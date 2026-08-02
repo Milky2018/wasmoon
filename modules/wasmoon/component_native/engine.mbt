@@ -190,7 +190,7 @@ fn native_component_session_with_contexts(
       for instance_idx, _ in contexts {
         existing.set(instance_idx, true)
       }
-      @runtime_impl.CoreRegistrationCheckpoint(fn() {
+      CoreRegistrationCheckpoint(fn() {
         let added : Array[Int] = []
         for instance_idx, _ in contexts {
           if !existing.contains(instance_idx) {

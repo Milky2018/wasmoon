@@ -249,7 +249,7 @@ test "failed component instantiation withdraws core linker registrations" {
   let provider = @component.parse_component(provider_bytes)
   let provider_validated = @component_validator.validate_component_for_instantiation_with_config(
     provider,
-    @component_validator.ComponentValidationConfig(false),
+    ComponentValidationConfig(false),
   )
   let bytes = @component_text.parse_component_wat(
     (
@@ -268,7 +268,7 @@ test "failed component instantiation withdraws core linker registrations" {
   let component = @component.parse_component(bytes)
   let validated = @component_validator.validate_component_for_instantiation_with_config(
     component,
-    @component_validator.ComponentValidationConfig(false),
+    ComponentValidationConfig(false),
   )
   let linker = ComponentLinker::ComponentLinker()
   linker.instantiate("provider", provider_validated) |> ignore

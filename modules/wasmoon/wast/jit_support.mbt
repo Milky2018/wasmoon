@@ -47,7 +47,7 @@ pub fn JITCompiler::JITCompiler(
 ///|
 /// Exact registry entries owned by one installed JIT module.
 struct FuncrefRegistration {
-  priv lease : @runtime.StoreFuncrefRegistration
+  lease : @runtime.StoreFuncrefRegistration
 }
 
 ///|
@@ -178,7 +178,7 @@ pub fn register_owned_instance_funcrefs_for_jit(
   for i, store_addr in instance.func_addrs {
     let func_ptr = jit_module.get_func_ptr(i)
     if store_addr >= 0 && func_ptr != 0L {
-      entries.push(@runtime.StoreFuncrefEntry(store_addr~, func_ptr~))
+      entries.push(StoreFuncrefEntry(store_addr~, func_ptr~))
     }
   }
   register_funcref_entries(store, entries)

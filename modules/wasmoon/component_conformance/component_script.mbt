@@ -17,7 +17,7 @@ priv enum ComponentTestErrorCode {
 
 ///|
 impl Show for ComponentTestError with fn output(self, logger) {
-  logger.write_string(to_repr(self).to_string())
+  logger.write_string(Repr(self).to_string())
 }
 
 ///|
@@ -1510,7 +1510,7 @@ fn run_component_script_impl(
                   result.add_passed()
                 } else {
                   result.add_failed(
-                    "assert_return \{field} mismatch expected=\{to_repr(expected)} got=\{to_repr(vals)}",
+                    "assert_return \{field} mismatch expected=\{Repr(expected)} got=\{Repr(vals)}",
                   )
                 }
               Err(e) => result.add_failed("assert_return trapped: \{e}")

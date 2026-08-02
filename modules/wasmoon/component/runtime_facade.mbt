@@ -55,7 +55,7 @@ pub(all) enum ComponentValueType {
 
 ///|
 pub impl Show for ComponentValueType with fn output(self, logger) {
-  logger.write_string(to_repr(self).to_string())
+  logger.write_string(Repr(self).to_string())
 }
 
 ///|
@@ -66,7 +66,7 @@ pub struct ComponentField {
 
 ///|
 pub impl Show for ComponentField with fn output(self, logger) {
-  logger.write_string(to_repr(self).to_string())
+  logger.write_string(Repr(self).to_string())
 }
 
 ///|
@@ -85,7 +85,7 @@ pub struct ComponentCase {
 
 ///|
 pub impl Show for ComponentCase with fn output(self, logger) {
-  logger.write_string(to_repr(self).to_string())
+  logger.write_string(Repr(self).to_string())
 }
 
 ///|
@@ -104,7 +104,7 @@ pub struct ComponentParam {
 
 ///|
 pub impl Show for ComponentParam with fn output(self, logger) {
-  logger.write_string(to_repr(self).to_string())
+  logger.write_string(Repr(self).to_string())
 }
 
 ///|
@@ -124,7 +124,7 @@ pub struct ComponentFuncType {
 
 ///|
 pub impl Show for ComponentFuncType with fn output(self, logger) {
-  logger.write_string(to_repr(self).to_string())
+  logger.write_string(Repr(self).to_string())
 }
 
 ///|
@@ -180,7 +180,7 @@ pub(all) enum ComponentValue {
 
 ///|
 pub impl Show for ComponentValue with fn output(self, logger) {
-  logger.write_string(to_repr(self).to_string())
+  logger.write_string(Repr(self).to_string())
 }
 
 ///|
@@ -214,7 +214,7 @@ pub(all) suberror ComponentRuntimeError {
 
 ///|
 pub impl Show for ComponentRuntimeError with fn output(self, logger) {
-  logger.write_string(to_repr(self).to_string())
+  logger.write_string(Repr(self).to_string())
 }
 
 ///|
@@ -1217,7 +1217,7 @@ fn lift_component_value(
       Resource({ handle, type_: { identity: "future" } })
     _ =>
       raise InvocationFailed(
-        "component returned a value incompatible with \{to_repr(expected)} at \{path}",
+        "component returned a value incompatible with \{Repr(expected)} at \{path}",
       )
   }
 }

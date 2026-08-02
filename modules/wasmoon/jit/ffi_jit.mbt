@@ -16,7 +16,7 @@ pub suberror JITTrap {
 /// Keep `Show` behavior while migrating from deprecated `derive(Show)` to
 /// `derive(Debug)`.
 pub impl Show for JITTrap with fn output(self, logger) {
-  logger.write_string(@types.compact_show_repr(to_repr(self).to_string()))
+  logger.write_string(@types.compact_show_repr(Repr(self).to_string()))
 }
 
 // ============ JIT Context Wrapper ============
@@ -304,7 +304,7 @@ fn JITContext::entry_trampoline(
       let installer = @wasmoon_jit.JitCodeInstaller::new(fn(_) { None })
       let trampoline = installer.install_trampoline(code_ints) catch {
         err =>
-          raise JITTrap("entry trampoline installation failed: \{to_repr(err)}")
+          raise JITTrap("entry trampoline installation failed: \{Repr(err)}")
       }
       let pointer = trampoline.entry_address()
       self.trampoline_cache.set(sig_hash, trampoline)

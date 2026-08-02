@@ -28,7 +28,7 @@ pub(all) enum ComponentValue {
 /// Keep `Show` behavior while migrating from deprecated `derive(Show)` to
 /// `derive(Debug)`.
 pub impl Show for ComponentValue with fn output(self, logger) {
-  logger.write_string(@types.compact_show_repr(to_repr(self).to_string()))
+  logger.write_string(@types.compact_show_repr(Repr(self).to_string()))
 }
 
 ///|

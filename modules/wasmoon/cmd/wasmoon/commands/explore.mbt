@@ -145,7 +145,7 @@ pub fn run_explore(
       name=func_name,
     ) catch {
       err => {
-        let text = "error: \{to_repr(err)}"
+        let text = "error: \{Repr(err)}"
         if !html_output {
           println("")
           println("── Compiler Infrastructure ──")
@@ -177,7 +177,7 @@ pub fn run_explore(
     let ir_optimized = milk_result.print()
     let target = match target_name {
       "x64" => @wasmoon_jit.NativeTarget::X64
-      "aarch64" => @wasmoon_jit.NativeTarget::AArch64
+      "aarch64" => AArch64
       _ =>
         @wasmoon_jit.host_native_target() catch {
           err => {

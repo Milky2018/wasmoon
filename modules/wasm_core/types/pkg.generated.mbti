@@ -855,3 +855,4 @@ pub impl ToInt64 for Int
 pub impl ToInt64 for Int64
 pub impl ToInt64 for Float
 pub impl ToInt64 for Double
+

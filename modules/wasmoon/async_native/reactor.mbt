@@ -9,7 +9,7 @@ pub suberror NativeReactorError {
 
 ///|
 pub impl Show for NativeReactorError with fn output(self, logger) {
-  logger.write_string(to_repr(self).to_string())
+  logger.write_string(Repr(self).to_string())
 }
 
 ///|
@@ -248,7 +248,7 @@ pub fn NativeReactor::wake(
 ///|
 pub impl Debug for NativeReactor with fn to_repr(self) {
   Repr::ctor("NativeReactor", [
-    (Some("registrations"), to_repr(self.registrations.length())),
+    (Some("registrations"), Repr(self.registrations.length())),
   ])
 }
 

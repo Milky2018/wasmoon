@@ -29,11 +29,11 @@ fn code_object_diagnostic_text(
   let bytes = code.map(byte => @types.to_hex_byte(byte.to_int())).join(" ")
   "code-object \{architecture}\n" +
   "  code-size: \{code.length()}\n" +
-  "  relocations: \{to_repr(object.relocations())}\n" +
-  "  sources: \{to_repr(object.sources())}\n" +
-  "  traps: \{to_repr(object.traps())}\n" +
-  "  safepoints: \{to_repr(object.safepoints())}\n" +
-  "  unwind: \{to_repr(object.unwind())}\n" +
+  "  relocations: \{Repr(object.relocations())}\n" +
+  "  sources: \{Repr(object.sources())}\n" +
+  "  traps: \{Repr(object.traps())}\n" +
+  "  safepoints: \{Repr(object.safepoints())}\n" +
+  "  unwind: \{Repr(object.unwind())}\n" +
   "  bytes: \{bytes}"
 }
 
@@ -67,7 +67,7 @@ pub suberror JitPipelineError {
 
 ///|
 pub impl Show for JitPipelineError with fn output(self, logger) {
-  logger.write_string(to_repr(self).to_string())
+  logger.write_string(Repr(self).to_string())
 }
 
 ///|

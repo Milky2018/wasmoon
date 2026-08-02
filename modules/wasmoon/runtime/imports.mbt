@@ -14,7 +14,7 @@ pub(all) enum FuncInst {
 /// host function closures.
 pub impl Debug for FuncInst with fn to_repr(self) {
   match self {
-    WasmFunc(code) => Repr::ctor("WasmFunc", [(None, to_repr(code))])
+    WasmFunc(code) => Repr::ctor("WasmFunc", [(None, Repr(code))])
     HostFunc(_) => Repr::ctor("HostFunc", [(None, Repr::literal("<native>"))])
   }
 }

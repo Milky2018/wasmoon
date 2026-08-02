@@ -1269,7 +1269,7 @@ fn run_with_jit(
           let loaded = @wasmoon_jit.verify_artifact(artifact, compatibility) catch {
             err => {
               @logger.error(
-                "Fresh JIT artifact failed validation: \{to_repr(err)}",
+                "Fresh JIT artifact failed validation: \{Repr(err)}",
               )
               return exit_failure()
             }

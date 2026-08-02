@@ -722,7 +722,7 @@ test "component runtime close is terminal for retained aliases" {
   } noraise {
     _ => fail("expected outstanding call to be cancelled")
   }
-  inspect(
+  debug_inspect(
     (instantiate_error, bind_error, start_error, call_error),
     content=(
       #|(RuntimeClosed, RuntimeClosed, RuntimeClosed, Cancelled)

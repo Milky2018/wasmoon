@@ -467,7 +467,7 @@ fn try_compile_jit_with_suspension(
       let loaded = verify_compiled_jit_artifact(artifact) catch {
         err =>
           return Err(
-            "WAST JIT strict mode: artifact verification failed: \{to_repr(err)}",
+            "WAST JIT strict mode: artifact verification failed: \{Repr(err)}",
           )
       }
       let jit_module_result : Result[@jit.JITModule, @jit.JITModuleLoadError] = try

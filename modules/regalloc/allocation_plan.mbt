@@ -37,7 +37,7 @@ pub struct AllocationPlan {
 
 ///|
 pub impl Show for AllocationPlan with fn output(self, logger) {
-  logger.write_string(self.to_repr().to_string())
+  logger.write_string(Repr(self).to_string())
 }
 
 ///|

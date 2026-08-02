@@ -35,8 +35,8 @@ pub(all) enum Location {
 ///|
 pub impl Debug for Location with fn to_repr(self) {
   match self {
-    Register(reg) => reg.to_repr()
-    Stack(slot) => slot.to_repr()
+    Register(reg) => Repr(reg)
+    Stack(slot) => Repr(slot)
   }
 }
 
@@ -511,7 +511,7 @@ pub suberror AllocationVerifyError {
 
 ///|
 pub impl Show for AllocationVerifyError with fn output(self, logger) {
-  logger.write_string(to_repr(self).to_string())
+  logger.write_string(Repr(self).to_string())
 }
 
 ///|
@@ -590,7 +590,7 @@ pub suberror FrameVerifyError {
 
 ///|
 pub impl Show for FrameVerifyError with fn output(self, logger) {
-  logger.write_string(to_repr(self).to_string())
+  logger.write_string(Repr(self).to_string())
 }
 
 ///|
@@ -600,5 +600,5 @@ pub suberror EmissionVerifyError {
 
 ///|
 pub impl Show for EmissionVerifyError with fn output(self, logger) {
-  logger.write_string(to_repr(self).to_string())
+  logger.write_string(Repr(self).to_string())
 }

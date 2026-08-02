@@ -394,7 +394,7 @@ test "Preview 2 directory names round-trip through UTF-8" {
       [Variant(0, Some(Variant(1, Some(Tuple([_, String(name)])))))] =>
         names.push(name)
       [Variant(0, Some(Variant(0, None)))] => break
-      result => fail("unexpected Preview 2 directory entry: \{to_repr(result)}")
+      result => fail("unexpected Preview 2 directory entry: \{Repr(result)}")
     }
   }
   names.sort()

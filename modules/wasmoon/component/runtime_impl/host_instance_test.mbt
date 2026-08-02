@@ -171,7 +171,10 @@ async test "component invocation join yields to other MoonBit processes" {
     }
     joined.wait()
   })
-  inspect((result, progress), content="([U32(11)], [other process ran])")
+  debug_inspect(
+    (result, progress),
+    content="([U32(11)], [\"other process ran\"])",
+  )
 }
 
 ///|

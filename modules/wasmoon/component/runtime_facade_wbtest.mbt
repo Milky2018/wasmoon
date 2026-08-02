@@ -65,10 +65,10 @@ async test "component async join and runtime close share one call lifecycle" {
   } noraise {
     _ => fail("expected runtime close to cancel the call")
   }
-  inspect(
+  debug_inspect(
     (result, progress, cancellations.val, cancelled_error),
     content=(
-      #|([U32(17)], [other process ran], 1, Cancelled)
+      #|([U32(17)], ["other process ran"], 1, Cancelled)
     ),
   )
 }

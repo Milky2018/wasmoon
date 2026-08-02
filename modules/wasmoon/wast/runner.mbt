@@ -480,7 +480,7 @@ pub fn run_wast_command(
         values => {
           result.failed = result.failed + 1
           result.failures.push(
-            "line \{line}: assert_exception \{action_desc}: expected exception but none thrown (returned \{to_repr(values)})",
+            "line \{line}: assert_exception \{action_desc}: expected exception but none thrown (returned \{Repr(values)})",
           )
         }
       }

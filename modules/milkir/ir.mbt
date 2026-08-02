@@ -94,7 +94,7 @@ pub impl Hash for Value with fn hash_combine(self, hasher) {
 
 ///|
 pub impl Debug for Value with fn to_repr(self) {
-  Repr::record({ "id": to_repr(self.id), "ty": to_repr(self.ty) })
+  Repr::record({ "id": Repr(self.id), "ty": Repr(self.ty) })
 }
 
 ///|
@@ -266,7 +266,7 @@ pub impl Hash for GlobalValue with fn hash_combine(self, hasher) {
 
 ///|
 pub impl Debug for GlobalValue with fn to_repr(self) {
-  Repr::record({ "id": to_repr(self.id) })
+  Repr::record({ "id": Repr(self.id) })
 }
 
 ///|
@@ -412,10 +412,10 @@ pub struct Block {
 ///|
 pub impl Debug for Block with fn to_repr(self) {
   Repr::record({
-    "id": to_repr(self.id),
-    "params": to_repr(self.params),
-    "instructions": to_repr(self.instructions),
-    "terminator": to_repr(self.terminator),
+    "id": Repr(self.id),
+    "params": Repr(self.params),
+    "instructions": Repr(self.instructions),
+    "terminator": Repr(self.terminator),
   })
 }
 
@@ -498,12 +498,12 @@ pub struct Inst {
 ///|
 pub impl Debug for Inst with fn to_repr(self) {
   Repr::record({
-    "id": to_repr(self.id),
-    "results": to_repr(self.results),
-    "opcode": to_repr(self.opcode),
-    "args": to_repr(self.args),
-    "operands": to_repr(self.operands),
-    "metadata": to_repr(self.metadata),
+    "id": Repr(self.id),
+    "results": Repr(self.results),
+    "opcode": Repr(self.opcode),
+    "args": Repr(self.args),
+    "operands": Repr(self.operands),
+    "metadata": Repr(self.metadata),
   })
 }
 
@@ -916,7 +916,7 @@ pub(all) enum Opcode {
 
 ///|
 pub impl Show for Opcode with fn output(self, logger) {
-  logger.write_string(to_repr(self).to_string())
+  logger.write_string(Repr(self).to_string())
 }
 
 ///|
@@ -1007,16 +1007,16 @@ pub struct Function {
 ///|
 pub impl Debug for Function with fn to_repr(self) {
   Repr::record({
-    "name": to_repr(self.name),
-    "params": to_repr(self.params),
-    "results": to_repr(self.results),
-    "blocks": to_repr(self.blocks),
-    "external_symbols": to_repr(self.external_symbols),
-    "global_values": to_repr(self.global_values),
-    "next_value_id": to_repr(self.next_value_id),
-    "next_inst_id": to_repr(self.next_inst_id),
-    "next_block_id": to_repr(self.next_block_id),
-    "next_global_value_id": to_repr(self.next_global_value_id),
+    "name": Repr(self.name),
+    "params": Repr(self.params),
+    "results": Repr(self.results),
+    "blocks": Repr(self.blocks),
+    "external_symbols": Repr(self.external_symbols),
+    "global_values": Repr(self.global_values),
+    "next_value_id": Repr(self.next_value_id),
+    "next_inst_id": Repr(self.next_inst_id),
+    "next_block_id": Repr(self.next_block_id),
+    "next_global_value_id": Repr(self.next_global_value_id),
   })
 }
 

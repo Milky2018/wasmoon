@@ -131,3 +131,4 @@ pub impl DynamicReturn for Unit
 pub impl[A : @types.FromInt64, B : @types.FromInt64] DynamicReturn for (A, B)
 pub impl[A : @types.FromInt64, B : @types.FromInt64, C : @types.FromInt64] DynamicReturn for (A, B, C)
 pub impl[A : @types.FromInt64, B : @types.FromInt64, C : @types.FromInt64, D : @types.FromInt64] DynamicReturn for (A, B, C, D)
+

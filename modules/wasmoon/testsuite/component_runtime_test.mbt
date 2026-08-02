@@ -165,7 +165,7 @@ test "component runtime: host import canonical roundtrip" {
   linker.add_func("", func_type, host)
   let validated = @component_model.validate_component_for_instantiation_with_config(
     component,
-    @component_model.ComponentValidationConfig(false),
+    ComponentValidationConfig(false),
   )
   let instance = linker.instantiate("host_import", validated)
   let results = instance.call_exported_func("", [S32(41)])
@@ -199,7 +199,7 @@ test "component runtime: canon lift core func" {
   let linker = @runtime_impl.ComponentLinker::ComponentLinker()
   let validated = @component_model.validate_component_for_instantiation_with_config(
     component,
-    @component_model.ComponentValidationConfig(false),
+    ComponentValidationConfig(false),
   )
   let instance = linker.instantiate("canon_lift", validated)
   let results = instance.call_exported_func("inc", [S32(41)])
@@ -219,7 +219,7 @@ test "component runtime: core trap names are isolated per Linker" {
   )
   let validated = @component_model.validate_component_for_instantiation_with_config(
     @component.parse_component(bytes),
-    @component_model.ComponentValidationConfig(false),
+    ComponentValidationConfig(false),
   )
   let first_linker = @runtime_impl.ComponentLinker::ComponentLinker()
   let first = first_linker.instantiate("first", validated)
@@ -288,7 +288,7 @@ test "component runtime: core execution crosses the configured engine seam" {
   let linker = @runtime_impl.ComponentLinker::with_core_execution_engine(engine)
   let validated = @component_model.validate_component_for_instantiation_with_config(
     component,
-    @component_model.ComponentValidationConfig(false),
+    ComponentValidationConfig(false),
   )
   let instance = linker.instantiate("engine_seam", validated)
   let results = instance.call_exported_func("inc", [S32(41)])
@@ -569,7 +569,7 @@ test "component runtime: canon lower to core func" {
   linker.add_func("inc", func_type, host)
   let validated = @component_model.validate_component_for_instantiation_with_config(
     component,
-    @component_model.ComponentValidationConfig(false),
+    ComponentValidationConfig(false),
   )
   let instance = linker.instantiate("canon_lower", validated)
   let exported = instance.get_export("core")
@@ -616,7 +616,7 @@ test "linker close releases nested-component instance graphs" {
   let component = @component.parse_component(bytes)
   let validated = @component_model.validate_component_for_instantiation_with_config(
     component,
-    @component_model.ComponentValidationConfig(false),
+    ComponentValidationConfig(false),
   )
   let linker = @runtime_impl.ComponentLinker::ComponentLinker()
   let instance = linker.instantiate("nested", validated)
@@ -630,7 +630,7 @@ test "linker close releases nested-component instance graphs" {
       instance.components.length(),
       instance.instances.length(),
       instance.funcs.length(),
-      instance.exports.size(),
+      instance.exports.length(),
     ),
     content="(0, 0, 0, 0)",
   )
@@ -654,7 +654,7 @@ test "component runtime: evidence survives raw component mutation" {
   let component = @component.parse_component(bytes)
   let validated = @component_model.validate_component_for_instantiation_with_config(
     component,
-    @component_model.ComponentValidationConfig(false),
+    ComponentValidationConfig(false),
   )
   // Erase every mutable view reachable through the caller's raw reference.
   component.binary.sections.clear()
@@ -683,7 +683,7 @@ test "component runtime: checkpoint callback close rolls back once" {
   let bytes = @component_text.parse_component_wat("(component)")
   let validated = @component_model.validate_component_for_instantiation_with_config(
     @component.parse_component(bytes),
-    @component_model.ComponentValidationConfig(false),
+    ComponentValidationConfig(false),
   )
   let linker_slot : Ref[@runtime_impl.ComponentLinker?] = Ref(None)
   let checkpoints = Ref(0)
@@ -696,9 +696,7 @@ test "component runtime: checkpoint callback close rolls back once" {
       if linker_slot.val is Some(linker) {
         linker.close()
       }
-      @runtime_impl.CoreRegistrationCheckpoint(fn() {
-        rollbacks.val = rollbacks.val + 1
-      })
+      CoreRegistrationCheckpoint(fn() { rollbacks.val = rollbacks.val + 1 })
     },
   )
   let linker = @runtime_impl.ComponentLinker::with_core_execution_engine(engine)
@@ -740,7 +738,7 @@ test "component runtime: close during engine registration cancels instantiation"
   let component = @component.parse_component(bytes)
   let validated = @component_model.validate_component_for_instantiation_with_config(
     component,
-    @component_model.ComponentValidationConfig(false),
+    ComponentValidationConfig(false),
   )
   let linker_slot : Ref[@runtime_impl.ComponentLinker?] = Ref(None)
   let registrations = Ref(0)
@@ -772,9 +770,7 @@ test "component runtime: close during engine registration cancels instantiation"
       raise HostCallError("invoke must not run in this test")
     },
     checkpoint_registrations=fn() {
-      @runtime_impl.CoreRegistrationCheckpoint(fn() {
-        rollbacks.val = rollbacks.val + 1
-      })
+      CoreRegistrationCheckpoint(fn() { rollbacks.val = rollbacks.val + 1 })
     },
   )
   let linker = @runtime_impl.ComponentLinker::with_core_execution_engine(engine)
@@ -820,7 +816,7 @@ test "component runtime: same-Linker reentrant instantiation is rejected" {
   )
   let validated = @component_model.validate_component_for_instantiation_with_config(
     @component.parse_component(bytes),
-    @component_model.ComponentValidationConfig(false),
+    ComponentValidationConfig(false),
   )
   let linker_slot : Ref[@runtime_impl.ComponentLinker?] = Ref(None)
   let did_reenter = Ref(false)
@@ -866,7 +862,7 @@ test "component runtime: closed linker refuses instantiation at entry" {
   let component = @component.parse_component(bytes)
   let validated = @component_model.validate_component_for_instantiation_with_config(
     component,
-    @component_model.ComponentValidationConfig(false),
+    ComponentValidationConfig(false),
   )
   let linker = @runtime_impl.ComponentLinker::ComponentLinker()
   linker.close()
@@ -920,7 +916,7 @@ test "component runtime: close releases only owned instances" {
   let component = @component.parse_component(bytes)
   let validated = @component_model.validate_component_for_instantiation_with_config(
     component,
-    @component_model.ComponentValidationConfig(false),
+    ComponentValidationConfig(false),
   )
   let linker_a = @runtime_impl.ComponentLinker::ComponentLinker()
   let provider = linker_a.instantiate("provider", validated)
@@ -954,7 +950,7 @@ priv struct CoreStoreAllocationBaseline {
   interpreter_heap_live : Int
   native_heap_size : Int64
   native_heap_objects : Int
-} derive(Debug, Eq)
+} derive(Eq)
 
 ///|
 fn core_store_allocation_baseline(
@@ -1047,7 +1043,7 @@ fn assert_start_trap_preserves_escaped_gc_ref(
 
 ///|
 test "component runtime: interpreter rollback preserves escaped GC refs" {
-  assert_start_trap_preserves_escaped_gc_ref(@runtime.Store::Store())
+  assert_start_trap_preserves_escaped_gc_ref(Store())
 }
 
 ///|
@@ -1095,7 +1091,7 @@ fn assert_start_trap_preserves_table_escaped_gc_ref(
 
 ///|
 test "component runtime: interpreter rollback preserves table-escaped GC refs" {
-  assert_start_trap_preserves_table_escaped_gc_ref(@runtime.Store::Store())
+  assert_start_trap_preserves_table_escaped_gc_ref(Store())
 }
 
 ///|
@@ -1127,7 +1123,7 @@ fn core_registration_then_start_trap() -> @component_model.ValidatedComponent ra
   let component = @component.parse_component(bytes)
   @component_model.validate_component_for_instantiation_with_config(
     component,
-    @component_model.ComponentValidationConfig(false),
+    ComponentValidationConfig(false),
   )
 }
 
@@ -1205,9 +1201,7 @@ test "component runtime: engine registration errors roll back core state" {
     },
     fn(_store, _instance, _func_idx, _args, _request) { Returned([]) },
     checkpoint_registrations=fn() {
-      @runtime_impl.CoreRegistrationCheckpoint(fn() {
-        rollbacks.val = rollbacks.val + 1
-      })
+      CoreRegistrationCheckpoint(fn() { rollbacks.val = rollbacks.val + 1 })
     },
   )
   let linker = @runtime_impl.ComponentLinker::with_core_execution_engine(engine)
@@ -1246,7 +1240,7 @@ test "component runtime: failed instantiation leaves open linker intact" {
   let inner = @component.parse_component(inner_bytes)
   let inner_validated = @component_model.validate_component_for_instantiation_with_config(
     inner,
-    @component_model.ComponentValidationConfig(false),
+    ComponentValidationConfig(false),
   )
   let linker = @runtime_impl.ComponentLinker::ComponentLinker()
   let provider = linker.instantiate("provider", inner_validated)
@@ -1271,12 +1265,12 @@ test "component runtime: failed instantiation leaves open linker intact" {
   let failing = @component.parse_component(failing_bytes)
   let failing_validated = @component_model.validate_component_for_instantiation_with_config(
     failing,
-    @component_model.ComponentValidationConfig(false),
+    ComponentValidationConfig(false),
   )
   // Route root instantiations through a shared host runtime so the frame
   // resource tables of the failing attempts land in one observable map.
   let runtime = linker.host_runtime_state()
-  let tables_before = runtime.async_state().resource_tables.size()
+  let tables_before = runtime.async_state().resource_tables.length()
   let core_before = core_store_allocation_baseline(linker.get_store())
   let outcome = try linker.instantiate("failing", failing_validated) catch {
     Cancelled => "cancelled"
@@ -1309,7 +1303,7 @@ test "component runtime: failed instantiation leaves open linker intact" {
     content="true",
   )
   debug_inspect(
-    runtime.async_state().resource_tables.size() == tables_before,
+    runtime.async_state().resource_tables.length() == tables_before,
     content="true",
   )
   // The imported instance the failed frame had resolved is untouched.
@@ -1339,7 +1333,7 @@ test "component runtime: component import registration requires evidence" {
   let inner = @component.parse_component(inner_bytes)
   let inner_validated = @component_model.validate_component_for_instantiation_with_config(
     inner,
-    @component_model.ComponentValidationConfig(false),
+    ComponentValidationConfig(false),
   )
   let linker = @runtime_impl.ComponentLinker::ComponentLinker()
   linker.add_component("inner", inner_validated)

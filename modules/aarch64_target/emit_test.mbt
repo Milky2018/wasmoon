@@ -5528,7 +5528,7 @@ test "AArch64 pipeline threads a moveless loop back edge to the loop head" {
   // Exactly one conditional branch, and it targets the loop head (a backward
   // branch to the add instruction), not a forwarding stub past the return.
   guard branch_targets is [(branch_offset, target_offset)] else {
-    fail("expected exactly one conditional branch, got \{branch_targets}")
+    fail("expected exactly one conditional branch, got \{Repr(branch_targets)}")
   }
   debug_inspect(target_offset < branch_offset, content="true")
   // Pin the exact destination: the loop body's first instruction (the add at
@@ -5587,7 +5587,7 @@ test "AArch64 pipeline keeps a loop back edge with moves unthreaded" {
     }
   }
   guard branch_targets is [(_, target_offset)] else {
-    fail("expected exactly one conditional branch, got \{branch_targets}")
+    fail("expected exactly one conditional branch, got \{Repr(branch_targets)}")
   }
   // The loop body's first instruction sits at offset 4, as in the threading
   // test above. With moves pending on the back edge, the branch must NOT be

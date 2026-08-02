@@ -42,7 +42,7 @@ pub suberror JITModuleLoadError {
 /// Keep `Show` behavior while migrating from deprecated `derive(Show)` to
 /// `derive(Debug)`.
 pub impl Show for JITModuleLoadError with fn output(self, logger) {
-  logger.write_string(@types.compact_show_repr(to_repr(self).to_string()))
+  logger.write_string(@types.compact_show_repr(Repr(self).to_string()))
 }
 
 ///|
@@ -1093,9 +1093,7 @@ pub fn JITModule::setup_gc(
   canonical_indices : Array[Int],
   func_type_indices : Array[Int],
 ) -> Unit raise @wasmoon_jit.GCSetupError {
-  guard self.context is Some(context) else {
-    raise @wasmoon_jit.MissingJITContext
-  }
+  guard self.context is Some(context) else { raise MissingJITContext }
   context.ctx.setup_gc(heap, types, canonical_indices, func_type_indices)
 }
 
@@ -1109,9 +1107,7 @@ pub fn JITModule::setup_gc_with_func_table(
   func_table_ptr : Int64,
   num_funcs : Int,
 ) -> Unit raise @wasmoon_jit.GCSetupError {
-  guard self.context is Some(context) else {
-    raise @wasmoon_jit.MissingJITContext
-  }
+  guard self.context is Some(context) else { raise MissingJITContext }
   context.ctx.setup_gc_with_func_table(
     heap, types, canonical_indices, func_type_indices, func_table_ptr, num_funcs,
   )

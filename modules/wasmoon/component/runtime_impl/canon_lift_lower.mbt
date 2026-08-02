@@ -113,9 +113,7 @@ fn instantiate_canon_lower(
         async_state, caller_table,
       )
       fn finish_call(out : Array[@types.Value]) -> Array[@types.Value] {
-        set_canon_debug_message(
-          "lower.async(func=\{func_idx})-> \{to_repr(out)}",
-        )
+        set_canon_debug_message("lower.async(func=\{func_idx})-> \{Repr(out)}")
         out
       }
 

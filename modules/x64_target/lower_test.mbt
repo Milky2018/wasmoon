@@ -3103,7 +3103,7 @@ test "X64 lowering always declares the rcx clobber for shifts and rotates" {
   let missing : Array[String] = []
   let seen : Array[String] = []
   for operation in shift_operations {
-    for ty in [@semantic.ValueType::I32, @semantic.ValueType::I64] {
+    for ty in [@semantic.ValueType::I32, I64] {
       let builder = @semantic.FunctionBuilder::new(
         "shift_clobber",
         Internal,

@@ -229,3 +229,4 @@ pub(open) trait FunctionView {
   fn instruction_operands(Self, Int) -> Array[Operand]
   fn instruction_clobbers(Self, Int) -> Array[PhysicalReg]
 }
+

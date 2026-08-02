@@ -15,12 +15,12 @@ pub(all) enum ComponentErrorCode {
 
 ///|
 pub impl Show for ComponentErrorFormat with fn output(self, logger) {
-  logger.write_string(to_repr(self).to_string())
+  logger.write_string(Repr(self).to_string())
 }
 
 ///|
 pub impl Show for ComponentErrorCode with fn output(self, logger) {
-  logger.write_string(to_repr(self).to_string())
+  logger.write_string(Repr(self).to_string())
 }
 
 ///|

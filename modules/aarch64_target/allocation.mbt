@@ -8,7 +8,7 @@ pub suberror AArch64AllocationError {
 
 ///|
 pub impl Show for AArch64AllocationError with fn output(self, logger) {
-  logger.write_string(to_repr(self).to_string())
+  logger.write_string(Repr(self).to_string())
 }
 
 ///|

@@ -125,12 +125,12 @@ pub(all) enum EOpcode {
 /// Keep `Show` behavior while migrating from deprecated `derive(Show)` to
 /// `derive(Debug)`.
 pub impl Show for EClassId with fn output(self, logger) {
-  logger.write_string(to_repr(self).to_string())
+  logger.write_string(Repr(self).to_string())
 }
 
 ///|
 pub impl Show for EOpcode with fn output(self, logger) {
-  logger.write_string(to_repr(self).to_string())
+  logger.write_string(Repr(self).to_string())
 }
 
 ///|
@@ -1686,8 +1686,8 @@ fn extract_cost_equal(lhs : ExtractCost, rhs : ExtractCost) -> Bool {
 
 ///|
 fn extract_node_tiebreak_less(lhs : ENode, rhs : ENode) -> Bool {
-  "\{to_repr(lhs.op)}:\{to_repr(lhs.children)}" <
-  "\{to_repr(rhs.op)}:\{to_repr(rhs.children)}"
+  "\{Repr(lhs.op)}:\{Repr(lhs.children)}" <
+  "\{Repr(rhs.op)}:\{Repr(rhs.children)}"
 }
 
 ///|

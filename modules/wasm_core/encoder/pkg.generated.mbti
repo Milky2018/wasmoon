@@ -15,3 +15,4 @@ pub fn encode(@types.Module) -> Array[Int]
 // Type aliases
 
 // Traits
+

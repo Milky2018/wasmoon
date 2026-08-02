@@ -301,3 +301,4 @@ pub(all) struct WasmValidationResolvers {
 // Type aliases
 
 // Traits
+

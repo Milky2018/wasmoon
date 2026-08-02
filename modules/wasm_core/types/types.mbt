@@ -1223,62 +1223,62 @@ pub fn compact_show_repr(text : String) -> String {
 /// Keep `Show` behavior while migrating from deprecated `derive(Show)` to
 /// `derive(Debug)`.
 pub impl Show for ValueType with fn output(self, logger) {
-  logger.write_string(compact_show_repr(to_repr(self).to_string()))
+  logger.write_string(compact_show_repr(Repr(self).to_string()))
 }
 
 ///|
 pub impl Show for StorageType with fn output(self, logger) {
-  logger.write_string(compact_show_repr(to_repr(self).to_string()))
+  logger.write_string(compact_show_repr(Repr(self).to_string()))
 }
 
 ///|
 pub impl Show for CompositeType with fn output(self, logger) {
-  logger.write_string(compact_show_repr(to_repr(self).to_string()))
+  logger.write_string(compact_show_repr(Repr(self).to_string()))
 }
 
 ///|
 pub impl Show for SubType with fn output(self, logger) {
-  logger.write_string(compact_show_repr(to_repr(self).to_string()))
+  logger.write_string(compact_show_repr(Repr(self).to_string()))
 }
 
 ///|
 pub impl Show for Value with fn output(self, logger) {
-  logger.write_string(compact_show_repr(to_repr(self).to_string()))
+  logger.write_string(compact_show_repr(Repr(self).to_string()))
 }
 
 ///|
 pub impl Show for FunctionCode with fn output(self, logger) {
-  logger.write_string(compact_show_repr(to_repr(self).to_string()))
+  logger.write_string(compact_show_repr(Repr(self).to_string()))
 }
 
 ///|
 pub impl Show for FuncType with fn output(self, logger) {
-  logger.write_string(compact_show_repr(to_repr(self).to_string()))
+  logger.write_string(compact_show_repr(Repr(self).to_string()))
 }
 
 ///|
 pub impl Show for MemoryType with fn output(self, logger) {
-  logger.write_string(compact_show_repr(to_repr(self).to_string()))
+  logger.write_string(compact_show_repr(Repr(self).to_string()))
 }
 
 ///|
 pub impl Show for TableType with fn output(self, logger) {
-  logger.write_string(compact_show_repr(to_repr(self).to_string()))
+  logger.write_string(compact_show_repr(Repr(self).to_string()))
 }
 
 ///|
 pub impl Show for GlobalType with fn output(self, logger) {
-  logger.write_string(compact_show_repr(to_repr(self).to_string()))
+  logger.write_string(compact_show_repr(Repr(self).to_string()))
 }
 
 ///|
 pub impl Show for Instruction with fn output(self, logger) {
-  logger.write_string(compact_show_repr(to_repr(self).to_string()))
+  logger.write_string(compact_show_repr(Repr(self).to_string()))
 }
 
 ///|
 pub impl Show for Module with fn output(self, logger) {
-  logger.write_string(compact_show_repr(to_repr(self).to_string()))
+  logger.write_string(compact_show_repr(Repr(self).to_string()))
 }
 
 ///|

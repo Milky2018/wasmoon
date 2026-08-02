@@ -314,7 +314,7 @@ pub(all) suberror GCSetupError {
 /// Keep `Show` behavior while migrating from deprecated `derive(Show)` to
 /// `derive(Debug)`.
 pub impl Show for GCSetupError with fn output(self, logger) {
-  logger.write_string(@types.compact_show_repr(to_repr(self).to_string()))
+  logger.write_string(@types.compact_show_repr(Repr(self).to_string()))
 }
 
 ///|

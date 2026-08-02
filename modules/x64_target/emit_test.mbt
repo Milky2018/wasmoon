@@ -1851,7 +1851,7 @@ test "X64 pipeline threads a moveless loop back edge to the loop head" {
     }
   }
   guard branch_targets is [(branch_offset, target_offset)] else {
-    fail("expected exactly one conditional branch, got \{branch_targets}")
+    fail("expected exactly one conditional branch, got \{Repr(branch_targets)}")
   }
   debug_inspect(target_offset < branch_offset, content="true")
   // Pin the exact destination byte offset of the loop body's first
@@ -1903,7 +1903,7 @@ test "X64 pipeline keeps a loop back edge with moves unthreaded" {
     }
   }
   guard branch_targets is [(_, target_offset)] else {
-    fail("expected exactly one conditional branch, got \{branch_targets}")
+    fail("expected exactly one conditional branch, got \{Repr(branch_targets)}")
   }
   // Offset 10 is the loop body's first instruction, as pinned by the
   // threading test above; with moves pending it must not be the target.

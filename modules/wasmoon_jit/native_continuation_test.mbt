@@ -107,7 +107,7 @@ test "interleaved native continuations complete and cancel exactly" {
       )
       let event = continuation.continue_with()
       guard event is NativeHostcallSuspended else {
-        return fail("continuation \{index} did not suspend: \{to_repr(event)}")
+        return fail("continuation \{index} did not suspend: \{Repr(event)}")
       }
       parked.push(continuation)
     }

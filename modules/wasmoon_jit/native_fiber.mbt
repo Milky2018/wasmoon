@@ -34,7 +34,7 @@ pub suberror NativeFiberError {
 
 ///|
 pub impl Show for NativeFiberError with fn output(self, logger) {
-  logger.write_string(@types.compact_show_repr(to_repr(self).to_string()))
+  logger.write_string(@types.compact_show_repr(Repr(self).to_string()))
 }
 
 ///|
@@ -177,8 +177,8 @@ pub fn NativeFiber::guard_size(self : NativeFiber) -> Int64 {
 ///|
 pub impl Debug for NativeFiber with fn to_repr(self) {
   Repr::ctor("NativeFiber", [
-    (Some("phase"), to_repr(self.phase())),
-    (Some("stack_size"), to_repr(self.stack_size())),
-    (Some("guard_size"), to_repr(self.guard_size())),
+    (Some("phase"), Repr(self.phase())),
+    (Some("stack_size"), Repr(self.stack_size())),
+    (Some("guard_size"), Repr(self.guard_size())),
   ])
 }
