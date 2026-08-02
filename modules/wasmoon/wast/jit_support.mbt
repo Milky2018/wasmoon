@@ -1608,7 +1608,7 @@ pub fn install_jit_hostcall_dispatcher(
         // Imported wasm callees can throw; route the exception into the active
         // JIT try_table chain instead of flattening it to a generic trap.
         if values.length() == 0 {
-          @jit.throw_exception_tag(jit_module.get_context_ptr(), local_tag_idx)
+          jit_module.throw_exception_tag(local_tag_idx)
         } else {
           let encoded_values : Array[Int64] = []
           for v in values {
@@ -1618,11 +1618,7 @@ pub fn install_jit_hostcall_dispatcher(
               None => return HostcallTrap(8)
             }
           }
-          @jit.throw_exception_values(
-            jit_module.get_context_ptr(),
-            local_tag_idx,
-            encoded_values,
-          )
+          jit_module.throw_exception_values(local_tag_idx, encoded_values)
         }
         return HostcallTrap(8)
       }

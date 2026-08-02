@@ -42,25 +42,11 @@ pub fn can_use_reusable_entry_trampoline(Array[@types.ValueType], Array[@types.V
 
 pub fn classify_import_function_ptr(Int64) -> ImportFunctionResolution
 
-pub fn clear_segments(Int64) -> Unit
-
-pub fn clear_wasi_stdin_buffer(Int64) -> Unit
-
-pub fn clear_wasi_stdin_callback(Int64) -> Unit
-
 pub fn collect_gc_root_args(Array[Int64], Array[@types.ValueType]) -> Array[Int64]
 
 pub fn compile_wasm_body_artifact_function(@milkir.Function, @wasm_milkir.WasmValidationContext, NativeTarget, function_index~ : Int, signature~ : @machv.Signature, use_subtype_indirect_check? : Bool, canonical_type_indices? : Array[Int]) -> @artifact.FunctionCode raise JitPipelineError
 
 pub fn compile_wasm_body_diagnostics_for_target(@milkir.Function, @wasm_milkir.WasmValidationContext, NativeTarget, use_subtype_indirect_check? : Bool, canonical_type_indices? : Array[Int]) -> JitPipelineDiagnostics raise JitPipelineError
-
-pub fn context_func_count(Int64) -> Int
-
-pub fn context_func_table_ptr(Int64) -> Int64
-
-pub fn context_table_ptr(Int64, Int) -> Int64
-
-pub fn context_table_size(Int64, Int) -> Int
 
 pub fn count_entry_trampoline_slots(Array[@types.ValueType]) -> Int
 
@@ -102,31 +88,7 @@ pub fn free_memory(Int64) -> Unit
 
 pub fn free_memory_desc(Int64) -> Unit
 
-pub fn gc_begin_frame(Int64, Int64) -> Unit
-
-pub fn gc_clear_heap(Int64) -> Unit
-
-pub fn gc_collect_for_alloc(Int64, Array[Int64]) -> Int
-
 pub fn gc_debug_set_fail_alloc(Int, fail_every? : Int) -> Unit
-
-pub fn gc_end_frame(Int64) -> Unit
-
-pub fn gc_set_code_object_safepoints(Int64, Int, Array[@code_object.SafepointSite]) -> Bool
-
-pub fn gc_set_context_heap_ptr(Int64, Int64) -> Unit
-
-pub fn gc_set_heap(Int64, CHeap) -> Unit
-
-pub fn gc_set_root_scratch(Int64, Array[Int64]) -> Bool
-
-pub fn gc_set_safepoint_table(Int64, Int64) -> Unit
-
-pub fn gc_setup(CHeap, Array[@types.SubType], Array[Int], ctx_ptr~ : Int64, func_type_indices~ : Array[Int], func_table_ptr~ : Int64, num_funcs~ : Int) -> Unit raise GCSetupError
-
-pub fn gc_teardown(Int64) -> Unit
-
-pub fn gc_use_func_safepoints(Int64, Int) -> Unit
 
 pub fn get_hostcall_func_addr() -> Int
 
@@ -153,8 +115,6 @@ pub fn hostcall_value_slot_read(Int) -> Int64
 pub fn hostcall_value_slot_write(Int, Int64) -> Unit
 
 pub fn i64_to_value(Int64, @types.ValueType) -> @types.Value
-
-pub fn init_wasi_context(Int64, Array[String], Array[String], Array[(String, String)], quiet? : Bool) -> Unit
 
 pub fn is_cancelled_trap_code(Int) -> Bool
 
@@ -220,31 +180,9 @@ pub fn resolve_import_function_ptr(Map[String, Map[String, Int64]], String, Stri
 
 pub fn sanitize_debug_filename(String) -> String
 
-pub fn set_wasi_stderr_capture(Int64, Bool) -> Unit
-
-pub fn set_wasi_stdin_buffer(Int64, Bytes) -> Unit
-
-pub fn set_wasi_stdin_callback(Int64, () -> Bytes) -> Unit
-
-pub fn set_wasi_stdout_capture(Int64, Bool) -> Unit
-
-pub fn setup_segments(Int64, Array[@types.Data], Array[Array[Int64]], data_dropped? : Array[Bool], elem_dropped? : Array[Bool]) -> Unit
-
-pub fn setup_type_cache_from_types(Int64, Array[@types.SubType], Array[Int]) -> Unit
-
 pub fn tag_funcref_ptr(Int64) -> Int64
 
 pub fn take_pending_trap_message() -> String?
-
-pub fn take_wasi_exit_code(Int64) -> Int
-
-pub fn take_wasi_stderr(Int64) -> Bytes
-
-pub fn take_wasi_stdout(Int64) -> Bytes
-
-pub fn throw_exception_tag(Int64, Int) -> Unit
-
-pub fn throw_exception_values(Int64, Int, Array[Int64]) -> Unit
 
 pub fn untag_funcref_ptr(Int64) -> Int64
 
@@ -292,7 +230,7 @@ pub(all) suberror CHeapError {
   OutOfMemory
 }
 
-pub suberror GCSetupError {
+pub(all) suberror GCSetupError {
   MissingJITContext
   InvalidFuncCount(num_funcs~ : Int)
   FuncTypeIndicesLengthMismatch(func_type_indices_len~ : Int, num_funcs~ : Int)
@@ -714,21 +652,48 @@ pub fn NativeJITContext::call_trampoline(Self, Int64, Int64, FixedArray[Int64], 
 pub fn NativeJITContext::clear_cancellation_callback(Self) -> Unit
 pub fn NativeJITContext::clear_gc_heap(Self) -> Unit
 pub fn NativeJITContext::clear_hostcall_callback(Self) -> Unit
-pub fn NativeJITContext::func_table_ptr(Self) -> Int64
+pub fn NativeJITContext::clear_segments(Self) -> Unit
+pub fn NativeJITContext::clear_wasi_stdin_buffer(Self) -> Unit
+pub fn NativeJITContext::clear_wasi_stdin_callback(Self) -> Unit
+pub fn NativeJITContext::func_count(Self) -> Int
+pub fn NativeJITContext::func_ptr(Self, Int) -> Int64
+pub fn NativeJITContext::gc_begin_frame(Self, Int64) -> Unit
+pub fn NativeJITContext::gc_collect_for_alloc(Self, Array[Int64]) -> Int
+pub fn NativeJITContext::gc_end_frame(Self) -> Unit
+pub fn NativeJITContext::gc_environment_is_clear(Self) -> Bool
+pub fn NativeJITContext::gc_set_root_scratch(Self, Array[Int64]) -> Bool
+pub fn NativeJITContext::gc_set_safepoint_table(Self, Int64) -> Unit
+pub fn NativeJITContext::gc_use_func_safepoints(Self, Int) -> Unit
 pub fn NativeJITContext::has_wasm_stack(Self) -> Bool
+pub fn NativeJITContext::init_wasi(Self, Array[String], Array[String], Array[(String, String)], quiet? : Bool) -> Unit
 pub fn NativeJITContext::memory_ptr(Self, Int) -> Int64
 pub fn NativeJITContext::memory_size(Self, Int) -> Int64
-pub fn NativeJITContext::ptr(Self) -> Int64
 pub fn NativeJITContext::refresh_table_layout(Self, Int) -> Bool
+pub fn NativeJITContext::register_safepoints(Self, Int, Array[@code_object.SafepointSite]) -> Bool
 pub fn NativeJITContext::set_cancellation_callback(Self, () -> Bool) -> Unit
 pub fn NativeJITContext::set_func(Self, Int, Int64) -> Unit
+pub fn NativeJITContext::set_gc_heap(Self, CHeap) -> Unit
+pub fn NativeJITContext::set_gc_heap_ptr(Self, Int64) -> Unit
 pub fn NativeJITContext::set_globals(Self, Int64) -> Unit
 pub fn NativeJITContext::set_hostcall_callback(Self, () -> NativeHostcallOutcome) -> Unit
 pub fn NativeJITContext::set_indirect(Self, Int, Int, Int) -> Unit
 pub fn NativeJITContext::set_memory(Self, Int64) -> Unit
 pub fn NativeJITContext::set_memory_pointers(Self, Array[MemoryInfo]) -> Unit
 pub fn NativeJITContext::set_table_pointers(Self, Array[JITTable?]) -> Unit
+pub fn NativeJITContext::set_wasi_stderr_capture(Self, Bool) -> Unit
+pub fn NativeJITContext::set_wasi_stdin_buffer(Self, Bytes) -> Unit
+pub fn NativeJITContext::set_wasi_stdin_callback(Self, () -> Bytes) -> Unit
+pub fn NativeJITContext::set_wasi_stdout_capture(Self, Bool) -> Unit
+pub fn NativeJITContext::setup_gc(Self, CHeap, Array[@types.SubType], Array[Int], Array[Int]) -> Unit raise GCSetupError
+pub fn NativeJITContext::setup_gc_with_func_table(Self, CHeap, Array[@types.SubType], Array[Int], Array[Int], Int64, Int) -> Unit raise GCSetupError
+pub fn NativeJITContext::setup_segments(Self, Array[@types.Data], Array[Array[Int64]], data_dropped? : Array[Bool], elem_dropped? : Array[Bool]) -> Unit
 pub fn NativeJITContext::start_continuation(Self, Int64, Int64, FixedArray[Int64], Int, stack_size? : Int64) -> NativeJITContinuation raise NativeFiberError
+pub fn NativeJITContext::take_wasi_exit_code(Self) -> Int
+pub fn NativeJITContext::take_wasi_stderr(Self) -> Bytes
+pub fn NativeJITContext::take_wasi_stdout(Self) -> Bytes
+pub fn NativeJITContext::teardown_gc(Self) -> Unit
+pub fn NativeJITContext::throw_exception_tag(Self, Int) -> Unit
+pub fn NativeJITContext::throw_exception_values(Self, Int, Array[Int64]) -> Unit
 pub fn NativeJITContext::try_alloc(Int) -> Self?
 
 type NativeJITContinuation
@@ -866,3 +831,4 @@ pub(all) struct WasmTrapFrame {
 // Type aliases
 
 // Traits
+

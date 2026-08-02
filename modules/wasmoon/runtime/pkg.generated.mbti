@@ -511,3 +511,4 @@ pub(open) trait GcRuntime {
   fn set_threshold(Self, Int) -> Unit
   fn get_threshold(Self) -> Int
 }
+

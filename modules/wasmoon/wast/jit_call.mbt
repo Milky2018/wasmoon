@@ -88,14 +88,11 @@ fn prepare_jit_core_environment(
   )
   match store.c_heap {
     Some(heap) => {
-      @wasmoon_jit.gc_setup(
+      context.jit_module.setup_gc(
         heap,
         context.module_types,
         context.canonical_type_indices,
-        ctx_ptr=context.jit_module.get_context_ptr(),
-        func_type_indices=context.func_type_indices,
-        func_table_ptr=context.jit_module.get_func_table_ptr(),
-        num_funcs=context.jit_module.get_func_count(),
+        context.func_type_indices,
       ) catch {
         error => raise GcSetupFailed(error.to_string())
       }
@@ -113,7 +110,7 @@ fn finish_jit_core_environment(
   gc_active : Bool,
 ) -> Unit {
   if gc_active {
-    @wasmoon_jit.gc_teardown(context.jit_module.get_context_ptr())
+    context.jit_module.teardown_gc()
   }
   sync_jit_globals_to_store(context, store)
   sync_jit_tables_to_store(context, store)

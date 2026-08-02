@@ -786,8 +786,6 @@ pub fn invoke_action(
                       jit_func_type_indices.push(-1) // Invalid/unknown type
                     }
                   }
-                  let mut gc_func_table_ptr = jit.jit_module.get_func_table_ptr()
-                  let mut gc_num_funcs = jit.jit_module.get_func_count()
                   let gc_func_type_indices : Array[Int] = []
                   for type_idx in jit_func_type_indices {
                     gc_func_type_indices.push(type_idx)
@@ -831,19 +829,27 @@ pub fn invoke_action(
                         )
                         gc_func_type_indices.push(type_idx)
                       }
-                      gc_func_table_ptr = table_ptr
-                      gc_num_funcs = gc_funcref_entries.length()
                     }
                   }
-                  @wasmoon_jit.gc_setup(
-                    heap,
-                    jit.module_types,
-                    canonical,
-                    ctx_ptr=jit.jit_module.get_context_ptr(),
-                    func_type_indices=gc_func_type_indices,
-                    func_table_ptr=gc_func_table_ptr,
-                    num_funcs=gc_num_funcs,
-                  ) catch {
+                  try {
+                    if temp_gc_func_table_ptr != 0L {
+                      jit.jit_module.setup_gc_with_func_table(
+                        heap,
+                        jit.module_types,
+                        canonical,
+                        gc_func_type_indices,
+                        temp_gc_func_table_ptr,
+                        gc_func_type_indices.length(),
+                      )
+                    } else {
+                      jit.jit_module.setup_gc(
+                        heap,
+                        jit.module_types,
+                        canonical,
+                        gc_func_type_indices,
+                      )
+                    }
+                  } catch {
                     err => {
                       if temp_gc_func_table_ptr != 0L {
                         @wasmoon_jit.free_memory(temp_gc_func_table_ptr)
@@ -870,7 +876,7 @@ pub fn invoke_action(
               let results = jit.jit_module.call_with_context(f, i64_args) catch {
                 JITExit(code) => {
                   // Tear down GC context on exit
-                  @wasmoon_jit.gc_teardown(jit.jit_module.get_context_ptr())
+                  jit.jit_module.teardown_gc()
                   if temp_gc_func_table_ptr != 0L {
                     @wasmoon_jit.free_memory(temp_gc_func_table_ptr)
                     temp_gc_func_table_ptr = 0L
@@ -882,7 +888,7 @@ pub fn invoke_action(
                 }
                 JITTrap(msg) => {
                   // Tear down GC context on trap
-                  @wasmoon_jit.gc_teardown(jit.jit_module.get_context_ptr())
+                  jit.jit_module.teardown_gc()
                   if temp_gc_func_table_ptr != 0L {
                     @wasmoon_jit.free_memory(temp_gc_func_table_ptr)
                     temp_gc_func_table_ptr = 0L
@@ -893,7 +899,7 @@ pub fn invoke_action(
                   raise RuntimeError(msg)
                 }
                 JITCancelled => {
-                  @wasmoon_jit.gc_teardown(jit.jit_module.get_context_ptr())
+                  jit.jit_module.teardown_gc()
                   if temp_gc_func_table_ptr != 0L {
                     @wasmoon_jit.free_memory(temp_gc_func_table_ptr)
                     temp_gc_func_table_ptr = 0L
@@ -904,7 +910,7 @@ pub fn invoke_action(
                 }
               }
               // Tear down GC context after JIT call
-              @wasmoon_jit.gc_teardown(jit.jit_module.get_context_ptr())
+              jit.jit_module.teardown_gc()
               if temp_gc_func_table_ptr != 0L {
                 @wasmoon_jit.free_memory(temp_gc_func_table_ptr)
               }

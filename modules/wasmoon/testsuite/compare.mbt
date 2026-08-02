@@ -429,7 +429,7 @@ fn run_jit_with_opt_level(
     let mut gc_active = false
     defer {
       if gc_active {
-        @wasmoon_jit.gc_teardown(jm.get_context_ptr())
+        jm.teardown_gc()
       }
       for table_idx in 0..<instance.table_addrs.length() {
         jm.refresh_table_layout(table_idx) |> ignore
@@ -494,15 +494,7 @@ fn run_jit_with_opt_level(
     )
     |> ignore
     let c_heap = @wasmoon_jit.CHeap::CHeap()
-    @wasmoon_jit.gc_setup(
-      c_heap,
-      module_types,
-      canonical_type_indices,
-      ctx_ptr=jm.get_context_ptr(),
-      func_type_indices~,
-      func_table_ptr=jm.get_func_table_ptr(),
-      num_funcs=jm.get_func_count(),
-    ) catch {
+    jm.setup_gc(c_heap, module_types, canonical_type_indices, func_type_indices) catch {
       err => return Err("GC setup failed: \{err}")
     }
     gc_active = true

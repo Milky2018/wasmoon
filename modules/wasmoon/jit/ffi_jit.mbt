@@ -48,12 +48,6 @@ fn JITContext::try_alloc(total_funcs : Int) -> JITContext? {
 }
 
 ///|
-/// Get the raw context pointer (for FFI calls)
-fn JITContext::ptr(self : JITContext) -> Int64 {
-  self.ctx.ptr()
-}
-
-///|
 fn JITContext::close(self : JITContext) -> Unit {
   self.clear_hostcall_callback()
   self.clear_cancellation_callback()
@@ -69,6 +63,15 @@ fn JITContext::close(self : JITContext) -> Unit {
 /// Set a function pointer in the context
 fn JITContext::set_func(self : JITContext, idx : Int, func_ptr : Int64) -> Unit {
   self.ctx.set_func(idx, func_ptr)
+}
+
+///|
+fn JITContext::register_safepoints(
+  self : JITContext,
+  func_idx : Int,
+  safepoints : Array[@code_object.SafepointSite],
+) -> Bool {
+  self.ctx.register_safepoints(func_idx, safepoints)
 }
 
 ///|
@@ -178,7 +181,7 @@ fn JITContext::init_wasi(
   env : Array[String],
   preopens : Array[(String, String)],
 ) -> Unit {
-  @wasmoon_jit.init_wasi_context(self.ptr(), args, env, preopens)
+  self.ctx.init_wasi(args, env, preopens)
 }
 
 ///|
@@ -189,7 +192,7 @@ fn JITContext::init_wasi_quiet(
   env : Array[String],
   preopens : Array[(String, String)],
 ) -> Unit {
-  @wasmoon_jit.init_wasi_context(self.ptr(), args, env, preopens, quiet=true)
+  self.ctx.init_wasi(args, env, preopens, quiet=true)
 }
 
 ///|
@@ -198,7 +201,7 @@ fn JITContext::set_wasi_stdout_capture(
   self : JITContext,
   enabled : Bool,
 ) -> Unit {
-  @wasmoon_jit.set_wasi_stdout_capture(self.ptr(), enabled)
+  self.ctx.set_wasi_stdout_capture(enabled)
 }
 
 ///|
@@ -207,13 +210,13 @@ fn JITContext::set_wasi_stderr_capture(
   self : JITContext,
   enabled : Bool,
 ) -> Unit {
-  @wasmoon_jit.set_wasi_stderr_capture(self.ptr(), enabled)
+  self.ctx.set_wasi_stderr_capture(enabled)
 }
 
 ///|
 /// Set WASI stdin buffer (custom stdin)
 fn JITContext::set_wasi_stdin_buffer(self : JITContext, data : Bytes) -> Unit {
-  @wasmoon_jit.set_wasi_stdin_buffer(self.ptr(), data)
+  self.ctx.set_wasi_stdin_buffer(data)
 }
 
 ///|
@@ -222,7 +225,7 @@ fn JITContext::set_wasi_stdin_callback(
   self : JITContext,
   callback : () -> Bytes,
 ) -> Unit {
-  @wasmoon_jit.set_wasi_stdin_callback(self.ptr(), callback)
+  self.ctx.set_wasi_stdin_callback(callback)
 }
 
 ///|
@@ -255,25 +258,25 @@ fn JITContext::clear_cancellation_callback(self : JITContext) -> Unit {
 ///|
 /// Clear WASI stdin callback
 fn JITContext::clear_wasi_stdin_callback(self : JITContext) -> Unit {
-  @wasmoon_jit.clear_wasi_stdin_callback(self.ptr())
+  self.ctx.clear_wasi_stdin_callback()
 }
 
 ///|
 /// Clear WASI stdin buffer
 fn JITContext::clear_wasi_stdin_buffer(self : JITContext) -> Unit {
-  @wasmoon_jit.clear_wasi_stdin_buffer(self.ptr())
+  self.ctx.clear_wasi_stdin_buffer()
 }
 
 ///|
 /// Take captured stdout bytes (and clear buffer)
 fn JITContext::take_wasi_stdout(self : JITContext) -> Bytes {
-  @wasmoon_jit.take_wasi_stdout(self.ptr())
+  self.ctx.take_wasi_stdout()
 }
 
 ///|
 /// Take captured stderr bytes (and clear buffer)
 fn JITContext::take_wasi_stderr(self : JITContext) -> Bytes {
-  @wasmoon_jit.take_wasi_stderr(self.ptr())
+  self.ctx.take_wasi_stderr()
 }
 
 // ============ Multi-value Return Support ============
@@ -348,7 +351,7 @@ fn JITContext::call_multi_return(
   )
   if trap_code != 0 {
     if @wasmoon_jit.is_wasi_exit_trap_code(trap_code) {
-      raise JITExit(@wasmoon_jit.take_wasi_exit_code(self.ptr()))
+      raise JITExit(self.ctx.take_wasi_exit_code())
     }
     if @wasmoon_jit.is_cancelled_trap_code(trap_code) {
       raise JITCancelled
@@ -366,7 +369,7 @@ fn JITContext::call_multi_return(
 ///|
 priv struct JITContextContinuation {
   raw : @wasmoon_jit.NativeJITContinuation
-  context_ptr : Int64
+  context : @wasmoon_jit.NativeJITContext
   values : FixedArray[Int64]
   num_arg_slots : Int
   num_result_slots : Int
@@ -404,7 +407,7 @@ fn JITContext::start_continuation(
   }
   {
     raw,
-    context_ptr: self.ptr(),
+    context: self.ctx,
     values,
     num_arg_slots,
     num_result_slots,
@@ -432,7 +435,7 @@ fn JITContextContinuation::advance(
       self.active[0] = false
       if trap_code != 0 {
         if @wasmoon_jit.is_wasi_exit_trap_code(trap_code) {
-          raise JITExit(@wasmoon_jit.take_wasi_exit_code(self.context_ptr))
+          raise JITExit(self.context.take_wasi_exit_code())
         }
         if @wasmoon_jit.is_cancelled_trap_code(trap_code) {
           raise JITCancelled

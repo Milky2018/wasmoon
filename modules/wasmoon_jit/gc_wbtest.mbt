@@ -374,18 +374,11 @@ test "gc: c_heap allocation fault is surfaced as OutOfMemory" {
 ///|
 test "gc_setup: fail fast on inconsistent function table context" {
   let heap = CHeap::CHeap()
-  let jit_ctx = c_jit_alloc_context_managed(1)
-  let ctx_ptr = c_jit_context_ptr(jit_ctx)
+  guard NativeJITContext::try_alloc(1) is Some(jit_ctx) else {
+    fail("expected JIT context allocation")
+  }
   let missing_types = try
-    gc_setup(
-      heap,
-      [],
-      [],
-      ctx_ptr~,
-      func_type_indices=[],
-      func_table_ptr=0L,
-      num_funcs=1,
-    )
+    jit_ctx.setup_gc_with_func_table(heap, [], [], [], 0L, 1)
   catch {
     FuncTypeIndicesLengthMismatch(func_type_indices_len=0, num_funcs=1) => true
     _ => false
@@ -396,15 +389,7 @@ test "gc_setup: fail fast on inconsistent function table context" {
     fail("expected func_type_indices length mismatch")
   }
   let missing_table_ptr = try
-    gc_setup(
-      heap,
-      [],
-      [],
-      ctx_ptr~,
-      func_type_indices=[0],
-      func_table_ptr=0L,
-      num_funcs=1,
-    )
+    jit_ctx.setup_gc_with_func_table(heap, [], [], [0], 0L, 1)
   catch {
     MissingFunctionTableContext(num_funcs=1) => true
     _ => false
@@ -415,15 +400,7 @@ test "gc_setup: fail fast on inconsistent function table context" {
     fail("expected missing function table context")
   }
   let zero_funcs_ok = try
-    gc_setup(
-      heap,
-      [],
-      [],
-      ctx_ptr~,
-      func_type_indices=[],
-      func_table_ptr=0L,
-      num_funcs=0,
-    )
+    jit_ctx.setup_gc_with_func_table(heap, [], [], [], 0L, 0)
   catch {
     _ => false
   } noraise {
@@ -432,90 +409,98 @@ test "gc_setup: fail fast on inconsistent function table context" {
   guard zero_funcs_ok else {
     fail("expected gc_setup success for zero-func module")
   }
-  gc_teardown(ctx_ptr)
+  jit_ctx.teardown_gc()
 }
 
 ///|
 test "gc: collect_for_alloc keeps scratch roots alive" {
   let heap = CHeap::CHeap(capacity=1024)
-  let jit_ctx = c_jit_alloc_context_managed(0)
-  let ctx_ptr = c_jit_context_ptr(jit_ctx)
-  gc_set_heap(ctx_ptr, heap)
+  guard NativeJITContext::try_alloc(0) is Some(jit_ctx) else {
+    fail("expected JIT context allocation")
+  }
+  jit_ctx.set_gc_heap(heap)
 
   let rooted = heap.alloc_struct(0, [I32(1)])
   let _unrooted = heap.alloc_struct(0, [I32(2)])
 
   let rooted_raw = value_to_i64(StructRef(rooted))
-  guard gc_set_root_scratch(ctx_ptr, [rooted_raw]) else {
+  guard jit_ctx.gc_set_root_scratch([rooted_raw]) else {
     fail("expected gc_set_root_scratch success")
   }
 
-  let collected = gc_collect_for_alloc(ctx_ptr, [])
+  let collected = jit_ctx.gc_collect_for_alloc([])
   inspect(collected >= 1, content="true")
   inspect(heap.is_valid(rooted), content="true")
 
-  gc_set_root_scratch(ctx_ptr, []) |> ignore
-  gc_clear_heap(ctx_ptr)
+  jit_ctx.gc_set_root_scratch([]) |> ignore
+  jit_ctx.clear_gc_heap()
 }
 
 ///|
 test "gc: begin/end frame API accepts nested scopes" {
-  let jit_ctx = c_jit_alloc_context_managed(0)
-  let ctx_ptr = c_jit_context_ptr(jit_ctx)
+  guard NativeJITContext::try_alloc(0) is Some(jit_ctx) else {
+    fail("expected JIT context allocation")
+  }
 
-  gc_begin_frame(ctx_ptr, 100L)
-  gc_begin_frame(ctx_ptr, 200L)
-  gc_end_frame(ctx_ptr)
-  gc_end_frame(ctx_ptr)
+  jit_ctx.gc_begin_frame(100L)
+  jit_ctx.gc_begin_frame(200L)
+  jit_ctx.gc_end_frame()
+  jit_ctx.gc_end_frame()
 
   inspect(true, content="true")
 }
 
 ///|
-fn test_gc_push_root_scope(ctx_ptr : Int64, roots : Array[Int64]) -> Bool {
+fn test_gc_push_root_scope(
+  context : NativeJITContext,
+  roots : Array[Int64],
+) -> Bool {
   let raw_roots = FixedArray::makei(roots.length(), fn(i) { roots[i] })
-  gc_push_root_scope_for_test(ctx_ptr, raw_roots, roots.length()) == 1
+  context.with_ptr(fn(ptr) {
+    gc_push_root_scope_for_test(ptr, raw_roots, roots.length()) == 1
+  })
 }
 
 ///|
-fn test_gc_pop_root_scope(ctx_ptr : Int64) -> Unit {
-  gc_pop_root_scope_for_test(ctx_ptr)
+fn test_gc_pop_root_scope(context : NativeJITContext) -> Unit {
+  context.with_ptr(fn(ptr) { gc_pop_root_scope_for_test(ptr) })
 }
 
 ///|
 test "gc: copied caller-root scopes nest and pop" {
   let heap = CHeap::CHeap(capacity=1024)
-  let jit_ctx = c_jit_alloc_context_managed(0)
-  let ctx_ptr = c_jit_context_ptr(jit_ctx)
-  gc_set_heap(ctx_ptr, heap)
+  guard NativeJITContext::try_alloc(0) is Some(jit_ctx) else {
+    fail("expected JIT context allocation")
+  }
+  jit_ctx.set_gc_heap(heap)
 
   let outer = heap.alloc_struct(0, [I32(1)])
   let inner = heap.alloc_struct(0, [I32(2)])
   let unrooted = heap.alloc_struct(0, [I32(3)])
-  guard test_gc_push_root_scope(ctx_ptr, [value_to_i64(StructRef(outer))]) else {
+  guard test_gc_push_root_scope(jit_ctx, [value_to_i64(StructRef(outer))]) else {
     fail("expected outer caller-root scope")
   }
-  guard test_gc_push_root_scope(ctx_ptr, [value_to_i64(StructRef(inner))]) else {
+  guard test_gc_push_root_scope(jit_ctx, [value_to_i64(StructRef(inner))]) else {
     fail("expected inner caller-root scope")
   }
 
-  inspect(gc_collect_for_alloc(ctx_ptr, []), content="1")
+  inspect(jit_ctx.gc_collect_for_alloc([]), content="1")
   debug_inspect(
     [heap.is_valid(outer), heap.is_valid(inner), heap.is_valid(unrooted)],
     content="[true, true, false]",
   )
 
-  test_gc_pop_root_scope(ctx_ptr)
-  inspect(gc_collect_for_alloc(ctx_ptr, []), content="1")
+  test_gc_pop_root_scope(jit_ctx)
+  inspect(jit_ctx.gc_collect_for_alloc([]), content="1")
   debug_inspect(
     [heap.is_valid(outer), heap.is_valid(inner)],
     content="[true, false]",
   )
 
-  test_gc_pop_root_scope(ctx_ptr)
-  inspect(gc_collect_for_alloc(ctx_ptr, []), content="1")
+  test_gc_pop_root_scope(jit_ctx)
+  inspect(jit_ctx.gc_collect_for_alloc([]), content="1")
   inspect(heap.is_valid(outer), content="false")
-  gc_clear_heap(c_jit_context_ptr(jit_ctx))
+  jit_ctx.clear_gc_heap()
 }
 
 ///|

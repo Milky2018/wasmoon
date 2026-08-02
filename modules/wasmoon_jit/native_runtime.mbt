@@ -257,7 +257,7 @@ pub fn is_wasi_exit_trap_code(code : Int) -> Bool {
 }
 
 ///|
-pub fn take_wasi_exit_code(ctx_ptr : Int64) -> Int {
+fn take_wasi_exit_code(ctx_ptr : Int64) -> Int {
   let raw_code = c_jit_get_wasi_exit_code(ctx_ptr)
   c_jit_clear_wasi_exit(ctx_ptr)
   if raw_code < 0 {
@@ -338,22 +338,22 @@ pub fn make_cstring(s : String) -> FixedArray[Byte] {
 }
 
 ///|
-pub fn set_wasi_stdout_capture(ctx_ptr : Int64, enabled : Bool) -> Unit {
+fn set_wasi_stdout_capture(ctx_ptr : Int64, enabled : Bool) -> Unit {
   c_jit_set_wasi_stdout_capture(ctx_ptr, if enabled { 1 } else { 0 })
 }
 
 ///|
-pub fn set_wasi_stderr_capture(ctx_ptr : Int64, enabled : Bool) -> Unit {
+fn set_wasi_stderr_capture(ctx_ptr : Int64, enabled : Bool) -> Unit {
   c_jit_set_wasi_stderr_capture(ctx_ptr, if enabled { 1 } else { 0 })
 }
 
 ///|
-pub fn set_wasi_stdin_buffer(ctx_ptr : Int64, data : Bytes) -> Unit {
+fn set_wasi_stdin_buffer(ctx_ptr : Int64, data : Bytes) -> Unit {
   c_jit_set_wasi_stdin_buffer(ctx_ptr, data, data.length())
 }
 
 ///|
-pub fn set_wasi_stdin_callback(ctx_ptr : Int64, callback : () -> Bytes) -> Unit {
+fn set_wasi_stdin_callback(ctx_ptr : Int64, callback : () -> Bytes) -> Unit {
   let call_closure : FuncRef[(() -> Bytes) -> Bytes] = fn(f : () -> Bytes) {
     f()
   }
@@ -361,27 +361,27 @@ pub fn set_wasi_stdin_callback(ctx_ptr : Int64, callback : () -> Bytes) -> Unit 
 }
 
 ///|
-pub fn clear_wasi_stdin_callback(ctx_ptr : Int64) -> Unit {
+fn clear_wasi_stdin_callback(ctx_ptr : Int64) -> Unit {
   c_jit_clear_wasi_stdin_callback(ctx_ptr)
 }
 
 ///|
-pub fn clear_wasi_stdin_buffer(ctx_ptr : Int64) -> Unit {
+fn clear_wasi_stdin_buffer(ctx_ptr : Int64) -> Unit {
   c_jit_clear_wasi_stdin_buffer(ctx_ptr)
 }
 
 ///|
-pub fn take_wasi_stdout(ctx_ptr : Int64) -> Bytes {
+fn take_wasi_stdout(ctx_ptr : Int64) -> Bytes {
   c_jit_take_wasi_stdout(ctx_ptr)
 }
 
 ///|
-pub fn take_wasi_stderr(ctx_ptr : Int64) -> Bytes {
+fn take_wasi_stderr(ctx_ptr : Int64) -> Bytes {
   c_jit_take_wasi_stderr(ctx_ptr)
 }
 
 ///|
-pub fn init_wasi_context(
+fn init_wasi_context(
   ctx_ptr : Int64,
   args : Array[String],
   env : Array[String],
@@ -412,32 +412,32 @@ pub fn init_wasi_context(
 }
 
 ///|
-pub fn context_func_table_ptr(ctx_ptr : Int64) -> Int64 {
+fn context_func_table_ptr(ctx_ptr : Int64) -> Int64 {
   c_jit_ctx_get_func_table(ctx_ptr)
 }
 
 ///|
-pub fn context_func_count(ctx_ptr : Int64) -> Int {
+fn context_func_count(ctx_ptr : Int64) -> Int {
   c_jit_ctx_get_func_count(ctx_ptr)
 }
 
 ///|
-pub fn context_table_ptr(ctx_ptr : Int64, table_idx : Int) -> Int64 {
+fn context_table_ptr(ctx_ptr : Int64, table_idx : Int) -> Int64 {
   c_jit_ctx_get_table_ptr(ctx_ptr, table_idx)
 }
 
 ///|
-pub fn context_table_size(ctx_ptr : Int64, table_idx : Int) -> Int {
+fn context_table_size(ctx_ptr : Int64, table_idx : Int) -> Int {
   c_jit_ctx_get_table_size(ctx_ptr, table_idx)
 }
 
 ///|
-pub fn throw_exception_tag(ctx_ptr : Int64, tag_addr : Int) -> Unit {
+fn throw_exception_tag(ctx_ptr : Int64, tag_addr : Int) -> Unit {
   c_jit_exception_throw_tag(ctx_ptr, tag_addr)
 }
 
 ///|
-pub fn throw_exception_values(
+fn throw_exception_values(
   ctx_ptr : Int64,
   tag_addr : Int,
   values : Array[Int64],
@@ -447,7 +447,7 @@ pub fn throw_exception_values(
 }
 
 ///|
-pub fn setup_segments(
+fn setup_segments(
   ctx_ptr : Int64,
   datas : Array[@types.Data],
   elem_segments : Array[Array[Int64]],
@@ -487,7 +487,7 @@ pub fn setup_segments(
 }
 
 ///|
-pub fn clear_segments(ctx_ptr : Int64) -> Unit {
+fn clear_segments(ctx_ptr : Int64) -> Unit {
   c_jit_ctx_clear_segments(ctx_ptr)
 }
 
@@ -508,8 +508,125 @@ pub fn NativeJITContext::try_alloc(total_funcs : Int) -> NativeJITContext? {
 }
 
 ///|
-pub fn NativeJITContext::ptr(self : NativeJITContext) -> Int64 {
-  c_jit_context_ptr(self.handle)
+fn[T] NativeJITContext::with_ptr(
+  self : NativeJITContext,
+  body : (Int64) -> T raise?,
+) -> T raise? {
+  let ptr = c_jit_context_ptr(self.handle)
+  defer c_jit_context_keep_alive(self.handle)
+  body(ptr)
+}
+
+///|
+pub fn NativeJITContext::init_wasi(
+  self : NativeJITContext,
+  args : Array[String],
+  env : Array[String],
+  preopens : Array[(String, String)],
+  quiet? : Bool = false,
+) -> Unit {
+  self.with_ptr(fn(ptr) { init_wasi_context(ptr, args, env, preopens, quiet~) })
+}
+
+///|
+pub fn NativeJITContext::set_wasi_stdout_capture(
+  self : NativeJITContext,
+  enabled : Bool,
+) -> Unit {
+  self.with_ptr(fn(ptr) { set_wasi_stdout_capture(ptr, enabled) })
+}
+
+///|
+pub fn NativeJITContext::set_wasi_stderr_capture(
+  self : NativeJITContext,
+  enabled : Bool,
+) -> Unit {
+  self.with_ptr(fn(ptr) { set_wasi_stderr_capture(ptr, enabled) })
+}
+
+///|
+pub fn NativeJITContext::set_wasi_stdin_buffer(
+  self : NativeJITContext,
+  data : Bytes,
+) -> Unit {
+  self.with_ptr(fn(ptr) { set_wasi_stdin_buffer(ptr, data) })
+}
+
+///|
+pub fn NativeJITContext::set_wasi_stdin_callback(
+  self : NativeJITContext,
+  callback : () -> Bytes,
+) -> Unit {
+  self.with_ptr(fn(ptr) { set_wasi_stdin_callback(ptr, callback) })
+}
+
+///|
+pub fn NativeJITContext::clear_wasi_stdin_callback(
+  self : NativeJITContext,
+) -> Unit {
+  self.with_ptr(fn(ptr) { clear_wasi_stdin_callback(ptr) })
+}
+
+///|
+pub fn NativeJITContext::clear_wasi_stdin_buffer(
+  self : NativeJITContext,
+) -> Unit {
+  self.with_ptr(fn(ptr) { clear_wasi_stdin_buffer(ptr) })
+}
+
+///|
+pub fn NativeJITContext::take_wasi_stdout(self : NativeJITContext) -> Bytes {
+  self.with_ptr(fn(ptr) { take_wasi_stdout(ptr) })
+}
+
+///|
+pub fn NativeJITContext::take_wasi_stderr(self : NativeJITContext) -> Bytes {
+  self.with_ptr(fn(ptr) { take_wasi_stderr(ptr) })
+}
+
+///|
+pub fn NativeJITContext::take_wasi_exit_code(self : NativeJITContext) -> Int {
+  self.with_ptr(fn(ptr) { take_wasi_exit_code(ptr) })
+}
+
+///|
+pub fn NativeJITContext::func_count(self : NativeJITContext) -> Int {
+  self.with_ptr(fn(ptr) { context_func_count(ptr) })
+}
+
+///|
+pub fn NativeJITContext::throw_exception_tag(
+  self : NativeJITContext,
+  tag_addr : Int,
+) -> Unit {
+  self.with_ptr(fn(ptr) { throw_exception_tag(ptr, tag_addr) })
+}
+
+///|
+pub fn NativeJITContext::throw_exception_values(
+  self : NativeJITContext,
+  tag_addr : Int,
+  values : Array[Int64],
+) -> Unit {
+  self.with_ptr(fn(ptr) { throw_exception_values(ptr, tag_addr, values) })
+}
+
+///|
+pub fn NativeJITContext::setup_segments(
+  self : NativeJITContext,
+  datas : Array[@types.Data],
+  elem_segments : Array[Array[Int64]],
+  data_dropped? : Array[Bool] = [],
+  elem_dropped? : Array[Bool] = [],
+) -> Unit {
+  self.with_ptr(fn(ptr) {
+    setup_segments(ptr, datas, elem_segments, data_dropped~, elem_dropped~)
+  })
+}
+
+///|
+pub fn NativeJITContext::clear_segments(self : NativeJITContext) -> Unit {
+  self.with_ptr(fn(ptr) { clear_segments(ptr) })
 }
 
 ///|
@@ -523,7 +640,7 @@ pub fn NativeJITContext::set_func(
   idx : Int,
   func_ptr : Int64,
 ) -> Unit {
-  c_jit_ctx_set_func(self.ptr(), idx, func_ptr)
+  self.with_ptr(fn(ptr) { c_jit_ctx_set_func(ptr, idx, func_ptr) })
 }
 
 ///|
@@ -531,7 +648,7 @@ pub fn NativeJITContext::alloc_indirect_table(
   self : NativeJITContext,
   count : Int,
 ) -> Bool {
-  c_jit_ctx_alloc_indirect_table(self.ptr(), count) != 0
+  self.with_ptr(fn(ptr) { c_jit_ctx_alloc_indirect_table(ptr, count) != 0 })
 }
 
 ///|
@@ -541,7 +658,9 @@ pub fn NativeJITContext::set_indirect(
   func_idx : Int,
   type_idx : Int,
 ) -> Unit {
-  c_jit_ctx_set_indirect(self.ptr(), table_idx, func_idx, type_idx)
+  self.with_ptr(fn(ptr) {
+    c_jit_ctx_set_indirect(ptr, table_idx, func_idx, type_idx)
+  })
 }
 
 ///|
@@ -549,7 +668,7 @@ pub fn NativeJITContext::set_memory(
   self : NativeJITContext,
   mem0_ptr : Int64,
 ) -> Unit {
-  c_jit_ctx_set_memory(self.ptr(), mem0_ptr)
+  self.with_ptr(fn(ptr) { c_jit_ctx_set_memory(ptr, mem0_ptr) })
 }
 
 ///|
@@ -557,7 +676,7 @@ pub fn NativeJITContext::set_globals(
   self : NativeJITContext,
   globals_ptr : Int64,
 ) -> Unit {
-  c_jit_ctx_set_globals(self.ptr(), globals_ptr)
+  self.with_ptr(fn(ptr) { c_jit_ctx_set_globals(ptr, globals_ptr) })
 }
 
 ///|
@@ -566,16 +685,29 @@ pub fn NativeJITContext::alloc_guarded_memory(
   initial_pages : Int,
   max_pages : Int?,
 ) -> Int64 {
-  c_jit_ctx_alloc_guarded_memory(
-    self.ptr(),
-    initial_pages.to_int64(),
-    max_pages.unwrap_or(-1).to_int64(),
-  )
+  self.with_ptr(fn(ptr) {
+    c_jit_ctx_alloc_guarded_memory(
+      ptr,
+      initial_pages.to_int64(),
+      max_pages.unwrap_or(-1).to_int64(),
+    )
+  })
 }
 
 ///|
-pub fn NativeJITContext::func_table_ptr(self : NativeJITContext) -> Int64 {
-  context_func_table_ptr(self.ptr())
+pub fn NativeJITContext::func_ptr(
+  self : NativeJITContext,
+  func_idx : Int,
+) -> Int64 {
+  self.with_ptr(fn(ptr) {
+    let table_ptr = context_func_table_ptr(ptr)
+    let count = context_func_count(ptr)
+    if table_ptr != 0L && func_idx >= 0 && func_idx < count {
+      native_value_slot_read(table_ptr, func_idx)
+    } else {
+      0L
+    }
+  })
 }
 
 ///|
@@ -603,13 +735,15 @@ pub fn NativeJITContext::set_table_pointers(
       None => ()
     }
   }
-  c_jit_ctx_set_table_pointers(
-    self.ptr(),
-    table_ptrs,
-    table_sizes,
-    table_max_sizes,
-    jit_tables.length(),
-  )
+  self.with_ptr(fn(ptr) {
+    c_jit_ctx_set_table_pointers(
+      ptr,
+      table_ptrs,
+      table_sizes,
+      table_max_sizes,
+      jit_tables.length(),
+    )
+  })
 }
 
 ///|
@@ -623,8 +757,9 @@ pub fn NativeJITContext::refresh_table_layout(
     return false
   }
   guard self.jit_tables[table_idx] is Some(jit_table) else { return false }
-  let table_ptr = context_table_ptr(self.ptr(), table_idx)
-  let size = context_table_size(self.ptr(), table_idx)
+  let (table_ptr, size) = self.with_ptr(fn(ptr) {
+    (context_table_ptr(ptr, table_idx), context_table_size(ptr, table_idx))
+  })
   if table_ptr == 0L || size < 0 {
     return false
   }
@@ -644,7 +779,9 @@ pub fn NativeJITContext::set_memory_pointers(
   for i, mem in memories {
     ptrs[i] = mem.ptr
   }
-  c_jit_ctx_set_memory_pointers(self.ptr(), ptrs, memories.length())
+  self.with_ptr(fn(ptr) {
+    c_jit_ctx_set_memory_pointers(ptr, ptrs, memories.length())
+  })
 }
 
 ///|
@@ -652,7 +789,7 @@ pub fn NativeJITContext::memory_ptr(
   self : NativeJITContext,
   memidx : Int,
 ) -> Int64 {
-  c_jit_ctx_get_memory_ptr(self.ptr(), memidx)
+  self.with_ptr(fn(ptr) { c_jit_ctx_get_memory_ptr(ptr, memidx) })
 }
 
 ///|
@@ -660,7 +797,7 @@ pub fn NativeJITContext::memory_size(
   self : NativeJITContext,
   memidx : Int,
 ) -> Int64 {
-  c_jit_ctx_get_memory_size(self.ptr(), memidx)
+  self.with_ptr(fn(ptr) { c_jit_ctx_get_memory_size(ptr, memidx) })
 }
 
 ///|
@@ -668,12 +805,12 @@ pub fn NativeJITContext::alloc_wasm_stack(
   self : NativeJITContext,
   stack_size : Int64,
 ) -> Bool {
-  c_jit_alloc_wasm_stack(self.ptr(), stack_size) == 0
+  self.with_ptr(fn(ptr) { c_jit_alloc_wasm_stack(ptr, stack_size) == 0 })
 }
 
 ///|
 pub fn NativeJITContext::has_wasm_stack(self : NativeJITContext) -> Bool {
-  c_jit_get_wasm_stack_top(self.ptr()) != 0L
+  self.with_ptr(fn(ptr) { c_jit_get_wasm_stack_top(ptr) != 0L })
 }
 
 ///|
@@ -697,14 +834,16 @@ pub fn NativeJITContext::set_hostcall_callback(
     }
   }
   let call_closure : FuncRef[(() -> Int) -> Int] = fn(f : () -> Int) { f() }
-  c_jit_set_hostcall_callback(self.ptr(), call_closure, encoded)
+  self.with_ptr(fn(ptr) {
+    c_jit_set_hostcall_callback(ptr, call_closure, encoded)
+  })
 }
 
 ///|
 pub fn NativeJITContext::clear_hostcall_callback(
   self : NativeJITContext,
 ) -> Unit {
-  c_jit_clear_hostcall_callback(self.ptr())
+  self.with_ptr(fn(ptr) { c_jit_clear_hostcall_callback(ptr) })
 }
 
 ///|
@@ -719,14 +858,16 @@ pub fn NativeJITContext::set_cancellation_callback(
       0
     }
   }
-  c_jit_set_cancellation_callback(self.ptr(), call_closure, callback)
+  self.with_ptr(fn(ptr) {
+    c_jit_set_cancellation_callback(ptr, call_closure, callback)
+  })
 }
 
 ///|
 pub fn NativeJITContext::clear_cancellation_callback(
   self : NativeJITContext,
 ) -> Unit {
-  c_jit_clear_cancellation_callback(self.ptr())
+  self.with_ptr(fn(ptr) { c_jit_clear_cancellation_callback(ptr) })
 }
 
 ///|

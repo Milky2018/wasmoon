@@ -8,9 +8,6 @@ import {
 }
 
 // Values
-pub fn throw_exception_tag(Int64, Int) -> Unit
-
-pub fn throw_exception_values(Int64, Int, Array[Int64]) -> Unit
 
 // Errors
 pub suberror JITModuleLoadError {
@@ -77,16 +74,15 @@ pub fn JITModule::export_functions(Self) -> Map[String, Int64]
 pub fn JITModule::find_func_by_pc(Self, Int64) -> (Int, JITFunction, Int)?
 pub fn JITModule::gc_begin_frame(Self, Int64) -> Unit
 pub fn JITModule::gc_end_frame(Self) -> Unit
+pub fn JITModule::gc_environment_is_clear(Self) -> Bool
 pub fn JITModule::gc_set_root_scratch(Self, Array[Int64]) -> Bool
 pub fn JITModule::gc_set_safepoint_table(Self, Int64) -> Unit
 pub fn JITModule::gc_use_func_safepoints(Self, Int) -> Unit
-pub fn JITModule::get_context_ptr(Self) -> Int64
 pub fn JITModule::get_func(Self, Int) -> JITFunction?
 pub fn JITModule::get_func_by_name(Self, String) -> JITFunction?
 pub fn JITModule::get_func_count(Self) -> Int
 pub fn JITModule::get_func_ptr(Self, Int) -> Int64
 pub fn JITModule::get_func_ptr_by_name(Self, String) -> Int64
-pub fn JITModule::get_func_table_ptr(Self) -> Int64
 pub fn JITModule::get_last_trap_report(Self) -> @wasmoon_jit.TrapReport?
 pub fn JITModule::get_memory_ptr(Self, Int) -> Int64
 pub fn JITModule::get_memory_size(Self, Int) -> Int64
@@ -105,8 +101,13 @@ pub fn JITModule::set_globals(Self, Int64) -> Unit
 pub fn JITModule::set_hostcall_callback(Self, () -> @wasmoon_jit.NativeHostcallOutcome) -> Unit
 pub fn JITModule::set_memory(Self, Int64) -> Unit
 pub fn JITModule::set_memory_pointers(Self, Array[@wasmoon_jit.MemoryInfo]) -> Unit
+pub fn JITModule::setup_gc(Self, @wasmoon_jit.CHeap, Array[@types.SubType], Array[Int], Array[Int]) -> Unit raise @wasmoon_jit.GCSetupError
+pub fn JITModule::setup_gc_with_func_table(Self, @wasmoon_jit.CHeap, Array[@types.SubType], Array[Int], Array[Int], Int64, Int) -> Unit raise @wasmoon_jit.GCSetupError
 pub fn JITModule::setup_segments(Self, Array[@types.Data], Array[Array[Int64]], data_dropped? : Array[Bool], elem_dropped? : Array[Bool]) -> Unit
 pub fn JITModule::start_continuation_call(Self, JITFunction, Array[Int64]) -> JITContinuationOutcome raise JITTrap
+pub fn JITModule::teardown_gc(Self) -> Unit
+pub fn JITModule::throw_exception_tag(Self, Int) -> Unit
+pub fn JITModule::throw_exception_values(Self, Int, Array[Int64]) -> Unit
 
 pub(all) struct Single[A](A)
 pub impl[A : @types.ToInt64] DynamicArgs for Single[A]
@@ -130,3 +131,4 @@ pub impl DynamicReturn for Unit
 pub impl[A : @types.FromInt64, B : @types.FromInt64] DynamicReturn for (A, B)
 pub impl[A : @types.FromInt64, B : @types.FromInt64, C : @types.FromInt64] DynamicReturn for (A, B, C)
 pub impl[A : @types.FromInt64, B : @types.FromInt64, C : @types.FromInt64, D : @types.FromInt64] DynamicReturn for (A, B, C, D)
+

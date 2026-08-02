@@ -516,6 +516,22 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_context_ptr(void *jit_context) {
     return *(int64_t *)jit_context;
 }
 
+MOONBIT_FFI_EXPORT void wasmoon_jit_context_keep_alive(void *jit_context) {
+    (void)jit_context;
+}
+
+MOONBIT_FFI_EXPORT int32_t wasmoon_jit_gc_environment_is_clear(int64_t ctx_ptr) {
+    jit_context_t *ctx = (jit_context_t *)(uintptr_t)ctx_ptr;
+    if (!ctx) return 0;
+    return ctx->gc_heap == NULL &&
+        ctx->gc_heap_ptr == NULL &&
+        ctx->gc_heap_limit == NULL &&
+        ctx->gc_type_cache == NULL &&
+        ctx->gc_canonical_indices == NULL &&
+        ctx->gc_func_type_indices == NULL &&
+        ctx->gc_func_table == NULL;
+}
+
 // ============ Shared Indirect Table Support ============
 
 static _Atomic int64_t g_shared_indirect_table_live_count = 0;
