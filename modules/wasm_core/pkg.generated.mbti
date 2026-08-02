@@ -21,4 +21,3 @@ pub fn simple_module(Array[@types.ValueType], Array[@types.ValueType], Array[@ty
 // Type aliases
 
 // Traits
-

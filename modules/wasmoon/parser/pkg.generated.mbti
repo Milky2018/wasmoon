@@ -20,4 +20,3 @@ pub fn Parser::Parser(Bytes) -> Self
 // Type aliases
 
 // Traits
-

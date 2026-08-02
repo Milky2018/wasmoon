@@ -31,4 +31,3 @@ pub fn VCodeAllocationEnvironment::new(Array[@vcode.PhysicalReg], Array[@vcode.P
 // Type aliases
 
 // Traits
-

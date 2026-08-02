@@ -118,4 +118,3 @@ pub(all) enum ResumableCallOutcome {
 // Type aliases
 
 // Traits
-

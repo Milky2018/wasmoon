@@ -400,4 +400,3 @@ pub fn LoweringContext::with_environment_field(Self, @machv.EnvironmentField, Ar
 // Type aliases
 
 // Traits
-

@@ -1,6 +1,6 @@
 name = "Milky2018/wasm_machv"
 
-version = "0.2.2"
+version = "0.3.0"
 
 readme = "README.mbt.md"
 
@@ -13,10 +13,10 @@ keywords = [ "wasm", "webassembly", "milkir", "machv", "lowering" ]
 description = "WebAssembly MilkIR dialect adapter for target-neutral MachV"
 
 import {
-  "Milky2018/wasm_milkir@0.3.2",
-  "Milky2018/milkir@0.3.2",
-  "Milky2018/machv@0.5.2",
-  "Milky2018/milkir_machv@0.4.2",
+  "Milky2018/wasm_milkir@0.4.0",
+  "Milky2018/milkir@0.4.0",
+  "Milky2018/machv@0.6.0",
+  "Milky2018/milkir_machv@0.5.0",
 }
 
 preferred_target = "wasm-gc"

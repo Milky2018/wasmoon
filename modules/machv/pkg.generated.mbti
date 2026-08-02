@@ -693,4 +693,3 @@ pub fn VectorStoreLaneSpec::new(VectorLane, Int, UInt64, Endianness, TrapReason?
 // Type aliases
 
 // Traits
-
