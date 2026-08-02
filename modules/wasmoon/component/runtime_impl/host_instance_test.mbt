@@ -69,6 +69,115 @@ test "async host functions suspend through the shared event loop" {
 }
 
 ///|
+test "host runtime keeps its first readiness source" {
+  let linker = @runtime_impl.ComponentLinker()
+  let runtime = @runtime_impl.HostRuntimeState()
+  let first_waits = Ref(0)
+  let second_waits = Ref(0)
+  runtime.set_event_loop(fn() {
+    first_waits.val = first_waits.val + 1
+    true
+  })
+  let install_error = try
+    runtime.set_event_loop(fn() {
+      second_waits.val = second_waits.val + 1
+      true
+    })
+  catch {
+    error => error
+  } noraise {
+    _ => fail("expected readiness source replacement to be rejected")
+  }
+  let builder = linker.host_instance_builder("test:readiness-owner", runtime)
+  builder.add_async_func(
+    "wait",
+    { is_async: true, params: [], result: Some(Prim(U32)) },
+    fn(_args, _table) {
+      HostFuture(
+        fn() { if first_waits.val > 0 { Ready([U32(7)]) } else { Pending } },
+        fn() { () },
+      )
+    },
+  )
+  let result = builder.finish().call_exported_func("wait", [])
+  debug_inspect(
+    (install_error, result, first_waits.val, second_waits.val),
+    content="(HostEventLoopAlreadyInstalled, [U32(7)], 1, 0)",
+  )
+}
+
+///|
+test "component invocations poll and cancel asynchronous host functions" {
+  let linker = @runtime_impl.ComponentLinker()
+  let runtime = @runtime_impl.HostRuntimeState()
+  let ready = Ref(false)
+  let cancellations = Ref(0)
+  let builder = linker.host_instance_builder("test:async-call", runtime)
+  builder.add_async_func(
+    "wait",
+    { is_async: true, params: [], result: Some(Prim(U32)) },
+    fn(_args, _table) {
+      HostFuture(fn() { if ready.val { Ready([U32(9)]) } else { Pending } }, fn() {
+        cancellations.val = cancellations.val + 1
+      })
+    },
+  )
+  let instance = builder.finish()
+  let completed = instance.start_exported_func("wait", [])
+  debug_inspect(completed.poll(), content="InvocationPending")
+  ready.val = true
+  debug_inspect(
+    (completed.poll(), completed.poll()),
+    content="(InvocationReady([U32(9)]), InvocationReady([U32(9)]))",
+  )
+  ready.val = false
+  let cancelled = instance.start_exported_func("wait", [])
+  debug_inspect(cancelled.poll(), content="InvocationPending")
+  cancelled.cancel()
+  cancelled.cancel()
+  inspect(cancellations.val, content="1")
+  inspect(
+    try cancelled.poll() catch {
+      error => error
+    } noraise {
+      _ => fail("expected cancelled invocation")
+    },
+    content="Cancelled",
+  )
+}
+
+///|
+async test "component invocation join yields to other MoonBit processes" {
+  let linker = @runtime_impl.ComponentLinker()
+  let runtime = @runtime_impl.HostRuntimeState()
+  let ready = Ref(false)
+  let progress = []
+  let builder = linker.host_instance_builder("test:async-join", runtime)
+  builder.add_async_func(
+    "wait",
+    { is_async: true, params: [], result: Some(Prim(U32)) },
+    fn(_args, _table) {
+      HostFuture(fn() { if ready.val { Ready([U32(11)]) } else { Pending } }, fn() {
+        progress.push("cancelled")
+      })
+    },
+  )
+  let invocation = builder.finish().start_exported_func("wait", [])
+  let result = @async.with_task_group(group => {
+    let joined = group.spawn(no_wait=true, () => invocation.join())
+    group.spawn_bg() <| () => {
+      progress.push("other process ran")
+      ready.val = true
+    }
+    joined.wait()
+  })
+  debug_inspect(
+    (result, progress),
+    content="([U32(11)], [\"other process ran\"])",
+  )
+}
+
+///|
 test "embedding byte streams expose finite data without blocking" {
   let runtime = @runtime_impl.HostRuntimeState()
   let table = runtime.resource_table()

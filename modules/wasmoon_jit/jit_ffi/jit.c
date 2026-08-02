@@ -516,7 +516,25 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_context_ptr(void *jit_context) {
     return *(int64_t *)jit_context;
 }
 
+MOONBIT_FFI_EXPORT void wasmoon_jit_context_keep_alive(void *jit_context) {
+    (void)jit_context;
+}
+
+MOONBIT_FFI_EXPORT int32_t wasmoon_jit_gc_environment_is_clear(int64_t ctx_ptr) {
+    jit_context_t *ctx = (jit_context_t *)(uintptr_t)ctx_ptr;
+    if (!ctx) return 0;
+    return ctx->gc_heap == NULL &&
+        ctx->gc_heap_ptr == NULL &&
+        ctx->gc_heap_limit == NULL &&
+        ctx->gc_type_cache == NULL &&
+        ctx->gc_canonical_indices == NULL &&
+        ctx->gc_func_type_indices == NULL &&
+        ctx->gc_func_table == NULL;
+}
+
 // ============ Shared Indirect Table Support ============
+
+static _Atomic int64_t g_shared_indirect_table_live_count = 0;
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_alloc_shared_indirect_table(int count) {
     if (count <= 0) return 0;
@@ -529,6 +547,8 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_alloc_shared_indirect_table(int count) {
         table[i * 2 + 1] = (void*)(intptr_t)(-1);
     }
 
+    atomic_fetch_add_explicit(&g_shared_indirect_table_live_count, 1, memory_order_relaxed);
+
     return (int64_t)table;
 }
 
@@ -536,7 +556,12 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_free_shared_indirect_table(int64_t table_ptr
     void **table = (void **)table_ptr;
     if (table) {
         free(table);
+        atomic_fetch_sub_explicit(&g_shared_indirect_table_live_count, 1, memory_order_relaxed);
     }
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_debug_shared_indirect_table_live_count(void) {
+    return atomic_load_explicit(&g_shared_indirect_table_live_count, memory_order_relaxed);
 }
 
 MOONBIT_FFI_EXPORT void wasmoon_jit_shared_table_set(int64_t table_ptr, int table_idx, int64_t func_ptr, int type_idx) {

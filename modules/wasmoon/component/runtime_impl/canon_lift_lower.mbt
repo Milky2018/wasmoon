@@ -113,9 +113,7 @@ fn instantiate_canon_lower(
         async_state, caller_table,
       )
       fn finish_call(out : Array[@types.Value]) -> Array[@types.Value] {
-        set_canon_debug_message(
-          "lower.async(func=\{func_idx})-> \{to_repr(out)}",
-        )
+        set_canon_debug_message("lower.async(func=\{func_idx})-> \{Repr(out)}")
         out
       }
 
@@ -938,6 +936,7 @@ fn instantiate_canon_lower(
       instance,
       func_idx: 0,
       engine: interpreter_core_execution_engine(),
+      debug_name: None,
       may_suspend: func_type.is_async,
       // Native activations may call this host adapter and nest another core
       // activation through the Store-scoped activation chain.

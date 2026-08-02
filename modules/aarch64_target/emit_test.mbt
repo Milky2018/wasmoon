@@ -5471,3 +5471,126 @@ test "AArch64 edge emission resolves register cycles through reserved scratch" {
     ),
   )
 }
+
+///|
+/// A counted loop whose back edge carries block arguments. When allocation
+/// coalesces the arguments onto the parameters, the split-edge block is a
+/// bare forwarding jump, and the loop's conditional branch must target the
+/// loop head directly rather than paying a second taken branch through the
+/// forwarding block every iteration.
+test "AArch64 pipeline threads a moveless loop back edge to the loop head" {
+  let builder = @semantic.FunctionBuilder::new(
+    "threaded_back_edge",
+    Platform,
+    [I32],
+    [I32],
+  )
+  let count = builder.parameters()[0]
+  let loop_head = builder.create_block([I32, I32])
+  // Frontends split the critical back edge into a dedicated block whose only
+  // job is to carry the edge arguments, exactly as modeled here.
+  let back_edge = builder.create_block([])
+  let exit = builder.create_block([])
+  let zero = builder.emit(I32Const(0U), [], [I32])[0]
+  builder.jump(loop_head, [count, zero])
+  builder.switch_to_block(loop_head)
+  let n = builder.block_parameters(loop_head)[0]
+  let x = builder.block_parameters(loop_head)[1]
+  let three = builder.emit(I32Const(3U), [], [I32])[0]
+  let one = builder.emit(I32Const(1U), [], [I32])[0]
+  let next_x = builder.emit(IntBinary(Add), [x, three], [I32])[0]
+  let next_n = builder.emit(IntBinary(Sub), [n, one], [I32])[0]
+  builder.branch(next_n, back_edge, [], exit, [])
+  builder.switch_to_block(back_edge)
+  builder.jump(loop_head, [next_n, next_x])
+  builder.switch_to_block(exit)
+  builder.return_([next_x])
+  let selected = lower(builder.finish(), test_lowering_context())
+  let (object, _) = compile(selected)
+  // Decode every branch and record its byte displacement. The loop's
+  // conditional branch must jump backward to the loop body, and no
+  // taken-path branch may land on another unconditional branch.
+  let code = object.code()
+  let branch_targets : Array[(Int, Int)] = []
+  for offset = 0; offset < code.length(); offset = offset + 4 {
+    let word = code[offset].to_uint() |
+      (code[offset + 1].to_uint() << 8) |
+      (code[offset + 2].to_uint() << 16) |
+      (code[offset + 3].to_uint() << 24)
+    if (word & 0x7F000000U) == 0x35000000U ||
+      (word & 0x7F000000U) == 0x34000000U {
+      // cbnz/cbz: imm19 at bits [23:5]
+      let imm = ((word >> 5) & 0x7FFFFU).reinterpret_as_int()
+      let signed = if imm >= 0x40000 { imm - 0x80000 } else { imm }
+      branch_targets.push((offset, offset + signed * 4))
+    }
+  }
+  // Exactly one conditional branch, and it targets the loop head (a backward
+  // branch to the add instruction), not a forwarding stub past the return.
+  guard branch_targets is [(branch_offset, target_offset)] else {
+    fail("expected exactly one conditional branch, got \{Repr(branch_targets)}")
+  }
+  debug_inspect(target_offset < branch_offset, content="true")
+  // Pin the exact destination: the loop body's first instruction (the add at
+  // offset 4, after the movz that seeds the accumulator). A target that is
+  // merely backward — the entry, or the sub — would be a miscompile that a
+  // weaker assertion accepts.
+  inspect(target_offset, content="4")
+}
+
+///|
+/// The refusal side of back-edge threading: when the forwarding block's jump
+/// carries parallel moves that allocation could not coalesce away, the
+/// conditional branch must keep targeting the forwarding block so the moves
+/// execute. Feeding one value into both loop parameters forces at least one
+/// move no matter how registers are assigned, since two live parameters
+/// cannot share a home.
+test "AArch64 pipeline keeps a loop back edge with moves unthreaded" {
+  let builder = @semantic.FunctionBuilder::new(
+    "unthreaded_back_edge",
+    Platform,
+    [I32],
+    [I32],
+  )
+  let count = builder.parameters()[0]
+  let loop_head = builder.create_block([I32, I32])
+  let back_edge = builder.create_block([])
+  let exit = builder.create_block([])
+  let zero = builder.emit(I32Const(0U), [], [I32])[0]
+  builder.jump(loop_head, [count, zero])
+  builder.switch_to_block(loop_head)
+  let n = builder.block_parameters(loop_head)[0]
+  let x = builder.block_parameters(loop_head)[1]
+  let three = builder.emit(I32Const(3U), [], [I32])[0]
+  let one = builder.emit(I32Const(1U), [], [I32])[0]
+  let next_x = builder.emit(IntBinary(Add), [x, three], [I32])[0]
+  let next_n = builder.emit(IntBinary(Sub), [n, one], [I32])[0]
+  builder.branch(next_n, back_edge, [], exit, [])
+  builder.switch_to_block(back_edge)
+  builder.jump(loop_head, [next_n, next_n])
+  builder.switch_to_block(exit)
+  builder.return_([next_x])
+  let selected = lower(builder.finish(), test_lowering_context())
+  let (object, _) = compile(selected)
+  let code = object.code()
+  let branch_targets : Array[(Int, Int)] = []
+  for offset = 0; offset < code.length(); offset = offset + 4 {
+    let word = code[offset].to_uint() |
+      (code[offset + 1].to_uint() << 8) |
+      (code[offset + 2].to_uint() << 16) |
+      (code[offset + 3].to_uint() << 24)
+    if (word & 0x7F000000U) == 0x35000000U ||
+      (word & 0x7F000000U) == 0x34000000U {
+      let imm = ((word >> 5) & 0x7FFFFU).reinterpret_as_int()
+      let signed = if imm >= 0x40000 { imm - 0x80000 } else { imm }
+      branch_targets.push((offset, offset + signed * 4))
+    }
+  }
+  guard branch_targets is [(_, target_offset)] else {
+    fail("expected exactly one conditional branch, got \{Repr(branch_targets)}")
+  }
+  // The loop body's first instruction sits at offset 4, as in the threading
+  // test above. With moves pending on the back edge, the branch must NOT be
+  // threaded there; it has to route through the forwarding block.
+  debug_inspect(target_offset == 4, content="false")
+}

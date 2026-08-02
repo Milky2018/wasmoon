@@ -319,13 +319,13 @@ test "plan scalar entry trampoline through reusable JIT pipeline" {
   let params : Array[@types.ValueType] = [I64, I64]
   let results : Array[@types.ValueType] = [I64]
   let plan = plan_entry_trampoline_for_target(params, results, X64) catch {
-    err => fail(to_repr(err).to_string())
+    err => fail(Repr(err).to_string())
   }
   debug_inspect(plan.target, content="X64")
   inspect(plan.entry_symbol, content="entry_trampoline")
   inspect(plan.object.get_bytes().length() > 0, content="true")
   let aarch64_plan = plan_entry_trampoline_for_target(params, results, AArch64) catch {
-    err => fail(to_repr(err).to_string())
+    err => fail(Repr(err).to_string())
   }
   inspect(aarch64_plan.object.get_bytes().length() > 0, content="true")
   inspect(
@@ -345,7 +345,7 @@ test "entry trampoline reports V128 MilkIR planner gap" {
   try plan_entry_trampoline_for_target(params, results, X64) catch {
     UnsupportedEntrySignature(message=msg) =>
       inspect(msg.contains("V128 MilkIR entry trampoline"), content="true")
-    error => fail("unexpected entry trampoline error: \{to_repr(error)}")
+    error => fail("unexpected entry trampoline error: \{Repr(error)}")
   } noraise {
     _ => fail("expected V128 trampoline planning to report unsupported")
   }
@@ -410,7 +410,7 @@ test "machine-code entry trampolines support V128 registers" {
   let params : Array[@types.ValueType] = [V128]
   let results : Array[@types.ValueType] = [V128]
   let x64_code = build_entry_trampoline_for_target(params, results, X64) catch {
-    err => fail(to_repr(err).to_string())
+    err => fail(Repr(err).to_string())
   }
   let mut x64_has_load = false
   let mut x64_has_store = false
@@ -425,7 +425,7 @@ test "machine-code entry trampolines support V128 registers" {
   inspect(x64_has_load, content="true")
   inspect(x64_has_store, content="true")
   let a64_code = build_entry_trampoline_for_target(params, results, AArch64) catch {
-    err => fail(to_repr(err).to_string())
+    err => fail(Repr(err).to_string())
   }
   let mut a64_has_load = false
   let mut a64_has_store = false
@@ -452,7 +452,7 @@ test "hostcall trampolines support V128 registers" {
     0,
     X64,
   ) catch {
-    err => fail(to_repr(err).to_string())
+    err => fail(Repr(err).to_string())
   }
   let mut x64_has_store = false
   let mut x64_has_load = false
@@ -476,7 +476,7 @@ test "hostcall trampolines support V128 registers" {
     0,
     AArch64,
   ) catch {
-    err => fail(to_repr(err).to_string())
+    err => fail(Repr(err).to_string())
   }
   let mut a64_has_store = false
   let mut a64_has_load = false
@@ -648,7 +648,7 @@ test "hostcall trampolines support stack-passed arguments" {
     0,
     X64,
   ) catch {
-    err => fail(to_repr(err).to_string())
+    err => fail(Repr(err).to_string())
   }
   inspect(code_contains_x64_rsp_int_load(x64_host.code), content="true")
   inspect(code_contains_x64_rsp_int_store(x64_host.code), content="true")
@@ -658,7 +658,7 @@ test "hostcall trampolines support stack-passed arguments" {
     0,
     AArch64,
   ) catch {
-    err => fail(to_repr(err).to_string())
+    err => fail(Repr(err).to_string())
   }
   inspect(
     code_contains_a64_x16_load_from_base(a64_host.code, 31),
@@ -685,12 +685,12 @@ test "entry trampolines support stack-passed arguments" {
   ]
   let results : Array[@types.ValueType] = []
   let x64_code = build_entry_trampoline_for_target(x64_params, results, X64) catch {
-    err => fail(to_repr(err).to_string())
+    err => fail(Repr(err).to_string())
   }
   inspect(code_contains_x64_r14_int_load(x64_code), content="true")
   inspect(code_contains_x64_rsp_int_store(x64_code), content="true")
   let a64_code = build_entry_trampoline_for_target(a64_params, results, AArch64) catch {
-    err => fail(to_repr(err).to_string())
+    err => fail(Repr(err).to_string())
   }
   inspect(code_contains_a64_x16_load_from_base(a64_code, 19), content="true")
   inspect(code_contains_a64_x16_store_to_base(a64_code, 31), content="true")
@@ -716,7 +716,7 @@ test "hostcall trampolines support overflow result areas" {
     0,
     X64,
   ) catch {
-    err => fail(to_repr(err).to_string())
+    err => fail(Repr(err).to_string())
   }
   inspect(code_contains_x64_rsp_int_load(x64_host.code), content="true")
   inspect(code_contains_x64_r12_int_store(x64_host.code), content="true")
@@ -726,7 +726,7 @@ test "hostcall trampolines support overflow result areas" {
     0,
     AArch64,
   ) catch {
-    err => fail(to_repr(err).to_string())
+    err => fail(Repr(err).to_string())
   }
   inspect(
     code_contains_a64_x16_load_from_base(a64_host.code, 31),
@@ -753,12 +753,12 @@ test "entry trampolines support overflow result areas" {
     I64,
   ]
   let x64_code = build_entry_trampoline_for_target(params, results, X64) catch {
-    err => fail(to_repr(err).to_string())
+    err => fail(Repr(err).to_string())
   }
   inspect(code_contains_x64_rsp_int_load(x64_code), content="true")
   inspect(code_contains_x64_r14_int_store(x64_code), content="true")
   let a64_code = build_entry_trampoline_for_target(params, results, AArch64) catch {
-    err => fail(to_repr(err).to_string())
+    err => fail(Repr(err).to_string())
   }
   inspect(code_contains_a64_x16_load_from_base(a64_code, 31), content="true")
   inspect(code_contains_a64_x16_store_to_base(a64_code, 19), content="true")

@@ -300,3 +300,31 @@ test "GC: collected object becomes inaccessible" {
     content="true",
   )
 }
+
+///|
+test "GC rollback: rooted transaction object is not reclaimed or reused" {
+  let heap = MarkSweepHeap::MarkSweepHeap()
+  heap.alloc_struct(0, [I32(1)]) |> ignore
+  heap.collect([]) |> ignore
+  let checkpoint = heap.checkpoint_allocations()
+  let escaped = heap.alloc_struct(0, [I32(7)])
+  let garbage = heap.alloc_struct(0, [I32(8)])
+
+  heap.rollback_allocations(checkpoint, [StructRef(escaped)])
+  debug_inspect(
+    (
+      escaped,
+      garbage,
+      heap.is_alive(escaped),
+      heap.is_alive(garbage),
+      heap.struct_get(escaped, 0),
+    ),
+    content="(0, 1, true, false, I32(7))",
+  )
+
+  let next = heap.alloc_struct(0, [I32(9)])
+  debug_inspect(
+    (escaped, next, heap.struct_get(escaped, 0)),
+    content="(0, 1, I32(7))",
+  )
+}

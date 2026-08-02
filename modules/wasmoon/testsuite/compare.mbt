@@ -313,8 +313,16 @@ pub fn compare_jit_interp_with_opt_level(
   let param_types = func_type.params
   let result_types = func_type.results
 
-  // Run interpreter
-  let interp_result = run_interp(mod_, func_name, args)
+  // Each backend owns its parsed module graph. Closing an interpreter Store
+  // releases arrays retained from that graph, so it must not share them with
+  // the subsequent JIT run.
+  let interp_mod = @wat.parse(source) catch {
+    e => {
+      let err = "Failed to parse interpreter WAT: \{e}"
+      return { jit_result: Err(err), interp_result: Err(err), match_: true }
+    }
+  }
+  let interp_result = run_interp(interp_mod, func_name, args)
 
   // Run JIT
   let jit_result = run_jit_with_opt_level(
@@ -349,6 +357,7 @@ fn run_interp(
   try {
     // Convert module to binary for parser - need to use the binary encoder
     let linker = @runtime.Linker::Linker()
+    defer linker.close()
     let store = linker.get_store()
     let instance = @executor.instantiate_with_linker(linker, "test", mod_)
     let result = @executor.call_exported_func(store, instance, func_name, args)
@@ -383,9 +392,9 @@ fn run_jit_with_opt_level(
   opt_level : Int,
 ) -> Result[Array[@types.Value], String] {
   func_name |> ignore
-  let mut jm_opt : @jit.JITModule? = None
   try {
     let linker = @runtime.Linker::Linker()
+    defer linker.close()
     let store = linker.get_store()
     let instance = @executor.instantiate_with_linker(linker, "test", mod_)
     let mut compile_error : String? = None
@@ -417,8 +426,18 @@ fn run_jit_with_opt_level(
       function_names=@commands.build_jit_function_names(mod_),
       debug_db~,
     )
-    jm_opt = Some(jm)
-    @wast.register_instance_funcrefs_for_jit(jm, instance)
+    let mut gc_active = false
+    defer {
+      if gc_active {
+        jm.teardown_gc()
+      }
+      for table_idx in 0..<instance.table_addrs.length() {
+        jm.refresh_table_layout(table_idx) |> ignore
+      }
+      jm.clear_segments()
+      jm.close()
+    }
+    @wast.register_instance_funcrefs_for_jit(jm, instance, store)
     @wast.install_jit_hostcall_dispatcher(jm, store, instance)
     jm.alloc_wasm_stack(1048576L) |> ignore
     guard @wast.init_jit_memories_from_store(instance, store, jm) is Some(_) else {
@@ -475,21 +494,12 @@ fn run_jit_with_opt_level(
     )
     |> ignore
     let c_heap = @wasmoon_jit.CHeap::CHeap()
-    @wasmoon_jit.gc_setup(
-      c_heap,
-      module_types,
-      canonical_type_indices,
-      ctx_ptr=jm.get_context_ptr(),
-      func_type_indices~,
-      func_table_ptr=jm.get_func_table_ptr(),
-      num_funcs=jm.get_func_count(),
-    ) catch {
+    jm.setup_gc(c_heap, module_types, canonical_type_indices, func_type_indices) catch {
       err => return Err("GC setup failed: \{err}")
     }
+    gc_active = true
     jm.set_gc_heap(c_heap.get_ptr())
     guard jm.get_func(func_idx) is Some(func) else {
-      @wasmoon_jit.gc_teardown(jm.get_context_ptr())
-      jm.clear_segments()
       return Err("JIT function \{func_idx} not loaded")
     }
     let jit_args : Array[Int64] = []
@@ -500,17 +510,9 @@ fn run_jit_with_opt_level(
       append_jit_arg_slots(jit_args, arg, param_types[i])
     }
     let raw_results = jm.call_with_context(func, jit_args)
-    @wasmoon_jit.gc_teardown(jm.get_context_ptr())
-    jm.clear_segments()
     Ok(jit_results_to_values(raw_results, result_types))
   } catch {
-    e => {
-      if jm_opt is Some(jm) {
-        @wasmoon_jit.gc_teardown(jm.get_context_ptr())
-        jm.clear_segments()
-      }
-      Err("JIT error: \{e}")
-    }
+    e => Err("JIT error: \{e}")
   }
 }
 
@@ -519,159 +521,6 @@ pub fn current_target_arch() -> @wasmoon_jit.NativeTarget {
   @wasmoon_jit.host_native_target() catch {
     _ => abort("unsupported host target")
   }
-}
-
-///|
-/// Evaluate element segment offset constant expression
-/// Supports i32.const, i64.const (for table64), i32.add, i32.sub, i32.mul, global.get for computing offsets
-fn eval_elem_offset_expr(
-  instrs : Array[@types.Instruction],
-  globals : Array[@runtime.GlobalInstance],
-) -> Int {
-  let stack : Array[Int] = []
-  for instr in instrs {
-    match instr {
-      I32Const(n) => stack.push(n)
-      I64Const(n) => stack.push(n.to_int()) // For table64 offset expressions
-      GlobalGet(idx) =>
-        if idx < globals.length() {
-          match globals[idx].get() {
-            I32(n) => stack.push(n)
-            I64(n) => stack.push(n.to_int()) // For table64
-            _ => ()
-          }
-        }
-      I32Add =>
-        if stack.length() >= 2 {
-          let b = stack.pop()
-          let a = stack.pop()
-          stack.push(a.unwrap() + b.unwrap())
-        }
-      I32Sub =>
-        if stack.length() >= 2 {
-          let b = stack.pop()
-          let a = stack.pop()
-          stack.push(a.unwrap() - b.unwrap())
-        }
-      I32Mul =>
-        if stack.length() >= 2 {
-          let b = stack.pop()
-          let a = stack.pop()
-          stack.push(a.unwrap() * b.unwrap())
-        }
-      I64Add =>
-        if stack.length() >= 2 {
-          let b = stack.pop()
-          let a = stack.pop()
-          stack.push(a.unwrap() + b.unwrap())
-        }
-      I64Sub =>
-        if stack.length() >= 2 {
-          let b = stack.pop()
-          let a = stack.pop()
-          stack.push(a.unwrap() - b.unwrap())
-        }
-      I64Mul =>
-        if stack.length() >= 2 {
-          let b = stack.pop()
-          let a = stack.pop()
-          stack.push(a.unwrap() * b.unwrap())
-        }
-      _ => () // Ignore other instructions
-    }
-  }
-  if stack.length() > 0 {
-    stack[stack.length() - 1]
-  } else {
-    0
-  }
-}
-
-///|
-/// Initialize element segments for call_indirect support
-pub fn init_elem_segments(
-  mod_ : @types.Module,
-  jm : @jit.JITModule,
-  globals : Array[@runtime.GlobalInstance],
-) -> Unit {
-  // Multi-table support: create a separate JIT table for each WebAssembly table
-  if mod_.tables.is_empty() {
-    return // No tables, nothing to do
-  }
-
-  // Compute canonical type indices for structural type equivalence
-  // Structurally equivalent types will have the same canonical index
-  let canonical_types = @types.compute_canonical_type_indices(
-    mod_.types,
-    type_rec_groups=mod_.type_rec_groups,
-  )
-
-  // Build function index to canonical type index mapping
-  let func_canonical_types : Array[Int] = []
-  for imp in mod_.imports {
-    if imp.desc is Func(type_idx) {
-      let canonical_idx = if type_idx < canonical_types.length() {
-        canonical_types[type_idx]
-      } else {
-        0
-      }
-      func_canonical_types.push(canonical_idx)
-    }
-  }
-  for type_idx in mod_.funcs {
-    let canonical_idx = if type_idx < canonical_types.length() {
-      canonical_types[type_idx]
-    } else {
-      0
-    }
-    func_canonical_types.push(canonical_idx)
-  }
-
-  // Create a JIT table for each WebAssembly table
-  let jit_tables : Array[@wasmoon_jit.JITTable?] = []
-  for table in mod_.tables {
-    let min_size = table.type_.limits.min.to_int()
-    let max_size = table.type_.limits.max.map(fn(m) { m.to_int() })
-    match @wasmoon_jit.JITTable::try_alloc(min_size, max_size) {
-      Some(jit_table) => jit_tables.push(Some(jit_table))
-      None => jit_tables.push(None)
-    }
-  }
-
-  // Process elem segments: build (table_idx, elem_idx, func_idx?, type_hash) tuples
-  let elem_init : Array[(Int, Int, Int?, Int)] = []
-  for table_idx, _table in mod_.tables {
-    // Process elem segments for this table
-    for elem in mod_.elems {
-      if elem.mode is Active(elem_table_idx, offset_expr) &&
-        elem_table_idx == table_idx {
-        let offset = eval_elem_offset_expr(offset_expr, globals)
-        for i, init_expr in elem.init {
-          let func_idx = match init_expr {
-            [RefFunc(idx)] => Some(idx)
-            [I32Const(idx)] => Some(idx)
-            [RefNull(_)] => None
-            _ => continue
-          }
-          let canonical_type_idx = match func_idx {
-            Some(idx) =>
-              if idx >= 0 && idx < func_canonical_types.length() {
-                func_canonical_types[idx]
-              } else {
-                0
-              }
-            None => 0
-          }
-          // Element index within this specific table
-          let elem_idx = offset + i
-          elem_init.push((table_idx, elem_idx, func_idx, canonical_type_idx))
-        }
-      }
-    }
-  }
-
-  // Initialize shared tables (new multi-table approach)
-  jm.init_shared_tables(jit_tables, elem_init)
 }
 
 ///|

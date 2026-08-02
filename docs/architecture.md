@@ -113,13 +113,14 @@ The default `component --run` and `component-test` commands enable the JIT
 engine. `--no-jit` selects the interpreter engine for differential testing.
 
 The stable library surface is `Milky2018/wasmoon/component`. It owns opaque
-runtime, instance, and function handles plus typed values and structured
-errors; applications do not depend on `component/runtime_impl`. Its portable
-runtime constructor uses the continuation-aware interpreter. The product CLI
-retains the separate native engine adapter for WASI command execution and
-conformance runs. `Milky2018/wasmoon/wit` can bind a resolved world eagerly
-against a stable component instance, rejecting missing or incompatible exports
-before the first call.
+engine, runtime, instance, function, and call handles plus typed values and
+structured errors; applications do not depend on `component/runtime_impl`.
+Default construction uses the strict native engine, while
+`interpreter_component_engine()` selects the continuation-aware interpreter
+explicitly. The CLI uses this same facade and engine seam.
+`Milky2018/wasmoon/wit` can bind a resolved world eagerly against a stable
+component instance, rejecting missing or incompatible exports before the first
+call.
 
 Component async execution uses one cooperative host event loop. MoonBit
 processes and component tasks are logical scheduling units, not operating-system

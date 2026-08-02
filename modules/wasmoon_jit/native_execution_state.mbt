@@ -17,7 +17,7 @@ pub suberror NativeExecutionStateError {
 
 ///|
 pub impl Show for NativeExecutionStateError with fn output(self, logger) {
-  logger.write_string(@types.compact_show_repr(to_repr(self).to_string()))
+  logger.write_string(@types.compact_show_repr(Repr(self).to_string()))
 }
 
 ///|
@@ -240,9 +240,9 @@ pub fn NativeExecutionState::live_count(self : NativeExecutionState) -> Int {
 ///|
 pub impl Debug for NativeExecutionState with fn to_repr(self) {
   Repr::ctor("NativeExecutionState", [
-    (Some("active_depth"), to_repr(self.active_depth())),
-    (Some("parked_count"), to_repr(self.parked_count())),
-    (Some("live_count"), to_repr(self.live_count())),
+    (Some("active_depth"), Repr(self.active_depth())),
+    (Some("parked_count"), Repr(self.parked_count())),
+    (Some("live_count"), Repr(self.live_count())),
   ])
 }
 
@@ -306,5 +306,5 @@ pub fn NativeInvocationHandle::release_if_live(
 
 ///|
 pub impl Debug for NativeInvocationHandle with fn to_repr(self) {
-  Repr::ctor("NativeInvocationHandle", [(Some("id"), to_repr(self.1))])
+  Repr::ctor("NativeInvocationHandle", [(Some("id"), Repr(self.1))])
 }

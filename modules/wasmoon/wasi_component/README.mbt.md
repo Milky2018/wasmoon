@@ -31,21 +31,16 @@ let ctx = @wasi_component.WasiComponentCtxBuilder()
   .preopened_directory("/srv/data", "/data", true)
   .build()
 defer ctx.close()
-let host = @wasi_component.WasiComponentHost(linker, ctx)
-host.add_preview2_cli_clocks_random()
-host.add_preview2_io()
-host.add_preview2_filesystem()
-host.add_preview2_sockets()
+@wasi_component.install_command_world(linker, ctx)
 ```
 
-Preview 3 embeddings register the corresponding async interfaces explicitly:
+`install_command_world` installs the complete Preview 2 and Preview 3 command
+surface. Lower-level host methods remain available to product-owned adapters
+that intentionally assemble a narrower world.
 
-```moonbit nocheck
-let host = @wasi_component.WasiComponentHost(linker, ctx)
-host.add_preview3_cli_clocks_random()
-host.add_preview3_filesystem()
-host.add_preview3_sockets()
-```
+The stable component facade claims a context for exactly one runtime before it
+installs this world. Context and installer aliases cannot share descriptors,
+reactor state, resources, or close authority across runtimes.
 
 Preopens are directory-descriptor capabilities, not ambient path prefixes.
 Guest `..` traversal and symlink resolution are checked against the live

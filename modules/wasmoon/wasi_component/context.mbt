@@ -23,7 +23,16 @@ struct WasiComponentCtx {
   stderr_rep : Int
   network_rep : Int
   preopens : Array[PreopenState]
+  runtime_owner_claimed : Ref[Bool]
   closed : Ref[Bool]
+}
+
+///|
+/// Exclusive authority to close a context owned by an embedding runtime.
+///
+/// This capability is produced only by a successful runtime-owner claim.
+struct WasiComponentCtxRuntimeOwner {
+  ctx : WasiComponentCtx
 }
 
 ///|
@@ -315,7 +324,25 @@ pub fn WasiComponentCtxBuilder::build(
     stderr_rep,
     network_rep,
     preopens: self.preopens.copy(),
+    runtime_owner_claimed: Ref(false),
     closed: Ref(false),
+  }
+}
+
+///|
+/// Claim this context for one embedding runtime.
+///
+/// The claim is terminal and shared by every alias of this context. Embedding
+/// adapters must acquire it before installing host functions that capture the
+/// context.
+pub fn WasiComponentCtx::try_claim_runtime_owner(
+  self : WasiComponentCtx,
+) -> WasiComponentCtxRuntimeOwner? {
+  if self.closed.val || self.runtime_owner_claimed.val {
+    None
+  } else {
+    self.runtime_owner_claimed.val = true
+    Some({ ctx: self })
   }
 }
 
@@ -342,12 +369,32 @@ pub fn WasiComponentCtx::exit_status(self : WasiComponentCtx) -> Int? {
 }
 
 ///|
-/// Release every host resource owned by this context.
+/// Release every host resource owned by this unclaimed context.
 ///
 /// Call this after component execution has ended. Pending native operations
 /// are cancelled before their source descriptors close. Repeated calls are
-/// harmless, and the context is terminal after the first call.
+/// harmless, and the context is terminal after the first call. Once an
+/// embedding runtime claims this context, only its runtime-owner capability
+/// can close it; calls through ordinary context aliases have no effect.
 pub fn WasiComponentCtx::close(self : WasiComponentCtx) -> Unit {
+  if self.runtime_owner_claimed.val {
+    return
+  }
+  self.close_resources()
+}
+
+///|
+/// Close the claimed context through its exclusive runtime-owner capability.
+///
+/// Repeated calls through capability aliases are harmless.
+pub fn WasiComponentCtxRuntimeOwner::close(
+  self : WasiComponentCtxRuntimeOwner,
+) -> Unit {
+  self.ctx.close_resources()
+}
+
+///|
+fn WasiComponentCtx::close_resources(self : WasiComponentCtx) -> Unit {
   if self.closed.val {
     return
   }
@@ -755,4 +802,20 @@ fn WasiComponentCtx::wait_for_async_event(
     }
   }
   false
+}
+
+///|
+fn WasiComponentCtx::poll_async_event(
+  self : WasiComponentCtx,
+) -> Bool raise @runtime_impl.ComponentRuntimeError {
+  if self.closed.val {
+    return false
+  }
+  guard self.native_reactor is Some(reactor) else {
+    raise HostCallError("native async reactor is unavailable")
+  }
+  let completed = reactor.wait(Some(0L)) catch {
+    error => raise HostCallError("native async reactor poll failed: \{error}")
+  }
+  completed > 0
 }

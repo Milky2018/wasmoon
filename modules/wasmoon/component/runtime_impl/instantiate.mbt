@@ -1,10 +1,26 @@
 ///|
+/// Per-component state shared by all section handlers during instantiation.
+priv struct ComponentInstantiationFrame {
+  linker : ComponentLinker
+  name : String
+  component : Component
+  overrides : Map[String, ComponentExtern]
+  outer_stack : Array[ComponentInstance]
+  state : BuildState
+  entry_state : ComponentInstanceEntryState
+  store : @runtime.Store
+  async_state : AsyncState
+  staged : Array[(String, ComponentInstance)]
+}
+
+///|
 fn instantiate_component(
   linker : ComponentLinker,
   name : String,
   component : Component,
   overrides : Map[String, ComponentExtern],
   outer_stack : Array[ComponentInstance],
+  staged : Array[(String, ComponentInstance)],
 ) -> ComponentInstance raise ComponentRuntimeError {
   let stream_table = if outer_stack.length() > 0 {
     outer_stack[outer_stack.length() - 1].stream_table
@@ -19,7 +35,7 @@ fn instantiate_component(
   } else {
     match linker.host_runtime.val {
       Some(runtime) => runtime.async_state
-      None => AsyncState(stream_table, core_engine=linker.core_engine)
+      None => AsyncState(stream_table, core_engine=linker.core_engine())
     }
   }
   let state = BuildState::BuildState(stream_table, async_state)
@@ -38,6 +54,50 @@ fn instantiate_component(
   )
   let entry_state = ComponentInstanceEntryState::new()
   let store = linker.get_store()
+  let frame : ComponentInstantiationFrame = {
+    linker,
+    name,
+    component,
+    overrides,
+    outer_stack,
+    state,
+    entry_state,
+    store,
+    async_state,
+    staged,
+  }
+  run_component_sections(frame) catch {
+    error => {
+      state.release_aborted()
+      raise error
+    }
+  }
+  entry_state.enable()
+  let instance = env_instance_from_state(name, state, store)
+  // Registration is transactional: the frame stages its instance, nested
+  // frames included, and only the root commits the whole tree into the
+  // linker once it succeeds on a still-open linker. Rollback releases every
+  // staged graph, so a failed root leaves nothing observable behind.
+  staged.push((name, instance))
+  instance
+}
+
+///|
+fn run_component_sections(
+  frame : ComponentInstantiationFrame,
+) -> Unit raise ComponentRuntimeError {
+  let {
+    linker,
+    name,
+    component,
+    overrides,
+    outer_stack,
+    state,
+    entry_state,
+    store,
+    async_state,
+    staged,
+  } = frame
   for section in component.binary.sections {
     match section.id {
       1 => {
@@ -86,16 +146,15 @@ fn instantiate_component(
               }
               pop_task(async_state)
               drop_task_thread(async_state, inst_task_id)
-              // Register a stable name for debugging core traps.
-              register_core_instance_name(instance.store_idx, module_name)
               linker.core_linker.register(module_name, instance) catch {
                 error => raise CoreModuleInstantiateError(error.to_string())
               }
-              linker.core_engine.register_instance(store, mod_, instance)
+              linker.core_engine().register_instance(store, mod_, instance)
               state.core_instances.push(
                 core_instance_from_module(
                   instance,
-                  linker.core_engine,
+                  linker.core_engine(),
+                  module_name,
                   may_suspend,
                   native_eligible,
                 ),
@@ -159,6 +218,7 @@ fn instantiate_component(
                 closure.component,
                 overrides_for_child,
                 closure.outer_stack,
+                staged,
               )
               state.instances.push(nested)
             }
@@ -376,28 +436,4 @@ fn instantiate_component(
       _ => ()
     }
   }
-  entry_state.enable()
-  let instance : ComponentInstance = {
-    name,
-    types: state.types,
-    funcs: state.funcs,
-    values: state.values,
-    components: state.components,
-    instances: state.instances,
-    resource_table: state.resource_table,
-    stream_table: state.stream_table,
-    async_state: state.async_state,
-    core_modules: state.core_modules,
-    core_instances: state.core_instances,
-    core_funcs: state.core_funcs,
-    core_types: state.core_types,
-    core_tables: state.core_tables,
-    core_mems: state.core_mems,
-    core_globals: state.core_globals,
-    core_tags: state.core_tags,
-    exports: state.exports,
-    store,
-  }
-  linker.register(name, instance)
-  instance
 }

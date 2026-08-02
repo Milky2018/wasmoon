@@ -50,7 +50,7 @@ pub suberror AArch64FrameError {
 
 ///|
 pub impl Show for AArch64FrameError with fn output(self, logger) {
-  logger.write_string(to_repr(self).to_string())
+  logger.write_string(Repr(self).to_string())
 }
 
 ///|
@@ -344,10 +344,10 @@ pub fn AArch64Frame::summary(self : AArch64Frame) -> String {
   }
   for entry in self.slots {
     let (slot, offset) = entry
-    output += "  place \{to_repr(slot)} at sp+\{offset}\n"
+    output += "  place \{Repr(slot)} at sp+\{offset}\n"
   }
   for saved in self.saved_registers {
-    output += "  save \{to_repr(saved.reg)} at sp+\{saved.offset}\n"
+    output += "  save \{Repr(saved.reg)} at sp+\{saved.offset}\n"
   }
   output
 }

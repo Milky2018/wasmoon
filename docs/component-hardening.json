@@ -7,8 +7,20 @@
   },
   "source_checks": {
     "stable_interface": "modules/wasmoon/component/pkg.generated.mbti",
-    "facade": "modules/wasmoon/component/runtime_facade.mbt",
     "validator": "modules/wasmoon/validator/component_model/validate.mbt",
+    "validator_interface": "modules/wasmoon/validator/component_model/pkg.generated.mbti",
+    "runtime_interface": "modules/wasmoon/component/runtime_impl/pkg.generated.mbti",
+    "interface_scan_root": "modules/wasmoon",
+    "implementation_owner_roots": [
+      "Milky2018/wasmoon/component/runtime_impl",
+      "Milky2018/wasmoon/component_engine",
+      "Milky2018/wasmoon/component_host",
+      "Milky2018/wasmoon/component_native"
+    ],
+    "implementation_interface_allowlist": [
+      "modules/wasmoon/component_native/pkg.generated.mbti",
+      "modules/wasmoon/wasi_component/pkg.generated.mbti"
+    ],
     "forbidden_termination_roots": [
       "modules/wasmoon/component/model",
       "modules/wasmoon/component/runtime_impl",

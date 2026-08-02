@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import re
 import subprocess
 import sys
 import tempfile
@@ -496,19 +497,32 @@ class GateManifestTests(unittest.TestCase):
         workflow = (ROOT / ".github/workflows/check.yml").read_text(
             encoding="utf-8"
         )
-        self.assertEqual(
-            workflow.count(
-                'moon test --target native --target-dir "$sanitizer_build" \\'
-            ),
-            8,
+        sanitizer_steps = workflow.split(
+            "      - name: run native sanitizer checks\n"
+        )[1:]
+        self.assertEqual(len(sanitizer_steps), 1)
+        sanitizer_step = sanitizer_steps[0].split(
+            "\n      - name:",
+            maxsplit=1,
+        )[0]
+        sanitizer_targets = re.findall(
+            r'moon test --target native --target-dir "\$sanitizer_build" \\\n'
+            r"\s+(\S+\.mbt)",
+            sanitizer_step,
         )
-        self.assertEqual(
-            workflow.count(
-                "modules/wasmoon/testsuite/"
-                "jit_resumable_lifecycle_test.mbt"
-            ),
-            1,
-        )
+        expected_targets = {
+            "modules/wasmoon_jit/native_continuation_test.mbt",
+            "modules/wasmoon/testsuite/jit_resumable_lifecycle_test.mbt",
+            "modules/wasmoon_jit/callback_ownership_test.mbt",
+            "modules/wasmoon/async_native/reactor_wbtest.mbt",
+            "modules/wasmoon/wasi_component/async_preview3_wbtest.mbt",
+            "modules/wasmoon/component/runtime_impl/runtime_cleanup_wbtest.mbt",
+            "modules/wasmoon/component/runtime_impl/entry_state_wbtest.mbt",
+            "modules/wasmoon/cmd/wasmoon/commands/component_error_wbtest.mbt",
+            "modules/wasmoon/testsuite/component_runtime_facade_test.mbt",
+        }
+        self.assertEqual(len(sanitizer_targets), len(set(sanitizer_targets)))
+        self.assertEqual(set(sanitizer_targets), expected_targets)
         self.assertEqual(
             workflow.count("scripts/native_sanitizer_cc.sh"),
             1,
@@ -523,20 +537,17 @@ class GateManifestTests(unittest.TestCase):
             1,
         )
         self.assertEqual(workflow.count('export MOON_AR="$(command -v ar)"'), 1)
-        self.assertEqual(workflow.count("timeout-minutes: 40"), 1)
+        # The sanitizer gate's budget is measured headroom: the step needs
+        # roughly 55 minutes to reach its last covered file (ISS-368 tracks
+        # reducing the underlying compile cost and lowering this again).
+        self.assertEqual(workflow.count("timeout-minutes: 75"), 1)
         self.assertEqual(
             workflow.count(
                 "python3 scripts/find_gc_bugs.py --dir spec/gc --timeout 30"
             ),
             1,
         )
-        sanitizer_steps = workflow.split(
-            "      - name: run native sanitizer checks\n"
-        )[1:]
-        self.assertEqual(len(sanitizer_steps), 1)
-        for step in sanitizer_steps:
-            step = step.split("\n      - name:", maxsplit=1)[0]
-            self.assertNotIn("scripts/find_gc_bugs.py", step)
+        self.assertNotIn("scripts/find_gc_bugs.py", sanitizer_step)
         self.assertNotIn("CFLAGS:", workflow)
         self.assertNotIn("CXXFLAGS:", workflow)
         self.assertNotIn("LDFLAGS:", workflow)

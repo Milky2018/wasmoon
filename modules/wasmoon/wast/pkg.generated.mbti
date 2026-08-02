@@ -25,8 +25,6 @@ pub fn build_func_signatures(@types.Module) -> Array[(Array[@types.ValueType], A
 
 pub fn builtin_jit_modules() -> Array[String]
 
-pub fn clear_funcref_registry() -> Unit
-
 pub fn collect_registered_funcref_entries(@runtime.Store) -> Array[(Int64, Int)]
 
 pub fn count_func_imports(Array[@types.Import]) -> Int
@@ -59,7 +57,9 @@ pub fn invoke_action(WastContext, @parser_impl.WastAction) -> Array[@types.Value
 
 pub fn parse(String) -> @parser_impl.WastScript raise @parser_impl.WatError
 
-pub fn register_instance_funcrefs_for_jit(@jit.JITModule, @runtime.ModuleInstance) -> Unit
+pub fn register_instance_funcrefs_for_jit(@jit.JITModule, @runtime.ModuleInstance, @runtime.Store) -> Unit
+
+pub fn register_owned_instance_funcrefs_for_jit(@jit.JITModule, @runtime.ModuleInstance, @runtime.Store) -> FuncrefRegistration
 
 pub fn run_wast_command(WastContext, @parser_impl.WastCommand, Int, WastResult, String, Bool) -> Unit
 
@@ -102,6 +102,9 @@ pub(all) suberror WastRunnerError {
 pub impl Show for WastRunnerError
 
 // Types and methods
+type FuncrefRegistration
+pub fn FuncrefRegistration::release(Self) -> Unit
+
 pub struct JITCompiler {
   compile_fn : (@types.Module, @runtime.ModuleInstance, @runtime.Store) -> Result[JITModuleContext, String]
 }

@@ -99,6 +99,52 @@ fn emit_edge_moves(
 }
 
 ///|
+/// Chase a branch target through empty forwarding blocks.
+///
+/// Lowering splits critical edges, so a branch frequently targets a block
+/// whose only content is an unconditional jump carrying the edge arguments.
+/// When allocation gives those arguments and the destination parameters the
+/// same locations, the block emits as a single `jmp`, and a loop back edge
+/// then pays two taken branches per iteration instead of one. Branching
+/// straight to the final destination removes the hop.
+///
+/// A block is skipped only when nothing observable happens in it: no body
+/// instructions, no allocation edits anchored on its terminator, and an edge
+/// whose parallel moves resolve to nothing. The forwarding block itself is
+/// still emitted, so predecessors that do need its moves keep their path.
+fn threaded_branch_target(
+  function : @vcode.Function[X64Inst],
+  allocation : @vcode.Allocation,
+  target : @vcode.Block,
+) -> @vcode.Block raise X64EmitError {
+  let mut current = target
+  // Forwarding chains longer than a few hops do not occur in practice; the
+  // bound also terminates on a cycle of empty blocks.
+  for _hop in 0..<4 {
+    if !function.block_body(current).is_empty() {
+      break
+    }
+    guard function.block_terminator(current) is Some(terminator) else { break }
+    guard function.instruction(terminator) is Some(Jump) else { break }
+    if !allocation.edits_at(terminator, Before).is_empty() ||
+      !allocation.edits_at(terminator, After).is_empty() {
+      break
+    }
+    if !resolve_edge_moves(function, allocation, current, 0).is_empty() {
+      break
+    }
+    guard function.instruction_successor_at(terminator, 0) is Some(edge) else {
+      break
+    }
+    if edge.target == current {
+      break
+    }
+    current = edge.target
+  }
+  current
+}
+
+///|
 fn emit_conditional_edges(
   buffer : CodeBuffer,
   function : @vcode.Function[X64Inst],
@@ -113,10 +159,19 @@ fn emit_conditional_edges(
   let when_false = function.instruction_successor_at(instruction, 1).unwrap().target
   let true_moves = resolve_edge_moves(function, allocation, block, 0)
   let false_moves = resolve_edge_moves(function, allocation, block, 1)
+  // Fallthrough decisions compare the original successors; emitted branches
+  // go to the threaded targets. The edge's own moves are emitted here either
+  // way, so threading only skips blocks that contribute nothing.
+  let threaded_true = function
+    .block_index(threaded_branch_target(function, allocation, when_true))
+    .unwrap()
+  let threaded_false = function
+    .block_index(threaded_branch_target(function, allocation, when_false))
+    .unwrap()
   buffer.x86_emit_test_rr32(condition.id, condition.id)
   if next_block == Some(when_false) {
     if true_moves.is_empty() {
-      buffer.x86_emit_jcc_rel32(RawNe, function.block_index(when_true).unwrap())
+      buffer.x86_emit_jcc_rel32(RawNe, threaded_true)
       emit_resolved_moves(buffer, frame, false_moves)
     } else {
       buffer.emit_byte(0x0F)
@@ -124,16 +179,13 @@ fn emit_conditional_edges(
       let local_false_branch = buffer.position()
       emit_u32_le(buffer, 0)
       emit_resolved_moves(buffer, frame, true_moves)
-      buffer.x86_emit_jmp_rel32(function.block_index(when_true).unwrap())
+      buffer.x86_emit_jmp_rel32(threaded_true)
       patch_relative_branch(buffer, local_false_branch, buffer.position(), 32)
       emit_resolved_moves(buffer, frame, false_moves)
     }
   } else if next_block == Some(when_true) {
     if false_moves.is_empty() {
-      buffer.x86_emit_jcc_rel32(
-        RawEq,
-        function.block_index(when_false).unwrap(),
-      )
+      buffer.x86_emit_jcc_rel32(RawEq, threaded_false)
       emit_resolved_moves(buffer, frame, true_moves)
     } else {
       buffer.emit_byte(0x0F)
@@ -141,28 +193,28 @@ fn emit_conditional_edges(
       let local_true_branch = buffer.position()
       emit_u32_le(buffer, 0)
       emit_resolved_moves(buffer, frame, false_moves)
-      buffer.x86_emit_jmp_rel32(function.block_index(when_false).unwrap())
+      buffer.x86_emit_jmp_rel32(threaded_false)
       patch_relative_branch(buffer, local_true_branch, buffer.position(), 32)
       emit_resolved_moves(buffer, frame, true_moves)
     }
   } else if true_moves.is_empty() {
-    buffer.x86_emit_jcc_rel32(RawNe, function.block_index(when_true).unwrap())
+    buffer.x86_emit_jcc_rel32(RawNe, threaded_true)
     emit_resolved_moves(buffer, frame, false_moves)
-    buffer.x86_emit_jmp_rel32(function.block_index(when_false).unwrap())
+    buffer.x86_emit_jmp_rel32(threaded_false)
   } else if false_moves.is_empty() {
-    buffer.x86_emit_jcc_rel32(RawEq, function.block_index(when_false).unwrap())
+    buffer.x86_emit_jcc_rel32(RawEq, threaded_false)
     emit_resolved_moves(buffer, frame, true_moves)
-    buffer.x86_emit_jmp_rel32(function.block_index(when_true).unwrap())
+    buffer.x86_emit_jmp_rel32(threaded_true)
   } else {
     buffer.emit_byte(0x0F)
     buffer.emit_byte(x86_cond_to_jcc_opcode(RawEq))
     let local_false_branch = buffer.position()
     emit_u32_le(buffer, 0)
     emit_resolved_moves(buffer, frame, true_moves)
-    buffer.x86_emit_jmp_rel32(function.block_index(when_true).unwrap())
+    buffer.x86_emit_jmp_rel32(threaded_true)
     patch_relative_branch(buffer, local_false_branch, buffer.position(), 32)
     emit_resolved_moves(buffer, frame, false_moves)
-    buffer.x86_emit_jmp_rel32(function.block_index(when_false).unwrap())
+    buffer.x86_emit_jmp_rel32(threaded_false)
   }
 }
 
@@ -207,7 +259,11 @@ fn emit_switch_edges(
     buffer.x86_emit_jmp_rel32(
       function
       .block_index(
-        function.instruction_successor_at(instruction, 0).unwrap().target,
+        threaded_branch_target(
+          function,
+          allocation,
+          function.instruction_successor_at(instruction, 0).unwrap().target,
+        ),
       )
       .unwrap(),
     )
@@ -225,7 +281,11 @@ fn emit_switch_edges(
   buffer.x86_emit_jmp_rel32(
     function
     .block_index(
-      function.instruction_successor_at(instruction, cases.length()).unwrap().target,
+      threaded_branch_target(
+        function,
+        allocation,
+        function.instruction_successor_at(instruction, cases.length()).unwrap().target,
+      ),
     )
     .unwrap(),
   )
@@ -236,7 +296,13 @@ fn emit_switch_edges(
     buffer.x86_emit_jmp_rel32(
       function
       .block_index(
-        function.instruction_successor_at(instruction, successor_index).unwrap().target,
+        threaded_branch_target(
+          function,
+          allocation,
+          function
+          .instruction_successor_at(instruction, successor_index)
+          .unwrap().target,
+        ),
       )
       .unwrap(),
     )

@@ -290,7 +290,7 @@ pub suberror TargetVCodeVerifyError {
 
 ///|
 pub impl Show for TargetVCodeVerifyError with fn output(self, logger) {
-  logger.write_string(to_repr(self).to_string())
+  logger.write_string(Repr(self).to_string())
 }
 
 ///|
@@ -690,6 +690,64 @@ fn valid_scalar_store(
 }
 
 ///|
+/// Physical registers an x64 instruction always overwrites beyond its declared
+/// outputs.
+///
+/// These are properties of the instruction encoding itself, not of any
+/// particular lowering path:
+///
+/// - Variable shifts and rotates take their count in `cl`, so the emitter
+///   always materializes the count into `rcx`.
+/// - `imul`/`idiv`/`div` and the `rax`-based atomic read-modify-write loops
+///   write both `rax` and `rdx`.
+///
+/// Lowering must not be trusted to remember them. The `append_body` helper in
+/// `lower.mbt` unions this set into every appended instruction, so a clobber
+/// cannot be lost by a special-case lowering path that bypasses the generic
+/// instruction-selection code.
+fn X64Inst::mandatory_clobbers(self : X64Inst) -> Array[@vcode.PhysicalReg] {
+  let rax = @vcode.PhysicalReg::new(0, Int)
+  let rcx = @vcode.PhysicalReg::new(1, Int)
+  let rdx = @vcode.PhysicalReg::new(2, Int)
+  match self {
+    IntBinary(_, Lsl | Asr | Lsr | Ror) => [rcx]
+    IntBinary(_, Sdiv | Udiv) => [rdx]
+    IntRemainder(_, _) => [rax]
+    IntHighMultiply(_, _) => [rax]
+    IntWithOverflow(_, Mul(_)) => [rdx]
+    AtomicRmw(_, _, And | Or | Xor) => [rdx]
+    _ => []
+  }
+}
+
+///|
+/// Reject VCode that omits an instruction's mandatory clobbers.
+///
+/// Register allocation trusts the declared clobber set: a missing entry lets it
+/// keep a live value in a register the emitter is going to overwrite. Checking
+/// it here makes the invariant hold for any VCode reaching the verifier, not
+/// only VCode built through this module's `append_body` helper.
+fn require_mandatory_clobbers(
+  function : @vcode.Function[X64Inst],
+  instruction : @vcode.Instruction,
+) -> Unit raise TargetVCodeVerifyError {
+  let inst = function.instruction(instruction).unwrap()
+  let required = inst.mandatory_clobbers()
+  if required.is_empty() {
+    return
+  }
+  let declared = function.instruction_clobbers(instruction)
+  for reg in required {
+    if !declared.contains(reg) {
+      raise InvalidInstruction(
+        instruction~,
+        message="instruction must declare its mandatory clobber of physical register \{reg.id}",
+      )
+    }
+  }
+}
+
+///|
 fn vector_lane_scalar_type(lane : @semantic.VectorLane) -> @semantic.ValueType {
   match lane {
     I8x16 | I16x8 | I32x4 => I32
@@ -792,6 +850,7 @@ fn verify_target_vcode(
 ) -> Unit raise TargetVCodeVerifyError {
   for index in 0..<function.instruction_count() {
     let instruction = function.instruction_at(index).unwrap()
+    require_mandatory_clobbers(function, instruction)
     match function.instruction(instruction).unwrap() {
       IncomingReg(ty, reg) => {
         if reg.class != @vcode.reg_class_for_value_type(ty) {

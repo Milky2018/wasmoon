@@ -44,6 +44,8 @@ pub struct Store {
   // JIT tables corresponding to runtime tables (for cross-module sharing)
   // jit_tables[i] is the JIT table for tables[i], or None if not using JIT
   jit_tables : Array[@wasmoon_jit.JITTable?]
+  // Store-only destruction capabilities corresponding to jit_tables.
+  priv jit_table_owners : Array[@wasmoon_jit.JITTableOwner?]
   // Current WASI module's memory address (for interpreter mode WASI callbacks)
   // WASI callbacks use this to access the correct memory instead of hardcoded index 0
   mut wasi_mem_addr : Int?
@@ -52,8 +54,107 @@ pub struct Store {
   mut wasi_ctx_handle : Int
   // Native invocation/fiber lifetimes belong to the Store, not a JIT module.
   native_execution : @wasmoon_jit.NativeExecutionState
+  priv funcref_registry : StoreFuncrefRegistry
   priv closed : Ref[Bool]
 } derive(Debug)
+
+///|
+priv struct StoreAllocationCheckpoint {
+  funcs : Int
+  func_types : Int
+  func_type_indices : Int
+  func_owners : Array[FuncOwner]
+  tables : Int
+  jit_tables : Int
+  mems : Int
+  wasi_mem_addr : Int?
+  globals : Int
+  tags : Int
+  tag_type_indices : Int
+  tag_owners : Array[FuncOwner]
+  exns : Int
+  wrapped_externs : Int
+  instances : Int
+  module_types : Array[@types.SubType]
+  module_rec_groups : Array[Int]
+  heap : MarkSweepHeapAllocationCheckpoint
+  c_heap : @wasmoon_jit.CHeapAllocationCheckpoint?
+}
+
+///|
+fn Store::checkpoint_allocations(self : Store) -> StoreAllocationCheckpoint {
+  {
+    funcs: self.funcs.length(),
+    func_types: self.func_types.length(),
+    func_type_indices: self.func_type_indices.length(),
+    func_owners: self.func_owners.copy(),
+    tables: self.tables.length(),
+    jit_tables: self.jit_tables.length(),
+    mems: self.mems.length(),
+    wasi_mem_addr: self.wasi_mem_addr,
+    globals: self.globals.length(),
+    tags: self.tags.length(),
+    tag_type_indices: self.tag_type_indices.length(),
+    tag_owners: self.tag_owners.copy(),
+    exns: self.exns.length(),
+    wrapped_externs: self.wrapped_externs.length(),
+    instances: self.instances.length(),
+    module_types: self.module_types,
+    module_rec_groups: self.module_rec_groups,
+    heap: self.heap.checkpoint_allocations(),
+    c_heap: self.c_heap.map(fn(heap) { heap.checkpoint_allocations() }),
+  }
+}
+
+///|
+fn Store::rollback_allocations(
+  self : Store,
+  checkpoint : StoreAllocationCheckpoint,
+) -> Unit {
+  for i in checkpoint.instances..<self.instances.length() {
+    self.instances[i].store_idx = -1
+  }
+  for i in checkpoint.mems..<self.mems.length() {
+    self.mems[i].close()
+  }
+  for i in checkpoint.jit_tables..<self.jit_table_owners.length() {
+    match self.jit_table_owners[i] {
+      Some(owner) => owner.close()
+      None => ()
+    }
+  }
+  self.funcs.truncate(checkpoint.funcs)
+  self.func_types.truncate(checkpoint.func_types)
+  self.func_type_indices.truncate(checkpoint.func_type_indices)
+  self.func_owners.clear()
+  for owner in checkpoint.func_owners {
+    self.func_owners.push(owner)
+  }
+  self.tables.truncate(checkpoint.tables)
+  self.jit_tables.truncate(checkpoint.jit_tables)
+  self.jit_table_owners.truncate(checkpoint.jit_tables)
+  self.mems.truncate(checkpoint.mems)
+  self.wasi_mem_addr = checkpoint.wasi_mem_addr
+  self.globals.truncate(checkpoint.globals)
+  self.tags.truncate(checkpoint.tags)
+  self.tag_type_indices.truncate(checkpoint.tag_type_indices)
+  self.tag_owners.clear()
+  for owner in checkpoint.tag_owners {
+    self.tag_owners.push(owner)
+  }
+  self.exns.truncate(checkpoint.exns)
+  self.wrapped_externs.truncate(checkpoint.wrapped_externs)
+  self.instances.truncate(checkpoint.instances)
+  self.module_types = checkpoint.module_types
+  self.module_rec_groups = checkpoint.module_rec_groups
+  let roots = self.collect_roots([])
+  self.heap.rollback_allocations(checkpoint.heap, roots)
+  match (self.c_heap, checkpoint.c_heap) {
+    (Some(heap), Some(heap_checkpoint)) =>
+      heap.rollback_allocations(heap_checkpoint, roots) |> ignore
+    _ => ()
+  }
+}
 
 ///|
 /// Optional C heap initial capacity override (bytes)
@@ -108,9 +209,11 @@ pub fn Store::Store() -> Store {
     func_owners: [],
     instances: [],
     jit_tables: [],
+    jit_table_owners: [],
     wasi_mem_addr: None,
     wasi_ctx_handle: 0,
     native_execution: NativeExecutionState(),
+    funcref_registry: StoreFuncrefRegistry::new(),
     closed: Ref(false),
   }
 }
@@ -138,9 +241,11 @@ pub fn Store::with_c_heap() -> Store {
     func_owners: [],
     instances: [],
     jit_tables: [],
+    jit_table_owners: [],
     wasi_mem_addr: None,
     wasi_ctx_handle: 0,
     native_execution: NativeExecutionState(),
+    funcref_registry: StoreFuncrefRegistry::new(),
     closed: Ref(false),
   }
 }
@@ -157,6 +262,7 @@ pub fn Store::close(self : Store) -> Unit {
   }
   self.closed.val = true
   self.native_execution.seal()
+  self.funcref_registry.clear()
   self.funcs.clear()
   self.func_types.clear()
   self.func_type_indices.clear()
@@ -180,6 +286,13 @@ pub fn Store::close(self : Store) -> Unit {
   self.module_types.clear()
   self.module_rec_groups.clear()
   self.wrapped_externs.clear()
+  for owner in self.jit_table_owners {
+    match owner {
+      Some(owner) => owner.close()
+      None => ()
+    }
+  }
+  self.jit_table_owners.clear()
   self.jit_tables.clear()
   self.wasi_mem_addr = None
   self.wasi_ctx_handle = 0
@@ -346,10 +459,19 @@ pub fn Store::alloc_table(
   // Create corresponding JIT table (always enabled for cross-module sharing)
   if use_jit {
     let (min, max) = table.get_limits()
-    let jit_table = @wasmoon_jit.JITTable::try_alloc(min, max)
-    self.jit_tables.push(jit_table)
+    match @wasmoon_jit.JITTableOwner::try_alloc(min, max) {
+      Some(owner) => {
+        self.jit_tables.push(Some(owner.table()))
+        self.jit_table_owners.push(Some(owner))
+      }
+      None => {
+        self.jit_tables.push(None)
+        self.jit_table_owners.push(None)
+      }
+    }
   } else {
     self.jit_tables.push(None)
+    self.jit_table_owners.push(None)
   }
   idx
 }

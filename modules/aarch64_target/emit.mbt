@@ -56,7 +56,7 @@ pub suberror AArch64EmitError {
 
 ///|
 pub impl Show for AArch64EmitError with fn output(self, logger) {
-  logger.write_string(to_repr(self).to_string())
+  logger.write_string(Repr(self).to_string())
 }
 
 ///|
@@ -3398,7 +3398,11 @@ fn emit_instruction(
     }
     Jump => {
       emit_edge_moves(buffer, function, allocation, frame, block, 0)
-      let target = function.instruction_successor_at(instruction, 0).unwrap().target
+      let target = threaded_branch_target(
+        function,
+        allocation,
+        function.instruction_successor_at(instruction, 0).unwrap().target,
+      )
       if next_block != Some(target) {
         buffer.emit_branch(target, 26, 0x14000000U)
       }

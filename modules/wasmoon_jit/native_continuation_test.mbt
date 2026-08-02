@@ -107,7 +107,7 @@ test "interleaved native continuations complete and cancel exactly" {
       )
       let event = continuation.continue_with()
       guard event is NativeHostcallSuspended else {
-        return fail("continuation \{index} did not suspend: \{to_repr(event)}")
+        return fail("continuation \{index} did not suspend: \{Repr(event)}")
       }
       parked.push(continuation)
     }
@@ -366,7 +366,7 @@ test "parked native trap activations do not overwrite each other" {
 test "parked native continuation keeps its precise GC root alive" {
   let heap = CHeap::CHeap(capacity=1024)
   let context = native_continuation_test_context()
-  gc_set_heap(context.ptr(), heap)
+  context.set_gc_heap(heap)
   context.set_hostcall_callback(fn() { HostcallSuspended })
   let _garbage = heap.alloc_struct(0, [I32(11)])
   let rooted = heap.alloc_struct(0, [I32(22)])
@@ -398,8 +398,8 @@ test "multiple parked continuations unregister GC roots independently" {
   let heap = CHeap::CHeap(capacity=1024)
   let first_context = native_continuation_test_context()
   let second_context = native_continuation_test_context()
-  gc_set_heap(first_context.ptr(), heap)
-  gc_set_heap(second_context.ptr(), heap)
+  first_context.set_gc_heap(heap)
+  second_context.set_gc_heap(heap)
   first_context.set_hostcall_callback(fn() { HostcallSuspended })
   second_context.set_hostcall_callback(fn() { HostcallSuspended })
   let first_root = heap.alloc_struct(0, [I32(1)])

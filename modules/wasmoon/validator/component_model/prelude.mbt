@@ -60,7 +60,7 @@ pub(all) suberror ComponentValidationError {
 /// Keep `Show` behavior while migrating from deprecated `derive(Show)` to
 /// `derive(Debug)`.
 pub impl Show for ComponentValidationError with fn output(self, logger) {
-  logger.write_string(@types.compact_show_repr(to_repr(self).to_string()))
+  logger.write_string(@types.compact_show_repr(Repr(self).to_string()))
 }
 
 ///|
@@ -86,6 +86,25 @@ pub fn ComponentValidationConfig::ComponentValidationConfig(
 ///|
 pub fn ComponentValidationConfig::default() -> ComponentValidationConfig {
   { wit_names: true }
+}
+
+///|
+/// Evidence that a component completed structural validation successfully.
+///
+/// The constructor is package-private. Runtime instantiation boundaries accept
+/// this type instead of a raw component so validation failure cannot be
+/// swallowed before execution.
+struct ValidatedComponent {
+  component_bytes : Bytes
+}
+
+///|
+/// Return the immutable binary snapshot covered by this validation evidence.
+///
+/// `Bytes` has no mutation interface, so returning the stored value cannot
+/// invalidate the evidence or affect later instantiations.
+pub fn ValidatedComponent::component_bytes(self : ValidatedComponent) -> Bytes {
+  self.component_bytes
 }
 
 ///|

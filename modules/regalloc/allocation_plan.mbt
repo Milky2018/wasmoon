@@ -3,7 +3,7 @@ pub(all) enum EditPosition {
   Before(Int)
   After(Int)
   Edge(source_block~ : Int, successor_index~ : Int)
-} derive(Eq, Debug)
+} derive(Eq, Hash, Debug)
 
 ///|
 pub(all) struct AllocationEdit {
@@ -37,7 +37,7 @@ pub struct AllocationPlan {
 
 ///|
 pub impl Show for AllocationPlan with fn output(self, logger) {
-  logger.write_string(self.to_repr().to_string())
+  logger.write_string(Repr(self).to_string())
 }
 
 ///|

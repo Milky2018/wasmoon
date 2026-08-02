@@ -75,7 +75,7 @@ pub impl Debug for Value with fn to_repr(self) {
 
 ///|
 pub impl Show for Value with fn output(self, logger) {
-  logger.write_string(to_repr(self).to_string())
+  logger.write_string(Repr(self).to_string())
 }
 
 ///|
@@ -101,7 +101,7 @@ pub impl Debug for Block with fn to_repr(self) {
 
 ///|
 pub impl Show for Block with fn output(self, logger) {
-  logger.write_string(to_repr(self).to_string())
+  logger.write_string(Repr(self).to_string())
 }
 
 ///|
@@ -127,7 +127,7 @@ pub impl Debug for Instruction with fn to_repr(self) {
 
 ///|
 pub impl Show for Instruction with fn output(self, logger) {
-  logger.write_string(to_repr(self).to_string())
+  logger.write_string(Repr(self).to_string())
 }
 
 ///|
@@ -165,7 +165,7 @@ pub impl Debug for ProgramPoint with fn to_repr(self) {
     Before => "before"
     After => "after"
   }
-  Repr::literal("\{placement}(\{to_repr(self.instruction)})")
+  Repr::literal("\{placement}(\{Repr(self.instruction)})")
 }
 
 ///|
@@ -420,7 +420,7 @@ pub suberror VCodeBuildError {
 
 ///|
 pub impl Show for VCodeBuildError with fn output(self, logger) {
-  logger.write_string(to_repr(self).to_string())
+  logger.write_string(Repr(self).to_string())
 }
 
 ///|
@@ -445,5 +445,5 @@ pub suberror VCodeVerifyError {
 
 ///|
 pub impl Show for VCodeVerifyError with fn output(self, logger) {
-  logger.write_string(to_repr(self).to_string())
+  logger.write_string(Repr(self).to_string())
 }

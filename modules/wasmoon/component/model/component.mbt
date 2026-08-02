@@ -25,12 +25,61 @@ pub(all) struct Component {
 /// Keep `Show` behavior while migrating from deprecated `derive(Show)` to
 /// `derive(Debug)`.
 pub impl Show for Component with fn output(self, logger) {
-  logger.write_string(@types.compact_show_repr(to_repr(self).to_string()))
+  logger.write_string(@types.compact_show_repr(Repr(self).to_string()))
 }
 
 ///|
 pub fn parse_component(bytes : Bytes) -> Component raise ComponentParseError {
-  let binary = parse_component_binary(bytes)
+  component_from_binary(parse_component_binary(bytes))
+}
+
+///|
+/// Encode the component's immutable binary snapshot.
+///
+/// `Bytes` is immutable, so validation evidence can retain and expose this
+/// value without granting mutation access to the parsed component graph.
+pub fn Component::snapshot_bytes(self : Component) -> Bytes {
+  let bytes : Array[Byte] = [b'\x00', b'a', b's', b'm']
+  bytes.push((self.binary.version & 0xFF).to_byte())
+  bytes.push(((self.binary.version >> 8) & 0xFF).to_byte())
+  bytes.push((self.binary.layer & 0xFF).to_byte())
+  bytes.push(((self.binary.layer >> 8) & 0xFF).to_byte())
+  for section in self.binary.sections {
+    bytes.push(section.id.to_byte())
+    append_component_leb_u32(bytes, section.payload.length())
+    for byte in section.payload {
+      bytes.push(byte)
+    }
+  }
+  Bytes::from_array(bytes)
+}
+
+///|
+fn append_component_leb_u32(bytes : Array[Byte], value : Int) -> Unit {
+  for remaining = value {
+    let byte = remaining & 0x7F
+    let next = remaining >> 7
+    if next == 0 {
+      bytes.push(byte.to_byte())
+      break
+    }
+    bytes.push((byte | 0x80).to_byte())
+    continue next
+  }
+}
+
+///|
+/// Rebuild a component that shares no mutable state with `self`.
+pub fn Component::isolated_copy(
+  self : Component,
+) -> Component raise ComponentParseError {
+  parse_component(self.snapshot_bytes())
+}
+
+///|
+fn component_from_binary(
+  binary : ComponentBinary,
+) -> Component raise ComponentParseError {
   let core_modules : Array[Bytes] = []
   let core_instances : Array[Bytes] = []
   let core_types : Array[Bytes] = []

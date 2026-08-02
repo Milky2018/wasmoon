@@ -1,0 +1,24 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "Milky2018/wasmoon/component_conformance"
+
+import {
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub fn run_component_script(String, ComponentTestOutputFormat, use_jit? : Bool) -> Int
+
+pub fn run_component_script_cli(String, ComponentTestOutputFormat, use_jit? : Bool) -> Int
+
+// Errors
+
+// Types and methods
+pub(all) enum ComponentTestOutputFormat {
+  Text
+  Json
+} derive(Eq, @debug.Debug)
+
+// Type aliases
+
+// Traits
+

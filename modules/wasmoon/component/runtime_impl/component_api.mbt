@@ -92,6 +92,7 @@ fn ComponentInstanceEntryState::poison(
 
 ///|
 struct HostEventLoop {
+  poll : () -> Bool raise ComponentRuntimeError
   wait : () -> Bool raise ComponentRuntimeError
 }
 
@@ -165,7 +166,13 @@ pub impl Show for CoreInstance with fn output(_self, logger) {
 ///|
 /// A component value is a closure: the component binary plus the captured outer
 /// environment needed to resolve `alias outer ...` when instantiated later.
-pub(all) struct ComponentClosure {
+///
+/// The type is abstract on purpose. Every closure the runtime instantiates
+/// must originate from a validated boundary (`ComponentLinker::instantiate`,
+/// `ComponentLinker::add_component`, or a section of an already-validated
+/// component), so external code must not be able to forge a
+/// `Component(closure)` extern around an unchecked component.
+struct ComponentClosure {
   component : Component
   outer_stack : Array[ComponentInstance]
 }
@@ -311,11 +318,19 @@ pub fn ComponentInstance::get_core_instance(
 ///|
 struct ComponentLinker {
   core_linker : @runtime.Linker
-  core_engine : CoreExecutionEngine
+  // Released by `finish_close`, like every other retained graph below. The
+  // engine can reach embedder-supplied closures and native session state, and
+  // an embedder callback that refers back to its linker would otherwise form a
+  // reference cycle that outlives terminal close. Read it through
+  // `ComponentLinker::core_engine`.
+  core_engine_slot : Ref[CoreExecutionEngine?]
+  core_execution_lifecycle : CoreExecutionLifecycle
   components : Array[(String, ComponentInstance)]
   imports : Map[String, ComponentExtern]
   host_runtime : Ref[HostRuntimeState?]
   closed : Ref[Bool]
+  close_complete : Ref[Bool]
+  instantiating : Ref[Bool]
   // Mutable counter stored in a 1-element array so methods can bump it without
   // requiring `mut self`.
   resource_id_counter : Array[Int]
@@ -334,15 +349,33 @@ pub fn ComponentLinker::with_core_execution_engine(
   core_engine : CoreExecutionEngine,
 ) -> ComponentLinker {
   let core_linker = @runtime.Linker::Linker()
-  core_engine.prepare_store(core_linker.get_store())
+  let core_execution_lifecycle = CoreExecutionLifecycle::new()
+  let managed_core_engine = core_engine.with_lifecycle(core_execution_lifecycle)
+  managed_core_engine.prepare_store(core_linker.get_store())
   {
     core_linker,
-    core_engine,
+    core_engine_slot: Ref(Some(managed_core_engine)),
+    core_execution_lifecycle,
     components: [],
     imports: Map([]),
     host_runtime: Ref(None),
     closed: Ref(false),
+    close_complete: Ref(false),
+    instantiating: Ref(false),
     resource_id_counter: [0],
+  }
+}
+
+///|
+/// The core execution engine backing this linker.
+///
+/// After terminal close the engine is released, and this reports a closed
+/// engine that rejects further work instead of resurrecting the released one.
+/// Every caller below reaches the engine while the linker is still open.
+fn ComponentLinker::core_engine(self : ComponentLinker) -> CoreExecutionEngine {
+  match self.core_engine_slot.val {
+    Some(engine) => engine
+    None => closed_core_execution_engine()
   }
 }
 
@@ -359,29 +392,103 @@ pub fn ComponentLinker::get_store(self : ComponentLinker) -> @runtime.Store {
 }
 
 ///|
-/// Close the execution engine after all component calls have ended.
+/// Close the linker and its execution engine.
 ///
-/// A linker is terminal after this call. Embeddings must finish or cancel every
-/// outstanding continuation before closing it.
+/// The linker is terminal as soon as this is called. Published continuations
+/// are cancelled first; final engine and Store teardown waits until every
+/// in-flight core execution has either returned or transferred and released
+/// its continuation lease.
 pub fn ComponentLinker::close(self : ComponentLinker) -> Unit {
   if self.closed.val {
     return
   }
   self.closed.val = true
+  self.core_execution_lifecycle.begin_close()
+  for entry in self.components {
+    let (_, component) = entry
+    cancel_async_state_continuations(component.async_state)
+  }
+  match self.host_runtime.val {
+    Some(runtime) => runtime.cancel_continuations()
+    None => ()
+  }
+  self.core_execution_lifecycle.request_close(fn() { self.finish_close() })
+}
+
+///|
+/// Release one linker-owned instance at terminal close.
+///
+/// A component that defines a nested component stores a `ComponentClosure`
+/// whose `outer_stack` holds an env instance sharing this instance's child
+/// arrays — `alias outer` resolution requires the enclosing scope when the
+/// nested component is instantiated later. That is a deliberate reference
+/// cycle, and reference counting can never reclaim it. The cycle runs
+/// through this instance's own arrays, so clearing them is what breaks it;
+/// the env and inline instances of the same frame share the very same array
+/// objects and die with it.
+///
+/// Deliberately shallow. The linker owns exactly the instances its own
+/// instantiations registered — every instantiation frame registers itself,
+/// so `finish_close` walks all of them directly. Recursing into children
+/// would cross the ownership boundary: `instances` and `exports` also hold
+/// instances supplied through `add_instance`/`add_import`, which another
+/// linker or the embedder owns and may still be using. Clearing this
+/// instance's arrays only drops references to those, never their state.
+fn release_owned_instance(instance : ComponentInstance) -> Unit {
+  instance.components.clear()
+  instance.instances.clear()
+  instance.funcs.clear()
+  instance.values.clear()
+  instance.exports.clear()
+}
+
+///|
+fn ComponentLinker::finish_close(self : ComponentLinker) -> Unit {
+  if self.close_complete.val {
+    return
+  }
+  self.close_complete.val = true
+  for entry in self.components {
+    let (_, instance) = entry
+    release_owned_instance(instance)
+  }
+  // Imports are not owned: dropping the table's references is the linker's
+  // entire claim on them. Releasing their graphs here destroyed instances
+  // shared from other linkers or built by the embedder.
   self.components.clear()
   self.imports.clear()
   self.host_runtime.val = None
-  self.core_engine.close()
+  // Close the engine, then drop it. Holding it past terminal close would keep
+  // embedder state alive for the lifetime of the linker, and would make an
+  // embedder callback that refers back to this linker an uncollectable cycle.
+  match self.core_engine_slot.val {
+    Some(engine) => {
+      self.core_engine_slot.val = None
+      engine.close()
+    }
+    None => ()
+  }
   self.core_linker.close()
 }
 
 ///|
-pub fn ComponentLinker::register(
-  self : ComponentLinker,
-  name : String,
-  instance : ComponentInstance,
+/// Roll back the staged registrations of a failed or refused instantiation.
+///
+/// Staged instances were never published, so no caller can hold them:
+/// release each graph's own containers (breaking its `alias outer` cycles)
+/// and withdraw its resource table from the shared async state — the table
+/// was added by the frame's build state and nothing can resolve it once the
+/// whole tree is discarded.
+fn rollback_staged_registrations(
+  staged : Array[(String, ComponentInstance)],
 ) -> Unit {
-  self.components.push((name, instance))
+  for entry in staged {
+    let (_, instance) = entry
+    release_owned_instance(instance)
+    instance.async_state.resource_tables.remove(instance.resource_table.id)
+    |> ignore
+  }
+  staged.clear()
 }
 
 ///|
@@ -403,7 +510,14 @@ pub fn ComponentLinker::add_import(
   self : ComponentLinker,
   name : String,
   ext : ComponentExtern,
-) -> Unit {
+) -> Unit raise ComponentRuntimeError {
+  // A terminally closed linker accepts no new imports. `finish_close` has
+  // already walked and released the import table, so an extern added after
+  // close would be retained until the linker itself dies — an uncollectable
+  // cycle whenever the extern captures its own linker.
+  if self.closed.val {
+    raise Cancelled
+  }
   self.imports.set(name, ext)
 }
 
@@ -422,7 +536,7 @@ pub fn ComponentLinker::add_func(
   name : String,
   func_type : FuncType,
   func : (Array[ComponentValue]) -> Array[ComponentValue] raise ComponentRuntimeError,
-) -> Unit {
+) -> Unit raise ComponentRuntimeError {
   self.add_import(
     name,
     Func(
@@ -441,17 +555,25 @@ pub fn ComponentLinker::add_value(
   self : ComponentLinker,
   name : String,
   value : ComponentValue,
-) -> Unit {
+) -> Unit raise ComponentRuntimeError {
   self.add_import(name, Value(value))
 }
 
 ///|
+/// Register a component import. Like `ComponentLinker::instantiate`, the
+/// boundary accepts validation evidence rather than a raw component: an
+/// imported component is instantiated by the instance sections of whichever
+/// component imports it, so an unchecked component here would reach
+/// instantiation without ever passing validation.
 pub fn ComponentLinker::add_component(
   self : ComponentLinker,
   name : String,
-  component : Component,
-) -> Unit {
-  self.add_import(name, Component({ component, outer_stack: [] }))
+  component : @component_validator.ValidatedComponent,
+) -> Unit raise ComponentRuntimeError {
+  let isolated = @component.parse_component(component.component_bytes()) catch {
+    e => raise ComponentParseError(e.to_string())
+  }
+  self.add_import(name, Component({ component: isolated, outer_stack: [] }))
 }
 
 ///|
@@ -459,7 +581,7 @@ pub fn ComponentLinker::add_instance(
   self : ComponentLinker,
   name : String,
   instance : ComponentInstance,
-) -> Unit {
+) -> Unit raise ComponentRuntimeError {
   self.add_import(name, Instance(instance))
 }
 
@@ -468,7 +590,7 @@ pub fn ComponentLinker::add_core_module(
   self : ComponentLinker,
   name : String,
   module_ : @types.Module,
-) -> Unit {
+) -> Unit raise ComponentRuntimeError {
   self.add_import(name, CoreModule(module_))
 }
 
@@ -477,7 +599,7 @@ pub fn ComponentLinker::add_core_instance(
   self : ComponentLinker,
   name : String,
   instance : CoreInstance,
-) -> Unit {
+) -> Unit raise ComponentRuntimeError {
   self.add_import(name, CoreInstance(instance))
 }
 
@@ -485,7 +607,54 @@ pub fn ComponentLinker::add_core_instance(
 pub fn ComponentLinker::instantiate(
   self : ComponentLinker,
   name : String,
-  component : Component,
+  component : @component_validator.ValidatedComponent,
 ) -> ComponentInstance raise ComponentRuntimeError {
-  instantiate_component(self, name, component, Map([]), [])
+  self.core_execution_lifecycle.ensure_open()
+  if self.instantiating.val {
+    raise ReentrantInstantiation
+  }
+  self.instantiating.val = true
+  defer {
+    self.instantiating.val = false
+  }
+  // The whole instantiation runs under one lifecycle lease and one
+  // registration transaction. The lease means an embedder callback that
+  // closes the linker mid-instantiation only begins the close: teardown is
+  // deferred until this frame unwinds, so no section ever observes a
+  // released engine or cleared imports. The transaction means every frame —
+  // nested components included — stages its instance instead of publishing
+  // it; only a root that succeeds on a still-open linker commits the tree,
+  // and any failure or mid-flight close rolls the whole tree back, so a
+  // partially instantiated graph is never observable through the linker.
+  // The same transaction checkpoints the underlying core Store, core linker,
+  // debug-name registry, and engine registrations so a later start trap also
+  // withdraws every core allocation and native context created by this root.
+  let staged : Array[(String, ComponentInstance)] = []
+  let core_checkpoint : Ref[@runtime.CoreLinkerCheckpoint?] = Ref(None)
+  let engine_checkpoint : Ref[CoreRegistrationCheckpoint?] = Ref(None)
+  let instance = self.core_execution_lifecycle.with_lease(
+    fn() raise ComponentRuntimeError {
+      core_checkpoint.val = Some(self.core_linker.checkpoint())
+      engine_checkpoint.val = Some(
+        self.core_engine().checkpoint_registrations(),
+      )
+      let isolated = @component.parse_component(component.component_bytes()) catch {
+        e => raise ComponentParseError(e.to_string())
+      }
+      instantiate_component(self, name, isolated, Map([]), [], staged)
+    },
+    rollback=fn() {
+      rollback_staged_registrations(staged)
+      if engine_checkpoint.val is Some(checkpoint) {
+        checkpoint.rollback()
+      }
+      if core_checkpoint.val is Some(checkpoint) {
+        self.core_linker.rollback_to(checkpoint) |> ignore
+      }
+    },
+  )
+  for entry in staged {
+    self.components.push(entry)
+  }
+  instance
 }

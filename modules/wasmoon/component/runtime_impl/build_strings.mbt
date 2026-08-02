@@ -20,6 +20,40 @@ priv struct BuildState {
 }
 
 ///|
+/// Release the build state of an aborted instantiation.
+///
+/// The frame's arrays carry the same deliberate `alias outer` cycles that
+/// `release_component_instance_graph` breaks at terminal close: a nested
+/// closure's outer stack holds an env instance whose child arrays are these
+/// arrays. Nothing registered the partial graph, so no later boundary can
+/// reach it — break the cycles here, on every abort. Clearing only this
+/// frame's own containers drops references to imported and outer objects
+/// without touching their state, so on an open linker the live imports the
+/// frame had resolved are unaffected. The frame's resource table is also
+/// withdrawn from the shared async state: registration is transactional, so
+/// an aborted root rolls back every nested frame with it and nothing that
+/// survives can resolve this table afterwards. Without the removal, each
+/// failed instantiation on a host-runtime-backed linker would grow the
+/// shared table map forever.
+fn BuildState::release_aborted(self : BuildState) -> Unit {
+  self.async_state.resource_tables.remove(self.resource_table.id)
+  self.types.clear()
+  self.funcs.clear()
+  self.values.clear()
+  self.components.clear()
+  self.instances.clear()
+  self.core_modules.clear()
+  self.core_instances.clear()
+  self.core_funcs.clear()
+  self.core_types.clear()
+  self.core_tables.clear()
+  self.core_mems.clear()
+  self.core_globals.clear()
+  self.core_tags.clear()
+  self.exports.clear()
+}
+
+///|
 fn BuildState::BuildState(
   stream_table : StreamTable,
   async_state : AsyncState,

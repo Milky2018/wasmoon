@@ -3,6 +3,7 @@ package "Milky2018/wasmoon/component"
 
 import {
   "Milky2018/wasmoon/component/model",
+  "Milky2018/wasmoon/wasi_component",
   "moonbitlang/core/debug",
 }
 
@@ -12,6 +13,10 @@ pub fn component_value_from_json(Json, ComponentValueType) -> ComponentValue rai
 pub fn component_value_to_json(ComponentValue) -> Json
 
 pub fn component_values_to_json(Array[ComponentValue]) -> Json
+
+pub fn interpreter_component_engine() -> ComponentEngine
+
+pub fn native_component_engine(opt_level? : Int, on_execution? : (NativeComponentExecutionEvent) -> Unit) -> ComponentEngine
 
 pub fn parse_alias_section(Bytes) -> Array[@model.Alias] raise @model.ComponentParseError
 
@@ -37,6 +42,8 @@ pub fn parse_type_section(Bytes) -> Array[@model.TypeDef] raise @model.Component
 
 pub fn sniff_binary_kind(Bytes) -> @model.BinaryKind?
 
+pub fn wasi_command_component_host(@wasi_component.WasiComponentCtx) -> ComponentHostInstaller
+
 // Errors
 pub(all) suberror ComponentRuntimeError {
   ParseFailed(String)
@@ -50,17 +57,39 @@ pub(all) suberror ComponentRuntimeError {
   ArgumentCountMismatch(expected~ : Int, actual~ : Int)
   TypeMismatch(path~ : String, expected~ : ComponentValueType, actual~ : String)
   InvocationFailed(String)
+  NativeEngineUnavailable(String)
+  NativeCompilationFailed(String)
+  HostInstallerAlreadyConsumed
+  HostContextAlreadyOwned
+  HostReadinessAlreadyInstalled
+  CallAlreadyActive
+  RuntimeClosed
+  Cancelled
+  HostExit(Int)
   JsonValueError(String)
 } derive(Eq, @debug.Debug)
 pub impl Show for ComponentRuntimeError
 
 // Types and methods
+type ComponentCall
+pub fn ComponentCall::cancel(Self) -> Unit raise ComponentRuntimeError
+pub async fn ComponentCall::join(Self) -> Array[ComponentValue] raise ComponentRuntimeError
+pub fn ComponentCall::poll(Self) -> ComponentCallPoll raise ComponentRuntimeError
+pub fn ComponentCall::wait(Self) -> Array[ComponentValue] raise ComponentRuntimeError
+
+pub(all) enum ComponentCallPoll {
+  Pending
+  Ready(Array[ComponentValue])
+} derive(Eq, @debug.Debug)
+
 pub struct ComponentCase {
   name : String
   ty : ComponentValueType?
 } derive(Eq, @debug.Debug)
 pub fn ComponentCase::ComponentCase(String, ComponentValueType?) -> Self
 pub impl Show for ComponentCase
+
+type ComponentEngine
 
 pub struct ComponentField {
   name : String
@@ -79,7 +108,10 @@ pub impl Show for ComponentFuncType
 
 type ComponentFunction
 pub fn ComponentFunction::call(Self, Array[ComponentValue]) -> Array[ComponentValue] raise ComponentRuntimeError
+pub fn ComponentFunction::start(Self, Array[ComponentValue]) -> ComponentCall raise ComponentRuntimeError
 pub fn ComponentFunction::type_(Self) -> ComponentFuncType
+
+type ComponentHostInstaller
 
 type ComponentInstance
 pub fn ComponentInstance::bind(Self, String) -> ComponentFunction raise ComponentRuntimeError
@@ -100,7 +132,9 @@ pub fn ComponentResourceType::name(Self) -> String
 pub fn ComponentResourceType::named(String) -> Self
 
 type ComponentRuntime
-pub fn ComponentRuntime::ComponentRuntime(wit_names? : Bool) -> Self
+pub fn ComponentRuntime::ComponentRuntime(engine? : ComponentEngine, wit_names? : Bool) -> Self
+pub fn ComponentRuntime::close(Self) -> Unit
+pub fn ComponentRuntime::install(Self, ComponentHostInstaller) -> Unit raise ComponentRuntimeError
 pub fn ComponentRuntime::instantiate(Self, String, Bytes) -> ComponentInstance raise ComponentRuntimeError
 pub fn ComponentRuntime::instantiate_component(Self, String, @model.Component) -> ComponentInstance raise ComponentRuntimeError
 
@@ -164,6 +198,12 @@ pub(all) enum ComponentValueType {
   Future(ComponentValueType?)
 } derive(Eq, @debug.Debug)
 pub impl Show for ComponentValueType
+
+pub(all) enum NativeComponentExecutionEvent {
+  RunToReturn
+  Resumable
+  ExplicitInterpreter
+} derive(Eq, @debug.Debug)
 
 // Type aliases
 pub using @model {type Alias}

@@ -222,7 +222,7 @@ pub fn validate_jit(
       err =>
         report.add_error(
           Regalloc,
-          to_repr(err).to_string(),
+          Repr(err).to_string(),
           func_idx=Some(func_idx),
           func_name=Some(func_name),
         )

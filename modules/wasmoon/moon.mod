@@ -14,6 +14,7 @@ import {
   "Milky2018/x64_target@0.2.2",
   "Milky2018/aarch64_target@0.3.2",
   "Milky2018/wasmoon_jit@0.4.2",
+  "moonbitlang/async@0.20.3",
 }
 
 readme = "README.mbt.md"

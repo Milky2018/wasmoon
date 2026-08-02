@@ -755,12 +755,12 @@ fn require_shape(
 ) -> String? {
   if operands != expected_operands {
     return operation_error(
-      "\{name} expects operands \{to_repr(expected_operands)}, got \{to_repr(operands)}",
+      "\{name} expects operands \{Repr(expected_operands)}, got \{Repr(operands)}",
     )
   }
   if results != expected_results {
     return operation_error(
-      "\{name} expects results \{to_repr(expected_results)}, got \{to_repr(results)}",
+      "\{name} expects results \{Repr(expected_results)}, got \{Repr(results)}",
     )
   }
   None
@@ -1111,7 +1111,7 @@ fn verify_call_operands(
   let expected = call_operand_types(call)
   if operands != expected {
     return operation_error(
-      "\{context} expects operands \{to_repr(expected)}, got \{to_repr(operands)}",
+      "\{context} expects operands \{Repr(expected)}, got \{Repr(operands)}",
     )
   }
   None
@@ -1444,7 +1444,7 @@ fn verify_operation_contract(
         None =>
           if results != call.signature.results {
             operation_error(
-              "call expects results \{to_repr(call.signature.results)}, got \{to_repr(results)}",
+              "call expects results \{Repr(call.signature.results)}, got \{Repr(results)}",
             )
           } else {
             None

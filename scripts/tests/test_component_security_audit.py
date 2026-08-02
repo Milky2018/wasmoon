@@ -20,8 +20,20 @@ class ComponentSecurityAuditTests(unittest.TestCase):
             "oracle": {"name": "wasmtime", "version": "45.0.0"},
             "source_checks": {
                 "stable_interface": "interface.mbti",
-                "facade": "facade.mbt",
                 "validator": "validator.mbt",
+                "validator_interface": "validator.mbti",
+                "runtime_interface": "runtime.mbti",
+                "interface_scan_root": "modules/wasmoon",
+                "implementation_owner_roots": [
+                    "Milky2018/wasmoon/component/runtime_impl",
+                    "Milky2018/wasmoon/component_engine",
+                    "Milky2018/wasmoon/component_host",
+                    "Milky2018/wasmoon/component_native",
+                ],
+                "implementation_interface_allowlist": [
+                    "modules/wasmoon/component_native/pkg.generated.mbti",
+                    "modules/wasmoon/wasi_component/pkg.generated.mbti",
+                ],
                 "forbidden_termination_roots": ["untrusted"],
                 "forbidden_termination_patterns": ["abort(", "try!"],
                 "termination_allowlist": [],
@@ -44,14 +56,26 @@ class ComponentSecurityAuditTests(unittest.TestCase):
             encoding="utf-8",
         )
         (root / "interface.mbti").write_text("pub type Component\n", encoding="utf-8")
-        (root / "facade.mbt").write_text(
-            "@component_model.validate_component_with_config(component)\n"
-            "self.linker.instantiate(name, component)\n",
-            encoding="utf-8",
-        )
         (root / "validator.mbt").write_text(
             '"effective type size exceeds the limit"\n'
             '"type nesting is too deep"\n',
+            encoding="utf-8",
+        )
+        (root / "validator.mbti").write_text(
+            "type ValidatedComponent\n"
+            "pub fn ValidatedComponent::component_bytes(Self) -> Bytes\n"
+            "pub fn validate_component_for_instantiation_with_config"
+            "(@model.Component, ComponentValidationConfig)"
+            " -> ValidatedComponent raise ComponentValidationError\n",
+            encoding="utf-8",
+        )
+        (root / "runtime.mbti").write_text(
+            "type ComponentClosure\n"
+            "pub fn ComponentLinker::add_component"
+            "(Self, String, @component_model.ValidatedComponent) -> Unit\n"
+            "pub fn ComponentLinker::instantiate"
+            "(Self, String, @component_model.ValidatedComponent)"
+            " -> ComponentInstance raise ComponentRuntimeError\n",
             encoding="utf-8",
         )
         (root / "untrusted").mkdir()
@@ -108,20 +132,254 @@ class ComponentSecurityAuditTests(unittest.TestCase):
             manifest_path.write_text(json.dumps(manifest))
             self.assert_failed(root, "manifest-evidence")
 
+    def test_missing_interface_owner_config_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.create_fixture(root)
+            manifest_path = root / "docs/component-hardening.json"
+            manifest = json.loads(manifest_path.read_text())
+            del manifest["source_checks"]["implementation_owner_roots"]
+            manifest_path.write_text(json.dumps(manifest))
+            self.assert_failed(root, "interface-owner-config")
+
     def test_stable_interface_leak_fails(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             self.create_fixture(root)
-            (root / "interface.mbti").write_text("pub type runtime_impl.State\n")
+            (root / "interface.mbti").write_text(
+                "import {\n"
+                '  "Milky2018/wasmoon/component/runtime_impl",\n'
+                "}\n"
+                "pub fn state() -> @runtime_impl.State\n",
+                encoding="utf-8",
+            )
             self.assert_failed(root, "stable-interface-isolation")
 
-    def test_instantiate_before_validation_fails(self) -> None:
+    def test_reexported_implementation_adapter_fails(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             self.create_fixture(root)
-            (root / "facade.mbt").write_text(
-                "self.linker.instantiate(name, component)\n"
-                "@component_model.validate_component_with_config(component)\n"
+            (root / "interface.mbti").write_text(
+                "import {\n"
+                '  "Milky2018/wasmoon/component_engine",\n'
+                "}\n"
+                "pub using @component_engine {type ComponentEngine}\n",
+                encoding="utf-8",
+            )
+            self.assert_failed(root, "stable-interface-isolation")
+
+    def test_aliased_nested_implementation_owner_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.create_fixture(root)
+            (root / "interface.mbti").write_text(
+                "import {\n"
+                '  "Milky2018/wasmoon/component_native/internal" @engine,\n'
+                "}\n"
+                "pub fn engine() -> @engine.CoreExecutionEngine\n",
+                encoding="utf-8",
+            )
+            self.assert_failed(root, "stable-interface-isolation")
+
+    def test_similarly_prefixed_public_owner_passes(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.create_fixture(root)
+            (root / "interface.mbti").write_text(
+                "import {\n"
+                '  "Milky2018/wasmoon/component_native_api",\n'
+                "}\n"
+                "pub fn engine() -> @component_native_api.Engine\n",
+                encoding="utf-8",
+            )
+            checks = {check.name: check for check in audit_repo(root)}
+            self.assertTrue(
+                checks["stable-interface-isolation"].passed,
+                checks["stable-interface-isolation"].detail,
+            )
+
+    def test_unused_implementation_import_passes(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.create_fixture(root)
+            (root / "interface.mbti").write_text(
+                "import {\n"
+                '  "Milky2018/wasmoon/component_native/internal" @engine,\n'
+                "}\n"
+                "pub fn local_engine() -> LocalEngine\n",
+                encoding="utf-8",
+            )
+            checks = {check.name: check for check in audit_repo(root)}
+            self.assertTrue(
+                checks["stable-interface-isolation"].passed,
+                checks["stable-interface-isolation"].detail,
+            )
+
+    def test_generic_adapter_under_another_package_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.create_fixture(root)
+            path = (
+                root
+                / "modules"
+                / "wasmoon"
+                / "alternate_adapter"
+                / "pkg.generated.mbti"
+            )
+            path.parent.mkdir(parents=True)
+            path.write_text(
+                "import {\n"
+                '  "Milky2018/wasmoon/component/runtime_impl" @engine,\n'
+                "}\n"
+                "pub fn from_session_factory(\n"
+                "  factory : () -> @engine.CoreExecutionEngine,\n"
+                ") -> Adapter\n",
+                encoding="utf-8",
+            )
+            self.assert_failed(root, "adapter-interface-isolation")
+
+    def test_reviewed_low_level_interface_passes(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.create_fixture(root)
+            path = (
+                root
+                / "modules"
+                / "wasmoon"
+                / "component_native"
+                / "pkg.generated.mbti"
+            )
+            path.parent.mkdir(parents=True)
+            path.write_text(
+                "import {\n"
+                '  "Milky2018/wasmoon/component/runtime_impl" @engine,\n'
+                "}\n"
+                "pub fn open_session() -> @engine.CoreExecutionEngine\n",
+                encoding="utf-8",
+            )
+            checks = {check.name: check for check in audit_repo(root)}
+            self.assertTrue(
+                checks["adapter-interface-isolation"].passed,
+                checks["adapter-interface-isolation"].detail,
+            )
+
+    def test_raw_component_instantiation_boundary_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.create_fixture(root)
+            (root / "runtime.mbti").write_text(
+                "pub fn ComponentLinker::instantiate"
+                "(Self, String, @model.Component)"
+                " -> ComponentInstance raise ComponentRuntimeError\n",
+                encoding="utf-8",
+            )
+            self.assert_failed(root, "validate-before-instantiate")
+
+    def test_raw_component_import_boundary_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.create_fixture(root)
+            (root / "runtime.mbti").write_text(
+                "type ComponentClosure\n"
+                "pub fn ComponentLinker::add_component"
+                "(Self, String, @model.Component) -> Unit\n"
+                "pub fn ComponentLinker::instantiate"
+                "(Self, String, @component_model.ValidatedComponent)"
+                " -> ComponentInstance raise ComponentRuntimeError\n",
+                encoding="utf-8",
+            )
+            self.assert_failed(root, "validate-before-instantiate")
+
+    def test_mutable_component_evidence_accessor_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.create_fixture(root)
+            (root / "validator.mbti").write_text(
+                "type ValidatedComponent\n"
+                "pub fn ValidatedComponent::component(Self)"
+                " -> @model.Component\n"
+                "pub fn validate_component_for_instantiation_with_config"
+                "(@model.Component, ComponentValidationConfig)"
+                " -> ValidatedComponent raise ComponentValidationError\n",
+                encoding="utf-8",
+            )
+            self.assert_failed(root, "validate-before-instantiate")
+
+    def test_accessor_implementation_spelling_is_not_audit_input(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.create_fixture(root)
+            (root / "validator.mbt").write_text(
+                "fn arbitrarily_refactored_validator() -> Unit { () }\n"
+                '"effective type size exceeds the limit"\n'
+                '"type nesting is too deep"\n',
+                encoding="utf-8",
+            )
+            checks = {check.name: check for check in audit_repo(root)}
+            self.assertTrue(
+                checks["validate-before-instantiate"].passed,
+                checks["validate-before-instantiate"].detail,
+            )
+
+    def test_public_register_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.create_fixture(root)
+            (root / "runtime.mbti").write_text(
+                "type ComponentClosure\n"
+                "pub fn ComponentLinker::add_component"
+                "(Self, String, @component_model.ValidatedComponent) -> Unit\n"
+                "pub fn ComponentLinker::instantiate"
+                "(Self, String, @component_model.ValidatedComponent)"
+                " -> ComponentInstance raise ComponentRuntimeError\n"
+                "pub fn ComponentLinker::register"
+                "(Self, String, ComponentInstance) -> Unit\n",
+                encoding="utf-8",
+            )
+            self.assert_failed(root, "validate-before-instantiate")
+
+    def test_constructible_component_closure_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.create_fixture(root)
+            (root / "runtime.mbti").write_text(
+                "pub(all) struct ComponentClosure {\n"
+                "  component : @model.Component\n"
+                "  outer_stack : Array[ComponentInstance]\n"
+                "}\n"
+                "pub fn ComponentLinker::add_component"
+                "(Self, String, @component_model.ValidatedComponent) -> Unit\n"
+                "pub fn ComponentLinker::instantiate"
+                "(Self, String, @component_model.ValidatedComponent)"
+                " -> ComponentInstance raise ComponentRuntimeError\n",
+                encoding="utf-8",
+            )
+            self.assert_failed(root, "validate-before-instantiate")
+
+    def test_missing_validation_evidence_producer_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.create_fixture(root)
+            (root / "validator.mbti").write_text(
+                "pub struct ValidatedComponent {\n"
+                "  component : @model.Component\n"
+                "}\n",
+                encoding="utf-8",
+            )
+            self.assert_failed(root, "validate-before-instantiate")
+
+    def test_constructible_validation_evidence_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.create_fixture(root)
+            (root / "validator.mbti").write_text(
+                "pub struct ValidatedComponent {\n"
+                "  component : @model.Component\n"
+                "}\n"
+                "pub fn validate_component_for_instantiation_with_config"
+                "(@model.Component, ComponentValidationConfig)"
+                " -> ValidatedComponent raise ComponentValidationError\n",
+                encoding="utf-8",
             )
             self.assert_failed(root, "validate-before-instantiate")
 

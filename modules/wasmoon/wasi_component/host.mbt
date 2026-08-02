@@ -23,9 +23,11 @@ struct WasiComponentHost {
 pub fn WasiComponentHost::WasiComponentHost(
   linker : @runtime_impl.ComponentLinker,
   ctx : WasiComponentCtx,
-) -> WasiComponentHost {
+) -> WasiComponentHost raise @runtime_impl.ComponentRuntimeError {
   let runtime = linker.host_runtime_state()
-  runtime.set_event_loop(() => ctx.wait_for_async_event())
+  runtime.set_event_loop(() => ctx.wait_for_async_event(), poll=() => {
+    ctx.poll_async_event()
+  })
   let all : Map[String, @component.TypeDef?] = Map([])
   for name in wasi_preview2_resource_names() {
     all.set(name, linker.new_host_resource_type())

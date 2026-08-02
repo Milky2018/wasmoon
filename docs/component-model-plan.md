@@ -13,6 +13,8 @@ same runtime objects, interpreter, and native compiler as ordinary core Wasm.
 - `wasmoon/validator/component_model`: component validation.
 - `wasmoon/component/runtime_impl`: linker, instantiation, canonical ABI,
   resources, tasks, streams, futures, and host adapters.
+- `wasmoon/component_native`: strict native JIT session factory used by the
+  stable facade and low-level conformance harnesses.
 - `wasmoon/wasi_component`: WASI Preview 2 and Preview 3 component hosts.
 - `wasmoon/cmd/wasmoon`: command execution and component-spec test harness.
 
@@ -20,10 +22,14 @@ Component execution does not add product dependencies to reusable compiler
 modules. The component runtime selects a core execution engine through an
 adapter owned by Wasmoon.
 
-Ordinary embedders depend only on the root component facade. The validator and
-runtime implementation depend directly on `component/model`, so the root
-package can compose them without a dependency cycle. Public facade signatures
-do not contain runtime implementation types.
+Ordinary embedders depend only on the root component facade. The root package
+owns its opaque engine, execution-event, and host-installer types and the
+private closures that create execution sessions or populate linkers. Only
+concrete interpreter, native, and WASI constructors are public: embedders
+cannot inject a reused mutable execution session or directly receive the
+linker. The validator and runtime implementation depend directly on
+`component/model`, so the root package can compose them without a dependency
+cycle. Public facade signatures do not contain runtime implementation types.
 
 ## Core Execution Contract
 
@@ -76,13 +82,22 @@ continuation stack and parked GC roots, and rejects stale late events.
 No replay cursor or cached host result is part of this protocol. Effects before
 a suspension point execute once, and events are consumed once after resumption.
 
+The stable facade represents one invocation as an opaque `ComponentCall`.
+`poll` performs bounded nonblocking progress, `wait` may block in the host
+reactor, and async `join` yields the current MoonBit process while retaining the
+same component task and continuation. `ComponentFunction::call` is only the
+blocking `start(args).wait()` convenience. These are driving policies over one
+state machine, not separate execution implementations.
+
 ## Supported Native Contract
 
 The supported native WASI 0.3 targets are macOS AArch64 and Linux AMD64. The
-component linker must remain alive while any call or continuation exists.
-Embeddings must finish or cancel all continuations and then call
-`ComponentLinker::close`; close is terminal and idempotent and releases native
-code and trampoline mappings.
+stable `ComponentRuntime` owns every call and continuation created through it.
+Its terminal, idempotent `close` cancels outstanding calls and installed host
+operations before releasing native code, trampoline mappings, and Store
+resources. Retained aliases share the closed state and cannot re-enter the
+runtime. The lower-level linker ordering is an implementation invariant, not
+an embedding requirement.
 
 The stable `Milky2018/wasmoon/component` facade does not expose fibers,
 platform-reactor contexts, native descriptors, Store internals, or mutable

@@ -28,7 +28,7 @@ priv enum ValueDefinition {
 
 ///|
 pub impl Show for VerifyError with fn output(self, logger) {
-  logger.write_string(to_repr(self).to_string())
+  logger.write_string(Repr(self).to_string())
 }
 
 ///|

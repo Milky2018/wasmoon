@@ -101,6 +101,33 @@ pub(all) enum CoreExecutionOutcome {
 } derive(Debug)
 
 ///|
+/// Engine-owned registrations added during one component instantiation.
+///
+/// The checkpoint is deliberately opaque: each adapter knows how to release
+/// its own registration resources, such as native compilation contexts.
+struct CoreRegistrationCheckpoint {
+  rollback_fn : () -> Unit
+  rolled_back : Ref[Bool]
+}
+
+///|
+pub fn CoreRegistrationCheckpoint::CoreRegistrationCheckpoint(
+  rollback : () -> Unit,
+) -> CoreRegistrationCheckpoint {
+  { rollback_fn: rollback, rolled_back: Ref(false) }
+}
+
+///|
+pub fn CoreRegistrationCheckpoint::rollback(
+  self : CoreRegistrationCheckpoint,
+) -> Unit {
+  if !self.rolled_back.val {
+    self.rolled_back.val = true
+    (self.rollback_fn)()
+  }
+}
+
+///|
 /// Component-owned seam for core Wasm execution.
 ///
 /// `register_instance` is called once after interpreter instantiation has
@@ -110,6 +137,7 @@ pub(all) enum CoreExecutionOutcome {
 struct CoreExecutionEngine {
   prepare_store_fn : (@runtime.Store) -> Unit
   close_fn : () -> Unit
+  checkpoint_registrations_fn : () -> CoreRegistrationCheckpoint
   register_instance_fn : (
     @runtime.Store,
     @types.Module,
@@ -125,6 +153,190 @@ struct CoreExecutionEngine {
 }
 
 ///|
+/// An engine that accepts no further work.
+///
+/// Reported by a linker whose engine has already been released at terminal
+/// close, so a late caller gets the same structured `Cancelled` it would get
+/// from a closing lifecycle rather than reaching a closed engine.
+fn closed_core_execution_engine() -> CoreExecutionEngine {
+  CoreExecutionEngine(
+    fn(_store, _module, _instance) raise ComponentRuntimeError {
+      raise Cancelled
+    },
+    fn(
+      _store,
+      _instance,
+      _func_idx,
+      _args,
+      _request,
+    ) raise ComponentRuntimeError {
+      raise Cancelled
+    },
+    prepare_store=fn(_store) { () },
+    close=fn() { () },
+  )
+}
+
+///|
+priv struct CoreExecutionLifecycle {
+  active_leases : Ref[Int]
+  closing : Ref[Bool]
+  close_when_idle : Ref[(() -> Unit)?]
+}
+
+///|
+fn CoreExecutionLifecycle::new() -> CoreExecutionLifecycle {
+  { active_leases: Ref(0), closing: Ref(false), close_when_idle: Ref(None) }
+}
+
+///|
+fn CoreExecutionLifecycle::ensure_open(
+  self : CoreExecutionLifecycle,
+) -> Unit raise ComponentRuntimeError {
+  if self.closing.val {
+    raise Cancelled
+  }
+}
+
+///|
+fn CoreExecutionLifecycle::enter(
+  self : CoreExecutionLifecycle,
+) -> Unit raise ComponentRuntimeError {
+  self.ensure_open()
+  self.active_leases.val = self.active_leases.val + 1
+}
+
+///|
+fn CoreExecutionLifecycle::leave(self : CoreExecutionLifecycle) -> Unit {
+  self.active_leases.val = self.active_leases.val - 1
+  if self.active_leases.val == 0 && self.closing.val {
+    match self.close_when_idle.val {
+      Some(close) => {
+        self.close_when_idle.val = None
+        close()
+      }
+      None => ()
+    }
+  }
+}
+
+///|
+fn CoreExecutionLifecycle::begin_close(self : CoreExecutionLifecycle) -> Unit {
+  self.closing.val = true
+}
+
+///|
+fn CoreExecutionLifecycle::request_close(
+  self : CoreExecutionLifecycle,
+  close : () -> Unit,
+) -> Unit {
+  if self.active_leases.val == 0 {
+    close()
+  } else {
+    self.close_when_idle.val = Some(close)
+  }
+}
+
+///|
+fn CoreExecutionLifecycle::finish_outcome(
+  self : CoreExecutionLifecycle,
+  outcome : CoreExecutionOutcome,
+) -> CoreExecutionOutcome raise ComponentRuntimeError {
+  if self.closing.val {
+    match outcome {
+      Suspended(_, continuation) => continuation.cancel()
+      Returned(_) => ()
+    }
+    self.leave()
+    raise Cancelled
+  }
+  match outcome {
+    Returned(results) => {
+      self.leave()
+      Returned(results)
+    }
+    Suspended(reason, continuation) =>
+      Suspended(reason, continuation.with_lifecycle(self))
+  }
+}
+
+///|
+/// Run one synchronous operation under a lifecycle lease.
+///
+/// This is the single implementation of the enter/catch/leave/closing
+/// protocol for operations that complete within the call (engine
+/// registration, whole instantiations). A close that begins while the
+/// operation runs defers teardown until the lease is released here, and the
+/// operation's result is discarded in favour of `Cancelled` — with
+/// `rollback` running first so staged state never outlives the refusal.
+/// `invoke` keeps its own flow: a suspension transfers the lease to the
+/// continuation instead of releasing it.
+fn[T] CoreExecutionLifecycle::with_lease(
+  self : CoreExecutionLifecycle,
+  operation : () -> T raise ComponentRuntimeError,
+  rollback? : () -> Unit = fn() {  },
+) -> T raise ComponentRuntimeError {
+  self.enter()
+  let result = operation() catch {
+    error => {
+      rollback()
+      let closing = self.closing.val
+      self.leave()
+      if closing {
+        raise Cancelled
+      }
+      raise error
+    }
+  }
+  if self.closing.val {
+    rollback()
+    self.leave()
+    raise Cancelled
+  }
+  self.leave()
+  result
+}
+
+///|
+fn CoreContinuation::with_lifecycle(
+  self : CoreContinuation,
+  lifecycle : CoreExecutionLifecycle,
+) -> CoreContinuation {
+  let consumed = Ref(false)
+  CoreContinuation(
+    fn() raise ComponentRuntimeError {
+      if consumed.val {
+        raise CanonCallError("core continuation has already been consumed")
+      }
+      consumed.val = true
+      if lifecycle.closing.val {
+        self.cancel()
+        lifecycle.leave()
+        raise Cancelled
+      }
+      let outcome = self.continue_execution() catch {
+        error => {
+          let closing = lifecycle.closing.val
+          lifecycle.leave()
+          if closing {
+            raise Cancelled
+          }
+          raise error
+        }
+      }
+      lifecycle.finish_outcome(outcome)
+    },
+    fn() {
+      if !consumed.val {
+        consumed.val = true
+        self.cancel()
+        lifecycle.leave()
+      }
+    },
+  )
+}
+
+///|
 pub fn CoreExecutionEngine::CoreExecutionEngine(
   register_instance : (@runtime.Store, @types.Module, @runtime.ModuleInstance) -> Unit raise ComponentRuntimeError,
   invoke : (
@@ -135,14 +347,52 @@ pub fn CoreExecutionEngine::CoreExecutionEngine(
     CoreExecutionRequest,
   ) -> CoreExecutionOutcome raise ComponentRuntimeError,
   prepare_store? : (@runtime.Store) -> Unit = fn(_store) { () },
+  checkpoint_registrations? : () -> CoreRegistrationCheckpoint = fn() {
+    CoreRegistrationCheckpoint(fn() { () })
+  },
   close? : () -> Unit = fn() { () },
 ) -> CoreExecutionEngine {
   {
     prepare_store_fn: prepare_store,
     close_fn: close,
+    checkpoint_registrations_fn: checkpoint_registrations,
     register_instance_fn: register_instance,
     invoke_fn: invoke,
   }
+}
+
+///|
+fn CoreExecutionEngine::with_lifecycle(
+  self : CoreExecutionEngine,
+  lifecycle : CoreExecutionLifecycle,
+) -> CoreExecutionEngine {
+  CoreExecutionEngine(
+    fn(store, module_, instance) raise ComponentRuntimeError {
+      // Registration runs embedder code and must hold a lease like invoke:
+      // a callback that closes the linker would otherwise tear the engine
+      // down mid-instantiation, and the registration would still commit.
+      lifecycle.with_lease(fn() raise ComponentRuntimeError {
+        self.register_instance(store, module_, instance)
+      })
+    },
+    fn(store, instance, func_idx, args, request) raise ComponentRuntimeError {
+      lifecycle.enter()
+      let outcome = self.invoke(store, instance, func_idx, args, request) catch {
+        error => {
+          let closing = lifecycle.closing.val
+          lifecycle.leave()
+          if closing {
+            raise Cancelled
+          }
+          raise error
+        }
+      }
+      lifecycle.finish_outcome(outcome)
+    },
+    prepare_store=fn(store) { self.prepare_store(store) },
+    checkpoint_registrations=fn() { self.checkpoint_registrations() },
+    close=fn() { self.close() },
+  )
 }
 
 ///|
@@ -160,6 +410,13 @@ pub fn CoreExecutionEngine::prepare_store(
   store : @runtime.Store,
 ) -> Unit {
   (self.prepare_store_fn)(store)
+}
+
+///|
+pub fn CoreExecutionEngine::checkpoint_registrations(
+  self : CoreExecutionEngine,
+) -> CoreRegistrationCheckpoint {
+  (self.checkpoint_registrations_fn)()
 }
 
 ///|

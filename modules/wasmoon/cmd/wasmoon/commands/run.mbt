@@ -1269,7 +1269,7 @@ fn run_with_jit(
           let loaded = @wasmoon_jit.verify_artifact(artifact, compatibility) catch {
             err => {
               @logger.error(
-                "Fresh JIT artifact failed validation: \{to_repr(err)}",
+                "Fresh JIT artifact failed validation: \{Repr(err)}",
               )
               return exit_failure()
             }
@@ -1394,14 +1394,11 @@ fn run_with_jit(
                   )
                   // Provide func_type_indices + func_table_ptr so libcalls can infer funcref types
                   // (e.g. table.fill) and ref.test can resolve tagged-pointer funcrefs.
-                  @wasmoon_jit.gc_setup(
+                  jm.setup_gc(
                     heap,
                     store.module_types,
                     canonical,
-                    ctx_ptr=jm.get_context_ptr(),
-                    func_type_indices=instance.func_type_indices,
-                    func_table_ptr=jm.get_func_table_ptr(),
-                    num_funcs=jm.get_func_count(),
+                    instance.func_type_indices,
                   ) catch {
                     err => {
                       @logger.error("JIT GC setup failed: \{err}")
@@ -1415,13 +1412,13 @@ fn run_with_jit(
               }
               let results = jm.call_with_context(f, i64_args) catch {
                 JITExit(code) => {
-                  @wasmoon_jit.gc_teardown(jm.get_context_ptr())
+                  jm.teardown_gc()
                   @wast.sync_jit_globals_to_store(jit_ctx, store)
                   native_exit(code)
                   panic()
                 }
                 JITTrap(msg) => {
-                  @wasmoon_jit.gc_teardown(jm.get_context_ptr())
+                  jm.teardown_gc()
                   // Sync globals back to interpreter store even on trap.
                   @wast.sync_jit_globals_to_store(jit_ctx, store)
                   // Capture and display backtrace if DWARF is enabled
@@ -1448,14 +1445,14 @@ fn run_with_jit(
                   return exit_failure()
                 }
                 JITCancelled => {
-                  @wasmoon_jit.gc_teardown(jm.get_context_ptr())
+                  jm.teardown_gc()
                   @wast.sync_jit_globals_to_store(jit_ctx, store)
                   @logger.error("JIT invocation cancelled")
                   return exit_failure()
                 }
               }
               // Tear down GC context after JIT call
-              @wasmoon_jit.gc_teardown(jm.get_context_ptr())
+              jm.teardown_gc()
               // Sync JIT globals back to interpreter store for consistency.
               @wast.sync_jit_globals_to_store(jit_ctx, store)
               // Convert Int64 results to Value using shared helper

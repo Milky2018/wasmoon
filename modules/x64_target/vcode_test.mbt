@@ -924,7 +924,9 @@ test "X64 verifier requires early-clobber atomic loop results" {
       @vcode.Input::any(builder.parameter(1)),
     ],
     [@vcode.Output::any(I32)],
-    [],
+    // Declare the mandatory clobber so this isolates the early-definition
+    // requirement instead of tripping the mandatory-clobber check first.
+    [@vcode.PhysicalReg::new(2, Int)],
     @vcode.InstructionMetadata::empty(),
   )
   |> ignore
@@ -991,5 +993,55 @@ test "X64 verifier rejects a safepoint marker without metadata" {
       )
   } noraise {
     _ => fail("expected unmarked safepoint to be rejected")
+  }
+}
+
+///|
+/// Regression test for ISS-365.
+///
+/// A variable rotate always writes `rcx`, because the emitter materializes the
+/// count into `cl`. VCode that fails to declare that clobber is unsound: the
+/// register allocator would be free to keep a live value in `rcx` across the
+/// rotate. The verifier must reject it rather than let allocation proceed.
+test "X64 verifier rejects a rotate that omits its rcx clobber" {
+  let builder : @vcode.Builder[X64Inst] = @vcode.Builder::new(
+    "rotate_without_clobber",
+    [I32, I32],
+  )
+  let entry = builder.entry_block()
+  builder.append_body(
+    entry,
+    IntBinary(W32, Ror),
+    [
+      @vcode.Input::any(builder.parameter(0)),
+      @vcode.Input::any(builder.parameter(1)),
+    ],
+    [@vcode.Output::any(I32)],
+    [],
+    @vcode.InstructionMetadata::empty(),
+  )
+  |> ignore
+  builder.set_terminator(
+    entry,
+    Return,
+    [],
+    [],
+    [],
+    @vcode.InstructionMetadata::empty(),
+  )
+  |> ignore
+  try verify_vcode(builder.finish()) catch {
+    error =>
+      inspect(
+        error,
+        content=(
+          #|InvalidInstruction(
+          #|  instruction=i0,
+          #|  message="instruction must declare its mandatory clobber of physical register 1",
+          #|)
+        ),
+      )
+  } noraise {
+    _ => fail("expected a rotate without its rcx clobber to be rejected")
   }
 }

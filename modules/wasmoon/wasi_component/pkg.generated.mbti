@@ -6,6 +6,8 @@ import {
 }
 
 // Values
+pub fn install_command_world(@runtime_impl.ComponentLinker, WasiComponentCtx) -> Unit raise @runtime_impl.ComponentRuntimeError
+
 pub let preview2_version : String
 
 pub fn preview2_wit_sha256() -> String
@@ -23,6 +25,7 @@ pub fn WasiComponentCtx::close(Self) -> Unit
 pub fn WasiComponentCtx::environment(Self) -> Array[(String, String)]
 pub fn WasiComponentCtx::exit_status(Self) -> Int?
 pub fn WasiComponentCtx::initial_cwd(Self) -> String?
+pub fn WasiComponentCtx::try_claim_runtime_owner(Self) -> WasiComponentCtxRuntimeOwner?
 
 type WasiComponentCtxBuilder
 pub fn WasiComponentCtxBuilder::WasiComponentCtxBuilder() -> Self
@@ -41,8 +44,11 @@ pub fn WasiComponentCtxBuilder::stderr(Self, (Bytes) -> Unit) -> Self
 pub fn WasiComponentCtxBuilder::stdin(Self, Bytes) -> Self
 pub fn WasiComponentCtxBuilder::stdout(Self, (Bytes) -> Unit) -> Self
 
+type WasiComponentCtxRuntimeOwner
+pub fn WasiComponentCtxRuntimeOwner::close(Self) -> Unit
+
 type WasiComponentHost
-pub fn WasiComponentHost::WasiComponentHost(@runtime_impl.ComponentLinker, WasiComponentCtx) -> Self
+pub fn WasiComponentHost::WasiComponentHost(@runtime_impl.ComponentLinker, WasiComponentCtx) -> Self raise @runtime_impl.ComponentRuntimeError
 pub fn WasiComponentHost::add_preview2_cli_clocks_random(Self) -> Unit raise @runtime_impl.ComponentRuntimeError
 pub fn WasiComponentHost::add_preview2_filesystem(Self) -> Unit raise @runtime_impl.ComponentRuntimeError
 pub fn WasiComponentHost::add_preview2_io(Self) -> Unit raise @runtime_impl.ComponentRuntimeError

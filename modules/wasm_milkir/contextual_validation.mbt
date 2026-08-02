@@ -413,7 +413,7 @@ fn validate_struct_get(
   if field.storage.packed_width() != packed_width {
     return contextual_error(
       wire_name,
-      "field \{field_index} of struct type \{type_index} has packed width \{to_repr(field.storage.packed_width())}, got \{to_repr(packed_width)}",
+      "field \{field_index} of struct type \{type_index} has packed width \{Repr(field.storage.packed_width())}, got \{Repr(packed_width)}",
     )
   }
   let expected = field.storage.carrier()
@@ -504,7 +504,7 @@ fn validate_array_get(
   if element.storage.packed_width() != packed_width {
     return contextual_error(
       wire_name,
-      "array type \{type_index} has packed width \{to_repr(element.storage.packed_width())}, got \{to_repr(packed_width)}",
+      "array type \{type_index} has packed width \{Repr(element.storage.packed_width())}, got \{Repr(packed_width)}",
     )
   }
   let expected = element.storage.carrier()

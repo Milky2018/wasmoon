@@ -600,7 +600,13 @@ fn step_task_once_impl(
 
   match task.func {
     Host(_ft, _types, host) => {
-      host(task.args, caller_table) |> ignore
+      let values = host(task.args, caller_table)
+      set_task_result(
+        async_state,
+        current_task_id(async_state),
+        caller_table.id,
+        values,
+      )
       Done
     }
     HostAsync(_ft, _types, start) => {
@@ -857,7 +863,11 @@ fn step_task_once_impl(
             entry,
             core_func,
             core_args,
-            Stackful,
+            if func_type.is_async || core_func.may_suspend {
+              Stackful
+            } else {
+              RunToCompletion
+            },
           )
         })
         let core_results = match polled {
@@ -906,7 +916,11 @@ fn step_task_once_impl(
             entry,
             core_func,
             core_args,
-            Stackful,
+            if func_type.is_async || core_func.may_suspend {
+              Stackful
+            } else {
+              RunToCompletion
+            },
           )
         })
         let core_results = match polled {
@@ -944,7 +958,7 @@ fn step_task_once_impl(
 }
 
 ///|
-fn progress_one_subtask(
+fn progress_one_subtask_nonblocking(
   async_state : AsyncState,
   store : @runtime.Store,
 ) -> Bool raise ComponentRuntimeError {
@@ -1271,6 +1285,14 @@ fn progress_one_subtask(
       }
     }
   }
+  false
+}
+
+///|
+fn wait_for_host_event(
+  async_state : AsyncState,
+  store : @runtime.Store,
+) -> Bool raise ComponentRuntimeError {
   match async_state.host_event_loop.val {
     Some(event_loop) =>
       if (event_loop.wait)() {
@@ -1281,6 +1303,36 @@ fn progress_one_subtask(
         false
       }
     None => false
+  }
+}
+
+///|
+fn poll_host_event(
+  async_state : AsyncState,
+  store : @runtime.Store,
+) -> Bool raise ComponentRuntimeError {
+  match async_state.host_event_loop.val {
+    Some(event_loop) =>
+      if (event_loop.poll)() {
+        progress_host_stream_sources(async_state, store) |> ignore
+        progress_host_future_sources(async_state, store) |> ignore
+        true
+      } else {
+        false
+      }
+    None => false
+  }
+}
+
+///|
+fn progress_one_subtask(
+  async_state : AsyncState,
+  store : @runtime.Store,
+) -> Bool raise ComponentRuntimeError {
+  if progress_one_subtask_nonblocking(async_state, store) {
+    true
+  } else {
+    wait_for_host_event(async_state, store)
   }
 }
 

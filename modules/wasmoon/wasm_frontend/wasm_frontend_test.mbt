@@ -1202,7 +1202,7 @@ test "unsupported structured branch reports label-stack capability" {
   let env = EmbeddingEnvironment::EmbeddingEnvironment(hidden_context_type=None)
   try lower_function(env, mod_, 0) catch {
     err => {
-      let msg = to_repr(err).to_string()
+      let msg = Repr(err).to_string()
       inspect(
         msg.contains("structured branches require label-stack lowering"),
         content="true",
@@ -1229,7 +1229,7 @@ test "unsupported memory64 bulk helper reports runtime ABI capability" {
   let env = native_test_env()
   try lower_function(env, mod_, 0) catch {
     err => {
-      let msg = to_repr(err).to_string()
+      let msg = Repr(err).to_string()
       inspect(
         msg.contains(
           "memory64 memory.fill requires a reusable runtime helper ABI",

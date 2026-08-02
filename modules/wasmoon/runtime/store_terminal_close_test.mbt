@@ -21,16 +21,12 @@ test "Store close is terminal for resource creation" {
     }),
     closed_store_result(() => store.alloc_host_func(fn(_args) { [] }) |> ignore),
     closed_store_result(() => {
-      store.alloc_table(@runtime.Table::Table(@types.FuncRef, 0, None))
-      |> ignore
+      store.alloc_table(Table(FuncRef, 0, None)) |> ignore
     }),
     closed_store_result(() => store.alloc_mem(memory) |> ignore),
     closed_store_result(() => {
       store.alloc_global(
-        @runtime.GlobalInstance::GlobalInstance(
-          { value_type: I32, mutable: false },
-          I32(0),
-        ),
+        GlobalInstance({ value_type: I32, mutable: false }, I32(0)),
       )
       |> ignore
     }),
@@ -41,8 +37,7 @@ test "Store close is terminal for resource creation" {
     closed_store_result(() => store.alloc_struct(0, []) |> ignore),
     closed_store_result(() => store.alloc_array(0, []) |> ignore),
     closed_store_result(() => {
-      store.register_instance(@runtime.ModuleInstance::ModuleInstance())
-      |> ignore
+      store.register_instance(ModuleInstance()) |> ignore
     }),
   ]
   debug_inspect(
@@ -102,9 +97,7 @@ test "Linker close is terminal for registrations" {
   let memory = @runtime.Memory::Memory(1, None)
   linker.close()
   let results = [
-    closed_store_result(() => {
-      linker.register("module", @runtime.ModuleInstance::ModuleInstance())
-    }),
+    closed_store_result(() => linker.register("module", ModuleInstance())),
     closed_store_result(() => {
       linker.add_host_func("host", "func", fn(_args) { [] })
     }),
@@ -115,20 +108,13 @@ test "Linker close is terminal for registrations" {
     }),
     closed_store_result(() => linker.add_memory("host", "memory", memory)),
     closed_store_result(() => {
-      linker.add_table(
-        "host",
-        "table",
-        @runtime.Table::Table(@types.FuncRef, 0, None),
-      )
+      linker.add_table("host", "table", Table(FuncRef, 0, None))
     }),
     closed_store_result(() => {
       linker.add_global(
         "host",
         "global",
-        @runtime.GlobalInstance::GlobalInstance(
-          { value_type: I32, mutable: false },
-          I32(0),
-        ),
+        GlobalInstance({ value_type: I32, mutable: false }, I32(0)),
       )
     }),
   ]
@@ -152,9 +138,7 @@ test "closing an aliased Store closes the Linker mutation boundary" {
   let linker = @runtime.Linker::Linker()
   linker.get_store().close()
   inspect(
-    closed_store_result(() => {
-      linker.register("module", @runtime.ModuleInstance::ModuleInstance())
-    }),
+    closed_store_result(() => linker.register("module", ModuleInstance())),
     content="store is closed",
   )
 }

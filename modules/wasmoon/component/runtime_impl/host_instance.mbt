@@ -38,12 +38,18 @@ fn HostRuntimeState::with_core_execution_engine(
 /// method before building host instances.
 pub fn ComponentLinker::host_runtime_state(
   self : ComponentLinker,
-) -> HostRuntimeState {
+) -> HostRuntimeState raise ComponentRuntimeError {
+  // A terminally closed linker installs no host runtime. `finish_close` has
+  // already dropped the runtime slot, and repeated closes return early, so
+  // a runtime installed here after close would never be released.
+  if self.closed.val {
+    raise Cancelled
+  }
   match self.host_runtime.val {
     Some(runtime) => runtime
     None => {
       let runtime = HostRuntimeState::with_core_execution_engine(
-        self.core_engine,
+        self.core_engine(),
       )
       self.host_runtime.val = Some(runtime)
       runtime
@@ -71,12 +77,68 @@ pub fn HostRuntimeState::async_state(self : HostRuntimeState) -> AsyncState {
 ///|
 /// Install the blocking event-loop hook used when every async host call is
 /// pending. The hook returns `true` after an external event may have made
-/// progress and `false` when no external work remains.
+/// progress and `false` when no external work remains. A runtime accepts one
+/// readiness source for its lifetime; replacing it is rejected so existing
+/// host futures cannot lose their event source.
 pub fn HostRuntimeState::set_event_loop(
   self : HostRuntimeState,
-  event_loop : () -> Bool raise ComponentRuntimeError,
-) -> Unit {
-  self.async_state.host_event_loop.val = Some({ wait: event_loop })
+  wait : () -> Bool raise ComponentRuntimeError,
+  poll? : () -> Bool raise ComponentRuntimeError = () => false,
+) -> Unit raise ComponentRuntimeError {
+  if self.async_state.host_event_loop.val is Some(_) {
+    raise HostEventLoopAlreadyInstalled
+  }
+  self.async_state.host_event_loop.val = Some({ poll, wait })
+}
+
+///|
+fn cancel_callback_task(task : CallbackTask) -> Unit {
+  task.cancelled[0] = true
+  match task.host_future[0] {
+    Some(future) => {
+      task.host_future[0] = None
+      (future.cancel)() catch {
+        _ => ()
+      }
+    }
+    None => ()
+  }
+  match task.continuation[0] {
+    Some(continuation) => {
+      task.continuation[0] = None
+      continuation.cancel()
+    }
+    None => ()
+  }
+}
+
+///|
+fn cancel_async_state_continuations(async_state : AsyncState) -> Unit {
+  for _, subtask in async_state.subtasks {
+    match subtask.driver {
+      CallbackLifted(task) => cancel_callback_task(task)
+    }
+  }
+  for _, state in async_state.sync_lower_states {
+    cancel_callback_task(state.task)
+  }
+  for _, thread in async_state.threads {
+    match thread.continuation[0] {
+      Some(continuation) => {
+        thread.continuation[0] = None
+        continuation.cancel()
+      }
+      None => ()
+    }
+  }
+  async_state.subtasks.clear()
+  async_state.sync_lower_states.clear()
+  async_state.threads.clear()
+}
+
+///|
+fn HostRuntimeState::cancel_continuations(self : HostRuntimeState) -> Unit {
+  cancel_async_state_continuations(self.async_state)
 }
 
 ///|

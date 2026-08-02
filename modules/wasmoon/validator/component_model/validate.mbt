@@ -911,3 +911,34 @@ pub fn validate_component_with_config(
 ) -> Unit raise ComponentValidationError {
   validate_component_inner(component, true, cfg, 0, [], [], [], []) |> ignore
 }
+
+///|
+/// Validate a component and return evidence accepted by runtime instantiation.
+pub fn validate_component_for_instantiation(
+  component : @component.Component,
+) -> ValidatedComponent raise ComponentValidationError {
+  validate_component_for_instantiation_with_config(
+    component,
+    ComponentValidationConfig::default(),
+  )
+}
+
+///|
+/// Validate a component with the requested name policy and return evidence
+/// accepted by runtime instantiation.
+///
+/// The evidence holds an immutable binary snapshot rebuilt from the
+/// component's sections. The parsed snapshot is what gets validated, and the
+/// runtime reparses exactly those bytes. Mutating the argument after this call
+/// cannot invalidate the evidence.
+pub fn validate_component_for_instantiation_with_config(
+  component : @component.Component,
+  cfg : ComponentValidationConfig,
+) -> ValidatedComponent raise ComponentValidationError {
+  let component_bytes = component.snapshot_bytes()
+  let snapshot = @component.parse_component(component_bytes) catch {
+    e => raise SectionParseError(0, "component snapshot: \{e}")
+  }
+  validate_component_with_config(snapshot, cfg)
+  { component_bytes, }
+}

@@ -6,6 +6,13 @@ struct Linker {
 }
 
 ///|
+struct CoreLinkerCheckpoint {
+  owner : Linker
+  store : StoreAllocationCheckpoint
+  modules : Int
+}
+
+///|
 /// Create a new linker with a fresh store
 pub fn Linker::Linker() -> Linker {
   { store: Store(), modules: [] }
@@ -21,6 +28,32 @@ pub fn Linker::with_store(store : Store) -> Linker {
 /// Get the underlying store
 pub fn Linker::get_store(self : Linker) -> Store {
   self.store
+}
+
+///|
+/// Snapshot the core allocations and named registrations owned by this linker.
+pub fn Linker::checkpoint(self : Linker) -> CoreLinkerCheckpoint {
+  {
+    owner: self,
+    store: self.store.checkpoint_allocations(),
+    modules: self.modules.length(),
+  }
+}
+
+///|
+/// Withdraw named registrations and unreachable allocations added after
+/// `checkpoint`. GC objects published into surviving Store roots retain their
+/// identity so rollback cannot leave dangling or reusable references.
+pub fn Linker::rollback_to(
+  self : Linker,
+  checkpoint : CoreLinkerCheckpoint,
+) -> Bool {
+  if !physical_equal(self, checkpoint.owner) {
+    return false
+  }
+  self.modules.truncate(checkpoint.modules)
+  self.store.rollback_allocations(checkpoint.store)
+  true
 }
 
 ///|

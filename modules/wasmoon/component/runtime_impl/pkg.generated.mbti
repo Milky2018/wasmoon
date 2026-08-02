@@ -5,6 +5,7 @@ import {
   "Milky2018/wasm_core/types",
   "Milky2018/wasmoon/component/model",
   "Milky2018/wasmoon/runtime",
+  "Milky2018/wasmoon/validator/component_model",
   "moonbitlang/core/debug",
   "moonbitlang/core/ref",
 }
@@ -19,8 +20,6 @@ pub fn interpreter_core_execution_engine() -> CoreExecutionEngine
 pub fn preset_canon_debug_message(String) -> Unit
 
 pub fn progress_one_subtask_intrinsic(AsyncState, @runtime.Store) -> Bool raise ComponentRuntimeError
-
-pub fn register_core_instance_name(Int, String) -> Unit
 
 pub fn set_canon_debug_message(String) -> Unit
 
@@ -56,12 +55,18 @@ pub(all) suberror ComponentRuntimeError {
   UnsupportedStringEncoding
   CanonCallError(String)
   HostCallError(String)
+  NativeEngineUnavailable(String)
+  NativeCompilationFailed(String)
+  Cancelled
   HostExit(Int)
   InvalidStartResultCount(Int)
   OuterAliasOutOfRange(Int)
   AliasTargetMismatch(String)
   DuplicateHostExport(String)
   InvalidHostTypeReference(Int)
+  HostEventLoopAlreadyInstalled
+  InvocationAlreadyDriving
+  ReentrantInstantiation
 } derive(Eq, @debug.Debug)
 pub impl Show for ComponentRuntimeError
 
@@ -119,10 +124,7 @@ type CanonResources derive(@debug.Debug)
 
 type CanonSuspend derive(Eq, @debug.Debug)
 
-pub(all) struct ComponentClosure {
-  component : @model.Component
-  outer_stack : Array[ComponentInstance]
-}
+type ComponentClosure
 pub impl Show for ComponentClosure
 
 pub(all) enum ComponentExtern {
@@ -174,27 +176,38 @@ pub(all) struct ComponentInstance {
 pub fn ComponentInstance::call_exported_func(Self, String, Array[ComponentValue]) -> Array[ComponentValue] raise ComponentRuntimeError
 pub fn ComponentInstance::get_core_instance(Self, Int) -> CoreInstance?
 pub fn ComponentInstance::get_export(Self, String) -> ComponentExtern?
+pub fn ComponentInstance::start_exported_func(Self, String, Array[ComponentValue]) -> ComponentInvocation raise ComponentRuntimeError
 
 type ComponentInstanceEntryState derive(@debug.Debug)
 
+type ComponentInvocation
+pub fn ComponentInvocation::cancel(Self) -> Unit raise ComponentRuntimeError
+pub async fn ComponentInvocation::join(Self) -> Array[ComponentValue] raise ComponentRuntimeError
+pub fn ComponentInvocation::poll(Self) -> ComponentInvocationPoll raise ComponentRuntimeError
+pub fn ComponentInvocation::wait(Self) -> Array[ComponentValue] raise ComponentRuntimeError
+
+pub(all) enum ComponentInvocationPoll {
+  InvocationPending
+  InvocationReady(Array[ComponentValue])
+} derive(@debug.Debug)
+
 type ComponentLinker
 pub fn ComponentLinker::ComponentLinker() -> Self
-pub fn ComponentLinker::add_component(Self, String, @model.Component) -> Unit
-pub fn ComponentLinker::add_core_instance(Self, String, CoreInstance) -> Unit
-pub fn ComponentLinker::add_core_module(Self, String, @types.Module) -> Unit
-pub fn ComponentLinker::add_func(Self, String, @model.FuncType, (Array[ComponentValue]) -> Array[ComponentValue] raise ComponentRuntimeError) -> Unit
-pub fn ComponentLinker::add_import(Self, String, ComponentExtern) -> Unit
-pub fn ComponentLinker::add_instance(Self, String, ComponentInstance) -> Unit
-pub fn ComponentLinker::add_value(Self, String, ComponentValue) -> Unit
+pub fn ComponentLinker::add_component(Self, String, @component_model.ValidatedComponent) -> Unit raise ComponentRuntimeError
+pub fn ComponentLinker::add_core_instance(Self, String, CoreInstance) -> Unit raise ComponentRuntimeError
+pub fn ComponentLinker::add_core_module(Self, String, @types.Module) -> Unit raise ComponentRuntimeError
+pub fn ComponentLinker::add_func(Self, String, @model.FuncType, (Array[ComponentValue]) -> Array[ComponentValue] raise ComponentRuntimeError) -> Unit raise ComponentRuntimeError
+pub fn ComponentLinker::add_import(Self, String, ComponentExtern) -> Unit raise ComponentRuntimeError
+pub fn ComponentLinker::add_instance(Self, String, ComponentInstance) -> Unit raise ComponentRuntimeError
+pub fn ComponentLinker::add_value(Self, String, ComponentValue) -> Unit raise ComponentRuntimeError
 pub fn ComponentLinker::close(Self) -> Unit
 pub fn ComponentLinker::get_component(Self, String) -> ComponentInstance?
 pub fn ComponentLinker::get_import(Self, String) -> ComponentExtern?
 pub fn ComponentLinker::get_store(Self) -> @runtime.Store
 pub fn ComponentLinker::host_instance_builder(Self, String, HostRuntimeState) -> HostInstanceBuilder
-pub fn ComponentLinker::host_runtime_state(Self) -> HostRuntimeState
-pub fn ComponentLinker::instantiate(Self, String, @model.Component) -> ComponentInstance raise ComponentRuntimeError
+pub fn ComponentLinker::host_runtime_state(Self) -> HostRuntimeState raise ComponentRuntimeError
+pub fn ComponentLinker::instantiate(Self, String, @component_model.ValidatedComponent) -> ComponentInstance raise ComponentRuntimeError
 pub fn ComponentLinker::new_host_resource_type(Self) -> @model.TypeDef?
-pub fn ComponentLinker::register(Self, String, ComponentInstance) -> Unit
 pub fn ComponentLinker::with_core_execution_engine(CoreExecutionEngine) -> Self
 
 pub(all) enum ComponentValue {
@@ -237,7 +250,8 @@ pub fn CoreContinuation::continue_execution(Self) -> CoreExecutionOutcome raise 
 pub impl @debug.Debug for CoreContinuation
 
 type CoreExecutionEngine
-pub fn CoreExecutionEngine::CoreExecutionEngine((@runtime.Store, @types.Module, @runtime.ModuleInstance) -> Unit raise ComponentRuntimeError, (@runtime.Store, @runtime.ModuleInstance, Int, Array[@types.Value], CoreExecutionRequest) -> CoreExecutionOutcome raise ComponentRuntimeError, prepare_store? : (@runtime.Store) -> Unit, close? : () -> Unit) -> Self
+pub fn CoreExecutionEngine::CoreExecutionEngine((@runtime.Store, @types.Module, @runtime.ModuleInstance) -> Unit raise ComponentRuntimeError, (@runtime.Store, @runtime.ModuleInstance, Int, Array[@types.Value], CoreExecutionRequest) -> CoreExecutionOutcome raise ComponentRuntimeError, prepare_store? : (@runtime.Store) -> Unit, checkpoint_registrations? : () -> CoreRegistrationCheckpoint, close? : () -> Unit) -> Self
+pub fn CoreExecutionEngine::checkpoint_registrations(Self) -> CoreRegistrationCheckpoint
 pub fn CoreExecutionEngine::close(Self) -> Unit
 pub fn CoreExecutionEngine::invoke(Self, @runtime.Store, @runtime.ModuleInstance, Int, Array[@types.Value], CoreExecutionRequest) -> CoreExecutionOutcome raise ComponentRuntimeError
 pub fn CoreExecutionEngine::prepare_store(Self, @runtime.Store) -> Unit
@@ -260,6 +274,7 @@ pub(all) struct CoreFuncRef {
   instance : @runtime.ModuleInstance
   func_idx : Int
   engine : CoreExecutionEngine
+  debug_name : String?
   may_suspend : Bool
   native_eligible : Bool
 } derive(@debug.Debug)
@@ -272,6 +287,10 @@ pub(all) struct CoreInstance {
   tags : Map[String, Int]
 }
 pub impl Show for CoreInstance
+
+type CoreRegistrationCheckpoint
+pub fn CoreRegistrationCheckpoint::CoreRegistrationCheckpoint(() -> Unit) -> Self
+pub fn CoreRegistrationCheckpoint::rollback(Self) -> Unit
 
 pub(all) enum CoreSuspension {
   Yield
@@ -344,7 +363,7 @@ pub fn HostRuntimeState::new_host_value_stream(Self, ResourceTable, @model.ValTy
 pub fn HostRuntimeState::new_host_value_stream_source(Self, ResourceTable, @model.ValType, Array[@model.TypeDef?], (Int) -> HostValueStreamPoll raise ComponentRuntimeError, () -> Unit) -> Int raise ComponentRuntimeError
 pub fn HostRuntimeState::read_host_byte_stream(Self, ResourceTable, Int) -> HostByteStreamRead raise ComponentRuntimeError
 pub fn HostRuntimeState::resource_table(Self) -> ResourceTable
-pub fn HostRuntimeState::set_event_loop(Self, () -> Bool raise ComponentRuntimeError) -> Unit
+pub fn HostRuntimeState::set_event_loop(Self, () -> Bool raise ComponentRuntimeError, poll? : () -> Bool raise ComponentRuntimeError) -> Unit raise ComponentRuntimeError
 pub fn HostRuntimeState::stream_table(Self) -> StreamTable
 
 type HostValueStream

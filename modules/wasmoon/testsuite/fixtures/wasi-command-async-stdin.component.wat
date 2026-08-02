@@ -85,16 +85,7 @@
               (i32.eq
                 (i32.load8_u (i32.const 20))
                 (i32.const 0x6f)))))
-        (else
-          (i32.and
-            (i32.eq (local.get $future-status) (i32.const 0))
-            (i32.and
-              (i32.eq
-                (i32.load8_u (i32.const 32))
-                (i32.const 1))
-              (i32.eq
-                (i32.load8_u (i32.const 33))
-                (i32.const 0))))))
+        (else (i32.const 0)))
       (if (result i32)
         (then (i32.const 0))
         (else (i32.const 1)))))
