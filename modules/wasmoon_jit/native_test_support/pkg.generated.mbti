@@ -24,6 +24,8 @@ pub fn parked_gc_root_probe() -> Int64
 
 pub fn reset_callback_capture() -> Unit
 
+pub fn shared_indirect_table_live_count() -> Int64
+
 pub fn transfer_cancellation_callback_to_null_context(() -> Bool) -> Unit
 
 // Errors
@@ -35,4 +37,3 @@ pub fn CallbackCapture::touch(Self) -> Unit
 // Type aliases
 
 // Traits
-

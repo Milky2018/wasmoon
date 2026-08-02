@@ -3,7 +3,6 @@ package "Milky2018/wasmoon/testsuite"
 
 import {
   "Milky2018/wasm_core/types",
-  "Milky2018/wasmoon/jit",
   "Milky2018/wasmoon/runtime",
   "Milky2018/wasmoon_jit",
   "moonbitlang/core/debug",
@@ -20,8 +19,6 @@ pub fn compare_result_errors_contain(CompareResult, String) -> Bool
 pub fn compare_result_is_match(CompareResult) -> Bool
 
 pub fn current_target_arch() -> @wasmoon_jit.NativeTarget
-
-pub fn init_elem_segments(@types.Module, @jit.JITModule, Array[@runtime.GlobalInstance]) -> Unit
 
 pub fn jit_results_to_values(Array[Int64], Array[@types.ValueType]) -> Array[@types.Value]
 
@@ -128,4 +125,3 @@ pub struct TestValue {
 // Type aliases
 
 // Traits
-
