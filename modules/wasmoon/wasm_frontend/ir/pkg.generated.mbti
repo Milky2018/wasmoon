@@ -23,4 +23,3 @@ pub fn TranslationContext::wasm_validation_context(Self) -> @wasm_milkir.WasmVal
 // Type aliases
 
 // Traits
-

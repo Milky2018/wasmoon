@@ -388,4 +388,3 @@ pub(all) enum X64VectorPredicate {
 // Type aliases
 
 // Traits
-

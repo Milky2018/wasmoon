@@ -370,4 +370,3 @@ pub(all) struct VariantCase {
 // Type aliases
 
 // Traits
-

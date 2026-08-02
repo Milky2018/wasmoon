@@ -77,4 +77,3 @@ pub fn ValidatedComponent::fresh_component(Self) -> @model.Component raise @mode
 // Type aliases
 
 // Traits
-

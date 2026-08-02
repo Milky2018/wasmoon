@@ -407,4 +407,3 @@ pub using @machv {type SafepointKind}
 pub using @machv {type ValueType}
 
 // Traits
-

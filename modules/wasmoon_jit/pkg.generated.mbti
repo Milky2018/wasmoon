@@ -831,4 +831,3 @@ pub(all) struct WasmTrapFrame {
 // Type aliases
 
 // Traits
-

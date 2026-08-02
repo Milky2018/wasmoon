@@ -29,4 +29,3 @@ pub(all) enum LogLevel {
 // Type aliases
 
 // Traits
-
