@@ -742,6 +742,15 @@ test "component runtime: closed linker refuses instantiation at entry" {
   }
   debug_inspect(add_outcome, content="\"cancelled\"")
   debug_inspect(linker.get_import("late-value") is None, content="true")
+  // The host runtime slot is terminal too: `finish_close` dropped it, and a
+  // runtime installed afterwards would never be released.
+  let runtime_outcome = try linker.host_runtime_state() catch {
+    Cancelled => "cancelled"
+    error => "unexpected error: \{error}"
+  } noraise {
+    _ => "installed"
+  }
+  debug_inspect(runtime_outcome, content="\"cancelled\"")
 }
 
 ///|
