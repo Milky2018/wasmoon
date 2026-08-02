@@ -13,6 +13,7 @@ concurrency:
 
 env:
   COMPONENT_WASM_TOOLS_VERSION: "1.254.0"
+  MOONBIT_TOOLCHAIN_VERSION: "0.10.5+5e7afb0c0"
 
 jobs:
   native-platform:
@@ -46,7 +47,8 @@ jobs:
 
       - name: install toolchain
         run: |
-          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh \
+            | bash -s "$MOONBIT_TOOLCHAIN_VERSION"
           echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
           cargo install wasm-tools \
             --version "$COMPONENT_WASM_TOOLS_VERSION" --locked
@@ -74,6 +76,7 @@ jobs:
           python3 scripts/audit_module_boundaries.py
           python3 scripts/audit_semantic_machv_api.py
           python3 scripts/audit_internal_compatibility.py
+          python3 scripts/audit_jit_context_lifetimes.py
           python3 -m unittest discover -s scripts/tests -p 'test_*.py'
           python3 scripts/audit_component_security.py
           python3 scripts/check_component_snapshot.py
