@@ -492,13 +492,16 @@ pub fn clear_segments(ctx_ptr : Int64) -> Unit {
 }
 
 ///|
-struct NativeJITContext(JITContext)
+struct NativeJITContext {
+  handle : JITContext
+  jit_tables : Array[JITTable?]
+}
 
 ///|
 pub fn NativeJITContext::try_alloc(total_funcs : Int) -> NativeJITContext? {
   let ctx = c_jit_alloc_context_managed(total_funcs)
   if c_jit_context_ptr(ctx) != 0L {
-    Some(NativeJITContext(ctx))
+    Some({ handle: ctx, jit_tables: [] })
   } else {
     None
   }
@@ -506,12 +509,12 @@ pub fn NativeJITContext::try_alloc(total_funcs : Int) -> NativeJITContext? {
 
 ///|
 pub fn NativeJITContext::ptr(self : NativeJITContext) -> Int64 {
-  c_jit_context_ptr(self.0)
+  c_jit_context_ptr(self.handle)
 }
 
 ///|
 pub fn NativeJITContext::clear_gc_heap(self : NativeJITContext) -> Unit {
-  c_jit_gc_clear_heap_managed(self.0)
+  c_jit_gc_clear_heap_managed(self.handle)
 }
 
 ///|
@@ -580,6 +583,10 @@ pub fn NativeJITContext::set_table_pointers(
   self : NativeJITContext,
   jit_tables : Array[JITTable?],
 ) -> Unit {
+  self.jit_tables.clear()
+  for jit_table in jit_tables {
+    self.jit_tables.push(jit_table)
+  }
   if jit_tables.is_empty() {
     return
   }
@@ -603,6 +610,26 @@ pub fn NativeJITContext::set_table_pointers(
     table_max_sizes,
     jit_tables.length(),
   )
+}
+
+///|
+/// Refresh one borrowed table from the context it was registered with.
+/// The context supplies both the table identity and its live C-side layout.
+pub fn NativeJITContext::refresh_table_layout(
+  self : NativeJITContext,
+  table_idx : Int,
+) -> Bool {
+  if table_idx < 0 || table_idx >= self.jit_tables.length() {
+    return false
+  }
+  guard self.jit_tables[table_idx] is Some(jit_table) else { return false }
+  let table_ptr = context_table_ptr(self.ptr(), table_idx)
+  let size = context_table_size(self.ptr(), table_idx)
+  if table_ptr == 0L || size < 0 {
+    return false
+  }
+  jit_table.refresh_layout(table_ptr, size)
+  true
 }
 
 ///|
@@ -713,7 +740,7 @@ pub fn NativeJITContext::call_trampoline(
 ) -> Int {
   if use_stack_switch {
     c_jit_call_with_stack_switch_managed(
-      self.0,
+      self.handle,
       trampoline_ptr,
       func_ptr,
       values_vec,
@@ -721,7 +748,7 @@ pub fn NativeJITContext::call_trampoline(
     )
   } else {
     c_jit_call_trampoline_managed(
-      self.0,
+      self.handle,
       trampoline_ptr,
       func_ptr,
       values_vec,
@@ -962,8 +989,8 @@ pub fn JITTable::raw_ptr(self : JITTable) -> Int64 {
 }
 
 ///|
-/// Refresh table pointer and size from the active JIT context view.
-pub fn JITTable::refresh_layout(
+/// Refresh table pointer and size from its registered JIT context view.
+fn JITTable::refresh_layout(
   self : JITTable,
   table_ptr : Int64,
   size : Int,

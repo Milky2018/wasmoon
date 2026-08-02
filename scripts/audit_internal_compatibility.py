@@ -186,6 +186,11 @@ def main() -> int:
             "modules/wasmoon_jit/pkg.generated.mbti: borrowed JITTable "
             "exposes Store-owned destruction"
         )
+    if "pub fn JITTable::refresh_layout(" in jit_interface_text:
+        failures.append(
+            "modules/wasmoon_jit/pkg.generated.mbti: borrowed JITTable "
+            "exposes Store-owned layout mutation"
+        )
 
     if failures:
         print("internal compatibility audit failed:", file=sys.stderr)

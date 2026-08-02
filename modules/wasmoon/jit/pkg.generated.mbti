@@ -90,8 +90,6 @@ pub fn JITModule::get_func_table_ptr(Self) -> Int64
 pub fn JITModule::get_last_trap_report(Self) -> @wasmoon_jit.TrapReport?
 pub fn JITModule::get_memory_ptr(Self, Int) -> Int64
 pub fn JITModule::get_memory_size(Self, Int) -> Int64
-pub fn JITModule::get_table_ptr(Self, Int) -> Int64
-pub fn JITModule::get_table_size(Self, Int) -> Int
 pub fn JITModule::has_wasm_stack(Self) -> Bool
 pub fn JITModule::init_indirect_table(Self, Int, Array[(Int, Int, Int)]) -> Unit
 pub fn JITModule::init_shared_tables(Self, Array[@wasmoon_jit.JITTable?], Array[(Int, Int, Int?, Int)]) -> Unit
@@ -100,6 +98,7 @@ pub fn JITModule::init_wasi_quiet(Self, Array[String], Array[String], Array[(Str
 pub fn JITModule::init_wasi_with_stdio(Self, Array[String], Array[String], Array[(String, String)], ((Bytes) -> Unit)?, ((Bytes) -> Unit)?, Bytes?, stdin_callback? : (() -> Bytes)?) -> Unit
 pub fn JITModule::load_artifact(@wasmoon_jit.LoadedArtifact, Array[(Array[@types.ValueType], Array[@types.ValueType])], function_names? : Array[String], debug_db? : @wasmoon_jit.JITDebugDB?) -> Self raise JITModuleLoadError
 pub fn JITModule::load_artifact_with_imports(@wasmoon_jit.LoadedArtifact, Array[(Array[@types.ValueType], Array[@types.ValueType])], Map[String, Map[String, Int64]], function_names? : Array[String], debug_db? : @wasmoon_jit.JITDebugDB?) -> Self raise JITModuleLoadError
+pub fn JITModule::refresh_table_layout(Self, Int) -> Bool
 pub fn JITModule::register_dwarf(Self, verbose? : Bool) -> @wasmoon_jit.DWARFBuilder
 pub fn JITModule::set_gc_heap(Self, Int64) -> Unit
 pub fn JITModule::set_globals(Self, Int64) -> Unit
@@ -131,4 +130,3 @@ pub impl DynamicReturn for Unit
 pub impl[A : @types.FromInt64, B : @types.FromInt64] DynamicReturn for (A, B)
 pub impl[A : @types.FromInt64, B : @types.FromInt64, C : @types.FromInt64] DynamicReturn for (A, B, C)
 pub impl[A : @types.FromInt64, B : @types.FromInt64, C : @types.FromInt64, D : @types.FromInt64] DynamicReturn for (A, B, C, D)
-

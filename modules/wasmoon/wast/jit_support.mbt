@@ -602,11 +602,7 @@ pub fn sync_jit_tables_to_store(
       Some(t) => t
       None => continue
     }
-    let live_table_ptr = jit_ctx.jit_module.get_table_ptr(table_idx)
-    let live_jit_size = jit_ctx.jit_module.get_table_size(table_idx)
-    if live_table_ptr != 0L && live_jit_size >= 0 {
-      jit_table.refresh_layout(live_table_ptr, live_jit_size)
-    }
+    jit_ctx.jit_module.refresh_table_layout(table_idx) |> ignore
     let mut runtime_size = table.size()
     let jit_size = jit_table.get_size()
     if jit_size > runtime_size {

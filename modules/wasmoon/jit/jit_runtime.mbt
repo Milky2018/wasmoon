@@ -386,22 +386,14 @@ pub fn JITModule::get_func_count(self : JITModule) -> Int {
 }
 
 ///|
-/// Get current table base pointer from active JIT context.
-pub fn JITModule::get_table_ptr(self : JITModule, table_idx : Int) -> Int64 {
-  if self.context_ptr != 0L {
-    @wasmoon_jit.context_table_ptr(self.context_ptr, table_idx)
-  } else {
-    0L
-  }
-}
-
-///|
-/// Get current table size from active JIT context.
-pub fn JITModule::get_table_size(self : JITModule, table_idx : Int) -> Int {
-  if self.context_ptr != 0L {
-    @wasmoon_jit.context_table_size(self.context_ptr, table_idx)
-  } else {
-    0
+/// Refresh one Store-owned table from the context that borrowed it.
+pub fn JITModule::refresh_table_layout(
+  self : JITModule,
+  table_idx : Int,
+) -> Bool {
+  match self.context {
+    Some(context) => context.refresh_table_layout(table_idx)
+    None => false
   }
 }
 

@@ -597,7 +597,6 @@ pub fn JITTable::get_entry_value(Self, Int) -> Int64
 pub fn JITTable::get_max(Self) -> Int?
 pub fn JITTable::get_size(Self) -> Int
 pub fn JITTable::raw_ptr(Self) -> Int64
-pub fn JITTable::refresh_layout(Self, Int64, Int) -> Unit
 pub fn JITTable::set(Self, Int, Int64, Int) -> Unit
 
 type JITTableOwner derive(@debug.Debug)
@@ -720,6 +719,7 @@ pub fn NativeJITContext::has_wasm_stack(Self) -> Bool
 pub fn NativeJITContext::memory_ptr(Self, Int) -> Int64
 pub fn NativeJITContext::memory_size(Self, Int) -> Int64
 pub fn NativeJITContext::ptr(Self) -> Int64
+pub fn NativeJITContext::refresh_table_layout(Self, Int) -> Bool
 pub fn NativeJITContext::set_cancellation_callback(Self, () -> Bool) -> Unit
 pub fn NativeJITContext::set_func(Self, Int, Int64) -> Unit
 pub fn NativeJITContext::set_globals(Self, Int64) -> Unit

@@ -431,6 +431,9 @@ fn run_jit_with_opt_level(
       if gc_active {
         @wasmoon_jit.gc_teardown(jm.get_context_ptr())
       }
+      for table_idx in 0..<instance.table_addrs.length() {
+        jm.refresh_table_layout(table_idx) |> ignore
+      }
       jm.clear_segments()
       jm.close()
     }

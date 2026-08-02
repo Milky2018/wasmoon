@@ -125,6 +125,11 @@ fn JITContext::set_table_pointers(
 }
 
 ///|
+fn JITContext::refresh_table_layout(self : JITContext, table_idx : Int) -> Bool {
+  self.ctx.refresh_table_layout(table_idx)
+}
+
+///|
 /// Set multiple memories (for multi-memory support)
 fn JITContext::set_memory_pointers(
   self : JITContext,
