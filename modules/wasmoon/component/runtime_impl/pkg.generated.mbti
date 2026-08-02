@@ -194,22 +194,22 @@ pub(all) enum ComponentInvocationPoll {
 
 type ComponentLinker
 pub fn ComponentLinker::ComponentLinker() -> Self
-pub fn ComponentLinker::add_component(Self, String, @component_model.ValidatedComponent) -> Unit
-pub fn ComponentLinker::add_core_instance(Self, String, CoreInstance) -> Unit
-pub fn ComponentLinker::add_core_module(Self, String, @types.Module) -> Unit
-pub fn ComponentLinker::add_func(Self, String, @model.FuncType, (Array[ComponentValue]) -> Array[ComponentValue] raise ComponentRuntimeError) -> Unit
-pub fn ComponentLinker::add_import(Self, String, ComponentExtern) -> Unit
-pub fn ComponentLinker::add_instance(Self, String, ComponentInstance) -> Unit
-pub fn ComponentLinker::add_value(Self, String, ComponentValue) -> Unit
+pub fn ComponentLinker::add_component(Self, String, @component_model.ValidatedComponent) -> Unit raise ComponentRuntimeError
+pub fn ComponentLinker::add_core_instance(Self, String, CoreInstance) -> Unit raise ComponentRuntimeError
+pub fn ComponentLinker::add_core_module(Self, String, @types.Module) -> Unit raise ComponentRuntimeError
+pub fn ComponentLinker::add_func(Self, String, @model.FuncType, (Array[ComponentValue]) -> Array[ComponentValue] raise ComponentRuntimeError) -> Unit raise ComponentRuntimeError
+pub fn ComponentLinker::add_import(Self, String, ComponentExtern) -> Unit raise ComponentRuntimeError
+pub fn ComponentLinker::add_instance(Self, String, ComponentInstance) -> Unit raise ComponentRuntimeError
+pub fn ComponentLinker::add_value(Self, String, ComponentValue) -> Unit raise ComponentRuntimeError
 pub fn ComponentLinker::close(Self) -> Unit
 pub fn ComponentLinker::get_component(Self, String) -> ComponentInstance?
 pub fn ComponentLinker::get_import(Self, String) -> ComponentExtern?
 pub fn ComponentLinker::get_store(Self) -> @runtime.Store
 pub fn ComponentLinker::host_instance_builder(Self, String, HostRuntimeState) -> HostInstanceBuilder
-pub fn ComponentLinker::host_runtime_state(Self) -> HostRuntimeState
+pub fn ComponentLinker::host_runtime_state(Self) -> HostRuntimeState raise ComponentRuntimeError
 pub fn ComponentLinker::instantiate(Self, String, @component_model.ValidatedComponent) -> ComponentInstance raise ComponentRuntimeError
 pub fn ComponentLinker::new_host_resource_type(Self) -> @model.TypeDef?
-pub fn ComponentLinker::register(Self, String, ComponentInstance) -> Unit
+pub fn ComponentLinker::register(Self, String, ComponentInstance) -> Unit raise ComponentRuntimeError
 pub fn ComponentLinker::with_core_execution_engine(CoreExecutionEngine) -> Self
 
 pub(all) enum ComponentValue {

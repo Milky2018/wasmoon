@@ -38,6 +38,37 @@ fn instantiate_component(
   )
   let entry_state = ComponentInstanceEntryState::new()
   let store = linker.get_store()
+  run_component_sections(
+    linker, name, component, overrides, outer_stack, state, entry_state, store, async_state,
+  ) catch {
+    error => {
+      state.release_aborted()
+      raise error
+    }
+  }
+  entry_state.enable()
+  let instance = env_instance_from_state(name, state, store)
+  linker.register(name, instance) catch {
+    error => {
+      state.release_aborted()
+      raise error
+    }
+  }
+  instance
+}
+
+///|
+fn run_component_sections(
+  linker : ComponentLinker,
+  name : String,
+  component : Component,
+  overrides : Map[String, ComponentExtern],
+  outer_stack : Array[ComponentInstance],
+  state : BuildState,
+  entry_state : ComponentInstanceEntryState,
+  store : @runtime.Store,
+  async_state : AsyncState,
+) -> Unit raise ComponentRuntimeError {
   for section in component.binary.sections {
     match section.id {
       1 => {
@@ -376,28 +407,4 @@ fn instantiate_component(
       _ => ()
     }
   }
-  entry_state.enable()
-  let instance : ComponentInstance = {
-    name,
-    types: state.types,
-    funcs: state.funcs,
-    values: state.values,
-    components: state.components,
-    instances: state.instances,
-    resource_table: state.resource_table,
-    stream_table: state.stream_table,
-    async_state: state.async_state,
-    core_modules: state.core_modules,
-    core_instances: state.core_instances,
-    core_funcs: state.core_funcs,
-    core_types: state.core_types,
-    core_tables: state.core_tables,
-    core_mems: state.core_mems,
-    core_globals: state.core_globals,
-    core_tags: state.core_tags,
-    exports: state.exports,
-    store,
-  }
-  linker.register(name, instance)
-  instance
 }
