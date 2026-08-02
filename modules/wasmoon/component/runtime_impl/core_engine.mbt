@@ -190,12 +190,19 @@ fn CoreExecutionLifecycle::new() -> CoreExecutionLifecycle {
 }
 
 ///|
-fn CoreExecutionLifecycle::enter(
+fn CoreExecutionLifecycle::ensure_open(
   self : CoreExecutionLifecycle,
 ) -> Unit raise ComponentRuntimeError {
   if self.closing.val {
     raise Cancelled
   }
+}
+
+///|
+fn CoreExecutionLifecycle::enter(
+  self : CoreExecutionLifecycle,
+) -> Unit raise ComponentRuntimeError {
+  self.ensure_open()
   self.active_leases.val = self.active_leases.val + 1
 }
 

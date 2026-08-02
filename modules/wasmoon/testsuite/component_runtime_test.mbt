@@ -746,11 +746,21 @@ test "component runtime: close during engine registration cancels instantiation"
   let linker_slot : Ref[@runtime_impl.ComponentLinker?] = Ref(None)
   let registrations = Ref(0)
   let rollbacks = Ref(0)
+  let reentry = Ref("not attempted")
   let engine = @runtime_impl.CoreExecutionEngine(
     fn(_store, _module, _instance) {
       registrations.val = registrations.val + 1
       if linker_slot.val is Some(linker) {
         linker.close()
+        reentry.val = try
+          linker.instantiate("closing-reentrant", validated)
+        catch {
+          Cancelled => "cancelled"
+          ReentrantInstantiation => "reentrant"
+          error => "unexpected error: \{error}"
+        } noraise {
+          _ => "instantiated"
+        }
       }
     },
     fn(
@@ -779,8 +789,13 @@ test "component runtime: close during engine registration cancels instantiation"
   debug_inspect(outcome, content="\"cancelled\"")
   debug_inspect(registrations.val, content="1")
   debug_inspect(rollbacks.val, content="1")
+  debug_inspect(reentry.val, content="\"cancelled\"")
   // The aborted instantiation must not resurrect state in the closed linker.
   debug_inspect(linker.get_component("closing") is None, content="true")
+  debug_inspect(
+    linker.get_component("closing-reentrant") is None,
+    content="true",
+  )
   // The linker is terminally closed: later instantiations are refused at
   // entry, before any section runs.
   let after_close = try linker.instantiate("after-close", validated) catch {

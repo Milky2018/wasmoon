@@ -609,6 +609,7 @@ pub fn ComponentLinker::instantiate(
   name : String,
   component : @component_validator.ValidatedComponent,
 ) -> ComponentInstance raise ComponentRuntimeError {
+  self.core_execution_lifecycle.ensure_open()
   if self.instantiating.val {
     raise ReentrantInstantiation
   }
