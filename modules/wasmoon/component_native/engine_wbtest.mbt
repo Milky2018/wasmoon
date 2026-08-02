@@ -41,14 +41,14 @@ test "failed component instantiation closes native JIT registrations" {
   let linker = @runtime_impl.ComponentLinker::with_core_execution_engine(engine)
   linker.instantiate("provider", provider_validated) |> ignore
   let baseline = contexts.length()
-  assert_eq(baseline, 1)
+  inspect(baseline, content="1")
   for root_name in ["first", "second"] {
     try linker.instantiate(root_name, validated) catch {
       _ => ()
     } noraise {
       _ => fail("expected core start to trap")
     }
-    assert_eq(contexts.length(), baseline)
+    inspect(contexts.length() == baseline, content="true")
   }
   linker.close()
 }
@@ -96,9 +96,9 @@ test "failed native registration cannot reappear at a reused Store index" {
     open_native_component_session(opt_level=0),
   )
   linker.instantiate("new", provider) |> ignore
-  assert_eq(
+  inspect(
     @wast.collect_registered_funcref_entries(linker.get_store()).length(),
-    1,
+    content="1",
   )
   linker.close()
 }
@@ -126,18 +126,18 @@ test "native funcref registrations are isolated between live Stores" {
   )
   first.instantiate("first", provider) |> ignore
   second.instantiate("second", provider) |> ignore
-  assert_eq(
+  inspect(
     @wast.collect_registered_funcref_entries(first.get_store()).length(),
-    1,
+    content="1",
   )
-  assert_eq(
+  inspect(
     @wast.collect_registered_funcref_entries(second.get_store()).length(),
-    1,
+    content="1",
   )
   second.close()
-  assert_eq(
+  inspect(
     @wast.collect_registered_funcref_entries(first.get_store()).length(),
-    1,
+    content="1",
   )
   first.close()
 }

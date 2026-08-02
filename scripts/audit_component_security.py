@@ -82,12 +82,10 @@ def owner_matches_root(owner: str, root: str) -> bool:
 
 
 def has_validated_instantiation_boundary(
-    validator_source: str,
     validator_interface: str,
     runtime_interface: str,
 ) -> bool:
-    """Check the type-state boundary and its isolation implementation."""
-    source = re.sub(r"\s+", " ", validator_source)
+    """Check that validation evidence exposes only immutable component bytes."""
     validator = re.sub(r"\s+", " ", validator_interface)
     runtime = re.sub(r"\s+", " ", runtime_interface)
     has_abstract_evidence = re.search(
@@ -100,21 +98,9 @@ def has_validated_instantiation_boundary(
         r" -> ValidatedComponent raise ComponentValidationError",
         validator,
     )
-    has_isolating_accessor_interface = re.search(
-        r"pub fn ValidatedComponent::fresh_component\(Self\)"
-        r" -> @model\.Component raise @model\.ComponentParseError",
+    has_immutable_snapshot_accessor = re.search(
+        r"pub fn ValidatedComponent::component_bytes\(Self\) -> Bytes",
         validator,
-    )
-    # `.mbti` records effects but cannot express aliasing. Pin the implementation
-    # that rebuilds from the validator-owned snapshot instead of treating the
-    # raising signature as proof that the returned component is isolated.
-    evidence_accessor_isolates = re.search(
-        r"pub fn ValidatedComponent::fresh_component"
-        r"\(\s*self\s*:\s*ValidatedComponent\s*,?\s*\)"
-        r" -> @[A-Za-z_][A-Za-z0-9_]*\.Component"
-        r" raise @[A-Za-z_][A-Za-z0-9_]*\.ComponentParseError"
-        r" \{ self\.component\.isolated_copy\(\) \}",
-        source,
     )
     linker_requires_evidence = re.search(
         r"pub fn ComponentLinker::instantiate"
@@ -143,8 +129,7 @@ def has_validated_instantiation_boundary(
     return bool(
         has_abstract_evidence
         and has_evidence_producer
-        and has_isolating_accessor_interface
-        and evidence_accessor_isolates
+        and has_immutable_snapshot_accessor
         and linker_requires_evidence
         and component_import_requires_evidence
         and closure_not_constructible
@@ -210,10 +195,6 @@ def audit_repo(root: Path) -> list[AuditCheck]:
     try:
         interface = read_text(root, str(source["stable_interface"]))
         validator = read_text(root, str(source["validator"]))
-        validator_evidence = read_text(
-            root,
-            str(source.get("validator_evidence", source["validator"])),
-        )
         validator_interface = read_text(
             root,
             str(source["validator_interface"]),
@@ -301,13 +282,12 @@ def audit_repo(root: Path) -> list[AuditCheck]:
         AuditCheck(
             "validate-before-instantiate",
             has_validated_instantiation_boundary(
-                validator_evidence,
                 validator_interface,
                 runtime_interface,
             ),
             "ComponentLinker::instantiate and ComponentLinker::add_component "
             "must require abstract evidence returned by successful component "
-            "validation, the evidence accessor must return isolated copies, "
+            "validation, the evidence must expose only immutable bytes, "
             "ComponentClosure must not be constructible, and instance "
             "registration must not be public",
         )

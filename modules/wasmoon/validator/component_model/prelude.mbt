@@ -95,21 +95,16 @@ pub fn ComponentValidationConfig::default() -> ComponentValidationConfig {
 /// this type instead of a raw component so validation failure cannot be
 /// swallowed before execution.
 struct ValidatedComponent {
-  component : @component.Component
+  component_bytes : Bytes
 }
 
 ///|
-/// Return the validated component to the runtime implementation.
+/// Return the immutable binary snapshot covered by this validation evidence.
 ///
-/// Every call rebuilds a fresh isolated copy from the stored snapshot's
-/// immutable sections, so no caller — including one holding this evidence —
-/// can reach the component an instantiation will actually read. Rebuilding
-/// a snapshot that already parsed successfully cannot fail at runtime; the
-/// `raise` is the honest type of the shared parsing path.
-pub fn ValidatedComponent::fresh_component(
-  self : ValidatedComponent,
-) -> @component.Component raise @component.ComponentParseError {
-  self.component.isolated_copy()
+/// `Bytes` has no mutation interface, so returning the stored value cannot
+/// invalidate the evidence or affect later instantiations.
+pub fn ValidatedComponent::component_bytes(self : ValidatedComponent) -> Bytes {
+  self.component_bytes
 }
 
 ///|

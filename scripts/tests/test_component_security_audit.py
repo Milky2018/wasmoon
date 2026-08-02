@@ -57,19 +57,13 @@ class ComponentSecurityAuditTests(unittest.TestCase):
         )
         (root / "interface.mbti").write_text("pub type Component\n", encoding="utf-8")
         (root / "validator.mbt").write_text(
-            "pub fn ValidatedComponent::fresh_component("
-            "self : ValidatedComponent)"
-            " -> @model.Component raise @model.ComponentParseError {\n"
-            "  self.component.isolated_copy()\n"
-            "}\n"
             '"effective type size exceeds the limit"\n'
             '"type nesting is too deep"\n',
             encoding="utf-8",
         )
         (root / "validator.mbti").write_text(
             "type ValidatedComponent\n"
-            "pub fn ValidatedComponent::fresh_component(Self)"
-            " -> @model.Component raise @model.ComponentParseError\n"
+            "pub fn ValidatedComponent::component_bytes(Self) -> Bytes\n"
             "pub fn validate_component_for_instantiation_with_config"
             "(@model.Component, ComponentValidationConfig)"
             " -> ValidatedComponent raise ComponentValidationError\n",
@@ -296,21 +290,36 @@ class ComponentSecurityAuditTests(unittest.TestCase):
             )
             self.assert_failed(root, "validate-before-instantiate")
 
-    def test_alias_returning_evidence_accessor_fails(self) -> None:
+    def test_mutable_component_evidence_accessor_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.create_fixture(root)
+            (root / "validator.mbti").write_text(
+                "type ValidatedComponent\n"
+                "pub fn ValidatedComponent::component(Self)"
+                " -> @model.Component\n"
+                "pub fn validate_component_for_instantiation_with_config"
+                "(@model.Component, ComponentValidationConfig)"
+                " -> ValidatedComponent raise ComponentValidationError\n",
+                encoding="utf-8",
+            )
+            self.assert_failed(root, "validate-before-instantiate")
+
+    def test_accessor_implementation_spelling_is_not_audit_input(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             self.create_fixture(root)
             (root / "validator.mbt").write_text(
-                "pub fn ValidatedComponent::fresh_component("
-                "self : ValidatedComponent)"
-                " -> @model.Component raise @model.ComponentParseError {\n"
-                "  self.component\n"
-                "}\n"
+                "fn arbitrarily_refactored_validator() -> Unit { () }\n"
                 '"effective type size exceeds the limit"\n'
                 '"type nesting is too deep"\n',
                 encoding="utf-8",
             )
-            self.assert_failed(root, "validate-before-instantiate")
+            checks = {check.name: check for check in audit_repo(root)}
+            self.assertTrue(
+                checks["validate-before-instantiate"].passed,
+                checks["validate-before-instantiate"].detail,
+            )
 
     def test_public_register_fails(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

@@ -570,7 +570,7 @@ pub fn ComponentLinker::add_component(
   name : String,
   component : @component_validator.ValidatedComponent,
 ) -> Unit raise ComponentRuntimeError {
-  let isolated = component.fresh_component() catch {
+  let isolated = @component.parse_component(component.component_bytes()) catch {
     e => raise ComponentParseError(e.to_string())
   }
   self.add_import(name, Component({ component: isolated, outer_stack: [] }))
@@ -638,7 +638,7 @@ pub fn ComponentLinker::instantiate(
       engine_checkpoint.val = Some(
         self.core_engine().checkpoint_registrations(),
       )
-      let isolated = component.fresh_component() catch {
+      let isolated = @component.parse_component(component.component_bytes()) catch {
         e => raise ComponentParseError(e.to_string())
       }
       instantiate_component(self, name, isolated, Map([]), [], staged)

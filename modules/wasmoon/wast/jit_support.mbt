@@ -59,7 +59,7 @@ pub fn FuncrefRegistration::release(self : FuncrefRegistration) -> Unit {
 ///|
 fn register_funcref_entries(
   store : @runtime.Store,
-  entries : Array[(Int, Int64)],
+  entries : Array[@runtime.StoreFuncrefEntry],
 ) -> FuncrefRegistration {
   { lease: store.register_jit_funcrefs(entries) }
 }
@@ -174,11 +174,11 @@ pub fn register_owned_instance_funcrefs_for_jit(
   instance : @runtime.ModuleInstance,
   store : @runtime.Store,
 ) -> FuncrefRegistration {
-  let entries : Array[(Int, Int64)] = []
+  let entries : Array[@runtime.StoreFuncrefEntry] = []
   for i, store_addr in instance.func_addrs {
     let func_ptr = jit_module.get_func_ptr(i)
     if store_addr >= 0 && func_ptr != 0L {
-      entries.push((store_addr, func_ptr))
+      entries.push(@runtime.StoreFuncrefEntry(store_addr~, func_ptr~))
     }
   }
   register_funcref_entries(store, entries)
@@ -192,7 +192,8 @@ pub fn collect_registered_funcref_entries(
 ) -> Array[(Int64, Int)] {
   let entries : Array[(Int64, Int)] = []
   for entry in store.jit_funcref_entries() {
-    let (func_ptr, store_addr) = entry
+    let func_ptr = entry.func_ptr
+    let store_addr = entry.store_addr
     if func_ptr == 0L {
       continue
     }

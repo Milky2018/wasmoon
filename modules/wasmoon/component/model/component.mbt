@@ -34,21 +34,46 @@ pub fn parse_component(bytes : Bytes) -> Component raise ComponentParseError {
 }
 
 ///|
-/// Rebuild a component that shares no mutable state with `self`.
+/// Encode the component's immutable binary snapshot.
 ///
-/// Validation and instantiation both read `binary.sections`, so evidence of
-/// successful validation is only meaningful for content the caller cannot
-/// reach afterwards. Sections are immutable; copying the section list and
-/// re-deriving every parsed view yields a component whose observable state
-/// cannot be changed through any reference the caller retains.
+/// `Bytes` is immutable, so validation evidence can retain and expose this
+/// value without granting mutation access to the parsed component graph.
+pub fn Component::snapshot_bytes(self : Component) -> Bytes {
+  let bytes : Array[Byte] = [b'\x00', b'a', b's', b'm']
+  bytes.push((self.binary.version & 0xFF).to_byte())
+  bytes.push(((self.binary.version >> 8) & 0xFF).to_byte())
+  bytes.push((self.binary.layer & 0xFF).to_byte())
+  bytes.push(((self.binary.layer >> 8) & 0xFF).to_byte())
+  for section in self.binary.sections {
+    bytes.push(section.id.to_byte())
+    append_component_leb_u32(bytes, section.payload.length())
+    for byte in section.payload {
+      bytes.push(byte)
+    }
+  }
+  Bytes::from_array(bytes)
+}
+
+///|
+fn append_component_leb_u32(bytes : Array[Byte], value : Int) -> Unit {
+  for remaining = value {
+    let byte = remaining & 0x7F
+    let next = remaining >> 7
+    if next == 0 {
+      bytes.push(byte.to_byte())
+      break
+    }
+    bytes.push((byte | 0x80).to_byte())
+    continue next
+  }
+}
+
+///|
+/// Rebuild a component that shares no mutable state with `self`.
 pub fn Component::isolated_copy(
   self : Component,
 ) -> Component raise ComponentParseError {
-  component_from_binary({
-    version: self.binary.version,
-    layer: self.binary.layer,
-    sections: self.binary.sections.copy(),
-  })
+  parse_component(self.snapshot_bytes())
 }
 
 ///|

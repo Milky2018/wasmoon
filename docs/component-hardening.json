@@ -8,7 +8,6 @@
   "source_checks": {
     "stable_interface": "modules/wasmoon/component/pkg.generated.mbti",
     "validator": "modules/wasmoon/validator/component_model/validate.mbt",
-    "validator_evidence": "modules/wasmoon/validator/component_model/prelude.mbt",
     "validator_interface": "modules/wasmoon/validator/component_model/pkg.generated.mbti",
     "runtime_interface": "modules/wasmoon/component/runtime_impl/pkg.generated.mbti",
     "interface_scan_root": "modules/wasmoon",

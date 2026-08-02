@@ -668,10 +668,9 @@ test "component runtime: evidence survives raw component mutation" {
   component.aliases.clear()
   component.canons.clear()
   component.components.clear()
-  // The evidence's own accessor is no alias either: every call returns a
-  // fresh isolated copy, so mutating one returned copy cannot change what a
-  // later instantiation of the same evidence reads.
-  validated.fresh_component().binary.sections.clear()
+  // The evidence exposes only immutable bytes, so it has no mutation path
+  // that can change what a later instantiation reads.
+  inspect(validated.component_bytes() == bytes, content="true")
   let linker = @runtime_impl.ComponentLinker::ComponentLinker()
   let instance = linker.instantiate("mutated", validated)
   let results = instance.call_exported_func("f", [])
@@ -1173,7 +1172,7 @@ fn assert_failed_core_registration_returns_to_baseline(
     } noraise {
       _ => fail("expected core start to trap")
     }
-    assert_eq(core_store_allocation_baseline(store), baseline)
+    inspect(core_store_allocation_baseline(store) == baseline, content="true")
     debug_inspect(
       @executor.call_exported_func(store, old_instance, "probe", []),
       content="[I32(2)]",
@@ -1221,7 +1220,10 @@ test "component runtime: engine registration errors roll back core state" {
     _ => "instantiated"
   }
   debug_inspect(outcome, content="\"failed\"")
-  assert_eq(core_store_allocation_baseline(linker.get_store()), baseline)
+  inspect(
+    core_store_allocation_baseline(linker.get_store()) == baseline,
+    content="true",
+  )
   debug_inspect(rollbacks.val, content="1")
   linker.close()
 }
@@ -1291,7 +1293,10 @@ test "component runtime: failed instantiation leaves open linker intact" {
     linker.get_component("failing::component0") is None,
     content="true",
   )
-  assert_eq(core_store_allocation_baseline(linker.get_store()), core_before)
+  inspect(
+    core_store_allocation_baseline(linker.get_store()) == core_before,
+    content="true",
+  )
   // A second failure must not accumulate resource tables in the shared
   // async state: every aborted frame withdraws its table.
   try linker.instantiate("failing-again", failing_validated) catch {
@@ -1299,7 +1304,10 @@ test "component runtime: failed instantiation leaves open linker intact" {
   } noraise {
     _ => ()
   }
-  assert_eq(core_store_allocation_baseline(linker.get_store()), core_before)
+  inspect(
+    core_store_allocation_baseline(linker.get_store()) == core_before,
+    content="true",
+  )
   debug_inspect(
     runtime.async_state().resource_tables.size() == tables_before,
     content="true",

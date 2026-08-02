@@ -147,6 +147,7 @@ pub(all) struct Component {
   components : Array[Component]
 } derive(Eq, @debug.Debug)
 pub fn Component::isolated_copy(Self) -> Self raise ComponentParseError
+pub fn Component::snapshot_bytes(Self) -> Bytes
 pub impl Show for Component
 
 pub struct ComponentBinary {

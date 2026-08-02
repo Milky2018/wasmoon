@@ -1,4 +1,19 @@
 ///|
+/// Per-component state shared by all section handlers during instantiation.
+priv struct ComponentInstantiationFrame {
+  linker : ComponentLinker
+  name : String
+  component : Component
+  overrides : Map[String, ComponentExtern]
+  outer_stack : Array[ComponentInstance]
+  state : BuildState
+  entry_state : ComponentInstanceEntryState
+  store : @runtime.Store
+  async_state : AsyncState
+  staged : Array[(String, ComponentInstance)]
+}
+
+///|
 fn instantiate_component(
   linker : ComponentLinker,
   name : String,
@@ -39,10 +54,19 @@ fn instantiate_component(
   )
   let entry_state = ComponentInstanceEntryState::new()
   let store = linker.get_store()
-  run_component_sections(
-    linker, name, component, overrides, outer_stack, state, entry_state, store, async_state,
+  let frame : ComponentInstantiationFrame = {
+    linker,
+    name,
+    component,
+    overrides,
+    outer_stack,
+    state,
+    entry_state,
+    store,
+    async_state,
     staged,
-  ) catch {
+  }
+  run_component_sections(frame) catch {
     error => {
       state.release_aborted()
       raise error
@@ -60,17 +84,20 @@ fn instantiate_component(
 
 ///|
 fn run_component_sections(
-  linker : ComponentLinker,
-  name : String,
-  component : Component,
-  overrides : Map[String, ComponentExtern],
-  outer_stack : Array[ComponentInstance],
-  state : BuildState,
-  entry_state : ComponentInstanceEntryState,
-  store : @runtime.Store,
-  async_state : AsyncState,
-  staged : Array[(String, ComponentInstance)],
+  frame : ComponentInstantiationFrame,
 ) -> Unit raise ComponentRuntimeError {
+  let {
+    linker,
+    name,
+    component,
+    overrides,
+    outer_stack,
+    state,
+    entry_state,
+    store,
+    async_state,
+    staged,
+  } = frame
   for section in component.binary.sections {
     match section.id {
       1 => {

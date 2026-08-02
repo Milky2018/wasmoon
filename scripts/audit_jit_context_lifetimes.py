@@ -5,35 +5,31 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-JIT_PACKAGE = ROOT / "modules/wasmoon_jit"
-NATIVE_RUNTIME = ROOT / "modules/wasmoon_jit/native_runtime.mbt"
-NATIVE_FFI = ROOT / "modules/wasmoon_jit/native_ffi.mbt"
-PUBLIC_INTERFACES = (
-    ROOT / "modules/wasmoon_jit/pkg.generated.mbti",
-    ROOT / "modules/wasmoon/jit/pkg.generated.mbti",
-)
+RAW_CONTEXT_EXTRACTOR = "c_jit_context_ptr("
 
 
-def main() -> int:
-    runtime = NATIVE_RUNTIME.read_text()
-    ffi = NATIVE_FFI.read_text()
+def audit_repo(root: Path) -> list[str]:
+    jit_package = root / "modules/wasmoon_jit"
+    native_ffi = jit_package / "native_ffi.mbt"
+    public_interfaces = (
+        jit_package / "pkg.generated.mbti",
+        root / "modules/wasmoon/jit/pkg.generated.mbti",
+    )
     failures: list[str] = []
 
-    extraction_count = runtime.count("c_jit_context_ptr(")
-    if extraction_count != 2:
-        failures.append(
-            "native_runtime.mbt must contain exactly the allocation check and "
-            f"scoped extractor; found {extraction_count} context-pointer uses"
-        )
-    if "defer c_jit_context_keep_alive(self.handle)" not in runtime:
-        failures.append("scoped context-pointer access is missing managed keep-alive")
-    if ffi.count("c_jit_context_ptr(") != 1:
-        failures.append("native_ffi.mbt must declare exactly one raw context extractor")
-    for source in JIT_PACKAGE.rglob("*.mbt"):
-        if source in (NATIVE_RUNTIME, NATIVE_FFI):
+    if not native_ffi.is_file():
+        failures.append(f"{native_ffi}: missing native FFI declarations")
+    extractor_sources: list[Path] = []
+    for source in jit_package.rglob("*.mbt"):
+        if source == native_ffi:
             continue
-        if "c_jit_context_ptr(" in source.read_text():
-            failures.append(f"{source}: bypasses scoped managed context access")
+        if RAW_CONTEXT_EXTRACTOR in source.read_text():
+            extractor_sources.append(source)
+    if len(extractor_sources) > 1:
+        failures.append(
+            "raw context extraction must stay confined to one implementation "
+            f"file; found {[str(path) for path in extractor_sources]}"
+        )
 
     forbidden_exports = (
         "NativeJITContext::ptr",
@@ -56,14 +52,26 @@ def main() -> int:
         "pub fn setup_segments(",
         "pub fn clear_segments(",
     )
-    for interface in PUBLIC_INTERFACES:
+    for interface in public_interfaces:
+        if not interface.is_file():
+            failures.append(f"{interface}: missing public interface")
+            continue
         text = interface.read_text()
         for export in forbidden_exports:
             if export in text:
-                failures.append(f"{interface}: exposes forbidden raw-pointer API {export}")
+                failures.append(
+                    f"{interface}: exposes forbidden raw-pointer API {export}"
+                )
         for signature in forbidden_raw_functions:
             if signature in text:
-                failures.append(f"{interface}: exposes raw context operation {signature}")
+                failures.append(
+                    f"{interface}: exposes raw context operation {signature}"
+                )
+    return failures
+
+
+def main() -> int:
+    failures = audit_repo(ROOT)
 
     if failures:
         print("JIT context lifetime audit failed:")

@@ -6,6 +6,21 @@ priv struct StoreFuncrefMappingOwner {
 } derive(Debug)
 
 ///|
+/// One Store-local function address and its native executable pointer.
+pub struct StoreFuncrefEntry {
+  store_addr : Int
+  func_ptr : Int64
+} derive(Debug, Eq)
+
+///|
+pub fn StoreFuncrefEntry::StoreFuncrefEntry(
+  store_addr~ : Int,
+  func_ptr~ : Int64,
+) -> StoreFuncrefEntry {
+  { store_addr, func_ptr }
+}
+
+///|
 priv struct StoreFuncrefRegistry {
   store_to_ptr : Map[Int, Array[StoreFuncrefMappingOwner]]
   ptr_to_store : Map[Int64, Array[StoreFuncrefMappingOwner]]
@@ -16,7 +31,7 @@ priv struct StoreFuncrefRegistry {
 struct StoreFuncrefRegistration {
   registry : StoreFuncrefRegistry
   registration : Int
-  entries : Array[(Int, Int64)]
+  entries : Array[StoreFuncrefEntry]
   active : Ref[Bool]
 }
 
@@ -41,12 +56,12 @@ fn remove_store_funcref_owner(
 ///|
 fn StoreFuncrefRegistry::register(
   self : StoreFuncrefRegistry,
-  entries : Array[(Int, Int64)],
+  entries : Array[StoreFuncrefEntry],
 ) -> StoreFuncrefRegistration {
   let registration = self.next_registration.val
   self.next_registration.val = registration + 1
   for entry in entries {
-    let (store_addr, func_ptr) = entry
+    let { store_addr, func_ptr } = entry
     if store_addr < 0 || func_ptr == 0L {
       continue
     }
@@ -72,7 +87,7 @@ pub fn StoreFuncrefRegistration::release(
   }
   self.active.val = false
   for entry in self.entries {
-    let (store_addr, func_ptr) = entry
+    let { store_addr, func_ptr } = entry
     if self.registry.store_to_ptr.get(store_addr) is Some(owners) {
       remove_store_funcref_owner(owners, self.registration)
       if owners.is_empty() {
@@ -115,11 +130,14 @@ fn StoreFuncrefRegistry::lookup_store_addr(
 ///|
 fn StoreFuncrefRegistry::entries(
   self : StoreFuncrefRegistry,
-) -> Array[(Int64, Int)] {
-  let entries : Array[(Int64, Int)] = []
+) -> Array[StoreFuncrefEntry] {
+  let entries : Array[StoreFuncrefEntry] = []
   for func_ptr, owners in self.ptr_to_store {
     if func_ptr != 0L && !owners.is_empty() {
-      entries.push((func_ptr, owners[owners.length() - 1].store_addr))
+      entries.push({
+        store_addr: owners[owners.length() - 1].store_addr,
+        func_ptr,
+      })
     }
   }
   entries
@@ -134,7 +152,7 @@ fn StoreFuncrefRegistry::clear(self : StoreFuncrefRegistry) -> Unit {
 ///|
 pub fn Store::register_jit_funcrefs(
   self : Store,
-  entries : Array[(Int, Int64)],
+  entries : Array[StoreFuncrefEntry],
 ) -> StoreFuncrefRegistration {
   self.funcref_registry.register(entries)
 }
@@ -153,6 +171,6 @@ pub fn Store::lookup_jit_funcref_store_addr(
 }
 
 ///|
-pub fn Store::jit_funcref_entries(self : Store) -> Array[(Int64, Int)] {
+pub fn Store::jit_funcref_entries(self : Store) -> Array[StoreFuncrefEntry] {
   self.funcref_registry.entries()
 }
