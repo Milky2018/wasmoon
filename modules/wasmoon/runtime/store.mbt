@@ -143,10 +143,11 @@ fn Store::rollback_allocations(
   self.instances.truncate(checkpoint.instances)
   self.module_types = checkpoint.module_types
   self.module_rec_groups = checkpoint.module_rec_groups
-  self.heap.rollback_allocations(checkpoint.heap)
+  let roots = self.collect_roots([])
+  self.heap.rollback_allocations(checkpoint.heap, roots)
   match (self.c_heap, checkpoint.c_heap) {
     (Some(heap), Some(heap_checkpoint)) =>
-      heap.rollback_allocations(heap_checkpoint) |> ignore
+      heap.rollback_allocations(heap_checkpoint, roots) |> ignore
     _ => ()
   }
 }

@@ -411,7 +411,7 @@ pub fn CHeap::get_usage_ratio(Self) -> Double
 pub fn CHeap::is_array(Self, Int) -> Bool
 pub fn CHeap::is_struct(Self, Int) -> Bool
 pub fn CHeap::is_valid(Self, Int) -> Bool
-pub fn CHeap::rollback_allocations(Self, CHeapAllocationCheckpoint) -> Bool
+pub fn CHeap::rollback_allocations(Self, CHeapAllocationCheckpoint, Array[@types.Value]) -> Bool
 pub fn CHeap::should_collect(Self, threshold? : Double) -> Bool
 pub fn CHeap::struct_get(Self, Int, Int, @types.ValueType) -> @types.Value
 pub fn CHeap::struct_set(Self, Int, Int, @types.Value) -> Unit

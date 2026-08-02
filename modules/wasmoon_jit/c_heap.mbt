@@ -70,14 +70,25 @@ pub fn CHeap::checkpoint_allocations(self : CHeap) -> CHeapAllocationCheckpoint 
 }
 
 ///|
+/// Reclaim objects allocated after `checkpoint` unless they remain reachable
+/// from `roots`. Retained object-table indices are never reused.
 pub fn CHeap::rollback_allocations(
   self : CHeap,
   checkpoint : CHeapAllocationCheckpoint,
+  roots : Array[@types.Value],
 ) -> Bool {
   if !physical_equal(self, checkpoint.owner) {
     return false
   }
-  c_gc_heap_rollback_allocations(self.ptr, checkpoint.object_count) != 0
+  let num_roots = roots.length()
+  let raw_roots = FixedArray::makei(num_roots, fn(i) { value_to_i64(roots[i]) })
+  c_gc_heap_rollback_allocations(
+    self.ptr,
+    checkpoint.object_count,
+    raw_roots,
+    num_roots,
+  ) !=
+  0
 }
 
 // ============================================================

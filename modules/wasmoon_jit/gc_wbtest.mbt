@@ -517,3 +517,33 @@ test "gc: copied caller-root scopes nest and pop" {
   inspect(heap.is_valid(outer), content="false")
   gc_clear_heap(c_jit_context_ptr(jit_ctx))
 }
+
+///|
+test "gc rollback: rooted transaction object is not reclaimed or reused" {
+  let heap = CHeap::CHeap(capacity=1024)
+  let checkpoint = heap.checkpoint_allocations()
+  let escaped = heap.alloc_struct(0, [I32(7)])
+  let garbage = heap.alloc_struct(0, [I32(8)])
+
+  inspect(
+    heap.rollback_allocations(checkpoint, [StructRef(escaped)]),
+    content="true",
+  )
+  debug_inspect(
+    (
+      escaped,
+      garbage,
+      heap.is_valid(escaped),
+      heap.is_valid(garbage),
+      heap.struct_get(escaped, 0, I32),
+    ),
+    content="(0, 1, true, false, I32(7))",
+  )
+
+  let next = heap.alloc_struct(0, [I32(9)])
+  debug_inspect(
+    (escaped, next, heap.struct_get(escaped, 0, I32)),
+    content="(0, 1, I32(7))",
+  )
+  heap.free()
+}

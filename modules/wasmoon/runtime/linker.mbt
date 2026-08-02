@@ -41,7 +41,9 @@ pub fn Linker::checkpoint(self : Linker) -> CoreLinkerCheckpoint {
 }
 
 ///|
-/// Withdraw every allocation and named registration added after `checkpoint`.
+/// Withdraw named registrations and unreachable allocations added after
+/// `checkpoint`. GC objects published into surviving Store roots retain their
+/// identity so rollback cannot leave dangling or reusable references.
 pub fn Linker::rollback_to(
   self : Linker,
   checkpoint : CoreLinkerCheckpoint,

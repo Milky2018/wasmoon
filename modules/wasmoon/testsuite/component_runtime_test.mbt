@@ -970,6 +970,128 @@ fn core_store_allocation_baseline(
 }
 
 ///|
+fn assert_escaped_gc_ref_is_not_reused(
+  store : @runtime.Store,
+  escaped_idx : Int,
+) -> Unit raise {
+  let before_reuse = try store.struct_get(escaped_idx, 0) catch {
+    UndefinedElement => "undefined element"
+    error => "unexpected error: \{error}"
+  } noraise {
+    value => "\{value}"
+  }
+  let next_idx = store.alloc_struct(0, [I64(9L)])
+  let after_reuse = try store.struct_get(escaped_idx, 0) catch {
+    error => "unexpected error: \{error}"
+  } noraise {
+    value => "\{value}"
+  }
+  debug_inspect(
+    (before_reuse, escaped_idx, next_idx, after_reuse),
+    content="(\"I64(7)\", 0, 1, \"I64(7)\")",
+  )
+}
+
+///|
+fn assert_start_trap_preserves_escaped_gc_ref(
+  store : @runtime.Store,
+) -> Unit raise {
+  let global = @runtime.GlobalInstance::GlobalInstance(
+    { value_type: AnyRef, mutable: true },
+    Null,
+  )
+  let global_addr = store.alloc_global(global)
+  let imports = @runtime.Imports::Imports()
+  imports.add_global("host", "escaped", global_addr)
+  let module_ = @wat.parse(
+    (
+      #|(module
+      #|  (type $box (struct (field i64)))
+      #|  (import "host" "escaped" (global $escaped (mut anyref)))
+      #|  (func $start
+      #|    (global.set $escaped (struct.new $box (i64.const 7)))
+      #|    unreachable)
+      #|  (start $start))
+      #|
+    ),
+  )
+  let linker = @runtime.Linker::with_store(store)
+  let checkpoint = linker.checkpoint()
+  try @executor.instantiate_module_with_imports(store, module_, imports) catch {
+    _ => ()
+  } noraise {
+    _ => fail("expected start to trap")
+  }
+  linker.rollback_to(checkpoint) |> ignore
+  let escaped_idx = match global.get() {
+    StructRef(idx) => idx
+    value => return fail("expected escaped struct reference, got \{value}")
+  }
+  assert_escaped_gc_ref_is_not_reused(store, escaped_idx)
+  linker.close()
+}
+
+///|
+test "component runtime: interpreter rollback preserves escaped GC refs" {
+  assert_start_trap_preserves_escaped_gc_ref(@runtime.Store::Store())
+}
+
+///|
+test "component runtime: native heap rollback preserves escaped GC refs" {
+  assert_start_trap_preserves_escaped_gc_ref(@runtime.Store::with_c_heap())
+}
+
+///|
+fn assert_start_trap_preserves_table_escaped_gc_ref(
+  store : @runtime.Store,
+) -> Unit raise {
+  let table = @runtime.Table::Table(AnyRef, 1, None)
+  let table_addr = store.alloc_table(table)
+  let imports = @runtime.Imports::Imports()
+  imports.add_table("host", "escaped", table_addr)
+  let module_ = @wat.parse(
+    (
+      #|(module
+      #|  (type $box (struct (field i64)))
+      #|  (import "host" "escaped" (table $escaped 1 anyref))
+      #|  (func $start
+      #|    (table.set $escaped
+      #|      (i32.const 0)
+      #|      (struct.new $box (i64.const 7)))
+      #|    unreachable)
+      #|  (start $start))
+      #|
+    ),
+  )
+  let linker = @runtime.Linker::with_store(store)
+  let checkpoint = linker.checkpoint()
+  try @executor.instantiate_module_with_imports(store, module_, imports) catch {
+    _ => ()
+  } noraise {
+    _ => fail("expected start to trap")
+  }
+  linker.rollback_to(checkpoint) |> ignore
+  let escaped_idx = match table.get(0) {
+    StructRef(idx) => idx
+    value => return fail("expected escaped struct reference, got \{value}")
+  }
+  assert_escaped_gc_ref_is_not_reused(store, escaped_idx)
+  linker.close()
+}
+
+///|
+test "component runtime: interpreter rollback preserves table-escaped GC refs" {
+  assert_start_trap_preserves_table_escaped_gc_ref(@runtime.Store::Store())
+}
+
+///|
+test "component runtime: native heap rollback preserves table-escaped GC refs" {
+  assert_start_trap_preserves_table_escaped_gc_ref(
+    @runtime.Store::with_c_heap(),
+  )
+}
+
+///|
 fn core_registration_then_start_trap() -> @component_model.ValidatedComponent raise {
   let bytes = @component_text.parse_component_wat(
     (

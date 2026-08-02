@@ -1260,10 +1260,13 @@ extern "c" fn c_gc_heap_collect(
 ) -> Int = "wasmoon_gc_heap_collect"
 
 ///|
-/// Discard objects allocated after the supplied object-table boundary.
+/// Discard unreachable objects allocated after the supplied object-table boundary.
+#borrow(roots)
 extern "c" fn c_gc_heap_rollback_allocations(
   heap : Int64,
   object_count : Int,
+  roots : FixedArray[Int64],
+  num_roots : Int,
 ) -> Int = "wasmoon_gc_heap_rollback_allocations"
 
 ///|
