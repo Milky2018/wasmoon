@@ -104,10 +104,24 @@ def has_validated_instantiation_boundary(
         r" -> ComponentInstance raise ComponentRuntimeError",
         runtime,
     )
+    # A component import is instantiated by whichever component imports it,
+    # so the registration boundary needs the same evidence as instantiation.
+    component_import_requires_evidence = re.search(
+        r"pub fn ComponentLinker::add_component"
+        r"\(Self, String, @component_model\.ValidatedComponent\) -> Unit",
+        runtime,
+    )
+    # A constructible closure would let external code forge a
+    # `Component(closure)` extern around an unchecked component.
+    closure_not_constructible = re.search(
+        r"\btype ComponentClosure\b", runtime
+    ) and not re.search(r"pub(\(all\))? struct ComponentClosure\b", runtime)
     return bool(
         has_abstract_evidence
         and has_evidence_producer
         and linker_requires_evidence
+        and component_import_requires_evidence
+        and closure_not_constructible
     )
 
 
@@ -259,8 +273,9 @@ def audit_repo(root: Path) -> list[AuditCheck]:
                 validator_interface,
                 runtime_interface,
             ),
-            "ComponentLinker::instantiate must require abstract evidence "
-            "returned by successful component validation",
+            "ComponentLinker::instantiate and ComponentLinker::add_component "
+            "must require abstract evidence returned by successful component "
+            "validation, and ComponentClosure must not be constructible",
         )
     )
     checks.append(

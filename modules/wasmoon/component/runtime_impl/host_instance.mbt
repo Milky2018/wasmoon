@@ -38,7 +38,13 @@ fn HostRuntimeState::with_core_execution_engine(
 /// method before building host instances.
 pub fn ComponentLinker::host_runtime_state(
   self : ComponentLinker,
-) -> HostRuntimeState {
+) -> HostRuntimeState raise ComponentRuntimeError {
+  // A terminally closed linker installs no host runtime. `finish_close` has
+  // already dropped the runtime slot, and repeated closes return early, so
+  // a runtime installed here after close would never be released.
+  if self.closed.val {
+    raise Cancelled
+  }
   match self.host_runtime.val {
     Some(runtime) => runtime
     None => {

@@ -30,7 +30,31 @@ pub impl Show for Component with fn output(self, logger) {
 
 ///|
 pub fn parse_component(bytes : Bytes) -> Component raise ComponentParseError {
-  let binary = parse_component_binary(bytes)
+  component_from_binary(parse_component_binary(bytes))
+}
+
+///|
+/// Rebuild a component that shares no mutable state with `self`.
+///
+/// Validation and instantiation both read `binary.sections`, so evidence of
+/// successful validation is only meaningful for content the caller cannot
+/// reach afterwards. Sections are immutable; copying the section list and
+/// re-deriving every parsed view yields a component whose observable state
+/// cannot be changed through any reference the caller retains.
+pub fn Component::isolated_copy(
+  self : Component,
+) -> Component raise ComponentParseError {
+  component_from_binary({
+    version: self.binary.version,
+    layer: self.binary.layer,
+    sections: self.binary.sections.copy(),
+  })
+}
+
+///|
+fn component_from_binary(
+  binary : ComponentBinary,
+) -> Component raise ComponentParseError {
   let core_modules : Array[Bytes] = []
   let core_instances : Array[Bytes] = []
   let core_types : Array[Bytes] = []

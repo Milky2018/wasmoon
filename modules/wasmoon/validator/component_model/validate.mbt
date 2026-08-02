@@ -926,10 +926,19 @@ pub fn validate_component_for_instantiation(
 ///|
 /// Validate a component with the requested name policy and return evidence
 /// accepted by runtime instantiation.
+///
+/// The evidence holds an isolated snapshot rebuilt from the component's
+/// binary sections: the snapshot is what gets validated, and it is the only
+/// component the runtime will instantiate. Mutating the argument after this
+/// call — its parsed views or its section list — cannot invalidate the
+/// evidence.
 pub fn validate_component_for_instantiation_with_config(
   component : @component.Component,
   cfg : ComponentValidationConfig,
 ) -> ValidatedComponent raise ComponentValidationError {
-  validate_component_with_config(component, cfg)
-  { component, }
+  let snapshot = component.isolated_copy() catch {
+    e => raise SectionParseError(0, "component snapshot: \{e}")
+  }
+  validate_component_with_config(snapshot, cfg)
+  { component: snapshot }
 }

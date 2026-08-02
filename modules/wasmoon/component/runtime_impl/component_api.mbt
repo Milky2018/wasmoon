@@ -166,7 +166,13 @@ pub impl Show for CoreInstance with fn output(_self, logger) {
 ///|
 /// A component value is a closure: the component binary plus the captured outer
 /// environment needed to resolve `alias outer ...` when instantiated later.
-pub(all) struct ComponentClosure {
+///
+/// The type is abstract on purpose. Every closure the runtime instantiates
+/// must originate from a validated boundary (`ComponentLinker::instantiate`,
+/// `ComponentLinker::add_component`, or a section of an already-validated
+/// component), so external code must not be able to forge a
+/// `Component(closure)` extern around an unchecked component.
+struct ComponentClosure {
   component : Component
   outer_stack : Array[ComponentInstance]
 }
@@ -408,63 +414,30 @@ pub fn ComponentLinker::close(self : ComponentLinker) -> Unit {
 }
 
 ///|
-/// Release an instance graph at terminal close.
+/// Release one linker-owned instance at terminal close.
 ///
 /// A component that defines a nested component stores a `ComponentClosure`
-/// whose `outer_stack` contains the enclosing instance itself — `alias outer`
-/// resolution requires the enclosing scope when the nested component is
-/// instantiated later. That is a deliberate reference cycle, and reference
-/// counting can never reclaim it: every instance graph with a nested
-/// component definition survives close intact, dragging its imports, host
-/// functions, and their per-function type-space copies along with it.
+/// whose `outer_stack` holds an env instance sharing this instance's child
+/// arrays — `alias outer` resolution requires the enclosing scope when the
+/// nested component is instantiated later. That is a deliberate reference
+/// cycle, and reference counting can never reclaim it. The cycle runs
+/// through this instance's own arrays, so clearing them is what breaks it;
+/// the env and inline instances of the same frame share the very same array
+/// objects and die with it.
 ///
-/// Terminal close is the owning boundary, so break the graph here: clear the
-/// closure and child arrays of every reachable instance. The visited set
-/// terminates on the cycles this exists to break.
-fn release_component_instance_graph(
-  instance : ComponentInstance,
-  visited : Array[ComponentInstance],
-) -> Unit {
-  for seen in visited {
-    if physical_equal(seen, instance) {
-      return
-    }
-  }
-  visited.push(instance)
-  // Instances produced during one instantiation share their backing arrays
-  // and export map — the `alias outer` environment records alias the final
-  // instance's storage. Collect every reachable child first, then clear this
-  // record's storage, and only then recurse: clearing while iterating a
-  // shared map would mutate the collection mid-walk, and a shared array
-  // visited again later is simply seen empty.
-  let children : Array[ComponentInstance] = []
-  for closure in instance.components {
-    for outer in closure.outer_stack {
-      children.push(outer)
-    }
-  }
-  for child in instance.instances {
-    children.push(child)
-  }
-  for entry in instance.exports {
-    let (_, ext) = entry
-    match ext {
-      Instance(child) => children.push(child)
-      Component(closure) =>
-        for outer in closure.outer_stack {
-          children.push(outer)
-        }
-      _ => ()
-    }
-  }
+/// Deliberately shallow. The linker owns exactly the instances its own
+/// instantiations registered — every instantiation frame registers itself,
+/// so `finish_close` walks all of them directly. Recursing into children
+/// would cross the ownership boundary: `instances` and `exports` also hold
+/// instances supplied through `add_instance`/`add_import`, which another
+/// linker or the embedder owns and may still be using. Clearing this
+/// instance's arrays only drops references to those, never their state.
+fn release_owned_instance(instance : ComponentInstance) -> Unit {
   instance.components.clear()
   instance.instances.clear()
   instance.funcs.clear()
   instance.values.clear()
   instance.exports.clear()
-  for child in children {
-    release_component_instance_graph(child, visited)
-  }
 }
 
 ///|
@@ -473,22 +446,13 @@ fn ComponentLinker::finish_close(self : ComponentLinker) -> Unit {
     return
   }
   self.close_complete.val = true
-  let visited : Array[ComponentInstance] = []
   for entry in self.components {
     let (_, instance) = entry
-    release_component_instance_graph(instance, visited)
+    release_owned_instance(instance)
   }
-  for entry in self.imports {
-    let (_, ext) = entry
-    match ext {
-      Instance(instance) => release_component_instance_graph(instance, visited)
-      Component(closure) =>
-        for outer in closure.outer_stack {
-          release_component_instance_graph(outer, visited)
-        }
-      _ => ()
-    }
-  }
+  // Imports are not owned: dropping the table's references is the linker's
+  // entire claim on them. Releasing their graphs here destroyed instances
+  // shared from other linkers or built by the embedder.
   self.components.clear()
   self.imports.clear()
   self.host_runtime.val = None
@@ -510,7 +474,13 @@ pub fn ComponentLinker::register(
   self : ComponentLinker,
   name : String,
   instance : ComponentInstance,
-) -> Unit {
+) -> Unit raise ComponentRuntimeError {
+  // A terminally closed linker accepts no new instance graph: nothing would
+  // ever release a graph committed after `finish_close` has run or been
+  // scheduled.
+  if self.closed.val {
+    raise Cancelled
+  }
   self.components.push((name, instance))
 }
 
@@ -533,7 +503,14 @@ pub fn ComponentLinker::add_import(
   self : ComponentLinker,
   name : String,
   ext : ComponentExtern,
-) -> Unit {
+) -> Unit raise ComponentRuntimeError {
+  // A terminally closed linker accepts no new imports. `finish_close` has
+  // already walked and released the import table, so an extern added after
+  // close would be retained until the linker itself dies — an uncollectable
+  // cycle whenever the extern captures its own linker.
+  if self.closed.val {
+    raise Cancelled
+  }
   self.imports.set(name, ext)
 }
 
@@ -552,7 +529,7 @@ pub fn ComponentLinker::add_func(
   name : String,
   func_type : FuncType,
   func : (Array[ComponentValue]) -> Array[ComponentValue] raise ComponentRuntimeError,
-) -> Unit {
+) -> Unit raise ComponentRuntimeError {
   self.add_import(
     name,
     Func(
@@ -571,17 +548,25 @@ pub fn ComponentLinker::add_value(
   self : ComponentLinker,
   name : String,
   value : ComponentValue,
-) -> Unit {
+) -> Unit raise ComponentRuntimeError {
   self.add_import(name, Value(value))
 }
 
 ///|
+/// Register a component import. Like `ComponentLinker::instantiate`, the
+/// boundary accepts validation evidence rather than a raw component: an
+/// imported component is instantiated by the instance sections of whichever
+/// component imports it, so an unchecked component here would reach
+/// instantiation without ever passing validation.
 pub fn ComponentLinker::add_component(
   self : ComponentLinker,
   name : String,
-  component : Component,
-) -> Unit {
-  self.add_import(name, Component({ component, outer_stack: [] }))
+  component : @component_validator.ValidatedComponent,
+) -> Unit raise ComponentRuntimeError {
+  self.add_import(
+    name,
+    Component({ component: component.component(), outer_stack: [] }),
+  )
 }
 
 ///|
@@ -589,7 +574,7 @@ pub fn ComponentLinker::add_instance(
   self : ComponentLinker,
   name : String,
   instance : ComponentInstance,
-) -> Unit {
+) -> Unit raise ComponentRuntimeError {
   self.add_import(name, Instance(instance))
 }
 
@@ -598,7 +583,7 @@ pub fn ComponentLinker::add_core_module(
   self : ComponentLinker,
   name : String,
   module_ : @types.Module,
-) -> Unit {
+) -> Unit raise ComponentRuntimeError {
   self.add_import(name, CoreModule(module_))
 }
 
@@ -607,7 +592,7 @@ pub fn ComponentLinker::add_core_instance(
   self : ComponentLinker,
   name : String,
   instance : CoreInstance,
-) -> Unit {
+) -> Unit raise ComponentRuntimeError {
   self.add_import(name, CoreInstance(instance))
 }
 
@@ -617,5 +602,35 @@ pub fn ComponentLinker::instantiate(
   name : String,
   component : @component_validator.ValidatedComponent,
 ) -> ComponentInstance raise ComponentRuntimeError {
-  instantiate_component(self, name, component.component(), Map([]), [])
+  // The whole instantiation holds a lifecycle lease. An embedder callback
+  // that closes the linker mid-instantiation (from an engine registration or
+  // a host import) only begins the close: teardown is deferred until this
+  // frame unwinds, so no section ever observes a released engine or cleared
+  // imports, and a close that started mid-flight turns into `Cancelled`
+  // rather than a successful instantiation on a closed linker.
+  self.core_execution_lifecycle.enter()
+  let instance = instantiate_component(
+    self,
+    name,
+    component.component(),
+    Map([]),
+    [],
+  ) catch {
+    error => {
+      let closing = self.core_execution_lifecycle.closing.val
+      self.core_execution_lifecycle.leave()
+      if closing {
+        raise Cancelled
+      }
+      raise error
+    }
+  }
+  let closing = self.core_execution_lifecycle.closing.val
+  self.core_execution_lifecycle.leave()
+  if closing {
+    // The deferred terminal close in `leave` released every registered
+    // graph, including this instance. Do not report success for it.
+    raise Cancelled
+  }
+  instance
 }
