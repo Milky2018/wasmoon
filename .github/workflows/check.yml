@@ -13,7 +13,7 @@ concurrency:
 
 env:
   COMPONENT_WASM_TOOLS_VERSION: "1.254.0"
-  MOONBIT_TOOLCHAIN_VERSION: "0.10.5+5e7afb0c0"
+  MOONBIT_TOOLCHAIN_VERSION: "nightly"
 
 jobs:
   native-platform:

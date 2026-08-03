@@ -61,7 +61,7 @@ pub fn CHeap::get_ptr(self : CHeap) -> Int64 {
 /// Return an owner-bound action that reclaims later allocations unless they
 /// remain reachable when the action runs. Retained object-table indices are
 /// never reused.
-pub fn CHeap::make_instantiation_abort(
+pub fn CHeap::make_allocation_rollback(
   self : CHeap,
   roots : () -> Array[@types.Value],
 ) -> () -> Unit {

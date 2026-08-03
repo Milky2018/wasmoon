@@ -110,7 +110,7 @@ pub fn init_jit_globals_from_store(
   }
   for i in 0..<num_globals {
     let global_addr = instance.global_addrs[i]
-    let global_inst = store.get_global(global_addr) catch { _ => return 0L }
+    let global_inst = store.globals[global_addr]
     let value = global_inst.get()
     let raw_value = match value {
       I32(n) => @types.ToInt64::to_int64_bits(n)
@@ -197,15 +197,14 @@ pub fn collect_registered_funcref_entries(
     if func_ptr == 0L {
       continue
     }
-    let raw_type_idx = store.get_func_type_idx(store_addr)
-    if raw_type_idx < 0 {
+    if store_addr < 0 || store_addr >= store.func_type_indices.length() {
       continue
     }
     let canonical_type_idx = store.get_func_canonical_type_idx(store_addr)
     let type_idx = if canonical_type_idx >= 0 {
       canonical_type_idx
     } else {
-      raw_type_idx
+      store.func_type_indices[store_addr]
     }
     entries.push((func_ptr, type_idx))
   }
@@ -309,7 +308,7 @@ pub fn sync_jit_globals_to_store(
   }
   // Read each global from JIT memory and write to store
   for i, global_addr in jit_ctx.global_addrs {
-    let global_inst = store.get_global(global_addr) catch { _ => continue }
+    let global_inst = store.globals[global_addr]
     // Only sync mutable globals (immutable globals don't change)
     if global_inst.get_type().mutable {
       // Read raw value from JIT memory (16 bytes per global: 8 value + 8 tag)
@@ -475,7 +474,10 @@ pub fn sync_store_globals_to_jit(
     return
   }
   for i, global_addr in jit_ctx.global_addrs {
-    let global_inst = store.get_global(global_addr) catch { _ => continue }
+    if global_addr < 0 || global_addr >= store.globals.length() {
+      continue
+    }
+    let global_inst = store.globals[global_addr]
     let (low, high) = encode_global_value_for_jit(
       global_inst.get(),
       jit_ctx.jit_module,
@@ -1073,8 +1075,10 @@ pub fn sync_table_to_jit(
             }
           None => ()
         }
-        if resolved_type_idx < 0 {
-          let raw_type_idx = store.get_func_type_idx(store_addr)
+        if resolved_type_idx < 0 &&
+          store_addr >= 0 &&
+          store_addr < store.func_type_indices.length() {
+          let raw_type_idx = store.func_type_indices[store_addr]
           resolved_type_idx = if use_subtype_indirect_check {
             raw_type_idx
           } else {

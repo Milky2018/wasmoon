@@ -3,19 +3,18 @@
 struct Linker {
   store : Store
   modules : Array[(String, ModuleInstance)] // (name, instance) pairs
-  mut instantiation : LinkerInstantiation?
 }
 
 ///|
 /// Create a new linker with a fresh store
 pub fn Linker::Linker() -> Linker {
-  { store: Store(), modules: [], instantiation: None }
+  { store: Store(), modules: [] }
 }
 
 ///|
 /// Create a new linker with an existing store
 pub fn Linker::with_store(store : Store) -> Linker {
-  { store, modules: [], instantiation: None }
+  { store, modules: [] }
 }
 
 ///|
@@ -25,13 +24,45 @@ pub fn Linker::get_store(self : Linker) -> Store {
 }
 
 ///|
+/// Register rollback for core allocations and names added by an instantiation.
+pub fn Linker::register_rollback(
+  self : Linker,
+  registrar : RollbackRegistrar,
+) -> Unit {
+  self.store.register_rollback(registrar)
+}
+
+///|
+fn Linker::host_module(self : Linker, name : String) -> (ModuleInstance, Int) {
+  let modules = self.modules.length()
+  for entry in self.modules {
+    let (module_name, instance) = entry
+    if module_name == name {
+      return (instance, modules)
+    }
+  }
+  let instance = ModuleInstance()
+  self.modules.push((name, instance))
+  (instance, modules)
+}
+
+///|
+fn Linker::rollback_module_change(
+  self : Linker,
+  modules : Int,
+  rollback : () -> Unit,
+) -> Unit {
+  self.store.on_instantiation_rollback(fn() {
+    rollback()
+    self.modules.truncate(modules)
+  })
+}
+
+///|
 /// Release this linker's store after all module execution has ended.
 ///
 /// This operation is idempotent and terminal.
 pub fn Linker::close(self : Linker) -> Unit {
-  if self.instantiation is Some(frame) {
-    frame.discard()
-  }
   self.modules.clear()
   self.store.close()
 }
@@ -45,18 +76,17 @@ pub fn Linker::register(
   instance : ModuleInstance,
 ) -> Unit raise RuntimeError {
   self.store.ensure_open()
-  match self.instantiation {
-    Some(frame) => frame.modules.push((name, instance))
-    None => self.modules.push((name, instance))
-  }
+  let modules = self.modules.length()
+  self.store.on_instantiation_rollback(fn() { self.modules.truncate(modules) })
+  self.modules.push((name, instance))
 }
 
 ///|
-fn add_module_imports(
-  imports : Imports,
-  modules : Array[(String, ModuleInstance)],
-) -> Unit {
-  for entry in modules {
+/// Build Imports from all registered modules
+/// This allows a new module to import from any previously registered module
+pub fn Linker::build_imports(self : Linker) -> Imports {
+  let imports = Imports::Imports()
+  for entry in self.modules {
     let (mod_name, instance) = entry
     for exp in instance.exports {
       match exp.desc {
@@ -83,43 +113,19 @@ fn add_module_imports(
       }
     }
   }
-}
-
-///|
-/// Build Imports from all registered modules
-/// This allows a new module to import from any previously registered module
-pub fn Linker::build_imports(self : Linker) -> Imports {
-  let imports = Imports::Imports()
-  add_module_imports(imports, self.modules)
-  if self.instantiation is Some(frame) {
-    add_module_imports(imports, frame.modules)
-  }
   imports
 }
 
 ///|
-fn find_module(
-  modules : Array[(String, ModuleInstance)],
-  name : String,
-) -> ModuleInstance? {
-  for entry in modules {
+/// Get a registered module instance by name
+pub fn Linker::get_module(self : Linker, name : String) -> ModuleInstance? {
+  for entry in self.modules {
     let (mod_name, instance) = entry
     if mod_name == name {
       return Some(instance)
     }
   }
   None
-}
-
-///|
-/// Get a registered module instance by name
-pub fn Linker::get_module(self : Linker, name : String) -> ModuleInstance? {
-  if self.instantiation is Some(frame) {
-    if find_module(frame.modules, name) is Some(instance) {
-      return Some(instance)
-    }
-  }
-  find_module(self.modules, name)
 }
 
 ///|
@@ -134,49 +140,13 @@ pub fn Linker::add_host_func(
 ) -> Unit raise RuntimeError {
   self.store.ensure_open()
   let func_addr = self.store.alloc_host_func(func, func_type~)
-  // Create a minimal instance to hold this function
-  // We need to add it to an existing module or create a synthetic one
-  // For simplicity, we add directly to the imports when building
-  // by storing it in a separate structure
-  // Actually, we need to store it somewhere accessible
-  // Let's add a host_funcs field to store these
-  // For now, we'll use a workaround by creating a synthetic module entry
-
-  // Find or create a module entry for this mod_name
-  fn find_or_create_host_module(
-    modules : Array[(String, ModuleInstance)],
-    target_name : String,
-  ) -> Int {
-    for i, entry in modules {
-      let (name, _) = entry
-      if name == target_name {
-        return i
-      }
-    }
-    // Create new synthetic module
-    let instance : ModuleInstance = {
-      types: [],
-      type_rec_groups: [],
-      canonical_type_indices: [],
-      store_idx: -1,
-      func_addrs: [],
-      func_type_indices: [],
-      table_addrs: [],
-      mem_addrs: [],
-      global_addrs: [],
-      tag_addrs: [],
-      exports: [],
-      elem_segments: [],
-      data_segments: [],
-      dropped_elems: [],
-      dropped_datas: [],
-    }
-    modules.push((target_name, instance))
-    modules.length() - 1
-  }
-
-  let idx = find_or_create_host_module(self.modules, mod_name)
-  let (_, instance) = self.modules[idx]
+  let (instance, modules) = self.host_module(mod_name)
+  let func_addrs = instance.func_addrs.length()
+  let exports = instance.exports.length()
+  self.rollback_module_change(modules, fn() {
+    instance.func_addrs.truncate(func_addrs)
+    instance.exports.truncate(exports)
+  })
   instance.func_addrs.push(func_addr)
   instance.exports.push({ name, desc: Func(instance.func_addrs.length() - 1) })
 }
@@ -192,41 +162,13 @@ pub fn Linker::add_host_func_with_caller(
 ) -> Unit raise RuntimeError {
   self.store.ensure_open()
   let func_addr = self.store.alloc_host_func_with_caller(func, func_type~)
-
-  // Find or create a synthetic module entry for this mod_name (same as add_host_func).
-  fn find_or_create_host_module(
-    modules : Array[(String, ModuleInstance)],
-    target_name : String,
-  ) -> Int {
-    for i, entry in modules {
-      let (name, _) = entry
-      if name == target_name {
-        return i
-      }
-    }
-    let instance : ModuleInstance = {
-      types: [],
-      type_rec_groups: [],
-      canonical_type_indices: [],
-      store_idx: -1,
-      func_addrs: [],
-      func_type_indices: [],
-      table_addrs: [],
-      mem_addrs: [],
-      global_addrs: [],
-      tag_addrs: [],
-      exports: [],
-      elem_segments: [],
-      data_segments: [],
-      dropped_elems: [],
-      dropped_datas: [],
-    }
-    modules.push((target_name, instance))
-    modules.length() - 1
-  }
-
-  let idx = find_or_create_host_module(self.modules, mod_name)
-  let (_, instance) = self.modules[idx]
+  let (instance, modules) = self.host_module(mod_name)
+  let func_addrs = instance.func_addrs.length()
+  let exports = instance.exports.length()
+  self.rollback_module_change(modules, fn() {
+    instance.func_addrs.truncate(func_addrs)
+    instance.exports.truncate(exports)
+  })
   instance.func_addrs.push(func_addr)
   instance.exports.push({ name, desc: Func(instance.func_addrs.length() - 1) })
 }
@@ -241,39 +183,13 @@ pub fn Linker::add_memory(
 ) -> Unit raise RuntimeError {
   self.store.ensure_open()
   let mem_addr = self.store.alloc_mem(mem)
-  fn find_or_create_host_module(
-    modules : Array[(String, ModuleInstance)],
-    target_name : String,
-  ) -> Int {
-    for i, entry in modules {
-      let (n, _) = entry
-      if n == target_name {
-        return i
-      }
-    }
-    let instance : ModuleInstance = {
-      types: [],
-      type_rec_groups: [],
-      canonical_type_indices: [],
-      store_idx: -1,
-      func_addrs: [],
-      func_type_indices: [],
-      table_addrs: [],
-      mem_addrs: [],
-      global_addrs: [],
-      tag_addrs: [],
-      exports: [],
-      elem_segments: [],
-      data_segments: [],
-      dropped_elems: [],
-      dropped_datas: [],
-    }
-    modules.push((target_name, instance))
-    modules.length() - 1
-  }
-
-  let idx = find_or_create_host_module(self.modules, mod_name)
-  let (_, instance) = self.modules[idx]
+  let (instance, modules) = self.host_module(mod_name)
+  let mem_addrs = instance.mem_addrs.length()
+  let exports = instance.exports.length()
+  self.rollback_module_change(modules, fn() {
+    instance.mem_addrs.truncate(mem_addrs)
+    instance.exports.truncate(exports)
+  })
   instance.mem_addrs.push(mem_addr)
   instance.exports.push({ name, desc: Memory(instance.mem_addrs.length() - 1) })
 }
@@ -288,39 +204,13 @@ pub fn Linker::add_table(
 ) -> Unit raise RuntimeError {
   self.store.ensure_open()
   let table_addr = self.store.alloc_table(table)
-  fn find_or_create_host_module(
-    modules : Array[(String, ModuleInstance)],
-    target_name : String,
-  ) -> Int {
-    for i, entry in modules {
-      let (n, _) = entry
-      if n == target_name {
-        return i
-      }
-    }
-    let instance : ModuleInstance = {
-      types: [],
-      type_rec_groups: [],
-      canonical_type_indices: [],
-      store_idx: -1,
-      func_addrs: [],
-      func_type_indices: [],
-      table_addrs: [],
-      mem_addrs: [],
-      global_addrs: [],
-      tag_addrs: [],
-      exports: [],
-      elem_segments: [],
-      data_segments: [],
-      dropped_elems: [],
-      dropped_datas: [],
-    }
-    modules.push((target_name, instance))
-    modules.length() - 1
-  }
-
-  let idx = find_or_create_host_module(self.modules, mod_name)
-  let (_, instance) = self.modules[idx]
+  let (instance, modules) = self.host_module(mod_name)
+  let table_addrs = instance.table_addrs.length()
+  let exports = instance.exports.length()
+  self.rollback_module_change(modules, fn() {
+    instance.table_addrs.truncate(table_addrs)
+    instance.exports.truncate(exports)
+  })
   instance.table_addrs.push(table_addr)
   instance.exports.push({ name, desc: Table(instance.table_addrs.length() - 1) })
 }
@@ -335,39 +225,13 @@ pub fn Linker::add_global(
 ) -> Unit raise RuntimeError {
   self.store.ensure_open()
   let global_addr = self.store.alloc_global(global)
-  fn find_or_create_host_module(
-    modules : Array[(String, ModuleInstance)],
-    target_name : String,
-  ) -> Int {
-    for i, entry in modules {
-      let (n, _) = entry
-      if n == target_name {
-        return i
-      }
-    }
-    let instance : ModuleInstance = {
-      types: [],
-      type_rec_groups: [],
-      canonical_type_indices: [],
-      store_idx: -1,
-      func_addrs: [],
-      func_type_indices: [],
-      table_addrs: [],
-      mem_addrs: [],
-      global_addrs: [],
-      tag_addrs: [],
-      exports: [],
-      elem_segments: [],
-      data_segments: [],
-      dropped_elems: [],
-      dropped_datas: [],
-    }
-    modules.push((target_name, instance))
-    modules.length() - 1
-  }
-
-  let idx = find_or_create_host_module(self.modules, mod_name)
-  let (_, instance) = self.modules[idx]
+  let (instance, modules) = self.host_module(mod_name)
+  let global_addrs = instance.global_addrs.length()
+  let exports = instance.exports.length()
+  self.rollback_module_change(modules, fn() {
+    instance.global_addrs.truncate(global_addrs)
+    instance.exports.truncate(exports)
+  })
   instance.global_addrs.push(global_addr)
   instance.exports.push({
     name,

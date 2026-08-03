@@ -37,24 +37,6 @@ fn ComponentJITContext::close(self : ComponentJITContext) -> Unit {
 }
 
 ///|
-fn finish_pending_contexts(
-  contexts : Map[Int, ComponentJITContext],
-  pending_contexts : Ref[Map[Int, ComponentJITContext]?],
-  commit : Bool,
-) -> Unit {
-  if pending_contexts.val is Some(pending) {
-    for instance_idx, context in pending {
-      if commit {
-        contexts[instance_idx] = context
-      } else {
-        context.close()
-      }
-    }
-  }
-  pending_contexts.val = None
-}
-
-///|
 fn component_jit_error(
   error : @wast.JITCoreCallError,
 ) -> @runtime_impl.ComponentRuntimeError {
@@ -116,7 +98,7 @@ fn native_component_session_with_contexts(
   on_execution : (NativeComponentExecutionEvent) -> Unit,
 ) -> (@runtime_impl.CoreExecutionEngine, Map[Int, ComponentJITContext]) {
   let contexts : Map[Int, ComponentJITContext] = Map([])
-  let pending_contexts : Ref[Map[Int, ComponentJITContext]?] = Ref(None)
+  let rollback_registrar : Ref[@runtime.RollbackRegistrar?] = Ref(None)
   let interpreter = @runtime_impl.interpreter_core_execution_engine()
   let target = try @wasmoon_jit.host_native_target() catch {
     _ => None
@@ -151,15 +133,16 @@ fn native_component_session_with_contexts(
           }
         },
       )
-      let context : ComponentJITContext = {
-        core,
-        funcrefs,
-        pending_suspension,
-        suspension_enabled,
-      }
-      match pending_contexts.val {
-        Some(pending) => pending[instance.store_idx] = context
-        None => contexts[instance.store_idx] = context
+      let instance_idx = instance.store_idx
+      let context = { core, funcrefs, pending_suspension, suspension_enabled }
+      contexts[instance_idx] = context
+      if rollback_registrar.val is Some(registrar) {
+        registrar.on_rollback(fn() {
+          if contexts.get(instance_idx) is Some(active_context) {
+            active_context.close()
+            contexts.remove(instance_idx)
+          }
+        })
       }
     },
     fn(
@@ -176,15 +159,7 @@ fn native_component_session_with_contexts(
         on_execution(ExplicitInterpreter)
         return outcome
       }
-      let pending_context = match pending_contexts.val {
-        Some(pending) => pending.get(instance.store_idx)
-        None => None
-      }
-      let context = match pending_context {
-        Some(context) => Some(context)
-        None => contexts.get(instance.store_idx)
-      }
-      guard context is Some(context) else {
+      guard contexts.get(instance.store_idx) is Some(context) else {
         raise NativeCompilationFailed(
           "native context is missing for core instance \{instance.store_idx}",
         )
@@ -216,15 +191,11 @@ fn native_component_session_with_contexts(
       }
     },
     prepare_store=fn(store) { try! store.enable_c_heap() },
-    begin_instantiation=fn() {
-      pending_contexts.val = Some(Map([]))
-      CoreEngineInstantiation(
-        fn() { finish_pending_contexts(contexts, pending_contexts, true) },
-        fn() { finish_pending_contexts(contexts, pending_contexts, false) },
-      )
+    register_rollback=fn(registrar) {
+      rollback_registrar.val = Some(registrar)
+      registrar.on_finish(fn() { rollback_registrar.val = None })
     },
     close=fn() {
-      finish_pending_contexts(contexts, pending_contexts, false)
       for _, context in contexts {
         context.close()
       }

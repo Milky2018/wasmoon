@@ -68,4 +68,3 @@ pub(all) enum WasiNetworkPolicy {
 // Type aliases
 
 // Traits
-

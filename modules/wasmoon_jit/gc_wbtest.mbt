@@ -504,17 +504,17 @@ test "gc: copied caller-root scopes nest and pop" {
 }
 
 ///|
-test "GC instantiation abort preserves an escaped object address" {
+test "gc rollback: rooted transaction object is not reclaimed or reused" {
   let heap = CHeap::CHeap(capacity=1024)
   let escaped_root = Ref(-1)
-  let abort = heap.make_instantiation_abort(fn() {
+  let rollback = heap.make_allocation_rollback(fn() {
     [StructRef(escaped_root.val)]
   })
   let escaped = heap.alloc_struct(0, [I32(7)])
   escaped_root.val = escaped
   let garbage = heap.alloc_struct(0, [I32(8)])
 
-  abort()
+  rollback()
   debug_inspect(
     (
       escaped,

@@ -9,19 +9,22 @@ test "Store close releases owned state and is idempotent" {
     []
   })
   |> ignore
-  let before = store.allocation_stats()
   debug_inspect(
-    (before.funcs, before.mems, store.c_heap is Some(_), store.closed.val),
+    (
+      store.funcs.length(),
+      store.mems.length(),
+      store.c_heap is Some(_),
+      store.closed.val,
+    ),
     content="(1, 2, true, false)",
   )
   store.close()
   store.close()
-  let after = store.allocation_stats()
   debug_inspect(
     (
-      after.funcs,
-      after.mems,
-      after.instances,
+      store.funcs.length(),
+      store.mems.length(),
+      store.instances.length(),
       store.c_heap is Some(_),
       store.closed.val,
     ),

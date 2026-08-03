@@ -101,38 +101,6 @@ pub(all) enum CoreExecutionOutcome {
 } derive(Debug)
 
 ///|
-/// One engine-owned frame of unpublished native registrations.
-struct CoreEngineInstantiation {
-  commit_fn : () -> Unit
-  discard_fn : () -> Unit
-  mut active : Bool
-}
-
-///|
-pub fn CoreEngineInstantiation::CoreEngineInstantiation(
-  commit : () -> Unit,
-  discard : () -> Unit,
-) -> CoreEngineInstantiation {
-  { commit_fn: commit, discard_fn: discard, active: true }
-}
-
-///|
-fn CoreEngineInstantiation::commit(self : CoreEngineInstantiation) -> Unit {
-  if self.active {
-    self.active = false
-    (self.commit_fn)()
-  }
-}
-
-///|
-fn CoreEngineInstantiation::discard(self : CoreEngineInstantiation) -> Unit {
-  if self.active {
-    self.active = false
-    (self.discard_fn)()
-  }
-}
-
-///|
 /// Component-owned seam for core Wasm execution.
 ///
 /// `register_instance` is called once after interpreter instantiation has
@@ -142,7 +110,7 @@ fn CoreEngineInstantiation::discard(self : CoreEngineInstantiation) -> Unit {
 struct CoreExecutionEngine {
   prepare_store_fn : (@runtime.Store) -> Unit
   close_fn : () -> Unit
-  begin_instantiation_fn : () -> CoreEngineInstantiation
+  register_rollback_fn : (@runtime.RollbackRegistrar) -> Unit
   register_instance_fn : (
     @runtime.Store,
     @types.Module,
@@ -352,15 +320,15 @@ pub fn CoreExecutionEngine::CoreExecutionEngine(
     CoreExecutionRequest,
   ) -> CoreExecutionOutcome raise ComponentRuntimeError,
   prepare_store? : (@runtime.Store) -> Unit = fn(_store) { () },
-  begin_instantiation? : () -> CoreEngineInstantiation = fn() {
-    CoreEngineInstantiation(fn() { () }, fn() { () })
+  register_rollback? : (@runtime.RollbackRegistrar) -> Unit = fn(_registrar) {
+    ()
   },
   close? : () -> Unit = fn() { () },
 ) -> CoreExecutionEngine {
   {
     prepare_store_fn: prepare_store,
     close_fn: close,
-    begin_instantiation_fn: begin_instantiation,
+    register_rollback_fn: register_rollback,
     register_instance_fn: register_instance,
     invoke_fn: invoke,
   }
@@ -395,7 +363,7 @@ fn CoreExecutionEngine::with_lifecycle(
       lifecycle.finish_outcome(outcome)
     },
     prepare_store=fn(store) { self.prepare_store(store) },
-    begin_instantiation=fn() { self.begin_instantiation() },
+    register_rollback=fn(registrar) { self.register_rollback(registrar) },
     close=fn() { self.close() },
   )
 }
@@ -418,10 +386,11 @@ pub fn CoreExecutionEngine::prepare_store(
 }
 
 ///|
-fn CoreExecutionEngine::begin_instantiation(
+pub fn CoreExecutionEngine::register_rollback(
   self : CoreExecutionEngine,
-) -> CoreEngineInstantiation {
-  (self.begin_instantiation_fn)()
+  registrar : @runtime.RollbackRegistrar,
+) -> Unit {
+  (self.register_rollback_fn)(registrar)
 }
 
 ///|

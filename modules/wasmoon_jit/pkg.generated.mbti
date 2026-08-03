@@ -348,7 +348,7 @@ pub fn CHeap::get_usage_ratio(Self) -> Double
 pub fn CHeap::is_array(Self, Int) -> Bool
 pub fn CHeap::is_struct(Self, Int) -> Bool
 pub fn CHeap::is_valid(Self, Int) -> Bool
-pub fn CHeap::make_instantiation_abort(Self, () -> Array[@types.Value]) -> () -> Unit
+pub fn CHeap::make_allocation_rollback(Self, () -> Array[@types.Value]) -> () -> Unit
 pub fn CHeap::should_collect(Self, threshold? : Double) -> Bool
 pub fn CHeap::struct_get(Self, Int, Int, @types.ValueType) -> @types.Value
 pub fn CHeap::struct_set(Self, Int, Int, @types.Value) -> Unit
@@ -828,4 +828,3 @@ pub(all) struct WasmTrapFrame {
 // Type aliases
 
 // Traits
-

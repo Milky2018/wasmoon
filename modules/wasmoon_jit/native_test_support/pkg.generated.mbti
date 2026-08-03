@@ -37,4 +37,3 @@ pub fn CallbackCapture::touch(Self) -> Unit
 // Type aliases
 
 // Traits
-
