@@ -512,14 +512,14 @@ class GateManifestTests(unittest.TestCase):
         )
         expected_targets = {
             "modules/wasmoon_jit/native_continuation_test.mbt",
-            "modules/wasmoon/testsuite/jit_resumable_lifecycle_test.mbt",
+            "modules/wasmoon/sanitizer_testsuite/jit_resumable_lifecycle_test.mbt",
             "modules/wasmoon_jit/callback_ownership_test.mbt",
             "modules/wasmoon/async_native/reactor_wbtest.mbt",
             "modules/wasmoon/wasi_component/async_preview3_wbtest.mbt",
             "modules/wasmoon/component/runtime_impl/runtime_cleanup_wbtest.mbt",
             "modules/wasmoon/component/runtime_impl/entry_state_wbtest.mbt",
             "modules/wasmoon/cmd/wasmoon/commands/component_error_wbtest.mbt",
-            "modules/wasmoon/testsuite/component_runtime_facade_test.mbt",
+            "modules/wasmoon/sanitizer_testsuite/component_runtime_facade_test.mbt",
         }
         self.assertEqual(len(sanitizer_targets), len(set(sanitizer_targets)))
         self.assertEqual(set(sanitizer_targets), expected_targets)
@@ -537,10 +537,11 @@ class GateManifestTests(unittest.TestCase):
             1,
         )
         self.assertEqual(workflow.count('export MOON_AR="$(command -v ar)"'), 1)
-        # The sanitizer gate's budget is measured headroom: the step needs
-        # roughly 55 minutes to reach its last covered file (ISS-368 tracks
-        # reducing the underlying compile cost and lowering this again).
-        self.assertEqual(workflow.count("timeout-minutes: 75"), 1)
+        # The sanitizer gate's budget is measured headroom. ISS-368 removed
+        # the 17k-line wasmoon/testsuite package from the gate by moving its
+        # two covered blackbox tests into wasmoon/sanitizer_testsuite, and
+        # lowered the budget from 75 to 60 minutes.
+        self.assertEqual(workflow.count("timeout-minutes: 60"), 1)
         self.assertEqual(
             workflow.count(
                 "python3 scripts/find_gc_bugs.py --dir spec/gc --timeout 30"
