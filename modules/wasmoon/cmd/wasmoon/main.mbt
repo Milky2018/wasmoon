@@ -97,9 +97,10 @@ fn main {
           ),
         },
       ),
-      "disasm": clap_subcommand(help="Disassemble WASM file to text format", args={
-        "file": @clap.Arg::positional(help="Path to WASM file"),
-      }),
+      "disasm": clap_subcommand(
+        help="Disassemble a WASM or WAT file to text format",
+        args={ "file": @clap.Arg::positional(help="Path to WASM or WAT file") },
+      ),
       "component": clap_subcommand(
         help="Parse a WebAssembly component and print a summary",
         args={
@@ -159,9 +160,6 @@ fn main {
           ),
         },
       ),
-      "wat": clap_subcommand(help="Parse WAT file and display as text", args={
-        "file": @clap.Arg::positional(help="Path to WAT file"),
-      }),
       "explore": clap_subcommand(help="Explore WASM compilation process", args={
         "file": @clap.Arg::positional(help="Path to WASM or WAT file"),
         "func": @clap.Arg::named(
@@ -403,14 +401,6 @@ fn main {
                 if status != 0 {
                   @sys.exit(status)
                 }
-              } else {
-                println("Error: missing file argument")
-              }
-            }
-            "wat" => {
-              let positional = sub.positional_args
-              if positional.length() > 0 {
-                @commands.run_wat(positional[0])
               } else {
                 println("Error: missing file argument")
               }

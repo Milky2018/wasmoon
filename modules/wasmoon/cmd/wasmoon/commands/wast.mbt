@@ -615,3 +615,14 @@ fn try_compile_jit(
 ) -> Result[@wast.JITModuleContext, String] {
   try_compile_jit_with_suspension(mod_, instance, store, fn(_error) { false })
 }
+
+///|
+/// Run testsuite with a WAST file
+pub fn run_testsuite(
+  wast_path : String,
+  use_jit : Bool,
+  show_success : Bool,
+) -> Unit {
+  // Delegate to run_wast - testsuite now uses WAST format
+  run_wast(wast_path, use_jit, show_success)
+}
