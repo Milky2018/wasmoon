@@ -134,6 +134,44 @@ fn canon_lower_entry(func_idx : Int) -> Array[Byte] {
 }
 
 ///|
+/// Parse and validate a WAT component, returning instantiation evidence.
+fn validated_wat(wat : String) -> @component_model.ValidatedComponent raise {
+  @component_model.validate_component_for_instantiation_with_config(
+    @component.parse_component(@component_text.parse_component_wat(wat)),
+    ComponentValidationConfig(false),
+  )
+}
+
+///|
+/// The canonical provider fixture: exports "f" returning 7 as u32.
+fn validated_provider() -> @component_model.ValidatedComponent raise {
+  validated_wat(
+    (
+      #|(component
+      #|  (core module $m (func (export "f") (result i32) (i32.const 7)))
+      #|  (core instance $i (instantiate $m))
+      #|  (func (export "f") (result u32) (canon lift (core func $i "f"))))
+      #|
+    ),
+  )
+}
+
+///|
+/// Classify a lifecycle operation's outcome into the stable buckets the
+/// lifecycle regressions assert on.
+fn[T] lifecycle_outcome(
+  run : () -> T raise @runtime_impl.ComponentRuntimeError,
+) -> String {
+  try run() catch {
+    Cancelled => "cancelled"
+    ReentrantInstantiation => "reentrant"
+    _ => "failed"
+  } noraise {
+    _ => "completed"
+  }
+}
+
+///|
 test "component runtime: host import canonical roundtrip" {
   let type_payload : Array[Byte] = [0x01, 0x40, 0x01, 0x00, 0x7a, 0x00, 0x7a]
   let import_payload = vec_payload([import_entry_func([], 0)])
@@ -642,6 +680,8 @@ test "linker close releases nested-component instance graphs" {
 /// the raw component after validation cannot change what the runtime
 /// instantiates.
 test "component runtime: evidence survives raw component mutation" {
+  // This test needs the raw parsed component and its bytes, so it does not
+  // use `validated_provider`.
   let bytes = @component_text.parse_component_wat(
     (
       #|(component
@@ -680,11 +720,7 @@ test "component runtime: evidence survives raw component mutation" {
 
 ///|
 test "component runtime: rollback hook callback close rolls back once" {
-  let bytes = @component_text.parse_component_wat("(component)")
-  let validated = @component_model.validate_component_for_instantiation_with_config(
-    @component.parse_component(bytes),
-    ComponentValidationConfig(false),
-  )
+  let validated = validated_wat("(component)")
   let linker_slot : Ref[@runtime_impl.ComponentLinker?] = Ref(None)
   let rollback_hooks = Ref(0)
   let rollbacks = Ref(0)
@@ -701,14 +737,9 @@ test "component runtime: rollback hook callback close rolls back once" {
   )
   let linker = @runtime_impl.ComponentLinker::with_core_execution_engine(engine)
   linker_slot.val = Some(linker)
-  let outcome = try
+  let outcome = lifecycle_outcome(() => {
     linker.instantiate("closing-at-rollback-hook", validated)
-  catch {
-    Cancelled => "cancelled"
-    error => "unexpected error: \{error}"
-  } noraise {
-    _ => "instantiated"
-  }
+  })
   debug_inspect(outcome, content="\"cancelled\"")
   debug_inspect(rollback_hooks.val, content="1")
   debug_inspect(rollbacks.val, content="1")
@@ -726,20 +757,7 @@ test "component runtime: rollback hook callback close rolls back once" {
 /// the instantiation surfaces `Cancelled` instead of registering an instance
 /// graph that nothing would ever release.
 test "component runtime: close during engine registration cancels instantiation" {
-  let bytes = @component_text.parse_component_wat(
-    (
-      #|(component
-      #|  (core module $m (func (export "f") (result i32) (i32.const 7)))
-      #|  (core instance $i (instantiate $m))
-      #|  (func (export "f") (result u32) (canon lift (core func $i "f"))))
-      #|
-    ),
-  )
-  let component = @component.parse_component(bytes)
-  let validated = @component_model.validate_component_for_instantiation_with_config(
-    component,
-    ComponentValidationConfig(false),
-  )
+  let validated = validated_provider()
   let linker_slot : Ref[@runtime_impl.ComponentLinker?] = Ref(None)
   let registrations = Ref(0)
   let rollbacks = Ref(0)
@@ -749,15 +767,9 @@ test "component runtime: close during engine registration cancels instantiation"
       registrations.val = registrations.val + 1
       if linker_slot.val is Some(linker) {
         linker.close()
-        reentry.val = try
+        reentry.val = lifecycle_outcome(() => {
           linker.instantiate("closing-reentrant", validated)
-        catch {
-          Cancelled => "cancelled"
-          ReentrantInstantiation => "reentrant"
-          error => "unexpected error: \{error}"
-        } noraise {
-          _ => "instantiated"
-        }
+        })
       }
     },
     fn(
@@ -775,12 +787,7 @@ test "component runtime: close during engine registration cancels instantiation"
   )
   let linker = @runtime_impl.ComponentLinker::with_core_execution_engine(engine)
   linker_slot.val = Some(linker)
-  let outcome = try linker.instantiate("closing", validated) catch {
-    Cancelled => "cancelled"
-    error => "unexpected error: \{error}"
-  } noraise {
-    _ => "instantiated"
-  }
+  let outcome = lifecycle_outcome(() => linker.instantiate("closing", validated))
   debug_inspect(outcome, content="\"cancelled\"")
   debug_inspect(registrations.val, content="1")
   debug_inspect(rollbacks.val, content="1")
@@ -793,31 +800,16 @@ test "component runtime: close during engine registration cancels instantiation"
   )
   // The linker is terminally closed: later instantiations are refused at
   // entry, before any section runs.
-  let after_close = try linker.instantiate("after-close", validated) catch {
-    Cancelled => "cancelled"
-    error => "unexpected error: \{error}"
-  } noraise {
-    _ => "instantiated"
-  }
+  let after_close = lifecycle_outcome(() => {
+    linker.instantiate("after-close", validated)
+  })
   debug_inspect(after_close, content="\"cancelled\"")
   debug_inspect(registrations.val, content="1")
 }
 
 ///|
 test "component runtime: same-Linker reentrant instantiation is rejected" {
-  let bytes = @component_text.parse_component_wat(
-    (
-      #|(component
-      #|  (core module $m (func (export "f") (result i32) (i32.const 7)))
-      #|  (core instance $i (instantiate $m))
-      #|  (func (export "f") (result u32) (canon lift (core func $i "f"))))
-      #|
-    ),
-  )
-  let validated = @component_model.validate_component_for_instantiation_with_config(
-    @component.parse_component(bytes),
-    ComponentValidationConfig(false),
-  )
+  let validated = validated_provider()
   let linker_slot : Ref[@runtime_impl.ComponentLinker?] = Ref(None)
   let did_reenter = Ref(false)
   let reentry = Ref("not attempted")
@@ -826,14 +818,9 @@ test "component runtime: same-Linker reentrant instantiation is rejected" {
       if !did_reenter.val {
         did_reenter.val = true
         if linker_slot.val is Some(linker) {
-          reentry.val = try
+          reentry.val = lifecycle_outcome(() => {
             linker.instantiate("reentrant-inner", validated)
-          catch {
-            ReentrantInstantiation => "rejected"
-            error => "unexpected: \{error}"
-          } noraise {
-            _ => "committed"
-          }
+          })
         }
         raise NativeCompilationFailed("injected outer registration failure")
       }
@@ -848,7 +835,7 @@ test "component runtime: same-Linker reentrant instantiation is rejected" {
   } noraise {
     _ => fail("expected outer instantiation to fail")
   }
-  debug_inspect(reentry.val, content="\"rejected\"")
+  debug_inspect(reentry.val, content="\"reentrant\"")
   debug_inspect(linker.get_component("reentrant-inner") is None, content="true")
   linker.close()
 }
@@ -858,40 +845,22 @@ test "component runtime: same-Linker reentrant instantiation is rejected" {
 /// for a component with no core sections, which previously committed an
 /// instance graph into the closed linker.
 test "component runtime: closed linker refuses instantiation at entry" {
-  let bytes = @component_text.parse_component_wat("(component)")
-  let component = @component.parse_component(bytes)
-  let validated = @component_model.validate_component_for_instantiation_with_config(
-    component,
-    ComponentValidationConfig(false),
-  )
+  let validated = validated_wat("(component)")
   let linker = @runtime_impl.ComponentLinker::ComponentLinker()
   linker.close()
-  let outcome = try linker.instantiate("late", validated) catch {
-    Cancelled => "cancelled"
-    error => "unexpected error: \{error}"
-  } noraise {
-    _ => "instantiated"
-  }
+  let outcome = lifecycle_outcome(() => linker.instantiate("late", validated))
   debug_inspect(outcome, content="\"cancelled\"")
   debug_inspect(linker.get_component("late") is None, content="true")
   // The import table is equally terminal: `finish_close` released it, so
   // an extern added afterwards would be retained until the linker dies.
-  let add_outcome = try linker.add_import("late-value", Value(U32(1))) catch {
-    Cancelled => "cancelled"
-    error => "unexpected error: \{error}"
-  } noraise {
-    _ => "added"
-  }
+  let add_outcome = lifecycle_outcome(() => {
+    linker.add_import("late-value", Value(U32(1)))
+  })
   debug_inspect(add_outcome, content="\"cancelled\"")
   debug_inspect(linker.get_import("late-value") is None, content="true")
   // The host runtime slot is terminal too: `finish_close` dropped it, and a
   // runtime installed afterwards would never be released.
-  let runtime_outcome = try linker.host_runtime_state() catch {
-    Cancelled => "cancelled"
-    error => "unexpected error: \{error}"
-  } noraise {
-    _ => "installed"
-  }
+  let runtime_outcome = lifecycle_outcome(() => linker.host_runtime_state())
   debug_inspect(runtime_outcome, content="\"cancelled\"")
 }
 
@@ -904,20 +873,7 @@ test "component runtime: closed linker refuses instantiation at entry" {
 /// linker's own instantiations registered; imports are dropped by clearing
 /// the import table, never by touching their state.
 test "component runtime: close releases only owned instances" {
-  let bytes = @component_text.parse_component_wat(
-    (
-      #|(component
-      #|  (core module $m (func (export "f") (result i32) (i32.const 7)))
-      #|  (core instance $i (instantiate $m))
-      #|  (func (export "f") (result u32) (canon lift (core func $i "f"))))
-      #|
-    ),
-  )
-  let component = @component.parse_component(bytes)
-  let validated = @component_model.validate_component_for_instantiation_with_config(
-    component,
-    ComponentValidationConfig(false),
-  )
+  let validated = validated_provider()
   let linker_a = @runtime_impl.ComponentLinker::ComponentLinker()
   let provider = linker_a.instantiate("provider", validated)
   let linker_b = @runtime_impl.ComponentLinker::ComponentLinker()
@@ -1209,12 +1165,9 @@ test "component runtime: engine registration errors roll back core state" {
   let linker = @runtime_impl.ComponentLinker::with_core_execution_engine(engine)
   let baseline = core_store_allocation_baseline(linker.get_store())
   let failing = core_registration_then_start_trap()
-  let outcome = try linker.instantiate("engine-error", failing) catch {
-    NativeCompilationFailed(_) => "failed"
-    error => "unexpected: \{error}"
-  } noraise {
-    _ => "instantiated"
-  }
+  let outcome = lifecycle_outcome(() => {
+    linker.instantiate("engine-error", failing)
+  })
   debug_inspect(outcome, content="\"failed\"")
   inspect(
     core_store_allocation_baseline(linker.get_store()) == baseline,
@@ -1230,20 +1183,7 @@ test "component runtime: engine registration errors roll back core state" {
 /// frame's own build state — breaking its `alias outer` cycles — while the
 /// imported instance and the linker itself stay fully usable.
 test "component runtime: failed instantiation leaves open linker intact" {
-  let inner_bytes = @component_text.parse_component_wat(
-    (
-      #|(component
-      #|  (core module $m (func (export "f") (result i32) (i32.const 7)))
-      #|  (core instance $i (instantiate $m))
-      #|  (func (export "f") (result u32) (canon lift (core func $i "f"))))
-      #|
-    ),
-  )
-  let inner = @component.parse_component(inner_bytes)
-  let inner_validated = @component_model.validate_component_for_instantiation_with_config(
-    inner,
-    ComponentValidationConfig(false),
-  )
+  let inner_validated = validated_provider()
   let linker = @runtime_impl.ComponentLinker::ComponentLinker()
   let provider = linker.instantiate("provider", inner_validated)
   linker.add_instance("a", provider)
@@ -1274,12 +1214,9 @@ test "component runtime: failed instantiation leaves open linker intact" {
   let runtime = linker.host_runtime_state()
   let tables_before = runtime.async_state().resource_tables.length()
   let core_before = core_store_allocation_baseline(linker.get_store())
-  let outcome = try linker.instantiate("failing", failing_validated) catch {
-    Cancelled => "cancelled"
-    _ => "failed"
-  } noraise {
-    _ => "instantiated"
-  }
+  let outcome = lifecycle_outcome(() => {
+    linker.instantiate("failing", failing_validated)
+  })
   debug_inspect(outcome, content="\"failed\"")
   debug_inspect(linker.get_component("failing") is None, content="true")
   // Registration is transactional: the nested component instance that
@@ -1295,11 +1232,8 @@ test "component runtime: failed instantiation leaves open linker intact" {
   )
   // A second failure must not accumulate resource tables in the shared
   // async state: every aborted frame withdraws its table.
-  try linker.instantiate("failing-again", failing_validated) catch {
-    _ => ()
-  } noraise {
-    _ => ()
-  }
+  lifecycle_outcome(() => linker.instantiate("failing-again", failing_validated))
+  |> ignore
   inspect(
     core_store_allocation_baseline(linker.get_store()) == core_before,
     content="true",
@@ -1323,20 +1257,7 @@ test "component runtime: failed instantiation leaves open linker intact" {
 /// import holds the evidence snapshot, which "evidence survives raw component
 /// mutation" above proves is unreachable from the caller's raw reference.
 test "component runtime: component import registration requires evidence" {
-  let inner_bytes = @component_text.parse_component_wat(
-    (
-      #|(component
-      #|  (core module $m (func (export "f") (result i32) (i32.const 7)))
-      #|  (core instance $i (instantiate $m))
-      #|  (func (export "f") (result u32) (canon lift (core func $i "f"))))
-      #|
-    ),
-  )
-  let inner = @component.parse_component(inner_bytes)
-  let inner_validated = @component_model.validate_component_for_instantiation_with_config(
-    inner,
-    ComponentValidationConfig(false),
-  )
+  let inner_validated = validated_provider()
   let linker = @runtime_impl.ComponentLinker::ComponentLinker()
   linker.add_component("inner", inner_validated)
   debug_inspect(
