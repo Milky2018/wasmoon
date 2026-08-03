@@ -112,7 +112,7 @@ pub fn EGraph::subsume(Self, EClassId, EClassId) -> EClassId
 pub(all) struct ENode {
   op : EOpcode
   children : Array[EClassId]
-} derive(Eq, Hash, @debug.Debug)
+} derive(Compare, Eq, Hash, @debug.Debug)
 
 pub(all) enum EOpcode {
   Const(Int64)
@@ -178,7 +178,7 @@ pub(all) enum EOpcode {
   Splat
   Vconst(Bytes)
   Var(Int)
-} derive(Eq, Hash, @debug.Debug)
+} derive(Compare, Eq, Hash, @debug.Debug)
 pub fn EOpcode::tag(Self) -> EOpcodeTag
 pub impl Show for EOpcode
 

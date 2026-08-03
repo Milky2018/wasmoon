@@ -317,10 +317,12 @@ fn EGraphBuilder::get_egraph(self : EGraphBuilder) -> @egraph.EGraph {
 }
 
 ///|
-/// Check if the extracted expression is a constant folding result
-/// Returns Some(Iconst(c)) if constant folding found, None otherwise
+/// Check if the value's e-class folded to an integer constant.
+/// Returns Some(Iconst(c)) if constant folding found, None otherwise.
 /// NOTE: Only handles constant folding. Complex rewrites (like x*3 -> (x<<1)+x)
-/// are not handled because they would require operand reconstruction.
+/// are not handled because they would require operand reconstruction (ISS-377).
+/// The class's cached constant answers this in O(1); a constant node costs 0
+/// and wins every extraction tie, so this matches what full extraction chose.
 fn EGraphBuilder::get_simplified_opcode(
   self : EGraphBuilder,
   value : Value,
@@ -328,12 +330,9 @@ fn EGraphBuilder::get_simplified_opcode(
   if value.id >= 0 &&
     value.id < self.value_map.length() &&
     self.value_map[value.id] is Some(class_id) {
-    let (_, best_node) = self.egraph.extract(class_id)
-    // Only handle constant folding - returns Iconst if the result is a constant
-    match best_node.op {
-      Const(c) => Some(Scalar(IntConst(c)))
-      // Don't change opcode for non-constant results - would need operand reconstruction
-      _ => None
+    match self.egraph.get_const(class_id) {
+      Some(c) => Some(Scalar(IntConst(c)))
+      None => None
     }
   } else {
     None

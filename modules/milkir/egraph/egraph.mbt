@@ -119,7 +119,7 @@ pub(all) enum EOpcode {
 
   // Variable reference (leaf node representing an IR value)
   Var(Int) // IR Value id
-} derive(Eq, Hash, Debug)
+} derive(Eq, Hash, Debug, Compare)
 
 ///|
 /// Keep `Show` behavior while migrating from deprecated `derive(Show)` to
@@ -309,7 +309,7 @@ pub fn EOpcode::tag(self : EOpcode) -> EOpcodeTag {
 pub(all) struct ENode {
   op : EOpcode
   children : Array[EClassId]
-} derive(Eq, Hash, Debug)
+} derive(Eq, Hash, Debug, Compare)
 
 ///|
 /// E-class: an equivalence class of e-nodes
@@ -1659,8 +1659,7 @@ fn extract_cost_equal(lhs : ExtractCost, rhs : ExtractCost) -> Bool {
 
 ///|
 fn extract_node_tiebreak_less(lhs : ENode, rhs : ENode) -> Bool {
-  "\{Repr(lhs.op)}:\{Repr(lhs.children)}" <
-  "\{Repr(rhs.op)}:\{Repr(rhs.children)}"
+  lhs.compare(rhs) < 0
 }
 
 ///|
