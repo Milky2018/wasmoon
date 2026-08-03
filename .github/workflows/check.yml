@@ -164,6 +164,12 @@ jobs:
       # dependency closures, not the size of the covered packages, which is
       # why the step below is cached rather than trimmed further.
       #
+      # The budget is back at 75 minutes. It was lowered to 60 on the strength
+      # of that single 52m27s observation, and the next uncached run on main
+      # was killed at the 60-minute mark without finding anything — one sample
+      # is not a bound on a shared runner. Lower it again only after several
+      # cached runs show a stable margin.
+      #
       # The cache key pins everything that silently changes what the wrapper
       # produces: the resolved toolchain (MOONBIT_TOOLCHAIN_VERSION is the
       # literal "nightly", which would let yesterday's objects survive a new
@@ -192,7 +198,7 @@ jobs:
             sanitizer-${{ matrix.os }}-${{ steps.sanitizer_cache_key.outputs.digest }}-
 
       - name: run native sanitizer checks
-        timeout-minutes: 60
+        timeout-minutes: 75
         env:
           MOONBIT_NEW_NATIVE: 0
           ASAN_OPTIONS: ${{ matrix.asan_options }}
