@@ -770,20 +770,20 @@ pub fn invoke_action(
                       } else {
                         jit_func_type_indices.push(raw_type_idx)
                       }
-                    } else if func_addr >= 0 &&
-                      func_addr < ctx.store.func_type_indices.length() {
+                    } else {
+                      let raw_type_idx = ctx.store.get_func_type_idx(func_addr)
+                      if raw_type_idx < 0 {
+                        jit_func_type_indices.push(-1)
+                        continue
+                      }
                       let fallback_canonical = ctx.store.get_func_canonical_type_idx(
                         func_addr,
                       )
                       if fallback_canonical >= 0 {
                         jit_func_type_indices.push(fallback_canonical)
                       } else {
-                        jit_func_type_indices.push(
-                          ctx.store.func_type_indices[func_addr],
-                        )
+                        jit_func_type_indices.push(raw_type_idx)
                       }
-                    } else {
-                      jit_func_type_indices.push(-1) // Invalid/unknown type
                     }
                   }
                   let gc_func_type_indices : Array[Int] = []
@@ -1301,14 +1301,10 @@ fn build_partial_instance_for_trapped_module(
   ctx : WastContext,
   mod_ : @types.Module,
   imports : @runtime.Imports,
-  before_funcs : Int,
-  before_tables : Int,
-  before_mems : Int,
-  before_globals : Int,
-  before_tags : Int,
+  before : @runtime.StoreAllocationStats,
 ) -> @runtime.ModuleInstance? {
-  let after_funcs = ctx.store.funcs.length()
-  if after_funcs <= before_funcs {
+  let after = ctx.store.allocation_stats()
+  if after.funcs <= before.funcs {
     return None
   }
 
@@ -1356,41 +1352,37 @@ fn build_partial_instance_for_trapped_module(
   }
 
   for i, type_idx in mod_.funcs {
-    let addr = before_funcs + i
-    if addr >= 0 && addr < after_funcs {
+    let addr = before.funcs + i
+    if addr >= 0 && addr < after.funcs {
       func_addrs.push(addr)
       func_type_indices.push(type_idx)
     }
   }
 
-  let after_tables = ctx.store.tables.length()
   for i in 0..<mod_.tables.length() {
-    let addr = before_tables + i
-    if addr >= 0 && addr < after_tables {
+    let addr = before.tables + i
+    if addr >= 0 && addr < after.tables {
       table_addrs.push(addr)
     }
   }
 
-  let after_mems = ctx.store.mems.length()
   for i in 0..<mod_.memories.length() {
-    let addr = before_mems + i
-    if addr >= 0 && addr < after_mems {
+    let addr = before.mems + i
+    if addr >= 0 && addr < after.mems {
       mem_addrs.push(addr)
     }
   }
 
-  let after_globals = ctx.store.globals.length()
   for i in 0..<mod_.globals.length() {
-    let addr = before_globals + i
-    if addr >= 0 && addr < after_globals {
+    let addr = before.globals + i
+    if addr >= 0 && addr < after.globals {
       global_addrs.push(addr)
     }
   }
 
-  let after_tags = ctx.store.tags.length()
   for i in 0..<mod_.tags.length() {
-    let addr = before_tags + i
-    if addr >= 0 && addr < after_tags {
+    let addr = before.tags + i
+    if addr >= 0 && addr < after.tags {
       tag_addrs.push(addr)
     }
   }
@@ -1435,20 +1427,17 @@ fn try_instantiate_source_traps(
       @validator.validate_module(mod_) catch {
         _ => return false
       }
-      let before_instances = ctx.store.instances.length()
-      let before_funcs = ctx.store.funcs.length()
-      let before_tables = ctx.store.tables.length()
-      let before_mems = ctx.store.mems.length()
-      let before_globals = ctx.store.globals.length()
-      let before_tags = ctx.store.tags.length()
+      let before = ctx.store.allocation_stats()
       let trapped = !succeeds(() => {
         @executor.instantiate_module_with_imports(ctx.store, mod_, imports)
         |> ignore
       })
       if trapped && ctx.use_jit && ctx.jit_compiler is Some(_) {
-        if ctx.store.instances.length() > before_instances {
-          let trapped_instance = ctx.store.instances[ctx.store.instances.length() -
-            1]
+        let after = ctx.store.allocation_stats()
+        if after.instances > before.instances {
+          let trapped_instance = ctx.store
+            .get_instance_opt(after.instances - 1)
+            .unwrap()
           match ctx.try_compile_jit(mod_, trapped_instance) {
             Ok(_) => ()
             Err(_) => return false
@@ -1456,8 +1445,7 @@ fn try_instantiate_source_traps(
         } else {
           match
             build_partial_instance_for_trapped_module(
-              ctx, mod_, imports, before_funcs, before_tables, before_mems, before_globals,
-              before_tags,
+              ctx, mod_, imports, before,
             ) {
             Some(partial_instance) =>
               match ctx.try_compile_jit(mod_, partial_instance) {
@@ -1474,20 +1462,17 @@ fn try_instantiate_source_traps(
       @validator.validate_module(mod_) catch {
         _ => return false
       }
-      let before_instances = ctx.store.instances.length()
-      let before_funcs = ctx.store.funcs.length()
-      let before_tables = ctx.store.tables.length()
-      let before_mems = ctx.store.mems.length()
-      let before_globals = ctx.store.globals.length()
-      let before_tags = ctx.store.tags.length()
+      let before = ctx.store.allocation_stats()
       let trapped = !succeeds(() => {
         @executor.instantiate_module_with_imports(ctx.store, mod_, imports)
         |> ignore
       })
       if trapped && ctx.use_jit && ctx.jit_compiler is Some(_) {
-        if ctx.store.instances.length() > before_instances {
-          let trapped_instance = ctx.store.instances[ctx.store.instances.length() -
-            1]
+        let after = ctx.store.allocation_stats()
+        if after.instances > before.instances {
+          let trapped_instance = ctx.store
+            .get_instance_opt(after.instances - 1)
+            .unwrap()
           match ctx.try_compile_jit(mod_, trapped_instance) {
             Ok(_) => ()
             Err(_) => return false
@@ -1495,8 +1480,7 @@ fn try_instantiate_source_traps(
         } else {
           match
             build_partial_instance_for_trapped_module(
-              ctx, mod_, imports, before_funcs, before_tables, before_mems, before_globals,
-              before_tags,
+              ctx, mod_, imports, before,
             ) {
             Some(partial_instance) =>
               match ctx.try_compile_jit(mod_, partial_instance) {

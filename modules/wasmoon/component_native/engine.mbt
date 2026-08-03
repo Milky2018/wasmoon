@@ -37,6 +37,24 @@ fn ComponentJITContext::close(self : ComponentJITContext) -> Unit {
 }
 
 ///|
+fn finish_pending_contexts(
+  contexts : Map[Int, ComponentJITContext],
+  pending_contexts : Ref[Map[Int, ComponentJITContext]?],
+  commit : Bool,
+) -> Unit {
+  if pending_contexts.val is Some(pending) {
+    for instance_idx, context in pending {
+      if commit {
+        contexts[instance_idx] = context
+      } else {
+        context.close()
+      }
+    }
+  }
+  pending_contexts.val = None
+}
+
+///|
 fn component_jit_error(
   error : @wast.JITCoreCallError,
 ) -> @runtime_impl.ComponentRuntimeError {
@@ -98,6 +116,7 @@ fn native_component_session_with_contexts(
   on_execution : (NativeComponentExecutionEvent) -> Unit,
 ) -> (@runtime_impl.CoreExecutionEngine, Map[Int, ComponentJITContext]) {
   let contexts : Map[Int, ComponentJITContext] = Map([])
+  let pending_contexts : Ref[Map[Int, ComponentJITContext]?] = Ref(None)
   let interpreter = @runtime_impl.interpreter_core_execution_engine()
   let target = try @wasmoon_jit.host_native_target() catch {
     _ => None
@@ -132,11 +151,15 @@ fn native_component_session_with_contexts(
           }
         },
       )
-      contexts[instance.store_idx] = {
+      let context : ComponentJITContext = {
         core,
         funcrefs,
         pending_suspension,
         suspension_enabled,
+      }
+      match pending_contexts.val {
+        Some(pending) => pending[instance.store_idx] = context
+        None => contexts[instance.store_idx] = context
       }
     },
     fn(
@@ -153,7 +176,15 @@ fn native_component_session_with_contexts(
         on_execution(ExplicitInterpreter)
         return outcome
       }
-      guard contexts.get(instance.store_idx) is Some(context) else {
+      let pending_context = match pending_contexts.val {
+        Some(pending) => pending.get(instance.store_idx)
+        None => None
+      }
+      let context = match pending_context {
+        Some(context) => Some(context)
+        None => contexts.get(instance.store_idx)
+      }
+      guard context is Some(context) else {
         raise NativeCompilationFailed(
           "native context is missing for core instance \{instance.store_idx}",
         )
@@ -185,28 +216,15 @@ fn native_component_session_with_contexts(
       }
     },
     prepare_store=fn(store) { try! store.enable_c_heap() },
-    register_rollback=fn(transaction) {
-      let existing : Map[Int, Bool] = Map([])
-      for instance_idx, _ in contexts {
-        existing.set(instance_idx, true)
-      }
-      transaction.on_rollback(fn() {
-        let added : Array[Int] = []
-        for instance_idx, _ in contexts {
-          if !existing.contains(instance_idx) {
-            added.push(instance_idx)
-          }
-        }
-        for instance_idx in added {
-          match contexts.get(instance_idx) {
-            Some(context) => context.close()
-            None => ()
-          }
-          contexts.remove(instance_idx)
-        }
-      })
+    begin_instantiation=fn() {
+      pending_contexts.val = Some(Map([]))
+      CoreEngineInstantiation(
+        fn() { finish_pending_contexts(contexts, pending_contexts, true) },
+        fn() { finish_pending_contexts(contexts, pending_contexts, false) },
+      )
     },
     close=fn() {
+      finish_pending_contexts(contexts, pending_contexts, false)
       for _, context in contexts {
         context.close()
       }

@@ -111,7 +111,7 @@ pub fn MarkSweepHeap::stats(self : MarkSweepHeap) -> GCStats {
 }
 
 ///|
-fn MarkSweepHeap::make_allocation_rollback(
+fn MarkSweepHeap::make_instantiation_abort(
   self : MarkSweepHeap,
   roots : () -> Array[@types.Value],
 ) -> () -> Unit {

@@ -3,18 +3,19 @@
 struct Linker {
   store : Store
   modules : Array[(String, ModuleInstance)] // (name, instance) pairs
+  mut instantiation : LinkerInstantiation?
 }
 
 ///|
 /// Create a new linker with a fresh store
 pub fn Linker::Linker() -> Linker {
-  { store: Store(), modules: [] }
+  { store: Store(), modules: [], instantiation: None }
 }
 
 ///|
 /// Create a new linker with an existing store
 pub fn Linker::with_store(store : Store) -> Linker {
-  { store, modules: [] }
+  { store, modules: [], instantiation: None }
 }
 
 ///|
@@ -24,21 +25,13 @@ pub fn Linker::get_store(self : Linker) -> Store {
 }
 
 ///|
-/// Register rollback for core allocations and names added by an instantiation.
-pub fn Linker::register_rollback(
-  self : Linker,
-  transaction : InstantiationTransaction,
-) -> Unit {
-  self.store.register_rollback(transaction)
-  let modules = self.modules.length()
-  transaction.on_rollback(fn() { self.modules.truncate(modules) })
-}
-
-///|
 /// Release this linker's store after all module execution has ended.
 ///
 /// This operation is idempotent and terminal.
 pub fn Linker::close(self : Linker) -> Unit {
+  if self.instantiation is Some(frame) {
+    frame.discard()
+  }
   self.modules.clear()
   self.store.close()
 }
@@ -52,15 +45,18 @@ pub fn Linker::register(
   instance : ModuleInstance,
 ) -> Unit raise RuntimeError {
   self.store.ensure_open()
-  self.modules.push((name, instance))
+  match self.instantiation {
+    Some(frame) => frame.modules.push((name, instance))
+    None => self.modules.push((name, instance))
+  }
 }
 
 ///|
-/// Build Imports from all registered modules
-/// This allows a new module to import from any previously registered module
-pub fn Linker::build_imports(self : Linker) -> Imports {
-  let imports = Imports::Imports()
-  for entry in self.modules {
+fn add_module_imports(
+  imports : Imports,
+  modules : Array[(String, ModuleInstance)],
+) -> Unit {
+  for entry in modules {
     let (mod_name, instance) = entry
     for exp in instance.exports {
       match exp.desc {
@@ -87,19 +83,43 @@ pub fn Linker::build_imports(self : Linker) -> Imports {
       }
     }
   }
+}
+
+///|
+/// Build Imports from all registered modules
+/// This allows a new module to import from any previously registered module
+pub fn Linker::build_imports(self : Linker) -> Imports {
+  let imports = Imports::Imports()
+  add_module_imports(imports, self.modules)
+  if self.instantiation is Some(frame) {
+    add_module_imports(imports, frame.modules)
+  }
   imports
 }
 
 ///|
-/// Get a registered module instance by name
-pub fn Linker::get_module(self : Linker, name : String) -> ModuleInstance? {
-  for entry in self.modules {
+fn find_module(
+  modules : Array[(String, ModuleInstance)],
+  name : String,
+) -> ModuleInstance? {
+  for entry in modules {
     let (mod_name, instance) = entry
     if mod_name == name {
       return Some(instance)
     }
   }
   None
+}
+
+///|
+/// Get a registered module instance by name
+pub fn Linker::get_module(self : Linker, name : String) -> ModuleInstance? {
+  if self.instantiation is Some(frame) {
+    if find_module(frame.modules, name) is Some(instance) {
+      return Some(instance)
+    }
+  }
+  find_module(self.modules, name)
 }
 
 ///|

@@ -472,14 +472,14 @@ fn ComponentLinker::finish_close(self : ComponentLinker) -> Unit {
 }
 
 ///|
-/// Roll back the staged registrations of a failed or refused instantiation.
+/// Discard the staged registrations of a failed or refused instantiation.
 ///
 /// Staged instances were never published, so no caller can hold them:
 /// release each graph's own containers (breaking its `alias outer` cycles)
 /// and withdraw its resource table from the shared async state — the table
 /// was added by the frame's build state and nothing can resolve it once the
 /// whole tree is discarded.
-fn rollback_staged_registrations(
+fn discard_staged_registrations(
   staged : Array[(String, ComponentInstance)],
 ) -> Unit {
   for entry in staged {
@@ -617,35 +617,54 @@ pub fn ComponentLinker::instantiate(
   defer {
     self.instantiating.val = false
   }
-  // The whole instantiation runs under one lifecycle lease and one
-  // registration transaction. The lease means an embedder callback that
+  // The whole instantiation runs under one lifecycle lease. The lease means
+  // an embedder callback that
   // closes the linker mid-instantiation only begins the close: teardown is
   // deferred until this frame unwinds, so no section ever observes a
-  // released engine or cleared imports. The transaction means every frame —
+  // released engine or cleared imports. Every frame —
   // nested components included — stages its instance instead of publishing
   // it; only a root that succeeds on a still-open linker commits the tree,
-  // and any failure or mid-flight close rolls the whole tree back, so a
+  // and any failure or mid-flight close discards the whole staged tree, so a
   // partially instantiated graph is never observable through the linker.
-  // Every participating layer adds its inverse operation to the same rollback
-  // stack, so a later start trap withdraws all core allocations and native
-  // contexts created by this root.
-  let transaction = @runtime.InstantiationTransaction::new()
+  // Core Store allocations, linker names, native contexts, and component
+  // instances each remain in their owning frame until the root commits.
+  // A later start trap therefore discards unpublished state instead of
+  // reconstructing an earlier snapshot.
+  let core_instantiation : Ref[@runtime.LinkerInstantiation?] = Ref(None)
+  let engine = self.core_engine()
+  let engine_instantiation : Ref[CoreEngineInstantiation?] = Ref(None)
   let staged : Array[(String, ComponentInstance)] = []
   let instance = self.core_execution_lifecycle.with_lease(
     fn() raise ComponentRuntimeError {
-      self.core_linker.register_rollback(transaction)
-      self.core_engine().register_rollback(transaction)
-      transaction.on_rollback(fn() { rollback_staged_registrations(staged) })
+      core_instantiation.val = Some(
+        self.core_linker.begin_instantiation() catch {
+          error => raise CoreModuleInstantiateError(error.to_string())
+        },
+      )
+      engine_instantiation.val = Some(engine.begin_instantiation())
       let isolated = @component.parse_component(component.component_bytes()) catch {
         e => raise ComponentParseError(e.to_string())
       }
       instantiate_component(self, name, isolated, Map([]), [], staged)
     },
-    rollback=fn() { transaction.rollback() },
+    rollback=fn() {
+      discard_staged_registrations(staged)
+      if engine_instantiation.val is Some(frame) {
+        frame.discard()
+      }
+      if core_instantiation.val is Some(frame) {
+        frame.discard()
+      }
+    },
   )
+  if core_instantiation.val is Some(frame) {
+    frame.commit()
+  }
+  if engine_instantiation.val is Some(frame) {
+    frame.commit()
+  }
   for entry in staged {
     self.components.push(entry)
   }
-  transaction.commit()
   instance
 }

@@ -16,115 +16,69 @@ pub(all) enum FuncOwner {
 ///|
 /// The store contains all global runtime state
 pub struct Store {
-  funcs : Array[FuncInst]
-  func_types : Array[@types.FuncType] // Type of each function
-  func_type_indices : Array[Int] // Original type index for structural comparison
-  tables : Array[Table]
-  mems : Array[Memory]
-  globals : Array[GlobalInstance]
-  tags : Array[@types.FuncType] // Tag types (params only, no results)
-  tag_type_indices : Array[Int] // Original type index for each tag
-  tag_owners : Array[FuncOwner] // Owner module for each tag
-  exns : Array[ExnInstance] // Exception instances for exnref
+  priv mut state : StoreState
   heap : MarkSweepHeap // GC heap for struct and array instances (interpreter mode)
   // C-managed GC heap for JIT mode (None = use MarkSweepHeap)
   mut c_heap : @wasmoon_jit.CHeap?
-  // Module types for CHeap type lookups (needed to decode Int64 to Value)
-  mut module_types : Array[@types.SubType]
-  // Module rec groups for canonical type index computation
-  mut module_rec_groups : Array[Int]
-  // Internal values wrapped as externref via extern.convert_any
-  // Accessed using negative ExternRef indices: ExternRef(-1-i) = wrapped_externs[i]
-  wrapped_externs : Array[@types.Value]
-  // Maps function address to its owning module instance
-  // Used for cross-module call context switching
-  func_owners : Array[FuncOwner]
-  // Registered module instances by their address/index
-  instances : Array[ModuleInstance]
-  // JIT tables corresponding to runtime tables (for cross-module sharing)
-  // jit_tables[i] is the JIT table for tables[i], or None if not using JIT
-  jit_tables : Array[@wasmoon_jit.JITTable?]
-  // Store-only destruction capabilities corresponding to jit_tables.
-  priv jit_table_owners : Array[@wasmoon_jit.JITTableOwner?]
-  // Current WASI module's memory address (for interpreter mode WASI callbacks)
-  // WASI callbacks use this to access the correct memory instead of hardcoded index 0
-  mut wasi_mem_addr : Int?
   // Opaque WASI context handle (for WAST runner to store WASI context)
   // This avoids circular dependency between runtime and wasi packages
   mut wasi_ctx_handle : Int
   // Native invocation/fiber lifetimes belong to the Store, not a JIT module.
   native_execution : @wasmoon_jit.NativeExecutionState
   priv funcref_registry : StoreFuncrefRegistry
+  priv mut instantiation : StoreBuildState?
   priv closed : Ref[Bool]
 } derive(Debug)
 
 ///|
-fn Store::register_rollback(
-  self : Store,
-  transaction : InstantiationTransaction,
-) -> Unit {
-  // Register heap cleanup first so LIFO rollback restores every Store root
-  // before deciding which transaction allocations escaped.
-  transaction.on_rollback(
-    self.heap.make_allocation_rollback(fn() { self.collect_roots([]) }),
-  )
-  if self.c_heap is Some(heap) {
-    transaction.on_rollback(
-      heap.make_allocation_rollback(fn() { self.collect_roots([]) }),
-    )
+/// Read-only allocation counts for diagnostics and failure-baseline tests.
+pub struct StoreAllocationStats {
+  funcs : Int
+  func_types : Int
+  func_type_indices : Int
+  func_owners : Int
+  tables : Int
+  jit_tables : Int
+  mems : Int
+  globals : Int
+  tags : Int
+  tag_type_indices : Int
+  tag_owners : Int
+  exns : Int
+  wrapped_externs : Int
+  instances : Int
+} derive(Debug, Eq)
+
+///|
+pub fn Store::allocation_stats(self : Store) -> StoreAllocationStats {
+  let state = self.state
+  {
+    funcs: state.funcs.length(),
+    func_types: state.func_types.length(),
+    func_type_indices: state.func_type_indices.length(),
+    func_owners: state.func_owners.length(),
+    tables: state.tables.length(),
+    jit_tables: state.jit_tables.length(),
+    mems: state.mems.length(),
+    globals: state.globals.length(),
+    tags: state.tags.length(),
+    tag_type_indices: state.tag_type_indices.length(),
+    tag_owners: state.tag_owners.length(),
+    exns: state.exns.length(),
+    wrapped_externs: state.wrapped_externs.length(),
+    instances: state.instances.length(),
   }
+}
 
-  let module_types = self.module_types
-  let module_rec_groups = self.module_rec_groups
-  transaction.on_rollback(fn() {
-    self.module_types = module_types
-    self.module_rec_groups = module_rec_groups
-  })
+///|
+pub fn Store::get_instance_opt(self : Store, index : Int) -> ModuleInstance? {
+  self.current_state().instances.get(index)
+}
 
-  transaction.truncate_on_rollback(self.wrapped_externs)
-  transaction.truncate_on_rollback(self.exns)
-  transaction.truncate_on_rollback(self.tags)
-  transaction.truncate_on_rollback(self.tag_type_indices)
-  transaction.restore_on_rollback(self.tag_owners)
-  transaction.truncate_on_rollback(self.globals)
-
-  let wasi_mem_addr = self.wasi_mem_addr
-  transaction.on_rollback(fn() { self.wasi_mem_addr = wasi_mem_addr })
-
-  let mems = self.mems.length()
-  transaction.on_rollback(fn() {
-    for i in mems..<self.mems.length() {
-      self.mems[i].close()
-    }
-    self.mems.truncate(mems)
-  })
-
-  let tables = self.tables.length()
-  let jit_tables = self.jit_tables.length()
-  transaction.on_rollback(fn() {
-    for i in jit_tables..<self.jit_table_owners.length() {
-      match self.jit_table_owners[i] {
-        Some(owner) => owner.close()
-        None => ()
-      }
-    }
-    self.tables.truncate(tables)
-    self.jit_tables.truncate(jit_tables)
-    self.jit_table_owners.truncate(jit_tables)
-  })
-
-  transaction.truncate_on_rollback(self.funcs)
-  transaction.truncate_on_rollback(self.func_types)
-  transaction.truncate_on_rollback(self.func_type_indices)
-  transaction.restore_on_rollback(self.func_owners)
-
-  let instances = self.instances.length()
-  transaction.on_rollback(fn() {
-    for i in instances..<self.instances.length() {
-      self.instances[i].store_idx = -1
-    }
-    self.instances.truncate(instances)
-  })
+///|
+/// Return an isolated snapshot of the active module type table.
+pub fn Store::module_types_snapshot(self : Store) -> Array[@types.SubType] {
+  self.current_state().module_types.copy()
 }
 
 ///|
@@ -162,29 +116,13 @@ fn c_heap_initial_capacity() -> Int {
 ///|
 pub fn Store::Store() -> Store {
   {
-    funcs: [],
-    func_types: [],
-    func_type_indices: [],
-    tables: [],
-    mems: [],
-    globals: [],
-    tags: [],
-    tag_type_indices: [],
-    tag_owners: [],
-    exns: [],
+    state: StoreState::new(),
     heap: MarkSweepHeap(),
     c_heap: None,
-    module_types: [],
-    module_rec_groups: [],
-    wrapped_externs: [],
-    func_owners: [],
-    instances: [],
-    jit_tables: [],
-    jit_table_owners: [],
-    wasi_mem_addr: None,
     wasi_ctx_handle: 0,
     native_execution: NativeExecutionState(),
     funcref_registry: StoreFuncrefRegistry::new(),
+    instantiation: None,
     closed: Ref(false),
   }
 }
@@ -194,29 +132,13 @@ pub fn Store::Store() -> Store {
 pub fn Store::with_c_heap() -> Store {
   let initial_capacity = c_heap_initial_capacity()
   {
-    funcs: [],
-    func_types: [],
-    func_type_indices: [],
-    tables: [],
-    mems: [],
-    globals: [],
-    tags: [],
-    tag_type_indices: [],
-    tag_owners: [],
-    exns: [],
+    state: StoreState::new(),
     heap: MarkSweepHeap(), // Used only when c_heap is None.
     c_heap: Some(CHeap(capacity=initial_capacity)),
-    module_types: [],
-    module_rec_groups: [],
-    wrapped_externs: [],
-    func_owners: [],
-    instances: [],
-    jit_tables: [],
-    jit_table_owners: [],
-    wasi_mem_addr: None,
     wasi_ctx_handle: 0,
     native_execution: NativeExecutionState(),
     funcref_registry: StoreFuncrefRegistry::new(),
+    instantiation: None,
     closed: Ref(false),
   }
 }
@@ -231,41 +153,45 @@ pub fn Store::close(self : Store) -> Unit {
   if self.closed.val {
     return
   }
+  if self.instantiation is Some(frame) {
+    frame.discard()
+  }
   self.closed.val = true
   self.native_execution.seal()
   self.funcref_registry.clear()
-  self.funcs.clear()
-  self.func_types.clear()
-  self.func_type_indices.clear()
-  self.func_owners.clear()
-  self.instances.clear()
-  self.tables.clear()
-  for memory in self.mems {
+  let state = self.state
+  state.funcs.clear()
+  state.func_types.clear()
+  state.func_type_indices.clear()
+  state.func_owners.clear()
+  state.instances.clear()
+  state.tables.clear()
+  for memory in state.mems {
     memory.close()
   }
-  self.mems.clear()
-  self.globals.clear()
-  self.tags.clear()
-  self.tag_type_indices.clear()
-  self.tag_owners.clear()
-  self.exns.clear()
+  state.mems.clear()
+  state.globals.clear()
+  state.tags.clear()
+  state.tag_type_indices.clear()
+  state.tag_owners.clear()
+  state.exns.clear()
   self.heap.clear()
   if self.c_heap is Some(heap) {
     heap.free()
     self.c_heap = None
   }
-  self.module_types.clear()
-  self.module_rec_groups.clear()
-  self.wrapped_externs.clear()
-  for owner in self.jit_table_owners {
+  state.module_types.clear()
+  state.module_rec_groups.clear()
+  state.wrapped_externs.clear()
+  for owner in state.jit_table_owners {
     match owner {
       Some(owner) => owner.close()
       None => ()
     }
   }
-  self.jit_table_owners.clear()
-  self.jit_tables.clear()
-  self.wasi_mem_addr = None
+  state.jit_table_owners.clear()
+  state.jit_tables.clear()
+  state.wasi_mem_addr = None
   self.wasi_ctx_handle = 0
 }
 
@@ -301,8 +227,9 @@ pub fn Store::set_module_types(
   rec_groups? : Array[Int] = [],
 ) -> Unit raise RuntimeError {
   self.ensure_open()
-  self.module_types = types
-  self.module_rec_groups = rec_groups
+  let state = self.current_state()
+  state.module_types = types
+  state.module_rec_groups = rec_groups
 }
 
 ///|
@@ -328,8 +255,7 @@ pub fn Store::wrap_as_extern(
   value : @types.Value,
 ) -> @types.Value raise RuntimeError {
   self.ensure_open()
-  let idx = self.wrapped_externs.length()
-  self.wrapped_externs.push(value)
+  let idx = push_and_index(self.current_state().wrapped_externs, value)
   ExternRef(-1 - idx) // -1 for index 0, -2 for index 1, etc.
 }
 
@@ -346,10 +272,10 @@ pub fn Store::unwrap_extern(
       if idx < 0 {
         // Wrapped internal value
         let wrapped_idx = -1 - idx
-        if wrapped_idx >= self.wrapped_externs.length() {
-          raise UndefinedElement
+        match self.current_state().wrapped_externs.get(wrapped_idx) {
+          Some(value) => value
+          None => raise UndefinedElement
         }
-        self.wrapped_externs[wrapped_idx]
       } else {
         // Host externref - return as-is (it's already an internal representation)
         value
@@ -368,12 +294,7 @@ pub fn Store::alloc_func(
   type_idx? : Int = -1,
 ) -> Int raise RuntimeError {
   self.ensure_open()
-  let idx = self.funcs.length()
-  self.funcs.push(WasmFunc(func))
-  self.func_types.push(func_type)
-  self.func_type_indices.push(type_idx)
-  self.func_owners.push(Unowned)
-  idx
+  self.alloc_func_inst(WasmFunc(func), func_type, type_idx, Unowned)
 }
 
 ///|
@@ -385,17 +306,12 @@ pub fn Store::alloc_host_func(
   type_idx? : Int = -1,
 ) -> Int raise RuntimeError {
   self.ensure_open()
-  let idx = self.funcs.length()
   // Back-compat: old-style host funcs don't take a Caller.
   let wrapped : (Caller, Array[@types.Value]) -> Array[@types.Value] raise RuntimeError = (
     _caller,
     args,
   ) => func(args)
-  self.funcs.push(HostFunc(wrapped))
-  self.func_types.push(func_type)
-  self.func_type_indices.push(type_idx)
-  self.func_owners.push(HostFunc)
-  idx
+  self.alloc_func_inst(HostFunc(wrapped), func_type, type_idx, HostFunc)
 }
 
 ///|
@@ -407,12 +323,7 @@ pub fn Store::alloc_host_func_with_caller(
   type_idx? : Int = -1,
 ) -> Int raise RuntimeError {
   self.ensure_open()
-  let idx = self.funcs.length()
-  self.funcs.push(HostFunc(func))
-  self.func_types.push(func_type)
-  self.func_type_indices.push(type_idx)
-  self.func_owners.push(HostFunc)
-  idx
+  self.alloc_func_inst(HostFunc(func), func_type, type_idx, HostFunc)
 }
 
 ///|
@@ -424,35 +335,30 @@ pub fn Store::alloc_table(
   use_jit? : Bool = true,
 ) -> Int raise RuntimeError {
   self.ensure_open()
-  let idx = self.tables.length()
-  self.tables.push(table)
-
-  // Create corresponding JIT table (always enabled for cross-module sharing)
-  if use_jit {
+  let (jit_table, jit_table_owner) : (
+    @wasmoon_jit.JITTable?,
+    @wasmoon_jit.JITTableOwner?,
+    // Create corresponding JIT table (always enabled for cross-module sharing)
+  ) = if use_jit {
     let (min, max) = table.get_limits()
     match @wasmoon_jit.JITTableOwner::try_alloc(min, max) {
-      Some(owner) => {
-        self.jit_tables.push(Some(owner.table()))
-        self.jit_table_owners.push(Some(owner))
-      }
-      None => {
-        self.jit_tables.push(None)
-        self.jit_table_owners.push(None)
-      }
+      Some(owner) => (Some(owner.table()), Some(owner))
+      None => (None, None)
     }
   } else {
-    self.jit_tables.push(None)
-    self.jit_table_owners.push(None)
+    (None, None)
   }
+  let state = self.current_state()
+  let idx = push_and_index(state.tables, table)
+  state.jit_tables.push(jit_table)
+  state.jit_table_owners.push(jit_table_owner)
   idx
 }
 
 ///|
 pub fn Store::alloc_mem(self : Store, mem : Memory) -> Int raise RuntimeError {
   self.ensure_open()
-  let idx = self.mems.length()
-  self.mems.push(mem)
-  idx
+  push_and_index(self.current_state().mems, mem)
 }
 
 ///|
@@ -461,9 +367,7 @@ pub fn Store::alloc_global(
   global : GlobalInstance,
 ) -> Int raise RuntimeError {
   self.ensure_open()
-  let idx = self.globals.length()
-  self.globals.push(global)
-  idx
+  push_and_index(self.current_state().globals, global)
 }
 
 ///|
@@ -474,10 +378,10 @@ pub fn Store::alloc_tag(
   type_idx? : Int = -1,
 ) -> Int raise RuntimeError {
   self.ensure_open()
-  let idx = self.tags.length()
-  self.tags.push(tag_type)
-  self.tag_type_indices.push(type_idx)
-  self.tag_owners.push(Unowned)
+  let state = self.current_state()
+  let idx = push_and_index(state.tags, tag_type)
+  state.tag_type_indices.push(type_idx)
+  state.tag_owners.push(Unowned)
   idx
 }
 
@@ -486,34 +390,26 @@ pub fn Store::get_tag_type(
   self : Store,
   idx : Int,
 ) -> @types.FuncType raise RuntimeError {
-  if idx < 0 || idx >= self.tags.length() {
-    raise UndefinedElement
+  match self.current_state().tags.get(idx) {
+    Some(tag) => tag
+    None => raise UndefinedElement
   }
-  self.tags[idx]
 }
 
 ///|
 /// Get the original type index for a tag
 pub fn Store::get_tag_type_idx(self : Store, tag_addr : Int) -> Int {
-  if tag_addr < 0 || tag_addr >= self.tag_type_indices.length() {
-    return -1
+  match self.current_state().tag_type_indices.get(tag_addr) {
+    Some(type_idx) => type_idx
+    None => -1
   }
-  self.tag_type_indices[tag_addr]
 }
 
 ///|
 /// Get the owner module for a tag
 pub fn Store::get_tag_owner(self : Store, tag_addr : Int) -> ModuleInstance? {
-  if tag_addr < 0 || tag_addr >= self.tag_owners.length() {
-    return None
-  }
-  match self.tag_owners[tag_addr] {
-    Module(idx) =>
-      if idx >= 0 && idx < self.instances.length() {
-        Some(self.instances[idx])
-      } else {
-        None
-      }
+  match self.tag_owner_at(tag_addr) {
+    Module(idx) => self.instance_at(idx)
     _ => None
   }
 }
@@ -526,9 +422,7 @@ pub fn Store::alloc_exn(
   values : Array[@types.Value],
 ) -> Int raise RuntimeError {
   self.ensure_open()
-  let idx = self.exns.length()
-  self.exns.push({ tag_addr, values })
-  idx
+  push_and_index(self.current_state().exns, { tag_addr, values })
 }
 
 ///|
@@ -537,10 +431,10 @@ pub fn Store::get_exn(
   self : Store,
   idx : Int,
 ) -> ExnInstance raise RuntimeError {
-  if idx < 0 || idx >= self.exns.length() {
-    raise UndefinedElement
+  match self.current_state().exns.get(idx) {
+    Some(exn) => exn
+    None => raise UndefinedElement
   }
-  self.exns[idx]
 }
 
 ///|
@@ -550,10 +444,11 @@ fn Store::get_struct_field_type(
   type_idx : Int,
   field_idx : Int,
 ) -> @types.ValueType {
-  if type_idx < 0 || type_idx >= self.module_types.length() {
+  let module_types = self.current_state().module_types
+  if type_idx < 0 || type_idx >= module_types.length() {
     return I64 // Fallback
   }
-  match self.module_types[type_idx].composite {
+  match module_types[type_idx].composite {
     Struct(st) =>
       if field_idx >= 0 && field_idx < st.fields.length() {
         match st.fields[field_idx].storage_type {
@@ -570,10 +465,11 @@ fn Store::get_struct_field_type(
 ///|
 /// Get the element type of an array from module_types
 fn Store::get_array_elem_type(self : Store, type_idx : Int) -> @types.ValueType {
-  if type_idx < 0 || type_idx >= self.module_types.length() {
+  let module_types = self.current_state().module_types
+  if type_idx < 0 || type_idx >= module_types.length() {
     return I64
   }
-  match self.module_types[type_idx].composite {
+  match module_types[type_idx].composite {
     Array(at) =>
       match at.element.storage_type {
         Val(vt) => vt
@@ -776,10 +672,10 @@ pub fn Store::get_func_inst(
   self : Store,
   idx : Int,
 ) -> FuncInst raise RuntimeError {
-  if idx < 0 || idx >= self.funcs.length() {
-    raise UndefinedElement
+  match self.current_state().funcs.get(idx) {
+    Some(func) => func
+    None => raise UndefinedElement
   }
-  self.funcs[idx]
 }
 
 ///|
@@ -787,11 +683,7 @@ pub fn Store::get_func_inst(
 ///
 /// This is useful for embedding/JIT callbacks that must not raise.
 pub fn Store::get_func_inst_opt(self : Store, idx : Int) -> FuncInst? {
-  if idx < 0 || idx >= self.funcs.length() {
-    None
-  } else {
-    Some(self.funcs[idx])
-  }
+  self.current_state().funcs.get(idx)
 }
 
 ///|
@@ -800,10 +692,10 @@ pub fn Store::get_func_type(
   self : Store,
   idx : Int,
 ) -> @types.FuncType raise RuntimeError {
-  if idx < 0 || idx >= self.func_types.length() {
-    raise UndefinedElement
+  match self.current_state().func_types.get(idx) {
+    Some(func_type) => func_type
+    None => raise UndefinedElement
   }
-  self.func_types[idx]
 }
 
 ///|
@@ -811,20 +703,15 @@ pub fn Store::get_func_type(
 ///
 /// This is useful for embedding/JIT callbacks that must not raise.
 pub fn Store::get_func_type_opt(self : Store, idx : Int) -> @types.FuncType? {
-  if idx < 0 || idx >= self.func_types.length() {
-    None
-  } else {
-    Some(self.func_types[idx])
-  }
+  self.current_state().func_types.get(idx)
 }
 
 ///|
 /// Get function type index by store address (for structural comparison)
 pub fn Store::get_func_type_idx(self : Store, idx : Int) -> Int {
-  if idx < 0 || idx >= self.func_type_indices.length() {
-    -1
-  } else {
-    self.func_type_indices[idx]
+  match self.current_state().func_type_indices.get(idx) {
+    Some(type_idx) => type_idx
+    None => -1
   }
 }
 
@@ -833,18 +720,12 @@ pub fn Store::get_func_type_idx(self : Store, idx : Int) -> Int {
 /// Returns the canonical type index from the function's owning module
 /// Returns -1 if the function or owner is not found
 pub fn Store::get_func_canonical_type_idx(self : Store, func_addr : Int) -> Int {
-  if func_addr < 0 || func_addr >= self.func_owners.length() {
-    return -1
-  }
-  let owner_idx = match self.func_owners[func_addr] {
+  let owner_idx = match self.func_owner_at(func_addr) {
     Module(idx) => idx
     _ => return -1
   }
-  if owner_idx >= self.instances.length() {
-    return -1
-  }
-  let instance = self.instances[owner_idx]
-  let type_idx = self.func_type_indices[func_addr]
+  guard self.instance_at(owner_idx) is Some(instance) else { return -1 }
+  let type_idx = self.get_func_type_idx(func_addr)
   if type_idx < 0 || type_idx >= instance.canonical_type_indices.length() {
     return -1
   }
@@ -865,38 +746,36 @@ pub fn Store::get_func(
 
 ///|
 pub fn Store::get_table(self : Store, idx : Int) -> Table raise RuntimeError {
-  if idx < 0 || idx >= self.tables.length() {
-    raise UndefinedElement
+  match self.current_state().tables.get(idx) {
+    Some(table) => table
+    None => raise UndefinedElement
   }
-  self.tables[idx]
 }
 
 ///|
 /// Get the JIT table corresponding to a runtime table (if exists)
 pub fn Store::get_jit_table(self : Store, idx : Int) -> @wasmoon_jit.JITTable? {
-  if idx < 0 || idx >= self.jit_tables.length() {
-    return None
+  match self.current_state().jit_tables.get(idx) {
+    Some(table) => table
+    None => None
   }
-  self.jit_tables[idx]
 }
 
 ///|
 pub fn Store::get_mem(self : Store, idx : Int) -> Memory raise RuntimeError {
-  if idx < 0 || idx >= self.mems.length() {
-    raise UndefinedElement
+  match self.current_state().mems.get(idx) {
+    Some(memory) => memory
+    None => raise UndefinedElement
   }
-  self.mems[idx]
 }
 
 ///|
 /// Get memory by index (returns None if not found)
 /// This is useful for WASI functions that need memory access
 pub fn Store::get_memory(self : Store, idx : Int) -> Memory {
-  if idx < 0 || idx >= self.mems.length() {
-    // Return a dummy empty memory if not found
-    Memory(0, None)
-  } else {
-    self.mems[idx]
+  match self.current_state().mems.get(idx) {
+    Some(memory) => memory
+    None => Memory(0, None)
   }
 }
 
@@ -904,7 +783,7 @@ pub fn Store::get_memory(self : Store, idx : Int) -> Memory {
 /// Get WASI module's memory
 /// Uses the stored wasi_mem_addr if set, otherwise falls back to index 0
 pub fn Store::get_wasi_memory(self : Store) -> Memory {
-  match self.wasi_mem_addr {
+  match self.current_state().wasi_mem_addr {
     Some(addr) => self.get_memory(addr)
     None => self.get_memory(0)
   }
@@ -918,7 +797,7 @@ pub fn Store::set_wasi_mem_addr(
   addr : Int,
 ) -> Unit raise RuntimeError {
   self.ensure_open()
-  self.wasi_mem_addr = Some(addr)
+  self.current_state().wasi_mem_addr = Some(addr)
 }
 
 ///|
@@ -942,10 +821,10 @@ pub fn Store::get_global(
   self : Store,
   idx : Int,
 ) -> GlobalInstance raise RuntimeError {
-  if idx < 0 || idx >= self.globals.length() {
-    raise UndefinedElement
+  match self.current_state().globals.get(idx) {
+    Some(global) => global
+    None => raise UndefinedElement
   }
-  self.globals[idx]
 }
 
 ///|
@@ -957,24 +836,21 @@ pub fn Store::register_instance(
   instance : ModuleInstance,
 ) -> Int raise RuntimeError {
   self.ensure_open()
-  let instance_idx = self.instances.length()
+  let state = self.current_state()
+  let instance_idx = state.instances.length()
   instance.store_idx = instance_idx
-  self.instances.push(instance)
+  state.instances.push(instance)
   // Set ownership only for unowned WASM functions
   // HostFunc and already-owned functions are not changed
   for func_addr in instance.func_addrs {
-    if func_addr >= 0 &&
-      func_addr < self.func_owners.length() &&
-      self.func_owners[func_addr] == Unowned {
-      self.func_owners[func_addr] = Module(instance_idx)
+    if self.func_owner_at(func_addr) == Unowned {
+      self.set_func_owner(func_addr, Module(instance_idx))
     }
   }
   // Set ownership for unowned tags
   for tag_addr in instance.tag_addrs {
-    if tag_addr >= 0 &&
-      tag_addr < self.tag_owners.length() &&
-      self.tag_owners[tag_addr] == Unowned {
-      self.tag_owners[tag_addr] = Module(instance_idx)
+    if self.tag_owner_at(tag_addr) == Unowned {
+      self.set_tag_owner(tag_addr, Module(instance_idx))
     }
   }
   instance_idx
@@ -983,16 +859,8 @@ pub fn Store::register_instance(
 ///|
 /// Get the owning module instance for a function address
 pub fn Store::get_func_owner(self : Store, func_addr : Int) -> ModuleInstance? {
-  if func_addr < 0 || func_addr >= self.func_owners.length() {
-    return None
-  }
-  match self.func_owners[func_addr] {
-    Module(idx) =>
-      if idx < self.instances.length() {
-        Some(self.instances[idx])
-      } else {
-        None
-      }
+  match self.func_owner_at(func_addr) {
+    Module(idx) => self.instance_at(idx)
     _ => None
   }
 }
@@ -1001,10 +869,7 @@ pub fn Store::get_func_owner(self : Store, func_addr : Int) -> ModuleInstance? {
 /// Get the owning module instance index for a function address
 /// Returns -1 if no owner (host function or unowned)
 pub fn Store::get_func_owner_idx(self : Store, func_addr : Int) -> Int {
-  if func_addr < 0 || func_addr >= self.func_owners.length() {
-    return -1
-  }
-  match self.func_owners[func_addr] {
+  match self.func_owner_at(func_addr) {
     Module(idx) => idx
     _ => -1
   }
@@ -1031,16 +896,17 @@ pub fn Store::collect_roots(
   additional_roots : Array[@types.Value],
 ) -> Array[@types.Value] {
   let roots : Array[@types.Value] = []
+  let state = self.current_state()
 
   // Collect from globals
-  for global in self.globals {
+  for global in state.globals {
     if is_gc_ref(global.value) {
       roots.push(global.value)
     }
   }
 
   // Collect from tables
-  for table in self.tables {
+  for table in state.tables {
     for i in 0..<table.size {
       let value = table.elements[i]
       if is_gc_ref(value) {
@@ -1050,7 +916,7 @@ pub fn Store::collect_roots(
   }
 
   // Collect from exception instances
-  for exn in self.exns {
+  for exn in state.exns {
     for value in exn.values {
       if is_gc_ref(value) {
         roots.push(value)
@@ -1059,7 +925,7 @@ pub fn Store::collect_roots(
   }
 
   // Collect from wrapped externrefs
-  for value in self.wrapped_externs {
+  for value in state.wrapped_externs {
     if is_gc_ref(value) {
       roots.push(value)
     }

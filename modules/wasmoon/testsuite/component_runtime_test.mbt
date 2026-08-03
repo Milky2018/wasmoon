@@ -679,24 +679,24 @@ test "component runtime: evidence survives raw component mutation" {
 }
 
 ///|
-test "component runtime: rollback hook callback close rolls back once" {
+test "component runtime: engine begin callback close aborts once" {
   let bytes = @component_text.parse_component_wat("(component)")
   let validated = @component_model.validate_component_for_instantiation_with_config(
     @component.parse_component(bytes),
     ComponentValidationConfig(false),
   )
   let linker_slot : Ref[@runtime_impl.ComponentLinker?] = Ref(None)
-  let rollback_hooks = Ref(0)
-  let rollbacks = Ref(0)
+  let begin_callbacks = Ref(0)
+  let aborts = Ref(0)
   let engine = @runtime_impl.CoreExecutionEngine(
     fn(_store, _module, _instance) { () },
     fn(_store, _instance, _func_idx, _args, _request) { Returned([]) },
-    register_rollback=fn(transaction) {
-      rollback_hooks.val = rollback_hooks.val + 1
+    begin_instantiation=fn() {
+      begin_callbacks.val = begin_callbacks.val + 1
       if linker_slot.val is Some(linker) {
         linker.close()
       }
-      transaction.on_rollback(fn() { rollbacks.val = rollbacks.val + 1 })
+      CoreEngineInstantiation(fn() { () }, fn() { aborts.val = aborts.val + 1 })
     },
   )
   let linker = @runtime_impl.ComponentLinker::with_core_execution_engine(engine)
@@ -710,8 +710,8 @@ test "component runtime: rollback hook callback close rolls back once" {
     _ => "instantiated"
   }
   debug_inspect(outcome, content="\"cancelled\"")
-  debug_inspect(rollback_hooks.val, content="1")
-  debug_inspect(rollbacks.val, content="1")
+  debug_inspect(begin_callbacks.val, content="1")
+  debug_inspect(aborts.val, content="1")
   debug_inspect(
     linker.get_component("closing-at-rollback-hook") is None,
     content="true",
@@ -742,7 +742,7 @@ test "component runtime: close during engine registration cancels instantiation"
   )
   let linker_slot : Ref[@runtime_impl.ComponentLinker?] = Ref(None)
   let registrations = Ref(0)
-  let rollbacks = Ref(0)
+  let aborts = Ref(0)
   let reentry = Ref("not attempted")
   let engine = @runtime_impl.CoreExecutionEngine(
     fn(_store, _module, _instance) {
@@ -769,8 +769,8 @@ test "component runtime: close during engine registration cancels instantiation"
     ) raise @runtime_impl.ComponentRuntimeError {
       raise HostCallError("invoke must not run in this test")
     },
-    register_rollback=fn(transaction) {
-      transaction.on_rollback(fn() { rollbacks.val = rollbacks.val + 1 })
+    begin_instantiation=fn() {
+      CoreEngineInstantiation(fn() { () }, fn() { aborts.val = aborts.val + 1 })
     },
   )
   let linker = @runtime_impl.ComponentLinker::with_core_execution_engine(engine)
@@ -783,7 +783,7 @@ test "component runtime: close during engine registration cancels instantiation"
   }
   debug_inspect(outcome, content="\"cancelled\"")
   debug_inspect(registrations.val, content="1")
-  debug_inspect(rollbacks.val, content="1")
+  debug_inspect(aborts.val, content="1")
   debug_inspect(reentry.val, content="\"cancelled\"")
   // The aborted instantiation must not resurrect state in the closed linker.
   debug_inspect(linker.get_component("closing") is None, content="true")
@@ -957,21 +957,22 @@ fn core_store_allocation_baseline(
   store : @runtime.Store,
 ) -> CoreStoreAllocationBaseline {
   let (native_heap_size, _, native_heap_objects, _, _) = store.get_gc_stats()
+  let allocations = store.allocation_stats()
   {
-    funcs: store.funcs.length(),
-    func_types: store.func_types.length(),
-    func_type_indices: store.func_type_indices.length(),
-    func_owners: store.func_owners.length(),
-    tables: store.tables.length(),
-    jit_tables: store.jit_tables.length(),
-    mems: store.mems.length(),
-    globals: store.globals.length(),
-    tags: store.tags.length(),
-    tag_type_indices: store.tag_type_indices.length(),
-    tag_owners: store.tag_owners.length(),
-    exns: store.exns.length(),
-    wrapped_externs: store.wrapped_externs.length(),
-    instances: store.instances.length(),
+    funcs: allocations.funcs,
+    func_types: allocations.func_types,
+    func_type_indices: allocations.func_type_indices,
+    func_owners: allocations.func_owners,
+    tables: allocations.tables,
+    jit_tables: allocations.jit_tables,
+    mems: allocations.mems,
+    globals: allocations.globals,
+    tags: allocations.tags,
+    tag_type_indices: allocations.tag_type_indices,
+    tag_owners: allocations.tag_owners,
+    exns: allocations.exns,
+    wrapped_externs: allocations.wrapped_externs,
+    instances: allocations.instances,
     interpreter_heap_slots: store.heap.length(),
     interpreter_heap_live: store.heap.stats().live_objects,
     native_heap_size,
@@ -1026,14 +1027,13 @@ fn assert_start_trap_preserves_escaped_gc_ref(
     ),
   )
   let linker = @runtime.Linker::with_store(store)
-  let transaction = @runtime.InstantiationTransaction::new()
-  linker.register_rollback(transaction)
+  let instantiation = linker.begin_instantiation()
   try @executor.instantiate_module_with_imports(store, module_, imports) catch {
     _ => ()
   } noraise {
     _ => fail("expected start to trap")
   }
-  transaction.rollback()
+  instantiation.discard()
   let escaped_idx = match global.get() {
     StructRef(idx) => idx
     value => return fail("expected escaped struct reference, got \{value}")
@@ -1075,14 +1075,13 @@ fn assert_start_trap_preserves_table_escaped_gc_ref(
     ),
   )
   let linker = @runtime.Linker::with_store(store)
-  let transaction = @runtime.InstantiationTransaction::new()
-  linker.register_rollback(transaction)
+  let instantiation = linker.begin_instantiation()
   try @executor.instantiate_module_with_imports(store, module_, imports) catch {
     _ => ()
   } noraise {
     _ => fail("expected start to trap")
   }
-  transaction.rollback()
+  instantiation.discard()
   let escaped_idx = match table.get(0) {
     StructRef(idx) => idx
     value => return fail("expected escaped struct reference, got \{value}")
@@ -1181,29 +1180,29 @@ fn assert_failed_core_registration_returns_to_baseline(
 }
 
 ///|
-test "component runtime: interpreter rolls back core registration on start trap" {
+test "component runtime: interpreter aborts core registration on start trap" {
   assert_failed_core_registration_returns_to_baseline(
     @runtime_impl.interpreter_core_execution_engine(),
   )
 }
 
 ///|
-test "component runtime: native JIT rolls back core registration on start trap" {
+test "component runtime: native JIT aborts core registration on start trap" {
   assert_failed_core_registration_returns_to_baseline(
     @component_native.open_native_component_session(opt_level=0),
   )
 }
 
 ///|
-test "component runtime: engine registration errors roll back core state" {
-  let rollbacks = Ref(0)
+test "component runtime: engine registration errors abort core state" {
+  let aborts = Ref(0)
   let engine = @runtime_impl.CoreExecutionEngine(
     fn(_store, _module, _instance) raise @runtime_impl.ComponentRuntimeError {
       raise NativeCompilationFailed("injected registration failure")
     },
     fn(_store, _instance, _func_idx, _args, _request) { Returned([]) },
-    register_rollback=fn(transaction) {
-      transaction.on_rollback(fn() { rollbacks.val = rollbacks.val + 1 })
+    begin_instantiation=fn() {
+      CoreEngineInstantiation(fn() { () }, fn() { aborts.val = aborts.val + 1 })
     },
   )
   let linker = @runtime_impl.ComponentLinker::with_core_execution_engine(engine)
@@ -1220,7 +1219,7 @@ test "component runtime: engine registration errors roll back core state" {
     core_store_allocation_baseline(linker.get_store()) == baseline,
     content="true",
   )
-  debug_inspect(rollbacks.val, content="1")
+  debug_inspect(aborts.val, content="1")
   linker.close()
 }
 

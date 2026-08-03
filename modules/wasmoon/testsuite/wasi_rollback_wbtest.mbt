@@ -47,8 +47,7 @@ fn assert_old_wasi_instance_usable_after_start_trap(
     @executor.call_exported_func(store, old_instance, "probe", []),
     content="[I32(2)]",
   )
-  let transaction = @runtime.InstantiationTransaction::new()
-  linker.register_rollback(transaction)
+  let instantiation = linker.begin_instantiation()
   try
     @executor.instantiate_with_linker(linker, name, @wat.parse(failing_source))
   catch {
@@ -56,7 +55,7 @@ fn assert_old_wasi_instance_usable_after_start_trap(
   } noraise {
     _ => fail("expected start to trap")
   }
-  transaction.rollback()
+  instantiation.discard()
   debug_inspect(
     @executor.call_exported_func(store, old_instance, "probe", []),
     content="[I32(2)]",
