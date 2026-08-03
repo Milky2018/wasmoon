@@ -312,3 +312,21 @@ test "egraph survives a deep operand chain" {
   run_egraph_pass(func) |> ignore
   inspect(func.verify(), content="()")
 }
+
+///|
+test "egraph elaborates a strength-reduced form into the IR" {
+  // x * 8 has a cheaper form as x << 3. Realizing it requires building a
+  // new expression shape, which only elaboration can do.
+  let builder = FunctionBuilder::FunctionBuilder("elaborate_mul_pow2")
+  let x = builder.add_param(I32)
+  builder.add_result(I32)
+  let eight = builder.iconst_i32(8)
+  let product = builder.imul(x, eight)
+  builder.return_([product])
+  let func = builder.get_function()
+  run_egraph_pass(func) |> ignore
+  inspect(func.verify(), content="()")
+  let text = func.print()
+  inspect(text.contains("ishl"), content="true")
+  inspect(text.contains("imul"), content="false")
+}

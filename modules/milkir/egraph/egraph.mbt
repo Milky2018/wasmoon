@@ -1823,6 +1823,21 @@ pub fn EGraph::extract(self : EGraph, id : EClassId) -> (Int, ENode) {
 }
 
 ///|
+/// Best node per class root, computed once for the whole e-graph.
+///
+/// Elaboration needs every class's chosen node, not one class's, so it pays
+/// for the shared fixpoint once instead of re-running extraction per value.
+/// Classes with no finite extraction (every node cyclic) are absent.
+pub fn EGraph::best_nodes(self : EGraph) -> Map[Int, ENode] {
+  let best : Map[Int, ENode] = Map([])
+  for class_id, entry in self.compute_extraction_table() {
+    let (_, node) = entry
+    best.set(class_id, node)
+  }
+  best
+}
+
+///|
 /// Relax per-class best costs to a fixpoint. A node becomes priceable once
 /// all of its children have finite entries; each update either strictly
 /// lowers a class's (op_cost, depth) or moves to a tie-break-smaller node

@@ -481,6 +481,9 @@ fn optimize_function_with_stats_with_limits_and_ruleset(
   // Run one saturation pass on the function-wide e-graph.
   builder.optimize()
   let egraph = builder.get_egraph()
+  // Extraction results are shared by every elaboration site, so the fixpoint
+  // runs once here rather than per value.
+  let best_nodes = egraph.best_nodes()
   let total_classes = egraph.num_classes()
   let total_nodes = egraph.num_nodes()
   let total_rule_applications = egraph.last_rule_applications()
@@ -535,7 +538,11 @@ fn optimize_function_with_stats_with_limits_and_ruleset(
             bind_rep(builder, param)
           }
 
-          // Apply optimizations: constant folding and operand rewriting.
+          // Apply optimizations: constant folding, operand rewriting, and
+          // elaboration. Elaborated instructions are spliced in ahead of the
+          // instruction that needed them, so the block is rebuilt rather
+          // than mutated in place.
+          let rewritten : Array[Inst] = []
           for inst in block.instructions {
             for operand in inst.operands {
               bind_rep(builder, operand)
@@ -572,11 +579,28 @@ fn optimize_function_with_stats_with_limits_and_ruleset(
                 inst.opcode = op
                 changed = true
               }
+            } else {
+              // Elaboration may prepend instructions that build the operands
+              // the rewritten form needs; those dominate every later use.
+              let before = rewritten.length()
+              if builder.elaborate_inst(func, best_nodes, inst, rewritten) {
+                changed = true
+              }
+              for i in before..<rewritten.length() {
+                if rewritten[i].first_result() is Some(v) {
+                  bind_rep(builder, v)
+                }
+              }
             }
 
+            rewritten.push(inst)
             if inst.first_result() is Some(v) {
               bind_rep(builder, v)
             }
+          }
+          block.instructions.clear()
+          for inst in rewritten {
+            block.instructions.push(inst)
           }
 
           // Exit runs after every child, so push it first.

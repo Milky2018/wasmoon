@@ -85,6 +85,7 @@ pub fn EGraph::add_ushr(Self, EClassId, EClassId) -> EClassId
 pub fn EGraph::add_var(Self, Int) -> EClassId
 pub fn EGraph::add_vconst(Self, Bytes) -> EClassId
 pub fn EGraph::add_xor(Self, EClassId, EClassId) -> EClassId
+pub fn EGraph::best_nodes(Self) -> Map[Int, ENode]
 pub fn EGraph::const_conflict_count(Self) -> Int
 pub fn EGraph::equiv(Self, EClassId, EClassId) -> Bool
 pub fn EGraph::extract(Self, EClassId) -> (Int, ENode)
