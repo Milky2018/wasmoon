@@ -77,4 +77,3 @@ pub fn ValidatedComponent::component_bytes(Self) -> Bytes
 // Type aliases
 
 // Traits
-

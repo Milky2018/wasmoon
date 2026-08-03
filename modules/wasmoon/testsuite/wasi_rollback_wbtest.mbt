@@ -48,7 +48,7 @@ fn assert_old_wasi_instance_usable_after_start_trap(
     content="[I32(2)]",
   )
   let transaction = @runtime.InstantiationTransaction::new()
-  linker.register_rollback(transaction)
+  linker.register_rollback(transaction.registrar())
   try
     @executor.instantiate_with_linker(linker, name, @wat.parse(failing_source))
   catch {

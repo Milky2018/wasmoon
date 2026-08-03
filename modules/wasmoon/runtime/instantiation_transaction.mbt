@@ -6,45 +6,50 @@
 /// are idempotent.
 struct InstantiationTransaction {
   rollbacks : Array[() -> Unit]
+  finalizers : Array[() -> Unit]
   mut active : Bool
 }
 
 ///|
 pub fn InstantiationTransaction::new() -> InstantiationTransaction {
-  { rollbacks: [], active: true }
+  { rollbacks: [], finalizers: [], active: true }
 }
 
 ///|
-pub fn InstantiationTransaction::on_rollback(
+struct RollbackRegistrar {
+  transaction : InstantiationTransaction
+}
+
+///|
+impl Debug for RollbackRegistrar with fn to_repr(_self) {
+  Repr::literal("rollback-registrar")
+}
+
+///|
+pub fn InstantiationTransaction::registrar(
   self : InstantiationTransaction,
+) -> RollbackRegistrar {
+  { transaction: self }
+}
+
+///|
+pub fn RollbackRegistrar::on_rollback(
+  self : RollbackRegistrar,
   rollback : () -> Unit,
 ) -> Unit {
-  if self.active {
-    self.rollbacks.push(rollback)
+  if self.transaction.active {
+    self.transaction.rollbacks.push(rollback)
   }
 }
 
 ///|
-fn[T] InstantiationTransaction::truncate_on_rollback(
-  self : InstantiationTransaction,
-  values : Array[T],
+pub fn RollbackRegistrar::on_finish(
+  self : RollbackRegistrar,
+  finalizer : () -> Unit,
 ) -> Unit {
-  let length = values.length()
-  self.on_rollback(fn() { values.truncate(length) })
-}
-
-///|
-fn[T] InstantiationTransaction::restore_on_rollback(
-  self : InstantiationTransaction,
-  values : Array[T],
-) -> Unit {
-  let snapshot = values.copy()
-  self.on_rollback(fn() {
-    values.clear()
-    for value in snapshot {
-      values.push(value)
-    }
-  })
+  if self.transaction.active {
+    self.transaction.finalizers.push(finalizer)
+  }
 }
 
 ///|
@@ -54,6 +59,10 @@ pub fn InstantiationTransaction::commit(
   if self.active {
     self.active = false
     self.rollbacks.clear()
+    for finalizer in self.finalizers {
+      finalizer()
+    }
+    self.finalizers.clear()
   }
 }
 
@@ -71,4 +80,8 @@ pub fn InstantiationTransaction::rollback(
     self.rollbacks[index]()
   }
   self.rollbacks.clear()
+  for finalizer in self.finalizers {
+    finalizer()
+  }
+  self.finalizers.clear()
 }

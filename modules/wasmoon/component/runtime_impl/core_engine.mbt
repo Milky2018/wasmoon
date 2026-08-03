@@ -110,7 +110,7 @@ pub(all) enum CoreExecutionOutcome {
 struct CoreExecutionEngine {
   prepare_store_fn : (@runtime.Store) -> Unit
   close_fn : () -> Unit
-  register_rollback_fn : (@runtime.InstantiationTransaction) -> Unit
+  register_rollback_fn : (@runtime.RollbackRegistrar) -> Unit
   register_instance_fn : (
     @runtime.Store,
     @types.Module,
@@ -320,9 +320,7 @@ pub fn CoreExecutionEngine::CoreExecutionEngine(
     CoreExecutionRequest,
   ) -> CoreExecutionOutcome raise ComponentRuntimeError,
   prepare_store? : (@runtime.Store) -> Unit = fn(_store) { () },
-  register_rollback? : (@runtime.InstantiationTransaction) -> Unit = fn(
-    _transaction,
-  ) {
+  register_rollback? : (@runtime.RollbackRegistrar) -> Unit = fn(_registrar) {
     ()
   },
   close? : () -> Unit = fn() { () },
@@ -365,7 +363,7 @@ fn CoreExecutionEngine::with_lifecycle(
       lifecycle.finish_outcome(outcome)
     },
     prepare_store=fn(store) { self.prepare_store(store) },
-    register_rollback=fn(transaction) { self.register_rollback(transaction) },
+    register_rollback=fn(registrar) { self.register_rollback(registrar) },
     close=fn() { self.close() },
   )
 }
@@ -390,9 +388,9 @@ pub fn CoreExecutionEngine::prepare_store(
 ///|
 pub fn CoreExecutionEngine::register_rollback(
   self : CoreExecutionEngine,
-  transaction : @runtime.InstantiationTransaction,
+  registrar : @runtime.RollbackRegistrar,
 ) -> Unit {
-  (self.register_rollback_fn)(transaction)
+  (self.register_rollback_fn)(registrar)
 }
 
 ///|

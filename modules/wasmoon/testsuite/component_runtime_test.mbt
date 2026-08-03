@@ -727,12 +727,12 @@ test "component runtime: rollback hook callback close rolls back once" {
   let engine = @runtime_impl.CoreExecutionEngine(
     fn(_store, _module, _instance) { () },
     fn(_store, _instance, _func_idx, _args, _request) { Returned([]) },
-    register_rollback=fn(transaction) {
+    register_rollback=fn(registrar) {
       rollback_hooks.val = rollback_hooks.val + 1
       if linker_slot.val is Some(linker) {
         linker.close()
       }
-      transaction.on_rollback(fn() { rollbacks.val = rollbacks.val + 1 })
+      registrar.on_rollback(fn() { rollbacks.val = rollbacks.val + 1 })
     },
   )
   let linker = @runtime_impl.ComponentLinker::with_core_execution_engine(engine)
@@ -781,8 +781,8 @@ test "component runtime: close during engine registration cancels instantiation"
     ) raise @runtime_impl.ComponentRuntimeError {
       raise HostCallError("invoke must not run in this test")
     },
-    register_rollback=fn(transaction) {
-      transaction.on_rollback(fn() { rollbacks.val = rollbacks.val + 1 })
+    register_rollback=fn(registrar) {
+      registrar.on_rollback(fn() { rollbacks.val = rollbacks.val + 1 })
     },
   )
   let linker = @runtime_impl.ComponentLinker::with_core_execution_engine(engine)
@@ -837,6 +837,47 @@ test "component runtime: same-Linker reentrant instantiation is rejected" {
   }
   debug_inspect(reentry.val, content="\"reentrant\"")
   debug_inspect(linker.get_component("reentrant-inner") is None, content="true")
+  linker.close()
+}
+
+///|
+test "component runtime: shared-Store reentry rolls back as one transaction" {
+  let did_reenter = Ref(false)
+  let nested_linker_slot : Ref[@runtime.Linker?] = Ref(None)
+  let engine = @runtime_impl.CoreExecutionEngine(
+    fn(store, _module, _instance) raise @runtime_impl.ComponentRuntimeError {
+      if !did_reenter.val {
+        did_reenter.val = true
+        let nested_linker = @runtime.Linker::with_store(store)
+        nested_linker_slot.val = Some(nested_linker)
+        try
+          @executor.instantiate_with_linker(
+            nested_linker,
+            "reentrant-inner",
+            @wat.parse(
+              "(module (func (export \"f\") (result i32) (i32.const 7)))",
+            ),
+          )
+        catch {
+          error => raise HostCallError(error.to_string())
+        } noraise {
+          _ => ()
+        }
+      }
+    },
+    fn(_store, _instance, _func_idx, _args, _request) { Returned([]) },
+  )
+  let linker = @runtime_impl.ComponentLinker::with_core_execution_engine(engine)
+  let failing = core_registration_then_start_trap()
+  let outcome = lifecycle_outcome(() => linker.instantiate("outer", failing))
+  debug_inspect(outcome, content="\"failed\"")
+  guard nested_linker_slot.val is Some(nested_linker) else {
+    return fail("expected engine registration callback to reenter")
+  }
+  debug_inspect(
+    nested_linker.get_module("reentrant-inner") is None,
+    content="true",
+  )
   linker.close()
 }
 
@@ -983,7 +1024,7 @@ fn assert_start_trap_preserves_escaped_gc_ref(
   )
   let linker = @runtime.Linker::with_store(store)
   let transaction = @runtime.InstantiationTransaction::new()
-  linker.register_rollback(transaction)
+  linker.register_rollback(transaction.registrar())
   try @executor.instantiate_module_with_imports(store, module_, imports) catch {
     _ => ()
   } noraise {
@@ -1032,7 +1073,7 @@ fn assert_start_trap_preserves_table_escaped_gc_ref(
   )
   let linker = @runtime.Linker::with_store(store)
   let transaction = @runtime.InstantiationTransaction::new()
-  linker.register_rollback(transaction)
+  linker.register_rollback(transaction.registrar())
   try @executor.instantiate_module_with_imports(store, module_, imports) catch {
     _ => ()
   } noraise {
@@ -1158,8 +1199,8 @@ test "component runtime: engine registration errors roll back core state" {
       raise NativeCompilationFailed("injected registration failure")
     },
     fn(_store, _instance, _func_idx, _args, _request) { Returned([]) },
-    register_rollback=fn(transaction) {
-      transaction.on_rollback(fn() { rollbacks.val = rollbacks.val + 1 })
+    register_rollback=fn(registrar) {
+      registrar.on_rollback(fn() { rollbacks.val = rollbacks.val + 1 })
     },
   )
   let linker = @runtime_impl.ComponentLinker::with_core_execution_engine(engine)

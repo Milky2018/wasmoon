@@ -630,12 +630,13 @@ pub fn ComponentLinker::instantiate(
   // stack, so a later start trap withdraws all core allocations and native
   // contexts created by this root.
   let transaction = @runtime.InstantiationTransaction::new()
+  let registrar = transaction.registrar()
   let staged : Array[(String, ComponentInstance)] = []
   let instance = self.core_execution_lifecycle.with_lease(
     fn() raise ComponentRuntimeError {
-      self.core_linker.register_rollback(transaction)
-      self.core_engine().register_rollback(transaction)
-      transaction.on_rollback(fn() { rollback_staged_registrations(staged) })
+      self.core_linker.register_rollback(registrar)
+      self.core_engine().register_rollback(registrar)
+      registrar.on_rollback(fn() { rollback_staged_registrations(staged) })
       let isolated = @component.parse_component(component.component_bytes()) catch {
         e => raise ComponentParseError(e.to_string())
       }

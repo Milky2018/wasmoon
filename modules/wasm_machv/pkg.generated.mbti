@@ -20,4 +20,3 @@ pub fn Environment::new((Int) -> @machv.CodeSymbol, (Int) -> @machv.EnvironmentF
 // Type aliases
 
 // Traits
-

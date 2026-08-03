@@ -169,7 +169,7 @@ pub fn Imports::resolve(Self, String, String) -> ExternVal?
 type InstantiationTransaction
 pub fn InstantiationTransaction::commit(Self) -> Unit
 pub fn InstantiationTransaction::new() -> Self
-pub fn InstantiationTransaction::on_rollback(Self, () -> Unit) -> Unit
+pub fn InstantiationTransaction::registrar(Self) -> RollbackRegistrar
 pub fn InstantiationTransaction::rollback(Self) -> Unit
 
 type Linker
@@ -184,7 +184,7 @@ pub fn Linker::close(Self) -> Unit
 pub fn Linker::get_module(Self, String) -> ModuleInstance?
 pub fn Linker::get_store(Self) -> Store
 pub fn Linker::register(Self, String, ModuleInstance) -> Unit raise RuntimeError
-pub fn Linker::register_rollback(Self, InstantiationTransaction) -> Unit
+pub fn Linker::register_rollback(Self, RollbackRegistrar) -> Unit
 pub fn Linker::with_store(Store) -> Self
 
 pub struct MarkSweepHeap {
@@ -295,6 +295,10 @@ pub fn ModuleInstance::get_array_type(Self, Int) -> @types.ArrayType
 pub fn ModuleInstance::get_func_type(Self, Int) -> @types.FuncType
 pub fn ModuleInstance::get_struct_type(Self, Int) -> @types.StructType
 pub impl Show for ModuleInstance
+
+type RollbackRegistrar
+pub fn RollbackRegistrar::on_finish(Self, () -> Unit) -> Unit
+pub fn RollbackRegistrar::on_rollback(Self, () -> Unit) -> Unit
 
 pub struct RuntimeCapabilities {
   version : String
@@ -520,4 +524,3 @@ pub(open) trait GcRuntime {
   fn set_threshold(Self, Int) -> Unit
   fn get_threshold(Self) -> Int
 }
-
