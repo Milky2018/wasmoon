@@ -49,7 +49,8 @@ pub fn run_explore(
   // Load the module
   let mod_ = load_module_from_path(wasm_path) catch {
     e => {
-      println("Error loading module: \{e}")
+      @logger.error("loading module: \{e}")
+      exit_failure()
       return
     }
   }
@@ -287,7 +288,8 @@ pub fn run_explore(
     let html = generate_html_report(compiled_funcs)
     @fs.write_string_to_file(path, html) catch {
       e => {
-        println("Error writing HTML report: \{e}")
+        @logger.error("writing HTML report: \{e}")
+        exit_failure()
         return
       }
     }

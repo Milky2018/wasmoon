@@ -221,7 +221,9 @@ extern "c" fn native_exit(code : Int) = "exit"
 
 ///|
 fn exit_error(msg : String) -> Unit {
-  println("error: \{msg}")
+  // Diagnostics go to stderr so `wasm2wat` in stdout mode never mixes an
+  // error into the WAT it emits (ISS-376).
+  @logger.error(msg)
   native_exit(1)
 }
 
