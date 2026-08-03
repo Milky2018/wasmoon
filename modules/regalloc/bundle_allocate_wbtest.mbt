@@ -492,14 +492,13 @@ test "production bundle queue keeps live extent separate from spill weight" {
 fn allocation_cost_test_segment(
   id : Int,
   value : Int,
-  range : ProgramRange,
   weight : Int,
   has_use : Bool,
 ) -> AllocationSegment {
   {
     id,
     value: { id: value, class: Int },
-    range,
+    range: ProgramRange(ProgramPoint(id, 0), ProgramPoint(id, 0)),
     weight,
     has_use,
     has_fixed_constraint: false,
@@ -509,101 +508,54 @@ fn allocation_cost_test_segment(
 }
 
 ///|
-test "production bundle cost protects two hottest fragments of one value" {
+test "small same-value bundle sums its two hottest active fragment costs" {
   let segments : Array[AllocationSegment] = [
-    allocation_cost_test_segment(
-      0,
-      0,
-      ProgramRange(ProgramPoint(0, 39), ProgramPoint(0, 114)),
-      53,
-      true,
-    ),
-    allocation_cost_test_segment(
-      1,
-      0,
-      ProgramRange(ProgramPoint(1, -1), ProgramPoint(1, 200)),
-      25,
-      true,
-    ),
-    allocation_cost_test_segment(
-      2,
-      0,
-      ProgramRange(ProgramPoint(4, -1), ProgramPoint(4, 2)),
-      1,
-      false,
-    ),
-    allocation_cost_test_segment(
-      3,
-      1,
-      ProgramRange(ProgramPoint(0, 39), ProgramPoint(0, 114)),
-      53,
-      true,
-    ),
-    allocation_cost_test_segment(
-      4,
-      2,
-      ProgramRange(ProgramPoint(1, -1), ProgramPoint(1, 200)),
-      25,
-      true,
-    ),
-    allocation_cost_test_segment(
-      5,
-      3,
-      ProgramRange(ProgramPoint(3, -1), ProgramPoint(3, 2)),
-      1,
-      false,
-    ),
-    allocation_cost_test_segment(
-      6,
-      4,
-      ProgramRange(ProgramPoint(0, 0), ProgramPoint(0, 1)),
-      2000,
-      true,
-    ),
-    allocation_cost_test_segment(
-      7,
-      4,
-      ProgramRange(ProgramPoint(1, 0), ProgramPoint(1, 41)),
-      1,
-      false,
-    ),
-    allocation_cost_test_segment(
-      8,
-      4,
-      ProgramRange(ProgramPoint(2, 0), ProgramPoint(2, 1)),
-      10000,
-      true,
-    ),
-    allocation_cost_test_segment(
-      9,
-      4,
-      ProgramRange(ProgramPoint(3, 0), ProgramPoint(3, 3)),
-      1,
-      false,
-    ),
-    allocation_cost_test_segment(
-      10,
-      0,
-      ProgramRange(ProgramPoint(2, 0), ProgramPoint(2, 4)),
-      10,
-      true,
-    ),
-    allocation_cost_test_segment(
-      11,
-      0,
-      ProgramRange(ProgramPoint(3, 0), ProgramPoint(3, 4)),
-      8,
-      true,
-    ),
+    allocation_cost_test_segment(0, 0, 40, true),
+    allocation_cost_test_segment(1, 0, 20, true),
+    allocation_cost_test_segment(2, 0, 12, true),
   ]
-  inspect(allocation_bundle(0, [0, 1, 10, 2], segments).weight, content="78")
-  inspect(allocation_bundle(1, [0, 1], segments).weight, content="33")
-  inspect(allocation_bundle(2, [3, 4, 5], segments).weight, content="33")
-  inspect(allocation_bundle(3, [6, 7, 8, 9], segments).weight, content="481")
-  inspect(
-    allocation_bundle(4, [0, 1, 10, 11, 2], segments).weight,
-    content="32",
-  )
+  inspect(allocation_bundle(0, [0, 1, 2], segments).weight, content="60")
+}
+
+///|
+test "two-fragment bundle keeps density eviction cost" {
+  let segments : Array[AllocationSegment] = [
+    allocation_cost_test_segment(0, 0, 40, true),
+    allocation_cost_test_segment(1, 0, 20, true),
+  ]
+  inspect(allocation_bundle(0, [0, 1], segments).weight, content="30")
+}
+
+///|
+test "coalesced SSA values keep density eviction cost" {
+  let segments : Array[AllocationSegment] = [
+    allocation_cost_test_segment(0, 0, 40, true),
+    allocation_cost_test_segment(1, 1, 20, true),
+    allocation_cost_test_segment(2, 2, 12, true),
+  ]
+  inspect(allocation_bundle(0, [0, 1, 2], segments).weight, content="24")
+}
+
+///|
+test "interior cold gap keeps density eviction cost" {
+  let segments : Array[AllocationSegment] = [
+    allocation_cost_test_segment(0, 0, 40, true),
+    allocation_cost_test_segment(1, 0, 5, false),
+    allocation_cost_test_segment(2, 0, 15, true),
+  ]
+  inspect(allocation_bundle(0, [0, 1, 2], segments).weight, content="20")
+}
+
+///|
+test "bundle with more than four fragments keeps density eviction cost" {
+  let segments : Array[AllocationSegment] = [
+    allocation_cost_test_segment(0, 0, 40, true),
+    allocation_cost_test_segment(1, 0, 20, true),
+    allocation_cost_test_segment(2, 0, 15, true),
+    allocation_cost_test_segment(3, 0, 10, true),
+    allocation_cost_test_segment(4, 0, 5, true),
+  ]
+  inspect(allocation_bundle(0, [0, 1, 2, 3, 4], segments).weight, content="18")
 }
 
 ///|
