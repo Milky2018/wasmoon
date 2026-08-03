@@ -141,15 +141,20 @@ jobs:
             --suite future-gated --dump-failures --no-jit || status=$?
           exit "$status"
 
-      # This gate rebuilds each covered package with sanitizers from scratch and
-      # has grown with every test file added to it: 2m20s on 2026-07-28, 32m25s
-      # on 07-29, 33m18s on 07-30, then past the old 40-minute budget. A run
-      # that reaches the last covered file needs roughly 55 minutes, most of it
-      # spent compiling large packages under ASan rather than running tests. The
-      # budget below is measured headroom, not an estimate; ISS-368 tracks
-      # bringing the cost itself down.
+      # This gate rebuilds each covered package with sanitizers from scratch,
+      # so its cost is compile volume, not test count. It grew with every file
+      # added to it — 2m20s on 2026-07-28, 32m25s on 07-29, 33m18s on 07-30 —
+      # until it exceeded a 40-minute budget that was then raised to 75.
+      #
+      # ISS-368 moved the two covered blackbox tests out of the 17k-line
+      # wasmoon/testsuite package into wasmoon/sanitizer_testsuite, which
+      # removed that package from the gate entirely. Measured under the same
+      # sanitizer wrapper, compiling wasmoon/testsuite alone costs 289s where
+      # building the new package with all its dependencies from scratch costs
+      # 262s. Keep this package small: a covered test placed in a large
+      # package puts that package's whole compile back into this budget.
       - name: run native sanitizer checks
-        timeout-minutes: 75
+        timeout-minutes: 60
         env:
           MOONBIT_NEW_NATIVE: 0
           ASAN_OPTIONS: ${{ matrix.asan_options }}
@@ -170,7 +175,7 @@ jobs:
           moon test --target native --target-dir "$sanitizer_build" \
             modules/wasmoon_jit/native_continuation_test.mbt
           moon test --target native --target-dir "$sanitizer_build" \
-            modules/wasmoon/testsuite/jit_resumable_lifecycle_test.mbt
+            modules/wasmoon/sanitizer_testsuite/jit_resumable_lifecycle_test.mbt
           moon test --target native --target-dir "$sanitizer_build" \
             modules/wasmoon_jit/callback_ownership_test.mbt
           moon test --target native --target-dir "$sanitizer_build" \
@@ -184,6 +189,6 @@ jobs:
           moon test --target native --target-dir "$sanitizer_build" \
             modules/wasmoon/cmd/wasmoon/commands/component_error_wbtest.mbt
           moon test --target native --target-dir "$sanitizer_build" \
-            modules/wasmoon/testsuite/component_runtime_facade_test.mbt
+            modules/wasmoon/sanitizer_testsuite/component_runtime_facade_test.mbt
           python3 scripts/verify_native_sanitizers.py \
             --target-dir "$sanitizer_build" --minimum-test-binaries 5
