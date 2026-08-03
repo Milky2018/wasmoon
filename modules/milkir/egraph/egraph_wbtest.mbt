@@ -1637,3 +1637,48 @@ test "extraction prices cycle-reachable classes context-free" {
   inspect(b_cost, content="1")
   inspect(b_node.op, content="Bnot")
 }
+
+///|
+test "conflicting widths poison the class type" {
+  let eg = EGraph::EGraph()
+  let c = eg.add_const(7)
+  eg.set_type(c, 32)
+  inspect(eg.get_bits(c) is Some(32), content="true")
+  // A second, different width (the shared-constant case) poisons the class.
+  eg.set_type(c, 64)
+  inspect(eg.get_bits(c) is None, content="true")
+  inspect(eg.type_conflict_count(), content="1")
+  // Poisoned classes never regain a width.
+  eg.set_type(c, 32)
+  inspect(eg.get_bits(c) is None, content="true")
+  inspect(eg.type_conflict_count(), content="1")
+}
+
+///|
+test "merging classes with differing widths poisons the type" {
+  let eg = EGraph::EGraph()
+  let x = eg.add_var(1)
+  let y = eg.add_var(2)
+  eg.set_type(x, 32)
+  eg.set_type(y, 64)
+  eg.merge(x, y) |> ignore
+  inspect(eg.get_bits(y) is None, content="true")
+  inspect(eg.type_conflict_count(), content="1")
+  eg.rebuild()
+  inspect(eg.get_bits(x) is None, content="true")
+}
+
+///|
+test "merging classes with differing constants is loud and unharvested" {
+  let eg = EGraph::EGraph()
+  let three = eg.add_const(3)
+  let five = eg.add_const(5)
+  eg.merge(three, five) |> ignore
+  // The conflict is observable and neither constant is harvestable.
+  inspect(eg.const_conflict_count(), content="1")
+  inspect(eg.get_const(five) is None, content="true")
+  // The refusal survives rebuild's cache refresh.
+  eg.rebuild()
+  inspect(eg.get_const(three) is None, content="true")
+  inspect(eg.const_conflict_count() >= 1, content="true")
+}

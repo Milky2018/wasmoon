@@ -396,6 +396,13 @@ struct EGraph {
   opcode_index : Map[EOpcodeTag, @hashset.HashSet[Int]]
   // Type information: maps canonical class id to bit width (8, 16, 32, 64, 128)
   type_map : Map[Int, Int]
+  // Classes whose width information conflicted (e.g., a constant shared by
+  // i32 and i64 uses). Poisoned classes report no width so width-dependent
+  // rules skip them instead of rewriting with a first-seen width (ISS-379).
+  type_conflicts : @hashset.HashSet[Int]
+  // Diagnostic counters: conflict observations, monotonically increasing.
+  mut type_conflict_hits : Int
+  mut const_conflict_hits : Int
   // Rematerialization set: classes that are cheap to recompute
   remat_set : @hashset.HashSet[Int]
   // Number of successful rule applications in the most recent saturate call.
@@ -415,6 +422,9 @@ pub fn EGraph::EGraph() -> EGraph {
     dirty: false,
     opcode_index: Map([]),
     type_map: Map([]),
+    type_conflicts: HashSet([]),
+    type_conflict_hits: 0,
+    const_conflict_hits: 0,
     remat_set: HashSet([]),
     last_rule_applications: 0,
     last_matches_limit_hits: 0,
@@ -531,13 +541,45 @@ pub fn EGraph::add_typed(self : EGraph, node : ENode, bits : Int) -> EClassId {
 }
 
 ///|
-/// Set the type (bit width) for an equivalence class
+/// Poison a class's width information: drop the entry, remember the class,
+/// and record the observation. Idempotent per class root.
+fn EGraph::note_type_conflict(self : EGraph, root : Int) -> Unit {
+  self.type_map.remove(root)
+  if !self.type_conflicts.contains(root) {
+    self.type_conflicts.add(root)
+    self.type_conflict_hits = self.type_conflict_hits + 1
+  }
+}
+
+///|
+/// Set the type (bit width) for an equivalence class.
+/// A conflicting assignment poisons the class: it reports no width from
+/// then on, so width-dependent rules skip it rather than rewriting with
+/// whichever width happened to be recorded first.
 pub fn EGraph::set_type(self : EGraph, id : EClassId, bits : Int) -> Unit {
   let canonical = self.find(id).0
   match self.type_map.get(canonical) {
-    None => self.type_map.set(canonical, bits)
-    Some(existing) => if existing == bits { () } else { () }
+    None =>
+      if !self.type_conflicts.contains(canonical) {
+        self.type_map.set(canonical, bits)
+      }
+    Some(existing) => if existing != bits { self.note_type_conflict(canonical) }
   }
+}
+
+///|
+/// Number of width-conflict observations so far (diagnostic).
+pub fn EGraph::type_conflict_count(self : EGraph) -> Int {
+  self.type_conflict_hits
+}
+
+///|
+/// Number of constant-cache conflict observations so far (diagnostic).
+/// A nonzero value means some rule merged classes carrying different
+/// constants — an unsound union whose constant is deliberately not
+/// harvested.
+pub fn EGraph::const_conflict_count(self : EGraph) -> Int {
+  self.const_conflict_hits
 }
 
 ///|
@@ -670,12 +712,24 @@ pub fn EGraph::subsume(self : EGraph, a : EClassId, b : EClassId) -> EClassId {
   let keep_root = self.uf.union_keep(b.0, a.0)
   let b = EClassId(keep_root)
 
-  // Transfer type information from a to b if b doesn't have it
-  if self.type_map.get(b.0) is None && self.type_map.get(a.0) is Some(bits) {
-    self.type_map.set(b.0, bits)
+  // Transfer type information from a to b; conflicting widths poison b.
+  if self.type_conflicts.contains(a.0) {
+    self.note_type_conflict(b.0)
   }
-  // Remove type entry for the subsumed class
+  match (self.type_map.get(b.0), self.type_map.get(a.0)) {
+    (None, Some(bits)) =>
+      if !self.type_conflicts.contains(b.0) {
+        self.type_map.set(b.0, bits)
+      }
+    (Some(existing), Some(bits)) =>
+      if existing != bits {
+        self.note_type_conflict(b.0)
+      }
+    _ => ()
+  }
+  // Remove type entries for the subsumed class
   self.type_map.remove(a.0)
+  self.type_conflicts.remove(a.0)
 
   // Transfer rematerialization flag: if either was rematerializable, result is
   if self.remat_set.contains(a.0) {
@@ -729,13 +783,24 @@ pub fn EGraph::merge(self : EGraph, a : EClassId, b : EClassId) -> EClassId {
   let new_id = EClassId(keep_root)
   let other_id = a
 
-  // Merge type information: prefer existing type, or take from other class
-  if (self.type_map.get(new_id.0), self.type_map.get(other_id.0))
-    is (None, Some(bits)) {
-    self.type_map.set(new_id.0, bits)
+  // Merge type information; conflicting widths poison the merged class.
+  if self.type_conflicts.contains(other_id.0) {
+    self.note_type_conflict(new_id.0)
   }
-  // Remove old type entry
+  match (self.type_map.get(new_id.0), self.type_map.get(other_id.0)) {
+    (None, Some(bits)) =>
+      if !self.type_conflicts.contains(new_id.0) {
+        self.type_map.set(new_id.0, bits)
+      }
+    (Some(existing), Some(bits)) =>
+      if existing != bits {
+        self.note_type_conflict(new_id.0)
+      }
+    _ => ()
+  }
+  // Remove old type entries
   self.type_map.remove(other_id.0)
+  self.type_conflicts.remove(other_id.0)
 
   // Merge rematerialization flag: if either was rematerializable, result is
   if self.remat_set.contains(other_id.0) {
@@ -765,12 +830,26 @@ pub fn EGraph::merge(self : EGraph, a : EClassId, b : EClassId) -> EClassId {
           self.hashcons.set(canonical_node, new_id)
         }
       }
-      // Merge constant caches: prefer non-None values
-      if root_class.const_value is None && other_class.const_value is Some(_) {
-        root_class.const_value = other_class.const_value
+      // Merge constant caches. Two classes carrying *different* constants
+      // is proof of an unsound union: record it and refuse to harvest
+      // either constant rather than silently keeping the root's.
+      match (root_class.const_value, other_class.const_value) {
+        (Some(a_val), Some(b_val)) =>
+          if a_val != b_val {
+            root_class.const_value = None
+            self.const_conflict_hits = self.const_conflict_hits + 1
+          }
+        (None, Some(_)) => root_class.const_value = other_class.const_value
+        _ => ()
       }
-      if root_class.fconst_value is None && other_class.fconst_value is Some(_) {
-        root_class.fconst_value = other_class.fconst_value
+      match (root_class.fconst_value, other_class.fconst_value) {
+        (Some(a_bits), Some(b_bits)) =>
+          if a_bits != b_bits {
+            root_class.fconst_value = None
+            self.const_conflict_hits = self.const_conflict_hits + 1
+          }
+        (None, Some(_)) => root_class.fconst_value = other_class.fconst_value
+        _ => ()
       }
     }
     // Remove the merged class
@@ -847,6 +926,8 @@ pub fn EGraph::rebuild(self : EGraph) -> Unit {
       let canonical_nodes : Array[ENode] = []
       let mut const_value : Int64? = None
       let mut fconst_value : UInt64? = None
+      let mut const_conflicted = false
+      let mut fconst_conflicted = false
       for node in root_class.nodes {
         let canonical_node = self.canonicalize(node)
 
@@ -862,19 +943,18 @@ pub fn EGraph::rebuild(self : EGraph) -> Unit {
           canonical_nodes.push(canonical_node)
         }
 
-        // Refresh constant caches.
+        // Refresh constant caches; a class containing two different
+        // constants is an unsound union and must not be harvested.
         match canonical_node.op {
           Const(v) =>
-            if const_value is None {
-              const_value = Some(v)
-            } else {
-              ()
+            match const_value {
+              None => const_value = Some(v)
+              Some(existing) => if existing != v { const_conflicted = true }
             }
           Fconst(bits) =>
-            if fconst_value is None {
-              fconst_value = Some(bits)
-            } else {
-              ()
+            match fconst_value {
+              None => fconst_value = Some(bits)
+              Some(existing) => if existing != bits { fconst_conflicted = true }
             }
           _ => ()
         }
@@ -899,8 +979,18 @@ pub fn EGraph::rebuild(self : EGraph) -> Unit {
         )
       }
       root_class.nodes = canonical_nodes
-      root_class.const_value = const_value
-      root_class.fconst_value = fconst_value
+      if const_conflicted {
+        self.const_conflict_hits = self.const_conflict_hits + 1
+        root_class.const_value = None
+      } else {
+        root_class.const_value = const_value
+      }
+      if fconst_conflicted {
+        self.const_conflict_hits = self.const_conflict_hits + 1
+        root_class.fconst_value = None
+      } else {
+        root_class.fconst_value = fconst_value
+      }
     }
     if unions.is_empty() {
       // Finalize: commit rebuilt structures and refresh type/remat maps.
@@ -920,12 +1010,28 @@ pub fn EGraph::rebuild(self : EGraph) -> Unit {
         }
       }
 
-      // Re-root the type map.
+      // Re-root the poison set, then the type map; entries that collide on
+      // a root with differing widths poison that root instead of silently
+      // letting the first entry win.
+      let poisoned_roots : Array[Int] = self.type_conflicts.to_array()
+      self.type_conflicts.clear()
+      for id in poisoned_roots {
+        self.type_conflicts.add(self.uf.find(id))
+      }
       let new_type_map : Map[Int, Int] = Map([])
       for id, bits in self.type_map {
         let root = self.uf.find(id)
-        if new_type_map.get(root) is None {
-          new_type_map.set(root, bits)
+        guard !self.type_conflicts.contains(root) else { continue }
+        match new_type_map.get(root) {
+          None => new_type_map.set(root, bits)
+          Some(existing) =>
+            if existing != bits {
+              new_type_map.remove(root)
+              if !self.type_conflicts.contains(root) {
+                self.type_conflicts.add(root)
+                self.type_conflict_hits = self.type_conflict_hits + 1
+              }
+            }
         }
       }
       self.type_map.clear()
