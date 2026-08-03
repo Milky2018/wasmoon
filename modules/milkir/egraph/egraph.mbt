@@ -1608,21 +1608,6 @@ fn extract_cost_is_better(lhs : ExtractCost, rhs : ExtractCost) -> Bool {
 }
 
 ///|
-fn extract_cost_cannot_beat(partial : ExtractCost, best : ExtractCost) -> Bool {
-  if best.infinite {
-    false
-  } else if partial.infinite {
-    true
-  } else if partial.op_cost > best.op_cost {
-    true
-  } else if partial.op_cost < best.op_cost {
-    false
-  } else {
-    partial.depth >= best.depth
-  }
-}
-
-///|
 fn extract_cost_add(lhs : ExtractCost, rhs : ExtractCost) -> ExtractCost {
   if lhs.infinite || rhs.infinite {
     return extract_cost_infinity()
@@ -1689,100 +1674,83 @@ fn extract_cost_apply_bonus(cost : ExtractCost, bonus : Int) -> ExtractCost {
 ///|
 /// Extract the best (lowest cost) expression from an e-class
 /// Returns the total cost and the best e-node
+///
+/// Costs are computed with a bottom-up fixpoint over the whole e-graph
+/// (egg-style relaxation) rather than a memoized DFS: a DFS that prices
+/// re-entered classes as infinite while an ancestor is on the stack can
+/// memoize that context-dependent infinity and poison later queries that
+/// reach the class through a cycle-free route. The fixpoint has no
+/// evaluation context, so every class settles to its true best cost.
 pub fn EGraph::extract(self : EGraph, id : EClassId) -> (Int, ENode) {
-  // Use memoization to avoid recomputing
-  let memo : Map[Int, (ExtractCost, ENode)] = Map([])
-  // Track classes currently being processed to detect cycles
-  let in_progress : @hashset.HashSet[Int] = HashSet([])
-  let (cost, node) = self.extract_impl(id, memo, in_progress)
-  if cost.infinite {
-    (@int.MAX_VALUE, node)
-  } else {
-    (cost.op_cost, node)
+  let canonical = self.find(id)
+  let table = self.compute_extraction_table()
+  match table.get(canonical.0) {
+    Some((cost, node)) =>
+      if cost.infinite {
+        (@int.MAX_VALUE, node)
+      } else {
+        (cost.op_cost, node)
+      }
+    // No finite extraction exists (every node participates in a cycle).
+    None => (@int.MAX_VALUE, { op: Var(-1), children: [] })
   }
 }
 
 ///|
-fn EGraph::extract_impl(
+/// Relax per-class best costs to a fixpoint. A node becomes priceable once
+/// all of its children have finite entries; each update either strictly
+/// lowers a class's (op_cost, depth) or moves to a tie-break-smaller node
+/// at equal cost, so the loop terminates and the result is independent of
+/// visit order.
+fn EGraph::compute_extraction_table(
   self : EGraph,
-  id : EClassId,
-  memo : Map[Int, (ExtractCost, ENode)],
-  in_progress : @hashset.HashSet[Int],
-) -> (ExtractCost, ENode) {
-  let canonical = self.find(id)
-
-  // Check memo
-  if memo.get(canonical.0) is Some(result) {
-    return result
-  }
-
-  // Check for cycle - if we're already processing this class, return high cost
-  // but don't return a fake Const(0) - the caller should handle this case
-  // by not choosing nodes that lead to cycles
-  if in_progress.contains(canonical.0) {
-    // Return a sentinel value that indicates "don't use this path"
-    // The caller will see the infinite cost and skip this node
-    return (extract_cost_infinity(), { op: Var(-1), children: [] })
-  }
-
-  // Mark as in progress
-  in_progress.add(canonical.0)
-
-  // Get all nodes in this class
-  let nodes = self.get_nodes(canonical)
-  if nodes.is_empty() {
-    // Should not happen in a well-formed e-graph, but handle gracefully
-    in_progress.remove(canonical.0)
-    // Return a sentinel value
-    return (extract_cost_infinity(), { op: Var(-1), children: [] })
-  }
-
-  // Find the lowest cost node
-  let mut best_cost = extract_cost_infinity()
-  let mut best_node = nodes[0]
-  for node in nodes {
-    // Skip nodes with cyclic children (child points to current class)
-    let mut has_cycle = false
-    for child in node.children {
-      if self.find(child).0 == canonical.0 {
-        has_cycle = true
-        break
+) -> Map[Int, (ExtractCost, ENode)] {
+  let table : Map[Int, (ExtractCost, ENode)] = Map([])
+  let mut changed = true
+  while changed {
+    changed = false
+    for class_id, eclass in self.classes {
+      for node in eclass.nodes {
+        let mut total_cost = extract_cost_finite(node_cost(node), 0)
+        let mut priceable = true
+        for child in node.children {
+          let child_root = self.find(child).0
+          match table.get(child_root) {
+            Some((child_cost, _)) =>
+              total_cost = extract_cost_add(total_cost, child_cost)
+            None => {
+              priceable = false
+              break
+            }
+          }
+        }
+        if !priceable {
+          continue
+        }
+        total_cost = extract_cost_apply_bonus(
+          total_cost,
+          self.remat_cost_bonus(EClassId(class_id)),
+        )
+        total_cost = extract_cost_increment_depth(total_cost)
+        match table.get(class_id) {
+          Some((best_cost, best_node)) =>
+            if extract_cost_is_better(total_cost, best_cost) ||
+              (
+                extract_cost_equal(total_cost, best_cost) &&
+                extract_node_tiebreak_less(node, best_node)
+              ) {
+              table.set(class_id, (total_cost, node))
+              changed = true
+            }
+          None => {
+            table.set(class_id, (total_cost, node))
+            changed = true
+          }
+        }
       }
     }
-    if has_cycle {
-      continue // Skip this node, try others
-    }
-
-    // Compute cost with Cranelift-style tie-breaking:
-    // op_cost first, then expression depth.
-    let mut total_cost = extract_cost_finite(node_cost(node), 0)
-    for child in node.children {
-      let (child_cost, _) = self.extract_impl(child, memo, in_progress)
-      total_cost = extract_cost_add(total_cost, child_cost)
-      if extract_cost_cannot_beat(total_cost, best_cost) {
-        break // Pruning: cannot beat current best
-      }
-    }
-    total_cost = extract_cost_apply_bonus(
-      total_cost,
-      self.remat_cost_bonus(canonical),
-    )
-    total_cost = extract_cost_increment_depth(total_cost)
-    if extract_cost_is_better(total_cost, best_cost) ||
-      (
-        extract_cost_equal(total_cost, best_cost) &&
-        extract_node_tiebreak_less(node, best_node)
-      ) {
-      best_cost = total_cost
-      best_node = node
-    }
   }
-
-  // Remove from in progress
-  in_progress.remove(canonical.0)
-  let result = (best_cost, best_node)
-  memo.set(canonical.0, result)
-  result
+  table
 }
 
 // ============================================================================

@@ -1612,3 +1612,28 @@ test "rebuild: re-canonicalize nodes after unions" {
   let lookup_result = eg.hashcons.get(mul_canonical)
   inspect(lookup_result is None, content="false")
 }
+
+///|
+test "extraction prices cycle-reachable classes context-free" {
+  let eg = EGraph::EGraph()
+  // Class A starts as a plain variable leaf.
+  let a = eg.add_var(1)
+  // Class B's only node references A.
+  let b = eg.add_bnot(a)
+  // Give A a second node that references B, closing the cycle A <-> B.
+  let n = eg.add_neg(b)
+  eg.merge(n, a) |> ignore
+  eg.rebuild()
+  // Root whose children are visited A first, then B. The old memoized DFS
+  // priced B as infinite inside A's cycle context, cached that poisoned
+  // entry, and reused it for the second child, pricing the root infinite.
+  // The fixpoint table has no evaluation context: A = Var (0),
+  // B = Bnot(A) (1), root = Add(A, B) (2).
+  let root = eg.add_add(a, b)
+  let (root_cost, root_node) = eg.extract(root)
+  inspect(root_cost, content="2")
+  inspect(root_node.op, content="Add")
+  let (b_cost, b_node) = eg.extract(b)
+  inspect(b_cost, content="1")
+  inspect(b_node.op, content="Bnot")
+}
