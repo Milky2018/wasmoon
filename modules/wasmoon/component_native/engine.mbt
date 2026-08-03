@@ -98,6 +98,7 @@ fn native_component_session_with_contexts(
   on_execution : (NativeComponentExecutionEvent) -> Unit,
 ) -> (@runtime_impl.CoreExecutionEngine, Map[Int, ComponentJITContext]) {
   let contexts : Map[Int, ComponentJITContext] = Map([])
+  let rollback_registrar : Ref[@runtime.RollbackRegistrar?] = Ref(None)
   let interpreter = @runtime_impl.interpreter_core_execution_engine()
   let target = try @wasmoon_jit.host_native_target() catch {
     _ => None
@@ -132,11 +133,16 @@ fn native_component_session_with_contexts(
           }
         },
       )
-      contexts[instance.store_idx] = {
-        core,
-        funcrefs,
-        pending_suspension,
-        suspension_enabled,
+      let instance_idx = instance.store_idx
+      let context = { core, funcrefs, pending_suspension, suspension_enabled }
+      contexts[instance_idx] = context
+      if rollback_registrar.val is Some(registrar) {
+        registrar.on_rollback(fn() {
+          if contexts.get(instance_idx) is Some(active_context) {
+            active_context.close()
+            contexts.remove(instance_idx)
+          }
+        })
       }
     },
     fn(
@@ -185,26 +191,9 @@ fn native_component_session_with_contexts(
       }
     },
     prepare_store=fn(store) { try! store.enable_c_heap() },
-    checkpoint_registrations=fn() {
-      let existing : Map[Int, Bool] = Map([])
-      for instance_idx, _ in contexts {
-        existing.set(instance_idx, true)
-      }
-      CoreRegistrationCheckpoint(fn() {
-        let added : Array[Int] = []
-        for instance_idx, _ in contexts {
-          if !existing.contains(instance_idx) {
-            added.push(instance_idx)
-          }
-        }
-        for instance_idx in added {
-          match contexts.get(instance_idx) {
-            Some(context) => context.close()
-            None => ()
-          }
-          contexts.remove(instance_idx)
-        }
-      })
+    register_rollback=fn(registrar) {
+      rollback_registrar.val = Some(registrar)
+      registrar.on_finish(fn() { rollback_registrar.val = None })
     },
     close=fn() {
       for _, context in contexts {

@@ -103,4 +103,3 @@ pub impl Show for WastValue
 // Type aliases
 
 // Traits
-

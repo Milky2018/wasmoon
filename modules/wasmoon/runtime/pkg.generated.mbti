@@ -94,8 +94,6 @@ pub fn Caller::get_exported_memory(Self, String) -> Memory? raise RuntimeError
 pub fn Caller::instance(Self) -> ModuleInstance
 pub fn Caller::store(Self) -> Store
 
-type CoreLinkerCheckpoint
-
 pub struct ExnInstance {
   tag_addr : Int
   values : Array[@types.Value]
@@ -168,6 +166,12 @@ pub fn Imports::add_table(Self, String, String, Int) -> Unit
 pub fn Imports::add_tag(Self, String, String, Int) -> Unit
 pub fn Imports::resolve(Self, String, String) -> ExternVal?
 
+type InstantiationTransaction
+pub fn InstantiationTransaction::commit(Self) -> Unit
+pub fn InstantiationTransaction::new() -> Self
+pub fn InstantiationTransaction::registrar(Self) -> RollbackRegistrar
+pub fn InstantiationTransaction::rollback(Self) -> Unit
+
 type Linker
 pub fn Linker::Linker() -> Self
 pub fn Linker::add_global(Self, String, String, GlobalInstance) -> Unit raise RuntimeError
@@ -176,12 +180,11 @@ pub fn Linker::add_host_func_with_caller(Self, String, String, (Caller, Array[@t
 pub fn Linker::add_memory(Self, String, String, Memory) -> Unit raise RuntimeError
 pub fn Linker::add_table(Self, String, String, Table) -> Unit raise RuntimeError
 pub fn Linker::build_imports(Self) -> Imports
-pub fn Linker::checkpoint(Self) -> CoreLinkerCheckpoint
 pub fn Linker::close(Self) -> Unit
 pub fn Linker::get_module(Self, String) -> ModuleInstance?
 pub fn Linker::get_store(Self) -> Store
 pub fn Linker::register(Self, String, ModuleInstance) -> Unit raise RuntimeError
-pub fn Linker::rollback_to(Self, CoreLinkerCheckpoint) -> Bool
+pub fn Linker::register_rollback(Self, RollbackRegistrar) -> Unit
 pub fn Linker::with_store(Store) -> Self
 
 pub struct MarkSweepHeap {
@@ -292,6 +295,10 @@ pub fn ModuleInstance::get_array_type(Self, Int) -> @types.ArrayType
 pub fn ModuleInstance::get_func_type(Self, Int) -> @types.FuncType
 pub fn ModuleInstance::get_struct_type(Self, Int) -> @types.StructType
 pub impl Show for ModuleInstance
+
+type RollbackRegistrar
+pub fn RollbackRegistrar::on_finish(Self, () -> Unit) -> Unit
+pub fn RollbackRegistrar::on_rollback(Self, () -> Unit) -> Unit
 
 pub struct RuntimeCapabilities {
   version : String
@@ -517,4 +524,3 @@ pub(open) trait GcRuntime {
   fn set_threshold(Self, Int) -> Unit
   fn get_threshold(Self) -> Int
 }
-

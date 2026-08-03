@@ -55,105 +55,44 @@ pub struct Store {
   // Native invocation/fiber lifetimes belong to the Store, not a JIT module.
   native_execution : @wasmoon_jit.NativeExecutionState
   priv funcref_registry : StoreFuncrefRegistry
+  priv mut instantiation : RollbackRegistrar?
   priv closed : Ref[Bool]
 } derive(Debug)
 
 ///|
-priv struct StoreAllocationCheckpoint {
-  funcs : Int
-  func_types : Int
-  func_type_indices : Int
-  func_owners : Array[FuncOwner]
-  tables : Int
-  jit_tables : Int
-  mems : Int
-  wasi_mem_addr : Int?
-  globals : Int
-  tags : Int
-  tag_type_indices : Int
-  tag_owners : Array[FuncOwner]
-  exns : Int
-  wrapped_externs : Int
-  instances : Int
-  module_types : Array[@types.SubType]
-  module_rec_groups : Array[Int]
-  heap : MarkSweepHeapAllocationCheckpoint
-  c_heap : @wasmoon_jit.CHeapAllocationCheckpoint?
-}
-
-///|
-fn Store::checkpoint_allocations(self : Store) -> StoreAllocationCheckpoint {
-  {
-    funcs: self.funcs.length(),
-    func_types: self.func_types.length(),
-    func_type_indices: self.func_type_indices.length(),
-    func_owners: self.func_owners.copy(),
-    tables: self.tables.length(),
-    jit_tables: self.jit_tables.length(),
-    mems: self.mems.length(),
-    wasi_mem_addr: self.wasi_mem_addr,
-    globals: self.globals.length(),
-    tags: self.tags.length(),
-    tag_type_indices: self.tag_type_indices.length(),
-    tag_owners: self.tag_owners.copy(),
-    exns: self.exns.length(),
-    wrapped_externs: self.wrapped_externs.length(),
-    instances: self.instances.length(),
-    module_types: self.module_types,
-    module_rec_groups: self.module_rec_groups,
-    heap: self.heap.checkpoint_allocations(),
-    c_heap: self.c_heap.map(fn(heap) { heap.checkpoint_allocations() }),
-  }
-}
-
-///|
-fn Store::rollback_allocations(
+fn Store::register_rollback(
   self : Store,
-  checkpoint : StoreAllocationCheckpoint,
+  registrar : RollbackRegistrar,
 ) -> Unit {
-  for i in checkpoint.instances..<self.instances.length() {
-    self.instances[i].store_idx = -1
+  self.instantiation = Some(registrar)
+  registrar.on_finish(fn() { self.instantiation = None })
+  // Heap cleanup runs last, after mutation-local rollbacks restore Store roots.
+  registrar.on_rollback(
+    self.heap.make_allocation_rollback(fn() { self.collect_roots([]) }),
+  )
+  if self.c_heap is Some(heap) {
+    registrar.on_rollback(
+      heap.make_allocation_rollback(fn() { self.collect_roots([]) }),
+    )
   }
-  for i in checkpoint.mems..<self.mems.length() {
-    self.mems[i].close()
+}
+
+///|
+fn Store::on_instantiation_rollback(
+  self : Store,
+  rollback : () -> Unit,
+) -> Unit {
+  if self.instantiation is Some(registrar) {
+    registrar.on_rollback(rollback)
   }
-  for i in checkpoint.jit_tables..<self.jit_table_owners.length() {
-    match self.jit_table_owners[i] {
-      Some(owner) => owner.close()
-      None => ()
-    }
-  }
-  self.funcs.truncate(checkpoint.funcs)
-  self.func_types.truncate(checkpoint.func_types)
-  self.func_type_indices.truncate(checkpoint.func_type_indices)
-  self.func_owners.clear()
-  for owner in checkpoint.func_owners {
-    self.func_owners.push(owner)
-  }
-  self.tables.truncate(checkpoint.tables)
-  self.jit_tables.truncate(checkpoint.jit_tables)
-  self.jit_table_owners.truncate(checkpoint.jit_tables)
-  self.mems.truncate(checkpoint.mems)
-  self.wasi_mem_addr = checkpoint.wasi_mem_addr
-  self.globals.truncate(checkpoint.globals)
-  self.tags.truncate(checkpoint.tags)
-  self.tag_type_indices.truncate(checkpoint.tag_type_indices)
-  self.tag_owners.clear()
-  for owner in checkpoint.tag_owners {
-    self.tag_owners.push(owner)
-  }
-  self.exns.truncate(checkpoint.exns)
-  self.wrapped_externs.truncate(checkpoint.wrapped_externs)
-  self.instances.truncate(checkpoint.instances)
-  self.module_types = checkpoint.module_types
-  self.module_rec_groups = checkpoint.module_rec_groups
-  let roots = self.collect_roots([])
-  self.heap.rollback_allocations(checkpoint.heap, roots)
-  match (self.c_heap, checkpoint.c_heap) {
-    (Some(heap), Some(heap_checkpoint)) =>
-      heap.rollback_allocations(heap_checkpoint, roots) |> ignore
-    _ => ()
-  }
+}
+
+///|
+fn[T] Store::push_allocation(self : Store, values : Array[T], value : T) -> Int {
+  let index = values.length()
+  self.on_instantiation_rollback(fn() { values.truncate(index) })
+  values.push(value)
+  index
 }
 
 ///|
@@ -214,6 +153,7 @@ pub fn Store::Store() -> Store {
     wasi_ctx_handle: 0,
     native_execution: NativeExecutionState(),
     funcref_registry: StoreFuncrefRegistry::new(),
+    instantiation: None,
     closed: Ref(false),
   }
 }
@@ -246,6 +186,7 @@ pub fn Store::with_c_heap() -> Store {
     wasi_ctx_handle: 0,
     native_execution: NativeExecutionState(),
     funcref_registry: StoreFuncrefRegistry::new(),
+    instantiation: None,
     closed: Ref(false),
   }
 }
@@ -296,6 +237,7 @@ pub fn Store::close(self : Store) -> Unit {
   self.jit_tables.clear()
   self.wasi_mem_addr = None
   self.wasi_ctx_handle = 0
+  self.instantiation = None
 }
 
 ///|
@@ -330,6 +272,12 @@ pub fn Store::set_module_types(
   rec_groups? : Array[Int] = [],
 ) -> Unit raise RuntimeError {
   self.ensure_open()
+  let old_types = self.module_types
+  let old_rec_groups = self.module_rec_groups
+  self.on_instantiation_rollback(fn() {
+    self.module_types = old_types
+    self.module_rec_groups = old_rec_groups
+  })
   self.module_types = types
   self.module_rec_groups = rec_groups
 }
@@ -357,8 +305,7 @@ pub fn Store::wrap_as_extern(
   value : @types.Value,
 ) -> @types.Value raise RuntimeError {
   self.ensure_open()
-  let idx = self.wrapped_externs.length()
-  self.wrapped_externs.push(value)
+  let idx = self.push_allocation(self.wrapped_externs, value)
   ExternRef(-1 - idx) // -1 for index 0, -2 for index 1, etc.
 }
 
@@ -397,11 +344,10 @@ pub fn Store::alloc_func(
   type_idx? : Int = -1,
 ) -> Int raise RuntimeError {
   self.ensure_open()
-  let idx = self.funcs.length()
-  self.funcs.push(WasmFunc(func))
-  self.func_types.push(func_type)
-  self.func_type_indices.push(type_idx)
-  self.func_owners.push(Unowned)
+  let idx = self.push_allocation(self.funcs, WasmFunc(func))
+  self.push_allocation(self.func_types, func_type) |> ignore
+  self.push_allocation(self.func_type_indices, type_idx) |> ignore
+  self.push_allocation(self.func_owners, Unowned) |> ignore
   idx
 }
 
@@ -414,16 +360,15 @@ pub fn Store::alloc_host_func(
   type_idx? : Int = -1,
 ) -> Int raise RuntimeError {
   self.ensure_open()
-  let idx = self.funcs.length()
   // Back-compat: old-style host funcs don't take a Caller.
   let wrapped : (Caller, Array[@types.Value]) -> Array[@types.Value] raise RuntimeError = (
     _caller,
     args,
   ) => func(args)
-  self.funcs.push(HostFunc(wrapped))
-  self.func_types.push(func_type)
-  self.func_type_indices.push(type_idx)
-  self.func_owners.push(HostFunc)
+  let idx = self.push_allocation(self.funcs, HostFunc(wrapped))
+  self.push_allocation(self.func_types, func_type) |> ignore
+  self.push_allocation(self.func_type_indices, type_idx) |> ignore
+  self.push_allocation(self.func_owners, HostFunc) |> ignore
   idx
 }
 
@@ -436,11 +381,10 @@ pub fn Store::alloc_host_func_with_caller(
   type_idx? : Int = -1,
 ) -> Int raise RuntimeError {
   self.ensure_open()
-  let idx = self.funcs.length()
-  self.funcs.push(HostFunc(func))
-  self.func_types.push(func_type)
-  self.func_type_indices.push(type_idx)
-  self.func_owners.push(HostFunc)
+  let idx = self.push_allocation(self.funcs, HostFunc(func))
+  self.push_allocation(self.func_types, func_type) |> ignore
+  self.push_allocation(self.func_type_indices, type_idx) |> ignore
+  self.push_allocation(self.func_owners, HostFunc) |> ignore
   idx
 }
 
@@ -454,6 +398,17 @@ pub fn Store::alloc_table(
 ) -> Int raise RuntimeError {
   self.ensure_open()
   let idx = self.tables.length()
+  self.on_instantiation_rollback(fn() {
+    if idx < self.jit_table_owners.length() {
+      match self.jit_table_owners[idx] {
+        Some(owner) => owner.close()
+        None => ()
+      }
+    }
+    self.tables.truncate(idx)
+    self.jit_tables.truncate(idx)
+    self.jit_table_owners.truncate(idx)
+  })
   self.tables.push(table)
 
   // Create corresponding JIT table (always enabled for cross-module sharing)
@@ -480,6 +435,12 @@ pub fn Store::alloc_table(
 pub fn Store::alloc_mem(self : Store, mem : Memory) -> Int raise RuntimeError {
   self.ensure_open()
   let idx = self.mems.length()
+  self.on_instantiation_rollback(fn() {
+    if idx < self.mems.length() {
+      self.mems[idx].close()
+    }
+    self.mems.truncate(idx)
+  })
   self.mems.push(mem)
   idx
 }
@@ -490,9 +451,7 @@ pub fn Store::alloc_global(
   global : GlobalInstance,
 ) -> Int raise RuntimeError {
   self.ensure_open()
-  let idx = self.globals.length()
-  self.globals.push(global)
-  idx
+  self.push_allocation(self.globals, global)
 }
 
 ///|
@@ -503,10 +462,9 @@ pub fn Store::alloc_tag(
   type_idx? : Int = -1,
 ) -> Int raise RuntimeError {
   self.ensure_open()
-  let idx = self.tags.length()
-  self.tags.push(tag_type)
-  self.tag_type_indices.push(type_idx)
-  self.tag_owners.push(Unowned)
+  let idx = self.push_allocation(self.tags, tag_type)
+  self.push_allocation(self.tag_type_indices, type_idx) |> ignore
+  self.push_allocation(self.tag_owners, Unowned) |> ignore
   idx
 }
 
@@ -555,9 +513,7 @@ pub fn Store::alloc_exn(
   values : Array[@types.Value],
 ) -> Int raise RuntimeError {
   self.ensure_open()
-  let idx = self.exns.length()
-  self.exns.push({ tag_addr, values })
-  idx
+  self.push_allocation(self.exns, { tag_addr, values })
 }
 
 ///|
@@ -947,6 +903,8 @@ pub fn Store::set_wasi_mem_addr(
   addr : Int,
 ) -> Unit raise RuntimeError {
   self.ensure_open()
+  let old_addr = self.wasi_mem_addr
+  self.on_instantiation_rollback(fn() { self.wasi_mem_addr = old_addr })
   self.wasi_mem_addr = Some(addr)
 }
 
@@ -987,6 +945,8 @@ pub fn Store::register_instance(
 ) -> Int raise RuntimeError {
   self.ensure_open()
   let instance_idx = self.instances.length()
+  let owned_funcs : Array[Int] = []
+  let owned_tags : Array[Int] = []
   instance.store_idx = instance_idx
   self.instances.push(instance)
   // Set ownership only for unowned WASM functions
@@ -996,6 +956,7 @@ pub fn Store::register_instance(
       func_addr < self.func_owners.length() &&
       self.func_owners[func_addr] == Unowned {
       self.func_owners[func_addr] = Module(instance_idx)
+      owned_funcs.push(func_addr)
     }
   }
   // Set ownership for unowned tags
@@ -1004,8 +965,23 @@ pub fn Store::register_instance(
       tag_addr < self.tag_owners.length() &&
       self.tag_owners[tag_addr] == Unowned {
       self.tag_owners[tag_addr] = Module(instance_idx)
+      owned_tags.push(tag_addr)
     }
   }
+  self.on_instantiation_rollback(fn() {
+    for func_addr in owned_funcs {
+      if func_addr < self.func_owners.length() {
+        self.func_owners[func_addr] = Unowned
+      }
+    }
+    for tag_addr in owned_tags {
+      if tag_addr < self.tag_owners.length() {
+        self.tag_owners[tag_addr] = Unowned
+      }
+    }
+    instance.store_idx = -1
+    self.instances.truncate(instance_idx)
+  })
   instance_idx
 }
 

@@ -626,35 +626,27 @@ pub fn ComponentLinker::instantiate(
   // it; only a root that succeeds on a still-open linker commits the tree,
   // and any failure or mid-flight close rolls the whole tree back, so a
   // partially instantiated graph is never observable through the linker.
-  // The same transaction checkpoints the underlying core Store, core linker,
-  // debug-name registry, and engine registrations so a later start trap also
-  // withdraws every core allocation and native context created by this root.
+  // Every participating layer adds its inverse operation to the same rollback
+  // stack, so a later start trap withdraws all core allocations and native
+  // contexts created by this root.
+  let transaction = @runtime.InstantiationTransaction::new()
+  let registrar = transaction.registrar()
   let staged : Array[(String, ComponentInstance)] = []
-  let core_checkpoint : Ref[@runtime.CoreLinkerCheckpoint?] = Ref(None)
-  let engine_checkpoint : Ref[CoreRegistrationCheckpoint?] = Ref(None)
   let instance = self.core_execution_lifecycle.with_lease(
     fn() raise ComponentRuntimeError {
-      core_checkpoint.val = Some(self.core_linker.checkpoint())
-      engine_checkpoint.val = Some(
-        self.core_engine().checkpoint_registrations(),
-      )
+      self.core_linker.register_rollback(registrar)
+      self.core_engine().register_rollback(registrar)
+      registrar.on_rollback(fn() { rollback_staged_registrations(staged) })
       let isolated = @component.parse_component(component.component_bytes()) catch {
         e => raise ComponentParseError(e.to_string())
       }
       instantiate_component(self, name, isolated, Map([]), [], staged)
     },
-    rollback=fn() {
-      rollback_staged_registrations(staged)
-      if engine_checkpoint.val is Some(checkpoint) {
-        checkpoint.rollback()
-      }
-      if core_checkpoint.val is Some(checkpoint) {
-        self.core_linker.rollback_to(checkpoint) |> ignore
-      }
-    },
+    rollback=fn() { transaction.rollback() },
   )
   for entry in staged {
     self.components.push(entry)
   }
+  transaction.commit()
   instance
 }

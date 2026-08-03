@@ -158,6 +158,7 @@ test "production allocation evicts then splits a cheaper long bundle" {
       value: { id: 0, class: Int },
       range: ProgramRange(ProgramPoint(0, 0), ProgramPoint(0, 2)),
       weight: 2,
+      has_use: true,
       has_fixed_constraint: true,
       location: None,
       defer_home: false,
@@ -167,6 +168,7 @@ test "production allocation evicts then splits a cheaper long bundle" {
       value: { id: 1, class: Int },
       range: ProgramRange(ProgramPoint(0, 4), ProgramPoint(0, 6)),
       weight: 3,
+      has_use: true,
       has_fixed_constraint: false,
       location: None,
       defer_home: false,
@@ -176,6 +178,7 @@ test "production allocation evicts then splits a cheaper long bundle" {
       value: { id: 2, class: Int },
       range: ProgramRange(ProgramPoint(0, 4), ProgramPoint(0, 6)),
       weight: 20,
+      has_use: true,
       has_fixed_constraint: false,
       location: None,
       defer_home: false,
@@ -261,6 +264,7 @@ test "production eviction accounts for and removes every conflicting bundle" {
       value: { id: 0, class: Int },
       range: ProgramRange(ProgramPoint(0, 0), ProgramPoint(0, 4)),
       weight: 4,
+      has_use: true,
       has_fixed_constraint: false,
       location: Some(SegmentReg(r0)),
       defer_home: false,
@@ -270,6 +274,7 @@ test "production eviction accounts for and removes every conflicting bundle" {
       value: { id: 1, class: Int },
       range: ProgramRange(ProgramPoint(0, 6), ProgramPoint(0, 10)),
       weight: 5,
+      has_use: true,
       has_fixed_constraint: false,
       location: Some(SegmentReg(r0)),
       defer_home: false,
@@ -279,6 +284,7 @@ test "production eviction accounts for and removes every conflicting bundle" {
       value: { id: 2, class: Int },
       range: ProgramRange(ProgramPoint(0, 1), ProgramPoint(0, 3)),
       weight: 6,
+      has_use: true,
       has_fixed_constraint: false,
       location: None,
       defer_home: false,
@@ -288,6 +294,7 @@ test "production eviction accounts for and removes every conflicting bundle" {
       value: { id: 2, class: Int },
       range: ProgramRange(ProgramPoint(0, 7), ProgramPoint(0, 9)),
       weight: 6,
+      has_use: true,
       has_fixed_constraint: false,
       location: None,
       defer_home: false,
@@ -403,6 +410,7 @@ test "production bundle queue keeps live extent separate from spill weight" {
       value: { id: 0, class: Int },
       range: ProgramRange(ProgramPoint(0, 0), ProgramPoint(0, 0)),
       weight: 100,
+      has_use: true,
       has_fixed_constraint: false,
       location: None,
       defer_home: false,
@@ -412,6 +420,7 @@ test "production bundle queue keeps live extent separate from spill weight" {
       value: { id: 1, class: Int },
       range: ProgramRange(ProgramPoint(0, 0), ProgramPoint(0, 4)),
       weight: 10,
+      has_use: true,
       has_fixed_constraint: false,
       location: None,
       defer_home: false,
@@ -421,6 +430,7 @@ test "production bundle queue keeps live extent separate from spill weight" {
       value: { id: 2, class: Int },
       range: ProgramRange(ProgramPoint(0, 0), ProgramPoint(0, 2)),
       weight: 50,
+      has_use: true,
       has_fixed_constraint: false,
       location: None,
       defer_home: false,
@@ -476,6 +486,76 @@ test "production bundle queue keeps live extent separate from spill weight" {
       #|}
     ),
   )
+}
+
+///|
+fn allocation_cost_test_segment(
+  id : Int,
+  value : Int,
+  weight : Int,
+  has_use : Bool,
+) -> AllocationSegment {
+  {
+    id,
+    value: { id: value, class: Int },
+    range: ProgramRange(ProgramPoint(id, 0), ProgramPoint(id, 0)),
+    weight,
+    has_use,
+    has_fixed_constraint: false,
+    location: None,
+    defer_home: false,
+  }
+}
+
+///|
+test "small same-value bundle sums its two hottest active fragment costs" {
+  let segments : Array[AllocationSegment] = [
+    allocation_cost_test_segment(0, 0, 40, true),
+    allocation_cost_test_segment(1, 0, 20, true),
+    allocation_cost_test_segment(2, 0, 12, true),
+  ]
+  inspect(allocation_bundle(0, [0, 1, 2], segments).weight, content="60")
+}
+
+///|
+test "two-fragment bundle keeps density eviction cost" {
+  let segments : Array[AllocationSegment] = [
+    allocation_cost_test_segment(0, 0, 40, true),
+    allocation_cost_test_segment(1, 0, 20, true),
+  ]
+  inspect(allocation_bundle(0, [0, 1], segments).weight, content="30")
+}
+
+///|
+test "coalesced SSA values keep density eviction cost" {
+  let segments : Array[AllocationSegment] = [
+    allocation_cost_test_segment(0, 0, 40, true),
+    allocation_cost_test_segment(1, 1, 20, true),
+    allocation_cost_test_segment(2, 2, 12, true),
+  ]
+  inspect(allocation_bundle(0, [0, 1, 2], segments).weight, content="24")
+}
+
+///|
+test "interior cold gap keeps density eviction cost" {
+  let segments : Array[AllocationSegment] = [
+    allocation_cost_test_segment(0, 0, 40, true),
+    allocation_cost_test_segment(1, 0, 5, false),
+    allocation_cost_test_segment(2, 0, 15, true),
+  ]
+  inspect(allocation_bundle(0, [0, 1, 2], segments).weight, content="20")
+}
+
+///|
+test "bundle with more than four fragments keeps density eviction cost" {
+  let segments : Array[AllocationSegment] = [
+    allocation_cost_test_segment(0, 0, 40, true),
+    allocation_cost_test_segment(1, 0, 20, true),
+    allocation_cost_test_segment(2, 0, 15, true),
+    allocation_cost_test_segment(3, 0, 10, true),
+    allocation_cost_test_segment(4, 0, 5, true),
+  ]
+  inspect(allocation_bundle(0, [0, 1, 2, 3, 4], segments).weight, content="18")
 }
 
 ///|

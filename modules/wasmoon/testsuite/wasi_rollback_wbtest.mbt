@@ -47,7 +47,8 @@ fn assert_old_wasi_instance_usable_after_start_trap(
     @executor.call_exported_func(store, old_instance, "probe", []),
     content="[I32(2)]",
   )
-  let checkpoint = linker.checkpoint()
+  let transaction = @runtime.InstantiationTransaction::new()
+  linker.register_rollback(transaction.registrar())
   try
     @executor.instantiate_with_linker(linker, name, @wat.parse(failing_source))
   catch {
@@ -55,7 +56,7 @@ fn assert_old_wasi_instance_usable_after_start_trap(
   } noraise {
     _ => fail("expected start to trap")
   }
-  inspect(linker.rollback_to(checkpoint), content="true")
+  transaction.rollback()
   debug_inspect(
     @executor.call_exported_func(store, old_instance, "probe", []),
     content="[I32(2)]",

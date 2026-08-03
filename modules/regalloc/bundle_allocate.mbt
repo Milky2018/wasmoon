@@ -154,7 +154,52 @@ fn allocation_bundle_metrics(
     normalized_priority.to_int64())
     .min(2_147_483_647L)
     .to_int()
-  (normalized_priority, weight.max(1), has_fixed_constraint)
+  let mut one_value = true
+  let mut highest_active_cost = 0
+  let mut second_active_cost = 0
+  let mut saw_use = false
+  let mut saw_gap_after_use = false
+  let mut has_cold_gap = false
+  let mut active_fragments = 0
+  if !segment_ids.is_empty() {
+    let first_value = segments[segment_ids[0]].value
+    for segment_id in segment_ids {
+      let segment = segments[segment_id]
+      one_value = one_value && segment.value == first_value
+      if segment.has_use {
+        active_fragments = active_fragments + 1
+        if segment.weight > highest_active_cost {
+          second_active_cost = highest_active_cost
+          highest_active_cost = segment.weight
+        } else if segment.weight > second_active_cost {
+          second_active_cost = segment.weight
+        }
+        has_cold_gap = has_cold_gap || saw_gap_after_use
+        saw_use = true
+      } else if saw_use {
+        saw_gap_after_use = true
+      }
+    }
+  }
+  // Repeated active fragments of one value incur independent reload costs in
+  // small CFG regions. Protect the two hottest fragments without letting long
+  // bundles grow more expensive with every block. Coalesced SSA values,
+  // two-fragment ranges, bundles spanning more than four fragments, and values
+  // with a cold live-through gap retain density pricing so the allocator can
+  // split cold regions away from a hot loop.
+  let eviction_weight = if one_value &&
+    !has_cold_gap &&
+    segment_ids.length() >= 3 &&
+    segment_ids.length() <= 4 &&
+    active_fragments >= 2 {
+    (highest_active_cost.to_int64() + second_active_cost.to_int64())
+    .min(2_147_483_647L)
+    .to_int()
+    .max(1)
+  } else {
+    weight.max(1)
+  }
+  (normalized_priority, eviction_weight, has_fixed_constraint)
 }
 
 ///|

@@ -39,13 +39,6 @@ pub struct CHeap {
 } derive(Debug)
 
 ///|
-/// Opaque allocation boundary belonging to one C heap.
-struct CHeapAllocationCheckpoint {
-  owner : CHeap
-  object_count : Int
-}
-
-///|
 /// Create a new C heap with the given initial capacity
 pub fn CHeap::CHeap(capacity? : Int = @types.ONE_MIB_BYTES) -> CHeap {
   let ptr = c_gc_heap_new(capacity.to_int64())
@@ -65,30 +58,23 @@ pub fn CHeap::get_ptr(self : CHeap) -> Int64 {
 }
 
 ///|
-pub fn CHeap::checkpoint_allocations(self : CHeap) -> CHeapAllocationCheckpoint {
-  { owner: self, object_count: self.get_object_count() }
-}
-
-///|
-/// Reclaim objects allocated after `checkpoint` unless they remain reachable
-/// from `roots`. Retained object-table indices are never reused.
-pub fn CHeap::rollback_allocations(
+/// Return an owner-bound action that reclaims later allocations unless they
+/// remain reachable when the action runs. Retained object-table indices are
+/// never reused.
+pub fn CHeap::make_allocation_rollback(
   self : CHeap,
-  checkpoint : CHeapAllocationCheckpoint,
-  roots : Array[@types.Value],
-) -> Bool {
-  if !physical_equal(self, checkpoint.owner) {
-    return false
+  roots : () -> Array[@types.Value],
+) -> () -> Unit {
+  let object_count = self.get_object_count()
+  fn() {
+    let current_roots = roots()
+    let num_roots = current_roots.length()
+    let raw_roots = FixedArray::makei(num_roots, fn(i) {
+      value_to_i64(current_roots[i])
+    })
+    c_gc_heap_rollback_allocations(self.ptr, object_count, raw_roots, num_roots)
+    |> ignore
   }
-  let num_roots = roots.length()
-  let raw_roots = FixedArray::makei(num_roots, fn(i) { value_to_i64(roots[i]) })
-  c_gc_heap_rollback_allocations(
-    self.ptr,
-    checkpoint.object_count,
-    raw_roots,
-    num_roots,
-  ) !=
-  0
 }
 
 // ============================================================

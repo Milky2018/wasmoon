@@ -331,7 +331,6 @@ pub fn CHeap::array_fill(Self, Int, Int, @types.Value, Int) -> Unit raise CHeapE
 pub fn CHeap::array_get(Self, Int, Int, @types.ValueType) -> @types.Value raise CHeapError
 pub fn CHeap::array_len(Self, Int) -> Int
 pub fn CHeap::array_set(Self, Int, Int, @types.Value) -> Unit raise CHeapError
-pub fn CHeap::checkpoint_allocations(Self) -> CHeapAllocationCheckpoint
 pub fn CHeap::collect(Self, Array[@types.Value]) -> Int
 pub fn CHeap::free(Self) -> Unit
 pub fn CHeap::get_barrier_writes(Self) -> Int
@@ -349,13 +348,11 @@ pub fn CHeap::get_usage_ratio(Self) -> Double
 pub fn CHeap::is_array(Self, Int) -> Bool
 pub fn CHeap::is_struct(Self, Int) -> Bool
 pub fn CHeap::is_valid(Self, Int) -> Bool
-pub fn CHeap::rollback_allocations(Self, CHeapAllocationCheckpoint, Array[@types.Value]) -> Bool
+pub fn CHeap::make_allocation_rollback(Self, () -> Array[@types.Value]) -> () -> Unit
 pub fn CHeap::should_collect(Self, threshold? : Double) -> Bool
 pub fn CHeap::struct_get(Self, Int, Int, @types.ValueType) -> @types.Value
 pub fn CHeap::struct_set(Self, Int, Int, @types.Value) -> Unit
 pub fn CHeap::verify(Self, verbose? : Bool) -> Bool
-
-type CHeapAllocationCheckpoint
 
 pub(all) struct CallCounter {
   counts : Map[Int, Int]
@@ -831,4 +828,3 @@ pub(all) struct WasmTrapFrame {
 // Type aliases
 
 // Traits
-
