@@ -394,8 +394,6 @@ struct EGraph {
   mut dirty : Bool
   // Opcode index: maps opcode tag to set of class ids containing that opcode
   opcode_index : Map[EOpcodeTag, @hashset.HashSet[Int]]
-  // Use-def edges: child class id -> set of parent class ids that reference it.
-  uses : Map[Int, @hashset.HashSet[Int]]
   // Type information: maps canonical class id to bit width (8, 16, 32, 64, 128)
   type_map : Map[Int, Int]
   // Rematerialization set: classes that are cheap to recompute
@@ -416,7 +414,6 @@ pub fn EGraph::EGraph() -> EGraph {
     hashcons: Map([]),
     dirty: false,
     opcode_index: Map([]),
-    uses: Map([]),
     type_map: Map([]),
     remat_set: HashSet([]),
     last_rule_applications: 0,
@@ -521,18 +518,6 @@ pub fn EGraph::add(self : EGraph, node : ENode) -> EClassId {
   // Update opcode index
   let tag = node.op.tag()
   self.index_add(tag, id)
-  // Record use-def edges for worklist scheduling.
-  for child in node.children {
-    let child_root = self.find(child).0
-    match self.uses.get(child_root) {
-      Some(parents) => parents.add(id)
-      None => {
-        let parents : @hashset.HashSet[Int] = HashSet([])
-        parents.add(id)
-        self.uses.set(child_root, parents)
-      }
-    }
-  }
   class_id
 }
 
@@ -927,23 +912,11 @@ pub fn EGraph::rebuild(self : EGraph) -> Unit {
       }
       self.hashcons = new_hashcons
 
-      // Rebuild opcode index and use-def edges from all e-nodes.
+      // Rebuild opcode index from all e-nodes.
       self.opcode_index.clear()
-      self.uses.clear()
       for class_id, eclass in self.classes {
         for node in eclass.nodes {
           self.index_add(node.op.tag(), class_id)
-          for child in node.children {
-            let child_root = self.find(child).0
-            match self.uses.get(child_root) {
-              Some(parents) => parents.add(class_id)
-              None => {
-                let parents : @hashset.HashSet[Int] = HashSet([])
-                parents.add(class_id)
-                self.uses.set(child_root, parents)
-              }
-            }
-          }
         }
       }
 
