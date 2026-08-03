@@ -306,11 +306,15 @@ test "GC rollback: rooted transaction object is not reclaimed or reused" {
   let heap = MarkSweepHeap::MarkSweepHeap()
   heap.alloc_struct(0, [I32(1)]) |> ignore
   heap.collect([]) |> ignore
-  let checkpoint = heap.checkpoint_allocations()
+  let escaped_root = Ref(-1)
+  let rollback = heap.make_allocation_rollback(fn() {
+    [StructRef(escaped_root.val)]
+  })
   let escaped = heap.alloc_struct(0, [I32(7)])
+  escaped_root.val = escaped
   let garbage = heap.alloc_struct(0, [I32(8)])
 
-  heap.rollback_allocations(checkpoint, [StructRef(escaped)])
+  rollback()
   debug_inspect(
     (
       escaped,

@@ -59,101 +59,72 @@ pub struct Store {
 } derive(Debug)
 
 ///|
-priv struct StoreAllocationCheckpoint {
-  funcs : Int
-  func_types : Int
-  func_type_indices : Int
-  func_owners : Array[FuncOwner]
-  tables : Int
-  jit_tables : Int
-  mems : Int
-  wasi_mem_addr : Int?
-  globals : Int
-  tags : Int
-  tag_type_indices : Int
-  tag_owners : Array[FuncOwner]
-  exns : Int
-  wrapped_externs : Int
-  instances : Int
-  module_types : Array[@types.SubType]
-  module_rec_groups : Array[Int]
-  heap : MarkSweepHeapAllocationCheckpoint
-  c_heap : @wasmoon_jit.CHeapAllocationCheckpoint?
-}
-
-///|
-fn Store::checkpoint_allocations(self : Store) -> StoreAllocationCheckpoint {
-  {
-    funcs: self.funcs.length(),
-    func_types: self.func_types.length(),
-    func_type_indices: self.func_type_indices.length(),
-    func_owners: self.func_owners.copy(),
-    tables: self.tables.length(),
-    jit_tables: self.jit_tables.length(),
-    mems: self.mems.length(),
-    wasi_mem_addr: self.wasi_mem_addr,
-    globals: self.globals.length(),
-    tags: self.tags.length(),
-    tag_type_indices: self.tag_type_indices.length(),
-    tag_owners: self.tag_owners.copy(),
-    exns: self.exns.length(),
-    wrapped_externs: self.wrapped_externs.length(),
-    instances: self.instances.length(),
-    module_types: self.module_types,
-    module_rec_groups: self.module_rec_groups,
-    heap: self.heap.checkpoint_allocations(),
-    c_heap: self.c_heap.map(fn(heap) { heap.checkpoint_allocations() }),
-  }
-}
-
-///|
-fn Store::rollback_allocations(
+fn Store::register_rollback(
   self : Store,
-  checkpoint : StoreAllocationCheckpoint,
+  transaction : InstantiationTransaction,
 ) -> Unit {
-  for i in checkpoint.instances..<self.instances.length() {
-    self.instances[i].store_idx = -1
+  // Register heap cleanup first so LIFO rollback restores every Store root
+  // before deciding which transaction allocations escaped.
+  transaction.on_rollback(
+    self.heap.make_allocation_rollback(fn() { self.collect_roots([]) }),
+  )
+  if self.c_heap is Some(heap) {
+    transaction.on_rollback(
+      heap.make_allocation_rollback(fn() { self.collect_roots([]) }),
+    )
   }
-  for i in checkpoint.mems..<self.mems.length() {
-    self.mems[i].close()
-  }
-  for i in checkpoint.jit_tables..<self.jit_table_owners.length() {
-    match self.jit_table_owners[i] {
-      Some(owner) => owner.close()
-      None => ()
+
+  let module_types = self.module_types
+  let module_rec_groups = self.module_rec_groups
+  transaction.on_rollback(fn() {
+    self.module_types = module_types
+    self.module_rec_groups = module_rec_groups
+  })
+
+  transaction.truncate_on_rollback(self.wrapped_externs)
+  transaction.truncate_on_rollback(self.exns)
+  transaction.truncate_on_rollback(self.tags)
+  transaction.truncate_on_rollback(self.tag_type_indices)
+  transaction.restore_on_rollback(self.tag_owners)
+  transaction.truncate_on_rollback(self.globals)
+
+  let wasi_mem_addr = self.wasi_mem_addr
+  transaction.on_rollback(fn() { self.wasi_mem_addr = wasi_mem_addr })
+
+  let mems = self.mems.length()
+  transaction.on_rollback(fn() {
+    for i in mems..<self.mems.length() {
+      self.mems[i].close()
     }
-  }
-  self.funcs.truncate(checkpoint.funcs)
-  self.func_types.truncate(checkpoint.func_types)
-  self.func_type_indices.truncate(checkpoint.func_type_indices)
-  self.func_owners.clear()
-  for owner in checkpoint.func_owners {
-    self.func_owners.push(owner)
-  }
-  self.tables.truncate(checkpoint.tables)
-  self.jit_tables.truncate(checkpoint.jit_tables)
-  self.jit_table_owners.truncate(checkpoint.jit_tables)
-  self.mems.truncate(checkpoint.mems)
-  self.wasi_mem_addr = checkpoint.wasi_mem_addr
-  self.globals.truncate(checkpoint.globals)
-  self.tags.truncate(checkpoint.tags)
-  self.tag_type_indices.truncate(checkpoint.tag_type_indices)
-  self.tag_owners.clear()
-  for owner in checkpoint.tag_owners {
-    self.tag_owners.push(owner)
-  }
-  self.exns.truncate(checkpoint.exns)
-  self.wrapped_externs.truncate(checkpoint.wrapped_externs)
-  self.instances.truncate(checkpoint.instances)
-  self.module_types = checkpoint.module_types
-  self.module_rec_groups = checkpoint.module_rec_groups
-  let roots = self.collect_roots([])
-  self.heap.rollback_allocations(checkpoint.heap, roots)
-  match (self.c_heap, checkpoint.c_heap) {
-    (Some(heap), Some(heap_checkpoint)) =>
-      heap.rollback_allocations(heap_checkpoint, roots) |> ignore
-    _ => ()
-  }
+    self.mems.truncate(mems)
+  })
+
+  let tables = self.tables.length()
+  let jit_tables = self.jit_tables.length()
+  transaction.on_rollback(fn() {
+    for i in jit_tables..<self.jit_table_owners.length() {
+      match self.jit_table_owners[i] {
+        Some(owner) => owner.close()
+        None => ()
+      }
+    }
+    self.tables.truncate(tables)
+    self.jit_tables.truncate(jit_tables)
+    self.jit_table_owners.truncate(jit_tables)
+  })
+
+  transaction.truncate_on_rollback(self.funcs)
+  transaction.truncate_on_rollback(self.func_types)
+  transaction.truncate_on_rollback(self.func_type_indices)
+  transaction.restore_on_rollback(self.func_owners)
+
+  let instances = self.instances.length()
+  transaction.on_rollback(fn() {
+    for i in instances..<self.instances.length() {
+      self.instances[i].store_idx = -1
+    }
+    self.instances.truncate(instances)
+  })
 }
 
 ///|

@@ -1,10 +1,11 @@
 ///|
-test "a Linker rejects another Linker's checkpoint" {
+test "a Linker transaction does not affect another Linker" {
   let linker_a = @runtime.Linker::Linker()
-  let checkpoint = linker_a.checkpoint()
+  let transaction = @runtime.InstantiationTransaction::new()
+  linker_a.register_rollback(transaction)
   let linker_b = @runtime.Linker::Linker()
   linker_b.register("kept", ModuleInstance())
-  linker_b.rollback_to(checkpoint) |> ignore
+  transaction.rollback()
   debug_inspect(linker_b.get_module("kept") is Some(_), content="true")
   linker_a.close()
   linker_b.close()

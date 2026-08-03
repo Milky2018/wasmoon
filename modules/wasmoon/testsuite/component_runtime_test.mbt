@@ -679,30 +679,30 @@ test "component runtime: evidence survives raw component mutation" {
 }
 
 ///|
-test "component runtime: checkpoint callback close rolls back once" {
+test "component runtime: rollback hook callback close rolls back once" {
   let bytes = @component_text.parse_component_wat("(component)")
   let validated = @component_model.validate_component_for_instantiation_with_config(
     @component.parse_component(bytes),
     ComponentValidationConfig(false),
   )
   let linker_slot : Ref[@runtime_impl.ComponentLinker?] = Ref(None)
-  let checkpoints = Ref(0)
+  let rollback_hooks = Ref(0)
   let rollbacks = Ref(0)
   let engine = @runtime_impl.CoreExecutionEngine(
     fn(_store, _module, _instance) { () },
     fn(_store, _instance, _func_idx, _args, _request) { Returned([]) },
-    checkpoint_registrations=fn() {
-      checkpoints.val = checkpoints.val + 1
+    register_rollback=fn(transaction) {
+      rollback_hooks.val = rollback_hooks.val + 1
       if linker_slot.val is Some(linker) {
         linker.close()
       }
-      CoreRegistrationCheckpoint(fn() { rollbacks.val = rollbacks.val + 1 })
+      transaction.on_rollback(fn() { rollbacks.val = rollbacks.val + 1 })
     },
   )
   let linker = @runtime_impl.ComponentLinker::with_core_execution_engine(engine)
   linker_slot.val = Some(linker)
   let outcome = try
-    linker.instantiate("closing-at-checkpoint", validated)
+    linker.instantiate("closing-at-rollback-hook", validated)
   catch {
     Cancelled => "cancelled"
     error => "unexpected error: \{error}"
@@ -710,10 +710,10 @@ test "component runtime: checkpoint callback close rolls back once" {
     _ => "instantiated"
   }
   debug_inspect(outcome, content="\"cancelled\"")
-  debug_inspect(checkpoints.val, content="1")
+  debug_inspect(rollback_hooks.val, content="1")
   debug_inspect(rollbacks.val, content="1")
   debug_inspect(
-    linker.get_component("closing-at-checkpoint") is None,
+    linker.get_component("closing-at-rollback-hook") is None,
     content="true",
   )
 }
@@ -769,8 +769,8 @@ test "component runtime: close during engine registration cancels instantiation"
     ) raise @runtime_impl.ComponentRuntimeError {
       raise HostCallError("invoke must not run in this test")
     },
-    checkpoint_registrations=fn() {
-      CoreRegistrationCheckpoint(fn() { rollbacks.val = rollbacks.val + 1 })
+    register_rollback=fn(transaction) {
+      transaction.on_rollback(fn() { rollbacks.val = rollbacks.val + 1 })
     },
   )
   let linker = @runtime_impl.ComponentLinker::with_core_execution_engine(engine)
@@ -1026,13 +1026,14 @@ fn assert_start_trap_preserves_escaped_gc_ref(
     ),
   )
   let linker = @runtime.Linker::with_store(store)
-  let checkpoint = linker.checkpoint()
+  let transaction = @runtime.InstantiationTransaction::new()
+  linker.register_rollback(transaction)
   try @executor.instantiate_module_with_imports(store, module_, imports) catch {
     _ => ()
   } noraise {
     _ => fail("expected start to trap")
   }
-  linker.rollback_to(checkpoint) |> ignore
+  transaction.rollback()
   let escaped_idx = match global.get() {
     StructRef(idx) => idx
     value => return fail("expected escaped struct reference, got \{value}")
@@ -1074,13 +1075,14 @@ fn assert_start_trap_preserves_table_escaped_gc_ref(
     ),
   )
   let linker = @runtime.Linker::with_store(store)
-  let checkpoint = linker.checkpoint()
+  let transaction = @runtime.InstantiationTransaction::new()
+  linker.register_rollback(transaction)
   try @executor.instantiate_module_with_imports(store, module_, imports) catch {
     _ => ()
   } noraise {
     _ => fail("expected start to trap")
   }
-  linker.rollback_to(checkpoint) |> ignore
+  transaction.rollback()
   let escaped_idx = match table.get(0) {
     StructRef(idx) => idx
     value => return fail("expected escaped struct reference, got \{value}")
@@ -1200,8 +1202,8 @@ test "component runtime: engine registration errors roll back core state" {
       raise NativeCompilationFailed("injected registration failure")
     },
     fn(_store, _instance, _func_idx, _args, _request) { Returned([]) },
-    checkpoint_registrations=fn() {
-      CoreRegistrationCheckpoint(fn() { rollbacks.val = rollbacks.val + 1 })
+    register_rollback=fn(transaction) {
+      transaction.on_rollback(fn() { rollbacks.val = rollbacks.val + 1 })
     },
   )
   let linker = @runtime_impl.ComponentLinker::with_core_execution_engine(engine)

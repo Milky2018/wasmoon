@@ -101,33 +101,6 @@ pub(all) enum CoreExecutionOutcome {
 } derive(Debug)
 
 ///|
-/// Engine-owned registrations added during one component instantiation.
-///
-/// The checkpoint is deliberately opaque: each adapter knows how to release
-/// its own registration resources, such as native compilation contexts.
-struct CoreRegistrationCheckpoint {
-  rollback_fn : () -> Unit
-  rolled_back : Ref[Bool]
-}
-
-///|
-pub fn CoreRegistrationCheckpoint::CoreRegistrationCheckpoint(
-  rollback : () -> Unit,
-) -> CoreRegistrationCheckpoint {
-  { rollback_fn: rollback, rolled_back: Ref(false) }
-}
-
-///|
-pub fn CoreRegistrationCheckpoint::rollback(
-  self : CoreRegistrationCheckpoint,
-) -> Unit {
-  if !self.rolled_back.val {
-    self.rolled_back.val = true
-    (self.rollback_fn)()
-  }
-}
-
-///|
 /// Component-owned seam for core Wasm execution.
 ///
 /// `register_instance` is called once after interpreter instantiation has
@@ -137,7 +110,7 @@ pub fn CoreRegistrationCheckpoint::rollback(
 struct CoreExecutionEngine {
   prepare_store_fn : (@runtime.Store) -> Unit
   close_fn : () -> Unit
-  checkpoint_registrations_fn : () -> CoreRegistrationCheckpoint
+  register_rollback_fn : (@runtime.InstantiationTransaction) -> Unit
   register_instance_fn : (
     @runtime.Store,
     @types.Module,
@@ -347,15 +320,17 @@ pub fn CoreExecutionEngine::CoreExecutionEngine(
     CoreExecutionRequest,
   ) -> CoreExecutionOutcome raise ComponentRuntimeError,
   prepare_store? : (@runtime.Store) -> Unit = fn(_store) { () },
-  checkpoint_registrations? : () -> CoreRegistrationCheckpoint = fn() {
-    CoreRegistrationCheckpoint(fn() { () })
+  register_rollback? : (@runtime.InstantiationTransaction) -> Unit = fn(
+    _transaction,
+  ) {
+    ()
   },
   close? : () -> Unit = fn() { () },
 ) -> CoreExecutionEngine {
   {
     prepare_store_fn: prepare_store,
     close_fn: close,
-    checkpoint_registrations_fn: checkpoint_registrations,
+    register_rollback_fn: register_rollback,
     register_instance_fn: register_instance,
     invoke_fn: invoke,
   }
@@ -390,7 +365,7 @@ fn CoreExecutionEngine::with_lifecycle(
       lifecycle.finish_outcome(outcome)
     },
     prepare_store=fn(store) { self.prepare_store(store) },
-    checkpoint_registrations=fn() { self.checkpoint_registrations() },
+    register_rollback=fn(transaction) { self.register_rollback(transaction) },
     close=fn() { self.close() },
   )
 }
@@ -413,10 +388,11 @@ pub fn CoreExecutionEngine::prepare_store(
 }
 
 ///|
-pub fn CoreExecutionEngine::checkpoint_registrations(
+pub fn CoreExecutionEngine::register_rollback(
   self : CoreExecutionEngine,
-) -> CoreRegistrationCheckpoint {
-  (self.checkpoint_registrations_fn)()
+  transaction : @runtime.InstantiationTransaction,
+) -> Unit {
+  (self.register_rollback_fn)(transaction)
 }
 
 ///|

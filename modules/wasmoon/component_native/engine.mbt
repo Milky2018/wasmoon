@@ -185,12 +185,12 @@ fn native_component_session_with_contexts(
       }
     },
     prepare_store=fn(store) { try! store.enable_c_heap() },
-    checkpoint_registrations=fn() {
+    register_rollback=fn(transaction) {
       let existing : Map[Int, Bool] = Map([])
       for instance_idx, _ in contexts {
         existing.set(instance_idx, true)
       }
-      CoreRegistrationCheckpoint(fn() {
+      transaction.on_rollback(fn() {
         let added : Array[Int] = []
         for instance_idx, _ in contexts {
           if !existing.contains(instance_idx) {
