@@ -5,7 +5,10 @@ on:
   pull_request:
   push:
     branches:
-      - $default-branch
+      # `$default-branch` is a starter-workflow placeholder that GitHub never
+      # substitutes, so this trigger matched nothing and no push to main ever
+      # ran these checks. Name the branch.
+      - main
 
 concurrency:
   group: check-${{ github.event.pull_request.number || github.ref }}

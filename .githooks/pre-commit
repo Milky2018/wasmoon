@@ -20,3 +20,11 @@ fi
 
 echo "[pre-commit] moon check --target native"
 moon check --target native
+
+# The script tests pin CI-facing manifests: the sanitizer gate's file list
+# and budget, module boundaries, and workflow structure. They cost a couple
+# of seconds and catch drift that `moon check` cannot see — moving a
+# sanitizer-covered test file once reached main with a stale manifest
+# because this ran only in CI.
+echo "[pre-commit] script tests"
+python3 -m unittest discover -s scripts/tests -p 'test_*.py'
