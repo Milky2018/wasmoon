@@ -553,11 +553,11 @@ class GateManifestTests(unittest.TestCase):
             1,
         )
         self.assertEqual(workflow.count('export MOON_AR="$(command -v ar)"'), 1)
-        # The sanitizer gate's budget is measured headroom. ISS-368 removed
-        # the 17k-line wasmoon/testsuite package from the gate by moving its
-        # two covered blackbox tests into wasmoon/sanitizer_testsuite, and
-        # lowered the budget from 75 to 60 minutes.
-        self.assertEqual(workflow.count("timeout-minutes: 60"), 1)
+        # The sanitizer gate's budget. A 60-minute budget, set from a single
+        # 52m27s observation, killed the next uncached run on main without it
+        # finding anything, so the budget is back at 75 until several cached
+        # runs show a stable margin.
+        self.assertEqual(workflow.count("timeout-minutes: 75"), 1)
         self.assertEqual(
             workflow.count(
                 "python3 scripts/find_gc_bugs.py --dir spec/gc --timeout 30"
