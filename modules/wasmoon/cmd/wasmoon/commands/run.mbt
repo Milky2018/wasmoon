@@ -1389,15 +1389,14 @@ fn run_with_jit(
               match store.c_heap {
                 Some(heap) => {
                   // Compute canonical type indices for proper type equivalence checking
-                  let module_types = store.module_types_snapshot()
                   let canonical = @types.compute_canonical_type_indices(
-                    module_types,
+                    store.module_types,
                   )
                   // Provide func_type_indices + func_table_ptr so libcalls can infer funcref types
                   // (e.g. table.fill) and ref.test can resolve tagged-pointer funcrefs.
                   jm.setup_gc(
                     heap,
-                    module_types,
+                    store.module_types,
                     canonical,
                     instance.func_type_indices,
                   ) catch {

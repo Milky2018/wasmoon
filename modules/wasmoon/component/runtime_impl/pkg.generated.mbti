@@ -249,15 +249,13 @@ pub fn CoreContinuation::cancel(Self) -> Unit
 pub fn CoreContinuation::continue_execution(Self) -> CoreExecutionOutcome raise ComponentRuntimeError
 pub impl @debug.Debug for CoreContinuation
 
-type CoreEngineInstantiation
-pub fn CoreEngineInstantiation::CoreEngineInstantiation(() -> Unit, () -> Unit) -> Self
-
 type CoreExecutionEngine
-pub fn CoreExecutionEngine::CoreExecutionEngine((@runtime.Store, @types.Module, @runtime.ModuleInstance) -> Unit raise ComponentRuntimeError, (@runtime.Store, @runtime.ModuleInstance, Int, Array[@types.Value], CoreExecutionRequest) -> CoreExecutionOutcome raise ComponentRuntimeError, prepare_store? : (@runtime.Store) -> Unit, begin_instantiation? : () -> CoreEngineInstantiation, close? : () -> Unit) -> Self
+pub fn CoreExecutionEngine::CoreExecutionEngine((@runtime.Store, @types.Module, @runtime.ModuleInstance) -> Unit raise ComponentRuntimeError, (@runtime.Store, @runtime.ModuleInstance, Int, Array[@types.Value], CoreExecutionRequest) -> CoreExecutionOutcome raise ComponentRuntimeError, prepare_store? : (@runtime.Store) -> Unit, register_rollback? : (@runtime.InstantiationTransaction) -> Unit, close? : () -> Unit) -> Self
 pub fn CoreExecutionEngine::close(Self) -> Unit
 pub fn CoreExecutionEngine::invoke(Self, @runtime.Store, @runtime.ModuleInstance, Int, Array[@types.Value], CoreExecutionRequest) -> CoreExecutionOutcome raise ComponentRuntimeError
 pub fn CoreExecutionEngine::prepare_store(Self, @runtime.Store) -> Unit
 pub fn CoreExecutionEngine::register_instance(Self, @runtime.Store, @types.Module, @runtime.ModuleInstance) -> Unit raise ComponentRuntimeError
+pub fn CoreExecutionEngine::register_rollback(Self, @runtime.InstantiationTransaction) -> Unit
 pub impl @debug.Debug for CoreExecutionEngine
 
 pub(all) enum CoreExecutionOutcome {

@@ -166,6 +166,12 @@ pub fn Imports::add_table(Self, String, String, Int) -> Unit
 pub fn Imports::add_tag(Self, String, String, Int) -> Unit
 pub fn Imports::resolve(Self, String, String) -> ExternVal?
 
+type InstantiationTransaction
+pub fn InstantiationTransaction::commit(Self) -> Unit
+pub fn InstantiationTransaction::new() -> Self
+pub fn InstantiationTransaction::on_rollback(Self, () -> Unit) -> Unit
+pub fn InstantiationTransaction::rollback(Self) -> Unit
+
 type Linker
 pub fn Linker::Linker() -> Self
 pub fn Linker::add_global(Self, String, String, GlobalInstance) -> Unit raise RuntimeError
@@ -173,17 +179,13 @@ pub fn Linker::add_host_func(Self, String, String, (Array[@types.Value]) -> Arra
 pub fn Linker::add_host_func_with_caller(Self, String, String, (Caller, Array[@types.Value]) -> Array[@types.Value] raise RuntimeError, func_type? : @types.FuncType) -> Unit raise RuntimeError
 pub fn Linker::add_memory(Self, String, String, Memory) -> Unit raise RuntimeError
 pub fn Linker::add_table(Self, String, String, Table) -> Unit raise RuntimeError
-pub fn Linker::begin_instantiation(Self) -> LinkerInstantiation raise RuntimeError
 pub fn Linker::build_imports(Self) -> Imports
 pub fn Linker::close(Self) -> Unit
 pub fn Linker::get_module(Self, String) -> ModuleInstance?
 pub fn Linker::get_store(Self) -> Store
 pub fn Linker::register(Self, String, ModuleInstance) -> Unit raise RuntimeError
+pub fn Linker::register_rollback(Self, InstantiationTransaction) -> Unit
 pub fn Linker::with_store(Store) -> Self
-
-type LinkerInstantiation
-pub fn LinkerInstantiation::commit(Self) -> Unit
-pub fn LinkerInstantiation::discard(Self) -> Unit
 
 pub struct MarkSweepHeap {
   objects : Array[GCObject?]
@@ -359,8 +361,25 @@ pub fn Stack::push_v128(Self, Bytes) -> Unit raise RuntimeError
 pub fn Stack::size(Self) -> Int
 
 pub struct Store {
+  funcs : Array[FuncInst]
+  func_types : Array[@types.FuncType]
+  func_type_indices : Array[Int]
+  tables : Array[Table]
+  mems : Array[Memory]
+  globals : Array[GlobalInstance]
+  tags : Array[@types.FuncType]
+  tag_type_indices : Array[Int]
+  tag_owners : Array[FuncOwner]
+  exns : Array[ExnInstance]
   heap : MarkSweepHeap
   mut c_heap : @wasmoon_jit.CHeap?
+  mut module_types : Array[@types.SubType]
+  mut module_rec_groups : Array[Int]
+  wrapped_externs : Array[@types.Value]
+  func_owners : Array[FuncOwner]
+  instances : Array[ModuleInstance]
+  jit_tables : Array[@wasmoon_jit.JITTable?]
+  mut wasi_mem_addr : Int?
   mut wasi_ctx_handle : Int
   native_execution : @wasmoon_jit.NativeExecutionState
   // private fields
@@ -376,7 +395,6 @@ pub fn Store::alloc_mem(Self, Memory) -> Int raise RuntimeError
 pub fn Store::alloc_struct(Self, Int, Array[@types.Value]) -> Int raise RuntimeError
 pub fn Store::alloc_table(Self, Table, use_jit? : Bool) -> Int raise RuntimeError
 pub fn Store::alloc_tag(Self, @types.FuncType, type_idx? : Int) -> Int raise RuntimeError
-pub fn Store::allocation_stats(Self) -> StoreAllocationStats
 pub fn Store::array_copy(Self, Int, Int, Int, Int, Int) -> Unit raise RuntimeError
 pub fn Store::array_fill(Self, Int, Int, @types.Value, Int) -> Unit raise RuntimeError
 pub fn Store::array_get(Self, Int, Int) -> @types.Value raise RuntimeError
@@ -400,7 +418,6 @@ pub fn Store::get_func_type_opt(Self, Int) -> @types.FuncType?
 pub fn Store::get_gc_stats(Self) -> (Int64, Int64, Int, Int, Int)
 pub fn Store::get_gc_type_idx(Self, Int) -> Int raise RuntimeError
 pub fn Store::get_global(Self, Int) -> GlobalInstance raise RuntimeError
-pub fn Store::get_instance_opt(Self, Int) -> ModuleInstance?
 pub fn Store::get_jit_table(Self, Int) -> @wasmoon_jit.JITTable?
 pub fn Store::get_mem(Self, Int) -> Memory raise RuntimeError
 pub fn Store::get_memory(Self, Int) -> Memory
@@ -416,7 +433,6 @@ pub fn Store::jit_funcref_entries(Self) -> Array[StoreFuncrefEntry]
 pub fn Store::lookup_jit_funcref_ptr(Self, Int) -> Int64?
 pub fn Store::lookup_jit_funcref_store_addr(Self, Int64) -> Int?
 pub fn Store::maybe_collect(Self, additional_roots? : Array[@types.Value], threshold? : Double) -> Int
-pub fn Store::module_types_snapshot(Self) -> Array[@types.SubType]
 pub fn Store::native_execution_state(Self) -> @wasmoon_jit.NativeExecutionState
 pub fn Store::register_instance(Self, ModuleInstance) -> Int raise RuntimeError
 pub fn Store::register_jit_funcrefs(Self, Array[StoreFuncrefEntry]) -> StoreFuncrefRegistration
@@ -429,23 +445,6 @@ pub fn Store::struct_set(Self, Int, Int, @types.Value) -> Unit raise RuntimeErro
 pub fn Store::unwrap_extern(Self, @types.Value) -> @types.Value raise RuntimeError
 pub fn Store::with_c_heap() -> Self
 pub fn Store::wrap_as_extern(Self, @types.Value) -> @types.Value raise RuntimeError
-
-pub struct StoreAllocationStats {
-  funcs : Int
-  func_types : Int
-  func_type_indices : Int
-  func_owners : Int
-  tables : Int
-  jit_tables : Int
-  mems : Int
-  globals : Int
-  tags : Int
-  tag_type_indices : Int
-  tag_owners : Int
-  exns : Int
-  wrapped_externs : Int
-  instances : Int
-} derive(Eq, @debug.Debug)
 
 pub struct StoreFuncrefEntry {
   store_addr : Int
