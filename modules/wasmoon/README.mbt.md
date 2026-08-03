@@ -132,12 +132,9 @@ wasmoon component-test path/to/component-tests.json
 wasmoon component-test path/to/component-tests.json --no-jit
 wasmoon component-test --help
 
-# wat
-wasmoon wat examples/add.wat
-wasmoon wat --help
-
 # disasm
 wasmoon disasm examples/stream.wasm
+wasmoon disasm examples/add.wat
 wasmoon disasm --help
 ```
 

@@ -42,8 +42,6 @@ pub fn run_wasi_component_command(String, Array[String], Array[String], Array[St
 
 pub fn run_wasm(String, String?, Array[String], Array[String], Array[String], Array[String], Array[String], Array[String], Bool, Bool, Bool, Int, Bool) -> Unit
 
-pub fn run_wat(String) -> Unit
-
 pub fn verify_compiled_jit_artifact(@artifact.Artifact) -> @wasmoon_jit.LoadedArtifact raise @wasmoon_jit.ArtifactLoadError
 
 // Errors

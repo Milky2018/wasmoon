@@ -1,15 +1,9 @@
 ///|
-/// Disassemble a WASM file
+/// Disassemble a WASM or WAT file
 pub fn run_disasm(wasm_path : String) -> Unit {
-  let bytes = @fs.read_file_to_bytes(wasm_path) catch {
+  let mod_ = load_module_from_path(wasm_path) catch {
     e => {
-      println("Error reading file: \{e}")
-      return
-    }
-  }
-  let mod_ = @parser.parse_module(bytes) catch {
-    e => {
-      println("Error parsing module: \{e}")
+      println("Error: \{e}")
       return
     }
   }
