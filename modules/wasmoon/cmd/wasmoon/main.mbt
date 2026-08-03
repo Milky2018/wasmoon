@@ -280,7 +280,7 @@ fn main {
                   wasi_options, debug, dump_on_trap, use_jit, opt_level, enable_dwarf,
                 )
               } else {
-                abort("missing file argument")
+                println("Error: missing file argument")
               }
             }
             "test" => {
