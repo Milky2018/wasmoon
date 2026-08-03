@@ -352,23 +352,6 @@ fn UnionFind::find(self : UnionFind, x : Int) -> Int {
 }
 
 ///|
-fn UnionFind::union(self : UnionFind, a : Int, b : Int) -> Int {
-  let root_a = self.find(a)
-  let root_b = self.find(b)
-  if root_a == root_b {
-    return root_a
-  }
-  // Always make the smaller id the root (deterministic)
-  if root_a < root_b {
-    self.parent[root_b] = root_a
-    root_a
-  } else {
-    self.parent[root_a] = root_b
-    root_b
-  }
-}
-
-///|
 /// Union two sets, forcing `keep` to remain the root.
 /// Returns the root id (always the root of `keep`).
 fn UnionFind::union_keep(self : UnionFind, keep : Int, other : Int) -> Int {
@@ -389,9 +372,17 @@ struct EGraph {
   // All e-classes (indexed by canonical id)
   classes : Map[Int, EClass]
   // Hash-cons map: ENode -> EClassId (for deduplication)
-  mut hashcons : Map[ENode, EClassId]
+  hashcons : Map[ENode, EClassId]
   // Dirty flag: true if there are pending merges
   mut dirty : Bool
+  // Parent edges: child class root -> ids of classes holding a node that
+  // references it. Consumed by `rebuild` to repair only what a union
+  // disturbed instead of rewalking the whole graph.
+  parents : Map[Int, @hashset.HashSet[Int]]
+  // Classes whose contents changed since the last rebuild.
+  pending : Array[Int]
+  // Classes repaired by the most recent rebuild (diagnostic).
+  mut last_rebuild_repairs : Int
   // Opcode index: maps opcode tag to set of class ids containing that opcode
   opcode_index : Map[EOpcodeTag, @hashset.HashSet[Int]]
   // Type information: maps canonical class id to bit width (8, 16, 32, 64, 128)
@@ -420,6 +411,9 @@ pub fn EGraph::EGraph() -> EGraph {
     classes: Map([]),
     hashcons: Map([]),
     dirty: false,
+    parents: Map([]),
+    pending: [],
+    last_rebuild_repairs: 0,
     opcode_index: Map([]),
     type_map: Map([]),
     type_conflicts: HashSet([]),
@@ -494,9 +488,9 @@ fn EGraph::canonicalize(self : EGraph, node : ENode) -> ENode {
 }
 
 ///|
-/// Add an e-node to the e-graph, returning its e-class id
-/// If an equivalent node already exists, returns the existing class id
-/// New nodes are queued for rule application (processed by add_eager)
+/// Add an e-node to the e-graph, returning its e-class id.
+/// If an equivalent node already exists, returns the existing class id.
+/// Rewriting happens later, in `saturate_indexed`.
 pub fn EGraph::add(self : EGraph, node : ENode) -> EClassId {
   // Canonicalize the node first
   let node = self.canonicalize(node)
@@ -528,7 +522,41 @@ pub fn EGraph::add(self : EGraph, node : ENode) -> EClassId {
   // Update opcode index
   let tag = node.op.tag()
   self.index_add(tag, id)
+  self.record_parent_edges(node, id)
   class_id
+}
+
+///|
+/// Record that class `owner` holds a node referencing each of its children.
+fn EGraph::record_parent_edges(
+  self : EGraph,
+  node : ENode,
+  owner : Int,
+) -> Unit {
+  for child in node.children {
+    let child_root = self.find(child).0
+    match self.parents.get(child_root) {
+      Some(owners) => owners.add(owner)
+      None => {
+        let owners : @hashset.HashSet[Int] = HashSet([])
+        owners.add(owner)
+        self.parents.set(child_root, owners)
+      }
+    }
+  }
+}
+
+///|
+/// Mark a class as needing repair on the next rebuild.
+fn EGraph::mark_pending(self : EGraph, class_id : Int) -> Unit {
+  self.pending.push(class_id)
+  self.dirty = true
+}
+
+///|
+/// Number of classes repaired by the most recent `rebuild` (diagnostic).
+pub fn EGraph::last_rebuild_repairs(self : EGraph) -> Int {
+  self.last_rebuild_repairs
 }
 
 ///|
@@ -668,19 +696,6 @@ pub fn EGraph::remat_cost_bonus(self : EGraph, id : EClassId) -> Int {
 }
 
 ///|
-/// Rewrite repeatedly until convergence, using a size-derived iteration budget.
-///
-/// Prefer `saturate_indexed(ruleset, 1)` for Cranelift-style one-pass
-/// simplification.
-pub fn EGraph::rewrite_to_fixpoint(
-  self : EGraph,
-  ruleset : IndexedRuleSet,
-) -> Unit {
-  let budget = (self.num_classes() + self.num_nodes() + 1) * 2
-  self.saturate_indexed(ruleset, budget) |> ignore
-}
-
-///|
 /// Remove a class from the opcode index
 fn EGraph::index_remove(
   self : EGraph,
@@ -744,7 +759,8 @@ pub fn EGraph::subsume(self : EGraph, a : EClassId, b : EClassId) -> EClassId {
 
   // Remove the old class entirely - its nodes are "subsumed"
   self.classes.remove(a.0)
-  self.dirty = true
+  self.absorb_parent_edges(a.0, b.0)
+  self.mark_pending(b.0)
   b
 }
 
@@ -814,20 +830,21 @@ pub fn EGraph::merge(self : EGraph, a : EClassId, b : EClassId) -> EClassId {
     self.index_merge(other_id.0, new_id.0, other_class.nodes)
     if self.classes.get(new_id.0) is Some(root_class) {
       // Merge all nodes: this preserves equivalences needed for congruence
-      // closure (e.g., when children are later merged).
+      // closure (e.g., when children are later merged). Membership is
+      // hashed, not scanned: e-classes can hold many nodes once the
+      // per-class node budget is raised.
+      let present : @hashset.HashSet[ENode] = HashSet([])
+      for existing in root_class.nodes {
+        present.add(existing)
+      }
       for node in other_class.nodes {
         let canonical_node = self.canonicalize(node)
-        let mut exists = false
-        for existing in root_class.nodes {
-          if existing == canonical_node {
-            exists = true
-            break
-          }
-        }
-        if !exists {
+        if !present.contains(canonical_node) {
+          present.add(canonical_node)
           root_class.nodes.push(canonical_node)
           // Keep hashcons aware of the merged node so it isn't re-created.
           self.hashcons.set(canonical_node, new_id)
+          self.record_parent_edges(canonical_node, new_id.0)
         }
       }
       // Merge constant caches. Two classes carrying *different* constants
@@ -856,204 +873,151 @@ pub fn EGraph::merge(self : EGraph, a : EClassId, b : EClassId) -> EClassId {
     self.classes.remove(other_id.0)
   }
 
-  // Mark as dirty - need to rebuild
-  self.dirty = true
+  // Inherit the subsumed class's parent edges, then schedule repair: every
+  // class holding a node that referenced either side now has a stale child
+  // id in that node.
+  self.absorb_parent_edges(other_id.0, new_id.0)
+  self.mark_pending(new_id.0)
   new_id
 }
 
 ///|
-/// Rebuild the e-graph after merges to restore invariants
-/// This re-canonicalizes all nodes and updates the hash-cons map
+/// Move parent edges recorded against `old_root` onto `new_root`.
+fn EGraph::absorb_parent_edges(
+  self : EGraph,
+  old_root : Int,
+  new_root : Int,
+) -> Unit {
+  guard self.parents.get(old_root) is Some(old_owners) else { return }
+  self.parents.remove(old_root)
+  match self.parents.get(new_root) {
+    Some(owners) =>
+      for owner in old_owners {
+        owners.add(owner)
+      }
+    None => self.parents.set(new_root, old_owners)
+  }
+}
+
+///|
+/// Restore e-graph invariants after unions.
+///
+/// Repair is driven by a worklist of classes whose contents changed, not by
+/// a walk of the whole graph: when a union moves a class, only the nodes
+/// that reference it hold a stale child id, and `parents` names exactly the
+/// classes holding those nodes. Repairing a class can expose new congruences,
+/// whose merges enqueue more work, so the loop runs until the worklist
+/// drains.
 pub fn EGraph::rebuild(self : EGraph) -> Unit {
+  self.last_rebuild_repairs = 0
   if !self.dirty {
     return
   }
-
-  // Rebuild must restore ALL invariants (hashcons, opcode index, caches, type map)
-  // after any sequence of unions. This implementation rebuilds to a fixpoint:
-  // canonicalize nodes -> detect congruence collisions -> union -> repeat.
-
-  while true {
-    // Merge all existing classes by their current union-find root.
-    // This also deduplicates nodes and refreshes constant caches.
-    let merged_classes : Map[Int, EClass] = Map([])
-    for class_id, eclass in self.classes {
-      let root = self.uf.find(class_id)
-      match merged_classes.get(root) {
-        Some(root_class) =>
-          for node in eclass.nodes {
-            root_class.nodes.push(node)
-          }
-        None => {
-          // Copy nodes; canonicalization happens later in this rebuild iteration.
-          let nodes : Array[ENode] = []
-          for node in eclass.nodes {
-            nodes.push(node)
-          }
-          merged_classes.set(root, {
-            nodes,
-            const_value: eclass.const_value,
-            fconst_value: eclass.fconst_value,
-          })
-        }
-      }
+  while !self.pending.is_empty() {
+    let batch = self.pending.copy()
+    self.pending.clear()
+    // Deduplicate against current roots: a batch often names the same class
+    // several times, and some entries have since been merged away.
+    let todo : @hashset.HashSet[Int] = HashSet([])
+    for class_id in batch {
+      todo.add(self.uf.find(class_id))
     }
-
-    // Rebuild hashcons/opcode_index from scratch using canonicalized nodes.
-    // Also collect any new unions implied by congruence (same canonical node).
-    let new_hashcons : Map[ENode, EClassId] = Map([])
-    let new_opcode_index : Map[EOpcodeTag, @hashset.HashSet[Int]] = Map([])
-    let unions : Array[(Int, Int)] = []
-
-    // Helper: add (tag -> root) to the new opcode index.
-    fn index_add_local(
-      idx : Map[EOpcodeTag, @hashset.HashSet[Int]],
-      tag : EOpcodeTag,
-      root : Int,
-    ) -> Unit {
-      match idx.get(tag) {
-        Some(set) => set.add(root)
-        None => {
-          let set : @hashset.HashSet[Int] = HashSet([])
-          set.add(root)
-          idx.set(tag, set)
-        }
-      }
+    for class_id in todo {
+      self.repair_class(class_id)
     }
+  }
+  self.dirty = false
+}
 
-    for root, root_class in merged_classes {
-      // Canonicalize and deduplicate nodes within the class.
-      let canonical_nodes : Array[ENode] = []
-      let mut const_value : Int64? = None
-      let mut fconst_value : UInt64? = None
-      let mut const_conflicted = false
-      let mut fconst_conflicted = false
-      for node in root_class.nodes {
-        let canonical_node = self.canonicalize(node)
+///|
+/// Repair one class and every class holding a node that references it.
+fn EGraph::repair_class(self : EGraph, class_id : Int) -> Unit {
+  let root = self.uf.find(class_id)
+  guard self.classes.get(root) is Some(_) else { return }
+  self.last_rebuild_repairs = self.last_rebuild_repairs + 1
+  // The class's own nodes may carry stale children too (its members were
+  // merged in from elsewhere), so recanonicalize it alongside its parents.
+  self.recanonicalize_class(root)
+  guard self.parents.get(root) is Some(owners) else { return }
+  let owner_roots : @hashset.HashSet[Int] = HashSet([])
+  for owner in owners {
+    owner_roots.add(self.uf.find(owner))
+  }
+  // Parent edges are re-recorded against current roots as we go.
+  self.parents.remove(root)
+  for owner in owner_roots {
+    self.recanonicalize_class(owner)
+  }
+}
 
-        // Deduplicate within e-class.
-        let mut found = false
-        for existing in canonical_nodes {
-          if existing == canonical_node {
-            found = true
-            break
-          }
-        }
-        if !found {
-          canonical_nodes.push(canonical_node)
-        }
-
-        // Refresh constant caches; a class containing two different
-        // constants is an unsound union and must not be harvested.
-        match canonical_node.op {
-          Const(v) =>
-            match const_value {
-              None => const_value = Some(v)
-              Some(existing) => if existing != v { const_conflicted = true }
-            }
-          Fconst(bits) =>
-            match fconst_value {
-              None => fconst_value = Some(bits)
-              Some(existing) => if existing != bits { fconst_conflicted = true }
-            }
-          _ => ()
-        }
-
-        // Congruence closure: identical canonical nodes must belong to same e-class.
-        match new_hashcons.get(canonical_node) {
-          Some(existing_id) => {
-            let existing_root = self.uf.find(existing_id.0)
-            let this_root = self.uf.find(root)
-            if existing_root != this_root {
-              unions.push((existing_root, this_root))
-            }
-          }
-          None => new_hashcons.set(canonical_node, EClassId(self.uf.find(root)))
-        }
-
-        // Opcode index (used by indexed saturation).
-        index_add_local(
-          new_opcode_index,
-          canonical_node.op.tag(),
-          self.uf.find(root),
-        )
-      }
-      root_class.nodes = canonical_nodes
-      if const_conflicted {
-        self.const_conflict_hits = self.const_conflict_hits + 1
-        root_class.const_value = None
-      } else {
-        root_class.const_value = const_value
-      }
-      if fconst_conflicted {
-        self.const_conflict_hits = self.const_conflict_hits + 1
-        root_class.fconst_value = None
-      } else {
-        root_class.fconst_value = fconst_value
-      }
+///|
+/// Recanonicalize one class's nodes in place: refresh the hashcons and
+/// opcode-index entries they own, re-record their parent edges, refresh the
+/// constant caches, and merge any class that turns out to be congruent.
+fn EGraph::recanonicalize_class(self : EGraph, class_id : Int) -> Unit {
+  let root = self.uf.find(class_id)
+  guard self.classes.get(root) is Some(eclass) else { return }
+  let canonical_nodes : Array[ENode] = []
+  let seen : @hashset.HashSet[ENode] = HashSet([])
+  let mut const_value : Int64? = None
+  let mut fconst_value : UInt64? = None
+  let mut const_conflicted = false
+  let mut fconst_conflicted = false
+  let congruent : Array[Int] = []
+  for node in eclass.nodes {
+    // Drop the pre-canonicalization entry; a stale key would otherwise keep
+    // resolving to this class forever.
+    self.hashcons.remove(node)
+    let canonical_node = self.canonicalize(node)
+    if seen.contains(canonical_node) {
+      continue
     }
-    if unions.is_empty() {
-      // Finalize: commit rebuilt structures and refresh type/remat maps.
-      self.classes.clear()
-      for root, eclass in merged_classes {
-        if self.uf.find(root) == root {
-          self.classes.set(root, eclass)
+    seen.add(canonical_node)
+    canonical_nodes.push(canonical_node)
+    match canonical_node.op {
+      Const(v) =>
+        match const_value {
+          None => const_value = Some(v)
+          Some(existing) => if existing != v { const_conflicted = true }
         }
-      }
-      self.hashcons = new_hashcons
-
-      // Rebuild opcode index from all e-nodes.
-      self.opcode_index.clear()
-      for class_id, eclass in self.classes {
-        for node in eclass.nodes {
-          self.index_add(node.op.tag(), class_id)
+      Fconst(bits) =>
+        match fconst_value {
+          None => fconst_value = Some(bits)
+          Some(existing) => if existing != bits { fconst_conflicted = true }
         }
-      }
-
-      // Re-root the poison set, then the type map; entries that collide on
-      // a root with differing widths poison that root instead of silently
-      // letting the first entry win.
-      let poisoned_roots : Array[Int] = self.type_conflicts.to_array()
-      self.type_conflicts.clear()
-      for id in poisoned_roots {
-        self.type_conflicts.add(self.uf.find(id))
-      }
-      let new_type_map : Map[Int, Int] = Map([])
-      for id, bits in self.type_map {
-        let root = self.uf.find(id)
-        guard !self.type_conflicts.contains(root) else { continue }
-        match new_type_map.get(root) {
-          None => new_type_map.set(root, bits)
-          Some(existing) =>
-            if existing != bits {
-              new_type_map.remove(root)
-              if !self.type_conflicts.contains(root) {
-                self.type_conflicts.add(root)
-                self.type_conflict_hits = self.type_conflict_hits + 1
-              }
-            }
-        }
-      }
-      self.type_map.clear()
-      for id, bits in new_type_map {
-        self.type_map.set(id, bits)
-      }
-
-      // Re-root the rematerialization set.
-      let remat_roots : Array[Int] = self.remat_set.to_array()
-      self.remat_set.clear()
-      for id in remat_roots {
-        self.remat_set.add(self.uf.find(id))
-      }
-      self.dirty = false
-      return
+      _ => ()
     }
-
-    // Apply unions and iterate again to reach a fixpoint.
-    for pair in unions {
-      let (a, b) = pair
-      self.uf.union(a, b) |> ignore
+    self.index_add(canonical_node.op.tag(), root)
+    self.record_parent_edges(canonical_node, root)
+    // Congruence closure: an identical canonical node elsewhere means the
+    // two classes are equal.
+    match self.hashcons.get(canonical_node) {
+      Some(existing_id) => {
+        let existing_root = self.uf.find(existing_id.0)
+        if existing_root != root {
+          congruent.push(existing_root)
+        }
+      }
+      None => self.hashcons.set(canonical_node, EClassId(root))
     }
+  }
+  eclass.nodes = canonical_nodes
+  if const_conflicted {
+    self.const_conflict_hits = self.const_conflict_hits + 1
+    eclass.const_value = None
+  } else {
+    eclass.const_value = const_value
+  }
+  if fconst_conflicted {
+    self.const_conflict_hits = self.const_conflict_hits + 1
+    eclass.fconst_value = None
+  } else {
+    eclass.fconst_value = fconst_value
+  }
+  // Merge after the scan so the loop above is not walking a class that is
+  // being rewritten underneath it. `merge` re-enqueues the survivor.
+  for other in congruent {
+    self.merge(EClassId(other), EClassId(self.uf.find(root))) |> ignore
   }
 }
 

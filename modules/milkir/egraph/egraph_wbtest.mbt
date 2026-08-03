@@ -1682,3 +1682,30 @@ test "merging classes with differing constants is loud and unharvested" {
   inspect(eg.get_const(three) is None, content="true")
   inspect(eg.const_conflict_count() >= 1, content="true")
 }
+
+///|
+test "rebuild repairs only the classes a union disturbed" {
+  let eg = EGraph::EGraph()
+  // A large graph of unrelated classes.
+  let mut untouched = 0
+  for i in 0..<400 {
+    let v = eg.add_var(i + 100)
+    eg.add_bnot(v) |> ignore
+    untouched = untouched + 2
+  }
+  eg.rebuild()
+  // Two more classes with a shared parent shape, then one union between them.
+  let x = eg.add_var(1)
+  let y = eg.add_var(2)
+  let px = eg.add_neg(x)
+  let py = eg.add_neg(y)
+  eg.rebuild()
+  inspect(eg.equiv(px, py), content="false")
+  eg.merge(x, y) |> ignore
+  eg.rebuild()
+  // Congruence still closes: Neg(x) and Neg(y) became the same node.
+  inspect(eg.equiv(px, py), content="true")
+  // ... but the repair touched a handful of classes, not the ~800 present.
+  inspect(eg.num_classes() > 400, content="true")
+  inspect(eg.last_rebuild_repairs() < 10, content="true")
+}

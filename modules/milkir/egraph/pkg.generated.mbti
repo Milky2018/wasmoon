@@ -97,6 +97,7 @@ pub fn EGraph::is_marked_rematerializable(Self, EClassId) -> Bool
 pub fn EGraph::is_rematerializable(Self, EClassId) -> Bool
 pub fn EGraph::last_eclass_size_limit_hits(Self) -> Int
 pub fn EGraph::last_matches_limit_hits(Self) -> Int
+pub fn EGraph::last_rebuild_repairs(Self) -> Int
 pub fn EGraph::last_rule_applications(Self) -> Int
 pub fn EGraph::mark_rematerializable(Self, EClassId) -> Bool
 pub fn EGraph::merge(Self, EClassId, EClassId) -> EClassId
@@ -104,7 +105,6 @@ pub fn EGraph::num_classes(Self) -> Int
 pub fn EGraph::num_nodes(Self) -> Int
 pub fn EGraph::rebuild(Self) -> Unit
 pub fn EGraph::remat_cost_bonus(Self, EClassId) -> Int
-pub fn EGraph::rewrite_to_fixpoint(Self, IndexedRuleSet) -> Unit
 pub fn EGraph::saturate_indexed(Self, IndexedRuleSet, Int) -> Int
 pub fn EGraph::saturate_indexed_with_limits(Self, IndexedRuleSet, Int, SaturationLimits) -> Int
 pub fn EGraph::set_type(Self, EClassId, Int) -> Unit
