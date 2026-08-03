@@ -523,14 +523,30 @@ class GateManifestTests(unittest.TestCase):
         }
         self.assertEqual(len(sanitizer_targets), len(set(sanitizer_targets)))
         self.assertEqual(set(sanitizer_targets), expected_targets)
+        # Twice: the wrapper is exported as MOON_CC, and its contents feed the
+        # cache key so editing its flags forces a full rebuild.
         self.assertEqual(
             workflow.count("scripts/native_sanitizer_cc.sh"),
-            1,
+            2,
         )
         self.assertEqual(
             workflow.count("scripts/verify_native_sanitizers.py"),
             1,
         )
+        # The build directory is cached across runs, so it must not be wiped
+        # at the start of the step; the cache key is what forces a rebuild.
+        self.assertNotIn('rm -rf "$sanitizer_build"', workflow)
+        self.assertIn("uses: actions/cache@v4", workflow)
+        self.assertIn(
+            "key: sanitizer-${{ matrix.os }}-"
+            "${{ steps.sanitizer_cache_key.outputs.digest }}-${{ github.sha }}",
+            workflow,
+        )
+        # The key must pin the resolved toolchain and the real compiler, not
+        # just the "nightly" label, or a new compiler would inherit stale
+        # objects.
+        self.assertIn("moon version --all", workflow)
+        self.assertIn("clang --version", workflow)
         self.assertEqual(workflow.count("MOONBIT_NEW_NATIVE: 0"), 1)
         self.assertEqual(
             workflow.count('export MOON_CC="$sanitizer_wrapper"'),
