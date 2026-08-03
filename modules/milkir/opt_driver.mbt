@@ -71,9 +71,15 @@ fn egraph_limits_for_function(func : Function) -> @egraph.SaturationLimits {
 ///|
 fn run_egraph_pass(func : Function) -> Bool {
   let limits = egraph_limits_for_function(func)
-  // Keep to a compact Cranelift-like core rewrite set for predictable compile
-  // time at every function size; the limits above scale the work per e-class.
-  let ruleset = @egraph.get_compact_ruleset()
+  // Large functions keep the compact core rewrite set for predictable
+  // compile time; smaller ones run the full ruleset, whose results
+  // elaboration can now materialize. The limits above additionally scale
+  // the work permitted per e-class.
+  let ruleset = if instruction_count(func) >= 300 {
+    @egraph.get_compact_ruleset()
+  } else {
+    @egraph.get_global_ruleset()
+  }
   if !perf_enabled() {
     return optimize_function_with_stats_with_limits_and_ruleset(
         func, limits, ruleset,

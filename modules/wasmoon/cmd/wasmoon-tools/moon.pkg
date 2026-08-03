@@ -1,4 +1,5 @@
 import {
+  "Milky2018/wasmoon/logger",
   "Milky2018/wasm_core/types",
   "Milky2018/wasm_core/encoder",
   "Milky2018/wasmoon/parser",

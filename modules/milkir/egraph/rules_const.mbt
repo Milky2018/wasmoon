@@ -22,16 +22,14 @@ fn rule_mul_pow2() -> RewriteRule {
             log2_if_pow2(c) is Some(shift) {
             let shift_const = eg.add_const(shift.to_int64())
             let new_node = eg.add_shl(node.children[0], shift_const)
-            let new_id = eg.merge(class_id, new_node)
-            changed = new_id != class_id || changed
+            changed = eg.merge_changed(class_id, new_node) || changed
           }
           // Check if left operand is power of 2
           if eg.find_const(node.children[0]) is Some(c) &&
             log2_if_pow2(c) is Some(shift) {
             let shift_const = eg.add_const(shift.to_int64())
             let new_node = eg.add_shl(node.children[1], shift_const)
-            let new_id = eg.merge(class_id, new_node)
-            changed = new_id != class_id || changed
+            changed = eg.merge_changed(class_id, new_node) || changed
           }
         }
       }
@@ -53,8 +51,7 @@ fn rule_double() -> RewriteRule {
           // x + x = x << 1
           let one = eg.add_const(1L)
           let shift = eg.add_shl(node.children[0], one)
-          let new_id = eg.merge(class_id, shift)
-          changed = new_id != class_id || changed
+          changed = eg.merge_changed(class_id, shift) || changed
         }
       }
       changed
@@ -247,8 +244,7 @@ fn rule_const_fold() -> RewriteRule {
           }
           if result is Some(r) {
             let result_node = eg.add_const(r)
-            let new_id = eg.subsume(class_id, result_node)
-            changed = new_id != class_id || changed
+            changed = eg.subsume_changed(class_id, result_node) || changed
           }
         }
         // Unary operations
@@ -284,8 +280,7 @@ fn rule_const_fold() -> RewriteRule {
           }
           if result is Some(r) {
             let result_node = eg.add_const(r)
-            let new_id = eg.subsume(class_id, result_node)
-            changed = new_id != class_id || changed
+            changed = eg.subsume_changed(class_id, result_node) || changed
           }
         }
       }
@@ -342,8 +337,7 @@ fn rule_reassoc_or_const() -> RewriteRule {
               // (a | c1) | c2 = a | (c1 | c2)
               let combined = eg.add_const(c1 | c2)
               let new_or = eg.add_or(inner.children[0], combined)
-              let new_id = eg.merge(class_id, new_or)
-              changed = new_id != class_id || changed
+              changed = eg.merge_changed(class_id, new_or) || changed
             }
           }
         }
@@ -370,8 +364,7 @@ fn rule_reassoc_and_const() -> RewriteRule {
               // (a & c1) & c2 = a & (c1 & c2)
               let combined = eg.add_const(c1 & c2)
               let new_and = eg.add_and(inner.children[0], combined)
-              let new_id = eg.merge(class_id, new_and)
-              changed = new_id != class_id || changed
+              changed = eg.merge_changed(class_id, new_and) || changed
             }
           }
         }
@@ -398,8 +391,7 @@ fn rule_reassoc_xor_const() -> RewriteRule {
               // (a ^ c1) ^ c2 = a ^ (c1 ^ c2)
               let combined = eg.add_const(c1 ^ c2)
               let new_xor = eg.add_xor(inner.children[0], combined)
-              let new_id = eg.merge(class_id, new_xor)
-              changed = new_id != class_id || changed
+              changed = eg.merge_changed(class_id, new_xor) || changed
             }
           }
         }
@@ -428,8 +420,7 @@ fn rule_reassoc_add_const() -> RewriteRule {
               // (a + c1) + c2 = a + (c1 + c2)
               let combined = eg.add_const(c1 + c2)
               let new_add = eg.add_add(inner.children[0], combined)
-              let new_id = eg.merge(class_id, new_add)
-              changed = new_id != class_id || changed
+              changed = eg.merge_changed(class_id, new_add) || changed
             }
           }
         }
@@ -457,8 +448,7 @@ fn rule_reassoc_sub_add_const() -> RewriteRule {
               // (add x k1) - k2 = x + (k1 - k2) or x - (k2 - k1)
               let combined = eg.add_const(c1 - c2)
               let new_add = eg.add_add(inner.children[0], combined)
-              let new_id = eg.merge(class_id, new_add)
-              changed = new_id != class_id || changed
+              changed = eg.merge_changed(class_id, new_add) || changed
             }
           }
         }
@@ -485,8 +475,7 @@ fn rule_reassoc_add_sub_const() -> RewriteRule {
               // (sub x k1) + k2 = x + (k2 - k1)
               let combined = eg.add_const(c2 - c1)
               let new_add = eg.add_add(inner.children[0], combined)
-              let new_id = eg.merge(class_id, new_add)
-              changed = new_id != class_id || changed
+              changed = eg.merge_changed(class_id, new_add) || changed
             }
           }
         }
@@ -513,8 +502,7 @@ fn rule_reassoc_sub_sub_const_left() -> RewriteRule {
               // (sub k1 x) - k2 = (k1 - k2) - x
               let combined = eg.add_const(c1 - c2)
               let new_sub = eg.add_sub(combined, inner.children[1])
-              let new_id = eg.merge(class_id, new_sub)
-              changed = new_id != class_id || changed
+              changed = eg.merge_changed(class_id, new_sub) || changed
             }
           }
         }
@@ -541,8 +529,7 @@ fn rule_reassoc_add_sub_const_left() -> RewriteRule {
               // (sub k1 x) + k2 = (k1 + k2) - x
               let combined = eg.add_const(c1 + c2)
               let new_sub = eg.add_sub(combined, inner.children[1])
-              let new_id = eg.merge(class_id, new_sub)
-              changed = new_id != class_id || changed
+              changed = eg.merge_changed(class_id, new_sub) || changed
             }
           }
         }
@@ -570,8 +557,7 @@ fn rule_reassoc_shl_const() -> RewriteRule {
               // ((A shl b) shl C) => ((A shl C) shl b)
               let inner_shift = eg.add_shl(inner.children[0], node.children[1])
               let new_shift = eg.add_shl(inner_shift, inner.children[1])
-              let new_id = eg.merge(class_id, new_shift)
-              changed = new_id != class_id || changed
+              changed = eg.merge_changed(class_id, new_shift) || changed
             }
           }
         }
@@ -603,8 +589,7 @@ fn rule_reassoc_ushr_const() -> RewriteRule {
                 op: Ushr,
                 children: [inner_shift, inner.children[1]],
               })
-              let new_id = eg.merge(class_id, new_shift)
-              changed = new_id != class_id || changed
+              changed = eg.merge_changed(class_id, new_shift) || changed
             }
           }
         }
@@ -636,8 +621,7 @@ fn rule_reassoc_sshr_const() -> RewriteRule {
                 op: Sshr,
                 children: [inner_shift, inner.children[1]],
               })
-              let new_id = eg.merge(class_id, new_shift)
-              changed = new_id != class_id || changed
+              changed = eg.merge_changed(class_id, new_shift) || changed
             }
           }
         }
@@ -664,8 +648,7 @@ fn rule_select_const() -> RewriteRule {
           } else {
             node.children[2]
           }
-          let new_id = eg.merge(class_id, result)
-          changed = new_id != class_id || changed
+          changed = eg.merge_changed(class_id, result) || changed
         }
       }
       changed
@@ -687,8 +670,7 @@ fn rule_sub_neg_const() -> RewriteRule {
           k < 0L {
           let neg_k = eg.add_const(-k)
           let new_add = eg.add_add(node.children[0], neg_k)
-          let new_id = eg.merge(class_id, new_add)
-          changed = new_id != class_id || changed
+          changed = eg.merge_changed(class_id, new_add) || changed
         }
       }
       changed
@@ -717,8 +699,7 @@ fn rule_rebalance_add_consts() -> RewriteRule {
                   let ac = eg.add_add(left.children[0], right.children[0])
                   let bd = eg.add_add(left.children[1], right.children[1])
                   let result = eg.add_add(ac, bd)
-                  let new_id = eg.merge(class_id, result)
-                  changed = new_id != class_id || changed
+                  changed = eg.merge_changed(class_id, result) || changed
                 }
               }
             }
@@ -749,8 +730,7 @@ fn rule_rebalance_mul_consts() -> RewriteRule {
                   let ac = eg.add_mul(left.children[0], right.children[0])
                   let bd = eg.add_mul(left.children[1], right.children[1])
                   let result = eg.add_mul(ac, bd)
-                  let new_id = eg.merge(class_id, result)
-                  changed = new_id != class_id || changed
+                  changed = eg.merge_changed(class_id, result) || changed
                 }
               }
             }
@@ -781,8 +761,7 @@ fn rule_rebalance_and_consts() -> RewriteRule {
                   let ac = eg.add_and(left.children[0], right.children[0])
                   let bd = eg.add_and(left.children[1], right.children[1])
                   let result = eg.add_and(ac, bd)
-                  let new_id = eg.merge(class_id, result)
-                  changed = new_id != class_id || changed
+                  changed = eg.merge_changed(class_id, result) || changed
                 }
               }
             }
@@ -813,8 +792,7 @@ fn rule_rebalance_or_consts() -> RewriteRule {
                   let ac = eg.add_or(left.children[0], right.children[0])
                   let bd = eg.add_or(left.children[1], right.children[1])
                   let result = eg.add_or(ac, bd)
-                  let new_id = eg.merge(class_id, result)
-                  changed = new_id != class_id || changed
+                  changed = eg.merge_changed(class_id, result) || changed
                 }
               }
             }
@@ -845,8 +823,7 @@ fn rule_rebalance_xor_consts() -> RewriteRule {
                   let ac = eg.add_xor(left.children[0], right.children[0])
                   let bd = eg.add_xor(left.children[1], right.children[1])
                   let result = eg.add_xor(ac, bd)
-                  let new_id = eg.merge(class_id, result)
-                  changed = new_id != class_id || changed
+                  changed = eg.merge_changed(class_id, result) || changed
                 }
               }
             }

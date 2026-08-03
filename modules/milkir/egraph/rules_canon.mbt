@@ -24,8 +24,7 @@ fn rule_canon_add() -> RewriteRule {
           if eg.get_const(left) is Some(_) && eg.get_const(right) is None {
             // k + x -> x + k (add equivalent form, don't remove original)
             let canonical = eg.add_add(right, left)
-            let new_id = eg.merge(class_id, canonical)
-            changed = new_id != class_id || changed
+            changed = eg.merge_changed(class_id, canonical) || changed
           }
         }
       }
@@ -46,8 +45,7 @@ fn rule_canon_mul() -> RewriteRule {
           let right = node.children[1]
           if eg.get_const(left) is Some(_) && eg.get_const(right) is None {
             let canonical = eg.add_mul(right, left)
-            let new_id = eg.merge(class_id, canonical)
-            changed = new_id != class_id || changed
+            changed = eg.merge_changed(class_id, canonical) || changed
           }
         }
       }
@@ -68,8 +66,7 @@ fn rule_canon_and() -> RewriteRule {
           let right = node.children[1]
           if eg.get_const(left) is Some(_) && eg.get_const(right) is None {
             let canonical = eg.add_and(right, left)
-            let new_id = eg.merge(class_id, canonical)
-            changed = new_id != class_id || changed
+            changed = eg.merge_changed(class_id, canonical) || changed
           }
         }
       }
@@ -90,8 +87,7 @@ fn rule_canon_or() -> RewriteRule {
           let right = node.children[1]
           if eg.get_const(left) is Some(_) && eg.get_const(right) is None {
             let canonical = eg.add_or(right, left)
-            let new_id = eg.merge(class_id, canonical)
-            changed = new_id != class_id || changed
+            changed = eg.merge_changed(class_id, canonical) || changed
           }
         }
       }
@@ -112,8 +108,7 @@ fn rule_canon_xor() -> RewriteRule {
           let right = node.children[1]
           if eg.get_const(left) is Some(_) && eg.get_const(right) is None {
             let canonical = eg.add_xor(right, left)
-            let new_id = eg.merge(class_id, canonical)
-            changed = new_id != class_id || changed
+            changed = eg.merge_changed(class_id, canonical) || changed
           }
         }
       }

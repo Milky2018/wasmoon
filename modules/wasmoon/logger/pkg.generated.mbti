@@ -14,6 +14,8 @@ pub fn info(String) -> Unit
 
 pub fn is_debug_enabled() -> Bool
 
+pub fn plain_error(String) -> Unit
+
 pub fn warn(String) -> Unit
 
 // Errors

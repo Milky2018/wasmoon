@@ -28,6 +28,28 @@ fn clap_simple_value(name : String) -> @clap.SimpleValue {
 }
 
 ///|
+/// Print usage text as a diagnostic.
+///
+/// Usage shown after a mistake is a diagnostic, not output: it goes to
+/// stderr so a redirected stdout keeps carrying data only. An explicit
+/// `help` command still prints to stdout, where the user asked for it.
+fn write_usage(help_msg : String) -> Unit {
+  for line in help_msg.split("\n") {
+    @logger.plain_error(line.to_owned())
+  }
+}
+
+///|
+/// Report a command-line mistake and exit non-zero.
+///
+/// Exit code 2 is the conventional "wrong usage" status, distinct from 1,
+/// which commands use for a failure while doing the work.
+fn usage_error(msg : String) -> Unit {
+  @logger.error(msg)
+  @sys.exit(2)
+}
+
+///|
 fn main {
   // Define choices for explore stages
   let stage_choices = @hashset.HashSet::from_array([
@@ -203,8 +225,9 @@ fn main {
   }
   let subcmd_help = parser.parse(value, cli_args[:]) catch {
     e => {
-      println(e)
-      println(help_msg)
+      @logger.error("\{e}")
+      write_usage(help_msg)
+      @sys.exit(2)
       return
     }
   }
@@ -278,7 +301,7 @@ fn main {
                   wasi_options, debug, dump_on_trap, use_jit, opt_level, enable_dwarf,
                 )
               } else {
-                println("Error: missing file argument")
+                usage_error("missing file argument")
               }
             }
             "test" => {
@@ -291,7 +314,7 @@ fn main {
                 let show_success = sub.flags.get("show-success") is Some(true)
                 @commands.run_testsuite(positional[0], use_jit, show_success)
               } else {
-                println("Error: missing file argument")
+                usage_error("missing file argument")
               }
             }
             "disasm" => {
@@ -299,7 +322,7 @@ fn main {
               if positional.length() > 0 {
                 @commands.run_disasm(positional[0])
               } else {
-                println("Error: missing file argument")
+                usage_error("missing file argument")
               }
             }
             "component" => {
@@ -378,7 +401,7 @@ fn main {
                   @sys.exit(status)
                 }
               } else {
-                println("Error: missing file argument")
+                usage_error("missing file argument")
               }
             }
             "component-test" => {
@@ -402,7 +425,7 @@ fn main {
                   @sys.exit(status)
                 }
               } else {
-                println("Error: missing file argument")
+                usage_error("missing file argument")
               }
             }
             "explore" => {
@@ -440,7 +463,7 @@ fn main {
                   target_name~,
                 )
               } else {
-                println("Error: missing file argument")
+                usage_error("missing file argument")
               }
             }
             "settings" => @commands.run_settings()
@@ -454,9 +477,9 @@ fn main {
               @commands.run_config(action)
             }
             "help" => println(help_msg)
-            name => println("Unknown command: \{name}")
+            name => usage_error("unknown command: \{name}")
           }
-        None => println("Error: no command")
+        None => usage_error("no command given")
       }
   }
 }

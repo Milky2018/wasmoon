@@ -31,6 +31,15 @@ priv struct RepKey {
 } derive(Eq, Hash)
 
 ///|
+/// Event for the explicit dominator-tree walk: `Enter` rewrites a block and
+/// schedules its children, `Exit` restores the representative bindings that
+/// block introduced.
+priv enum DomWalkEvent {
+  Enter(Int)
+  Exit(Array[(RepKey, Value?)])
+}
+
+///|
 fn EGraphBuilder::new_with_limits_and_ruleset(
   saturation_limits : @egraph.SaturationLimits,
   ruleset : @egraph.IndexedRuleSet,
@@ -239,61 +248,111 @@ fn opcode_to_eopcode(inst : Inst) -> @egraph.EOpcode? {
 }
 
 ///|
-/// Add an IR value to the e-graph, recursively adding its definition
-/// Uses eager optimization: rules are applied immediately when adding nodes
+/// Look up the already-converted class for a value, if any.
+fn EGraphBuilder::lookup_value(
+  self : EGraphBuilder,
+  value : Value,
+) -> @egraph.EClassId? {
+  if value.id >= 0 &&
+    value.id < self.value_map.length() &&
+    self.value_map[value.id] is Some(id) {
+    Some(self.egraph.find(id))
+  } else {
+    None
+  }
+}
+
+///|
+/// Add a leaf class (variable or constant) for a value that has no operands
+/// to convert first.
+fn EGraphBuilder::add_leaf_value(
+  self : EGraphBuilder,
+  value : Value,
+) -> @egraph.EClassId {
+  let bits = type_bits(value.ty)
+  let class_id = if value.id >= 0 &&
+    value.id < self.def_map.length() &&
+    self.def_map[value.id] is Some(_) &&
+    self.def_eop_map[value.id] is Some(Const(c)) {
+    self.egraph.add_const(c)
+  } else {
+    self.egraph.add_var(value.id)
+  }
+  self.egraph.set_type(class_id, bits)
+  class_id
+}
+
+///|
+/// Whether a value's definition contributes operand children to the e-graph.
+fn EGraphBuilder::value_has_children(
+  self : EGraphBuilder,
+  value : Value,
+) -> Bool {
+  value.id >= 0 &&
+  value.id < self.def_map.length() &&
+  self.def_map[value.id] is Some(_) &&
+  self.def_eop_map[value.id] is Some(eop) &&
+  !(eop is Const(_))
+}
+
+///|
+/// Add an IR value to the e-graph, converting its operand chain first.
+///
+/// Operand chains are walked with an explicit stack: a value is pushed once
+/// to request its children and revisited once they are all converted, so a
+/// long dependency chain costs heap rather than native stack (ISS-380).
 fn EGraphBuilder::add_value(
   self : EGraphBuilder,
   value : Value,
 ) -> @egraph.EClassId {
-  // Check if already converted
-  if value.id >= 0 &&
-    value.id < self.value_map.length() &&
-    self.value_map[value.id] is Some(id) {
-    return self.egraph.find(id) // Return canonical id
+  if self.lookup_value(value) is Some(id) {
+    return id
   }
-
-  // Get the bit width from the value's type
-  let bits = type_bits(value.ty)
-
-  // Look up the defining instruction
-  let class_id = if value.id >= 0 &&
-    value.id < self.def_map.length() &&
-    self.def_map[value.id] is Some(inst) {
-    match self.def_eop_map[value.id] {
-      None => {
-        // Not an optimizable opcode - treat as variable
-        let id = self.egraph.add_var(value.id)
-        self.egraph.set_type(id, bits)
-        id
-      }
-      Some(eop) =>
-        // Optimizable opcode: recursively add operands, then add node.
-        match eop {
-          Const(c) => {
-            let id = self.egraph.add_const(c)
-            self.egraph.set_type(id, bits)
-            id
-          }
-          _ => {
-            // Recursively add operands
-            let children : Array[@egraph.EClassId] = []
-            for operand in inst.operands {
-              children.push(self.add_value(operand))
-            }
-            // Add the node with type info; rewriting happens in a later saturation step.
-            self.egraph.add_typed({ op: eop, children }, bits)
-          }
-        }
+  // Each frame is (value, expanded): `expanded` marks the revisit after the
+  // frame's operands have been pushed.
+  let stack : Array[(Value, Bool)] = [(value, false)]
+  while stack.pop() is Some((current, expanded)) {
+    if self.lookup_value(current) is Some(_) {
+      continue
     }
-  } else {
-    // No definition found - treat as a variable (parameter or external)
-    let id = self.egraph.add_var(value.id)
-    self.egraph.set_type(id, bits)
-    id
+    if !self.value_has_children(current) {
+      let class_id = self.add_leaf_value(current)
+      self.ensure_value_slot(current.id)
+      self.value_map[current.id] = Some(class_id)
+      continue
+    }
+    guard self.def_map[current.id] is Some(inst) else { continue }
+    guard self.def_eop_map[current.id] is Some(eop) else { continue }
+    if expanded {
+      let children : Array[@egraph.EClassId] = []
+      for operand in inst.operands {
+        // Operands are converted by now; a self-referential operand (only
+        // reachable through malformed IR) falls back to a variable leaf.
+        match self.lookup_value(operand) {
+          Some(child) => children.push(child)
+          None => children.push(self.add_leaf_value(operand))
+        }
+      }
+      let class_id = self.egraph.add_typed(
+        { op: eop, children },
+        type_bits(current.ty),
+      )
+      self.ensure_value_slot(current.id)
+      self.value_map[current.id] = Some(class_id)
+    } else {
+      stack.push((current, true))
+      for operand in inst.operands {
+        if self.lookup_value(operand) is None {
+          stack.push((operand, false))
+        }
+      }
+    }
   }
-  self.ensure_value_slot(value.id)
-  self.value_map[value.id] = Some(class_id)
-  class_id
+  match self.lookup_value(value) {
+    Some(id) => id
+    // Unreachable for well-formed IR; keep the conversion total.
+    None => self.add_leaf_value(value)
+  }
 }
 
 ///|
@@ -317,10 +376,12 @@ fn EGraphBuilder::get_egraph(self : EGraphBuilder) -> @egraph.EGraph {
 }
 
 ///|
-/// Check if the extracted expression is a constant folding result
-/// Returns Some(Iconst(c)) if constant folding found, None otherwise
+/// Check if the value's e-class folded to an integer constant.
+/// Returns Some(Iconst(c)) if constant folding found, None otherwise.
 /// NOTE: Only handles constant folding. Complex rewrites (like x*3 -> (x<<1)+x)
-/// are not handled because they would require operand reconstruction.
+/// are not handled because they would require operand reconstruction (ISS-377).
+/// The class's cached constant answers this in O(1); a constant node costs 0
+/// and wins every extraction tie, so this matches what full extraction chose.
 fn EGraphBuilder::get_simplified_opcode(
   self : EGraphBuilder,
   value : Value,
@@ -328,12 +389,9 @@ fn EGraphBuilder::get_simplified_opcode(
   if value.id >= 0 &&
     value.id < self.value_map.length() &&
     self.value_map[value.id] is Some(class_id) {
-    let (_, best_node) = self.egraph.extract(class_id)
-    // Only handle constant folding - returns Iconst if the result is a constant
-    match best_node.op {
-      Const(c) => Some(Scalar(IntConst(c)))
-      // Don't change opcode for non-constant results - would need operand reconstruction
-      _ => None
+    match self.egraph.get_const(class_id) {
+      Some(c) => Some(Scalar(IntConst(c)))
+      None => None
     }
   } else {
     None
@@ -423,6 +481,9 @@ fn optimize_function_with_stats_with_limits_and_ruleset(
   // Run one saturation pass on the function-wide e-graph.
   builder.optimize()
   let egraph = builder.get_egraph()
+  // Extraction results are shared by every elaboration site, so the fixpoint
+  // runs once here rather than per value.
+  let best_nodes = egraph.best_nodes()
   let total_classes = egraph.num_classes()
   let total_nodes = egraph.num_nodes()
   let total_rule_applications = egraph.last_rule_applications()
@@ -436,86 +497,119 @@ fn optimize_function_with_stats_with_limits_and_ruleset(
   let domtree = build_dominator_tree(idom)
   let block_idx = build_block_index(func)
 
-  fn rewrite_block(block_id : Int) -> Unit {
-    if block_idx.get(block_id) is Some(idx) {
-      let block = func.blocks[idx]
-      let scoped_entries : Array[(RepKey, Value?)] = []
-
-      fn bind_rep(builder : EGraphBuilder, value : Value) -> Unit {
-        if value.id >= 0 &&
-          value.id < builder.value_map.length() &&
-          builder.value_map[value.id] is Some(class_id) {
-          let canonical = builder.egraph.find(class_id)
-          let key : RepKey = { class_id: canonical.0, ty: value.ty }
-          let previous = builder.class_to_value.get(key)
-          let should_bind = previous is None
-          if should_bind {
-            scoped_entries.push((key, previous))
-            builder.class_to_value.set(key, value)
+  // The dominator tree is walked with an explicit event stack rather than
+  // native recursion, so a deep block chain costs heap (ISS-380). Enter
+  // events rewrite a block and push its children; the matching exit event
+  // restores the bindings that block introduced.
+  fn rewrite_dominator_tree(root : Int) -> Unit {
+    let stack : Array[DomWalkEvent] = [Enter(root)]
+    while stack.pop() is Some(event) {
+      match event {
+        Exit(scoped_entries) =>
+          for entry in scoped_entries.rev_iter() {
+            let (key, previous) = entry
+            match previous {
+              Some(value) => builder.class_to_value.set(key, value)
+              None => builder.class_to_value.remove(key)
+            }
           }
-        }
-      }
+        Enter(block_id) => {
+          guard block_idx.get(block_id) is Some(idx) else { continue }
+          let block = func.blocks[idx]
+          let scoped_entries : Array[(RepKey, Value?)] = []
 
-      for pair in block.params {
-        let (param, _) = pair
-        bind_rep(builder, param)
-      }
-
-      // Apply optimizations: constant folding and operand rewriting.
-      for inst in block.instructions {
-        for operand in inst.operands {
-          bind_rep(builder, operand)
-        }
-        for i in 0..<inst.operands.length() {
-          let operand = inst.operands[i]
-          if builder.get_simplified_operand(operand) is Some(simplified) {
-            inst.operands[i] = simplified
-            changed = true
-          }
-        }
-
-        if inst.first_result() is Some(v) &&
-          builder.get_simplified_opcode(v) is Some(op) {
-          if op is Scalar(IntConst(c)) {
-            let mut inst_changed = false
-            match inst.opcode {
-              Scalar(IntConst(old_c)) =>
-                if old_c != c || inst.operands.length() > 0 {
-                  inst.opcode = Scalar(IntConst(c))
-                  inst.operands.clear()
-                  inst_changed = true
-                }
-              _ => {
-                inst.opcode = Scalar(IntConst(c))
-                inst.operands.clear()
-                inst_changed = true
+          fn bind_rep(builder : EGraphBuilder, value : Value) -> Unit {
+            if value.id >= 0 &&
+              value.id < builder.value_map.length() &&
+              builder.value_map[value.id] is Some(class_id) {
+              let canonical = builder.egraph.find(class_id)
+              let key : RepKey = { class_id: canonical.0, ty: value.ty }
+              let previous = builder.class_to_value.get(key)
+              let should_bind = previous is None
+              if should_bind {
+                scoped_entries.push((key, previous))
+                builder.class_to_value.set(key, value)
               }
             }
-            if inst_changed {
-              changed = true
-            }
-          } else if inst.opcode != op {
-            inst.opcode = op
-            changed = true
           }
-        }
 
-        if inst.first_result() is Some(v) {
-          bind_rep(builder, v)
-        }
-      }
+          for pair in block.params {
+            let (param, _) = pair
+            bind_rep(builder, param)
+          }
 
-      if block_id < domtree.length() {
-        for child in domtree[block_id] {
-          rewrite_block(child)
-        }
-      }
+          // Apply optimizations: constant folding, operand rewriting, and
+          // elaboration. Elaborated instructions are spliced in ahead of the
+          // instruction that needed them, so the block is rebuilt rather
+          // than mutated in place.
+          let rewritten : Array[Inst] = []
+          for inst in block.instructions {
+            for operand in inst.operands {
+              bind_rep(builder, operand)
+            }
+            for i in 0..<inst.operands.length() {
+              let operand = inst.operands[i]
+              if builder.get_simplified_operand(operand) is Some(simplified) {
+                inst.operands[i] = simplified
+                changed = true
+              }
+            }
 
-      for entry in scoped_entries.rev_iter() {
-        let (key, previous) = entry
-        match previous {
-          Some(value) => builder.class_to_value.set(key, value)
-          None => builder.class_to_value.remove(key)
+            if inst.first_result() is Some(v) &&
+              builder.get_simplified_opcode(v) is Some(op) {
+              if op is Scalar(IntConst(c)) {
+                let mut inst_changed = false
+                match inst.opcode {
+                  Scalar(IntConst(old_c)) =>
+                    if old_c != c || inst.operands.length() > 0 {
+                      inst.opcode = Scalar(IntConst(c))
+                      inst.operands.clear()
+                      inst_changed = true
+                    }
+                  _ => {
+                    inst.opcode = Scalar(IntConst(c))
+                    inst.operands.clear()
+                    inst_changed = true
+                  }
+                }
+                if inst_changed {
+                  changed = true
+                }
+              } else if inst.opcode != op {
+                inst.opcode = op
+                changed = true
+              }
+            } else {
+              // Elaboration may prepend instructions that build the operands
+              // the rewritten form needs; those dominate every later use.
+              let before = rewritten.length()
+              if builder.elaborate_inst(func, best_nodes, inst, rewritten) {
+                changed = true
+              }
+              for i in before..<rewritten.length() {
+                if rewritten[i].first_result() is Some(v) {
+                  bind_rep(builder, v)
+                }
+              }
+            }
+
+            rewritten.push(inst)
+            if inst.first_result() is Some(v) {
+              bind_rep(builder, v)
+            }
+          }
+          block.instructions.clear()
+          for inst in rewritten {
+            block.instructions.push(inst)
+          }
+
+          // Exit runs after every child, so push it first.
+          stack.push(Exit(scoped_entries))
+          if block_id < domtree.length() {
+            for child in domtree[block_id] {
+              stack.push(Enter(child))
+            }
+          }
         }
       }
     }
@@ -523,7 +617,7 @@ fn optimize_function_with_stats_with_limits_and_ruleset(
 
   if cfg.is_valid(0) {
     builder.class_to_value.clear()
-    rewrite_block(0)
+    rewrite_dominator_tree(0)
   }
   { changed, total_classes, total_nodes, total_rule_applications }
 }

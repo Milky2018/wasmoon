@@ -22,10 +22,10 @@ fn require_o3_jit_match(
 }
 
 ///|
-fn optimized_milkir(
+fn translated_milkir(
   source : String,
   function_name : String,
-) -> (String, String) raise {
+) -> @milkir.Function raise {
   let mod_ = @wat.parse(source)
   @validator.validate_module(mod_)
   let mut exported_func_idx = None
@@ -39,15 +39,47 @@ fn optimized_milkir(
     fail("function not found: \{function_name}")
   }
   let local_idx = func_idx - @wast.count_func_imports(mod_.imports)
-  let milk = @wasm_frontend.translate_function(
+  @wasm_frontend.translate_function(
     @wasmoon.wasm_frontend_embedding_environment(),
     mod_,
     local_idx,
     name=function_name,
   )
+}
+
+///|
+fn optimized_milkir(
+  source : String,
+  function_name : String,
+) -> (String, String) raise {
+  let milk = translated_milkir(source, function_name)
   let before = milk.print()
   @milkir.optimize_with_level(milk, O3) |> ignore
   (before, milk.print())
+}
+
+///|
+/// Assert that O3's loop pipeline changed the function relative to O2.
+///
+/// Counting a mnemonic only evidences unrolling when the duplicated
+/// operation cannot be folded away again: side-effecting bodies (stores,
+/// calls, trapping division) qualify, but a body of pure arithmetic does
+/// not. Unrolling a `count += 1` / `i += -3` loop duplicates both adds, and
+/// the reassociation that follows legitimately fuses each pair into
+/// `count += 2` / `i += -6`, leaving the mnemonic count unchanged while the
+/// code is strictly better. Comparing against O2 evidences the transform
+/// without depending on what later passes do to it.
+fn require_o3_transforms_loop(
+  source : String,
+  function_name : String,
+) -> Unit raise {
+  let o2_func = translated_milkir(source, function_name)
+  @milkir.optimize_with_level(o2_func, O2) |> ignore
+  let o3_func = translated_milkir(source, function_name)
+  @milkir.optimize_with_level(o3_func, O3) |> ignore
+  if o2_func.print() == o3_func.print() {
+    fail("expected the O3 loop pipeline to transform '\{function_name}'")
+  }
 }
 
 ///|
@@ -327,7 +359,7 @@ test "O3 generated counted loops cover predicate and step combinations" {
       continue_on_true~,
     )
     require_o3_jit_match(source, "run")
-    require_o3_duplicates_loop_effect(source, "run", "iadd")
+    require_o3_transforms_loop(source, "run")
   }
 }
 

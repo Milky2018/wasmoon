@@ -3,7 +3,8 @@
 pub fn run_disasm(wasm_path : String) -> Unit {
   let mod_ = load_module_from_path(wasm_path) catch {
     e => {
-      println("Error: \{e}")
+      @logger.error("\{e}")
+      exit_failure()
       return
     }
   }

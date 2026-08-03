@@ -1612,3 +1612,123 @@ test "rebuild: re-canonicalize nodes after unions" {
   let lookup_result = eg.hashcons.get(mul_canonical)
   inspect(lookup_result is None, content="false")
 }
+
+///|
+test "extraction prices cycle-reachable classes context-free" {
+  let eg = EGraph::EGraph()
+  // Class A starts as a plain variable leaf.
+  let a = eg.add_var(1)
+  // Class B's only node references A.
+  let b = eg.add_bnot(a)
+  // Give A a second node that references B, closing the cycle A <-> B.
+  let n = eg.add_neg(b)
+  eg.merge(n, a) |> ignore
+  eg.rebuild()
+  // Root whose children are visited A first, then B. The old memoized DFS
+  // priced B as infinite inside A's cycle context, cached that poisoned
+  // entry, and reused it for the second child, pricing the root infinite.
+  // The fixpoint table has no evaluation context: A = Var (0),
+  // B = Bnot(A) (1), root = Add(A, B) (2).
+  let root = eg.add_add(a, b)
+  let (root_cost, root_node) = eg.extract(root)
+  inspect(root_cost, content="2")
+  inspect(root_node.op, content="Add")
+  let (b_cost, b_node) = eg.extract(b)
+  inspect(b_cost, content="1")
+  inspect(b_node.op, content="Bnot")
+}
+
+///|
+test "conflicting widths poison the class type" {
+  let eg = EGraph::EGraph()
+  let c = eg.add_const(7)
+  eg.set_type(c, 32)
+  inspect(eg.get_bits(c) is Some(32), content="true")
+  // A second, different width (the shared-constant case) poisons the class.
+  eg.set_type(c, 64)
+  inspect(eg.get_bits(c) is None, content="true")
+  inspect(eg.type_conflict_count(), content="1")
+  // Poisoned classes never regain a width.
+  eg.set_type(c, 32)
+  inspect(eg.get_bits(c) is None, content="true")
+  inspect(eg.type_conflict_count(), content="1")
+}
+
+///|
+test "merging classes with differing widths poisons the type" {
+  let eg = EGraph::EGraph()
+  let x = eg.add_var(1)
+  let y = eg.add_var(2)
+  eg.set_type(x, 32)
+  eg.set_type(y, 64)
+  eg.merge(x, y) |> ignore
+  inspect(eg.get_bits(y) is None, content="true")
+  inspect(eg.type_conflict_count(), content="1")
+  eg.rebuild()
+  inspect(eg.get_bits(x) is None, content="true")
+}
+
+///|
+test "merging classes with differing constants is loud and unharvested" {
+  let eg = EGraph::EGraph()
+  let three = eg.add_const(3)
+  let five = eg.add_const(5)
+  eg.merge(three, five) |> ignore
+  // The conflict is observable and neither constant is harvestable.
+  inspect(eg.const_conflict_count(), content="1")
+  inspect(eg.get_const(five) is None, content="true")
+  // The refusal survives rebuild's cache refresh.
+  eg.rebuild()
+  inspect(eg.get_const(three) is None, content="true")
+  inspect(eg.const_conflict_count() >= 1, content="true")
+}
+
+///|
+test "rebuild repairs only the classes a union disturbed" {
+  let eg = EGraph::EGraph()
+  // A large graph of unrelated classes.
+  let mut untouched = 0
+  for i in 0..<400 {
+    let v = eg.add_var(i + 100)
+    eg.add_bnot(v) |> ignore
+    untouched = untouched + 2
+  }
+  eg.rebuild()
+  // Two more classes with a shared parent shape, then one union between them.
+  let x = eg.add_var(1)
+  let y = eg.add_var(2)
+  let px = eg.add_neg(x)
+  let py = eg.add_neg(y)
+  eg.rebuild()
+  inspect(eg.equiv(px, py), content="false")
+  eg.merge(x, y) |> ignore
+  eg.rebuild()
+  // Congruence still closes: Neg(x) and Neg(y) became the same node.
+  inspect(eg.equiv(px, py), content="true")
+  // ... but the repair touched a handful of classes, not the ~800 present.
+  inspect(eg.num_classes() > 400, content="true")
+  inspect(eg.last_rebuild_repairs() < 10, content="true")
+}
+
+///|
+test "merge reports progress independently of which side becomes root" {
+  let eg = EGraph::EGraph()
+  // Build one class much larger than the other so union-by-size picks the
+  // big side as root regardless of argument order.
+  let big = eg.add_var(1)
+  for i in 0..<8 {
+    let extra = eg.add_var(i + 50)
+    eg.merge(big, extra) |> ignore
+  }
+  eg.rebuild()
+  let small = eg.add_var(2)
+  // Progress is reported even though `small` (the first argument) does not
+  // survive as the root; the old `merge(...) != class_id` convention is
+  // exactly what this would have broken.
+  inspect(eg.merge_changed(small, big), content="true")
+  eg.rebuild()
+  inspect(eg.equiv(small, big), content="true")
+  // Merging an already-equivalent pair reports no progress.
+  inspect(eg.merge_changed(small, big), content="false")
+  inspect(eg.merge_changed(big, small), content="false")
+}

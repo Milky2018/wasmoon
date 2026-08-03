@@ -1,5 +1,6 @@
 import {
   "Milky2018/wasmoon/cmd/wasmoon/commands",
+  "Milky2018/wasmoon/logger",
   "moonbitlang/core/env",
   "moonbitlang/x/sys",
   "TheWaWaR/clap",

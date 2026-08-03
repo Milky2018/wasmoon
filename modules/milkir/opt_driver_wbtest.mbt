@@ -259,3 +259,74 @@ test "optimization metrics sink receives pass events and can be cleared" {
   run_opt_pass(after_clear, "cleared_dce", eliminate_dead_code) |> ignore
   inspect(events.length(), content="1")
 }
+
+///|
+/// A single straight-line chain of `count` blocks, each jumping to the next.
+/// The dominator tree is one long spine, which the e-graph block rewriter
+/// used to walk with native recursion.
+fn deep_block_chain_function(name : String, count : Int) -> Function {
+  let builder = FunctionBuilder::FunctionBuilder(name)
+  let input = builder.add_param(I32)
+  builder.add_result(I32)
+  let zero = builder.iconst_i32(0)
+  let mut value = input
+  for _ in 0..<count {
+    let next = builder.create_block()
+    builder.jump(next, [])
+    builder.switch_to_block(next)
+    value = builder.iadd(value, zero)
+  }
+  builder.return_([value])
+  builder.get_function()
+}
+
+///|
+/// One long chain of e-graph-encodable `iadd`s, each consuming the previous
+/// result. The value converter used to walk this with native recursion.
+/// `copy` is deliberately not used: it has no e-graph encoding, so a copy
+/// chain becomes a row of leaves rather than a deep operand chain.
+fn deep_operand_chain_function(name : String, count : Int) -> Function {
+  let builder = FunctionBuilder::FunctionBuilder(name)
+  let input = builder.add_param(I32)
+  builder.add_result(I32)
+  let one = builder.iconst_i32(1)
+  let mut value = input
+  for _ in 0..<count {
+    value = builder.iadd(value, one)
+  }
+  builder.return_([value])
+  builder.get_function()
+}
+
+///|
+test "egraph survives a deep dominator spine" {
+  // Well past the depth a native-stack recursion survives.
+  let func = deep_block_chain_function("egraph_deep_blocks", 100000)
+  run_egraph_pass(func) |> ignore
+  inspect(func.verify(), content="()")
+}
+
+///|
+test "egraph survives a deep operand chain" {
+  let func = deep_operand_chain_function("egraph_deep_operands", 100000)
+  run_egraph_pass(func) |> ignore
+  inspect(func.verify(), content="()")
+}
+
+///|
+test "egraph elaborates a strength-reduced form into the IR" {
+  // x * 8 has a cheaper form as x << 3. Realizing it requires building a
+  // new expression shape, which only elaboration can do.
+  let builder = FunctionBuilder::FunctionBuilder("elaborate_mul_pow2")
+  let x = builder.add_param(I32)
+  builder.add_result(I32)
+  let eight = builder.iconst_i32(8)
+  let product = builder.imul(x, eight)
+  builder.return_([product])
+  let func = builder.get_function()
+  run_egraph_pass(func) |> ignore
+  inspect(func.verify(), content="()")
+  let text = func.print()
+  inspect(text.contains("ishl"), content="true")
+  inspect(text.contains("imul"), content="false")
+}

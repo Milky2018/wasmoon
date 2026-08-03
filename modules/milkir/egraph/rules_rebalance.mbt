@@ -72,8 +72,7 @@ fn rule_rebalance_add_right() -> RewriteRule {
             let ab = eg.add_add(a, b)
             let cd = eg.add_add(c, d)
             let result = eg.add_add(ab, cd)
-            let new_id = eg.subsume(class_id, result)
-            changed = new_id != class_id || changed
+            changed = eg.subsume_changed(class_id, result) || changed
           }
         }
       }
@@ -98,8 +97,7 @@ fn rule_rebalance_add_left() -> RewriteRule {
             let ab = eg.add_add(a, b)
             let cd = eg.add_add(c, d)
             let result = eg.add_add(ab, cd)
-            let new_id = eg.subsume(class_id, result)
-            changed = new_id != class_id || changed
+            changed = eg.subsume_changed(class_id, result) || changed
           }
         }
       }
@@ -122,8 +120,7 @@ fn rule_rebalance_mul_right() -> RewriteRule {
             let ab = eg.add_mul(a, b)
             let cd = eg.add_mul(c, d)
             let result = eg.add_mul(ab, cd)
-            let new_id = eg.subsume(class_id, result)
-            changed = new_id != class_id || changed
+            changed = eg.subsume_changed(class_id, result) || changed
           }
         }
       }
@@ -146,8 +143,7 @@ fn rule_rebalance_mul_left() -> RewriteRule {
             let ab = eg.add_mul(a, b)
             let cd = eg.add_mul(c, d)
             let result = eg.add_mul(ab, cd)
-            let new_id = eg.subsume(class_id, result)
-            changed = new_id != class_id || changed
+            changed = eg.subsume_changed(class_id, result) || changed
           }
         }
       }
@@ -170,8 +166,7 @@ fn rule_rebalance_and_right() -> RewriteRule {
             let ab = eg.add_and(a, b)
             let cd = eg.add_and(c, d)
             let result = eg.add_and(ab, cd)
-            let new_id = eg.subsume(class_id, result)
-            changed = new_id != class_id || changed
+            changed = eg.subsume_changed(class_id, result) || changed
           }
         }
       }
@@ -194,8 +189,7 @@ fn rule_rebalance_and_left() -> RewriteRule {
             let ab = eg.add_and(a, b)
             let cd = eg.add_and(c, d)
             let result = eg.add_and(ab, cd)
-            let new_id = eg.subsume(class_id, result)
-            changed = new_id != class_id || changed
+            changed = eg.subsume_changed(class_id, result) || changed
           }
         }
       }
@@ -218,8 +212,7 @@ fn rule_rebalance_xor_right() -> RewriteRule {
             let ab = eg.add_xor(a, b)
             let cd = eg.add_xor(c, d)
             let result = eg.add_xor(ab, cd)
-            let new_id = eg.subsume(class_id, result)
-            changed = new_id != class_id || changed
+            changed = eg.subsume_changed(class_id, result) || changed
           }
         }
       }
@@ -242,8 +235,7 @@ fn rule_rebalance_xor_left() -> RewriteRule {
             let ab = eg.add_xor(a, b)
             let cd = eg.add_xor(c, d)
             let result = eg.add_xor(ab, cd)
-            let new_id = eg.subsume(class_id, result)
-            changed = new_id != class_id || changed
+            changed = eg.subsume_changed(class_id, result) || changed
           }
         }
       }

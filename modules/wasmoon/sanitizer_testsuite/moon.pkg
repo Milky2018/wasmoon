@@ -1,0 +1,24 @@
+// Tests exercised by CI's native sanitizer gate.
+//
+// These live apart from `wasmoon/testsuite` for build cost, not for topic:
+// the gate rebuilds every covered package from scratch under ASan/UBSan, and
+// compiling the 17k-line testsuite package to run these two files dominated
+// the gate's wall time (ISS-368). The package holds only blackbox tests, so
+// every import belongs to the test scope. Keep it small — add a file here
+// only when the sanitizer gate covers it, and keep the imports minimal.
+import {
+  "Milky2018/wasm_core/types",
+  "Milky2018/wasmoon/cmd/wasmoon/commands",
+  "Milky2018/wasmoon/component",
+  "Milky2018/wasmoon/component/text_parser" @component_text,
+  "Milky2018/wasmoon/executor",
+  "Milky2018/wasmoon/jit",
+  "Milky2018/wasmoon/runtime",
+  "Milky2018/wasmoon/wasi_component",
+  "Milky2018/wasmoon/wast",
+  "Milky2018/wasmoon/wat",
+  "Milky2018/wasmoon/wit",
+  "Milky2018/wasmoon_jit",
+  "moonbitlang/async",
+  "moonbitlang/x/fs",
+} for "test"

@@ -26,7 +26,8 @@ fn run_wast(wast_path : String, use_jit : Bool, show_success : Bool) -> Unit {
   // Read WAST file
   let content = @fs.read_file_to_string(wast_path) catch {
     e => {
-      println("Error reading file: \{e}")
+      @logger.error("reading file: \{e}")
+      exit_failure()
       return
     }
   }
@@ -34,7 +35,8 @@ fn run_wast(wast_path : String, use_jit : Bool, show_success : Bool) -> Unit {
   // Parse WAST script
   let script = @wast.parse(content) catch {
     e => {
-      println("Error parsing WAST: \{e}")
+      @logger.error("parsing WAST: \{e}")
+      exit_failure()
       return
     }
   }
