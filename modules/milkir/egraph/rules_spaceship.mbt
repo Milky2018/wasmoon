@@ -30,8 +30,7 @@ fn rule_spaceship_eq_zero() -> RewriteRule {
               let x = spaceship_node.children[0]
               let y = spaceship_node.children[1]
               let new_node = eg.add({ op: Eq, children: [x, y] })
-              let new_id = eg.subsume(class_id, new_node)
-              changed = new_id != class_id || changed
+              changed = eg.subsume_changed(class_id, new_node) || changed
             }
           }
           // Check the other way around
@@ -44,8 +43,7 @@ fn rule_spaceship_eq_zero() -> RewriteRule {
               let x = spaceship_node.children[0]
               let y = spaceship_node.children[1]
               let new_node = eg.add({ op: Eq, children: [x, y] })
-              let new_id = eg.subsume(class_id, new_node)
-              changed = new_id != class_id || changed
+              changed = eg.subsume_changed(class_id, new_node) || changed
             }
           }
         }
@@ -74,8 +72,7 @@ fn rule_spaceship_ne_zero() -> RewriteRule {
               let x = spaceship_node.children[0]
               let y = spaceship_node.children[1]
               let new_node = eg.add({ op: Ne, children: [x, y] })
-              let new_id = eg.subsume(class_id, new_node)
-              changed = new_id != class_id || changed
+              changed = eg.subsume_changed(class_id, new_node) || changed
             }
           }
           for spaceship_node in eg.get_nodes(node.children[1]) {
@@ -87,8 +84,7 @@ fn rule_spaceship_ne_zero() -> RewriteRule {
               let x = spaceship_node.children[0]
               let y = spaceship_node.children[1]
               let new_node = eg.add({ op: Ne, children: [x, y] })
-              let new_id = eg.subsume(class_id, new_node)
-              changed = new_id != class_id || changed
+              changed = eg.subsume_changed(class_id, new_node) || changed
             }
           }
         }
@@ -113,8 +109,7 @@ fn rule_spaceship_s_lt_zero() -> RewriteRule {
               let x = spaceship_node.children[0]
               let y = spaceship_node.children[1]
               let new_node = eg.add({ op: Icmp(CC_SLT), children: [x, y] })
-              let new_id = eg.subsume(class_id, new_node)
-              changed = new_id != class_id || changed
+              changed = eg.subsume_changed(class_id, new_node) || changed
             }
           }
         }
@@ -139,8 +134,7 @@ fn rule_spaceship_u_lt_zero() -> RewriteRule {
               let x = spaceship_node.children[0]
               let y = spaceship_node.children[1]
               let new_node = eg.add({ op: Icmp(CC_ULT), children: [x, y] })
-              let new_id = eg.subsume(class_id, new_node)
-              changed = new_id != class_id || changed
+              changed = eg.subsume_changed(class_id, new_node) || changed
             }
           }
         }
@@ -164,8 +158,7 @@ fn rule_spaceship_s_le_zero() -> RewriteRule {
               let x = spaceship_node.children[0]
               let y = spaceship_node.children[1]
               let new_node = eg.add({ op: Icmp(CC_SLE), children: [x, y] })
-              let new_id = eg.subsume(class_id, new_node)
-              changed = new_id != class_id || changed
+              changed = eg.subsume_changed(class_id, new_node) || changed
             }
           }
         }
@@ -189,8 +182,7 @@ fn rule_spaceship_u_le_zero() -> RewriteRule {
               let x = spaceship_node.children[0]
               let y = spaceship_node.children[1]
               let new_node = eg.add({ op: Icmp(CC_ULE), children: [x, y] })
-              let new_id = eg.subsume(class_id, new_node)
-              changed = new_id != class_id || changed
+              changed = eg.subsume_changed(class_id, new_node) || changed
             }
           }
         }
@@ -214,8 +206,7 @@ fn rule_spaceship_s_gt_zero() -> RewriteRule {
               let x = spaceship_node.children[0]
               let y = spaceship_node.children[1]
               let new_node = eg.add({ op: Icmp(CC_SGT), children: [x, y] })
-              let new_id = eg.subsume(class_id, new_node)
-              changed = new_id != class_id || changed
+              changed = eg.subsume_changed(class_id, new_node) || changed
             }
           }
         }
@@ -239,8 +230,7 @@ fn rule_spaceship_u_gt_zero() -> RewriteRule {
               let x = spaceship_node.children[0]
               let y = spaceship_node.children[1]
               let new_node = eg.add({ op: Icmp(CC_UGT), children: [x, y] })
-              let new_id = eg.subsume(class_id, new_node)
-              changed = new_id != class_id || changed
+              changed = eg.subsume_changed(class_id, new_node) || changed
             }
           }
         }
@@ -264,8 +254,7 @@ fn rule_spaceship_s_ge_zero() -> RewriteRule {
               let x = spaceship_node.children[0]
               let y = spaceship_node.children[1]
               let new_node = eg.add({ op: Icmp(CC_SGE), children: [x, y] })
-              let new_id = eg.subsume(class_id, new_node)
-              changed = new_id != class_id || changed
+              changed = eg.subsume_changed(class_id, new_node) || changed
             }
           }
         }
@@ -289,8 +278,7 @@ fn rule_spaceship_u_ge_zero() -> RewriteRule {
               let x = spaceship_node.children[0]
               let y = spaceship_node.children[1]
               let new_node = eg.add({ op: Icmp(CC_UGE), children: [x, y] })
-              let new_id = eg.subsume(class_id, new_node)
-              changed = new_id != class_id || changed
+              changed = eg.subsume_changed(class_id, new_node) || changed
             }
           }
         }
@@ -316,8 +304,7 @@ fn rule_spaceship_s_eq_neg_one() -> RewriteRule {
               let x = spaceship_node.children[0]
               let y = spaceship_node.children[1]
               let new_node = eg.add({ op: Icmp(CC_SLT), children: [x, y] })
-              let new_id = eg.subsume(class_id, new_node)
-              changed = new_id != class_id || changed
+              changed = eg.subsume_changed(class_id, new_node) || changed
             }
           }
         }
@@ -343,8 +330,7 @@ fn rule_spaceship_u_eq_neg_one() -> RewriteRule {
               let x = spaceship_node.children[0]
               let y = spaceship_node.children[1]
               let new_node = eg.add({ op: Icmp(CC_ULT), children: [x, y] })
-              let new_id = eg.subsume(class_id, new_node)
-              changed = new_id != class_id || changed
+              changed = eg.subsume_changed(class_id, new_node) || changed
             }
           }
         }
@@ -370,8 +356,7 @@ fn rule_spaceship_s_ne_neg_one() -> RewriteRule {
               let x = spaceship_node.children[0]
               let y = spaceship_node.children[1]
               let new_node = eg.add({ op: Icmp(CC_SGE), children: [x, y] })
-              let new_id = eg.subsume(class_id, new_node)
-              changed = new_id != class_id || changed
+              changed = eg.subsume_changed(class_id, new_node) || changed
             }
           }
         }
@@ -397,8 +382,7 @@ fn rule_spaceship_u_ne_neg_one() -> RewriteRule {
               let x = spaceship_node.children[0]
               let y = spaceship_node.children[1]
               let new_node = eg.add({ op: Icmp(CC_UGE), children: [x, y] })
-              let new_id = eg.subsume(class_id, new_node)
-              changed = new_id != class_id || changed
+              changed = eg.subsume_changed(class_id, new_node) || changed
             }
           }
         }
@@ -423,8 +407,7 @@ fn rule_spaceship_s_eq_one() -> RewriteRule {
               let x = spaceship_node.children[0]
               let y = spaceship_node.children[1]
               let new_node = eg.add({ op: Icmp(CC_SGT), children: [x, y] })
-              let new_id = eg.subsume(class_id, new_node)
-              changed = new_id != class_id || changed
+              changed = eg.subsume_changed(class_id, new_node) || changed
             }
           }
         }
@@ -449,8 +432,7 @@ fn rule_spaceship_u_eq_one() -> RewriteRule {
               let x = spaceship_node.children[0]
               let y = spaceship_node.children[1]
               let new_node = eg.add({ op: Icmp(CC_UGT), children: [x, y] })
-              let new_id = eg.subsume(class_id, new_node)
-              changed = new_id != class_id || changed
+              changed = eg.subsume_changed(class_id, new_node) || changed
             }
           }
         }
@@ -475,8 +457,7 @@ fn rule_spaceship_s_ne_one() -> RewriteRule {
               let x = spaceship_node.children[0]
               let y = spaceship_node.children[1]
               let new_node = eg.add({ op: Icmp(CC_SLE), children: [x, y] })
-              let new_id = eg.subsume(class_id, new_node)
-              changed = new_id != class_id || changed
+              changed = eg.subsume_changed(class_id, new_node) || changed
             }
           }
         }
@@ -501,8 +482,7 @@ fn rule_spaceship_u_ne_one() -> RewriteRule {
               let x = spaceship_node.children[0]
               let y = spaceship_node.children[1]
               let new_node = eg.add({ op: Icmp(CC_ULE), children: [x, y] })
-              let new_id = eg.subsume(class_id, new_node)
-              changed = new_id != class_id || changed
+              changed = eg.subsume_changed(class_id, new_node) || changed
             }
           }
         }

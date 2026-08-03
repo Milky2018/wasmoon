@@ -1709,3 +1709,26 @@ test "rebuild repairs only the classes a union disturbed" {
   inspect(eg.num_classes() > 400, content="true")
   inspect(eg.last_rebuild_repairs() < 10, content="true")
 }
+
+///|
+test "merge reports progress independently of which side becomes root" {
+  let eg = EGraph::EGraph()
+  // Build one class much larger than the other so union-by-size picks the
+  // big side as root regardless of argument order.
+  let big = eg.add_var(1)
+  for i in 0..<8 {
+    let extra = eg.add_var(i + 50)
+    eg.merge(big, extra) |> ignore
+  }
+  eg.rebuild()
+  let small = eg.add_var(2)
+  // Progress is reported even though `small` (the first argument) does not
+  // survive as the root; the old `merge(...) != class_id` convention is
+  // exactly what this would have broken.
+  inspect(eg.merge_changed(small, big), content="true")
+  eg.rebuild()
+  inspect(eg.equiv(small, big), content="true")
+  // Merging an already-equivalent pair reports no progress.
+  inspect(eg.merge_changed(small, big), content="false")
+  inspect(eg.merge_changed(big, small), content="false")
+}

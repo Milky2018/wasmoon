@@ -28,14 +28,12 @@ fn rule_add_zero() -> RewriteRule {
           node.children.length() == 2 &&
           eg.find_const(node.children[1]) is Some(0L) {
           // x + 0 = x
-          let new_id = eg.merge(class_id, node.children[0])
-          changed = new_id != class_id || changed
+          changed = eg.merge_changed(class_id, node.children[0]) || changed
         } else if node.op is Add &&
           node.children.length() == 2 &&
           eg.find_const(node.children[0]) is Some(0L) {
           // 0 + x = x
-          let new_id = eg.merge(class_id, node.children[1])
-          changed = new_id != class_id || changed
+          changed = eg.merge_changed(class_id, node.children[1]) || changed
         }
       }
       changed
@@ -54,8 +52,7 @@ fn rule_sub_zero() -> RewriteRule {
           node.children.length() == 2 &&
           eg.find_const(node.children[1]) is Some(0L) {
           // x - 0 = x
-          let new_id = eg.merge(class_id, node.children[0])
-          changed = new_id != class_id || changed
+          changed = eg.merge_changed(class_id, node.children[0]) || changed
         }
       }
       changed
@@ -73,13 +70,11 @@ fn rule_mul_one() -> RewriteRule {
         if node.op is Mul &&
           node.children.length() == 2 &&
           eg.find_const(node.children[1]) is Some(1L) {
-          let new_id = eg.merge(class_id, node.children[0])
-          changed = new_id != class_id || changed
+          changed = eg.merge_changed(class_id, node.children[0]) || changed
         } else if node.op is Mul &&
           node.children.length() == 2 &&
           eg.find_const(node.children[0]) is Some(1L) {
-          let new_id = eg.merge(class_id, node.children[1])
-          changed = new_id != class_id || changed
+          changed = eg.merge_changed(class_id, node.children[1]) || changed
         }
       }
       changed
@@ -101,8 +96,7 @@ fn rule_mul_zero() -> RewriteRule {
             eg.find_const(node.children[0]) is Some(0L)
           ) {
           let zero = eg.add_const(0L)
-          let new_id = eg.merge(class_id, zero)
-          changed = new_id != class_id || changed
+          changed = eg.merge_changed(class_id, zero) || changed
         }
       }
       changed
@@ -120,8 +114,7 @@ fn rule_idempotent() -> RewriteRule {
         if (node.op is And || node.op is Or) &&
           node.children.length() == 2 &&
           eg.equiv(node.children[0], node.children[1]) {
-          let new_id = eg.merge(class_id, node.children[0])
-          changed = new_id != class_id || changed
+          changed = eg.merge_changed(class_id, node.children[0]) || changed
         }
       }
       changed
@@ -140,8 +133,7 @@ fn rule_xor_self() -> RewriteRule {
           node.children.length() == 2 &&
           eg.equiv(node.children[0], node.children[1]) {
           let zero = eg.add_const(0L)
-          let new_id = eg.merge(class_id, zero)
-          changed = new_id != class_id || changed
+          changed = eg.merge_changed(class_id, zero) || changed
         }
       }
       changed
@@ -160,8 +152,7 @@ fn rule_sub_self() -> RewriteRule {
           node.children.length() == 2 &&
           eg.equiv(node.children[0], node.children[1]) {
           let zero = eg.add_const(0L)
-          let new_id = eg.merge(class_id, zero)
-          changed = new_id != class_id || changed
+          changed = eg.merge_changed(class_id, zero) || changed
         }
       }
       changed

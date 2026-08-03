@@ -48,8 +48,7 @@ fn rule_udiv_select_pow2() -> RewriteRule {
                 })
                 // Create ushr(y, select(...))
                 let new_node = eg.add({ op: Ushr, children: [y, shift_select] })
-                let new_id = eg.merge(class_id, new_node)
-                changed = new_id != class_id || changed
+                changed = eg.merge_changed(class_id, new_node) || changed
               }
             }
           }

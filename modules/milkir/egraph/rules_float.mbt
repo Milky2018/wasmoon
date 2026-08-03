@@ -71,8 +71,7 @@ fn rule_fconst_fold_binary() -> RewriteRule {
           if result is Some(r) {
             let result_bits = r.reinterpret_as_uint64()
             let result_node = eg.add_fconst(result_bits)
-            let new_id = eg.merge(class_id, result_node)
-            changed = new_id != class_id || changed
+            changed = eg.merge_changed(class_id, result_node) || changed
           }
         }
       }
@@ -139,8 +138,7 @@ fn rule_fconst_fold_unary() -> RewriteRule {
           if result is Some(r) {
             let result_bits = r.reinterpret_as_uint64()
             let result_node = eg.add_fconst(result_bits)
-            let new_id = eg.merge(class_id, result_node)
-            changed = new_id != class_id || changed
+            changed = eg.merge_changed(class_id, result_node) || changed
           }
         }
       }
@@ -160,8 +158,7 @@ fn rule_fneg_fneg() -> RewriteRule {
           for inner in eg.get_nodes(node.children[0]) {
             if inner.op is Fneg && inner.children.length() == 1 {
               // fneg(fneg(x)) = x
-              let new_id = eg.merge(class_id, inner.children[0])
-              changed = new_id != class_id || changed
+              changed = eg.merge_changed(class_id, inner.children[0]) || changed
             }
           }
         }
@@ -183,8 +180,7 @@ fn rule_fabs_fneg() -> RewriteRule {
             if inner.op is Fneg && inner.children.length() == 1 {
               // fabs(fneg(x)) = fabs(x)
               let new_abs = eg.add_fabs(inner.children[0])
-              let new_id = eg.merge(class_id, new_abs)
-              changed = new_id != class_id || changed
+              changed = eg.merge_changed(class_id, new_abs) || changed
             }
           }
         }
@@ -205,8 +201,7 @@ fn rule_fabs_fabs() -> RewriteRule {
           for inner in eg.get_nodes(node.children[0]) {
             if inner.op is Fabs && inner.children.length() == 1 {
               // fabs(fabs(x)) = fabs(x)
-              let new_id = eg.merge(class_id, node.children[0])
-              changed = new_id != class_id || changed
+              changed = eg.merge_changed(class_id, node.children[0]) || changed
             }
           }
         }
@@ -233,8 +228,7 @@ fn rule_fneg_fabs() -> RewriteRule {
                 if innermost.op is Fneg && innermost.children.length() == 1 {
                   let new_fabs = eg.add_fabs(innermost.children[0])
                   let new_fneg = eg.add_fneg(new_fabs)
-                  let new_id = eg.merge(class_id, new_fneg)
-                  changed = new_id != class_id || changed
+                  changed = eg.merge_changed(class_id, new_fneg) || changed
                 }
               }
             }

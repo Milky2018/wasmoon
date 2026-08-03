@@ -46,8 +46,7 @@ fn rule_sub_sub_sub_right() -> RewriteRule {
             let ab = eg.add_sub(a, b)
             let cd = eg.add_sub(c, d)
             let result = eg.add_add(ab, cd)
-            let new_id = eg.subsume(class_id, result)
-            changed = new_id != class_id || changed
+            changed = eg.subsume_changed(class_id, result) || changed
           }
         }
       }
@@ -70,8 +69,7 @@ fn rule_sub_sub_add_right() -> RewriteRule {
             let ab = eg.add_sub(a, b)
             let cd = eg.add_add(c, d)
             let result = eg.add_add(ab, cd)
-            let new_id = eg.subsume(class_id, result)
-            changed = new_id != class_id || changed
+            changed = eg.subsume_changed(class_id, result) || changed
           }
         }
       }
@@ -94,8 +92,7 @@ fn rule_sub_add_sub_right() -> RewriteRule {
             let ab = eg.add_sub(a, b)
             let cd = eg.add_sub(c, d)
             let result = eg.add_sub(ab, cd)
-            let new_id = eg.subsume(class_id, result)
-            changed = new_id != class_id || changed
+            changed = eg.subsume_changed(class_id, result) || changed
           }
         }
       }
@@ -118,8 +115,7 @@ fn rule_sub_add_add_right() -> RewriteRule {
             let ab = eg.add_sub(a, b)
             let cd = eg.add_add(c, d)
             let result = eg.add_sub(ab, cd)
-            let new_id = eg.subsume(class_id, result)
-            changed = new_id != class_id || changed
+            changed = eg.subsume_changed(class_id, result) || changed
           }
         }
       }
@@ -142,8 +138,7 @@ fn rule_add_sub_sub_right() -> RewriteRule {
             let ab = eg.add_add(a, b)
             let cd = eg.add_sub(c, d)
             let result = eg.add_sub(ab, cd)
-            let new_id = eg.subsume(class_id, result)
-            changed = new_id != class_id || changed
+            changed = eg.subsume_changed(class_id, result) || changed
           }
         }
       }
@@ -166,8 +161,7 @@ fn rule_add_sub_add_right() -> RewriteRule {
             let ab = eg.add_add(a, b)
             let cd = eg.add_add(c, d)
             let result = eg.add_sub(ab, cd)
-            let new_id = eg.subsume(class_id, result)
-            changed = new_id != class_id || changed
+            changed = eg.subsume_changed(class_id, result) || changed
           }
         }
       }
@@ -190,8 +184,7 @@ fn rule_add_add_sub_right() -> RewriteRule {
             let ab = eg.add_add(a, b)
             let cd = eg.add_sub(c, d)
             let result = eg.add_add(ab, cd)
-            let new_id = eg.subsume(class_id, result)
-            changed = new_id != class_id || changed
+            changed = eg.subsume_changed(class_id, result) || changed
           }
         }
       }
@@ -216,8 +209,7 @@ fn rule_sub_sub_sub_left() -> RewriteRule {
             let ab = eg.add_sub(a, b)
             let cd = eg.add_add(c, d)
             let result = eg.add_sub(ab, cd)
-            let new_id = eg.subsume(class_id, result)
-            changed = new_id != class_id || changed
+            changed = eg.subsume_changed(class_id, result) || changed
           }
         }
       }
@@ -240,8 +232,7 @@ fn rule_sub_sub_add_left() -> RewriteRule {
             let ab = eg.add_sub(a, b)
             let cd = eg.add_sub(c, d)
             let result = eg.add_sub(ab, cd)
-            let new_id = eg.subsume(class_id, result)
-            changed = new_id != class_id || changed
+            changed = eg.subsume_changed(class_id, result) || changed
           }
         }
       }
@@ -264,8 +255,7 @@ fn rule_sub_add_sub_left() -> RewriteRule {
             let ab = eg.add_sub(a, b)
             let cd = eg.add_sub(c, d)
             let result = eg.add_add(ab, cd)
-            let new_id = eg.subsume(class_id, result)
-            changed = new_id != class_id || changed
+            changed = eg.subsume_changed(class_id, result) || changed
           }
         }
       }
@@ -288,8 +278,7 @@ fn rule_sub_add_add_left() -> RewriteRule {
             let ab = eg.add_sub(a, b)
             let cd = eg.add_add(c, d)
             let result = eg.add_add(ab, cd)
-            let new_id = eg.subsume(class_id, result)
-            changed = new_id != class_id || changed
+            changed = eg.subsume_changed(class_id, result) || changed
           }
         }
       }
@@ -312,8 +301,7 @@ fn rule_add_sub_sub_left() -> RewriteRule {
             let ab = eg.add_add(a, b)
             let cd = eg.add_add(c, d)
             let result = eg.add_sub(ab, cd)
-            let new_id = eg.subsume(class_id, result)
-            changed = new_id != class_id || changed
+            changed = eg.subsume_changed(class_id, result) || changed
           }
         }
       }
@@ -336,8 +324,7 @@ fn rule_add_sub_add_left() -> RewriteRule {
             let ab = eg.add_add(a, b)
             let cd = eg.add_sub(c, d)
             let result = eg.add_sub(ab, cd)
-            let new_id = eg.subsume(class_id, result)
-            changed = new_id != class_id || changed
+            changed = eg.subsume_changed(class_id, result) || changed
           }
         }
       }
@@ -360,8 +347,7 @@ fn rule_add_add_sub_left() -> RewriteRule {
             let ab = eg.add_add(a, b)
             let cd = eg.add_sub(c, d)
             let result = eg.add_add(ab, cd)
-            let new_id = eg.subsume(class_id, result)
-            changed = new_id != class_id || changed
+            changed = eg.subsume_changed(class_id, result) || changed
           }
         }
       }

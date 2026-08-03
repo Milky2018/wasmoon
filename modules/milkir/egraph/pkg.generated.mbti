@@ -101,6 +101,7 @@ pub fn EGraph::last_rebuild_repairs(Self) -> Int
 pub fn EGraph::last_rule_applications(Self) -> Int
 pub fn EGraph::mark_rematerializable(Self, EClassId) -> Bool
 pub fn EGraph::merge(Self, EClassId, EClassId) -> EClassId
+pub fn EGraph::merge_changed(Self, EClassId, EClassId) -> Bool
 pub fn EGraph::num_classes(Self) -> Int
 pub fn EGraph::num_nodes(Self) -> Int
 pub fn EGraph::rebuild(Self) -> Unit
@@ -109,6 +110,7 @@ pub fn EGraph::saturate_indexed(Self, IndexedRuleSet, Int) -> Int
 pub fn EGraph::saturate_indexed_with_limits(Self, IndexedRuleSet, Int, SaturationLimits) -> Int
 pub fn EGraph::set_type(Self, EClassId, Int) -> Unit
 pub fn EGraph::subsume(Self, EClassId, EClassId) -> EClassId
+pub fn EGraph::subsume_changed(Self, EClassId, EClassId) -> Bool
 pub fn EGraph::type_conflict_count(Self) -> Int
 
 pub(all) struct ENode {

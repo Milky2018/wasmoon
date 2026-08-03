@@ -325,17 +325,20 @@ priv struct EClass {
 priv struct UnionFind {
   // parent[i] = parent of i, or i if i is a root
   parent : Array[Int]
+  // size[i] = number of elements in i's tree when i is a root
+  size : Array[Int]
 }
 
 ///|
 fn UnionFind::UnionFind() -> UnionFind {
-  { parent: [] }
+  { parent: [], size: [] }
 }
 
 ///|
 fn UnionFind::make_set(self : UnionFind) -> Int {
   let id = self.parent.length()
   self.parent.push(id)
+  self.size.push(1)
   id
 }
 
@@ -352,6 +355,32 @@ fn UnionFind::find(self : UnionFind, x : Int) -> Int {
 }
 
 ///|
+/// Union two sets by size, returning the surviving root.
+/// Callers must not assume which side wins; use `union_keep` when the
+/// survivor matters (as `subsume` does).
+fn UnionFind::union(self : UnionFind, a : Int, b : Int) -> Int {
+  let root_a = self.find(a)
+  let root_b = self.find(b)
+  if root_a == root_b {
+    return root_a
+  }
+  // Attach the smaller tree under the larger one; ties break on the lower
+  // id so the result stays deterministic.
+  let (keep, other) = if self.size[root_a] > self.size[root_b] {
+    (root_a, root_b)
+  } else if self.size[root_b] > self.size[root_a] {
+    (root_b, root_a)
+  } else if root_a < root_b {
+    (root_a, root_b)
+  } else {
+    (root_b, root_a)
+  }
+  self.parent[other] = keep
+  self.size[keep] = self.size[keep] + self.size[other]
+  keep
+}
+
+///|
 /// Union two sets, forcing `keep` to remain the root.
 /// Returns the root id (always the root of `keep`).
 fn UnionFind::union_keep(self : UnionFind, keep : Int, other : Int) -> Int {
@@ -361,6 +390,7 @@ fn UnionFind::union_keep(self : UnionFind, keep : Int, other : Int) -> Int {
     return root_keep
   }
   self.parent[root_other] = root_keep
+  self.size[root_keep] = self.size[root_keep] + self.size[root_other]
   root_keep
 }
 
@@ -791,13 +821,11 @@ pub fn EGraph::merge(self : EGraph, a : EClassId, b : EClassId) -> EClassId {
     return a
   }
 
-  // Directed merge: force `b` to remain the root.
-  // Many existing rewrite rules treat "change" as `merge(...) != class_id`;
-  // keeping the second argument as root ensures those rules observe progress
-  // when they merge in a newly-created node or a preferred representation.
-  let keep_root = self.uf.union_keep(b.0, a.0)
+  // Rules report progress explicitly via `merge_changed`, so the union-find
+  // is free to pick whichever root keeps its trees shallow.
+  let keep_root = self.uf.union(a.0, b.0)
   let new_id = EClassId(keep_root)
-  let other_id = a
+  let other_id = if keep_root == a.0 { b } else { a }
 
   // Merge type information; conflicting widths poison the merged class.
   if self.type_conflicts.contains(other_id.0) {
@@ -879,6 +907,34 @@ pub fn EGraph::merge(self : EGraph, a : EClassId, b : EClassId) -> EClassId {
   self.absorb_parent_edges(other_id.0, new_id.0)
   self.mark_pending(new_id.0)
   new_id
+}
+
+///|
+/// Merge two e-classes, reporting whether they were distinct beforehand.
+///
+/// Rewrite rules use this to answer "did I make progress?" directly, rather
+/// than inferring it from which id `merge` returned. Keeping progress
+/// explicit lets the union-find choose roots freely.
+pub fn EGraph::merge_changed(self : EGraph, a : EClassId, b : EClassId) -> Bool {
+  if self.find(a) == self.find(b) {
+    return false
+  }
+  self.merge(a, b) |> ignore
+  true
+}
+
+///|
+/// Subsume `a` into `b`, reporting whether they were distinct beforehand.
+pub fn EGraph::subsume_changed(
+  self : EGraph,
+  a : EClassId,
+  b : EClassId,
+) -> Bool {
+  if self.find(a) == self.find(b) {
+    return false
+  }
+  self.subsume(a, b) |> ignore
+  true
 }
 
 ///|

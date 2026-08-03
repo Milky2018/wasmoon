@@ -16,8 +16,7 @@ fn rule_uextend_uextend() -> RewriteRule {
                 op: Uextend(from_bits, to_bits),
                 children: [inner.children[0]],
               })
-              let new_id = eg.merge(class_id, new_node)
-              changed = new_id != class_id || changed
+              changed = eg.merge_changed(class_id, new_node) || changed
             }
           }
         }
@@ -43,8 +42,7 @@ fn rule_sextend_sextend() -> RewriteRule {
                 op: Sextend(from_bits, to_bits),
                 children: [inner.children[0]],
               })
-              let new_id = eg.merge(class_id, new_node)
-              changed = new_id != class_id || changed
+              changed = eg.merge_changed(class_id, new_node) || changed
             }
           }
         }
@@ -70,8 +68,7 @@ fn rule_sextend_uextend() -> RewriteRule {
                 op: Uextend(from_bits, to_bits),
                 children: [inner.children[0]],
               })
-              let new_id = eg.merge(class_id, new_node)
-              changed = new_id != class_id || changed
+              changed = eg.merge_changed(class_id, new_node) || changed
             }
           }
         }
@@ -97,8 +94,7 @@ fn rule_sextend_icmp() -> RewriteRule {
                 op: Uextend(from_bits, to_bits),
                 children: [node.children[0]],
               })
-              let new_id = eg.merge(class_id, new_node)
-              changed = new_id != class_id || changed
+              changed = eg.merge_changed(class_id, new_node) || changed
             }
           }
         }
@@ -121,8 +117,7 @@ fn rule_ireduce_uextend() -> RewriteRule {
             if inner.op is Uextend(extend_from, _) &&
               inner.children.length() == 1 &&
               reduce_to == extend_from {
-              let new_id = eg.merge(class_id, inner.children[0])
-              changed = new_id != class_id || changed
+              changed = eg.merge_changed(class_id, inner.children[0]) || changed
             }
           }
         }
@@ -145,8 +140,7 @@ fn rule_ireduce_sextend() -> RewriteRule {
             if inner.op is Sextend(extend_from, _) &&
               inner.children.length() == 1 &&
               reduce_to == extend_from {
-              let new_id = eg.merge(class_id, inner.children[0])
-              changed = new_id != class_id || changed
+              changed = eg.merge_changed(class_id, inner.children[0]) || changed
             }
           }
         }
@@ -179,8 +173,7 @@ fn rule_band_uextend() -> RewriteRule {
                     op: Uextend(from_bits, to_bits),
                     children: [inner_and],
                   })
-                  let new_id = eg.merge(class_id, new_node)
-                  changed = new_id != class_id || changed
+                  changed = eg.merge_changed(class_id, new_node) || changed
                 }
               }
             }
@@ -215,8 +208,7 @@ fn rule_bor_uextend() -> RewriteRule {
                     op: Uextend(from_bits, to_bits),
                     children: [inner_or],
                   })
-                  let new_id = eg.merge(class_id, new_node)
-                  changed = new_id != class_id || changed
+                  changed = eg.merge_changed(class_id, new_node) || changed
                 }
               }
             }
@@ -251,8 +243,7 @@ fn rule_bxor_uextend() -> RewriteRule {
                     op: Uextend(from_bits, to_bits),
                     children: [inner_xor],
                   })
-                  let new_id = eg.merge(class_id, new_node)
-                  changed = new_id != class_id || changed
+                  changed = eg.merge_changed(class_id, new_node) || changed
                 }
               }
             }
@@ -281,8 +272,7 @@ fn rule_ireduce_ineg() -> RewriteRule {
                 children: [inner.children[0]],
               })
               let new_node = eg.add({ op: Neg, children: [inner_reduce] })
-              let new_id = eg.merge(class_id, new_node)
-              changed = new_id != class_id || changed
+              changed = eg.merge_changed(class_id, new_node) || changed
             }
           }
         }
@@ -309,8 +299,7 @@ fn rule_ireduce_bnot() -> RewriteRule {
                 children: [inner.children[0]],
               })
               let new_node = eg.add({ op: Bnot, children: [inner_reduce] })
-              let new_id = eg.merge(class_id, new_node)
-              changed = new_id != class_id || changed
+              changed = eg.merge_changed(class_id, new_node) || changed
             }
           }
         }
@@ -344,8 +333,7 @@ fn rule_ireduce_iadd() -> RewriteRule {
                 op: Add,
                 children: [left_reduce, right_reduce],
               })
-              let new_id = eg.merge(class_id, new_node)
-              changed = new_id != class_id || changed
+              changed = eg.merge_changed(class_id, new_node) || changed
             }
           }
         }
@@ -379,8 +367,7 @@ fn rule_ireduce_isub() -> RewriteRule {
                 op: Sub,
                 children: [left_reduce, right_reduce],
               })
-              let new_id = eg.merge(class_id, new_node)
-              changed = new_id != class_id || changed
+              changed = eg.merge_changed(class_id, new_node) || changed
             }
           }
         }
@@ -414,8 +401,7 @@ fn rule_ireduce_imul() -> RewriteRule {
                 op: Mul,
                 children: [left_reduce, right_reduce],
               })
-              let new_id = eg.merge(class_id, new_node)
-              changed = new_id != class_id || changed
+              changed = eg.merge_changed(class_id, new_node) || changed
             }
           }
         }
@@ -449,8 +435,7 @@ fn rule_ireduce_band() -> RewriteRule {
                 op: And,
                 children: [left_reduce, right_reduce],
               })
-              let new_id = eg.merge(class_id, new_node)
-              changed = new_id != class_id || changed
+              changed = eg.merge_changed(class_id, new_node) || changed
             }
           }
         }
@@ -484,8 +469,7 @@ fn rule_ireduce_bor() -> RewriteRule {
                 op: Or,
                 children: [left_reduce, right_reduce],
               })
-              let new_id = eg.merge(class_id, new_node)
-              changed = new_id != class_id || changed
+              changed = eg.merge_changed(class_id, new_node) || changed
             }
           }
         }
@@ -519,8 +503,7 @@ fn rule_ireduce_bxor() -> RewriteRule {
                 op: Xor,
                 children: [left_reduce, right_reduce],
               })
-              let new_id = eg.merge(class_id, new_node)
-              changed = new_id != class_id || changed
+              changed = eg.merge_changed(class_id, new_node) || changed
             }
           }
         }
@@ -550,8 +533,7 @@ fn rule_eq_sextend_zero() -> RewriteRule {
                     op: Eq,
                     children: [left.children[0], zero],
                   })
-                  let new_id = eg.merge(class_id, new_node)
-                  changed = new_id != class_id || changed
+                  changed = eg.merge_changed(class_id, new_node) || changed
                 }
               }
             }
@@ -566,8 +548,7 @@ fn rule_eq_sextend_zero() -> RewriteRule {
                     op: Eq,
                     children: [right.children[0], zero],
                   })
-                  let new_id = eg.merge(class_id, new_node)
-                  changed = new_id != class_id || changed
+                  changed = eg.merge_changed(class_id, new_node) || changed
                 }
               }
             }
@@ -599,8 +580,7 @@ fn rule_ne_sextend_zero() -> RewriteRule {
                     op: Ne,
                     children: [left.children[0], zero],
                   })
-                  let new_id = eg.merge(class_id, new_node)
-                  changed = new_id != class_id || changed
+                  changed = eg.merge_changed(class_id, new_node) || changed
                 }
               }
             }
@@ -615,8 +595,7 @@ fn rule_ne_sextend_zero() -> RewriteRule {
                     op: Ne,
                     children: [right.children[0], zero],
                   })
-                  let new_id = eg.merge(class_id, new_node)
-                  changed = new_id != class_id || changed
+                  changed = eg.merge_changed(class_id, new_node) || changed
                 }
               }
             }
@@ -656,8 +635,7 @@ fn rule_icmp_sextend_zero() -> RewriteRule {
                     op: Icmp(cc),
                     children: [left.children[0], zero],
                   })
-                  let new_id = eg.merge(class_id, new_node)
-                  changed = new_id != class_id || changed
+                  changed = eg.merge_changed(class_id, new_node) || changed
                 }
               }
             }
@@ -685,8 +663,7 @@ fn rule_ireduce_ireduce() -> RewriteRule {
                 op: Ireduce(from_bits, to_bits),
                 children: [inner.children[0]],
               })
-              let new_id = eg.merge(class_id, new_node)
-              changed = new_id != class_id || changed
+              changed = eg.merge_changed(class_id, new_node) || changed
             }
           }
         }
@@ -720,8 +697,7 @@ fn rule_iadd_uextend() -> RewriteRule {
                     op: Uextend(from_bits, to_bits),
                     children: [inner_add],
                   })
-                  let new_id = eg.merge(class_id, new_node)
-                  changed = new_id != class_id || changed
+                  changed = eg.merge_changed(class_id, new_node) || changed
                 }
               }
             }
@@ -756,8 +732,7 @@ fn rule_isub_uextend() -> RewriteRule {
                     op: Sextend(from_bits, to_bits),
                     children: [inner_sub],
                   })
-                  let new_id = eg.merge(class_id, new_node)
-                  changed = new_id != class_id || changed
+                  changed = eg.merge_changed(class_id, new_node) || changed
                 }
               }
             }
@@ -789,8 +764,7 @@ fn rule_ireduce_ishl() -> RewriteRule {
                 op: Shl,
                 children: [value_reduce, inner.children[1]],
               })
-              let new_id = eg.merge(class_id, new_node)
-              changed = new_id != class_id || changed
+              changed = eg.merge_changed(class_id, new_node) || changed
             }
           }
         }
@@ -816,8 +790,7 @@ fn rule_slt_uextend_zero() -> RewriteRule {
                 if right.op == Const(0L) {
                   // slt(uextend(x), 0) = 0 (always false)
                   let false_const = eg.add_const(0L)
-                  let new_id = eg.merge(class_id, false_const)
-                  changed = new_id != class_id || changed
+                  changed = eg.merge_changed(class_id, false_const) || changed
                 }
               }
             }
@@ -845,8 +818,7 @@ fn rule_sge_uextend_zero() -> RewriteRule {
                 if right.op == Const(0L) {
                   // sge(uextend(x), 0) = 1 (always true)
                   let true_const = eg.add_const(1L)
-                  let new_id = eg.merge(class_id, true_const)
-                  changed = new_id != class_id || changed
+                  changed = eg.merge_changed(class_id, true_const) || changed
                 }
               }
             }
@@ -880,8 +852,8 @@ fn rule_band_uextend_mask() -> RewriteRule {
                 if right.op is Const(mask) && is_type_mask(mask) {
                   // band(uextend(x), mask) = uextend(x) when mask covers narrow type
                   // This is safe because uextend already zeroes high bits
-                  let new_id = eg.merge(class_id, node.children[0])
-                  changed = new_id != class_id || changed
+                  changed = eg.merge_changed(class_id, node.children[0]) ||
+                    changed
                 }
               }
             }
@@ -891,8 +863,8 @@ fn rule_band_uextend_mask() -> RewriteRule {
             if left.op is Const(mask) && is_type_mask(mask) {
               for right in eg.get_nodes(node.children[1]) {
                 if right.op is Uextend(_, _) && right.children.length() == 1 {
-                  let new_id = eg.merge(class_id, node.children[1])
-                  changed = new_id != class_id || changed
+                  changed = eg.merge_changed(class_id, node.children[1]) ||
+                    changed
                 }
               }
             }
@@ -925,8 +897,7 @@ fn rule_band_sextend_mask() -> RewriteRule {
                     op: Uextend(from_bits, to_bits),
                     children: [left.children[0]],
                   })
-                  let new_id = eg.merge(class_id, new_node)
-                  changed = new_id != class_id || changed
+                  changed = eg.merge_changed(class_id, new_node) || changed
                 }
               }
             }
@@ -941,8 +912,7 @@ fn rule_band_sextend_mask() -> RewriteRule {
                     op: Uextend(from_bits, to_bits),
                     children: [right.children[0]],
                   })
-                  let new_id = eg.merge(class_id, new_node)
-                  changed = new_id != class_id || changed
+                  changed = eg.merge_changed(class_id, new_node) || changed
                 }
               }
             }
@@ -981,8 +951,7 @@ fn rule_ireduce_const() -> RewriteRule {
               let mask = mask_for_bits(to_bits)
               let truncated = c & mask
               let new_const = eg.add_const(truncated)
-              let new_id = eg.merge(class_id, new_const)
-              changed = new_id != class_id || changed
+              changed = eg.merge_changed(class_id, new_const) || changed
             }
           }
         }
@@ -1004,8 +973,7 @@ fn rule_uextend_identity() -> RewriteRule {
           from_bits == to_bits &&
           node.children.length() == 1 {
           // uextend(x) where widths match = x
-          let new_id = eg.merge(class_id, node.children[0])
-          changed = new_id != class_id || changed
+          changed = eg.merge_changed(class_id, node.children[0]) || changed
         }
       }
       changed
@@ -1025,8 +993,7 @@ fn rule_sextend_identity() -> RewriteRule {
           from_bits == to_bits &&
           node.children.length() == 1 {
           // sextend(x) where widths match = x
-          let new_id = eg.merge(class_id, node.children[0])
-          changed = new_id != class_id || changed
+          changed = eg.merge_changed(class_id, node.children[0]) || changed
         }
       }
       changed
@@ -1046,8 +1013,7 @@ fn rule_ireduce_identity() -> RewriteRule {
           from_bits == to_bits &&
           node.children.length() == 1 {
           // ireduce(x) where widths match = x
-          let new_id = eg.merge(class_id, node.children[0])
-          changed = new_id != class_id || changed
+          changed = eg.merge_changed(class_id, node.children[0]) || changed
         }
       }
       changed
@@ -1073,8 +1039,8 @@ fn rule_band_uextend_mask_precise() -> RewriteRule {
                   Const(mask) =>
                     // If the mask covers all bits of the narrow type, the AND is a no-op
                     if (mask & type_mask) == type_mask {
-                      let new_id = eg.merge(class_id, node.children[0])
-                      changed = new_id != class_id || changed
+                      changed = eg.merge_changed(class_id, node.children[0]) ||
+                        changed
                     }
                   _ => ()
                 }
@@ -1090,8 +1056,8 @@ fn rule_band_uextend_mask_precise() -> RewriteRule {
                     if right.children.length() == 1 {
                       let type_mask = mask_for_bits(from_bits)
                       if (mask & type_mask) == type_mask {
-                        let new_id = eg.merge(class_id, node.children[1])
-                        changed = new_id != class_id || changed
+                        changed = eg.merge_changed(class_id, node.children[1]) ||
+                          changed
                       }
                     }
                   _ => ()
@@ -1125,8 +1091,7 @@ fn rule_ireduce_uextend_skip() -> RewriteRule {
                 op: Ireduce(extend_from, reduce_to),
                 children: [inner.children[0]],
               })
-              let new_id = eg.merge(class_id, new_node)
-              changed = new_id != class_id || changed
+              changed = eg.merge_changed(class_id, new_node) || changed
             }
           }
         }
@@ -1155,8 +1120,7 @@ fn rule_ireduce_sextend_skip() -> RewriteRule {
                 op: Ireduce(extend_from, reduce_to),
                 children: [inner.children[0]],
               })
-              let new_id = eg.merge(class_id, new_node)
-              changed = new_id != class_id || changed
+              changed = eg.merge_changed(class_id, new_node) || changed
             }
           }
         }
@@ -1185,8 +1149,7 @@ fn rule_ireduce_uextend_to_extend() -> RewriteRule {
                 op: Uextend(extend_from, reduce_to),
                 children: [inner.children[0]],
               })
-              let new_id = eg.merge(class_id, new_node)
-              changed = new_id != class_id || changed
+              changed = eg.merge_changed(class_id, new_node) || changed
             }
           }
         }
@@ -1215,8 +1178,7 @@ fn rule_ireduce_sextend_to_extend() -> RewriteRule {
                 op: Sextend(extend_from, reduce_to),
                 children: [inner.children[0]],
               })
-              let new_id = eg.merge(class_id, new_node)
-              changed = new_id != class_id || changed
+              changed = eg.merge_changed(class_id, new_node) || changed
             }
           }
         }
@@ -1243,8 +1205,7 @@ fn rule_uextend_const() -> RewriteRule {
               let mask = mask_for_bits(from_bits)
               let masked_c = c & mask
               let new_const = eg.add_const(masked_c)
-              let new_id = eg.merge(class_id, new_const)
-              changed = new_id != class_id || changed
+              changed = eg.merge_changed(class_id, new_const) || changed
             }
           }
         }
@@ -1278,8 +1239,7 @@ fn rule_sextend_const() -> RewriteRule {
                 masked
               }
               let new_const = eg.add_const(extended)
-              let new_id = eg.merge(class_id, new_const)
-              changed = new_id != class_id || changed
+              changed = eg.merge_changed(class_id, new_const) || changed
             }
           }
         }

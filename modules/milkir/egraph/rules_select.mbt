@@ -14,8 +14,7 @@ fn rule_select_same() -> RewriteRule {
         if node.op is Select &&
           node.children.length() == 3 &&
           eg.equiv(node.children[1], node.children[2]) {
-          let new_id = eg.subsume(class_id, node.children[1])
-          changed = new_id != class_id || changed
+          changed = eg.subsume_changed(class_id, node.children[1]) || changed
         }
       }
       changed
@@ -41,8 +40,7 @@ fn rule_select_icmp_one_zero() -> RewriteRule {
               cond_node.op is Eq ||
               cond_node.op is Ne {
               // select(icmp, 1, 0) = icmp (the icmp already produces 0/1)
-              let new_id = eg.merge(class_id, node.children[0])
-              changed = new_id != class_id || changed
+              changed = eg.merge_changed(class_id, node.children[0]) || changed
             }
           }
         }
@@ -77,8 +75,7 @@ fn rule_select_icmp_zero_one() -> RewriteRule {
               // Now we have select(icmp_comp, nonzero, 0) which is truthy form
               // But if nonzero is 1, we can just use icmp_comp
               if nz == 1L {
-                let new_id = eg.merge(class_id, new_icmp)
-                changed = new_id != class_id || changed
+                changed = eg.merge_changed(class_id, new_icmp) || changed
               }
             }
           }
@@ -110,8 +107,7 @@ fn rule_select_nested_same_cond_right() -> RewriteRule {
                 op: Select,
                 children: [d, a, inner.children[2]],
               })
-              let new_id = eg.subsume(class_id, new_select)
-              changed = new_id != class_id || changed
+              changed = eg.subsume_changed(class_id, new_select) || changed
             }
           }
         }
@@ -142,8 +138,7 @@ fn rule_select_nested_same_cond_left() -> RewriteRule {
                 op: Select,
                 children: [d, inner.children[1], a],
               })
-              let new_id = eg.subsume(class_id, new_select)
-              changed = new_id != class_id || changed
+              changed = eg.subsume_changed(class_id, new_select) || changed
             }
           }
         }
@@ -176,8 +171,7 @@ fn rule_select_uextend_cond() -> RewriteRule {
                       node.children[2],
                     ],
                   })
-                  let new_id = eg.merge(class_id, new_select)
-                  changed = new_id != class_id || changed
+                  changed = eg.merge_changed(class_id, new_select) || changed
                 }
               }
             }
@@ -213,8 +207,7 @@ fn rule_add_select_const() -> RewriteRule {
                   op: Select,
                   children: [sel.children[0], x_plus_z, y_plus_z],
                 })
-                let new_id = eg.subsume(class_id, new_select)
-                changed = new_id != class_id || changed
+                changed = eg.subsume_changed(class_id, new_select) || changed
               }
             }
           }
@@ -231,8 +224,7 @@ fn rule_add_select_const() -> RewriteRule {
                   op: Select,
                   children: [sel.children[0], x_plus_z, y_plus_z],
                 })
-                let new_id = eg.subsume(class_id, new_select)
-                changed = new_id != class_id || changed
+                changed = eg.subsume_changed(class_id, new_select) || changed
               }
             }
           }
@@ -269,8 +261,7 @@ fn rule_select_to_smax() -> RewriteRule {
               // select(sgt(x, y), x, y) = smax(x, y)
               if eg.equiv(true_val, x) && eg.equiv(false_val, y) {
                 let smax = eg.add({ op: Smax, children: [x, y] })
-                let new_id = eg.merge(class_id, smax)
-                changed = new_id != class_id || changed
+                changed = eg.merge_changed(class_id, smax) || changed
               }
             }
           }
@@ -303,8 +294,7 @@ fn rule_select_to_smin() -> RewriteRule {
               // select(slt(x, y), x, y) = smin(x, y)
               if eg.equiv(true_val, x) && eg.equiv(false_val, y) {
                 let smin = eg.add({ op: Smin, children: [x, y] })
-                let new_id = eg.merge(class_id, smin)
-                changed = new_id != class_id || changed
+                changed = eg.merge_changed(class_id, smin) || changed
               }
             }
           }
@@ -337,8 +327,7 @@ fn rule_select_to_umax() -> RewriteRule {
               // select(ugt(x, y), x, y) = umax(x, y)
               if eg.equiv(true_val, x) && eg.equiv(false_val, y) {
                 let umax = eg.add({ op: Umax, children: [x, y] })
-                let new_id = eg.merge(class_id, umax)
-                changed = new_id != class_id || changed
+                changed = eg.merge_changed(class_id, umax) || changed
               }
             }
           }
@@ -371,8 +360,7 @@ fn rule_select_to_umin() -> RewriteRule {
               // select(ult(x, y), x, y) = umin(x, y)
               if eg.equiv(true_val, x) && eg.equiv(false_val, y) {
                 let umin = eg.add({ op: Umin, children: [x, y] })
-                let new_id = eg.merge(class_id, umin)
-                changed = new_id != class_id || changed
+                changed = eg.merge_changed(class_id, umin) || changed
               }
             }
           }
@@ -409,8 +397,7 @@ fn rule_select_to_smax_swapped() -> RewriteRule {
               // select(slt(x, y), y, x) = smax(x, y)
               if eg.equiv(true_val, y) && eg.equiv(false_val, x) {
                 let smax = eg.add({ op: Smax, children: [x, y] })
-                let new_id = eg.merge(class_id, smax)
-                changed = new_id != class_id || changed
+                changed = eg.merge_changed(class_id, smax) || changed
               }
             }
           }
@@ -442,8 +429,7 @@ fn rule_select_to_smin_swapped() -> RewriteRule {
               // select(sgt(x, y), y, x) = smin(x, y)
               if eg.equiv(true_val, y) && eg.equiv(false_val, x) {
                 let smin = eg.add({ op: Smin, children: [x, y] })
-                let new_id = eg.merge(class_id, smin)
-                changed = new_id != class_id || changed
+                changed = eg.merge_changed(class_id, smin) || changed
               }
             }
           }
@@ -475,8 +461,7 @@ fn rule_select_to_umax_swapped() -> RewriteRule {
               // select(ult(x, y), y, x) = umax(x, y)
               if eg.equiv(true_val, y) && eg.equiv(false_val, x) {
                 let umax = eg.add({ op: Umax, children: [x, y] })
-                let new_id = eg.merge(class_id, umax)
-                changed = new_id != class_id || changed
+                changed = eg.merge_changed(class_id, umax) || changed
               }
             }
           }
@@ -508,8 +493,7 @@ fn rule_select_to_umin_swapped() -> RewriteRule {
               // select(ugt(x, y), y, x) = umin(x, y)
               if eg.equiv(true_val, y) && eg.equiv(false_val, x) {
                 let umin = eg.add({ op: Umin, children: [x, y] })
-                let new_id = eg.merge(class_id, umin)
-                changed = new_id != class_id || changed
+                changed = eg.merge_changed(class_id, umin) || changed
               }
             }
           }
@@ -549,8 +533,7 @@ fn rule_select_to_iabs_positive() -> RewriteRule {
                     neg_node.children.length() == 1 &&
                     eg.equiv(neg_node.children[0], x) {
                     let iabs = eg.add({ op: Iabs, children: [x] })
-                    let new_id = eg.subsume(class_id, iabs)
-                    changed = new_id != class_id || changed
+                    changed = eg.subsume_changed(class_id, iabs) || changed
                   }
                 }
               }
@@ -588,8 +571,7 @@ fn rule_select_to_iabs_negative() -> RewriteRule {
                     neg_node.children.length() == 1 &&
                     eg.equiv(neg_node.children[0], x) {
                     let iabs = eg.add({ op: Iabs, children: [x] })
-                    let new_id = eg.subsume(class_id, iabs)
-                    changed = new_id != class_id || changed
+                    changed = eg.subsume_changed(class_id, iabs) || changed
                   }
                 }
               }
@@ -624,8 +606,7 @@ fn rule_smin_never_greater() -> RewriteRule {
               let y = min_node.children[1]
               if eg.equiv(rhs, x) || eg.equiv(rhs, y) {
                 let zero = eg.add_const(0L)
-                let new_id = eg.subsume(class_id, zero)
-                changed = new_id != class_id || changed
+                changed = eg.subsume_changed(class_id, zero) || changed
               }
             }
           }
@@ -654,8 +635,7 @@ fn rule_never_less_than_smin() -> RewriteRule {
               let y = min_node.children[1]
               if eg.equiv(lhs, x) || eg.equiv(lhs, y) {
                 let zero = eg.add_const(0L)
-                let new_id = eg.subsume(class_id, zero)
-                changed = new_id != class_id || changed
+                changed = eg.subsume_changed(class_id, zero) || changed
               }
             }
           }
@@ -684,8 +664,7 @@ fn rule_umin_never_greater() -> RewriteRule {
               let y = min_node.children[1]
               if eg.equiv(rhs, x) || eg.equiv(rhs, y) {
                 let zero = eg.add_const(0L)
-                let new_id = eg.subsume(class_id, zero)
-                changed = new_id != class_id || changed
+                changed = eg.subsume_changed(class_id, zero) || changed
               }
             }
           }
@@ -714,8 +693,7 @@ fn rule_never_less_than_umin() -> RewriteRule {
               let y = min_node.children[1]
               if eg.equiv(lhs, x) || eg.equiv(lhs, y) {
                 let zero = eg.add_const(0L)
-                let new_id = eg.subsume(class_id, zero)
-                changed = new_id != class_id || changed
+                changed = eg.subsume_changed(class_id, zero) || changed
               }
             }
           }
