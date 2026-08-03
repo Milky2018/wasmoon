@@ -70,7 +70,10 @@ fn convert_args_to_jit(args : Array[@types.Value]) -> Array[Int64] {
       FuncRef(idx) => idx.to_int64()
       ExternRef(idx) => @wasmoon_jit.encode_externref(idx)
       Null => @wasm_milkir.NULL_REF
-      V128(_) => abort("V128 args not yet supported")
+      V128(_) => {
+        @logger.error("V128 args not yet supported")
+        exit_failure()
+      }
       StructRef(idx) => @wasmoon_jit.encode_heap_ref(idx)
       ArrayRef(idx) => @wasmoon_jit.encode_heap_ref(idx)
       I31(n) => (n.to_int64() << 1) | 1L
@@ -1207,7 +1210,10 @@ fn run_with_jit(
   // This is crucial for memory.grow to enforce the correct max limit
   let actual_memory_max : Int? = if instance.mem_addrs.length() > 0 {
     let mem = store.get_mem(instance.mem_addrs[0]) catch {
-      _ => abort("Memory not found")
+      _ => {
+        @logger.error("memory not found")
+        exit_failure()
+      }
     }
     let (_, max) = mem.get_limits()
     max
