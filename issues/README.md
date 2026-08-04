@@ -407,6 +407,7 @@ graph TD
   ISS_386["ISS-386: Elaboration's commit loop can leave half a plan behind"]
   ISS_389["ISS-389: `wasmoon/sanitizer_testsuite` is named after a gate that no longer exists"]
   ISS_390["ISS-390: Rebuild sanitizer coverage as a dedicated package, not a compiler shim"]
+  ISS_391["ISS-391: Elaboration's commit loop still had failure points after allocation"]
   ISS_002 --> ISS_003
   ISS_002 --> ISS_004
   ISS_003 --> ISS_005

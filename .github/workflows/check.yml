@@ -139,4 +139,3 @@ jobs:
           python3 scripts/run_component_wast.py \
             --suite future-gated --dump-failures --no-jit || status=$?
           exit "$status"
-

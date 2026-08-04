@@ -132,32 +132,53 @@ fn child_type_of(
 }
 
 ///|
-/// One instruction elaboration intends to create.
-priv struct ElaborationStep {
-  class_id : Int
-  node : @egraph.ENode
-  ty : Type
+/// Where an operand's value comes from at commit time.
+///
+/// Planning decides this, so committing never has to look anything up and
+/// so can never fail. `FromStep` indexes `steps`, and post-order guarantees
+/// the referenced step is earlier than the one naming it.
+priv enum ElaborationOperand {
+  Existing(Value)
+  FromStep(Int)
 }
 
 ///|
-/// Collect the classes that must be built to have a value for `class_id`,
-/// children before parents. Returns false when the shape cannot be built:
-/// no IR encoding, an out-of-scope `Var`, an unknown operand type, a cycle,
-/// or more work than the budget allows.
+/// One instruction elaboration intends to create, resolved down to what
+/// building it needs: no e-node, no lookups, nothing left to re-derive.
+priv struct ElaborationStep {
+  class_id : Int
+  ty : Type
+  opcode : Opcode
+  operands : Array[ElaborationOperand]
+}
+
+///|
+/// Plan how to obtain a value for `class_id` at type `ty`, appending the
+/// classes that must be built to `steps`, children before parents.
+///
+/// Returns how the caller should reference the result, or `None` when the
+/// shape cannot be built: no IR encoding (which covers `Var`, whose class
+/// has no dominating binding here), an unknown operand type, a cycle, or
+/// more work than the budget allows.
+///
+/// Everything this proves is recorded in the step rather than discarded.
+/// Committing used to re-derive the opcode, the operand types and the
+/// operand values, which put failure points after the first `new_value`
+/// call; recording them is what removes those.
 fn EGraphBuilder::collect_elaboration_steps(
   self : EGraphBuilder,
   best_nodes : Map[Int, @egraph.ENode],
   class_id : @egraph.EClassId,
   ty : Type,
   steps : Array[ElaborationStep],
-  planned : @hashset.HashSet[RepKey],
+  planned : Map[RepKey, Int],
   in_progress : @hashset.HashSet[Int],
-) -> Bool {
+) -> ElaborationOperand? {
   let canonical = self.egraph.find(class_id).0
   // Already available as an IR value that dominates this point: free.
   let key : RepKey = { class_id: canonical, ty }
-  if self.class_to_value.get(key) is Some(_) {
-    return true
+  if self.class_to_value.get(key) is Some(value) {
+    return Some(Existing(value))
   }
   // Keyed by `RepKey`, not by class alone: one class can be needed at two
   // widths in a single plan, because constants are interned by value and so
@@ -165,78 +186,64 @@ fn EGraphBuilder::collect_elaboration_steps(
   // carries the shift amount across a width change unchanged. Keying on the
   // class would report the I64 build as satisfying the I32 operand, and the
   // commit below would then use an I64 value where an I32 one belongs.
-  if planned.contains(key) {
-    return true
+  if planned.get(key) is Some(index) {
+    return Some(FromStep(index))
   }
   // A class reached again while still being planned is a cyclic expression.
   // Class-keyed on purpose: a node of class C taking C as an operand is a
   // cycle whatever widths the two mentions carry.
   if in_progress.contains(canonical) {
-    return false
+    return None
   }
   if steps.length() >= ELABORATION_BUDGET {
-    return false
+    return None
   }
-  guard best_nodes.get(canonical) is Some(node) else { return false }
-  guard eopcode_to_opcode(node.op) is Some(_) else { return false }
-  // `Var` names an existing IR value; without a dominating binding (checked
-  // above) it cannot be referenced from here.
-  if node.op is Var(_) {
-    return false
-  }
+  guard best_nodes.get(canonical) is Some(node) else { return None }
+  guard eopcode_to_opcode(node.op) is Some(opcode) else { return None }
   in_progress.add(canonical)
+  let operands : Array[ElaborationOperand] = []
   for index in 0..<node.children.length() {
     guard child_type_of(self.egraph, node, index, ty) is Some(child_ty) else {
       in_progress.remove(canonical)
-      return false
+      return None
     }
-    if !self.collect_elaboration_steps(
+    guard self.collect_elaboration_steps(
         best_nodes,
         node.children[index],
         child_ty,
         steps,
         planned,
         in_progress,
-      ) {
+      )
+      is Some(operand) else {
       in_progress.remove(canonical)
-      return false
+      return None
     }
+    operands.push(operand)
   }
   in_progress.remove(canonical)
-  planned.add(key)
-  // Post-order: every operand of this node is already scheduled.
-  steps.push({ class_id: canonical, node, ty })
-  true
-}
-
-///|
-/// Resolve a class to an IR value, given the values elaboration just built.
-fn EGraphBuilder::resolve_operand(
-  self : EGraphBuilder,
-  class_id : @egraph.EClassId,
-  ty : Type,
-  built : Map[RepKey, Value],
-) -> Value? {
-  let canonical = self.egraph.find(class_id).0
-  let key : RepKey = { class_id: canonical, ty }
-  match self.class_to_value.get(key) {
-    Some(value) => Some(value)
-    // Same key as the plan used, so an operand only ever resolves to a value
-    // of its own type: a class built at another width does not answer here.
-    None => built.get(key)
-  }
+  // Post-order: every operand of this node is already scheduled, so this
+  // step's index is greater than every index it names.
+  let index = steps.length()
+  planned.set(key, index)
+  steps.push({ class_id: canonical, ty, opcode, operands })
+  Some(FromStep(index))
 }
 
 ///|
 /// Rewrite `inst` into the form extraction chose for its e-class, appending
 /// any instructions needed to build that form's operands to `emitted`.
 ///
-/// Returns whether the instruction changed. The rewrite is abandoned — with
-/// nothing appended and `inst` untouched — whenever the chosen form is not
-/// materializable, so a failure is silent and harmless. Everything the
-/// rewrite creates is staged until the last point of failure has passed, so
-/// that holds however the abandonment arises rather than by the caller
-/// cleaning up after a partial run.
+/// Returns whether the instruction changed. An abandoned rewrite leaves no
+/// trace at all: nothing appended, `inst` untouched, `value_map` unchanged,
+/// and `func`'s value and instruction counters where they were.
+///
+/// That last part is why planning resolves the whole shape before building
+/// starts. `new_value` and `new_inst` advance counters on `func`, so any
+/// failure point reached after the first of them leaks IDs no matter what
+/// the rewrite stages and discards. Planning records the opcode, the operand
+/// types and the operand sources into each step, which leaves the build loop
+/// below with nothing to check and therefore no way to fail partway.
 fn EGraphBuilder::elaborate_inst(
   self : EGraphBuilder,
   func : Function,
@@ -248,99 +255,70 @@ fn EGraphBuilder::elaborate_inst(
   guard self.lookup_value(result) is Some(class_id) else { return false }
   let canonical = class_id.0
   guard best_nodes.get(canonical) is Some(node) else { return false }
+  // `Var` has no IR encoding, so the guard above already rejected it: the
+  // class is best represented by an existing value, which operand rewriting
+  // handles.
   guard eopcode_to_opcode(node.op) is Some(opcode) else { return false }
-  // `Var` means "this class is best represented by an existing value";
-  // operand rewriting already handles that case.
-  if node.op is Var(_) {
-    return false
-  }
   // Nothing to do when the instruction already has the chosen shape.
   if opcode == inst.opcode && self.operands_match(node, inst) {
     return false
   }
-  // Plan the operands first: a plan that cannot be completed must leave the
-  // function untouched.
+  // Plan the whole shape first. Every way this rewrite can fail lives in
+  // here, before anything is created.
   let steps : Array[ElaborationStep] = []
-  let planned : @hashset.HashSet[RepKey] = HashSet([])
+  let planned : Map[RepKey, Int] = Map([])
   let in_progress : @hashset.HashSet[Int] = HashSet([])
   in_progress.add(canonical)
-  let operand_types : Array[Type] = []
+  let root_operands : Array[ElaborationOperand] = []
   for index in 0..<node.children.length() {
     guard child_type_of(self.egraph, node, index, result.ty) is Some(child_ty) else {
       return false
     }
-    operand_types.push(child_ty)
-    if !self.collect_elaboration_steps(
+    guard self.collect_elaboration_steps(
         best_nodes,
         node.children[index],
         child_ty,
         steps,
         planned,
         in_progress,
-      ) {
+      )
+      is Some(operand) else {
       return false
     }
+    root_operands.push(operand)
   }
   if steps.length() > ELABORATION_BUDGET {
     return false
   }
-  // Build the operand instructions children-first, into a staging area
-  // rather than straight into `emitted`.
-  //
-  // Every `return false` below abandons the rewrite, and this function
-  // promises to leave nothing behind when it does. Appending to the
-  // caller's array as we go would break that promise from the first step
-  // onward, and the caller cannot tell a half-built plan from a whole one:
-  // it binds whatever appeared as a class representative either way. The
-  // guards here re-derive facts planning already established — an opcode
-  // that encodes, a child type that is known, an operand that resolves —
-  // so none of them fires today. Staging is what keeps that a statement
-  // about the guards rather than about the caller's cleanup.
-  let staged : Array[Inst] = []
-  let bindings : Array[(Int, Int)] = []
-  let built : Map[RepKey, Value] = Map([])
+  // Past every point of failure. From here the work is total: each step
+  // carries its own opcode and the source of each of its operands, and
+  // post-order means a `FromStep` index is always one this loop has already
+  // filled in. Nothing below can return, so nothing below can leave the
+  // function half-changed.
+  let built : Array[Value] = []
   for step in steps {
-    guard eopcode_to_opcode(step.node.op) is Some(step_opcode) else {
-      return false
-    }
     let step_operands : Array[Value] = []
-    for index in 0..<step.node.children.length() {
-      guard child_type_of(self.egraph, step.node, index, step.ty)
-        is Some(child_ty) else {
-        return false
-      }
-      guard self.resolve_operand(step.node.children[index], child_ty, built)
-        is Some(value) else {
-        return false
-      }
-      step_operands.push(value)
+    for operand in step.operands {
+      step_operands.push(
+        match operand {
+          Existing(value) => value
+          FromStep(index) => built[index]
+        },
+      )
     }
     let value = func.new_value(step.ty)
-    staged.push(func.new_inst(step_opcode, step_operands, [value]))
-    built.set({ class_id: step.class_id, ty: step.ty }, value)
-    bindings.push((value.id, step.class_id))
+    emitted.push(func.new_inst(step.opcode, step_operands, [value]))
+    built.push(value)
+    self.ensure_value_slot(value.id)
+    self.value_map[value.id] = Some(@egraph.EClassId(step.class_id))
   }
   let new_operands : Array[Value] = []
-  for index in 0..<node.children.length() {
-    guard self.resolve_operand(
-        node.children[index],
-        operand_types[index],
-        built,
-      )
-      is Some(value) else {
-      return false
+  for operand in root_operands {
+    let value = match operand {
+      Existing(value) => value
+      FromStep(index) => built[index]
     }
     new_operands.push(value)
-  }
-  // Past the last point of failure: publish the staged instructions, then
-  // the value-to-class bindings that let later lookups share them.
-  for staged_inst in staged {
-    emitted.push(staged_inst)
-  }
-  for binding in bindings {
-    let (value_id, step_class) = binding
-    self.ensure_value_slot(value_id)
-    self.value_map[value_id] = Some(@egraph.EClassId(step_class))
   }
   inst.opcode = opcode
   inst.operands.clear()
