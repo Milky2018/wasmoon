@@ -74,6 +74,75 @@ fn splice_before(func : Function, target : Inst, built : Array[Inst]) -> Unit {
 }
 
 ///|
+/// A plan that runs past `ELABORATION_BUDGET` is abandoned partway through.
+/// Nothing it worked out along the way may reach the caller: the caller
+/// binds whatever was appended as a class representative without consulting
+/// the return value, so a half-built plan would be spliced into the block.
+///
+/// This pins the contract at the boundary. It does not reach the guards in
+/// the commit loop — those re-derive facts planning already proved, so no
+/// input gets to them — which is the reason the commit loop stages its work
+/// instead of relying on that unreachability holding forever.
+test "an abandoned elaboration appends nothing" {
+  let fb = FunctionBuilder::FunctionBuilder("over_budget")
+  let wide = fb.add_param(I64)
+  fb.add_result(I64)
+  let sum = fb.iadd(wide, wide)
+  fb.return_([sum])
+  let func = fb.get_function()
+  let builder = EGraphBuilder::new_with_limits_and_ruleset(
+    @egraph.SaturationLimits::cranelift_default(),
+    @egraph.get_global_ruleset(),
+  )
+  let eg = builder.egraph
+  // `(1 + 2) + (3 + 4)`: seven classes to build against a budget of four,
+  // and the budget runs out with four instructions already planned.
+  let left = eg.add({ op: Add, children: [eg.add_const(1), eg.add_const(2)] })
+  let right = eg.add({ op: Add, children: [eg.add_const(3), eg.add_const(4)] })
+  let root = eg.add({ op: Add, children: [left, right] })
+  builder.ensure_value_slot(sum.id)
+  builder.value_map[sum.id] = Some(root)
+  let best_nodes : Map[Int, @egraph.ENode] = Map([])
+  for
+    class_id in [
+      eg.add_const(1),
+      eg.add_const(2),
+      eg.add_const(3),
+      eg.add_const(4),
+      left,
+      right,
+      root,
+    ] {
+    best_nodes.set(eg.find(class_id).0, eg.get_nodes(class_id)[0])
+  }
+  let mut sum_inst : Inst? = None
+  for inst in func.blocks[0].instructions {
+    if inst.first_result() is Some(value) && value.id == sum.id {
+      sum_inst = Some(inst)
+    }
+  }
+  let emitted : Array[Inst] = []
+  inspect(
+    builder.elaborate_inst(func, best_nodes, sum_inst.unwrap(), emitted),
+    content="false",
+  )
+  inspect(emitted.length(), content="0")
+  // `inst` still holds its original shape too.
+  inspect(func.verify(), content="()")
+  inspect(
+    func.print(),
+    content=(
+      #|function over_budget(v0:i64) -> i64 {
+      #|block0:
+      #|    v1:i64 = iadd v0, v0
+      #|    return v1
+      #|}
+      #|
+    ),
+  )
+}
+
+///|
 test "elaboration builds a shared constant once per width it is needed at" {
   let (func, sum_inst, builder, best_nodes) = dual_width_const_function()
   let emitted : Array[Inst] = []
