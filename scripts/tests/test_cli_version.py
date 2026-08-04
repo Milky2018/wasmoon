@@ -1,9 +1,15 @@
-"""Pin the CLI's reported version to the module manifest.
+"""Pin the CLI's reported version constant to the module manifest.
 
 MoonBit gives a program no way to read its own `moon.mod`, so the version
 `wasmoon --version` prints is a constant in the source. The manifest stays
-the single source of truth; this is what keeps the copy from drifting away
-from it.
+the single source of truth; this keeps the copy from drifting away from it.
+
+This reads source, so it can only see that the two strings agree -- never
+that `--version` runs, or prints, or exits 0. `scripts/cli_behavior_test.py`
+executes the built binary and checks all of that, and is the authority on
+what the CLI does. What this adds is timing: it runs in the pre-commit hook
+before anything is built, so drift is caught at the commit that causes it
+rather than one CI build later.
 """
 
 from __future__ import annotations
@@ -45,14 +51,17 @@ class CliVersionTest(unittest.TestCase):
             "update WASMOON_VERSION in main.mbt to match the manifest",
         )
 
-    def test_version_flag_is_declared(self) -> None:
-        # A constant nothing reads would pass the check above while
-        # `--version` stayed missing, which is the state this replaced.
-        self.assertRegex(
-            MAIN.read_text(),
-            r'"version":\s*@clap\.Arg::flag\(',
-            "main.mbt no longer declares a top-level --version flag",
-        )
+    def test_behaviour_test_covers_the_flag(self) -> None:
+        # This file used to also grep for the flag's declaration, on the
+        # grounds that a constant nothing reads would satisfy the check
+        # above while `--version` stayed missing. Running the binary settles
+        # that properly, so what is left to pin here is that the check which
+        # runs the binary still exists and is wired into CI -- otherwise the
+        # coverage silently reverts to grepping source.
+        behaviour = ROOT / "scripts/cli_behavior_test.py"
+        self.assertTrue(behaviour.exists(), f"{behaviour} is missing")
+        workflow = (ROOT / ".github/workflows/check.yml").read_text()
+        self.assertIn("python3 scripts/cli_behavior_test.py", workflow)
 
 
 if __name__ == "__main__":
