@@ -150,7 +150,7 @@ fn EGraphBuilder::collect_elaboration_steps(
   class_id : @egraph.EClassId,
   ty : Type,
   steps : Array[ElaborationStep],
-  planned : @hashset.HashSet[Int],
+  planned : @hashset.HashSet[RepKey],
   in_progress : @hashset.HashSet[Int],
 ) -> Bool {
   let canonical = self.egraph.find(class_id).0
@@ -159,10 +159,18 @@ fn EGraphBuilder::collect_elaboration_steps(
   if self.class_to_value.get(key) is Some(_) {
     return true
   }
-  if planned.contains(canonical) {
+  // Keyed by `RepKey`, not by class alone: one class can be needed at two
+  // widths in a single plan, because constants are interned by value and so
+  // are shared across widths, and `ireduce(shl(x, k)) = shl(ireduce(x), k)`
+  // carries the shift amount across a width change unchanged. Keying on the
+  // class would report the I64 build as satisfying the I32 operand, and the
+  // commit below would then use an I64 value where an I32 one belongs.
+  if planned.contains(key) {
     return true
   }
   // A class reached again while still being planned is a cyclic expression.
+  // Class-keyed on purpose: a node of class C taking C as an operand is a
+  // cycle whatever widths the two mentions carry.
   if in_progress.contains(canonical) {
     return false
   }
@@ -195,7 +203,7 @@ fn EGraphBuilder::collect_elaboration_steps(
     }
   }
   in_progress.remove(canonical)
-  planned.add(canonical)
+  planned.add(key)
   // Post-order: every operand of this node is already scheduled.
   steps.push({ class_id: canonical, node, ty })
   true
@@ -207,13 +215,15 @@ fn EGraphBuilder::resolve_operand(
   self : EGraphBuilder,
   class_id : @egraph.EClassId,
   ty : Type,
-  built : Map[Int, Value],
+  built : Map[RepKey, Value],
 ) -> Value? {
   let canonical = self.egraph.find(class_id).0
   let key : RepKey = { class_id: canonical, ty }
   match self.class_to_value.get(key) {
     Some(value) => Some(value)
-    None => built.get(canonical)
+    // Same key as the plan used, so an operand only ever resolves to a value
+    // of its own type: a class built at another width does not answer here.
+    None => built.get(key)
   }
 }
 
@@ -248,7 +258,7 @@ fn EGraphBuilder::elaborate_inst(
   // Plan the operands first: a plan that cannot be completed must leave the
   // function untouched.
   let steps : Array[ElaborationStep] = []
-  let planned : @hashset.HashSet[Int] = HashSet([])
+  let planned : @hashset.HashSet[RepKey] = HashSet([])
   let in_progress : @hashset.HashSet[Int] = HashSet([])
   in_progress.add(canonical)
   let operand_types : Array[Type] = []
@@ -272,7 +282,7 @@ fn EGraphBuilder::elaborate_inst(
     return false
   }
   // Commit: build the operand instructions children-first.
-  let built : Map[Int, Value] = Map([])
+  let built : Map[RepKey, Value] = Map([])
   for step in steps {
     guard eopcode_to_opcode(step.node.op) is Some(step_opcode) else {
       return false
@@ -291,7 +301,7 @@ fn EGraphBuilder::elaborate_inst(
     }
     let value = func.new_value(step.ty)
     emitted.push(func.new_inst(step_opcode, step_operands, [value]))
-    built.set(step.class_id, value)
+    built.set({ class_id: step.class_id, ty: step.ty }, value)
     // Record the new value so later lookups and rewrites can share it.
     self.ensure_value_slot(value.id)
     self.value_map[value.id] = Some(@egraph.EClassId(step.class_id))
