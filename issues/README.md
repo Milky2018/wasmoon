@@ -403,6 +403,7 @@ graph TD
   ISS_384["ISS-384: Stop paying full extraction for the constant-only harvest"]
   ISS_385["ISS-385: Elaboration planning keys by e-class, not by (e-class, type)"]
   ISS_386["ISS-386: Elaboration's commit loop can leave half a plan behind"]
+  ISS_391["ISS-391: Elaboration's commit loop still had failure points after allocation"]
   ISS_002 --> ISS_003
   ISS_002 --> ISS_004
   ISS_003 --> ISS_005
