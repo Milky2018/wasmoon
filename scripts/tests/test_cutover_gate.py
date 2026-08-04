@@ -361,7 +361,6 @@ class GateManifestTests(unittest.TestCase):
         self.assertIn("if: runner.os == 'Linux'", workflow)
         self.assertIn("native_test_args: --no-parallelize", workflow)
         self.assertIn("native_test_args: \"\"", workflow)
-        self.assertIn("ASAN_OPTIONS: ${{ matrix.asan_options }}", workflow)
         self.assertNotIn("  linux-amd64:", workflow)
         self.assertNotIn("  macos-arm64:", workflow)
         self.assertIn("scripts/check_committed_diff.py", workflow)
@@ -468,7 +467,7 @@ class GateManifestTests(unittest.TestCase):
             )
             self.assertEqual(missing_base.returncode, 0)
 
-    def test_platform_jobs_own_component_and_sanitizer_checks(self) -> None:
+    def test_platform_jobs_own_component_checks(self) -> None:
         workflow = (ROOT / ".github/workflows/check.yml").read_text(
             encoding="utf-8"
         )
@@ -489,85 +488,44 @@ class GateManifestTests(unittest.TestCase):
             workflow.count("run future-gated Component Model features"),
             1,
         )
-        self.assertEqual(workflow.count("run native sanitizer checks"), 1)
-
-    def test_sanitizer_tests_are_isolated_and_instrumentation_is_verified(
-        self,
-    ) -> None:
-        workflow = (ROOT / ".github/workflows/check.yml").read_text(
-            encoding="utf-8"
-        )
-        sanitizer_steps = workflow.split(
-            "      - name: run native sanitizer checks\n"
-        )[1:]
-        self.assertEqual(len(sanitizer_steps), 1)
-        sanitizer_step = sanitizer_steps[0].split(
-            "\n      - name:",
-            maxsplit=1,
-        )[0]
-        sanitizer_targets = re.findall(
-            r'moon test --target native --target-dir "\$sanitizer_build" \\\n'
-            r"\s+(\S+\.mbt)",
-            sanitizer_step,
-        )
-        expected_targets = {
-            "modules/wasmoon_jit/native_continuation_test.mbt",
-            "modules/wasmoon/sanitizer_testsuite/jit_resumable_lifecycle_test.mbt",
-            "modules/wasmoon_jit/callback_ownership_test.mbt",
-            "modules/wasmoon/async_native/reactor_wbtest.mbt",
-            "modules/wasmoon/wasi_component/async_preview3_wbtest.mbt",
-            "modules/wasmoon/component/runtime_impl/runtime_cleanup_wbtest.mbt",
-            "modules/wasmoon/component/runtime_impl/entry_state_wbtest.mbt",
-            "modules/wasmoon/cmd/wasmoon/commands/component_error_wbtest.mbt",
-            "modules/wasmoon/sanitizer_testsuite/component_runtime_facade_test.mbt",
-        }
-        self.assertEqual(len(sanitizer_targets), len(set(sanitizer_targets)))
-        self.assertEqual(set(sanitizer_targets), expected_targets)
-        # Twice: the wrapper is exported as MOON_CC, and its contents feed the
-        # cache key so editing its flags forces a full rebuild.
-        self.assertEqual(
-            workflow.count("scripts/native_sanitizer_cc.sh"),
-            2,
-        )
-        self.assertEqual(
-            workflow.count("scripts/verify_native_sanitizers.py"),
-            1,
-        )
-        # The build directory is cached across runs, so it must not be wiped
-        # at the start of the step; the cache key is what forces a rebuild.
-        self.assertNotIn('rm -rf "$sanitizer_build"', workflow)
-        self.assertIn("uses: actions/cache@v4", workflow)
-        self.assertIn(
-            "key: sanitizer-${{ matrix.os }}-"
-            "${{ steps.sanitizer_cache_key.outputs.digest }}-${{ github.sha }}",
-            workflow,
-        )
-        # The key must pin the resolved toolchain and the real compiler, not
-        # just the "nightly" label, or a new compiler would inherit stale
-        # objects.
-        self.assertIn("moon version --all", workflow)
-        self.assertIn("clang --version", workflow)
-        self.assertEqual(workflow.count("MOONBIT_NEW_NATIVE: 0"), 1)
-        self.assertEqual(
-            workflow.count('export MOON_CC="$sanitizer_wrapper"'),
-            1,
-        )
-        self.assertEqual(workflow.count('export MOON_AR="$(command -v ar)"'), 1)
-        # The sanitizer gate's budget. A 60-minute budget, set from a single
-        # 52m27s observation, killed the next uncached run on main without it
-        # finding anything, so the budget is back at 75 until several cached
-        # runs show a stable margin.
-        self.assertEqual(workflow.count("timeout-minutes: 75"), 1)
         self.assertEqual(
             workflow.count(
                 "python3 scripts/find_gc_bugs.py --dir spec/gc --timeout 30"
             ),
             1,
         )
-        self.assertNotIn("scripts/find_gc_bugs.py", sanitizer_step)
-        self.assertNotIn("CFLAGS:", workflow)
-        self.assertNotIn("CXXFLAGS:", workflow)
-        self.assertNotIn("LDFLAGS:", workflow)
+
+    def test_sanitizer_gate_is_gone(self) -> None:
+        # The gate was removed by maintainer decision: it worked by pointing
+        # MOON_CC at a wrapper that appended -fsanitize to every compile and
+        # link, which is compiler interception, and moon honours no other
+        # route (CFLAGS and friends are ignored -- see ISS-323). Removing the
+        # wrapper removes the gate; there is no non-intercepting version of it
+        # to keep, and a version without sanitizers would only duplicate the
+        # `run native tests` and `build Wasmoon` steps.
+        #
+        # This asserts the removal stayed complete rather than half-undone.
+        workflow = (ROOT / ".github/workflows/check.yml").read_text(
+            encoding="utf-8"
+        )
+        for token in (
+            "run native sanitizer checks",
+            "MOON_CC",
+            "MOON_AR",
+            "ASAN_OPTIONS",
+            "UBSAN_OPTIONS",
+            "asan_options",
+            "sanitizer_build",
+            "scripts/native_sanitizer_cc.sh",
+            "scripts/verify_native_sanitizers.py",
+        ):
+            self.assertNotIn(token, workflow)
+        for path in (
+            "scripts/native_sanitizer_cc.sh",
+            "scripts/verify_native_sanitizers.py",
+            "scripts/tests/test_verify_native_sanitizers.py",
+        ):
+            self.assertFalse((ROOT / path).exists(), f"{path} still exists")
 
 if __name__ == "__main__":
     unittest.main()
