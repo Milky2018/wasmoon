@@ -151,11 +151,15 @@ def check_manifest(root: Path) -> tuple[dict[str, object], list[AuditCheck]]:
         )
     ]
     evidence = manifest.get("evidence")
+    # `native-sanitizers` was renamed to `native-runtime-tests`. Its command
+    # has always been `moon test --target native`, which runs no sanitizer;
+    # the name promised coverage the entry never carried. Removing the
+    # sanitizer gate is when that stopped being merely inaccurate.
     expected = {
         "fuzz",
         "wasmtime-differential",
         "logical-resource-lifecycle",
-        "native-sanitizers",
+        "native-runtime-tests",
         "large-component-stress",
     }
     names = (
@@ -397,9 +401,18 @@ def audit_repo(root: Path) -> list[AuditCheck]:
         ci_text = read_text(root, ".github/workflows/check.yml")
     except OSError:
         ci_text = ""
+    # The sanitizer gate used to name `runtime_cleanup_wbtest.mbt` here and
+    # was itself required by name. Both are gone: the gate was removed, and
+    # with it the only step that named individual test files.
+    #
+    # What that gate guaranteed splits in two. The cleanup tests still run —
+    # `moon test --target native` covers every package — so this asks for
+    # that step and, below, for the file itself, which together say the same
+    # thing without naming a step that no longer exists. What is genuinely
+    # gone is running them *under sanitizers*, and nothing here should
+    # pretend otherwise.
     required_ci_tokens = [
-        "runtime_cleanup_wbtest.mbt",
-        "run native sanitizer checks",
+        "moon test --target native",
         "stable-0.2",
         "async-0.3",
         "future-gated",
@@ -412,6 +425,24 @@ def audit_repo(root: Path) -> list[AuditCheck]:
             "missing CI references: " + ", ".join(missing_ci)
             if missing_ci
             else "configured",
+        )
+    )
+    # The other half of what `platform-ci` used to cover: deleting the
+    # cleanup tests would otherwise pass unnoticed now that no CI step names
+    # the file.
+    cleanup = root / "modules/wasmoon/component/runtime_impl/runtime_cleanup_wbtest.mbt"
+    cleanup_tests = (
+        len(re.findall(r"^test ", cleanup.read_text(encoding="utf-8"), re.MULTILINE))
+        if cleanup.is_file()
+        else 0
+    )
+    checks.append(
+        AuditCheck(
+            "resource-cleanup-tests",
+            cleanup_tests > 0,
+            f"{cleanup_tests} tests in {cleanup.name}"
+            if cleanup_tests
+            else f"missing or empty: {cleanup}",
         )
     )
     return checks
