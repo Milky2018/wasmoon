@@ -79,10 +79,19 @@ fn splice_before(func : Function, target : Inst, built : Array[Inst]) -> Unit {
 /// binds whatever was appended as a class representative without consulting
 /// the return value, so a half-built plan would be spliced into the block.
 ///
-/// This pins the contract at the boundary. It does not reach the guards in
-/// the commit loop — those re-derive facts planning already proved, so no
-/// input gets to them — which is the reason the commit loop stages its work
-/// instead of relying on that unreachability holding forever.
+/// "Nothing" includes `func`'s ID counters. `new_value` and `new_inst`
+/// advance them, so a rewrite that built anything before deciding to abandon
+/// would leak IDs while still appending nothing — invisible in the printed
+/// function, which is why the counters are checked directly.
+///
+/// What this test does not do is separate this implementation from the one
+/// before it. Both abandon this input during planning, before anything is
+/// built. The previous one could only leak from failure points sitting after
+/// the first `new_value` in its commit loop, and those were unreachable:
+/// each re-derived what planning had already proved. An unreachable defect
+/// cannot be pinned by a test, so it was removed by construction instead —
+/// the build loop has no failure points now — and what stays testable is the
+/// boundary contract below.
 test "an abandoned elaboration appends nothing" {
   let fb = FunctionBuilder::FunctionBuilder("over_budget")
   let wide = fb.add_param(I64)
@@ -122,11 +131,15 @@ test "an abandoned elaboration appends nothing" {
     }
   }
   let emitted : Array[Inst] = []
+  let values_before = func.next_value_id
+  let insts_before = func.next_inst_id
   inspect(
     builder.elaborate_inst(func, best_nodes, sum_inst.unwrap(), emitted),
     content="false",
   )
   inspect(emitted.length(), content="0")
+  inspect(func.next_value_id == values_before, content="true")
+  inspect(func.next_inst_id == insts_before, content="true")
   // `inst` still holds its original shape too.
   inspect(func.verify(), content="()")
   inspect(
@@ -146,10 +159,18 @@ test "an abandoned elaboration appends nothing" {
 test "elaboration builds a shared constant once per width it is needed at" {
   let (func, sum_inst, builder, best_nodes) = dual_width_const_function()
   let emitted : Array[Inst] = []
+  let values_before = func.next_value_id
+  let insts_before = func.next_inst_id
   inspect(
     builder.elaborate_inst(func, best_nodes, sum_inst, emitted),
     content="true",
   )
+  // A successful rewrite spends exactly one value and one instruction per
+  // instruction it emits. Anything more would mean the build loop created
+  // something it then dropped.
+  inspect(func.next_value_id - values_before, content="4")
+  inspect(func.next_inst_id - insts_before, content="4")
+  inspect(emitted.length(), content="4")
   splice_before(func, sum_inst, emitted)
   // The whole point: `ishl` needs an i32 shift amount and `iadd` an i64 one.
   // Reusing one built value for both puts an i64 operand on the i32 shift,
