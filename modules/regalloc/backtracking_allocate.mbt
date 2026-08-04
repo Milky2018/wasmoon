@@ -338,6 +338,7 @@ fn[F : FunctionView] allocate_segments_with_bundles(
   environment : MachineEnv,
   ranges : LiveRangeSet,
   strategy : AllocatorStrategy,
+  config? : RegallocConfig = RegallocConfig(),
 ) -> (
   Array[AllocationSegment],
   Array[Array[Int]],
@@ -345,12 +346,15 @@ fn[F : FunctionView] allocate_segments_with_bundles(
   Array[Int],
   ProductionBundlePlan,
 ) {
+  config.enter_phase(Some(SegmentConstruction))
   let loop_depths = compute_allocator_loop_depths(function)
   let (segments, segments_by_value) = build_allocation_segments(
     ranges,
     loop_depths~,
   )
+  config.enter_phase(Some(BundleFormation))
   let bundle_plan = build_production_bundle_plan(function, ranges, segments)
+  config.enter_phase(Some(BundleAllocation))
   let (bundles, segment_owner) = allocate_bundles(
     function,
     environment,
@@ -1053,12 +1057,12 @@ fn[F : FunctionView] allocate_bundle_plan(
 ) -> AllocationPlan raise VerifyError {
   config.enter_phase(Some(LiveRanges))
   let ranges = build_function_live_ranges(function)
-  config.enter_phase(Some(BundlePlanning))
   let (segments, segments_by_value, _, _, bundle_plan) = allocate_segments_with_bundles(
     function,
     environment,
     ranges,
     config.strategy(),
+    config~,
   )
   let plan = AllocationPlan::new(function.value_count())
   config.enter_phase(Some(HomeAssignment))

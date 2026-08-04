@@ -181,7 +181,9 @@ pub fn RegallocConfig::verify(Self) -> Bool
 
 pub(all) enum RegallocPhase {
   LiveRanges
-  BundlePlanning
+  SegmentConstruction
+  BundleFormation
+  BundleAllocation
   HomeAssignment
   OperandAssignment
   EdgeTransfers

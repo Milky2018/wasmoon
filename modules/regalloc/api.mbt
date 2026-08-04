@@ -20,7 +20,9 @@ pub impl Show for AllocatorStrategy with fn output(self, logger) {
 /// only says which phase it is entering (ISS-371).
 pub(all) enum RegallocPhase {
   LiveRanges
-  BundlePlanning
+  SegmentConstruction
+  BundleFormation
+  BundleAllocation
   HomeAssignment
   OperandAssignment
   EdgeTransfers
@@ -33,7 +35,9 @@ pub impl Show for RegallocPhase with fn output(self, logger) {
   logger.write_string(
     match self {
       LiveRanges => "live_ranges"
-      BundlePlanning => "bundle_planning"
+      SegmentConstruction => "segment_construction"
+      BundleFormation => "bundle_formation"
+      BundleAllocation => "bundle_allocation"
       HomeAssignment => "home_assignment"
       OperandAssignment => "operand_assignment"
       EdgeTransfers => "edge_transfers"

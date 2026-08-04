@@ -55,7 +55,9 @@ test "X64 compile runs the complete target pipeline" {
       #|[
       #|  RegallocStarted,
       #|  RegallocPhaseStarted("live_ranges"),
-      #|  RegallocPhaseStarted("bundle_planning"),
+      #|  RegallocPhaseStarted("segment_construction"),
+      #|  RegallocPhaseStarted("bundle_formation"),
+      #|  RegallocPhaseStarted("bundle_allocation"),
       #|  RegallocPhaseStarted("home_assignment"),
       #|  RegallocPhaseStarted("operand_assignment"),
       #|  RegallocPhaseStarted("edge_transfers"),
