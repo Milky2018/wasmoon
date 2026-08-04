@@ -401,6 +401,8 @@ graph TD
   ISS_382["ISS-382: Delete the consumer-less e-graph use-def map"]
   ISS_383["ISS-383: Report rule progress explicitly instead of via merge root identity"]
   ISS_384["ISS-384: Stop paying full extraction for the constant-only harvest"]
+  ISS_387["ISS-387: `wasmoon test` exits 0 on assertion failures"]
+  ISS_388["ISS-388: `wasmoon` has no `--version`"]
   ISS_002 --> ISS_003
   ISS_002 --> ISS_004
   ISS_003 --> ISS_005

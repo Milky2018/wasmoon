@@ -50,20 +50,18 @@ def run_test(
 
         output = (stdout or "") + (stderr or "")
 
-        # Check for crash (non-zero exit code without proper output)
-        if proc.returncode != 0 and "Passed:" not in output:
+        # The runner carries its verdict in the exit status; the Results
+        # block carries the counts. A run that printed no Results block never
+        # reached a verdict -- a crash, or a read/parse error that exited
+        # before any assertion ran.
+        if "Passed:" not in output:
             lines = [line.strip() for line in output.split("\n") if line.strip()]
-            if lines:
-                tail = " | ".join(lines[-3:])
-                return None, None, f"Crash (exit {proc.returncode}): {tail}"
-            return None, None, f"Crash (exit {proc.returncode})"
-
-        if "Error" in output and "Passed:" not in output:
-            # Parse error
-            for line in output.split("\n"):
-                if "Error" in line:
-                    return None, None, line.strip()
-            return None, None, "Unknown error"
+            detail = next((l for l in lines if "Error" in l), None)
+            if detail is None and lines:
+                detail = " | ".join(lines[-3:])
+            if detail:
+                return None, None, f"Did not run (exit {proc.returncode}): {detail}"
+            return None, None, f"Did not run (exit {proc.returncode})"
 
         # Parse results
         passed = failed = 0
@@ -72,6 +70,14 @@ def run_test(
                 passed = int(line.split(":")[1].strip())
             elif "Failed:" in line:
                 failed = int(line.split(":")[1].strip())
+
+        # Status and tally have to agree. A non-zero exit with nothing marked
+        # failed means the run broke somewhere the tally does not cover, and
+        # reporting it as a pass is how a real failure would slip through.
+        if proc.returncode != 0 and failed == 0:
+            return None, None, (
+                f"Exited {proc.returncode} with no failed assertion"
+            )
 
         return passed, failed, None
     except Exception as e:
