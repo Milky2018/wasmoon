@@ -69,8 +69,13 @@ fn build_aarch64_target(
         @aarch64_target.compile(
           selected,
           on_event=target_compile_metrics_observer(tick),
+          verify_allocation=regalloc_validation(),
         )
-      None => @aarch64_target.compile(selected)
+      None =>
+        @aarch64_target.compile(
+          selected,
+          verify_allocation=regalloc_validation(),
+        )
     }
   } catch {
     error => raise AArch64CompilationFailed(cause=error)

@@ -69,8 +69,10 @@ fn build_x64_target(
         @x64_target.compile(
           selected,
           on_event=target_compile_metrics_observer(tick),
+          verify_allocation=regalloc_validation(),
         )
-      None => @x64_target.compile(selected)
+      None =>
+        @x64_target.compile(selected, verify_allocation=regalloc_validation())
     }
   } catch {
     error => raise X64CompilationFailed(cause=error)

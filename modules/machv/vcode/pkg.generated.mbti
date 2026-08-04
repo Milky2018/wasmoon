@@ -387,6 +387,8 @@ pub(all) enum SymbolReference {
 
 pub(all) enum TargetCompileEvent {
   RegallocStarted
+  RegallocPhaseStarted(String)
+  RegallocPhasesFinished
   RegallocFinished(AllocationStatistics)
   FramePlanningStarted
   FramePlanningFinished

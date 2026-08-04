@@ -163,6 +163,16 @@ test "AArch64 compile runs the complete target pipeline" {
     content=(
       #|[
       #|  RegallocStarted,
+      #|  RegallocPhaseStarted("live_ranges"),
+      #|  RegallocPhaseStarted("segment_construction"),
+      #|  RegallocPhaseStarted("bundle_formation"),
+      #|  RegallocPhaseStarted("bundle_allocation"),
+      #|  RegallocPhaseStarted("home_assignment"),
+      #|  RegallocPhaseStarted("operand_assignment"),
+      #|  RegallocPhaseStarted("edge_transfers"),
+      #|  RegallocPhaseStarted("edit_resolution"),
+      #|  RegallocPhaseStarted("verification"),
+      #|  RegallocPhasesFinished,
       #|  RegallocFinished(
       #|    {
       #|      spill_slots: 0,

@@ -164,6 +164,8 @@ fn verify_target_allocation(
 ///|
 fn allocate_verified(
   function : @vcode.Function[AArch64Inst],
+  on_phase? : ((String?) -> Unit)? = None,
+  verify_allocation? : Bool = true,
 ) -> @vcode.Allocation raise AArch64AllocationError {
   let allocation = @vcode_regalloc.allocate_selected_vcode(
     function,
@@ -171,6 +173,8 @@ fn allocate_verified(
       allocatable_physical_regs(),
       spill_scratch_regs(),
     ),
+    on_phase~,
+    verify=verify_allocation,
   ) catch {
     error => raise AllocatorFailure(cause=error)
   }
