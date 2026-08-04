@@ -317,10 +317,13 @@ pub fn[F : FunctionView] allocate_function(
   config? : RegallocConfig = RegallocConfig(),
 ) -> AllocationPlan raise VerifyError {
   verify_operand_preferences(function, environment)
-  let plan = allocate_bundle_plan(function, environment, config.strategy())
+  let plan = allocate_bundle_plan(function, environment, config)
+  config.enter_phase(Some(EditResolution))
   resolve_instruction_edits(plan, environment)
   if config.verify() {
+    config.enter_phase(Some(Verification))
     verify_function_allocation(function, environment, plan)
   }
+  config.enter_phase(None)
   plan
 }

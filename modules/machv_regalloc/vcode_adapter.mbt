@@ -129,14 +129,30 @@ fn add_materialized_transfer(
 pub fn[Inst] allocate_selected_vcode(
   function : @vcode.Function[Inst],
   environment : VCodeAllocationEnvironment,
+  on_phase? : ((String?) -> Unit)? = None,
+  verify? : Bool = true,
 ) -> @vcode.Allocation raise VCodeAllocationError {
+  // Translate the allocator's phase enum to a name here so neither the
+  // allocator nor the event enum has to know about the other (ISS-371).
+  let observer : ((@regalloc.RegallocPhase?) -> Unit)? = match on_phase {
+    Some(notify) =>
+      Some(phase => {
+        notify(
+          match phase {
+            Some(p) => Some("\{p}")
+            None => None
+          },
+        )
+      })
+    None => None
+  }
   let plan = @regalloc.allocate_function(
     VCodeFunctionView::new(function),
     @regalloc.MachineEnv::new(
       environment.allocatable_regs.map(reg => to_regalloc_preg(reg)),
       environment.spill_scratch_regs.map(reg => to_regalloc_preg(reg)),
     ).with_operand_scratch_regs([]),
-    config=RegallocConfig(strategy=Backtracking, verify=true),
+    config=RegallocConfig(strategy=Backtracking, verify~, observer~),
   ) catch {
     error => raise RegallocFailure(cause=error)
   }

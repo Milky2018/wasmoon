@@ -172,10 +172,23 @@ pub(all) enum RegClass {
 pub struct RegallocConfig {
   strategy : AllocatorStrategy
   verify : Bool
-} derive(Eq, @debug.Debug)
-pub fn RegallocConfig::RegallocConfig(strategy? : AllocatorStrategy, verify? : Bool) -> Self
+  observer : ((RegallocPhase?) -> Unit)?
+}
+pub fn RegallocConfig::RegallocConfig(strategy? : AllocatorStrategy, verify? : Bool, observer? : ((RegallocPhase?) -> Unit)?) -> Self
+pub fn RegallocConfig::enter_phase(Self, RegallocPhase?) -> Unit
 pub fn RegallocConfig::strategy(Self) -> AllocatorStrategy
 pub fn RegallocConfig::verify(Self) -> Bool
+
+pub(all) enum RegallocPhase {
+  LiveRanges
+  BundlePlanning
+  HomeAssignment
+  OperandAssignment
+  EdgeTransfers
+  EditResolution
+  Verification
+} derive(Eq, @debug.Debug)
+pub impl Show for RegallocPhase
 
 pub(all) struct SpillSlotReservation {
   slot : Int

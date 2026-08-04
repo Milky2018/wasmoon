@@ -21,12 +21,22 @@ pub impl Show for AArch64CompileError with fn output(self, logger) {
 pub fn compile(
   function : @vcode.Function[AArch64Inst],
   on_event? : (@vcode.TargetCompileEvent) -> Unit = fn(_) { () },
+  verify_allocation? : Bool = true,
 ) -> (@code_object.UnlinkedCodeObject, Int) raise AArch64CompileError {
   verify_vcode(function) catch {
     error => raise TargetValidationFailed(cause=error)
   }
   on_event(RegallocStarted)
-  let allocation = allocate_verified(function) catch {
+  let allocation = allocate_verified(
+    function,
+    on_phase=Some(phase => {
+      match phase {
+        Some(name) => on_event(RegallocPhaseStarted(name))
+        None => on_event(RegallocPhasesFinished)
+      }
+    }),
+    verify_allocation~,
+  ) catch {
     error => raise AllocationFailed(cause=error)
   }
   on_event(RegallocFinished(allocation.statistics()))

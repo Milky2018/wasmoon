@@ -1049,19 +1049,27 @@ fn[F : FunctionView] assign_backtracking_operands(
 fn[F : FunctionView] allocate_bundle_plan(
   function : F,
   environment : MachineEnv,
-  strategy : AllocatorStrategy,
+  config : RegallocConfig,
 ) -> AllocationPlan raise VerifyError {
+  config.enter_phase(Some(LiveRanges))
   let ranges = build_function_live_ranges(function)
+  config.enter_phase(Some(BundlePlanning))
   let (segments, segments_by_value, _, _, bundle_plan) = allocate_segments_with_bundles(
-    function, environment, ranges, strategy,
+    function,
+    environment,
+    ranges,
+    config.strategy(),
   )
   let plan = AllocationPlan::new(function.value_count())
+  config.enter_phase(Some(HomeAssignment))
   assign_backtracking_homes(
     plan, function, environment, ranges, segments, segments_by_value, bundle_plan,
   )
+  config.enter_phase(Some(OperandAssignment))
   let resident_segments_by_block = assign_backtracking_operands(
     plan, function, environment, segments, segments_by_value,
   )
+  config.enter_phase(Some(EdgeTransfers))
   assign_edge_transfers(
     plan, function, segments, segments_by_value, resident_segments_by_block,
   )
