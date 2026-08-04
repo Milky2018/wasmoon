@@ -1081,3 +1081,90 @@ test "backtracking keeps edit-only scratch registers out of instruction operands
     ),
   )
 }
+
+///|
+/// The observer contract says every phase that opens is followed, eventually,
+/// by exactly one `None`. A failing allocation is still an allocation that
+/// ended, so it owes that event too — without it, whoever is measuring is
+/// left holding a phase that never closed, and it is always the phase that
+/// failed, which is the one worth seeing.
+///
+/// A `FixedReg` preference for a register outside the allocatable set gets
+/// all the way through the pipeline before the plan verifier rejects it, so
+/// this drives the real path rather than a contrived one.
+test "a failed allocation still ends the observer's phase sequence" {
+  let events : Array[String] = []
+  let config = RegallocConfig::RegallocConfig(
+    observer=Some(phase => {
+      events.push(
+        match phase {
+          Some(named) => "\{named}"
+          None => "END"
+        },
+      )
+    }),
+  )
+  let function : TestFunction = {
+    value_count: 1,
+    instructions: [
+      [Operand::use_reg(value(0)).with_constraint(FixedReg(int_reg(9)))],
+    ],
+    block_parameters: [value(0)],
+  }
+  let mut raised = false
+  try
+    allocate_function(function, MachineEnv::new([int_reg(0)], []), config~)
+    |> ignore
+  catch {
+    _ => raised = true
+  }
+  inspect(raised, content="true")
+  inspect(
+    events.join(","),
+    content="live_ranges,segment_construction,bundle_formation,bundle_allocation,home_assignment,operand_assignment,edge_transfers,edit_resolution,verification,END",
+  )
+  // The terminator arrives once, at the end, not for every phase.
+  inspect(events.filter(event => event == "END").length(), content="1")
+}
+
+///|
+/// A rejection that happens before the first phase opens is different: the
+/// observer has heard nothing, so it is owed nothing. Sending a lone `None`
+/// there would report the end of a sequence that never began.
+test "a pre-phase rejection notifies the observer at all" {
+  let events : Array[String] = []
+  let config = RegallocConfig::RegallocConfig(
+    observer=Some(phase => {
+      events.push(
+        match phase {
+          Some(named) => "\{named}"
+          None => "END"
+        },
+      )
+    }),
+  )
+  let function : TestFunction = {
+    value_count: 1,
+    instructions: [
+      [
+        Operand::use_reg(value(0))
+        .with_constraint(AnyLocation)
+        .with_preference(int_reg(9)),
+      ],
+    ],
+    block_parameters: [value(0)],
+  }
+  let mut raised = false
+  try
+    allocate_function(
+      function,
+      MachineEnv::new([int_reg(0)], [int_reg(1)]),
+      config~,
+    )
+    |> ignore
+  catch {
+    _ => raised = true
+  }
+  inspect(raised, content="true")
+  inspect(events.length(), content="0")
+}
