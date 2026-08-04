@@ -264,8 +264,10 @@ pub fn[Inst] allocate_selected_vcode(
       }
     }
   }
-  @vcode.verify_allocation_invariants(function, allocation) catch {
-    error => raise InvalidAllocation(cause=error)
+  if verify {
+    @vcode.verify_allocation_invariants(function, allocation) catch {
+      error => raise InvalidAllocation(cause=error)
+    }
   }
   allocation
 }
