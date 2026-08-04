@@ -498,11 +498,15 @@ class GateManifestTests(unittest.TestCase):
     def test_sanitizer_gate_is_gone(self) -> None:
         # The gate was removed by maintainer decision: it worked by pointing
         # MOON_CC at a wrapper that appended -fsanitize to every compile and
-        # link, which is compiler interception, and moon honours no other
-        # route (CFLAGS and friends are ignored -- see ISS-323). Removing the
-        # wrapper removes the gate; there is no non-intercepting version of it
-        # to keep, and a version without sanitizers would only duplicate the
+        # link, which is compiler interception. Removing the wrapper removes
+        # the gate -- a version without sanitizers would only duplicate the
         # `run native tests` and `build Wasmoon` steps.
+        #
+        # Interception was never the only supported route, and ISS-390 records
+        # the declarative one: `link.native.cc-flags` / `cc-link-flags` in a
+        # package's own config. ISS-323's finding was narrower than it read --
+        # the CFLAGS/CXXFLAGS/LDFLAGS *environment variables* are ignored, but
+        # those config fields are not.
         #
         # This asserts the removal stayed complete rather than half-undone.
         workflow = (ROOT / ".github/workflows/check.yml").read_text(
