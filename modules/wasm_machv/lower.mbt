@@ -938,6 +938,58 @@ fn emit_slot_buffer(
 }
 
 ///|
+/// Pack values into a flat word buffer, spending two words on a v128.
+///
+/// Unlike `emit_slot_buffer` this does not pad every entry to a slot, because
+/// the exception payload is indexed by word: the catch side walks the tag's
+/// declared types and advances by two only where the tag says v128. Both
+/// sides derive the layout from that one signature.
+fn emit_payload_word_buffer(
+  context : @adapter.InstructionContext,
+  values : Array[@machv.Value],
+  types : Array[@machv.ValueType],
+) -> (@machv.Value, Int) {
+  let mut words = 0
+  for ty in types {
+    words += if ty is V128 { 2 } else { 1 }
+  }
+  if words == 0 {
+    return (context.emit(NullPtr, [], [Ptr64])[0], 0)
+  }
+  let object = context.create_stack_object(words * 8, 16)
+  let address = context.emit(StackAddress(object), [], [Ptr64])[0]
+  fn store_word(offset : Int, word : @machv.Value) {
+    context.emit(
+      Store(@machv.StoreSpec::new(W64, I64, offset.to_uint64(), Little, None)),
+      [address, word],
+      [],
+    )
+    |> ignore
+  }
+
+  let mut offset = 0
+  for index, value in values {
+    if types[index] is V128 {
+      // Split into lanes rather than storing 16 bytes, so the buffer stays a
+      // run of words and needs no alignment the caller has not promised.
+      store_word(
+        offset,
+        context.emit(Vector(ExtractLane(I64x2, 0, None)), [value], [I64])[0],
+      )
+      store_word(
+        offset + 8,
+        context.emit(Vector(ExtractLane(I64x2, 1, None)), [value], [I64])[0],
+      )
+      offset += 16
+    } else {
+      store_word(offset, encode_runtime_word(context, value, types[index]))
+      offset += 8
+    }
+  }
+  (address, words)
+}
+
+///|
 fn emit_runtime_word_buffer(
   context : @adapter.InstructionContext,
   values : Array[@machv.Value],
@@ -1022,9 +1074,10 @@ fn lower_spill_locals(
   let types = context.operand_types()
   for ty in types {
     if !is_runtime_word_type(ty) {
-      return Some(
-        "the current Wasm exception ABI cannot spill v128 as one runtime word",
-      )
+      // Spilled locals arrive already split into words -- the frontend's
+      // `local_to_spill_words` gives a v128 two of them -- so a vector here
+      // means that split was skipped, not that vectors cannot be spilled.
+      return Some("spilled locals must reach the ABI already split into words")
     }
   }
   let values = context.operands()
@@ -1069,13 +1122,6 @@ fn lower_throw(
   tag_index : Int,
 ) -> String? {
   let types = context.operand_types()
-  for ty in types {
-    if !is_runtime_word_type(ty) {
-      return Some(
-        "the current Wasm exception ABI cannot throw v128 as one runtime word",
-      )
-    }
-  }
   let values = context.operands()
   let operands = context.environment()
   operands.push(i32_immediate(context, tag_index))
@@ -1088,8 +1134,12 @@ fn lower_throw(
       [Ptr64, I32],
     )
   } else {
-    operands.push(emit_runtime_word_buffer(context, values, types))
-    operands.push(i32_immediate(context, values.length()))
+    // `count` is the number of words, which is what the runtime copies and
+    // what the catch side indexes; it exceeds the value count when the tag
+    // carries a v128.
+    let (buffer, words) = emit_payload_word_buffer(context, values, types)
+    operands.push(buffer)
+    operands.push(i32_immediate(context, words))
     finish_noreturn_runtime_call(
       context,
       environment,
