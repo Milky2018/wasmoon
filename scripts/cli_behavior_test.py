@@ -204,6 +204,22 @@ def check_invalid_modules(tmp: Path) -> None:
             proc.stdout == "" and proc.stderr != "",
             f"stdout={proc.stdout!r}, stderr={proc.stderr!r}",
         )
+        # These parse and then fail validation, which is a later exit than the
+        # cases below and was reached by a different path: `explore` printed
+        # the error to stdout and returned 0, so it reported success for a
+        # module it had just rejected.
+        proc = run("explore", str(path))
+        expect(
+            f"`explore` on {label} exits non-zero",
+            proc.returncode > 0,
+            f"exit {proc.returncode}"
+            + (" (killed by signal)" if proc.returncode < 0 else ""),
+        )
+        expect(
+            f"`explore` on {label} writes its diagnostic to stderr",
+            proc.stdout == "" and proc.stderr != "",
+            f"stdout={proc.stdout!r}, stderr={proc.stderr!r}",
+        )
 
 
 def check_malformed_type_kind_across_commands(tmp: Path) -> None:

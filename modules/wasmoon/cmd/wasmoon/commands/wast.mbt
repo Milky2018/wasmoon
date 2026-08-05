@@ -18,11 +18,6 @@ fn run_wast(wast_path : String, use_jit : Bool, show_success : Bool) -> Unit {
   wast_jit_compiled_modules.val = 0
   wast_jit_compiled_functions.val = 0
   wast_jit_attempts.val = 0
-  println("Running WAST script: \{wast_path}")
-  let jit_status = if use_jit { "enabled" } else { "disabled" }
-  println("JIT: \{jit_status}")
-  println("=".repeat(50))
-
   // Read WAST file
   let content = @fs.read_file_to_string(wast_path) catch {
     e => {
@@ -40,6 +35,14 @@ fn run_wast(wast_path : String, use_jit : Bool, show_success : Bool) -> Unit {
       return
     }
   }
+
+  // Only now that there is a script to run: this heading introduces the
+  // report below it, and a heading with no report reads like a run that was
+  // cut short rather than one that never started.
+  println("Running WAST script: \{wast_path}")
+  let jit_status = if use_jit { "enabled" } else { "disabled" }
+  println("JIT: \{jit_status}")
+  println("=".repeat(50))
 
   // Run WAST commands with JIT compiler callback
   let base_dir = find_base_dir(wast_path)
