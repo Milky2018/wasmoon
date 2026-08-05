@@ -78,6 +78,13 @@ fn run_wast(wast_path : String, use_jit : Bool, show_success : Bool) -> Unit {
     )
   }
   println("=".repeat(50))
+  // A test runner reports its verdict through its exit status. Printing the
+  // tally and exiting 0 makes every failure invisible to `set -e`, to `&&`
+  // chains, and to any harness that does not parse this text — which is why
+  // `scripts/run_all_wast.py` had to infer the verdict from stdout.
+  if result.failed > 0 {
+    exit_failure()
+  }
 }
 
 ///|

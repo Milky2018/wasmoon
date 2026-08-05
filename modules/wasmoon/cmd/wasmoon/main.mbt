@@ -1,10 +1,18 @@
 ///|
+/// The version this binary reports, kept equal to `modules/wasmoon/moon.mod`
+/// by `scripts/tests/test_cli_version.py`. MoonBit gives the program no way
+/// to read its own module manifest, so the manifest stays the single source
+/// of truth and the test is what keeps this copy from drifting.
+const WASMOON_VERSION : String = "0.10.0"
+
+///|
 fn clap_parser(
   prog~ : String,
   description~ : String,
   subcmds~ : Map[String, @clap.SubCommand],
+  args? : Map[String, @clap.Arg] = Map([]),
 ) -> @clap.Parser {
-  { prog, args: Map([]), subcmds, description }
+  { prog, args, subcmds, description }
 }
 
 ///|
@@ -70,6 +78,9 @@ fn main {
   let parser = clap_parser(
     prog="wasmoon",
     description="WebAssembly Runtime in MoonBit",
+    args={
+      "version": @clap.Arg::flag(short='V', help="Print the version and exit"),
+    },
     subcmds={
       "run": clap_subcommand(help="Run a WebAssembly module", args={
         "file": @clap.Arg::positional(help="Path to WASM or WAT file"),
@@ -230,6 +241,12 @@ fn main {
       @sys.exit(2)
       return
     }
+  }
+  // Asked for, so it is output: stdout and exit 0, before any subcommand
+  // dispatch, so `wasmoon --version` needs no command to go with it.
+  if value.flags.get("version") is Some(true) {
+    println(WASMOON_VERSION)
+    return
   }
   match subcmd_help {
     Some(msg) => println(msg)

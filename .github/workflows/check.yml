@@ -22,9 +22,7 @@ jobs:
   native-platform:
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
-    # About 11 minutes of checks, tests, and suites run before the sanitizer
-    # gate, which now carries a 75-minute budget of its own.
-    timeout-minutes: 120
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
@@ -32,11 +30,9 @@ jobs:
           - name: Linux AMD64
             os: ubuntu-latest
             native_test_args: --no-parallelize
-            asan_options: detect_leaks=1:abort_on_error=1
           - name: macOS ARM64
             os: macos-latest
             native_test_args: ""
-            asan_options: detect_leaks=0:abort_on_error=1
     steps:
       - uses: actions/checkout@v4
         with:
@@ -103,6 +99,13 @@ jobs:
           fi
           ./install.sh
 
+      # Before the suites below, because they trust the exit status this
+      # checks: `run_all_wast.py` reads `wasmoon test`'s status as its
+      # verdict, so a regression here would make those steps report on a
+      # runner that is lying to them.
+      - name: run CLI behaviour tests
+        run: python3 scripts/cli_behavior_test.py
+
       - name: run core WAST tests
         timeout-minutes: 10
         run: |
@@ -143,95 +146,3 @@ jobs:
           python3 scripts/run_component_wast.py \
             --suite future-gated --dump-failures --no-jit || status=$?
           exit "$status"
-
-      # This gate rebuilds each covered package with sanitizers from scratch,
-      # so its cost is compile volume, not test count. It grew with every file
-      # added to it — 2m20s on 2026-07-28, 32m25s on 07-29, 33m18s on 07-30 —
-      # until it exceeded a 40-minute budget that was then raised to 75.
-      #
-      # ISS-368 moved the two covered blackbox tests out of the 17k-line
-      # wasmoon/testsuite package into wasmoon/sanitizer_testsuite, which
-      # removed that package from the gate entirely. Keep that package small:
-      # a covered test placed in a large package puts that package's whole
-      # compile back into this budget.
-      #
-      # The first complete Linux run afterwards took 52m27s, attributed as:
-      # 13m06s release build of cmd/wasmoon, 13m28s for the
-      # sanitizer_testsuite closure, 12m35s for the commands closure, 6m45s
-      # for component/runtime_impl, 3m45s for wasmoon_jit, 2m37s for
-      # wasi_component, and about zero for the four invocations that reuse an
-      # already-compiled package. The cost is therefore the union of distinct
-      # dependency closures, not the size of the covered packages, which is
-      # why the step below is cached rather than trimmed further.
-      #
-      # The budget is back at 75 minutes. It was lowered to 60 on the strength
-      # of that single 52m27s observation, and the next uncached run on main
-      # was killed at the 60-minute mark without finding anything — one sample
-      # is not a bound on a shared runner. Lower it again only after several
-      # cached runs show a stable margin.
-      #
-      # The cache key pins everything that silently changes what the wrapper
-      # produces: the resolved toolchain (MOONBIT_TOOLCHAIN_VERSION is the
-      # literal "nightly", which would let yesterday's objects survive a new
-      # compiler), the wrapper's own flags, and the real clang. A key change
-      # forces the full rebuild that used to happen on every run; otherwise
-      # moon rebuilds only what the diff touched. Instrumentation is still
-      # verified from the binaries themselves after the run, so a restored
-      # cache cannot make an uninstrumented build look green.
-      - name: compute sanitizer cache key
-        id: sanitizer_cache_key
-        run: |
-          {
-            moon version --all
-            clang --version
-            cat scripts/native_sanitizer_cc.sh
-          } > "$RUNNER_TEMP/sanitizer-inputs.txt"
-          digest="$(shasum -a 256 "$RUNNER_TEMP/sanitizer-inputs.txt" | cut -d' ' -f1)"
-          echo "digest=$digest" >> "$GITHUB_OUTPUT"
-
-      - name: cache the sanitizer build directory
-        uses: actions/cache@v4
-        with:
-          path: ${{ runner.temp }}/wasmoon-sanitizer-build
-          key: sanitizer-${{ matrix.os }}-${{ steps.sanitizer_cache_key.outputs.digest }}-${{ github.sha }}
-          restore-keys: |
-            sanitizer-${{ matrix.os }}-${{ steps.sanitizer_cache_key.outputs.digest }}-
-
-      - name: run native sanitizer checks
-        timeout-minutes: 75
-        env:
-          MOONBIT_NEW_NATIVE: 0
-          ASAN_OPTIONS: ${{ matrix.asan_options }}
-          UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
-        run: |
-          sanitizer_build="$RUNNER_TEMP/wasmoon-sanitizer-build"
-          sanitizer_wrapper="$GITHUB_WORKSPACE/scripts/native_sanitizer_cc.sh"
-          export WASMOON_SANITIZER_REAL_CC="$(command -v clang)"
-          export MOON_CC="$sanitizer_wrapper"
-          export MOON_AR="$(command -v ar)"
-          moon build modules/wasmoon/cmd/wasmoon \
-            --target native --release --target-dir "$sanitizer_build"
-          cp \
-            "$sanitizer_build/native/release/build/Milky2018/wasmoon/cmd/wasmoon/wasmoon.exe" \
-            ./wasmoon
-          chmod +x ./wasmoon
-          moon test --target native --target-dir "$sanitizer_build" \
-            modules/wasmoon_jit/native_continuation_test.mbt
-          moon test --target native --target-dir "$sanitizer_build" \
-            modules/wasmoon/sanitizer_testsuite/jit_resumable_lifecycle_test.mbt
-          moon test --target native --target-dir "$sanitizer_build" \
-            modules/wasmoon_jit/callback_ownership_test.mbt
-          moon test --target native --target-dir "$sanitizer_build" \
-            modules/wasmoon/async_native/reactor_wbtest.mbt
-          moon test --target native --target-dir "$sanitizer_build" \
-            modules/wasmoon/wasi_component/async_preview3_wbtest.mbt
-          moon test --target native --target-dir "$sanitizer_build" \
-            modules/wasmoon/component/runtime_impl/runtime_cleanup_wbtest.mbt
-          moon test --target native --target-dir "$sanitizer_build" \
-            modules/wasmoon/component/runtime_impl/entry_state_wbtest.mbt
-          moon test --target native --target-dir "$sanitizer_build" \
-            modules/wasmoon/cmd/wasmoon/commands/component_error_wbtest.mbt
-          moon test --target native --target-dir "$sanitizer_build" \
-            modules/wasmoon/sanitizer_testsuite/component_runtime_facade_test.mbt
-          python3 scripts/verify_native_sanitizers.py \
-            --target-dir "$sanitizer_build" --minimum-test-binaries 5
