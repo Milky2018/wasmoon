@@ -80,7 +80,7 @@ fn compare_wasi_with_options(
   let num_imports = @wast.count_func_imports(mod_.imports)
   let local_idx = idx - num_imports
   let func_type_idx = mod_.funcs[local_idx]
-  let func_type = mod_.get_func_type(func_type_idx)
+  let func_type = mod_.validated_func_type_at(func_type_idx)
   let result_types = func_type.results
 
   // Run interpreter with WASI (stdout suppressed)
@@ -151,7 +151,7 @@ fn compare_wasi_with_callback(
   let num_imports = @wast.count_func_imports(mod_.imports)
   let local_idx = idx - num_imports
   let func_type_idx = mod_.funcs[local_idx]
-  let func_type = mod_.get_func_type(func_type_idx)
+  let func_type = mod_.validated_func_type_at(func_type_idx)
   let result_types = func_type.results
   let (interp_result, interp_stdout) = run_wasi_interp_quiet(
     mod_,

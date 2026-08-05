@@ -4,6 +4,10 @@ package "Milky2018/wasmoon/cmd/wasmoon-tools"
 // Values
 
 // Errors
+pub(all) suberror WatPrintError {
+  NotAFunctionType(Int)
+}
+pub impl Show for WatPrintError
 
 // Types and methods
 

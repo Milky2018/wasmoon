@@ -1,9 +1,10 @@
 ///|
-extern "c" fn native_exit(code : Int) = "exit"
-
-///|
+/// Exit seam for the failure paths, which all use status 1.
+///
+/// Typed to return `T` so a caller can end an expression with it; the
+/// `panic()` is unreachable and only satisfies that type.
 fn[T] exit_failure() -> T {
-  native_exit(1)
+  @sys.exit(1)
   panic()
 }
 
@@ -741,7 +742,7 @@ fn find_exported_func_type(
         }
       }
       if type_idx is Some(tidx) && tidx < mod_.types.length() {
-        return Some(mod_.get_func_type(tidx))
+        return Some(mod_.validated_func_type_at(tidx))
       }
     }
   }
@@ -1420,7 +1421,7 @@ fn run_with_jit(
                 JITExit(code) => {
                   jm.teardown_gc()
                   @wast.sync_jit_globals_to_store(jit_ctx, store)
-                  native_exit(code)
+                  @sys.exit(code)
                   panic()
                 }
                 JITTrap(msg) => {
@@ -1785,7 +1786,7 @@ fn compile_validated_module_to_jit(
   let mut import_func_idx = 0
   for imp in mod_.imports {
     if imp.desc is Func(type_idx) {
-      let func_type = mod_.get_func_type(type_idx)
+      let func_type = mod_.validated_func_type_at(type_idx)
       imports.push(
         @wasmoon_jit.wasm_import_identity(
           import_func_idx,
@@ -1808,7 +1809,7 @@ fn compile_validated_module_to_jit(
     }
     let func_idx = num_imports + i
     let type_idx = mod_.funcs[i]
-    let func_type = mod_.get_func_type(type_idx)
+    let func_type = mod_.validated_func_type_at(type_idx)
     let func_name = get_func_name(mod_, func_idx)
     let compiler_name = if func_name.is_empty() {
       "func_\{func_idx}"
@@ -1995,7 +1996,7 @@ fn build_jit_func_signatures(
   // Fill in signatures for import functions
   for i, imp in mod_.imports {
     if imp.desc is Func(type_idx) && type_idx < mod_.types.length() {
-      let func_type = mod_.get_func_type(type_idx)
+      let func_type = mod_.validated_func_type_at(type_idx)
       signatures[i] = (func_type.params.copy(), func_type.results.copy())
     }
   }
@@ -2003,7 +2004,7 @@ fn build_jit_func_signatures(
   for i, type_idx in mod_.funcs {
     let func_idx = num_imports + i
     if type_idx < mod_.types.length() {
-      let func_type = mod_.get_func_type(type_idx)
+      let func_type = mod_.validated_func_type_at(type_idx)
       signatures[func_idx] = (func_type.params.copy(), func_type.results.copy())
     }
   }

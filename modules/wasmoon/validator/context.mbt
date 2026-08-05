@@ -31,39 +31,62 @@ priv struct ValidationContext {
   subtyping_ctx : @types.SubtypingContext // for subtype checking
 }
 
+// Type-kind lookups.
+//
+// Each is partial twice over: the index may be out of range, and the type it
+// names may be of another kind. These used to be spelled as total functions
+// returning the type directly, which left `abort` as the only way to handle
+// either case — so a module naming a func type in `struct.get` killed the
+// process instead of being rejected. Callers had noticed: three of them
+// discarded the result and kept the call purely for that abort, which made
+// the crash the validation rule.
+//
+// Raising says the same thing where the caller can act on it. Every caller
+// already raises `ValidationError`, so nothing here needs a new channel; the
+// error simply stops being fatal.
+
 ///|
-/// Helper to get FuncType from types array at given index
+/// Get the function type at `idx`, or reject the module.
 fn ValidationContext::get_func_type(
   self : ValidationContext,
   idx : Int,
-) -> @types.FuncType {
+) -> @types.FuncType raise ValidationError {
+  if idx < 0 || idx >= self.types.length() {
+    raise InvalidTypeIndex(idx)
+  }
   match self.types[idx].composite {
     Func(ft) => ft
-    _ => abort("Type at index \{idx} is not a function type")
+    _ => raise TypeMismatch("type at index \{idx} is not a function type")
   }
 }
 
 ///|
-/// Helper to get StructType from types array at given index
+/// Get the struct type at `idx`, or reject the module.
 fn ValidationContext::get_struct_type(
   self : ValidationContext,
   idx : Int,
-) -> @types.StructType {
+) -> @types.StructType raise ValidationError {
+  if idx < 0 || idx >= self.types.length() {
+    raise InvalidTypeIndex(idx)
+  }
   match self.types[idx].composite {
     Struct(st) => st
-    _ => abort("Type at index \{idx} is not a struct type")
+    _ => raise TypeMismatch("type at index \{idx} is not a struct type")
   }
 }
 
 ///|
-/// Helper to get ArrayType from types array at given index
+/// Get the array type at `idx`, or reject the module.
 fn ValidationContext::get_array_type(
   self : ValidationContext,
   idx : Int,
-) -> @types.ArrayType {
+) -> @types.ArrayType raise ValidationError {
+  if idx < 0 || idx >= self.types.length() {
+    raise InvalidTypeIndex(idx)
+  }
   match self.types[idx].composite {
     Array(at) => at
-    _ => abort("Type at index \{idx} is not an array type")
+    _ => raise TypeMismatch("type at index \{idx} is not an array type")
   }
 }
 
@@ -125,7 +148,7 @@ fn collect_declared_funcs(
 ///|
 fn ValidationContext::ValidationContext(
   mod : @types.Module,
-) -> ValidationContext {
+) -> ValidationContext raise ValidationError {
   // Collect function types (imports + defined functions)
   let funcs : Array[Int] = []
   for imp in mod.imports {
@@ -172,14 +195,24 @@ fn ValidationContext::ValidationContext(
     elems.push(elem.type_)
   }
   // Collect tags (imports + defined tags)
+  // A tag names a function type. One that names a struct or array is a
+  // module to reject here, where the context is still being built, rather
+  // than a crash on the way in.
   let tags : Array[@types.FuncType] = []
+  fn tag_type(type_idx : Int) -> @types.FuncType raise ValidationError {
+    guard mod.func_type_at(type_idx) is Some(ft) else {
+      raise TypeMismatch("tag type at index \{type_idx} is not a function type")
+    }
+    ft
+  }
+
   for imp in mod.imports {
     if imp.desc is Tag(type_idx) {
-      tags.push(mod.get_func_type(type_idx))
+      tags.push(tag_type(type_idx))
     }
   }
   for tag in mod.tags {
-    tags.push(mod.get_func_type(tag.type_idx))
+    tags.push(tag_type(tag.type_idx))
   }
 
   // Collect declared functions from elem segments and global inits

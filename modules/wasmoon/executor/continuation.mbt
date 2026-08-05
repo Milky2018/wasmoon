@@ -179,7 +179,7 @@ pub fn call_func_by_index_resumable(
   let store_addr = instance.func_addrs[func_idx]
   let func_inst = store.get_func_inst(store_addr)
   let type_idx = instance.func_type_indices[func_idx]
-  let func_type = instance.get_func_type(type_idx)
+  let func_type = instance.validated_func_type_at(type_idx)
   let return_arity = func_type.results.length()
   context.call_func_inst_with_context(store_addr, func_inst, args, return_arity) catch {
     ExecutionSuspended =>

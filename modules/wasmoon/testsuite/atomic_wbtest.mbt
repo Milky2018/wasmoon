@@ -59,7 +59,7 @@ test "atomics: i32.atomic.store + i32.atomic.load (interp & jit)" {
   inspect(interp[0], content="I32(42)")
   let func_idx = exported_func_index(mod_, "run")
   let type_idx = mod_.funcs[func_idx]
-  let func_type = mod_.get_func_type(type_idx)
+  let func_type = mod_.validated_func_type_at(type_idx)
   let jit = run_jit(
     mod_,
     "run",
@@ -113,7 +113,7 @@ test "atomics: i32.atomic.rmw.add returns old value (interp & jit)" {
   inspect(interp[0], content="I32(7)")
   let func_idx = exported_func_index(mod_, "run")
   let type_idx = mod_.funcs[func_idx]
-  let func_type = mod_.get_func_type(type_idx)
+  let func_type = mod_.validated_func_type_at(type_idx)
   let jit = run_jit(
     mod_,
     "run",
@@ -175,7 +175,7 @@ test "atomics: i32.atomic.rmw.cmpxchg updates memory (interp & jit)" {
   inspect(interp[0], content="I32(11)")
   let func_idx = exported_func_index(mod_, "run")
   let type_idx = mod_.funcs[func_idx]
-  let func_type = mod_.get_func_type(type_idx)
+  let func_type = mod_.validated_func_type_at(type_idx)
   let jit = run_jit(
     mod_,
     "run",

@@ -1513,6 +1513,38 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_gc_struct_set_ptr(void) {
     return (int64_t)gc_struct_set_impl;
 }
 
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_gc_struct_get_v128_ptr(void) {
+    return (int64_t)gc_struct_get_v128_impl;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_gc_struct_set_v128_ptr(void) {
+    return (int64_t)gc_struct_set_v128_impl;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_gc_array_get_v128_ptr(void) {
+    return (int64_t)gc_array_get_v128_impl;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_gc_array_set_v128_ptr(void) {
+    return (int64_t)gc_array_set_v128_impl;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_gc_array_fill_v128_ptr(void) {
+    return (int64_t)gc_array_fill_v128_impl;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_gc_alloc_struct_wide_slow_ptr(void) {
+    return (int64_t)gc_alloc_struct_wide_slow_impl;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_gc_alloc_array_wide_slow_ptr(void) {
+    return (int64_t)gc_alloc_array_wide_slow_impl;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_gc_alloc_array_from_slots_slow_ptr(void) {
+    return (int64_t)gc_alloc_array_from_slots_slow_impl;
+}
+
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_gc_array_new_ptr(void) {
     return (int64_t)gc_array_new_impl;
 }

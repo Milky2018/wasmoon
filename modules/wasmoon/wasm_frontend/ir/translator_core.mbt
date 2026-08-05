@@ -336,7 +336,7 @@ pub fn translate_function(
   let func_idx = ctx.num_imports + func_local_idx
   let func_name = get_module_func_name(mod_, func_idx, name?)
   let type_idx = mod_.funcs[func_local_idx]
-  let func_type = mod_.get_func_type(type_idx)
+  let func_type = mod_.validated_func_type_at(type_idx)
   let code = mod_.codes[func_local_idx]
   translate_function_body(ctx, func_name, func_type, code.locals, code.body)
 }
@@ -429,6 +429,41 @@ fn Translator::spill_words_to_v128(
   let v0 = self.builder.v128_splat64(zero)
   let v1 = self.builder.v128_replace64(v0, lo, 0)
   self.builder.v128_replace64(v1, hi, 1)
+}
+
+///|
+/// Read an exception payload back into the tag's declared types.
+///
+/// The inverse of the `local_to_spill_words` walk the throw side runs: the
+/// payload is a flat run of i64 words in which a v128 occupies two, so the
+/// word index only tracks the value index when no vector precedes it. Both
+/// sides derive the layout from the same tag signature, which is what keeps
+/// them in step.
+fn Translator::read_exception_payload(
+  self : Translator,
+  tag_types : Array[@types.ValueType],
+) -> Array[Value] {
+  let args : Array[Value] = []
+  let mut word = 0
+  for ty in tag_types {
+    match ty {
+      V128 => {
+        let lo = @wasm_milkir.get_exception_value(self.builder, word)
+        let hi = @wasm_milkir.get_exception_value(self.builder, word + 1)
+        word += 2
+        args.push(self.spill_words_to_v128(lo, hi))
+      }
+      _ => {
+        let bits = @wasm_milkir.get_exception_value(self.builder, word)
+        word += 1
+        // Exhaustive over the IR types, unlike the bitcast catch-all this
+        // replaces, which would happily convert a word to anything asked of
+        // it -- including v128, which is how ISS-400 reached the verifier.
+        args.push(self.i64_bits_to_local(bits, type_from_wasm(ty)))
+      }
+    }
+  }
+  args
 }
 
 ///|
@@ -840,23 +875,7 @@ fn Translator::emit_catch_branch(
   let tag_types = self.get_tag_param_types(tag_idx)
 
   // Get exception values BEFORE calling try_table_end (which frees them)
-  let args : Array[Value] = []
-  for i, ty in tag_types {
-    let val_i64 = @wasm_milkir.get_exception_value(self.builder, i)
-    // Convert i64 to appropriate type
-    let val = match ty {
-      I32 => self.builder.ireduce(I32, val_i64)
-      I64 => val_i64
-      F32 => {
-        // Reinterpret bits: i64 -> i32 -> f32
-        let val_i32 = self.builder.ireduce(I32, val_i64)
-        self.builder.bitcast(F32, val_i32)
-      }
-      F64 => self.builder.bitcast(F64, val_i64)
-      _ => self.builder.bitcast(type_from_wasm(ty), val_i64)
-    }
-    args.push(val)
-  }
+  let args = self.read_exception_payload(tag_types)
 
   // Pop the exception handler AFTER reading values
   // This is required so that throw_ref doesn't loop back to the same handler
@@ -892,22 +911,7 @@ fn Translator::emit_catch_ref_branch(
   let tag_types = self.get_tag_param_types(tag_idx)
 
   // Get exception values BEFORE calling try_table_end (which frees them)
-  let args : Array[Value] = []
-  for i, ty in tag_types {
-    let val_i64 = @wasm_milkir.get_exception_value(self.builder, i)
-    // Convert i64 to appropriate type
-    let val = match ty {
-      I32 => self.builder.ireduce(I32, val_i64)
-      I64 => val_i64
-      F32 => {
-        let val_i32 = self.builder.ireduce(I32, val_i64)
-        self.builder.bitcast(F32, val_i32)
-      }
-      F64 => self.builder.bitcast(F64, val_i64)
-      _ => self.builder.bitcast(type_from_wasm(ty), val_i64)
-    }
-    args.push(val)
-  }
+  let args = self.read_exception_payload(tag_types)
 
   // Add exnref (placeholder - use exception tag as simple exnref)
   let exnref = @wasm_milkir.get_exception_tag(self.builder)

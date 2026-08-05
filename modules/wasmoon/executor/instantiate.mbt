@@ -63,7 +63,7 @@ pub fn instantiate_module(
   let func_addrs : Array[Int] = []
   for i, code in mod.codes {
     let type_idx = mod.funcs[i]
-    let func_type = mod.get_func_type(type_idx)
+    let func_type = mod.validated_func_type_at(type_idx)
     let addr = try! store.alloc_func(code, func_type~, type_idx~)
     func_addrs.push(addr)
   }
@@ -148,7 +148,7 @@ pub fn instantiate_module(
   // Allocate tags
   let tag_addrs : Array[Int] = []
   for tag in mod.tags {
-    let tag_type = mod.get_func_type(tag.type_idx)
+    let tag_type = mod.validated_func_type_at(tag.type_idx)
     let addr = try! store.alloc_tag(tag_type, type_idx=tag.type_idx)
     tag_addrs.push(addr)
   }
@@ -834,7 +834,7 @@ pub fn validate_imports_with_diagnostics(
       Func(type_idx) =>
         match extern_val {
           Func(addr) => {
-            let expected_type = mod.get_func_type(type_idx)
+            let expected_type = mod.validated_func_type_at(type_idx)
             let actual_type = match store.get_func_type_opt(addr) {
               Some(type_) => type_
               None => {
@@ -1180,7 +1180,7 @@ pub fn validate_imports_with_diagnostics(
                   imp.mod_name,
                   imp.name,
                   ImportTypeMismatch,
-                  mod.get_func_type(expected_type_idx).to_string(),
+                  mod.validated_func_type_at(expected_type_idx).to_string(),
                   None,
                   "import \{imp.mod_name}.\{imp.name} refers to invalid tag address \{addr}",
                 )
@@ -1189,7 +1189,7 @@ pub fn validate_imports_with_diagnostics(
             } noraise {
               type_ => type_
             }
-            let expected_type = mod.get_func_type(expected_type_idx)
+            let expected_type = mod.validated_func_type_at(expected_type_idx)
             let owner = store.get_tag_owner(addr)
             let actual_type_idx = store.get_tag_type_idx(addr)
             match owner {
@@ -1324,7 +1324,7 @@ pub fn instantiate_module_with_imports(
           Some(Func(addr)) => {
             // Check that imported function type matches expected type
             let owner = store.get_func_owner(addr)
-            let expected_type = mod.get_func_type(type_idx)
+            let expected_type = mod.validated_func_type_at(type_idx)
             let actual_type = store.get_func_type(addr)
             match owner {
               Some(o) => {
@@ -1486,7 +1486,7 @@ pub fn instantiate_module_with_imports(
             // Check that imported tag type matches expected type
             let owner = store.get_tag_owner(addr)
             let actual_type_idx = store.get_tag_type_idx(addr)
-            let expected_type = mod.get_func_type(expected_type_idx)
+            let expected_type = mod.validated_func_type_at(expected_type_idx)
             let actual_type = store.get_tag_type(addr)
             match owner {
               Some(o) => {
@@ -1547,7 +1547,7 @@ pub fn instantiate_module_with_imports(
   // Allocate module functions with their types
   for i, code in mod.codes {
     let type_idx = mod.funcs[i]
-    let func_type = mod.get_func_type(type_idx)
+    let func_type = mod.validated_func_type_at(type_idx)
     let addr = store.alloc_func(code, func_type~, type_idx~)
     func_addrs.push(addr)
     func_type_indices.push(type_idx)
@@ -1630,7 +1630,7 @@ pub fn instantiate_module_with_imports(
 
   // Allocate tags (after imported tags)
   for tag in mod.tags {
-    let tag_type = mod.get_func_type(tag.type_idx)
+    let tag_type = mod.validated_func_type_at(tag.type_idx)
     let addr = store.alloc_tag(tag_type, type_idx=tag.type_idx)
     tag_addrs.push(addr)
   }

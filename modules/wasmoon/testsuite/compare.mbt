@@ -309,7 +309,7 @@ pub fn compare_jit_interp_with_opt_level(
 
   // Get function type
   let func_type_idx = mod_.funcs[idx]
-  let func_type = mod_.get_func_type(func_type_idx)
+  let func_type = mod_.validated_func_type_at(func_type_idx)
   let param_types = func_type.params
   let result_types = func_type.results
 
@@ -589,7 +589,7 @@ test "compare_jit_interp: i32 add" {
   let mod_ = @wat.parse(source) catch { _ => abort("parse failed") }
   let func_idx = 0
   let func_type_idx = mod_.funcs[func_idx]
-  let func_type = mod_.get_func_type(func_type_idx)
+  let func_type = mod_.validated_func_type_at(func_type_idx)
   let param_types = func_type.params
   let result_types = func_type.results
   let args = [@types.Value::I32(3), I32(5)]

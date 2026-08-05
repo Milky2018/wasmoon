@@ -889,6 +889,34 @@ extern "c" fn c_jit_get_gc_struct_get_ptr() -> Int64 = "wasmoon_jit_get_gc_struc
 extern "c" fn c_jit_get_gc_struct_set_ptr() -> Int64 = "wasmoon_jit_get_gc_struct_set_ptr"
 
 ///|
+/// Get the v128 aggregate libcall function pointers.
+///
+/// These carry the vector through a caller-owned 16-byte buffer rather than a
+/// runtime word, so each takes or returns its value by address.
+extern "c" fn c_jit_get_gc_struct_get_v128_ptr() -> Int64 = "wasmoon_jit_get_gc_struct_get_v128_ptr"
+
+///|
+extern "c" fn c_jit_get_gc_struct_set_v128_ptr() -> Int64 = "wasmoon_jit_get_gc_struct_set_v128_ptr"
+
+///|
+extern "c" fn c_jit_get_gc_array_get_v128_ptr() -> Int64 = "wasmoon_jit_get_gc_array_get_v128_ptr"
+
+///|
+extern "c" fn c_jit_get_gc_array_set_v128_ptr() -> Int64 = "wasmoon_jit_get_gc_array_set_v128_ptr"
+
+///|
+extern "c" fn c_jit_get_gc_array_fill_v128_ptr() -> Int64 = "wasmoon_jit_get_gc_array_fill_v128_ptr"
+
+///|
+extern "c" fn c_jit_get_gc_alloc_struct_wide_slow_ptr() -> Int64 = "wasmoon_jit_get_gc_alloc_struct_wide_slow_ptr"
+
+///|
+extern "c" fn c_jit_get_gc_alloc_array_wide_slow_ptr() -> Int64 = "wasmoon_jit_get_gc_alloc_array_wide_slow_ptr"
+
+///|
+extern "c" fn c_jit_get_gc_alloc_array_from_slots_slow_ptr() -> Int64 = "wasmoon_jit_get_gc_alloc_array_from_slots_slow_ptr"
+
+///|
 /// Get array.new libcall function pointer
 extern "c" fn c_jit_get_gc_array_new_ptr() -> Int64 = "wasmoon_jit_get_gc_array_new_ptr"
 
@@ -1151,84 +1179,99 @@ extern "c" fn c_jit_ctx_clear_segments(ctx_ptr : Int64) -> Unit = "wasmoon_jit_c
 ///|
 /// Allocate a new struct
 /// Returns gc_ref (1-based index), or 0 on failure
+///
+/// `fields` is a flat run of [lo, hi] word pairs, two entries per field. The
+/// narrow `wasmoon_gc_heap_alloc_struct` next to it in C is for JIT-emitted
+/// code, which only ever produces runtime words; MoonBit always goes wide so
+/// that a v128 field never has to be squeezed into one word.
 #borrow(fields)
-extern "c" fn c_gc_heap_alloc_struct(
+extern "c" fn c_gc_heap_alloc_struct_wide(
   heap : Int64,
   type_idx : Int,
   fields : FixedArray[Int64],
   num_fields : Int,
-) -> Int = "wasmoon_gc_heap_alloc_struct"
+) -> Int = "wasmoon_gc_heap_alloc_struct_wide"
 
 ///|
-/// Get a struct field value
-extern "c" fn c_gc_heap_struct_get(
+/// Read a struct field into `out` as [lo, hi]
+#borrow(out)
+extern "c" fn c_gc_heap_struct_get_wide(
   heap : Int64,
   gc_ref : Int,
   field_idx : Int,
-) -> Int64 = "wasmoon_gc_heap_struct_get"
+  out : FixedArray[Int64],
+) -> Unit = "wasmoon_gc_heap_struct_get_wide"
 
 ///|
 /// Set a struct field value
-extern "c" fn c_gc_heap_struct_set(
+extern "c" fn c_gc_heap_struct_set_wide(
   heap : Int64,
   gc_ref : Int,
   field_idx : Int,
-  value : Int64,
-) -> Unit = "wasmoon_gc_heap_struct_set"
+  lo : Int64,
+  hi : Int64,
+) -> Unit = "wasmoon_gc_heap_struct_set_wide"
 
 // ============ Array Operations ============
 
 ///|
 /// Allocate a new array
 /// Returns gc_ref (1-based index), or 0 on failure
-extern "c" fn c_gc_heap_alloc_array(
+extern "c" fn c_gc_heap_alloc_array_wide(
   heap : Int64,
   type_idx : Int,
   len : Int,
-  init_value : Int64,
-) -> Int = "wasmoon_gc_heap_alloc_array"
+  lo : Int64,
+  hi : Int64,
+) -> Int = "wasmoon_gc_heap_alloc_array_wide"
 
 ///|
 /// Allocate a new array from existing values
 /// Returns gc_ref (1-based index), or 0 on failure
+///
+/// `values` is a flat run of [lo, hi] word pairs, two entries per element.
 #borrow(values)
-extern "c" fn c_gc_heap_alloc_array_from_values(
+extern "c" fn c_gc_heap_alloc_array_from_slots(
   heap : Int64,
   type_idx : Int,
   values : FixedArray[Int64],
   len : Int,
-) -> Int = "wasmoon_gc_heap_alloc_array_from_values"
+) -> Int = "wasmoon_gc_heap_alloc_array_from_slots"
 
 ///|
 /// Get array length
 extern "c" fn c_gc_heap_array_len(heap : Int64, gc_ref : Int) -> Int = "wasmoon_gc_heap_array_len"
 
 ///|
-/// Get an array element
-extern "c" fn c_gc_heap_array_get(
+/// Read an array element into `out` as [lo, hi]
+#borrow(out)
+extern "c" fn c_gc_heap_array_get_wide(
   heap : Int64,
   gc_ref : Int,
   idx : Int,
-) -> Int64 = "wasmoon_gc_heap_array_get"
+  out : FixedArray[Int64],
+) -> Unit = "wasmoon_gc_heap_array_get_wide"
 
 ///|
 /// Set an array element
-extern "c" fn c_gc_heap_array_set(
+extern "c" fn c_gc_heap_array_set_wide(
   heap : Int64,
   gc_ref : Int,
   idx : Int,
-  value : Int64,
-) -> Unit = "wasmoon_gc_heap_array_set"
+  lo : Int64,
+  hi : Int64,
+) -> Unit = "wasmoon_gc_heap_array_set_wide"
 
 ///|
 /// Fill array elements with a value
-extern "c" fn c_gc_heap_array_fill(
+extern "c" fn c_gc_heap_array_fill_wide(
   heap : Int64,
   gc_ref : Int,
   offset : Int,
-  value : Int64,
+  lo : Int64,
+  hi : Int64,
   count : Int,
-) -> Unit = "wasmoon_gc_heap_array_fill"
+) -> Unit = "wasmoon_gc_heap_array_fill_wide"
 
 ///|
 /// Copy array elements

@@ -81,8 +81,21 @@ lldb -- ./wasmoon test path/to/test.wast
 
 - **NEVER commit or push directly to main branch** - always create a feature branch and merge via PR
 - Write commit messages in English
-- Create a new branch for each change, merge via PR
+- **Stack successive fixes onto one branch** rather than opening a branch per
+  issue. Keep adding commits to the branch in progress; open one PR for the
+  batch. Start a separate branch only when the work is genuinely independent,
+  and prefer waiting for the current branch to merge even then.
 - Don't use `commit --amend` or `push --force`, use new commits instead
+
+Every open PR builds Linux AMD64 and macOS ARM64, and a run takes 10-70
+minutes, so a branch per issue multiplies CI by the number of issues in
+flight. It also invites a conflict cascade: PRs here routinely touch
+`issues/README.md`, so each merge advances main and turns every other open PR
+`CONFLICTING` at once - and GitHub creates no CI run for a conflicting PR, so
+resolving them costs a second full round of builds on every branch. Stacked
+PRs have a related trap: only the tip needs a green run because it contains
+the rest, but merging main into each branch separately breaks that containment
+and puts every branch back on its own build.
 
 ## MoonBit Notes
 

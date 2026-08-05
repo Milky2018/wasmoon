@@ -11,7 +11,7 @@ fn ExecContext::exec_struct_new(
   self : ExecContext,
   type_idx : Int,
 ) -> Unit raise {
-  let struct_type = self.instance.get_struct_type(type_idx)
+  let struct_type = self.instance.validated_struct_type_at(type_idx)
   let num_fields = struct_type.fields.length()
 
   // Pop field values from stack (in reverse order)
@@ -32,7 +32,7 @@ fn ExecContext::exec_struct_new_default(
   self : ExecContext,
   type_idx : Int,
 ) -> Unit raise {
-  let struct_type = self.instance.get_struct_type(type_idx)
+  let struct_type = self.instance.validated_struct_type_at(type_idx)
   let num_fields = struct_type.fields.length()
 
   // Create fields with default values
@@ -79,7 +79,7 @@ fn ExecContext::exec_struct_get_s(
     StructRef(ref_idx) => {
       let value = self.store.struct_get(ref_idx, field_idx)
       // Get the field's storage type to check if it's packed
-      let struct_type = self.instance.get_struct_type(type_idx)
+      let struct_type = self.instance.validated_struct_type_at(type_idx)
       let storage_type = struct_type.fields[field_idx].storage_type
       // Sign-extend packed types
       let extended_value = match (value, storage_type) {
@@ -118,7 +118,7 @@ fn ExecContext::exec_struct_get_u(
     StructRef(ref_idx) => {
       let value = self.store.struct_get(ref_idx, field_idx)
       // Get the field's storage type to check if it's packed
-      let struct_type = self.instance.get_struct_type(type_idx)
+      let struct_type = self.instance.validated_struct_type_at(type_idx)
       let storage_type = struct_type.fields[field_idx].storage_type
       // Zero-extend packed types (mask off high bits)
       let extended_value = match (value, storage_type) {
@@ -145,7 +145,7 @@ fn ExecContext::exec_struct_set(
   match ref_val {
     StructRef(ref_idx) => {
       // Get the field's storage type to check if it's packed
-      let struct_type = self.instance.get_struct_type(type_idx)
+      let struct_type = self.instance.validated_struct_type_at(type_idx)
       let storage_type = struct_type.fields[field_idx].storage_type
       // Mask packed types to their bit width
       let masked_value = match (value, storage_type) {
@@ -197,7 +197,7 @@ fn ExecContext::exec_array_new_default(
     I32(n) => n
     _ => raise @runtime.RuntimeError::TypeMismatch
   }
-  let array_type = self.instance.get_array_type(type_idx)
+  let array_type = self.instance.validated_array_type_at(type_idx)
   let default_val = default_value_for_storage_type(
     array_type.element.storage_type,
   )
@@ -268,7 +268,7 @@ fn ExecContext::exec_array_get_s(
     ArrayRef(ref_idx) => {
       let value = self.store.array_get(ref_idx, idx)
       // Sign-extend the value based on the packed type
-      let array_type = self.instance.get_array_type(type_idx)
+      let array_type = self.instance.validated_array_type_at(type_idx)
       let extended = match array_type.element.storage_type {
         Packed(I8) =>
           // Sign-extend from 8 bits
@@ -323,7 +323,7 @@ fn ExecContext::exec_array_get_u(
     ArrayRef(ref_idx) => {
       let value = self.store.array_get(ref_idx, idx)
       // Zero-extend the value based on the packed type
-      let array_type = self.instance.get_array_type(type_idx)
+      let array_type = self.instance.validated_array_type_at(type_idx)
       let extended = match array_type.element.storage_type {
         Packed(I8) =>
           // Zero-extend from 8 bits (just mask, no sign extension)
@@ -472,7 +472,7 @@ fn ExecContext::exec_array_new_data(
     return
   }
   let data_segment = self.instance.data_segments[data_idx]
-  let array_type = self.instance.get_array_type(type_idx)
+  let array_type = self.instance.validated_array_type_at(type_idx)
 
   // Calculate bytes per element based on storage type
   let bytes_per_elem = storage_type_byte_size(array_type.element.storage_type)
@@ -590,7 +590,7 @@ fn ExecContext::exec_array_init_data(
     return
   }
   let data_segment = self.instance.data_segments[data_idx]
-  let array_type = self.instance.get_array_type(type_idx)
+  let array_type = self.instance.validated_array_type_at(type_idx)
   let bytes_per_elem = storage_type_byte_size(array_type.element.storage_type)
 
   // Check bounds
@@ -1149,6 +1149,8 @@ fn default_value_for_storage_type(
     Val(I64) => I64(0L)
     Val(F32) => F32(0.0)
     Val(F64) => F64(0.0)
+    // Not a reference type, so the catch-all below would have made it Null.
+    Val(V128) => V128(Bytes::make(16, b'\x00'))
     Val(FuncRef) | Val(RefNullFuncTyped(_)) => Null
     Val(ExternRef) => Null
     Val(RefNullStruct(_)) => Null

@@ -16,8 +16,8 @@ test "parse module with type" {
     #|)
   let mod_ = parse(wat)
   inspect(mod_.types.length(), content="1")
-  inspect(mod_.get_func_type(0).params.length(), content="2")
-  inspect(mod_.get_func_type(0).results.length(), content="1")
+  inspect(mod_.func_type_at(0).unwrap().params.length(), content="2")
+  inspect(mod_.func_type_at(0).unwrap().results.length(), content="1")
 }
 
 ///|
@@ -190,8 +190,8 @@ test "parse import with inline signature" {
   inspect(mod_.imports[0].name, content="fd_write")
   // The inline signature should be added to types
   inspect(mod_.types.length(), content="1")
-  inspect(mod_.get_func_type(0).params.length(), content="4")
-  inspect(mod_.get_func_type(0).results.length(), content="1")
+  inspect(mod_.func_type_at(0).unwrap().params.length(), content="4")
+  inspect(mod_.func_type_at(0).unwrap().results.length(), content="1")
 }
 
 ///|
@@ -203,8 +203,8 @@ test "parse import with no params" {
   let mod_ = parse(wat)
   inspect(mod_.imports.length(), content="1")
   inspect(mod_.types.length(), content="1")
-  inspect(mod_.get_func_type(0).params.length(), content="1")
-  inspect(mod_.get_func_type(0).results.length(), content="0")
+  inspect(mod_.func_type_at(0).unwrap().params.length(), content="1")
+  inspect(mod_.func_type_at(0).unwrap().results.length(), content="0")
 }
 
 ///|
@@ -216,8 +216,8 @@ test "parse import with only result" {
   let mod_ = parse(wat)
   inspect(mod_.imports.length(), content="1")
   inspect(mod_.types.length(), content="1")
-  inspect(mod_.get_func_type(0).params.length(), content="0")
-  inspect(mod_.get_func_type(0).results.length(), content="1")
+  inspect(mod_.func_type_at(0).unwrap().params.length(), content="0")
+  inspect(mod_.func_type_at(0).unwrap().results.length(), content="1")
 }
 
 ///|
@@ -650,7 +650,7 @@ test "parse simple struct type" {
   let mod_ = parse(wat)
   inspect(mod_.types.length(), content="1")
   inspect(mod_.is_struct_type(0), content="true")
-  let st = mod_.get_struct_type(0)
+  let st = mod_.struct_type_at(0).unwrap()
   inspect(st.fields.length(), content="2")
   inspect(st.fields[0].storage_type, content="Val(I32)")
   inspect(st.fields[1].storage_type, content="Val(I32)")
@@ -664,7 +664,7 @@ test "parse struct type with named fields" {
     #|)
   let mod_ = parse(wat)
   inspect(mod_.types.length(), content="1")
-  let st = mod_.get_struct_type(0)
+  let st = mod_.struct_type_at(0).unwrap()
   inspect(st.fields.length(), content="2")
 }
 
@@ -675,7 +675,7 @@ test "parse struct type with mutable fields" {
     #|  (type $point (struct (field (mut i32)) (field (mut f64))))
     #|)
   let mod_ = parse(wat)
-  let st = mod_.get_struct_type(0)
+  let st = mod_.struct_type_at(0).unwrap()
   inspect(st.fields[0].mutable, content="true")
   inspect(st.fields[0].storage_type, content="Val(I32)")
   inspect(st.fields[1].mutable, content="true")
@@ -689,7 +689,7 @@ test "parse struct type with packed fields" {
     #|  (type $bytes (struct (field i8) (field i16)))
     #|)
   let mod_ = parse(wat)
-  let st = mod_.get_struct_type(0)
+  let st = mod_.struct_type_at(0).unwrap()
   inspect(st.fields[0].storage_type, content="Packed(I8)")
   inspect(st.fields[1].storage_type, content="Packed(I16)")
 }
@@ -701,7 +701,7 @@ test "parse struct type with mutable packed fields" {
     #|  (type $buf (struct (field (mut i8)) (field (mut i16))))
     #|)
   let mod_ = parse(wat)
-  let st = mod_.get_struct_type(0)
+  let st = mod_.struct_type_at(0).unwrap()
   inspect(st.fields[0].mutable, content="true")
   inspect(st.fields[0].storage_type, content="Packed(I8)")
   inspect(st.fields[1].mutable, content="true")
@@ -717,7 +717,7 @@ test "parse simple array type" {
   let mod_ = parse(wat)
   inspect(mod_.types.length(), content="1")
   inspect(mod_.is_array_type(0), content="true")
-  let at = mod_.get_array_type(0)
+  let at = mod_.array_type_at(0).unwrap()
   inspect(at.element.storage_type, content="Val(F64)")
   inspect(at.element.mutable, content="false")
 }
@@ -729,7 +729,7 @@ test "parse mutable array type" {
     #|  (type $vec (array (mut f64)))
     #|)
   let mod_ = parse(wat)
-  let at = mod_.get_array_type(0)
+  let at = mod_.array_type_at(0).unwrap()
   inspect(at.element.storage_type, content="Val(F64)")
   inspect(at.element.mutable, content="true")
 }
@@ -741,7 +741,7 @@ test "parse array type with packed element" {
     #|  (type $bytes (array (mut i8)))
     #|)
   let mod_ = parse(wat)
-  let at = mod_.get_array_type(0)
+  let at = mod_.array_type_at(0).unwrap()
   inspect(at.element.storage_type, content="Packed(I8)")
   inspect(at.element.mutable, content="true")
 }
@@ -760,14 +760,14 @@ test "parse mixed func, struct, array types" {
   inspect(mod_.is_struct_type(1), content="true")
   inspect(mod_.is_array_type(2), content="true")
   // Check func type
-  let ft = mod_.get_func_type(0)
+  let ft = mod_.func_type_at(0).unwrap()
   debug_inspect(ft.params, content="[I32, I32]")
   debug_inspect(ft.results, content="[I32]")
   // Check struct type
-  let st = mod_.get_struct_type(1)
+  let st = mod_.struct_type_at(1).unwrap()
   inspect(st.fields.length(), content="2")
   // Check array type
-  let at = mod_.get_array_type(2)
+  let at = mod_.array_type_at(2).unwrap()
   inspect(at.element.storage_type, content="Val(F64)")
 }
 
@@ -781,7 +781,7 @@ test "parse struct with reference field" {
     #|  ))
     #|)
   let mod_ = parse(wat)
-  let st = mod_.get_struct_type(0)
+  let st = mod_.struct_type_at(0).unwrap()
   inspect(st.fields.length(), content="2")
   inspect(st.fields[0].storage_type, content="Val(I32)")
   // The second field is a nullable reference to type 0
@@ -797,7 +797,7 @@ test "parse array of references" {
     #|)
   let mod_ = parse(wat)
   inspect(mod_.types.length(), content="2")
-  let at = mod_.get_array_type(1)
+  let at = mod_.array_type_at(1).unwrap()
   inspect(at.element.mutable, content="true")
   // Reference to struct at index 0
   inspect(at.element.storage_type, content="Val(RefNullStruct(0))")
@@ -852,7 +852,7 @@ test "parse empty struct type" {
   let mod_ = parse(wat)
   inspect(mod_.types.length(), content="1")
   inspect(mod_.is_struct_type(0), content="true")
-  let st = mod_.get_struct_type(0)
+  let st = mod_.struct_type_at(0).unwrap()
   inspect(st.fields.length(), content="0")
 }
 
@@ -864,7 +864,7 @@ test "parse abbreviated field syntax with multiple types" {
     #|)
   let mod_ = parse(wat)
   inspect(mod_.types.length(), content="1")
-  let st = mod_.get_struct_type(0)
+  let st = mod_.struct_type_at(0).unwrap()
   inspect(st.fields.length(), content="2")
   inspect(st.fields[0].storage_type, content="Val(I32)")
   inspect(st.fields[1].storage_type, content="Val(I32)")

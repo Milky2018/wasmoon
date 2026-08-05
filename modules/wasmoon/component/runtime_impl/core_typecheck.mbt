@@ -39,7 +39,7 @@ fn core_func_ref_type(
     raise InvalidCoreFuncIndex(f.func_idx)
   }
   let tyidx = f.instance.func_type_indices[f.func_idx]
-  f.instance.get_func_type(tyidx)
+  f.instance.validated_func_type_at(tyidx)
 }
 
 ///|
@@ -307,7 +307,7 @@ fn module_export_type(m : @types.Module, name : String) -> CoreExternType? {
             match imp.desc {
               Func(tyidx) =>
                 if imported == func_idx {
-                  return Some(Func(m.get_func_type(tyidx)))
+                  return Some(Func(m.validated_func_type_at(tyidx)))
                 } else {
                   imported += 1
                 }
@@ -319,7 +319,7 @@ fn module_export_type(m : @types.Module, name : String) -> CoreExternType? {
             return None
           }
           let tyidx = m.funcs[defined_idx]
-          return Some(Func(m.get_func_type(tyidx)))
+          return Some(Func(m.validated_func_type_at(tyidx)))
         }
         Table(table_idx) => {
           let mut imported = 0
@@ -394,7 +394,7 @@ fn module_import_type(
   for imp in m.imports {
     if imp.mod_name == mod_name && imp.name == name {
       match imp.desc {
-        Func(tyidx) => return Some(Func(m.get_func_type(tyidx)))
+        Func(tyidx) => return Some(Func(m.validated_func_type_at(tyidx)))
         Table(tt) => return Some(Table(tt))
         Memory(mt) => return Some(Memory(mt))
         Global(gt) => return Some(Global(gt))

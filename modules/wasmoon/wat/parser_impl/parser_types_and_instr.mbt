@@ -860,9 +860,18 @@ fn Parser::parse_func_def(
   }
 
   // Calculate actual param count - if type_idx was used, get params from type
-  // Otherwise use inline_params
+  // Otherwise use inline_params.
+  //
+  // A `(type $t)` naming a struct or array is a parse error, not a crash.
+  // The bounds were checked here before but the kind was not, because the
+  // lookup returned a `FuncType` and had nowhere to say otherwise; it
+  // aborted instead, which killed every command in both binaries on four
+  // lines of WAT (ISS-396).
   let param_count = if type_idx >= 0 && type_idx < mod_.types.length() {
-    mod_.get_func_type(type_idx).params.length()
+    guard mod_.func_type_at(type_idx) is Some(ft) else {
+      raise ParseError("type \{type_idx} is not a function type", self.loc())
+    }
+    ft.params.length()
   } else {
     inline_params.length()
   }

@@ -706,14 +706,17 @@ pub(all) struct Module {
   func_names : Map[Int, String]
 } derive(@debug.Debug)
 pub fn Module::Module() -> Self
+pub fn Module::array_type_at(Self, Int) -> ArrayType?
 pub fn Module::empty() -> Self
-pub fn Module::get_array_type(Self, Int) -> ArrayType
-pub fn Module::get_func_type(Self, Int) -> FuncType
-pub fn Module::get_struct_type(Self, Int) -> StructType
+pub fn Module::func_type_at(Self, Int) -> FuncType?
 pub fn Module::is_array_type(Self, Int) -> Bool
 pub fn Module::is_func_type(Self, Int) -> Bool
 pub fn Module::is_struct_type(Self, Int) -> Bool
 pub fn Module::simple(Array[ValueType], Array[ValueType], Array[Instruction], String) -> Self
+pub fn Module::struct_type_at(Self, Int) -> StructType?
+pub fn Module::validated_array_type_at(Self, Int) -> ArrayType
+pub fn Module::validated_func_type_at(Self, Int) -> FuncType
+pub fn Module::validated_struct_type_at(Self, Int) -> StructType
 pub impl Show for Module
 
 pub(all) enum PackedType {

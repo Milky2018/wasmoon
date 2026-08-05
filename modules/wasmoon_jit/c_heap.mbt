@@ -82,12 +82,28 @@ pub fn CHeap::make_allocation_rollback(
 // ============================================================
 
 ///|
-/// Encode a Value to Int64 for C heap storage
-/// Encoding rules:
+/// One field or element as the C heap stores it.
+///
+/// `lo` is the runtime word. Every value kind except v128 is encoded entirely
+/// into it, and it is the only word the collector scans for references, so a
+/// reference must never be written to `hi`.
+pub struct GcSlot {
+  lo : Int64
+  hi : Int64
+} derive(Eq, Debug)
+
+///|
+/// Encode a Value into a C heap slot.
+///
+/// Total, and that is the point: a slot is 16 bytes, so there is no value
+/// this cannot represent and no case left to abort on.
+///
+/// Encoding rules for `lo`:
 /// - i32: sign-extended to i64
 /// - i64: as-is
 /// - f32: lower 32 bits (IEEE 754 bits)
 /// - f64: as-is (IEEE 754 bits)
+/// - v128: low 8 bytes, with the high 8 in `hi`
 /// - structref/arrayref: (gc_ref) << 1, where gc_ref = idx + 1 (even, low bit = 0)
 /// - funcref: function index + 1 (0 = null)
 /// - externref: extern index + 1 (0 = null)
@@ -95,28 +111,55 @@ pub fn CHeap::make_allocation_rollback(
 /// - i31: (value << 1) | 1 (tagged, low bit = 1)
 /// - null: 0
 ///
-/// GC reference detection in gc_heap_mark uses: (value & 1) == 0 && value > 0
-pub fn value_to_i64(value : @types.Value) -> Int64 {
+/// GC reference detection in gc_heap_mark uses: (lo & 1) == 0 && lo > 0
+pub fn value_to_slot(value : @types.Value) -> GcSlot {
   match value {
-    I32(n) => n.to_int64()
-    I64(n) => n
-    F32(f) => f.reinterpret_as_int().to_int64()
-    F64(d) => d.reinterpret_as_int64()
-    V128(_) => abort("V128 values not yet supported in JIT")
+    I32(n) => { lo: n.to_int64(), hi: 0L }
+    I64(n) => { lo: n, hi: 0L }
+    F32(f) => { lo: f.reinterpret_as_int().to_int64(), hi: 0L }
+    F64(d) => { lo: d.reinterpret_as_int64(), hi: 0L }
+    V128(bytes) =>
+      {
+        lo: @types.bytes_to_int64_le(bytes, 0),
+        hi: @types.bytes_to_int64_le(bytes, 8),
+      }
     // gc_ref is 1-based: StructRef(0) -> gc_ref=1 -> encoded=2
-    StructRef(idx) => (idx + 1).to_int64() << 1
-    ArrayRef(idx) => (idx + 1).to_int64() << 1
-    FuncRef(idx) => (idx + 1).to_int64()
-    ExternRef(idx) => (idx + 1).to_int64()
-    ExnRef(idx) => (idx + 1).to_int64()
-    I31(n) => (n.to_int64() << 1) | 1L
-    Null => @wasm_milkir.NULL_REF
+    StructRef(idx) => { lo: (idx + 1).to_int64() << 1, hi: 0L }
+    ArrayRef(idx) => { lo: (idx + 1).to_int64() << 1, hi: 0L }
+    FuncRef(idx) => { lo: (idx + 1).to_int64(), hi: 0L }
+    ExternRef(idx) => { lo: (idx + 1).to_int64(), hi: 0L }
+    ExnRef(idx) => { lo: (idx + 1).to_int64(), hi: 0L }
+    I31(n) => { lo: (n.to_int64() << 1) | 1L, hi: 0L }
+    Null => { lo: @wasm_milkir.NULL_REF, hi: 0L }
   }
 }
 
 ///|
-/// Decode an Int64 from C heap to a Value based on expected type
+/// Encode a Value as a bare runtime word, for the root array the collector
+/// scans. A root's high word would never be read, so dropping it is not a
+/// loss of information here.
+pub fn value_to_i64(value : @types.Value) -> Int64 {
+  value_to_slot(value).lo
+}
+
+///|
+/// Decode a runtime word to a Value based on expected type.
+///
+/// A word carries no high half, so a `V128` request yields a vector whose
+/// upper 8 bytes are zero. Callers reading a stored field want
+/// `slot_to_value`, which has the other half.
 pub fn i64_to_value(raw : Int64, ty : @types.ValueType) -> @types.Value {
+  slot_to_value({ lo: raw, hi: 0L }, ty)
+}
+
+///|
+/// Decode a C heap slot to a Value based on expected type.
+///
+/// Total, and inverse to `value_to_slot`: every `ValueType` names a value
+/// this can produce, so no case has to fall back to a value of some other
+/// type the way `V128 => I64(raw)` once did.
+pub fn slot_to_value(slot : GcSlot, ty : @types.ValueType) -> @types.Value {
+  let raw = slot.lo
   match ty {
     I32 => I32(raw.to_int())
     I64 => I64(raw)
@@ -174,8 +217,21 @@ pub fn i64_to_value(raw : Int64, ty : @types.ValueType) -> @types.Value {
         StructRef(((raw >> 1) - 1L).to_int())
       }
     NullRef | NullFuncRef | NullExnRef | NullExternRef | RefNone => Null
-    V128 => I64(raw) // V128 not fully supported
+    V128 => V128(@types.int64_pair_to_v128_le(slot.lo, slot.hi))
   }
+}
+
+///|
+/// Flatten values into the [lo, hi] word pairs the wide C entry points take.
+fn slots_to_words(values : Array[@types.Value]) -> FixedArray[Int64] {
+  FixedArray::makei(values.length() * 2, fn(i) {
+    let slot = value_to_slot(values[i / 2])
+    if i % 2 == 0 {
+      slot.lo
+    } else {
+      slot.hi
+    }
+  })
 }
 
 // ============================================================
@@ -191,10 +247,8 @@ pub fn CHeap::alloc_struct(
   fields : Array[@types.Value],
 ) -> Int raise CHeapError {
   let num_fields = fields.length()
-  let raw_fields = FixedArray::makei(num_fields, fn(i) {
-    value_to_i64(fields[i])
-  })
-  let gc_ref = c_gc_heap_alloc_struct(
+  let raw_fields = slots_to_words(fields)
+  let gc_ref = c_gc_heap_alloc_struct_wide(
     self.ptr,
     type_idx,
     raw_fields,
@@ -217,8 +271,9 @@ pub fn CHeap::struct_get(
 ) -> @types.Value {
   // Convert 0-based to 1-based for C heap
   let gc_ref = struct_idx + 1
-  let raw = c_gc_heap_struct_get(self.ptr, gc_ref, field_idx)
-  i64_to_value(raw, field_type)
+  let out = FixedArray::make(2, 0L)
+  c_gc_heap_struct_get_wide(self.ptr, gc_ref, field_idx, out)
+  slot_to_value({ lo: out[0], hi: out[1] }, field_type)
 }
 
 ///|
@@ -230,8 +285,8 @@ pub fn CHeap::struct_set(
   value : @types.Value,
 ) -> Unit {
   let gc_ref = struct_idx + 1
-  let raw = value_to_i64(value)
-  c_gc_heap_struct_set(self.ptr, gc_ref, field_idx, raw)
+  let slot = value_to_slot(value)
+  c_gc_heap_struct_set_wide(self.ptr, gc_ref, field_idx, slot.lo, slot.hi)
 }
 
 // ============================================================
@@ -247,8 +302,14 @@ pub fn CHeap::alloc_array(
   len : Int,
   init_value : @types.Value,
 ) -> Int raise CHeapError {
-  let raw_init = value_to_i64(init_value)
-  let gc_ref = c_gc_heap_alloc_array(self.ptr, type_idx, len, raw_init)
+  let slot = value_to_slot(init_value)
+  let gc_ref = c_gc_heap_alloc_array_wide(
+    self.ptr,
+    type_idx,
+    len,
+    slot.lo,
+    slot.hi,
+  )
   if gc_ref <= 0 {
     raise OutOfMemory
   }
@@ -264,8 +325,8 @@ pub fn CHeap::alloc_array_from_values(
   elements : Array[@types.Value],
 ) -> Int raise CHeapError {
   let len = elements.length()
-  let raw_values = FixedArray::makei(len, fn(i) { value_to_i64(elements[i]) })
-  let gc_ref = c_gc_heap_alloc_array_from_values(
+  let raw_values = slots_to_words(elements)
+  let gc_ref = c_gc_heap_alloc_array_from_slots(
     self.ptr,
     type_idx,
     raw_values,
@@ -298,8 +359,9 @@ pub fn CHeap::array_get(
   if elem_idx < 0 || elem_idx >= len {
     raise OutOfBoundsArrayAccess
   }
-  let raw = c_gc_heap_array_get(self.ptr, gc_ref, elem_idx)
-  i64_to_value(raw, elem_type)
+  let out = FixedArray::make(2, 0L)
+  c_gc_heap_array_get_wide(self.ptr, gc_ref, elem_idx, out)
+  slot_to_value({ lo: out[0], hi: out[1] }, elem_type)
 }
 
 ///|
@@ -316,8 +378,8 @@ pub fn CHeap::array_set(
   if elem_idx < 0 || elem_idx >= len {
     raise OutOfBoundsArrayAccess
   }
-  let raw = value_to_i64(value)
-  c_gc_heap_array_set(self.ptr, gc_ref, elem_idx, raw)
+  let slot = value_to_slot(value)
+  c_gc_heap_array_set_wide(self.ptr, gc_ref, elem_idx, slot.lo, slot.hi)
 }
 
 ///|
@@ -335,8 +397,8 @@ pub fn CHeap::array_fill(
   if offset < 0 || count < 0 || offset + count > len {
     raise OutOfBoundsArrayAccess
   }
-  let raw = value_to_i64(value)
-  c_gc_heap_array_fill(self.ptr, gc_ref, offset, raw, count)
+  let slot = value_to_slot(value)
+  c_gc_heap_array_fill_wide(self.ptr, gc_ref, offset, slot.lo, slot.hi, count)
 }
 
 ///|

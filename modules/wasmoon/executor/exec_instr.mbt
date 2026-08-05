@@ -969,7 +969,7 @@ pub fn ExecContext::call_func(
 
   // Get the function type to determine return arity
   let type_idx = self.instance.func_type_indices[func_idx]
-  let func_type = self.instance.get_func_type(type_idx)
+  let func_type = self.instance.validated_func_type_at(type_idx)
   let return_arity = func_type.results.length()
 
   // Use the same context-switching logic as exec_call

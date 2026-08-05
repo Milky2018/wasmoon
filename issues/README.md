@@ -411,6 +411,10 @@ graph TD
   ISS_390["ISS-390: Rebuild sanitizer coverage as a dedicated package, not a compiler shim"]
   ISS_391["ISS-391: Elaboration's commit loop still had failure points after allocation"]
   ISS_392["ISS-392: A failed allocation never ends the observer's phase sequence"]
+  ISS_393["ISS-393: egraph.mbt carries five responsibilities in one 2125-line file"]
+  ISS_394["ISS-394: Two CLI binaries declare their own `exit` FFI around a stale warning"]
+  ISS_395["ISS-395: The validator aborts the process on modules it should reject"]
+  ISS_396["ISS-396: A type index of the wrong kind kills every command, during parsing"]
   ISS_002 --> ISS_003
   ISS_002 --> ISS_004
   ISS_003 --> ISS_005

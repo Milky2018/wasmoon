@@ -41,11 +41,6 @@ pub fn run_explore(
   let show_machv = show_all || stages.contains("machv")
   let show_vcode = show_all || stages.contains("vcode")
   let show_code_object = show_all || stages.contains("code-object")
-  if !html_output {
-    println("Exploring compilation: \{wasm_path}")
-    println("=".repeat(60))
-  }
-
   // Load the module
   let mod_ = load_module_from_path(wasm_path) catch {
     e => {
@@ -58,9 +53,21 @@ pub fn run_explore(
   // Validate the module
   @validator.validate_module(mod_) catch {
     e => {
-      println("Validation error: \{e}")
+      // A rejected module is a failure, so it belongs on stderr behind a
+      // non-zero status. Printing it and returning 0 made `explore` claim
+      // success for a module it never explored.
+      @logger.error("validating module: \{e}")
+      exit_failure()
       return
     }
+  }
+
+  // Only now that there is a module to explore: the heading announces output
+  // that follows it, so emitting it earlier left a header on stdout for a
+  // report that never came.
+  if !html_output {
+    println("Exploring compilation: \{wasm_path}")
+    println("=".repeat(60))
   }
   // Count imports to convert between absolute and local function indices
   // Absolute index = num_imports + local_index (matches JIT error messages)
@@ -99,7 +106,7 @@ pub fn run_explore(
   let compiled_funcs : Array[CompiledFunc] = []
   for local_idx in func_indices {
     let type_idx = mod_.funcs[local_idx]
-    let func_type = mod_.get_func_type(type_idx)
+    let func_type = mod_.validated_func_type_at(type_idx)
     let code = mod_.codes[local_idx]
     // Find function name: prefer internal name, then export name, then anonymous
     let actual_func_idx = num_imports + local_idx

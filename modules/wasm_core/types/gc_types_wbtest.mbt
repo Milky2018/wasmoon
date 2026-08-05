@@ -376,12 +376,12 @@ test "PackedType equality" {
 // ============================================================
 
 ///|
-test "Module::get_func_type returns correct FuncType" {
+test "Module::func_type_at returns correct FuncType" {
   let mod_ = Module::Module()
   mod_.types.push(SubType::func([I32, I32], [I32]))
   mod_.types.push(SubType::func([], [F64]))
-  let ft0 = mod_.get_func_type(0)
-  let ft1 = mod_.get_func_type(1)
+  let ft0 = mod_.func_type_at(0).unwrap()
+  let ft1 = mod_.func_type_at(1).unwrap()
   debug_inspect(ft0.params, content="[I32, I32]")
   debug_inspect(ft0.results, content="[I32]")
   debug_inspect(ft1.params, content="[]")
@@ -389,7 +389,7 @@ test "Module::get_func_type returns correct FuncType" {
 }
 
 ///|
-test "Module::get_struct_type returns correct StructType" {
+test "Module::struct_type_at returns correct StructType" {
   let mod_ = Module::Module()
   let struct_type : StructType = {
     fields: [
@@ -398,20 +398,20 @@ test "Module::get_struct_type returns correct StructType" {
     ],
   }
   mod_.types.push(SubType::simple(Struct(struct_type)))
-  let st = mod_.get_struct_type(0)
+  let st = mod_.struct_type_at(0).unwrap()
   inspect(st.fields.length(), content="2")
   inspect(st.fields[0].storage_type, content="Val(I32)")
   inspect(st.fields[1].mutable, content="true")
 }
 
 ///|
-test "Module::get_array_type returns correct ArrayType" {
+test "Module::array_type_at returns correct ArrayType" {
   let mod_ = Module::Module()
   let array_type : ArrayType = {
     element: { storage_type: Packed(I8), mutable: true },
   }
   mod_.types.push(SubType::simple(Array(array_type)))
-  let at = mod_.get_array_type(0)
+  let at = mod_.array_type_at(0).unwrap()
   inspect(at.element.storage_type, content="Packed(I8)")
   inspect(at.element.mutable, content="true")
 }
@@ -486,10 +486,40 @@ test "Module with mixed type definitions" {
   inspect(mod_.is_array_type(3), content="true")
   inspect(mod_.is_func_type(4), content="true")
   // Get specific types
-  let add_type = mod_.get_func_type(1)
+  let add_type = mod_.func_type_at(1).unwrap()
   debug_inspect(add_type.params, content="[I32, I32]")
-  let point_type = mod_.get_struct_type(2)
+  let point_type = mod_.struct_type_at(2).unwrap()
   inspect(point_type.fields.length(), content="1")
-  let arr_type = mod_.get_array_type(3)
+  let arr_type = mod_.array_type_at(3).unwrap()
   inspect(arr_type.element.storage_type, content="Val(F64)")
+}
+
+///|
+/// The lookups are partial twice over, and both halves used to be spelled as
+/// an abort: an index naming another kind, and an index naming nothing at
+/// all. Neither is an error of this package's making, so neither belongs in
+/// a crash (ISS-396).
+test "type lookups answer None rather than aborting" {
+  let mod_ = Module::Module()
+  mod_.types.push(SubType::func([], []))
+  mod_.types.push(
+    SubType::simple(
+      Struct({ fields: [{ storage_type: Val(I32), mutable: false }] }),
+    ),
+  )
+
+  // Right index, wrong kind.
+  inspect(mod_.struct_type_at(0) is None, content="true")
+  inspect(mod_.array_type_at(0) is None, content="true")
+  inspect(mod_.func_type_at(1) is None, content="true")
+  inspect(mod_.array_type_at(1) is None, content="true")
+
+  // Right kind, right index.
+  inspect(mod_.func_type_at(0) is Some(_), content="true")
+  inspect(mod_.struct_type_at(1) is Some(_), content="true")
+
+  // No such index, in either direction.
+  inspect(mod_.func_type_at(2) is None, content="true")
+  inspect(mod_.func_type_at(-1) is None, content="true")
+  inspect(mod_.struct_type_at(99) is None, content="true")
 }

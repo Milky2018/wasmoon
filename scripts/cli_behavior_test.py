@@ -41,6 +41,39 @@ FAILING_WAST = """(module (func (export "one") (result i32) (i32.const 1)))
 UNPARSEABLE_WAST = """(module (func (export "x")
 """
 
+# Modules the validator must reject. Each names a type index of the wrong
+# kind, or one that does not exist. These used to abort the process from
+# inside the validator -- SIGABRT, the diagnostic on stdout, and for the
+# out-of-range case nothing on either stream (ISS-395). A crash is not an
+# exit code, so none of the guarantees below applied to them.
+INVALID_MODULES = {
+    "struct.get on a func type": """(module
+  (type $f (func))
+  (func (export "go") (result i32)
+    (struct.get $f 0 (ref.null none))))
+""",
+    "array.get on a func type": """(module
+  (type $f (func))
+  (func (export "go") (result i32)
+    (array.get $f (ref.null none) (i32.const 0))))
+""",
+    "type index out of range": """(module
+  (type $f (func))
+  (func (export "go") (result i32)
+    (struct.get 99 0 (ref.null none))))
+""",
+}
+
+# A `(type $t)` on a function where `$t` names a struct. This one aborted
+# during *parsing*, upstream of validation, so it took down every command in
+# both binaries -- validating harder could never have caught it (ISS-396).
+# Kept separate from the modules above because what it pins is the breadth:
+# each subcommand parses, so each has to survive it.
+UNPARSEABLE_TYPE_KIND = """(module
+  (type $s (struct (field i32)))
+  (func (export "go") (type $s)))
+"""
+
 
 class Failure(Exception):
     pass
@@ -152,6 +185,71 @@ def check_test_exit_codes(tmp: Path) -> None:
     )
 
 
+def check_invalid_modules(tmp: Path) -> None:
+    for label, source in INVALID_MODULES.items():
+        path = tmp / (label.replace(" ", "_").replace(".", "_") + ".wat")
+        path.write_text(source)
+        proc = run("run", str(path), "--invoke", "go")
+        # A signal is reported as a negative returncode by subprocess, and is
+        # the specific failure this covers: the validator killing the process
+        # rather than rejecting the module.
+        expect(
+            f"`run` on {label} is rejected, not fatal",
+            proc.returncode > 0,
+            f"exit {proc.returncode}"
+            + (" (killed by signal)" if proc.returncode < 0 else ""),
+        )
+        expect(
+            f"`run` on {label} writes its diagnostic to stderr",
+            proc.stdout == "" and proc.stderr != "",
+            f"stdout={proc.stdout!r}, stderr={proc.stderr!r}",
+        )
+        # These parse and then fail validation, which is a later exit than the
+        # cases below and was reached by a different path: `explore` printed
+        # the error to stdout and returned 0, so it reported success for a
+        # module it had just rejected.
+        proc = run("explore", str(path))
+        expect(
+            f"`explore` on {label} exits non-zero",
+            proc.returncode > 0,
+            f"exit {proc.returncode}"
+            + (" (killed by signal)" if proc.returncode < 0 else ""),
+        )
+        expect(
+            f"`explore` on {label} writes its diagnostic to stderr",
+            proc.stdout == "" and proc.stderr != "",
+            f"stdout={proc.stdout!r}, stderr={proc.stderr!r}",
+        )
+
+
+def check_malformed_type_kind_across_commands(tmp: Path) -> None:
+    wat = tmp / "bad_type_kind.wat"
+    wat.write_text(UNPARSEABLE_TYPE_KIND)
+    wast = tmp / "bad_type_kind.wast"
+    wast.write_text(UNPARSEABLE_TYPE_KIND)
+    for command in (
+        ["run", str(wat), "--invoke", "go"],
+        ["run", str(wat), "--invoke", "go", "--no-jit"],
+        ["disasm", str(wat)],
+        ["explore", str(wat)],
+        ["test", str(wast)],
+    ):
+        proc = run(*command)
+        expect(
+            f"`{command[0]}` survives a struct type in a func position"
+            + (" (--no-jit)" if "--no-jit" in command else ""),
+            proc.returncode > 0,
+            f"exit {proc.returncode}"
+            + (" (killed by signal)" if proc.returncode < 0 else ""),
+        )
+        expect(
+            f"`{command[0]}` reports it on stderr"
+            + (" (--no-jit)" if "--no-jit" in command else ""),
+            proc.stdout == "" and proc.stderr != "",
+            f"stdout={proc.stdout!r}, stderr={proc.stderr!r}",
+        )
+
+
 def main() -> int:
     if not WASMOON.exists():
         print(
@@ -164,6 +262,8 @@ def main() -> int:
         with tempfile.TemporaryDirectory() as directory:
             check_version_flags()
             check_test_exit_codes(Path(directory))
+            check_invalid_modules(Path(directory))
+            check_malformed_type_kind_across_commands(Path(directory))
     except Failure as failure:
         print(f"FAILED {failure}", file=sys.stderr)
         return 1

@@ -455,11 +455,15 @@ fn InstanceSig::empty() -> InstanceSig {
 /// Convert a core index-space (including imports) into a type for validation.
 /// Returns None when the index is out of bounds or for kinds we don't model yet.
 fn core_func_type_of_idx(m : @types.Module, func_idx : Int) -> @types.FuncType? {
+  // The module here has not been validated -- this is what decides whether
+  // it will be -- so a type index naming a struct is an answer of `None`,
+  // not a crash (ISS-396). The `None` return was already the way to say
+  // "cannot model this"; a wrong-kind index is one more of those.
   let mut imported = 0
   for imp in m.imports {
     if imp.desc is Func(tyidx) {
       if imported == func_idx {
-        return Some(m.get_func_type(tyidx))
+        return m.func_type_at(tyidx)
       }
       imported += 1
     }
@@ -469,7 +473,7 @@ fn core_func_type_of_idx(m : @types.Module, func_idx : Int) -> @types.FuncType? 
     return None
   }
   let tyidx = m.funcs[local_idx]
-  Some(m.get_func_type(tyidx))
+  m.func_type_at(tyidx)
 }
 
 ///|
@@ -562,7 +566,11 @@ fn core_import_type_of_module(
   desc : @types.ImportDesc,
 ) -> CoreExternType? {
   match desc {
-    Func(tyidx) => Some(Func(m.get_func_type(tyidx)))
+    Func(tyidx) =>
+      match m.func_type_at(tyidx) {
+        Some(ft) => Some(Func(ft))
+        None => None
+      }
     Table(tt) => Some(Table(tt))
     Memory(mt) => Some(Memory(mt))
     Global(gt) => Some(Global(gt))

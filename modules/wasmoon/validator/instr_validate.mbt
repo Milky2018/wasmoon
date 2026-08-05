@@ -1609,16 +1609,19 @@ fn validate_instr(
       stack.push(RefStruct(type_idx))
     }
     StructNewDefault(type_idx) => {
-      // Just push struct ref (default values are implicit)
+      // Default field values are implicit, so nothing is read from the type.
+      // The lookup stays because it *is* the rule that `type_idx` must name a
+      // struct: it raises otherwise, and that is the only reason to call it.
       ignore(ctx.get_struct_type(type_idx))
       stack.push(RefStruct(type_idx))
     }
     StructGet(type_idx, field_idx)
     | StructGetS(type_idx, field_idx)
     | StructGetU(type_idx, field_idx) => {
-      // Pop struct ref, push field value
-      stack.pop(RefNullStruct(type_idx))
+      // Resolve the type before popping against it, so a `type_idx` that
+      // names no struct is rejected rather than shaping the operand check.
       let struct_type = ctx.get_struct_type(type_idx)
+      stack.pop(RefNullStruct(type_idx))
       let field_type = struct_type.fields[field_idx].storage_type
       stack.push(storage_type_to_value_type(field_type))
     }
@@ -1636,15 +1639,17 @@ fn validate_instr(
 
     // GC instructions - array operations
     ArrayNew(type_idx) => {
-      // Pop length (i32), pop init value, push array ref
-      ignore(ctx.get_array_type(type_idx))
-      stack.pop(I32)
+      // Pop length (i32), pop init value, push array ref. The element type is
+      // read below; looking it up first rejects a non-array `type_idx` before
+      // anything is popped against it.
       let array_type = ctx.get_array_type(type_idx)
+      stack.pop(I32)
       stack.pop(storage_type_to_value_type(array_type.element.storage_type))
       stack.push(RefArray(type_idx))
     }
     ArrayNewDefault(type_idx) => {
-      // Pop length (i32), push array ref
+      // Pop length (i32), push array ref. Nothing is read from the type, so
+      // this lookup is here only as the rule that `type_idx` names an array.
       ignore(ctx.get_array_type(type_idx))
       stack.pop(I32)
       stack.push(RefArray(type_idx))

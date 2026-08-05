@@ -41,6 +41,14 @@ fn semantic_runtime_symbol(
     "gc.alloc_struct_slow" => symbols.gc_alloc_struct_slow
     "gc.alloc_array_from_values_slow" => symbols.gc_alloc_array_from_values_slow
     "gc.alloc_array_slow" => symbols.gc_alloc_array_slow
+    "gc.struct_get_v128" => symbols.gc_struct_get_v128
+    "gc.struct_set_v128" => symbols.gc_struct_set_v128
+    "gc.array_get_v128" => symbols.gc_array_get_v128
+    "gc.array_set_v128" => symbols.gc_array_set_v128
+    "gc.array_fill_v128" => symbols.gc_array_fill_v128
+    "gc.alloc_struct_wide_slow" => symbols.gc_alloc_struct_wide_slow
+    "gc.alloc_array_wide_slow" => symbols.gc_alloc_array_wide_slow
+    "gc.alloc_array_from_slots_slow" => symbols.gc_alloc_array_from_slots_slow
     "exception.try_begin" => symbols.exception_try_begin
     "exception.try_end" => symbols.exception_try_end
     "exception.throw" => symbols.exception_throw

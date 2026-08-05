@@ -859,3 +859,204 @@ int64_t gc_alloc_array_from_values_slow(
     // Encode: gc_ref << 1
     return ((int64_t)gc_ref) << 1;
 }
+
+// ============ v128 Aggregate Operations ============
+//
+// A v128 does not fit the int64_t runtime word the ops above are built on, so
+// these carry it through a caller-owned 16-byte buffer instead. JIT-emitted
+// code allocates that buffer as a stack object and passes its address, which
+// keeps the call ABI to plain words and needs no 128-bit return convention.
+//
+// Layout of the buffer is GcSlot: low 8 bytes then high 8 bytes, little-endian.
+
+void gc_struct_get_v128_impl(int64_t ref, int32_t type_idx, int32_t field_idx,
+                             int64_t out_ptr) {
+    (void)type_idx;
+
+    GcSlot *out = (GcSlot *)(uintptr_t)out_ptr;
+    GcHeap *heap = resolve_heap(NULL);
+    if (!heap || ref == 0) {
+        trap_unreachable_void();
+        return;
+    }
+
+    int32_t gc_ref = decode_heap_ref(ref);
+    *out = gc_heap_struct_get_wide(heap, gc_ref, field_idx);
+}
+
+void gc_struct_set_v128_impl(int64_t ref, int32_t type_idx, int32_t field_idx,
+                             int64_t value_ptr) {
+    (void)type_idx;
+
+    GcHeap *heap = resolve_heap(NULL);
+    if (!heap || ref == 0) {
+        trap_unreachable_void();
+        return;
+    }
+
+    int32_t gc_ref = decode_heap_ref(ref);
+    gc_heap_struct_set_wide(heap, gc_ref, field_idx,
+                            *(const GcSlot *)(uintptr_t)value_ptr);
+}
+
+void gc_array_get_v128_impl(int64_t ref, int32_t type_idx, int32_t idx,
+                            int64_t out_ptr) {
+    (void)type_idx;
+
+    GcSlot *out = (GcSlot *)(uintptr_t)out_ptr;
+    GcHeap *heap = resolve_heap(NULL);
+    if (!heap || ref == 0) {
+        trap_unreachable_void();
+        return;
+    }
+
+    int32_t gc_ref = decode_heap_ref(ref);
+    int32_t len = gc_heap_array_len(heap, gc_ref);
+    if (idx < 0 || idx >= len) {
+        g_trap_code = 1;  // Out of bounds
+        if (g_trap_active) {
+            siglongjmp(g_trap_jmp_buf, 1);
+        }
+        return;
+    }
+
+    *out = gc_heap_array_get_wide(heap, gc_ref, idx);
+}
+
+void gc_array_set_v128_impl(int64_t ref, int32_t type_idx, int32_t idx,
+                            int64_t value_ptr) {
+    (void)type_idx;
+
+    GcHeap *heap = resolve_heap(NULL);
+    if (!heap || ref == 0) {
+        trap_unreachable_void();
+        return;
+    }
+
+    int32_t gc_ref = decode_heap_ref(ref);
+    int32_t len = gc_heap_array_len(heap, gc_ref);
+    if (idx < 0 || idx >= len) {
+        g_trap_code = 1;  // Out of bounds
+        if (g_trap_active) {
+            siglongjmp(g_trap_jmp_buf, 1);
+        }
+        return;
+    }
+
+    gc_heap_array_set_wide(heap, gc_ref, idx,
+                           *(const GcSlot *)(uintptr_t)value_ptr);
+}
+
+void gc_array_fill_v128_impl(int64_t ref, int32_t offset, int64_t value_ptr,
+                             int32_t count) {
+    GcHeap *heap = resolve_heap(NULL);
+    if (!heap) {
+        trap_unreachable_void();
+        return;
+    }
+    if (ref == 0) {
+        g_trap_code = 2;  // Null reference
+        if (g_trap_active) {
+            siglongjmp(g_trap_jmp_buf, 1);
+        }
+        return;
+    }
+
+    int32_t gc_ref = decode_heap_ref(ref);
+    int32_t len = gc_heap_array_len(heap, gc_ref);
+    if (offset < 0 || count < 0 || offset + count > len) {
+        g_trap_code = 1;  // Out of bounds
+        if (g_trap_active) {
+            siglongjmp(g_trap_jmp_buf, 1);
+        }
+        return;
+    }
+
+    gc_heap_array_fill_wide(heap, gc_ref, offset,
+                            *(const GcSlot *)(uintptr_t)value_ptr, count);
+}
+
+int64_t gc_alloc_struct_wide_slow_impl(int64_t ctx_ptr, int32_t type_idx,
+                                        int64_t slots_ptr, int32_t num_fields) {
+    (void)ctx_ptr;
+
+    jit_context_t *ctx = resolve_ctx(NULL);
+    GcHeap *heap = resolve_heap(ctx);
+    if (!heap) {
+        return trap_unreachable_i64();
+    }
+
+    const GcSlot *slots = (const GcSlot *)(uintptr_t)slots_ptr;
+    int32_t gc_ref = gc_heap_alloc_struct_wide(heap, type_idx, slots, num_fields);
+    if (gc_ref == 0) {
+        // Retry once behind a collection, mirroring the word-sized slow paths.
+        gc_heap_collect(heap, NULL, 0);
+        gc_ref = gc_heap_alloc_struct_wide(heap, type_idx, slots, num_fields);
+    }
+    if (gc_ref == 0) {
+        return trap_out_of_memory_i64();
+    }
+
+    if (ctx) {
+        ctx->gc_heap = heap;
+        ctx->gc_heap_ptr = heap->data + heap->size;
+        ctx->gc_heap_limit = heap->data + heap->capacity;
+    }
+    return ((int64_t)gc_ref) << 1;
+}
+
+int64_t gc_alloc_array_wide_slow_impl(int64_t ctx_ptr, int32_t type_idx,
+                                       int32_t len, int64_t init_ptr) {
+    (void)ctx_ptr;
+
+    jit_context_t *ctx = resolve_ctx(NULL);
+    GcHeap *heap = resolve_heap(ctx);
+    if (!heap) {
+        return trap_unreachable_i64();
+    }
+
+    GcSlot init = *(const GcSlot *)(uintptr_t)init_ptr;
+    int32_t gc_ref = gc_heap_alloc_array_wide(heap, type_idx, len, init);
+    if (gc_ref == 0) {
+        gc_heap_collect(heap, NULL, 0);
+        gc_ref = gc_heap_alloc_array_wide(heap, type_idx, len, init);
+    }
+    if (gc_ref == 0) {
+        return trap_out_of_memory_i64();
+    }
+
+    if (ctx) {
+        ctx->gc_heap = heap;
+        ctx->gc_heap_ptr = heap->data + heap->size;
+        ctx->gc_heap_limit = heap->data + heap->capacity;
+    }
+    return ((int64_t)gc_ref) << 1;
+}
+
+int64_t gc_alloc_array_from_slots_slow_impl(int64_t ctx_ptr, int32_t type_idx,
+                                             int64_t slots_ptr, int32_t len) {
+    (void)ctx_ptr;
+
+    jit_context_t *ctx = resolve_ctx(NULL);
+    GcHeap *heap = resolve_heap(ctx);
+    if (!heap) {
+        return trap_unreachable_i64();
+    }
+
+    const GcSlot *slots = (const GcSlot *)(uintptr_t)slots_ptr;
+    int32_t gc_ref = gc_heap_alloc_array_from_slots(heap, type_idx, slots, len);
+    if (gc_ref == 0) {
+        gc_heap_collect(heap, NULL, 0);
+        gc_ref = gc_heap_alloc_array_from_slots(heap, type_idx, slots, len);
+    }
+    if (gc_ref == 0) {
+        return trap_out_of_memory_i64();
+    }
+
+    if (ctx) {
+        ctx->gc_heap = heap;
+        ctx->gc_heap_ptr = heap->data + heap->size;
+        ctx->gc_heap_limit = heap->data + heap->capacity;
+    }
+    return ((int64_t)gc_ref) << 1;
+}

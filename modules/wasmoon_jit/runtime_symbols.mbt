@@ -43,6 +43,38 @@ pub fn RuntimeSymbolResolver::with_wasmoon_runtime_symbols() -> RuntimeSymbolRes
     c_jit_get_gc_struct_set_ptr(),
   )
   resolver.add_symbol(
+    "wasmoon.runtime.gc.struct_get_v128",
+    c_jit_get_gc_struct_get_v128_ptr(),
+  )
+  resolver.add_symbol(
+    "wasmoon.runtime.gc.struct_set_v128",
+    c_jit_get_gc_struct_set_v128_ptr(),
+  )
+  resolver.add_symbol(
+    "wasmoon.runtime.gc.array_get_v128",
+    c_jit_get_gc_array_get_v128_ptr(),
+  )
+  resolver.add_symbol(
+    "wasmoon.runtime.gc.array_set_v128",
+    c_jit_get_gc_array_set_v128_ptr(),
+  )
+  resolver.add_symbol(
+    "wasmoon.runtime.gc.array_fill_v128",
+    c_jit_get_gc_array_fill_v128_ptr(),
+  )
+  resolver.add_symbol(
+    "wasmoon.runtime.gc.alloc_struct_wide_slow",
+    c_jit_get_gc_alloc_struct_wide_slow_ptr(),
+  )
+  resolver.add_symbol(
+    "wasmoon.runtime.gc.alloc_array_wide_slow",
+    c_jit_get_gc_alloc_array_wide_slow_ptr(),
+  )
+  resolver.add_symbol(
+    "wasmoon.runtime.gc.alloc_array_from_slots_slow",
+    c_jit_get_gc_alloc_array_from_slots_slow_ptr(),
+  )
+  resolver.add_symbol(
     "wasmoon.runtime.gc.array_new",
     c_jit_get_gc_array_new_ptr(),
   )

@@ -1,6 +1,28 @@
 ///|
+/// A module too malformed to render as WAT.
+///
+/// `wasm2wat` prints whatever it is handed, without validating first, so it
+/// meets shapes a validated module cannot have. It used to abort on them,
+/// which killed the process on the way to a diagnostic (ISS-396).
+pub(all) suberror WatPrintError {
+  NotAFunctionType(Int)
+}
+
+///|
+fn WatPrintError::to_string(self : WatPrintError) -> String {
+  match self {
+    NotAFunctionType(idx) => "type \{idx} is not a function type"
+  }
+}
+
+///|
+pub impl Show for WatPrintError with fn output(self, logger) {
+  logger.write_string(self.to_string())
+}
+
+///|
 /// Convert a Module to WAT text format
-fn module_to_wat(mod_ : @types.Module) -> String {
+fn module_to_wat(mod_ : @types.Module) -> String raise WatPrintError {
   let sb = StringBuilder::StringBuilder()
   sb.write_string("(module\n")
 
@@ -215,7 +237,9 @@ fn module_to_wat(mod_ : @types.Module) -> String {
   for i, code in mod_.codes {
     let func_idx = import_func_count + i
     let type_idx = mod_.funcs[i]
-    let func_type = mod_.get_func_type(type_idx)
+    guard mod_.func_type_at(type_idx) is Some(func_type) else {
+      raise NotAFunctionType(type_idx)
+    }
     sb.write_string("  (func (;")
     sb.write_string(func_idx.to_string())
     sb.write_string(";) (type ")

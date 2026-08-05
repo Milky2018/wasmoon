@@ -253,7 +253,7 @@ fn compile_component_artifact(
           imported_function_index,
           import_.mod_name,
           import_.name,
-          module_.get_func_type(type_index),
+          module_.validated_func_type_at(type_index),
         ),
       )
       imported_function_index = imported_function_index + 1
@@ -262,7 +262,9 @@ fn compile_component_artifact(
   let functions : Array[@artifact.FunctionCode] = []
   for local_index, code in module_.codes {
     let function_index = imported_function_index + local_index
-    let function_type = module_.get_func_type(module_.funcs[local_index])
+    let function_type = module_.validated_func_type_at(
+      module_.funcs[local_index],
+    )
     let milkir = @wasm_frontend.translate_function_body(
       translation_context,
       component_function_name(module_, function_index),
