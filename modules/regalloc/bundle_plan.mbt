@@ -23,15 +23,22 @@ priv struct ProductionBundlePlan {
 }
 
 ///|
+/// Check that the plan just built maps every range and segment exactly once.
+///
+/// A violation means this allocator is broken, not that the input was bad, so
+/// it reports through `VerifyError::InvalidPlan` — the same channel
+/// `verify_plan.mbt` uses for the same class of claim. Killing the process
+/// instead would give whoever is bringing up a target a signal they cannot
+/// catch and cannot see the shape of.
 fn ProductionBundlePlan::validate(
   self : ProductionBundlePlan,
   range_count : Int,
   segment_count : Int,
-) -> Unit {
+) -> Unit raise VerifyError {
   if self.range_to_bundle.length() != range_count ||
     self.segment_to_bundle.length() != segment_count ||
     self.bundle_ranges.length() != self.bundle_segments.length() {
-    abort("invalid production bundle plan dimensions")
+    raise InvalidPlan(message="invalid production bundle plan dimensions")
   }
   let seen_ranges = Array::make(range_count, false)
   for bundle, range_ids in self.bundle_ranges {
@@ -40,7 +47,9 @@ fn ProductionBundlePlan::validate(
         range_id >= range_count ||
         seen_ranges[range_id] ||
         self.range_to_bundle[range_id] != bundle {
-        abort("invalid production bundle range mapping")
+        raise InvalidPlan(
+          message="invalid production bundle range mapping for range \{range_id} in bundle \{bundle}",
+        )
       }
       seen_ranges[range_id] = true
     }
@@ -49,7 +58,9 @@ fn ProductionBundlePlan::validate(
     if !seen_ranges[range_id] ||
       self.range_to_bundle[range_id] < 0 ||
       self.range_to_bundle[range_id] >= self.bundle_ranges.length() {
-      abort("incomplete production bundle range mapping")
+      raise InvalidPlan(
+        message="incomplete production bundle range mapping for range \{range_id}",
+      )
     }
   }
   let seen_segments = Array::make(segment_count, false)
@@ -59,7 +70,9 @@ fn ProductionBundlePlan::validate(
         segment_id >= segment_count ||
         seen_segments[segment_id] ||
         self.segment_to_bundle[segment_id] != bundle {
-        abort("invalid production bundle segment mapping")
+        raise InvalidPlan(
+          message="invalid production bundle segment mapping for segment \{segment_id} in bundle \{bundle}",
+        )
       }
       seen_segments[segment_id] = true
     }
@@ -68,7 +81,9 @@ fn ProductionBundlePlan::validate(
     if !seen_segments[segment_id] ||
       self.segment_to_bundle[segment_id] < 0 ||
       self.segment_to_bundle[segment_id] >= self.bundle_segments.length() {
-      abort("incomplete production bundle segment mapping")
+      raise InvalidPlan(
+        message="incomplete production bundle segment mapping for segment \{segment_id}",
+      )
     }
   }
 }
@@ -265,7 +280,7 @@ fn build_production_bundle_plan_from_range_edges(
   ranges : LiveRangeSet,
   segments : Array[AllocationSegment],
   edges : Array[(Int, Int)],
-) -> ProductionBundlePlan {
+) -> ProductionBundlePlan raise VerifyError {
   let facts = build_bundle_range_facts(ranges)
   let union_find = @unionfind.UnionFind::UnionFind(facts.length())
   let fixed_reg_cache : Array[PhysicalReg?] = []
@@ -358,7 +373,7 @@ fn[F : FunctionView] build_production_bundle_plan(
   function : F,
   ranges : LiveRangeSet,
   segments : Array[AllocationSegment],
-) -> ProductionBundlePlan {
+) -> ProductionBundlePlan raise VerifyError {
   build_production_bundle_plan_from_range_edges(
     ranges,
     segments,

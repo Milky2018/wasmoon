@@ -345,7 +345,7 @@ fn[F : FunctionView] allocate_segments_with_bundles(
   Array[AllocationBundle],
   Array[Int],
   ProductionBundlePlan,
-) {
+) raise VerifyError {
   config.enter_phase(Some(SegmentConstruction))
   let loop_depths = compute_allocator_loop_depths(function)
   let (segments, segments_by_value) = build_allocation_segments(

@@ -627,27 +627,38 @@ fn should_take_bundle_split(
 }
 
 ///|
+/// Check that allocation left every bundle resolved and every segment owned.
+///
+/// Like `ProductionBundlePlan::validate`, a violation here is a defect in this
+/// allocator rather than bad input, and it reports through
+/// `VerifyError::InvalidPlan` so the caller can see which invariant broke.
 fn validate_bundle_allocations(
   bundles : Array[AllocationBundle],
   segments : Array[AllocationSegment],
   segment_owner : Array[Int],
-) -> Unit {
+) -> Unit raise VerifyError {
   for bundle in bundles {
     if bundle.state is BundlePending {
-      abort("pending allocation bundle after allocation")
+      raise InvalidPlan(message="pending allocation bundle after allocation")
     }
     let (priority, weight, has_fixed_constraint) = allocation_bundle_metrics(
       bundle.segments,
       segments,
     )
     if bundle.priority != priority {
-      abort("allocation bundle lost queue priority")
+      raise InvalidPlan(
+        message="allocation bundle lost queue priority: recorded \{bundle.priority}, recomputed \{priority}",
+      )
     }
     if bundle.weight != weight {
-      abort("allocation bundle lost use weight")
+      raise InvalidPlan(
+        message="allocation bundle lost use weight: recorded \{bundle.weight}, recomputed \{weight}",
+      )
     }
     if has_fixed_constraint != bundle.has_fixed_constraint {
-      abort("allocation bundle lost fixed constraints")
+      raise InvalidPlan(
+        message="allocation bundle lost fixed constraints: recorded \{bundle.has_fixed_constraint}, recomputed \{has_fixed_constraint}",
+      )
     }
     if bundle.state is BundleSplit {
       continue
@@ -658,13 +669,18 @@ fn validate_bundle_allocations(
     if owner < 0 ||
       owner >= bundles.length() ||
       !bundles[owner].segments.contains(segment.id) {
-      abort("invalid allocation bundle ownership")
+      raise InvalidPlan(
+        message="invalid allocation bundle ownership for segment \{segment.id}: owner \{owner}",
+      )
     }
     match (bundles[owner].state, segment.location) {
       (BundleReg(expected), Some(SegmentReg(actual))) if expected == actual =>
         ()
       (BundleSpill, Some(SegmentSpill)) => ()
-      _ => abort("incomplete atomic bundle allocation")
+      _ =>
+        raise InvalidPlan(
+          message="incomplete atomic bundle allocation for segment \{segment.id} in bundle \{owner}",
+        )
     }
   }
 }
@@ -1023,7 +1039,7 @@ fn[F : FunctionView] allocate_bundles(
   bundle_plan : ProductionBundlePlan,
   strategy : AllocatorStrategy,
   loop_depths? : Array[Int] = [],
-) -> (Array[AllocationBundle], Array[Int]) {
+) -> (Array[AllocationBundle], Array[Int]) raise VerifyError {
   let enable_eviction = strategy is Backtracking
   let (bundles, segment_owner) = build_allocation_bundles(bundle_plan, segments)
   let occupied : Array[Array[Int]] = []
