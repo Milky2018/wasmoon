@@ -42,9 +42,14 @@ validation. Validation inside a nested control-flow block does not establish
 evidence for the gate.
 
 The Linux AMD64 and macOS ARM64 jobs each run the stable 0.2, current 0.3
-async, and future-gated suites through both JIT and interpreter execution. They
-also run native sanitizer checks in the same platform job instead of launching
-separate Component Model or sanitizer jobs.
+async, and future-gated suites through both JIT and interpreter execution, in
+one platform job rather than separate Component Model jobs.
+
+Neither job runs ASan or UBSan. The gate that did was removed with the
+compiler wrapper it depended on; the tests it covered, including
+`runtime_cleanup_wbtest.mbt`, still run under `moon test --target native`,
+but uninstrumented. Treat leak and use-after-free claims about the component
+runtime as unverified by CI until ISS-390 restores that coverage.
 
 The following tools remain available for explicit local diagnostics, but they
 are not pull-request gates or scheduled CI campaigns:

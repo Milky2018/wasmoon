@@ -102,9 +102,9 @@
       "report": "target/component-hardening/lifecycle.log"
     },
     {
-      "name": "native-sanitizers",
+      "name": "native-runtime-tests",
       "command": "moon test --target native",
-      "report": "target/component-hardening/sanitizer.log"
+      "report": "target/component-hardening/native-tests.log"
     },
     {
       "name": "large-component-stress",

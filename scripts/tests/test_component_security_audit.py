@@ -45,7 +45,7 @@ class ComponentSecurityAuditTests(unittest.TestCase):
                     "fuzz",
                     "wasmtime-differential",
                     "logical-resource-lifecycle",
-                    "native-sanitizers",
+                    "native-runtime-tests",
                     "large-component-stress",
                 ]
             ],
@@ -104,12 +104,16 @@ class ComponentSecurityAuditTests(unittest.TestCase):
         workflows = root / ".github/workflows"
         workflows.mkdir(parents=True)
         (workflows / "check.yml").write_text(
-            "runtime_cleanup_wbtest.mbt\n"
-            "run native sanitizer checks\n"
+            "moon test --target native\n"
             "stable-0.2\n"
             "async-0.3\n"
             "future-gated\n",
             encoding="utf-8",
+        )
+        cleanup = root / "modules/wasmoon/component/runtime_impl"
+        cleanup.mkdir(parents=True, exist_ok=True)
+        (cleanup / "runtime_cleanup_wbtest.mbt").write_text(
+            'test "cleanup" {\n}\n', encoding="utf-8"
         )
 
     def assert_failed(self, root: Path, name: str) -> None:
@@ -429,8 +433,21 @@ class ComponentSecurityAuditTests(unittest.TestCase):
             root = Path(directory)
             self.create_fixture(root)
             for path in (root / ".github/workflows").iterdir():
-                path.write_text("run native sanitizer checks\n")
+                path.write_text("stable-0.2\n")
             self.assert_failed(root, "platform-ci")
+
+    def test_deleted_cleanup_tests_fail(self) -> None:
+        # No CI step names this file any more, so the audit is what
+        # notices if the tests it used to guard are deleted.
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.create_fixture(root)
+            (
+                root
+                / "modules/wasmoon/component/runtime_impl"
+                / "runtime_cleanup_wbtest.mbt"
+            ).write_text("// no tests left\n", encoding="utf-8")
+            self.assert_failed(root, "resource-cleanup-tests")
 
 
 if __name__ == "__main__":
