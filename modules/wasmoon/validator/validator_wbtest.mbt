@@ -1827,3 +1827,72 @@ test "validator: table64 table.grow takes and returns i64" {
   )
   validate_module(mod)
 }
+
+///|
+/// A type index that names the wrong kind of type is a module the validator
+/// must reject. It used to `abort` instead: the lookup helpers returned the
+/// type directly, so there was no way to report "that index names a function
+/// type" other than killing the process — and three call sites discarded the
+/// result and kept the call solely for that abort, which made the crash the
+/// rule. Both spellings below reached it (ISS-395).
+test "validator: type index naming the wrong kind is rejected, not fatal" {
+  let func_type : @types.FuncType = { params: [], results: [] }
+  fn module_with(body : Array[@types.Instruction]) -> @types.Module {
+    {
+      types: [@types.SubType::from_func(func_type)],
+      type_rec_groups: [0],
+      imports: [],
+      funcs: [0],
+      tables: [],
+      memories: [],
+      globals: [],
+      exports: [],
+      start: None,
+      elems: [],
+      codes: [{ locals: [], body }],
+      datas: [],
+      tags: [],
+      func_names: Map([]),
+    }
+  }
+
+  // `struct.new_default` reads nothing from the type, so its lookup exists
+  // only as this rule.
+  assert_true(
+    validate_module_has_error(module_with([StructNewDefault(0)]), err => {
+      err is TypeMismatch("type at index 0 is not a struct type")
+    }),
+  )
+  assert_true(
+    validate_module_has_error(module_with([ArrayNewDefault(0)]), err => {
+      err is TypeMismatch("type at index 0 is not an array type")
+    }),
+  )
+}
+
+///|
+/// The same helpers indexed `types` without a bounds check, so an
+/// out-of-range index aborted before it could name itself — the process died
+/// with nothing on either stream (ISS-395).
+test "validator: out-of-range type index is rejected, not fatal" {
+  let func_type : @types.FuncType = { params: [], results: [] }
+  let mod : @types.Module = {
+    types: [@types.SubType::from_func(func_type)],
+    type_rec_groups: [0],
+    imports: [],
+    funcs: [0],
+    tables: [],
+    memories: [],
+    globals: [],
+    exports: [],
+    start: None,
+    elems: [],
+    codes: [{ locals: [], body: [StructNewDefault(99)] }],
+    datas: [],
+    tags: [],
+    func_names: Map([]),
+  }
+  assert_true(
+    validate_module_has_error(mod, err => err is InvalidTypeIndex(99)),
+  )
+}
