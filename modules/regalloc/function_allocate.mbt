@@ -310,19 +310,48 @@ fn[F : FunctionView] verify_operand_preferences(
 }
 
 ///|
-/// Allocate directly from a read-only machine-function view.
-pub fn[F : FunctionView] allocate_function(
+/// The phases proper: everything from the first `enter_phase` onwards.
+///
+/// Split out so the terminating event can be attached to every way this
+/// returns. A single body cannot express that — MoonBit has no `finally`,
+/// and a `raise` runs straight past a trailing call.
+fn[F : FunctionView] run_allocation_phases(
   function : F,
   environment : MachineEnv,
-  config? : RegallocConfig = RegallocConfig(),
+  config : RegallocConfig,
 ) -> AllocationPlan raise VerifyError {
-  verify_operand_preferences(function, environment)
   let plan = allocate_bundle_plan(function, environment, config)
   config.enter_phase(Some(EditResolution))
   resolve_instruction_edits(plan, environment)
   if config.verify() {
     config.enter_phase(Some(Verification))
     verify_function_allocation(function, environment, plan)
+  }
+  plan
+}
+
+///|
+/// Allocate directly from a read-only machine-function view.
+///
+/// The observer sees `Some(phase)` as each phase begins and exactly one
+/// `None` once the last one ends, *including when allocation fails*. A raise
+/// used to skip that `None`, leaving whoever was measuring with a phase that
+/// never ended — `Verification` most often, since verifying the finished
+/// plan is both the likeliest raise and the last phase to open.
+pub fn[F : FunctionView] allocate_function(
+  function : F,
+  environment : MachineEnv,
+  config? : RegallocConfig = RegallocConfig(),
+) -> AllocationPlan raise VerifyError {
+  // Ahead of the first phase on purpose: this raises before any phase has
+  // opened, so there is no sequence to terminate, and an observer that has
+  // heard nothing is owed nothing.
+  verify_operand_preferences(function, environment)
+  let plan = run_allocation_phases(function, environment, config) catch {
+    error => {
+      config.enter_phase(None)
+      raise error
+    }
   }
   config.enter_phase(None)
   plan
