@@ -180,6 +180,8 @@ pub fn resolve_import_function_ptr(Map[String, Map[String, Int64]], String, Stri
 
 pub fn sanitize_debug_filename(String) -> String
 
+pub fn slot_to_value(GcSlot, @types.ValueType) -> @types.Value
+
 pub fn tag_funcref_ptr(Int64) -> Int64
 
 pub fn take_pending_trap_message() -> String?
@@ -187,6 +189,8 @@ pub fn take_pending_trap_message() -> String?
 pub fn untag_funcref_ptr(Int64) -> Int64
 
 pub fn value_to_i64(@types.Value) -> Int64
+
+pub fn value_to_slot(@types.Value) -> GcSlot
 
 pub fn value_type_may_hold_gc_ref(@types.ValueType) -> Bool
 
@@ -450,6 +454,11 @@ pub struct GcSafepoint {
   metadata : Int64
 } derive(@debug.Debug)
 pub fn GcSafepoint::GcSafepoint(Int, Array[Int], Int64) -> Self
+
+pub struct GcSlot {
+  lo : Int64
+  hi : Int64
+} derive(Eq, @debug.Debug)
 
 pub(all) struct HostcallImportTrampolineCode {
   code : Array[Int]

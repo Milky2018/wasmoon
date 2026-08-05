@@ -324,8 +324,8 @@ void gc_heap_unregister_parked_roots(void* opaque_registration) {
 
 // ============ Struct Operations ============
 
-int32_t gc_heap_alloc_struct(GcHeap* heap, int32_t type_idx,
-                              const int64_t* fields, int32_t num_fields) {
+static int32_t alloc_struct_slots(GcHeap* heap, int32_t type_idx,
+                                  const GcSlot* fields, int32_t num_fields) {
     if (!heap) {
         return 0;
     }
@@ -334,7 +334,7 @@ int32_t gc_heap_alloc_struct(GcHeap* heap, int32_t type_idx,
     }
 
     // Calculate object size: header + fields
-    size_t data_size = num_fields * sizeof(int64_t);
+    size_t data_size = (size_t)num_fields * GC_VALUE_SLOT_SIZE;
     size_t total_size = ALIGN_UP(GC_HEADER_SIZE + data_size, 16);
 
     // Ensure capacity
@@ -359,9 +359,9 @@ int32_t gc_heap_alloc_struct(GcHeap* heap, int32_t type_idx,
     header->reserved = num_fields;  // Store actual field count for GC
 
     // Copy field values
-    int64_t* field_data = (int64_t*)(heap->data + offset + GC_HEADER_SIZE);
+    GcSlot* field_data = (GcSlot*)(heap->data + offset + GC_HEADER_SIZE);
     if (fields && num_fields > 0) {
-        memcpy(field_data, fields, num_fields * sizeof(int64_t));
+        memcpy(field_data, fields, (size_t)num_fields * GC_VALUE_SLOT_SIZE);
     }
 
     // Update heap state
@@ -375,32 +375,68 @@ int32_t gc_heap_alloc_struct(GcHeap* heap, int32_t type_idx,
     return gc_ref;
 }
 
+int32_t gc_heap_alloc_struct(GcHeap* heap, int32_t type_idx,
+                              const int64_t* fields, int32_t num_fields) {
+    if (!fields || num_fields <= 0) {
+        return alloc_struct_slots(heap, type_idx, NULL, num_fields);
+    }
+    // Widen the caller's runtime words in place of a second allocation path.
+    // The high word of every non-v128 value is zero, which is what a fresh
+    // slot already holds, so only the low words need writing.
+    GcSlot* slots = (GcSlot*)calloc((size_t)num_fields, sizeof(GcSlot));
+    if (!slots) {
+        return 0;
+    }
+    for (int32_t i = 0; i < num_fields; i++) {
+        slots[i].lo = fields[i];
+    }
+    int32_t gc_ref = alloc_struct_slots(heap, type_idx, slots, num_fields);
+    free(slots);
+    return gc_ref;
+}
+
+int32_t gc_heap_alloc_struct_wide(GcHeap* heap, int32_t type_idx,
+                                   const GcSlot* fields, int32_t num_fields) {
+    return alloc_struct_slots(heap, type_idx, fields, num_fields);
+}
+
 int64_t gc_heap_struct_get(GcHeap* heap, int32_t gc_ref, int32_t field_idx) {
+    return gc_heap_struct_get_wide(heap, gc_ref, field_idx).lo;
+}
+
+GcSlot gc_heap_struct_get_wide(GcHeap* heap, int32_t gc_ref, int32_t field_idx) {
+    GcSlot empty = {0, 0};
     uint8_t* data = get_object_data(heap, gc_ref);
     if (!data) {
-        return 0;  // Invalid reference
+        return empty;  // Invalid reference
     }
 
-    int64_t* fields = (int64_t*)data;
+    GcSlot* fields = (GcSlot*)data;
     return fields[field_idx];
 }
 
 void gc_heap_struct_set(GcHeap* heap, int32_t gc_ref, int32_t field_idx, int64_t value) {
+    GcSlot slot = {value, 0};
+    gc_heap_struct_set_wide(heap, gc_ref, field_idx, slot);
+}
+
+void gc_heap_struct_set_wide(GcHeap* heap, int32_t gc_ref, int32_t field_idx,
+                             GcSlot value) {
     uint8_t* data = get_object_data(heap, gc_ref);
     if (!data) {
         return;  // Invalid reference
     }
 
-    int64_t* fields = (int64_t*)data;
-    gc_heap_write_barrier(heap, gc_ref, value);
+    GcSlot* fields = (GcSlot*)data;
+    gc_heap_write_barrier(heap, gc_ref, value.lo);
     fields[field_idx] = value;
     gc_heap_maybe_verify(heap, "struct_set");
 }
 
 // ============ Array Operations ============
 
-int32_t gc_heap_alloc_array(GcHeap* heap, int32_t type_idx,
-                             int32_t len, int64_t init_value) {
+int32_t gc_heap_alloc_array_wide(GcHeap* heap, int32_t type_idx,
+                                  int32_t len, GcSlot init_value) {
     if (!heap || len < 0) {
         return 0;
     }
@@ -408,9 +444,9 @@ int32_t gc_heap_alloc_array(GcHeap* heap, int32_t type_idx,
         return 0;
     }
 
-    // Calculate object size: header + length (8 bytes) + elements
-    // Array layout: [header][length:i32][padding:i32][elem0:i64][elem1:i64]...
-    size_t data_size = 8 + len * sizeof(int64_t);  // 8 = sizeof(int32_t) * 2 for length + padding
+    // Calculate object size: header + length block + elements
+    // Array layout: [header][length:i32][padding:12][elem0:16][elem1:16]...
+    size_t data_size = GC_ARRAY_DATA_OFFSET + (size_t)len * GC_VALUE_SLOT_SIZE;
     size_t total_size = ALIGN_UP(GC_HEADER_SIZE + data_size, 16);
 
     // Ensure capacity
@@ -440,7 +476,7 @@ int32_t gc_heap_alloc_array(GcHeap* heap, int32_t type_idx,
     len_ptr[0] = len;
 
     // Initialize elements
-    int64_t* elements = (int64_t*)(data + 8);
+    GcSlot* elements = (GcSlot*)(data + GC_ARRAY_DATA_OFFSET);
     for (int32_t i = 0; i < len; i++) {
         elements[i] = init_value;
     }
@@ -456,6 +492,12 @@ int32_t gc_heap_alloc_array(GcHeap* heap, int32_t type_idx,
     return gc_ref;
 }
 
+int32_t gc_heap_alloc_array(GcHeap* heap, int32_t type_idx,
+                             int32_t len, int64_t init_value) {
+    GcSlot slot = {init_value, 0};
+    return gc_heap_alloc_array_wide(heap, type_idx, len, slot);
+}
+
 int32_t gc_heap_array_len(GcHeap* heap, int32_t gc_ref) {
     uint8_t* data = get_object_data(heap, gc_ref);
     if (!data) {
@@ -467,21 +509,32 @@ int32_t gc_heap_array_len(GcHeap* heap, int32_t gc_ref) {
 }
 
 int64_t gc_heap_array_get(GcHeap* heap, int32_t gc_ref, int32_t idx) {
+    return gc_heap_array_get_wide(heap, gc_ref, idx).lo;
+}
+
+GcSlot gc_heap_array_get_wide(GcHeap* heap, int32_t gc_ref, int32_t idx) {
+    GcSlot empty = {0, 0};
     uint8_t* data = get_object_data(heap, gc_ref);
     if (!data) {
-        return 0;  // Invalid reference
+        return empty;  // Invalid reference
     }
 
     int32_t len = ((int32_t*)data)[0];
     if (idx < 0 || idx >= len) {
-        return 0;  // Out of bounds
+        return empty;  // Out of bounds
     }
 
-    int64_t* elements = (int64_t*)(data + 8);
+    GcSlot* elements = (GcSlot*)(data + GC_ARRAY_DATA_OFFSET);
     return elements[idx];
 }
 
 void gc_heap_array_set(GcHeap* heap, int32_t gc_ref, int32_t idx, int64_t value) {
+    GcSlot slot = {value, 0};
+    gc_heap_array_set_wide(heap, gc_ref, idx, slot);
+}
+
+void gc_heap_array_set_wide(GcHeap* heap, int32_t gc_ref, int32_t idx,
+                            GcSlot value) {
     uint8_t* data = get_object_data(heap, gc_ref);
     if (!data) {
         return;  // Invalid reference
@@ -492,24 +545,30 @@ void gc_heap_array_set(GcHeap* heap, int32_t gc_ref, int32_t idx, int64_t value)
         return;  // Out of bounds
     }
 
-    int64_t* elements = (int64_t*)(data + 8);
-    gc_heap_write_barrier(heap, gc_ref, value);
+    GcSlot* elements = (GcSlot*)(data + GC_ARRAY_DATA_OFFSET);
+    gc_heap_write_barrier(heap, gc_ref, value.lo);
     elements[idx] = value;
     gc_heap_maybe_verify(heap, "array_set");
 }
 
 void gc_heap_array_fill(GcHeap* heap, int32_t gc_ref, int32_t offset,
                         int64_t value, int32_t count) {
+    GcSlot slot = {value, 0};
+    gc_heap_array_fill_wide(heap, gc_ref, offset, slot, count);
+}
+
+void gc_heap_array_fill_wide(GcHeap* heap, int32_t gc_ref, int32_t offset,
+                             GcSlot value, int32_t count) {
     uint8_t* data = get_object_data(heap, gc_ref);
     if (!data) {
         return;
     }
 
     int32_t len = ((int32_t*)data)[0];
-    int64_t* elements = (int64_t*)(data + 8);
+    GcSlot* elements = (GcSlot*)(data + GC_ARRAY_DATA_OFFSET);
 
     for (int32_t i = 0; i < count && (offset + i) < len; i++) {
-        gc_heap_write_barrier(heap, gc_ref, value);
+        gc_heap_write_barrier(heap, gc_ref, value.lo);
         elements[offset + i] = value;
     }
     gc_heap_maybe_verify(heap, "array_fill");
@@ -525,8 +584,8 @@ void gc_heap_array_copy(GcHeap* heap, int32_t dst_ref, int32_t dst_offset,
 
     int32_t dst_len = ((int32_t*)dst_data)[0];
     int32_t src_len = ((int32_t*)src_data)[0];
-    int64_t* dst_elements = (int64_t*)(dst_data + 8);
-    int64_t* src_elements = (int64_t*)(src_data + 8);
+    GcSlot* dst_elements = (GcSlot*)(dst_data + GC_ARRAY_DATA_OFFSET);
+    GcSlot* src_elements = (GcSlot*)(src_data + GC_ARRAY_DATA_OFFSET);
 
     // Bounds check
     if (dst_offset < 0 || src_offset < 0 ||
@@ -536,10 +595,10 @@ void gc_heap_array_copy(GcHeap* heap, int32_t dst_ref, int32_t dst_offset,
 
     // Use memmove to handle overlapping regions
     for (int32_t i = 0; i < count; i++) {
-        gc_heap_write_barrier(heap, dst_ref, src_elements[src_offset + i]);
+        gc_heap_write_barrier(heap, dst_ref, src_elements[src_offset + i].lo);
     }
     memmove(&dst_elements[dst_offset], &src_elements[src_offset],
-            count * sizeof(int64_t));
+            (size_t)count * GC_VALUE_SLOT_SIZE);
     gc_heap_maybe_verify(heap, "array_copy");
 }
 
@@ -591,8 +650,8 @@ void gc_heap_write_barrier(GcHeap* heap, int32_t owner_gc_ref, int64_t written_v
     gc_heap_write_barrier_slow(heap, owner_gc_ref, target_gc_ref);
 }
 
-int32_t gc_heap_alloc_array_from_values(GcHeap* heap, int32_t type_idx,
-                                         const int64_t* values, int32_t len) {
+int32_t gc_heap_alloc_array_from_slots(GcHeap* heap, int32_t type_idx,
+                                        const GcSlot* values, int32_t len) {
     if (!heap || len < 0) {
         return 0;
     }
@@ -600,8 +659,8 @@ int32_t gc_heap_alloc_array_from_values(GcHeap* heap, int32_t type_idx,
         return 0;
     }
 
-    // Calculate object size: header + length (8 bytes) + elements
-    size_t data_size = 8 + len * sizeof(int64_t);
+    // Calculate object size: header + length block + elements
+    size_t data_size = GC_ARRAY_DATA_OFFSET + (size_t)len * GC_VALUE_SLOT_SIZE;
     size_t total_size = ALIGN_UP(GC_HEADER_SIZE + data_size, 16);
 
     // Ensure capacity
@@ -631,9 +690,9 @@ int32_t gc_heap_alloc_array_from_values(GcHeap* heap, int32_t type_idx,
     len_ptr[0] = len;
 
     // Copy element values
-    int64_t* elements = (int64_t*)(data + 8);
+    GcSlot* elements = (GcSlot*)(data + GC_ARRAY_DATA_OFFSET);
     if (values && len > 0) {
-        memcpy(elements, values, len * sizeof(int64_t));
+        memcpy(elements, values, (size_t)len * GC_VALUE_SLOT_SIZE);
     }
 
     // Update heap state
@@ -644,6 +703,23 @@ int32_t gc_heap_alloc_array_from_values(GcHeap* heap, int32_t type_idx,
     heap->total_allocations++;
 
     gc_heap_maybe_verify(heap, "alloc_array_from_values");
+    return gc_ref;
+}
+
+int32_t gc_heap_alloc_array_from_values(GcHeap* heap, int32_t type_idx,
+                                         const int64_t* values, int32_t len) {
+    if (!values || len <= 0) {
+        return gc_heap_alloc_array_from_slots(heap, type_idx, NULL, len);
+    }
+    GcSlot* slots = (GcSlot*)calloc((size_t)len, sizeof(GcSlot));
+    if (!slots) {
+        return 0;
+    }
+    for (int32_t i = 0; i < len; i++) {
+        slots[i].lo = values[i];
+    }
+    int32_t gc_ref = gc_heap_alloc_array_from_slots(heap, type_idx, slots, len);
+    free(slots);
     return gc_ref;
 }
 
@@ -686,28 +762,33 @@ void gc_heap_mark(GcHeap* heap, int32_t gc_ref) {
     // Recursively mark referenced objects
     uint8_t* data = ((uint8_t*)header) + GC_HEADER_SIZE;
 
+    // Only a slot's low word is scanned. Every reference is encoded there, so
+    // the high word can hold nothing but v128 payload bits, and reading it
+    // could only manufacture false positives. Marking is conservative either
+    // way -- an i64 field holding 4 is already indistinguishable from a
+    // reference to object 2 -- which is sound because sweeping never moves an
+    // object and the candidate decoder rejects anything outside the object
+    // table.
     if (header->kind == GC_KIND_STRUCT) {
         // Struct: scan all fields for references
         // Use stored field count (in reserved) to avoid scanning padding bytes
         int32_t num_fields = (int32_t)header->reserved;
-        int64_t* fields = (int64_t*)data;
+        GcSlot* fields = (GcSlot*)data;
 
         for (int32_t i = 0; i < num_fields; i++) {
-            int64_t value = fields[i];
             int32_t ref_gc_ref = 0;
-            if (gc_try_decode_heap_ref_candidate(heap, value, &ref_gc_ref)) {
+            if (gc_try_decode_heap_ref_candidate(heap, fields[i].lo, &ref_gc_ref)) {
                 gc_heap_mark(heap, ref_gc_ref);
             }
         }
     } else if (header->kind == GC_KIND_ARRAY) {
         // Array: scan all elements for references
         int32_t len = ((int32_t*)data)[0];
-        int64_t* elements = (int64_t*)(data + 8);
+        GcSlot* elements = (GcSlot*)(data + GC_ARRAY_DATA_OFFSET);
 
         for (int32_t i = 0; i < len; i++) {
-            int64_t value = elements[i];
             int32_t ref_gc_ref = 0;
-            if (gc_try_decode_heap_ref_candidate(heap, value, &ref_gc_ref)) {
+            if (gc_try_decode_heap_ref_candidate(heap, elements[i].lo, &ref_gc_ref)) {
                 gc_heap_mark(heap, ref_gc_ref);
             }
         }
@@ -909,19 +990,19 @@ int32_t gc_heap_verify(GcHeap* heap, int32_t verbose) {
 
         if (header->kind == GC_KIND_STRUCT) {
             uint64_t num_fields_u64 = header->reserved;
-            if (num_fields_u64 > (payload_size / sizeof(int64_t))) {
+            if (num_fields_u64 > (payload_size / GC_VALUE_SLOT_SIZE)) {
                 if (verbose) {
                     fprintf(stderr, "[GC VERIFY] struct field count exceeds payload: gc_ref=%d fields=%llu payload=%zu\n",
                             gc_ref, (unsigned long long)num_fields_u64, payload_size);
                 }
                 return 0;
             }
-            int64_t* fields = (int64_t*)data;
+            GcSlot* fields = (GcSlot*)data;
             int32_t num_fields = (int32_t)num_fields_u64;
             (void)fields;
             (void)num_fields;
         } else {
-            if (payload_size < 8) {
+            if (payload_size < GC_ARRAY_DATA_OFFSET) {
                 if (verbose) {
                     fprintf(stderr, "[GC VERIFY] array payload too small: gc_ref=%d payload=%zu\n", gc_ref, payload_size);
                 }
@@ -934,7 +1015,7 @@ int32_t gc_heap_verify(GcHeap* heap, int32_t verbose) {
                 }
                 return 0;
             }
-            size_t need = 8 + ((size_t)len * sizeof(int64_t));
+            size_t need = GC_ARRAY_DATA_OFFSET + ((size_t)len * GC_VALUE_SLOT_SIZE);
             if (need > payload_size) {
                 if (verbose) {
                     fprintf(stderr, "[GC VERIFY] array elements exceed payload: gc_ref=%d len=%d need=%zu payload=%zu\n",
@@ -942,7 +1023,7 @@ int32_t gc_heap_verify(GcHeap* heap, int32_t verbose) {
                 }
                 return 0;
             }
-            int64_t* elements = (int64_t*)(data + 8);
+            GcSlot* elements = (GcSlot*)(data + GC_ARRAY_DATA_OFFSET);
             (void)elements;
         }
     }
@@ -1076,6 +1157,28 @@ void wasmoon_gc_heap_struct_set(int64_t heap_ptr, int32_t gc_ref, int32_t field_
     gc_heap_struct_set((GcHeap*)(uintptr_t)heap_ptr, gc_ref, field_idx, value);
 }
 
+// The `_wide` wrappers carry whole slots as flat [lo, hi] word pairs, because
+// that is what crosses the MoonBit FFI cleanly as a FixedArray[Int64].
+
+int32_t wasmoon_gc_heap_alloc_struct_wide(int64_t heap_ptr, int32_t type_idx,
+                                           int64_t* words, int32_t num_fields) {
+    return gc_heap_alloc_struct_wide((GcHeap*)(uintptr_t)heap_ptr, type_idx,
+                                     (const GcSlot*)words, num_fields);
+}
+
+void wasmoon_gc_heap_struct_get_wide(int64_t heap_ptr, int32_t gc_ref,
+                                      int32_t field_idx, int64_t* out_words) {
+    GcSlot slot = gc_heap_struct_get_wide((GcHeap*)(uintptr_t)heap_ptr, gc_ref, field_idx);
+    out_words[0] = slot.lo;
+    out_words[1] = slot.hi;
+}
+
+void wasmoon_gc_heap_struct_set_wide(int64_t heap_ptr, int32_t gc_ref,
+                                      int32_t field_idx, int64_t lo, int64_t hi) {
+    GcSlot slot = {lo, hi};
+    gc_heap_struct_set_wide((GcHeap*)(uintptr_t)heap_ptr, gc_ref, field_idx, slot);
+}
+
 int32_t wasmoon_gc_heap_alloc_array(int64_t heap_ptr, int32_t type_idx,
                                      int32_t len, int64_t init_value) {
     return gc_heap_alloc_array((GcHeap*)(uintptr_t)heap_ptr, type_idx, len, init_value);
@@ -1096,6 +1199,37 @@ void wasmoon_gc_heap_array_set(int64_t heap_ptr, int32_t gc_ref, int32_t idx, in
 void wasmoon_gc_heap_array_fill(int64_t heap_ptr, int32_t gc_ref, int32_t offset,
                                  int64_t value, int32_t count) {
     gc_heap_array_fill((GcHeap*)(uintptr_t)heap_ptr, gc_ref, offset, value, count);
+}
+
+int32_t wasmoon_gc_heap_alloc_array_wide(int64_t heap_ptr, int32_t type_idx,
+                                          int32_t len, int64_t lo, int64_t hi) {
+    GcSlot slot = {lo, hi};
+    return gc_heap_alloc_array_wide((GcHeap*)(uintptr_t)heap_ptr, type_idx, len, slot);
+}
+
+int32_t wasmoon_gc_heap_alloc_array_from_slots(int64_t heap_ptr, int32_t type_idx,
+                                                int64_t* words, int32_t len) {
+    return gc_heap_alloc_array_from_slots((GcHeap*)(uintptr_t)heap_ptr, type_idx,
+                                          (const GcSlot*)words, len);
+}
+
+void wasmoon_gc_heap_array_get_wide(int64_t heap_ptr, int32_t gc_ref,
+                                     int32_t idx, int64_t* out_words) {
+    GcSlot slot = gc_heap_array_get_wide((GcHeap*)(uintptr_t)heap_ptr, gc_ref, idx);
+    out_words[0] = slot.lo;
+    out_words[1] = slot.hi;
+}
+
+void wasmoon_gc_heap_array_set_wide(int64_t heap_ptr, int32_t gc_ref, int32_t idx,
+                                     int64_t lo, int64_t hi) {
+    GcSlot slot = {lo, hi};
+    gc_heap_array_set_wide((GcHeap*)(uintptr_t)heap_ptr, gc_ref, idx, slot);
+}
+
+void wasmoon_gc_heap_array_fill_wide(int64_t heap_ptr, int32_t gc_ref, int32_t offset,
+                                      int64_t lo, int64_t hi, int32_t count) {
+    GcSlot slot = {lo, hi};
+    gc_heap_array_fill_wide((GcHeap*)(uintptr_t)heap_ptr, gc_ref, offset, slot, count);
 }
 
 void wasmoon_gc_heap_array_copy(int64_t heap_ptr, int32_t dst_ref, int32_t dst_offset,

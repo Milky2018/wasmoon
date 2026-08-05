@@ -357,4 +357,23 @@ int64_t gc_alloc_array_slow(jit_context_t *ctx, int32_t type_idx,
 int64_t gc_alloc_array_from_values_slow(jit_context_t *ctx, int32_t type_idx,
                                          int64_t *values, int32_t len, int32_t safepoint_id);
 
+// v128 aggregate operations. A v128 does not fit a runtime word, so these
+// carry it through a caller-owned 16-byte GcSlot buffer passed by address.
+void gc_struct_get_v128_impl(int64_t ref, int32_t type_idx, int32_t field_idx,
+                             int64_t out_ptr);
+void gc_struct_set_v128_impl(int64_t ref, int32_t type_idx, int32_t field_idx,
+                             int64_t value_ptr);
+void gc_array_get_v128_impl(int64_t ref, int32_t type_idx, int32_t idx,
+                            int64_t out_ptr);
+void gc_array_set_v128_impl(int64_t ref, int32_t type_idx, int32_t idx,
+                            int64_t value_ptr);
+void gc_array_fill_v128_impl(int64_t ref, int32_t offset, int64_t value_ptr,
+                             int32_t count);
+int64_t gc_alloc_struct_wide_slow_impl(int64_t ctx_ptr, int32_t type_idx,
+                                        int64_t slots_ptr, int32_t num_fields);
+int64_t gc_alloc_array_wide_slow_impl(int64_t ctx_ptr, int32_t type_idx,
+                                       int32_t len, int64_t init_ptr);
+int64_t gc_alloc_array_from_slots_slow_impl(int64_t ctx_ptr, int32_t type_idx,
+                                             int64_t slots_ptr, int32_t len);
+
 #endif // JIT_INTERNAL_H

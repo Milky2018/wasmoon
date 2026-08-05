@@ -5,15 +5,24 @@
  * the interpreter and JIT-compiled code. All GC objects (structs and arrays)
  * are stored in a contiguous memory region managed by C.
  *
- * Value Encoding (all values stored as int64_t):
+ * Value Encoding
+ *
+ * Every field and element occupies a 16-byte slot of two int64_t words, so
+ * that a v128 fits. Only v128 uses the high word; every other value kind
+ * lives entirely in the low word and stores zero in the high word:
  * - i32: sign-extended to i64
  * - i64: as-is
  * - f32: lower 32 bits (IEEE 754 bits)
  * - f64: as-is (IEEE 754 bits)
+ * - v128: low 8 bytes in `lo`, high 8 bytes in `hi` (little-endian lane order)
  * - structref/arrayref: gc_ref index (positive, 0 = null)
  * - funcref: function index (positive, 0 = null)
  * - i31: (value << 1) | 1 (tagged)
  * - null: 0
+ *
+ * The int64_t accessors below address the low word, which is where every
+ * reference lives, so they keep their meaning for all non-v128 values. Use
+ * the `_wide` accessors to read or write a full slot.
  */
 
 #ifndef GC_HEAP_H
@@ -52,6 +61,28 @@ typedef struct GcHeader {
 } GcHeader;
 
 #define GC_HEADER_SIZE 16
+
+/**
+ * One field or array element.
+ *
+ * `lo` is the runtime word every non-v128 value is encoded into, and is the
+ * only word the collector scans for references -- a reference is never
+ * written to `hi`, so scanning it could only add false positives.
+ */
+typedef struct GcSlot {
+    int64_t lo;
+    int64_t hi;
+} GcSlot;
+
+#define GC_VALUE_SLOT_SIZE 16
+
+/**
+ * Byte offset from the start of an array's payload to its first element.
+ *
+ * The length is an int32_t at offset 0; the rest is padding that exists to
+ * keep element slots 16-byte aligned.
+ */
+#define GC_ARRAY_DATA_OFFSET 16
 
 /**
  * GC Heap structure
@@ -151,6 +182,27 @@ int64_t gc_heap_struct_get(GcHeap* heap, int32_t gc_ref, int32_t field_idx);
  */
 void gc_heap_struct_set(GcHeap* heap, int32_t gc_ref, int32_t field_idx, int64_t value);
 
+/**
+ * Allocate a struct from full slots, so v128 fields keep their high word.
+ *
+ * `gc_heap_alloc_struct` above takes runtime words and is what JIT-emitted
+ * code calls; it zeroes each high word. Callers that can hold a v128 -- the
+ * interpreter -- use this instead.
+ */
+int32_t gc_heap_alloc_struct_wide(GcHeap* heap, int32_t type_idx,
+                                   const GcSlot* fields, int32_t num_fields);
+
+/**
+ * Read a whole struct field, high word included.
+ */
+GcSlot gc_heap_struct_get_wide(GcHeap* heap, int32_t gc_ref, int32_t field_idx);
+
+/**
+ * Write a whole struct field, high word included.
+ */
+void gc_heap_struct_set_wide(GcHeap* heap, int32_t gc_ref, int32_t field_idx,
+                             GcSlot value);
+
 // ============ Array Operations ============
 
 /**
@@ -200,6 +252,24 @@ int64_t gc_heap_array_get(GcHeap* heap, int32_t gc_ref, int32_t idx);
  * @param value New value as int64_t
  */
 void gc_heap_array_set(GcHeap* heap, int32_t gc_ref, int32_t idx, int64_t value);
+
+/**
+ * Array counterparts of the struct `_wide` entry points above: same storage,
+ * same reason, for callers that can hold a v128.
+ */
+int32_t gc_heap_alloc_array_wide(GcHeap* heap, int32_t type_idx,
+                                  int32_t len, GcSlot init_value);
+
+int32_t gc_heap_alloc_array_from_slots(GcHeap* heap, int32_t type_idx,
+                                        const GcSlot* values, int32_t len);
+
+GcSlot gc_heap_array_get_wide(GcHeap* heap, int32_t gc_ref, int32_t idx);
+
+void gc_heap_array_set_wide(GcHeap* heap, int32_t gc_ref, int32_t idx,
+                            GcSlot value);
+
+void gc_heap_array_fill_wide(GcHeap* heap, int32_t gc_ref, int32_t offset,
+                             GcSlot value, int32_t count);
 
 /**
  * Fill array elements with a value

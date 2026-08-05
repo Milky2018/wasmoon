@@ -1,4 +1,11 @@
 ///|
+/// Bytes per GC field or array element, matching `GcSlot` in gc_heap.h.
+///
+/// Two words, so that a v128 fits. Everything else uses the low word and
+/// leaves the high one zero.
+const GC_SLOT_BYTES : Int = 16
+
+///|
 /// Embedding-owned identities required by WebAssembly semantic lowering.
 ///
 /// Symbols remain unresolved and target-neutral. Address resolution belongs to
@@ -470,6 +477,32 @@ fn finish_runtime_word(
 }
 
 ///|
+/// Call a runtime helper that returns nothing, without ending the operation.
+///
+/// The v128 paths need this: the helper moves the vector through scratch
+/// memory, so the lowering has to keep going afterwards to load or store it.
+fn emit_runtime_void_call(
+  context : @adapter.InstructionContext,
+  environment : Environment,
+  capability : String,
+  operands : Array[@machv.Value],
+  parameter_types : Array[@machv.ValueType],
+  memory : @machv.MemoryEffect,
+) -> Unit {
+  context.emit_call_without_roots(
+    @machv.SemanticCall::new(
+      External((environment.runtime_symbol)(capability)),
+      @machv.Signature::new(parameter_types, []),
+      Platform,
+      @machv.CallBehavior::new(memory, true, false, false, false),
+    ),
+    operands,
+    [],
+  )
+  |> ignore
+}
+
+///|
 fn emit_runtime_word_call(
   context : @adapter.InstructionContext,
   environment : Environment,
@@ -498,11 +531,6 @@ fn lower_aggregate_get(
   type_index : Int,
   field_index : Int?,
 ) -> String? {
-  if !is_runtime_word_type(context.result_types()[0]) {
-    return Some(
-      "the current Wasm GC runtime ABI cannot return a v128 aggregate value",
-    )
-  }
   let source_operands = context.operands()
   let operands : Array[@machv.Value] = [source_operands[0]]
   let parameter_types : Array[@machv.ValueType] = [GcRef64, I32, I32]
@@ -511,6 +539,22 @@ fn lower_aggregate_get(
     operands.push(i32_immediate(context, index))
   } else {
     operands.push(source_operands[1])
+  }
+  if context.result_types()[0] is V128 {
+    // The helper writes the vector into scratch rather than returning it.
+    let scratch = emit_slot_scratch(context)
+    operands.push(scratch)
+    parameter_types.push(Ptr64)
+    emit_runtime_void_call(
+      context,
+      environment,
+      v128_capability(capability),
+      operands,
+      parameter_types,
+      Read,
+    )
+    context.finish_operation(Copy, [load_v128(context, scratch)])
+    return None
   }
   let word = emit_runtime_word_call(
     context,
@@ -522,6 +566,12 @@ fn lower_aggregate_get(
   )
   finish_runtime_word(context, word)
   None
+}
+
+///|
+/// Name of the v128 helper matching a word-sized GC capability.
+fn v128_capability(capability : String) -> String {
+  "\{capability}_v128"
 }
 
 ///|
@@ -586,16 +636,17 @@ fn lower_aggregate_set(
   let source_operands = context.operands()
   let source_types = context.operand_types()
   let value_index = source_operands.length() - 1
-  if !is_runtime_word_type(source_types[value_index]) {
-    return Some(
-      "the current Wasm GC runtime ABI cannot store a v128 aggregate value",
+  let is_vector = source_types[value_index] is V128
+  // A vector goes through scratch memory; everything else is one word.
+  let value = if is_vector {
+    emit_v128_to_scratch(context, source_operands[value_index])
+  } else {
+    encode_runtime_word(
+      context,
+      source_operands[value_index],
+      source_types[value_index],
     )
   }
-  let value = encode_runtime_word(
-    context,
-    source_operands[value_index],
-    source_types[value_index],
-  )
   let operands : Array[@machv.Value] = [source_operands[0]]
   let parameter_types : Array[@machv.ValueType] = [GcRef64, I32]
   operands.push(i32_immediate(context, type_index))
@@ -607,11 +658,15 @@ fn lower_aggregate_set(
     parameter_types.push(I32)
   }
   operands.push(value)
-  parameter_types.push(I64)
+  parameter_types.push(if is_vector { Ptr64 } else { I64 })
   finish_runtime_call(
     context,
     environment,
-    capability,
+    if is_vector {
+      v128_capability(capability)
+    } else {
+      capability
+    },
     operands,
     parameter_types,
     @machv.CallBehavior::new(ReadWrite, true, false, false, false),
@@ -626,18 +681,22 @@ fn lower_array_fill(
 ) -> String? {
   let source_operands = context.operands()
   let source_types = context.operand_types()
-  if !is_runtime_word_type(source_types[2]) {
-    return Some(
-      "the current Wasm GC runtime ABI cannot fill arrays with v128 values",
-    )
+  let is_vector = source_types[2] is V128
+  let value = if is_vector {
+    emit_v128_to_scratch(context, source_operands[2])
+  } else {
+    encode_runtime_word(context, source_operands[2], source_types[2])
   }
-  let value = encode_runtime_word(context, source_operands[2], source_types[2])
   finish_runtime_call(
     context,
     environment,
-    "gc.array_fill",
+    if is_vector {
+      "gc.array_fill_v128"
+    } else {
+      "gc.array_fill"
+    },
     [source_operands[0], source_operands[1], value, source_operands[3]],
-    [GcRef64, I32, I64, I32],
+    [GcRef64, I32, if is_vector { Ptr64 } else { I64 }, I32],
     @machv.CallBehavior::new(ReadWrite, true, false, false, false),
   )
   None
@@ -687,14 +746,12 @@ fn lower_array_new(
 ) -> String? {
   let source_operands = context.operands()
   let source_types = context.operand_types()
+  let is_vector = !use_default && source_types[0] is V128
   let initial = if use_default {
     context.emit(I64Const(0UL), [], [I64])[0]
+  } else if is_vector {
+    emit_v128_to_scratch(context, source_operands[0])
   } else {
-    if !is_runtime_word_type(source_types[0]) {
-      return Some(
-        "the current Wasm GC runtime ABI cannot initialize arrays with v128 values",
-      )
-    }
     encode_runtime_word(context, source_operands[0], source_types[0])
   }
   let length = if use_default { source_operands[0] } else { source_operands[1] }
@@ -705,9 +762,13 @@ fn lower_array_new(
   let word = emit_gc_allocation(
     context,
     environment,
-    "gc.alloc_array_slow",
+    if is_vector {
+      "gc.alloc_array_wide_slow"
+    } else {
+      "gc.alloc_array_slow"
+    },
     operands,
-    [Ptr64, I32, I32, I64],
+    [Ptr64, I32, I32, if is_vector { Ptr64 } else { I64 }],
   )
   finish_runtime_word(context, word)
   None
@@ -782,6 +843,101 @@ fn lower_array_segment_init(
 }
 
 ///|
+/// Reserve a 16-byte stack slot for one `GcSlot`.
+///
+/// A v128 is wider than the int64 runtime word every other value crosses the
+/// GC ABI as, so vectors are passed and returned by address instead. That
+/// keeps calls to plain word arguments and needs no 128-bit return
+/// convention, which neither target's call lowering has.
+fn emit_slot_scratch(context : @adapter.InstructionContext) -> @machv.Value {
+  let object = context.create_stack_object(GC_SLOT_BYTES, GC_SLOT_BYTES)
+  context.emit(StackAddress(object), [], [Ptr64])[0]
+}
+
+///|
+/// Store a v128 into a scratch slot and hand back the slot's address.
+fn emit_v128_to_scratch(
+  context : @adapter.InstructionContext,
+  value : @machv.Value,
+) -> @machv.Value {
+  let address = emit_slot_scratch(context)
+  store_v128(context, address, 0, value)
+  address
+}
+
+///|
+fn store_v128(
+  context : @adapter.InstructionContext,
+  address : @machv.Value,
+  offset : Int,
+  value : @machv.Value,
+) -> Unit {
+  context.emit(
+    Store(@machv.StoreSpec::new(W128, V128, offset.to_uint64(), Little, None)),
+    [address, value],
+    [],
+  )
+  |> ignore
+}
+
+///|
+fn load_v128(
+  context : @adapter.InstructionContext,
+  address : @machv.Value,
+) -> @machv.Value {
+  context.emit(
+    Load(@machv.LoadSpec::new(W128, None, V128, 0UL, Little, None)),
+    [address],
+    [V128],
+  )[0]
+}
+
+///|
+/// Build a buffer of `GcSlot`s, so v128 members keep their upper half.
+///
+/// `emit_runtime_word_buffer` below packs one word per value and is what the
+/// non-v128 paths use; this matches the C `GcSlot` layout instead.
+fn emit_slot_buffer(
+  context : @adapter.InstructionContext,
+  values : Array[@machv.Value],
+  types : Array[@machv.ValueType],
+) -> @machv.Value {
+  if values.is_empty() {
+    return context.emit(NullPtr, [], [Ptr64])[0]
+  }
+  let object = context.create_stack_object(
+    values.length() * GC_SLOT_BYTES,
+    GC_SLOT_BYTES,
+  )
+  let address = context.emit(StackAddress(object), [], [Ptr64])[0]
+  for index, value in values {
+    let base = index * GC_SLOT_BYTES
+    if types[index] is V128 {
+      store_v128(context, address, base, value)
+    } else {
+      // The high word stays zero, which is what a non-v128 slot must hold.
+      let word = encode_runtime_word(context, value, types[index])
+      context.emit(
+        Store(@machv.StoreSpec::new(W64, I64, base.to_uint64(), Little, None)),
+        [address, word],
+        [],
+      )
+      |> ignore
+      let zero = context.emit(I64Const(0UL), [], [I64])[0]
+      context.emit(
+        Store(
+          @machv.StoreSpec::new(W64, I64, (base + 8).to_uint64(), Little, None),
+        ),
+        [address, zero],
+        [],
+      )
+      |> ignore
+    }
+  }
+  address
+}
+
+///|
 fn emit_runtime_word_buffer(
   context : @adapter.InstructionContext,
   values : Array[@machv.Value],
@@ -814,27 +970,48 @@ fn lower_fixed_allocation(
   type_index : Int,
 ) -> String? {
   let types = context.operand_types()
+  let mut has_vector = false
   for ty in types {
-    if !is_runtime_word_type(ty) {
-      return Some(
-        "the current Wasm GC runtime ABI cannot allocate v128 aggregate values",
-      )
+    if ty is V128 {
+      has_vector = true
     }
   }
   let values = context.operands()
-  let buffer = emit_runtime_word_buffer(context, values, types)
+  // With a vector member the buffer has to be GcSlot-shaped, and the helper
+  // that reads it has to agree; without one, the packed word buffer is both
+  // smaller and what the existing fast paths already expect.
+  let buffer = if has_vector {
+    emit_slot_buffer(context, values, types)
+  } else {
+    emit_runtime_word_buffer(context, values, types)
+  }
   let operands = context.environment()
   operands.push(i32_immediate(context, type_index))
   operands.push(buffer)
   operands.push(i32_immediate(context, values.length()))
-  let word = emit_gc_allocation(context, environment, capability, operands, [
-    Ptr64,
-    I32,
-    Ptr64,
-    I32,
-  ])
+  let word = emit_gc_allocation(
+    context,
+    environment,
+    if has_vector {
+      wide_allocation_capability(capability)
+    } else {
+      capability
+    },
+    operands,
+    [Ptr64, I32, Ptr64, I32],
+  )
   finish_runtime_word(context, word)
   None
+}
+
+///|
+/// Name of the GcSlot-shaped allocator matching a word-buffer allocator.
+fn wide_allocation_capability(capability : String) -> String {
+  match capability {
+    "gc.alloc_struct_slow" => "gc.alloc_struct_wide_slow"
+    "gc.alloc_array_from_values_slow" => "gc.alloc_array_from_slots_slow"
+    _ => capability
+  }
 }
 
 ///|

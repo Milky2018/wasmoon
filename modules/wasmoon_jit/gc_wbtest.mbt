@@ -344,10 +344,11 @@ test "gc: barrier write counter tracks reference stores" {
 test "gc: fault injection fails configured allocation attempt" {
   gc_debug_set_fail_alloc(2)
   let heap_ptr = c_gc_heap_new(1024L)
-  let fields = FixedArray::makei(1, fn(_) { 1L })
+  // One field, as the [lo, hi] word pair a slot is made of.
+  let fields : FixedArray[Int64] = [1L, 0L]
 
-  let first = c_gc_heap_alloc_struct(heap_ptr, 0, fields, 1)
-  let second = c_gc_heap_alloc_struct(heap_ptr, 0, fields, 1)
+  let first = c_gc_heap_alloc_struct_wide(heap_ptr, 0, fields, 1)
+  let second = c_gc_heap_alloc_struct_wide(heap_ptr, 0, fields, 1)
 
   inspect(first > 0, content="true")
   inspect(second == 0, content="true")

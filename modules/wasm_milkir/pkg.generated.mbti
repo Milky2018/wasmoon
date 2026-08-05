@@ -191,6 +191,14 @@ pub(all) struct RuntimeSymbols {
   gc_alloc_struct_slow : String
   gc_alloc_array_from_values_slow : String
   gc_alloc_array_slow : String
+  gc_struct_get_v128 : String
+  gc_struct_set_v128 : String
+  gc_array_get_v128 : String
+  gc_array_set_v128 : String
+  gc_array_fill_v128 : String
+  gc_alloc_struct_wide_slow : String
+  gc_alloc_array_wide_slow : String
+  gc_alloc_array_from_slots_slow : String
   exception_try_begin : String
   exception_try_end : String
   exception_throw : String

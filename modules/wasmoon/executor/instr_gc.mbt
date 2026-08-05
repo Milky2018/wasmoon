@@ -1149,6 +1149,8 @@ fn default_value_for_storage_type(
     Val(I64) => I64(0L)
     Val(F32) => F32(0.0)
     Val(F64) => F64(0.0)
+    // Not a reference type, so the catch-all below would have made it Null.
+    Val(V128) => V128(Bytes::make(16, b'\x00'))
     Val(FuncRef) | Val(RefNullFuncTyped(_)) => Null
     Val(ExternRef) => Null
     Val(RefNullStruct(_)) => Null

@@ -30,6 +30,16 @@ pub(all) struct RuntimeSymbols {
   gc_alloc_struct_slow : String
   gc_alloc_array_from_values_slow : String
   gc_alloc_array_slow : String
+  // v128 aggregate operations. A v128 is wider than the runtime word the
+  // symbols above are built on, so these pass it by address instead.
+  gc_struct_get_v128 : String
+  gc_struct_set_v128 : String
+  gc_array_get_v128 : String
+  gc_array_set_v128 : String
+  gc_array_fill_v128 : String
+  gc_alloc_struct_wide_slow : String
+  gc_alloc_array_wide_slow : String
+  gc_alloc_array_from_slots_slow : String
   exception_try_begin : String
   exception_try_end : String
   exception_throw : String
@@ -94,6 +104,16 @@ pub fn RuntimeSymbols::with_runtime_prefix(prefix : String) -> RuntimeSymbols {
       prefix, "alloc_array_from_values_slow",
     ),
     gc_alloc_array_slow: prefixed_gc(prefix, "alloc_array_slow"),
+    gc_struct_get_v128: prefixed_gc(prefix, "struct_get_v128"),
+    gc_struct_set_v128: prefixed_gc(prefix, "struct_set_v128"),
+    gc_array_get_v128: prefixed_gc(prefix, "array_get_v128"),
+    gc_array_set_v128: prefixed_gc(prefix, "array_set_v128"),
+    gc_array_fill_v128: prefixed_gc(prefix, "array_fill_v128"),
+    gc_alloc_struct_wide_slow: prefixed_gc(prefix, "alloc_struct_wide_slow"),
+    gc_alloc_array_wide_slow: prefixed_gc(prefix, "alloc_array_wide_slow"),
+    gc_alloc_array_from_slots_slow: prefixed_gc(
+      prefix, "alloc_array_from_slots_slow",
+    ),
     exception_try_begin: prefixed_exception(prefix, "try_begin"),
     exception_try_end: prefixed_exception(prefix, "try_end"),
     exception_throw: prefixed_exception(prefix, "throw"),
