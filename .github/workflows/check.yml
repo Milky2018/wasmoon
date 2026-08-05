@@ -99,6 +99,13 @@ jobs:
           fi
           ./install.sh
 
+      # Before the suites below, because they trust the exit status this
+      # checks: `run_all_wast.py` reads `wasmoon test`'s status as its
+      # verdict, so a regression here would make those steps report on a
+      # runner that is lying to them.
+      - name: run CLI behaviour tests
+        run: python3 scripts/cli_behavior_test.py
+
       - name: run core WAST tests
         timeout-minutes: 10
         run: |

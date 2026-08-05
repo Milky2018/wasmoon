@@ -405,6 +405,8 @@ graph TD
   ISS_384["ISS-384: Stop paying full extraction for the constant-only harvest"]
   ISS_385["ISS-385: Elaboration planning keys by e-class, not by (e-class, type)"]
   ISS_386["ISS-386: Elaboration's commit loop can leave half a plan behind"]
+  ISS_387["ISS-387: `wasmoon test` exits 0 on assertion failures"]
+  ISS_388["ISS-388: `wasmoon` has no `--version`"]
   ISS_389["ISS-389: `wasmoon/sanitizer_testsuite` is named after a gate that no longer exists"]
   ISS_390["ISS-390: Rebuild sanitizer coverage as a dedicated package, not a compiler shim"]
   ISS_391["ISS-391: Elaboration's commit loop still had failure points after allocation"]
