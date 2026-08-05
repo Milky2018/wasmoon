@@ -10,6 +10,7 @@ import {
   "Milky2018/wasmoon/wasi",
   "moonbitlang/core/env",
   "moonbitlang/x/fs",
+  "moonbitlang/x/sys",
   "TheWaWaR/clap",
 }
 

@@ -406,6 +406,7 @@ graph TD
   ISS_387["ISS-387: `wasmoon test` exits 0 on assertion failures"]
   ISS_388["ISS-388: `wasmoon` has no `--version`"]
   ISS_391["ISS-391: Elaboration's commit loop still had failure points after allocation"]
+  ISS_394["ISS-394: Two CLI binaries declare their own `exit` FFI around a stale warning"]
   ISS_002 --> ISS_003
   ISS_002 --> ISS_004
   ISS_003 --> ISS_005

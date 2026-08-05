@@ -215,16 +215,11 @@ fn main {
 }
 
 ///|
-/// Native exit function with correct void return type
-/// (moonbitlang/x/sys declares exit as returning int32, which causes a warning)
-extern "c" fn native_exit(code : Int) = "exit"
-
-///|
 fn exit_error(msg : String) -> Unit {
   // Diagnostics go to stderr so `wasm2wat` in stdout mode never mixes an
   // error into the WAT it emits (ISS-376).
   @logger.error(msg)
-  native_exit(1)
+  @sys.exit(1)
 }
 
 ///|

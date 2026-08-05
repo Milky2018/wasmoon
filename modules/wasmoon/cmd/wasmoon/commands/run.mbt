@@ -1,9 +1,10 @@
 ///|
-extern "c" fn native_exit(code : Int) = "exit"
-
-///|
+/// Exit seam for the failure paths, which all use status 1.
+///
+/// Typed to return `T` so a caller can end an expression with it; the
+/// `panic()` is unreachable and only satisfies that type.
 fn[T] exit_failure() -> T {
-  native_exit(1)
+  @sys.exit(1)
   panic()
 }
 
@@ -1420,7 +1421,7 @@ fn run_with_jit(
                 JITExit(code) => {
                   jm.teardown_gc()
                   @wast.sync_jit_globals_to_store(jit_ctx, store)
-                  native_exit(code)
+                  @sys.exit(code)
                   panic()
                 }
                 JITTrap(msg) => {
