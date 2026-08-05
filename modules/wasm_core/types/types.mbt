@@ -1330,34 +1330,101 @@ pub fn Module::simple(
   }
 }
 
+// Type-kind lookups.
+//
+// A type index is partial twice over: it may be out of range, and the type
+// it names may be of another kind. These returned the type directly and
+// aborted on either, which is why four lines of WAT naming a struct type in
+// a `func` position killed every command in both binaries — the abort ran
+// during parsing, upstream of any validation (ISS-396).
+//
+// `Option` rather than a raise, because the answer has to travel: callers
+// live in the parser, the validator, the executor, the component runtime
+// and the JIT frontend, each with its own error vocabulary. An error type
+// declared here would make every one of those packages catch and translate
+// a `wasm_core` error; `None` lets each report the failure in its own terms.
+//
+// The names changed deliberately. `get_func_type` no longer exists, so no
+// caller can keep the old behaviour by accident.
+
 ///|
-/// Get the function type at the given index.
-/// Panics if the type is not a function type.
-pub fn Module::get_func_type(self : Module, idx : Int) -> FuncType {
+/// The function type at `idx`, or `None` if the index is out of range or
+/// names a type of another kind.
+pub fn Module::func_type_at(self : Module, idx : Int) -> FuncType? {
+  if idx < 0 || idx >= self.types.length() {
+    return None
+  }
   match self.types[idx].composite {
-    Func(ft) => ft
-    _ => abort("Type at index \{idx} is not a function type")
+    Func(ft) => Some(ft)
+    _ => None
   }
 }
 
 ///|
-/// Get the struct type at the given index.
-/// Panics if the type is not a struct type.
-pub fn Module::get_struct_type(self : Module, idx : Int) -> StructType {
+/// The struct type at `idx`, or `None` if the index is out of range or
+/// names a type of another kind.
+pub fn Module::struct_type_at(self : Module, idx : Int) -> StructType? {
+  if idx < 0 || idx >= self.types.length() {
+    return None
+  }
   match self.types[idx].composite {
-    Struct(st) => st
-    _ => abort("Type at index \{idx} is not a struct type")
+    Struct(st) => Some(st)
+    _ => None
   }
 }
 
 ///|
-/// Get the array type at the given index.
-/// Panics if the type is not an array type.
-pub fn Module::get_array_type(self : Module, idx : Int) -> ArrayType {
-  match self.types[idx].composite {
-    Array(at) => at
-    _ => abort("Type at index \{idx} is not an array type")
+/// The array type at `idx`, or `None` if the index is out of range or names
+/// a type of another kind.
+pub fn Module::array_type_at(self : Module, idx : Int) -> ArrayType? {
+  if idx < 0 || idx >= self.types.length() {
+    return None
   }
+  match self.types[idx].composite {
+    Array(at) => Some(at)
+    _ => None
+  }
+}
+
+// The same lookups for code that runs after validation.
+//
+// Validation establishes that a type index used as a function type names a
+// function type, so these cannot fail for a module that passed it — and if
+// one ever does, the module was accepted when it should have been rejected,
+// which is a defect here rather than in the input. That is worth aborting
+// on, and it is a different claim from the one the callers above make.
+//
+// Keeping the two apart is the point. Before, one lookup served both, so a
+// caller that had proved nothing was indistinguishable from one that had,
+// and the parser reached the abort with an unvalidated module (ISS-396).
+// `grep validated_` now lists everything that depends on validation having
+// run.
+
+///|
+/// The function type at `idx` in a module that has passed validation.
+pub fn Module::validated_func_type_at(self : Module, idx : Int) -> FuncType {
+  guard self.func_type_at(idx) is Some(ft) else {
+    abort("validated module has no function type at index \{idx}")
+  }
+  ft
+}
+
+///|
+/// The struct type at `idx` in a module that has passed validation.
+pub fn Module::validated_struct_type_at(self : Module, idx : Int) -> StructType {
+  guard self.struct_type_at(idx) is Some(st) else {
+    abort("validated module has no struct type at index \{idx}")
+  }
+  st
+}
+
+///|
+/// The array type at `idx` in a module that has passed validation.
+pub fn Module::validated_array_type_at(self : Module, idx : Int) -> ArrayType {
+  guard self.array_type_at(idx) is Some(at) else {
+    abort("validated module has no array type at index \{idx}")
+  }
+  at
 }
 
 ///|

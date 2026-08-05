@@ -46,41 +46,58 @@ pub fn ModuleInstance::ModuleInstance() -> ModuleInstance {
   }
 }
 
+// Type-kind lookups on an instance.
+//
+// An instance exists only after its module passed validation, so a type
+// index used as a function type names one. That is a claim about wasmoon,
+// not about the input, and the names now say so: `validated_` marks every
+// caller that leans on validation having run (ISS-396).
+//
+// The bounds check is not redundant with that claim. Reaching it means an
+// index arrived from somewhere validation does not cover, and saying so
+// beats dying on an array access with nothing on either stream.
+
 ///|
-/// Get the function type at the given index.
-/// Panics if the type is not a function type.
-pub fn ModuleInstance::get_func_type(
+/// The function type at `idx`, in an instance whose module passed validation.
+pub fn ModuleInstance::validated_func_type_at(
   self : ModuleInstance,
   idx : Int,
 ) -> @types.FuncType {
+  guard idx >= 0 && idx < self.types.length() else {
+    abort("validated instance has no type at index \{idx}")
+  }
   match self.types[idx].composite {
     Func(ft) => ft
-    _ => abort("Type at index \{idx} is not a function type")
+    _ => abort("validated instance has no function type at index \{idx}")
   }
 }
 
 ///|
-/// Get the struct type at the given index.
-/// Panics if the type is not a struct type.
-pub fn ModuleInstance::get_struct_type(
+/// The struct type at `idx`, in an instance whose module passed validation.
+pub fn ModuleInstance::validated_struct_type_at(
   self : ModuleInstance,
   idx : Int,
 ) -> @types.StructType {
+  guard idx >= 0 && idx < self.types.length() else {
+    abort("validated instance has no type at index \{idx}")
+  }
   match self.types[idx].composite {
     Struct(st) => st
-    _ => abort("Type at index \{idx} is not a struct type")
+    _ => abort("validated instance has no struct type at index \{idx}")
   }
 }
 
 ///|
-/// Get the array type at the given index.
-/// Panics if the type is not an array type.
-pub fn ModuleInstance::get_array_type(
+/// The array type at `idx`, in an instance whose module passed validation.
+pub fn ModuleInstance::validated_array_type_at(
   self : ModuleInstance,
   idx : Int,
 ) -> @types.ArrayType {
+  guard idx >= 0 && idx < self.types.length() else {
+    abort("validated instance has no type at index \{idx}")
+  }
   match self.types[idx].composite {
     Array(at) => at
-    _ => abort("Type at index \{idx} is not an array type")
+    _ => abort("validated instance has no array type at index \{idx}")
   }
 }

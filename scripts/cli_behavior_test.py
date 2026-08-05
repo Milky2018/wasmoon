@@ -64,6 +64,16 @@ INVALID_MODULES = {
 """,
 }
 
+# A `(type $t)` on a function where `$t` names a struct. This one aborted
+# during *parsing*, upstream of validation, so it took down every command in
+# both binaries -- validating harder could never have caught it (ISS-396).
+# Kept separate from the modules above because what it pins is the breadth:
+# each subcommand parses, so each has to survive it.
+UNPARSEABLE_TYPE_KIND = """(module
+  (type $s (struct (field i32)))
+  (func (export "go") (type $s)))
+"""
+
 
 class Failure(Exception):
     pass
@@ -196,6 +206,34 @@ def check_invalid_modules(tmp: Path) -> None:
         )
 
 
+def check_malformed_type_kind_across_commands(tmp: Path) -> None:
+    wat = tmp / "bad_type_kind.wat"
+    wat.write_text(UNPARSEABLE_TYPE_KIND)
+    wast = tmp / "bad_type_kind.wast"
+    wast.write_text(UNPARSEABLE_TYPE_KIND)
+    for command in (
+        ["run", str(wat), "--invoke", "go"],
+        ["run", str(wat), "--invoke", "go", "--no-jit"],
+        ["disasm", str(wat)],
+        ["explore", str(wat)],
+        ["test", str(wast)],
+    ):
+        proc = run(*command)
+        expect(
+            f"`{command[0]}` survives a struct type in a func position"
+            + (" (--no-jit)" if "--no-jit" in command else ""),
+            proc.returncode > 0,
+            f"exit {proc.returncode}"
+            + (" (killed by signal)" if proc.returncode < 0 else ""),
+        )
+        expect(
+            f"`{command[0]}` reports it on stderr"
+            + (" (--no-jit)" if "--no-jit" in command else ""),
+            proc.stdout == "" and proc.stderr != "",
+            f"stdout={proc.stdout!r}, stderr={proc.stderr!r}",
+        )
+
+
 def main() -> int:
     if not WASMOON.exists():
         print(
@@ -209,6 +247,7 @@ def main() -> int:
             check_version_flags()
             check_test_exit_codes(Path(directory))
             check_invalid_modules(Path(directory))
+            check_malformed_type_kind_across_commands(Path(directory))
     except Failure as failure:
         print(f"FAILED {failure}", file=sys.stderr)
         return 1

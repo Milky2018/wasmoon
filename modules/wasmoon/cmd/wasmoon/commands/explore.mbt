@@ -99,7 +99,7 @@ pub fn run_explore(
   let compiled_funcs : Array[CompiledFunc] = []
   for local_idx in func_indices {
     let type_idx = mod_.funcs[local_idx]
-    let func_type = mod_.get_func_type(type_idx)
+    let func_type = mod_.validated_func_type_at(type_idx)
     let code = mod_.codes[local_idx]
     // Find function name: prefer internal name, then export name, then anonymous
     let actual_func_idx = num_imports + local_idx

@@ -7,7 +7,7 @@ fn ExecContext::exec_call(self : ExecContext, func_idx : Int) -> Unit raise {
   // func_addrs[func_idx] gives us the store address
   let store_addr = self.instance.func_addrs[func_idx]
   let type_idx = self.instance.func_type_indices[func_idx]
-  let func_type = self.instance.get_func_type(type_idx)
+  let func_type = self.instance.validated_func_type_at(type_idx)
 
   // Pop arguments from stack in reverse order
   let num_params = func_type.params.length()
@@ -55,7 +55,7 @@ fn ExecContext::exec_call_indirect(
   }
 
   // Get the expected type
-  let expected_type = self.instance.get_func_type(type_idx)
+  let expected_type = self.instance.validated_func_type_at(type_idx)
 
   // Type checking using unified subtyping API
   // For call_indirect, the actual function type must be a subtype of the expected type
@@ -132,7 +132,7 @@ fn ExecContext::exec_call_ref(self : ExecContext, type_idx : Int) -> Unit raise 
   }
 
   // Get the expected type
-  let expected_type = self.instance.get_func_type(type_idx)
+  let expected_type = self.instance.validated_func_type_at(type_idx)
 
   // Verify type matches using subtyping
   let actual_type_idx = self.store.get_func_type_idx(store_addr)
@@ -419,7 +419,7 @@ pub fn ExecContext::exec_tail_call(
   // Get function address and type from current module
   let store_addr = self.instance.func_addrs[func_idx]
   let type_idx = self.instance.func_type_indices[func_idx]
-  let func_type = self.instance.get_func_type(type_idx)
+  let func_type = self.instance.validated_func_type_at(type_idx)
 
   // Pop arguments from stack into array (in reverse order)
   let num_params = func_type.params.length()
@@ -470,7 +470,7 @@ pub fn ExecContext::exec_tail_call_indirect(
   }
 
   // Get the expected type and verify type matches using subtyping
-  let expected_type = self.instance.get_func_type(type_idx)
+  let expected_type = self.instance.validated_func_type_at(type_idx)
   let actual_type_idx = self.store.get_func_type_idx(store_addr)
   let owner_idx = self.store.get_func_owner_idx(store_addr)
   let same_module = owner_idx >= 0 && owner_idx == self.instance.store_idx
@@ -548,7 +548,7 @@ pub fn ExecContext::exec_tail_call_ref(
   }
 
   // Get the expected type and verify type matches using subtyping
-  let expected_type = self.instance.get_func_type(type_idx)
+  let expected_type = self.instance.validated_func_type_at(type_idx)
   let actual_type_idx = self.store.get_func_type_idx(store_addr)
   let owner_idx = self.store.get_func_owner_idx(store_addr)
   let same_module = owner_idx >= 0 && owner_idx == self.instance.store_idx

@@ -336,7 +336,7 @@ pub fn translate_function(
   let func_idx = ctx.num_imports + func_local_idx
   let func_name = get_module_func_name(mod_, func_idx, name?)
   let type_idx = mod_.funcs[func_local_idx]
-  let func_type = mod_.get_func_type(type_idx)
+  let func_type = mod_.validated_func_type_at(type_idx)
   let code = mod_.codes[func_local_idx]
   translate_function_body(ctx, func_name, func_type, code.locals, code.body)
 }

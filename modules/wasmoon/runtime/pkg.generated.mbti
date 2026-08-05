@@ -291,9 +291,9 @@ pub(all) struct ModuleInstance {
   dropped_datas : Array[Bool]
 } derive(@debug.Debug)
 pub fn ModuleInstance::ModuleInstance() -> Self
-pub fn ModuleInstance::get_array_type(Self, Int) -> @types.ArrayType
-pub fn ModuleInstance::get_func_type(Self, Int) -> @types.FuncType
-pub fn ModuleInstance::get_struct_type(Self, Int) -> @types.StructType
+pub fn ModuleInstance::validated_array_type_at(Self, Int) -> @types.ArrayType
+pub fn ModuleInstance::validated_func_type_at(Self, Int) -> @types.FuncType
+pub fn ModuleInstance::validated_struct_type_at(Self, Int) -> @types.StructType
 pub impl Show for ModuleInstance
 
 type RollbackRegistrar

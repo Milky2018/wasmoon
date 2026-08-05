@@ -408,6 +408,7 @@ graph TD
   ISS_391["ISS-391: Elaboration's commit loop still had failure points after allocation"]
   ISS_394["ISS-394: Two CLI binaries declare their own `exit` FFI around a stale warning"]
   ISS_395["ISS-395: The validator aborts the process on modules it should reject"]
+  ISS_396["ISS-396: A type index of the wrong kind kills every command, during parsing"]
   ISS_002 --> ISS_003
   ISS_002 --> ISS_004
   ISS_003 --> ISS_005

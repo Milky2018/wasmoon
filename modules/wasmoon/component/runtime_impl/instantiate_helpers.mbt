@@ -486,7 +486,7 @@ fn validate_core_import_args(
   for imp in module_.imports {
     match imp.desc {
       Func(tyidx) => {
-        let expected = module_.get_func_type(tyidx)
+        let expected = module_.validated_func_type_at(tyidx)
         match
           supplied_core_func_for_import(imp.mod_name, imp.name, args, state) {
           Some(f) => {

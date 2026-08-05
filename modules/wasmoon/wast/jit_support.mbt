@@ -989,7 +989,7 @@ pub fn build_func_signatures(
         func_import_idx < signatures.length() &&
         type_idx >= 0 &&
         type_idx < mod_.types.length() {
-        let func_type = mod_.get_func_type(type_idx)
+        let func_type = mod_.validated_func_type_at(type_idx)
         signatures[func_import_idx] = (
           func_type.params.copy(),
           func_type.results.copy(),
@@ -1002,7 +1002,7 @@ pub fn build_func_signatures(
   for i, type_idx in mod_.funcs {
     let func_idx = num_imports + i
     if type_idx < mod_.types.length() {
-      let func_type = mod_.get_func_type(type_idx)
+      let func_type = mod_.validated_func_type_at(type_idx)
       signatures[func_idx] = (func_type.params.copy(), func_type.results.copy())
     }
   }

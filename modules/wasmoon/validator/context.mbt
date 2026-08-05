@@ -148,7 +148,7 @@ fn collect_declared_funcs(
 ///|
 fn ValidationContext::ValidationContext(
   mod : @types.Module,
-) -> ValidationContext {
+) -> ValidationContext raise ValidationError {
   // Collect function types (imports + defined functions)
   let funcs : Array[Int] = []
   for imp in mod.imports {
@@ -195,14 +195,24 @@ fn ValidationContext::ValidationContext(
     elems.push(elem.type_)
   }
   // Collect tags (imports + defined tags)
+  // A tag names a function type. One that names a struct or array is a
+  // module to reject here, where the context is still being built, rather
+  // than a crash on the way in.
   let tags : Array[@types.FuncType] = []
+  fn tag_type(type_idx : Int) -> @types.FuncType raise ValidationError {
+    guard mod.func_type_at(type_idx) is Some(ft) else {
+      raise TypeMismatch("tag type at index \{type_idx} is not a function type")
+    }
+    ft
+  }
+
   for imp in mod.imports {
     if imp.desc is Tag(type_idx) {
-      tags.push(mod.get_func_type(type_idx))
+      tags.push(tag_type(type_idx))
     }
   }
   for tag in mod.tags {
-    tags.push(mod.get_func_type(tag.type_idx))
+    tags.push(tag_type(tag.type_idx))
   }
 
   // Collect declared functions from elem segments and global inits
