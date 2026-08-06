@@ -4,7 +4,8 @@
 /// On-demand loading:
 /// - Support block params (multi-value extension)
 /// - Pass params to both then and else blocks
-/// - Pass all mutable locals through continuation for SSA phi nodes
+/// - Pass the locals either arm can redefine through the continuation as SSA
+///   phi nodes; see `region_local_params` for why the rest need none
 fn Translator::translate_if(
   self : Translator,
   block_type : @types.BlockType,
@@ -47,11 +48,10 @@ fn Translator::translate_if(
     self.builder.add_block_param(continuation, ty) |> ignore
   }
 
-  // Add continuation parameters for ALL locals (SSA phi nodes)
+  // Add continuation parameters for the locals either arm can redefine
+  let local_params = self.region_local_params([then_body, else_body])
   let local_param_start = result_types.length()
-  for loc in self.locals {
-    self.builder.add_block_param(continuation, loc.ty) |> ignore
-  }
+  self.add_local_block_params(continuation, local_params)
 
   // Branch with param values (only if not unreachable)
   // Note: pass params to both then and else blocks
@@ -80,6 +80,7 @@ fn Translator::translate_if(
   let frame : BlockFrame = {
     block: continuation,
     result_types,
+    local_params,
     stack_height: stack_height_after_params,
     has_predecessor: false,
   }
@@ -109,10 +110,7 @@ fn Translator::translate_if(
       args.push(self.pop())
     }
     args.rev_in_place()
-    // Pass locals
-    for loc in self.locals {
-      args.push(loc)
-    }
+    self.push_local_args(args, local_params)
     self.block_stack[frame_idx].has_predecessor = true
     self.builder.jump(continuation, args)
   } else if block.terminator is None {
@@ -149,10 +147,7 @@ fn Translator::translate_if(
       args.push(self.pop())
     }
     args.rev_in_place()
-    // Pass locals
-    for loc in self.locals {
-      args.push(loc)
-    }
+    self.push_local_args(args, local_params)
     self.block_stack[frame_idx].has_predecessor = true
     self.builder.jump(continuation, args)
   } else if block.terminator is None {
@@ -178,10 +173,8 @@ fn Translator::translate_if(
       self.push(continuation.params[i].0)
     }
 
-    // Update locals to use the continuation's phi values
-    for i, _loc in self.locals {
-      self.locals[i] = continuation.params[local_param_start + i].0
-    }
+    // Update the carried locals to use the continuation's phi values
+    self.adopt_local_params(continuation, local_params, local_param_start)
   }
 }
 
@@ -199,10 +192,7 @@ fn Translator::translate_br(self : Translator, depth : Int) -> Unit {
       args.push(self.pop())
     }
     args.rev_in_place()
-    // Always pass current local values
-    for loc in self.locals {
-      args.push(loc)
-    }
+    self.push_local_args(args, frame.local_params)
     self.mark_block_frame_reachable(idx)
     self.builder.jump(frame.block, args)
   } else if idx == -1 {
@@ -214,10 +204,6 @@ fn Translator::translate_br(self : Translator, depth : Int) -> Unit {
       args.push(self.pop())
     }
     args.rev_in_place()
-    // Always pass current local values
-    for loc in self.locals {
-      args.push(loc)
-    }
     self.builder.jump(ret_cont, args)
   }
   // After br, code is unreachable
@@ -248,10 +234,7 @@ fn Translator::translate_br_if(self : Translator, depth : Int) -> Unit {
       )
     }
 
-    // Always pass current local values
-    for loc in self.locals {
-      args.push(loc)
-    }
+    self.push_local_args(args, frame.local_params)
 
     // Branch: taken goes to intermediate block, not-taken falls through
     self.builder.brnz(cond, taken, fallthrough)
@@ -275,11 +258,6 @@ fn Translator::translate_br_if(self : Translator, depth : Int) -> Unit {
         self.func_result_types.length() +
         i],
       )
-    }
-
-    // Always pass current local values
-    for loc in self.locals {
-      args.push(loc)
     }
 
     // Branch: taken goes to intermediate block, not-taken falls through
@@ -321,10 +299,7 @@ fn Translator::translate_br_on_null(self : Translator, depth : Int) -> Unit {
       )
     }
 
-    // Always pass current local values
-    for loc in self.locals {
-      args.push(loc)
-    }
+    self.push_local_args(args, frame.local_params)
 
     // Branch: if null, go to taken block; otherwise fall through
     self.builder.brnz(is_null, taken, fallthrough)
@@ -347,9 +322,6 @@ fn Translator::translate_br_on_null(self : Translator, depth : Int) -> Unit {
         self.func_result_types.length() +
         i],
       )
-    }
-    for loc in self.locals {
-      args.push(loc)
     }
     self.builder.brnz(is_null, taken, fallthrough)
     self.builder.switch_to_block(taken)
@@ -392,10 +364,7 @@ fn Translator::translate_br_on_non_null(self : Translator, depth : Int) -> Unit 
     // Add the ref as the last value (the non-null ref being passed)
     args.push(ref_val)
 
-    // Always pass current local values
-    for loc in self.locals {
-      args.push(loc)
-    }
+    self.push_local_args(args, frame.local_params)
 
     // Branch: if NOT null (is_null == false), go to taken block; otherwise fall through
     // Since is_null is 1 if null, 0 if non-null, we branch to fallthrough if null
@@ -421,9 +390,6 @@ fn Translator::translate_br_on_non_null(self : Translator, depth : Int) -> Unit 
       )
     }
     args.push(ref_val)
-    for loc in self.locals {
-      args.push(loc)
-    }
     self.builder.brnz(is_null, fallthrough, taken)
     self.builder.switch_to_block(taken)
     self.builder.jump(ret_cont, args)
@@ -477,9 +443,7 @@ fn Translator::translate_br_on_cast(
       args.push(v)
     }
     args.push(cast_val)
-    for loc in self.locals {
-      args.push(loc)
-    }
+    self.push_local_args(args, frame.local_params)
     self.mark_block_frame_reachable(idx)
     self.builder.jump(frame.block, args)
     // Continue with fallthrough - push the original ref back
@@ -510,9 +474,6 @@ fn Translator::translate_br_on_cast(
       args.push(v)
     }
     args.push(cast_val)
-    for loc in self.locals {
-      args.push(loc)
-    }
     self.builder.jump(ret_cont, args)
     self.builder.switch_to_block(fallthrough)
     self.push(ref_val)
@@ -554,9 +515,7 @@ fn Translator::translate_br_on_cast_fail(
       args.push(v)
     }
     args.push(ref_val)
-    for loc in self.locals {
-      args.push(loc)
-    }
+    self.push_local_args(args, frame.local_params)
     // Branch: if NOT matches (matches == 0), go to taken; otherwise fall through
     // brnz branches if non-zero, so we invert: if matches, go to fallthrough
     self.builder.brnz(matches, fallthrough, taken)
@@ -590,9 +549,6 @@ fn Translator::translate_br_on_cast_fail(
       args.push(v)
     }
     args.push(ref_val)
-    for loc in self.locals {
-      args.push(loc)
-    }
     self.builder.brnz(matches, fallthrough, taken)
     self.builder.switch_to_block(taken)
     self.builder.jump(ret_cont, args)
@@ -619,37 +575,48 @@ fn Translator::translate_br_table(
 ) -> Unit {
   let index = self.pop()
 
-  // Helper to get target block and result types for a given depth
-  // Returns (target_block, result_types, is_function_level)
-  fn get_target(self : Translator, depth : Int) -> (Block, Array[Type], Bool) {
+  // Helper to get a target's block, result types, and carried locals for a
+  // given depth. The return continuation carries no locals.
+  // Returns (target_block, result_types, local_params)
+  fn get_target(
+    self : Translator,
+    depth : Int,
+  ) -> (Block, Array[Type], Array[Int]) {
     let idx = self.block_stack.length() - 1 - depth
     if idx >= 0 && idx < self.block_stack.length() {
       let frame = self.block_stack[idx]
       self.mark_block_frame_reachable(idx)
-      (frame.block, frame.result_types, false)
+      (frame.block, frame.result_types, frame.local_params)
     } else {
       // Function level
       let ret_cont = self.get_or_create_return_continuation()
-      (ret_cont, self.func_result_types, true)
+      (ret_cont, self.func_result_types, [])
     }
   }
 
   // Get default target info
-  let (default_block, default_result_types, _) = get_target(self, default_)
+  let (default_block, default_result_types, default_local_params) = get_target(
+    self, default_,
+  )
 
-  // Collect arguments that would be passed on branch (same for all targets)
-  // All targets must have the same result type as the default
-  let args : Array[Value] = []
+  // The explicit results are the same for every target -- all targets share the
+  // default's result type. The locals are not: each target carries only what
+  // its own region can redefine, so every target builds its own argument list
+  // off this shared prefix.
+  let result_args : Array[Value] = []
   let num_results = default_result_types.length()
   // Only collect results if we have enough values on the stack
   if self.value_stack.length() >= num_results {
     for i in 0..<num_results {
-      args.push(self.value_stack[self.value_stack.length() - num_results + i])
+      result_args.push(
+        self.value_stack[self.value_stack.length() - num_results + i],
+      )
     }
   }
-  // Always pass current local values
-  for loc in self.locals {
-    args.push(loc)
+  fn target_args(self : Translator, local_params : Array[Int]) -> Array[Value] {
+    let args = result_args.copy()
+    self.push_local_args(args, local_params)
+    args
   }
 
   // Phase 1: Create intermediate blocks for unique target depths.
@@ -684,14 +651,14 @@ fn Translator::translate_br_table(
     guard depth_to_intermediate.get(depth) is Some(intermediate) else {
       continue
     }
-    let (target_block, _, _) = get_target(self, depth)
+    let (target_block, _, local_params) = get_target(self, depth)
     self.builder.switch_to_block(intermediate)
-    self.builder.jump(target_block, args)
+    self.builder.jump(target_block, target_args(self, local_params))
   }
 
   // Fill in default intermediate
   self.builder.switch_to_block(default_intermediate)
-  self.builder.jump(default_block, args)
+  self.builder.jump(default_block, target_args(self, default_local_params))
 
   // br_table is a terminator, code after it is unreachable
   // Don't switch back to original - leave current_block as the last intermediate

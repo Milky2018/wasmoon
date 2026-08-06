@@ -68,6 +68,10 @@ priv struct Translator {
 priv struct BlockFrame {
   block : Block // The continuation block
   result_types : Array[Type]
+  // Local indices the block carries as parameters, in parameter order, from
+  // `region_local_params`. A branch to this frame supplies one argument per
+  // entry after the explicit results.
+  local_params : Array[Int]
   // Stack height at block entry
   stack_height : Int
   mut has_predecessor : Bool
@@ -812,9 +816,6 @@ fn Translator::translate(
         }
       }
       args.rev_in_place()
-      for loc in self.locals {
-        args.push(loc)
-      }
       self.builder.jump(ret_cont, args)
     } else {
       // No one jumped to function level, just return directly
@@ -848,13 +849,13 @@ fn Translator::get_or_create_return_continuation(self : Translator) -> Block {
     Some(block) => block
     None => {
       let ret_cont = self.builder.create_block()
-      // Add block parameters for function results
+      // Add block parameters for function results.
+      //
+      // No local parameters: this block only returns the result values, so a
+      // local threaded into it could never be read. Every branch to function
+      // level therefore passes results and nothing else.
       for ty in self.func_result_types {
         self.builder.add_block_param(ret_cont, ty) |> ignore
-      }
-      // Add block parameters for ALL locals (SSA phi nodes)
-      for loc in self.locals {
-        self.builder.add_block_param(ret_cont, loc.ty) |> ignore
       }
       self.return_continuation = Some(ret_cont)
       ret_cont
@@ -881,19 +882,16 @@ fn Translator::emit_catch_branch(
   // This is required so that throw_ref doesn't loop back to the same handler
   @wasm_milkir.try_table_end(self.builder, handler_id)
 
-  // Also pass current local values (for SSA correctness)
-  for loc in self.locals {
-    args.push(loc)
-  }
-
   // Branch to the handler label
   let idx = self.block_stack.length() - 1 - label_depth
   if idx >= 0 && idx < self.block_stack.length() {
     let frame = self.block_stack[idx]
+    // Also pass the locals the handler's block carries (for SSA correctness)
+    self.push_local_args(args, frame.local_params)
     self.mark_block_frame_reachable(idx)
     self.builder.jump(frame.block, args)
   } else {
-    // Function-level branch
+    // Function-level branch, which carries no locals
     let ret_cont = self.get_or_create_return_continuation()
     self.builder.jump(ret_cont, args)
   }
@@ -921,15 +919,11 @@ fn Translator::emit_catch_ref_branch(
   // Pop the exception handler AFTER reading values
   @wasm_milkir.try_table_end(self.builder, handler_id)
 
-  // Also pass current local values
-  for loc in self.locals {
-    args.push(loc)
-  }
-
   // Branch to the handler label
   let idx = self.block_stack.length() - 1 - label_depth
   if idx >= 0 && idx < self.block_stack.length() {
     let frame = self.block_stack[idx]
+    self.push_local_args(args, frame.local_params)
     self.mark_block_frame_reachable(idx)
     self.builder.jump(frame.block, args)
   } else {
@@ -951,15 +945,11 @@ fn Translator::emit_catch_all_branch(
   // catch_all doesn't pass exception values, just branches
   let args : Array[Value] = []
 
-  // Pass current local values
-  for loc in self.locals {
-    args.push(loc)
-  }
-
   // Branch to the handler label
   let idx = self.block_stack.length() - 1 - label_depth
   if idx >= 0 && idx < self.block_stack.length() {
     let frame = self.block_stack[idx]
+    self.push_local_args(args, frame.local_params)
     self.mark_block_frame_reachable(idx)
     self.builder.jump(frame.block, args)
   } else {
@@ -984,15 +974,11 @@ fn Translator::emit_catch_all_ref_branch(
   let exnref_i64 = self.builder.sextend(I64, exnref)
   args.push(self.builder.bitcast(Ref, exnref_i64))
 
-  // Pass current local values
-  for loc in self.locals {
-    args.push(loc)
-  }
-
   // Branch to the handler label
   let idx = self.block_stack.length() - 1 - label_depth
   if idx >= 0 && idx < self.block_stack.length() {
     let frame = self.block_stack[idx]
+    self.push_local_args(args, frame.local_params)
     self.mark_block_frame_reachable(idx)
     self.builder.jump(frame.block, args)
   } else {
@@ -1267,9 +1253,11 @@ fn Translator::translate_simd_store_lane(
 ///|
 /// Translate a block construct
 ///
-/// For proper SSA form, we need to pass all mutable locals through the
-/// continuation block as parameters. This ensures locals modified inside the
-/// block (or nested loops) are properly threaded through phi nodes.
+/// For proper SSA form, the locals the body writes -- nested regions included
+/// -- are threaded through the continuation block as parameters, so a value
+/// modified inside the block reaches the code after it as a phi. Locals the
+/// body never writes hold the same value on every edge into the continuation
+/// and get no parameter; `region_local_params` states the invariant.
 fn Translator::translate_block(
   self : Translator,
   block_type : @types.BlockType,
@@ -1297,16 +1285,16 @@ fn Translator::translate_block(
     self.builder.add_block_param(continuation, ty) |> ignore
   }
 
-  // Add block parameters for ALL locals (SSA phi nodes)
+  // Add block parameters for the locals the body can redefine
+  let local_params = self.region_local_params([body])
   let local_param_start = result_types.length()
-  for loc in self.locals {
-    self.builder.add_block_param(continuation, loc.ty) |> ignore
-  }
+  self.add_local_block_params(continuation, local_params)
 
   // Push block frame
   let frame : BlockFrame = {
     block: continuation,
     result_types,
+    local_params,
     stack_height: stack_height_after_params,
     has_predecessor: false,
   }
@@ -1336,10 +1324,8 @@ fn Translator::translate_block(
       args.push(self.pop())
     }
     args.rev_in_place()
-    // Then, all locals
-    for loc in self.locals {
-      args.push(loc)
-    }
+    // Then, the carried locals
+    self.push_local_args(args, local_params)
     self.block_stack[frame_idx].has_predecessor = true
     self.builder.jump(continuation, args)
   }
@@ -1369,18 +1355,18 @@ fn Translator::translate_block(
       self.push(continuation.params[i].0)
     }
 
-    // Update locals to use the continuation's phi values
-    for i, _loc in self.locals {
-      self.locals[i] = continuation.params[local_param_start + i].0
-    }
+    // Update the carried locals to use the continuation's phi values
+    self.adopt_local_params(continuation, local_params, local_param_start)
   }
 }
 
 ///|
 /// Translate a loop construct
 ///
-/// For proper SSA form, we need to pass all mutable locals through the loop
-/// header as parameters. This creates phi nodes for loop-carried variables.
+/// For proper SSA form, the locals the body writes are threaded through the
+/// loop header as parameters, which is what makes them loop-carried. A local
+/// the body never writes has the same value on the entry edge and every back
+/// edge, so it needs no parameter; see `region_local_params`.
 fn Translator::translate_loop(
   self : Translator,
   block_type : @types.BlockType,
@@ -1398,11 +1384,11 @@ fn Translator::translate_loop(
     self.builder.add_block_param(loop_header, ty) |> ignore
   }
 
-  // Add loop header parameters for ALL locals (SSA phi nodes for loop-carried values)
+  // Add loop header parameters for the locals the body can redefine, which are
+  // exactly the ones a back edge can disagree with the entry edge about
+  let local_params = self.region_local_params([body])
   let local_param_start = param_types.length()
-  for loc in self.locals {
-    self.builder.add_block_param(loop_header, loc.ty) |> ignore
-  }
+  self.add_local_block_params(loop_header, local_params)
 
   // Add continuation parameters for results
   for ty in result_types {
@@ -1418,10 +1404,8 @@ fn Translator::translate_loop(
       header_args.push(self.pop())
     }
     header_args.rev_in_place()
-    // Then, all locals
-    for loc in self.locals {
-      header_args.push(loc)
-    }
+    // Then, the loop-carried locals
+    self.push_local_args(header_args, local_params)
     self.builder.jump(loop_header, header_args)
   }
 
@@ -1437,16 +1421,14 @@ fn Translator::translate_loop(
     self.push(loop_header.params[i].0)
   }
 
-  // Update locals to use the loop header's phi values
-  for i, _loc in self.locals {
-    self.locals[i] = loop_header.params[local_param_start + i].0
-  }
+  // Update the loop-carried locals to use the loop header's phi values
+  self.adopt_local_params(loop_header, local_params, local_param_start)
 
   // Push block frame (br targets loop header for loops)
-  // Store local_param_start so br can pass locals too
   let frame : BlockFrame = {
     block: loop_header, // Loop's br target is the header
     result_types: param_types, // For br, we need params not results
+    local_params,
     stack_height: self.value_stack.length(),
     has_predecessor: false,
   }
