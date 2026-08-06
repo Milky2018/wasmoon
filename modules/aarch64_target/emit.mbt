@@ -3711,7 +3711,10 @@ fn patch_relative_branch(
 }
 
 ///|
-fn emit_verified(
+/// One emission attempt at a fixed branch width. Callers want
+/// `emit_with_branch_fallback`: on its own this fails outright on any branch
+/// past imm19, with no way to recover.
+fn emit_single_pass(
   function : @vcode.Function[AArch64Inst],
   allocation : @vcode.Allocation,
   frame : AArch64Frame,
@@ -3779,6 +3782,32 @@ fn emit_verified(
 }
 
 ///|
+/// Emit `function`, widening range-limited branches when the compact form does
+/// not reach.
+///
+/// Emit compactly first. A conditional branch only overflows imm19 in a
+/// function large enough to span a megabyte, so paying four bytes per branch
+/// up front would tax every ordinary function for a case none of them hit.
+/// Emission is a pure function of its inputs, so re-running it after an
+/// overflow is safe and costs nothing until it is needed.
+///
+/// Every path that turns VCode into machine code goes through here. Keeping
+/// the fallback in a wrapper that callers had to opt into is what left the
+/// JIT's own path — `compile`, which reached for the single-pass function
+/// directly — failing on functions that `emit` compiled fine (ISS-402).
+fn emit_with_branch_fallback(
+  function : @vcode.Function[AArch64Inst],
+  allocation : @vcode.Allocation,
+  frame : AArch64Frame,
+) -> @code_object.UnlinkedCodeObject raise AArch64EmitError {
+  emit_single_pass(function, allocation, frame) catch {
+    BranchOutOfRange(_) =>
+      emit_single_pass(function, allocation, frame, long_branches=true)
+    error => raise error
+  }
+}
+
+///|
 pub fn emit(
   function : @vcode.Function[AArch64Inst],
   allocation : @vcode.Allocation,
@@ -3787,14 +3816,5 @@ pub fn emit(
   verify_frame(function, allocation, frame) catch {
     error => raise InvalidFrame(cause=error)
   }
-  // Emit compactly first. A conditional branch only overflows imm19 in a
-  // function large enough to span a megabyte, so paying four bytes per branch
-  // up front would tax every ordinary function for a case none of them hit.
-  // Emission is a pure function of its inputs, so re-running it after an
-  // overflow is safe and costs nothing until it is needed.
-  emit_verified(function, allocation, frame) catch {
-    BranchOutOfRange(_) =>
-      emit_verified(function, allocation, frame, long_branches=true)
-    error => raise error
-  }
+  emit_with_branch_fallback(function, allocation, frame)
 }

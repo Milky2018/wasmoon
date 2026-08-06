@@ -46,7 +46,7 @@ pub fn compile(
   }
   on_event(FramePlanningFinished)
   on_event(EmissionStarted)
-  let object = emit_verified(function, allocation, frame) catch {
+  let object = emit_with_branch_fallback(function, allocation, frame) catch {
     error => raise EmissionFailed(cause=error)
   }
   on_event(EmissionFinished)

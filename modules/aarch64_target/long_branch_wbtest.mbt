@@ -10,7 +10,7 @@
 /// word throws off the offsets around it, since a function that overflows
 /// imm19 needs about a megabyte of code and takes minutes to compile.
 ///
-/// To check that instead, flip `emit_verified`'s `long_branches` default to
+/// To check that instead, flip `emit_single_pass`'s `long_branches` default to
 /// `true` and run `scripts/run_all_wast.py --rec`. Every conditional branch
 /// then takes the wide path, and the corpus exercises it 62563 times in each
 /// mode. Done on 2026-08-06: all 258 files passed in both modes. The only

@@ -1260,6 +1260,11 @@ fn run_with_jit(
   let compiled = match cached_artifact {
     Some(loaded) => Some((loaded, None, None))
     None => {
+      // The compiler already knows why it gave up, and the stage event
+      // carries the reason. Dropping it left `run` reporting nothing but
+      // "JIT compilation failed" for a module the compiler had a precise
+      // complaint about.
+      let failure : Ref[String?] = { val: None }
       let fresh = compile_validated_module_to_jit(
         mod_,
         debug,
@@ -1269,7 +1274,17 @@ fn run_with_jit(
         enable_dwarf,
         local_compile_mask~,
         source_module=wasm_binary,
+        on_progress=fn(event) {
+          if event.stage is Failed && event.message is Some(message) {
+            failure.val = Some(message)
+          }
+          None
+        },
       )
+      if fresh is None && failure.val is Some(message) {
+        @logger.error("JIT compilation failed: \{message}")
+        return exit_failure()
+      }
       match fresh {
         None => None
         Some((artifact, debug_db)) => {
