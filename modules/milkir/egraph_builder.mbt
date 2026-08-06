@@ -31,15 +31,6 @@ priv struct RepKey {
 } derive(Eq, Hash)
 
 ///|
-/// Event for the explicit dominator-tree walk: `Enter` rewrites a block and
-/// schedules its children, `Exit` restores the representative bindings that
-/// block introduced.
-priv enum DomWalkEvent {
-  Enter(Int)
-  Exit(Array[(RepKey, Value?)])
-}
-
-///|
 fn EGraphBuilder::new_with_limits_and_ruleset(
   saturation_limits : @egraph.SaturationLimits,
   ruleset : @egraph.IndexedRuleSet,
@@ -497,127 +488,112 @@ fn optimize_function_with_stats_with_limits_and_ruleset(
   let domtree = build_dominator_tree(idom)
   let block_idx = build_block_index(func)
 
-  // The dominator tree is walked with an explicit event stack rather than
-  // native recursion, so a deep block chain costs heap (ISS-380). Enter
-  // events rewrite a block and push its children; the matching exit event
-  // restores the bindings that block introduced.
-  fn rewrite_dominator_tree(root : Int) -> Unit {
-    let stack : Array[DomWalkEvent] = [Enter(root)]
-    while stack.pop() is Some(event) {
-      match event {
-        Exit(scoped_entries) =>
-          for entry in scoped_entries.rev_iter() {
-            let (key, previous) = entry
-            match previous {
-              Some(value) => builder.class_to_value.set(key, value)
-              None => builder.class_to_value.remove(key)
-            }
-          }
-        Enter(block_id) => {
-          guard block_idx.get(block_id) is Some(idx) else { continue }
-          let block = func.blocks[idx]
-          let scoped_entries : Array[(RepKey, Value?)] = []
-
-          fn bind_rep(builder : EGraphBuilder, value : Value) -> Unit {
-            if value.id >= 0 &&
-              value.id < builder.value_map.length() &&
-              builder.value_map[value.id] is Some(class_id) {
-              let canonical = builder.egraph.find(class_id)
-              let key : RepKey = { class_id: canonical.0, ty: value.ty }
-              let previous = builder.class_to_value.get(key)
-              let should_bind = previous is None
-              if should_bind {
-                scoped_entries.push((key, previous))
-                builder.class_to_value.set(key, value)
-              }
-            }
-          }
-
-          for pair in block.params {
-            let (param, _) = pair
-            bind_rep(builder, param)
-          }
-
-          // Apply optimizations: constant folding, operand rewriting, and
-          // elaboration. Elaborated instructions are spliced in ahead of the
-          // instruction that needed them, so the block is rebuilt rather
-          // than mutated in place.
-          let rewritten : Array[Inst] = []
-          for inst in block.instructions {
-            for operand in inst.operands {
-              bind_rep(builder, operand)
-            }
-            for i in 0..<inst.operands.length() {
-              let operand = inst.operands[i]
-              if builder.get_simplified_operand(operand) is Some(simplified) {
-                inst.operands[i] = simplified
-                changed = true
-              }
-            }
-
-            if inst.first_result() is Some(v) &&
-              builder.get_simplified_opcode(v) is Some(op) {
-              if op is Scalar(IntConst(c)) {
-                let mut inst_changed = false
-                match inst.opcode {
-                  Scalar(IntConst(old_c)) =>
-                    if old_c != c || inst.operands.length() > 0 {
-                      inst.opcode = Scalar(IntConst(c))
-                      inst.operands.clear()
-                      inst_changed = true
-                    }
-                  _ => {
-                    inst.opcode = Scalar(IntConst(c))
-                    inst.operands.clear()
-                    inst_changed = true
-                  }
-                }
-                if inst_changed {
-                  changed = true
-                }
-              } else if inst.opcode != op {
-                inst.opcode = op
-                changed = true
-              }
-            } else {
-              // Elaboration may prepend instructions that build the operands
-              // the rewritten form needs; those dominate every later use.
-              let before = rewritten.length()
-              if builder.elaborate_inst(func, best_nodes, inst, rewritten) {
-                changed = true
-              }
-              for i in before..<rewritten.length() {
-                if rewritten[i].first_result() is Some(v) {
-                  bind_rep(builder, v)
-                }
-              }
-            }
-
-            rewritten.push(inst)
-            if inst.first_result() is Some(v) {
-              bind_rep(builder, v)
-            }
-          }
-          block.instructions.clear()
-          for inst in rewritten {
-            block.instructions.push(inst)
-          }
-
-          // Exit runs after every child, so push it first.
-          stack.push(Exit(scoped_entries))
-          if block_id < domtree.length() {
-            for child in domtree[block_id] {
-              stack.push(Enter(child))
-            }
-          }
+  // The dominator tree is walked with `visit_dominator_tree`'s explicit
+  // stack rather than native recursion, so a deep block chain costs heap
+  // (ISS-380). Entering a block rewrites it and returns the bindings it
+  // introduced; the matching exit restores them.
+  fn rewrite_block(block_id : Int) -> (Array[(RepKey, Value?)], Bool) {
+    guard block_idx.get(block_id) is Some(idx) else { return ([], true) }
+    let block = func.blocks[idx]
+    let scoped_entries : Array[(RepKey, Value?)] = []
+    fn bind_rep(builder : EGraphBuilder, value : Value) -> Unit {
+      if value.id >= 0 &&
+        value.id < builder.value_map.length() &&
+        builder.value_map[value.id] is Some(class_id) {
+        let canonical = builder.egraph.find(class_id)
+        let key : RepKey = { class_id: canonical.0, ty: value.ty }
+        let previous = builder.class_to_value.get(key)
+        let should_bind = previous is None
+        if should_bind {
+          scoped_entries.push((key, previous))
+          builder.class_to_value.set(key, value)
         }
       }
     }
+
+    for pair in block.params {
+      let (param, _) = pair
+      bind_rep(builder, param)
+    }
+
+    // Apply optimizations: constant folding, operand rewriting, and
+    // elaboration. Elaborated instructions are spliced in ahead of the
+    // instruction that needed them, so the block is rebuilt rather
+    // than mutated in place.
+    let rewritten : Array[Inst] = []
+    for inst in block.instructions {
+      for operand in inst.operands {
+        bind_rep(builder, operand)
+      }
+      for i in 0..<inst.operands.length() {
+        let operand = inst.operands[i]
+        if builder.get_simplified_operand(operand) is Some(simplified) {
+          inst.operands[i] = simplified
+          changed = true
+        }
+      }
+
+      if inst.first_result() is Some(v) &&
+        builder.get_simplified_opcode(v) is Some(op) {
+        if op is Scalar(IntConst(c)) {
+          let mut inst_changed = false
+          match inst.opcode {
+            Scalar(IntConst(old_c)) =>
+              if old_c != c || inst.operands.length() > 0 {
+                inst.opcode = Scalar(IntConst(c))
+                inst.operands.clear()
+                inst_changed = true
+              }
+            _ => {
+              inst.opcode = Scalar(IntConst(c))
+              inst.operands.clear()
+              inst_changed = true
+            }
+          }
+          if inst_changed {
+            changed = true
+          }
+        } else if inst.opcode != op {
+          inst.opcode = op
+          changed = true
+        }
+      } else {
+        // Elaboration may prepend instructions that build the operands
+        // the rewritten form needs; those dominate every later use.
+        let before = rewritten.length()
+        if builder.elaborate_inst(func, best_nodes, inst, rewritten) {
+          changed = true
+        }
+        for i in before..<rewritten.length() {
+          if rewritten[i].first_result() is Some(v) {
+            bind_rep(builder, v)
+          }
+        }
+      }
+
+      rewritten.push(inst)
+      if inst.first_result() is Some(v) {
+        bind_rep(builder, v)
+      }
+    }
+    block.instructions.clear()
+    for inst in rewritten {
+      block.instructions.push(inst)
+    }
+    (scoped_entries, true)
   }
 
   if cfg.is_valid(0) {
     builder.class_to_value.clear()
-    rewrite_dominator_tree(0)
+    visit_dominator_tree(domtree, 0, rewrite_block, fn(scoped_entries) {
+      for entry in scoped_entries.rev_iter() {
+        let (key, previous) = entry
+        match previous {
+          Some(value) => builder.class_to_value.set(key, value)
+          None => builder.class_to_value.remove(key)
+        }
+      }
+    })
   }
   { changed, total_classes, total_nodes, total_rule_applications }
 }

@@ -663,10 +663,10 @@ fn run_global_value_numbering_with_budget(
   )
   let work_done : Ref[Int] = { val: 0 }
   let budget_exhausted : Ref[Bool] = { val: false }
-  // DFS the dominator tree
-  fn dfs(block_id : Int) {
+  // Walk the dominator tree
+  fn enter(block_id : Int) -> (Array[(Inst, (Value, AliasRegion?)?)], Bool) {
     if budget_exhausted.val {
-      return
+      return ([], false)
     }
     let idx = block_idx.get(block_id).unwrap()
     let block = func.blocks[idx]
@@ -795,13 +795,12 @@ fn run_global_value_numbering_with_budget(
         }
       }
     }
-    // Recurse to dominated children
-    if !budget_exhausted.val && block_id < domtree.length() {
-      for child in domtree[block_id] {
-        dfs(child)
-      }
-    }
-    // Restore value table to state before this block
+    // Descend into dominated children unless the budget ran out here.
+    (local_entries, !budget_exhausted.val)
+  }
+
+  // Restore the value table to the state it had before the block.
+  fn exit(local_entries : Array[(Inst, (Value, AliasRegion?)?)]) -> Unit {
     for entry in local_entries.rev_iter() {
       let (key, prev) = entry
       match prev {
@@ -819,9 +818,9 @@ fn run_global_value_numbering_with_budget(
     }
   }
 
-  // Start DFS from entry block (block 0)
+  // Start from the entry block (block 0)
   if cfg.is_valid(0) {
-    dfs(0)
+    visit_dominator_tree(domtree, 0, enter, exit)
   }
   { result, work_done: work_done.val, budget_exhausted: budget_exhausted.val }
 }

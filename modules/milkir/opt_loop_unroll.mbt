@@ -54,6 +54,32 @@ fn find_unroll_block(func : Function, block_id : Int) -> Block? {
 }
 
 ///|
+/// The instruction outside the loop that defines `value`, if there is one.
+fn definition_outside_loop(
+  func : Function,
+  loop_ : Loop,
+  value : Value,
+) -> Inst? {
+  for block in func.blocks {
+    if loop_.contains(block.id) {
+      continue
+    }
+    for inst in block.instructions {
+      if inst.results.any(result => result.id == value.id) {
+        return Some(inst)
+      }
+    }
+  }
+  None
+}
+
+///|
+/// Resolve `value` to an integer constant defined outside the loop, following
+/// copies.
+///
+/// Copies are followed with a loop rather than a recursive call: the length of
+/// a copy chain is a property of the input function, and nothing upstream
+/// bounds it (ISS-401).
 fn find_integer_constant_outside_loop(
   func : Function,
   loop_ : Loop,
@@ -63,41 +89,21 @@ fn find_integer_constant_outside_loop(
     return None
   }
   let visited : @hashset.HashSet[Int] = HashSet([])
-  find_integer_constant_outside_loop_inner(func, loop_, value, visited)
-}
-
-///|
-fn find_integer_constant_outside_loop_inner(
-  func : Function,
-  loop_ : Loop,
-  value : Value,
-  visited : @hashset.HashSet[Int],
-) -> Int64? {
-  if visited.contains(value.id) {
-    return None
-  }
-  visited.add(value.id)
-  for block in func.blocks {
-    if loop_.contains(block.id) {
-      continue
+  let mut current = value
+  while !visited.contains(current.id) {
+    visited.add(current.id)
+    guard definition_outside_loop(func, loop_, current) is Some(inst) else {
+      return None
     }
-    for inst in block.instructions {
-      guard inst.results.any(result => result.id == value.id) else { continue }
-      match inst.opcode {
-        Scalar(IntConst(constant)) => return Some(constant)
-        Scalar(Copy) =>
-          if inst.operands.length() == 1 && inst.operands[0].ty == value.ty {
-            return find_integer_constant_outside_loop_inner(
-              func,
-              loop_,
-              inst.operands[0],
-              visited,
-            )
-          } else {
-            return None
-          }
-        _ => return None
-      }
+    match inst.opcode {
+      Scalar(IntConst(constant)) => return Some(constant)
+      Scalar(Copy) =>
+        if inst.operands.length() == 1 && inst.operands[0].ty == current.ty {
+          current = inst.operands[0]
+        } else {
+          return None
+        }
+      _ => return None
     }
   }
   None
