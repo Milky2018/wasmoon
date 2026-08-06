@@ -14,7 +14,7 @@
 ///
 /// These cover the label path itself. That real `br_table` shapes still work
 /// once the reserved words are in place is covered by running the corpus with
-/// `emit_verified`'s `long_branches` default flipped to `true`, which forces
+/// `emit_single_pass`'s `long_branches` default flipped to `true`, which forces
 /// every conditional branch through the wide form: 258/258 files and 62563
 /// assertions in both JIT and interpreter mode, on 2026-08-06.
 
