@@ -115,7 +115,7 @@ fn write_cache_test_bytes(path : String, bytes : Bytes) -> Unit {
     _ => ()
   }
   @fs.write_bytes_to_file(path, bytes) catch {
-    err => abort("failed to write cache fixture: \{err}")
+    @fs.IOError(message) => abort("failed to write cache fixture: \{message}")
   }
 }
 

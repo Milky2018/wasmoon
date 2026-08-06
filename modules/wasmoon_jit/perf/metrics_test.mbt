@@ -1,7 +1,7 @@
 ///|
 test "compile metrics preserve every production phase and allocation summary" {
-  let previous = @sys.get_env_var("WASMOON_PERF_METRICS")
-  @sys.set_env_var("WASMOON_PERF_METRICS", "1")
+  let previous = @env.get_env_var("WASMOON_PERF_METRICS")
+  @env.set_env_var("WASMOON_PERF_METRICS", "1")
   reset_module(1)
   begin_function(7, "measured", 2, 30)
   record_stage_us(Optimize, 10L)
@@ -48,7 +48,7 @@ test "compile metrics preserve every production phase and allocation summary" {
     ),
   )
   match previous {
-    Some(value) => @sys.set_env_var("WASMOON_PERF_METRICS", value)
-    None => @sys.unset_env_var("WASMOON_PERF_METRICS")
+    Some(value) => @env.set_env_var("WASMOON_PERF_METRICS", value)
+    None => @env.unset_env_var("WASMOON_PERF_METRICS")
   }
 }

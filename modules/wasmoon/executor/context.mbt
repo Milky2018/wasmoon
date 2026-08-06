@@ -29,7 +29,7 @@ fn is_truthy_env_flag(value : String) -> Bool {
 
 ///|
 fn gc_stress_enabled() -> Bool {
-  match @sys.get_env_var(GC_STRESS_ENV) {
+  match @env.get_env_var(GC_STRESS_ENV) {
     Some(v) => is_truthy_env_flag(v)
     None => false
   }
@@ -53,7 +53,7 @@ fn parse_decimal_int(value : String) -> Int? {
 
 ///|
 fn gc_stress_every() -> Int {
-  match @sys.get_env_var(GC_STRESS_EVERY_ENV) {
+  match @env.get_env_var(GC_STRESS_EVERY_ENV) {
     Some(raw_value) =>
       match parse_decimal_int(raw_value) {
         Some(parsed) if parsed > 0 => parsed
