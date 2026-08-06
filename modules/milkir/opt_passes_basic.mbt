@@ -540,7 +540,7 @@ fn canonicalize_aliases(func : Function) -> OptResult {
   }
   // Active alias environment for the current dominator-tree path.
   let aliases : @hashmap.HashMap[Int, Value] = HashMap([])
-  fn dfs(block_id : Int) {
+  fn enter(block_id : Int) -> (Array[Int], Bool) {
     let idx = block_idx.get(block_id).unwrap()
     let block = func.blocks[idx]
     // Track aliases introduced in this block so we can pop on exit.
@@ -566,21 +566,16 @@ fn canonicalize_aliases(func : Function) -> OptResult {
       let new_term = propagate_copies_in_terminator(term, aliases, result)
       block.terminator = Some(new_term)
     }
-    // Recurse into dominated children.
-    if block_id < domtree.length() {
-      for child in domtree[block_id] {
-        dfs(child)
-      }
-    }
-    // Pop this block's aliases.
-    for id in local_aliases {
-      aliases.remove(id)
-    }
+    (local_aliases, true)
   }
 
-  // Start DFS from entry block (block 0).
+  // Walk dominated children, then pop this block's aliases.
   if cfg.is_valid(0) {
-    dfs(0)
+    visit_dominator_tree(domtree, 0, enter, fn(local_aliases) {
+      for id in local_aliases {
+        aliases.remove(id)
+      }
+    })
   }
   result
 }

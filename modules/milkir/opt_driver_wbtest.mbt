@@ -281,6 +281,37 @@ fn deep_block_chain_function(name : String, count : Int) -> Function {
 }
 
 ///|
+/// The same spine with nothing in the blocks but their terminator. GVN stops
+/// descending once its work budget runs out, and only instructions consume
+/// that budget, so blocks that hold no instruction let the walk reach the
+/// full depth of the tree however large the function is.
+fn deep_empty_block_chain_function(name : String, count : Int) -> Function {
+  let builder = FunctionBuilder::FunctionBuilder(name)
+  let input = builder.add_param(I32)
+  builder.add_result(I32)
+  // The entry block carries the only instructions, which is what gives the
+  // pass a non-zero budget to begin with — a function of nothing but empty
+  // blocks is refused before the walk starts. Nothing below the entry can
+  // spend that budget, so the descent runs the full depth of the chain.
+  let zero = builder.iconst_i32(0)
+  let value = builder.iadd(input, zero)
+  for _ in 0..<count {
+    let next = builder.create_block()
+    builder.jump(next, [])
+    builder.switch_to_block(next)
+  }
+  builder.return_([value])
+  builder.get_function()
+}
+
+///|
+test "global value numbering survives a deep spine of empty blocks" {
+  let func = deep_empty_block_chain_function("gvn_deep_empty_blocks", 100000)
+  cse_gvn_global(func) |> ignore
+  inspect(func.verify(), content="()")
+}
+
+///|
 /// One long chain of e-graph-encodable `iadd`s, each consuming the previous
 /// result. The value converter used to walk this with native recursion.
 /// `copy` is deliberately not used: it has no e-graph encoding, so a copy
@@ -303,6 +334,18 @@ test "egraph survives a deep dominator spine" {
   // Well past the depth a native-stack recursion survives.
   let func = deep_block_chain_function("egraph_deep_blocks", 100000)
   run_egraph_pass(func) |> ignore
+  inspect(func.verify(), content="()")
+}
+
+///|
+test "the optimizer pipeline survives a deep dominator spine" {
+  // The e-graph pass is not the only descent of the dominator tree, and the
+  // test above only covers that one. Alias canonicalization descends on every
+  // level above O0 with no budget to cut it short, and GVN descends as far as
+  // its budget reaches, so the pipeline has to be driven end to end to cover
+  // them.
+  let func = deep_block_chain_function("optimize_deep_blocks", 100000)
+  optimize_with_level(func, O3) |> ignore
   inspect(func.verify(), content="()")
 }
 

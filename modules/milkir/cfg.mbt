@@ -107,30 +107,45 @@ pub fn CFG::is_exit_block(self : CFG, block_id : Int) -> Bool {
 }
 
 ///|
+/// Depth-first postorder over the reachable CFG, entry block first.
+///
+/// The depth of this walk is the length of a CFG path, which the input
+/// function controls, so it keeps its own stack on the heap. A chain of
+/// blocks is ordinary in generated code, and a native recursion turns one
+/// into a stack overflow inside the optimizer rather than a diagnosable
+/// error (ISS-380, ISS-401).
 pub fn CFG::postorder(self : CFG) -> Array[Int] {
   let visited = Array::make(self.size, false)
   let result : Array[Int] = []
-  if self.size > 0 && self.valid[0] {
-    postorder_visit(self, 0, visited, result)
+  if self.size == 0 || !self.valid[0] {
+    return result
+  }
+  // `pending[i]` is the index of the next successor to consider when
+  // `stack[i]` comes back to the top. Advancing one successor per visit is
+  // what makes this emit the same order as a recursive descent: a block is
+  // pushed to `result` only once every successor below it has been.
+  let stack = [0]
+  let pending = [0]
+  visited[0] = true
+  while stack.length() > 0 {
+    let top = stack.length() - 1
+    let block_id = stack[top]
+    let successors = self.successors[block_id]
+    if pending[top] < successors.length() {
+      let succ = successors[pending[top]]
+      pending[top] += 1
+      if self.is_valid(succ) && !visited[succ] {
+        visited[succ] = true
+        stack.push(succ)
+        pending.push(0)
+      }
+    } else {
+      stack.unsafe_pop() |> ignore
+      pending.unsafe_pop() |> ignore
+      result.push(block_id)
+    }
   }
   result
-}
-
-///|
-fn postorder_visit(
-  cfg : CFG,
-  block_id : Int,
-  visited : Array[Bool],
-  result : Array[Int],
-) -> Unit {
-  if !cfg.is_valid(block_id) || visited[block_id] {
-    return
-  }
-  visited[block_id] = true
-  for succ in cfg.successors[block_id] {
-    postorder_visit(cfg, succ, visited, result)
-  }
-  result.push(block_id)
 }
 
 ///|
@@ -231,6 +246,55 @@ fn build_dominator_tree(idom : Array[Int]) -> Array[Array[Int]] {
     }
   }
   children
+}
+
+///|
+/// One step of an explicit dominator-tree walk: `Enter` visits a node and
+/// schedules its children, `Exit` carries the scope state that node
+/// introduced so it can be unwound once the subtree below it is finished.
+priv enum DomWalkEvent[Scope] {
+  Enter(Int)
+  Exit(Scope)
+}
+
+///|
+/// Walk the dominator tree below `root` in the order a recursive pre-order
+/// descent would, without spending native stack on the depth of the tree.
+///
+/// `enter` visits a node and returns the scope state that node introduced
+/// together with whether to descend into its children; `exit` receives that
+/// state once the node's whole subtree is done. Scoped passes bind on the way
+/// down and restore on the way up, so the two run in exactly the nesting a
+/// recursion gave them.
+///
+/// This exists so that stack safety is settled once rather than per pass.
+/// Every dominator-tree pass here used to hand-roll its own descent, which
+/// meant "does this survive a deep function?" got answered independently at
+/// each site — and answered wrong at all but one of them (ISS-401).
+fn[Scope] visit_dominator_tree(
+  domtree : Array[Array[Int]],
+  root : Int,
+  enter : (Int) -> (Scope, Bool),
+  exit : (Scope) -> Unit,
+) -> Unit {
+  let events : Array[DomWalkEvent[Scope]] = [Enter(root)]
+  while events.pop() is Some(event) {
+    match event {
+      Exit(scope) => exit(scope)
+      Enter(block_id) => {
+        let (scope, descend) = enter(block_id)
+        // Pushed before the children so it pops after all of them.
+        events.push(Exit(scope))
+        if descend && block_id >= 0 && block_id < domtree.length() {
+          // Reversed: the stack is LIFO, so this pops the children back out
+          // in the order the recursive descent took them.
+          for child in domtree[block_id].rev_iter() {
+            events.push(Enter(child))
+          }
+        }
+      }
+    }
+  }
 }
 
 ///|

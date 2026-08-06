@@ -103,28 +103,40 @@ fn build_cfg(function : Function) -> (Array[Array[Int]], Array[Array[Int]]) {
 }
 
 ///|
-fn postorder_visit(
-  block_id : Int,
-  successors : Array[Array[Int]],
-  visited : Array[Bool],
-  order : Array[Int],
-) -> Unit {
-  if visited[block_id] {
-    return
-  }
-  visited[block_id] = true
-  for successor in successors[block_id] {
-    postorder_visit(successor, successors, visited, order)
-  }
-  order.push(block_id)
-}
-
-///|
+/// Reachable blocks in reverse postorder, entry block first.
+///
+/// The depth of this walk is the length of a CFG path, which the input
+/// function controls, so it keeps its own stack on the heap rather than
+/// recursing: a chain of blocks is ordinary in generated code, and a native
+/// recursion turns one into a stack overflow (ISS-401).
 fn reverse_postorder(successors : Array[Array[Int]]) -> Array[Int] {
   let visited = Array::make(successors.length(), false)
   let order : Array[Int] = []
-  if !successors.is_empty() {
-    postorder_visit(0, successors, visited, order)
+  if successors.is_empty() {
+    return order
+  }
+  // `pending[i]` is the index of the next successor to consider when
+  // `stack[i]` comes back to the top, so a block joins the postorder only
+  // once every successor below it has, exactly as a recursive descent does.
+  let stack = [0]
+  let pending = [0]
+  visited[0] = true
+  while stack.length() > 0 {
+    let top = stack.length() - 1
+    let block_id = stack[top]
+    if pending[top] < successors[block_id].length() {
+      let successor = successors[block_id][pending[top]]
+      pending[top] += 1
+      if !visited[successor] {
+        visited[successor] = true
+        stack.push(successor)
+        pending.push(0)
+      }
+    } else {
+      stack.unsafe_pop() |> ignore
+      pending.unsafe_pop() |> ignore
+      order.push(block_id)
+    }
   }
   order.rev_in_place()
   order
