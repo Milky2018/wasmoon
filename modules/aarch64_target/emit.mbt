@@ -26,6 +26,9 @@ priv struct BranchFixup {
   offset : Int
   target : @vcode.Block
   bits : Int
+  // Two words were reserved here instead of one, so the patch may spend the
+  // second on a long-range form. See `CodeBuffer::long_branches`.
+  wide : Bool
 }
 
 ///|
@@ -33,6 +36,14 @@ priv struct CodeBuffer {
   code : Array[Byte]
   fixups : Array[BranchFixup]
   relocations : Array[@code_object.Relocation]
+  // Reserve a second word after every conditional branch, so one whose target
+  // turns out to be beyond imm19's +/-1MB can be rewritten as an inverted
+  // short branch over an unconditional `b`, which reaches +/-128MB.
+  //
+  // Off for the first emission attempt, because it costs four bytes per
+  // conditional branch and almost no function needs it. `emit` turns it on and
+  // re-emits only after a branch has actually overflowed.
+  long_branches : Bool
 }
 
 ///|
@@ -60,8 +71,33 @@ pub impl Show for AArch64EmitError with fn output(self, logger) {
 }
 
 ///|
-fn CodeBuffer::new() -> CodeBuffer {
-  { code: [], fixups: [], relocations: [] }
+fn CodeBuffer::new(long_branches? : Bool = false) -> CodeBuffer {
+  { code: [], fixups: [], relocations: [], long_branches }
+}
+
+///|
+/// `nop`, which fills the reserved slot when the short form suffices.
+const AARCH64_NOP : UInt = 0xD503201FU
+
+///|
+/// `b` with an empty imm26 field.
+const AARCH64_BRANCH : UInt = 0x14000000U
+
+///|
+/// Flip a conditional branch to its opposite.
+///
+/// Both conditional forms that reach imm19 invert with a single bit, which is
+/// what makes the long-range rewrite cheap: `b.cond` keeps its condition in
+/// the low four bits and inverts in the lowest, and `cbz`/`cbnz` differ only
+/// in bit 24 for either operand width.
+fn invert_conditional_branch(word : UInt) -> UInt? {
+  if (word & 0xFF000000U) == 0x54000000U {
+    Some(word ^ 1U)
+  } else if (word & 0x7E000000U) == 0x34000000U {
+    Some(word ^ 0x01000000U)
+  } else {
+    None
+  }
 }
 
 ///|
@@ -75,6 +111,14 @@ fn CodeBuffer::emit_word(self : CodeBuffer, word : UInt) -> Unit {
   self.code.push(((word >> 8) & 0xFFU).to_byte())
   self.code.push(((word >> 16) & 0xFFU).to_byte())
   self.code.push(((word >> 24) & 0xFFU).to_byte())
+}
+
+///|
+fn CodeBuffer::read_word(self : CodeBuffer, offset : Int) -> UInt {
+  self.code[offset].to_uint() |
+  (self.code[offset + 1].to_uint() << 8) |
+  (self.code[offset + 2].to_uint() << 16) |
+  (self.code[offset + 3].to_uint() << 24)
 }
 
 ///|
@@ -94,7 +138,12 @@ fn CodeBuffer::emit_branch(
 ) -> Unit {
   let offset = self.position()
   self.emit_word(base)
-  self.fixups.push({ offset, target, bits })
+  // Only imm19 can overflow within a function; `b` already reaches +/-128MB.
+  let wide = bits == 19 && self.long_branches
+  if wide {
+    self.emit_word(AARCH64_NOP)
+  }
+  self.fixups.push({ offset, target, bits, wide })
 }
 
 ///|
@@ -3488,8 +3537,55 @@ fn patch_branches(
     if target < 0 {
       raise BranchTargetMissing(block=fixup.target)
     }
-    patch_relative_branch(buffer, fixup.offset, target, fixup.bits)
+    if fixup.wide {
+      patch_wide_conditional_branch(buffer, fixup.offset, target)
+    } else {
+      patch_relative_branch(buffer, fixup.offset, target, fixup.bits)
+    }
   }
+}
+
+///|
+/// Fill a two-word conditional branch slot.
+///
+/// Within imm19 the short branch still does the job and the reserved word
+/// stays a `nop`. Beyond it, the condition is inverted to jump over an
+/// unconditional `b`, trading one word for imm26's much larger reach:
+///
+/// ```text
+///     b.<inverted>  +8        ; skips the branch below
+///     b             target    ; imm26, +/-128MB
+/// ```
+fn patch_wide_conditional_branch(
+  buffer : CodeBuffer,
+  offset : Int,
+  target : Int,
+) -> Unit raise AArch64EmitError {
+  if branch_reaches(offset, target, 19) {
+    patch_relative_branch(buffer, offset, target, 19)
+    buffer.patch_word(offset + 4, AARCH64_NOP)
+    return
+  }
+  let original = buffer.read_word(offset)
+  guard invert_conditional_branch(original) is Some(inverted) else {
+    // Reserved by `emit_branch` for imm19, which only `b.cond` and `cbz`/
+    // `cbnz` use; anything else means the two stayed out of step.
+    raise BranchOutOfRange(offset=target - offset, bits=19)
+  }
+  buffer.patch_word(offset, inverted)
+  patch_relative_branch(buffer, offset, offset + 8, 19)
+  buffer.patch_word(offset + 4, AARCH64_BRANCH)
+  patch_relative_branch(buffer, offset + 4, target, 26)
+}
+
+///|
+fn branch_reaches(offset : Int, target : Int, bits : Int) -> Bool {
+  let delta = target - offset
+  if delta % 4 != 0 {
+    return false
+  }
+  let words = delta / 4
+  words >= -(1 << (bits - 1)) && words <= (1 << (bits - 1)) - 1
 }
 
 ///|
@@ -3499,19 +3595,13 @@ fn patch_relative_branch(
   target : Int,
   bits : Int,
 ) -> Unit raise AArch64EmitError {
-  let delta = target - offset
-  let words = delta / 4
-  let minimum = -(1 << (bits - 1))
-  let maximum = (1 << (bits - 1)) - 1
-  if delta % 4 != 0 || words < minimum || words > maximum {
-    raise BranchOutOfRange(offset=delta, bits~)
+  if !branch_reaches(offset, target, bits) {
+    raise BranchOutOfRange(offset=target - offset, bits~)
   }
+  let words = (target - offset) / 4
   let mask = if bits == 26 { 0x03FFFFFFU } else { 0x7FFFFU }
   let shift = if bits == 19 { 5 } else { 0 }
-  let original = buffer.code[offset].to_uint() |
-    (buffer.code[offset + 1].to_uint() << 8) |
-    (buffer.code[offset + 2].to_uint() << 16) |
-    (buffer.code[offset + 3].to_uint() << 24)
+  let original = buffer.read_word(offset)
   let base = original & (mask << shift).lnot()
   buffer.patch_word(
     offset,
@@ -3524,8 +3614,9 @@ fn emit_verified(
   function : @vcode.Function[AArch64Inst],
   allocation : @vcode.Allocation,
   frame : AArch64Frame,
+  long_branches? : Bool = false,
 ) -> @code_object.UnlinkedCodeObject raise AArch64EmitError {
-  let buffer = CodeBuffer::new()
+  let buffer = CodeBuffer::new(long_branches~)
   let block_offsets = Array::make(function.block_count(), -1)
   let sources : Array[@code_object.SourceSite] = []
   let traps : Array[@code_object.TrapSite] = []
@@ -3595,5 +3686,14 @@ pub fn emit(
   verify_frame(function, allocation, frame) catch {
     error => raise InvalidFrame(cause=error)
   }
-  emit_verified(function, allocation, frame)
+  // Emit compactly first. A conditional branch only overflows imm19 in a
+  // function large enough to span a megabyte, so paying four bytes per branch
+  // up front would tax every ordinary function for a case none of them hit.
+  // Emission is a pure function of its inputs, so re-running it after an
+  // overflow is safe and costs nothing until it is needed.
+  emit_verified(function, allocation, frame) catch {
+    BranchOutOfRange(_) =>
+      emit_verified(function, allocation, frame, long_branches=true)
+    error => raise error
+  }
 }
