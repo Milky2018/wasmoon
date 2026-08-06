@@ -22,9 +22,22 @@ fn trap_brk_payload(reason : @semantic.TrapReason) -> UInt {
 }
 
 ///|
+/// Where a branch lands.
+///
+/// Blocks resolve through `block_offsets` once the whole function is laid out.
+/// Labels are positions inside the emission that no block begins at: the join
+/// after an edge's parallel moves, the point a switch case's stub falls to.
+/// Both go through the same fixup list, which is what lets either be widened
+/// when it turns out not to reach.
+priv enum FixupTarget {
+  ToBlock(@vcode.Block)
+  ToLabel(Int)
+}
+
+///|
 priv struct BranchFixup {
   offset : Int
-  target : @vcode.Block
+  target : FixupTarget
   bits : Int
   // Two words were reserved here instead of one, so the patch may spend the
   // second on a long-range form. See `CodeBuffer::long_branches`.
@@ -35,6 +48,8 @@ priv struct BranchFixup {
 priv struct CodeBuffer {
   code : Array[Byte]
   fixups : Array[BranchFixup]
+  // Position of each local label, -1 until bound.
+  labels : Array[Int]
   relocations : Array[@code_object.Relocation]
   // Reserve a second word after every conditional branch, so one whose target
   // turns out to be beyond imm19's +/-1MB can be rewritten as an inverted
@@ -62,6 +77,8 @@ pub suberror AArch64EmitError {
   InvalidVectorInstruction
   InvalidConversionInstruction
   BranchTargetMissing(block~ : @vcode.Block)
+  BranchLabelUnbound(label~ : Int)
+  BranchSpanNotFixed(offset~ : Int)
   BranchOutOfRange(offset~ : Int, bits~ : Int)
 } derive(Debug)
 
@@ -72,7 +89,7 @@ pub impl Show for AArch64EmitError with fn output(self, logger) {
 
 ///|
 fn CodeBuffer::new(long_branches? : Bool = false) -> CodeBuffer {
-  { code: [], fixups: [], relocations: [], long_branches }
+  { code: [], fixups: [], labels: [], relocations: [], long_branches }
 }
 
 ///|
@@ -130,20 +147,64 @@ fn CodeBuffer::patch_word(self : CodeBuffer, offset : Int, word : UInt) -> Unit 
 }
 
 ///|
-fn CodeBuffer::emit_branch(
+/// Reserve a label whose position is filled in by `bind_label`.
+fn CodeBuffer::new_label(self : CodeBuffer) -> Int {
+  self.labels.push(-1)
+  self.labels.length() - 1
+}
+
+///|
+/// Fix `label` at the current position. Branches to it may already have been
+/// emitted; they are patched with the rest at the end of the function.
+fn CodeBuffer::bind_label(self : CodeBuffer, label : Int) -> Unit {
+  self.labels[label] = self.position()
+}
+
+///|
+/// Emit a branch whose displacement is filled in later.
+///
+/// Every relative branch that can be out of range goes through here, because
+/// widening one is only possible if the second word was reserved when the
+/// branch was emitted -- a patch applied later has nowhere to put it. Emitting
+/// a bare word and patching it directly leaves a branch that can only ever be
+/// short, which is what made `br_table` fail on large functions even with
+/// `long_branches` on.
+fn CodeBuffer::emit_fixup_branch(
   self : CodeBuffer,
-  target : @vcode.Block,
+  target : FixupTarget,
   bits : Int,
   base : UInt,
 ) -> Unit {
   let offset = self.position()
   self.emit_word(base)
   // Only imm19 can overflow within a function; `b` already reaches +/-128MB.
+  // Keeping imm26 to one word also holds the jump table's stride, which the
+  // `adr`/`add`/`br` sequence indexes as one instruction per case.
   let wide = bits == 19 && self.long_branches
   if wide {
     self.emit_word(AARCH64_NOP)
   }
   self.fixups.push({ offset, target, bits, wide })
+}
+
+///|
+fn CodeBuffer::emit_branch(
+  self : CodeBuffer,
+  target : @vcode.Block,
+  bits : Int,
+  base : UInt,
+) -> Unit {
+  self.emit_fixup_branch(ToBlock(target), bits, base)
+}
+
+///|
+fn CodeBuffer::emit_label_branch(
+  self : CodeBuffer,
+  label : Int,
+  bits : Int,
+  base : UInt,
+) -> Unit {
+  self.emit_fixup_branch(ToLabel(label), bits, base)
 }
 
 ///|
@@ -539,7 +600,7 @@ fn emit_atomic_rmw(
   )
   let retry = buffer.position()
   buffer.emit_word(0x35000000U | reg_bits(status))
-  patch_relative_branch(buffer, retry, loop_offset, 19)
+  patch_fixed_span_branch(buffer, retry, loop_offset, 19)
   loop_offset
 }
 
@@ -583,7 +644,7 @@ fn emit_atomic_compare_exchange(
   )
   let retry = buffer.position()
   buffer.emit_word(0x35000000U | reg_bits(status))
-  patch_relative_branch(buffer, retry, loop_offset, 19)
+  patch_fixed_span_branch(buffer, retry, loop_offset, 19)
   loop_offset
 }
 
@@ -3532,10 +3593,22 @@ fn patch_branches(
   block_offsets : Array[Int],
 ) -> Unit raise AArch64EmitError {
   for fixup in buffer.fixups {
-    let block_index = function.block_index(fixup.target).unwrap()
-    let target = block_offsets[block_index]
-    if target < 0 {
-      raise BranchTargetMissing(block=fixup.target)
+    let target = match fixup.target {
+      ToBlock(block) => {
+        let block_index = function.block_index(block).unwrap()
+        let offset = block_offsets[block_index]
+        if offset < 0 {
+          raise BranchTargetMissing(block~)
+        }
+        offset
+      }
+      ToLabel(label) => {
+        let offset = buffer.labels[label]
+        if offset < 0 {
+          raise BranchLabelUnbound(label~)
+        }
+        offset
+      }
     }
     if fixup.wide {
       patch_wide_conditional_branch(buffer, fixup.offset, target)
@@ -3576,6 +3649,34 @@ fn patch_wide_conditional_branch(
   patch_relative_branch(buffer, offset, offset + 8, 19)
   buffer.patch_word(offset + 4, AARCH64_BRANCH)
   patch_relative_branch(buffer, offset + 4, target, 26)
+}
+
+///|
+/// The longest span `patch_fixed_span_branch` accepts. A branch over a fixed
+/// instruction sequence is a handful of words; anything longer means the span
+/// grows with the program and the branch belongs on the fixup path.
+const FIXED_SPAN_LIMIT : Int = 64
+
+///|
+/// Patch a branch that skips a fixed number of instructions.
+///
+/// Anything whose distance depends on the program -- an edge's parallel moves,
+/// a switch's cases -- must go through `emit_fixup_branch` instead. Widening a
+/// branch spends a word reserved when the branch was emitted, so a branch
+/// patched directly can only ever be short, and a short branch that outgrows
+/// imm19 fails the whole compilation with no way to recover. The bound below
+/// is what keeps that distinction from being a matter of who read the comment.
+fn patch_fixed_span_branch(
+  buffer : CodeBuffer,
+  offset : Int,
+  target : Int,
+  bits : Int,
+) -> Unit raise AArch64EmitError {
+  let delta = target - offset
+  if delta > FIXED_SPAN_LIMIT || delta < -FIXED_SPAN_LIMIT {
+    raise BranchSpanNotFixed(offset=delta)
+  }
+  patch_relative_branch(buffer, offset, target, bits)
 }
 
 ///|
