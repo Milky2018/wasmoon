@@ -60,6 +60,8 @@ pub suberror AArch64EmitError {
   InvalidVectorInstruction
   InvalidConversionInstruction
   BranchTargetMissing(block~ : @vcode.Block)
+  BranchLabelUnbound(label~ : Int)
+  BranchSpanNotFixed(offset~ : Int)
   BranchOutOfRange(offset~ : Int, bits~ : Int)
 } derive(@debug.Debug)
 pub impl Show for AArch64EmitError

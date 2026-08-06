@@ -173,11 +173,13 @@ fn emit_two_way_edges(
       buffer.emit_branch(threaded_true, 19, true_branch_base)
       emit_resolved_moves(buffer, frame, false_moves)
     } else {
-      let local_false_branch = buffer.position()
-      buffer.emit_word(false_branch_base)
+      // Skips the true edge's moves. The span is the size of those moves, so
+      // it is data-dependent and has to be able to widen.
+      let past_true_moves = buffer.new_label()
+      buffer.emit_label_branch(past_true_moves, 19, false_branch_base)
       emit_resolved_moves(buffer, frame, true_moves)
       buffer.emit_branch(threaded_true, 26, 0x14000000U)
-      patch_relative_branch(buffer, local_false_branch, buffer.position(), 19)
+      buffer.bind_label(past_true_moves)
       emit_resolved_moves(buffer, frame, false_moves)
     }
   } else if next_block == Some(when_true) {
@@ -185,11 +187,11 @@ fn emit_two_way_edges(
       buffer.emit_branch(threaded_false, 19, false_branch_base)
       emit_resolved_moves(buffer, frame, true_moves)
     } else {
-      let local_true_branch = buffer.position()
-      buffer.emit_word(true_branch_base)
+      let past_false_moves = buffer.new_label()
+      buffer.emit_label_branch(past_false_moves, 19, true_branch_base)
       emit_resolved_moves(buffer, frame, false_moves)
       buffer.emit_branch(threaded_false, 26, 0x14000000U)
-      patch_relative_branch(buffer, local_true_branch, buffer.position(), 19)
+      buffer.bind_label(past_false_moves)
       emit_resolved_moves(buffer, frame, true_moves)
     }
   } else if true_moves.is_empty() {
@@ -197,11 +199,11 @@ fn emit_two_way_edges(
     emit_resolved_moves(buffer, frame, false_moves)
     buffer.emit_branch(threaded_false, 26, 0x14000000U)
   } else {
-    let local_true_branch = buffer.position()
-    buffer.emit_word(true_branch_base)
+    let past_false_moves = buffer.new_label()
+    buffer.emit_label_branch(past_false_moves, 19, true_branch_base)
     emit_resolved_moves(buffer, frame, false_moves)
     buffer.emit_branch(threaded_false, 26, 0x14000000U)
-    patch_relative_branch(buffer, local_true_branch, buffer.position(), 19)
+    buffer.bind_label(past_false_moves)
     emit_resolved_moves(buffer, frame, true_moves)
     buffer.emit_branch(threaded_true, 26, 0x14000000U)
   }
@@ -308,9 +310,11 @@ fn emit_switch_edges(
       )
       None
     } else {
-      let branch = buffer.position()
-      buffer.emit_word(0x54000002U)
-      Some(branch)
+      // Reaches past the whole jump table and every stub below it, so on a
+      // switch with many cases this is the branch that outgrows imm19.
+      let past_table = buffer.new_label()
+      buffer.emit_label_branch(past_table, 19, 0x54000002U)
+      Some(past_table)
     }
     // The table begins three instructions after ADR. UXTW is required for an
     // I32 index so stale upper register bits cannot escape the bounds check.
@@ -341,13 +345,16 @@ fn emit_switch_edges(
           0x14000000U,
         )
       } else {
-        stubs.push((buffer.position(), successor_index))
-        buffer.emit_word(0x14000000U)
+        // One word, like every other table entry: the `adr`/`add`/`br` above
+        // indexes this table by instruction, so the stride cannot change.
+        let stub = buffer.new_label()
+        stubs.push((stub, successor_index))
+        buffer.emit_label_branch(stub, 26, 0x14000000U)
       }
     }
-    for stub in stubs {
-      let (branch, successor_index) = stub
-      patch_relative_branch(buffer, branch, buffer.position(), 26)
+    for entry in stubs {
+      let (stub, successor_index) = entry
+      buffer.bind_label(stub)
       emit_edge_moves(
         buffer, function, allocation, frame, block, successor_index,
       )
@@ -363,8 +370,8 @@ fn emit_switch_edges(
         0x14000000U,
       )
     }
-    if default_branch is Some(branch) {
-      patch_relative_branch(buffer, branch, buffer.position(), 19)
+    if default_branch is Some(label) {
+      buffer.bind_label(label)
       emit_resolved_moves(buffer, frame, default_moves)
       buffer.emit_branch(
         threaded_branch_target(
@@ -394,8 +401,11 @@ fn emit_switch_edges(
           0x54000000U,
         )
       } else {
-        case_branches.push((buffer.position(), successor_index))
-        buffer.emit_word(0x54000000U)
+        // Each of these reaches past every stub emitted before its own, so the
+        // last case in a large switch is the furthest reach in the function.
+        let stub = buffer.new_label()
+        case_branches.push((stub, successor_index))
+        buffer.emit_label_branch(stub, 19, 0x54000000U)
       }
     }
     emit_edge_moves(buffer, function, allocation, frame, block, cases.length())
@@ -409,8 +419,8 @@ fn emit_switch_edges(
       0x14000000U,
     )
     for entry in case_branches {
-      let (branch, successor_index) = entry
-      patch_relative_branch(buffer, branch, buffer.position(), 19)
+      let (stub, successor_index) = entry
+      buffer.bind_label(stub)
       emit_edge_moves(
         buffer, function, allocation, frame, block, successor_index,
       )
