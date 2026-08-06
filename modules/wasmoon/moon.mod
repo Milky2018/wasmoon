@@ -1,6 +1,6 @@
 name = "Milky2018/wasmoon"
 
-version = "0.11.0"
+version = "0.11.1"
 
 import {
   "moonbitlang/x@0.4.38",
@@ -12,8 +12,8 @@ import {
   "Milky2018/milkir_machv@0.6.0",
   "Milky2018/machv_regalloc@0.5.0",
   "Milky2018/x64_target@0.4.0",
-  "Milky2018/aarch64_target@0.5.0",
-  "Milky2018/wasmoon_jit@0.6.0",
+  "Milky2018/aarch64_target@0.5.1",
+  "Milky2018/wasmoon_jit@0.6.1",
   "moonbitlang/async@0.20.3",
 }
 

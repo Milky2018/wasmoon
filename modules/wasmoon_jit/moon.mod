@@ -1,6 +1,6 @@
 name = "Milky2018/wasmoon_jit"
 
-version = "0.6.0"
+version = "0.6.1"
 
 readme = "README.mbt.md"
 
@@ -21,7 +21,7 @@ import {
   "Milky2018/machv@0.7.0",
   "Milky2018/milkir_machv@0.6.0",
   "Milky2018/machv_regalloc@0.5.0",
-  "Milky2018/aarch64_target@0.5.0",
+  "Milky2018/aarch64_target@0.5.1",
   "Milky2018/x64_target@0.4.0",
 }
 
