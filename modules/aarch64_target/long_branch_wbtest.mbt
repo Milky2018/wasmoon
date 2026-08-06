@@ -5,6 +5,18 @@
 /// enough to exceed that used to fail to compile outright, which is what
 /// #486 reports. The reserved second word lets the patch fall back to an
 /// inverted short branch over an unconditional `b`, which reaches +/-128MB.
+///
+/// These cover the encoding. What they cannot reach is whether the reserved
+/// word throws off the offsets around it, since a function that overflows
+/// imm19 needs about a megabyte of code and takes minutes to compile.
+///
+/// To check that instead, flip `emit_verified`'s `long_branches` default to
+/// `true` and run `scripts/run_all_wast.py --rec`. Every conditional branch
+/// then takes the wide path, and the corpus exercises it 62563 times in each
+/// mode. Done on 2026-08-06: all 258 files passed in both modes. The only
+/// casualties are the golden-byte tests in `emit_test.mbt`, which change by
+/// design -- each conditional branch gains a nop and the displacements after
+/// it shift one word.
 
 ///|
 /// Lay one branch at offset 0 and pad out to `target`, so the patch sees the
