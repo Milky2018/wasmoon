@@ -20,7 +20,7 @@ fn regalloc_validation() -> Bool {
   match regalloc_validation_enabled.val {
     Some(value) => value
     None => {
-      let value = match @sys.get_env_var("MACHV_REGALLOC_VALIDATION") {
+      let value = match @env.get_env_var("MACHV_REGALLOC_VALIDATION") {
         Some("1") | Some("true") | Some("TRUE") | Some("yes") | Some("on") =>
           true
         _ => false

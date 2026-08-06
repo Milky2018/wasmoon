@@ -13,7 +13,7 @@ keywords = [ "compiler", "lowering", "isa", "codegen" ]
 description = "MilkIR-to-MachV lowering"
 
 import {
-  "moonbitlang/x@0.4.38",
+  "moonbitlang/x@0.4.48",
   "Milky2018/milkir@0.5.0",
   "Milky2018/machv@0.7.0",
 }

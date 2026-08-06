@@ -2,7 +2,7 @@ import {
   "Milky2018/wasm_core/types",
   "Milky2018/wasmoon/runtime",
   "Milky2018/wasmoon/logger",
-  "moonbitlang/x/sys",
+  "moonbitlang/core/env",
   "moonbitlang/core/buffer",
   "moonbitlang/core/debug",
   "moonbitlang/core/double",

@@ -394,7 +394,7 @@ pub fn run_wasm(
   // Handle inherit-env option
   if inherit_env {
     @logger.debug("Inheriting host environment variables")
-    let host_envs = @sys.get_env_vars()
+    let host_envs = @env.get_env_vars()
     let mut inherited_count = 0
     for key, value in host_envs {
       // Keep explicit --env values authoritative when keys overlap.
@@ -835,7 +835,7 @@ fn int_array_to_bytes(ints : Array[Int]) -> Bytes {
 
 ///|
 fn run_jit_cache_dir() -> String {
-  match @sys.get_env_var("WASMOON_JIT_CACHE_DIR") {
+  match @env.get_env_var("WASMOON_JIT_CACHE_DIR") {
     Some(dir) if dir.length() > 0 => dir
     _ => "/tmp/wasmoon-jit-cache"
   }
@@ -1959,14 +1959,14 @@ fn compile_validated_module_to_jit(
   if module_tick is Some(tick) {
     @perf.set_module_compile_us(@perf.elapsed_us(tick))
     let report = @perf.export_json()
-    let output_path = match @sys.get_env_var("WASMOON_PERF_METRICS_FILE") {
+    let output_path = match @env.get_env_var("WASMOON_PERF_METRICS_FILE") {
       Some(path) => path
       None => "target/wasmoon-perf-metrics.json"
     }
     @fs.write_string_to_file(output_path, report) catch {
-      e =>
+      @fs.IOError(message) =>
         @logger.warn(
-          "Failed to write perf metrics report to '\{output_path}': \{e}",
+          "Failed to write perf metrics report to '\{output_path}': \{message}",
         )
     }
   }

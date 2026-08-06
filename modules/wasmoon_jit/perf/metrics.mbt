@@ -17,7 +17,7 @@ fn is_truthy_env(v : String) -> Bool {
 
 ///|
 pub fn enabled() -> Bool {
-  match @sys.get_env_var("WASMOON_PERF_METRICS") {
+  match @env.get_env_var("WASMOON_PERF_METRICS") {
     Some(v) => is_truthy_env(v)
     None => false
   }
@@ -30,7 +30,7 @@ pub fn enabled() -> Bool {
 /// Default: disabled (compact mode).
 /// Enable explicitly with WASMOON_PERF_METRICS_DETAIL=1/true/full.
 let perf_detail_metrics_enabled : Bool = match
-  @sys.get_env_var("WASMOON_PERF_METRICS_DETAIL") {
+  @env.get_env_var("WASMOON_PERF_METRICS_DETAIL") {
   Some(v) => is_truthy_env(v) || v == "full" || v == "FULL"
   None => false
 }

@@ -20,8 +20,8 @@ fn run_wast(wast_path : String, use_jit : Bool, show_success : Bool) -> Unit {
   wast_jit_attempts.val = 0
   // Read WAST file
   let content = @fs.read_file_to_string(wast_path) catch {
-    e => {
-      @logger.error("reading file: \{e}")
+    @fs.IOError(message) => {
+      @logger.error("reading file: \{message}")
       exit_failure()
       return
     }
@@ -72,7 +72,7 @@ fn run_wast(wast_path : String, use_jit : Bool, show_success : Bool) -> Unit {
       println("  - \{failure}")
     }
   }
-  if (match @sys.get_env_var("WASMOON_WAST_JIT_TRACE") {
+  if (match @env.get_env_var("WASMOON_WAST_JIT_TRACE") {
       Some(v) => is_truthy_env(v)
       None => false
     }) {

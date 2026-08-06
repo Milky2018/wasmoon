@@ -12,7 +12,7 @@ import {
   "Milky2018/wasmoon_jit/artifact",
   "Milky2018/wasmoon_jit/perf",
   "moonbitlang/x/crypto",
-  "moonbitlang/x/sys",
+  "moonbitlang/core/env",
   "moonbitlang/core/cmp",
   "moonbitlang/core/hashset",
 }

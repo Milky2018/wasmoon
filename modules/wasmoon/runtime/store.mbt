@@ -117,7 +117,7 @@ fn parse_decimal_int(value : String) -> Int? {
 
 ///|
 fn c_heap_initial_capacity() -> Int {
-  match @sys.get_env_var(GC_HEAP_CAPACITY_ENV) {
+  match @env.get_env_var(GC_HEAP_CAPACITY_ENV) {
     Some(raw_value) =>
       match parse_decimal_int(raw_value) {
         Some(parsed) if parsed > 0 => parsed
