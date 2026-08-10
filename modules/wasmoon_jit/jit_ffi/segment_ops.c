@@ -176,6 +176,54 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_clear_segments(int64_t ctx_ptr) {
     free_elem_segments(ctx);
 }
 
+extern int64_t wasmoon_jit_context_ptr(void *jit_context);
+
+MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_init_data_segments_managed(
+    void *jit_context, int count
+) {
+    wasmoon_jit_ctx_init_data_segments(
+        wasmoon_jit_context_ptr(jit_context), count
+    );
+}
+
+MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_add_data_segment_managed(
+    void *jit_context,
+    int idx,
+    uint8_t *data,
+    int size,
+    int is_dropped
+) {
+    wasmoon_jit_ctx_add_data_segment(
+        wasmoon_jit_context_ptr(jit_context), idx, data, size, is_dropped
+    );
+}
+
+MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_init_elem_segments_managed(
+    void *jit_context, int count
+) {
+    wasmoon_jit_ctx_init_elem_segments(
+        wasmoon_jit_context_ptr(jit_context), count
+    );
+}
+
+MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_add_elem_segment_managed(
+    void *jit_context,
+    int idx,
+    int64_t *data,
+    int size,
+    int is_dropped
+) {
+    wasmoon_jit_ctx_add_elem_segment(
+        wasmoon_jit_context_ptr(jit_context), idx, data, size, is_dropped
+    );
+}
+
+MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_clear_segments_managed(
+    void *jit_context
+) {
+    wasmoon_jit_ctx_clear_segments(wasmoon_jit_context_ptr(jit_context));
+}
+
 // ============ Memory Segment Libcalls ============
 
 // memory.init - Initialize memory region from data segment

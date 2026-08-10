@@ -17,43 +17,14 @@ class JITContextLifetimeAuditTests(unittest.TestCase):
         jit_package = root / "modules/wasmoon_jit"
         jit_package.mkdir(parents=True)
         (jit_package / "native_ffi.mbt").write_text(
-            'extern "c" fn c_jit_context_ptr(Context) -> Int64\n',
-            encoding="utf-8",
-        )
-        (jit_package / "managed_owner.mbt").write_text(
-            "///|\n"
-            "fn[T] ManagedOwner::borrow(\n"
-            "  self : ManagedOwner,\n"
-            "  body : (Int64) -> T,\n"
-            ") -> T {\n"
-            "  let raw = c_jit_context_ptr(self.handle)\n"
-            "  defer c_jit_context_keep_alive(self.handle)\n"
-            "  body(raw)\n"
-            "}\n"
-            "\n"
-            "///|\n"
-            "fn[T] ManagedOwner::inspect(\n"
-            "  self : ManagedOwner,\n"
-            "  action : (Int64) -> T,\n"
-            ") -> T {\n"
-            "  let address = c_jit_context_ptr(self.handle)\n"
-            "  defer c_jit_context_keep_alive(self.handle)\n"
-            "  action(address)\n"
-            "}\n"
-            "\n"
-            "///|\n"
-            "fn[T] ManagedOwner::visit(\n"
-            "  self : ManagedOwner,\n"
-            "  visitor : (Int64) -> T,\n"
-            ") -> T {\n"
-            "  let pointer = c_jit_context_ptr(self.handle)\n"
-            "  defer c_jit_context_keep_alive(self.handle)\n"
-            "  visitor(pointer)\n"
-            "}\n",
+            'priv type JITContext\n'
+            '#borrow(context)\n'
+            'extern "c" fn context_is_valid(context : JITContext) -> Int = '
+            '"wasmoon_jit_context_is_valid"\n',
             encoding="utf-8",
         )
         (jit_package / "pkg.generated.mbti").write_text(
-            "type ManagedOwner\n", encoding="utf-8"
+            "type NativeJITContext\n", encoding="utf-8"
         )
         public_jit = root / "modules/wasmoon/jit"
         public_jit.mkdir(parents=True)
@@ -62,62 +33,54 @@ class JITContextLifetimeAuditTests(unittest.TestCase):
         )
         return jit_package
 
-    def test_structurally_scoped_accessors_pass_without_name_or_count_rules(
-        self,
-    ) -> None:
+    def test_opaque_managed_context_operations_pass(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             self.create_fixture(root)
             self.assertEqual(audit_repo(root), [])
 
-    def test_owner_file_extraction_without_keep_alive_fails(self) -> None:
+    def test_raw_extractor_declaration_fails(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             jit_package = self.create_fixture(root)
-            owner = jit_package / "managed_owner.mbt"
-            owner.write_text(
-                owner.read_text(encoding="utf-8").replace(
-                    "  defer c_jit_context_keep_alive(self.handle)\n", "", 1
-                ),
+            (jit_package / "native_ffi.mbt").write_text(
+                'extern "c" fn raw(context : JITContext) -> Int64 = '
+                '"wasmoon_jit_context_ptr"\n',
                 encoding="utf-8",
             )
             self.assertTrue(
-                any("managed keep-alive" in failure for failure in audit_repo(root))
+                any("raw JIT context seam" in failure for failure in audit_repo(root))
             )
 
-    def test_owner_file_use_before_keep_alive_fails(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            jit_package = self.create_fixture(root)
-            owner = jit_package / "managed_owner.mbt"
-            owner.write_text(
-                owner.read_text(encoding="utf-8").replace(
-                    "  defer c_jit_context_keep_alive(self.handle)\n"
-                    "  body(raw)\n",
-                    "  body(raw) |> ignore\n"
-                    "  defer c_jit_context_keep_alive(self.handle)\n"
-                    "  body(raw)\n",
-                    1,
-                ),
-                encoding="utf-8",
-            )
-            self.assertTrue(
-                any("before its first use" in failure for failure in audit_repo(root))
-            )
-
-    def test_same_package_direct_extraction_fails(self) -> None:
+    def test_reported_return_escape_fails(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             jit_package = self.create_fixture(root)
             (jit_package / "bypass.mbt").write_text(
-                "///|\n"
-                "fn bypass(context : Context) -> Int64 {\n"
-                "  c_jit_context_ptr(context)\n"
+                "fn bypass(context, body) -> Int64 {\n"
+                "  let raw = c_jit_context_ptr(context)\n"
+                "  defer c_jit_context_keep_alive(context)\n"
+                "  body(raw)\n"
+                "  raw\n"
                 "}\n",
                 encoding="utf-8",
             )
             self.assertTrue(
-                any("scoped accessor" in failure for failure in audit_repo(root))
+                any("raw JIT context seam" in failure for failure in audit_repo(root))
+            )
+
+    def test_scoped_callback_seam_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            jit_package = self.create_fixture(root)
+            (jit_package / "owner.mbt").write_text(
+                "fn[T] NativeJITContext::with_ptr(self, body) -> T {\n"
+                "  body(c_jit_context_ptr(self.handle))\n"
+                "}\n",
+                encoding="utf-8",
+            )
+            self.assertTrue(
+                any("raw JIT context seam" in failure for failure in audit_repo(root))
             )
 
     def test_public_raw_pointer_escape_fails(self) -> None:
