@@ -1,6 +1,6 @@
 name = "Milky2018/milkir_machv"
 
-version = "0.6.1"
+version = "0.7.0"
 
 readme = "README.mbt.md"
 
@@ -14,8 +14,8 @@ description = "MilkIR-to-MachV lowering"
 
 import {
   "moonbitlang/x@0.4.48",
-  "Milky2018/milkir@0.5.1",
-  "Milky2018/machv@0.7.1",
+  "Milky2018/milkir@0.6.0",
+  "Milky2018/machv@0.8.0",
 }
 
 preferred_target = "wasm-gc"

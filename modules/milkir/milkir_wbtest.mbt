@@ -1267,6 +1267,33 @@ test "optimizer removes unreachable trampoline with dominating free value" {
 }
 
 ///|
+test "jump threading keeps trampoline parameters used by descendants" {
+  let builder = FunctionBuilder::FunctionBuilder("thread_jump_live_param")
+  builder.add_result(I32)
+  let left = builder.create_block()
+  let right = builder.create_block()
+  let trampoline = builder.create_block()
+  let exit = builder.create_block()
+  let condition = builder.iconst_i32(1)
+  let left_value = builder.iconst_i32(7)
+  let right_value = builder.iconst_i32(9)
+  builder.brnz(condition, left, right)
+  builder.switch_to_block(left)
+  builder.jump(trampoline, [left_value])
+  builder.switch_to_block(right)
+  builder.jump(trampoline, [right_value])
+  let forwarded = builder.add_block_param(trampoline, I32)
+  builder.switch_to_block(trampoline)
+  builder.jump(exit, [])
+  builder.switch_to_block(exit)
+  builder.return_([forwarded])
+  let func = builder.get_function()
+  inspect(func.verify(), content="()")
+  thread_jumps(func) |> ignore
+  inspect(func.verify(), content="()")
+}
+
+///|
 test "optimizer merges straight line blocks" {
   let builder = FunctionBuilder::FunctionBuilder("merge_blocks")
   builder.add_result(I32)

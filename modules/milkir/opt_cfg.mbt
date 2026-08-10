@@ -849,6 +849,7 @@ fn resolve_jump_target_with_args(
   func : Function,
   block_idx : @hashmap.HashMap[Int, Int],
   empty_jump_targets : Array[Int],
+  forward_only_params : Array[Bool],
 ) -> (Int, Array[Value]) {
   if args.length() == 0 &&
     target >= 0 &&
@@ -882,6 +883,14 @@ fn resolve_jump_target_with_args(
       None => break
     }
     if block.instructions.length() != 0 {
+      break
+    }
+    if block.params.length() != 0 &&
+      (
+        current_target < 0 ||
+        current_target >= forward_only_params.length() ||
+        !forward_only_params[current_target]
+      ) {
       break
     }
     match block.terminator {
@@ -925,13 +934,31 @@ fn thread_jumps(func : Function) -> OptResult {
   for i, block in func.blocks {
     block_idx.set(block.id, i)
   }
+  let use_counts = compute_use_counts(func)
+  let forward_only_params = Array::make(func.next_block_id, false)
+  for block in func.blocks {
+    if block.id < 0 || block.id >= forward_only_params.length() {
+      continue
+    }
+    if block.terminator is Some(Jump(_, outgoing_args)) {
+      forward_only_params[block.id] = block.params.all(fn(param) {
+        let mut outgoing_uses = 0
+        for arg in outgoing_args {
+          if arg.id == param.0.id {
+            outgoing_uses = outgoing_uses + 1
+          }
+        }
+        use_counts.get(param.0.id).unwrap_or(0) == outgoing_uses
+      })
+    }
+  }
   let empty_jump_targets = Array::make(func.next_block_id, -1)
   // Update terminators to skip intermediate jump blocks
   for block in func.blocks {
     match block.terminator {
       Some(Jump(target, args)) => {
         let (final_target, final_args) = resolve_jump_target_with_args(
-          target, args, func, block_idx, empty_jump_targets,
+          target, args, func, block_idx, empty_jump_targets, forward_only_params,
         )
         if final_target != target || !block_arg_arrays_equal(final_args, args) {
           block.terminator = Some(Jump(final_target, final_args))
@@ -945,6 +972,7 @@ fn thread_jumps(func : Function) -> OptResult {
           func,
           block_idx,
           empty_jump_targets,
+          forward_only_params,
         )
         let (resolved_else, else_args) = resolve_jump_target_with_args(
           else_target,
@@ -952,6 +980,7 @@ fn thread_jumps(func : Function) -> OptResult {
           func,
           block_idx,
           empty_jump_targets,
+          forward_only_params,
         )
         let new_then = if then_args.length() == 0 {
           resolved_then
@@ -975,6 +1004,7 @@ fn thread_jumps(func : Function) -> OptResult {
           func,
           block_idx,
           empty_jump_targets,
+          forward_only_params,
         )
         let (resolved_else, else_args) = resolve_jump_target_with_args(
           else_target,
@@ -982,6 +1012,7 @@ fn thread_jumps(func : Function) -> OptResult {
           func,
           block_idx,
           empty_jump_targets,
+          forward_only_params,
         )
         let new_then = if then_args.length() == 0 {
           resolved_then
@@ -1008,6 +1039,7 @@ fn thread_jumps(func : Function) -> OptResult {
             func,
             block_idx,
             empty_jump_targets,
+            forward_only_params,
           )
           let new_t = if resolved_args.length() == 0 { resolved_t } else { t }
           new_targets.push(new_t)
@@ -1021,6 +1053,7 @@ fn thread_jumps(func : Function) -> OptResult {
           func,
           block_idx,
           empty_jump_targets,
+          forward_only_params,
         )
         let new_default = if default_args.length() == 0 {
           resolved_default
