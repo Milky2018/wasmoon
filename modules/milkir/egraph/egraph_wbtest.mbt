@@ -1689,6 +1689,38 @@ test "merging classes with differing constants is loud and unharvested" {
 }
 
 ///|
+test "constant conflicts survive root changes and later merges" {
+  let eg = EGraph::EGraph()
+  let zero = eg.add_const(0)
+  let one = eg.add_const(1)
+  let two = eg.add_const(2)
+  eg.merge(zero, one) |> ignore
+  inspect(eg.get_const(zero) is None, content="true")
+  // Make the class holding 2 larger so union-by-size chooses it as the root.
+  eg.merge(two, eg.add_var(0)) |> ignore
+  eg.merge(two, eg.add_var(1)) |> ignore
+  eg.merge(zero, two) |> ignore
+  inspect(eg.get_const(zero) is None, content="true")
+  eg.merge(zero, eg.add_const(3)) |> ignore
+  inspect(eg.get_const(zero) is None, content="true")
+  eg.rebuild()
+  inspect(eg.get_const(zero) is None, content="true")
+}
+
+///|
+test "float constant conflicts remain poisoned across later merges" {
+  let eg = EGraph::EGraph()
+  let zero = eg.add_fconst(0UL)
+  let one = eg.add_fconst(0x3FF0000000000000UL)
+  eg.merge(zero, one) |> ignore
+  inspect(eg.get_fconst(zero) is None, content="true")
+  eg.merge(zero, eg.add_fconst(0x4000000000000000UL)) |> ignore
+  inspect(eg.get_fconst(zero) is None, content="true")
+  eg.rebuild()
+  inspect(eg.get_fconst(zero) is None, content="true")
+}
+
+///|
 test "rebuild repairs only the classes a union disturbed" {
   let eg = EGraph::EGraph()
   // A large graph of unrelated classes.
