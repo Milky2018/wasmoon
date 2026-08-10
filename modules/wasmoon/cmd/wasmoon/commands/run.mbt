@@ -1979,7 +1979,7 @@ fn compile_validated_module_to_jit(
       None => "target/wasmoon-perf-metrics.json"
     }
     @fs.write_string_to_file(output_path, report) catch {
-      @fs.IOError(message) =>
+      IOError(message) =>
         @logger.warn(
           "Failed to write perf metrics report to '\{output_path}': \{message}",
         )

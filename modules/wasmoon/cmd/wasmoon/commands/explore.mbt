@@ -294,7 +294,7 @@ pub fn run_explore(
     }
     let html = generate_html_report(compiled_funcs)
     @fs.write_string_to_file(path, html) catch {
-      @fs.IOError(message) => {
+      IOError(message) => {
         @logger.error("writing HTML report: \{message}")
         exit_failure()
         return

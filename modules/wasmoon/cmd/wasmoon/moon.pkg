@@ -3,7 +3,7 @@ import {
   "Milky2018/wasmoon/logger",
   "moonbitlang/core/env",
   "moonbitlang/x/sys",
-  "TheWaWaR/clap",
+  "moonbitlang/core/argparse",
   "moonbitlang/core/hashset",
   "moonbitlang/core/string",
   "moonbitlang/core/strconv",

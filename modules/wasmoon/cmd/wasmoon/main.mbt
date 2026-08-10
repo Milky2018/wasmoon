@@ -6,36 +6,6 @@
 const WASMOON_VERSION : String = "0.11.2"
 
 ///|
-fn clap_parser(
-  prog~ : String,
-  description~ : String,
-  subcmds~ : Map[String, @clap.SubCommand],
-  args? : Map[String, @clap.Arg] = Map([]),
-) -> @clap.Parser {
-  { prog, args, subcmds, description }
-}
-
-///|
-fn clap_subcommand(
-  help~ : String,
-  args? : Map[String, @clap.Arg] = Map([]),
-  subcmds? : Map[String, @clap.SubCommand] = Map([]),
-) -> @clap.SubCommand {
-  { args, subcmds, help }
-}
-
-///|
-fn clap_simple_value(name : String) -> @clap.SimpleValue {
-  {
-    name,
-    args: HashMap([]),
-    flags: HashMap([]),
-    positional_args: [],
-    subcmd: None,
-  }
-}
-
-///|
 /// Print usage text as a diagnostic.
 ///
 /// Usage shown after a mistake is a diagnostic, not output: it goes to
@@ -44,6 +14,60 @@ fn clap_simple_value(name : String) -> @clap.SimpleValue {
 fn write_usage(help_msg : String) -> Unit {
   for line in help_msg.split("\n") {
     @logger.plain_error(line.to_owned())
+  }
+}
+
+///|
+/// Reject a value outside a fixed set.
+///
+/// `@argparse` has no equivalent of the `choices` constraint the previous
+/// parser carried, so the check is done here after parsing. Keeping it in
+/// one place is also what stops the old behavior from coming back, where
+/// the rejection text printed the raw container:
+/// `choices=@hashset.from_array([regalloc, opt-milkir, ...])`.
+fn require_choice(
+  label : String,
+  value : String,
+  allowed : Array[String],
+) -> Unit {
+  if !allowed.contains(value) {
+    usage_error(
+      "invalid value for \{label}: '\{value}' (expected one of: \{allowed.join(", ")})",
+    )
+  }
+}
+
+///|
+/// Every value collected for a repeatable option, or empty when absent.
+fn values_of(matches : @argparse.Matches, name : String) -> Array[String] {
+  matches.values.get(name).unwrap_or([])
+}
+
+///|
+/// The single value of an option, or `None` when it was not given.
+fn value_of(matches : @argparse.Matches, name : String) -> String? {
+  if matches.values.get(name) is Some(values) && values.length() > 0 {
+    Some(values[0])
+  } else {
+    None
+  }
+}
+
+///|
+/// Whether a flag was set.
+fn flag_of(matches : @argparse.Matches, name : String) -> Bool {
+  matches.flags.get(name) is Some(true)
+}
+
+///|
+/// The required leading positional, or a usage error naming what is missing.
+fn required_file(matches : @argparse.Matches) -> String {
+  match value_of(matches, "file") {
+    Some(path) => path
+    None => {
+      usage_error("missing file argument")
+      ""
+    }
   }
 }
 
@@ -58,445 +82,354 @@ fn usage_error(msg : String) -> Unit {
 }
 
 ///|
-fn main {
-  // Define choices for explore stages
-  let stage_choices = @hashset.HashSet::from_array([
-    "source", "ir", "opt-ir", "machv", "vcode", "allocated-vcode", "regalloc", "code-object",
-    "mc", "milkir", "opt-milkir", "machv-mc",
-  ])
+/// Values accepted by `explore --stage`.
+let stage_choices : Array[String] = [
+  "source", "ir", "opt-ir", "machv", "vcode", "allocated-vcode", "regalloc", "code-object",
+  "mc", "milkir", "opt-milkir", "machv-mc",
+]
 
-  // Define choices for the explore native target override
-  let explore_target_choices = @hashset.HashSet::from_array([
-    "host", "x64", "aarch64",
-  ])
+///|
+let target_choices : Array[String] = ["host", "x64", "aarch64"]
 
-  // Define choices for config action
-  let config_action_choices = @hashset.HashSet::from_array([
-    "show", "path", "init",
-  ])
-  let error_format_choices = @hashset.HashSet::from_array(["text", "json"])
-  let parser = clap_parser(
-    prog="wasmoon",
-    description="WebAssembly Runtime in MoonBit",
-    args={
-      "version": @clap.Arg::flag(short='V', help="Print the version and exit"),
-    },
-    subcmds={
-      "run": clap_subcommand(help="Run a WebAssembly module", args={
-        "file": @clap.Arg::positional(help="Path to WASM or WAT file"),
-        "invoke": @clap.Arg::named(nargs=AtMost(1), help="Function to invoke"),
-        "arg": @clap.Arg::named(
-          nargs=Any,
-          help="Arguments to pass to the function (can be repeated)",
-        ),
-        "preload": @clap.Arg::named(
-          nargs=Any,
-          help="Preload module as NAME=PATH (can be repeated)",
-        ),
-        "dir": @clap.Arg::named(
-          nargs=Any,
-          help="Grant access to directory (HOST_DIR or HOST_DIR::GUEST_DIR)",
-        ),
-        "env": @clap.Arg::named(
-          nargs=Any,
-          help="Pass environment variable to WASM module (NAME=VALUE)",
-        ),
-        "wasi": @clap.Arg::named(
-          short='S',
-          nargs=Any,
-          help="WASI option (e.g., inherit-env, inherit-stdin)",
-        ),
-        "debug": @clap.Arg::flag(short='D', help="Enable debug output"),
-        "dump-on-trap": @clap.Arg::flag(
-          help="On JIT trap, dump IR/MachV/MC for the failing function",
-        ),
-        "dwarf": @clap.Arg::flag(
-          short='W',
-          help="Generate DWARF debug info for JIT code (enables LLDB stack traces)",
-        ),
-        "no-jit": @clap.Arg::flag(
-          help="Disable JIT compilation (use interpreter)",
-        ),
-      }),
-      "test": clap_subcommand(
-        help="Run WebAssembly test script (.wast format)",
-        args={
-          "file": @clap.Arg::positional(help="Path to WAST file"),
-          "no-jit": @clap.Arg::flag(
-            help="Disable JIT compilation (use interpreter)",
+///|
+let config_action_choices : Array[String] = ["show", "path", "init"]
+
+///|
+let error_format_choices : Array[String] = ["text", "json"]
+
+///|
+/// The `--error-format` value shared by the two component commands.
+fn component_error_format(
+  matches : @argparse.Matches,
+) -> @commands.ComponentErrorFormat {
+  match value_of(matches, "error-format") {
+    Some(value) => {
+      require_choice("--error-format", value, error_format_choices)
+      if value == "json" {
+        Json
+      } else {
+        Text
+      }
+    }
+    None => Text
+  }
+}
+
+///|
+/// The command tree.
+///
+/// `version` is what the built-in `-V`/`--version` prints, so the flag needs
+/// no handling of its own: `@argparse` writes it to stdout and exits 0.
+fn build_command() -> @argparse.Command {
+  Command(
+    "wasmoon",
+    about="WebAssembly Runtime in MoonBit",
+    version=WASMOON_VERSION,
+    disable_help_subcommand=true,
+    arg_required_else_help=true,
+    subcommand_required=true,
+    subcommands=[
+      Command(
+        "run",
+        about="Run a WebAssembly module",
+        positionals=[
+          PositionArg("file", about="Path to WASM or WAT file"),
+          PositionArg(
+            "args",
+            about="Arguments passed through to the module",
+            num_args=ValueRange(lower=0),
+            allow_hyphen_values=true,
           ),
-          "show-success": @clap.Arg::flag(
-            help="Print successful assertions (default: only print failures)",
+        ],
+        options=[
+          OptionArg("invoke", about="Function to invoke"),
+          OptionArg(
+            "arg",
+            action=Append,
+            about="Arguments to pass to the function (can be repeated)",
           ),
-        },
+          OptionArg(
+            "preload",
+            action=Append,
+            about="Preload module as NAME=PATH (can be repeated)",
+          ),
+          OptionArg(
+            "dir",
+            action=Append,
+            about="Grant access to directory (HOST_DIR or HOST_DIR::GUEST_DIR)",
+          ),
+          OptionArg(
+            "env",
+            action=Append,
+            about="Pass environment variable to WASM module (NAME=VALUE)",
+          ),
+          OptionArg(
+            "wasi",
+            short='S',
+            action=Append,
+            about="WASI option (e.g., inherit-env, inherit-stdin)",
+          ),
+        ],
+        flags=[
+          FlagArg("debug", short='D', about="Enable debug output"),
+          FlagArg(
+            "dump-on-trap",
+            about="On JIT trap, dump IR/MachV/MC for the failing function",
+          ),
+          FlagArg(
+            "dwarf",
+            short='W',
+            about="Generate DWARF debug info for JIT code (enables LLDB stack traces)",
+          ),
+          FlagArg("no-jit", about="Disable JIT compilation (use interpreter)"),
+        ],
       ),
-      "disasm": clap_subcommand(
-        help="Disassemble a WASM or WAT file to text format",
-        args={ "file": @clap.Arg::positional(help="Path to WASM or WAT file") },
+      Command(
+        "test",
+        about="Run WebAssembly test script (.wast format)",
+        positionals=[PositionArg("file", about="Path to WAST file")],
+        flags=[
+          FlagArg("no-jit", about="Disable JIT compilation (use interpreter)"),
+          FlagArg(
+            "show-success",
+            about="Print successful assertions (default: only print failures)",
+          ),
+        ],
       ),
-      "component": clap_subcommand(
-        help="Parse a WebAssembly component and print a summary",
-        args={
-          "file": @clap.Arg::positional(help="Path to component file"),
-          "dump": @clap.Arg::flag(help="Print the parsed component structure"),
-          "validate": @clap.Arg::flag(
-            help="Validate the component after parsing",
+      Command("disasm", about="Disassemble a WASM or WAT file to text format", positionals=[
+        PositionArg("file", about="Path to WASM or WAT file"),
+      ]),
+      Command(
+        "component",
+        about="Parse a WebAssembly component and print a summary",
+        positionals=[PositionArg("file", about="Path to component file")],
+        options=[
+          OptionArg(
+            "invoke",
+            about="Invoke export or interface#function with typed JSON arguments",
           ),
-          "run": @clap.Arg::flag(
-            help="Run a pinned WASI Preview 2 or Preview 3 command component",
+          OptionArg(
+            "arg",
+            action=Append,
+            about="Command strings for --run or typed JSON values for --invoke",
           ),
-          "invoke": @clap.Arg::named(
-            nargs=AtMost(1),
-            help="Invoke export or interface#function with typed JSON arguments",
+          OptionArg(
+            "env",
+            action=Append,
+            about="Command environment entry in NAME=VALUE form",
           ),
-          "no-jit": @clap.Arg::flag(
-            help="Disable JIT compilation for synchronous component core functions",
+          OptionArg(
+            "dir",
+            action=Append,
+            about="Preopen HOST_DIR or HOST_DIR::GUEST_DIR",
           ),
-          "arg": @clap.Arg::named(
-            nargs=Any,
-            help="Command strings for --run or typed JSON values for --invoke",
+          OptionArg(
+            "network",
+            about="Network capability: deny (default), loopback, or all",
           ),
-          "env": @clap.Arg::named(
-            nargs=Any,
-            help="Command environment entry in NAME=VALUE form",
+          OptionArg(
+            "error-format",
+            about="Component command output format: text (default) or json",
           ),
-          "dir": @clap.Arg::named(
-            nargs=Any,
-            help="Preopen HOST_DIR or HOST_DIR::GUEST_DIR",
+        ],
+        flags=[
+          FlagArg("dump", about="Print the parsed component structure"),
+          FlagArg("validate", about="Validate the component after parsing"),
+          FlagArg(
+            "run",
+            about="Run a pinned WASI Preview 2 or Preview 3 command component",
           ),
-          "network": @clap.Arg::named(
-            nargs=AtMost(1),
-            choices=@hashset.HashSet::from_array(["deny", "loopback", "all"]),
-            help="Network capability: deny (default), loopback, or all",
+          FlagArg(
+            "no-jit",
+            about="Disable JIT compilation for synchronous component core functions",
           ),
-          "no-wit-names": @clap.Arg::flag(
-            help="Disable wasm-tools/WIT name validation (kebab-case/package-name checks)",
+          FlagArg(
+            "no-wit-names",
+            about="Disable wasm-tools/WIT name validation (kebab-case/package-name checks)",
           ),
-          "error-format": @clap.Arg::named(
-            nargs=AtMost(1),
-            choices=error_format_choices,
-            help="Component command output format: text (default) or json",
-          ),
-        },
+        ],
       ),
-      "component-test": clap_subcommand(
-        help="Run component-model test script (JSON)",
-        args={
-          "file": @clap.Arg::positional(help="Path to component test script"),
-          "error-format": @clap.Arg::named(
-            nargs=AtMost(1),
-            choices=error_format_choices,
-            help="component-test output format: text (default) or json",
+      Command(
+        "component-test",
+        about="Run component-model test script (JSON)",
+        positionals=[PositionArg("file", about="Path to component test script")],
+        options=[
+          OptionArg(
+            "error-format",
+            about="component-test output format: text (default) or json",
           ),
-          "no-jit": @clap.Arg::flag(
-            help="Use the core interpreter for all component test calls",
+        ],
+        flags=[
+          FlagArg(
+            "no-jit",
+            about="Use the core interpreter for all component test calls",
           ),
-        },
+        ],
       ),
-      "explore": clap_subcommand(help="Explore WASM compilation process", args={
-        "file": @clap.Arg::positional(help="Path to WASM or WAT file"),
-        "func": @clap.Arg::named(
-          nargs=AtMost(1),
-          help="Function index to explore (default: 0)",
-        ),
-        "stage": @clap.Arg::named(
-          short='s',
-          nargs=Any,
-          choices=stage_choices,
-          help="Stages to show: source, milkir, opt-milkir, machv, vcode, allocated-vcode, code-object, mc (default all; ir, opt-ir, regalloc, and machv-mc are aliases)",
-        ),
-        "target": @clap.Arg::named(
-          nargs=AtMost(1),
-          choices=explore_target_choices,
-          help="Native target to inspect: host, x64, aarch64 (default: host)",
-        ),
-        "html": @clap.Arg::flag(help="Output HTML report"),
-        "debug": @clap.Arg::flag(short='D', help="Enable debug output"),
-      }),
-      "settings": clap_subcommand(help="Display available compiler settings"),
-      "config": clap_subcommand(help="Manage configuration", args={
-        "action": @clap.Arg::positional(
-          choices=config_action_choices,
-          help="Action: show, path, init",
-        ),
-      }),
-      "help": clap_subcommand(help="Display help message"),
-    },
+      Command(
+        "explore",
+        about="Explore WASM compilation process",
+        positionals=[PositionArg("file", about="Path to WASM or WAT file")],
+        options=[
+          OptionArg("func", about="Function index to explore (default: 0)"),
+          OptionArg(
+            "stage",
+            short='s',
+            action=Append,
+            about="Stages to show: source, milkir, opt-milkir, machv, vcode, allocated-vcode, code-object, mc (default all; ir, opt-ir, regalloc, and machv-mc are aliases)",
+          ),
+          OptionArg(
+            "target",
+            about="Native target to inspect: host, x64, aarch64 (default: host)",
+          ),
+        ],
+        flags=[
+          FlagArg("html", about="Output HTML report"),
+          FlagArg("debug", short='D', about="Enable debug output"),
+        ],
+      ),
+      Command("settings", about="Display available compiler settings"),
+      Command("config", about="Manage configuration", positionals=[
+        PositionArg("action", about="Action: show, path, init"),
+      ]),
+      Command("help", about="Display help message"),
+    ],
   )
-  let help_msg = parser.gen_help_message(["wasmoon"], Map([]))
-  let args = @env.args()
-  if args.length() < 2 {
-    println(help_msg)
-    return
-  }
-  let value = clap_simple_value("wasmoon")
-  let cli_args : Array[String] = []
-  for i in 1..<args.length() {
-    cli_args.push(args[i])
-  }
-  let subcmd_help = parser.parse(value, cli_args[:]) catch {
-    e => {
-      @logger.error("\{e}")
-      write_usage(help_msg)
+}
+
+///|
+fn main {
+  let command = build_command()
+  let matches = command.parse(argv=@env.args()[1:]) catch {
+    err => {
+      write_usage(err.to_string())
       @sys.exit(2)
       return
     }
   }
-  // Asked for, so it is output: stdout and exit 0, before any subcommand
-  // dispatch, so `wasmoon --version` needs no command to go with it.
-  if value.flags.get("version") is Some(true) {
-    println(WASMOON_VERSION)
+  guard matches.subcommand is Some((name, sub)) else {
+    usage_error("no command given")
     return
   }
-  match subcmd_help {
-    Some(msg) => println(msg)
-    None =>
-      match value.subcmd {
-        Some(sub) =>
-          match sub.name {
-            "run" => {
-              let positional = sub.positional_args
-              if positional.length() > 0 {
-                let file_path = positional[0]
-                // Extract WASI program args (all positional args after the file)
-                let wasm_args : Array[String] = if positional.length() > 1 {
-                  let mut result = []
-                  for i in 1..<positional.length() {
-                    result = result + [positional[i]]
-                  }
-                  result
-                } else {
-                  []
-                }
-                let invoke_opt : String? = match sub.args.get("invoke") {
-                  Some(arr) =>
-                    if arr.length() > 0 {
-                      Some(arr[0])
-                    } else {
-                      None
-                    }
-                  None => None
-                }
-                // CLI `run` uses balanced optimization for better steady-state runtime.
-                let opt_level = 2
-                // Get function arguments from --arg option (for invoked function)
-                let func_args : Array[String] = match sub.args.get("arg") {
-                  Some(arr) => arr
-                  None => []
-                }
-                // Get debug flag
-                let debug = sub.flags.get("debug") is Some(true)
-                let dump_on_trap = sub.flags.get("dump-on-trap") is Some(true)
-                let enable_dwarf = sub.flags.get("dwarf") is Some(true)
-                // Get directory mappings from --dir option
-                let dirs : Array[String] = match sub.args.get("dir") {
-                  Some(arr) => arr
-                  None => []
-                }
-                // Get environment variables from --env option
-                let envs : Array[String] = match sub.args.get("env") {
-                  Some(arr) => arr
-                  None => []
-                }
-                // Get preload modules from --preload option
-                let preloads : Array[String] = match sub.args.get("preload") {
-                  Some(arr) => arr
-                  None => []
-                }
-                // Get WASI options from -S flag
-                let wasi_options : Array[String] = match sub.args.get("wasi") {
-                  Some(arr) => arr
-                  None => []
-                }
-                // Check if JIT is disabled (default: enabled)
-                let use_jit = match sub.flags.get("no-jit") {
-                  Some(true) => false
-                  _ => true
-                }
-                @commands.run_wasm(
-                  file_path, invoke_opt, func_args, wasm_args, preloads, dirs, envs,
-                  wasi_options, debug, dump_on_trap, use_jit, opt_level, enable_dwarf,
-                )
-              } else {
-                usage_error("missing file argument")
-              }
-            }
-            "test" => {
-              let positional = sub.positional_args
-              if positional.length() > 0 {
-                let use_jit = match sub.flags.get("no-jit") {
-                  Some(true) => false
-                  _ => true
-                }
-                let show_success = sub.flags.get("show-success") is Some(true)
-                @commands.run_testsuite(positional[0], use_jit, show_success)
-              } else {
-                usage_error("missing file argument")
-              }
-            }
-            "disasm" => {
-              let positional = sub.positional_args
-              if positional.length() > 0 {
-                @commands.run_disasm(positional[0])
-              } else {
-                usage_error("missing file argument")
-              }
-            }
-            "component" => {
-              let positional = sub.positional_args
-              if positional.length() > 0 {
-                let dump = sub.flags.get("dump") is Some(true)
-                let validate = sub.flags.get("validate") is Some(true)
-                let run = sub.flags.get("run") is Some(true)
-                let invoke = match sub.args.get("invoke") {
-                  Some([path]) => Some(path)
-                  _ => None
-                }
-                let wit_names = match sub.flags.get("no-wit-names") {
-                  Some(true) => false
-                  _ => true
-                }
-                let error_format = match sub.args.get("error-format") {
-                  Some(arr) =>
-                    if arr.length() > 0 && arr[0] == "json" {
-                      @commands.ComponentErrorFormat::Json
-                    } else {
-                      Text
-                    }
-                  None => Text
-                }
-                let component_args = match sub.args.get("arg") {
-                  Some(values) => values
-                  None => []
-                }
-                let status = if run && invoke is Some(_) {
-                  @commands.report_component_option_error(
-                    error_format, "--run and --invoke are mutually exclusive",
-                  )
-                } else if invoke is Some(export_path) {
-                  @commands.run_component_invoke_command(
-                    positional[0],
-                    export_path,
-                    component_args,
-                    wit_names,
-                    error_format,
-                  )
-                } else if run {
-                  let use_jit = match sub.flags.get("no-jit") {
-                    Some(true) => false
-                    _ => true
-                  }
-                  @commands.run_wasi_component_command(
-                    positional[0],
-                    component_args,
-                    match sub.args.get("env") {
-                      Some(values) => values
-                      None => []
-                    },
-                    match sub.args.get("dir") {
-                      Some(values) => values
-                      None => []
-                    },
-                    match sub.args.get("network") {
-                      Some([value]) => value
-                      _ => "deny"
-                    },
-                    wit_names,
-                    error_format,
-                    use_jit~,
-                  )
-                } else {
-                  @commands.run_component_command(
-                    positional[0],
-                    dump,
-                    validate,
-                    wit_names,
-                    error_format,
-                  )
-                }
-                if status != 0 {
-                  @sys.exit(status)
-                }
-              } else {
-                usage_error("missing file argument")
-              }
-            }
-            "component-test" => {
-              let positional = sub.positional_args
-              if positional.length() > 0 {
-                let error_format = match sub.args.get("error-format") {
-                  Some(arr) =>
-                    if arr.length() > 0 && arr[0] == "json" {
-                      @commands.ComponentErrorFormat::Json
-                    } else {
-                      Text
-                    }
-                  None => Text
-                }
-                let status = @commands.run_component_script_cli(
-                  positional[0],
-                  error_format,
-                  use_jit=!(sub.flags.get("no-jit") is Some(true)),
-                )
-                if status != 0 {
-                  @sys.exit(status)
-                }
-              } else {
-                usage_error("missing file argument")
-              }
-            }
-            "explore" => {
-              let positional = sub.positional_args
-              if positional.length() > 0 {
-                let func_idx : Int? = match sub.args.get("func") {
-                  Some(arr) =>
-                    if arr.length() > 0 {
-                      Some(@string.parse_int(arr[0])) catch {
-                        _ => None
-                      }
-                    } else {
-                      None
-                    }
-                  None => None
-                }
-                let opt_level = 2
-                let stages : Array[String] = match sub.args.get("stage") {
-                  Some(arr) => arr
-                  None => []
-                }
-                let html_output = sub.flags.get("html") is Some(true)
-                let debug = sub.flags.get("debug") is Some(true)
-                let target_name : String = match sub.args.get("target") {
-                  Some(arr) => if arr.length() > 0 { arr[0] } else { "host" }
-                  None => "host"
-                }
-                @commands.run_explore(
-                  positional[0],
-                  func_idx,
-                  opt_level,
-                  stages,
-                  html_output,
-                  debug,
-                  target_name~,
-                )
-              } else {
-                usage_error("missing file argument")
-              }
-            }
-            "settings" => @commands.run_settings()
-            "config" => {
-              let positional = sub.positional_args
-              let action = if positional.length() > 0 {
-                positional[0]
-              } else {
-                "show"
-              }
-              @commands.run_config(action)
-            }
-            "help" => println(help_msg)
-            name => usage_error("unknown command: \{name}")
+  match name {
+    "run" => {
+      let file_path = required_file(sub)
+      // CLI `run` uses balanced optimization for better steady-state runtime.
+      let opt_level = 2
+      @commands.run_wasm(
+        file_path,
+        value_of(sub, "invoke"),
+        values_of(sub, "arg"),
+        values_of(sub, "args"),
+        values_of(sub, "preload"),
+        values_of(sub, "dir"),
+        values_of(sub, "env"),
+        values_of(sub, "wasi"),
+        flag_of(sub, "debug"),
+        flag_of(sub, "dump-on-trap"),
+        !flag_of(sub, "no-jit"),
+        opt_level,
+        flag_of(sub, "dwarf"),
+      )
+    }
+    "test" =>
+      @commands.run_testsuite(
+        required_file(sub),
+        !flag_of(sub, "no-jit"),
+        flag_of(sub, "show-success"),
+      )
+    "disasm" => @commands.run_disasm(required_file(sub))
+    "component" => {
+      let file_path = required_file(sub)
+      let error_format = component_error_format(sub)
+      let invoke = value_of(sub, "invoke")
+      let run = flag_of(sub, "run")
+      let wit_names = !flag_of(sub, "no-wit-names")
+      let component_args = values_of(sub, "arg")
+      let status = if run && invoke is Some(_) {
+        @commands.report_component_option_error(
+          error_format, "--run and --invoke are mutually exclusive",
+        )
+      } else if invoke is Some(export_path) {
+        @commands.run_component_invoke_command(
+          file_path, export_path, component_args, wit_names, error_format,
+        )
+      } else if run {
+        let network = match value_of(sub, "network") {
+          Some(value) => {
+            require_choice("--network", value, ["deny", "loopback", "all"])
+            value
           }
-        None => usage_error("no command given")
+          None => "deny"
+        }
+        @commands.run_wasi_component_command(
+          file_path,
+          component_args,
+          values_of(sub, "env"),
+          values_of(sub, "dir"),
+          network,
+          wit_names,
+          error_format,
+          use_jit=!flag_of(sub, "no-jit"),
+        )
+      } else {
+        @commands.run_component_command(
+          file_path,
+          flag_of(sub, "dump"),
+          flag_of(sub, "validate"),
+          wit_names,
+          error_format,
+        )
       }
+      if status != 0 {
+        @sys.exit(status)
+      }
+    }
+    "component-test" => {
+      let status = @commands.run_component_script_cli(
+        required_file(sub),
+        component_error_format(sub),
+        use_jit=!flag_of(sub, "no-jit"),
+      )
+      if status != 0 {
+        @sys.exit(status)
+      }
+    }
+    "explore" => {
+      let file_path = required_file(sub)
+      let func_idx : Int? = match value_of(sub, "func") {
+        Some(text) => Some(@string.parse_int(text)) catch { _ => None }
+        None => None
+      }
+      let stages = values_of(sub, "stage")
+      for stage in stages {
+        require_choice("--stage", stage, stage_choices)
+      }
+      let target_name = match value_of(sub, "target") {
+        Some(value) => {
+          require_choice("--target", value, target_choices)
+          value
+        }
+        None => "host"
+      }
+      let opt_level = 2
+      @commands.run_explore(
+        file_path,
+        func_idx,
+        opt_level,
+        stages,
+        flag_of(sub, "html"),
+        flag_of(sub, "debug"),
+        target_name~,
+      )
+    }
+    "settings" => @commands.run_settings()
+    "config" => {
+      let action = value_of(sub, "action").unwrap_or("show")
+      require_choice("action", action, config_action_choices)
+      @commands.run_config(action)
+    }
+    "help" => println(command.render_help())
+    other => usage_error("unknown command: \{other}")
   }
 }

@@ -20,7 +20,7 @@ fn run_wast(wast_path : String, use_jit : Bool, show_success : Bool) -> Unit {
   wast_jit_attempts.val = 0
   // Read WAST file
   let content = @fs.read_file_to_string(wast_path) catch {
-    @fs.IOError(message) => {
+    IOError(message) => {
       @logger.error("reading file: \{message}")
       exit_failure()
       return
