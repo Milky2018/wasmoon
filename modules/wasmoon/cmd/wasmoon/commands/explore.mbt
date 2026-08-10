@@ -24,6 +24,37 @@ pub fn run_explore(
   debug : Bool,
   target_name? : String = "host",
 ) -> Int {
+  run_explore_with_compiler(
+    wasm_path,
+    func_index,
+    opt_level,
+    stages,
+    html_output,
+    debug,
+    target_name,
+    fn(function, validation_context, target) raise {
+      @wasmoon_jit.compile_wasm_body_diagnostics_for_target(
+        function, validation_context, target,
+      )
+    },
+  )
+}
+
+///|
+fn run_explore_with_compiler(
+  wasm_path : String,
+  func_index : Int?,
+  opt_level : Int,
+  stages : Array[String],
+  html_output : Bool,
+  debug : Bool,
+  target_name : String,
+  compile : (
+    @milkir.Function,
+    @wasm_milkir.WasmValidationContext,
+    @wasmoon_jit.NativeTarget,
+  ) -> @wasmoon_jit.JitPipelineDiagnostics raise,
+) -> Int {
   debug |> ignore
   // Parse stages - empty means show all
   let show_all = stages.is_empty()
@@ -189,9 +220,7 @@ pub fn run_explore(
           }
         }
     }
-    let diagnostics = @wasmoon_jit.compile_wasm_body_diagnostics_for_target(
-      milk_result, wasm_validation_context, target,
-    ) catch {
+    let diagnostics = compile(milk_result, wasm_validation_context, target) catch {
       err => {
         failed = true
         let text = "Native pipeline error: \{err}"
