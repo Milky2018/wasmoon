@@ -100,6 +100,7 @@ pub fn run_explore(
 
   // Compile each function
   let compiled_funcs : Array[CompiledFunc] = []
+  let mut failed = false
   for local_idx in func_indices {
     let type_idx = mod_.funcs[local_idx]
     let func_type = mod_.validated_func_type_at(type_idx)
@@ -149,12 +150,9 @@ pub fn run_explore(
       name=func_name,
     ) catch {
       err => {
-        let text = "error: \{Repr(err)}"
-        if !html_output {
-          println("")
-          println("── Compiler Infrastructure ──")
-          println(text)
-        }
+        failed = true
+        let text = "Compiler infrastructure error: \{Repr(err)}"
+        @logger.error(text)
         if html_output {
           compiled_funcs.push({
             name: func_name,
@@ -185,9 +183,8 @@ pub fn run_explore(
       _ =>
         @wasmoon_jit.host_native_target() catch {
           err => {
-            if !html_output {
-              println("Unsupported host target: \{err}")
-            }
+            failed = true
+            @logger.error("unsupported host target: \{err}")
             continue
           }
         }
@@ -196,10 +193,10 @@ pub fn run_explore(
       milk_result, wasm_validation_context, target,
     ) catch {
       err => {
+        failed = true
         let text = "Native pipeline error: \{err}"
-        if !html_output {
-          println(text)
-        } else {
+        @logger.error(text)
+        if html_output {
           compiled_funcs.push({
             name: func_name,
             type_str: format_func_type(func_type),
@@ -297,7 +294,11 @@ pub fn run_explore(
     }
     println("HTML report written to: \{path}")
   }
-  0
+  if failed {
+    1
+  } else {
+    0
+  }
 }
 
 ///|

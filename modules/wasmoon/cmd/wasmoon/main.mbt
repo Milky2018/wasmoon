@@ -31,6 +31,7 @@ fn require_choice(
     @logger.error(
       "invalid value for \{label}: '\{value}' (expected one of: \{allowed.join(", ")})",
     )
+    write_usage(build_command().render_help())
     @sys.exit(2)
   }
 }

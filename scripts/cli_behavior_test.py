@@ -341,6 +341,20 @@ def check_explore_selection(tmp: Path) -> None:
         f"stdout={proc.stdout!r}, stderr={proc.stderr!r}",
     )
 
+    proc = run("explore", str(wat), "--stage", "bogus")
+    expect(
+        "`explore --stage` rejects an unknown stage as usage error",
+        proc.returncode == 2,
+        f"exit {proc.returncode}",
+    )
+    expect(
+        "an invalid `--stage` value includes usage on stderr",
+        proc.stdout == ""
+        and "invalid value for --stage" in proc.stderr
+        and "Usage: wasmoon" in proc.stderr,
+        f"stdout={proc.stdout!r}, stderr={proc.stderr!r}",
+    )
+
 def main() -> int:
     if not WASMOON.exists():
         print(
