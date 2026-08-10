@@ -1,5 +1,8 @@
 ///|
 fn test_environment() -> Environment {
+  let runtime_symbols = @wasm_milkir.RuntimeSymbols::with_runtime_prefix(
+    "wasm.runtime",
+  )
   Environment::new(
     fn(index) { @machv.CodeSymbol::new("wasm.function.\{index}") },
     fn(index) {
@@ -10,7 +13,9 @@ fn test_environment() -> Environment {
       @machv.EnvironmentField::new("wasm.table.\{index}.base", Ptr64)
     },
     fn(index) { index + 100 },
-    fn(name) { @machv.ExternalSymbol::new("wasm.runtime.\{name}") },
+    fn(helper) {
+      @machv.ExternalSymbol::new(runtime_symbols.symbol_name(helper))
+    },
   )
 }
 

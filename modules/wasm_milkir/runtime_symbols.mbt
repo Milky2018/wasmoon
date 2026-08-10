@@ -1,130 +1,135 @@
 ///|
-pub(all) struct RuntimeSymbols {
-  memory_grow : String
-  memory_size : String
-  memory_fill : String
-  memory_copy : String
-  memory_init : String
-  data_drop : String
-  table_grow : String
-  table_fill : String
-  table_copy : String
-  table_init : String
-  elem_drop : String
-  gc_ref_test : String
-  gc_ref_cast : String
-  gc_struct_get : String
-  gc_struct_set : String
-  gc_array_get : String
-  gc_array_set : String
-  gc_array_len : String
-  gc_array_fill : String
-  gc_array_copy : String
-  gc_array_new_data : String
-  gc_array_new_elem : String
-  gc_array_init_data : String
-  gc_array_init_elem : String
-  gc_type_check_subtype : String
-  gc_register_struct_inline : String
-  gc_register_array_inline : String
-  gc_alloc_struct_slow : String
-  gc_alloc_array_from_values_slow : String
-  gc_alloc_array_slow : String
-  // v128 aggregate operations. A v128 is wider than the runtime word the
-  // symbols above are built on, so these pass it by address instead.
-  gc_struct_get_v128 : String
-  gc_struct_set_v128 : String
-  gc_array_get_v128 : String
-  gc_array_set_v128 : String
-  gc_array_fill_v128 : String
-  gc_alloc_struct_wide_slow : String
-  gc_alloc_array_wide_slow : String
-  gc_alloc_array_from_slots_slow : String
-  exception_try_begin : String
-  exception_try_end : String
-  exception_throw : String
-  exception_throw_tag : String
-  exception_throw_ref : String
-  exception_delegate : String
-  exception_get_tag : String
-  exception_get_value : String
-  exception_get_value_count : String
-  exception_sigsetjmp : String
-  exception_spill_locals : String
-  exception_get_spilled_local : String
+/// Runtime operations required by WebAssembly lowering.
+///
+/// The helper identity stays typed throughout lowering. An embedding assigns
+/// its external symbol spelling only when the operation enters MilkIR or
+/// MachV.
+pub(all) enum WasmRuntimeHelper {
+  MemoryGrow
+  MemorySize
+  MemoryFill
+  MemoryCopy
+  MemoryInit
+  DataDrop
+  TableGrow
+  TableFill
+  TableCopy
+  TableInit
+  ElemDrop
+  CancelPoll
+  GcRefTest
+  GcRefCast
+  GcStructGet
+  GcStructSet
+  GcArrayGet
+  GcArraySet
+  GcArrayLen
+  GcArrayFill
+  GcArrayCopy
+  GcArrayNewData
+  GcArrayNewElem
+  GcArrayInitData
+  GcArrayInitElem
+  GcTypeCheckSubtype
+  GcRegisterStructInline
+  GcRegisterArrayInline
+  GcAllocStructSlow
+  GcAllocArrayFromValuesSlow
+  GcAllocArraySlow
+  GcStructGetV128
+  GcStructSetV128
+  GcArrayGetV128
+  GcArraySetV128
+  GcArrayFillV128
+  GcAllocStructWideSlow
+  GcAllocArrayWideSlow
+  GcAllocArrayFromSlotsSlow
+  ExceptionTryBegin
+  ExceptionTryEnd
+  ExceptionThrow
+  ExceptionThrowTag
+  ExceptionThrowRef
+  ExceptionDelegate
+  ExceptionGetTag
+  ExceptionGetValue
+  ExceptionGetValueCount
+  ExceptionSigsetjmp
+  ExceptionSpillLocals
+  ExceptionGetSpilledLocal
 } derive(Debug, Eq)
 
 ///|
-fn prefixed(prefix : String, name : String) -> String {
-  prefix + "." + name
+fn WasmRuntimeHelper::suffix(self : WasmRuntimeHelper) -> String {
+  match self {
+    MemoryGrow => "memory_grow"
+    MemorySize => "memory_size"
+    MemoryFill => "memory_fill"
+    MemoryCopy => "memory_copy"
+    MemoryInit => "memory_init"
+    DataDrop => "data_drop"
+    TableGrow => "table_grow"
+    TableFill => "table_fill"
+    TableCopy => "table_copy"
+    TableInit => "table_init"
+    ElemDrop => "elem_drop"
+    CancelPoll => "cancel_poll"
+    GcRefTest => "gc.ref_test"
+    GcRefCast => "gc.ref_cast"
+    GcStructGet => "gc.struct_get"
+    GcStructSet => "gc.struct_set"
+    GcArrayGet => "gc.array_get"
+    GcArraySet => "gc.array_set"
+    GcArrayLen => "gc.array_len"
+    GcArrayFill => "gc.array_fill"
+    GcArrayCopy => "gc.array_copy"
+    GcArrayNewData => "gc.array_new_data"
+    GcArrayNewElem => "gc.array_new_elem"
+    GcArrayInitData => "gc.array_init_data"
+    GcArrayInitElem => "gc.array_init_elem"
+    GcTypeCheckSubtype => "gc.type_check_subtype"
+    GcRegisterStructInline => "gc.register_struct_inline"
+    GcRegisterArrayInline => "gc.register_array_inline"
+    GcAllocStructSlow => "gc.alloc_struct_slow"
+    GcAllocArrayFromValuesSlow => "gc.alloc_array_from_values_slow"
+    GcAllocArraySlow => "gc.alloc_array_slow"
+    GcStructGetV128 => "gc.struct_get_v128"
+    GcStructSetV128 => "gc.struct_set_v128"
+    GcArrayGetV128 => "gc.array_get_v128"
+    GcArraySetV128 => "gc.array_set_v128"
+    GcArrayFillV128 => "gc.array_fill_v128"
+    GcAllocStructWideSlow => "gc.alloc_struct_wide_slow"
+    GcAllocArrayWideSlow => "gc.alloc_array_wide_slow"
+    GcAllocArrayFromSlotsSlow => "gc.alloc_array_from_slots_slow"
+    ExceptionTryBegin => "exception.try_begin"
+    ExceptionTryEnd => "exception.try_end"
+    ExceptionThrow => "exception.throw"
+    ExceptionThrowTag => "exception.throw_tag"
+    ExceptionThrowRef => "exception.throw_ref"
+    ExceptionDelegate => "exception.delegate"
+    ExceptionGetTag => "exception.get_tag"
+    ExceptionGetValue => "exception.get_value"
+    ExceptionGetValueCount => "exception.get_value_count"
+    ExceptionSigsetjmp => "exception.sigsetjmp"
+    ExceptionSpillLocals => "exception.spill_locals"
+    ExceptionGetSpilledLocal => "exception.get_spilled_local"
+  }
 }
 
 ///|
-fn prefixed_gc(prefix : String, name : String) -> String {
-  prefixed(prefix, "gc.\{name}")
-}
-
-///|
-fn prefixed_exception(prefix : String, name : String) -> String {
-  prefixed(prefix, "exception.\{name}")
-}
+/// Embedding-specific external names for WebAssembly runtime helpers.
+struct RuntimeSymbols {
+  prefix : String
+} derive(Debug, Eq)
 
 ///|
 pub fn RuntimeSymbols::with_runtime_prefix(prefix : String) -> RuntimeSymbols {
-  {
-    memory_grow: prefixed(prefix, "memory_grow"),
-    memory_size: prefixed(prefix, "memory_size"),
-    memory_fill: prefixed(prefix, "memory_fill"),
-    memory_copy: prefixed(prefix, "memory_copy"),
-    memory_init: prefixed(prefix, "memory_init"),
-    data_drop: prefixed(prefix, "data_drop"),
-    table_grow: prefixed(prefix, "table_grow"),
-    table_fill: prefixed(prefix, "table_fill"),
-    table_copy: prefixed(prefix, "table_copy"),
-    table_init: prefixed(prefix, "table_init"),
-    elem_drop: prefixed(prefix, "elem_drop"),
-    gc_ref_test: prefixed_gc(prefix, "ref_test"),
-    gc_ref_cast: prefixed_gc(prefix, "ref_cast"),
-    gc_struct_get: prefixed_gc(prefix, "struct_get"),
-    gc_struct_set: prefixed_gc(prefix, "struct_set"),
-    gc_array_get: prefixed_gc(prefix, "array_get"),
-    gc_array_set: prefixed_gc(prefix, "array_set"),
-    gc_array_len: prefixed_gc(prefix, "array_len"),
-    gc_array_fill: prefixed_gc(prefix, "array_fill"),
-    gc_array_copy: prefixed_gc(prefix, "array_copy"),
-    gc_array_new_data: prefixed_gc(prefix, "array_new_data"),
-    gc_array_new_elem: prefixed_gc(prefix, "array_new_elem"),
-    gc_array_init_data: prefixed_gc(prefix, "array_init_data"),
-    gc_array_init_elem: prefixed_gc(prefix, "array_init_elem"),
-    gc_type_check_subtype: prefixed_gc(prefix, "type_check_subtype"),
-    gc_register_struct_inline: prefixed_gc(prefix, "register_struct_inline"),
-    gc_register_array_inline: prefixed_gc(prefix, "register_array_inline"),
-    gc_alloc_struct_slow: prefixed_gc(prefix, "alloc_struct_slow"),
-    gc_alloc_array_from_values_slow: prefixed_gc(
-      prefix, "alloc_array_from_values_slow",
-    ),
-    gc_alloc_array_slow: prefixed_gc(prefix, "alloc_array_slow"),
-    gc_struct_get_v128: prefixed_gc(prefix, "struct_get_v128"),
-    gc_struct_set_v128: prefixed_gc(prefix, "struct_set_v128"),
-    gc_array_get_v128: prefixed_gc(prefix, "array_get_v128"),
-    gc_array_set_v128: prefixed_gc(prefix, "array_set_v128"),
-    gc_array_fill_v128: prefixed_gc(prefix, "array_fill_v128"),
-    gc_alloc_struct_wide_slow: prefixed_gc(prefix, "alloc_struct_wide_slow"),
-    gc_alloc_array_wide_slow: prefixed_gc(prefix, "alloc_array_wide_slow"),
-    gc_alloc_array_from_slots_slow: prefixed_gc(
-      prefix, "alloc_array_from_slots_slow",
-    ),
-    exception_try_begin: prefixed_exception(prefix, "try_begin"),
-    exception_try_end: prefixed_exception(prefix, "try_end"),
-    exception_throw: prefixed_exception(prefix, "throw"),
-    exception_throw_tag: prefixed_exception(prefix, "throw_tag"),
-    exception_throw_ref: prefixed_exception(prefix, "throw_ref"),
-    exception_delegate: prefixed_exception(prefix, "delegate"),
-    exception_get_tag: prefixed_exception(prefix, "get_tag"),
-    exception_get_value: prefixed_exception(prefix, "get_value"),
-    exception_get_value_count: prefixed_exception(prefix, "get_value_count"),
-    exception_sigsetjmp: prefixed_exception(prefix, "sigsetjmp"),
-    exception_spill_locals: prefixed_exception(prefix, "spill_locals"),
-    exception_get_spilled_local: prefixed_exception(prefix, "get_spilled_local"),
-  }
+  { prefix, }
+}
+
+///|
+pub fn RuntimeSymbols::symbol_name(
+  self : RuntimeSymbols,
+  helper : WasmRuntimeHelper,
+) -> String {
+  self.prefix + "." + helper.suffix()
 }

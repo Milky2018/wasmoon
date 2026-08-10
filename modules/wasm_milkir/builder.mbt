@@ -101,7 +101,7 @@ pub fn memory_grow(
   let max_pages_value = max_pages.unwrap_or(-1)
   let call_result = call_runtime(
     builder,
-    runtime_symbols.memory_grow,
+    runtime_symbols.symbol_name(MemoryGrow),
     Some(I32),
     [
       vmctx,
@@ -127,7 +127,7 @@ pub fn memory_size(
 ) -> @milkir.Value {
   let call_result = call_runtime(
     builder,
-    runtime_symbols.memory_size,
+    runtime_symbols.symbol_name(MemorySize),
     Some(I32),
     [vmctx, builder.iconst_i32(memidx)],
   ).unwrap()
@@ -148,7 +148,7 @@ pub fn memory_fill(
   val : @milkir.Value,
   size : @milkir.Value,
 ) -> Unit {
-  call_runtime(builder, runtime_symbols.memory_fill, None, [
+  call_runtime(builder, runtime_symbols.symbol_name(MemoryFill), None, [
     vmctx,
     builder.iconst_i32(memidx),
     dst,
@@ -169,7 +169,7 @@ pub fn memory_copy(
   src : @milkir.Value,
   size : @milkir.Value,
 ) -> Unit {
-  call_runtime(builder, runtime_symbols.memory_copy, None, [
+  call_runtime(builder, runtime_symbols.symbol_name(MemoryCopy), None, [
     vmctx,
     builder.iconst_i32(dst_memidx),
     builder.iconst_i32(src_memidx),
@@ -191,7 +191,7 @@ pub fn memory_init(
   src : @milkir.Value,
   size : @milkir.Value,
 ) -> Unit {
-  call_runtime(builder, runtime_symbols.memory_init, None, [
+  call_runtime(builder, runtime_symbols.symbol_name(MemoryInit), None, [
     vmctx,
     builder.iconst_i32(memidx),
     builder.iconst_i32(data_idx),
@@ -209,7 +209,7 @@ pub fn data_drop(
   vmctx : @milkir.Value,
   data_idx : Int,
 ) -> Unit {
-  call_runtime(builder, runtime_symbols.data_drop, None, [
+  call_runtime(builder, runtime_symbols.symbol_name(DataDrop), None, [
     vmctx,
     builder.iconst_i32(data_idx),
   ])
@@ -233,7 +233,7 @@ pub fn table_grow(
   }
   let call_result = call_runtime(
     builder,
-    runtime_symbols.table_grow,
+    runtime_symbols.symbol_name(TableGrow),
     Some(I64),
     [vmctx, builder.iconst_i32(table_idx), runtime_delta, init_value],
   ).unwrap()
@@ -254,7 +254,7 @@ pub fn table_fill(
   val : @milkir.Value,
   size : @milkir.Value,
 ) -> Unit {
-  call_runtime(builder, runtime_symbols.table_fill, None, [
+  call_runtime(builder, runtime_symbols.symbol_name(TableFill), None, [
     vmctx,
     builder.iconst_i32(table_idx),
     dst,
@@ -275,7 +275,7 @@ pub fn table_copy(
   src : @milkir.Value,
   size : @milkir.Value,
 ) -> Unit {
-  call_runtime(builder, runtime_symbols.table_copy, None, [
+  call_runtime(builder, runtime_symbols.symbol_name(TableCopy), None, [
     vmctx,
     builder.iconst_i32(dst_table_idx),
     builder.iconst_i32(src_table_idx),
@@ -297,7 +297,7 @@ pub fn table_init(
   src : @milkir.Value,
   size : @milkir.Value,
 ) -> Unit {
-  call_runtime(builder, runtime_symbols.table_init, None, [
+  call_runtime(builder, runtime_symbols.symbol_name(TableInit), None, [
     vmctx,
     builder.iconst_i32(table_idx),
     builder.iconst_i32(elem_idx),
@@ -315,7 +315,7 @@ pub fn elem_drop(
   vmctx : @milkir.Value,
   elem_idx : Int,
 ) -> Unit {
-  call_runtime(builder, runtime_symbols.elem_drop, None, [
+  call_runtime(builder, runtime_symbols.symbol_name(ElemDrop), None, [
     vmctx,
     builder.iconst_i32(elem_idx),
   ])

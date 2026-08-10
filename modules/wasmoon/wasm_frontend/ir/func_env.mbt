@@ -63,7 +63,11 @@ fn FuncEnvironment::FuncEnvironment(
     memory_descriptor_layout,
     runtime_symbols: embedding_env.wasm_runtime_symbols(),
     cancellation_symbol: if embedding_env.cancellation_safepoints() {
-      Some(embedding_env.runtime_symbol("runtime.cancel_poll"))
+      Some(
+        ExternalSymbol(
+          embedding_env.wasm_runtime_symbols().symbol_name(CancelPoll),
+        ),
+      )
     } else {
       None
     },
