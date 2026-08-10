@@ -8,9 +8,12 @@ struct NativeJITContext {
 
 ///|
 pub fn NativeJITContext::try_alloc(total_funcs : Int) -> NativeJITContext? {
-  let ctx = c_jit_alloc_context_managed(total_funcs)
-  if c_jit_context_ptr(ctx) != 0L {
-    Some({ handle: ctx, jit_tables: [] })
+  let context : NativeJITContext = {
+    handle: c_jit_alloc_context_managed(total_funcs),
+    jit_tables: [],
+  }
+  if context.with_ptr(fn(ptr) { ptr != 0L }) {
+    Some(context)
   } else {
     None
   }
