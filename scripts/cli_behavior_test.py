@@ -255,7 +255,7 @@ def check_malformed_type_kind_across_commands(tmp: Path) -> None:
         )
 
 
-def check_explore_selection_and_wat_alias(tmp: Path) -> None:
+def check_explore_selection(tmp: Path) -> None:
     wat = tmp / "explorable.wat"
     wat.write_text(EXPLORABLE_WAT)
 
@@ -283,19 +283,6 @@ def check_explore_selection_and_wat_alias(tmp: Path) -> None:
         f"stdout={proc.stdout!r}, stderr={proc.stderr!r}",
     )
 
-    proc = run("wat", str(wat))
-    expect(
-        "`wasmoon wat` remains a successful disassembly alias",
-        proc.returncode == 0,
-        f"exit {proc.returncode}, stderr={proc.stderr!r}",
-    )
-    expect(
-        "`wasmoon wat` writes only WAT to stdout",
-        proc.stderr == "" and proc.stdout.lstrip().startswith("(module"),
-        f"stdout={proc.stdout!r}, stderr={proc.stderr!r}",
-    )
-
-
 def main() -> int:
     if not WASMOON.exists():
         print(
@@ -310,7 +297,7 @@ def main() -> int:
             check_test_exit_codes(Path(directory))
             check_invalid_modules(Path(directory))
             check_malformed_type_kind_across_commands(Path(directory))
-            check_explore_selection_and_wat_alias(Path(directory))
+            check_explore_selection(Path(directory))
     except Failure as failure:
         print(f"FAILED {failure}", file=sys.stderr)
         return 1

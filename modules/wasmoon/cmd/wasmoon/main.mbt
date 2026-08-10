@@ -199,9 +199,6 @@ fn build_command() -> @argparse.Command {
       Command("disasm", about="Disassemble a WASM or WAT file to text format", positionals=[
         PositionArg("file", about="Path to WASM or WAT file"),
       ]),
-      Command("wat", about="Alias for disasm", positionals=[
-        PositionArg("file", about="Path to WASM or WAT file"),
-      ]),
       Command(
         "component",
         about="Parse a WebAssembly component and print a summary",
@@ -341,7 +338,7 @@ fn main {
         !flag_of(sub, "no-jit"),
         flag_of(sub, "show-success"),
       )
-    "disasm" | "wat" => @commands.run_disasm(required_file(sub))
+    "disasm" => @commands.run_disasm(required_file(sub))
     "component" => {
       let file_path = required_file(sub)
       let error_format = component_error_format(sub)
