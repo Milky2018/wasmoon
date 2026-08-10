@@ -4,9 +4,7 @@ import {
   "moonbitlang/core/env",
   "moonbitlang/x/sys",
   "moonbitlang/core/argparse",
-  "moonbitlang/core/hashset",
   "moonbitlang/core/string",
-  "moonbitlang/core/strconv",
 }
 
 pkgtype(kind: "executable")

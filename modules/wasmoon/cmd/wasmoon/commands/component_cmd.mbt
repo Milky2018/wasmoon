@@ -432,14 +432,6 @@ fn report_component_run_error(
 }
 
 ///|
-pub fn report_component_option_error(
-  format : ComponentErrorFormat,
-  detail : String,
-) -> Int {
-  report_component_run_error(format, "options", detail)
-}
-
-///|
 fn component_command_context(
   file_path : String,
   args : Array[String],

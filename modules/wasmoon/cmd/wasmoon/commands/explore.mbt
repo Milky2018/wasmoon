@@ -23,7 +23,7 @@ pub fn run_explore(
   html_output : Bool,
   debug : Bool,
   target_name? : String = "host",
-) -> Unit {
+) -> Int {
   debug |> ignore
   // Parse stages - empty means show all
   let show_all = stages.is_empty()
@@ -45,8 +45,7 @@ pub fn run_explore(
   let mod_ = load_module_from_path(wasm_path) catch {
     e => {
       @logger.error("loading module: \{e}")
-      exit_failure()
-      return
+      return 1
     }
   }
 
@@ -57,8 +56,7 @@ pub fn run_explore(
       // non-zero status. Printing it and returning 0 made `explore` claim
       // success for a module it never explored.
       @logger.error("validating module: \{e}")
-      exit_failure()
-      return
+      return 1
     }
   }
 
@@ -75,8 +73,7 @@ pub fn run_explore(
         @logger.error(
           "function index \{abs_idx} out of range (\{num_imports}..\{num_imports + mod_.codes.length() - 1})",
         )
-        exit_failure()
-        return
+        return 1
       }
       [local_idx]
     }
@@ -295,12 +292,12 @@ pub fn run_explore(
     @fs.write_string_to_file(path, html) catch {
       IOError(message) => {
         @logger.error("writing HTML report: \{message}")
-        exit_failure()
-        return
+        return 1
       }
     }
     println("HTML report written to: \{path}")
   }
+  0
 }
 
 ///|

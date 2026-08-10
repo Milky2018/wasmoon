@@ -17,7 +17,6 @@ import {
   "Milky2018/wasmoon_jit",
   "Milky2018/wasmoon_jit/perf",
   "Milky2018/wasmoon/wasi",
-  "moonbitlang/x/sys",
   "moonbitlang/core/env",
   "moonbitlang/x/fs",
   "Milky2018/wasmoon/executor",
