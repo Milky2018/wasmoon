@@ -350,6 +350,7 @@ test "egraph: (x << 2) << 3 = x << 5" {
   let inner = eg.add_shl(x, two)
   let outer = eg.add_shl(inner, three)
   let direct = eg.add_shl(x, five)
+  eg.set_type(outer, 64)
   eg.saturate_indexed(get_global_ruleset(), 10) |> ignore
   inspect(eg.equiv(outer, direct), content="true")
 }
@@ -1056,6 +1057,7 @@ test "egraph: (x >> 3) >> 2 = x >> 5 (ushr)" {
   let inner = eg.add({ op: Ushr, children: [x, three] })
   let outer = eg.add({ op: Ushr, children: [inner, two] })
   let direct = eg.add({ op: Ushr, children: [x, five] })
+  eg.set_type(outer, 64)
   eg.saturate_indexed(get_global_ruleset(), 10) |> ignore
   inspect(eg.equiv(outer, direct), content="true")
 }
@@ -1070,6 +1072,7 @@ test "egraph: (x >> 3) >> 2 = x >> 5 (sshr)" {
   let inner = eg.add({ op: Sshr, children: [x, three] })
   let outer = eg.add({ op: Sshr, children: [inner, two] })
   let direct = eg.add({ op: Sshr, children: [x, five] })
+  eg.set_type(outer, 64)
   eg.saturate_indexed(get_global_ruleset(), 10) |> ignore
   inspect(eg.equiv(outer, direct), content="true")
 }
@@ -1265,6 +1268,7 @@ test "egraph: (ishl (ishl x 40) 30) = 0 (shift overflow)" {
   let shl1 = eg.add_shl(x, k40)
   let shl2 = eg.add_shl(shl1, k30)
   let zero = eg.add_const(0L)
+  eg.set_type(shl2, 64)
   eg.saturate_indexed(get_global_ruleset(), 10) |> ignore
   inspect(eg.equiv(shl2, zero), content="true")
 }
@@ -1278,6 +1282,7 @@ test "egraph: (ushr (ushr x 40) 30) = 0 (shift overflow)" {
   let ushr1 = eg.add({ op: Ushr, children: [x, k40] })
   let ushr2 = eg.add({ op: Ushr, children: [ushr1, k30] })
   let zero = eg.add_const(0L)
+  eg.set_type(ushr2, 64)
   eg.saturate_indexed(get_global_ruleset(), 10) |> ignore
   inspect(eg.equiv(ushr2, zero), content="true")
 }
