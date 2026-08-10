@@ -708,38 +708,34 @@ fn eliminate_unreachable_code(func : Function) -> OptResult {
   if func.blocks.length() == 0 {
     return result
   }
-  // Mark reachable blocks using DFS from entry
-  let reachable : @hashmap.HashMap[Int, Bool] = HashMap([])
-  let worklist : Array[Int] = [0] // Start from entry block (block 0)
+  let block_idx = build_block_index_array(func)
+  let reachable = Array::make(func.next_block_id, false)
+  let worklist : Array[Int] = []
+  if block_idx.length() > 0 && block_idx[0] >= 0 {
+    reachable[0] = true
+    worklist.push(0)
+  }
   while worklist.length() > 0 {
     let block_id = worklist.pop().unwrap()
-    if reachable.get(block_id).unwrap_or(false) {
-      continue
-    }
-    reachable.set(block_id, true)
-    // Find the block and add successors to worklist
-    for block in func.blocks {
-      if block.id == block_id {
-        if block.terminator is Some(term) {
-          for succ in get_terminator_targets(term) {
-            if !reachable.get(succ).unwrap_or(false) {
-              worklist.push(succ)
-            }
-          }
+    let block = func.blocks[block_idx[block_id]]
+    if block.terminator is Some(term) {
+      for succ in get_terminator_targets(term) {
+        if succ >= 0 &&
+          succ < block_idx.length() &&
+          block_idx[succ] >= 0 &&
+          !reachable[succ] {
+          reachable[succ] = true
+          worklist.push(succ)
         }
-        break
       }
     }
   }
-  // Remove unreachable blocks (iterate backwards to avoid index issues)
-  let mut i = func.blocks.length() - 1
-  while i >= 0 {
-    let block = func.blocks[i]
-    if !reachable.get(block.id).unwrap_or(false) {
-      func.blocks.remove(i) |> ignore
-      result.mark_changed()
-    }
-    i = i - 1
+  let old_block_count = func.blocks.length()
+  func.blocks.retain(fn(block) {
+    block.id >= 0 && block.id < reachable.length() && reachable[block.id]
+  })
+  if func.blocks.length() != old_block_count {
+    result.mark_changed()
   }
   result
 }
@@ -754,82 +750,58 @@ fn merge_blocks(func : Function) -> OptResult {
   if func.blocks.length() <= 1 {
     return result
   }
-  // Build predecessor and successor counts
-  let pred_count : @hashmap.HashMap[Int, Int] = HashMap([])
-  let succ_count : @hashmap.HashMap[Int, Int] = HashMap([])
-  let single_pred : @hashmap.HashMap[Int, Int] = HashMap([]) // block -> its single predecessor
-  for block in func.blocks {
-    pred_count.set(block.id, 0)
-    succ_count.set(block.id, 0)
-  }
+  let block_idx = build_block_index_array(func)
+  let pred_count = Array::make(func.next_block_id, 0)
   for block in func.blocks {
     if block.terminator is Some(term) {
-      let targets = get_terminator_targets(term)
-      succ_count.set(block.id, targets.length())
-      for target in targets {
-        let count = pred_count.get(target).unwrap_or(0)
-        pred_count.set(target, count + 1)
-        // Track the predecessor if this is the first one
-        if count == 0 {
-          single_pred.set(target, block.id)
-        } else {
-          // More than one predecessor, clear
-          single_pred.remove(target)
+      for target in get_terminator_targets(term) {
+        if target >= 0 && target < pred_count.length() {
+          pred_count[target] = pred_count[target] + 1
         }
       }
     }
   }
-  // Find mergeable pairs: pred has 1 successor, succ has 1 predecessor
-  let to_merge : Array[(Int, Int)] = [] // (pred_id, succ_id)
+
+  // Absorb complete straight-line chains while indices still refer to the
+  // original array, then compact the array once.
+  let removed = Array::make(func.next_block_id, false)
   for block in func.blocks {
-    if block.id == 0 {
-      continue // Don't merge into entry block
+    if block.id < 0 || block.id >= removed.length() || removed[block.id] {
+      continue
     }
-    let preds = pred_count.get(block.id).unwrap_or(0)
-    if preds == 1 && single_pred.get(block.id) is Some(pred_id) {
-      let succs = succ_count.get(pred_id).unwrap_or(0)
-      if succs == 1 {
-        // Check that the jump has no arguments (simple case)
-        for pred_block in func.blocks {
-          if pred_block.id == pred_id {
-            if pred_block.terminator is Some(Jump(_, args)) &&
-              args.length() == 0 {
-              to_merge.push((pred_id, block.id))
-            }
-            break
+    let mut done = false
+    while !done {
+      match block.terminator {
+        Some(Jump(target, args)) => {
+          if args.length() != 0 ||
+            target <= 0 ||
+            target >= block_idx.length() ||
+            block_idx[target] < 0 ||
+            removed[target] ||
+            pred_count[target] != 1 {
+            done = true
+            continue
           }
+          let successor = func.blocks[block_idx[target]]
+          if successor.id == block.id {
+            done = true
+            continue
+          }
+          for inst in successor.instructions {
+            block.instructions.push(inst)
+          }
+          block.terminator = successor.terminator
+          removed[target] = true
+          result.mark_changed()
         }
+        _ => done = true
       }
     }
   }
-  // Perform merges
-  for pair in to_merge {
-    let (pred_id, succ_id) = pair
-    let mut pred_block : Block? = None
-    let mut succ_block : Block? = None
-    let mut succ_idx = -1
-    for i, block in func.blocks {
-      if block.id == pred_id {
-        pred_block = Some(block)
-      }
-      if block.id == succ_id {
-        succ_block = Some(block)
-        succ_idx = i
-      }
-    }
-    if (pred_block, succ_block) is (Some(pred), Some(succ)) {
-      // Append successor's instructions to predecessor
-      for inst in succ.instructions {
-        pred.instructions.push(inst)
-      }
-      // Take successor's terminator
-      pred.terminator = succ.terminator
-      // Remove successor block
-      if succ_idx >= 0 {
-        func.blocks.remove(succ_idx) |> ignore
-        result.mark_changed()
-      }
-    }
+  if result.changed {
+    func.blocks.retain(fn(block) {
+      block.id < 0 || block.id >= removed.length() || !removed[block.id]
+    })
   }
   result
 }
@@ -876,13 +848,32 @@ fn resolve_jump_target_with_args(
   args : Array[Value],
   func : Function,
   block_idx : @hashmap.HashMap[Int, Int],
+  empty_jump_targets : Array[Int],
 ) -> (Int, Array[Value]) {
+  if args.length() == 0 &&
+    target >= 0 &&
+    target < empty_jump_targets.length() &&
+    empty_jump_targets[target] >= 0 {
+    return (empty_jump_targets[target], [])
+  }
   let visited : @hashmap.HashMap[Int, Bool] = HashMap([])
+  let empty_path : Array[Int] = []
   let mut current_target = target
   let mut current_args = args
+  let mut cacheable = args.length() == 0
+  let mut cyclic = false
   let mut done = false
   while !done {
+    if cacheable &&
+      current_target >= 0 &&
+      current_target < empty_jump_targets.length() &&
+      empty_jump_targets[current_target] >= 0 {
+      current_target = empty_jump_targets[current_target]
+      done = true
+      continue
+    }
     if visited.get(current_target).unwrap_or(false) {
+      cyclic = true
       break
     }
     visited.set(current_target, true)
@@ -898,12 +889,28 @@ fn resolve_jump_target_with_args(
         match
           rewrite_jump_args_through_block(block.params, current_args, next_args) {
           Some(rewritten_args) => {
+            if cacheable &&
+              block.params.length() == 0 &&
+              current_args.length() == 0 &&
+              next_args.length() == 0 {
+              empty_path.push(current_target)
+            } else {
+              cacheable = false
+              empty_path.clear()
+            }
             current_target = next_target
             current_args = rewritten_args
           }
           None => done = true
         }
       _ => done = true
+    }
+  }
+  if cacheable && !cyclic && current_args.length() == 0 {
+    for path_target in empty_path {
+      if path_target >= 0 && path_target < empty_jump_targets.length() {
+        empty_jump_targets[path_target] = current_target
+      }
     }
   }
   (current_target, current_args)
@@ -918,12 +925,13 @@ fn thread_jumps(func : Function) -> OptResult {
   for i, block in func.blocks {
     block_idx.set(block.id, i)
   }
+  let empty_jump_targets = Array::make(func.next_block_id, -1)
   // Update terminators to skip intermediate jump blocks
   for block in func.blocks {
     match block.terminator {
       Some(Jump(target, args)) => {
         let (final_target, final_args) = resolve_jump_target_with_args(
-          target, args, func, block_idx,
+          target, args, func, block_idx, empty_jump_targets,
         )
         if final_target != target || !block_arg_arrays_equal(final_args, args) {
           block.terminator = Some(Jump(final_target, final_args))
@@ -936,12 +944,14 @@ fn thread_jumps(func : Function) -> OptResult {
           [],
           func,
           block_idx,
+          empty_jump_targets,
         )
         let (resolved_else, else_args) = resolve_jump_target_with_args(
           else_target,
           [],
           func,
           block_idx,
+          empty_jump_targets,
         )
         let new_then = if then_args.length() == 0 {
           resolved_then
@@ -964,12 +974,14 @@ fn thread_jumps(func : Function) -> OptResult {
           [],
           func,
           block_idx,
+          empty_jump_targets,
         )
         let (resolved_else, else_args) = resolve_jump_target_with_args(
           else_target,
           [],
           func,
           block_idx,
+          empty_jump_targets,
         )
         let new_then = if then_args.length() == 0 {
           resolved_then
@@ -995,6 +1007,7 @@ fn thread_jumps(func : Function) -> OptResult {
             [],
             func,
             block_idx,
+            empty_jump_targets,
           )
           let new_t = if resolved_args.length() == 0 { resolved_t } else { t }
           new_targets.push(new_t)
@@ -1007,6 +1020,7 @@ fn thread_jumps(func : Function) -> OptResult {
           [],
           func,
           block_idx,
+          empty_jump_targets,
         )
         let new_default = if default_args.length() == 0 {
           resolved_default

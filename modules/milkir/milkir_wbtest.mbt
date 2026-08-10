@@ -1293,6 +1293,25 @@ test "optimizer merges straight line blocks" {
 }
 
 ///|
+test "optimizer merges a complete straight-line chain in one pass" {
+  let builder = FunctionBuilder::FunctionBuilder("merge_block_chain")
+  let first = builder.create_block()
+  let second = builder.create_block()
+  let exit = builder.create_block()
+  builder.jump(first, [])
+  builder.switch_to_block(first)
+  builder.jump(second, [])
+  builder.switch_to_block(second)
+  builder.jump(exit, [])
+  builder.switch_to_block(exit)
+  builder.return_([])
+  let func = builder.get_function()
+  merge_blocks(func) |> ignore
+  inspect(func.blocks.length(), content="1")
+  inspect(func.verify(), content="()")
+}
+
+///|
 test "optimizer does not merge block with params" {
   let builder = FunctionBuilder::FunctionBuilder("merge_skip_params")
   builder.add_result(I32)
