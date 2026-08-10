@@ -62,16 +62,33 @@ pub fn run_explore(
     }
   }
 
-  // Only now that there is a module to explore: the heading announces output
-  // that follows it, so emitting it earlier left a header on stdout for a
-  // report that never came.
+  // Count imports to convert between absolute and local function indices
+  // Absolute index = num_imports + local_index (matches JIT error messages)
+  let num_imports = count_func_imports(mod_.imports)
+  // Determine which functions to explore before emitting any report output.
+  // User provides an absolute WebAssembly function index (including imports),
+  // matching the indices shown in JIT diagnostics.
+  let func_indices : Array[Int] = match func_index {
+    Some(abs_idx) => {
+      let local_idx = abs_idx - num_imports
+      if local_idx < 0 || local_idx >= mod_.codes.length() {
+        @logger.error(
+          "function index \{abs_idx} out of range (\{num_imports}..\{num_imports + mod_.codes.length() - 1})",
+        )
+        exit_failure()
+        return
+      }
+      [local_idx]
+    }
+    None => Array::makei(mod_.codes.length(), fn(i) { i })
+  }
+
+  // Only now that there is a report to produce: failures above must leave
+  // stdout empty so scripts can treat it as data.
   if !html_output {
     println("Exploring compilation: \{wasm_path}")
     println("=".repeat(60))
   }
-  // Count imports to convert between absolute and local function indices
-  // Absolute index = num_imports + local_index (matches JIT error messages)
-  let num_imports = count_func_imports(mod_.imports)
   let translation_context = @wasm_frontend.translation_context_from_module(
     mod_,
     @wasmoon.wasm_frontend_embedding_environment(),
@@ -82,24 +99,6 @@ pub fn run_explore(
   if !html_output {
     println("Module loaded: \{mod_.codes.length()} functions")
     println("")
-  }
-
-  // Determine which functions to explore
-  // User provides absolute WebAssembly function index (including imports)
-  // This matches the indices shown in JIT error messages (wasm=N)
-  let func_indices : Array[Int] = match func_index {
-    Some(abs_idx) => {
-      // Convert absolute index to local index
-      let local_idx = abs_idx - num_imports
-      if local_idx < 0 || local_idx >= mod_.codes.length() {
-        println(
-          "Error: function index \{abs_idx} out of range (\{num_imports}..\{num_imports + mod_.codes.length() - 1})",
-        )
-        return
-      }
-      [local_idx]
-    }
-    None => Array::makei(mod_.codes.length(), fn(i) { i })
   }
 
   // Compile each function

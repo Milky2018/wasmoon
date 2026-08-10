@@ -74,6 +74,11 @@ UNPARSEABLE_TYPE_KIND = """(module
   (func (export "go") (type $s)))
 """
 
+EXPLORABLE_WAT = """(module
+  (func (export "zero") (result i32) (i32.const 0))
+  (func (export "one") (result i32) (i32.const 1)))
+"""
+
 
 class Failure(Exception):
     pass
@@ -250,6 +255,47 @@ def check_malformed_type_kind_across_commands(tmp: Path) -> None:
         )
 
 
+def check_explore_selection_and_wat_alias(tmp: Path) -> None:
+    wat = tmp / "explorable.wat"
+    wat.write_text(EXPLORABLE_WAT)
+
+    proc = run("explore", str(wat), "--func", "nope")
+    expect(
+        "`explore --func` rejects a non-integer",
+        proc.returncode == 2,
+        f"exit {proc.returncode}",
+    )
+    expect(
+        "an invalid `--func` value is only a diagnostic",
+        proc.stdout == "" and proc.stderr != "",
+        f"stdout={proc.stdout!r}, stderr={proc.stderr!r}",
+    )
+
+    proc = run("explore", str(wat), "--func", "999")
+    expect(
+        "`explore --func` rejects an out-of-range index",
+        proc.returncode > 0,
+        f"exit {proc.returncode}",
+    )
+    expect(
+        "an out-of-range function index is only a diagnostic",
+        proc.stdout == "" and "out of range" in proc.stderr,
+        f"stdout={proc.stdout!r}, stderr={proc.stderr!r}",
+    )
+
+    proc = run("wat", str(wat))
+    expect(
+        "`wasmoon wat` remains a successful disassembly alias",
+        proc.returncode == 0,
+        f"exit {proc.returncode}, stderr={proc.stderr!r}",
+    )
+    expect(
+        "`wasmoon wat` writes only WAT to stdout",
+        proc.stderr == "" and proc.stdout.lstrip().startswith("(module"),
+        f"stdout={proc.stdout!r}, stderr={proc.stderr!r}",
+    )
+
+
 def main() -> int:
     if not WASMOON.exists():
         print(
@@ -264,6 +310,7 @@ def main() -> int:
             check_test_exit_codes(Path(directory))
             check_invalid_modules(Path(directory))
             check_malformed_type_kind_across_commands(Path(directory))
+            check_explore_selection_and_wat_alias(Path(directory))
     except Failure as failure:
         print(f"FAILED {failure}", file=sys.stderr)
         return 1
