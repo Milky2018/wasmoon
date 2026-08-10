@@ -215,23 +215,53 @@ fn intersect_dominators(
 
 ///|
 pub fn CFG::dominates(self : CFG, a : Int, b : Int) -> Bool {
-  let idom = self.compute_dominators()
-  dominates_with_idom(idom, a, b)
+  self.compute_dominance().dominates(a, b)
 }
 
 ///|
-fn dominates_with_idom(idom : Array[Int], a : Int, b : Int) -> Bool {
+priv struct Dominance {
+  idom : Array[Int]
+  preorder : Array[Int]
+  subtree_end : Array[Int]
+}
+
+///|
+fn CFG::compute_dominance(self : CFG) -> Dominance {
+  let idom = self.compute_dominators()
+  let preorder = Array::make(idom.length(), -1)
+  let subtree_end = Array::make(idom.length(), -1)
+  let mut next = 0
+  if self.is_valid(0) {
+    visit_dominator_tree(
+      build_dominator_tree(idom),
+      0,
+      fn(block_id) {
+        preorder[block_id] = next
+        next = next + 1
+        (block_id, true)
+      },
+      fn(block_id) { subtree_end[block_id] = next },
+    )
+  }
+  { idom, preorder, subtree_end }
+}
+
+///|
+fn Dominance::dominates(self : Dominance, a : Int, b : Int) -> Bool {
   if a == b {
     return true
   }
-  let mut current = b
-  while current != -1 && current != 0 {
-    current = idom[current]
-    if current == a {
-      return true
-    }
+  if a < 0 ||
+    a >= self.preorder.length() ||
+    b < 0 ||
+    b >= self.preorder.length() {
+    return false
   }
-  a == 0 && current == 0
+  let a_preorder = self.preorder[a]
+  let b_preorder = self.preorder[b]
+  a_preorder >= 0 &&
+  b_preorder >= a_preorder &&
+  b_preorder < self.subtree_end[a]
 }
 
 ///|
@@ -299,14 +329,14 @@ fn[Scope] visit_dominator_tree(
 
 ///|
 pub fn CFG::find_back_edges(self : CFG) -> Array[(Int, Int)] {
-  let idom = self.compute_dominators()
+  let dominance = self.compute_dominance()
   let back_edges : Array[(Int, Int)] = []
   for block_id in 0..<self.size {
     if !self.valid[block_id] {
       continue
     }
     for succ in self.successors[block_id] {
-      if dominates_with_idom(idom, succ, block_id) {
+      if dominance.dominates(succ, block_id) {
         back_edges.push((block_id, succ))
       }
     }
