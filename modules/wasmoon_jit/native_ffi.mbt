@@ -62,36 +62,8 @@ extern "c" fn c_jit_host_target_arch() -> Int = "wasmoon_jit_host_target_arch"
 extern "c" fn c_jit_get_hostcall_ptr() -> Int64 = "wasmoon_jit_get_hostcall_ptr"
 
 ///|
-/// Set hostcall callback for a JITContext.
-/// The callback closure is invoked with no arguments; it can query the current
-/// hostcall parameters via `c_jit_get_hostcall_*` helpers.
-#owned(closure)
-extern "c" fn c_jit_set_hostcall_callback(
-  ctx_ptr : Int64,
-  call_closure : FuncRef[(() -> Int) -> Int],
-  closure : () -> Int,
-) -> Unit = "wasmoon_jit_set_hostcall_callback"
-
-///|
-/// Clear hostcall callback for a JITContext.
-extern "c" fn c_jit_clear_hostcall_callback(ctx_ptr : Int64) -> Unit = "wasmoon_jit_clear_hostcall_callback"
-
-///|
 /// Get the cooperative cancellation poll helper pointer.
 extern "c" fn c_jit_get_cancel_poll_ptr() -> Int64 = "wasmoon_jit_get_cancel_poll_ptr"
-
-///|
-/// Set an invocation-local cooperative cancellation callback.
-#owned(closure)
-extern "c" fn c_jit_set_cancellation_callback(
-  ctx_ptr : Int64,
-  call_closure : FuncRef[(() -> Bool) -> Int],
-  closure : () -> Bool,
-) -> Unit = "wasmoon_jit_set_cancellation_callback"
-
-///|
-/// Clear the cooperative cancellation callback.
-extern "c" fn c_jit_clear_cancellation_callback(ctx_ptr : Int64) -> Unit = "wasmoon_jit_clear_cancellation_callback"
 
 ///|
 /// Current hostcall func_idx (thread-local).
@@ -121,27 +93,6 @@ priv type JITContext
 extern "c" fn c_jit_alloc_context_managed(func_count : Int) -> JITContext = "wasmoon_jit_alloc_context_managed"
 
 ///|
-/// Get the context pointer from a GC-managed JITContext object
-#borrow(jit_context)
-extern "c" fn c_jit_context_ptr(jit_context : JITContext) -> Int64 = "wasmoon_jit_context_ptr"
-
-///|
-/// Explicit managed-owner use that must run after any scoped raw-pointer use.
-#borrow(jit_context)
-extern "c" fn c_jit_context_keep_alive(jit_context : JITContext) -> Unit = "wasmoon_jit_context_keep_alive"
-
-///|
-extern "c" fn c_jit_gc_environment_is_clear(ctx_ptr : Int64) -> Int = "wasmoon_jit_gc_environment_is_clear"
-
-///|
-/// Set a function pointer in the context's function table
-extern "c" fn c_jit_ctx_set_func(
-  ctx_ptr : Int64,
-  idx : Int,
-  func_ptr : Int64,
-) -> Unit = "wasmoon_jit_ctx_set_func"
-
-///|
 /// Copy bytes to linear memory at offset (zero-copy friendly Bytes path).
 #borrow(data)
 extern "c" fn c_jit_memory_init_bytes(
@@ -160,18 +111,6 @@ extern "c" fn c_jit_memory_read(
   out : FixedArray[Byte],
   size : Int,
 ) -> Int = "wasmoon_jit_memory_read"
-
-///|
-/// Set memory0 in the context
-extern "c" fn c_jit_ctx_set_memory(ctx_ptr : Int64, mem0_ptr : Int64) -> Unit = "wasmoon_jit_ctx_set_memory"
-
-///|
-/// Get memory base pointer for memidx
-extern "c" fn c_jit_ctx_get_memory_ptr(ctx_ptr : Int64, memidx : Int) -> Int64 = "wasmoon_jit_ctx_get_memory_ptr"
-
-///|
-/// Get memory size in bytes for memidx
-extern "c" fn c_jit_ctx_get_memory_size(ctx_ptr : Int64, memidx : Int) -> Int64 = "wasmoon_jit_ctx_get_memory_size"
 
 ///|
 /// Allocate linear memory for generic buffers (globals, etc.)
@@ -262,21 +201,6 @@ extern "c" fn c_jit_alloc_guarded_memory_desc(
 ) -> Int64 = "wasmoon_jit_alloc_guarded_memory_desc"
 
 ///|
-/// Allocate guarded memory with mmap for bounds check elimination
-/// Memory is allocated with guard pages (PROT_NONE) after the accessible region
-/// Access to guard pages triggers SIGSEGV which is caught and converted to a trap
-/// Parameters:
-///   ctx_ptr: JIT context pointer
-///   initial_pages: Initial memory size in WASM pages (64KB each)
-///   max_pages: Maximum memory size in WASM pages (-1 or 0 for default 4GB reservation)
-/// Returns: memory pointer on success, 0 on failure
-extern "c" fn c_jit_ctx_alloc_guarded_memory(
-  ctx_ptr : Int64,
-  initial_pages : Int64,
-  max_pages : Int64,
-) -> Int64 = "wasmoon_jit_ctx_alloc_guarded_memory"
-
-///|
 /// Free linear memory
 extern "c" fn c_jit_free_memory(mem_ptr : Int64) -> Unit = "wasmoon_jit_free_memory"
 
@@ -339,60 +263,6 @@ extern "c" fn c_jit_get_table_init_ptr() -> Int64 = "wasmoon_jit_get_table_init_
 /// Signature: elem_drop(ctx: *jit_context_t, elem_idx: i32) -> void
 extern "c" fn c_jit_get_elem_drop_ptr() -> Int64 = "wasmoon_jit_get_elem_drop_ptr"
 
-///|
-/// Configure JIT context with multiple memories (for multi-memory support)
-/// memory_ptrs: FixedArray of Int64 (wasmoon_memory_t* pointers)
-/// memory_count: Number of memories
-#borrow(memory_ptrs)
-extern "c" fn c_jit_ctx_set_memory_pointers(
-  ctx_ptr : Int64,
-  memory_ptrs : FixedArray[Int64],
-  memory_count : Int,
-) -> Unit = "wasmoon_jit_ctx_set_memory_pointers"
-
-///|
-/// Set globals array in the context
-extern "c" fn c_jit_ctx_set_globals(
-  ctx_ptr : Int64,
-  globals_ptr : Int64,
-) -> Unit = "wasmoon_jit_ctx_set_globals"
-
-///|
-/// Get function table base address from context
-extern "c" fn c_jit_ctx_get_func_table(ctx_ptr : Int64) -> Int64 = "wasmoon_jit_ctx_get_func_table"
-
-///|
-/// Get function count from context
-extern "c" fn c_jit_ctx_get_func_count(ctx_ptr : Int64) -> Int = "wasmoon_jit_ctx_get_func_count"
-
-///|
-/// Get table base pointer for table index in context
-extern "c" fn c_jit_ctx_get_table_ptr(
-  ctx_ptr : Int64,
-  table_idx : Int,
-) -> Int64 = "wasmoon_jit_ctx_get_table_ptr"
-
-///|
-/// Get table current size for table index in context
-extern "c" fn c_jit_ctx_get_table_size(ctx_ptr : Int64, table_idx : Int) -> Int = "wasmoon_jit_ctx_get_table_size"
-
-///|
-/// Allocate indirect table for context
-extern "c" fn c_jit_ctx_alloc_indirect_table(
-  ctx_ptr : Int64,
-  count : Int,
-) -> Int = "wasmoon_jit_ctx_alloc_indirect_table"
-
-///|
-/// Set an entry in indirect table (table_idx -> func_table[func_idx])
-/// type_idx: the type index of the function (for type checking)
-extern "c" fn c_jit_ctx_set_indirect(
-  ctx_ptr : Int64,
-  table_idx : Int,
-  func_idx : Int,
-  type_idx : Int,
-) -> Unit = "wasmoon_jit_ctx_set_indirect"
-
 // ============ Shared Indirect Table ============
 
 ///|
@@ -413,21 +283,6 @@ extern "c" fn c_jit_shared_table_set(
 ) -> Unit = "wasmoon_jit_shared_table_set"
 
 ///|
-/// Configure JIT context with multiple indirect tables (for multi-table support)
-/// table_ptrs: FixedArray of Int64 (table pointers from Store.jit_tables)
-/// table_sizes: FixedArray of Int (table sizes for bounds checking)
-/// table_max_sizes: FixedArray of Int (max sizes, -1 = unlimited)
-/// table_count: Number of tables
-#borrow(table_ptrs, table_sizes, table_max_sizes)
-extern "c" fn c_jit_ctx_set_table_pointers(
-  ctx_ptr : Int64,
-  table_ptrs : FixedArray[Int64],
-  table_sizes : FixedArray[Int],
-  table_max_sizes : FixedArray[Int],
-  table_count : Int,
-) -> Unit = "wasmoon_jit_ctx_set_table_pointers"
-
-///|
 /// C FFI for trampoline-based calls that keeps the GC-managed `JITContext`
 /// alive for the duration of the call.
 /// This avoids relying on any global "current context" state.
@@ -441,27 +296,6 @@ extern "c" fn c_jit_call_trampoline_managed(
 ) -> Int = "wasmoon_jit_call_trampoline_managed"
 
 // ============ WASM Stack (Independent Stack with Guard Page) ============
-
-///|
-/// Allocate an independent WASM stack with guard page protection.
-/// The stack is mmap-allocated and has a guard page at the bottom.
-/// When the WASM code overflows the stack, it hits the guard page
-/// and triggers a controlled "call stack exhausted" trap.
-///
-/// Parameters:
-///   ctx_ptr: JIT context pointer
-///   stack_size: Size of the stack in bytes (recommended: 1MB = 1048576)
-///
-/// Returns: 0 on success, -1 on failure
-extern "c" fn c_jit_alloc_wasm_stack(
-  ctx_ptr : Int64,
-  stack_size : Int64,
-) -> Int = "wasmoon_jit_alloc_wasm_stack"
-
-///|
-/// Get the WASM stack top pointer from a context.
-/// Returns 0 if no WASM stack is allocated.
-extern "c" fn c_jit_get_wasm_stack_top(ctx_ptr : Int64) -> Int64 = "wasmoon_jit_get_wasm_stack_top"
 
 ///|
 /// GC-managed version of stack-switching call.
@@ -717,111 +551,6 @@ extern "c" fn c_jit_get_sock_send_ptr() -> Int64 = "wasmoon_jit_get_sock_send_pt
 /// Get sock_shutdown trampoline pointer (stub - returns ENOTSUP)
 extern "c" fn c_jit_get_sock_shutdown_ptr() -> Int64 = "wasmoon_jit_get_sock_shutdown_ptr"
 
-// ============ WASI Context Initialization ============
-
-///|
-/// Initialize WASI fd table and preopens
-extern "c" fn c_jit_init_wasi_fds(ctx_ptr : Int64, preopen_count : Int) -> Unit = "wasmoon_jit_init_wasi_fds"
-
-///|
-/// Initialize WASI fd table with stdout/stderr redirected to /dev/null (for testing)
-extern "c" fn c_jit_init_wasi_fds_quiet(
-  ctx_ptr : Int64,
-  preopen_count : Int,
-) -> Unit = "wasmoon_jit_init_wasi_fds_quiet"
-
-///|
-/// Add a preopened directory
-#borrow(host_path, guest_path)
-extern "c" fn c_jit_add_preopen(
-  ctx_ptr : Int64,
-  idx : Int,
-  host_path : FixedArray[Byte],
-  guest_path : FixedArray[Byte],
-) -> Unit = "wasmoon_jit_add_preopen"
-
-///|
-/// Enable or disable stdout capture for WASI
-extern "c" fn c_jit_set_wasi_stdout_capture(
-  ctx_ptr : Int64,
-  enabled : Int,
-) -> Unit = "wasmoon_jit_set_wasi_stdout_capture"
-
-///|
-/// Enable or disable stderr capture for WASI
-extern "c" fn c_jit_set_wasi_stderr_capture(
-  ctx_ptr : Int64,
-  enabled : Int,
-) -> Unit = "wasmoon_jit_set_wasi_stderr_capture"
-
-///|
-/// Set stdin buffer for WASI (custom stdin)
-#borrow(data)
-extern "c" fn c_jit_set_wasi_stdin_buffer(
-  ctx_ptr : Int64,
-  data : Bytes,
-  len : Int,
-) -> Unit = "wasmoon_jit_set_wasi_stdin_buffer"
-
-///|
-/// Set stdin callback for WASI (custom stdin)
-#owned(closure)
-extern "c" fn c_jit_set_wasi_stdin_callback(
-  ctx_ptr : Int64,
-  call_closure : FuncRef[(() -> Bytes) -> Bytes],
-  closure : () -> Bytes,
-) -> Unit = "wasmoon_jit_set_wasi_stdin_callback"
-
-///|
-/// Clear stdin callback for WASI
-extern "c" fn c_jit_clear_wasi_stdin_callback(ctx_ptr : Int64) -> Unit = "wasmoon_jit_clear_wasi_stdin_callback"
-
-///|
-/// Clear stdin buffer for WASI
-extern "c" fn c_jit_clear_wasi_stdin_buffer(ctx_ptr : Int64) -> Unit = "wasmoon_jit_clear_wasi_stdin_buffer"
-
-///|
-/// Take captured stdout bytes
-extern "c" fn c_jit_take_wasi_stdout(ctx_ptr : Int64) -> Bytes = "wasmoon_jit_take_wasi_stdout"
-
-///|
-/// Take captured stderr bytes
-extern "c" fn c_jit_take_wasi_stderr(ctx_ptr : Int64) -> Bytes = "wasmoon_jit_take_wasi_stderr"
-
-///|
-/// Initialize args array
-extern "c" fn c_jit_set_wasi_args(ctx_ptr : Int64, argc : Int) -> Unit = "wasmoon_jit_set_wasi_args"
-
-///|
-/// Set a single arg
-#borrow(arg)
-extern "c" fn c_jit_set_wasi_arg(
-  ctx_ptr : Int64,
-  idx : Int,
-  arg : FixedArray[Byte],
-) -> Unit = "wasmoon_jit_set_wasi_arg"
-
-///|
-/// Initialize env array
-extern "c" fn c_jit_set_wasi_envs(ctx_ptr : Int64, envc : Int) -> Unit = "wasmoon_jit_set_wasi_envs"
-
-///|
-/// Set a single env variable
-#borrow(env)
-extern "c" fn c_jit_set_wasi_env(
-  ctx_ptr : Int64,
-  idx : Int,
-  env : FixedArray[Byte],
-) -> Unit = "wasmoon_jit_set_wasi_env"
-
-///|
-/// Get WASI exit code from context (-1 if none)
-extern "c" fn c_jit_get_wasi_exit_code(ctx_ptr : Int64) -> Int = "wasmoon_jit_get_wasi_exit_code"
-
-///|
-/// Clear WASI exit state in context
-extern "c" fn c_jit_clear_wasi_exit(ctx_ptr : Int64) -> Unit = "wasmoon_jit_clear_wasi_exit"
-
 // ============ Spectest Trampolines ============
 
 ///|
@@ -1006,116 +735,9 @@ extern "c" fn c_jit_get_gc_push_root_scope_ptr() -> Int64 = "wasmoon_jit_get_gc_
 extern "c" fn c_jit_get_gc_pop_root_scope_ptr() -> Int64 = "wasmoon_jit_get_gc_pop_root_scope_ptr"
 
 ///|
-/// Set type cache for GC operations
-/// types_data: array of [super_idx, kind] pairs per type
-#borrow(types_data)
-extern "c" fn c_jit_gc_set_type_cache(
-  ctx_ptr : Int64,
-  types_data : FixedArray[Int],
-  num_types : Int,
-) -> Unit = "wasmoon_jit_gc_set_type_cache"
-
-///|
-/// Set canonical type indices for subtyping
-#borrow(canonical)
-extern "c" fn c_jit_gc_set_canonical_indices(
-  ctx_ptr : Int64,
-  canonical : FixedArray[Int],
-  num_types : Int,
-) -> Unit = "wasmoon_jit_gc_set_canonical_indices"
-
-///|
-/// Set function type indices for funcref subtyping
-#borrow(func_type_indices)
-extern "c" fn c_jit_gc_set_func_type_indices(
-  ctx_ptr : Int64,
-  func_type_indices : FixedArray[Int],
-  num_funcs : Int,
-) -> Unit = "wasmoon_jit_gc_set_func_type_indices"
-
-///|
-/// Set function table pointer for funcref lookup
-extern "c" fn c_jit_gc_set_func_table(
-  ctx_ptr : Int64,
-  func_table_ptr : Int64,
-  num_funcs : Int,
-) -> Unit = "wasmoon_jit_gc_set_func_table"
-
-///|
-/// Clear GC cache after JIT execution
-extern "c" fn c_jit_gc_clear_cache(ctx_ptr : Int64) -> Unit = "wasmoon_jit_gc_clear_cache"
-
-///|
-/// Set GC heap pointer for JIT execution
-extern "c" fn c_jit_gc_set_heap(ctx_ptr : Int64, heap_ptr : Int64) -> Unit = "wasmoon_jit_gc_set_heap"
-
-///|
-/// Clear GC heap pointer after JIT execution
-extern "c" fn c_jit_gc_clear_heap(ctx_ptr : Int64) -> Unit = "wasmoon_jit_gc_clear_heap"
-
-///|
 /// Clear the GC heap while keeping the managed context alive for the C call.
 #borrow(jit_context)
 extern "c" fn c_jit_gc_clear_heap_managed(jit_context : JITContext) -> Unit = "wasmoon_jit_gc_clear_heap_managed"
-
-///|
-/// Push a JIT frame node for GC bookkeeping.
-extern "c" fn c_jit_gc_begin_frame(ctx_ptr : Int64, frame_id : Int64) -> Unit = "wasmoon_jit_gc_begin_frame"
-
-///|
-/// Pop a JIT frame node for GC bookkeeping.
-extern "c" fn c_jit_gc_end_frame(ctx_ptr : Int64) -> Unit = "wasmoon_jit_gc_end_frame"
-
-///|
-/// Trigger GC for allocation retry with explicit roots.
-#borrow(roots)
-extern "c" fn c_jit_gc_collect_for_alloc(
-  ctx_ptr : Int64,
-  roots : FixedArray[Int64],
-  root_count : Int,
-) -> Int = "wasmoon_jit_gc_collect_for_alloc"
-
-///|
-/// Set context-local scratch roots merged by `c_jit_gc_collect_for_alloc`.
-#borrow(roots)
-extern "c" fn c_jit_gc_set_root_scratch(
-  ctx_ptr : Int64,
-  roots : FixedArray[Int64],
-  root_count : Int,
-) -> Int = "wasmoon_jit_gc_set_root_scratch"
-
-///|
-/// Set safepoint metadata table pointer for current context.
-extern "c" fn c_jit_gc_set_safepoint_table(
-  ctx_ptr : Int64,
-  table_ptr : Int64,
-) -> Unit = "wasmoon_jit_gc_set_safepoint_table"
-
-///|
-/// Install per-function safepoint metadata into context-owned storage.
-/// Returns 1 on success, 0 on failure.
-#borrow(stackmap_blob, code_offsets)
-extern "c" fn c_jit_gc_set_func_safepoints(
-  ctx_ptr : Int64,
-  func_idx : Int,
-  stackmap_blob : Bytes,
-  stackmap_blob_size : Int,
-  code_offsets : FixedArray[Int],
-  safepoint_count : Int,
-) -> Int = "wasmoon_jit_gc_set_func_safepoints"
-
-///|
-/// Select currently active safepoint table by wasm function index.
-/// Pass func_idx < 0 to clear active table.
-extern "c" fn c_jit_gc_use_func_safepoints(
-  ctx_ptr : Int64,
-  func_idx : Int,
-) -> Unit = "wasmoon_jit_gc_use_func_safepoints"
-
-///|
-/// Set GC heap pointer in VMContext for inline allocation
-/// This enables ctx-passing GC libcalls
-extern "c" fn c_jit_ctx_set_gc_heap(ctx_ptr : Int64, heap_ptr : Int64) -> Unit = "wasmoon_jit_ctx_set_gc_heap"
 
 // ============ C GC Heap ============
 
@@ -1127,52 +749,6 @@ extern "c" fn c_gc_heap_new(capacity : Int64) -> Int64 = "wasmoon_gc_heap_new"
 ///|
 /// Free a GC heap and all its memory
 extern "c" fn c_gc_heap_free(heap : Int64) -> Unit = "wasmoon_gc_heap_free"
-
-// ============ Segment Setup (bulk memory/table + GC segment ops) ============
-
-///|
-/// Initialize per-context data segment storage.
-extern "c" fn c_jit_ctx_init_data_segments(
-  ctx_ptr : Int64,
-  count : Int,
-) -> Unit = "wasmoon_jit_ctx_init_data_segments"
-
-///|
-/// Add a single data segment to a context (ownership transferred to C).
-/// is_dropped: 0/1 initial dropped flag.
-#borrow(data)
-extern "c" fn c_jit_ctx_add_data_segment(
-  ctx_ptr : Int64,
-  idx : Int,
-  data : FixedArray[Byte],
-  size : Int,
-  is_dropped : Int,
-) -> Unit = "wasmoon_jit_ctx_add_data_segment"
-
-///|
-/// Initialize per-context element segment storage.
-extern "c" fn c_jit_ctx_init_elem_segments(
-  ctx_ptr : Int64,
-  count : Int,
-) -> Unit = "wasmoon_jit_ctx_init_elem_segments"
-
-///|
-/// Add a single element segment to a context (ownership transferred to C).
-/// Each segment stores pairs: (value, type_idx) for each element.
-/// size: number of elements (not Int64 slots).
-/// is_dropped: 0/1 initial dropped flag.
-#borrow(data)
-extern "c" fn c_jit_ctx_add_elem_segment(
-  ctx_ptr : Int64,
-  idx : Int,
-  data : FixedArray[Int64],
-  size : Int,
-  is_dropped : Int,
-) -> Unit = "wasmoon_jit_ctx_add_elem_segment"
-
-///|
-/// Clear all segment state from the context (frees owned arrays).
-extern "c" fn c_jit_ctx_clear_segments(ctx_ptr : Int64) -> Unit = "wasmoon_jit_ctx_clear_segments"
 
 // ============ Struct Operations ============
 
@@ -1390,25 +966,6 @@ extern "c" fn c_jit_get_exception_throw_ptr() -> Int64 = "wasmoon_jit_get_except
 extern "c" fn c_jit_get_exception_throw_tag_ptr() -> Int64 = "wasmoon_jit_get_exception_throw_tag_ptr"
 
 ///|
-/// Throw an exception with empty payload from host-side bridge code.
-/// Signature: throw(ctx: *jit_context_t, tag_addr: i32, 0, 0) -> noreturn
-extern "c" fn c_jit_exception_throw_tag(
-  ctx_ptr : Int64,
-  tag_addr : Int,
-) -> Unit = "wasmoon_jit_exception_throw_tag"
-
-///|
-/// Throw an exception with payload values from host-side bridge code.
-/// Signature: throw(ctx: *jit_context_t, tag_addr: i32, values: *i64, count: i32) -> noreturn
-#borrow(values)
-extern "c" fn c_jit_exception_throw_values(
-  ctx_ptr : Int64,
-  tag_addr : Int,
-  values : FixedArray[Int64],
-  count : Int,
-) -> Unit = "wasmoon_jit_exception_throw_values"
-
-///|
 /// Get exception throw_ref function pointer for JIT
 /// Signature: throw_ref(ctx: *jit_context_t, exnref: i64) -> noreturn
 extern "c" fn c_jit_get_exception_throw_ref_ptr() -> Int64 = "wasmoon_jit_get_exception_throw_ref_ptr"
@@ -1522,3 +1079,430 @@ extern "c" fn c_dwarf_capture_backtrace_ex(
   frames_out : FixedArray[Int64],
   max_frames : Int,
 ) -> Int = "wasmoon_dwarf_capture_backtrace_ex"
+
+// ============ Managed JITContext Operations ============
+
+///|
+#borrow(jit_context)
+extern "c" fn c_jit_context_is_valid(jit_context : JITContext) -> Int = "wasmoon_jit_context_is_valid"
+
+///|
+#borrow(jit_context)
+extern "c" fn c_jit_ctx_set_func_managed(
+  jit_context : JITContext,
+  idx : Int,
+  func_ptr : Int64,
+) -> Unit = "wasmoon_jit_ctx_set_func_managed"
+
+///|
+#borrow(jit_context)
+extern "c" fn c_jit_ctx_set_memory_managed(
+  jit_context : JITContext,
+  mem0_ptr : Int64,
+) -> Unit = "wasmoon_jit_ctx_set_memory_managed"
+
+///|
+#borrow(jit_context)
+extern "c" fn c_jit_ctx_set_globals_managed(
+  jit_context : JITContext,
+  globals_ptr : Int64,
+) -> Unit = "wasmoon_jit_ctx_set_globals_managed"
+
+///|
+#borrow(jit_context)
+extern "c" fn c_jit_ctx_get_func_table_managed(
+  jit_context : JITContext,
+) -> Int64 = "wasmoon_jit_ctx_get_func_table_managed"
+
+///|
+#borrow(jit_context)
+extern "c" fn c_jit_ctx_get_func_count_managed(jit_context : JITContext) -> Int = "wasmoon_jit_ctx_get_func_count_managed"
+
+///|
+#borrow(jit_context)
+extern "c" fn c_jit_ctx_get_table_ptr_managed(
+  jit_context : JITContext,
+  table_idx : Int,
+) -> Int64 = "wasmoon_jit_ctx_get_table_ptr_managed"
+
+///|
+#borrow(jit_context)
+extern "c" fn c_jit_ctx_get_table_size_managed(
+  jit_context : JITContext,
+  table_idx : Int,
+) -> Int = "wasmoon_jit_ctx_get_table_size_managed"
+
+///|
+#borrow(jit_context)
+extern "c" fn c_jit_ctx_alloc_indirect_table_managed(
+  jit_context : JITContext,
+  count : Int,
+) -> Int = "wasmoon_jit_ctx_alloc_indirect_table_managed"
+
+///|
+#borrow(jit_context)
+extern "c" fn c_jit_ctx_set_indirect_managed(
+  jit_context : JITContext,
+  table_idx : Int,
+  func_idx : Int,
+  type_idx : Int,
+) -> Unit = "wasmoon_jit_ctx_set_indirect_managed"
+
+///|
+#borrow(jit_context, memory_ptrs)
+extern "c" fn c_jit_ctx_set_memory_pointers_managed(
+  jit_context : JITContext,
+  memory_ptrs : FixedArray[Int64],
+  memory_count : Int,
+) -> Unit = "wasmoon_jit_ctx_set_memory_pointers_managed"
+
+///|
+#borrow(jit_context, table_ptrs, table_sizes, table_max_sizes)
+extern "c" fn c_jit_ctx_set_table_pointers_managed(
+  jit_context : JITContext,
+  table_ptrs : FixedArray[Int64],
+  table_sizes : FixedArray[Int],
+  table_max_sizes : FixedArray[Int],
+  table_count : Int,
+) -> Unit = "wasmoon_jit_ctx_set_table_pointers_managed"
+
+///|
+#borrow(jit_context)
+extern "c" fn c_jit_ctx_alloc_guarded_memory_managed(
+  jit_context : JITContext,
+  initial_pages : Int64,
+  max_pages : Int64,
+) -> Int64 = "wasmoon_jit_ctx_alloc_guarded_memory_managed"
+
+///|
+#borrow(jit_context)
+extern "c" fn c_jit_ctx_get_memory_ptr_managed(
+  jit_context : JITContext,
+  memidx : Int,
+) -> Int64 = "wasmoon_jit_ctx_get_memory_ptr_managed"
+
+///|
+#borrow(jit_context)
+extern "c" fn c_jit_ctx_get_memory_size_managed(
+  jit_context : JITContext,
+  memidx : Int,
+) -> Int64 = "wasmoon_jit_ctx_get_memory_size_managed"
+
+///|
+#borrow(jit_context)
+extern "c" fn c_jit_exception_throw_tag_managed(
+  jit_context : JITContext,
+  tag_addr : Int,
+) -> Unit = "wasmoon_jit_exception_throw_tag_managed"
+
+///|
+#borrow(jit_context, values)
+extern "c" fn c_jit_exception_throw_values_managed(
+  jit_context : JITContext,
+  tag_addr : Int,
+  values : FixedArray[Int64],
+  count : Int,
+) -> Unit = "wasmoon_jit_exception_throw_values_managed"
+
+///|
+#borrow(jit_context)
+extern "c" fn c_jit_ctx_init_data_segments_managed(
+  jit_context : JITContext,
+  count : Int,
+) -> Unit = "wasmoon_jit_ctx_init_data_segments_managed"
+
+///|
+#borrow(jit_context, data)
+extern "c" fn c_jit_ctx_add_data_segment_managed(
+  jit_context : JITContext,
+  idx : Int,
+  data : FixedArray[Byte],
+  size : Int,
+  dropped : Int,
+) -> Unit = "wasmoon_jit_ctx_add_data_segment_managed"
+
+///|
+#borrow(jit_context)
+extern "c" fn c_jit_ctx_init_elem_segments_managed(
+  jit_context : JITContext,
+  count : Int,
+) -> Unit = "wasmoon_jit_ctx_init_elem_segments_managed"
+
+///|
+#borrow(jit_context, data)
+extern "c" fn c_jit_ctx_add_elem_segment_managed(
+  jit_context : JITContext,
+  idx : Int,
+  data : FixedArray[Int64],
+  size : Int,
+  dropped : Int,
+) -> Unit = "wasmoon_jit_ctx_add_elem_segment_managed"
+
+///|
+#borrow(jit_context)
+extern "c" fn c_jit_ctx_clear_segments_managed(
+  jit_context : JITContext,
+) -> Unit = "wasmoon_jit_ctx_clear_segments_managed"
+
+///|
+#borrow(jit_context)
+extern "c" fn c_jit_alloc_wasm_stack_managed(
+  jit_context : JITContext,
+  stack_size : Int64,
+) -> Int = "wasmoon_jit_alloc_wasm_stack_managed"
+
+///|
+#borrow(jit_context)
+extern "c" fn c_jit_get_wasm_stack_top_managed(
+  jit_context : JITContext,
+) -> Int64 = "wasmoon_jit_get_wasm_stack_top_managed"
+
+///|
+#borrow(jit_context)
+#owned(closure)
+extern "c" fn c_jit_set_hostcall_callback_managed(
+  jit_context : JITContext,
+  call_closure : FuncRef[(() -> Int) -> Int],
+  closure : () -> Int,
+) -> Unit = "wasmoon_jit_set_hostcall_callback_managed"
+
+///|
+#borrow(jit_context)
+extern "c" fn c_jit_clear_hostcall_callback_managed(
+  jit_context : JITContext,
+) -> Unit = "wasmoon_jit_clear_hostcall_callback_managed"
+
+///|
+#borrow(jit_context)
+#owned(closure)
+extern "c" fn c_jit_set_cancellation_callback_managed(
+  jit_context : JITContext,
+  call_closure : FuncRef[(() -> Bool) -> Int],
+  closure : () -> Bool,
+) -> Unit = "wasmoon_jit_set_cancellation_callback_managed"
+
+///|
+#borrow(jit_context)
+extern "c" fn c_jit_clear_cancellation_callback_managed(
+  jit_context : JITContext,
+) -> Unit = "wasmoon_jit_clear_cancellation_callback_managed"
+
+///|
+#borrow(jit_context)
+extern "c" fn c_jit_gc_environment_is_clear_managed(
+  jit_context : JITContext,
+) -> Int = "wasmoon_jit_gc_environment_is_clear_managed"
+
+///|
+#borrow(jit_context, types_data)
+extern "c" fn c_jit_gc_set_type_cache_managed(
+  jit_context : JITContext,
+  types_data : FixedArray[Int],
+  num_types : Int,
+) -> Unit = "wasmoon_jit_gc_set_type_cache_managed"
+
+///|
+#borrow(jit_context, canonical)
+extern "c" fn c_jit_gc_set_canonical_indices_managed(
+  jit_context : JITContext,
+  canonical : FixedArray[Int],
+  num_types : Int,
+) -> Unit = "wasmoon_jit_gc_set_canonical_indices_managed"
+
+///|
+#borrow(jit_context, func_type_indices)
+extern "c" fn c_jit_gc_set_func_type_indices_managed(
+  jit_context : JITContext,
+  func_type_indices : FixedArray[Int],
+  num_funcs : Int,
+) -> Unit = "wasmoon_jit_gc_set_func_type_indices_managed"
+
+///|
+#borrow(jit_context)
+extern "c" fn c_jit_gc_set_func_table_managed(
+  jit_context : JITContext,
+  func_table_ptr : Int64,
+  num_funcs : Int,
+) -> Unit = "wasmoon_jit_gc_set_func_table_managed"
+
+///|
+#borrow(jit_context)
+extern "c" fn c_jit_gc_clear_cache_managed(jit_context : JITContext) -> Unit = "wasmoon_jit_gc_clear_cache_managed"
+
+///|
+#borrow(jit_context)
+extern "c" fn c_jit_gc_set_heap_managed(
+  jit_context : JITContext,
+  heap_ptr : Int64,
+) -> Unit = "wasmoon_jit_gc_set_heap_managed"
+
+///|
+#borrow(jit_context)
+extern "c" fn c_jit_ctx_set_gc_heap_managed(
+  jit_context : JITContext,
+  heap_ptr : Int64,
+) -> Unit = "wasmoon_jit_ctx_set_gc_heap_managed"
+
+///|
+#borrow(jit_context)
+extern "c" fn c_jit_gc_begin_frame_managed(
+  jit_context : JITContext,
+  frame_id : Int64,
+) -> Unit = "wasmoon_jit_gc_begin_frame_managed"
+
+///|
+#borrow(jit_context)
+extern "c" fn c_jit_gc_end_frame_managed(jit_context : JITContext) -> Unit = "wasmoon_jit_gc_end_frame_managed"
+
+///|
+#borrow(jit_context, roots)
+extern "c" fn c_jit_gc_collect_for_alloc_managed(
+  jit_context : JITContext,
+  roots : FixedArray[Int64],
+  root_count : Int,
+) -> Int = "wasmoon_jit_gc_collect_for_alloc_managed"
+
+///|
+#borrow(jit_context, roots)
+extern "c" fn c_jit_gc_set_root_scratch_managed(
+  jit_context : JITContext,
+  roots : FixedArray[Int64],
+  root_count : Int,
+) -> Int = "wasmoon_jit_gc_set_root_scratch_managed"
+
+///|
+#borrow(jit_context)
+extern "c" fn c_jit_gc_set_safepoint_table_managed(
+  jit_context : JITContext,
+  table_ptr : Int64,
+) -> Unit = "wasmoon_jit_gc_set_safepoint_table_managed"
+
+///|
+#borrow(jit_context, stackmap_blob, code_offsets)
+extern "c" fn c_jit_gc_set_func_safepoints_managed(
+  jit_context : JITContext,
+  func_idx : Int,
+  stackmap_blob : Bytes,
+  stackmap_blob_size : Int,
+  code_offsets : FixedArray[Int],
+  safepoint_count : Int,
+) -> Int = "wasmoon_jit_gc_set_func_safepoints_managed"
+
+///|
+#borrow(jit_context)
+extern "c" fn c_jit_gc_use_func_safepoints_managed(
+  jit_context : JITContext,
+  func_idx : Int,
+) -> Unit = "wasmoon_jit_gc_use_func_safepoints_managed"
+
+///|
+#borrow(jit_context)
+extern "c" fn c_jit_init_wasi_fds_managed(
+  jit_context : JITContext,
+  preopen_count : Int,
+) -> Unit = "wasmoon_jit_init_wasi_fds_managed"
+
+///|
+#borrow(jit_context)
+extern "c" fn c_jit_init_wasi_fds_quiet_managed(
+  jit_context : JITContext,
+  preopen_count : Int,
+) -> Unit = "wasmoon_jit_init_wasi_fds_quiet_managed"
+
+///|
+#borrow(jit_context, host_path, guest_path)
+extern "c" fn c_jit_add_preopen_managed(
+  jit_context : JITContext,
+  idx : Int,
+  host_path : FixedArray[Byte],
+  guest_path : FixedArray[Byte],
+) -> Unit = "wasmoon_jit_add_preopen_managed"
+
+///|
+#borrow(jit_context)
+extern "c" fn c_jit_set_wasi_stdout_capture_managed(
+  jit_context : JITContext,
+  enabled : Int,
+) -> Unit = "wasmoon_jit_set_wasi_stdout_capture_managed"
+
+///|
+#borrow(jit_context)
+extern "c" fn c_jit_set_wasi_stderr_capture_managed(
+  jit_context : JITContext,
+  enabled : Int,
+) -> Unit = "wasmoon_jit_set_wasi_stderr_capture_managed"
+
+///|
+#borrow(jit_context, data)
+extern "c" fn c_jit_set_wasi_stdin_buffer_managed(
+  jit_context : JITContext,
+  data : Bytes,
+  len : Int,
+) -> Unit = "wasmoon_jit_set_wasi_stdin_buffer_managed"
+
+///|
+#borrow(jit_context)
+#owned(closure)
+extern "c" fn c_jit_set_wasi_stdin_callback_managed(
+  jit_context : JITContext,
+  call_closure : FuncRef[(() -> Bytes) -> Bytes],
+  closure : () -> Bytes,
+) -> Unit = "wasmoon_jit_set_wasi_stdin_callback_managed"
+
+///|
+#borrow(jit_context)
+extern "c" fn c_jit_clear_wasi_stdin_callback_managed(
+  jit_context : JITContext,
+) -> Unit = "wasmoon_jit_clear_wasi_stdin_callback_managed"
+
+///|
+#borrow(jit_context)
+extern "c" fn c_jit_clear_wasi_stdin_buffer_managed(
+  jit_context : JITContext,
+) -> Unit = "wasmoon_jit_clear_wasi_stdin_buffer_managed"
+
+///|
+#borrow(jit_context)
+extern "c" fn c_jit_take_wasi_stdout_managed(jit_context : JITContext) -> Bytes = "wasmoon_jit_take_wasi_stdout_managed"
+
+///|
+#borrow(jit_context)
+extern "c" fn c_jit_take_wasi_stderr_managed(jit_context : JITContext) -> Bytes = "wasmoon_jit_take_wasi_stderr_managed"
+
+///|
+#borrow(jit_context)
+extern "c" fn c_jit_set_wasi_args_managed(
+  jit_context : JITContext,
+  argc : Int,
+) -> Unit = "wasmoon_jit_set_wasi_args_managed"
+
+///|
+#borrow(jit_context, arg)
+extern "c" fn c_jit_set_wasi_arg_managed(
+  jit_context : JITContext,
+  idx : Int,
+  arg : FixedArray[Byte],
+) -> Unit = "wasmoon_jit_set_wasi_arg_managed"
+
+///|
+#borrow(jit_context)
+extern "c" fn c_jit_set_wasi_envs_managed(
+  jit_context : JITContext,
+  envc : Int,
+) -> Unit = "wasmoon_jit_set_wasi_envs_managed"
+
+///|
+#borrow(jit_context, env)
+extern "c" fn c_jit_set_wasi_env_managed(
+  jit_context : JITContext,
+  idx : Int,
+  env : FixedArray[Byte],
+) -> Unit = "wasmoon_jit_set_wasi_env_managed"
+
+///|
+#borrow(jit_context)
+extern "c" fn c_jit_get_wasi_exit_code_managed(jit_context : JITContext) -> Int = "wasmoon_jit_get_wasi_exit_code_managed"
+
+///|
+#borrow(jit_context)
+extern "c" fn c_jit_clear_wasi_exit_managed(jit_context : JITContext) -> Unit = "wasmoon_jit_clear_wasi_exit_managed"

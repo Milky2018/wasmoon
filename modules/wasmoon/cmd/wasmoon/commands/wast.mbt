@@ -14,16 +14,15 @@ fn is_truthy_env(v : String) -> Bool {
 
 ///|
 /// Run a WAST test script
-fn run_wast(wast_path : String, use_jit : Bool, show_success : Bool) -> Unit {
+fn run_wast(wast_path : String, use_jit : Bool, show_success : Bool) -> Int {
   wast_jit_compiled_modules.val = 0
   wast_jit_compiled_functions.val = 0
   wast_jit_attempts.val = 0
   // Read WAST file
   let content = @fs.read_file_to_string(wast_path) catch {
-    @fs.IOError(message) => {
+    IOError(message) => {
       @logger.error("reading file: \{message}")
-      exit_failure()
-      return
+      return 1
     }
   }
 
@@ -31,8 +30,7 @@ fn run_wast(wast_path : String, use_jit : Bool, show_success : Bool) -> Unit {
   let script = @wast.parse(content) catch {
     e => {
       @logger.error("parsing WAST: \{e}")
-      exit_failure()
-      return
+      return 1
     }
   }
 
@@ -86,8 +84,9 @@ fn run_wast(wast_path : String, use_jit : Bool, show_success : Bool) -> Unit {
   // chains, and to any harness that does not parse this text — which is why
   // `scripts/run_all_wast.py` had to infer the verdict from stdout.
   if result.failed > 0 {
-    exit_failure()
+    return 1
   }
+  0
 }
 
 ///|
@@ -634,7 +633,6 @@ pub fn run_testsuite(
   wast_path : String,
   use_jit : Bool,
   show_success : Bool,
-) -> Unit {
-  // Delegate to run_wast - testsuite now uses WAST format
+) -> Int {
   run_wast(wast_path, use_jit, show_success)
 }

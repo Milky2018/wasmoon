@@ -180,6 +180,24 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_wasm_stack_top(int64_t ctx_ptr) {
     return (int64_t)ctx->wasm_stack_top;
 }
 
+extern int64_t wasmoon_jit_context_ptr(void *jit_context);
+
+MOONBIT_FFI_EXPORT int wasmoon_jit_alloc_wasm_stack_managed(
+    void *jit_context, int64_t stack_size
+) {
+    return wasmoon_jit_alloc_wasm_stack(
+        wasmoon_jit_context_ptr(jit_context), stack_size
+    );
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_wasm_stack_top_managed(
+    void *jit_context
+) {
+    return wasmoon_jit_get_wasm_stack_top(
+        wasmoon_jit_context_ptr(jit_context)
+    );
+}
+
 // Check if address is in WASM stack guard page (used by trap handler)
 MOONBIT_FFI_EXPORT int wasmoon_jit_is_guard_page_access(int64_t ctx_ptr, int64_t addr) {
     jit_context_t *ctx = (jit_context_t *)ctx_ptr;

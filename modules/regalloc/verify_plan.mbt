@@ -325,37 +325,9 @@ fn[F : FunctionView] verify_function_allocation(
   // root keep their index order at the end, matching the staged seeding
   // below.
   let priority = Array::make(block_count, block_count)
-  let postorder : Array[Int] = []
-  let visited = Array::make(block_count, false)
-  for root in 0..<block_count {
-    if root != 0 && has_predecessor[root] {
-      continue
-    }
-    if visited[root] {
-      continue
-    }
-    // Iterative depth-first search; the explicit stack carries the next
-    // successor index to visit for each open block.
-    let stack : Array[(Int, Int)] = [(root, 0)]
-    visited[root] = true
-    while stack.length() > 0 {
-      let (block, next_successor) = stack[stack.length() - 1]
-      let block_successors = successors[block]
-      if next_successor < block_successors.length() {
-        stack[stack.length() - 1] = (block, next_successor + 1)
-        let target = block_successors[next_successor]
-        if target >= 0 && target < block_count && !visited[target] {
-          visited[target] = true
-          stack.push((target, 0))
-        }
-      } else {
-        postorder.push(block)
-        stack.pop() |> ignore
-      }
-    }
-  }
-  for index in 0..<postorder.length() {
-    priority[postorder[postorder.length() - 1 - index]] = index
+  let order = reverse_postorder_from_roots(successors, has_predecessor)
+  for index, block in order {
+    priority[block] = index
   }
   let order = Array::makei(block_count, block => block)
   order.sort_by((left, right) => {

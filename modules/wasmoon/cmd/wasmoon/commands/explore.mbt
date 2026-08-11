@@ -23,7 +23,38 @@ pub fn run_explore(
   html_output : Bool,
   debug : Bool,
   target_name? : String = "host",
-) -> Unit {
+) -> Int {
+  run_explore_with_compiler(
+    wasm_path,
+    func_index,
+    opt_level,
+    stages,
+    html_output,
+    debug,
+    target_name,
+    fn(function, validation_context, target) raise {
+      @wasmoon_jit.compile_wasm_body_diagnostics_for_target(
+        function, validation_context, target,
+      )
+    },
+  )
+}
+
+///|
+fn run_explore_with_compiler(
+  wasm_path : String,
+  func_index : Int?,
+  opt_level : Int,
+  stages : Array[String],
+  html_output : Bool,
+  debug : Bool,
+  target_name : String,
+  compile : (
+    @milkir.Function,
+    @wasm_milkir.WasmValidationContext,
+    @wasmoon_jit.NativeTarget,
+  ) -> @wasmoon_jit.JitPipelineDiagnostics raise,
+) -> Int {
   debug |> ignore
   // Parse stages - empty means show all
   let show_all = stages.is_empty()
@@ -45,8 +76,7 @@ pub fn run_explore(
   let mod_ = load_module_from_path(wasm_path) catch {
     e => {
       @logger.error("loading module: \{e}")
-      exit_failure()
-      return
+      return 1
     }
   }
 
@@ -57,21 +87,36 @@ pub fn run_explore(
       // non-zero status. Printing it and returning 0 made `explore` claim
       // success for a module it never explored.
       @logger.error("validating module: \{e}")
-      exit_failure()
-      return
+      return 1
     }
   }
 
-  // Only now that there is a module to explore: the heading announces output
-  // that follows it, so emitting it earlier left a header on stdout for a
-  // report that never came.
+  // Count imports to convert between absolute and local function indices
+  // Absolute index = num_imports + local_index (matches JIT error messages)
+  let num_imports = count_func_imports(mod_.imports)
+  // Determine which functions to explore before emitting any report output.
+  // User provides an absolute WebAssembly function index (including imports),
+  // matching the indices shown in JIT diagnostics.
+  let func_indices : Array[Int] = match func_index {
+    Some(abs_idx) => {
+      let local_idx = abs_idx - num_imports
+      if local_idx < 0 || local_idx >= mod_.codes.length() {
+        @logger.error(
+          "function index \{abs_idx} out of range (\{num_imports}..\{num_imports + mod_.codes.length() - 1})",
+        )
+        return 1
+      }
+      [local_idx]
+    }
+    None => Array::makei(mod_.codes.length(), fn(i) { i })
+  }
+
+  // Only now that there is a report to produce: failures above must leave
+  // stdout empty so scripts can treat it as data.
   if !html_output {
     println("Exploring compilation: \{wasm_path}")
     println("=".repeat(60))
   }
-  // Count imports to convert between absolute and local function indices
-  // Absolute index = num_imports + local_index (matches JIT error messages)
-  let num_imports = count_func_imports(mod_.imports)
   let translation_context = @wasm_frontend.translation_context_from_module(
     mod_,
     @wasmoon.wasm_frontend_embedding_environment(),
@@ -84,26 +129,9 @@ pub fn run_explore(
     println("")
   }
 
-  // Determine which functions to explore
-  // User provides absolute WebAssembly function index (including imports)
-  // This matches the indices shown in JIT error messages (wasm=N)
-  let func_indices : Array[Int] = match func_index {
-    Some(abs_idx) => {
-      // Convert absolute index to local index
-      let local_idx = abs_idx - num_imports
-      if local_idx < 0 || local_idx >= mod_.codes.length() {
-        println(
-          "Error: function index \{abs_idx} out of range (\{num_imports}..\{num_imports + mod_.codes.length() - 1})",
-        )
-        return
-      }
-      [local_idx]
-    }
-    None => Array::makei(mod_.codes.length(), fn(i) { i })
-  }
-
   // Compile each function
   let compiled_funcs : Array[CompiledFunc] = []
+  let mut failed = false
   for local_idx in func_indices {
     let type_idx = mod_.funcs[local_idx]
     let func_type = mod_.validated_func_type_at(type_idx)
@@ -153,12 +181,9 @@ pub fn run_explore(
       name=func_name,
     ) catch {
       err => {
-        let text = "error: \{Repr(err)}"
-        if !html_output {
-          println("")
-          println("── Compiler Infrastructure ──")
-          println(text)
-        }
+        failed = true
+        let text = "Compiler infrastructure error: \{Repr(err)}"
+        @logger.error(text)
         if html_output {
           compiled_funcs.push({
             name: func_name,
@@ -189,21 +214,18 @@ pub fn run_explore(
       _ =>
         @wasmoon_jit.host_native_target() catch {
           err => {
-            if !html_output {
-              println("Unsupported host target: \{err}")
-            }
+            failed = true
+            @logger.error("unsupported host target: \{err}")
             continue
           }
         }
     }
-    let diagnostics = @wasmoon_jit.compile_wasm_body_diagnostics_for_target(
-      milk_result, wasm_validation_context, target,
-    ) catch {
+    let diagnostics = compile(milk_result, wasm_validation_context, target) catch {
       err => {
+        failed = true
         let text = "Native pipeline error: \{err}"
-        if !html_output {
-          println(text)
-        } else {
+        @logger.error(text)
+        if html_output {
           compiled_funcs.push({
             name: func_name,
             type_str: format_func_type(func_type),
@@ -294,13 +316,17 @@ pub fn run_explore(
     }
     let html = generate_html_report(compiled_funcs)
     @fs.write_string_to_file(path, html) catch {
-      @fs.IOError(message) => {
+      IOError(message) => {
         @logger.error("writing HTML report: \{message}")
-        exit_failure()
-        return
+        return 1
       }
     }
     println("HTML report written to: \{path}")
+  }
+  if failed {
+    1
+  } else {
+    0
   }
 }
 

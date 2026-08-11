@@ -6,66 +6,6 @@ priv struct WasmoonSemanticEnvironment {
 }
 
 ///|
-fn semantic_runtime_symbol(
-  symbols : @wasm_milkir.RuntimeSymbols,
-  capability : String,
-) -> String {
-  match capability {
-    "memory.grow" => symbols.memory_grow
-    "memory.size" => symbols.memory_size
-    "memory.fill" => symbols.memory_fill
-    "memory.copy" => symbols.memory_copy
-    "memory.init" => symbols.memory_init
-    "data.drop" => symbols.data_drop
-    "table.grow" => symbols.table_grow
-    "table.fill" => symbols.table_fill
-    "table.copy" => symbols.table_copy
-    "table.init" => symbols.table_init
-    "elem.drop" => symbols.elem_drop
-    "gc.ref_test" => symbols.gc_ref_test
-    "gc.ref_cast" => symbols.gc_ref_cast
-    "gc.struct_get" => symbols.gc_struct_get
-    "gc.struct_set" => symbols.gc_struct_set
-    "gc.array_get" => symbols.gc_array_get
-    "gc.array_set" => symbols.gc_array_set
-    "gc.array_len" => symbols.gc_array_len
-    "gc.array_fill" => symbols.gc_array_fill
-    "gc.array_copy" => symbols.gc_array_copy
-    "gc.array_new_data" => symbols.gc_array_new_data
-    "gc.array_new_elem" => symbols.gc_array_new_elem
-    "gc.array_init_data" => symbols.gc_array_init_data
-    "gc.array_init_elem" => symbols.gc_array_init_elem
-    "gc.type_check_subtype" => symbols.gc_type_check_subtype
-    "gc.register_struct_inline" => symbols.gc_register_struct_inline
-    "gc.register_array_inline" => symbols.gc_register_array_inline
-    "gc.alloc_struct_slow" => symbols.gc_alloc_struct_slow
-    "gc.alloc_array_from_values_slow" => symbols.gc_alloc_array_from_values_slow
-    "gc.alloc_array_slow" => symbols.gc_alloc_array_slow
-    "gc.struct_get_v128" => symbols.gc_struct_get_v128
-    "gc.struct_set_v128" => symbols.gc_struct_set_v128
-    "gc.array_get_v128" => symbols.gc_array_get_v128
-    "gc.array_set_v128" => symbols.gc_array_set_v128
-    "gc.array_fill_v128" => symbols.gc_array_fill_v128
-    "gc.alloc_struct_wide_slow" => symbols.gc_alloc_struct_wide_slow
-    "gc.alloc_array_wide_slow" => symbols.gc_alloc_array_wide_slow
-    "gc.alloc_array_from_slots_slow" => symbols.gc_alloc_array_from_slots_slow
-    "exception.try_begin" => symbols.exception_try_begin
-    "exception.try_end" => symbols.exception_try_end
-    "exception.throw" => symbols.exception_throw
-    "exception.throw_tag" => symbols.exception_throw_tag
-    "exception.throw_ref" => symbols.exception_throw_ref
-    "exception.delegate" => symbols.exception_delegate
-    "exception.get_tag" => symbols.exception_get_tag
-    "exception.get_value" => symbols.exception_get_value
-    "exception.get_value_count" => symbols.exception_get_value_count
-    "exception.sigsetjmp" => symbols.exception_sigsetjmp
-    "exception.spill_locals" => symbols.exception_spill_locals
-    "exception.get_spilled_local" => symbols.exception_get_spilled_local
-    _ => abort("missing Wasmoon runtime capability '\{capability}'")
-  }
-}
-
-///|
 fn wasmoon_semantic_environment(
   use_subtype_indirect_check : Bool,
   canonical_type_indices : Array[Int],
@@ -121,10 +61,8 @@ fn wasmoon_semantic_environment(
         raw_type_index
       }
     },
-    fn(capability) {
-      @semantic_machv.ExternalSymbol::new(
-        semantic_runtime_symbol(runtime_symbols, capability),
-      )
+    fn(helper) {
+      @semantic_machv.ExternalSymbol::new(runtime_symbols.symbol_name(helper))
     },
   )
   { wasm, field_paths, runtime_symbols }
@@ -136,13 +74,13 @@ fn wasmoon_allocation_symbols(
 ) -> Array[@semantic_machv.ExternalSymbol] {
   [
     @semantic_machv.ExternalSymbol::new(
-      environment.runtime_symbols.gc_alloc_struct_slow,
+      environment.runtime_symbols.symbol_name(GcAllocStructSlow),
     ),
     @semantic_machv.ExternalSymbol::new(
-      environment.runtime_symbols.gc_alloc_array_from_values_slow,
+      environment.runtime_symbols.symbol_name(GcAllocArrayFromValuesSlow),
     ),
     @semantic_machv.ExternalSymbol::new(
-      environment.runtime_symbols.gc_alloc_array_slow,
+      environment.runtime_symbols.symbol_name(GcAllocArraySlow),
     ),
   ]
 }

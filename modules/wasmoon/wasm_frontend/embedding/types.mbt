@@ -64,14 +64,6 @@ pub fn EmbeddingEnvironment::cancellation_safepoints(
 }
 
 ///|
-pub fn EmbeddingEnvironment::runtime_symbol(
-  self : EmbeddingEnvironment,
-  name : String,
-) -> @milkir.ExternalSymbol {
-  ExternalSymbol(self.runtime_symbol_prefix + "." + name)
-}
-
-///|
 pub fn EmbeddingEnvironment::wasm_runtime_symbols(
   self : EmbeddingEnvironment,
 ) -> @wasm_milkir.RuntimeSymbols {

@@ -59,7 +59,23 @@ fn rule_shift_of_zero() -> RewriteRule {
 }
 
 ///|
-/// (x << a) << b = x << (a + b) when a + b < 64
+/// Normalize two constant shift amounts using the operation's integer width.
+fn combined_shift_amount(
+  eg : EGraph,
+  class_id : EClassId,
+  a : Int64,
+  b : Int64,
+) -> (Int64, Int64)? {
+  guard eg.get_bits(class_id) is Some(bits) && (bits == 32 || bits == 64) else {
+    return None
+  }
+  let width = bits.to_int64()
+  let mask = width - 1L
+  Some(((a & mask) + (b & mask), width))
+}
+
+///|
+/// (x << a) << b = x << (a + b) when the normalized sum is below the width
 fn rule_shl_shl() -> RewriteRule {
   {
     apply: fn(eg, class_id) {
@@ -72,8 +88,9 @@ fn rule_shl_shl() -> RewriteRule {
             if inner.op is Shl &&
               inner.children.length() == 2 &&
               eg.find_const(inner.children[1]) is Some(a) {
-              let total = a + b
-              if total >= 0L && total < 64L {
+              if combined_shift_amount(eg, class_id, a, b)
+                is Some((total, width)) &&
+                total < width {
                 let total_const = eg.add_const(total)
                 let new_node = eg.add_shl(inner.children[0], total_const)
                 changed = eg.merge_changed(class_id, new_node) || changed
@@ -88,7 +105,8 @@ fn rule_shl_shl() -> RewriteRule {
 }
 
 ///|
-/// (x >> a) >> b = x >> (a + b) when a + b < 64 (unsigned)
+/// (x >> a) >> b = x >> (a + b) when the normalized sum is below
+/// the width (unsigned)
 fn rule_ushr_ushr() -> RewriteRule {
   {
     apply: fn(eg, class_id) {
@@ -101,8 +119,9 @@ fn rule_ushr_ushr() -> RewriteRule {
             if inner.op is Ushr &&
               inner.children.length() == 2 &&
               eg.find_const(inner.children[1]) is Some(a) {
-              let total = a + b
-              if total >= 0L && total < 64L {
+              if combined_shift_amount(eg, class_id, a, b)
+                is Some((total, width)) &&
+                total < width {
                 let total_const = eg.add_const(total)
                 let new_node = eg.add({
                   op: Ushr,
@@ -120,7 +139,8 @@ fn rule_ushr_ushr() -> RewriteRule {
 }
 
 ///|
-/// (x >> a) >> b = x >> (a + b) when a + b < 64 (signed)
+/// (x >> a) >> b = x >> (a + b) when the normalized sum is below
+/// the width (signed)
 fn rule_sshr_sshr() -> RewriteRule {
   {
     apply: fn(eg, class_id) {
@@ -133,8 +153,9 @@ fn rule_sshr_sshr() -> RewriteRule {
             if inner.op is Sshr &&
               inner.children.length() == 2 &&
               eg.find_const(inner.children[1]) is Some(a) {
-              let total = a + b
-              if total >= 0L && total < 64L {
+              if combined_shift_amount(eg, class_id, a, b)
+                is Some((total, width)) &&
+                total < width {
                 let total_const = eg.add_const(total)
                 let new_node = eg.add({
                   op: Sshr,
@@ -457,9 +478,9 @@ fn rule_shl_shl_overflow() -> RewriteRule {
             if inner.op is Shl &&
               inner.children.length() == 2 &&
               eg.find_const(inner.children[1]) is Some(k1) {
-              let total = k1 + k2
-              // Overflow for 64-bit and 32-bit
-              if total >= 64L {
+              if combined_shift_amount(eg, class_id, k1, k2)
+                is Some((total, width)) &&
+                total >= width {
                 let zero = eg.add_const(0L)
                 changed = eg.subsume_changed(class_id, zero) || changed
               }
@@ -487,8 +508,9 @@ fn rule_ushr_ushr_overflow() -> RewriteRule {
             if inner.op is Ushr &&
               inner.children.length() == 2 &&
               eg.find_const(inner.children[1]) is Some(k1) {
-              let total = k1 + k2
-              if total >= 64L {
+              if combined_shift_amount(eg, class_id, k1, k2)
+                is Some((total, width)) &&
+                total >= width {
                 let zero = eg.add_const(0L)
                 changed = eg.subsume_changed(class_id, zero) || changed
               }

@@ -516,10 +516,6 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_context_ptr(void *jit_context) {
     return *(int64_t *)jit_context;
 }
 
-MOONBIT_FFI_EXPORT void wasmoon_jit_context_keep_alive(void *jit_context) {
-    (void)jit_context;
-}
-
 MOONBIT_FFI_EXPORT int32_t wasmoon_jit_gc_environment_is_clear(int64_t ctx_ptr) {
     jit_context_t *ctx = (jit_context_t *)(uintptr_t)ctx_ptr;
     if (!ctx) return 0;
@@ -1768,3 +1764,272 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_gc_use_func_safepoints(
     jit_context_t *ctx = (jit_context_t *)(uintptr_t)ctx_ptr;
     ctx_gc_use_func_safepoints_internal(ctx, func_idx);
 }
+
+// Managed-context entry points for MoonBit.  Keeping the external object as a
+// C argument prevents its finalizer from running while an operation uses the
+// native context; MoonBit never receives the native context address.
+#define MANAGED_CTX(jit_context) wasmoon_jit_context_ptr(jit_context)
+
+MOONBIT_FFI_EXPORT int32_t wasmoon_jit_context_is_valid(void *jit_context) {
+    return MANAGED_CTX(jit_context) != 0;
+}
+
+MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_set_func_managed(
+    void *jit_context, int idx, int64_t func_ptr
+) {
+    wasmoon_jit_ctx_set_func(MANAGED_CTX(jit_context), idx, func_ptr);
+}
+
+MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_set_memory_managed(
+    void *jit_context, int64_t mem0_ptr
+) {
+    wasmoon_jit_ctx_set_memory(MANAGED_CTX(jit_context), mem0_ptr);
+}
+
+MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_set_globals_managed(
+    void *jit_context, int64_t globals_ptr
+) {
+    wasmoon_jit_ctx_set_globals(MANAGED_CTX(jit_context), globals_ptr);
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_ctx_get_func_table_managed(
+    void *jit_context
+) {
+    return wasmoon_jit_ctx_get_func_table(MANAGED_CTX(jit_context));
+}
+
+MOONBIT_FFI_EXPORT int32_t wasmoon_jit_ctx_get_func_count_managed(
+    void *jit_context
+) {
+    return wasmoon_jit_ctx_get_func_count(MANAGED_CTX(jit_context));
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_ctx_get_table_ptr_managed(
+    void *jit_context, int table_idx
+) {
+    return wasmoon_jit_ctx_get_table_ptr(MANAGED_CTX(jit_context), table_idx);
+}
+
+MOONBIT_FFI_EXPORT int32_t wasmoon_jit_ctx_get_table_size_managed(
+    void *jit_context, int table_idx
+) {
+    return wasmoon_jit_ctx_get_table_size(MANAGED_CTX(jit_context), table_idx);
+}
+
+MOONBIT_FFI_EXPORT int32_t wasmoon_jit_ctx_alloc_indirect_table_managed(
+    void *jit_context, int count
+) {
+    return wasmoon_jit_ctx_alloc_indirect_table(MANAGED_CTX(jit_context), count);
+}
+
+MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_set_indirect_managed(
+    void *jit_context, int table_idx, int func_idx, int type_idx
+) {
+    wasmoon_jit_ctx_set_indirect(
+        MANAGED_CTX(jit_context), table_idx, func_idx, type_idx
+    );
+}
+
+MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_set_memory_pointers_managed(
+    void *jit_context, int64_t *memory_ptrs, int memory_count
+) {
+    wasmoon_jit_ctx_set_memory_pointers(
+        MANAGED_CTX(jit_context), memory_ptrs, memory_count
+    );
+}
+
+MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_set_table_pointers_managed(
+    void *jit_context,
+    int64_t *table_ptrs,
+    int32_t *table_sizes,
+    int32_t *table_max_sizes,
+    int table_count
+) {
+    wasmoon_jit_ctx_set_table_pointers(
+        MANAGED_CTX(jit_context),
+        table_ptrs,
+        table_sizes,
+        table_max_sizes,
+        table_count
+    );
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_ctx_alloc_guarded_memory_managed(
+    void *jit_context, int64_t initial_pages, int64_t max_pages
+) {
+    return wasmoon_jit_ctx_alloc_guarded_memory(
+        MANAGED_CTX(jit_context), initial_pages, max_pages
+    );
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_ctx_get_memory_ptr_managed(
+    void *jit_context, int memidx
+) {
+    return wasmoon_jit_ctx_get_memory_ptr(MANAGED_CTX(jit_context), memidx);
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_ctx_get_memory_size_managed(
+    void *jit_context, int memidx
+) {
+    return wasmoon_jit_ctx_get_memory_size(MANAGED_CTX(jit_context), memidx);
+}
+
+MOONBIT_FFI_EXPORT int32_t wasmoon_jit_gc_environment_is_clear_managed(
+    void *jit_context
+) {
+    return wasmoon_jit_gc_environment_is_clear(MANAGED_CTX(jit_context));
+}
+
+MOONBIT_FFI_EXPORT void wasmoon_jit_gc_set_type_cache_managed(
+    void *jit_context, int32_t *types_data, int num_types
+) {
+    wasmoon_jit_gc_set_type_cache(
+        MANAGED_CTX(jit_context), types_data, num_types
+    );
+}
+
+MOONBIT_FFI_EXPORT void wasmoon_jit_gc_set_canonical_indices_managed(
+    void *jit_context, int32_t *canonical, int num_types
+) {
+    wasmoon_jit_gc_set_canonical_indices(
+        MANAGED_CTX(jit_context), canonical, num_types
+    );
+}
+
+MOONBIT_FFI_EXPORT void wasmoon_jit_gc_set_func_type_indices_managed(
+    void *jit_context, int32_t *indices, int num_funcs
+) {
+    wasmoon_jit_gc_set_func_type_indices(
+        MANAGED_CTX(jit_context), indices, num_funcs
+    );
+}
+
+MOONBIT_FFI_EXPORT void wasmoon_jit_gc_set_func_table_managed(
+    void *jit_context, int64_t func_table_ptr, int num_funcs
+) {
+    wasmoon_jit_gc_set_func_table(
+        MANAGED_CTX(jit_context), func_table_ptr, num_funcs
+    );
+}
+
+MOONBIT_FFI_EXPORT void wasmoon_jit_gc_clear_cache_managed(
+    void *jit_context
+) {
+    wasmoon_jit_gc_clear_cache(MANAGED_CTX(jit_context));
+}
+
+MOONBIT_FFI_EXPORT void wasmoon_jit_gc_set_heap_managed(
+    void *jit_context, int64_t heap_ptr
+) {
+    wasmoon_jit_gc_set_heap(MANAGED_CTX(jit_context), heap_ptr);
+}
+
+MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_set_gc_heap_managed(
+    void *jit_context, int64_t heap_ptr
+) {
+    wasmoon_jit_ctx_set_gc_heap(MANAGED_CTX(jit_context), heap_ptr);
+}
+
+MOONBIT_FFI_EXPORT void wasmoon_jit_gc_begin_frame_managed(
+    void *jit_context, int64_t frame_id
+) {
+    wasmoon_jit_gc_begin_frame(MANAGED_CTX(jit_context), frame_id);
+}
+
+MOONBIT_FFI_EXPORT void wasmoon_jit_gc_end_frame_managed(void *jit_context) {
+    wasmoon_jit_gc_end_frame(MANAGED_CTX(jit_context));
+}
+
+MOONBIT_FFI_EXPORT int32_t wasmoon_jit_gc_push_root_scope_managed(
+    void *jit_context, int64_t *roots, int32_t root_count
+) {
+    return wasmoon_jit_gc_push_root_scope(
+        MANAGED_CTX(jit_context), roots, root_count
+    );
+}
+
+MOONBIT_FFI_EXPORT void wasmoon_jit_gc_pop_root_scope_managed(
+    void *jit_context
+) {
+    wasmoon_jit_gc_pop_root_scope(MANAGED_CTX(jit_context));
+}
+
+MOONBIT_FFI_EXPORT int32_t wasmoon_jit_gc_collect_for_alloc_managed(
+    void *jit_context, int64_t *roots, int32_t root_count
+) {
+    return wasmoon_jit_gc_collect_for_alloc(
+        MANAGED_CTX(jit_context), roots, root_count
+    );
+}
+
+MOONBIT_FFI_EXPORT int32_t wasmoon_jit_gc_set_root_scratch_managed(
+    void *jit_context, int64_t *roots, int32_t root_count
+) {
+    return wasmoon_jit_gc_set_root_scratch(
+        MANAGED_CTX(jit_context), roots, root_count
+    );
+}
+
+MOONBIT_FFI_EXPORT void wasmoon_jit_gc_set_safepoint_table_managed(
+    void *jit_context, int64_t table_ptr
+) {
+    wasmoon_jit_gc_set_safepoint_table(MANAGED_CTX(jit_context), table_ptr);
+}
+
+MOONBIT_FFI_EXPORT int32_t wasmoon_jit_gc_set_func_safepoints_managed(
+    void *jit_context,
+    int32_t func_idx,
+    uint8_t *stackmap_blob,
+    int32_t stackmap_blob_size,
+    int32_t *code_offsets,
+    int32_t safepoint_count
+) {
+    return wasmoon_jit_gc_set_func_safepoints(
+        MANAGED_CTX(jit_context),
+        func_idx,
+        stackmap_blob,
+        stackmap_blob_size,
+        code_offsets,
+        safepoint_count
+    );
+}
+
+MOONBIT_FFI_EXPORT void wasmoon_jit_gc_use_func_safepoints_managed(
+    void *jit_context, int32_t func_idx
+) {
+    wasmoon_jit_gc_use_func_safepoints(MANAGED_CTX(jit_context), func_idx);
+}
+
+MOONBIT_FFI_EXPORT void wasmoon_jit_set_hostcall_callback_managed(
+    void *jit_context,
+    hostcall_callback_fn callback,
+    void *closure
+) {
+    wasmoon_jit_set_hostcall_callback(
+        MANAGED_CTX(jit_context), callback, closure
+    );
+}
+
+MOONBIT_FFI_EXPORT void wasmoon_jit_clear_hostcall_callback_managed(
+    void *jit_context
+) {
+    wasmoon_jit_clear_hostcall_callback(MANAGED_CTX(jit_context));
+}
+
+MOONBIT_FFI_EXPORT void wasmoon_jit_set_cancellation_callback_managed(
+    void *jit_context,
+    cancellation_callback_fn callback,
+    void *closure
+) {
+    wasmoon_jit_set_cancellation_callback(
+        MANAGED_CTX(jit_context), callback, closure
+    );
+}
+
+MOONBIT_FFI_EXPORT void wasmoon_jit_clear_cancellation_callback_managed(
+    void *jit_context
+) {
+    wasmoon_jit_clear_cancellation_callback(MANAGED_CTX(jit_context));
+}
+
+#undef MANAGED_CTX

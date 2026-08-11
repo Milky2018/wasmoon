@@ -119,10 +119,10 @@ pub fn Function::verify(self : Function) -> Unit raise VerifyError {
       require_owned_terminator_values(self, term)
     }
   }
-  let idom = CFG::build(self).compute_dominators()
+  let dominance = CFG::build(self).compute_dominance()
   for block in self.blocks {
     for inst_index, inst in block.instructions {
-      verify_inst(self, inst, definitions, block.id, inst_index, idom)
+      verify_inst(self, inst, definitions, block.id, inst_index, dominance)
     }
     if block.terminator is Some(term) {
       verify_terminator(
@@ -132,7 +132,7 @@ pub fn Function::verify(self : Function) -> Unit raise VerifyError {
         self.results,
         block.id,
         block.instructions.length(),
-        idom,
+        dominance,
       )
     }
   }
@@ -270,7 +270,7 @@ fn verify_defined(
   definitions : @hashmap.HashMap[Int, ValueDefinition],
   use_block : Int,
   use_position : Int,
-  idom : Array[Int],
+  dominance : Dominance,
 ) -> Unit raise VerifyError {
   match definitions.get(value.id) {
     None => raise UndefinedValue(value_id=value.id)
@@ -285,7 +285,7 @@ fn verify_defined(
         FunctionParameter(_) => ()
         BlockParameter(_, defining_block) =>
           if defining_block != use_block &&
-            !dominates_with_idom(idom, defining_block, use_block) {
+            !dominance.dominates(defining_block, use_block) {
             raise NonDominatingUse(
               value_id=value.id,
               defining_block~,
@@ -297,7 +297,7 @@ fn verify_defined(
             if defining_position >= use_position {
               raise UseBeforeDefinition(value_id=value.id)
             }
-          } else if !dominates_with_idom(idom, defining_block, use_block) {
+          } else if !dominance.dominates(defining_block, use_block) {
             raise NonDominatingUse(
               value_id=value.id,
               defining_block~,
@@ -368,11 +368,11 @@ fn verify_block_args(
   edge : String,
   use_block : Int,
   use_position : Int,
-  idom : Array[Int],
+  dominance : Dominance,
 ) -> Unit raise VerifyError {
   let block = require_block(block_id, blocks)
   for arg in args {
-    verify_defined(arg, definitions, use_block, use_position, idom)
+    verify_defined(arg, definitions, use_block, use_position, dominance)
   }
   if args.length() != block.params.length() {
     raise ArityMismatch(
@@ -403,10 +403,10 @@ fn verify_inst(
   definitions : @hashmap.HashMap[Int, ValueDefinition],
   use_block : Int,
   use_position : Int,
-  idom : Array[Int],
+  dominance : Dominance,
 ) -> Unit raise VerifyError {
   for arg in inst.args {
-    verify_defined(arg, definitions, use_block, use_position, idom)
+    verify_defined(arg, definitions, use_block, use_position, dominance)
   }
   verify_opcode_contract(func, inst)
 }
@@ -461,12 +461,12 @@ fn verify_terminator(
   result_types : Array[Type],
   use_block : Int,
   use_position : Int,
-  idom : Array[Int],
+  dominance : Dominance,
 ) -> Unit raise VerifyError {
   match term {
     Return(values) => {
       for value in values {
-        verify_defined(value, definitions, use_block, use_position, idom)
+        verify_defined(value, definitions, use_block, use_position, dominance)
       }
       if values.length() != result_types.length() {
         raise ArityMismatch(
@@ -484,23 +484,23 @@ fn verify_terminator(
     }
     Jump(target, values) =>
       verify_block_args(
-        target, values, blocks, definitions, "jump", use_block, use_position, idom,
+        target, values, blocks, definitions, "jump", use_block, use_position, dominance,
       )
     Branch(cond, true_target, true_args, false_target, false_args) => {
-      verify_defined(cond, definitions, use_block, use_position, idom)
+      verify_defined(cond, definitions, use_block, use_position, dominance)
       verify_i32(cond, "branch condition")
       verify_block_args(
         true_target, true_args, blocks, definitions, "branch", use_block, use_position,
-        idom,
+        dominance,
       )
       verify_block_args(
         false_target, false_args, blocks, definitions, "branch", use_block, use_position,
-        idom,
+        dominance,
       )
     }
     Brz(cond, true_target, false_target)
     | Brnz(cond, true_target, false_target) => {
-      verify_defined(cond, definitions, use_block, use_position, idom)
+      verify_defined(cond, definitions, use_block, use_position, dominance)
       verify_i32(cond, "branch condition")
       verify_block_args(
         true_target,
@@ -510,7 +510,7 @@ fn verify_terminator(
         "branch",
         use_block,
         use_position,
-        idom,
+        dominance,
       )
       verify_block_args(
         false_target,
@@ -520,11 +520,11 @@ fn verify_terminator(
         "branch",
         use_block,
         use_position,
-        idom,
+        dominance,
       )
     }
     BrTable(index, targets, default_target) => {
-      verify_defined(index, definitions, use_block, use_position, idom)
+      verify_defined(index, definitions, use_block, use_position, dominance)
       verify_i32(index, "branch table index")
       for target in targets {
         verify_block_args(
@@ -535,7 +535,7 @@ fn verify_terminator(
           "branch table",
           use_block,
           use_position,
-          idom,
+          dominance,
         )
       }
       verify_block_args(
@@ -546,7 +546,7 @@ fn verify_terminator(
         "branch table",
         use_block,
         use_position,
-        idom,
+        dominance,
       )
     }
     Trap(_) | TrapExit(_) => ()

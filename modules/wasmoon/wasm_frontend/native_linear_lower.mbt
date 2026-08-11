@@ -780,7 +780,7 @@ fn push_table_set(
   }
   let symbol = builder
     .get_function()
-    .declare_external_symbol(runtime_symbols.table_fill)
+    .declare_external_symbol(runtime_symbols.symbol_name(TableFill))
   builder.call_symbol(symbol, None, [
     context,
     builder.iconst_i32(table_idx),
@@ -806,7 +806,7 @@ fn push_table_fill(
   guard pop3(stack) is Some((dst, value, size)) else { return false }
   let symbol = builder
     .get_function()
-    .declare_external_symbol(runtime_symbols.table_fill)
+    .declare_external_symbol(runtime_symbols.symbol_name(TableFill))
   builder.call_symbol(symbol, None, [
     context,
     builder.iconst_i32(table_idx),
@@ -985,7 +985,7 @@ fn push_memory_grow(
     .unwrap_or(-1)
   let symbol = builder
     .get_function()
-    .declare_external_symbol(runtime_symbols.memory_grow)
+    .declare_external_symbol(runtime_symbols.symbol_name(MemoryGrow))
   guard builder.call_symbol(symbol, Some(I32), [
       context,
       builder.iconst_i32(memidx),
@@ -1036,7 +1036,7 @@ fn push_memory_fill(
   guard pop3(stack) is Some((dst, value, size)) else { return false }
   let symbol = builder
     .get_function()
-    .declare_external_symbol(runtime_symbols.memory_fill)
+    .declare_external_symbol(runtime_symbols.symbol_name(MemoryFill))
   builder.call_symbol(symbol, None, [
     context,
     builder.iconst_i32(memidx),
@@ -1072,7 +1072,7 @@ fn push_memory_copy(
   guard pop3(stack) is Some((dst, src, size)) else { return false }
   let symbol = builder
     .get_function()
-    .declare_external_symbol(runtime_symbols.memory_copy)
+    .declare_external_symbol(runtime_symbols.symbol_name(MemoryCopy))
   builder.call_symbol(symbol, None, [
     context,
     builder.iconst_i32(dst_memidx),
@@ -1131,7 +1131,7 @@ fn push_memory_init(
   }
   let symbol = builder
     .get_function()
-    .declare_external_symbol(runtime_symbols.memory_init)
+    .declare_external_symbol(runtime_symbols.symbol_name(MemoryInit))
   builder.call_symbol(symbol, None, [
     context,
     builder.iconst_i32(memidx),
@@ -1154,7 +1154,7 @@ fn push_data_drop(
   guard vmctx is Some(context) else { return false }
   let symbol = builder
     .get_function()
-    .declare_external_symbol(runtime_symbols.data_drop)
+    .declare_external_symbol(runtime_symbols.symbol_name(DataDrop))
   builder.call_symbol(symbol, None, [context, builder.iconst_i32(data_idx)])
   |> ignore
   true
@@ -1186,7 +1186,7 @@ fn push_table_grow(
   }
   let symbol = builder
     .get_function()
-    .declare_external_symbol(runtime_symbols.table_grow)
+    .declare_external_symbol(runtime_symbols.symbol_name(TableGrow))
   guard builder.call_symbol(symbol, Some(I32), [
       context,
       builder.iconst_i32(table_idx),
@@ -1225,7 +1225,7 @@ fn push_table_copy(
   guard pop3(stack) is Some((dst, src, size)) else { return false }
   let symbol = builder
     .get_function()
-    .declare_external_symbol(runtime_symbols.table_copy)
+    .declare_external_symbol(runtime_symbols.symbol_name(TableCopy))
   builder.call_symbol(symbol, None, [
     context,
     builder.iconst_i32(dst_table_idx),
@@ -1253,7 +1253,7 @@ fn push_table_init(
   guard pop3(stack) is Some((dst, src, size)) else { return false }
   let symbol = builder
     .get_function()
-    .declare_external_symbol(runtime_symbols.table_init)
+    .declare_external_symbol(runtime_symbols.symbol_name(TableInit))
   builder.call_symbol(symbol, None, [
     context,
     builder.iconst_i32(table_idx),
@@ -1276,7 +1276,7 @@ fn push_elem_drop(
   guard vmctx is Some(context) else { return false }
   let symbol = builder
     .get_function()
-    .declare_external_symbol(runtime_symbols.elem_drop)
+    .declare_external_symbol(runtime_symbols.symbol_name(ElemDrop))
   builder.call_symbol(symbol, None, [context, builder.iconst_i32(elem_idx)])
   |> ignore
   true

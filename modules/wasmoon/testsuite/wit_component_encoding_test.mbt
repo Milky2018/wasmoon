@@ -132,7 +132,7 @@ test "wit component encode (non-scalar + resources + use)" {
 ///|
 test "wit component decode (wasm-tools fixture)" {
   let bytes = @fs.read_file_to_bytes("testsuite/fixtures/witpkg.wasm") catch {
-    @fs.IOError(message) => {
+    IOError(message) => {
       fail(message)
       panic()
     }

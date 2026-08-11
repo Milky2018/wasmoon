@@ -7,15 +7,16 @@
 // ============================================================
 
 ///|
-#borrow(roots)
-extern "c" fn gc_push_root_scope_for_test(
-  ctx_ptr : Int64,
+#borrow(context, roots)
+extern "c" fn c_jit_gc_push_root_scope_managed(
+  context : JITContext,
   roots : FixedArray[Int64],
   count : Int,
-) -> Int = "wasmoon_jit_gc_push_root_scope"
+) -> Int = "wasmoon_jit_gc_push_root_scope_managed"
 
 ///|
-extern "c" fn gc_pop_root_scope_for_test(ctx_ptr : Int64) -> Unit = "wasmoon_jit_gc_pop_root_scope"
+#borrow(context)
+extern "c" fn c_jit_gc_pop_root_scope_managed(context : JITContext) -> Unit = "wasmoon_jit_gc_pop_root_scope_managed"
 
 ///|
 test "gc: collect root args from reference-typed heap values" {
@@ -457,14 +458,13 @@ fn test_gc_push_root_scope(
   roots : Array[Int64],
 ) -> Bool {
   let raw_roots = FixedArray::makei(roots.length(), fn(i) { roots[i] })
-  context.with_ptr(fn(ptr) {
-    gc_push_root_scope_for_test(ptr, raw_roots, roots.length()) == 1
-  })
+  c_jit_gc_push_root_scope_managed(context.handle, raw_roots, roots.length()) ==
+  1
 }
 
 ///|
 fn test_gc_pop_root_scope(context : NativeJITContext) -> Unit {
-  context.with_ptr(fn(ptr) { gc_pop_root_scope_for_test(ptr) })
+  c_jit_gc_pop_root_scope_managed(context.handle)
 }
 
 ///|

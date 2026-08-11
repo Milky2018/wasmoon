@@ -550,35 +550,17 @@ fn memory_key_from_access(
 }
 
 ///|
-fn block_dominates_with_idom(idom : Array[Int], a : Int, b : Int) -> Bool {
-  if a == b {
-    return true
-  }
-  let mut cursor = b
-  while cursor >= 0 && cursor < idom.length() {
-    cursor = idom[cursor]
-    if cursor == a {
-      return true
-    }
-    if cursor == -1 {
-      break
-    }
-  }
-  false
-}
-
-///|
 fn inst_dominates(
   def_block_id : Int,
   def_inst_index : Int,
   use_block_id : Int,
   use_inst_index : Int,
-  idom : Array[Int],
+  dominance : Dominance,
 ) -> Bool {
   if def_block_id == use_block_id {
     return def_inst_index < use_inst_index
   }
-  block_dominates_with_idom(idom, def_block_id, use_block_id)
+  dominance.dominates(def_block_id, use_block_id)
 }
 
 ///|
@@ -645,8 +627,8 @@ fn run_global_value_numbering_with_budget(
   let ptr_base_infos = collect_ptr_base_infos(func, iconst_values)
   // Build CFG and compute dominators
   let cfg = CFG::build(func)
-  let idom = cfg.compute_dominators()
-  let domtree = build_dominator_tree(idom)
+  let dominance = cfg.compute_dominance()
+  let domtree = build_dominator_tree(dominance.idom)
   // Build block_id -> array_index mapping
   let block_idx : @hashmap.HashMap[Int, Int] = HashMap([])
   for i, block in func.blocks {
@@ -698,7 +680,7 @@ fn run_global_value_numbering_with_budget(
             entry.def_inst_index,
             block_id,
             inst_index,
-            idom,
+            dominance,
           ) {
           inst.opcode = Scalar(Copy)
           inst.operands.clear()
