@@ -165,6 +165,63 @@ test "range split isolates the use-free gap and preserves spillset lineage" {
 }
 
 ///|
+test "spill bundle keeps earlier appended segments visible to conflict probes" {
+  let r0 : PhysicalReg = { id: 0, class: Int }
+  let segments : Array[AllocationSegment] = [
+    {
+      id: 0,
+      value: { id: 0, class: Int },
+      range: ProgramRange(ProgramPoint(0, 5), ProgramPoint(0, 20)),
+      weight: 1,
+      has_fixed_constraint: false,
+      location: Some(SegmentReg(r0)),
+    },
+    {
+      id: 1,
+      value: { id: 1, class: Int },
+      range: ProgramRange(ProgramPoint(1, 0), ProgramPoint(1, 0)),
+      weight: 1,
+      has_fixed_constraint: false,
+      location: None,
+    },
+    {
+      id: 2,
+      value: { id: 2, class: Int },
+      range: ProgramRange(ProgramPoint(0, 0), ProgramPoint(0, 10)),
+      weight: 1,
+      has_fixed_constraint: false,
+      location: None,
+    },
+  ]
+  let bundles = [allocation_bundle(0, [0], segments, [0, 1])]
+  bundles[0].state = BundleReg(r0)
+  let owners = [0, -1, -1]
+  let spill_sets : Array[SpillSet] = [
+    { weight: 1, hint: None, spill_bundle: None },
+  ]
+  add_to_spill_bundle(0, 1, bundles, owners, spill_sets, segments, [0, 1])
+  add_to_spill_bundle(0, 2, bundles, owners, spill_sets, segments, [0, 1])
+  let occupied = RegisterAllocationIndex::new(1, segments, [0, 1])
+  occupied.insert(0, 0)
+  let probe = probe_bundle_register(
+    bundles[1],
+    0,
+    r0,
+    bundles,
+    spill_sets,
+    segments,
+    owners,
+    occupied,
+    { points_by_reg: Map([]), block_order: [0, 1] },
+    [0, 1],
+    Array::make(bundles.length(), 0),
+    1,
+    [],
+  )
+  debug_inspect((bundles[1].segments, probe.conflicts), content="([2, 1], [0])")
+}
+
+///|
 test "production allocation assigns an SSA bundle atomically" {
   let ranges = LiveRangeSet::LiveRangeSet([0, 1, 2])
   ranges.add_range(bundle_test_range(0, Int, 0, 2, []))

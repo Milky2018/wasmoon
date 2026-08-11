@@ -506,9 +506,21 @@ fn add_to_spill_bundle(
 ) -> Unit {
   match spill_sets[spill_set].spill_bundle {
     Some(bundle_id) => {
-      bundles[bundle_id].segments.push(segment)
+      let bundle = bundles[bundle_id]
+      let mut insertion = bundle.segments.length()
+      for index, existing in bundle.segments {
+        let by_end = segments[segment].range.end.compare_with_order(
+          segments[existing].range.end,
+          block_order,
+        )
+        if by_end < 0 || (by_end == 0 && segment < existing) {
+          insertion = index
+          break
+        }
+      }
+      bundle.segments.insert(insertion, segment)
       segment_owner[segment] = bundle_id
-      refresh_bundle_metrics(bundles[bundle_id], segments)
+      refresh_bundle_metrics(bundle, segments)
     }
     None => {
       let spill_bundle = allocation_bundle(
@@ -864,6 +876,7 @@ fn validate_bundle_allocations(
   bundles : Array[AllocationBundle],
   segments : Array[AllocationSegment],
   segment_owner : Array[Int],
+  block_order : Array[Int],
 ) -> Unit raise VerifyError {
   for bundle in bundles {
     if bundle.state is BundlePending || bundle.state is BundleDeferredSpill {
@@ -871,6 +884,19 @@ fn validate_bundle_allocations(
     }
     if bundle.state is BundleSplit {
       continue
+    }
+    for index in 1..<bundle.segments.length() {
+      let previous = bundle.segments[index - 1]
+      let current = bundle.segments[index]
+      let by_end = segments[previous].range.end.compare_with_order(
+        segments[current].range.end,
+        block_order,
+      )
+      if by_end > 0 || (by_end == 0 && previous > current) {
+        raise InvalidPlan(
+          message="allocation bundle segments are not ordered by live-range end",
+        )
+      }
     }
     let (priority, weight, has_fixed_constraint) = allocation_bundle_metrics(
       bundle.segments,
@@ -1106,6 +1132,11 @@ fn[F : FunctionView] allocate_bundles(
       force_spill_bundle(bundle, segments)
     }
   }
-  validate_bundle_allocations(bundles, segments, segment_owner)
+  validate_bundle_allocations(
+    bundles,
+    segments,
+    segment_owner,
+    ranges.block_order,
+  )
   (bundles, segment_owner, spill_sets, segment_spill_set)
 }
