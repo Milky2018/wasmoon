@@ -66,12 +66,33 @@ Reusable compiler-infrastructure modules include `wasm_core`, `milkir`, `machv`,
 - Native runtime address resolution belongs in `wasmoon_jit` or another explicitly Wasmoon-owned package. Generic emitters should produce machine code plus symbolic relocation/fixup metadata.
 - If a product-specific name is temporarily necessary in reusable infrastructure, document why in the local code and track the cleanup in an issue instead of broadening the boundary audit with ad-hoc string checks.
 
-## Git Conventions
+## Git Branch Model
 
-- **NEVER commit or push directly to main branch** - always create a feature branch and merge via PR
-- Write commit messages in English
-- Create a new branch for each change, merge via PR
-- Don't use `commit --amend` or `push --force`, use new commits instead
+- `main` is the stable/release branch. `dev` is the current development
+  integration branch.
+- **NEVER commit or push directly to `main` or `dev`.** Start each change from
+  an up-to-date `dev`, create a new `milky/<topic>` branch, and merge it into
+  `dev` through a PR:
+  ```bash
+  git fetch origin --prune
+  git switch dev
+  git pull --ff-only
+  git switch -c milky/<topic>
+  ```
+- Target ordinary feature and fix PRs at `dev`. Update `main` only through an
+  explicit `dev` to `main` integration or release PR.
+- A merged or closed PR makes its source branch terminal. **Never add another
+  commit to that branch.** Switch to the updated `dev` immediately and create
+  a fresh branch for follow-up work. GitHub does not reopen or extend an
+  already merged PR when new commits are pushed to its old source branch.
+- A successful `git push` proves only that a commit exists on the remote; it
+  does not prove that the commit is integrated. Before reporting delivery,
+  verify that the branch either has an open PR targeting `dev`, or that the
+  delivered commit is an ancestor of `origin/dev`.
+- Write commit messages and PR text in English.
+- Don't use `commit --amend` or `push --force`; add a new commit instead.
+- After a PR is merged and its commits are confirmed in `origin/dev`, delete
+  the source branch locally and remotely.
 
 ## MoonBit Notes
 
@@ -102,18 +123,35 @@ Reusable compiler-infrastructure modules include `wasm_core`, `milkir`, `machv`,
 1. **File issues for remaining work** - Create issues for anything that needs follow-up
 2. **Run quality gates** (if code changed) - Tests, linters, builds
 3. **Update issue status** - Close finished work, update in-progress items
-4. **PUSH TO REMOTE** - This is MANDATORY:
+4. **PUSH AND ACCOUNT FOR EVERY COMMIT** - Push the feature branch, then either
+   open or update its PR targeting `dev`, or verify that the requested merge
+   has already landed:
    ```bash
-   git pull --rebase
-   git push
-   git status  # MUST show "up to date with origin"
+   branch="$(git branch --show-current)"
+   git push -u origin "$branch"
+   gh pr list --state open --head "$branch" --base dev
    ```
-5. **Clean up** - Clear stashes, prune remote branches
-6. **Verify** - All changes committed AND pushed
-7. **Hand off** - Provide context for next session
+   If the task includes merging, wait for the complete required check set,
+   merge the PR, then verify the delivered commit is contained in `dev`:
+   ```bash
+   delivered="$(git rev-parse HEAD)"
+   git switch dev
+   git pull --ff-only
+   git merge-base --is-ancestor "$delivered" origin/dev
+   ```
+5. **RETIRE MERGED BRANCHES** - Once ancestry is verified, delete the merged
+   source branch. Never continue work on it.
+6. **Clean up** - Clear stashes and prune remote branches.
+7. **Verify** - The working tree is clean, `dev` matches `origin/dev`, and no
+   delivered commit is stranded only on a remote feature branch.
+8. **Hand off** - Report the PR, merge commit, checks, and current branch.
 
 **CRITICAL RULES:**
-- Work is NOT complete until `git push` succeeds
+- Work is NOT complete until `git push` succeeds and every pushed commit is
+  covered by an open PR to `dev` or contained in `origin/dev`.
 - NEVER stop before pushing - that leaves work stranded locally
 - NEVER say "ready to push when you are" - YOU must push
 - If push fails, resolve and retry until it succeeds
+- NEVER reuse a source branch after its PR is merged or closed
+- NEVER claim a pushed commit was merged without an ancestry check against
+  `origin/dev`
