@@ -139,19 +139,19 @@ fn bundle_test_range(
 }
 
 ///|
-test "segment metadata partitions unsorted uses in one ordered pass" {
+test "segment metadata follows custom block order in one use pass" {
   let r0 : PhysicalReg = { id: 0, class: Int }
   let r1 : PhysicalReg = { id: 1, class: Int }
-  let ranges = LiveRangeSet::LiveRangeSet([0])
+  let ranges = LiveRangeSet::LiveRangeSet([1, 0])
   let range = LiveRange::LiveRange(0, { id: 0, class: Int })
   range.add_range(ProgramRange(ProgramPoint(0, 0), ProgramPoint(0, 1)))
-  range.add_range(ProgramRange(ProgramPoint(0, 10), ProgramPoint(0, 11)))
+  range.add_range(ProgramRange(ProgramPoint(1, 10), ProgramPoint(1, 11)))
   range.add_use(
-    UsePosition(ProgramPoint(0, 10), LiveUse, AnyReg).with_preference(Some(r1)),
+    UsePosition(ProgramPoint(0, 0), LiveUse, AnyReg).with_preference(Some(r1)),
   )
-  range.add_use(UsePosition(ProgramPoint(0, 0), LiveDef, FixedReg(r0)))
+  range.add_use(UsePosition(ProgramPoint(1, 10), LiveDef, FixedReg(r0)))
   range.add_use(
-    UsePosition(ProgramPoint(0, 11), LiveUse, AnyLocation).with_preference(
+    UsePosition(ProgramPoint(0, 1), LiveUse, AnyLocation).with_preference(
       Some(r1),
     ),
   )

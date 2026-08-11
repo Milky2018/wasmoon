@@ -73,7 +73,7 @@ fn segment_metadata(
   let end = if use_end < 0 { range.uses.length() } else { use_end }
   for use_index in use_start..<end {
     let use_position = range.uses[use_index]
-    if fragment.contains(use_position.point, []) {
+    if fragment.contains(use_position.point, block_order) {
       use_cost = use_cost + use_weight(use_position, loop_depths)
       if use_position.constraint is FixedReg(_) {
         has_fixed_constraint = true
@@ -151,36 +151,29 @@ fn build_allocation_segments(
   for _ in 0..<(max_value + 1) {
     segments_by_value.push([])
   }
-  let mut identity_block_order = true
-  for block, order in ranges.block_order {
-    if block != order {
-      identity_block_order = false
-      break
-    }
-  }
   for range in ranges.ranges {
-    if identity_block_order {
-      range.uses.sort_by(fn(left, right) {
-        left.point.compare_with_order(right.point, [])
-      })
-    }
+    range.sort_ranges(ranges.block_order)
+    range.uses.sort_by(fn(left, right) {
+      left.point.compare_with_order(right.point, ranges.block_order)
+    })
     let mut use_start = 0
     for fragment in range.ranges {
-      let mut use_end = range.uses.length()
-      if identity_block_order {
-        while use_start < range.uses.length() &&
-              range.uses[use_start].point.compare_with_order(fragment.start, []) <
-              0 {
-          use_start = use_start + 1
-        }
-        use_end = use_start
-        while use_end < range.uses.length() &&
-              range.uses[use_end].point.compare_with_order(fragment.end, []) <=
-              0 {
-          use_end = use_end + 1
-        }
-      } else {
-        use_start = 0
+      while use_start < range.uses.length() &&
+            range.uses[use_start].point.compare_with_order(
+              fragment.start,
+              ranges.block_order,
+            ) <
+            0 {
+        use_start = use_start + 1
+      }
+      let mut use_end = use_start
+      while use_end < range.uses.length() &&
+            range.uses[use_end].point.compare_with_order(
+              fragment.end,
+              ranges.block_order,
+            ) <=
+            0 {
+        use_end = use_end + 1
       }
       let metadata = segment_metadata(
         range,
