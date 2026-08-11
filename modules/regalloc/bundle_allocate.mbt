@@ -720,11 +720,11 @@ fn split_segment_around_gap(
   let original_range = segment.range
   let mut before : Int? = None
   if original_range.start.inst < gap_start {
-    segment.range = ProgramRange(
-      original_range.start,
-      ProgramPoint(point.block, gap_start - 1),
-    )
-    segment.refresh_metadata(
+    segments[segment_id] = segment.with_range(
+      ProgramRange(
+        original_range.start,
+        ProgramPoint(point.block, gap_start - 1),
+      ),
       live_range,
       loop_depths,
       ranges.block_order,
@@ -732,9 +732,15 @@ fn split_segment_around_gap(
     )
     before = Some(segment_id)
   } else {
-    segment.range = ProgramRange(
-      ProgramPoint(point.block, gap_start),
-      ProgramPoint(point.block, gap_end),
+    segments[segment_id] = segment.with_range(
+      ProgramRange(
+        ProgramPoint(point.block, gap_start),
+        ProgramPoint(point.block, gap_end),
+      ),
+      live_range,
+      loop_depths,
+      ranges.block_order,
+      allocatable,
     )
   }
   let spill = if before is Some(_) {
@@ -755,12 +761,6 @@ fn split_segment_around_gap(
       allocatable,
     )
   } else {
-    segment.refresh_metadata(
-      live_range,
-      loop_depths,
-      ranges.block_order,
-      allocatable,
-    )
     segment_id
   }
   let after = if gap_end < original_range.end.inst {

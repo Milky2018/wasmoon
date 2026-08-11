@@ -63,6 +63,7 @@ priv struct GapSplitSnapshot {
   owners : Array[Int]
   spill_sets : Array[Int]
   use_free : Array[Bool]
+  weights : Array[Int]
 } derive(Debug)
 
 ///|
@@ -146,6 +147,7 @@ test "range split isolates the use-free gap and preserves spillset lineage" {
       owners,
       spill_sets,
       use_free: segments.map(segment => segment_carries_no_use(segment, ranges)),
+      weights: segments.map(segment => segment.weight),
     },
     content=(
       #|{
@@ -160,6 +162,7 @@ test "range split isolates the use-free gap and preserves spillset lineage" {
       #|  owners: [4, 4, 4],
       #|  spill_sets: [0, 0, 0],
       #|  use_free: [false, true, false],
+      #|  weights: [3000, 1, 2000],
       #|}
     ),
   )

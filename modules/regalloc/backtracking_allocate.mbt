@@ -8,11 +8,11 @@ priv enum SegmentLocation {
 priv struct AllocationSegment {
   id : Int
   value : VirtualReg
-  mut range : ProgramRange
-  mut weight : Int
-  mut has_fixed_constraint : Bool
-  mut fixed_hint : PhysicalReg?
-  mut preference_hint : PhysicalReg?
+  range : ProgramRange
+  weight : Int
+  has_fixed_constraint : Bool
+  fixed_hint : PhysicalReg?
+  preference_hint : PhysicalReg?
   mut location : SegmentLocation?
 }
 
@@ -114,24 +114,25 @@ fn segment_metadata(
 }
 
 ///|
-fn AllocationSegment::refresh_metadata(
+fn AllocationSegment::with_range(
   self : AllocationSegment,
-  range : LiveRange,
+  range : ProgramRange,
+  live_range : LiveRange,
   loop_depths : Array[Int],
   block_order : Array[Int],
   allocatable : Array[PhysicalReg],
-) -> Unit {
+) -> AllocationSegment {
   let metadata = segment_metadata(
-    range,
-    self.range,
-    loop_depths,
-    block_order,
-    allocatable,
+    live_range, range, loop_depths, block_order, allocatable,
   )
-  self.weight = metadata.weight
-  self.has_fixed_constraint = metadata.has_fixed_constraint
-  self.fixed_hint = metadata.fixed_hint
-  self.preference_hint = metadata.preference_hint
+  {
+    ..self,
+    range,
+    weight: metadata.weight,
+    has_fixed_constraint: metadata.has_fixed_constraint,
+    fixed_hint: metadata.fixed_hint,
+    preference_hint: metadata.preference_hint,
+  }
 }
 
 ///|
