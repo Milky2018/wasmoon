@@ -833,6 +833,55 @@ impl FunctionView for VerifierCfgView with fn instruction_clobbers(
 }
 
 ///|
+test "operand assignment reuses a tied group's resident register" {
+  let spilled : VirtualReg = { id: 0, class: Int }
+  let resident : VirtualReg = { id: 1, class: Int }
+  let r0 : PhysicalReg = { id: 0, class: Int }
+  let function : VerifierCfgView = {
+    value_count: 2,
+    blocks: [[0]],
+    operands: [
+      [
+        Operand::use_reg(spilled).with_constraint(AnyLocation).with_tie(0),
+        Operand::def(resident).with_tie(0),
+      ],
+    ],
+    successors: [[]],
+    entry_values: [spilled],
+    parameters: [[]],
+    edge_arguments: [[]],
+    successor_queries: Ref(0),
+    block_visits: Ref(0),
+  }
+  let plan = AllocationPlan::new(2)
+  let slot = plan.create_spill_slot(8, 8)
+  plan.assign_value(spilled, Spill(slot))
+  plan.assign_value(resident, Reg(r0))
+  let (segments, segments_by_value) = build_allocation_segments(
+    build_function_live_ranges(function),
+    allocatable=[r0],
+  )
+  for segment in segments_by_value[spilled.id] {
+    segments[segment].location = Some(SegmentSpill)
+  }
+  for segment in segments_by_value[resident.id] {
+    segments[segment].location = Some(SegmentReg(r0))
+  }
+  assign_segment_operands(
+    plan,
+    function,
+    MachineEnv::new([r0], []),
+    segments,
+    segments_by_value,
+  )
+  verify_function_allocation(function, MachineEnv::new([r0], []), plan)
+  debug_inspect(
+    (plan.operand_location(0, 0), plan.operand_location(0, 1)),
+    content="(Some(Reg({ id: 0, class: Int })), Some(Reg({ id: 0, class: Int })))",
+  )
+}
+
+///|
 fn verify_wrong_location(
   function : VerifierCfgView,
   def_instruction : Int?,

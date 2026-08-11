@@ -706,6 +706,7 @@ fn[F : FunctionView] assign_segment_operands(
       let used_temps : Array[PhysicalReg] = []
       let borrowed_temps : Array[PhysicalReg] = []
       let tied_constraints : Map[Int, OperandConstraint] = Map([])
+      let tied_locations : Map[Int, Location] = Map([])
       for operand in operands {
         if operand.tie_id >= 0 {
           let constraint = match tied_constraints.get(operand.tie_id) {
@@ -763,6 +764,12 @@ fn[F : FunctionView] assign_segment_operands(
               Spill(_) => None
             }
         }
+        if operand.tie_id >= 0 &&
+          constraint is AnyReg &&
+          reserved is Some(reg) &&
+          tied_locations.get(operand.tie_id) is None {
+          tied_locations[operand.tie_id] = Reg(reg)
+        }
         if reserved is Some(reg) && !used_temps.contains(reg) {
           used_temps.push(reg)
         }
@@ -772,15 +779,7 @@ fn[F : FunctionView] assign_segment_operands(
         let tied_location : Location? = if operand.tie_id < 0 {
           None
         } else {
-          let mut location : Location? = None
-          for earlier in 0..<operand_index {
-            if operands[earlier].tie_id == operand.tie_id &&
-              assigned[earlier] is Some(previous) {
-              location = Some(previous)
-              break
-            }
-          }
-          location
+          tied_locations.get(operand.tie_id)
         }
         let selected = match tied_location {
           Some(location) => location
@@ -842,6 +841,9 @@ fn[F : FunctionView] assign_segment_operands(
             }
         }
         assigned[operand_index] = Some(selected)
+        if operand.tie_id >= 0 {
+          tied_locations[operand.tie_id] = selected
+        }
         plan.assign_operand(instruction, operand_index, selected)
       }
       let resident_operand_segments : Array[Int?] = []
