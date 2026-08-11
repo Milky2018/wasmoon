@@ -1,4 +1,7 @@
 ///|
+const MAX_SPLITS_PER_SPILL_SET : Int = 2
+
+///|
 priv enum AllocationBundleState {
   BundlePending
   BundleReg(PhysicalReg)
@@ -10,6 +13,7 @@ priv enum AllocationBundleState {
 ///|
 priv struct SpillSet {
   weight : Int
+  mut splits : Int
   mut hint : PhysicalReg?
   mut spill_bundle : Int?
 }
@@ -233,7 +237,12 @@ fn build_allocation_bundles(
       block_order,
       spill_set~,
     )
-    spill_sets.push({ weight: bundle.weight, hint: None, spill_bundle: None })
+    spill_sets.push({
+      weight: bundle.weight,
+      splits: 0,
+      hint: None,
+      spill_bundle: None,
+    })
     bundles.push(bundle)
     for segment_id in segment_ids {
       segment_owner[segment_id] = bundle.id
@@ -754,6 +763,25 @@ fn split_bundle_at_conflict(
   allocatable : Array[PhysicalReg],
 ) -> Bool {
   guard split_point is Some(point) else { return false }
+  let spill_set = spill_sets[bundle.spill_set]
+  if spill_set.splits >= MAX_SPLITS_PER_SPILL_SET {
+    // Operand assignment reserves registers around spilled uses, so the shared
+    // spill bundle is this allocator's minimal fallback.
+    bundle.state = BundleSplit
+    for segment_id in bundle.segments {
+      add_to_spill_bundle(
+        bundle.spill_set,
+        segment_id,
+        bundles,
+        segment_owner,
+        spill_sets,
+        segments,
+        ranges.block_order,
+      )
+    }
+    return true
+  }
+  spill_set.splits = spill_set.splits + 1
   let before : Array[Int] = []
   let after : Array[Int] = []
   let spill : Array[Int] = []
