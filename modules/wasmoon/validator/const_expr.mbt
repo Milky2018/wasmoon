@@ -3,7 +3,7 @@
 /// Returns the result type of the expression
 /// Supports extended-const proposal: allows i32/i64 arithmetic (add, sub, mul)
 fn validate_const_expr(
-  globals : Array[@types.GlobalType],
+  globals : ArrayView[@types.GlobalType],
   expr : Array[@types.Instruction],
   expected_type : @types.ValueType,
   funcs? : Array[Int] = [],

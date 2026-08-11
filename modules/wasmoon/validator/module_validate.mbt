@@ -106,19 +106,9 @@ pub fn validate_module(mod : @types.Module) -> Unit raise ValidationError {
   // (imported globals are already in ctx.globals from imports)
   let num_imported_globals = count_global_imports(mod.imports)
   for i, global in mod.globals {
-    // Available globals for this init: imports + module globals before index i
-    let available_globals : Array[@types.GlobalType] = []
-    // Add all imported globals
-    for j in 0..<num_imported_globals {
-      available_globals.push(ctx.globals[j])
-    }
-    // Add module globals defined before this one
-    for j in 0..<i {
-      available_globals.push(mod.globals[j].type_)
-    }
     // Validate init expression (pass funcs to allow ref.func in global init)
     validate_const_expr(
-      available_globals,
+      ctx.globals[:num_imported_globals + i],
       global.init,
       global.type_.value_type,
       funcs=ctx.funcs,
