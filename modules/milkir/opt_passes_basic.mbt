@@ -25,35 +25,47 @@ fn OptResult::mark_changed(self : OptResult) -> Unit {
 /// Removes instructions whose results are never used
 fn eliminate_dead_code(func : Function) -> OptResult {
   let result = OptResult::OptResult()
-  // Build use counts for all values
   let use_counts = compute_use_counts(func)
-  // Iterate until fixed point
-  let mut changed = true
-  while changed {
-    changed = false
-    for block in func.blocks {
-      // Remove dead instructions (iterate backwards to handle chains)
-      let mut i = block.instructions.length() - 1
-      while i >= 0 {
-        let inst = block.instructions[i]
-        let all_results_unused = inst.results.length() > 0 &&
-          inst.results.all(v => use_counts.get(v.id).unwrap_or(0) == 0)
-        if all_results_unused &&
-          !inst.opcode.semantics().must_preserve_if_unused() {
-          // Remove this instruction
-          block.instructions.remove(i) |> ignore
-          // Decrement use counts for operands
-          for op in inst.operands {
-            let count = use_counts.get(op.id).unwrap_or(0)
-            if count > 0 {
-              use_counts.set(op.id, count - 1)
-            }
-          }
-          changed = true
+  let definition_by_value : Array[Inst?] = Array::make(func.next_value_id, None)
+  let dead_insts = Array::make(func.next_inst_id, false)
+  let worklist : Array[Inst] = []
+  for block in func.blocks {
+    for inst in block.instructions {
+      for value in inst.results {
+        definition_by_value[value.id] = Some(inst)
+      }
+      if inst.results.length() > 0 &&
+        inst.results.all(v => use_counts.get(v.id).unwrap_or(0) == 0) &&
+        !inst.opcode.semantics().must_preserve_if_unused() {
+        dead_insts[inst.id] = true
+        worklist.push(inst)
+        result.mark_changed()
+      }
+    }
+  }
+  while worklist.pop() is Some(inst) {
+    for operand in inst.operands {
+      let count = use_counts.get(operand.id).unwrap_or(0)
+      if count > 0 {
+        let remaining = count - 1
+        use_counts.set(operand.id, remaining)
+        if remaining == 0 &&
+          definition_by_value[operand.id] is Some(definition) &&
+          !dead_insts[definition.id] &&
+          definition.results.all(value => {
+            use_counts.get(value.id).unwrap_or(0) == 0
+          }) &&
+          !definition.opcode.semantics().must_preserve_if_unused() {
+          dead_insts[definition.id] = true
+          worklist.push(definition)
           result.mark_changed()
         }
-        i = i - 1
       }
+    }
+  }
+  if result.changed {
+    for block in func.blocks {
+      block.instructions.retain(inst => !dead_insts[inst.id])
     }
   }
   result

@@ -402,78 +402,93 @@ fn collect_ptr_base_infos(
       }
     }
   }
-  let mut changed = true
-  while changed {
-    changed = false
-    for block in func.blocks {
-      for inst in block.instructions {
-        if inst.first_result() is Some(v) && result.get(v.id) is None {
-          let inferred : PtrBaseInfo? = match inst.opcode {
-            GlobalValue(global_value) =>
-              match func.global_value_data(global_value) {
-                Some(ContextField(_, _, region)) => Some({ region, })
-                None => None
-              }
-            Ext(_, _) => None
-            Scalar(Copy)
-            | Scalar(Convert(Bitcast))
-            | Scalar(Convert(UnsignedExtend))
-            | Scalar(Convert(SignedExtend))
-            | Scalar(Convert(IntReduce)) =>
-              if inst.operands.length() > 0 {
-                result.get(inst.operands[0].id)
-              } else {
-                None
-              }
-            Scalar(IntBinary(Add)) =>
-              if inst.operands.length() >= 2 {
-                let lhs = inst.operands[0]
-                let rhs = inst.operands[1]
-                match (result.get(lhs.id), result.get(rhs.id)) {
-                  (Some(base), None) | (None, Some(base)) => Some(base)
-                  (Some(lhs_base), Some(rhs_base)) if lhs_base.region ==
-                    rhs_base.region => Some(lhs_base)
-                  _ =>
-                    if result.get(lhs.id) is Some(base) &&
-                      is_known_iconst(rhs.id, iconst_values) {
-                      Some(base)
-                    } else if result.get(rhs.id) is Some(base) &&
-                      is_known_iconst(lhs.id, iconst_values) {
-                      Some(base)
-                    } else {
-                      None
-                    }
-                }
-              } else {
-                None
-              }
-            Scalar(IntBinary(Sub)) =>
-              if inst.operands.length() >= 2 {
-                let lhs = inst.operands[0]
-                let rhs = inst.operands[1]
+  let dependents : Array[Array[Inst]] = Array::makei(func.next_value_id, _ => [])
+  let worklist : Array[Inst] = []
+  let queued = Array::make(func.next_inst_id, false)
+  for block in func.blocks {
+    for inst in block.instructions {
+      worklist.push(inst)
+      queued[inst.id] = true
+      for operand in inst.operands {
+        dependents[operand.id].push(inst)
+      }
+    }
+  }
+  let mut cursor = 0
+  while cursor < worklist.length() {
+    let inst = worklist[cursor]
+    cursor = cursor + 1
+    queued[inst.id] = false
+    if inst.first_result() is Some(v) && result.get(v.id) is None {
+      let inferred : PtrBaseInfo? = match inst.opcode {
+        GlobalValue(global_value) =>
+          match func.global_value_data(global_value) {
+            Some(ContextField(_, _, region)) => Some({ region, })
+            None => None
+          }
+        Ext(_, _) => None
+        Scalar(Copy)
+        | Scalar(Convert(Bitcast))
+        | Scalar(Convert(UnsignedExtend))
+        | Scalar(Convert(SignedExtend))
+        | Scalar(Convert(IntReduce)) =>
+          if inst.operands.length() > 0 {
+            result.get(inst.operands[0].id)
+          } else {
+            None
+          }
+        Scalar(IntBinary(Add)) =>
+          if inst.operands.length() >= 2 {
+            let lhs = inst.operands[0]
+            let rhs = inst.operands[1]
+            match (result.get(lhs.id), result.get(rhs.id)) {
+              (Some(base), None) | (None, Some(base)) => Some(base)
+              (Some(lhs_base), Some(rhs_base)) if lhs_base.region ==
+                rhs_base.region => Some(lhs_base)
+              _ =>
                 if result.get(lhs.id) is Some(base) &&
                   is_known_iconst(rhs.id, iconst_values) {
+                  Some(base)
+                } else if result.get(rhs.id) is Some(base) &&
+                  is_known_iconst(lhs.id, iconst_values) {
                   Some(base)
                 } else {
                   None
                 }
-              } else {
-                None
-              }
-            Scalar(Select) =>
-              if inst.operands.length() >= 3 &&
-                result.get(inst.operands[1].id) is Some(lhs_base) &&
-                result.get(inst.operands[2].id) is Some(rhs_base) &&
-                lhs_base.region == rhs_base.region {
-                Some(lhs_base)
-              } else {
-                None
-              }
-            _ => None
+            }
+          } else {
+            None
           }
-          if inferred is Some(base) {
-            result.set(v.id, base)
-            changed = true
+        Scalar(IntBinary(Sub)) =>
+          if inst.operands.length() >= 2 {
+            let lhs = inst.operands[0]
+            let rhs = inst.operands[1]
+            if result.get(lhs.id) is Some(base) &&
+              is_known_iconst(rhs.id, iconst_values) {
+              Some(base)
+            } else {
+              None
+            }
+          } else {
+            None
+          }
+        Scalar(Select) =>
+          if inst.operands.length() >= 3 &&
+            result.get(inst.operands[1].id) is Some(lhs_base) &&
+            result.get(inst.operands[2].id) is Some(rhs_base) &&
+            lhs_base.region == rhs_base.region {
+            Some(lhs_base)
+          } else {
+            None
+          }
+        _ => None
+      }
+      if inferred is Some(base) {
+        result.set(v.id, base)
+        for dependent in dependents[v.id] {
+          if !queued[dependent.id] {
+            worklist.push(dependent)
+            queued[dependent.id] = true
           }
         }
       }
