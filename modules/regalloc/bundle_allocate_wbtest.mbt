@@ -207,7 +207,7 @@ test "spill bundle is normalized before conflict probes" {
   bundles[0].state = BundleReg(r0)
   let owners = [0, -1, -1]
   let spill_sets : Array[SpillSet] = [
-    { weight: 1, hint: None, spill_bundle: None },
+    { hint: None, spill_bundle: None, splits: 0 },
   ]
   add_to_spill_bundle(0, 1, bundles, owners, spill_sets, segments, [0, 1])
   add_to_spill_bundle(0, 2, bundles, owners, spill_sets, segments, [0, 1])
@@ -219,7 +219,6 @@ test "spill bundle is normalized before conflict probes" {
     0,
     r0,
     bundles,
-    spill_sets,
     segments,
     owners,
     occupied,
@@ -238,7 +237,7 @@ test "spill bundle is normalized before conflict probes" {
 }
 
 ///|
-test "spillset splits every distinct use-free gap" {
+test "spillset defers to second chance after two normal splits" {
   let ranges = LiveRangeSet::LiveRangeSet([0])
   let range = bundle_test_range(0, Int, 0, 30, [])
   for instruction in [0, 10, 20, 30] {
@@ -298,13 +297,24 @@ test "spillset splits every distinct use-free gap" {
     }
   }
   let spill_bundle = bundles[spill_sets[0].spill_bundle.unwrap()]
+  let pending = bundles.filter(bundle => bundle.state is BundlePending)
+  let deferred = bundles.filter(bundle => bundle.state is BundleDeferredSpill)
+  debug_inspect(
+    (
+      spill_sets[0].splits,
+      pending.length(),
+      pending.all(bundle => bundle.minimal),
+      deferred.length(),
+      bundles[current_bundle].state is BundleDeferredSpill,
+    ),
+    content="(2, 2, true, 2, true)",
+  )
   debug_inspect(
     spill_bundle.segments.map(segment_id => segments[segment_id].range),
     content=(
       #|[
       #|  { start: { block: 0, inst: 1 }, end: { block: 0, inst: 9 } },
       #|  { start: { block: 0, inst: 11 }, end: { block: 0, inst: 19 } },
-      #|  { start: { block: 0, inst: 21 }, end: { block: 0, inst: 29 } },
       #|]
     ),
   )
@@ -448,7 +458,7 @@ test "production allocation evicts then splits a cheaper long bundle" {
       #|      id: 3,
       #|      segments: [0],
       #|      priority: 3,
-      #|      weight: 2,
+      #|      weight: 1,
       #|      has_fixed_constraint: true,
       #|      state: SnapshotReg({ id: 0, class: Int }),
       #|    },
@@ -520,17 +530,11 @@ test "production eviction accounts for and removes every conflicting bundle" {
   occupied.insert(0, 0)
   occupied.insert(0, 1)
   let occupied_stack : Array[Int] = []
-  let spill_sets : Array[SpillSet] = bundles.map(bundle => {
-    weight: bundle.weight,
-    hint: None,
-    spill_bundle: None,
-  })
   let probe = probe_bundle_register(
     bundles[2],
     0,
     r0,
     bundles,
-    spill_sets,
     segments,
     [0, 1, 2, 2],
     occupied,
@@ -547,7 +551,9 @@ test "production eviction accounts for and removes every conflicting bundle" {
     conflict_cost: probe.conflict_cost,
     first_conflict: probe.first_conflict,
     clobbered: probe.clobbered,
-    can_evict: bundle_can_evict(bundles[2], probe, spill_sets),
+    can_evict: !probe.clobbered &&
+    !probe.conflicts.is_empty() &&
+    probe.conflict_cost < bundles[2].weight,
   }
   debug_inspect(
     probe_snapshot,
@@ -636,7 +642,6 @@ test "production eviction accounts for and removes every conflicting bundle" {
     0,
     r0,
     bundles,
-    spill_sets,
     segments,
     [0, 1, 2, 2],
     cutoff_occupied,

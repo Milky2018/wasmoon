@@ -226,9 +226,9 @@ test "spill-home groups follow spillset lineage after layout sorting" {
     (0, 1),
   ])
   let spill_sets : Array[SpillSet] = plan.bundle_segments.map(_ => {
-    weight: 1,
     hint: None,
     spill_bundle: None,
+    splits: 0,
   })
   debug_inspect(
     build_spill_home_groups(
