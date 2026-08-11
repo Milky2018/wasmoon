@@ -63,12 +63,16 @@ fn segment_metadata(
   loop_depths : Array[Int],
   block_order : Array[Int],
   allocatable : Array[PhysicalReg],
+  use_start? : Int = 0,
+  use_end? : Int = -1,
 ) -> SegmentMetadata {
   let mut use_cost = 0
   let mut has_fixed_constraint = false
   let mut fixed_hint : PhysicalReg? = None
   let preference_counts = Array::make(allocatable.length(), 0)
-  for use_position in range.uses {
+  let end = if use_end < 0 { range.uses.length() } else { use_end }
+  for use_index in use_start..<end {
+    let use_position = range.uses[use_index]
     if fragment.contains(use_position.point, []) {
       use_cost = use_cost + use_weight(use_position, loop_depths)
       if use_position.constraint is FixedReg(_) {
@@ -147,14 +151,45 @@ fn build_allocation_segments(
   for _ in 0..<(max_value + 1) {
     segments_by_value.push([])
   }
+  let mut identity_block_order = true
+  for block, order in ranges.block_order {
+    if block != order {
+      identity_block_order = false
+      break
+    }
+  }
   for range in ranges.ranges {
+    if identity_block_order {
+      range.uses.sort_by(fn(left, right) {
+        left.point.compare_with_order(right.point, [])
+      })
+    }
+    let mut use_start = 0
     for fragment in range.ranges {
+      let mut use_end = range.uses.length()
+      if identity_block_order {
+        while use_start < range.uses.length() &&
+              range.uses[use_start].point.compare_with_order(fragment.start, []) <
+              0 {
+          use_start = use_start + 1
+        }
+        use_end = use_start
+        while use_end < range.uses.length() &&
+              range.uses[use_end].point.compare_with_order(fragment.end, []) <=
+              0 {
+          use_end = use_end + 1
+        }
+      } else {
+        use_start = 0
+      }
       let metadata = segment_metadata(
         range,
         fragment,
         loop_depths,
         ranges.block_order,
         allocatable,
+        use_start~,
+        use_end~,
       )
       let id = segments.length()
       segments.push({
