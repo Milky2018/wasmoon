@@ -160,58 +160,8 @@ pub fn wasm_funcref_type() -> @milkir.Type
 // Errors
 
 // Types and methods
-pub(all) struct RuntimeSymbols {
-  memory_grow : String
-  memory_size : String
-  memory_fill : String
-  memory_copy : String
-  memory_init : String
-  data_drop : String
-  table_grow : String
-  table_fill : String
-  table_copy : String
-  table_init : String
-  elem_drop : String
-  gc_ref_test : String
-  gc_ref_cast : String
-  gc_struct_get : String
-  gc_struct_set : String
-  gc_array_get : String
-  gc_array_set : String
-  gc_array_len : String
-  gc_array_fill : String
-  gc_array_copy : String
-  gc_array_new_data : String
-  gc_array_new_elem : String
-  gc_array_init_data : String
-  gc_array_init_elem : String
-  gc_type_check_subtype : String
-  gc_register_struct_inline : String
-  gc_register_array_inline : String
-  gc_alloc_struct_slow : String
-  gc_alloc_array_from_values_slow : String
-  gc_alloc_array_slow : String
-  gc_struct_get_v128 : String
-  gc_struct_set_v128 : String
-  gc_array_get_v128 : String
-  gc_array_set_v128 : String
-  gc_array_fill_v128 : String
-  gc_alloc_struct_wide_slow : String
-  gc_alloc_array_wide_slow : String
-  gc_alloc_array_from_slots_slow : String
-  exception_try_begin : String
-  exception_try_end : String
-  exception_throw : String
-  exception_throw_tag : String
-  exception_throw_ref : String
-  exception_delegate : String
-  exception_get_tag : String
-  exception_get_value : String
-  exception_get_value_count : String
-  exception_sigsetjmp : String
-  exception_spill_locals : String
-  exception_get_spilled_local : String
-} derive(Eq, @debug.Debug)
+type RuntimeSymbols derive(Eq, @debug.Debug)
+pub fn RuntimeSymbols::symbol_name(Self, WasmRuntimeHelper) -> String
 pub fn RuntimeSymbols::with_runtime_prefix(String) -> Self
 
 pub(all) enum WasmDefinedTypeContract {
@@ -278,6 +228,60 @@ pub(all) enum WasmOpcode {
   SpillLocalsForThrow(Int)
   GetSpilledLocal(Int)
 } derive(Eq, Hash, @debug.Debug)
+
+pub(all) enum WasmRuntimeHelper {
+  MemoryGrow
+  MemorySize
+  MemoryFill
+  MemoryCopy
+  MemoryInit
+  DataDrop
+  TableGrow
+  TableFill
+  TableCopy
+  TableInit
+  ElemDrop
+  CancelPoll
+  GcRefTest
+  GcRefCast
+  GcStructGet
+  GcStructSet
+  GcArrayGet
+  GcArraySet
+  GcArrayLen
+  GcArrayFill
+  GcArrayCopy
+  GcArrayNewData
+  GcArrayNewElem
+  GcArrayInitData
+  GcArrayInitElem
+  GcTypeCheckSubtype
+  GcRegisterStructInline
+  GcRegisterArrayInline
+  GcAllocStructSlow
+  GcAllocArrayFromValuesSlow
+  GcAllocArraySlow
+  GcStructGetV128
+  GcStructSetV128
+  GcArrayGetV128
+  GcArraySetV128
+  GcArrayFillV128
+  GcAllocStructWideSlow
+  GcAllocArrayWideSlow
+  GcAllocArrayFromSlotsSlow
+  ExceptionTryBegin
+  ExceptionTryEnd
+  ExceptionThrow
+  ExceptionThrowTag
+  ExceptionThrowRef
+  ExceptionDelegate
+  ExceptionGetTag
+  ExceptionGetValue
+  ExceptionGetValueCount
+  ExceptionSigsetjmp
+  ExceptionSpillLocals
+  ExceptionGetSpilledLocal
+} derive(Eq, @debug.Debug)
 
 pub(all) enum WasmStorageContract {
   Value(@milkir.Type)

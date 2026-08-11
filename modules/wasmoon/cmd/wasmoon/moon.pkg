@@ -3,10 +3,8 @@ import {
   "Milky2018/wasmoon/logger",
   "moonbitlang/core/env",
   "moonbitlang/x/sys",
-  "TheWaWaR/clap",
-  "moonbitlang/core/hashset",
+  "moonbitlang/core/argparse",
   "moonbitlang/core/string",
-  "moonbitlang/core/strconv",
 }
 
 pkgtype(kind: "executable")

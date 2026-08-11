@@ -68,23 +68,23 @@ pub fn memory_descriptor_fill(
 }
 
 ///|
-fn context_func_table_ptr(ctx_ptr : Int64) -> Int64 {
-  c_jit_ctx_get_func_table(ctx_ptr)
+fn context_func_table_ptr(context : JITContext) -> Int64 {
+  c_jit_ctx_get_func_table_managed(context)
 }
 
 ///|
-fn context_func_count(ctx_ptr : Int64) -> Int {
-  c_jit_ctx_get_func_count(ctx_ptr)
+fn context_func_count(context : JITContext) -> Int {
+  c_jit_ctx_get_func_count_managed(context)
 }
 
 ///|
-fn context_table_ptr(ctx_ptr : Int64, table_idx : Int) -> Int64 {
-  c_jit_ctx_get_table_ptr(ctx_ptr, table_idx)
+fn context_table_ptr(context : JITContext, table_idx : Int) -> Int64 {
+  c_jit_ctx_get_table_ptr_managed(context, table_idx)
 }
 
 ///|
-fn context_table_size(ctx_ptr : Int64, table_idx : Int) -> Int {
-  c_jit_ctx_get_table_size(ctx_ptr, table_idx)
+fn context_table_size(context : JITContext, table_idx : Int) -> Int {
+  c_jit_ctx_get_table_size_managed(context, table_idx)
 }
 
 ///|
@@ -92,7 +92,7 @@ pub fn NativeJITContext::set_memory(
   self : NativeJITContext,
   mem0_ptr : Int64,
 ) -> Unit {
-  self.with_ptr(fn(ptr) { c_jit_ctx_set_memory(ptr, mem0_ptr) })
+  c_jit_ctx_set_memory_managed(self.handle, mem0_ptr)
 }
 
 ///|
@@ -101,13 +101,11 @@ pub fn NativeJITContext::alloc_guarded_memory(
   initial_pages : Int,
   max_pages : Int?,
 ) -> Int64 {
-  self.with_ptr(fn(ptr) {
-    c_jit_ctx_alloc_guarded_memory(
-      ptr,
-      initial_pages.to_int64(),
-      max_pages.unwrap_or(-1).to_int64(),
-    )
-  })
+  c_jit_ctx_alloc_guarded_memory_managed(
+    self.handle,
+    initial_pages.to_int64(),
+    max_pages.unwrap_or(-1).to_int64(),
+  )
 }
 
 ///|
@@ -115,15 +113,13 @@ pub fn NativeJITContext::func_ptr(
   self : NativeJITContext,
   func_idx : Int,
 ) -> Int64 {
-  self.with_ptr(fn(ptr) {
-    let table_ptr = context_func_table_ptr(ptr)
-    let count = context_func_count(ptr)
-    if table_ptr != 0L && func_idx >= 0 && func_idx < count {
-      native_value_slot_read(table_ptr, func_idx)
-    } else {
-      0L
-    }
-  })
+  let table_ptr = context_func_table_ptr(self.handle)
+  let count = context_func_count(self.handle)
+  if table_ptr != 0L && func_idx >= 0 && func_idx < count {
+    native_value_slot_read(table_ptr, func_idx)
+  } else {
+    0L
+  }
 }
 
 ///|
@@ -151,15 +147,13 @@ pub fn NativeJITContext::set_table_pointers(
       None => ()
     }
   }
-  self.with_ptr(fn(ptr) {
-    c_jit_ctx_set_table_pointers(
-      ptr,
-      table_ptrs,
-      table_sizes,
-      table_max_sizes,
-      jit_tables.length(),
-    )
-  })
+  c_jit_ctx_set_table_pointers_managed(
+    self.handle,
+    table_ptrs,
+    table_sizes,
+    table_max_sizes,
+    jit_tables.length(),
+  )
 }
 
 ///|
@@ -173,9 +167,8 @@ pub fn NativeJITContext::refresh_table_layout(
     return false
   }
   guard self.jit_tables[table_idx] is Some(jit_table) else { return false }
-  let (table_ptr, size) = self.with_ptr(fn(ptr) {
-    (context_table_ptr(ptr, table_idx), context_table_size(ptr, table_idx))
-  })
+  let table_ptr = context_table_ptr(self.handle, table_idx)
+  let size = context_table_size(self.handle, table_idx)
   if table_ptr == 0L || size < 0 {
     return false
   }
@@ -195,9 +188,7 @@ pub fn NativeJITContext::set_memory_pointers(
   for i, mem in memories {
     ptrs[i] = mem.ptr
   }
-  self.with_ptr(fn(ptr) {
-    c_jit_ctx_set_memory_pointers(ptr, ptrs, memories.length())
-  })
+  c_jit_ctx_set_memory_pointers_managed(self.handle, ptrs, memories.length())
 }
 
 ///|
@@ -205,7 +196,7 @@ pub fn NativeJITContext::memory_ptr(
   self : NativeJITContext,
   memidx : Int,
 ) -> Int64 {
-  self.with_ptr(fn(ptr) { c_jit_ctx_get_memory_ptr(ptr, memidx) })
+  c_jit_ctx_get_memory_ptr_managed(self.handle, memidx)
 }
 
 ///|
@@ -213,7 +204,7 @@ pub fn NativeJITContext::memory_size(
   self : NativeJITContext,
   memidx : Int,
 ) -> Int64 {
-  self.with_ptr(fn(ptr) { c_jit_ctx_get_memory_size(ptr, memidx) })
+  c_jit_ctx_get_memory_size_managed(self.handle, memidx)
 }
 
 ///|

@@ -482,6 +482,10 @@ class GateManifestTests(unittest.TestCase):
             workflow.count("python3 scripts/audit_component_security.py"),
             1,
         )
+        self.assertEqual(
+            workflow.count("python3 scripts/audit_jit_context_lifetimes.py"),
+            1,
+        )
         self.assertEqual(workflow.count("run stable Component Model 0.2"), 1)
         self.assertEqual(workflow.count("run Component Model 0.3 async"), 1)
         self.assertEqual(

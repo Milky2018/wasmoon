@@ -30,6 +30,7 @@ pub(all) suberror ValidationError {
   UninitializedLocal(Int) // Non-nullable ref local read before initialization
   InvalidStartFunction(String) // Start function has invalid signature
   UndeclaredFunctionReference(Int) // ref.func used on function not declared in elem/global
+  UnsupportedInstruction(String) // Instruction missing from validator dispatch
   // Error with location context
   WithContext(ValidationErrorContext)
 } derive(Debug)
@@ -90,6 +91,7 @@ pub fn ValidationErrorContext::from_error(
     UninitializedLocal(_) => "uninitialized local"
     InvalidStartFunction(m) => m
     UndeclaredFunctionReference(_) => "undeclared function reference"
+    UnsupportedInstruction(m) => m
     WithContext(ctx) => ctx.error_msg
   }
   { error_msg: msg, func_idx: None, instr_offset: None, instruction: None }

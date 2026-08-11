@@ -310,7 +310,7 @@ fn EGraphBuilder::elaborate_inst(
     emitted.push(func.new_inst(step.opcode, step_operands, [value]))
     built.push(value)
     self.ensure_value_slot(value.id)
-    self.value_map[value.id] = Some(@egraph.EClassId(step.class_id))
+    self.value_map[value.id] = Some(EClassId(step.class_id))
   }
   let new_operands : Array[Value] = []
   for operand in root_operands {

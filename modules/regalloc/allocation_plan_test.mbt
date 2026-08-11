@@ -434,7 +434,7 @@ test "both strategies keep the dense live range resident" {
     allocate_function(
       function,
       environment,
-      config=RegallocConfig(strategy=SinglePass),
+      config=RegallocConfig(strategy=Fast),
     ),
     content=(
       #|{
@@ -571,8 +571,8 @@ test "backtracking parks cold live-through values outside hot loops" {
       #|{
       #|  value_locations: [
       #|    Some(Spill(0)),
-      #|    Some(Reg({ id: 0, class: Int })),
       #|    Some(Reg({ id: 1, class: Int })),
+      #|    Some(Reg({ id: 0, class: Int })),
       #|    Some(Reg({ id: 1, class: Int })),
       #|    Some(Reg({ id: 0, class: Int })),
       #|  ],
@@ -598,18 +598,6 @@ test "backtracking parks cold live-through values outside hot loops" {
       #|      from: Spill(0),
       #|      to: Reg({ id: 0, class: Int }),
       #|      position: Before(21),
-      #|    },
-      #|    {
-      #|      value: { id: 1, class: Int },
-      #|      from: Reg({ id: 0, class: Int }),
-      #|      to: Reg({ id: 1, class: Int }),
-      #|      position: Edge(source_block=0, successor_index=0),
-      #|    },
-      #|    {
-      #|      value: { id: 2, class: Int },
-      #|      from: Reg({ id: 1, class: Int }),
-      #|      to: Reg({ id: 0, class: Int }),
-      #|      position: Edge(source_block=0, successor_index=0),
       #|    },
       #|  ],
       #|  spill_slots: [{ size: 8, alignment: 8 }],
@@ -750,17 +738,17 @@ test "backtracking coalesces conflict-free edges and preserves loop transfers" {
       #|    Some(Reg({ id: 2, class: Int })),
       #|    Some(Reg({ id: 0, class: Int })),
       #|    Some(Reg({ id: 1, class: Int })),
-      #|    Some(Reg({ id: 3, class: Int })),
+      #|    Some(Reg({ id: 2, class: Int })),
       #|  ],
       #|  operand_locations: {
       #|    (1, 0): Reg({ id: 2, class: Int }),
       #|    (1, 1): Reg({ id: 0, class: Int }),
-      #|    (1, 2): Reg({ id: 3, class: Int }),
+      #|    (1, 2): Reg({ id: 2, class: Int }),
       #|  },
       #|  operand_assignments: [
       #|    { instruction: 1, operand: 0, location: Reg({ id: 2, class: Int }) },
       #|    { instruction: 1, operand: 1, location: Reg({ id: 0, class: Int }) },
-      #|    { instruction: 1, operand: 2, location: Reg({ id: 3, class: Int }) },
+      #|    { instruction: 1, operand: 2, location: Reg({ id: 2, class: Int }) },
       #|  ],
       #|  edits: [
       #|    {
@@ -771,7 +759,7 @@ test "backtracking coalesces conflict-free edges and preserves loop transfers" {
       #|    },
       #|    {
       #|      value: { id: 6, class: Int },
-      #|      from: Reg({ id: 3, class: Int }),
+      #|      from: Reg({ id: 2, class: Int }),
       #|      to: Reg({ id: 0, class: Int }),
       #|      position: Edge(source_block=1, successor_index=0),
       #|    },
@@ -779,6 +767,46 @@ test "backtracking coalesces conflict-free edges and preserves loop transfers" {
       #|  spill_slots: [],
       #|}
     ),
+  )
+}
+
+///|
+test "fast allocation verifies branch and loop transfers" {
+  let function : CfgTestFunction = {
+    value_count: 7,
+    blocks: [[0], [1, 2]],
+    instructions: [
+      [],
+      [
+        Operand::use_reg(value(3)).with_timing(Early),
+        Operand::use_reg(value(4)).with_timing(Early),
+        Operand::def(value(6)).with_timing(Late),
+      ],
+      [],
+    ],
+    clobbers: [[], [], []],
+    successors: [[1], [1]],
+    entry_values: [value(0), value(1), value(2)],
+    parameters: [[], [value(3), value(4), value(5)]],
+    edge_arguments: [
+      [[value(0), value(1), value(2)]],
+      [[value(4), value(6), value(5)]],
+    ],
+  }
+  let plan = allocate_function(
+    function,
+    MachineEnv::new([int_reg(0), int_reg(1), int_reg(2), int_reg(3)], [
+      int_reg(4),
+    ]),
+    config=RegallocConfig(strategy=Fast),
+  )
+  debug_inspect(
+    (
+      plan.operand_assignments().length(),
+      plan.edits().length(),
+      plan.spill_count(),
+    ),
+    content="(3, 5, 0)",
   )
 }
 
@@ -918,6 +946,68 @@ test "backtracking honors a fixed-register operand" {
       #|  spill_slots: [],
       #|}
     ),
+  )
+}
+
+///|
+test "fast allocation preserves tied and fixed operands across a clobber" {
+  let function : CfgTestFunction = {
+    value_count: 2,
+    blocks: [[0, 1]],
+    instructions: [
+      [
+        Operand::use_reg(value(0)).with_tie(0),
+        Operand::def(value(1)).with_tie(0),
+      ],
+      [Operand::use_reg(value(1)).with_constraint(FixedReg(int_reg(1)))],
+    ],
+    clobbers: [[], [int_reg(0)]],
+    successors: [[]],
+    entry_values: [value(0)],
+    parameters: [[]],
+    edge_arguments: [[]],
+  }
+  let plan = allocate_function(
+    function,
+    MachineEnv::new([int_reg(0), int_reg(1)], [int_reg(2)]),
+    config=RegallocConfig(strategy=Fast),
+  )
+  debug_inspect(
+    (
+      plan.operand_location(0, 0),
+      plan.operand_location(0, 1),
+      plan.operand_location(1, 0),
+    ),
+    content=(
+      #|(
+      #|  Some(Reg({ id: 0, class: Int })),
+      #|  Some(Reg({ id: 0, class: Int })),
+      #|  Some(Reg({ id: 1, class: Int })),
+      #|)
+    ),
+  )
+}
+
+///|
+test "fast allocation applies AnyReg to the whole tied group" {
+  let function : TestFunction = {
+    value_count: 2,
+    block_parameters: [value(0)],
+    instructions: [
+      [
+        Operand::use_reg(value(0)).with_constraint(AnyLocation).with_tie(0),
+        Operand::def(value(1)).with_constraint(AnyReg).with_tie(0),
+      ],
+    ],
+  }
+  let plan = allocate_function(
+    function,
+    MachineEnv::new([], [int_reg(0)]),
+    config=RegallocConfig(strategy=Fast),
+  )
+  debug_inspect(
+    (plan.operand_location(0, 0), plan.operand_location(0, 1)),
+    content="(Some(Reg({ id: 0, class: Int })), Some(Reg({ id: 0, class: Int })))",
   )
 }
 

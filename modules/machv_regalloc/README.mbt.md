@@ -28,7 +28,7 @@ VCode `Allocation` side tables, and then runs the independent VCode allocation
 verifier. Production enables both the reusable plan verifier and the
 materialized VCode state verifier; the latter follows resident values through
 edits, clobbers, and CFG joins. There is no second backtracking policy package
-and no production fallback to `SinglePass`.
+and no production fallback to `Fast`.
 
 Ordinary `Input::any` operands require a register at the instruction. A target
 operation that can consume a register or spill slot directly uses

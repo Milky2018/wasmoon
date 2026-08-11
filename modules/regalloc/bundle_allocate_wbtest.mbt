@@ -2,6 +2,7 @@
 priv enum BundleStateSnapshot {
   SnapshotPending
   SnapshotReg(PhysicalReg)
+  SnapshotDeferredSpill
   SnapshotSpill
   SnapshotSplit
 } derive(Debug)
@@ -54,10 +55,22 @@ priv struct BundleEvictionSnapshot {
 } derive(Debug)
 
 ///|
+priv struct GapSplitSnapshot {
+  before : Int?
+  spill : Int
+  after : Int?
+  ranges : Array[ProgramRange]
+  owners : Array[Int]
+  spill_sets : Array[Int]
+  use_free : Array[Bool]
+} derive(Debug)
+
+///|
 fn snapshot_bundle_state(state : AllocationBundleState) -> BundleStateSnapshot {
   match state {
     BundlePending => SnapshotPending
     BundleReg(reg) => SnapshotReg(reg)
+    BundleDeferredSpill => SnapshotDeferredSpill
     BundleSpill => SnapshotSpill
     BundleSplit => SnapshotSplit
   }
@@ -102,6 +115,172 @@ fn snapshot_bundle_allocation(
 }
 
 ///|
+test "range split isolates the use-free gap and preserves spillset lineage" {
+  let ranges = LiveRangeSet::LiveRangeSet([0])
+  let live_range = bundle_test_range(0, Int, 0, 10, [])
+  live_range.add_use(UsePosition(ProgramPoint(0, 0), LiveDef, AnyLocation))
+  live_range.add_use(UsePosition(ProgramPoint(0, 10), LiveUse, AnyReg))
+  ranges.add_range(live_range)
+  let (segments, segments_by_value) = build_allocation_segments(ranges)
+  let owners = [4]
+  let spill_sets = [0]
+  let occupied = RegisterAllocationIndex::new(1, segments, [0])
+  let parts = split_segment_around_gap(
+    0,
+    ProgramPoint(0, 5),
+    segments,
+    segments_by_value,
+    owners,
+    spill_sets,
+    occupied,
+    ranges,
+    [0],
+    [],
+  ).unwrap()
+  debug_inspect(
+    GapSplitSnapshot::{
+      before: parts.before,
+      spill: parts.spill,
+      after: parts.after,
+      ranges: segments.map(segment => segment.range),
+      owners,
+      spill_sets,
+      use_free: segments.map(segment => segment_carries_no_use(segment, ranges)),
+    },
+    content=(
+      #|{
+      #|  before: Some(0),
+      #|  spill: 1,
+      #|  after: Some(2),
+      #|  ranges: [
+      #|    { start: { block: 0, inst: 0 }, end: { block: 0, inst: 0 } },
+      #|    { start: { block: 0, inst: 1 }, end: { block: 0, inst: 9 } },
+      #|    { start: { block: 0, inst: 10 }, end: { block: 0, inst: 10 } },
+      #|  ],
+      #|  owners: [4, 4, 4],
+      #|  spill_sets: [0, 0, 0],
+      #|  use_free: [false, true, false],
+      #|}
+    ),
+  )
+}
+
+///|
+test "spill bundle is normalized before conflict probes" {
+  let r0 : PhysicalReg = { id: 0, class: Int }
+  let segments : Array[AllocationSegment] = [
+    {
+      id: 0,
+      value: { id: 0, class: Int },
+      range: ProgramRange(ProgramPoint(0, 5), ProgramPoint(0, 20)),
+      weight: 1,
+      has_fixed_constraint: false,
+      fixed_hint: None,
+      preference_hint: None,
+      location: Some(SegmentReg(r0)),
+    },
+    {
+      id: 1,
+      value: { id: 1, class: Int },
+      range: ProgramRange(ProgramPoint(1, 0), ProgramPoint(1, 0)),
+      weight: 1,
+      has_fixed_constraint: false,
+      fixed_hint: None,
+      preference_hint: None,
+      location: None,
+    },
+    {
+      id: 2,
+      value: { id: 2, class: Int },
+      range: ProgramRange(ProgramPoint(0, 0), ProgramPoint(0, 10)),
+      weight: 1,
+      has_fixed_constraint: false,
+      fixed_hint: None,
+      preference_hint: None,
+      location: None,
+    },
+  ]
+  let bundles = [allocation_bundle(0, [0], segments, [0, 1])]
+  bundles[0].state = BundleReg(r0)
+  let owners = [0, -1, -1]
+  let spill_sets : Array[SpillSet] = [
+    { weight: 1, splits: 0, hint: None, spill_bundle: None },
+  ]
+  add_to_spill_bundle(0, 1, bundles, owners, spill_sets, segments, [0, 1])
+  add_to_spill_bundle(0, 2, bundles, owners, spill_sets, segments, [0, 1])
+  prepare_spill_bundle(bundles[1], segments, [0, 1])
+  let occupied = RegisterAllocationIndex::new(1, segments, [0, 1])
+  occupied.insert(0, 0)
+  let probe = probe_bundle_register(
+    bundles[1],
+    0,
+    r0,
+    bundles,
+    spill_sets,
+    segments,
+    owners,
+    occupied,
+    { points_by_reg: Map([]), block_order: [0, 1] },
+    [0, 1],
+    Array::make(bundles.length(), 0),
+    1,
+    [],
+  )
+  debug_inspect((bundles[1].segments, probe.conflicts), content="([2, 1], [0])")
+}
+
+///|
+test "split cap moves the remaining bundle to stable spill handling" {
+  let ranges = LiveRangeSet::LiveRangeSet([0])
+  let range = bundle_test_range(0, Int, 0, 2, [])
+  range.add_use(UsePosition(ProgramPoint(0, 0), LiveUse, AnyReg))
+  ranges.add_range(range)
+  let (segments, segments_by_value) = build_allocation_segments(ranges)
+  let plan : ProductionBundlePlan = {
+    range_to_bundle: [0],
+    segment_to_bundle: [0],
+    bundle_ranges: [[0]],
+    bundle_segments: [[0]],
+  }
+  let (bundles, owners, spill_sets, segment_spill_sets) = build_allocation_bundles(
+    plan,
+    segments,
+    [0],
+  )
+  spill_sets[0].splits = MAX_SPLITS_PER_SPILL_SET
+  let queue = BundleQueue::new(bundles)
+  let occupied = RegisterAllocationIndex::new(1, segments, [0])
+  let split = split_bundle_at_conflict(
+    bundles[0],
+    Some(ProgramPoint(0, 1)),
+    None,
+    bundles,
+    owners,
+    queue,
+    segments,
+    segments_by_value,
+    segment_spill_sets,
+    spill_sets,
+    occupied,
+    ranges,
+    [0],
+    [],
+  )
+  debug_inspect(
+    (
+      split,
+      spill_sets[0].splits,
+      snapshot_bundle_state(bundles[0].state),
+      bundles[1].segments,
+      snapshot_bundle_state(bundles[1].state),
+      owners,
+      segments.length(),
+    ),
+    content="(true, 2, SnapshotSplit, [0], SnapshotDeferredSpill, [1], 1)",
+  )
+}
+
+///|
 test "production allocation assigns an SSA bundle atomically" {
   let ranges = LiveRangeSet::LiveRangeSet([0, 1, 2])
   ranges.add_range(bundle_test_range(0, Int, 0, 2, []))
@@ -114,11 +293,10 @@ test "production allocation assigns an SSA bundle atomically" {
     parameters: [[], [{ id: 1, class: Int }], [{ id: 2, class: Int }]],
     edge_arguments: [[[{ id: 0, class: Int }]], [[{ id: 1, class: Int }]], []],
   }
-  let (segments, _, bundles, segment_owner, _) = allocate_segments_with_bundles(
+  let (segments, _, bundles, segment_owner, _, _) = allocate_segments_with_bundles(
     function,
     MachineEnv::new([{ id: 0, class: Int }], []),
     ranges,
-    Backtracking,
   )
   debug_inspect(
     snapshot_bundle_allocation(bundles, segments, segment_owner),
@@ -158,30 +336,30 @@ test "production allocation evicts then splits a cheaper long bundle" {
       value: { id: 0, class: Int },
       range: ProgramRange(ProgramPoint(0, 0), ProgramPoint(0, 2)),
       weight: 2,
-      has_use: true,
       has_fixed_constraint: true,
+      fixed_hint: Some(r0),
+      preference_hint: None,
       location: None,
-      defer_home: false,
     },
     {
       id: 1,
       value: { id: 1, class: Int },
       range: ProgramRange(ProgramPoint(0, 4), ProgramPoint(0, 6)),
       weight: 3,
-      has_use: true,
       has_fixed_constraint: false,
+      fixed_hint: None,
+      preference_hint: None,
       location: None,
-      defer_home: false,
     },
     {
       id: 2,
       value: { id: 2, class: Int },
       range: ProgramRange(ProgramPoint(0, 4), ProgramPoint(0, 6)),
       weight: 20,
-      has_use: true,
       has_fixed_constraint: false,
+      fixed_hint: None,
+      preference_hint: None,
       location: None,
-      defer_home: false,
     },
   ]
   let plan : ProductionBundlePlan = {
@@ -198,13 +376,14 @@ test "production allocation evicts then splits a cheaper long bundle" {
     parameters: [[]],
     edge_arguments: [[]],
   }
-  let (bundles, segment_owner) = allocate_bundles(
+  let (bundles, segment_owner, _, _) = allocate_bundles(
     function,
     MachineEnv::new([r0], []),
     ranges,
     segments,
+    [[0], [1], [2]],
+    [0],
     plan,
-    Backtracking,
   )
   debug_inspect(
     snapshot_bundle_allocation(bundles, segments, segment_owner),
@@ -229,22 +408,22 @@ test "production allocation evicts then splits a cheaper long bundle" {
       #|    },
       #|    {
       #|      id: 2,
-      #|      segments: [0],
-      #|      priority: 3,
-      #|      weight: 2,
-      #|      has_fixed_constraint: true,
-      #|      state: SnapshotReg({ id: 0, class: Int }),
-      #|    },
-      #|    {
-      #|      id: 3,
       #|      segments: [1],
       #|      priority: 3,
       #|      weight: 3,
       #|      has_fixed_constraint: false,
       #|      state: SnapshotSpill,
       #|    },
+      #|    {
+      #|      id: 3,
+      #|      segments: [0],
+      #|      priority: 3,
+      #|      weight: 2,
+      #|      has_fixed_constraint: true,
+      #|      state: SnapshotReg({ id: 0, class: Int }),
+      #|    },
       #|  ],
-      #|  segment_owner: [2, 3, 1],
+      #|  segment_owner: [3, 2, 1],
       #|  segment_locations: [
       #|    SnapshotSegmentReg({ id: 0, class: Int }),
       #|    SnapshotSegmentSpill,
@@ -264,67 +443,80 @@ test "production eviction accounts for and removes every conflicting bundle" {
       value: { id: 0, class: Int },
       range: ProgramRange(ProgramPoint(0, 0), ProgramPoint(0, 4)),
       weight: 4,
-      has_use: true,
       has_fixed_constraint: false,
+      fixed_hint: None,
+      preference_hint: None,
       location: Some(SegmentReg(r0)),
-      defer_home: false,
     },
     {
       id: 1,
       value: { id: 1, class: Int },
       range: ProgramRange(ProgramPoint(0, 6), ProgramPoint(0, 10)),
       weight: 5,
-      has_use: true,
       has_fixed_constraint: false,
+      fixed_hint: None,
+      preference_hint: None,
       location: Some(SegmentReg(r0)),
-      defer_home: false,
     },
     {
       id: 2,
       value: { id: 2, class: Int },
       range: ProgramRange(ProgramPoint(0, 1), ProgramPoint(0, 3)),
       weight: 6,
-      has_use: true,
       has_fixed_constraint: false,
+      fixed_hint: None,
+      preference_hint: None,
       location: None,
-      defer_home: false,
     },
     {
       id: 3,
       value: { id: 2, class: Int },
       range: ProgramRange(ProgramPoint(0, 7), ProgramPoint(0, 9)),
       weight: 6,
-      has_use: true,
       has_fixed_constraint: false,
+      fixed_hint: None,
+      preference_hint: None,
       location: None,
-      defer_home: false,
     },
   ]
   let bundles : Array[AllocationBundle] = [
-    allocation_bundle(0, [0], segments),
-    allocation_bundle(1, [1], segments),
-    allocation_bundle(2, [2, 3], segments),
+    allocation_bundle(0, [0], segments, [0]),
+    allocation_bundle(1, [1], segments, [0]),
+    allocation_bundle(2, [2, 3], segments, [0]),
   ]
   bundles[0].state = BundleReg(r0)
   bundles[1].state = BundleReg(r0)
-  let occupied = [[0, 1]]
+  let occupied = RegisterAllocationIndex::new(1, segments, [0])
+  occupied.insert(0, 0)
+  occupied.insert(0, 1)
+  let occupied_stack : Array[Int] = []
+  let spill_sets : Array[SpillSet] = bundles.map(bundle => {
+    weight: bundle.weight,
+    splits: 0,
+    hint: None,
+    spill_bundle: None,
+  })
   let probe = probe_bundle_register(
     bundles[2],
     0,
     r0,
     bundles,
+    spill_sets,
     segments,
     [0, 1, 2, 2],
     occupied,
     { points_by_reg: Map([]), block_order: [0] },
     [0],
+    Array::make(bundles.length(), 0),
+    1,
+    occupied_stack,
   )
   let probe_snapshot : BundleProbeSnapshot = {
     conflicts: probe.conflicts,
     conflict_cost: probe.conflict_cost,
     first_conflict: probe.first_conflict,
     clobbered: probe.clobbered,
-    can_evict: bundle_can_evict(true, bundles[2], probe),
+    can_evict: bundle_can_evict(bundles[2], probe, spill_sets),
   }
   debug_inspect(
     probe_snapshot,
@@ -338,7 +530,7 @@ test "production eviction accounts for and removes every conflicting bundle" {
       #|}
     ),
   )
-  let queue = BundleQueue::new(bundles, true)
+  let queue = BundleQueue::new(bundles)
   evict_bundle_conflicts(
     probe.conflicts,
     bundles,
@@ -351,12 +543,17 @@ test "production eviction accounts for and removes every conflicting bundle" {
   while queue.pop() is Some(entry) {
     requeued.push(entry.bundle)
   }
+  let remaining : Array[Int] = []
+  occupied.seek(0, ProgramPoint(0, -1), occupied_stack)
+  while occupied.next(occupied_stack) is Some(segment) {
+    remaining.push(segment)
+  }
   let eviction_snapshot : BundleEvictionSnapshot = {
     bundles: snapshot_bundles(bundles),
     segment_locations: segments.map(segment => {
       snapshot_segment_location(segment.location)
     }),
-    occupied,
+    occupied: [remaining],
     requeued,
   }
   debug_inspect(
@@ -400,6 +597,34 @@ test "production eviction accounts for and removes every conflicting bundle" {
       #|}
     ),
   )
+  let cutoff_occupied = RegisterAllocationIndex::new(1, segments, [0])
+  cutoff_occupied.insert(0, 0)
+  cutoff_occupied.insert(0, 1)
+  let cutoff_probe = probe_bundle_register(
+    bundles[2],
+    0,
+    r0,
+    bundles,
+    spill_sets,
+    segments,
+    [0, 1, 2, 2],
+    cutoff_occupied,
+    { points_by_reg: Map([]), block_order: [0] },
+    [0],
+    Array::make(bundles.length(), 0),
+    1,
+    occupied_stack,
+    max_conflict_cost=Some(3),
+  )
+  debug_inspect(
+    (
+      cutoff_probe.cutoff_exceeded,
+      cutoff_probe.conflicts,
+      cutoff_probe.conflict_cost,
+      cutoff_probe.first_conflict,
+    ),
+    content="(true, [0], 4, Some({ block: 0, inst: 1 }))",
+  )
 }
 
 ///|
@@ -410,37 +635,39 @@ test "production bundle queue keeps live extent separate from spill weight" {
       value: { id: 0, class: Int },
       range: ProgramRange(ProgramPoint(0, 0), ProgramPoint(0, 0)),
       weight: 100,
-      has_use: true,
       has_fixed_constraint: false,
+      fixed_hint: None,
+      preference_hint: None,
       location: None,
-      defer_home: false,
     },
     {
       id: 1,
       value: { id: 1, class: Int },
       range: ProgramRange(ProgramPoint(0, 0), ProgramPoint(0, 4)),
       weight: 10,
-      has_use: true,
       has_fixed_constraint: false,
+      fixed_hint: None,
+      preference_hint: None,
       location: None,
-      defer_home: false,
     },
     {
       id: 2,
       value: { id: 2, class: Int },
       range: ProgramRange(ProgramPoint(0, 0), ProgramPoint(0, 2)),
       weight: 50,
-      has_use: true,
       has_fixed_constraint: false,
+      fixed_hint: None,
+      preference_hint: None,
       location: None,
-      defer_home: false,
     },
   ]
   let bundles : Array[AllocationBundle] = []
   for segment in segments {
-    bundles.push(allocation_bundle(bundles.length(), [segment.id], segments))
+    bundles.push(
+      allocation_bundle(bundles.length(), [segment.id], segments, [0]),
+    )
   }
-  let queue = BundleQueue::new(bundles, true)
+  let queue = BundleQueue::new(bundles)
   for bundle in bundles {
     queue.push(bundle.id, None)
   }
@@ -489,73 +716,30 @@ test "production bundle queue keeps live extent separate from spill weight" {
 }
 
 ///|
-fn allocation_cost_test_segment(
-  id : Int,
-  value : Int,
-  weight : Int,
-  has_use : Bool,
-) -> AllocationSegment {
-  {
-    id,
-    value: { id: value, class: Int },
-    range: ProgramRange(ProgramPoint(id, 0), ProgramPoint(id, 0)),
-    weight,
-    has_use,
-    has_fixed_constraint: false,
-    location: None,
-    defer_home: false,
-  }
-}
-
-///|
-test "small same-value bundle sums its two hottest active fragment costs" {
-  let segments : Array[AllocationSegment] = [
-    allocation_cost_test_segment(0, 0, 40, true),
-    allocation_cost_test_segment(1, 0, 20, true),
-    allocation_cost_test_segment(2, 0, 12, true),
-  ]
-  inspect(allocation_bundle(0, [0, 1, 2], segments).weight, content="60")
-}
-
-///|
 test "two-fragment bundle keeps density eviction cost" {
   let segments : Array[AllocationSegment] = [
-    allocation_cost_test_segment(0, 0, 40, true),
-    allocation_cost_test_segment(1, 0, 20, true),
+    {
+      id: 0,
+      value: { id: 0, class: Int },
+      range: ProgramRange(ProgramPoint(0, 0), ProgramPoint(0, 0)),
+      weight: 40,
+      has_fixed_constraint: false,
+      fixed_hint: None,
+      preference_hint: None,
+      location: None,
+    },
+    {
+      id: 1,
+      value: { id: 0, class: Int },
+      range: ProgramRange(ProgramPoint(1, 0), ProgramPoint(1, 0)),
+      weight: 20,
+      has_fixed_constraint: false,
+      fixed_hint: None,
+      preference_hint: None,
+      location: None,
+    },
   ]
-  inspect(allocation_bundle(0, [0, 1], segments).weight, content="30")
-}
-
-///|
-test "coalesced SSA values keep density eviction cost" {
-  let segments : Array[AllocationSegment] = [
-    allocation_cost_test_segment(0, 0, 40, true),
-    allocation_cost_test_segment(1, 1, 20, true),
-    allocation_cost_test_segment(2, 2, 12, true),
-  ]
-  inspect(allocation_bundle(0, [0, 1, 2], segments).weight, content="24")
-}
-
-///|
-test "interior cold gap keeps density eviction cost" {
-  let segments : Array[AllocationSegment] = [
-    allocation_cost_test_segment(0, 0, 40, true),
-    allocation_cost_test_segment(1, 0, 5, false),
-    allocation_cost_test_segment(2, 0, 15, true),
-  ]
-  inspect(allocation_bundle(0, [0, 1, 2], segments).weight, content="20")
-}
-
-///|
-test "bundle with more than four fragments keeps density eviction cost" {
-  let segments : Array[AllocationSegment] = [
-    allocation_cost_test_segment(0, 0, 40, true),
-    allocation_cost_test_segment(1, 0, 20, true),
-    allocation_cost_test_segment(2, 0, 15, true),
-    allocation_cost_test_segment(3, 0, 10, true),
-    allocation_cost_test_segment(4, 0, 5, true),
-  ]
-  inspect(allocation_bundle(0, [0, 1, 2, 3, 4], segments).weight, content="18")
+  inspect(allocation_bundle(0, [0, 1], segments, [0, 1]).weight, content="30")
 }
 
 ///|
@@ -718,5 +902,51 @@ test "clobber query excludes range boundaries and scales logarithmically" {
       index.query(r0, ProgramRange(ProgramPoint(0, -1), ProgramPoint(0, 8193))),
     ),
     content="((None, 14), (None, 14), (Some({ block: 0, inst: 1 }), 14))",
+  )
+}
+
+///|
+test "clobber intersection skips boundaries and gaps between segments" {
+  let r0 : PhysicalReg = { id: 0, class: Int }
+  let index : RegisterClobberIndex = {
+    points_by_reg: Map([
+      (
+        physical_reg_key(r0),
+        [
+          ProgramPoint(0, 1),
+          ProgramPoint(0, 3),
+          ProgramPoint(0, 5),
+          ProgramPoint(0, 7),
+          ProgramPoint(0, 9),
+        ],
+      ),
+    ]),
+    block_order: [0],
+  }
+  let segments : Array[AllocationSegment] = [
+    {
+      id: 0,
+      value: { id: 0, class: Int },
+      range: ProgramRange(ProgramPoint(0, 1), ProgramPoint(0, 3)),
+      weight: 1,
+      has_fixed_constraint: false,
+      fixed_hint: None,
+      preference_hint: None,
+      location: None,
+    },
+    {
+      id: 1,
+      value: { id: 0, class: Int },
+      range: ProgramRange(ProgramPoint(0, 6), ProgramPoint(0, 9)),
+      weight: 1,
+      has_fixed_constraint: false,
+      fixed_hint: None,
+      preference_hint: None,
+      location: None,
+    },
+  ]
+  debug_inspect(
+    index.first_intersection(r0, [0, 1], segments),
+    content="Some({ block: 0, inst: 7 })",
   )
 }

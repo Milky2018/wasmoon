@@ -3939,3 +3939,124 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_free_wasi_fds(int64_t ctx_ptr) {
     ctx->wasi_stderr_len = 0;
     ctx->wasi_stderr_cap = 0;
 }
+
+extern int64_t wasmoon_jit_context_ptr(void *jit_context);
+
+#define MANAGED_CTX(jit_context) wasmoon_jit_context_ptr(jit_context)
+
+MOONBIT_FFI_EXPORT void wasmoon_jit_init_wasi_fds_managed(
+    void *jit_context, int preopen_count
+) {
+    wasmoon_jit_init_wasi_fds(MANAGED_CTX(jit_context), preopen_count);
+}
+
+MOONBIT_FFI_EXPORT void wasmoon_jit_init_wasi_fds_quiet_managed(
+    void *jit_context, int preopen_count
+) {
+    wasmoon_jit_init_wasi_fds_quiet(
+        MANAGED_CTX(jit_context), preopen_count
+    );
+}
+
+MOONBIT_FFI_EXPORT void wasmoon_jit_add_preopen_managed(
+    void *jit_context,
+    int idx,
+    const char *host_path,
+    const char *guest_path
+) {
+    wasmoon_jit_add_preopen(
+        MANAGED_CTX(jit_context), idx, host_path, guest_path
+    );
+}
+
+MOONBIT_FFI_EXPORT void wasmoon_jit_set_wasi_stdout_capture_managed(
+    void *jit_context, int enabled
+) {
+    wasmoon_jit_set_wasi_stdout_capture(MANAGED_CTX(jit_context), enabled);
+}
+
+MOONBIT_FFI_EXPORT void wasmoon_jit_set_wasi_stderr_capture_managed(
+    void *jit_context, int enabled
+) {
+    wasmoon_jit_set_wasi_stderr_capture(MANAGED_CTX(jit_context), enabled);
+}
+
+MOONBIT_FFI_EXPORT void wasmoon_jit_set_wasi_stdin_buffer_managed(
+    void *jit_context, moonbit_bytes_t data, int len
+) {
+    wasmoon_jit_set_wasi_stdin_buffer(
+        MANAGED_CTX(jit_context), data, len
+    );
+}
+
+MOONBIT_FFI_EXPORT void wasmoon_jit_set_wasi_stdin_callback_managed(
+    void *jit_context,
+    wasi_stdin_callback_fn callback,
+    void *closure
+) {
+    wasmoon_jit_set_wasi_stdin_callback(
+        MANAGED_CTX(jit_context), callback, closure
+    );
+}
+
+MOONBIT_FFI_EXPORT void wasmoon_jit_clear_wasi_stdin_buffer_managed(
+    void *jit_context
+) {
+    wasmoon_jit_clear_wasi_stdin_buffer(MANAGED_CTX(jit_context));
+}
+
+MOONBIT_FFI_EXPORT void wasmoon_jit_clear_wasi_stdin_callback_managed(
+    void *jit_context
+) {
+    wasmoon_jit_clear_wasi_stdin_callback(MANAGED_CTX(jit_context));
+}
+
+MOONBIT_FFI_EXPORT moonbit_bytes_t wasmoon_jit_take_wasi_stdout_managed(
+    void *jit_context
+) {
+    return wasmoon_jit_take_wasi_stdout(MANAGED_CTX(jit_context));
+}
+
+MOONBIT_FFI_EXPORT moonbit_bytes_t wasmoon_jit_take_wasi_stderr_managed(
+    void *jit_context
+) {
+    return wasmoon_jit_take_wasi_stderr(MANAGED_CTX(jit_context));
+}
+
+MOONBIT_FFI_EXPORT void wasmoon_jit_set_wasi_args_managed(
+    void *jit_context, int argc
+) {
+    wasmoon_jit_set_wasi_args(MANAGED_CTX(jit_context), argc);
+}
+
+MOONBIT_FFI_EXPORT void wasmoon_jit_set_wasi_arg_managed(
+    void *jit_context, int idx, const char *arg
+) {
+    wasmoon_jit_set_wasi_arg(MANAGED_CTX(jit_context), idx, arg);
+}
+
+MOONBIT_FFI_EXPORT void wasmoon_jit_set_wasi_envs_managed(
+    void *jit_context, int envc
+) {
+    wasmoon_jit_set_wasi_envs(MANAGED_CTX(jit_context), envc);
+}
+
+MOONBIT_FFI_EXPORT void wasmoon_jit_set_wasi_env_managed(
+    void *jit_context, int idx, const char *env
+) {
+    wasmoon_jit_set_wasi_env(MANAGED_CTX(jit_context), idx, env);
+}
+
+MOONBIT_FFI_EXPORT int wasmoon_jit_get_wasi_exit_code_managed(
+    void *jit_context
+) {
+    return wasmoon_jit_get_wasi_exit_code(MANAGED_CTX(jit_context));
+}
+
+MOONBIT_FFI_EXPORT void wasmoon_jit_clear_wasi_exit_managed(
+    void *jit_context
+) {
+    wasmoon_jit_clear_wasi_exit(MANAGED_CTX(jit_context));
+}
+
+#undef MANAGED_CTX

@@ -1,29 +1,34 @@
 /// Execution, callback, exception, fiber-stack, and GC operations for managed JIT contexts.
 
 ///|
-fn throw_exception_tag(ctx_ptr : Int64, tag_addr : Int) -> Unit {
-  c_jit_exception_throw_tag(ctx_ptr, tag_addr)
+fn throw_exception_tag(context : JITContext, tag_addr : Int) -> Unit {
+  c_jit_exception_throw_tag_managed(context, tag_addr)
 }
 
 ///|
 fn throw_exception_values(
-  ctx_ptr : Int64,
+  context : JITContext,
   tag_addr : Int,
   values : Array[Int64],
 ) -> Unit {
   let payload = FixedArray::makei(values.length(), fn(i) { values[i] })
-  c_jit_exception_throw_values(ctx_ptr, tag_addr, payload, values.length())
+  c_jit_exception_throw_values_managed(
+    context,
+    tag_addr,
+    payload,
+    values.length(),
+  )
 }
 
 ///|
 fn setup_segments(
-  ctx_ptr : Int64,
+  context : JITContext,
   datas : Array[@types.Data],
   elem_segments : Array[Array[Int64]],
   data_dropped? : Array[Bool] = [],
   elem_dropped? : Array[Bool] = [],
 ) -> Unit {
-  c_jit_ctx_init_data_segments(ctx_ptr, datas.length())
+  c_jit_ctx_init_data_segments_managed(context, datas.length())
   for i, data in datas {
     let bytes = data.init
     let size = bytes.length()
@@ -36,10 +41,10 @@ fn setup_segments(
     for j in 0..<size {
       buf[j] = bytes[j]
     }
-    c_jit_ctx_add_data_segment(ctx_ptr, i, buf, size, dropped)
+    c_jit_ctx_add_data_segment_managed(context, i, buf, size, dropped)
   }
 
-  c_jit_ctx_init_elem_segments(ctx_ptr, elem_segments.length())
+  c_jit_ctx_init_elem_segments_managed(context, elem_segments.length())
   for i, seg in elem_segments {
     let dropped = if i < elem_dropped.length() && elem_dropped[i] {
       1
@@ -51,18 +56,18 @@ fn setup_segments(
     for j in 0..<nslots {
       buf[j] = seg[j]
     }
-    c_jit_ctx_add_elem_segment(ctx_ptr, i, buf, nslots / 2, dropped)
+    c_jit_ctx_add_elem_segment_managed(context, i, buf, nslots / 2, dropped)
   }
 }
 
 ///|
-fn clear_segments(ctx_ptr : Int64) -> Unit {
-  c_jit_ctx_clear_segments(ctx_ptr)
+fn clear_segments(context : JITContext) -> Unit {
+  c_jit_ctx_clear_segments_managed(context)
 }
 
 ///|
 pub fn NativeJITContext::func_count(self : NativeJITContext) -> Int {
-  self.with_ptr(fn(ptr) { context_func_count(ptr) })
+  context_func_count(self.handle)
 }
 
 ///|
@@ -70,7 +75,7 @@ pub fn NativeJITContext::throw_exception_tag(
   self : NativeJITContext,
   tag_addr : Int,
 ) -> Unit {
-  self.with_ptr(fn(ptr) { throw_exception_tag(ptr, tag_addr) })
+  throw_exception_tag(self.handle, tag_addr)
 }
 
 ///|
@@ -79,7 +84,7 @@ pub fn NativeJITContext::throw_exception_values(
   tag_addr : Int,
   values : Array[Int64],
 ) -> Unit {
-  self.with_ptr(fn(ptr) { throw_exception_values(ptr, tag_addr, values) })
+  throw_exception_values(self.handle, tag_addr, values)
 }
 
 ///|
@@ -90,14 +95,18 @@ pub fn NativeJITContext::setup_segments(
   data_dropped? : Array[Bool] = [],
   elem_dropped? : Array[Bool] = [],
 ) -> Unit {
-  self.with_ptr(fn(ptr) {
-    setup_segments(ptr, datas, elem_segments, data_dropped~, elem_dropped~)
-  })
+  setup_segments(
+    self.handle,
+    datas,
+    elem_segments,
+    data_dropped~,
+    elem_dropped~,
+  )
 }
 
 ///|
 pub fn NativeJITContext::clear_segments(self : NativeJITContext) -> Unit {
-  self.with_ptr(fn(ptr) { clear_segments(ptr) })
+  clear_segments(self.handle)
 }
 
 ///|
@@ -111,7 +120,7 @@ pub fn NativeJITContext::set_func(
   idx : Int,
   func_ptr : Int64,
 ) -> Unit {
-  self.with_ptr(fn(ptr) { c_jit_ctx_set_func(ptr, idx, func_ptr) })
+  c_jit_ctx_set_func_managed(self.handle, idx, func_ptr)
 }
 
 ///|
@@ -119,7 +128,7 @@ pub fn NativeJITContext::alloc_indirect_table(
   self : NativeJITContext,
   count : Int,
 ) -> Bool {
-  self.with_ptr(fn(ptr) { c_jit_ctx_alloc_indirect_table(ptr, count) != 0 })
+  c_jit_ctx_alloc_indirect_table_managed(self.handle, count) != 0
 }
 
 ///|
@@ -129,9 +138,7 @@ pub fn NativeJITContext::set_indirect(
   func_idx : Int,
   type_idx : Int,
 ) -> Unit {
-  self.with_ptr(fn(ptr) {
-    c_jit_ctx_set_indirect(ptr, table_idx, func_idx, type_idx)
-  })
+  c_jit_ctx_set_indirect_managed(self.handle, table_idx, func_idx, type_idx)
 }
 
 ///|
@@ -139,7 +146,7 @@ pub fn NativeJITContext::set_globals(
   self : NativeJITContext,
   globals_ptr : Int64,
 ) -> Unit {
-  self.with_ptr(fn(ptr) { c_jit_ctx_set_globals(ptr, globals_ptr) })
+  c_jit_ctx_set_globals_managed(self.handle, globals_ptr)
 }
 
 ///|
@@ -147,12 +154,12 @@ pub fn NativeJITContext::alloc_wasm_stack(
   self : NativeJITContext,
   stack_size : Int64,
 ) -> Bool {
-  self.with_ptr(fn(ptr) { c_jit_alloc_wasm_stack(ptr, stack_size) == 0 })
+  c_jit_alloc_wasm_stack_managed(self.handle, stack_size) == 0
 }
 
 ///|
 pub fn NativeJITContext::has_wasm_stack(self : NativeJITContext) -> Bool {
-  self.with_ptr(fn(ptr) { c_jit_get_wasm_stack_top(ptr) != 0L })
+  c_jit_get_wasm_stack_top_managed(self.handle) != 0L
 }
 
 ///|
@@ -176,16 +183,14 @@ pub fn NativeJITContext::set_hostcall_callback(
     }
   }
   let call_closure : FuncRef[(() -> Int) -> Int] = fn(f : () -> Int) { f() }
-  self.with_ptr(fn(ptr) {
-    c_jit_set_hostcall_callback(ptr, call_closure, encoded)
-  })
+  c_jit_set_hostcall_callback_managed(self.handle, call_closure, encoded)
 }
 
 ///|
 pub fn NativeJITContext::clear_hostcall_callback(
   self : NativeJITContext,
 ) -> Unit {
-  self.with_ptr(fn(ptr) { c_jit_clear_hostcall_callback(ptr) })
+  c_jit_clear_hostcall_callback_managed(self.handle)
 }
 
 ///|
@@ -200,16 +205,14 @@ pub fn NativeJITContext::set_cancellation_callback(
       0
     }
   }
-  self.with_ptr(fn(ptr) {
-    c_jit_set_cancellation_callback(ptr, call_closure, callback)
-  })
+  c_jit_set_cancellation_callback_managed(self.handle, call_closure, callback)
 }
 
 ///|
 pub fn NativeJITContext::clear_cancellation_callback(
   self : NativeJITContext,
 ) -> Unit {
-  self.with_ptr(fn(ptr) { c_jit_clear_cancellation_callback(ptr) })
+  c_jit_clear_cancellation_callback_managed(self.handle)
 }
 
 ///|

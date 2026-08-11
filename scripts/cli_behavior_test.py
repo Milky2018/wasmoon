@@ -74,6 +74,13 @@ UNPARSEABLE_TYPE_KIND = """(module
   (func (export "go") (type $s)))
 """
 
+EXPLORABLE_WAT = """(module
+  (func (export "zero") (result i32) (i32.const 0))
+  (func (export "one") (result i32) (i32.const 1)))
+"""
+
+WASI_EXIT_WAT = '(module (import "wasi_snapshot_preview1" "proc_exit" (func $exit (param i32))) (func (export "_start") (call $exit (i32.const 7))))'
+
 
 class Failure(Exception):
     pass
@@ -123,6 +130,53 @@ def check_version_flags() -> None:
             f"`wasmoon {flag}` writes nothing to stderr",
             proc.stderr == "",
             f"stderr={proc.stderr!r}",
+        )
+
+
+def check_argparse_contract() -> None:
+    proc = run()
+    expect(
+        "a missing subcommand is a usage error",
+        proc.returncode == 2
+        and proc.stdout == ""
+        and "required argument was not provided: 'subcommand'" in proc.stderr
+        and "Usage: wasmoon <command>" in proc.stderr,
+        repr(proc),
+    )
+
+    proc = run("help", "run")
+    expect(
+        "the built-in help subcommand accepts a command path",
+        proc.returncode == 0
+        and "Usage: wasmoon run [options] <file> [args...]" in proc.stdout
+        and proc.stderr == "",
+        repr(proc),
+    )
+
+    for command in ("run", "test", "disasm", "component", "component-test", "explore"):
+        proc = run(command)
+        expect(
+            f"`wasmoon {command}` lets argparse reject the missing file",
+            proc.returncode == 2
+            and proc.stdout == ""
+            and "'file' requires at least 1 values" in proc.stderr
+            and f"Usage: wasmoon {command}" in proc.stderr,
+            repr(proc),
+        )
+
+    for label, args, diagnostic in (
+        ("conflicting component modes", ("--run", "--invoke", "f"), "group conflict execution"),
+        ("a run-only option without --run", ("--network", "all"), "'run' (required by 'network')"),
+        ("an inspection flag in execution mode", ("--run", "--dump"), "execution conflicts with dump"),
+    ):
+        proc = run("component", "missing.wasm", *args)
+        expect(
+            f"argparse rejects {label}",
+            proc.returncode == 2
+            and proc.stdout == ""
+            and diagnostic in proc.stderr
+            and "Usage: wasmoon component" in proc.stderr,
+            repr(proc),
         )
 
 
@@ -183,6 +237,15 @@ def check_test_exit_codes(tmp: Path) -> None:
         proc.stdout == "",
         f"stdout={proc.stdout!r}",
     )
+    wasi_exit = tmp / "wasi_exit.wat"
+    wasi_exit.write_text(WASI_EXIT_WAT)
+    for extra_args, label in (((), "JIT"), (("--no-jit",), "interpreter")):
+        proc = run("run", str(wasi_exit), *extra_args)
+        expect(
+            f"`wasmoon run` preserves a WASI exit status in the {label}",
+            proc.returncode == 7,
+            f"exit={proc.returncode}, stdout={proc.stdout!r}, stderr={proc.stderr!r}",
+        )
 
 
 def check_invalid_modules(tmp: Path) -> None:
@@ -250,6 +313,48 @@ def check_malformed_type_kind_across_commands(tmp: Path) -> None:
         )
 
 
+def check_explore_selection(tmp: Path) -> None:
+    wat = tmp / "explorable.wat"
+    wat.write_text(EXPLORABLE_WAT)
+
+    proc = run("explore", str(wat), "--func", "nope")
+    expect(
+        "`explore --func` rejects a non-integer",
+        proc.returncode == 2,
+        f"exit {proc.returncode}",
+    )
+    expect(
+        "an invalid `--func` value is only a diagnostic",
+        proc.stdout == "" and proc.stderr != "",
+        f"stdout={proc.stdout!r}, stderr={proc.stderr!r}",
+    )
+
+    proc = run("explore", str(wat), "--func", "-1")
+    expect(
+        "`explore --func` rejects an out-of-range index",
+        proc.returncode > 0,
+        f"exit {proc.returncode}",
+    )
+    expect(
+        "an out-of-range function index is only a diagnostic",
+        proc.stdout == "" and "out of range" in proc.stderr,
+        f"stdout={proc.stdout!r}, stderr={proc.stderr!r}",
+    )
+
+    proc = run("explore", str(wat), "--stage", "bogus")
+    expect(
+        "`explore --stage` rejects an unknown stage as usage error",
+        proc.returncode == 2,
+        f"exit {proc.returncode}",
+    )
+    expect(
+        "an invalid `--stage` value includes usage on stderr",
+        proc.stdout == ""
+        and "invalid value for --stage" in proc.stderr
+        and "Usage: wasmoon" in proc.stderr,
+        f"stdout={proc.stdout!r}, stderr={proc.stderr!r}",
+    )
+
 def main() -> int:
     if not WASMOON.exists():
         print(
@@ -261,9 +366,11 @@ def main() -> int:
     try:
         with tempfile.TemporaryDirectory() as directory:
             check_version_flags()
+            check_argparse_contract()
             check_test_exit_codes(Path(directory))
             check_invalid_modules(Path(directory))
             check_malformed_type_kind_across_commands(Path(directory))
+            check_explore_selection(Path(directory))
     except Failure as failure:
         print(f"FAILED {failure}", file=sys.stderr)
         return 1

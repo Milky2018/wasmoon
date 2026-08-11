@@ -162,6 +162,8 @@ pub fn EGraph::add(self : EGraph, node : ENode) -> EClassId {
     nodes: [node],
     const_value: const_val,
     fconst_value: fconst_val,
+    const_conflicted: false,
+    fconst_conflicted: false,
   }
   self.classes.set(id, eclass)
   self.hashcons.set(node, class_id)
@@ -264,6 +266,18 @@ pub fn EGraph::subsume(self : EGraph, a : EClassId, b : EClassId) -> EClassId {
 
   // Remove the old class from opcode index before removing it
   if self.classes.get(a.0) is Some(old_class) {
+    // A constant conflict remains proof that this equivalence class is
+    // unsound even though subsume discards the old nodes.
+    if self.classes.get(b.0) is Some(new_class) {
+      if old_class.const_conflicted {
+        new_class.const_conflicted = true
+        new_class.const_value = None
+      }
+      if old_class.fconst_conflicted {
+        new_class.fconst_conflicted = true
+        new_class.fconst_value = None
+      }
+    }
     self.index_remove(a.0, old_class.nodes)
   }
 
@@ -358,29 +372,40 @@ pub fn EGraph::merge(self : EGraph, a : EClassId, b : EClassId) -> EClassId {
       // Merge constant caches. Two classes carrying *different* constants
       // is proof of an unsound union: record it and refuse to harvest
       // either constant rather than silently keeping the root's.
-      match (root_class.const_value, other_class.const_value) {
-        (Some(a_val), Some(b_val)) =>
-          if a_val != b_val {
-            root_class.const_value = None
-            self.const_conflict_hits = self.const_conflict_hits + 1
-          }
-        (None, Some(_)) => root_class.const_value = other_class.const_value
-        _ => ()
+      if root_class.const_conflicted || other_class.const_conflicted {
+        root_class.const_conflicted = true
+        root_class.const_value = None
+      } else {
+        match (root_class.const_value, other_class.const_value) {
+          (Some(a_val), Some(b_val)) =>
+            if a_val != b_val {
+              root_class.const_value = None
+              root_class.const_conflicted = true
+              self.const_conflict_hits = self.const_conflict_hits + 1
+            }
+          (None, Some(_)) => root_class.const_value = other_class.const_value
+          _ => ()
+        }
       }
-      match (root_class.fconst_value, other_class.fconst_value) {
-        (Some(a_bits), Some(b_bits)) =>
-          if a_bits != b_bits {
-            root_class.fconst_value = None
-            self.const_conflict_hits = self.const_conflict_hits + 1
-          }
-        (None, Some(_)) => root_class.fconst_value = other_class.fconst_value
-        _ => ()
+      if root_class.fconst_conflicted || other_class.fconst_conflicted {
+        root_class.fconst_conflicted = true
+        root_class.fconst_value = None
+      } else {
+        match (root_class.fconst_value, other_class.fconst_value) {
+          (Some(a_bits), Some(b_bits)) =>
+            if a_bits != b_bits {
+              root_class.fconst_value = None
+              root_class.fconst_conflicted = true
+              self.const_conflict_hits = self.const_conflict_hits + 1
+            }
+          (None, Some(_)) => root_class.fconst_value = other_class.fconst_value
+          _ => ()
+        }
       }
     }
     // Remove the merged class
     self.classes.remove(other_id.0)
   }
-
   // Inherit the subsumed class's parent edges, then schedule repair: every
   // class holding a node that referenced either side now has a stale child
   // id in that node.
@@ -538,14 +563,20 @@ fn EGraph::recanonicalize_class(self : EGraph, class_id : Int) -> Unit {
     }
   }
   eclass.nodes = canonical_nodes
-  if const_conflicted {
+  if const_conflicted && !eclass.const_conflicted {
+    eclass.const_conflicted = true
     self.const_conflict_hits = self.const_conflict_hits + 1
+  }
+  if eclass.const_conflicted {
     eclass.const_value = None
   } else {
     eclass.const_value = const_value
   }
-  if fconst_conflicted {
+  if fconst_conflicted && !eclass.fconst_conflicted {
+    eclass.fconst_conflicted = true
     self.const_conflict_hits = self.const_conflict_hits + 1
+  }
+  if eclass.fconst_conflicted {
     eclass.fconst_value = None
   } else {
     eclass.fconst_value = fconst_value

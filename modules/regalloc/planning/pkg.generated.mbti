@@ -7,33 +7,19 @@ import {
 }
 
 // Values
-pub fn build_dense_successor_edges(Array[Int], Array[Array[Int]]) -> DenseCfgEdges
-
 pub fn choose_fixed_reg_hint(Array[@regalloc.PhysicalReg], Array[@regalloc.PhysicalReg]) -> @regalloc.PhysicalReg?
 
 pub fn choose_temp_register(@regalloc.RegClass, Array[Int], Array[Int], Array[Int], Array[Int], Bool, Int, Int) -> TempRegisterChoice
 
 pub fn compact_spill_slots(Array[CompactSpillSet], Array[SpillSlotNoShareEdge], Array[Int]) -> SpillSlotCompaction
 
-pub fn compute_approx_loop_depths(Array[Array[Int]]) -> Array[Int]
-
 pub fn compute_block_point_bases(Array[Int], Array[Int]) -> Array[Int]
 
-pub fn compute_dominators_from_edges(DenseCfgEdges) -> Array[Int]
-
-pub fn compute_reachable_reverse_postorder_from_successors(Array[Array[Int]]) -> Array[Int]
-
 pub fn compute_reload_intervals(Array[ReloadUseInfo], allow_vector? : Bool) -> Array[ReloadIntervalInfo]
-
-pub fn compute_reverse_postorder_from_successors(Array[Array[Int]]) -> Array[Int]
 
 pub fn compute_spill_weight(Array[@regalloc.UsePosition], Array[Int]) -> Int
 
 pub fn count_sorted_ints_in_open_range(Array[Int], Int, Int) -> Int
-
-pub fn find_back_edges_from_edges(DenseCfgEdges) -> Array[(Int, Int)]
-
-pub fn find_loops_from_edges(DenseCfgEdges) -> Array[DenseCfgLoop]
 
 pub fn has_ordered_span_conflict(Array[OrderedProgramSpan], Array[OrderedProgramSpan]) -> Bool
 
@@ -92,17 +78,6 @@ pub(all) struct ConflictScanResult {
   first_conflict_point : @regalloc.ProgramPoint?
   rejected : Bool
 } derive(Eq, @debug.Debug)
-
-pub(all) struct DenseCfgEdges {
-  preds : Array[Array[Int]]
-  succs : Array[Array[Int]]
-} derive(@debug.Debug)
-
-pub(all) struct DenseCfgLoop {
-  header : Int
-  body : Array[Int]
-  latch : Int
-} derive(@debug.Debug)
 
 pub(all) struct FixedConstraint {
   operand : FixedConstraintOperand

@@ -350,6 +350,7 @@ test "egraph: (x << 2) << 3 = x << 5" {
   let inner = eg.add_shl(x, two)
   let outer = eg.add_shl(inner, three)
   let direct = eg.add_shl(x, five)
+  eg.set_type(outer, 64)
   eg.saturate_indexed(get_global_ruleset(), 10) |> ignore
   inspect(eg.equiv(outer, direct), content="true")
 }
@@ -1056,6 +1057,7 @@ test "egraph: (x >> 3) >> 2 = x >> 5 (ushr)" {
   let inner = eg.add({ op: Ushr, children: [x, three] })
   let outer = eg.add({ op: Ushr, children: [inner, two] })
   let direct = eg.add({ op: Ushr, children: [x, five] })
+  eg.set_type(outer, 64)
   eg.saturate_indexed(get_global_ruleset(), 10) |> ignore
   inspect(eg.equiv(outer, direct), content="true")
 }
@@ -1070,6 +1072,7 @@ test "egraph: (x >> 3) >> 2 = x >> 5 (sshr)" {
   let inner = eg.add({ op: Sshr, children: [x, three] })
   let outer = eg.add({ op: Sshr, children: [inner, two] })
   let direct = eg.add({ op: Sshr, children: [x, five] })
+  eg.set_type(outer, 64)
   eg.saturate_indexed(get_global_ruleset(), 10) |> ignore
   inspect(eg.equiv(outer, direct), content="true")
 }
@@ -1265,6 +1268,7 @@ test "egraph: (ishl (ishl x 40) 30) = 0 (shift overflow)" {
   let shl1 = eg.add_shl(x, k40)
   let shl2 = eg.add_shl(shl1, k30)
   let zero = eg.add_const(0L)
+  eg.set_type(shl2, 64)
   eg.saturate_indexed(get_global_ruleset(), 10) |> ignore
   inspect(eg.equiv(shl2, zero), content="true")
 }
@@ -1278,6 +1282,7 @@ test "egraph: (ushr (ushr x 40) 30) = 0 (shift overflow)" {
   let ushr1 = eg.add({ op: Ushr, children: [x, k40] })
   let ushr2 = eg.add({ op: Ushr, children: [ushr1, k30] })
   let zero = eg.add_const(0L)
+  eg.set_type(ushr2, 64)
   eg.saturate_indexed(get_global_ruleset(), 10) |> ignore
   inspect(eg.equiv(ushr2, zero), content="true")
 }
@@ -1681,6 +1686,38 @@ test "merging classes with differing constants is loud and unharvested" {
   eg.rebuild()
   inspect(eg.get_const(three) is None, content="true")
   inspect(eg.const_conflict_count() >= 1, content="true")
+}
+
+///|
+test "constant conflicts survive root changes and later merges" {
+  let eg = EGraph::EGraph()
+  let zero = eg.add_const(0)
+  let one = eg.add_const(1)
+  let two = eg.add_const(2)
+  eg.merge(zero, one) |> ignore
+  inspect(eg.get_const(zero) is None, content="true")
+  // Make the class holding 2 larger so union-by-size chooses it as the root.
+  eg.merge(two, eg.add_var(0)) |> ignore
+  eg.merge(two, eg.add_var(1)) |> ignore
+  eg.merge(zero, two) |> ignore
+  inspect(eg.get_const(zero) is None, content="true")
+  eg.merge(zero, eg.add_const(3)) |> ignore
+  inspect(eg.get_const(zero) is None, content="true")
+  eg.rebuild()
+  inspect(eg.get_const(zero) is None, content="true")
+}
+
+///|
+test "float constant conflicts remain poisoned across later merges" {
+  let eg = EGraph::EGraph()
+  let zero = eg.add_fconst(0UL)
+  let one = eg.add_fconst(0x3FF0000000000000UL)
+  eg.merge(zero, one) |> ignore
+  inspect(eg.get_fconst(zero) is None, content="true")
+  eg.merge(zero, eg.add_fconst(0x4000000000000000UL)) |> ignore
+  inspect(eg.get_fconst(zero) is None, content="true")
+  eg.rebuild()
+  inspect(eg.get_fconst(zero) is None, content="true")
 }
 
 ///|

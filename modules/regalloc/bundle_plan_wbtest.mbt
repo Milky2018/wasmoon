@@ -170,7 +170,7 @@ test "production bundle plan follows transitive SSA edge affinities" {
 }
 
 ///|
-test "spill-home groups retain stable range ids after layout sorting" {
+test "spill-home groups follow spillset lineage after layout sorting" {
   let ranges = LiveRangeSet::LiveRangeSet([0])
   ranges.add_range(bundle_test_range(2, Int, 4, 6, []))
   ranges.add_range(bundle_test_range(0, Int, 0, 2, []))
@@ -186,15 +186,28 @@ test "spill-home groups retain stable range ids after layout sorting" {
   let plan = build_production_bundle_plan_from_range_edges(ranges, segments, [
     (0, 1),
   ])
+  let spill_sets : Array[SpillSet] = plan.bundle_segments.map(_ => {
+    weight: 1,
+    splits: 0,
+    hint: None,
+    spill_bundle: None,
+  })
   debug_inspect(
-    build_spill_home_groups(function, ranges, plan, [true, true, true]),
+    build_spill_home_groups(
+      function,
+      segments,
+      spill_sets,
+      plan.segment_to_bundle,
+      [true, true, true],
+    ),
     content="([0, 0, -1], [[{ id: 0, class: Int }, { id: 1, class: Int }]])",
   )
   debug_inspect(
     build_spill_home_groups(
       { ..function, spill_kinds: [0, 1, 2] },
-      ranges,
-      plan,
+      segments,
+      spill_sets,
+      plan.segment_to_bundle,
       [true, true, true],
     ),
     content="([-1, -1, -1], [])",

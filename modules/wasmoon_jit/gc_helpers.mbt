@@ -122,7 +122,7 @@ pub fn decode_heap_ref(encoded : Int64) -> Int {
 /// types: Array of SubType from the module
 /// canonical_indices: Array of canonical type indices
 fn setup_type_cache_from_types(
-  ctx_ptr : Int64,
+  context : JITContext,
   types : Array[@types.SubType],
   canonical_indices : Array[Int],
 ) -> Unit {
@@ -180,15 +180,15 @@ fn setup_type_cache_from_types(
     }
   }
   // Set the type cache in C
-  c_jit_gc_set_type_cache(ctx_ptr, types_data, num_types)
+  c_jit_gc_set_type_cache_managed(context, types_data, num_types)
   // Also set canonical indices if available
   if canonical_indices.length() > 0 {
     let canonical = FixedArray::make(canonical_indices.length(), 0)
     for i, idx in canonical_indices {
       canonical[i] = idx
     }
-    c_jit_gc_set_canonical_indices(
-      ctx_ptr,
+    c_jit_gc_set_canonical_indices_managed(
+      context,
       canonical,
       canonical_indices.length(),
     )
@@ -197,35 +197,35 @@ fn setup_type_cache_from_types(
 
 ///|
 /// Clean up GC context after JIT execution
-fn gc_teardown(ctx_ptr : Int64) -> Unit {
+fn gc_teardown(context : JITContext) -> Unit {
   // Clear the type cache
-  c_jit_gc_clear_cache(ctx_ptr)
+  c_jit_gc_clear_cache_managed(context)
   // Clear the heap pointer
-  c_jit_gc_clear_heap(ctx_ptr)
+  c_jit_gc_clear_heap_managed(context)
 }
 
 ///|
 /// Set up the GC heap for JIT execution
 /// heap: The CHeap pointer from Store
-fn gc_set_heap(ctx_ptr : Int64, heap : CHeap) -> Unit {
-  c_jit_gc_set_heap(ctx_ptr, heap.get_ptr())
+fn gc_set_heap(context : JITContext, heap : CHeap) -> Unit {
+  c_jit_gc_set_heap_managed(context, heap.get_ptr())
 }
 
 ///|
-fn gc_set_context_heap_ptr(ctx_ptr : Int64, heap_ptr : Int64) -> Unit {
-  c_jit_ctx_set_gc_heap(ctx_ptr, heap_ptr)
+fn gc_set_context_heap_ptr(context : JITContext, heap_ptr : Int64) -> Unit {
+  c_jit_ctx_set_gc_heap_managed(context, heap_ptr)
 }
 
 ///|
 /// Begin a GC frame scope for current JIT context.
-fn gc_begin_frame(ctx_ptr : Int64, frame_id : Int64) -> Unit {
-  c_jit_gc_begin_frame(ctx_ptr, frame_id)
+fn gc_begin_frame(context : JITContext, frame_id : Int64) -> Unit {
+  c_jit_gc_begin_frame_managed(context, frame_id)
 }
 
 ///|
 /// End a GC frame scope for current JIT context.
-fn gc_end_frame(ctx_ptr : Int64) -> Unit {
-  c_jit_gc_end_frame(ctx_ptr)
+fn gc_end_frame(context : JITContext) -> Unit {
+  c_jit_gc_end_frame_managed(context)
 }
 
 ///|
@@ -240,28 +240,28 @@ fn gc_pop_root_scope_symbol() -> String {
 
 ///|
 /// Merge roots into context-local scratch storage for allocation retries.
-fn gc_set_root_scratch(ctx_ptr : Int64, roots : Array[Int64]) -> Bool {
+fn gc_set_root_scratch(context : JITContext, roots : Array[Int64]) -> Bool {
   let raw_roots = FixedArray::makei(roots.length(), fn(i) { roots[i] })
-  c_jit_gc_set_root_scratch(ctx_ptr, raw_roots, roots.length()) == 1
+  c_jit_gc_set_root_scratch_managed(context, raw_roots, roots.length()) == 1
 }
 
 ///|
 /// Trigger a GC cycle for allocation retry.
-fn gc_collect_for_alloc(ctx_ptr : Int64, roots : Array[Int64]) -> Int {
+fn gc_collect_for_alloc(context : JITContext, roots : Array[Int64]) -> Int {
   let raw_roots = FixedArray::makei(roots.length(), fn(i) { roots[i] })
-  c_jit_gc_collect_for_alloc(ctx_ptr, raw_roots, roots.length())
+  c_jit_gc_collect_for_alloc_managed(context, raw_roots, roots.length())
 }
 
 ///|
 /// Set safepoint metadata table pointer for current context.
-fn gc_set_safepoint_table(ctx_ptr : Int64, table_ptr : Int64) -> Unit {
-  c_jit_gc_set_safepoint_table(ctx_ptr, table_ptr)
+fn gc_set_safepoint_table(context : JITContext, table_ptr : Int64) -> Unit {
+  c_jit_gc_set_safepoint_table_managed(context, table_ptr)
 }
 
 ///|
 /// Install verified code-object safepoints into context-owned GC metadata.
 fn gc_set_code_object_safepoints(
-  ctx_ptr : Int64,
+  context : JITContext,
   func_idx : Int,
   safepoints : Array[@code_object.SafepointSite],
 ) -> Bool {
@@ -285,8 +285,8 @@ fn gc_set_code_object_safepoints(
   let offsets = FixedArray::makei(entries.length(), fn(i) {
     entries[i].code_offset
   })
-  c_jit_gc_set_func_safepoints(
-    ctx_ptr,
+  c_jit_gc_set_func_safepoints_managed(
+    context,
     func_idx,
     stackmap_blob,
     stackmap_blob.length(),
@@ -297,8 +297,8 @@ fn gc_set_code_object_safepoints(
 }
 
 ///|
-fn gc_use_func_safepoints(ctx_ptr : Int64, func_idx : Int) -> Unit {
-  c_jit_gc_use_func_safepoints(ctx_ptr, func_idx)
+fn gc_use_func_safepoints(context : JITContext, func_idx : Int) -> Unit {
+  c_jit_gc_use_func_safepoints_managed(context, func_idx)
 }
 
 ///|
@@ -325,12 +325,12 @@ fn gc_setup(
   heap : CHeap,
   types : Array[@types.SubType],
   canonical_indices : Array[Int],
-  ctx_ptr~ : Int64,
+  context~ : JITContext,
   func_type_indices~ : Array[Int],
   func_table_ptr~ : Int64,
   num_funcs~ : Int,
 ) -> Unit raise GCSetupError {
-  if ctx_ptr == 0L {
+  if c_jit_context_is_valid(context) == 0 {
     raise MissingJITContext
   }
   if num_funcs < 0 {
@@ -345,17 +345,21 @@ fn gc_setup(
   if num_funcs > 0 && func_table_ptr == 0L {
     raise MissingFunctionTableContext(num_funcs~)
   }
-  gc_set_heap(ctx_ptr, heap)
-  setup_type_cache_from_types(ctx_ptr, types, canonical_indices)
+  gc_set_heap(context, heap)
+  setup_type_cache_from_types(context, types, canonical_indices)
   // Set function type indices for funcref subtyping
   let indices = FixedArray::make(func_type_indices.length(), 0)
   for i, idx in func_type_indices {
     indices[i] = idx
   }
-  c_jit_gc_set_func_type_indices(ctx_ptr, indices, func_type_indices.length())
+  c_jit_gc_set_func_type_indices_managed(
+    context,
+    indices,
+    func_type_indices.length(),
+  )
 
   // Set function table pointer for tagged pointer funcref lookups.
-  c_jit_gc_set_func_table(ctx_ptr, func_table_ptr, num_funcs)
+  c_jit_gc_set_func_table_managed(context, func_table_ptr, num_funcs)
 }
 
 ///|
@@ -366,18 +370,16 @@ pub fn NativeJITContext::setup_gc(
   canonical_indices : Array[Int],
   func_type_indices : Array[Int],
 ) -> Unit raise GCSetupError {
-  self.with_ptr(fn(ptr) raise GCSetupError {
-    let num_funcs = context_func_count(ptr)
-    gc_setup(
-      heap,
-      types,
-      canonical_indices,
-      ctx_ptr=ptr,
-      func_type_indices~,
-      func_table_ptr=context_func_table_ptr(ptr),
-      num_funcs~,
-    )
-  })
+  let num_funcs = context_func_count(self.handle)
+  gc_setup(
+    heap,
+    types,
+    canonical_indices,
+    context=self.handle,
+    func_type_indices~,
+    func_table_ptr=context_func_table_ptr(self.handle),
+    num_funcs~,
+  )
 }
 
 ///|
@@ -390,22 +392,20 @@ pub fn NativeJITContext::setup_gc_with_func_table(
   func_table_ptr : Int64,
   num_funcs : Int,
 ) -> Unit raise GCSetupError {
-  self.with_ptr(fn(ptr) raise GCSetupError {
-    gc_setup(
-      heap,
-      types,
-      canonical_indices,
-      ctx_ptr=ptr,
-      func_type_indices~,
-      func_table_ptr~,
-      num_funcs~,
-    )
-  })
+  gc_setup(
+    heap,
+    types,
+    canonical_indices,
+    context=self.handle,
+    func_type_indices~,
+    func_table_ptr~,
+    num_funcs~,
+  )
 }
 
 ///|
 pub fn NativeJITContext::teardown_gc(self : NativeJITContext) -> Unit {
-  self.with_ptr(fn(ptr) { gc_teardown(ptr) })
+  gc_teardown(self.handle)
 }
 
 ///|
@@ -413,7 +413,7 @@ pub fn NativeJITContext::set_gc_heap_ptr(
   self : NativeJITContext,
   heap_ptr : Int64,
 ) -> Unit {
-  self.with_ptr(fn(ptr) { gc_set_context_heap_ptr(ptr, heap_ptr) })
+  gc_set_context_heap_ptr(self.handle, heap_ptr)
 }
 
 ///|
@@ -421,7 +421,7 @@ pub fn NativeJITContext::set_gc_heap(
   self : NativeJITContext,
   heap : CHeap,
 ) -> Unit {
-  self.with_ptr(fn(ptr) { gc_set_heap(ptr, heap) })
+  gc_set_heap(self.handle, heap)
 }
 
 ///|
@@ -429,12 +429,12 @@ pub fn NativeJITContext::gc_begin_frame(
   self : NativeJITContext,
   frame_id : Int64,
 ) -> Unit {
-  self.with_ptr(fn(ptr) { gc_begin_frame(ptr, frame_id) })
+  gc_begin_frame(self.handle, frame_id)
 }
 
 ///|
 pub fn NativeJITContext::gc_end_frame(self : NativeJITContext) -> Unit {
-  self.with_ptr(fn(ptr) { gc_end_frame(ptr) })
+  gc_end_frame(self.handle)
 }
 
 ///|
@@ -442,7 +442,7 @@ pub fn NativeJITContext::gc_set_root_scratch(
   self : NativeJITContext,
   roots : Array[Int64],
 ) -> Bool {
-  self.with_ptr(fn(ptr) { gc_set_root_scratch(ptr, roots) })
+  gc_set_root_scratch(self.handle, roots)
 }
 
 ///|
@@ -450,7 +450,7 @@ pub fn NativeJITContext::gc_collect_for_alloc(
   self : NativeJITContext,
   roots : Array[Int64],
 ) -> Int {
-  self.with_ptr(fn(ptr) { gc_collect_for_alloc(ptr, roots) })
+  gc_collect_for_alloc(self.handle, roots)
 }
 
 ///|
@@ -458,7 +458,7 @@ pub fn NativeJITContext::gc_set_safepoint_table(
   self : NativeJITContext,
   table_ptr : Int64,
 ) -> Unit {
-  self.with_ptr(fn(ptr) { gc_set_safepoint_table(ptr, table_ptr) })
+  gc_set_safepoint_table(self.handle, table_ptr)
 }
 
 ///|
@@ -467,9 +467,7 @@ pub fn NativeJITContext::register_safepoints(
   func_idx : Int,
   safepoints : Array[@code_object.SafepointSite],
 ) -> Bool {
-  self.with_ptr(fn(ptr) {
-    gc_set_code_object_safepoints(ptr, func_idx, safepoints)
-  })
+  gc_set_code_object_safepoints(self.handle, func_idx, safepoints)
 }
 
 ///|
@@ -477,12 +475,12 @@ pub fn NativeJITContext::gc_use_func_safepoints(
   self : NativeJITContext,
   func_idx : Int,
 ) -> Unit {
-  self.with_ptr(fn(ptr) { gc_use_func_safepoints(ptr, func_idx) })
+  gc_use_func_safepoints(self.handle, func_idx)
 }
 
 ///|
 pub fn NativeJITContext::gc_environment_is_clear(
   self : NativeJITContext,
 ) -> Bool {
-  self.with_ptr(fn(ptr) { c_jit_gc_environment_is_clear(ptr) == 1 })
+  c_jit_gc_environment_is_clear_managed(self.handle) == 1
 }

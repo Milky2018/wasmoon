@@ -1,11 +1,6 @@
 ///|
-/// Exit seam for the failure paths, which all use status 1.
-///
-/// Typed to return `T` so a caller can end an expression with it; the
-/// `panic()` is unreachable and only satisfies that type.
-fn[T] exit_failure() -> T {
-  @sys.exit(1)
-  panic()
+priv suberror CommandFailure {
+  CommandFailure(Int)
 }
 
 ///|
@@ -61,8 +56,10 @@ fn format_value(v : @types.Value) -> String {
 
 ///|
 /// Convert Value array to Int64 array for JIT call
-fn convert_args_to_jit(args : Array[@types.Value]) -> Array[Int64] {
-  args.map(fn(v) {
+fn convert_args_to_jit(
+  args : Array[@types.Value],
+) -> Array[Int64] raise CommandFailure {
+  args.map(v => {
     match v {
       I32(n) => n.to_int64()
       I64(n) => n
@@ -73,7 +70,7 @@ fn convert_args_to_jit(args : Array[@types.Value]) -> Array[Int64] {
       Null => @wasm_milkir.NULL_REF
       V128(_) => {
         @logger.error("V128 args not yet supported")
-        exit_failure()
+        raise CommandFailure(1)
       }
       StructRef(idx) => @wasmoon_jit.encode_heap_ref(idx)
       ArrayRef(idx) => @wasmoon_jit.encode_heap_ref(idx)
@@ -313,7 +310,7 @@ pub fn run_wasm(
   use_jit : Bool,
   opt_level : Int,
   enable_dwarf : Bool,
-) -> Unit {
+) -> Int {
   if debug {
     @logger.enable_debug()
   }
@@ -370,8 +367,7 @@ pub fn run_wasm(
         @logger.error(
           "invalid --dir format '\{dir}', expected HOST_DIR or HOST_DIR::GUEST_DIR",
         )
-        exit_failure()
-        return
+        return 1
       }
     }
   }
@@ -386,8 +382,7 @@ pub fn run_wasm(
       }
       None => {
         @logger.error("invalid --env format '\{env_var}', expected NAME=VALUE")
-        exit_failure()
-        return
+        return 1
       }
     }
   }
@@ -435,15 +430,13 @@ pub fn run_wasm(
         let preload_mod = load_module_from_path(path) catch {
           e => {
             @logger.error("loading preload module '\{name}': \{e}")
-            exit_failure()
-            return
+            return 1
           }
         }
         validate_module_for_execution(preload_mod) catch {
           e => {
             @logger.error("validating preload module '\{name}': \{e}")
-            exit_failure()
-            return
+            return 1
           }
         }
         let preload_instance = @executor.instantiate_with_linker(
@@ -451,16 +444,14 @@ pub fn run_wasm(
         ) catch {
           e => {
             @logger.error("instantiating preload module '\{name}': \{e}")
-            exit_failure()
-            return
+            return 1
           }
         }
         try! linker.register(name, preload_instance)
       }
       None => {
         @logger.error("invalid preload format '\{preload}', expected NAME=PATH")
-        exit_failure()
-        return
+        return 1
       }
     }
   }
@@ -468,8 +459,7 @@ pub fn run_wasm(
   let (mod_, wasm_binary) = load_module_with_binary_from_path(wasm_path) catch {
     e => {
       @logger.error("loading main module: \{e}")
-      exit_failure()
-      return
+      return 1
     }
   }
   @logger.debug(
@@ -478,8 +468,7 @@ pub fn run_wasm(
   validate_module_for_execution(mod_) catch {
     e => {
       @logger.error("validating main module: \{e}")
-      exit_failure()
-      return
+      return 1
     }
   }
   // Instantiate the main module
@@ -496,9 +485,11 @@ pub fn run_wasm(
   let instance = @executor.instantiate_module_with_imports(store, mod_, imports) catch {
     e => {
       @logger.error("instantiating module: \{e}")
-      exit_failure()
-      return
+      return 1
     }
+  }
+  if wasi_ctx.get_exit_code() is Some(status) {
+    return status
   }
   @logger.debug("Module instantiated successfully")
   // Determine which function to call
@@ -514,8 +505,7 @@ pub fn run_wasm(
     let args = parse_func_args(ft.params, func_args) catch {
       e => {
         @logger.error("parsing arguments: \{e}")
-        exit_failure()
-        return
+        return 1
       }
     }
     // Call the function
@@ -554,8 +544,7 @@ pub fn run_wasm(
           "). " +
           "Please re-run with --no-jit.",
         )
-        exit_failure()
-        return
+        return 1
       }
 
       // JIT execution path
@@ -565,7 +554,9 @@ pub fn run_wasm(
       let jit_results = run_with_jit(
         mod_, instance, store, func_name, args, debug, dump_on_trap, jit_args, jit_envs,
         jit_preopens, jit_stdin_data, wasm_binary, opt_level, enable_dwarf,
-      )
+      ) catch {
+        CommandFailure(status) => return status
+      }
       if jit_results.length() > 0 {
         // Print all results separated by spaces
         let strs = jit_results.map(format_value)
@@ -578,9 +569,11 @@ pub fn run_wasm(
       ) catch {
         e => {
           @logger.error("\{e}")
-          exit_failure()
-          return
+          return 1
         }
+      }
+      if wasi_ctx.get_exit_code() is Some(status) {
+        return status
       }
       // Print results
       if results.length() > 0 {
@@ -591,8 +584,9 @@ pub fn run_wasm(
     // No exported function found, check if there's a start function
   } else if invoke is Some(name) {
     @logger.error("function '\{name}' not found")
-    exit_failure()
+    return 1
   }
+  0
 }
 
 ///|
@@ -1205,7 +1199,7 @@ fn run_with_jit(
   wasm_binary : Bytes?,
   opt_level : Int,
   enable_dwarf : Bool,
-) -> Array[@types.Value] {
+) -> Array[@types.Value] raise CommandFailure {
   @logger.debug("JIT: Compiling module...")
   // Get actual memory max from the store (for imported memories)
   // This is crucial for memory.grow to enforce the correct max limit
@@ -1213,7 +1207,7 @@ fn run_with_jit(
     let mem = store.get_mem(instance.mem_addrs[0]) catch {
       _ => {
         @logger.error("memory not found")
-        exit_failure()
+        raise CommandFailure(1)
       }
     }
     let (_, max) = mem.get_limits()
@@ -1234,7 +1228,7 @@ fn run_with_jit(
   ) catch {
     err => {
       @logger.error("Failed to build JIT artifact manifest: \{err}")
-      return exit_failure()
+      raise CommandFailure(1)
     }
   }
   let compatibility = jit_artifact_compatibility(expected_manifest)
@@ -1283,7 +1277,7 @@ fn run_with_jit(
       )
       if fresh is None && failure.val is Some(message) {
         @logger.error("JIT compilation failed: \{message}")
-        return exit_failure()
+        raise CommandFailure(1)
       }
       match fresh {
         None => None
@@ -1293,7 +1287,7 @@ fn run_with_jit(
               @logger.error(
                 "Fresh JIT artifact failed validation: \{Repr(err)}",
               )
-              return exit_failure()
+              raise CommandFailure(1)
             }
           }
           Some((loaded, debug_db, Some(artifact)))
@@ -1304,7 +1298,7 @@ fn run_with_jit(
   match compiled {
     None => {
       @logger.error("JIT compilation failed")
-      return exit_failure()
+      raise CommandFailure(1)
     }
     Some((loaded, debug_db, fresh_artifact)) => {
       if fresh_artifact is Some(artifact) && cache_path is Some(path) {
@@ -1335,7 +1329,7 @@ fn run_with_jit(
       match jit_module_result {
         Err(err) => {
           @logger.error("Failed to load JIT module: \{err}")
-          return exit_failure()
+          raise CommandFailure(1)
         }
         Ok(jm) => {
           // Enable arbitrary host function imports via JIT -> hostcall bridge.
@@ -1369,7 +1363,7 @@ fn run_with_jit(
           guard @wast.init_jit_memories_from_store(instance, store, jm)
             is Some(_) else {
             @logger.error("Failed to initialize JIT memories")
-            return exit_failure()
+            raise CommandFailure(1)
           }
           // Initialize globals (pass jm for tagged funcref pointers)
           let globals_ptr = @wast.init_jit_globals_from_store(
@@ -1385,7 +1379,7 @@ fn run_with_jit(
           @wast.init_bulk_segments(mod_, jm, instance, store) catch {
             err => {
               @logger.error("Failed to initialize JIT bulk segments: \{err}")
-              return exit_failure()
+              raise CommandFailure(1)
             }
           }
           let jit_ctx = @wast.JITModuleContext::JITModuleContext(
@@ -1424,7 +1418,7 @@ fn run_with_jit(
                   ) catch {
                     err => {
                       @logger.error("JIT GC setup failed: \{err}")
-                      return exit_failure()
+                      raise CommandFailure(1)
                     }
                   }
                   // Set GC heap in VMContext for inline allocation
@@ -1436,8 +1430,7 @@ fn run_with_jit(
                 JITExit(code) => {
                   jm.teardown_gc()
                   @wast.sync_jit_globals_to_store(jit_ctx, store)
-                  @sys.exit(code)
-                  panic()
+                  raise CommandFailure(code)
                 }
                 JITTrap(msg) => {
                   jm.teardown_gc()
@@ -1464,13 +1457,13 @@ fn run_with_jit(
                     None => @logger.error("JIT Trap: \{msg}")
                   }
                   // NOTE: Memory and globals are now freed by JITContext finalizer (GC-managed)
-                  return exit_failure()
+                  raise CommandFailure(1)
                 }
                 JITCancelled => {
                   jm.teardown_gc()
                   @wast.sync_jit_globals_to_store(jit_ctx, store)
                   @logger.error("JIT invocation cancelled")
-                  return exit_failure()
+                  raise CommandFailure(1)
                 }
               }
               // Tear down GC context after JIT call
@@ -1484,7 +1477,7 @@ fn run_with_jit(
             }
             None => {
               @logger.error("Function '\{func_name}' not found in JIT module")
-              return exit_failure()
+              raise CommandFailure(1)
             }
           }
         }
@@ -1979,7 +1972,7 @@ fn compile_validated_module_to_jit(
       None => "target/wasmoon-perf-metrics.json"
     }
     @fs.write_string_to_file(output_path, report) catch {
-      @fs.IOError(message) =>
+      IOError(message) =>
         @logger.warn(
           "Failed to write perf metrics report to '\{output_path}': \{message}",
         )

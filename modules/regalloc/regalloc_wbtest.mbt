@@ -79,60 +79,6 @@ test "sparse live sets cover diamond loop and unreachable CFG regions" {
 }
 
 ///|
-test "compute reverse postorder from dense successors" {
-  debug_inspect(
-    @planning.compute_reverse_postorder_from_successors([[1, 2], [3], [3], []]),
-    content="[0, 2, 1, 3]",
-  )
-  debug_inspect(
-    @planning.compute_reverse_postorder_from_successors([[1], [], [], []]),
-    content="[2, 3, 1, 0]",
-  )
-  debug_inspect(
-    @planning.compute_reachable_reverse_postorder_from_successors([
-      [1],
-      [],
-      [],
-      [],
-    ]),
-    content="[0, 1]",
-  )
-}
-
-///|
-test "build dense CFG edges from sparse block ids" {
-  let edges = @planning.build_dense_successor_edges([10, 20, 30], [
-    [20, 30, 99],
-    [30],
-    [10],
-  ])
-  debug_inspect(edges.succs, content="[[1, 2], [2], [0]]")
-  debug_inspect(edges.preds, content="[[2], [0], [0, 1]]")
-}
-
-///|
-test "dense CFG computes dominators and loops" {
-  let edges = @planning.build_dense_successor_edges([0, 1, 2, 3], [
-    [1],
-    [3, 2],
-    [1],
-    [],
-  ])
-  debug_inspect(
-    @planning.compute_dominators_from_edges(edges),
-    content="[0, 0, 1, 1]",
-  )
-  let back_edges = @planning.find_back_edges_from_edges(edges)
-  inspect(back_edges.length(), content="1")
-  debug_inspect(back_edges[0], content="(2, 1)")
-  let loops = @planning.find_loops_from_edges(edges)
-  inspect(loops.length(), content="1")
-  inspect(loops[0].header, content="1")
-  inspect(loops[0].latch, content="2")
-  debug_inspect(loops[0].body, content="[1, 2]")
-}
-
-///|
 test "count sorted integer points in open range" {
   let points = [2, 4, 4, 8, 10]
   inspect(@planning.lower_bound_sorted_int(points, 4), content="1")
@@ -671,18 +617,6 @@ test "instruction edit resolution preserves position order and edge edits" {
 }
 
 ///|
-test "compute approximate loop depths from successors" {
-  let depths = @planning.compute_approx_loop_depths([[1], [2], [1, 3], []])
-  debug_inspect(depths, content="[0, 1, 1, 0]")
-}
-
-///|
-test "compute approximate loop depths ignores invalid successors" {
-  let depths = @planning.compute_approx_loop_depths([[1, -1, 99], [0], []])
-  debug_inspect(depths, content="[1, 1, 0]")
-}
-
-///|
 test "reserve spill slots aligns vector slots" {
   let int_slot = reserve_spill_slot(0, Int)
   inspect(int_slot.slot, content="0")
@@ -922,6 +856,36 @@ fn verify_wrong_location(
 }
 
 ///|
+test "plan verifier rejects a spilled AnyReg operand" {
+  let value : VirtualReg = { id: 0, class: Int }
+  let function : VerifierCfgView = {
+    value_count: 1,
+    blocks: [[0]],
+    operands: [[Operand::use_reg(value)]],
+    successors: [[]],
+    entry_values: [value],
+    parameters: [[]],
+    edge_arguments: [[]],
+    successor_queries: Ref(0),
+    block_visits: Ref(0),
+  }
+  let plan = AllocationPlan::new(1)
+  let slot = plan.create_spill_slot(8, 8)
+  plan.assign_value(value, Spill(slot))
+  plan.assign_operand(0, 0, Spill(slot))
+  let error = try {
+    verify_function_allocation(function, MachineEnv::new([], []), plan)
+    None
+  } catch {
+    error => Some(error)
+  }
+  debug_inspect(
+    error,
+    content="Some(InvalidPlan(message=\"register-constrained operand allocated outside a register\"))",
+  )
+}
+
+///|
 test "plan verifier always enters a self-looping entry block" {
   let value : VirtualReg = { id: 0, class: Int }
   debug_inspect(
@@ -1004,16 +968,39 @@ test "plan verifier queries each block successor list once" {
 }
 
 ///|
-test "production fragments use local spill-cost density" {
+test "production fragments cache local allocation metadata" {
+  let r0 : PhysicalReg = { id: 0, class: Int }
+  let r1 : PhysicalReg = { id: 1, class: Int }
   let range = LiveRange::LiveRange(0, { id: 0, class: Int })
   range.add_range(ProgramRange(ProgramPoint(0, 0), ProgramPoint(0, 2)))
   range.add_range(ProgramRange(ProgramPoint(2, 0), ProgramPoint(2, 2)))
-  range.add_use(UsePosition(ProgramPoint(0, 1), LiveUse, AnyReg))
-  range.add_use(UsePosition(ProgramPoint(2, 1), LiveUse, AnyReg))
+  range.add_use(
+    UsePosition(ProgramPoint(0, 1), LiveUse, AnyReg).with_preference(Some(r1)),
+  )
+  range.add_use(
+    UsePosition(ProgramPoint(2, 1), LiveUse, FixedReg(r0)).with_preference(
+      Some(r0),
+    ),
+  )
   let ranges = LiveRangeSet::LiveRangeSet([0, 1, 2])
   ranges.add_range(range)
-  let (segments, _) = build_allocation_segments(ranges)
-  debug_inspect(segments.map(segment => segment.weight), content="[667, 667]")
+  let (segments, _) = build_allocation_segments(ranges, allocatable=[r0, r1])
+  debug_inspect(
+    segments.map(segment => {
+      (
+        segment.weight,
+        segment.has_fixed_constraint,
+        segment.fixed_hint,
+        segment.preference_hint,
+      )
+    }),
+    content=(
+      #|[
+      #|  (667, false, None, Some({ id: 1, class: Int })),
+      #|  (1000, true, Some({ id: 0, class: Int }), Some({ id: 0, class: Int })),
+      #|]
+    ),
+  )
 }
 
 ///|
@@ -1040,13 +1027,13 @@ test "any-location definitions materialize in their stable home" {
       value,
       range: ProgramRange(ProgramPoint(0, 0), ProgramPoint(0, 2)),
       weight: 1,
-      has_use: true,
       has_fixed_constraint: false,
+      fixed_hint: None,
+      preference_hint: None,
       location: Some(SegmentReg(register)),
-      defer_home: false,
     },
   ]
-  assign_backtracking_operands(
+  assign_segment_operands(
     plan,
     function,
     MachineEnv::new([register], []),
@@ -1061,121 +1048,67 @@ test "any-location definitions materialize in their stable home" {
 }
 
 ///|
-test "edge arguments do not hide a live-through value transfer" {
-  let value : VirtualReg = { id: 0, class: Int }
-  let parameter : VirtualReg = { id: 1, class: Int }
-  let source_register : PhysicalReg = { id: 0, class: Int }
-  let parameter_register : PhysicalReg = { id: 1, class: Int }
-  let function : VerifierCfgView = {
-    value_count: 2,
-    blocks: [[], []],
-    operands: [],
-    successors: [[1], []],
-    entry_values: [value],
-    parameters: [[], [parameter]],
-    edge_arguments: [[[value]], []],
-    successor_queries: Ref(0),
-    block_visits: Ref(0),
-  }
-  let plan = AllocationPlan::new(2)
-  let slot = plan.create_spill_slot(8, 8)
-  plan.assign_value(value, Spill(slot))
-  plan.assign_value(parameter, Reg(parameter_register))
-  let segments : Array[AllocationSegment] = [
-    {
-      id: 0,
-      value,
-      range: ProgramRange(ProgramPoint(0, -1), ProgramPoint(0, 0)),
-      weight: 1,
-      has_use: true,
-      has_fixed_constraint: false,
-      location: Some(SegmentReg(source_register)),
-      defer_home: true,
-    },
-    {
-      id: 1,
-      value,
-      range: ProgramRange(ProgramPoint(1, -1), ProgramPoint(1, 0)),
-      weight: 1,
-      has_use: true,
-      has_fixed_constraint: false,
-      location: Some(SegmentSpill),
-      defer_home: false,
-    },
-  ]
-  assign_edge_transfers(plan, function, segments, [[0, 1], []], [
-    [true, false],
-    [false, false],
-  ])
-  debug_inspect(
-    plan.edits(),
-    content=(
-      #|[
-      #|  {
-      #|    value: { id: 0, class: Int },
-      #|    from: Reg({ id: 0, class: Int }),
-      #|    to: Reg({ id: 1, class: Int }),
-      #|    position: Edge(source_block=0, successor_index=0),
-      #|  },
-      #|  {
-      #|    value: { id: 0, class: Int },
-      #|    from: Reg({ id: 0, class: Int }),
-      #|    to: Spill(0),
-      #|    position: Edge(source_block=0, successor_index=0),
-      #|  },
-      #|]
-    ),
-  )
-}
-
-///|
-test "production conflict index finds only overlapping occupied segments" {
+test "production register allocation index orders updates by range end" {
   let segments : Array[AllocationSegment] = [
     {
       id: 0,
       value: { id: 0, class: Int },
       range: ProgramRange(ProgramPoint(0, 0), ProgramPoint(0, 2)),
       weight: 1,
-      has_use: true,
       has_fixed_constraint: false,
+      fixed_hint: None,
+      preference_hint: None,
       location: None,
-      defer_home: false,
     },
     {
       id: 1,
       value: { id: 1, class: Int },
       range: ProgramRange(ProgramPoint(0, 4), ProgramPoint(0, 6)),
       weight: 1,
-      has_use: true,
       has_fixed_constraint: false,
+      fixed_hint: None,
+      preference_hint: None,
       location: None,
-      defer_home: false,
     },
     {
       id: 2,
       value: { id: 2, class: Int },
       range: ProgramRange(ProgramPoint(0, 8), ProgramPoint(0, 10)),
       weight: 1,
-      has_use: true,
       has_fixed_constraint: false,
+      fixed_hint: None,
+      preference_hint: None,
       location: None,
-      defer_home: false,
     },
     {
       id: 3,
       value: { id: 3, class: Int },
       range: ProgramRange(ProgramPoint(0, 5), ProgramPoint(0, 7)),
       weight: 1,
-      has_use: true,
       has_fixed_constraint: false,
+      fixed_hint: None,
+      preference_hint: None,
       location: None,
-      defer_home: false,
     },
   ]
-  debug_inspect(
-    conflicting_segments(segments, [0, 1, 2], segments[3], [0]),
-    content="[1]",
-  )
+  let allocations = RegisterAllocationIndex::new(1, segments, [0])
+  allocations.insert(0, 2)
+  allocations.insert(0, 0)
+  allocations.insert(0, 1)
+  let stack : Array[Int] = []
+  let ordered : Array[Int] = []
+  allocations.seek(0, ProgramPoint(0, -1), stack)
+  while allocations.next(stack) is Some(segment) {
+    ordered.push(segment)
+  }
+  debug_inspect(ordered, content="[0, 1, 2]")
+  allocations.remove(0, 1)
+  ordered.clear()
+  allocations.seek(0, ProgramPoint(0, -1), stack)
+  while allocations.next(stack) is Some(segment) {
+    ordered.push(segment)
+  }
+  debug_inspect(ordered, content="[0, 2]")
 }
 
 ///|

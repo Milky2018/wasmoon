@@ -42,6 +42,7 @@ pub(all) suberror ValidationError {
   UninitializedLocal(Int)
   InvalidStartFunction(String)
   UndeclaredFunctionReference(Int)
+  UnsupportedInstruction(String)
   WithContext(ValidationErrorContext)
 } derive(@debug.Debug)
 pub impl Show for ValidationError
