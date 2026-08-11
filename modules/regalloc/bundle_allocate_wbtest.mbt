@@ -165,7 +165,7 @@ test "range split isolates the use-free gap and preserves spillset lineage" {
 }
 
 ///|
-test "spill bundle keeps earlier appended segments visible to conflict probes" {
+test "spill bundle is normalized before conflict probes" {
   let r0 : PhysicalReg = { id: 0, class: Int }
   let segments : Array[AllocationSegment] = [
     {
@@ -201,6 +201,7 @@ test "spill bundle keeps earlier appended segments visible to conflict probes" {
   ]
   add_to_spill_bundle(0, 1, bundles, owners, spill_sets, segments, [0, 1])
   add_to_spill_bundle(0, 2, bundles, owners, spill_sets, segments, [0, 1])
+  prepare_spill_bundle(bundles[1], segments, [0, 1])
   let occupied = RegisterAllocationIndex::new(1, segments, [0, 1])
   occupied.insert(0, 0)
   let probe = probe_bundle_register(

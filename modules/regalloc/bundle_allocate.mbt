@@ -507,20 +507,8 @@ fn add_to_spill_bundle(
   match spill_sets[spill_set].spill_bundle {
     Some(bundle_id) => {
       let bundle = bundles[bundle_id]
-      let mut insertion = bundle.segments.length()
-      for index, existing in bundle.segments {
-        let by_end = segments[segment].range.end.compare_with_order(
-          segments[existing].range.end,
-          block_order,
-        )
-        if by_end < 0 || (by_end == 0 && segment < existing) {
-          insertion = index
-          break
-        }
-      }
-      bundle.segments.insert(insertion, segment)
+      bundle.segments.push(segment)
       segment_owner[segment] = bundle_id
-      refresh_bundle_metrics(bundle, segments)
     }
     None => {
       let spill_bundle = allocation_bundle(
@@ -536,6 +524,26 @@ fn add_to_spill_bundle(
       spill_sets[spill_set].spill_bundle = Some(spill_bundle.id)
     }
   }
+}
+
+///|
+fn prepare_spill_bundle(
+  bundle : AllocationBundle,
+  segments : Array[AllocationSegment],
+  block_order : Array[Int],
+) -> Unit {
+  bundle.segments.sort_by(fn(left, right) {
+    let by_end = segments[left].range.end.compare_with_order(
+      segments[right].range.end,
+      block_order,
+    )
+    if by_end != 0 {
+      by_end
+    } else {
+      left.compare(right)
+    }
+  })
+  refresh_bundle_metrics(bundle, segments)
 }
 
 ///|
@@ -1079,6 +1087,9 @@ fn[F : FunctionView] allocate_bundles(
   )
   for bundle in bundles {
     if bundle.state is BundleDeferredSpill {
+      if spill_sets[bundle.spill_set].spill_bundle == Some(bundle.id) {
+        prepare_spill_bundle(bundle, segments, ranges.block_order)
+      }
       second_chance.push(bundle.id, spill_sets[bundle.spill_set].hint)
     }
   }
