@@ -2,6 +2,7 @@
 priv enum BundleStateSnapshot {
   SnapshotPending
   SnapshotReg(PhysicalReg)
+  SnapshotDeferredSpill
   SnapshotSpill
   SnapshotSplit
 } derive(Debug)
@@ -54,10 +55,22 @@ priv struct BundleEvictionSnapshot {
 } derive(Debug)
 
 ///|
+priv struct GapSplitSnapshot {
+  before : Int?
+  spill : Int
+  after : Int?
+  ranges : Array[ProgramRange]
+  owners : Array[Int]
+  spill_sets : Array[Int]
+  use_free : Array[Bool]
+} derive(Debug)
+
+///|
 fn snapshot_bundle_state(state : AllocationBundleState) -> BundleStateSnapshot {
   match state {
     BundlePending => SnapshotPending
     BundleReg(reg) => SnapshotReg(reg)
+    BundleDeferredSpill => SnapshotDeferredSpill
     BundleSpill => SnapshotSpill
     BundleSplit => SnapshotSplit
   }
@@ -102,6 +115,56 @@ fn snapshot_bundle_allocation(
 }
 
 ///|
+test "range split isolates the use-free gap and preserves spillset lineage" {
+  let ranges = LiveRangeSet::LiveRangeSet([0])
+  let live_range = bundle_test_range(0, Int, 0, 10, [])
+  live_range.add_use(UsePosition(ProgramPoint(0, 0), LiveDef, AnyLocation))
+  live_range.add_use(UsePosition(ProgramPoint(0, 10), LiveUse, AnyReg))
+  ranges.add_range(live_range)
+  let (segments, segments_by_value) = build_allocation_segments(ranges)
+  let owners = [4]
+  let spill_sets = [0]
+  let occupied = RegisterAllocationIndex::new(1, segments, [0])
+  let parts = split_segment_around_gap(
+    0,
+    ProgramPoint(0, 5),
+    segments,
+    segments_by_value,
+    owners,
+    spill_sets,
+    occupied,
+    ranges,
+    [0],
+  ).unwrap()
+  debug_inspect(
+    GapSplitSnapshot::{
+      before: parts.before,
+      spill: parts.spill,
+      after: parts.after,
+      ranges: segments.map(segment => segment.range),
+      owners,
+      spill_sets,
+      use_free: segments.map(segment => segment_carries_no_use(segment, ranges)),
+    },
+    content=(
+      #|{
+      #|  before: Some(0),
+      #|  spill: 1,
+      #|  after: Some(2),
+      #|  ranges: [
+      #|    { start: { block: 0, inst: 0 }, end: { block: 0, inst: 0 } },
+      #|    { start: { block: 0, inst: 1 }, end: { block: 0, inst: 9 } },
+      #|    { start: { block: 0, inst: 10 }, end: { block: 0, inst: 10 } },
+      #|  ],
+      #|  owners: [4, 4, 4],
+      #|  spill_sets: [0, 0, 0],
+      #|  use_free: [false, true, false],
+      #|}
+    ),
+  )
+}
+
+///|
 test "production allocation assigns an SSA bundle atomically" {
   let ranges = LiveRangeSet::LiveRangeSet([0, 1, 2])
   ranges.add_range(bundle_test_range(0, Int, 0, 2, []))
@@ -114,7 +177,7 @@ test "production allocation assigns an SSA bundle atomically" {
     parameters: [[], [{ id: 1, class: Int }], [{ id: 2, class: Int }]],
     edge_arguments: [[[{ id: 0, class: Int }]], [[{ id: 1, class: Int }]], []],
   }
-  let (segments, _, bundles, segment_owner, _) = allocate_segments_with_bundles(
+  let (segments, _, bundles, segment_owner, _, _) = allocate_segments_with_bundles(
     function,
     MachineEnv::new([{ id: 0, class: Int }], []),
     ranges,
@@ -192,11 +255,13 @@ test "production allocation evicts then splits a cheaper long bundle" {
     parameters: [[]],
     edge_arguments: [[]],
   }
-  let (bundles, segment_owner) = allocate_bundles(
+  let (bundles, segment_owner, _, _) = allocate_bundles(
     function,
     MachineEnv::new([r0], []),
     ranges,
     segments,
+    [[0], [1], [2]],
+    [0],
     plan,
     Backtracking,
   )
@@ -223,22 +288,22 @@ test "production allocation evicts then splits a cheaper long bundle" {
       #|    },
       #|    {
       #|      id: 2,
-      #|      segments: [0],
-      #|      priority: 3,
-      #|      weight: 2,
-      #|      has_fixed_constraint: true,
-      #|      state: SnapshotReg({ id: 0, class: Int }),
-      #|    },
-      #|    {
-      #|      id: 3,
       #|      segments: [1],
       #|      priority: 3,
       #|      weight: 3,
       #|      has_fixed_constraint: false,
       #|      state: SnapshotSpill,
       #|    },
+      #|    {
+      #|      id: 3,
+      #|      segments: [0],
+      #|      priority: 3,
+      #|      weight: 2,
+      #|      has_fixed_constraint: true,
+      #|      state: SnapshotReg({ id: 0, class: Int }),
+      #|    },
       #|  ],
-      #|  segment_owner: [2, 3, 1],
+      #|  segment_owner: [3, 2, 1],
       #|  segment_locations: [
       #|    SnapshotSegmentReg({ id: 0, class: Int }),
       #|    SnapshotSegmentSpill,
@@ -297,11 +362,17 @@ test "production eviction accounts for and removes every conflicting bundle" {
   occupied.insert(0, 0)
   occupied.insert(0, 1)
   let occupied_stack : Array[Int] = []
+  let spill_sets : Array[SpillSet] = bundles.map(bundle => {
+    weight: bundle.weight,
+    hint: None,
+    spill_bundle: None,
+  })
   let probe = probe_bundle_register(
     bundles[2],
     0,
     r0,
     bundles,
+    spill_sets,
     segments,
     [0, 1, 2, 2],
     occupied,
@@ -316,7 +387,7 @@ test "production eviction accounts for and removes every conflicting bundle" {
     conflict_cost: probe.conflict_cost,
     first_conflict: probe.first_conflict,
     clobbered: probe.clobbered,
-    can_evict: bundle_can_evict(true, bundles[2], probe),
+    can_evict: bundle_can_evict(true, bundles[2], probe, spill_sets),
   }
   debug_inspect(
     probe_snapshot,

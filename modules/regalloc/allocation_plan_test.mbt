@@ -571,8 +571,8 @@ test "backtracking parks cold live-through values outside hot loops" {
       #|{
       #|  value_locations: [
       #|    Some(Spill(0)),
-      #|    Some(Reg({ id: 0, class: Int })),
       #|    Some(Reg({ id: 1, class: Int })),
+      #|    Some(Reg({ id: 0, class: Int })),
       #|    Some(Reg({ id: 1, class: Int })),
       #|    Some(Reg({ id: 0, class: Int })),
       #|  ],
@@ -598,18 +598,6 @@ test "backtracking parks cold live-through values outside hot loops" {
       #|      from: Spill(0),
       #|      to: Reg({ id: 0, class: Int }),
       #|      position: Before(21),
-      #|    },
-      #|    {
-      #|      value: { id: 1, class: Int },
-      #|      from: Reg({ id: 0, class: Int }),
-      #|      to: Reg({ id: 1, class: Int }),
-      #|      position: Edge(source_block=0, successor_index=0),
-      #|    },
-      #|    {
-      #|      value: { id: 2, class: Int },
-      #|      from: Reg({ id: 1, class: Int }),
-      #|      to: Reg({ id: 0, class: Int }),
-      #|      position: Edge(source_block=0, successor_index=0),
       #|    },
       #|  ],
       #|  spill_slots: [{ size: 8, alignment: 8 }],

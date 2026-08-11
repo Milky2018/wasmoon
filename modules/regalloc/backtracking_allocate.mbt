@@ -8,9 +8,9 @@ priv enum SegmentLocation {
 priv struct AllocationSegment {
   id : Int
   value : VirtualReg
-  range : ProgramRange
-  weight : Int
-  has_fixed_constraint : Bool
+  mut range : ProgramRange
+  mut weight : Int
+  mut has_fixed_constraint : Bool
   mut location : SegmentLocation?
 }
 
@@ -70,6 +70,30 @@ fn segment_weight(
 }
 
 ///|
+fn segment_has_use(range : LiveRange, fragment : ProgramRange) -> Bool {
+  for use_position in range.uses {
+    if fragment.contains(use_position.point, []) {
+      return true
+    }
+  }
+  false
+}
+
+///|
+fn fragment_has_fixed_constraint(
+  range : LiveRange,
+  fragment : ProgramRange,
+) -> Bool {
+  for use_position in range.uses {
+    if fragment.contains(use_position.point, []) &&
+      use_position.constraint is FixedReg(_) {
+      return true
+    }
+  }
+  false
+}
+
+///|
 fn build_allocation_segments(
   ranges : LiveRangeSet,
   loop_depths? : Array[Int] = [],
@@ -86,7 +110,6 @@ fn build_allocation_segments(
     segments_by_value.push([])
   }
   for range in ranges.ranges {
-    let has_fixed_constraint = range.has_fixed_constraint()
     for fragment in range.ranges {
       let weight = segment_weight(range, fragment, loop_depths)
       let id = segments.length()
@@ -95,7 +118,7 @@ fn build_allocation_segments(
         value: range.vreg,
         range: fragment,
         weight,
-        has_fixed_constraint,
+        has_fixed_constraint: fragment_has_fixed_constraint(range, fragment),
         location: None,
       })
       segments_by_value[range.vreg.id].push(id)
@@ -218,7 +241,8 @@ fn[F : FunctionView] allocate_segments_with_bundles(
   Array[Array[Int]],
   Array[AllocationBundle],
   Array[Int],
-  ProductionBundlePlan,
+  Array[SpillSet],
+  Array[Int],
 ) raise VerifyError {
   config.enter_phase(Some(SegmentConstruction))
   let loop_depths = compute_allocator_loop_depths(function)
@@ -229,10 +253,13 @@ fn[F : FunctionView] allocate_segments_with_bundles(
   config.enter_phase(Some(BundleFormation))
   let bundle_plan = build_production_bundle_plan(function, ranges, segments)
   config.enter_phase(Some(BundleAllocation))
-  let (bundles, segment_owner) = allocate_bundles(
-    function, environment, ranges, segments, bundle_plan, strategy,
+  let (bundles, segment_owner, spill_sets, segment_spill_set) = allocate_bundles(
+    function, environment, ranges, segments, segments_by_value, loop_depths, bundle_plan,
+    strategy,
   )
-  (segments, segments_by_value, bundles, segment_owner, bundle_plan)
+  (
+    segments, segments_by_value, bundles, segment_owner, spill_sets, segment_spill_set,
+  )
 }
 
 ///|
@@ -272,22 +299,26 @@ fn[F : FunctionView] spill_home_types_match(
 ///|
 fn[F : FunctionView] build_spill_home_groups(
   function : F,
-  ranges : LiveRangeSet,
-  bundle_plan : ProductionBundlePlan,
+  segments : Array[AllocationSegment],
+  spill_sets : Array[SpillSet],
+  segment_spill_set : Array[Int],
   needs_spill : Array[Bool],
 ) -> (Array[Int], Array[Array[VirtualReg]]) {
   let group_by_value = Array::make(function.value_count(), -1)
   let groups : Array[Array[VirtualReg]] = []
-  // Bundle ranges are copy-related and non-overlapping by construction. Keep
-  // their stable ids separate from the layout-sorted range storage.
-  let range_values : Array[VirtualReg?] = Array::make(ranges.length(), None)
-  for range in ranges.ranges {
-    range_values[range.id] = Some(range.vreg)
+  let values_by_spill_set : Array[Array[VirtualReg]] = []
+  for _ in spill_sets {
+    values_by_spill_set.push([])
   }
-  for range_ids in bundle_plan.bundle_ranges {
+  for segment in segments {
+    let spill_set = segment_spill_set[segment.id]
+    if spill_set >= 0 && !values_by_spill_set[spill_set].contains(segment.value) {
+      values_by_spill_set[spill_set].push(segment.value)
+    }
+  }
+  for values in values_by_spill_set {
     let compatible_groups : Array[Array[VirtualReg]] = []
-    for range_id in range_ids {
-      let value = range_values[range_id].unwrap()
+    for value in values {
       if !needs_spill[value.id] {
         continue
       }
@@ -357,7 +388,8 @@ fn[F : FunctionView] assign_backtracking_homes(
   ranges : LiveRangeSet,
   segments : Array[AllocationSegment],
   segments_by_value : Array[Array[Int]],
-  bundle_plan : ProductionBundlePlan,
+  spill_sets : Array[SpillSet],
+  segment_spill_set : Array[Int],
 ) -> Unit {
   let needs_spill = Array::make(function.value_count(), false)
   let register_homes : Array[PhysicalReg?] = Array::make(
@@ -398,7 +430,7 @@ fn[F : FunctionView] assign_backtracking_homes(
 
   let slot_values : Array[Array[VirtualReg]] = []
   let (group_by_value, spill_home_groups) = build_spill_home_groups(
-    function, ranges, bundle_plan, needs_spill,
+    function, segments, spill_sets, segment_spill_set, needs_spill,
   )
   let group_slots : Array[Int?] = Array::make(spill_home_groups.length(), None)
   for value in 0..<function.value_count() {
@@ -851,7 +883,7 @@ fn[F : FunctionView] allocate_bundle_plan(
 ) -> AllocationPlan raise VerifyError {
   config.enter_phase(Some(LiveRanges))
   let ranges = build_function_live_ranges(function)
-  let (segments, segments_by_value, _, _, bundle_plan) = allocate_segments_with_bundles(
+  let (segments, segments_by_value, _, _, spill_sets, segment_spill_set) = allocate_segments_with_bundles(
     function,
     environment,
     ranges,
@@ -861,7 +893,8 @@ fn[F : FunctionView] allocate_bundle_plan(
   let plan = AllocationPlan::new(function.value_count())
   config.enter_phase(Some(HomeAssignment))
   assign_backtracking_homes(
-    plan, function, environment, ranges, segments, segments_by_value, bundle_plan,
+    plan, function, environment, ranges, segments, segments_by_value, spill_sets,
+    segment_spill_set,
   )
   config.enter_phase(Some(OperandAssignment))
   assign_backtracking_operands(

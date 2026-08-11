@@ -32,6 +32,18 @@ fn RegisterAllocationIndex::new(
 }
 
 ///|
+fn RegisterAllocationIndex::add_segment(
+  self : RegisterAllocationIndex,
+  segment : Int,
+) -> Unit {
+  while self.left.length() <= segment {
+    self.left.push(-1)
+    self.right.push(-1)
+    self.parent.push(-1)
+  }
+}
+
+///|
 fn allocation_node_priority(segment : Int) -> UInt {
   let mut value = (segment + 1).reinterpret_as_uint()
   value = value ^ (value << 13)

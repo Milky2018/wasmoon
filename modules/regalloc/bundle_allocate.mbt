@@ -2,18 +2,26 @@
 priv enum AllocationBundleState {
   BundlePending
   BundleReg(PhysicalReg)
+  BundleDeferredSpill
   BundleSpill
   BundleSplit
+}
+
+///|
+priv struct SpillSet {
+  weight : Int
+  mut hint : PhysicalReg?
+  mut spill_bundle : Int?
 }
 
 ///|
 priv struct AllocationBundle {
   id : Int
   segments : Array[Int]
-  priority : Int
-  weight : Int
-  has_fixed_constraint : Bool
-  split_count : Int
+  mut priority : Int
+  mut weight : Int
+  mut has_fixed_constraint : Bool
+  spill_set : Int
   mut state : AllocationBundleState
 }
 
@@ -29,18 +37,21 @@ priv struct BundleQueue {
   items : Array[BundleQueueEntry]
   in_queue : Array[Bool]
   production_priority : Bool
+  spill_priorities : Array[Int]?
 }
 
 ///|
 fn BundleQueue::new(
   bundles : Array[AllocationBundle],
   production_priority : Bool,
+  spill_priorities? : Array[Int]? = None,
 ) -> BundleQueue {
   {
     bundles,
     items: [],
     in_queue: Array::make(bundles.length(), false),
     production_priority,
+    spill_priorities,
   }
 }
 
@@ -59,7 +70,10 @@ fn BundleQueue::higher(
 ) -> Bool {
   let left = self.bundles[lhs.bundle]
   let right = self.bundles[rhs.bundle]
-  if self.production_priority && left.priority != right.priority {
+  if self.spill_priorities is Some(priorities) &&
+    priorities[left.spill_set] != priorities[right.spill_set] {
+    priorities[left.spill_set] > priorities[right.spill_set]
+  } else if self.production_priority && left.priority != right.priority {
     left.priority > right.priority
   } else {
     left.id < right.id
@@ -163,7 +177,7 @@ fn allocation_bundle(
   segment_ids : Array[Int],
   segments : Array[AllocationSegment],
   block_order : Array[Int],
-  split_count? : Int = 0,
+  spill_set? : Int = id,
 ) -> AllocationBundle {
   let ordered_segments = segment_ids.copy()
   ordered_segments.sort_by((left, right) => {
@@ -186,7 +200,7 @@ fn allocation_bundle(
     priority,
     weight,
     has_fixed_constraint,
-    split_count,
+    spill_set,
     state: BundlePending,
   }
 }
@@ -208,22 +222,28 @@ fn build_allocation_bundles(
   plan : ProductionBundlePlan,
   segments : Array[AllocationSegment],
   block_order : Array[Int],
-) -> (Array[AllocationBundle], Array[Int]) {
+) -> (Array[AllocationBundle], Array[Int], Array[SpillSet], Array[Int]) {
   let bundles : Array[AllocationBundle] = []
   let segment_owner = Array::make(segments.length(), -1)
+  let spill_sets : Array[SpillSet] = []
+  let segment_spill_set = Array::make(segments.length(), -1)
   for segment_ids in plan.bundle_segments {
+    let spill_set = spill_sets.length()
     let bundle = allocation_bundle(
       bundles.length(),
       segment_ids,
       segments,
       block_order,
+      spill_set~,
     )
+    spill_sets.push({ weight: bundle.weight, hint: None, spill_bundle: None })
     bundles.push(bundle)
     for segment_id in segment_ids {
       segment_owner[segment_id] = bundle.id
+      segment_spill_set[segment_id] = spill_set
     }
   }
-  (bundles, segment_owner)
+  (bundles, segment_owner, spill_sets, segment_spill_set)
 }
 
 ///|
@@ -266,6 +286,7 @@ fn probe_bundle_register(
   register : Int,
   reg : PhysicalReg,
   bundles : Array[AllocationBundle],
+  spill_sets : Array[SpillSet],
   segments : Array[AllocationSegment],
   segment_owner : Array[Int],
   occupied : RegisterAllocationIndex,
@@ -316,7 +337,9 @@ fn probe_bundle_register(
     if owner != bundle.id && conflict_marks[owner] != probe_id {
       conflict_marks[owner] = probe_id
       conflicts.push(owner)
-      conflict_cost = conflict_cost.max(bundles[owner].weight)
+      conflict_cost = conflict_cost.max(
+        spill_sets[bundles[owner].spill_set].weight,
+      )
       first_conflict = Some(
         earlier_conflict_point(
           first_conflict,
@@ -402,11 +425,12 @@ fn bundle_can_evict(
   enable_eviction : Bool,
   bundle : AllocationBundle,
   probe : BundleRegisterProbe,
+  spill_sets : Array[SpillSet],
 ) -> Bool {
   enable_eviction &&
   !probe.clobbered &&
   !probe.conflicts.is_empty() &&
-  probe.conflict_cost < bundle.weight
+  probe.conflict_cost < spill_sets[bundle.spill_set].weight
 }
 
 ///|
@@ -420,8 +444,12 @@ fn evict_bundle_conflicts(
 ) -> Unit {
   for conflict in conflicts {
     let evicted = bundles[conflict]
+    let hint = match evicted.state {
+      BundleReg(reg) => Some(reg)
+      _ => None
+    }
     remove_bundle_allocation(evicted, environment, segments, occupied)
-    queue.push(evicted.id, None)
+    queue.push(evicted.id, hint)
   }
 }
 
@@ -433,6 +461,7 @@ fn record_bundle_allocation(
   segments : Array[AllocationSegment],
   occupied : RegisterAllocationIndex,
   preferred_by_value : Array[PhysicalReg?],
+  spill_sets : Array[SpillSet],
 ) -> Unit {
   let reg = environment.allocatable_regs[register]
   for segment_id in bundle.segments {
@@ -441,6 +470,7 @@ fn record_bundle_allocation(
     preferred_by_value[segment.value.id] = Some(reg)
     occupied.insert(register, segment_id)
   }
+  spill_sets[bundle.spill_set].hint = Some(reg)
   bundle.state = BundleReg(reg)
 }
 
@@ -456,6 +486,52 @@ fn force_spill_bundle(
 }
 
 ///|
+fn refresh_bundle_metrics(
+  bundle : AllocationBundle,
+  segments : Array[AllocationSegment],
+) -> Unit {
+  let (priority, weight, fixed) = allocation_bundle_metrics(
+    bundle.segments,
+    segments,
+  )
+  bundle.priority = priority
+  bundle.weight = weight
+  bundle.has_fixed_constraint = fixed
+}
+
+///|
+fn add_to_spill_bundle(
+  spill_set : Int,
+  segment : Int,
+  bundles : Array[AllocationBundle],
+  segment_owner : Array[Int],
+  spill_sets : Array[SpillSet],
+  segments : Array[AllocationSegment],
+  block_order : Array[Int],
+) -> Unit {
+  match spill_sets[spill_set].spill_bundle {
+    Some(bundle_id) => {
+      bundles[bundle_id].segments.push(segment)
+      segment_owner[segment] = bundle_id
+      refresh_bundle_metrics(bundles[bundle_id], segments)
+    }
+    None => {
+      let spill_bundle = allocation_bundle(
+        bundles.length(),
+        [segment],
+        segments,
+        block_order,
+        spill_set~,
+      )
+      spill_bundle.state = BundleDeferredSpill
+      bundles.push(spill_bundle)
+      segment_owner[segment] = spill_bundle.id
+      spill_sets[spill_set].spill_bundle = Some(spill_bundle.id)
+    }
+  }
+}
+
+///|
 fn enqueue_child_bundle(
   bundles : Array[AllocationBundle],
   segment_owner : Array[Int],
@@ -464,20 +540,177 @@ fn enqueue_child_bundle(
   segment_ids : Array[Int],
   block_order : Array[Int],
   hint : PhysicalReg?,
-  split_count : Int,
+  spill_set : Int,
 ) -> Unit {
   let child = allocation_bundle(
     bundles.length(),
     segment_ids,
     segments,
     block_order,
-    split_count~,
+    spill_set~,
   )
   bundles.push(child)
   for segment_id in segment_ids {
     segment_owner[segment_id] = child.id
   }
   queue.push(child.id, hint)
+}
+
+///|
+priv struct SegmentGapSplit {
+  before : Int?
+  spill : Int
+  after : Int?
+}
+
+///|
+fn append_split_segment(
+  source : Int,
+  range : ProgramRange,
+  segments : Array[AllocationSegment],
+  segments_by_value : Array[Array[Int]],
+  segment_owner : Array[Int],
+  segment_spill_set : Array[Int],
+  occupied : RegisterAllocationIndex,
+  live_range : LiveRange,
+  loop_depths : Array[Int],
+) -> Int {
+  let segment = segments[source]
+  let id = segments.length()
+  segments.push({
+    id,
+    value: segment.value,
+    range,
+    weight: segment_weight(live_range, range, loop_depths),
+    has_fixed_constraint: fragment_has_fixed_constraint(live_range, range),
+    location: None,
+  })
+  segments_by_value[segment.value.id].push(id)
+  segment_owner.push(segment_owner[source])
+  segment_spill_set.push(segment_spill_set[source])
+  occupied.add_segment(id)
+  id
+}
+
+///|
+fn split_segment_around_gap(
+  segment_id : Int,
+  point : ProgramPoint,
+  segments : Array[AllocationSegment],
+  segments_by_value : Array[Array[Int]],
+  segment_owner : Array[Int],
+  segment_spill_set : Array[Int],
+  occupied : RegisterAllocationIndex,
+  ranges : LiveRangeSet,
+  loop_depths : Array[Int],
+) -> SegmentGapSplit? {
+  let segment = segments[segment_id]
+  if segment.range.start.block != point.block ||
+    segment.range.end.block != point.block ||
+    point.inst < segment.range.start.inst ||
+    point.inst > segment.range.end.inst {
+    return None
+  }
+  guard ranges.get_by_vreg(segment.value) is Some(live_range) else {
+    return None
+  }
+  let mut previous_use : Int? = None
+  let mut next_use : Int? = None
+  for use_position in live_range.uses {
+    if use_position.point.block != point.block ||
+      !segment.range.contains(use_position.point, ranges.block_order) {
+      continue
+    }
+    if use_position.point.inst == point.inst {
+      return None
+    }
+    if use_position.point.inst < point.inst &&
+      (previous_use is None || use_position.point.inst > previous_use.unwrap()) {
+      previous_use = Some(use_position.point.inst)
+    }
+    if use_position.point.inst > point.inst &&
+      (next_use is None || use_position.point.inst < next_use.unwrap()) {
+      next_use = Some(use_position.point.inst)
+    }
+  }
+  let gap_start = previous_use.map_or(segment.range.start.inst, previous => {
+    previous + 1
+  })
+  let gap_end = next_use.map_or(segment.range.end.inst, next => next - 1)
+  if gap_start > point.inst || gap_end < point.inst || gap_start > gap_end {
+    return None
+  }
+  let original_range = segment.range
+  let mut before : Int? = None
+  if original_range.start.inst < gap_start {
+    segment.range = ProgramRange(
+      original_range.start,
+      ProgramPoint(point.block, gap_start - 1),
+    )
+    segment.weight = segment_weight(live_range, segment.range, loop_depths)
+    segment.has_fixed_constraint = fragment_has_fixed_constraint(
+      live_range,
+      segment.range,
+    )
+    before = Some(segment_id)
+  } else {
+    segment.range = ProgramRange(
+      ProgramPoint(point.block, gap_start),
+      ProgramPoint(point.block, gap_end),
+    )
+  }
+  let spill = if before is Some(_) {
+    append_split_segment(
+      segment_id,
+      ProgramRange(
+        ProgramPoint(point.block, gap_start),
+        ProgramPoint(point.block, gap_end),
+      ),
+      segments,
+      segments_by_value,
+      segment_owner,
+      segment_spill_set,
+      occupied,
+      live_range,
+      loop_depths,
+    )
+  } else {
+    segment.weight = segment_weight(live_range, segment.range, loop_depths)
+    segment.has_fixed_constraint = fragment_has_fixed_constraint(
+      live_range,
+      segment.range,
+    )
+    segment_id
+  }
+  let after = if gap_end < original_range.end.inst {
+    Some(
+      append_split_segment(
+        segment_id,
+        ProgramRange(ProgramPoint(point.block, gap_end + 1), original_range.end),
+        segments,
+        segments_by_value,
+        segment_owner,
+        segment_spill_set,
+        occupied,
+        live_range,
+        loop_depths,
+      ),
+    )
+  } else {
+    None
+  }
+  Some({ before, spill, after })
+}
+
+///|
+fn segment_carries_no_use(
+  segment : AllocationSegment,
+  ranges : LiveRangeSet,
+) -> Bool {
+  match ranges.get_by_vreg(segment.value) {
+    Some(live_range) => !segment_has_use(live_range, segment.range)
+    None => false
+  }
 }
 
 ///|
@@ -489,53 +722,121 @@ fn split_bundle_at_conflict(
   segment_owner : Array[Int],
   queue : BundleQueue,
   segments : Array[AllocationSegment],
-  block_order : Array[Int],
-) -> Unit {
-  if bundle.segments.length() <= 1 {
-    force_spill_bundle(bundle, segments)
-    return
-  }
+  segments_by_value : Array[Array[Int]],
+  segment_spill_set : Array[Int],
+  spill_sets : Array[SpillSet],
+  occupied : RegisterAllocationIndex,
+  ranges : LiveRangeSet,
+  loop_depths : Array[Int],
+) -> Bool {
+  guard split_point is Some(point) else { return false }
   let before : Array[Int] = []
   let after : Array[Int] = []
-  if split_point is Some(point) {
-    for segment_id in bundle.segments {
-      if segments[segment_id].range.end.compare_with_order(point, block_order) <=
-        0 {
-        before.push(segment_id)
+  let spill : Array[Int] = []
+  for segment_id in bundle.segments {
+    let segment = segments[segment_id]
+    if segment.range.end.compare_with_order(point, ranges.block_order) < 0 {
+      before.push(segment_id)
+    } else if segment.range.start.compare_with_order(point, ranges.block_order) >=
+      0 {
+      after.push(segment_id)
+    } else if bundle.segments.length() == 1 &&
+      split_segment_around_gap(
+        segment_id, point, segments, segments_by_value, segment_owner, segment_spill_set,
+        occupied, ranges, loop_depths,
+      )
+      is Some(parts) {
+      if parts.before is Some(left) {
+        before.push(left)
+      }
+      spill.push(parts.spill)
+      if parts.after is Some(right) {
+        after.push(right)
+      }
+    } else {
+      after.push(segment_id)
+    }
+  }
+  for side in [before, after] {
+    let mut index = 0
+    while index < side.length() {
+      let segment_id = side[index]
+      if segment_carries_no_use(segments[segment_id], ranges) {
+        spill.push(segment_id)
+        side.remove(index) |> ignore
       } else {
-        after.push(segment_id)
+        index = index + 1
       }
     }
   }
-  bundle.state = BundleSplit
-  let child_split_count = bundle.split_count + 1
-  if bundle.split_count < 2 && !before.is_empty() && !after.is_empty() {
-    enqueue_child_bundle(
-      bundles, segment_owner, queue, segments, before, block_order, hint, child_split_count,
-    )
-    enqueue_child_bundle(
-      bundles, segment_owner, queue, segments, after, block_order, hint, child_split_count,
-    )
-    return
+  if (before.is_empty() || after.is_empty()) && spill.is_empty() {
+    if bundle.segments.length() <= 1 {
+      return false
+    }
+    bundle.state = BundleSplit
+    for segment_id in bundle.segments {
+      if segment_carries_no_use(segments[segment_id], ranges) {
+        add_to_spill_bundle(
+          bundle.spill_set,
+          segment_id,
+          bundles,
+          segment_owner,
+          spill_sets,
+          segments,
+          ranges.block_order,
+        )
+      } else {
+        enqueue_child_bundle(
+          bundles,
+          segment_owner,
+          queue,
+          segments,
+          [segment_id],
+          ranges.block_order,
+          hint,
+          bundle.spill_set,
+        )
+      }
+    }
+    return true
   }
-  let mut first = true
-  for segment_id in bundle.segments {
+  bundle.state = BundleSplit
+  for segment_id in spill {
+    add_to_spill_bundle(
+      bundle.spill_set,
+      segment_id,
+      bundles,
+      segment_owner,
+      spill_sets,
+      segments,
+      ranges.block_order,
+    )
+  }
+  if !before.is_empty() {
     enqueue_child_bundle(
       bundles,
       segment_owner,
       queue,
       segments,
-      [segment_id],
-      block_order,
-      if first {
-        hint
-      } else {
-        None
-      },
-      child_split_count,
+      before,
+      ranges.block_order,
+      hint,
+      bundle.spill_set,
     )
-    first = false
   }
+  if !after.is_empty() {
+    enqueue_child_bundle(
+      bundles,
+      segment_owner,
+      queue,
+      segments,
+      after,
+      ranges.block_order,
+      hint,
+      bundle.spill_set,
+    )
+  }
+  true
 }
 
 ///|
@@ -570,8 +871,11 @@ fn validate_bundle_allocations(
   segment_owner : Array[Int],
 ) -> Unit raise VerifyError {
   for bundle in bundles {
-    if bundle.state is BundlePending {
+    if bundle.state is BundlePending || bundle.state is BundleDeferredSpill {
       raise InvalidPlan(message="pending allocation bundle after allocation")
+    }
+    if bundle.state is BundleSplit {
+      continue
     }
     let (priority, weight, has_fixed_constraint) = allocation_bundle_metrics(
       bundle.segments,
@@ -591,9 +895,6 @@ fn validate_bundle_allocations(
       raise InvalidPlan(
         message="allocation bundle lost fixed constraints: recorded \{bundle.has_fixed_constraint}, recomputed \{has_fixed_constraint}",
       )
-    }
-    if bundle.state is BundleSplit {
-      continue
     }
   }
   for segment in segments {
@@ -623,11 +924,13 @@ fn[F : FunctionView] allocate_bundles(
   environment : MachineEnv,
   ranges : LiveRangeSet,
   segments : Array[AllocationSegment],
+  segments_by_value : Array[Array[Int]],
+  loop_depths : Array[Int],
   bundle_plan : ProductionBundlePlan,
   strategy : AllocatorStrategy,
-) -> (Array[AllocationBundle], Array[Int]) raise VerifyError {
+) -> (Array[AllocationBundle], Array[Int], Array[SpillSet], Array[Int]) raise VerifyError {
   let enable_eviction = strategy is Backtracking
-  let (bundles, segment_owner) = build_allocation_bundles(
+  let (bundles, segment_owner, spill_sets, segment_spill_set) = build_allocation_bundles(
     bundle_plan,
     segments,
     ranges.block_order,
@@ -656,7 +959,10 @@ fn[F : FunctionView] allocate_bundles(
     }
     let register_order = bundle_register_order(
       bundle,
-      entry.hint,
+      match spill_sets[bundle.spill_set].hint {
+        Some(reg) => Some(reg)
+        None => entry.hint
+      },
       segments,
       ranges,
       environment,
@@ -683,6 +989,7 @@ fn[F : FunctionView] allocate_bundles(
         register,
         reg,
         bundles,
+        spill_sets,
         segments,
         segment_owner,
         occupied,
@@ -696,7 +1003,7 @@ fn[F : FunctionView] allocate_bundles(
         free_register = register
         break
       }
-      if bundle_can_evict(enable_eviction, bundle, probe) &&
+      if bundle_can_evict(enable_eviction, bundle, probe, spill_sets) &&
         (eviction_cost is None || probe.conflict_cost < eviction_cost.unwrap()) {
         eviction_register = register
         eviction_cost = Some(probe.conflict_cost)
@@ -721,6 +1028,7 @@ fn[F : FunctionView] allocate_bundles(
     if free_register >= 0 {
       record_bundle_allocation(
         bundle, free_register, environment, segments, occupied, preferred_by_value,
+        spill_sets,
       )
       continue
     }
@@ -730,6 +1038,7 @@ fn[F : FunctionView] allocate_bundles(
       )
       record_bundle_allocation(
         bundle, eviction_register, environment, segments, occupied, preferred_by_value,
+        spill_sets,
       )
       continue
     }
@@ -738,17 +1047,73 @@ fn[F : FunctionView] allocate_bundles(
     } else {
       None
     }
-    split_bundle_at_conflict(
+    if !split_bundle_at_conflict(
+        bundle, split_point, split_hint, bundles, segment_owner, queue, segments,
+        segments_by_value, segment_spill_set, spill_sets, occupied, ranges, loop_depths,
+      ) {
+      bundle.state = BundleDeferredSpill
+    }
+  }
+  let second_chance = BundleQueue::new(
+    bundles,
+    true,
+    spill_priorities=Some(spill_sets.map(set => set.weight)),
+  )
+  for bundle in bundles {
+    if bundle.state is BundleDeferredSpill {
+      second_chance.push(bundle.id, spill_sets[bundle.spill_set].hint)
+    }
+  }
+  while second_chance.pop() is Some(entry) {
+    let bundle = bundles[entry.bundle]
+    guard bundle.state is BundleDeferredSpill else { continue }
+    let register_order = bundle_register_order(
       bundle,
-      split_point,
-      split_hint,
-      bundles,
-      segment_owner,
-      queue,
+      spill_sets[bundle.spill_set].hint,
       segments,
-      ranges.block_order,
+      ranges,
+      environment,
+      preferred_by_value,
     )
+    let mut free_register = -1
+    for register in register_order {
+      let reg = environment.allocatable_regs[register]
+      if reg.class != bundle_class(bundle, segments) {
+        continue
+      }
+      while conflict_marks.length() < bundles.length() {
+        conflict_marks.push(0)
+      }
+      probe_id = probe_id + 1
+      let probe = probe_bundle_register(
+        bundle,
+        register,
+        reg,
+        bundles,
+        spill_sets,
+        segments,
+        segment_owner,
+        occupied,
+        clobbers,
+        ranges.block_order,
+        conflict_marks,
+        probe_id,
+        occupied_stack,
+      )
+      if !probe.clobbered && probe.conflicts.is_empty() {
+        free_register = register
+        break
+      }
+    }
+    if free_register >= 0 {
+      record_bundle_allocation(
+        bundle, free_register, environment, segments, occupied, preferred_by_value,
+        spill_sets,
+      )
+    } else {
+      force_spill_bundle(bundle, segments)
+    }
   }
   validate_bundle_allocations(bundles, segments, segment_owner)
-  (bundles, segment_owner)
+  (bundles, segment_owner, spill_sets, segment_spill_set)
 }
