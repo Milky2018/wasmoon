@@ -597,6 +597,34 @@ test "production eviction accounts for and removes every conflicting bundle" {
       #|}
     ),
   )
+  let cutoff_occupied = RegisterAllocationIndex::new(1, segments, [0])
+  cutoff_occupied.insert(0, 0)
+  cutoff_occupied.insert(0, 1)
+  let cutoff_probe = probe_bundle_register(
+    bundles[2],
+    0,
+    r0,
+    bundles,
+    spill_sets,
+    segments,
+    [0, 1, 2, 2],
+    cutoff_occupied,
+    { points_by_reg: Map([]), block_order: [0] },
+    [0],
+    Array::make(bundles.length(), 0),
+    1,
+    occupied_stack,
+    max_conflict_cost=Some(3),
+  )
+  debug_inspect(
+    (
+      cutoff_probe.cutoff_exceeded,
+      cutoff_probe.conflicts,
+      cutoff_probe.conflict_cost,
+      cutoff_probe.first_conflict,
+    ),
+    content="(true, [0], 4, Some({ block: 0, inst: 1 }))",
+  )
 }
 
 ///|

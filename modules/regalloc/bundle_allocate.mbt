@@ -146,6 +146,7 @@ priv struct BundleRegisterProbe {
   conflict_cost : Int
   first_conflict : ProgramPoint?
   clobbered : Bool
+  cutoff_exceeded : Bool
 }
 
 ///|
@@ -301,6 +302,7 @@ fn probe_bundle_register(
   conflict_marks : Array[Int],
   probe_id : Int,
   occupied_stack : Array[Int],
+  max_conflict_cost? : Int? = None,
 ) -> BundleRegisterProbe {
   let conflicts : Array[Int] = []
   let mut conflict_cost = 0
@@ -310,8 +312,23 @@ fn probe_bundle_register(
     clobbered = true
     first_conflict = Some(point)
   }
+  if clobbered && max_conflict_cost is Some(limit) && 0 > limit {
+    return {
+      conflicts,
+      conflict_cost,
+      first_conflict,
+      clobbered,
+      cutoff_exceeded: true,
+    }
+  }
   guard !bundle.segments.is_empty() else {
-    return { conflicts, conflict_cost, first_conflict, clobbered }
+    return {
+      conflicts,
+      conflict_cost,
+      first_conflict,
+      clobbered,
+      cutoff_exceeded: false,
+    }
   }
   occupied.seek(
     register,
@@ -348,6 +365,15 @@ fn probe_bundle_register(
           block_order,
         ),
       )
+      if max_conflict_cost is Some(limit) && conflict_cost > limit {
+        return {
+          conflicts,
+          conflict_cost,
+          first_conflict,
+          clobbered,
+          cutoff_exceeded: true,
+        }
+      }
     }
     if conflict.range.end.compare_with_order(current.range.end, block_order) <=
       0 {
@@ -356,7 +382,13 @@ fn probe_bundle_register(
       bundle_index = bundle_index + 1
     }
   }
-  { conflicts, conflict_cost, first_conflict, clobbered }
+  {
+    conflicts,
+    conflict_cost,
+    first_conflict,
+    clobbered,
+    cutoff_exceeded: false,
+  }
 }
 
 ///|
@@ -1047,6 +1079,15 @@ fn[F : FunctionView] allocate_bundles(
         conflict_marks.push(0)
       }
       probe_id = probe_id + 1
+      let max_conflict_cost = match split_cost {
+        Some(cost) => {
+          let eviction_limit = eviction_cost
+            .unwrap_or(spill_sets[bundle.spill_set].weight)
+            .min(spill_sets[bundle.spill_set].weight)
+          Some(cost.max(eviction_limit - 1))
+        }
+        None => None
+      }
       let probe = probe_bundle_register(
         bundle,
         register,
@@ -1061,7 +1102,11 @@ fn[F : FunctionView] allocate_bundles(
         conflict_marks,
         probe_id,
         occupied_stack,
+        max_conflict_cost~,
       )
+      if probe.cutoff_exceeded {
+        continue
+      }
       if !probe.clobbered && probe.conflicts.is_empty() {
         free_register = register
         break
@@ -1175,6 +1220,7 @@ fn[F : FunctionView] allocate_bundles(
         conflict_marks,
         probe_id,
         occupied_stack,
+        max_conflict_cost=Some(-1),
       )
       if !probe.clobbered && probe.conflicts.is_empty() {
         free_register = register
