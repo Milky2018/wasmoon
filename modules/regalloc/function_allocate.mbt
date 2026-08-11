@@ -110,51 +110,12 @@ fn add_use_transfer(
 }
 
 ///|
-fn[F : FunctionView] value_is_live_out_of_block(
-  function : F,
-  segments : Array[AllocationSegment],
-  segments_by_value : Array[Array[Int]],
-  value : Int,
-  block : Int,
-) -> Bool {
-  if value < 0 || value >= segments_by_value.length() {
-    return false
-  }
-  for segment_id in segments_by_value[value] {
-    if segments[segment_id].range.start.block == block &&
-      segments[segment_id].range.end.inst ==
-      function.block_instructions(block).length() * 2 {
-      return true
-    }
-  }
-  false
-}
-
-///|
-fn value_is_live_into_block(
-  segments : Array[AllocationSegment],
-  segments_by_value : Array[Array[Int]],
-  value : Int,
-  block : Int,
-) -> Bool {
-  if value < 0 || value >= segments_by_value.length() {
-    return false
-  }
-  for segment_id in segments_by_value[value] {
-    if segments[segment_id].range.start.block == block &&
-      segments[segment_id].range.start.inst == -1 {
-      return true
-    }
-  }
-  false
-}
-
-///|
+/// Values keep one home for their complete live range, so live-through CFG
+/// edges need no transfer. Only SSA block arguments can change value identity
+/// and therefore location at an edge.
 fn[F : FunctionView] assign_edge_transfers(
   plan : AllocationPlan,
   function : F,
-  segments : Array[AllocationSegment],
-  segments_by_value : Array[Array[Int]],
 ) -> Unit raise VerifyError {
   for block_index in 0..<function.block_count() {
     let successors = function.block_successors(block_index)
@@ -175,33 +136,6 @@ fn[F : FunctionView] assign_edge_transfers(
         if from != to {
           plan.add_edit({
             value: argument,
-            from,
-            to,
-            position: Edge(
-              source_block=function.block_id_at(block_index),
-              successor_index~,
-            ),
-          })
-        }
-      }
-      for value in 0..<function.value_count() {
-        if !value_is_live_out_of_block(
-            function, segments, segments_by_value, value, block_index,
-          ) ||
-          !value_is_live_into_block(segments, segments_by_value, value, target) {
-          continue
-        }
-        let vreg : VirtualReg = {
-          id: value,
-          class: function.value_class(value),
-        }
-        guard plan.value_location(vreg.id) is Some(from) &&
-          plan.value_location(vreg.id) is Some(to) else {
-          raise Unassigned(vreg~)
-        }
-        if from != to {
-          plan.add_edit({
-            value: vreg,
             from,
             to,
             position: Edge(

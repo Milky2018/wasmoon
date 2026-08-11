@@ -868,6 +868,6 @@ fn[F : FunctionView] allocate_bundle_plan(
     plan, function, environment, segments, segments_by_value,
   )
   config.enter_phase(Some(EdgeTransfers))
-  assign_edge_transfers(plan, function, segments, segments_by_value)
+  assign_edge_transfers(plan, function)
   plan
 }
