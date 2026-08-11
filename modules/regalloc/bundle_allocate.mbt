@@ -297,14 +297,9 @@ fn probe_bundle_register(
   let mut conflict_cost = 0
   let mut first_conflict : ProgramPoint? = None
   let mut clobbered = false
-  for segment_id in bundle.segments {
-    let segment = segments[segment_id]
-    if first_clobber_point(segment, reg, clobbers) is Some(point) {
-      clobbered = true
-      first_conflict = Some(
-        earlier_conflict_point(first_conflict, point, block_order),
-      )
-    }
+  if clobbers.first_intersection(reg, bundle.segments, segments) is Some(point) {
+    clobbered = true
+    first_conflict = Some(point)
   }
   guard !bundle.segments.is_empty() else {
     return { conflicts, conflict_cost, first_conflict, clobbered }

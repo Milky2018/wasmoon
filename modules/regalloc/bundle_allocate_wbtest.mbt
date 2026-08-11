@@ -793,3 +793,45 @@ test "clobber query excludes range boundaries and scales logarithmically" {
     content="((None, 14), (None, 14), (Some({ block: 0, inst: 1 }), 14))",
   )
 }
+
+///|
+test "clobber intersection skips boundaries and gaps between segments" {
+  let r0 : PhysicalReg = { id: 0, class: Int }
+  let index : RegisterClobberIndex = {
+    points_by_reg: Map([
+      (
+        physical_reg_key(r0),
+        [
+          ProgramPoint(0, 1),
+          ProgramPoint(0, 3),
+          ProgramPoint(0, 5),
+          ProgramPoint(0, 7),
+          ProgramPoint(0, 9),
+        ],
+      ),
+    ]),
+    block_order: [0],
+  }
+  let segments : Array[AllocationSegment] = [
+    {
+      id: 0,
+      value: { id: 0, class: Int },
+      range: ProgramRange(ProgramPoint(0, 1), ProgramPoint(0, 3)),
+      weight: 1,
+      has_fixed_constraint: false,
+      location: None,
+    },
+    {
+      id: 1,
+      value: { id: 0, class: Int },
+      range: ProgramRange(ProgramPoint(0, 6), ProgramPoint(0, 9)),
+      weight: 1,
+      has_fixed_constraint: false,
+      location: None,
+    },
+  ]
+  debug_inspect(
+    index.first_intersection(r0, [0, 1], segments),
+    content="Some({ block: 0, inst: 7 })",
+  )
+}

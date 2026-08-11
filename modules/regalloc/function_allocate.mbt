@@ -77,6 +77,43 @@ fn RegisterClobberIndex::query(
 }
 
 ///|
+fn RegisterClobberIndex::first_intersection(
+  self : RegisterClobberIndex,
+  reg : PhysicalReg,
+  segment_ids : Array[Int],
+  segments : Array[AllocationSegment],
+) -> ProgramPoint? {
+  guard !segment_ids.is_empty() else { return None }
+  guard self.points_by_reg.get(physical_reg_key(reg)) is Some(points) else {
+    return None
+  }
+  let mut lo = 0
+  let mut hi = points.length()
+  let first_start = segments[segment_ids[0]].range.start
+  while lo < hi {
+    let mid = lo + (hi - lo) / 2
+    if points[mid].compare_with_order(first_start, self.block_order) <= 0 {
+      lo = mid + 1
+    } else {
+      hi = mid
+    }
+  }
+  let mut segment_index = 0
+  while lo < points.length() && segment_index < segment_ids.length() {
+    let point = points[lo]
+    let range = segments[segment_ids[segment_index]].range
+    if point.compare_with_order(range.start, self.block_order) <= 0 {
+      lo = lo + 1
+    } else if point.compare_with_order(range.end, self.block_order) < 0 {
+      return Some(point)
+    } else {
+      segment_index = segment_index + 1
+    }
+  }
+  None
+}
+
+///|
 fn find_scratch_reg(
   environment : MachineEnv,
   class : RegClass,
