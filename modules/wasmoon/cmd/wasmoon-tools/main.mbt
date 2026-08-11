@@ -225,7 +225,7 @@ fn exit_error(msg : String) -> Unit {
 ///|
 fn read_file(path : String) -> Bytes {
   @fs.read_file_to_bytes(path) catch {
-    @fs.IOError(message) => {
+    IOError(message) => {
       exit_error("reading file '\{path}': \{message}")
       panic() // unreachable
     }
@@ -235,14 +235,14 @@ fn read_file(path : String) -> Bytes {
 ///|
 fn write_text_file(path : String, content : String) -> Unit {
   @fs.write_string_to_file(path, content) catch {
-    @fs.IOError(message) => exit_error("writing file '\{path}': \{message}")
+    IOError(message) => exit_error("writing file '\{path}': \{message}")
   }
 }
 
 ///|
 fn write_bytes_file(path : String, data : Bytes) -> Unit {
   @fs.write_bytes_to_file(path, data) catch {
-    @fs.IOError(message) => exit_error("writing file '\{path}': \{message}")
+    IOError(message) => exit_error("writing file '\{path}': \{message}")
   }
 }
 
@@ -254,14 +254,14 @@ fn write_binary_file(path : String, data : Array[Int]) -> Unit {
   }
   let bytes = Bytes::from_array(byte_arr)
   @fs.write_bytes_to_file(path, bytes) catch {
-    @fs.IOError(message) => exit_error("writing file '\{path}': \{message}")
+    IOError(message) => exit_error("writing file '\{path}': \{message}")
   }
 }
 
 ///|
 fn read_text_file(path : String) -> String {
   @fs.read_file_to_string(path) catch {
-    @fs.IOError(message) => {
+    IOError(message) => {
       exit_error("reading file '\{path}': \{message}")
       panic()
     }
@@ -559,7 +559,7 @@ fn is_dir(path : String) -> Bool {
 ///|
 fn read_wit_dir(path : String) -> @wit.Package {
   let entries = @fs.read_dir(path) catch {
-    @fs.IOError(message) => {
+    IOError(message) => {
       exit_error(message)
       panic()
     }
@@ -614,7 +614,7 @@ fn read_wit_deps(root : String) -> Array[@wit.Package] {
     return []
   }
   let entries = @fs.read_dir(deps_dir) catch {
-    @fs.IOError(message) => {
+    IOError(message) => {
       exit_error(message)
       panic()
     }
@@ -659,7 +659,7 @@ fn read_wit_dir_allow_missing_package(path : String) -> @wit.Package {
   // Like read_wit_dir(), but used for deps entries where the container name is arbitrary.
   // The WIT files themselves must still declare a `package` somewhere; this is validated later.
   let entries = @fs.read_dir(path) catch {
-    @fs.IOError(message) => {
+    IOError(message) => {
       exit_error(message)
       panic()
     }
@@ -708,7 +708,7 @@ fn write_wit_out_dir(
     }
   } else {
     @fs.create_dir(out_dir) catch {
-      @fs.IOError(message) => {
+      IOError(message) => {
         exit_error(message)
         panic()
       }
@@ -726,7 +726,7 @@ fn write_wit_out_dir(
     }
   } else {
     @fs.create_dir(deps_dir) catch {
-      @fs.IOError(message) => {
+      IOError(message) => {
         exit_error(message)
         panic()
       }

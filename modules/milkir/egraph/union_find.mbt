@@ -11,6 +11,8 @@ priv struct EClass {
   // Cached constant values for O(1) lookup (instead of O(n) scan)
   mut const_value : Int64?
   mut fconst_value : UInt64?
+  mut const_conflicted : Bool
+  mut fconst_conflicted : Bool
 }
 
 ///|

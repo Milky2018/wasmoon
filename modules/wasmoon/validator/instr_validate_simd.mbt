@@ -635,6 +635,9 @@ fn validate_instr_simd(
       stack.pop(V128)
       stack.push(V128)
     }
-    _ => abort("non-SIMD instruction routed to SIMD validator: \{instr}")
+    _ =>
+      raise UnsupportedInstruction(
+        "non-SIMD instruction routed to SIMD validator: \{instr}",
+      )
   }
 }

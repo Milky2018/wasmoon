@@ -79,60 +79,6 @@ test "sparse live sets cover diamond loop and unreachable CFG regions" {
 }
 
 ///|
-test "compute reverse postorder from dense successors" {
-  debug_inspect(
-    @planning.compute_reverse_postorder_from_successors([[1, 2], [3], [3], []]),
-    content="[0, 2, 1, 3]",
-  )
-  debug_inspect(
-    @planning.compute_reverse_postorder_from_successors([[1], [], [], []]),
-    content="[2, 3, 1, 0]",
-  )
-  debug_inspect(
-    @planning.compute_reachable_reverse_postorder_from_successors([
-      [1],
-      [],
-      [],
-      [],
-    ]),
-    content="[0, 1]",
-  )
-}
-
-///|
-test "build dense CFG edges from sparse block ids" {
-  let edges = @planning.build_dense_successor_edges([10, 20, 30], [
-    [20, 30, 99],
-    [30],
-    [10],
-  ])
-  debug_inspect(edges.succs, content="[[1, 2], [2], [0]]")
-  debug_inspect(edges.preds, content="[[2], [0], [0, 1]]")
-}
-
-///|
-test "dense CFG computes dominators and loops" {
-  let edges = @planning.build_dense_successor_edges([0, 1, 2, 3], [
-    [1],
-    [3, 2],
-    [1],
-    [],
-  ])
-  debug_inspect(
-    @planning.compute_dominators_from_edges(edges),
-    content="[0, 0, 1, 1]",
-  )
-  let back_edges = @planning.find_back_edges_from_edges(edges)
-  inspect(back_edges.length(), content="1")
-  debug_inspect(back_edges[0], content="(2, 1)")
-  let loops = @planning.find_loops_from_edges(edges)
-  inspect(loops.length(), content="1")
-  inspect(loops[0].header, content="1")
-  inspect(loops[0].latch, content="2")
-  debug_inspect(loops[0].body, content="[1, 2]")
-}
-
-///|
 test "count sorted integer points in open range" {
   let points = [2, 4, 4, 8, 10]
   inspect(@planning.lower_bound_sorted_int(points, 4), content="1")
@@ -668,18 +614,6 @@ test "instruction edit resolution preserves position order and edge edits" {
       #|]
     ),
   )
-}
-
-///|
-test "compute approximate loop depths from successors" {
-  let depths = @planning.compute_approx_loop_depths([[1], [2], [1, 3], []])
-  debug_inspect(depths, content="[0, 1, 1, 0]")
-}
-
-///|
-test "compute approximate loop depths ignores invalid successors" {
-  let depths = @planning.compute_approx_loop_depths([[1, -1, 99], [0], []])
-  debug_inspect(depths, content="[1, 1, 0]")
 }
 
 ///|

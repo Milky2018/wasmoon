@@ -1,9 +1,9 @@
 /// WASI state and symbol access for managed native JIT contexts.
 
 ///|
-fn take_wasi_exit_code(ctx_ptr : Int64) -> Int {
-  let raw_code = c_jit_get_wasi_exit_code(ctx_ptr)
-  c_jit_clear_wasi_exit(ctx_ptr)
+fn take_wasi_exit_code(context : JITContext) -> Int {
+  let raw_code = c_jit_get_wasi_exit_code_managed(context)
+  c_jit_clear_wasi_exit_managed(context)
   if raw_code < 0 {
     0
   } else {
@@ -82,76 +82,84 @@ pub fn make_cstring(s : String) -> FixedArray[Byte] {
 }
 
 ///|
-fn set_wasi_stdout_capture(ctx_ptr : Int64, enabled : Bool) -> Unit {
-  c_jit_set_wasi_stdout_capture(ctx_ptr, if enabled { 1 } else { 0 })
+fn set_wasi_stdout_capture(context : JITContext, enabled : Bool) -> Unit {
+  c_jit_set_wasi_stdout_capture_managed(context, if enabled { 1 } else { 0 })
 }
 
 ///|
-fn set_wasi_stderr_capture(ctx_ptr : Int64, enabled : Bool) -> Unit {
-  c_jit_set_wasi_stderr_capture(ctx_ptr, if enabled { 1 } else { 0 })
+fn set_wasi_stderr_capture(context : JITContext, enabled : Bool) -> Unit {
+  c_jit_set_wasi_stderr_capture_managed(context, if enabled { 1 } else { 0 })
 }
 
 ///|
-fn set_wasi_stdin_buffer(ctx_ptr : Int64, data : Bytes) -> Unit {
-  c_jit_set_wasi_stdin_buffer(ctx_ptr, data, data.length())
+fn set_wasi_stdin_buffer(context : JITContext, data : Bytes) -> Unit {
+  c_jit_set_wasi_stdin_buffer_managed(context, data, data.length())
 }
 
 ///|
-fn set_wasi_stdin_callback(ctx_ptr : Int64, callback : () -> Bytes) -> Unit {
+fn set_wasi_stdin_callback(
+  context : JITContext,
+  callback : () -> Bytes,
+) -> Unit {
   let call_closure : FuncRef[(() -> Bytes) -> Bytes] = fn(f : () -> Bytes) {
     f()
   }
-  c_jit_set_wasi_stdin_callback(ctx_ptr, call_closure, callback)
+  c_jit_set_wasi_stdin_callback_managed(context, call_closure, callback)
 }
 
 ///|
-fn clear_wasi_stdin_callback(ctx_ptr : Int64) -> Unit {
-  c_jit_clear_wasi_stdin_callback(ctx_ptr)
+fn clear_wasi_stdin_callback(context : JITContext) -> Unit {
+  c_jit_clear_wasi_stdin_callback_managed(context)
 }
 
 ///|
-fn clear_wasi_stdin_buffer(ctx_ptr : Int64) -> Unit {
-  c_jit_clear_wasi_stdin_buffer(ctx_ptr)
+fn clear_wasi_stdin_buffer(context : JITContext) -> Unit {
+  c_jit_clear_wasi_stdin_buffer_managed(context)
 }
 
 ///|
-fn take_wasi_stdout(ctx_ptr : Int64) -> Bytes {
-  c_jit_take_wasi_stdout(ctx_ptr)
+fn take_wasi_stdout(context : JITContext) -> Bytes {
+  c_jit_take_wasi_stdout_managed(context)
 }
 
 ///|
-fn take_wasi_stderr(ctx_ptr : Int64) -> Bytes {
-  c_jit_take_wasi_stderr(ctx_ptr)
+fn take_wasi_stderr(context : JITContext) -> Bytes {
+  c_jit_take_wasi_stderr_managed(context)
 }
 
 ///|
 fn init_wasi_context(
-  ctx_ptr : Int64,
+  context : JITContext,
   args : Array[String],
   env : Array[String],
   preopens : Array[(String, String)],
   quiet? : Bool = false,
 ) -> Unit {
   if quiet {
-    c_jit_init_wasi_fds_quiet(ctx_ptr, preopens.length())
+    c_jit_init_wasi_fds_quiet_managed(context, preopens.length())
   } else {
-    c_jit_init_wasi_fds(ctx_ptr, preopens.length())
+    c_jit_init_wasi_fds_managed(context, preopens.length())
   }
-  set_wasi_stdout_capture(ctx_ptr, false)
-  set_wasi_stderr_capture(ctx_ptr, false)
-  clear_wasi_stdin_callback(ctx_ptr)
-  clear_wasi_stdin_buffer(ctx_ptr)
-  c_jit_set_wasi_args(ctx_ptr, args.length())
+  set_wasi_stdout_capture(context, false)
+  set_wasi_stderr_capture(context, false)
+  clear_wasi_stdin_callback(context)
+  clear_wasi_stdin_buffer(context)
+  c_jit_set_wasi_args_managed(context, args.length())
   for i, arg in args {
-    c_jit_set_wasi_arg(ctx_ptr, i, make_cstring(arg))
+    c_jit_set_wasi_arg_managed(context, i, make_cstring(arg))
   }
-  c_jit_set_wasi_envs(ctx_ptr, env.length())
+  c_jit_set_wasi_envs_managed(context, env.length())
   for i, e in env {
-    c_jit_set_wasi_env(ctx_ptr, i, make_cstring(e))
+    c_jit_set_wasi_env_managed(context, i, make_cstring(e))
   }
   for i, entry in preopens {
     let (host, guest) = entry
-    c_jit_add_preopen(ctx_ptr, i, make_cstring(host), make_cstring(guest))
+    c_jit_add_preopen_managed(
+      context,
+      i,
+      make_cstring(host),
+      make_cstring(guest),
+    )
   }
 }
 
@@ -163,7 +171,7 @@ pub fn NativeJITContext::init_wasi(
   preopens : Array[(String, String)],
   quiet? : Bool = false,
 ) -> Unit {
-  self.with_ptr(fn(ptr) { init_wasi_context(ptr, args, env, preopens, quiet~) })
+  init_wasi_context(self.handle, args, env, preopens, quiet~)
 }
 
 ///|
@@ -171,7 +179,7 @@ pub fn NativeJITContext::set_wasi_stdout_capture(
   self : NativeJITContext,
   enabled : Bool,
 ) -> Unit {
-  self.with_ptr(fn(ptr) { set_wasi_stdout_capture(ptr, enabled) })
+  set_wasi_stdout_capture(self.handle, enabled)
 }
 
 ///|
@@ -179,7 +187,7 @@ pub fn NativeJITContext::set_wasi_stderr_capture(
   self : NativeJITContext,
   enabled : Bool,
 ) -> Unit {
-  self.with_ptr(fn(ptr) { set_wasi_stderr_capture(ptr, enabled) })
+  set_wasi_stderr_capture(self.handle, enabled)
 }
 
 ///|
@@ -187,7 +195,7 @@ pub fn NativeJITContext::set_wasi_stdin_buffer(
   self : NativeJITContext,
   data : Bytes,
 ) -> Unit {
-  self.with_ptr(fn(ptr) { set_wasi_stdin_buffer(ptr, data) })
+  set_wasi_stdin_buffer(self.handle, data)
 }
 
 ///|
@@ -195,36 +203,36 @@ pub fn NativeJITContext::set_wasi_stdin_callback(
   self : NativeJITContext,
   callback : () -> Bytes,
 ) -> Unit {
-  self.with_ptr(fn(ptr) { set_wasi_stdin_callback(ptr, callback) })
+  set_wasi_stdin_callback(self.handle, callback)
 }
 
 ///|
 pub fn NativeJITContext::clear_wasi_stdin_callback(
   self : NativeJITContext,
 ) -> Unit {
-  self.with_ptr(fn(ptr) { clear_wasi_stdin_callback(ptr) })
+  clear_wasi_stdin_callback(self.handle)
 }
 
 ///|
 pub fn NativeJITContext::clear_wasi_stdin_buffer(
   self : NativeJITContext,
 ) -> Unit {
-  self.with_ptr(fn(ptr) { clear_wasi_stdin_buffer(ptr) })
+  clear_wasi_stdin_buffer(self.handle)
 }
 
 ///|
 pub fn NativeJITContext::take_wasi_stdout(self : NativeJITContext) -> Bytes {
-  self.with_ptr(fn(ptr) { take_wasi_stdout(ptr) })
+  take_wasi_stdout(self.handle)
 }
 
 ///|
 pub fn NativeJITContext::take_wasi_stderr(self : NativeJITContext) -> Bytes {
-  self.with_ptr(fn(ptr) { take_wasi_stderr(ptr) })
+  take_wasi_stderr(self.handle)
 }
 
 ///|
 pub fn NativeJITContext::take_wasi_exit_code(self : NativeJITContext) -> Int {
-  self.with_ptr(fn(ptr) { take_wasi_exit_code(ptr) })
+  take_wasi_exit_code(self.handle)
 }
 
 ///|

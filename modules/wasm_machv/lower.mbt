@@ -16,7 +16,7 @@ struct Environment {
   function_table_field : @machv.EnvironmentField
   table_base_field : (Int) -> @machv.EnvironmentField
   canonical_type_index : (Int) -> Int
-  runtime_symbol : (String) -> @machv.ExternalSymbol
+  runtime_symbol : (@wasm_milkir.WasmRuntimeHelper) -> @machv.ExternalSymbol
 }
 
 ///|
@@ -26,7 +26,7 @@ pub fn Environment::new(
   function_table_field : @machv.EnvironmentField,
   table_base_field : (Int) -> @machv.EnvironmentField,
   canonical_type_index : (Int) -> Int,
-  runtime_symbol : (String) -> @machv.ExternalSymbol,
+  runtime_symbol : (@wasm_milkir.WasmRuntimeHelper) -> @machv.ExternalSymbol,
 ) -> Environment {
   {
     function_symbol,
@@ -273,7 +273,7 @@ fn check_indirect_type(
   context.switch_to_block(subtype_block)
   context.emit_call_without_roots(
     @machv.SemanticCall::new(
-      External((environment.runtime_symbol)("gc.type_check_subtype")),
+      External((environment.runtime_symbol)(GcTypeCheckSubtype)),
       @machv.Signature::new([I32, I32], []),
       Platform,
       @machv.CallBehavior::new(Read, true, false, false, false),
@@ -342,14 +342,14 @@ fn lower_indirect_call(
 fn finish_runtime_call(
   context : @adapter.InstructionContext,
   environment : Environment,
-  capability : String,
+  helper : @wasm_milkir.WasmRuntimeHelper,
   operands : Array[@machv.Value],
   parameter_types : Array[@machv.ValueType],
   behavior : @machv.CallBehavior,
 ) -> Unit {
   context.finish_call_without_roots(
     @machv.SemanticCall::new(
-      External((environment.runtime_symbol)(capability)),
+      External((environment.runtime_symbol)(helper)),
       @machv.Signature::new(parameter_types, context.result_types()),
       Platform,
       behavior,
@@ -387,7 +387,7 @@ fn lower_ref_test(
   finish_runtime_call(
     context,
     environment,
-    "gc.ref_test",
+    GcRefTest,
     operands,
     [GcRef64, I32, I32],
     @machv.CallBehavior::new(Read, false, false, false, false),
@@ -407,7 +407,7 @@ fn lower_ref_cast(
   finish_runtime_call(
     context,
     environment,
-    "gc.ref_cast",
+    GcRefCast,
     operands,
     [GcRef64, I32, I32],
     @machv.CallBehavior::new(Read, true, false, false, false),
@@ -422,7 +422,7 @@ fn lower_array_len(
   finish_runtime_call(
     context,
     environment,
-    "gc.array_len",
+    GcArrayLen,
     context.operands(),
     [GcRef64],
     @machv.CallBehavior::new(Read, true, false, false, false),
@@ -484,14 +484,14 @@ fn finish_runtime_word(
 fn emit_runtime_void_call(
   context : @adapter.InstructionContext,
   environment : Environment,
-  capability : String,
+  helper : @wasm_milkir.WasmRuntimeHelper,
   operands : Array[@machv.Value],
   parameter_types : Array[@machv.ValueType],
   memory : @machv.MemoryEffect,
 ) -> Unit {
   context.emit_call_without_roots(
     @machv.SemanticCall::new(
-      External((environment.runtime_symbol)(capability)),
+      External((environment.runtime_symbol)(helper)),
       @machv.Signature::new(parameter_types, []),
       Platform,
       @machv.CallBehavior::new(memory, true, false, false, false),
@@ -506,14 +506,14 @@ fn emit_runtime_void_call(
 fn emit_runtime_word_call(
   context : @adapter.InstructionContext,
   environment : Environment,
-  capability : String,
+  helper : @wasm_milkir.WasmRuntimeHelper,
   operands : Array[@machv.Value],
   parameter_types : Array[@machv.ValueType],
   memory : @machv.MemoryEffect,
 ) -> @machv.Value {
   context.emit_call_without_roots(
     @machv.SemanticCall::new(
-      External((environment.runtime_symbol)(capability)),
+      External((environment.runtime_symbol)(helper)),
       @machv.Signature::new(parameter_types, [I64]),
       Platform,
       @machv.CallBehavior::new(memory, true, false, false, false),
@@ -527,7 +527,7 @@ fn emit_runtime_word_call(
 fn lower_aggregate_get(
   context : @adapter.InstructionContext,
   environment : Environment,
-  capability : String,
+  helper : @wasm_milkir.WasmRuntimeHelper,
   type_index : Int,
   field_index : Int?,
 ) -> String? {
@@ -548,7 +548,7 @@ fn lower_aggregate_get(
     emit_runtime_void_call(
       context,
       environment,
-      v128_capability(capability),
+      v128_helper(helper),
       operands,
       parameter_types,
       Read,
@@ -559,7 +559,7 @@ fn lower_aggregate_get(
   let word = emit_runtime_word_call(
     context,
     environment,
-    capability,
+    helper,
     operands,
     parameter_types,
     Read,
@@ -569,9 +569,17 @@ fn lower_aggregate_get(
 }
 
 ///|
-/// Name of the v128 helper matching a word-sized GC capability.
-fn v128_capability(capability : String) -> String {
-  "\{capability}_v128"
+/// V128 helper matching a word-sized GC helper.
+fn v128_helper(
+  helper : @wasm_milkir.WasmRuntimeHelper,
+) -> @wasm_milkir.WasmRuntimeHelper {
+  match helper {
+    GcStructGet => GcStructGetV128
+    GcStructSet => GcStructSetV128
+    GcArrayGet => GcArrayGetV128
+    GcArraySet => GcArraySetV128
+    _ => helper
+  }
 }
 
 ///|
@@ -599,7 +607,7 @@ fn finish_packed_runtime_word(
 fn lower_packed_aggregate_get(
   context : @adapter.InstructionContext,
   environment : Environment,
-  capability : String,
+  helper : @wasm_milkir.WasmRuntimeHelper,
   type_index : Int,
   field_index : Int?,
   byte_width : Int,
@@ -617,7 +625,7 @@ fn lower_packed_aggregate_get(
   let word = emit_runtime_word_call(
     context,
     environment,
-    capability,
+    helper,
     operands,
     parameter_types,
     Read,
@@ -629,7 +637,7 @@ fn lower_packed_aggregate_get(
 fn lower_aggregate_set(
   context : @adapter.InstructionContext,
   environment : Environment,
-  capability : String,
+  helper : @wasm_milkir.WasmRuntimeHelper,
   type_index : Int,
   field_index : Int?,
 ) -> String? {
@@ -663,9 +671,9 @@ fn lower_aggregate_set(
     context,
     environment,
     if is_vector {
-      v128_capability(capability)
+      v128_helper(helper)
     } else {
-      capability
+      helper
     },
     operands,
     parameter_types,
@@ -691,9 +699,9 @@ fn lower_array_fill(
     context,
     environment,
     if is_vector {
-      "gc.array_fill_v128"
+      GcArrayFillV128
     } else {
-      "gc.array_fill"
+      GcArrayFill
     },
     [source_operands[0], source_operands[1], value, source_operands[3]],
     [GcRef64, I32, if is_vector { Ptr64 } else { I64 }, I32],
@@ -710,7 +718,7 @@ fn lower_array_copy(
   finish_runtime_call(
     context,
     environment,
-    "gc.array_copy",
+    GcArrayCopy,
     context.operands(),
     [GcRef64, I32, GcRef64, I32, I32],
     @machv.CallBehavior::new(ReadWrite, true, false, false, false),
@@ -721,13 +729,13 @@ fn lower_array_copy(
 fn emit_gc_allocation(
   context : @adapter.InstructionContext,
   environment : Environment,
-  capability : String,
+  helper : @wasm_milkir.WasmRuntimeHelper,
   operands : Array[@machv.Value],
   parameter_types : Array[@machv.ValueType],
 ) -> @machv.Value {
   context.emit_call(
     @machv.SemanticCall::new(
-      External((environment.runtime_symbol)(capability)),
+      External((environment.runtime_symbol)(helper)),
       @machv.Signature::new(parameter_types, [I64]),
       Platform,
       @machv.CallBehavior::new(ReadWrite, true, false, true, false),
@@ -763,9 +771,9 @@ fn lower_array_new(
     context,
     environment,
     if is_vector {
-      "gc.alloc_array_wide_slow"
+      GcAllocArrayWideSlow
     } else {
-      "gc.alloc_array_slow"
+      GcAllocArraySlow
     },
     operands,
     [Ptr64, I32, I32, if is_vector { Ptr64 } else { I64 }],
@@ -787,7 +795,7 @@ fn lower_struct_new_default(
   let word = emit_gc_allocation(
     context,
     environment,
-    "gc.alloc_struct_slow",
+    GcAllocStructSlow,
     operands,
     [Ptr64, I32, Ptr64, I32],
   )
@@ -798,7 +806,7 @@ fn lower_struct_new_default(
 fn lower_array_segment_new(
   context : @adapter.InstructionContext,
   environment : Environment,
-  capability : String,
+  helper : @wasm_milkir.WasmRuntimeHelper,
   type_index : Int,
   segment_index : Int,
 ) -> Unit {
@@ -808,7 +816,7 @@ fn lower_array_segment_new(
   for operand in context.operands() {
     operands.push(operand)
   }
-  let word = emit_gc_allocation(context, environment, capability, operands, [
+  let word = emit_gc_allocation(context, environment, helper, operands, [
     Ptr64,
     I32,
     I32,
@@ -822,7 +830,7 @@ fn lower_array_segment_new(
 fn lower_array_segment_init(
   context : @adapter.InstructionContext,
   environment : Environment,
-  capability : String,
+  helper : @wasm_milkir.WasmRuntimeHelper,
   type_index : Int,
   segment_index : Int,
 ) -> Unit {
@@ -835,7 +843,7 @@ fn lower_array_segment_init(
   finish_runtime_call(
     context,
     environment,
-    capability,
+    helper,
     operands,
     [Ptr64, I32, I32, GcRef64, I32, I32, I32],
     @machv.CallBehavior::new(ReadWrite, true, false, false, false),
@@ -1018,7 +1026,7 @@ fn emit_runtime_word_buffer(
 fn lower_fixed_allocation(
   context : @adapter.InstructionContext,
   environment : Environment,
-  capability : String,
+  helper : @wasm_milkir.WasmRuntimeHelper,
   type_index : Int,
 ) -> String? {
   let types = context.operand_types()
@@ -1045,9 +1053,9 @@ fn lower_fixed_allocation(
     context,
     environment,
     if has_vector {
-      wide_allocation_capability(capability)
+      wide_allocation_helper(helper)
     } else {
-      capability
+      helper
     },
     operands,
     [Ptr64, I32, Ptr64, I32],
@@ -1057,12 +1065,14 @@ fn lower_fixed_allocation(
 }
 
 ///|
-/// Name of the GcSlot-shaped allocator matching a word-buffer allocator.
-fn wide_allocation_capability(capability : String) -> String {
-  match capability {
-    "gc.alloc_struct_slow" => "gc.alloc_struct_wide_slow"
-    "gc.alloc_array_from_values_slow" => "gc.alloc_array_from_slots_slow"
-    _ => capability
+/// GcSlot-shaped allocator matching a word-buffer allocator.
+fn wide_allocation_helper(
+  helper : @wasm_milkir.WasmRuntimeHelper,
+) -> @wasm_milkir.WasmRuntimeHelper {
+  match helper {
+    GcAllocStructSlow => GcAllocStructWideSlow
+    GcAllocArrayFromValuesSlow => GcAllocArrayFromSlotsSlow
+    _ => helper
   }
 }
 
@@ -1088,7 +1098,7 @@ fn lower_spill_locals(
   finish_runtime_call(
     context,
     environment,
-    "exception.spill_locals",
+    ExceptionSpillLocals,
     operands,
     [Ptr64, Ptr64, I32],
     @machv.CallBehavior::new(ReadWrite, false, false, false, false),
@@ -1100,13 +1110,13 @@ fn lower_spill_locals(
 fn finish_noreturn_runtime_call(
   context : @adapter.InstructionContext,
   environment : Environment,
-  capability : String,
+  helper : @wasm_milkir.WasmRuntimeHelper,
   operands : Array[@machv.Value],
   parameter_types : Array[@machv.ValueType],
 ) -> Unit {
   context.noreturn_call(
     @machv.SemanticCall::new(
-      External((environment.runtime_symbol)(capability)),
+      External((environment.runtime_symbol)(helper)),
       @machv.Signature::new(parameter_types, []),
       Platform,
       @machv.CallBehavior::new(ReadWrite, true, false, false, false),
@@ -1129,7 +1139,7 @@ fn lower_throw(
     finish_noreturn_runtime_call(
       context,
       environment,
-      "exception.throw_tag",
+      ExceptionThrowTag,
       operands,
       [Ptr64, I32],
     )
@@ -1143,7 +1153,7 @@ fn lower_throw(
     finish_noreturn_runtime_call(
       context,
       environment,
-      "exception.throw",
+      ExceptionThrow,
       operands,
       [Ptr64, I32, Ptr64, I32],
     )
@@ -1161,7 +1171,7 @@ fn lower_throw_ref(
   finish_noreturn_runtime_call(
     context,
     environment,
-    "exception.throw_ref",
+    ExceptionThrowRef,
     operands,
     [Ptr64, GcRef64],
   )
@@ -1178,7 +1188,7 @@ fn lower_delegate(
   finish_noreturn_runtime_call(
     context,
     environment,
-    "exception.delegate",
+    ExceptionDelegate,
     operands,
     [Ptr64, I32],
   )
@@ -1188,7 +1198,7 @@ fn lower_delegate(
 fn lower_exception_query(
   context : @adapter.InstructionContext,
   environment : Environment,
-  capability : String,
+  helper : @wasm_milkir.WasmRuntimeHelper,
   immediate : Int?,
 ) -> Unit {
   let operands = context.environment()
@@ -1202,7 +1212,7 @@ fn lower_exception_query(
   finish_runtime_call(
     context,
     environment,
-    capability,
+    helper,
     operands,
     parameter_types,
     @machv.CallBehavior::new(Read, false, false, false, false),
@@ -1222,7 +1232,7 @@ fn lower_try_table_end(
   finish_runtime_call(
     context,
     environment,
-    "exception.try_end",
+    ExceptionTryEnd,
     operands,
     [Ptr64, I32],
     @machv.CallBehavior::new(ReadWrite, false, false, false, false),
@@ -1239,7 +1249,7 @@ fn lower_try_table_begin(
   operands.push(i32_immediate(context, handler_id))
   let buffer = context.emit_call_without_roots(
       @machv.SemanticCall::new(
-        External((environment.runtime_symbol)("exception.try_begin")),
+        External((environment.runtime_symbol)(ExceptionTryBegin)),
         @machv.Signature::new([Ptr64, I32], [Ptr64]),
         Platform,
         @machv.CallBehavior::new(ReadWrite, true, false, false, false),
@@ -1250,7 +1260,7 @@ fn lower_try_table_begin(
   finish_runtime_call(
     context,
     environment,
-    "exception.sigsetjmp",
+    ExceptionSigsetjmp,
     [buffer, i32_immediate(context, 0)],
     [Ptr64, I32],
     @machv.CallBehavior::new(
@@ -1339,7 +1349,7 @@ fn lower_extension(
       lower_aggregate_get(
         context,
         environment,
-        "gc.struct_get",
+        GcStructGet,
         type_index,
         Some(field_index),
       )
@@ -1347,7 +1357,7 @@ fn lower_extension(
       lower_packed_aggregate_get(
         context,
         environment,
-        "gc.struct_get",
+        GcStructGet,
         type_index,
         Some(field_index),
         byte_width,
@@ -1359,7 +1369,7 @@ fn lower_extension(
       lower_packed_aggregate_get(
         context,
         environment,
-        "gc.struct_get",
+        GcStructGet,
         type_index,
         Some(field_index),
         byte_width,
@@ -1371,23 +1381,17 @@ fn lower_extension(
       lower_aggregate_set(
         context,
         environment,
-        "gc.struct_set",
+        GcStructSet,
         type_index,
         Some(field_index),
       )
     ArrayGet(type_index) =>
-      lower_aggregate_get(
-        context,
-        environment,
-        "gc.array_get",
-        type_index,
-        None,
-      )
+      lower_aggregate_get(context, environment, GcArrayGet, type_index, None)
     ArrayGetS(type_index, byte_width) => {
       lower_packed_aggregate_get(
         context,
         environment,
-        "gc.array_get",
+        GcArrayGet,
         type_index,
         None,
         byte_width,
@@ -1399,7 +1403,7 @@ fn lower_extension(
       lower_packed_aggregate_get(
         context,
         environment,
-        "gc.array_get",
+        GcArrayGet,
         type_index,
         None,
         byte_width,
@@ -1408,13 +1412,7 @@ fn lower_extension(
       None
     }
     ArraySet(type_index) =>
-      lower_aggregate_set(
-        context,
-        environment,
-        "gc.array_set",
-        type_index,
-        None,
-      )
+      lower_aggregate_set(context, environment, GcArraySet, type_index, None)
     ArrayFill(_) => lower_array_fill(context, environment)
     ArrayCopy(_, _) => {
       lower_array_copy(context, environment)
@@ -1430,33 +1428,55 @@ fn lower_extension(
     }
     StructNew(type_index) =>
       lower_fixed_allocation(
-        context, environment, "gc.alloc_struct_slow", type_index,
+        context,
+        environment,
+        GcAllocStructSlow,
+        type_index,
       )
     ArrayNewFixed(type_index, _) =>
       lower_fixed_allocation(
-        context, environment, "gc.alloc_array_from_values_slow", type_index,
+        context,
+        environment,
+        GcAllocArrayFromValuesSlow,
+        type_index,
       )
     ArrayNewData(type_index, data_index) => {
       lower_array_segment_new(
-        context, environment, "gc.array_new_data", type_index, data_index,
+        context,
+        environment,
+        GcArrayNewData,
+        type_index,
+        data_index,
       )
       None
     }
     ArrayNewElem(type_index, element_index) => {
       lower_array_segment_new(
-        context, environment, "gc.array_new_elem", type_index, element_index,
+        context,
+        environment,
+        GcArrayNewElem,
+        type_index,
+        element_index,
       )
       None
     }
     ArrayInitData(type_index, data_index) => {
       lower_array_segment_init(
-        context, environment, "gc.array_init_data", type_index, data_index,
+        context,
+        environment,
+        GcArrayInitData,
+        type_index,
+        data_index,
       )
       None
     }
     ArrayInitElem(type_index, element_index) => {
       lower_array_segment_init(
-        context, environment, "gc.array_init_elem", type_index, element_index,
+        context,
+        environment,
+        GcArrayInitElem,
+        type_index,
+        element_index,
       )
       None
     }
@@ -1479,32 +1499,27 @@ fn lower_extension(
       None
     }
     GetExceptionTag => {
-      lower_exception_query(context, environment, "exception.get_tag", None)
+      lower_exception_query(context, environment, ExceptionGetTag, None)
       None
     }
     GetExceptionValue(index) => {
       lower_exception_query(
         context,
         environment,
-        "exception.get_value",
+        ExceptionGetValue,
         Some(index),
       )
       None
     }
     GetExceptionValueCount => {
-      lower_exception_query(
-        context,
-        environment,
-        "exception.get_value_count",
-        None,
-      )
+      lower_exception_query(context, environment, ExceptionGetValueCount, None)
       None
     }
     GetSpilledLocal(index) => {
       lower_exception_query(
         context,
         environment,
-        "exception.get_spilled_local",
+        ExceptionGetSpilledLocal,
         Some(index),
       )
       None

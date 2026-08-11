@@ -37,6 +37,54 @@ test "JIT: i32.and + i32.shl with shift=32 (must mask to 0)" {
 }
 
 ///|
+test "JIT: consecutive i32 shifts use the i32 width" {
+  let source =
+    #|(module
+    #|  (func (export "test") (param i32) (result i32)
+    #|    (i32.shl
+    #|      (i32.shl (local.get 0) (i32.const 20))
+    #|      (i32.const 20))
+    #|  )
+    #|)
+  inspect(
+    compare_jit_interp_with_opt_level(source, "test", [I32(1)], 2),
+    content="matched",
+  )
+}
+
+///|
+test "JIT: consecutive i32 logical right shifts use the i32 width" {
+  let source =
+    #|(module
+    #|  (func (export "test") (param i32) (result i32)
+    #|    (i32.shr_u
+    #|      (i32.shr_u (local.get 0) (i32.const 20))
+    #|      (i32.const 20))
+    #|  )
+    #|)
+  inspect(
+    compare_jit_interp_with_opt_level(source, "test", [I32(-1)], 2),
+    content="matched",
+  )
+}
+
+///|
+test "JIT: consecutive i32 arithmetic right shifts use the i32 width" {
+  let source =
+    #|(module
+    #|  (func (export "test") (param i32) (result i32)
+    #|    (i32.shr_s
+    #|      (i32.shr_s (local.get 0) (i32.const 20))
+    #|      (i32.const 20))
+    #|  )
+    #|)
+  inspect(
+    compare_jit_interp_with_opt_level(source, "test", [I32(-2147483648)], 2),
+    content="matched",
+  )
+}
+
+///|
 test "JIT: i32 boolean via br_if must use low 32 bits" {
   let source =
     #|(module

@@ -1896,3 +1896,39 @@ test "validator: out-of-range type index is rejected, not fatal" {
     validate_module_has_error(mod, err => err is InvalidTypeIndex(99)),
   )
 }
+
+///|
+/// The SIMD validator is an internal dispatch boundary. A missed instruction
+/// must become a validation error rather than terminate the process.
+test "validator: non-SIMD dispatch is rejected, not fatal" {
+  let mod : @types.Module = {
+    types: [],
+    type_rec_groups: [],
+    imports: [],
+    funcs: [],
+    tables: [],
+    memories: [],
+    globals: [],
+    exports: [],
+    start: None,
+    elems: [],
+    codes: [],
+    datas: [],
+    tags: [],
+    func_names: Map([]),
+  }
+  let ctx = ValidationContext::ValidationContext(mod)
+  let stack = OperandStack::new_with_subtyping(ctx.subtyping_ctx)
+  try validate_instr_simd(ctx, stack, I32Const(0)) catch {
+    err =>
+      inspect(
+        err
+        is UnsupportedInstruction(
+          "non-SIMD instruction routed to SIMD validator: I32Const(0)"
+        ),
+        content="true",
+      )
+  } noraise {
+    _ => fail("expected non-SIMD dispatch to be rejected")
+  }
+}

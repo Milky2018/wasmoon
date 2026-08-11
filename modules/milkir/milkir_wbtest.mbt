@@ -1267,6 +1267,33 @@ test "optimizer removes unreachable trampoline with dominating free value" {
 }
 
 ///|
+test "jump threading keeps trampoline parameters used by descendants" {
+  let builder = FunctionBuilder::FunctionBuilder("thread_jump_live_param")
+  builder.add_result(I32)
+  let left = builder.create_block()
+  let right = builder.create_block()
+  let trampoline = builder.create_block()
+  let exit = builder.create_block()
+  let condition = builder.iconst_i32(1)
+  let left_value = builder.iconst_i32(7)
+  let right_value = builder.iconst_i32(9)
+  builder.brnz(condition, left, right)
+  builder.switch_to_block(left)
+  builder.jump(trampoline, [left_value])
+  builder.switch_to_block(right)
+  builder.jump(trampoline, [right_value])
+  let forwarded = builder.add_block_param(trampoline, I32)
+  builder.switch_to_block(trampoline)
+  builder.jump(exit, [])
+  builder.switch_to_block(exit)
+  builder.return_([forwarded])
+  let func = builder.get_function()
+  inspect(func.verify(), content="()")
+  thread_jumps(func) |> ignore
+  inspect(func.verify(), content="()")
+}
+
+///|
 test "optimizer merges straight line blocks" {
   let builder = FunctionBuilder::FunctionBuilder("merge_blocks")
   builder.add_result(I32)
@@ -1289,6 +1316,25 @@ test "optimizer merges straight line blocks" {
       #|
     ),
   )
+  inspect(func.verify(), content="()")
+}
+
+///|
+test "optimizer merges a complete straight-line chain in one pass" {
+  let builder = FunctionBuilder::FunctionBuilder("merge_block_chain")
+  let first = builder.create_block()
+  let second = builder.create_block()
+  let exit = builder.create_block()
+  builder.jump(first, [])
+  builder.switch_to_block(first)
+  builder.jump(second, [])
+  builder.switch_to_block(second)
+  builder.jump(exit, [])
+  builder.switch_to_block(exit)
+  builder.return_([])
+  let func = builder.get_function()
+  merge_blocks(func) |> ignore
+  inspect(func.blocks.length(), content="1")
   inspect(func.verify(), content="()")
 }
 

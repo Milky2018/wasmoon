@@ -1,6 +1,6 @@
 ///|
 /// Display available compiler settings
-pub fn run_settings() -> Unit {
+pub fn run_settings() -> Int {
   println("Wasmoon Compiler Settings")
   println("=".repeat(60))
   println("")
@@ -41,4 +41,5 @@ pub fn run_settings() -> Unit {
   println("  .wast   WebAssembly test script format")
   println("")
   println("=".repeat(60))
+  0
 }
