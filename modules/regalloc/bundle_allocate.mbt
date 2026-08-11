@@ -262,15 +262,6 @@ fn bundle_class(
 }
 
 ///|
-fn first_clobber_point(
-  segment : AllocationSegment,
-  reg : PhysicalReg,
-  clobbers : RegisterClobberIndex,
-) -> ProgramPoint? {
-  clobbers.query(reg, segment.range).0
-}
-
-///|
 fn earlier_conflict_point(
   current : ProgramPoint?,
   candidate : ProgramPoint,

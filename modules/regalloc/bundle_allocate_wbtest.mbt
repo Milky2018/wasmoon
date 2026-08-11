@@ -868,43 +868,19 @@ test "clobber index follows custom block order and fixed operands" {
     clobbers: [[r0], [], [r0]],
   }
   let index = build_register_clobber_index(function, [2, 0, 1])
-  let query = index.query(
-    r0,
-    ProgramRange(ProgramPoint(1, -1), ProgramPoint(0, 2)),
-  )
   debug_inspect(
     (
       index.points_by_reg.get(physical_reg_key(r0)),
       index.points_by_reg.get(physical_reg_key(r1)),
-      query,
-      index.query(r2, ProgramRange(ProgramPoint(1, -1), ProgramPoint(0, 2))),
+      index.points_by_reg.get(physical_reg_key(r2)),
     ),
     content=(
       #|(
       #|  Some([{ block: 2, inst: 1 }, { block: 0, inst: 1 }]),
       #|  Some([{ block: 1, inst: 0 }]),
-      #|  (Some({ block: 2, inst: 1 }), 3),
-      #|  (None, 0),
+      #|  None,
       #|)
     ),
-  )
-}
-
-///|
-test "clobber query excludes range boundaries and scales logarithmically" {
-  let r0 : PhysicalReg = { id: 0, class: Int }
-  let points = Array::makei(4096, index => ProgramPoint(0, index * 2 + 1))
-  let index : RegisterClobberIndex = {
-    points_by_reg: Map([(physical_reg_key(r0), points)]),
-    block_order: [0],
-  }
-  debug_inspect(
-    (
-      index.query(r0, ProgramRange(ProgramPoint(0, 1), ProgramPoint(0, 3))),
-      index.query(r0, ProgramRange(ProgramPoint(0, -1), ProgramPoint(0, 1))),
-      index.query(r0, ProgramRange(ProgramPoint(0, -1), ProgramPoint(0, 8193))),
-    ),
-    content="((None, 14), (None, 14), (Some({ block: 0, inst: 1 }), 14))",
   )
 }
 

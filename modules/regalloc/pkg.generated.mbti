@@ -39,12 +39,6 @@ pub fn AllocationPlan::spill_slot(Self, Int) -> SpillSlotSpec?
 pub fn AllocationPlan::value_location(Self, Int) -> Location?
 pub impl Show for AllocationPlan
 
-pub(all) enum AllocatorStrategy {
-  Backtracking
-  Fast
-} derive(Eq, @debug.Debug)
-pub impl Show for AllocatorStrategy
-
 type DenseCfgEdges derive(@debug.Debug)
 
 type DenseLiveSets derive(@debug.Debug)
@@ -170,13 +164,11 @@ pub(all) enum RegClass {
 } derive(Eq, @debug.Debug)
 
 pub struct RegallocConfig {
-  strategy : AllocatorStrategy
   verify : Bool
   observer : ((RegallocPhase?) -> Unit)?
 }
-pub fn RegallocConfig::RegallocConfig(strategy? : AllocatorStrategy, verify? : Bool, observer? : ((RegallocPhase?) -> Unit)?) -> Self
+pub fn RegallocConfig::RegallocConfig(verify? : Bool, observer? : ((RegallocPhase?) -> Unit)?) -> Self
 pub fn RegallocConfig::enter_phase(Self, RegallocPhase?) -> Unit
-pub fn RegallocConfig::strategy(Self) -> AllocatorStrategy
 pub fn RegallocConfig::verify(Self) -> Bool
 
 pub(all) enum RegallocPhase {
@@ -184,7 +176,6 @@ pub(all) enum RegallocPhase {
   SegmentConstruction
   BundleFormation
   BundleAllocation
-  FastAllocation
   HomeAssignment
   OperandAssignment
   EdgeTransfers

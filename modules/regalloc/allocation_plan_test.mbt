@@ -387,7 +387,7 @@ test "backtracking keeps spill homes distinct across CFG blocks" {
 }
 
 ///|
-test "both strategies keep the dense live range resident" {
+test "backtracking keeps the dense live range resident" {
   let function : TestFunction = {
     value_count: 2,
     block_parameters: [value(0)],
@@ -401,41 +401,6 @@ test "both strategies keep the dense live range resident" {
   let environment = MachineEnv::new([int_reg(0)], [int_reg(1), int_reg(2)])
   inspect(
     allocate_function(function, environment),
-    content=(
-      #|{
-      #|  value_locations: [Some(Spill(0)), Some(Reg({ id: 0, class: Int }))],
-      #|  operand_locations: {
-      #|    (0, 0): Reg({ id: 0, class: Int }),
-      #|    (1, 0): Reg({ id: 0, class: Int }),
-      #|    (2, 0): Reg({ id: 0, class: Int }),
-      #|    (3, 0): Reg({ id: 1, class: Int }),
-      #|    (3, 1): Reg({ id: 0, class: Int }),
-      #|  },
-      #|  operand_assignments: [
-      #|    { instruction: 0, operand: 0, location: Reg({ id: 0, class: Int }) },
-      #|    { instruction: 1, operand: 0, location: Reg({ id: 0, class: Int }) },
-      #|    { instruction: 2, operand: 0, location: Reg({ id: 0, class: Int }) },
-      #|    { instruction: 3, operand: 0, location: Reg({ id: 1, class: Int }) },
-      #|    { instruction: 3, operand: 1, location: Reg({ id: 0, class: Int }) },
-      #|  ],
-      #|  edits: [
-      #|    {
-      #|      value: { id: 0, class: Int },
-      #|      from: Spill(0),
-      #|      to: Reg({ id: 1, class: Int }),
-      #|      position: Before(3),
-      #|    },
-      #|  ],
-      #|  spill_slots: [{ size: 8, alignment: 8 }],
-      #|}
-    ),
-  )
-  inspect(
-    allocate_function(
-      function,
-      environment,
-      config=RegallocConfig(strategy=Fast),
-    ),
     content=(
       #|{
       #|  value_locations: [Some(Spill(0)), Some(Reg({ id: 0, class: Int }))],
@@ -771,46 +736,6 @@ test "backtracking coalesces conflict-free edges and preserves loop transfers" {
 }
 
 ///|
-test "fast allocation verifies branch and loop transfers" {
-  let function : CfgTestFunction = {
-    value_count: 7,
-    blocks: [[0], [1, 2]],
-    instructions: [
-      [],
-      [
-        Operand::use_reg(value(3)).with_timing(Early),
-        Operand::use_reg(value(4)).with_timing(Early),
-        Operand::def(value(6)).with_timing(Late),
-      ],
-      [],
-    ],
-    clobbers: [[], [], []],
-    successors: [[1], [1]],
-    entry_values: [value(0), value(1), value(2)],
-    parameters: [[], [value(3), value(4), value(5)]],
-    edge_arguments: [
-      [[value(0), value(1), value(2)]],
-      [[value(4), value(6), value(5)]],
-    ],
-  }
-  let plan = allocate_function(
-    function,
-    MachineEnv::new([int_reg(0), int_reg(1), int_reg(2), int_reg(3)], [
-      int_reg(4),
-    ]),
-    config=RegallocConfig(strategy=Fast),
-  )
-  debug_inspect(
-    (
-      plan.operand_assignments().length(),
-      plan.edits().length(),
-      plan.spill_count(),
-    ),
-    content="(3, 5, 0)",
-  )
-}
-
-///|
 test "backtracking coalesces the conflict-free side of a critical-edge parameter" {
   let function : CfgTestFunction = {
     value_count: 3,
@@ -950,7 +875,7 @@ test "backtracking honors a fixed-register operand" {
 }
 
 ///|
-test "fast allocation preserves tied and fixed operands across a clobber" {
+test "backtracking preserves tied and fixed operands across a clobber" {
   let function : CfgTestFunction = {
     value_count: 2,
     blocks: [[0, 1]],
@@ -970,7 +895,6 @@ test "fast allocation preserves tied and fixed operands across a clobber" {
   let plan = allocate_function(
     function,
     MachineEnv::new([int_reg(0), int_reg(1)], [int_reg(2)]),
-    config=RegallocConfig(strategy=Fast),
   )
   debug_inspect(
     (
@@ -989,7 +913,7 @@ test "fast allocation preserves tied and fixed operands across a clobber" {
 }
 
 ///|
-test "fast allocation applies AnyReg to the whole tied group" {
+test "backtracking applies AnyReg to the whole tied group" {
   let function : TestFunction = {
     value_count: 2,
     block_parameters: [value(0)],
@@ -1000,11 +924,7 @@ test "fast allocation applies AnyReg to the whole tied group" {
       ],
     ],
   }
-  let plan = allocate_function(
-    function,
-    MachineEnv::new([], [int_reg(0)]),
-    config=RegallocConfig(strategy=Fast),
-  )
+  let plan = allocate_function(function, MachineEnv::new([], [int_reg(0)]))
   debug_inspect(
     (plan.operand_location(0, 0), plan.operand_location(0, 1)),
     content="(Some(Reg({ id: 0, class: Int })), Some(Reg({ id: 0, class: Int })))",
