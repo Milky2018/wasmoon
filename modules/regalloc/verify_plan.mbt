@@ -176,6 +176,11 @@ fn[F : FunctionView] process_operand_phase(
       )
     }
     require_plan_location(environment, plan, operand.vreg, location)
+    if operand.constraint is AnyReg && location is Spill(_) {
+      raise InvalidPlan(
+        message="register-constrained operand allocated outside a register",
+      )
+    }
     if operand.constraint is FixedReg(required) && location != Reg(required) {
       raise FixedConstraintViolation(
         vreg=operand.vreg,

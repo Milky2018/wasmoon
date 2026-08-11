@@ -668,6 +668,29 @@ fn[F : FunctionView] assign_segment_operands(
       let operand_segments : Array[Int?] = []
       let used_temps : Array[PhysicalReg] = []
       let borrowed_temps : Array[PhysicalReg] = []
+      let tied_constraints : Map[Int, OperandConstraint] = Map([])
+      for operand in operands {
+        if operand.tie_id >= 0 {
+          let constraint = match tied_constraints.get(operand.tie_id) {
+            None => operand.constraint
+            Some(FixedReg(required)) =>
+              match operand.constraint {
+                FixedReg(other) if other != required =>
+                  raise InvalidPlan(
+                    message="tied operands require different fixed registers",
+                  )
+                _ => FixedReg(required)
+              }
+            Some(AnyReg) =>
+              match operand.constraint {
+                FixedReg(required) => FixedReg(required)
+                _ => AnyReg
+              }
+            Some(AnyLocation) => operand.constraint
+          }
+          tied_constraints[operand.tie_id] = constraint
+        }
+      }
       for operand in operands {
         let home = plan.value_location(operand.vreg.id).unwrap()
         let segment = segment_at(
@@ -687,7 +710,10 @@ fn[F : FunctionView] assign_segment_operands(
         }
         natural_locations.push(natural)
         let any_location = if operand.role is Def { home } else { natural }
-        let reserved = match operand.constraint {
+        let constraint = tied_constraints
+          .get(operand.tie_id)
+          .unwrap_or(operand.constraint)
+        let reserved = match constraint {
           FixedReg(reg) => Some(reg)
           AnyLocation =>
             match any_location {
@@ -722,7 +748,8 @@ fn[F : FunctionView] assign_segment_operands(
         let selected = match tied_location {
           Some(location) => location
           None =>
-            match operand.constraint {
+            match
+              tied_constraints.get(operand.tie_id).unwrap_or(operand.constraint) {
               FixedReg(reg) => Reg(reg)
               AnyLocation =>
                 if operand.role is Def {

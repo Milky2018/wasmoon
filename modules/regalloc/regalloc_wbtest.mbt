@@ -856,6 +856,36 @@ fn verify_wrong_location(
 }
 
 ///|
+test "plan verifier rejects a spilled AnyReg operand" {
+  let value : VirtualReg = { id: 0, class: Int }
+  let function : VerifierCfgView = {
+    value_count: 1,
+    blocks: [[0]],
+    operands: [[Operand::use_reg(value)]],
+    successors: [[]],
+    entry_values: [value],
+    parameters: [[]],
+    edge_arguments: [[]],
+    successor_queries: Ref(0),
+    block_visits: Ref(0),
+  }
+  let plan = AllocationPlan::new(1)
+  let slot = plan.create_spill_slot(8, 8)
+  plan.assign_value(value, Spill(slot))
+  plan.assign_operand(0, 0, Spill(slot))
+  let error = try {
+    verify_function_allocation(function, MachineEnv::new([], []), plan)
+    None
+  } catch {
+    error => Some(error)
+  }
+  debug_inspect(
+    error,
+    content="Some(InvalidPlan(message=\"register-constrained operand allocated outside a register\"))",
+  )
+}
+
+///|
 test "plan verifier always enters a self-looping entry block" {
   let value : VirtualReg = { id: 0, class: Int }
   debug_inspect(

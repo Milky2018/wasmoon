@@ -989,6 +989,29 @@ test "fast allocation preserves tied and fixed operands across a clobber" {
 }
 
 ///|
+test "fast allocation applies AnyReg to the whole tied group" {
+  let function : TestFunction = {
+    value_count: 2,
+    block_parameters: [value(0)],
+    instructions: [
+      [
+        Operand::use_reg(value(0)).with_constraint(AnyLocation).with_tie(0),
+        Operand::def(value(1)).with_constraint(AnyReg).with_tie(0),
+      ],
+    ],
+  }
+  let plan = allocate_function(
+    function,
+    MachineEnv::new([], [int_reg(0)]),
+    config=RegallocConfig(strategy=Fast),
+  )
+  debug_inspect(
+    (plan.operand_location(0, 0), plan.operand_location(0, 1)),
+    content="(Some(Reg({ id: 0, class: Int })), Some(Reg({ id: 0, class: Int })))",
+  )
+}
+
+///|
 test "backtracking borrows an allocatable register when spill temporaries are exhausted" {
   let function : TestFunction = {
     value_count: 4,
