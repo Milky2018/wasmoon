@@ -938,16 +938,39 @@ test "plan verifier queries each block successor list once" {
 }
 
 ///|
-test "production fragments use local spill-cost density" {
+test "production fragments cache local allocation metadata" {
+  let r0 : PhysicalReg = { id: 0, class: Int }
+  let r1 : PhysicalReg = { id: 1, class: Int }
   let range = LiveRange::LiveRange(0, { id: 0, class: Int })
   range.add_range(ProgramRange(ProgramPoint(0, 0), ProgramPoint(0, 2)))
   range.add_range(ProgramRange(ProgramPoint(2, 0), ProgramPoint(2, 2)))
-  range.add_use(UsePosition(ProgramPoint(0, 1), LiveUse, AnyReg))
-  range.add_use(UsePosition(ProgramPoint(2, 1), LiveUse, AnyReg))
+  range.add_use(
+    UsePosition(ProgramPoint(0, 1), LiveUse, AnyReg).with_preference(Some(r1)),
+  )
+  range.add_use(
+    UsePosition(ProgramPoint(2, 1), LiveUse, FixedReg(r0)).with_preference(
+      Some(r0),
+    ),
+  )
   let ranges = LiveRangeSet::LiveRangeSet([0, 1, 2])
   ranges.add_range(range)
-  let (segments, _) = build_allocation_segments(ranges)
-  debug_inspect(segments.map(segment => segment.weight), content="[667, 667]")
+  let (segments, _) = build_allocation_segments(ranges, allocatable=[r0, r1])
+  debug_inspect(
+    segments.map(segment => {
+      (
+        segment.weight,
+        segment.has_fixed_constraint,
+        segment.fixed_hint,
+        segment.preference_hint,
+      )
+    }),
+    content=(
+      #|[
+      #|  (667, false, None, Some({ id: 1, class: Int })),
+      #|  (1000, true, Some({ id: 0, class: Int }), Some({ id: 0, class: Int })),
+      #|]
+    ),
+  )
 }
 
 ///|
@@ -975,6 +998,8 @@ test "any-location definitions materialize in their stable home" {
       range: ProgramRange(ProgramPoint(0, 0), ProgramPoint(0, 2)),
       weight: 1,
       has_fixed_constraint: false,
+      fixed_hint: None,
+      preference_hint: None,
       location: Some(SegmentReg(register)),
     },
   ]
@@ -1001,6 +1026,8 @@ test "production register allocation index orders updates by range end" {
       range: ProgramRange(ProgramPoint(0, 0), ProgramPoint(0, 2)),
       weight: 1,
       has_fixed_constraint: false,
+      fixed_hint: None,
+      preference_hint: None,
       location: None,
     },
     {
@@ -1009,6 +1036,8 @@ test "production register allocation index orders updates by range end" {
       range: ProgramRange(ProgramPoint(0, 4), ProgramPoint(0, 6)),
       weight: 1,
       has_fixed_constraint: false,
+      fixed_hint: None,
+      preference_hint: None,
       location: None,
     },
     {
@@ -1017,6 +1046,8 @@ test "production register allocation index orders updates by range end" {
       range: ProgramRange(ProgramPoint(0, 8), ProgramPoint(0, 10)),
       weight: 1,
       has_fixed_constraint: false,
+      fixed_hint: None,
+      preference_hint: None,
       location: None,
     },
     {
@@ -1025,6 +1056,8 @@ test "production register allocation index orders updates by range end" {
       range: ProgramRange(ProgramPoint(0, 5), ProgramPoint(0, 7)),
       weight: 1,
       has_fixed_constraint: false,
+      fixed_hint: None,
+      preference_hint: None,
       location: None,
     },
   ]

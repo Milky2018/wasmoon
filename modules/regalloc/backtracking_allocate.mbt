@@ -11,7 +11,17 @@ priv struct AllocationSegment {
   mut range : ProgramRange
   mut weight : Int
   mut has_fixed_constraint : Bool
+  mut fixed_hint : PhysicalReg?
+  mut preference_hint : PhysicalReg?
   mut location : SegmentLocation?
+}
+
+///|
+priv struct SegmentMetadata {
+  weight : Int
+  has_fixed_constraint : Bool
+  fixed_hint : PhysicalReg?
+  preference_hint : PhysicalReg?
 }
 
 ///|
@@ -47,56 +57,84 @@ fn use_weight(use_position : UsePosition, loop_depths : Array[Int]) -> Int {
 ///|
 /// Rank a fragment by spill cost per program point. This keeps a sparse,
 /// long-lived value from evicting short-lived values used at every instruction.
-fn segment_weight(
+fn segment_metadata(
   range : LiveRange,
   fragment : ProgramRange,
   loop_depths : Array[Int],
-) -> Int {
+  block_order : Array[Int],
+  allocatable : Array[PhysicalReg],
+) -> SegmentMetadata {
   let mut use_cost = 0
+  let mut has_fixed_constraint = false
+  let mut fixed_hint : PhysicalReg? = None
+  let preference_counts = Array::make(allocatable.length(), 0)
   for use_position in range.uses {
     if fragment.contains(use_position.point, []) {
       use_cost = use_cost + use_weight(use_position, loop_depths)
+      if use_position.constraint is FixedReg(_) {
+        has_fixed_constraint = true
+      }
     }
-  }
-  if use_cost == 0 {
-    return 1
+    if fragment.contains(use_position.point, block_order) {
+      if fixed_hint is None && use_position.constraint is FixedReg(reg) {
+        fixed_hint = Some(reg)
+      }
+      if use_position.preference is Some(preference) &&
+        register_index(allocatable, preference) is Some(index) {
+        preference_counts[index] = preference_counts[index] + 1
+      }
+    }
   }
   let length = if fragment.start.block == fragment.end.block {
     (fragment.end.inst - fragment.start.inst).abs() + 1
   } else {
     1
   }
-  ((use_cost + length - 1) / length).max(1)
-}
-
-///|
-fn segment_has_use(range : LiveRange, fragment : ProgramRange) -> Bool {
-  for use_position in range.uses {
-    if fragment.contains(use_position.point, []) {
-      return true
+  let weight = if use_cost == 0 {
+    1
+  } else {
+    ((use_cost + length - 1) / length).max(1)
+  }
+  let mut preference_hint : PhysicalReg? = None
+  let mut selected_count = 0
+  for index, count in preference_counts {
+    if count > selected_count {
+      preference_hint = Some(allocatable[index])
+      selected_count = count
     }
   }
-  false
+  if !has_fixed_constraint {
+    fixed_hint = None
+  }
+  { weight, has_fixed_constraint, fixed_hint, preference_hint }
 }
 
 ///|
-fn fragment_has_fixed_constraint(
+fn AllocationSegment::refresh_metadata(
+  self : AllocationSegment,
   range : LiveRange,
-  fragment : ProgramRange,
-) -> Bool {
-  for use_position in range.uses {
-    if fragment.contains(use_position.point, []) &&
-      use_position.constraint is FixedReg(_) {
-      return true
-    }
-  }
-  false
+  loop_depths : Array[Int],
+  block_order : Array[Int],
+  allocatable : Array[PhysicalReg],
+) -> Unit {
+  let metadata = segment_metadata(
+    range,
+    self.range,
+    loop_depths,
+    block_order,
+    allocatable,
+  )
+  self.weight = metadata.weight
+  self.has_fixed_constraint = metadata.has_fixed_constraint
+  self.fixed_hint = metadata.fixed_hint
+  self.preference_hint = metadata.preference_hint
 }
 
 ///|
 fn build_allocation_segments(
   ranges : LiveRangeSet,
   loop_depths? : Array[Int] = [],
+  allocatable? : Array[PhysicalReg] = [],
 ) -> (Array[AllocationSegment], Array[Array[Int]]) {
   let segments : Array[AllocationSegment] = []
   let segments_by_value : Array[Array[Int]] = []
@@ -111,20 +149,38 @@ fn build_allocation_segments(
   }
   for range in ranges.ranges {
     for fragment in range.ranges {
-      let weight = segment_weight(range, fragment, loop_depths)
+      let metadata = segment_metadata(
+        range,
+        fragment,
+        loop_depths,
+        ranges.block_order,
+        allocatable,
+      )
       let id = segments.length()
       segments.push({
         id,
         value: range.vreg,
         range: fragment,
-        weight,
-        has_fixed_constraint: fragment_has_fixed_constraint(range, fragment),
+        weight: metadata.weight,
+        has_fixed_constraint: metadata.has_fixed_constraint,
+        fixed_hint: metadata.fixed_hint,
+        preference_hint: metadata.preference_hint,
         location: None,
       })
       segments_by_value[range.vreg.id].push(id)
     }
   }
   (segments, segments_by_value)
+}
+
+///|
+fn segment_has_use(range : LiveRange, fragment : ProgramRange) -> Bool {
+  for use_position in range.uses {
+    if fragment.contains(use_position.point, []) {
+      return true
+    }
+  }
+  false
 }
 
 ///|
@@ -174,55 +230,6 @@ fn register_index(registers : Array[PhysicalReg], target : PhysicalReg) -> Int? 
 }
 
 ///|
-fn segment_fixed_hint(
-  ranges : LiveRangeSet,
-  segment : AllocationSegment,
-) -> PhysicalReg? {
-  if !segment.has_fixed_constraint {
-    return None
-  }
-  guard ranges.get_by_vreg(segment.value) is Some(range) else { return None }
-  for use_position in range.uses {
-    if segment.range.contains(use_position.point, ranges.block_order) &&
-      use_position.constraint is FixedReg(reg) {
-      return Some(reg)
-    }
-  }
-  None
-}
-
-///|
-fn segment_preference_hint(
-  ranges : LiveRangeSet,
-  segment : AllocationSegment,
-  allocatable : Array[PhysicalReg],
-) -> PhysicalReg? {
-  guard ranges.get_by_vreg(segment.value) is Some(range) else { return None }
-  let preferences : Array[PhysicalReg] = []
-  for use_position in range.uses {
-    if segment.range.contains(use_position.point, ranges.block_order) &&
-      use_position.preference is Some(preference) {
-      preferences.push(preference)
-    }
-  }
-  let mut selected : PhysicalReg? = None
-  let mut selected_count = 0
-  for candidate in allocatable {
-    let mut count = 0
-    for preference in preferences {
-      if preference == candidate {
-        count = count + 1
-      }
-    }
-    if count > selected_count {
-      selected = Some(candidate)
-      selected_count = count
-    }
-  }
-  selected
-}
-
-///|
 fn push_register_candidate(order : Array[Int], candidate : Int?) -> Unit {
   if candidate is Some(index) && !order.contains(index) {
     order.push(index)
@@ -248,6 +255,7 @@ fn[F : FunctionView] allocate_segments_with_bundles(
   let (segments, segments_by_value) = build_allocation_segments(
     ranges,
     loop_depths~,
+    allocatable=environment.allocatable_regs,
   )
   config.enter_phase(Some(BundleFormation))
   let bundle_plan = build_production_bundle_plan(function, ranges, segments)

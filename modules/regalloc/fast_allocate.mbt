@@ -139,6 +139,7 @@ fn[F : FunctionView] allocate_fast_plan(
   let (segments, segments_by_value) = build_allocation_segments(
     ranges,
     loop_depths=compute_allocator_loop_depths(function),
+    allocatable=environment.allocatable_regs,
   )
   config.enter_phase(Some(FastAllocation))
   allocate_fast_segments(function, environment, ranges, segments)

@@ -135,6 +135,7 @@ test "range split isolates the use-free gap and preserves spillset lineage" {
     occupied,
     ranges,
     [0],
+    [],
   ).unwrap()
   debug_inspect(
     GapSplitSnapshot::{
@@ -174,6 +175,8 @@ test "spill bundle is normalized before conflict probes" {
       range: ProgramRange(ProgramPoint(0, 5), ProgramPoint(0, 20)),
       weight: 1,
       has_fixed_constraint: false,
+      fixed_hint: None,
+      preference_hint: None,
       location: Some(SegmentReg(r0)),
     },
     {
@@ -182,6 +185,8 @@ test "spill bundle is normalized before conflict probes" {
       range: ProgramRange(ProgramPoint(1, 0), ProgramPoint(1, 0)),
       weight: 1,
       has_fixed_constraint: false,
+      fixed_hint: None,
+      preference_hint: None,
       location: None,
     },
     {
@@ -190,6 +195,8 @@ test "spill bundle is normalized before conflict probes" {
       range: ProgramRange(ProgramPoint(0, 0), ProgramPoint(0, 10)),
       weight: 1,
       has_fixed_constraint: false,
+      fixed_hint: None,
+      preference_hint: None,
       location: None,
     },
   ]
@@ -279,6 +286,8 @@ test "production allocation evicts then splits a cheaper long bundle" {
       range: ProgramRange(ProgramPoint(0, 0), ProgramPoint(0, 2)),
       weight: 2,
       has_fixed_constraint: true,
+      fixed_hint: Some(r0),
+      preference_hint: None,
       location: None,
     },
     {
@@ -287,6 +296,8 @@ test "production allocation evicts then splits a cheaper long bundle" {
       range: ProgramRange(ProgramPoint(0, 4), ProgramPoint(0, 6)),
       weight: 3,
       has_fixed_constraint: false,
+      fixed_hint: None,
+      preference_hint: None,
       location: None,
     },
     {
@@ -295,6 +306,8 @@ test "production allocation evicts then splits a cheaper long bundle" {
       range: ProgramRange(ProgramPoint(0, 4), ProgramPoint(0, 6)),
       weight: 20,
       has_fixed_constraint: false,
+      fixed_hint: None,
+      preference_hint: None,
       location: None,
     },
   ]
@@ -380,6 +393,8 @@ test "production eviction accounts for and removes every conflicting bundle" {
       range: ProgramRange(ProgramPoint(0, 0), ProgramPoint(0, 4)),
       weight: 4,
       has_fixed_constraint: false,
+      fixed_hint: None,
+      preference_hint: None,
       location: Some(SegmentReg(r0)),
     },
     {
@@ -388,6 +403,8 @@ test "production eviction accounts for and removes every conflicting bundle" {
       range: ProgramRange(ProgramPoint(0, 6), ProgramPoint(0, 10)),
       weight: 5,
       has_fixed_constraint: false,
+      fixed_hint: None,
+      preference_hint: None,
       location: Some(SegmentReg(r0)),
     },
     {
@@ -396,6 +413,8 @@ test "production eviction accounts for and removes every conflicting bundle" {
       range: ProgramRange(ProgramPoint(0, 1), ProgramPoint(0, 3)),
       weight: 6,
       has_fixed_constraint: false,
+      fixed_hint: None,
+      preference_hint: None,
       location: None,
     },
     {
@@ -404,6 +423,8 @@ test "production eviction accounts for and removes every conflicting bundle" {
       range: ProgramRange(ProgramPoint(0, 7), ProgramPoint(0, 9)),
       weight: 6,
       has_fixed_constraint: false,
+      fixed_hint: None,
+      preference_hint: None,
       location: None,
     },
   ]
@@ -535,6 +556,8 @@ test "production bundle queue keeps live extent separate from spill weight" {
       range: ProgramRange(ProgramPoint(0, 0), ProgramPoint(0, 0)),
       weight: 100,
       has_fixed_constraint: false,
+      fixed_hint: None,
+      preference_hint: None,
       location: None,
     },
     {
@@ -543,6 +566,8 @@ test "production bundle queue keeps live extent separate from spill weight" {
       range: ProgramRange(ProgramPoint(0, 0), ProgramPoint(0, 4)),
       weight: 10,
       has_fixed_constraint: false,
+      fixed_hint: None,
+      preference_hint: None,
       location: None,
     },
     {
@@ -551,6 +576,8 @@ test "production bundle queue keeps live extent separate from spill weight" {
       range: ProgramRange(ProgramPoint(0, 0), ProgramPoint(0, 2)),
       weight: 50,
       has_fixed_constraint: false,
+      fixed_hint: None,
+      preference_hint: None,
       location: None,
     },
   ]
@@ -617,6 +644,8 @@ test "two-fragment bundle keeps density eviction cost" {
       range: ProgramRange(ProgramPoint(0, 0), ProgramPoint(0, 0)),
       weight: 40,
       has_fixed_constraint: false,
+      fixed_hint: None,
+      preference_hint: None,
       location: None,
     },
     {
@@ -625,6 +654,8 @@ test "two-fragment bundle keeps density eviction cost" {
       range: ProgramRange(ProgramPoint(1, 0), ProgramPoint(1, 0)),
       weight: 20,
       has_fixed_constraint: false,
+      fixed_hint: None,
+      preference_hint: None,
       location: None,
     },
   ]
@@ -819,6 +850,8 @@ test "clobber intersection skips boundaries and gaps between segments" {
       range: ProgramRange(ProgramPoint(0, 1), ProgramPoint(0, 3)),
       weight: 1,
       has_fixed_constraint: false,
+      fixed_hint: None,
+      preference_hint: None,
       location: None,
     },
     {
@@ -827,6 +860,8 @@ test "clobber intersection skips boundaries and gaps between segments" {
       range: ProgramRange(ProgramPoint(0, 6), ProgramPoint(0, 9)),
       weight: 1,
       has_fixed_constraint: false,
+      fixed_hint: None,
+      preference_hint: None,
       location: None,
     },
   ]

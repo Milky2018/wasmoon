@@ -366,7 +366,6 @@ fn bundle_register_order(
   bundle : AllocationBundle,
   hint : PhysicalReg?,
   segments : Array[AllocationSegment],
-  ranges : LiveRangeSet,
   environment : MachineEnv,
   preferred_by_value : Array[PhysicalReg?],
 ) -> Array[Int] {
@@ -377,12 +376,12 @@ fn bundle_register_order(
     push_bundle_register_candidates(
       order,
       environment.allocatable_regs,
-      segment_fixed_hint(ranges, segment),
+      segment.fixed_hint,
     )
     push_bundle_register_candidates(
       order,
       environment.allocatable_regs,
-      segment_preference_hint(ranges, segment, environment.allocatable_regs),
+      segment.preference_hint,
     )
     push_bundle_register_candidates(
       order,
@@ -584,15 +583,22 @@ fn append_split_segment(
   occupied : RegisterAllocationIndex,
   live_range : LiveRange,
   loop_depths : Array[Int],
+  block_order : Array[Int],
+  allocatable : Array[PhysicalReg],
 ) -> Int {
   let segment = segments[source]
   let id = segments.length()
+  let metadata = segment_metadata(
+    live_range, range, loop_depths, block_order, allocatable,
+  )
   segments.push({
     id,
     value: segment.value,
     range,
-    weight: segment_weight(live_range, range, loop_depths),
-    has_fixed_constraint: fragment_has_fixed_constraint(live_range, range),
+    weight: metadata.weight,
+    has_fixed_constraint: metadata.has_fixed_constraint,
+    fixed_hint: metadata.fixed_hint,
+    preference_hint: metadata.preference_hint,
     location: None,
   })
   segments_by_value[segment.value.id].push(id)
@@ -613,6 +619,7 @@ fn split_segment_around_gap(
   occupied : RegisterAllocationIndex,
   ranges : LiveRangeSet,
   loop_depths : Array[Int],
+  allocatable : Array[PhysicalReg],
 ) -> SegmentGapSplit? {
   let segment = segments[segment_id]
   if segment.range.start.block != point.block ||
@@ -657,10 +664,11 @@ fn split_segment_around_gap(
       original_range.start,
       ProgramPoint(point.block, gap_start - 1),
     )
-    segment.weight = segment_weight(live_range, segment.range, loop_depths)
-    segment.has_fixed_constraint = fragment_has_fixed_constraint(
+    segment.refresh_metadata(
       live_range,
-      segment.range,
+      loop_depths,
+      ranges.block_order,
+      allocatable,
     )
     before = Some(segment_id)
   } else {
@@ -683,12 +691,15 @@ fn split_segment_around_gap(
       occupied,
       live_range,
       loop_depths,
+      ranges.block_order,
+      allocatable,
     )
   } else {
-    segment.weight = segment_weight(live_range, segment.range, loop_depths)
-    segment.has_fixed_constraint = fragment_has_fixed_constraint(
+    segment.refresh_metadata(
       live_range,
-      segment.range,
+      loop_depths,
+      ranges.block_order,
+      allocatable,
     )
     segment_id
   }
@@ -704,6 +715,8 @@ fn split_segment_around_gap(
         occupied,
         live_range,
         loop_depths,
+        ranges.block_order,
+        allocatable,
       ),
     )
   } else {
@@ -738,6 +751,7 @@ fn split_bundle_at_conflict(
   occupied : RegisterAllocationIndex,
   ranges : LiveRangeSet,
   loop_depths : Array[Int],
+  allocatable : Array[PhysicalReg],
 ) -> Bool {
   guard split_point is Some(point) else { return false }
   let before : Array[Int] = []
@@ -753,7 +767,7 @@ fn split_bundle_at_conflict(
     } else if bundle.segments.length() == 1 &&
       split_segment_around_gap(
         segment_id, point, segments, segments_by_value, segment_owner, segment_spill_set,
-        occupied, ranges, loop_depths,
+        occupied, ranges, loop_depths, allocatable,
       )
       is Some(parts) {
       if parts.before is Some(left) {
@@ -986,7 +1000,6 @@ fn[F : FunctionView] allocate_bundles(
         None => entry.hint
       },
       segments,
-      ranges,
       environment,
       preferred_by_value,
     )
@@ -1070,8 +1083,20 @@ fn[F : FunctionView] allocate_bundles(
       None
     }
     if !split_bundle_at_conflict(
-        bundle, split_point, split_hint, bundles, segment_owner, queue, segments,
-        segments_by_value, segment_spill_set, spill_sets, occupied, ranges, loop_depths,
+        bundle,
+        split_point,
+        split_hint,
+        bundles,
+        segment_owner,
+        queue,
+        segments,
+        segments_by_value,
+        segment_spill_set,
+        spill_sets,
+        occupied,
+        ranges,
+        loop_depths,
+        environment.allocatable_regs,
       ) {
       bundle.state = BundleDeferredSpill
     }
@@ -1095,7 +1120,6 @@ fn[F : FunctionView] allocate_bundles(
       bundle,
       spill_sets[bundle.spill_set].hint,
       segments,
-      ranges,
       environment,
       preferred_by_value,
     )
