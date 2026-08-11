@@ -41,7 +41,7 @@ pub impl Show for AllocationPlan
 
 pub(all) enum AllocatorStrategy {
   Backtracking
-  SinglePass
+  Fast
 } derive(Eq, @debug.Debug)
 pub impl Show for AllocatorStrategy
 
@@ -184,6 +184,7 @@ pub(all) enum RegallocPhase {
   SegmentConstruction
   BundleFormation
   BundleAllocation
+  FastAllocation
   HomeAssignment
   OperandAssignment
   EdgeTransfers

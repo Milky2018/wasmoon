@@ -1,14 +1,14 @@
 ///|
 pub(all) enum AllocatorStrategy {
   Backtracking
-  SinglePass
+  Fast
 } derive(Eq, Debug)
 
 ///|
 pub impl Show for AllocatorStrategy with fn output(self, logger) {
   match self {
     Backtracking => logger.write_string("Backtracking")
-    SinglePass => logger.write_string("SinglePass")
+    Fast => logger.write_string("Fast")
   }
 }
 
@@ -23,6 +23,7 @@ pub(all) enum RegallocPhase {
   SegmentConstruction
   BundleFormation
   BundleAllocation
+  FastAllocation
   HomeAssignment
   OperandAssignment
   EdgeTransfers
@@ -38,6 +39,7 @@ pub impl Show for RegallocPhase with fn output(self, logger) {
       SegmentConstruction => "segment_construction"
       BundleFormation => "bundle_formation"
       BundleAllocation => "bundle_allocation"
+      FastAllocation => "fast_allocation"
       HomeAssignment => "home_assignment"
       OperandAssignment => "operand_assignment"
       EdgeTransfers => "edge_transfers"
