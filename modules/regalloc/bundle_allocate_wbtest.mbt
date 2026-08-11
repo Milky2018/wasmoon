@@ -225,6 +225,7 @@ test "spill bundle is normalized before conflict probes" {
     Array::make(bundles.length(), 0),
     1,
     [],
+    [],
   )
   debug_inspect((bundles[1].segments, probe.conflicts), content="([2, 1], [0])")
 }
@@ -510,6 +511,7 @@ test "production eviction accounts for and removes every conflicting bundle" {
     Array::make(bundles.length(), 0),
     1,
     occupied_stack,
+    [],
   )
   let probe_snapshot : BundleProbeSnapshot = {
     conflicts: probe.conflicts,
@@ -614,6 +616,7 @@ test "production eviction accounts for and removes every conflicting bundle" {
     Array::make(bundles.length(), 0),
     1,
     occupied_stack,
+    [],
     max_conflict_cost=Some(3),
   )
   debug_inspect(

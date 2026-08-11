@@ -302,9 +302,10 @@ fn probe_bundle_register(
   conflict_marks : Array[Int],
   probe_id : Int,
   occupied_stack : Array[Int],
+  conflicts : Array[Int],
   max_conflict_cost? : Int? = None,
 ) -> BundleRegisterProbe {
-  let conflicts : Array[Int] = []
+  conflicts.clear()
   let mut conflict_cost = 0
   let mut first_conflict : ProgramPoint? = None
   let mut clobbered = false
@@ -394,11 +395,15 @@ fn probe_bundle_register(
 ///|
 fn push_bundle_register_candidates(
   order : Array[Int],
-  registers : Array[PhysicalReg],
+  order_marks : Array[Bool],
+  register_indexes : Map[(Int, Int), Int],
   candidate : PhysicalReg?,
 ) -> Unit {
-  if candidate is Some(reg) {
-    push_register_candidate(order, register_index(registers, reg))
+  if candidate is Some(reg) &&
+    register_indexes.get(physical_reg_key(reg)) is Some(index) &&
+    !order_marks[index] {
+    order_marks[index] = true
+    order.push(index)
   }
 }
 
@@ -409,31 +414,42 @@ fn bundle_register_order(
   segments : Array[AllocationSegment],
   environment : MachineEnv,
   preferred_by_value : Array[PhysicalReg?],
-) -> Array[Int] {
-  let order : Array[Int] = []
-  push_bundle_register_candidates(order, environment.allocatable_regs, hint)
+  register_indexes : Map[(Int, Int), Int],
+  order : Array[Int],
+  order_marks : Array[Bool],
+) -> Unit {
+  for register in order {
+    order_marks[register] = false
+  }
+  order.clear()
+  push_bundle_register_candidates(order, order_marks, register_indexes, hint)
   for segment_id in bundle.segments {
     let segment = segments[segment_id]
     push_bundle_register_candidates(
       order,
-      environment.allocatable_regs,
+      order_marks,
+      register_indexes,
       segment.fixed_hint,
     )
     push_bundle_register_candidates(
       order,
-      environment.allocatable_regs,
+      order_marks,
+      register_indexes,
       segment.preference_hint,
     )
     push_bundle_register_candidates(
       order,
-      environment.allocatable_regs,
+      order_marks,
+      register_indexes,
       preferred_by_value[segment.value.id],
     )
   }
   for register in 0..<environment.allocatable_regs.length() {
-    push_register_candidate(order, Some(register))
+    if !order_marks[register] {
+      order_marks[register] = true
+      order.push(register)
+    }
   }
-  order
 }
 
 ///|
@@ -1043,6 +1059,16 @@ fn[F : FunctionView] allocate_bundles(
     None,
   )
   let conflict_marks : Array[Int] = Array::make(bundles.length(), 0)
+  let probe_conflicts : Array[Int] = []
+  let register_indexes : Map[(Int, Int), Int] = Map([])
+  for index, reg in environment.allocatable_regs {
+    register_indexes[physical_reg_key(reg)] = index
+  }
+  let register_order : Array[Int] = []
+  let register_order_marks = Array::make(
+    environment.allocatable_regs.length(),
+    false,
+  )
   let mut probe_id = 0
   let queue = BundleQueue::new(bundles)
   for bundle in bundles {
@@ -1053,7 +1079,7 @@ fn[F : FunctionView] allocate_bundles(
     if !(bundle.state is BundlePending) {
       continue
     }
-    let register_order = bundle_register_order(
+    bundle_register_order(
       bundle,
       match spill_sets[bundle.spill_set].hint {
         Some(reg) => Some(reg)
@@ -1062,6 +1088,9 @@ fn[F : FunctionView] allocate_bundles(
       segments,
       environment,
       preferred_by_value,
+      register_indexes,
+      register_order,
+      register_order_marks,
     )
     let mut free_register = -1
     let mut eviction_register = -1
@@ -1102,6 +1131,7 @@ fn[F : FunctionView] allocate_bundles(
         conflict_marks,
         probe_id,
         occupied_stack,
+        probe_conflicts,
         max_conflict_cost~,
       )
       if probe.cutoff_exceeded {
@@ -1189,12 +1219,15 @@ fn[F : FunctionView] allocate_bundles(
   while second_chance.pop() is Some(entry) {
     let bundle = bundles[entry.bundle]
     guard bundle.state is BundleDeferredSpill else { continue }
-    let register_order = bundle_register_order(
+    bundle_register_order(
       bundle,
       spill_sets[bundle.spill_set].hint,
       segments,
       environment,
       preferred_by_value,
+      register_indexes,
+      register_order,
+      register_order_marks,
     )
     let mut free_register = -1
     for register in register_order {
@@ -1220,6 +1253,7 @@ fn[F : FunctionView] allocate_bundles(
         conflict_marks,
         probe_id,
         occupied_stack,
+        probe_conflicts,
         max_conflict_cost=Some(-1),
       )
       if !probe.clobbered && probe.conflicts.is_empty() {

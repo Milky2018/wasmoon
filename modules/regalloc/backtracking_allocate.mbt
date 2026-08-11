@@ -265,13 +265,6 @@ fn register_index(registers : Array[PhysicalReg], target : PhysicalReg) -> Int? 
 }
 
 ///|
-fn push_register_candidate(order : Array[Int], candidate : Int?) -> Unit {
-  if candidate is Some(index) && !order.contains(index) {
-    order.push(index)
-  }
-}
-
-///|
 fn[F : FunctionView] allocate_segments_with_bundles(
   function : F,
   environment : MachineEnv,
