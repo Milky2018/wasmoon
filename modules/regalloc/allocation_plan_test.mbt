@@ -750,17 +750,17 @@ test "backtracking coalesces conflict-free edges and preserves loop transfers" {
       #|    Some(Reg({ id: 2, class: Int })),
       #|    Some(Reg({ id: 0, class: Int })),
       #|    Some(Reg({ id: 1, class: Int })),
-      #|    Some(Reg({ id: 3, class: Int })),
+      #|    Some(Reg({ id: 2, class: Int })),
       #|  ],
       #|  operand_locations: {
       #|    (1, 0): Reg({ id: 2, class: Int }),
       #|    (1, 1): Reg({ id: 0, class: Int }),
-      #|    (1, 2): Reg({ id: 3, class: Int }),
+      #|    (1, 2): Reg({ id: 2, class: Int }),
       #|  },
       #|  operand_assignments: [
       #|    { instruction: 1, operand: 0, location: Reg({ id: 2, class: Int }) },
       #|    { instruction: 1, operand: 1, location: Reg({ id: 0, class: Int }) },
-      #|    { instruction: 1, operand: 2, location: Reg({ id: 3, class: Int }) },
+      #|    { instruction: 1, operand: 2, location: Reg({ id: 2, class: Int }) },
       #|  ],
       #|  edits: [
       #|    {
@@ -771,7 +771,7 @@ test "backtracking coalesces conflict-free edges and preserves loop transfers" {
       #|    },
       #|    {
       #|      value: { id: 6, class: Int },
-      #|      from: Reg({ id: 3, class: Int }),
+      #|      from: Reg({ id: 2, class: Int }),
       #|      to: Reg({ id: 0, class: Int }),
       #|      position: Edge(source_block=1, successor_index=0),
       #|    },

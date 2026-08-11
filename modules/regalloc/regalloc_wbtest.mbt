@@ -1040,10 +1040,8 @@ test "any-location definitions materialize in their stable home" {
       value,
       range: ProgramRange(ProgramPoint(0, 0), ProgramPoint(0, 2)),
       weight: 1,
-      has_use: true,
       has_fixed_constraint: false,
       location: Some(SegmentReg(register)),
-      defer_home: false,
     },
   ]
   assign_backtracking_operands(
@@ -1061,74 +1059,6 @@ test "any-location definitions materialize in their stable home" {
 }
 
 ///|
-test "edge arguments do not hide a live-through value transfer" {
-  let value : VirtualReg = { id: 0, class: Int }
-  let parameter : VirtualReg = { id: 1, class: Int }
-  let source_register : PhysicalReg = { id: 0, class: Int }
-  let parameter_register : PhysicalReg = { id: 1, class: Int }
-  let function : VerifierCfgView = {
-    value_count: 2,
-    blocks: [[], []],
-    operands: [],
-    successors: [[1], []],
-    entry_values: [value],
-    parameters: [[], [parameter]],
-    edge_arguments: [[[value]], []],
-    successor_queries: Ref(0),
-    block_visits: Ref(0),
-  }
-  let plan = AllocationPlan::new(2)
-  let slot = plan.create_spill_slot(8, 8)
-  plan.assign_value(value, Spill(slot))
-  plan.assign_value(parameter, Reg(parameter_register))
-  let segments : Array[AllocationSegment] = [
-    {
-      id: 0,
-      value,
-      range: ProgramRange(ProgramPoint(0, -1), ProgramPoint(0, 0)),
-      weight: 1,
-      has_use: true,
-      has_fixed_constraint: false,
-      location: Some(SegmentReg(source_register)),
-      defer_home: true,
-    },
-    {
-      id: 1,
-      value,
-      range: ProgramRange(ProgramPoint(1, -1), ProgramPoint(1, 0)),
-      weight: 1,
-      has_use: true,
-      has_fixed_constraint: false,
-      location: Some(SegmentSpill),
-      defer_home: false,
-    },
-  ]
-  assign_edge_transfers(plan, function, segments, [[0, 1], []], [
-    [true, false],
-    [false, false],
-  ])
-  debug_inspect(
-    plan.edits(),
-    content=(
-      #|[
-      #|  {
-      #|    value: { id: 0, class: Int },
-      #|    from: Reg({ id: 0, class: Int }),
-      #|    to: Reg({ id: 1, class: Int }),
-      #|    position: Edge(source_block=0, successor_index=0),
-      #|  },
-      #|  {
-      #|    value: { id: 0, class: Int },
-      #|    from: Reg({ id: 0, class: Int }),
-      #|    to: Spill(0),
-      #|    position: Edge(source_block=0, successor_index=0),
-      #|  },
-      #|]
-    ),
-  )
-}
-
-///|
 test "production conflict index finds only overlapping occupied segments" {
   let segments : Array[AllocationSegment] = [
     {
@@ -1136,40 +1066,32 @@ test "production conflict index finds only overlapping occupied segments" {
       value: { id: 0, class: Int },
       range: ProgramRange(ProgramPoint(0, 0), ProgramPoint(0, 2)),
       weight: 1,
-      has_use: true,
       has_fixed_constraint: false,
       location: None,
-      defer_home: false,
     },
     {
       id: 1,
       value: { id: 1, class: Int },
       range: ProgramRange(ProgramPoint(0, 4), ProgramPoint(0, 6)),
       weight: 1,
-      has_use: true,
       has_fixed_constraint: false,
       location: None,
-      defer_home: false,
     },
     {
       id: 2,
       value: { id: 2, class: Int },
       range: ProgramRange(ProgramPoint(0, 8), ProgramPoint(0, 10)),
       weight: 1,
-      has_use: true,
       has_fixed_constraint: false,
       location: None,
-      defer_home: false,
     },
     {
       id: 3,
       value: { id: 3, class: Int },
       range: ProgramRange(ProgramPoint(0, 5), ProgramPoint(0, 7)),
       weight: 1,
-      has_use: true,
       has_fixed_constraint: false,
       location: None,
-      defer_home: false,
     },
   ]
   debug_inspect(

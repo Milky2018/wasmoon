@@ -110,70 +110,6 @@ fn add_use_transfer(
 }
 
 ///|
-fn segment_in_block(
-  segments : Array[AllocationSegment],
-  segments_by_value : Array[Array[Int]],
-  value : VirtualReg,
-  block : Int,
-) -> Int? {
-  if value.id < 0 || value.id >= segments_by_value.length() {
-    return None
-  }
-  for segment_id in segments_by_value[value.id] {
-    if segments[segment_id].range.start.block == block {
-      return Some(segment_id)
-    }
-  }
-  None
-}
-
-///|
-fn segment_location(
-  plan : AllocationPlan,
-  segments : Array[AllocationSegment],
-  segments_by_value : Array[Array[Int]],
-  value : VirtualReg,
-  block : Int,
-) -> Location? {
-  guard segment_in_block(segments, segments_by_value, value, block)
-    is Some(segment_id) else {
-    return plan.value_location(value.id)
-  }
-  match segments[segment_id].location {
-    Some(SegmentReg(reg)) if segments[segment_id].defer_home => Some(Reg(reg))
-    Some(SegmentSpill) | None => plan.value_location(value.id)
-    Some(SegmentReg(_)) => plan.value_location(value.id)
-  }
-}
-
-///|
-fn edge_source_location(
-  plan : AllocationPlan,
-  segments : Array[AllocationSegment],
-  segments_by_value : Array[Array[Int]],
-  resident_segments_by_block : Array[Array[Bool]],
-  value : VirtualReg,
-  block : Int,
-) -> Location? {
-  guard segment_in_block(segments, segments_by_value, value, block)
-    is Some(segment_id) else {
-    return plan.value_location(value.id)
-  }
-  match segments[segment_id].location {
-    Some(SegmentReg(reg)) if segments[segment_id].defer_home =>
-      if block >= 0 &&
-        block < resident_segments_by_block.length() &&
-        segment_id < resident_segments_by_block[block].length() &&
-        resident_segments_by_block[block][segment_id] {
-        Some(Reg(reg))
-      } else {
-        plan.value_location(value.id)
-      }
-    _ => plan.value_location(value.id)
-  }
-}
-
-///|
 fn[F : FunctionView] value_is_live_out_of_block(
   function : F,
   segments : Array[AllocationSegment],
@@ -219,7 +155,6 @@ fn[F : FunctionView] assign_edge_transfers(
   function : F,
   segments : Array[AllocationSegment],
   segments_by_value : Array[Array[Int]],
-  resident_segments_by_block : Array[Array[Bool]],
 ) -> Unit raise VerifyError {
   for block_index in 0..<function.block_count() {
     let successors = function.block_successors(block_index)
@@ -231,11 +166,7 @@ fn[F : FunctionView] assign_edge_transfers(
           break
         }
         let parameter = parameters[argument_index]
-        guard edge_source_location(
-            plan, segments, segments_by_value, resident_segments_by_block, argument,
-            block_index,
-          )
-          is Some(from) else {
+        guard plan.value_location(argument.id) is Some(from) else {
           raise Unassigned(vreg=argument)
         }
         guard plan.value_location(parameter.id) is Some(to) else {
@@ -264,13 +195,8 @@ fn[F : FunctionView] assign_edge_transfers(
           id: value,
           class: function.value_class(value),
         }
-        guard edge_source_location(
-            plan, segments, segments_by_value, resident_segments_by_block, vreg,
-            block_index,
-          )
-          is Some(from) &&
-          segment_location(plan, segments, segments_by_value, vreg, target)
-          is Some(to) else {
+        guard plan.value_location(vreg.id) is Some(from) &&
+          plan.value_location(vreg.id) is Some(to) else {
           raise Unassigned(vreg~)
         }
         if from != to {

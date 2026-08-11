@@ -10,10 +10,8 @@ priv struct AllocationSegment {
   value : VirtualReg
   range : ProgramRange
   weight : Int
-  has_use : Bool
   has_fixed_constraint : Bool
   mut location : SegmentLocation?
-  mut defer_home : Bool
 }
 
 ///|
@@ -53,7 +51,7 @@ fn segment_weight(
   range : LiveRange,
   fragment : ProgramRange,
   loop_depths : Array[Int],
-) -> (Int, Bool) {
+) -> Int {
   let mut use_cost = 0
   for use_position in range.uses {
     if fragment.contains(use_position.point, []) {
@@ -61,14 +59,14 @@ fn segment_weight(
     }
   }
   if use_cost == 0 {
-    return (1, false)
+    return 1
   }
   let length = if fragment.start.block == fragment.end.block {
     (fragment.end.inst - fragment.start.inst).abs() + 1
   } else {
     1
   }
-  (((use_cost + length - 1) / length).max(1), true)
+  ((use_cost + length - 1) / length).max(1)
 }
 
 ///|
@@ -90,17 +88,15 @@ fn build_allocation_segments(
   for range in ranges.ranges {
     let has_fixed_constraint = range.has_fixed_constraint()
     for fragment in range.ranges {
-      let (weight, has_use) = segment_weight(range, fragment, loop_depths)
+      let weight = segment_weight(range, fragment, loop_depths)
       let id = segments.length()
       segments.push({
         id,
         value: range.vreg,
         range: fragment,
         weight,
-        has_use,
         has_fixed_constraint,
         location: None,
-        defer_home: false,
       })
       segments_by_value[range.vreg.id].push(id)
     }
@@ -292,47 +288,6 @@ fn push_register_candidate(order : Array[Int], candidate : Int?) -> Unit {
 }
 
 ///|
-fn add_edge_affinity(
-  affinities : Array[Array[Int]],
-  value : VirtualReg,
-  related : VirtualReg,
-) -> Unit {
-  if value.id >= 0 &&
-    value.id < affinities.length() &&
-    !affinities[value.id].contains(related.id) {
-    affinities[value.id].push(related.id)
-  }
-}
-
-///|
-fn[F : FunctionView] build_edge_affinities(
-  function : F,
-) -> (Array[Array[Int]], Array[Bool], Array[Bool]) {
-  let affinities : Array[Array[Int]] = Array::makei(function.value_count(), _ => {
-    []
-  })
-  let is_edge_argument = Array::make(function.value_count(), false)
-  let is_edge_target = Array::make(function.value_count(), false)
-  for block in 0..<function.block_count() {
-    let successors = function.block_successors(block)
-    for successor_index, target in successors {
-      let arguments = function.edge_arguments(block, successor_index)
-      let parameters = function.block_parameters(target)
-      let count = arguments.length().min(parameters.length())
-      for index in 0..<count {
-        let argument = arguments[index]
-        let parameter = parameters[index]
-        is_edge_argument[argument.id] = true
-        is_edge_target[parameter.id] = true
-        add_edge_affinity(affinities, argument, parameter)
-        add_edge_affinity(affinities, parameter, argument)
-      }
-    }
-  }
-  (affinities, is_edge_argument, is_edge_target)
-}
-
-///|
 fn[F : FunctionView] allocate_segments_with_bundles(
   function : F,
   environment : MachineEnv,
@@ -356,13 +311,7 @@ fn[F : FunctionView] allocate_segments_with_bundles(
   let bundle_plan = build_production_bundle_plan(function, ranges, segments)
   config.enter_phase(Some(BundleAllocation))
   let (bundles, segment_owner) = allocate_bundles(
-    function,
-    environment,
-    ranges,
-    segments,
-    bundle_plan,
-    strategy,
-    loop_depths~,
+    function, environment, ranges, segments, bundle_plan, strategy,
   )
   (segments, segments_by_value, bundles, segment_owner, bundle_plan)
 }
@@ -703,46 +652,13 @@ fn[F : FunctionView] borrow_allocatable_register(
 }
 
 ///|
-fn preserve_deferred_resident_segments(
-  plan : AllocationPlan,
-  segments : Array[AllocationSegment],
-  register_segments : Map[(Int, Int), Array[Int]],
-  resident_segments : Array[Bool],
-  reg : PhysicalReg,
-  keep : Int?,
-  instruction : Int,
-) -> Unit {
-  guard register_segments.get(physical_reg_key(reg)) is Some(segment_ids) else {
-    return
-  }
-  for segment_id in segment_ids {
-    if !resident_segments[segment_id] ||
-      keep == Some(segment_id) ||
-      !segments[segment_id].defer_home {
-      continue
-    }
-    let value = segments[segment_id].value
-    let home = plan.value_location(value.id).unwrap()
-    if home != Reg(reg) {
-      plan.add_edit({
-        value,
-        from: Reg(reg),
-        to: home,
-        position: Before(instruction),
-      })
-    }
-    resident_segments[segment_id] = false
-  }
-}
-
-///|
 fn[F : FunctionView] assign_backtracking_operands(
   plan : AllocationPlan,
   function : F,
   environment : MachineEnv,
   segments : Array[AllocationSegment],
   segments_by_value : Array[Array[Int]],
-) -> Array[Array[Bool]] raise VerifyError {
+) -> Unit raise VerifyError {
   let borrow_slots : Array[Int?] = Array::make(function.value_count(), None)
   let register_home_values : Map[(Int, Int), Array[VirtualReg]] = Map([])
   let register_segments : Map[(Int, Int), Array[Int]] = Map([])
@@ -765,7 +681,6 @@ fn[F : FunctionView] assign_backtracking_operands(
       }
     }
   }
-  let resident_segments_by_block : Array[Array[Bool]] = []
   let has_predecessor = Array::make(function.block_count(), false)
   for block in 0..<function.block_count() {
     for successor in function.block_successors(block) {
@@ -777,15 +692,13 @@ fn[F : FunctionView] assign_backtracking_operands(
   for block in 0..<function.block_count() {
     let resident_segments = Array::make(segments.length(), false)
     if has_predecessor[block] {
-      let parameters = function.block_parameters(block)
       for segment in segments {
         if segment.range.start.block == block &&
           segment.range.start.inst == -1 &&
           segment.location is Some(SegmentReg(reg)) {
           let home_matches = plan.value_location(segment.value.id) ==
             Some(Reg(reg))
-          if (!parameters.contains(segment.value) && segment.defer_home) ||
-            home_matches {
+          if home_matches {
             resident_segments[segment.id] = true
           }
         }
@@ -922,38 +835,6 @@ fn[F : FunctionView] assign_backtracking_operands(
           },
         )
       }
-      let preserved_registers : Array[PhysicalReg] = []
-      for operand_index, _ in operands {
-        if assigned[operand_index].unwrap() is Reg(reg) &&
-          !preserved_registers.contains(reg) {
-          let mut keep = resident_operand_segments[operand_index]
-          for other in 0..<operands.length() {
-            if other != operand_index &&
-              assigned[other].unwrap() == Reg(reg) &&
-              resident_operand_segments[other] != keep {
-              keep = None
-            }
-          }
-          preserve_deferred_resident_segments(
-            plan, segments, register_segments, resident_segments, reg, keep, instruction,
-          )
-          preserved_registers.push(reg)
-        }
-      }
-      for clobber in function.instruction_clobbers(instruction) {
-        if !preserved_registers.contains(clobber) {
-          preserve_deferred_resident_segments(
-            plan,
-            segments,
-            register_segments,
-            resident_segments,
-            clobber,
-            None,
-            instruction,
-          )
-          preserved_registers.push(clobber)
-        }
-      }
       for timing in [Early, Late] {
         for operand_index, operand in operands {
           if operand.timing != timing {
@@ -999,11 +880,7 @@ fn[F : FunctionView] assign_backtracking_operands(
           }
           let home = plan.value_location(operand.vreg.id).unwrap()
           let selected = assigned[operand_index].unwrap()
-          if home != selected &&
-            (
-              resident_operand_segments[operand_index] is None ||
-              !segments[resident_operand_segments[operand_index].unwrap()].defer_home
-            ) {
+          if home != selected {
             plan.add_edit({
               value: operand.vreg,
               from: selected,
@@ -1044,9 +921,7 @@ fn[F : FunctionView] assign_backtracking_operands(
         }
       }
     }
-    resident_segments_by_block.push(resident_segments)
   }
-  resident_segments_by_block
 }
 
 ///|
@@ -1070,12 +945,10 @@ fn[F : FunctionView] allocate_bundle_plan(
     plan, function, environment, ranges, segments, segments_by_value, bundle_plan,
   )
   config.enter_phase(Some(OperandAssignment))
-  let resident_segments_by_block = assign_backtracking_operands(
+  assign_backtracking_operands(
     plan, function, environment, segments, segments_by_value,
   )
   config.enter_phase(Some(EdgeTransfers))
-  assign_edge_transfers(
-    plan, function, segments, segments_by_value, resident_segments_by_block,
-  )
+  assign_edge_transfers(plan, function, segments, segments_by_value)
   plan
 }
