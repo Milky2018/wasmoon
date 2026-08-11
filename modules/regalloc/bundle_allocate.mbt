@@ -162,14 +162,27 @@ fn allocation_bundle(
   id : Int,
   segment_ids : Array[Int],
   segments : Array[AllocationSegment],
+  block_order : Array[Int],
   split_count? : Int = 0,
 ) -> AllocationBundle {
+  let ordered_segments = segment_ids.copy()
+  ordered_segments.sort_by((left, right) => {
+    let by_end = segments[left].range.end.compare_with_order(
+      segments[right].range.end,
+      block_order,
+    )
+    if by_end != 0 {
+      by_end
+    } else {
+      left - right
+    }
+  })
   let (priority, weight, has_fixed_constraint) = allocation_bundle_metrics(
-    segment_ids, segments,
+    ordered_segments, segments,
   )
   {
     id,
-    segments: segment_ids.copy(),
+    segments: ordered_segments,
     priority,
     weight,
     has_fixed_constraint,
@@ -194,11 +207,17 @@ fn allocation_segment_priority(segment : AllocationSegment) -> Int {
 fn build_allocation_bundles(
   plan : ProductionBundlePlan,
   segments : Array[AllocationSegment],
+  block_order : Array[Int],
 ) -> (Array[AllocationBundle], Array[Int]) {
   let bundles : Array[AllocationBundle] = []
   let segment_owner = Array::make(segments.length(), -1)
   for segment_ids in plan.bundle_segments {
-    let bundle = allocation_bundle(bundles.length(), segment_ids, segments)
+    let bundle = allocation_bundle(
+      bundles.length(),
+      segment_ids,
+      segments,
+      block_order,
+    )
     bundles.push(bundle)
     for segment_id in segment_ids {
       segment_owner[segment_id] = bundle.id
@@ -249,9 +268,12 @@ fn probe_bundle_register(
   bundles : Array[AllocationBundle],
   segments : Array[AllocationSegment],
   segment_owner : Array[Int],
-  occupied : Array[Array[Int]],
+  occupied : RegisterAllocationIndex,
   clobbers : RegisterClobberIndex,
   block_order : Array[Int],
+  conflict_marks : Array[Int],
+  probe_id : Int,
+  occupied_stack : Array[Int],
 ) -> BundleRegisterProbe {
   let conflicts : Array[Int] = []
   let mut conflict_cost = 0
@@ -265,27 +287,49 @@ fn probe_bundle_register(
         earlier_conflict_point(first_conflict, point, block_order),
       )
     }
-    for
-      conflict_segment in conflicting_segments(
-        segments,
-        occupied[register],
-        segment,
-        block_order,
-      ) {
-      let owner = segment_owner[conflict_segment]
-      if owner == bundle.id || conflicts.contains(owner) {
-        continue
-      }
+  }
+  guard !bundle.segments.is_empty() else {
+    return { conflicts, conflict_cost, first_conflict, clobbered }
+  }
+  occupied.seek(
+    register,
+    segments[bundle.segments[0]].range.start,
+    occupied_stack,
+  )
+  let mut assigned = occupied.next(occupied_stack)
+  let mut bundle_index = 0
+  while bundle_index < bundle.segments.length() && assigned is Some(_) {
+    let conflict_segment = assigned.unwrap()
+    let current = segments[bundle.segments[bundle_index]]
+    let conflict = segments[conflict_segment]
+    if conflict.range.end.compare_with_order(current.range.start, block_order) <
+      0 {
+      assigned = occupied.next(occupied_stack)
+      continue
+    }
+    if current.range.end.compare_with_order(conflict.range.start, block_order) <
+      0 {
+      bundle_index = bundle_index + 1
+      continue
+    }
+    let owner = segment_owner[conflict_segment]
+    if owner != bundle.id && conflict_marks[owner] != probe_id {
+      conflict_marks[owner] = probe_id
       conflicts.push(owner)
       conflict_cost = conflict_cost.max(bundles[owner].weight)
-      let point = later_point(
-        segment.range.start,
-        segments[conflict_segment].range.start,
-        block_order,
-      )
       first_conflict = Some(
-        earlier_conflict_point(first_conflict, point, block_order),
+        earlier_conflict_point(
+          first_conflict,
+          later_point(current.range.start, conflict.range.start, block_order),
+          block_order,
+        ),
       )
+    }
+    if conflict.range.end.compare_with_order(current.range.end, block_order) <=
+      0 {
+      assigned = occupied.next(occupied_stack)
+    } else {
+      bundle_index = bundle_index + 1
     }
   }
   { conflicts, conflict_cost, first_conflict, clobbered }
@@ -342,12 +386,12 @@ fn remove_bundle_allocation(
   bundle : AllocationBundle,
   environment : MachineEnv,
   segments : Array[AllocationSegment],
-  occupied : Array[Array[Int]],
+  occupied : RegisterAllocationIndex,
 ) -> Unit {
   guard bundle.state is BundleReg(reg) else { return }
   let register = register_index(environment.allocatable_regs, reg).unwrap()
   for segment_id in bundle.segments {
-    remove_occupied_segment(occupied, register, segment_id)
+    occupied.remove(register, segment_id)
     segments[segment_id].location = None
   }
   bundle.state = BundlePending
@@ -371,7 +415,7 @@ fn evict_bundle_conflicts(
   bundles : Array[AllocationBundle],
   environment : MachineEnv,
   segments : Array[AllocationSegment],
-  occupied : Array[Array[Int]],
+  occupied : RegisterAllocationIndex,
   queue : BundleQueue,
 ) -> Unit {
   for conflict in conflicts {
@@ -387,8 +431,7 @@ fn record_bundle_allocation(
   register : Int,
   environment : MachineEnv,
   segments : Array[AllocationSegment],
-  occupied : Array[Array[Int]],
-  block_order : Array[Int],
+  occupied : RegisterAllocationIndex,
   preferred_by_value : Array[PhysicalReg?],
 ) -> Unit {
   let reg = environment.allocatable_regs[register]
@@ -396,12 +439,7 @@ fn record_bundle_allocation(
     let segment = segments[segment_id]
     segment.location = Some(SegmentReg(reg))
     preferred_by_value[segment.value.id] = Some(reg)
-    insert_occupied_segment(
-      segments,
-      occupied[register],
-      segment_id,
-      block_order,
-    )
+    occupied.insert(register, segment_id)
   }
   bundle.state = BundleReg(reg)
 }
@@ -424,6 +462,7 @@ fn enqueue_child_bundle(
   queue : BundleQueue,
   segments : Array[AllocationSegment],
   segment_ids : Array[Int],
+  block_order : Array[Int],
   hint : PhysicalReg?,
   split_count : Int,
 ) -> Unit {
@@ -431,6 +470,7 @@ fn enqueue_child_bundle(
     bundles.length(),
     segment_ids,
     segments,
+    block_order,
     split_count~,
   )
   bundles.push(child)
@@ -471,10 +511,10 @@ fn split_bundle_at_conflict(
   let child_split_count = bundle.split_count + 1
   if bundle.split_count < 2 && !before.is_empty() && !after.is_empty() {
     enqueue_child_bundle(
-      bundles, segment_owner, queue, segments, before, hint, child_split_count,
+      bundles, segment_owner, queue, segments, before, block_order, hint, child_split_count,
     )
     enqueue_child_bundle(
-      bundles, segment_owner, queue, segments, after, hint, child_split_count,
+      bundles, segment_owner, queue, segments, after, block_order, hint, child_split_count,
     )
     return
   }
@@ -486,6 +526,7 @@ fn split_bundle_at_conflict(
       queue,
       segments,
       [segment_id],
+      block_order,
       if first {
         hint
       } else {
@@ -586,16 +627,24 @@ fn[F : FunctionView] allocate_bundles(
   strategy : AllocatorStrategy,
 ) -> (Array[AllocationBundle], Array[Int]) raise VerifyError {
   let enable_eviction = strategy is Backtracking
-  let (bundles, segment_owner) = build_allocation_bundles(bundle_plan, segments)
-  let occupied : Array[Array[Int]] = []
-  for _ in environment.allocatable_regs {
-    occupied.push([])
-  }
+  let (bundles, segment_owner) = build_allocation_bundles(
+    bundle_plan,
+    segments,
+    ranges.block_order,
+  )
+  let occupied = RegisterAllocationIndex::new(
+    environment.allocatable_regs.length(),
+    segments,
+    ranges.block_order,
+  )
+  let occupied_stack : Array[Int] = []
   let clobbers = build_register_clobber_index(function, ranges.block_order)
   let preferred_by_value : Array[PhysicalReg?] = Array::make(
     function.value_count(),
     None,
   )
+  let conflict_marks : Array[Int] = Array::make(bundles.length(), 0)
+  let mut probe_id = 0
   let queue = BundleQueue::new(bundles, enable_eviction)
   for bundle in bundles {
     queue.push(bundle.id, None)
@@ -625,6 +674,10 @@ fn[F : FunctionView] allocate_bundles(
       if reg.class != bundle_class(bundle, segments) {
         continue
       }
+      while conflict_marks.length() < bundles.length() {
+        conflict_marks.push(0)
+      }
+      probe_id = probe_id + 1
       let probe = probe_bundle_register(
         bundle,
         register,
@@ -635,6 +688,9 @@ fn[F : FunctionView] allocate_bundles(
         occupied,
         clobbers,
         ranges.block_order,
+        conflict_marks,
+        probe_id,
+        occupied_stack,
       )
       if !probe.clobbered && probe.conflicts.is_empty() {
         free_register = register
@@ -664,13 +720,7 @@ fn[F : FunctionView] allocate_bundles(
     }
     if free_register >= 0 {
       record_bundle_allocation(
-        bundle,
-        free_register,
-        environment,
-        segments,
-        occupied,
-        ranges.block_order,
-        preferred_by_value,
+        bundle, free_register, environment, segments, occupied, preferred_by_value,
       )
       continue
     }
@@ -679,13 +729,7 @@ fn[F : FunctionView] allocate_bundles(
         eviction_conflicts, bundles, environment, segments, occupied, queue,
       )
       record_bundle_allocation(
-        bundle,
-        eviction_register,
-        environment,
-        segments,
-        occupied,
-        ranges.block_order,
-        preferred_by_value,
+        bundle, eviction_register, environment, segments, occupied, preferred_by_value,
       )
       continue
     }

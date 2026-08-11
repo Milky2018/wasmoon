@@ -1059,7 +1059,7 @@ test "any-location definitions materialize in their stable home" {
 }
 
 ///|
-test "production conflict index finds only overlapping occupied segments" {
+test "production register allocation index orders updates by range end" {
   let segments : Array[AllocationSegment] = [
     {
       id: 0,
@@ -1094,10 +1094,24 @@ test "production conflict index finds only overlapping occupied segments" {
       location: None,
     },
   ]
-  debug_inspect(
-    conflicting_segments(segments, [0, 1, 2], segments[3], [0]),
-    content="[1]",
-  )
+  let allocations = RegisterAllocationIndex::new(1, segments, [0])
+  allocations.insert(0, 2)
+  allocations.insert(0, 0)
+  allocations.insert(0, 1)
+  let stack : Array[Int] = []
+  let ordered : Array[Int] = []
+  allocations.seek(0, ProgramPoint(0, -1), stack)
+  while allocations.next(stack) is Some(segment) {
+    ordered.push(segment)
+  }
+  debug_inspect(ordered, content="[0, 1, 2]")
+  allocations.remove(0, 1)
+  ordered.clear()
+  allocations.seek(0, ProgramPoint(0, -1), stack)
+  while allocations.next(stack) is Some(segment) {
+    ordered.push(segment)
+  }
+  debug_inspect(ordered, content="[0, 2]")
 }
 
 ///|

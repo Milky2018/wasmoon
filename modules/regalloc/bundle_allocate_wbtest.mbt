@@ -287,13 +287,16 @@ test "production eviction accounts for and removes every conflicting bundle" {
     },
   ]
   let bundles : Array[AllocationBundle] = [
-    allocation_bundle(0, [0], segments),
-    allocation_bundle(1, [1], segments),
-    allocation_bundle(2, [2, 3], segments),
+    allocation_bundle(0, [0], segments, [0]),
+    allocation_bundle(1, [1], segments, [0]),
+    allocation_bundle(2, [2, 3], segments, [0]),
   ]
   bundles[0].state = BundleReg(r0)
   bundles[1].state = BundleReg(r0)
-  let occupied = [[0, 1]]
+  let occupied = RegisterAllocationIndex::new(1, segments, [0])
+  occupied.insert(0, 0)
+  occupied.insert(0, 1)
+  let occupied_stack : Array[Int] = []
   let probe = probe_bundle_register(
     bundles[2],
     0,
@@ -304,6 +307,9 @@ test "production eviction accounts for and removes every conflicting bundle" {
     occupied,
     { points_by_reg: Map([]), block_order: [0] },
     [0],
+    Array::make(bundles.length(), 0),
+    1,
+    occupied_stack,
   )
   let probe_snapshot : BundleProbeSnapshot = {
     conflicts: probe.conflicts,
@@ -337,12 +343,17 @@ test "production eviction accounts for and removes every conflicting bundle" {
   while queue.pop() is Some(entry) {
     requeued.push(entry.bundle)
   }
+  let remaining : Array[Int] = []
+  occupied.seek(0, ProgramPoint(0, -1), occupied_stack)
+  while occupied.next(occupied_stack) is Some(segment) {
+    remaining.push(segment)
+  }
   let eviction_snapshot : BundleEvictionSnapshot = {
     bundles: snapshot_bundles(bundles),
     segment_locations: segments.map(segment => {
       snapshot_segment_location(segment.location)
     }),
-    occupied,
+    occupied: [remaining],
     requeued,
   }
   debug_inspect(
@@ -418,7 +429,9 @@ test "production bundle queue keeps live extent separate from spill weight" {
   ]
   let bundles : Array[AllocationBundle] = []
   for segment in segments {
-    bundles.push(allocation_bundle(bundles.length(), [segment.id], segments))
+    bundles.push(
+      allocation_bundle(bundles.length(), [segment.id], segments, [0]),
+    )
   }
   let queue = BundleQueue::new(bundles, true)
   for bundle in bundles {
@@ -488,7 +501,7 @@ test "two-fragment bundle keeps density eviction cost" {
       location: None,
     },
   ]
-  inspect(allocation_bundle(0, [0, 1], segments).weight, content="30")
+  inspect(allocation_bundle(0, [0, 1], segments, [0, 1]).weight, content="30")
 }
 
 ///|
