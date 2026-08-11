@@ -66,12 +66,30 @@ Reusable compiler-infrastructure modules include `wasm_core`, `milkir`, `machv`,
 - Native runtime address resolution belongs in `wasmoon_jit` or another explicitly Wasmoon-owned package. Generic emitters should produce machine code plus symbolic relocation/fixup metadata.
 - If a product-specific name is temporarily necessary in reusable infrastructure, document why in the local code and track the cleanup in an issue instead of broadening the boundary audit with ad-hoc string checks.
 
-## Git Conventions
+## Git Branch Model
 
-- **NEVER commit or push directly to main branch** - always create a feature branch and merge via PR
-- Write commit messages in English
-- Create a new branch for each change, merge via PR
-- Don't use `commit --amend` or `push --force`, use new commits instead
+- `dev` is the long-lived development branch and the only branch for ordinary
+  implementation work. `main` is the stable/release branch.
+- **Make all ordinary changes directly on `dev`.** Do not create topic or
+  per-task branches unless the user explicitly requests an exception.
+- Start every task from the current remote `dev`:
+  ```bash
+  git fetch origin --prune
+  git switch dev
+  git pull --rebase origin dev
+  ```
+- Commit and push development work directly to `dev`. **NEVER commit or push
+  directly to `main`.**
+- Periodically open a `dev` to `main` PR after a coherent batch of development
+  work has passed the complete required check set. PRs are integration points
+  for promoting `dev`; they are not required for each development commit.
+- After a `dev` to `main` PR is merged, continue working on the same long-lived
+  `dev` branch. Do not delete, recreate, or replace it.
+- A successful push to `dev` proves delivery to the development branch only.
+  Never claim that a commit is in `main` without verifying that it is an
+  ancestor of `origin/main`.
+- Write commit messages and PR text in English.
+- Don't use `commit --amend` or `push --force`; add a new commit instead.
 
 ## MoonBit Notes
 
@@ -102,18 +120,33 @@ Reusable compiler-infrastructure modules include `wasm_core`, `milkir`, `machv`,
 1. **File issues for remaining work** - Create issues for anything that needs follow-up
 2. **Run quality gates** (if code changed) - Tests, linters, builds
 3. **Update issue status** - Close finished work, update in-progress items
-4. **PUSH TO REMOTE** - This is MANDATORY:
+4. **SYNC AND PUSH `dev`** - This is mandatory. Rebase local development work
+   onto the latest remote `dev`, resolve any conflict, and push:
    ```bash
-   git pull --rebase
-   git push
-   git status  # MUST show "up to date with origin"
+   git switch dev
+   git pull --rebase origin dev
+   git push origin dev
    ```
-5. **Clean up** - Clear stashes, prune remote branches
-6. **Verify** - All changes committed AND pushed
-7. **Hand off** - Provide context for next session
+5. **Clean up** - Clear stashes and prune obsolete remote branches.
+6. **Verify** - The working tree is clean and local `dev` exactly matches
+   `origin/dev`:
+   ```bash
+   test "$(git branch --show-current)" = dev
+   test "$(git rev-parse HEAD)" = "$(git rev-parse origin/dev)"
+   git status --short --branch
+   ```
+7. **Promote periodically** - When requested or when a coherent release batch
+   is ready, open a `dev` to `main` PR and wait for the complete check set
+   before merging.
+8. **Hand off** - Report the commit, checks, and whether it is only in `dev` or
+   has also been promoted to `main`.
 
 **CRITICAL RULES:**
-- Work is NOT complete until `git push` succeeds
+- Work is NOT complete until `git push origin dev` succeeds and local `dev`
+  matches `origin/dev`.
 - NEVER stop before pushing - that leaves work stranded locally
 - NEVER say "ready to push when you are" - YOU must push
 - If push fails, resolve and retry until it succeeds
+- NEVER do ordinary implementation work on `main`
+- NEVER create a topic branch unless the user explicitly requests one
+- NEVER claim a development commit is in `main` without an ancestry check
