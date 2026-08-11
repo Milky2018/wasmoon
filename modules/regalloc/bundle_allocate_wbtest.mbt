@@ -207,7 +207,7 @@ test "spill bundle is normalized before conflict probes" {
   bundles[0].state = BundleReg(r0)
   let owners = [0, -1, -1]
   let spill_sets : Array[SpillSet] = [
-    { weight: 1, splits: 0, hint: None, spill_bundle: None },
+    { weight: 1, hint: None, spill_bundle: None },
   ]
   add_to_spill_bundle(0, 1, bundles, owners, spill_sets, segments, [0, 1])
   add_to_spill_bundle(0, 2, bundles, owners, spill_sets, segments, [0, 1])
@@ -238,10 +238,12 @@ test "spill bundle is normalized before conflict probes" {
 }
 
 ///|
-test "split cap moves the remaining bundle to stable spill handling" {
+test "spillset splits every distinct use-free gap" {
   let ranges = LiveRangeSet::LiveRangeSet([0])
-  let range = bundle_test_range(0, Int, 0, 2, [])
-  range.add_use(UsePosition(ProgramPoint(0, 0), LiveUse, AnyReg))
+  let range = bundle_test_range(0, Int, 0, 30, [])
+  for instruction in [0, 10, 20, 30] {
+    range.add_use(UsePosition(ProgramPoint(0, instruction), LiveUse, AnyReg))
+  }
   ranges.add_range(range)
   let (segments, segments_by_value) = build_allocation_segments(ranges)
   let plan : ProductionBundlePlan = {
@@ -255,36 +257,56 @@ test "split cap moves the remaining bundle to stable spill handling" {
     segments,
     [0],
   )
-  spill_sets[0].splits = MAX_SPLITS_PER_SPILL_SET
   let queue = BundleQueue::new(bundles)
   let occupied = RegisterAllocationIndex::new(1, segments, [0])
-  let split = split_bundle_at_conflict(
-    bundles[0],
-    Some(ProgramPoint(0, 1)),
-    None,
-    bundles,
-    owners,
-    queue,
-    segments,
-    segments_by_value,
-    segment_spill_sets,
-    spill_sets,
-    occupied,
-    ranges,
-    [0],
-    [],
-  )
+  let split_points = [5, 15, 25]
+  let mut current_bundle = 0
+  for index, instruction in split_points {
+    inspect(
+      split_bundle_at_conflict(
+        bundles[current_bundle],
+        Some(ProgramPoint(0, instruction)),
+        None,
+        bundles,
+        owners,
+        queue,
+        segments,
+        segments_by_value,
+        segment_spill_sets,
+        spill_sets,
+        occupied,
+        ranges,
+        [0],
+        [],
+      ),
+      content="true",
+    )
+    if index + 1 < split_points.length() {
+      let next_point = ProgramPoint(0, split_points[index + 1])
+      let mut next_bundle = -1
+      for candidate in bundles {
+        if candidate.state is BundlePending {
+          for segment_id in candidate.segments {
+            if segments[segment_id].range.contains(next_point, [0]) {
+              next_bundle = candidate.id
+            }
+          }
+        }
+      }
+      inspect(next_bundle >= 0, content="true")
+      current_bundle = next_bundle
+    }
+  }
+  let spill_bundle = bundles[spill_sets[0].spill_bundle.unwrap()]
   debug_inspect(
-    (
-      split,
-      spill_sets[0].splits,
-      snapshot_bundle_state(bundles[0].state),
-      bundles[1].segments,
-      snapshot_bundle_state(bundles[1].state),
-      owners,
-      segments.length(),
+    spill_bundle.segments.map(segment_id => segments[segment_id].range),
+    content=(
+      #|[
+      #|  { start: { block: 0, inst: 1 }, end: { block: 0, inst: 9 } },
+      #|  { start: { block: 0, inst: 11 }, end: { block: 0, inst: 19 } },
+      #|  { start: { block: 0, inst: 21 }, end: { block: 0, inst: 29 } },
+      #|]
     ),
-    content="(true, 2, SnapshotSplit, [0], SnapshotDeferredSpill, [1], 1)",
   )
 }
 
@@ -500,7 +522,6 @@ test "production eviction accounts for and removes every conflicting bundle" {
   let occupied_stack : Array[Int] = []
   let spill_sets : Array[SpillSet] = bundles.map(bundle => {
     weight: bundle.weight,
-    splits: 0,
     hint: None,
     spill_bundle: None,
   })
