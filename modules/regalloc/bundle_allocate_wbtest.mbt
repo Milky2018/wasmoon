@@ -226,8 +226,12 @@ test "spill bundle is normalized before conflict probes" {
     1,
     [],
     [],
+    conflict_policy=RejectAnyConflict,
   )
-  debug_inspect((bundles[1].segments, probe.conflicts), content="([2, 1], [0])")
+  debug_inspect(
+    (bundles[1].segments, probe.cutoff_exceeded, probe.conflicts),
+    content="([2, 1], true, [0])",
+  )
 }
 
 ///|
@@ -512,6 +516,7 @@ test "production eviction accounts for and removes every conflicting bundle" {
     1,
     occupied_stack,
     [],
+    conflict_policy=Unlimited,
   )
   let probe_snapshot : BundleProbeSnapshot = {
     conflicts: probe.conflicts,
@@ -617,7 +622,7 @@ test "production eviction accounts for and removes every conflicting bundle" {
     1,
     occupied_stack,
     [],
-    max_conflict_cost=Some(3),
+    conflict_policy=CostLimit(4),
   )
   debug_inspect(
     (
@@ -626,7 +631,7 @@ test "production eviction accounts for and removes every conflicting bundle" {
       cutoff_probe.conflict_cost,
       cutoff_probe.first_conflict,
     ),
-    content="(true, [0], 4, Some({ block: 0, inst: 1 }))",
+    content="(true, [0, 1], 5, Some({ block: 0, inst: 1 }))",
   )
 }
 
