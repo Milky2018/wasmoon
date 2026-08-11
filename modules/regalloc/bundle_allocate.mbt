@@ -36,21 +36,18 @@ priv struct BundleQueue {
   bundles : Array[AllocationBundle]
   items : Array[BundleQueueEntry]
   in_queue : Array[Bool]
-  production_priority : Bool
   spill_priorities : Array[Int]?
 }
 
 ///|
 fn BundleQueue::new(
   bundles : Array[AllocationBundle],
-  production_priority : Bool,
   spill_priorities? : Array[Int]? = None,
 ) -> BundleQueue {
   {
     bundles,
     items: [],
     in_queue: Array::make(bundles.length(), false),
-    production_priority,
     spill_priorities,
   }
 }
@@ -73,7 +70,7 @@ fn BundleQueue::higher(
   if self.spill_priorities is Some(priorities) &&
     priorities[left.spill_set] != priorities[right.spill_set] {
     priorities[left.spill_set] > priorities[right.spill_set]
-  } else if self.production_priority && left.priority != right.priority {
+  } else if left.priority != right.priority {
     left.priority > right.priority
   } else {
     left.id < right.id
@@ -422,12 +419,10 @@ fn remove_bundle_allocation(
 
 ///|
 fn bundle_can_evict(
-  enable_eviction : Bool,
   bundle : AllocationBundle,
   probe : BundleRegisterProbe,
   spill_sets : Array[SpillSet],
 ) -> Bool {
-  enable_eviction &&
   !probe.clobbered &&
   !probe.conflicts.is_empty() &&
   probe.conflict_cost < spill_sets[bundle.spill_set].weight
@@ -927,9 +922,7 @@ fn[F : FunctionView] allocate_bundles(
   segments_by_value : Array[Array[Int]],
   loop_depths : Array[Int],
   bundle_plan : ProductionBundlePlan,
-  strategy : AllocatorStrategy,
 ) -> (Array[AllocationBundle], Array[Int], Array[SpillSet], Array[Int]) raise VerifyError {
-  let enable_eviction = strategy is Backtracking
   let (bundles, segment_owner, spill_sets, segment_spill_set) = build_allocation_bundles(
     bundle_plan,
     segments,
@@ -948,7 +941,7 @@ fn[F : FunctionView] allocate_bundles(
   )
   let conflict_marks : Array[Int] = Array::make(bundles.length(), 0)
   let mut probe_id = 0
-  let queue = BundleQueue::new(bundles, enable_eviction)
+  let queue = BundleQueue::new(bundles)
   for bundle in bundles {
     queue.push(bundle.id, None)
   }
@@ -1003,7 +996,7 @@ fn[F : FunctionView] allocate_bundles(
         free_register = register
         break
       }
-      if bundle_can_evict(enable_eviction, bundle, probe, spill_sets) &&
+      if bundle_can_evict(bundle, probe, spill_sets) &&
         (eviction_cost is None || probe.conflict_cost < eviction_cost.unwrap()) {
         eviction_register = register
         eviction_cost = Some(probe.conflict_cost)
@@ -1056,7 +1049,6 @@ fn[F : FunctionView] allocate_bundles(
   }
   let second_chance = BundleQueue::new(
     bundles,
-    true,
     spill_priorities=Some(spill_sets.map(set => set.weight)),
   )
   for bundle in bundles {

@@ -1044,7 +1044,7 @@ test "any-location definitions materialize in their stable home" {
       location: Some(SegmentReg(register)),
     },
   ]
-  assign_backtracking_operands(
+  assign_segment_operands(
     plan,
     function,
     MachineEnv::new([register], []),

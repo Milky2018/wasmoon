@@ -26,17 +26,18 @@ bundles when pressure requires it, evicts cheaper residents, and reuses
 compatible non-overlapping spill slots. Fixed-register, soft-register, and
 cross-fragment hints all feed this one production implementation.
 
-`SinglePass` is an explicit low-compile-latency strategy. It uses the same
-fragmented plan and verification contract but does not evict an existing
-fragment to make room for a more valuable one, so it may spill earlier.
+`Fast` is an independent low-compile-latency strategy. It scans block-local
+live-range fragments in reverse layout order with dense register state and
+bounded work per physical register. It does not construct allocation bundles,
+spillsets, range indexes, or a backtracking queue, so it may spill earlier.
 Callers should select it only when compile latency matters more than generated
 code quality.
 
 ```moonbit check
 ///|
 test "select the low-latency allocator explicitly" {
-  let config = RegallocConfig::RegallocConfig(strategy=SinglePass)
-  inspect(config.strategy(), content="SinglePass")
+  let config = RegallocConfig::RegallocConfig(strategy=Fast)
+  inspect(config.strategy(), content="Fast")
 }
 ```
 
@@ -76,7 +77,7 @@ separate `Allocation` side tables. The aggregate target pipeline verifies
 selected VCode before allocation and independently verifies the materialized
 VCode allocation afterward, without repeating the generic plan verifier's
 whole-function analysis. Production compilation does not fall back to
-`SinglePass`.
+`Fast`.
 
 The production integration is complete. CI validates allocation correctness on
 both native targets; retired allocators and backends are not rebuilt as
@@ -86,5 +87,5 @@ performance or code-size acceptance baselines.
 
 - `Milky2018/regalloc/planning` provides standalone CFG, spill-slot, edit, and
   frame-planning utilities. Allocation queues, bundle merging, eviction, and
-  splitting remain private to the root production allocator so there is only
-  one maintained allocation policy.
+  splitting remain private to the root Backtracking allocator. The independent
+  `Fast` path shares only live-range, operand-edit, and verification contracts.

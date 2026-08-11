@@ -181,7 +181,6 @@ test "production allocation assigns an SSA bundle atomically" {
     function,
     MachineEnv::new([{ id: 0, class: Int }], []),
     ranges,
-    Backtracking,
   )
   debug_inspect(
     snapshot_bundle_allocation(bundles, segments, segment_owner),
@@ -263,7 +262,6 @@ test "production allocation evicts then splits a cheaper long bundle" {
     [[0], [1], [2]],
     [0],
     plan,
-    Backtracking,
   )
   debug_inspect(
     snapshot_bundle_allocation(bundles, segments, segment_owner),
@@ -387,7 +385,7 @@ test "production eviction accounts for and removes every conflicting bundle" {
     conflict_cost: probe.conflict_cost,
     first_conflict: probe.first_conflict,
     clobbered: probe.clobbered,
-    can_evict: bundle_can_evict(true, bundles[2], probe, spill_sets),
+    can_evict: bundle_can_evict(bundles[2], probe, spill_sets),
   }
   debug_inspect(
     probe_snapshot,
@@ -401,7 +399,7 @@ test "production eviction accounts for and removes every conflicting bundle" {
       #|}
     ),
   )
-  let queue = BundleQueue::new(bundles, true)
+  let queue = BundleQueue::new(bundles)
   evict_bundle_conflicts(
     probe.conflicts,
     bundles,
@@ -504,7 +502,7 @@ test "production bundle queue keeps live extent separate from spill weight" {
       allocation_bundle(bundles.length(), [segment.id], segments, [0]),
     )
   }
-  let queue = BundleQueue::new(bundles, true)
+  let queue = BundleQueue::new(bundles)
   for bundle in bundles {
     queue.push(bundle.id, None)
   }

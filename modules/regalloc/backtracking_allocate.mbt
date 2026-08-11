@@ -234,7 +234,6 @@ fn[F : FunctionView] allocate_segments_with_bundles(
   function : F,
   environment : MachineEnv,
   ranges : LiveRangeSet,
-  strategy : AllocatorStrategy,
   config? : RegallocConfig = RegallocConfig(),
 ) -> (
   Array[AllocationSegment],
@@ -255,7 +254,6 @@ fn[F : FunctionView] allocate_segments_with_bundles(
   config.enter_phase(Some(BundleAllocation))
   let (bundles, segment_owner, spill_sets, segment_spill_set) = allocate_bundles(
     function, environment, ranges, segments, segments_by_value, loop_depths, bundle_plan,
-    strategy,
   )
   (
     segments, segments_by_value, bundles, segment_owner, spill_sets, segment_spill_set,
@@ -603,7 +601,7 @@ fn[F : FunctionView] borrow_allocatable_register(
 }
 
 ///|
-fn[F : FunctionView] assign_backtracking_operands(
+fn[F : FunctionView] assign_segment_operands(
   plan : AllocationPlan,
   function : F,
   environment : MachineEnv,
@@ -887,7 +885,6 @@ fn[F : FunctionView] allocate_bundle_plan(
     function,
     environment,
     ranges,
-    config.strategy(),
     config~,
   )
   let plan = AllocationPlan::new(function.value_count())
@@ -897,7 +894,7 @@ fn[F : FunctionView] allocate_bundle_plan(
     segment_spill_set,
   )
   config.enter_phase(Some(OperandAssignment))
-  assign_backtracking_operands(
+  assign_segment_operands(
     plan, function, environment, segments, segments_by_value,
   )
   config.enter_phase(Some(EdgeTransfers))

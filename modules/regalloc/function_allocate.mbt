@@ -180,7 +180,10 @@ fn[F : FunctionView] run_allocation_phases(
   environment : MachineEnv,
   config : RegallocConfig,
 ) -> AllocationPlan raise VerifyError {
-  let plan = allocate_bundle_plan(function, environment, config)
+  let plan = match config.strategy() {
+    Backtracking => allocate_bundle_plan(function, environment, config)
+    Fast => allocate_fast_plan(function, environment, config)
+  }
   config.enter_phase(Some(EditResolution))
   resolve_instruction_edits(plan, environment)
   if config.verify() {
