@@ -295,6 +295,81 @@ test "AArch64 lowering selects zero-extended register-offset stores" {
 }
 
 ///|
+test "AArch64 lowering folds constant extended indices into displacements" {
+  let builder = @semantic.FunctionBuilder::new(
+    "selected_constant_displacements",
+    Platform,
+    [Ptr64, I32],
+    [I32],
+  )
+  let parameters = builder.parameters()
+  let load_base = builder.emit(Convert(Bitcast(Ptr64, I64)), [parameters[0]], [
+      I64,
+    ])[0]
+  let load_index = builder.emit(I32Const(12U), [], [I32])[0]
+  let load_extended = builder.emit(
+      Convert(I64ExtendI32(Unsigned)),
+      [load_index],
+      [I64],
+    )[0]
+  let load_bits = builder.emit(IntBinary(Add), [load_base, load_extended], [I64])[0]
+  let load_address = builder.emit(Convert(Bitcast(I64, Ptr64)), [load_bits], [
+      Ptr64,
+    ])[0]
+  let load_zero = builder.emit(I64Const(0UL), [], [I64])[0]
+  let load_pointer = builder.emit(PointerOffset, [load_address, load_zero], [
+      Ptr64,
+    ])[0]
+  let loaded = builder.emit(
+      Load(@semantic.LoadSpec::new(W32, None, I32, 0UL, Little, None)),
+      [load_pointer],
+      [I32],
+    )[0]
+
+  let store_base = builder.emit(Convert(Bitcast(Ptr64, I64)), [parameters[0]], [
+      I64,
+    ])[0]
+  let store_index = builder.emit(I32Const(16U), [], [I32])[0]
+  let store_extended = builder.emit(
+      Convert(I64ExtendI32(Unsigned)),
+      [store_index],
+      [I64],
+    )[0]
+  let store_bits = builder.emit(IntBinary(Add), [store_base, store_extended], [
+      I64,
+    ])[0]
+  let store_address = builder.emit(Convert(Bitcast(I64, Ptr64)), [store_bits], [
+      Ptr64,
+    ])[0]
+  let store_zero = builder.emit(I64Const(0UL), [], [I64])[0]
+  let store_pointer = builder.emit(PointerOffset, [store_address, store_zero], [
+      Ptr64,
+    ])[0]
+  builder.emit(
+    Store(@semantic.StoreSpec::new(W32, I32, 0UL, Little, None)),
+    [store_pointer, parameters[1]],
+    [],
+  )
+  |> ignore
+  builder.return_([loaded])
+
+  inspect(
+    lower(builder.finish(), test_lowering_context()).summary(),
+    content=(
+      #|vcode selected_constant_displacements(v0:ptr64, v1:i32) -> (i32)
+      #|block0:
+      #|  i0 IncomingReg(Ptr64, p0:int) uses=[v0:fixed(p0:int)@early] defs=[v2:any-location(prefer=p0:int)@late]
+      #|  i1 IncomingReg(I32, p1:int) uses=[v1:fixed(p1:int)@early] defs=[v3:any-location(prefer=p1:int)@late]
+      #|  i2 ScalarLoad(W32, None, I32, 12) uses=[v2:any@early] defs=[v4:any@late]
+      #|  i3 ScalarStore(W32, I32, 16) uses=[v2:any@early, v3:any@early]
+      #|  i4 OutgoingReg(I32, p0:int) uses=[v4:any@early]
+      #|  i5 Return
+      #|
+    ),
+  )
+}
+
+///|
 test "AArch64 lowering keeps a constant displacement after an extended index" {
   let builder = @semantic.FunctionBuilder::new(
     "selected_register_offset_load_with_displacement",

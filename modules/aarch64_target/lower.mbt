@@ -606,7 +606,7 @@ priv struct AddressImmediateSelection {
 ///|
 priv struct MemoryAddressSelection {
   base : @semantic.Value
-  index : @semantic.Value
+  index : @semantic.Value?
   shift : Int
   offset : UInt64
 }
@@ -1091,7 +1091,7 @@ fn uxtw_memory_address_selection(
     index_bits : @semantic.Value,
   ) -> (
     @semantic.Value,
-    @semantic.Value,
+    @semantic.Value?,
     UInt64,
     Array[@semantic.Value],
     Array[@semantic.Value],
@@ -1128,7 +1128,15 @@ fn uxtw_memory_address_selection(
       Some(index)
     }
     if match_extended_index(index_bits) is Some(index) {
-      return Some((base, index, 0UL, [], [base_bits, index_bits]))
+      if constants[function.value_index(index).unwrap()] is Some(offset) {
+        let byte_scale = 1UL << natural_register_shift(width)
+        if offset % byte_scale == 0UL && offset / byte_scale <= 4095UL {
+          return Some(
+            (base, None, offset, [index_bits], [base_bits, index_bits, index]),
+          )
+        }
+      }
+      return Some((base, Some(index), 0UL, [], [base_bits, index_bits]))
     }
     guard foldable_definition(function, definitions, uses, index_bits)
       is Some(offset_instruction) else {
@@ -1163,7 +1171,7 @@ fn uxtw_memory_address_selection(
       return None
     }
     guard match_extended_index(extended) is Some(index) else { return None }
-    Some((base, index, offset, [index_bits], [base_bits, extended]))
+    Some((base, Some(index), offset, [index_bits], [base_bits, extended]))
   }
   let parts = match match_parts(left, right) {
     Some(parts) => Some(parts)
@@ -1172,9 +1180,15 @@ fn uxtw_memory_address_selection(
   guard parts is Some((base, index, offset, extra_skipped, folded_constants)) else {
     return None
   }
-  let (selected_index, shift, skipped_index, folded_constant) = select_scaled_index(
-    function, definitions, uses, constants, index, width,
-  )
+  let (selected_index, shift, skipped_index, folded_constant) = match index {
+    Some(index) => {
+      let (selected, shift, skipped, folded) = select_scaled_index(
+        function, definitions, uses, constants, index, width,
+      )
+      (Some(selected), shift, skipped, folded)
+    }
+    None => (None, 0, None, None)
+  }
   let skipped = [address, pointer, sum]
   for value in extra_skipped {
     skipped.push(value)
@@ -1780,10 +1794,10 @@ fn lower_instruction(
     (_, _, _, Some(selected), _, _) =>
       [map_value(function, values, selected.input)]
     (_, _, _, _, Some(selected), _) => {
-      let selected_operands = [
-        map_value(function, values, selected.base),
-        map_value(function, values, selected.index),
-      ]
+      let selected_operands = [map_value(function, values, selected.base)]
+      if selected.index is Some(index) {
+        selected_operands.push(map_value(function, values, index))
+      }
       if operation is Store(_) {
         selected_operands.push(
           map_value(function, values, semantic_operands[1]),
@@ -1876,7 +1890,24 @@ fn lower_instruction(
     return
   }
   if memory_address is Some(selected) {
-    if selected.offset != 0UL {
+    let (selected_operation, selected_operands) = if selected.index is None {
+      (
+        match operation {
+          Load(spec) =>
+            ScalarLoad(
+              spec.width,
+              spec.extension,
+              spec.result_type,
+              selected.offset,
+            )
+          Store(spec) =>
+            ScalarStore(spec.width, spec.value_type, selected.offset)
+          _ =>
+            abort("memory-address selection requires scalar memory operation")
+        },
+        operands,
+      )
+    } else if selected.offset != 0UL {
       let address = append_body(
           builder,
           block,
@@ -1885,55 +1916,49 @@ fn lower_instruction(
           [@vcode.Output::any(Ptr64)],
           @vcode.InstructionMetadata::empty(),
         )[0]
-      let selected_operands = [address]
+      let adjusted = [address]
       if operation is Store(_) {
-        selected_operands.push(operands[2])
+        adjusted.push(operands[2])
       }
-      let selected_operation = match operation {
-        Load(spec) =>
-          ScalarLoad(
-            spec.width,
-            spec.extension,
-            spec.result_type,
-            selected.offset,
-          )
-        Store(spec) => ScalarStore(spec.width, spec.value_type, selected.offset)
-        _ => abort("register-offset selection requires scalar memory operation")
-      }
-      let results = append_body(
-        builder,
-        block,
-        selected_operation,
-        selected_operands.map(@vcode.Input::any),
-        result_types.map(@vcode.Output::any),
-        source_metadata(
-          function.instruction_metadata(instruction).unwrap(),
-          roots,
-          operation.semantics(),
-        ),
+      (
+        match operation {
+          Load(spec) =>
+            ScalarLoad(
+              spec.width,
+              spec.extension,
+              spec.result_type,
+              selected.offset,
+            )
+          Store(spec) =>
+            ScalarStore(spec.width, spec.value_type, selected.offset)
+          _ =>
+            abort("register-offset selection requires scalar memory operation")
+        },
+        adjusted,
       )
-      for index, result in semantic_results {
-        values[function.value_index(result).unwrap()] = Some(results[index])
-      }
-      return
-    }
-    let selected_operation = match operation {
-      Load(spec) =>
-        ScalarLoadUxtw(
-          spec.width,
-          spec.extension,
-          spec.result_type,
-          selected.shift,
-        )
-      Store(spec) =>
-        ScalarStoreUxtw(spec.width, spec.value_type, selected.shift)
-      _ => abort("register-offset selection requires scalar memory operation")
+    } else {
+      (
+        match operation {
+          Load(spec) =>
+            ScalarLoadUxtw(
+              spec.width,
+              spec.extension,
+              spec.result_type,
+              selected.shift,
+            )
+          Store(spec) =>
+            ScalarStoreUxtw(spec.width, spec.value_type, selected.shift)
+          _ =>
+            abort("register-offset selection requires scalar memory operation")
+        },
+        operands,
+      )
     }
     let results = append_body(
       builder,
       block,
       selected_operation,
-      operands.map(@vcode.Input::any),
+      selected_operands.map(@vcode.Input::any),
       result_types.map(@vcode.Output::any),
       source_metadata(
         function.instruction_metadata(instruction).unwrap(),
