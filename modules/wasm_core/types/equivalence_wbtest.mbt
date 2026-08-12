@@ -165,3 +165,43 @@ test "compute_canonical_type_indices: with rec groups" {
   // t3 is at pos=0, size=1 - different from t1 (size differs)
   inspect(canonical[2], content="2")
 }
+
+///|
+test "compute_canonical_type_indices: equivalent rec groups share indices" {
+  let types = func_types_to_subtypes([
+    { params: [], results: [RefNullFuncTyped(1)] },
+    { params: [I32], results: [] },
+    { params: [], results: [RefNullFuncTyped(3)] },
+    { params: [I32], results: [] },
+  ])
+  debug_inspect(
+    compute_canonical_type_indices(types, type_rec_groups=[0, 0, 1, 1]),
+    content="[0, 1, 0, 1]",
+  )
+}
+
+///|
+test "compute_canonical_type_indices: many explicit singleton groups" {
+  let types : Array[SubType] = []
+  let rec_groups : Array[Int] = []
+  for i in 0..<512 {
+    types.push(
+      SubType::simple(
+        Func({
+          params: if i == 0 {
+            [I32]
+          } else {
+            [RefFuncTyped(i - 1)]
+          },
+          results: [],
+        }),
+      ),
+    )
+    rec_groups.push(i)
+  }
+  let canonical = compute_canonical_type_indices(
+    types,
+    type_rec_groups=rec_groups,
+  )
+  inspect(canonical == rec_groups, content="true")
+}

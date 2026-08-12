@@ -5,13 +5,73 @@
 // support for recursive types, rec groups, and all composite types.
 
 ///|
+priv struct RecGroupIndex {
+  group_by_type : Array[Int]
+  position_by_type : Array[Int]
+  groups : Array[Array[Int]]
+}
+
+///|
+fn RecGroupIndex::new(
+  type_count : Int,
+  rec_group_ids : Array[Int],
+) -> RecGroupIndex {
+  let group_by_type = Array::make(type_count, -1)
+  let position_by_type = Array::make(type_count, 0)
+  let groups : Array[Array[Int]] = []
+  let group_by_id : Map[Int, Int] = Map([])
+  for type_idx in 0..<type_count {
+    let group = if rec_group_ids.length() == 0 ||
+      type_idx >= rec_group_ids.length() {
+      let group = groups.length()
+      groups.push([])
+      group
+    } else {
+      let group_id = rec_group_ids[type_idx]
+      match group_by_id.get(group_id) {
+        Some(group) => group
+        None => {
+          let group = groups.length()
+          groups.push([])
+          group_by_id[group_id] = group
+          group
+        }
+      }
+    }
+    group_by_type[type_idx] = group
+    position_by_type[type_idx] = groups[group].length()
+    groups[group].push(type_idx)
+  }
+  { group_by_type, position_by_type, groups }
+}
+
+///|
+fn RecGroupIndex::group_at(self : RecGroupIndex, type_idx : Int) -> Int {
+  if type_idx >= 0 && type_idx < self.group_by_type.length() {
+    self.group_by_type[type_idx]
+  } else {
+    -1
+  }
+}
+
+///|
+fn RecGroupIndex::info_at(self : RecGroupIndex, type_idx : Int) -> (Int, Int) {
+  let group = self.group_at(type_idx)
+  if group >= 0 {
+    (self.position_by_type[type_idx], self.groups[group].length())
+  } else {
+    (0, 1)
+  }
+}
+
+///|
 /// Context for type equivalence checking.
 /// Now uses SubType to properly handle func, struct, and array types.
-pub struct TypeEquivalenceContext {
+struct TypeEquivalenceContext {
   types1 : Array[SubType]
   types2 : Array[SubType]
-  rec_groups1 : Array[Int]
-  rec_groups2 : Array[Int]
+  rec_groups1 : RecGroupIndex
+  rec_groups2 : RecGroupIndex
   cross_module : Bool
   visited : Map[(Int, Int), Bool]
 }
@@ -22,11 +82,12 @@ pub fn TypeEquivalenceContext::same_module(
   types : Array[SubType],
   type_rec_groups? : Array[Int] = [],
 ) -> TypeEquivalenceContext {
+  let rec_groups = RecGroupIndex::new(types.length(), type_rec_groups)
   {
     types1: types,
     types2: types,
-    rec_groups1: type_rec_groups,
-    rec_groups2: type_rec_groups,
+    rec_groups1: rec_groups,
+    rec_groups2: rec_groups,
     cross_module: false,
     visited: Map([]),
   }
@@ -43,8 +104,8 @@ pub fn TypeEquivalenceContext::cross_module(
   {
     types1,
     types2,
-    rec_groups1,
-    rec_groups2,
+    rec_groups1: RecGroupIndex::new(types1.length(), rec_groups1),
+    rec_groups2: RecGroupIndex::new(types2.length(), rec_groups2),
     cross_module: true,
     visited: Map([]),
   }
@@ -66,22 +127,14 @@ pub fn TypeEquivalenceContext::types_equivalent(
   }
   // First check rec group info - types can only be equivalent if
   // they have the same position and size within their rec groups
-  let rec_info1 = get_rec_group_info(self.rec_groups1, idx1)
-  let rec_info2 = get_rec_group_info(self.rec_groups2, idx2)
+  let rec_info1 = self.rec_groups1.info_at(idx1)
+  let rec_info2 = self.rec_groups2.info_at(idx2)
   if rec_info1 != rec_info2 {
     return false
   }
   // Types can only be equivalent if their rec groups are pairwise equivalent
-  let rec_id1 = if idx1 < self.rec_groups1.length() {
-    self.rec_groups1[idx1]
-  } else {
-    idx1 // singleton rec group
-  }
-  let rec_id2 = if idx2 < self.rec_groups2.length() {
-    self.rec_groups2[idx2]
-  } else {
-    idx2 // singleton rec group
-  }
+  let rec_id1 = self.rec_groups1.group_at(idx1)
+  let rec_id2 = self.rec_groups2.group_at(idx2)
 
   // For same-module, same rec group ID means same rec group
   if !self.cross_module && rec_id1 == rec_id2 {
@@ -91,18 +144,12 @@ pub fn TypeEquivalenceContext::types_equivalent(
 
   // Check if the rec groups are pairwise equivalent
   // This works for both same-module (different rec groups) and cross-module
-  let n_types = if self.types1.length() > self.types2.length() {
-    self.types1.length()
-  } else {
-    self.types2.length()
-  }
   rec_groups_equivalent(
     self,
     self.rec_groups1,
     self.rec_groups2,
     rec_id1,
     rec_id2,
-    n_types,
   )
 }
 
@@ -363,31 +410,23 @@ fn TypeEquivalenceContext::type_refs_equal(
   other_idx : Int,
 ) -> Bool {
   // Get rec group info for the types being compared
-  let rec_id1 = if self_idx >= 0 && self_idx < self.rec_groups1.length() {
-    self.rec_groups1[self_idx]
-  } else {
-    -1
-  }
-  let rec_id2 = if other_idx >= 0 && other_idx < self.rec_groups2.length() {
-    self.rec_groups2[other_idx]
-  } else {
-    -1
-  }
+  let rec_id1 = self.rec_groups1.group_at(self_idx)
+  let rec_id2 = self.rec_groups2.group_at(other_idx)
   // Check if ref1 is within self_idx's rec group
   let ref1_in_group = ref1 >= 0 &&
-    ref1 < self.rec_groups1.length() &&
+    ref1 < self.types1.length() &&
     rec_id1 >= 0 &&
-    self.rec_groups1[ref1] == rec_id1
+    self.rec_groups1.group_at(ref1) == rec_id1
   // Check if ref2 is within other_idx's rec group
   let ref2_in_group = ref2 >= 0 &&
-    ref2 < self.rec_groups2.length() &&
+    ref2 < self.types2.length() &&
     rec_id2 >= 0 &&
-    self.rec_groups2[ref2] == rec_id2
+    self.rec_groups2.group_at(ref2) == rec_id2
   if ref1_in_group && ref2_in_group {
     // Both references are within their respective rec groups
     // They must be at the same relative position
-    let pos1 = get_rec_group_position(self.rec_groups1, ref1, rec_id1)
-    let pos2 = get_rec_group_position(self.rec_groups2, ref2, rec_id2)
+    let pos1 = self.rec_groups1.position_by_type[ref1]
+    let pos2 = self.rec_groups2.position_by_type[ref2]
     return pos1 == pos2
   }
   if ref1_in_group || ref2_in_group {
@@ -400,22 +439,6 @@ fn TypeEquivalenceContext::type_refs_equal(
   // that are in equivalent rec groups at equivalent positions.
   // Use types_equivalent which checks rec group info.
   self.types_equivalent(ref1, ref2)
-}
-
-///|
-/// Get the position of a type within its rec group.
-fn get_rec_group_position(
-  rec_groups : Array[Int],
-  type_idx : Int,
-  rec_id : Int,
-) -> Int {
-  let mut position = 0
-  for i in 0..<type_idx {
-    if i < rec_groups.length() && rec_groups[i] == rec_id {
-      position = position + 1
-    }
-  }
-  position
 }
 
 ///|
@@ -451,61 +474,29 @@ pub fn compute_canonical_type_indices(
   types : Array[SubType],
   type_rec_groups? : Array[Int] = [],
 ) -> Array[Int] {
-  let n = types.length()
-  let canonical : Array[Int] = Array::make(n, -1)
-  // Track which rec groups we've processed and their canonical mapping
-  // Key: rec_group_id, Value: (canonical_rec_id, first_type_idx)
-  let rec_group_canonical : Map[Int, (Int, Int)] = Map([])
+  let canonical : Array[Int] = Array::make(types.length(), -1)
   let ctx = TypeEquivalenceContext::same_module(types, type_rec_groups~)
-  for i in 0..<n {
-    let rec_id_i = if i < type_rec_groups.length() {
-      type_rec_groups[i]
-    } else {
-      i // singleton rec group
-    }
-    // Check if we've already determined this rec group's canonical mapping
-    if rec_group_canonical.get(rec_id_i) is Some((canon_rec_id, first_idx)) {
-      // This rec group already mapped - compute relative canonical index
-      let pos_i = get_rec_group_position(type_rec_groups, i, rec_id_i)
-      canonical[i] = first_idx +
-        pos_i -
-        get_rec_group_position(type_rec_groups, first_idx, canon_rec_id)
-      continue
-    }
-    // This is the first type we've seen from this rec group
-    // Try to find an equivalent rec group we've already processed
-    let rec_info_i = get_rec_group_info(type_rec_groups, i)
-    let mut found = false
-    for j in 0..<i {
-      let rec_id_j = if j < type_rec_groups.length() {
-        type_rec_groups[j]
-      } else {
-        j
-      }
-      let rec_info_j = get_rec_group_info(type_rec_groups, j)
-      // Rec groups can only be equivalent if they have the same size
-      if rec_info_i.1 != rec_info_j.1 {
+  for group_index, members in ctx.rec_groups1.groups {
+    let mut canonical_first = members[0]
+    for previous_group in 0..<group_index {
+      let previous_members = ctx.rec_groups1.groups[previous_group]
+      if members.length() != previous_members.length() {
         continue
       }
-      // Check if this is the first type of rec_group j
-      if rec_info_j.0 != 0 {
-        continue
+      let mut equivalent = true
+      for position, type_idx in members {
+        if !ctx.types_structurally_equal(type_idx, previous_members[position]) {
+          equivalent = false
+          break
+        }
       }
-      // Check if entire rec groups are pairwise equivalent
-      if rec_groups_equivalent(
-          ctx, type_rec_groups, type_rec_groups, rec_id_i, rec_id_j, n,
-        ) {
-        // Map this rec group to j's rec group
-        let pos_i = get_rec_group_position(type_rec_groups, i, rec_id_i)
-        canonical[i] = j + pos_i
-        rec_group_canonical[rec_id_i] = (rec_id_j, j)
-        found = true
+      if equivalent {
+        canonical_first = previous_members[0]
         break
       }
     }
-    if !found {
-      canonical[i] = i
-      rec_group_canonical[rec_id_i] = (rec_id_i, i)
+    for position, type_idx in members {
+      canonical[type_idx] = canonical_first + position
     }
   }
   canonical
@@ -515,39 +506,13 @@ pub fn compute_canonical_type_indices(
 /// Check if two entire rec groups are pairwise structurally equivalent.
 fn rec_groups_equivalent(
   ctx : TypeEquivalenceContext,
-  rec_groups1 : Array[Int],
-  rec_groups2 : Array[Int],
+  rec_groups1 : RecGroupIndex,
+  rec_groups2 : RecGroupIndex,
   rec_id1 : Int,
   rec_id2 : Int,
-  n_types : Int,
 ) -> Bool {
-  // Collect types in each rec group
-  let types1 : Array[Int] = []
-  let types2 : Array[Int] = []
-  // Handle empty rec_groups (each type is singleton)
-  if rec_groups1.length() == 0 {
-    // rec_id is the type index itself for singleton
-    if rec_id1 >= 0 && rec_id1 < n_types {
-      types1.push(rec_id1)
-    }
-  } else {
-    for i, id in rec_groups1 {
-      if id == rec_id1 {
-        types1.push(i)
-      }
-    }
-  }
-  if rec_groups2.length() == 0 {
-    if rec_id2 >= 0 && rec_id2 < n_types {
-      types2.push(rec_id2)
-    }
-  } else {
-    for i, id in rec_groups2 {
-      if id == rec_id2 {
-        types2.push(i)
-      }
-    }
-  }
+  let types1 = if rec_id1 >= 0 { rec_groups1.groups[rec_id1] } else { [] }
+  let types2 = if rec_id2 >= 0 { rec_groups2.groups[rec_id2] } else { [] }
   // Must have same number of types
   if types1.length() != types2.length() {
     return false

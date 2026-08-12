@@ -47,36 +47,6 @@ fn[F : FunctionView] build_register_clobber_index(
 }
 
 ///|
-fn RegisterClobberIndex::query(
-  self : RegisterClobberIndex,
-  reg : PhysicalReg,
-  range : ProgramRange,
-) -> (ProgramPoint?, Int) {
-  guard self.points_by_reg.get(physical_reg_key(reg)) is Some(points) else {
-    return (None, 0)
-  }
-  let mut comparisons = 0
-  let mut lo = 0
-  let mut hi = points.length()
-  while lo < hi {
-    let mid = lo + (hi - lo) / 2
-    comparisons = comparisons + 1
-    if points[mid].compare_with_order(range.start, self.block_order) <= 0 {
-      lo = mid + 1
-    } else {
-      hi = mid
-    }
-  }
-  if lo < points.length() {
-    comparisons = comparisons + 1
-    if points[lo].compare_with_order(range.end, self.block_order) < 0 {
-      return (Some(points[lo]), comparisons)
-    }
-  }
-  (None, comparisons)
-}
-
-///|
 fn RegisterClobberIndex::first_intersection(
   self : RegisterClobberIndex,
   reg : PhysicalReg,
@@ -217,10 +187,7 @@ fn[F : FunctionView] run_allocation_phases(
   environment : MachineEnv,
   config : RegallocConfig,
 ) -> AllocationPlan raise VerifyError {
-  let plan = match config.strategy() {
-    Backtracking => allocate_bundle_plan(function, environment, config)
-    Fast => allocate_fast_plan(function, environment, config)
-  }
+  let plan = allocate_bundle_plan(function, environment, config)
   config.enter_phase(Some(EditResolution))
   resolve_instruction_edits(plan, environment)
   if config.verify() {

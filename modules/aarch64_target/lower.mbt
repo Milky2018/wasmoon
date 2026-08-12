@@ -606,25 +606,10 @@ priv struct AddressImmediateSelection {
 ///|
 priv struct MemoryAddressSelection {
   base : @semantic.Value
-  index : @semantic.Value
+  index : @semantic.Value?
   shift : Int
   offset : UInt64
 }
-
-///|
-/// Bound stable-field reuse by both span and consumer count. This keeps each
-/// cached value inside one short pressure region instead of pinning it across
-/// the complete function or loop.
-const ENVIRONMENT_REUSE_DISTANCE : Int = 16
-
-///|
-const ENVIRONMENT_REUSE_LIMIT : Int = 1
-
-///|
-/// Semantic SSA pressure undercounts target addressing temporaries and fixed
-/// ABI constraints, so keep long-lived environment values below a conservative
-/// fraction of the physical integer register file.
-const ENVIRONMENT_REUSE_INTEGER_PRESSURE_LIMIT : Int = 11
 
 ///|
 priv struct BranchSelection {
@@ -645,7 +630,7 @@ priv struct LoweringAnalysis {
   shifted_adds : Array[ShiftedAddSelection?]
   address_immediates : Array[AddressImmediateSelection?]
   memory_addresses : Array[MemoryAddressSelection?]
-  environment_aliases : Array[@semantic.Value?]
+  value_aliases : Array[@semantic.Value?]
   branches : Array[BranchSelection?]
   skip_results : Array[Bool]
 }
@@ -657,262 +642,6 @@ fn count_value_use(
   value : @semantic.Value,
 ) -> Unit {
   uses[function.value_index(value).unwrap()] += 1
-}
-
-///|
-fn update_last_use(
-  function : @semantic.Function,
-  last_uses : Array[Int],
-  value : @semantic.Value,
-  position : Int,
-) -> Unit {
-  let index = function.value_index(value).unwrap()
-  if position > last_uses[index] {
-    last_uses[index] = position
-  }
-}
-
-///|
-fn record_terminator_last_uses(
-  function : @semantic.Function,
-  last_uses : Array[Int],
-  record : @semantic.TerminatorRecord,
-  position : Int,
-) -> Unit {
-  match record.kind {
-    Jump(edge) =>
-      for argument in edge.arguments {
-        update_last_use(function, last_uses, argument, position)
-      }
-    Branch(condition, when_true, when_false) => {
-      update_last_use(function, last_uses, condition, position)
-      for argument in when_true.arguments {
-        update_last_use(function, last_uses, argument, position)
-      }
-      for argument in when_false.arguments {
-        update_last_use(function, last_uses, argument, position)
-      }
-    }
-    Switch(index, cases, default_edge) => {
-      update_last_use(function, last_uses, index, position)
-      for case in cases {
-        for argument in case.edge.arguments {
-          update_last_use(function, last_uses, argument, position)
-        }
-      }
-      for argument in default_edge.arguments {
-        update_last_use(function, last_uses, argument, position)
-      }
-    }
-    Return(values) | TailCall(_, values) | NoReturnCall(_, values) =>
-      for value in values {
-        update_last_use(function, last_uses, value, position)
-      }
-    Trap(_) => ()
-  }
-  for root in record.metadata.live_gc_roots {
-    update_last_use(function, last_uses, root, position)
-  }
-}
-
-///|
-fn environment_reuse_lifetimes(
-  function : @semantic.Function,
-  instruction_positions : Array[Int],
-) -> (Array[Int], Array[Int], Array[@semantic.ValueType?]) {
-  let definitions = Array::make(function.value_count(), -1)
-  let last_uses = Array::make(function.value_count(), -1)
-  let value_types : Array[@semantic.ValueType?] = Array::make(
-    function.value_count(),
-    None,
-  )
-  for parameter in function.parameters() {
-    let index = function.value_index(parameter).unwrap()
-    definitions[index] = 0
-    last_uses[index] = 0
-    value_types[index] = function.value_type(parameter)
-  }
-  let mut position = 1
-  for block in function.blocks_in_cfg_order() {
-    for parameter in function.block_parameters(block) {
-      let index = function.value_index(parameter).unwrap()
-      definitions[index] = position
-      last_uses[index] = position
-      value_types[index] = function.value_type(parameter)
-    }
-    for instruction in function.block_instructions(block) {
-      instruction_positions[function.instruction_index(instruction).unwrap()] = position
-      for result in function.instruction_results(instruction) {
-        let index = function.value_index(result).unwrap()
-        definitions[index] = position
-        last_uses[index] = position
-        value_types[index] = function.value_type(result)
-      }
-      for operand in function.instruction_operands(instruction) {
-        update_last_use(function, last_uses, operand, position)
-      }
-      for
-        root in function.instruction_metadata(instruction).unwrap().live_gc_roots {
-        update_last_use(function, last_uses, root, position)
-      }
-      position += 1
-    }
-    record_terminator_last_uses(
-      function,
-      last_uses,
-      function.block_terminator(block).unwrap(),
-      position,
-    )
-    position += 1
-  }
-  (definitions, last_uses, value_types)
-}
-
-///|
-fn can_reuse_environment_region(
-  function : @semantic.Function,
-  region : @semantic.EnvironmentFieldUseRegion,
-  instruction_positions : Array[Int],
-  integer_pressure : Array[Int],
-  environment_pressure : Array[Int],
-) -> Bool {
-  if region.occurrences.length() < 3 {
-    return false
-  }
-  let first_position = instruction_positions[function
-    .instruction_index(region.occurrences[0])
-    .unwrap()]
-  let last_position = instruction_positions[function
-    .instruction_index(region.occurrences[region.occurrences.length() - 1])
-    .unwrap()]
-  let mut peak = 0
-  for position in first_position..<=last_position {
-    let live = integer_pressure[position] - environment_pressure[position]
-    if live > peak {
-      peak = live
-    }
-  }
-  peak + 1 <= ENVIRONMENT_REUSE_INTEGER_PRESSURE_LIMIT
-}
-
-///|
-fn add_pressure_range(
-  changes : Array[Int],
-  definition : Int,
-  last_use : Int,
-) -> Unit {
-  if definition >= 0 && last_use >= definition {
-    changes[definition] += 1
-    changes[last_use + 1] -= 1
-  }
-}
-
-///|
-fn finish_pressure_ranges(changes : Array[Int]) -> Array[Int] {
-  let pressure = Array::make(changes.length() - 1, 0)
-  let mut live = 0
-  for index in 0..<pressure.length() {
-    live += changes[index]
-    pressure[index] = live
-  }
-  pressure
-}
-
-///|
-fn integer_pressure_by_position(
-  definitions : Array[Int],
-  last_uses : Array[Int],
-  value_types : Array[@semantic.ValueType?],
-  skip_results : Array[Bool],
-  position_count : Int,
-) -> Array[Int] {
-  let changes = Array::make(position_count + 1, 0)
-  for index in 0..<definitions.length() {
-    if !skip_results[index] &&
-      value_types[index].map(@vcode.reg_class_for_value_type) == Some(Int) {
-      add_pressure_range(changes, definitions[index], last_uses[index])
-    }
-  }
-  finish_pressure_ranges(changes)
-}
-
-///|
-fn environment_pressure_by_position(
-  function : @semantic.Function,
-  group : @semantic.EnvironmentFieldUseGroup,
-  definitions : Array[Int],
-  last_uses : Array[Int],
-  skip_results : Array[Bool],
-  position_count : Int,
-) -> Array[Int] {
-  let changes = Array::make(position_count + 1, 0)
-  for occurrence in group.occurrences {
-    for result in function.instruction_results(occurrence) {
-      let index = function.value_index(result).unwrap()
-      if !skip_results[index] {
-        add_pressure_range(changes, definitions[index], last_uses[index])
-      }
-    }
-  }
-  finish_pressure_ranges(changes)
-}
-
-///|
-fn record_environment_aliases(
-  function : @semantic.Function,
-  occurrences : Array[@semantic.Instruction],
-  environment_aliases : Array[@semantic.Value?],
-) -> Unit {
-  guard occurrences.get(0) is Some(first) &&
-    function.instruction_results(first) is [canonical] else {
-    return
-  }
-  for occurrence in occurrences[1:] {
-    guard function.instruction_results(occurrence) is [result] else { continue }
-    environment_aliases[function.value_index(result).unwrap()] = Some(canonical)
-  }
-}
-
-///|
-fn record_bounded_environment_aliases(
-  function : @semantic.Function,
-  occurrences : Array[@semantic.Instruction],
-  instruction_positions : Array[Int],
-  environment_aliases : Array[@semantic.Value?],
-) -> Unit {
-  guard occurrences.get(0) is Some(first) &&
-    function.instruction_results(first) is [first_result] else {
-    return
-  }
-  let mut canonical = first_result
-  let mut canonical_position = instruction_positions[function
-    .instruction_index(first)
-    .unwrap()]
-  let mut reuse_count = 0
-  for occurrence in occurrences[1:] {
-    guard function.instruction_results(occurrence) is [result] else { continue }
-    let position = instruction_positions[function
-      .instruction_index(occurrence)
-      .unwrap()]
-    if reuse_count < ENVIRONMENT_REUSE_LIMIT &&
-      position - canonical_position <= ENVIRONMENT_REUSE_DISTANCE {
-      environment_aliases[function.value_index(result).unwrap()] = Some(
-        canonical,
-      )
-      reuse_count += 1
-    } else {
-      canonical = result
-      canonical_position = position
-      reuse_count = 0
-    }
-  }
-}
-
-///|
-fn environment_field_uses_integer_register(
-  group : @semantic.EnvironmentFieldUseGroup,
-) -> Bool {
-  @vcode.reg_class_for_value_type(group.field.value_type) == Int
 }
 
 ///|
@@ -1091,7 +820,7 @@ fn uxtw_memory_address_selection(
     index_bits : @semantic.Value,
   ) -> (
     @semantic.Value,
-    @semantic.Value,
+    @semantic.Value?,
     UInt64,
     Array[@semantic.Value],
     Array[@semantic.Value],
@@ -1128,7 +857,15 @@ fn uxtw_memory_address_selection(
       Some(index)
     }
     if match_extended_index(index_bits) is Some(index) {
-      return Some((base, index, 0UL, [], [base_bits, index_bits]))
+      if constants[function.value_index(index).unwrap()] is Some(offset) {
+        let byte_scale = 1UL << natural_register_shift(width)
+        if offset % byte_scale == 0UL && offset / byte_scale <= 4095UL {
+          return Some(
+            (base, None, offset, [index_bits], [base_bits, index_bits, index]),
+          )
+        }
+      }
+      return Some((base, Some(index), 0UL, [], [base_bits, index_bits]))
     }
     guard foldable_definition(function, definitions, uses, index_bits)
       is Some(offset_instruction) else {
@@ -1163,7 +900,7 @@ fn uxtw_memory_address_selection(
       return None
     }
     guard match_extended_index(extended) is Some(index) else { return None }
-    Some((base, index, offset, [index_bits], [base_bits, extended]))
+    Some((base, Some(index), offset, [index_bits], [base_bits, extended]))
   }
   let parts = match match_parts(left, right) {
     Some(parts) => Some(parts)
@@ -1172,9 +909,15 @@ fn uxtw_memory_address_selection(
   guard parts is Some((base, index, offset, extra_skipped, folded_constants)) else {
     return None
   }
-  let (selected_index, shift, skipped_index, folded_constant) = select_scaled_index(
-    function, definitions, uses, constants, index, width,
-  )
+  let (selected_index, shift, skipped_index, folded_constant) = match index {
+    Some(index) => {
+      let (selected, shift, skipped, folded) = select_scaled_index(
+        function, definitions, uses, constants, index, width,
+      )
+      (Some(selected), shift, skipped, folded)
+    }
+    None => (None, 0, None, None)
+  }
   let skipped = [address, pointer, sum]
   for value in extra_skipped {
     skipped.push(value)
@@ -1230,10 +973,7 @@ fn analyze_lowering(function : @semantic.Function) -> LoweringAnalysis {
     instruction_slots,
     None,
   )
-  let environment_aliases : Array[@semantic.Value?] = Array::make(
-    value_count,
-    None,
-  )
+  let value_aliases : Array[@semantic.Value?] = Array::make(value_count, None)
   let branches : Array[BranchSelection?] = Array::make(
     function.block_count(),
     None,
@@ -1594,74 +1334,6 @@ fn analyze_lowering(function : @semantic.Function) -> LoweringAnalysis {
       skip_results[value_index] = true
     }
   }
-  let environment_groups = function.environment_field_use_groups()
-  for group in environment_groups {
-    if group.stability == Stable &&
-      group.can_replace_context_carrier &&
-      environment_field_uses_integer_register(group) {
-      record_environment_aliases(
-        function,
-        group.occurrences,
-        environment_aliases,
-      )
-    }
-  }
-  let needs_regional_reuse = environment_groups.any(group => {
-    group.stability == Stable &&
-    !(group.can_replace_context_carrier &&
-    environment_field_uses_integer_register(group))
-  })
-  if needs_regional_reuse {
-    let instruction_positions = Array::make(instruction_slots, -1)
-    let (value_definitions, value_last_uses, value_types) = environment_reuse_lifetimes(
-      function, instruction_positions,
-    )
-    let position_count = instruction_slots + function.block_count() + 2
-    let integer_pressure = integer_pressure_by_position(
-      value_definitions, value_last_uses, value_types, skip_results, position_count,
-    )
-    for group in environment_groups {
-      if group.stability == Mutable ||
-        (
-          group.can_replace_context_carrier &&
-          environment_field_uses_integer_register(group)
-        ) {
-        continue
-      }
-      if !environment_field_uses_integer_register(group) {
-        for region in group.call_free_regions {
-          record_bounded_environment_aliases(
-            function,
-            region.occurrences,
-            instruction_positions,
-            environment_aliases,
-          )
-        }
-        continue
-      }
-      let environment_pressure = environment_pressure_by_position(
-        function, group, value_definitions, value_last_uses, skip_results, position_count,
-      )
-      for region in group.call_free_regions {
-        if can_reuse_environment_region(
-            function, region, instruction_positions, integer_pressure, environment_pressure,
-          ) {
-          record_environment_aliases(
-            function,
-            region.occurrences,
-            environment_aliases,
-          )
-        } else {
-          record_bounded_environment_aliases(
-            function,
-            region.occurrences,
-            instruction_positions,
-            environment_aliases,
-          )
-        }
-      }
-    }
-  }
   // `pointer.offset p, 0` is `p`, and both sides are Ptr64.
   //
   // The register-offset selector above deliberately matches a zero
@@ -1682,8 +1354,7 @@ fn analyze_lowering(function : @semantic.Function) -> LoweringAnalysis {
         continue
       }
       let result_index = function.value_index(result).unwrap()
-      if skip_results[result_index] ||
-        environment_aliases[result_index] is Some(_) {
+      if skip_results[result_index] || value_aliases[result_index] is Some(_) {
         continue
       }
       if constants[function.value_index(constant).unwrap()] != Some(0UL) {
@@ -1694,7 +1365,7 @@ fn analyze_lowering(function : @semantic.Function) -> LoweringAnalysis {
       if !metadata.live_gc_roots.is_empty() {
         continue
       }
-      environment_aliases[result_index] = Some(input)
+      value_aliases[result_index] = Some(input)
       address_immediates[result_index] = None
     }
   }
@@ -1706,7 +1377,7 @@ fn analyze_lowering(function : @semantic.Function) -> LoweringAnalysis {
     shifted_adds,
     address_immediates,
     memory_addresses,
-    environment_aliases,
+    value_aliases,
     branches,
     skip_results,
   }
@@ -1731,7 +1402,7 @@ fn lower_instruction(
     .get(0)
     .map(result => function.value_index(result).unwrap())
   if result_index is Some(index) &&
-    analysis.environment_aliases[index] is Some(alias_value) {
+    analysis.value_aliases[index] is Some(alias_value) {
     values[index] = Some(map_value(function, values, alias_value))
     return
   }
@@ -1780,10 +1451,10 @@ fn lower_instruction(
     (_, _, _, Some(selected), _, _) =>
       [map_value(function, values, selected.input)]
     (_, _, _, _, Some(selected), _) => {
-      let selected_operands = [
-        map_value(function, values, selected.base),
-        map_value(function, values, selected.index),
-      ]
+      let selected_operands = [map_value(function, values, selected.base)]
+      if selected.index is Some(index) {
+        selected_operands.push(map_value(function, values, index))
+      }
       if operation is Store(_) {
         selected_operands.push(
           map_value(function, values, semantic_operands[1]),
@@ -1876,7 +1547,24 @@ fn lower_instruction(
     return
   }
   if memory_address is Some(selected) {
-    if selected.offset != 0UL {
+    let (selected_operation, selected_operands) = if selected.index is None {
+      (
+        match operation {
+          Load(spec) =>
+            ScalarLoad(
+              spec.width,
+              spec.extension,
+              spec.result_type,
+              selected.offset,
+            )
+          Store(spec) =>
+            ScalarStore(spec.width, spec.value_type, selected.offset)
+          _ =>
+            abort("memory-address selection requires scalar memory operation")
+        },
+        operands,
+      )
+    } else if selected.offset != 0UL {
       let address = append_body(
           builder,
           block,
@@ -1885,55 +1573,49 @@ fn lower_instruction(
           [@vcode.Output::any(Ptr64)],
           @vcode.InstructionMetadata::empty(),
         )[0]
-      let selected_operands = [address]
+      let adjusted = [address]
       if operation is Store(_) {
-        selected_operands.push(operands[2])
+        adjusted.push(operands[2])
       }
-      let selected_operation = match operation {
-        Load(spec) =>
-          ScalarLoad(
-            spec.width,
-            spec.extension,
-            spec.result_type,
-            selected.offset,
-          )
-        Store(spec) => ScalarStore(spec.width, spec.value_type, selected.offset)
-        _ => abort("register-offset selection requires scalar memory operation")
-      }
-      let results = append_body(
-        builder,
-        block,
-        selected_operation,
-        selected_operands.map(@vcode.Input::any),
-        result_types.map(@vcode.Output::any),
-        source_metadata(
-          function.instruction_metadata(instruction).unwrap(),
-          roots,
-          operation.semantics(),
-        ),
+      (
+        match operation {
+          Load(spec) =>
+            ScalarLoad(
+              spec.width,
+              spec.extension,
+              spec.result_type,
+              selected.offset,
+            )
+          Store(spec) =>
+            ScalarStore(spec.width, spec.value_type, selected.offset)
+          _ =>
+            abort("register-offset selection requires scalar memory operation")
+        },
+        adjusted,
       )
-      for index, result in semantic_results {
-        values[function.value_index(result).unwrap()] = Some(results[index])
-      }
-      return
-    }
-    let selected_operation = match operation {
-      Load(spec) =>
-        ScalarLoadUxtw(
-          spec.width,
-          spec.extension,
-          spec.result_type,
-          selected.shift,
-        )
-      Store(spec) =>
-        ScalarStoreUxtw(spec.width, spec.value_type, selected.shift)
-      _ => abort("register-offset selection requires scalar memory operation")
+    } else {
+      (
+        match operation {
+          Load(spec) =>
+            ScalarLoadUxtw(
+              spec.width,
+              spec.extension,
+              spec.result_type,
+              selected.shift,
+            )
+          Store(spec) =>
+            ScalarStoreUxtw(spec.width, spec.value_type, selected.shift)
+          _ =>
+            abort("register-offset selection requires scalar memory operation")
+        },
+        operands,
+      )
     }
     let results = append_body(
       builder,
       block,
       selected_operation,
-      operands.map(@vcode.Input::any),
+      selected_operands.map(@vcode.Input::any),
       result_types.map(@vcode.Output::any),
       source_metadata(
         function.instruction_metadata(instruction).unwrap(),

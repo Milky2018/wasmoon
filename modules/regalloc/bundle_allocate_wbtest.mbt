@@ -63,6 +63,7 @@ priv struct GapSplitSnapshot {
   owners : Array[Int]
   spill_sets : Array[Int]
   use_free : Array[Bool]
+  weights : Array[Int]
 } derive(Debug)
 
 ///|
@@ -146,6 +147,7 @@ test "range split isolates the use-free gap and preserves spillset lineage" {
       owners,
       spill_sets,
       use_free: segments.map(segment => segment_carries_no_use(segment, ranges)),
+      weights: segments.map(segment => segment.weight),
     },
     content=(
       #|{
@@ -160,6 +162,7 @@ test "range split isolates the use-free gap and preserves spillset lineage" {
       #|  owners: [4, 4, 4],
       #|  spill_sets: [0, 0, 0],
       #|  use_free: [false, true, false],
+      #|  weights: [3000, 1, 2000],
       #|}
     ),
   )
@@ -204,7 +207,7 @@ test "spill bundle is normalized before conflict probes" {
   bundles[0].state = BundleReg(r0)
   let owners = [0, -1, -1]
   let spill_sets : Array[SpillSet] = [
-    { weight: 1, splits: 0, hint: None, spill_bundle: None },
+    { hint: None, spill_bundle: None, splits: 0 },
   ]
   add_to_spill_bundle(0, 1, bundles, owners, spill_sets, segments, [0, 1])
   add_to_spill_bundle(0, 2, bundles, owners, spill_sets, segments, [0, 1])
@@ -216,7 +219,6 @@ test "spill bundle is normalized before conflict probes" {
     0,
     r0,
     bundles,
-    spill_sets,
     segments,
     owners,
     occupied,
@@ -225,15 +227,22 @@ test "spill bundle is normalized before conflict probes" {
     Array::make(bundles.length(), 0),
     1,
     [],
+    [],
+    conflict_policy=RejectAnyConflict,
   )
-  debug_inspect((bundles[1].segments, probe.conflicts), content="([2, 1], [0])")
+  debug_inspect(
+    (bundles[1].segments, probe.cutoff_exceeded, probe.conflicts),
+    content="([2, 1], true, [0])",
+  )
 }
 
 ///|
-test "split cap moves the remaining bundle to stable spill handling" {
+test "spillset defers to second chance after two normal splits" {
   let ranges = LiveRangeSet::LiveRangeSet([0])
-  let range = bundle_test_range(0, Int, 0, 2, [])
-  range.add_use(UsePosition(ProgramPoint(0, 0), LiveUse, AnyReg))
+  let range = bundle_test_range(0, Int, 0, 30, [])
+  for instruction in [0, 10, 20, 30] {
+    range.add_use(UsePosition(ProgramPoint(0, instruction), LiveUse, AnyReg))
+  }
   ranges.add_range(range)
   let (segments, segments_by_value) = build_allocation_segments(ranges)
   let plan : ProductionBundlePlan = {
@@ -247,36 +256,67 @@ test "split cap moves the remaining bundle to stable spill handling" {
     segments,
     [0],
   )
-  spill_sets[0].splits = MAX_SPLITS_PER_SPILL_SET
   let queue = BundleQueue::new(bundles)
   let occupied = RegisterAllocationIndex::new(1, segments, [0])
-  let split = split_bundle_at_conflict(
-    bundles[0],
-    Some(ProgramPoint(0, 1)),
-    None,
-    bundles,
-    owners,
-    queue,
-    segments,
-    segments_by_value,
-    segment_spill_sets,
-    spill_sets,
-    occupied,
-    ranges,
-    [0],
-    [],
-  )
+  let split_points = [5, 15, 25]
+  let mut current_bundle = 0
+  for index, instruction in split_points {
+    inspect(
+      split_bundle_at_conflict(
+        bundles[current_bundle],
+        Some(ProgramPoint(0, instruction)),
+        None,
+        bundles,
+        owners,
+        queue,
+        segments,
+        segments_by_value,
+        segment_spill_sets,
+        spill_sets,
+        occupied,
+        ranges,
+        [0],
+        [],
+      ),
+      content="true",
+    )
+    if index + 1 < split_points.length() {
+      let next_point = ProgramPoint(0, split_points[index + 1])
+      let mut next_bundle = -1
+      for candidate in bundles {
+        if candidate.state is BundlePending {
+          for segment_id in candidate.segments {
+            if segments[segment_id].range.contains(next_point, [0]) {
+              next_bundle = candidate.id
+            }
+          }
+        }
+      }
+      inspect(next_bundle >= 0, content="true")
+      current_bundle = next_bundle
+    }
+  }
+  let spill_bundle = bundles[spill_sets[0].spill_bundle.unwrap()]
+  let pending = bundles.filter(bundle => bundle.state is BundlePending)
+  let deferred = bundles.filter(bundle => bundle.state is BundleDeferredSpill)
   debug_inspect(
     (
-      split,
       spill_sets[0].splits,
-      snapshot_bundle_state(bundles[0].state),
-      bundles[1].segments,
-      snapshot_bundle_state(bundles[1].state),
-      owners,
-      segments.length(),
+      pending.length(),
+      pending.all(bundle => bundle.minimal),
+      deferred.length(),
+      bundles[current_bundle].state is BundleDeferredSpill,
     ),
-    content="(true, 2, SnapshotSplit, [0], SnapshotDeferredSpill, [1], 1)",
+    content="(2, 2, true, 2, true)",
+  )
+  debug_inspect(
+    spill_bundle.segments.map(segment_id => segments[segment_id].range),
+    content=(
+      #|[
+      #|  { start: { block: 0, inst: 1 }, end: { block: 0, inst: 9 } },
+      #|  { start: { block: 0, inst: 11 }, end: { block: 0, inst: 19 } },
+      #|]
+    ),
   )
 }
 
@@ -418,7 +458,7 @@ test "production allocation evicts then splits a cheaper long bundle" {
       #|      id: 3,
       #|      segments: [0],
       #|      priority: 3,
-      #|      weight: 2,
+      #|      weight: 1,
       #|      has_fixed_constraint: true,
       #|      state: SnapshotReg({ id: 0, class: Int }),
       #|    },
@@ -490,18 +530,11 @@ test "production eviction accounts for and removes every conflicting bundle" {
   occupied.insert(0, 0)
   occupied.insert(0, 1)
   let occupied_stack : Array[Int] = []
-  let spill_sets : Array[SpillSet] = bundles.map(bundle => {
-    weight: bundle.weight,
-    splits: 0,
-    hint: None,
-    spill_bundle: None,
-  })
   let probe = probe_bundle_register(
     bundles[2],
     0,
     r0,
     bundles,
-    spill_sets,
     segments,
     [0, 1, 2, 2],
     occupied,
@@ -510,13 +543,17 @@ test "production eviction accounts for and removes every conflicting bundle" {
     Array::make(bundles.length(), 0),
     1,
     occupied_stack,
+    [],
+    conflict_policy=Unlimited,
   )
   let probe_snapshot : BundleProbeSnapshot = {
     conflicts: probe.conflicts,
     conflict_cost: probe.conflict_cost,
     first_conflict: probe.first_conflict,
     clobbered: probe.clobbered,
-    can_evict: bundle_can_evict(bundles[2], probe, spill_sets),
+    can_evict: !probe.clobbered &&
+    !probe.conflicts.is_empty() &&
+    probe.conflict_cost < bundles[2].weight,
   }
   debug_inspect(
     probe_snapshot,
@@ -605,7 +642,6 @@ test "production eviction accounts for and removes every conflicting bundle" {
     0,
     r0,
     bundles,
-    spill_sets,
     segments,
     [0, 1, 2, 2],
     cutoff_occupied,
@@ -614,7 +650,8 @@ test "production eviction accounts for and removes every conflicting bundle" {
     Array::make(bundles.length(), 0),
     1,
     occupied_stack,
-    max_conflict_cost=Some(3),
+    [],
+    conflict_policy=CostLimit(4),
   )
   debug_inspect(
     (
@@ -623,7 +660,7 @@ test "production eviction accounts for and removes every conflicting bundle" {
       cutoff_probe.conflict_cost,
       cutoff_probe.first_conflict,
     ),
-    content="(true, [0], 4, Some({ block: 0, inst: 1 }))",
+    content="(true, [0, 1], 5, Some({ block: 0, inst: 1 }))",
   )
 }
 
@@ -865,43 +902,19 @@ test "clobber index follows custom block order and fixed operands" {
     clobbers: [[r0], [], [r0]],
   }
   let index = build_register_clobber_index(function, [2, 0, 1])
-  let query = index.query(
-    r0,
-    ProgramRange(ProgramPoint(1, -1), ProgramPoint(0, 2)),
-  )
   debug_inspect(
     (
       index.points_by_reg.get(physical_reg_key(r0)),
       index.points_by_reg.get(physical_reg_key(r1)),
-      query,
-      index.query(r2, ProgramRange(ProgramPoint(1, -1), ProgramPoint(0, 2))),
+      index.points_by_reg.get(physical_reg_key(r2)),
     ),
     content=(
       #|(
       #|  Some([{ block: 2, inst: 1 }, { block: 0, inst: 1 }]),
       #|  Some([{ block: 1, inst: 0 }]),
-      #|  (Some({ block: 2, inst: 1 }), 3),
-      #|  (None, 0),
+      #|  None,
       #|)
     ),
-  )
-}
-
-///|
-test "clobber query excludes range boundaries and scales logarithmically" {
-  let r0 : PhysicalReg = { id: 0, class: Int }
-  let points = Array::makei(4096, index => ProgramPoint(0, index * 2 + 1))
-  let index : RegisterClobberIndex = {
-    points_by_reg: Map([(physical_reg_key(r0), points)]),
-    block_order: [0],
-  }
-  debug_inspect(
-    (
-      index.query(r0, ProgramRange(ProgramPoint(0, 1), ProgramPoint(0, 3))),
-      index.query(r0, ProgramRange(ProgramPoint(0, -1), ProgramPoint(0, 1))),
-      index.query(r0, ProgramRange(ProgramPoint(0, -1), ProgramPoint(0, 8193))),
-    ),
-    content="((None, 14), (None, 14), (Some({ block: 0, inst: 1 }), 14))",
   )
 }
 

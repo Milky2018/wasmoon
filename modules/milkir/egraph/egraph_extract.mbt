@@ -158,30 +158,6 @@ fn extract_node_tiebreak_less(lhs : ENode, rhs : ENode) -> Bool {
 }
 
 ///|
-fn extract_cost_apply_bonus(cost : ExtractCost, bonus : Int) -> ExtractCost {
-  if cost.infinite || bonus == 0 {
-    return cost
-  }
-  let max_finite = extract_cost_max_finite()
-  if bonus > 0 {
-    let op_cost = if cost.op_cost > max_finite - bonus {
-      max_finite
-    } else {
-      cost.op_cost + bonus
-    }
-    extract_cost_finite(op_cost, cost.depth)
-  } else {
-    let bonus_abs = 0 - bonus
-    let op_cost = if cost.op_cost <= bonus_abs {
-      0
-    } else {
-      cost.op_cost - bonus_abs
-    }
-    extract_cost_finite(op_cost, cost.depth)
-  }
-}
-
-///|
 /// Extract the best (lowest cost) expression from an e-class
 /// Returns the total cost and the best e-node
 ///
@@ -222,55 +198,62 @@ pub fn EGraph::best_nodes(self : EGraph) -> Map[Int, ENode] {
 }
 
 ///|
-/// Relax per-class best costs to a fixpoint. A node becomes priceable once
-/// all of its children have finite entries; each update either strictly
-/// lowers a class's (op_cost, depth) or moves to a tie-break-smaller node
-/// at equal cost, so the loop terminates and the result is independent of
-/// visit order.
+/// Relax per-class best costs with a dependency worklist. A class is revisited
+/// only when one of its children's costs improves.
 fn EGraph::compute_extraction_table(
   self : EGraph,
 ) -> Map[Int, (ExtractCost, ENode)] {
   let table : Map[Int, (ExtractCost, ENode)] = Map([])
-  let mut changed = true
-  while changed {
-    changed = false
-    for class_id, eclass in self.classes {
-      for node in eclass.nodes {
-        let mut total_cost = extract_cost_finite(node_cost(node), 0)
-        let mut priceable = true
-        for child in node.children {
-          let child_root = self.find(child).0
-          match table.get(child_root) {
-            Some((child_cost, _)) =>
-              total_cost = extract_cost_add(total_cost, child_cost)
-            None => {
-              priceable = false
-              break
-            }
-          }
-        }
-        if !priceable {
-          continue
-        }
-        total_cost = extract_cost_apply_bonus(
-          total_cost,
-          self.remat_cost_bonus(EClassId(class_id)),
-        )
-        total_cost = extract_cost_increment_depth(total_cost)
-        match table.get(class_id) {
-          Some((best_cost, best_node)) =>
-            if extract_cost_is_better(total_cost, best_cost) ||
-              (
-                extract_cost_equal(total_cost, best_cost) &&
-                extract_node_tiebreak_less(node, best_node)
-              ) {
-              table.set(class_id, (total_cost, node))
-              changed = true
-            }
+  let pending : Array[Int] = []
+  let in_pending = Array::make(self.uf.parent.length(), false)
+  for class_id, _ in self.classes {
+    pending.push(class_id)
+    in_pending[class_id] = true
+  }
+  while pending.pop() is Some(class_id) {
+    in_pending[class_id] = false
+    guard self.classes.get(class_id) is Some(eclass) else { continue }
+    let mut improved = false
+    for node in eclass.nodes {
+      let mut total_cost = extract_cost_finite(node_cost(node), 0)
+      let mut priceable = true
+      for child in node.children {
+        let child_root = self.find(child).0
+        match table.get(child_root) {
+          Some((child_cost, _)) =>
+            total_cost = extract_cost_add(total_cost, child_cost)
           None => {
-            table.set(class_id, (total_cost, node))
-            changed = true
+            priceable = false
+            break
           }
+        }
+      }
+      if !priceable {
+        continue
+      }
+      total_cost = extract_cost_increment_depth(total_cost)
+      match table.get(class_id) {
+        Some((best_cost, best_node)) =>
+          if extract_cost_is_better(total_cost, best_cost) ||
+            (
+              extract_cost_equal(total_cost, best_cost) &&
+              extract_node_tiebreak_less(node, best_node)
+            ) {
+            table.set(class_id, (total_cost, node))
+            improved = true
+          }
+        None => {
+          table.set(class_id, (total_cost, node))
+          improved = true
+        }
+      }
+    }
+    if improved && self.parents.get(class_id) is Some(owners) {
+      for owner in owners {
+        let root = self.uf.find(owner)
+        if root >= 0 && root < in_pending.length() && !in_pending[root] {
+          in_pending[root] = true
+          pending.push(root)
         }
       }
     }

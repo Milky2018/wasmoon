@@ -1,5 +1,5 @@
 // Per-class facts the e-graph caches alongside the classes themselves:
-// integer width, the bounds derived from it, and rematerialization marks.
+// integer width and the bounds derived from it.
 //
 // These ride along with merging rather than driving it -- a merge has to
 // reconcile them, which is why `note_type_conflict` lives here and is
@@ -103,40 +103,5 @@ pub fn ty_smax(bits : Int) -> Int64 {
     32 => I32_SMAX_I64
     64 => 9223372036854775807L
     _ => 9223372036854775807L
-  }
-}
-
-// ============================================================================
-// Rematerialization support
-// ============================================================================
-
-///|
-/// Mark an equivalence class as rematerializable
-/// Rematerializable expressions are cheap to recompute at each use site
-pub fn EGraph::mark_rematerializable(self : EGraph, id : EClassId) -> Bool {
-  let canonical = self.find(id).0
-  if self.remat_set.contains(canonical) {
-    false
-  } else {
-    self.remat_set.add(canonical)
-    true
-  }
-}
-
-///|
-/// Check if an equivalence class is marked as rematerializable
-pub fn EGraph::is_marked_rematerializable(self : EGraph, id : EClassId) -> Bool {
-  let canonical = self.find(id).0
-  self.remat_set.contains(canonical)
-}
-
-///|
-/// Get the rematerialization bonus for cost calculation
-/// Returns a negative value (cost reduction) if the class is rematerializable
-pub fn EGraph::remat_cost_bonus(self : EGraph, id : EClassId) -> Int {
-  if self.is_marked_rematerializable(id) {
-    -1 // Small bonus for rematerializable expressions
-  } else {
-    0
   }
 }

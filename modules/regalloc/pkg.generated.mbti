@@ -30,7 +30,7 @@ pub(all) struct AllocationEdit {
 
 pub struct AllocationPlan {
   // private fields
-} derive(@debug.Debug)
+}
 pub fn AllocationPlan::edits(Self) -> Array[AllocationEdit]
 pub fn AllocationPlan::operand_assignments(Self) -> Array[OperandAssignment]
 pub fn AllocationPlan::operand_location(Self, Int, Int) -> Location?
@@ -38,12 +38,7 @@ pub fn AllocationPlan::spill_count(Self) -> Int
 pub fn AllocationPlan::spill_slot(Self, Int) -> SpillSlotSpec?
 pub fn AllocationPlan::value_location(Self, Int) -> Location?
 pub impl Show for AllocationPlan
-
-pub(all) enum AllocatorStrategy {
-  Backtracking
-  Fast
-} derive(Eq, @debug.Debug)
-pub impl Show for AllocatorStrategy
+pub impl @debug.Debug for AllocationPlan
 
 type DenseCfgEdges derive(@debug.Debug)
 
@@ -86,8 +81,6 @@ pub fn LiveRangeSet::block_order_count(Self) -> Int
 pub fn LiveRangeSet::get(Self, Int) -> LiveRange
 pub fn LiveRangeSet::get_by_vreg(Self, VirtualReg) -> LiveRange?
 pub fn LiveRangeSet::length(Self) -> Int
-
-type LiveSetUseDef derive(@debug.Debug)
 
 pub(all) enum Location {
   Reg(PhysicalReg)
@@ -170,13 +163,11 @@ pub(all) enum RegClass {
 } derive(Eq, @debug.Debug)
 
 pub struct RegallocConfig {
-  strategy : AllocatorStrategy
   verify : Bool
   observer : ((RegallocPhase?) -> Unit)?
 }
-pub fn RegallocConfig::RegallocConfig(strategy? : AllocatorStrategy, verify? : Bool, observer? : ((RegallocPhase?) -> Unit)?) -> Self
+pub fn RegallocConfig::RegallocConfig(verify? : Bool, observer? : ((RegallocPhase?) -> Unit)?) -> Self
 pub fn RegallocConfig::enter_phase(Self, RegallocPhase?) -> Unit
-pub fn RegallocConfig::strategy(Self) -> AllocatorStrategy
 pub fn RegallocConfig::verify(Self) -> Bool
 
 pub(all) enum RegallocPhase {
@@ -184,7 +175,6 @@ pub(all) enum RegallocPhase {
   SegmentConstruction
   BundleFormation
   BundleAllocation
-  FastAllocation
   HomeAssignment
   OperandAssignment
   EdgeTransfers

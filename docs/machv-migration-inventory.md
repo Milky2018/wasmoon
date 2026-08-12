@@ -36,8 +36,8 @@ remain independent of Wasmoon.
 
 - AArch64 and x64 production JIT compilation both pass through semantic MachV
   and their respective Target VCode pipelines.
-- Both production targets explicitly use the verified backtracking allocator;
-  `Fast` is not a runtime fallback.
+- Both production targets use the same verified bundle-aware allocator; there
+  is no runtime fallback allocator.
 - Diagnostics and `explore --stage machv vcode allocated-vcode code-object mc`
   use the same semantic, target, allocation, object, and emission path as
   production compilation.

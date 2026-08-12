@@ -10,26 +10,28 @@ pub fn ProgramPoint::ProgramPoint(block : Int, inst : Int) -> ProgramPoint {
 }
 
 ///|
-fn ProgramPoint::order(self : ProgramPoint, block_order : Array[Int]) -> Int {
-  let block_ord = if self.block >= 0 && self.block < block_order.length() {
-    block_order[self.block]
-  } else {
-    self.block
-  }
-  block_ord * 1_000_000 + self.inst
-}
-
-///|
 pub fn ProgramPoint::compare_with_order(
   self : ProgramPoint,
   other : ProgramPoint,
   block_order : Array[Int],
 ) -> Int {
-  let lhs = self.order(block_order)
-  let rhs = other.order(block_order)
-  if lhs < rhs {
+  let lhs_block = if self.block >= 0 && self.block < block_order.length() {
+    block_order[self.block]
+  } else {
+    self.block
+  }
+  let rhs_block = if other.block >= 0 && other.block < block_order.length() {
+    block_order[other.block]
+  } else {
+    other.block
+  }
+  if lhs_block < rhs_block {
     -1
-  } else if lhs > rhs {
+  } else if lhs_block > rhs_block {
+    1
+  } else if self.inst < other.inst {
+    -1
+  } else if self.inst > other.inst {
     1
   } else {
     0

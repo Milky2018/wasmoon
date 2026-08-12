@@ -18,28 +18,15 @@ A physical-register preference only orders otherwise legal allocation choices;
 it is ignored rather than causing an extra spill, split, move, or failure when
 the preferred register cannot hold the live range.
 
-## Allocation strategies
+## Allocation
 
-`Backtracking` is the default production strategy. It builds allocation bundles
-from compatible SSA edge affinities, allocates each bundle atomically, splits
+The allocator builds allocation bundles from compatible SSA edge affinities,
+allocates each bundle atomically, splits
 bundles when pressure requires it, evicts cheaper residents, and reuses
 compatible non-overlapping spill slots. Fixed-register, soft-register, and
-cross-fragment hints all feed this one production implementation.
-
-`Fast` is an independent low-compile-latency strategy. It scans block-local
-live-range fragments in reverse layout order with dense register state and
-bounded work per physical register. It does not construct allocation bundles,
-spillsets, range indexes, or a backtracking queue, so it may spill earlier.
-Callers should select it only when compile latency matters more than generated
-code quality.
-
-```moonbit check
-///|
-test "select the low-latency allocator explicitly" {
-  let config = RegallocConfig::RegallocConfig(strategy=Fast)
-  inspect(config.strategy(), content="Fast")
-}
-```
+cross-fragment hints all feed this implementation. There is no alternate
+allocation strategy; compile-time work belongs in the same verified allocator
+rather than a lower-quality fallback.
 
 ## Integrating a machine IR
 
@@ -71,21 +58,13 @@ this path before target emission.
 ## Production integration
 
 Wasmoon's AArch64 and x64 JIT pipelines lower semantic MachV to target-owned
-VCode, expose that VCode directly through `FunctionView`, and explicitly select
-`Backtracking`. The adapter materializes the returned plan into Target VCode's
-separate `Allocation` side tables. The aggregate target pipeline verifies
+VCode and expose that VCode directly through `FunctionView`. The adapter
+materializes the returned plan into Target VCode's separate `Allocation` side
+tables. The aggregate target pipeline verifies
 selected VCode before allocation and independently verifies the materialized
 VCode allocation afterward, without repeating the generic plan verifier's
-whole-function analysis. Production compilation does not fall back to
-`Fast`.
+whole-function analysis.
 
 The production integration is complete. CI validates allocation correctness on
 both native targets; retired allocators and backends are not rebuilt as
 performance or code-size acceptance baselines.
-
-## Expert packages
-
-- `Milky2018/regalloc/planning` provides standalone CFG, spill-slot, edit, and
-  frame-planning utilities. Allocation queues, bundle merging, eviction, and
-  splitting remain private to the root Backtracking allocator. The independent
-  `Fast` path shares only live-range, operand-edit, and verification contracts.

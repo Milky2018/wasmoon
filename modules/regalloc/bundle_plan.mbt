@@ -1,8 +1,8 @@
 ///|
 priv struct BundlePlanSpan {
-  start_ord : Int
-  start_before_ord : Int
-  end_ord : Int
+  start : ProgramPoint
+  start_before : ProgramPoint
+  end : ProgramPoint
 }
 
 ///|
@@ -12,6 +12,11 @@ priv struct BundleRangeFact {
   fixed_reg : PhysicalReg?
   fixed_conflict : Bool
   has_fixed_def : Bool
+}
+
+///|
+priv struct BundleSpanRuns {
+  levels : Array[Array[BundlePlanSpan]?]
 }
 
 ///|
@@ -112,13 +117,29 @@ fn bundle_span(
   range : ProgramRange,
   block_order : Array[Int],
 ) -> BundlePlanSpan {
-  let start_ord = range.start.order(block_order)
-  let start_before_ord = if range.start.inst >= 0 && range.start.inst % 2 == 1 {
-    ProgramPoint(range.start.block, range.start.inst - 1).order(block_order)
+  let start_block = block_order
+    .get(range.start.block)
+    .unwrap_or(range.start.block)
+  let end_block = block_order.get(range.end.block).unwrap_or(range.end.block)
+  let start_before_inst = if range.start.inst >= 0 && range.start.inst % 2 == 1 {
+    range.start.inst - 1
   } else {
-    start_ord
+    range.start.inst
   }
-  { start_ord, start_before_ord, end_ord: range.end.order(block_order) }
+  {
+    start: ProgramPoint(start_block, range.start.inst),
+    start_before: ProgramPoint(start_block, start_before_inst),
+    end: ProgramPoint(end_block, range.end.inst),
+  }
+}
+
+///|
+fn compare_bundle_span_point(lhs : ProgramPoint, rhs : ProgramPoint) -> Int {
+  if lhs.block != rhs.block {
+    lhs.block - rhs.block
+  } else {
+    lhs.inst - rhs.inst
+  }
 }
 
 ///|
@@ -144,17 +165,17 @@ fn build_bundle_range_facts(ranges : LiveRangeSet) -> Array[BundleRangeFact] {
 }
 
 ///|
-fn bundle_spans_for_root(
+fn bundle_span_runs_for_root(
   facts : Array[BundleRangeFact],
-  span_cache : Array[Array[BundlePlanSpan]?],
+  span_cache : Array[BundleSpanRuns?],
   root : Int,
-) -> Array[BundlePlanSpan] {
+) -> BundleSpanRuns {
   match span_cache[root] {
-    Some(spans) => spans
+    Some(runs) => runs
     None => {
-      let spans = facts[root].spans.copy()
-      span_cache[root] = Some(spans)
-      spans
+      let runs : BundleSpanRuns = { levels: [Some(facts[root].spans)] }
+      span_cache[root] = Some(runs)
+      runs
     }
   }
 }
@@ -172,21 +193,43 @@ fn bundle_spans_conflict(
     let left = lhs[lhs_index]
     let right = rhs[rhs_index]
     let left_start = if lhs_has_fixed_def {
-      left.start_before_ord
+      left.start_before
     } else {
-      left.start_ord
+      left.start
     }
     let right_start = if rhs_has_fixed_def {
-      right.start_before_ord
+      right.start_before
     } else {
-      right.start_ord
+      right.start
     }
-    if left_start >= right.end_ord {
+    if compare_bundle_span_point(left_start, right.end) >= 0 {
       rhs_index += 1
-    } else if right_start >= left.end_ord {
+    } else if compare_bundle_span_point(right_start, left.end) >= 0 {
       lhs_index += 1
     } else {
       return true
+    }
+  }
+  false
+}
+
+///|
+fn BundleSpanRuns::conflicts(
+  self : BundleSpanRuns,
+  self_has_fixed_def : Bool,
+  other : BundleSpanRuns,
+  other_has_fixed_def : Bool,
+) -> Bool {
+  for left in self.levels {
+    if left is Some(left) {
+      for right in other.levels {
+        if right is Some(right) &&
+          bundle_spans_conflict(
+            left, self_has_fixed_def, right, other_has_fixed_def,
+          ) {
+          return true
+        }
+      }
     }
   }
   false
@@ -201,7 +244,8 @@ fn merge_bundle_spans(
   let mut lhs_index = 0
   let mut rhs_index = 0
   while lhs_index < lhs.length() && rhs_index < rhs.length() {
-    if lhs[lhs_index].start_ord <= rhs[rhs_index].start_ord {
+    if compare_bundle_span_point(lhs[lhs_index].start, rhs[rhs_index].start) <=
+      0 {
       merged.push(lhs[lhs_index])
       lhs_index += 1
     } else {
@@ -221,6 +265,44 @@ fn merge_bundle_spans(
 }
 
 ///|
+fn BundleSpanRuns::merge_run(
+  self : BundleSpanRuns,
+  start_level : Int,
+  run : Array[BundlePlanSpan],
+) -> Unit {
+  let mut level = start_level
+  let mut carry = run
+  while true {
+    while self.levels.length() <= level {
+      self.levels.push(None)
+    }
+    match self.levels[level] {
+      None => {
+        self.levels[level] = Some(carry)
+        return
+      }
+      Some(existing) => {
+        self.levels[level] = None
+        carry = merge_bundle_spans(existing, carry)
+        level = level + 1
+      }
+    }
+  }
+}
+
+///|
+fn BundleSpanRuns::merge_from(
+  self : BundleSpanRuns,
+  other : BundleSpanRuns,
+) -> Unit {
+  for level, run in other.levels {
+    if run is Some(run) {
+      self.merge_run(level, run)
+    }
+  }
+}
+
+///|
 fn try_merge_bundle_edge(
   union_find : @unionfind.UnionFind,
   facts : Array[BundleRangeFact],
@@ -228,7 +310,7 @@ fn try_merge_bundle_edge(
   fixed_reg_cache : Array[PhysicalReg?],
   fixed_conflict_cache : Array[Bool],
   fixed_def_cache : Array[Bool],
-  span_cache : Array[Array[BundlePlanSpan]?],
+  span_cache : Array[BundleSpanRuns?],
 ) -> Unit {
   let (target, source) = edge
   if target < 0 ||
@@ -249,10 +331,9 @@ fn try_merge_bundle_edge(
     (Some(lhs), Some(rhs)) => if lhs != rhs { return }
     _ => ()
   }
-  let target_spans = bundle_spans_for_root(facts, span_cache, target_root)
-  let source_spans = bundle_spans_for_root(facts, span_cache, source_root)
-  if bundle_spans_conflict(
-      target_spans,
+  let target_spans = bundle_span_runs_for_root(facts, span_cache, target_root)
+  let source_spans = bundle_span_runs_for_root(facts, span_cache, source_root)
+  if target_spans.conflicts(
       fixed_def_cache[target_root],
       source_spans,
       fixed_def_cache[source_root],
@@ -271,7 +352,7 @@ fn try_merge_bundle_edge(
     _ => None
   }
   fixed_conflict_cache[target_root] = false
-  span_cache[target_root] = Some(merge_bundle_spans(target_spans, source_spans))
+  target_spans.merge_from(source_spans)
   span_cache[source_root] = None
 }
 
@@ -286,10 +367,7 @@ fn build_production_bundle_plan_from_range_edges(
   let fixed_reg_cache : Array[PhysicalReg?] = []
   let fixed_conflict_cache : Array[Bool] = []
   let fixed_def_cache : Array[Bool] = []
-  let span_cache : Array[Array[BundlePlanSpan]?] = Array::make(
-    facts.length(),
-    None,
-  )
+  let span_cache : Array[BundleSpanRuns?] = Array::make(facts.length(), None)
   for fact in facts {
     fixed_reg_cache.push(fact.fixed_reg)
     fixed_conflict_cache.push(fact.fixed_conflict)

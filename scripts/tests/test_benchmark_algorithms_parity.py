@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import importlib.util
 import json
-import math
 import sys
 import tempfile
 import unittest
@@ -29,33 +28,28 @@ PARITY = load_module(
 
 
 class AlgorithmsParityTests(unittest.TestCase):
-    def test_pair_order_alternates_deterministically(self) -> None:
+    def test_workload_pair_order_alternates_deterministically(self) -> None:
         self.assertEqual(PARITY.pair_engine_order(0), ["wasmoon", "wasmtime"])
         self.assertEqual(PARITY.pair_engine_order(1), ["wasmtime", "wasmoon"])
-        self.assertEqual(PARITY.pair_engine_order(2), ["wasmoon", "wasmtime"])
-        self.assertEqual(PARITY.pair_engine_order(3), ["wasmtime", "wasmoon"])
 
-    def test_paired_ratio_summary_keeps_median_and_geometric_mean(self) -> None:
-        summary = PARITY.paired_ratio_summary([1.0, 2.0, 8.0])
-        self.assertEqual(summary["count"], 3)
-        self.assertEqual(summary["median"], 2.0)
-        self.assertTrue(
-            math.isclose(summary["geometric_mean"], 2.5198420997897464)
-        )
-
-    def test_cache_is_rooted_in_output_area_and_cleared_per_workload(self) -> None:
+    def test_both_caches_are_output_local_and_cleared_per_workload(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory) / "summary-output" / "jit-cache"
             workload = Path("examples/algorithms/aead strange.wasm")
-            cache = PARITY.prepare_isolated_cache(root, workload)
-            stale = cache / "stale.cwasm"
-            stale.write_bytes(b"old")
-            recreated = PARITY.prepare_isolated_cache(root, workload)
-            self.assertEqual(recreated, root / "aead_strange")
-            self.assertFalse(stale.exists())
-            self.assertEqual(list(recreated.iterdir()), [])
+            caches = PARITY.prepare_isolated_caches(root, workload)
+            (caches.wasmoon / "stale.cwasm").write_bytes(b"old")
+            (caches.wasmtime / "stale.bin").write_bytes(b"old")
 
-    def test_wasmoon_run_records_fresh_cache_creation_without_wasmtime(self) -> None:
+            recreated = PARITY.prepare_isolated_caches(root, workload)
+
+            self.assertEqual(recreated.root, root / "aead_strange")
+            self.assertEqual(list(recreated.wasmoon.iterdir()), [])
+            self.assertEqual(list(recreated.wasmtime.iterdir()), [])
+            config = recreated.wasmtime_config.read_text(encoding="utf-8")
+            self.assertIn("[cache]", config)
+            self.assertIn(str(recreated.wasmtime.resolve()), config)
+
+    def test_cache_run_records_fresh_artifact(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             cache = Path(directory)
 
@@ -75,40 +69,51 @@ class AlgorithmsParityTests(unittest.TestCase):
                 )
 
             with mock.patch.object(PARITY, "run_one", side_effect=create_artifact):
-                result = PARITY.run_wasmoon(
+                result = PARITY.record_cache_run(
                     ["wasmoon", "run", "case.wasm"],
                     5,
                     cache,
+                    extra_env={"WASMOON_JIT_CACHE_DIR": str(cache)},
                 )
+
             self.assertTrue(result.freshly_compiled)
             self.assertEqual(result.cache_files_before, [])
             self.assertEqual(result.cache_files_after, ["current.cwasm"])
 
-    def test_main_writes_raw_pairs_and_cache_provenance_without_wasmtime(
-        self,
-    ) -> None:
+    def test_main_runs_each_engine_once_with_separate_cold_caches(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             workloads = root / "workloads"
             workloads.mkdir()
-            (workloads / "case.wasm").write_bytes(b"wasm")
+            (workloads / "a.wasm").write_bytes(b"wasm")
+            (workloads / "b.wasm").write_bytes(b"wasm")
             summary = root / "out" / "summary.json"
+            calls = []
 
             def fake_run(command, timeout_sec, *, extra_env=None):
                 del timeout_sec
-                is_wasmoon = command[0] == "wasmoon"
-                if is_wasmoon:
+                engine = "wasmoon" if command[0] == "wasmoon" else "wasmtime"
+                workload = Path(command[-1]).name
+                calls.append((workload, engine))
+                if engine == "wasmoon":
                     cache = Path(extra_env["WASMOON_JIT_CACHE_DIR"])
-                    artifact = cache / "current.cwasm"
-                    if not artifact.exists():
-                        artifact.write_bytes(b"artifact")
+                    (cache / "current.cwasm").write_bytes(b"artifact")
+                else:
+                    self.assertIn("cache=y", command)
+                    config_arg = next(
+                        arg for arg in command if arg.startswith("cache-config=")
+                    )
+                    config_path = Path(config_arg.split("=", 1)[1])
+                    directory_line = config_path.read_text(encoding="utf-8").splitlines()[1]
+                    cache = Path(json.loads(directory_line.split("=", 1)[1].strip()))
+                    (cache / "compiled-module").write_bytes(b"artifact")
                 return PARITY.RunResult(
                     command=command,
                     exit_code=0,
-                    duration_sec=2.0 if is_wasmoon else 1.0,
-                    stdout="2" if is_wasmoon else "1",
+                    duration_sec=2.0 if engine == "wasmoon" else 1.0,
+                    stdout="2" if engine == "wasmoon" else "1",
                     stderr="",
-                    parsed_value=2.0 if is_wasmoon else 1.0,
+                    parsed_value=2.0 if engine == "wasmoon" else 1.0,
                     timeout=False,
                 )
 
@@ -127,41 +132,34 @@ class AlgorithmsParityTests(unittest.TestCase):
                         str(workloads),
                         "--summary-file",
                         str(summary),
-                        "--iterations",
-                        "2",
-                        "--warmup",
-                        "0",
                     ],
                 ),
             ):
                 self.assertEqual(PARITY.main(), 0)
 
-            payload = json.loads(summary.read_text(encoding="utf-8"))
-            row = payload["rows"][0]
             self.assertEqual(
-                [pair["order"] for pair in row["pairs"]],
+                calls,
                 [
-                    ["wasmoon", "wasmtime"],
-                    ["wasmtime", "wasmoon"],
+                    ("a.wasm", "wasmoon"),
+                    ("a.wasm", "wasmtime"),
+                    ("b.wasm", "wasmtime"),
+                    ("b.wasm", "wasmoon"),
                 ],
             )
+            payload = json.loads(summary.read_text(encoding="utf-8"))
+            self.assertEqual(payload["schema_version"], 3)
+            self.assertEqual(payload["config"]["runs_per_engine"], 1)
             self.assertEqual(
-                row["paired_ratios"],
-                {
-                    "value": {
-                        "count": 2,
-                        "median": 2.0,
-                        "geometric_mean": 2.0,
-                    },
-                    "wall": {
-                        "count": 2,
-                        "median": 2.0,
-                        "geometric_mean": 2.0,
-                    },
-                },
+                payload["config"]["cache_policy"],
+                "cold-isolated-per-workload",
             )
-            self.assertEqual(row["cache"]["measured_fresh_compilations"], 1)
-            self.assertEqual(row["cache"]["final_files"], ["current.cwasm"])
+            for row in payload["rows"]:
+                self.assertEqual(row["pair"]["value_ratio"], 2.0)
+                self.assertEqual(row["pair"]["wall_ratio"], 2.0)
+                self.assertTrue(row["pair"]["wasmoon"]["freshly_compiled"])
+                self.assertTrue(row["pair"]["wasmtime"]["freshly_compiled"])
+                self.assertNotIn("pairs", row)
+                self.assertNotIn("paired_ratios", row)
 
 
 if __name__ == "__main__":

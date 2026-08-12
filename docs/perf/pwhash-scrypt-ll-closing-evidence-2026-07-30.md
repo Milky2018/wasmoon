@@ -1,5 +1,10 @@
 # `pwhash_scrypt_ll` Closing Evidence
 
+> Historical methodology: this report measured cached execution after a
+> warmup. New corpus sweeps must clear separate Wasmoon and Wasmtime caches per
+> workload and invoke each engine exactly once, with no warmup or repeated
+> aggregation.
+
 This report closes the performance evidence required by ISS-266. It complements
 the complete 70-workload matrix in
 `docs/perf/algorithms-single-run-2026-07-24.md` with a current cached execution

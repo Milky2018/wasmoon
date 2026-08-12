@@ -1,5 +1,9 @@
 # AArch64 JIT Current-Version Performance Evidence
 
+> Historical methodology: this report used warm-cache repeated measurements.
+> New corpus sweeps must clear separate Wasmoon and Wasmtime caches per workload
+> and invoke each engine exactly once, with no warmup or repeated aggregation.
+
 This report records the result of the ISS-252 optimization sequence. It compares
 the current Wasmoon AArch64 JIT with Wasmtime for diagnostic context. It is not a
 CI threshold and does not restore the retired fixed-legacy comparison gate.

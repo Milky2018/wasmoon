@@ -1,18 +1,4 @@
 ///|
-pub(all) enum AllocatorStrategy {
-  Backtracking
-  Fast
-} derive(Eq, Debug)
-
-///|
-pub impl Show for AllocatorStrategy with fn output(self, logger) {
-  match self {
-    Backtracking => logger.write_string("Backtracking")
-    Fast => logger.write_string("Fast")
-  }
-}
-
-///|
 /// The allocator's internal phases, in the order they run.
 ///
 /// Reported through `RegallocConfig::observer` so a caller that owns a clock
@@ -23,7 +9,6 @@ pub(all) enum RegallocPhase {
   SegmentConstruction
   BundleFormation
   BundleAllocation
-  FastAllocation
   HomeAssignment
   OperandAssignment
   EdgeTransfers
@@ -39,7 +24,6 @@ pub impl Show for RegallocPhase with fn output(self, logger) {
       SegmentConstruction => "segment_construction"
       BundleFormation => "bundle_formation"
       BundleAllocation => "bundle_allocation"
-      FastAllocation => "fast_allocation"
       HomeAssignment => "home_assignment"
       OperandAssignment => "operand_assignment"
       EdgeTransfers => "edge_transfers"
@@ -51,7 +35,6 @@ pub impl Show for RegallocPhase with fn output(self, logger) {
 
 ///|
 pub struct RegallocConfig {
-  strategy : AllocatorStrategy
   verify : Bool
   // Called as each phase begins, and once with None when the last one ends.
   // Absent by default so the allocator pays nothing when nobody is measuring.
@@ -60,16 +43,10 @@ pub struct RegallocConfig {
 
 ///|
 pub fn RegallocConfig::RegallocConfig(
-  strategy? : AllocatorStrategy = Backtracking,
   verify? : Bool = true,
   observer? : ((RegallocPhase?) -> Unit)? = None,
 ) -> RegallocConfig {
-  { strategy, verify, observer }
-}
-
-///|
-pub fn RegallocConfig::strategy(self : RegallocConfig) -> AllocatorStrategy {
-  self.strategy
+  { verify, observer }
 }
 
 ///|

@@ -139,6 +139,45 @@ fn bundle_test_range(
 }
 
 ///|
+test "segment metadata follows custom block order in one use pass" {
+  let r0 : PhysicalReg = { id: 0, class: Int }
+  let r1 : PhysicalReg = { id: 1, class: Int }
+  let ranges = LiveRangeSet::LiveRangeSet([1, 0])
+  let range = LiveRange::LiveRange(0, { id: 0, class: Int })
+  range.add_range(ProgramRange(ProgramPoint(0, 0), ProgramPoint(0, 1)))
+  range.add_range(ProgramRange(ProgramPoint(1, 10), ProgramPoint(1, 11)))
+  range.add_use(
+    UsePosition(ProgramPoint(0, 0), LiveUse, AnyReg).with_preference(Some(r1)),
+  )
+  range.add_use(UsePosition(ProgramPoint(1, 10), LiveDef, FixedReg(r0)))
+  range.add_use(
+    UsePosition(ProgramPoint(0, 1), LiveUse, AnyLocation).with_preference(
+      Some(r1),
+    ),
+  )
+  ranges.add_range(range)
+  let (segments, _) = build_allocation_segments(ranges, loop_depths=[0], allocatable=[
+    r0, r1,
+  ])
+  debug_inspect(
+    segments.map(segment => {
+      (
+        segment.weight,
+        segment.has_fixed_constraint,
+        segment.fixed_hint,
+        segment.preference_hint,
+      )
+    }),
+    content=(
+      #|[
+      #|  (2500, true, Some({ id: 0, class: Int }), None),
+      #|  (1500, false, None, Some({ id: 1, class: Int })),
+      #|]
+    ),
+  )
+}
+
+///|
 test "production bundle plan follows transitive SSA edge affinities" {
   let ranges = LiveRangeSet::LiveRangeSet([0, 1, 2])
   let first = bundle_test_range(0, Int, 0, 2, [])
@@ -187,10 +226,9 @@ test "spill-home groups follow spillset lineage after layout sorting" {
     (0, 1),
   ])
   let spill_sets : Array[SpillSet] = plan.bundle_segments.map(_ => {
-    weight: 1,
-    splits: 0,
     hint: None,
     spill_bundle: None,
+    splits: 0,
   })
   debug_inspect(
     build_spill_home_groups(

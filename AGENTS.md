@@ -57,6 +57,7 @@ python3 scripts/run_all_wast.py --rec
 python3 scripts/run_component_wast.py --suite stable-0.2
 python3 scripts/run_component_wast.py --suite async-0.3
 python3 scripts/run_component_wast.py --suite future-gated
+python3 scripts/benchmark_algorithms_parity.py  # Cold caches; one run per engine and workload
 ```
 
 ## Compiler Boundaries

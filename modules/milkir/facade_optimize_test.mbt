@@ -198,7 +198,8 @@ test "public O3 derives power-of-two strength-reduction constants" {
       #|block0:
       #|    v5:i32 = iconst 3
       #|    v2:i32 = ishl v0, v5
-      #|    v3:i32 = ushr v0, v5
+      #|    v6:i32 = iconst 3
+      #|    v3:i32 = ushr v0, v6
       #|    v7:i32 = iconst 7
       #|    v4:i32 = band v0, v7
       #|    return v2, v3, v4

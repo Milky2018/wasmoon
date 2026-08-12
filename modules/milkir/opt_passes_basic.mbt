@@ -25,35 +25,45 @@ fn OptResult::mark_changed(self : OptResult) -> Unit {
 /// Removes instructions whose results are never used
 fn eliminate_dead_code(func : Function) -> OptResult {
   let result = OptResult::OptResult()
-  // Build use counts for all values
   let use_counts = compute_use_counts(func)
-  // Iterate until fixed point
-  let mut changed = true
-  while changed {
-    changed = false
-    for block in func.blocks {
-      // Remove dead instructions (iterate backwards to handle chains)
-      let mut i = block.instructions.length() - 1
-      while i >= 0 {
-        let inst = block.instructions[i]
-        let all_results_unused = inst.results.length() > 0 &&
-          inst.results.all(v => use_counts.get(v.id).unwrap_or(0) == 0)
-        if all_results_unused &&
-          !inst.opcode.semantics().must_preserve_if_unused() {
-          // Remove this instruction
-          block.instructions.remove(i) |> ignore
-          // Decrement use counts for operands
-          for op in inst.operands {
-            let count = use_counts.get(op.id).unwrap_or(0)
-            if count > 0 {
-              use_counts.set(op.id, count - 1)
-            }
-          }
-          changed = true
+  let definition_by_value : Array[Inst?] = Array::make(func.next_value_id, None)
+  let dead_insts = Array::make(func.next_inst_id, false)
+  let worklist : Array[Inst] = []
+  for block in func.blocks {
+    for inst in block.instructions {
+      for value in inst.results {
+        definition_by_value[value.id] = Some(inst)
+      }
+      if inst.results.length() > 0 &&
+        inst.results.all(v => use_counts[v.id] == 0) &&
+        !inst.opcode.semantics().must_preserve_if_unused() {
+        dead_insts[inst.id] = true
+        worklist.push(inst)
+        result.mark_changed()
+      }
+    }
+  }
+  while worklist.pop() is Some(inst) {
+    for operand in inst.operands {
+      let count = use_counts[operand.id]
+      if count > 0 {
+        let remaining = count - 1
+        use_counts[operand.id] = remaining
+        if remaining == 0 &&
+          definition_by_value[operand.id] is Some(definition) &&
+          !dead_insts[definition.id] &&
+          definition.results.all(value => use_counts[value.id] == 0) &&
+          !definition.opcode.semantics().must_preserve_if_unused() {
+          dead_insts[definition.id] = true
+          worklist.push(definition)
           result.mark_changed()
         }
-        i = i - 1
       }
+    }
+  }
+  if result.changed {
+    for block in func.blocks {
+      block.instructions.retain(inst => !dead_insts[inst.id])
     }
   }
   result
@@ -61,47 +71,39 @@ fn eliminate_dead_code(func : Function) -> OptResult {
 
 ///|
 /// Compute use counts for all values in a function
-fn compute_use_counts(func : Function) -> @hashmap.HashMap[Int, Int] {
-  let counts : @hashmap.HashMap[Int, Int] = HashMap([])
+fn compute_use_counts(func : Function) -> Array[Int] {
+  let counts = Array::make(func.next_value_id, 0)
+  fn count(value : Value) -> Unit {
+    counts[value.id] = counts[value.id] + 1
+  }
   for block in func.blocks {
-    // Count uses in instructions
     for inst in block.instructions {
       for op in inst.operands {
-        let count = counts.get(op.id).unwrap_or(0)
-        counts.set(op.id, count + 1)
+        count(op)
       }
     }
-    // Count uses in terminator
     if block.terminator is Some(term) {
-      for v in get_terminator_uses(term) {
-        let count = counts.get(v.id).unwrap_or(0)
-        counts.set(v.id, count + 1)
+      match term {
+        Jump(_, args) | Return(args) =>
+          for value in args {
+            count(value)
+          }
+        Branch(cond, _, true_args, _, false_args) => {
+          count(cond)
+          for value in true_args {
+            count(value)
+          }
+          for value in false_args {
+            count(value)
+          }
+        }
+        Brz(cond, _, _) | Brnz(cond, _, _) => count(cond)
+        BrTable(index, _, _) => count(index)
+        Trap(_) | TrapExit(_) => ()
       }
     }
   }
   counts
-}
-
-///|
-/// Get values used by a terminator
-fn get_terminator_uses(term : Terminator) -> Array[Value] {
-  match term {
-    Jump(_, args) => args
-    Branch(cond, _, true_args, _, false_args) => {
-      let values : Array[Value] = [cond]
-      for v in true_args {
-        values.push(v)
-      }
-      for v in false_args {
-        values.push(v)
-      }
-      values
-    }
-    Brz(cond, _, _) | Brnz(cond, _, _) => [cond]
-    BrTable(index, _, _) => [index]
-    Return(values) => values
-    Trap(_) | TrapExit(_) => []
-  }
 }
 
 // ============ Constant Folding ============
@@ -525,30 +527,30 @@ fn eval_icmp_i64(cc : IntCC, a : Int64, b : Int64) -> Bool {
 /// Resolves visible copy chains along the dominator tree and rewrites operands
 /// to canonical values (Cranelift analogue: `resolve_all_aliases()`).
 fn canonicalize_aliases(func : Function) -> OptResult {
+  canonicalize_aliases_with_analysis(func, FunctionAnalysis::build(func))
+}
+
+///|
+fn canonicalize_aliases_with_analysis(
+  func : Function,
+  analysis : FunctionAnalysis,
+) -> OptResult {
   let result = OptResult::OptResult()
   if func.blocks.length() == 0 {
     return result
   }
-  // Build CFG and compute dominators.
-  let cfg = CFG::build(func)
-  let idom = cfg.compute_dominators()
-  let domtree = build_dominator_tree(idom)
-  // Build block_id -> array_index mapping.
-  let block_idx : @hashmap.HashMap[Int, Int] = HashMap([])
-  for i, block in func.blocks {
-    block_idx.set(block.id, i)
-  }
   // Active alias environment for the current dominator-tree path.
-  let aliases : @hashmap.HashMap[Int, Value] = HashMap([])
+  let aliases : Array[Value?] = Array::make(func.next_value_id, None)
   fn enter(block_id : Int) -> (Array[Int], Bool) {
-    let idx = block_idx.get(block_id).unwrap()
+    let idx = analysis.block_idx[block_id]
     let block = func.blocks[idx]
     // Track aliases introduced in this block so we can pop on exit.
     let local_aliases : Array[Int] = []
     for inst in block.instructions {
       // Canonicalize operands through currently visible alias chain.
       for i, op in inst.operands {
-        if resolve_copy(op, aliases) is Some(resolved) && resolved.id != op.id {
+        let resolved = resolve_copy(op, aliases)
+        if resolved.id != op.id {
           inst.operands[i] = resolved
           result.mark_changed()
         }
@@ -557,7 +559,7 @@ fn canonicalize_aliases(func : Function) -> OptResult {
       if inst.opcode is Scalar(Copy) &&
         inst.first_result() is Some(dest) &&
         inst.operands.length() > 0 {
-        aliases.set(dest.id, inst.operands[0])
+        aliases[dest.id] = Some(inst.operands[0])
         local_aliases.push(dest.id)
       }
     }
@@ -570,10 +572,10 @@ fn canonicalize_aliases(func : Function) -> OptResult {
   }
 
   // Walk dominated children, then pop this block's aliases.
-  if cfg.is_valid(0) {
-    visit_dominator_tree(domtree, 0, enter, fn(local_aliases) {
+  if analysis.cfg.is_valid(0) {
+    visit_dominator_tree(analysis.domtree, 0, enter, fn(local_aliases) {
       for id in local_aliases {
-        aliases.remove(id)
+        aliases[id] = None
       }
     })
   }
@@ -582,126 +584,53 @@ fn canonicalize_aliases(func : Function) -> OptResult {
 
 ///|
 /// Resolve a value through copy chain
-fn resolve_copy(v : Value, copies : @hashmap.HashMap[Int, Value]) -> Value? {
-  // Follow copy chain (with cycle detection)
+fn resolve_copy(v : Value, copies : Array[Value?]) -> Value {
   let mut current = v
-  let visited : @hashmap.HashMap[Int, Bool] = HashMap([])
-  while true {
-    if visited.get(current.id).unwrap_or(false) {
-      break // Cycle detected
-    }
-    visited.set(current.id, true)
-    match copies.get(current.id) {
-      Some(source) => current = source
-      None => break
-    }
+  while copies[current.id] is Some(source) {
+    current = source
   }
-  Some(current)
+  current
 }
 
 ///|
 /// Propagate copies in terminator
 fn propagate_copies_in_terminator(
   term : Terminator,
-  copies : @hashmap.HashMap[Int, Value],
+  copies : Array[Value?],
   result : OptResult,
 ) -> Terminator {
+  fn canonical(value : Value) -> Value {
+    let resolved = resolve_copy(value, copies)
+    if resolved.id != value.id {
+      result.mark_changed()
+    }
+    resolved
+  }
   match term {
     Jump(target, args) => {
-      let new_args : Array[Value] = []
-      for arg in args {
-        match resolve_copy(arg, copies) {
-          Some(resolved) => {
-            if resolved.id != arg.id {
-              result.mark_changed()
-            }
-            new_args.push(resolved)
-          }
-          None => new_args.push(arg)
-        }
+      for index, value in args {
+        args[index] = canonical(value)
       }
-      Jump(target, new_args)
+      Jump(target, args)
     }
-    Brz(cond, then_t, else_t) =>
-      match resolve_copy(cond, copies) {
-        Some(resolved) => {
-          if resolved.id != cond.id {
-            result.mark_changed()
-          }
-          Brz(resolved, then_t, else_t)
-        }
-        None => term
-      }
-    Brnz(cond, then_t, else_t) =>
-      match resolve_copy(cond, copies) {
-        Some(resolved) => {
-          if resolved.id != cond.id {
-            result.mark_changed()
-          }
-          Brnz(resolved, then_t, else_t)
-        }
-        None => term
-      }
+    Brz(cond, then_t, else_t) => Brz(canonical(cond), then_t, else_t)
+    Brnz(cond, then_t, else_t) => Brnz(canonical(cond), then_t, else_t)
     Branch(cond, true_t, true_args, false_t, false_args) => {
-      let new_cond = match resolve_copy(cond, copies) {
-        Some(resolved) => {
-          if resolved.id != cond.id {
-            result.mark_changed()
-          }
-          resolved
-        }
-        None => cond
+      for index, value in true_args {
+        true_args[index] = canonical(value)
       }
-      let new_true_args : Array[Value] = []
-      for arg in true_args {
-        match resolve_copy(arg, copies) {
-          Some(resolved) => {
-            if resolved.id != arg.id {
-              result.mark_changed()
-            }
-            new_true_args.push(resolved)
-          }
-          None => new_true_args.push(arg)
-        }
+      for index, value in false_args {
+        false_args[index] = canonical(value)
       }
-      let new_false_args : Array[Value] = []
-      for arg in false_args {
-        match resolve_copy(arg, copies) {
-          Some(resolved) => {
-            if resolved.id != arg.id {
-              result.mark_changed()
-            }
-            new_false_args.push(resolved)
-          }
-          None => new_false_args.push(arg)
-        }
-      }
-      Branch(new_cond, true_t, new_true_args, false_t, new_false_args)
+      Branch(canonical(cond), true_t, true_args, false_t, false_args)
     }
     BrTable(index, targets, default_t) =>
-      match resolve_copy(index, copies) {
-        Some(resolved) => {
-          if resolved.id != index.id {
-            result.mark_changed()
-          }
-          BrTable(resolved, targets, default_t)
-        }
-        None => term
-      }
+      BrTable(canonical(index), targets, default_t)
     Return(values) => {
-      let new_values : Array[Value] = []
-      for v in values {
-        match resolve_copy(v, copies) {
-          Some(resolved) => {
-            if resolved.id != v.id {
-              result.mark_changed()
-            }
-            new_values.push(resolved)
-          }
-          None => new_values.push(v)
-        }
+      for index, value in values {
+        values[index] = canonical(value)
       }
-      Return(new_values)
+      Return(values)
     }
     Trap(_) | TrapExit(_) => term
   }

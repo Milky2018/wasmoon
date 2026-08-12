@@ -96,27 +96,15 @@ fn LastStoreState::clone(self : LastStoreState) -> LastStoreState {
 }
 
 ///|
-fn LastStoreState::equals(
-  self : LastStoreState,
-  other : LastStoreState,
+fn indexed_store_maps_equal(
+  left : @hashmap.HashMap[Int, StoreVersion],
+  right : @hashmap.HashMap[Int, StoreVersion],
 ) -> Bool {
-  if self.heap_default != other.heap_default ||
-    self.table_default != other.table_default ||
-    self.context != other.context ||
-    self.other != other.other ||
-    self.heap.length() != other.heap.length() ||
-    self.table.length() != other.table.length() {
+  if left.length() != right.length() {
     return false
   }
-  for entry in self.heap.iter() {
-    let (memidx, token) = entry
-    if other.heap.get(memidx) != Some(token) {
-      return false
-    }
-  }
-  for entry in self.table.iter() {
-    let (tableidx, token) = entry
-    if other.table.get(tableidx) != Some(token) {
+  for entry in left.iter() {
+    if right.get(entry.0) != Some(entry.1) {
       return false
     }
   }
@@ -155,63 +143,83 @@ fn indexed_store_token(
 }
 
 ///|
+fn meet_indexed_store_maps(
+  left : @hashmap.HashMap[Int, StoreVersion],
+  left_default : StoreVersion?,
+  right : @hashmap.HashMap[Int, StoreVersion],
+  right_default : StoreVersion?,
+  merged_default : StoreVersion?,
+  join_token : StoreVersion,
+) -> @hashmap.HashMap[Int, StoreVersion] {
+  let merged : @hashmap.HashMap[Int, StoreVersion] = HashMap([])
+  for entry in left.iter() {
+    let token = meet_last_store_token(
+      Some(entry.1),
+      indexed_store_token(right, right_default, entry.0),
+      join_token,
+    )
+    if token is Some(value) && token != merged_default {
+      merged.set(entry.0, value)
+    }
+  }
+  for entry in right.iter() {
+    if left.get(entry.0) is None {
+      let token = meet_last_store_token(left_default, Some(entry.1), join_token)
+      if token is Some(value) && token != merged_default {
+        merged.set(entry.0, value)
+      }
+    }
+  }
+  merged
+}
+
+///|
 fn LastStoreState::meet_from(
   self : LastStoreState,
   other : LastStoreState,
   join_token : StoreVersion,
-) -> Unit {
-  self.context = meet_last_store_token(self.context, other.context, join_token)
-  self.other = meet_last_store_token(self.other, other.other, join_token)
-  self.heap_default = meet_last_store_token(
+) -> Bool {
+  let context = meet_last_store_token(self.context, other.context, join_token)
+  let other_token = meet_last_store_token(self.other, other.other, join_token)
+  let heap_default = meet_last_store_token(
     self.heap_default,
     other.heap_default,
     join_token,
   )
-  let heap_keys : @hashset.HashSet[Int] = HashSet([])
-  for entry in self.heap.iter() {
-    let (memidx, _) = entry
-    heap_keys.add(memidx)
-  }
-  for entry in other.heap.iter() {
-    let (memidx, _) = entry
-    heap_keys.add(memidx)
-  }
-  let merged_heap : @hashmap.HashMap[Int, StoreVersion] = HashMap([])
-  for memidx in heap_keys {
-    let left = match self.heap.get(memidx) {
-      Some(token) => Some(token)
-      None => self.heap_default
-    }
-    let right = match other.heap.get(memidx) {
-      Some(token) => Some(token)
-      None => other.heap_default
-    }
-    if meet_last_store_token(left, right, join_token) is Some(token) {
-      merged_heap.set(memidx, token)
-    }
-  }
-  self.heap = merged_heap
-  self.table_default = meet_last_store_token(
+  let merged_heap = meet_indexed_store_maps(
+    self.heap,
+    self.heap_default,
+    other.heap,
+    other.heap_default,
+    heap_default,
+    join_token,
+  )
+  let table_default = meet_last_store_token(
     self.table_default,
     other.table_default,
     join_token,
   )
-  let table_keys : @hashset.HashSet[Int] = HashSet([])
-  for entry in self.table.iter() {
-    table_keys.add(entry.0)
-  }
-  for entry in other.table.iter() {
-    table_keys.add(entry.0)
-  }
-  let merged_table : @hashmap.HashMap[Int, StoreVersion] = HashMap([])
-  for tableidx in table_keys {
-    let left = indexed_store_token(self.table, self.table_default, tableidx)
-    let right = indexed_store_token(other.table, other.table_default, tableidx)
-    if meet_last_store_token(left, right, join_token) is Some(token) {
-      merged_table.set(tableidx, token)
-    }
-  }
+  let merged_table = meet_indexed_store_maps(
+    self.table,
+    self.table_default,
+    other.table,
+    other.table_default,
+    table_default,
+    join_token,
+  )
+  let changed = context != self.context ||
+    other_token != self.other ||
+    heap_default != self.heap_default ||
+    table_default != self.table_default ||
+    !indexed_store_maps_equal(merged_heap, self.heap) ||
+    !indexed_store_maps_equal(merged_table, self.table)
+  self.context = context
+  self.other = other_token
+  self.heap_default = heap_default
+  self.table_default = table_default
+  self.heap = merged_heap
   self.table = merged_table
+  changed
 }
 
 ///|
@@ -257,7 +265,7 @@ fn LastStoreState::set_all_tokens(
 ///|
 fn instruction_memory_write_scope(
   inst : Inst,
-  ptr_base_infos : @hashmap.HashMap[Int, PtrBaseInfo],
+  ptr_base_infos : Array[PtrBaseInfo?],
 ) -> MemoryWriteScope {
   let is_store = match inst.opcode {
     Memory(Store(_) | StoreNarrow(_) | Vector(StoreLane(_, _))) => true
@@ -282,7 +290,7 @@ fn update_last_store_state(
   state : LastStoreState,
   inst : Inst,
   inst_version : StoreVersion,
-  ptr_base_infos : @hashmap.HashMap[Int, PtrBaseInfo],
+  ptr_base_infos : Array[PtrBaseInfo?],
 ) -> Unit {
   match instruction_memory_write_scope(inst, ptr_base_infos) {
     NoWrite => ()
@@ -295,8 +303,8 @@ fn update_last_store_state(
 fn compute_block_input_last_store_states(
   func : Function,
   cfg : CFG,
-  block_idx : @hashmap.HashMap[Int, Int],
-  ptr_base_infos : @hashmap.HashMap[Int, PtrBaseInfo],
+  block_idx : Array[Int],
+  ptr_base_infos : Array[PtrBaseInfo?],
 ) -> @hashmap.HashMap[Int, LastStoreState] {
   let block_input : @hashmap.HashMap[Int, LastStoreState] = HashMap([])
   if !cfg.is_valid(0) {
@@ -312,7 +320,7 @@ fn compute_block_input_last_store_states(
       Some(existing) => existing.clone()
       None => LastStoreState()
     }
-    let idx = block_idx.get(block_id).unwrap()
+    let idx = block_idx[block_id]
     let block = func.blocks[idx]
     for inst_index, inst in block.instructions {
       update_last_store_state(
@@ -323,7 +331,7 @@ fn compute_block_input_last_store_states(
       )
     }
     for succ in cfg.get_successors(block_id) {
-      let succ_idx = block_idx.get(succ).unwrap()
+      let succ_idx = block_idx[succ]
       let succ_block = func.blocks[succ_idx]
       let join_token = if succ_block.instructions.length() > 0 {
         { block_id: succ, inst_index: 0 }
@@ -331,16 +339,7 @@ fn compute_block_input_last_store_states(
         { block_id: succ, inst_index: -1 }
       }
       let updated = match block_input.get(succ) {
-        Some(existing) => {
-          let merged = existing.clone()
-          merged.meet_from(state, join_token)
-          if !merged.equals(existing) {
-            block_input.set(succ, merged)
-            true
-          } else {
-            false
-          }
-        }
+        Some(existing) => existing.meet_from(state, join_token)
         None => {
           block_input.set(succ, state.clone())
           true
@@ -356,17 +355,17 @@ fn compute_block_input_last_store_states(
 }
 
 ///|
-fn collect_iconst_values(func : Function) -> @hashmap.HashMap[Int, Int64] {
-  let result : @hashmap.HashMap[Int, Int64] = HashMap([])
+fn collect_iconst_values(func : Function) -> Array[Int64?] {
+  let result : Array[Int64?] = Array::make(func.next_value_id, None)
   for block in func.blocks {
     for inst in block.instructions {
       if inst.first_result() is Some(v) {
         match inst.opcode {
-          Scalar(IntConst(value)) => result.set(v.id, value)
+          Scalar(IntConst(value)) => result[v.id] = Some(value)
           Scalar(Copy) =>
             if inst.operands.length() > 0 &&
-              result.get(inst.operands[0].id) is Some(copied) {
-              result.set(v.id, copied)
+              result[inst.operands[0].id] is Some(copied) {
+              result[v.id] = Some(copied)
             }
           _ => ()
         }
@@ -377,103 +376,115 @@ fn collect_iconst_values(func : Function) -> @hashmap.HashMap[Int, Int64] {
 }
 
 ///|
-fn is_known_iconst(
-  value_id : Int,
-  iconst_values : @hashmap.HashMap[Int, Int64],
-) -> Bool {
-  iconst_values.get(value_id) is Some(_)
+fn is_known_iconst(value_id : Int, iconst_values : Array[Int64?]) -> Bool {
+  iconst_values[value_id] is Some(_)
 }
 
 ///|
 fn collect_ptr_base_infos(
   func : Function,
-  iconst_values : @hashmap.HashMap[Int, Int64],
-) -> @hashmap.HashMap[Int, PtrBaseInfo] {
-  let result : @hashmap.HashMap[Int, PtrBaseInfo] = HashMap([])
+  iconst_values : Array[Int64?],
+) -> Array[PtrBaseInfo?] {
+  let result : Array[PtrBaseInfo?] = Array::make(func.next_value_id, None)
   for param in func.params {
     if param.1 is (Ptr | Ref | CallableRef | OpaqueRef) {
-      result.set(param.0.id, { region: Other })
+      result[param.0.id] = Some({ region: Other })
     }
   }
   if func.blocks.length() > 0 {
     for param in func.blocks[0].params {
       if param.1 is (Ptr | Ref | CallableRef | OpaqueRef) {
-        result.set(param.0.id, { region: Other })
+        result[param.0.id] = Some({ region: Other })
       }
     }
   }
-  let mut changed = true
-  while changed {
-    changed = false
-    for block in func.blocks {
-      for inst in block.instructions {
-        if inst.first_result() is Some(v) && result.get(v.id) is None {
-          let inferred : PtrBaseInfo? = match inst.opcode {
-            GlobalValue(global_value) =>
-              match func.global_value_data(global_value) {
-                Some(ContextField(_, _, region)) => Some({ region, })
-                None => None
-              }
-            Ext(_, _) => None
-            Scalar(Copy)
-            | Scalar(Convert(Bitcast))
-            | Scalar(Convert(UnsignedExtend))
-            | Scalar(Convert(SignedExtend))
-            | Scalar(Convert(IntReduce)) =>
-              if inst.operands.length() > 0 {
-                result.get(inst.operands[0].id)
-              } else {
-                None
-              }
-            Scalar(IntBinary(Add)) =>
-              if inst.operands.length() >= 2 {
-                let lhs = inst.operands[0]
-                let rhs = inst.operands[1]
-                match (result.get(lhs.id), result.get(rhs.id)) {
-                  (Some(base), None) | (None, Some(base)) => Some(base)
-                  (Some(lhs_base), Some(rhs_base)) if lhs_base.region ==
-                    rhs_base.region => Some(lhs_base)
-                  _ =>
-                    if result.get(lhs.id) is Some(base) &&
-                      is_known_iconst(rhs.id, iconst_values) {
-                      Some(base)
-                    } else if result.get(rhs.id) is Some(base) &&
-                      is_known_iconst(lhs.id, iconst_values) {
-                      Some(base)
-                    } else {
-                      None
-                    }
-                }
-              } else {
-                None
-              }
-            Scalar(IntBinary(Sub)) =>
-              if inst.operands.length() >= 2 {
-                let lhs = inst.operands[0]
-                let rhs = inst.operands[1]
-                if result.get(lhs.id) is Some(base) &&
+  let dependents : Array[Array[Inst]] = Array::makei(func.next_value_id, _ => [])
+  let worklist : Array[Inst] = []
+  let queued = Array::make(func.next_inst_id, false)
+  for block in func.blocks {
+    for inst in block.instructions {
+      worklist.push(inst)
+      queued[inst.id] = true
+      for operand in inst.operands {
+        dependents[operand.id].push(inst)
+      }
+    }
+  }
+  let mut cursor = 0
+  while cursor < worklist.length() {
+    let inst = worklist[cursor]
+    cursor = cursor + 1
+    queued[inst.id] = false
+    if inst.first_result() is Some(v) && result[v.id] is None {
+      let inferred : PtrBaseInfo? = match inst.opcode {
+        GlobalValue(global_value) =>
+          match func.global_value_data(global_value) {
+            Some(ContextField(_, _, region)) => Some({ region, })
+            None => None
+          }
+        Ext(_, _) => None
+        Scalar(Copy)
+        | Scalar(Convert(Bitcast))
+        | Scalar(Convert(UnsignedExtend))
+        | Scalar(Convert(SignedExtend))
+        | Scalar(Convert(IntReduce)) =>
+          if inst.operands.length() > 0 {
+            result[inst.operands[0].id]
+          } else {
+            None
+          }
+        Scalar(IntBinary(Add)) =>
+          if inst.operands.length() >= 2 {
+            let lhs = inst.operands[0]
+            let rhs = inst.operands[1]
+            match (result[lhs.id], result[rhs.id]) {
+              (Some(base), None) | (None, Some(base)) => Some(base)
+              (Some(lhs_base), Some(rhs_base)) if lhs_base.region ==
+                rhs_base.region => Some(lhs_base)
+              _ =>
+                if result[lhs.id] is Some(base) &&
                   is_known_iconst(rhs.id, iconst_values) {
+                  Some(base)
+                } else if result[rhs.id] is Some(base) &&
+                  is_known_iconst(lhs.id, iconst_values) {
                   Some(base)
                 } else {
                   None
                 }
-              } else {
-                None
-              }
-            Scalar(Select) =>
-              if inst.operands.length() >= 3 &&
-                result.get(inst.operands[1].id) is Some(lhs_base) &&
-                result.get(inst.operands[2].id) is Some(rhs_base) &&
-                lhs_base.region == rhs_base.region {
-                Some(lhs_base)
-              } else {
-                None
-              }
-            _ => None
+            }
+          } else {
+            None
           }
-          if inferred is Some(base) {
-            result.set(v.id, base)
-            changed = true
+        Scalar(IntBinary(Sub)) =>
+          if inst.operands.length() >= 2 {
+            let lhs = inst.operands[0]
+            let rhs = inst.operands[1]
+            if result[lhs.id] is Some(base) &&
+              is_known_iconst(rhs.id, iconst_values) {
+              Some(base)
+            } else {
+              None
+            }
+          } else {
+            None
+          }
+        Scalar(Select) =>
+          if inst.operands.length() >= 3 &&
+            result[inst.operands[1].id] is Some(lhs_base) &&
+            result[inst.operands[2].id] is Some(rhs_base) &&
+            lhs_base.region == rhs_base.region {
+            Some(lhs_base)
+          } else {
+            None
+          }
+        _ => None
+      }
+      if inferred is Some(base) {
+        result[v.id] = Some(base)
+        for dependent in dependents[v.id] {
+          if !queued[dependent.id] {
+            worklist.push(dependent)
+            queued[dependent.id] = true
           }
         }
       }
@@ -485,14 +496,14 @@ fn collect_ptr_base_infos(
 ///|
 fn ptr_access_from_inst(
   inst : Inst,
-  ptr_base_infos : @hashmap.HashMap[Int, PtrBaseInfo],
+  ptr_base_infos : Array[PtrBaseInfo?],
 ) -> PtrAccess? {
   match inst.opcode {
     Memory(Load(_)) =>
       if inst.operands.length() >= 2 {
         let base = inst.operands[0]
         let offset = inst.operands[1]
-        let region = match ptr_base_infos.get(base.id) {
+        let region = match ptr_base_infos[base.id] {
           Some(base_info) => base_info.region
           None => Other
         }
@@ -504,7 +515,7 @@ fn ptr_access_from_inst(
       if inst.operands.length() >= 2 {
         let base = inst.operands[0]
         let offset = inst.operands[1]
-        let region = match ptr_base_infos.get(base.id) {
+        let region = match ptr_base_infos[base.id] {
           Some(base_info) => base_info.region
           None => Other
         }
@@ -516,7 +527,7 @@ fn ptr_access_from_inst(
       if inst.operands.length() >= 3 {
         let base = inst.operands[0]
         let offset = inst.operands[2]
-        let region = match ptr_base_infos.get(base.id) {
+        let region = match ptr_base_infos[base.id] {
           Some(base_info) => base_info.region
           None => Other
         }
@@ -528,7 +539,7 @@ fn ptr_access_from_inst(
       if inst.operands.length() >= 3 {
         let base = inst.operands[0]
         let offset = inst.operands[2]
-        let region = match ptr_base_infos.get(base.id) {
+        let region = match ptr_base_infos[base.id] {
           Some(base_info) => base_info.region
           None => Other
         }
@@ -573,6 +584,9 @@ fn is_gvn_candidate(inst : Inst) -> Bool {
   if inst.results.length() != 1 {
     return false
   }
+  if is_cheap_rematerializable_constant(inst) {
+    return false
+  }
   !inst.opcode.semantics().must_preserve_if_unused()
 }
 
@@ -580,7 +594,7 @@ fn is_gvn_candidate(inst : Inst) -> Bool {
 fn gvn_memory_dependency(
   func : Function,
   inst : Inst,
-  ptr_base_infos : @hashmap.HashMap[Int, PtrBaseInfo],
+  ptr_base_infos : Array[PtrBaseInfo?],
 ) -> AliasRegion? {
   match inst.opcode {
     GlobalValue(global_value) =>
@@ -608,9 +622,10 @@ priv struct GVNStats {
 }
 
 ///|
-fn run_global_value_numbering_with_budget(
+fn run_global_value_numbering_with_budget_and_analysis(
   func : Function,
   work_budget : Int,
+  analysis : FunctionAnalysis,
 ) -> GVNStats {
   let result = OptResult::OptResult()
   if func.blocks.length() == 0 {
@@ -623,24 +638,26 @@ fn run_global_value_numbering_with_budget(
       budget_exhausted: instruction_count(func) > 0,
     }
   }
-  let iconst_values = collect_iconst_values(func)
-  let ptr_base_infos = collect_ptr_base_infos(func, iconst_values)
-  // Build CFG and compute dominators
-  let cfg = CFG::build(func)
-  let dominance = cfg.compute_dominance()
-  let domtree = build_dominator_tree(dominance.idom)
-  // Build block_id -> array_index mapping
-  let block_idx : @hashmap.HashMap[Int, Int] = HashMap([])
-  for i, block in func.blocks {
-    block_idx.set(block.id, i)
+  let memory_analysis_enabled = instruction_count(func) <= work_budget
+  let ptr_base_infos = if memory_analysis_enabled {
+    collect_ptr_base_infos(func, collect_iconst_values(func))
+  } else {
+    Array::make(func.next_value_id, None)
   }
   // Expression environment: key -> (value, abstract memory dependency)
   let value_table : @hashmap.HashMap[Inst, (Value, AliasRegion?)] = HashMap([])
   // Track memory-dependent keys separately for scoped invalidation.
   let memory_keys : @hashmap.HashMap[Inst, AliasRegion] = HashMap([])
-  let block_input_state = compute_block_input_last_store_states(
-    func, cfg, block_idx, ptr_base_infos,
-  )
+  let block_input_state = if memory_analysis_enabled {
+    compute_block_input_last_store_states(
+      func,
+      analysis.cfg,
+      analysis.block_idx,
+      ptr_base_infos,
+    )
+  } else {
+    HashMap([])
+  }
   let memory_values : @hashmap.HashMap[MemoryValueKey, MemoryValueEntry] = HashMap([],
   )
   let work_done : Ref[Int] = { val: 0 }
@@ -650,7 +667,7 @@ fn run_global_value_numbering_with_budget(
     if budget_exhausted.val {
       return ([], false)
     }
-    let idx = block_idx.get(block_id).unwrap()
+    let idx = analysis.block_idx[block_id]
     let block = func.blocks[idx]
     // Track expressions added/modified in this block (to restore later)
     // Stores (key, previous_entry) where previous_entry is None if new
@@ -667,7 +684,8 @@ fn run_global_value_numbering_with_budget(
       }
       work_done.val = work_done.val + 1
       let mut replaced_by_memory = false
-      if inst.opcode is Memory(Load(load_ty)) &&
+      if memory_analysis_enabled &&
+        inst.opcode is Memory(Load(load_ty)) &&
         ptr_access_from_inst(inst, ptr_base_infos) is Some(load_access) {
         let key = memory_key_from_access(
           load_access,
@@ -680,7 +698,7 @@ fn run_global_value_numbering_with_budget(
             entry.def_inst_index,
             block_id,
             inst_index,
-            dominance,
+            analysis.dominance,
           ) {
           inst.opcode = Scalar(Copy)
           inst.operands.clear()
@@ -689,7 +707,8 @@ fn run_global_value_numbering_with_budget(
           replaced_by_memory = true
         }
       }
-      if inst.opcode is Memory(Store(store_ty)) &&
+      if memory_analysis_enabled &&
+        inst.opcode is Memory(Store(store_ty)) &&
         ptr_access_from_inst(inst, ptr_base_infos) is Some(store_access) &&
         inst.operands.length() >= 2 {
         let key = memory_key_from_access(
@@ -746,11 +765,6 @@ fn run_global_value_numbering_with_budget(
           continue
         }
       }
-      // Skip non-candidates
-      if inst.opcode is GlobalValue(global_value) &&
-        func.global_value_data(global_value) is Some(ContextField(_, Stable, _)) {
-        continue
-      }
       if !is_gvn_candidate(inst) {
         continue
       }
@@ -801,8 +815,8 @@ fn run_global_value_numbering_with_budget(
   }
 
   // Start from the entry block (block 0)
-  if cfg.is_valid(0) {
-    visit_dominator_tree(domtree, 0, enter, exit)
+  if analysis.cfg.is_valid(0) {
+    visit_dominator_tree(analysis.domtree, 0, enter, exit)
   }
   { result, work_done: work_done.val, budget_exhausted: budget_exhausted.val }
 }
@@ -810,6 +824,3 @@ fn run_global_value_numbering_with_budget(
 ///|
 /// Unified global optimization pass that combines pure CSE and alias-aware GVN
 /// in a single dominator-tree walk.
-fn cse_gvn_global(func : Function) -> GVNStats {
-  run_global_value_numbering_with_budget(func, instruction_count(func))
-}

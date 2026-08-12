@@ -1834,6 +1834,36 @@ test "X64 lowering resolves environment paths and typed symbol addresses" {
 }
 
 ///|
+test "X64 lowering materializes each stable environment field" {
+  let field = @semantic.EnvironmentField::new("runtime.memory.base", I64)
+  let builder = @semantic.FunctionBuilder::new(
+    "stable_environment_fields",
+    Internal,
+    [Ptr64],
+    [I64, I64],
+  )
+  let context = builder.parameters()[0]
+  let first = builder.emit(EnvironmentField(field, Stable), [context], [I64])[0]
+  let second = builder.emit(EnvironmentField(field, Stable), [context], [I64])[0]
+  builder.return_([first, second])
+  let lowering = test_lowering_context().with_environment_field(field, [24])
+  inspect(
+    lower(builder.finish(), lowering).summary(),
+    content=(
+      #|vcode stable_environment_fields(v0:ptr64) -> (i64, i64)
+      #|block0:
+      #|  i0 IncomingReg(Ptr64, p7:int) uses=[v0:fixed(p7:int)@early] defs=[v1:any-location(prefer=p7:int)@late]
+      #|  i1 ScalarLoad(W64, None, I64, 24) uses=[v1:any@early] defs=[v2:any@late]
+      #|  i2 ScalarLoad(W64, None, I64, 24) uses=[v1:any@early] defs=[v3:any@late]
+      #|  i3 OutgoingReg(I64, p0:int) uses=[v2:any@early]
+      #|  i4 OutgoingReg(I64, p2:int) uses=[v3:any@early]
+      #|  i5 Return
+      #|
+    ),
+  )
+}
+
+///|
 test "X64 lowering selects a direct platform call with explicit ABI facts" {
   let builder = @semantic.FunctionBuilder::new(
     "direct_platform_call",

@@ -151,7 +151,7 @@ const ECLASS_ENODE_LIMIT: usize = 5;
 
 ## 3. Register Allocation
 
-### Wasmoon (`vcode/regalloc/`)
+### Wasmoon (`regalloc/` and `machv_regalloc/`)
 
 ```moonbit
 struct BacktrackingAllocator {
@@ -165,7 +165,7 @@ struct BacktrackingAllocator {
 // ~4000 lines of MoonBit code
 ```
 
-**Algorithm:** Ion-style backtracking allocator
+**Algorithm:** Bundle-aware backtracking allocator
 - Live interval analysis
 - Bundle merging (copy coalescing)
 - Spill weight priority queue
@@ -195,13 +195,14 @@ let regalloc_result = regalloc2::run(
 | Feature | Wasmoon | Cranelift |
 |---------|---------|-----------|
 | **Implementation** | Built-in | External crate (regalloc2) |
-| **Algorithm** | Ion-style | Ion / Fastalloc selectable |
-| **Code Size** | ~4000 lines | ~20,000+ lines (regalloc2) |
-| **Validation** | None | Optional Checker |
-| **Constraint System** | Simple | Full operand constraints |
-| **SSA Destruction** | Manual | Automatic |
+| **Algorithm** | One bundle-aware allocator | Ion / Fastalloc selectable |
+| **Validation** | Allocation-plan and materialized-VCode verifiers | Optional checker |
+| **Constraint System** | Fixed, register, location, tied, and preference constraints | Full operand constraints |
+| **SSA Destruction** | Edge edits in the allocation plan | Automatic |
 
-**Recommendation:** Wasmoon's allocator is fairly complete. Consider adding a Fastalloc option for debug builds.
+**Recommendation:** Improve compile-time behavior in the sole verified allocator.
+The former lower-quality allocator was removed after it lost end-to-end time
+and generated-code quality on representative workloads.
 
 ### Review Notes (Actionable)
 
@@ -391,7 +392,7 @@ WASM → CLIF → Legalize → Mid-End Opt → Lowering (ISLE) → RegAlloc2 →
 
 | Dimension | Wasmoon | Cranelift |
 |-----------|---------|-----------|
-| **Compile Speed** | Moderate | Fast (single-pass design) |
+| **Compile Speed** | Moderate | Fast when Fastalloc is selected |
 | **Code Quality** | Good | Very Good |
 | **Multi-target** | AArch64 only | 4 targets |
 | **Modularity** | Moderate | High (trait abstractions) |
@@ -455,14 +456,13 @@ WASM → CLIF → Legalize → Mid-End Opt → Lowering (ISLE) → RegAlloc2 →
 ### Medium-term
 
 4. **Single-Pass Optimization**: Replace saturation with single-pass directional design
-5. **Fastalloc Option**: Add fast allocator for debug builds
-6. **More Targets**: Consider x86_64 support
+5. **More Targets**: Continue target coverage beyond AArch64 and x64
 
 ### Long-term
 
-7. **MoonBit ISLE**: Develop declarative instruction selection DSL
-8. **PCC Support**: Add Proof-Carrying Code infrastructure
-9. **Profile-Guided**: Add PGO support
+6. **MoonBit ISLE**: Develop declarative instruction selection DSL
+7. **PCC Support**: Add Proof-Carrying Code infrastructure
+8. **Profile-Guided**: Add PGO support
 
 ---
 

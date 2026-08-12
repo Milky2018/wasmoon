@@ -307,7 +307,9 @@ fn EGraphBuilder::elaborate_inst(
       )
     }
     let value = func.new_value(step.ty)
-    emitted.push(func.new_inst(step.opcode, step_operands, [value]))
+    let materialized = func.new_inst(step.opcode, step_operands, [value])
+    emitted.push(materialized)
+    self.register_def(materialized)
     built.push(value)
     self.ensure_value_slot(value.id)
     self.value_map[value.id] = Some(EClassId(step.class_id))

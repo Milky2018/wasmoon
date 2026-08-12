@@ -216,7 +216,7 @@ impl[Inst] @regalloc.FunctionView for VCodeFunctionView[Inst] with fn block_para
   self,
   block,
 ) -> Array[@regalloc.VirtualReg] {
-  self.parameters[block].copy()
+  self.parameters[block]
 }
 
 ///|

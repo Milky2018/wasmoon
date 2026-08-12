@@ -605,15 +605,16 @@ test "O3 derives power-of-two constants with a bounded large-function egraph" {
   let func = builder.get_function()
   optimize_with_level(func, O3) |> ignore
   let instructions = func.blocks[0].instructions
-  inspect(instructions.length(), content="5")
+  inspect(instructions.length(), content="6")
   inspect(instructions[0].opcode, content="Scalar(IntConst(3))")
   inspect(instructions[1].opcode, content="Scalar(IntBinary(ShiftLeft))")
+  inspect(instructions[2].opcode, content="Scalar(IntConst(3))")
   inspect(
-    instructions[2].opcode,
+    instructions[3].opcode,
     content="Scalar(IntBinary(UnsignedShiftRight))",
   )
-  inspect(instructions[3].opcode, content="Scalar(IntConst(7))")
-  inspect(instructions[4].opcode, content="Scalar(IntBinary(And))")
+  inspect(instructions[4].opcode, content="Scalar(IntConst(7))")
+  inspect(instructions[5].opcode, content="Scalar(IntBinary(And))")
   inspect(func.verify(), content="()")
 }
 
@@ -733,7 +734,11 @@ test "GVN reuses float constants with identical NaN bits" {
   let second = builder.fconst_f64(nan)
   builder.return_([second])
   let func = builder.get_function()
-  let stats = cse_gvn_global(func)
+  let stats = run_global_value_numbering_with_budget_and_analysis(
+    func,
+    instruction_count(func),
+    FunctionAnalysis::build(func),
+  )
   inspect(stats.result.changed, content="true")
   inspect(func.blocks[0].instructions[1].opcode is Scalar(Copy), content="true")
   inspect(func.verify(), content="()")
@@ -747,7 +752,11 @@ test "GVN does not conflate integer constants with different widths" {
   let wide = builder.iconst_i64(1L)
   builder.return_([wide])
   let func = builder.get_function()
-  let stats = cse_gvn_global(func)
+  let stats = run_global_value_numbering_with_budget_and_analysis(
+    func,
+    instruction_count(func),
+    FunctionAnalysis::build(func),
+  )
   inspect(stats.result.changed, content="false")
   inspect(
     func.print(),
@@ -1364,7 +1373,11 @@ test "CSE keeps duplicate loads without alias metadata" {
   let loaded1 = builder.load_ptr(I32, ptr, offset)
   builder.return_([loaded1])
   let func = builder.get_function()
-  let stats = cse_gvn_global(func)
+  let stats = run_global_value_numbering_with_budget_and_analysis(
+    func,
+    instruction_count(func),
+    FunctionAnalysis::build(func),
+  )
   inspect(stats.result.changed, content="false")
   inspect(
     func.print(),

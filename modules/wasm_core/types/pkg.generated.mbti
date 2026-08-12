@@ -776,14 +776,7 @@ pub(all) struct TagType {
   type_idx : Int
 } derive(Eq, @debug.Debug)
 
-pub struct TypeEquivalenceContext {
-  types1 : Array[SubType]
-  types2 : Array[SubType]
-  rec_groups1 : Array[Int]
-  rec_groups2 : Array[Int]
-  cross_module : Bool
-  visited : Map[(Int, Int), Bool]
-}
+type TypeEquivalenceContext
 pub fn TypeEquivalenceContext::cross_module(Array[SubType], Array[SubType], rec_groups1? : Array[Int], rec_groups2? : Array[Int]) -> Self
 pub fn TypeEquivalenceContext::same_module(Array[SubType], type_rec_groups? : Array[Int]) -> Self
 pub fn TypeEquivalenceContext::types_equivalent(Self, Int, Int) -> Bool

@@ -105,6 +105,76 @@ test "run JIT cache encodes the codegen revision as a path-safe component" {
 }
 
 ///|
+test "run JIT cache uses platform user cache directories" {
+  debug_inspect(
+    [
+      resolve_run_jit_cache_location(
+        Some(MacOS),
+        Map([("HOME", "/Users/test")]),
+      ),
+      resolve_run_jit_cache_location(
+        Some(LinuxGnu),
+        Map([("XDG_CACHE_HOME", "/var/cache/test")]),
+      ),
+      resolve_run_jit_cache_location(
+        Some(LinuxMusl),
+        Map([("HOME", "/home/test")]),
+      ),
+      resolve_run_jit_cache_location(
+        Some(WindowsMsvc),
+        Map([("LOCALAPPDATA", "C:/Users/test/AppData/Local")]),
+      ),
+    ].map(fn(location) {
+      match location {
+        Some(location) => Some((location.directory, location.parent))
+        None => None
+      }
+    }),
+    content=(
+      #|[
+      #|  Some(
+      #|    (
+      #|      "/Users/test/Library/Caches/wasmoon",
+      #|      Some("/Users/test/Library/Caches"),
+      #|    ),
+      #|  ),
+      #|  Some(("/var/cache/test/wasmoon", Some("/var/cache/test"))),
+      #|  Some(("/home/test/.cache/wasmoon", Some("/home/test/.cache"))),
+      #|  Some(
+      #|    (
+      #|      "C:/Users/test/AppData/Local/wasmoon/cache",
+      #|      Some("C:/Users/test/AppData/Local/wasmoon"),
+      #|    ),
+      #|  ),
+      #|]
+    ),
+  )
+}
+
+///|
+test "run JIT cache override is authoritative and missing user dirs disable cache" {
+  debug_inspect(
+    [
+      resolve_run_jit_cache_location(
+        None,
+        Map([("WASMOON_JIT_CACHE_DIR", "/explicit/cache")]),
+      ),
+      resolve_run_jit_cache_location(Some(LinuxGnu), Map([])),
+      resolve_run_jit_cache_location(Some(WindowsMsvc), Map([])),
+      resolve_run_jit_cache_location(None, Map([])),
+    ].map(fn(location) {
+      match location {
+        Some(location) => Some((location.directory, location.parent))
+        None => None
+      }
+    }),
+    content=(
+      #|[Some(("/explicit/cache", None)), None, None, None]
+    ),
+  )
+}
+
+///|
 fn cache_test_file(label : String) -> String {
   "/tmp/wasmoon-v9-cache-\{label}.cwasm"
 }

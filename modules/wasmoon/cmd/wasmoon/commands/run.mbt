@@ -828,11 +828,62 @@ fn int_array_to_bytes(ints : Array[Int]) -> Bytes {
 }
 
 ///|
-fn run_jit_cache_dir() -> String {
-  match @env.get_env_var("WASMOON_JIT_CACHE_DIR") {
-    Some(dir) if dir.length() > 0 => dir
-    _ => "/tmp/wasmoon-jit-cache"
+priv struct RunJitCacheLocation {
+  directory : String
+  parent : String?
+}
+
+///|
+fn resolve_run_jit_cache_location(
+  os : @artifact.OperatingSystemAbi?,
+  env : Map[String, String],
+) -> RunJitCacheLocation? {
+  match env.get("WASMOON_JIT_CACHE_DIR") {
+    Some(directory) if directory.length() > 0 =>
+      return Some({ directory, parent: None })
+    _ => ()
   }
+  match os {
+    Some(MacOS) =>
+      match env.get("HOME") {
+        Some(home) if home.length() > 0 =>
+          Some({
+            directory: "\{home}/Library/Caches/wasmoon",
+            parent: Some("\{home}/Library/Caches"),
+          })
+        _ => None
+      }
+    Some(LinuxGnu | LinuxMusl) =>
+      match env.get("XDG_CACHE_HOME") {
+        Some(base) if base.length() > 0 =>
+          Some({ directory: "\{base}/wasmoon", parent: Some(base) })
+        _ =>
+          match env.get("HOME") {
+            Some(home) if home.length() > 0 =>
+              Some({
+                directory: "\{home}/.cache/wasmoon",
+                parent: Some("\{home}/.cache"),
+              })
+            _ => None
+          }
+      }
+    Some(WindowsMsvc) =>
+      match env.get("LOCALAPPDATA") {
+        Some(base) if base.length() > 0 =>
+          Some({
+            directory: "\{base}/wasmoon/cache",
+            parent: Some("\{base}/wasmoon"),
+          })
+        _ => None
+      }
+    None => None
+  }
+}
+
+///|
+fn run_jit_cache_location() -> RunJitCacheLocation? {
+  let os = Some(@wasmoon_jit.host_operating_system_abi()) catch { _ => None }
+  resolve_run_jit_cache_location(os, @env.get_env_vars())
 }
 
 ///|
@@ -1025,13 +1076,24 @@ fn digest_hex(bytes : Bytes) -> String {
 }
 
 ///|
-fn ensure_run_jit_cache_dir(cache_dir : String) -> Bool {
-  if @fs.path_exists(cache_dir) {
-    @fs.is_dir(cache_dir) catch {
+fn ensure_run_jit_cache_dir(location : RunJitCacheLocation) -> Bool {
+  match location.parent {
+    Some(parent) if !@fs.path_exists(parent) =>
+      @fs.create_dir(parent) catch {
+        _ => return false
+      }
+    Some(parent) =>
+      if !(@fs.is_dir(parent) catch { _ => false }) {
+        return false
+      }
+    None => ()
+  }
+  if @fs.path_exists(location.directory) {
+    @fs.is_dir(location.directory) catch {
       _ => false
     }
   } else {
-    @fs.create_dir(cache_dir) catch {
+    @fs.create_dir(location.directory) catch {
       _ => return false
     }
     true
@@ -1236,17 +1298,18 @@ fn run_with_jit(
   let mut cached_artifact : @wasmoon_jit.LoadedArtifact? = None
   if should_use_run_jit_cache(dump_on_trap, @perf.enabled()) {
     match wasm_binary {
-      Some(_) => {
-        let cache_dir = run_jit_cache_dir()
-        if ensure_run_jit_cache_dir(cache_dir) {
-          let path = run_jit_cache_file(cache_dir, expected_manifest)
-          cache_path = Some(path)
-          cached_artifact = load_run_jit_cache(path, compatibility)
-          if cached_artifact is Some(_) && debug {
-            @logger.debug("JIT: cache hit \{path}")
+      Some(_) =>
+        match run_jit_cache_location() {
+          Some(location) if ensure_run_jit_cache_dir(location) => {
+            let path = run_jit_cache_file(location.directory, expected_manifest)
+            cache_path = Some(path)
+            cached_artifact = load_run_jit_cache(path, compatibility)
+            if cached_artifact is Some(_) && debug {
+              @logger.debug("JIT: cache hit \{path}")
+            }
           }
+          _ => ()
         }
-      }
       None => ()
     }
   }
