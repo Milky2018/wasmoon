@@ -158,30 +158,6 @@ fn extract_node_tiebreak_less(lhs : ENode, rhs : ENode) -> Bool {
 }
 
 ///|
-fn extract_cost_apply_bonus(cost : ExtractCost, bonus : Int) -> ExtractCost {
-  if cost.infinite || bonus == 0 {
-    return cost
-  }
-  let max_finite = extract_cost_max_finite()
-  if bonus > 0 {
-    let op_cost = if cost.op_cost > max_finite - bonus {
-      max_finite
-    } else {
-      cost.op_cost + bonus
-    }
-    extract_cost_finite(op_cost, cost.depth)
-  } else {
-    let bonus_abs = 0 - bonus
-    let op_cost = if cost.op_cost <= bonus_abs {
-      0
-    } else {
-      cost.op_cost - bonus_abs
-    }
-    extract_cost_finite(op_cost, cost.depth)
-  }
-}
-
-///|
 /// Extract the best (lowest cost) expression from an e-class
 /// Returns the total cost and the best e-node
 ///
@@ -255,10 +231,6 @@ fn EGraph::compute_extraction_table(
       if !priceable {
         continue
       }
-      total_cost = extract_cost_apply_bonus(
-        total_cost,
-        self.remat_cost_bonus(EClassId(class_id)),
-      )
       total_cost = extract_cost_increment_depth(total_cost)
       match table.get(class_id) {
         Some((best_cost, best_node)) =>

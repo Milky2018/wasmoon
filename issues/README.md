@@ -441,6 +441,7 @@ graph TD
   ISS_415["ISS-415: Remove the uncompetitive Fast allocator"]
   ISS_416["ISS-416: Remove repeated compiler analysis and allocation work"]
   ISS_417["ISS-417: Remove the unused regalloc rematerialization planner"]
+  ISS_418["ISS-418: Delete the obsolete e-graph rematerialization marks"]
   ISS_002 --> ISS_003
   ISS_002 --> ISS_004
   ISS_003 --> ISS_005
@@ -799,6 +800,7 @@ graph TD
   ISS_410 --> ISS_411
   ISS_411 --> ISS_412
   ISS_412 --> ISS_413
+  ISS_405 --> ISS_418
 ```
 
 ## Warnings

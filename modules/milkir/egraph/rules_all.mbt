@@ -381,20 +381,6 @@ fn build_indexed_ruleset() -> IndexedRuleSet {
   rs.add_rule(rule_sle_smin(), [TIcmp])
   rs.add_rule(rule_sge_smin(), [TIcmp])
   rs.add_rule(rule_sle_smax(), [TIcmp])
-  // Rematerialization rules (mark cheap-to-recompute expressions)
-  rs.add_rule(rule_remat_iadd_iconst_left(), [TAdd])
-  rs.add_rule(rule_remat_iadd_iconst_right(), [TAdd])
-  rs.add_rule(rule_remat_isub_iconst_left(), [TSub])
-  rs.add_rule(rule_remat_isub_iconst_right(), [TSub])
-  rs.add_rule(rule_remat_band_iconst_left(), [TAnd])
-  rs.add_rule(rule_remat_band_iconst_right(), [TAnd])
-  rs.add_rule(rule_remat_bor_iconst_left(), [TOr])
-  rs.add_rule(rule_remat_bor_iconst_right(), [TOr])
-  rs.add_rule(rule_remat_bxor_iconst_left(), [TXor])
-  rs.add_rule(rule_remat_bxor_iconst_right(), [TXor])
-  rs.add_rule(rule_remat_bnot(), [TBnot])
-  rs.add_rule(rule_remat_iconst(), [TConst])
-  rs.add_rule(rule_remat_fconst(), [TFconst])
   // TODO(ISS-017): skeleton div-select strength reduction is legality-specific
   // and must remain out of the generic default ruleset until facts are modeled.
   // Spaceship comparison simplification rules

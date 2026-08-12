@@ -40,8 +40,6 @@ struct EGraph {
   // Diagnostic counters: conflict observations, monotonically increasing.
   mut type_conflict_hits : Int
   mut const_conflict_hits : Int
-  // Rematerialization set: classes that are cheap to recompute
-  remat_set : @hashset.HashSet[Int]
   // Number of successful rule applications in the most recent saturate call.
   mut last_rule_applications : Int
   // Number of times rewrite candidates were truncated by matches limit.
@@ -65,7 +63,6 @@ pub fn EGraph::EGraph() -> EGraph {
     type_conflicts: HashSet([]),
     type_conflict_hits: 0,
     const_conflict_hits: 0,
-    remat_set: HashSet([]),
     last_rule_applications: 0,
     last_matches_limit_hits: 0,
     last_eclass_size_limit_hits: 0,
@@ -258,12 +255,6 @@ pub fn EGraph::subsume(self : EGraph, a : EClassId, b : EClassId) -> EClassId {
   self.type_map.remove(a.0)
   self.type_conflicts.remove(a.0)
 
-  // Transfer rematerialization flag: if either was rematerializable, result is
-  if self.remat_set.contains(a.0) {
-    self.remat_set.add(b.0)
-  }
-  self.remat_set.remove(a.0)
-
   // Remove the old class from opcode index before removing it
   if self.classes.get(a.0) is Some(old_class) {
     // A constant conflict remains proof that this equivalence class is
@@ -339,12 +330,6 @@ pub fn EGraph::merge(self : EGraph, a : EClassId, b : EClassId) -> EClassId {
   // Remove old type entries
   self.type_map.remove(other_id.0)
   self.type_conflicts.remove(other_id.0)
-
-  // Merge rematerialization flag: if either was rematerializable, result is
-  if self.remat_set.contains(other_id.0) {
-    self.remat_set.add(new_id.0)
-  }
-  self.remat_set.remove(other_id.0)
 
   // Merge the e-class contents
   if self.classes.get(other_id.0) is Some(other_class) {
