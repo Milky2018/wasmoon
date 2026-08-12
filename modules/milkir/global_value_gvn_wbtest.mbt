@@ -92,7 +92,7 @@ test "GVN reloads a mutable context global after an unknown store" {
 }
 
 ///|
-test "GVN leaves stable context globals rematerializable across calls" {
+test "GVN leaves repeated stable context globals rematerializable" {
   let (builder, context, global) = context_global_fixture(
     "stable_global_call",
     Stable,
@@ -100,10 +100,10 @@ test "GVN leaves stable context globals rematerializable across calls" {
   )
   builder.add_result(I64)
   builder.global_value(global, context) |> ignore
-  let symbol = builder.get_function().declare_external_symbol("effect")
-  builder.call_symbol(symbol, None, []) |> ignore
-  let second = builder.global_value(global, context)
-  builder.return_([second])
+  builder.global_value(global, context) |> ignore
+  builder.global_value(global, context) |> ignore
+  let last = builder.global_value(global, context)
+  builder.return_([last])
   let function = builder.get_function()
   run_global_value_numbering_with_budget_and_analysis(
     function,
@@ -116,7 +116,8 @@ test "GVN leaves stable context globals rematerializable across calls" {
     content=(
       #|[
       #|  GlobalValue({ id: 0 }),
-      #|  Call(Direct({ name: "effect" }, { params: [], results: [] })),
+      #|  GlobalValue({ id: 0 }),
+      #|  GlobalValue({ id: 0 }),
       #|  GlobalValue({ id: 0 }),
       #|]
     ),

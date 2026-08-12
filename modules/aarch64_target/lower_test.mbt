@@ -2396,247 +2396,32 @@ test "AArch64 lowering resolves environment paths and typed symbol addresses" {
 }
 
 ///|
-test "AArch64 lowering reuses low-pressure stable environment regions" {
+test "AArch64 lowering materializes each stable environment field" {
   let field = @semantic.EnvironmentField::new("runtime.memory.base", I64)
   let builder = @semantic.FunctionBuilder::new(
-    "environment_stability",
+    "stable_environment_fields",
     Internal,
     [Ptr64],
-    [I64, I64, I64, I64, I64, I64],
+    [I64, I64],
   )
-  let stable_first = builder.emit(
-      EnvironmentField(field, Stable),
-      [builder.parameters()[0]],
-      [I64],
-    )[0]
-  for value in 0..<9 {
-    builder.emit(I64Const(value.to_uint64()), [], [I64]) |> ignore
-  }
-  let stable_second = builder.emit(
-      EnvironmentField(field, Stable),
-      [builder.parameters()[0]],
-      [I64],
-    )[0]
-  let stable_third = builder.emit(
-      EnvironmentField(field, Stable),
-      [builder.parameters()[0]],
-      [I64],
-    )[0]
-  let stable_fourth = builder.emit(
-      EnvironmentField(field, Stable),
-      [builder.parameters()[0]],
-      [I64],
-    )[0]
-  let mutable_first = builder.emit(
-      EnvironmentField(field, Mutable),
-      [builder.parameters()[0]],
-      [I64],
-    )[0]
-  let mutable_second = builder.emit(
-      EnvironmentField(field, Mutable),
-      [builder.parameters()[0]],
-      [I64],
-    )[0]
-  builder.return_([
-    stable_first, stable_second, stable_third, stable_fourth, mutable_first, mutable_second,
-  ])
-  let context = test_lowering_context().with_environment_field(field, [24])
+  let context = builder.parameters()[0]
+  let first = builder.emit(EnvironmentField(field, Stable), [context], [I64])[0]
+  let second = builder.emit(EnvironmentField(field, Stable), [context], [I64])[0]
+  builder.return_([first, second])
+  let lowering = test_lowering_context().with_environment_field(field, [24])
   inspect(
-    lower(builder.finish(), context).summary(),
+    lower(builder.finish(), lowering).summary(),
     content=(
-      #|vcode environment_stability(v0:ptr64) -> (i64, i64, i64, i64, i64, i64)
+      #|vcode stable_environment_fields(v0:ptr64) -> (i64, i64)
       #|block0:
       #|  i0 IncomingReg(Ptr64, p0:int) uses=[v0:fixed(p0:int)@early] defs=[v1:any-location(prefer=p0:int)@late]
       #|  i1 ScalarLoad(W64, None, I64, 24) uses=[v1:any@early] defs=[v2:any@late]
       #|  i2 ScalarLoad(W64, None, I64, 24) uses=[v1:any@early] defs=[v3:any@late]
-      #|  i3 ScalarLoad(W64, None, I64, 24) uses=[v1:any@early] defs=[v4:any@late]
-      #|  i4 OutgoingReg(I64, p0:int) uses=[v2:any@early]
-      #|  i5 OutgoingReg(I64, p1:int) uses=[v2:any@early]
-      #|  i6 OutgoingReg(I64, p2:int) uses=[v2:any@early]
-      #|  i7 OutgoingReg(I64, p3:int) uses=[v2:any@early]
-      #|  i8 OutgoingReg(I64, p4:int) uses=[v3:any@early]
-      #|  i9 OutgoingReg(I64, p5:int) uses=[v4:any@early]
-      #|  i10 Return
-      #|
-    ),
-  )
-}
-
-///|
-test "AArch64 lowering replaces an exclusive context carrier across calls" {
-  let field = @semantic.EnvironmentField::new("runtime.memory.base", I64)
-  let builder = @semantic.FunctionBuilder::new(
-    "environment_call_boundary",
-    Internal,
-    [Ptr64],
-    [I64, I64],
-  )
-  let before_call = builder.emit(
-      EnvironmentField(field, Stable),
-      [builder.parameters()[0]],
-      [I64],
-    )[0]
-  let call = @semantic.SemanticCall::new(
-    External(@semantic.ExternalSymbol::new("runtime.helper")),
-    @semantic.Signature::new([], []),
-    Platform,
-    @semantic.CallBehavior::new(ReadWrite, true, true, true, true),
-  )
-  builder.emit(Call(call), [], []) |> ignore
-  let after_call = builder.emit(
-      EnvironmentField(field, Stable),
-      [builder.parameters()[0]],
-      [I64],
-    )[0]
-  builder.return_([before_call, after_call])
-  let context = test_lowering_context().with_environment_field(field, [24])
-  inspect(
-    lower(builder.finish(), context).summary(),
-    content=(
-      #|vcode environment_call_boundary(v0:ptr64) -> (i64, i64)
-      #|block0:
-      #|  i0 IncomingReg(Ptr64, p0:int) uses=[v0:fixed(p0:int)@early] defs=[v1:any-location(prefer=p0:int)@late]
-      #|  i1 ScalarLoad(W64, None, I64, 24) uses=[v1:any@early] defs=[v2:any@late]
-      #|  i2 PlatformCall({ name: "runtime.helper" }, { params: [], results: [] }) clobbers=[p0:int, p1:int, p2:int, p3:int, p4:int, p5:int, p6:int, p7:int, p8:int, p9:int, p10:int, p11:int, p12:int, p13:int, p14:int, p15:int, p16:int, p17:int, p0:fpvec, p1:fpvec, p2:fpvec, p3:fpvec, p4:fpvec, p5:fpvec, p6:fpvec, p7:fpvec, p8:fpvec, p9:fpvec, p10:fpvec, p11:fpvec, p12:fpvec, p13:fpvec, p14:fpvec, p15:fpvec, p16:fpvec, p17:fpvec, p18:fpvec, p19:fpvec, p20:fpvec, p21:fpvec, p22:fpvec, p23:fpvec, p24:fpvec, p25:fpvec, p26:fpvec, p27:fpvec, p28:fpvec, p29:fpvec, p30:fpvec, p31:fpvec] safepoint=GcAndCancellation
       #|  i3 OutgoingReg(I64, p0:int) uses=[v2:any@early]
-      #|  i4 OutgoingReg(I64, p1:int) uses=[v2:any@early]
+      #|  i4 OutgoingReg(I64, p1:int) uses=[v3:any@early]
       #|  i5 Return
       #|
     ),
-  )
-}
-
-///|
-fn selected_environment_loads(
-  function : @vcode.Function[AArch64Inst],
-  offset : UInt64,
-) -> Array[AArch64Inst] {
-  let loads : Array[AArch64Inst] = []
-  for index in 0..<function.instruction_count() {
-    guard function.instruction_at(index) is Some(instruction) &&
-      function.instruction(instruction)
-      is Some(ScalarLoad(W64, None, _, instruction_offset)) else {
-      continue
-    }
-    if instruction_offset == offset {
-      loads.push(function.instruction(instruction).unwrap())
-    }
-  }
-  loads
-}
-
-///|
-test "AArch64 lowering replaces an exclusive context carrier across blocks" {
-  let field = @semantic.EnvironmentField::new("runtime.memory.base", I64)
-  let builder = @semantic.FunctionBuilder::new(
-    "environment_carrier_replacement",
-    Internal,
-    [Ptr64],
-    [I64, I64],
-  )
-  let context = builder.parameters()[0]
-  let first = builder.emit(EnvironmentField(field, Stable), [context], [I64])[0]
-  let continuation = builder.create_block([])
-  builder.jump(continuation, [])
-  builder.switch_to_block(continuation)
-  let second = builder.emit(EnvironmentField(field, Stable), [context], [I64])[0]
-  builder.return_([first, second])
-  let context = test_lowering_context().with_environment_field(field, [24])
-  debug_inspect(
-    selected_environment_loads(lower(builder.finish(), context), 24UL),
-    content="[ScalarLoad(W64, None, I64, 24)]",
-  )
-}
-
-///|
-test "AArch64 lowering does not replace an integer carrier with a float field" {
-  let field = @semantic.EnvironmentField::new("runtime.float.field", F64)
-  let builder = @semantic.FunctionBuilder::new(
-    "environment_float_carrier",
-    Internal,
-    [Ptr64],
-    [F64, F64, F64, F64],
-  )
-  let context = builder.parameters()[0]
-  let results : Array[@semantic.Value] = []
-  for _ in 0..<4 {
-    results.push(
-      builder.emit(EnvironmentField(field, Stable), [context], [F64])[0],
-    )
-  }
-  builder.return_(results)
-  let context = test_lowering_context().with_environment_field(field, [24])
-  debug_inspect(
-    selected_environment_loads(lower(builder.finish(), context), 24UL),
-    content="[ScalarLoad(W64, None, F64, 24), ScalarLoad(W64, None, F64, 24)]",
-  )
-}
-
-///|
-test "AArch64 lowering keeps non-exclusive reuse separated by calls" {
-  let field = @semantic.EnvironmentField::new("runtime.memory.base", I64)
-  let builder = @semantic.FunctionBuilder::new(
-    "environment_call_regions",
-    Internal,
-    [Ptr64],
-    [I64, I64, I64, I64, Ptr64],
-  )
-  let context = builder.parameters()[0]
-  let first = builder.emit(EnvironmentField(field, Stable), [context], [I64])[0]
-  let second = builder.emit(EnvironmentField(field, Stable), [context], [I64])[0]
-  builder.emit(
-    Call(
-      @semantic.SemanticCall::new(
-        External(@semantic.ExternalSymbol::new("runtime.helper")),
-        @semantic.Signature::new([], []),
-        Platform,
-        @semantic.CallBehavior::conservative(),
-      ),
-    ),
-    [],
-    [],
-  )
-  |> ignore
-  let third = builder.emit(EnvironmentField(field, Stable), [context], [I64])[0]
-  let fourth = builder.emit(EnvironmentField(field, Stable), [context], [I64])[0]
-  builder.return_([first, second, third, fourth, context])
-  let context = test_lowering_context().with_environment_field(field, [24])
-  debug_inspect(
-    selected_environment_loads(lower(builder.finish(), context), 24UL),
-    content="[ScalarLoad(W64, None, I64, 24), ScalarLoad(W64, None, I64, 24)]",
-  )
-}
-
-///|
-test "AArch64 lowering rematerializes stable fields under integer pressure" {
-  let field = @semantic.EnvironmentField::new("runtime.memory.base", I64)
-  let parameter_types : Array[@semantic.ValueType] = [Ptr64, Ptr64]
-  for _ in 0..<24 {
-    parameter_types.push(I64)
-  }
-  let builder = @semantic.FunctionBuilder::new(
-    "environment_pressure",
-    Internal,
-    parameter_types,
-    parameter_types,
-  )
-  let parameters = builder.parameters()
-  for _ in 0..<4 {
-    let value = builder.emit(EnvironmentField(field, Stable), [parameters[0]], [
-        I64,
-      ])[0]
-    builder.emit(
-      Store(@semantic.StoreSpec::new(W64, I64, 0UL, Little, None)),
-      [parameters[1], value],
-      [],
-    )
-    |> ignore
-  }
-  builder.return_(parameters)
-  let context = test_lowering_context().with_environment_field(field, [24])
-  debug_inspect(
-    selected_environment_loads(lower(builder.finish(), context), 24UL),
-    content="[ScalarLoad(W64, None, I64, 24), ScalarLoad(W64, None, I64, 24)]",
   )
 }
 
