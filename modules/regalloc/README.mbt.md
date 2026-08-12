@@ -68,9 +68,3 @@ whole-function analysis.
 The production integration is complete. CI validates allocation correctness on
 both native targets; retired allocators and backends are not rebuilt as
 performance or code-size acceptance baselines.
-
-## Expert packages
-
-- `Milky2018/regalloc/planning` provides standalone CFG, spill-slot, edit, and
-  frame-planning utilities. Allocation queues, bundle merging, eviction, and
-  splitting remain private to the root allocator.
