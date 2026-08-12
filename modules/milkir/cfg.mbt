@@ -226,6 +226,27 @@ priv struct Dominance {
 }
 
 ///|
+/// CFG facts shared by instruction-only optimization passes. The analysis is
+/// valid until a pass changes block successors or block identity.
+priv struct FunctionAnalysis {
+  cfg : CFG
+  dominance : Dominance
+  domtree : Array[Array[Int]]
+  block_idx : Array[Int]
+}
+
+///|
+fn FunctionAnalysis::build(func : Function) -> FunctionAnalysis {
+  let cfg = CFG::build(func)
+  let dominance = cfg.compute_dominance()
+  let block_idx = Array::make(func.next_block_id, -1)
+  for index, block in func.blocks {
+    block_idx[block.id] = index
+  }
+  { cfg, dominance, domtree: build_dominator_tree(dominance.idom), block_idx }
+}
+
+///|
 fn CFG::compute_dominance(self : CFG) -> Dominance {
   let idom = self.compute_dominators()
   let preorder = Array::make(idom.length(), -1)

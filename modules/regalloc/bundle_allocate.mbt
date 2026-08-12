@@ -447,8 +447,9 @@ fn bundle_register_order(
       preferred_by_value[segment.value.id],
     )
   }
-  for register in 0..<environment.allocatable_regs.length() {
-    if !order_marks[register] {
+  let class = bundle_class(bundle, segments)
+  for register, reg in environment.allocatable_regs {
+    if reg.class == class && !order_marks[register] {
       order_marks[register] = true
       order.push(register)
     }
@@ -1013,11 +1014,26 @@ fn validate_bundle_allocations(
       )
     }
   }
+  let seen_segments = Array::make(segments.length(), false)
+  for bundle in bundles {
+    if bundle.state is BundleSplit {
+      continue
+    }
+    for segment_id in bundle.segments {
+      if segment_id < 0 ||
+        segment_id >= segments.length() ||
+        seen_segments[segment_id] ||
+        segment_owner[segment_id] != bundle.id {
+        raise InvalidPlan(
+          message="invalid allocation bundle ownership for segment \{segment_id}: owner \{bundle.id}",
+        )
+      }
+      seen_segments[segment_id] = true
+    }
+  }
   for segment in segments {
     let owner = segment_owner[segment.id]
-    if owner < 0 ||
-      owner >= bundles.length() ||
-      !bundles[owner].segments.contains(segment.id) {
+    if owner < 0 || owner >= bundles.length() || !seen_segments[segment.id] {
       raise InvalidPlan(
         message="invalid allocation bundle ownership for segment \{segment.id}: owner \{owner}",
       )
@@ -1101,9 +1117,10 @@ fn[F : FunctionView] allocate_bundles(
     let mut split_register = -1
     let mut split_cost : Int? = None
     let mut split_point : ProgramPoint? = None
+    let class = bundle_class(bundle, segments)
     for register in register_order {
       let reg = environment.allocatable_regs[register]
-      if reg.class != bundle_class(bundle, segments) {
+      if reg.class != class {
         continue
       }
       while conflict_marks.length() < bundles.length() {

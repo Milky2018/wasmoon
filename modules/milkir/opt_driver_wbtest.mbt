@@ -88,14 +88,20 @@ test "O1 folds a 300-instruction live arithmetic chain" {
 ///|
 test "egraph uses a bounded rewrite budget at 300 instructions" {
   let func = egraph_identity_function("egraph_300", 300)
-  inspect(run_egraph_pass(func), content="true")
+  inspect(
+    run_egraph_pass_with_analysis(func, FunctionAnalysis::build(func)),
+    content="true",
+  )
   inspect(func.verify(), content="()")
 }
 
 ///|
 test "egraph retains rewrite work at 600 instructions" {
   let func = egraph_identity_function("egraph_600", 600)
-  inspect(run_egraph_pass(func), content="true")
+  inspect(
+    run_egraph_pass_with_analysis(func, FunctionAnalysis::build(func)),
+    content="true",
+  )
   inspect(func.verify(), content="()")
 }
 
@@ -136,15 +142,9 @@ test "mandatory cleanup preserves effects above size boundaries" {
 
 ///|
 test "egraph size tiers retain nonzero rewrite budgets" {
-  let limits_299 = egraph_limits_for_function(
-    copy_chain_function("limits_299", 299),
-  )
-  let limits_300 = egraph_limits_for_function(
-    copy_chain_function("limits_300", 300),
-  )
-  let limits_600 = egraph_limits_for_function(
-    copy_chain_function("limits_600", 600),
-  )
+  let limits_299 = egraph_limits_for_instruction_count(299)
+  let limits_300 = egraph_limits_for_instruction_count(300)
+  let limits_600 = egraph_limits_for_instruction_count(600)
   debug_inspect(
     [
       (limits_299.matches_limit(), limits_299.eclass_enode_limit()),
@@ -158,7 +158,11 @@ test "egraph size tiers retain nonzero rewrite budgets" {
 ///|
 test "GVN work budget stops safely after partial optimization" {
   let func = duplicate_expression_function("gvn_partial", 5)
-  let stats = run_global_value_numbering_with_budget(func, 2)
+  let stats = run_global_value_numbering_with_budget_and_analysis(
+    func,
+    2,
+    FunctionAnalysis::build(func),
+  )
   inspect(stats.work_done, content="2")
   inspect(stats.budget_exhausted, content="true")
   inspect(func.blocks[0].instructions[1].opcode, content="Scalar(Copy)")
@@ -181,7 +185,11 @@ test "GVN early termination preserves external effects" {
   let result = builder.iadd(lhs, rhs)
   builder.return_([result])
   let func = builder.get_function()
-  let stats = run_global_value_numbering_with_budget(func, 2)
+  let stats = run_global_value_numbering_with_budget_and_analysis(
+    func,
+    2,
+    FunctionAnalysis::build(func),
+  )
   inspect(stats.budget_exhausted, content="true")
   inspect(func.blocks[0].instructions[1].opcode is Call(_), content="true")
   inspect(func.verify(), content="()")
@@ -191,10 +199,10 @@ test "GVN early termination preserves external effects" {
 test "GVN uses work units instead of a function-size switch" {
   debug_inspect(
     [
-      gvn_work_budget_for_function(copy_chain_function("gvn_299", 299)),
-      gvn_work_budget_for_function(copy_chain_function("gvn_300", 300)),
-      gvn_work_budget_for_function(copy_chain_function("gvn_301", 301)),
-      gvn_work_budget_for_function(copy_chain_function("gvn_600", 600)),
+      gvn_work_budget_for_instruction_count(299),
+      gvn_work_budget_for_instruction_count(300),
+      gvn_work_budget_for_instruction_count(301),
+      gvn_work_budget_for_instruction_count(600),
     ],
     content="[299, 300, 300, 300]",
   )
@@ -225,7 +233,7 @@ test "GVN metrics count only instructions visited in reachable blocks" {
       fn(event) { events.push(event) },
     ),
   )
-  run_gvn_pass(func) |> ignore
+  run_gvn_pass_with_analysis(func, FunctionAnalysis::build(func)) |> ignore
   clear_optimization_metrics_sink()
   inspect(events.length(), content="1")
   debug_inspect(events[0].work_done, content="Some(1)")
@@ -307,7 +315,12 @@ fn deep_empty_block_chain_function(name : String, count : Int) -> Function {
 ///|
 test "global value numbering survives a deep spine of empty blocks" {
   let func = deep_empty_block_chain_function("gvn_deep_empty_blocks", 100000)
-  cse_gvn_global(func) |> ignore
+  run_global_value_numbering_with_budget_and_analysis(
+    func,
+    instruction_count(func),
+    FunctionAnalysis::build(func),
+  )
+  |> ignore
   inspect(func.verify(), content="()")
 }
 
@@ -333,7 +346,7 @@ fn deep_operand_chain_function(name : String, count : Int) -> Function {
 test "egraph survives a deep dominator spine" {
   // Well past the depth a native-stack recursion survives.
   let func = deep_block_chain_function("egraph_deep_blocks", 100000)
-  run_egraph_pass(func) |> ignore
+  run_egraph_pass_with_analysis(func, FunctionAnalysis::build(func)) |> ignore
   inspect(func.verify(), content="()")
 }
 
@@ -352,7 +365,7 @@ test "the optimizer pipeline survives a deep dominator spine" {
 ///|
 test "egraph survives a deep operand chain" {
   let func = deep_operand_chain_function("egraph_deep_operands", 100000)
-  run_egraph_pass(func) |> ignore
+  run_egraph_pass_with_analysis(func, FunctionAnalysis::build(func)) |> ignore
   inspect(func.verify(), content="()")
 }
 
@@ -367,7 +380,7 @@ test "egraph elaborates a strength-reduced form into the IR" {
   let product = builder.imul(x, eight)
   builder.return_([product])
   let func = builder.get_function()
-  run_egraph_pass(func) |> ignore
+  run_egraph_pass_with_analysis(func, FunctionAnalysis::build(func)) |> ignore
   inspect(func.verify(), content="()")
   let text = func.print()
   inspect(text.contains("ishl"), content="true")

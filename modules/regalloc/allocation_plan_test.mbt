@@ -232,11 +232,6 @@ test "backtracking reuses a register across early use and late def" {
     content=(
       #|{
       #|  value_locations: [Some(Reg({ id: 0, class: Int })), Some(Reg({ id: 0, class: Int }))],
-      #|  operand_locations: {
-      #|    (0, 0): Reg({ id: 0, class: Int }),
-      #|    (0, 1): Reg({ id: 0, class: Int }),
-      #|    (1, 0): Reg({ id: 0, class: Int }),
-      #|  },
       #|  operand_assignments: [
       #|    { instruction: 0, operand: 0, location: Reg({ id: 0, class: Int }) },
       #|    { instruction: 0, operand: 1, location: Reg({ id: 0, class: Int }) },
@@ -273,14 +268,6 @@ test "backtracking reuses spill slots for disjoint values" {
       #|    Some(Reg({ id: 0, class: Int })),
       #|    Some(Spill(0)),
       #|  ],
-      #|  operand_locations: {
-      #|    (0, 0): Reg({ id: 0, class: Int }),
-      #|    (0, 1): Reg({ id: 1, class: Int }),
-      #|    (1, 0): Reg({ id: 0, class: Int }),
-      #|    (1, 1): Reg({ id: 1, class: Int }),
-      #|    (2, 0): Reg({ id: 0, class: Int }),
-      #|    (2, 1): Reg({ id: 1, class: Int }),
-      #|  },
       #|  operand_assignments: [
       #|    { instruction: 0, operand: 0, location: Reg({ id: 0, class: Int }) },
       #|    { instruction: 0, operand: 1, location: Reg({ id: 1, class: Int }) },
@@ -344,14 +331,6 @@ test "backtracking keeps spill homes distinct across CFG blocks" {
       #|    Some(Reg({ id: 0, class: Int })),
       #|    Some(Spill(1)),
       #|  ],
-      #|  operand_locations: {
-      #|    (0, 0): Reg({ id: 0, class: Int }),
-      #|    (0, 1): Reg({ id: 1, class: Int }),
-      #|    (1, 0): Reg({ id: 0, class: Int }),
-      #|    (1, 1): Reg({ id: 1, class: Int }),
-      #|    (2, 0): Reg({ id: 0, class: Int }),
-      #|    (2, 1): Reg({ id: 1, class: Int }),
-      #|  },
       #|  operand_assignments: [
       #|    { instruction: 0, operand: 0, location: Reg({ id: 0, class: Int }) },
       #|    { instruction: 0, operand: 1, location: Reg({ id: 1, class: Int }) },
@@ -404,13 +383,6 @@ test "backtracking keeps the dense live range resident" {
     content=(
       #|{
       #|  value_locations: [Some(Spill(0)), Some(Reg({ id: 0, class: Int }))],
-      #|  operand_locations: {
-      #|    (0, 0): Reg({ id: 0, class: Int }),
-      #|    (1, 0): Reg({ id: 0, class: Int }),
-      #|    (2, 0): Reg({ id: 0, class: Int }),
-      #|    (3, 0): Reg({ id: 1, class: Int }),
-      #|    (3, 1): Reg({ id: 0, class: Int }),
-      #|  },
       #|  operand_assignments: [
       #|    { instruction: 0, operand: 0, location: Reg({ id: 0, class: Int }) },
       #|    { instruction: 1, operand: 0, location: Reg({ id: 0, class: Int }) },
@@ -453,10 +425,6 @@ test "backtracking splits a live range around a clobbered CFG fragment" {
     content=(
       #|{
       #|  value_locations: [Some(Spill(0))],
-      #|  operand_locations: {
-      #|    (0, 0): Reg({ id: 0, class: Int }),
-      #|    (2, 0): Reg({ id: 0, class: Int }),
-      #|  },
       #|  operand_assignments: [
       #|    { instruction: 0, operand: 0, location: Reg({ id: 0, class: Int }) },
       #|    { instruction: 2, operand: 0, location: Reg({ id: 0, class: Int }) },
@@ -541,14 +509,6 @@ test "backtracking parks cold live-through values outside hot loops" {
       #|    Some(Reg({ id: 1, class: Int })),
       #|    Some(Reg({ id: 0, class: Int })),
       #|  ],
-      #|  operand_locations: {
-      #|    (19, 0): Reg({ id: 1, class: Int }),
-      #|    (19, 1): Reg({ id: 0, class: Int }),
-      #|    (21, 0): Reg({ id: 0, class: Int }),
-      #|    (21, 1): Reg({ id: 0, class: Int }),
-      #|    (21, 2): Reg({ id: 0, class: Int }),
-      #|    (21, 3): Reg({ id: 0, class: Int }),
-      #|  },
       #|  operand_assignments: [
       #|    { instruction: 19, operand: 0, location: Reg({ id: 1, class: Int }) },
       #|    { instruction: 19, operand: 1, location: Reg({ id: 0, class: Int }) },
@@ -593,10 +553,6 @@ test "backtracking shares a spill home across a loop-carried SSA bundle" {
     content=(
       #|{
       #|  value_locations: [Some(Spill(0)), Some(Spill(0)), Some(Spill(0))],
-      #|  operand_locations: {
-      #|    (0, 0): Reg({ id: 0, class: Int }),
-      #|    (0, 1): Reg({ id: 1, class: Int }),
-      #|  },
       #|  operand_assignments: [
       #|    { instruction: 0, operand: 0, location: Reg({ id: 0, class: Int }) },
       #|    { instruction: 0, operand: 1, location: Reg({ id: 1, class: Int }) },
@@ -705,11 +661,6 @@ test "backtracking coalesces conflict-free edges and preserves loop transfers" {
       #|    Some(Reg({ id: 1, class: Int })),
       #|    Some(Reg({ id: 2, class: Int })),
       #|  ],
-      #|  operand_locations: {
-      #|    (1, 0): Reg({ id: 2, class: Int }),
-      #|    (1, 1): Reg({ id: 0, class: Int }),
-      #|    (1, 2): Reg({ id: 2, class: Int }),
-      #|  },
       #|  operand_assignments: [
       #|    { instruction: 1, operand: 0, location: Reg({ id: 2, class: Int }) },
       #|    { instruction: 1, operand: 1, location: Reg({ id: 0, class: Int }) },
@@ -759,28 +710,16 @@ test "backtracking coalesces the conflict-free side of a critical-edge parameter
     content=(
       #|{
       #|  value_locations: [
-      #|    Some(Reg({ id: 1, class: Int })),
       #|    Some(Reg({ id: 0, class: Int })),
-      #|    Some(Reg({ id: 1, class: Int })),
+      #|    Some(Reg({ id: 0, class: Int })),
+      #|    Some(Reg({ id: 0, class: Int })),
       #|  ],
-      #|  operand_locations: {
-      #|    (0, 0): Reg({ id: 1, class: Int }),
-      #|    (1, 0): Reg({ id: 0, class: Int }),
-      #|    (2, 0): Reg({ id: 1, class: Int }),
-      #|  },
       #|  operand_assignments: [
-      #|    { instruction: 0, operand: 0, location: Reg({ id: 1, class: Int }) },
+      #|    { instruction: 0, operand: 0, location: Reg({ id: 0, class: Int }) },
       #|    { instruction: 1, operand: 0, location: Reg({ id: 0, class: Int }) },
-      #|    { instruction: 2, operand: 0, location: Reg({ id: 1, class: Int }) },
+      #|    { instruction: 2, operand: 0, location: Reg({ id: 0, class: Int }) },
       #|  ],
-      #|  edits: [
-      #|    {
-      #|      value: { id: 1, class: Int },
-      #|      from: Reg({ id: 0, class: Int }),
-      #|      to: Reg({ id: 1, class: Int }),
-      #|      position: Edge(source_block=1, successor_index=0),
-      #|    },
-      #|  ],
+      #|  edits: [],
       #|  spill_slots: [],
       #|}
     ),
@@ -808,7 +747,6 @@ test "soft register preference chooses a legal home without an edit" {
     content=(
       #|{
       #|  value_locations: [Some(Reg({ id: 2, class: Int }))],
-      #|  operand_locations: { (0, 0): Reg({ id: 2, class: Int }) },
       #|  operand_assignments: [{ instruction: 0, operand: 0, location: Reg({ id: 2, class: Int }) }],
       #|  edits: [],
       #|  spill_slots: [],
@@ -865,7 +803,6 @@ test "backtracking honors a fixed-register operand" {
     content=(
       #|{
       #|  value_locations: [Some(Reg({ id: 1, class: Int }))],
-      #|  operand_locations: { (0, 0): Reg({ id: 1, class: Int }) },
       #|  operand_assignments: [{ instruction: 0, operand: 0, location: Reg({ id: 1, class: Int }) }],
       #|  edits: [],
       #|  spill_slots: [],
@@ -963,15 +900,6 @@ test "backtracking borrows an allocatable register when spill temporaries are ex
       #|    Some(Spill(1)),
       #|    Some(Spill(2)),
       #|  ],
-      #|  operand_locations: {
-      #|    (0, 0): Reg({ id: 1, class: Int }),
-      #|    (0, 1): Reg({ id: 2, class: Int }),
-      #|    (0, 2): Reg({ id: 0, class: Int }),
-      #|    (1, 0): Reg({ id: 0, class: Int }),
-      #|    (1, 1): Reg({ id: 0, class: Int }),
-      #|    (1, 2): Reg({ id: 0, class: Int }),
-      #|    (1, 3): Reg({ id: 0, class: Int }),
-      #|  },
       #|  operand_assignments: [
       #|    { instruction: 0, operand: 0, location: Reg({ id: 1, class: Int }) },
       #|    { instruction: 0, operand: 1, location: Reg({ id: 2, class: Int }) },
@@ -1050,14 +978,6 @@ test "backtracking keeps edit-only scratch registers out of instruction operands
       #|    Some(Reg({ id: 1, class: Int })),
       #|    Some(Spill(0)),
       #|  ],
-      #|  operand_locations: {
-      #|    (0, 0): Reg({ id: 1, class: Int }),
-      #|    (0, 1): Reg({ id: 0, class: Int }),
-      #|    (1, 0): Reg({ id: 0, class: Int }),
-      #|    (1, 1): Reg({ id: 0, class: Int }),
-      #|    (1, 2): Reg({ id: 0, class: Int }),
-      #|    (1, 3): Reg({ id: 0, class: Int }),
-      #|  },
       #|  operand_assignments: [
       #|    { instruction: 0, operand: 0, location: Reg({ id: 1, class: Int }) },
       #|    { instruction: 0, operand: 1, location: Reg({ id: 0, class: Int }) },

@@ -42,14 +42,15 @@ test "sparse vreg set promotes and unions high virtual register ids" {
 ///|
 test "sparse live sets preserve defs and successor propagation" {
   let cfg : DenseCfgEdges = { preds: [[], [0], [1]], succs: [[1], [2], []] }
-  let sets = compute_live_sets_from_use_defs(3, 1_000_001, cfg, [
-    {
-      vreg_id: 1_000_000,
-      def_point: Some(ProgramPoint(0, 0)),
-      is_entry_param_def: false,
-      use_points: [ProgramPoint(2, 0)],
-    },
-  ])
+  let defs = [SparseVRegSet::new(), SparseVRegSet::new(), SparseVRegSet::new()]
+  let live_in = [
+    SparseVRegSet::new(),
+    SparseVRegSet::new(),
+    SparseVRegSet::new(),
+  ]
+  defs[0].set(1_000_000, true)
+  live_in[2].set(1_000_000, true)
+  let sets = propagate_live_sets(3, cfg, defs, live_in)
   debug_inspect(sets.live_in, content="[[], [1000000], [1000000]]")
   debug_inspect(sets.live_out, content="[[1000000], [1000000], []]")
 }
@@ -60,20 +61,24 @@ test "sparse live sets cover diamond loop and unreachable CFG regions" {
     preds: [[], [0, 3], [0], [1, 2], []],
     succs: [[1, 2], [3], [3], [1], []],
   }
-  let sets = compute_live_sets_from_use_defs(5, 1_000_001, cfg, [
-    {
-      vreg_id: 7,
-      def_point: Some(ProgramPoint(0, 0)),
-      is_entry_param_def: false,
-      use_points: [ProgramPoint(3, 0)],
-    },
-    {
-      vreg_id: 1_000_000,
-      def_point: None,
-      is_entry_param_def: false,
-      use_points: [ProgramPoint(4, 0)],
-    },
-  ])
+  let defs = [
+    SparseVRegSet::new(),
+    SparseVRegSet::new(),
+    SparseVRegSet::new(),
+    SparseVRegSet::new(),
+    SparseVRegSet::new(),
+  ]
+  let live_in = [
+    SparseVRegSet::new(),
+    SparseVRegSet::new(),
+    SparseVRegSet::new(),
+    SparseVRegSet::new(),
+    SparseVRegSet::new(),
+  ]
+  defs[0].set(7, true)
+  live_in[3].set(7, true)
+  live_in[4].set(1_000_000, true)
+  let sets = propagate_live_sets(5, cfg, defs, live_in)
   debug_inspect(sets.live_in, content="[[], [7], [7], [7], [1000000]]")
   debug_inspect(sets.live_out, content="[[7], [7], [7], [7], []]")
 }
@@ -94,20 +99,16 @@ test "count sorted integer points in open range" {
 ///|
 test "compute sparse live sets over reusable CFG model" {
   let cfg : DenseCfgEdges = { preds: [[], [0], [1]], succs: [[1], [2], []] }
-  let live_sets = compute_live_sets_from_use_defs(3, 2, cfg, [
-    {
-      vreg_id: 0,
-      def_point: Some(ProgramPoint(0, 1)),
-      is_entry_param_def: false,
-      use_points: [ProgramPoint(2, 0)],
-    },
-    {
-      vreg_id: 1,
-      def_point: Some(ProgramPoint(0, -2)),
-      is_entry_param_def: true,
-      use_points: [ProgramPoint(1, 0)],
-    },
-  ])
+  let defs = [SparseVRegSet::new(), SparseVRegSet::new(), SparseVRegSet::new()]
+  let live_in = [
+    SparseVRegSet::new(),
+    SparseVRegSet::new(),
+    SparseVRegSet::new(),
+  ]
+  defs[0].set(0, true)
+  live_in[1].set(1, true)
+  live_in[2].set(0, true)
+  let live_sets = propagate_live_sets(3, cfg, defs, live_in)
   debug_inspect(live_sets.live_in, content="[[1], [0, 1], [0]]")
   debug_inspect(live_sets.live_out, content="[[0, 1], [0], []]")
 }
@@ -186,6 +187,14 @@ test "compact spill slots reuses non-overlapping scalar slots" {
       #|  total_slots: 2,
       #|}
     ),
+  )
+}
+
+///|
+test "program point ordering is lexicographic across large blocks" {
+  inspect(
+    ProgramPoint(0, 1_500_000).compare_with_order(ProgramPoint(1, 0), [0, 1]),
+    content="-1",
   )
 }
 

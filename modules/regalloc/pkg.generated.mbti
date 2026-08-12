@@ -30,7 +30,7 @@ pub(all) struct AllocationEdit {
 
 pub struct AllocationPlan {
   // private fields
-} derive(@debug.Debug)
+}
 pub fn AllocationPlan::edits(Self) -> Array[AllocationEdit]
 pub fn AllocationPlan::operand_assignments(Self) -> Array[OperandAssignment]
 pub fn AllocationPlan::operand_location(Self, Int, Int) -> Location?
@@ -38,6 +38,7 @@ pub fn AllocationPlan::spill_count(Self) -> Int
 pub fn AllocationPlan::spill_slot(Self, Int) -> SpillSlotSpec?
 pub fn AllocationPlan::value_location(Self, Int) -> Location?
 pub impl Show for AllocationPlan
+pub impl @debug.Debug for AllocationPlan
 
 type DenseCfgEdges derive(@debug.Debug)
 
@@ -80,8 +81,6 @@ pub fn LiveRangeSet::block_order_count(Self) -> Int
 pub fn LiveRangeSet::get(Self, Int) -> LiveRange
 pub fn LiveRangeSet::get_by_vreg(Self, VirtualReg) -> LiveRange?
 pub fn LiveRangeSet::length(Self) -> Int
-
-type LiveSetUseDef derive(@debug.Debug)
 
 pub(all) enum Location {
   Reg(PhysicalReg)

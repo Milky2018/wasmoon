@@ -24,7 +24,7 @@ test "pointer-base inference follows dependencies against block storage order" {
   func.blocks.rev_in_place()
   let infos = collect_ptr_base_infos(func, collect_iconst_values(func))
   debug_inspect(
-    infos.get(pointer.id).map(info => info.region),
+    infos[pointer.id].map(info => info.region),
     content="Some(Heap(0))",
   )
 }

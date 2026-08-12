@@ -83,6 +83,16 @@ fn SparseVRegSet::set(self : SparseVRegSet, id : Int, present : Bool) -> Unit {
 }
 
 ///|
+fn SparseVRegSet::contains(self : SparseVRegSet, id : Int) -> Bool {
+  if id < 0 {
+    return false
+  }
+  let word_id = id / 64
+  let bit = id % 64
+  (self.word(word_id) & (1UL << bit)) != 0UL
+}
+
+///|
 fn SparseVRegSet::merge_word(
   self : SparseVRegSet,
   word_id : Int,

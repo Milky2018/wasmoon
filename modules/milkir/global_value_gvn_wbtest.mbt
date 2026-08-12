@@ -32,7 +32,12 @@ test "GVN reuses a mutable context global across heap stores" {
   let second = builder.global_value(global, context)
   builder.return_([second])
   let function = builder.get_function()
-  cse_gvn_global(function) |> ignore
+  run_global_value_numbering_with_budget_and_analysis(
+    function,
+    instruction_count(function),
+    FunctionAnalysis::build(function),
+  )
+  |> ignore
   debug_inspect(
     function.blocks[0].instructions.map(inst => inst.opcode),
     content=(
@@ -65,7 +70,12 @@ test "GVN reloads a mutable context global after an unknown store" {
   let second = builder.global_value(global, context)
   builder.return_([second])
   let function = builder.get_function()
-  cse_gvn_global(function) |> ignore
+  run_global_value_numbering_with_budget_and_analysis(
+    function,
+    instruction_count(function),
+    FunctionAnalysis::build(function),
+  )
+  |> ignore
   debug_inspect(
     function.blocks[0].instructions.map(inst => inst.opcode),
     content=(
@@ -95,7 +105,12 @@ test "GVN leaves stable context globals rematerializable across calls" {
   let second = builder.global_value(global, context)
   builder.return_([second])
   let function = builder.get_function()
-  cse_gvn_global(function) |> ignore
+  run_global_value_numbering_with_budget_and_analysis(
+    function,
+    instruction_count(function),
+    FunctionAnalysis::build(function),
+  )
+  |> ignore
   debug_inspect(
     function.blocks[0].instructions.map(inst => inst.opcode),
     content=(
@@ -123,7 +138,12 @@ test "GVN reloads mutable context globals after calls" {
   let second = builder.global_value(global, context)
   builder.return_([second])
   let function = builder.get_function()
-  cse_gvn_global(function) |> ignore
+  run_global_value_numbering_with_budget_and_analysis(
+    function,
+    instruction_count(function),
+    FunctionAnalysis::build(function),
+  )
+  |> ignore
   debug_inspect(
     function.blocks[0].instructions.map(inst => inst.opcode),
     content=(
@@ -164,7 +184,12 @@ test "GVN does not merge distinct context globals" {
   let second = builder.global_value(memory1, context)
   builder.return_([second])
   let function = builder.get_function()
-  cse_gvn_global(function) |> ignore
+  run_global_value_numbering_with_budget_and_analysis(
+    function,
+    instruction_count(function),
+    FunctionAnalysis::build(function),
+  )
+  |> ignore
   debug_inspect(
     function.blocks[0].instructions.map(inst => inst.opcode),
     content=(

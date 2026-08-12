@@ -29,11 +29,20 @@ pub struct SpillSlotSpec {
 ///|
 pub struct AllocationPlan {
   priv value_locations : Array[Location?]
-  priv operand_locations : Map[(Int, Int), Location]
-  priv operand_assignments : Array[OperandAssignment]
+  priv operand_locations : Array[Array[Location?]]
   priv edits : Array[AllocationEdit]
   priv spill_slots : Array[SpillSlotSpec]
-} derive(Debug)
+}
+
+///|
+pub impl Debug for AllocationPlan with fn to_repr(self) {
+  Repr::record({
+    "value_locations": Repr(self.value_locations),
+    "operand_assignments": Repr(self.operand_assignments()),
+    "edits": Repr(self.edits),
+    "spill_slots": Repr(self.spill_slots),
+  })
+}
 
 ///|
 pub impl Show for AllocationPlan with fn output(self, logger) {
@@ -44,8 +53,7 @@ pub impl Show for AllocationPlan with fn output(self, logger) {
 fn AllocationPlan::new(value_count : Int) -> AllocationPlan {
   {
     value_locations: Array::make(value_count, None),
-    operand_locations: Map([]),
-    operand_assignments: [],
+    operand_locations: [],
     edits: [],
     spill_slots: [],
   }
@@ -69,8 +77,14 @@ fn AllocationPlan::assign_operand(
   operand : Int,
   location : Location,
 ) -> Unit {
-  self.operand_locations[(instruction, operand)] = location
-  self.operand_assignments.push({ instruction, operand, location })
+  while self.operand_locations.length() <= instruction {
+    self.operand_locations.push([])
+  }
+  let locations = self.operand_locations[instruction]
+  while locations.length() <= operand {
+    locations.push(None)
+  }
+  locations[operand] = Some(location)
 }
 
 ///|
@@ -110,14 +124,24 @@ pub fn AllocationPlan::operand_location(
   instruction : Int,
   operand : Int,
 ) -> Location? {
-  self.operand_locations.get((instruction, operand))
+  self.operand_locations
+  .get(instruction)
+  .bind(locations => locations.get(operand).bind(location => location))
 }
 
 ///|
 pub fn AllocationPlan::operand_assignments(
   self : AllocationPlan,
 ) -> Array[OperandAssignment] {
-  self.operand_assignments.copy()
+  let assignments : Array[OperandAssignment] = []
+  for instruction, locations in self.operand_locations {
+    for operand, location in locations {
+      if location is Some(location) {
+        assignments.push({ instruction, operand, location })
+      }
+    }
+  }
+  assignments
 }
 
 ///|

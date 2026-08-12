@@ -295,13 +295,15 @@ fn EGraphBuilder::value_has_children(
 fn EGraphBuilder::add_value(
   self : EGraphBuilder,
   value : Value,
+  stack : Array[(Value, Bool)],
 ) -> @egraph.EClassId {
   if self.lookup_value(value) is Some(id) {
     return id
   }
   // Each frame is (value, expanded): `expanded` marks the revisit after the
   // frame's operands have been pushed.
-  let stack : Array[(Value, Bool)] = [(value, false)]
+  stack.clear()
+  stack.push((value, false))
   while stack.pop() is Some((current, expanded)) {
     if self.lookup_value(current) is Some(_) {
       continue
@@ -420,15 +422,6 @@ fn EGraphBuilder::get_simplified_operand(
 }
 
 ///|
-fn build_block_index(func : Function) -> Map[Int, Int] {
-  let index : Map[Int, Int] = Map([])
-  for i, block in func.blocks {
-    index.set(block.id, i)
-  }
-  index
-}
-
-///|
 /// Apply e-graph optimization to a function
 /// Returns true if any optimization was applied
 priv struct EGraphOptimizeStats {
@@ -443,6 +436,7 @@ fn optimize_function_with_stats_with_limits_and_ruleset(
   func : Function,
   limits : @egraph.SaturationLimits,
   ruleset : @egraph.IndexedRuleSet,
+  analysis : FunctionAnalysis,
 ) -> EGraphOptimizeStats {
   let mut changed = false
   let builder = EGraphBuilder::new_with_limits_and_ruleset(limits, ruleset)
@@ -457,6 +451,7 @@ fn optimize_function_with_stats_with_limits_and_ruleset(
     }
   }
 
+  let value_stack : Array[(Value, Bool)] = []
   for block in func.blocks {
     // Add all e-graph-admitted values from all blocks.
     for inst in block.instructions {
@@ -464,7 +459,7 @@ fn optimize_function_with_stats_with_limits_and_ruleset(
         v.id >= 0 &&
         v.id < builder.def_eop_map.length() &&
         builder.def_eop_map[v.id] is Some(_) {
-        builder.add_value(v) |> ignore
+        builder.add_value(v, value_stack) |> ignore
       }
     }
   }
@@ -483,17 +478,13 @@ fn optimize_function_with_stats_with_limits_and_ruleset(
   // This mirrors Cranelift's ScopedHashMap elaboration direction: each block
   // sees dominating representatives, can refine them locally, and restores on
   // scope exit.
-  let cfg = CFG::build(func)
-  let idom = cfg.compute_dominators()
-  let domtree = build_dominator_tree(idom)
-  let block_idx = build_block_index(func)
-
   // The dominator tree is walked with `visit_dominator_tree`'s explicit
   // stack rather than native recursion, so a deep block chain costs heap
   // (ISS-380). Entering a block rewrites it and returns the bindings it
   // introduced; the matching exit restores them.
   fn rewrite_block(block_id : Int) -> (Array[(RepKey, Value?)], Bool) {
-    guard block_idx.get(block_id) is Some(idx) else { return ([], true) }
+    let idx = analysis.block_idx[block_id]
+    guard idx >= 0 else { return ([], true) }
     let block = func.blocks[idx]
     let scoped_entries : Array[(RepKey, Value?)] = []
     fn bind_rep(builder : EGraphBuilder, value : Value) -> Unit {
@@ -576,16 +567,15 @@ fn optimize_function_with_stats_with_limits_and_ruleset(
         bind_rep(builder, v)
       }
     }
-    block.instructions.clear()
-    for inst in rewritten {
-      block.instructions.push(inst)
-    }
+    block.instructions = rewritten
     (scoped_entries, true)
   }
 
-  if cfg.is_valid(0) {
+  if analysis.cfg.is_valid(0) {
     builder.class_to_value.clear()
-    visit_dominator_tree(domtree, 0, rewrite_block, fn(scoped_entries) {
+    visit_dominator_tree(analysis.domtree, 0, rewrite_block, fn(
+      scoped_entries,
+    ) {
       for entry in scoped_entries.rev_iter() {
         let (key, previous) = entry
         match previous {

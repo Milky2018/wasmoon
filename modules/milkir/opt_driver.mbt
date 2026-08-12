@@ -53,8 +53,7 @@ fn run_opt_pass(
 }
 
 ///|
-fn egraph_limits_for_function(func : Function) -> @egraph.SaturationLimits {
-  let insts = instruction_count(func)
+fn egraph_limits_for_instruction_count(insts : Int) -> @egraph.SaturationLimits {
   if insts >= 600 {
     // An e-class starts with one node, so a limit of one would disable all
     // rewrites. Allow one match and one additional node instead.
@@ -69,26 +68,29 @@ fn egraph_limits_for_function(func : Function) -> @egraph.SaturationLimits {
 }
 
 ///|
-fn run_egraph_pass(func : Function) -> Bool {
-  let limits = egraph_limits_for_function(func)
+fn run_egraph_pass_with_analysis(
+  func : Function,
+  analysis : FunctionAnalysis,
+) -> Bool {
+  let before = instruction_count(func)
+  let limits = egraph_limits_for_instruction_count(before)
   // Large functions keep the compact core rewrite set for predictable
   // compile time; smaller ones run the full ruleset, whose results
   // elaboration can now materialize. The limits above additionally scale
   // the work permitted per e-class.
-  let ruleset = if instruction_count(func) >= 300 {
+  let ruleset = if before >= 300 {
     @egraph.get_compact_ruleset()
   } else {
     @egraph.get_global_ruleset()
   }
   if !perf_enabled() {
     return optimize_function_with_stats_with_limits_and_ruleset(
-        func, limits, ruleset,
+        func, limits, ruleset, analysis,
       ).changed
   }
-  let before = instruction_count(func)
   let tick = perf_tick_now()
   let stats = optimize_function_with_stats_with_limits_and_ruleset(
-    func, limits, ruleset,
+    func, limits, ruleset, analysis,
   )
   let duration_us = perf_elapsed_us(tick)
   let after = instruction_count(func)
@@ -106,8 +108,7 @@ fn run_egraph_pass(func : Function) -> Bool {
 }
 
 ///|
-fn gvn_work_budget_for_function(func : Function) -> Int {
-  let insts = instruction_count(func)
+fn gvn_work_budget_for_instruction_count(insts : Int) -> Int {
   if insts > 300 {
     300
   } else {
@@ -116,16 +117,17 @@ fn gvn_work_budget_for_function(func : Function) -> Int {
 }
 
 ///|
-fn run_gvn_pass(func : Function) -> OptResult {
+fn run_gvn_pass_with_analysis(
+  func : Function,
+  analysis : FunctionAnalysis,
+) -> OptResult {
   let before = instruction_count(func)
-  let budget = gvn_work_budget_for_function(func)
+  let budget = gvn_work_budget_for_instruction_count(before)
   let perf_on = perf_enabled()
   let tick = if perf_on { perf_tick_now() } else { 0L }
-  let stats = if budget == before {
-    cse_gvn_global(func)
-  } else {
-    run_global_value_numbering_with_budget(func, budget)
-  }
+  let stats = run_global_value_numbering_with_budget_and_analysis(
+    func, budget, analysis,
+  )
   if perf_on {
     perf_record_ir_pass(
       "cse_gvn_global",
@@ -177,23 +179,33 @@ fn run_optimized_mandatory_pre_cleanup(func : Function) -> OptResult {
   if alias_result.changed {
     result.mark_changed()
   }
-  let cleanup_result = run_opt_pass(func, "dce", eliminate_dead_code)
-  if cleanup_result.changed {
-    result.mark_changed()
+  if backend_result.changed || cf_result.changed || alias_result.changed {
+    let cleanup_result = run_opt_pass(func, "dce", eliminate_dead_code)
+    if cleanup_result.changed {
+      result.mark_changed()
+    }
   }
   result
 }
 
 ///|
-fn run_mandatory_final_cleanup(func : Function) -> OptResult {
+fn run_mandatory_final_cleanup_with_analysis(
+  func : Function,
+  analysis : FunctionAnalysis,
+  needs_dce : Bool,
+) -> OptResult {
   let result = OptResult::OptResult()
-  let alias_result = run_opt_pass(func, "alias_canon", canonicalize_aliases)
+  let alias_result = run_opt_pass(func, "alias_canon", function => {
+    canonicalize_aliases_with_analysis(function, analysis)
+  })
   if alias_result.changed {
     result.mark_changed()
   }
-  let dce_result = run_opt_pass(func, "dce", eliminate_dead_code)
-  if dce_result.changed {
-    result.mark_changed()
+  if needs_dce || alias_result.changed {
+    let dce_result = run_opt_pass(func, "dce", eliminate_dead_code)
+    if dce_result.changed {
+      result.mark_changed()
+    }
   }
   let bs_result = run_opt_pass(func, "simplify_branches", simplify_branches)
   if bs_result.changed {
@@ -225,16 +237,22 @@ fn optimize_o2_pipeline(func : Function) -> OptResult {
   if pre_cleanup.changed {
     result.mark_changed()
   }
-  if run_egraph_pass(func) {
+  let analysis = FunctionAnalysis::build(func)
+  let egraph_changed = run_egraph_pass_with_analysis(func, analysis)
+  if egraph_changed {
     result.mark_changed()
   }
-  let gvn_result = run_gvn_pass(func)
+  let gvn_result = run_gvn_pass_with_analysis(func, analysis)
   if gvn_result.changed {
     result.mark_changed()
   }
   // Budgeted passes may stop after a safe partial rewrite. Re-establish the
   // canonical IR form unconditionally afterward.
-  let final_cleanup = run_mandatory_final_cleanup(func)
+  let final_cleanup = run_mandatory_final_cleanup_with_analysis(
+    func,
+    analysis,
+    egraph_changed || gvn_result.changed,
+  )
   if final_cleanup.changed {
     result.mark_changed()
   }

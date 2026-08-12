@@ -405,7 +405,7 @@ pub struct Block {
   priv owner : Ref[FunctionOwnerContext]
   id : Int // Unique block identifier
   params : Array[(Value, Type)] // Block parameters (for phi nodes)
-  instructions : Array[Inst] // Instructions in this block
+  mut instructions : Array[Inst] // Instructions in this block
   mut terminator : Terminator? // How this block ends
 }
 
