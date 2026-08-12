@@ -765,11 +765,6 @@ fn run_global_value_numbering_with_budget_and_analysis(
           continue
         }
       }
-      // Skip non-candidates
-      if inst.opcode is GlobalValue(global_value) &&
-        func.global_value_data(global_value) is Some(ContextField(_, Stable, _)) {
-        continue
-      }
       if !is_gvn_candidate(inst) {
         continue
       }

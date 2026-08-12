@@ -92,9 +92,9 @@ test "GVN reloads a mutable context global after an unknown store" {
 }
 
 ///|
-test "GVN leaves repeated stable context globals rematerializable" {
+test "GVN reuses a stable context global" {
   let (builder, context, global) = context_global_fixture(
-    "stable_global_call",
+    "stable_global_reuse",
     Stable,
     0,
   )
@@ -113,14 +113,7 @@ test "GVN leaves repeated stable context globals rematerializable" {
   |> ignore
   debug_inspect(
     function.blocks[0].instructions.map(inst => inst.opcode),
-    content=(
-      #|[
-      #|  GlobalValue({ id: 0 }),
-      #|  GlobalValue({ id: 0 }),
-      #|  GlobalValue({ id: 0 }),
-      #|  GlobalValue({ id: 0 }),
-      #|]
-    ),
+    content="[GlobalValue({ id: 0 }), Scalar(Copy), Scalar(Copy), Scalar(Copy)]",
   )
   function.verify()
 }
