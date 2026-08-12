@@ -695,6 +695,8 @@ fn[F : FunctionView] assign_segment_operands(
   let operand_segments : Array[Int?] = []
   let used_temps : Array[PhysicalReg] = []
   let borrowed_temps : Array[PhysicalReg] = []
+  let tie_slot_by_id : Map[Int, Int] = Map([])
+  let operand_tie_slots : Array[Int?] = []
   let tied_constraints : Array[OperandConstraint?] = []
   let tied_locations : Array[Location?] = []
   let has_predecessor = Array::make(function.block_count(), false)
@@ -727,16 +729,31 @@ fn[F : FunctionView] assign_segment_operands(
       operand_segments.clear()
       used_temps.clear()
       borrowed_temps.clear()
+      tie_slot_by_id.clear()
+      operand_tie_slots.clear()
       tied_constraints.clear()
       tied_locations.clear()
-      for _ in operands {
-        assigned.push(None)
-        tied_constraints.push(None)
-        tied_locations.push(None)
-      }
       for operand in operands {
-        if operand.tie_id >= 0 {
-          let constraint = match tied_constraints[operand.tie_id] {
+        assigned.push(None)
+        let tie_slot = if operand.tie_id < 0 {
+          None
+        } else {
+          match tie_slot_by_id.get(operand.tie_id) {
+            Some(slot) => Some(slot)
+            None => {
+              let slot = tied_constraints.length()
+              tie_slot_by_id[operand.tie_id] = slot
+              tied_constraints.push(None)
+              tied_locations.push(None)
+              Some(slot)
+            }
+          }
+        }
+        operand_tie_slots.push(tie_slot)
+      }
+      for operand_index, operand in operands {
+        if operand_tie_slots[operand_index] is Some(slot) {
+          let constraint = match tied_constraints[slot] {
             None => operand.constraint
             Some(FixedReg(required)) =>
               match operand.constraint {
@@ -753,10 +770,10 @@ fn[F : FunctionView] assign_segment_operands(
               }
             Some(AnyLocation) => operand.constraint
           }
-          tied_constraints[operand.tie_id] = Some(constraint)
+          tied_constraints[slot] = Some(constraint)
         }
       }
-      for operand in operands {
+      for operand_index, operand in operands {
         let home = plan.value_location(operand.vreg.id).unwrap()
         let segment = segment_at(
           segments,
@@ -775,10 +792,10 @@ fn[F : FunctionView] assign_segment_operands(
         }
         natural_locations.push(natural)
         let any_location = if operand.role is Def { home } else { natural }
-        let constraint = if operand.tie_id >= 0 {
-          tied_constraints[operand.tie_id].unwrap_or(operand.constraint)
-        } else {
-          operand.constraint
+        let tie_slot = operand_tie_slots[operand_index]
+        let constraint = match tie_slot {
+          Some(slot) => tied_constraints[slot].unwrap_or(operand.constraint)
+          None => operand.constraint
         }
         let reserved = match constraint {
           FixedReg(reg) => Some(reg)
@@ -793,11 +810,11 @@ fn[F : FunctionView] assign_segment_operands(
               Spill(_) => None
             }
         }
-        if operand.tie_id >= 0 &&
+        if tie_slot is Some(slot) &&
           constraint is AnyReg &&
           reserved is Some(reg) &&
-          tied_locations[operand.tie_id] is None {
-          tied_locations[operand.tie_id] = Some(Reg(reg))
+          tied_locations[slot] is None {
+          tied_locations[slot] = Some(Reg(reg))
         }
         if reserved is Some(reg) && !used_temps.contains(reg) {
           used_temps.push(reg)
@@ -805,19 +822,19 @@ fn[F : FunctionView] assign_segment_operands(
       }
       for operand_index, operand in operands {
         let home = plan.value_location(operand.vreg.id).unwrap()
-        let tied_location : Location? = if operand.tie_id < 0 {
-          None
-        } else {
-          tied_locations[operand.tie_id]
+        let tie_slot = operand_tie_slots[operand_index]
+        let tied_location : Location? = match tie_slot {
+          Some(slot) => tied_locations[slot]
+          None => None
         }
         let selected = match tied_location {
           Some(location) => location
           None =>
             match
-              (if operand.tie_id >= 0 {
-                tied_constraints[operand.tie_id].unwrap_or(operand.constraint)
-              } else {
-                operand.constraint
+              (match tie_slot {
+                Some(slot) =>
+                  tied_constraints[slot].unwrap_or(operand.constraint)
+                None => operand.constraint
               }) {
               FixedReg(reg) => Reg(reg)
               AnyLocation =>
@@ -874,8 +891,8 @@ fn[F : FunctionView] assign_segment_operands(
             }
         }
         assigned[operand_index] = Some(selected)
-        if operand.tie_id >= 0 {
-          tied_locations[operand.tie_id] = Some(selected)
+        if tie_slot is Some(slot) {
+          tied_locations[slot] = Some(selected)
         }
         plan.assign_operand(instruction, operand_index, selected)
       }

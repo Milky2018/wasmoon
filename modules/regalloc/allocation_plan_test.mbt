@@ -850,14 +850,14 @@ test "backtracking preserves tied and fixed operands across a clobber" {
 }
 
 ///|
-test "backtracking applies AnyReg to the whole tied group" {
+test "backtracking applies AnyReg to a sparse tied group" {
   let function : TestFunction = {
     value_count: 2,
     block_parameters: [value(0)],
     instructions: [
       [
-        Operand::use_reg(value(0)).with_constraint(AnyLocation).with_tie(0),
-        Operand::def(value(1)).with_constraint(AnyReg).with_tie(0),
+        Operand::use_reg(value(0)).with_constraint(AnyLocation).with_tie(7),
+        Operand::def(value(1)).with_constraint(AnyReg).with_tie(7),
       ],
     ],
   }

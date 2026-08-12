@@ -106,6 +106,8 @@ pub fn Operand::with_preference(
 }
 
 ///|
+/// Tie operands in one instruction by a shared nonnegative label.
+/// Labels are opaque and need not be contiguous or bounded by operand count.
 pub fn Operand::with_tie(self : Operand, tie_id : Int) -> Operand {
   {
     vreg: self.vreg,
