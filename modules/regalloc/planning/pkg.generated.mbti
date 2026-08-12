@@ -29,11 +29,7 @@ pub fn lower_bound_ordered_span_by_end(Array[OrderedProgramSpan], Int) -> Int
 
 pub fn lower_bound_sorted_int(Array[Int], Int) -> Int
 
-pub fn plan_cross_block_rematerializations(Array[RematDefInfo], Array[RematUseInfo]) -> Array[RematLocalCloneInfo]
-
 pub fn plan_fixed_constraint_edits(Array[FixedConstraintInst]) -> Array[FixedConstraintInstEdits]
-
-pub fn plan_long_distance_rematerializations(Array[RematDefInfo], Array[RematUseInfo], min_distance? : Int, per_vreg_clone_cap? : Int) -> Array[RematCloneInfo]
 
 pub fn plan_register_probe_order(Array[@regalloc.PhysicalReg], Array[@regalloc.PhysicalReg], Array[@regalloc.PhysicalReg], Bool, Int, Int, @regalloc.PhysicalReg?) -> Array[@regalloc.PhysicalReg]
 
@@ -141,30 +137,6 @@ pub(all) struct ReloadUseInfo {
   inst_index : Int
   spill_slot : Int
   vreg : @regalloc.VirtualReg
-} derive(Eq, @debug.Debug)
-
-pub(all) struct RematCloneInfo {
-  vreg : @regalloc.VirtualReg
-  block_id : Int
-  inst_index : Int
-} derive(Eq, @debug.Debug)
-
-pub(all) struct RematDefInfo {
-  vreg : @regalloc.VirtualReg
-  block_id : Int
-  inst_index : Int
-} derive(Eq, @debug.Debug)
-
-pub(all) struct RematLocalCloneInfo {
-  vreg : @regalloc.VirtualReg
-  block_id : Int
-  first_inst_index : Int
-} derive(Eq, @debug.Debug)
-
-pub(all) struct RematUseInfo {
-  vreg : @regalloc.VirtualReg
-  block_id : Int
-  inst_index : Int
 } derive(Eq, @debug.Debug)
 
 pub(all) struct SpillSlotCompaction {

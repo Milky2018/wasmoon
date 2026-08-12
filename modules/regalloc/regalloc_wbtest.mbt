@@ -114,54 +114,6 @@ test "compute sparse live sets over reusable CFG model" {
 }
 
 ///|
-test "plan long-distance rematerialization clones by pure use positions" {
-  let v0 : VirtualReg = { id: 0, class: Int }
-  let defs : Array[@planning.RematDefInfo] = [
-    { vreg: v0, block_id: 0, inst_index: 0 },
-  ]
-  let uses : Array[@planning.RematUseInfo] = [
-    { vreg: v0, block_id: 0, inst_index: 2 },
-    { vreg: v0, block_id: 0, inst_index: 4 },
-    { vreg: v0, block_id: 1, inst_index: 8 },
-    { vreg: v0, block_id: 0, inst_index: 9 },
-  ]
-  let plan = @planning.plan_long_distance_rematerializations(
-    defs,
-    uses,
-    min_distance=4,
-    per_vreg_clone_cap=1,
-  )
-  debug_inspect(
-    plan,
-    content="[{ vreg: { id: 0, class: Int }, block_id: 0, inst_index: 4 }]",
-  )
-}
-
-///|
-test "plan cross-block rematerialization clones once per use block" {
-  let v0 : VirtualReg = { id: 0, class: Int }
-  let defs : Array[@planning.RematDefInfo] = [
-    { vreg: v0, block_id: 0, inst_index: 0 },
-  ]
-  let uses : Array[@planning.RematUseInfo] = [
-    { vreg: v0, block_id: 0, inst_index: 3 },
-    { vreg: v0, block_id: 1, inst_index: 2 },
-    { vreg: v0, block_id: 1, inst_index: 4 },
-    { vreg: v0, block_id: 2, inst_index: 1 },
-  ]
-  let plan = @planning.plan_cross_block_rematerializations(defs, uses)
-  debug_inspect(
-    plan,
-    content=(
-      #|[
-      #|  { vreg: { id: 0, class: Int }, block_id: 1, first_inst_index: 2 },
-      #|  { vreg: { id: 0, class: Int }, block_id: 2, first_inst_index: 1 },
-      #|]
-    ),
-  )
-}
-
-///|
 test "compact spill slots reuses non-overlapping scalar slots" {
   let a = ProgramRange::ProgramRange(ProgramPoint(0, 0), ProgramPoint(0, 2))
   let b = ProgramRange::ProgramRange(ProgramPoint(0, 2), ProgramPoint(0, 4))
