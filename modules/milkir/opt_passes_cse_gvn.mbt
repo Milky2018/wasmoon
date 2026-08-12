@@ -584,6 +584,9 @@ fn is_gvn_candidate(inst : Inst) -> Bool {
   if inst.results.length() != 1 {
     return false
   }
+  if is_cheap_rematerializable_constant(inst) {
+    return false
+  }
   !inst.opcode.semantics().must_preserve_if_unused()
 }
 

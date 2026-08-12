@@ -605,15 +605,16 @@ test "O3 derives power-of-two constants with a bounded large-function egraph" {
   let func = builder.get_function()
   optimize_with_level(func, O3) |> ignore
   let instructions = func.blocks[0].instructions
-  inspect(instructions.length(), content="5")
+  inspect(instructions.length(), content="6")
   inspect(instructions[0].opcode, content="Scalar(IntConst(3))")
   inspect(instructions[1].opcode, content="Scalar(IntBinary(ShiftLeft))")
+  inspect(instructions[2].opcode, content="Scalar(IntConst(3))")
   inspect(
-    instructions[2].opcode,
+    instructions[3].opcode,
     content="Scalar(IntBinary(UnsignedShiftRight))",
   )
-  inspect(instructions[3].opcode, content="Scalar(IntConst(7))")
-  inspect(instructions[4].opcode, content="Scalar(IntBinary(And))")
+  inspect(instructions[4].opcode, content="Scalar(IntConst(7))")
+  inspect(instructions[5].opcode, content="Scalar(IntBinary(And))")
   inspect(func.verify(), content="()")
 }
 

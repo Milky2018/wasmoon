@@ -229,10 +229,7 @@ fn run_mandatory_final_cleanup_with_analysis(
 }
 
 ///|
-fn optimize_o2_pipeline(
-  func : Function,
-  late_rematerialization? : Bool = true,
-) -> OptResult {
+fn optimize_o2_pipeline(func : Function) -> OptResult {
   let result = OptResult::OptResult()
   // Mandatory passes are independent of function size and run before budgets
   // are selected, so dead and aliased IR does not consume expensive work.
@@ -258,15 +255,6 @@ fn optimize_o2_pipeline(
   )
   if final_cleanup.changed {
     result.mark_changed()
-  }
-  if late_rematerialization {
-    let remat_result = run_opt_pass(
-      func, "rematerialize", rematerialize_cheap_values_across_blocks,
-    )
-    if remat_result.changed {
-      result.mark_changed()
-      run_opt_pass(func, "dce", eliminate_dead_code) |> ignore
-    }
   }
   result
 }
@@ -307,7 +295,7 @@ pub fn optimize(func : Function) -> OptResult {
 fn optimize_o3(func : Function) -> OptResult {
   let result = OptResult::OptResult()
   // First run O2 optimizations
-  let o2_result = optimize_o2_pipeline(func, late_rematerialization=false)
+  let o2_result = optimize_o2_pipeline(func)
   if o2_result.changed {
     result.mark_changed()
   }

@@ -399,6 +399,9 @@ fn EGraphBuilder::get_simplified_operand(
   self : EGraphBuilder,
   value : Value,
 ) -> Value? {
+  if is_cheap_rematerializable_value(value, self.def_map) {
+    return None
+  }
   if value.id >= 0 &&
     value.id < self.value_map.length() &&
     self.value_map[value.id] is Some(class_id) {
@@ -488,6 +491,9 @@ fn optimize_function_with_stats_with_limits_and_ruleset(
     let block = func.blocks[idx]
     let scoped_entries : Array[(RepKey, Value?)] = []
     fn bind_rep(builder : EGraphBuilder, value : Value) -> Unit {
+      if is_cheap_rematerializable_value(value, builder.def_map) {
+        return
+      }
       if value.id >= 0 &&
         value.id < builder.value_map.length() &&
         builder.value_map[value.id] is Some(class_id) {
@@ -564,6 +570,7 @@ fn optimize_function_with_stats_with_limits_and_ruleset(
 
       rewritten.push(inst)
       if inst.first_result() is Some(v) {
+        builder.register_def(inst)
         bind_rep(builder, v)
       }
     }

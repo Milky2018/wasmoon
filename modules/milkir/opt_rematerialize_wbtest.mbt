@@ -25,39 +25,24 @@ test "cheap rematerialization accepts only one-lane integer constants" {
 }
 
 ///|
-test "late rematerialization rebuilds once per using block" {
-  let builder = FunctionBuilder::FunctionBuilder("rematerialize_across_blocks")
-  let condition = builder.add_param(I32)
+test "O2 keeps repeated cheap address recipes local" {
+  let builder = FunctionBuilder::FunctionBuilder("local_address_recipes")
   builder.add_result(I64)
-  let local_use = builder.create_block()
-  let terminator_use = builder.create_block()
-  let constant = builder.iconst_i64(65535L)
-  builder.brnz(condition, local_use, terminator_use)
-  builder.switch_to_block(local_use)
-  let sum = builder.iadd(constant, constant)
-  builder.return_([sum])
-  builder.switch_to_block(terminator_use)
-  builder.return_([constant])
+  builder.add_result(I64)
+  let first = builder.uextend(I64, builder.iconst_i32(4))
+  let second = builder.uextend(I64, builder.iconst_i32(4))
+  builder.return_([first, second])
   let func = builder.get_function()
 
-  inspect(
-    rematerialize_cheap_values_across_blocks(func).changed,
-    content="true",
-  )
-  eliminate_dead_code(func) |> ignore
+  optimize_with_level(func, O2) |> ignore
   inspect(
     func.print(),
     content=(
-      #|function rematerialize_across_blocks(v0:i32) -> i64 {
+      #|function local_address_recipes() -> i64, i64 {
       #|block0:
-      #|    brnz v0, block1, block2
-      #|block1:
-      #|    v3:i64 = iconst 65535
-      #|    v2:i64 = iadd v3, v3
-      #|    return v2
-      #|block2:
-      #|    v4:i64 = iconst 65535
-      #|    return v4
+      #|    v1:i64 = iconst 4
+      #|    v3:i64 = iconst 4
+      #|    return v1, v3
       #|}
       #|
     ),
