@@ -860,9 +860,11 @@ fn uxtw_memory_address_selection(
       if constants[function.value_index(index).unwrap()] is Some(offset) {
         let byte_scale = 1UL << natural_register_shift(width)
         if offset % byte_scale == 0UL && offset / byte_scale <= 4095UL {
-          return Some(
-            (base, None, offset, [index_bits], [base_bits, index_bits, index]),
-          )
+          let folded_constants = [base_bits, index_bits]
+          if uses[function.value_index(index_bits).unwrap()] == 1 {
+            folded_constants.push(index)
+          }
+          return Some((base, None, offset, [], folded_constants))
         }
       }
       return Some((base, Some(index), 0UL, [], [base_bits, index_bits]))
