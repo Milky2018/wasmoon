@@ -40,6 +40,268 @@ test "AArch64 allocation honors incoming and return ABI constraints" {
 }
 
 ///|
+test "AArch64 allocation rejects transfer scratch as an unconstrained operand" {
+  let builder = @semantic.FunctionBuilder::new(
+    "illegal_transfer_operand",
+    Platform,
+    [I64, I64],
+    [I64],
+  )
+  let sum = builder.emit(IntBinary(Add), builder.parameters(), [I64])[0]
+  builder.return_([sum])
+  let function = lower(builder.finish(), test_lowering_context())
+  let allocation = allocate(function)
+  let instruction = function.instruction_at(2).unwrap()
+  let operand = function.instruction_operand_at(instruction, 0).unwrap()
+  let home = match allocation.value_location(operand.value).unwrap() {
+    Register(home) => home
+    Stack(_) => fail("expected the source value to have a register home")
+  }
+  let transfer = @vcode.PhysicalReg::new(15, Int)
+  assert_true(allocation.assign_operand(instruction, 0, transfer))
+  assert_true(
+    allocation.add_edit(
+      @vcode.Edit::register_move(
+        function.before(instruction).unwrap(),
+        operand.value,
+        home,
+        transfer,
+      ),
+    ),
+  )
+  let error = try {
+    verify_allocation(function, allocation)
+    None
+  } catch {
+    error => Some(error)
+  }
+  debug_inspect(error, content="Some(IllegalRegister(reg=p15:int))")
+}
+
+///|
+test "AArch64 allocation rejects transfer scratch in an allocator edit" {
+  let builder = @semantic.FunctionBuilder::new(
+    "illegal_transfer_edit",
+    Platform,
+    [I64, I64],
+    [I64],
+  )
+  let sum = builder.emit(IntBinary(Add), builder.parameters(), [I64])[0]
+  builder.return_([sum])
+  let function = lower(builder.finish(), test_lowering_context())
+  let allocation = allocate(function)
+  let instruction = function.instruction_at(2).unwrap()
+  let operand = function.instruction_operand_at(instruction, 0).unwrap()
+  let home = match allocation.value_location(operand.value).unwrap() {
+    Register(home) => home
+    Stack(_) => fail("expected the source value to have a register home")
+  }
+  assert_true(
+    allocation.add_edit(
+      @vcode.Edit::register_move(
+        function.before(instruction).unwrap(),
+        operand.value,
+        home,
+        @vcode.PhysicalReg::new(15, Int),
+      ),
+    ),
+  )
+  let error = try {
+    verify_allocation(function, allocation)
+    None
+  } catch {
+    error => Some(error)
+  }
+  debug_inspect(error, content="Some(IllegalRegister(reg=p15:int))")
+}
+
+///|
+test "AArch64 allocation rejects every reserved register as a value home" {
+  let errors : Array[AArch64AllocationError?] = []
+  let cases : Array[(@semantic.ValueType, @vcode.PhysicalReg)] = [
+    (I64, @vcode.PhysicalReg::new(15, Int)),
+    (I64, @vcode.PhysicalReg::new(16, Int)),
+    (I64, @vcode.PhysicalReg::new(17, Int)),
+    (F64, @vcode.PhysicalReg::new(16, FpVector)),
+    (F64, @vcode.PhysicalReg::new(17, FpVector)),
+    (F64, @vcode.PhysicalReg::new(18, FpVector)),
+  ]
+  for case in cases {
+    let (ty, reg) = case
+    let builder : @vcode.Builder[AArch64Inst] = @vcode.Builder::new(
+      "illegal_reserved_home",
+      [ty],
+    )
+    let entry = builder.entry_block()
+    builder.set_terminator(
+      entry,
+      Return,
+      [],
+      [],
+      [],
+      @vcode.InstructionMetadata::empty(),
+    )
+    |> ignore
+    let value = builder.parameter(0)
+    let function = builder.finish()
+    let allocation = @vcode.Allocation::for_function(function)
+    assert_true(allocation.assign_value(value, Register(reg)))
+    errors.push(
+      try {
+        verify_allocation(function, allocation)
+        None
+      } catch {
+        error => Some(error)
+      },
+    )
+  }
+  debug_inspect(
+    errors,
+    content=(
+      #|[
+      #|  Some(IllegalRegister(reg=p15:int)),
+      #|  Some(IllegalRegister(reg=p16:int)),
+      #|  Some(IllegalRegister(reg=p17:int)),
+      #|  Some(IllegalRegister(reg=p16:fpvec)),
+      #|  Some(IllegalRegister(reg=p17:fpvec)),
+      #|  Some(IllegalRegister(reg=p18:fpvec)),
+      #|]
+    ),
+  )
+}
+
+///|
+test "AArch64 allocation rejects stack-address scratch in an allocator edit" {
+  let builder = @semantic.FunctionBuilder::new(
+    "illegal_stack_address_edit",
+    Platform,
+    [I64, I64],
+    [I64],
+  )
+  let sum = builder.emit(IntBinary(Add), builder.parameters(), [I64])[0]
+  builder.return_([sum])
+  let function = lower(builder.finish(), test_lowering_context())
+  let allocation = allocate(function)
+  let instruction = function.instruction_at(2).unwrap()
+  let operand = function.instruction_operand_at(instruction, 0).unwrap()
+  let home = match allocation.value_location(operand.value).unwrap() {
+    Register(home) => home
+    Stack(_) => fail("expected the source value to have a register home")
+  }
+  assert_true(
+    allocation.add_edit(
+      @vcode.Edit::register_move(
+        function.before(instruction).unwrap(),
+        operand.value,
+        home,
+        @vcode.PhysicalReg::new(16, Int),
+      ),
+    ),
+  )
+  let error = try {
+    verify_allocation(function, allocation)
+    None
+  } catch {
+    error => Some(error)
+  }
+  debug_inspect(error, content="Some(IllegalRegister(reg=p16:int))")
+}
+
+///|
+test "AArch64 allocation keeps spill scratch out of unconstrained operands" {
+  let builder = @semantic.FunctionBuilder::new(
+    "illegal_spill_scratch_operand",
+    Platform,
+    [I64, I64],
+    [I64],
+  )
+  let sum = builder.emit(IntBinary(Add), builder.parameters(), [I64])[0]
+  builder.return_([sum])
+  let function = lower(builder.finish(), test_lowering_context())
+  let allocation = allocate(function)
+  let instruction = function.instruction_at(2).unwrap()
+  let operand = function.instruction_operand_at(instruction, 0).unwrap()
+  let home = match allocation.value_location(operand.value).unwrap() {
+    Register(home) => home
+    Stack(_) => fail("expected the source value to have a register home")
+  }
+  let scratch = @vcode.PhysicalReg::new(17, Int)
+  assert_true(allocation.assign_operand(instruction, 0, scratch))
+  assert_true(
+    allocation.add_edit(
+      @vcode.Edit::register_move(
+        function.before(instruction).unwrap(),
+        operand.value,
+        home,
+        scratch,
+      ),
+    ),
+  )
+  let error = try {
+    verify_allocation(function, allocation)
+    None
+  } catch {
+    error => Some(error)
+  }
+  debug_inspect(error, content="Some(IllegalRegister(reg=p17:int))")
+}
+
+///|
+test "AArch64 allocation admits spill scratch only between allocation edits" {
+  let builder : @vcode.Builder[AArch64Inst] = @vcode.Builder::new(
+    "legal_spill_scratch_edit",
+    [I64],
+  )
+  let entry = builder.entry_block()
+  let value = builder.parameter(0)
+  let (keep_alive, _) = builder.append_body(
+    entry,
+    KeepAlive(I64),
+    [@vcode.Input::any(value)],
+    [],
+    [],
+    @vcode.InstructionMetadata::empty(),
+  )
+  builder.set_terminator(
+    entry,
+    Return,
+    [],
+    [],
+    [],
+    @vcode.InstructionMetadata::empty(),
+  )
+  |> ignore
+  let function = builder.finish()
+  let allocation = @vcode.Allocation::for_function(function)
+  let slot = allocation.create_stack_slot(I64, 8, 8)
+  let scratch = @vcode.PhysicalReg::new(17, Int)
+  let operand = @vcode.PhysicalReg::new(0, Int)
+  assert_true(allocation.assign_value(value, Stack(slot)))
+  assert_true(allocation.assign_operand(keep_alive, 0, operand))
+  assert_true(
+    allocation.add_edit(
+      @vcode.Edit::reload(
+        function.before(keep_alive).unwrap(),
+        value,
+        slot,
+        scratch,
+      ),
+    ),
+  )
+  assert_true(
+    allocation.add_edit(
+      @vcode.Edit::register_move(
+        function.before(keep_alive).unwrap(),
+        value,
+        scratch,
+        operand,
+      ),
+    ),
+  )
+  verify_allocation(function, allocation)
+}
+
+///|
 test "AArch64 frame reserves emergency move storage only on request" {
   let builder : @vcode.Builder[AArch64Inst] = @vcode.Builder::new(
     "emergency_move_frame",

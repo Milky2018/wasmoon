@@ -65,50 +65,124 @@ fn transfer_scratch_for_type(ty : @semantic.ValueType) -> @vcode.PhysicalReg {
 }
 
 ///|
+priv enum AllocationRegisterRole {
+  ValueHome
+  SpillEdit
+  Transfer
+  StackAddress
+  Reserved
+}
+
+///|
+fn allocation_register_role(reg : @vcode.PhysicalReg) -> AllocationRegisterRole {
+  match reg.class {
+    Int =>
+      if (reg.id >= 0 && reg.id < 15) || (reg.id >= 19 && reg.id < 29) {
+        ValueHome
+      } else if reg.id == 15 {
+        Transfer
+      } else if reg.id == 16 {
+        StackAddress
+      } else if reg.id == 17 {
+        SpillEdit
+      } else {
+        Reserved
+      }
+    FpVector =>
+      if (reg.id >= 0 && reg.id < 16) || (reg.id >= 19 && reg.id < 32) {
+        ValueHome
+      } else if reg.id == 16 || reg.id == 17 {
+        SpillEdit
+      } else if reg.id == 18 {
+        Transfer
+      } else {
+        Reserved
+      }
+  }
+}
+
+///|
+fn AllocationRegisterRole::allows_value_home(
+  self : AllocationRegisterRole,
+) -> Bool {
+  match self {
+    ValueHome => true
+    SpillEdit | Transfer | StackAddress | Reserved => false
+  }
+}
+
+///|
+fn AllocationRegisterRole::allows_spill_edit(
+  self : AllocationRegisterRole,
+) -> Bool {
+  self is SpillEdit
+}
+
+///|
+fn is_allocatable(reg : @vcode.PhysicalReg) -> Bool {
+  allocation_register_role(reg).allows_value_home()
+}
+
+///|
 fn allocatable_physical_regs() -> Array[@vcode.PhysicalReg] {
   let regs : Array[@vcode.PhysicalReg] = []
-  for index in 0..<15 {
-    regs.push(int_physical(index))
+  for index in 0..<32 {
+    let reg = int_physical(index)
+    if allocation_register_role(reg).allows_value_home() {
+      regs.push(reg)
+    }
   }
-  for index in 19..<29 {
-    regs.push(int_physical(index))
-  }
-  for index in 0..<16 {
-    regs.push(fp_physical(index))
-  }
-  for index in 19..<32 {
-    regs.push(fp_physical(index))
+  for index in 0..<32 {
+    let reg = fp_physical(index)
+    if allocation_register_role(reg).allows_value_home() {
+      regs.push(reg)
+    }
   }
   regs
 }
 
 ///|
 fn spill_scratch_regs() -> Array[@vcode.PhysicalReg] {
-  [int_instruction_scratch(), fp_physical(16), fp_physical(17)]
-}
-
-///|
-fn is_allocatable(reg : @vcode.PhysicalReg) -> Bool {
-  match reg.class {
-    Int => (reg.id >= 0 && reg.id < 15) || (reg.id >= 19 && reg.id < 29)
-    FpVector => (reg.id >= 0 && reg.id < 16) || (reg.id >= 19 && reg.id < 32)
+  let regs : Array[@vcode.PhysicalReg] = []
+  for index in 0..<32 {
+    let reg = int_physical(index)
+    if allocation_register_role(reg).allows_spill_edit() {
+      regs.push(reg)
+    }
   }
-}
-
-///|
-fn is_scratch(reg : @vcode.PhysicalReg) -> Bool {
-  match reg.class {
-    Int => reg.id == 15 || reg.id == 17
-    FpVector => reg.id == 16 || reg.id == 17 || reg.id == 18
+  for index in 0..<32 {
+    let reg = fp_physical(index)
+    if allocation_register_role(reg).allows_spill_edit() {
+      regs.push(reg)
+    }
   }
+  regs
 }
 
 ///|
-fn require_legal_register(
+fn require_legal_value_register(
   reg : @vcode.PhysicalReg,
-  allow_scratch : Bool,
 ) -> Unit raise AArch64AllocationError {
-  if !is_allocatable(reg) && !(allow_scratch && is_scratch(reg)) {
+  if !allocation_register_role(reg).allows_value_home() {
+    raise IllegalRegister(reg~)
+  }
+}
+
+///|
+fn require_legal_operand_register(
+  reg : @vcode.PhysicalReg,
+) -> Unit raise AArch64AllocationError {
+  if !allocation_register_role(reg).allows_value_home() {
+    raise IllegalRegister(reg~)
+  }
+}
+
+///|
+fn require_legal_edit_register(
+  reg : @vcode.PhysicalReg,
+) -> Unit raise AArch64AllocationError {
+  let role = allocation_register_role(reg)
+  if !role.allows_value_home() && !role.allows_spill_edit() {
     raise IllegalRegister(reg~)
   }
 }
@@ -135,7 +209,7 @@ fn verify_target_allocation(
   for index in 0..<function.value_count() {
     let value = function.value_at(index).unwrap()
     match allocation.value_location(value).unwrap() {
-      Register(reg) => require_legal_register(reg, false)
+      Register(reg) => require_legal_value_register(reg)
       Stack(_) => ()
     }
   }
@@ -144,23 +218,23 @@ fn verify_target_allocation(
     for operand_index in 0..<function.instruction_operand_count(instruction) {
       if allocation.operand_location(instruction, operand_index).unwrap()
         is Register(reg) {
-        require_legal_register(reg, true)
+        require_legal_operand_register(reg)
       }
     }
   }
   for edit in allocation.edits() {
     match edit.kind {
-      Spill(reg~, ..) | Reload(reg~, ..) => require_legal_register(reg, true)
+      Spill(reg~, ..) | Reload(reg~, ..) => require_legal_edit_register(reg)
       Move(from~, to~, ..) => {
-        require_legal_register(from, true)
-        require_legal_register(to, true)
+        require_legal_edit_register(from)
+        require_legal_edit_register(to)
       }
       EdgeMove(from~, to~, ..) => {
         if from is Register(reg) {
-          require_legal_register(reg, true)
+          require_legal_edit_register(reg)
         }
         if to is Register(reg) {
-          require_legal_register(reg, true)
+          require_legal_edit_register(reg)
         }
       }
     }
