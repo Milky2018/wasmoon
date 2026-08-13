@@ -232,6 +232,9 @@ pub fn resolve_parallel_moves(
   scratch_int : Array[PhysicalReg],
   scratch_fp : Array[PhysicalReg],
 ) -> Array[ParallelMove] raise MoveResolveError {
+  if moves.is_empty() {
+    return []
+  }
   let plan = plan_parallel_moves(
     moves,
     select_legacy_scratch(Int, moves, scratch_int, scratch_fp),
