@@ -209,6 +209,71 @@ test "GVN uses work units instead of a function-size switch" {
 }
 
 ///|
+test "GVN retains memory forwarding in a large function budget prefix" {
+  let builder = FunctionBuilder::FunctionBuilder("gvn_large_memory_prefix")
+  let pointer = builder.add_param(Ptr)
+  let stored = builder.add_param(I32)
+  builder.add_result(I32)
+  let offset = builder.iconst_i64(0L)
+  builder.store_ptr(I32, pointer, stored, offset)
+  let loaded = builder.load_ptr(I32, pointer, offset)
+  for i in 0..<300 {
+    builder.iconst_i32(i) |> ignore
+  }
+  builder.return_([loaded])
+  let func = builder.get_function()
+  let stats = run_global_value_numbering_with_budget_and_analysis(
+    func,
+    300,
+    FunctionAnalysis::build(func),
+  )
+  inspect(stats.work_done, content="300")
+  inspect(stats.budget_exhausted, content="true")
+  inspect(func.blocks[0].instructions[2].opcode, content="Scalar(Copy)")
+  inspect(func.verify(), content="()")
+}
+
+///|
+test "bounded memory GVN keeps unknown block entries conservative" {
+  let build = fn(name : String, trailing : Int) -> Function {
+    let builder = FunctionBuilder::FunctionBuilder(name)
+    let pointer = builder.add_param(Ptr)
+    let stored = builder.add_param(I32)
+    builder.add_result(I32)
+    let next = builder.create_block()
+    let offset = builder.iconst_i64(0L)
+    builder.store_ptr(I32, pointer, stored, offset)
+    builder.jump(next, [])
+    builder.switch_to_block(next)
+    let loaded = builder.load_ptr(I32, pointer, offset)
+    for i in 0..<trailing {
+      builder.iconst_i32(i) |> ignore
+    }
+    builder.return_([loaded])
+    builder.get_function()
+  }
+  let small = build("gvn_complete_block_input", 0)
+  run_global_value_numbering_with_budget_and_analysis(
+    small,
+    instruction_count(small),
+    FunctionAnalysis::build(small),
+  )
+  |> ignore
+  inspect(small.blocks[1].instructions[0].opcode, content="Scalar(Copy)")
+  let large = build("gvn_unknown_bounded_block_input", 300)
+  let stats = run_global_value_numbering_with_budget_and_analysis(
+    large,
+    300,
+    FunctionAnalysis::build(large),
+  )
+  inspect(stats.work_done, content="300")
+  inspect(stats.budget_exhausted, content="true")
+  inspect(large.blocks[1].instructions[0].opcode, content="Memory(Load(I32))")
+  inspect(small.verify(), content="()")
+  inspect(large.verify(), content="()")
+}
+
+///|
 test "GVN metrics count only instructions visited in reachable blocks" {
   let builder = FunctionBuilder::FunctionBuilder("gvn_reachable_work")
   builder.iconst_i32(1) |> ignore

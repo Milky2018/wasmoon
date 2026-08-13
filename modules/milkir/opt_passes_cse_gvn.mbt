@@ -355,35 +355,44 @@ fn compute_block_input_last_store_states(
 }
 
 ///|
-fn collect_iconst_values(func : Function) -> Array[Int64?] {
+fn collect_iconst_values(
+  func : Function,
+  instructions? : Array[Inst],
+) -> Array[Int64?] {
   let result : Array[Int64?] = Array::make(func.next_value_id, None)
-  for block in func.blocks {
-    for inst in block.instructions {
-      if inst.first_result() is Some(v) {
-        match inst.opcode {
-          Scalar(IntConst(value)) => result[v.id] = Some(value)
-          Scalar(Copy) =>
-            if inst.operands.length() > 0 &&
-              result[inst.operands[0].id] is Some(copied) {
-              result[v.id] = Some(copied)
-            }
-          _ => ()
-        }
+  let record = fn(inst : Inst) {
+    if inst.first_result() is Some(v) {
+      match inst.opcode {
+        Scalar(IntConst(value)) => result[v.id] = Some(value)
+        Scalar(Copy) =>
+          if inst.operands.length() > 0 &&
+            result[inst.operands[0].id] is Some(copied) {
+            result[v.id] = Some(copied)
+          }
+        _ => ()
       }
     }
   }
+  match instructions {
+    Some(prefix) =>
+      for inst in prefix {
+        record(inst)
+      }
+    None =>
+      for block in func.blocks {
+        for inst in block.instructions {
+          record(inst)
+        }
+      }
+  }
   result
-}
-
-///|
-fn is_known_iconst(value_id : Int, iconst_values : Array[Int64?]) -> Bool {
-  iconst_values[value_id] is Some(_)
 }
 
 ///|
 fn collect_ptr_base_infos(
   func : Function,
   iconst_values : Array[Int64?],
+  instructions? : Array[Inst],
 ) -> Array[PtrBaseInfo?] {
   let result : Array[PtrBaseInfo?] = Array::make(func.next_value_id, None)
   for param in func.params {
@@ -401,14 +410,24 @@ fn collect_ptr_base_infos(
   let dependents : Array[Array[Inst]] = Array::makei(func.next_value_id, _ => [])
   let worklist : Array[Inst] = []
   let queued = Array::make(func.next_inst_id, false)
-  for block in func.blocks {
-    for inst in block.instructions {
-      worklist.push(inst)
-      queued[inst.id] = true
-      for operand in inst.operands {
-        dependents[operand.id].push(inst)
-      }
+  let enqueue = fn(inst : Inst) {
+    worklist.push(inst)
+    queued[inst.id] = true
+    for operand in inst.operands {
+      dependents[operand.id].push(inst)
     }
+  }
+  match instructions {
+    Some(prefix) =>
+      for inst in prefix {
+        enqueue(inst)
+      }
+    None =>
+      for block in func.blocks {
+        for inst in block.instructions {
+          enqueue(inst)
+        }
+      }
   }
   let mut cursor = 0
   while cursor < worklist.length() {
@@ -491,6 +510,37 @@ fn collect_ptr_base_infos(
     }
   }
   result
+}
+
+///|
+fn gvn_instruction_prefix(
+  func : Function,
+  work_budget : Int,
+  analysis : FunctionAnalysis,
+) -> Array[Inst] {
+  let prefix : Array[Inst] = []
+  fn enter(block_id : Int) -> (Unit, Bool) {
+    if prefix.length() >= work_budget {
+      return ((), false)
+    }
+    let block = func.blocks[analysis.block_idx[block_id]]
+    for inst in block.instructions {
+      if prefix.length() >= work_budget {
+        break
+      }
+      prefix.push(inst)
+    }
+    ((), prefix.length() < work_budget)
+  }
+  if analysis.cfg.is_valid(0) {
+    visit_dominator_tree(analysis.domtree, 0, enter, fn(_) { () })
+  }
+  prefix
+}
+
+///|
+fn is_known_iconst(value_id : Int, iconst_values : Array[Int64?]) -> Bool {
+  iconst_values[value_id] is Some(_)
 }
 
 ///|
@@ -638,17 +688,22 @@ fn run_global_value_numbering_with_budget_and_analysis(
       budget_exhausted: instruction_count(func) > 0,
     }
   }
-  let memory_analysis_enabled = instruction_count(func) <= work_budget
-  let ptr_base_infos = if memory_analysis_enabled {
+  let complete_memory_analysis = instruction_count(func) <= work_budget
+  let ptr_base_infos = if complete_memory_analysis {
     collect_ptr_base_infos(func, collect_iconst_values(func))
   } else {
-    Array::make(func.next_value_id, None)
+    let prefix = gvn_instruction_prefix(func, work_budget, analysis)
+    collect_ptr_base_infos(
+      func,
+      collect_iconst_values(func, instructions=prefix),
+      instructions=prefix,
+    )
   }
   // Expression environment: key -> (value, abstract memory dependency)
   let value_table : @hashmap.HashMap[Inst, (Value, AliasRegion?)] = HashMap([])
   // Track memory-dependent keys separately for scoped invalidation.
   let memory_keys : @hashmap.HashMap[Inst, AliasRegion] = HashMap([])
-  let block_input_state = if memory_analysis_enabled {
+  let block_input_state = if complete_memory_analysis {
     compute_block_input_last_store_states(
       func,
       analysis.cfg,
@@ -684,8 +739,7 @@ fn run_global_value_numbering_with_budget_and_analysis(
       }
       work_done.val = work_done.val + 1
       let mut replaced_by_memory = false
-      if memory_analysis_enabled &&
-        inst.opcode is Memory(Load(load_ty)) &&
+      if inst.opcode is Memory(Load(load_ty)) &&
         ptr_access_from_inst(inst, ptr_base_infos) is Some(load_access) {
         let key = memory_key_from_access(
           load_access,
@@ -707,8 +761,7 @@ fn run_global_value_numbering_with_budget_and_analysis(
           replaced_by_memory = true
         }
       }
-      if memory_analysis_enabled &&
-        inst.opcode is Memory(Store(store_ty)) &&
+      if inst.opcode is Memory(Store(store_ty)) &&
         ptr_access_from_inst(inst, ptr_base_infos) is Some(store_access) &&
         inst.operands.length() >= 2 {
         let key = memory_key_from_access(
