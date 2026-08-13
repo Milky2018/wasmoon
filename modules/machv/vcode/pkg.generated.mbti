@@ -11,6 +11,8 @@ pub fn plan_call_transfers(Allocation, Array[CallTransfer], Int, Int, Array[Phys
 
 pub fn plan_parallel_moves(Array[ParallelMove], PhysicalReg, PhysicalReg) -> ResolvedMovePlan raise MoveResolveError
 
+pub fn plan_resolved_call_transfers(Allocation, Array[CallTransfer], Int, Int, Array[PhysicalReg], Array[PhysicalReg], PhysicalReg, PhysicalReg, Array[Location]) -> ResolvedCallTransferPlan raise CallTransferError
+
 pub fn reg_class_for_value_type(@machv.ValueType) -> RegClass
 
 pub fn resolve_parallel_moves(Array[ParallelMove], Array[PhysicalReg], Array[PhysicalReg]) -> Array[ParallelMove] raise MoveResolveError
@@ -367,6 +369,11 @@ pub(all) enum RegClass {
   Int
   FpVector
 } derive(Eq, Hash, @debug.Debug)
+
+pub struct ResolvedCallTransferPlan {
+  stack_transfers : Array[StackArgumentTransfer]
+  register_moves : ResolvedMovePlan
+} derive(Eq, @debug.Debug)
 
 pub struct ResolvedMovePlan {
   steps : Array[ResolvedMoveStep]

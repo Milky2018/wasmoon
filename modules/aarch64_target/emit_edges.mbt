@@ -30,11 +30,11 @@ fn resolve_edge_moves(
   allocation : @vcode.Allocation,
   block : @vcode.Block,
   successor_index : Int,
-) -> Array[@vcode.ParallelMove] raise AArch64EmitError {
-  @vcode.resolve_parallel_moves(
+) -> @vcode.ResolvedMovePlan raise AArch64EmitError {
+  @vcode.plan_parallel_moves(
     edge_parallel_moves(function, allocation, block, successor_index),
-    int_transfer_scratch_regs(),
-    fp_transfer_scratch_regs(),
+    int_transfer_scratch(),
+    fp_transfer_scratch(),
   ) catch {
     error => raise InvalidParallelMove(cause=error)
   }
@@ -72,10 +72,24 @@ fn emit_location_move(
 fn emit_resolved_moves(
   buffer : CodeBuffer,
   frame : AArch64Frame,
-  transfers : Array[@vcode.ParallelMove],
+  plan : @vcode.ResolvedMovePlan,
 ) -> Unit raise AArch64EmitError {
-  for transfer in transfers {
-    emit_location_move(buffer, frame, transfer)
+  for step in plan.steps {
+    match step {
+      Transfer(transfer) => emit_location_move(buffer, frame, transfer)
+      SpillScratchToEmergency(ty~, scratch~) => {
+        guard frame.emergency_move_offset() is Some(offset) else {
+          raise MissingEmergencyMoveArea
+        }
+        emit_stack_access(buffer, false, ty, scratch, offset)
+      }
+      ReloadScratchFromEmergency(ty~, scratch~) => {
+        guard frame.emergency_move_offset() is Some(offset) else {
+          raise MissingEmergencyMoveArea
+        }
+        emit_stack_access(buffer, true, ty, scratch, offset)
+      }
+    }
   }
 }
 
@@ -117,7 +131,7 @@ fn threaded_branch_target(
       !allocation.edits_at(terminator, After).is_empty() {
       break
     }
-    if !resolve_edge_moves(function, allocation, current, 0).is_empty() {
+    if !resolve_edge_moves(function, allocation, current, 0).steps.is_empty() {
       break
     }
     guard function.instruction_successor_at(terminator, 0) is Some(edge) else {
@@ -169,7 +183,7 @@ fn emit_two_way_edges(
   let threaded_true = threaded_branch_target(function, allocation, when_true)
   let threaded_false = threaded_branch_target(function, allocation, when_false)
   if next_block == Some(when_false) {
-    if true_moves.is_empty() {
+    if true_moves.steps.is_empty() {
       buffer.emit_branch(threaded_true, 19, true_branch_base)
       emit_resolved_moves(buffer, frame, false_moves)
     } else {
@@ -183,7 +197,7 @@ fn emit_two_way_edges(
       emit_resolved_moves(buffer, frame, false_moves)
     }
   } else if next_block == Some(when_true) {
-    if false_moves.is_empty() {
+    if false_moves.steps.is_empty() {
       buffer.emit_branch(threaded_false, 19, false_branch_base)
       emit_resolved_moves(buffer, frame, true_moves)
     } else {
@@ -194,7 +208,7 @@ fn emit_two_way_edges(
       buffer.bind_label(past_false_moves)
       emit_resolved_moves(buffer, frame, true_moves)
     }
-  } else if true_moves.is_empty() {
+  } else if true_moves.steps.is_empty() {
     buffer.emit_branch(threaded_true, 19, true_branch_base)
     emit_resolved_moves(buffer, frame, false_moves)
     buffer.emit_branch(threaded_false, 26, 0x14000000U)
@@ -298,7 +312,7 @@ fn emit_switch_edges(
     let default_moves = resolve_edge_moves(
       function, allocation, block, default_index,
     )
-    let default_branch : Int? = if default_moves.is_empty() {
+    let default_branch : Int? = if default_moves.steps.is_empty() {
       buffer.emit_branch(
         threaded_branch_target(
           function,

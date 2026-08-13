@@ -41,29 +41,64 @@ test "AArch64 allocation honors incoming and return ABI constraints" {
 
 ///|
 test "AArch64 frame reserves emergency move storage only on request" {
-  let builder = @semantic.FunctionBuilder::new(
+  let builder : @vcode.Builder[AArch64Inst] = @vcode.Builder::new(
     "emergency_move_frame",
-    Platform,
-    [],
-    [],
+    [I64, I64],
   )
-  builder.return_([])
-  let function = lower(builder.finish(), test_lowering_context())
-  let allocation = allocate(function)
-  let ordinary = plan_frame(function, allocation)
-  assert_eq(ordinary.frame_size(), 0)
-  assert_eq(ordinary.emergency_move_offset(), None)
-  let emergency = plan_frame(function, allocation, requires_emergency=true)
-  assert_eq(emergency.frame_size(), 16)
+  let entry = builder.entry_block()
+  let exit = builder.create_block([I64, I64])
+  let first = builder.parameter(0)
+  let second = builder.parameter(1)
+  builder.set_terminator(
+    entry,
+    Jump,
+    [],
+    [@vcode.Edge::new(exit, [first, second])],
+    [],
+    @vcode.InstructionMetadata::empty(),
+  )
+  |> ignore
+  builder.set_terminator(
+    exit,
+    Return,
+    [],
+    [],
+    [],
+    @vcode.InstructionMetadata::empty(),
+  )
+  |> ignore
+  let exit_first = builder.block_parameter(exit, 0)
+  let exit_second = builder.block_parameter(exit, 1)
+  let function = builder.finish()
+  let allocation = @vcode.Allocation::for_function(function)
+  let stack0 = allocation.create_stack_slot(I64, 8, 8)
+  let stack1 = allocation.create_stack_slot(I64, 8, 8)
+  allocation.assign_value(first, Stack(stack0)) |> ignore
+  allocation.assign_value(second, Stack(stack1)) |> ignore
+  allocation.assign_value(exit_first, Stack(stack1)) |> ignore
+  allocation.assign_value(exit_second, Stack(stack0)) |> ignore
+  allocation.add_edit(
+    @vcode.Edit::edge_move(entry, 0, first, Stack(stack0), Stack(stack1)),
+  )
+  |> ignore
+  allocation.add_edit(
+    @vcode.Edit::edge_move(entry, 0, second, Stack(stack1), Stack(stack0)),
+  )
+  |> ignore
+  let emergency = plan_frame(function, allocation)
+  assert_eq(emergency.frame_size(), 32)
   assert_eq(emergency.emergency_move_offset(), Some(0))
   inspect(
     emergency.summary(),
     content=(
-      #|aarch64 frame size=16 align=16
+      #|aarch64 frame size=32 align=16
       #|  emergency-move 16 bytes at sp+0
+      #|  place stack0 at sp+16
+      #|  place stack1 at sp+24
       #|
     ),
   )
+  emit(function, allocation, emergency) |> ignore
 }
 
 ///|

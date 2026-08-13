@@ -70,6 +70,7 @@ pub suberror AArch64EmitError {
   UnresolvedStackMove
   MissingStackObjectArea
   MissingResultArea
+  MissingEmergencyMoveArea
   UnexpectedStackOperand(instruction~ : @vcode.Instruction, operand~ : Int)
   FrameOffsetOutOfRange(offset~ : Int)
   InvalidScalarMemoryAccess
@@ -2376,14 +2377,12 @@ fn emit_epilogue(
 }
 
 ///|
-fn[Inst] emit_edits_at(
-  buffer : CodeBuffer,
+fn[Inst] edit_parallel_moves(
   function : @vcode.Function[Inst],
   allocation : @vcode.Allocation,
-  frame : AArch64Frame,
   instruction : @vcode.Instruction,
   placement : @vcode.PointPlacement,
-) -> Unit raise AArch64EmitError {
+) -> Array[@vcode.ParallelMove] {
   let moves : Array[@vcode.ParallelMove] = []
   for edit in allocation.edits_at(instruction, placement) {
     match edit.kind() {
@@ -2414,10 +2413,22 @@ fn[Inst] emit_edits_at(
       EdgeMove(..) => ()
     }
   }
-  let resolved = @vcode.resolve_parallel_moves(
-    moves,
-    int_transfer_scratch_regs(),
-    fp_transfer_scratch_regs(),
+  moves
+}
+
+///|
+fn[Inst] emit_edits_at(
+  buffer : CodeBuffer,
+  function : @vcode.Function[Inst],
+  allocation : @vcode.Allocation,
+  frame : AArch64Frame,
+  instruction : @vcode.Instruction,
+  placement : @vcode.PointPlacement,
+) -> Unit raise AArch64EmitError {
+  let resolved = @vcode.plan_parallel_moves(
+    edit_parallel_moves(function, allocation, instruction, placement),
+    int_transfer_scratch(),
+    fp_transfer_scratch(),
   ) catch {
     error => raise InvalidParallelMove(cause=error)
   }
@@ -2425,19 +2436,16 @@ fn[Inst] emit_edits_at(
 }
 
 ///|
-fn emit_call_arguments(
-  buffer : CodeBuffer,
+fn call_argument_transfers(
   allocation : @vcode.Allocation,
-  frame : AArch64Frame,
   instruction : @vcode.Instruction,
   types : Array[@semantic.ValueType],
   locations : Array[CallArgumentLocation],
-  stack_size : Int,
   operand_start? : Int = 0,
   stack_base? : Int = 0,
   callee? : (Int, @vcode.PhysicalReg),
   result_area? : (Int, @vcode.PhysicalReg),
-) -> Unit raise AArch64EmitError {
+) -> Array[@vcode.CallTransfer] {
   let transfers : Array[@vcode.CallTransfer] = []
   for index, ty in types {
     let source = allocation
@@ -2472,21 +2480,41 @@ fn emit_call_arguments(
       ),
     )
   }
-  let int_scratch = if (
-      callee is Some((_, reg)) && reg == int_transfer_scratch()
-    ) ||
-    (result_area is Some((_, reg)) && reg == int_transfer_scratch()) {
-    [stack_address_scratch()]
-  } else {
-    int_transfer_scratch_regs()
-  }
-  let plan = @vcode.plan_call_transfers(
+  transfers
+}
+
+///|
+fn emit_call_arguments(
+  buffer : CodeBuffer,
+  allocation : @vcode.Allocation,
+  frame : AArch64Frame,
+  instruction : @vcode.Instruction,
+  types : Array[@semantic.ValueType],
+  locations : Array[CallArgumentLocation],
+  stack_size : Int,
+  operand_start? : Int = 0,
+  stack_base? : Int = 0,
+  callee? : (Int, @vcode.PhysicalReg),
+  result_area? : (Int, @vcode.PhysicalReg),
+) -> Unit raise AArch64EmitError {
+  let plan = @vcode.plan_resolved_call_transfers(
     allocation,
-    transfers,
+    call_argument_transfers(
+      allocation,
+      instruction,
+      types,
+      locations,
+      operand_start~,
+      stack_base~,
+      callee?,
+      result_area?,
+    ),
     stack_base,
     stack_size,
-    int_scratch,
+    int_transfer_scratch_regs(),
     fp_transfer_scratch_regs(),
+    int_transfer_scratch(),
+    fp_transfer_scratch(),
     allocation.safepoint_roots(instruction).map(entry => entry.1),
   ) catch {
     error => raise InvalidCallTransfer(cause=error)
@@ -2576,6 +2604,42 @@ fn value_home(
 }
 
 ///|
+fn function_input_register_moves(
+  function : @vcode.Function[AArch64Inst],
+  allocation : @vcode.Allocation,
+  body : Array[@vcode.Instruction],
+  start : Int,
+) -> Array[@vcode.ParallelMove] {
+  let moves : Array[@vcode.ParallelMove] = []
+  let mut index = start
+  while index < body.length() {
+    let input_instruction = body[index]
+    match function.instruction(input_instruction).unwrap() {
+      IncomingReg(ty, source) =>
+        moves.push(
+          @vcode.ParallelMove::new(
+            ty,
+            Register(source),
+            value_home(function, allocation, input_instruction, 1),
+          ),
+        )
+      IncomingResultArea(source) =>
+        moves.push(
+          @vcode.ParallelMove::new(
+            Ptr64,
+            Register(source),
+            value_home(function, allocation, input_instruction, 0),
+          ),
+        )
+      IncomingStack(_, _) => ()
+      _ => break
+    }
+    index += 1
+  }
+  moves
+}
+
+///|
 fn emit_function_inputs(
   buffer : CodeBuffer,
   function : @vcode.Function[AArch64Inst],
@@ -2599,38 +2663,23 @@ fn emit_function_inputs(
     is_function_input(function.instruction(body[current_index - 1]).unwrap()) {
     return
   }
-  let register_moves : Array[@vcode.ParallelMove] = []
   let stack_inputs : Array[(@vcode.Instruction, @semantic.ValueType, Int)] = []
   let mut index = current_index
   while index < body.length() {
     let input_instruction = body[index]
     match function.instruction(input_instruction).unwrap() {
-      IncomingReg(ty, source) =>
-        register_moves.push(
-          @vcode.ParallelMove::new(
-            ty,
-            Register(source),
-            value_home(function, allocation, input_instruction, 1),
-          ),
-        )
+      IncomingReg(_, _) => ()
       IncomingStack(ty, offset) =>
         stack_inputs.push((input_instruction, ty, offset))
-      IncomingResultArea(source) =>
-        register_moves.push(
-          @vcode.ParallelMove::new(
-            Ptr64,
-            Register(source),
-            value_home(function, allocation, input_instruction, 0),
-          ),
-        )
+      IncomingResultArea(_) => ()
       _ => break
     }
     index += 1
   }
-  let resolved = @vcode.resolve_parallel_moves(
-    register_moves,
-    int_transfer_scratch_regs(),
-    fp_transfer_scratch_regs(),
+  let resolved = @vcode.plan_parallel_moves(
+    function_input_register_moves(function, allocation, body, current_index),
+    int_transfer_scratch(),
+    fp_transfer_scratch(),
   ) catch {
     error => raise InvalidParallelMove(cause=error)
   }
@@ -2693,30 +2742,24 @@ fn emit_incoming_call_results(
     ) {
     return
   }
-  let register_moves : Array[@vcode.ParallelMove] = []
   let area_results : Array[(@vcode.Instruction, @semantic.ValueType, Int)] = []
   let mut index = current_index
   while index < body.length() {
     let result_instruction = body[index]
     match function.instruction(result_instruction).unwrap() {
-      IncomingCallResult(ty, source) =>
-        register_moves.push(
-          @vcode.ParallelMove::new(
-            ty,
-            Register(source),
-            value_home(function, allocation, result_instruction, 0),
-          ),
-        )
+      IncomingCallResult(_, _) => ()
       IncomingCallAreaResult(ty, offset) =>
         area_results.push((result_instruction, ty, offset))
       _ => break
     }
     index += 1
   }
-  let resolved = @vcode.resolve_parallel_moves(
-    register_moves,
-    int_transfer_scratch_regs(),
-    fp_transfer_scratch_regs(),
+  let resolved = @vcode.plan_parallel_moves(
+    incoming_call_result_register_moves(
+      function, allocation, body, current_index,
+    ),
+    int_transfer_scratch(),
+    fp_transfer_scratch(),
   ) catch {
     error => raise InvalidParallelMove(cause=error)
   }
@@ -2754,6 +2797,34 @@ fn emit_incoming_call_results(
 }
 
 ///|
+fn incoming_call_result_register_moves(
+  function : @vcode.Function[AArch64Inst],
+  allocation : @vcode.Allocation,
+  body : Array[@vcode.Instruction],
+  start : Int,
+) -> Array[@vcode.ParallelMove] {
+  let moves : Array[@vcode.ParallelMove] = []
+  let mut index = start
+  while index < body.length() {
+    let result_instruction = body[index]
+    match function.instruction(result_instruction).unwrap() {
+      IncomingCallResult(ty, source) =>
+        moves.push(
+          @vcode.ParallelMove::new(
+            ty,
+            Register(source),
+            value_home(function, allocation, result_instruction, 0),
+          ),
+        )
+      IncomingCallAreaResult(_, _) => ()
+      _ => break
+    }
+    index += 1
+  }
+  moves
+}
+
+///|
 fn is_function_output(instruction : AArch64Inst) -> Bool {
   match instruction {
     OutgoingReg(_, _) | OutgoingAreaResult(_, _) => true
@@ -2766,6 +2837,34 @@ fn is_abi_materialization(instruction : AArch64Inst) -> Bool {
   is_function_input(instruction) ||
   is_incoming_call_result(instruction) ||
   is_function_output(instruction)
+}
+
+///|
+fn function_output_register_moves(
+  function : @vcode.Function[AArch64Inst],
+  allocation : @vcode.Allocation,
+  body : Array[@vcode.Instruction],
+  start : Int,
+) -> Array[@vcode.ParallelMove] {
+  let moves : Array[@vcode.ParallelMove] = []
+  let mut index = start
+  while index < body.length() {
+    let output_instruction = body[index]
+    match function.instruction(output_instruction).unwrap() {
+      OutgoingReg(ty, destination) =>
+        moves.push(
+          @vcode.ParallelMove::new(
+            ty,
+            value_home(function, allocation, output_instruction, 0),
+            Register(destination),
+          ),
+        )
+      OutgoingAreaResult(_, _) => ()
+      _ => break
+    }
+    index += 1
+  }
+  moves
 }
 
 ///|
@@ -2792,20 +2891,12 @@ fn emit_function_outputs(
     is_function_output(function.instruction(body[current_index - 1]).unwrap()) {
     return
   }
-  let register_moves : Array[@vcode.ParallelMove] = []
   let area_results : Array[(@vcode.Instruction, @semantic.ValueType, Int)] = []
   let mut index = current_index
   while index < body.length() {
     let output_instruction = body[index]
     match function.instruction(output_instruction).unwrap() {
-      OutgoingReg(ty, destination) =>
-        register_moves.push(
-          @vcode.ParallelMove::new(
-            ty,
-            value_home(function, allocation, output_instruction, 0),
-            Register(destination),
-          ),
-        )
+      OutgoingReg(_, _) => ()
       OutgoingAreaResult(ty, offset) =>
         area_results.push((output_instruction, ty, offset))
       _ => break
@@ -2847,10 +2938,10 @@ fn emit_function_outputs(
     }
     emit_result_area_access(buffer, false, ty, address~, value~, offset)
   }
-  let resolved = @vcode.resolve_parallel_moves(
-    register_moves,
-    int_transfer_scratch_regs(),
-    fp_transfer_scratch_regs(),
+  let resolved = @vcode.plan_parallel_moves(
+    function_output_register_moves(function, allocation, body, current_index),
+    int_transfer_scratch(),
+    fp_transfer_scratch(),
   ) catch {
     error => raise InvalidParallelMove(cause=error)
   }
