@@ -42,6 +42,13 @@ occupied. A target whose emitter reserves those registers for instruction-local
 expansion must call `with_operand_scratch_regs([])` (or provide the safe subset),
 while leaving the edit scratch set intact.
 
+`fixed_operand_regs` are a third, narrower role. They are excluded from value
+homes and allocator-chosen scratches, but an instruction may name one explicitly
+with `FixedReg`; operand materialization can then move the value into that named
+register at the instruction boundary. This models reserved ISA operands such as
+an x64 instruction-local temporary without granting the allocator general
+scratch authority over that register.
+
 The view also distinguishes function entry values from block parameters and
 defines spill size, alignment, and slot-sharing compatibility. Operand timing
 uses `Early` and `Late` points, allowing an early input and late output to

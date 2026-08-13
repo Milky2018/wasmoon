@@ -386,6 +386,84 @@ test "plan verifier rejects a spilled AnyReg operand" {
 }
 
 ///|
+test "plan verifier accepts a declared fixed-operand-only register" {
+  let value : VirtualReg = { id: 0, class: Int }
+  let home : PhysicalReg = { id: 0, class: Int }
+  let edit_scratch : PhysicalReg = { id: 1, class: Int }
+  let fixed_only : PhysicalReg = { id: 2, class: Int }
+  let function : VerifierCfgView = {
+    value_count: 1,
+    blocks: [[0]],
+    operands: [[Operand::use_reg(value).with_constraint(FixedReg(fixed_only))]],
+    successors: [[]],
+    entry_values: [value],
+    parameters: [[]],
+    edge_arguments: [[]],
+    successor_queries: Ref(0),
+    block_visits: Ref(0),
+  }
+  let plan = AllocationPlan::new(1)
+  plan.assign_value(value, Reg(home))
+  plan.assign_operand(0, 0, Reg(fixed_only))
+  plan.add_edit({
+    value,
+    from: Reg(home),
+    to: Reg(fixed_only),
+    position: Before(0),
+  })
+  verify_function_allocation(
+    function,
+    MachineEnv::new([home], [edit_scratch])
+    .with_operand_scratch_regs([])
+    .with_fixed_operand_regs([fixed_only]),
+    plan,
+  )
+}
+
+///|
+test "plan verifier rejects an unconstrained operand in a fixed-only register" {
+  let value : VirtualReg = { id: 0, class: Int }
+  let home : PhysicalReg = { id: 0, class: Int }
+  let fixed_only : PhysicalReg = { id: 2, class: Int }
+  let function : VerifierCfgView = {
+    value_count: 1,
+    blocks: [[0]],
+    operands: [[Operand::use_reg(value)]],
+    successors: [[]],
+    entry_values: [value],
+    parameters: [[]],
+    edge_arguments: [[]],
+    successor_queries: Ref(0),
+    block_visits: Ref(0),
+  }
+  let plan = AllocationPlan::new(1)
+  plan.assign_value(value, Reg(home))
+  plan.assign_operand(0, 0, Reg(fixed_only))
+  plan.add_edit({
+    value,
+    from: Reg(home),
+    to: Reg(fixed_only),
+    position: Before(0),
+  })
+  let error = try {
+    verify_function_allocation(
+      function,
+      MachineEnv::new([home], [])
+      .with_operand_scratch_regs([])
+      .with_fixed_operand_regs([fixed_only]),
+      plan,
+    )
+    None
+  } catch {
+    error => Some(error)
+  }
+  debug_inspect(
+    error,
+    content="Some(InvalidPlan(message=\"illegal operand allocation location for v0\"))",
+  )
+}
+
+///|
 test "plan verifier always enters a self-looping entry block" {
   let value : VirtualReg = { id: 0, class: Int }
   debug_inspect(

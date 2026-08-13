@@ -139,7 +139,7 @@ fn allocate_verified(
     @vcode_regalloc.VCodeAllocationEnvironment::new(
       allocatable_physical_regs(),
       spill_scratch_regs(),
-    ),
+    ).with_fixed_operand_regs([int_physical(11)]),
     on_phase~,
     verify=verify_allocation,
   ) catch {

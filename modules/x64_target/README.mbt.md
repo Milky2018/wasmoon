@@ -43,6 +43,8 @@ metrics without coupling the target to a product metrics system. The callback
 must not mutate compiler inputs.
 
 Parallel moves use R15 and XMM13 as dedicated transfer scratches and share the
-target-neutral emergency-aware move planner with AArch64. R10/R11 and
-XMM14/XMM15 remain available for instruction and regalloc spill work. The frame
-reserves a raw 16-byte emergency area only for move groups that require it.
+target-neutral emergency-aware move planner with AArch64. R10 and XMM14 remain
+the allocator's spill/edit scratches; R11 is a declared fixed-operand-only
+instruction temporary, and XMM15 remains reserved for emitter-local expansion.
+The frame reserves a raw 16-byte emergency area only for move groups that
+require it.

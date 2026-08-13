@@ -180,6 +180,42 @@ test "fixed operands are instruction-point constraints rather than value homes" 
 }
 
 ///|
+test "fixed-only operands do not become allocator scratch registers" {
+  let home = @vcode.PhysicalReg::new(0, Int)
+  let fixed_only = @vcode.PhysicalReg::new(2, Int)
+  let builder : @vcode.Builder[Unit] = @vcode.Builder::new(
+    "fixed_only_operand",
+    [I64],
+  )
+  let entry = builder.entry_block()
+  builder.set_terminator(
+    entry,
+    (),
+    [@vcode.Input::fixed(builder.parameter(0), fixed_only)],
+    [],
+    [],
+    @vcode.InstructionMetadata::empty(),
+  )
+  |> ignore
+  let allocation = allocate_vcode(
+    builder.finish(),
+    VCodeAllocationEnvironment::new([home], []).with_fixed_operand_regs([
+      fixed_only,
+    ]),
+  )
+  inspect(
+    allocation.summary(),
+    content=(
+      #|allocation fixed_only_operand
+      #|  v0:i64 -> p0:int
+      #|  i0 operand0 -> p2:int
+      #|  before(i0): move v0 p0:int -> p2:int
+      #|
+    ),
+  )
+}
+
+///|
 test "generic adapter validates selected VCode before allocation" {
   let builder : @vcode.Builder[Unit] = @vcode.Builder::new("invalid_selected", [])
   let error = try {
