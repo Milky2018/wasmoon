@@ -9,6 +9,8 @@ import {
 // Values
 pub fn plan_call_transfers(Allocation, Array[CallTransfer], Int, Int, Array[PhysicalReg], Array[PhysicalReg], Array[Location]) -> CallTransferPlan raise CallTransferError
 
+pub fn plan_parallel_moves(Array[ParallelMove], PhysicalReg, PhysicalReg) -> ResolvedMovePlan raise MoveResolveError
+
 pub fn reg_class_for_value_type(@machv.ValueType) -> RegClass
 
 pub fn resolve_parallel_moves(Array[ParallelMove], Array[PhysicalReg], Array[PhysicalReg]) -> Array[ParallelMove] raise MoveResolveError
@@ -365,6 +367,17 @@ pub(all) enum RegClass {
   Int
   FpVector
 } derive(Eq, Hash, @debug.Debug)
+
+pub struct ResolvedMovePlan {
+  steps : Array[ResolvedMoveStep]
+  requires_emergency : Bool
+} derive(Eq, @debug.Debug)
+
+pub(all) enum ResolvedMoveStep {
+  Transfer(ParallelMove)
+  SpillScratchToEmergency(ty~ : @machv.ValueType, scratch~ : PhysicalReg)
+  ReloadScratchFromEmergency(ty~ : @machv.ValueType, scratch~ : PhysicalReg)
+} derive(Eq, @debug.Debug)
 
 pub struct StackArgumentTransfer {
   ty : @machv.ValueType
