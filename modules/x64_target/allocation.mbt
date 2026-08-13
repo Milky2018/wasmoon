@@ -23,21 +23,21 @@ fn fp_physical(index : Int) -> @vcode.PhysicalReg {
 
 ///|
 fn int_transfer_scratch() -> @vcode.PhysicalReg {
-  int_physical(11)
+  int_physical(15)
 }
 
 ///|
 fn fp_transfer_scratch() -> @vcode.PhysicalReg {
-  fp_physical(15)
+  fp_physical(13)
 }
 
 ///|
 fn allocatable_physical_regs() -> Array[@vcode.PhysicalReg] {
   let regs : Array[@vcode.PhysicalReg] = []
-  for index in [0, 1, 2, 3, 6, 7, 8, 9, 12, 13, 14, 15] {
+  for index in [0, 1, 2, 3, 6, 7, 8, 9, 12, 13, 14] {
     regs.push(int_physical(index))
   }
-  for index in 0..<14 {
+  for index in 0..<13 {
     regs.push(fp_physical(index))
   }
   regs
@@ -51,16 +51,16 @@ fn spill_scratch_regs() -> Array[@vcode.PhysicalReg] {
 ///|
 fn is_allocatable(reg : @vcode.PhysicalReg) -> Bool {
   match reg.class {
-    Int => [0, 1, 2, 3, 6, 7, 8, 9, 12, 13, 14, 15].contains(reg.id)
-    FpVector => reg.id >= 0 && reg.id < 14
+    Int => [0, 1, 2, 3, 6, 7, 8, 9, 12, 13, 14].contains(reg.id)
+    FpVector => reg.id >= 0 && reg.id < 13
   }
 }
 
 ///|
 fn is_scratch(reg : @vcode.PhysicalReg) -> Bool {
   match reg.class {
-    Int => reg.id == 10 || reg.id == 11
-    FpVector => reg.id == 14 || reg.id == 15
+    Int => reg.id == 10 || reg.id == 11 || reg.id == 15
+    FpVector => reg.id == 13 || reg.id == 14 || reg.id == 15
   }
 }
 

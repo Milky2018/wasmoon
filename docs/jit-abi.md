@@ -13,9 +13,10 @@ Wasmoon uses a custom calling convention optimized for WebAssembly execution.
 | X0 | `vmctx` (VMContext special param) | Caller |
 | X1-X7 | Integer user parameters (up to 7) | Caller |
 | X8 | SRET pointer (when needed) | Caller |
-| X9-X15 | Scratch (allocatable) | Caller |
-| X16 | IP0 / codegen scratch | Caller |
-| X17 | IP1 / call target scratch (indirect calls) | Caller |
+| X9-X14 | Scratch (allocatable) | Caller |
+| X15 | Parallel-move transfer scratch | Caller |
+| X16 | IP0 / stack-address scratch | Caller |
+| X17 | IP1 / instruction and indirect-call scratch | Caller |
 | X18 | Platform reserved | - |
 | X19 | Cached `func_table` (when used) | Callee |
 | X20, X22-X28 | Callee-saved (allocatable) | Callee |
@@ -34,7 +35,15 @@ Notes:
 |----------|-------|-------|
 | V0-V7 | Float/SIMD parameters and returns | Caller |
 | V8-V15 | Callee-saved (low 64 bits) | Callee |
-| V16-V31 | Scratch (allocatable) | Caller |
+| V16-V17 | Instruction and regalloc spill scratch | Caller |
+| V18 | Parallel-move transfer scratch | Caller |
+| V19-V31 | Scratch (allocatable) | Caller |
+
+Parallel assignments use exactly one transfer scratch per physical register
+bank. If a stack-slot cycle needs that scratch while its saved cycle value is
+live, the target frame reserves one raw 16-byte, 16-byte-aligned emergency
+area. The area is not a value home, spill slot, safepoint root, or allocation
+statistic, and frames that do not need it do not reserve it.
 
 ### Parameter Passing
 

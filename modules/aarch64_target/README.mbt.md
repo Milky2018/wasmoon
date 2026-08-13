@@ -58,3 +58,9 @@ frame-base SP. A function containing true tail calls enlarges its incoming area
 in the prologue to the maximum tail-callee requirement, then reuses that area
 when transferring control. Platform calls continue to use ordinary AAPCS64
 caller-owned stack arguments.
+
+Parallel moves reserve X15 and V18 as one transfer scratch per register bank.
+X16 remains stack-address-only, while X17 and V16/V17 serve instruction and
+regalloc spill needs. A stack cycle that temporarily needs the live transfer
+scratch receives one verified 16-byte emergency frame area; ordinary frames
+do not pay for it.

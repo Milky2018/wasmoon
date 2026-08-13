@@ -151,6 +151,13 @@ Semantic MachV represents function-owned typed values, blocks, explicit edge arg
 
 Register allocation does not own or copy a second machine-IR graph. `machv_regalloc` adapts the selected target VCode to the reusable allocator's read-only `FunctionView`; both production targets use the same bundle-aware allocator. The aggregate target pipeline verifies selected VCode before allocation and independently verifies the materialized VCode allocation before frame planning. There is no lower-quality fallback allocator.
 
+Target-neutral parallel assignments are linearized in `machv/vcode` with one
+dedicated transfer scratch per register bank. A shared legalization pass emits
+explicit emergency save and restore steps when a stack-to-stack transfer would
+otherwise clobber a live cycle value. Each target owns the optional physical
+16-byte frame area and verifies its presence against the resolved move groups;
+the area is raw codegen storage rather than an allocated stack slot or GC root.
+
 Each target emitter produces machine code and symbolic metadata. Resolving Wasmoon runtime helpers, allocating executable memory, installing signal/trap integration, and constructing VMContext state occur after emission in `wasmoon_jit`. See [JIT ABI](jit-abi.md) for the embedding contract and the target modules for executable policy definitions.
 
 ## Capability Coverage and Readiness
