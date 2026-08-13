@@ -30,14 +30,11 @@ fn resolve_edge_moves(
   allocation : @vcode.Allocation,
   block : @vcode.Block,
   successor_index : Int,
-) -> Array[@vcode.ParallelMove] raise X64EmitError {
-  @vcode.resolve_parallel_moves(
+) -> @vcode.ResolvedMovePlan raise X64EmitError {
+  @vcode.plan_parallel_moves(
     edge_parallel_moves(function, allocation, block, successor_index),
-    [@vcode.PhysicalReg::new(10, Int), @vcode.PhysicalReg::new(11, Int)],
-    [
-      @vcode.PhysicalReg::new(14, FpVector),
-      @vcode.PhysicalReg::new(15, FpVector),
-    ],
+    int_transfer_scratch(),
+    fp_transfer_scratch(),
   ) catch {
     error => raise InvalidParallelMove(cause=error)
   }
@@ -75,10 +72,24 @@ fn emit_location_move(
 fn emit_resolved_moves(
   buffer : CodeBuffer,
   frame : X64Frame,
-  transfers : Array[@vcode.ParallelMove],
+  plan : @vcode.ResolvedMovePlan,
 ) -> Unit raise X64EmitError {
-  for transfer in transfers {
-    emit_location_move(buffer, frame, transfer)
+  for step in plan.steps {
+    match step {
+      Transfer(transfer) => emit_location_move(buffer, frame, transfer)
+      SpillScratchToEmergency(ty~, scratch~) => {
+        guard frame.emergency_move_offset() is Some(offset) else {
+          raise MissingEmergencyMoveArea
+        }
+        emit_stack_access(buffer, false, ty, scratch, offset)
+      }
+      ReloadScratchFromEmergency(ty~, scratch~) => {
+        guard frame.emergency_move_offset() is Some(offset) else {
+          raise MissingEmergencyMoveArea
+        }
+        emit_stack_access(buffer, true, ty, scratch, offset)
+      }
+    }
   }
 }
 
@@ -130,7 +141,7 @@ fn threaded_branch_target(
       !allocation.edits_at(terminator, After).is_empty() {
       break
     }
-    if !resolve_edge_moves(function, allocation, current, 0).is_empty() {
+    if !resolve_edge_moves(function, allocation, current, 0).steps.is_empty() {
       break
     }
     guard function.instruction_successor_at(terminator, 0) is Some(edge) else {
@@ -170,7 +181,7 @@ fn emit_conditional_edges(
     .unwrap()
   buffer.x86_emit_test_rr32(condition.id, condition.id)
   if next_block == Some(when_false) {
-    if true_moves.is_empty() {
+    if true_moves.steps.is_empty() {
       buffer.x86_emit_jcc_rel32(RawNe, threaded_true)
       emit_resolved_moves(buffer, frame, false_moves)
     } else {
@@ -184,7 +195,7 @@ fn emit_conditional_edges(
       emit_resolved_moves(buffer, frame, false_moves)
     }
   } else if next_block == Some(when_true) {
-    if false_moves.is_empty() {
+    if false_moves.steps.is_empty() {
       buffer.x86_emit_jcc_rel32(RawEq, threaded_false)
       emit_resolved_moves(buffer, frame, true_moves)
     } else {
@@ -197,11 +208,11 @@ fn emit_conditional_edges(
       patch_relative_branch(buffer, local_true_branch, buffer.position(), 32)
       emit_resolved_moves(buffer, frame, true_moves)
     }
-  } else if true_moves.is_empty() {
+  } else if true_moves.steps.is_empty() {
     buffer.x86_emit_jcc_rel32(RawNe, threaded_true)
     emit_resolved_moves(buffer, frame, false_moves)
     buffer.x86_emit_jmp_rel32(threaded_false)
-  } else if false_moves.is_empty() {
+  } else if false_moves.steps.is_empty() {
     buffer.x86_emit_jcc_rel32(RawEq, threaded_false)
     emit_resolved_moves(buffer, frame, true_moves)
     buffer.x86_emit_jmp_rel32(threaded_true)

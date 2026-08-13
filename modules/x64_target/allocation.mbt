@@ -22,6 +22,16 @@ fn fp_physical(index : Int) -> @vcode.PhysicalReg {
 }
 
 ///|
+fn int_transfer_scratch() -> @vcode.PhysicalReg {
+  int_physical(11)
+}
+
+///|
+fn fp_transfer_scratch() -> @vcode.PhysicalReg {
+  fp_physical(15)
+}
+
+///|
 fn allocatable_physical_regs() -> Array[@vcode.PhysicalReg] {
   let regs : Array[@vcode.PhysicalReg] = []
   for index in [0, 1, 2, 3, 6, 7, 8, 9, 12, 13, 14, 15] {
@@ -35,7 +45,7 @@ fn allocatable_physical_regs() -> Array[@vcode.PhysicalReg] {
 
 ///|
 fn spill_scratch_regs() -> Array[@vcode.PhysicalReg] {
-  [int_physical(10), int_physical(11), fp_physical(14), fp_physical(15)]
+  [int_physical(10), fp_physical(14)]
 }
 
 ///|

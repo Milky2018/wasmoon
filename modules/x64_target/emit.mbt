@@ -44,6 +44,7 @@ pub suberror X64EmitError {
   UnresolvedStackMove
   MissingStackObjectArea
   MissingResultArea
+  MissingEmergencyMoveArea
   UnexpectedStackOperand(instruction~ : @vcode.Instruction, operand~ : Int)
   FrameOffsetOutOfRange(offset~ : Int)
   InvalidScalarMemoryAccess
@@ -2782,14 +2783,12 @@ fn emit_epilogue(
 }
 
 ///|
-fn[Inst] emit_edits_at(
-  buffer : CodeBuffer,
+fn[Inst] edit_parallel_moves(
   function : @vcode.Function[Inst],
   allocation : @vcode.Allocation,
-  frame : X64Frame,
   instruction : @vcode.Instruction,
   placement : @vcode.PointPlacement,
-) -> Unit raise X64EmitError {
+) -> Array[@vcode.ParallelMove] {
   let moves : Array[@vcode.ParallelMove] = []
   for edit in allocation.edits_at(instruction, placement) {
     match edit.kind() {
@@ -2820,13 +2819,22 @@ fn[Inst] emit_edits_at(
       EdgeMove(..) => ()
     }
   }
-  let resolved = @vcode.resolve_parallel_moves(
-    moves,
-    [@vcode.PhysicalReg::new(10, Int), @vcode.PhysicalReg::new(11, Int)],
-    [
-      @vcode.PhysicalReg::new(14, FpVector),
-      @vcode.PhysicalReg::new(15, FpVector),
-    ],
+  moves
+}
+
+///|
+fn[Inst] emit_edits_at(
+  buffer : CodeBuffer,
+  function : @vcode.Function[Inst],
+  allocation : @vcode.Allocation,
+  frame : X64Frame,
+  instruction : @vcode.Instruction,
+  placement : @vcode.PointPlacement,
+) -> Unit raise X64EmitError {
+  let resolved = @vcode.plan_parallel_moves(
+    edit_parallel_moves(function, allocation, instruction, placement),
+    int_transfer_scratch(),
+    fp_transfer_scratch(),
   ) catch {
     error => raise InvalidParallelMove(cause=error)
   }
@@ -2891,7 +2899,7 @@ fn emit_call_arguments(
       int_scratch.push(@vcode.PhysicalReg::new(id, Int))
     }
   }
-  let plan = @vcode.plan_call_transfers(
+  let plan = @vcode.plan_resolved_call_transfers(
     allocation,
     transfers,
     stack_base,
@@ -2901,6 +2909,8 @@ fn emit_call_arguments(
       @vcode.PhysicalReg::new(14, FpVector),
       @vcode.PhysicalReg::new(15, FpVector),
     ],
+    int_transfer_scratch(),
+    fp_transfer_scratch(),
     allocation.safepoint_roots(instruction).map(entry => entry.1),
   ) catch {
     error => raise InvalidCallTransfer(cause=error)
@@ -3039,13 +3049,10 @@ fn emit_function_inputs(
     }
     index += 1
   }
-  let resolved = @vcode.resolve_parallel_moves(
+  let resolved = @vcode.plan_parallel_moves(
     register_moves,
-    [@vcode.PhysicalReg::new(10, Int), @vcode.PhysicalReg::new(11, Int)],
-    [
-      @vcode.PhysicalReg::new(14, FpVector),
-      @vcode.PhysicalReg::new(15, FpVector),
-    ],
+    int_transfer_scratch(),
+    fp_transfer_scratch(),
   ) catch {
     error => raise InvalidParallelMove(cause=error)
   }
@@ -3135,13 +3142,10 @@ fn emit_incoming_call_results(
     }
     index += 1
   }
-  let resolved = @vcode.resolve_parallel_moves(
+  let resolved = @vcode.plan_parallel_moves(
     register_moves,
-    [@vcode.PhysicalReg::new(10, Int), @vcode.PhysicalReg::new(11, Int)],
-    [
-      @vcode.PhysicalReg::new(14, FpVector),
-      @vcode.PhysicalReg::new(15, FpVector),
-    ],
+    int_transfer_scratch(),
+    fp_transfer_scratch(),
   ) catch {
     error => raise InvalidParallelMove(cause=error)
   }
@@ -3281,13 +3285,10 @@ fn emit_function_outputs(
     }
     emit_result_area_access(buffer, false, ty, address~, value~, offset)
   }
-  let resolved = @vcode.resolve_parallel_moves(
+  let resolved = @vcode.plan_parallel_moves(
     register_moves,
-    [@vcode.PhysicalReg::new(10, Int), @vcode.PhysicalReg::new(11, Int)],
-    [
-      @vcode.PhysicalReg::new(14, FpVector),
-      @vcode.PhysicalReg::new(15, FpVector),
-    ],
+    int_transfer_scratch(),
+    fp_transfer_scratch(),
   ) catch {
     error => raise InvalidParallelMove(cause=error)
   }

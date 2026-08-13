@@ -35,3 +35,64 @@ test "x64 target allocates selected scalar VCode" {
     ),
   )
 }
+
+///|
+test "x64 frame reserves emergency move storage only when required" {
+  let builder : @vcode.Builder[X64Inst] = @vcode.Builder::new(
+    "emergency_move_frame",
+    [I64, I64],
+  )
+  let entry = builder.entry_block()
+  let exit = builder.create_block([I64, I64])
+  let first = builder.parameter(0)
+  let second = builder.parameter(1)
+  builder.set_terminator(
+    entry,
+    Jump,
+    [],
+    [@vcode.Edge::new(exit, [first, second])],
+    [],
+    @vcode.InstructionMetadata::empty(),
+  )
+  |> ignore
+  builder.set_terminator(
+    exit,
+    Return,
+    [],
+    [],
+    [],
+    @vcode.InstructionMetadata::empty(),
+  )
+  |> ignore
+  let exit_first = builder.block_parameter(exit, 0)
+  let exit_second = builder.block_parameter(exit, 1)
+  let function = builder.finish()
+  let allocation = @vcode.Allocation::for_function(function)
+  let stack0 = allocation.create_stack_slot(I64, 8, 8)
+  let stack1 = allocation.create_stack_slot(I64, 8, 8)
+  allocation.assign_value(first, Stack(stack0)) |> ignore
+  allocation.assign_value(second, Stack(stack1)) |> ignore
+  allocation.assign_value(exit_first, Stack(stack1)) |> ignore
+  allocation.assign_value(exit_second, Stack(stack0)) |> ignore
+  allocation.add_edit(
+    @vcode.Edit::edge_move(entry, 0, first, Stack(stack0), Stack(stack1)),
+  )
+  |> ignore
+  allocation.add_edit(
+    @vcode.Edit::edge_move(entry, 0, second, Stack(stack1), Stack(stack0)),
+  )
+  |> ignore
+  let frame = plan_frame(function, allocation)
+  assert_eq(frame.emergency_move_offset(), Some(0))
+  inspect(
+    frame.summary(),
+    content=(
+      #|x64 frame size=40 align=16
+      #|  emergency-move 16 bytes at sp+0
+      #|  place stack0 at sp+16
+      #|  place stack1 at sp+24
+      #|
+    ),
+  )
+  emit(function, allocation, frame) |> ignore
+}
