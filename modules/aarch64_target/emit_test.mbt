@@ -2504,7 +2504,7 @@ test "AArch64 pipeline emits far I32 spill slots" {
   builder.return_([result])
   let selected = lower(builder.finish(), test_lowering_context())
   let (_, frame_size) = compile(selected)
-  inspect(frame_size, content="16496")
+  inspect(frame_size, content="16512")
 }
 
 ///|
@@ -2532,7 +2532,7 @@ test "AArch64 pipeline emits far F32 spill slots" {
   builder.return_([sum])
   let selected = lower(builder.finish(), test_lowering_context())
   let (_, frame_size) = compile(selected)
-  inspect(frame_size, content="16464")
+  inspect(frame_size, content="16480")
 }
 
 ///|
@@ -5118,7 +5118,7 @@ test "AArch64 emits scalar min max and bit-exact copy-sign" {
       #|    0x1e,
       #|    0xb0,
       #|    0x4e,
-      #|    0x10,
+      #|    0x12,
       #|    0x1c,
       #|    0xa0,
       #|    0x4e,
@@ -5134,9 +5134,9 @@ test "AArch64 emits scalar min max and bit-exact copy-sign" {
       #|    0x1c,
       #|    0xa3,
       #|    0x4e,
-      #|    0x03,
+      #|    0x43,
       #|    0x1e,
-      #|    0xb0,
+      #|    0xb2,
       #|    0x4e,
       #|    0xc0,
       #|    0x03,
@@ -5451,7 +5451,7 @@ test "AArch64 edge emission resolves register cycles through reserved scratch" {
       #|{
       #|  architecture: AArch64,
       #|  code: [
-      #|    0xf1,
+      #|    0xef,
       #|    0x03,
       #|    0x01,
       #|    0xaa,
@@ -5461,7 +5461,7 @@ test "AArch64 edge emission resolves register cycles through reserved scratch" {
       #|    0xaa,
       #|    0xe0,
       #|    0x03,
-      #|    0x11,
+      #|    0x0f,
       #|    0xaa,
       #|    0xe0,
       #|    0x03,

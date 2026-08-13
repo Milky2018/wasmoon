@@ -304,7 +304,7 @@ fn emit_stack_access(
       if load {
         reg
       } else {
-        int_transfer_scratch()
+        int_instruction_scratch()
       }
     } else {
       primary

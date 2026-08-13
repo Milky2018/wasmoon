@@ -40,6 +40,33 @@ test "AArch64 allocation honors incoming and return ABI constraints" {
 }
 
 ///|
+test "AArch64 frame reserves emergency move storage only on request" {
+  let builder = @semantic.FunctionBuilder::new(
+    "emergency_move_frame",
+    Platform,
+    [],
+    [],
+  )
+  builder.return_([])
+  let function = lower(builder.finish(), test_lowering_context())
+  let allocation = allocate(function)
+  let ordinary = plan_frame(function, allocation)
+  assert_eq(ordinary.frame_size(), 0)
+  assert_eq(ordinary.emergency_move_offset(), None)
+  let emergency = plan_frame(function, allocation, requires_emergency=true)
+  assert_eq(emergency.frame_size(), 16)
+  assert_eq(emergency.emergency_move_offset(), Some(0))
+  inspect(
+    emergency.summary(),
+    content=(
+      #|aarch64 frame size=16 align=16
+      #|  emergency-move 16 bytes at sp+0
+      #|
+    ),
+  )
+}
+
+///|
 test "AArch64 frame plans spills and callee-saved registers" {
   let builder = @semantic.FunctionBuilder::new(
     "register_pressure",
@@ -211,13 +238,13 @@ test "AArch64 call inputs may remain in spill slots" {
     content=(
       #|allocation spilled_call_inputs
       #|  v0:i64 -> p0:int
-      #|  v1:i64 -> p1:int
-      #|  v2:i64 -> stack0:i64(size=8, align=8)
-      #|  v3:i64 -> stack1:i64(size=8, align=8)
-      #|  v4:i64 -> stack2:i64(size=8, align=8)
-      #|  v5:i64 -> stack3:i64(size=8, align=8)
-      #|  v6:i64 -> stack4:i64(size=8, align=8)
-      #|  v7:i64 -> stack5:i64(size=8, align=8)
+      #|  v1:i64 -> stack0:i64(size=8, align=8)
+      #|  v2:i64 -> stack1:i64(size=8, align=8)
+      #|  v3:i64 -> stack2:i64(size=8, align=8)
+      #|  v4:i64 -> stack3:i64(size=8, align=8)
+      #|  v5:i64 -> stack4:i64(size=8, align=8)
+      #|  v6:i64 -> stack5:i64(size=8, align=8)
+      #|  v7:i64 -> stack6:i64(size=8, align=8)
       #|  v8:i64 -> p8:int
       #|  v9:i64 -> p9:int
       #|  v10:i64 -> p10:int
@@ -225,30 +252,30 @@ test "AArch64 call inputs may remain in spill slots" {
       #|  v12:i64 -> p12:int
       #|  v13:i64 -> p13:int
       #|  v14:i64 -> p14:int
-      #|  v15:i64 -> p15:int
-      #|  v16:i64 -> p19:int
-      #|  v17:i64 -> p20:int
-      #|  v18:i64 -> p21:int
-      #|  v19:i64 -> p22:int
-      #|  v20:i64 -> p23:int
-      #|  v21:i64 -> p24:int
-      #|  v22:i64 -> p25:int
-      #|  v23:i64 -> p26:int
-      #|  v24:i64 -> p27:int
-      #|  v25:i64 -> p28:int
-      #|  v26:i64 -> p7:int
-      #|  v27:i64 -> p6:int
-      #|  v28:i64 -> p5:int
-      #|  v29:i64 -> p4:int
-      #|  v30:i64 -> p3:int
-      #|  v31:i64 -> p2:int
-      #|  v32:i64 -> stack6:i64(size=8, align=8)
-      #|  v33:i64 -> stack7:i64(size=8, align=8)
-      #|  v34:i64 -> stack0:i64(size=8, align=8)
-      #|  v35:i64 -> stack1:i64(size=8, align=8)
-      #|  v36:i64 -> stack2:i64(size=8, align=8)
-      #|  v37:i64 -> stack3:i64(size=8, align=8)
-      #|  v38:i64 -> p6:int
+      #|  v15:i64 -> p19:int
+      #|  v16:i64 -> p20:int
+      #|  v17:i64 -> p21:int
+      #|  v18:i64 -> p22:int
+      #|  v19:i64 -> p23:int
+      #|  v20:i64 -> p24:int
+      #|  v21:i64 -> p25:int
+      #|  v22:i64 -> p26:int
+      #|  v23:i64 -> p27:int
+      #|  v24:i64 -> p28:int
+      #|  v25:i64 -> p7:int
+      #|  v26:i64 -> p6:int
+      #|  v27:i64 -> p5:int
+      #|  v28:i64 -> p4:int
+      #|  v29:i64 -> p3:int
+      #|  v30:i64 -> p2:int
+      #|  v31:i64 -> p1:int
+      #|  v32:i64 -> stack7:i64(size=8, align=8)
+      #|  v33:i64 -> stack0:i64(size=8, align=8)
+      #|  v34:i64 -> stack1:i64(size=8, align=8)
+      #|  v35:i64 -> stack2:i64(size=8, align=8)
+      #|  v36:i64 -> stack3:i64(size=8, align=8)
+      #|  v37:i64 -> stack4:i64(size=8, align=8)
+      #|  v38:i64 -> stack5:i64(size=8, align=8)
       #|  v39:i64 -> p7:int
       #|  v40:i64 -> p8:int
       #|  v41:i64 -> p9:int
@@ -257,37 +284,37 @@ test "AArch64 call inputs may remain in spill slots" {
       #|  v44:i64 -> p12:int
       #|  v45:i64 -> p13:int
       #|  v46:i64 -> p14:int
-      #|  v47:i64 -> p15:int
-      #|  v48:i64 -> p19:int
-      #|  v49:i64 -> p20:int
-      #|  v50:i64 -> p21:int
-      #|  v51:i64 -> p22:int
-      #|  v52:i64 -> p23:int
-      #|  v53:i64 -> p24:int
-      #|  v54:i64 -> p25:int
-      #|  v55:i64 -> p26:int
-      #|  v56:i64 -> p27:int
-      #|  v57:i64 -> p28:int
-      #|  v58:i64 -> p0:int
-      #|  v59:i64 -> p1:int
-      #|  v60:i64 -> p2:int
-      #|  v61:i64 -> p3:int
-      #|  v62:i64 -> p4:int
-      #|  v63:i64 -> p5:int
+      #|  v47:i64 -> p19:int
+      #|  v48:i64 -> p20:int
+      #|  v49:i64 -> p21:int
+      #|  v50:i64 -> p22:int
+      #|  v51:i64 -> p23:int
+      #|  v52:i64 -> p24:int
+      #|  v53:i64 -> p25:int
+      #|  v54:i64 -> p26:int
+      #|  v55:i64 -> p27:int
+      #|  v56:i64 -> p28:int
+      #|  v57:i64 -> p0:int
+      #|  v58:i64 -> p1:int
+      #|  v59:i64 -> p2:int
+      #|  v60:i64 -> p3:int
+      #|  v61:i64 -> p4:int
+      #|  v62:i64 -> p5:int
+      #|  v63:i64 -> p6:int
       #|  i0 operand0 -> p0:int
-      #|  i0 operand1 -> stack6
+      #|  i0 operand1 -> stack7
       #|  i1 operand0 -> p1:int
-      #|  i1 operand1 -> stack7
+      #|  i1 operand1 -> stack0
       #|  i2 operand0 -> p2:int
-      #|  i2 operand1 -> stack0
+      #|  i2 operand1 -> stack1
       #|  i3 operand0 -> p3:int
-      #|  i3 operand1 -> stack1
+      #|  i3 operand1 -> stack2
       #|  i4 operand0 -> p4:int
-      #|  i4 operand1 -> stack2
+      #|  i4 operand1 -> stack3
       #|  i5 operand0 -> p5:int
-      #|  i5 operand1 -> stack3
+      #|  i5 operand1 -> stack4
       #|  i6 operand0 -> p6:int
-      #|  i6 operand1 -> p6:int
+      #|  i6 operand1 -> stack5
       #|  i7 operand0 -> p7:int
       #|  i7 operand1 -> p7:int
       #|  i8 operand0 -> p8:int
@@ -297,30 +324,30 @@ test "AArch64 call inputs may remain in spill slots" {
       #|  i12 operand0 -> p12:int
       #|  i13 operand0 -> p13:int
       #|  i14 operand0 -> p14:int
-      #|  i15 operand0 -> p15:int
-      #|  i16 operand0 -> p19:int
-      #|  i17 operand0 -> p20:int
-      #|  i18 operand0 -> p21:int
-      #|  i19 operand0 -> p22:int
-      #|  i20 operand0 -> p23:int
-      #|  i21 operand0 -> p24:int
-      #|  i22 operand0 -> p25:int
-      #|  i23 operand0 -> p26:int
-      #|  i24 operand0 -> p27:int
-      #|  i25 operand0 -> p28:int
-      #|  i26 operand0 -> p0:int
-      #|  i27 operand0 -> p1:int
-      #|  i28 operand0 -> p2:int
-      #|  i29 operand0 -> p3:int
-      #|  i30 operand0 -> p4:int
-      #|  i31 operand0 -> p5:int
-      #|  i32 operand0 -> stack6
-      #|  i32 operand1 -> stack7
-      #|  i32 operand2 -> stack0
-      #|  i32 operand3 -> stack1
-      #|  i32 operand4 -> stack2
-      #|  i32 operand5 -> stack3
-      #|  i32 operand6 -> p6:int
+      #|  i15 operand0 -> p19:int
+      #|  i16 operand0 -> p20:int
+      #|  i17 operand0 -> p21:int
+      #|  i18 operand0 -> p22:int
+      #|  i19 operand0 -> p23:int
+      #|  i20 operand0 -> p24:int
+      #|  i21 operand0 -> p25:int
+      #|  i22 operand0 -> p26:int
+      #|  i23 operand0 -> p27:int
+      #|  i24 operand0 -> p28:int
+      #|  i25 operand0 -> p0:int
+      #|  i26 operand0 -> p1:int
+      #|  i27 operand0 -> p2:int
+      #|  i28 operand0 -> p3:int
+      #|  i29 operand0 -> p4:int
+      #|  i30 operand0 -> p5:int
+      #|  i31 operand0 -> p6:int
+      #|  i32 operand0 -> stack7
+      #|  i32 operand1 -> stack0
+      #|  i32 operand2 -> stack1
+      #|  i32 operand3 -> stack2
+      #|  i32 operand4 -> stack3
+      #|  i32 operand5 -> stack4
+      #|  i32 operand6 -> stack5
       #|  i32 operand7 -> p7:int
       #|  i32 operand8 -> p8:int
       #|  i32 operand9 -> p9:int
@@ -329,29 +356,30 @@ test "AArch64 call inputs may remain in spill slots" {
       #|  i32 operand12 -> p12:int
       #|  i32 operand13 -> p13:int
       #|  i32 operand14 -> p14:int
-      #|  i32 operand15 -> p15:int
-      #|  i32 operand16 -> p19:int
-      #|  i32 operand17 -> p20:int
-      #|  i32 operand18 -> p21:int
-      #|  i32 operand19 -> p22:int
-      #|  i32 operand20 -> p23:int
-      #|  i32 operand21 -> p24:int
-      #|  i32 operand22 -> p25:int
-      #|  i32 operand23 -> p26:int
-      #|  i32 operand24 -> p27:int
-      #|  i32 operand25 -> p28:int
-      #|  i32 operand26 -> p0:int
-      #|  i32 operand27 -> p1:int
-      #|  i32 operand28 -> p2:int
-      #|  i32 operand29 -> p3:int
-      #|  i32 operand30 -> p4:int
-      #|  i32 operand31 -> p5:int
-      #|  before(i2): reload v2 stack0 -> p2:int
-      #|  before(i3): reload v3 stack1 -> p3:int
-      #|  before(i4): reload v4 stack2 -> p4:int
-      #|  before(i5): reload v5 stack3 -> p5:int
-      #|  before(i6): reload v6 stack4 -> p6:int
-      #|  before(i7): reload v7 stack5 -> p7:int
+      #|  i32 operand15 -> p19:int
+      #|  i32 operand16 -> p20:int
+      #|  i32 operand17 -> p21:int
+      #|  i32 operand18 -> p22:int
+      #|  i32 operand19 -> p23:int
+      #|  i32 operand20 -> p24:int
+      #|  i32 operand21 -> p25:int
+      #|  i32 operand22 -> p26:int
+      #|  i32 operand23 -> p27:int
+      #|  i32 operand24 -> p28:int
+      #|  i32 operand25 -> p0:int
+      #|  i32 operand26 -> p1:int
+      #|  i32 operand27 -> p2:int
+      #|  i32 operand28 -> p3:int
+      #|  i32 operand29 -> p4:int
+      #|  i32 operand30 -> p5:int
+      #|  i32 operand31 -> p6:int
+      #|  before(i1): reload v1 stack0 -> p1:int
+      #|  before(i2): reload v2 stack1 -> p2:int
+      #|  before(i3): reload v3 stack2 -> p3:int
+      #|  before(i4): reload v4 stack3 -> p4:int
+      #|  before(i5): reload v5 stack4 -> p5:int
+      #|  before(i6): reload v6 stack5 -> p6:int
+      #|  before(i7): reload v7 stack6 -> p7:int
       #|
     ),
   )

@@ -29,15 +29,21 @@ fn stack_address_scratch() -> @vcode.PhysicalReg {
 }
 
 ///|
-/// IP1 carries allocator-inserted integer transfers and the occasional second
-/// emitter temporary.
+/// X15 is reserved exclusively for target-level parallel transfers.
 fn int_transfer_scratch() -> @vcode.PhysicalReg {
-  int_physical(17)
+  int_physical(15)
 }
 
 ///|
 fn fp_transfer_scratch() -> @vcode.PhysicalReg {
-  fp_physical(16)
+  fp_physical(18)
+}
+
+///|
+/// IP1 carries allocator-inserted integer transfers and instruction-local
+/// temporary values.
+fn int_instruction_scratch() -> @vcode.PhysicalReg {
+  int_physical(17)
 }
 
 ///|
@@ -47,7 +53,7 @@ fn int_transfer_scratch_regs() -> Array[@vcode.PhysicalReg] {
 
 ///|
 fn fp_transfer_scratch_regs() -> Array[@vcode.PhysicalReg] {
-  [fp_transfer_scratch(), fp_physical(17)]
+  [fp_transfer_scratch()]
 }
 
 ///|
@@ -61,7 +67,7 @@ fn transfer_scratch_for_type(ty : @semantic.ValueType) -> @vcode.PhysicalReg {
 ///|
 fn allocatable_physical_regs() -> Array[@vcode.PhysicalReg] {
   let regs : Array[@vcode.PhysicalReg] = []
-  for index in 0..<16 {
+  for index in 0..<15 {
     regs.push(int_physical(index))
   }
   for index in 19..<29 {
@@ -70,7 +76,7 @@ fn allocatable_physical_regs() -> Array[@vcode.PhysicalReg] {
   for index in 0..<16 {
     regs.push(fp_physical(index))
   }
-  for index in 18..<32 {
+  for index in 19..<32 {
     regs.push(fp_physical(index))
   }
   regs
@@ -78,22 +84,22 @@ fn allocatable_physical_regs() -> Array[@vcode.PhysicalReg] {
 
 ///|
 fn spill_scratch_regs() -> Array[@vcode.PhysicalReg] {
-  [int_transfer_scratch(), fp_physical(16), fp_physical(17)]
+  [int_instruction_scratch(), fp_physical(16), fp_physical(17)]
 }
 
 ///|
 fn is_allocatable(reg : @vcode.PhysicalReg) -> Bool {
   match reg.class {
-    Int => (reg.id >= 0 && reg.id < 16) || (reg.id >= 19 && reg.id < 29)
-    FpVector => (reg.id >= 0 && reg.id < 16) || (reg.id >= 18 && reg.id < 32)
+    Int => (reg.id >= 0 && reg.id < 15) || (reg.id >= 19 && reg.id < 29)
+    FpVector => (reg.id >= 0 && reg.id < 16) || (reg.id >= 19 && reg.id < 32)
   }
 }
 
 ///|
 fn is_scratch(reg : @vcode.PhysicalReg) -> Bool {
   match reg.class {
-    Int => reg.id == 17
-    FpVector => reg.id == 16 || reg.id == 17
+    Int => reg.id == 15 || reg.id == 17
+    FpVector => reg.id == 16 || reg.id == 17 || reg.id == 18
   }
 }
 

@@ -26,6 +26,7 @@ pub struct AArch64Frame {
   priv outgoing_args_size : Int
   priv result_area : ResultArea?
   priv stack_objects : StackObjectArea?
+  priv emergency_move_offset : Int?
   priv slots : Array[(@vcode.StackSlot, Int)]
   priv saved_registers : Array[SavedRegister]
 }
@@ -45,6 +46,7 @@ pub suberror AArch64FrameError {
     actual_tail~ : Int
   )
   InvalidStackObjectArea(message~ : String)
+  InvalidEmergencyMoveArea(offset~ : Int?)
   SavedRegisterSetMismatch
 } derive(Debug)
 
@@ -299,6 +301,11 @@ fn AArch64Frame::result_area_offset(self : AArch64Frame) -> Int? {
 }
 
 ///|
+pub fn AArch64Frame::emergency_move_offset(self : AArch64Frame) -> Int? {
+  self.emergency_move_offset
+}
+
+///|
 pub fn AArch64Frame::stack_object_offset(
   self : AArch64Frame,
   object : AArch64StackObject,
@@ -341,6 +348,9 @@ pub fn AArch64Frame::summary(self : AArch64Frame) -> String {
   }
   if self.stack_objects is Some(area) {
     output += "  stack-objects \{area.size} bytes at sp+\{area.offset}\n"
+  }
+  if self.emergency_move_offset is Some(offset) {
+    output += "  emergency-move 16 bytes at sp+\{offset}\n"
   }
   for entry in self.slots {
     let (slot, offset) = entry
@@ -437,6 +447,18 @@ fn verify_target_frame(
         message="planned stack-object area presence does not match target VCode",
       )
   }
+  let reserved_object_area_end = match frame.stack_objects {
+    Some(area) => area.offset + area.size
+    None => reserved_call_area_end
+  }
+  if frame.emergency_move_offset is Some(offset) &&
+    (
+      offset < reserved_object_area_end ||
+      offset % 16 != 0 ||
+      offset + 16 > frame.local_size
+    ) {
+    raise InvalidEmergencyMoveArea(offset=Some(offset))
+  }
   let expected = used_callee_saved_registers(function, allocation)
   if frame.saved_registers.map(saved => saved.reg) != expected {
     raise SavedRegisterSetMismatch
@@ -450,6 +472,9 @@ fn verify_target_frame(
   }
   if frame.stack_objects is Some(area) {
     occupied.push((area.offset, area.offset + area.size))
+  }
+  if frame.emergency_move_offset is Some(offset) {
+    occupied.push((offset, offset + 16))
   }
   for index in 0..<allocation.stack_slot_count() {
     let slot = allocation.stack_slot_at(index).unwrap()
@@ -479,6 +504,7 @@ fn verify_target_frame(
 fn plan_frame_verified(
   function : @vcode.Function[AArch64Inst],
   allocation : @vcode.Allocation,
+  requires_emergency? : Bool = false,
 ) -> AArch64Frame raise AArch64FrameError {
   let outgoing_args_size = maximum_outgoing_args_size(function)
   let mut offset = outgoing_args_size
@@ -499,6 +525,14 @@ fn plan_frame_verified(
       Some(area)
     }
     None => None
+  }
+  let emergency_move_offset = if requires_emergency {
+    offset = align_up(offset, 16)
+    let emergency_offset = offset
+    offset += 16
+    Some(emergency_offset)
+  } else {
+    None
   }
   let slot_offsets : Array[Int] = []
   for index in 0..<allocation.stack_slot_count() {
@@ -546,6 +580,7 @@ fn plan_frame_verified(
     outgoing_args_size,
     result_area,
     stack_objects,
+    emergency_move_offset,
     slots,
     saved_registers,
   }
@@ -557,9 +592,10 @@ fn plan_frame_verified(
 pub fn plan_frame(
   function : @vcode.Function[AArch64Inst],
   allocation : @vcode.Allocation,
+  requires_emergency? : Bool = false,
 ) -> AArch64Frame raise AArch64FrameError {
   verify_allocation(function, allocation) catch {
     error => raise InvalidAllocation(cause=error)
   }
-  plan_frame_verified(function, allocation)
+  plan_frame_verified(function, allocation, requires_emergency~)
 }

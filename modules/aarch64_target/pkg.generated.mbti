@@ -18,7 +18,7 @@ pub fn emit(@vcode.Function[AArch64Inst], @vcode.Allocation, AArch64Frame) -> @c
 
 pub fn lower(@machv.Function, LoweringContext) -> @vcode.Function[AArch64Inst] raise AArch64LowerError
 
-pub fn plan_frame(@vcode.Function[AArch64Inst], @vcode.Allocation) -> AArch64Frame raise AArch64FrameError
+pub fn plan_frame(@vcode.Function[AArch64Inst], @vcode.Allocation, requires_emergency? : Bool) -> AArch64Frame raise AArch64FrameError
 
 pub fn prepare_aarch64_link(@code_object.UnlinkedCodeObject) -> AArch64LinkPlan raise AArch64LinkError
 
@@ -75,6 +75,7 @@ pub suberror AArch64FrameError {
   ResultAreaMismatch(expected~ : Int, actual~ : Int)
   TailAreaMismatch(expected_incoming~ : Int, actual_incoming~ : Int, expected_tail~ : Int, actual_tail~ : Int)
   InvalidStackObjectArea(message~ : String)
+  InvalidEmergencyMoveArea(offset~ : Int?)
   SavedRegisterSetMismatch
 } derive(@debug.Debug)
 pub impl Show for AArch64FrameError
@@ -193,6 +194,7 @@ pub struct AArch64Frame {
   // private fields
 }
 pub fn AArch64Frame::alignment(Self) -> Int
+pub fn AArch64Frame::emergency_move_offset(Self) -> Int?
 pub fn AArch64Frame::frame_size(Self) -> Int
 pub fn AArch64Frame::incoming_args_size(Self) -> Int
 pub fn AArch64Frame::outgoing_args_size(Self) -> Int
