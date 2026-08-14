@@ -1,6 +1,6 @@
 name = "Milky2018/machv_regalloc"
 
-version = "0.6.1"
+version = "0.6.2"
 
 readme = "README.mbt.md"
 
@@ -14,8 +14,8 @@ description = "Target VCode adapter for the reusable register allocator"
 
 import {
   "moonbitlang/x@0.4.48",
-  "Milky2018/machv@0.8.1",
-  "Milky2018/regalloc@0.7.1",
+  "Milky2018/machv@0.8.2",
+  "Milky2018/regalloc@0.7.2",
 }
 
 preferred_target = "wasm-gc"

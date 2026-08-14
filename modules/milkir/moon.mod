@@ -1,6 +1,6 @@
 name = "Milky2018/milkir"
 
-version = "0.6.1"
+version = "0.6.2"
 
 readme = "README.mbt.md"
 
