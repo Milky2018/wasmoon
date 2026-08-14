@@ -1,0 +1,32 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "Milky2018/wasm_core/wat"
+
+import {
+  "Milky2018/wasm_core/types",
+}
+
+// Values
+pub fn render(@types.Module) -> String raise WatPrintError
+
+pub fn render_function(@types.Module, Int) -> String raise WatPrintError
+
+// Errors
+pub(all) suberror WatPrintError {
+  NotAFunctionType(Int)
+  FunctionCodeCountMismatch(declarations~ : Int, bodies~ : Int)
+  FunctionIndexOutOfBounds(Int)
+  ImportedFunction(Int)
+  TypeRecGroupCountMismatch(types~ : Int, groups~ : Int)
+  NonContiguousTypeRecGroup(Int)
+  InvalidMemoryPageSizeLog2(Int)
+  InvalidV128ConstantLength(Int)
+  InvalidShuffleLaneCount(Int)
+  InvalidAtomicSubopcode(Int)
+}
+pub impl Show for WatPrintError
+
+// Types and methods
+
+// Type aliases
+
+// Traits

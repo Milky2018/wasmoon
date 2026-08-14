@@ -1,5 +1,796 @@
 ///|
-/// Convert an Instruction to WAT text format
+/// A module too malformed to render as WAT.
+///
+/// `wasm2wat` prints whatever it is handed, without validating first, so it
+/// meets shapes a validated module cannot have. It used to abort on them,
+/// which killed the process on the way to a diagnostic (ISS-396).
+pub(all) suberror WatPrintError {
+  NotAFunctionType(Int)
+  FunctionCodeCountMismatch(declarations~ : Int, bodies~ : Int)
+  FunctionIndexOutOfBounds(Int)
+  ImportedFunction(Int)
+  TypeRecGroupCountMismatch(types~ : Int, groups~ : Int)
+  NonContiguousTypeRecGroup(Int)
+  InvalidMemoryPageSizeLog2(Int)
+  InvalidV128ConstantLength(Int)
+  InvalidShuffleLaneCount(Int)
+  InvalidAtomicSubopcode(Int)
+}
+
+///|
+fn WatPrintError::to_string(self : WatPrintError) -> String {
+  match self {
+    NotAFunctionType(idx) => "type \{idx} is not a function type"
+    FunctionCodeCountMismatch(declarations~, bodies~) =>
+      "function declaration count \{declarations} does not match code body count \{bodies}"
+    FunctionIndexOutOfBounds(idx) => "function index \{idx} is out of bounds"
+    ImportedFunction(idx) => "function index \{idx} is imported and has no body"
+    TypeRecGroupCountMismatch(types~, groups~) =>
+      "type count \{types} does not match recursive group count \{groups}"
+    NonContiguousTypeRecGroup(group) =>
+      "recursive type group \{group} is not contiguous"
+    InvalidMemoryPageSizeLog2(log2) =>
+      "memory page size exponent \{log2} is outside 0 through 16"
+    InvalidV128ConstantLength(length) =>
+      "v128 constant has \{length} bytes instead of 16"
+    InvalidShuffleLaneCount(length) =>
+      "i8x16.shuffle has \{length} lanes instead of 16"
+    InvalidAtomicSubopcode(subopcode) =>
+      "atomic instruction has unknown subopcode \{subopcode}"
+  }
+}
+
+///|
+pub impl Show for WatPrintError with fn output(self, logger) {
+  logger.write_string(self.to_string())
+}
+
+///|
+fn imported_function_count(mod_ : @types.Module) -> Int {
+  let mut count = 0
+  for import_ in mod_.imports {
+    if import_.desc is Func(_) {
+      count += 1
+    }
+  }
+  count
+}
+
+///|
+fn validate_memory_type(memory : @types.MemoryType) -> Unit raise WatPrintError {
+  if memory.page_size_log2 < 0 || memory.page_size_log2 > 16 {
+    raise InvalidMemoryPageSizeLog2(memory.page_size_log2)
+  }
+}
+
+///|
+fn validate_instructions(
+  instructions : Array[@types.Instruction],
+) -> Unit raise WatPrintError {
+  for instruction in instructions {
+    match instruction {
+      Block(_, body) | Loop(_, body) => validate_instructions(body)
+      If(_, then_body, else_body) => {
+        validate_instructions(then_body)
+        validate_instructions(else_body)
+      }
+      TryTable(_, _, body) => validate_instructions(body)
+      V128Const(bytes) =>
+        if bytes.length() != 16 {
+          raise InvalidV128ConstantLength(bytes.length())
+        }
+      I8x16Shuffle(lanes) =>
+        if lanes.length() != 16 {
+          raise InvalidShuffleLaneCount(lanes.length())
+        }
+      Atomic(subopcode, _, _, _) =>
+        if subopcode < 0 || subopcode > 66 {
+          raise InvalidAtomicSubopcode(subopcode)
+        }
+      _ => ()
+    }
+  }
+}
+
+///|
+fn validate_module_shape(mod_ : @types.Module) -> Unit raise WatPrintError {
+  if mod_.funcs.length() != mod_.codes.length() {
+    raise FunctionCodeCountMismatch(
+      declarations=mod_.funcs.length(),
+      bodies=mod_.codes.length(),
+    )
+  }
+  if !mod_.type_rec_groups.is_empty() &&
+    mod_.types.length() != mod_.type_rec_groups.length() {
+    raise TypeRecGroupCountMismatch(
+      types=mod_.types.length(),
+      groups=mod_.type_rec_groups.length(),
+    )
+  }
+  let closed_groups : Map[Int, Bool] = Map([])
+  let mut previous_group : Int? = None
+  for group in mod_.type_rec_groups {
+    if previous_group is Some(previous) && group != previous {
+      closed_groups.set(previous, true)
+    }
+    if closed_groups.get(group) == Some(true) {
+      raise NonContiguousTypeRecGroup(group)
+    }
+    previous_group = Some(group)
+  }
+  for import_ in mod_.imports {
+    match import_.desc {
+      Memory(memory) => validate_memory_type(memory)
+      _ => ()
+    }
+  }
+  for memory in mod_.memories {
+    validate_memory_type(memory)
+  }
+  for global in mod_.globals {
+    validate_instructions(global.init)
+  }
+  for table in mod_.tables {
+    if table.init is Some(init) {
+      validate_instructions(init)
+    }
+  }
+  for elem in mod_.elems {
+    match elem.mode {
+      Active(_, offset) => validate_instructions(offset)
+      _ => ()
+    }
+    for init in elem.init {
+      validate_instructions(init)
+    }
+  }
+  for code in mod_.codes {
+    validate_instructions(code.body)
+  }
+  for data in mod_.datas {
+    validate_instructions(data.offset)
+  }
+}
+
+///|
+fn render_defined_function(
+  mod_ : @types.Module,
+  function_index : Int,
+  imported : Int,
+  indent : Int,
+) -> String raise WatPrintError {
+  if function_index < 0 || function_index >= imported + mod_.funcs.length() {
+    raise FunctionIndexOutOfBounds(function_index)
+  }
+  if function_index < imported {
+    raise ImportedFunction(function_index)
+  }
+  let local_index = function_index - imported
+  let type_index = mod_.funcs[local_index]
+  guard mod_.func_type_at(type_index) is Some(func_type) else {
+    raise NotAFunctionType(type_index)
+  }
+  let code = mod_.codes[local_index]
+  let outer_indent = "  ".repeat(indent)
+  let sb = StringBuilder::StringBuilder()
+  sb.write_string(outer_indent)
+  sb.write_string("(func (;\{function_index};) (type \{type_index})")
+  for param in func_type.params {
+    sb.write_string(" (param \{value_type_to_wat(param)})")
+  }
+  for result in func_type.results {
+    sb.write_string(" (result \{value_type_to_wat(result)})")
+  }
+  sb.write_string("\n")
+  for local_ty in code.locals {
+    sb.write_string(outer_indent)
+    sb.write_string("  (local \{value_type_to_wat(local_ty)})\n")
+  }
+  sb.write_string(instrs_to_wat(code.body, indent + 1))
+  sb.write_string(outer_indent)
+  sb.write_string(")\n")
+  sb.to_string()
+}
+
+///|
+/// Render one defined function, addressed in the module function index space.
+pub fn render_function(
+  mod_ : @types.Module,
+  function_index : Int,
+) -> String raise WatPrintError {
+  validate_module_shape(mod_)
+  render_defined_function(
+    mod_,
+    function_index,
+    imported_function_count(mod_),
+    0,
+  )
+}
+
+///|
+/// Render a complete WebAssembly module as deterministic WAT text.
+pub fn render(mod_ : @types.Module) -> String raise WatPrintError {
+  validate_module_shape(mod_)
+  let sb = StringBuilder::StringBuilder()
+  sb.write_string("(module\n")
+
+  // Types section
+  let mut type_idx = 0
+  while type_idx < mod_.types.length() {
+    let group = if mod_.type_rec_groups.is_empty() {
+      type_idx
+    } else {
+      mod_.type_rec_groups[type_idx]
+    }
+    let mut group_end = type_idx + 1
+    while group_end < mod_.types.length() &&
+          !mod_.type_rec_groups.is_empty() &&
+          mod_.type_rec_groups[group_end] == group {
+      group_end += 1
+    }
+    if group_end - type_idx > 1 {
+      sb.write_string("  (rec\n")
+      for i = type_idx; i < group_end; i = i + 1 {
+        sb.write_string(type_to_wat(i, mod_.types[i], 2))
+      }
+      sb.write_string("  )\n")
+    } else {
+      sb.write_string(type_to_wat(type_idx, mod_.types[type_idx], 1))
+    }
+    type_idx = group_end
+  }
+
+  // Imports section
+  for imp in mod_.imports {
+    sb.write_string("  (import \"")
+    sb.write_string(escape_wat_string(imp.mod_name))
+    sb.write_string("\" \"")
+    sb.write_string(escape_wat_string(imp.name))
+    sb.write_string("\" ")
+    match imp.desc {
+      Func(type_idx) => {
+        sb.write_string("(func (type ")
+        sb.write_string(type_idx.to_string())
+        sb.write_string("))")
+      }
+      Table(table_type) => {
+        sb.write_string("(table ")
+        if table_type.is_table64 {
+          sb.write_string("i64 ")
+        }
+        sb.write_string(limits_to_wat(table_type.limits))
+        sb.write_string(" ")
+        sb.write_string(value_type_to_wat(table_type.elem_type))
+        sb.write_string(")")
+      }
+      Memory(mem_type) => {
+        sb.write_string("(memory ")
+        if mem_type.is_memory64 {
+          sb.write_string("i64 ")
+        }
+        sb.write_string(limits_to_wat(mem_type.limits))
+        sb.write_string(memory_page_size_to_wat(mem_type))
+        sb.write_string(")")
+      }
+      Global(global_type) => {
+        sb.write_string("(global ")
+        if global_type.mutable {
+          sb.write_string("(mut ")
+          sb.write_string(value_type_to_wat(global_type.value_type))
+          sb.write_string(")")
+        } else {
+          sb.write_string(value_type_to_wat(global_type.value_type))
+        }
+        sb.write_string(")")
+      }
+      Tag(type_idx) => {
+        sb.write_string("(tag (type ")
+        sb.write_string(type_idx.to_string())
+        sb.write_string("))")
+      }
+    }
+    sb.write_string(")\n")
+  }
+
+  // Count imported functions for indexing
+  let import_func_count = imported_function_count(mod_)
+
+  // Tables section
+  for i, table in mod_.tables {
+    sb.write_string("  (table (;")
+    sb.write_string(i.to_string())
+    sb.write_string(";) ")
+    if table.type_.is_table64 {
+      sb.write_string("i64 ")
+    }
+    sb.write_string(limits_to_wat(table.type_.limits))
+    sb.write_string(" ")
+    sb.write_string(value_type_to_wat(table.type_.elem_type))
+    if table.init is Some(init) {
+      sb.write_string(" (")
+      sb.write_string(instrs_to_wat_inline(init))
+      sb.write_string(")")
+    }
+    sb.write_string(")\n")
+  }
+
+  // Memories section
+  for i, mem in mod_.memories {
+    sb.write_string("  (memory (;")
+    sb.write_string(i.to_string())
+    sb.write_string(";) ")
+    if mem.is_memory64 {
+      sb.write_string("i64 ")
+    }
+    sb.write_string(limits_to_wat(mem.limits))
+    sb.write_string(memory_page_size_to_wat(mem))
+    sb.write_string(")\n")
+  }
+
+  // Globals section
+  for i, global in mod_.globals {
+    sb.write_string("  (global (;")
+    sb.write_string(i.to_string())
+    sb.write_string(";) ")
+    if global.type_.mutable {
+      sb.write_string("(mut ")
+      sb.write_string(value_type_to_wat(global.type_.value_type))
+      sb.write_string(")")
+    } else {
+      sb.write_string(value_type_to_wat(global.type_.value_type))
+    }
+    sb.write_string(" (")
+    sb.write_string(instrs_to_wat_inline(global.init))
+    sb.write_string("))\n")
+  }
+
+  // Exports section
+  for exp in mod_.exports {
+    sb.write_string("  (export \"")
+    sb.write_string(escape_wat_string(exp.name))
+    sb.write_string("\" (")
+    match exp.desc {
+      Func(idx) => {
+        sb.write_string("func ")
+        sb.write_string(idx.to_string())
+      }
+      Table(idx) => {
+        sb.write_string("table ")
+        sb.write_string(idx.to_string())
+      }
+      Memory(idx) => {
+        sb.write_string("memory ")
+        sb.write_string(idx.to_string())
+      }
+      Global(idx) => {
+        sb.write_string("global ")
+        sb.write_string(idx.to_string())
+      }
+      Tag(idx) => {
+        sb.write_string("tag ")
+        sb.write_string(idx.to_string())
+      }
+    }
+    sb.write_string("))\n")
+  }
+
+  // Start section
+  if mod_.start is Some(start_idx) {
+    sb.write_string("  (start ")
+    sb.write_string(start_idx.to_string())
+    sb.write_string(")\n")
+  }
+
+  // Tags section
+  for i, tag in mod_.tags {
+    sb.write_string("  (tag (;\{i};) (type \{tag.type_idx}))\n")
+  }
+
+  // Elements section
+  for i, elem in mod_.elems {
+    sb.write_string("  (elem (;")
+    sb.write_string(i.to_string())
+    sb.write_string(";) ")
+    match elem.mode {
+      Passive => ()
+      Declarative => sb.write_string("declare ")
+      Active(table_idx, offset) => {
+        if table_idx != 0 {
+          sb.write_string("(table ")
+          sb.write_string(table_idx.to_string())
+          sb.write_string(") ")
+        }
+        sb.write_string("(")
+        sb.write_string(instrs_to_wat_inline(offset))
+        sb.write_string(") ")
+      }
+    }
+    sb.write_string(value_type_to_wat(elem.type_))
+    for init in elem.init {
+      sb.write_string(" (")
+      sb.write_string(instrs_to_wat_inline(init))
+      sb.write_string(")")
+    }
+    sb.write_string(")\n")
+  }
+
+  // Functions section (code)
+  for i in 0..<mod_.codes.length() {
+    let func_idx = import_func_count + i
+    sb.write_string(
+      render_defined_function(mod_, func_idx, import_func_count, 1),
+    )
+  }
+
+  // Data section
+  for i, data in mod_.datas {
+    sb.write_string("  (data (;")
+    sb.write_string(i.to_string())
+    sb.write_string(";) ")
+    // Passive segments use memory_idx = -1 and have no offset.
+    if data.memory_idx > 0 {
+      sb.write_string("(memory ")
+      sb.write_string(data.memory_idx.to_string())
+      sb.write_string(") ")
+    }
+    if data.offset.length() > 0 {
+      sb.write_string("(")
+      sb.write_string(instrs_to_wat_inline(data.offset))
+      sb.write_string(") ")
+    }
+    sb.write_string("\"")
+    sb.write_string(escape_wat_bytes(data.init))
+    sb.write_string("\")\n")
+  }
+  sb.write_string(")\n")
+  sb.to_string()
+}
+
+///|
+fn escape_wat_bytes(data : Bytes) -> String {
+  let sb = StringBuilder::StringBuilder()
+  for b in data {
+    let c = b.to_int()
+    if c >= 32 && c < 127 && c != 0x22 && c != 0x5c {
+      // Printable ASCII (except " and \)
+      sb.write_char(c.unsafe_to_char())
+    } else {
+      // Escape as hex
+      sb.write_string("\\")
+      let hex = "0123456789abcdef"
+      sb.write_char(hex[(c >> 4) & 0xf].to_int().unsafe_to_char())
+      sb.write_char(hex[c & 0xf].to_int().unsafe_to_char())
+    }
+  }
+  sb.to_string()
+}
+
+///|
+fn escape_wat_string(text : String) -> String {
+  escape_wat_bytes(@utf8.encode(text))
+}
+
+///|
+fn f32_literal(value : Float) -> String {
+  let bits = value.reinterpret_as_uint()
+  let negative = (bits & 0x80000000U) != 0U
+  let exponent = bits & 0x7f800000U
+  let payload = bits & 0x007fffffU
+  if exponent == 0x7f800000U {
+    if payload == 0U {
+      return if negative { "-inf" } else { "inf" }
+    }
+    let prefix = if negative { "-" } else { "" }
+    return "\{prefix}nan:0x\{payload.to_string(radix=16)}"
+  }
+  if bits == 0x80000000U {
+    return "-0"
+  }
+  value.to_string()
+}
+
+///|
+fn f64_literal(value : Double) -> String {
+  let bits = value.reinterpret_as_uint64()
+  let negative = (bits & 0x8000000000000000UL) != 0UL
+  let exponent = bits & 0x7ff0000000000000UL
+  let payload = bits & 0x000fffffffffffffUL
+  if exponent == 0x7ff0000000000000UL {
+    if payload == 0UL {
+      return if negative { "-inf" } else { "inf" }
+    }
+    let prefix = if negative { "-" } else { "" }
+    return "\{prefix}nan:0x\{payload.to_string(radix=16)}"
+  }
+  if bits == 0x8000000000000000UL {
+    return "-0"
+  }
+  value.to_string()
+}
+
+///|
+fn limits_to_wat(limits : @types.Limits) -> String {
+  match limits.max {
+    Some(max) => "\{limits.min} \{max}"
+    None => limits.min.to_string()
+  }
+}
+
+///|
+fn memory_page_size_to_wat(memory : @types.MemoryType) -> String {
+  if memory.page_size_log2 == 16 {
+    ""
+  } else {
+    " (pagesize \{1 << memory.page_size_log2})"
+  }
+}
+
+///|
+fn composite_type_to_wat(composite : @types.CompositeType) -> String {
+  let sb = StringBuilder::StringBuilder()
+  match composite {
+    Func(func_type) => {
+      sb.write_string("(func")
+      for param in func_type.params {
+        sb.write_string(" (param \{value_type_to_wat(param)})")
+      }
+      for result in func_type.results {
+        sb.write_string(" (result \{value_type_to_wat(result)})")
+      }
+      sb.write_string(")")
+    }
+    Struct(struct_type) => {
+      sb.write_string("(struct")
+      for field in struct_type.fields {
+        sb.write_string(" (field ")
+        if field.mutable {
+          sb.write_string("(mut ")
+        }
+        sb.write_string(storage_type_to_wat(field.storage_type))
+        if field.mutable {
+          sb.write_string(")")
+        }
+        sb.write_string(")")
+      }
+      sb.write_string(")")
+    }
+    Array(array_type) => {
+      sb.write_string("(array ")
+      if array_type.element.mutable {
+        sb.write_string("(mut ")
+      }
+      sb.write_string(storage_type_to_wat(array_type.element.storage_type))
+      if array_type.element.mutable {
+        sb.write_string(")")
+      }
+      sb.write_string(")")
+    }
+  }
+  sb.to_string()
+}
+
+///|
+fn subtype_to_wat(subtype : @types.SubType) -> String {
+  if subtype.final_ && subtype.supertypes.is_empty() {
+    return composite_type_to_wat(subtype.composite)
+  }
+  let sb = StringBuilder::StringBuilder()
+  sb.write_string("(sub")
+  if subtype.final_ {
+    sb.write_string(" final")
+  }
+  for supertype in subtype.supertypes {
+    sb.write_string(" \{supertype}")
+  }
+  sb.write_string(" ")
+  sb.write_string(composite_type_to_wat(subtype.composite))
+  sb.write_string(")")
+  sb.to_string()
+}
+
+///|
+fn type_to_wat(index : Int, subtype : @types.SubType, indent : Int) -> String {
+  "\{"  ".repeat(indent)}(type (;\{index};) \{subtype_to_wat(subtype)})\n"
+}
+
+///|
+fn storage_type_to_wat(st : @types.StorageType) -> String {
+  match st {
+    Val(vt) => value_type_to_wat(vt)
+    Packed(I8) => "i8"
+    Packed(I16) => "i16"
+  }
+}
+
+///|
+fn instrs_to_wat_inline(instrs : Array[@types.Instruction]) -> String {
+  let parts : Array[String] = []
+  for instr in instrs {
+    parts.push(instr_to_wat(instr))
+  }
+  parts.join(" ")
+}
+
+///|
+fn value_type_to_wat(t : @types.ValueType) -> String {
+  match t {
+    I32 => "i32"
+    I64 => "i64"
+    F32 => "f32"
+    F64 => "f64"
+    V128 => "v128"
+    FuncRef => "funcref"
+    ExternRef => "externref"
+    RefFunc => "(ref func)"
+    RefExtern => "(ref extern)"
+    RefFuncTyped(idx) => "(ref \{idx})"
+    RefNullFuncTyped(idx) => "(ref null \{idx})"
+    AnyRef => "anyref"
+    ExnRef => "exnref"
+    StructRef => "structref"
+    ArrayRef => "arrayref"
+    RefStruct(idx) => "(ref \{idx})"
+    RefNullStruct(idx) => "(ref null \{idx})"
+    RefArray(idx) => "(ref \{idx})"
+    RefNullArray(idx) => "(ref null \{idx})"
+    RefAny => "(ref any)"
+    RefEq => "(ref eq)"
+    RefNullEq => "(ref null eq)"
+    RefI31 => "(ref i31)"
+    RefNullI31 => "(ref null i31)"
+    RefStructAbs => "(ref struct)"
+    RefArrayAbs => "(ref array)"
+    RefNone => "(ref none)"
+    NullRef => "nullref"
+    NullFuncRef => "nullfuncref"
+    NullExnRef => "nullexnref"
+    NullExternRef => "nullexternref"
+  }
+}
+
+///|
+fn block_type_to_wat(bt : @types.BlockType) -> String {
+  match bt {
+    Empty => ""
+    Value(t) => " (result \{value_type_to_wat(t)})"
+    MultiValue(types) => {
+      let types_str = types.map(fn(t) { value_type_to_wat(t) }).join(" ")
+      " (result \{types_str})"
+    }
+    InlineType(params, results) => {
+      let params_str = if params.is_empty() {
+        ""
+      } else {
+        let p = params.map(fn(t) { value_type_to_wat(t) }).join(" ")
+        " (param \{p})"
+      }
+      let results_str = if results.is_empty() {
+        ""
+      } else {
+        let r = results.map(fn(t) { value_type_to_wat(t) }).join(" ")
+        " (result \{r})"
+      }
+      "\{params_str}\{results_str}"
+    }
+    TypeIndex(idx) => " (type \{idx})"
+  }
+}
+
+///|
+fn catch_handler_to_wat(handler : @types.CatchHandler) -> String {
+  match handler {
+    Catch(tag, label) => " (catch \{tag} \{label})"
+    CatchRef(tag, label) => " (catch_ref \{tag} \{label})"
+    CatchAll(label) => " (catch_all \{label})"
+    CatchAllRef(label) => " (catch_all_ref \{label})"
+  }
+}
+
+///|
+fn ref_type_to_wat(t : @types.ValueType) -> String {
+  match t {
+    FuncRef => "funcref"
+    ExternRef => "externref"
+    AnyRef => "anyref"
+    ExnRef => "exnref"
+    RefFunc => "(ref func)"
+    RefExtern => "(ref extern)"
+    RefAny => "(ref any)"
+    RefEq => "(ref eq)"
+    RefI31 => "(ref i31)"
+    RefFuncTyped(idx) => "(ref \{idx})"
+    RefNullFuncTyped(idx) => "(ref null \{idx})"
+    RefStruct(idx) => "(ref \{idx})"
+    RefNullStruct(idx) => "(ref null \{idx})"
+    RefArray(idx) => "(ref \{idx})"
+    RefNullArray(idx) => "(ref null \{idx})"
+    _ => value_type_to_wat(t)
+  }
+}
+
+///|
+fn heap_type_to_wat(t : @types.ValueType) -> String {
+  match t {
+    FuncRef | RefFunc => "func"
+    ExternRef | RefExtern => "extern"
+    AnyRef | RefAny => "any"
+    ExnRef => "exn"
+    RefEq | RefNullEq => "eq"
+    RefI31 | RefNullI31 => "i31"
+    RefFuncTyped(idx) | RefNullFuncTyped(idx) => idx.to_string()
+    RefStruct(idx) | RefNullStruct(idx) => idx.to_string()
+    RefArray(idx) | RefNullArray(idx) => idx.to_string()
+    _ => "any"
+  }
+}
+
+///|
+fn mem_instr(
+  name : String,
+  mem : Int,
+  align : Int,
+  offset : Int64,
+  _natural_align : Int,
+) -> String {
+  let sb = StringBuilder::StringBuilder()
+  sb.write_string(name)
+  if mem != 0 {
+    sb.write_string(" \{mem}")
+  }
+  if offset != 0L {
+    sb.write_string(" offset=\{offset}")
+  }
+  let align_bytes = 1 << align
+  sb.write_string(" align=\{align_bytes}")
+  sb.to_string()
+}
+
+///|
+fn format_v128_bytes(bytes : Bytes) -> String {
+  let parts : Array[String] = []
+  for i = 0; i < 16; i = i + 1 {
+    let b = bytes[i].to_int()
+    parts.push(b.to_string())
+  }
+  parts.join(" ")
+}
+
+///|
+fn instrs_to_wat(instrs : Array[@types.Instruction], indent : Int) -> String {
+  let sb = StringBuilder::StringBuilder()
+  let indent_str = "  ".repeat(indent)
+  for instr in instrs {
+    sb.write_string(indent_str)
+    sb.write_string(instr_to_wat(instr))
+    sb.write_string("\n")
+    match instr {
+      Block(_, body) | Loop(_, body) => {
+        sb.write_string(instrs_to_wat(body, indent + 1))
+        sb.write_string(indent_str)
+        sb.write_string("end\n")
+      }
+      If(_, then_body, else_body) => {
+        sb.write_string(instrs_to_wat(then_body, indent + 1))
+        if !else_body.is_empty() {
+          sb.write_string(indent_str)
+          sb.write_string("else\n")
+          sb.write_string(instrs_to_wat(else_body, indent + 1))
+        }
+        sb.write_string(indent_str)
+        sb.write_string("end\n")
+      }
+      TryTable(_, _, body) => {
+        sb.write_string(instrs_to_wat(body, indent + 1))
+        sb.write_string(indent_str)
+        sb.write_string("end\n")
+      }
+      _ => ()
+    }
+  }
+  sb.to_string()
+}
+
+///|
 fn instr_to_wat(instr : @types.Instruction) -> String {
   fn atomic_instr(
     subop : Int,
@@ -127,7 +918,6 @@ fn instr_to_wat(instr : @types.Instruction) -> String {
   }
 
   match instr {
-    // Control instructions
     Unreachable => "unreachable"
     Nop => "nop"
     Block(bt, _) => "block\{block_type_to_wat(bt)}"
@@ -156,28 +946,27 @@ fn instr_to_wat(instr : @types.Instruction) -> String {
         "return_call_indirect \{table_idx} (type \{type_idx})"
       }
     ReturnCallRef(type_idx) => "return_call_ref \{type_idx}"
-
-    // Exception handling
     Throw(idx) => "throw \{idx}"
     ThrowRef => "throw_ref"
-    TryTable(bt, _, _) => "try_table\{block_type_to_wat(bt)}"
-
-    // Parametric instructions
+    TryTable(bt, handlers, _) => {
+      let sb = StringBuilder::StringBuilder()
+      sb.write_string("try_table\{block_type_to_wat(bt)}")
+      for handler in handlers {
+        sb.write_string(catch_handler_to_wat(handler))
+      }
+      sb.to_string()
+    }
     Drop => "drop"
     Select => "select"
     SelectTyped(types) => {
       let types_str = types.map(fn(t) { value_type_to_wat(t) }).join(" ")
       "select (result \{types_str})"
     }
-
-    // Variable instructions
     LocalGet(idx) => "local.get \{idx}"
     LocalSet(idx) => "local.set \{idx}"
     LocalTee(idx) => "local.tee \{idx}"
     GlobalGet(idx) => "global.get \{idx}"
     GlobalSet(idx) => "global.set \{idx}"
-
-    // Table instructions
     TableGet(idx) => if idx == 0 { "table.get" } else { "table.get \{idx}" }
     TableSet(idx) => if idx == 0 { "table.set" } else { "table.set \{idx}" }
     TableSize(idx) => if idx == 0 { "table.size" } else { "table.size \{idx}" }
@@ -185,8 +974,6 @@ fn instr_to_wat(instr : @types.Instruction) -> String {
     TableFill(idx) => if idx == 0 { "table.fill" } else { "table.fill \{idx}" }
     TableCopy(dst, src) => "table.copy \{dst} \{src}"
     TableInit(table_idx, elem_idx) => "table.init \{table_idx} \{elem_idx}"
-
-    // Memory instructions
     I32Load(mem, align, offset) => mem_instr("i32.load", mem, align, offset, 2)
     I64Load(mem, align, offset) => mem_instr("i64.load", mem, align, offset, 3)
     F32Load(mem, align, offset) => mem_instr("f32.load", mem, align, offset, 2)
@@ -252,8 +1039,6 @@ fn instr_to_wat(instr : @types.Instruction) -> String {
       }
     ElemDrop(idx) => "elem.drop \{idx}"
     Atomic(subop, mem, align, offset) => atomic_instr(subop, mem, align, offset)
-
-    // Reference instructions
     RefNull(t) => "ref.null \{ref_type_to_wat(t)}"
     RefIsNull => "ref.is_null"
     RefFunc(idx) => "ref.func \{idx}"
@@ -261,14 +1046,10 @@ fn instr_to_wat(instr : @types.Instruction) -> String {
     RefEqInstr => "ref.eq"
     BrOnNull(idx) => "br_on_null \{idx}"
     BrOnNonNull(idx) => "br_on_non_null \{idx}"
-
-    // Numeric constants
     I32Const(v) => "i32.const \{v}"
     I64Const(v) => "i64.const \{v}"
-    F32Const(v) => "f32.const \{v}"
-    F64Const(v) => "f64.const \{v}"
-
-    // i32 operations
+    F32Const(v) => "f32.const \{f32_literal(v)}"
+    F64Const(v) => "f64.const \{f64_literal(v)}"
     I32Eqz => "i32.eqz"
     I32Eq => "i32.eq"
     I32Ne => "i32.ne"
@@ -300,8 +1081,6 @@ fn instr_to_wat(instr : @types.Instruction) -> String {
     I32Rotr => "i32.rotr"
     I32Extend8S => "i32.extend8_s"
     I32Extend16S => "i32.extend16_s"
-
-    // i64 operations
     I64Eqz => "i64.eqz"
     I64Eq => "i64.eq"
     I64Ne => "i64.ne"
@@ -336,8 +1115,6 @@ fn instr_to_wat(instr : @types.Instruction) -> String {
     I64Extend8S => "i64.extend8_s"
     I64Extend16S => "i64.extend16_s"
     I64Extend32S => "i64.extend32_s"
-
-    // f32 operations
     F32Eq => "f32.eq"
     F32Ne => "f32.ne"
     F32Lt => "f32.lt"
@@ -358,8 +1135,6 @@ fn instr_to_wat(instr : @types.Instruction) -> String {
     F32Min => "f32.min"
     F32Max => "f32.max"
     F32Copysign => "f32.copysign"
-
-    // f64 operations
     F64Eq => "f64.eq"
     F64Ne => "f64.ne"
     F64Lt => "f64.lt"
@@ -380,8 +1155,6 @@ fn instr_to_wat(instr : @types.Instruction) -> String {
     F64Min => "f64.min"
     F64Max => "f64.max"
     F64Copysign => "f64.copysign"
-
-    // Conversions
     I32WrapI64 => "i32.wrap_i64"
     I32TruncF32S => "i32.trunc_f32_s"
     I32TruncF32U => "i32.trunc_f32_u"
@@ -407,8 +1180,6 @@ fn instr_to_wat(instr : @types.Instruction) -> String {
     I64ReinterpretF64 => "i64.reinterpret_f64"
     F32ReinterpretI32 => "f32.reinterpret_i32"
     F64ReinterpretI64 => "f64.reinterpret_i64"
-
-    // Saturating truncation
     I32TruncSatF32S => "i32.trunc_sat_f32_s"
     I32TruncSatF32U => "i32.trunc_sat_f32_u"
     I32TruncSatF64S => "i32.trunc_sat_f64_s"
@@ -417,16 +1188,12 @@ fn instr_to_wat(instr : @types.Instruction) -> String {
     I64TruncSatF32U => "i64.trunc_sat_f32_u"
     I64TruncSatF64S => "i64.trunc_sat_f64_s"
     I64TruncSatF64U => "i64.trunc_sat_f64_u"
-
-    // GC struct operations
     StructNew(idx) => "struct.new \{idx}"
     StructNewDefault(idx) => "struct.new_default \{idx}"
     StructGet(type_idx, field_idx) => "struct.get \{type_idx} \{field_idx}"
     StructGetS(type_idx, field_idx) => "struct.get_s \{type_idx} \{field_idx}"
     StructGetU(type_idx, field_idx) => "struct.get_u \{type_idx} \{field_idx}"
     StructSet(type_idx, field_idx) => "struct.set \{type_idx} \{field_idx}"
-
-    // GC array operations
     ArrayNew(idx) => "array.new \{idx}"
     ArrayNewDefault(idx) => "array.new_default \{idx}"
     ArrayNewFixed(type_idx, len) => "array.new_fixed \{type_idx} \{len}"
@@ -443,8 +1210,6 @@ fn instr_to_wat(instr : @types.Instruction) -> String {
       "array.init_data \{type_idx} \{data_idx}"
     ArrayInitElem(type_idx, elem_idx) =>
       "array.init_elem \{type_idx} \{elem_idx}"
-
-    // GC reference casting
     RefTest(t) => "ref.test \{ref_type_to_wat(t)}"
     RefTestNull(t) => "ref.test (ref null \{heap_type_to_wat(t)})"
     RefCast(t) => "ref.cast \{ref_type_to_wat(t)}"
@@ -453,17 +1218,11 @@ fn instr_to_wat(instr : @types.Instruction) -> String {
       "br_on_cast \{label} \{ref_type_to_wat(from)} \{ref_type_to_wat(to)}"
     BrOnCastFail(label, from, to) =>
       "br_on_cast_fail \{label} \{ref_type_to_wat(from)} \{ref_type_to_wat(to)}"
-
-    // GC i31
     RefI31 => "ref.i31"
     I31GetS => "i31.get_s"
     I31GetU => "i31.get_u"
-
-    // GC type conversion
     AnyConvertExtern => "any.convert_extern"
     ExternConvertAny => "extern.convert_any"
-
-    // SIMD
     V128Const(bytes) => "v128.const i8x16 \{format_v128_bytes(bytes)}"
     V128Load(mem, align, offset) =>
       mem_instr("v128.load", mem, align, offset, 4)
@@ -554,8 +1313,6 @@ fn instr_to_wat(instr : @types.Instruction) -> String {
     I64x2ReplaceLane(lane) => "i64x2.replace_lane \{lane}"
     F32x4ReplaceLane(lane) => "f32x4.replace_lane \{lane}"
     F64x2ReplaceLane(lane) => "f64x2.replace_lane \{lane}"
-
-    // SIMD comparisons - i8x16
     I8x16Eq => "i8x16.eq"
     I8x16Ne => "i8x16.ne"
     I8x16LtS => "i8x16.lt_s"
@@ -566,8 +1323,6 @@ fn instr_to_wat(instr : @types.Instruction) -> String {
     I8x16LeU => "i8x16.le_u"
     I8x16GeS => "i8x16.ge_s"
     I8x16GeU => "i8x16.ge_u"
-
-    // SIMD comparisons - i16x8
     I16x8Eq => "i16x8.eq"
     I16x8Ne => "i16x8.ne"
     I16x8LtS => "i16x8.lt_s"
@@ -578,8 +1333,6 @@ fn instr_to_wat(instr : @types.Instruction) -> String {
     I16x8LeU => "i16x8.le_u"
     I16x8GeS => "i16x8.ge_s"
     I16x8GeU => "i16x8.ge_u"
-
-    // SIMD comparisons - i32x4
     I32x4Eq => "i32x4.eq"
     I32x4Ne => "i32x4.ne"
     I32x4LtS => "i32x4.lt_s"
@@ -590,32 +1343,24 @@ fn instr_to_wat(instr : @types.Instruction) -> String {
     I32x4LeU => "i32x4.le_u"
     I32x4GeS => "i32x4.ge_s"
     I32x4GeU => "i32x4.ge_u"
-
-    // SIMD comparisons - i64x2
     I64x2Eq => "i64x2.eq"
     I64x2Ne => "i64x2.ne"
     I64x2LtS => "i64x2.lt_s"
     I64x2GtS => "i64x2.gt_s"
     I64x2LeS => "i64x2.le_s"
     I64x2GeS => "i64x2.ge_s"
-
-    // SIMD comparisons - f32x4
     F32x4Eq => "f32x4.eq"
     F32x4Ne => "f32x4.ne"
     F32x4Lt => "f32x4.lt"
     F32x4Gt => "f32x4.gt"
     F32x4Le => "f32x4.le"
     F32x4Ge => "f32x4.ge"
-
-    // SIMD comparisons - f64x2
     F64x2Eq => "f64x2.eq"
     F64x2Ne => "f64x2.ne"
     F64x2Lt => "f64x2.lt"
     F64x2Gt => "f64x2.gt"
     F64x2Le => "f64x2.le"
     F64x2Ge => "f64x2.ge"
-
-    // v128 bitwise
     V128Not => "v128.not"
     V128And => "v128.and"
     V128AndNot => "v128.andnot"
@@ -623,8 +1368,6 @@ fn instr_to_wat(instr : @types.Instruction) -> String {
     V128Xor => "v128.xor"
     V128Bitselect => "v128.bitselect"
     V128AnyTrue => "v128.any_true"
-
-    // i8x16 operations
     I8x16Abs => "i8x16.abs"
     I8x16Neg => "i8x16.neg"
     I8x16Popcnt => "i8x16.popcnt"
@@ -646,8 +1389,6 @@ fn instr_to_wat(instr : @types.Instruction) -> String {
     I8x16MaxS => "i8x16.max_s"
     I8x16MaxU => "i8x16.max_u"
     I8x16AvgrU => "i8x16.avgr_u"
-
-    // i16x8 operations
     I16x8ExtAddPairwiseI8x16S => "i16x8.extadd_pairwise_i8x16_s"
     I16x8ExtAddPairwiseI8x16U => "i16x8.extadd_pairwise_i8x16_u"
     I16x8Abs => "i16x8.abs"
@@ -680,8 +1421,6 @@ fn instr_to_wat(instr : @types.Instruction) -> String {
     I16x8ExtMulHighI8x16S => "i16x8.extmul_high_i8x16_s"
     I16x8ExtMulLowI8x16U => "i16x8.extmul_low_i8x16_u"
     I16x8ExtMulHighI8x16U => "i16x8.extmul_high_i8x16_u"
-
-    // i32x4 operations
     I32x4ExtAddPairwiseI16x8S => "i32x4.extadd_pairwise_i16x8_s"
     I32x4ExtAddPairwiseI16x8U => "i32x4.extadd_pairwise_i16x8_u"
     I32x4Abs => "i32x4.abs"
@@ -707,8 +1446,6 @@ fn instr_to_wat(instr : @types.Instruction) -> String {
     I32x4ExtMulHighI16x8S => "i32x4.extmul_high_i16x8_s"
     I32x4ExtMulLowI16x8U => "i32x4.extmul_low_i16x8_u"
     I32x4ExtMulHighI16x8U => "i32x4.extmul_high_i16x8_u"
-
-    // i64x2 operations
     I64x2Abs => "i64x2.abs"
     I64x2Neg => "i64x2.neg"
     I64x2AllTrue => "i64x2.all_true"
@@ -727,8 +1464,6 @@ fn instr_to_wat(instr : @types.Instruction) -> String {
     I64x2ExtMulHighI32x4S => "i64x2.extmul_high_i32x4_s"
     I64x2ExtMulLowI32x4U => "i64x2.extmul_low_i32x4_u"
     I64x2ExtMulHighI32x4U => "i64x2.extmul_high_i32x4_u"
-
-    // f32x4 operations
     F32x4Ceil => "f32x4.ceil"
     F32x4Floor => "f32x4.floor"
     F32x4Trunc => "f32x4.trunc"
@@ -744,8 +1479,6 @@ fn instr_to_wat(instr : @types.Instruction) -> String {
     F32x4Max => "f32x4.max"
     F32x4Pmin => "f32x4.pmin"
     F32x4Pmax => "f32x4.pmax"
-
-    // f64x2 operations
     F64x2Ceil => "f64x2.ceil"
     F64x2Floor => "f64x2.floor"
     F64x2Trunc => "f64x2.trunc"
@@ -761,8 +1494,6 @@ fn instr_to_wat(instr : @types.Instruction) -> String {
     F64x2Max => "f64x2.max"
     F64x2Pmin => "f64x2.pmin"
     F64x2Pmax => "f64x2.pmax"
-
-    // SIMD conversions
     I32x4TruncSatF32x4S => "i32x4.trunc_sat_f32x4_s"
     I32x4TruncSatF32x4U => "i32x4.trunc_sat_f32x4_u"
     F32x4ConvertI32x4S => "f32x4.convert_i32x4_s"
@@ -773,8 +1504,6 @@ fn instr_to_wat(instr : @types.Instruction) -> String {
     F64x2ConvertLowI32x4U => "f64x2.convert_low_i32x4_u"
     F32x4DemoteF64x2Zero => "f32x4.demote_f64x2_zero"
     F64x2PromoteLowF32x4 => "f64x2.promote_low_f32x4"
-
-    // Relaxed SIMD
     I8x16RelaxedSwizzle => "i8x16.relaxed_swizzle"
     I32x4RelaxedTruncF32x4S => "i32x4.relaxed_trunc_f32x4_s"
     I32x4RelaxedTruncF32x4U => "i32x4.relaxed_trunc_f32x4_u"
@@ -796,213 +1525,4 @@ fn instr_to_wat(instr : @types.Instruction) -> String {
     I16x8RelaxedDotI8x16I7x16S => "i16x8.relaxed_dot_i8x16_i7x16_s"
     I32x4RelaxedDotI8x16I7x16AddS => "i32x4.relaxed_dot_i8x16_i7x16_add_s"
   }
-}
-
-///|
-fn block_type_to_wat(bt : @types.BlockType) -> String {
-  match bt {
-    Empty => ""
-    Value(t) => " (result \{value_type_to_wat(t)})"
-    MultiValue(types) => {
-      let types_str = types.map(fn(t) { value_type_to_wat(t) }).join(" ")
-      " (result \{types_str})"
-    }
-    InlineType(params, results) => {
-      let params_str = if params.is_empty() {
-        ""
-      } else {
-        let p = params.map(fn(t) { value_type_to_wat(t) }).join(" ")
-        " (param \{p})"
-      }
-      let results_str = if results.is_empty() {
-        ""
-      } else {
-        let r = results.map(fn(t) { value_type_to_wat(t) }).join(" ")
-        " (result \{r})"
-      }
-      "\{params_str}\{results_str}"
-    }
-    TypeIndex(idx) => " (type \{idx})"
-  }
-}
-
-///|
-fn value_type_to_wat(t : @types.ValueType) -> String {
-  match t {
-    I32 => "i32"
-    I64 => "i64"
-    F32 => "f32"
-    F64 => "f64"
-    V128 => "v128"
-    FuncRef => "funcref"
-    ExternRef => "externref"
-    RefFunc => "(ref func)"
-    RefExtern => "(ref extern)"
-    RefFuncTyped(idx) => "(ref \{idx})"
-    RefNullFuncTyped(idx) => "(ref null \{idx})"
-    AnyRef => "anyref"
-    ExnRef => "exnref"
-    StructRef => "structref"
-    ArrayRef => "arrayref"
-    RefStruct(idx) => "(ref \{idx})"
-    RefNullStruct(idx) => "(ref null \{idx})"
-    RefArray(idx) => "(ref \{idx})"
-    RefNullArray(idx) => "(ref null \{idx})"
-    RefAny => "(ref any)"
-    RefEq => "(ref eq)"
-    RefNullEq => "(ref null eq)"
-    RefI31 => "(ref i31)"
-    RefNullI31 => "(ref null i31)"
-    RefStructAbs => "(ref struct)"
-    RefArrayAbs => "(ref array)"
-    RefNone => "(ref none)"
-    NullRef => "nullref"
-    NullFuncRef => "nullfuncref"
-    NullExnRef => "nullexnref"
-    NullExternRef => "nullexternref"
-  }
-}
-
-///|
-fn ref_type_to_wat(t : @types.ValueType) -> String {
-  match t {
-    FuncRef => "funcref"
-    ExternRef => "externref"
-    AnyRef => "anyref"
-    ExnRef => "exnref"
-    RefFunc => "(ref func)"
-    RefExtern => "(ref extern)"
-    RefAny => "(ref any)"
-    RefEq => "(ref eq)"
-    RefI31 => "(ref i31)"
-    RefFuncTyped(idx) => "(ref \{idx})"
-    RefNullFuncTyped(idx) => "(ref null \{idx})"
-    RefStruct(idx) => "(ref \{idx})"
-    RefNullStruct(idx) => "(ref null \{idx})"
-    RefArray(idx) => "(ref \{idx})"
-    RefNullArray(idx) => "(ref null \{idx})"
-    _ => value_type_to_wat(t)
-  }
-}
-
-///|
-fn heap_type_to_wat(t : @types.ValueType) -> String {
-  match t {
-    FuncRef | RefFunc => "func"
-    ExternRef | RefExtern => "extern"
-    AnyRef | RefAny => "any"
-    ExnRef => "exn"
-    RefEq | RefNullEq => "eq"
-    RefI31 | RefNullI31 => "i31"
-    RefFuncTyped(idx) | RefNullFuncTyped(idx) => idx.to_string()
-    RefStruct(idx) | RefNullStruct(idx) => idx.to_string()
-    RefArray(idx) | RefNullArray(idx) => idx.to_string()
-    _ => "any"
-  }
-}
-
-///|
-fn mem_instr(
-  name : String,
-  mem : Int,
-  align : Int,
-  offset : Int64,
-  natural_align : Int,
-) -> String {
-  let sb = StringBuilder::StringBuilder()
-  sb.write_string(name)
-  // Memory index (only if not 0)
-  if mem != 0 {
-    sb.write_string(" \{mem}")
-  }
-  // Offset (only if not 0)
-  if offset != 0L {
-    sb.write_string(" offset=\{offset}")
-  }
-  // Alignment (only if not natural)
-  if align != natural_align {
-    let align_bytes = 1 << align
-    sb.write_string(" align=\{align_bytes}")
-  }
-  sb.to_string()
-}
-
-///|
-fn format_v128_bytes(bytes : Bytes) -> String {
-  let parts : Array[String] = []
-  for i = 0; i < 16; i = i + 1 {
-    let b = if i < bytes.length() { bytes[i].to_int() } else { 0 }
-    parts.push(b.to_string())
-  }
-  parts.join(" ")
-}
-
-///|
-/// Convert function body instructions to WAT format with proper indentation
-fn instrs_to_wat(instrs : Array[@types.Instruction], indent : Int) -> String {
-  let sb = StringBuilder::StringBuilder()
-  let indent_str = "  ".repeat(indent)
-  for instr in instrs {
-    sb.write_string(indent_str)
-    sb.write_string(instr_to_wat(instr))
-    sb.write_string("\n")
-    // Handle nested instructions
-    match instr {
-      Block(_, body) | Loop(_, body) => {
-        sb.write_string(instrs_to_wat(body, indent + 1))
-        sb.write_string(indent_str)
-        sb.write_string("end\n")
-      }
-      If(_, then_body, else_body) => {
-        sb.write_string(instrs_to_wat(then_body, indent + 1))
-        if !else_body.is_empty() {
-          sb.write_string(indent_str)
-          sb.write_string("else\n")
-          sb.write_string(instrs_to_wat(else_body, indent + 1))
-        }
-        sb.write_string(indent_str)
-        sb.write_string("end\n")
-      }
-      TryTable(_, _, body) => {
-        sb.write_string(instrs_to_wat(body, indent + 1))
-        sb.write_string(indent_str)
-        sb.write_string("end\n")
-      }
-      _ => ()
-    }
-  }
-  sb.to_string()
-}
-
-///|
-/// Generate WAT source for a single function
-pub fn func_to_wat(
-  func_name : String,
-  func_type : @types.FuncType,
-  locals : Array[@types.ValueType],
-  body : Array[@types.Instruction],
-) -> String {
-  let sb = StringBuilder::StringBuilder()
-  // Function signature
-  sb.write_string("(func")
-  if func_name != "" {
-    sb.write_string(" $\{func_name}")
-  }
-  // Parameters
-  for i, param in func_type.params {
-    sb.write_string(" (param $p\{i} \{value_type_to_wat(param)})")
-  }
-  // Results
-  for result in func_type.results {
-    sb.write_string(" (result \{value_type_to_wat(result)})")
-  }
-  sb.write_string("\n")
-  // Locals
-  for i, loc in locals {
-    sb.write_string("  (local $l\{i} \{value_type_to_wat(loc)})\n")
-  }
-  // Body
-  sb.write_string(instrs_to_wat(body, 1))
-  sb.write_string(")")
-  sb.to_string()
 }

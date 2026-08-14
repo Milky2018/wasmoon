@@ -16,8 +16,6 @@ pub fn compile_module(Bytes, opt_level? : Int, enable_dwarf? : Bool, on_progress
 
 pub fn compile_module_to_jit(@types.Module, Bool, Bool, actual_memory_max? : Int?, Int, Bool, on_progress? : (CompileProgress) -> Unit?, compile_start? : @perf.Instant?, local_compile_mask? : Array[Bool]?, force_subtype_indirect_check? : Bool?, use_reusable_pipeline? : Bool, enable_cancellation? : Bool) -> (@artifact.Artifact, @wasmoon_jit.JITDebugDB?)?
 
-pub fn func_to_wat(String, @types.FuncType, Array[@types.ValueType], Array[@types.Instruction]) -> String
-
 pub fn run_component_command(String, Bool, Bool, Bool, ComponentErrorFormat) -> Int
 
 pub fn run_component_invoke_command(String, String, Array[String], Bool, ComponentErrorFormat) -> Int

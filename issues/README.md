@@ -449,6 +449,7 @@ graph TD
   ISS_427["ISS-427: Preserve shared AArch64 extended indices"]
   ISS_428["ISS-428: Keep bounded memory GVN in large functions"]
   ISS_429["ISS-429: Enforce target allocation scratch roles"]
+  ISS_430["ISS-430: Expose one canonical library-owned WAT renderer"]
   ISS_002 --> ISS_003
   ISS_002 --> ISS_004
   ISS_003 --> ISS_005
