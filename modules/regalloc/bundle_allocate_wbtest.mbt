@@ -910,7 +910,7 @@ test "clobber index follows custom block order and fixed operands" {
     ),
     content=(
       #|(
-      #|  Some([{ block: 2, inst: 1 }, { block: 0, inst: 1 }]),
+      #|  Some([{ block: 2, inst: 0 }, { block: 0, inst: 0 }]),
       #|  Some([{ block: 1, inst: 0 }]),
       #|  None,
       #|)
@@ -919,7 +919,7 @@ test "clobber index follows custom block order and fixed operands" {
 }
 
 ///|
-test "clobber intersection skips boundaries and gaps between segments" {
+test "clobber intersection includes starts and excludes ends" {
   let r0 : PhysicalReg = { id: 0, class: Int }
   let index : RegisterClobberIndex = {
     points_by_reg: Map([
@@ -960,6 +960,6 @@ test "clobber intersection skips boundaries and gaps between segments" {
   ]
   debug_inspect(
     index.first_intersection(r0, [0, 1], segments),
-    content="Some({ block: 0, inst: 7 })",
+    content="Some({ block: 0, inst: 1 })",
   )
 }

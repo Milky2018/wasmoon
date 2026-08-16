@@ -100,6 +100,38 @@ fn require_plan_location(
 }
 
 ///|
+fn operand_location_is_legal(
+  environment : MachineEnv,
+  plan : AllocationPlan,
+  operand : Operand,
+  location : Location,
+) -> Bool {
+  if plan_location_is_legal(environment, plan, operand.vreg, location) {
+    return true
+  }
+  match (operand.constraint, location) {
+    (FixedReg(_), Reg(reg)) =>
+      reg.class == operand.vreg.class &&
+      environment.fixed_operand_regs.contains(reg)
+    _ => false
+  }
+}
+
+///|
+fn require_operand_location(
+  environment : MachineEnv,
+  plan : AllocationPlan,
+  operand : Operand,
+  location : Location,
+) -> Unit raise VerifyError {
+  if !operand_location_is_legal(environment, plan, operand, location) {
+    raise InvalidPlan(
+      message="illegal operand allocation location for v\{operand.vreg.id}",
+    )
+  }
+}
+
+///|
 fn require_value_at(
   state : PlanState,
   value : VirtualReg,
@@ -175,7 +207,7 @@ fn[F : FunctionView] process_operand_phase(
         message="missing allocation for instruction \{instruction} operand \{operand_index}",
       )
     }
-    require_plan_location(environment, plan, operand.vreg, location)
+    require_operand_location(environment, plan, operand, location)
     if operand.constraint is AnyReg && location is Spill(_) {
       raise InvalidPlan(
         message="register-constrained operand allocated outside a register",

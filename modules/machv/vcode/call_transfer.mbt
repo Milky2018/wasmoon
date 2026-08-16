@@ -45,6 +45,12 @@ pub struct CallTransferPlan {
 } derive(Eq, Debug)
 
 ///|
+pub struct ResolvedCallTransferPlan {
+  stack_transfers : Array[StackArgumentTransfer]
+  register_moves : ResolvedMovePlan
+} derive(Eq, Debug)
+
+///|
 pub suberror CallTransferError {
   InvalidSourceClass(index~ : Int)
   ForeignSourceStack(index~ : Int)
@@ -114,7 +120,7 @@ fn stack_transfer_scratch(
 ///
 /// Outgoing stack arguments are captured before any ABI register destination is
 /// overwritten. Register destinations are then resolved as one parallel move.
-pub fn plan_call_transfers(
+fn prepare_call_transfers(
   allocation : Allocation,
   transfers : Array[CallTransfer],
   outgoing_stack_start : Int,
@@ -245,10 +251,55 @@ pub fn plan_call_transfers(
       }
     }
   }
+  { stack_transfers, register_moves }
+}
+
+///|
+pub fn plan_call_transfers(
+  allocation : Allocation,
+  transfers : Array[CallTransfer],
+  outgoing_stack_start : Int,
+  outgoing_stack_size : Int,
+  scratch_int : Array[PhysicalReg],
+  scratch_fp : Array[PhysicalReg],
+  protected_locations : Array[Location],
+) -> CallTransferPlan raise CallTransferError {
+  let transfer_plan = prepare_call_transfers(
+    allocation, transfers, outgoing_stack_start, outgoing_stack_size, scratch_int,
+    scratch_fp, protected_locations,
+  )
   let register_moves = resolve_parallel_moves(
-    register_moves, scratch_int, scratch_fp,
+    transfer_plan.register_moves,
+    scratch_int,
+    scratch_fp,
   ) catch {
     error => raise MoveResolutionFailed(cause=error)
   }
-  { stack_transfers, register_moves }
+  { stack_transfers: transfer_plan.stack_transfers, register_moves }
+}
+
+///|
+pub fn plan_resolved_call_transfers(
+  allocation : Allocation,
+  transfers : Array[CallTransfer],
+  outgoing_stack_start : Int,
+  outgoing_stack_size : Int,
+  stack_scratch_int : Array[PhysicalReg],
+  stack_scratch_fp : Array[PhysicalReg],
+  move_scratch_int : PhysicalReg,
+  move_scratch_fp : PhysicalReg,
+  protected_locations : Array[Location],
+) -> ResolvedCallTransferPlan raise CallTransferError {
+  let transfer_plan = prepare_call_transfers(
+    allocation, transfers, outgoing_stack_start, outgoing_stack_size, stack_scratch_int,
+    stack_scratch_fp, protected_locations,
+  )
+  let register_moves = plan_parallel_moves(
+    transfer_plan.register_moves,
+    move_scratch_int,
+    move_scratch_fp,
+  ) catch {
+    error => raise MoveResolutionFailed(cause=error)
+  }
+  { stack_transfers: transfer_plan.stack_transfers, register_moves }
 }

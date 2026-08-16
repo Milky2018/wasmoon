@@ -1,4 +1,9 @@
 ///|
+test "legacy parallel move resolver accepts empty inputs without scratch" {
+  debug_inspect(resolve_parallel_moves([], [], []), content="[]")
+}
+
+///|
 test "parallel move resolver preserves cycles and stack transfers" {
   let int0 = PhysicalReg::new(0, Int)
   let int1 = PhysicalReg::new(1, Int)

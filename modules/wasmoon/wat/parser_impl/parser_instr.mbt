@@ -1335,7 +1335,89 @@ fn Parser::parse_plain_instruction(
     "i16x8.relaxed_q15mulr_s" => I16x8RelaxedQ15mulrS
     "i16x8.relaxed_dot_i8x16_i7x16_s" => I16x8RelaxedDotI8x16I7x16S
     "i32x4.relaxed_dot_i8x16_i7x16_add_s" => I32x4RelaxedDotI8x16I7x16AddS
-    _ => raise InvalidInstruction(kw, self.loc())
+    _ =>
+      match atomic_subopcode(kw) {
+        Some(3) => Atomic(3, 0, 0, 0L)
+        Some(subopcode) =>
+          parse_mem_arg(self, fn(memory, align, offset) {
+            Atomic(subopcode, memory, align, offset)
+          })
+        None => raise InvalidInstruction(kw, self.loc())
+      }
+  }
+}
+
+///|
+fn atomic_subopcode(keyword : String) -> Int? {
+  match keyword {
+    "memory.atomic.notify" => Some(0)
+    "memory.atomic.wait32" => Some(1)
+    "memory.atomic.wait64" => Some(2)
+    "atomic.fence" => Some(3)
+    "i32.atomic.load" => Some(4)
+    "i64.atomic.load" => Some(5)
+    "i32.atomic.load8_u" => Some(6)
+    "i32.atomic.load16_u" => Some(7)
+    "i64.atomic.load8_u" => Some(8)
+    "i64.atomic.load16_u" => Some(9)
+    "i64.atomic.load32_u" => Some(10)
+    "i32.atomic.store" => Some(11)
+    "i64.atomic.store" => Some(12)
+    "i32.atomic.store8" => Some(13)
+    "i32.atomic.store16" => Some(14)
+    "i64.atomic.store8" => Some(15)
+    "i64.atomic.store16" => Some(16)
+    "i64.atomic.store32" => Some(17)
+    "i32.atomic.rmw.add" => Some(18)
+    "i64.atomic.rmw.add" => Some(19)
+    "i32.atomic.rmw8.add_u" => Some(20)
+    "i32.atomic.rmw16.add_u" => Some(21)
+    "i64.atomic.rmw8.add_u" => Some(22)
+    "i64.atomic.rmw16.add_u" => Some(23)
+    "i64.atomic.rmw32.add_u" => Some(24)
+    "i32.atomic.rmw.sub" => Some(25)
+    "i64.atomic.rmw.sub" => Some(26)
+    "i32.atomic.rmw8.sub_u" => Some(27)
+    "i32.atomic.rmw16.sub_u" => Some(28)
+    "i64.atomic.rmw8.sub_u" => Some(29)
+    "i64.atomic.rmw16.sub_u" => Some(30)
+    "i64.atomic.rmw32.sub_u" => Some(31)
+    "i32.atomic.rmw.and" => Some(32)
+    "i64.atomic.rmw.and" => Some(33)
+    "i32.atomic.rmw8.and_u" => Some(34)
+    "i32.atomic.rmw16.and_u" => Some(35)
+    "i64.atomic.rmw8.and_u" => Some(36)
+    "i64.atomic.rmw16.and_u" => Some(37)
+    "i64.atomic.rmw32.and_u" => Some(38)
+    "i32.atomic.rmw.or" => Some(39)
+    "i64.atomic.rmw.or" => Some(40)
+    "i32.atomic.rmw8.or_u" => Some(41)
+    "i32.atomic.rmw16.or_u" => Some(42)
+    "i64.atomic.rmw8.or_u" => Some(43)
+    "i64.atomic.rmw16.or_u" => Some(44)
+    "i64.atomic.rmw32.or_u" => Some(45)
+    "i32.atomic.rmw.xor" => Some(46)
+    "i64.atomic.rmw.xor" => Some(47)
+    "i32.atomic.rmw8.xor_u" => Some(48)
+    "i32.atomic.rmw16.xor_u" => Some(49)
+    "i64.atomic.rmw8.xor_u" => Some(50)
+    "i64.atomic.rmw16.xor_u" => Some(51)
+    "i64.atomic.rmw32.xor_u" => Some(52)
+    "i32.atomic.rmw.xchg" => Some(53)
+    "i64.atomic.rmw.xchg" => Some(54)
+    "i32.atomic.rmw8.xchg_u" => Some(55)
+    "i32.atomic.rmw16.xchg_u" => Some(56)
+    "i64.atomic.rmw8.xchg_u" => Some(57)
+    "i64.atomic.rmw16.xchg_u" => Some(58)
+    "i64.atomic.rmw32.xchg_u" => Some(59)
+    "i32.atomic.rmw.cmpxchg" => Some(60)
+    "i64.atomic.rmw.cmpxchg" => Some(61)
+    "i32.atomic.rmw8.cmpxchg_u" => Some(62)
+    "i32.atomic.rmw16.cmpxchg_u" => Some(63)
+    "i64.atomic.rmw8.cmpxchg_u" => Some(64)
+    "i64.atomic.rmw16.cmpxchg_u" => Some(65)
+    "i64.atomic.rmw32.cmpxchg_u" => Some(66)
+    _ => None
   }
 }
 

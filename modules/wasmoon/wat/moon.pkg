@@ -3,3 +3,7 @@ import {
   "Milky2018/wasm_core/types",
   "moonbitlang/core/debug",
 }
+
+import {
+  "Milky2018/wasm_core/wat" @core_wat,
+} for "test"

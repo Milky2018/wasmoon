@@ -53,6 +53,7 @@ pub suberror AArch64EmitError {
   UnresolvedStackMove
   MissingStackObjectArea
   MissingResultArea
+  MissingEmergencyMoveArea
   UnexpectedStackOperand(instruction~ : @vcode.Instruction, operand~ : Int)
   FrameOffsetOutOfRange(offset~ : Int)
   InvalidScalarMemoryAccess
@@ -75,6 +76,8 @@ pub suberror AArch64FrameError {
   ResultAreaMismatch(expected~ : Int, actual~ : Int)
   TailAreaMismatch(expected_incoming~ : Int, actual_incoming~ : Int, expected_tail~ : Int, actual_tail~ : Int)
   InvalidStackObjectArea(message~ : String)
+  MovePlanningFailed(cause~ : @vcode.MoveResolveError)
+  InvalidEmergencyMoveArea(offset~ : Int?)
   SavedRegisterSetMismatch
 } derive(@debug.Debug)
 pub impl Show for AArch64FrameError
@@ -193,6 +196,7 @@ pub struct AArch64Frame {
   // private fields
 }
 pub fn AArch64Frame::alignment(Self) -> Int
+pub fn AArch64Frame::emergency_move_offset(Self) -> Int?
 pub fn AArch64Frame::frame_size(Self) -> Int
 pub fn AArch64Frame::incoming_args_size(Self) -> Int
 pub fn AArch64Frame::outgoing_args_size(Self) -> Int

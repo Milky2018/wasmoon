@@ -25,8 +25,10 @@ pub impl Show for VCodeAllocationError
 pub struct VCodeAllocationEnvironment {
   allocatable_regs : Array[@vcode.PhysicalReg]
   spill_scratch_regs : Array[@vcode.PhysicalReg]
+  fixed_operand_regs : Array[@vcode.PhysicalReg]
 }
 pub fn VCodeAllocationEnvironment::new(Array[@vcode.PhysicalReg], Array[@vcode.PhysicalReg]) -> Self
+pub fn VCodeAllocationEnvironment::with_fixed_operand_regs(Self, Array[@vcode.PhysicalReg]) -> Self
 
 // Type aliases
 

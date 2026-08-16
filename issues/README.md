@@ -438,6 +438,18 @@ graph TD
   ISS_416["ISS-416: Remove repeated compiler analysis and allocation work"]
   ISS_417["ISS-417: Remove the unused regalloc rematerialization planner"]
   ISS_418["ISS-418: Delete the obsolete e-graph rematerialization marks"]
+  ISS_419["ISS-419: Make parallel moves emergency-spill aware"]
+  ISS_420["ISS-420: Plan parallel moves with an emergency spill"]
+  ISS_421["ISS-421: Separate AArch64 scratch roles and frame emergency moves"]
+  ISS_422["ISS-422: Emit AArch64 emergency-aware parallel moves"]
+  ISS_423["ISS-423: Migrate x64 parallel moves to the shared emergency plan"]
+  ISS_424["ISS-424: Validate and document emergency-aware move codegen"]
+  ISS_425["ISS-425: Close strict JIT regalloc validation gaps"]
+  ISS_426["ISS-426: Preserve empty legacy parallel moves"]
+  ISS_427["ISS-427: Preserve shared AArch64 extended indices"]
+  ISS_428["ISS-428: Keep bounded memory GVN in large functions"]
+  ISS_429["ISS-429: Enforce target allocation scratch roles"]
+  ISS_430["ISS-430: Expose one canonical library-owned WAT renderer"]
   ISS_002 --> ISS_003
   ISS_002 --> ISS_004
   ISS_003 --> ISS_005
@@ -797,6 +809,15 @@ graph TD
   ISS_411 --> ISS_412
   ISS_412 --> ISS_413
   ISS_405 --> ISS_418
+  ISS_420 --> ISS_419
+  ISS_421 --> ISS_419
+  ISS_422 --> ISS_419
+  ISS_423 --> ISS_419
+  ISS_424 --> ISS_419
+  ISS_420 --> ISS_421
+  ISS_421 --> ISS_422
+  ISS_422 --> ISS_423
+  ISS_423 --> ISS_424
 ```
 
 ## Warnings

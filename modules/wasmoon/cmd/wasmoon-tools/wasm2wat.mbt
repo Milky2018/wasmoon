@@ -11,7 +11,7 @@ fn cmd_wasm2wat(file : String, output_opt : String?) -> Unit {
   }
 
   // Convert to WAT text
-  let wat_text = module_to_wat(mod_) catch {
+  let wat_text = @core_wat.render(mod_) catch {
     e => {
       exit_error("printing WAT: \{e}")
       panic()

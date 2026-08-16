@@ -16,7 +16,7 @@ import {
 }
 
 // Values
-pub const WASMOON_CODEGEN_REVISION : String = "machv-vcode-5"
+pub const WASMOON_CODEGEN_REVISION : String = "machv-vcode-7"
 
 pub const WASMOON_JIT_ABI_VERSION : Int = 3
 

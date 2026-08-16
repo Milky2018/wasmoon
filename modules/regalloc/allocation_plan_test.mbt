@@ -450,6 +450,46 @@ test "backtracking splits a live range around a clobbered CFG fragment" {
 }
 
 ///|
+test "backtracking spills a value defined before a same-block clobber" {
+  let function : CfgTestFunction = {
+    value_count: 1,
+    blocks: [[0, 1, 2]],
+    instructions: [[Operand::def(value(0))], [], [Operand::use_reg(value(0))]],
+    clobbers: [[], [int_reg(0)], []],
+    successors: [[]],
+    entry_values: [],
+    parameters: [[]],
+    edge_arguments: [[]],
+  }
+  let plan = allocate_function(
+    function,
+    MachineEnv::new([int_reg(0)], [int_reg(1)]),
+  )
+  debug_inspect(
+    (plan.value_location(0), plan.edits()),
+    content=(
+      #|(
+      #|  Some(Spill(0)),
+      #|  [
+      #|    {
+      #|      value: { id: 0, class: Int },
+      #|      from: Reg({ id: 0, class: Int }),
+      #|      to: Spill(0),
+      #|      position: After(0),
+      #|    },
+      #|    {
+      #|      value: { id: 0, class: Int },
+      #|      from: Spill(0),
+      #|      to: Reg({ id: 0, class: Int }),
+      #|      position: Before(2),
+      #|    },
+      #|  ],
+      #|)
+    ),
+  )
+}
+
+///|
 test "backtracking parks cold live-through values outside hot loops" {
   let instructions : Array[Array[Operand]] = []
   for _ in 0..<19 {

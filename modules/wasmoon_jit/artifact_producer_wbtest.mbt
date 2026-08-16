@@ -137,7 +137,7 @@ test "artifact producer preserves symbolic imported and internal code targets" {
       #|    },
       #|    required_cpu_features: [],
       #|    jit_abi_version: 3,
-      #|    codegen_revision: "machv-vcode-5",
+      #|    codegen_revision: "machv-vcode-7",
       #|    module_identity: {
       #|      name: "artifact-producer",
       #|      source_digest: sha256:211dcf04280f2ac1d686baab63a361ea45dd13543dac493b14e3af963860a86c,

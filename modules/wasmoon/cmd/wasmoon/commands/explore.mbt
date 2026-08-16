@@ -135,7 +135,6 @@ fn run_explore_with_compiler(
   for local_idx in func_indices {
     let type_idx = mod_.funcs[local_idx]
     let func_type = mod_.validated_func_type_at(type_idx)
-    let code = mod_.codes[local_idx]
     // Find function name: prefer internal name, then export name, then anonymous
     let actual_func_idx = num_imports + local_idx
     // First, check for internal name from WAT parsing (e.g., $some_func -> "some_func")
@@ -158,7 +157,12 @@ fn run_explore_with_compiler(
       }
     }
     // Generate WAT source text for this function
-    let source_text = func_to_wat(func_name, func_type, code.locals, code.body)
+    let source_text = @core_wat.render_function(mod_, actual_func_idx) catch {
+      error => {
+        @logger.error("rendering function \{actual_func_idx} as WAT: \{error}")
+        return 1
+      }
+    }
     if !html_output {
       println("")
       println("╔" + "═".repeat(58) + "╗")

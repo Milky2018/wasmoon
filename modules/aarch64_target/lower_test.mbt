@@ -370,6 +370,47 @@ test "AArch64 lowering folds constant extended indices into displacements" {
 }
 
 ///|
+test "AArch64 constant displacement folding preserves a shared extended index" {
+  let builder = @semantic.FunctionBuilder::new(
+    "selected_shared_constant_extended_index",
+    Platform,
+    [Ptr64],
+    [I64],
+  )
+  let parameters = builder.parameters()
+  let base = builder.emit(Convert(Bitcast(Ptr64, I64)), [parameters[0]], [I64])[0]
+  let index = builder.emit(I32Const(12U), [], [I32])[0]
+  let extended = builder.emit(Convert(I64ExtendI32(Unsigned)), [index], [I64])[0]
+  let address_bits = builder.emit(IntBinary(Add), [base, extended], [I64])[0]
+  let address = builder.emit(Convert(Bitcast(I64, Ptr64)), [address_bits], [
+      Ptr64,
+    ])[0]
+  let zero = builder.emit(I64Const(0UL), [], [I64])[0]
+  let pointer = builder.emit(PointerOffset, [address, zero], [Ptr64])[0]
+  builder.emit(
+    Load(@semantic.LoadSpec::new(W32, None, I32, 0UL, Little, None)),
+    [pointer],
+    [I32],
+  )
+  |> ignore
+  builder.return_([extended])
+  inspect(
+    lower(builder.finish(), test_lowering_context()).summary(),
+    content=(
+      #|vcode selected_shared_constant_extended_index(v0:ptr64) -> (i64)
+      #|block0:
+      #|  i0 IncomingReg(Ptr64, p0:int) uses=[v0:fixed(p0:int)@early] defs=[v1:any-location(prefer=p0:int)@late]
+      #|  i1 LoadConstant(W32, 12) defs=[v2:any@late]
+      #|  i2 Convert(ExtendI32ToI64(Unsigned)) uses=[v2:any@early] defs=[v3:any@late]
+      #|  i3 ScalarLoad(W32, None, I32, 12) uses=[v1:any@early] defs=[v4:any@late]
+      #|  i4 OutgoingReg(I64, p0:int) uses=[v3:any@early]
+      #|  i5 Return
+      #|
+    ),
+  )
+}
+
+///|
 test "AArch64 lowering keeps a constant displacement after an extended index" {
   let builder = @semantic.FunctionBuilder::new(
     "selected_register_offset_load_with_displacement",

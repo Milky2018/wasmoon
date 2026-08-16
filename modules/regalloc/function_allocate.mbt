@@ -23,7 +23,13 @@ fn[F : FunctionView] build_register_clobber_index(
   }
   for block in 0..<function.block_count() {
     for instruction_index, instruction in function.block_instructions(block) {
-      let point = ProgramPoint(block, instruction_index * 2 + 1)
+      // A clobber happens after Early operands and before Late operands. Place
+      // it at the Early boundary: ranges ending in an Early use may occupy the
+      // register, Late definitions start after it, and live-through ranges
+      // cross it. Recording the clobber at the Late point made a split spill
+      // gap end exactly on an open intersection boundary and allowed the gap
+      // to be recolored into the clobbered register.
+      let point = ProgramPoint(block, instruction_index * 2)
       for clobber in function.instruction_clobbers(instruction) {
         record(points_by_reg, clobber, point)
       }
@@ -62,7 +68,7 @@ fn RegisterClobberIndex::first_intersection(
   let first_start = segments[segment_ids[0]].range.start
   while lo < hi {
     let mid = lo + (hi - lo) / 2
-    if points[mid].compare_with_order(first_start, self.block_order) <= 0 {
+    if points[mid].compare_with_order(first_start, self.block_order) < 0 {
       lo = mid + 1
     } else {
       hi = mid
@@ -72,7 +78,7 @@ fn RegisterClobberIndex::first_intersection(
   while lo < points.length() && segment_index < segment_ids.length() {
     let point = points[lo]
     let range = segments[segment_ids[segment_index]].range
-    if point.compare_with_order(range.start, self.block_order) <= 0 {
+    if point.compare_with_order(range.start, self.block_order) < 0 {
       lo = lo + 1
     } else if point.compare_with_order(range.end, self.block_order) < 0 {
       return Some(point)

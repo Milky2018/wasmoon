@@ -26,6 +26,7 @@ pub struct AArch64Frame {
   priv outgoing_args_size : Int
   priv result_area : ResultArea?
   priv stack_objects : StackObjectArea?
+  priv emergency_move_offset : Int?
   priv slots : Array[(@vcode.StackSlot, Int)]
   priv saved_registers : Array[SavedRegister]
 }
@@ -45,6 +46,8 @@ pub suberror AArch64FrameError {
     actual_tail~ : Int
   )
   InvalidStackObjectArea(message~ : String)
+  MovePlanningFailed(cause~ : @vcode.MoveResolveError)
+  InvalidEmergencyMoveArea(offset~ : Int?)
   SavedRegisterSetMismatch
 } derive(Debug)
 
@@ -245,6 +248,57 @@ fn stack_object_area_requirements(
 }
 
 ///|
+fn moves_require_emergency(
+  moves : Array[@vcode.ParallelMove],
+) -> Bool raise AArch64FrameError {
+  @vcode.plan_parallel_moves(
+    moves,
+    int_transfer_scratch(),
+    fp_transfer_scratch(),
+  ).requires_emergency catch {
+    error => raise MovePlanningFailed(cause=error)
+  }
+}
+
+///|
+fn requires_emergency_move_area(
+  function : @vcode.Function[AArch64Inst],
+  allocation : @vcode.Allocation,
+) -> Bool raise AArch64FrameError {
+  for block in function.layout() {
+    for instruction in function.block_body(block) {
+      if !is_abi_materialization(function.instruction(instruction).unwrap()) {
+        if moves_require_emergency(
+            edit_parallel_moves(function, allocation, instruction, Before),
+          ) ||
+          moves_require_emergency(
+            edit_parallel_moves(function, allocation, instruction, After),
+          ) {
+          return true
+        }
+      }
+    }
+    let terminator = function.block_terminator(block).unwrap()
+    if moves_require_emergency(
+        edit_parallel_moves(function, allocation, terminator, Before),
+      ) ||
+      moves_require_emergency(
+        edit_parallel_moves(function, allocation, terminator, After),
+      ) {
+      return true
+    }
+    for successor_index in 0..<function.instruction_successor_count(terminator) {
+      if moves_require_emergency(
+          edge_parallel_moves(function, allocation, block, successor_index),
+        ) {
+        return true
+      }
+    }
+  }
+  false
+}
+
+///|
 pub fn AArch64Frame::frame_size(self : AArch64Frame) -> Int {
   self.layout.frame_size()
 }
@@ -299,6 +353,11 @@ fn AArch64Frame::result_area_offset(self : AArch64Frame) -> Int? {
 }
 
 ///|
+pub fn AArch64Frame::emergency_move_offset(self : AArch64Frame) -> Int? {
+  self.emergency_move_offset
+}
+
+///|
 pub fn AArch64Frame::stack_object_offset(
   self : AArch64Frame,
   object : AArch64StackObject,
@@ -341,6 +400,9 @@ pub fn AArch64Frame::summary(self : AArch64Frame) -> String {
   }
   if self.stack_objects is Some(area) {
     output += "  stack-objects \{area.size} bytes at sp+\{area.offset}\n"
+  }
+  if self.emergency_move_offset is Some(offset) {
+    output += "  emergency-move 16 bytes at sp+\{offset}\n"
   }
   for entry in self.slots {
     let (slot, offset) = entry
@@ -437,6 +499,21 @@ fn verify_target_frame(
         message="planned stack-object area presence does not match target VCode",
       )
   }
+  let reserved_object_area_end = match frame.stack_objects {
+    Some(area) => area.offset + area.size
+    None => reserved_call_area_end
+  }
+  let expected_emergency = requires_emergency_move_area(function, allocation)
+  match (expected_emergency, frame.emergency_move_offset) {
+    (false, None) => ()
+    (true, Some(offset)) =>
+      if offset < reserved_object_area_end ||
+        offset % 16 != 0 ||
+        offset + 16 > frame.local_size {
+        raise InvalidEmergencyMoveArea(offset=Some(offset))
+      }
+    _ => raise InvalidEmergencyMoveArea(offset=frame.emergency_move_offset)
+  }
   let expected = used_callee_saved_registers(function, allocation)
   if frame.saved_registers.map(saved => saved.reg) != expected {
     raise SavedRegisterSetMismatch
@@ -450,6 +527,9 @@ fn verify_target_frame(
   }
   if frame.stack_objects is Some(area) {
     occupied.push((area.offset, area.offset + area.size))
+  }
+  if frame.emergency_move_offset is Some(offset) {
+    occupied.push((offset, offset + 16))
   }
   for index in 0..<allocation.stack_slot_count() {
     let slot = allocation.stack_slot_at(index).unwrap()
@@ -500,6 +580,16 @@ fn plan_frame_verified(
     }
     None => None
   }
+  let emergency_move_offset = if requires_emergency_move_area(
+      function, allocation,
+    ) {
+    offset = align_up(offset, 16)
+    let emergency_offset = offset
+    offset += 16
+    Some(emergency_offset)
+  } else {
+    None
+  }
   let slot_offsets : Array[Int] = []
   for index in 0..<allocation.stack_slot_count() {
     let slot = allocation.stack_slot_at(index).unwrap()
@@ -546,6 +636,7 @@ fn plan_frame_verified(
     outgoing_args_size,
     result_area,
     stack_objects,
+    emergency_move_offset,
     slots,
     saved_registers,
   }

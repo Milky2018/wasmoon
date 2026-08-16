@@ -86,11 +86,12 @@ fn Parser::parse_memory_def(self : Parser) -> MemoryDefResult raise WatError {
             )
           _ => None
         }
+        let page_size_log2 = self.parse_optional_page_size_log2()
         self.expect_rparen() // close memory
         let imp : @types.Import = {
           mod_name,
           name: import_name,
-          desc: Memory({ limits: { min, max }, is_memory64, page_size_log2: 16 }),
+          desc: Memory({ limits: { min, max }, is_memory64, page_size_log2 }),
         }
         return MemoryImport(imp, export_names)
       }
@@ -173,6 +174,7 @@ fn Parser::parse_memory_def(self : Parser) -> MemoryDefResult raise WatError {
                   )
                 _ => None
               }
+              let page_size_log2 = self.parse_optional_page_size_log2()
               self.expect_rparen() // close memory
               let imp : @types.Import = {
                 mod_name,
@@ -180,7 +182,7 @@ fn Parser::parse_memory_def(self : Parser) -> MemoryDefResult raise WatError {
                 desc: Memory({
                   limits: { min, max },
                   is_memory64,
-                  page_size_log2: 16,
+                  page_size_log2,
                 }),
               }
               return MemoryImport(imp, export_names)
@@ -317,11 +319,41 @@ fn Parser::parse_memory_def(self : Parser) -> MemoryDefResult raise WatError {
       )
     _ => None
   }
+  let page_size_log2 = self.parse_optional_page_size_log2()
   self.expect_rparen()
-  MemoryDef(
-    { limits: { min, max }, is_memory64, page_size_log2: 16 },
-    export_names,
-  )
+  MemoryDef({ limits: { min, max }, is_memory64, page_size_log2 }, export_names)
+}
+
+///|
+fn Parser::parse_optional_page_size_log2(self : Parser) -> Int raise WatError {
+  if self.current.token != LParen {
+    return 16
+  }
+  let saved = self.lexer.pos
+  let saved_line = self.lexer.line
+  let saved_column = self.lexer.column
+  let saved_token_start_line = self.lexer.token_start_line
+  let saved_token_start_column = self.lexer.token_start_column
+  self.advance()
+  if self.current.token != Keyword("pagesize") {
+    self.lexer.pos = saved
+    self.lexer.line = saved_line
+    self.lexer.column = saved_column
+    self.lexer.token_start_line = saved_token_start_line
+    self.lexer.token_start_column = saved_token_start_column
+    self.current = LocatedToken::synthetic(LParen)
+    return 16
+  }
+  self.advance()
+  let page_size = self.parse_u32()
+  if page_size == 0 || page_size > 65536 || (page_size & (page_size - 1)) != 0 {
+    raise UnexpectedToken(
+      "memory page size must be a power of two between 1 and 65536",
+      self.loc(),
+    )
+  }
+  self.expect_rparen()
+  log2(page_size)
 }
 
 ///|
@@ -1195,7 +1227,8 @@ fn Parser::parse_import_def(
           )
         _ => None
       }
-      Memory({ limits: { min, max }, is_memory64, page_size_log2: 16 })
+      let page_size_log2 = self.parse_optional_page_size_log2()
+      Memory({ limits: { min, max }, is_memory64, page_size_log2 })
     }
     Keyword("table") => {
       self.advance()

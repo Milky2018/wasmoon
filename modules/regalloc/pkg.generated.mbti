@@ -91,11 +91,14 @@ pub struct MachineEnv {
   allocatable_regs : Array[PhysicalReg]
   scratch_regs : Array[PhysicalReg]
   operand_scratch_regs : Array[PhysicalReg]
+  fixed_operand_regs : Array[PhysicalReg]
 }
 pub fn MachineEnv::allocatable_regs(Self) -> Array[PhysicalReg]
+pub fn MachineEnv::fixed_operand_regs(Self) -> Array[PhysicalReg]
 pub fn MachineEnv::new(Array[PhysicalReg], Array[PhysicalReg]) -> Self
 pub fn MachineEnv::operand_scratch_regs(Self) -> Array[PhysicalReg]
 pub fn MachineEnv::scratch_regs(Self) -> Array[PhysicalReg]
+pub fn MachineEnv::with_fixed_operand_regs(Self, Array[PhysicalReg]) -> Self
 pub fn MachineEnv::with_operand_scratch_regs(Self, Array[PhysicalReg]) -> Self
 
 pub(all) struct Operand {

@@ -2,6 +2,7 @@
 pub struct VCodeAllocationEnvironment {
   allocatable_regs : Array[@vcode.PhysicalReg]
   spill_scratch_regs : Array[@vcode.PhysicalReg]
+  fixed_operand_regs : Array[@vcode.PhysicalReg]
 }
 
 ///|
@@ -12,7 +13,18 @@ pub fn VCodeAllocationEnvironment::new(
   {
     allocatable_regs: allocatable_regs.copy(),
     spill_scratch_regs: spill_scratch_regs.copy(),
+    fixed_operand_regs: [],
   }
+}
+
+///|
+/// Declare reserved registers that selected VCode may name only through fixed
+/// operand constraints.
+pub fn VCodeAllocationEnvironment::with_fixed_operand_regs(
+  self : VCodeAllocationEnvironment,
+  fixed_operand_regs : Array[@vcode.PhysicalReg],
+) -> VCodeAllocationEnvironment {
+  { ..self, fixed_operand_regs: fixed_operand_regs.copy() }
 }
 
 ///|
@@ -151,7 +163,11 @@ pub fn[Inst] allocate_selected_vcode(
     @regalloc.MachineEnv::new(
       environment.allocatable_regs.map(reg => to_regalloc_preg(reg)),
       environment.spill_scratch_regs.map(reg => to_regalloc_preg(reg)),
-    ).with_operand_scratch_regs([]),
+    )
+    .with_operand_scratch_regs([])
+    .with_fixed_operand_regs(
+      environment.fixed_operand_regs.map(reg => to_regalloc_preg(reg)),
+    ),
     config=RegallocConfig(verify~, observer~),
   ) catch {
     error => raise RegallocFailure(cause=error)
