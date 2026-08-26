@@ -154,12 +154,17 @@ pub fn NativeJITContext::alloc_wasm_stack(
   self : NativeJITContext,
   stack_size : Int64,
 ) -> Bool {
-  c_jit_alloc_wasm_stack_managed(self.handle, stack_size) == 0
+  if stack_size <= 0L {
+    false
+  } else {
+    self.configured_stack_size = stack_size
+    true
+  }
 }
 
 ///|
 pub fn NativeJITContext::has_wasm_stack(self : NativeJITContext) -> Bool {
-  c_jit_get_wasm_stack_top_managed(self.handle) != 0L
+  self.configured_stack_size > 0L
 }
 
 ///|
@@ -222,16 +227,32 @@ pub fn NativeJITContext::call_trampoline(
   func_ptr : Int64,
   values_vec : FixedArray[Int64],
   values_len : Int,
-  use_stack_switch : Bool,
+  use_native_fiber : Bool,
 ) -> Int {
-  if use_stack_switch {
-    c_jit_call_with_stack_switch_managed(
-      self.handle,
-      trampoline_ptr,
-      func_ptr,
-      values_vec,
-      values_len,
-    )
+  if use_native_fiber {
+    let continuation = self.start_continuation(
+      trampoline_ptr, func_ptr, values_vec, values_len,
+    ) catch {
+      _ => return 8
+    }
+    let event = continuation.continue_with() catch {
+      _ => {
+        continuation.cancel() catch {
+          _ => ()
+        }
+        return 8
+      }
+    }
+    match event {
+      NativeJITCompleted => 0
+      NativeJITTrapped(code) => code
+      NativeHostcallSuspended => {
+        continuation.cancel() catch {
+          _ => ()
+        }
+        8
+      }
+    }
   } else {
     c_jit_call_trampoline_managed(
       self.handle,

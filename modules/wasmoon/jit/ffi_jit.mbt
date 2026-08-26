@@ -152,21 +152,18 @@ fn JITContext::get_memory_size(self : JITContext, memidx : Int) -> Int64 {
 }
 
 ///|
-/// Allocate an independent WASM stack with guard page protection.
-/// This provides controlled stack overflow behavior - when WASM code
-/// overflows the stack, it hits the guard page and triggers a
-/// "call stack exhausted" trap instead of crashing.
+/// Configure the guarded native-fiber stack used by JIT calls.
 ///
 /// Parameters:
 ///   stack_size: Size of the stack in bytes (default: 1MB = 1048576)
 ///
-/// Returns: true on success, false on failure
+/// Returns: true when the requested size is valid.
 fn JITContext::alloc_wasm_stack(self : JITContext, stack_size : Int64) -> Bool {
   self.ctx.alloc_wasm_stack(stack_size)
 }
 
 ///|
-/// Check if a WASM stack has been allocated
+/// Check if a native-fiber stack size has been configured.
 fn JITContext::has_wasm_stack(self : JITContext) -> Bool {
   self.ctx.has_wasm_stack()
 }
@@ -341,13 +338,10 @@ fn JITContext::call_multi_return(
   }
 
   // Call via trampoline (Standard: all ABI complexity in JIT code)
-  // Use stack-switching call if a WASM stack has been allocated
+  // All production JIT calls use the native-fiber trap transport. The
+  // configured stack size overrides its default budget when present.
   let trap_code = self.ctx.call_trampoline(
-    trampoline_ptr,
-    func_ptr,
-    values_vec,
-    values_len,
-    self.has_wasm_stack(),
+    trampoline_ptr, func_ptr, values_vec, values_len, true,
   )
   if trap_code != 0 {
     if @wasmoon_jit.is_wasi_exit_trap_code(trap_code) {
@@ -431,17 +425,18 @@ fn JITContextContinuation::advance(
   }
   match event {
     NativeHostcallSuspended => Suspended
-    NativeJITReturned(trap_code) => {
+    NativeJITTrapped(trap_code) => {
       self.active[0] = false
-      if trap_code != 0 {
-        if @wasmoon_jit.is_wasi_exit_trap_code(trap_code) {
-          raise JITExit(self.context.take_wasi_exit_code())
-        }
-        if @wasmoon_jit.is_cancelled_trap_code(trap_code) {
-          raise JITCancelled
-        }
-        raise JITTrap(@wasmoon_jit.jit_trap_message(trap_code))
+      if @wasmoon_jit.is_wasi_exit_trap_code(trap_code) {
+        raise JITExit(self.context.take_wasi_exit_code())
       }
+      if @wasmoon_jit.is_cancelled_trap_code(trap_code) {
+        raise JITCancelled
+      }
+      raise JITTrap(@wasmoon_jit.jit_trap_message(trap_code))
+    }
+    NativeJITCompleted => {
+      self.active[0] = false
       let results : Array[Int64] = []
       for i in 0..<self.num_result_slots {
         results.push(self.values[self.num_arg_slots + i])

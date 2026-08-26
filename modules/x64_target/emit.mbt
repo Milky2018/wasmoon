@@ -2930,7 +2930,14 @@ fn emit_call_arguments(
         scratch
       }
     }
-    emit_stack_access(buffer, false, transfer.ty, source, transfer.offset)
+    // Integer call slots are eight bytes. Write the full slot so its upper
+    // half is canonical for callees that consume the native-width value.
+    let stack_type : @semantic.ValueType = if transfer.ty == I32 {
+      I64
+    } else {
+      transfer.ty
+    }
+    emit_stack_access(buffer, false, stack_type, source, transfer.offset)
   }
   emit_resolved_moves(buffer, frame, plan.register_moves)
 }

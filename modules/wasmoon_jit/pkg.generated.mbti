@@ -16,7 +16,7 @@ import {
 }
 
 // Values
-pub const WASMOON_CODEGEN_REVISION : String = "machv-vcode-7"
+pub const WASMOON_CODEGEN_REVISION : String = "machv-vcode-8"
 
 pub const WASMOON_JIT_ABI_VERSION : Int = 3
 
@@ -710,7 +710,8 @@ pub fn NativeJITContinuation::phase(Self) -> NativeFiberPhase
 
 pub(all) enum NativeJITContinuationEvent {
   NativeHostcallSuspended
-  NativeJITReturned(Int)
+  NativeJITCompleted
+  NativeJITTrapped(Int)
 } derive(Eq, @debug.Debug)
 
 pub(all) enum NativeTarget {

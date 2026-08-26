@@ -1162,8 +1162,8 @@ pub fn JITModule::set_memory_pointers(
 }
 
 ///|
-/// Allocate an independent WASM stack with guard page protection.
-/// When enabled, JIT-compiled WASM code runs on a separate stack,
+/// Configure the guarded native-fiber stack used by JIT calls.
+/// When enabled, JIT-compiled Wasm code runs on a separate stack,
 /// providing controlled stack overflow behavior:
 /// - Stack overflows hit a guard page and trigger "call stack exhausted" trap
 /// - Host stack is protected from runaway WASM recursion
@@ -1172,7 +1172,7 @@ pub fn JITModule::set_memory_pointers(
 /// Parameters:
 ///   stack_size: Size of the stack in bytes (default: 1MB = 1048576)
 ///
-/// Returns: true on success, false on failure
+/// Returns: true when the requested size is valid.
 pub fn JITModule::alloc_wasm_stack(
   self : JITModule,
   stack_size : Int64,
@@ -1184,7 +1184,7 @@ pub fn JITModule::alloc_wasm_stack(
 }
 
 ///|
-/// Check if a WASM stack has been allocated
+/// Check if a native-fiber stack size has been configured.
 pub fn JITModule::has_wasm_stack(self : JITModule) -> Bool {
   match self.context {
     Some(ctx) => ctx.has_wasm_stack()

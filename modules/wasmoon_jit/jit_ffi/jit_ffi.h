@@ -138,15 +138,6 @@ typedef struct {
     int64_t *spilled_locals;      // Saved local values
     int32_t spilled_locals_count; // Number of saved locals
 
-    // Independent WASM stack (separate from host stack)
-    // This provides controlled stack overflow behavior and prevents
-    // blowing up the host stack from deeply recursive WASM code.
-    void *wasm_stack_base;        // Base of allocated region (low address, includes guard page)
-    void *wasm_stack_top;         // Top of usable stack (high address, SP starts here)
-    size_t wasm_stack_size;       // Total allocated size including guard page
-    void *wasm_stack_guard;       // Guard page address (low end, triggers SIGSEGV on overflow)
-    size_t guard_page_size;       // Size of guard page (typically one page)
-
     // WASI file descriptor table (all descriptors, including stdio mappings).
     int *fd_table;                // Maps WASI fd -> native fd (-1 = not open)
     int fd_table_size;            // Size of fd_table
@@ -247,22 +238,5 @@ void *wasmoon_jit_stage_exec_managed(int size);
 int wasmoon_jit_finalize_exec_managed(void *exec_code, uint8_t *code, int size);
 int wasmoon_jit_release_exec_managed(void *exec_code);
 int wasmoon_jit_exec_mapping_count(void);
-
-// ============ WASM Stack Functions ============
-// Allocate/free independent WASM stack with guard page
-
-int wasmoon_jit_alloc_wasm_stack(int64_t ctx_ptr, int64_t stack_size);
-void wasmoon_jit_free_wasm_stack(int64_t ctx_ptr);
-int64_t wasmoon_jit_get_wasm_stack_top(int64_t ctx_ptr);
-
-// Call trampoline with stack switching
-// Switches to WASM stack before calling, restores host stack after
-int wasmoon_jit_call_with_stack_switch(
-    int64_t trampoline_ptr,
-    int64_t ctx_ptr,
-    int64_t func_ptr,
-    int64_t *values_vec,
-    int values_len
-);
 
 #endif // JIT_FFI_H
