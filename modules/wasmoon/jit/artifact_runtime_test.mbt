@@ -124,6 +124,39 @@ test "JITModule publishes a complete installed artifact" {
 }
 
 ///|
+test "JITModule preserves native fiber allocation failure" {
+  let artifact : @artifact.Artifact = {
+    manifest: runtime_artifact_manifest(),
+    imports: [],
+    functions: [
+      runtime_artifact_function(
+        0,
+        runtime_artifact_code(Some(42)),
+        @machv.Signature::new([], [I32]),
+      ),
+    ],
+  }
+  let jit_module = JITModule::load_artifact(
+    load_runtime_artifact(artifact),
+    [([], [I32])],
+    function_names=["answer"],
+  )
+  guard jit_module.get_func_by_name("answer") is Some(function) else {
+    fail("installed function was not published")
+  }
+  guard jit_module.configure_native_fiber_stack_size(9223372036854775807L) else {
+    fail("failed to configure native fiber stack size")
+  }
+  try jit_module.call_with_context(function, []) catch {
+    JITNativeFiberFailure(message) =>
+      inspect(message, content="StackAllocationFailed(9223372036854775807)")
+    error => fail("unexpected JIT invocation error: \{error}")
+  } noraise {
+    result => fail("expected stack allocation failure, got \{Repr(result)}")
+  }
+}
+
+///|
 test "JITModule resolves imported Code symbols transactionally" {
   let relocation = runtime_call_relocation(
     Code(@machv.CodeSymbol::new("wasm.func.0")),

@@ -1397,14 +1397,13 @@ fn run_with_jit(
         Ok(jm) => {
           // Enable arbitrary host function imports via JIT -> hostcall bridge.
           @wast.install_jit_hostcall_dispatcher(jm, store, instance)
-          // Allocate independent WASM stack with guard page.
-          // Use a larger default than 1MB since real-world programs can have
-          // large native frames after register allocation.
-          let wasm_stack_ok = jm.alloc_wasm_stack(16L * 1024L * 1024L)
-          if !wasm_stack_ok {
-            @logger.warn(
-              "failed to allocate WASM stack; falling back to host stack",
-            )
+          // Configure the guarded native-fiber stack allocated for each JIT
+          // invocation. Real-world programs may have large native frames after
+          // register allocation, so the CLI uses a larger budget than the API
+          // default.
+          if !jm.configure_native_fiber_stack_size(16L * 1024L * 1024L) {
+            @logger.error("failed to configure native-fiber stack size")
+            raise CommandFailure(1)
           }
           // Register DWARF debug info with debugger if enabled
           // The DWARF info must stay registered for the duration of JIT execution
@@ -1520,6 +1519,12 @@ fn run_with_jit(
                     None => @logger.error("JIT Trap: \{msg}")
                   }
                   // NOTE: Memory and globals are now freed by JITContext finalizer (GC-managed)
+                  raise CommandFailure(1)
+                }
+                JITNativeFiberFailure(message) => {
+                  jm.teardown_gc()
+                  @wast.sync_jit_globals_to_store(jit_ctx, store)
+                  @logger.error("JIT native-fiber failure: \{message}")
                   raise CommandFailure(1)
                 }
                 JITCancelled => {

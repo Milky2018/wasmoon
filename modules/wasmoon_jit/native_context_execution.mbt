@@ -150,21 +150,28 @@ pub fn NativeJITContext::set_globals(
 }
 
 ///|
-pub fn NativeJITContext::alloc_wasm_stack(
+/// Configure the guarded stack size used by future native JIT continuations.
+/// The stack mapping is allocated only when a continuation starts.
+#alias(alloc_wasm_stack, deprecated="Use configure_native_fiber_stack_size instead")
+pub fn NativeJITContext::configure_native_fiber_stack_size(
   self : NativeJITContext,
   stack_size : Int64,
 ) -> Bool {
   if stack_size <= 0L {
     false
   } else {
-    self.configured_stack_size = stack_size
+    self.configured_native_fiber_stack_size = stack_size
     true
   }
 }
 
 ///|
-pub fn NativeJITContext::has_wasm_stack(self : NativeJITContext) -> Bool {
-  self.configured_stack_size > 0L
+/// Check whether a native-fiber stack size override has been configured.
+#alias(has_wasm_stack, deprecated="Use has_configured_native_fiber_stack_size instead")
+pub fn NativeJITContext::has_configured_native_fiber_stack_size(
+  self : NativeJITContext,
+) -> Bool {
+  self.configured_native_fiber_stack_size > 0L
 }
 
 ///|
@@ -228,29 +235,21 @@ pub fn NativeJITContext::call_trampoline(
   values_vec : FixedArray[Int64],
   values_len : Int,
   use_native_fiber : Bool,
-) -> Int {
+) -> Int raise NativeFiberError {
   if use_native_fiber {
     let continuation = self.start_continuation(
       trampoline_ptr, func_ptr, values_vec, values_len,
-    ) catch {
-      _ => return 8
-    }
-    let event = continuation.continue_with() catch {
-      _ => {
-        continuation.cancel() catch {
-          _ => ()
-        }
-        return 8
-      }
+    )
+    let event = {
+      errdefer (continuation.cancel() catch { _ => () })
+      continuation.continue_with()
     }
     match event {
       NativeJITCompleted => 0
       NativeJITTrapped(code) => code
       NativeHostcallSuspended => {
-        continuation.cancel() catch {
-          _ => ()
-        }
-        8
+        continuation.cancel()
+        raise UnexpectedYield(-1L)
       }
     }
   } else {

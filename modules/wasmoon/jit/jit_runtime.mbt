@@ -536,6 +536,8 @@ pub fn JITModule::call_with_context(
           self.last_trap_report = Some(report)
           raise JITTrap(@wasmoon_jit.format_trap_report_message(report))
         }
+        Some(JITNativeFiberFailure(message)) =>
+          raise JITNativeFiberFailure(message)
         Some(JITExit(code)) => raise JITExit(code)
         Some(JITCancelled) => raise JITCancelled
         None => ()
@@ -604,6 +606,7 @@ fn JITCallContinuation::finish_error(
       self.jit_module.last_trap_report = Some(report)
       raise JITTrap(@wasmoon_jit.format_trap_report_message(report))
     }
+    JITNativeFiberFailure(message) => raise JITNativeFiberFailure(message)
     JITExit(code) => raise JITExit(code)
     JITCancelled => raise JITCancelled
   }
@@ -1163,7 +1166,9 @@ pub fn JITModule::set_memory_pointers(
 
 ///|
 /// Configure the guarded native-fiber stack used by JIT calls.
-/// When enabled, JIT-compiled Wasm code runs on a separate stack,
+/// This records the size used by later invocations; allocation is deferred
+/// until a native continuation starts. JIT-compiled Wasm code runs on a
+/// separate stack,
 /// providing controlled stack overflow behavior:
 /// - Stack overflows hit a guard page and trigger "call stack exhausted" trap
 /// - Host stack is protected from runaway WASM recursion
@@ -1172,22 +1177,26 @@ pub fn JITModule::set_memory_pointers(
 /// Parameters:
 ///   stack_size: Size of the stack in bytes (default: 1MB = 1048576)
 ///
-/// Returns: true when the requested size is valid.
-pub fn JITModule::alloc_wasm_stack(
+/// Returns: true when the configuration was accepted.
+#alias(alloc_wasm_stack, deprecated="Use configure_native_fiber_stack_size instead")
+pub fn JITModule::configure_native_fiber_stack_size(
   self : JITModule,
   stack_size : Int64,
 ) -> Bool {
   match self.context {
-    Some(ctx) => ctx.alloc_wasm_stack(stack_size)
+    Some(ctx) => ctx.configure_native_fiber_stack_size(stack_size)
     None => false
   }
 }
 
 ///|
 /// Check if a native-fiber stack size has been configured.
-pub fn JITModule::has_wasm_stack(self : JITModule) -> Bool {
+#alias(has_wasm_stack, deprecated="Use has_configured_native_fiber_stack_size instead")
+pub fn JITModule::has_configured_native_fiber_stack_size(
+  self : JITModule,
+) -> Bool {
   match self.context {
-    Some(ctx) => ctx.has_wasm_stack()
+    Some(ctx) => ctx.has_configured_native_fiber_stack_size()
     None => false
   }
 }

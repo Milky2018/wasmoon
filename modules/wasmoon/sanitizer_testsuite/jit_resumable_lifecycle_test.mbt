@@ -15,7 +15,7 @@ fn build_resumable_lifecycle_context(
     function_names=@commands.build_jit_function_names(mod_),
     debug_db~,
   )
-  jm.alloc_wasm_stack(1024L * 1024L) |> ignore
+  jm.configure_native_fiber_stack_size(1024L * 1024L) |> ignore
   let globals_ptr = @wast.init_jit_globals_from_store(instance, store, jm)
   let func_type_indices : Array[Int] = []
   if valid_func_type_indices {

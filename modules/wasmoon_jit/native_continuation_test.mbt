@@ -7,6 +7,17 @@ fn native_continuation_test_context() -> NativeJITContext {
 }
 
 ///|
+fn synchronous_call_for_test(
+  context : NativeJITContext,
+  trampoline_ptr : Int64,
+  func_ptr : Int64,
+  values : FixedArray[Int64],
+  values_len : Int,
+) -> Int raise NativeFiberError {
+  context.call_trampoline(trampoline_ptr, func_ptr, values, values_len, true)
+}
+
+///|
 test "native continuation cancellation has explicit phase boundaries" {
   let context = native_continuation_test_context()
   let running : Array[NativeJITContinuation?] = [None]
@@ -201,8 +212,8 @@ test "native hostcall suspension can retry only the suspended hostcall" {
 ///|
 test "native hostcall accepts slots on the active fiber stack" {
   let context = native_continuation_test_context()
-  guard context.alloc_wasm_stack(64L * 1024L) else {
-    fail("failed to allocate ordinary Wasm stack")
+  guard context.configure_native_fiber_stack_size(64L * 1024L) else {
+    fail("failed to configure native fiber stack size")
   }
   context.set_hostcall_callback(fn() { HostcallCompleted })
   let values = FixedArray::from_array([99L])
@@ -223,8 +234,8 @@ test "native hostcall accepts slots on the active fiber stack" {
 test "synchronous calls use the configured native fiber" {
   let context = native_continuation_test_context()
   let requested_stack_size = 128L * 1024L
-  guard context.alloc_wasm_stack(requested_stack_size) else {
-    fail("failed to configure ordinary Wasm stack")
+  guard context.configure_native_fiber_stack_size(requested_stack_size) else {
+    fail("failed to configure native fiber stack size")
   }
   let values = FixedArray::from_array([0L, 0L])
   let trap = context.call_trampoline(
@@ -241,23 +252,53 @@ test "synchronous calls use the configured native fiber" {
 }
 
 ///|
+test "synchronous stack allocation failure remains structured" {
+  let context = native_continuation_test_context()
+  let requested_stack_size = 9223372036854775807L
+  guard context.configure_native_fiber_stack_size(requested_stack_size) else {
+    fail("failed to configure native fiber stack size")
+  }
+  let values = FixedArray::from_array([0L])
+  try
+    synchronous_call_for_test(
+      context,
+      @native_test_support.active_fiber_stack_probe_trampoline(),
+      1L,
+      values,
+      values.length(),
+    )
+  catch {
+    StackAllocationFailed(stack_size) =>
+      inspect(stack_size, content="9223372036854775807")
+    error => fail("unexpected native fiber error: \{error}")
+  } noraise {
+    trap_code =>
+      fail("expected stack allocation failure, got trap \{trap_code}")
+  }
+}
+
+///|
 test "synchronous calls cancel an unexpected hostcall suspension" {
   let context = native_continuation_test_context()
-  guard context.alloc_wasm_stack(64L * 1024L) else {
-    fail("failed to configure ordinary Wasm stack")
+  guard context.configure_native_fiber_stack_size(64L * 1024L) else {
+    fail("failed to configure native fiber stack size")
   }
   context.set_hostcall_callback(fn() { HostcallSuspended })
   let suspended_values = FixedArray::from_array([0L])
-  inspect(
-    context.call_trampoline(
+  try
+    synchronous_call_for_test(
+      context,
       @native_test_support.hostcall_probe_trampoline(),
       1L,
       suspended_values,
       suspended_values.length(),
-      true,
-    ),
-    content="8",
-  )
+    )
+  catch {
+    UnexpectedYield(event) => inspect(event, content="-1")
+    error => fail("unexpected native fiber error: \{error}")
+  } noraise {
+    trap_code => fail("expected unexpected-yield error, got trap \{trap_code}")
+  }
   context.set_hostcall_callback(fn() { HostcallCompleted })
   let completed_values = FixedArray::from_array([0L])
   inspect(
@@ -279,8 +320,8 @@ test "synchronous calls cancel an unexpected hostcall suspension" {
 ///|
 test "repeated synchronous traps release their native fibers" {
   let context = native_continuation_test_context()
-  guard context.alloc_wasm_stack(64L * 1024L) else {
-    fail("failed to configure ordinary Wasm stack")
+  guard context.configure_native_fiber_stack_size(64L * 1024L) else {
+    fail("failed to configure native fiber stack size")
   }
   for index in 0..<32 {
     let func_idx = index + 1
@@ -502,7 +543,9 @@ test "nested same-context activation preserves its suspended caller" {
       nested_values,
       nested_values.length(),
       false,
-    )
+    ) catch {
+      _ => return HostcallTrap(8)
+    }
     if trap != 6 {
       return HostcallTrap(8)
     }

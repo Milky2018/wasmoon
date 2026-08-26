@@ -5,6 +5,7 @@ pub(all) suberror JITCoreCallError {
   ArgumentTypeMismatch(Int)
   ResultTypeMismatch(Int)
   Trap(String)
+  NativeFiberFailure(String)
   Cancelled
   Exit(Int)
   GcSetupFailed(String)
@@ -120,6 +121,7 @@ fn finish_jit_core_environment(
 fn map_jit_call_error(error : @jit.JITTrap) -> JITCoreCallError {
   match error {
     JITTrap(message) => Trap(message)
+    JITNativeFiberFailure(message) => NativeFiberFailure(message)
     JITCancelled => Cancelled
     JITExit(code) => Exit(code)
   }
@@ -317,6 +319,7 @@ pub fn JITModuleContext::call_core_func(
   defer invocation.release_if_live()
   let raw_results = self.jit_module.call_with_context(func, encoded_args) catch {
     JITTrap(message) => raise Trap(message)
+    JITNativeFiberFailure(message) => raise NativeFiberFailure(message)
     JITCancelled => raise Cancelled
     JITExit(code) => raise Exit(code)
   }

@@ -506,7 +506,7 @@ fn try_compile_jit_with_suspension(
           // Allocate independent WASM stack with guard page. Native JIT
           // execution and hostcall bridges use this stack, so keep it aligned
           // with `wasmoon run`.
-          jm.alloc_wasm_stack(16L * 1024L * 1024L) |> ignore
+          jm.configure_native_fiber_stack_size(16L * 1024L * 1024L) |> ignore
           // Initialize WASI only when the module imports it.
           if module_has_wasi_import(lowered_mod) {
             jm.init_wasi_quiet([], [], [])

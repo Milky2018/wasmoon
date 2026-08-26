@@ -439,7 +439,7 @@ fn run_jit_with_opt_level(
     }
     @wast.register_instance_funcrefs_for_jit(jm, instance, store)
     @wast.install_jit_hostcall_dispatcher(jm, store, instance)
-    jm.alloc_wasm_stack(1048576L) |> ignore
+    jm.configure_native_fiber_stack_size(1048576L) |> ignore
     guard @wast.init_jit_memories_from_store(instance, store, jm) is Some(_) else {
       return Err("JIT memory initialization failed")
     }

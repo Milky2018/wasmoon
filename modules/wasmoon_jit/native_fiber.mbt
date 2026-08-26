@@ -78,8 +78,8 @@ pub fn NativeJITContext::start_continuation(
   values_len : Int,
   stack_size? : Int64 = 1024L * 1024L,
 ) -> NativeJITContinuation raise NativeFiberError {
-  let effective_stack_size = if self.configured_stack_size > 0L {
-    self.configured_stack_size
+  let effective_stack_size = if self.configured_native_fiber_stack_size > 0L {
+    self.configured_native_fiber_stack_size
   } else {
     stack_size
   }

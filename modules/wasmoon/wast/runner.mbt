@@ -898,6 +898,16 @@ pub fn invoke_action(
                   sync_jit_tables_to_store(jit, ctx.store)
                   raise RuntimeError(msg)
                 }
+                JITNativeFiberFailure(message) => {
+                  jit.jit_module.teardown_gc()
+                  if temp_gc_func_table_ptr != 0L {
+                    @wasmoon_jit.free_memory(temp_gc_func_table_ptr)
+                    temp_gc_func_table_ptr = 0L
+                  }
+                  sync_jit_globals_to_store(jit, ctx.store)
+                  sync_jit_tables_to_store(jit, ctx.store)
+                  raise RuntimeError("JIT native-fiber failure: \{message}")
+                }
                 JITCancelled => {
                   jit.jit_module.teardown_gc()
                   if temp_gc_func_table_ptr != 0L {
