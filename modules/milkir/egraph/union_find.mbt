@@ -26,7 +26,7 @@ priv struct UnionFind {
 
 ///|
 fn UnionFind::UnionFind() -> UnionFind {
-  { parent: [], size: [] }
+  { parent: [], size: [], }
 }
 
 ///|

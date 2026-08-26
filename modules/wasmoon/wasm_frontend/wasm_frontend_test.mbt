@@ -17,7 +17,7 @@ fn native_test_env() -> EmbeddingEnvironment {
       table_entry_stride: 16,
       func_table_entry_stride: 8,
     }),
-    memory_descriptor_layout=Some({ base_offset: 0, current_length_offset: 8 }),
+    memory_descriptor_layout=Some({ base_offset: 0, current_length_offset: 8, }),
   )
 }
 
@@ -65,7 +65,7 @@ test "lower locals through native linear fast path" {
   ]
   let mod_ = {
     ..@types.Module::simple([I32, I32], [I32], body, "double_sum"),
-    codes: [{ locals: [I32], body }],
+    codes: [{ locals: [I32], body, }],
   }
   let env = EmbeddingEnvironment::EmbeddingEnvironment(hidden_context_type=None)
   let func = lower_function(env, mod_, 0)
@@ -81,7 +81,7 @@ test "lower nop and float locals through native linear fast path" {
   let body : Array[@types.Instruction] = [Nop, LocalGet(1), LocalGet(0), F64Add]
   let mod_ = {
     ..@types.Module::simple([F64], [F64], body, "float_local_default"),
-    codes: [{ locals: [F64], body }],
+    codes: [{ locals: [F64], body, }],
   }
   let env = EmbeddingEnvironment::EmbeddingEnvironment(hidden_context_type=None)
   let func = lower_function(env, mod_, 0)
@@ -324,7 +324,7 @@ test "lower globals through native VMContext loads and stores" {
       "global_roundtrip",
     ),
     globals: [
-      { type_: { value_type: I32, mutable: true }, init: [I32Const(0)] },
+      { type_: { value_type: I32, mutable: true, }, init: [I32Const(0)], },
     ],
   }
   let env = native_test_env()
@@ -345,7 +345,7 @@ test "lower table size and get through native VMContext loads" {
   let table : @types.Table = {
     type_: {
       elem_type: FuncRef,
-      limits: { min: 2, max: None },
+      limits: { min: 2, max: None, },
       is_table64: false,
     },
     init: None,
@@ -374,7 +374,7 @@ test "production table.get preserves the table element carrier" {
   let table : @types.Table = {
     type_: {
       elem_type: FuncRef,
-      limits: { min: 1, max: None },
+      limits: { min: 1, max: None, },
       is_table64: false,
     },
     init: None,
@@ -392,7 +392,7 @@ test "production table.get preserves the table element carrier" {
   @wasm_milkir.verify_function(func)
   let imported = {
     ..mod_,
-    imports: [{ mod_name: "host", name: "table", desc: Table(table.type_) }],
+    imports: [{ mod_name: "host", name: "table", desc: Table(table.type_), }],
     tables: [],
   }
   let imported_func = translate_function(native_test_env(), imported, 0)
@@ -404,7 +404,7 @@ test "lower table set through native table fill runtime call" {
   let table : @types.Table = {
     type_: {
       elem_type: FuncRef,
-      limits: { min: 2, max: None },
+      limits: { min: 2, max: None, },
       is_table64: false,
     },
     init: None,
@@ -510,7 +510,7 @@ test "lower linear integer bitops comparisons and select natively" {
     I32Eq,
     Select,
   ]
-  let mod_ = { ..mod_, codes: [{ locals: [I32], body }] }
+  let mod_ = { ..mod_, codes: [{ locals: [I32], body, }], }
   let env = EmbeddingEnvironment::EmbeddingEnvironment(hidden_context_type=None)
   let func = lower_function(env, mod_, 0)
   let text = func.print()
@@ -730,8 +730,8 @@ test "lower direct calls as generic MilkIR calls" {
     locals: [],
     body: [I32Const(3), I32Const(4), Call(0)],
   }
-  let add_type : @types.FuncType = { params: [I32, I32], results: [I32] }
-  let main_type : @types.FuncType = { params: [], results: [I32] }
+  let add_type : @types.FuncType = { params: [I32, I32], results: [I32], }
+  let main_type : @types.FuncType = { params: [], results: [I32], }
   let mod_ : @types.Module = {
     types: [
       @types.SubType::from_func(add_type),
@@ -743,7 +743,7 @@ test "lower direct calls as generic MilkIR calls" {
     tables: [],
     memories: [],
     globals: [],
-    exports: [{ name: "main", desc: Func(1) }],
+    exports: [{ name: "main", desc: Func(1), }],
     start: None,
     elems: [],
     codes: [add_func, main_func],
@@ -775,7 +775,11 @@ test "lower memory operations through native MilkIR memory ops" {
       "memory_roundtrip",
     ),
     memories: [
-      { limits: { min: 1, max: None }, is_memory64: false, page_size_log2: 16 },
+      {
+        limits: { min: 1, max: None, },
+        is_memory64: false,
+        page_size_log2: 16,
+      },
     ],
   }
   let env = native_test_env()
@@ -854,7 +858,11 @@ test "lower narrow memory operations through native MilkIR memory ops" {
       "narrow_memory",
     ),
     memories: [
-      { limits: { min: 1, max: None }, is_memory64: false, page_size_log2: 16 },
+      {
+        limits: { min: 1, max: None, },
+        is_memory64: false,
+        page_size_log2: 16,
+      },
     ],
   }
   let env = native_test_env()
@@ -895,7 +903,11 @@ test "lower memory grow size and bulk helpers as native helper calls" {
       "memory_bulk",
     ),
     memories: [
-      { limits: { min: 1, max: None }, is_memory64: false, page_size_log2: 16 },
+      {
+        limits: { min: 1, max: None, },
+        is_memory64: false,
+        page_size_log2: 16,
+      },
     ],
   }
   let env = native_test_env()
@@ -923,8 +935,16 @@ test "lower non-zero memory.size through native descriptor loads" {
   let mod_ = {
     ..@types.Module::simple([], [I32], [MemorySize(1)], "memory1_size"),
     memories: [
-      { limits: { min: 1, max: None }, is_memory64: false, page_size_log2: 16 },
-      { limits: { min: 2, max: None }, is_memory64: false, page_size_log2: 16 },
+      {
+        limits: { min: 1, max: None, },
+        is_memory64: false,
+        page_size_log2: 16,
+      },
+      {
+        limits: { min: 2, max: None, },
+        is_memory64: false,
+        page_size_log2: 16,
+      },
     ],
   }
   let env = native_test_env()
@@ -953,8 +973,16 @@ test "lower non-zero memory load store with explicit bounds check" {
       "memory1_roundtrip",
     ),
     memories: [
-      { limits: { min: 1, max: None }, is_memory64: false, page_size_log2: 16 },
-      { limits: { min: 1, max: None }, is_memory64: false, page_size_log2: 16 },
+      {
+        limits: { min: 1, max: None, },
+        is_memory64: false,
+        page_size_log2: 16,
+      },
+      {
+        limits: { min: 1, max: None, },
+        is_memory64: false,
+        page_size_log2: 16,
+      },
     ],
   }
   let env = native_test_env()
@@ -978,7 +1006,7 @@ test "lower memory64 load with overflow-safe bounds check" {
       "memory64_load",
     ),
     memories: [
-      { limits: { min: 1, max: None }, is_memory64: true, page_size_log2: 16 },
+      { limits: { min: 1, max: None, }, is_memory64: true, page_size_log2: 16, },
     ],
   }
   let env = native_test_env()
@@ -1011,7 +1039,7 @@ test "lower memory64 narrow load store with overflow-safe bounds check" {
       "memory64_narrow_roundtrip",
     ),
     memories: [
-      { limits: { min: 1, max: None }, is_memory64: true, page_size_log2: 16 },
+      { limits: { min: 1, max: None, }, is_memory64: true, page_size_log2: 16, },
     ],
   }
   let env = native_test_env()
@@ -1040,7 +1068,11 @@ test "lower v128 load store through native memory path" {
   let mod_ = {
     ..@types.Module::simple([V128], [V128], body, "v128_roundtrip"),
     memories: [
-      { limits: { min: 1, max: None }, is_memory64: false, page_size_log2: 16 },
+      {
+        limits: { min: 1, max: None, },
+        is_memory64: false,
+        page_size_log2: 16,
+      },
     ],
   }
   let env = native_test_env()
@@ -1058,7 +1090,7 @@ test "lower table bulk helpers as native helper calls" {
   let table : @types.Table = {
     type_: {
       elem_type: FuncRef,
-      limits: { min: 2, max: None },
+      limits: { min: 2, max: None, },
       is_table64: false,
     },
     init: None,
@@ -1223,7 +1255,7 @@ test "unsupported memory64 bulk helper reports runtime ABI capability" {
       "memory64_fill",
     ),
     memories: [
-      { limits: { min: 1, max: None }, is_memory64: true, page_size_log2: 16 },
+      { limits: { min: 1, max: None, }, is_memory64: true, page_size_log2: 16, },
     ],
   }
   let env = native_test_env()

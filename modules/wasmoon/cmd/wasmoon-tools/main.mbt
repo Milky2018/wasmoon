@@ -4,7 +4,7 @@ fn clap_parser(
   description~ : String,
   subcmds~ : Map[String, @clap.SubCommand],
 ) -> @clap.Parser {
-  { prog, args: Map([]), subcmds, description }
+  { prog, args: Map([]), subcmds, description, }
 }
 
 ///|
@@ -13,7 +13,7 @@ fn clap_subcommand(
   args? : Map[String, @clap.Arg] = Map([]),
   subcmds? : Map[String, @clap.SubCommand] = Map([]),
 ) -> @clap.SubCommand {
-  { args, subcmds, help }
+  { args, subcmds, help, }
 }
 
 ///|

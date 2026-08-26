@@ -17,7 +17,7 @@ fn allocation_location_key(location : Location) -> (Int, Int) {
 
 ///|
 fn AllocationState::new() -> AllocationState {
-  { values: Map([]) }
+  { values: Map([]), }
 }
 
 ///|

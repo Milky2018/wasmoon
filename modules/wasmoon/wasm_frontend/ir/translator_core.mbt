@@ -122,9 +122,9 @@ pub fn TranslationContext::from_module(
         num_imports = num_imports + 1
         import_func_type_indices.push(type_idx)
       }
-      Table(table_type) => tables.push({ type_: table_type, init: None })
+      Table(table_type) => tables.push({ type_: table_type, init: None, })
       Global(global_type) => global_types.push(global_type)
-      Tag(tag_type_idx) => tags.push({ type_idx: tag_type_idx })
+      Tag(tag_type_idx) => tags.push({ type_idx: tag_type_idx, })
       Memory(_) => memory_count = memory_count + 1
     }
   }
@@ -181,7 +181,7 @@ fn module_func_type_table(
   for subtype in subtypes {
     match subtype.composite {
       Func(ft) => result.push(ft)
-      _ => result.push({ params: [], results: [] })
+      _ => result.push({ params: [], results: [], })
     }
   }
   result

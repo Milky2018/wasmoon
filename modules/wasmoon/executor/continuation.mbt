@@ -29,7 +29,7 @@ fn ExecContext::set_base_resume_action(
   action : () -> Unit raise,
 ) -> Unit {
   self.suspension_token = Some(token)
-  self.resume_action = Some({ run: action })
+  self.resume_action = Some({ run: action, })
 }
 
 ///|
@@ -126,7 +126,7 @@ fn suspended_outcome(
     abort("missing interpreter suspension token")
   }
   context.suspension_token = None
-  Suspended(token, { context, return_arity, active })
+  Suspended(token, { context, return_arity, active, })
 }
 
 ///|

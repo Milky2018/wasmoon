@@ -29,7 +29,7 @@ fn rule_spaceship_eq_zero() -> RewriteRule {
               // (spaceship(x, y) == 0) → (x == y)
               let x = spaceship_node.children[0]
               let y = spaceship_node.children[1]
-              let new_node = eg.add({ op: Eq, children: [x, y] })
+              let new_node = eg.add({ op: Eq, children: [x, y], })
               changed = eg.subsume_changed(class_id, new_node) || changed
             }
           }
@@ -42,7 +42,7 @@ fn rule_spaceship_eq_zero() -> RewriteRule {
               eg.find_const(node.children[0]) is Some(0L) {
               let x = spaceship_node.children[0]
               let y = spaceship_node.children[1]
-              let new_node = eg.add({ op: Eq, children: [x, y] })
+              let new_node = eg.add({ op: Eq, children: [x, y], })
               changed = eg.subsume_changed(class_id, new_node) || changed
             }
           }
@@ -71,7 +71,7 @@ fn rule_spaceship_ne_zero() -> RewriteRule {
               eg.find_const(node.children[1]) is Some(0L) {
               let x = spaceship_node.children[0]
               let y = spaceship_node.children[1]
-              let new_node = eg.add({ op: Ne, children: [x, y] })
+              let new_node = eg.add({ op: Ne, children: [x, y], })
               changed = eg.subsume_changed(class_id, new_node) || changed
             }
           }
@@ -83,7 +83,7 @@ fn rule_spaceship_ne_zero() -> RewriteRule {
               eg.find_const(node.children[0]) is Some(0L) {
               let x = spaceship_node.children[0]
               let y = spaceship_node.children[1]
-              let new_node = eg.add({ op: Ne, children: [x, y] })
+              let new_node = eg.add({ op: Ne, children: [x, y], })
               changed = eg.subsume_changed(class_id, new_node) || changed
             }
           }
@@ -108,7 +108,7 @@ fn rule_spaceship_s_lt_zero() -> RewriteRule {
               eg.find_const(node.children[1]) is Some(0L) {
               let x = spaceship_node.children[0]
               let y = spaceship_node.children[1]
-              let new_node = eg.add({ op: Icmp(CC_SLT), children: [x, y] })
+              let new_node = eg.add({ op: Icmp(CC_SLT), children: [x, y], })
               changed = eg.subsume_changed(class_id, new_node) || changed
             }
           }
@@ -133,7 +133,7 @@ fn rule_spaceship_u_lt_zero() -> RewriteRule {
               eg.find_const(node.children[1]) is Some(0L) {
               let x = spaceship_node.children[0]
               let y = spaceship_node.children[1]
-              let new_node = eg.add({ op: Icmp(CC_ULT), children: [x, y] })
+              let new_node = eg.add({ op: Icmp(CC_ULT), children: [x, y], })
               changed = eg.subsume_changed(class_id, new_node) || changed
             }
           }
@@ -157,7 +157,7 @@ fn rule_spaceship_s_le_zero() -> RewriteRule {
               eg.find_const(node.children[1]) is Some(0L) {
               let x = spaceship_node.children[0]
               let y = spaceship_node.children[1]
-              let new_node = eg.add({ op: Icmp(CC_SLE), children: [x, y] })
+              let new_node = eg.add({ op: Icmp(CC_SLE), children: [x, y], })
               changed = eg.subsume_changed(class_id, new_node) || changed
             }
           }
@@ -181,7 +181,7 @@ fn rule_spaceship_u_le_zero() -> RewriteRule {
               eg.find_const(node.children[1]) is Some(0L) {
               let x = spaceship_node.children[0]
               let y = spaceship_node.children[1]
-              let new_node = eg.add({ op: Icmp(CC_ULE), children: [x, y] })
+              let new_node = eg.add({ op: Icmp(CC_ULE), children: [x, y], })
               changed = eg.subsume_changed(class_id, new_node) || changed
             }
           }
@@ -205,7 +205,7 @@ fn rule_spaceship_s_gt_zero() -> RewriteRule {
               eg.find_const(node.children[1]) is Some(0L) {
               let x = spaceship_node.children[0]
               let y = spaceship_node.children[1]
-              let new_node = eg.add({ op: Icmp(CC_SGT), children: [x, y] })
+              let new_node = eg.add({ op: Icmp(CC_SGT), children: [x, y], })
               changed = eg.subsume_changed(class_id, new_node) || changed
             }
           }
@@ -229,7 +229,7 @@ fn rule_spaceship_u_gt_zero() -> RewriteRule {
               eg.find_const(node.children[1]) is Some(0L) {
               let x = spaceship_node.children[0]
               let y = spaceship_node.children[1]
-              let new_node = eg.add({ op: Icmp(CC_UGT), children: [x, y] })
+              let new_node = eg.add({ op: Icmp(CC_UGT), children: [x, y], })
               changed = eg.subsume_changed(class_id, new_node) || changed
             }
           }
@@ -253,7 +253,7 @@ fn rule_spaceship_s_ge_zero() -> RewriteRule {
               eg.find_const(node.children[1]) is Some(0L) {
               let x = spaceship_node.children[0]
               let y = spaceship_node.children[1]
-              let new_node = eg.add({ op: Icmp(CC_SGE), children: [x, y] })
+              let new_node = eg.add({ op: Icmp(CC_SGE), children: [x, y], })
               changed = eg.subsume_changed(class_id, new_node) || changed
             }
           }
@@ -277,7 +277,7 @@ fn rule_spaceship_u_ge_zero() -> RewriteRule {
               eg.find_const(node.children[1]) is Some(0L) {
               let x = spaceship_node.children[0]
               let y = spaceship_node.children[1]
-              let new_node = eg.add({ op: Icmp(CC_UGE), children: [x, y] })
+              let new_node = eg.add({ op: Icmp(CC_UGE), children: [x, y], })
               changed = eg.subsume_changed(class_id, new_node) || changed
             }
           }
@@ -303,7 +303,7 @@ fn rule_spaceship_s_eq_neg_one() -> RewriteRule {
               is_neg_one(v) {
               let x = spaceship_node.children[0]
               let y = spaceship_node.children[1]
-              let new_node = eg.add({ op: Icmp(CC_SLT), children: [x, y] })
+              let new_node = eg.add({ op: Icmp(CC_SLT), children: [x, y], })
               changed = eg.subsume_changed(class_id, new_node) || changed
             }
           }
@@ -329,7 +329,7 @@ fn rule_spaceship_u_eq_neg_one() -> RewriteRule {
               is_neg_one(v) {
               let x = spaceship_node.children[0]
               let y = spaceship_node.children[1]
-              let new_node = eg.add({ op: Icmp(CC_ULT), children: [x, y] })
+              let new_node = eg.add({ op: Icmp(CC_ULT), children: [x, y], })
               changed = eg.subsume_changed(class_id, new_node) || changed
             }
           }
@@ -355,7 +355,7 @@ fn rule_spaceship_s_ne_neg_one() -> RewriteRule {
               is_neg_one(v) {
               let x = spaceship_node.children[0]
               let y = spaceship_node.children[1]
-              let new_node = eg.add({ op: Icmp(CC_SGE), children: [x, y] })
+              let new_node = eg.add({ op: Icmp(CC_SGE), children: [x, y], })
               changed = eg.subsume_changed(class_id, new_node) || changed
             }
           }
@@ -381,7 +381,7 @@ fn rule_spaceship_u_ne_neg_one() -> RewriteRule {
               is_neg_one(v) {
               let x = spaceship_node.children[0]
               let y = spaceship_node.children[1]
-              let new_node = eg.add({ op: Icmp(CC_UGE), children: [x, y] })
+              let new_node = eg.add({ op: Icmp(CC_UGE), children: [x, y], })
               changed = eg.subsume_changed(class_id, new_node) || changed
             }
           }
@@ -406,7 +406,7 @@ fn rule_spaceship_s_eq_one() -> RewriteRule {
               eg.find_const(node.children[1]) is Some(1L) {
               let x = spaceship_node.children[0]
               let y = spaceship_node.children[1]
-              let new_node = eg.add({ op: Icmp(CC_SGT), children: [x, y] })
+              let new_node = eg.add({ op: Icmp(CC_SGT), children: [x, y], })
               changed = eg.subsume_changed(class_id, new_node) || changed
             }
           }
@@ -431,7 +431,7 @@ fn rule_spaceship_u_eq_one() -> RewriteRule {
               eg.find_const(node.children[1]) is Some(1L) {
               let x = spaceship_node.children[0]
               let y = spaceship_node.children[1]
-              let new_node = eg.add({ op: Icmp(CC_UGT), children: [x, y] })
+              let new_node = eg.add({ op: Icmp(CC_UGT), children: [x, y], })
               changed = eg.subsume_changed(class_id, new_node) || changed
             }
           }
@@ -456,7 +456,7 @@ fn rule_spaceship_s_ne_one() -> RewriteRule {
               eg.find_const(node.children[1]) is Some(1L) {
               let x = spaceship_node.children[0]
               let y = spaceship_node.children[1]
-              let new_node = eg.add({ op: Icmp(CC_SLE), children: [x, y] })
+              let new_node = eg.add({ op: Icmp(CC_SLE), children: [x, y], })
               changed = eg.subsume_changed(class_id, new_node) || changed
             }
           }
@@ -481,7 +481,7 @@ fn rule_spaceship_u_ne_one() -> RewriteRule {
               eg.find_const(node.children[1]) is Some(1L) {
               let x = spaceship_node.children[0]
               let y = spaceship_node.children[1]
-              let new_node = eg.add({ op: Icmp(CC_ULE), children: [x, y] })
+              let new_node = eg.add({ op: Icmp(CC_ULE), children: [x, y], })
               changed = eg.subsume_changed(class_id, new_node) || changed
             }
           }

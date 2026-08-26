@@ -9,7 +9,7 @@ fn instantiate_canon_context_get(
   state : BuildState,
   store : @runtime.Store,
 ) -> Unit raise ComponentRuntimeError {
-  let core_type : @types.FuncType = { params: [], results: [_vt] }
+  let core_type : @types.FuncType = { params: [], results: [_vt], }
   let async_state = state.async_state
   let host = fn(
     _args : Array[@types.Value],
@@ -55,7 +55,7 @@ fn instantiate_canon_context_set(
   state : BuildState,
   store : @runtime.Store,
 ) -> Unit raise ComponentRuntimeError {
-  let core_type : @types.FuncType = { params: [_vt], results: [] }
+  let core_type : @types.FuncType = { params: [_vt], results: [], }
   let async_state = state.async_state
   let host = fn(
     args : Array[@types.Value],

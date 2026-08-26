@@ -34,7 +34,7 @@ pub fn UnwindDirective::new(
   offset : Int,
   operation : UnwindOperation,
 ) -> UnwindDirective {
-  { offset, operation }
+  { offset, operation, }
 }
 
 ///|
@@ -69,7 +69,7 @@ pub fn Relocation::new(
   target : RelocationTarget,
   addend? : Int64 = 0L,
 ) -> Relocation {
-  { offset, kind, target, addend }
+  { offset, kind, target, addend, }
 }
 
 ///|
@@ -85,7 +85,7 @@ pub fn TrapSite::new(
   reason : @semantic.TrapReason,
   source? : @semantic.SourceLocation,
 ) -> TrapSite {
-  { offset, reason, source }
+  { offset, reason, source, }
 }
 
 ///|
@@ -99,7 +99,7 @@ pub fn SourceSite::new(
   offset : Int,
   source : @semantic.SourceLocation,
 ) -> SourceSite {
-  { offset, source }
+  { offset, source, }
 }
 
 ///|
@@ -119,7 +119,7 @@ pub fn SafepointSite::new(
   source? : @semantic.SourceLocation,
   stack_map? : @semantic.StackMapMetadata,
 ) -> SafepointSite {
-  { offset, kind, roots: roots.copy(), source, stack_map }
+  { offset, kind, roots: roots.copy(), source, stack_map, }
 }
 
 ///|

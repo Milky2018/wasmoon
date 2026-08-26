@@ -172,7 +172,7 @@ fn parse_int64_safe(s : String) -> Int64 {
 ///|
 /// Convert JsonValue to TestValue
 fn json_value_to_test_value(jv : JsonValue) -> TestValue {
-  { type_: jv.type_, value: jv.value }
+  { type_: jv.type_, value: jv.value, }
 }
 
 ///|
@@ -321,7 +321,7 @@ fn json_command_to_test_command(
       }
     _ => raise ParseError("Unknown command type: \{jc.type_}")
   }
-  { line: jc.line, command }
+  { line: jc.line, command, }
 }
 
 ///|
@@ -346,7 +346,7 @@ pub fn parse_json_test_file(
   for jc in test_file.commands {
     commands.push(json_command_to_test_command(jc))
   }
-  { source_filename: test_file.source_filename, commands }
+  { source_filename: test_file.source_filename, commands, }
 }
 
 ///|

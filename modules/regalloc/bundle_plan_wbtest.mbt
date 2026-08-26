@@ -129,7 +129,7 @@ fn bundle_test_range(
   end : Int,
   fixed_uses : Array[(UseKind, PhysicalReg)],
 ) -> LiveRange {
-  let range = LiveRange::LiveRange(id, { id, class })
+  let range = LiveRange::LiveRange(id, { id, class, })
   range.add_range(ProgramRange(ProgramPoint(0, start), ProgramPoint(0, end)))
   for entry in fixed_uses {
     let (kind, reg) = entry
@@ -140,10 +140,10 @@ fn bundle_test_range(
 
 ///|
 test "segment metadata follows custom block order in one use pass" {
-  let r0 : PhysicalReg = { id: 0, class: Int }
-  let r1 : PhysicalReg = { id: 1, class: Int }
+  let r0 : PhysicalReg = { id: 0, class: Int, }
+  let r1 : PhysicalReg = { id: 1, class: Int, }
   let ranges = LiveRangeSet::LiveRangeSet([1, 0])
-  let range = LiveRange::LiveRange(0, { id: 0, class: Int })
+  let range = LiveRange::LiveRange(0, { id: 0, class: Int, })
   range.add_range(ProgramRange(ProgramPoint(0, 0), ProgramPoint(0, 1)))
   range.add_range(ProgramRange(ProgramPoint(1, 10), ProgramPoint(1, 11)))
   range.add_use(
@@ -190,8 +190,8 @@ test "production bundle plan follows transitive SSA edge affinities" {
     classes: [Int, Int, Int],
     spill_kinds: [0, 0, 0],
     successors: [[1], [2], []],
-    parameters: [[], [{ id: 1, class: Int }], [{ id: 2, class: Int }]],
-    edge_arguments: [[[{ id: 0, class: Int }]], [[{ id: 1, class: Int }]], []],
+    parameters: [[], [{ id: 1, class: Int, }], [{ id: 2, class: Int, }]],
+    edge_arguments: [[[{ id: 0, class: Int, }]], [[{ id: 1, class: Int, }]], []],
   }
   debug_inspect(
     bundle_plan_snapshot(
@@ -242,7 +242,7 @@ test "spill-home groups follow spillset lineage after layout sorting" {
   )
   debug_inspect(
     build_spill_home_groups(
-      { ..function, spill_kinds: [0, 1, 2] },
+      { ..function, spill_kinds: [0, 1, 2], },
       segments,
       spill_sets,
       plan.segment_to_bundle,
@@ -254,8 +254,8 @@ test "spill-home groups follow spillset lineage after layout sorting" {
 
 ///|
 test "production bundle plan rejects incompatible range contracts" {
-  let r0 : PhysicalReg = { id: 0, class: Int }
-  let r1 : PhysicalReg = { id: 1, class: Int }
+  let r0 : PhysicalReg = { id: 0, class: Int, }
+  let r1 : PhysicalReg = { id: 1, class: Int, }
   let ranges = LiveRangeSet::LiveRangeSet([0])
   ranges.add_range(bundle_test_range(0, Int, 0, 2, []))
   ranges.add_range(bundle_test_range(1, Int, 1, 3, []))

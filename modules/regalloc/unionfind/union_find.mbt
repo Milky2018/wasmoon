@@ -18,7 +18,7 @@ pub fn UnionFind::UnionFind(n : Int) -> UnionFind {
     parent.push(i) // Each element is its own parent initially
     rank.push(0)
   }
-  { parent, rank }
+  { parent, rank, }
 }
 
 ///|

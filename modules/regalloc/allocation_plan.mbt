@@ -102,7 +102,7 @@ fn AllocationPlan::create_spill_slot(
   alignment : Int,
 ) -> Int {
   let slot = self.spill_slots.length()
-  self.spill_slots.push({ size, alignment })
+  self.spill_slots.push({ size, alignment, })
   slot
 }
 
@@ -137,7 +137,7 @@ pub fn AllocationPlan::operand_assignments(
   for instruction, locations in self.operand_locations {
     for operand, location in locations {
       if location is Some(location) {
-        assignments.push({ instruction, operand, location })
+        assignments.push({ instruction, operand, location, })
       }
     }
   }

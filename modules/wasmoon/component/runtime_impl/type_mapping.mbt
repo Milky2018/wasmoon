@@ -283,7 +283,7 @@ fn resolve_canon_resources(
       _ => ()
     }
   }
-  { mem_addr: mem, realloc, post_return, encoding }
+  { mem_addr: mem, realloc, post_return, encoding, }
 }
 
 ///|

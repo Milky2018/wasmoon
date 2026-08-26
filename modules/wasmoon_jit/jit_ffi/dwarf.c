@@ -905,7 +905,7 @@ typedef struct {
 } backtrace_frame_t;
 
 // Capture a backtrace using pre-captured frames from signal handler
-// The frame chain was captured in the signal handler while the WASM stack was still valid
+// The frame chain was captured after returning to the trap activation.
 // Returns the number of frames captured
 // frames_out should point to an array of at least MAX_BACKTRACE_DEPTH * 2 int64s
 // (alternating pc, fp pairs)

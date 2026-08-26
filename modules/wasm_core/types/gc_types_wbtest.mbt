@@ -7,7 +7,7 @@
 
 ///|
 test "SubType::simple creates final type without supertypes" {
-  let composite = CompositeType::Func({ params: [I32], results: [I64] })
+  let composite = CompositeType::Func({ params: [I32], results: [I64], })
   let subtype = SubType::simple(composite)
   inspect(subtype.final_, content="true")
   inspect(subtype.supertypes.length(), content="0")
@@ -16,7 +16,7 @@ test "SubType::simple creates final type without supertypes" {
 
 ///|
 test "SubType::from_func wraps FuncType correctly" {
-  let func_type : FuncType = { params: [F32, F64], results: [I32] }
+  let func_type : FuncType = { params: [F32, F64], results: [I32], }
   let subtype = SubType::from_func(func_type)
   inspect(subtype.final_, content="true")
   inspect(subtype.supertypes.length(), content="0")
@@ -48,8 +48,8 @@ test "SubType::func with empty params and results" {
 
 ///|
 test "StructType with immutable i32 field" {
-  let field : FieldType = { storage_type: Val(I32), mutable: false }
-  let struct_type : StructType = { fields: [field] }
+  let field : FieldType = { storage_type: Val(I32), mutable: false, }
+  let struct_type : StructType = { fields: [field], }
   inspect(struct_type.fields.length(), content="1")
   inspect(struct_type.fields[0].mutable, content="false")
   inspect(struct_type.fields[0].storage_type, content="Val(I32)")
@@ -57,9 +57,9 @@ test "StructType with immutable i32 field" {
 
 ///|
 test "StructType with mutable fields" {
-  let field1 : FieldType = { storage_type: Val(I32), mutable: true }
-  let field2 : FieldType = { storage_type: Val(I64), mutable: false }
-  let struct_type : StructType = { fields: [field1, field2] }
+  let field1 : FieldType = { storage_type: Val(I32), mutable: true, }
+  let field2 : FieldType = { storage_type: Val(I64), mutable: false, }
+  let struct_type : StructType = { fields: [field1, field2], }
   inspect(struct_type.fields.length(), content="2")
   inspect(struct_type.fields[0].mutable, content="true")
   inspect(struct_type.fields[1].mutable, content="false")
@@ -67,25 +67,25 @@ test "StructType with mutable fields" {
 
 ///|
 test "StructType with packed i8 field" {
-  let field : FieldType = { storage_type: Packed(I8), mutable: true }
-  let struct_type : StructType = { fields: [field] }
+  let field : FieldType = { storage_type: Packed(I8), mutable: true, }
+  let struct_type : StructType = { fields: [field], }
   inspect(struct_type.fields[0].storage_type, content="Packed(I8)")
 }
 
 ///|
 test "StructType with packed i16 field" {
-  let field : FieldType = { storage_type: Packed(I16), mutable: false }
-  let struct_type : StructType = { fields: [field] }
+  let field : FieldType = { storage_type: Packed(I16), mutable: false, }
+  let struct_type : StructType = { fields: [field], }
   inspect(struct_type.fields[0].storage_type, content="Packed(I16)")
 }
 
 ///|
 test "StructType with mixed field types" {
   let fields : Array[FieldType] = [
-    { storage_type: Val(I32), mutable: false },
-    { storage_type: Packed(I8), mutable: true },
-    { storage_type: Val(F64), mutable: false },
-    { storage_type: Packed(I16), mutable: true },
+    { storage_type: Val(I32), mutable: false, },
+    { storage_type: Packed(I8), mutable: true, },
+    { storage_type: Val(F64), mutable: false, },
+    { storage_type: Packed(I16), mutable: true, },
   ]
   let struct_type : StructType = { fields, }
   inspect(struct_type.fields.length(), content="4")
@@ -93,8 +93,11 @@ test "StructType with mixed field types" {
 
 ///|
 test "StructType with reference field" {
-  let field : FieldType = { storage_type: Val(RefNullStruct(0)), mutable: true }
-  let struct_type : StructType = { fields: [field] }
+  let field : FieldType = {
+    storage_type: Val(RefNullStruct(0)),
+    mutable: true,
+  }
+  let struct_type : StructType = { fields: [field], }
   inspect(struct_type.fields[0].storage_type, content="Val(RefNullStruct(0))")
 }
 
@@ -104,30 +107,30 @@ test "StructType with reference field" {
 
 ///|
 test "ArrayType with i32 element" {
-  let elem : FieldType = { storage_type: Val(I32), mutable: true }
-  let array_type : ArrayType = { element: elem }
+  let elem : FieldType = { storage_type: Val(I32), mutable: true, }
+  let array_type : ArrayType = { element: elem, }
   inspect(array_type.element.storage_type, content="Val(I32)")
   inspect(array_type.element.mutable, content="true")
 }
 
 ///|
 test "ArrayType with packed i8 element" {
-  let elem : FieldType = { storage_type: Packed(I8), mutable: true }
-  let array_type : ArrayType = { element: elem }
+  let elem : FieldType = { storage_type: Packed(I8), mutable: true, }
+  let array_type : ArrayType = { element: elem, }
   inspect(array_type.element.storage_type, content="Packed(I8)")
 }
 
 ///|
 test "ArrayType with immutable element" {
-  let elem : FieldType = { storage_type: Val(F64), mutable: false }
-  let array_type : ArrayType = { element: elem }
+  let elem : FieldType = { storage_type: Val(F64), mutable: false, }
+  let array_type : ArrayType = { element: elem, }
   inspect(array_type.element.mutable, content="false")
 }
 
 ///|
 test "ArrayType with reference element" {
-  let elem : FieldType = { storage_type: Val(RefNullArray(1)), mutable: true }
-  let array_type : ArrayType = { element: elem }
+  let elem : FieldType = { storage_type: Val(RefNullArray(1)), mutable: true, }
+  let array_type : ArrayType = { element: elem, }
   inspect(array_type.element.storage_type, content="Val(RefNullArray(1))")
 }
 
@@ -137,7 +140,7 @@ test "ArrayType with reference element" {
 
 ///|
 test "CompositeType::Func variant" {
-  let ft : FuncType = { params: [I32], results: [I32] }
+  let ft : FuncType = { params: [I32], results: [I32], }
   let composite = CompositeType::Func(ft)
   guard composite is Func(f) else { return }
   debug_inspect(f.params, content="[I32]")
@@ -145,7 +148,7 @@ test "CompositeType::Func variant" {
 
 ///|
 test "CompositeType::Struct variant" {
-  let st : StructType = { fields: [] }
+  let st : StructType = { fields: [], }
   let composite = CompositeType::Struct(st)
   guard composite is Struct(s) else { return }
   inspect(s.fields.length(), content="0")
@@ -153,7 +156,7 @@ test "CompositeType::Struct variant" {
 
 ///|
 test "CompositeType::Array variant" {
-  let at : ArrayType = { element: { storage_type: Val(I32), mutable: true } }
+  let at : ArrayType = { element: { storage_type: Val(I32), mutable: true, }, }
   let composite = CompositeType::Array(at)
   guard composite is Array(a) else { return }
   inspect(a.element.storage_type, content="Val(I32)")
@@ -172,7 +175,7 @@ test "func_types_to_subtypes with empty array" {
 
 ///|
 test "func_types_to_subtypes with single type" {
-  let func_types : Array[FuncType] = [{ params: [I32], results: [I64] }]
+  let func_types : Array[FuncType] = [{ params: [I32], results: [I64], }]
   let subtypes = func_types_to_subtypes(func_types)
   inspect(subtypes.length(), content="1")
   inspect(subtypes[0].final_, content="true")
@@ -184,9 +187,9 @@ test "func_types_to_subtypes with single type" {
 ///|
 test "func_types_to_subtypes with multiple types" {
   let func_types : Array[FuncType] = [
-    { params: [], results: [] },
-    { params: [I32, I32], results: [I32] },
-    { params: [F64], results: [F64, F64] },
+    { params: [], results: [], },
+    { params: [I32, I32], results: [I32], },
+    { params: [F64], results: [F64, F64], },
   ]
   let subtypes = func_types_to_subtypes(func_types)
   inspect(subtypes.length(), content="3")
@@ -317,7 +320,7 @@ test "SubType with supertype" {
   let subtype : SubType = {
     final_: false,
     supertypes: [0], // extends type at index 0
-    composite: Func({ params: [I32], results: [I32] }),
+    composite: Func({ params: [I32], results: [I32], }),
   }
   inspect(subtype.final_, content="false")
   inspect(subtype.supertypes.length(), content="1")
@@ -326,11 +329,11 @@ test "SubType with supertype" {
 
 ///|
 test "SubType final vs non-final" {
-  let final_type = SubType::simple(Func({ params: [], results: [] }))
+  let final_type = SubType::simple(Func({ params: [], results: [], }))
   let open_type : SubType = {
     final_: false,
     supertypes: [],
-    composite: Func({ params: [], results: [] }),
+    composite: Func({ params: [], results: [], }),
   }
   inspect(final_type.final_, content="true")
   inspect(open_type.final_, content="false")
@@ -342,10 +345,10 @@ test "SubType final vs non-final" {
 
 ///|
 test "FieldType equality" {
-  let f1 : FieldType = { storage_type: Val(I32), mutable: false }
-  let f2 : FieldType = { storage_type: Val(I32), mutable: false }
-  let f3 : FieldType = { storage_type: Val(I32), mutable: true }
-  let f4 : FieldType = { storage_type: Val(I64), mutable: false }
+  let f1 : FieldType = { storage_type: Val(I32), mutable: false, }
+  let f2 : FieldType = { storage_type: Val(I32), mutable: false, }
+  let f3 : FieldType = { storage_type: Val(I32), mutable: true, }
+  let f4 : FieldType = { storage_type: Val(I64), mutable: false, }
   inspect(f1 == f2, content="true")
   inspect(f1 == f3, content="false") // different mutability
   inspect(f1 == f4, content="false") // different storage type
@@ -393,8 +396,8 @@ test "Module::struct_type_at returns correct StructType" {
   let mod_ = Module::Module()
   let struct_type : StructType = {
     fields: [
-      { storage_type: Val(I32), mutable: false },
-      { storage_type: Val(I64), mutable: true },
+      { storage_type: Val(I32), mutable: false, },
+      { storage_type: Val(I64), mutable: true, },
     ],
   }
   mod_.types.push(SubType::simple(Struct(struct_type)))
@@ -408,7 +411,7 @@ test "Module::struct_type_at returns correct StructType" {
 test "Module::array_type_at returns correct ArrayType" {
   let mod_ = Module::Module()
   let array_type : ArrayType = {
-    element: { storage_type: Packed(I8), mutable: true },
+    element: { storage_type: Packed(I8), mutable: true, },
   }
   mod_.types.push(SubType::simple(Array(array_type)))
   let at = mod_.array_type_at(0).unwrap()
@@ -419,9 +422,9 @@ test "Module::array_type_at returns correct ArrayType" {
 ///|
 test "Module::is_func_type correctly identifies function types" {
   let mod_ = Module::Module()
-  let struct_type : StructType = { fields: [] }
+  let struct_type : StructType = { fields: [], }
   let array_type : ArrayType = {
-    element: { storage_type: Val(I32), mutable: true },
+    element: { storage_type: Val(I32), mutable: true, },
   }
   mod_.types.push(SubType::func([I32], [I32])) // index 0: func
   mod_.types.push(SubType::simple(Struct(struct_type))) // index 1: struct
@@ -434,9 +437,9 @@ test "Module::is_func_type correctly identifies function types" {
 ///|
 test "Module::is_struct_type correctly identifies struct types" {
   let mod_ = Module::Module()
-  let struct_type : StructType = { fields: [] }
+  let struct_type : StructType = { fields: [], }
   let array_type : ArrayType = {
-    element: { storage_type: Val(I32), mutable: true },
+    element: { storage_type: Val(I32), mutable: true, },
   }
   mod_.types.push(SubType::func([I32], [I32])) // index 0: func
   mod_.types.push(SubType::simple(Struct(struct_type))) // index 1: struct
@@ -449,9 +452,9 @@ test "Module::is_struct_type correctly identifies struct types" {
 ///|
 test "Module::is_array_type correctly identifies array types" {
   let mod_ = Module::Module()
-  let struct_type : StructType = { fields: [] }
+  let struct_type : StructType = { fields: [], }
   let array_type : ArrayType = {
-    element: { storage_type: Val(I32), mutable: true },
+    element: { storage_type: Val(I32), mutable: true, },
   }
   mod_.types.push(SubType::func([I32], [I32])) // index 0: func
   mod_.types.push(SubType::simple(Struct(struct_type))) // index 1: struct
@@ -469,12 +472,12 @@ test "Module with mixed type definitions" {
   mod_.types.push(SubType::func([I32, I32], [I32])) // 1: add signature
   mod_.types.push(
     SubType::simple(
-      Struct({ fields: [{ storage_type: Val(I32), mutable: true }] }),
+      Struct({ fields: [{ storage_type: Val(I32), mutable: true, }], }),
     ),
   ) // 2: point struct
   mod_.types.push(
     SubType::simple(
-      Array({ element: { storage_type: Val(F64), mutable: true } }),
+      Array({ element: { storage_type: Val(F64), mutable: true, }, }),
     ),
   ) // 3: f64 array
   mod_.types.push(SubType::func([RefNullStruct(2)], [I32])) // 4: func taking struct ref
@@ -504,7 +507,7 @@ test "type lookups answer None rather than aborting" {
   mod_.types.push(SubType::func([], []))
   mod_.types.push(
     SubType::simple(
-      Struct({ fields: [{ storage_type: Val(I32), mutable: false }] }),
+      Struct({ fields: [{ storage_type: Val(I32), mutable: false, }], }),
     ),
   )
 

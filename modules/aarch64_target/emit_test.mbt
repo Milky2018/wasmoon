@@ -3591,6 +3591,50 @@ test "AArch64 internal calls emit code-symbol relocations" {
 }
 
 ///|
+test "AArch64 calls zero-extend stack i32 arguments" {
+  let parameter_types : Array[@semantic.ValueType] = [
+    Ptr64,
+    I32,
+    I32,
+    I32,
+    I32,
+    I32,
+    I32,
+    I32,
+    I32,
+    I32,
+  ]
+  let builder = @semantic.FunctionBuilder::new(
+    "emitted_i32_stack_call",
+    Internal,
+    [Ptr64],
+    [],
+  )
+  let operands = [builder.parameters()[0]]
+  for index in 0..<9 {
+    operands.push(
+      builder.emit(I32Const(index.reinterpret_as_uint()), [], [I32])[0],
+    )
+  }
+  let call = @semantic.SemanticCall::new(
+    Internal(@semantic.CodeSymbol::new("wasm.func.i32_stack_args")),
+    @semantic.Signature::new(parameter_types, []),
+    Internal,
+    @semantic.CallBehavior::new(ReadWrite, true, true, false, false),
+  )
+  builder.emit(Call(call), operands, []) |> ignore
+  builder.return_([])
+  let function = lower(builder.finish(), test_lowering_context())
+  let allocation = allocate(function)
+  let frame = plan_frame(function, allocation)
+  let code = emit(function, allocation, frame).code()
+  debug_inspect(
+    code[44:52].to_owned(),
+    content="[0xe8, 0x03, 0x00, 0xf9, 0xe9, 0x07, 0x00, 0xf9]",
+  )
+}
+
+///|
 test "AArch64 internal calls keep caller-owned outgoing stack arguments" {
   let callee_parameter_types : Array[@semantic.ValueType] = [
     Ptr64,

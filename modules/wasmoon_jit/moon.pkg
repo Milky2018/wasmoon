@@ -35,7 +35,6 @@ options(
     "jit_ffi/gc_heap.c",
     "jit_ffi/exception.c",
     "jit_ffi/wasi.c",
-    "jit_ffi/wasm_stack.c",
     "jit_ffi/fiber.c",
     "jit_ffi/trampoline_call_x86_64.S",
     "jit_ffi/stack_switch_aarch64.S",

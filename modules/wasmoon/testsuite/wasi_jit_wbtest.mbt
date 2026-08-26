@@ -110,7 +110,7 @@ fn compare_wasi_with_options(
     _ => false
   }
   let match_ = results_match && jit_stdout == interp_stdout
-  { jit_result, interp_result, jit_stdout, interp_stdout, match_ }
+  { jit_result, interp_result, jit_stdout, interp_stdout, match_, }
 }
 
 ///|
@@ -175,7 +175,7 @@ fn compare_wasi_with_callback(
     _ => false
   }
   let match_ = results_match && jit_stdout == interp_stdout
-  { jit_result, interp_result, jit_stdout, interp_stdout, match_ }
+  { jit_result, interp_result, jit_stdout, interp_stdout, match_, }
 }
 
 ///|
@@ -349,7 +349,7 @@ fn run_wasi_jit_quiet(
     )
     @wast.register_instance_funcrefs_for_jit(jm, instance, store)
     @wast.install_jit_hostcall_dispatcher(jm, store, instance)
-    jm.alloc_wasm_stack(1048576L) |> ignore
+    jm.configure_native_fiber_stack_size(1048576L) |> ignore
     jm.init_wasi_with_stdio(
       [],
       [],

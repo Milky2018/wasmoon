@@ -46,7 +46,7 @@ pub fn CoreExecutionRequest::CoreExecutionRequest(
   backend : CoreBackendPolicy,
   suspension : CoreSuspensionPolicy,
 ) -> CoreExecutionRequest {
-  { style, backend, suspension }
+  { style, backend, suspension, }
 }
 
 ///|
@@ -73,7 +73,7 @@ pub fn CoreContinuation::CoreContinuation(
   continue_with : () -> CoreExecutionOutcome raise ComponentRuntimeError,
   cancel : () -> Unit,
 ) -> CoreContinuation {
-  { resume_fn: continue_with, cancel_fn: cancel }
+  { resume_fn: continue_with, cancel_fn: cancel, }
 }
 
 ///|
@@ -159,7 +159,7 @@ priv struct CoreExecutionLifecycle {
 
 ///|
 fn CoreExecutionLifecycle::new() -> CoreExecutionLifecycle {
-  { active_leases: Ref(0), closing: Ref(false), close_when_idle: Ref(None) }
+  { active_leases: Ref(0), closing: Ref(false), close_when_idle: Ref(None), }
 }
 
 ///|

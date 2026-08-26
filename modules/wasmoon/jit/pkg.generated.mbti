@@ -22,6 +22,7 @@ pub impl Show for JITModuleLoadError
 
 pub suberror JITTrap {
   JITTrap(String)
+  JITNativeFiberFailure(String)
   JITExit(Int)
   JITCancelled
 } derive(@debug.Debug)
@@ -63,13 +64,14 @@ pub struct JITFunction {
 type JITModule
 pub fn JITModule::JITModule() -> Self
 pub fn JITModule::alloc_guarded_memory(Self, Int, Int?) -> Int64
-pub fn JITModule::alloc_wasm_stack(Self, Int64) -> Bool
 pub fn JITModule::call_with_context(Self, JITFunction, Array[Int64]) -> Array[Int64] raise JITTrap
 pub fn JITModule::call_with_context_controlled(Self, JITFunction, Array[Int64], cancel? : (() -> Bool)?) -> JITCallResult
 pub fn[Arg : DynamicArgs, Ret : DynamicReturn] JITModule::call_with_context_poly(Self, JITFunction, Arg) -> Ret raise PolycallError
 pub fn JITModule::clear_hostcall_callback(Self) -> Unit
 pub fn JITModule::clear_segments(Self) -> Unit
 pub fn JITModule::close(Self) -> Unit
+#alias(alloc_wasm_stack, deprecated)
+pub fn JITModule::configure_native_fiber_stack_size(Self, Int64) -> Bool
 pub fn JITModule::export_functions(Self) -> Map[String, Int64]
 pub fn JITModule::find_func_by_pc(Self, Int64) -> (Int, JITFunction, Int)?
 pub fn JITModule::gc_begin_frame(Self, Int64) -> Unit
@@ -86,7 +88,8 @@ pub fn JITModule::get_func_ptr_by_name(Self, String) -> Int64
 pub fn JITModule::get_last_trap_report(Self) -> @wasmoon_jit.TrapReport?
 pub fn JITModule::get_memory_ptr(Self, Int) -> Int64
 pub fn JITModule::get_memory_size(Self, Int) -> Int64
-pub fn JITModule::has_wasm_stack(Self) -> Bool
+#alias(has_wasm_stack, deprecated)
+pub fn JITModule::has_configured_native_fiber_stack_size(Self) -> Bool
 pub fn JITModule::init_indirect_table(Self, Int, Array[(Int, Int, Int)]) -> Unit
 pub fn JITModule::init_shared_tables(Self, Array[@wasmoon_jit.JITTable?], Array[(Int, Int, Int?, Int)]) -> Unit
 pub fn JITModule::init_wasi(Self, Array[String], Array[String], Array[(String, String)]) -> Unit

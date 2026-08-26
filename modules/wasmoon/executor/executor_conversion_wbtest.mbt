@@ -151,22 +151,22 @@ test "executor: const expr supports extern.convert_any/any.convert_extern" {
     ..@types.Module::empty(),
     globals: [
       {
-        type_: { value_type: ExternRef, mutable: false },
+        type_: { value_type: ExternRef, mutable: false, },
         init: [RefNull(AnyRef), ExternConvertAny],
       },
       {
-        type_: { value_type: AnyRef, mutable: false },
+        type_: { value_type: AnyRef, mutable: false, },
         init: [RefNull(ExternRef), AnyConvertExtern],
       },
       {
-        type_: { value_type: AnyRef, mutable: false },
+        type_: { value_type: AnyRef, mutable: false, },
         init: [I32Const(7), RefI31, ExternConvertAny, AnyConvertExtern],
       },
     ],
     exports: [
-      { name: "g_extern_null", desc: Global(0) },
-      { name: "g_any_null", desc: Global(1) },
-      { name: "g_any_i31", desc: Global(2) },
+      { name: "g_extern_null", desc: Global(0), },
+      { name: "g_any_null", desc: Global(1), },
+      { name: "g_any_i31", desc: Global(2), },
     ],
   }
   let (store, instance) = instantiate_module(mod)

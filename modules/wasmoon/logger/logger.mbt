@@ -11,7 +11,7 @@ pub(all) enum LogLevel {
 
 ///|
 /// Global debug flag - when false, debug messages are suppressed
-let debug_enabled : Ref[Bool] = { val: false }
+let debug_enabled : Ref[Bool] = { val: false, }
 
 ///|
 /// Enable debug logging

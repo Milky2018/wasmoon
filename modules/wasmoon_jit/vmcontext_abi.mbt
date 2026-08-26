@@ -70,5 +70,5 @@ pub(all) struct MemoryDescriptorLayout {
 
 ///|
 pub fn memory_descriptor_layout() -> MemoryDescriptorLayout {
-  { base_offset: 0, current_length_offset: 8 }
+  { base_offset: 0, current_length_offset: 8, }
 }

@@ -18,7 +18,7 @@ pub(all) struct CallCounter {
 
 ///|
 pub fn CallCounter::CallCounter() -> CallCounter {
-  { counts: Map([]), total_calls: 0 }
+  { counts: Map([]), total_calls: 0, }
 }
 
 ///|
@@ -85,19 +85,19 @@ pub(all) struct HotThreshold {
 
 ///|
 pub fn HotThreshold::default() -> HotThreshold {
-  { warm_threshold: 10, hot_threshold: 100 }
+  { warm_threshold: 10, hot_threshold: 100, }
 }
 
 ///|
 pub fn HotThreshold::aggressive() -> HotThreshold {
   // Compile sooner
-  { warm_threshold: 5, hot_threshold: 50 }
+  { warm_threshold: 5, hot_threshold: 50, }
 }
 
 ///|
 pub fn HotThreshold::conservative() -> HotThreshold {
   // Wait longer before compiling
-  { warm_threshold: 50, hot_threshold: 500 }
+  { warm_threshold: 50, hot_threshold: 500, }
 }
 
 ///|

@@ -174,7 +174,7 @@ pub fn MarkSweepHeap::alloc_struct(
   type_idx : Int,
   fields : Array[@types.Value],
 ) -> Int {
-  let obj = GCObject::Struct({ type_idx, fields })
+  let obj = GCObject::Struct({ type_idx, fields, })
   self.alloc_object(obj)
 }
 
@@ -185,7 +185,7 @@ pub fn MarkSweepHeap::alloc_array(
   type_idx : Int,
   elements : Array[@types.Value],
 ) -> Int {
-  let obj = GCObject::Array({ type_idx, elements })
+  let obj = GCObject::Array({ type_idx, elements, })
   self.alloc_object(obj)
 }
 

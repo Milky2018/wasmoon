@@ -173,7 +173,7 @@ fn[F : FunctionView] build_function_range_fragments(
       if open_ends[value_id] is Some(end) {
         add_live_range_fragment(
           ranges,
-          { id: value_id, class: function.value_class(value_id) },
+          { id: value_id, class: function.value_class(value_id), },
           block_start,
           end,
         )

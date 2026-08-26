@@ -10,12 +10,12 @@
 
 ///|
 pub fn EGraph::add_const(self : EGraph, value : Int64) -> EClassId {
-  self.add({ op: Const(value), children: [] })
+  self.add({ op: Const(value), children: [], })
 }
 
 ///|
 pub fn EGraph::add_var(self : EGraph, var_id : Int) -> EClassId {
-  self.add({ op: Var(var_id), children: [] })
+  self.add({ op: Var(var_id), children: [], })
 }
 
 ///|
@@ -25,7 +25,7 @@ pub fn EGraph::add_binop(
   lhs : EClassId,
   rhs : EClassId,
 ) -> EClassId {
-  self.add({ op, children: [lhs, rhs] })
+  self.add({ op, children: [lhs, rhs], })
 }
 
 ///|
@@ -94,13 +94,13 @@ pub fn EGraph::add_xor(
 ///|
 /// Add a negation node: -x
 pub fn EGraph::add_neg(self : EGraph, operand : EClassId) -> EClassId {
-  self.add({ op: Neg, children: [operand] })
+  self.add({ op: Neg, children: [operand], })
 }
 
 ///|
 /// Add a bitwise NOT node: ~x
 pub fn EGraph::add_bnot(self : EGraph, operand : EClassId) -> EClassId {
-  self.add({ op: Bnot, children: [operand] })
+  self.add({ op: Bnot, children: [operand], })
 }
 
 ///|
@@ -178,31 +178,31 @@ pub fn EGraph::add_rotr(
 ///|
 /// Add a count leading zeros node
 pub fn EGraph::add_clz(self : EGraph, operand : EClassId) -> EClassId {
-  self.add({ op: Clz, children: [operand] })
+  self.add({ op: Clz, children: [operand], })
 }
 
 ///|
 /// Add a count trailing zeros node
 pub fn EGraph::add_ctz(self : EGraph, operand : EClassId) -> EClassId {
-  self.add({ op: Ctz, children: [operand] })
+  self.add({ op: Ctz, children: [operand], })
 }
 
 ///|
 /// Add a population count node
 pub fn EGraph::add_popcnt(self : EGraph, operand : EClassId) -> EClassId {
-  self.add({ op: Popcnt, children: [operand] })
+  self.add({ op: Popcnt, children: [operand], })
 }
 
 ///|
 /// Add a byte swap node
 pub fn EGraph::add_bswap(self : EGraph, operand : EClassId) -> EClassId {
-  self.add({ op: Bswap, children: [operand] })
+  self.add({ op: Bswap, children: [operand], })
 }
 
 ///|
 /// Add a bit reverse node
 pub fn EGraph::add_bitrev(self : EGraph, operand : EClassId) -> EClassId {
-  self.add({ op: Bitrev, children: [operand] })
+  self.add({ op: Bitrev, children: [operand], })
 }
 
 ///|
@@ -213,7 +213,7 @@ pub fn EGraph::add_icmp(
   lhs : EClassId,
   rhs : EClassId,
 ) -> EClassId {
-  self.add({ op: Icmp(cc), children: [lhs, rhs] })
+  self.add({ op: Icmp(cc), children: [lhs, rhs], })
 }
 
 ///|
@@ -244,13 +244,13 @@ pub fn EGraph::add_select(
   a : EClassId,
   b : EClassId,
 ) -> EClassId {
-  self.add({ op: Select, children: [cond, a, b] })
+  self.add({ op: Select, children: [cond, a, b], })
 }
 
 ///|
 /// Add a boolean mask node: 0 -> 0, nonzero -> -1
 pub fn EGraph::add_bmask(self : EGraph, operand : EClassId) -> EClassId {
-  self.add({ op: Bmask, children: [operand] })
+  self.add({ op: Bmask, children: [operand], })
 }
 
 ///|
@@ -261,7 +261,7 @@ pub fn EGraph::add_ireduce(
   from_bits? : Int = 64,
   to_bits? : Int = 32,
 ) -> EClassId {
-  self.add({ op: Ireduce(from_bits, to_bits), children: [operand] })
+  self.add({ op: Ireduce(from_bits, to_bits), children: [operand], })
 }
 
 ///|
@@ -272,7 +272,7 @@ pub fn EGraph::add_uextend(
   from_bits? : Int = 32,
   to_bits? : Int = 64,
 ) -> EClassId {
-  self.add({ op: Uextend(from_bits, to_bits), children: [operand] })
+  self.add({ op: Uextend(from_bits, to_bits), children: [operand], })
 }
 
 ///|
@@ -283,7 +283,7 @@ pub fn EGraph::add_sextend(
   from_bits? : Int = 32,
   to_bits? : Int = 64,
 ) -> EClassId {
-  self.add({ op: Sextend(from_bits, to_bits), children: [operand] })
+  self.add({ op: Sextend(from_bits, to_bits), children: [operand], })
 }
 
 // ============================================================================
@@ -293,7 +293,7 @@ pub fn EGraph::add_sextend(
 ///|
 /// Add a float constant node (bits stored as UInt64)
 pub fn EGraph::add_fconst(self : EGraph, bits : UInt64) -> EClassId {
-  self.add({ op: Fconst(bits), children: [] })
+  self.add({ op: Fconst(bits), children: [], })
 }
 
 ///|
@@ -303,7 +303,7 @@ pub fn EGraph::add_fadd(
   left : EClassId,
   right : EClassId,
 ) -> EClassId {
-  self.add({ op: Fadd, children: [left, right] })
+  self.add({ op: Fadd, children: [left, right], })
 }
 
 ///|
@@ -313,7 +313,7 @@ pub fn EGraph::add_fsub(
   left : EClassId,
   right : EClassId,
 ) -> EClassId {
-  self.add({ op: Fsub, children: [left, right] })
+  self.add({ op: Fsub, children: [left, right], })
 }
 
 ///|
@@ -323,7 +323,7 @@ pub fn EGraph::add_fmul(
   left : EClassId,
   right : EClassId,
 ) -> EClassId {
-  self.add({ op: Fmul, children: [left, right] })
+  self.add({ op: Fmul, children: [left, right], })
 }
 
 ///|
@@ -333,7 +333,7 @@ pub fn EGraph::add_fdiv(
   left : EClassId,
   right : EClassId,
 ) -> EClassId {
-  self.add({ op: Fdiv, children: [left, right] })
+  self.add({ op: Fdiv, children: [left, right], })
 }
 
 ///|
@@ -343,7 +343,7 @@ pub fn EGraph::add_fmin(
   left : EClassId,
   right : EClassId,
 ) -> EClassId {
-  self.add({ op: Fmin, children: [left, right] })
+  self.add({ op: Fmin, children: [left, right], })
 }
 
 ///|
@@ -353,7 +353,7 @@ pub fn EGraph::add_fmax(
   left : EClassId,
   right : EClassId,
 ) -> EClassId {
-  self.add({ op: Fmax, children: [left, right] })
+  self.add({ op: Fmax, children: [left, right], })
 }
 
 ///|
@@ -363,49 +363,49 @@ pub fn EGraph::add_fcopysign(
   mag : EClassId,
   sign : EClassId,
 ) -> EClassId {
-  self.add({ op: Fcopysign, children: [mag, sign] })
+  self.add({ op: Fcopysign, children: [mag, sign], })
 }
 
 ///|
 /// Add a float negate node
 pub fn EGraph::add_fneg(self : EGraph, operand : EClassId) -> EClassId {
-  self.add({ op: Fneg, children: [operand] })
+  self.add({ op: Fneg, children: [operand], })
 }
 
 ///|
 /// Add a float absolute value node
 pub fn EGraph::add_fabs(self : EGraph, operand : EClassId) -> EClassId {
-  self.add({ op: Fabs, children: [operand] })
+  self.add({ op: Fabs, children: [operand], })
 }
 
 ///|
 /// Add a float square root node
 pub fn EGraph::add_fsqrt(self : EGraph, operand : EClassId) -> EClassId {
-  self.add({ op: Fsqrt, children: [operand] })
+  self.add({ op: Fsqrt, children: [operand], })
 }
 
 ///|
 /// Add a float ceiling node
 pub fn EGraph::add_fceil(self : EGraph, operand : EClassId) -> EClassId {
-  self.add({ op: Fceil, children: [operand] })
+  self.add({ op: Fceil, children: [operand], })
 }
 
 ///|
 /// Add a float floor node
 pub fn EGraph::add_ffloor(self : EGraph, operand : EClassId) -> EClassId {
-  self.add({ op: Ffloor, children: [operand] })
+  self.add({ op: Ffloor, children: [operand], })
 }
 
 ///|
 /// Add a float truncate node
 pub fn EGraph::add_ftrunc(self : EGraph, operand : EClassId) -> EClassId {
-  self.add({ op: Ftrunc, children: [operand] })
+  self.add({ op: Ftrunc, children: [operand], })
 }
 
 ///|
 /// Add a float round to nearest node
 pub fn EGraph::add_fnearest(self : EGraph, operand : EClassId) -> EClassId {
-  self.add({ op: Fnearest, children: [operand] })
+  self.add({ op: Fnearest, children: [operand], })
 }
 
 ///|
@@ -416,43 +416,43 @@ pub fn EGraph::add_fcmp(
   left : EClassId,
   right : EClassId,
 ) -> EClassId {
-  self.add({ op: Fcmp(cc), children: [left, right] })
+  self.add({ op: Fcmp(cc), children: [left, right], })
 }
 
 ///|
 /// Add a float promote (f32 -> f64) node
 pub fn EGraph::add_fpromote(self : EGraph, operand : EClassId) -> EClassId {
-  self.add({ op: Fpromote, children: [operand] })
+  self.add({ op: Fpromote, children: [operand], })
 }
 
 ///|
 /// Add a float demote (f64 -> f32) node
 pub fn EGraph::add_fdemote(self : EGraph, operand : EClassId) -> EClassId {
-  self.add({ op: Fdemote, children: [operand] })
+  self.add({ op: Fdemote, children: [operand], })
 }
 
 ///|
 /// Add a float to signed int conversion node
 pub fn EGraph::add_fcvt_to_sint(self : EGraph, operand : EClassId) -> EClassId {
-  self.add({ op: FcvtToSint, children: [operand] })
+  self.add({ op: FcvtToSint, children: [operand], })
 }
 
 ///|
 /// Add a float to unsigned int conversion node
 pub fn EGraph::add_fcvt_to_uint(self : EGraph, operand : EClassId) -> EClassId {
-  self.add({ op: FcvtToUint, children: [operand] })
+  self.add({ op: FcvtToUint, children: [operand], })
 }
 
 ///|
 /// Add a signed int to float conversion node
 pub fn EGraph::add_sint_to_fcvt(self : EGraph, operand : EClassId) -> EClassId {
-  self.add({ op: SintToFcvt, children: [operand] })
+  self.add({ op: SintToFcvt, children: [operand], })
 }
 
 ///|
 /// Add an unsigned int to float conversion node
 pub fn EGraph::add_uint_to_fcvt(self : EGraph, operand : EClassId) -> EClassId {
-  self.add({ op: UintToFcvt, children: [operand] })
+  self.add({ op: UintToFcvt, children: [operand], })
 }
 
 // ============================================================================
@@ -462,11 +462,11 @@ pub fn EGraph::add_uint_to_fcvt(self : EGraph, operand : EClassId) -> EClassId {
 ///|
 /// Add a vector splat node (broadcast scalar to all lanes)
 pub fn EGraph::add_splat(self : EGraph, scalar : EClassId) -> EClassId {
-  self.add({ op: Splat, children: [scalar] })
+  self.add({ op: Splat, children: [scalar], })
 }
 
 ///|
 /// Add a vector constant node
 pub fn EGraph::add_vconst(self : EGraph, bits : Bytes) -> EClassId {
-  self.add({ op: Vconst(bits), children: [] })
+  self.add({ op: Vconst(bits), children: [], })
 }

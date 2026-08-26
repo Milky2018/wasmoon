@@ -32,7 +32,7 @@ priv struct TextReader {
 
 ///|
 fn TextReader::TextReader(input : String) -> TextReader {
-  { input, pos: 0 }
+  { input, pos: 0, }
 }
 
 ///|
@@ -468,7 +468,7 @@ priv struct ByteBuf {
 
 ///|
 fn ByteBuf::ByteBuf() -> ByteBuf {
-  { bytes: [] }
+  { bytes: [], }
 }
 
 ///|
@@ -594,7 +594,7 @@ fn bind_named_index(
   idx : Int,
 ) -> Unit {
   if name_opt is Some(name) {
-    bindings.push({ name, idx })
+    bindings.push({ name, idx, })
   }
 }
 
@@ -602,7 +602,7 @@ fn bind_named_index(
 fn copy_named_bindings(bindings : Array[NamedBinding]) -> Array[NamedBinding] {
   let out : Array[NamedBinding] = []
   for binding in bindings {
-    out.push({ name: binding.name, idx: binding.idx })
+    out.push({ name: binding.name, idx: binding.idx, })
   }
   out
 }
@@ -1102,7 +1102,7 @@ fn parse_func_sig(
       if items[0] is Atom("param") {
         if items.length() == 2 {
           let ty = parse_valtype(items[1], state)
-          params.push({ label: "p\{params.length()}", ty })
+          params.push({ label: "p\{params.length()}", ty, })
           continue
         }
         if items.length() == 3 {
@@ -1114,7 +1114,7 @@ fn parse_func_sig(
             raise Unsupported("unsupported param label")
           }
           let ty = parse_valtype(items[2], state)
-          params.push({ label, ty })
+          params.push({ label, ty, })
           continue
         }
         raise Unsupported("unsupported param field")
@@ -1137,7 +1137,7 @@ fn parse_func_sig(
     }
     raise Unsupported("unsupported func declaration item")
   }
-  { params, result_ty, is_async }
+  { params, result_ty, is_async, }
 }
 
 ///|
@@ -1168,7 +1168,7 @@ fn add_type_entry(
 ) -> Int {
   let idx = state.next_type_idx
   state.next_type_idx += 1
-  state.types.push({ idx, bytes: type_bytes, func_sig })
+  state.types.push({ idx, bytes: type_bytes, func_sig, })
   push_ordered_section(state, 7, type_bytes)
   bind_named_index(state.type_names, name_opt, idx)
   idx
@@ -1207,7 +1207,7 @@ fn ensure_core_type_bytes(
   }
   let idx = state.next_core_type_idx
   state.next_core_type_idx += 1
-  state.core_types.push({ idx, bytes: type_bytes })
+  state.core_types.push({ idx, bytes: type_bytes, })
   push_ordered_section(state, 3, type_bytes)
   idx
 }
@@ -1613,7 +1613,7 @@ fn parse_inline_func_sig(
           )
           next_type_count = next_next_count
           decl_count += ty_decl_count
-          params.push({ label: "p\{params.length()}", ty })
+          params.push({ label: "p\{params.length()}", ty, })
           continue
         }
         if items.length() == 3 {
@@ -1633,7 +1633,7 @@ fn parse_inline_func_sig(
           )
           next_type_count = next_next_count
           decl_count += ty_decl_count
-          params.push({ label, ty })
+          params.push({ label, ty, })
           continue
         }
         raise Unsupported("unsupported param field")
@@ -1665,7 +1665,7 @@ fn parse_inline_func_sig(
     }
     raise Unsupported("unsupported func declaration item")
   }
-  ({ params, result_ty, is_async }, next_type_count, decl_count)
+  ({ params, result_ty, is_async, }, next_type_count, decl_count)
 }
 
 ///|
@@ -3144,7 +3144,7 @@ fn push_ordered_section(
   section_id : Int,
   decl : Bytes,
 ) -> Unit {
-  state.sections_ordered.push({ section_id, payload: wrap_single_decl(decl) })
+  state.sections_ordered.push({ section_id, payload: wrap_single_decl(decl), })
 }
 
 ///|
@@ -3936,7 +3936,7 @@ fn parse_core_alias_binding(
     kind, instance_idx, export_name,
   )
   push_ordered_section(state, 6, alias_decl)
-  state.core_alias_bindings.push({ kind, instance_idx, name: export_name, idx })
+  state.core_alias_bindings.push({ kind, instance_idx, name: export_name, idx, })
   idx
 }
 
@@ -5090,7 +5090,7 @@ fn parse_export_field(
     let empty_component = Bytes::from_array([
       0x00, 0x61, 0x73, 0x6d, 0x0d, 0x00, 0x01, 0x00,
     ])
-    state.sections_ordered.push({ section_id: 4, payload: empty_component })
+    state.sections_ordered.push({ section_id: 4, payload: empty_component, })
     let component_idx = state.next_component_idx
     state.next_component_idx += 1
     push_export_decl(state, {
@@ -5351,7 +5351,7 @@ fn parse_core_module_field(
     e => raise ParseError("failed to parse core module: \{e}")
   }
   let bytes = int_array_to_bytes(@encoder.encode(mod))
-  state.sections_ordered.push({ section_id: 1, payload: bytes })
+  state.sections_ordered.push({ section_id: 1, payload: bytes, })
   let idx = state.next_core_module_idx
   state.next_core_module_idx += 1
   bind_named_index(state.core_module_names, name_opt, idx)
@@ -6110,7 +6110,7 @@ fn parse_component_sort_ref(
           idx: export_ref.idx,
         })
       }
-      let entry = InstanceEntry::{ expr: InlineExports(exports) }
+      let entry = InstanceEntry::{ expr: InlineExports(exports), }
       let instance_idx = state.next_instance_idx
       state.next_instance_idx += 1
       push_ordered_section(state, 5, encode_instance_decl(entry))
@@ -6129,7 +6129,7 @@ fn parse_component_sort_ref(
       0x05 => resolve_reference(items[1], state.instance_names, "instance")
       _ => raise Unsupported("unsupported component sort reference")
     }
-    return { name: "", attributes: None, sort_tag, core_kind: None, idx }
+    return { name: "", attributes: None, sort_tag, core_kind: None, idx, }
   }
   if items.length() >= 3 &&
     (
@@ -6203,7 +6203,7 @@ fn parse_instance_field(
   let name_opt = parse_optional_identifier(field, 1)
   let expr_index = if name_opt is Some(_) { 2 } else { 1 }
   if expr_index >= field.length() {
-    let empty = InstanceEntry::{ expr: InlineExports([]) }
+    let empty = InstanceEntry::{ expr: InlineExports([]), }
     push_ordered_section(state, 5, encode_instance_decl(empty))
     let idx = state.next_instance_idx
     state.next_instance_idx += 1
@@ -6237,7 +6237,7 @@ fn parse_instance_field(
           idx: 0,
         })
       }
-      let entry = InstanceEntry::{ expr: InlineExports(exports) }
+      let entry = InstanceEntry::{ expr: InlineExports(exports), }
       push_ordered_section(state, 5, encode_instance_decl(entry))
       let idx = state.next_instance_idx
       state.next_instance_idx += 1
@@ -6290,7 +6290,7 @@ fn parse_instance_field(
     for i in 2..<expr.length() {
       args.push(parse_instance_instantiate_arg(expr[i], state))
     }
-    let entry = InstanceEntry::{ expr: Instantiate(component_idx, args) }
+    let entry = InstanceEntry::{ expr: Instantiate(component_idx, args), }
     push_ordered_section(state, 5, encode_instance_decl(entry))
     let idx = state.next_instance_idx
     state.next_instance_idx += 1
@@ -6409,7 +6409,7 @@ fn parse_instance_field(
     return
   }
 
-  let entry = InstanceEntry::{ expr: InlineExports(exports) }
+  let entry = InstanceEntry::{ expr: InlineExports(exports), }
   push_ordered_section(state, 5, encode_instance_decl(entry))
   let idx = state.next_instance_idx
   state.next_instance_idx += 1
@@ -6469,7 +6469,7 @@ fn parse_core_sort_ref(
         state.core_instance_names,
         "core instance",
       )
-      return { name: "", kind: 0x12, idx }
+      return { name: "", kind: 0x12, idx, }
     }
     let exports : Array[CoreSortRef] = []
     for i in 1..<items.length() {
@@ -6494,17 +6494,17 @@ fn parse_core_sort_ref(
         idx: export_ref.idx,
       })
     }
-    let entry = CoreInstanceEntry::{ expr: InlineExports(exports) }
+    let entry = CoreInstanceEntry::{ expr: InlineExports(exports), }
     let core_instance_idx = state.next_core_instance_idx
     state.next_core_instance_idx += 1
     push_ordered_section(state, 2, encode_core_instance_decl(entry))
-    return { name: "", kind: 0x12, idx: core_instance_idx }
+    return { name: "", kind: 0x12, idx: core_instance_idx, }
   }
 
   if kind_name == "module" {
     if items.length() == 2 {
       let idx = resolve_core_module_reference(items[1], state)
-      return { name: "", kind, idx }
+      return { name: "", kind, idx, }
     }
     if items.length() == 3 {
       let export_name = parse_name_text(items[2], "core module export name")
@@ -6557,7 +6557,7 @@ fn parse_core_sort_ref(
           None,
         )
       }
-      return { name: "", kind, idx }
+      return { name: "", kind, idx, }
     }
     raise Unsupported(
       "core module ref must be `(module <idx-or-id>)` or `(module <instance> <export>)`",
@@ -6567,7 +6567,7 @@ fn parse_core_sort_ref(
   if kind_name == "func" {
     if items.length() == 2 {
       let idx = resolve_reference(items[1], state.core_func_names, "core func")
-      return { name: "", kind, idx }
+      return { name: "", kind, idx, }
     }
     if items.length() == 3 {
       let instance_idx = resolve_reference(
@@ -6583,7 +6583,7 @@ fn parse_core_sort_ref(
         export_name,
         None,
       )
-      return { name: "", kind, idx }
+      return { name: "", kind, idx, }
     }
     raise Unsupported(
       "core func ref must be `(func <idx-or-id>)` or `(func <instance> <export>)`",
@@ -6597,7 +6597,7 @@ fn parse_core_sort_ref(
         state.core_memory_names,
         "core memory",
       )
-      return { name: "", kind, idx }
+      return { name: "", kind, idx, }
     }
     if items.length() == 3 {
       let instance_idx = resolve_reference(
@@ -6613,7 +6613,7 @@ fn parse_core_sort_ref(
         export_name,
         None,
       )
-      return { name: "", kind, idx }
+      return { name: "", kind, idx, }
     }
     raise Unsupported(
       "core memory ref must be `(memory <idx-or-id>)` or `(memory <instance> <export>)`",
@@ -6627,7 +6627,7 @@ fn parse_core_sort_ref(
         state.core_table_names,
         "core table",
       )
-      return { name: "", kind, idx }
+      return { name: "", kind, idx, }
     }
     if items.length() == 3 {
       let instance_idx = resolve_reference(
@@ -6643,7 +6643,7 @@ fn parse_core_sort_ref(
         export_name,
         None,
       )
-      return { name: "", kind, idx }
+      return { name: "", kind, idx, }
     }
     raise Unsupported(
       "core table ref must be `(table <idx-or-id>)` or `(table <instance> <export>)`",
@@ -6657,7 +6657,7 @@ fn parse_core_sort_ref(
         state.core_global_names,
         "core global",
       )
-      return { name: "", kind, idx }
+      return { name: "", kind, idx, }
     }
     if items.length() == 3 {
       let instance_idx = resolve_reference(
@@ -6673,7 +6673,7 @@ fn parse_core_sort_ref(
         export_name,
         None,
       )
-      return { name: "", kind, idx }
+      return { name: "", kind, idx, }
     }
     raise Unsupported(
       "core global ref must be `(global <idx-or-id>)` or `(global <instance> <export>)`",
@@ -6683,7 +6683,7 @@ fn parse_core_sort_ref(
   if kind_name == "tag" {
     if items.length() == 2 {
       let idx = resolve_reference(items[1], state.core_tag_names, "core tag")
-      return { name: "", kind, idx }
+      return { name: "", kind, idx, }
     }
     if items.length() == 3 {
       let instance_idx = resolve_reference(
@@ -6699,7 +6699,7 @@ fn parse_core_sort_ref(
         export_name,
         None,
       )
-      return { name: "", kind, idx }
+      return { name: "", kind, idx, }
     }
     raise Unsupported(
       "core tag ref must be `(tag <idx-or-id>)` or `(tag <instance> <export>)`",
@@ -6709,7 +6709,7 @@ fn parse_core_sort_ref(
   if kind_name == "type" {
     if items.length() == 2 {
       let idx = resolve_reference(items[1], state.core_type_names, "core type")
-      return { name: "", kind, idx }
+      return { name: "", kind, idx, }
     }
     if items.length() == 3 {
       let instance_idx = resolve_reference(
@@ -6725,7 +6725,7 @@ fn parse_core_sort_ref(
         export_name,
         None,
       )
-      return { name: "", kind, idx }
+      return { name: "", kind, idx, }
     }
     raise Unsupported(
       "core type ref must be `(type <idx-or-id>)` or `(type <instance> <export>)`",
@@ -6750,7 +6750,7 @@ fn parse_core_instantiate_arg(
   }
   let name = parse_name_text(arg[1], "core instantiate import name")
   let sort_ref = parse_core_sort_ref(arg[2], state)
-  { name, kind: sort_ref.kind, idx: sort_ref.idx }
+  { name, kind: sort_ref.kind, idx: sort_ref.idx, }
 }
 
 ///|
@@ -6761,7 +6761,7 @@ fn parse_core_instance_field(
   let name_opt = parse_optional_identifier(field, 2)
   let expr_index = if name_opt is Some(_) { 3 } else { 2 }
   if expr_index >= field.length() {
-    let empty = CoreInstanceEntry::{ expr: InlineExports([]) }
+    let empty = CoreInstanceEntry::{ expr: InlineExports([]), }
     push_ordered_section(state, 2, encode_core_instance_decl(empty))
     let idx = state.next_core_instance_idx
     state.next_core_instance_idx += 1
@@ -6789,7 +6789,7 @@ fn parse_core_instance_field(
     for i in 2..<expr.length() {
       args.push(parse_core_instantiate_arg(expr[i], state))
     }
-    let entry = CoreInstanceEntry::{ expr: Instantiate(module_idx, args) }
+    let entry = CoreInstanceEntry::{ expr: Instantiate(module_idx, args), }
     push_ordered_section(state, 2, encode_core_instance_decl(entry))
     let idx = state.next_core_instance_idx
     state.next_core_instance_idx += 1
@@ -6822,17 +6822,17 @@ fn parse_core_instance_field(
     }
     let export_name = parse_name_text(export_item[1], "core inline export name")
     if export_item.length() == 2 {
-      exports.push({ name: export_name, kind: 0x00, idx: 0 })
+      exports.push({ name: export_name, kind: 0x00, idx: 0, })
       continue
     }
     if export_item.length() != 3 {
       raise Unsupported("core inline export must be `(export <name> <ref>)`")
     }
     let sort_ref = parse_core_sort_ref(export_item[2], state)
-    exports.push({ name: export_name, kind: sort_ref.kind, idx: sort_ref.idx })
+    exports.push({ name: export_name, kind: sort_ref.kind, idx: sort_ref.idx, })
   }
 
-  let entry = CoreInstanceEntry::{ expr: InlineExports(exports) }
+  let entry = CoreInstanceEntry::{ expr: InlineExports(exports), }
   push_ordered_section(state, 2, encode_core_instance_decl(entry))
   let idx = state.next_core_instance_idx
   state.next_core_instance_idx += 1
@@ -7279,7 +7279,7 @@ fn compile_component_expr_with_outer(
         next_outer_core_module_scopes,
       )
       state.nested_components.push(nested)
-      state.sections_ordered.push({ section_id: 4, payload: nested })
+      state.sections_ordered.push({ section_id: 4, payload: nested, })
       let component_idx = state.next_component_idx
       state.next_component_idx += 1
       bind_named_index(state.component_names, name_opt, component_idx)

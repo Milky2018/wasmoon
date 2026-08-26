@@ -97,11 +97,6 @@ void jit_trap_activation_init(
         activation->stack_top = stack_top;
         activation->guard_base = guard_base;
         activation->guard_size = guard_size;
-    } else if (context) {
-        activation->stack_base = (uintptr_t)context->wasm_stack_base;
-        activation->stack_top = (uintptr_t)context->wasm_stack_top;
-        activation->guard_base = (uintptr_t)context->wasm_stack_guard;
-        activation->guard_size = context->guard_page_size;
     }
 }
 
@@ -314,21 +309,23 @@ jit_trap_activation_t *jit_trap_activation_detach(void) {
     if (!activation) return NULL;
     save_activation_context(activation);
     current_activation = activation->previous;
+    if (current_activation &&
+        current_activation->context == activation->context) {
+        restore_activation_context(current_activation);
+    }
     return activation;
 }
 
 void jit_trap_activation_attach(jit_trap_activation_t *activation) {
     if (!activation) return;
-    if (current_activation != activation->previous) {
-        // A parked continuation may be resumed after its original dynamic
-        // caller has returned or parked. Rebind it to the activation that is
-        // current at the actual resume point.
-        activation->previous = current_activation;
-        if (current_activation &&
-            current_activation->context == activation->context) {
-            save_activation_context(current_activation);
-        }
+    // A parked continuation may be resumed after its original dynamic caller
+    // has returned or parked. Preserve the activation current at the actual
+    // resume point before rebinding the continuation to it.
+    if (current_activation &&
+        current_activation->context == activation->context) {
+        save_activation_context(current_activation);
     }
+    activation->previous = current_activation;
     restore_activation_context(activation);
     current_activation = activation;
 }
@@ -523,8 +520,8 @@ static int decode_trap_imm(uintptr_t pc, uintptr_t *out_trap_pc, int *out_imm) {
 extern uint64_t wasmoon_dwarf_get_low_pc(void);
 extern uint64_t wasmoon_dwarf_get_high_pc(void);
 
-// Walk the frame pointer chain and capture frames
-// Must be called from signal handler while WASM stack is still valid
+// Walk the retained frame pointer chain after the signal handler has returned
+// to the trap activation on the same native fiber.
 static void capture_frame_chain(uintptr_t initial_pc, uintptr_t initial_fp,
                                  uintptr_t stack_base, uintptr_t stack_top) {
     g_trap_frame_count = 0;
@@ -581,6 +578,29 @@ static void capture_frame_chain(uintptr_t initial_pc, uintptr_t initial_fp,
     }
 }
 
+void jit_trap_activation_finalize(jit_trap_activation_t *activation) {
+    if (!activation || activation->frame_count != 0) return;
+    if (activation->stack_base != 0 && activation->stack_top != 0) {
+        uintptr_t fp = activation->fp;
+        if (fp >= activation->stack_base &&
+            fp + sizeof(uintptr_t) < activation->stack_top &&
+            (fp & 0xF) == 0) {
+            activation->frame_lr =
+                *(uintptr_t *)(fp + sizeof(uintptr_t));
+        }
+        capture_frame_chain(
+            activation->pc,
+            activation->fp,
+            activation->stack_base,
+            activation->stack_top
+        );
+    } else if (activation->pc != 0) {
+        activation->frames_pc[0] = activation->pc;
+        activation->frames_fp[0] = activation->fp;
+        activation->frame_count = 1;
+    }
+}
+
 // Signal handler for SIGTRAP (triggered by BRK instruction)
 // Uses SA_SIGINFO to get ucontext and extract BRK immediate
 static void trap_signal_handler(int sig, siginfo_t *info, void *ucontext) {
@@ -614,9 +634,6 @@ static void trap_signal_handler(int sig, siginfo_t *info, void *ucontext) {
         g_trap_x15 = 0;
         if (ctx) {
             g_trap_func_idx = (sig_atomic_t)ctx->debug_current_func_idx;
-            // Save WASM stack bounds for frame walking validation
-            g_trap_wasm_stack_base = (uintptr_t)ctx->wasm_stack_base;
-            g_trap_wasm_stack_top = (uintptr_t)ctx->wasm_stack_top;
         }
 
 #if defined(__APPLE__) && defined(__aarch64__)
@@ -624,27 +641,8 @@ static void trap_signal_handler(int sig, siginfo_t *info, void *ucontext) {
         ucontext_t *uc = (ucontext_t *)ucontext;
         uint64_t pc = uc->uc_mcontext->__ss.__pc;
         g_trap_lr = (uintptr_t)uc->uc_mcontext->__ss.__lr;
-        // Capture frame pointer for stack walking
-        uintptr_t fp = (uintptr_t)uc->uc_mcontext->__ss.__fp;
-        g_trap_fp = fp;
-        // If the function uses the standard prologue, the caller return address
-        // is saved in the frame record at [fp + 8]. Only read it when `fp` looks safe.
+        g_trap_fp = (uintptr_t)uc->uc_mcontext->__ss.__fp;
         g_trap_frame_lr = 0;
-        if (fp) {
-            uintptr_t low = 0;
-            uintptr_t high = 0;
-            if (g_trap_wasm_stack_base != 0 && g_trap_wasm_stack_top != 0) {
-                low = g_trap_wasm_stack_base;
-                high = g_trap_wasm_stack_top;
-            } else if (g_stack_base != NULL && g_stack_size != 0) {
-                uintptr_t base = (uintptr_t)g_stack_base;
-                low = base - (uintptr_t)g_stack_size;
-                high = base;
-            }
-            if (high > low && fp >= low && fp + sizeof(uintptr_t) < high && (fp & 0xF) == 0) {
-                g_trap_frame_lr = *(uintptr_t *)(fp + sizeof(uintptr_t));
-            }
-        }
         if (!decode_trap_imm((uintptr_t)pc, &trap_pc, &brk_imm)) {
             trap_pc = (uintptr_t)pc;
         }
@@ -665,25 +663,8 @@ static void trap_signal_handler(int sig, siginfo_t *info, void *ucontext) {
         ucontext_t *uc = (ucontext_t *)ucontext;
         uint64_t pc = uc->uc_mcontext.pc;
         g_trap_lr = (uintptr_t)uc->uc_mcontext.regs[30];
-        // Capture frame pointer for stack walking
-         uintptr_t fp = (uintptr_t)uc->uc_mcontext.regs[29];
-         g_trap_fp = fp;
-         g_trap_frame_lr = 0;
-         if (fp) {
-             uintptr_t low = 0;
-             uintptr_t high = 0;
-             if (g_trap_wasm_stack_base != 0 && g_trap_wasm_stack_top != 0) {
-                 low = g_trap_wasm_stack_base;
-                 high = g_trap_wasm_stack_top;
-             } else if (g_stack_base != NULL && g_stack_size != 0) {
-                 uintptr_t base = (uintptr_t)g_stack_base;
-                 low = base - (uintptr_t)g_stack_size;
-                 high = base;
-             }
-             if (high > low && fp >= low && fp + sizeof(uintptr_t) < high && (fp & 0xF) == 0) {
-                 g_trap_frame_lr = *(uintptr_t *)(fp + sizeof(uintptr_t));
-             }
-         }
+        g_trap_fp = (uintptr_t)uc->uc_mcontext.regs[29];
+        g_trap_frame_lr = 0;
         if (!decode_trap_imm((uintptr_t)pc, &trap_pc, &brk_imm)) {
             trap_pc = (uintptr_t)pc;
         }
@@ -702,7 +683,6 @@ static void trap_signal_handler(int sig, siginfo_t *info, void *ucontext) {
         // macOS x86_64: INT3 payload.
         ucontext_t *uc = (ucontext_t *)ucontext;
         uintptr_t pc = (uintptr_t)uc->uc_mcontext->__ss.__rip;
-        uintptr_t fp = (uintptr_t)uc->uc_mcontext->__ss.__rbp;
         g_trap_x0 = (uintptr_t)uc->uc_mcontext->__ss.__rax;
         g_trap_x1 = (uintptr_t)uc->uc_mcontext->__ss.__rcx;
         g_trap_x2 = (uintptr_t)uc->uc_mcontext->__ss.__rdx;
@@ -715,12 +695,8 @@ static void trap_signal_handler(int sig, siginfo_t *info, void *ucontext) {
         g_trap_x11 = (uintptr_t)uc->uc_mcontext->__ss.__r11;
         g_trap_x15 = (uintptr_t)uc->uc_mcontext->__ss.__r15;
         g_trap_lr = 0;
-        g_trap_fp = fp;
+        g_trap_fp = (uintptr_t)uc->uc_mcontext->__ss.__rbp;
         g_trap_frame_lr = 0;
-        if (fp) {
-            // Frame record: [fp] = prev_fp, [fp+8] = return_address.
-            g_trap_frame_lr = *(uintptr_t *)(fp + sizeof(uintptr_t));
-        }
         if (!decode_trap_imm(pc, &trap_pc, &brk_imm)) {
             trap_pc = pc;
         }
@@ -738,7 +714,6 @@ static void trap_signal_handler(int sig, siginfo_t *info, void *ucontext) {
         // Linux x86_64: INT3 payload.
         ucontext_t *uc = (ucontext_t *)ucontext;
         uintptr_t pc = (uintptr_t)uc->uc_mcontext.gregs[REG_RIP];
-        uintptr_t fp = (uintptr_t)uc->uc_mcontext.gregs[REG_RBP];
         g_trap_x0 = (uintptr_t)uc->uc_mcontext.gregs[REG_RAX];
         g_trap_x1 = (uintptr_t)uc->uc_mcontext.gregs[REG_RCX];
         g_trap_x2 = (uintptr_t)uc->uc_mcontext.gregs[REG_RDX];
@@ -751,11 +726,8 @@ static void trap_signal_handler(int sig, siginfo_t *info, void *ucontext) {
         g_trap_x11 = (uintptr_t)uc->uc_mcontext.gregs[REG_R11];
         g_trap_x15 = (uintptr_t)uc->uc_mcontext.gregs[REG_R15];
         g_trap_lr = 0;
-        g_trap_fp = fp;
+        g_trap_fp = (uintptr_t)uc->uc_mcontext.gregs[REG_RBP];
         g_trap_frame_lr = 0;
-        if (fp) {
-            g_trap_frame_lr = *(uintptr_t *)(fp + sizeof(uintptr_t));
-        }
         if (!decode_trap_imm(pc, &trap_pc, &brk_imm)) {
             trap_pc = pc;
         }
@@ -778,19 +750,7 @@ static void trap_signal_handler(int sig, siginfo_t *info, void *ucontext) {
         g_trap_pc = trap_pc;
         g_trap_brk_imm = brk_imm;
 
-        // Capture frame chain while WASM stack is still accessible.
-        // If we don't have WASM stack bounds, still record the top frame.
-        if (g_trap_wasm_stack_base != 0 && g_trap_wasm_stack_top != 0) {
-            capture_frame_chain(trap_pc, g_trap_fp,
-                               g_trap_wasm_stack_base, g_trap_wasm_stack_top);
-        } else {
-            g_trap_frame_count = 0;
-            if (g_trap_frame_count < MAX_TRAP_FRAMES) {
-                g_trap_frames_pc[g_trap_frame_count] = trap_pc;
-                g_trap_frames_fp[g_trap_frame_count] = g_trap_fp;
-                g_trap_frame_count++;
-            }
-        }
+        g_trap_frame_count = 0;
 
         siglongjmp(g_trap_jmp_buf, 1);
     }
@@ -820,9 +780,6 @@ static void segv_signal_handler(int sig, siginfo_t *info, void *ucontext) {
         g_trap_x15 = 0;
         if (ctx) {
             g_trap_func_idx = (sig_atomic_t)ctx->debug_current_func_idx;
-            // Save WASM stack bounds for frame walking validation
-            g_trap_wasm_stack_base = (uintptr_t)ctx->wasm_stack_base;
-            g_trap_wasm_stack_top = (uintptr_t)ctx->wasm_stack_top;
         }
 
 #if defined(__APPLE__) && defined(__aarch64__)
@@ -830,24 +787,8 @@ static void segv_signal_handler(int sig, siginfo_t *info, void *ucontext) {
             ucontext_t *uc = (ucontext_t *)ucontext;
             pc = (uintptr_t)uc->uc_mcontext->__ss.__pc;
             g_trap_lr = (uintptr_t)uc->uc_mcontext->__ss.__lr;
-             uintptr_t fp = (uintptr_t)uc->uc_mcontext->__ss.__fp;
-             g_trap_fp = fp;
-             g_trap_frame_lr = 0;
-             if (fp) {
-                 uintptr_t low = 0;
-                 uintptr_t high = 0;
-                 if (g_trap_wasm_stack_base != 0 && g_trap_wasm_stack_top != 0) {
-                     low = g_trap_wasm_stack_base;
-                     high = g_trap_wasm_stack_top;
-                 } else if (g_stack_base != NULL && g_stack_size != 0) {
-                     uintptr_t base = (uintptr_t)g_stack_base;
-                     low = base - (uintptr_t)g_stack_size;
-                     high = base;
-                 }
-                 if (high > low && fp >= low && fp + sizeof(uintptr_t) < high && (fp & 0xF) == 0) {
-                     g_trap_frame_lr = *(uintptr_t *)(fp + sizeof(uintptr_t));
-                 }
-             }
+            g_trap_fp = (uintptr_t)uc->uc_mcontext->__ss.__fp;
+            g_trap_frame_lr = 0;
         }
 #elif defined(__APPLE__) && defined(__x86_64__)
         if (ucontext) {
@@ -866,48 +807,16 @@ static void segv_signal_handler(int sig, siginfo_t *info, void *ucontext) {
             g_trap_x15 = (uintptr_t)uc->uc_mcontext->__ss.__r15;
             // amd64 has no link register; keep LR at 0.
             g_trap_lr = 0;
-            uintptr_t fp = (uintptr_t)uc->uc_mcontext->__ss.__rbp;
-            g_trap_fp = fp;
+            g_trap_fp = (uintptr_t)uc->uc_mcontext->__ss.__rbp;
             g_trap_frame_lr = 0;
-            if (fp) {
-                uintptr_t low = 0;
-                uintptr_t high = 0;
-                if (g_trap_wasm_stack_base != 0 && g_trap_wasm_stack_top != 0) {
-                    low = g_trap_wasm_stack_base;
-                    high = g_trap_wasm_stack_top;
-                } else if (g_stack_base != NULL && g_stack_size != 0) {
-                    uintptr_t base = (uintptr_t)g_stack_base;
-                    low = base - (uintptr_t)g_stack_size;
-                    high = base;
-                }
-                if (high > low && fp >= low && fp + sizeof(uintptr_t) < high) {
-                    g_trap_frame_lr = *(uintptr_t *)(fp + sizeof(uintptr_t));
-                }
-            }
         }
 #elif defined(__linux__) && defined(__aarch64__)
         if (ucontext) {
             ucontext_t *uc = (ucontext_t *)ucontext;
             pc = (uintptr_t)uc->uc_mcontext.pc;
             g_trap_lr = (uintptr_t)uc->uc_mcontext.regs[30];
-            uintptr_t fp = (uintptr_t)uc->uc_mcontext.regs[29];
-            g_trap_fp = fp;
+            g_trap_fp = (uintptr_t)uc->uc_mcontext.regs[29];
             g_trap_frame_lr = 0;
-            if (fp) {
-                uintptr_t low = 0;
-                uintptr_t high = 0;
-                if (g_trap_wasm_stack_base != 0 && g_trap_wasm_stack_top != 0) {
-                    low = g_trap_wasm_stack_base;
-                    high = g_trap_wasm_stack_top;
-                } else if (g_stack_base != NULL && g_stack_size != 0) {
-                    uintptr_t base = (uintptr_t)g_stack_base;
-                    low = base - (uintptr_t)g_stack_size;
-                    high = base;
-                }
-                if (high > low && fp >= low && fp + sizeof(uintptr_t) < high && (fp & 0xF) == 0) {
-                    g_trap_frame_lr = *(uintptr_t *)(fp + sizeof(uintptr_t));
-                }
-            }
         }
 #elif defined(__linux__) && defined(__x86_64__)
         if (ucontext) {
@@ -925,41 +834,13 @@ static void segv_signal_handler(int sig, siginfo_t *info, void *ucontext) {
             g_trap_x11 = (uintptr_t)uc->uc_mcontext.gregs[REG_R11];
             g_trap_x15 = (uintptr_t)uc->uc_mcontext.gregs[REG_R15];
             g_trap_lr = 0;
-            uintptr_t fp = (uintptr_t)uc->uc_mcontext.gregs[REG_RBP];
-            g_trap_fp = fp;
+            g_trap_fp = (uintptr_t)uc->uc_mcontext.gregs[REG_RBP];
             g_trap_frame_lr = 0;
-            if (fp) {
-                uintptr_t low = 0;
-                uintptr_t high = 0;
-                if (g_trap_wasm_stack_base != 0 && g_trap_wasm_stack_top != 0) {
-                    low = g_trap_wasm_stack_base;
-                    high = g_trap_wasm_stack_top;
-                } else if (g_stack_base != NULL && g_stack_size != 0) {
-                    uintptr_t base = (uintptr_t)g_stack_base;
-                    low = base - (uintptr_t)g_stack_size;
-                    high = base;
-                }
-                if (high > low && fp >= low && fp + sizeof(uintptr_t) < high) {
-                    g_trap_frame_lr = *(uintptr_t *)(fp + sizeof(uintptr_t));
-                }
-            }
         }
 #endif
         g_trap_pc = pc;
 
-        // Capture frame chain while WASM stack is still accessible.
-        // If we don't have WASM stack bounds, still record the top frame.
-        if (g_trap_wasm_stack_base != 0 && g_trap_wasm_stack_top != 0) {
-            capture_frame_chain(pc, g_trap_fp,
-                               g_trap_wasm_stack_base, g_trap_wasm_stack_top);
-        } else {
-            g_trap_frame_count = 0;
-            if (g_trap_frame_count < MAX_TRAP_FRAMES) {
-                g_trap_frames_pc[g_trap_frame_count] = pc;
-                g_trap_frames_fp[g_trap_frame_count] = g_trap_fp;
-                g_trap_frame_count++;
-            }
-        }
+        g_trap_frame_count = 0;
 
         jit_trap_activation_t *activation = jit_current_trap_activation();
         uintptr_t fault = (uintptr_t)fault_addr;
@@ -977,15 +858,8 @@ static void segv_signal_handler(int sig, siginfo_t *info, void *ucontext) {
             siglongjmp(g_trap_jmp_buf, 1);
         }
 
-        // Check for WASM stack guard page access
-        if (ctx && is_wasm_guard_page_access(ctx, fault_addr)) {
-            // WASM stack overflow - hit the guard page
-            g_trap_code = 2;  // call stack exhausted
-            siglongjmp(g_trap_jmp_buf, 1);
-        }
-
         if (is_stack_overflow(fault_addr)) {
-            // Native stack overflow detected (fallback for non-stack-switching mode)
+            // Native stack overflow detected for a direct host-stack call.
             g_trap_code = 2;  // call stack exhausted
             siglongjmp(g_trap_jmp_buf, 1);
         } else {

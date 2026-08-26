@@ -19,11 +19,11 @@ test "module initialization: start function execution" {
     locals: [],
     body: [I32Const(42), GlobalSet(0)],
   }
-  let get_func : @types.FunctionCode = { locals: [], body: [GlobalGet(0)] }
-  let init_type : @types.FuncType = { params: [], results: [] }
-  let get_type : @types.FuncType = { params: [], results: [I32] }
+  let get_func : @types.FunctionCode = { locals: [], body: [GlobalGet(0)], }
+  let init_type : @types.FuncType = { params: [], results: [], }
+  let get_type : @types.FuncType = { params: [], results: [I32], }
   let global : @types.Global = {
-    type_: { value_type: I32, mutable: true },
+    type_: { value_type: I32, mutable: true, },
     init: [I32Const(0)],
   }
   let mod : @types.Module = {
@@ -37,7 +37,7 @@ test "module initialization: start function execution" {
     tables: [],
     memories: [],
     globals: [global],
-    exports: [{ name: "get", desc: Func(1) }],
+    exports: [{ name: "get", desc: Func(1), }],
     start: Some(0), // start function is func 0
     elems: [],
     codes: [init_func, get_func],
@@ -62,9 +62,13 @@ test "module initialization: data segment" {
   let mod = {
     ..@types.Module::simple([], [I32], [I32Const(0), I32Load(0, 2, 0)], "read"),
     memories: [
-      { limits: { min: 1, max: None }, is_memory64: false, page_size_log2: 16 },
+      {
+        limits: { min: 1, max: None, },
+        is_memory64: false,
+        page_size_log2: 16,
+      },
     ],
-    datas: [{ memory_idx: 0, offset: [I32Const(0)], init: data_bytes }],
+    datas: [{ memory_idx: 0, offset: [I32Const(0)], init: data_bytes, }],
   }
   let (store, instance) = instantiate_module_with_init(mod) catch {
     _ => fail("instantiate_module_with_init failed")
@@ -87,9 +91,13 @@ test "module initialization: data segment with offset" {
       "read",
     ),
     memories: [
-      { limits: { min: 1, max: None }, is_memory64: false, page_size_log2: 16 },
+      {
+        limits: { min: 1, max: None, },
+        is_memory64: false,
+        page_size_log2: 16,
+      },
     ],
-    datas: [{ memory_idx: 0, offset: [I32Const(100)], init: data_bytes }],
+    datas: [{ memory_idx: 0, offset: [I32Const(100)], init: data_bytes, }],
   }
   let (store, instance) = instantiate_module_with_init(mod) catch {
     _ => fail("instantiate_module_with_init failed")
@@ -105,14 +113,14 @@ test "module initialization: data segment with offset" {
 test "module initialization: element segment" {
   // This test verifies element segment initialization works
   // (already tested in call_indirect test, but let's be explicit)
-  let func0 : @types.FunctionCode = { locals: [], body: [I32Const(100)] }
-  let func1 : @types.FunctionCode = { locals: [], body: [I32Const(200)] }
+  let func0 : @types.FunctionCode = { locals: [], body: [I32Const(100)], }
+  let func1 : @types.FunctionCode = { locals: [], body: [I32Const(200)], }
   let call_func : @types.FunctionCode = {
     locals: [],
     body: [LocalGet(0), CallIndirect(0, 0)],
   }
-  let ret_type : @types.FuncType = { params: [], results: [I32] }
-  let call_type : @types.FuncType = { params: [I32], results: [I32] }
+  let ret_type : @types.FuncType = { params: [], results: [I32], }
+  let call_type : @types.FuncType = { params: [I32], results: [I32], }
   let mod : @types.Module = {
     types: [
       @types.SubType::from_func(ret_type),
@@ -125,7 +133,7 @@ test "module initialization: element segment" {
       {
         type_: {
           elem_type: FuncRef,
-          limits: { min: 2, max: None },
+          limits: { min: 2, max: None, },
           is_table64: false,
         },
         init: None,
@@ -133,7 +141,7 @@ test "module initialization: element segment" {
     ],
     memories: [],
     globals: [],
-    exports: [{ name: "call", desc: Func(2) }],
+    exports: [{ name: "call", desc: Func(2), }],
     start: None,
     elems: [
       {
@@ -181,7 +189,11 @@ test "bulk memory: memory.fill" {
       "test",
     ),
     memories: [
-      { limits: { min: 1, max: None }, is_memory64: false, page_size_log2: 16 },
+      {
+        limits: { min: 1, max: None, },
+        is_memory64: false,
+        page_size_log2: 16,
+      },
     ],
   }
   let (store, instance) = instantiate_module(mod)
@@ -212,7 +224,11 @@ test "bulk memory: memory.copy non-overlapping" {
       "test",
     ),
     memories: [
-      { limits: { min: 1, max: None }, is_memory64: false, page_size_log2: 16 },
+      {
+        limits: { min: 1, max: None, },
+        is_memory64: false,
+        page_size_log2: 16,
+      },
     ],
   }
   let (store, instance) = instantiate_module(mod)
@@ -243,7 +259,11 @@ test "bulk memory: memory.copy overlapping backward" {
       "test",
     ),
     memories: [
-      { limits: { min: 1, max: None }, is_memory64: false, page_size_log2: 16 },
+      {
+        limits: { min: 1, max: None, },
+        is_memory64: false,
+        page_size_log2: 16,
+      },
     ],
   }
   let (store, instance) = instantiate_module(mod)
@@ -270,9 +290,13 @@ test "bulk memory: memory.init from data segment" {
   let mod = {
     ..@types.Module::simple([], [I32], body, "test"),
     memories: [
-      { limits: { min: 1, max: None }, is_memory64: false, page_size_log2: 16 },
+      {
+        limits: { min: 1, max: None, },
+        is_memory64: false,
+        page_size_log2: 16,
+      },
     ],
-    datas: [{ memory_idx: 0, offset: [I32Const(0)], init: data_bytes }],
+    datas: [{ memory_idx: 0, offset: [I32Const(0)], init: data_bytes, }],
   }
   let (store, instance) = instantiate_module_with_init(mod) catch {
     _ => fail("instantiate_module_with_init failed")
@@ -300,9 +324,13 @@ test "bulk memory: memory.init with offset" {
   let mod = {
     ..@types.Module::simple([], [I32], body, "test"),
     memories: [
-      { limits: { min: 1, max: None }, is_memory64: false, page_size_log2: 16 },
+      {
+        limits: { min: 1, max: None, },
+        is_memory64: false,
+        page_size_log2: 16,
+      },
     ],
-    datas: [{ memory_idx: 0, offset: [I32Const(0)], init: data_bytes }],
+    datas: [{ memory_idx: 0, offset: [I32Const(0)], init: data_bytes, }],
   }
   let (store, instance) = instantiate_module_with_init(mod) catch {
     _ => fail("instantiate_module_with_init failed")
@@ -321,7 +349,7 @@ test "bulk memory: data.drop" {
   // Function 0: drop data segment 0
   // Function 1: try memory.init with length 0 (should succeed even after drop)
   // Function 2: try memory.init with length > 0 (should fail after drop)
-  let drop_func : @types.FunctionCode = { locals: [], body: [DataDrop(0)] } // drop data segment 0
+  let drop_func : @types.FunctionCode = { locals: [], body: [DataDrop(0)], } // drop data segment 0
   let init_zero_func : @types.FunctionCode = {
     locals: [],
     body: [
@@ -342,8 +370,8 @@ test "bulk memory: data.drop" {
       I32Const(1),
     ],
   }
-  let void_type : @types.FuncType = { params: [], results: [] }
-  let i32_type : @types.FuncType = { params: [], results: [I32] }
+  let void_type : @types.FuncType = { params: [], results: [], }
+  let i32_type : @types.FuncType = { params: [], results: [I32], }
   let data_bytes = Bytes::from_array([b'\x42'])
   let mod : @types.Module = {
     types: [
@@ -355,18 +383,22 @@ test "bulk memory: data.drop" {
     funcs: [0, 1, 1], // drop has type 0, init funcs have type 1
     tables: [],
     memories: [
-      { limits: { min: 1, max: None }, is_memory64: false, page_size_log2: 16 },
+      {
+        limits: { min: 1, max: None, },
+        is_memory64: false,
+        page_size_log2: 16,
+      },
     ],
     globals: [],
     exports: [
-      { name: "drop", desc: Func(0) },
-      { name: "init_zero", desc: Func(1) },
-      { name: "init_nonzero", desc: Func(2) },
+      { name: "drop", desc: Func(0), },
+      { name: "init_zero", desc: Func(1), },
+      { name: "init_nonzero", desc: Func(2), },
     ],
     start: None,
     elems: [],
     codes: [drop_func, init_zero_func, init_nonzero_func],
-    datas: [{ memory_idx: 0, offset: [I32Const(0)], init: data_bytes }],
+    datas: [{ memory_idx: 0, offset: [I32Const(0)], init: data_bytes, }],
     tags: [],
     func_names: Map([]),
   }
@@ -404,10 +436,10 @@ test "bulk memory: data.drop" {
 test "bulk memory: elem.drop" {
   // Test elem.drop: after dropping, the segment is marked as dropped
   // We verify by checking the instance state directly
-  let drop_func : @types.FunctionCode = { locals: [], body: [ElemDrop(0)] } // drop elem segment 0
-  let void_type : @types.FuncType = { params: [], results: [] }
-  let dummy_func : @types.FunctionCode = { locals: [], body: [I32Const(0)] }
-  let i32_type : @types.FuncType = { params: [], results: [I32] }
+  let drop_func : @types.FunctionCode = { locals: [], body: [ElemDrop(0)], } // drop elem segment 0
+  let void_type : @types.FuncType = { params: [], results: [], }
+  let dummy_func : @types.FunctionCode = { locals: [], body: [I32Const(0)], }
+  let i32_type : @types.FuncType = { params: [], results: [I32], }
   let mod : @types.Module = {
     types: [
       @types.SubType::from_func(void_type),
@@ -420,7 +452,7 @@ test "bulk memory: elem.drop" {
       {
         type_: {
           elem_type: FuncRef,
-          limits: { min: 2, max: None },
+          limits: { min: 2, max: None, },
           is_table64: false,
         },
         init: None,
@@ -428,10 +460,10 @@ test "bulk memory: elem.drop" {
     ],
     memories: [],
     globals: [],
-    exports: [{ name: "drop", desc: Func(0) }],
+    exports: [{ name: "drop", desc: Func(0), }],
     start: None,
     elems: [
-      { mode: Active(0, [I32Const(0)]), type_: FuncRef, init: [[RefFunc(1)]] },
+      { mode: Active(0, [I32Const(0)]), type_: FuncRef, init: [[RefFunc(1)]], },
     ], // elem segment with func 1
     codes: [drop_func, dummy_func],
     datas: [],
@@ -459,7 +491,7 @@ test "bulk memory: data.drop is idempotent" {
     locals: [],
     body: [DataDrop(0), DataDrop(0), DataDrop(0)], // drop 3 times
   }
-  let void_type : @types.FuncType = { params: [], results: [] }
+  let void_type : @types.FuncType = { params: [], results: [], }
   let data_bytes = Bytes::from_array([b'\x42'])
   let mod : @types.Module = {
     types: [@types.SubType::from_func(void_type)],
@@ -468,14 +500,18 @@ test "bulk memory: data.drop is idempotent" {
     funcs: [0],
     tables: [],
     memories: [
-      { limits: { min: 1, max: None }, is_memory64: false, page_size_log2: 16 },
+      {
+        limits: { min: 1, max: None, },
+        is_memory64: false,
+        page_size_log2: 16,
+      },
     ],
     globals: [],
-    exports: [{ name: "drop", desc: Func(0) }],
+    exports: [{ name: "drop", desc: Func(0), }],
     start: None,
     elems: [],
     codes: [drop_func],
-    datas: [{ memory_idx: 0, offset: [I32Const(0)], init: data_bytes }],
+    datas: [{ memory_idx: 0, offset: [I32Const(0)], init: data_bytes, }],
     tags: [],
     func_names: Map([]),
   }

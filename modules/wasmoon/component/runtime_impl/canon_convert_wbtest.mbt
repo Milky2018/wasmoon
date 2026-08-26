@@ -5,7 +5,7 @@ test "canon convert: lower non-empty list stores elements" {
   let heap_ptr = [1024]
   let realloc = alloc_host_core_func(
     store,
-    { params: [I32, I32, I32, I32], results: [I32] },
+    { params: [I32, I32, I32, I32], results: [I32], },
     fn(
       args : Array[@types.Value],
     ) -> Array[@types.Value] raise @runtime.RuntimeError {
@@ -39,7 +39,7 @@ test "canon convert: lower non-empty list stores elements" {
   }
   let func_type : FuncType = {
     is_async: false,
-    params: [{ label: "", ty: TypeIdx(0) }],
+    params: [{ label: "", ty: TypeIdx(0), }],
     result: None,
   }
   let types : Array[TypeDef?] = [Some(List(Prim(S32)))]
@@ -72,7 +72,7 @@ test "canon convert: lower indirect list result stores compound elements" {
   let heap_ptr = [1024]
   let realloc = alloc_host_core_func(
     store,
-    { params: [I32, I32, I32, I32], results: [I32] },
+    { params: [I32, I32, I32, I32], results: [I32], },
     fn(
       args : Array[@types.Value],
     ) -> Array[@types.Value] raise @runtime.RuntimeError {
@@ -145,7 +145,7 @@ test "typed host stream values lower strings into reader memory" {
   let heap_ptr = [1024]
   let realloc = alloc_host_core_func(
     store,
-    { params: [I32, I32, I32, I32], results: [I32] },
+    { params: [I32, I32, I32, I32], results: [I32], },
     fn(
       args : Array[@types.Value],
     ) -> Array[@types.Value] raise @runtime.RuntimeError {
@@ -173,8 +173,8 @@ test "typed host stream values lower strings into reader memory" {
     Some(Enum(["unknown", "directory", "file"])),
     Some(
       Record([
-        { label: "kind", ty: TypeIdx(0) },
-        { label: "name", ty: Prim(String) },
+        { label: "kind", ty: TypeIdx(0), },
+        { label: "name", ty: Prim(String), },
       ]),
     ),
   ]

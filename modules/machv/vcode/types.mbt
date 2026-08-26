@@ -44,7 +44,7 @@ pub struct PhysicalReg {
 
 ///|
 pub fn PhysicalReg::new(id : Int, class : RegClass) -> PhysicalReg {
-  { id, class }
+  { id, class, }
 }
 
 ///|
@@ -60,7 +60,7 @@ pub struct Value {
 
 ///|
 fn Value::new(owner : Ref[Unit], id : Int) -> Value {
-  { owner, id }
+  { owner, id, }
 }
 
 ///|
@@ -86,7 +86,7 @@ pub struct Block {
 
 ///|
 fn Block::new(owner : Ref[Unit], id : Int) -> Block {
-  { owner, id }
+  { owner, id, }
 }
 
 ///|
@@ -112,7 +112,7 @@ pub struct Instruction {
 
 ///|
 fn Instruction::new(owner : Ref[Unit], id : Int) -> Instruction {
-  { owner, id }
+  { owner, id, }
 }
 
 ///|
@@ -149,7 +149,7 @@ fn ProgramPoint::new(
   instruction : Instruction,
   placement : PointPlacement,
 ) -> ProgramPoint {
-  { owner, instruction, placement }
+  { owner, instruction, placement, }
 }
 
 ///|
@@ -208,7 +208,7 @@ pub struct Input {
 
 ///|
 pub fn Input::any(value : Value) -> Input {
-  { value, constraint: Any, preference: None, timing: Early }
+  { value, constraint: Any, preference: None, timing: Early, }
 }
 
 ///|
@@ -217,18 +217,18 @@ pub fn Input::any(value : Value) -> Input {
 /// stack-resident value directly instead of requiring every input in a register
 /// at the same program point.
 pub fn Input::any_location(value : Value) -> Input {
-  { value, constraint: AnyLocation, preference: None, timing: Early }
+  { value, constraint: AnyLocation, preference: None, timing: Early, }
 }
 
 ///|
 pub fn Input::fixed(value : Value, reg : PhysicalReg) -> Input {
-  { value, constraint: Fixed(reg), preference: None, timing: Early }
+  { value, constraint: Fixed(reg), preference: None, timing: Early, }
 }
 
 ///|
 /// Prefer a physical register without making it an allocation constraint.
 pub fn Input::with_preference(self : Input, preference : PhysicalReg) -> Input {
-  { ..self, preference: Some(preference) }
+  { ..self, preference: Some(preference), }
 }
 
 ///|
@@ -246,7 +246,7 @@ pub struct Output {
 
 ///|
 pub fn Output::any(ty : ValueType) -> Output {
-  { ty, constraint: Any, preference: None, timing: Late }
+  { ty, constraint: Any, preference: None, timing: Late, }
 }
 
 ///|
@@ -254,17 +254,17 @@ pub fn Output::any(ty : ValueType) -> Output {
 /// This is intended for target ABI pseudos whose emitter owns the transfer
 /// from an implicit incoming location.
 pub fn Output::any_location(ty : ValueType) -> Output {
-  { ty, constraint: AnyLocation, preference: None, timing: Late }
+  { ty, constraint: AnyLocation, preference: None, timing: Late, }
 }
 
 ///|
 pub fn Output::fixed(ty : ValueType, reg : PhysicalReg) -> Output {
-  { ty, constraint: Fixed(reg), preference: None, timing: Late }
+  { ty, constraint: Fixed(reg), preference: None, timing: Late, }
 }
 
 ///|
 pub fn Output::tied(ty : ValueType, operand_index : Int) -> Output {
-  { ty, constraint: TiedTo(operand_index), preference: None, timing: Late }
+  { ty, constraint: TiedTo(operand_index), preference: None, timing: Late, }
 }
 
 ///|
@@ -273,7 +273,7 @@ pub fn Output::with_preference(
   self : Output,
   preference : PhysicalReg,
 ) -> Output {
-  { ..self, preference: Some(preference) }
+  { ..self, preference: Some(preference), }
 }
 
 ///|
@@ -321,7 +321,7 @@ pub struct Edge {
 
 ///|
 pub fn Edge::new(target : Block, arguments : Array[Value]) -> Edge {
-  { target, arguments: arguments.copy() }
+  { target, arguments: arguments.copy(), }
 }
 
 ///|

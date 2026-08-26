@@ -22,13 +22,13 @@ pub fn SaturationLimits::SaturationLimits(
   matches_limit : Int,
   eclass_enode_limit : Int,
 ) -> SaturationLimits {
-  { matches_limit, eclass_enode_limit }
+  { matches_limit, eclass_enode_limit, }
 }
 
 ///|
 pub fn SaturationLimits::cranelift_default() -> SaturationLimits {
   // Cranelift uses small hard caps for predictability.
-  { matches_limit: 5, eclass_enode_limit: 5 }
+  { matches_limit: 5, eclass_enode_limit: 5, }
 }
 
 ///|
@@ -64,7 +64,7 @@ struct IndexedRuleSet {
 
 ///|
 fn IndexedRuleSet::IndexedRuleSet() -> IndexedRuleSet {
-  { by_opcode: Map([]), universal: [] }
+  { by_opcode: Map([]), universal: [], }
 }
 
 ///|

@@ -58,7 +58,7 @@ priv struct MemoryValueEntry {
 
 ///|
 fn PtrAccess::location_key(self : PtrAccess) -> PtrLocationKey {
-  { base_id: self.base_id, offset_id: self.offset_id, region: self.region }
+  { base_id: self.base_id, offset_id: self.offset_id, region: self.region, }
 }
 
 ///|
@@ -326,7 +326,7 @@ fn compute_block_input_last_store_states(
       update_last_store_state(
         state,
         inst,
-        { block_id, inst_index },
+        { block_id, inst_index, },
         ptr_base_infos,
       )
     }
@@ -334,9 +334,9 @@ fn compute_block_input_last_store_states(
       let succ_idx = block_idx[succ]
       let succ_block = func.blocks[succ_idx]
       let join_token = if succ_block.instructions.length() > 0 {
-        { block_id: succ, inst_index: 0 }
+        { block_id: succ, inst_index: 0, }
       } else {
-        { block_id: succ, inst_index: -1 }
+        { block_id: succ, inst_index: -1, }
       }
       let updated = match block_input.get(succ) {
         Some(existing) => existing.meet_from(state, join_token)
@@ -397,13 +397,13 @@ fn collect_ptr_base_infos(
   let result : Array[PtrBaseInfo?] = Array::make(func.next_value_id, None)
   for param in func.params {
     if param.1 is (Ptr | Ref | CallableRef | OpaqueRef) {
-      result[param.0.id] = Some({ region: Other })
+      result[param.0.id] = Some({ region: Other, })
     }
   }
   if func.blocks.length() > 0 {
     for param in func.blocks[0].params {
       if param.1 is (Ptr | Ref | CallableRef | OpaqueRef) {
-        result[param.0.id] = Some({ region: Other })
+        result[param.0.id] = Some({ region: Other, })
       }
     }
   }
@@ -557,7 +557,7 @@ fn ptr_access_from_inst(
           Some(base_info) => base_info.region
           None => Other
         }
-        Some({ base_id: base.id, offset_id: offset.id, region })
+        Some({ base_id: base.id, offset_id: offset.id, region, })
       } else {
         None
       }
@@ -569,7 +569,7 @@ fn ptr_access_from_inst(
           Some(base_info) => base_info.region
           None => Other
         }
-        Some({ base_id: base.id, offset_id: offset.id, region })
+        Some({ base_id: base.id, offset_id: offset.id, region, })
       } else {
         None
       }
@@ -581,7 +581,7 @@ fn ptr_access_from_inst(
           Some(base_info) => base_info.region
           None => Other
         }
-        Some({ base_id: base.id, offset_id: offset.id, region })
+        Some({ base_id: base.id, offset_id: offset.id, region, })
       } else {
         None
       }
@@ -593,7 +593,7 @@ fn ptr_access_from_inst(
           Some(base_info) => base_info.region
           None => Other
         }
-        Some({ base_id: base.id, offset_id: offset.id, region })
+        Some({ base_id: base.id, offset_id: offset.id, region, })
       } else {
         None
       }
@@ -607,7 +607,7 @@ fn memory_key_from_access(
   ty : Type,
   last_store : StoreVersion?,
 ) -> MemoryValueKey {
-  { last_store, location: access.location_key(), ty }
+  { last_store, location: access.location_key(), ty, }
 }
 
 ///|
@@ -679,7 +679,7 @@ fn run_global_value_numbering_with_budget_and_analysis(
 ) -> GVNStats {
   let result = OptResult::OptResult()
   if func.blocks.length() == 0 {
-    return { result, work_done: 0, budget_exhausted: false }
+    return { result, work_done: 0, budget_exhausted: false, }
   }
   if work_budget <= 0 {
     return {
@@ -715,8 +715,8 @@ fn run_global_value_numbering_with_budget_and_analysis(
   }
   let memory_values : @hashmap.HashMap[MemoryValueKey, MemoryValueEntry] = HashMap([],
   )
-  let work_done : Ref[Int] = { val: 0 }
-  let budget_exhausted : Ref[Bool] = { val: false }
+  let work_done : Ref[Int] = { val: 0, }
+  let budget_exhausted : Ref[Bool] = { val: false, }
   // Walk the dominator tree
   fn enter(block_id : Int) -> (Array[(Inst, (Value, AliasRegion?)?)], Bool) {
     if budget_exhausted.val {
@@ -767,7 +767,7 @@ fn run_global_value_numbering_with_budget_and_analysis(
         let key = memory_key_from_access(
           store_access,
           store_ty,
-          Some({ block_id, inst_index }),
+          Some({ block_id, inst_index, }),
         )
         memory_values.set(key, {
           def_block_id: block_id,
@@ -778,7 +778,7 @@ fn run_global_value_numbering_with_budget_and_analysis(
       update_last_store_state(
         last_store_state,
         inst,
-        { block_id, inst_index },
+        { block_id, inst_index, },
         ptr_base_infos,
       )
       if replaced_by_memory {
@@ -871,7 +871,7 @@ fn run_global_value_numbering_with_budget_and_analysis(
   if analysis.cfg.is_valid(0) {
     visit_dominator_tree(analysis.domtree, 0, enter, exit)
   }
-  { result, work_done: work_done.val, budget_exhausted: budget_exhausted.val }
+  { result, work_done: work_done.val, budget_exhausted: budget_exhausted.val, }
 }
 
 ///|

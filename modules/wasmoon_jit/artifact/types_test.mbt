@@ -11,13 +11,13 @@ fn sample_artifact() -> Artifact {
         endianness: Little,
         pointer_width: Bits64,
       },
-      required_cpu_features: [{ name: "neon" }],
+      required_cpu_features: [{ name: "neon", }],
       jit_abi_version: 3,
       codegen_revision: "machv-2026-07-22",
       module_identity: {
         name: "answer",
-        source_digest: { bytes: Bytes::make(32, b'\x11') },
-        semantic_features_digest: { bytes: Bytes::make(32, b'\x22') },
+        source_digest: { bytes: Bytes::make(32, b'\x11'), },
+        semantic_features_digest: { bytes: Bytes::make(32, b'\x22'), },
       },
       policy: {
         optimization_level: O2,

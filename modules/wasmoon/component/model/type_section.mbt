@@ -175,7 +175,7 @@ fn parse_paramlist(reader : Reader) -> Array[Param] raise ComponentParseError {
   for _ in 0..<n {
     let label = reader.read_label()
     let ty = parse_valtype(reader)
-    params.push(({ label, ty } : Param))
+    params.push(({ label, ty, } : Param))
   }
   params
 }
@@ -204,7 +204,7 @@ fn parse_functype(
   let is_async = op == 0x43
   let params = parse_paramlist(reader)
   let result = parse_resultlist(reader)
-  { is_async, params, result }
+  { is_async, params, result, }
 }
 
 ///|
@@ -598,7 +598,7 @@ fn parse_typedef(reader : Reader) -> TypeDef raise ComponentParseError {
         } else {
           raise InvalidTypeSection
         }
-        cases.push(({ label, ty, refines } : VariantCase))
+        cases.push(({ label, ty, refines, } : VariantCase))
       }
       Variant(cases)
     }
@@ -608,7 +608,7 @@ fn parse_typedef(reader : Reader) -> TypeDef raise ComponentParseError {
       for _ in 0..<n {
         let label = reader.read_label()
         let ty = parse_valtype(reader)
-        fields.push(({ label, ty } : RecordField))
+        fields.push(({ label, ty, } : RecordField))
       }
       Record(fields)
     }

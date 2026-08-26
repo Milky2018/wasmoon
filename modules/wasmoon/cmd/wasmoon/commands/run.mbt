@@ -840,7 +840,7 @@ fn resolve_run_jit_cache_location(
 ) -> RunJitCacheLocation? {
   match env.get("WASMOON_JIT_CACHE_DIR") {
     Some(directory) if directory.length() > 0 =>
-      return Some({ directory, parent: None })
+      return Some({ directory, parent: None, })
     _ => ()
   }
   match os {
@@ -856,7 +856,7 @@ fn resolve_run_jit_cache_location(
     Some(LinuxGnu | LinuxMusl) =>
       match env.get("XDG_CACHE_HOME") {
         Some(base) if base.length() > 0 =>
-          Some({ directory: "\{base}/wasmoon", parent: Some(base) })
+          Some({ directory: "\{base}/wasmoon", parent: Some(base), })
         _ =>
           match env.get("HOME") {
             Some(home) if home.length() > 0 =>
@@ -1321,7 +1321,7 @@ fn run_with_jit(
       // carries the reason. Dropping it left `run` reporting nothing but
       // "JIT compilation failed" for a module the compiler had a precise
       // complaint about.
-      let failure : Ref[String?] = { val: None }
+      let failure : Ref[String?] = { val: None, }
       let fresh = compile_validated_module_to_jit(
         mod_,
         debug,
@@ -1397,14 +1397,13 @@ fn run_with_jit(
         Ok(jm) => {
           // Enable arbitrary host function imports via JIT -> hostcall bridge.
           @wast.install_jit_hostcall_dispatcher(jm, store, instance)
-          // Allocate independent WASM stack with guard page.
-          // Use a larger default than 1MB since real-world programs can have
-          // large native frames after register allocation.
-          let wasm_stack_ok = jm.alloc_wasm_stack(16L * 1024L * 1024L)
-          if !wasm_stack_ok {
-            @logger.warn(
-              "failed to allocate WASM stack; falling back to host stack",
-            )
+          // Configure the guarded native-fiber stack allocated for each JIT
+          // invocation. Real-world programs may have large native frames after
+          // register allocation, so the CLI uses a larger budget than the API
+          // default.
+          if !jm.configure_native_fiber_stack_size(16L * 1024L * 1024L) {
+            @logger.error("failed to configure native-fiber stack size")
+            raise CommandFailure(1)
           }
           // Register DWARF debug info with debugger if enabled
           // The DWARF info must stay registered for the duration of JIT execution
@@ -1520,6 +1519,12 @@ fn run_with_jit(
                     None => @logger.error("JIT Trap: \{msg}")
                   }
                   // NOTE: Memory and globals are now freed by JITContext finalizer (GC-managed)
+                  raise CommandFailure(1)
+                }
+                JITNativeFiberFailure(message) => {
+                  jm.teardown_gc()
+                  @wast.sync_jit_globals_to_store(jit_ctx, store)
+                  @logger.error("JIT native-fiber failure: \{message}")
                   raise CommandFailure(1)
                 }
                 JITCancelled => {
@@ -2048,7 +2053,7 @@ fn compile_validated_module_to_jit(
     total_compile_funcs,
     compiled_count,
   )
-  Some(({ manifest, imports, functions }, debug_db))
+  Some(({ manifest, imports, functions, }, debug_db))
 }
 
 ///|

@@ -18,7 +18,9 @@ fn ComponentHostInstaller::from_linker_installer(
   claim? : () -> Unit raise ComponentRuntimeError = fn() { () },
   close? : () -> Unit = fn() { () },
 ) -> ComponentHostInstaller {
-  { state: { claim, install, close, consumed: Ref(false), closed: Ref(false) } }
+  {
+    state: { claim, install, close, consumed: Ref(false), closed: Ref(false), },
+  }
 }
 
 ///|

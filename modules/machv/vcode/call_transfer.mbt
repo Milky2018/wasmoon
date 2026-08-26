@@ -18,7 +18,7 @@ pub fn CallTransfer::to_register(
   source : Location,
   destination : PhysicalReg,
 ) -> CallTransfer {
-  { ty, source, destination: TransferRegister(destination) }
+  { ty, source, destination: TransferRegister(destination), }
 }
 
 ///|
@@ -27,7 +27,7 @@ pub fn CallTransfer::to_stack(
   source : Location,
   offset : Int,
 ) -> CallTransfer {
-  { ty, source, destination: TransferOutgoingStack(offset) }
+  { ty, source, destination: TransferOutgoingStack(offset), }
 }
 
 ///|
@@ -251,7 +251,7 @@ fn prepare_call_transfers(
       }
     }
   }
-  { stack_transfers, register_moves }
+  { stack_transfers, register_moves, }
 }
 
 ///|
@@ -275,7 +275,7 @@ pub fn plan_call_transfers(
   ) catch {
     error => raise MoveResolutionFailed(cause=error)
   }
-  { stack_transfers: transfer_plan.stack_transfers, register_moves }
+  { stack_transfers: transfer_plan.stack_transfers, register_moves, }
 }
 
 ///|
@@ -301,5 +301,5 @@ pub fn plan_resolved_call_transfers(
   ) catch {
     error => raise MoveResolutionFailed(cause=error)
   }
-  { stack_transfers: transfer_plan.stack_transfers, register_moves }
+  { stack_transfers: transfer_plan.stack_transfers, register_moves, }
 }

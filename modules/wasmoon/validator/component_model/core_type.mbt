@@ -532,7 +532,7 @@ fn parse_bracket_resource_name(name : String) -> BracketResourceName? {
   let p = prefix.to_string()
   let s = suffix.to_string()
   if p == "constructor" {
-    return Some({ kind: Constructor, resource: s })
+    return Some({ kind: Constructor, resource: s, })
   }
   if p == "method" || p == "static" {
     let res = StringBuilder::StringBuilder()
@@ -547,7 +547,7 @@ fn parse_bracket_resource_name(name : String) -> BracketResourceName? {
       }
     }
     let kind = if p == "method" { Method } else { Static }
-    return Some({ kind, resource: res.to_string() })
+    return Some({ kind, resource: res.to_string(), })
   }
   None
 }
@@ -835,7 +835,7 @@ fn funcsig_of_functype(
     Some(v) => Some(type_sig_of_valtype(v, type_table, resource_ids, visiting))
     None => None
   }
-  { params, result }
+  { params, result, }
 }
 
 ///|
@@ -891,7 +891,7 @@ fn type_sig_of_typedef_lg(
               ),
             )
         }
-        out.push({ name: c.label, ty: payload })
+        out.push({ name: c.label, ty: payload, })
       }
       Variant(out)
     }
@@ -1042,7 +1042,7 @@ fn funcsig_of_functype_lg(
       )
     None => None
   }
-  { params, result }
+  { params, result, }
 }
 
 ///|
@@ -1079,7 +1079,7 @@ fn type_sig_of_typedef(
           Some(t) =>
             Some(type_sig_of_valtype(t, type_table, resource_ids, visiting))
         }
-        out.push({ name: c.label, ty: payload })
+        out.push({ name: c.label, ty: payload, })
       }
       Variant(out)
     }
@@ -1174,7 +1174,7 @@ fn type_sig_subst_resources(sig : TypeSig, subst : Map[Int, Int]) -> TypeSig {
     Record(fs) =>
       Record(
         fs.map(fn(f) {
-          { name: f.name, ty: type_sig_subst_resources(f.ty, subst) }
+          { name: f.name, ty: type_sig_subst_resources(f.ty, subst), }
         }),
       )
     Variant(cs) =>
@@ -1184,7 +1184,7 @@ fn type_sig_subst_resources(sig : TypeSig, subst : Map[Int, Int]) -> TypeSig {
             None => None
             Some(t) => Some(type_sig_subst_resources(t, subst))
           }
-          { name: c.name, ty }
+          { name: c.name, ty, }
         }),
       )
     Option(v) => Option(type_sig_subst_resources(v, subst))
@@ -1300,13 +1300,13 @@ fn funcsig_subst_resources(
 ) -> FuncSigShape {
   let params : Array[ParamShape] = []
   for p in sig.params {
-    params.push({ name: p.name, ty: type_sig_subst_resources(p.ty, subst) })
+    params.push({ name: p.name, ty: type_sig_subst_resources(p.ty, subst), })
   }
   let result = match sig.result {
     None => None
     Some(r) => Some(type_sig_subst_resources(r, subst))
   }
-  { params, result }
+  { params, result, }
 }
 
 ///|
@@ -1733,7 +1733,7 @@ fn instancetype_sig_of_decls(
       _ => ()
     }
   }
-  { exports, nested }
+  { exports, nested, }
 }
 
 ///|

@@ -397,7 +397,7 @@ fn validate_component_section_instance(
               } else {
                 Map([])
               }
-              inst_sig = Some({ exports, nested })
+              inst_sig = Some({ exports, nested, })
             }
             None => ()
           }
@@ -586,7 +586,7 @@ fn validate_component_section_instance(
             _ => size = add_type_size(size, 1)
           }
         }
-        inst_sig = Some({ exports: map, nested: Map([]) })
+        inst_sig = Some({ exports: map, nested: Map([]), })
         inst_size = size
         inst_type_idxs = Some(t_idxs)
         inst_func_idxs = Some(f_idxs)

@@ -42,7 +42,7 @@ fn RecGroupIndex::new(
     position_by_type[type_idx] = groups[group].length()
     groups[group].push(type_idx)
   }
-  { group_by_type, position_by_type, groups }
+  { group_by_type, position_by_type, groups, }
 }
 
 ///|

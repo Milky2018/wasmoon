@@ -102,7 +102,7 @@ pub fn Operand::with_preference(
   self : Operand,
   preference : PhysicalReg,
 ) -> Operand {
-  { ..self, preference: Some(preference) }
+  { ..self, preference: Some(preference), }
 }
 
 ///|

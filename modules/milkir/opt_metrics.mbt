@@ -28,11 +28,11 @@ pub fn OptimizationMetricsSink::new(
   now_us : () -> Int64,
   record : (OptimizationPassMetric) -> Unit,
 ) -> OptimizationMetricsSink {
-  { now_us, record }
+  { now_us, record, }
 }
 
 ///|
-let optimization_metrics_sink : Ref[OptimizationMetricsSink?] = { val: None }
+let optimization_metrics_sink : Ref[OptimizationMetricsSink?] = { val: None, }
 
 ///|
 pub fn install_optimization_metrics_sink(

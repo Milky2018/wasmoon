@@ -67,7 +67,7 @@ test "render one function uses the canonical module instruction spelling" {
 ///|
 test "render module names as escaped UTF-8 strings" {
   let module_ = @types.Module::empty()
-  module_.exports.push({ name: "x\"\\\né", desc: Func(0) })
+  module_.exports.push({ name: "x\"\\\né", desc: Func(0), })
   assert_true(render(module_).contains("(export \"x\\22\\5c\\0a\\c3\\a9\""))
 }
 
@@ -127,7 +127,7 @@ test "reject malformed instruction immediates" {
 test "render custom memory page sizes" {
   let module_ = @types.Module::empty()
   module_.memories.push({
-    limits: { min: 1L, max: Some(2L) },
+    limits: { min: 1L, max: Some(2L), },
     is_memory64: true,
     page_size_log2: 8,
   })

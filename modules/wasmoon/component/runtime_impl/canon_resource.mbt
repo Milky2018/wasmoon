@@ -29,7 +29,7 @@ fn instantiate_canon_resource_new(
     }
     _ => raise InvalidTypeDef(tyidx)
   }
-  let core_type : @types.FuncType = { params: [I32], results: [I32] }
+  let core_type : @types.FuncType = { params: [I32], results: [I32], }
   let table = state.resource_table
   let host = fn(
     args : Array[@types.Value],
@@ -74,7 +74,7 @@ fn instantiate_canon_resource_rep(
     Some(ResourceType(id, _, _, kind)) => (id, kind)
     _ => raise InvalidTypeDef(tyidx)
   }
-  let core_type : @types.FuncType = { params: [I32], results: [I32] }
+  let core_type : @types.FuncType = { params: [I32], results: [I32], }
   let table = state.resource_table
   let host = fn(
     args : Array[@types.Value],
@@ -140,7 +140,7 @@ fn instantiate_canon_resource_drop(
     Some(ResourceType(id, _, _, kind)) => (id, kind)
     _ => raise InvalidTypeDef(tyidx)
   }
-  let core_type : @types.FuncType = { params: [I32], results: [] }
+  let core_type : @types.FuncType = { params: [I32], results: [], }
   let table = state.resource_table
   let host = fn(
     args : Array[@types.Value],

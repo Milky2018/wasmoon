@@ -123,7 +123,7 @@ fn decode_socket_address(
             None
           } else {
             Some({
-              native: { family: 4, address: bytes, port, scope_id: 0 },
+              native: { family: 4, address: bytes, port, scope_id: 0, },
               loopback: bytes[0] == b'\x7f',
             })
           }
@@ -145,7 +145,7 @@ fn decode_socket_address(
               }
             }
             Some({
-              native: { family: 6, address: bytes, port, scope_id },
+              native: { family: 6, address: bytes, port, scope_id, },
               loopback,
             })
           }

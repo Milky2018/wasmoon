@@ -62,7 +62,7 @@ pub fn PreflightDiagnostic::PreflightDiagnostic(
   func_idx? : Int? = None,
   func_name? : String? = None,
 ) -> PreflightDiagnostic {
-  { severity, stage, message, func_idx, func_name }
+  { severity, stage, message, func_idx, func_name, }
 }
 
 ///|
@@ -76,7 +76,7 @@ pub struct PreflightResult {
 
 ///|
 pub fn PreflightResult::PreflightResult() -> PreflightResult {
-  { ok: true, diagnostics: [], total_funcs: 0, checked_funcs: 0 }
+  { ok: true, diagnostics: [], total_funcs: 0, checked_funcs: 0, }
 }
 
 ///|

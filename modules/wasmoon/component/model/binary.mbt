@@ -104,7 +104,7 @@ priv struct Reader {
 
 ///|
 fn Reader::Reader(data : Bytes) -> Reader {
-  { data, pos: 0 }
+  { data, pos: 0, }
 }
 
 ///|
@@ -293,7 +293,7 @@ pub fn parse_component_binary(
     let id = reader.read_u8()
     let size = reader.read_leb_u32()
     let payload = reader.read_bytes(size)
-    sections.push({ id, payload })
+    sections.push({ id, payload, })
   }
-  { version, layer, sections }
+  { version, layer, sections, }
 }

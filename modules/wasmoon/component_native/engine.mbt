@@ -134,7 +134,7 @@ fn native_component_session_with_contexts(
         },
       )
       let instance_idx = instance.store_idx
-      let context = { core, funcrefs, pending_suspension, suspension_enabled }
+      let context = { core, funcrefs, pending_suspension, suspension_enabled, }
       contexts[instance_idx] = context
       if rollback_registrar.val is Some(registrar) {
         registrar.on_rollback(fn() {

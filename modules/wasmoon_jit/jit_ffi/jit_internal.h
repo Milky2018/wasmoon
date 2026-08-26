@@ -117,6 +117,7 @@ void jit_trap_activation_init(
     jit_context_t *context
 );
 void jit_trap_activation_push(jit_trap_activation_t *activation);
+void jit_trap_activation_finalize(jit_trap_activation_t *activation);
 void jit_trap_activation_publish(jit_trap_activation_t *activation);
 void jit_trap_activation_pop(jit_trap_activation_t *activation);
 jit_trap_activation_t *jit_trap_activation_detach(void);
@@ -325,12 +326,7 @@ void exception_spill_locals_impl(jit_context_t *ctx, int64_t *locals, int32_t co
 int64_t exception_get_spilled_local_impl(jit_context_t *ctx, int32_t idx);
 void exception_reset_context_state(jit_context_t *ctx);
 
-// ============ WASM Stack (wasm_stack.c) ============
-
-// Check if an address is in the WASM stack guard page
-int is_wasm_guard_page_access(jit_context_t *ctx, void *addr);
-
-// Get current JIT context (thread-local, set during stack-switching calls)
+// Get the context owned by the current trap activation.
 jit_context_t *get_current_jit_context(void);
 
 // ============ GC Operations (gc_ops.c) ============

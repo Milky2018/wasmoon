@@ -5,7 +5,7 @@ test "host instance builder defines callable typed functions" {
   let builder = linker.host_instance_builder("test:math", runtime)
   let func_type : @component.FuncType = {
     is_async: false,
-    params: [{ label: "value", ty: Prim(U32) }],
+    params: [{ label: "value", ty: Prim(U32), }],
     result: Some(Prim(U32)),
   }
   builder.add_func("increment", func_type, fn(
@@ -54,7 +54,7 @@ test "async host functions suspend through the shared event loop" {
   let builder = linker.host_instance_builder("test:async", runtime)
   builder.add_async_func(
     "wait",
-    { is_async: true, params: [], result: Some(Prim(U32)) },
+    { is_async: true, params: [], result: Some(Prim(U32)), },
     fn(_args, _table) {
       HostFuture(fn() { if ready.val { Ready([U32(7)]) } else { Pending } }, fn() {
         ()
@@ -91,7 +91,7 @@ test "host runtime keeps its first readiness source" {
   let builder = linker.host_instance_builder("test:readiness-owner", runtime)
   builder.add_async_func(
     "wait",
-    { is_async: true, params: [], result: Some(Prim(U32)) },
+    { is_async: true, params: [], result: Some(Prim(U32)), },
     fn(_args, _table) {
       HostFuture(
         fn() { if first_waits.val > 0 { Ready([U32(7)]) } else { Pending } },
@@ -115,7 +115,7 @@ test "component invocations poll and cancel asynchronous host functions" {
   let builder = linker.host_instance_builder("test:async-call", runtime)
   builder.add_async_func(
     "wait",
-    { is_async: true, params: [], result: Some(Prim(U32)) },
+    { is_async: true, params: [], result: Some(Prim(U32)), },
     fn(_args, _table) {
       HostFuture(fn() { if ready.val { Ready([U32(9)]) } else { Pending } }, fn() {
         cancellations.val = cancellations.val + 1
@@ -155,7 +155,7 @@ async test "component invocation join yields to other MoonBit processes" {
   let builder = linker.host_instance_builder("test:async-join", runtime)
   builder.add_async_func(
     "wait",
-    { is_async: true, params: [], result: Some(Prim(U32)) },
+    { is_async: true, params: [], result: Some(Prim(U32)), },
     fn(_args, _table) {
       HostFuture(fn() { if ready.val { Ready([U32(11)]) } else { Pending } }, fn() {
         progress.push("cancelled")
@@ -214,7 +214,7 @@ test "host instance builder rejects invalid function type references" {
   let builder = linker.host_instance_builder("test:invalid", HostRuntimeState())
   let func_type : @component.FuncType = {
     is_async: false,
-    params: [{ label: "value", ty: TypeIdx(0) }],
+    params: [{ label: "value", ty: TypeIdx(0), }],
     result: None,
   }
   try

@@ -38,7 +38,8 @@ priv enum NativeFiberCancelCode {
 ///|
 priv enum NativeJITAdvanceResult {
   JITHostcallSuspended
-  JITReturned(Int)
+  JITCompleted
+  JITTrapped(Int)
   JITAdvanceFailed(NativeFiberProtocolFailure)
 }
 
@@ -137,7 +138,14 @@ fn native_jit_continuation_advance(
       } else {
         JITAdvanceFailed(FiberUnexpectedYield(event))
       }
-    FiberReturned(value) => JITReturned(value.to_int())
+    FiberReturned(value) =>
+      if value == 0L {
+        JITCompleted
+      } else if value > 0L {
+        JITTrapped(value.to_int())
+      } else {
+        JITAdvanceFailed(FiberNativeFailure(value.to_int()))
+      }
     FiberAdvanceFailed(failure) => JITAdvanceFailed(failure)
   }
 }

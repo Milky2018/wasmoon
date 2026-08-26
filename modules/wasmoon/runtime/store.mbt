@@ -340,7 +340,7 @@ pub fn Store::unwrap_extern(
 pub fn Store::alloc_func(
   self : Store,
   func : @types.FunctionCode,
-  func_type? : @types.FuncType = { params: [], results: [] },
+  func_type? : @types.FuncType = { params: [], results: [], },
   type_idx? : Int = -1,
 ) -> Int raise RuntimeError {
   self.ensure_open()
@@ -356,7 +356,7 @@ pub fn Store::alloc_func(
 pub fn Store::alloc_host_func(
   self : Store,
   func : (Array[@types.Value]) -> Array[@types.Value] raise RuntimeError,
-  func_type? : @types.FuncType = { params: [], results: [] },
+  func_type? : @types.FuncType = { params: [], results: [], },
   type_idx? : Int = -1,
 ) -> Int raise RuntimeError {
   self.ensure_open()
@@ -377,7 +377,7 @@ pub fn Store::alloc_host_func(
 pub fn Store::alloc_host_func_with_caller(
   self : Store,
   func : (Caller, Array[@types.Value]) -> Array[@types.Value] raise RuntimeError,
-  func_type? : @types.FuncType = { params: [], results: [] },
+  func_type? : @types.FuncType = { params: [], results: [], },
   type_idx? : Int = -1,
 ) -> Int raise RuntimeError {
   self.ensure_open()
@@ -513,7 +513,7 @@ pub fn Store::alloc_exn(
   values : Array[@types.Value],
 ) -> Int raise RuntimeError {
   self.ensure_open()
-  self.push_allocation(self.exns, { tag_addr, values })
+  self.push_allocation(self.exns, { tag_addr, values, })
 }
 
 ///|

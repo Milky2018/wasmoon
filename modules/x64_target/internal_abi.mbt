@@ -170,7 +170,7 @@ fn InternalAbi::call_layout(
       fp_index += 1
     }
   }
-  { arguments, stack_size: call_align_up(fp_stack_offset, 16) }
+  { arguments, stack_size: call_align_up(fp_stack_offset, 16), }
 }
 
 ///|

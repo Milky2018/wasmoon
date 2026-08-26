@@ -24,7 +24,7 @@ pub fn HostFuture::HostFuture(
   poll : () -> HostFuturePoll raise ComponentRuntimeError,
   cancel : () -> Unit raise ComponentRuntimeError,
 ) -> HostFuture {
-  { poll, cancel }
+  { poll, cancel, }
 }
 
 ///|
@@ -41,7 +41,7 @@ struct ComponentInstanceEntryState {
 
 ///|
 fn ComponentInstanceEntryState::new() -> ComponentInstanceEntryState {
-  { ready: Ref(false), active: Ref(false), poisoned: Ref(false) }
+  { ready: Ref(false), active: Ref(false), poisoned: Ref(false), }
 }
 
 ///|
@@ -573,7 +573,7 @@ pub fn ComponentLinker::add_component(
   let isolated = @component.parse_component(component.component_bytes()) catch {
     e => raise ComponentParseError(e.to_string())
   }
-  self.add_import(name, Component({ component: isolated, outer_stack: [] }))
+  self.add_import(name, Component({ component: isolated, outer_stack: [], }))
 }
 
 ///|

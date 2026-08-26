@@ -327,7 +327,7 @@ fn EGraphBuilder::add_value(
         }
       }
       let class_id = self.egraph.add_typed(
-        { op: eop, children },
+        { op: eop, children, },
         type_bits(current.ty),
       )
       self.ensure_value_slot(current.id)
@@ -408,7 +408,7 @@ fn EGraphBuilder::get_simplified_operand(
     // Get the canonical class after optimization
     let canonical = self.egraph.find(class_id)
     // Check if this class maps to a different (simpler) value with same IR type
-    let key : RepKey = { class_id: canonical.0, ty: value.ty }
+    let key : RepKey = { class_id: canonical.0, ty: value.ty, }
     match self.class_to_value.get(key) {
       None => None
       Some(simplified_value) =>
@@ -498,7 +498,7 @@ fn optimize_function_with_stats_with_limits_and_ruleset(
         value.id < builder.value_map.length() &&
         builder.value_map[value.id] is Some(class_id) {
         let canonical = builder.egraph.find(class_id)
-        let key : RepKey = { class_id: canonical.0, ty: value.ty }
+        let key : RepKey = { class_id: canonical.0, ty: value.ty, }
         let previous = builder.class_to_value.get(key)
         let should_bind = previous is None
         if should_bind {
@@ -592,5 +592,5 @@ fn optimize_function_with_stats_with_limits_and_ruleset(
       }
     })
   }
-  { changed, total_classes, total_nodes, total_rule_applications }
+  { changed, total_classes, total_nodes, total_rule_applications, }
 }

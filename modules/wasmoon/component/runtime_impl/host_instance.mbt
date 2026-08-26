@@ -26,7 +26,7 @@ fn HostRuntimeState::with_core_execution_engine(
   let stream_table = StreamTable()
   let async_state = AsyncState(stream_table, core_engine~)
   async_state.resource_tables.set(resource_table.id, resource_table)
-  { resource_table, stream_table, async_state }
+  { resource_table, stream_table, async_state, }
 }
 
 ///|
@@ -88,7 +88,7 @@ pub fn HostRuntimeState::set_event_loop(
   if self.async_state.host_event_loop.val is Some(_) {
     raise HostEventLoopAlreadyInstalled
   }
-  self.async_state.host_event_loop.val = Some({ poll, wait })
+  self.async_state.host_event_loop.val = Some({ poll, wait, })
 }
 
 ///|

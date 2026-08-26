@@ -99,7 +99,7 @@ pub struct RuntimeErrorContext {
 pub fn RuntimeErrorContext::RuntimeErrorContext(
   error : RuntimeError,
 ) -> RuntimeErrorContext {
-  { error, call_stack: [], instruction: None, func_idx: None }
+  { error, call_stack: [], instruction: None, func_idx: None, }
 }
 
 ///|
@@ -107,7 +107,7 @@ pub fn RuntimeErrorContext::with_call_stack(
   self : RuntimeErrorContext,
   stack : Array[CallStackEntry],
 ) -> RuntimeErrorContext {
-  { ..self, call_stack: stack }
+  { ..self, call_stack: stack, }
 }
 
 ///|
@@ -115,7 +115,7 @@ pub fn RuntimeErrorContext::with_instruction(
   self : RuntimeErrorContext,
   instr : String,
 ) -> RuntimeErrorContext {
-  { ..self, instruction: Some(instr) }
+  { ..self, instruction: Some(instr), }
 }
 
 ///|
@@ -123,7 +123,7 @@ pub fn RuntimeErrorContext::with_func_idx(
   self : RuntimeErrorContext,
   idx : Int,
 ) -> RuntimeErrorContext {
-  { ..self, func_idx: Some(idx) }
+  { ..self, func_idx: Some(idx), }
 }
 
 ///|

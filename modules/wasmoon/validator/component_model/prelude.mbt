@@ -85,7 +85,7 @@ pub fn ComponentValidationConfig::ComponentValidationConfig(
 
 ///|
 pub fn ComponentValidationConfig::default() -> ComponentValidationConfig {
-  { wit_names: true }
+  { wit_names: true, }
 }
 
 ///|
@@ -278,7 +278,7 @@ fn typedef_of_typesig(
             resource_ids,
             preferred_named_types,
           ) {
-          Some(v) => out.push({ label: f.name, ty: v })
+          Some(v) => out.push({ label: f.name, ty: v, })
           None => return None
         }
       }
@@ -298,7 +298,7 @@ fn typedef_of_typesig(
               None => return None
             }
         }
-        out.push({ label: c.name, ty, refines: None })
+        out.push({ label: c.name, ty, refines: None, })
       }
       Some(Variant(out))
     }
@@ -448,7 +448,7 @@ fn funcsig_valid_in_interface(
 
 ///|
 fn InstanceSig::empty() -> InstanceSig {
-  { exports: Map([]), nested: Map([]) }
+  { exports: Map([]), nested: Map([]), }
 }
 
 ///|
@@ -1485,7 +1485,7 @@ priv struct CoreTypeReader {
 
 ///|
 fn CoreTypeReader::CoreTypeReader(data : Bytes) -> CoreTypeReader {
-  { data, pos: 0 }
+  { data, pos: 0, }
 }
 
 ///|
@@ -1679,7 +1679,7 @@ fn CoreTypeReader::read_core_functype(
   for _i in 0..<nresults {
     results.push(self.read_core_valtype())
   }
-  { params, results }
+  { params, results, }
 }
 
 ///|
@@ -1727,7 +1727,7 @@ fn CoreTypeReader::read_extern_type_sig(
           None => None
         },
       }
-      Some(Table({ elem_type: elem_ty, limits, is_table64: false }))
+      Some(Table({ elem_type: elem_ty, limits, is_table64: false, }))
     }
     0x02 => {
       // memtype: flags + limits (track memory64 when present)
@@ -1753,14 +1753,14 @@ fn CoreTypeReader::read_extern_type_sig(
         },
       }
       let is_memory64 = (flags & 0x04) != 0
-      Some(Memory({ limits, is_memory64, page_size_log2: 16 }))
+      Some(Memory({ limits, is_memory64, page_size_log2: 16, }))
     }
     0x03 => {
       // globaltype: valtype + mut
       let vt = self.read_core_valtype()
       let mut_ = self.read_u8()
       let mutable = mut_ != 0
-      Some(Global({ value_type: vt, mutable }))
+      Some(Global({ value_type: vt, mutable, }))
     }
     _ => {
       self.validate_extern_type(kind, func_type_bound)
@@ -1803,7 +1803,7 @@ fn parse_core_type_module_sig(
         seen_imports.set(key, 1)
         let kind = r.read_u8()
         match r.read_extern_type_sig(kind, func_types, func_type_bound) {
-          Some(ty) => imports.push({ mod_name: mod_s, name: name_s, ty })
+          Some(ty) => imports.push({ mod_name: mod_s, name: name_s, ty, })
           None => ()
         }
       }

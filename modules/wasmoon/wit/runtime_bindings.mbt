@@ -420,7 +420,7 @@ fn wit_interface_scope(
   result : ResolveResult,
   interface : Interface,
 ) -> WitBindingScope raise WitBindingError {
-  let scope : WitBindingScope = { declarations: Map([]) }
+  let scope : WitBindingScope = { declarations: Map([]), }
   wit_scope_add_interface_declarations(scope, interface)
   for item in interface.items {
     if item is Use(use_item) {
@@ -435,7 +435,7 @@ fn wit_world_scope(
   result : ResolveResult,
   world : World,
 ) -> WitBindingScope raise WitBindingError {
-  let scope : WitBindingScope = { declarations: Map([]) }
+  let scope : WitBindingScope = { declarations: Map([]), }
   wit_scope_add_world_declarations(scope, world)
   for item in world.items {
     if item is Use(use_item) {
@@ -519,7 +519,7 @@ fn wit_bind_inline_interface(
   export_name : String,
   interface : InlineInterface,
 ) -> Unit raise WitBindingError {
-  let materialized : Interface = { name: export_name, items: interface.items }
+  let materialized : Interface = { name: export_name, items: interface.items, }
   wit_bind_interface(result, bindings, instance, export_name, materialized)
 }
 
@@ -537,7 +537,7 @@ pub fn ResolveResult::bind_world(
     }
   }
   guard selected is Some(world) else { raise UnknownWorld(world_name) }
-  let bindings : WitBindings = { functions: Map([]), ordered_paths: [] }
+  let bindings : WitBindings = { functions: Map([]), ordered_paths: [], }
   let world_scope = wit_world_scope(self, world)
   for item in world.items {
     match item {

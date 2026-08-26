@@ -13,7 +13,7 @@ pub fn Frame::Frame(
   locals : Array[@types.Value],
   return_arity : Int,
 ) -> Frame {
-  { func_idx, locals, ip: 0, return_arity }
+  { func_idx, locals, ip: 0, return_arity, }
 }
 
 ///|

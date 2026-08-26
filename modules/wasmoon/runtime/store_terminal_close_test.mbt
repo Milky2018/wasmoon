@@ -17,7 +17,7 @@ test "Store close is terminal for resource creation" {
   let results = [
     closed_store_result(() => store.enable_c_heap()),
     closed_store_result(() => {
-      store.alloc_func({ locals: [], body: [] }) |> ignore
+      store.alloc_func({ locals: [], body: [], }) |> ignore
     }),
     closed_store_result(() => store.alloc_host_func(fn(_args) { [] }) |> ignore),
     closed_store_result(() => {
@@ -26,12 +26,12 @@ test "Store close is terminal for resource creation" {
     closed_store_result(() => store.alloc_mem(memory) |> ignore),
     closed_store_result(() => {
       store.alloc_global(
-        GlobalInstance({ value_type: I32, mutable: false }, I32(0)),
+        GlobalInstance({ value_type: I32, mutable: false, }, I32(0)),
       )
       |> ignore
     }),
     closed_store_result(() => {
-      store.alloc_tag({ params: [], results: [] }) |> ignore
+      store.alloc_tag({ params: [], results: [], }) |> ignore
     }),
     closed_store_result(() => store.alloc_exn(0, []) |> ignore),
     closed_store_result(() => store.alloc_struct(0, []) |> ignore),
@@ -114,7 +114,7 @@ test "Linker close is terminal for registrations" {
       linker.add_global(
         "host",
         "global",
-        GlobalInstance({ value_type: I32, mutable: false }, I32(0)),
+        GlobalInstance({ value_type: I32, mutable: false, }, I32(0)),
       )
     }),
   ]

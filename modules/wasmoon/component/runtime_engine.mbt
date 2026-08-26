@@ -16,7 +16,7 @@ pub(all) enum NativeComponentExecutionEvent {
 
 ///|
 pub fn interpreter_component_engine() -> ComponentEngine {
-  { open_session: fn() { @runtime_impl.interpreter_core_execution_engine() } }
+  { open_session: fn() { @runtime_impl.interpreter_core_execution_engine() }, }
 }
 
 ///|

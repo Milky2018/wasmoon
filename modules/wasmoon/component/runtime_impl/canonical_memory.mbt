@@ -361,7 +361,7 @@ fn load_flat_component_value_from_memory(
         }
         Some(Some(Option(payload_ty))) => {
           let tag = match
-            load_storage_value(mem, addr, { vt: I32, size: 1, align: 1 }) {
+            load_storage_value(mem, addr, { vt: I32, size: 1, align: 1, }) {
             I32(value) => value
             _ => raise HostCallError("type mismatch")
           }
@@ -395,7 +395,7 @@ fn load_flat_component_value_from_memory(
         }
         Some(Some(Result(ok_ty, error_ty))) => {
           let tag = match
-            load_storage_value(mem, addr, { vt: I32, size: 1, align: 1 }) {
+            load_storage_value(mem, addr, { vt: I32, size: 1, align: 1, }) {
             I32(value) => value
             _ => raise HostCallError("type mismatch")
           }

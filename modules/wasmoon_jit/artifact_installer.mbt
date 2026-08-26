@@ -191,7 +191,7 @@ pub struct JitCodeInstaller {
 pub fn JitCodeInstaller::new(
   resolver : (@code_object.RelocationTarget) -> Int64?,
 ) -> JitCodeInstaller {
-  { resolver, current: { val: None } }
+  { resolver, current: { val: None, }, }
 }
 
 ///|
@@ -384,7 +384,7 @@ fn build_installed_imports(
       Some(address) => address
       None => raise ResolutionFailed(kind="external", name=import_.symbol.name)
     }
-    imports.push({ identity: import_, address })
+    imports.push({ identity: import_, address, })
   }
   imports
 }
@@ -485,7 +485,7 @@ fn install_artifact_with_failure(
         )
       }
     }
-    let installed = { executable_code: staged, imports, functions }
+    let installed = { executable_code: staged, imports, functions, }
     if failure == Some(Publication) {
       raise PublicationFailed(message="injected failure")
     }

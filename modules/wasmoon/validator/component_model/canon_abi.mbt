@@ -233,7 +233,7 @@ fn core_functype_for_task_return(
         None => params.push(I32)
       }
   }
-  Some({ params, results: [] })
+  Some({ params, results: [], })
 }
 
 ///|
@@ -243,22 +243,22 @@ fn core_functype_for_canon(
 ) -> @types.FuncType? {
   match c {
     BackpressureInc | BackpressureDec | TaskCancel =>
-      Some({ params: [], results: [] })
+      Some({ params: [], results: [], })
     TaskReturn(result, _) => core_functype_for_task_return(result, type_table)
-    WaitableSetNew => Some({ params: [], results: [I32] })
+    WaitableSetNew => Some({ params: [], results: [I32], })
     WaitableSetWait(_, _) | WaitableSetPoll(_, _) =>
-      Some({ params: [I32, I32], results: [I32] })
-    WaitableSetDrop => Some({ params: [I32], results: [] })
-    WaitableJoin => Some({ params: [I32, I32], results: [] })
-    SubtaskDrop => Some({ params: [I32], results: [] })
-    SubtaskCancel(_) => Some({ params: [I32], results: [I32] })
-    ThreadYield(_) => Some({ params: [], results: [I32] })
+      Some({ params: [I32, I32], results: [I32], })
+    WaitableSetDrop => Some({ params: [I32], results: [], })
+    WaitableJoin => Some({ params: [I32, I32], results: [], })
+    SubtaskDrop => Some({ params: [I32], results: [], })
+    SubtaskCancel(_) => Some({ params: [I32], results: [I32], })
+    ThreadYield(_) => Some({ params: [], results: [I32], })
     ThreadSuspendThenResume(_)
     | ThreadYieldThenResume(_)
     | ThreadSuspendThenPromote(_)
-    | ThreadYieldThenPromote(_) => Some({ params: [I32], results: [I32] })
-    ContextGet(vt, _) => Some({ params: [], results: [vt] })
-    ContextSet(vt, _) => Some({ params: [vt], results: [] })
+    | ThreadYieldThenPromote(_) => Some({ params: [I32], results: [I32], })
+    ContextGet(vt, _) => Some({ params: [], results: [vt], })
+    ContextSet(vt, _) => Some({ params: [vt], results: [], })
     _ => None
   }
 }

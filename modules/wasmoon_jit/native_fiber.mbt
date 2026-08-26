@@ -19,7 +19,8 @@ pub(all) enum NativeFiberEvent {
 /// Result of advancing a stackful JIT invocation.
 pub(all) enum NativeJITContinuationEvent {
   NativeHostcallSuspended
-  NativeJITReturned(Int)
+  NativeJITCompleted
+  NativeJITTrapped(Int)
 } derive(Debug, Eq)
 
 ///|
@@ -77,17 +78,22 @@ pub fn NativeJITContext::start_continuation(
   values_len : Int,
   stack_size? : Int64 = 1024L * 1024L,
 ) -> NativeJITContinuation raise NativeFiberError {
+  let effective_stack_size = if self.configured_native_fiber_stack_size > 0L {
+    self.configured_native_fiber_stack_size
+  } else {
+    stack_size
+  }
   let raw = c_native_jit_continuation_alloc(
     self.handle,
     trampoline_ptr,
     func_ptr,
     values,
     values_len,
-    stack_size,
+    effective_stack_size,
   )
   let continuation = NativeJITContinuation::{ raw, }
   if !native_fiber_is_allocated(raw) {
-    raise StackAllocationFailed(stack_size)
+    raise StackAllocationFailed(effective_stack_size)
   }
   continuation
 }
@@ -116,7 +122,8 @@ pub fn NativeJITContinuation::continue_with(
 ) -> NativeJITContinuationEvent raise NativeFiberError {
   match native_jit_continuation_advance(self.raw, value) {
     JITHostcallSuspended => NativeHostcallSuspended
-    JITReturned(code) => NativeJITReturned(code)
+    JITCompleted => NativeJITCompleted
+    JITTrapped(code) => NativeJITTrapped(code)
     JITAdvanceFailed(failure) => raise failure.to_error()
   }
 }

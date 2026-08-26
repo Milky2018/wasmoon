@@ -50,7 +50,7 @@ pub fn CompilationRequest::CompilationRequest(
   func_idx : Int,
   mode : CompilationMode,
 ) -> CompilationRequest {
-  { func_idx, mode, priority: 0 }
+  { func_idx, mode, priority: 0, }
 }
 
 ///|
@@ -59,7 +59,7 @@ pub fn CompilationRequest::with_priority(
   mode : CompilationMode,
   priority : Int,
 ) -> CompilationRequest {
-  { func_idx, mode, priority }
+  { func_idx, mode, priority, }
 }
 
 // ============ Compilation Queue ============
@@ -75,7 +75,7 @@ pub(all) struct CompilationQueue {
 
 ///|
 pub fn CompilationQueue::CompilationQueue(max_size : Int) -> CompilationQueue {
-  { requests: [], max_size }
+  { requests: [], max_size, }
 }
 
 ///|

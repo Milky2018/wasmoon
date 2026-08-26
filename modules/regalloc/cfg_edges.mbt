@@ -51,5 +51,5 @@ fn build_dense_successor_edges(
     succs[block_idx] = block_succs
   }
 
-  { preds, succs }
+  { preds, succs, }
 }

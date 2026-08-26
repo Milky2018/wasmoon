@@ -62,7 +62,7 @@ priv struct ByteWriter {
 
 ///|
 fn ByteWriter::new() -> ByteWriter {
-  { bytes: [] }
+  { bytes: [], }
 }
 
 ///|
@@ -140,7 +140,7 @@ priv struct ByteReader {
 
 ///|
 fn ByteReader::new(data : Bytes, limits : DecodeLimits) -> ByteReader {
-  { data, position: 0, limits }
+  { data, position: 0, limits, }
 }
 
 ///|
@@ -848,7 +848,7 @@ fn read_digest(
   reader : ByteReader,
   field : String,
 ) -> Digest raise ArtifactDecodeError {
-  { bytes: reader.read_raw(32, field) }
+  { bytes: reader.read_raw(32, field), }
 }
 
 ///|
@@ -1232,5 +1232,5 @@ pub fn decode(
   if reader.remaining() != 0 {
     raise TrailingBytes(count=reader.remaining())
   }
-  { manifest, imports, functions }
+  { manifest, imports, functions, }
 }

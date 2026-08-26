@@ -57,7 +57,7 @@ pub fn MachineEnv::with_operand_scratch_regs(
   self : MachineEnv,
   operand_scratch_regs : Array[PhysicalReg],
 ) -> MachineEnv {
-  { ..self, operand_scratch_regs: operand_scratch_regs.copy() }
+  { ..self, operand_scratch_regs: operand_scratch_regs.copy(), }
 }
 
 ///|
@@ -71,7 +71,7 @@ pub fn MachineEnv::with_fixed_operand_regs(
   self : MachineEnv,
   fixed_operand_regs : Array[PhysicalReg],
 ) -> MachineEnv {
-  { ..self, fixed_operand_regs: fixed_operand_regs.copy() }
+  { ..self, fixed_operand_regs: fixed_operand_regs.copy(), }
 }
 
 ///|

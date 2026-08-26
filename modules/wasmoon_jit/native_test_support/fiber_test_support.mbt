@@ -5,7 +5,16 @@ extern "c" fn c_hostcall_probe_trampoline() -> Int64 = "wasmoon_test_hostcall_pr
 extern "c" fn c_fiber_stack_hostcall_probe_trampoline() -> Int64 = "wasmoon_test_fiber_stack_hostcall_probe_trampoline"
 
 ///|
+extern "c" fn c_active_fiber_stack_probe_trampoline() -> Int64 = "wasmoon_test_active_fiber_stack_probe_trampoline"
+
+///|
 extern "c" fn c_nested_hostcall_tls_probe_trampoline() -> Int64 = "wasmoon_test_nested_hostcall_tls_probe_trampoline"
+
+///|
+extern "c" fn c_nested_activation_exception_probe() -> Int64 = "wasmoon_test_nested_activation_exception_probe"
+
+///|
+extern "c" fn c_nested_activation_gc_root_probe() -> Int64 = "wasmoon_test_nested_activation_gc_root_probe"
 
 ///|
 extern "c" fn c_nested_trap_probe() -> Int64 = "wasmoon_test_nested_trap_probe"
@@ -106,8 +115,23 @@ pub fn fiber_stack_hostcall_probe_trampoline() -> Int64 {
 }
 
 ///|
+pub fn active_fiber_stack_probe_trampoline() -> Int64 {
+  c_active_fiber_stack_probe_trampoline()
+}
+
+///|
 pub fn nested_hostcall_tls_probe_trampoline() -> Int64 {
   c_nested_hostcall_tls_probe_trampoline()
+}
+
+///|
+pub fn nested_activation_exception_probe() -> Int64 {
+  c_nested_activation_exception_probe()
+}
+
+///|
+pub fn nested_activation_gc_root_probe() -> Int64 {
+  c_nested_activation_gc_root_probe()
 }
 
 ///|

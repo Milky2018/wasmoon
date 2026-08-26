@@ -78,7 +78,7 @@ fn build_x64_target(
     error => raise X64CompilationFailed(cause=error)
   }
   let (object, frame_size) = compiled
-  { object, frame_size }
+  { object, frame_size, }
 }
 
 ///|

@@ -342,7 +342,7 @@ pub fn WasiComponentCtx::try_claim_runtime_owner(
     None
   } else {
     self.runtime_owner_claimed.val = true
-    Some({ ctx: self })
+    Some({ ctx: self, })
   }
 }
 
@@ -599,7 +599,7 @@ priv struct WasiHostResourceEntry {
 
 ///|
 fn new_resource_entry(resource : WasiHostResource) -> WasiHostResourceEntry {
-  { resource, references: Ref(1) }
+  { resource, references: Ref(1), }
 }
 
 ///|

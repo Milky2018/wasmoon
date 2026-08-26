@@ -46,7 +46,7 @@ pub fn RegallocConfig::RegallocConfig(
   verify? : Bool = true,
   observer? : ((RegallocPhase?) -> Unit)? = None,
 ) -> RegallocConfig {
-  { verify, observer }
+  { verify, observer, }
 }
 
 ///|

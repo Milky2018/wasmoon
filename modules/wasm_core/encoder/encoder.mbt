@@ -14,7 +14,7 @@ priv struct BinaryWriter {
 
 ///|
 fn BinaryWriter::BinaryWriter() -> BinaryWriter {
-  { buf: [] }
+  { buf: [], }
 }
 
 ///|

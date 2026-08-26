@@ -173,7 +173,7 @@ pub fn AArch64StackObject::new(
   area_size : Int,
   area_alignment : Int,
 ) -> AArch64StackObject {
-  { offset, size, alignment, area_size, area_alignment }
+  { offset, size, alignment, area_size, area_alignment, }
 }
 
 ///|
@@ -399,7 +399,7 @@ fn platform_call_layout(types : Array[@semantic.ValueType]) -> CallLayout {
       stack_size += alignment
     }
   }
-  { arguments, stack_size: call_align_up(stack_size, 16) }
+  { arguments, stack_size: call_align_up(stack_size, 16), }
 }
 
 ///|

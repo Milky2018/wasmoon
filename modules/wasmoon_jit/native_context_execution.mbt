@@ -150,16 +150,28 @@ pub fn NativeJITContext::set_globals(
 }
 
 ///|
-pub fn NativeJITContext::alloc_wasm_stack(
+/// Configure the guarded stack size used by future native JIT continuations.
+/// The stack mapping is allocated only when a continuation starts.
+#alias(alloc_wasm_stack, deprecated="Use configure_native_fiber_stack_size instead")
+pub fn NativeJITContext::configure_native_fiber_stack_size(
   self : NativeJITContext,
   stack_size : Int64,
 ) -> Bool {
-  c_jit_alloc_wasm_stack_managed(self.handle, stack_size) == 0
+  if stack_size <= 0L {
+    false
+  } else {
+    self.configured_native_fiber_stack_size = stack_size
+    true
+  }
 }
 
 ///|
-pub fn NativeJITContext::has_wasm_stack(self : NativeJITContext) -> Bool {
-  c_jit_get_wasm_stack_top_managed(self.handle) != 0L
+/// Check whether a native-fiber stack size override has been configured.
+#alias(has_wasm_stack, deprecated="Use has_configured_native_fiber_stack_size instead")
+pub fn NativeJITContext::has_configured_native_fiber_stack_size(
+  self : NativeJITContext,
+) -> Bool {
+  self.configured_native_fiber_stack_size > 0L
 }
 
 ///|
@@ -222,16 +234,24 @@ pub fn NativeJITContext::call_trampoline(
   func_ptr : Int64,
   values_vec : FixedArray[Int64],
   values_len : Int,
-  use_stack_switch : Bool,
-) -> Int {
-  if use_stack_switch {
-    c_jit_call_with_stack_switch_managed(
-      self.handle,
-      trampoline_ptr,
-      func_ptr,
-      values_vec,
-      values_len,
+  use_native_fiber : Bool,
+) -> Int raise NativeFiberError {
+  if use_native_fiber {
+    let continuation = self.start_continuation(
+      trampoline_ptr, func_ptr, values_vec, values_len,
     )
+    let event = {
+      errdefer (continuation.cancel() catch { _ => () })
+      continuation.continue_with()
+    }
+    match event {
+      NativeJITCompleted => 0
+      NativeJITTrapped(code) => code
+      NativeHostcallSuspended => {
+        continuation.cancel()
+        raise UnexpectedYield(-1L)
+      }
+    }
   } else {
     c_jit_call_trampoline_managed(
       self.handle,

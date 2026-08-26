@@ -337,14 +337,14 @@ fn Parser::parse_module_field_inner(
           mod_.funcs.push(type_idx)
           mod_.codes.push(code)
           for name in export_names {
-            mod_.exports.push({ name, desc: Func(func_idx) })
+            mod_.exports.push({ name, desc: Func(func_idx), })
           }
         }
         InlineImport(imp, export_names) => {
           let func_idx = count_func_imports(mod_.imports)
           mod_.imports.push(imp)
           for name in export_names {
-            mod_.exports.push({ name, desc: Func(func_idx) })
+            mod_.exports.push({ name, desc: Func(func_idx), })
           }
         }
       }
@@ -354,7 +354,7 @@ fn Parser::parse_module_field_inner(
           let mem_idx = mod_.memories.length()
           mod_.memories.push(mem)
           for name in export_names {
-            mod_.exports.push({ name, desc: Memory(mem_idx) })
+            mod_.exports.push({ name, desc: Memory(mem_idx), })
           }
         }
         MemoryImport(imp, export_names) => {
@@ -366,14 +366,14 @@ fn Parser::parse_module_field_inner(
           }
           mod_.imports.push(imp)
           for name in export_names {
-            mod_.exports.push({ name, desc: Memory(memory_import_count) })
+            mod_.exports.push({ name, desc: Memory(memory_import_count), })
           }
         }
         MemoryWithData(mem, export_names, data_bytes) => {
           let mem_idx = mod_.memories.length()
           mod_.memories.push(mem)
           for name in export_names {
-            mod_.exports.push({ name, desc: Memory(mem_idx) })
+            mod_.exports.push({ name, desc: Memory(mem_idx), })
           }
           mod_.datas.push({
             memory_idx: mem_idx,
@@ -398,7 +398,7 @@ fn Parser::parse_module_field_inner(
           let global_idx = num_global_imports + mod_.globals.length()
           mod_.globals.push(global)
           for name in export_names {
-            mod_.exports.push({ name, desc: Global(global_idx) })
+            mod_.exports.push({ name, desc: Global(global_idx), })
           }
         }
         GlobalImport(imp, export_names) => {
@@ -410,7 +410,7 @@ fn Parser::parse_module_field_inner(
           }
           mod_.imports.push(imp)
           for name in export_names {
-            mod_.exports.push({ name, desc: Global(global_import_count) })
+            mod_.exports.push({ name, desc: Global(global_import_count), })
           }
         }
       }
@@ -432,7 +432,7 @@ fn Parser::parse_module_field_inner(
         self.table_names.set(name, table_idx)
       }
       if export_name is Some(name) {
-        mod_.exports.push({ name, desc: Table(table_idx) })
+        mod_.exports.push({ name, desc: Table(table_idx), })
       }
       if inline_elem is Some(elem) {
         mod_.elems.push(elem)
@@ -460,14 +460,14 @@ fn Parser::parse_module_field_inner(
           let tag_idx = count_tag_imports(mod_.imports) + mod_.tags.length()
           mod_.tags.push(tag)
           for name in export_names {
-            mod_.exports.push({ name, desc: Tag(tag_idx) })
+            mod_.exports.push({ name, desc: Tag(tag_idx), })
           }
         }
         TagImport(imp, export_names) => {
           let tag_idx = count_tag_imports(mod_.imports)
           mod_.imports.push(imp)
           for name in export_names {
-            mod_.exports.push({ name, desc: Tag(tag_idx) })
+            mod_.exports.push({ name, desc: Tag(tag_idx), })
           }
         }
       }
@@ -1273,7 +1273,7 @@ fn Parser::parse_wast_f64(self : Parser) -> Double raise WatError {
 ///|
 fn parse_wast_int(s : String) -> Int raise WatError {
   if s.length() == 0 {
-    raise InvalidNumber(s, { line: 0, column: 0 })
+    raise InvalidNumber(s, { line: 0, column: 0, })
   }
   let mut start = 0
   let mut negative = false
@@ -1300,7 +1300,7 @@ fn parse_wast_int(s : String) -> Int raise WatError {
         continue
       }
       if c < '0' || c > '9' {
-        raise InvalidNumber(s, { line: 0, column: 0 })
+        raise InvalidNumber(s, { line: 0, column: 0, })
       }
       result = result * 10 + (c.to_int() - '0'.to_int())
     }
@@ -1327,7 +1327,7 @@ fn parse_wast_hex_int(s : String, start : Int) -> Int raise WatError {
     } else if c >= 'A' && c <= 'F' {
       c.to_int() - 'A'.to_int() + 10
     } else {
-      raise InvalidNumber(s, { line: 0, column: 0 })
+      raise InvalidNumber(s, { line: 0, column: 0, })
     }
     result = result * 16 + digit
   }
@@ -1337,7 +1337,7 @@ fn parse_wast_hex_int(s : String, start : Int) -> Int raise WatError {
 ///|
 fn parse_wast_int64(s : String) -> Int64 raise WatError {
   if s.length() == 0 {
-    raise InvalidNumber(s, { line: 0, column: 0 })
+    raise InvalidNumber(s, { line: 0, column: 0, })
   }
   let mut start = 0
   let mut negative = false
@@ -1364,7 +1364,7 @@ fn parse_wast_int64(s : String) -> Int64 raise WatError {
         continue
       }
       if c < '0' || c > '9' {
-        raise InvalidNumber(s, { line: 0, column: 0 })
+        raise InvalidNumber(s, { line: 0, column: 0, })
       }
       result = result * 10L + (c.to_int() - '0'.to_int()).to_int64()
     }
@@ -1391,7 +1391,7 @@ fn parse_wast_hex_int64(s : String, start : Int) -> Int64 raise WatError {
     } else if c >= 'A' && c <= 'F' {
       c.to_int() - 'A'.to_int() + 10
     } else {
-      raise InvalidNumber(s, { line: 0, column: 0 })
+      raise InvalidNumber(s, { line: 0, column: 0, })
     }
     result = result * 16L + digit.to_int64()
   }

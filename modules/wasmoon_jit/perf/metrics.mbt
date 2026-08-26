@@ -119,10 +119,10 @@ pub struct ModuleMetricsReport {
 } derive(ToJson)
 
 ///|
-let module_state : Ref[ModuleMetricsReport?] = { val: None }
+let module_state : Ref[ModuleMetricsReport?] = { val: None, }
 
 ///|
-let current_function_state : Ref[FunctionMetrics?] = { val: None }
+let current_function_state : Ref[FunctionMetrics?] = { val: None, }
 
 ///|
 fn ensure_module_state() -> ModuleMetricsReport {
@@ -231,7 +231,7 @@ pub fn record_ir_pass(
 }
 
 ///|
-let milkir_metrics_clock_origin : Ref[PerfTick?] = { val: None }
+let milkir_metrics_clock_origin : Ref[PerfTick?] = { val: None, }
 
 ///|
 fn milkir_metrics_now_us() -> Int64 {
@@ -301,7 +301,7 @@ pub fn record_regalloc_phase_us(
   guard enabled() else { return }
   guard detail_enabled() else { return }
   if current_function_state.val is Some(m) {
-    m.regalloc_phases.push({ name: phase_name, duration_us })
+    m.regalloc_phases.push({ name: phase_name, duration_us, })
   }
 }
 

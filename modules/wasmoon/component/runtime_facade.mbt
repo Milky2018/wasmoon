@@ -13,7 +13,7 @@ struct ComponentResourceType {
 
 ///|
 pub fn ComponentResourceType::named(name : String) -> ComponentResourceType {
-  { identity: name }
+  { identity: name, }
 }
 
 ///|
@@ -74,7 +74,7 @@ pub fn ComponentField::ComponentField(
   name : String,
   ty : ComponentValueType,
 ) -> ComponentField {
-  { name, ty }
+  { name, ty, }
 }
 
 ///|
@@ -93,7 +93,7 @@ pub fn ComponentCase::ComponentCase(
   name : String,
   ty : ComponentValueType?,
 ) -> ComponentCase {
-  { name, ty }
+  { name, ty, }
 }
 
 ///|
@@ -112,7 +112,7 @@ pub fn ComponentParam::ComponentParam(
   name : String,
   ty : ComponentValueType,
 ) -> ComponentParam {
-  { name, ty }
+  { name, ty, }
 }
 
 ///|
@@ -133,7 +133,7 @@ pub fn ComponentFuncType::ComponentFuncType(
   result : ComponentValueType?,
   is_async? : Bool = false,
 ) -> ComponentFuncType {
-  { is_async, params, result }
+  { is_async, params, result, }
 }
 
 ///|
@@ -427,7 +427,7 @@ pub fn ComponentRuntime::instantiate_component(
   if self.state.closed.val {
     raise RuntimeClosed
   }
-  { inner, runtime: self.state }
+  { inner, runtime: self.state, }
 }
 
 ///|
@@ -452,7 +452,7 @@ fn component_primitive_type(ty : @model.PrimValType) -> ComponentValueType {
 
 ///|
 fn component_resource_identity(index : Int) -> ComponentResourceType {
-  { identity: "type[\{index}]" }
+  { identity: "type[\{index}]", }
 }
 
 ///|
@@ -569,7 +569,7 @@ fn resolve_component_func_type(
     Some(result) => Some(resolve_component_value_type(result, types))
     None => None
   }
-  { is_async: func_type.is_async, params, result }
+  { is_async: func_type.is_async, params, result, }
 }
 
 ///|
@@ -613,7 +613,7 @@ pub fn ComponentInstance::bind(
     Some(Func(func)) => {
       let (raw_type, raw_types) = component_function_parts(func)
       let public_type = resolve_component_func_type(raw_type, raw_types)
-      { instance: current, runtime: self.runtime, name, public_type }
+      { instance: current, runtime: self.runtime, name, public_type, }
     }
     Some(_) => raise ExportNotFunction(path)
     None => raise UnknownExport(path)
@@ -1210,11 +1210,11 @@ fn lift_component_value(
       )
     (Own(identity), ResourceValue(handle))
     | (Borrow(identity), ResourceValue(handle)) =>
-      Resource({ handle, type_: identity })
+      Resource({ handle, type_: identity, })
     (Stream(_), ResourceValue(handle)) =>
-      Resource({ handle, type_: { identity: "stream" } })
+      Resource({ handle, type_: { identity: "stream", }, })
     (Future(_), ResourceValue(handle)) =>
-      Resource({ handle, type_: { identity: "future" } })
+      Resource({ handle, type_: { identity: "future", }, })
     _ =>
       raise InvocationFailed(
         "component returned a value incompatible with \{Repr(expected)} at \{path}",

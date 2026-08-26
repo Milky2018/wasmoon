@@ -232,7 +232,7 @@ pub fn verify_artifact(
   let code_objects = build_verified_code_objects(decoded) catch {
     error => raise CodeObjectInvalid(cause=error)
   }
-  { artifact: decoded, code_objects }
+  { artifact: decoded, code_objects, }
 }
 
 ///|

@@ -90,7 +90,7 @@ pub impl Show for AArch64EmitError with fn output(self, logger) {
 
 ///|
 fn CodeBuffer::new(long_branches? : Bool = false) -> CodeBuffer {
-  { code: [], fixups: [], labels: [], relocations: [], long_branches }
+  { code: [], fixups: [], labels: [], relocations: [], long_branches, }
 }
 
 ///|
@@ -185,7 +185,7 @@ fn CodeBuffer::emit_fixup_branch(
   if wide {
     self.emit_word(AARCH64_NOP)
   }
-  self.fixups.push({ offset, target, bits, wide })
+  self.fixups.push({ offset, target, bits, wide, })
 }
 
 ///|
@@ -2534,7 +2534,14 @@ fn emit_call_arguments(
         scratch
       }
     }
-    emit_stack_access(buffer, false, transfer.ty, source, transfer.offset)
+    // Integer call slots are eight bytes. Write the full slot so its upper
+    // half is canonical for callees that consume the native-width value.
+    let stack_type : @semantic.ValueType = if transfer.ty == I32 {
+      I64
+    } else {
+      transfer.ty
+    }
+    emit_stack_access(buffer, false, stack_type, source, transfer.offset)
   }
   emit_resolved_moves(buffer, frame, plan.register_moves)
 }

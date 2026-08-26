@@ -44,7 +44,7 @@ fn create_i64_arithmetic_module() -> @types.Module {
     locals: [],
     body: [LocalGet(0), LocalGet(1), I64RemU],
   }
-  let func_type : @types.FuncType = { params: [I64, I64], results: [I64] }
+  let func_type : @types.FuncType = { params: [I64, I64], results: [I64], }
   {
     types: [@types.SubType::from_func(func_type)],
     type_rec_groups: [0],
@@ -54,13 +54,13 @@ fn create_i64_arithmetic_module() -> @types.Module {
     memories: [],
     globals: [],
     exports: [
-      { name: "add", desc: Func(0) },
-      { name: "sub", desc: Func(1) },
-      { name: "mul", desc: Func(2) },
-      { name: "div_s", desc: Func(3) },
-      { name: "div_u", desc: Func(4) },
-      { name: "rem_s", desc: Func(5) },
-      { name: "rem_u", desc: Func(6) },
+      { name: "add", desc: Func(0), },
+      { name: "sub", desc: Func(1), },
+      { name: "mul", desc: Func(2), },
+      { name: "div_s", desc: Func(3), },
+      { name: "div_u", desc: Func(4), },
+      { name: "rem_s", desc: Func(5), },
+      { name: "rem_u", desc: Func(6), },
     ],
     start: None,
     elems: [],
@@ -285,7 +285,7 @@ fn create_i64_bitwise_module() -> @types.Module {
     locals: [],
     body: [LocalGet(0), LocalGet(1), I64Rotr],
   }
-  let func_type : @types.FuncType = { params: [I64, I64], results: [I64] }
+  let func_type : @types.FuncType = { params: [I64, I64], results: [I64], }
   {
     types: [@types.SubType::from_func(func_type)],
     type_rec_groups: [0],
@@ -295,14 +295,14 @@ fn create_i64_bitwise_module() -> @types.Module {
     memories: [],
     globals: [],
     exports: [
-      { name: "and", desc: Func(0) },
-      { name: "or", desc: Func(1) },
-      { name: "xor", desc: Func(2) },
-      { name: "shl", desc: Func(3) },
-      { name: "shr_s", desc: Func(4) },
-      { name: "shr_u", desc: Func(5) },
-      { name: "rotl", desc: Func(6) },
-      { name: "rotr", desc: Func(7) },
+      { name: "and", desc: Func(0), },
+      { name: "or", desc: Func(1), },
+      { name: "xor", desc: Func(2), },
+      { name: "shl", desc: Func(3), },
+      { name: "shr_s", desc: Func(4), },
+      { name: "shr_u", desc: Func(5), },
+      { name: "rotl", desc: Func(6), },
+      { name: "rotr", desc: Func(7), },
     ],
     start: None,
     elems: [],
@@ -426,7 +426,7 @@ fn create_i64_unary_module() -> @types.Module {
     locals: [],
     body: [LocalGet(0), I64Extend32S],
   }
-  let unary_type : @types.FuncType = { params: [I64], results: [I64] }
+  let unary_type : @types.FuncType = { params: [I64], results: [I64], }
   {
     types: [@types.SubType::from_func(unary_type)],
     type_rec_groups: [0],
@@ -436,12 +436,12 @@ fn create_i64_unary_module() -> @types.Module {
     memories: [],
     globals: [],
     exports: [
-      { name: "clz", desc: Func(0) },
-      { name: "ctz", desc: Func(1) },
-      { name: "popcnt", desc: Func(2) },
-      { name: "extend8_s", desc: Func(3) },
-      { name: "extend16_s", desc: Func(4) },
-      { name: "extend32_s", desc: Func(5) },
+      { name: "clz", desc: Func(0), },
+      { name: "ctz", desc: Func(1), },
+      { name: "popcnt", desc: Func(2), },
+      { name: "extend8_s", desc: Func(3), },
+      { name: "extend16_s", desc: Func(4), },
+      { name: "extend32_s", desc: Func(5), },
     ],
     start: None,
     elems: [],

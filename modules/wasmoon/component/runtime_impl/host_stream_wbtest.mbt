@@ -5,8 +5,8 @@ test "embedding result futures use the canonical future table" {
   let types : Array[TypeDef?] = [
     Some(
       Variant([
-        { label: "io", ty: None, refines: None },
-        { label: "other", ty: Some(TypeIdx(1)), refines: None },
+        { label: "io", ty: None, refines: None, },
+        { label: "other", ty: Some(TypeIdx(1)), refines: None, },
       ]),
     ),
     Some(Option(Prim(String))),

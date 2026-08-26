@@ -87,6 +87,7 @@ pub(all) suberror JITCoreCallError {
   ArgumentTypeMismatch(Int)
   ResultTypeMismatch(Int)
   Trap(String)
+  NativeFiberFailure(String)
   Cancelled
   Exit(Int)
   GcSetupFailed(String)

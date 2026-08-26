@@ -549,7 +549,7 @@ fn instantiate_canon_thread_index(
   state : BuildState,
   store : @runtime.Store,
 ) -> Unit raise ComponentRuntimeError {
-  let core_type : @types.FuncType = { params: [], results: [I32] }
+  let core_type : @types.FuncType = { params: [], results: [I32], }
   let async_state = state.async_state
   let owner_component_id = state.resource_table.id
   let host = fn(
@@ -577,7 +577,7 @@ fn instantiate_canon_thread_yield(
   state : BuildState,
   store : @runtime.Store,
 ) -> Unit raise ComponentRuntimeError {
-  let core_type : @types.FuncType = { params: [], results: [I32] }
+  let core_type : @types.FuncType = { params: [], results: [I32], }
   let async_state = state.async_state
   let owner_component_id = state.resource_table.id
   let host = fn(
@@ -606,7 +606,7 @@ fn instantiate_canon_thread_yield_then_resume(
   state : BuildState,
   store : @runtime.Store,
 ) -> Unit raise ComponentRuntimeError {
-  let core_type : @types.FuncType = { params: [I32], results: [I32] }
+  let core_type : @types.FuncType = { params: [I32], results: [I32], }
   let async_state = state.async_state
   let owner_component_id = state.resource_table.id
   let host = fn(
@@ -642,7 +642,7 @@ fn instantiate_canon_thread_suspend_then_resume(
   state : BuildState,
   store : @runtime.Store,
 ) -> Unit raise ComponentRuntimeError {
-  let core_type : @types.FuncType = { params: [I32], results: [I32] }
+  let core_type : @types.FuncType = { params: [I32], results: [I32], }
   let async_state = state.async_state
   let owner_component_id = state.resource_table.id
   let host = fn(
@@ -678,7 +678,7 @@ fn instantiate_unsupported_thread_promotion(
   state : BuildState,
   store : @runtime.Store,
 ) -> Unit raise ComponentRuntimeError {
-  let core_type : @types.FuncType = { params: [I32], results: [I32] }
+  let core_type : @types.FuncType = { params: [I32], results: [I32], }
   let host = fn(
     _args : Array[@types.Value],
   ) -> Array[@types.Value] raise @runtime.RuntimeError {
@@ -715,7 +715,7 @@ fn instantiate_canon_thread_resume_later(
   state : BuildState,
   store : @runtime.Store,
 ) -> Unit raise ComponentRuntimeError {
-  let core_type : @types.FuncType = { params: [I32], results: [] }
+  let core_type : @types.FuncType = { params: [I32], results: [], }
   let async_state = state.async_state
   let owner_component_id = state.resource_table.id
   let host = fn(
@@ -756,7 +756,7 @@ fn instantiate_canon_thread_suspend(
   state : BuildState,
   store : @runtime.Store,
 ) -> Unit raise ComponentRuntimeError {
-  let core_type : @types.FuncType = { params: [], results: [I32] }
+  let core_type : @types.FuncType = { params: [], results: [I32], }
   let async_state = state.async_state
   let owner_component_id = state.resource_table.id
   let host = fn(
@@ -786,7 +786,7 @@ fn instantiate_canon_thread_new_indirect(
   state : BuildState,
   store : @runtime.Store,
 ) -> Unit raise ComponentRuntimeError {
-  let core_type : @types.FuncType = { params: [I32, I32], results: [I32] }
+  let core_type : @types.FuncType = { params: [I32, I32], results: [I32], }
   let async_state = state.async_state
   let owner_component_id = state.resource_table.id
   let table_addr = if table_idx >= 0 && table_idx < state.core_tables.length() {

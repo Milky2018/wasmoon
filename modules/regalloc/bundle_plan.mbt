@@ -173,7 +173,7 @@ fn bundle_span_runs_for_root(
   match span_cache[root] {
     Some(runs) => runs
     None => {
-      let runs : BundleSpanRuns = { levels: [Some(facts[root].spans)] }
+      let runs : BundleSpanRuns = { levels: [Some(facts[root].spans)], }
       span_cache[root] = Some(runs)
       runs
     }

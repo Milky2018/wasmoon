@@ -6,7 +6,7 @@ pub(all) struct ProgramPoint {
 
 ///|
 pub fn ProgramPoint::ProgramPoint(block : Int, inst : Int) -> ProgramPoint {
-  { block, inst }
+  { block, inst, }
 }
 
 ///|
@@ -49,7 +49,7 @@ pub fn ProgramRange::ProgramRange(
   start : ProgramPoint,
   end : ProgramPoint,
 ) -> ProgramRange {
-  { start, end }
+  { start, end, }
 }
 
 ///|
@@ -101,7 +101,7 @@ pub fn UsePosition::UsePosition(
   kind : UseKind,
   constraint : OperandConstraint,
 ) -> UsePosition {
-  { point, kind, constraint, preference: None, tie_id: -1 }
+  { point, kind, constraint, preference: None, tie_id: -1, }
 }
 
 ///|
@@ -127,7 +127,7 @@ struct LiveRange {
 
 ///|
 pub fn LiveRange::LiveRange(id : Int, vreg : VirtualReg) -> LiveRange {
-  { id, vreg, ranges: [], uses: [] }
+  { id, vreg, ranges: [], uses: [], }
 }
 
 ///|

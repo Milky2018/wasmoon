@@ -5,7 +5,7 @@ priv struct PlanState {
 
 ///|
 fn PlanState::new() -> PlanState {
-  { values: Map([]) }
+  { values: Map([]), }
 }
 
 ///|
@@ -328,7 +328,7 @@ fn[F : FunctionView] verify_function_allocation(
   plan : AllocationPlan,
 ) -> Unit raise VerifyError {
   for value in 0..<function.value_count() {
-    let vreg : VirtualReg = { id: value, class: function.value_class(value) }
+    let vreg : VirtualReg = { id: value, class: function.value_class(value), }
     guard plan.value_location(value) is Some(location) else {
       raise Unassigned(vreg~)
     }

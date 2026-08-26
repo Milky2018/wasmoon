@@ -3,7 +3,7 @@ test "host core function allocation preserves a closed Store error" {
   let store = @runtime.Store::Store()
   store.close()
   try
-    @runtime_impl.alloc_host_core_func(store, { params: [], results: [] }, fn(
+    @runtime_impl.alloc_host_core_func(store, { params: [], results: [], }, fn(
       _args,
     ) {
       []

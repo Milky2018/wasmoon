@@ -55,7 +55,7 @@ pub(all) struct ValidationErrorContext {
 pub fn ValidationErrorContext::ValidationErrorContext(
   msg : String,
 ) -> ValidationErrorContext {
-  { error_msg: msg, func_idx: None, instr_offset: None, instruction: None }
+  { error_msg: msg, func_idx: None, instr_offset: None, instruction: None, }
 }
 
 ///|
@@ -94,7 +94,7 @@ pub fn ValidationErrorContext::from_error(
     UnsupportedInstruction(m) => m
     WithContext(ctx) => ctx.error_msg
   }
-  { error_msg: msg, func_idx: None, instr_offset: None, instruction: None }
+  { error_msg: msg, func_idx: None, instr_offset: None, instruction: None, }
 }
 
 ///|
@@ -102,7 +102,7 @@ pub fn ValidationErrorContext::with_func_idx(
   self : ValidationErrorContext,
   idx : Int,
 ) -> ValidationErrorContext {
-  { ..self, func_idx: Some(idx) }
+  { ..self, func_idx: Some(idx), }
 }
 
 ///|
@@ -110,7 +110,7 @@ pub fn ValidationErrorContext::with_instr_offset(
   self : ValidationErrorContext,
   offset : Int,
 ) -> ValidationErrorContext {
-  { ..self, instr_offset: Some(offset) }
+  { ..self, instr_offset: Some(offset), }
 }
 
 ///|
@@ -118,7 +118,7 @@ pub fn ValidationErrorContext::with_instruction(
   self : ValidationErrorContext,
   instr : String,
 ) -> ValidationErrorContext {
-  { ..self, instruction: Some(instr) }
+  { ..self, instruction: Some(instr), }
 }
 
 ///|

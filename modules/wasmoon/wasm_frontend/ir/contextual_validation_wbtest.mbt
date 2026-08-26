@@ -4,26 +4,26 @@ test "frontend validation context resolves linked and module-local contracts" {
   mod_.types.push(@types.SubType::func([I32], [I64]))
   mod_.types.push(
     @types.SubType::simple(
-      Struct({ fields: [{ storage_type: Val(F64), mutable: true }] }),
+      Struct({ fields: [{ storage_type: Val(F64), mutable: true, }], }),
     ),
   )
   mod_.types.push(
     @types.SubType::simple(
-      Array({ element: { storage_type: Packed(I8), mutable: true } }),
+      Array({ element: { storage_type: Packed(I8), mutable: true, }, }),
     ),
   )
   mod_.types.push(@types.SubType::func([I32, F64], []))
   mod_.funcs.push(0)
   mod_.tables.push({
     type_: {
-      limits: { min: 0L, max: None },
+      limits: { min: 0L, max: None, },
       elem_type: FuncRef,
       is_table64: true,
     },
     init: None,
   })
-  mod_.tags.push({ type_idx: 3 })
-  mod_.datas.push({ memory_idx: 0, offset: [], init: Bytes::from_array([]) })
+  mod_.tags.push({ type_idx: 3, })
+  mod_.datas.push({ memory_idx: 0, offset: [], init: Bytes::from_array([]), })
   let translation_context = TranslationContext::from_module(
     mod_,
     EmbeddingEnvironment(),

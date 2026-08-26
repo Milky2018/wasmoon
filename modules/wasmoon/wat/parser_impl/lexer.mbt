@@ -41,7 +41,7 @@ impl Show for LocatedToken with fn output(self, logger) {
 
 ///|
 fn LocatedToken::to_loc(self : LocatedToken) -> SourceLoc {
-  { line: self.span.start_line, column: self.span.start_column }
+  { line: self.span.start_line, column: self.span.start_column, }
 }
 
 ///|
@@ -49,7 +49,7 @@ fn LocatedToken::to_loc(self : LocatedToken) -> SourceLoc {
 fn LocatedToken::synthetic(token : Token) -> LocatedToken {
   {
     token,
-    span: { start_line: 0, start_column: 0, end_line: 0, end_column: 0 },
+    span: { start_line: 0, start_column: 0, end_line: 0, end_column: 0, },
     raw: "",
   }
 }
@@ -91,7 +91,7 @@ fn Lexer::Lexer(input : String) -> Lexer {
 
 ///|
 fn Lexer::current_loc(self : Lexer) -> SourceLoc {
-  { line: self.token_start_line, column: self.token_start_column }
+  { line: self.token_start_line, column: self.token_start_column, }
 }
 
 ///|

@@ -7,8 +7,8 @@ test "canonical memory keeps compound variant stride separate from flat ABI" {
     Some(Tuple([Prim(U32), Prim(U32)])),
     Some(
       Variant([
-        { label: "none", ty: None, refines: None },
-        { label: "pair", ty: Some(TypeIdx(0)), refines: None },
+        { label: "none", ty: None, refines: None, },
+        { label: "pair", ty: Some(TypeIdx(0)), refines: None, },
       ]),
     ),
   ]

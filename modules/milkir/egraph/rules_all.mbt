@@ -2,10 +2,10 @@
 
 ///|
 /// Global singleton for indexed ruleset - built once, reused everywhere
-let global_indexed_ruleset : Ref[IndexedRuleSet?] = { val: None }
+let global_indexed_ruleset : Ref[IndexedRuleSet?] = { val: None, }
 
 ///|
-let compact_indexed_ruleset : Ref[IndexedRuleSet?] = { val: None }
+let compact_indexed_ruleset : Ref[IndexedRuleSet?] = { val: None, }
 
 ///|
 /// Get the global indexed ruleset (singleton pattern for performance)

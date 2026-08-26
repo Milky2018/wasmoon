@@ -16,7 +16,7 @@ import {
 }
 
 // Values
-pub const WASMOON_CODEGEN_REVISION : String = "machv-vcode-7"
+pub const WASMOON_CODEGEN_REVISION : String = "machv-vcode-8"
 
 pub const WASMOON_JIT_ABI_VERSION : Int = 3
 
@@ -653,14 +653,15 @@ pub(all) enum NativeInvocationPhase {
 type NativeJITContext
 pub fn NativeJITContext::alloc_guarded_memory(Self, Int, Int?) -> Int64
 pub fn NativeJITContext::alloc_indirect_table(Self, Int) -> Bool
-pub fn NativeJITContext::alloc_wasm_stack(Self, Int64) -> Bool
-pub fn NativeJITContext::call_trampoline(Self, Int64, Int64, FixedArray[Int64], Int, Bool) -> Int
+pub fn NativeJITContext::call_trampoline(Self, Int64, Int64, FixedArray[Int64], Int, Bool) -> Int raise NativeFiberError
 pub fn NativeJITContext::clear_cancellation_callback(Self) -> Unit
 pub fn NativeJITContext::clear_gc_heap(Self) -> Unit
 pub fn NativeJITContext::clear_hostcall_callback(Self) -> Unit
 pub fn NativeJITContext::clear_segments(Self) -> Unit
 pub fn NativeJITContext::clear_wasi_stdin_buffer(Self) -> Unit
 pub fn NativeJITContext::clear_wasi_stdin_callback(Self) -> Unit
+#alias(alloc_wasm_stack, deprecated)
+pub fn NativeJITContext::configure_native_fiber_stack_size(Self, Int64) -> Bool
 pub fn NativeJITContext::func_count(Self) -> Int
 pub fn NativeJITContext::func_ptr(Self, Int) -> Int64
 pub fn NativeJITContext::gc_begin_frame(Self, Int64) -> Unit
@@ -670,7 +671,8 @@ pub fn NativeJITContext::gc_environment_is_clear(Self) -> Bool
 pub fn NativeJITContext::gc_set_root_scratch(Self, Array[Int64]) -> Bool
 pub fn NativeJITContext::gc_set_safepoint_table(Self, Int64) -> Unit
 pub fn NativeJITContext::gc_use_func_safepoints(Self, Int) -> Unit
-pub fn NativeJITContext::has_wasm_stack(Self) -> Bool
+#alias(has_wasm_stack, deprecated)
+pub fn NativeJITContext::has_configured_native_fiber_stack_size(Self) -> Bool
 pub fn NativeJITContext::init_wasi(Self, Array[String], Array[String], Array[(String, String)], quiet? : Bool) -> Unit
 pub fn NativeJITContext::memory_ptr(Self, Int) -> Int64
 pub fn NativeJITContext::memory_size(Self, Int) -> Int64
@@ -710,7 +712,8 @@ pub fn NativeJITContinuation::phase(Self) -> NativeFiberPhase
 
 pub(all) enum NativeJITContinuationEvent {
   NativeHostcallSuspended
-  NativeJITReturned(Int)
+  NativeJITCompleted
+  NativeJITTrapped(Int)
 } derive(Eq, @debug.Debug)
 
 pub(all) enum NativeTarget {

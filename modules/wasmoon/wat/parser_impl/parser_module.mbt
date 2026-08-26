@@ -979,7 +979,7 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
                 mod_.funcs.push(type_idx)
                 mod_.codes.push(code)
                 for name in export_names {
-                  mod_.exports.push({ name, desc: Func(func_idx) })
+                  mod_.exports.push({ name, desc: Func(func_idx), })
                 }
               }
               InlineImport(imp, export_names) => {
@@ -987,7 +987,7 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
                 let func_idx = count_func_imports(mod_.imports)
                 mod_.imports.push(imp)
                 for name in export_names {
-                  mod_.exports.push({ name, desc: Func(func_idx) })
+                  mod_.exports.push({ name, desc: Func(func_idx), })
                 }
               }
             }
@@ -997,7 +997,7 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
                 let mem_idx = mod_.memories.length()
                 mod_.memories.push(mem)
                 for name in export_names {
-                  mod_.exports.push({ name, desc: Memory(mem_idx) })
+                  mod_.exports.push({ name, desc: Memory(mem_idx), })
                 }
               }
               MemoryImport(imp, export_names) => {
@@ -1010,14 +1010,14 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
                 }
                 mod_.imports.push(imp)
                 for name in export_names {
-                  mod_.exports.push({ name, desc: Memory(memory_import_count) })
+                  mod_.exports.push({ name, desc: Memory(memory_import_count), })
                 }
               }
               MemoryWithData(mem, export_names, data_bytes) => {
                 let mem_idx = mod_.memories.length()
                 mod_.memories.push(mem)
                 for name in export_names {
-                  mod_.exports.push({ name, desc: Memory(mem_idx) })
+                  mod_.exports.push({ name, desc: Memory(mem_idx), })
                 }
                 // Add inline data segment at offset 0
                 mod_.datas.push({
@@ -1045,7 +1045,7 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
                 let global_idx = num_global_imports + mod_.globals.length()
                 mod_.globals.push(global)
                 for name in export_names {
-                  mod_.exports.push({ name, desc: Global(global_idx) })
+                  mod_.exports.push({ name, desc: Global(global_idx), })
                 }
               }
               GlobalImport(imp, export_names) => {
@@ -1058,7 +1058,7 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
                 }
                 mod_.imports.push(imp)
                 for name in export_names {
-                  mod_.exports.push({ name, desc: Global(global_import_count) })
+                  mod_.exports.push({ name, desc: Global(global_import_count), })
                 }
               }
             }
@@ -1081,7 +1081,7 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
               self.table_names.set(name, table_idx)
             }
             if export_name is Some(name) {
-              mod_.exports.push({ name, desc: Table(table_idx) })
+              mod_.exports.push({ name, desc: Table(table_idx), })
             }
             if inline_elem is Some(elem) {
               mod_.elems.push(elem)
@@ -1110,14 +1110,14 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
                   mod_.tags.length()
                 mod_.tags.push(tag)
                 for name in export_names {
-                  mod_.exports.push({ name, desc: Tag(tag_idx) })
+                  mod_.exports.push({ name, desc: Tag(tag_idx), })
                 }
               }
               TagImport(imp, export_names) => {
                 let tag_idx = count_tag_imports(mod_.imports)
                 mod_.imports.push(imp)
                 for name in export_names {
-                  mod_.exports.push({ name, desc: Tag(tag_idx) })
+                  mod_.exports.push({ name, desc: Tag(tag_idx), })
                 }
               }
             }

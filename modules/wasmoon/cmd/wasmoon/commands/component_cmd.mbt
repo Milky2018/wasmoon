@@ -296,7 +296,7 @@ fn run_component_invoke_eval(
 ) -> ComponentInvokeEvalResult {
   let bytes = @fs.read_file_to_bytes(file_path) catch {
     IOError(error) =>
-      return { ok: false, phase: "read", detail: error, values: [] }
+      return { ok: false, phase: "read", detail: error, values: [], }
   }
   let runtime = @component.ComponentRuntime(wit_names~)
   defer runtime.close()
@@ -311,7 +311,12 @@ fn run_component_invoke_eval(
   }
   let function = instance.bind(export_path) catch {
     error =>
-      return { ok: false, phase: "bind", detail: error.to_string(), values: [] }
+      return {
+        ok: false,
+        phase: "bind",
+        detail: error.to_string(),
+        values: [],
+      }
   }
   let function_type = function.type_()
   if args.length() != function_type.params.length() {
@@ -347,7 +352,7 @@ fn run_component_invoke_eval(
         values: [],
       }
   }
-  { ok: true, phase: "invoke", detail: export_path, values: results }
+  { ok: true, phase: "invoke", detail: export_path, values: results, }
 }
 
 ///|

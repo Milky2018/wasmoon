@@ -11,7 +11,7 @@ priv struct SparseVRegSet {
 
 ///|
 fn SparseVRegSet::new() -> SparseVRegSet {
-  { words: Small([]) }
+  { words: Small([]), }
 }
 
 ///|

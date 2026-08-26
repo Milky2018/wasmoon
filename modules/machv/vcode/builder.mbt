@@ -8,7 +8,7 @@ pub fn[Inst] Builder::new(
   name : String,
   parameter_types : Array[ValueType],
 ) -> Builder[Inst] {
-  { function: Function::new(name, Platform, parameter_types, []) }
+  { function: Function::new(name, Platform, parameter_types, []), }
 }
 
 ///|
@@ -17,7 +17,7 @@ pub fn[Inst] Builder::new_with_results(
   parameter_types : Array[ValueType],
   result_types : Array[ValueType],
 ) -> Builder[Inst] {
-  { function: Function::new(name, Platform, parameter_types, result_types) }
+  { function: Function::new(name, Platform, parameter_types, result_types), }
 }
 
 ///|
@@ -27,7 +27,7 @@ pub fn[Inst] Builder::new_with_protocol(
   parameter_types : Array[ValueType],
   result_types : Array[ValueType],
 ) -> Builder[Inst] {
-  { function: Function::new(name, protocol, parameter_types, result_types) }
+  { function: Function::new(name, protocol, parameter_types, result_types), }
 }
 
 ///|

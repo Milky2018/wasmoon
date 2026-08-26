@@ -295,19 +295,6 @@ extern "c" fn c_jit_call_trampoline_managed(
   values_len : Int,
 ) -> Int = "wasmoon_jit_call_trampoline_managed"
 
-// ============ WASM Stack (Independent Stack with Guard Page) ============
-
-///|
-/// GC-managed version of stack-switching call.
-#borrow(jit_context, values_vec)
-extern "c" fn c_jit_call_with_stack_switch_managed(
-  jit_context : JITContext,
-  trampoline_ptr : Int64,
-  func_ptr : Int64,
-  values_vec : FixedArray[Int64],
-  values_len : Int,
-) -> Int = "wasmoon_jit_call_with_stack_switch_managed"
-
 // ============ Store-Owned Native Fibers ============
 
 ///|
@@ -1243,19 +1230,6 @@ extern "c" fn c_jit_ctx_add_elem_segment_managed(
 extern "c" fn c_jit_ctx_clear_segments_managed(
   jit_context : JITContext,
 ) -> Unit = "wasmoon_jit_ctx_clear_segments_managed"
-
-///|
-#borrow(jit_context)
-extern "c" fn c_jit_alloc_wasm_stack_managed(
-  jit_context : JITContext,
-  stack_size : Int64,
-) -> Int = "wasmoon_jit_alloc_wasm_stack_managed"
-
-///|
-#borrow(jit_context)
-extern "c" fn c_jit_get_wasm_stack_top_managed(
-  jit_context : JITContext,
-) -> Int64 = "wasmoon_jit_get_wasm_stack_top_managed"
 
 ///|
 #borrow(jit_context)

@@ -25,7 +25,7 @@ test "validator: valid simple function" {
     locals: [],
     body: [I32Const(1), I32Const(2), I32Add],
   }
-  let func_type : @types.FuncType = { params: [], results: [I32] }
+  let func_type : @types.FuncType = { params: [], results: [I32], }
   let mod : @types.Module = {
     types: [@types.SubType::from_func(func_type)],
     type_rec_groups: [0],
@@ -52,7 +52,7 @@ test "validator: valid function with params" {
     locals: [],
     body: [LocalGet(0), LocalGet(1), I32Add],
   }
-  let func_type : @types.FuncType = { params: [I32, I32], results: [I32] }
+  let func_type : @types.FuncType = { params: [I32, I32], results: [I32], }
   let mod : @types.Module = {
     types: [@types.SubType::from_func(func_type)],
     type_rec_groups: [0],
@@ -78,7 +78,7 @@ test "validator: type mismatch - wrong operand type" {
     locals: [],
     body: [I64Const(1L), I32Const(2), I32Add], // i64 + i32 is invalid
   }
-  let func_type : @types.FuncType = { params: [], results: [I32] }
+  let func_type : @types.FuncType = { params: [], results: [I32], }
   let mod : @types.Module = {
     types: [@types.SubType::from_func(func_type)],
     type_rec_groups: [0],
@@ -104,8 +104,8 @@ test "validator: type mismatch - wrong operand type" {
 
 ///|
 test "validator: stack underflow" {
-  let func : @types.FunctionCode = { locals: [], body: [I32Const(1), I32Add] } // needs 2 operands, only has 1
-  let func_type : @types.FuncType = { params: [], results: [I32] }
+  let func : @types.FunctionCode = { locals: [], body: [I32Const(1), I32Add], } // needs 2 operands, only has 1
+  let func_type : @types.FuncType = { params: [], results: [I32], }
   let mod : @types.Module = {
     types: [@types.SubType::from_func(func_type)],
     type_rec_groups: [0],
@@ -131,8 +131,8 @@ test "validator: stack underflow" {
 
 ///|
 test "validator: invalid local index" {
-  let func : @types.FunctionCode = { locals: [], body: [LocalGet(5)] } // no local at index 5
-  let func_type : @types.FuncType = { params: [], results: [] }
+  let func : @types.FunctionCode = { locals: [], body: [LocalGet(5)], } // no local at index 5
+  let func_type : @types.FuncType = { params: [], results: [], }
   let mod : @types.Module = {
     types: [@types.SubType::from_func(func_type)],
     type_rec_groups: [0],
@@ -158,9 +158,9 @@ test "validator: invalid local index" {
 test "validator: valid function call" {
   // func 0: returns i32
   // func 1: calls func 0 and returns result
-  let func0 : @types.FunctionCode = { locals: [], body: [I32Const(42)] }
-  let func1 : @types.FunctionCode = { locals: [], body: [Call(0)] }
-  let func_type : @types.FuncType = { params: [], results: [I32] }
+  let func0 : @types.FunctionCode = { locals: [], body: [I32Const(42)], }
+  let func1 : @types.FunctionCode = { locals: [], body: [Call(0)], }
+  let func_type : @types.FuncType = { params: [], results: [I32], }
   let mod : @types.Module = {
     types: [@types.SubType::from_func(func_type)],
     type_rec_groups: [0],
@@ -186,8 +186,8 @@ test "validator: valid global operations" {
     locals: [],
     body: [GlobalGet(0), I32Const(1), I32Add, GlobalSet(0), GlobalGet(0)],
   }
-  let func_type : @types.FuncType = { params: [], results: [I32] }
-  let global_type : @types.GlobalType = { value_type: I32, mutable: true }
+  let func_type : @types.FuncType = { params: [], results: [I32], }
+  let global_type : @types.GlobalType = { value_type: I32, mutable: true, }
   let mod : @types.Module = {
     types: [@types.SubType::from_func(func_type)],
     type_rec_groups: [0],
@@ -195,7 +195,7 @@ test "validator: valid global operations" {
     funcs: [0],
     tables: [],
     memories: [],
-    globals: [{ type_: global_type, init: [I32Const(0)] }],
+    globals: [{ type_: global_type, init: [I32Const(0)], }],
     exports: [],
     start: None,
     elems: [],
@@ -214,7 +214,7 @@ test "validator: stack height - function returns too many values" {
     locals: [],
     body: [I32Const(1), I32Const(2)], // 2 values, but only 1 expected
   }
-  let func_type : @types.FuncType = { params: [], results: [I32] }
+  let func_type : @types.FuncType = { params: [], results: [I32], }
   let mod : @types.Module = {
     types: [@types.SubType::from_func(func_type)],
     type_rec_groups: [0],
@@ -242,8 +242,8 @@ test "validator: stack height - function returns too many values" {
 ///|
 test "validator: stack height - function returns too few values" {
   // Function type says returns 2 values, but body only leaves 1
-  let func : @types.FunctionCode = { locals: [], body: [I32Const(1)] }
-  let func_type : @types.FuncType = { params: [], results: [I32, I32] }
+  let func : @types.FunctionCode = { locals: [], body: [I32Const(1)], }
+  let func_type : @types.FuncType = { params: [], results: [I32, I32], }
   let mod : @types.Module = {
     types: [@types.SubType::from_func(func_type)],
     type_rec_groups: [0],
@@ -279,8 +279,8 @@ test "validator: stack height - block returns correct values" {
       I32Add,
     ],
   }
-  let block_type : @types.FuncType = { params: [], results: [I32, I32] }
-  let func_type : @types.FuncType = { params: [], results: [I32] }
+  let block_type : @types.FuncType = { params: [], results: [I32, I32], }
+  let func_type : @types.FuncType = { params: [], results: [I32], }
   let mod : @types.Module = {
     types: [
       @types.SubType::from_func(block_type),
@@ -309,8 +309,8 @@ test "validator: typed block parameters form the control frame base" {
     locals: [],
     body: [I32Const(7), Block(TypeIndex(0), [])],
   }
-  let block_type : @types.FuncType = { params: [I32], results: [I32] }
-  let func_type : @types.FuncType = { params: [], results: [I32] }
+  let block_type : @types.FuncType = { params: [I32], results: [I32], }
+  let func_type : @types.FuncType = { params: [], results: [I32], }
   let mod : @types.Module = {
     types: [
       @types.SubType::from_func(block_type),
@@ -340,7 +340,7 @@ test "validator: stack height - block leaves wrong number of values" {
     locals: [],
     body: [Block(Value(I32), [I32Const(1), I32Const(2)])],
   }
-  let func_type : @types.FuncType = { params: [], results: [I32] }
+  let func_type : @types.FuncType = { params: [], results: [I32], }
   let mod : @types.Module = {
     types: [@types.SubType::from_func(func_type)],
     type_rec_groups: [0],
@@ -374,7 +374,7 @@ test "validator: stack height - if branches must match" {
       If(Value(I32), [I32Const(10)], [I32Const(20)]),
     ],
   }
-  let func_type : @types.FuncType = { params: [], results: [I32] }
+  let func_type : @types.FuncType = { params: [], results: [I32], }
   let mod : @types.Module = {
     types: [@types.SubType::from_func(func_type)],
     type_rec_groups: [0],
@@ -397,8 +397,8 @@ test "validator: stack height - if branches must match" {
 ///|
 test "validator: stack height - void function with leftover values" {
   // Void function should have empty stack at end
-  let func : @types.FunctionCode = { locals: [], body: [I32Const(1)] } // leaves 1 value, but should be 0
-  let func_type : @types.FuncType = { params: [], results: [] }
+  let func : @types.FunctionCode = { locals: [], body: [I32Const(1)], } // leaves 1 value, but should be 0
+  let func_type : @types.FuncType = { params: [], results: [], }
   let mod : @types.Module = {
     types: [@types.SubType::from_func(func_type)],
     type_rec_groups: [0],
@@ -428,7 +428,7 @@ test "validator: control flow - valid br in block" {
     locals: [],
     body: [Block(Value(I32), [I32Const(42), Br(0)])],
   }
-  let func_type : @types.FuncType = { params: [], results: [I32] }
+  let func_type : @types.FuncType = { params: [], results: [I32], }
   let mod : @types.Module = {
     types: [@types.SubType::from_func(func_type)],
     type_rec_groups: [0],
@@ -451,8 +451,8 @@ test "validator: control flow - valid br in block" {
 ///|
 test "validator: control flow - invalid label index" {
   // br with invalid label index (no enclosing block)
-  let func : @types.FunctionCode = { locals: [], body: [Br(1)] }
-  let func_type : @types.FuncType = { params: [], results: [] }
+  let func : @types.FunctionCode = { locals: [], body: [Br(1)], }
+  let func_type : @types.FuncType = { params: [], results: [], }
   let mod : @types.Module = {
     types: [@types.SubType::from_func(func_type)],
     type_rec_groups: [0],
@@ -490,7 +490,7 @@ test "validator: control flow - nested blocks with br" {
       ]),
     ],
   }
-  let func_type : @types.FuncType = { params: [], results: [I32] }
+  let func_type : @types.FuncType = { params: [], results: [I32], }
   let mod : @types.Module = {
     types: [@types.SubType::from_func(func_type)],
     type_rec_groups: [0],
@@ -524,7 +524,7 @@ test "validator: control flow - br_if with correct type" {
       ]),
     ],
   }
-  let func_type : @types.FuncType = { params: [], results: [I32] }
+  let func_type : @types.FuncType = { params: [], results: [I32], }
   let mod : @types.Module = {
     types: [@types.SubType::from_func(func_type)],
     type_rec_groups: [0],
@@ -547,8 +547,8 @@ test "validator: control flow - br_if with correct type" {
 ///|
 test "validator: control flow - loop with br back to start" {
   // Loop that uses br 0 to jump back to start (expects params, not results)
-  let loop_type : @types.FuncType = { params: [], results: [] }
-  let func_type : @types.FuncType = { params: [], results: [] }
+  let loop_type : @types.FuncType = { params: [], results: [], }
+  let func_type : @types.FuncType = { params: [], results: [], }
   let func : @types.FunctionCode = {
     locals: [],
     body: [
@@ -586,7 +586,7 @@ test "validator: control flow - return in nested block" {
     locals: [],
     body: [Block(Empty, [I32Const(42), Return]), I32Const(0)],
   } // unreachable after block with return
-  let func_type : @types.FuncType = { params: [], results: [I32] }
+  let func_type : @types.FuncType = { params: [], results: [I32], }
   let mod : @types.Module = {
     types: [@types.SubType::from_func(func_type)],
     type_rec_groups: [0],
@@ -618,7 +618,7 @@ test "validator: control flow - br_table basic" {
       ]),
     ],
   }
-  let func_type : @types.FuncType = { params: [], results: [I32] }
+  let func_type : @types.FuncType = { params: [], results: [I32], }
   let mod : @types.Module = {
     types: [@types.SubType::from_func(func_type)],
     type_rec_groups: [0],
@@ -680,7 +680,7 @@ test "validator: validate_module_with_context provides location on error" {
     locals: [],
     body: [I64Const(1L), I32Const(2), I32Add], // Type mismatch at index 2
   }
-  let func_type : @types.FuncType = { params: [], results: [I32] }
+  let func_type : @types.FuncType = { params: [], results: [I32], }
   let mod : @types.Module = {
     types: [@types.SubType::from_func(func_type)],
     type_rec_groups: [0],
@@ -712,9 +712,9 @@ test "validator: validate_module_with_context provides location on error" {
 ///|
 test "validator: validate_module_with_context reports correct function index" {
   // First function is valid, second has error
-  let func0 : @types.FunctionCode = { locals: [], body: [I32Const(42)] }
-  let func1 : @types.FunctionCode = { locals: [], body: [LocalGet(99)] } // Invalid local index
-  let func_type : @types.FuncType = { params: [], results: [I32] }
+  let func0 : @types.FunctionCode = { locals: [], body: [I32Const(42)], }
+  let func1 : @types.FunctionCode = { locals: [], body: [LocalGet(99)], } // Invalid local index
+  let func_type : @types.FuncType = { params: [], results: [I32], }
   let mod : @types.Module = {
     types: [@types.SubType::from_func(func_type)],
     type_rec_groups: [0],
@@ -782,14 +782,18 @@ test "validator: data segment with i64 offset should fail" {
     funcs: [],
     tables: [],
     memories: [
-      { limits: { min: 1, max: None }, is_memory64: false, page_size_log2: 16 },
+      {
+        limits: { min: 1, max: None, },
+        is_memory64: false,
+        page_size_log2: 16,
+      },
     ],
     globals: [],
     exports: [],
     start: None,
     elems: [],
     codes: [],
-    datas: [{ memory_idx: 0, offset: [I64Const(0L)], init: b"" }],
+    datas: [{ memory_idx: 0, offset: [I64Const(0L)], init: b"", }],
     tags: [],
     func_names: Map([]),
   }
@@ -810,14 +814,18 @@ test "validator: data segment with ref.null offset should fail" {
     funcs: [],
     tables: [],
     memories: [
-      { limits: { min: 1, max: None }, is_memory64: false, page_size_log2: 16 },
+      {
+        limits: { min: 1, max: None, },
+        is_memory64: false,
+        page_size_log2: 16,
+      },
     ],
     globals: [],
     exports: [],
     start: None,
     elems: [],
     codes: [],
-    datas: [{ memory_idx: 0, offset: [RefNull(FuncRef)], init: b"" }],
+    datas: [{ memory_idx: 0, offset: [RefNull(FuncRef)], init: b"", }],
     tags: [],
     func_names: Map([]),
   }
@@ -838,14 +846,18 @@ test "validator: data segment with empty offset should fail" {
     funcs: [],
     tables: [],
     memories: [
-      { limits: { min: 1, max: None }, is_memory64: false, page_size_log2: 16 },
+      {
+        limits: { min: 1, max: None, },
+        is_memory64: false,
+        page_size_log2: 16,
+      },
     ],
     globals: [],
     exports: [],
     start: None,
     elems: [],
     codes: [],
-    datas: [{ memory_idx: 0, offset: [], init: b"" }],
+    datas: [{ memory_idx: 0, offset: [], init: b"", }],
     tags: [],
     func_names: Map([]),
   }
@@ -866,14 +878,18 @@ test "validator: data segment with non-constant instruction should fail" {
     funcs: [],
     tables: [],
     memories: [
-      { limits: { min: 1, max: None }, is_memory64: false, page_size_log2: 16 },
+      {
+        limits: { min: 1, max: None, },
+        is_memory64: false,
+        page_size_log2: 16,
+      },
     ],
     globals: [],
     exports: [],
     start: None,
     elems: [],
     codes: [],
-    datas: [{ memory_idx: 0, offset: [I32Ctz], init: b"" }],
+    datas: [{ memory_idx: 0, offset: [I32Ctz], init: b"", }],
     tags: [],
     func_names: Map([]),
   }
@@ -892,14 +908,18 @@ test "validator: data segment with nop offset should fail" {
     funcs: [],
     tables: [],
     memories: [
-      { limits: { min: 1, max: None }, is_memory64: false, page_size_log2: 16 },
+      {
+        limits: { min: 1, max: None, },
+        is_memory64: false,
+        page_size_log2: 16,
+      },
     ],
     globals: [],
     exports: [],
     start: None,
     elems: [],
     codes: [],
-    datas: [{ memory_idx: 0, offset: [Nop], init: b"" }],
+    datas: [{ memory_idx: 0, offset: [Nop], init: b"", }],
     tags: [],
     func_names: Map([]),
   }
@@ -918,14 +938,18 @@ test "validator: data segment with unknown global should fail" {
     funcs: [],
     tables: [],
     memories: [
-      { limits: { min: 1, max: None }, is_memory64: false, page_size_log2: 16 },
+      {
+        limits: { min: 1, max: None, },
+        is_memory64: false,
+        page_size_log2: 16,
+      },
     ],
     globals: [],
     exports: [],
     start: None,
     elems: [],
     codes: [],
-    datas: [{ memory_idx: 0, offset: [GlobalGet(0)], init: b"" }],
+    datas: [{ memory_idx: 0, offset: [GlobalGet(0)], init: b"", }],
     tags: [],
     func_names: Map([]),
   }
@@ -944,16 +968,20 @@ test "validator: data segment with mutable global offset should fail" {
     funcs: [],
     tables: [],
     memories: [
-      { limits: { min: 1, max: None }, is_memory64: false, page_size_log2: 16 },
+      {
+        limits: { min: 1, max: None, },
+        is_memory64: false,
+        page_size_log2: 16,
+      },
     ],
     globals: [
-      { type_: { value_type: I32, mutable: true }, init: [I32Const(0)] },
+      { type_: { value_type: I32, mutable: true, }, init: [I32Const(0)], },
     ],
     exports: [],
     start: None,
     elems: [],
     codes: [],
-    datas: [{ memory_idx: 0, offset: [GlobalGet(0)], init: b"" }],
+    datas: [{ memory_idx: 0, offset: [GlobalGet(0)], init: b"", }],
     tags: [],
     func_names: Map([]),
   }
@@ -972,14 +1000,18 @@ test "validator: data segment with valid i32 const offset should pass" {
     funcs: [],
     tables: [],
     memories: [
-      { limits: { min: 1, max: None }, is_memory64: false, page_size_log2: 16 },
+      {
+        limits: { min: 1, max: None, },
+        is_memory64: false,
+        page_size_log2: 16,
+      },
     ],
     globals: [],
     exports: [],
     start: None,
     elems: [],
     codes: [],
-    datas: [{ memory_idx: 0, offset: [I32Const(0)], init: b"hello" }],
+    datas: [{ memory_idx: 0, offset: [I32Const(0)], init: b"hello", }],
     tags: [],
     func_names: Map([]),
   }
@@ -996,16 +1028,20 @@ test "validator: data segment with immutable global offset should pass" {
     funcs: [],
     tables: [],
     memories: [
-      { limits: { min: 1, max: None }, is_memory64: false, page_size_log2: 16 },
+      {
+        limits: { min: 1, max: None, },
+        is_memory64: false,
+        page_size_log2: 16,
+      },
     ],
     globals: [
-      { type_: { value_type: I32, mutable: false }, init: [I32Const(0)] },
+      { type_: { value_type: I32, mutable: false, }, init: [I32Const(0)], },
     ],
     exports: [],
     start: None,
     elems: [],
     codes: [],
-    datas: [{ memory_idx: 0, offset: [GlobalGet(0)], init: b"hello" }],
+    datas: [{ memory_idx: 0, offset: [GlobalGet(0)], init: b"hello", }],
     tags: [],
     func_names: Map([]),
   }
@@ -1028,7 +1064,7 @@ test "validator: elem segment with i64 offset should fail" {
       {
         type_: {
           elem_type: FuncRef,
-          limits: { min: 1, max: None },
+          limits: { min: 1, max: None, },
           is_table64: false,
         },
         init: None,
@@ -1038,7 +1074,7 @@ test "validator: elem segment with i64 offset should fail" {
     globals: [],
     exports: [],
     start: None,
-    elems: [{ mode: Active(0, [I64Const(0L)]), type_: FuncRef, init: [] }],
+    elems: [{ mode: Active(0, [I64Const(0L)]), type_: FuncRef, init: [], }],
     codes: [],
     datas: [],
     tags: [],
@@ -1063,7 +1099,7 @@ test "validator: elem segment with non-constant instruction should fail" {
       {
         type_: {
           elem_type: FuncRef,
-          limits: { min: 1, max: None },
+          limits: { min: 1, max: None, },
           is_table64: false,
         },
         init: None,
@@ -1073,7 +1109,7 @@ test "validator: elem segment with non-constant instruction should fail" {
     globals: [],
     exports: [],
     start: None,
-    elems: [{ mode: Active(0, [I32Ctz]), type_: FuncRef, init: [] }],
+    elems: [{ mode: Active(0, [I32Ctz]), type_: FuncRef, init: [], }],
     codes: [],
     datas: [],
     tags: [],
@@ -1096,7 +1132,7 @@ test "validator: elem segment with unknown global should fail" {
       {
         type_: {
           elem_type: FuncRef,
-          limits: { min: 1, max: None },
+          limits: { min: 1, max: None, },
           is_table64: false,
         },
         init: None,
@@ -1106,7 +1142,7 @@ test "validator: elem segment with unknown global should fail" {
     globals: [],
     exports: [],
     start: None,
-    elems: [{ mode: Active(0, [GlobalGet(0)]), type_: FuncRef, init: [] }],
+    elems: [{ mode: Active(0, [GlobalGet(0)]), type_: FuncRef, init: [], }],
     codes: [],
     datas: [],
     tags: [],
@@ -1129,7 +1165,7 @@ test "validator: elem segment with mutable global offset should fail" {
       {
         type_: {
           elem_type: FuncRef,
-          limits: { min: 1, max: None },
+          limits: { min: 1, max: None, },
           is_table64: false,
         },
         init: None,
@@ -1137,11 +1173,11 @@ test "validator: elem segment with mutable global offset should fail" {
     ],
     memories: [],
     globals: [
-      { type_: { value_type: I32, mutable: true }, init: [I32Const(0)] },
+      { type_: { value_type: I32, mutable: true, }, init: [I32Const(0)], },
     ],
     exports: [],
     start: None,
-    elems: [{ mode: Active(0, [GlobalGet(0)]), type_: FuncRef, init: [] }],
+    elems: [{ mode: Active(0, [GlobalGet(0)]), type_: FuncRef, init: [], }],
     codes: [],
     datas: [],
     tags: [],
@@ -1165,7 +1201,7 @@ test "validator: elem segment with invalid table index should fail" {
     globals: [],
     exports: [],
     start: None,
-    elems: [{ mode: Active(0, [I32Const(0)]), type_: FuncRef, init: [] }],
+    elems: [{ mode: Active(0, [I32Const(0)]), type_: FuncRef, init: [], }],
     codes: [],
     datas: [],
     tags: [],
@@ -1188,7 +1224,7 @@ test "validator: elem segment type mismatch with table should fail" {
       {
         type_: {
           elem_type: ExternRef,
-          limits: { min: 1, max: None },
+          limits: { min: 1, max: None, },
           is_table64: false,
         },
         init: None,
@@ -1198,7 +1234,7 @@ test "validator: elem segment type mismatch with table should fail" {
     globals: [],
     exports: [],
     start: None,
-    elems: [{ mode: Active(0, [I32Const(0)]), type_: FuncRef, init: [] }],
+    elems: [{ mode: Active(0, [I32Const(0)]), type_: FuncRef, init: [], }],
     codes: [],
     datas: [],
     tags: [],
@@ -1221,7 +1257,7 @@ test "validator: elem segment with valid i32 const offset should pass" {
       {
         type_: {
           elem_type: FuncRef,
-          limits: { min: 1, max: None },
+          limits: { min: 1, max: None, },
           is_table64: false,
         },
         init: None,
@@ -1231,7 +1267,7 @@ test "validator: elem segment with valid i32 const offset should pass" {
     globals: [],
     exports: [],
     start: None,
-    elems: [{ mode: Active(0, [I32Const(0)]), type_: FuncRef, init: [] }],
+    elems: [{ mode: Active(0, [I32Const(0)]), type_: FuncRef, init: [], }],
     codes: [],
     datas: [],
     tags: [],
@@ -1252,7 +1288,7 @@ test "validator: elem init with wrong type should fail" {
       {
         type_: {
           elem_type: FuncRef,
-          limits: { min: 1, max: None },
+          limits: { min: 1, max: None, },
           is_table64: false,
         },
         init: None,
@@ -1293,7 +1329,7 @@ test "validator: elem with unknown function should fail" {
       {
         type_: {
           elem_type: FuncRef,
-          limits: { min: 2, max: None },
+          limits: { min: 2, max: None, },
           is_table64: false,
         },
         init: None,
@@ -1338,7 +1374,7 @@ test "regression: invalid type index should fail" {
     exports: [],
     start: None,
     elems: [],
-    codes: [{ locals: [], body: [] }],
+    codes: [{ locals: [], body: [], }],
     datas: [],
     tags: [],
     func_names: Map([]),
@@ -1392,7 +1428,7 @@ test "regression: initialized non-nullable local should pass" {
     start: None,
     elems: [
       // Need to declare function 0 for ref.func usage
-      { type_: FuncRef, init: [[RefFunc(0)]], mode: Declarative },
+      { type_: FuncRef, init: [[RefFunc(0)]], mode: Declarative, },
     ],
     codes: [
       {
@@ -1454,7 +1490,7 @@ test "regression: param with non-nullable ref type should be initialized" {
     exports: [],
     start: None,
     elems: [],
-    codes: [{ locals: [], body: [LocalGet(0), Drop] }],
+    codes: [{ locals: [], body: [LocalGet(0), Drop], }],
     datas: [], // param 0 is always initialized
     tags: [],
     func_names: Map([]),
@@ -1496,19 +1532,19 @@ fn field(
   storage : @types.StorageType,
   mutable? : Bool = false,
 ) -> @types.FieldType {
-  { storage_type: storage, mutable }
+  { storage_type: storage, mutable, }
 }
 
 ///|
 /// Helper: create a SubType wrapping a struct
 fn struct_subtype(fields : Array[@types.FieldType]) -> @types.SubType {
-  { final_: true, supertypes: [], composite: Struct({ fields, }) }
+  { final_: true, supertypes: [], composite: Struct({ fields, }), }
 }
 
 ///|
 /// Helper: create a SubType wrapping an array
 fn array_subtype(element : @types.FieldType) -> @types.SubType {
-  { final_: true, supertypes: [], composite: Array({ element, }) }
+  { final_: true, supertypes: [], composite: Array({ element, }), }
 }
 
 ///|
@@ -1631,7 +1667,7 @@ test "validator: mixed func, struct, array types should pass" {
     exports: [],
     start: None,
     elems: [],
-    codes: [{ locals: [], body: [LocalGet(0)] }],
+    codes: [{ locals: [], body: [LocalGet(0)], }],
     datas: [],
     tags: [],
     func_names: Map([]),
@@ -1649,9 +1685,9 @@ fn module_with_memory(
   results : Array[@types.ValueType],
   is_memory64? : Bool = false,
 ) -> @types.Module {
-  let func_type : @types.FuncType = { params: [], results }
+  let func_type : @types.FuncType = { params: [], results, }
   let mem_type : @types.MemoryType = {
-    limits: { min: 1L, max: None },
+    limits: { min: 1L, max: None, },
     is_memory64,
     page_size_log2: 16,
   }
@@ -1666,7 +1702,7 @@ fn module_with_memory(
     exports: [],
     start: None,
     elems: [],
-    codes: [{ locals: [], body }],
+    codes: [{ locals: [], body, }],
     datas: [],
     tags: [],
     func_names: Map([]),
@@ -1679,9 +1715,9 @@ fn module_with_table(
   results : Array[@types.ValueType],
   is_table64? : Bool = false,
 ) -> @types.Module {
-  let func_type : @types.FuncType = { params: [], results }
+  let func_type : @types.FuncType = { params: [], results, }
   let table_type : @types.TableType = {
-    limits: { min: 1L, max: None },
+    limits: { min: 1L, max: None, },
     elem_type: FuncRef,
     is_table64,
   }
@@ -1690,13 +1726,13 @@ fn module_with_table(
     type_rec_groups: [0],
     imports: [],
     funcs: [0],
-    tables: [{ type_: table_type, init: None }],
+    tables: [{ type_: table_type, init: None, }],
     memories: [],
     globals: [],
     exports: [],
     start: None,
     elems: [],
-    codes: [{ locals: [], body }],
+    codes: [{ locals: [], body, }],
     datas: [],
     tags: [],
     func_names: Map([]),
@@ -1836,7 +1872,7 @@ test "validator: table64 table.grow takes and returns i64" {
 /// result and kept the call solely for that abort, which made the crash the
 /// rule. Both spellings below reached it (ISS-395).
 test "validator: type index naming the wrong kind is rejected, not fatal" {
-  let func_type : @types.FuncType = { params: [], results: [] }
+  let func_type : @types.FuncType = { params: [], results: [], }
   fn module_with(body : Array[@types.Instruction]) -> @types.Module {
     {
       types: [@types.SubType::from_func(func_type)],
@@ -1849,7 +1885,7 @@ test "validator: type index naming the wrong kind is rejected, not fatal" {
       exports: [],
       start: None,
       elems: [],
-      codes: [{ locals: [], body }],
+      codes: [{ locals: [], body, }],
       datas: [],
       tags: [],
       func_names: Map([]),
@@ -1875,7 +1911,7 @@ test "validator: type index naming the wrong kind is rejected, not fatal" {
 /// out-of-range index aborted before it could name itself — the process died
 /// with nothing on either stream (ISS-395).
 test "validator: out-of-range type index is rejected, not fatal" {
-  let func_type : @types.FuncType = { params: [], results: [] }
+  let func_type : @types.FuncType = { params: [], results: [], }
   let mod : @types.Module = {
     types: [@types.SubType::from_func(func_type)],
     type_rec_groups: [0],
@@ -1887,7 +1923,7 @@ test "validator: out-of-range type index is rejected, not fatal" {
     exports: [],
     start: None,
     elems: [],
-    codes: [{ locals: [], body: [StructNewDefault(99)] }],
+    codes: [{ locals: [], body: [StructNewDefault(99)], }],
     datas: [],
     tags: [],
     func_names: Map([]),

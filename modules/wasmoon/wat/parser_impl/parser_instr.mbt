@@ -1674,7 +1674,7 @@ fn Parser::find_or_create_func_type(
     }
   }
   // No match found, create a new type
-  let new_type = @types.FuncType::{ params, results }
+  let new_type = @types.FuncType::{ params, results, }
   let idx = self.types.length()
   self.types.push(@types.SubType::from_func(new_type))
   // Implicit type is its own rec group

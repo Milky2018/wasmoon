@@ -19,7 +19,7 @@ fn Parser::read_field_type(self : Parser) -> @types.FieldType raise ParserError 
   if mutability != 0x00 && mutability != 0x01 {
     raise MalformedMutability(mutability)
   }
-  { storage_type, mutable: mutability == 0x01 }
+  { storage_type, mutable: mutability == 0x01, }
 }
 
 ///|
@@ -45,7 +45,7 @@ fn Parser::read_composite_type(
     0x60 => {
       let params = self.read_vec(() => self.read_value_type())
       let results = self.read_vec(() => self.read_value_type())
-      Func({ params, results })
+      Func({ params, results, })
     }
     0x5f => Struct(self.read_struct_type())
     0x5e => Array(self.read_array_type())
@@ -74,7 +74,7 @@ fn Parser::read_subtype(self : Parser) -> @types.SubType raise ParserError {
       []
     }
     let composite = self.read_composite_type()
-    { final_, supertypes, composite }
+    { final_, supertypes, composite, }
   } else if tag == 0x4f {
     self.skip(1)
     let flags = self.read_byte()
@@ -88,11 +88,11 @@ fn Parser::read_subtype(self : Parser) -> @types.SubType raise ParserError {
       []
     }
     let composite = self.read_composite_type()
-    { final_: true, supertypes, composite }
+    { final_: true, supertypes, composite, }
   } else {
     // Implicit final subtype
     let composite = self.read_composite_type()
-    { final_: true, supertypes: [], composite }
+    { final_: true, supertypes: [], composite, }
   }
 }
 
@@ -108,8 +108,8 @@ fn Parser::read_rec_group(
     composite_tag : Int,
   ) -> @types.SubType raise ParserError {
     let composite : @types.CompositeType = match composite_tag {
-      0x60 => Func({ params: [], results: [] })
-      0x5f => Struct({ fields: [] })
+      0x60 => Func({ params: [], results: [], })
+      0x5f => Struct({ fields: [], })
       0x5e => {
         let element : @types.FieldType = {
           storage_type: Val(I32),
@@ -119,7 +119,7 @@ fn Parser::read_rec_group(
       }
       _ => raise ParseError("unknown composite type tag: \{composite_tag}")
     }
-    { final_: true, supertypes: [], composite }
+    { final_: true, supertypes: [], composite, }
   }
 
   fn skip_value_type_no_resolve(self : Parser) -> Unit raise ParserError {

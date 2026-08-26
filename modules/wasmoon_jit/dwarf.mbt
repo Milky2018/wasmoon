@@ -22,7 +22,7 @@ pub struct DWARFBuilder {
 ///|
 /// Create a new DWARF builder
 pub fn DWARFBuilder::DWARFBuilder() -> DWARFBuilder {
-  { handle: c_dwarf_create() }
+  { handle: c_dwarf_create(), }
 }
 
 ///|
@@ -116,7 +116,7 @@ pub fn DWARFBuilder::lookup_address(
         name_buf[i].to_int().unsafe_to_char()
       }),
     )
-    Some({ name, func_idx: func_idx_buf[0], offset: offset_buf[0] })
+    Some({ name, func_idx: func_idx_buf[0], offset: offset_buf[0], })
   } else {
     None
   }

@@ -59,8 +59,8 @@ fn emit_resolved_move(
         message="no scratch register for stack-to-stack transfer",
       )
     }
-    result.push({ value: transfer.value, from: transfer.from, to: Reg(reg) })
-    result.push({ value: transfer.value, from: Reg(reg), to: transfer.to })
+    result.push({ value: transfer.value, from: transfer.from, to: Reg(reg), })
+    result.push({ value: transfer.value, from: Reg(reg), to: transfer.to, })
   } else {
     result.push(transfer)
   }
@@ -119,7 +119,7 @@ fn resolve_plan_moves(
     guard source_value is Some(value) else {
       raise InvalidPlan(message="parallel-transfer cycle has no source owner")
     }
-    result.push({ value, from: cycle.to, to: temporary })
+    result.push({ value, from: cycle.to, to: temporary, })
     for index in 0..<pending.length() {
       if move_aliases(pending[index].from, cycle.to) {
         pending[index] = {
@@ -154,11 +154,11 @@ fn resolve_instruction_edits(
     if instruction_edit_key(edit.position) is Some(key) {
       match moves_by_position.get(key) {
         Some(moves) =>
-          moves.push({ value: edit.value, from: edit.from, to: edit.to })
+          moves.push({ value: edit.value, from: edit.from, to: edit.to, })
         None => {
           positions.push(edit.position)
           moves_by_position[key] = [
-            { value: edit.value, from: edit.from, to: edit.to },
+            { value: edit.value, from: edit.from, to: edit.to, },
           ]
         }
       }

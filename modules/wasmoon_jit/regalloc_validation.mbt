@@ -13,7 +13,7 @@
 /// when the allocator moved into `modules/`, leaving the verifier
 /// unconditional and the variable dead; this restores it. CI's `moon test`
 /// step sets the variable, so the test matrix keeps full verification.
-let regalloc_validation_enabled : Ref[Bool?] = { val: None }
+let regalloc_validation_enabled : Ref[Bool?] = { val: None, }
 
 ///|
 fn regalloc_validation() -> Bool {

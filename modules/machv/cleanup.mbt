@@ -321,5 +321,5 @@ pub fn Function::run_mandatory_cleanup(
   let aliases_rewritten = self.rewrite_aliases(aliases)
   let instructions_removed = self.remove_dead_instructions()
   self.verify()
-  { aliases_rewritten, instructions_removed }
+  { aliases_rewritten, instructions_removed, }
 }

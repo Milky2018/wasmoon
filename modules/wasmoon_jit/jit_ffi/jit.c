@@ -164,9 +164,11 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_jit_hostcall(
     // Defensive: hostcall trampolines pass a pointer into the active WASM stack.
     // If ABI bugs pass an invalid pointer, the MoonBit dispatcher may scribble
     // over unrelated memory and corrupt the heap.
-    if (ctx->wasm_stack_base && ctx->wasm_stack_top) {
-        uintptr_t base = (uintptr_t)ctx->wasm_stack_base;
-        uintptr_t top = (uintptr_t)ctx->wasm_stack_top;
+    uintptr_t base = 0;
+    uintptr_t top = 0;
+    if (wasmoon_native_fiber_stack_bounds(
+            &base, &top, NULL, NULL
+        )) {
         uintptr_t ptr = (uintptr_t)values_ptr;
         // Each slot is 8 bytes; `num_args`/`num_results` are already slot counts
         // (v128 uses 2 slots in the trampoline).
@@ -178,16 +180,6 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_jit_hostcall(
         }
         uintptr_t bytes = (uintptr_t)(num_args + num_results) * 8u;
         int valid = hostcall_slots_in_range(ptr, bytes, base, top);
-        uintptr_t fiber_base = 0;
-        uintptr_t fiber_top = 0;
-        if (!valid &&
-            wasmoon_native_fiber_stack_bounds(
-                &fiber_base, &fiber_top, NULL, NULL
-            )) {
-            valid = hostcall_slots_in_range(
-                ptr, bytes, fiber_base, fiber_top
-            );
-        }
         if (!valid) {
             g_trap_code = 3; // unreachable
             if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
@@ -884,6 +876,7 @@ MOONBIT_FFI_EXPORT int wasmoon_jit_call_trampoline(
 
     if (sigsetjmp(activation.jmp_buf, 1) != 0) {
         int trap_code = (int)activation.code;
+        jit_trap_activation_finalize(&activation);
         jit_trap_activation_publish(&activation);
         exception_reset_context_state(ctx);
         jit_trap_activation_pop(&activation);
@@ -904,6 +897,7 @@ MOONBIT_FFI_EXPORT int wasmoon_jit_call_trampoline(
 #endif
 
     int trap_code = (int)activation.code;
+    jit_trap_activation_finalize(&activation);
     jit_trap_activation_publish(&activation);
     exception_reset_context_state(ctx);
     jit_trap_activation_pop(&activation);
@@ -925,90 +919,6 @@ MOONBIT_FFI_EXPORT int wasmoon_jit_call_trampoline_managed(
     if (!jit_context) return -1;
     int64_t ctx_ptr = wasmoon_jit_context_ptr(jit_context);
     return wasmoon_jit_call_trampoline(trampoline_ptr, ctx_ptr, func_ptr, values_vec, values_len);
-}
-
-// ============ Stack-Switching Trampoline Call ============
-
-// External assembly function for stack switching (from stack_switch_aarch64.S)
-#if defined(__aarch64__) || defined(_M_ARM64) || defined(__x86_64__) || defined(_M_X64)
-extern int stack_switch_call(
-    void *wasm_stack_top,
-    void *trampoline_ptr,
-    void *vmctx,
-    void *values_vec,
-    void *func_ptr
-);
-#endif
-
-MOONBIT_FFI_EXPORT int wasmoon_jit_call_with_stack_switch(
-    int64_t trampoline_ptr,
-    int64_t ctx_ptr,
-    int64_t func_ptr,
-    int64_t *values_vec,
-    int values_len
-) {
-    (void)values_len;
-
-    if (!trampoline_ptr || !ctx_ptr || !func_ptr) return -1;
-
-    jit_context_t *ctx = (jit_context_t *)ctx_ptr;
-    ctx_refresh_memory0_fast_fields(ctx);
-
-    // Check if WASM stack is allocated
-    if (!ctx->wasm_stack_top) {
-        // Fall back to regular call if no WASM stack
-        return wasmoon_jit_call_trampoline(trampoline_ptr, ctx_ptr, func_ptr, values_vec, values_len);
-    }
-
-#if defined(__aarch64__) || defined(_M_ARM64) || defined(__x86_64__) || defined(_M_X64)
-    install_trap_handler();
-    jit_trap_activation_t activation;
-    jit_trap_activation_init(&activation, ctx);
-    jit_trap_activation_push(&activation);
-
-    if (sigsetjmp(activation.jmp_buf, 1) != 0) {
-        int trap_code = (int)activation.code;
-        jit_trap_activation_publish(&activation);
-        exception_reset_context_state(ctx);
-        jit_trap_activation_pop(&activation);
-        return trap_code;
-    }
-
-    // Call using stack-switching assembly
-    int result = stack_switch_call(
-        ctx->wasm_stack_top,
-        (void *)trampoline_ptr,
-        ctx,
-        values_vec,
-        (void *)func_ptr
-    );
-
-    int trap_code = (int)activation.code;
-    jit_trap_activation_publish(&activation);
-    exception_reset_context_state(ctx);
-    jit_trap_activation_pop(&activation);
-
-    if (trap_code != 0) {
-        return trap_code;
-    }
-
-    return result;
-#else
-    // On targets without a stack-switch helper, fall back to regular call.
-    return wasmoon_jit_call_trampoline(trampoline_ptr, ctx_ptr, func_ptr, values_vec, values_len);
-#endif
-}
-
-MOONBIT_FFI_EXPORT int wasmoon_jit_call_with_stack_switch_managed(
-    void *jit_context,
-    int64_t trampoline_ptr,
-    int64_t func_ptr,
-    int64_t *values_vec,
-    int values_len
-) {
-    if (!jit_context) return -1;
-    int64_t ctx_ptr = wasmoon_jit_context_ptr(jit_context);
-    return wasmoon_jit_call_with_stack_switch(trampoline_ptr, ctx_ptr, func_ptr, values_vec, values_len);
 }
 
 // ============ Spectest Trampolines ============

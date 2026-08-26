@@ -8,13 +8,13 @@ struct Linker {
 ///|
 /// Create a new linker with a fresh store
 pub fn Linker::Linker() -> Linker {
-  { store: Store(), modules: [] }
+  { store: Store(), modules: [], }
 }
 
 ///|
 /// Create a new linker with an existing store
 pub fn Linker::with_store(store : Store) -> Linker {
-  { store, modules: [] }
+  { store, modules: [], }
 }
 
 ///|
@@ -136,7 +136,7 @@ pub fn Linker::add_host_func(
   mod_name : String,
   name : String,
   func : (Array[@types.Value]) -> Array[@types.Value] raise RuntimeError,
-  func_type? : @types.FuncType = { params: [], results: [] },
+  func_type? : @types.FuncType = { params: [], results: [], },
 ) -> Unit raise RuntimeError {
   self.store.ensure_open()
   let func_addr = self.store.alloc_host_func(func, func_type~)
@@ -148,7 +148,7 @@ pub fn Linker::add_host_func(
     instance.exports.truncate(exports)
   })
   instance.func_addrs.push(func_addr)
-  instance.exports.push({ name, desc: Func(instance.func_addrs.length() - 1) })
+  instance.exports.push({ name, desc: Func(instance.func_addrs.length() - 1), })
 }
 
 ///|
@@ -158,7 +158,7 @@ pub fn Linker::add_host_func_with_caller(
   mod_name : String,
   name : String,
   func : (Caller, Array[@types.Value]) -> Array[@types.Value] raise RuntimeError,
-  func_type? : @types.FuncType = { params: [], results: [] },
+  func_type? : @types.FuncType = { params: [], results: [], },
 ) -> Unit raise RuntimeError {
   self.store.ensure_open()
   let func_addr = self.store.alloc_host_func_with_caller(func, func_type~)
@@ -170,7 +170,7 @@ pub fn Linker::add_host_func_with_caller(
     instance.exports.truncate(exports)
   })
   instance.func_addrs.push(func_addr)
-  instance.exports.push({ name, desc: Func(instance.func_addrs.length() - 1) })
+  instance.exports.push({ name, desc: Func(instance.func_addrs.length() - 1), })
 }
 
 ///|
@@ -191,7 +191,7 @@ pub fn Linker::add_memory(
     instance.exports.truncate(exports)
   })
   instance.mem_addrs.push(mem_addr)
-  instance.exports.push({ name, desc: Memory(instance.mem_addrs.length() - 1) })
+  instance.exports.push({ name, desc: Memory(instance.mem_addrs.length() - 1), })
 }
 
 ///|
@@ -212,7 +212,10 @@ pub fn Linker::add_table(
     instance.exports.truncate(exports)
   })
   instance.table_addrs.push(table_addr)
-  instance.exports.push({ name, desc: Table(instance.table_addrs.length() - 1) })
+  instance.exports.push({
+    name,
+    desc: Table(instance.table_addrs.length() - 1),
+  })
 }
 
 ///|

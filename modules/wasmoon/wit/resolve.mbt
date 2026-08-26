@@ -23,7 +23,7 @@ pub fn desugar_toplevel_use(doc : Package) -> Package raise WitError {
   for p in doc.nested {
     nested.push(desugar_toplevel_use(p))
   }
-  { name: doc.name, version: doc.version, items, nested }
+  { name: doc.name, version: doc.version, items, nested, }
 }
 
 ///|
@@ -35,7 +35,7 @@ pub fn merge_package_files(docs : Array[Package]) -> Package raise WitError {
     let dd = desugar_toplevel_use(d)
     merged = Some(merge_packages(merged, dd))
   }
-  merged.unwrap_or({ name: None, version: None, items: [], nested: [] })
+  merged.unwrap_or({ name: None, version: None, items: [], nested: [], })
 }
 
 ///|
@@ -101,7 +101,7 @@ pub fn resolve_package(
       )
     }
   }
-  { root: root_pkg, deps: out_deps }
+  { root: root_pkg, deps: out_deps, }
 }
 
 // ============================================================
@@ -130,7 +130,7 @@ pub fn importize_world(world : World, out_name : String) -> World {
       _ => items.push(wi)
     }
   }
-  { name: out_name, items }
+  { name: out_name, items, }
 }
 
 ///|
@@ -159,7 +159,7 @@ pub fn importize_resolved_package(
     items.push(it)
   }
   items.push(World(out_world))
-  { name: res.root.name, version: res.root.version, items, nested: res.deps }
+  { name: res.root.name, version: res.root.version, items, nested: res.deps, }
 }
 
 ///|
@@ -188,7 +188,7 @@ pub fn importize_first_world_in_package(
     items.push(it)
   }
   items.push(World(out_world))
-  { name: pkg.name, version: pkg.version, items, nested: pkg.nested }
+  { name: pkg.name, version: pkg.version, items, nested: pkg.nested, }
 }
 
 ///|
@@ -436,8 +436,8 @@ fn resolve_one_package(
     let (type_exports, deps_arr) = resolve_interface_in_package(
       pkg_key, iface, pkgs, iface_type_exports,
     )
-    iface_type_exports.set(iface_key({ pkg_key, name }), type_exports)
-    iface_deps.set(iface_key({ pkg_key, name }), deps_arr)
+    iface_type_exports.set(iface_key({ pkg_key, name, }), type_exports)
+    iface_deps.set(iface_key({ pkg_key, name, }), deps_arr)
     resolved_ifaces.set(name, iface)
   }
 
@@ -656,8 +656,8 @@ fn get_iface_type_exports(
 ///|
 fn use_path_to_iface_ref(cur_pkg_key : String, path : UsePath) -> IfaceRef {
   match split_use_path(path) {
-    (None, name, _) => { pkg_key: cur_pkg_key, name }
-    (Some(k), name, _) => { pkg_key: k, name }
+    (None, name, _) => { pkg_key: cur_pkg_key, name, }
+    (Some(k), name, _) => { pkg_key: k, name, }
   }
 }
 
@@ -942,7 +942,7 @@ fn resolve_world_in_package(
   // Rebuild world items with new interface imports at the front.
   let rebuilt : Array[WorldItem] = []
   for r in import_list {
-    rebuilt.push(Import({ raw: iface_ref_to_use_path(pkg_key, r) }))
+    rebuilt.push(Import({ raw: iface_ref_to_use_path(pkg_key, r), }))
   }
   // Keep non-interface-import items in original order, skipping old interface imports.
   for wi in items {
@@ -953,7 +953,7 @@ fn resolve_world_in_package(
   // Validate world-local type definitions and world-level function signatures.
   validate_world_types(world.name, rebuilt, pkg_key, iface_type_exports, pkgs)
   |> ignore
-  { name: world.name, items: rebuilt }
+  { name: world.name, items: rebuilt, }
 }
 
 ///|
@@ -1452,12 +1452,12 @@ fn desugar_interface_aliases(
     match it {
       Use(u) =>
         items.push(
-          Use({ path: resolve_toplevel_alias(aliases, u.path), names: u.names }),
+          Use({ path: resolve_toplevel_alias(aliases, u.path), names: u.names, }),
         )
       _ => items.push(it)
     }
   }
-  { name: iface.name, items }
+  { name: iface.name, items, }
 }
 
 ///|
@@ -1476,7 +1476,7 @@ fn desugar_world_aliases(w : World, aliases : Map[String, UsePath]) -> World {
         )
       Use(u) =>
         items.push(
-          Use({ path: resolve_toplevel_alias(aliases, u.path), names: u.names }),
+          Use({ path: resolve_toplevel_alias(aliases, u.path), names: u.names, }),
         )
       ImportInlineInterface(nm, iface) =>
         items.push(
@@ -1495,7 +1495,7 @@ fn desugar_world_aliases(w : World, aliases : Map[String, UsePath]) -> World {
       _ => items.push(it)
     }
   }
-  { name: w.name, items }
+  { name: w.name, items, }
 }
 
 ///|
@@ -1508,7 +1508,7 @@ fn desugar_inline_iface_aliases(
     match it {
       Use(u) =>
         items.push(
-          Use({ path: resolve_toplevel_alias(aliases, u.path), names: u.names }),
+          Use({ path: resolve_toplevel_alias(aliases, u.path), names: u.names, }),
         )
       _ => items.push(it)
     }
@@ -1545,7 +1545,7 @@ fn merge_packages(acc : Package?, pkg : Package) -> Package raise WitError {
       }
       let items = a.items + pkg.items
       let nested = a.nested + pkg.nested
-      { name, version, items, nested }
+      { name, version, items, nested, }
     }
   }
 }

@@ -9,7 +9,7 @@ priv struct Reader {
 
 ///|
 fn Reader::Reader(data : Bytes) -> Reader {
-  { data, pos: 0 }
+  { data, pos: 0, }
 }
 
 ///|

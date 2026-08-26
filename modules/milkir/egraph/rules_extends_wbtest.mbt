@@ -7,7 +7,7 @@ test "rule_uextend_const_with_extract" {
   let const_200 = eg.add_const(200L)
 
   // Create uextend(32, 64, const_200)
-  let uextend_node = eg.add({ op: Uextend(32, 64), children: [const_200] })
+  let uextend_node = eg.add({ op: Uextend(32, 64), children: [const_200], })
 
   // Before saturation
   inspect(eg.get_nodes(uextend_node).length(), content="1")
@@ -32,9 +32,9 @@ test "rule_uextend_const_with_extract" {
 test "rule_uextend_const_typed_rewrite" {
   let eg = EGraph::EGraph()
   let rules = get_global_ruleset()
-  let const_200 = eg.add_typed({ op: Const(200L), children: [] }, 32)
+  let const_200 = eg.add_typed({ op: Const(200L), children: [], }, 32)
   let uextend_node = eg.add_typed(
-    { op: Uextend(32, 64), children: [const_200] },
+    { op: Uextend(32, 64), children: [const_200], },
     64,
   )
   eg.saturate_indexed(rules, 10) |> ignore

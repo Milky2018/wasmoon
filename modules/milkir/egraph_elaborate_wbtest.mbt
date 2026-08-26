@@ -25,14 +25,14 @@ fn dual_width_const_function() -> (
   let eg = builder.egraph
   let three = eg.add_const(3)
   let narrow_var = eg.add_var(narrow.id)
-  let shifted = eg.add({ op: Shl, children: [narrow_var, three] })
-  let widened = eg.add({ op: Uextend(32, 64), children: [shifted] })
-  let root = eg.add({ op: Add, children: [widened, three] })
+  let shifted = eg.add({ op: Shl, children: [narrow_var, three], })
+  let widened = eg.add({ op: Uextend(32, 64), children: [shifted], })
+  let root = eg.add({ op: Add, children: [widened, three], })
   // `narrow` is the one value elaboration may reuse; everything else in the
   // shape has to be built.
   builder.ensure_value_slot(narrow.id)
   builder.class_to_value.set(
-    { class_id: eg.find(narrow_var).0, ty: I32 },
+    { class_id: eg.find(narrow_var).0, ty: I32, },
     narrow,
   )
   builder.ensure_value_slot(sum.id)
@@ -106,9 +106,9 @@ test "an abandoned elaboration appends nothing" {
   let eg = builder.egraph
   // `(1 + 2) + (3 + 4)`: seven classes to build against a budget of four,
   // and the budget runs out with four instructions already planned.
-  let left = eg.add({ op: Add, children: [eg.add_const(1), eg.add_const(2)] })
-  let right = eg.add({ op: Add, children: [eg.add_const(3), eg.add_const(4)] })
-  let root = eg.add({ op: Add, children: [left, right] })
+  let left = eg.add({ op: Add, children: [eg.add_const(1), eg.add_const(2)], })
+  let right = eg.add({ op: Add, children: [eg.add_const(3), eg.add_const(4)], })
+  let root = eg.add({ op: Add, children: [left, right], })
   builder.ensure_value_slot(sum.id)
   builder.value_map[sum.id] = Some(root)
   let best_nodes : Map[Int, @egraph.ENode] = Map([])
