@@ -565,7 +565,7 @@ fn plan_frame_verified(
   let result_area_size = maximum_result_area_size(function)
   let result_area = if result_area_size > 0 {
     offset = align_up(offset, 16)
-    let area = { offset, size: result_area_size }
+    let area = { offset, size: result_area_size, }
     offset += result_area_size
     Some(area)
   } else {
@@ -574,7 +574,7 @@ fn plan_frame_verified(
   let stack_objects = match stack_object_area_requirements(function) {
     Some((size, alignment)) => {
       offset = align_up(offset, alignment)
-      let area = { offset, size, alignment }
+      let area = { offset, size, alignment, }
       offset += size
       Some(area)
     }
@@ -602,7 +602,7 @@ fn plan_frame_verified(
   for reg in used_callee_saved_registers(function, allocation) {
     let size = register_save_size(reg)
     offset = align_up(offset, size)
-    saved_registers.push({ reg, offset })
+    saved_registers.push({ reg, offset, })
     offset += size
   }
   let local_size = align_up(offset, 16)

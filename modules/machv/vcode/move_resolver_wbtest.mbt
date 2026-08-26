@@ -26,7 +26,7 @@ fn symbolic_write(
       return
     }
   }
-  state.push({ location, value })
+  state.push({ location, value, })
 }
 
 ///|
@@ -39,7 +39,7 @@ fn symbolic_add_location(
       return
     }
   }
-  state.push({ location, value: state.length() })
+  state.push({ location, value: state.length(), })
 }
 
 ///|
@@ -58,7 +58,7 @@ fn assert_plan_preserves_parallel_assignment(
   symbolic_add_location(state, Register(scratch_fp))
   let initial : Array[SymbolicCell] = []
   for cell in state {
-    initial.push({ location: cell.location, value: cell.value })
+    initial.push({ location: cell.location, value: cell.value, })
   }
   let mut emergency : Int? = None
   for step in plan.steps {

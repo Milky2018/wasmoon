@@ -12,7 +12,7 @@ priv struct LivenessWorklist {
 
 ///|
 fn LivenessWorklist::LivenessWorklist(size : Int) -> LivenessWorklist {
-  { queue: [], in_worklist: Array::make(size, false) }
+  { queue: [], in_worklist: Array::make(size, false), }
 }
 
 ///|

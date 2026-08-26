@@ -697,7 +697,7 @@ fn multiply_add_selection(
   guard function.instruction_operands(instruction) is [left, right] else {
     return None
   }
-  Some({ width, accumulator, left, right })
+  Some({ width, accumulator, left, right, })
 }
 
 ///|
@@ -931,7 +931,7 @@ fn uxtw_memory_address_selection(
     folded_constants.push(value)
   }
   Some(
-    ({ base, index: selected_index, shift, offset }, skipped, folded_constants),
+    ({ base, index: selected_index, shift, offset, }, skipped, folded_constants),
   )
 }
 
@@ -1126,7 +1126,7 @@ fn analyze_lowering(function : @semantic.Function) -> LoweringAnalysis {
               is Some({ operation: Lsl, amount, input, .. }) else {
               return None
             }
-            Some({ width, amount, accumulator, shifted_input: input })
+            Some({ width, amount, accumulator, shifted_input: input, })
           }
           let shifted = match select_shifted(left, right) {
             Some(selected) => Some((selected, right))

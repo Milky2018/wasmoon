@@ -8,7 +8,7 @@ fn instantiate_canon_subtask_cancel(
   state : BuildState,
   store : @runtime.Store,
 ) -> Unit raise ComponentRuntimeError {
-  let core_type : @types.FuncType = { params: [I32], results: [I32] }
+  let core_type : @types.FuncType = { params: [I32], results: [I32], }
   let async_state = state.async_state
   let owner_component_id = state.resource_table.id
   let host = fn(
@@ -151,7 +151,7 @@ fn instantiate_canon_subtask_drop(
   state : BuildState,
   store : @runtime.Store,
 ) -> Unit raise ComponentRuntimeError {
-  let core_type : @types.FuncType = { params: [I32], results: [] }
+  let core_type : @types.FuncType = { params: [I32], results: [], }
   let async_state = state.async_state
   let owner_component_id = state.resource_table.id
   let host = fn(

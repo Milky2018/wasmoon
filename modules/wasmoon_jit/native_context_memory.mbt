@@ -222,7 +222,7 @@ pub fn MemoryInfo::MemoryInfo(
   size : Int64,
   max_pages : Int?,
 ) -> MemoryInfo {
-  { ptr, size, max_pages }
+  { ptr, size, max_pages, }
 }
 
 ///|
@@ -334,7 +334,7 @@ pub fn JITTableOwner::try_alloc(size : Int, max : Int?) -> JITTableOwner? {
   if table_ptr == 0L {
     return None
   }
-  Some({ table: { table_ptr, size, max } })
+  Some({ table: { table_ptr, size, max, }, })
 }
 
 ///|

@@ -189,7 +189,7 @@ test "component runtime: host import canonical roundtrip" {
   let linker = @runtime_impl.ComponentLinker::ComponentLinker()
   let func_type : @component.FuncType = {
     is_async: false,
-    params: [{ label: "", ty: Prim(S32) }],
+    params: [{ label: "", ty: Prim(S32), }],
     result: Some(Prim(S32)),
   }
   let host = fn(
@@ -593,7 +593,7 @@ test "component runtime: canon lower to core func" {
   let linker = @runtime_impl.ComponentLinker::ComponentLinker()
   let func_type : @component.FuncType = {
     is_async: false,
-    params: [{ label: "", ty: Prim(S32) }],
+    params: [{ label: "", ty: Prim(S32), }],
     result: Some(Prim(S32)),
   }
   let host = fn(
@@ -1004,7 +1004,7 @@ fn assert_start_trap_preserves_escaped_gc_ref(
   store : @runtime.Store,
 ) -> Unit raise {
   let global = @runtime.GlobalInstance::GlobalInstance(
-    { value_type: AnyRef, mutable: true },
+    { value_type: AnyRef, mutable: true, },
     Null,
   )
   let global_addr = store.alloc_global(global)

@@ -20,7 +20,7 @@ pub fn GcSafepoint::GcSafepoint(
   live_refs : Array[Int],
   metadata : Int64,
 ) -> GcSafepoint {
-  { code_offset, live_refs, metadata }
+  { code_offset, live_refs, metadata, }
 }
 
 ///|

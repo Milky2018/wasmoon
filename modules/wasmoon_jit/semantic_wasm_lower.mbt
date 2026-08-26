@@ -65,7 +65,7 @@ fn wasmoon_semantic_environment(
       @semantic_machv.ExternalSymbol::new(runtime_symbols.symbol_name(helper))
     },
   )
-  { wasm, field_paths, runtime_symbols }
+  { wasm, field_paths, runtime_symbols, }
 }
 
 ///|

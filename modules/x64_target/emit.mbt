@@ -63,7 +63,7 @@ pub impl Show for X64EmitError with fn output(self, logger) {
 
 ///|
 fn CodeBuffer::new() -> CodeBuffer {
-  { code: [], x64_fixups: [], relocations: [] }
+  { code: [], x64_fixups: [], relocations: [], }
 }
 
 ///|

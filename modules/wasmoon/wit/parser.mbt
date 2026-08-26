@@ -70,7 +70,7 @@ priv struct Lexer {
 
 ///|
 fn Lexer::Lexer(src : String) -> Lexer {
-  { src, i: 0, line: 1, col: 1 }
+  { src, i: 0, line: 1, col: 1, }
 }
 
 ///|
@@ -82,7 +82,7 @@ fn Lexer::lex_all(self : Lexer) -> Array[Token] raise WitError {
       break
     }
     let (kind, line, col) = self.lex_one()
-    out.push({ kind, line, col })
+    out.push({ kind, line, col, })
   }
   out
 }
@@ -366,7 +366,7 @@ priv struct Parser {
 
 ///|
 fn Parser::Parser(toks : Array[Token]) -> Parser {
-  { toks, i: 0 }
+  { toks, i: 0, }
 }
 
 ///|
@@ -403,7 +403,7 @@ fn Parser::parse_package(self : Parser) -> Package raise WitError {
       )
     }
   }
-  { name, version, items, nested }
+  { name, version, items, nested, }
 }
 
 ///|
@@ -444,7 +444,7 @@ fn Parser::parse_toplevel_use(self : Parser) -> ToplevelUse raise WitError {
     as_name = Some(self.parse_ident())
   }
   self.bump_kw(Semi)
-  { path, as_name }
+  { path, as_name, }
 }
 
 ///|
@@ -474,7 +474,7 @@ fn Parser::parse_nested_package(self : Parser) -> Package raise WitError {
     }
   }
   self.bump_kw(RBrace)
-  { name, version, items, nested }
+  { name, version, items, nested, }
 }
 
 ///|
@@ -559,7 +559,7 @@ fn Parser::parse_use_path_until(
     }
     self.i = self.i + 1
   }
-  { raw: sb.to_string() }
+  { raw: sb.to_string(), }
 }
 
 ///|
@@ -601,7 +601,7 @@ fn Parser::parse_use_item(self : Parser) -> UseItem raise WitError {
   }
   self.bump_kw(RBrace)
   self.bump_kw(Semi)
-  { path, names }
+  { path, names, }
 }
 
 ///|
@@ -626,7 +626,7 @@ fn Parser::parse_use_path_before_dot_lbrace(
     }
     self.i = self.i + 1
   }
-  { raw: sb.to_string() }
+  { raw: sb.to_string(), }
 }
 
 ///|
@@ -669,7 +669,7 @@ fn Parser::parse_include_item(self : Parser) -> IncludeItem raise WitError {
   } else {
     self.bump_kw(Semi)
   }
-  { path, renames }
+  { path, renames, }
 }
 
 ///|
@@ -690,7 +690,7 @@ fn Parser::parse_resource_decl(self : Parser) -> ResourceDecl raise WitError {
     }
     self.bump_kw(RBrace)
   }
-  { name, methods }
+  { name, methods, }
 }
 
 ///|
@@ -711,11 +711,11 @@ fn Parser::parse_variant_decl(self : Parser) -> VariantDecl raise WitError {
       payload = Some(self.parse_type())
       self.bump_kw(RParen)
     }
-    cases.push({ name: case_name, payload })
+    cases.push({ name: case_name, payload, })
     self.eat_kw(Comma)
   }
   self.bump_kw(RBrace)
-  { name, cases }
+  { name, cases, }
 }
 
 ///|
@@ -733,7 +733,7 @@ fn Parser::parse_flags_decl(self : Parser) -> FlagsDecl raise WitError {
     self.eat_kw(Comma)
   }
   self.bump_kw(RBrace)
-  { name, flags }
+  { name, flags, }
 }
 
 ///|
@@ -751,7 +751,7 @@ fn Parser::parse_enum_decl(self : Parser) -> EnumDecl raise WitError {
     self.eat_kw(Comma)
   }
   self.bump_kw(RBrace)
-  { name, cases }
+  { name, cases, }
 }
 
 ///|
@@ -791,7 +791,7 @@ fn Parser::parse_interface(self : Parser) -> Interface raise WitError {
     }
   }
   self.bump_kw(RBrace)
-  { name, items }
+  { name, items, }
 }
 
 ///|
@@ -879,7 +879,7 @@ fn Parser::parse_world(self : Parser) -> World raise WitError {
     }
   }
   self.bump_kw(RBrace)
-  { name, items }
+  { name, items, }
 }
 
 ///|
@@ -942,7 +942,7 @@ fn Parser::parse_func_type_after_colon(
     self.bump_kw(Arrow)
     results.push((None, self.parse_type()))
   }
-  { name, is_async, params, results }
+  { name, is_async, params, results, }
 }
 
 ///|
@@ -963,7 +963,7 @@ fn Parser::parse_func_decl(self : Parser) -> FuncDecl raise WitError {
     self.bump_kw(Arrow)
     results.push((None, self.parse_type()))
   }
-  { name, is_async, params, results }
+  { name, is_async, params, results, }
 }
 
 ///|
@@ -972,7 +972,7 @@ fn Parser::parse_type_alias(self : Parser) -> TypeAlias raise WitError {
   let name = self.parse_ident()
   self.bump_kw(Eq)
   let ty = self.parse_type()
-  { name, ty }
+  { name, ty, }
 }
 
 ///|
@@ -989,7 +989,7 @@ fn Parser::parse_record_decl(self : Parser) -> RecordDecl raise WitError {
     self.eat_kw(Comma)
   }
   self.bump_kw(RBrace)
-  { name, fields }
+  { name, fields, }
 }
 
 ///|

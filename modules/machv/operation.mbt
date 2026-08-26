@@ -125,7 +125,7 @@ pub fn LoadSpec::new(
   endianness : Endianness,
   trap : TrapReason?,
 ) -> LoadSpec {
-  { width, extension, result_type, offset, endianness, trap }
+  { width, extension, result_type, offset, endianness, trap, }
 }
 
 ///|
@@ -145,7 +145,7 @@ pub fn StoreSpec::new(
   endianness : Endianness,
   trap : TrapReason?,
 ) -> StoreSpec {
-  { width, value_type, offset, endianness, trap }
+  { width, value_type, offset, endianness, trap, }
 }
 
 ///|
@@ -177,7 +177,7 @@ pub fn AtomicSpec::new(
   endianness : Endianness,
   trap : TrapReason?,
 ) -> AtomicSpec {
-  { width, value_type, offset, endianness, trap }
+  { width, value_type, offset, endianness, trap, }
 }
 
 ///|
@@ -332,7 +332,7 @@ pub fn VectorLoadSpec::new(
   endianness : Endianness,
   trap : TrapReason?,
 ) -> VectorLoadSpec {
-  { kind, offset, endianness, trap }
+  { kind, offset, endianness, trap, }
 }
 
 ///|
@@ -352,7 +352,7 @@ pub fn VectorStoreLaneSpec::new(
   endianness : Endianness,
   trap : TrapReason?,
 ) -> VectorStoreLaneSpec {
-  { lane, lane_index, offset, endianness, trap }
+  { lane, lane_index, offset, endianness, trap, }
 }
 
 ///|
@@ -1458,9 +1458,9 @@ fn verify_operation_contract(
 pub fn Operation::semantics(self : Operation) -> OperationSemantics {
   match self {
     IntBinary(SignedDiv | UnsignedDiv | SignedRem | UnsignedRem) =>
-      { ..OperationSemantics::pure(), may_trap: true }
+      { ..OperationSemantics::pure(), may_trap: true, }
     Convert(FloatToInt(_, _, _, Trapping)) =>
-      { ..OperationSemantics::pure(), may_trap: true }
+      { ..OperationSemantics::pure(), may_trap: true, }
     Load(spec) =>
       {
         ..OperationSemantics::pure(),
@@ -1491,7 +1491,7 @@ pub fn Operation::semantics(self : Operation) -> OperationSemantics {
         memory: ReadWrite,
         may_trap: spec.trap is Some(_),
       }
-    AtomicFence => { ..OperationSemantics::pure(), memory: ReadWrite }
+    AtomicFence => { ..OperationSemantics::pure(), memory: ReadWrite, }
     VectorLoad(spec) =>
       {
         ..OperationSemantics::pure(),
@@ -1504,11 +1504,11 @@ pub fn Operation::semantics(self : Operation) -> OperationSemantics {
         memory: Write,
         may_trap: spec.trap is Some(_),
       }
-    EnvironmentField(_, _) => { ..OperationSemantics::pure(), memory: Read }
+    EnvironmentField(_, _) => { ..OperationSemantics::pure(), memory: Read, }
     Call(call) => call.behavior.semantics()
-    Safepoint(Gc) => { ..OperationSemantics::pure(), gc_safepoint: true }
+    Safepoint(Gc) => { ..OperationSemantics::pure(), gc_safepoint: true, }
     Safepoint(Cancellation) =>
-      { ..OperationSemantics::pure(), cancellation_safepoint: true }
+      { ..OperationSemantics::pure(), cancellation_safepoint: true, }
     Safepoint(GcAndCancellation) =>
       {
         ..OperationSemantics::pure(),

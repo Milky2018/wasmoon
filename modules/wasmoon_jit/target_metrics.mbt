@@ -39,10 +39,10 @@ fn record_target_allocation_stats(
 fn target_compile_metrics_observer(
   target_lower_tick : @perf.PerfTick,
 ) -> (@vcode.TargetCompileEvent) -> Unit {
-  let phase_tick : Ref[@perf.PerfTick?] = { val: None }
+  let phase_tick : Ref[@perf.PerfTick?] = { val: None, }
   // The allocator reports each internal phase as it begins; the previous one
   // ends at that instant, and RegallocFinished closes the last (ISS-371).
-  let regalloc_phase : Ref[(String, @perf.PerfTick)?] = { val: None }
+  let regalloc_phase : Ref[(String, @perf.PerfTick)?] = { val: None, }
   fn close_regalloc_phase() -> Unit {
     if regalloc_phase.val is Some((name, tick)) {
       @perf.record_regalloc_phase_us(name, @perf.elapsed_us(tick))

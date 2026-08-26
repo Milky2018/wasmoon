@@ -275,9 +275,9 @@ priv struct BigUInt {
 ///|
 fn BigUInt::from_int(n : Int) -> BigUInt {
   if n == 0 {
-    { limbs: [0UL] }
+    { limbs: [0UL], }
   } else {
-    { limbs: [n.to_int64().reinterpret_as_uint64()] }
+    { limbs: [n.to_int64().reinterpret_as_uint64()], }
   }
 }
 
@@ -326,7 +326,7 @@ fn BigUInt::mul_small(self : BigUInt, n : UInt64) -> BigUInt {
   if carry != 0UL {
     result.push(carry)
   }
-  { limbs: result }
+  { limbs: result, }
 }
 
 ///|
@@ -352,7 +352,7 @@ fn BigUInt::add(self : BigUInt, other : BigUInt) -> BigUInt {
   if carry != 0UL {
     result.push(carry)
   }
-  { limbs: result }
+  { limbs: result, }
 }
 
 ///|
@@ -385,7 +385,7 @@ fn BigUInt::compare(self : BigUInt, other : BigUInt) -> Int {
 /// Left shift by n bits
 impl Shl for BigUInt with fn shl(self, n) {
   if n == 0 {
-    return { limbs: self.limbs.copy() }
+    return { limbs: self.limbs.copy(), }
   }
   let limb_shift = n / 64
   let bit_shift = n % 64
@@ -408,19 +408,19 @@ impl Shl for BigUInt with fn shl(self, n) {
       result.push(carry)
     }
   }
-  { limbs: result }
+  { limbs: result, }
 }
 
 ///|
 /// Right shift by n bits
 impl Shr for BigUInt with fn shr(self, n) {
   if n == 0 {
-    return { limbs: self.limbs.copy() }
+    return { limbs: self.limbs.copy(), }
   }
   let limb_shift = n / 64
   let bit_shift = n % 64
   if limb_shift >= self.limbs.length() {
-    return { limbs: [0UL] }
+    return { limbs: [0UL], }
   }
   let result : Array[UInt64] = []
   if bit_shift == 0 {
@@ -442,7 +442,7 @@ impl Shr for BigUInt with fn shr(self, n) {
   while result.length() > 1 && result[result.length() - 1] == 0UL {
     result.pop() |> ignore
   }
-  { limbs: result }
+  { limbs: result, }
 }
 
 ///|
@@ -636,7 +636,7 @@ fn parse_decimal_float32_precise(s : String) -> Float raise WatError {
   // For division, we use: mantissa * 2^extra_bits / 5^|decimal_exp| to get enough precision
 
   let mut binary_exp = 0
-  let mut sig : BigUInt = { limbs: mantissa.limbs.copy() }
+  let mut sig : BigUInt = { limbs: mantissa.limbs.copy(), }
   if decimal_exp >= 0 {
     // Multiply by 5^decimal_exp
     for _ in 0..<decimal_exp {
@@ -917,7 +917,7 @@ fn bigint_sub(a : BigUInt, b : BigUInt) -> BigUInt {
   while result.length() > 1 && result[result.length() - 1] == 0UL {
     result.pop() |> ignore
   }
-  { limbs: result }
+  { limbs: result, }
 }
 
 ///|

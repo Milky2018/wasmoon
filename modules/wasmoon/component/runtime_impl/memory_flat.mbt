@@ -174,7 +174,7 @@ struct FlatStorageField {
 
 ///|
 fn default_flat_storage_field(vt : @types.ValueType) -> FlatStorageField {
-  { vt, size: core_valtype_size(vt), align: core_valtype_align(vt) }
+  { vt, size: core_valtype_size(vt), align: core_valtype_align(vt), }
 }
 
 ///|
@@ -201,15 +201,15 @@ fn append_flat_storage_for_valtype(
   match resolve_valtype(ty, types) {
     Prim(p) =>
       match p {
-        Bool | S8 | U8 => out.push({ vt: I32, size: 1, align: 1 })
-        S16 | U16 => out.push({ vt: I32, size: 2, align: 2 })
-        S32 | U32 | Char => out.push({ vt: I32, size: 4, align: 4 })
-        S64 | U64 => out.push({ vt: I64, size: 8, align: 8 })
-        F32 => out.push({ vt: F32, size: 4, align: 4 })
-        F64 => out.push({ vt: F64, size: 8, align: 8 })
+        Bool | S8 | U8 => out.push({ vt: I32, size: 1, align: 1, })
+        S16 | U16 => out.push({ vt: I32, size: 2, align: 2, })
+        S32 | U32 | Char => out.push({ vt: I32, size: 4, align: 4, })
+        S64 | U64 => out.push({ vt: I64, size: 8, align: 8, })
+        F32 => out.push({ vt: F32, size: 4, align: 4, })
+        F64 => out.push({ vt: F64, size: 8, align: 8, })
         String | ErrorContext => {
-          out.push({ vt: ptr_vt, size: ptr_size, align: ptr_size })
-          out.push({ vt: ptr_vt, size: ptr_size, align: ptr_size })
+          out.push({ vt: ptr_vt, size: ptr_size, align: ptr_size, })
+          out.push({ vt: ptr_vt, size: ptr_size, align: ptr_size, })
         }
       }
     TypeIdx(ti) =>
@@ -223,31 +223,31 @@ fn append_flat_storage_for_valtype(
             append_flat_storage_for_valtype(out, field.ty, types, mem_is_64)
           }
         Some(Some(List(_elem_ty))) => {
-          out.push({ vt: ptr_vt, size: ptr_size, align: ptr_size })
-          out.push({ vt: ptr_vt, size: ptr_size, align: ptr_size })
+          out.push({ vt: ptr_vt, size: ptr_size, align: ptr_size, })
+          out.push({ vt: ptr_vt, size: ptr_size, align: ptr_size, })
         }
         Some(Some(Enum(labels))) => {
           let n = labels.length()
           let size = if n <= 0x100 { 1 } else if n <= 0x10000 { 2 } else { 4 }
-          out.push({ vt: I32, size, align: size })
+          out.push({ vt: I32, size, align: size, })
         }
         Some(Some(Flags(labels))) => {
           let nbits = labels.length()
           if nbits <= 8 {
-            out.push({ vt: I32, size: 1, align: 1 })
+            out.push({ vt: I32, size: 1, align: 1, })
           } else if nbits <= 16 {
-            out.push({ vt: I32, size: 2, align: 2 })
+            out.push({ vt: I32, size: 2, align: 2, })
           } else if nbits <= 32 {
-            out.push({ vt: I32, size: 4, align: 4 })
+            out.push({ vt: I32, size: 4, align: 4, })
           } else {
-            out.push({ vt: I64, size: 8, align: 8 })
+            out.push({ vt: I64, size: 8, align: 8, })
           }
         }
         Some(Some(Own(_)))
         | Some(Some(Borrow(_)))
         | Some(Some(ResourceType(_, _, _, _)))
         | Some(Some(Stream(_)))
-        | Some(Some(Future(_))) => out.push({ vt: I32, size: 4, align: 4 })
+        | Some(Some(Future(_))) => out.push({ vt: I32, size: 4, align: 4, })
         Some(Some(DefValType(p))) =>
           append_flat_storage_for_valtype(out, Prim(p), types, mem_is_64)
         _ => append_default_flat_storage_for_valtype(out, ty, types, mem_is_64)

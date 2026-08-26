@@ -398,5 +398,5 @@ pub fn parse_start_section(payload : Bytes) -> Start raise ComponentParseError {
   if !reader.is_eof() {
     raise InvalidStartSection
   }
-  { func_idx, args, results }
+  { func_idx, args, results, }
 }

@@ -1225,7 +1225,7 @@ fn validate_instr(
       // Save local_init state - locals initialized inside block don't count outside
       let saved_init = ctx.local_init.copy()
       // Push label for block (br jumps to end, uses results)
-      let label : LabelInfo = { kind: BlockLabel, block_type: bt }
+      let label : LabelInfo = { kind: BlockLabel, block_type: bt, }
       ctx.labels.push(label)
       // Validate body
       validate_expr(ctx, block_stack, body)
@@ -1261,7 +1261,7 @@ fn validate_instr(
       // Save local_init state - locals initialized inside loop don't count outside
       let saved_init = ctx.local_init.copy()
       // Push label for loop (br jumps to start, uses params)
-      let label : LabelInfo = { kind: LoopLabel, block_type: bt }
+      let label : LabelInfo = { kind: LoopLabel, block_type: bt, }
       ctx.labels.push(label)
       // Validate body
       validate_expr(ctx, block_stack, body)
@@ -1293,7 +1293,7 @@ fn validate_instr(
       // Save local_init state - locals initialized inside if don't count outside
       let saved_init = ctx.local_init.copy()
       // Push label for if (br jumps to end, uses results)
-      let label : LabelInfo = { kind: BlockLabel, block_type: bt }
+      let label : LabelInfo = { kind: BlockLabel, block_type: bt, }
       ctx.labels.push(label)
       // Validate then branch
       let then_stack = OperandStack::new_with_subtyping(ctx.subtyping_ctx)
@@ -1569,7 +1569,7 @@ fn validate_instr(
       let saved_init = ctx.local_init.copy()
 
       // Now push try_table's label for body validation
-      let label = { kind: BlockLabel, block_type: bt }
+      let label = { kind: BlockLabel, block_type: bt, }
       ctx.labels.push(label)
 
       // Validate body with block_stack

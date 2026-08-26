@@ -91,7 +91,7 @@ fn Parser::parse_memory_def(self : Parser) -> MemoryDefResult raise WatError {
         let imp : @types.Import = {
           mod_name,
           name: import_name,
-          desc: Memory({ limits: { min, max }, is_memory64, page_size_log2 }),
+          desc: Memory({ limits: { min, max, }, is_memory64, page_size_log2, }),
         }
         return MemoryImport(imp, export_names)
       }
@@ -180,7 +180,7 @@ fn Parser::parse_memory_def(self : Parser) -> MemoryDefResult raise WatError {
                 mod_name,
                 name: import_name,
                 desc: Memory({
-                  limits: { min, max },
+                  limits: { min, max, },
                   is_memory64,
                   page_size_log2,
                 }),
@@ -226,7 +226,7 @@ fn Parser::parse_memory_def(self : Parser) -> MemoryDefResult raise WatError {
         }).to_int64()
         return MemoryWithData(
           {
-            limits: { min, max: Some(min) },
+            limits: { min, max: Some(min), },
             is_memory64: false,
             page_size_log2: 16,
           },
@@ -287,7 +287,7 @@ fn Parser::parse_memory_def(self : Parser) -> MemoryDefResult raise WatError {
         min_pages
       }).to_int64()
       return MemoryWithData(
-        { limits: { min, max: Some(min) }, is_memory64, page_size_log2: 16 },
+        { limits: { min, max: Some(min), }, is_memory64, page_size_log2: 16, },
         export_names,
         Bytes::from_array(init_bytes),
       )
@@ -321,7 +321,10 @@ fn Parser::parse_memory_def(self : Parser) -> MemoryDefResult raise WatError {
   }
   let page_size_log2 = self.parse_optional_page_size_log2()
   self.expect_rparen()
-  MemoryDef({ limits: { min, max }, is_memory64, page_size_log2 }, export_names)
+  MemoryDef(
+    { limits: { min, max, }, is_memory64, page_size_log2, },
+    export_names,
+  )
 }
 
 ///|
@@ -450,7 +453,7 @@ fn Parser::parse_global_def(self : Parser) -> GlobalDefResult raise WatError {
         let imp : @types.Import = {
           mod_name,
           name: import_name,
-          desc: Global({ value_type, mutable }),
+          desc: Global({ value_type, mutable, }),
         }
         return GlobalImport(imp, export_names)
       }
@@ -557,7 +560,7 @@ fn Parser::parse_global_def(self : Parser) -> GlobalDefResult raise WatError {
         let imp : @types.Import = {
           mod_name,
           name: import_name,
-          desc: Global({ value_type, mutable }),
+          desc: Global({ value_type, mutable, }),
         }
         return GlobalImport(imp, export_names)
       }
@@ -599,7 +602,7 @@ fn Parser::parse_global_def(self : Parser) -> GlobalDefResult raise WatError {
   // Parse init expression
   let init = self.parse_instructions()
   self.expect_rparen()
-  GlobalDef({ type_: { value_type, mutable }, init }, export_names)
+  GlobalDef({ type_: { value_type, mutable, }, init, }, export_names)
 }
 
 ///|
@@ -701,12 +704,15 @@ fn Parser::parse_table_def(
         let imp : @types.Import = {
           mod_name,
           name: import_name,
-          desc: Table({ elem_type, limits: { min, max }, is_table64 }),
+          desc: Table({ elem_type, limits: { min, max, }, is_table64, }),
         }
         mod_.imports.push(imp)
         // Return a placeholder table (the import is what matters)
         return (
-          { type_: { elem_type, limits: { min, max }, is_table64 }, init: None },
+          {
+            type_: { elem_type, limits: { min, max, }, is_table64, },
+            init: None,
+          },
           export_name,
           None,
           table_name,
@@ -846,7 +852,7 @@ fn Parser::parse_table_def(
           {
             type_: {
               elem_type,
-              limits: { min: 0L, max: None },
+              limits: { min: 0L, max: None, },
               is_table64: false,
             },
             init: None,
@@ -970,7 +976,7 @@ fn Parser::parse_table_def(
                 {
                   type_: {
                     elem_type,
-                    limits: { min: 0L, max: None },
+                    limits: { min: 0L, max: None, },
                     is_table64: true,
                   },
                   init: None,
@@ -1049,7 +1055,7 @@ fn Parser::parse_table_def(
       self.expect_rparen()
       (
         {
-          type_: { elem_type, limits: { min, max }, is_table64 },
+          type_: { elem_type, limits: { min, max, }, is_table64, },
           init: table_init,
         },
         export_name,
@@ -1127,7 +1133,7 @@ fn Parser::parse_export_def(
   ignore(mod_)
   self.expect_rparen()
   self.expect_rparen()
-  { name, desc }
+  { name, desc, }
 }
 
 ///|
@@ -1186,7 +1192,7 @@ fn Parser::parse_import_def(
         }
       } else {
         // No type specified, use empty signature
-        let func_type : @types.FuncType = { params: [], results: [] }
+        let func_type : @types.FuncType = { params: [], results: [], }
         let idx = mod_.types.length()
         mod_.types.push(@types.SubType::from_func(func_type))
         // Implicit type is its own rec group
@@ -1228,7 +1234,7 @@ fn Parser::parse_import_def(
         _ => None
       }
       let page_size_log2 = self.parse_optional_page_size_log2()
-      Memory({ limits: { min, max }, is_memory64, page_size_log2 })
+      Memory({ limits: { min, max, }, is_memory64, page_size_log2, })
     }
     Keyword("table") => {
       self.advance()
@@ -1261,7 +1267,7 @@ fn Parser::parse_import_def(
         _ => None
       }
       let elem_type = self.parse_value_type()
-      Table({ elem_type, limits: { min, max }, is_table64 })
+      Table({ elem_type, limits: { min, max, }, is_table64, })
     }
     Keyword("global") => {
       self.advance()
@@ -1295,7 +1301,7 @@ fn Parser::parse_import_def(
       } else {
         (self.parse_value_type(), false)
       }
-      Global({ value_type, mutable })
+      Global({ value_type, mutable, })
     }
     Keyword("tag") => {
       self.advance()
@@ -1340,7 +1346,7 @@ fn Parser::parse_import_def(
         }
       } else {
         // No type specified, use empty signature
-        let func_type : @types.FuncType = { params: [], results: [] }
+        let func_type : @types.FuncType = { params: [], results: [], }
         let idx = mod_.types.length()
         mod_.types.push(@types.SubType::from_func(func_type))
         // Implicit type is its own rec group
@@ -1353,7 +1359,7 @@ fn Parser::parse_import_def(
   }
   self.expect_rparen()
   self.expect_rparen()
-  { mod_name, name, desc }
+  { mod_name, name, desc, }
 }
 
 ///|
@@ -1453,7 +1459,7 @@ fn Parser::parse_data_def(
   }
   self.expect_rparen() // close data
   let final_memory_idx = if is_passive { -1 } else { memory_idx }
-  { memory_idx: final_memory_idx, offset, init: Bytes::from_array(init_bytes) }
+  { memory_idx: final_memory_idx, offset, init: Bytes::from_array(init_bytes), }
 }
 
 ///|
@@ -1565,7 +1571,7 @@ fn Parser::parse_elem_def(
     // Empty passive segment
     RParen => {
       self.expect_rparen()
-      { mode: Passive, type_: FuncRef, init: [] }
+      { mode: Passive, type_: FuncRef, init: [], }
     }
     _ => raise UnexpectedToken("expected elem segment content", self.loc())
   }
@@ -1629,7 +1635,7 @@ fn Parser::parse_elem_items_and_finish(
     }
   }
   self.expect_rparen() // close elem
-  { mode, type_: elem_type, init }
+  { mode, type_: elem_type, init, }
 }
 
 ///|
@@ -1823,7 +1829,7 @@ fn Parser::parse_tag_type_spec(
     }
   } else {
     // No type specified, use empty signature
-    let func_type : @types.FuncType = { params: [], results: [] }
+    let func_type : @types.FuncType = { params: [], results: [], }
     let idx = mod_.types.length()
     mod_.types.push(@types.SubType::from_func(func_type))
     // Implicit type is its own rec group

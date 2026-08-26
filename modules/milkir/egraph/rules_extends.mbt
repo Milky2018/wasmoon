@@ -271,7 +271,7 @@ fn rule_ireduce_ineg() -> RewriteRule {
                 op: Ireduce(from_bits, to_bits),
                 children: [inner.children[0]],
               })
-              let new_node = eg.add({ op: Neg, children: [inner_reduce] })
+              let new_node = eg.add({ op: Neg, children: [inner_reduce], })
               changed = eg.merge_changed(class_id, new_node) || changed
             }
           }
@@ -298,7 +298,7 @@ fn rule_ireduce_bnot() -> RewriteRule {
                 op: Ireduce(from_bits, to_bits),
                 children: [inner.children[0]],
               })
-              let new_node = eg.add({ op: Bnot, children: [inner_reduce] })
+              let new_node = eg.add({ op: Bnot, children: [inner_reduce], })
               changed = eg.merge_changed(class_id, new_node) || changed
             }
           }

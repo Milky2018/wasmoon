@@ -101,7 +101,7 @@ fn[Inst] Function::allocate_value(
   definition : ValueDefinition,
 ) -> Value {
   let value = Value::new(self.owner, self.values.length())
-  self.values.push({ ty, definition })
+  self.values.push({ ty, definition, })
   value
 }
 
@@ -115,7 +115,7 @@ fn[Inst] Function::allocate_block(
   for ty in parameter_types {
     parameters.push(self.allocate_value(ty, BlockParameter(block)))
   }
-  self.blocks.push({ parameters, body: [], terminator: None })
+  self.blocks.push({ parameters, body: [], terminator: None, })
   block
 }
 

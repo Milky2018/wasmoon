@@ -45,7 +45,7 @@ struct Imports {
 
 ///|
 pub fn Imports::Imports() -> Imports {
-  { entries: [] }
+  { entries: [], }
 }
 
 ///|

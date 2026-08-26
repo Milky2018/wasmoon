@@ -181,7 +181,7 @@ fn parse_sort(reader : Reader) -> Sort raise ComponentParseError {
 fn parse_sortidx(reader : Reader) -> SortIdx raise ComponentParseError {
   let sort = parse_sort(reader)
   let idx = reader.read_leb_u32()
-  { sort, idx }
+  { sort, idx, }
 }
 
 ///|
@@ -256,7 +256,7 @@ pub fn parse_import_section(
   for _i in 0..<n {
     let (name, attributes) = parse_importname(reader)
     let desc = parse_externdesc(reader)
-    imports.push({ name, attributes, desc })
+    imports.push({ name, attributes, desc, })
   }
   if !reader.is_eof() {
     raise InvalidTypeSection
@@ -275,7 +275,7 @@ pub fn parse_export_section(
     let (name, attributes) = parse_exportname(reader)
     let sortidx = parse_sortidx(reader)
     let desc = parse_opt_externdesc(reader)
-    exports.push({ name, attributes, sortidx, desc })
+    exports.push({ name, attributes, sortidx, desc, })
   }
   if !reader.is_eof() {
     raise InvalidTypeSection

@@ -28,7 +28,7 @@ fn core_instance_from_module(
       Tag(idx) => tags.set(exp.name, instance.tag_addrs[idx])
     }
   }
-  { funcs, tables, memories, globals, tags }
+  { funcs, tables, memories, globals, tags, }
 }
 
 ///|
@@ -103,7 +103,7 @@ fn parse_limits_u32(
   } else {
     None
   }
-  { min: min.to_int64(), max: max.map(fn(x) { x.to_int64() }) }
+  { min: min.to_int64(), max: max.map(fn(x) { x.to_int64() }), }
 }
 
 ///|
@@ -130,7 +130,7 @@ fn parse_core_functype(
   for _i in 0..<nresults {
     results.push(parse_core_valtype(reader))
   }
-  { params, results }
+  { params, results, }
 }
 
 ///|
@@ -152,18 +152,18 @@ fn parse_core_extern_type_in_moduletype(
     0x01 => {
       let elem = parse_core_valtype(reader)
       let limits = parse_limits_u32(reader)
-      Table({ elem_type: elem, limits, is_table64: false })
+      Table({ elem_type: elem, limits, is_table64: false, })
     }
     0x02 => {
       let limits = parse_limits_u32(reader)
-      Memory({ limits, is_memory64: false, page_size_log2: 16 })
+      Memory({ limits, is_memory64: false, page_size_log2: 16, })
     }
     0x03 => {
       let vt = parse_core_valtype(reader)
       let mutability = reader.read_u8() catch {
         e => raise ComponentParseError(e.to_string())
       }
-      Global({ value_type: vt, mutable: mutability != 0 })
+      Global({ value_type: vt, mutable: mutability != 0, })
     }
     _ => raise ImportTypeMismatch("unsupported module type extern kind")
   }
@@ -243,7 +243,7 @@ fn parse_core_moduletype_spec(
   if !reader.is_eof() {
     raise ImportTypeMismatch("invalid module type")
   }
-  { imports, exports }
+  { imports, exports, }
 }
 
 ///|

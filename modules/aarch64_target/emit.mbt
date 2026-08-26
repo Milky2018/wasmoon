@@ -90,7 +90,7 @@ pub impl Show for AArch64EmitError with fn output(self, logger) {
 
 ///|
 fn CodeBuffer::new(long_branches? : Bool = false) -> CodeBuffer {
-  { code: [], fixups: [], labels: [], relocations: [], long_branches }
+  { code: [], fixups: [], labels: [], relocations: [], long_branches, }
 }
 
 ///|
@@ -185,7 +185,7 @@ fn CodeBuffer::emit_fixup_branch(
   if wide {
     self.emit_word(AARCH64_NOP)
   }
-  self.fixups.push({ offset, target, bits, wide })
+  self.fixups.push({ offset, target, bits, wide, })
 }
 
 ///|

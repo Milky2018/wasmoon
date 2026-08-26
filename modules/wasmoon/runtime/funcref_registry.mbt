@@ -17,7 +17,7 @@ pub fn StoreFuncrefEntry::StoreFuncrefEntry(
   store_addr~ : Int,
   func_ptr~ : Int64,
 ) -> StoreFuncrefEntry {
-  { store_addr, func_ptr }
+  { store_addr, func_ptr, }
 }
 
 ///|
@@ -37,7 +37,7 @@ struct StoreFuncrefRegistration {
 
 ///|
 fn StoreFuncrefRegistry::new() -> StoreFuncrefRegistry {
-  { store_to_ptr: Map([]), ptr_to_store: Map([]), next_registration: Ref(0) }
+  { store_to_ptr: Map([]), ptr_to_store: Map([]), next_registration: Ref(0), }
 }
 
 ///|
@@ -61,11 +61,11 @@ fn StoreFuncrefRegistry::register(
   let registration = self.next_registration.val
   self.next_registration.val = registration + 1
   for entry in entries {
-    let { store_addr, func_ptr } = entry
+    let { store_addr, func_ptr, } = entry
     if store_addr < 0 || func_ptr == 0L {
       continue
     }
-    let owner = { registration, store_addr, func_ptr }
+    let owner = { registration, store_addr, func_ptr, }
     match self.store_to_ptr.get(store_addr) {
       Some(owners) => owners.push(owner)
       None => self.store_to_ptr.set(store_addr, [owner])
@@ -75,7 +75,7 @@ fn StoreFuncrefRegistry::register(
       None => self.ptr_to_store.set(func_ptr, [owner])
     }
   }
-  { registry: self, registration, entries, active: Ref(true) }
+  { registry: self, registration, entries, active: Ref(true), }
 }
 
 ///|
@@ -87,7 +87,7 @@ pub fn StoreFuncrefRegistration::release(
   }
   self.active.val = false
   for entry in self.entries {
-    let { store_addr, func_ptr } = entry
+    let { store_addr, func_ptr, } = entry
     if self.registry.store_to_ptr.get(store_addr) is Some(owners) {
       remove_store_funcref_owner(owners, self.registration)
       if owners.is_empty() {

@@ -1,11 +1,11 @@
 ///|
-let wast_jit_compiled_modules : Ref[Int] = { val: 0 }
+let wast_jit_compiled_modules : Ref[Int] = { val: 0, }
 
 ///|
-let wast_jit_compiled_functions : Ref[Int] = { val: 0 }
+let wast_jit_compiled_functions : Ref[Int] = { val: 0, }
 
 ///|
-let wast_jit_attempts : Ref[Int] = { val: 0 }
+let wast_jit_attempts : Ref[Int] = { val: 0, }
 
 ///|
 fn is_truthy_env(v : String) -> Bool {

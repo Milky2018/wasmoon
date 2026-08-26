@@ -11,7 +11,7 @@ fn lift_task_return_value(
   resource_table : ResourceTable,
   store : @runtime.Store,
 ) -> ComponentValue raise ComponentRuntimeError {
-  let result_param : @component.Param = { label: "", ty: result }
+  let result_param : @component.Param = { label: "", ty: result, }
   let result_func : FuncType = {
     is_async: false,
     params: [result_param],
@@ -66,7 +66,7 @@ fn instantiate_canon_task_return(
     }
     None => []
   }
-  let core_type : @types.FuncType = { params: core_params, results: [] }
+  let core_type : @types.FuncType = { params: core_params, results: [], }
   let async_state = state.async_state
   let owner_component_id = state.resource_table.id
   let types = state.types
@@ -127,7 +127,7 @@ fn instantiate_canon_task_cancel(
   state : BuildState,
   store : @runtime.Store,
 ) -> Unit raise ComponentRuntimeError {
-  let core_type : @types.FuncType = { params: [], results: [] }
+  let core_type : @types.FuncType = { params: [], results: [], }
   let async_state = state.async_state
   let owner_component_id = state.resource_table.id
   let host = fn(

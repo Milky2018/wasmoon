@@ -391,7 +391,7 @@ fn decode_interface_from_componenttype(
   let resources : Map[String, ResourceDecl] = Map([])
   for kv in resource_by_idx.iter() {
     let (_i, rname) = kv
-    resources.set(rname, { name: rname, methods: [] })
+    resources.set(rname, { name: rname, methods: [], })
   }
 
   // Collect named types.
@@ -409,7 +409,7 @@ fn decode_interface_from_componenttype(
               ) {
               Some((None, Some(SubResource))) => {
                 // Treat as a re-exported resource.
-                resources.set(tname, { name: tname, methods: [] })
+                resources.set(tname, { name: tname, methods: [], })
                 // Also treat this exported nominal type index as a resource for own/borrow decoding.
                 match idx_by_name.get(tname) {
                   Some(exp_idx) => resource_by_idx.set(exp_idx, tname)
@@ -433,11 +433,11 @@ fn decode_interface_from_componenttype(
                         ),
                       )
                     }
-                    type_items.push(Record({ name: tname, fields: fs }))
+                    type_items.push(Record({ name: tname, fields: fs, }))
                   }
                   Flags(xs) =>
-                    type_items.push(Flags({ name: tname, flags: xs }))
-                  Enum(xs) => type_items.push(Enum({ name: tname, cases: xs }))
+                    type_items.push(Flags({ name: tname, flags: xs, }))
+                  Enum(xs) => type_items.push(Enum({ name: tname, cases: xs, }))
                   Variant(cases) => {
                     let cs : Array[VariantCase] = []
                     for c in cases {
@@ -450,21 +450,21 @@ fn decode_interface_from_componenttype(
                             ),
                           )
                       }
-                      cs.push({ name: c.label, payload })
+                      cs.push({ name: c.label, payload, })
                     }
-                    type_items.push(Variant({ name: tname, cases: cs }))
+                    type_items.push(Variant({ name: tname, cases: cs, }))
                   }
                   _ => {
                     let ty = typeexpr_of_typedef(
                       slots, td2, export_name_by_idx, resource_by_idx,
                     )
-                    type_items.push(TypeAlias({ name: tname, ty }))
+                    type_items.push(TypeAlias({ name: tname, ty, }))
                   }
                 }
-              _ => type_items.push(TypeAlias({ name: tname, ty: Id("other") }))
+              _ => type_items.push(TypeAlias({ name: tname, ty: Id("other"), }))
             }
           } else {
-            type_items.push(TypeAlias({ name: tname, ty: Id("other") }))
+            type_items.push(TypeAlias({ name: tname, ty: Id("other"), }))
           }
         Def(td2) =>
           match td2 {
@@ -483,10 +483,10 @@ fn decode_interface_from_componenttype(
                   ),
                 )
               }
-              type_items.push(Record({ name: tname, fields: fs }))
+              type_items.push(Record({ name: tname, fields: fs, }))
             }
-            Flags(xs) => type_items.push(Flags({ name: tname, flags: xs }))
-            Enum(xs) => type_items.push(Enum({ name: tname, cases: xs }))
+            Flags(xs) => type_items.push(Flags({ name: tname, flags: xs, }))
+            Enum(xs) => type_items.push(Enum({ name: tname, cases: xs, }))
             Variant(cases) => {
               let cs : Array[VariantCase] = []
               for c in cases {
@@ -499,18 +499,18 @@ fn decode_interface_from_componenttype(
                       ),
                     )
                 }
-                cs.push({ name: c.label, payload })
+                cs.push({ name: c.label, payload, })
               }
-              type_items.push(Variant({ name: tname, cases: cs }))
+              type_items.push(Variant({ name: tname, cases: cs, }))
             }
             _ => {
               let ty = typeexpr_of_typedef(
                 slots, td2, export_name_by_idx, resource_by_idx,
               )
-              type_items.push(TypeAlias({ name: tname, ty }))
+              type_items.push(TypeAlias({ name: tname, ty, }))
             }
           }
-        _ => type_items.push(TypeAlias({ name: tname, ty: Id("other") }))
+        _ => type_items.push(TypeAlias({ name: tname, ty: Id("other"), }))
       }
     }
   }
@@ -598,7 +598,7 @@ fn decode_interface_from_componenttype(
             )
         }
         func_items.push(
-          Func({ name: fname, is_async: ft.is_async, params, results }),
+          Func({ name: fname, is_async: ft.is_async, params, results, }),
         )
       }
     }
@@ -616,7 +616,7 @@ fn decode_interface_from_componenttype(
   for it in func_items {
     items.push(it)
   }
-  (pkg, ver, { name, items })
+  (pkg, ver, { name, items, })
 }
 
 ///|
@@ -662,13 +662,13 @@ fn decode_world_from_componenttype(
   for d in inner_decls {
     match d {
       Import(n, _attributes, InstanceType(_ti)) =>
-        items.push(Import({ raw: normalize_inst_name(n) }))
+        items.push(Import({ raw: normalize_inst_name(n), }))
       Export(n, _attributes, InstanceType(_ti)) =>
-        items.push(Export({ raw: normalize_inst_name(n) }))
+        items.push(Export({ raw: normalize_inst_name(n), }))
       _ => ()
     }
   }
-  (pkg, ver, { name, items })
+  (pkg, ver, { name, items, })
 }
 
 ///|
@@ -747,5 +747,5 @@ pub fn decode_wit_package_from_component(
       }
     }
   }
-  { name: pkg_name, version: pkg_ver, items, nested: [] }
+  { name: pkg_name, version: pkg_ver, items, nested: [], }
 }

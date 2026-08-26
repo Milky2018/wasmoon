@@ -86,7 +86,7 @@ fn validate_component_section_alias(
         // For aliases that target the current component, validate bounds
         // against the current in-progress index spaces.
         if ct == 0 {
-          check_sortidx({ sort: a.sort, idx }, counts, type_table.length())
+          check_sortidx({ sort: a.sort, idx, }, counts, type_table.length())
         }
       }
     }

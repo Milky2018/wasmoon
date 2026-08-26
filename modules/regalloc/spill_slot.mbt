@@ -16,8 +16,8 @@ pub fn reserve_spill_slot(
   match class {
     Vector => {
       let aligned = if next_slot % 2 == 0 { next_slot } else { next_slot + 1 }
-      { slot: aligned, next_slot: aligned + 2, slots_used: 2 }
+      { slot: aligned, next_slot: aligned + 2, slots_used: 2, }
     }
-    Int | Float => { slot: next_slot, next_slot: next_slot + 1, slots_used: 1 }
+    Int | Float => { slot: next_slot, next_slot: next_slot + 1, slots_used: 1, }
   }
 }

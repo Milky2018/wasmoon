@@ -65,7 +65,7 @@ fn rule_band_splat_splat() -> RewriteRule {
           find_splat_child(eg, node.children[1]) is Some(y) {
           // band(splat(x), splat(y)) -> splat(band(x, y))
           let inner_and = eg.add_and(x, y)
-          let new_node = eg.add({ op: Splat, children: [inner_and] })
+          let new_node = eg.add({ op: Splat, children: [inner_and], })
           changed = eg.merge_changed(class_id, new_node) || changed
         }
       }
@@ -86,7 +86,7 @@ fn rule_bor_splat_splat() -> RewriteRule {
           find_splat_child(eg, node.children[0]) is Some(x) &&
           find_splat_child(eg, node.children[1]) is Some(y) {
           let inner_or = eg.add_or(x, y)
-          let new_node = eg.add({ op: Splat, children: [inner_or] })
+          let new_node = eg.add({ op: Splat, children: [inner_or], })
           changed = eg.merge_changed(class_id, new_node) || changed
         }
       }
@@ -107,7 +107,7 @@ fn rule_bxor_splat_splat() -> RewriteRule {
           find_splat_child(eg, node.children[0]) is Some(x) &&
           find_splat_child(eg, node.children[1]) is Some(y) {
           let inner_xor = eg.add_xor(x, y)
-          let new_node = eg.add({ op: Splat, children: [inner_xor] })
+          let new_node = eg.add({ op: Splat, children: [inner_xor], })
           changed = eg.merge_changed(class_id, new_node) || changed
         }
       }
@@ -126,8 +126,8 @@ fn rule_bnot_splat() -> RewriteRule {
         if node.op is Bnot &&
           node.children.length() == 1 &&
           find_splat_child(eg, node.children[0]) is Some(x) {
-          let inner_bnot = eg.add({ op: Bnot, children: [x] })
-          let new_node = eg.add({ op: Splat, children: [inner_bnot] })
+          let inner_bnot = eg.add({ op: Bnot, children: [x], })
+          let new_node = eg.add({ op: Splat, children: [inner_bnot], })
           changed = eg.merge_changed(class_id, new_node) || changed
         }
       }
@@ -148,7 +148,7 @@ fn rule_iadd_splat_splat() -> RewriteRule {
           find_splat_child(eg, node.children[0]) is Some(x) &&
           find_splat_child(eg, node.children[1]) is Some(y) {
           let inner_add = eg.add_add(x, y)
-          let new_node = eg.add({ op: Splat, children: [inner_add] })
+          let new_node = eg.add({ op: Splat, children: [inner_add], })
           changed = eg.merge_changed(class_id, new_node) || changed
         }
       }
@@ -169,7 +169,7 @@ fn rule_isub_splat_splat() -> RewriteRule {
           find_splat_child(eg, node.children[0]) is Some(x) &&
           find_splat_child(eg, node.children[1]) is Some(y) {
           let inner_sub = eg.add_sub(x, y)
-          let new_node = eg.add({ op: Splat, children: [inner_sub] })
+          let new_node = eg.add({ op: Splat, children: [inner_sub], })
           changed = eg.merge_changed(class_id, new_node) || changed
         }
       }
@@ -190,7 +190,7 @@ fn rule_imul_splat_splat() -> RewriteRule {
           find_splat_child(eg, node.children[0]) is Some(x) &&
           find_splat_child(eg, node.children[1]) is Some(y) {
           let inner_mul = eg.add_mul(x, y)
-          let new_node = eg.add({ op: Splat, children: [inner_mul] })
+          let new_node = eg.add({ op: Splat, children: [inner_mul], })
           changed = eg.merge_changed(class_id, new_node) || changed
         }
       }
@@ -209,8 +209,8 @@ fn rule_ineg_splat() -> RewriteRule {
         if node.op is Neg &&
           node.children.length() == 1 &&
           find_splat_child(eg, node.children[0]) is Some(x) {
-          let inner_neg = eg.add({ op: Neg, children: [x] })
-          let new_node = eg.add({ op: Splat, children: [inner_neg] })
+          let inner_neg = eg.add({ op: Neg, children: [x], })
+          let new_node = eg.add({ op: Splat, children: [inner_neg], })
           changed = eg.merge_changed(class_id, new_node) || changed
         }
       }
@@ -229,8 +229,8 @@ fn rule_iabs_splat() -> RewriteRule {
         if node.op is Iabs &&
           node.children.length() == 1 &&
           find_splat_child(eg, node.children[0]) is Some(x) {
-          let inner_iabs = eg.add({ op: Iabs, children: [x] })
-          let new_node = eg.add({ op: Splat, children: [inner_iabs] })
+          let inner_iabs = eg.add({ op: Iabs, children: [x], })
+          let new_node = eg.add({ op: Splat, children: [inner_iabs], })
           changed = eg.merge_changed(class_id, new_node) || changed
         }
       }
@@ -249,8 +249,8 @@ fn rule_popcnt_splat() -> RewriteRule {
         if node.op is Popcnt &&
           node.children.length() == 1 &&
           find_splat_child(eg, node.children[0]) is Some(x) {
-          let inner_popcnt = eg.add({ op: Popcnt, children: [x] })
-          let new_node = eg.add({ op: Splat, children: [inner_popcnt] })
+          let inner_popcnt = eg.add({ op: Popcnt, children: [x], })
+          let new_node = eg.add({ op: Splat, children: [inner_popcnt], })
           changed = eg.merge_changed(class_id, new_node) || changed
         }
       }
@@ -270,8 +270,8 @@ fn rule_smin_splat_splat() -> RewriteRule {
           node.children.length() == 2 &&
           find_splat_child(eg, node.children[0]) is Some(x) &&
           find_splat_child(eg, node.children[1]) is Some(y) {
-          let inner_smin = eg.add({ op: Smin, children: [x, y] })
-          let new_node = eg.add({ op: Splat, children: [inner_smin] })
+          let inner_smin = eg.add({ op: Smin, children: [x, y], })
+          let new_node = eg.add({ op: Splat, children: [inner_smin], })
           changed = eg.merge_changed(class_id, new_node) || changed
         }
       }
@@ -291,8 +291,8 @@ fn rule_umin_splat_splat() -> RewriteRule {
           node.children.length() == 2 &&
           find_splat_child(eg, node.children[0]) is Some(x) &&
           find_splat_child(eg, node.children[1]) is Some(y) {
-          let inner_umin = eg.add({ op: Umin, children: [x, y] })
-          let new_node = eg.add({ op: Splat, children: [inner_umin] })
+          let inner_umin = eg.add({ op: Umin, children: [x, y], })
+          let new_node = eg.add({ op: Splat, children: [inner_umin], })
           changed = eg.merge_changed(class_id, new_node) || changed
         }
       }
@@ -312,8 +312,8 @@ fn rule_smax_splat_splat() -> RewriteRule {
           node.children.length() == 2 &&
           find_splat_child(eg, node.children[0]) is Some(x) &&
           find_splat_child(eg, node.children[1]) is Some(y) {
-          let inner_smax = eg.add({ op: Smax, children: [x, y] })
-          let new_node = eg.add({ op: Splat, children: [inner_smax] })
+          let inner_smax = eg.add({ op: Smax, children: [x, y], })
+          let new_node = eg.add({ op: Splat, children: [inner_smax], })
           changed = eg.merge_changed(class_id, new_node) || changed
         }
       }
@@ -333,8 +333,8 @@ fn rule_umax_splat_splat() -> RewriteRule {
           node.children.length() == 2 &&
           find_splat_child(eg, node.children[0]) is Some(x) &&
           find_splat_child(eg, node.children[1]) is Some(y) {
-          let inner_umax = eg.add({ op: Umax, children: [x, y] })
-          let new_node = eg.add({ op: Splat, children: [inner_umax] })
+          let inner_umax = eg.add({ op: Umax, children: [x, y], })
+          let new_node = eg.add({ op: Splat, children: [inner_umax], })
           changed = eg.merge_changed(class_id, new_node) || changed
         }
       }
@@ -359,8 +359,8 @@ fn rule_rotl_splat() -> RewriteRule {
           node.children.length() == 2 &&
           find_splat_child(eg, node.children[0]) is Some(x) {
           let y = node.children[1]
-          let inner_rotl = eg.add({ op: Rotl, children: [x, y] })
-          let new_node = eg.add({ op: Splat, children: [inner_rotl] })
+          let inner_rotl = eg.add({ op: Rotl, children: [x, y], })
+          let new_node = eg.add({ op: Splat, children: [inner_rotl], })
           changed = eg.merge_changed(class_id, new_node) || changed
         }
       }
@@ -380,8 +380,8 @@ fn rule_rotr_splat() -> RewriteRule {
           node.children.length() == 2 &&
           find_splat_child(eg, node.children[0]) is Some(x) {
           let y = node.children[1]
-          let inner_rotr = eg.add({ op: Rotr, children: [x, y] })
-          let new_node = eg.add({ op: Splat, children: [inner_rotr] })
+          let inner_rotr = eg.add({ op: Rotr, children: [x, y], })
+          let new_node = eg.add({ op: Splat, children: [inner_rotr], })
           changed = eg.merge_changed(class_id, new_node) || changed
         }
       }
@@ -402,7 +402,7 @@ fn rule_ishl_splat() -> RewriteRule {
           find_splat_child(eg, node.children[0]) is Some(x) {
           let y = node.children[1]
           let inner_shl = eg.add_shl(x, y)
-          let new_node = eg.add({ op: Splat, children: [inner_shl] })
+          let new_node = eg.add({ op: Splat, children: [inner_shl], })
           changed = eg.merge_changed(class_id, new_node) || changed
         }
       }
@@ -422,8 +422,8 @@ fn rule_ushr_splat() -> RewriteRule {
           node.children.length() == 2 &&
           find_splat_child(eg, node.children[0]) is Some(x) {
           let y = node.children[1]
-          let inner_ushr = eg.add({ op: Ushr, children: [x, y] })
-          let new_node = eg.add({ op: Splat, children: [inner_ushr] })
+          let inner_ushr = eg.add({ op: Ushr, children: [x, y], })
+          let new_node = eg.add({ op: Splat, children: [inner_ushr], })
           changed = eg.merge_changed(class_id, new_node) || changed
         }
       }
@@ -443,8 +443,8 @@ fn rule_sshr_splat() -> RewriteRule {
           node.children.length() == 2 &&
           find_splat_child(eg, node.children[0]) is Some(x) {
           let y = node.children[1]
-          let inner_sshr = eg.add({ op: Sshr, children: [x, y] })
-          let new_node = eg.add({ op: Splat, children: [inner_sshr] })
+          let inner_sshr = eg.add({ op: Sshr, children: [x, y], })
+          let new_node = eg.add({ op: Splat, children: [inner_sshr], })
           changed = eg.merge_changed(class_id, new_node) || changed
         }
       }

@@ -115,19 +115,19 @@ fn EGraph::canonicalize(self : EGraph, node : ENode) -> ENode {
       let b_is_const = self.get_const(b) is Some(_) ||
         self.get_fconst(b) is Some(_)
       if a_is_const && !b_is_const {
-        return { op, children: [b, a] }
+        return { op, children: [b, a], }
       }
       if !a_is_const && b_is_const {
-        return { op, children: [a, b] }
+        return { op, children: [a, b], }
       }
       if a.0 <= b.0 {
-        return { op, children: [a, b] }
+        return { op, children: [a, b], }
       } else {
-        return { op, children: [b, a] }
+        return { op, children: [b, a], }
       }
     }
   }
-  { op: node.op, children: new_children }
+  { op: node.op, children: new_children, }
 }
 
 ///|

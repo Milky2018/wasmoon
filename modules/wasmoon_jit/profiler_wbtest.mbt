@@ -60,7 +60,7 @@ test "hot threshold: temperature detection" {
 
 ///|
 test "profiler: record calls and detect hot" {
-  let threshold = HotThreshold::{ warm_threshold: 5, hot_threshold: 10 }
+  let threshold = HotThreshold::{ warm_threshold: 5, hot_threshold: 10, }
   let profiler = Profiler::Profiler(threshold)
 
   // Cold function
@@ -81,7 +81,7 @@ test "profiler: record calls and detect hot" {
 
 ///|
 test "profiler: mark compiled" {
-  let threshold = HotThreshold::{ warm_threshold: 5, hot_threshold: 10 }
+  let threshold = HotThreshold::{ warm_threshold: 5, hot_threshold: 10, }
   let profiler = Profiler::Profiler(threshold)
   inspect(profiler.is_compiled(0), content="false")
   profiler.mark_compiled(0)
@@ -91,7 +91,7 @@ test "profiler: mark compiled" {
 
 ///|
 test "profiler: pending compilation" {
-  let threshold = HotThreshold::{ warm_threshold: 5, hot_threshold: 10 }
+  let threshold = HotThreshold::{ warm_threshold: 5, hot_threshold: 10, }
   let profiler = Profiler::Profiler(threshold)
 
   // Trigger compilation for function 0
@@ -110,7 +110,7 @@ test "profiler: pending compilation" {
 
 ///|
 test "profiler: stats" {
-  let threshold = HotThreshold::{ warm_threshold: 5, hot_threshold: 10 }
+  let threshold = HotThreshold::{ warm_threshold: 5, hot_threshold: 10, }
   let profiler = Profiler::Profiler(threshold)
   for _ in 0..<15 {
     profiler.record_call(0) |> ignore

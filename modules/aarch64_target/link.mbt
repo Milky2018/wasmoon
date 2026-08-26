@@ -74,7 +74,7 @@ pub fn prepare_aarch64_link(
       veneer_offsets[index] = veneer
     }
   }
-  { code, relocations, veneer_offsets }
+  { code, relocations, veneer_offsets, }
 }
 
 ///|

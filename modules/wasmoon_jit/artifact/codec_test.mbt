@@ -130,7 +130,7 @@ test "decoder returns structured format errors" {
   let function = artifact.functions[0]
   let invalid_entry : Artifact = {
     ..artifact,
-    functions: [{ ..function, entry_offset: function.code.length() }],
+    functions: [{ ..function, entry_offset: function.code.length(), }],
   }
   debug_inspect(
     [
@@ -237,27 +237,27 @@ test "decoder enforces every variable-length resource class" {
         ..defaults,
         max_artifact_bytes: encoded.length() - 1,
       }),
-      decode_error(encoded, limits={ ..defaults, max_cpu_features: 0 }),
-      decode_error(encoded, limits={ ..defaults, max_string_bytes: 3 }),
-      decode_error(encoded, limits={ ..defaults, max_imports: 0 }),
-      decode_error(encoded, limits={ ..defaults, max_signature_values: 0 }),
-      decode_error(encoded, limits={ ..defaults, max_functions: 0 }),
+      decode_error(encoded, limits={ ..defaults, max_cpu_features: 0, }),
+      decode_error(encoded, limits={ ..defaults, max_string_bytes: 3, }),
+      decode_error(encoded, limits={ ..defaults, max_imports: 0, }),
+      decode_error(encoded, limits={ ..defaults, max_signature_values: 0, }),
+      decode_error(encoded, limits={ ..defaults, max_functions: 0, }),
       decode_error(encoded, limits={
         ..defaults,
         max_code_bytes_per_function: 3,
       }),
-      decode_error(encoded, limits={ ..defaults, max_total_code_bytes: 3 }),
+      decode_error(encoded, limits={ ..defaults, max_total_code_bytes: 3, }),
       decode_error(encoded, limits={
         ..defaults,
         max_relocations_per_function: 0,
       }),
-      decode_error(encoded, limits={ ..defaults, max_sources_per_function: 0 }),
-      decode_error(encoded, limits={ ..defaults, max_traps_per_function: 0 }),
+      decode_error(encoded, limits={ ..defaults, max_sources_per_function: 0, }),
+      decode_error(encoded, limits={ ..defaults, max_traps_per_function: 0, }),
       decode_error(encoded, limits={
         ..defaults,
         max_safepoints_per_function: 0,
       }),
-      decode_error(encoded, limits={ ..defaults, max_roots_per_safepoint: 0 }),
+      decode_error(encoded, limits={ ..defaults, max_roots_per_safepoint: 0, }),
       decode_error(encoded, limits={
         ..defaults,
         max_unwind_directives_per_function: 0,
@@ -317,7 +317,7 @@ test "encoder rejects a non-SHA-256 digest width" {
       ..artifact.manifest,
       module_identity: {
         ..artifact.manifest.module_identity,
-        source_digest: { bytes: b"short" },
+        source_digest: { bytes: b"short", },
       },
     },
   }

@@ -52,7 +52,7 @@ fn parse_inlineexport(
     raise InvalidInstanceSection
   }
   let sortidx = parse_sortidx(reader)
-  { name, attributes, sortidx }
+  { name, attributes, sortidx, }
 }
 
 ///|
@@ -61,7 +61,7 @@ fn parse_instantiatearg(
 ) -> InstantiateArg raise ComponentParseError {
   let name = reader.read_name()
   let sortidx = parse_sortidx(reader)
-  { name, sortidx }
+  { name, sortidx, }
 }
 
 ///|
@@ -97,7 +97,7 @@ pub fn parse_instance_section(
   let n = reader.read_leb_u32()
   let instances : Array[Instance] = []
   for _ in 0..<n {
-    instances.push({ expr: parse_instanceexpr(reader) })
+    instances.push({ expr: parse_instanceexpr(reader), })
   }
   if !reader.is_eof() {
     raise InvalidInstanceSection
@@ -147,7 +147,7 @@ fn parse_aliastarget(reader : Reader) -> AliasTarget raise ComponentParseError {
 fn parse_alias(reader : Reader) -> Alias raise ComponentParseError {
   let sort = parse_sort(reader)
   let target = parse_aliastarget(reader)
-  { sort, target }
+  { sort, target, }
 }
 
 ///|

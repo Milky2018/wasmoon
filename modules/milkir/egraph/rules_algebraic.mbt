@@ -16,7 +16,7 @@ fn rule_neg_zero() -> RewriteRule {
           eg.find_const(node.children[0]) is Some(0L) {
           // 0 - x is already in canonical form for negation
           // Add the Neg node as equivalent
-          let neg_node = eg.add({ op: Neg, children: [node.children[1]] })
+          let neg_node = eg.add({ op: Neg, children: [node.children[1]], })
           changed = eg.merge_changed(class_id, neg_node) || changed
         }
       }

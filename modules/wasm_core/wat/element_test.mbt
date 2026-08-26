@@ -11,7 +11,7 @@ test "render element segments" {
     type_: FuncRef,
     init: [[RefFunc(0)], [RefFunc(1)]],
   })
-  mod_.elems.push({ mode: Declarative, type_: FuncRef, init: [[RefFunc(0)]] })
+  mod_.elems.push({ mode: Declarative, type_: FuncRef, init: [[RefFunc(0)]], })
   let output = render(mod_)
   let expected =
     #|(module

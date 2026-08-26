@@ -236,7 +236,7 @@ fn new_descriptor_resource(
     }
     Some(stat) => {
       let rep = host.ctx.insert_resource(
-        Descriptor({ fd, flags, file_type: stat.filetype, closed: Ref(false) }),
+        Descriptor({ fd, flags, file_type: stat.filetype, closed: Ref(false), }),
       )
       filesystem_ok(
         U32(allocate_resource_handle(host.ctx, table, descriptor_type, rep)),
@@ -1083,10 +1083,10 @@ fn add_directory_stream_methods(
           let entries : Array[DirectoryEntryState] = []
           for entry in native_entries {
             let (name, file_type) = entry
-            entries.push({ name, file_type })
+            entries.push({ name, file_type, })
           }
           let rep = host.ctx.insert_resource(
-            DirectoryEntryStream({ entries, index: Ref(0) }),
+            DirectoryEntryStream({ entries, index: Ref(0), }),
           )
           [
             filesystem_ok(

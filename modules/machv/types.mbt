@@ -41,7 +41,7 @@ pub fn Signature::new(
   params : Array[ValueType],
   results : Array[ValueType],
 ) -> Signature {
-  { params: params.copy(), results: results.copy() }
+  { params: params.copy(), results: results.copy(), }
 }
 
 ///|
@@ -95,7 +95,7 @@ pub fn EnvironmentField::new(
   name : String,
   value_type : ValueType,
 ) -> EnvironmentField {
-  { name, value_type }
+  { name, value_type, }
 }
 
 ///|
@@ -289,7 +289,7 @@ pub fn SourceLocation::new(
   line : Int,
   column : Int,
 ) -> SourceLocation {
-  { file, line, column }
+  { file, line, column, }
 }
 
 ///|

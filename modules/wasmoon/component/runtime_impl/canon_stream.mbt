@@ -8,7 +8,7 @@ fn instantiate_canon_stream_new(
   state : BuildState,
   store : @runtime.Store,
 ) -> Unit raise ComponentRuntimeError {
-  let core_type : @types.FuncType = { params: [], results: [I64] }
+  let core_type : @types.FuncType = { params: [], results: [I64], }
   let payload_ty : ValType? = match state.types.get(_tyidx) {
     Some(Some(Stream(v))) => v
     _ => None
@@ -89,7 +89,7 @@ fn store_host_stream_value(
     [value],
     {
       is_async: false,
-      params: [{ label: "value", ty: payload_ty }],
+      params: [{ label: "value", ty: payload_ty, }],
       result: None,
     },
     types,
@@ -252,7 +252,7 @@ fn instantiate_canon_stream_read(
   state : BuildState,
   store : @runtime.Store,
 ) -> Unit raise ComponentRuntimeError {
-  let core_type : @types.FuncType = { params: [I32, I32, I32], results: [I32] }
+  let core_type : @types.FuncType = { params: [I32, I32, I32], results: [I32], }
   let resources = resolve_canon_resources(opts, state) catch { e => raise e }
   let payload_ty : ValType? = match state.types.get(_tyidx) {
     Some(Some(Stream(v))) => v
@@ -876,7 +876,7 @@ fn instantiate_canon_stream_write(
   state : BuildState,
   store : @runtime.Store,
 ) -> Unit raise ComponentRuntimeError {
-  let core_type : @types.FuncType = { params: [I32, I32, I32], results: [I32] }
+  let core_type : @types.FuncType = { params: [I32, I32, I32], results: [I32], }
   let resources = resolve_canon_resources(opts, state) catch { e => raise e }
   let payload_ty : ValType? = match state.types.get(_tyidx) {
     Some(Some(Stream(v))) => v
@@ -1405,7 +1405,7 @@ fn instantiate_canon_stream_cancel_read(
   state : BuildState,
   store : @runtime.Store,
 ) -> Unit raise ComponentRuntimeError {
-  let core_type : @types.FuncType = { params: [I32], results: [I32] }
+  let core_type : @types.FuncType = { params: [I32], results: [I32], }
   let table = state.stream_table
   let async_state = state.async_state
   let owner_component_id = state.resource_table.id
@@ -1483,7 +1483,7 @@ fn instantiate_canon_stream_cancel_write(
   state : BuildState,
   store : @runtime.Store,
 ) -> Unit raise ComponentRuntimeError {
-  let core_type : @types.FuncType = { params: [I32], results: [I32] }
+  let core_type : @types.FuncType = { params: [I32], results: [I32], }
   let table = state.stream_table
   let async_state = state.async_state
   let owner_component_id = state.resource_table.id
@@ -1560,7 +1560,7 @@ fn instantiate_canon_stream_drop_readable(
   state : BuildState,
   store : @runtime.Store,
 ) -> Unit raise ComponentRuntimeError {
-  let core_type : @types.FuncType = { params: [I32], results: [] }
+  let core_type : @types.FuncType = { params: [I32], results: [], }
   let table = state.stream_table
   let async_state = state.async_state
   let owner_component_id = state.resource_table.id
@@ -1677,7 +1677,7 @@ fn instantiate_canon_stream_drop_writable(
   state : BuildState,
   store : @runtime.Store,
 ) -> Unit raise ComponentRuntimeError {
-  let core_type : @types.FuncType = { params: [I32], results: [] }
+  let core_type : @types.FuncType = { params: [I32], results: [], }
   let table = state.stream_table
   let async_state = state.async_state
   let owner_component_id = state.resource_table.id

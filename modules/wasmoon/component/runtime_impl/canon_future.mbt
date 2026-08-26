@@ -8,7 +8,7 @@ fn instantiate_canon_future_new(
   state : BuildState,
   store : @runtime.Store,
 ) -> Unit raise ComponentRuntimeError {
-  let core_type : @types.FuncType = { params: [], results: [I64] }
+  let core_type : @types.FuncType = { params: [], results: [I64], }
   let async_state = state.async_state
   let creator_component_id = state.resource_table.id
   let payload_ty : ValType? = match state.types.get(_tyidx) {
@@ -88,7 +88,7 @@ fn instantiate_canon_future_read(
   state : BuildState,
   store : @runtime.Store,
 ) -> Unit raise ComponentRuntimeError {
-  let core_type : @types.FuncType = { params: [I32, I32], results: [I32] }
+  let core_type : @types.FuncType = { params: [I32, I32], results: [I32], }
   let resources = resolve_canon_resources(_opts, state) catch { e => raise e }
   let async_state = state.async_state
   let caller_component_id = state.resource_table.id
@@ -485,7 +485,7 @@ fn instantiate_canon_future_write(
   state : BuildState,
   store : @runtime.Store,
 ) -> Unit raise ComponentRuntimeError {
-  let core_type : @types.FuncType = { params: [I32, I32], results: [I32] }
+  let core_type : @types.FuncType = { params: [I32, I32], results: [I32], }
   let resources = resolve_canon_resources(_opts, state) catch { e => raise e }
   let async_state = state.async_state
   let caller_component_id = state.resource_table.id
@@ -853,7 +853,7 @@ fn instantiate_canon_future_cancel_read(
   state : BuildState,
   store : @runtime.Store,
 ) -> Unit raise ComponentRuntimeError {
-  let core_type : @types.FuncType = { params: [I32], results: [I32] }
+  let core_type : @types.FuncType = { params: [I32], results: [I32], }
   let async_state = state.async_state
   let owner_component_id = state.resource_table.id
   let host = fn(
@@ -952,7 +952,7 @@ fn instantiate_canon_future_cancel_write(
   state : BuildState,
   store : @runtime.Store,
 ) -> Unit raise ComponentRuntimeError {
-  let core_type : @types.FuncType = { params: [I32], results: [I32] }
+  let core_type : @types.FuncType = { params: [I32], results: [I32], }
   let async_state = state.async_state
   let owner_component_id = state.resource_table.id
   let host = fn(
@@ -1052,7 +1052,7 @@ fn instantiate_canon_future_drop_readable(
   state : BuildState,
   store : @runtime.Store,
 ) -> Unit raise ComponentRuntimeError {
-  let core_type : @types.FuncType = { params: [I32], results: [] }
+  let core_type : @types.FuncType = { params: [I32], results: [], }
   let async_state = state.async_state
   let owner_component_id = state.resource_table.id
   let host = fn(
@@ -1148,7 +1148,7 @@ fn instantiate_canon_future_drop_writable(
   state : BuildState,
   store : @runtime.Store,
 ) -> Unit raise ComponentRuntimeError {
-  let core_type : @types.FuncType = { params: [I32], results: [] }
+  let core_type : @types.FuncType = { params: [I32], results: [], }
   let async_state = state.async_state
   let owner_component_id = state.resource_table.id
   let host = fn(

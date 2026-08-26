@@ -140,7 +140,7 @@ fn ExecContext::ExecContext(
     gc_stress_every: gc_stress_every(),
     gc_stress_alloc_count: 0,
     cancel: cancel.map(fn(callback) { { callback, } }),
-    suspension_classifier: Some({ classify: classify_suspension }),
+    suspension_classifier: Some({ classify: classify_suspension, }),
     resume_action: None,
     suspension_token: None,
   }
@@ -161,7 +161,7 @@ fn ExecContext::push_label(
   is_loop : Bool,
   arity : Int,
 ) -> Unit {
-  self.labels.push({ is_loop, arity, stack_height: self.stack.size() })
+  self.labels.push({ is_loop, arity, stack_height: self.stack.size(), })
 }
 
 ///|

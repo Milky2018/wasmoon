@@ -38,7 +38,7 @@ pub fn CFG::build(func : Function) -> CFG {
       }
     }
   }
-  { size, num_blocks, successors, predecessors, valid }
+  { size, num_blocks, successors, predecessors, valid, }
 }
 
 ///|
@@ -243,7 +243,7 @@ fn FunctionAnalysis::build(func : Function) -> FunctionAnalysis {
   for index, block in func.blocks {
     block_idx[block.id] = index
   }
-  { cfg, dominance, domtree: build_dominator_tree(dominance.idom), block_idx }
+  { cfg, dominance, domtree: build_dominator_tree(dominance.idom), block_idx, }
 }
 
 ///|
@@ -264,7 +264,7 @@ fn CFG::compute_dominance(self : CFG) -> Dominance {
       fn(block_id) { subtree_end[block_id] = next },
     )
   }
-  { idom, preorder, subtree_end }
+  { idom, preorder, subtree_end, }
 }
 
 ///|

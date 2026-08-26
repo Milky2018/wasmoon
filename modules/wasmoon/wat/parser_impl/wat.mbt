@@ -51,7 +51,7 @@ pub impl Show for SourceLoc with fn output(self, logger) {
 ///|
 /// Default source location (for errors without specific location)
 fn default_loc() -> SourceLoc {
-  { line: 0, column: 0 }
+  { line: 0, column: 0, }
 }
 
 ///|

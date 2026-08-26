@@ -176,7 +176,7 @@ fn EGraphBuilder::collect_elaboration_steps(
 ) -> ElaborationOperand? {
   let canonical = self.egraph.find(class_id).0
   // Already available as an IR value that dominates this point: free.
-  let key : RepKey = { class_id: canonical, ty }
+  let key : RepKey = { class_id: canonical, ty, }
   if self.class_to_value.get(key) is Some(value) {
     return Some(Existing(value))
   }
@@ -226,7 +226,7 @@ fn EGraphBuilder::collect_elaboration_steps(
   // step's index is greater than every index it names.
   let index = steps.length()
   planned.set(key, index)
-  steps.push({ class_id: canonical, ty, opcode, operands })
+  steps.push({ class_id: canonical, ty, opcode, operands, })
   Some(FromStep(index))
 }
 

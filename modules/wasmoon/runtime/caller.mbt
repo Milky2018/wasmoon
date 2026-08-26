@@ -11,7 +11,7 @@ pub struct Caller {
 
 ///|
 pub fn Caller::Caller(store : Store, instance : ModuleInstance) -> Caller {
-  { store, instance }
+  { store, instance, }
 }
 
 ///|

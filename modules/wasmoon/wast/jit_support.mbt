@@ -61,7 +61,7 @@ fn register_funcref_entries(
   store : @runtime.Store,
   entries : Array[@runtime.StoreFuncrefEntry],
 ) -> FuncrefRegistration {
-  { lease: store.register_jit_funcrefs(entries) }
+  { lease: store.register_jit_funcrefs(entries), }
 }
 
 ///|

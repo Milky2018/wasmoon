@@ -9,7 +9,7 @@ pub struct OptResult {
 
 ///|
 fn OptResult::OptResult() -> OptResult {
-  { changed: false }
+  { changed: false, }
 }
 
 ///|

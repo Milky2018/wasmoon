@@ -195,7 +195,9 @@ fn decode_poll_subscriptions(
         Ok(source) => source
         Err(errno) => return Err(errno)
       }
-      subscriptions.push(FdPoll({ userdata, wasi_fd, event_type: tag, source }))
+      subscriptions.push(
+        FdPoll({ userdata, wasi_fd, event_type: tag, source, }),
+      )
     } else {
       return Err(Inval)
     }

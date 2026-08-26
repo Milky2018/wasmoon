@@ -23,15 +23,15 @@ test "component conformance parses typed named composite values" {
     Some(Flags(["a", "b", "c"])),
     Some(
       Variant([
-        { label: "number", ty: Some(Prim(U32)), refines: None },
-        { label: "text", ty: Some(Prim(String)), refines: None },
+        { label: "number", ty: Some(Prim(U32)), refines: None, },
+        { label: "text", ty: Some(Prim(String)), refines: None, },
       ]),
     ),
     Some(
       Record([
-        { label: "color", ty: TypeIdx(0) },
-        { label: "features", ty: TypeIdx(1) },
-        { label: "payload", ty: TypeIdx(2) },
+        { label: "color", ty: TypeIdx(0), },
+        { label: "features", ty: TypeIdx(1), },
+        { label: "payload", ty: TypeIdx(2), },
       ]),
     ),
   ]

@@ -206,12 +206,12 @@ impl FunctionView for TestFunction with fn instruction_clobbers(
 
 ///|
 fn value(id : Int) -> VirtualReg {
-  { id, class: Int }
+  { id, class: Int, }
 }
 
 ///|
 fn int_reg(id : Int) -> PhysicalReg {
-  { id, class: Int }
+  { id, class: Int, }
 }
 
 ///|

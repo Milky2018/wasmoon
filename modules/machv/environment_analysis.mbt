@@ -104,7 +104,7 @@ pub fn Function::environment_field_use_groups(
         self.instruction_results(instruction) is [_] else {
         continue
       }
-      let key = { field, stability, context }
+      let key = { field, stability, context, }
       let group_index = match group_indices.get(key) {
         Some(index) => index
         None => {

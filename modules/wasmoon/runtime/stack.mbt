@@ -7,7 +7,7 @@ struct Stack {
 
 ///|
 pub fn Stack::Stack() -> Stack {
-  { values: [], sp: 0 }
+  { values: [], sp: 0, }
 }
 
 ///|

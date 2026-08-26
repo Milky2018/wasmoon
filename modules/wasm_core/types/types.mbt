@@ -125,7 +125,7 @@ pub(all) struct SubType {
 ///|
 /// Create a simple subtype without inheritance
 pub fn SubType::simple(composite : CompositeType) -> SubType {
-  { final_: true, supertypes: [], composite }
+  { final_: true, supertypes: [], composite, }
 }
 
 ///|
@@ -140,7 +140,7 @@ pub fn SubType::func(
   params : Array[ValueType],
   results : Array[ValueType],
 ) -> SubType {
-  SubType::from_func({ params, results })
+  SubType::from_func({ params, results, })
 }
 
 ///|
@@ -1311,7 +1311,7 @@ pub fn Module::simple(
   body : Array[Instruction],
   export_name : String,
 ) -> Module {
-  let func_type : FuncType = { params, results }
+  let func_type : FuncType = { params, results, }
   {
     types: [SubType::from_func(func_type)],
     type_rec_groups: [0],
@@ -1320,10 +1320,10 @@ pub fn Module::simple(
     tables: [],
     memories: [],
     globals: [],
-    exports: [{ name: export_name, desc: Func(0) }],
+    exports: [{ name: export_name, desc: Func(0), }],
     start: None,
     elems: [],
-    codes: [{ locals: [], body }],
+    codes: [{ locals: [], body, }],
     datas: [],
     tags: [],
     func_names: Map([]),

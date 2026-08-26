@@ -43,7 +43,7 @@ priv struct JITContext {
 /// Create a new JIT context - GC managed
 fn JITContext::try_alloc(total_funcs : Int) -> JITContext? {
   @wasmoon_jit.NativeJITContext::try_alloc(total_funcs).map(fn(ctx) {
-    { ctx, trampoline_cache: Map([]) }
+    { ctx, trampoline_cache: Map([]), }
   })
 }
 

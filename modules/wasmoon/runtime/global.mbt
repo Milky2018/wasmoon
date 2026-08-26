@@ -10,7 +10,7 @@ pub fn GlobalInstance::GlobalInstance(
   type_ : @types.GlobalType,
   value : @types.Value,
 ) -> GlobalInstance {
-  { type_, value }
+  { type_, value, }
 }
 
 ///|

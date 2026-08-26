@@ -16,7 +16,7 @@ pub fn wasm_runtime_symbols() -> @wasm_milkir.RuntimeSymbols {
 
 ///|
 pub fn RuntimeSymbolResolver::RuntimeSymbolResolver() -> RuntimeSymbolResolver {
-  { symbols: [] }
+  { symbols: [], }
 }
 
 ///|
@@ -116,7 +116,7 @@ pub fn RuntimeSymbolResolver::add_symbol(
   name : String,
   address : Int64,
 ) -> Unit {
-  self.symbols.push({ name, address })
+  self.symbols.push({ name, address, })
 }
 
 ///|

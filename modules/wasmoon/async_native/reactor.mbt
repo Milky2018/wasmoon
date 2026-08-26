@@ -108,7 +108,7 @@ pub fn NativeReactor::try_new() -> NativeReactor raise NativeReactorError {
   if c_reactor_state(raw) != 0 {
     raise AllocationFailed
   }
-  { raw, next_token: 1L, registrations: Map([]), closed: Ref(false) }
+  { raw, next_token: 1L, registrations: Map([]), closed: Ref(false), }
 }
 
 ///|
@@ -128,7 +128,7 @@ fn NativeReactor::register(
   if status != 0 {
     raise RegistrationFailed(status)
   }
-  let record : RegistrationRecord = { state: Ref(Pending) }
+  let record : RegistrationRecord = { state: Ref(Pending), }
   self.registrations.set(token, record)
   NativeRegistration(self, token, record)
 }
@@ -165,7 +165,7 @@ pub fn NativeReactor::register_timer(
   if status != 0 {
     raise RegistrationFailed(status)
   }
-  let record : RegistrationRecord = { state: Ref(Pending) }
+  let record : RegistrationRecord = { state: Ref(Pending), }
   self.registrations.set(token, record)
   NativeRegistration(self, token, record)
 }

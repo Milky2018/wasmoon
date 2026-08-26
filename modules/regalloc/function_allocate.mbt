@@ -49,7 +49,7 @@ fn[F : FunctionView] build_register_clobber_index(
       left.compare_with_order(right, block_order)
     })
   }
-  { points_by_reg, block_order: block_order.copy() }
+  { points_by_reg, block_order: block_order.copy(), }
 }
 
 ///|

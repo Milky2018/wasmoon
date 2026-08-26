@@ -13,7 +13,7 @@ struct FunctionBuilder {
 pub fn FunctionBuilder::FunctionBuilder(name : String) -> FunctionBuilder {
   let func = Function::new_empty(name)
   let entry = func.new_block0()
-  { func, current_block: entry }
+  { func, current_block: entry, }
 }
 
 ///|

@@ -6,7 +6,7 @@ pub struct StackSlot {
 
 ///|
 fn StackSlot::new(owner : Ref[Unit], id : Int) -> StackSlot {
-  { owner, id }
+  { owner, id, }
 }
 
 ///|
@@ -87,7 +87,7 @@ pub fn Edit::spill(
   reg : PhysicalReg,
   slot : StackSlot,
 ) -> Edit {
-  { point: Some(point), kind: Spill(value~, reg~, slot~) }
+  { point: Some(point), kind: Spill(value~, reg~, slot~), }
 }
 
 ///|
@@ -97,7 +97,7 @@ pub fn Edit::reload(
   slot : StackSlot,
   reg : PhysicalReg,
 ) -> Edit {
-  { point: Some(point), kind: Reload(value~, slot~, reg~) }
+  { point: Some(point), kind: Reload(value~, slot~, reg~), }
 }
 
 ///|
@@ -107,7 +107,7 @@ pub fn Edit::register_move(
   from : PhysicalReg,
   to : PhysicalReg,
 ) -> Edit {
-  { point: Some(point), kind: Move(value~, from~, to~) }
+  { point: Some(point), kind: Move(value~, from~, to~), }
 }
 
 ///|
@@ -118,7 +118,10 @@ pub fn Edit::edge_move(
   from : Location,
   to : Location,
 ) -> Edit {
-  { point: None, kind: EdgeMove(source~, successor_index~, value~, from~, to~) }
+  {
+    point: None,
+    kind: EdgeMove(source~, successor_index~, value~, from~, to~),
+  }
 }
 
 ///|
@@ -224,7 +227,7 @@ pub fn Allocation::create_stack_slot(
   alignment : Int,
 ) -> StackSlot {
   let slot = StackSlot::new(self.owner, self.stack_slots.length())
-  self.stack_slots.push({ ty, size, alignment })
+  self.stack_slots.push({ ty, size, alignment, })
   slot
 }
 
@@ -432,7 +435,7 @@ pub fn Allocation::add_safepoint_root(
     !self.location_matches(location, self.value_types[value.id]) {
     return false
   }
-  self.safepoint_roots.push({ instruction, value, location })
+  self.safepoint_roots.push({ instruction, value, location, })
   true
 }
 

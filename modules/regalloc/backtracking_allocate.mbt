@@ -120,7 +120,7 @@ fn segment_metadata(
   if !has_fixed_constraint {
     fixed_hint = None
   }
-  { weight, has_fixed_constraint, fixed_hint, preference_hint }
+  { weight, has_fixed_constraint, fixed_hint, preference_hint, }
 }
 
 ///|
@@ -472,7 +472,7 @@ fn[F : FunctionView] assign_backtracking_homes(
   )
   let group_slots : Array[Int?] = Array::make(spill_home_groups.length(), None)
   for value in 0..<function.value_count() {
-    let vreg : VirtualReg = { id: value, class: function.value_class(value) }
+    let vreg : VirtualReg = { id: value, class: function.value_class(value), }
     if !needs_spill[value] {
       plan.assign_value(vreg, Reg(register_homes[value].unwrap()))
       continue

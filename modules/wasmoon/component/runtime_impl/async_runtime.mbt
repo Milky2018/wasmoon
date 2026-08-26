@@ -519,7 +519,7 @@ fn decode_callback_code(code : Int) -> DecodedCallbackCode {
   let u = code.reinterpret_as_uint()
   let tag = (u & 0xFU).reinterpret_as_int()
   let payload = (u >> 4).reinterpret_as_int()
-  { tag, payload }
+  { tag, payload, }
 }
 
 ///|
@@ -1109,7 +1109,7 @@ fn progress_one_subtask_nonblocking(
       enqueue_waitable_event(
         async_state,
         handle_key(owner_component_id, st.id),
-        { owner_component_id, code: 1, index: st.id, payload: 1 },
+        { owner_component_id, code: 1, index: st.id, payload: 1, },
       )
       return true
     }
@@ -1279,7 +1279,7 @@ fn progress_one_subtask_nonblocking(
         enqueue_waitable_event(
           async_state,
           handle_key(owner_component_id, st.id),
-          { owner_component_id, code: 1, index: st.id, payload },
+          { owner_component_id, code: 1, index: st.id, payload, },
         )
         return true
       }

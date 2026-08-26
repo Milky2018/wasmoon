@@ -12,7 +12,7 @@ struct InstantiationTransaction {
 
 ///|
 pub fn InstantiationTransaction::new() -> InstantiationTransaction {
-  { rollbacks: [], finalizers: [], active: true }
+  { rollbacks: [], finalizers: [], active: true, }
 }
 
 ///|
@@ -29,7 +29,7 @@ impl Debug for RollbackRegistrar with fn to_repr(_self) {
 pub fn InstantiationTransaction::registrar(
   self : InstantiationTransaction,
 ) -> RollbackRegistrar {
-  { transaction: self }
+  { transaction: self, }
 }
 
 ///|

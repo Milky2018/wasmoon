@@ -16,7 +16,7 @@ fn instantiate_canon_backpressure_inc(
   state : BuildState,
   store : @runtime.Store,
 ) -> Unit raise ComponentRuntimeError {
-  let core_type : @types.FuncType = { params: [], results: [] }
+  let core_type : @types.FuncType = { params: [], results: [], }
   let async_state = state.async_state
   let owner_component_id = state.resource_table.id
   let host = fn(
@@ -42,7 +42,7 @@ fn instantiate_canon_backpressure_dec(
   state : BuildState,
   store : @runtime.Store,
 ) -> Unit raise ComponentRuntimeError {
-  let core_type : @types.FuncType = { params: [], results: [] }
+  let core_type : @types.FuncType = { params: [], results: [], }
   let async_state = state.async_state
   let owner_component_id = state.resource_table.id
   let host = fn(
@@ -70,7 +70,7 @@ fn instantiate_canon_error_context_new(
   store : @runtime.Store,
 ) -> Unit raise ComponentRuntimeError {
   let resources = resolve_canon_resources(opts, state)
-  let core_type : @types.FuncType = { params: [I32, I32], results: [I32] }
+  let core_type : @types.FuncType = { params: [I32, I32], results: [I32], }
   let async_state = state.async_state
   let owner_component_id = state.resource_table.id
   let types = state.types
@@ -128,7 +128,7 @@ fn instantiate_canon_error_context_debug_message(
   store : @runtime.Store,
 ) -> Unit raise ComponentRuntimeError {
   let resources = resolve_canon_resources(opts, state)
-  let core_type : @types.FuncType = { params: [I32, I32], results: [] }
+  let core_type : @types.FuncType = { params: [I32, I32], results: [], }
   let async_state = state.async_state
   let owner_component_id = state.resource_table.id
   let host = fn(
@@ -233,7 +233,7 @@ fn instantiate_canon_error_context_drop(
   state : BuildState,
   store : @runtime.Store,
 ) -> Unit raise ComponentRuntimeError {
-  let core_type : @types.FuncType = { params: [I32], results: [] }
+  let core_type : @types.FuncType = { params: [I32], results: [], }
   let async_state = state.async_state
   let owner_component_id = state.resource_table.id
   let host = fn(

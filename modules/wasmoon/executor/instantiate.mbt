@@ -729,7 +729,7 @@ pub struct ImportDiagnosticsResult {
 
 ///|
 pub fn ImportDiagnosticsResult::ImportDiagnosticsResult() -> ImportDiagnosticsResult {
-  { ok: true, diagnostics: [] }
+  { ok: true, diagnostics: [], }
 }
 
 ///|
@@ -1578,7 +1578,7 @@ pub fn instantiate_module_with_imports(
   for addr in global_addrs {
     global_instances.push(
       store.get_global(addr) catch {
-        _ => GlobalInstance({ value_type: I32, mutable: false }, I32(0))
+        _ => GlobalInstance({ value_type: I32, mutable: false, }, I32(0))
       },
     )
   }
@@ -1788,7 +1788,7 @@ pub fn CallExportOptions::CallExportOptions(
   budget? : Int? = None,
   cancel? : (() -> Bool)? = None,
 ) -> CallExportOptions {
-  { timeout_ms, fuel, budget, cancel }
+  { timeout_ms, fuel, budget, cancel, }
 }
 
 ///|
@@ -1797,7 +1797,7 @@ fn call_export_failure(
   message : String,
   runtime_error? : @runtime.RuntimeError? = None,
 ) -> CallExportFailure {
-  { kind, message, runtime_error }
+  { kind, message, runtime_error, }
 }
 
 ///|

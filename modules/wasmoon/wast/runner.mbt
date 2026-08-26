@@ -22,7 +22,7 @@ pub struct WastResult {
 
 ///|
 pub fn WastResult::WastResult() -> WastResult {
-  { passed: 0, failed: 0, skipped: 0, failures: [] }
+  { passed: 0, failed: 0, skipped: 0, failures: [], }
 }
 
 ///|

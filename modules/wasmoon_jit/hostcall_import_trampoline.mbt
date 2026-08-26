@@ -113,7 +113,7 @@ fn hostcall_param_locations(
     match hostcall_scalar_class(ty) {
       Int =>
         if int_seen < int_arg_regs.length() {
-          locations.push(Reg({ index: int_arg_regs[int_seen] }))
+          locations.push(Reg({ index: int_arg_regs[int_seen], }))
           int_seen = int_seen + 1
         } else {
           let align = hostcall_abi_stack_align(ty)
@@ -125,7 +125,7 @@ fn hostcall_param_locations(
         }
       Float32 | Float64 | Vector =>
         if float_seen < float_arg_reg_count {
-          locations.push(Reg({ index: float_seen }))
+          locations.push(Reg({ index: float_seen, }))
           float_seen = float_seen + 1
         } else {
           let align = hostcall_abi_stack_align(ty)
@@ -165,7 +165,7 @@ fn hostcall_result_locations(
     match hostcall_scalar_class(ty) {
       Int =>
         if int_seen < int_result_regs.length() {
-          locations.push(Reg({ index: int_result_regs[int_seen] }))
+          locations.push(Reg({ index: int_result_regs[int_seen], }))
           int_seen = int_seen + 1
         } else {
           let align = hostcall_abi_stack_align(ty)
@@ -178,7 +178,7 @@ fn hostcall_result_locations(
         }
       Float32 | Float64 | Vector =>
         if float_seen < float_result_reg_count {
-          locations.push(Reg({ index: float_seen }))
+          locations.push(Reg({ index: float_seen, }))
           float_seen = float_seen + 1
         } else {
           let align = hostcall_abi_stack_align(ty)

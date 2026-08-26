@@ -89,7 +89,7 @@ fn extract_cost_finite(op_cost : Int, depth : Int) -> ExtractCost {
   if op_cost >= extract_cost_max_finite() {
     extract_cost_infinity()
   } else {
-    { op_cost, depth, infinite: false }
+    { op_cost, depth, infinite: false, }
   }
 }
 
@@ -178,7 +178,7 @@ pub fn EGraph::extract(self : EGraph, id : EClassId) -> (Int, ENode) {
         (cost.op_cost, node)
       }
     // No finite extraction exists (every node participates in a cycle).
-    None => (@int.MAX_VALUE, { op: Var(-1), children: [] })
+    None => (@int.MAX_VALUE, { op: Var(-1), children: [], })
   }
 }
 

@@ -11,7 +11,7 @@ pub fn ParallelMove::new(
   from : Location,
   to : Location,
 ) -> ParallelMove {
-  { ty, from, to }
+  { ty, from, to, }
 }
 
 ///|
@@ -184,7 +184,7 @@ fn legalize_single_bank(
       }
     }
   }
-  { steps, requires_emergency }
+  { steps, requires_emergency, }
 }
 
 ///|

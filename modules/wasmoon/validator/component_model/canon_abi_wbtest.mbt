@@ -2,24 +2,24 @@
 test "canon lift only requires realloc for values written into core memory" {
   let scalar_params : Array[@component.Param] = []
   for i in 0..<17 {
-    scalar_params.push({ label: "p\{i}", ty: Prim(U32) })
+    scalar_params.push({ label: "p\{i}", ty: Prim(U32), })
   }
   let cases : Array[(String, @component.FuncType)] = [
     (
       "string-result",
-      { is_async: false, params: [], result: Some(Prim(String)) },
+      { is_async: false, params: [], result: Some(Prim(String)), },
     ),
     (
       "string-parameter",
       {
         is_async: false,
-        params: [{ label: "value", ty: Prim(String) }],
+        params: [{ label: "value", ty: Prim(String), }],
         result: None,
       },
     ),
     (
       "indirect-parameters",
-      { is_async: false, params: scalar_params, result: None },
+      { is_async: false, params: scalar_params, result: None, },
     ),
   ]
   let results = []
@@ -46,13 +46,13 @@ test "canon lower only requires realloc for values written into core memory" {
       "string-parameter",
       {
         is_async: false,
-        params: [{ label: "value", ty: Prim(String) }],
+        params: [{ label: "value", ty: Prim(String), }],
         result: None,
       },
     ),
     (
       "string-result",
-      { is_async: false, params: [], result: Some(Prim(String)) },
+      { is_async: false, params: [], result: Some(Prim(String)), },
     ),
   ]
   let results = []
@@ -69,12 +69,12 @@ test "canon lower only requires realloc for values written into core memory" {
 ///|
 test "canonical memory address type follows the selected memory" {
   let memory32 : @types.MemoryType = {
-    limits: { min: 1L, max: None },
+    limits: { min: 1L, max: None, },
     is_memory64: false,
     page_size_log2: 16,
   }
   let memory64 : @types.MemoryType = {
-    limits: { min: 1L, max: None },
+    limits: { min: 1L, max: None, },
     is_memory64: true,
     page_size_log2: 16,
   }
@@ -90,13 +90,13 @@ test "canonical memory address type follows the selected memory" {
 ///|
 test "memory64 canonical realloc requires an i64 address signature" {
   let memory64 : @types.MemoryType = {
-    limits: { min: 1L, max: None },
+    limits: { min: 1L, max: None, },
     is_memory64: true,
     page_size_log2: 16,
   }
   let func_type : @component.FuncType = {
     is_async: false,
-    params: [{ label: "value", ty: Prim(String) }],
+    params: [{ label: "value", ty: Prim(String), }],
     result: None,
   }
   let invalid_realloc : @types.FuncType = {

@@ -4,10 +4,10 @@ fn make_host_fail_module() -> @types.Module {
     ..@types.Module::empty(),
     types: [@types.SubType::func([], [I32])],
     type_rec_groups: [0],
-    imports: [{ mod_name: "env", name: "fail", desc: Func(0) }],
+    imports: [{ mod_name: "env", name: "fail", desc: Func(0), }],
     funcs: [0],
-    codes: [{ locals: [], body: [Call(0)] }],
-    exports: [{ name: "main", desc: Func(1) }],
+    codes: [{ locals: [], body: [Call(0)], }],
+    exports: [{ name: "main", desc: Func(1), }],
   }
 }
 
@@ -43,7 +43,7 @@ test "call_exported_func_with_options: classify host invocation error" {
   let store = @runtime.Store::Store()
   let host_addr = store.alloc_host_func_with_caller(
     (_caller, _args) => raise LinkErrorDetail("host failed"),
-    func_type={ params: [], results: [I32] },
+    func_type={ params: [], results: [I32], },
     type_idx=0,
   )
   let imports = @runtime.Imports::Imports()
@@ -76,7 +76,7 @@ test "call_exported_func_with_options: preserve legacy host error behavior" {
   let store = @runtime.Store::Store()
   let host_addr = store.alloc_host_func_with_caller(
     (_caller, _args) => raise LinkErrorDetail("legacy host error"),
-    func_type={ params: [], results: [I32] },
+    func_type={ params: [], results: [I32], },
     type_idx=0,
   )
   let imports = @runtime.Imports::Imports()
@@ -145,7 +145,7 @@ test "call_exported_func_with_options: cancel at loop safepoint" {
         ],
       },
     ],
-    exports: [{ name: "main", desc: Func(0) }],
+    exports: [{ name: "main", desc: Func(0), }],
   }
   let (store, instance) = instantiate_module(mod)
   let polls = [0]

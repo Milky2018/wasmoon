@@ -1,8 +1,8 @@
 ///|
 test "live range lookup uses a direct per-class dense index" {
   let ranges = LiveRangeSet::LiveRangeSet([])
-  let int_reg : VirtualReg = { id: 4096, class: Int }
-  let float_reg : VirtualReg = { id: 4096, class: Float }
+  let int_reg : VirtualReg = { id: 4096, class: Int, }
+  let float_reg : VirtualReg = { id: 4096, class: Float, }
   ranges.add_range(LiveRange(0, int_reg))
   ranges.add_range(LiveRange(1, float_reg))
   debug_inspect(
@@ -41,7 +41,7 @@ test "sparse vreg set promotes and unions high virtual register ids" {
 
 ///|
 test "sparse live sets preserve defs and successor propagation" {
-  let cfg : DenseCfgEdges = { preds: [[], [0], [1]], succs: [[1], [2], []] }
+  let cfg : DenseCfgEdges = { preds: [[], [0], [1]], succs: [[1], [2], []], }
   let defs = [SparseVRegSet::new(), SparseVRegSet::new(), SparseVRegSet::new()]
   let live_in = [
     SparseVRegSet::new(),
@@ -85,7 +85,7 @@ test "sparse live sets cover diamond loop and unreachable CFG regions" {
 
 ///|
 test "compute sparse live sets over reusable CFG model" {
-  let cfg : DenseCfgEdges = { preds: [[], [0], [1]], succs: [[1], [2], []] }
+  let cfg : DenseCfgEdges = { preds: [[], [0], [1]], succs: [[1], [2], []], }
   let defs = [SparseVRegSet::new(), SparseVRegSet::new(), SparseVRegSet::new()]
   let live_in = [
     SparseVRegSet::new(),
@@ -111,16 +111,16 @@ test "program point ordering is lexicographic across large blocks" {
 ///|
 test "instruction edit resolution preserves position order and edge edits" {
   let plan = AllocationPlan::new(4)
-  let r0 : PhysicalReg = { id: 0, class: Int }
-  let r1 : PhysicalReg = { id: 1, class: Int }
-  let r2 : PhysicalReg = { id: 2, class: Int }
-  let v0 : VirtualReg = { id: 0, class: Int }
-  let v1 : VirtualReg = { id: 1, class: Int }
-  let v2 : VirtualReg = { id: 2, class: Int }
-  plan.add_edit({ value: v0, from: Reg(r0), to: Reg(r1), position: Before(2) })
-  plan.add_edit({ value: v1, from: Reg(r1), to: Reg(r2), position: After(0) })
-  plan.add_edit({ value: v2, from: Reg(r2), to: Reg(r0), position: Before(1) })
-  plan.add_edit({ value: v0, from: Reg(r0), to: Reg(r1), position: Before(2) })
+  let r0 : PhysicalReg = { id: 0, class: Int, }
+  let r1 : PhysicalReg = { id: 1, class: Int, }
+  let r2 : PhysicalReg = { id: 2, class: Int, }
+  let v0 : VirtualReg = { id: 0, class: Int, }
+  let v1 : VirtualReg = { id: 1, class: Int, }
+  let v2 : VirtualReg = { id: 2, class: Int, }
+  plan.add_edit({ value: v0, from: Reg(r0), to: Reg(r1), position: Before(2), })
+  plan.add_edit({ value: v1, from: Reg(r1), to: Reg(r2), position: After(0), })
+  plan.add_edit({ value: v2, from: Reg(r2), to: Reg(r0), position: Before(1), })
+  plan.add_edit({ value: v0, from: Reg(r0), to: Reg(r1), position: Before(2), })
   plan.add_edit({
     value: v1,
     from: Reg(r1),
@@ -285,9 +285,9 @@ impl FunctionView for VerifierCfgView with fn instruction_clobbers(
 
 ///|
 test "operand assignment reuses a tied group's resident register" {
-  let spilled : VirtualReg = { id: 0, class: Int }
-  let resident : VirtualReg = { id: 1, class: Int }
-  let r0 : PhysicalReg = { id: 0, class: Int }
+  let spilled : VirtualReg = { id: 0, class: Int, }
+  let resident : VirtualReg = { id: 1, class: Int, }
+  let r0 : PhysicalReg = { id: 0, class: Int, }
   let function : VerifierCfgView = {
     value_count: 2,
     blocks: [[0]],
@@ -338,9 +338,9 @@ fn verify_wrong_location(
   def_instruction : Int?,
   use_instruction : Int,
 ) -> VerifyError? {
-  let value : VirtualReg = { id: 0, class: Int }
-  let r0 : PhysicalReg = { id: 0, class: Int }
-  let r1 : PhysicalReg = { id: 1, class: Int }
+  let value : VirtualReg = { id: 0, class: Int, }
+  let r0 : PhysicalReg = { id: 0, class: Int, }
+  let r1 : PhysicalReg = { id: 1, class: Int, }
   let plan = AllocationPlan::new(1)
   plan.assign_value(value, Reg(r0))
   if def_instruction is Some(instruction) {
@@ -357,7 +357,7 @@ fn verify_wrong_location(
 
 ///|
 test "plan verifier rejects a spilled AnyReg operand" {
-  let value : VirtualReg = { id: 0, class: Int }
+  let value : VirtualReg = { id: 0, class: Int, }
   let function : VerifierCfgView = {
     value_count: 1,
     blocks: [[0]],
@@ -387,10 +387,10 @@ test "plan verifier rejects a spilled AnyReg operand" {
 
 ///|
 test "plan verifier accepts a declared fixed-operand-only register" {
-  let value : VirtualReg = { id: 0, class: Int }
-  let home : PhysicalReg = { id: 0, class: Int }
-  let edit_scratch : PhysicalReg = { id: 1, class: Int }
-  let fixed_only : PhysicalReg = { id: 2, class: Int }
+  let value : VirtualReg = { id: 0, class: Int, }
+  let home : PhysicalReg = { id: 0, class: Int, }
+  let edit_scratch : PhysicalReg = { id: 1, class: Int, }
+  let fixed_only : PhysicalReg = { id: 2, class: Int, }
   let function : VerifierCfgView = {
     value_count: 1,
     blocks: [[0]],
@@ -422,9 +422,9 @@ test "plan verifier accepts a declared fixed-operand-only register" {
 
 ///|
 test "plan verifier rejects an unconstrained operand in a fixed-only register" {
-  let value : VirtualReg = { id: 0, class: Int }
-  let home : PhysicalReg = { id: 0, class: Int }
-  let fixed_only : PhysicalReg = { id: 2, class: Int }
+  let value : VirtualReg = { id: 0, class: Int, }
+  let home : PhysicalReg = { id: 0, class: Int, }
+  let fixed_only : PhysicalReg = { id: 2, class: Int, }
   let function : VerifierCfgView = {
     value_count: 1,
     blocks: [[0]],
@@ -465,7 +465,7 @@ test "plan verifier rejects an unconstrained operand in a fixed-only register" {
 
 ///|
 test "plan verifier always enters a self-looping entry block" {
-  let value : VirtualReg = { id: 0, class: Int }
+  let value : VirtualReg = { id: 0, class: Int, }
   debug_inspect(
     verify_wrong_location(
       {
@@ -495,7 +495,7 @@ test "plan verifier always enters a self-looping entry block" {
 
 ///|
 test "plan verifier checks an unreachable cyclic component" {
-  let value : VirtualReg = { id: 0, class: Int }
+  let value : VirtualReg = { id: 0, class: Int, }
   debug_inspect(
     verify_wrong_location(
       {
@@ -526,8 +526,8 @@ test "plan verifier checks an unreachable cyclic component" {
 ///|
 test "plan verifier queries each block successor list once" {
   let successor_queries = Ref(0)
-  let value : VirtualReg = { id: 0, class: Int }
-  let register : PhysicalReg = { id: 0, class: Int }
+  let value : VirtualReg = { id: 0, class: Int, }
+  let register : PhysicalReg = { id: 0, class: Int, }
   let function : VerifierCfgView = {
     value_count: 1,
     blocks: [[], [], [], []],
@@ -547,9 +547,9 @@ test "plan verifier queries each block successor list once" {
 
 ///|
 test "production fragments cache local allocation metadata" {
-  let r0 : PhysicalReg = { id: 0, class: Int }
-  let r1 : PhysicalReg = { id: 1, class: Int }
-  let range = LiveRange::LiveRange(0, { id: 0, class: Int })
+  let r0 : PhysicalReg = { id: 0, class: Int, }
+  let r1 : PhysicalReg = { id: 1, class: Int, }
+  let range = LiveRange::LiveRange(0, { id: 0, class: Int, })
   range.add_range(ProgramRange(ProgramPoint(0, 0), ProgramPoint(0, 2)))
   range.add_range(ProgramRange(ProgramPoint(2, 0), ProgramPoint(2, 2)))
   range.add_use(
@@ -583,8 +583,8 @@ test "production fragments cache local allocation metadata" {
 
 ///|
 test "any-location definitions materialize in their stable home" {
-  let value : VirtualReg = { id: 0, class: Int }
-  let register : PhysicalReg = { id: 0, class: Int }
+  let value : VirtualReg = { id: 0, class: Int, }
+  let register : PhysicalReg = { id: 0, class: Int, }
   let function : VerifierCfgView = {
     value_count: 1,
     blocks: [[0]],
@@ -630,7 +630,7 @@ test "production register allocation index orders updates by range end" {
   let segments : Array[AllocationSegment] = [
     {
       id: 0,
-      value: { id: 0, class: Int },
+      value: { id: 0, class: Int, },
       range: ProgramRange(ProgramPoint(0, 0), ProgramPoint(0, 2)),
       weight: 1,
       has_fixed_constraint: false,
@@ -640,7 +640,7 @@ test "production register allocation index orders updates by range end" {
     },
     {
       id: 1,
-      value: { id: 1, class: Int },
+      value: { id: 1, class: Int, },
       range: ProgramRange(ProgramPoint(0, 4), ProgramPoint(0, 6)),
       weight: 1,
       has_fixed_constraint: false,
@@ -650,7 +650,7 @@ test "production register allocation index orders updates by range end" {
     },
     {
       id: 2,
-      value: { id: 2, class: Int },
+      value: { id: 2, class: Int, },
       range: ProgramRange(ProgramPoint(0, 8), ProgramPoint(0, 10)),
       weight: 1,
       has_fixed_constraint: false,
@@ -660,7 +660,7 @@ test "production register allocation index orders updates by range end" {
     },
     {
       id: 3,
-      value: { id: 3, class: Int },
+      value: { id: 3, class: Int, },
       range: ProgramRange(ProgramPoint(0, 5), ProgramPoint(0, 7)),
       weight: 1,
       has_fixed_constraint: false,
@@ -696,10 +696,10 @@ test "production register allocation index orders updates by range end" {
 /// the previous one — so any reordering inside the bucket fails verification
 /// with `IncorrectValue`.
 test "plan verifier applies same-position edits in plan order" {
-  let value : VirtualReg = { id: 0, class: Int }
-  let r0 : PhysicalReg = { id: 0, class: Int }
-  let r1 : PhysicalReg = { id: 1, class: Int }
-  let r2 : PhysicalReg = { id: 2, class: Int }
+  let value : VirtualReg = { id: 0, class: Int, }
+  let r0 : PhysicalReg = { id: 0, class: Int, }
+  let r1 : PhysicalReg = { id: 1, class: Int, }
+  let r2 : PhysicalReg = { id: 2, class: Int, }
   let function : VerifierCfgView = {
     value_count: 1,
     blocks: [[0]],
@@ -713,9 +713,9 @@ test "plan verifier applies same-position edits in plan order" {
   }
   let plan = AllocationPlan::new(1)
   plan.assign_value(value, Reg(r0))
-  plan.add_edit({ value, from: Reg(r0), to: Reg(r1), position: Before(0) })
-  plan.add_edit({ value, from: Reg(r1), to: Reg(r2), position: Before(0) })
-  plan.add_edit({ value, from: Reg(r2), to: Reg(r0), position: Before(0) })
+  plan.add_edit({ value, from: Reg(r0), to: Reg(r1), position: Before(0), })
+  plan.add_edit({ value, from: Reg(r1), to: Reg(r2), position: Before(0), })
+  plan.add_edit({ value, from: Reg(r2), to: Reg(r0), position: Before(0), })
   plan.assign_operand(0, 0, Reg(r0))
   verify_function_allocation(function, MachineEnv::new([r0, r1, r2], []), plan)
 }
@@ -732,8 +732,8 @@ test "plan verifier applies same-position edits in plan order" {
 test "plan verifier processes a deep diamond join chain once per block" {
   let diamonds = 8
   let block_count = 3 * diamonds + 1
-  let value : VirtualReg = { id: 0, class: Int }
-  let r0 : PhysicalReg = { id: 0, class: Int }
+  let value : VirtualReg = { id: 0, class: Int, }
+  let r0 : PhysicalReg = { id: 0, class: Int, }
   let registers : Array[PhysicalReg] = Array::makei(diamonds + 1, id => {
     id,
     class: Int,

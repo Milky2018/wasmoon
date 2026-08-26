@@ -46,7 +46,7 @@ pub fn JITFunctionDebug::JITFunctionDebug(
   machv_after_regalloc : String,
   machine_code : String,
 ) -> JITFunctionDebug {
-  { ir, machv_before_regalloc, machv_after_regalloc, machine_code }
+  { ir, machv_before_regalloc, machv_after_regalloc, machine_code, }
 }
 
 ///|
@@ -57,7 +57,7 @@ pub struct JITDebugDB {
 
 ///|
 pub fn JITDebugDB::JITDebugDB() -> JITDebugDB {
-  { entries: Map([]) }
+  { entries: Map([]), }
 }
 
 ///|

@@ -12,7 +12,7 @@ pub struct LoweringContext {
 
 ///|
 pub fn LoweringContext::new(internal_abi : InternalAbi) -> LoweringContext {
-  { internal_abi: internal_abi.copy(), environment_fields: [] }
+  { internal_abi: internal_abi.copy(), environment_fields: [], }
 }
 
 ///|
@@ -24,15 +24,15 @@ pub fn LoweringContext::with_environment_field(
   let bindings = self.environment_fields.copy()
   for index, binding in bindings {
     if binding.field == field {
-      bindings[index] = { field, offsets: offsets.copy() }
+      bindings[index] = { field, offsets: offsets.copy(), }
       return {
         internal_abi: self.internal_abi.copy(),
         environment_fields: bindings,
       }
     }
   }
-  bindings.push({ field, offsets: offsets.copy() })
-  { internal_abi: self.internal_abi.copy(), environment_fields: bindings }
+  bindings.push({ field, offsets: offsets.copy(), })
+  { internal_abi: self.internal_abi.copy(), environment_fields: bindings, }
 }
 
 ///|

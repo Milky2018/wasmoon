@@ -139,7 +139,7 @@ test "linker close cannot overtake in-flight continuation ownership" {
   close_linker.val = fn() { linker.close() }
   let core_func = alloc_host_core_func(
     linker.get_store(),
-    { params: [], results: [] },
+    { params: [], results: [], },
     fn(_arguments) { [] },
   )
   let result = try {
@@ -184,7 +184,7 @@ test "published continuation lease delays linker teardown" {
   let linker = ComponentLinker::with_core_execution_engine(engine)
   let core_func = alloc_host_core_func(
     linker.get_store(),
-    { params: [], results: [] },
+    { params: [], results: [], },
     fn(_arguments) { [] },
   )
   let outcome = linker

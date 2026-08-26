@@ -10,13 +10,13 @@ fn loader_artifact() -> @artifact.Artifact {
         endianness: Little,
         pointer_width: Bits64,
       },
-      required_cpu_features: [{ name: "neon" }],
+      required_cpu_features: [{ name: "neon", }],
       jit_abi_version: 3,
       codegen_revision: "machv-2026-07-22",
       module_identity: {
         name: "answer",
-        source_digest: { bytes: Bytes::make(32, b'\x11') },
-        semantic_features_digest: { bytes: Bytes::make(32, b'\x22') },
+        source_digest: { bytes: Bytes::make(32, b'\x11'), },
+        semantic_features_digest: { bytes: Bytes::make(32, b'\x22'), },
       },
       policy: {
         optimization_level: O2,
@@ -78,7 +78,7 @@ fn loader_artifact() -> @artifact.Artifact {
 fn loader_compatibility(artifact : @artifact.Artifact) -> ArtifactCompatibility {
   {
     target: artifact.manifest.target,
-    available_cpu_features: [{ name: "neon" }, { name: "crc" }],
+    available_cpu_features: [{ name: "neon", }, { name: "crc", }],
     jit_abi_version: artifact.manifest.jit_abi_version,
     codegen_revision: artifact.manifest.codegen_revision,
     module_identity: artifact.manifest.module_identity,
@@ -162,23 +162,23 @@ test "artifact compatibility reports exact mismatch causes" {
   let expected = loader_compatibility(artifact)
   debug_inspect(
     [
-      compatibility_error(artifact, { ..expected, available_cpu_features: [] }),
+      compatibility_error(artifact, { ..expected, available_cpu_features: [], }),
       compatibility_error(artifact, {
         ..expected,
-        target: { ..expected.target, operating_system_abi: LinuxGnu },
+        target: { ..expected.target, operating_system_abi: LinuxGnu, },
       }),
-      compatibility_error(artifact, { ..expected, jit_abi_version: 4 }),
+      compatibility_error(artifact, { ..expected, jit_abi_version: 4, }),
       compatibility_error(artifact, {
         ..expected,
         codegen_revision: "different",
       }),
       compatibility_error(artifact, {
         ..expected,
-        module_identity: { ..expected.module_identity, name: "other" },
+        module_identity: { ..expected.module_identity, name: "other", },
       }),
       compatibility_error(artifact, {
         ..expected,
-        policy: { ..expected.policy, optimization_level: O3 },
+        policy: { ..expected.policy, optimization_level: O3, },
       }),
     ],
     content=(
@@ -275,7 +275,7 @@ test "artifact loader propagates code object verification" {
   let function = artifact.functions[0]
   let malformed : @artifact.Artifact = {
     ..artifact,
-    functions: [{ ..function, code: [b'\x00', b'\x00', b'\x00', b'\x00'] }],
+    functions: [{ ..function, code: [b'\x00', b'\x00', b'\x00', b'\x00'], }],
   }
   let decoded = @artifact.decode(@artifact.encode(malformed))
   let error = try build_verified_code_objects(decoded) catch {
@@ -307,7 +307,7 @@ test "artifact loader preserves structured failure classes" {
   let function = artifact.functions[0]
   let malformed_code : @artifact.Artifact = {
     ..artifact,
-    functions: [{ ..function, code: [b'\x00', b'\x00', b'\x00', b'\x00'] }],
+    functions: [{ ..function, code: [b'\x00', b'\x00', b'\x00', b'\x00'], }],
   }
   debug_inspect(
     [

@@ -138,7 +138,7 @@ fn make_carried_effect_loop(bound_value : Int) -> CarriedEffectLoopFixture {
   builder.jump(header, [next_induction, next_accumulator])
   builder.switch_to_block(exit)
   builder.return_([])
-  { func, preheader, header, latch }
+  { func, preheader, header, latch, }
 }
 
 ///|
@@ -181,7 +181,7 @@ fn make_counted_loop(
   builder.jump(header, [next])
   builder.switch_to_block(exit)
   builder.return_([])
-  { func: builder.get_function() }
+  { func: builder.get_function(), }
 }
 
 ///|

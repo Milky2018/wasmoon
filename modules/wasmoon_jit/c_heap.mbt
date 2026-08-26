@@ -114,23 +114,23 @@ pub struct GcSlot {
 /// GC reference detection in gc_heap_mark uses: (lo & 1) == 0 && lo > 0
 pub fn value_to_slot(value : @types.Value) -> GcSlot {
   match value {
-    I32(n) => { lo: n.to_int64(), hi: 0L }
-    I64(n) => { lo: n, hi: 0L }
-    F32(f) => { lo: f.reinterpret_as_int().to_int64(), hi: 0L }
-    F64(d) => { lo: d.reinterpret_as_int64(), hi: 0L }
+    I32(n) => { lo: n.to_int64(), hi: 0L, }
+    I64(n) => { lo: n, hi: 0L, }
+    F32(f) => { lo: f.reinterpret_as_int().to_int64(), hi: 0L, }
+    F64(d) => { lo: d.reinterpret_as_int64(), hi: 0L, }
     V128(bytes) =>
       {
         lo: @types.bytes_to_int64_le(bytes, 0),
         hi: @types.bytes_to_int64_le(bytes, 8),
       }
     // gc_ref is 1-based: StructRef(0) -> gc_ref=1 -> encoded=2
-    StructRef(idx) => { lo: (idx + 1).to_int64() << 1, hi: 0L }
-    ArrayRef(idx) => { lo: (idx + 1).to_int64() << 1, hi: 0L }
-    FuncRef(idx) => { lo: (idx + 1).to_int64(), hi: 0L }
-    ExternRef(idx) => { lo: (idx + 1).to_int64(), hi: 0L }
-    ExnRef(idx) => { lo: (idx + 1).to_int64(), hi: 0L }
-    I31(n) => { lo: (n.to_int64() << 1) | 1L, hi: 0L }
-    Null => { lo: @wasm_milkir.NULL_REF, hi: 0L }
+    StructRef(idx) => { lo: (idx + 1).to_int64() << 1, hi: 0L, }
+    ArrayRef(idx) => { lo: (idx + 1).to_int64() << 1, hi: 0L, }
+    FuncRef(idx) => { lo: (idx + 1).to_int64(), hi: 0L, }
+    ExternRef(idx) => { lo: (idx + 1).to_int64(), hi: 0L, }
+    ExnRef(idx) => { lo: (idx + 1).to_int64(), hi: 0L, }
+    I31(n) => { lo: (n.to_int64() << 1) | 1L, hi: 0L, }
+    Null => { lo: @wasm_milkir.NULL_REF, hi: 0L, }
   }
 }
 
@@ -149,7 +149,7 @@ pub fn value_to_i64(value : @types.Value) -> Int64 {
 /// upper 8 bytes are zero. Callers reading a stored field want
 /// `slot_to_value`, which has the other half.
 pub fn i64_to_value(raw : Int64, ty : @types.ValueType) -> @types.Value {
-  slot_to_value({ lo: raw, hi: 0L }, ty)
+  slot_to_value({ lo: raw, hi: 0L, }, ty)
 }
 
 ///|
@@ -273,7 +273,7 @@ pub fn CHeap::struct_get(
   let gc_ref = struct_idx + 1
   let out = FixedArray::make(2, 0L)
   c_gc_heap_struct_get_wide(self.ptr, gc_ref, field_idx, out)
-  slot_to_value({ lo: out[0], hi: out[1] }, field_type)
+  slot_to_value({ lo: out[0], hi: out[1], }, field_type)
 }
 
 ///|
@@ -361,7 +361,7 @@ pub fn CHeap::array_get(
   }
   let out = FixedArray::make(2, 0L)
   c_gc_heap_array_get_wide(self.ptr, gc_ref, elem_idx, out)
-  slot_to_value({ lo: out[0], hi: out[1] }, elem_type)
+  slot_to_value({ lo: out[0], hi: out[1], }, elem_type)
 }
 
 ///|

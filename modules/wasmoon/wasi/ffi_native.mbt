@@ -1201,7 +1201,7 @@ pub fn native_poll(
     for i in 0..<nfds {
       revents.push(revents_arr[i])
     }
-    Some({ ready_count: result, revents })
+    Some({ ready_count: result, revents, })
   }
 }
 
@@ -1413,7 +1413,7 @@ pub fn native_resolver_start(name : String) -> NativeResolver? {
   if handle == 0L || poll_fd[0] < 0 {
     None
   } else {
-    Some({ handle, poll_fd: poll_fd[0] })
+    Some({ handle, poll_fd: poll_fd[0], })
   }
 }
 

@@ -257,7 +257,7 @@ fn resolve_outer_alias(
     raise OuterAliasOutOfRange(depth)
   }
   let outer = outer_stack[outer_stack.length() - 1 - depth]
-  resolve_sortidx_in_instance({ sort, idx }, outer)
+  resolve_sortidx_in_instance({ sort, idx, }, outer)
 }
 
 ///|
@@ -322,7 +322,7 @@ fn build_inline_core_instance(
       _ => raise AliasTargetMismatch("inline core export")
     }
   }
-  { funcs, tables, memories, globals, tags }
+  { funcs, tables, memories, globals, tags, }
 }
 
 ///|

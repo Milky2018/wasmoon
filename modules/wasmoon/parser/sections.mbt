@@ -99,7 +99,7 @@ pub fn parse_module(data : Bytes) -> @types.Module raise ParserError {
             }
             _ => raise InvalidImportKind(kind)
           }
-          mod.imports.push({ mod_name, name, desc })
+          mod.imports.push({ mod_name, name, desc, })
         }
       }
       3 => {
@@ -129,7 +129,7 @@ pub fn parse_module(data : Bytes) -> @types.Module raise ParserError {
         for _ in 0..<count {
           let type_ = parser.read_global_type()
           let init = parser.read_expr()
-          mod.globals.push({ type_, init })
+          mod.globals.push({ type_, init, })
         }
       }
       7 => {
@@ -146,7 +146,7 @@ pub fn parse_module(data : Bytes) -> @types.Module raise ParserError {
             0x04 => Tag(parser.read_u32())
             _ => raise InvalidExportKind(kind)
           }
-          mod.exports.push({ name, desc })
+          mod.exports.push({ name, desc, })
         }
       }
       8 =>
@@ -158,7 +158,7 @@ pub fn parse_module(data : Bytes) -> @types.Module raise ParserError {
         for _ in 0..<count {
           let flags = parser.read_u32()
           let (mode, elem_type, init) = parser.read_elem_segment(flags)
-          mod.elems.push({ mode, type_: elem_type, init })
+          mod.elems.push({ mode, type_: elem_type, init, })
         }
       }
       10 => {
@@ -184,7 +184,7 @@ pub fn parse_module(data : Bytes) -> @types.Module raise ParserError {
             }
           }
           let body = parser.read_expr()
-          mod.codes.push({ locals, body })
+          mod.codes.push({ locals, body, })
         }
       }
       11 => {
@@ -212,7 +212,7 @@ pub fn parse_module(data : Bytes) -> @types.Module raise ParserError {
           }
           let size = parser.read_u32()
           let init = parser.read_bytes(size)
-          mod.datas.push({ memory_idx, offset, init })
+          mod.datas.push({ memory_idx, offset, init, })
         }
       }
       0 => {

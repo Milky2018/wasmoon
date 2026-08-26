@@ -22,7 +22,7 @@ fn instantiate_canon_waitable_set_new(
   state : BuildState,
   store : @runtime.Store,
 ) -> Unit raise ComponentRuntimeError {
-  let core_type : @types.FuncType = { params: [], results: [I32] }
+  let core_type : @types.FuncType = { params: [], results: [I32], }
   let async_state = state.async_state
   let owner_component_id = state.resource_table.id
   let host = fn(
@@ -50,7 +50,7 @@ fn instantiate_canon_waitable_set_wait(
   state : BuildState,
   store : @runtime.Store,
 ) -> Unit raise ComponentRuntimeError {
-  let core_type : @types.FuncType = { params: [I32, I32], results: [I32] }
+  let core_type : @types.FuncType = { params: [I32, I32], results: [I32], }
   let async_state = state.async_state
   let owner_component_id = state.resource_table.id
   if memidx < 0 || memidx >= state.core_mems.length() {
@@ -243,7 +243,7 @@ fn instantiate_canon_waitable_set_poll(
   state : BuildState,
   store : @runtime.Store,
 ) -> Unit raise ComponentRuntimeError {
-  let core_type : @types.FuncType = { params: [I32, I32], results: [I32] }
+  let core_type : @types.FuncType = { params: [I32, I32], results: [I32], }
   let async_state = state.async_state
   let owner_component_id = state.resource_table.id
   if memidx < 0 || memidx >= state.core_mems.length() {
@@ -310,7 +310,7 @@ fn instantiate_canon_waitable_set_drop(
   state : BuildState,
   store : @runtime.Store,
 ) -> Unit raise ComponentRuntimeError {
-  let core_type : @types.FuncType = { params: [I32], results: [] }
+  let core_type : @types.FuncType = { params: [I32], results: [], }
   let async_state = state.async_state
   let owner_component_id = state.resource_table.id
   let host = fn(
@@ -371,7 +371,7 @@ fn instantiate_canon_waitable_join(
   state : BuildState,
   store : @runtime.Store,
 ) -> Unit raise ComponentRuntimeError {
-  let core_type : @types.FuncType = { params: [I32, I32], results: [] }
+  let core_type : @types.FuncType = { params: [I32, I32], results: [], }
   let async_state = state.async_state
   let owner_component_id = state.resource_table.id
   let host = fn(

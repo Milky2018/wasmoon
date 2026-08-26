@@ -24,7 +24,7 @@ fn test_field(
   storage : @wasm_milkir.WasmStorageContract,
   mutable_? : Bool = true,
 ) -> @wasm_milkir.WasmFieldContract {
-  { storage, mutable_, defaultable: true }
+  { storage, mutable_, defaultable: true, }
 }
 
 ///|
@@ -32,16 +32,16 @@ fn test_validation_context(name : String) -> @wasm_milkir.WasmValidationContext 
   @wasm_milkir.WasmValidationContext::new({
     function_contract: fn(index) {
       match (name, index) {
-        ("caller", 7) => Some({ params: [I32], results: [I64] })
-        ("tail_caller", 4) => Some({ params: [Ref], results: [I64] })
-        ("function_reference", 5) => Some({ params: [], results: [] })
+        ("caller", 7) => Some({ params: [I32], results: [I64], })
+        ("tail_caller", 4) => Some({ params: [Ref], results: [I64], })
+        ("function_reference", 5) => Some({ params: [], results: [], })
         _ => None
       }
     },
     defined_type_contract: fn(index) {
       match (name, index) {
         ("reference_caller", 2) =>
-          Some(Function({ params: [I32], results: [I32] }))
+          Some(Function({ params: [I32], results: [I32], }))
         ("gc_reference_queries", 7) => Some(Array(test_field(Value(Ref))))
         ("gc_aggregate_access", 2) =>
           Some(
@@ -84,24 +84,24 @@ fn test_validation_context(name : String) -> @wasm_milkir.WasmValidationContext 
         ("gc_fixed_allocations", 7) => Some(Array(test_field(Value(Ref))))
         ("gc_v128_allocation", 1) => Some(Struct([test_field(Value(V128))]))
         ("indirect_table64", 3) =>
-          Some(Function({ params: [I32], results: [I64] }))
+          Some(Function({ params: [I32], results: [I64], }))
         ("indirect_tail", 1) =>
-          Some(Function({ params: [Ref], results: [I64] }))
+          Some(Function({ params: [Ref], results: [I64], }))
         _ => None
       }
     },
     table_contract: fn(index) {
       match (name, index) {
         ("indirect_table64", 2) =>
-          Some({ index_type: I64, element_type: CallableRef })
+          Some({ index_type: I64, element_type: CallableRef, })
         ("indirect_tail", 0) =>
-          Some({ index_type: I32, element_type: CallableRef })
+          Some({ index_type: I32, element_type: CallableRef, })
         _ => None
       }
     },
     tag_contract: fn(index) {
       if name == "exception_throw" && index == 9 {
-        Some({ params: [I64, Ref], results: [] })
+        Some({ params: [I64, Ref], results: [], })
       } else {
         None
       }

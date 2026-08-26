@@ -260,7 +260,7 @@ fn rule_select_to_smax() -> RewriteRule {
               let y = cond_node.children[1]
               // select(sgt(x, y), x, y) = smax(x, y)
               if eg.equiv(true_val, x) && eg.equiv(false_val, y) {
-                let smax = eg.add({ op: Smax, children: [x, y] })
+                let smax = eg.add({ op: Smax, children: [x, y], })
                 changed = eg.merge_changed(class_id, smax) || changed
               }
             }
@@ -293,7 +293,7 @@ fn rule_select_to_smin() -> RewriteRule {
               let y = cond_node.children[1]
               // select(slt(x, y), x, y) = smin(x, y)
               if eg.equiv(true_val, x) && eg.equiv(false_val, y) {
-                let smin = eg.add({ op: Smin, children: [x, y] })
+                let smin = eg.add({ op: Smin, children: [x, y], })
                 changed = eg.merge_changed(class_id, smin) || changed
               }
             }
@@ -326,7 +326,7 @@ fn rule_select_to_umax() -> RewriteRule {
               let y = cond_node.children[1]
               // select(ugt(x, y), x, y) = umax(x, y)
               if eg.equiv(true_val, x) && eg.equiv(false_val, y) {
-                let umax = eg.add({ op: Umax, children: [x, y] })
+                let umax = eg.add({ op: Umax, children: [x, y], })
                 changed = eg.merge_changed(class_id, umax) || changed
               }
             }
@@ -359,7 +359,7 @@ fn rule_select_to_umin() -> RewriteRule {
               let y = cond_node.children[1]
               // select(ult(x, y), x, y) = umin(x, y)
               if eg.equiv(true_val, x) && eg.equiv(false_val, y) {
-                let umin = eg.add({ op: Umin, children: [x, y] })
+                let umin = eg.add({ op: Umin, children: [x, y], })
                 changed = eg.merge_changed(class_id, umin) || changed
               }
             }
@@ -396,7 +396,7 @@ fn rule_select_to_smax_swapped() -> RewriteRule {
               let y = cond_node.children[1]
               // select(slt(x, y), y, x) = smax(x, y)
               if eg.equiv(true_val, y) && eg.equiv(false_val, x) {
-                let smax = eg.add({ op: Smax, children: [x, y] })
+                let smax = eg.add({ op: Smax, children: [x, y], })
                 changed = eg.merge_changed(class_id, smax) || changed
               }
             }
@@ -428,7 +428,7 @@ fn rule_select_to_smin_swapped() -> RewriteRule {
               let y = cond_node.children[1]
               // select(sgt(x, y), y, x) = smin(x, y)
               if eg.equiv(true_val, y) && eg.equiv(false_val, x) {
-                let smin = eg.add({ op: Smin, children: [x, y] })
+                let smin = eg.add({ op: Smin, children: [x, y], })
                 changed = eg.merge_changed(class_id, smin) || changed
               }
             }
@@ -460,7 +460,7 @@ fn rule_select_to_umax_swapped() -> RewriteRule {
               let y = cond_node.children[1]
               // select(ult(x, y), y, x) = umax(x, y)
               if eg.equiv(true_val, y) && eg.equiv(false_val, x) {
-                let umax = eg.add({ op: Umax, children: [x, y] })
+                let umax = eg.add({ op: Umax, children: [x, y], })
                 changed = eg.merge_changed(class_id, umax) || changed
               }
             }
@@ -492,7 +492,7 @@ fn rule_select_to_umin_swapped() -> RewriteRule {
               let y = cond_node.children[1]
               // select(ugt(x, y), y, x) = umin(x, y)
               if eg.equiv(true_val, y) && eg.equiv(false_val, x) {
-                let umin = eg.add({ op: Umin, children: [x, y] })
+                let umin = eg.add({ op: Umin, children: [x, y], })
                 changed = eg.merge_changed(class_id, umin) || changed
               }
             }
@@ -532,7 +532,7 @@ fn rule_select_to_iabs_positive() -> RewriteRule {
                   if neg_node.op is Neg &&
                     neg_node.children.length() == 1 &&
                     eg.equiv(neg_node.children[0], x) {
-                    let iabs = eg.add({ op: Iabs, children: [x] })
+                    let iabs = eg.add({ op: Iabs, children: [x], })
                     changed = eg.subsume_changed(class_id, iabs) || changed
                   }
                 }
@@ -570,7 +570,7 @@ fn rule_select_to_iabs_negative() -> RewriteRule {
                   if neg_node.op is Neg &&
                     neg_node.children.length() == 1 &&
                     eg.equiv(neg_node.children[0], x) {
-                    let iabs = eg.add({ op: Iabs, children: [x] })
+                    let iabs = eg.add({ op: Iabs, children: [x], })
                     changed = eg.subsume_changed(class_id, iabs) || changed
                   }
                 }

@@ -840,7 +840,7 @@ fn resolve_run_jit_cache_location(
 ) -> RunJitCacheLocation? {
   match env.get("WASMOON_JIT_CACHE_DIR") {
     Some(directory) if directory.length() > 0 =>
-      return Some({ directory, parent: None })
+      return Some({ directory, parent: None, })
     _ => ()
   }
   match os {
@@ -856,7 +856,7 @@ fn resolve_run_jit_cache_location(
     Some(LinuxGnu | LinuxMusl) =>
       match env.get("XDG_CACHE_HOME") {
         Some(base) if base.length() > 0 =>
-          Some({ directory: "\{base}/wasmoon", parent: Some(base) })
+          Some({ directory: "\{base}/wasmoon", parent: Some(base), })
         _ =>
           match env.get("HOME") {
             Some(home) if home.length() > 0 =>
@@ -1321,7 +1321,7 @@ fn run_with_jit(
       // carries the reason. Dropping it left `run` reporting nothing but
       // "JIT compilation failed" for a module the compiler had a precise
       // complaint about.
-      let failure : Ref[String?] = { val: None }
+      let failure : Ref[String?] = { val: None, }
       let fresh = compile_validated_module_to_jit(
         mod_,
         debug,
@@ -2048,7 +2048,7 @@ fn compile_validated_module_to_jit(
     total_compile_funcs,
     compiled_count,
   )
-  Some(({ manifest, imports, functions }, debug_db))
+  Some(({ manifest, imports, functions, }, debug_db))
 }
 
 ///|

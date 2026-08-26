@@ -408,7 +408,7 @@ fn rule_ushr_band_shl() -> RewriteRule {
                   eg.equiv(left.children[1], y) {
                   let x = left.children[0]
                   let z = inner.children[1]
-                  let z_ushr_y = eg.add({ op: Ushr, children: [z, y] })
+                  let z_ushr_y = eg.add({ op: Ushr, children: [z, y], })
                   let new_node = eg.add_and(x, z_ushr_y)
                   changed = eg.merge_changed(class_id, new_node) || changed
                 }
@@ -420,7 +420,7 @@ fn rule_ushr_band_shl() -> RewriteRule {
                   eg.equiv(right.children[1], y) {
                   let x = right.children[0]
                   let z = inner.children[0]
-                  let z_ushr_y = eg.add({ op: Ushr, children: [z, y] })
+                  let z_ushr_y = eg.add({ op: Ushr, children: [z, y], })
                   let new_node = eg.add_and(x, z_ushr_y)
                   changed = eg.merge_changed(class_id, new_node) || changed
                 }
@@ -539,7 +539,7 @@ fn rule_rotl_rotl_combine() -> RewriteRule {
               let y = inner.children[1]
               // rotl(rotl(x, y), z) = rotl(x, y + z)
               let sum = eg.add_add(y, z)
-              let new_node = eg.add({ op: Rotl, children: [x, sum] })
+              let new_node = eg.add({ op: Rotl, children: [x, sum], })
               changed = eg.merge_changed(class_id, new_node) || changed
             }
           }
@@ -566,7 +566,7 @@ fn rule_rotr_rotr_combine() -> RewriteRule {
               let y = inner.children[1]
               // rotr(rotr(x, y), z) = rotr(x, y + z)
               let sum = eg.add_add(y, z)
-              let new_node = eg.add({ op: Rotr, children: [x, sum] })
+              let new_node = eg.add({ op: Rotr, children: [x, sum], })
               changed = eg.merge_changed(class_id, new_node) || changed
             }
           }
@@ -593,7 +593,7 @@ fn rule_rotr_rotl_to_rotl() -> RewriteRule {
               let y = inner.children[1]
               // rotr(rotl(x, y), z) = rotl(x, y - z)
               let diff = eg.add_sub(y, z)
-              let new_node = eg.add({ op: Rotl, children: [x, diff] })
+              let new_node = eg.add({ op: Rotl, children: [x, diff], })
               changed = eg.merge_changed(class_id, new_node) || changed
             }
           }
@@ -620,7 +620,7 @@ fn rule_rotl_rotr_to_rotr() -> RewriteRule {
               let y = inner.children[1]
               // rotl(rotr(x, y), z) = rotr(x, y - z)
               let diff = eg.add_sub(y, z)
-              let new_node = eg.add({ op: Rotr, children: [x, diff] })
+              let new_node = eg.add({ op: Rotr, children: [x, diff], })
               changed = eg.merge_changed(class_id, new_node) || changed
             }
           }
@@ -657,7 +657,7 @@ fn rule_shift_extend_amount() -> RewriteRule {
               ) &&
               amount_node.children.length() == 1 {
               let y = amount_node.children[0]
-              let new_node = eg.add({ op: node.op, children: [x, y] })
+              let new_node = eg.add({ op: node.op, children: [x, y], })
               changed = eg.merge_changed(class_id, new_node) || changed
             }
           }
@@ -691,7 +691,7 @@ fn rule_shift_reduce_amount() -> RewriteRule {
             if amount_node.op is Ireduce(_, _) &&
               amount_node.children.length() == 1 {
               let y = amount_node.children[0]
-              let new_node = eg.add({ op: node.op, children: [x, y] })
+              let new_node = eg.add({ op: node.op, children: [x, y], })
               changed = eg.merge_changed(class_id, new_node) || changed
             }
           }

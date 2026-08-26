@@ -170,11 +170,11 @@ test "range split isolates the use-free gap and preserves spillset lineage" {
 
 ///|
 test "spill bundle is normalized before conflict probes" {
-  let r0 : PhysicalReg = { id: 0, class: Int }
+  let r0 : PhysicalReg = { id: 0, class: Int, }
   let segments : Array[AllocationSegment] = [
     {
       id: 0,
-      value: { id: 0, class: Int },
+      value: { id: 0, class: Int, },
       range: ProgramRange(ProgramPoint(0, 5), ProgramPoint(0, 20)),
       weight: 1,
       has_fixed_constraint: false,
@@ -184,7 +184,7 @@ test "spill bundle is normalized before conflict probes" {
     },
     {
       id: 1,
-      value: { id: 1, class: Int },
+      value: { id: 1, class: Int, },
       range: ProgramRange(ProgramPoint(1, 0), ProgramPoint(1, 0)),
       weight: 1,
       has_fixed_constraint: false,
@@ -194,7 +194,7 @@ test "spill bundle is normalized before conflict probes" {
     },
     {
       id: 2,
-      value: { id: 2, class: Int },
+      value: { id: 2, class: Int, },
       range: ProgramRange(ProgramPoint(0, 0), ProgramPoint(0, 10)),
       weight: 1,
       has_fixed_constraint: false,
@@ -207,7 +207,7 @@ test "spill bundle is normalized before conflict probes" {
   bundles[0].state = BundleReg(r0)
   let owners = [0, -1, -1]
   let spill_sets : Array[SpillSet] = [
-    { hint: None, spill_bundle: None, splits: 0 },
+    { hint: None, spill_bundle: None, splits: 0, },
   ]
   add_to_spill_bundle(0, 1, bundles, owners, spill_sets, segments, [0, 1])
   add_to_spill_bundle(0, 2, bundles, owners, spill_sets, segments, [0, 1])
@@ -222,7 +222,7 @@ test "spill bundle is normalized before conflict probes" {
     segments,
     owners,
     occupied,
-    { points_by_reg: Map([]), block_order: [0, 1] },
+    { points_by_reg: Map([]), block_order: [0, 1], },
     [0, 1],
     Array::make(bundles.length(), 0),
     1,
@@ -330,12 +330,12 @@ test "production allocation assigns an SSA bundle atomically" {
     classes: [Int, Int, Int],
     spill_kinds: [0, 0, 0],
     successors: [[1], [2], []],
-    parameters: [[], [{ id: 1, class: Int }], [{ id: 2, class: Int }]],
-    edge_arguments: [[[{ id: 0, class: Int }]], [[{ id: 1, class: Int }]], []],
+    parameters: [[], [{ id: 1, class: Int, }], [{ id: 2, class: Int, }]],
+    edge_arguments: [[[{ id: 0, class: Int, }]], [[{ id: 1, class: Int, }]], []],
   }
   let (segments, _, bundles, segment_owner, _, _) = allocate_segments_with_bundles(
     function,
-    MachineEnv::new([{ id: 0, class: Int }], []),
+    MachineEnv::new([{ id: 0, class: Int, }], []),
     ranges,
   )
   debug_inspect(
@@ -365,7 +365,7 @@ test "production allocation assigns an SSA bundle atomically" {
 
 ///|
 test "production allocation evicts then splits a cheaper long bundle" {
-  let r0 : PhysicalReg = { id: 0, class: Int }
+  let r0 : PhysicalReg = { id: 0, class: Int, }
   let ranges = LiveRangeSet::LiveRangeSet([0])
   ranges.add_range(bundle_test_range(0, Int, 0, 2, [(LiveUse, r0)]))
   ranges.add_range(bundle_test_range(1, Int, 4, 6, []))
@@ -373,7 +373,7 @@ test "production allocation evicts then splits a cheaper long bundle" {
   let segments : Array[AllocationSegment] = [
     {
       id: 0,
-      value: { id: 0, class: Int },
+      value: { id: 0, class: Int, },
       range: ProgramRange(ProgramPoint(0, 0), ProgramPoint(0, 2)),
       weight: 2,
       has_fixed_constraint: true,
@@ -383,7 +383,7 @@ test "production allocation evicts then splits a cheaper long bundle" {
     },
     {
       id: 1,
-      value: { id: 1, class: Int },
+      value: { id: 1, class: Int, },
       range: ProgramRange(ProgramPoint(0, 4), ProgramPoint(0, 6)),
       weight: 3,
       has_fixed_constraint: false,
@@ -393,7 +393,7 @@ test "production allocation evicts then splits a cheaper long bundle" {
     },
     {
       id: 2,
-      value: { id: 2, class: Int },
+      value: { id: 2, class: Int, },
       range: ProgramRange(ProgramPoint(0, 4), ProgramPoint(0, 6)),
       weight: 20,
       has_fixed_constraint: false,
@@ -476,11 +476,11 @@ test "production allocation evicts then splits a cheaper long bundle" {
 
 ///|
 test "production eviction accounts for and removes every conflicting bundle" {
-  let r0 : PhysicalReg = { id: 0, class: Int }
+  let r0 : PhysicalReg = { id: 0, class: Int, }
   let segments : Array[AllocationSegment] = [
     {
       id: 0,
-      value: { id: 0, class: Int },
+      value: { id: 0, class: Int, },
       range: ProgramRange(ProgramPoint(0, 0), ProgramPoint(0, 4)),
       weight: 4,
       has_fixed_constraint: false,
@@ -490,7 +490,7 @@ test "production eviction accounts for and removes every conflicting bundle" {
     },
     {
       id: 1,
-      value: { id: 1, class: Int },
+      value: { id: 1, class: Int, },
       range: ProgramRange(ProgramPoint(0, 6), ProgramPoint(0, 10)),
       weight: 5,
       has_fixed_constraint: false,
@@ -500,7 +500,7 @@ test "production eviction accounts for and removes every conflicting bundle" {
     },
     {
       id: 2,
-      value: { id: 2, class: Int },
+      value: { id: 2, class: Int, },
       range: ProgramRange(ProgramPoint(0, 1), ProgramPoint(0, 3)),
       weight: 6,
       has_fixed_constraint: false,
@@ -510,7 +510,7 @@ test "production eviction accounts for and removes every conflicting bundle" {
     },
     {
       id: 3,
-      value: { id: 2, class: Int },
+      value: { id: 2, class: Int, },
       range: ProgramRange(ProgramPoint(0, 7), ProgramPoint(0, 9)),
       weight: 6,
       has_fixed_constraint: false,
@@ -538,7 +538,7 @@ test "production eviction accounts for and removes every conflicting bundle" {
     segments,
     [0, 1, 2, 2],
     occupied,
-    { points_by_reg: Map([]), block_order: [0] },
+    { points_by_reg: Map([]), block_order: [0], },
     [0],
     Array::make(bundles.length(), 0),
     1,
@@ -645,7 +645,7 @@ test "production eviction accounts for and removes every conflicting bundle" {
     segments,
     [0, 1, 2, 2],
     cutoff_occupied,
-    { points_by_reg: Map([]), block_order: [0] },
+    { points_by_reg: Map([]), block_order: [0], },
     [0],
     Array::make(bundles.length(), 0),
     1,
@@ -669,7 +669,7 @@ test "production bundle queue keeps live extent separate from spill weight" {
   let segments : Array[AllocationSegment] = [
     {
       id: 0,
-      value: { id: 0, class: Int },
+      value: { id: 0, class: Int, },
       range: ProgramRange(ProgramPoint(0, 0), ProgramPoint(0, 0)),
       weight: 100,
       has_fixed_constraint: false,
@@ -679,7 +679,7 @@ test "production bundle queue keeps live extent separate from spill weight" {
     },
     {
       id: 1,
-      value: { id: 1, class: Int },
+      value: { id: 1, class: Int, },
       range: ProgramRange(ProgramPoint(0, 0), ProgramPoint(0, 4)),
       weight: 10,
       has_fixed_constraint: false,
@@ -689,7 +689,7 @@ test "production bundle queue keeps live extent separate from spill weight" {
     },
     {
       id: 2,
-      value: { id: 2, class: Int },
+      value: { id: 2, class: Int, },
       range: ProgramRange(ProgramPoint(0, 0), ProgramPoint(0, 2)),
       weight: 50,
       has_fixed_constraint: false,
@@ -757,7 +757,7 @@ test "two-fragment bundle keeps density eviction cost" {
   let segments : Array[AllocationSegment] = [
     {
       id: 0,
-      value: { id: 0, class: Int },
+      value: { id: 0, class: Int, },
       range: ProgramRange(ProgramPoint(0, 0), ProgramPoint(0, 0)),
       weight: 40,
       has_fixed_constraint: false,
@@ -767,7 +767,7 @@ test "two-fragment bundle keeps density eviction cost" {
     },
     {
       id: 1,
-      value: { id: 0, class: Int },
+      value: { id: 0, class: Int, },
       range: ProgramRange(ProgramPoint(1, 0), ProgramPoint(1, 0)),
       weight: 20,
       has_fixed_constraint: false,
@@ -892,10 +892,10 @@ impl FunctionView for ClobberIndexTestFunction with fn instruction_clobbers(
 
 ///|
 test "clobber index follows custom block order and fixed operands" {
-  let r0 : PhysicalReg = { id: 0, class: Int }
-  let r1 : PhysicalReg = { id: 1, class: Int }
-  let r2 : PhysicalReg = { id: 2, class: Int }
-  let value : VirtualReg = { id: 0, class: Int }
+  let r0 : PhysicalReg = { id: 0, class: Int, }
+  let r1 : PhysicalReg = { id: 1, class: Int, }
+  let r2 : PhysicalReg = { id: 2, class: Int, }
+  let value : VirtualReg = { id: 0, class: Int, }
   let function : ClobberIndexTestFunction = {
     blocks: [[0], [1], [2]],
     operands: [[], [Operand::use_reg(value).with_constraint(FixedReg(r1))], []],
@@ -920,7 +920,7 @@ test "clobber index follows custom block order and fixed operands" {
 
 ///|
 test "clobber intersection includes starts and excludes ends" {
-  let r0 : PhysicalReg = { id: 0, class: Int }
+  let r0 : PhysicalReg = { id: 0, class: Int, }
   let index : RegisterClobberIndex = {
     points_by_reg: Map([
       (
@@ -939,7 +939,7 @@ test "clobber intersection includes starts and excludes ends" {
   let segments : Array[AllocationSegment] = [
     {
       id: 0,
-      value: { id: 0, class: Int },
+      value: { id: 0, class: Int, },
       range: ProgramRange(ProgramPoint(0, 1), ProgramPoint(0, 3)),
       weight: 1,
       has_fixed_constraint: false,
@@ -949,7 +949,7 @@ test "clobber intersection includes starts and excludes ends" {
     },
     {
       id: 1,
-      value: { id: 0, class: Int },
+      value: { id: 0, class: Int, },
       range: ProgramRange(ProgramPoint(0, 6), ProgramPoint(0, 9)),
       weight: 1,
       has_fixed_constraint: false,

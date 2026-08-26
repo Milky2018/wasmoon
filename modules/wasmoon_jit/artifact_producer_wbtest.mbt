@@ -112,7 +112,7 @@ test "artifact producer preserves symbolic imported and internal code targets" {
   let artifact : @artifact.Artifact = {
     manifest: artifact_wbtest_manifest(X64),
     imports: [
-      wasm_import_identity(0, "env", "host", { params: [], results: [] }),
+      wasm_import_identity(0, "env", "host", { params: [], results: [], }),
     ],
     functions: [function],
   }

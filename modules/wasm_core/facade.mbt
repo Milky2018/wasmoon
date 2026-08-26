@@ -25,7 +25,7 @@ pub fn func_type(
   params : Array[@types.ValueType],
   results : Array[@types.ValueType],
 ) -> @types.FuncType {
-  { params, results }
+  { params, results, }
 }
 
 ///|

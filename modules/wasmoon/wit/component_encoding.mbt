@@ -23,7 +23,7 @@ priv struct ByteBuf {
 
 ///|
 fn ByteBuf::ByteBuf() -> ByteBuf {
-  { data: [] }
+  { data: [], }
 }
 
 ///|
@@ -1036,7 +1036,7 @@ fn encode_interface_instancetype_full(
             "`",
           )
         }
-        let ft = { is_async: f.is_async, params, result }
+        let ft = { is_async: f.is_async, params, result, }
         let ft_idx = env.alloc_type(
           {
             let bb = ByteBuf::ByteBuf()
@@ -1069,7 +1069,7 @@ fn encode_interface_instancetype_full(
               "`",
             )
           }
-          let ft = { is_async: m.is_async, params, result }
+          let ft = { is_async: m.is_async, params, result, }
           let ft_idx = env.alloc_type(
             {
               let bb = ByteBuf::ByteBuf()
@@ -1111,17 +1111,17 @@ fn encode_interface_instancetype_types_only(
       items.push(it)
     }
   }
-  let iface2 : Interface = { name: iface.name, items }
+  let iface2 : Interface = { name: iface.name, items, }
   // The full encoder will still export resource methods; avoid by stripping methods.
   // Strip methods from resources.
   let items2 : Array[InterfaceItem] = []
   for it in iface2.items {
     match it {
-      Resource(r) => items2.push(Resource({ name: r.name, methods: [] }))
+      Resource(r) => items2.push(Resource({ name: r.name, methods: [], }))
       _ => items2.push(it)
     }
   }
-  let iface3 : Interface = { name: iface.name, items: items2 }
+  let iface3 : Interface = { name: iface.name, items: items2, }
   encode_interface_instancetype_full(iface3, imported)
 }
 

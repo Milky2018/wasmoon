@@ -28,9 +28,9 @@ fn validation_field_contract(
         defaultable: validation_value_defaultable(value_type),
       }
     Packed(I8) =>
-      { storage: Packed8, mutable_: field.mutable, defaultable: true }
+      { storage: Packed8, mutable_: field.mutable, defaultable: true, }
     Packed(I16) =>
-      { storage: Packed16, mutable_: field.mutable, defaultable: true }
+      { storage: Packed16, mutable_: field.mutable, defaultable: true, }
   }
 }
 

@@ -68,7 +68,7 @@ priv struct ScriptResult {
 
 ///|
 fn ScriptResult::ScriptResult() -> ScriptResult {
-  { passed: 0, failed: 0, skipped: 0, failures: [] }
+  { passed: 0, failed: 0, skipped: 0, failures: [], }
 }
 
 ///|
@@ -857,7 +857,7 @@ fn make_const_u32_func(value : Int) -> @runtime_impl.ComponentFunc {
 fn make_echo_u32_func() -> @runtime_impl.ComponentFunc {
   let func_type : @component.FuncType = {
     is_async: false,
-    params: [{ label: "p1", ty: Prim(U32) }],
+    params: [{ label: "p1", ty: Prim(U32), }],
     result: Some(Prim(U32)),
   }
   Host(func_type, [], fn(
@@ -1029,7 +1029,7 @@ fn run_component_script_impl(
   host_exports.set("resource1-again", Type(resource1_type))
   let resource1_drops : Array[Int] = [0]
   let resource1_last_drop : Array[Int] = [0]
-  let dtor_core_type : @types.FuncType = { params: [I32], results: [] }
+  let dtor_core_type : @types.FuncType = { params: [I32], results: [], }
   let resource1_dtor = @runtime_impl.alloc_host_core_func(
     store,
     dtor_core_type,
@@ -1085,7 +1085,7 @@ fn run_component_script_impl(
   let ctor_types : Array[@component.TypeDef?] = [resource1_type, Some(Own(0))]
   let ctor_func_type : @component.FuncType = {
     is_async: false,
-    params: [{ label: "r", ty: Prim(U32) }],
+    params: [{ label: "r", ty: Prim(U32), }],
     result: Some(TypeIdx(1)),
   }
   let ctor = @runtime_impl.ComponentFunc::Host(ctor_func_type, ctor_types, fn(
@@ -1139,7 +1139,7 @@ fn run_component_script_impl(
   let assert_types : Array[@component.TypeDef?] = [resource1_type, Some(Own(0))]
   let assert_func_type : @component.FuncType = {
     is_async: false,
-    params: [{ label: "r", ty: TypeIdx(1) }, { label: "rep", ty: Prim(U32) }],
+    params: [{ label: "r", ty: TypeIdx(1), }, { label: "rep", ty: Prim(U32), }],
     result: None,
   }
   let assert_func = @runtime_impl.ComponentFunc::Host(
@@ -1168,7 +1168,10 @@ fn run_component_script_impl(
   let simple_types : Array[@component.TypeDef?] = [resource1_type, borrow_ty]
   let simple_func_type : @component.FuncType = {
     is_async: false,
-    params: [{ label: "self", ty: TypeIdx(1) }, { label: "rep", ty: Prim(U32) }],
+    params: [
+      { label: "self", ty: TypeIdx(1), },
+      { label: "rep", ty: Prim(U32), },
+    ],
     result: None,
   }
   let simple = @runtime_impl.ComponentFunc::Host(
@@ -1193,7 +1196,10 @@ fn run_component_script_impl(
   host_exports.set("[method]resource1.simple", Func(simple))
   let take_borrow_func_type : @component.FuncType = {
     is_async: false,
-    params: [{ label: "self", ty: TypeIdx(1) }, { label: "b", ty: TypeIdx(1) }],
+    params: [
+      { label: "self", ty: TypeIdx(1), },
+      { label: "b", ty: TypeIdx(1), },
+    ],
     result: None,
   }
   let take_borrow = @runtime_impl.ComponentFunc::Host(
@@ -1220,7 +1226,10 @@ fn run_component_script_impl(
   ]
   let take_own_func_type : @component.FuncType = {
     is_async: false,
-    params: [{ label: "self", ty: TypeIdx(1) }, { label: "b", ty: TypeIdx(2) }],
+    params: [
+      { label: "self", ty: TypeIdx(1), },
+      { label: "b", ty: TypeIdx(2), },
+    ],
     result: None,
   }
   let take_own = @runtime_impl.ComponentFunc::Host(

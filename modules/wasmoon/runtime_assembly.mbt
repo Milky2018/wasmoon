@@ -127,7 +127,7 @@ pub fn compiler_infrastructure_assembly() -> CompilerInfrastructureAssembly rais
   let plan = @wasmoon_jit.plan_milkir_integration_for_target(milk, X64) catch {
     err => raise WasmCompilerPipelineFailure(message=err.to_string())
   }
-  { signature, machv_function, code_object: plan.object }
+  { signature, machv_function, code_object: plan.object, }
 }
 
 ///|

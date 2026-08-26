@@ -3,44 +3,46 @@ fn contextual_test_context() -> WasmValidationContext {
   WasmValidationContext::new({
     function_contract: fn(index) {
       if index == 7 {
-        Some({ params: [I32], results: [I64] })
+        Some({ params: [I32], results: [I64], })
       } else {
         None
       }
     },
     defined_type_contract: fn(index) {
       match index {
-        2 => Some(Function({ params: [I64], results: [F32] }))
+        2 => Some(Function({ params: [I64], results: [F32], }))
         3 =>
           Some(
             Struct([
-              { storage: Value(I64), mutable_: true, defaultable: true },
-              { storage: Packed8, mutable_: false, defaultable: true },
+              { storage: Value(I64), mutable_: true, defaultable: true, },
+              { storage: Packed8, mutable_: false, defaultable: true, },
             ]),
           )
         4 =>
           Some(
-            Array({ storage: Value(F64), mutable_: true, defaultable: true }),
+            Array({ storage: Value(F64), mutable_: true, defaultable: true, }),
           )
         5 =>
-          Some(Array({ storage: Packed16, mutable_: false, defaultable: true }))
+          Some(
+            Array({ storage: Packed16, mutable_: false, defaultable: true, }),
+          )
         6 =>
           Some(
-            Array({ storage: Value(Ref), mutable_: true, defaultable: true }),
+            Array({ storage: Value(Ref), mutable_: true, defaultable: true, }),
           )
         _ => None
       }
     },
     table_contract: fn(index) {
       if index == 1 {
-        Some({ index_type: I64, element_type: CallableRef })
+        Some({ index_type: I64, element_type: CallableRef, })
       } else {
         None
       }
     },
     tag_contract: fn(index) {
       if index == 0 {
-        Some({ params: [I32, F64], results: [] })
+        Some({ params: [I32, F64], results: [], })
       } else {
         None
       }

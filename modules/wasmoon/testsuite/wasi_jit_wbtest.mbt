@@ -110,7 +110,7 @@ fn compare_wasi_with_options(
     _ => false
   }
   let match_ = results_match && jit_stdout == interp_stdout
-  { jit_result, interp_result, jit_stdout, interp_stdout, match_ }
+  { jit_result, interp_result, jit_stdout, interp_stdout, match_, }
 }
 
 ///|
@@ -175,7 +175,7 @@ fn compare_wasi_with_callback(
     _ => false
   }
   let match_ = results_match && jit_stdout == interp_stdout
-  { jit_result, interp_result, jit_stdout, interp_stdout, match_ }
+  { jit_result, interp_result, jit_stdout, interp_stdout, match_, }
 }
 
 ///|

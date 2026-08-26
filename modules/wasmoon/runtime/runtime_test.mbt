@@ -51,7 +51,7 @@ test "Table set and get with funcref" {
 ///|
 test "GlobalInstance mutable vs immutable" {
   // Mutable global
-  let mut_gt : @types.GlobalType = { value_type: I32, mutable: true }
+  let mut_gt : @types.GlobalType = { value_type: I32, mutable: true, }
   let mut_g = @runtime.GlobalInstance::GlobalInstance(mut_gt, I32(100))
   mut_g.set(I32(200))
   inspect(mut_g.get(), content="I32(200)")
@@ -128,9 +128,9 @@ test "RuntimeErrorContext formats with call stack" {
   let ctx = @runtime.RuntimeErrorContext::RuntimeErrorContext(
     OutOfBoundsMemoryAccess,
   ).with_call_stack([
-    { func_idx: 0, func_name: Some("main") },
-    { func_idx: 1, func_name: None },
-    { func_idx: 2, func_name: Some("helper") },
+    { func_idx: 0, func_name: Some("main"), },
+    { func_idx: 1, func_name: None, },
+    { func_idx: 2, func_name: Some("helper"), },
   ])
   let formatted = ctx.format()
   assert_true(formatted.contains("out of bounds memory access"))

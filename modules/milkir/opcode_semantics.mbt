@@ -15,27 +15,27 @@ priv struct OpcodeSemantics {
 
 ///|
 fn pure_opcode_semantics() -> OpcodeSemantics {
-  { memory: None, may_trap: false, other_observable_effect: false }
+  { memory: None, may_trap: false, other_observable_effect: false, }
 }
 
 ///|
 fn trapping_opcode_semantics() -> OpcodeSemantics {
-  { memory: None, may_trap: true, other_observable_effect: false }
+  { memory: None, may_trap: true, other_observable_effect: false, }
 }
 
 ///|
 fn memory_read_opcode_semantics() -> OpcodeSemantics {
-  { memory: Read, may_trap: true, other_observable_effect: false }
+  { memory: Read, may_trap: true, other_observable_effect: false, }
 }
 
 ///|
 fn memory_write_opcode_semantics() -> OpcodeSemantics {
-  { memory: Write, may_trap: true, other_observable_effect: false }
+  { memory: Write, may_trap: true, other_observable_effect: false, }
 }
 
 ///|
 fn unknown_opcode_semantics() -> OpcodeSemantics {
-  { memory: Unknown, may_trap: true, other_observable_effect: true }
+  { memory: Unknown, may_trap: true, other_observable_effect: true, }
 }
 
 ///|

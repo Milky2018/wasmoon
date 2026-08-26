@@ -322,7 +322,7 @@ test "host function" {
       guard args[0] is I32(x) else { return [] }
       [I32(x * 2)]
     },
-    func_type={ params: [I32], results: [I32] },
+    func_type={ params: [I32], results: [I32], },
   )
   let wat =
     #|(module

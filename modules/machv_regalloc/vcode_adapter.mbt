@@ -24,7 +24,7 @@ pub fn VCodeAllocationEnvironment::with_fixed_operand_regs(
   self : VCodeAllocationEnvironment,
   fixed_operand_regs : Array[@vcode.PhysicalReg],
 ) -> VCodeAllocationEnvironment {
-  { ..self, fixed_operand_regs: fixed_operand_regs.copy() }
+  { ..self, fixed_operand_regs: fixed_operand_regs.copy(), }
 }
 
 ///|
@@ -50,7 +50,7 @@ fn to_regalloc_class(class : @vcode.RegClass) -> @regalloc.RegClass {
 
 ///|
 fn to_regalloc_preg(reg : @vcode.PhysicalReg) -> @regalloc.PhysicalReg {
-  { id: reg.id, class: to_regalloc_class(reg.class) }
+  { id: reg.id, class: to_regalloc_class(reg.class), }
 }
 
 ///|

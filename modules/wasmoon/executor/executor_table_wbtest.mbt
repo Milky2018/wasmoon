@@ -16,7 +16,7 @@ test "table import: call_indirect with imported table" {
   }
 
   // The type for add/sub functions
-  let binary_type : @types.FuncType = { params: [I32, I32], results: [I32] }
+  let binary_type : @types.FuncType = { params: [I32, I32], results: [I32], }
 
   // Allocate the functions in store with their type
   let add_addr = store.alloc_func(add_func, func_type=binary_type)
@@ -41,7 +41,10 @@ test "table import: call_indirect with imported table" {
       CallIndirect(0, 0),
     ],
   } // type 0, table 0
-  let apply_type : @types.FuncType = { params: [I32, I32, I32], results: [I32] }
+  let apply_type : @types.FuncType = {
+    params: [I32, I32, I32],
+    results: [I32],
+  }
   let mod : @types.Module = {
     types: [
       @types.SubType::from_func(binary_type),
@@ -54,7 +57,7 @@ test "table import: call_indirect with imported table" {
         name: "table",
         desc: Table({
           elem_type: FuncRef,
-          limits: { min: 2, max: None },
+          limits: { min: 2, max: None, },
           is_table64: false,
         }),
       },
@@ -63,7 +66,7 @@ test "table import: call_indirect with imported table" {
     tables: [], // No local tables, only imported
     memories: [],
     globals: [],
-    exports: [{ name: "apply", desc: Func(0) }],
+    exports: [{ name: "apply", desc: Func(0), }],
     start: None,
     elems: [],
     codes: [apply_func],
@@ -108,7 +111,7 @@ test "global variables: global.get and global.set" {
       "test",
     ),
     globals: [
-      { type_: { value_type: I32, mutable: true }, init: [I32Const(10)] },
+      { type_: { value_type: I32, mutable: true, }, init: [I32Const(10)], },
     ],
   }
   let (store, instance) = instantiate_module(mod)
@@ -129,8 +132,8 @@ test "global variables: multiple globals" {
       "test",
     ),
     globals: [
-      { type_: { value_type: I32, mutable: true }, init: [I32Const(7)] },
-      { type_: { value_type: I32, mutable: false }, init: [I32Const(100)] },
+      { type_: { value_type: I32, mutable: true, }, init: [I32Const(7)], },
+      { type_: { value_type: I32, mutable: false, }, init: [I32Const(100)], },
     ],
   }
   let (store, instance) = instantiate_module(mod)
@@ -147,7 +150,7 @@ test "global variables: i64 global" {
     ..@types.Module::simple([], [I64], [GlobalGet(0)], "test"),
     globals: [
       {
-        type_: { value_type: I64, mutable: false },
+        type_: { value_type: I64, mutable: false, },
         init: [I64Const(9999999999L)],
       },
     ],
@@ -164,7 +167,7 @@ test "global variables: i64 global" {
 test "global import: imported global" {
   let store = @runtime.Store::Store()
   let global_inst = @runtime.GlobalInstance::GlobalInstance(
-    { value_type: I32, mutable: true },
+    { value_type: I32, mutable: true, },
     I32(42),
   )
   let global_addr = store.alloc_global(global_inst)
@@ -174,7 +177,7 @@ test "global import: imported global" {
       {
         mod_name: "env",
         name: "g",
-        desc: Global({ value_type: I32, mutable: true }),
+        desc: Global({ value_type: I32, mutable: true, }),
       },
     ],
   }
@@ -196,7 +199,7 @@ test "table operations: table.size" {
       {
         type_: {
           elem_type: FuncRef,
-          limits: { min: 4, max: None },
+          limits: { min: 4, max: None, },
           is_table64: false,
         },
         init: None,
@@ -220,15 +223,15 @@ test "table operations: table.grow" {
   // - size function: (table.size $t)
   let table_type : @types.TableType = {
     elem_type: FuncRef,
-    limits: { min: 2, max: None },
+    limits: { min: 2, max: None, },
     is_table64: false,
   }
-  let table : @types.Table = { type_: table_type, init: None }
+  let table : @types.Table = { type_: table_type, init: None, }
   // Function type: () -> i32
   let func_type : @types.SubType = {
     final_: true,
     supertypes: [],
-    composite: Func({ params: [], results: [I32] }),
+    composite: Func({ params: [], results: [I32], }),
   }
   let mod : @types.Module = {
     types: [func_type],
@@ -238,14 +241,17 @@ test "table operations: table.grow" {
     tables: [table],
     memories: [],
     globals: [],
-    exports: [{ name: "grow", desc: Func(0) }, { name: "size", desc: Func(1) }],
+    exports: [
+      { name: "grow", desc: Func(0), },
+      { name: "size", desc: Func(1), },
+    ],
     start: None,
     elems: [],
     codes: [
       // grow function: ref.null func, i32.const 3, table.grow 0
-      { locals: [], body: [RefNull(FuncRef), I32Const(3), TableGrow(0)] },
+      { locals: [], body: [RefNull(FuncRef), I32Const(3), TableGrow(0)], },
       // size function: table.size 0
-      { locals: [], body: [TableSize(0)] },
+      { locals: [], body: [TableSize(0)], },
     ],
     datas: [],
     tags: [],

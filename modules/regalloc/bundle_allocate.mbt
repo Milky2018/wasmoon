@@ -92,7 +92,7 @@ fn BundleQueue::push(
     return
   }
   self.in_queue[bundle] = true
-  self.items.push({ bundle, hint })
+  self.items.push({ bundle, hint, })
   let mut index = self.items.length() - 1
   while index > 0 {
     let parent = (index - 1) / 2
@@ -253,7 +253,7 @@ fn build_allocation_bundles(
       block_order,
       spill_set~,
     )
-    spill_sets.push({ hint: None, spill_bundle: None, splits: 0 })
+    spill_sets.push({ hint: None, spill_bundle: None, splits: 0, })
     bundles.push(bundle)
     for segment_id in segment_ids {
       segment_owner[segment_id] = bundle.id
@@ -777,7 +777,7 @@ fn split_segment_around_gap(
   } else {
     None
   }
-  Some({ before, spill, after })
+  Some({ before, spill, after, })
 }
 
 ///|

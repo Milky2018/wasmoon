@@ -25,7 +25,7 @@ fn component_runtime_async_host(
     let builder = linker.host_instance_builder("host", host_runtime)
     builder.add_async_func(
       "wait",
-      { is_async: true, params: [], result: Some(Prim(U32)) },
+      { is_async: true, params: [], result: Some(Prim(U32)), },
       fn(_args, _table) {
         HostFuture(
           fn() { if ready.val { Ready([U32(17)]) } else { Pending } },

@@ -20,7 +20,7 @@ pub fn Table::Table(
   for _ in 0..<min {
     elements.push(init_value)
   }
-  { elem_type, elements, size: min, max, is_table64 }
+  { elem_type, elements, size: min, max, is_table64, }
 }
 
 ///|

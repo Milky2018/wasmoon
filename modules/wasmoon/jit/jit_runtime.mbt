@@ -54,7 +54,7 @@ fn JITFunction::JITFunction(
   param_types : Array[@types.ValueType],
   result_types : Array[@types.ValueType],
 ) -> JITFunction {
-  { func_idx, name, func_ptr, code_size, param_types, result_types }
+  { func_idx, name, func_ptr, code_size, param_types, result_types, }
 }
 
 ///|

@@ -8,7 +8,7 @@ priv struct FunctionOwnerContext {
 
 ///|
 fn FunctionOwnerContext::new() -> Ref[FunctionOwnerContext] {
-  Ref({ construction_error: None })
+  Ref({ construction_error: None, })
 }
 
 ///|
@@ -74,7 +74,7 @@ pub struct Value {
 
 ///|
 fn Value::new(owner : Ref[FunctionOwnerContext], id : Int, ty : Type) -> Value {
-  { owner, id, ty }
+  { owner, id, ty, }
 }
 
 ///|
@@ -144,7 +144,7 @@ pub fn Signature::Signature(
   params : Array[Type],
   results : Array[Type],
 ) -> Signature {
-  { params, results }
+  { params, results, }
 }
 
 ///|
@@ -171,7 +171,7 @@ pub fn ContextField::new(
   parameters : FixedArray[Int],
   ty : Type,
 ) -> ContextField {
-  { dialect, key, parameters, ty }
+  { dialect, key, parameters, ty, }
 }
 
 ///|
@@ -251,7 +251,7 @@ pub struct GlobalValue {
 
 ///|
 fn GlobalValue::new(owner : Ref[FunctionOwnerContext], id : Int) -> GlobalValue {
-  { owner, id }
+  { owner, id, }
 }
 
 ///|
@@ -310,7 +310,7 @@ pub fn ExtOpDescriptor::with_immediate_range(
   min_immediates : Int,
   max_immediates : Int,
 ) -> ExtOpDescriptor {
-  { dialect, opcode, min_immediates, max_immediates }
+  { dialect, opcode, min_immediates, max_immediates, }
 }
 
 ///|
@@ -338,7 +338,7 @@ pub fn ExtOp::ExtOp(
   opcode : String,
   immediates : FixedArray[Int],
 ) -> ExtOp {
-  { dialect, opcode, immediates }
+  { dialect, opcode, immediates, }
 }
 
 ///|
@@ -421,7 +421,7 @@ pub impl Debug for Block with fn to_repr(self) {
 
 ///|
 fn Block::Block(owner : Ref[FunctionOwnerContext], id : Int) -> Block {
-  { owner, id, params: [], instructions: [], terminator: None }
+  { owner, id, params: [], instructions: [], terminator: None, }
 }
 
 ///|
@@ -567,7 +567,7 @@ fn Inst::new_with_id(
   args : Array[Value],
   results : Array[Value],
 ) -> Inst {
-  { owner, id, results, opcode, args, operands: args, metadata: [] }
+  { owner, id, results, opcode, args, operands: args, metadata: [], }
 }
 
 ///|

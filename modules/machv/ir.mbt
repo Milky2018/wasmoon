@@ -7,7 +7,7 @@ pub struct Value {
 
 ///|
 fn Value::new(owner : Ref[Unit], id : Int) -> Value {
-  { owner, id }
+  { owner, id, }
 }
 
 ///|
@@ -34,7 +34,7 @@ pub struct Block {
 
 ///|
 fn Block::new(owner : Ref[Unit], id : Int) -> Block {
-  { owner, id }
+  { owner, id, }
 }
 
 ///|
@@ -61,7 +61,7 @@ pub struct Instruction {
 
 ///|
 fn Instruction::new(owner : Ref[Unit], id : Int) -> Instruction {
-  { owner, id }
+  { owner, id, }
 }
 
 ///|
@@ -88,7 +88,7 @@ pub struct StackObject {
 
 ///|
 fn StackObject::new(owner : Ref[Unit], id : Int) -> StackObject {
-  { owner, id }
+  { owner, id, }
 }
 
 ///|
@@ -114,7 +114,7 @@ pub struct Edge {
 
 ///|
 fn Edge::new(target : Block, arguments : Array[Value]) -> Edge {
-  { target, arguments: arguments.copy() }
+  { target, arguments: arguments.copy(), }
 }
 
 ///|
@@ -130,7 +130,7 @@ pub struct SwitchCase {
 
 ///|
 fn SwitchCase::new(bits : UInt64, edge : Edge) -> SwitchCase {
-  { bits, edge }
+  { bits, edge, }
 }
 
 ///|
@@ -172,7 +172,7 @@ pub struct TerminatorMetadata {
 
 ///|
 pub fn TerminatorMetadata::empty() -> TerminatorMetadata {
-  { source: None, live_gc_roots: [] }
+  { source: None, live_gc_roots: [], }
 }
 
 ///|
@@ -180,7 +180,7 @@ pub fn TerminatorMetadata::new(
   source : SourceLocation?,
   live_gc_roots : Array[Value],
 ) -> TerminatorMetadata {
-  { source, live_gc_roots: live_gc_roots.copy() }
+  { source, live_gc_roots: live_gc_roots.copy(), }
 }
 
 ///|
@@ -217,7 +217,7 @@ pub struct InstructionMetadata {
 
 ///|
 pub fn InstructionMetadata::empty() -> InstructionMetadata {
-  { source: None, live_gc_roots: [], stack_map: None }
+  { source: None, live_gc_roots: [], stack_map: None, }
 }
 
 ///|
@@ -231,7 +231,7 @@ pub fn StackMapMetadata::new(
   id : Int,
   argument_root_count~ : Int,
 ) -> StackMapMetadata {
-  { id, argument_root_count }
+  { id, argument_root_count, }
 }
 
 ///|
@@ -240,7 +240,7 @@ pub fn InstructionMetadata::new(
   live_gc_roots : Array[Value],
   stack_map? : StackMapMetadata,
 ) -> InstructionMetadata {
-  { source, live_gc_roots: live_gc_roots.copy(), stack_map }
+  { source, live_gc_roots: live_gc_roots.copy(), stack_map, }
 }
 
 ///|
@@ -360,7 +360,7 @@ fn Function::allocate_stack_object(
   alignment : Int,
 ) -> StackObject {
   let object = StackObject::new(self.owner, self.stack_objects.length())
-  self.stack_objects.push({ size, alignment })
+  self.stack_objects.push({ size, alignment, })
   object
 }
 
@@ -371,7 +371,7 @@ fn Function::allocate_value(
   definition : ValueDefinition,
 ) -> Value {
   let value = Value::new(self.owner, self.values.length())
-  self.values.push({ ty, definition })
+  self.values.push({ ty, definition, })
   value
 }
 
@@ -385,7 +385,7 @@ fn Function::allocate_block(
   for index, ty in parameter_types {
     parameters.push(self.allocate_value(ty, BlockParameter(block, index)))
   }
-  self.blocks.push({ parameters, instructions: [], terminator: None })
+  self.blocks.push({ parameters, instructions: [], terminator: None, })
   block
 }
 

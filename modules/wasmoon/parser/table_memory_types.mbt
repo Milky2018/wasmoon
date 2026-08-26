@@ -17,12 +17,12 @@ fn Parser::read_table(self : Parser) -> @types.Table raise ParserError {
     let (limits, is_table64) = self.read_table_limits()
     // Read the initialization expression
     let init = self.read_expr()
-    { type_: { elem_type, limits, is_table64 }, init: Some(init) }
+    { type_: { elem_type, limits, is_table64, }, init: Some(init), }
   } else {
     // Standard encoding: reftype limits
     let elem_type = self.read_value_type()
     let (limits, is_table64) = self.read_table_limits()
-    { type_: { elem_type, limits, is_table64 }, init: None }
+    { type_: { elem_type, limits, is_table64, }, init: None, }
   }
 }
 
@@ -31,7 +31,7 @@ fn Parser::read_table_type(self : Parser) -> @types.TableType raise ParserError 
   // For imports, we just need the table type (no init expression)
   let elem_type = self.read_value_type()
   let (limits, is_table64) = self.read_table_limits()
-  { elem_type, limits, is_table64 }
+  { elem_type, limits, is_table64, }
 }
 
 ///|
@@ -72,7 +72,7 @@ fn Parser::read_table_limits(
     }
     (min, max)
   }
-  ({ min, max }, is_table64)
+  ({ min, max, }, is_table64)
 }
 
 ///|
@@ -132,7 +132,7 @@ fn Parser::read_memory_type(
   } else {
     16
   }
-  { limits: { min, max }, is_memory64, page_size_log2 }
+  { limits: { min, max, }, is_memory64, page_size_log2, }
 }
 
 ///|
@@ -145,5 +145,5 @@ fn Parser::read_global_type(
   if mutability != 0x00 && mutability != 0x01 {
     raise MalformedMutability(mutability)
   }
-  { value_type, mutable: mutability == 0x01 }
+  { value_type, mutable: mutability == 0x01, }
 }

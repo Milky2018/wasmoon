@@ -307,7 +307,7 @@ fn compile_component_artifact(
   ) catch {
     error => raise NativeCompilationFailed("artifact manifest failed: \{error}")
   }
-  { manifest, imports, functions }
+  { manifest, imports, functions, }
 }
 
 ///|

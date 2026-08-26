@@ -70,7 +70,7 @@ fn Parser::parse_type_def(
     self.expect_rparen() // close sub
   }
   self.expect_rparen() // close type
-  { final_: is_final, supertypes, composite }
+  { final_: is_final, supertypes, composite, }
 }
 
 ///|
@@ -111,35 +111,35 @@ fn Parser::parse_field_type(self : Parser) -> @types.FieldType raise WatError {
           let storage_type = self.parse_storage_type()
           self.expect_rparen() // close mut
           self.expect_rparen() // close field
-          return { storage_type, mutable: true }
+          return { storage_type, mutable: true, }
         } else {
           // Not mut, restore lparen context and parse as storage type
           // This handles (field (ref $t)) case
           let storage_type = self.parse_storage_type_after_lparen()
           self.expect_rparen() // close field
-          return { storage_type, mutable: false }
+          return { storage_type, mutable: false, }
         }
       } else {
         false
       }
       let storage_type = self.parse_storage_type()
       self.expect_rparen() // close field
-      { storage_type, mutable }
+      { storage_type, mutable, }
     } else if self.current.token == Keyword("mut") {
       // Shorthand: (mut <storage_type>)
       self.advance()
       let storage_type = self.parse_storage_type()
       self.expect_rparen()
-      { storage_type, mutable: true }
+      { storage_type, mutable: true, }
     } else {
       // It's a storage type starting with lparen, like (ref ...)
       let storage_type = self.parse_storage_type_after_lparen()
-      { storage_type, mutable: false }
+      { storage_type, mutable: false, }
     }
   } else {
     // Just a storage type
     let storage_type = self.parse_storage_type()
-    { storage_type, mutable: false }
+    { storage_type, mutable: false, }
   }
 }
 
@@ -312,17 +312,17 @@ fn Parser::parse_field_types(
           self.advance()
           let storage_type = self.parse_storage_type()
           self.expect_rparen() // close mut
-          fields.push({ storage_type, mutable: true })
+          fields.push({ storage_type, mutable: true, })
           self.expect_rparen() // close field
           return
         } else {
           // Not mut, it's a storage type like (ref ...), parse it but continue for more
           let storage_type = self.parse_storage_type_after_lparen()
-          fields.push({ storage_type, mutable: false })
+          fields.push({ storage_type, mutable: false, })
           // Continue parsing more types if any
           while self.current.token != RParen {
             let storage_type = self.parse_storage_type()
-            fields.push({ storage_type, mutable: false })
+            fields.push({ storage_type, mutable: false, })
           }
           self.expect_rparen() // close field
           return
@@ -338,15 +338,15 @@ fn Parser::parse_field_types(
             self.advance()
             let storage_type = self.parse_storage_type()
             self.expect_rparen()
-            fields.push({ storage_type, mutable: true })
+            fields.push({ storage_type, mutable: true, })
           } else {
             // Reference type: (ref ...)
             let storage_type = self.parse_storage_type_after_lparen()
-            fields.push({ storage_type, mutable: false })
+            fields.push({ storage_type, mutable: false, })
           }
         } else {
           let storage_type = self.parse_storage_type()
-          fields.push({ storage_type, mutable: false })
+          fields.push({ storage_type, mutable: false, })
         }
       }
       self.expect_rparen() // close field
@@ -355,16 +355,16 @@ fn Parser::parse_field_types(
       self.advance()
       let storage_type = self.parse_storage_type()
       self.expect_rparen()
-      fields.push({ storage_type, mutable: true })
+      fields.push({ storage_type, mutable: true, })
     } else {
       // It's a storage type starting with lparen, like (ref ...)
       let storage_type = self.parse_storage_type_after_lparen()
-      fields.push({ storage_type, mutable: false })
+      fields.push({ storage_type, mutable: false, })
     }
   } else {
     // Just a storage type
     let storage_type = self.parse_storage_type()
-    fields.push({ storage_type, mutable: false })
+    fields.push({ storage_type, mutable: false, })
   }
 }
 
@@ -379,14 +379,14 @@ fn Parser::parse_array_type(self : Parser) -> @types.ArrayType raise WatError {
 fn placeholder_subtype_for_rec_kind(kind : Int) -> @types.SubType {
   match kind {
     // struct
-    1 => @types.SubType::simple(Struct({ fields: [] }))
+    1 => @types.SubType::simple(Struct({ fields: [], }))
     // array
     2 =>
       @types.SubType::simple(
-        Array({ element: { storage_type: Val(I32), mutable: false } }),
+        Array({ element: { storage_type: Val(I32), mutable: false, }, }),
       )
     // func (default)
-    _ => @types.SubType::simple(Func({ params: [], results: [] }))
+    _ => @types.SubType::simple(Func({ params: [], results: [], }))
   }
 }
 
@@ -561,7 +561,7 @@ fn Parser::parse_func_type(self : Parser) -> @types.FuncType raise WatError {
       }
     }
   }
-  { params, results }
+  { params, results, }
 }
 
 ///|
@@ -906,7 +906,7 @@ fn Parser::parse_func_def(
   // Parse body instructions
   let body = self.parse_instructions()
   self.expect_rparen() // close func
-  FuncDef(type_idx, { locals, body }, export_names)
+  FuncDef(type_idx, { locals, body, }, export_names)
 }
 
 ///|

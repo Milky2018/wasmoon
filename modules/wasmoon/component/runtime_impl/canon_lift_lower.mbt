@@ -97,7 +97,7 @@ fn instantiate_canon_lower(
       Some(_) => lowered_params + [ptr_ty]
       None => lowered_params
     }
-    let core_type : @types.FuncType = { params, results: [I32] }
+    let core_type : @types.FuncType = { params, results: [I32], }
     let async_state = state.async_state
     let caller_table = state.resource_table
     let host = fn(
@@ -671,7 +671,7 @@ fn instantiate_canon_lower(
             init_task_meta(
               async_state, inner_task_id, meta_inst_id, outer_task_id,
             )
-            let s : SyncLowerState = { task_id: inner_task_id, task }
+            let s : SyncLowerState = { task_id: inner_task_id, task, }
             async_state.sync_lower_states.set(outer_task_id, s)
             s
           }

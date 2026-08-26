@@ -42,7 +42,7 @@ test "execute function with local variables" {
   ]
   let mod = {
     ..@types.Module::simple([I32, I32], [I32], body, "double_sum"),
-    codes: [{ locals: [I32], body }],
+    codes: [{ locals: [I32], body, }],
   }
   let (store, instance) = instantiate_module(mod)
   let results = call_exported_func(store, instance, "double_sum", [
@@ -241,7 +241,11 @@ test "memory: i32.store and i32.load" {
       "test",
     ),
     memories: [
-      { limits: { min: 1, max: None }, is_memory64: false, page_size_log2: 16 },
+      {
+        limits: { min: 1, max: None, },
+        is_memory64: false,
+        page_size_log2: 16,
+      },
     ],
   }
   let (store, instance) = instantiate_module(mod)
@@ -268,7 +272,11 @@ test "memory: i64.store and i64.load" {
       "test",
     ),
     memories: [
-      { limits: { min: 1, max: None }, is_memory64: false, page_size_log2: 16 },
+      {
+        limits: { min: 1, max: None, },
+        is_memory64: false,
+        page_size_log2: 16,
+      },
     ],
   }
   let (store, instance) = instantiate_module(mod)
@@ -295,7 +303,11 @@ test "memory: f32.store and f32.load" {
       "test",
     ),
     memories: [
-      { limits: { min: 1, max: None }, is_memory64: false, page_size_log2: 16 },
+      {
+        limits: { min: 1, max: None, },
+        is_memory64: false,
+        page_size_log2: 16,
+      },
     ],
   }
   let (store, instance) = instantiate_module(mod)
@@ -325,7 +337,11 @@ test "memory: load with offset" {
       "test",
     ),
     memories: [
-      { limits: { min: 1, max: None }, is_memory64: false, page_size_log2: 16 },
+      {
+        limits: { min: 1, max: None, },
+        is_memory64: false,
+        page_size_log2: 16,
+      },
     ],
   }
   let (store, instance) = instantiate_module(mod)
@@ -352,7 +368,11 @@ test "memory: i32.load8_s sign extension" {
       "test",
     ),
     memories: [
-      { limits: { min: 1, max: None }, is_memory64: false, page_size_log2: 16 },
+      {
+        limits: { min: 1, max: None, },
+        is_memory64: false,
+        page_size_log2: 16,
+      },
     ],
   }
   let (store, instance) = instantiate_module(mod)
@@ -379,7 +399,11 @@ test "memory: i32.load8_u zero extension" {
       "test",
     ),
     memories: [
-      { limits: { min: 1, max: None }, is_memory64: false, page_size_log2: 16 },
+      {
+        limits: { min: 1, max: None, },
+        is_memory64: false,
+        page_size_log2: 16,
+      },
     ],
   }
   let (store, instance) = instantiate_module(mod)
@@ -400,7 +424,11 @@ test "memory: memory.size and memory.grow" {
       "test",
     ),
     memories: [
-      { limits: { min: 1, max: None }, is_memory64: false, page_size_log2: 16 },
+      {
+        limits: { min: 1, max: None, },
+        is_memory64: false,
+        page_size_log2: 16,
+      },
     ],
   }
   let (store, instance) = instantiate_module(mod)
@@ -498,7 +526,7 @@ test "control flow: loop with br" {
   ]
   let mod = {
     ..@types.Module::simple([], [I32], body, "test"),
-    codes: [{ locals: [I32, I32], body }],
+    codes: [{ locals: [I32, I32], body, }],
   }
   let (store, instance) = instantiate_module(mod)
   let results = call_exported_func(store, instance, "test", [])
@@ -588,8 +616,8 @@ test "function call: call instruction" {
     locals: [],
     body: [I32Const(3), I32Const(4), Call(0)],
   }
-  let add_type : @types.FuncType = { params: [I32, I32], results: [I32] }
-  let main_type : @types.FuncType = { params: [], results: [I32] }
+  let add_type : @types.FuncType = { params: [I32, I32], results: [I32], }
+  let main_type : @types.FuncType = { params: [], results: [I32], }
   let mod : @types.Module = {
     types: [
       @types.SubType::from_func(add_type),
@@ -601,7 +629,7 @@ test "function call: call instruction" {
     tables: [],
     memories: [],
     globals: [],
-    exports: [{ name: "main", desc: Func(1) }],
+    exports: [{ name: "main", desc: Func(1), }],
     start: None,
     elems: [],
     codes: [add_func, main_func],
@@ -635,7 +663,7 @@ test "function call: nested calls" {
     locals: [],
     body: [LocalGet(0), Call(0), Call(1)], // double then add_one
   }
-  let unary_type : @types.FuncType = { params: [I32], results: [I32] }
+  let unary_type : @types.FuncType = { params: [I32], results: [I32], }
   let mod : @types.Module = {
     types: [@types.SubType::from_func(unary_type)],
     type_rec_groups: [0],
@@ -644,7 +672,7 @@ test "function call: nested calls" {
     tables: [],
     memories: [],
     globals: [],
-    exports: [{ name: "main", desc: Func(2) }],
+    exports: [{ name: "main", desc: Func(2), }],
     start: None,
     elems: [],
     codes: [double_func, add_one_func, main_func],
@@ -684,8 +712,11 @@ test "function call: call_indirect" {
       CallIndirect(0, 0),
     ],
   } // type 0, table 0
-  let binary_type : @types.FuncType = { params: [I32, I32], results: [I32] }
-  let apply_type : @types.FuncType = { params: [I32, I32, I32], results: [I32] }
+  let binary_type : @types.FuncType = { params: [I32, I32], results: [I32], }
+  let apply_type : @types.FuncType = {
+    params: [I32, I32, I32],
+    results: [I32],
+  }
   let mod : @types.Module = {
     types: [
       @types.SubType::from_func(binary_type),
@@ -698,7 +729,7 @@ test "function call: call_indirect" {
       {
         type_: {
           elem_type: FuncRef,
-          limits: { min: 2, max: None },
+          limits: { min: 2, max: None, },
           is_table64: false,
         },
         init: None,
@@ -706,7 +737,7 @@ test "function call: call_indirect" {
     ],
     memories: [],
     globals: [],
-    exports: [{ name: "apply", desc: Func(2) }],
+    exports: [{ name: "apply", desc: Func(2), }],
     start: None,
     elems: [
       {
@@ -757,7 +788,7 @@ test "host function: simple call" {
       _ => raise TypeMismatch
     }
   }
-  let unary_type : @types.FuncType = { params: [I32], results: [I32] }
+  let unary_type : @types.FuncType = { params: [I32], results: [I32], }
   let host_addr = store.alloc_host_func(host_fn, func_type=unary_type)
 
   // Create a module that imports and calls the host function
@@ -770,12 +801,12 @@ test "host function: simple call" {
   let mod : @types.Module = {
     types: [@types.SubType::from_func(unary_type)],
     type_rec_groups: [0],
-    imports: [{ mod_name: "env", name: "double", desc: Func(0) }],
+    imports: [{ mod_name: "env", name: "double", desc: Func(0), }],
     funcs: [0], // main has type 0
     tables: [],
     memories: [],
     globals: [],
-    exports: [{ name: "main", desc: Func(1) }], // func 1 is main (after import)
+    exports: [{ name: "main", desc: Func(1), }], // func 1 is main (after import)
     start: None,
     elems: [],
     codes: [main_func],
@@ -818,7 +849,7 @@ test "host function: caller can access exported memory" {
       None => raise UndefinedElement
     }
   }
-  let host_type : @types.FuncType = { params: [], results: [] }
+  let host_type : @types.FuncType = { params: [], results: [], }
   let host_addr = store.alloc_host_func_with_caller(
     host_fn,
     func_type=host_type,
@@ -828,7 +859,7 @@ test "host function: caller can access exported memory" {
   // - exports a memory as "mem"
   // - imports "env.write_mem0" and calls it
   // - reads mem[0] and returns it
-  let main_type : @types.FuncType = { params: [], results: [I32] }
+  let main_type : @types.FuncType = { params: [], results: [I32], }
   let main_func : @types.FunctionCode = {
     locals: [],
     body: [Call(0), I32Const(0), I32Load(0, 2, 0)],
@@ -839,14 +870,21 @@ test "host function: caller can access exported memory" {
       @types.SubType::from_func(main_type),
     ],
     type_rec_groups: [0, 1],
-    imports: [{ mod_name: "env", name: "write_mem0", desc: Func(0) }],
+    imports: [{ mod_name: "env", name: "write_mem0", desc: Func(0), }],
     funcs: [1],
     tables: [],
     memories: [
-      { limits: { min: 1, max: None }, is_memory64: false, page_size_log2: 16 },
+      {
+        limits: { min: 1, max: None, },
+        is_memory64: false,
+        page_size_log2: 16,
+      },
     ],
     globals: [],
-    exports: [{ name: "mem", desc: Memory(0) }, { name: "main", desc: Func(1) }],
+    exports: [
+      { name: "mem", desc: Memory(0), },
+      { name: "main", desc: Func(1), },
+    ],
     start: None,
     elems: [],
     codes: [main_func],
@@ -882,7 +920,7 @@ test "memory import: shared memory between modules" {
     locals: [],
     body: [I32Const(0), I32Load(0, 2, 0)], // load from address 0
   }
-  let func_type : @types.FuncType = { params: [], results: [I32] }
+  let func_type : @types.FuncType = { params: [], results: [I32], }
   let mod : @types.Module = {
     types: [@types.SubType::from_func(func_type)],
     type_rec_groups: [0],
@@ -891,7 +929,7 @@ test "memory import: shared memory between modules" {
         mod_name: "env",
         name: "memory",
         desc: Memory({
-          limits: { min: 1, max: None },
+          limits: { min: 1, max: None, },
           is_memory64: false,
           page_size_log2: 16,
         }),
@@ -901,7 +939,7 @@ test "memory import: shared memory between modules" {
     tables: [],
     memories: [], // No local memories, only imported
     globals: [],
-    exports: [{ name: "read", desc: Func(0) }],
+    exports: [{ name: "read", desc: Func(0), }],
     start: None,
     elems: [],
     codes: [read_func],
@@ -936,7 +974,7 @@ test "memory import: write to imported memory" {
     locals: [],
     body: [I32Const(100), I32Const(42), I32Store(0, 2, 0)],
   }
-  let func_type : @types.FuncType = { params: [], results: [] }
+  let func_type : @types.FuncType = { params: [], results: [], }
   let mod : @types.Module = {
     types: [@types.SubType::from_func(func_type)],
     type_rec_groups: [0],
@@ -945,7 +983,7 @@ test "memory import: write to imported memory" {
         mod_name: "env",
         name: "mem",
         desc: Memory({
-          limits: { min: 1, max: None },
+          limits: { min: 1, max: None, },
           is_memory64: false,
           page_size_log2: 16,
         }),
@@ -955,7 +993,7 @@ test "memory import: write to imported memory" {
     tables: [],
     memories: [],
     globals: [],
-    exports: [{ name: "write", desc: Func(0) }],
+    exports: [{ name: "write", desc: Func(0), }],
     start: None,
     elems: [],
     codes: [write_func],
@@ -982,17 +1020,17 @@ test "import validation: missing import raises error" {
   let store = @runtime.Store::Store()
 
   // Create a module that requires an import but don't provide it
-  let func : @types.FunctionCode = { locals: [], body: [I32Const(1)] }
-  let func_type : @types.FuncType = { params: [], results: [I32] }
+  let func : @types.FunctionCode = { locals: [], body: [I32Const(1)], }
+  let func_type : @types.FuncType = { params: [], results: [I32], }
   let mod : @types.Module = {
     types: [@types.SubType::from_func(func_type)],
     type_rec_groups: [0],
-    imports: [{ mod_name: "env", name: "missing_func", desc: Func(0) }],
+    imports: [{ mod_name: "env", name: "missing_func", desc: Func(0), }],
     funcs: [0],
     tables: [],
     memories: [],
     globals: [],
-    exports: [{ name: "test", desc: Func(1) }],
+    exports: [{ name: "test", desc: Func(1), }],
     start: None,
     elems: [],
     codes: [func],
