@@ -344,6 +344,107 @@ test "suspended nested hostcall restores the outer hostcall slots" {
 }
 
 ///|
+test "suspended nested continuation restores the outer exception handler" {
+  let context = native_continuation_test_context()
+  let nested : Array[NativeJITContinuation?] = [None]
+  context.set_hostcall_callback(fn() {
+    match get_hostcall_func_addr() {
+      46 => {
+        let continuation = context.start_continuation(
+          @native_test_support.fiber_stack_hostcall_probe_trampoline(),
+          1L,
+          FixedArray::from_array([0L]),
+          1,
+        ) catch {
+          _ => return HostcallTrap(8)
+        }
+        let event = continuation.continue_with() catch {
+          _ => return HostcallTrap(8)
+        }
+        guard event is NativeHostcallSuspended else { return HostcallTrap(8) }
+        nested[0] = Some(continuation)
+        HostcallCompleted
+      }
+      47 => {
+        guard nested[0] is Some(continuation) else { return HostcallTrap(8) }
+        let event = continuation.continue_with() catch {
+          _ => return HostcallTrap(8)
+        }
+        guard event is NativeJITCompleted else { return HostcallTrap(8) }
+        nested[0] = None
+        HostcallCompleted
+      }
+      44 => HostcallSuspended
+      _ => HostcallTrap(8)
+    }
+  })
+  let values = FixedArray::from_array([0L])
+  let outer = context.start_continuation(
+    @native_test_support.nested_activation_exception_probe(),
+    1L,
+    values,
+    values.length(),
+  )
+  debug_inspect(
+    (outer.continue_with(), values[0]),
+    content="(NativeJITCompleted, 17)",
+  )
+  inspect(nested[0] is None, content="true")
+  context.clear_hostcall_callback()
+}
+
+///|
+test "suspended nested continuation restores the outer precise GC roots" {
+  let heap = CHeap::CHeap(capacity=1024)
+  let context = native_continuation_test_context()
+  context.set_gc_heap(heap)
+  let nested : Array[NativeJITContinuation?] = [None]
+  context.set_hostcall_callback(fn() {
+    match get_hostcall_func_addr() {
+      46 => {
+        let continuation = context.start_continuation(
+          @native_test_support.fiber_stack_hostcall_probe_trampoline(),
+          1L,
+          FixedArray::from_array([0L]),
+          1,
+        ) catch {
+          _ => return HostcallTrap(8)
+        }
+        let event = continuation.continue_with() catch {
+          _ => return HostcallTrap(8)
+        }
+        guard event is NativeHostcallSuspended else { return HostcallTrap(8) }
+        nested[0] = Some(continuation)
+        HostcallCompleted
+      }
+      44 => HostcallSuspended
+      _ => HostcallTrap(8)
+    }
+  })
+  let rooted = heap.alloc_struct(0, [I32(22)])
+  let values = FixedArray::from_array([value_to_i64(StructRef(rooted)), 0L])
+  let outer = context.start_continuation(
+    @native_test_support.nested_activation_gc_root_probe(),
+    1L,
+    values,
+    values.length(),
+  )
+  debug_inspect(
+    (outer.continue_with(), values[1]),
+    content="(NativeJITCompleted, 1)",
+  )
+  inspect(heap.is_valid(rooted), content="true")
+  if nested[0] is Some(continuation) {
+    continuation.cancel()
+  }
+  inspect(heap.collect([]), content="1")
+  inspect(heap.is_valid(rooted), content="false")
+  context.clear_gc_heap()
+  context.clear_hostcall_callback()
+  heap.free()
+}
+
+///|
 test "trap activation survives a native hostcall suspension" {
   let context = native_continuation_test_context()
   context.set_hostcall_callback(fn() { HostcallSuspended })

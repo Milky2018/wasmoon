@@ -199,6 +199,91 @@ wasmoon_test_nested_hostcall_tls_probe_trampoline(void) {
     return (int64_t)nested_hostcall_tls_probe;
 }
 
+static int nested_activation_exception_probe(
+    jit_context_t *ctx,
+    int64_t *values,
+    void *func_ptr
+) {
+    (void)func_ptr;
+    sigjmp_buf *landing = exception_try_begin_impl(ctx, 17);
+    int jumped = sigsetjmp(*landing, 1);
+    if (jumped == 0) {
+        int64_t slots[1] = {0};
+        int result = wasmoon_jit_hostcall(
+            ctx,
+            46,
+            (int64_t)slots,
+            0,
+            1
+        );
+        if (result != 0) {
+            exception_try_end_impl(ctx, 17);
+            return result;
+        }
+        if (ctx->exception_handler) {
+            result = wasmoon_jit_hostcall(
+                ctx,
+                47,
+                (int64_t)slots,
+                0,
+                1
+            );
+            if (result != 0) {
+                exception_try_end_impl(ctx, 17);
+                return result;
+            }
+        }
+        exception_throw_impl(ctx, 1, NULL, 0);
+        return 8;
+    }
+    exception_try_end_impl(ctx, 17);
+    values[0] = jumped;
+    return 0;
+}
+
+MOONBIT_FFI_EXPORT int64_t
+wasmoon_test_nested_activation_exception_probe(void) {
+    return (int64_t)nested_activation_exception_probe;
+}
+
+static int nested_activation_gc_root_probe(
+    jit_context_t *ctx,
+    int64_t *values,
+    void *func_ptr
+) {
+    (void)func_ptr;
+    if (!ctx || !ctx->gc_heap || !values) return 8;
+    if (!ctx_gc_push_root_scope_internal(ctx, values, 1)) return 9;
+    int64_t slots[1] = {0};
+    int result = wasmoon_jit_hostcall(
+        ctx,
+        46,
+        (int64_t)slots,
+        0,
+        1
+    );
+    if (result != 0) {
+        ctx_gc_pop_root_scope_internal(ctx);
+        return result;
+    }
+    int64_t encoded = values[0];
+    int32_t gc_ref = encoded > 0 && (encoded & 1L) == 0
+        ? (int32_t)(encoded >> 1)
+        : 0;
+    if (gc_collect_for_alloc_internal(ctx, NULL, 0) < 0) {
+        ctx_gc_pop_root_scope_internal(ctx);
+        return 9;
+    }
+    values[1] = gc_heap_is_valid((GcHeap *)ctx->gc_heap, gc_ref);
+    ctx_gc_pop_root_scope_internal(ctx);
+    return 0;
+}
+
+MOONBIT_FFI_EXPORT int64_t
+wasmoon_test_nested_activation_gc_root_probe(void) {
+    return (int64_t)nested_activation_gc_root_probe;
+}
+
 static int parked_gc_root_probe(
     jit_context_t *ctx,
     int64_t *values,

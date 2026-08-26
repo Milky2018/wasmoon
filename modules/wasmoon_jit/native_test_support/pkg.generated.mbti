@@ -16,6 +16,10 @@ pub fn fiber_stack_hostcall_probe_trampoline() -> Int64
 
 pub fn hostcall_probe_trampoline() -> Int64
 
+pub fn nested_activation_exception_probe() -> Int64
+
+pub fn nested_activation_gc_root_probe() -> Int64
+
 pub fn nested_hostcall_tls_probe_trampoline() -> Int64
 
 pub fn nested_trap_probe() -> Int64
