@@ -1,6 +1,6 @@
 name = "Milky2018/regalloc"
 
-version = "0.7.3"
+version = "0.12.5"
 
 readme = "README.mbt.md"
 

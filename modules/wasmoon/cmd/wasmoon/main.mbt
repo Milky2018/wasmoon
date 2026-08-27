@@ -3,7 +3,7 @@
 /// by `scripts/tests/test_cli_version.py`. MoonBit gives the program no way
 /// to read its own module manifest, so the manifest stays the single source
 /// of truth and the test is what keeps this copy from drifting.
-const WASMOON_VERSION : String = "0.12.4"
+const WASMOON_VERSION : String = "0.12.5"
 
 ///|
 /// Print usage text as a diagnostic.

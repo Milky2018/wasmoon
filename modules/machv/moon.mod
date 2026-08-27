@@ -1,6 +1,6 @@
 name = "Milky2018/machv"
 
-version = "0.8.3"
+version = "0.12.5"
 
 readme = "README.mbt.md"
 

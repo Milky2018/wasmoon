@@ -1,6 +1,6 @@
 name = "Milky2018/aarch64_target"
 
-version = "0.6.3"
+version = "0.12.5"
 
 readme = "README.mbt.md"
 
@@ -13,10 +13,10 @@ keywords = [ "aarch64", "compiler", "codegen", "jit" ]
 description = "AArch64 target pipeline from semantic MachV to native code"
 
 import {
-  "Milky2018/milkir@0.6.3",
-  "Milky2018/machv@0.8.3",
-  "Milky2018/machv_regalloc@0.6.3",
-  "Milky2018/milkir_machv@0.7.3",
+  "Milky2018/milkir@0.12.5",
+  "Milky2018/machv@0.12.5",
+  "Milky2018/machv_regalloc@0.12.5",
+  "Milky2018/milkir_machv@0.12.5",
 }
 
 preferred_target = "wasm-gc"
