@@ -74,6 +74,8 @@ priv struct BlockFrame {
   local_params : Array[Int]
   // Stack height at block entry
   stack_height : Int
+  // Number of runtime try_table handlers that remain active at this target.
+  handler_depth : Int
   mut has_predecessor : Bool
 }
 
@@ -486,11 +488,17 @@ fn Translator::spill_locals_if_in_try(self : Translator) -> Unit {
 }
 
 ///|
-/// Tail calls leave the current function frame immediately, so active
-/// try_table handlers in this function must be popped first.
-fn Translator::unwind_try_handlers_for_tail_call(self : Translator) -> Unit {
+/// Emit cleanup for the try_table scopes crossed by one control-flow edge.
+/// The lexical handler stack remains unchanged while other CFG edges are built.
+fn Translator::unwind_try_handlers_to_depth(
+  self : Translator,
+  target_depth : Int,
+) -> Unit {
+  guard target_depth >= 0 && target_depth <= self.try_handler_stack.length() else {
+    abort("invalid try_table handler target depth: \{target_depth}")
+  }
   let mut i = self.try_handler_stack.length()
-  while i > 0 {
+  while i > target_depth {
     i = i - 1
     @wasm_milkir.try_table_end(self.builder, self.try_handler_stack[i])
   }
@@ -870,7 +878,6 @@ fn Translator::emit_catch_branch(
   self : Translator,
   tag_idx : Int,
   label_depth : Int,
-  handler_id : Int,
 ) -> Unit {
   // Get the tag's parameter types
   let tag_types = self.get_tag_param_types(tag_idx)
@@ -878,20 +885,18 @@ fn Translator::emit_catch_branch(
   // Get exception values BEFORE calling try_table_end (which frees them)
   let args = self.read_exception_payload(tag_types)
 
-  // Pop the exception handler AFTER reading values
-  // This is required so that throw_ref doesn't loop back to the same handler
-  @wasm_milkir.try_table_end(self.builder, handler_id)
-
   // Branch to the handler label
   let idx = self.block_stack.length() - 1 - label_depth
   if idx >= 0 && idx < self.block_stack.length() {
     let frame = self.block_stack[idx]
+    self.unwind_try_handlers_to_depth(frame.handler_depth)
     // Also pass the locals the handler's block carries (for SSA correctness)
     self.push_local_args(args, frame.local_params)
     self.mark_block_frame_reachable(idx)
     self.builder.jump(frame.block, args)
   } else {
     // Function-level branch, which carries no locals
+    self.unwind_try_handlers_to_depth(0)
     let ret_cont = self.get_or_create_return_continuation()
     self.builder.jump(ret_cont, args)
   }
@@ -903,7 +908,6 @@ fn Translator::emit_catch_ref_branch(
   self : Translator,
   tag_idx : Int,
   label_depth : Int,
-  handler_id : Int,
 ) -> Unit {
   // Get the tag's parameter types
   let tag_types = self.get_tag_param_types(tag_idx)
@@ -916,17 +920,16 @@ fn Translator::emit_catch_ref_branch(
   let exnref_i64 = self.builder.sextend(I64, exnref)
   args.push(self.builder.bitcast(Ref, exnref_i64))
 
-  // Pop the exception handler AFTER reading values
-  @wasm_milkir.try_table_end(self.builder, handler_id)
-
   // Branch to the handler label
   let idx = self.block_stack.length() - 1 - label_depth
   if idx >= 0 && idx < self.block_stack.length() {
     let frame = self.block_stack[idx]
+    self.unwind_try_handlers_to_depth(frame.handler_depth)
     self.push_local_args(args, frame.local_params)
     self.mark_block_frame_reachable(idx)
     self.builder.jump(frame.block, args)
   } else {
+    self.unwind_try_handlers_to_depth(0)
     let ret_cont = self.get_or_create_return_continuation()
     self.builder.jump(ret_cont, args)
   }
@@ -937,11 +940,7 @@ fn Translator::emit_catch_ref_branch(
 fn Translator::emit_catch_all_branch(
   self : Translator,
   label_depth : Int,
-  handler_id : Int,
 ) -> Unit {
-  // Pop the exception handler before branching to the catch target
-  @wasm_milkir.try_table_end(self.builder, handler_id)
-
   // catch_all doesn't pass exception values, just branches
   let args : Array[Value] = []
 
@@ -949,10 +948,12 @@ fn Translator::emit_catch_all_branch(
   let idx = self.block_stack.length() - 1 - label_depth
   if idx >= 0 && idx < self.block_stack.length() {
     let frame = self.block_stack[idx]
+    self.unwind_try_handlers_to_depth(frame.handler_depth)
     self.push_local_args(args, frame.local_params)
     self.mark_block_frame_reachable(idx)
     self.builder.jump(frame.block, args)
   } else {
+    self.unwind_try_handlers_to_depth(0)
     let ret_cont = self.get_or_create_return_continuation()
     self.builder.jump(ret_cont, args)
   }
@@ -963,10 +964,7 @@ fn Translator::emit_catch_all_branch(
 fn Translator::emit_catch_all_ref_branch(
   self : Translator,
   label_depth : Int,
-  handler_id : Int,
 ) -> Unit {
-  // Pop the exception handler before branching to the catch target
-  @wasm_milkir.try_table_end(self.builder, handler_id)
   let args : Array[Value] = []
 
   // Add exnref (placeholder)
@@ -978,10 +976,12 @@ fn Translator::emit_catch_all_ref_branch(
   let idx = self.block_stack.length() - 1 - label_depth
   if idx >= 0 && idx < self.block_stack.length() {
     let frame = self.block_stack[idx]
+    self.unwind_try_handlers_to_depth(frame.handler_depth)
     self.push_local_args(args, frame.local_params)
     self.mark_block_frame_reachable(idx)
     self.builder.jump(frame.block, args)
   } else {
+    self.unwind_try_handlers_to_depth(0)
     let ret_cont = self.get_or_create_return_continuation()
     self.builder.jump(ret_cont, args)
   }
@@ -1296,6 +1296,7 @@ fn Translator::translate_block(
     result_types,
     local_params,
     stack_height: stack_height_after_params,
+    handler_depth: self.try_handler_stack.length(),
     has_predecessor: false,
   }
   let frame_idx = self.block_stack.length()
@@ -1430,6 +1431,7 @@ fn Translator::translate_loop(
     result_types: param_types, // For br, we need params not results
     local_params,
     stack_height: self.value_stack.length(),
+    handler_depth: self.try_handler_stack.length(),
     has_predecessor: false,
   }
   self.block_stack.push(frame)

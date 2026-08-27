@@ -246,6 +246,22 @@ wasmoon_test_nested_activation_exception_probe(void) {
     return (int64_t)nested_activation_exception_probe;
 }
 
+static int mismatched_try_end_probe(
+    jit_context_t *ctx,
+    int64_t *values,
+    void *func_ptr
+) {
+    (void)values;
+    (void)func_ptr;
+    exception_try_begin_impl(ctx, 17);
+    exception_try_end_impl(ctx, 18);
+    return 0;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_test_mismatched_try_end_probe(void) {
+    return (int64_t)mismatched_try_end_probe;
+}
+
 static int nested_activation_gc_root_probe(
     jit_context_t *ctx,
     int64_t *values,

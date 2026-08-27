@@ -82,6 +82,7 @@ fn Translator::translate_if(
     result_types,
     local_params,
     stack_height: stack_height_after_params,
+    handler_depth: self.try_handler_stack.length(),
     has_predecessor: false,
   }
   let frame_idx = self.block_stack.length()
@@ -194,6 +195,7 @@ fn Translator::translate_br(self : Translator, depth : Int) -> Unit {
     args.rev_in_place()
     self.push_local_args(args, frame.local_params)
     self.mark_block_frame_reachable(idx)
+    self.unwind_try_handlers_to_depth(frame.handler_depth)
     self.builder.jump(frame.block, args)
   } else if idx == -1 {
     // Jump to function level (early return)
@@ -204,6 +206,7 @@ fn Translator::translate_br(self : Translator, depth : Int) -> Unit {
       args.push(self.pop())
     }
     args.rev_in_place()
+    self.unwind_try_handlers_to_depth(0)
     self.builder.jump(ret_cont, args)
   }
   // After br, code is unreachable
@@ -242,6 +245,7 @@ fn Translator::translate_br_if(self : Translator, depth : Int) -> Unit {
     // Critical edge split: taken block jumps to target with args
     self.builder.switch_to_block(taken)
     self.mark_block_frame_reachable(idx)
+    self.unwind_try_handlers_to_depth(frame.handler_depth)
     self.builder.jump(frame.block, args)
 
     // Continue with fallthrough
@@ -265,6 +269,7 @@ fn Translator::translate_br_if(self : Translator, depth : Int) -> Unit {
 
     // Critical edge split: taken block jumps to return continuation
     self.builder.switch_to_block(taken)
+    self.unwind_try_handlers_to_depth(0)
     self.builder.jump(ret_cont, args)
 
     // Continue with fallthrough
@@ -307,6 +312,7 @@ fn Translator::translate_br_on_null(self : Translator, depth : Int) -> Unit {
     // Critical edge split: taken block jumps to target with args
     self.builder.switch_to_block(taken)
     self.mark_block_frame_reachable(idx)
+    self.unwind_try_handlers_to_depth(frame.handler_depth)
     self.builder.jump(frame.block, args)
 
     // Continue with fallthrough - push the non-null ref back on stack
@@ -325,6 +331,7 @@ fn Translator::translate_br_on_null(self : Translator, depth : Int) -> Unit {
     }
     self.builder.brnz(is_null, taken, fallthrough)
     self.builder.switch_to_block(taken)
+    self.unwind_try_handlers_to_depth(0)
     self.builder.jump(ret_cont, args)
     self.builder.switch_to_block(fallthrough)
     self.push(ref_val)
@@ -373,6 +380,7 @@ fn Translator::translate_br_on_non_null(self : Translator, depth : Int) -> Unit 
     // Critical edge split: taken block jumps to target with args
     self.builder.switch_to_block(taken)
     self.mark_block_frame_reachable(idx)
+    self.unwind_try_handlers_to_depth(frame.handler_depth)
     self.builder.jump(frame.block, args)
 
     // Continue with fallthrough - reference is consumed (null), nothing pushed
@@ -392,6 +400,7 @@ fn Translator::translate_br_on_non_null(self : Translator, depth : Int) -> Unit 
     args.push(ref_val)
     self.builder.brnz(is_null, fallthrough, taken)
     self.builder.switch_to_block(taken)
+    self.unwind_try_handlers_to_depth(0)
     self.builder.jump(ret_cont, args)
     self.builder.switch_to_block(fallthrough)
   }
@@ -445,6 +454,7 @@ fn Translator::translate_br_on_cast(
     args.push(cast_val)
     self.push_local_args(args, frame.local_params)
     self.mark_block_frame_reachable(idx)
+    self.unwind_try_handlers_to_depth(frame.handler_depth)
     self.builder.jump(frame.block, args)
     // Continue with fallthrough - push the original ref back
     self.builder.switch_to_block(fallthrough)
@@ -474,6 +484,7 @@ fn Translator::translate_br_on_cast(
       args.push(v)
     }
     args.push(cast_val)
+    self.unwind_try_handlers_to_depth(0)
     self.builder.jump(ret_cont, args)
     self.builder.switch_to_block(fallthrough)
     self.push(ref_val)
@@ -522,6 +533,7 @@ fn Translator::translate_br_on_cast_fail(
     // Critical edge split: taken block jumps to target with original ref
     self.builder.switch_to_block(taken)
     self.mark_block_frame_reachable(idx)
+    self.unwind_try_handlers_to_depth(frame.handler_depth)
     self.builder.jump(frame.block, args)
     // Continue with fallthrough - push the cast ref (it matched)
     self.builder.switch_to_block(fallthrough)
@@ -551,6 +563,7 @@ fn Translator::translate_br_on_cast_fail(
     args.push(ref_val)
     self.builder.brnz(matches, fallthrough, taken)
     self.builder.switch_to_block(taken)
+    self.unwind_try_handlers_to_depth(0)
     self.builder.jump(ret_cont, args)
     // Continue with fallthrough - push the cast ref (it matched)
     self.builder.switch_to_block(fallthrough)
@@ -577,27 +590,30 @@ fn Translator::translate_br_table(
 
   // Helper to get a target's block, result types, and carried locals for a
   // given depth. The return continuation carries no locals.
-  // Returns (target_block, result_types, local_params)
+  // Returns (target_block, result_types, local_params, handler_depth)
   fn get_target(
     self : Translator,
     depth : Int,
-  ) -> (Block, Array[Type], Array[Int]) {
+  ) -> (Block, Array[Type], Array[Int], Int) {
     let idx = self.block_stack.length() - 1 - depth
     if idx >= 0 && idx < self.block_stack.length() {
       let frame = self.block_stack[idx]
       self.mark_block_frame_reachable(idx)
-      (frame.block, frame.result_types, frame.local_params)
+      (frame.block, frame.result_types, frame.local_params, frame.handler_depth)
     } else {
       // Function level
       let ret_cont = self.get_or_create_return_continuation()
-      (ret_cont, self.func_result_types, [])
+      (ret_cont, self.func_result_types, [], 0)
     }
   }
 
   // Get default target info
-  let (default_block, default_result_types, default_local_params) = get_target(
-    self, default_,
-  )
+  let (
+    default_block,
+    default_result_types,
+    default_local_params,
+    default_handler_depth,
+  ) = get_target(self, default_)
 
   // The explicit results are the same for every target -- all targets share the
   // default's result type. The locals are not: each target carries only what
@@ -651,13 +667,15 @@ fn Translator::translate_br_table(
     guard depth_to_intermediate.get(depth) is Some(intermediate) else {
       continue
     }
-    let (target_block, _, local_params) = get_target(self, depth)
+    let (target_block, _, local_params, handler_depth) = get_target(self, depth)
     self.builder.switch_to_block(intermediate)
+    self.unwind_try_handlers_to_depth(handler_depth)
     self.builder.jump(target_block, target_args(self, local_params))
   }
 
   // Fill in default intermediate
   self.builder.switch_to_block(default_intermediate)
+  self.unwind_try_handlers_to_depth(default_handler_depth)
   self.builder.jump(default_block, target_args(self, default_local_params))
 
   // br_table is a terminator, code after it is unreachable

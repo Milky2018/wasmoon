@@ -341,6 +341,32 @@ test "repeated synchronous traps release their native fibers" {
 }
 
 ///|
+test "mismatched try end becomes an explicit JIT invariant trap" {
+  let context = native_continuation_test_context()
+  let first_values = FixedArray::from_array([0L])
+  let second_values = FixedArray::from_array([0L])
+  inspect(
+    (
+      context.call_trampoline(
+        @native_test_support.mismatched_try_end_probe(),
+        1L,
+        first_values,
+        first_values.length(),
+        true,
+      ),
+      context.call_trampoline(
+        @native_test_support.mismatched_try_end_probe(),
+        1L,
+        second_values,
+        second_values.length(),
+        true,
+      ),
+    ),
+    content="(8, 8)",
+  )
+}
+
+///|
 test "suspended nested hostcall restores the outer hostcall slots" {
   let context = native_continuation_test_context()
   let nested : Array[NativeJITContinuation?] = [None]

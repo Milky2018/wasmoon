@@ -14,6 +14,9 @@ extern "c" fn c_nested_hostcall_tls_probe_trampoline() -> Int64 = "wasmoon_test_
 extern "c" fn c_nested_activation_exception_probe() -> Int64 = "wasmoon_test_nested_activation_exception_probe"
 
 ///|
+extern "c" fn c_mismatched_try_end_probe() -> Int64 = "wasmoon_test_mismatched_try_end_probe"
+
+///|
 extern "c" fn c_nested_activation_gc_root_probe() -> Int64 = "wasmoon_test_nested_activation_gc_root_probe"
 
 ///|
@@ -127,6 +130,11 @@ pub fn nested_hostcall_tls_probe_trampoline() -> Int64 {
 ///|
 pub fn nested_activation_exception_probe() -> Int64 {
   c_nested_activation_exception_probe()
+}
+
+///|
+pub fn mismatched_try_end_probe() -> Int64 {
+  c_mismatched_try_end_probe()
 }
 
 ///|
