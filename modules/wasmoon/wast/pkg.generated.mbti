@@ -93,6 +93,11 @@ pub(all) suberror JITCoreCallError {
   GcSetupFailed(String)
   ExecutionStateFailure(@wasmoon_jit.NativeExecutionStateError)
 } derive(Eq, @debug.Debug)
+pub fn JITCoreCallError::equal(Self, Self) -> Bool
+pub fn JITCoreCallError::not_equal(Self, Self) -> Bool
+pub fn JITCoreCallError::output(Self, &Logger) -> Unit
+pub fn JITCoreCallError::to_repr(Self) -> @debug.Repr
+pub fn JITCoreCallError::to_string(Self) -> String
 pub impl Show for JITCoreCallError
 
 pub(all) suberror WastRunnerError {
@@ -100,6 +105,8 @@ pub(all) suberror WastRunnerError {
   NoCurrentModule
   RuntimeError(String)
 }
+pub fn WastRunnerError::output(Self, &Logger) -> Unit
+pub fn WastRunnerError::to_string(Self) -> String
 pub impl Show for WastRunnerError
 
 // Types and methods

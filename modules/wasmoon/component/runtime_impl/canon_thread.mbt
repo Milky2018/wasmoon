@@ -213,7 +213,8 @@ fn run_explicit_thread_once(
   }
 
   push_task(async_state, t.task_id, true)
-  let outcome = try {
+  let outcome = {
+    errdefer pop_task(async_state)
     match t.continuation[0] {
       Some(continuation) => {
         t.continuation[0] = None
@@ -221,11 +222,6 @@ fn run_explicit_thread_once(
       }
       None =>
         call_core_func_outcome(store, t.start_func, [I32(t.context)], Stackful)
-    }
-  } catch {
-    error => {
-      pop_task(async_state)
-      raise error
     }
   }
   pop_task(async_state)

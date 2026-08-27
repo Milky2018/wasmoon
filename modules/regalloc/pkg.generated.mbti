@@ -19,6 +19,7 @@ pub suberror VerifyError {
   ScratchRegisterUnavailable(message~ : String)
   InvalidPlan(message~ : String)
 } derive(@debug.Debug)
+pub fn VerifyError::to_repr(Self) -> @debug.Repr
 
 // Types and methods
 pub(all) struct AllocationEdit {
@@ -27,6 +28,9 @@ pub(all) struct AllocationEdit {
   to : Location
   position : EditPosition
 } derive(Eq, @debug.Debug)
+pub fn AllocationEdit::equal(Self, Self) -> Bool
+pub fn AllocationEdit::not_equal(Self, Self) -> Bool
+pub fn AllocationEdit::to_repr(Self) -> @debug.Repr
 
 pub struct AllocationPlan {
   // private fields
@@ -34,21 +38,31 @@ pub struct AllocationPlan {
 pub fn AllocationPlan::edits(Self) -> Array[AllocationEdit]
 pub fn AllocationPlan::operand_assignments(Self) -> Array[OperandAssignment]
 pub fn AllocationPlan::operand_location(Self, Int, Int) -> Location?
+pub fn AllocationPlan::output(Self, &Logger) -> Unit
 pub fn AllocationPlan::spill_count(Self) -> Int
 pub fn AllocationPlan::spill_slot(Self, Int) -> SpillSlotSpec?
+pub fn AllocationPlan::to_repr(Self) -> @debug.Repr
+pub fn AllocationPlan::to_string(Self) -> String
 pub fn AllocationPlan::value_location(Self, Int) -> Location?
 pub impl Show for AllocationPlan
 pub impl @debug.Debug for AllocationPlan
 
 type DenseCfgEdges derive(@debug.Debug)
+pub fn DenseCfgEdges::to_repr(Self) -> @debug.Repr
 
 type DenseLiveSets derive(@debug.Debug)
+pub fn DenseLiveSets::to_repr(Self) -> @debug.Repr
 
 pub(all) enum EditPosition {
   Before(Int)
   After(Int)
   Edge(source_block~ : Int, successor_index~ : Int)
 } derive(Eq, Hash, @debug.Debug)
+pub fn EditPosition::equal(Self, Self) -> Bool
+pub fn EditPosition::hash(Self) -> Int
+pub fn EditPosition::hash_combine(Self, Hasher) -> Unit
+pub fn EditPosition::not_equal(Self, Self) -> Bool
+pub fn EditPosition::to_repr(Self) -> @debug.Repr
 
 type LiveRange derive(@debug.Debug)
 pub fn LiveRange::LiveRange(Int, VirtualReg) -> Self
@@ -65,6 +79,7 @@ pub fn LiveRange::overlaps(Self, Self, Array[Int]) -> Bool
 pub fn LiveRange::range_at(Self, Int) -> ProgramRange?
 pub fn LiveRange::range_count(Self) -> Int
 pub fn LiveRange::start(Self) -> ProgramPoint?
+pub fn LiveRange::to_repr(Self) -> @debug.Repr
 pub fn LiveRange::total_length(Self) -> Int
 pub fn LiveRange::touch(Self, ProgramPoint) -> Unit
 pub fn LiveRange::touch_with_order(Self, ProgramPoint, Array[Int]) -> Unit
@@ -81,11 +96,15 @@ pub fn LiveRangeSet::block_order_count(Self) -> Int
 pub fn LiveRangeSet::get(Self, Int) -> LiveRange
 pub fn LiveRangeSet::get_by_vreg(Self, VirtualReg) -> LiveRange?
 pub fn LiveRangeSet::length(Self) -> Int
+pub fn LiveRangeSet::to_repr(Self) -> @debug.Repr
 
 pub(all) enum Location {
   Reg(PhysicalReg)
   Spill(Int)
 } derive(Eq, @debug.Debug)
+pub fn Location::equal(Self, Self) -> Bool
+pub fn Location::not_equal(Self, Self) -> Bool
+pub fn Location::to_repr(Self) -> @debug.Repr
 
 pub struct MachineEnv {
   allocatable_regs : Array[PhysicalReg]
@@ -110,6 +129,9 @@ pub(all) struct Operand {
   timing : OperandTiming
 } derive(Eq, @debug.Debug)
 pub fn Operand::def(VirtualReg) -> Self
+pub fn Operand::equal(Self, Self) -> Bool
+pub fn Operand::not_equal(Self, Self) -> Bool
+pub fn Operand::to_repr(Self) -> @debug.Repr
 pub fn Operand::use_reg(VirtualReg) -> Self
 pub fn Operand::with_constraint(Self, OperandConstraint) -> Self
 pub fn Operand::with_preference(Self, PhysicalReg) -> Self
@@ -121,28 +143,43 @@ pub struct OperandAssignment {
   operand : Int
   location : Location
 } derive(Eq, @debug.Debug)
+pub fn OperandAssignment::equal(Self, Self) -> Bool
+pub fn OperandAssignment::not_equal(Self, Self) -> Bool
+pub fn OperandAssignment::to_repr(Self) -> @debug.Repr
 
 pub(all) enum OperandConstraint {
   AnyReg
   AnyLocation
   FixedReg(PhysicalReg)
 } derive(Eq, @debug.Debug)
+pub fn OperandConstraint::equal(Self, Self) -> Bool
+pub fn OperandConstraint::not_equal(Self, Self) -> Bool
+pub fn OperandConstraint::to_repr(Self) -> @debug.Repr
 
 pub(all) enum OperandRole {
   Use
   Def
   UseDef
 } derive(Eq, @debug.Debug)
+pub fn OperandRole::equal(Self, Self) -> Bool
+pub fn OperandRole::not_equal(Self, Self) -> Bool
+pub fn OperandRole::to_repr(Self) -> @debug.Repr
 
 pub(all) enum OperandTiming {
   Early
   Late
 } derive(Eq, @debug.Debug)
+pub fn OperandTiming::equal(Self, Self) -> Bool
+pub fn OperandTiming::not_equal(Self, Self) -> Bool
+pub fn OperandTiming::to_repr(Self) -> @debug.Repr
 
 pub(all) struct PhysicalReg {
   id : Int
   class : RegClass
 } derive(Eq, @debug.Debug)
+pub fn PhysicalReg::equal(Self, Self) -> Bool
+pub fn PhysicalReg::not_equal(Self, Self) -> Bool
+pub fn PhysicalReg::to_repr(Self) -> @debug.Repr
 
 pub(all) struct ProgramPoint {
   block : Int
@@ -150,6 +187,9 @@ pub(all) struct ProgramPoint {
 } derive(Eq, @debug.Debug)
 pub fn ProgramPoint::ProgramPoint(Int, Int) -> Self
 pub fn ProgramPoint::compare_with_order(Self, Self, Array[Int]) -> Int
+pub fn ProgramPoint::equal(Self, Self) -> Bool
+pub fn ProgramPoint::not_equal(Self, Self) -> Bool
+pub fn ProgramPoint::to_repr(Self) -> @debug.Repr
 
 pub(all) struct ProgramRange {
   start : ProgramPoint
@@ -157,13 +197,19 @@ pub(all) struct ProgramRange {
 } derive(Eq, @debug.Debug)
 pub fn ProgramRange::ProgramRange(ProgramPoint, ProgramPoint) -> Self
 pub fn ProgramRange::contains(Self, ProgramPoint, Array[Int]) -> Bool
+pub fn ProgramRange::equal(Self, Self) -> Bool
+pub fn ProgramRange::not_equal(Self, Self) -> Bool
 pub fn ProgramRange::overlaps(Self, Self, Array[Int]) -> Bool
+pub fn ProgramRange::to_repr(Self) -> @debug.Repr
 
 pub(all) enum RegClass {
   Int
   Float
   Vector
 } derive(Eq, @debug.Debug)
+pub fn RegClass::equal(Self, Self) -> Bool
+pub fn RegClass::not_equal(Self, Self) -> Bool
+pub fn RegClass::to_repr(Self) -> @debug.Repr
 
 pub struct RegallocConfig {
   verify : Bool
@@ -184,6 +230,11 @@ pub(all) enum RegallocPhase {
   EditResolution
   Verification
 } derive(Eq, @debug.Debug)
+pub fn RegallocPhase::equal(Self, Self) -> Bool
+pub fn RegallocPhase::not_equal(Self, Self) -> Bool
+pub fn RegallocPhase::output(Self, &Logger) -> Unit
+pub fn RegallocPhase::to_repr(Self) -> @debug.Repr
+pub fn RegallocPhase::to_string(Self) -> String
 pub impl Show for RegallocPhase
 
 pub(all) struct SpillSlotReservation {
@@ -191,17 +242,26 @@ pub(all) struct SpillSlotReservation {
   next_slot : Int
   slots_used : Int
 } derive(Eq, @debug.Debug)
+pub fn SpillSlotReservation::equal(Self, Self) -> Bool
+pub fn SpillSlotReservation::not_equal(Self, Self) -> Bool
+pub fn SpillSlotReservation::to_repr(Self) -> @debug.Repr
 
 pub struct SpillSlotSpec {
   size : Int
   alignment : Int
 } derive(Eq, @debug.Debug)
+pub fn SpillSlotSpec::equal(Self, Self) -> Bool
+pub fn SpillSlotSpec::not_equal(Self, Self) -> Bool
+pub fn SpillSlotSpec::to_repr(Self) -> @debug.Repr
 
 pub(all) enum UseKind {
   LiveDef
   LiveUse
   LiveUseDef
 } derive(Eq, @debug.Debug)
+pub fn UseKind::equal(Self, Self) -> Bool
+pub fn UseKind::not_equal(Self, Self) -> Bool
+pub fn UseKind::to_repr(Self) -> @debug.Repr
 
 pub(all) struct UsePosition {
   point : ProgramPoint
@@ -211,6 +271,9 @@ pub(all) struct UsePosition {
   tie_id : Int
 } derive(Eq, @debug.Debug)
 pub fn UsePosition::UsePosition(ProgramPoint, UseKind, OperandConstraint) -> Self
+pub fn UsePosition::equal(Self, Self) -> Bool
+pub fn UsePosition::not_equal(Self, Self) -> Bool
+pub fn UsePosition::to_repr(Self) -> @debug.Repr
 pub fn UsePosition::with_preference(Self, PhysicalReg?) -> Self
 pub fn UsePosition::with_tie(Self, Int) -> Self
 
@@ -218,6 +281,9 @@ pub(all) struct VirtualReg {
   id : Int
   class : RegClass
 } derive(Eq, @debug.Debug)
+pub fn VirtualReg::equal(Self, Self) -> Bool
+pub fn VirtualReg::not_equal(Self, Self) -> Bool
+pub fn VirtualReg::to_repr(Self) -> @debug.Repr
 
 // Type aliases
 

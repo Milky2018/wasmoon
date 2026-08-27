@@ -10,7 +10,7 @@ pub(all) suberror WitError {
 }
 
 ///|
-fn WitError::to_string(self : WitError) -> String {
+pub fn WitError::to_string(self : WitError) -> String {
   match self {
     Error(msg) => msg
   }

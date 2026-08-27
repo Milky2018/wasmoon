@@ -9,6 +9,8 @@ pub suberror ComponentTextError {
   ParseError(String)
   Unsupported(String)
 }
+pub fn ComponentTextError::output(Self, &Logger) -> Unit
+pub fn ComponentTextError::to_string(Self) -> String
 pub impl Show for ComponentTextError
 
 // Types and methods

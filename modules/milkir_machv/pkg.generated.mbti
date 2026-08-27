@@ -25,6 +25,11 @@ pub suberror SemanticLowerError {
   MissingBlock(block_id~ : Int)
   InvalidMachV(message~ : String)
 } derive(Eq, @debug.Debug)
+pub fn SemanticLowerError::equal(Self, Self) -> Bool
+pub fn SemanticLowerError::not_equal(Self, Self) -> Bool
+pub fn SemanticLowerError::output(Self, &Logger) -> Unit
+pub fn SemanticLowerError::to_repr(Self) -> @debug.Repr
+pub fn SemanticLowerError::to_string(Self) -> String
 pub impl Show for SemanticLowerError
 
 // Types and methods

@@ -72,7 +72,7 @@ pub suberror ComponentParseError {
 }
 
 ///|
-fn ComponentParseError::to_string(self : ComponentParseError) -> String {
+pub fn ComponentParseError::to_string(self : ComponentParseError) -> String {
   match self {
     InvalidMagic => "invalid wasm magic"
     UnexpectedEndOfInput => "unexpected end of input"

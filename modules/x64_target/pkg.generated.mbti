@@ -36,12 +36,22 @@ pub suberror InternalAbiError {
   ResultAreaRegisterReused(index~ : Int)
   InvalidSignature(message~ : String)
 } derive(Eq, @debug.Debug)
+pub fn InternalAbiError::equal(Self, Self) -> Bool
+pub fn InternalAbiError::not_equal(Self, Self) -> Bool
+pub fn InternalAbiError::output(Self, &Logger) -> Unit
+pub fn InternalAbiError::to_repr(Self) -> @debug.Repr
+pub fn InternalAbiError::to_string(Self) -> String
 pub impl Show for InternalAbiError
 
 pub suberror TargetVCodeVerifyError {
   CommonFailure(cause~ : @vcode.VCodeVerifyError)
   InvalidInstruction(instruction~ : @vcode.Instruction, message~ : String)
 } derive(Eq, @debug.Debug)
+pub fn TargetVCodeVerifyError::equal(Self, Self) -> Bool
+pub fn TargetVCodeVerifyError::not_equal(Self, Self) -> Bool
+pub fn TargetVCodeVerifyError::output(Self, &Logger) -> Unit
+pub fn TargetVCodeVerifyError::to_repr(Self) -> @debug.Repr
+pub fn TargetVCodeVerifyError::to_string(Self) -> String
 pub impl Show for TargetVCodeVerifyError
 
 pub suberror X64AllocationError {
@@ -50,6 +60,9 @@ pub suberror X64AllocationError {
   InvalidAllocation(cause~ : @vcode.AllocationVerifyError)
   IllegalRegister(reg~ : @vcode.PhysicalReg)
 } derive(@debug.Debug)
+pub fn X64AllocationError::output(Self, &Logger) -> Unit
+pub fn X64AllocationError::to_repr(Self) -> @debug.Repr
+pub fn X64AllocationError::to_string(Self) -> String
 pub impl Show for X64AllocationError
 
 pub suberror X64CompileError {
@@ -58,6 +71,9 @@ pub suberror X64CompileError {
   FramePlanningFailed(cause~ : X64FrameError)
   EmissionFailed(cause~ : X64EmitError)
 } derive(@debug.Debug)
+pub fn X64CompileError::output(Self, &Logger) -> Unit
+pub fn X64CompileError::to_repr(Self) -> @debug.Repr
+pub fn X64CompileError::to_string(Self) -> String
 pub impl Show for X64CompileError
 
 pub suberror X64EmitError {
@@ -79,6 +95,9 @@ pub suberror X64EmitError {
   BranchTargetMissing(block~ : @vcode.Block)
   BranchOutOfRange(offset~ : Int, bits~ : Int)
 } derive(@debug.Debug)
+pub fn X64EmitError::output(Self, &Logger) -> Unit
+pub fn X64EmitError::to_repr(Self) -> @debug.Repr
+pub fn X64EmitError::to_string(Self) -> String
 pub impl Show for X64EmitError
 
 pub suberror X64FrameError {
@@ -94,6 +113,9 @@ pub suberror X64FrameError {
   InvalidEmergencyMoveArea(offset~ : Int?)
   SavedRegisterSetMismatch
 } derive(@debug.Debug)
+pub fn X64FrameError::output(Self, &Logger) -> Unit
+pub fn X64FrameError::to_repr(Self) -> @debug.Repr
+pub fn X64FrameError::to_string(Self) -> String
 pub impl Show for X64FrameError
 
 pub suberror X64LinkError {
@@ -103,6 +125,11 @@ pub suberror X64LinkError {
   RelocationOutOfRange(index~ : Int)
   UnsupportedRelocation(index~ : Int)
 } derive(Eq, @debug.Debug)
+pub fn X64LinkError::equal(Self, Self) -> Bool
+pub fn X64LinkError::not_equal(Self, Self) -> Bool
+pub fn X64LinkError::output(Self, &Logger) -> Unit
+pub fn X64LinkError::to_repr(Self) -> @debug.Repr
+pub fn X64LinkError::to_string(Self) -> String
 pub impl Show for X64LinkError
 
 pub suberror X64LowerError {
@@ -113,19 +140,34 @@ pub suberror X64LowerError {
   BuildFailure(cause~ : @vcode.VCodeBuildError)
   InvalidTarget(cause~ : TargetVCodeVerifyError)
 } derive(@debug.Debug)
+pub fn X64LowerError::output(Self, &Logger) -> Unit
+pub fn X64LowerError::to_repr(Self) -> @debug.Repr
+pub fn X64LowerError::to_string(Self) -> String
 pub impl Show for X64LowerError
 
 // Types and methods
 type CallArgumentLocation derive(Eq, @debug.Debug)
+pub fn CallArgumentLocation::equal(Self, Self) -> Bool
+pub fn CallArgumentLocation::not_equal(Self, Self) -> Bool
+pub fn CallArgumentLocation::to_repr(Self) -> @debug.Repr
 
 type CallLayout derive(Eq, @debug.Debug)
+pub fn CallLayout::equal(Self, Self) -> Bool
+pub fn CallLayout::not_equal(Self, Self) -> Bool
+pub fn CallLayout::to_repr(Self) -> @debug.Repr
 
 type CallResultLocation derive(Eq, @debug.Debug)
+pub fn CallResultLocation::equal(Self, Self) -> Bool
+pub fn CallResultLocation::not_equal(Self, Self) -> Bool
+pub fn CallResultLocation::to_repr(Self) -> @debug.Repr
 
 pub(all) enum GprWidth {
   W32
   W64
 } derive(Eq, @debug.Debug)
+pub fn GprWidth::equal(Self, Self) -> Bool
+pub fn GprWidth::not_equal(Self, Self) -> Bool
+pub fn GprWidth::to_repr(Self) -> @debug.Repr
 
 pub struct InternalAbi {
   // private fields
@@ -135,6 +177,9 @@ pub fn InternalAbi::new(Int, Int, Array[Int], Array[Int], Array[Int], Array[Int]
 pub struct InternalCallPlan {
   // private fields
 } derive(Eq, @debug.Debug)
+pub fn InternalCallPlan::equal(Self, Self) -> Bool
+pub fn InternalCallPlan::not_equal(Self, Self) -> Bool
+pub fn InternalCallPlan::to_repr(Self) -> @debug.Repr
 
 pub struct LoweringContext {
   // private fields
@@ -147,6 +192,9 @@ pub(all) enum X64Address {
   External(@machv.ExternalSymbol)
   Data(@machv.DataSymbol)
 } derive(Eq, @debug.Debug)
+pub fn X64Address::equal(Self, Self) -> Bool
+pub fn X64Address::not_equal(Self, Self) -> Bool
+pub fn X64Address::to_repr(Self) -> @debug.Repr
 
 pub(all) enum X64Condition {
   Eq
@@ -160,6 +208,9 @@ pub(all) enum X64Condition {
   Hi
   Hs
 } derive(Eq, @debug.Debug)
+pub fn X64Condition::equal(Self, Self) -> Bool
+pub fn X64Condition::not_equal(Self, Self) -> Bool
+pub fn X64Condition::to_repr(Self) -> @debug.Repr
 
 pub(all) enum X64Conversion {
   WrapI64ToI32
@@ -172,6 +223,9 @@ pub(all) enum X64Conversion {
   FloatToInt(@machv.FloatType, @machv.IntegerType, @machv.Signedness)
   FloatToIntSaturating(@machv.FloatType, @machv.IntegerType, @machv.Signedness)
 } derive(Eq, @debug.Debug)
+pub fn X64Conversion::equal(Self, Self) -> Bool
+pub fn X64Conversion::not_equal(Self, Self) -> Bool
+pub fn X64Conversion::to_repr(Self) -> @debug.Repr
 
 pub(all) enum X64FloatBinary {
   Add
@@ -182,6 +236,9 @@ pub(all) enum X64FloatBinary {
   Max
   CopySign
 } derive(Eq, @debug.Debug)
+pub fn X64FloatBinary::equal(Self, Self) -> Bool
+pub fn X64FloatBinary::not_equal(Self, Self) -> Bool
+pub fn X64FloatBinary::to_repr(Self) -> @debug.Repr
 
 pub(all) enum X64FloatCondition {
   Equal
@@ -193,6 +250,9 @@ pub(all) enum X64FloatCondition {
   Ordered
   Unordered
 } derive(Eq, @debug.Debug)
+pub fn X64FloatCondition::equal(Self, Self) -> Bool
+pub fn X64FloatCondition::not_equal(Self, Self) -> Bool
+pub fn X64FloatCondition::to_repr(Self) -> @debug.Repr
 
 pub(all) enum X64FloatTernary {
   Fmadd
@@ -200,6 +260,9 @@ pub(all) enum X64FloatTernary {
   Fnmadd
   Fnmsub
 } derive(Eq, @debug.Debug)
+pub fn X64FloatTernary::equal(Self, Self) -> Bool
+pub fn X64FloatTernary::not_equal(Self, Self) -> Bool
+pub fn X64FloatTernary::to_repr(Self) -> @debug.Repr
 
 pub(all) enum X64FloatTrapCondition {
   Unordered
@@ -207,6 +270,9 @@ pub(all) enum X64FloatTrapCondition {
   LessOrEqual
   GreaterOrEqual
 } derive(Eq, @debug.Debug)
+pub fn X64FloatTrapCondition::equal(Self, Self) -> Bool
+pub fn X64FloatTrapCondition::not_equal(Self, Self) -> Bool
+pub fn X64FloatTrapCondition::to_repr(Self) -> @debug.Repr
 
 pub(all) enum X64FloatUnary {
   Negate
@@ -217,6 +283,9 @@ pub(all) enum X64FloatUnary {
   Truncate
   Nearest
 } derive(Eq, @debug.Debug)
+pub fn X64FloatUnary::equal(Self, Self) -> Bool
+pub fn X64FloatUnary::not_equal(Self, Self) -> Bool
+pub fn X64FloatUnary::to_repr(Self) -> @debug.Repr
 
 pub struct X64Frame {
   // private fields
@@ -313,6 +382,9 @@ pub(all) enum X64Inst {
   Trap(@machv.TrapReason)
   Return
 } derive(Eq, @debug.Debug)
+pub fn X64Inst::equal(Self, Self) -> Bool
+pub fn X64Inst::not_equal(Self, Self) -> Bool
+pub fn X64Inst::to_repr(Self) -> @debug.Repr
 
 pub(all) enum X64IntBinary {
   Add
@@ -328,6 +400,9 @@ pub(all) enum X64IntBinary {
   Sdiv
   Udiv
 } derive(Eq, @debug.Debug)
+pub fn X64IntBinary::equal(Self, Self) -> Bool
+pub fn X64IntBinary::not_equal(Self, Self) -> Bool
+pub fn X64IntBinary::to_repr(Self) -> @debug.Repr
 
 pub(all) enum X64IntUnary {
   Mvn
@@ -335,12 +410,16 @@ pub(all) enum X64IntUnary {
   Rbit
   Neg
 } derive(Eq, @debug.Debug)
+pub fn X64IntUnary::equal(Self, Self) -> Bool
+pub fn X64IntUnary::not_equal(Self, Self) -> Bool
+pub fn X64IntUnary::to_repr(Self) -> @debug.Repr
 
 pub struct X64LinkPlan {
   // private fields
 } derive(@debug.Debug)
 pub fn X64LinkPlan::code(Self) -> Array[Byte]
 pub fn X64LinkPlan::link(Self, Int64, (@code_object.RelocationTarget) -> Int64?) -> Array[Byte] raise X64LinkError
+pub fn X64LinkPlan::to_repr(Self) -> @debug.Repr
 pub fn X64LinkPlan::veneer_offsets(Self) -> Array[Int]
 
 pub struct X64StackObject {
@@ -350,7 +429,10 @@ pub struct X64StackObject {
   area_size : Int
   area_alignment : Int
 } derive(Eq, @debug.Debug)
+pub fn X64StackObject::equal(Self, Self) -> Bool
 pub fn X64StackObject::new(Int, Int, Int, Int, Int) -> Self
+pub fn X64StackObject::not_equal(Self, Self) -> Bool
+pub fn X64StackObject::to_repr(Self) -> @debug.Repr
 
 pub(all) enum X64VectorConversion {
   ExtendLow(@machv.VectorLane, @machv.Signedness)
@@ -361,6 +443,9 @@ pub(all) enum X64VectorConversion {
   PromoteLowF32x4
   DemoteZeroF64x2
 } derive(Eq, @debug.Debug)
+pub fn X64VectorConversion::equal(Self, Self) -> Bool
+pub fn X64VectorConversion::not_equal(Self, Self) -> Bool
+pub fn X64VectorConversion::to_repr(Self) -> @debug.Repr
 
 pub(all) enum X64VectorIntBinary {
   Add
@@ -375,6 +460,9 @@ pub(all) enum X64VectorIntBinary {
   Dot16To32Signed
   Q15MultiplyRoundedSaturating
 } derive(Eq, @debug.Debug)
+pub fn X64VectorIntBinary::equal(Self, Self) -> Bool
+pub fn X64VectorIntBinary::not_equal(Self, Self) -> Bool
+pub fn X64VectorIntBinary::to_repr(Self) -> @debug.Repr
 
 pub(all) enum X64VectorIntUnary {
   Absolute
@@ -382,12 +470,18 @@ pub(all) enum X64VectorIntUnary {
   PopulationCount
   ExtendAddPairwise(@machv.Signedness)
 } derive(Eq, @debug.Debug)
+pub fn X64VectorIntUnary::equal(Self, Self) -> Bool
+pub fn X64VectorIntUnary::not_equal(Self, Self) -> Bool
+pub fn X64VectorIntUnary::to_repr(Self) -> @debug.Repr
 
 pub(all) enum X64VectorPredicate {
   AnyTrue
   AllTrue(@machv.VectorLane)
   BitMask(@machv.VectorLane)
 } derive(Eq, @debug.Debug)
+pub fn X64VectorPredicate::equal(Self, Self) -> Bool
+pub fn X64VectorPredicate::not_equal(Self, Self) -> Bool
+pub fn X64VectorPredicate::to_repr(Self) -> @debug.Repr
 
 // Type aliases
 

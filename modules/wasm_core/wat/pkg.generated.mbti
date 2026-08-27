@@ -23,6 +23,8 @@ pub(all) suberror WatPrintError {
   InvalidShuffleLaneCount(Int)
   InvalidAtomicSubopcode(Int)
 }
+pub fn WatPrintError::output(Self, &Logger) -> Unit
+pub fn WatPrintError::to_string(Self) -> String
 pub impl Show for WatPrintError
 
 // Types and methods

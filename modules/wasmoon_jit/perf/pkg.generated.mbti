@@ -67,6 +67,7 @@ pub struct FunctionMetrics {
   ir_passes : Array[IRPassMetric]
   regalloc_phases : Array[RegallocPhaseMetric]
 } derive(ToJson)
+pub fn FunctionMetrics::to_json(Self) -> Json
 
 pub struct IRPassMetric {
   name : String
@@ -80,6 +81,7 @@ pub struct IRPassMetric {
   work_done : Int?
   budget_exhausted : Bool?
 } derive(ToJson)
+pub fn IRPassMetric::to_json(Self) -> Json
 
 #alias(PerfTick)
 type Instant
@@ -90,11 +92,13 @@ pub struct ModuleMetricsReport {
   mut module_compile_us : Int64
   functions : Array[FunctionMetrics]
 } derive(ToJson)
+pub fn ModuleMetricsReport::to_json(Self) -> Json
 
 pub struct RegallocPhaseMetric {
   name : String
   duration_us : Int64
 } derive(ToJson)
+pub fn RegallocPhaseMetric::to_json(Self) -> Json
 
 // Type aliases
 

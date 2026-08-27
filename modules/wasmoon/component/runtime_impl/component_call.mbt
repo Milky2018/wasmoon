@@ -145,6 +145,17 @@ fn ComponentInvocation::finish_cancel(
 }
 
 ///|
+fn ComponentInvocation::finish_cancel_during_unwind(
+  self : ComponentInvocation,
+) -> Unit {
+  try self.finish_cancel() catch {
+    _ => ()
+  } noraise {
+    _ => ()
+  }
+}
+
+///|
 fn ComponentInvocation::drive_once(
   self : ComponentInvocation,
 ) -> ComponentInvocationStep raise ComponentRuntimeError {
@@ -162,14 +173,23 @@ fn ComponentInvocation::drive_once(
     self.driving[0] = false
   }
   push_task(self.async_state, self.task_id, self.can_block)
-  let step = step_task_once(
-    self.task,
-    self.store,
-    self.caller_table,
-    self.async_state,
-  ) catch {
-    error => {
-      pop_task(self.async_state)
+  let step_cleanup_armed = [true]
+  errdefer (if step_cleanup_armed[0] {
+    pop_task(self.async_state)
+    self.finish_cancel_during_unwind()
+  })
+  let step_result : Result[TaskStep, ComponentRuntimeError] = try
+    step_task_once(self.task, self.store, self.caller_table, self.async_state)
+  catch {
+    error => Err(error)
+  } noraise {
+    step => Ok(step)
+  }
+  step_cleanup_armed[0] = false
+  pop_task(self.async_state)
+  let step = match step_result {
+    Ok(step) => step
+    Err(error) => {
       if self.cancel_requested[0] {
         self.finish_cancel()
         raise Cancelled
@@ -178,22 +198,42 @@ fn ComponentInvocation::drive_once(
       raise error
     }
   }
-  pop_task(self.async_state)
   if self.cancel_requested[0] {
     self.finish_cancel()
     raise Cancelled
   }
   let result = match step {
-    Done =>
-      DriveReady(self.finish()) catch {
-        error => {
+    Done => {
+      let finish_cleanup_armed = [true]
+      errdefer (if finish_cleanup_armed[0] {
+        self.finish_cancel_during_unwind()
+      })
+      let finish_result : Result[Array[ComponentValue], ComponentRuntimeError] = try
+        self.finish()
+      catch {
+        error => Err(error)
+      } noraise {
+        values => Ok(values)
+      }
+      finish_cleanup_armed[0] = false
+      match finish_result {
+        Ok(values) => DriveReady(values)
+        Err(error) => {
           self.fail(error)
           raise error
         }
       }
+    }
     Progressed => DriveProgressed
-    Blocked =>
-      try {
+    Blocked => {
+      let progress_cleanup_armed = [true]
+      errdefer (if progress_cleanup_armed[0] {
+        self.finish_cancel_during_unwind()
+      })
+      let progress_result : Result[
+        ComponentInvocationStep,
+        ComponentRuntimeError,
+      ] = try {
         let subtask_progressed = progress_one_subtask_nonblocking(
           self.async_state,
           self.store,
@@ -211,7 +251,14 @@ fn ComponentInvocation::drive_once(
           }
         }
       } catch {
-        error => {
+        error => Err(error)
+      } noraise {
+        result => Ok(result)
+      }
+      progress_cleanup_armed[0] = false
+      match progress_result {
+        Ok(result) => result
+        Err(error) => {
           if self.cancel_requested[0] {
             self.finish_cancel()
             raise Cancelled
@@ -220,6 +267,7 @@ fn ComponentInvocation::drive_once(
           raise error
         }
       }
+    }
   }
   if self.cancel_requested[0] {
     self.finish_cancel()
@@ -246,8 +294,12 @@ pub fn ComponentInvocation::wait(
     match self.drive_once() {
       DriveReady(values) => return values
       DriveProgressed => continue
-      DriveBlocked =>
-        try {
+      DriveBlocked => {
+        let wait_cleanup_armed = [true]
+        errdefer (if wait_cleanup_armed[0] {
+          self.finish_cancel_during_unwind()
+        })
+        let wait_result : Result[Unit, ComponentRuntimeError] = try {
           if !wait_for_host_event(self.async_state, self.store) {
             let error = CanonCallError(
               "wasm trap: deadlock detected: event loop cannot make further progress",
@@ -255,11 +307,19 @@ pub fn ComponentInvocation::wait(
             raise error
           }
         } catch {
-          error => {
+          error => Err(error)
+        } noraise {
+          _ => Ok(())
+        }
+        wait_cleanup_armed[0] = false
+        match wait_result {
+          Ok(_) => ()
+          Err(error) => {
             self.fail(error)
             raise error
           }
         }
+      }
     }
   }
   raise CanonCallError("unreachable")

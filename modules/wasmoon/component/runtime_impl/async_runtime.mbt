@@ -29,7 +29,8 @@ fn transfer_args_if_needed(
     }
   }
   let out : Array[ComponentValue] = []
-  try {
+  {
+    errdefer release_lends()
     for i, param in func_type.params {
       let v = if i < args.length() {
         args[i]
@@ -45,11 +46,6 @@ fn transfer_args_if_needed(
         to_component_id,
       )
       out.push(transferred)
-    }
-  } catch {
-    error => {
-      release_lends()
-      raise error
     }
   }
   (out, lends)
@@ -183,7 +179,12 @@ fn await_component_func(
   init_task_meta(async_state, task_id, callee_instance_id, caller_task_id)
   push_task(async_state, task_id, can_block)
   take_task_result(async_state, task_id) |> ignore
-  let out = try {
+  let out = {
+    errdefer {
+      pop_task(async_state)
+      drop_task_thread(async_state, task_id)
+      remove_task_meta(async_state, task_id)
+    }
     match func {
       Host(_ft, _types, host) => host(args, caller_table)
       HostAsync(_ft, _types, start) => {
@@ -362,21 +363,21 @@ fn await_component_func(
                 progress_one_subtask(async_state, store) |> ignore
                 async_state.in_async_callback[0] = true
                 preset_canon_debug_message("async.callback.yield(ev=NONE)")
-                let r = drive_core_to_completion(
-                  async_state,
-                  store,
-                  call_core_func_guarded_outcome(
-                    store,
-                    may_enter,
-                    cb,
-                    [I32(0), I32(0), I32(0)],
-                    CallbackStep,
-                  ),
-                ) catch {
-                  e => {
+                let r = {
+                  errdefer {
                     async_state.in_async_callback[0] = false
-                    raise e
                   }
+                  drive_core_to_completion(
+                    async_state,
+                    store,
+                    call_core_func_guarded_outcome(
+                      store,
+                      may_enter,
+                      cb,
+                      [I32(0), I32(0), I32(0)],
+                      CallbackStep,
+                    ),
+                  )
                 }
                 async_state.in_async_callback[0] = false
                 code = match r {
@@ -417,21 +418,21 @@ fn await_component_func(
                 preset_canon_debug_message(
                   "async.callback.wait(ev code=\{ev.code} index=\{ev.index} payload=\{ev.payload})\{subtask_mem_dbg(ev)}",
                 )
-                let r = drive_core_to_completion(
-                  async_state,
-                  store,
-                  call_core_func_guarded_outcome(
-                    store,
-                    may_enter,
-                    cb,
-                    [I32(ev.code), I32(ev.index), I32(ev.payload)],
-                    CallbackStep,
-                  ),
-                ) catch {
-                  e => {
+                let r = {
+                  errdefer {
                     async_state.in_async_callback[0] = false
-                    raise e
                   }
+                  drive_core_to_completion(
+                    async_state,
+                    store,
+                    call_core_func_guarded_outcome(
+                      store,
+                      may_enter,
+                      cb,
+                      [I32(ev.code), I32(ev.index), I32(ev.payload)],
+                      CallbackStep,
+                    ),
+                  )
                 }
                 async_state.in_async_callback[0] = false
                 code = match r {
@@ -457,13 +458,6 @@ fn await_component_func(
           }
         }
       }
-    }
-  } catch {
-    e => {
-      pop_task(async_state)
-      drop_task_thread(async_state, task_id)
-      remove_task_meta(async_state, task_id)
-      raise e
     }
   }
   pop_task(async_state)
@@ -1364,15 +1358,15 @@ fn call_component_func(
     // Preserve the host-provided `task_can_block` flag: exported async funcs must be allowed to block.
     let can_block = async_state.task_can_block[0]
     push_task(async_state, task_id, can_block)
-    let out = call_component_func_in_task(
-      func, args, store, resource_table, async_state,
-    ) catch {
-      e => {
+    let out = {
+      errdefer {
         pop_task(async_state)
         drop_task_thread(async_state, task_id)
         remove_task_meta(async_state, task_id)
-        raise e
       }
+      call_component_func_in_task(
+        func, args, store, resource_table, async_state,
+      )
     }
     pop_task(async_state)
     drop_task_thread(async_state, task_id)
@@ -1447,7 +1441,11 @@ fn call_component_func_in_task(
           init_task_meta(async_state, task_id, callee_table.id, caller_task_id)
           push_task(async_state, task_id, false)
           take_task_result(async_state, task_id) |> ignore
-          let out = try {
+          let out = {
+            errdefer {
+              pop_task(async_state)
+              remove_task_meta(async_state, task_id)
+            }
             let initial_results = drive_core_to_completion(
               async_state,
               store,
@@ -1472,21 +1470,21 @@ fn call_component_func_in_task(
                 // YIELD: allowed even for synchronous tasks (must not block).
                 progress_one_subtask(async_state, store) |> ignore
                 async_state.in_async_callback[0] = true
-                let r = drive_core_to_completion(
-                  async_state,
-                  store,
-                  call_core_func_guarded_outcome(
-                    store,
-                    entry,
-                    cb,
-                    [I32(0), I32(0), I32(0)],
-                    CallbackStep,
-                  ),
-                ) catch {
-                  e => {
+                let r = {
+                  errdefer {
                     async_state.in_async_callback[0] = false
-                    raise e
                   }
+                  drive_core_to_completion(
+                    async_state,
+                    store,
+                    call_core_func_guarded_outcome(
+                      store,
+                      entry,
+                      cb,
+                      [I32(0), I32(0), I32(0)],
+                      CallbackStep,
+                    ),
+                  )
                 }
                 async_state.in_async_callback[0] = false
                 code = match r {
@@ -1523,12 +1521,6 @@ fn call_component_func_in_task(
               callee_table.id,
               resource_table.id,
             )
-          } catch {
-            e => {
-              pop_task(async_state)
-              remove_task_meta(async_state, task_id)
-              raise e
-            }
           }
           pop_task(async_state)
           remove_task_meta(async_state, task_id)
@@ -1556,7 +1548,10 @@ fn call_component_func_in_task(
       // code is never entered when a continuation may be required.
       let previous_can_block = async_state.task_can_block[0]
       async_state.task_can_block[0] = false
-      let core_results = try {
+      let core_results = {
+        errdefer {
+          async_state.task_can_block[0] = previous_can_block
+        }
         if core_func.may_suspend {
           drive_core_to_completion(
             async_state,
@@ -1571,11 +1566,6 @@ fn call_component_func_in_task(
           )
         } else {
           call_core_func_guarded(store, entry, core_func, core_args)
-        }
-      } catch {
-        error => {
-          async_state.task_can_block[0] = previous_can_block
-          raise error
         }
       }
       async_state.task_can_block[0] = previous_can_block
@@ -1614,11 +1604,11 @@ fn call_component_func_in_task(
         Some(pr) => {
           let prev = canon_may_leave[0]
           canon_may_leave[0] = false
-          (call_core_func_guarded(store, entry, pr, core_results) catch {
-            e => {
+          ({
+            errdefer {
               canon_may_leave[0] = prev
-              raise e
             }
+            call_core_func_guarded(store, entry, pr, core_results)
           })
           |> ignore
           canon_may_leave[0] = prev

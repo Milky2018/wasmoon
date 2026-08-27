@@ -68,6 +68,11 @@ pub(all) suberror ComponentRuntimeError {
   HostExit(Int)
   JsonValueError(String)
 } derive(Eq, @debug.Debug)
+pub fn ComponentRuntimeError::equal(Self, Self) -> Bool
+pub fn ComponentRuntimeError::not_equal(Self, Self) -> Bool
+pub fn ComponentRuntimeError::output(Self, &Logger) -> Unit
+pub fn ComponentRuntimeError::to_repr(Self) -> @debug.Repr
+pub fn ComponentRuntimeError::to_string(Self) -> String
 pub impl Show for ComponentRuntimeError
 
 // Types and methods
@@ -81,12 +86,20 @@ pub(all) enum ComponentCallPoll {
   Pending
   Ready(Array[ComponentValue])
 } derive(Eq, @debug.Debug)
+pub fn ComponentCallPoll::equal(Self, Self) -> Bool
+pub fn ComponentCallPoll::not_equal(Self, Self) -> Bool
+pub fn ComponentCallPoll::to_repr(Self) -> @debug.Repr
 
 pub struct ComponentCase {
   name : String
   ty : ComponentValueType?
 } derive(Eq, @debug.Debug)
 pub fn ComponentCase::ComponentCase(String, ComponentValueType?) -> Self
+pub fn ComponentCase::equal(Self, Self) -> Bool
+pub fn ComponentCase::not_equal(Self, Self) -> Bool
+pub fn ComponentCase::output(Self, &Logger) -> Unit
+pub fn ComponentCase::to_repr(Self) -> @debug.Repr
+pub fn ComponentCase::to_string(Self) -> String
 pub impl Show for ComponentCase
 
 type ComponentEngine
@@ -96,6 +109,11 @@ pub struct ComponentField {
   ty : ComponentValueType
 } derive(Eq, @debug.Debug)
 pub fn ComponentField::ComponentField(String, ComponentValueType) -> Self
+pub fn ComponentField::equal(Self, Self) -> Bool
+pub fn ComponentField::not_equal(Self, Self) -> Bool
+pub fn ComponentField::output(Self, &Logger) -> Unit
+pub fn ComponentField::to_repr(Self) -> @debug.Repr
+pub fn ComponentField::to_string(Self) -> String
 pub impl Show for ComponentField
 
 pub struct ComponentFuncType {
@@ -104,6 +122,11 @@ pub struct ComponentFuncType {
   result : ComponentValueType?
 } derive(Eq, @debug.Debug)
 pub fn ComponentFuncType::ComponentFuncType(Array[ComponentParam], ComponentValueType?, is_async? : Bool) -> Self
+pub fn ComponentFuncType::equal(Self, Self) -> Bool
+pub fn ComponentFuncType::not_equal(Self, Self) -> Bool
+pub fn ComponentFuncType::output(Self, &Logger) -> Unit
+pub fn ComponentFuncType::to_repr(Self) -> @debug.Repr
+pub fn ComponentFuncType::to_string(Self) -> String
 pub impl Show for ComponentFuncType
 
 type ComponentFunction
@@ -122,14 +145,25 @@ pub struct ComponentParam {
   ty : ComponentValueType
 } derive(Eq, @debug.Debug)
 pub fn ComponentParam::ComponentParam(String, ComponentValueType) -> Self
+pub fn ComponentParam::equal(Self, Self) -> Bool
+pub fn ComponentParam::not_equal(Self, Self) -> Bool
+pub fn ComponentParam::output(Self, &Logger) -> Unit
+pub fn ComponentParam::to_repr(Self) -> @debug.Repr
+pub fn ComponentParam::to_string(Self) -> String
 pub impl Show for ComponentParam
 
 type ComponentResource derive(Eq, @debug.Debug)
+pub fn ComponentResource::equal(Self, Self) -> Bool
+pub fn ComponentResource::not_equal(Self, Self) -> Bool
+pub fn ComponentResource::to_repr(Self) -> @debug.Repr
 pub fn ComponentResource::type_(Self) -> ComponentResourceType
 
 type ComponentResourceType derive(Eq, @debug.Debug)
+pub fn ComponentResourceType::equal(Self, Self) -> Bool
 pub fn ComponentResourceType::name(Self) -> String
 pub fn ComponentResourceType::named(String) -> Self
+pub fn ComponentResourceType::not_equal(Self, Self) -> Bool
+pub fn ComponentResourceType::to_repr(Self) -> @debug.Repr
 
 type ComponentRuntime
 pub fn ComponentRuntime::ComponentRuntime(engine? : ComponentEngine, wit_names? : Bool) -> Self
@@ -165,6 +199,11 @@ pub(all) enum ComponentValue {
   ResultErr(ComponentValue?)
   Resource(ComponentResource)
 } derive(Eq, @debug.Debug)
+pub fn ComponentValue::equal(Self, Self) -> Bool
+pub fn ComponentValue::not_equal(Self, Self) -> Bool
+pub fn ComponentValue::output(Self, &Logger) -> Unit
+pub fn ComponentValue::to_repr(Self) -> @debug.Repr
+pub fn ComponentValue::to_string(Self) -> String
 pub impl Show for ComponentValue
 
 pub(all) enum ComponentValueType {
@@ -197,6 +236,11 @@ pub(all) enum ComponentValueType {
   Stream(ComponentValueType?)
   Future(ComponentValueType?)
 } derive(Eq, @debug.Debug)
+pub fn ComponentValueType::equal(Self, Self) -> Bool
+pub fn ComponentValueType::not_equal(Self, Self) -> Bool
+pub fn ComponentValueType::output(Self, &Logger) -> Unit
+pub fn ComponentValueType::to_repr(Self) -> @debug.Repr
+pub fn ComponentValueType::to_string(Self) -> String
 pub impl Show for ComponentValueType
 
 pub(all) enum NativeComponentExecutionEvent {
@@ -204,6 +248,9 @@ pub(all) enum NativeComponentExecutionEvent {
   Resumable
   ExplicitInterpreter
 } derive(Eq, @debug.Debug)
+pub fn NativeComponentExecutionEvent::equal(Self, Self) -> Bool
+pub fn NativeComponentExecutionEvent::not_equal(Self, Self) -> Bool
+pub fn NativeComponentExecutionEvent::to_repr(Self) -> @debug.Repr
 
 // Type aliases
 pub using @model {type Alias}

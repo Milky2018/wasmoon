@@ -19,6 +19,9 @@ pub suberror VCodeAllocationError {
   AllocationConstructionRejected
   InvalidAllocation(cause~ : @vcode.AllocationVerifyError)
 } derive(@debug.Debug)
+pub fn VCodeAllocationError::output(Self, &Logger) -> Unit
+pub fn VCodeAllocationError::to_repr(Self) -> @debug.Repr
+pub fn VCodeAllocationError::to_string(Self) -> String
 pub impl Show for VCodeAllocationError
 
 // Types and methods

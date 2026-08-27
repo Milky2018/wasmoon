@@ -89,7 +89,7 @@ fn instantiate_canon_future_read(
   store : @runtime.Store,
 ) -> Unit raise ComponentRuntimeError {
   let core_type : @types.FuncType = { params: [I32, I32], results: [I32], }
-  let resources = resolve_canon_resources(_opts, state) catch { e => raise e }
+  let resources = resolve_canon_resources(_opts, state)
   let async_state = state.async_state
   let caller_component_id = state.resource_table.id
   let is_async = canon_opt_is_async(_opts)
@@ -486,7 +486,7 @@ fn instantiate_canon_future_write(
   store : @runtime.Store,
 ) -> Unit raise ComponentRuntimeError {
   let core_type : @types.FuncType = { params: [I32, I32], results: [I32], }
-  let resources = resolve_canon_resources(_opts, state) catch { e => raise e }
+  let resources = resolve_canon_resources(_opts, state)
   let async_state = state.async_state
   let caller_component_id = state.resource_table.id
   let is_async = canon_opt_is_async(_opts)

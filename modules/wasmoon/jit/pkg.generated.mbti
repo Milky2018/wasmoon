@@ -18,6 +18,9 @@ pub suberror JITModuleLoadError {
   ArtifactInstallationFailed(cause~ : @wasmoon_jit.JitInstallError)
   FunctionMetadataRegistrationFailed(func_idx~ : Int, message~ : String)
 } derive(@debug.Debug)
+pub fn JITModuleLoadError::output(Self, &Logger) -> Unit
+pub fn JITModuleLoadError::to_repr(Self) -> @debug.Repr
+pub fn JITModuleLoadError::to_string(Self) -> String
 pub impl Show for JITModuleLoadError
 
 pub suberror JITTrap {
@@ -26,6 +29,9 @@ pub suberror JITTrap {
   JITExit(Int)
   JITCancelled
 } derive(@debug.Debug)
+pub fn JITTrap::output(Self, &Logger) -> Unit
+pub fn JITTrap::to_repr(Self) -> @debug.Repr
+pub fn JITTrap::to_string(Self) -> String
 pub impl Show for JITTrap
 
 pub suberror PolycallError {
@@ -36,6 +42,7 @@ pub suberror PolycallError {
 
 // Types and methods
 type AddressRange derive(@debug.Debug)
+pub fn AddressRange::to_repr(Self) -> @debug.Repr
 
 type JITCallContinuation
 pub fn JITCallContinuation::cancel(Self) -> Unit raise JITTrap
@@ -47,6 +54,7 @@ pub(all) enum JITCallResult {
   Failed(JITTrap)
   UnsupportedCancellation
 } derive(@debug.Debug)
+pub fn JITCallResult::to_repr(Self) -> @debug.Repr
 
 pub(all) enum JITContinuationOutcome {
   JITReturned(Array[Int64])
@@ -113,6 +121,8 @@ pub fn JITModule::throw_exception_tag(Self, Int) -> Unit
 pub fn JITModule::throw_exception_values(Self, Int, Array[Int64]) -> Unit
 
 pub(all) struct Single[A](A)
+pub fn[A : @types.FromInt64] Single::from_int64_array(Array[Int64]) -> Self[A]
+pub fn[A : @types.ToInt64] Single::to_int64_array(Self[A]) -> Array[Int64]
 pub impl[A : @types.ToInt64] DynamicArgs for Single[A]
 pub impl[A : @types.FromInt64] DynamicReturn for Single[A]
 

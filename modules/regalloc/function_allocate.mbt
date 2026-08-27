@@ -220,11 +220,9 @@ pub fn[F : FunctionView] allocate_function(
   // opened, so there is no sequence to terminate, and an observer that has
   // heard nothing is owed nothing.
   verify_operand_preferences(function, environment)
-  let plan = run_allocation_phases(function, environment, config) catch {
-    error => {
-      config.enter_phase(None)
-      raise error
-    }
+  let plan = {
+    errdefer config.enter_phase(None)
+    run_allocation_phases(function, environment, config)
   }
   config.enter_phase(None)
   plan

@@ -22,6 +22,18 @@ pub fn ty_umax(Int) -> Int64
 
 // Types and methods
 pub(all) struct EClassId(Int) derive(Compare, Eq, Hash, @debug.Debug)
+pub fn EClassId::compare(Self, Self) -> Int
+pub fn EClassId::equal(Self, Self) -> Bool
+pub fn EClassId::hash(Self) -> Int
+pub fn EClassId::hash_combine(Self, Hasher) -> Unit
+pub fn EClassId::not_equal(Self, Self) -> Bool
+pub fn EClassId::op_ge(Self, Self) -> Bool
+pub fn EClassId::op_gt(Self, Self) -> Bool
+pub fn EClassId::op_le(Self, Self) -> Bool
+pub fn EClassId::op_lt(Self, Self) -> Bool
+pub fn EClassId::output(Self, &Logger) -> Unit
+pub fn EClassId::to_repr(Self) -> @debug.Repr
+pub fn EClassId::to_string(Self) -> String
 pub impl Show for EClassId
 
 type EGraph
@@ -114,6 +126,16 @@ pub(all) struct ENode {
   op : EOpcode
   children : Array[EClassId]
 } derive(Compare, Eq, Hash, @debug.Debug)
+pub fn ENode::compare(Self, Self) -> Int
+pub fn ENode::equal(Self, Self) -> Bool
+pub fn ENode::hash(Self) -> Int
+pub fn ENode::hash_combine(Self, Hasher) -> Unit
+pub fn ENode::not_equal(Self, Self) -> Bool
+pub fn ENode::op_ge(Self, Self) -> Bool
+pub fn ENode::op_gt(Self, Self) -> Bool
+pub fn ENode::op_le(Self, Self) -> Bool
+pub fn ENode::op_lt(Self, Self) -> Bool
+pub fn ENode::to_repr(Self) -> @debug.Repr
 
 pub(all) enum EOpcode {
   Const(Int64)
@@ -180,10 +202,27 @@ pub(all) enum EOpcode {
   Vconst(Bytes)
   Var(Int)
 } derive(Compare, Eq, Hash, @debug.Debug)
+pub fn EOpcode::compare(Self, Self) -> Int
+pub fn EOpcode::equal(Self, Self) -> Bool
+pub fn EOpcode::hash(Self) -> Int
+pub fn EOpcode::hash_combine(Self, Hasher) -> Unit
+pub fn EOpcode::not_equal(Self, Self) -> Bool
+pub fn EOpcode::op_ge(Self, Self) -> Bool
+pub fn EOpcode::op_gt(Self, Self) -> Bool
+pub fn EOpcode::op_le(Self, Self) -> Bool
+pub fn EOpcode::op_lt(Self, Self) -> Bool
+pub fn EOpcode::output(Self, &Logger) -> Unit
 pub fn EOpcode::tag(Self) -> EOpcodeTag
+pub fn EOpcode::to_repr(Self) -> @debug.Repr
+pub fn EOpcode::to_string(Self) -> String
 pub impl Show for EOpcode
 
 type EOpcodeTag derive(Eq, Hash, @debug.Debug)
+pub fn EOpcodeTag::equal(Self, Self) -> Bool
+pub fn EOpcodeTag::hash(Self) -> Int
+pub fn EOpcodeTag::hash_combine(Self, Hasher) -> Unit
+pub fn EOpcodeTag::not_equal(Self, Self) -> Bool
+pub fn EOpcodeTag::to_repr(Self) -> @debug.Repr
 
 type IndexedRuleSet
 
@@ -195,6 +234,7 @@ pub fn SaturationLimits::SaturationLimits(Int, Int) -> Self
 pub fn SaturationLimits::cranelift_default() -> Self
 pub fn SaturationLimits::eclass_enode_limit(Self) -> Int
 pub fn SaturationLimits::matches_limit(Self) -> Int
+pub fn SaturationLimits::to_repr(Self) -> @debug.Repr
 
 // Type aliases
 

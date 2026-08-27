@@ -19,7 +19,7 @@ pub(all) enum CompilationMode {
 }
 
 ///|
-fn CompilationMode::to_string(self : CompilationMode) -> String {
+pub fn CompilationMode::to_string(self : CompilationMode) -> String {
   match self {
     Interpret => "interpret"
     Baseline => "baseline"
@@ -237,7 +237,7 @@ pub(all) enum CompilationDecision {
 }
 
 ///|
-fn CompilationDecision::to_string(self : CompilationDecision) -> String {
+pub fn CompilationDecision::to_string(self : CompilationDecision) -> String {
   match self {
     Interpret => "interpret"
     CompileAndExecute(mode) => "compile_and_execute(\{mode})"
@@ -369,7 +369,7 @@ pub fn CompilationStrategy::stats(
 }
 
 ///|
-fn CompilationStrategy::to_string(self : CompilationStrategy) -> String {
+pub fn CompilationStrategy::to_string(self : CompilationStrategy) -> String {
   let (total, interp, compiled_calls, compilations, queue, hot) = self.stats()
   "CompilationStrategy(calls=\{total}, interp=\{interp}, jit=\{compiled_calls}, compilations=\{compilations}, queue=\{queue}, hot=\{hot})"
 }

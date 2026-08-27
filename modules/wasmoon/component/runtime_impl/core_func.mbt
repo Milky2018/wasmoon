@@ -186,11 +186,9 @@ fn call_core_func_guarded(
   style? : CoreCallStyle = RunToCompletion,
 ) -> Array[@types.Value] raise ComponentRuntimeError {
   entry.enter()
-  let out = call_core_func(store, core_func, args, style~) catch {
-    e => {
-      entry.poison()
-      raise e
-    }
+  let out = {
+    errdefer entry.poison()
+    call_core_func(store, core_func, args, style~)
   }
   entry.leave()
   out
@@ -216,11 +214,9 @@ fn guard_core_outcome(
         CoreContinuation(
           fn() raise ComponentRuntimeError {
             entry.enter()
-            let resumed = continuation.continue_execution() catch {
-              e => {
-                entry.poison()
-                raise e
-              }
+            let resumed = {
+              errdefer entry.poison()
+              continuation.continue_execution()
             }
             guard_core_outcome(resumed, entry)
           },
@@ -243,11 +239,9 @@ fn call_core_func_guarded_outcome(
   style : CoreCallStyle,
 ) -> CoreExecutionOutcome raise ComponentRuntimeError {
   entry.enter()
-  let outcome = call_core_func_outcome(store, core_func, args, style) catch {
-    e => {
-      entry.poison()
-      raise e
-    }
+  let outcome = {
+    errdefer entry.poison()
+    call_core_func_outcome(store, core_func, args, style)
   }
   guard_core_outcome(outcome, entry)
 }

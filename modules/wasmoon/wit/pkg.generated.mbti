@@ -42,11 +42,18 @@ pub(all) suberror WitBindingError {
   MissingFunction(String)
   RuntimeBindingFailed(String)
 } derive(Eq, @debug.Debug)
+pub fn WitBindingError::equal(Self, Self) -> Bool
+pub fn WitBindingError::not_equal(Self, Self) -> Bool
+pub fn WitBindingError::output(Self, &Logger) -> Unit
+pub fn WitBindingError::to_repr(Self) -> @debug.Repr
+pub fn WitBindingError::to_string(Self) -> String
 pub impl Show for WitBindingError
 
 pub(all) suberror WitError {
   Error(String)
 }
+pub fn WitError::output(Self, &Logger) -> Unit
+pub fn WitError::to_string(Self) -> String
 pub impl Show for WitError
 
 // Types and methods

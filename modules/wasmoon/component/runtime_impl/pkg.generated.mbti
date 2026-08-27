@@ -68,6 +68,11 @@ pub(all) suberror ComponentRuntimeError {
   InvocationAlreadyDriving
   ReentrantInstantiation
 } derive(Eq, @debug.Debug)
+pub fn ComponentRuntimeError::equal(Self, Self) -> Bool
+pub fn ComponentRuntimeError::not_equal(Self, Self) -> Bool
+pub fn ComponentRuntimeError::output(Self, &Logger) -> Unit
+pub fn ComponentRuntimeError::to_repr(Self) -> @debug.Repr
+pub fn ComponentRuntimeError::to_string(Self) -> String
 pub impl Show for ComponentRuntimeError
 
 // Types and methods
@@ -117,14 +122,22 @@ pub(all) struct AsyncState {
   error_contexts : Map[Int64, String]
 } derive(@debug.Debug)
 pub fn AsyncState::AsyncState(StreamTable, core_engine? : CoreExecutionEngine) -> Self
+pub fn AsyncState::to_repr(Self) -> @debug.Repr
 
 type CallbackTask derive(@debug.Debug)
+pub fn CallbackTask::to_repr(Self) -> @debug.Repr
 
 type CanonResources derive(@debug.Debug)
+pub fn CanonResources::to_repr(Self) -> @debug.Repr
 
 type CanonSuspend derive(Eq, @debug.Debug)
+pub fn CanonSuspend::equal(Self, Self) -> Bool
+pub fn CanonSuspend::not_equal(Self, Self) -> Bool
+pub fn CanonSuspend::to_repr(Self) -> @debug.Repr
 
 type ComponentClosure
+pub fn ComponentClosure::output(Self, &Logger) -> Unit
+pub fn ComponentClosure::to_string(Self) -> String
 pub impl Show for ComponentClosure
 
 pub(all) enum ComponentExtern {
@@ -142,6 +155,8 @@ pub(all) enum ComponentExtern {
   CoreTag(Int)
   CoreType(Bytes)
 }
+pub fn ComponentExtern::output(Self, &Logger) -> Unit
+pub fn ComponentExtern::to_string(Self) -> String
 pub impl Show for ComponentExtern
 
 pub(all) enum ComponentFunc {
@@ -149,6 +164,9 @@ pub(all) enum ComponentFunc {
   Host(@model.FuncType, Array[@model.TypeDef?], (Array[ComponentValue], ResourceTable) -> Array[ComponentValue] raise ComponentRuntimeError)
   HostAsync(@model.FuncType, Array[@model.TypeDef?], (Array[ComponentValue], ResourceTable) -> HostFuture raise ComponentRuntimeError)
 }
+pub fn ComponentFunc::output(Self, &Logger) -> Unit
+pub fn ComponentFunc::to_repr(Self) -> @debug.Repr
+pub fn ComponentFunc::to_string(Self) -> String
 pub impl Show for ComponentFunc
 pub impl @debug.Debug for ComponentFunc
 
@@ -179,6 +197,7 @@ pub fn ComponentInstance::get_export(Self, String) -> ComponentExtern?
 pub fn ComponentInstance::start_exported_func(Self, String, Array[ComponentValue]) -> ComponentInvocation raise ComponentRuntimeError
 
 type ComponentInstanceEntryState derive(@debug.Debug)
+pub fn ComponentInstanceEntryState::to_repr(Self) -> @debug.Repr
 
 type ComponentInvocation
 pub fn ComponentInvocation::cancel(Self) -> Unit raise ComponentRuntimeError
@@ -190,6 +209,7 @@ pub(all) enum ComponentInvocationPoll {
   InvocationPending
   InvocationReady(Array[ComponentValue])
 } derive(@debug.Debug)
+pub fn ComponentInvocationPoll::to_repr(Self) -> @debug.Repr
 
 type ComponentLinker
 pub fn ComponentLinker::ComponentLinker() -> Self
@@ -230,23 +250,35 @@ pub(all) enum ComponentValue {
   Variant(Int, ComponentValue?)
   ResourceValue(Int)
 } derive(Eq, @debug.Debug)
+pub fn ComponentValue::equal(Self, Self) -> Bool
+pub fn ComponentValue::not_equal(Self, Self) -> Bool
+pub fn ComponentValue::output(Self, &Logger) -> Unit
+pub fn ComponentValue::to_repr(Self) -> @debug.Repr
+pub fn ComponentValue::to_string(Self) -> String
 pub impl Show for ComponentValue
 
 pub(all) enum CoreBackendPolicy {
   PreferNative
   InterpreterOnly
 } derive(Eq, @debug.Debug)
+pub fn CoreBackendPolicy::equal(Self, Self) -> Bool
+pub fn CoreBackendPolicy::not_equal(Self, Self) -> Bool
+pub fn CoreBackendPolicy::to_repr(Self) -> @debug.Repr
 
 pub(all) enum CoreCallStyle {
   RunToCompletion
   CallbackStep
   Stackful
 } derive(Eq, @debug.Debug)
+pub fn CoreCallStyle::equal(Self, Self) -> Bool
+pub fn CoreCallStyle::not_equal(Self, Self) -> Bool
+pub fn CoreCallStyle::to_repr(Self) -> @debug.Repr
 
 type CoreContinuation
 pub fn CoreContinuation::CoreContinuation(() -> CoreExecutionOutcome raise ComponentRuntimeError, () -> Unit) -> Self
 pub fn CoreContinuation::cancel(Self) -> Unit
 pub fn CoreContinuation::continue_execution(Self) -> CoreExecutionOutcome raise ComponentRuntimeError
+pub fn CoreContinuation::to_repr(Self) -> @debug.Repr
 pub impl @debug.Debug for CoreContinuation
 
 type CoreExecutionEngine
@@ -256,12 +288,14 @@ pub fn CoreExecutionEngine::invoke(Self, @runtime.Store, @runtime.ModuleInstance
 pub fn CoreExecutionEngine::prepare_store(Self, @runtime.Store) -> Unit
 pub fn CoreExecutionEngine::register_instance(Self, @runtime.Store, @types.Module, @runtime.ModuleInstance) -> Unit raise ComponentRuntimeError
 pub fn CoreExecutionEngine::register_rollback(Self, @runtime.RollbackRegistrar) -> Unit
+pub fn CoreExecutionEngine::to_repr(Self) -> @debug.Repr
 pub impl @debug.Debug for CoreExecutionEngine
 
 pub(all) enum CoreExecutionOutcome {
   Returned(Array[@types.Value])
   Suspended(CoreSuspension, CoreContinuation)
 } derive(@debug.Debug)
+pub fn CoreExecutionOutcome::to_repr(Self) -> @debug.Repr
 
 pub struct CoreExecutionRequest {
   style : CoreCallStyle
@@ -269,6 +303,9 @@ pub struct CoreExecutionRequest {
   suspension : CoreSuspensionPolicy
 } derive(Eq, @debug.Debug)
 pub fn CoreExecutionRequest::CoreExecutionRequest(CoreCallStyle, CoreBackendPolicy, CoreSuspensionPolicy) -> Self
+pub fn CoreExecutionRequest::equal(Self, Self) -> Bool
+pub fn CoreExecutionRequest::not_equal(Self, Self) -> Bool
+pub fn CoreExecutionRequest::to_repr(Self) -> @debug.Repr
 
 pub(all) struct CoreFuncRef {
   instance : @runtime.ModuleInstance
@@ -278,6 +315,7 @@ pub(all) struct CoreFuncRef {
   may_suspend : Bool
   native_eligible : Bool
 } derive(@debug.Debug)
+pub fn CoreFuncRef::to_repr(Self) -> @debug.Repr
 
 pub(all) struct CoreInstance {
   funcs : Map[String, CoreFuncRef]
@@ -286,35 +324,52 @@ pub(all) struct CoreInstance {
   globals : Map[String, Int]
   tags : Map[String, Int]
 }
+pub fn CoreInstance::output(Self, &Logger) -> Unit
+pub fn CoreInstance::to_string(Self) -> String
 pub impl Show for CoreInstance
 
 pub(all) enum CoreSuspension {
   Yield
   Wait(Int64)
 } derive(Eq, @debug.Debug)
+pub fn CoreSuspension::equal(Self, Self) -> Bool
+pub fn CoreSuspension::not_equal(Self, Self) -> Bool
+pub fn CoreSuspension::to_repr(Self) -> @debug.Repr
 
 pub(all) enum CoreSuspensionPolicy {
   RunToReturn
   Resumable
 } derive(Eq, @debug.Debug)
+pub fn CoreSuspensionPolicy::equal(Self, Self) -> Bool
+pub fn CoreSuspensionPolicy::not_equal(Self, Self) -> Bool
+pub fn CoreSuspensionPolicy::to_repr(Self) -> @debug.Repr
 
 type DecodedCallbackCode derive(@debug.Debug)
+pub fn DecodedCallbackCode::to_repr(Self) -> @debug.Repr
 
 type FlatStorageField derive(@debug.Debug)
+pub fn FlatStorageField::to_repr(Self) -> @debug.Repr
 
 type FutureEndpoint derive(@debug.Debug)
+pub fn FutureEndpoint::to_repr(Self) -> @debug.Repr
 
 type FutureState derive(@debug.Debug)
+pub fn FutureState::to_repr(Self) -> @debug.Repr
 
 type GuestThread derive(@debug.Debug)
+pub fn GuestThread::to_repr(Self) -> @debug.Repr
 
 type GuestThreadPhase derive(Eq, @debug.Debug)
+pub fn GuestThreadPhase::equal(Self, Self) -> Bool
+pub fn GuestThreadPhase::not_equal(Self, Self) -> Bool
+pub fn GuestThreadPhase::to_repr(Self) -> @debug.Repr
 
 pub(all) enum HostByteStreamRead {
   Pending
   Data(Bytes)
   Closed
 } derive(@debug.Debug)
+pub fn HostByteStreamRead::to_repr(Self) -> @debug.Repr
 
 type HostEventLoop
 
@@ -332,6 +387,7 @@ pub(all) enum HostFutureValuePoll {
   Pending
   Ready(ComponentValue)
 } derive(@debug.Debug)
+pub fn HostFutureValuePoll::to_repr(Self) -> @debug.Repr
 
 type HostInstanceBuilder
 pub fn HostInstanceBuilder::add_async_func(Self, String, @model.FuncType, (Array[ComponentValue], ResourceTable) -> HostFuture raise ComponentRuntimeError) -> Unit raise ComponentRuntimeError
@@ -369,14 +425,19 @@ pub(all) enum HostValueStreamPoll {
   Values(Array[ComponentValue])
   Closed
 } derive(@debug.Debug)
+pub fn HostValueStreamPoll::to_repr(Self) -> @debug.Repr
 
 type PendingFutureRead derive(@debug.Debug)
+pub fn PendingFutureRead::to_repr(Self) -> @debug.Repr
 
 type PendingFutureWrite derive(@debug.Debug)
+pub fn PendingFutureWrite::to_repr(Self) -> @debug.Repr
 
 type PendingStreamRead derive(@debug.Debug)
+pub fn PendingStreamRead::to_repr(Self) -> @debug.Repr
 
 type PendingStreamWrite derive(@debug.Debug)
+pub fn PendingStreamWrite::to_repr(Self) -> @debug.Repr
 
 pub(all) struct ResourceHandle {
   type_id : Int
@@ -389,6 +450,7 @@ pub(all) struct ResourceHandle {
   borrow_scope : Array[Int64]?
   num_lends : Array[Int]
 } derive(@debug.Debug)
+pub fn ResourceHandle::to_repr(Self) -> @debug.Repr
 
 pub(all) struct ResourceTable {
   id : Int
@@ -401,6 +463,7 @@ pub fn ResourceTable::ResourceTable() -> Self
 pub fn ResourceTable::alloc(Self, ResourceHandle) -> Int
 pub fn ResourceTable::free(Self, Int) -> ResourceHandle?
 pub fn ResourceTable::get(Self, Int) -> ResourceHandle?
+pub fn ResourceTable::to_repr(Self) -> @debug.Repr
 
 pub(all) struct StreamEndpoint {
   stream_id : Int
@@ -408,8 +471,10 @@ pub(all) struct StreamEndpoint {
   notified_peer_dropped : Array[Bool]
   in_waitable_set : @ref.Ref[Bool]
 } derive(@debug.Debug)
+pub fn StreamEndpoint::to_repr(Self) -> @debug.Repr
 
 type StreamState derive(@debug.Debug)
+pub fn StreamState::to_repr(Self) -> @debug.Repr
 
 pub(all) struct StreamTable {
   next_stream_id : Array[Int]
@@ -418,20 +483,32 @@ pub(all) struct StreamTable {
   host_values : Map[Int, HostValueStream]
 } derive(@debug.Debug)
 pub fn StreamTable::StreamTable() -> Self
+pub fn StreamTable::to_repr(Self) -> @debug.Repr
 
 type Subtask derive(@debug.Debug)
+pub fn Subtask::to_repr(Self) -> @debug.Repr
 
 type SubtaskDriver derive(@debug.Debug)
+pub fn SubtaskDriver::to_repr(Self) -> @debug.Repr
 
 type SubtaskPhase derive(Eq, @debug.Debug)
+pub fn SubtaskPhase::equal(Self, Self) -> Bool
+pub fn SubtaskPhase::not_equal(Self, Self) -> Bool
+pub fn SubtaskPhase::to_repr(Self) -> @debug.Repr
 
 type SyncLowerState derive(@debug.Debug)
+pub fn SyncLowerState::to_repr(Self) -> @debug.Repr
 
 type TaskStep derive(Eq, @debug.Debug)
+pub fn TaskStep::equal(Self, Self) -> Bool
+pub fn TaskStep::not_equal(Self, Self) -> Bool
+pub fn TaskStep::to_repr(Self) -> @debug.Repr
 
 type WaitEvent derive(@debug.Debug)
+pub fn WaitEvent::to_repr(Self) -> @debug.Repr
 
 type WaitableSet derive(@debug.Debug)
+pub fn WaitableSet::to_repr(Self) -> @debug.Repr
 
 // Type aliases
 

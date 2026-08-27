@@ -64,6 +64,8 @@ pub(all) enum WasiNetworkPolicy {
   LoopbackOnly
   AllowAll
 } derive(Eq)
+pub fn WasiNetworkPolicy::equal(Self, Self) -> Bool
+pub fn WasiNetworkPolicy::not_equal(Self, Self) -> Bool
 
 // Type aliases
 

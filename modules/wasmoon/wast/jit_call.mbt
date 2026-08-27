@@ -186,16 +186,12 @@ pub fn JITCoreContinuation::continue_execution(
   self.invocation.reactivate() catch {
     error => raise ExecutionStateFailure(error)
   }
-  let gc_active = prepare_jit_core_environment(
-    self.context,
-    self.store,
-    self.instance,
-  ) catch {
-    error => {
+  let gc_active = {
+    errdefer {
       self.invocation.release_if_live()
       self.active[0] = false
-      raise error
     }
+    prepare_jit_core_environment(self.context, self.store, self.instance)
   }
   let outcome = self.call.continue_execution() catch {
     error => {
@@ -244,11 +240,9 @@ pub fn JITModuleContext::call_core_func_resumable(
   let invocation = store.native_execution_state().begin() catch {
       error => raise ExecutionStateFailure(error)
     }
-  let gc_active = prepare_jit_core_environment(self, store, instance) catch {
-    error => {
-      invocation.release_if_live()
-      raise error
-    }
+  let gc_active = {
+    errdefer invocation.release_if_live()
+    prepare_jit_core_environment(self, store, instance)
   }
   let outcome = self.jit_module.start_continuation_call(func, encoded_args) catch {
     error => {

@@ -214,7 +214,7 @@ pub(all) enum CompileStage {
 }
 
 ///|
-fn CompileStage::to_string(self : CompileStage) -> String {
+pub fn CompileStage::to_string(self : CompileStage) -> String {
   match self {
     Parse => "parse"
     Verify => "verify"
