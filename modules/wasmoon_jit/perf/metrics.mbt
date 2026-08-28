@@ -338,6 +338,46 @@ pub fn record_stage_us(
       FramePlanning => m.frame_plan_us = duration_us
       Emission => m.emit_us = duration_us
     }
+    if detail_enabled() {
+      let parent_and_residual_name = match stage {
+        SemanticLowering =>
+          Some(("semantic_lowering", "semantic_orchestration"))
+        TargetLowering => Some(("target_lowering", "target_orchestration"))
+        _ => None
+      }
+      if parent_and_residual_name is Some((parent, residual_name)) {
+        let mut attributed = 0L
+        for subphase in m.compile_subphases {
+          if subphase.parent == parent {
+            attributed = attributed + subphase.duration_us
+          }
+        }
+        let orchestration = duration_us - attributed
+        if orchestration > 0L {
+          m.compile_subphases.push({
+            name: residual_name,
+            parent,
+            duration_us: orchestration,
+          })
+        }
+      }
+      match stage {
+        RegisterAllocation => {
+          let mut attributed = 0L
+          for phase in m.regalloc_phases {
+            attributed = attributed + phase.duration_us
+          }
+          let orchestration = duration_us - attributed
+          if orchestration > 0L {
+            m.regalloc_phases.push({
+              name: "regalloc_orchestration",
+              duration_us: orchestration,
+            })
+          }
+        }
+        _ => ()
+      }
+    }
   }
 }
 

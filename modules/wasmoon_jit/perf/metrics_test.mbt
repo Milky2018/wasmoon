@@ -82,17 +82,18 @@ test "detailed compile subphases reconcile their declared parent" {
     7L,
     parent="semantic_lowering",
   )
-  record_function_compile_us(20L)
+  record_stage_us(SemanticLowering, 9L)
+  record_function_compile_us(30L)
   finish_function(18, 96)
   record_module_subphase_us("module_preparation", 3L)
-  set_module_compile_us(30L)
+  set_module_compile_us(40L)
   let report = export_json()
   inspect(
     report.contains(
       (
         #|"name": "function_orchestration",
         #|          "parent": "function",
-        #|          "duration_us": "5"
+        #|          "duration_us": "6"
       ),
     ),
     content="true",
@@ -103,6 +104,16 @@ test "detailed compile subphases reconcile their declared parent" {
         #|"name": "semantic_validation",
         #|          "parent": "semantic_lowering",
         #|          "duration_us": "7"
+      ),
+    ),
+    content="true",
+  )
+  inspect(
+    report.contains(
+      (
+        #|"name": "semantic_orchestration",
+        #|          "parent": "semantic_lowering",
+        #|          "duration_us": "2"
       ),
     ),
     content="true",

@@ -70,8 +70,10 @@ Collection starts in `cmd/wasmoon/run.mbt` during `compile_module_to_jit(...)`.
     ABI and target-context preparation, target analysis/VCode construction,
     adapter construction, and artifact packaging. The `parent` field identifies
     whether a subphase reconciles against `function_compile_us`, `lower_us`, or
-    `target_lower_us`; derived `function_orchestration` entries close the
-    function-level remainder.
+    `target_lower_us`; derived `semantic_orchestration`,
+    `target_orchestration`, and `function_orchestration` entries close observer
+    and function-level remainders. `regalloc_orchestration` performs the same
+    reconciliation for `regalloc_phases[]`.
   - `ir_passes[]`
   - `regalloc_phases[]` when detailed metrics are enabled.
 
