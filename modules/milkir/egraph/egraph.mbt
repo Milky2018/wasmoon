@@ -16,7 +16,8 @@ struct EGraph {
   // Union-find for equivalence classes
   uf : UnionFind
   // All e-classes (indexed by canonical id)
-  classes : Map[Int, EClass]
+  classes : Array[EClass?]
+  mut active_class_count : Int
   // Hash-cons map: ENode -> EClassId (for deduplication)
   hashcons : Map[ENode, EClassId]
   // Dirty flag: true if there are pending merges
@@ -24,7 +25,7 @@ struct EGraph {
   // Parent edges: child class root -> ids of classes holding a node that
   // references it. Consumed by `rebuild` to repair only what a union
   // disturbed instead of rewalking the whole graph.
-  parents : Map[Int, @hashset.HashSet[Int]]
+  parents : Array[@hashset.HashSet[Int]?]
   // Classes whose contents changed since the last rebuild.
   pending : Array[Int]
   // Classes repaired by the most recent rebuild (diagnostic).
@@ -32,7 +33,7 @@ struct EGraph {
   // Opcode index: maps opcode tag to set of class ids containing that opcode
   opcode_index : Map[EOpcodeTag, @hashset.HashSet[Int]]
   // Type information: maps canonical class id to bit width (8, 16, 32, 64, 128)
-  type_map : Map[Int, Int]
+  type_map : Array[Int?]
   // Classes whose width information conflicted (e.g., a constant shared by
   // i32 and i64 uses). Poisoned classes report no width so width-dependent
   // rules skip them instead of rewriting with a first-seen width (ISS-379).
@@ -52,20 +53,104 @@ struct EGraph {
 pub fn EGraph::EGraph() -> EGraph {
   {
     uf: UnionFind(),
-    classes: Map([]),
+    classes: [],
+    active_class_count: 0,
     hashcons: Map([]),
     dirty: false,
-    parents: Map([]),
+    parents: [],
     pending: [],
     last_rebuild_repairs: 0,
     opcode_index: Map([]),
-    type_map: Map([]),
+    type_map: [],
     type_conflicts: HashSet([]),
     type_conflict_hits: 0,
     const_conflict_hits: 0,
     last_rule_applications: 0,
     last_matches_limit_hits: 0,
     last_eclass_size_limit_hits: 0,
+  }
+}
+
+///|
+fn EGraph::ensure_class_slot(self : EGraph, id : Int) -> Unit {
+  while self.classes.length() <= id {
+    self.classes.push(None)
+    self.parents.push(None)
+    self.type_map.push(None)
+  }
+}
+
+///|
+fn EGraph::class_at(self : EGraph, id : Int) -> EClass? {
+  if id >= 0 && id < self.classes.length() {
+    self.classes[id]
+  } else {
+    None
+  }
+}
+
+///|
+fn EGraph::set_class(self : EGraph, id : Int, eclass : EClass) -> Unit {
+  self.ensure_class_slot(id)
+  if self.classes[id] is None {
+    self.active_class_count = self.active_class_count + 1
+  }
+  self.classes[id] = Some(eclass)
+}
+
+///|
+fn EGraph::remove_class(self : EGraph, id : Int) -> Unit {
+  if id >= 0 && id < self.classes.length() && self.classes[id] is Some(_) {
+    self.classes[id] = None
+    self.active_class_count = self.active_class_count - 1
+  }
+}
+
+///|
+fn EGraph::parent_set(self : EGraph, id : Int) -> @hashset.HashSet[Int]? {
+  if id >= 0 && id < self.parents.length() {
+    self.parents[id]
+  } else {
+    None
+  }
+}
+
+///|
+fn EGraph::set_parent_set(
+  self : EGraph,
+  id : Int,
+  parents : @hashset.HashSet[Int],
+) -> Unit {
+  self.ensure_class_slot(id)
+  self.parents[id] = Some(parents)
+}
+
+///|
+fn EGraph::remove_parent_set(self : EGraph, id : Int) -> Unit {
+  if id >= 0 && id < self.parents.length() {
+    self.parents[id] = None
+  }
+}
+
+///|
+fn EGraph::type_at(self : EGraph, id : Int) -> Int? {
+  if id >= 0 && id < self.type_map.length() {
+    self.type_map[id]
+  } else {
+    None
+  }
+}
+
+///|
+fn EGraph::set_type_at(self : EGraph, id : Int, bits : Int) -> Unit {
+  self.ensure_class_slot(id)
+  self.type_map[id] = Some(bits)
+}
+
+///|
+fn EGraph::remove_type_at(self : EGraph, id : Int) -> Unit {
+  if id >= 0 && id < self.type_map.length() {
+    self.type_map[id] = None
   }
 }
 
@@ -162,7 +247,7 @@ pub fn EGraph::add(self : EGraph, node : ENode) -> EClassId {
     const_conflicted: false,
     fconst_conflicted: false,
   }
-  self.classes.set(id, eclass)
+  self.set_class(id, eclass)
   self.hashcons.set(node, class_id)
   // Update opcode index
   let tag = node.op.tag()
@@ -180,12 +265,12 @@ fn EGraph::record_parent_edges(
 ) -> Unit {
   for child in node.children {
     let child_root = self.find(child).0
-    match self.parents.get(child_root) {
+    match self.parent_set(child_root) {
       Some(owners) => owners.add(owner)
       None => {
         let owners : @hashset.HashSet[Int] = HashSet([])
         owners.add(owner)
-        self.parents.set(child_root, owners)
+        self.set_parent_set(child_root, owners)
       }
     }
   }
@@ -240,10 +325,10 @@ pub fn EGraph::subsume(self : EGraph, a : EClassId, b : EClassId) -> EClassId {
   if self.type_conflicts.contains(a.0) {
     self.note_type_conflict(b.0)
   }
-  match (self.type_map.get(b.0), self.type_map.get(a.0)) {
+  match (self.type_at(b.0), self.type_at(a.0)) {
     (None, Some(bits)) =>
       if !self.type_conflicts.contains(b.0) {
-        self.type_map.set(b.0, bits)
+        self.set_type_at(b.0, bits)
       }
     (Some(existing), Some(bits)) =>
       if existing != bits {
@@ -252,14 +337,14 @@ pub fn EGraph::subsume(self : EGraph, a : EClassId, b : EClassId) -> EClassId {
     _ => ()
   }
   // Remove type entries for the subsumed class
-  self.type_map.remove(a.0)
+  self.remove_type_at(a.0)
   self.type_conflicts.remove(a.0)
 
   // Remove the old class from opcode index before removing it
-  if self.classes.get(a.0) is Some(old_class) {
+  if self.class_at(a.0) is Some(old_class) {
     // A constant conflict remains proof that this equivalence class is
     // unsound even though subsume discards the old nodes.
-    if self.classes.get(b.0) is Some(new_class) {
+    if self.class_at(b.0) is Some(new_class) {
       if old_class.const_conflicted {
         new_class.const_conflicted = true
         new_class.const_value = None
@@ -273,7 +358,7 @@ pub fn EGraph::subsume(self : EGraph, a : EClassId, b : EClassId) -> EClassId {
   }
 
   // Remove the old class entirely - its nodes are "subsumed"
-  self.classes.remove(a.0)
+  self.remove_class(a.0)
   self.absorb_parent_edges(a.0, b.0)
   self.mark_pending(b.0)
   b
@@ -316,10 +401,10 @@ pub fn EGraph::merge(self : EGraph, a : EClassId, b : EClassId) -> EClassId {
   if self.type_conflicts.contains(other_id.0) {
     self.note_type_conflict(new_id.0)
   }
-  match (self.type_map.get(new_id.0), self.type_map.get(other_id.0)) {
+  match (self.type_at(new_id.0), self.type_at(other_id.0)) {
     (None, Some(bits)) =>
       if !self.type_conflicts.contains(new_id.0) {
-        self.type_map.set(new_id.0, bits)
+        self.set_type_at(new_id.0, bits)
       }
     (Some(existing), Some(bits)) =>
       if existing != bits {
@@ -328,14 +413,14 @@ pub fn EGraph::merge(self : EGraph, a : EClassId, b : EClassId) -> EClassId {
     _ => ()
   }
   // Remove old type entries
-  self.type_map.remove(other_id.0)
+  self.remove_type_at(other_id.0)
   self.type_conflicts.remove(other_id.0)
 
   // Merge the e-class contents
-  if self.classes.get(other_id.0) is Some(other_class) {
+  if self.class_at(other_id.0) is Some(other_class) {
     // Update opcode index: redirect old class entries to new class
     self.index_merge(other_id.0, new_id.0, other_class.nodes)
-    if self.classes.get(new_id.0) is Some(root_class) {
+    if self.class_at(new_id.0) is Some(root_class) {
       // Merge all nodes: this preserves equivalences needed for congruence
       // closure (e.g., when children are later merged). Membership is
       // hashed, not scanned: e-classes can hold many nodes once the
@@ -389,7 +474,7 @@ pub fn EGraph::merge(self : EGraph, a : EClassId, b : EClassId) -> EClassId {
       }
     }
     // Remove the merged class
-    self.classes.remove(other_id.0)
+    self.remove_class(other_id.0)
   }
   // Inherit the subsumed class's parent edges, then schedule repair: every
   // class holding a node that referenced either side now has a stale child
@@ -434,14 +519,14 @@ fn EGraph::absorb_parent_edges(
   old_root : Int,
   new_root : Int,
 ) -> Unit {
-  guard self.parents.get(old_root) is Some(old_owners) else { return }
-  self.parents.remove(old_root)
-  match self.parents.get(new_root) {
+  guard self.parent_set(old_root) is Some(old_owners) else { return }
+  self.remove_parent_set(old_root)
+  match self.parent_set(new_root) {
     Some(owners) =>
       for owner in old_owners {
         owners.add(owner)
       }
-    None => self.parents.set(new_root, old_owners)
+    None => self.set_parent_set(new_root, old_owners)
   }
 }
 
@@ -479,18 +564,18 @@ pub fn EGraph::rebuild(self : EGraph) -> Unit {
 /// Repair one class and every class holding a node that references it.
 fn EGraph::repair_class(self : EGraph, class_id : Int) -> Unit {
   let root = self.uf.find(class_id)
-  guard self.classes.get(root) is Some(_) else { return }
+  guard self.class_at(root) is Some(_) else { return }
   self.last_rebuild_repairs = self.last_rebuild_repairs + 1
   // The class's own nodes may carry stale children too (its members were
   // merged in from elsewhere), so recanonicalize it alongside its parents.
   self.recanonicalize_class(root)
-  guard self.parents.get(root) is Some(owners) else { return }
+  guard self.parent_set(root) is Some(owners) else { return }
   let owner_roots : @hashset.HashSet[Int] = HashSet([])
   for owner in owners {
     owner_roots.add(self.uf.find(owner))
   }
   // Parent edges are re-recorded against current roots as we go.
-  self.parents.remove(root)
+  self.remove_parent_set(root)
   for owner in owner_roots {
     self.recanonicalize_class(owner)
   }
@@ -502,7 +587,7 @@ fn EGraph::repair_class(self : EGraph, class_id : Int) -> Unit {
 /// constant caches, and merge any class that turns out to be congruent.
 fn EGraph::recanonicalize_class(self : EGraph, class_id : Int) -> Unit {
   let root = self.uf.find(class_id)
-  guard self.classes.get(root) is Some(eclass) else { return }
+  guard self.class_at(root) is Some(eclass) else { return }
   let canonical_nodes : Array[ENode] = []
   let seen : @hashset.HashSet[ENode] = HashSet([])
   let mut const_value : Int64? = None
@@ -577,7 +662,7 @@ fn EGraph::recanonicalize_class(self : EGraph, class_id : Int) -> Unit {
 /// Get all nodes in an e-class
 pub fn EGraph::get_nodes(self : EGraph, id : EClassId) -> Array[ENode] {
   let canonical = self.find(id)
-  if self.classes.get(canonical.0) is Some(eclass) {
+  if self.class_at(canonical.0) is Some(eclass) {
     eclass.nodes
   } else {
     []
@@ -588,7 +673,7 @@ pub fn EGraph::get_nodes(self : EGraph, id : EClassId) -> Array[ENode] {
 /// Get cached constant value for an e-class (O(1) lookup)
 pub fn EGraph::get_const(self : EGraph, id : EClassId) -> Int64? {
   let canonical = self.find(id)
-  if self.classes.get(canonical.0) is Some(eclass) {
+  if self.class_at(canonical.0) is Some(eclass) {
     eclass.const_value
   } else {
     None
@@ -599,7 +684,7 @@ pub fn EGraph::get_const(self : EGraph, id : EClassId) -> Int64? {
 /// Get cached float constant value for an e-class (O(1) lookup)
 pub fn EGraph::get_fconst(self : EGraph, id : EClassId) -> UInt64? {
   let canonical = self.find(id)
-  if self.classes.get(canonical.0) is Some(eclass) {
+  if self.class_at(canonical.0) is Some(eclass) {
     eclass.fconst_value
   } else {
     None
@@ -615,15 +700,17 @@ pub fn EGraph::equiv(self : EGraph, a : EClassId, b : EClassId) -> Bool {
 ///|
 /// Get the number of e-classes
 pub fn EGraph::num_classes(self : EGraph) -> Int {
-  self.classes.length()
+  self.active_class_count
 }
 
 ///|
 /// Get the total number of e-nodes
 pub fn EGraph::num_nodes(self : EGraph) -> Int {
   let mut count = 0
-  for _, eclass in self.classes {
-    count = count + eclass.nodes.length()
+  for eclass in self.classes {
+    if eclass is Some(eclass) {
+      count = count + eclass.nodes.length()
+    }
   }
   count
 }

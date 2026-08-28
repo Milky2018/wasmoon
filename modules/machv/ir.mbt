@@ -287,6 +287,7 @@ priv struct StackObjectData {
 /// snapshots; construction and transformation go through owner-aware seams.
 pub struct Function {
   priv owner : Ref[Unit]
+  priv mut verified : Bool
   priv name : String
   priv protocol : CallProtocol
   priv signature : Signature
@@ -305,6 +306,7 @@ fn Function::new(
 ) -> Function {
   let function = {
     owner: Ref(()),
+    verified: false,
     name,
     protocol,
     signature: Signature::new(signature.params, signature.results),

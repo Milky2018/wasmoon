@@ -34,19 +34,117 @@ pub impl Show for RegallocPhase with fn output(self, logger) {
 }
 
 ///|
+/// Deterministic work counters for the backtracking bundle loop.
+///
+/// These count allocator decisions rather than elapsed time, so callers can
+/// compare runs without making this reusable module own a clock.
+pub struct BundleAllocationStatistics {
+  mut queue_pops : Int
+  mut register_probes : Int
+  mut occupied_segments_scanned : Int
+  mut conflicts : Int
+  mut evictions : Int
+  mut bundle_splits : Int
+  mut second_chance_attempts : Int
+  mut max_queue_length : Int
+} derive(Eq, Debug)
+
+///|
+fn BundleAllocationStatistics::new() -> BundleAllocationStatistics {
+  {
+    queue_pops: 0,
+    register_probes: 0,
+    occupied_segments_scanned: 0,
+    conflicts: 0,
+    evictions: 0,
+    bundle_splits: 0,
+    second_chance_attempts: 0,
+    max_queue_length: 0,
+  }
+}
+
+///|
+pub fn BundleAllocationStatistics::queue_pops(
+  self : BundleAllocationStatistics,
+) -> Int {
+  self.queue_pops
+}
+
+///|
+pub fn BundleAllocationStatistics::register_probes(
+  self : BundleAllocationStatistics,
+) -> Int {
+  self.register_probes
+}
+
+///|
+pub fn BundleAllocationStatistics::occupied_segments_scanned(
+  self : BundleAllocationStatistics,
+) -> Int {
+  self.occupied_segments_scanned
+}
+
+///|
+pub fn BundleAllocationStatistics::conflicts(
+  self : BundleAllocationStatistics,
+) -> Int {
+  self.conflicts
+}
+
+///|
+pub fn BundleAllocationStatistics::evictions(
+  self : BundleAllocationStatistics,
+) -> Int {
+  self.evictions
+}
+
+///|
+pub fn BundleAllocationStatistics::bundle_splits(
+  self : BundleAllocationStatistics,
+) -> Int {
+  self.bundle_splits
+}
+
+///|
+pub fn BundleAllocationStatistics::second_chance_attempts(
+  self : BundleAllocationStatistics,
+) -> Int {
+  self.second_chance_attempts
+}
+
+///|
+pub fn BundleAllocationStatistics::max_queue_length(
+  self : BundleAllocationStatistics,
+) -> Int {
+  self.max_queue_length
+}
+
+///|
 pub struct RegallocConfig {
   verify : Bool
   // Called as each phase begins, and once with None when the last one ends.
   // Absent by default so the allocator pays nothing when nobody is measuring.
   observer : ((RegallocPhase?) -> Unit)?
+  statistics_observer : ((BundleAllocationStatistics) -> Unit)?
 }
 
 ///|
 pub fn RegallocConfig::RegallocConfig(
   verify? : Bool = true,
   observer? : ((RegallocPhase?) -> Unit)? = None,
+  statistics_observer? : ((BundleAllocationStatistics) -> Unit)? = None,
 ) -> RegallocConfig {
-  { verify, observer, }
+  { verify, observer, statistics_observer, }
+}
+
+///|
+fn RegallocConfig::report_bundle_statistics(
+  self : RegallocConfig,
+  statistics : BundleAllocationStatistics,
+) -> Unit {
+  if self.statistics_observer is Some(notify) {
+    notify(statistics)
+  }
 }
 
 ///|

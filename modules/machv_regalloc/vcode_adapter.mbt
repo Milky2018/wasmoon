@@ -142,6 +142,7 @@ pub fn[Inst] allocate_selected_vcode(
   function : @vcode.Function[Inst],
   environment : VCodeAllocationEnvironment,
   on_phase? : ((String?) -> Unit)? = None,
+  on_statistics? : ((@vcode.RegallocLoopStatistics) -> Unit)? = None,
   verify? : Bool = true,
 ) -> @vcode.Allocation raise VCodeAllocationError {
   // Translate the allocator's phase enum to a name here so neither the
@@ -158,6 +159,23 @@ pub fn[Inst] allocate_selected_vcode(
       })
     None => None
   }
+  let statistics_observer : ((@regalloc.BundleAllocationStatistics) -> Unit)? = match
+    on_statistics {
+    Some(notify) =>
+      Some(statistics => {
+        notify({
+          queue_pops: statistics.queue_pops(),
+          register_probes: statistics.register_probes(),
+          occupied_segments_scanned: statistics.occupied_segments_scanned(),
+          conflicts: statistics.conflicts(),
+          evictions: statistics.evictions(),
+          bundle_splits: statistics.bundle_splits(),
+          second_chance_attempts: statistics.second_chance_attempts(),
+          max_queue_length: statistics.max_queue_length(),
+        })
+      })
+    None => None
+  }
   let plan = @regalloc.allocate_function(
     VCodeFunctionView::new(function),
     @regalloc.MachineEnv::new(
@@ -168,7 +186,7 @@ pub fn[Inst] allocate_selected_vcode(
     .with_fixed_operand_regs(
       environment.fixed_operand_regs.map(reg => to_regalloc_preg(reg)),
     ),
-    config=RegallocConfig(verify~, observer~),
+    config=RegallocConfig(verify~, observer~, statistics_observer~),
   ) catch {
     error => raise RegallocFailure(cause=error)
   }

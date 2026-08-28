@@ -611,6 +611,7 @@ fn Function::verify_value_use(
 /// Verify the complete target-neutral MachV checkpoint without consulting a
 /// target, ABI, construction history, or mutable validator callback.
 pub fn Function::verify(self : Function) -> Unit raise MachVVerifyError {
+  self.verified = false
   if self.blocks.is_empty() {
     raise EmptyFunction
   }
@@ -819,4 +820,19 @@ pub fn Function::verify(self : Function) -> Unit raise MachVVerifyError {
     }
   }
   self.verify_gc_safepoint_roots(successors, predecessors)
+  self.verified = true
+}
+
+///|
+/// Require the canonical function state established by its last verifier.
+///
+/// Public construction and transformation seams finish by verifying. If a
+/// package-internal producer has not done so, this falls back to full
+/// verification instead of trusting construction history.
+pub fn Function::require_verified(
+  self : Function,
+) -> Unit raise MachVVerifyError {
+  if !self.verified {
+    self.verify()
+  }
 }

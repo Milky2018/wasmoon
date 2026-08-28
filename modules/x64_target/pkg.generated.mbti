@@ -14,6 +14,8 @@ pub fn allocate(@vcode.Function[X64Inst]) -> @vcode.Allocation raise X64Allocati
 
 pub fn compile(@vcode.Function[X64Inst], on_event? : (@vcode.TargetCompileEvent) -> Unit, verify_allocation? : Bool) -> (@code_object.UnlinkedCodeObject, Int) raise X64CompileError
 
+pub fn compile_selected(SelectedFunction, on_event? : (@vcode.TargetCompileEvent) -> Unit, verify_allocation? : Bool) -> (@code_object.UnlinkedCodeObject, Int) raise X64CompileError
+
 pub fn emit(@vcode.Function[X64Inst], @vcode.Allocation, X64Frame) -> @code_object.UnlinkedCodeObject raise X64EmitError
 
 pub fn lower(@machv.Function, LoweringContext) -> @vcode.Function[X64Inst] raise X64LowerError
@@ -21,6 +23,10 @@ pub fn lower(@machv.Function, LoweringContext) -> @vcode.Function[X64Inst] raise
 pub fn plan_frame(@vcode.Function[X64Inst], @vcode.Allocation) -> X64Frame raise X64FrameError
 
 pub fn prepare_x64_link(@code_object.UnlinkedCodeObject) -> X64LinkPlan raise X64LinkError
+
+pub fn select(@machv.Function, LoweringContext) -> SelectedFunction raise X64LowerError
+
+pub fn select_verified(@machv.Function, LoweringContext) -> SelectedFunction raise X64LowerError
 
 pub fn verify_allocation(@vcode.Function[X64Inst], @vcode.Allocation) -> Unit raise X64AllocationError
 
@@ -187,6 +193,10 @@ pub struct LoweringContext {
 }
 pub fn LoweringContext::new(InternalAbi) -> Self
 pub fn LoweringContext::with_environment_field(Self, @machv.EnvironmentField, Array[Int]) -> Self
+
+pub struct SelectedFunction {
+  // private fields
+}
 
 pub(all) enum X64Address {
   Code(@machv.CodeSymbol)

@@ -18,7 +18,7 @@ pub fn EGraph::add_typed(self : EGraph, node : ENode, bits : Int) -> EClassId {
 /// Poison a class's width information: drop the entry, remember the class,
 /// and record the observation. Idempotent per class root.
 fn EGraph::note_type_conflict(self : EGraph, root : Int) -> Unit {
-  self.type_map.remove(root)
+  self.remove_type_at(root)
   if !self.type_conflicts.contains(root) {
     self.type_conflicts.add(root)
     self.type_conflict_hits = self.type_conflict_hits + 1
@@ -32,10 +32,10 @@ fn EGraph::note_type_conflict(self : EGraph, root : Int) -> Unit {
 /// whichever width happened to be recorded first.
 pub fn EGraph::set_type(self : EGraph, id : EClassId, bits : Int) -> Unit {
   let canonical = self.find(id).0
-  match self.type_map.get(canonical) {
+  match self.type_at(canonical) {
     None =>
       if !self.type_conflicts.contains(canonical) {
-        self.type_map.set(canonical, bits)
+        self.set_type_at(canonical, bits)
       }
     Some(existing) => if existing != bits { self.note_type_conflict(canonical) }
   }
@@ -61,7 +61,7 @@ pub fn EGraph::const_conflict_count(self : EGraph) -> Int {
 /// Returns None if no type information is available
 pub fn EGraph::get_bits(self : EGraph, id : EClassId) -> Int? {
   let canonical = self.find(id).0
-  self.type_map.get(canonical)
+  self.type_at(canonical)
 }
 
 ///|

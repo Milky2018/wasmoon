@@ -140,6 +140,12 @@ pub extend RegClass with Eq::{not_equal, equal}
 pub extend RegClass with Hash::{hash, hash_combine}
 
 ///|
+pub extend RegallocLoopStatistics with Debug::{to_repr}
+
+///|
+pub extend RegallocLoopStatistics with Eq::{not_equal, equal}
+
+///|
 pub extend ResolvedCallTransferPlan with Debug::{to_repr}
 
 ///|

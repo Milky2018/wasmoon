@@ -47,6 +47,28 @@ pub fn AllocationPlan::value_location(Self, Int) -> Location?
 pub impl Show for AllocationPlan
 pub impl @debug.Debug for AllocationPlan
 
+pub struct BundleAllocationStatistics {
+  mut queue_pops : Int
+  mut register_probes : Int
+  mut occupied_segments_scanned : Int
+  mut conflicts : Int
+  mut evictions : Int
+  mut bundle_splits : Int
+  mut second_chance_attempts : Int
+  mut max_queue_length : Int
+} derive(Eq, @debug.Debug)
+pub fn BundleAllocationStatistics::bundle_splits(Self) -> Int
+pub fn BundleAllocationStatistics::conflicts(Self) -> Int
+pub fn BundleAllocationStatistics::equal(Self, Self) -> Bool
+pub fn BundleAllocationStatistics::evictions(Self) -> Int
+pub fn BundleAllocationStatistics::max_queue_length(Self) -> Int
+pub fn BundleAllocationStatistics::not_equal(Self, Self) -> Bool
+pub fn BundleAllocationStatistics::occupied_segments_scanned(Self) -> Int
+pub fn BundleAllocationStatistics::queue_pops(Self) -> Int
+pub fn BundleAllocationStatistics::register_probes(Self) -> Int
+pub fn BundleAllocationStatistics::second_chance_attempts(Self) -> Int
+pub fn BundleAllocationStatistics::to_repr(Self) -> @debug.Repr
+
 type DenseCfgEdges derive(@debug.Debug)
 pub fn DenseCfgEdges::to_repr(Self) -> @debug.Repr
 
@@ -214,8 +236,9 @@ pub fn RegClass::to_repr(Self) -> @debug.Repr
 pub struct RegallocConfig {
   verify : Bool
   observer : ((RegallocPhase?) -> Unit)?
+  statistics_observer : ((BundleAllocationStatistics) -> Unit)?
 }
-pub fn RegallocConfig::RegallocConfig(verify? : Bool, observer? : ((RegallocPhase?) -> Unit)?) -> Self
+pub fn RegallocConfig::RegallocConfig(verify? : Bool, observer? : ((RegallocPhase?) -> Unit)?, statistics_observer? : ((BundleAllocationStatistics) -> Unit)?) -> Self
 pub fn RegallocConfig::enter_phase(Self, RegallocPhase?) -> Unit
 pub fn RegallocConfig::verify(Self) -> Bool
 

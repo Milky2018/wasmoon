@@ -60,19 +60,19 @@ fn build_aarch64_target(
     None => function
   }
   let context = aarch64_target_context(elaborated, environment_field_path)
-  let selected = @aarch64_target.lower(elaborated, context) catch {
+  let selected = @aarch64_target.select_verified(elaborated, context) catch {
     error => raise AArch64LoweringFailed(cause=error)
   }
   let compiled = try {
     match target_lower_tick {
       Some(tick) =>
-        @aarch64_target.compile(
+        @aarch64_target.compile_selected(
           selected,
           on_event=target_compile_metrics_observer(tick),
           verify_allocation=regalloc_validation(),
         )
       None =>
-        @aarch64_target.compile(
+        @aarch64_target.compile_selected(
           selected,
           verify_allocation=regalloc_validation(),
         )

@@ -197,6 +197,21 @@ pub extend Function with Debug::{to_repr}
 pub extend Function with Show::{to_string, output}
 
 ///|
+pub extend StackMapArgumentRoots with Debug::{to_repr}
+
+///|
+pub extend StackMapArgumentRoots with Eq::{equal, not_equal}
+
+///|
+pub extend CallAbiElaborationError with Debug::{to_repr}
+
+///|
+pub extend CallAbiElaborationError with Eq::{equal, not_equal}
+
+///|
+pub extend CallAbiElaborationError with Show::{to_string, output}
+
+///|
 pub extend Instruction with Debug::{to_repr}
 
 ///|

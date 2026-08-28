@@ -8,6 +8,18 @@ import {
 // Values
 
 // Errors
+pub suberror CallAbiElaborationError {
+  InvalidInput(cause~ : MachVVerifyError)
+  InvalidOutput(cause~ : MachVVerifyError)
+  InvalidCall(instruction_id~ : Int, message~ : String)
+} derive(Eq, @debug.Debug)
+pub fn CallAbiElaborationError::equal(Self, Self) -> Bool
+pub fn CallAbiElaborationError::not_equal(Self, Self) -> Bool
+pub fn CallAbiElaborationError::output(Self, &Logger) -> Unit
+pub fn CallAbiElaborationError::to_repr(Self) -> @debug.Repr
+pub fn CallAbiElaborationError::to_string(Self) -> String
+pub impl Show for CallAbiElaborationError
+
 pub suberror MachVVerifyError {
   EmptyFunction
   InvalidFunction(message~ : String)
@@ -97,6 +109,11 @@ pub impl Eq for Block
 pub impl Hash for Block
 pub impl @debug.Debug for Block
 
+pub struct CallAbiElaboration {
+  // private fields
+}
+pub fn CallAbiElaboration::new(root_scope? : CallerRootScopeAbi, hidden_safepoints? : Array[HiddenSafepointAbi]) -> Self
+
 pub struct CallBehavior {
   memory : MemoryEffect
   may_trap : Bool
@@ -134,6 +151,11 @@ pub fn Callee::hash(Self) -> Int
 pub fn Callee::hash_combine(Self, Hasher) -> Unit
 pub fn Callee::not_equal(Self, Self) -> Bool
 pub fn Callee::to_repr(Self) -> @debug.Repr
+
+pub struct CallerRootScopeAbi {
+  // private fields
+}
+pub fn CallerRootScopeAbi::new(ExternalSymbol, ExternalSymbol) -> Self
 
 pub struct CleanupStats {
   aliases_rewritten : Int
@@ -316,6 +338,7 @@ pub fn Function::block_parameters(Self, Block) -> Array[Value]
 pub fn Function::block_terminator(Self, Block) -> TerminatorRecord?
 pub fn Function::blocks(Self) -> Array[Block]
 pub fn Function::blocks_in_cfg_order(Self) -> Array[Block]
+pub fn Function::elaborate_call_abi(Self, CallAbiElaboration) -> Self raise CallAbiElaborationError
 pub fn Function::instruction_count(Self) -> Int
 pub fn Function::instruction_index(Self, Instruction) -> Int?
 pub fn Function::instruction_metadata(Self, Instruction) -> InstructionMetadata?
@@ -327,6 +350,7 @@ pub fn Function::output(Self, &Logger) -> Unit
 pub fn Function::parameters(Self) -> Array[Value]
 pub fn Function::print(Self) -> String
 pub fn Function::protocol(Self) -> CallProtocol
+pub fn Function::require_verified(Self) -> Unit raise MachVVerifyError
 pub fn Function::run_mandatory_cleanup(Self) -> CleanupStats raise MachVVerifyError
 pub fn Function::signature(Self) -> Signature
 pub fn Function::stack_object_alignment(Self, StackObject) -> Int?
@@ -365,6 +389,11 @@ pub fn FunctionBuilder::switch_to_block(Self, Block) -> Unit
 pub fn FunctionBuilder::tail_call(Self, SemanticCall, Array[Value]) -> Unit
 pub fn FunctionBuilder::tail_call_with_metadata(Self, SemanticCall, Array[Value], TerminatorMetadata) -> Unit
 pub fn FunctionBuilder::trap(Self, TrapReason) -> Unit
+
+pub struct HiddenSafepointAbi {
+  // private fields
+}
+pub fn HiddenSafepointAbi::new(ExternalSymbol, StackMapArgumentRoots) -> Self
 
 pub struct Instruction {
   // private fields
@@ -630,6 +659,15 @@ pub fn SourceLocation::hash_combine(Self, Hasher) -> Unit
 pub fn SourceLocation::new(String, Int, Int) -> Self
 pub fn SourceLocation::not_equal(Self, Self) -> Bool
 pub fn SourceLocation::to_repr(Self) -> @debug.Repr
+
+pub(all) enum StackMapArgumentRoots {
+  Fixed(Int)
+  I32ConstantOperand(Int)
+  AllocationOperands
+} derive(Eq, @debug.Debug)
+pub fn StackMapArgumentRoots::equal(Self, Self) -> Bool
+pub fn StackMapArgumentRoots::not_equal(Self, Self) -> Bool
+pub fn StackMapArgumentRoots::to_repr(Self) -> @debug.Repr
 
 pub struct StackMapMetadata {
   id : Int

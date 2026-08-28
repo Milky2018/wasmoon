@@ -170,7 +170,7 @@ fn extract_node_tiebreak_less(lhs : ENode, rhs : ENode) -> Bool {
 pub fn EGraph::extract(self : EGraph, id : EClassId) -> (Int, ENode) {
   let canonical = self.find(id)
   let table = self.compute_extraction_table()
-  match table.get(canonical.0) {
+  match table[canonical.0] {
     Some((cost, node)) =>
       if cost.infinite {
         (@int.MAX_VALUE, node)
@@ -191,8 +191,9 @@ pub fn EGraph::extract(self : EGraph, id : EClassId) -> (Int, ENode) {
 pub fn EGraph::best_nodes(self : EGraph) -> Map[Int, ENode] {
   let best : Map[Int, ENode] = Map([])
   for class_id, entry in self.compute_extraction_table() {
-    let (_, node) = entry
-    best.set(class_id, node)
+    if entry is Some((_, node)) {
+      best.set(class_id, node)
+    }
   }
   best
 }
@@ -202,24 +203,29 @@ pub fn EGraph::best_nodes(self : EGraph) -> Map[Int, ENode] {
 /// only when one of its children's costs improves.
 fn EGraph::compute_extraction_table(
   self : EGraph,
-) -> Map[Int, (ExtractCost, ENode)] {
-  let table : Map[Int, (ExtractCost, ENode)] = Map([])
+) -> Array[(ExtractCost, ENode)?] {
+  let table : Array[(ExtractCost, ENode)?] = Array::make(
+    self.uf.parent.length(),
+    None,
+  )
   let pending : Array[Int] = []
   let in_pending = Array::make(self.uf.parent.length(), false)
-  for class_id, _ in self.classes {
-    pending.push(class_id)
-    in_pending[class_id] = true
+  for class_id, eclass in self.classes {
+    if eclass is Some(_) {
+      pending.push(class_id)
+      in_pending[class_id] = true
+    }
   }
   while pending.pop() is Some(class_id) {
     in_pending[class_id] = false
-    guard self.classes.get(class_id) is Some(eclass) else { continue }
+    guard self.class_at(class_id) is Some(eclass) else { continue }
     let mut improved = false
     for node in eclass.nodes {
       let mut total_cost = extract_cost_finite(node_cost(node), 0)
       let mut priceable = true
       for child in node.children {
         let child_root = self.find(child).0
-        match table.get(child_root) {
+        match table[child_root] {
           Some((child_cost, _)) =>
             total_cost = extract_cost_add(total_cost, child_cost)
           None => {
@@ -232,23 +238,23 @@ fn EGraph::compute_extraction_table(
         continue
       }
       total_cost = extract_cost_increment_depth(total_cost)
-      match table.get(class_id) {
+      match table[class_id] {
         Some((best_cost, best_node)) =>
           if extract_cost_is_better(total_cost, best_cost) ||
             (
               extract_cost_equal(total_cost, best_cost) &&
               extract_node_tiebreak_less(node, best_node)
             ) {
-            table.set(class_id, (total_cost, node))
+            table[class_id] = Some((total_cost, node))
             improved = true
           }
         None => {
-          table.set(class_id, (total_cost, node))
+          table[class_id] = Some((total_cost, node))
           improved = true
         }
       }
     }
-    if improved && self.parents.get(class_id) is Some(owners) {
+    if improved && self.parent_set(class_id) is Some(owners) {
       for owner in owners {
         let root = self.uf.find(owner)
         if root >= 0 && root < in_pending.length() && !in_pending[root] {

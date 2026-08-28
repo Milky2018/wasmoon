@@ -167,6 +167,18 @@ test "AArch64 compile runs the complete target pipeline" {
       #|  RegallocPhaseStarted("segment_construction"),
       #|  RegallocPhaseStarted("bundle_formation"),
       #|  RegallocPhaseStarted("bundle_allocation"),
+      #|  RegallocLoopMeasured(
+      #|    {
+      #|      queue_pops: 5,
+      #|      register_probes: 5,
+      #|      occupied_segments_scanned: 1,
+      #|      conflicts: 0,
+      #|      evictions: 0,
+      #|      bundle_splits: 0,
+      #|      second_chance_attempts: 0,
+      #|      max_queue_length: 5,
+      #|    },
+      #|  ),
       #|  RegallocPhaseStarted("home_assignment"),
       #|  RegallocPhaseStarted("operand_assignment"),
       #|  RegallocPhaseStarted("edge_transfers"),

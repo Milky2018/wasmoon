@@ -11,13 +11,14 @@ test "compile metrics preserve every production phase and allocation summary" {
   record_stage_us(FramePlanning, 50L)
   record_stage_us(Emission, 60L)
   record_regalloc_stats(3, 4, 5, 6, 7)
+  record_regalloc_loop(8, 9, 10, 11, 12, 13, 14, 15)
   finish_function(18, 96)
   set_module_compile_us(240L)
   inspect(
     export_json(),
     content=(
       #|{
-      #|  "schema_version": 3,
+      #|  "schema_version": 4,
       #|  "expected_functions": 1,
       #|  "module_compile_us": "240",
       #|  "functions": [
@@ -39,6 +40,16 @@ test "compile metrics preserve every production phase and allocation summary" {
       #|      "reloads": 5,
       #|      "reg_moves": 6,
       #|      "spill_to_spill": 7,
+      #|      "regalloc_loop": {
+      #|        "queue_pops": 8,
+      #|        "register_probes": 9,
+      #|        "occupied_segments_scanned": 10,
+      #|        "conflicts": 11,
+      #|        "evictions": 12,
+      #|        "bundle_splits": 13,
+      #|        "second_chance_attempts": 14,
+      #|        "max_queue_length": 15
+      #|      },
       #|      "ir_passes": [],
       #|      "regalloc_phases": []
       #|    }

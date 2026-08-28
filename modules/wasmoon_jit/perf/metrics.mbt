@@ -88,6 +88,18 @@ pub struct RegallocPhaseMetric {
 } derive(ToJson)
 
 ///|
+pub struct RegallocLoopMetric {
+  queue_pops : Int
+  register_probes : Int
+  occupied_segments_scanned : Int
+  conflicts : Int
+  evictions : Int
+  bundle_splits : Int
+  second_chance_attempts : Int
+  max_queue_length : Int
+} derive(ToJson)
+
+///|
 pub struct FunctionMetrics {
   func_idx : Int
   func_name : String
@@ -106,6 +118,7 @@ pub struct FunctionMetrics {
   mut reloads : Int
   mut reg_moves : Int
   mut spill_to_spill : Int
+  mut regalloc_loop : RegallocLoopMetric?
   ir_passes : Array[IRPassMetric]
   regalloc_phases : Array[RegallocPhaseMetric]
 } derive(ToJson)
@@ -130,7 +143,7 @@ fn ensure_module_state() -> ModuleMetricsReport {
     Some(m) => m
     None => {
       let m = {
-        schema_version: 3,
+        schema_version: 4,
         expected_functions: 0,
         module_compile_us: 0L,
         functions: [],
@@ -153,7 +166,7 @@ fn flush_current_function_if_any() -> Unit {
 pub fn reset_module(expected_functions : Int) -> Unit {
   guard enabled() else { return }
   module_state.val = Some({
-    schema_version: 3,
+    schema_version: 4,
     expected_functions,
     module_compile_us: 0L,
     functions: [],
@@ -194,6 +207,7 @@ pub fn begin_function(
     reloads: 0,
     reg_moves: 0,
     spill_to_spill: 0,
+    regalloc_loop: None,
     ir_passes: [],
     regalloc_phases: [],
   })
@@ -320,6 +334,32 @@ pub fn record_regalloc_stats(
     m.reloads = reloads
     m.reg_moves = reg_moves
     m.spill_to_spill = spill_to_spill
+  }
+}
+
+///|
+pub fn record_regalloc_loop(
+  queue_pops : Int,
+  register_probes : Int,
+  occupied_segments_scanned : Int,
+  conflicts : Int,
+  evictions : Int,
+  bundle_splits : Int,
+  second_chance_attempts : Int,
+  max_queue_length : Int,
+) -> Unit {
+  guard enabled() else { return }
+  if current_function_state.val is Some(m) {
+    m.regalloc_loop = Some({
+      queue_pops,
+      register_probes,
+      occupied_segments_scanned,
+      conflicts,
+      evictions,
+      bundle_splits,
+      second_chance_attempts,
+      max_queue_length,
+    })
   }
 }
 

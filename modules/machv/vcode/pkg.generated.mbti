@@ -456,6 +456,20 @@ pub fn RegClass::hash_combine(Self, Hasher) -> Unit
 pub fn RegClass::not_equal(Self, Self) -> Bool
 pub fn RegClass::to_repr(Self) -> @debug.Repr
 
+pub(all) struct RegallocLoopStatistics {
+  queue_pops : Int
+  register_probes : Int
+  occupied_segments_scanned : Int
+  conflicts : Int
+  evictions : Int
+  bundle_splits : Int
+  second_chance_attempts : Int
+  max_queue_length : Int
+} derive(Eq, @debug.Debug)
+pub fn RegallocLoopStatistics::equal(Self, Self) -> Bool
+pub fn RegallocLoopStatistics::not_equal(Self, Self) -> Bool
+pub fn RegallocLoopStatistics::to_repr(Self) -> @debug.Repr
+
 pub struct ResolvedCallTransferPlan {
   stack_transfers : Array[StackArgumentTransfer]
   register_moves : ResolvedMovePlan
@@ -514,6 +528,7 @@ pub(all) enum TargetCompileEvent {
   RegallocStarted
   RegallocPhaseStarted(String)
   RegallocPhasesFinished
+  RegallocLoopMeasured(RegallocLoopStatistics)
   RegallocFinished(AllocationStatistics)
   FramePlanningStarted
   FramePlanningFinished

@@ -60,19 +60,22 @@ fn build_x64_target(
     None => function
   }
   let context = x64_target_context(elaborated, environment_field_path)
-  let selected = @x64_target.lower(elaborated, context) catch {
+  let selected = @x64_target.select_verified(elaborated, context) catch {
     error => raise X64LoweringFailed(cause=error)
   }
   let compiled = try {
     match target_lower_tick {
       Some(tick) =>
-        @x64_target.compile(
+        @x64_target.compile_selected(
           selected,
           on_event=target_compile_metrics_observer(tick),
           verify_allocation=regalloc_validation(),
         )
       None =>
-        @x64_target.compile(selected, verify_allocation=regalloc_validation())
+        @x64_target.compile_selected(
+          selected,
+          verify_allocation=regalloc_validation(),
+        )
     }
   } catch {
     error => raise X64CompilationFailed(cause=error)

@@ -1,4 +1,17 @@
 ///|
+/// Deterministic counters for the allocator's bundle-probing loop.
+pub(all) struct RegallocLoopStatistics {
+  queue_pops : Int
+  register_probes : Int
+  occupied_segments_scanned : Int
+  conflicts : Int
+  evictions : Int
+  bundle_splits : Int
+  second_chance_attempts : Int
+  max_queue_length : Int
+} derive(Eq, Debug)
+
+///|
 /// Target-compilation boundaries exposed to an embedding-owned observer.
 ///
 /// The observer must not mutate compiler inputs from inside the callback.
@@ -14,6 +27,7 @@ pub(all) enum TargetCompileEvent {
   // translating the plan and any target-level checking — and belongs to
   // neither the allocator nor an allocator phase.
   RegallocPhasesFinished
+  RegallocLoopMeasured(RegallocLoopStatistics)
   RegallocFinished(AllocationStatistics)
   FramePlanningStarted
   FramePlanningFinished

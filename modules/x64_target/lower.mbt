@@ -1357,13 +1357,10 @@ fn set_terminator(
 }
 
 ///|
-pub fn lower(
+fn lower_validated_semantic(
   function : @semantic.Function,
   context : LoweringContext,
 ) -> @vcode.Function[X64Inst] raise X64LowerError {
-  function.verify() catch {
-    error => raise InvalidSemantic(cause=error)
-  }
   let signature = function.signature()
   let builder : @vcode.Builder[X64Inst] = @vcode.Builder::new_with_protocol(
     function.name(),
@@ -1603,4 +1600,45 @@ pub fn lower(
     error => raise InvalidTarget(cause=error)
   }
   lowered
+}
+
+///|
+/// Validate and lower externally supplied semantic MachV.
+pub fn lower(
+  function : @semantic.Function,
+  context : LoweringContext,
+) -> @vcode.Function[X64Inst] raise X64LowerError {
+  function.verify() catch {
+    error => raise InvalidSemantic(cause=error)
+  }
+  lower_validated_semantic(function, context)
+}
+
+///|
+/// Opaque evidence that x64 instruction selection and VCode validation
+/// completed without exposing the selected function for mutation.
+pub struct SelectedFunction {
+  priv function : @vcode.Function[X64Inst]
+}
+
+///|
+/// Select and validate x64 VCode for immediate target compilation.
+pub fn select(
+  function : @semantic.Function,
+  context : LoweringContext,
+) -> SelectedFunction raise X64LowerError {
+  { function: lower(function, context), }
+}
+
+///|
+/// Select canonical semantic MachV without repeating an established proof.
+/// Falls back to full validation if the producer did not establish it.
+pub fn select_verified(
+  function : @semantic.Function,
+  context : LoweringContext,
+) -> SelectedFunction raise X64LowerError {
+  function.require_verified() catch {
+    error => raise InvalidSemantic(cause=error)
+  }
+  { function: lower_validated_semantic(function, context), }
 }

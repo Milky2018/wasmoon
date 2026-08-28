@@ -776,6 +776,17 @@ fn compute_gc_roots(
 }
 
 ///|
+fn gc_roots_for_instruction(
+  roots : Array[Array[Int]]?,
+  instruction : Int,
+) -> Array[Int] {
+  match roots {
+    Some(roots) => roots[instruction]
+    None => []
+  }
+}
+
+///|
 fn lower_call_instruction(
   builder : @semantic.FunctionBuilder,
   values : Array[@semantic.Value?],
@@ -984,7 +995,7 @@ fn lower_instruction(
   value_types : Array[@semantic.ValueType?],
   instruction : @milkir.Inst,
   block_id : Int,
-  gc_roots : Array[Array[Int]],
+  gc_roots : Array[Array[Int]]?,
   function_result_types : Array[@semantic.ValueType],
   environment : Array[@semantic.Value],
   dialect : DialectLowering?,
@@ -997,7 +1008,7 @@ fn lower_instruction(
         value_types,
         instruction,
         call,
-        gc_roots[instruction.id],
+        gc_roots_for_instruction(gc_roots, instruction.id),
       )
       return false
     }
@@ -1162,7 +1173,7 @@ fn lower_instruction(
             function_result_types,
             ext,
             block_id,
-            gc_roots[instruction.id],
+            gc_roots_for_instruction(gc_roots, instruction.id),
             lowering,
           )
         None =>
@@ -1303,17 +1314,21 @@ fn lower_verified_function(
     function.next_value_id,
     None,
   )
+  let mut has_gc_references = false
   let lowered_params = builder.parameters()
   for index, parameter in function.params {
     value_types[parameter.0.id] = Some(parameter_types[index])
+    has_gc_references = has_gc_references || is_gc_reference_type(parameter.1)
   }
   for block in function.blocks {
     for parameter in block.params {
       value_types[parameter.0.id] = Some(lower_type(parameter.1))
+      has_gc_references = has_gc_references || is_gc_reference_type(parameter.1)
     }
     for instruction in block.instructions {
       for result in instruction.results {
         value_types[result.id] = Some(lower_type(result.ty))
+        has_gc_references = has_gc_references || is_gc_reference_type(result.ty)
       }
     }
   }
@@ -1344,7 +1359,11 @@ fn lower_verified_function(
     source_blocks[block.id] = Some(block)
   }
   let cfg = @milkir.CFG::build(function)
-  let gc_roots = compute_gc_roots(function, cfg)
+  let gc_roots = if has_gc_references {
+    Some(compute_gc_roots(function, cfg))
+  } else {
+    None
+  }
   let function_result_types = function.results.map(lower_type)
   let block_order = cfg.reverse_postorder()
   let reachable = Array::make(function.next_block_id, false)

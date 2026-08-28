@@ -290,6 +290,7 @@ fn verify_target_allocation(
 fn allocate_verified(
   function : @vcode.Function[X64Inst],
   on_phase? : ((String?) -> Unit)? = None,
+  on_statistics? : ((@vcode.RegallocLoopStatistics) -> Unit)? = None,
   verify_allocation? : Bool = true,
 ) -> @vcode.Allocation raise X64AllocationError {
   let allocation = @vcode_regalloc.allocate_selected_vcode(
@@ -299,6 +300,7 @@ fn allocate_verified(
       spill_scratch_regs(),
     ).with_fixed_operand_regs(fixed_operand_only_regs()),
     on_phase~,
+    on_statistics~,
     verify=verify_allocation,
   ) catch {
     error => raise AllocatorFailure(cause=error)

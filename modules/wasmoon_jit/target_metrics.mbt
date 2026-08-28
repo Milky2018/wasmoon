@@ -67,6 +67,17 @@ fn target_compile_metrics_observer(
         // phases summing to the measured regalloc stage.
         regalloc_phase.val = Some(("plan_translation", @perf.tick_now()))
       }
+      RegallocLoopMeasured(statistics) =>
+        @perf.record_regalloc_loop(
+          statistics.queue_pops,
+          statistics.register_probes,
+          statistics.occupied_segments_scanned,
+          statistics.conflicts,
+          statistics.evictions,
+          statistics.bundle_splits,
+          statistics.second_chance_attempts,
+          statistics.max_queue_length,
+        )
       RegallocFinished(statistics) => {
         close_regalloc_phase()
         if record_target_stage(RegisterAllocation, phase_tick.val)

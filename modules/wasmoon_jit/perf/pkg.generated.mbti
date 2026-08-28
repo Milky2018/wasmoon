@@ -22,6 +22,8 @@ pub fn instant_now() -> Instant
 
 pub fn record_ir_pass(String, Int, Int, Bool, Int64, egraph_classes? : Int?, egraph_nodes? : Int?, egraph_rule_apps? : Int?, work_done? : Int?, budget_exhausted? : Bool?) -> Unit
 
+pub fn record_regalloc_loop(Int, Int, Int, Int, Int, Int, Int, Int) -> Unit
+
 pub fn record_regalloc_phase_us(String, Int64) -> Unit
 
 pub fn record_regalloc_stats(Int, Int, Int, Int, Int) -> Unit
@@ -64,6 +66,7 @@ pub struct FunctionMetrics {
   mut reloads : Int
   mut reg_moves : Int
   mut spill_to_spill : Int
+  mut regalloc_loop : RegallocLoopMetric?
   ir_passes : Array[IRPassMetric]
   regalloc_phases : Array[RegallocPhaseMetric]
 } derive(ToJson)
@@ -93,6 +96,18 @@ pub struct ModuleMetricsReport {
   functions : Array[FunctionMetrics]
 } derive(ToJson)
 pub fn ModuleMetricsReport::to_json(Self) -> Json
+
+pub struct RegallocLoopMetric {
+  queue_pops : Int
+  register_probes : Int
+  occupied_segments_scanned : Int
+  conflicts : Int
+  evictions : Int
+  bundle_splits : Int
+  second_chance_attempts : Int
+  max_queue_length : Int
+} derive(ToJson)
+pub fn RegallocLoopMetric::to_json(Self) -> Json
 
 pub struct RegallocPhaseMetric {
   name : String

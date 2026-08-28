@@ -214,7 +214,10 @@ test "spill bundle is normalized before conflict probes" {
   prepare_spill_bundle(bundles[1], segments, [0, 1])
   let occupied = RegisterAllocationIndex::new(1, segments, [0, 1])
   occupied.insert(0, 0)
-  let probe = probe_bundle_register(
+  let probe_conflicts : Array[Int] = []
+  let probe = BundleRegisterProbe::new(probe_conflicts)
+  let statistics = BundleAllocationStatistics::new()
+  probe_bundle_register(
     bundles[1],
     0,
     r0,
@@ -227,7 +230,9 @@ test "spill bundle is normalized before conflict probes" {
     Array::make(bundles.length(), 0),
     1,
     [],
-    [],
+    probe_conflicts,
+    probe,
+    statistics,
     conflict_policy=RejectAnyConflict,
   )
   debug_inspect(
@@ -259,6 +264,7 @@ test "spillset defers to second chance after two normal splits" {
   let queue = BundleQueue::new(bundles)
   let occupied = RegisterAllocationIndex::new(1, segments, [0])
   let split_points = [5, 15, 25]
+  let statistics = BundleAllocationStatistics::new()
   let mut current_bundle = 0
   for index, instruction in split_points {
     inspect(
@@ -277,6 +283,7 @@ test "spillset defers to second chance after two normal splits" {
         ranges,
         [0],
         [],
+        statistics,
       ),
       content="true",
     )
@@ -416,7 +423,7 @@ test "production allocation evicts then splits a cheaper long bundle" {
     parameters: [[]],
     edge_arguments: [[]],
   }
-  let (bundles, segment_owner, _, _) = allocate_bundles(
+  let (bundles, segment_owner, _, _, statistics) = allocate_bundles(
     function,
     MachineEnv::new([r0], []),
     ranges,
@@ -472,6 +479,10 @@ test "production allocation evicts then splits a cheaper long bundle" {
       #|}
     ),
   )
+  inspect(statistics.queue_pops() > 0, content="true")
+  inspect(statistics.register_probes() > 0, content="true")
+  inspect(statistics.occupied_segments_scanned() > 0, content="true")
+  inspect(statistics.bundle_splits() > 0, content="true")
 }
 
 ///|
@@ -530,7 +541,10 @@ test "production eviction accounts for and removes every conflicting bundle" {
   occupied.insert(0, 0)
   occupied.insert(0, 1)
   let occupied_stack : Array[Int] = []
-  let probe = probe_bundle_register(
+  let probe_conflicts : Array[Int] = []
+  let probe = BundleRegisterProbe::new(probe_conflicts)
+  let statistics = BundleAllocationStatistics::new()
+  probe_bundle_register(
     bundles[2],
     0,
     r0,
@@ -543,7 +557,9 @@ test "production eviction accounts for and removes every conflicting bundle" {
     Array::make(bundles.length(), 0),
     1,
     occupied_stack,
-    [],
+    probe_conflicts,
+    probe,
+    statistics,
     conflict_policy=Unlimited,
   )
   let probe_snapshot : BundleProbeSnapshot = {
@@ -575,6 +591,7 @@ test "production eviction accounts for and removes every conflicting bundle" {
     segments,
     occupied,
     queue,
+    statistics,
   )
   let requeued : Array[Int] = []
   while queue.pop() is Some(entry) {
@@ -637,7 +654,9 @@ test "production eviction accounts for and removes every conflicting bundle" {
   let cutoff_occupied = RegisterAllocationIndex::new(1, segments, [0])
   cutoff_occupied.insert(0, 0)
   cutoff_occupied.insert(0, 1)
-  let cutoff_probe = probe_bundle_register(
+  let cutoff_conflicts : Array[Int] = []
+  let cutoff_probe = BundleRegisterProbe::new(cutoff_conflicts)
+  probe_bundle_register(
     bundles[2],
     0,
     r0,
@@ -650,7 +669,9 @@ test "production eviction accounts for and removes every conflicting bundle" {
     Array::make(bundles.length(), 0),
     1,
     occupied_stack,
-    [],
+    cutoff_conflicts,
+    cutoff_probe,
+    statistics,
     conflict_policy=CostLimit(4),
   )
   debug_inspect(

@@ -143,14 +143,14 @@ fn EGraph::apply_indexed_rules_once(
   let ids : Array[EClassId] = []
   let mut i = 0
   while i < uf_len {
-    if self.classes.get(i) is Some(_) {
+    if self.class_at(i) is Some(_) {
       ids.push(EClassId(i))
     }
     i = i + 1
   }
   for id in ids {
     let canonical = self.find(id).0
-    guard self.classes.get(canonical) is Some(_) else { continue }
+    guard self.class_at(canonical) is Some(_) else { continue }
     let class_id = EClassId(canonical)
     let nodes = self.get_nodes(class_id)
     guard !nodes.is_empty() else { continue }

@@ -121,27 +121,27 @@ test "Wasmoon runtime ABI elaboration makes roots and stack maps explicit" {
       #|  v3:i32 = i32.const 7
       #|  v4:ptr64 = stack.address stack0
       #|  v5:i32 = i32.const 1
-      #|  v6:ptr64 = stack.address stack1
+      #|  v7:ptr64 = stack.address stack1
       #|  store {
       #|  width: W64,
       #|  value_type: GcRef64,
       #|  offset: 0,
       #|  endianness: Little,
       #|  trap: None,
-      #|} v6, v1 [memory=write]
+      #|} v7, v1 [memory=write]
       #|  store {
       #|  width: W64,
       #|  value_type: GcRef64,
       #|  offset: 8,
       #|  endianness: Little,
       #|  trap: None,
-      #|} v6, v2 [memory=write]
-      #|  v7:i32 = i32.const 2
-      #|  call external @wasmoon.runtime.gc.push_root_scope (ptr64, ptr64, i32) -> () [platform] v0, v6, v7 [memory=read-write, trap]
-      #|  v8:i32 = i32.const 0
-      #|  v9:i64 = call external @wasm.runtime.gc.alloc_struct_slow (ptr64, i32, ptr64, i32, i32) -> (i64) [platform] v0, v3, v4, v5, v8 [memory=read-write, trap, gc-safepoint] roots=[v1, v2] stack-map=0:1
+      #|} v7, v2 [memory=write]
+      #|  v8:i32 = i32.const 2
+      #|  call external @wasmoon.runtime.gc.push_root_scope (ptr64, ptr64, i32) -> () [platform] v0, v7, v8 [memory=read-write, trap]
+      #|  v9:i32 = i32.const 0
+      #|  v6:i64 = call external @wasm.runtime.gc.alloc_struct_slow (ptr64, i32, ptr64, i32, i32) -> (i64) [platform] v0, v3, v4, v5, v9 [memory=read-write, trap, gc-safepoint] roots=[v1, v2] stack-map=0:1
       #|  call external @wasmoon.runtime.gc.pop_root_scope (ptr64) -> () [platform] v0 [memory=read-write, trap]
-      #|  return v9
+      #|  return v6
       #|}
     ),
   )
@@ -201,45 +201,45 @@ test "Wasmoon runtime ABI elaboration shares one root-scope stack object" {
       #|machv shared_root_scope_object [internal](v0:ptr64, v1:gcref64, v2:gcref64, v3:gcref64) -> (i64) {
       #|stack0: size=24, alignment=16
       #|block0:
-      #|  v4:ptr64 = stack.address stack0
+      #|  v6:ptr64 = stack.address stack0
       #|  store {
       #|  width: W64,
       #|  value_type: GcRef64,
       #|  offset: 0,
       #|  endianness: Little,
       #|  trap: None,
-      #|} v4, v1 [memory=write]
+      #|} v6, v1 [memory=write]
       #|  store {
       #|  width: W64,
       #|  value_type: GcRef64,
       #|  offset: 8,
       #|  endianness: Little,
       #|  trap: None,
-      #|} v4, v2 [memory=write]
+      #|} v6, v2 [memory=write]
       #|  store {
       #|  width: W64,
       #|  value_type: GcRef64,
       #|  offset: 16,
       #|  endianness: Little,
       #|  trap: None,
-      #|} v4, v3 [memory=write]
-      #|  v5:i32 = i32.const 3
-      #|  call external @wasmoon.runtime.gc.push_root_scope (ptr64, ptr64, i32) -> () [platform] v0, v4, v5 [memory=read-write, trap]
-      #|  v6:i64 = call external @host.first (ptr64) -> (i64) [platform] v0 [memory=read-write, trap, gc-safepoint] roots=[v1, v2, v3]
+      #|} v6, v3 [memory=write]
+      #|  v7:i32 = i32.const 3
+      #|  call external @wasmoon.runtime.gc.push_root_scope (ptr64, ptr64, i32) -> () [platform] v0, v6, v7 [memory=read-write, trap]
+      #|  v4:i64 = call external @host.first (ptr64) -> (i64) [platform] v0 [memory=read-write, trap, gc-safepoint] roots=[v1, v2, v3]
       #|  call external @wasmoon.runtime.gc.pop_root_scope (ptr64) -> () [platform] v0 [memory=read-write, trap]
-      #|  v7:ptr64 = stack.address stack0
+      #|  v8:ptr64 = stack.address stack0
       #|  store {
       #|  width: W64,
       #|  value_type: GcRef64,
       #|  offset: 0,
       #|  endianness: Little,
       #|  trap: None,
-      #|} v7, v1 [memory=write]
-      #|  v8:i32 = i32.const 1
-      #|  call external @wasmoon.runtime.gc.push_root_scope (ptr64, ptr64, i32) -> () [platform] v0, v7, v8 [memory=read-write, trap]
-      #|  v9:i64 = call external @host.second (ptr64) -> (i64) [platform] v0 [memory=read-write, trap, gc-safepoint] roots=[v1]
+      #|} v8, v1 [memory=write]
+      #|  v9:i32 = i32.const 1
+      #|  call external @wasmoon.runtime.gc.push_root_scope (ptr64, ptr64, i32) -> () [platform] v0, v8, v9 [memory=read-write, trap]
+      #|  v5:i64 = call external @host.second (ptr64) -> (i64) [platform] v0 [memory=read-write, trap, gc-safepoint] roots=[v1]
       #|  call external @wasmoon.runtime.gc.pop_root_scope (ptr64) -> () [platform] v0 [memory=read-write, trap]
-      #|  return v9
+      #|  return v5
       #|}
     ),
   )

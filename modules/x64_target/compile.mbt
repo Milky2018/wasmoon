@@ -18,14 +18,11 @@ pub impl Show for X64CompileError with fn output(self, logger) {
 ///
 /// `on_event` is an observation-only seam. It must not mutate `function` or any
 /// compiler object reachable while the callback runs.
-pub fn compile(
+fn compile_selected_function(
   function : @vcode.Function[X64Inst],
   on_event? : (@vcode.TargetCompileEvent) -> Unit = fn(_) { () },
   verify_allocation? : Bool = true,
 ) -> (@code_object.UnlinkedCodeObject, Int) raise X64CompileError {
-  verify_vcode(function) catch {
-    error => raise TargetValidationFailed(cause=error)
-  }
   on_event(RegallocStarted)
   let allocation = allocate_verified(
     function,
@@ -35,6 +32,7 @@ pub fn compile(
         None => on_event(RegallocPhasesFinished)
       }
     }),
+    on_statistics=Some(statistics => on_event(RegallocLoopMeasured(statistics))),
     verify_allocation~,
   ) catch {
     error => raise AllocationFailed(cause=error)
@@ -51,4 +49,27 @@ pub fn compile(
   }
   on_event(EmissionFinished)
   (object, frame.frame_size())
+}
+
+///|
+/// Compile VCode produced by `select` without repeating target validation.
+pub fn compile_selected(
+  selected : SelectedFunction,
+  on_event? : (@vcode.TargetCompileEvent) -> Unit = fn(_) { () },
+  verify_allocation? : Bool = true,
+) -> (@code_object.UnlinkedCodeObject, Int) raise X64CompileError {
+  compile_selected_function(selected.function, on_event~, verify_allocation~)
+}
+
+///|
+/// Compile externally supplied x64 VCode through the safe validated entry.
+pub fn compile(
+  function : @vcode.Function[X64Inst],
+  on_event? : (@vcode.TargetCompileEvent) -> Unit = fn(_) { () },
+  verify_allocation? : Bool = true,
+) -> (@code_object.UnlinkedCodeObject, Int) raise X64CompileError {
+  verify_vcode(function) catch {
+    error => raise TargetValidationFailed(cause=error)
+  }
+  compile_selected_function(function, on_event~, verify_allocation~)
 }

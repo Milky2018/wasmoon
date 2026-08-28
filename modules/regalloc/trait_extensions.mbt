@@ -11,6 +11,12 @@ pub extend AllocationPlan with Debug::{to_repr}
 pub extend AllocationPlan with Show::{to_string, output}
 
 ///|
+pub extend BundleAllocationStatistics with Debug::{to_repr}
+
+///|
+pub extend BundleAllocationStatistics with Eq::{not_equal, equal}
+
+///|
 pub extend DenseCfgEdges with Debug::{to_repr}
 
 ///|
