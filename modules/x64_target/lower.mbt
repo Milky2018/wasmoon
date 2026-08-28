@@ -244,6 +244,57 @@ fn map_values(
 }
 
 ///|
+fn map_instruction_operands(
+  function : @semantic.Function,
+  values : Array[@vcode.Value?],
+  instruction : @semantic.Instruction,
+) -> Array[@vcode.Value] raise X64LowerError {
+  let mapped = []
+  let count = function.instruction_operand_count(instruction).unwrap()
+  for index in 0..<count {
+    mapped.push(
+      map_value(
+        function,
+        values,
+        function.instruction_operand_at(instruction, index).unwrap(),
+      ),
+    )
+  }
+  mapped
+}
+
+///|
+fn instruction_result_types(
+  function : @semantic.Function,
+  instruction : @semantic.Instruction,
+) -> Array[@semantic.ValueType] {
+  let result_types = []
+  let count = function.instruction_result_count(instruction).unwrap()
+  for index in 0..<count {
+    result_types.push(
+      function
+      .value_type(function.instruction_result_at(instruction, index).unwrap())
+      .unwrap(),
+    )
+  }
+  result_types
+}
+
+///|
+fn bind_instruction_results(
+  function : @semantic.Function,
+  values : Array[@vcode.Value?],
+  instruction : @semantic.Instruction,
+  results : Array[@vcode.Value],
+) -> Unit {
+  let count = function.instruction_result_count(instruction).unwrap()
+  for index in 0..<count {
+    let result = function.instruction_result_at(instruction, index).unwrap()
+    values[function.value_index(result).unwrap()] = Some(results[index])
+  }
+}
+
+///|
 fn append_body(
   builder : @vcode.Builder[X64Inst],
   block : @vcode.Block,
@@ -533,12 +584,8 @@ fn lower_instruction(
 ) -> Unit raise X64LowerError {
   let instruction_index = function.instruction_index(instruction).unwrap()
   let operation = function.instruction_operation(instruction).unwrap()
-  let semantic_operands = function.instruction_operands(instruction)
-  let operands = map_values(function, values, semantic_operands)
-  let semantic_results = function.instruction_results(instruction)
-  let result_types = semantic_results.map(value => {
-    function.value_type(value).unwrap()
-  })
+  let operands = map_instruction_operands(function, values, instruction)
+  let result_types = instruction_result_types(function, instruction)
   let roots = map_values(
     function,
     values,
@@ -560,9 +607,7 @@ fn lower_instruction(
           context, builder, block, call, operands, result_types, metadata,
         )
     }
-    for index, result in semantic_results {
-      values[function.value_index(result).unwrap()] = Some(results[index])
-    }
+    bind_instruction_results(function, values, instruction, results)
     return
   }
   if operation is IntBinary(binary) &&
@@ -631,9 +676,7 @@ fn lower_instruction(
       outputs,
       source_metadata(semantic_metadata, roots, operation.semantics()),
     )
-    for index, result in semantic_results {
-      values[function.value_index(result).unwrap()] = Some(results[index])
-    }
+    bind_instruction_results(function, values, instruction, results)
     return
   }
   if operation is Convert(FloatToInt(source, result, signedness, mode)) {
@@ -721,11 +764,7 @@ fn lower_instruction(
       result_types.map(@vcode.Output::any),
       source_metadata(semantic_metadata, roots, operation.semantics()),
     )
-    for index, semantic_result in semantic_results {
-      values[function.value_index(semantic_result).unwrap()] = Some(
-        results[index],
-      )
-    }
+    bind_instruction_results(function, values, instruction, results)
     return
   }
   if operation is IntUnary(CountTrailingZeros) {
@@ -752,11 +791,7 @@ fn lower_instruction(
         operation.semantics(),
       ),
     )
-    for index, semantic_result in semantic_results {
-      values[function.value_index(semantic_result).unwrap()] = Some(
-        results[index],
-      )
-    }
+    bind_instruction_results(function, values, instruction, results)
     return
   }
   if operation is IntBinary(RotateLeft) {
@@ -783,11 +818,7 @@ fn lower_instruction(
         operation.semantics(),
       ),
     )
-    for index, semantic_result in semantic_results {
-      values[function.value_index(semantic_result).unwrap()] = Some(
-        results[index],
-      )
-    }
+    bind_instruction_results(function, values, instruction, results)
     return
   }
   if operation is EnvironmentField(field, _) {
@@ -827,7 +858,9 @@ fn lower_instruction(
           },
         )[0]
     }
-    values[function.value_index(semantic_results[0]).unwrap()] = Some(current)
+    values[function
+    .value_index(function.instruction_result_at(instruction, 0).unwrap())
+    .unwrap()] = Some(current)
     return
   }
   if operation is Vector(ReplaceLane(lane, index)) {
@@ -843,9 +876,9 @@ fn lower_instruction(
         operation.semantics(),
       ),
     )
-    values[function.value_index(semantic_results[0]).unwrap()] = Some(
-      results[0],
-    )
+    values[function
+    .value_index(function.instruction_result_at(instruction, 0).unwrap())
+    .unwrap()] = Some(results[0])
     return
   }
   if operation is Vector(Relaxed(Dot8To32AddSigned)) {
@@ -893,7 +926,9 @@ fn lower_instruction(
           operation.semantics(),
         ),
       )[0]
-    values[function.value_index(semantic_results[0]).unwrap()] = Some(result)
+    values[function
+    .value_index(function.instruction_result_at(instruction, 0).unwrap())
+    .unwrap()] = Some(result)
     return
   }
   let selected = match operation {
@@ -983,7 +1018,7 @@ fn lower_instruction(
       Some(VectorIntBinary(I16x8, Q15MultiplyRoundedSaturating))
     Vector(Relaxed(Dot8To16Signed)) => Some(VectorRelaxedDot8To16)
     ReferenceCompare(comparison) => {
-      let operand_type = match semantic_operands.get(0) {
+      let operand_type = match function.instruction_operand_at(instruction, 0) {
         Some(value) => function.value_type(value)
         None => None
       }
@@ -1020,7 +1055,7 @@ fn lower_instruction(
         _ => None
       }
     IntCompare(comparison) => {
-      let operand_type = match semantic_operands.get(0) {
+      let operand_type = match function.instruction_operand_at(instruction, 0) {
         Some(value) => function.value_type(value)
         None => None
       }
@@ -1058,7 +1093,7 @@ fn lower_instruction(
         _ => None
       }
     FloatCompare(comparison) => {
-      let operand_type = match semantic_operands.get(0) {
+      let operand_type = match function.instruction_operand_at(instruction, 0) {
         Some(value) => function.value_type(value)
         None => None
       }
@@ -1218,9 +1253,7 @@ fn lower_instruction(
       },
     ),
   )
-  for index, result in semantic_results {
-    values[function.value_index(result).unwrap()] = Some(results[index])
-  }
+  bind_instruction_results(function, values, instruction, results)
 }
 
 ///|
@@ -1372,20 +1405,32 @@ fn lower_validated_semantic(
   )
   let values : Array[@vcode.Value?] = Array::make(function.value_count(), None)
   let result_area = lower_parameters(function, context, builder, values)
-  let semantic_blocks = function.blocks()
   let blocks : Array[@vcode.Block] = []
-  for index, semantic_block in semantic_blocks {
+  for index in 0..<function.block_count() {
+    let semantic_block = function.block_at(index).unwrap()
+    let parameter_count = function
+      .block_parameter_count(semantic_block)
+      .unwrap()
     let block = if index == 0 {
       builder.entry_block()
     } else {
       builder.create_block(
-        function
-        .block_parameters(semantic_block)
-        .map(value => function.value_type(value).unwrap()),
+        Array::makei(parameter_count, parameter_index => {
+          function
+          .value_type(
+            function
+            .block_parameter_at(semantic_block, parameter_index)
+            .unwrap(),
+          )
+          .unwrap()
+        }),
       )
     }
     blocks.push(block)
-    for parameter_index, parameter in function.block_parameters(semantic_block) {
+    for parameter_index in 0..<parameter_count {
+      let parameter = function
+        .block_parameter_at(semantic_block, parameter_index)
+        .unwrap()
       values[function.value_index(parameter).unwrap()] = Some(
         builder.block_parameter(block, parameter_index) catch {
           error => raise BuildFailure(cause=error)
@@ -1396,7 +1441,13 @@ fn lower_validated_semantic(
   for semantic_block in function.blocks_in_cfg_order() {
     let block_index = function.block_index(semantic_block).unwrap()
     let block = blocks[block_index]
-    for instruction in function.block_instructions(semantic_block) {
+    let instruction_count = function
+      .block_instruction_count(semantic_block)
+      .unwrap()
+    for instruction_index in 0..<instruction_count {
+      let instruction = function
+        .block_instruction_at(semantic_block, instruction_index)
+        .unwrap()
       lower_instruction(
         function, context, builder, block, block_index, instruction, values,
       )
