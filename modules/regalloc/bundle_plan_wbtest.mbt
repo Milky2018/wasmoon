@@ -206,7 +206,7 @@ test "production bundle plan follows transitive SSA edge affinities" {
       #|  range_to_bundle: [0, 0, 0],
       #|  segment_to_bundle: [0, 0, 0, 0],
       #|  bundle_ranges: [[0, 1, 2]],
-      #|  bundle_segments: [[0, 1, 2, 3]],
+      #|  bundle_segments: [[0, 2, 3, 1]],
       #|}
     ),
   )

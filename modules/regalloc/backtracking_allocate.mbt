@@ -269,7 +269,7 @@ fn register_index(registers : Array[PhysicalReg], target : PhysicalReg) -> Int? 
 }
 
 ///|
-fn[F : FunctionView] allocate_segments_with_bundles(
+fn[F : FunctionView] allocate_segments_with_context(
   function : F,
   environment : MachineEnv,
   ranges : LiveRangeSet,
@@ -277,7 +277,7 @@ fn[F : FunctionView] allocate_segments_with_bundles(
 ) -> (
   Array[AllocationSegment],
   Array[Array[Int]],
-  Array[AllocationBundle],
+  AllocationContext,
   Array[Int],
   Array[SpillSet],
   Array[Int],
@@ -292,12 +292,12 @@ fn[F : FunctionView] allocate_segments_with_bundles(
   config.enter_phase(Some(BundleFormation))
   let bundle_plan = build_production_bundle_plan(function, ranges, segments)
   config.enter_phase(Some(BundleAllocation))
-  let (bundles, segment_owner, spill_sets, segment_spill_set, statistics) = allocate_bundles(
+  let (context, segment_owner, spill_sets, segment_spill_set, statistics) = allocate_bundles(
     function, environment, ranges, segments, segments_by_value, loop_depths, bundle_plan,
   )
   config.report_bundle_statistics(statistics)
   (
-    segments, segments_by_value, bundles, segment_owner, spill_sets, segment_spill_set,
+    segments, segments_by_value, context, segment_owner, spill_sets, segment_spill_set,
   )
 }
 
@@ -988,7 +988,7 @@ fn[F : FunctionView] allocate_bundle_plan(
 ) -> AllocationPlan raise VerifyError {
   config.enter_phase(Some(LiveRanges))
   let ranges = build_function_live_ranges(function)
-  let (segments, segments_by_value, _, _, spill_sets, segment_spill_set) = allocate_segments_with_bundles(
+  let (segments, segments_by_value, _, _, spill_sets, segment_spill_set) = allocate_segments_with_context(
     function,
     environment,
     ranges,

@@ -406,6 +406,19 @@ fn build_production_bundle_plan_from_range_edges(
     segment_to_bundle[segment.id] = bundle
     bundle_segments[bundle].push(segment.id)
   }
+  for segment_ids in bundle_segments {
+    segment_ids.sort_by((left, right) => {
+      let by_end = segments[left].range.end.compare_with_order(
+        segments[right].range.end,
+        ranges.block_order,
+      )
+      if by_end != 0 {
+        by_end
+      } else {
+        left - right
+      }
+    })
+  }
   let plan : ProductionBundlePlan = {
     range_to_bundle,
     segment_to_bundle,
