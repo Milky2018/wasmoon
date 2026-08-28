@@ -527,6 +527,7 @@ pub fn SymbolReference::to_repr(Self) -> @debug.Repr
 pub(all) enum TargetCompileEvent {
   TargetAnalysisStarted
   TargetConstructionStarted
+  TargetValidationStarted
   TargetSelectionFinished
   RegallocStarted
   RegallocPhaseStarted(String)

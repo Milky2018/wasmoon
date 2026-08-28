@@ -21,6 +21,8 @@ pub(all) enum TargetCompileEvent {
   TargetAnalysisStarted
   // Construction of selected target VCode began.
   TargetConstructionStarted
+  // Target-specific validation of completed VCode began.
+  TargetValidationStarted
   // Target VCode construction and validation completed.
   TargetSelectionFinished
   RegallocStarted

@@ -145,6 +145,11 @@ fn target_compile_metrics_observer(
             ("target_vcode_construction", @perf.tick_now()),
           )
         }
+      TargetValidationStarted =>
+        if detail {
+          close_target_phase()
+          target_phase.val = Some(("target_vcode_validation", @perf.tick_now()))
+        }
       TargetSelectionFinished => if detail { close_target_phase() }
       RegallocStarted => {
         close_target_phase()

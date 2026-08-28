@@ -44,7 +44,11 @@ test "X64 compile runs the complete target pipeline" {
   debug_inspect(
     selection_events,
     content=(
-      #|[TargetConstructionStarted, TargetSelectionFinished]
+      #|[
+      #|  TargetConstructionStarted,
+      #|  TargetValidationStarted,
+      #|  TargetSelectionFinished,
+      #|]
     ),
   )
   let events : Array[@vcode.TargetCompileEvent] = []

@@ -2762,6 +2762,7 @@ fn lower_validated_semantic(
   lowered.set_layout(layout) catch {
     error => raise BuildFailure(cause=error)
   }
+  on_event(TargetValidationStarted)
   verify_vcode(lowered) catch {
     error => raise InvalidTarget(cause=error)
   }
