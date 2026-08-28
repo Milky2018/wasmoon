@@ -232,12 +232,11 @@ test "spill bundle is normalized before conflict probes" {
   probe_bundle_register(
     bundles[1],
     0,
-    r0,
     bundles,
     segments,
     owners,
     occupied,
-    { points_by_reg: Map([]), block_order: [0, 1], },
+    RegisterClobberIndex::new(1),
     [0, 1],
     Array::make(bundles.length(), 0),
     1,
@@ -573,12 +572,11 @@ test "production eviction accounts for and removes every conflicting bundle" {
   probe_bundle_register(
     bundles[2],
     0,
-    r0,
     bundles,
     segments,
     owners,
     occupied,
-    { points_by_reg: Map([]), block_order: [0], },
+    RegisterClobberIndex::new(1),
     [0],
     Array::make(bundles.length(), 0),
     1,
@@ -691,12 +689,11 @@ test "production eviction accounts for and removes every conflicting bundle" {
   probe_bundle_register(
     bundles[2],
     0,
-    r0,
     bundles,
     segments,
     owners,
     cutoff_occupied,
-    { points_by_reg: Map([]), block_order: [0], },
+    RegisterClobberIndex::new(1),
     [0],
     Array::make(bundles.length(), 0),
     1,
@@ -958,18 +955,22 @@ test "clobber index follows custom block order and fixed operands" {
     operands: [[], [Operand::use_reg(value).with_constraint(FixedReg(r1))], []],
     clobbers: [[r0], [], [r0]],
   }
-  let index = build_register_clobber_index(function, [2, 0, 1])
+  let index = build_register_clobber_index(
+    function,
+    MachineEnv::new([r0, r1, r2], []),
+    [2, 0, 1],
+  )
   debug_inspect(
     (
-      index.points_by_reg.get(physical_reg_key(r0)),
-      index.points_by_reg.get(physical_reg_key(r1)),
-      index.points_by_reg.get(physical_reg_key(r2)),
+      index.by_register[0].points,
+      index.by_register[1].points,
+      index.by_register[2].points,
     ),
     content=(
       #|(
-      #|  Some([{ block: 2, inst: 0 }, { block: 0, inst: 0 }]),
-      #|  Some([{ block: 1, inst: 0 }]),
-      #|  None,
+      #|  [{ block: 2, inst: 0 }, { block: 0, inst: 0 }],
+      #|  [{ block: 1, inst: 0 }],
+      #|  [],
       #|)
     ),
   )
@@ -977,21 +978,12 @@ test "clobber index follows custom block order and fixed operands" {
 
 ///|
 test "clobber intersection includes starts and excludes ends" {
-  let r0 : PhysicalReg = { id: 0, class: Int, }
-  let index : RegisterClobberIndex = {
-    points_by_reg: Map([
-      (
-        physical_reg_key(r0),
-        [
-          ProgramPoint(0, 1),
-          ProgramPoint(0, 3),
-          ProgramPoint(0, 5),
-          ProgramPoint(0, 7),
-          ProgramPoint(0, 9),
-        ],
-      ),
-    ]),
-    block_order: [0],
+  let index = RegisterClobberIndex::new(1)
+  let points = index.by_register[0]
+  for instruction in [1, 3, 5, 7, 9] {
+    points.points.push(ProgramPoint(0, instruction))
+    points.block_orders.push(0)
+    points.instructions.push(instruction)
   }
   let segments : Array[AllocationSegment] = [
     {
@@ -1015,8 +1007,9 @@ test "clobber intersection includes starts and excludes ends" {
       location: None,
     },
   ]
+  let occupied = RegisterAllocationIndex::new(1, segments, [0, 0], [0], [0])
   debug_inspect(
-    index.first_intersection(r0, [0, 1], segments),
+    index.first_intersection(0, [0, 1], occupied),
     content="Some({ block: 0, inst: 1 })",
   )
 }

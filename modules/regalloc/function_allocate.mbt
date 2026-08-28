@@ -1,24 +1,43 @@
 ///|
+priv struct RegisterClobberPoints {
+  points : Array[ProgramPoint]
+  block_orders : Array[Int]
+  instructions : Array[Int]
+}
+
+///|
 priv struct RegisterClobberIndex {
-  points_by_reg : Map[(Int, Int), Array[ProgramPoint]]
-  block_order : Array[Int]
+  by_register : Array[RegisterClobberPoints]
+}
+
+///|
+fn RegisterClobberIndex::new(register_count : Int) -> RegisterClobberIndex {
+  let by_register : Array[RegisterClobberPoints] = []
+  for _ in 0..<register_count {
+    by_register.push({ points: [], block_orders: [], instructions: [], })
+  }
+  { by_register, }
 }
 
 ///|
 fn[F : FunctionView] build_register_clobber_index(
   function : F,
+  environment : MachineEnv,
   block_order : Array[Int],
 ) -> RegisterClobberIndex {
-  let points_by_reg : Map[(Int, Int), Array[ProgramPoint]] = Map([])
+  let index = RegisterClobberIndex::new(environment.allocatable_regs.length())
+  let register_indexes : Map[(Int, Int), Int] = Map([])
+  for register, reg in environment.allocatable_regs {
+    register_indexes[physical_reg_key(reg)] = register
+  }
   fn record(
-    points_by_reg : Map[(Int, Int), Array[ProgramPoint]],
+    index : RegisterClobberIndex,
+    register_indexes : Map[(Int, Int), Int],
     reg : PhysicalReg,
     point : ProgramPoint,
   ) -> Unit {
-    let key = physical_reg_key(reg)
-    match points_by_reg.get(key) {
-      Some(points) => points.push(point)
-      None => points_by_reg[key] = [point]
+    if register_indexes.get(physical_reg_key(reg)) is Some(register) {
+      index.by_register[register].points.push(point)
     }
   }
   for block in 0..<function.block_count() {
@@ -31,12 +50,13 @@ fn[F : FunctionView] build_register_clobber_index(
       // to be recolored into the clobbered register.
       let point = ProgramPoint(block, instruction_index * 2)
       for clobber in function.instruction_clobbers(instruction) {
-        record(points_by_reg, clobber, point)
+        record(index, register_indexes, clobber, point)
       }
       for operand in function.instruction_operands(instruction) {
         if operand.constraint is FixedReg(reg) {
           record(
-            points_by_reg,
+            index,
+            register_indexes,
             reg,
             operand_program_point(block, instruction_index, operand.timing),
           )
@@ -44,44 +64,63 @@ fn[F : FunctionView] build_register_clobber_index(
       }
     }
   }
-  for _, points in points_by_reg {
-    points.sort_by(fn(left, right) {
+  for clobbers in index.by_register {
+    clobbers.points.sort_by(fn(left, right) {
       left.compare_with_order(right, block_order)
     })
+    for point in clobbers.points {
+      clobbers.block_orders.push(program_point_block_order(point, block_order))
+      clobbers.instructions.push(point.inst)
+    }
   }
-  { points_by_reg, block_order: block_order.copy(), }
+  index
 }
 
 ///|
 fn RegisterClobberIndex::first_intersection(
   self : RegisterClobberIndex,
-  reg : PhysicalReg,
+  register : Int,
   segment_ids : Array[Int],
-  segments : Array[AllocationSegment],
+  segments : RegisterAllocationIndex,
 ) -> ProgramPoint? {
   guard !segment_ids.is_empty() else { return None }
-  guard self.points_by_reg.get(physical_reg_key(reg)) is Some(points) else {
-    return None
-  }
+  let clobbers = self.by_register[register]
   let mut lo = 0
-  let mut hi = points.length()
-  let first_start = segments[segment_ids[0]].range.start
+  let mut hi = clobbers.points.length()
+  let first_segment = segment_ids[0]
   while lo < hi {
     let mid = lo + (hi - lo) / 2
-    if points[mid].compare_with_order(first_start, self.block_order) < 0 {
+    if compare_cached_points(
+        clobbers.block_orders[mid],
+        clobbers.instructions[mid],
+        segments.start_block_order[first_segment],
+        segments.start_instruction[first_segment],
+      ) <
+      0 {
       lo = mid + 1
     } else {
       hi = mid
     }
   }
   let mut segment_index = 0
-  while lo < points.length() && segment_index < segment_ids.length() {
-    let point = points[lo]
-    let range = segments[segment_ids[segment_index]].range
-    if point.compare_with_order(range.start, self.block_order) < 0 {
+  while lo < clobbers.points.length() && segment_index < segment_ids.length() {
+    let segment = segment_ids[segment_index]
+    if compare_cached_points(
+        clobbers.block_orders[lo],
+        clobbers.instructions[lo],
+        segments.start_block_order[segment],
+        segments.start_instruction[segment],
+      ) <
+      0 {
       lo = lo + 1
-    } else if point.compare_with_order(range.end, self.block_order) < 0 {
-      return Some(point)
+    } else if compare_cached_points(
+        clobbers.block_orders[lo],
+        clobbers.instructions[lo],
+        segments.end_block_order[segment],
+        segments.end_instruction[segment],
+      ) <
+      0 {
+      return Some(clobbers.points[lo])
     } else {
       segment_index = segment_index + 1
     }

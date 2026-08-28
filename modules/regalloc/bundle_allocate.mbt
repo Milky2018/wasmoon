@@ -302,7 +302,6 @@ fn earlier_conflict_point(
 fn probe_bundle_register(
   bundle : AllocationBundle,
   register : Int,
-  reg : PhysicalReg,
   bundles : Array[AllocationBundle],
   segments : Array[AllocationSegment],
   segment_owner : Array[Int],
@@ -323,7 +322,8 @@ fn probe_bundle_register(
   result.first_conflict = None
   result.clobbered = false
   result.cutoff_exceeded = false
-  if clobbers.first_intersection(reg, bundle.segments, segments) is Some(point) {
+  if clobbers.first_intersection(register, bundle.segments, occupied)
+    is Some(point) {
     result.clobbered = true
     result.first_conflict = Some(point)
   }
@@ -1101,7 +1101,11 @@ fn[F : FunctionView] allocate_bundles(
     ranges.block_order,
   )
   let occupied_stack : Array[Int] = []
-  let clobbers = build_register_clobber_index(function, ranges.block_order)
+  let clobbers = build_register_clobber_index(
+    function,
+    environment,
+    ranges.block_order,
+  )
   let preferred_by_value : Array[PhysicalReg?] = Array::make(
     function.value_count(),
     None,
@@ -1168,7 +1172,6 @@ fn[F : FunctionView] allocate_bundles(
       probe_bundle_register(
         bundle,
         register,
-        reg,
         bundles,
         segments,
         segment_owner,
@@ -1341,7 +1344,6 @@ fn[F : FunctionView] allocate_bundles(
       probe_bundle_register(
         bundle,
         register,
-        reg,
         bundles,
         segments,
         segment_owner,
