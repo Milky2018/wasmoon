@@ -648,10 +648,11 @@ pub fn FunctionBuilder::set_terminator_source(
 /// verify the resulting function again.
 pub fn FunctionBuilder::finish(
   self : FunctionBuilder,
+  on_cleanup_phase? : (MandatoryCleanupPhase) -> Unit = fn(_) { () },
 ) -> Function raise MachVVerifyError {
   if self.construction_error is Some(error) {
     raise error
   }
-  self.function.run_mandatory_cleanup() |> ignore
+  self.function.run_mandatory_cleanup(on_phase=on_cleanup_phase) |> ignore
   self.function
 }

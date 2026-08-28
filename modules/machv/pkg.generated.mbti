@@ -351,7 +351,7 @@ pub fn Function::parameters(Self) -> Array[Value]
 pub fn Function::print(Self) -> String
 pub fn Function::protocol(Self) -> CallProtocol
 pub fn Function::require_verified(Self) -> Unit raise MachVVerifyError
-pub fn Function::run_mandatory_cleanup(Self) -> CleanupStats raise MachVVerifyError
+pub fn Function::run_mandatory_cleanup(Self, on_phase? : (MandatoryCleanupPhase) -> Unit) -> CleanupStats raise MachVVerifyError
 pub fn Function::signature(Self) -> Signature
 pub fn Function::stack_object_alignment(Self, StackObject) -> Int?
 pub fn Function::stack_object_size(Self, StackObject) -> Int?
@@ -376,7 +376,7 @@ pub fn FunctionBuilder::current_block(Self) -> Block
 pub fn FunctionBuilder::emit(Self, Operation, Array[Value], Array[ValueType]) -> Array[Value]
 pub fn FunctionBuilder::emit_with_metadata(Self, Operation, Array[Value], Array[ValueType], InstructionMetadata) -> Array[Value]
 pub fn FunctionBuilder::entry_block(Self) -> Block
-pub fn FunctionBuilder::finish(Self) -> Function raise MachVVerifyError
+pub fn FunctionBuilder::finish(Self, on_cleanup_phase? : (MandatoryCleanupPhase) -> Unit) -> Function raise MachVVerifyError
 pub fn FunctionBuilder::jump(Self, Block, Array[Value]) -> Unit
 pub fn FunctionBuilder::new(String, CallProtocol, Array[ValueType], Array[ValueType]) -> Self
 pub fn FunctionBuilder::noreturn_call(Self, SemanticCall, Array[Value]) -> Unit
@@ -517,6 +517,17 @@ pub fn LoadSpec::hash_combine(Self, Hasher) -> Unit
 pub fn LoadSpec::new(AccessWidth, LoadExtension, ValueType, UInt64, Endianness, TrapReason?) -> Self
 pub fn LoadSpec::not_equal(Self, Self) -> Bool
 pub fn LoadSpec::to_repr(Self) -> @debug.Repr
+
+pub(all) enum MandatoryCleanupPhase {
+  VerifyInput
+  CollectAliases
+  RewriteAliases
+  RemoveDeadInstructions
+  VerifyOutput
+} derive(Eq, @debug.Debug)
+pub fn MandatoryCleanupPhase::equal(Self, Self) -> Bool
+pub fn MandatoryCleanupPhase::not_equal(Self, Self) -> Bool
+pub fn MandatoryCleanupPhase::to_repr(Self) -> @debug.Repr
 
 pub(all) enum MemoryEffect {
   None

@@ -17,7 +17,8 @@ Metrics are opt-in via environment variables:
   - Enables metrics collection in the JIT compile pipeline.
   - Bypasses the run JIT cache so every report describes an actual compilation.
 - `WASMOON_PERF_METRICS_DETAIL=1`
-  - Adds per-pass optimization and register-allocation details.
+  - Adds per-pass optimization, compiler subphase, and register-allocation
+    details.
 - `WASMOON_PERF_METRICS_FILE=<path>`
   - Optional output file path.
   - Default: `target/wasmoon-perf-metrics.json`.
@@ -34,9 +35,11 @@ Collection starts in `cmd/wasmoon/run.mbt` during `compile_module_to_jit(...)`.
 
 ### Module-level fields
 
-- `schema_version` (`3` for the phase-complete target pipeline)
+- `schema_version` (`5` for compiler subphase attribution)
 - `expected_functions`
 - `module_compile_us`
+- `compile_subphases[]` for module preparation when detailed metrics are
+  enabled
 - `functions[]`
 
 ### Per-function fields
@@ -45,6 +48,9 @@ Collection starts in `cmd/wasmoon/run.mbt` during `compile_module_to_jit(...)`.
   - `func_idx`, `func_name`, `opt_level`
 - IR size:
   - `ir_insts_before`, `ir_insts_after`
+- Detailed aggregate:
+  - `function_compile_us`: complete serial function-job time, used to derive
+    orchestration work outside the named compiler stages.
 - Stage time:
   - `optimize_us`: MilkIR optimization.
   - `lower_us`: validated Wasm MilkIR to semantic MachV lowering.
@@ -57,6 +63,10 @@ Collection starts in `cmd/wasmoon/run.mbt` during `compile_module_to_jit(...)`.
   - `code_size`
   - `spill_slots`, `spills`, `reloads`, `reg_moves`, `spill_to_spill`
 - Pass list:
+  - `compile_subphases[]` when detailed metrics are enabled. This attributes
+    frontend translation, semantic validation/construction/cleanup, embedding
+    ABI and target-context preparation, target analysis/VCode construction,
+    adapter construction, and artifact packaging.
   - `ir_passes[]`
   - `regalloc_phases[]` when detailed metrics are enabled.
 

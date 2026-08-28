@@ -6,3 +6,9 @@ pub extend SemanticLowerError with Eq::{not_equal, equal}
 
 ///|
 pub extend SemanticLowerError with Show::{to_string, output}
+
+///|
+pub extend SemanticLowerEvent with Debug::{to_repr}
+
+///|
+pub extend SemanticLowerEvent with Eq::{not_equal, equal}

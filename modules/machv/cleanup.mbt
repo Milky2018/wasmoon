@@ -5,6 +5,18 @@ pub struct CleanupStats {
 } derive(Debug, Eq)
 
 ///|
+/// Mandatory cleanup phases exposed to observation-only callers.
+///
+/// An observer must not mutate the function while cleanup is running.
+pub(all) enum MandatoryCleanupPhase {
+  VerifyInput
+  CollectAliases
+  RewriteAliases
+  RemoveDeadInstructions
+  VerifyOutput
+} derive(Debug, Eq)
+
+///|
 fn resolve_alias(aliases : Array[Int], value_id : Int) -> Int {
   let mut current = value_id
   while aliases[current] != current {
@@ -315,11 +327,17 @@ fn Function::remove_dead_instructions(self : Function) -> Int {
 /// are removed. Observable effects, traps, calls, and safepoints are retained.
 pub fn Function::run_mandatory_cleanup(
   self : Function,
+  on_phase? : (MandatoryCleanupPhase) -> Unit = fn(_) { () },
 ) -> CleanupStats raise MachVVerifyError {
+  on_phase(VerifyInput)
   self.verify()
+  on_phase(CollectAliases)
   let aliases = self.collect_aliases()
+  on_phase(RewriteAliases)
   let aliases_rewritten = self.rewrite_aliases(aliases)
+  on_phase(RemoveDeadInstructions)
   let instructions_removed = self.remove_dead_instructions()
+  on_phase(VerifyOutput)
   self.verify()
   { aliases_rewritten, instructions_removed, }
 }

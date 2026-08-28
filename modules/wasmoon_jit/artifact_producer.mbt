@@ -244,12 +244,15 @@ pub fn compile_wasm_body_artifact_function(
         canonical_type_indices,
         record_metrics=@perf.enabled(),
       )
-      artifact_function_from_code_object(
+      let packaging_tick = detail_metrics_tick(@perf.enabled())
+      let result = artifact_function_from_code_object(
         compiled.object,
         frame_size=compiled.frame_size,
         function_index~,
         signature~,
       )
+      record_compile_subphase("artifact_packaging", packaging_tick)
+      result
     }
     X64 => {
       let compiled = compile_wasm_body_x64_target(
@@ -259,12 +262,15 @@ pub fn compile_wasm_body_artifact_function(
         canonical_type_indices,
         record_metrics=@perf.enabled(),
       )
-      artifact_function_from_code_object(
+      let packaging_tick = detail_metrics_tick(@perf.enabled())
+      let result = artifact_function_from_code_object(
         compiled.object,
         frame_size=compiled.frame_size,
         function_index~,
         signature~,
       )
+      record_compile_subphase("artifact_packaging", packaging_tick)
+      result
     }
   }
 }

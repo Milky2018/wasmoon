@@ -1082,3 +1082,23 @@ test "terminator source metadata is preserved" {
     ),
   )
 }
+
+///|
+test "mandatory cleanup exposes ordered observation phases" {
+  let builder = @machv.FunctionBuilder::new("observed_cleanup", Internal, [], [])
+  builder.return_([])
+  let phases : Array[@machv.MandatoryCleanupPhase] = []
+  builder.finish(on_cleanup_phase=phase => phases.push(phase)) |> ignore
+  debug_inspect(
+    phases,
+    content=(
+      #|[
+      #|  VerifyInput,
+      #|  CollectAliases,
+      #|  RewriteAliases,
+      #|  RemoveDeadInstructions,
+      #|  VerifyOutput,
+      #|]
+    ),
+  )
+}

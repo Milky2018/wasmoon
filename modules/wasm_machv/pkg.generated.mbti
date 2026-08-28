@@ -9,7 +9,7 @@ import {
 }
 
 // Values
-pub fn lower_function(@milkir.Function, @wasm_milkir.WasmValidationContext, Environment) -> @machv.Function raise @milkir_machv.SemanticLowerError
+pub fn lower_function(@milkir.Function, @wasm_milkir.WasmValidationContext, Environment, on_event? : (@milkir_machv.SemanticLowerEvent) -> Unit) -> @machv.Function raise @milkir_machv.SemanticLowerError
 
 // Errors
 

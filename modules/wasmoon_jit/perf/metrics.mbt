@@ -36,7 +36,7 @@ let perf_detail_metrics_enabled : Bool = match
 }
 
 ///|
-fn detail_enabled() -> Bool {
+pub fn detail_enabled() -> Bool {
   perf_detail_metrics_enabled
 }
 
@@ -88,6 +88,12 @@ pub struct RegallocPhaseMetric {
 } derive(ToJson)
 
 ///|
+pub struct CompileSubphaseMetric {
+  name : String
+  duration_us : Int64
+} derive(ToJson)
+
+///|
 pub struct RegallocLoopMetric {
   queue_pops : Int
   register_probes : Int
@@ -106,12 +112,14 @@ pub struct FunctionMetrics {
   opt_level : Int
   ir_insts_before : Int
   mut ir_insts_after : Int
+  mut function_compile_us : Int64
   mut optimize_us : Int64
   mut lower_us : Int64
   mut target_lower_us : Int64
   mut regalloc_us : Int64
   mut frame_plan_us : Int64
   mut emit_us : Int64
+  compile_subphases : Array[CompileSubphaseMetric]
   mut code_size : Int
   mut spill_slots : Int
   mut spills : Int
@@ -128,6 +136,7 @@ pub struct ModuleMetricsReport {
   schema_version : Int
   expected_functions : Int
   mut module_compile_us : Int64
+  compile_subphases : Array[CompileSubphaseMetric]
   functions : Array[FunctionMetrics]
 } derive(ToJson)
 
@@ -143,9 +152,10 @@ fn ensure_module_state() -> ModuleMetricsReport {
     Some(m) => m
     None => {
       let m = {
-        schema_version: 4,
+        schema_version: 5,
         expected_functions: 0,
         module_compile_us: 0L,
+        compile_subphases: [],
         functions: [],
       }
       module_state.val = Some(m)
@@ -166,9 +176,10 @@ fn flush_current_function_if_any() -> Unit {
 pub fn reset_module(expected_functions : Int) -> Unit {
   guard enabled() else { return }
   module_state.val = Some({
-    schema_version: 4,
+    schema_version: 5,
     expected_functions,
     module_compile_us: 0L,
+    compile_subphases: [],
     functions: [],
   })
   current_function_state.val = None
@@ -195,12 +206,14 @@ pub fn begin_function(
     opt_level,
     ir_insts_before,
     ir_insts_after: ir_insts_before,
+    function_compile_us: 0L,
     optimize_us: 0L,
     lower_us: 0L,
     target_lower_us: 0L,
     regalloc_us: 0L,
     frame_plan_us: 0L,
     emit_us: 0L,
+    compile_subphases: [],
     code_size: 0,
     spill_slots: 0,
     spills: 0,
@@ -308,6 +321,14 @@ pub fn record_stage_us(
 }
 
 ///|
+pub fn record_function_compile_us(duration_us : Int64) -> Unit {
+  guard enabled() && detail_enabled() else { return }
+  if current_function_state.val is Some(m) {
+    m.function_compile_us = duration_us
+  }
+}
+
+///|
 pub fn record_regalloc_phase_us(
   phase_name : String,
   duration_us : Int64,
@@ -317,6 +338,29 @@ pub fn record_regalloc_phase_us(
   if current_function_state.val is Some(m) {
     m.regalloc_phases.push({ name: phase_name, duration_us, })
   }
+}
+
+///|
+pub fn record_compile_subphase_us(
+  phase_name : String,
+  duration_us : Int64,
+) -> Unit {
+  guard enabled() && detail_enabled() else { return }
+  if current_function_state.val is Some(m) {
+    m.compile_subphases.push({ name: phase_name, duration_us, })
+  }
+}
+
+///|
+pub fn record_module_subphase_us(
+  phase_name : String,
+  duration_us : Int64,
+) -> Unit {
+  guard enabled() && detail_enabled() else { return }
+  ensure_module_state().compile_subphases.push({
+    name: phase_name,
+    duration_us,
+  })
 }
 
 ///|

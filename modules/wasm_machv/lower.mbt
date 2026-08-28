@@ -1536,6 +1536,7 @@ pub fn lower_function(
   function : @milkir.Function,
   validation_context : @wasm_milkir.WasmValidationContext,
   environment : Environment,
+  on_event? : (@milkir_machv.SemanticLowerEvent) -> Unit = fn(_) { () },
 ) -> @machv.Function raise @milkir_machv.SemanticLowerError {
   fn validate(view : @milkir.ExtensionInstView) -> String? {
     validation_context.validate_extension(view, function.results)
@@ -1565,5 +1566,6 @@ pub fn lower_function(
     [(0, Ptr64)],
     lower,
     resolve_context_field,
+    on_event~,
   )
 }

@@ -130,8 +130,14 @@ fn lower_wasm_body_semantic_with_environment(
   function : @milkir.Function,
   validation_context : @wasm_milkir.WasmValidationContext,
   environment : WasmoonSemanticEnvironment,
+  on_event? : (@milkir_machv.SemanticLowerEvent) -> Unit = fn(_) { () },
 ) -> @semantic_machv.Function raise JitPipelineError {
-  @wasm_machv.lower_function(function, validation_context, environment.wasm) catch {
+  @wasm_machv.lower_function(
+    function,
+    validation_context,
+    environment.wasm,
+    on_event~,
+  ) catch {
     error => raise SemanticLoweringFailed(cause=error)
   }
 }
@@ -222,13 +228,24 @@ fn compile_wasm_body_aarch64_target(
   canonical_type_indices : Array[Int],
   record_metrics? : Bool = false,
 ) -> AArch64TargetCompilation raise JitPipelineError {
+  let environment_tick = detail_metrics_tick(record_metrics)
   let environment = wasmoon_semantic_environment(
     use_subtype_indirect_check, canonical_type_indices,
   )
+  record_compile_subphase("semantic_environment", environment_tick)
   let semantic_lower_tick = target_metrics_tick(record_metrics)
-  let semantic = lower_wasm_body_semantic_with_environment(
-    function, validation_context, environment,
-  )
+  let semantic = if record_metrics && @perf.detail_enabled() {
+    lower_wasm_body_semantic_with_environment(
+      function,
+      validation_context,
+      environment,
+      on_event=semantic_lower_metrics_observer(),
+    )
+  } else {
+    lower_wasm_body_semantic_with_environment(
+      function, validation_context, environment,
+    )
+  }
   record_target_stage(SemanticLowering, semantic_lower_tick) |> ignore
   build_wasmoon_aarch64_target(semantic, environment, record_metrics~)
 }
@@ -241,13 +258,24 @@ fn compile_wasm_body_x64_target(
   canonical_type_indices : Array[Int],
   record_metrics? : Bool = false,
 ) -> X64TargetCompilation raise JitPipelineError {
+  let environment_tick = detail_metrics_tick(record_metrics)
   let environment = wasmoon_semantic_environment(
     use_subtype_indirect_check, canonical_type_indices,
   )
+  record_compile_subphase("semantic_environment", environment_tick)
   let semantic_lower_tick = target_metrics_tick(record_metrics)
-  let semantic = lower_wasm_body_semantic_with_environment(
-    function, validation_context, environment,
-  )
+  let semantic = if record_metrics && @perf.detail_enabled() {
+    lower_wasm_body_semantic_with_environment(
+      function,
+      validation_context,
+      environment,
+      on_event=semantic_lower_metrics_observer(),
+    )
+  } else {
+    lower_wasm_body_semantic_with_environment(
+      function, validation_context, environment,
+    )
+  }
   record_target_stage(SemanticLowering, semantic_lower_tick) |> ignore
   build_wasmoon_x64_target(semantic, environment, record_metrics~)
 }

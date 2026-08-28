@@ -525,6 +525,9 @@ pub fn SymbolReference::not_equal(Self, Self) -> Bool
 pub fn SymbolReference::to_repr(Self) -> @debug.Repr
 
 pub(all) enum TargetCompileEvent {
+  TargetAnalysisStarted
+  TargetConstructionStarted
+  TargetSelectionFinished
   RegallocStarted
   RegallocPhaseStarted(String)
   RegallocPhasesFinished

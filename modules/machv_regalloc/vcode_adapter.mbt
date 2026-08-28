@@ -176,8 +176,12 @@ pub fn[Inst] allocate_selected_vcode(
       })
     None => None
   }
+  if on_phase is Some(notify) {
+    notify(Some("function_view"))
+  }
+  let function_view = VCodeFunctionView::new(function)
   let plan = @regalloc.allocate_function(
-    VCodeFunctionView::new(function),
+    function_view,
     @regalloc.MachineEnv::new(
       environment.allocatable_regs.map(reg => to_regalloc_preg(reg)),
       environment.spill_scratch_regs.map(reg => to_regalloc_preg(reg)),

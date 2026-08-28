@@ -232,6 +232,32 @@ test "core lowering keeps the enclosing call protocol explicit" {
 }
 
 ///|
+test "semantic lowering exposes ordered observation phases" {
+  let builder = @milkir.FunctionBuilder::FunctionBuilder("observed_lowering")
+  builder.return_([])
+  let events : Array[SemanticLowerEvent] = []
+  lower_core_function_with_protocol(builder.finalize(), Internal, on_event=event => {
+    events.push(event)
+  })
+  |> ignore
+  debug_inspect(
+    events,
+    content=(
+      #|[
+      #|  InputValidationStarted,
+      #|  SemanticConstructionStarted,
+      #|  CleanupPhaseStarted(VerifyInput),
+      #|  CleanupPhaseStarted(CollectAliases),
+      #|  CleanupPhaseStarted(RewriteAliases),
+      #|  CleanupPhaseStarted(RemoveDeadInstructions),
+      #|  CleanupPhaseStarted(VerifyOutput),
+      #|  SemanticLoweringFinished,
+      #|]
+    ),
+  )
+}
+
+///|
 test "core lowering follows CFG order instead of physical block order" {
   let builder = @milkir.FunctionBuilder::FunctionBuilder("physical_order")
   let input = builder.add_param(I32)

@@ -54,21 +54,32 @@ fn build_x64_target(
   ),
 ) -> X64TargetCompilation raise JitPipelineError {
   let target_lower_tick = target_metrics_tick(record_metrics)
+  let observer = target_lower_tick.map(target_compile_metrics_observer)
+  let runtime_abi_tick = detail_metrics_tick(record_metrics)
   let elaborated = match root_scope_symbols {
     Some(symbols) =>
       elaborate_wasmoon_runtime_abi(function, allocation_symbols, symbols)
     None => function
   }
+  record_compile_subphase("runtime_abi_elaboration", runtime_abi_tick)
+  let context_tick = detail_metrics_tick(record_metrics)
   let context = x64_target_context(elaborated, environment_field_path)
-  let selected = @x64_target.select_verified(elaborated, context) catch {
+  record_compile_subphase("target_context", context_tick)
+  let selected = try {
+    match observer {
+      Some(observe) =>
+        @x64_target.select_verified(elaborated, context, on_event=observe)
+      None => @x64_target.select_verified(elaborated, context)
+    }
+  } catch {
     error => raise X64LoweringFailed(cause=error)
   }
   let compiled = try {
-    match target_lower_tick {
-      Some(tick) =>
+    match observer {
+      Some(observe) =>
         @x64_target.compile_selected(
           selected,
-          on_event=target_compile_metrics_observer(tick),
+          on_event=observe,
           verify_allocation=regalloc_validation(),
         )
       None =>

@@ -2408,7 +2408,9 @@ fn set_terminator(
 fn lower_validated_semantic(
   function : @semantic.Function,
   context : LoweringContext,
+  on_event? : (@vcode.TargetCompileEvent) -> Unit = fn(_) { () },
 ) -> @vcode.Function[AArch64Inst] raise AArch64LowerError {
+  on_event(TargetAnalysisStarted)
   let signature = function.signature()
   let builder : @vcode.Builder[AArch64Inst] = @vcode.Builder::new_with_protocol(
     function.name(),
@@ -2418,6 +2420,7 @@ fn lower_validated_semantic(
   )
   let values : Array[@vcode.Value?] = Array::make(function.value_count(), None)
   let analysis = analyze_lowering(function)
+  on_event(TargetConstructionStarted)
   let result_area = lower_parameters(
     function, context, builder, values, analysis,
   )
@@ -2694,6 +2697,7 @@ fn lower_validated_semantic(
   verify_vcode(lowered) catch {
     error => raise InvalidTarget(cause=error)
   }
+  on_event(TargetSelectionFinished)
   lowered
 }
 
@@ -2702,11 +2706,12 @@ fn lower_validated_semantic(
 pub fn lower(
   function : @semantic.Function,
   context : LoweringContext,
+  on_event? : (@vcode.TargetCompileEvent) -> Unit = fn(_) { () },
 ) -> @vcode.Function[AArch64Inst] raise AArch64LowerError {
   function.verify() catch {
     error => raise InvalidSemantic(cause=error)
   }
-  lower_validated_semantic(function, context)
+  lower_validated_semantic(function, context, on_event~)
 }
 
 ///|
@@ -2721,8 +2726,9 @@ pub struct SelectedFunction {
 pub fn select(
   function : @semantic.Function,
   context : LoweringContext,
+  on_event? : (@vcode.TargetCompileEvent) -> Unit = fn(_) { () },
 ) -> SelectedFunction raise AArch64LowerError {
-  { function: lower(function, context), }
+  { function: lower(function, context, on_event~), }
 }
 
 ///|
@@ -2731,9 +2737,10 @@ pub fn select(
 pub fn select_verified(
   function : @semantic.Function,
   context : LoweringContext,
+  on_event? : (@vcode.TargetCompileEvent) -> Unit = fn(_) { () },
 ) -> SelectedFunction raise AArch64LowerError {
   function.require_verified() catch {
     error => raise InvalidSemantic(cause=error)
   }
-  { function: lower_validated_semantic(function, context), }
+  { function: lower_validated_semantic(function, context, on_event~), }
 }

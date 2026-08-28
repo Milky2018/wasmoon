@@ -1287,7 +1287,9 @@ fn lower_verified_function(
   function : @milkir.Function,
   protocol : @semantic.CallProtocol,
   dialect : DialectLowering?,
+  on_event : (SemanticLowerEvent) -> Unit,
 ) -> @semantic.Function raise SemanticLowerError {
+  on_event(SemanticConstructionStarted)
   let parameter_types : Array[@semantic.ValueType] = []
   for parameter_index, parameter in function.params {
     let mut parameter_type = lower_type(parameter.1)
@@ -1423,9 +1425,13 @@ fn lower_verified_function(
       }
     }
   }
-  builder.finish() catch {
+  let lowered = builder.finish(on_cleanup_phase=phase => {
+    on_event(CleanupPhaseStarted(phase))
+  }) catch {
     error => raise InvalidMachV(message=error.to_string())
   }
+  on_event(SemanticLoweringFinished)
+  lowered
 }
 
 ///|
@@ -1436,11 +1442,13 @@ fn lower_verified_function(
 pub fn lower_core_function_with_protocol(
   function : @milkir.Function,
   protocol : @semantic.CallProtocol,
+  on_event? : (SemanticLowerEvent) -> Unit = fn(_) { () },
 ) -> @semantic.Function raise SemanticLowerError {
+  on_event(InputValidationStarted)
   function.verify_core() catch {
     error => raise InvalidMilkIR(message=error.to_string())
   }
-  lower_verified_function(function, protocol, None)
+  lower_verified_function(function, protocol, None, on_event)
 }
 
 ///|
@@ -1463,7 +1471,9 @@ pub fn lower_dialect_function_with_protocol(
   environment_parameters : Array[(Int, @semantic.ValueType)],
   lower : (@adapter.InstructionContext, @milkir.ExtOp) -> String?,
   resolve_context_field : (@milkir.ContextField) -> @semantic.EnvironmentField?,
+  on_event? : (SemanticLowerEvent) -> Unit = fn(_) { () },
 ) -> @semantic.Function raise SemanticLowerError {
+  on_event(InputValidationStarted)
   function.verify_with_dialect_validator(
     dialect, validator, global_value_validator,
   ) catch {
@@ -1478,6 +1488,7 @@ pub fn lower_dialect_function_with_protocol(
       lower,
       resolve_context_field,
     }),
+    on_event,
   )
 }
 
@@ -1490,6 +1501,7 @@ pub fn lower_dialect_function(
   environment_parameters : Array[(Int, @semantic.ValueType)],
   lower : (@adapter.InstructionContext, @milkir.ExtOp) -> String?,
   resolve_context_field : (@milkir.ContextField) -> @semantic.EnvironmentField?,
+  on_event? : (SemanticLowerEvent) -> Unit = fn(_) { () },
 ) -> @semantic.Function raise SemanticLowerError {
   lower_dialect_function_with_protocol(
     function,
@@ -1500,5 +1512,6 @@ pub fn lower_dialect_function(
     environment_parameters,
     lower,
     resolve_context_field,
+    on_event~,
   )
 }

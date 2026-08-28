@@ -8,6 +8,22 @@ fn target_metrics_tick(enabled : Bool) -> @perf.PerfTick? {
 }
 
 ///|
+fn detail_metrics_tick(enabled : Bool) -> @perf.PerfTick? {
+  if enabled && @perf.detail_enabled() {
+    Some(@perf.tick_now())
+  } else {
+    None
+  }
+}
+
+///|
+fn record_compile_subphase(name : String, tick : @perf.PerfTick?) -> Unit {
+  if tick is Some(start) {
+    @perf.record_compile_subphase_us(name, @perf.elapsed_us(start))
+  }
+}
+
+///|
 fn record_target_stage(
   stage : @perf.FunctionCompileStage,
   tick : @perf.PerfTick?,
@@ -36,10 +52,56 @@ fn record_target_allocation_stats(
 }
 
 ///|
+fn semantic_cleanup_phase_name(
+  phase : @semantic_machv.MandatoryCleanupPhase,
+) -> String {
+  match phase {
+    VerifyInput => "semantic_cleanup.verify_input"
+    CollectAliases => "semantic_cleanup.collect_aliases"
+    RewriteAliases => "semantic_cleanup.rewrite_aliases"
+    RemoveDeadInstructions => "semantic_cleanup.remove_dead_instructions"
+    VerifyOutput => "semantic_cleanup.verify_output"
+  }
+}
+
+///|
+fn semantic_lower_metrics_observer() -> (@milkir_machv.SemanticLowerEvent) -> Unit {
+  let phase : Ref[(String, @perf.PerfTick)?] = { val: None, }
+  fn close_phase() -> Unit {
+    if phase.val is Some((name, tick)) {
+      @perf.record_compile_subphase_us(name, @perf.elapsed_us(tick))
+      phase.val = None
+    }
+  }
+
+  fn(event) {
+    match event {
+      InputValidationStarted => {
+        close_phase()
+        phase.val = Some(("semantic_input_validation", @perf.tick_now()))
+      }
+      SemanticConstructionStarted => {
+        close_phase()
+        phase.val = Some(("semantic_construction", @perf.tick_now()))
+      }
+      CleanupPhaseStarted(cleanup_phase) => {
+        close_phase()
+        phase.val = Some(
+          (semantic_cleanup_phase_name(cleanup_phase), @perf.tick_now()),
+        )
+      }
+      SemanticLoweringFinished => close_phase()
+    }
+  }
+}
+
+///|
 fn target_compile_metrics_observer(
   target_lower_tick : @perf.PerfTick,
 ) -> (@vcode.TargetCompileEvent) -> Unit {
+  let detail = @perf.detail_enabled()
   let phase_tick : Ref[@perf.PerfTick?] = { val: None, }
+  let target_phase : Ref[(String, @perf.PerfTick)?] = { val: None, }
   // The allocator reports each internal phase as it begins; the previous one
   // ends at that instant, and RegallocFinished closes the last (ISS-371).
   let regalloc_phase : Ref[(String, @perf.PerfTick)?] = { val: None, }
@@ -50,23 +112,46 @@ fn target_compile_metrics_observer(
     }
   }
 
+  fn close_target_phase() -> Unit {
+    if target_phase.val is Some((name, tick)) {
+      @perf.record_compile_subphase_us(name, @perf.elapsed_us(tick))
+      target_phase.val = None
+    }
+  }
+
   fn(event) {
     match event {
+      TargetAnalysisStarted =>
+        if detail {
+          close_target_phase()
+          target_phase.val = Some(("target_analysis", @perf.tick_now()))
+        }
+      TargetConstructionStarted =>
+        if detail {
+          close_target_phase()
+          target_phase.val = Some(
+            ("target_vcode_construction", @perf.tick_now()),
+          )
+        }
+      TargetSelectionFinished => if detail { close_target_phase() }
       RegallocStarted => {
+        close_target_phase()
         record_target_stage(TargetLowering, Some(target_lower_tick)) |> ignore
         phase_tick.val = Some(@perf.tick_now())
       }
-      RegallocPhaseStarted(name) => {
-        close_regalloc_phase()
-        regalloc_phase.val = Some((name, @perf.tick_now()))
-      }
-      RegallocPhasesFinished => {
-        close_regalloc_phase()
-        // Everything from here to RegallocFinished is plan translation and
-        // target-level checking, not allocator work. Naming it keeps the
-        // phases summing to the measured regalloc stage.
-        regalloc_phase.val = Some(("plan_translation", @perf.tick_now()))
-      }
+      RegallocPhaseStarted(name) =>
+        if detail {
+          close_regalloc_phase()
+          regalloc_phase.val = Some((name, @perf.tick_now()))
+        }
+      RegallocPhasesFinished =>
+        if detail {
+          close_regalloc_phase()
+          // Everything from here to RegallocFinished is plan translation and
+          // target-level checking, not allocator work. Naming it keeps the
+          // phases summing to the measured regalloc stage.
+          regalloc_phase.val = Some(("plan_translation", @perf.tick_now()))
+        }
       RegallocLoopMeasured(statistics) =>
         @perf.record_regalloc_loop(
           statistics.queue_pops,

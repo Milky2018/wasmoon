@@ -602,4 +602,10 @@ pub extend VectorStoreLaneSpec with Debug::{to_repr}
 pub extend VectorStoreLaneSpec with Eq::{not_equal, equal}
 
 ///|
+pub extend MandatoryCleanupPhase with Debug::{to_repr}
+
+///|
+pub extend MandatoryCleanupPhase with Eq::{not_equal, equal}
+
+///|
 pub extend VectorStoreLaneSpec with Hash::{hash, hash_combine}

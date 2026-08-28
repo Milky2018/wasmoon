@@ -12,3 +12,6 @@ pub extend RegallocPhaseMetric with ToJson::{to_json}
 
 ///|
 pub extend RegallocLoopMetric with ToJson::{to_json}
+
+///|
+pub extend CompileSubphaseMetric with ToJson::{to_json}

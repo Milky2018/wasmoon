@@ -18,9 +18,10 @@ test "compile metrics preserve every production phase and allocation summary" {
     export_json(),
     content=(
       #|{
-      #|  "schema_version": 4,
+      #|  "schema_version": 5,
       #|  "expected_functions": 1,
       #|  "module_compile_us": "240",
+      #|  "compile_subphases": [],
       #|  "functions": [
       #|    {
       #|      "func_idx": 7,
@@ -28,12 +29,14 @@ test "compile metrics preserve every production phase and allocation summary" {
       #|      "opt_level": 2,
       #|      "ir_insts_before": 30,
       #|      "ir_insts_after": 18,
+      #|      "function_compile_us": "0",
       #|      "optimize_us": "10",
       #|      "lower_us": "20",
       #|      "target_lower_us": "30",
       #|      "regalloc_us": "40",
       #|      "frame_plan_us": "50",
       #|      "emit_us": "60",
+      #|      "compile_subphases": [],
       #|      "code_size": 96,
       #|      "spill_slots": 3,
       #|      "spills": 4,

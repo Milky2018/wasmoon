@@ -11,11 +11,11 @@ import {
 // Values
 pub fn lower_core_function(@milkir.Function) -> @machv.Function raise SemanticLowerError
 
-pub fn lower_core_function_with_protocol(@milkir.Function, @machv.CallProtocol) -> @machv.Function raise SemanticLowerError
+pub fn lower_core_function_with_protocol(@milkir.Function, @machv.CallProtocol, on_event? : (SemanticLowerEvent) -> Unit) -> @machv.Function raise SemanticLowerError
 
-pub fn lower_dialect_function(@milkir.Function, String, (@milkir.ExtensionInstView) -> String?, (@milkir.GlobalValueData) -> String?, Array[(Int, @machv.ValueType)], (@adapter.InstructionContext, @milkir.ExtOp) -> String?, (@milkir.ContextField) -> @machv.EnvironmentField?) -> @machv.Function raise SemanticLowerError
+pub fn lower_dialect_function(@milkir.Function, String, (@milkir.ExtensionInstView) -> String?, (@milkir.GlobalValueData) -> String?, Array[(Int, @machv.ValueType)], (@adapter.InstructionContext, @milkir.ExtOp) -> String?, (@milkir.ContextField) -> @machv.EnvironmentField?, on_event? : (SemanticLowerEvent) -> Unit) -> @machv.Function raise SemanticLowerError
 
-pub fn lower_dialect_function_with_protocol(@milkir.Function, @machv.CallProtocol, String, (@milkir.ExtensionInstView) -> String?, (@milkir.GlobalValueData) -> String?, Array[(Int, @machv.ValueType)], (@adapter.InstructionContext, @milkir.ExtOp) -> String?, (@milkir.ContextField) -> @machv.EnvironmentField?) -> @machv.Function raise SemanticLowerError
+pub fn lower_dialect_function_with_protocol(@milkir.Function, @machv.CallProtocol, String, (@milkir.ExtensionInstView) -> String?, (@milkir.GlobalValueData) -> String?, Array[(Int, @machv.ValueType)], (@adapter.InstructionContext, @milkir.ExtOp) -> String?, (@milkir.ContextField) -> @machv.EnvironmentField?, on_event? : (SemanticLowerEvent) -> Unit) -> @machv.Function raise SemanticLowerError
 
 // Errors
 pub suberror SemanticLowerError {
@@ -33,6 +33,15 @@ pub fn SemanticLowerError::to_string(Self) -> String
 pub impl Show for SemanticLowerError
 
 // Types and methods
+pub(all) enum SemanticLowerEvent {
+  InputValidationStarted
+  SemanticConstructionStarted
+  CleanupPhaseStarted(@machv.MandatoryCleanupPhase)
+  SemanticLoweringFinished
+} derive(Eq, @debug.Debug)
+pub fn SemanticLowerEvent::equal(Self, Self) -> Bool
+pub fn SemanticLowerEvent::not_equal(Self, Self) -> Bool
+pub fn SemanticLowerEvent::to_repr(Self) -> @debug.Repr
 
 // Type aliases
 
