@@ -2545,8 +2545,9 @@ fn lower_validated_semantic(
       )
     }
   }
-  for semantic_block in function.blocks_in_cfg_order() {
-    let block_index = function.block_index(semantic_block).unwrap()
+  let semantic_layout = function.block_indices_in_cfg_order()
+  for block_index in semantic_layout {
+    let semantic_block = function.block_at(block_index).unwrap()
     let block = blocks[block_index]
     let instruction_count = function
       .block_instruction_count(semantic_block)
@@ -2794,9 +2795,7 @@ fn lower_validated_semantic(
     }
   }
   let lowered = builder.finish()
-  let layout = function
-    .blocks_in_cfg_order()
-    .map(semantic_block => blocks[function.block_index(semantic_block).unwrap()])
+  let layout = semantic_layout.map(block_index => blocks[block_index])
   lowered.set_layout(layout) catch {
     error => raise BuildFailure(cause=error)
   }

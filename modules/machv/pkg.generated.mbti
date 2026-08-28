@@ -334,6 +334,7 @@ pub struct Function {
 pub fn Function::block_at(Self, Int) -> Block?
 pub fn Function::block_count(Self) -> Int
 pub fn Function::block_index(Self, Block) -> Int?
+pub fn Function::block_indices_in_cfg_order(Self) -> Array[Int]
 pub fn Function::block_instruction_at(Self, Block, Int) -> Instruction?
 pub fn Function::block_instruction_count(Self, Block) -> Int?
 pub fn Function::block_instructions(Self, Block) -> Array[Instruction]

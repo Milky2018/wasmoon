@@ -337,10 +337,12 @@ test "semantic MachV exposes definition-safe CFG lowering order" {
   builder.return_([])
   builder.switch_to_block(dominating)
   builder.jump(physically_first, [])
+  let function = builder.finish()
   debug_inspect(
-    builder.finish().blocks_in_cfg_order(),
+    function.blocks_in_cfg_order(),
     content="[block0, block2, block1]",
   )
+  debug_inspect(function.block_indices_in_cfg_order(), content="[0, 2, 1]")
 }
 
 ///|

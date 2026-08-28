@@ -34,6 +34,24 @@ fn build_cfg(function : Function) -> (Array[Array[Int]], Array[Array[Int]]) {
 }
 
 ///|
+/// Reachable block indices in reverse postorder, entry block first, followed
+/// by unreachable blocks in stable storage order.
+pub fn Function::block_indices_in_cfg_order(self : Function) -> Array[Int] {
+  let (successors, _) = build_cfg(self)
+  let order = reverse_postorder(successors)
+  let seen = Array::make(self.blocks.length(), false)
+  for block_id in order {
+    seen[block_id] = true
+  }
+  for block_id in 0..<self.blocks.length() {
+    if !seen[block_id] {
+      order.push(block_id)
+    }
+  }
+  order
+}
+
+///|
 /// Reachable blocks in reverse postorder, entry block first.
 ///
 /// The depth of this walk is the length of a CFG path, which the input
@@ -79,20 +97,9 @@ fn reverse_postorder(successors : Array[Array[Int]]) -> Array[Int] {
 /// reachable SSA definition is materialized before its dominated uses without
 /// making physical block allocation order part of the semantic contract.
 pub fn Function::blocks_in_cfg_order(self : Function) -> Array[Block] {
-  let (successors, _) = build_cfg(self)
-  let order = reverse_postorder(successors)
-  let seen = Array::make(self.blocks.length(), false)
-  let blocks : Array[Block] = []
-  for block_id in order {
-    seen[block_id] = true
-    blocks.push(Block::new(self.owner, block_id))
-  }
-  for block_id in 0..<self.blocks.length() {
-    if !seen[block_id] {
-      blocks.push(Block::new(self.owner, block_id))
-    }
-  }
-  blocks
+  self
+  .block_indices_in_cfg_order()
+  .map(block_id => Block::new(self.owner, block_id))
 }
 
 ///|
