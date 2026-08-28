@@ -627,6 +627,24 @@ test "any-location definitions materialize in their stable home" {
 }
 
 ///|
+test "physical register index preserves classes and bounded fallback" {
+  let int3 : PhysicalReg = { id: 3, class: Int, }
+  let float3 : PhysicalReg = { id: 3, class: Float, }
+  let dense_registers = [int3, float3]
+  let session = AllocationSession::new()
+  let dense = PhysicalRegisterIndex::for_session(session, dense_registers)
+  let dense_int = dense.find(dense_registers, int3)
+  let dense_float = dense.find(dense_registers, float3)
+  let far : PhysicalReg = { id: 300, class: Int, }
+  let fallback_registers = [far]
+  let fallback = PhysicalRegisterIndex::for_session(session, fallback_registers)
+  debug_inspect(
+    (dense_int, dense_float, fallback.find(fallback_registers, far)),
+    content="(Some(0), Some(1), Some(0))",
+  )
+}
+
+///|
 test "production register allocation index orders updates by range end" {
   let segments : Array[AllocationSegment] = [
     {

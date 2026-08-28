@@ -998,10 +998,13 @@ test "clobber index follows custom block order and fixed operands" {
     operands: [[], [Operand::use_reg(value).with_constraint(FixedReg(r1))], []],
     clobbers: [[r0], [], [r0]],
   }
+  let environment = MachineEnv::new([r0, r1, r2], [])
+  let session = AllocationSession::new()
   let index = build_register_clobber_index(
     function,
-    MachineEnv::new([r0, r1, r2], []),
+    environment,
     [2, 0, 1],
+    PhysicalRegisterIndex::for_session(session, environment.allocatable_regs),
   )
   debug_inspect(
     (

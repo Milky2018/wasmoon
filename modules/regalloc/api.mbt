@@ -164,6 +164,7 @@ pub struct AllocationSession {
   priv eviction_conflicts : Array[Int]
   priv register_order : Array[Int]
   priv register_order_marks : Array[Bool]
+  priv physical_register_indexes : Array[Int]
   priv queue_items : Array[Int]
   priv queue_priorities : Array[Int]
   priv queue_weights : Array[Int]

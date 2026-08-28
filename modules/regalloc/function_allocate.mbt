@@ -11,6 +11,67 @@ priv struct RegisterClobberIndex {
 }
 
 ///|
+priv struct PhysicalRegisterIndex {
+  stride : Int
+  indexes : Array[Int]
+}
+
+///|
+fn physical_register_class_index(class : RegClass) -> Int {
+  match class {
+    Int => 0
+    Float => 1
+    Vector => 2
+  }
+}
+
+///|
+fn PhysicalRegisterIndex::for_session(
+  session : AllocationSession,
+  registers : Array[PhysicalReg],
+) -> PhysicalRegisterIndex {
+  let mut max_id = -1
+  for register in registers {
+    max_id = max_id.max(register.id)
+  }
+  // Real ISAs use compact register ids. Keep malformed or unconventional
+  // embeddings from turning an external id into an unbounded allocation.
+  let stride = if max_id >= 0 && max_id <= 255 { max_id + 1 } else { 0 }
+  reset_dense_array(session.physical_register_indexes, stride * 3, -1)
+  let index : PhysicalRegisterIndex = {
+    stride,
+    indexes: session.physical_register_indexes,
+  }
+  if stride > 0 {
+    for register_index, register in registers {
+      if register.id >= 0 {
+        index.indexes[physical_register_class_index(register.class) * stride +
+        register.id] = register_index
+      }
+    }
+  }
+  index
+}
+
+///|
+fn PhysicalRegisterIndex::find(
+  self : PhysicalRegisterIndex,
+  registers : Array[PhysicalReg],
+  register : PhysicalReg,
+) -> Int? {
+  if self.stride > 0 && register.id >= 0 && register.id < self.stride {
+    let index = self.indexes[physical_register_class_index(register.class) *
+      self.stride +
+      register.id]
+    if index >= 0 {
+      return Some(index)
+    }
+    return None
+  }
+  register_index(registers, register)
+}
+
+///|
 fn RegisterClobberIndex::new(register_count : Int) -> RegisterClobberIndex {
   let by_register : Array[RegisterClobberPoints] = []
   for _ in 0..<register_count {
@@ -39,20 +100,18 @@ fn[F : FunctionView] build_register_clobber_index(
   function : F,
   environment : MachineEnv,
   block_order : Array[Int],
+  register_indexes : PhysicalRegisterIndex,
   index? : RegisterClobberIndex = RegisterClobberIndex::new(0),
 ) -> RegisterClobberIndex {
   index.reset(environment.allocatable_regs.length())
-  let register_indexes : Map[(Int, Int), Int] = Map([])
-  for register, reg in environment.allocatable_regs {
-    register_indexes[physical_reg_key(reg)] = register
-  }
   fn record(
     index : RegisterClobberIndex,
-    register_indexes : Map[(Int, Int), Int],
+    register_indexes : PhysicalRegisterIndex,
+    registers : Array[PhysicalReg],
     reg : PhysicalReg,
     point : ProgramPoint,
   ) -> Unit {
-    if register_indexes.get(physical_reg_key(reg)) is Some(register) {
+    if register_indexes.find(registers, reg) is Some(register) {
       index.by_register[register].points.push(point)
     }
   }
@@ -66,13 +125,31 @@ fn[F : FunctionView] build_register_clobber_index(
       // to be recolored into the clobbered register.
       let point = ProgramPoint(block, instruction_index * 2)
       for clobber in function.instruction_clobbers(instruction) {
-        record(index, register_indexes, clobber, point)
+        record(
+          index,
+          register_indexes,
+          environment.allocatable_regs,
+          clobber,
+          point,
+        )
       }
       for operand in function.instruction_operands(instruction) {
-        if operand.constraint is FixedReg(reg) {
+        if operand.timing is Early && operand.constraint is FixedReg(reg) {
           record(
             index,
             register_indexes,
+            environment.allocatable_regs,
+            reg,
+            operand_program_point(block, instruction_index, operand.timing),
+          )
+        }
+      }
+      for operand in function.instruction_operands(instruction) {
+        if operand.timing is Late && operand.constraint is FixedReg(reg) {
+          record(
+            index,
+            register_indexes,
+            environment.allocatable_regs,
             reg,
             operand_program_point(block, instruction_index, operand.timing),
           )
@@ -80,10 +157,20 @@ fn[F : FunctionView] build_register_clobber_index(
       }
     }
   }
+  let mut block_order_is_monotonic = true
+  for block in 1..<function.block_count() {
+    if program_point_block_order(ProgramPoint(block - 1, 0), block_order) >
+      program_point_block_order(ProgramPoint(block, 0), block_order) {
+      block_order_is_monotonic = false
+      break
+    }
+  }
   for clobbers in index.by_register {
-    clobbers.points.sort_by(fn(left, right) {
-      left.compare_with_order(right, block_order)
-    })
+    if !block_order_is_monotonic {
+      clobbers.points.sort_by(fn(left, right) {
+        left.compare_with_order(right, block_order)
+      })
+    }
     for point in clobbers.points {
       clobbers.block_orders.push(program_point_block_order(point, block_order))
       clobbers.instructions.push(point.inst)

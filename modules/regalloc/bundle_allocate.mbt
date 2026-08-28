@@ -69,6 +69,7 @@ pub fn AllocationSession::new() -> AllocationSession {
     eviction_conflicts: [],
     register_order: [],
     register_order_marks: [],
+    physical_register_indexes: [],
     queue_items: [],
     queue_priorities: [],
     queue_weights: [],
@@ -501,11 +502,12 @@ fn probe_bundle_register(
 fn push_bundle_register_candidates(
   order : Array[Int],
   order_marks : Array[Bool],
+  register_indexes : PhysicalRegisterIndex,
   registers : Array[PhysicalReg],
   candidate : PhysicalReg?,
 ) -> Unit {
   if candidate is Some(reg) &&
-    register_index(registers, reg) is Some(index) &&
+    register_indexes.find(registers, reg) is Some(index) &&
     !order_marks[index] {
     order_marks[index] = true
     order.push(index)
@@ -520,6 +522,7 @@ fn bundle_register_order(
   segments : Array[AllocationSegment],
   environment : MachineEnv,
   preferred_by_value : Array[PhysicalReg?],
+  register_indexes : PhysicalRegisterIndex,
   order : Array[Int],
   order_marks : Array[Bool],
 ) -> Unit {
@@ -530,6 +533,7 @@ fn bundle_register_order(
   push_bundle_register_candidates(
     order,
     order_marks,
+    register_indexes,
     environment.allocatable_regs,
     hint,
   )
@@ -538,18 +542,21 @@ fn bundle_register_order(
     push_bundle_register_candidates(
       order,
       order_marks,
+      register_indexes,
       environment.allocatable_regs,
       segment.fixed_hint,
     )
     push_bundle_register_candidates(
       order,
       order_marks,
+      register_indexes,
       environment.allocatable_regs,
       segment.preference_hint,
     )
     push_bundle_register_candidates(
       order,
       order_marks,
+      register_indexes,
       environment.allocatable_regs,
       preferred_by_value[segment.value.id],
     )
@@ -1192,10 +1199,15 @@ fn[F : FunctionView] allocate_bundles(
   )
   let occupied_stack = session.occupied_stack
   occupied_stack.clear()
+  let register_indexes = PhysicalRegisterIndex::for_session(
+    session,
+    environment.allocatable_regs,
+  )
   let clobbers = build_register_clobber_index(
     function,
     environment,
     ranges.block_order,
+    register_indexes,
   )
   let preferred_by_value = session.preferred_by_value
   reset_dense_array(preferred_by_value, function.value_count(), None)
@@ -1235,6 +1247,7 @@ fn[F : FunctionView] allocate_bundles(
       segments,
       environment,
       preferred_by_value,
+      register_indexes,
       register_order,
       register_order_marks,
     )
@@ -1426,6 +1439,7 @@ fn[F : FunctionView] allocate_bundles(
       segments,
       environment,
       preferred_by_value,
+      register_indexes,
       register_order,
       register_order_marks,
     )

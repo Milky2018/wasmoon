@@ -667,12 +667,15 @@ fn[F : FunctionView] assign_segment_operands(
   environment : MachineEnv,
   segments : Array[AllocationSegment],
   segments_by_value : Array[Array[Int]],
+  session? : AllocationSession = AllocationSession::new(),
 ) -> Unit raise VerifyError {
   let borrow_slots : Array[Int?] = Array::make(function.value_count(), None)
-  let register_indexes : Map[(Int, Int), Int] = Map([])
+  let register_indexes = PhysicalRegisterIndex::for_session(
+    session,
+    environment.allocatable_regs,
+  )
   let register_home_segments : Array[Array[Int]] = []
-  for index, reg in environment.allocatable_regs {
-    register_indexes[physical_reg_key(reg)] = index
+  for _ in environment.allocatable_regs {
     register_home_segments.push([])
   }
   let block_entry_segments : Array[Array[Int]] = []
@@ -682,7 +685,8 @@ fn[F : FunctionView] assign_segment_operands(
   for segment in segments {
     if segment.location is Some(_) &&
       plan.value_location(segment.value.id) is Some(Reg(home_reg)) &&
-      register_indexes.get(physical_reg_key(home_reg)) is Some(index) {
+      register_indexes.find(environment.allocatable_regs, home_reg)
+      is Some(index) {
       register_home_segments[index].push(segment.id)
     }
     if segment.range.start.inst == -1 &&
@@ -733,7 +737,8 @@ fn[F : FunctionView] assign_segment_operands(
         guard segments[segment_id].location is Some(SegmentReg(reg)) else {
           continue
         }
-        if register_indexes.get(physical_reg_key(reg)) is Some(index) {
+        if register_indexes.find(environment.allocatable_regs, reg)
+          is Some(index) {
           resident_by_register[index] = segment_id
         }
       }
@@ -929,7 +934,8 @@ fn[F : FunctionView] assign_segment_operands(
             match resident_operand_segments[operand_index] {
               Some(segment) => {
                 let register = match selected {
-                  Reg(reg) => register_indexes.get(physical_reg_key(reg))
+                  Reg(reg) =>
+                    register_indexes.find(environment.allocatable_regs, reg)
                   Spill(_) => None
                 }
                 match register {
@@ -945,7 +951,8 @@ fn[F : FunctionView] assign_segment_operands(
               None => {
                 add_use_transfer(plan, instruction, operand, home, selected)
                 if selected is Reg(reg) && !borrowed_temps.contains(reg) {
-                  if register_indexes.get(physical_reg_key(reg)) is Some(index) {
+                  if register_indexes.find(environment.allocatable_regs, reg)
+                    is Some(index) {
                     resident_by_register[index] = -1
                   }
                 }
@@ -970,18 +977,21 @@ fn[F : FunctionView] assign_segment_operands(
           }
           if resident_operand_segments[operand_index] is Some(segment) &&
             selected is Reg(reg) {
-            if register_indexes.get(physical_reg_key(reg)) is Some(index) {
+            if register_indexes.find(environment.allocatable_regs, reg)
+              is Some(index) {
               resident_by_register[index] = segment
             }
           } else if selected is Reg(reg) && !borrowed_temps.contains(reg) {
-            if register_indexes.get(physical_reg_key(reg)) is Some(index) {
+            if register_indexes.find(environment.allocatable_regs, reg)
+              is Some(index) {
               resident_by_register[index] = -1
             }
           }
         }
         if timing == Early {
           for clobber in function.instruction_clobbers(instruction) {
-            if register_indexes.get(physical_reg_key(clobber)) is Some(index) {
+            if register_indexes.find(environment.allocatable_regs, clobber)
+              is Some(index) {
               resident_by_register[index] = -1
             }
           }
@@ -1028,7 +1038,12 @@ fn[F : FunctionView] allocate_bundle_plan(
   )
   config.enter_phase(Some(OperandAssignment))
   assign_segment_operands(
-    plan, function, environment, segments, segments_by_value,
+    plan,
+    function,
+    environment,
+    segments,
+    segments_by_value,
+    session~,
   )
   config.enter_phase(Some(EdgeTransfers))
   assign_edge_transfers(plan, function)
