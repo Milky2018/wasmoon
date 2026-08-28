@@ -45,6 +45,53 @@ fn build_test_function() -> Function[TestInst] raise VCodeBuildError {
 }
 
 ///|
+test "CheckedBuilder rejects incomplete construction at sealing" {
+  let builder : CheckedBuilder[TestInst] = CheckedBuilder::new(
+    "missing_terminator",
+    [],
+  )
+  try builder.finish() |> ignore catch {
+    error => inspect(error, content="MissingTerminator(block=block0)")
+  } noraise {
+    _ => fail("expected incomplete checked construction to be rejected")
+  }
+}
+
+///|
+test "CheckedBuilder rejects malformed edges before mutation" {
+  let builder : CheckedBuilder[TestInst] = CheckedBuilder::new("bad_edge", [])
+  let entry = builder.entry_block()
+  let exit = builder.create_block([I64])
+  try
+    builder.set_terminator(
+      entry,
+      Jump,
+      [],
+      [Edge::new(exit, [])],
+      [],
+      InstructionMetadata::empty(),
+    )
+    |> ignore
+  catch {
+    error => inspect(error, content="InvalidEdgeArity(block=block1)")
+  } noraise {
+    _ => fail("expected malformed checked edge to be rejected")
+  }
+  builder.set_terminator(
+    entry,
+    Return,
+    [],
+    [],
+    [],
+    InstructionMetadata::empty(),
+  )
+  |> ignore
+  builder.set_terminator(exit, Return, [], [], [], InstructionMetadata::empty())
+  |> ignore
+  builder.finish() |> ignore
+}
+
+///|
 test "Target VCode snapshots selected SSA and compact allocation facts" {
   let function = build_test_function()
   verify_selected(function)

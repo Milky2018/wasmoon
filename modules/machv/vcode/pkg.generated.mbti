@@ -121,6 +121,12 @@ pub suberror VCodeBuildError {
   InvalidOperandConstraint
   DuplicateTerminator(block~ : Block)
   BlockAlreadyTerminated(block~ : Block)
+  InvalidEdgeArity(block~ : Block)
+  EdgeClassMismatch(block~ : Block, index~ : Int)
+  DuplicateClobber(reg~ : PhysicalReg)
+  InvalidSafepointRoot(value~ : Value)
+  InvalidStackMap
+  MissingTerminator(block~ : Block)
   InvalidLayout
 } derive(Eq, @debug.Debug)
 pub fn VCodeBuildError::equal(Self, Self) -> Bool
@@ -232,6 +238,20 @@ pub struct CallTransferPlan {
 pub fn CallTransferPlan::equal(Self, Self) -> Bool
 pub fn CallTransferPlan::not_equal(Self, Self) -> Bool
 pub fn CallTransferPlan::to_repr(Self) -> @debug.Repr
+
+pub struct CheckedBuilder[Inst] {
+  // private fields
+}
+pub fn[Inst] CheckedBuilder::append_body(Self[Inst], Block, Inst, Array[Input], Array[Output], Array[PhysicalReg], InstructionMetadata) -> (Instruction, Array[Value]) raise VCodeBuildError
+pub fn[Inst] CheckedBuilder::block_parameter(Self[Inst], Block, Int) -> Value raise VCodeBuildError
+pub fn[Inst] CheckedBuilder::create_block(Self[Inst], Array[@machv.ValueType]) -> Block
+pub fn[Inst] CheckedBuilder::entry_block(Self[Inst]) -> Block
+pub fn[Inst] CheckedBuilder::finish(Self[Inst]) -> Function[Inst] raise VCodeBuildError
+pub fn[Inst] CheckedBuilder::new(String, Array[@machv.ValueType]) -> Self[Inst]
+pub fn[Inst] CheckedBuilder::new_with_protocol(String, @machv.CallProtocol, Array[@machv.ValueType], Array[@machv.ValueType]) -> Self[Inst]
+pub fn[Inst] CheckedBuilder::new_with_results(String, Array[@machv.ValueType], Array[@machv.ValueType]) -> Self[Inst]
+pub fn[Inst] CheckedBuilder::parameter(Self[Inst], Int) -> Value raise VCodeBuildError
+pub fn[Inst] CheckedBuilder::set_terminator(Self[Inst], Block, Inst, Array[Input], Array[Edge], Array[PhysicalReg], InstructionMetadata) -> Instruction raise VCodeBuildError
 
 pub struct Edge {
   target : Block

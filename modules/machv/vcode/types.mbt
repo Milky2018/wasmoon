@@ -415,6 +415,12 @@ pub suberror VCodeBuildError {
   InvalidOperandConstraint
   DuplicateTerminator(block~ : Block)
   BlockAlreadyTerminated(block~ : Block)
+  InvalidEdgeArity(block~ : Block)
+  EdgeClassMismatch(block~ : Block, index~ : Int)
+  DuplicateClobber(reg~ : PhysicalReg)
+  InvalidSafepointRoot(value~ : Value)
+  InvalidStackMap
+  MissingTerminator(block~ : Block)
   InvalidLayout
 } derive(Eq, Debug)
 

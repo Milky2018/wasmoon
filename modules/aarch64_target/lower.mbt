@@ -341,7 +341,7 @@ fn bind_instruction_results(
 
 ///|
 fn append_body(
-  builder : @vcode.Builder[AArch64Inst],
+  builder : @vcode.CheckedBuilder[AArch64Inst],
   block : @vcode.Block,
   instruction : AArch64Inst,
   inputs : Array[@vcode.Input],
@@ -452,7 +452,7 @@ fn abi_home_output(
 
 ///|
 fn lower_direct_platform_call(
-  builder : @vcode.Builder[AArch64Inst],
+  builder : @vcode.CheckedBuilder[AArch64Inst],
   block : @vcode.Block,
   call : @semantic.SemanticCall,
   operands : Array[@vcode.Value],
@@ -530,7 +530,7 @@ fn lower_direct_platform_call(
 ///|
 fn lower_internal_call(
   context : LoweringContext,
-  builder : @vcode.Builder[AArch64Inst],
+  builder : @vcode.CheckedBuilder[AArch64Inst],
   block : @vcode.Block,
   call : @semantic.SemanticCall,
   operands : Array[@vcode.Value],
@@ -1504,7 +1504,7 @@ fn analyze_lowering(function : @semantic.Function) -> LoweringAnalysis {
 fn lower_instruction(
   function : @semantic.Function,
   context : LoweringContext,
-  builder : @vcode.Builder[AArch64Inst],
+  builder : @vcode.CheckedBuilder[AArch64Inst],
   block : @vcode.Block,
   block_index : Int,
   instruction : @semantic.Instruction,
@@ -2320,7 +2320,7 @@ fn lower_instruction(
 fn lower_parameters(
   function : @semantic.Function,
   context : LoweringContext,
-  builder : @vcode.Builder[AArch64Inst],
+  builder : @vcode.CheckedBuilder[AArch64Inst],
   values : Array[@vcode.Value?],
   analysis : LoweringAnalysis,
 ) -> @vcode.Value? raise AArch64LowerError {
@@ -2389,7 +2389,7 @@ fn lower_parameters(
 fn lower_return_values(
   function : @semantic.Function,
   context : LoweringContext,
-  builder : @vcode.Builder[AArch64Inst],
+  builder : @vcode.CheckedBuilder[AArch64Inst],
   block : @vcode.Block,
   values : Array[@vcode.Value],
   result_types : Array[@semantic.ValueType],
@@ -2439,7 +2439,7 @@ fn lower_return_values(
 
 ///|
 fn set_terminator(
-  builder : @vcode.Builder[AArch64Inst],
+  builder : @vcode.CheckedBuilder[AArch64Inst],
   block : @vcode.Block,
   instruction : AArch64Inst,
   inputs : Array[@vcode.Input],
@@ -2463,7 +2463,7 @@ fn construct_validated_semantic(
 ) -> ConstructedFunction raise AArch64LowerError {
   on_event(TargetAnalysisStarted)
   let signature = function.signature()
-  let builder : @vcode.Builder[AArch64Inst] = @vcode.Builder::new_with_protocol(
+  let builder : @vcode.CheckedBuilder[AArch64Inst] = @vcode.CheckedBuilder::new_with_protocol(
     function.name(),
     function.protocol(),
     signature.params,
@@ -2757,7 +2757,9 @@ fn construct_validated_semantic(
         )
     }
   }
-  let lowered = builder.finish()
+  let lowered = builder.finish() catch {
+    error => raise BuildFailure(cause=error)
+  }
   let layout = semantic_layout.map(block_index => blocks[block_index])
   lowered.set_layout(layout) catch {
     error => raise BuildFailure(cause=error)
