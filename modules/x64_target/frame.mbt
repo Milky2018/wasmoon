@@ -18,6 +18,16 @@ priv struct ResultArea {
 }
 
 ///|
+priv struct TailCallFramePlan {
+  stack_argument_size : Int
+  stack_argument_base : Int
+  synthetic_return_size : Int
+  alignment_padding : Int
+  transfer_size : Int
+  thunk_cleanup_size : Int
+}
+
+///|
 pub struct X64Frame {
   priv layout : @vcode.FrameLayout
   priv has_setup_area : Bool
@@ -375,19 +385,63 @@ pub fn X64Frame::tail_args_size(self : X64Frame) -> Int {
 }
 
 ///|
-fn X64Frame::tail_call_stack_base(
+fn X64Frame::tail_call_plan(
   self : X64Frame,
   callee_args_size : Int,
-) -> Int {
+) -> TailCallFramePlan {
   if callee_args_size <= self.incoming_args_size {
-    self.frame_size() + 8
+    {
+      stack_argument_size: callee_args_size,
+      stack_argument_base: self.frame_size() + 8,
+      synthetic_return_size: 0,
+      alignment_padding: 0,
+      transfer_size: 0,
+      thunk_cleanup_size: 0,
+    }
   } else {
-    self.frame_size() - callee_args_size
+    let synthetic_return_size = 8
+    let transfer_size = align_up(synthetic_return_size + callee_args_size, 16)
+    let alignment_padding = transfer_size -
+      synthetic_return_size -
+      callee_args_size
+    {
+      stack_argument_size: callee_args_size,
+      stack_argument_base: self.frame_size() +
+      synthetic_return_size -
+      transfer_size,
+      synthetic_return_size,
+      alignment_padding,
+      transfer_size,
+      thunk_cleanup_size: transfer_size - synthetic_return_size,
+    }
   }
 }
 
 ///|
-fn tail_cleanup_area_size(
+fn X64Frame::valid_tail_call_plan(
+  self : X64Frame,
+  plan : TailCallFramePlan,
+) -> Bool {
+  if plan.stack_argument_size <= self.incoming_args_size {
+    return plan.stack_argument_base == self.frame_size() + 8 &&
+      plan.synthetic_return_size == 0 &&
+      plan.alignment_padding == 0 &&
+      plan.transfer_size == 0 &&
+      plan.thunk_cleanup_size == 0
+  }
+  plan.stack_argument_size % 16 == 0 &&
+  plan.synthetic_return_size == 8 &&
+  plan.alignment_padding >= 0 &&
+  plan.synthetic_return_size + plan.stack_argument_size + plan.alignment_padding ==
+  plan.transfer_size &&
+  plan.transfer_size % 16 == 0 &&
+  plan.stack_argument_base ==
+  self.frame_size() + plan.synthetic_return_size - plan.transfer_size &&
+  plan.thunk_cleanup_size + plan.synthetic_return_size == plan.transfer_size
+}
+
+///|
+fn tail_argument_staging_size(
   incoming_args_size : Int,
   tail_args_size : Int,
 ) -> Int {
@@ -448,7 +502,9 @@ pub fn X64Frame::saved_registers(
 pub fn X64Frame::summary(self : X64Frame) -> String {
   let mut output = "x64 frame size=\{self.frame_size()} align=\{self.alignment()}\n"
   if self.tail_args_size > self.incoming_args_size {
-    output += "  tail-args \{self.tail_args_size} bytes at sp+\{self.local_size} (incoming \{self.incoming_args_size})\n"
+    let plan = self.tail_call_plan(self.tail_args_size)
+    output += "  tail-args \{plan.stack_argument_size} bytes at sp+\{plan.stack_argument_base}\n"
+    output += "  tail-transfer return=\{plan.synthetic_return_size} padding=\{plan.alignment_padding} adjust=\{plan.transfer_size} cleanup=\{plan.thunk_cleanup_size}\n"
   }
   if self.outgoing_args_size > 0 {
     output += "  outgoing \{self.outgoing_args_size} bytes at sp+0\n"
@@ -513,7 +569,7 @@ fn verify_target_frame(
   } else {
     expected_incoming
   }
-  let expected_tail_area = tail_cleanup_area_size(
+  let expected_tail_area = tail_argument_staging_size(
     expected_incoming, expected_tail,
   )
   if frame.incoming_args_size != expected_incoming ||
@@ -525,6 +581,23 @@ fn verify_target_frame(
       expected_tail~,
       actual_tail=frame.tail_args_size,
     )
+  }
+  for index in 0..<function.instruction_count() {
+    let instruction = function.instruction_at(index).unwrap()
+    let stack_arguments = match function.instruction(instruction) {
+      Some(TailCallDirect(_, _, plan) | TailCallIndirect(_, plan)) =>
+        Some(plan.stack_size)
+      _ => None
+    }
+    if stack_arguments is Some(size) &&
+      !frame.valid_tail_call_plan(frame.tail_call_plan(size)) {
+      raise TailAreaMismatch(
+        expected_incoming~,
+        actual_incoming=frame.incoming_args_size,
+        expected_tail=size,
+        actual_tail=frame.tail_args_size,
+      )
+    }
   }
   let expected_result_area = maximum_result_area_size(function)
   let actual_result_area = frame.result_area.map(area => area.size).unwrap_or(0)
@@ -677,7 +750,7 @@ fn plan_frame_verified(
   } else {
     incoming_args_size
   }
-  let tail_area_size = tail_cleanup_area_size(
+  let tail_area_size = tail_argument_staging_size(
     incoming_args_size, tail_args_size,
   )
   let allocation_size = local_size + tail_area_size

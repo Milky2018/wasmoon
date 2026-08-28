@@ -2948,11 +2948,10 @@ fn emit_call_arguments(
 ///|
 fn emit_tail_return_thunk_setup(
   buffer : CodeBuffer,
-  frame : X64Frame,
-  callee_args_size : Int,
+  plan : TailCallFramePlan,
 ) -> Int? raise X64EmitError {
-  if callee_args_size > frame.incoming_args_size() {
-    emit_sp_adjust(buffer, true, callee_args_size + 8)
+  if plan.synthetic_return_size > 0 {
+    emit_sp_adjust(buffer, true, plan.transfer_size)
     emit_rex_w(buffer, 1, 0)
     buffer.emit_byte(0x8D)
     emit_modrm(buffer, 0, 10, 5)
@@ -2967,13 +2966,12 @@ fn emit_tail_return_thunk_setup(
 ///|
 fn emit_tail_return_thunk(
   buffer : CodeBuffer,
-  frame : X64Frame,
-  callee_args_size : Int,
+  plan : TailCallFramePlan,
   thunk_address : Int?,
 ) -> Unit raise X64EmitError {
-  if callee_args_size > frame.incoming_args_size() {
+  if plan.synthetic_return_size > 0 {
     buffer.patch_local_rel32(thunk_address.unwrap(), buffer.position())
-    emit_sp_adjust(buffer, false, callee_args_size)
+    emit_sp_adjust(buffer, false, plan.thunk_cleanup_size)
     buffer.x86_emit_ret()
   }
 }
@@ -3922,6 +3920,7 @@ fn emit_instruction(
       buffer.x86_emit_call_r64(callee_register.id)
     }
     TailCallDirect(target, signature, plan) => {
+      let tail_frame = frame.tail_call_plan(plan.stack_size)
       let result_area = result_area_register(plan).map(destination => {
         (signature.params.length(), destination)
       })
@@ -3933,15 +3932,11 @@ fn emit_instruction(
         signature.params,
         plan.arguments,
         plan.stack_size,
-        stack_base=frame.tail_call_stack_base(plan.stack_size),
+        stack_base=tail_frame.stack_argument_base,
         result_area?,
       )
       emit_epilogue(buffer, frame)
-      let thunk_address = emit_tail_return_thunk_setup(
-        buffer,
-        frame,
-        plan.stack_size,
-      )
+      let thunk_address = emit_tail_return_thunk_setup(buffer, tail_frame)
       metadata_offset = buffer.position()
       buffer.emit_byte(0xE9)
       let displacement = buffer.position()
@@ -3953,9 +3948,10 @@ fn emit_instruction(
           Code(target),
         ),
       )
-      emit_tail_return_thunk(buffer, frame, plan.stack_size, thunk_address)
+      emit_tail_return_thunk(buffer, tail_frame, thunk_address)
     }
     TailCallIndirect(signature, plan) => {
+      let tail_frame = frame.tail_call_plan(plan.stack_size)
       let callee_register = @vcode.PhysicalReg::new(0, Int)
       let result_area = result_area_register(plan).map(destination => {
         (signature.params.length() + 1, destination)
@@ -3969,19 +3965,15 @@ fn emit_instruction(
         plan.arguments,
         plan.stack_size,
         operand_start=1,
-        stack_base=frame.tail_call_stack_base(plan.stack_size),
+        stack_base=tail_frame.stack_argument_base,
         callee=(0, callee_register),
         result_area?,
       )
       emit_epilogue(buffer, frame)
-      let thunk_address = emit_tail_return_thunk_setup(
-        buffer,
-        frame,
-        plan.stack_size,
-      )
+      let thunk_address = emit_tail_return_thunk_setup(buffer, tail_frame)
       metadata_offset = buffer.position()
       buffer.x86_emit_jmp_r64(callee_register.id)
-      emit_tail_return_thunk(buffer, frame, plan.stack_size, thunk_address)
+      emit_tail_return_thunk(buffer, tail_frame, thunk_address)
     }
     Jump => {
       emit_edge_moves(buffer, function, allocation, frame, block, 0)

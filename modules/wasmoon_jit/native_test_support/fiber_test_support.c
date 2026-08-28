@@ -14,6 +14,25 @@ typedef struct {
 
 static _Atomic int callback_capture_releases;
 
+#if defined(__x86_64__) && !defined(_WIN32)
+__attribute__((naked, noinline))
+static int64_t x64_sysv_stack_alignment_probe(void) {
+    __asm__ volatile(
+        "movq %rsp, %rax\n\t"
+        "andq $15, %rax\n\t"
+        "retq\n\t"
+    );
+}
+#endif
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_test_x64_stack_alignment_probe_ptr(void) {
+#if defined(__x86_64__) && !defined(_WIN32)
+    return (int64_t)(uintptr_t)x64_sysv_stack_alignment_probe;
+#else
+    return 0;
+#endif
+}
+
 static void finalize_callback_capture(void *self) {
     (void)self;
     atomic_fetch_add_explicit(

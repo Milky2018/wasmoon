@@ -32,6 +32,9 @@ extern "c" fn c_fiber_guard_rejects_access() -> Int = "wasmoon_test_fiber_guard_
 extern "c" fn c_fiber_preserves_registers() -> Int = "wasmoon_test_fiber_preserves_registers"
 
 ///|
+extern "c" fn c_x64_stack_alignment_probe_ptr() -> Int64 = "wasmoon_test_x64_stack_alignment_probe_ptr"
+
+///|
 type CallbackCapture
 
 ///|
@@ -160,4 +163,9 @@ pub fn fiber_guard_rejects_access() -> Bool {
 ///|
 pub fn fiber_preserves_registers() -> Bool {
   c_fiber_preserves_registers() == 1
+}
+
+///|
+pub fn x64_stack_alignment_probe_ptr() -> Int64 {
+  c_x64_stack_alignment_probe_ptr()
 }

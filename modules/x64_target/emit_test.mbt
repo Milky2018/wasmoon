@@ -1972,3 +1972,72 @@ test "X64 pipeline keeps a loop back edge with moves unthreaded" {
   // threading test above; with moves pending it must not be the target.
   debug_inspect(target_offset == 10, content="false")
 }
+
+///|
+fn x64_test_contains_bytes(code : Array[Byte], expected : Array[Byte]) -> Bool {
+  if expected.is_empty() {
+    return true
+  }
+  if expected.length() > code.length() {
+    return false
+  }
+  for start in 0..<=(code.length() - expected.length()) {
+    let mut matches = true
+    for offset in 0..<expected.length() {
+      if code[start + offset] != expected[offset] {
+        matches = false
+        break
+      }
+    }
+    if matches {
+      return true
+    }
+  }
+  false
+}
+
+///|
+test "X64 expanded tail calls preserve SysV callee-entry alignment" {
+  let builder = @semantic.FunctionBuilder::new(
+    "expanded_tail_alignment",
+    Internal,
+    [Ptr64],
+    [],
+  )
+  let operands = [builder.parameters()[0]]
+  for index in 0..<8 {
+    operands.push(builder.emit(I64Const(index.to_uint64()), [], [I64])[0])
+  }
+  let call = @semantic.SemanticCall::new(
+    Internal(@semantic.CodeSymbol::new("wasm.func.expanded_tail_callee")),
+    @semantic.Signature::new([Ptr64, I64, I64, I64, I64, I64, I64, I64, I64], []),
+    Internal,
+    @semantic.CallBehavior::new(ReadWrite, true, true, false, false),
+  )
+  builder.tail_call(call, operands)
+  let selected = lower(builder.finish(), test_lowering_context())
+  let allocation = allocate(selected)
+  let frame = plan_frame(selected, allocation)
+  inspect(
+    frame.summary(),
+    content=(
+      #|x64 frame size=56 align=16
+      #|  tail-args 32 bytes at sp+16
+      #|  tail-transfer return=8 padding=8 adjust=48 cleanup=40
+      #|  save p3:int at sp+0
+      #|  save p12:int at sp+8
+      #|
+    ),
+  )
+  let code = emit(selected, allocation, frame).code()
+  let subtracts_aligned_transfer = x64_test_contains_bytes(code, [
+    0x5D, 0x48, 0x81, 0xEC, 0x30, 0x00, 0x00, 0x00,
+  ])
+  let thunk_discards_arguments_and_padding = x64_test_contains_bytes(code, [
+    0x48, 0x81, 0xC4, 0x28, 0x00, 0x00, 0x00,
+  ])
+  debug_inspect(
+    (subtracts_aligned_transfer, thunk_discards_arguments_and_padding),
+    content="(true, true)",
+  )
+}
