@@ -69,8 +69,8 @@ fn segment_metadata(
   let mut use_cost = 0
   let mut has_fixed_constraint = false
   let mut fixed_hint : PhysicalReg? = None
-  let preference_regs : Array[PhysicalReg] = []
-  let preference_counts : Array[Int] = []
+  let mut preference_regs : Array[PhysicalReg]? = None
+  let mut preference_counts : Array[Int]? = None
   let end = if use_end < 0 { range.uses.length() } else { use_end }
   for use_index in use_start..<end {
     let use_position = range.uses[use_index]
@@ -82,19 +82,26 @@ fn segment_metadata(
       if fixed_hint is None && use_position.constraint is FixedReg(reg) {
         fixed_hint = Some(reg)
       }
-      if use_position.preference is Some(preference) {
+      if use_position.preference is Some(preference) &&
+        allocatable.contains(preference) {
+        if preference_regs is None {
+          preference_regs = Some([])
+          preference_counts = Some([])
+        }
+        let regs = preference_regs.unwrap()
+        let counts = preference_counts.unwrap()
         let mut index = -1
-        for candidate_index, candidate in preference_regs {
+        for candidate_index, candidate in regs {
           if candidate == preference {
             index = candidate_index
             break
           }
         }
         if index >= 0 {
-          preference_counts[index] = preference_counts[index] + 1
-        } else if allocatable.contains(preference) {
-          preference_regs.push(preference)
-          preference_counts.push(1)
+          counts[index] = counts[index] + 1
+        } else {
+          regs.push(preference)
+          counts.push(1)
         }
       }
     }
@@ -111,10 +118,12 @@ fn segment_metadata(
   }
   let mut preference_hint : PhysicalReg? = None
   let mut selected_count = 0
-  for index, count in preference_counts {
-    if count > selected_count {
-      preference_hint = Some(preference_regs[index])
-      selected_count = count
+  if preference_counts is Some(counts) && preference_regs is Some(regs) {
+    for index, count in counts {
+      if count > selected_count {
+        preference_hint = Some(regs[index])
+        selected_count = count
+      }
     }
   }
   if !has_fixed_constraint {
@@ -150,6 +159,7 @@ fn build_allocation_segments(
   ranges : LiveRangeSet,
   loop_depths? : Array[Int] = [],
   allocatable? : Array[PhysicalReg] = [],
+  preordered? : Bool = false,
 ) -> (Array[AllocationSegment], Array[Array[Int]]) {
   let segments : Array[AllocationSegment] = []
   let segments_by_value : Array[Array[Int]] = []
@@ -163,10 +173,12 @@ fn build_allocation_segments(
     segments_by_value.push([])
   }
   for range in ranges.ranges {
-    range.sort_ranges(ranges.block_order)
-    range.uses.sort_by(fn(left, right) {
-      left.point.compare_with_order(right.point, ranges.block_order)
-    })
+    if !preordered {
+      range.sort_ranges(ranges.block_order)
+      range.uses.sort_by(fn(left, right) {
+        left.point.compare_with_order(right.point, ranges.block_order)
+      })
+    }
     let mut use_start = 0
     for fragment in range.ranges {
       while use_start < range.uses.length() &&
@@ -289,6 +301,7 @@ fn[F : FunctionView] allocate_segments_with_context(
     ranges,
     loop_depths~,
     allocatable=environment.allocatable_regs,
+    preordered=true,
   )
   config.enter_phase(Some(BundleFormation))
   let bundle_plan = build_production_bundle_plan(
