@@ -345,26 +345,26 @@ fn probe_bundle_register(
     statistics.occupied_segments_scanned = statistics.occupied_segments_scanned +
       1
     let conflict_segment = assigned.unwrap()
-    let current = segments[bundle.segments[bundle_index]]
-    let conflict = segments[conflict_segment]
-    if occupied.segment_end_before_start(
-        conflict_segment,
-        bundle.segments[bundle_index],
-      ) {
+    // Keep reference-counted segment records out of the scan-only path. Most
+    // visits only compare cached coordinates; ranges are needed only when a
+    // previously unseen conflict contributes its first overlap point.
+    let current_segment = bundle.segments[bundle_index]
+    if occupied.segment_end_before_start(conflict_segment, current_segment) {
       assigned = occupied.next(occupied_stack)
       skipped_occupied = skipped_occupied + 1
       if skipped_occupied >= 16 {
-        occupied.seek(register, current.range.start, occupied_stack)
+        occupied.seek(
+          register,
+          segments[current_segment].range.start,
+          occupied_stack,
+        )
         assigned = occupied.next(occupied_stack)
         skipped_occupied = 0
       }
       continue
     }
     skipped_occupied = 0
-    if occupied.segment_end_before_start(
-        bundle.segments[bundle_index],
-        conflict_segment,
-      ) {
+    if occupied.segment_end_before_start(current_segment, conflict_segment) {
       bundle_index = bundle_index + 1
       continue
     }
@@ -374,6 +374,8 @@ fn probe_bundle_register(
       conflicts.push(owner)
       statistics.conflicts = statistics.conflicts + 1
       result.conflict_cost = result.conflict_cost.max(bundles[owner].weight)
+      let current = segments[current_segment]
+      let conflict = segments[conflict_segment]
       result.first_conflict = Some(
         earlier_conflict_point(
           result.first_conflict,
@@ -391,10 +393,7 @@ fn probe_bundle_register(
         return
       }
     }
-    if occupied.segment_end_before_or_equal(
-        conflict_segment,
-        bundle.segments[bundle_index],
-      ) {
+    if occupied.segment_end_before_or_equal(conflict_segment, current_segment) {
       assigned = occupied.next(occupied_stack)
     } else {
       bundle_index = bundle_index + 1
