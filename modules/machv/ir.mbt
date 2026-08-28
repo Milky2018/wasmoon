@@ -216,6 +216,44 @@ pub struct InstructionMetadata {
 } derive(Debug, Eq)
 
 ///|
+/// Read-only access to canonical instruction metadata without copying the live
+/// GC-root collection.
+pub struct InstructionMetadataView {
+  priv source : SourceLocation?
+  priv live_gc_roots : Array[Value]
+  priv stack_map : StackMapMetadata?
+}
+
+///|
+pub fn InstructionMetadataView::source(
+  self : InstructionMetadataView,
+) -> SourceLocation? {
+  self.source
+}
+
+///|
+pub fn InstructionMetadataView::stack_map(
+  self : InstructionMetadataView,
+) -> StackMapMetadata? {
+  self.stack_map
+}
+
+///|
+pub fn InstructionMetadataView::live_gc_root_count(
+  self : InstructionMetadataView,
+) -> Int {
+  self.live_gc_roots.length()
+}
+
+///|
+pub fn InstructionMetadataView::live_gc_root_at(
+  self : InstructionMetadataView,
+  index : Int,
+) -> Value? {
+  self.live_gc_roots.get(index)
+}
+
+///|
 pub fn InstructionMetadata::empty() -> InstructionMetadata {
   { source: None, live_gc_roots: [], stack_map: None, }
 }
@@ -757,6 +795,24 @@ pub fn Function::instruction_metadata(
     Some({
       source: metadata.source,
       live_gc_roots: metadata.live_gc_roots.copy(),
+      stack_map: metadata.stack_map,
+    })
+  } else {
+    None
+  }
+}
+
+///|
+pub fn Function::instruction_metadata_view(
+  self : Function,
+  instruction : Instruction,
+) -> InstructionMetadataView? {
+  if self.owns_instruction(instruction) &&
+    self.instructions[instruction.id].alive {
+    let metadata = self.instructions[instruction.id].metadata
+    Some({
+      source: metadata.source,
+      live_gc_roots: metadata.live_gc_roots,
       stack_map: metadata.stack_map,
     })
   } else {

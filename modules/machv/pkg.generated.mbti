@@ -349,6 +349,7 @@ pub fn Function::instruction_at(Self, Int) -> Instruction?
 pub fn Function::instruction_count(Self) -> Int
 pub fn Function::instruction_index(Self, Instruction) -> Int?
 pub fn Function::instruction_metadata(Self, Instruction) -> InstructionMetadata?
+pub fn Function::instruction_metadata_view(Self, Instruction) -> InstructionMetadataView?
 pub fn Function::instruction_operand_at(Self, Instruction, Int) -> Value?
 pub fn Function::instruction_operand_count(Self, Instruction) -> Int?
 pub fn Function::instruction_operands(Self, Instruction) -> Array[Value]
@@ -429,6 +430,14 @@ pub fn InstructionMetadata::equal(Self, Self) -> Bool
 pub fn InstructionMetadata::new(SourceLocation?, Array[Value], stack_map? : StackMapMetadata) -> Self
 pub fn InstructionMetadata::not_equal(Self, Self) -> Bool
 pub fn InstructionMetadata::to_repr(Self) -> @debug.Repr
+
+pub struct InstructionMetadataView {
+  // private fields
+}
+pub fn InstructionMetadataView::live_gc_root_at(Self, Int) -> Value?
+pub fn InstructionMetadataView::live_gc_root_count(Self) -> Int
+pub fn InstructionMetadataView::source(Self) -> SourceLocation?
+pub fn InstructionMetadataView::stack_map(Self) -> StackMapMetadata?
 
 pub(all) enum IntBinaryOp {
   Add

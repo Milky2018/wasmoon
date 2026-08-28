@@ -353,6 +353,7 @@ test "semantic MachV indexed traversal preserves ownership and bounds" {
   let function = builder.finish()
   let block = function.block_at(0).unwrap()
   let instruction = function.block_instruction_at(block, 0).unwrap()
+  let metadata = function.instruction_metadata_view(instruction).unwrap()
   debug_inspect(
     (
       function.block_count(),
@@ -364,6 +365,15 @@ test "semantic MachV indexed traversal preserves ownership and bounds" {
       function.instruction_result_count(instruction),
     ),
     content="(1, 1, 1, Some(0), Some(1), Some(0), Some(1))",
+  )
+  debug_inspect(
+    (
+      metadata.source(),
+      metadata.stack_map(),
+      metadata.live_gc_root_count(),
+      metadata.live_gc_root_at(0),
+    ),
+    content="(None, None, 0, None)",
   )
   debug_inspect(
     (

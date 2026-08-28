@@ -322,7 +322,7 @@ fn append_body(
 
 ///|
 fn source_metadata(
-  metadata : @semantic.InstructionMetadata,
+  metadata : @semantic.InstructionMetadataView,
   values : Array[@vcode.Value],
   semantics : @semantic.OperationSemantics,
   trap? : @semantic.TrapReason,
@@ -334,21 +334,21 @@ fn source_metadata(
     (false, true) => Some(Cancellation)
     (false, false) => None
   }
-  match metadata.source {
+  match metadata.source() {
     Some(source) =>
       @vcode.InstructionMetadata::new(
         source~,
         trap?,
         safepoint?,
         live_gc_roots=values,
-        stack_map?=metadata.stack_map,
+        stack_map?=metadata.stack_map(),
       )
     None =>
       @vcode.InstructionMetadata::new(
         trap?,
         safepoint?,
         live_gc_roots=values,
-        stack_map?=metadata.stack_map,
+        stack_map?=metadata.stack_map(),
       )
   }
 }
@@ -584,16 +584,24 @@ fn lower_instruction(
 ) -> Unit raise X64LowerError {
   let instruction_index = function.instruction_index(instruction).unwrap()
   let operation = function.instruction_operation(instruction).unwrap()
+  let semantic_metadata = function
+    .instruction_metadata_view(instruction)
+    .unwrap()
   let operands = map_instruction_operands(function, values, instruction)
   let result_types = instruction_result_types(function, instruction)
-  let roots = map_values(
-    function,
-    values,
-    function.instruction_metadata(instruction).unwrap().live_gc_roots,
-  )
+  let roots = []
+  for root_index in 0..<semantic_metadata.live_gc_root_count() {
+    roots.push(
+      map_value(
+        function,
+        values,
+        semantic_metadata.live_gc_root_at(root_index).unwrap(),
+      ),
+    )
+  }
   if operation is Call(call) {
     let metadata = source_metadata(
-      function.instruction_metadata(instruction).unwrap(),
+      semantic_metadata,
       roots,
       operation.semantics(),
     )
@@ -615,7 +623,6 @@ fn lower_instruction(
     guard optional_gpr_width(result_types.get(0)) is Some(width) else {
       raise UnsupportedOperation(block_index~, instruction_index~, operation~)
     }
-    let semantic_metadata = function.instruction_metadata(instruction).unwrap()
     append_body(
       builder,
       block,
@@ -681,7 +688,6 @@ fn lower_instruction(
   }
   if operation is Convert(FloatToInt(source, result, signedness, mode)) {
     let source_type = float_value_type(source)
-    let semantic_metadata = function.instruction_metadata(instruction).unwrap()
     if mode == Trapping {
       append_body(
         builder,
@@ -785,11 +791,7 @@ fn lower_instruction(
       IntUnary(width, Clz),
       [@vcode.Input::any(reversed)],
       result_types.map(@vcode.Output::any),
-      source_metadata(
-        function.instruction_metadata(instruction).unwrap(),
-        roots,
-        operation.semantics(),
-      ),
+      source_metadata(semantic_metadata, roots, operation.semantics()),
     )
     bind_instruction_results(function, values, instruction, results)
     return
@@ -812,11 +814,7 @@ fn lower_instruction(
       IntBinary(width, Ror),
       [@vcode.Input::any(operands[0]), @vcode.Input::any(negated_shift)],
       result_types.map(@vcode.Output::any),
-      source_metadata(
-        function.instruction_metadata(instruction).unwrap(),
-        roots,
-        operation.semantics(),
-      ),
+      source_metadata(semantic_metadata, roots, operation.semantics()),
     )
     bind_instruction_results(function, values, instruction, results)
     return
@@ -848,11 +846,7 @@ fn lower_instruction(
           [@vcode.Input::any(current)],
           [@vcode.Output::any(ty)],
           if last {
-            source_metadata(
-              function.instruction_metadata(instruction).unwrap(),
-              roots,
-              operation.semantics(),
-            )
+            source_metadata(semantic_metadata, roots, operation.semantics())
           } else {
             @vcode.InstructionMetadata::empty()
           },
@@ -870,11 +864,7 @@ fn lower_instruction(
       VectorReplaceLane(lane, index),
       operands.map(@vcode.Input::any),
       [@vcode.Output::any(V128)],
-      source_metadata(
-        function.instruction_metadata(instruction).unwrap(),
-        roots,
-        operation.semantics(),
-      ),
+      source_metadata(semantic_metadata, roots, operation.semantics()),
     )
     values[function
     .value_index(function.instruction_result_at(instruction, 0).unwrap())
@@ -920,11 +910,7 @@ fn lower_instruction(
         VectorIntBinary(I32x4, Add),
         [@vcode.Input::any(dot_products), @vcode.Input::any(operands[2])],
         [@vcode.Output::any(V128)],
-        source_metadata(
-          function.instruction_metadata(instruction).unwrap(),
-          roots,
-          operation.semantics(),
-        ),
+        source_metadata(semantic_metadata, roots, operation.semantics()),
       )[0]
     values[function
     .value_index(function.instruction_result_at(instruction, 0).unwrap())
@@ -1237,7 +1223,7 @@ fn lower_instruction(
     inputs,
     outputs,
     source_metadata(
-      function.instruction_metadata(instruction).unwrap(),
+      semantic_metadata,
       roots,
       operation.semantics(),
       trap?=match operation {
