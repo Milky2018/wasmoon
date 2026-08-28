@@ -261,7 +261,7 @@ test "spillset defers to second chance after two normal splits" {
     segments,
     [0],
   )
-  let queue = BundleQueue::new(bundles)
+  let queue = BundleQueue::new(bundles.length())
   let occupied = RegisterAllocationIndex::new(1, segments, [0])
   let split_points = [5, 15, 25]
   let statistics = BundleAllocationStatistics::new()
@@ -583,7 +583,7 @@ test "production eviction accounts for and removes every conflicting bundle" {
       #|}
     ),
   )
-  let queue = BundleQueue::new(bundles)
+  let queue = BundleQueue::new(bundles.length())
   evict_bundle_conflicts(
     probe.conflicts,
     bundles,
@@ -725,9 +725,9 @@ test "production bundle queue keeps live extent separate from spill weight" {
       allocation_bundle(bundles.length(), [segment.id], segments, [0]),
     )
   }
-  let queue = BundleQueue::new(bundles)
+  let queue = BundleQueue::new(bundles.length())
   for bundle in bundles {
-    queue.push(bundle.id, None)
+    queue.push(bundle, None)
   }
   let order : Array[Int] = []
   while queue.pop() is Some(entry) {

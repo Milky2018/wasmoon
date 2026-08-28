@@ -33,12 +33,13 @@ priv struct AllocationBundle {
 ///|
 priv struct BundleQueueEntry {
   bundle : Int
+  priority : Int
+  weight : Int
   hint : PhysicalReg?
 }
 
 ///|
 priv struct BundleQueue {
-  bundles : Array[AllocationBundle]
   items : Array[BundleQueueEntry]
   in_queue : Array[Bool]
   prioritize_weight : Bool
@@ -46,15 +47,10 @@ priv struct BundleQueue {
 
 ///|
 fn BundleQueue::new(
-  bundles : Array[AllocationBundle],
+  bundle_count : Int,
   prioritize_weight? : Bool = false,
 ) -> BundleQueue {
-  {
-    bundles,
-    items: [],
-    in_queue: Array::make(bundles.length(), false),
-    prioritize_weight,
-  }
+  { items: [], in_queue: Array::make(bundle_count, false), prioritize_weight, }
 }
 
 ///|
@@ -70,29 +66,32 @@ fn BundleQueue::higher(
   lhs : BundleQueueEntry,
   rhs : BundleQueueEntry,
 ) -> Bool {
-  let left = self.bundles[lhs.bundle]
-  let right = self.bundles[rhs.bundle]
-  if self.prioritize_weight && left.weight != right.weight {
-    left.weight > right.weight
-  } else if left.priority != right.priority {
-    left.priority > right.priority
+  if self.prioritize_weight && lhs.weight != rhs.weight {
+    lhs.weight > rhs.weight
+  } else if lhs.priority != rhs.priority {
+    lhs.priority > rhs.priority
   } else {
-    left.id < right.id
+    lhs.bundle < rhs.bundle
   }
 }
 
 ///|
 fn BundleQueue::push(
   self : BundleQueue,
-  bundle : Int,
+  bundle : AllocationBundle,
   hint : PhysicalReg?,
 ) -> Unit {
-  self.ensure_slot(bundle)
-  if self.in_queue[bundle] {
+  self.ensure_slot(bundle.id)
+  if self.in_queue[bundle.id] {
     return
   }
-  self.in_queue[bundle] = true
-  self.items.push({ bundle, hint, })
+  self.in_queue[bundle.id] = true
+  self.items.push({
+    bundle: bundle.id,
+    priority: bundle.priority,
+    weight: bundle.weight,
+    hint,
+  })
   let mut index = self.items.length() - 1
   while index > 0 {
     let parent = (index - 1) / 2
@@ -495,7 +494,7 @@ fn evict_bundle_conflicts(
       _ => None
     }
     remove_bundle_allocation(evicted, environment, segments, occupied)
-    queue.push(evicted.id, hint)
+    queue.push(evicted, hint)
     statistics.evictions = statistics.evictions + 1
   }
 }
@@ -625,7 +624,7 @@ fn enqueue_child_bundle(
   for segment_id in segment_ids {
     segment_owner[segment_id] = child.id
   }
-  queue.push(child.id, hint)
+  queue.push(child, hint)
 }
 
 ///|
@@ -1109,9 +1108,9 @@ fn[F : FunctionView] allocate_bundles(
     false,
   )
   let mut probe_id = 0
-  let queue = BundleQueue::new(bundles)
+  let queue = BundleQueue::new(bundles.length())
   for bundle in bundles {
-    queue.push(bundle.id, None)
+    queue.push(bundle, None)
   }
   statistics.max_queue_length = queue.items.length()
   while queue.pop() is Some(entry) {
@@ -1294,13 +1293,13 @@ fn[F : FunctionView] allocate_bundles(
       queue.items.length(),
     )
   }
-  let second_chance = BundleQueue::new(bundles, prioritize_weight=true)
+  let second_chance = BundleQueue::new(bundles.length(), prioritize_weight=true)
   for bundle in bundles {
     if bundle.state is BundleDeferredSpill {
       if spill_sets[bundle.spill_set].spill_bundle == Some(bundle.id) {
         prepare_spill_bundle(bundle, segments, ranges.block_order)
       }
-      second_chance.push(bundle.id, spill_sets[bundle.spill_set].hint)
+      second_chance.push(bundle, spill_sets[bundle.spill_set].hint)
     }
   }
   while second_chance.pop() is Some(entry) {
