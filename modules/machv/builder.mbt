@@ -4,6 +4,8 @@ pub struct FunctionBuilder {
   priv function : Function
   priv mut current_block : Block
   priv mut construction_error : MachVVerifyError?
+  priv stack_map_ids : Array[Bool]
+  priv mut stack_map_count : Int
 }
 
 ///|
@@ -18,6 +20,8 @@ pub fn FunctionBuilder::new(
     function,
     current_block: Block::new(function.owner, 0),
     construction_error: None,
+    stack_map_ids: [],
+    stack_map_count: 0,
   }
   if name.is_empty() {
     builder.record_error(
@@ -143,6 +147,41 @@ fn FunctionBuilder::value_types(
 }
 
 ///|
+fn FunctionBuilder::require_unique_roots(
+  self : FunctionBuilder,
+  roots : Array[Value],
+) -> Bool {
+  for index, root in roots {
+    for earlier in 0..<index {
+      if roots[earlier] == root {
+        self.record_error(
+          InvalidSafepoint(
+            block_id=self.current_block.id,
+            message="live GC roots must not contain duplicates",
+          ),
+        )
+        return false
+      }
+    }
+  }
+  true
+}
+
+///|
+fn FunctionBuilder::record_stack_map(
+  self : FunctionBuilder,
+  stack_map_id : Int?,
+) -> Unit {
+  if stack_map_id is Some(id) {
+    while self.stack_map_ids.length() <= id {
+      self.stack_map_ids.push(false)
+    }
+    self.stack_map_ids[id] = true
+    self.stack_map_count += 1
+  }
+}
+
+///|
 /// Append one parameterized semantic operation after validating its local
 /// ownership and typed operation contract.
 pub fn FunctionBuilder::emit(
@@ -169,7 +208,8 @@ pub fn FunctionBuilder::emit_with_metadata(
 ) -> Array[Value] {
   if !self.require_block_open() ||
     !self.require_values(operands) ||
-    !self.require_values(metadata.live_gc_roots) {
+    !self.require_values(metadata.live_gc_roots) ||
+    !self.require_unique_roots(metadata.live_gc_roots) {
     return []
   }
   if operation is StackAddress(object) &&
@@ -195,25 +235,39 @@ pub fn FunctionBuilder::emit_with_metadata(
     return []
   }
   let semantics = operation.semantics()
-  if metadata.stack_map is Some(stack_map) {
-    if !semantics.gc_safepoint {
-      self.record_error(
-        InvalidMetadata(
-          block_id=self.current_block.id,
-          message="stack-map metadata requires a GC safepoint operation",
-        ),
-      )
-      return []
+  let stack_map_id = match metadata.stack_map {
+    Some(stack_map) => {
+      if !semantics.gc_safepoint {
+        self.record_error(
+          InvalidMetadata(
+            block_id=self.current_block.id,
+            message="stack-map metadata requires a GC safepoint operation",
+          ),
+        )
+        return []
+      }
+      if stack_map.id < 0 || stack_map.argument_root_count < 0 {
+        self.record_error(
+          InvalidMetadata(
+            block_id=self.current_block.id,
+            message="stack-map id and argument root count must be non-negative",
+          ),
+        )
+        return []
+      }
+      if stack_map.id < self.stack_map_ids.length() &&
+        self.stack_map_ids[stack_map.id] {
+        self.record_error(
+          InvalidMetadata(
+            block_id=self.current_block.id,
+            message="stack-map ids must be unique and dense from zero",
+          ),
+        )
+        return []
+      }
+      Some(stack_map.id)
     }
-    if stack_map.id < 0 || stack_map.argument_root_count < 0 {
-      self.record_error(
-        InvalidMetadata(
-          block_id=self.current_block.id,
-          message="stack-map id and argument root count must be non-negative",
-        ),
-      )
-      return []
-    }
+    None => None
   }
   if !semantics.gc_safepoint && !metadata.live_gc_roots.is_empty() {
     self.record_error(
@@ -235,13 +289,15 @@ pub fn FunctionBuilder::emit_with_metadata(
       return []
     }
   }
-  self.function.append_instruction(
+  let results = self.function.append_instruction(
     self.current_block,
     operation,
     operands,
     result_types,
     metadata,
   )
+  self.record_stack_map(stack_map_id)
+  results
 }
 
 ///|
@@ -454,7 +510,8 @@ pub fn FunctionBuilder::tail_call_with_metadata(
 ) -> Unit {
   if !self.require_block_open() ||
     !self.require_values(operands) ||
-    !self.require_values(metadata.live_gc_roots) {
+    !self.require_values(metadata.live_gc_roots) ||
+    !self.require_unique_roots(metadata.live_gc_roots) {
     return
   }
   if metadata.source is Some(source) && !source.is_valid() {
@@ -534,7 +591,8 @@ pub fn FunctionBuilder::noreturn_call_with_metadata(
 ) -> Unit {
   if !self.require_block_open() ||
     !self.require_values(operands) ||
-    !self.require_values(metadata.live_gc_roots) {
+    !self.require_values(metadata.live_gc_roots) ||
+    !self.require_unique_roots(metadata.live_gc_roots) {
     return
   }
   if metadata.source is Some(source) && !source.is_valid() {
@@ -644,8 +702,8 @@ pub fn FunctionBuilder::set_terminator_source(
 }
 
 ///|
-/// Verify the constructed function, run mandatory target-neutral cleanup, and
-/// verify the resulting function again.
+/// Seal checked construction with global CFG validation, then run cleanup that
+/// preserves the verified invariants.
 pub fn FunctionBuilder::finish(
   self : FunctionBuilder,
   on_cleanup_phase? : (MandatoryCleanupPhase) -> Unit = fn(_) { () },
@@ -653,6 +711,15 @@ pub fn FunctionBuilder::finish(
   if self.construction_error is Some(error) {
     raise error
   }
-  self.function.run_mandatory_cleanup(on_phase=on_cleanup_phase) |> ignore
+  if self.stack_map_count != self.stack_map_ids.length() {
+    raise InvalidMetadata(
+      block_id=0,
+      message="stack-map ids must be unique and dense from zero",
+    )
+  }
+  on_cleanup_phase(VerifyInput)
+  self.function.verify_checked_construction()
+  self.function.run_mandatory_cleanup_verified(on_phase=on_cleanup_phase)
+  |> ignore
   self.function
 }

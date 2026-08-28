@@ -66,7 +66,7 @@ Collection starts in `cmd/wasmoon/run.mbt` during `compile_module_to_jit(...)`.
   - `spill_slots`, `spills`, `reloads`, `reg_moves`, `spill_to_spill`
 - Pass list:
   - `compile_subphases[]` when detailed metrics are enabled. This attributes
-    frontend translation, semantic validation/construction/cleanup, embedding
+    frontend translation, semantic validation/construction/cleanup sealing, embedding
     ABI and target-context preparation, target analysis/VCode construction and
     validation or trusted sealing, adapter construction, and artifact packaging.
     Detailed external validation further splits into common and ISA phases

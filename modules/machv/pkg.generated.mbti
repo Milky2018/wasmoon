@@ -544,7 +544,7 @@ pub(all) enum MandatoryCleanupPhase {
   CollectAliases
   RewriteAliases
   RemoveDeadInstructions
-  VerifyOutput
+  SealOutput
 } derive(Eq, @debug.Debug)
 pub fn MandatoryCleanupPhase::equal(Self, Self) -> Bool
 pub fn MandatoryCleanupPhase::not_equal(Self, Self) -> Bool

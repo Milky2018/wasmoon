@@ -64,7 +64,7 @@ fn semantic_cleanup_phase_name(
     CollectAliases => "semantic_cleanup.collect_aliases"
     RewriteAliases => "semantic_cleanup.rewrite_aliases"
     RemoveDeadInstructions => "semantic_cleanup.remove_dead_instructions"
-    VerifyOutput => "semantic_cleanup.verify_output"
+    SealOutput => "semantic_cleanup.seal_output"
   }
 }
 

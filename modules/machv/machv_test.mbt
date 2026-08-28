@@ -76,8 +76,10 @@ test "complete semantic function snapshot" {
   builder.jump(merge_block, [false_value])
   builder.switch_to_block(merge_block)
   builder.return_([builder.block_parameters(merge_block)[0]])
+  let function = builder.finish()
+  function.verify()
   inspect(
-    builder.finish(),
+    function,
     content=(
       #|machv semantic_pipeline [internal](v0:ptr64, v1:i32, v2:gcref64) -> (i32) {
       #|block0:
@@ -468,8 +470,10 @@ test "mandatory cleanup removes aliases but preserves observable operations" {
   )
   builder.emit(Call(call), [], []) |> ignore
   builder.return_([shifted])
+  let function = builder.finish()
+  function.verify()
   inspect(
-    builder.finish(),
+    function,
     content=(
       #|machv mandatory_cleanup [internal](v0:ptr64, v1:i32) -> (i32) {
       #|block0:

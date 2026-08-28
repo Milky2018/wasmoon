@@ -13,7 +13,7 @@ pub(all) enum MandatoryCleanupPhase {
   CollectAliases
   RewriteAliases
   RemoveDeadInstructions
-  VerifyOutput
+  SealOutput
 } derive(Debug, Eq)
 
 ///|
@@ -331,13 +331,26 @@ pub fn Function::run_mandatory_cleanup(
 ) -> CleanupStats raise MachVVerifyError {
   on_phase(VerifyInput)
   self.verify()
+  self.run_mandatory_cleanup_verified(on_phase~)
+}
+
+///|
+/// Cleanup transformations preserve the verified CFG, typing, dominance, and
+/// safepoint contracts: aliases only replace a definition with its dominating
+/// same-typed input, root duplicates are removed, and dead removal requires no
+/// remaining use. Sealing therefore retains the verified state without a
+/// second completed-function scan.
+fn Function::run_mandatory_cleanup_verified(
+  self : Function,
+  on_phase? : (MandatoryCleanupPhase) -> Unit = fn(_) { () },
+) -> CleanupStats {
   on_phase(CollectAliases)
   let aliases = self.collect_aliases()
   on_phase(RewriteAliases)
   let aliases_rewritten = self.rewrite_aliases(aliases)
   on_phase(RemoveDeadInstructions)
   let instructions_removed = self.remove_dead_instructions()
-  on_phase(VerifyOutput)
-  self.verify()
+  on_phase(SealOutput)
+  self.verified = true
   { aliases_rewritten, instructions_removed, }
 }

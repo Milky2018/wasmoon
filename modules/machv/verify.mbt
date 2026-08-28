@@ -608,6 +608,88 @@ fn Function::verify_value_use(
 }
 
 ///|
+/// Seal a function whose local storage, ownership, operation, metadata, and
+/// terminator contracts were established by `FunctionBuilder` mutations.
+/// Only whole-CFG properties remain: completion, reachability, dominance, and
+/// exact safepoint roots.
+fn Function::verify_checked_construction(
+  self : Function,
+) -> Unit raise MachVVerifyError {
+  self.verified = false
+  let instruction_blocks = Array::make(self.instructions.length(), -1)
+  let instruction_positions = Array::make(self.instructions.length(), -1)
+  for block_id, block in self.blocks {
+    if block.terminator is None {
+      raise MissingTerminator(block_id~)
+    }
+    for position, instruction in block.instructions {
+      instruction_blocks[instruction.id] = block_id
+      instruction_positions[instruction.id] = position
+    }
+  }
+  let (successors, predecessors) = build_cfg(self)
+  if !predecessors[0].is_empty() {
+    raise EntryHasPredecessor(block_id=0)
+  }
+  let order = reverse_postorder(successors)
+  if order.length() != self.blocks.length() {
+    let reachable = Array::make(self.blocks.length(), false)
+    for block_id in order {
+      reachable[block_id] = true
+    }
+    for block_id, is_reachable in reachable {
+      if !is_reachable {
+        raise UnreachableBlock(block_id~)
+      }
+    }
+  }
+  let idom = compute_dominators(successors, predecessors)
+  for block_id, block in self.blocks {
+    for position, instruction in block.instructions {
+      let data = self.instructions[instruction.id]
+      for operand in data.operands {
+        self.verify_value_use(
+          operand,
+          block_id,
+          position,
+          instruction.id,
+          instruction_blocks,
+          instruction_positions,
+          idom,
+        )
+      }
+      for root in data.metadata.live_gc_roots {
+        self.verify_value_use(
+          root,
+          block_id,
+          position,
+          instruction.id,
+          instruction_blocks,
+          instruction_positions,
+          idom,
+        )
+      }
+    }
+    let record = block.terminator.unwrap()
+    let use_position = block.instructions.length()
+    for value in terminator_values(record.kind) {
+      self.verify_value_use(
+        value, block_id, use_position, -1, instruction_blocks, instruction_positions,
+        idom,
+      )
+    }
+    for root in record.metadata.live_gc_roots {
+      self.verify_value_use(
+        root, block_id, use_position, -1, instruction_blocks, instruction_positions,
+        idom,
+      )
+    }
+  }
+  self.verify_gc_safepoint_roots(successors, predecessors)
+  self.verified = true
+}
+
+///|
 /// Verify the complete target-neutral MachV checkpoint without consulting a
 /// target, ABI, construction history, or mutable validator callback.
 pub fn Function::verify(self : Function) -> Unit raise MachVVerifyError {

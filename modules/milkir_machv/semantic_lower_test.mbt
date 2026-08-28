@@ -250,7 +250,7 @@ test "semantic lowering exposes ordered observation phases" {
       #|  CleanupPhaseStarted(CollectAliases),
       #|  CleanupPhaseStarted(RewriteAliases),
       #|  CleanupPhaseStarted(RemoveDeadInstructions),
-      #|  CleanupPhaseStarted(VerifyOutput),
+      #|  CleanupPhaseStarted(SealOutput),
       #|  SemanticLoweringFinished,
       #|]
     ),

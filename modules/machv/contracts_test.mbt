@@ -18,8 +18,10 @@ test "address-visible stack objects retain target-neutral layout requirements" {
   )
   |> ignore
   builder.return_([])
+  let function = builder.finish()
+  function.verify()
   inspect(
-    builder.finish(),
+    function,
     content=(
       #|machv stack_buffer [internal](v0:i64) -> () {
       #|stack0: size=24, alignment=16
@@ -1128,8 +1130,10 @@ test "mandatory cleanup deduplicates roots collapsed by alias rewriting" {
   )
   |> ignore
   builder.return_([second_alias])
+  let function = builder.finish()
+  function.verify()
   inspect(
-    builder.finish(),
+    function,
     content=(
       #|machv canonical_gc_roots [internal](v0:gcref64) -> (gcref64) {
       #|block0:
@@ -1170,7 +1174,7 @@ test "mandatory cleanup exposes ordered observation phases" {
       #|  CollectAliases,
       #|  RewriteAliases,
       #|  RemoveDeadInstructions,
-      #|  VerifyOutput,
+      #|  SealOutput,
       #|]
     ),
   )
