@@ -156,7 +156,7 @@ test "egraph size tiers retain nonzero rewrite budgets" {
 }
 
 ///|
-test "GVN work budget stops safely after partial optimization" {
+test "GVN memory budget does not stop cheap expression numbering" {
   let func = duplicate_expression_function("gvn_partial", 5)
   let stats = run_global_value_numbering_with_budget_and_analysis(
     func,
@@ -166,10 +166,8 @@ test "GVN work budget stops safely after partial optimization" {
   inspect(stats.work_done, content="2")
   inspect(stats.budget_exhausted, content="true")
   inspect(func.blocks[0].instructions[1].opcode, content="Scalar(Copy)")
-  inspect(
-    func.blocks[0].instructions[2].opcode,
-    content="Scalar(IntBinary(Add))",
-  )
+  inspect(func.blocks[0].instructions[2].opcode, content="Scalar(Copy)")
+  inspect(func.blocks[0].instructions[4].opcode, content="Scalar(Copy)")
   inspect(func.verify(), content="()")
 }
 
@@ -354,18 +352,15 @@ fn deep_block_chain_function(name : String, count : Int) -> Function {
 }
 
 ///|
-/// The same spine with nothing in the blocks but their terminator. GVN stops
-/// descending once its work budget runs out, and only instructions consume
-/// that budget, so blocks that hold no instruction let the walk reach the
-/// full depth of the tree however large the function is.
+/// The same spine with nothing in the blocks but their terminator. GVN walks
+/// the complete dominator tree even after its precise-memory budget runs out,
+/// so this locks down the non-recursive traversal at extreme depth.
 fn deep_empty_block_chain_function(name : String, count : Int) -> Function {
   let builder = FunctionBuilder::FunctionBuilder(name)
   let input = builder.add_param(I32)
   builder.add_result(I32)
-  // The entry block carries the only instructions, which is what gives the
-  // pass a non-zero budget to begin with — a function of nothing but empty
-  // blocks is refused before the walk starts. Nothing below the entry can
-  // spend that budget, so the descent runs the full depth of the chain.
+  // The entry block carries the only instructions. Nothing below it spends
+  // the precise-memory budget, but every dominated block is still visited.
   let zero = builder.iconst_i32(0)
   let value = builder.iadd(input, zero)
   for _ in 0..<count {

@@ -228,28 +228,6 @@ pub fn EnvironmentFieldStability::hash_combine(Self, Hasher) -> Unit
 pub fn EnvironmentFieldStability::not_equal(Self, Self) -> Bool
 pub fn EnvironmentFieldStability::to_repr(Self) -> @debug.Repr
 
-pub struct EnvironmentFieldUseGroup {
-  field : EnvironmentField
-  stability : EnvironmentFieldStability
-  context : Value
-  occurrences : Array[Instruction]
-  call_free_regions : Array[EnvironmentFieldUseRegion]
-  context_use_count : Int
-  can_replace_context_carrier : Bool
-} derive(Eq, @debug.Debug)
-pub fn EnvironmentFieldUseGroup::equal(Self, Self) -> Bool
-pub fn EnvironmentFieldUseGroup::not_equal(Self, Self) -> Bool
-pub fn EnvironmentFieldUseGroup::to_repr(Self) -> @debug.Repr
-
-pub struct EnvironmentFieldUseRegion {
-  block : Block
-  segment_index : Int
-  occurrences : Array[Instruction]
-} derive(Eq, @debug.Debug)
-pub fn EnvironmentFieldUseRegion::equal(Self, Self) -> Bool
-pub fn EnvironmentFieldUseRegion::not_equal(Self, Self) -> Bool
-pub fn EnvironmentFieldUseRegion::to_repr(Self) -> @debug.Repr
-
 pub struct ExternalSymbol {
   name : String
 } derive(Eq, Hash, @debug.Debug)
@@ -338,7 +316,6 @@ pub fn Function::block_parameters(Self, Block) -> Array[Value]
 pub fn Function::block_terminator(Self, Block) -> TerminatorRecord?
 pub fn Function::blocks(Self) -> Array[Block]
 pub fn Function::blocks_in_cfg_order(Self) -> Array[Block]
-pub fn Function::environment_field_use_groups(Self) -> Array[EnvironmentFieldUseGroup]
 pub fn Function::instruction_count(Self) -> Int
 pub fn Function::instruction_index(Self, Instruction) -> Int?
 pub fn Function::instruction_metadata(Self, Instruction) -> InstructionMetadata?

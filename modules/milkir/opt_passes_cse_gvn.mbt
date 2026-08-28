@@ -672,6 +672,33 @@ priv struct GVNStats {
 }
 
 ///|
+priv struct GVNValueEntry {
+  key : Inst
+  value : Value
+  dependency : AliasRegion?
+  position : Int
+  reuse_count : Int
+}
+
+///|
+/// Keep post-budget rematerializable context values inside short live ranges.
+/// Extending one AEGIS memory-base value across the complete function adds
+/// enough spill traffic to outweigh the eliminated loads.
+const GVN_POST_BUDGET_STABLE_GLOBAL_REUSE_DISTANCE : Int = 16
+
+///|
+const GVN_POST_BUDGET_STABLE_GLOBAL_REUSE_LIMIT : Int = 1
+
+///|
+fn is_stable_global_value(func : Function, inst : Inst) -> Bool {
+  match inst.opcode {
+    GlobalValue(global_value) =>
+      func.global_value_data(global_value) is Some(ContextField(_, Stable, _))
+    _ => false
+  }
+}
+
+///|
 fn run_global_value_numbering_with_budget_and_analysis(
   func : Function,
   work_budget : Int,
@@ -681,26 +708,20 @@ fn run_global_value_numbering_with_budget_and_analysis(
   if func.blocks.length() == 0 {
     return { result, work_done: 0, budget_exhausted: false, }
   }
-  if work_budget <= 0 {
-    return {
-      result,
-      work_done: 0,
-      budget_exhausted: instruction_count(func) > 0,
-    }
-  }
-  let complete_memory_analysis = instruction_count(func) <= work_budget
+  let memory_work_budget = if work_budget > 0 { work_budget } else { 0 }
+  let complete_memory_analysis = instruction_count(func) <= memory_work_budget
   let ptr_base_infos = if complete_memory_analysis {
     collect_ptr_base_infos(func, collect_iconst_values(func))
   } else {
-    let prefix = gvn_instruction_prefix(func, work_budget, analysis)
+    let prefix = gvn_instruction_prefix(func, memory_work_budget, analysis)
     collect_ptr_base_infos(
       func,
       collect_iconst_values(func, instructions=prefix),
       instructions=prefix,
     )
   }
-  // Expression environment: key -> (value, abstract memory dependency)
-  let value_table : @hashmap.HashMap[Inst, (Value, AliasRegion?)] = HashMap([])
+  // Expression environment: key -> available value and reuse state.
+  let value_table : @hashmap.HashMap[Inst, GVNValueEntry] = HashMap([])
   // Track memory-dependent keys separately for scoped invalidation.
   let memory_keys : @hashmap.HashMap[Inst, AliasRegion] = HashMap([])
   let block_input_state = if complete_memory_analysis {
@@ -717,29 +738,31 @@ fn run_global_value_numbering_with_budget_and_analysis(
   )
   let work_done : Ref[Int] = { val: 0, }
   let budget_exhausted : Ref[Bool] = { val: false, }
+  let instruction_position : Ref[Int] = { val: 0, }
   // Walk the dominator tree
-  fn enter(block_id : Int) -> (Array[(Inst, (Value, AliasRegion?)?)], Bool) {
-    if budget_exhausted.val {
-      return ([], false)
-    }
+  fn enter(block_id : Int) -> (Array[(Inst, GVNValueEntry?)], Bool) {
     let idx = analysis.block_idx[block_id]
     let block = func.blocks[idx]
     // Track expressions added/modified in this block (to restore later)
     // Stores (key, previous_entry) where previous_entry is None if new
-    let local_entries : Array[(Inst, (Value, AliasRegion?)?)] = []
+    let local_entries : Array[(Inst, GVNValueEntry?)] = []
     let last_store_state = match block_input_state.get(block_id) {
       Some(state) => state.clone()
       None => LastStoreState()
     }
     // Process instructions
     for inst_index, inst in block.instructions {
-      if work_done.val >= work_budget {
+      let position = instruction_position.val
+      instruction_position.val = position + 1
+      let within_memory_budget = work_done.val < memory_work_budget
+      if within_memory_budget {
+        work_done.val = work_done.val + 1
+      } else {
         budget_exhausted.val = true
-        break
       }
-      work_done.val = work_done.val + 1
       let mut replaced_by_memory = false
-      if inst.opcode is Memory(Load(load_ty)) &&
+      if within_memory_budget &&
+        inst.opcode is Memory(Load(load_ty)) &&
         ptr_access_from_inst(inst, ptr_base_infos) is Some(load_access) {
         let key = memory_key_from_access(
           load_access,
@@ -761,7 +784,8 @@ fn run_global_value_numbering_with_budget_and_analysis(
           replaced_by_memory = true
         }
       }
-      if inst.opcode is Memory(Store(store_ty)) &&
+      if within_memory_budget &&
+        inst.opcode is Memory(Store(store_ty)) &&
         ptr_access_from_inst(inst, ptr_base_infos) is Some(store_access) &&
         inst.operands.length() >= 2 {
         let key = memory_key_from_access(
@@ -775,12 +799,14 @@ fn run_global_value_numbering_with_budget_and_analysis(
           value: inst.operands[1],
         })
       }
-      update_last_store_state(
-        last_store_state,
-        inst,
-        { block_id, inst_index, },
-        ptr_base_infos,
-      )
+      if within_memory_budget {
+        update_last_store_state(
+          last_store_state,
+          inst,
+          { block_id, inst_index, },
+          ptr_base_infos,
+        )
+      }
       if replaced_by_memory {
         continue
       }
@@ -823,39 +849,73 @@ fn run_global_value_numbering_with_budget_and_analysis(
       }
       if inst.first_result() is Some(result_val) {
         let key = inst
-        if value_table.get(key) is Some((existing, _)) {
+        let bounded_stable_global = !within_memory_budget &&
+          is_stable_global_value(func, inst)
+        if value_table.get(key) is Some(existing_entry) {
           // Already computed - replace with copy. The type check is defensive:
           // Inst identity includes result types, so a mismatch is not expected.
-          if existing.ty == result_val.ty {
+          if existing_entry.value.ty == result_val.ty &&
+            (
+              !bounded_stable_global ||
+              (
+                position - existing_entry.position <=
+                GVN_POST_BUDGET_STABLE_GLOBAL_REUSE_DISTANCE &&
+                existing_entry.reuse_count <
+                GVN_POST_BUDGET_STABLE_GLOBAL_REUSE_LIMIT
+              )
+            ) {
             inst.opcode = Scalar(Copy)
             inst.operands.clear()
-            inst.operands.push(existing)
+            inst.operands.push(existing_entry.value)
             result.mark_changed()
+            if bounded_stable_global {
+              local_entries.push((existing_entry.key, Some(existing_entry)))
+              value_table.set(existing_entry.key, {
+                ..existing_entry,
+                reuse_count: existing_entry.reuse_count + 1,
+              })
+            }
+          } else if bounded_stable_global {
+            local_entries.push((existing_entry.key, Some(existing_entry)))
+            value_table.set(existing_entry.key, {
+              key: existing_entry.key,
+              value: result_val,
+              dependency: None,
+              position,
+              reuse_count: 0,
+            })
           }
         } else {
           // Record previous value (None if new)
           let prev = value_table.get(key)
           local_entries.push((key, prev))
           let dependency = gvn_memory_dependency(func, inst, ptr_base_infos)
-          value_table.set(key, (result_val, dependency))
+          value_table.set(key, {
+            key,
+            value: result_val,
+            dependency,
+            position,
+            reuse_count: 0,
+          })
           if dependency is Some(region) {
             memory_keys.set(key, region)
           }
         }
       }
     }
-    // Descend into dominated children unless the budget ran out here.
-    (local_entries, !budget_exhausted.val)
+    // Cheap value numbering covers the complete dominator tree. The bounded
+    // budget only disables precise memory forwarding.
+    (local_entries, true)
   }
 
   // Restore the value table to the state it had before the block.
-  fn exit(local_entries : Array[(Inst, (Value, AliasRegion?)?)]) -> Unit {
+  fn exit(local_entries : Array[(Inst, GVNValueEntry?)]) -> Unit {
     for entry in local_entries.rev_iter() {
       let (key, prev) = entry
       match prev {
         Some(v) => {
           value_table.set(key, v)
-          if v.1 is Some(region) {
+          if v.dependency is Some(region) {
             memory_keys.set(key, region)
           }
         }

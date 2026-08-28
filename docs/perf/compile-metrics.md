@@ -85,7 +85,9 @@ stack-to-stack is `spill_to_spill`.
 - Optional e-graph stats:
   - `egraph_classes`, `egraph_nodes`, `egraph_rule_apps`
 - Optional bounded-work stats:
-  - `work_done`, `budget_exhausted`
+  - `work_done`, `budget_exhausted` (for `cse_gvn_global`, these describe the
+    bounded precise-memory prefix; cheap value numbering still visits the
+    complete reachable dominator tree)
 
 ## Baseline Capture Script
 

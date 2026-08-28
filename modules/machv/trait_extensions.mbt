@@ -137,18 +137,6 @@ pub extend EnvironmentFieldStability with Eq::{not_equal, equal}
 pub extend EnvironmentFieldStability with Hash::{hash, hash_combine}
 
 ///|
-pub extend EnvironmentFieldUseGroup with Debug::{to_repr}
-
-///|
-pub extend EnvironmentFieldUseGroup with Eq::{not_equal, equal}
-
-///|
-pub extend EnvironmentFieldUseRegion with Debug::{to_repr}
-
-///|
-pub extend EnvironmentFieldUseRegion with Eq::{not_equal, equal}
-
-///|
 pub extend ExternalSymbol with Debug::{to_repr}
 
 ///|
