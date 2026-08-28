@@ -68,7 +68,8 @@ Collection starts in `cmd/wasmoon/run.mbt` during `compile_module_to_jit(...)`.
   - `compile_subphases[]` when detailed metrics are enabled. This attributes
     frontend translation, semantic validation/construction/cleanup sealing, embedding
     ABI and target-context preparation, target analysis/VCode construction and
-    validation or trusted sealing, adapter construction, and artifact packaging.
+    validation or trusted sealing, flat allocation-input normalization, generic
+    allocation input validation, and artifact packaging.
     Detailed external validation further splits into common and ISA phases
     under `target_vcode_validation`. The `parent` field identifies
     whether a subphase reconciles against `function_compile_us`, `lower_us`, or

@@ -5,6 +5,7 @@
 /// can attribute compile time per phase. This module stays clock-free: it
 /// only says which phase it is entering (ISS-371).
 pub(all) enum RegallocPhase {
+  InputValidation
   LiveRanges
   SegmentConstruction
   BundleFormation
@@ -20,6 +21,7 @@ pub(all) enum RegallocPhase {
 pub impl Show for RegallocPhase with fn output(self, logger) {
   logger.write_string(
     match self {
+      InputValidation => "input_validation"
       LiveRanges => "live_ranges"
       SegmentConstruction => "segment_construction"
       BundleFormation => "bundle_formation"

@@ -167,6 +167,38 @@ test "instruction and program-point handles survive layout and allocation" {
 }
 
 ///|
+test "flat function access follows layout without collection snapshots" {
+  let function = build_test_function()
+  let entry = function.layout_block_at(0).unwrap()
+  let exit = function.layout_block_at(1).unwrap()
+  inspect(function.block_parameter_count(entry), content="0")
+  inspect(function.block_parameter_count(exit), content="1")
+  inspect(
+    function.value_index(function.block_parameter_at(exit, 0).unwrap()).unwrap(),
+    content="1",
+  )
+  inspect(function.block_instruction_count(entry), content="2")
+  let jump = function.block_instruction_at(entry, 1).unwrap()
+  inspect(function.instruction_index(jump).unwrap(), content="1")
+  inspect(function.instruction_successor_count(jump), content="1")
+  inspect(
+    function
+    .block_index(function.instruction_successor_target(jump, 0).unwrap())
+    .unwrap(),
+    content="1",
+  )
+  inspect(function.instruction_successor_argument_count(jump, 0), content="1")
+  inspect(
+    function
+    .value_index(
+      function.instruction_successor_argument_at(jump, 0, 0).unwrap(),
+    )
+    .unwrap(),
+    content="2",
+  )
+}
+
+///|
 test "Allocation remains separate and verifies edits, slots, and safepoints" {
   let builder : Builder[TestInst] = Builder::new("pressure", [GcRef64])
   let entry = builder.entry_block()

@@ -344,7 +344,7 @@ fn[F : FunctionView] verify_function_allocation(
   let edits_at = index_plan_edits(plan.edits())
   let block_count = function.block_count()
   let successors = Array::makei(block_count, block => {
-    function.block_successors(block)
+    function.block_successors(block).to_owned()
   })
   let has_predecessor = Array::make(block_count, false)
   for source_successors in successors {

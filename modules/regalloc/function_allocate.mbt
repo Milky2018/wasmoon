@@ -216,12 +216,10 @@ pub fn[F : FunctionView] allocate_function(
   environment : MachineEnv,
   config? : RegallocConfig = RegallocConfig(),
 ) -> AllocationPlan raise VerifyError {
-  // Ahead of the first phase on purpose: this raises before any phase has
-  // opened, so there is no sequence to terminate, and an observer that has
-  // heard nothing is owed nothing.
-  verify_operand_preferences(function, environment)
   let plan = {
     errdefer config.enter_phase(None)
+    config.enter_phase(Some(InputValidation))
+    verify_operand_preferences(function, environment)
     run_allocation_phases(function, environment, config)
   }
   config.enter_phase(None)

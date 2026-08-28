@@ -72,7 +72,7 @@ fn[F : FunctionView] collect_function_liveness(
     block_defs.push(definitions)
     live_in.push(uses)
     block_ids.push(block)
-    successors.push(block_successors)
+    successors.push(block_successors.to_owned())
   }
   propagate_live_sets(
     function.block_count(),

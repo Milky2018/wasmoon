@@ -58,10 +58,11 @@ impl FunctionView for BundleTestFunction with fn values_share_spill_slot(
 }
 
 ///|
-impl FunctionView for BundleTestFunction with fn entry_values(_self) -> Array[
+impl FunctionView for BundleTestFunction with fn entry_values(_self) -> ArrayView[
   VirtualReg,
 ] {
-  []
+  let empty : Array[VirtualReg] = []
+  empty[:]
 }
 
 ///|
@@ -75,25 +76,26 @@ impl FunctionView for BundleTestFunction with fn block_id_at(_self, block) -> In
 }
 
 ///|
-impl FunctionView for BundleTestFunction with fn block_parameters(self, block) -> Array[
+impl FunctionView for BundleTestFunction with fn block_parameters(self, block) -> ArrayView[
   VirtualReg,
 ] {
-  self.parameters[block].copy()
+  self.parameters[block][:]
 }
 
 ///|
 impl FunctionView for BundleTestFunction with fn block_instructions(
   _self,
   _block,
-) -> Array[Int] {
-  []
+) -> ArrayView[Int] {
+  let empty : Array[Int] = []
+  empty[:]
 }
 
 ///|
-impl FunctionView for BundleTestFunction with fn block_successors(self, block) -> Array[
+impl FunctionView for BundleTestFunction with fn block_successors(self, block) -> ArrayView[
   Int,
 ] {
-  self.successors[block].copy()
+  self.successors[block][:]
 }
 
 ///|
@@ -101,24 +103,26 @@ impl FunctionView for BundleTestFunction with fn edge_arguments(
   self,
   block,
   successor,
-) -> Array[VirtualReg] {
-  self.edge_arguments[block][successor].copy()
+) -> ArrayView[VirtualReg] {
+  self.edge_arguments[block][successor][:]
 }
 
 ///|
 impl FunctionView for BundleTestFunction with fn instruction_operands(
   _self,
   _instruction,
-) -> Array[Operand] {
-  []
+) -> ArrayView[Operand] {
+  let empty : Array[Operand] = []
+  empty[:]
 }
 
 ///|
 impl FunctionView for BundleTestFunction with fn instruction_clobbers(
   _self,
   _instruction,
-) -> Array[PhysicalReg] {
-  []
+) -> ArrayView[PhysicalReg] {
+  let empty : Array[PhysicalReg] = []
+  empty[:]
 }
 
 ///|

@@ -50,10 +50,10 @@ impl FunctionView for CfgTestFunction with fn values_share_spill_slot(
 }
 
 ///|
-impl FunctionView for CfgTestFunction with fn entry_values(self) -> Array[
+impl FunctionView for CfgTestFunction with fn entry_values(self) -> ArrayView[
   VirtualReg,
 ] {
-  self.entry_values.copy()
+  self.entry_values[:]
 }
 
 ///|
@@ -67,24 +67,24 @@ impl FunctionView for CfgTestFunction with fn block_id_at(_self, index) -> Int {
 }
 
 ///|
-impl FunctionView for CfgTestFunction with fn block_parameters(self, block) -> Array[
+impl FunctionView for CfgTestFunction with fn block_parameters(self, block) -> ArrayView[
   VirtualReg,
 ] {
-  self.parameters[block].copy()
+  self.parameters[block][:]
 }
 
 ///|
-impl FunctionView for CfgTestFunction with fn block_instructions(self, block) -> Array[
+impl FunctionView for CfgTestFunction with fn block_instructions(self, block) -> ArrayView[
   Int,
 ] {
-  self.blocks[block].copy()
+  self.blocks[block][:]
 }
 
 ///|
-impl FunctionView for CfgTestFunction with fn block_successors(self, block) -> Array[
+impl FunctionView for CfgTestFunction with fn block_successors(self, block) -> ArrayView[
   Int,
 ] {
-  self.successors[block].copy()
+  self.successors[block][:]
 }
 
 ///|
@@ -92,24 +92,24 @@ impl FunctionView for CfgTestFunction with fn edge_arguments(
   self,
   block,
   successor,
-) -> Array[VirtualReg] {
-  self.edge_arguments[block][successor].copy()
+) -> ArrayView[VirtualReg] {
+  self.edge_arguments[block][successor][:]
 }
 
 ///|
 impl FunctionView for CfgTestFunction with fn instruction_operands(
   self,
   instruction,
-) -> Array[Operand] {
-  self.instructions[instruction].copy()
+) -> ArrayView[Operand] {
+  self.instructions[instruction][:]
 }
 
 ///|
 impl FunctionView for CfgTestFunction with fn instruction_clobbers(
   self,
   instruction,
-) -> Array[PhysicalReg] {
-  self.clobbers[instruction].copy()
+) -> ArrayView[PhysicalReg] {
+  self.clobbers[instruction][:]
 }
 
 ///|
@@ -142,10 +142,10 @@ impl FunctionView for TestFunction with fn values_share_spill_slot(
 }
 
 ///|
-impl FunctionView for TestFunction with fn entry_values(self) -> Array[
+impl FunctionView for TestFunction with fn entry_values(self) -> ArrayView[
   VirtualReg,
 ] {
-  self.block_parameters.copy()
+  self.block_parameters[:]
 }
 
 ///|
@@ -159,24 +159,27 @@ impl FunctionView for TestFunction with fn block_id_at(_self, index) -> Int {
 }
 
 ///|
-impl FunctionView for TestFunction with fn block_parameters(_self, _block) -> Array[
+impl FunctionView for TestFunction with fn block_parameters(_self, _block) -> ArrayView[
   VirtualReg,
 ] {
-  []
+  let empty : Array[VirtualReg] = []
+  empty[:]
 }
 
 ///|
-impl FunctionView for TestFunction with fn block_instructions(self, _block) -> Array[
+impl FunctionView for TestFunction with fn block_instructions(self, _block) -> ArrayView[
   Int,
 ] {
-  Array::makei(self.instructions.length(), index => index)
+  let instructions = Array::makei(self.instructions.length(), index => index)
+  instructions[:]
 }
 
 ///|
-impl FunctionView for TestFunction with fn block_successors(_self, _block) -> Array[
+impl FunctionView for TestFunction with fn block_successors(_self, _block) -> ArrayView[
   Int,
 ] {
-  []
+  let empty : Array[Int] = []
+  empty[:]
 }
 
 ///|
@@ -184,24 +187,26 @@ impl FunctionView for TestFunction with fn edge_arguments(
   _self,
   _block,
   _successor,
-) -> Array[VirtualReg] {
-  []
+) -> ArrayView[VirtualReg] {
+  let empty : Array[VirtualReg] = []
+  empty[:]
 }
 
 ///|
 impl FunctionView for TestFunction with fn instruction_operands(
   self,
   instruction,
-) -> Array[Operand] {
-  self.instructions[instruction].copy()
+) -> ArrayView[Operand] {
+  self.instructions[instruction][:]
 }
 
 ///|
 impl FunctionView for TestFunction with fn instruction_clobbers(
   _self,
   _instruction,
-) -> Array[PhysicalReg] {
-  []
+) -> ArrayView[PhysicalReg] {
+  let empty : Array[PhysicalReg] = []
+  empty[:]
 }
 
 ///|
@@ -1091,17 +1096,17 @@ test "a failed allocation still ends the observer's phase sequence" {
   inspect(raised, content="true")
   inspect(
     events.join(","),
-    content="live_ranges,segment_construction,bundle_formation,bundle_allocation,home_assignment,operand_assignment,edge_transfers,edit_resolution,verification,END",
+    content="input_validation,live_ranges,segment_construction,bundle_formation,bundle_allocation,home_assignment,operand_assignment,edge_transfers,edit_resolution,verification,END",
   )
   // The terminator arrives once, at the end, not for every phase.
   inspect(events.filter(event => event == "END").length(), content="1")
 }
 
 ///|
-/// A rejection that happens before the first phase opens is different: the
-/// observer has heard nothing, so it is owed nothing. Sending a lone `None`
-/// there would report the end of a sequence that never began.
-test "a pre-phase rejection notifies the observer at all" {
+/// Input validation is an attributed phase too. A rejection there must expose
+/// both the phase and its matching terminator rather than hiding adapter work
+/// inside the preceding caller-owned phase.
+test "an input-validation rejection closes its attributed phase" {
   let events : Array[String] = []
   let config = RegallocConfig::RegallocConfig(
     observer=Some(phase => {
@@ -1136,5 +1141,5 @@ test "a pre-phase rejection notifies the observer at all" {
     _ => raised = true
   }
   inspect(raised, content="true")
-  inspect(events.length(), content="0")
+  inspect(events.join(","), content="input_validation,END")
 }

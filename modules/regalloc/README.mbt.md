@@ -33,7 +33,9 @@ rather than a lower-quality fallback.
 Implement `FunctionView` over the machine IR and provide a `MachineEnv` with
 allocatable and scratch registers. Block arguments passed to CFG methods are
 dense layout indices; `block_id_at` maps them back to the machine IR's stable
-block id for edge edits.
+block id for edge edits. Collection queries return non-owning, read-only
+`ArrayView` spans. Implementations must keep their backing storage alive for
+the allocation call and should not allocate a collection per query.
 
 Scratch registers have two distinct roles. `scratch_regs` are always available
 to resolve allocator edits such as spill reloads and parallel moves. By default

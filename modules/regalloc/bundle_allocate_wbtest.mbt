@@ -846,10 +846,11 @@ impl FunctionView for ClobberIndexTestFunction with fn values_share_spill_slot(
 }
 
 ///|
-impl FunctionView for ClobberIndexTestFunction with fn entry_values(_self) -> Array[
+impl FunctionView for ClobberIndexTestFunction with fn entry_values(_self) -> ArrayView[
   VirtualReg,
 ] {
-  []
+  let empty : Array[VirtualReg] = []
+  empty[:]
 }
 
 ///|
@@ -866,24 +867,26 @@ impl FunctionView for ClobberIndexTestFunction with fn block_id_at(_self, block)
 impl FunctionView for ClobberIndexTestFunction with fn block_parameters(
   _self,
   _block,
-) -> Array[VirtualReg] {
-  []
+) -> ArrayView[VirtualReg] {
+  let empty : Array[VirtualReg] = []
+  empty[:]
 }
 
 ///|
 impl FunctionView for ClobberIndexTestFunction with fn block_instructions(
   self,
   block,
-) -> Array[Int] {
-  self.blocks[block].copy()
+) -> ArrayView[Int] {
+  self.blocks[block][:]
 }
 
 ///|
 impl FunctionView for ClobberIndexTestFunction with fn block_successors(
   _self,
   _block,
-) -> Array[Int] {
-  []
+) -> ArrayView[Int] {
+  let empty : Array[Int] = []
+  empty[:]
 }
 
 ///|
@@ -891,24 +894,25 @@ impl FunctionView for ClobberIndexTestFunction with fn edge_arguments(
   _self,
   _block,
   _successor,
-) -> Array[VirtualReg] {
-  []
+) -> ArrayView[VirtualReg] {
+  let empty : Array[VirtualReg] = []
+  empty[:]
 }
 
 ///|
 impl FunctionView for ClobberIndexTestFunction with fn instruction_operands(
   self,
   instruction,
-) -> Array[Operand] {
-  self.operands[instruction].copy()
+) -> ArrayView[Operand] {
+  self.operands[instruction][:]
 }
 
 ///|
 impl FunctionView for ClobberIndexTestFunction with fn instruction_clobbers(
   self,
   instruction,
-) -> Array[PhysicalReg] {
-  self.clobbers[instruction].copy()
+) -> ArrayView[PhysicalReg] {
+  self.clobbers[instruction][:]
 }
 
 ///|

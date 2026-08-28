@@ -243,6 +243,31 @@ pub fn[Inst] Function::block_parameters(
 }
 
 ///|
+pub fn[Inst] Function::block_parameter_count(
+  self : Function[Inst],
+  block : Block,
+) -> Int {
+  if self.owns_block(block) {
+    self.blocks[block.id].parameters.length()
+  } else {
+    0
+  }
+}
+
+///|
+pub fn[Inst] Function::block_parameter_at(
+  self : Function[Inst],
+  block : Block,
+  index : Int,
+) -> Value? {
+  if self.owns_block(block) {
+    self.blocks[block.id].parameters.get(index)
+  } else {
+    None
+  }
+}
+
+///|
 pub fn[Inst] Function::block_body(
   self : Function[Inst],
   block : Block,
@@ -261,6 +286,44 @@ pub fn[Inst] Function::block_terminator(
 ) -> Instruction? {
   if self.owns_block(block) {
     self.blocks[block.id].terminator
+  } else {
+    None
+  }
+}
+
+///|
+/// Number of instructions in a block, including its terminator when present.
+pub fn[Inst] Function::block_instruction_count(
+  self : Function[Inst],
+  block : Block,
+) -> Int {
+  if self.owns_block(block) {
+    let data = self.blocks[block.id]
+    let terminator_count = match data.terminator {
+      Some(_) => 1
+      None => 0
+    }
+    data.body.length() + terminator_count
+  } else {
+    0
+  }
+}
+
+///|
+/// Returns a body instruction or the block terminator by linear block index.
+pub fn[Inst] Function::block_instruction_at(
+  self : Function[Inst],
+  block : Block,
+  index : Int,
+) -> Instruction? {
+  if !self.owns_block(block) || index < 0 {
+    return None
+  }
+  let data = self.blocks[block.id]
+  if index < data.body.length() {
+    data.body.get(index)
+  } else if index == data.body.length() {
+    data.terminator
   } else {
     None
   }
@@ -450,6 +513,52 @@ pub fn[Inst] Function::instruction_successor_at(
 }
 
 ///|
+pub fn[Inst] Function::instruction_successor_target(
+  self : Function[Inst],
+  instruction : Instruction,
+  successor : Int,
+) -> Block? {
+  if !self.owns_instruction(instruction) {
+    return None
+  }
+  match self.instructions[instruction.id].successors.get(successor) {
+    Some(edge) => Some(edge.target)
+    None => None
+  }
+}
+
+///|
+pub fn[Inst] Function::instruction_successor_argument_count(
+  self : Function[Inst],
+  instruction : Instruction,
+  successor : Int,
+) -> Int {
+  if !self.owns_instruction(instruction) {
+    return 0
+  }
+  match self.instructions[instruction.id].successors.get(successor) {
+    Some(edge) => edge.arguments.length()
+    None => 0
+  }
+}
+
+///|
+pub fn[Inst] Function::instruction_successor_argument_at(
+  self : Function[Inst],
+  instruction : Instruction,
+  successor : Int,
+  argument : Int,
+) -> Value? {
+  if !self.owns_instruction(instruction) {
+    return None
+  }
+  match self.instructions[instruction.id].successors.get(successor) {
+    Some(edge) => edge.arguments.get(argument)
+    None => None
+  }
+}
+
+///|
 pub fn[Inst] Function::instruction_metadata(
   self : Function[Inst],
   instruction : Instruction,
@@ -464,6 +573,14 @@ pub fn[Inst] Function::instruction_metadata(
 ///|
 pub fn[Inst] Function::layout(self : Function[Inst]) -> Array[Block] {
   self.layout.copy()
+}
+
+///|
+pub fn[Inst] Function::layout_block_at(
+  self : Function[Inst],
+  index : Int,
+) -> Block? {
+  self.layout.get(index)
 }
 
 ///|

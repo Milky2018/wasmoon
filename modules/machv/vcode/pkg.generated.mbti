@@ -298,6 +298,10 @@ pub fn[Inst] Function::block_at(Self[Inst], Int) -> Block?
 pub fn[Inst] Function::block_body(Self[Inst], Block) -> Array[Instruction]
 pub fn[Inst] Function::block_count(Self[Inst]) -> Int
 pub fn[Inst] Function::block_index(Self[Inst], Block) -> Int?
+pub fn[Inst] Function::block_instruction_at(Self[Inst], Block, Int) -> Instruction?
+pub fn[Inst] Function::block_instruction_count(Self[Inst], Block) -> Int
+pub fn[Inst] Function::block_parameter_at(Self[Inst], Block, Int) -> Value?
+pub fn[Inst] Function::block_parameter_count(Self[Inst], Block) -> Int
 pub fn[Inst] Function::block_parameters(Self[Inst], Block) -> Array[Value]
 pub fn[Inst] Function::block_terminator(Self[Inst], Block) -> Instruction?
 pub fn[Inst] Function::entry_block(Self[Inst]) -> Block
@@ -314,10 +318,14 @@ pub fn[Inst] Function::instruction_operand_at(Self[Inst], Instruction, Int) -> O
 pub fn[Inst] Function::instruction_operand_count(Self[Inst], Instruction) -> Int
 pub fn[Inst] Function::instruction_operands(Self[Inst], Instruction) -> Array[Operand]
 pub fn[Inst] Function::instruction_results(Self[Inst], Instruction) -> Array[Value]
+pub fn[Inst] Function::instruction_successor_argument_at(Self[Inst], Instruction, Int, Int) -> Value?
+pub fn[Inst] Function::instruction_successor_argument_count(Self[Inst], Instruction, Int) -> Int
 pub fn[Inst] Function::instruction_successor_at(Self[Inst], Instruction, Int) -> Edge?
 pub fn[Inst] Function::instruction_successor_count(Self[Inst], Instruction) -> Int
+pub fn[Inst] Function::instruction_successor_target(Self[Inst], Instruction, Int) -> Block?
 pub fn[Inst] Function::instruction_successors(Self[Inst], Instruction) -> Array[Edge]
 pub fn[Inst] Function::layout(Self[Inst]) -> Array[Block]
+pub fn[Inst] Function::layout_block_at(Self[Inst], Int) -> Block?
 pub fn[Inst] Function::name(Self[Inst]) -> String
 pub fn[Inst] Function::parameter_at(Self[Inst], Int) -> Value?
 pub fn[Inst] Function::parameter_count(Self[Inst]) -> Int

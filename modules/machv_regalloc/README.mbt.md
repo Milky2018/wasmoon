@@ -20,9 +20,10 @@ explicit set of allocatable registers and spill scratch registers. The result
 is verified against fixed and tied operands, clobbers, stack slots, insertion
 edits, edge moves, and safepoint roots before it is returned.
 
-The production adapter reads Target VCode directly through `FunctionView`; it
-does not build a second instruction or CFG graph. The aggregate target pipeline
-first verifies selected VCode, runs the root bundle-aware allocator,
+The production adapter normalizes Target VCode once into flat tables and offset
+vectors, then exposes non-owning `ArrayView` spans through `FunctionView`; it
+does not build a second nested instruction or CFG graph. The aggregate target
+pipeline first verifies selected VCode, runs the root bundle-aware allocator,
 materializes its `AllocationPlan` into VCode `Allocation` side tables, and then
 runs the independent VCode allocation verifier. Production enables both the
 reusable plan verifier and the

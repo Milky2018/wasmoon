@@ -219,10 +219,10 @@ impl FunctionView for VerifierCfgView with fn values_share_spill_slot(
 }
 
 ///|
-impl FunctionView for VerifierCfgView with fn entry_values(self) -> Array[
+impl FunctionView for VerifierCfgView with fn entry_values(self) -> ArrayView[
   VirtualReg,
 ] {
-  self.entry_values.copy()
+  self.entry_values[:]
 }
 
 ///|
@@ -236,26 +236,26 @@ impl FunctionView for VerifierCfgView with fn block_id_at(_self, block) -> Int {
 }
 
 ///|
-impl FunctionView for VerifierCfgView with fn block_parameters(self, block) -> Array[
+impl FunctionView for VerifierCfgView with fn block_parameters(self, block) -> ArrayView[
   VirtualReg,
 ] {
-  self.parameters[block].copy()
+  self.parameters[block][:]
 }
 
 ///|
-impl FunctionView for VerifierCfgView with fn block_instructions(self, block) -> Array[
+impl FunctionView for VerifierCfgView with fn block_instructions(self, block) -> ArrayView[
   Int,
 ] {
   self.block_visits.val = self.block_visits.val + 1
-  self.blocks[block].copy()
+  self.blocks[block][:]
 }
 
 ///|
-impl FunctionView for VerifierCfgView with fn block_successors(self, block) -> Array[
+impl FunctionView for VerifierCfgView with fn block_successors(self, block) -> ArrayView[
   Int,
 ] {
   self.successor_queries.val = self.successor_queries.val + 1
-  self.successors[block].copy()
+  self.successors[block][:]
 }
 
 ///|
@@ -263,24 +263,25 @@ impl FunctionView for VerifierCfgView with fn edge_arguments(
   self,
   block,
   successor,
-) -> Array[VirtualReg] {
-  self.edge_arguments[block][successor].copy()
+) -> ArrayView[VirtualReg] {
+  self.edge_arguments[block][successor][:]
 }
 
 ///|
 impl FunctionView for VerifierCfgView with fn instruction_operands(
   self,
   instruction,
-) -> Array[Operand] {
-  self.operands[instruction].copy()
+) -> ArrayView[Operand] {
+  self.operands[instruction][:]
 }
 
 ///|
 impl FunctionView for VerifierCfgView with fn instruction_clobbers(
   _self,
   _instruction,
-) -> Array[PhysicalReg] {
-  []
+) -> ArrayView[PhysicalReg] {
+  let empty : Array[PhysicalReg] = []
+  empty[:]
 }
 
 ///|

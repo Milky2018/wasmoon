@@ -11,15 +11,15 @@ pub(open) trait FunctionView {
   fn value_spill_size(Self, Int) -> Int
   fn value_spill_alignment(Self, Int) -> Int
   fn values_share_spill_slot(Self, Int, Int) -> Bool
-  fn entry_values(Self) -> Array[VirtualReg]
+  fn entry_values(Self) -> ArrayView[VirtualReg]
   fn block_count(Self) -> Int
   fn block_id_at(Self, Int) -> Int
-  fn block_parameters(Self, Int) -> Array[VirtualReg]
-  fn block_instructions(Self, Int) -> Array[Int]
-  fn block_successors(Self, Int) -> Array[Int]
-  fn edge_arguments(Self, Int, Int) -> Array[VirtualReg]
-  fn instruction_operands(Self, Int) -> Array[Operand]
-  fn instruction_clobbers(Self, Int) -> Array[PhysicalReg]
+  fn block_parameters(Self, Int) -> ArrayView[VirtualReg]
+  fn block_instructions(Self, Int) -> ArrayView[Int]
+  fn block_successors(Self, Int) -> ArrayView[Int]
+  fn edge_arguments(Self, Int, Int) -> ArrayView[VirtualReg]
+  fn instruction_operands(Self, Int) -> ArrayView[Operand]
+  fn instruction_clobbers(Self, Int) -> ArrayView[PhysicalReg]
 }
 
 ///|
