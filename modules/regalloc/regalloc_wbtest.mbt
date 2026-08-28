@@ -670,10 +670,18 @@ test "production register allocation index orders updates by range end" {
       location: None,
     },
   ]
-  let allocations = RegisterAllocationIndex::new(1, segments, [0])
+  let allocations = RegisterAllocationIndex::new(
+    1,
+    segments,
+    [0, 1, 0, 0],
+    Array::make(2, 0),
+    [0],
+  )
   allocations.insert(0, 2)
   allocations.insert(0, 0)
+  debug_inspect(allocations.owner_is_contiguous(0), content="true")
   allocations.insert(0, 1)
+  debug_inspect(allocations.owner_is_contiguous(0), content="false")
   let stack : Array[Int] = []
   let ordered : Array[Int] = []
   allocations.seek(0, ProgramPoint(0, -1), stack)
@@ -682,6 +690,11 @@ test "production register allocation index orders updates by range end" {
   }
   debug_inspect(ordered, content="[0, 1, 2]")
   allocations.remove(0, 1)
+  debug_inspect(allocations.owner_is_contiguous(0), content="true")
+  allocations.insert(0, 3)
+  debug_inspect(allocations.owner_is_contiguous(0), content="true")
+  allocations.remove(0, 3)
+  debug_inspect(allocations.owner_is_contiguous(0), content="true")
   ordered.clear()
   allocations.seek(0, ProgramPoint(0, -1), stack)
   while allocations.next(stack) is Some(segment) {

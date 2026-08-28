@@ -392,6 +392,15 @@ fn probe_bundle_register(
         return
       }
     }
+    if owner != bundle.id && occupied.owner_is_contiguous(owner) {
+      let owner_segments = bundles[owner].segments
+      occupied.skip_after(
+        owner_segments[owner_segments.length() - 1],
+        occupied_stack,
+      )
+      assigned = occupied.next(occupied_stack)
+      continue
+    }
     if occupied.segment_end_before_or_equal(conflict_segment, current_segment) {
       assigned = occupied.next(occupied_stack)
     } else {
@@ -1083,9 +1092,12 @@ fn[F : FunctionView] allocate_bundles(
     segments,
     ranges.block_order,
   )
+  let owner_run_count = Array::make(bundles.length(), 0)
   let occupied = RegisterAllocationIndex::new(
     environment.allocatable_regs.length(),
     segments,
+    segment_owner,
+    owner_run_count,
     ranges.block_order,
   )
   let occupied_stack : Array[Int] = []

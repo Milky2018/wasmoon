@@ -5,9 +5,13 @@
 /// evicted and reinserted. The treap keeps expected logarithmic updates without
 /// shifting an occupied suffix or allocating a tree node. Assigned ranges on
 /// one register are disjoint, so ordering by inclusive end is also ordering by
-/// start; a bundle probe can merge this stream with its ordered segments.
+/// start; a bundle probe can merge this stream with its ordered segments. Run
+/// counts track whether all segments owned by one allocated bundle are adjacent
+/// and can therefore be skipped after their first conflict.
 priv struct RegisterAllocationIndex {
   segments : Array[AllocationSegment]
+  segment_owner : Array[Int]
+  owner_run_count : Array[Int]
   block_order : Array[Int]
   roots : Array[Int]
   left : Array[Int]
@@ -53,10 +57,14 @@ fn compare_cached_points(
 fn RegisterAllocationIndex::new(
   register_count : Int,
   segments : Array[AllocationSegment],
+  segment_owner : Array[Int],
+  owner_run_count : Array[Int],
   block_order : Array[Int],
 ) -> RegisterAllocationIndex {
   let index = {
     segments,
+    segment_owner,
+    owner_run_count,
     block_order: block_order.copy(),
     roots: Array::make(register_count, -1),
     left: Array::make(segments.length(), -1),
@@ -209,6 +217,10 @@ fn RegisterAllocationIndex::insert(
   register : Int,
   segment : Int,
 ) -> Unit {
+  let owner = self.segment_owner[segment]
+  while self.owner_run_count.length() <= owner {
+    self.owner_run_count.push(0)
+  }
   self.left[segment] = -1
   self.right[segment] = -1
   self.parent[segment] = -1
@@ -216,6 +228,7 @@ fn RegisterAllocationIndex::insert(
   self.next_order[segment] = -1
   if self.roots[register] < 0 {
     self.roots[register] = segment
+    self.owner_run_count[owner] = self.owner_run_count[owner] + 1
     return
   }
   let mut current = self.roots[register]
@@ -248,6 +261,20 @@ fn RegisterAllocationIndex::insert(
   if successor >= 0 {
     self.previous_order[successor] = segment
   }
+  let predecessor_same_owner = predecessor >= 0 &&
+    self.segment_owner[predecessor] == owner
+  let successor_same_owner = successor >= 0 &&
+    self.segment_owner[successor] == owner
+  if !predecessor_same_owner && !successor_same_owner {
+    self.owner_run_count[owner] = self.owner_run_count[owner] + 1
+  }
+  if predecessor >= 0 &&
+    successor >= 0 &&
+    self.segment_owner[predecessor] == self.segment_owner[successor] &&
+    self.segment_owner[predecessor] != owner {
+    let split_owner = self.segment_owner[predecessor]
+    self.owner_run_count[split_owner] = self.owner_run_count[split_owner] + 1
+  }
   while self.parent[segment] >= 0 &&
         allocation_node_is_higher(segment, self.parent[segment]) {
     let parent = self.parent[segment]
@@ -267,6 +294,20 @@ fn RegisterAllocationIndex::remove(
 ) -> Unit {
   let previous = self.previous_order[segment]
   let next = self.next_order[segment]
+  let owner = self.segment_owner[segment]
+  let previous_same_owner = previous >= 0 &&
+    self.segment_owner[previous] == owner
+  let next_same_owner = next >= 0 && self.segment_owner[next] == owner
+  if !previous_same_owner && !next_same_owner {
+    self.owner_run_count[owner] = self.owner_run_count[owner] - 1
+  }
+  if previous >= 0 &&
+    next >= 0 &&
+    self.segment_owner[previous] == self.segment_owner[next] &&
+    self.segment_owner[previous] != owner {
+    let joined_owner = self.segment_owner[previous]
+    self.owner_run_count[joined_owner] = self.owner_run_count[joined_owner] - 1
+  }
   if previous >= 0 {
     self.next_order[previous] = next
   }
@@ -360,4 +401,24 @@ fn RegisterAllocationIndex::next(
     stack.push(self.next_order[segment])
   }
   Some(segment)
+}
+
+///|
+fn RegisterAllocationIndex::owner_is_contiguous(
+  self : RegisterAllocationIndex,
+  owner : Int,
+) -> Bool {
+  self.owner_run_count[owner] == 1
+}
+
+///|
+fn RegisterAllocationIndex::skip_after(
+  self : RegisterAllocationIndex,
+  segment : Int,
+  stack : Array[Int],
+) -> Unit {
+  stack.clear()
+  if self.next_order[segment] >= 0 {
+    stack.push(self.next_order[segment])
+  }
 }

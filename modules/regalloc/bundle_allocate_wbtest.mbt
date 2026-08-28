@@ -125,7 +125,13 @@ test "range split isolates the use-free gap and preserves spillset lineage" {
   let (segments, segments_by_value) = build_allocation_segments(ranges)
   let owners = [4]
   let spill_sets = [0]
-  let occupied = RegisterAllocationIndex::new(1, segments, [0])
+  let occupied = RegisterAllocationIndex::new(
+    1,
+    segments,
+    owners,
+    Array::make(5, 0),
+    [0],
+  )
   let parts = split_segment_around_gap(
     0,
     ProgramPoint(0, 5),
@@ -212,7 +218,13 @@ test "spill bundle is normalized before conflict probes" {
   add_to_spill_bundle(0, 1, bundles, owners, spill_sets, segments, [0, 1])
   add_to_spill_bundle(0, 2, bundles, owners, spill_sets, segments, [0, 1])
   prepare_spill_bundle(bundles[1], segments, [0, 1])
-  let occupied = RegisterAllocationIndex::new(1, segments, [0, 1])
+  let occupied = RegisterAllocationIndex::new(
+    1,
+    segments,
+    owners,
+    Array::make(bundles.length(), 0),
+    [0, 1],
+  )
   occupied.insert(0, 0)
   let probe_conflicts : Array[Int] = []
   let probe = BundleRegisterProbe::new(probe_conflicts)
@@ -262,7 +274,13 @@ test "spillset defers to second chance after two normal splits" {
     [0],
   )
   let queue = BundleQueue::new(bundles.length())
-  let occupied = RegisterAllocationIndex::new(1, segments, [0])
+  let occupied = RegisterAllocationIndex::new(
+    1,
+    segments,
+    owners,
+    Array::make(bundles.length(), 0),
+    [0],
+  )
   let split_points = [5, 15, 25]
   let statistics = BundleAllocationStatistics::new()
   let mut current_bundle = 0
@@ -537,7 +555,15 @@ test "production eviction accounts for and removes every conflicting bundle" {
   ]
   bundles[0].state = BundleReg(r0)
   bundles[1].state = BundleReg(r0)
-  let occupied = RegisterAllocationIndex::new(1, segments, [0])
+  let owners = [0, 1, 2, 2]
+  let owner_run_count = Array::make(bundles.length(), 0)
+  let occupied = RegisterAllocationIndex::new(
+    1,
+    segments,
+    owners,
+    owner_run_count,
+    [0],
+  )
   occupied.insert(0, 0)
   occupied.insert(0, 1)
   let occupied_stack : Array[Int] = []
@@ -550,7 +576,7 @@ test "production eviction accounts for and removes every conflicting bundle" {
     r0,
     bundles,
     segments,
-    [0, 1, 2, 2],
+    owners,
     occupied,
     { points_by_reg: Map([]), block_order: [0], },
     [0],
@@ -651,7 +677,13 @@ test "production eviction accounts for and removes every conflicting bundle" {
       #|}
     ),
   )
-  let cutoff_occupied = RegisterAllocationIndex::new(1, segments, [0])
+  let cutoff_occupied = RegisterAllocationIndex::new(
+    1,
+    segments,
+    owners,
+    Array::make(bundles.length(), 0),
+    [0],
+  )
   cutoff_occupied.insert(0, 0)
   cutoff_occupied.insert(0, 1)
   let cutoff_conflicts : Array[Int] = []
@@ -662,7 +694,7 @@ test "production eviction accounts for and removes every conflicting bundle" {
     r0,
     bundles,
     segments,
-    [0, 1, 2, 2],
+    owners,
     cutoff_occupied,
     { points_by_reg: Map([]), block_order: [0], },
     [0],
