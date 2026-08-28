@@ -17,9 +17,13 @@ fn detail_metrics_tick(enabled : Bool) -> @perf.PerfTick? {
 }
 
 ///|
-fn record_compile_subphase(name : String, tick : @perf.PerfTick?) -> Unit {
+fn record_compile_subphase(
+  name : String,
+  tick : @perf.PerfTick?,
+  parent? : String = "function",
+) -> Unit {
   if tick is Some(start) {
-    @perf.record_compile_subphase_us(name, @perf.elapsed_us(start))
+    @perf.record_compile_subphase_us(name, @perf.elapsed_us(start), parent~)
   }
 }
 
@@ -69,7 +73,11 @@ fn semantic_lower_metrics_observer() -> (@milkir_machv.SemanticLowerEvent) -> Un
   let phase : Ref[(String, @perf.PerfTick)?] = { val: None, }
   fn close_phase() -> Unit {
     if phase.val is Some((name, tick)) {
-      @perf.record_compile_subphase_us(name, @perf.elapsed_us(tick))
+      @perf.record_compile_subphase_us(
+        name,
+        @perf.elapsed_us(tick),
+        parent="semantic_lowering",
+      )
       phase.val = None
     }
   }
@@ -114,7 +122,11 @@ fn target_compile_metrics_observer(
 
   fn close_target_phase() -> Unit {
     if target_phase.val is Some((name, tick)) {
-      @perf.record_compile_subphase_us(name, @perf.elapsed_us(tick))
+      @perf.record_compile_subphase_us(
+        name,
+        @perf.elapsed_us(tick),
+        parent="target_lowering",
+      )
       target_phase.val = None
     }
   }

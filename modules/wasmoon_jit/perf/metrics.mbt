@@ -90,6 +90,7 @@ pub struct RegallocPhaseMetric {
 ///|
 pub struct CompileSubphaseMetric {
   name : String
+  parent : String
   duration_us : Int64
 } derive(ToJson)
 
@@ -188,7 +189,27 @@ pub fn reset_module(expected_functions : Int) -> Unit {
 ///|
 pub fn set_module_compile_us(us : Int64) -> Unit {
   guard enabled() else { return }
-  ensure_module_state().module_compile_us = us
+  let report = ensure_module_state()
+  report.module_compile_us = us
+  if detail_enabled() {
+    let mut attributed = 0L
+    for subphase in report.compile_subphases {
+      if subphase.parent == "module" {
+        attributed = attributed + subphase.duration_us
+      }
+    }
+    for function in report.functions {
+      attributed = attributed + function.function_compile_us
+    }
+    let orchestration = us - attributed
+    if orchestration > 0L {
+      report.compile_subphases.push({
+        name: "module_orchestration",
+        parent: "module",
+        duration_us: orchestration,
+      })
+    }
+  }
 }
 
 ///|
@@ -325,6 +346,25 @@ pub fn record_function_compile_us(duration_us : Int64) -> Unit {
   guard enabled() && detail_enabled() else { return }
   if current_function_state.val is Some(m) {
     m.function_compile_us = duration_us
+    let mut attributed = m.optimize_us +
+      m.lower_us +
+      m.target_lower_us +
+      m.regalloc_us +
+      m.frame_plan_us +
+      m.emit_us
+    for subphase in m.compile_subphases {
+      if subphase.parent == "function" {
+        attributed = attributed + subphase.duration_us
+      }
+    }
+    let orchestration = duration_us - attributed
+    if orchestration > 0L {
+      m.compile_subphases.push({
+        name: "function_orchestration",
+        parent: "function",
+        duration_us: orchestration,
+      })
+    }
   }
 }
 
@@ -344,10 +384,11 @@ pub fn record_regalloc_phase_us(
 pub fn record_compile_subphase_us(
   phase_name : String,
   duration_us : Int64,
+  parent? : String = "function",
 ) -> Unit {
   guard enabled() && detail_enabled() else { return }
   if current_function_state.val is Some(m) {
-    m.compile_subphases.push({ name: phase_name, duration_us, })
+    m.compile_subphases.push({ name: phase_name, parent, duration_us, })
   }
 }
 
@@ -359,6 +400,7 @@ pub fn record_module_subphase_us(
   guard enabled() && detail_enabled() else { return }
   ensure_module_state().compile_subphases.push({
     name: phase_name,
+    parent: "module",
     duration_us,
   })
 }

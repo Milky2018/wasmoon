@@ -1,5 +1,6 @@
 ///|
 test "compile metrics preserve every production phase and allocation summary" {
+  guard !detail_enabled() else { return }
   let previous = @env.get_env_var("WASMOON_PERF_METRICS")
   @env.set_env_var("WASMOON_PERF_METRICS", "1")
   reset_module(1)
@@ -60,6 +61,61 @@ test "compile metrics preserve every production phase and allocation summary" {
       #|}
       #|
     ),
+  )
+  match previous {
+    Some(value) => @env.set_env_var("WASMOON_PERF_METRICS", value)
+    None => @env.unset_env_var("WASMOON_PERF_METRICS")
+  }
+}
+
+///|
+test "detailed compile subphases reconcile their declared parent" {
+  guard detail_enabled() else { return }
+  let previous = @env.get_env_var("WASMOON_PERF_METRICS")
+  @env.set_env_var("WASMOON_PERF_METRICS", "1")
+  reset_module(1)
+  begin_function(7, "measured", 2, 30)
+  record_stage_us(Optimize, 10L)
+  record_compile_subphase_us("frontend_translation", 5L)
+  record_compile_subphase_us(
+    "semantic_validation",
+    7L,
+    parent="semantic_lowering",
+  )
+  record_function_compile_us(20L)
+  finish_function(18, 96)
+  record_module_subphase_us("module_preparation", 3L)
+  set_module_compile_us(30L)
+  let report = export_json()
+  inspect(
+    report.contains(
+      (
+        #|"name": "function_orchestration",
+        #|          "parent": "function",
+        #|          "duration_us": "5"
+      ),
+    ),
+    content="true",
+  )
+  inspect(
+    report.contains(
+      (
+        #|"name": "semantic_validation",
+        #|          "parent": "semantic_lowering",
+        #|          "duration_us": "7"
+      ),
+    ),
+    content="true",
+  )
+  inspect(
+    report.contains(
+      (
+        #|"name": "module_orchestration",
+        #|      "parent": "module",
+        #|      "duration_us": "7"
+      ),
+    ),
+    content="true",
   )
   match previous {
     Some(value) => @env.set_env_var("WASMOON_PERF_METRICS", value)

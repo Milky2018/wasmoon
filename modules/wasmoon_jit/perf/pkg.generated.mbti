@@ -22,7 +22,7 @@ pub fn instant_elapsed_as_secs_f64(Instant) -> Double
 
 pub fn instant_now() -> Instant
 
-pub fn record_compile_subphase_us(String, Int64) -> Unit
+pub fn record_compile_subphase_us(String, Int64, parent? : String) -> Unit
 
 pub fn record_function_compile_us(Int64) -> Unit
 
@@ -49,6 +49,7 @@ pub fn tick_now() -> Instant
 // Types and methods
 pub struct CompileSubphaseMetric {
   name : String
+  parent : String
   duration_us : Int64
 } derive(ToJson)
 pub fn CompileSubphaseMetric::to_json(Self) -> Json

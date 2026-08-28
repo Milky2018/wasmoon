@@ -39,7 +39,9 @@ Collection starts in `cmd/wasmoon/run.mbt` during `compile_module_to_jit(...)`.
 - `expected_functions`
 - `module_compile_us`
 - `compile_subphases[]` for module preparation when detailed metrics are
-  enabled
+  enabled. Each entry names `parent: "module"`; the derived
+  `module_orchestration` entry closes the difference between module time,
+  preparation, and complete function jobs.
 - `functions[]`
 
 ### Per-function fields
@@ -66,7 +68,10 @@ Collection starts in `cmd/wasmoon/run.mbt` during `compile_module_to_jit(...)`.
   - `compile_subphases[]` when detailed metrics are enabled. This attributes
     frontend translation, semantic validation/construction/cleanup, embedding
     ABI and target-context preparation, target analysis/VCode construction,
-    adapter construction, and artifact packaging.
+    adapter construction, and artifact packaging. The `parent` field identifies
+    whether a subphase reconciles against `function_compile_us`, `lower_us`, or
+    `target_lower_us`; derived `function_orchestration` entries close the
+    function-level remainder.
   - `ir_passes[]`
   - `regalloc_phases[]` when detailed metrics are enabled.
 

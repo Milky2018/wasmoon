@@ -61,10 +61,18 @@ fn build_x64_target(
       elaborate_wasmoon_runtime_abi(function, allocation_symbols, symbols)
     None => function
   }
-  record_compile_subphase("runtime_abi_elaboration", runtime_abi_tick)
+  record_compile_subphase(
+    "runtime_abi_elaboration",
+    runtime_abi_tick,
+    parent="target_lowering",
+  )
   let context_tick = detail_metrics_tick(record_metrics)
   let context = x64_target_context(elaborated, environment_field_path)
-  record_compile_subphase("target_context", context_tick)
+  record_compile_subphase(
+    "target_context",
+    context_tick,
+    parent="target_lowering",
+  )
   let selected = try {
     match observer {
       Some(observe) =>
