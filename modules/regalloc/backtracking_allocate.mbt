@@ -291,11 +291,23 @@ fn[F : FunctionView] allocate_segments_with_context(
     allocatable=environment.allocatable_regs,
   )
   config.enter_phase(Some(BundleFormation))
-  let bundle_plan = build_production_bundle_plan(function, ranges, segments)
+  let bundle_plan = build_production_bundle_plan(
+    function,
+    ranges,
+    segments,
+    verify=config.verify(),
+  )
   config.enter_phase(Some(BundleAllocation))
   let (context, segment_owner, spill_sets, segment_spill_set, statistics) = allocate_bundles(
-    function, environment, ranges, segments, segments_by_value, loop_depths, bundle_plan,
+    function,
+    environment,
+    ranges,
+    segments,
+    segments_by_value,
+    loop_depths,
+    bundle_plan,
     session,
+    verify=config.verify(),
   )
   config.report_bundle_statistics(statistics)
   (
@@ -702,6 +714,7 @@ fn[F : FunctionView] assign_segment_operands(
   let operand_tie_slots : Array[Int?] = []
   let tied_constraints : Array[OperandConstraint?] = []
   let tied_locations : Array[Location?] = []
+  let resident_operand_segments : Array[Int?] = []
   let has_predecessor = Array::make(function.block_count(), false)
   for block in 0..<function.block_count() {
     for successor in function.block_successors(block) {
@@ -736,6 +749,7 @@ fn[F : FunctionView] assign_segment_operands(
       operand_tie_slots.clear()
       tied_constraints.clear()
       tied_locations.clear()
+      resident_operand_segments.clear()
       for operand in operands {
         assigned.push(None)
         let tie_slot = if operand.tie_id < 0 {
@@ -753,9 +767,7 @@ fn[F : FunctionView] assign_segment_operands(
           }
         }
         operand_tie_slots.push(tie_slot)
-      }
-      for operand_index, operand in operands {
-        if operand_tie_slots[operand_index] is Some(slot) {
+        if tie_slot is Some(slot) {
           let constraint = match tied_constraints[slot] {
             None => operand.constraint
             Some(FixedReg(required)) =>
@@ -897,17 +909,14 @@ fn[F : FunctionView] assign_segment_operands(
         if tie_slot is Some(slot) {
           tied_locations[slot] = Some(selected)
         }
-        plan.assign_operand(instruction, operand_index, selected)
-      }
-      let resident_operand_segments : Array[Int?] = []
-      for operand_index, _ in operands {
         resident_operand_segments.push(
           match operand_segments[operand_index] {
-            Some(segment) if natural_locations[operand_index] ==
-              assigned[operand_index].unwrap() => Some(segment)
+            Some(segment) if natural_locations[operand_index] == selected =>
+              Some(segment)
             _ => None
           },
         )
+        plan.assign_operand(instruction, operand_index, selected)
       }
       for timing in [Early, Late] {
         for operand_index, operand in operands {

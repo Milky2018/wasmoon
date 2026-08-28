@@ -44,8 +44,22 @@ fn propagate_live_sets(
   live_in : Array[SparseVRegSet],
 ) -> DenseLiveSets {
   let live_out : Array[SparseVRegSet] = []
+  let dense_word_count = match live_in.get(0) {
+    Some(set) =>
+      match set.words {
+        Dense(words) => words.length()
+        _ => 0
+      }
+    None => 0
+  }
   for _ in 0..<num_blocks {
-    live_out.push(SparseVRegSet::new())
+    live_out.push(
+      if dense_word_count > 0 {
+        { words: Dense(Array::make(dense_word_count, 0UL)), }
+      } else {
+        SparseVRegSet::new()
+      },
+    )
   }
   let worklist = LivenessWorklist::LivenessWorklist(num_blocks)
   for i in 0..<num_blocks {

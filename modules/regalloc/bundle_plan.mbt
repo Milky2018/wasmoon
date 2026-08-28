@@ -361,6 +361,7 @@ fn build_production_bundle_plan_from_range_edges(
   ranges : LiveRangeSet,
   segments : Array[AllocationSegment],
   edges : Array[(Int, Int)],
+  verify? : Bool = true,
 ) -> ProductionBundlePlan raise VerifyError {
   let facts = build_bundle_range_facts(ranges)
   let union_find = @unionfind.UnionFind::UnionFind(facts.length())
@@ -425,7 +426,9 @@ fn build_production_bundle_plan_from_range_edges(
     bundle_ranges,
     bundle_segments,
   }
-  plan.validate(facts.length(), segments.length())
+  if verify {
+    plan.validate(facts.length(), segments.length())
+  }
   plan
 }
 
@@ -464,10 +467,12 @@ fn[F : FunctionView] build_production_bundle_plan(
   function : F,
   ranges : LiveRangeSet,
   segments : Array[AllocationSegment],
+  verify? : Bool = true,
 ) -> ProductionBundlePlan raise VerifyError {
   build_production_bundle_plan_from_range_edges(
     ranges,
     segments,
     collect_production_bundle_edges(function, ranges),
+    verify~,
   )
 }

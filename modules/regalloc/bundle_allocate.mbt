@@ -501,11 +501,11 @@ fn probe_bundle_register(
 fn push_bundle_register_candidates(
   order : Array[Int],
   order_marks : Array[Bool],
-  register_indexes : Map[(Int, Int), Int],
+  registers : Array[PhysicalReg],
   candidate : PhysicalReg?,
 ) -> Unit {
   if candidate is Some(reg) &&
-    register_indexes.get(physical_reg_key(reg)) is Some(index) &&
+    register_index(registers, reg) is Some(index) &&
     !order_marks[index] {
     order_marks[index] = true
     order.push(index)
@@ -520,7 +520,6 @@ fn bundle_register_order(
   segments : Array[AllocationSegment],
   environment : MachineEnv,
   preferred_by_value : Array[PhysicalReg?],
-  register_indexes : Map[(Int, Int), Int],
   order : Array[Int],
   order_marks : Array[Bool],
 ) -> Unit {
@@ -528,25 +527,30 @@ fn bundle_register_order(
     order_marks[register] = false
   }
   order.clear()
-  push_bundle_register_candidates(order, order_marks, register_indexes, hint)
+  push_bundle_register_candidates(
+    order,
+    order_marks,
+    environment.allocatable_regs,
+    hint,
+  )
   for segment_id in context.segments[bundle] {
     let segment = segments[segment_id]
     push_bundle_register_candidates(
       order,
       order_marks,
-      register_indexes,
+      environment.allocatable_regs,
       segment.fixed_hint,
     )
     push_bundle_register_candidates(
       order,
       order_marks,
-      register_indexes,
+      environment.allocatable_regs,
       segment.preference_hint,
     )
     push_bundle_register_candidates(
       order,
       order_marks,
-      register_indexes,
+      environment.allocatable_regs,
       preferred_by_value[segment.value.id],
     )
   }
@@ -1164,6 +1168,7 @@ fn[F : FunctionView] allocate_bundles(
   loop_depths : Array[Int],
   bundle_plan : ProductionBundlePlan,
   session : AllocationSession,
+  verify? : Bool = true,
 ) -> (
   AllocationContext,
   Array[Int],
@@ -1201,10 +1206,6 @@ fn[F : FunctionView] allocate_bundles(
   let probe = BundleRegisterProbe::new(probe_conflicts)
   let eviction_conflicts = session.eviction_conflicts
   eviction_conflicts.clear()
-  let register_indexes : Map[(Int, Int), Int] = Map([])
-  for index, reg in environment.allocatable_regs {
-    register_indexes[physical_reg_key(reg)] = index
-  }
   let register_order = session.register_order
   register_order.clear()
   let register_order_marks = session.register_order_marks
@@ -1234,7 +1235,6 @@ fn[F : FunctionView] allocate_bundles(
       segments,
       environment,
       preferred_by_value,
-      register_indexes,
       register_order,
       register_order_marks,
     )
@@ -1426,7 +1426,6 @@ fn[F : FunctionView] allocate_bundles(
       segments,
       environment,
       preferred_by_value,
-      register_indexes,
       register_order,
       register_order_marks,
     )
@@ -1471,11 +1470,13 @@ fn[F : FunctionView] allocate_bundles(
       force_spill_bundle(bundle, context, segments)
     }
   }
-  validate_bundle_allocations(
-    context,
-    segments,
-    segment_owner,
-    ranges.block_order,
-  )
+  if verify {
+    validate_bundle_allocations(
+      context,
+      segments,
+      segment_owner,
+      ranges.block_order,
+    )
+  }
   (context, segment_owner, spill_sets, segment_spill_set, statistics)
 }

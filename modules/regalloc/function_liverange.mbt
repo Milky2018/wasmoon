@@ -16,13 +16,24 @@ fn[F : FunctionView] collect_function_liveness(
   function : F,
   ranges : LiveRangeSet,
 ) -> DenseLiveSets {
+  let word_count = (function.value_count() + 63) / 64
+  let block_count = function.block_count()
+  let use_dense = block_count == 0 || word_count <= 262144 / block_count
   let block_defs : Array[SparseVRegSet] = []
   let live_in : Array[SparseVRegSet] = []
   let successors : Array[Array[Int]] = []
   let block_ids : Array[Int] = []
   for block in 0..<function.block_count() {
-    let definitions = SparseVRegSet::new()
-    let uses = SparseVRegSet::new()
+    let definitions = if use_dense {
+      SparseVRegSet::dense(function.value_count())
+    } else {
+      SparseVRegSet::new()
+    }
+    let uses = if use_dense {
+      SparseVRegSet::dense(function.value_count())
+    } else {
+      SparseVRegSet::new()
+    }
     let block_start = ProgramPoint(block, -1)
     for value in function.block_parameters(block) {
       definitions.set(value.id, true)
