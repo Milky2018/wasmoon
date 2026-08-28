@@ -344,6 +344,67 @@ test "semantic MachV exposes definition-safe CFG lowering order" {
 }
 
 ///|
+test "semantic MachV indexed traversal preserves ownership and bounds" {
+  let builder = @machv.FunctionBuilder::new("indexed", Internal, [], [I32])
+  let result = single(builder.emit(I32Const(7), [], [I32]))
+  builder.return_([result])
+  let function = builder.finish()
+  let block = function.block_at(0).unwrap()
+  let instruction = function.block_instruction_at(block, 0).unwrap()
+  debug_inspect(
+    (
+      function.block_count(),
+      function.instruction_count(),
+      function.instruction_slot_count(),
+      function.block_parameter_count(block),
+      function.block_instruction_count(block),
+      function.instruction_operand_count(instruction),
+      function.instruction_result_count(instruction),
+    ),
+    content="(1, 1, 1, Some(0), Some(1), Some(0), Some(1))",
+  )
+  debug_inspect(
+    (
+      function.instruction_at(0),
+      function.instruction_result_at(instruction, 0),
+      function.block_at(-1),
+      function.block_at(1),
+      function.instruction_at(-1),
+      function.instruction_at(1),
+      function.block_parameter_at(block, 0),
+      function.block_instruction_at(block, 1),
+      function.instruction_operand_at(instruction, 0),
+      function.instruction_result_at(instruction, 1),
+    ),
+    content=(
+      #|(
+      #|  Some(inst0),
+      #|  Some(v0),
+      #|  None,
+      #|  None,
+      #|  None,
+      #|  None,
+      #|  None,
+      #|  None,
+      #|  None,
+      #|  None,
+      #|)
+    ),
+  )
+  let foreign_builder = @machv.FunctionBuilder::new("foreign", Internal, [], [])
+  foreign_builder.return_([])
+  let foreign = foreign_builder.finish().block_at(0).unwrap()
+  debug_inspect(
+    (
+      function.block_parameter_count(foreign),
+      function.block_instruction_count(foreign),
+      function.block_instruction_at(foreign, 0),
+    ),
+    content="(None, None, None)",
+  )
+}
+
+///|
 test "indirect calls use an explicit ptr64 callee" {
   let builder = @machv.FunctionBuilder::new(
     "indirect",

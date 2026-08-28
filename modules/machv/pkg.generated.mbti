@@ -331,20 +331,31 @@ pub fn FloatUnaryOp::to_repr(Self) -> @debug.Repr
 pub struct Function {
   // private fields
 }
+pub fn Function::block_at(Self, Int) -> Block?
 pub fn Function::block_count(Self) -> Int
 pub fn Function::block_index(Self, Block) -> Int?
+pub fn Function::block_instruction_at(Self, Block, Int) -> Instruction?
+pub fn Function::block_instruction_count(Self, Block) -> Int?
 pub fn Function::block_instructions(Self, Block) -> Array[Instruction]
+pub fn Function::block_parameter_at(Self, Block, Int) -> Value?
+pub fn Function::block_parameter_count(Self, Block) -> Int?
 pub fn Function::block_parameters(Self, Block) -> Array[Value]
 pub fn Function::block_terminator(Self, Block) -> TerminatorRecord?
 pub fn Function::blocks(Self) -> Array[Block]
 pub fn Function::blocks_in_cfg_order(Self) -> Array[Block]
 pub fn Function::elaborate_call_abi(Self, CallAbiElaboration) -> Self raise CallAbiElaborationError
+pub fn Function::instruction_at(Self, Int) -> Instruction?
 pub fn Function::instruction_count(Self) -> Int
 pub fn Function::instruction_index(Self, Instruction) -> Int?
 pub fn Function::instruction_metadata(Self, Instruction) -> InstructionMetadata?
+pub fn Function::instruction_operand_at(Self, Instruction, Int) -> Value?
+pub fn Function::instruction_operand_count(Self, Instruction) -> Int?
 pub fn Function::instruction_operands(Self, Instruction) -> Array[Value]
 pub fn Function::instruction_operation(Self, Instruction) -> Operation?
+pub fn Function::instruction_result_at(Self, Instruction, Int) -> Value?
+pub fn Function::instruction_result_count(Self, Instruction) -> Int?
 pub fn Function::instruction_results(Self, Instruction) -> Array[Value]
+pub fn Function::instruction_slot_count(Self) -> Int
 pub fn Function::name(Self) -> String
 pub fn Function::output(Self, &Logger) -> Unit
 pub fn Function::parameters(Self) -> Array[Value]

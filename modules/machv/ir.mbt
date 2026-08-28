@@ -447,6 +447,16 @@ pub fn Function::blocks(self : Function) -> Array[Block] {
 }
 
 ///|
+/// Returns the block at `index` without materializing a block snapshot.
+pub fn Function::block_at(self : Function, index : Int) -> Block? {
+  if index >= 0 && index < self.blocks.length() {
+    Some(Block::new(self.owner, index))
+  } else {
+    None
+  }
+}
+
+///|
 pub fn Function::value_count(self : Function) -> Int {
   self.values.length()
 }
@@ -483,6 +493,26 @@ pub fn Function::instruction_count(self : Function) -> Int {
     }
   }
   count
+}
+
+///|
+/// Returns the number of stable instruction slots, including dead slots kept
+/// to preserve instruction identity.
+pub fn Function::instruction_slot_count(self : Function) -> Int {
+  self.instructions.length()
+}
+
+///|
+/// Returns the live instruction in a stable slot without materializing an
+/// instruction snapshot.
+pub fn Function::instruction_at(self : Function, index : Int) -> Instruction? {
+  if index >= 0 &&
+    index < self.instructions.length() &&
+    self.instructions[index].alive {
+    Some(Instruction::new(self.owner, index))
+  } else {
+    None
+  }
 }
 
 ///|
@@ -551,6 +581,25 @@ pub fn Function::block_parameters(
 }
 
 ///|
+pub fn Function::block_parameter_count(self : Function, block : Block) -> Int? {
+  if self.owns_block(block) {
+    Some(self.blocks[block.id].parameters.length())
+  } else {
+    None
+  }
+}
+
+///|
+pub fn Function::block_parameter_at(
+  self : Function,
+  block : Block,
+  index : Int,
+) -> Value? {
+  guard self.owns_block(block) else { return None }
+  self.blocks[block.id].parameters.get(index)
+}
+
+///|
 pub fn Function::block_instructions(
   self : Function,
   block : Block,
@@ -559,6 +608,35 @@ pub fn Function::block_instructions(
     self.blocks[block.id].instructions.copy()
   } else {
     []
+  }
+}
+
+///|
+pub fn Function::block_instruction_count(
+  self : Function,
+  block : Block,
+) -> Int? {
+  if self.owns_block(block) {
+    Some(self.blocks[block.id].instructions.length())
+  } else {
+    None
+  }
+}
+
+///|
+pub fn Function::block_instruction_at(
+  self : Function,
+  block : Block,
+  index : Int,
+) -> Instruction? {
+  guard self.owns_block(block) else { return None }
+  guard self.blocks[block.id].instructions.get(index) is Some(instruction) else {
+    return None
+  }
+  if self.instructions[instruction.id].alive {
+    Some(instruction)
+  } else {
+    None
   }
 }
 
@@ -604,6 +682,32 @@ pub fn Function::instruction_operands(
 }
 
 ///|
+pub fn Function::instruction_operand_count(
+  self : Function,
+  instruction : Instruction,
+) -> Int? {
+  if self.owns_instruction(instruction) &&
+    self.instructions[instruction.id].alive {
+    Some(self.instructions[instruction.id].operands.length())
+  } else {
+    None
+  }
+}
+
+///|
+pub fn Function::instruction_operand_at(
+  self : Function,
+  instruction : Instruction,
+  index : Int,
+) -> Value? {
+  guard self.owns_instruction(instruction) &&
+    self.instructions[instruction.id].alive else {
+    return None
+  }
+  self.instructions[instruction.id].operands.get(index)
+}
+
+///|
 pub fn Function::instruction_results(
   self : Function,
   instruction : Instruction,
@@ -614,6 +718,32 @@ pub fn Function::instruction_results(
   } else {
     []
   }
+}
+
+///|
+pub fn Function::instruction_result_count(
+  self : Function,
+  instruction : Instruction,
+) -> Int? {
+  if self.owns_instruction(instruction) &&
+    self.instructions[instruction.id].alive {
+    Some(self.instructions[instruction.id].results.length())
+  } else {
+    None
+  }
+}
+
+///|
+pub fn Function::instruction_result_at(
+  self : Function,
+  instruction : Instruction,
+  index : Int,
+) -> Value? {
+  guard self.owns_instruction(instruction) &&
+    self.instructions[instruction.id].alive else {
+    return None
+  }
+  self.instructions[instruction.id].results.get(index)
 }
 
 ///|
