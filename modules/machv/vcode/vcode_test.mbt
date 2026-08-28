@@ -450,6 +450,10 @@ test "Allocation checker requires and validates edge parallel moves" {
   }
   allocation.add_edit(Edit::edge_move(entry, 0, value, source, destination))
   |> ignore
+  assert_eq(allocation.edge_edits_at(entry, 0).length(), 1)
+  assert_true(allocation.edge_edits_at(entry, 1).is_empty())
+  let foreign = build_test_function()
+  assert_true(allocation.edge_edits_at(foreign.entry_block(), 0).is_empty())
   verify_allocated(function, allocation)
   inspect(
     allocation.summary(),

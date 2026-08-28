@@ -111,6 +111,7 @@ pub suberror X64FrameError {
   InvalidStackObjectArea(message~ : String)
   MovePlanningFailed(cause~ : @vcode.MoveResolveError)
   InvalidEmergencyMoveArea(offset~ : Int?)
+  StaleAllocation(expected_edits~ : Int, actual_edits~ : Int)
   SavedRegisterSetMismatch
 } derive(@debug.Debug)
 pub fn X64FrameError::output(Self, &Logger) -> Unit

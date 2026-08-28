@@ -6,18 +6,16 @@ fn edge_parallel_moves(
   successor_index : Int,
 ) -> Array[@vcode.ParallelMove] {
   let transfers : Array[@vcode.ParallelMove] = []
-  for edit in allocation.edits() {
+  for edit in allocation.edge_edits_at(block, successor_index) {
     match edit.kind() {
-      EdgeMove(source~, successor_index=edge_index, value~, from~, to~) =>
-        if source == block && edge_index == successor_index {
-          transfers.push(
-            @vcode.ParallelMove::new(
-              function.value_type(value).unwrap(),
-              from,
-              to,
-            ),
-          )
-        }
+      EdgeMove(value~, from~, to~, ..) =>
+        transfers.push(
+          @vcode.ParallelMove::new(
+            function.value_type(value).unwrap(),
+            from,
+            to,
+          ),
+        )
       _ => ()
     }
   }
@@ -31,6 +29,9 @@ fn resolve_edge_moves(
   block : @vcode.Block,
   successor_index : Int,
 ) -> @vcode.ResolvedMovePlan raise AArch64EmitError {
+  if allocation.edge_edits_at(block, successor_index).is_empty() {
+    return @vcode.ResolvedMovePlan::empty()
+  }
   @vcode.plan_parallel_moves(
     edge_parallel_moves(function, allocation, block, successor_index),
     int_transfer_scratch(),
@@ -346,7 +347,7 @@ fn emit_switch_edges(
           successor_index = index
         }
       }
-      if edge_parallel_moves(function, allocation, block, successor_index).is_empty() {
+      if allocation.edge_edits_at(block, successor_index).is_empty() {
         buffer.emit_branch(
           threaded_branch_target(
             function,
@@ -402,7 +403,7 @@ fn emit_switch_edges(
     let case_branches : Array[(Int, Int)] = []
     for successor_index, bits in cases {
       emit_switch_compare(buffer, width, index, bits)
-      if edge_parallel_moves(function, allocation, block, successor_index).is_empty() {
+      if allocation.edge_edits_at(block, successor_index).is_empty() {
         buffer.emit_branch(
           threaded_branch_target(
             function,

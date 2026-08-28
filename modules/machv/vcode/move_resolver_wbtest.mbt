@@ -90,6 +90,37 @@ fn assert_plan_preserves_parallel_assignment(
 }
 
 ///|
+test "empty parallel move plan has no work" {
+  let plan = plan_parallel_moves(
+    [],
+    PhysicalReg::new(16, Int),
+    PhysicalReg::new(16, FpVector),
+  )
+  assert_true(plan.steps.is_empty())
+  assert_false(plan.requires_emergency)
+}
+
+///|
+test "empty production plan still validates concrete scratch roles" {
+  try
+    plan_parallel_moves(
+      [],
+      PhysicalReg::new(16, FpVector),
+      PhysicalReg::new(16, FpVector),
+    )
+    |> ignore
+  catch {
+    error =>
+      debug_inspect(
+        error,
+        content="InvalidScratch(reg=p16:fpvec, expected=Int)",
+      )
+  } noraise {
+    _ => fail("expected invalid integer scratch role")
+  }
+}
+
+///|
 test "parallel stack-slot cycle preserves both values" {
   let owner = Ref(())
   let stack0 = StackSlot::new(owner, 0)

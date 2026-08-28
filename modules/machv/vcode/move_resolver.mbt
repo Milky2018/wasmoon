@@ -28,6 +28,11 @@ pub struct ResolvedMovePlan {
 } derive(Eq, Debug)
 
 ///|
+pub fn ResolvedMovePlan::empty() -> ResolvedMovePlan {
+  { steps: [], requires_emergency: false, }
+}
+
+///|
 pub suberror MoveResolveError {
   MissingScratch(class~ : RegClass)
   InvalidScratch(reg~ : PhysicalReg, expected~ : RegClass)
@@ -198,6 +203,9 @@ pub fn plan_parallel_moves(
   }
   if scratch_fp.class != FpVector {
     raise InvalidScratch(reg=scratch_fp, expected=FpVector)
+  }
+  if moves.is_empty() {
+    return ResolvedMovePlan::empty()
   }
   let int_moves : Array[ParallelMove] = []
   let fp_moves : Array[ParallelMove] = []

@@ -208,6 +208,13 @@ fn Allocation::owns_instruction(
 }
 
 ///|
+fn Allocation::owns_block(self : Allocation, block : Block) -> Bool {
+  physical_equal(self.source_owner, block.owner) &&
+  block.id >= 0 &&
+  block.id < self.source_block_count
+}
+
+///|
 fn Allocation::owns_slot(self : Allocation, slot : StackSlot) -> Bool {
   physical_equal(self.owner, slot.owner) &&
   slot.id >= 0 &&
@@ -424,6 +431,30 @@ pub fn Allocation::edits_at(
 }
 
 ///|
+/// Returns the allocation edits scheduled for one outgoing CFG edge.
+///
+/// The returned view is read-only and remains valid while this allocation is
+/// not mutated. Target emitters should query this index instead of scanning
+/// `edits()` for every edge.
+pub fn Allocation::edge_edits_at(
+  self : Allocation,
+  source : Block,
+  successor_index : Int,
+) -> ArrayView[Edit] {
+  if !self.owns_block(source) || successor_index < 0 {
+    let empty : Array[Edit] = []
+    return empty[:]
+  }
+  match self.edge_edits.get((source.id, successor_index)) {
+    Some(edits) => edits[:]
+    None => {
+      let empty : Array[Edit] = []
+      empty[:]
+    }
+  }
+}
+
+///|
 pub fn Allocation::add_safepoint_root(
   self : Allocation,
   instruction : Instruction,
@@ -442,6 +473,11 @@ pub fn Allocation::add_safepoint_root(
 ///|
 pub fn Allocation::edits(self : Allocation) -> Array[Edit] {
   self.edits.copy()
+}
+
+///|
+pub fn Allocation::edit_count(self : Allocation) -> Int {
+  self.edits.length()
 }
 
 ///|

@@ -87,6 +87,7 @@ pub suberror AArch64FrameError {
   InvalidStackObjectArea(message~ : String)
   MovePlanningFailed(cause~ : @vcode.MoveResolveError)
   InvalidEmergencyMoveArea(offset~ : Int?)
+  StaleAllocation(expected_edits~ : Int, actual_edits~ : Int)
   SavedRegisterSetMismatch
 } derive(@debug.Debug)
 pub fn AArch64FrameError::output(Self, &Logger) -> Unit

@@ -165,6 +165,8 @@ pub fn Allocation::assign_operand(Self, Instruction, Int, PhysicalReg) -> Bool
 pub fn Allocation::assign_operand_location(Self, Instruction, Int, Location) -> Bool
 pub fn Allocation::assign_value(Self, Value, Location) -> Bool
 pub fn Allocation::create_stack_slot(Self, @machv.ValueType, Int, Int) -> StackSlot
+pub fn Allocation::edge_edits_at(Self, Block, Int) -> ArrayView[Edit]
+pub fn Allocation::edit_count(Self) -> Int
 pub fn Allocation::edits(Self) -> Array[Edit]
 pub fn Allocation::edits_at(Self, Instruction, PointPlacement) -> ArrayView[Edit]
 pub fn[Inst] Allocation::for_function(Function[Inst]) -> Self
@@ -466,6 +468,7 @@ pub struct ResolvedMovePlan {
   steps : Array[ResolvedMoveStep]
   requires_emergency : Bool
 } derive(Eq, @debug.Debug)
+pub fn ResolvedMovePlan::empty() -> Self
 pub fn ResolvedMovePlan::equal(Self, Self) -> Bool
 pub fn ResolvedMovePlan::not_equal(Self, Self) -> Bool
 pub fn ResolvedMovePlan::to_repr(Self) -> @debug.Repr

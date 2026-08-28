@@ -2831,6 +2831,9 @@ fn[Inst] emit_edits_at(
   instruction : @vcode.Instruction,
   placement : @vcode.PointPlacement,
 ) -> Unit raise X64EmitError {
+  if allocation.edits_at(instruction, placement).is_empty() {
+    return
+  }
   let resolved = @vcode.plan_parallel_moves(
     edit_parallel_moves(function, allocation, instruction, placement),
     int_transfer_scratch(),

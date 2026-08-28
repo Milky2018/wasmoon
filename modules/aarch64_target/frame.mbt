@@ -27,6 +27,8 @@ pub struct AArch64Frame {
   priv result_area : ResultArea?
   priv stack_objects : StackObjectArea?
   priv emergency_move_offset : Int?
+  priv requires_emergency_moves : Bool
+  priv allocation_edit_count : Int
   priv slots : Array[(@vcode.StackSlot, Int)]
   priv saved_registers : Array[SavedRegister]
 }
@@ -48,6 +50,7 @@ pub suberror AArch64FrameError {
   InvalidStackObjectArea(message~ : String)
   MovePlanningFailed(cause~ : @vcode.MoveResolveError)
   InvalidEmergencyMoveArea(offset~ : Int?)
+  StaleAllocation(expected_edits~ : Int, actual_edits~ : Int)
   SavedRegisterSetMismatch
 } derive(Debug)
 
@@ -261,6 +264,36 @@ fn moves_require_emergency(
 }
 
 ///|
+fn instruction_edits_require_emergency(
+  function : @vcode.Function[AArch64Inst],
+  allocation : @vcode.Allocation,
+  instruction : @vcode.Instruction,
+  placement : @vcode.PointPlacement,
+) -> Bool raise AArch64FrameError {
+  if allocation.edits_at(instruction, placement).is_empty() {
+    return false
+  }
+  moves_require_emergency(
+    edit_parallel_moves(function, allocation, instruction, placement),
+  )
+}
+
+///|
+fn edge_edits_require_emergency(
+  function : @vcode.Function[AArch64Inst],
+  allocation : @vcode.Allocation,
+  block : @vcode.Block,
+  successor_index : Int,
+) -> Bool raise AArch64FrameError {
+  if allocation.edge_edits_at(block, successor_index).is_empty() {
+    return false
+  }
+  moves_require_emergency(
+    edge_parallel_moves(function, allocation, block, successor_index),
+  )
+}
+
+///|
 fn requires_emergency_move_area(
   function : @vcode.Function[AArch64Inst],
   allocation : @vcode.Allocation,
@@ -268,28 +301,40 @@ fn requires_emergency_move_area(
   for block in function.layout() {
     for instruction in function.block_body(block) {
       if !is_abi_materialization(function.instruction(instruction).unwrap()) {
-        if moves_require_emergency(
-            edit_parallel_moves(function, allocation, instruction, Before),
+        if instruction_edits_require_emergency(
+            function,
+            allocation,
+            instruction,
+            Before,
           ) ||
-          moves_require_emergency(
-            edit_parallel_moves(function, allocation, instruction, After),
+          instruction_edits_require_emergency(
+            function,
+            allocation,
+            instruction,
+            After,
           ) {
           return true
         }
       }
     }
     let terminator = function.block_terminator(block).unwrap()
-    if moves_require_emergency(
-        edit_parallel_moves(function, allocation, terminator, Before),
+    if instruction_edits_require_emergency(
+        function,
+        allocation,
+        terminator,
+        Before,
       ) ||
-      moves_require_emergency(
-        edit_parallel_moves(function, allocation, terminator, After),
+      instruction_edits_require_emergency(
+        function,
+        allocation,
+        terminator,
+        After,
       ) {
       return true
     }
     for successor_index in 0..<function.instruction_successor_count(terminator) {
-      if moves_require_emergency(
-          edge_parallel_moves(function, allocation, block, successor_index),
+      if edge_edits_require_emergency(
+          function, allocation, block, successor_index,
         ) {
         return true
       }
@@ -435,6 +480,13 @@ fn verify_target_frame(
   allocation : @vcode.Allocation,
   frame : AArch64Frame,
 ) -> Unit raise AArch64FrameError {
+  let actual_edit_count = allocation.edit_count()
+  if frame.allocation_edit_count != actual_edit_count {
+    raise StaleAllocation(
+      expected_edits=frame.allocation_edit_count,
+      actual_edits=actual_edit_count,
+    )
+  }
   let expected_outgoing = maximum_outgoing_args_size(function)
   if frame.outgoing_args_size != expected_outgoing {
     raise OutgoingAreaMismatch(
@@ -503,8 +555,7 @@ fn verify_target_frame(
     Some(area) => area.offset + area.size
     None => reserved_call_area_end
   }
-  let expected_emergency = requires_emergency_move_area(function, allocation)
-  match (expected_emergency, frame.emergency_move_offset) {
+  match (frame.requires_emergency_moves, frame.emergency_move_offset) {
     (false, None) => ()
     (true, Some(offset)) =>
       if offset < reserved_object_area_end ||
@@ -580,9 +631,10 @@ fn plan_frame_verified(
     }
     None => None
   }
-  let emergency_move_offset = if requires_emergency_move_area(
-      function, allocation,
-    ) {
+  let requires_emergency_moves = requires_emergency_move_area(
+    function, allocation,
+  )
+  let emergency_move_offset = if requires_emergency_moves {
     offset = align_up(offset, 16)
     let emergency_offset = offset
     offset += 16
@@ -637,6 +689,8 @@ fn plan_frame_verified(
     result_area,
     stack_objects,
     emergency_move_offset,
+    requires_emergency_moves,
+    allocation_edit_count: allocation.edit_count(),
     slots,
     saved_registers,
   }
