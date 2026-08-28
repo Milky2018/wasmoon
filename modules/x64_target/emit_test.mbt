@@ -47,6 +47,8 @@ test "X64 compile runs the complete target pipeline" {
       #|[
       #|  TargetConstructionStarted,
       #|  TargetValidationStarted,
+      #|  TargetCommonValidationStarted,
+      #|  TargetIsaValidationStarted,
       #|  TargetSelectionFinished,
       #|]
     ),

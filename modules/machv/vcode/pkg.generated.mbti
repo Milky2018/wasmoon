@@ -528,6 +528,8 @@ pub(all) enum TargetCompileEvent {
   TargetAnalysisStarted
   TargetConstructionStarted
   TargetValidationStarted
+  TargetCommonValidationStarted
+  TargetIsaValidationStarted
   TargetSelectionFinished
   RegallocStarted
   RegallocPhaseStarted(String)

@@ -23,6 +23,10 @@ pub(all) enum TargetCompileEvent {
   TargetConstructionStarted
   // Target-specific validation of completed VCode began.
   TargetValidationStarted
+  // Target-neutral CFG, dominance, operand, and metadata validation began.
+  TargetCommonValidationStarted
+  // ISA-specific instruction validation began.
+  TargetIsaValidationStarted
   // Target VCode construction and validation completed.
   TargetSelectionFinished
   RegallocStarted

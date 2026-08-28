@@ -157,6 +157,8 @@ test "AArch64 compile runs the complete target pipeline" {
       #|  TargetAnalysisStarted,
       #|  TargetConstructionStarted,
       #|  TargetValidationStarted,
+      #|  TargetCommonValidationStarted,
+      #|  TargetIsaValidationStarted,
       #|  TargetSelectionFinished,
       #|]
     ),

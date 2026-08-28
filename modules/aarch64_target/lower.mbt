@@ -2763,7 +2763,12 @@ fn lower_validated_semantic(
     error => raise BuildFailure(cause=error)
   }
   on_event(TargetValidationStarted)
-  verify_vcode(lowered) catch {
+  on_event(TargetCommonValidationStarted)
+  @vcode.verify_selected(lowered) catch {
+    error => raise InvalidTarget(cause=CommonFailure(cause=error))
+  }
+  on_event(TargetIsaValidationStarted)
+  verify_target_vcode(lowered) catch {
     error => raise InvalidTarget(cause=error)
   }
   on_event(TargetSelectionFinished)

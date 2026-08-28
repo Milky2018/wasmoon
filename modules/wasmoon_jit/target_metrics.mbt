@@ -110,6 +110,7 @@ fn target_compile_metrics_observer(
   let detail = @perf.detail_enabled()
   let phase_tick : Ref[@perf.PerfTick?] = { val: None, }
   let target_phase : Ref[(String, @perf.PerfTick)?] = { val: None, }
+  let validation_phase : Ref[(String, @perf.PerfTick)?] = { val: None, }
   // The allocator reports each internal phase as it begins; the previous one
   // ends at that instant, and RegallocFinished closes the last (ISS-371).
   let regalloc_phase : Ref[(String, @perf.PerfTick)?] = { val: None, }
@@ -128,6 +129,17 @@ fn target_compile_metrics_observer(
         parent="target_lowering",
       )
       target_phase.val = None
+    }
+  }
+
+  fn close_validation_phase() -> Unit {
+    if validation_phase.val is Some((name, tick)) {
+      @perf.record_compile_subphase_us(
+        name,
+        @perf.elapsed_us(tick),
+        parent="target_vcode_validation",
+      )
+      validation_phase.val = None
     }
   }
 
@@ -150,7 +162,25 @@ fn target_compile_metrics_observer(
           close_target_phase()
           target_phase.val = Some(("target_vcode_validation", @perf.tick_now()))
         }
-      TargetSelectionFinished => if detail { close_target_phase() }
+      TargetCommonValidationStarted =>
+        if detail {
+          close_validation_phase()
+          validation_phase.val = Some(
+            ("target_common_validation", @perf.tick_now()),
+          )
+        }
+      TargetIsaValidationStarted =>
+        if detail {
+          close_validation_phase()
+          validation_phase.val = Some(
+            ("target_isa_validation", @perf.tick_now()),
+          )
+        }
+      TargetSelectionFinished =>
+        if detail {
+          close_validation_phase()
+          close_target_phase()
+        }
       RegallocStarted => {
         close_target_phase()
         record_target_stage(TargetLowering, Some(target_lower_tick)) |> ignore
