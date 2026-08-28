@@ -87,6 +87,49 @@ test "X64 verifier rejects an invalid 32-bit constant" {
 }
 
 ///|
+test "X64 compile does not trust externally built VCode" {
+  let builder : @vcode.Builder[X64Inst] = @vcode.Builder::new(
+    "external_bad_const",
+    [],
+  )
+  let entry = builder.entry_block()
+  builder.append_body(
+    entry,
+    LoadConstant(W32, 0x100000000UL),
+    [],
+    [@vcode.Output::any(I32)],
+    [],
+    @vcode.InstructionMetadata::empty(),
+  )
+  |> ignore
+  builder.set_terminator(
+    entry,
+    Return,
+    [],
+    [],
+    [],
+    @vcode.InstructionMetadata::empty(),
+  )
+  |> ignore
+  try compile(builder.finish()) |> ignore catch {
+    error =>
+      inspect(
+        error,
+        content=(
+          #|TargetValidationFailed(
+          #|  cause=InvalidInstruction(
+          #|    instruction=i0,
+          #|    message="32-bit constant has non-zero high bits",
+          #|  ),
+          #|)
+        ),
+      )
+  } noraise {
+    _ => fail("expected external VCode validation to fail")
+  }
+}
+
+///|
 test "X64 verifier rejects duplicate switch cases" {
   let builder : @vcode.Builder[X64Inst] = @vcode.Builder::new("bad_switch", [
     I32,

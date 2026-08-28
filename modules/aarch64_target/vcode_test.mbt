@@ -87,6 +87,49 @@ test "AArch64 verifier rejects an invalid 32-bit constant" {
 }
 
 ///|
+test "AArch64 compile does not trust externally built VCode" {
+  let builder : @vcode.Builder[AArch64Inst] = @vcode.Builder::new(
+    "external_bad_const",
+    [],
+  )
+  let entry = builder.entry_block()
+  builder.append_body(
+    entry,
+    LoadConstant(W32, 0x100000000UL),
+    [],
+    [@vcode.Output::any(I32)],
+    [],
+    @vcode.InstructionMetadata::empty(),
+  )
+  |> ignore
+  builder.set_terminator(
+    entry,
+    Return,
+    [],
+    [],
+    [],
+    @vcode.InstructionMetadata::empty(),
+  )
+  |> ignore
+  try compile(builder.finish()) |> ignore catch {
+    error =>
+      inspect(
+        error,
+        content=(
+          #|TargetValidationFailed(
+          #|  cause=InvalidInstruction(
+          #|    instruction=i0,
+          #|    message="32-bit constant has non-zero high bits",
+          #|  ),
+          #|)
+        ),
+      )
+  } noraise {
+    _ => fail("expected external VCode validation to fail")
+  }
+}
+
+///|
 test "AArch64 verifier rejects an out-of-range immediate shift" {
   let builder : @vcode.Builder[AArch64Inst] = @vcode.Builder::new(
     "bad_immediate_shift",
