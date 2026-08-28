@@ -90,6 +90,7 @@ fn build_wasmoon_aarch64_target(
   semantic : @semantic_machv.Function,
   environment : WasmoonSemanticEnvironment,
   record_metrics? : Bool = false,
+  compilation_session? : @aarch64_target.CompilationSession = @aarch64_target.CompilationSession::new(),
 ) -> AArch64TargetCompilation raise JitPipelineError {
   build_aarch64_target(
     semantic,
@@ -98,6 +99,7 @@ fn build_wasmoon_aarch64_target(
     },
     allocation_symbols=wasmoon_allocation_symbols(environment),
     record_metrics~,
+    compilation_session~,
     root_scope_symbols=(
       @semantic_machv.ExternalSymbol::new(gc_push_root_scope_symbol()),
       @semantic_machv.ExternalSymbol::new(gc_pop_root_scope_symbol()),
@@ -110,6 +112,7 @@ fn build_wasmoon_x64_target(
   semantic : @semantic_machv.Function,
   environment : WasmoonSemanticEnvironment,
   record_metrics? : Bool = false,
+  compilation_session? : @x64_target.CompilationSession = @x64_target.CompilationSession::new(),
 ) -> X64TargetCompilation raise JitPipelineError {
   build_x64_target(
     semantic,
@@ -118,6 +121,7 @@ fn build_wasmoon_x64_target(
     },
     allocation_symbols=wasmoon_allocation_symbols(environment),
     record_metrics~,
+    compilation_session~,
     root_scope_symbols=(
       @semantic_machv.ExternalSymbol::new(gc_push_root_scope_symbol()),
       @semantic_machv.ExternalSymbol::new(gc_pop_root_scope_symbol()),
@@ -227,6 +231,7 @@ fn compile_wasm_body_aarch64_target(
   use_subtype_indirect_check : Bool,
   canonical_type_indices : Array[Int],
   record_metrics? : Bool = false,
+  compilation_session? : @aarch64_target.CompilationSession = @aarch64_target.CompilationSession::new(),
 ) -> AArch64TargetCompilation raise JitPipelineError {
   let environment_tick = detail_metrics_tick(record_metrics)
   let environment = wasmoon_semantic_environment(
@@ -247,7 +252,12 @@ fn compile_wasm_body_aarch64_target(
     )
   }
   record_target_stage(SemanticLowering, semantic_lower_tick) |> ignore
-  build_wasmoon_aarch64_target(semantic, environment, record_metrics~)
+  build_wasmoon_aarch64_target(
+    semantic,
+    environment,
+    record_metrics~,
+    compilation_session~,
+  )
 }
 
 ///|
@@ -257,6 +267,7 @@ fn compile_wasm_body_x64_target(
   use_subtype_indirect_check : Bool,
   canonical_type_indices : Array[Int],
   record_metrics? : Bool = false,
+  compilation_session? : @x64_target.CompilationSession = @x64_target.CompilationSession::new(),
 ) -> X64TargetCompilation raise JitPipelineError {
   let environment_tick = detail_metrics_tick(record_metrics)
   let environment = wasmoon_semantic_environment(
@@ -277,7 +288,12 @@ fn compile_wasm_body_x64_target(
     )
   }
   record_target_stage(SemanticLowering, semantic_lower_tick) |> ignore
-  build_wasmoon_x64_target(semantic, environment, record_metrics~)
+  build_wasmoon_x64_target(
+    semantic,
+    environment,
+    record_metrics~,
+    compilation_session~,
+  )
 }
 
 ///|

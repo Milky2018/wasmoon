@@ -47,6 +47,12 @@ pub fn AllocationPlan::value_location(Self, Int) -> Location?
 pub impl Show for AllocationPlan
 pub impl @debug.Debug for AllocationPlan
 
+pub struct AllocationSession {
+  // private fields
+}
+pub fn[F : FunctionView] AllocationSession::allocate_function(Self, F, MachineEnv, config? : RegallocConfig) -> AllocationPlan raise VerifyError
+pub fn AllocationSession::new() -> Self
+
 pub struct BundleAllocationStatistics {
   mut queue_pops : Int
   mut register_probes : Int

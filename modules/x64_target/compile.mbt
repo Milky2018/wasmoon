@@ -18,7 +18,25 @@ pub impl Show for X64CompileError with fn output(self, logger) {
 ///
 /// `on_event` is an observation-only seam. It must not mutate `function` or any
 /// compiler object reachable while the callback runs.
-fn compile_selected_function(
+pub struct CompilationSession {
+  priv allocation : @vcode_regalloc.AllocationSession
+  priv allocation_environment : @vcode_regalloc.VCodeAllocationEnvironment
+}
+
+///|
+pub fn CompilationSession::new() -> CompilationSession {
+  {
+    allocation: @vcode_regalloc.AllocationSession::new(),
+    allocation_environment: @vcode_regalloc.VCodeAllocationEnvironment::new(
+      allocatable_physical_regs(),
+      spill_scratch_regs(),
+    ).with_fixed_operand_regs(fixed_operand_only_regs()),
+  }
+}
+
+///|
+fn CompilationSession::compile_selected_function(
+  self : CompilationSession,
   function : @vcode.Function[X64Inst],
   on_event? : (@vcode.TargetCompileEvent) -> Unit = fn(_) { () },
   verify_allocation? : Bool = true,
@@ -34,6 +52,8 @@ fn compile_selected_function(
     }),
     on_statistics=Some(statistics => on_event(RegallocLoopMeasured(statistics))),
     verify_allocation~,
+    allocation_session=self.allocation,
+    allocation_environment=self.allocation_environment,
   ) catch {
     error => raise AllocationFailed(cause=error)
   }
@@ -58,7 +78,23 @@ pub fn compile_selected(
   on_event? : (@vcode.TargetCompileEvent) -> Unit = fn(_) { () },
   verify_allocation? : Bool = true,
 ) -> (@code_object.UnlinkedCodeObject, Int) raise X64CompileError {
-  compile_selected_function(
+  CompilationSession::new().compile_selected_function(
+    selected.constructed.function,
+    on_event~,
+    verify_allocation~,
+  )
+}
+
+///|
+/// Compile selected VCode while retaining allocator scratch capacity for the
+/// next serial call on this session.
+pub fn CompilationSession::compile_selected(
+  self : CompilationSession,
+  selected : SelectedFunction,
+  on_event? : (@vcode.TargetCompileEvent) -> Unit = fn(_) { () },
+  verify_allocation? : Bool = true,
+) -> (@code_object.UnlinkedCodeObject, Int) raise X64CompileError {
+  self.compile_selected_function(
     selected.constructed.function,
     on_event~,
     verify_allocation~,
@@ -75,5 +111,9 @@ pub fn compile(
   verify_vcode(function) catch {
     error => raise TargetValidationFailed(cause=error)
   }
-  compile_selected_function(function, on_event~, verify_allocation~)
+  CompilationSession::new().compile_selected_function(
+    function,
+    on_event~,
+    verify_allocation~,
+  )
 }

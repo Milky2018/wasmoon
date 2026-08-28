@@ -647,6 +647,12 @@ pub struct MemoryInfo {
 }
 pub fn MemoryInfo::MemoryInfo(Int64, Int64, Int?) -> Self
 
+pub struct NativeCompiler {
+  // private fields
+}
+pub fn NativeCompiler::compile_wasm_body_artifact_function(Self, @milkir.Function, @wasm_milkir.WasmValidationContext, function_index~ : Int, signature~ : @machv.Signature, use_subtype_indirect_check? : Bool, canonical_type_indices? : Array[Int]) -> @artifact.FunctionCode raise JitPipelineError
+pub fn NativeCompiler::new(NativeTarget) -> Self
+
 type NativeExecutionState
 pub fn NativeExecutionState::NativeExecutionState() -> Self
 pub fn NativeExecutionState::active_depth(Self) -> Int

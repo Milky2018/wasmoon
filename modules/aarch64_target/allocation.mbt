@@ -247,13 +247,15 @@ fn allocate_verified(
   on_phase? : ((String?) -> Unit)? = None,
   on_statistics? : ((@vcode.RegallocLoopStatistics) -> Unit)? = None,
   verify_allocation? : Bool = true,
+  allocation_session? : @vcode_regalloc.AllocationSession = @vcode_regalloc.AllocationSession::new(),
+  allocation_environment? : @vcode_regalloc.VCodeAllocationEnvironment = @vcode_regalloc.VCodeAllocationEnvironment::new(
+    allocatable_physical_regs(),
+    spill_scratch_regs(),
+  ),
 ) -> @vcode.Allocation raise AArch64AllocationError {
-  let allocation = @vcode_regalloc.allocate_selected_vcode(
+  let allocation = allocation_session.allocate_selected_vcode(
     function,
-    @vcode_regalloc.VCodeAllocationEnvironment::new(
-      allocatable_physical_regs(),
-      spill_scratch_regs(),
-    ),
+    allocation_environment,
     on_phase~,
     on_statistics~,
     verify=verify_allocation,

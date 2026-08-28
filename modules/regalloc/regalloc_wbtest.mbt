@@ -670,7 +670,8 @@ test "production register allocation index orders updates by range end" {
       location: None,
     },
   ]
-  let allocations = RegisterAllocationIndex::new(
+  let allocations = RegisterAllocationIndex::for_session(
+    AllocationSession::new(),
     1,
     segments,
     [0, 1, 0, 0],

@@ -26,6 +26,14 @@ priv struct RegisterAllocationIndex {
 }
 
 ///|
+fn[T] reset_dense_array(array : Array[T], length : Int, value : T) -> Unit {
+  array.clear()
+  for _ in 0..<length {
+    array.push(value)
+  }
+}
+
+///|
 fn program_point_block_order(
   point : ProgramPoint,
   block_order : Array[Int],
@@ -54,28 +62,43 @@ fn compare_cached_points(
 }
 
 ///|
-fn RegisterAllocationIndex::new(
+fn RegisterAllocationIndex::for_session(
+  session : AllocationSession,
   register_count : Int,
   segments : Array[AllocationSegment],
   segment_owner : Array[Int],
   owner_run_count : Array[Int],
   block_order : Array[Int],
 ) -> RegisterAllocationIndex {
-  let index = {
+  session.occupied_block_order.clear()
+  for order in block_order {
+    session.occupied_block_order.push(order)
+  }
+  reset_dense_array(session.occupied_roots, register_count, -1)
+  reset_dense_array(session.occupied_left, segments.length(), -1)
+  reset_dense_array(session.occupied_right, segments.length(), -1)
+  reset_dense_array(session.occupied_parent, segments.length(), -1)
+  reset_dense_array(session.occupied_previous, segments.length(), -1)
+  reset_dense_array(session.occupied_next, segments.length(), -1)
+  reset_dense_array(session.occupied_start_blocks, segments.length(), 0)
+  reset_dense_array(session.occupied_start_instructions, segments.length(), 0)
+  reset_dense_array(session.occupied_end_blocks, segments.length(), 0)
+  reset_dense_array(session.occupied_end_instructions, segments.length(), 0)
+  let index : RegisterAllocationIndex = {
     segments,
     segment_owner,
     owner_run_count,
-    block_order: block_order.copy(),
-    roots: Array::make(register_count, -1),
-    left: Array::make(segments.length(), -1),
-    right: Array::make(segments.length(), -1),
-    parent: Array::make(segments.length(), -1),
-    previous_order: Array::make(segments.length(), -1),
-    next_order: Array::make(segments.length(), -1),
-    start_block_order: Array::make(segments.length(), 0),
-    start_instruction: Array::make(segments.length(), 0),
-    end_block_order: Array::make(segments.length(), 0),
-    end_instruction: Array::make(segments.length(), 0),
+    block_order: session.occupied_block_order,
+    roots: session.occupied_roots,
+    left: session.occupied_left,
+    right: session.occupied_right,
+    parent: session.occupied_parent,
+    previous_order: session.occupied_previous,
+    next_order: session.occupied_next,
+    start_block_order: session.occupied_start_blocks,
+    start_instruction: session.occupied_start_instructions,
+    end_block_order: session.occupied_end_blocks,
+    end_instruction: session.occupied_end_instructions,
   }
   for segment in segments {
     index.refresh_segment(segment.id)

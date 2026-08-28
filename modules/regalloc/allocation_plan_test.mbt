@@ -1143,3 +1143,40 @@ test "an input-validation rejection closes its attributed phase" {
   inspect(raised, content="true")
   inspect(events.join(","), content="input_validation,END")
 }
+
+///|
+test "allocation session resets scratch between serial functions" {
+  let environment = MachineEnv::new([int_reg(0), int_reg(1)], [int_reg(2)])
+  let larger : TestFunction = {
+    value_count: 3,
+    instructions: [
+      [Operand::def(value(0)), Operand::def(value(1))],
+      [Operand::use_reg(value(0)), Operand::def(value(2))],
+      [Operand::use_reg(value(1)), Operand::use_reg(value(2))],
+    ],
+    block_parameters: [],
+  }
+  let smaller : TestFunction = {
+    value_count: 1,
+    instructions: [[Operand::def(value(0))], [Operand::use_reg(value(0))]],
+    block_parameters: [],
+  }
+  let expected_larger = allocate_function(larger, environment).to_string()
+  let expected_smaller = allocate_function(smaller, environment).to_string()
+  let session = AllocationSession::new()
+  inspect(
+    session.allocate_function(larger, environment).to_string() ==
+    expected_larger,
+    content="true",
+  )
+  inspect(
+    session.allocate_function(smaller, environment).to_string() ==
+    expected_smaller,
+    content="true",
+  )
+  inspect(
+    session.allocate_function(larger, environment).to_string() ==
+    expected_larger,
+    content="true",
+  )
+}

@@ -223,6 +223,31 @@ fn artifact_function_from_code_object(
 ///|
 /// Compile one verified Wasm MilkIR body directly into the final unlinked
 /// artifact representation. Symbolic relocations are retained unchanged.
+pub struct NativeCompiler {
+  priv target : NativeTarget
+  priv aarch64 : @aarch64_target.CompilationSession?
+  priv x64 : @x64_target.CompilationSession?
+}
+
+///|
+pub fn NativeCompiler::new(target : NativeTarget) -> NativeCompiler {
+  match target {
+    AArch64 =>
+      {
+        target,
+        aarch64: Some(@aarch64_target.CompilationSession::new()),
+        x64: None,
+      }
+    X64 =>
+      {
+        target,
+        aarch64: None,
+        x64: Some(@x64_target.CompilationSession::new()),
+      }
+  }
+}
+
+///|
 pub fn compile_wasm_body_artifact_function(
   function : @milkir.Function,
   validation_context : @wasm_milkir.WasmValidationContext,
@@ -232,10 +257,32 @@ pub fn compile_wasm_body_artifact_function(
   use_subtype_indirect_check? : Bool = true,
   canonical_type_indices? : Array[Int] = [],
 ) -> @artifact.FunctionCode raise JitPipelineError {
+  NativeCompiler::new(target).compile_wasm_body_artifact_function(
+    function,
+    validation_context,
+    function_index~,
+    signature~,
+    use_subtype_indirect_check~,
+    canonical_type_indices~,
+  )
+}
+
+///|
+/// Compile one function while retaining target allocator scratch capacity for
+/// the next serial call on this compiler.
+pub fn NativeCompiler::compile_wasm_body_artifact_function(
+  self : NativeCompiler,
+  function : @milkir.Function,
+  validation_context : @wasm_milkir.WasmValidationContext,
+  function_index~ : Int,
+  signature~ : @semantic_machv.Signature,
+  use_subtype_indirect_check? : Bool = true,
+  canonical_type_indices? : Array[Int] = [],
+) -> @artifact.FunctionCode raise JitPipelineError {
   if function_index < 0 {
     raise InvalidFunctionIndex(index=function_index)
   }
-  match target {
+  match self.target {
     AArch64 => {
       let compiled = compile_wasm_body_aarch64_target(
         function,
@@ -243,6 +290,7 @@ pub fn compile_wasm_body_artifact_function(
         use_subtype_indirect_check,
         canonical_type_indices,
         record_metrics=@perf.enabled(),
+        compilation_session=self.aarch64.unwrap(),
       )
       let packaging_tick = detail_metrics_tick(@perf.enabled())
       let result = artifact_function_from_code_object(
@@ -261,6 +309,7 @@ pub fn compile_wasm_body_artifact_function(
         use_subtype_indirect_check,
         canonical_type_indices,
         record_metrics=@perf.enabled(),
+        compilation_session=self.x64.unwrap(),
       )
       let packaging_tick = detail_metrics_tick(@perf.enabled())
       let result = artifact_function_from_code_object(

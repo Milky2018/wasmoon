@@ -25,6 +25,12 @@ pub fn VCodeAllocationError::to_string(Self) -> String
 pub impl Show for VCodeAllocationError
 
 // Types and methods
+pub struct AllocationSession {
+  // private fields
+}
+pub fn[Inst] AllocationSession::allocate_selected_vcode(Self, @vcode.Function[Inst], VCodeAllocationEnvironment, on_phase? : ((String?) -> Unit)?, on_statistics? : ((@vcode.RegallocLoopStatistics) -> Unit)?, verify? : Bool) -> @vcode.Allocation raise VCodeAllocationError
+pub fn AllocationSession::new() -> Self
+
 pub struct VCodeAllocationEnvironment {
   allocatable_regs : Array[@vcode.PhysicalReg]
   spill_scratch_regs : Array[@vcode.PhysicalReg]

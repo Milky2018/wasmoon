@@ -481,6 +481,12 @@ pub fn CallResultLocation::equal(Self, Self) -> Bool
 pub fn CallResultLocation::not_equal(Self, Self) -> Bool
 pub fn CallResultLocation::to_repr(Self) -> @debug.Repr
 
+pub struct CompilationSession {
+  // private fields
+}
+pub fn CompilationSession::compile_selected(Self, SelectedFunction, on_event? : (@vcode.TargetCompileEvent) -> Unit, verify_allocation? : Bool) -> (@code_object.UnlinkedCodeObject, Int) raise AArch64CompileError
+pub fn CompilationSession::new() -> Self
+
 pub(all) enum GprWidth {
   W32
   W64

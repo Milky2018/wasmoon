@@ -30,26 +30,71 @@ priv struct AllocationContext {
 }
 
 ///|
-priv struct BundleQueueEntry {
-  bundle : Int
-  priority : Int
-  weight : Int
-  hint : PhysicalReg?
-}
-
-///|
 priv struct BundleQueue {
-  items : Array[BundleQueueEntry]
+  items : Array[Int]
+  priorities : Array[Int]
+  weights : Array[Int]
   in_queue : Array[Bool]
-  prioritize_weight : Bool
+  hints : Array[PhysicalReg?]
+  mut prioritize_weight : Bool
 }
 
 ///|
-fn BundleQueue::new(
+pub fn AllocationSession::new() -> AllocationSession {
+  {
+    context_priorities: [],
+    context_weights: [],
+    context_fixed_constraints: [],
+    context_boundary_costs: [],
+    context_minimals: [],
+    context_spill_sets: [],
+    segment_owner: [],
+    segment_spill_set: [],
+    owner_run_count: [],
+    occupied_block_order: [],
+    occupied_roots: [],
+    occupied_left: [],
+    occupied_right: [],
+    occupied_parent: [],
+    occupied_previous: [],
+    occupied_next: [],
+    occupied_start_blocks: [],
+    occupied_start_instructions: [],
+    occupied_end_blocks: [],
+    occupied_end_instructions: [],
+    occupied_stack: [],
+    preferred_by_value: [],
+    conflict_marks: [],
+    probe_conflicts: [],
+    eviction_conflicts: [],
+    register_order: [],
+    register_order_marks: [],
+    queue_items: [],
+    queue_priorities: [],
+    queue_weights: [],
+    queue_in_queue: [],
+    queue_hints: [],
+  }
+}
+
+///|
+fn BundleQueue::for_session(
+  session : AllocationSession,
   bundle_count : Int,
-  prioritize_weight? : Bool = false,
 ) -> BundleQueue {
-  { items: [], in_queue: Array::make(bundle_count, false), prioritize_weight, }
+  reset_dense_array(session.queue_in_queue, bundle_count, false)
+  session.queue_items.clear()
+  session.queue_priorities.clear()
+  session.queue_weights.clear()
+  session.queue_hints.clear()
+  {
+    items: session.queue_items,
+    priorities: session.queue_priorities,
+    weights: session.queue_weights,
+    in_queue: session.queue_in_queue,
+    hints: session.queue_hints,
+    prioritize_weight: false,
+  }
 }
 
 ///|
@@ -60,17 +105,30 @@ fn BundleQueue::ensure_slot(self : BundleQueue, bundle : Int) -> Unit {
 }
 
 ///|
-fn BundleQueue::higher(
+fn BundleQueue::reset(
   self : BundleQueue,
-  lhs : BundleQueueEntry,
-  rhs : BundleQueueEntry,
-) -> Bool {
-  if self.prioritize_weight && lhs.weight != rhs.weight {
-    lhs.weight > rhs.weight
-  } else if lhs.priority != rhs.priority {
-    lhs.priority > rhs.priority
+  bundle_count : Int,
+  prioritize_weight : Bool,
+) -> Unit {
+  self.items.clear()
+  self.priorities.clear()
+  self.weights.clear()
+  self.in_queue.clear()
+  self.hints.clear()
+  for _ in 0..<bundle_count {
+    self.in_queue.push(false)
+  }
+  self.prioritize_weight = prioritize_weight
+}
+
+///|
+fn BundleQueue::higher(self : BundleQueue, lhs : Int, rhs : Int) -> Bool {
+  if self.prioritize_weight && self.weights[lhs] != self.weights[rhs] {
+    self.weights[lhs] > self.weights[rhs]
+  } else if self.priorities[lhs] != self.priorities[rhs] {
+    self.priorities[lhs] > self.priorities[rhs]
   } else {
-    lhs.bundle < rhs.bundle
+    self.items[lhs] < self.items[rhs]
   }
 }
 
@@ -86,35 +144,49 @@ fn BundleQueue::push(
     return
   }
   self.in_queue[bundle] = true
-  self.items.push({
-    bundle,
-    priority: context.priorities[bundle],
-    weight: context.weights[bundle],
-    hint,
-  })
+  self.items.push(bundle)
+  self.priorities.push(context.priorities[bundle])
+  self.weights.push(context.weights[bundle])
+  self.hints.push(hint)
   let mut index = self.items.length() - 1
   while index > 0 {
     let parent = (index - 1) / 2
-    if !self.higher(self.items[index], self.items[parent]) {
+    if !self.higher(index, parent) {
       break
     }
     let temporary = self.items[index]
     self.items[index] = self.items[parent]
     self.items[parent] = temporary
+    let priority = self.priorities[index]
+    self.priorities[index] = self.priorities[parent]
+    self.priorities[parent] = priority
+    let weight = self.weights[index]
+    self.weights[index] = self.weights[parent]
+    self.weights[parent] = weight
+    let hint = self.hints[index]
+    self.hints[index] = self.hints[parent]
+    self.hints[parent] = hint
     index = parent
   }
 }
 
 ///|
-fn BundleQueue::pop(self : BundleQueue) -> BundleQueueEntry? {
+fn BundleQueue::pop(self : BundleQueue) -> (Int, PhysicalReg?)? {
   if self.items.is_empty() {
     return None
   }
   let first = self.items[0]
-  self.in_queue[first.bundle] = false
+  self.in_queue[first] = false
+  let hint = self.hints[0]
   let last = self.items.pop().unwrap()
+  let last_priority = self.priorities.pop().unwrap()
+  let last_weight = self.weights.pop().unwrap()
+  let last_hint = self.hints.pop().unwrap()
   if !self.items.is_empty() {
     self.items[0] = last
+    self.priorities[0] = last_priority
+    self.weights[0] = last_weight
+    self.hints[0] = last_hint
     let mut index = 0
     while true {
       let left = index * 2 + 1
@@ -123,20 +195,28 @@ fn BundleQueue::pop(self : BundleQueue) -> BundleQueueEntry? {
       }
       let right = left + 1
       let mut higher = left
-      if right < self.items.length() &&
-        self.higher(self.items[right], self.items[left]) {
+      if right < self.items.length() && self.higher(right, left) {
         higher = right
       }
-      if !self.higher(self.items[higher], self.items[index]) {
+      if !self.higher(higher, index) {
         break
       }
       let temporary = self.items[index]
       self.items[index] = self.items[higher]
       self.items[higher] = temporary
+      let priority = self.priorities[index]
+      self.priorities[index] = self.priorities[higher]
+      self.priorities[higher] = priority
+      let weight = self.weights[index]
+      self.weights[index] = self.weights[higher]
+      self.weights[higher] = weight
+      let hint = self.hints[index]
+      self.hints[index] = self.hints[higher]
+      self.hints[higher] = hint
       index = higher
     }
   }
-  Some(first)
+  Some((first, hint))
 }
 
 ///|
@@ -193,17 +273,24 @@ fn allocation_bundle_metrics(
 }
 
 ///|
-fn AllocationContext::new(
+fn AllocationContext::for_session(
   initial_segments : Array[Array[Int]],
+  session : AllocationSession,
 ) -> AllocationContext {
+  session.context_priorities.clear()
+  session.context_weights.clear()
+  session.context_fixed_constraints.clear()
+  session.context_boundary_costs.clear()
+  session.context_minimals.clear()
+  session.context_spill_sets.clear()
   {
     segments: initial_segments,
-    priorities: [],
-    weights: [],
-    fixed_constraints: [],
-    boundary_costs: [],
-    minimals: [],
-    spill_sets: [],
+    priorities: session.context_priorities,
+    weights: session.context_weights,
+    fixed_constraints: session.context_fixed_constraints,
+    boundary_costs: session.context_boundary_costs,
+    minimals: session.context_minimals,
+    spill_sets: session.context_spill_sets,
     states: [],
   }
 }
@@ -252,11 +339,14 @@ fn allocation_segment_priority(segment : AllocationSegment) -> Int {
 fn build_allocation_context(
   plan : ProductionBundlePlan,
   segments : Array[AllocationSegment],
+  session : AllocationSession,
 ) -> (AllocationContext, Array[Int], Array[SpillSet], Array[Int]) {
-  let context = AllocationContext::new(plan.bundle_segments)
-  let segment_owner = Array::make(segments.length(), -1)
+  let context = AllocationContext::for_session(plan.bundle_segments, session)
+  let segment_owner = session.segment_owner
+  reset_dense_array(segment_owner, segments.length(), -1)
   let spill_sets : Array[SpillSet] = []
-  let segment_spill_set = Array::make(segments.length(), -1)
+  let segment_spill_set = session.segment_spill_set
+  reset_dense_array(segment_spill_set, segments.length(), -1)
   for bundle, segment_ids in context.segments {
     let spill_set = spill_sets.length()
     context.add_bundle(segment_ids, segments, spill_set) |> ignore
@@ -1073,6 +1163,7 @@ fn[F : FunctionView] allocate_bundles(
   segments_by_value : Array[Array[Int]],
   loop_depths : Array[Int],
   bundle_plan : ProductionBundlePlan,
+  session : AllocationSession,
 ) -> (
   AllocationContext,
   Array[Int],
@@ -1082,48 +1173,54 @@ fn[F : FunctionView] allocate_bundles(
 ) raise VerifyError {
   let statistics = BundleAllocationStatistics::new()
   let (context, segment_owner, spill_sets, segment_spill_set) = build_allocation_context(
-    bundle_plan, segments,
+    bundle_plan, segments, session,
   )
-  let owner_run_count = Array::make(context.states.length(), 0)
-  let occupied = RegisterAllocationIndex::new(
+  let owner_run_count = session.owner_run_count
+  reset_dense_array(owner_run_count, context.states.length(), 0)
+  let occupied = RegisterAllocationIndex::for_session(
+    session,
     environment.allocatable_regs.length(),
     segments,
     segment_owner,
     owner_run_count,
     ranges.block_order,
   )
-  let occupied_stack : Array[Int] = []
+  let occupied_stack = session.occupied_stack
+  occupied_stack.clear()
   let clobbers = build_register_clobber_index(
     function,
     environment,
     ranges.block_order,
   )
-  let preferred_by_value : Array[PhysicalReg?] = Array::make(
-    function.value_count(),
-    None,
-  )
-  let conflict_marks : Array[Int] = Array::make(context.states.length(), 0)
-  let probe_conflicts : Array[Int] = []
+  let preferred_by_value = session.preferred_by_value
+  reset_dense_array(preferred_by_value, function.value_count(), None)
+  let conflict_marks = session.conflict_marks
+  reset_dense_array(conflict_marks, context.states.length(), 0)
+  let probe_conflicts = session.probe_conflicts
+  probe_conflicts.clear()
   let probe = BundleRegisterProbe::new(probe_conflicts)
-  let eviction_conflicts : Array[Int] = []
+  let eviction_conflicts = session.eviction_conflicts
+  eviction_conflicts.clear()
   let register_indexes : Map[(Int, Int), Int] = Map([])
   for index, reg in environment.allocatable_regs {
     register_indexes[physical_reg_key(reg)] = index
   }
-  let register_order : Array[Int] = []
-  let register_order_marks = Array::make(
+  let register_order = session.register_order
+  register_order.clear()
+  let register_order_marks = session.register_order_marks
+  reset_dense_array(
+    register_order_marks,
     environment.allocatable_regs.length(),
     false,
   )
   let mut probe_id = 0
-  let queue = BundleQueue::new(context.states.length())
+  let queue = BundleQueue::for_session(session, context.states.length())
   for bundle in 0..<context.states.length() {
     queue.push(bundle, context, None)
   }
   statistics.max_queue_length = queue.items.length()
-  while queue.pop() is Some(entry) {
+  while queue.pop() is Some((bundle, queue_hint)) {
     statistics.queue_pops = statistics.queue_pops + 1
-    let bundle = entry.bundle
     if !(context.states[bundle] is BundlePending) {
       continue
     }
@@ -1132,7 +1229,7 @@ fn[F : FunctionView] allocate_bundles(
       context,
       match spill_sets[context.spill_sets[bundle]].hint {
         Some(reg) => Some(reg)
-        None => entry.hint
+        None => queue_hint
       },
       segments,
       environment,
@@ -1305,10 +1402,8 @@ fn[F : FunctionView] allocate_bundles(
       queue.items.length(),
     )
   }
-  let second_chance = BundleQueue::new(
-    context.states.length(),
-    prioritize_weight=true,
-  )
+  queue.reset(context.states.length(), true)
+  let second_chance = queue
   for bundle in 0..<context.states.length() {
     if context.states[bundle] is BundleDeferredSpill {
       if spill_sets[context.spill_sets[bundle]].spill_bundle == Some(bundle) {
@@ -1321,8 +1416,7 @@ fn[F : FunctionView] allocate_bundles(
       )
     }
   }
-  while second_chance.pop() is Some(entry) {
-    let bundle = entry.bundle
+  while second_chance.pop() is Some((bundle, _)) {
     guard context.states[bundle] is BundleDeferredSpill else { continue }
     statistics.second_chance_attempts = statistics.second_chance_attempts + 1
     bundle_register_order(

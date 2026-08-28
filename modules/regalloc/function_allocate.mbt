@@ -20,12 +20,28 @@ fn RegisterClobberIndex::new(register_count : Int) -> RegisterClobberIndex {
 }
 
 ///|
+fn RegisterClobberIndex::reset(
+  self : RegisterClobberIndex,
+  register_count : Int,
+) -> Unit {
+  while self.by_register.length() < register_count {
+    self.by_register.push({ points: [], block_orders: [], instructions: [], })
+  }
+  for register in self.by_register {
+    register.points.clear()
+    register.block_orders.clear()
+    register.instructions.clear()
+  }
+}
+
+///|
 fn[F : FunctionView] build_register_clobber_index(
   function : F,
   environment : MachineEnv,
   block_order : Array[Int],
+  index? : RegisterClobberIndex = RegisterClobberIndex::new(0),
 ) -> RegisterClobberIndex {
-  let index = RegisterClobberIndex::new(environment.allocatable_regs.length())
+  index.reset(environment.allocatable_regs.length())
   let register_indexes : Map[(Int, Int), Int] = Map([])
   for register, reg in environment.allocatable_regs {
     register_indexes[physical_reg_key(reg)] = register
@@ -230,9 +246,10 @@ fn[F : FunctionView] verify_operand_preferences(
 fn[F : FunctionView] run_allocation_phases(
   function : F,
   environment : MachineEnv,
+  session : AllocationSession,
   config : RegallocConfig,
 ) -> AllocationPlan raise VerifyError {
-  let plan = allocate_bundle_plan(function, environment, config)
+  let plan = allocate_bundle_plan(function, environment, session, config)
   config.enter_phase(Some(EditResolution))
   resolve_instruction_edits(plan, environment)
   if config.verify() {
@@ -255,11 +272,23 @@ pub fn[F : FunctionView] allocate_function(
   environment : MachineEnv,
   config? : RegallocConfig = RegallocConfig(),
 ) -> AllocationPlan raise VerifyError {
+  AllocationSession::new().allocate_function(function, environment, config~)
+}
+
+///|
+/// Allocate one function while retaining scratch capacity for the next serial
+/// call on this session.
+pub fn[F : FunctionView] AllocationSession::allocate_function(
+  self : AllocationSession,
+  function : F,
+  environment : MachineEnv,
+  config? : RegallocConfig = RegallocConfig(),
+) -> AllocationPlan raise VerifyError {
   let plan = {
     errdefer config.enter_phase(None)
     config.enter_phase(Some(InputValidation))
     verify_operand_preferences(function, environment)
-    run_allocation_phases(function, environment, config)
+    run_allocation_phases(function, environment, self, config)
   }
   config.enter_phase(None)
   plan

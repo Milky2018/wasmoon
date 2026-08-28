@@ -138,7 +138,18 @@ fn add_materialized_transfer(
 /// The caller must not mutate `function` between validation and this call.
 /// Prefer `allocate_vcode` unless validation is owned by an aggregate compile
 /// pipeline.
-pub fn[Inst] allocate_selected_vcode(
+pub struct AllocationSession {
+  priv core : @regalloc.AllocationSession
+}
+
+///|
+pub fn AllocationSession::new() -> AllocationSession {
+  { core: @regalloc.AllocationSession::new(), }
+}
+
+///|
+pub fn[Inst] AllocationSession::allocate_selected_vcode(
+  self : AllocationSession,
   function : @vcode.Function[Inst],
   environment : VCodeAllocationEnvironment,
   on_phase? : ((String?) -> Unit)? = None,
@@ -180,7 +191,7 @@ pub fn[Inst] allocate_selected_vcode(
     notify(Some("function_view"))
   }
   let function_view = VCodeFunctionView::new(function)
-  let plan = @regalloc.allocate_function(
+  let plan = self.core.allocate_function(
     function_view,
     @regalloc.MachineEnv::new(
       environment.allocatable_regs.map(reg => to_regalloc_preg(reg)),
@@ -308,6 +319,24 @@ pub fn[Inst] allocate_selected_vcode(
     }
   }
   allocation
+}
+
+///|
+/// Allocate one selected function with an ephemeral session.
+pub fn[Inst] allocate_selected_vcode(
+  function : @vcode.Function[Inst],
+  environment : VCodeAllocationEnvironment,
+  on_phase? : ((String?) -> Unit)? = None,
+  on_statistics? : ((@vcode.RegallocLoopStatistics) -> Unit)? = None,
+  verify? : Bool = true,
+) -> @vcode.Allocation raise VCodeAllocationError {
+  AllocationSession::new().allocate_selected_vcode(
+    function,
+    environment,
+    on_phase~,
+    on_statistics~,
+    verify~,
+  )
 }
 
 ///|

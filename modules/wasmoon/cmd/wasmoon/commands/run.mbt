@@ -1864,6 +1864,7 @@ fn compile_validated_module_to_jit(
   }
   let imports : Array[@artifact.ImportIdentity] = []
   let functions : Array[@artifact.FunctionCode] = []
+  let native_compiler = @wasmoon_jit.NativeCompiler::new(native_target)
   let mut import_func_idx = 0
   for imp in mod_.imports {
     if imp.desc is Func(type_idx) {
@@ -1984,10 +1985,9 @@ fn compile_validated_module_to_jit(
       func_idx=Some(func_idx),
       func_name=Some(func_name),
     )
-    let entry = @wasmoon_jit.compile_wasm_body_artifact_function(
+    let entry = native_compiler.compile_wasm_body_artifact_function(
       ir_func,
       wasm_validation_context,
-      native_target,
       function_index=func_idx,
       signature=@wasmoon_jit.wasm_function_signature(func_type),
       use_subtype_indirect_check~,

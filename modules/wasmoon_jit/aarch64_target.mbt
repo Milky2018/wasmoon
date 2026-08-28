@@ -48,6 +48,7 @@ fn build_aarch64_target(
   environment_field_path? : (@semantic_machv.EnvironmentField) -> Array[Int]?,
   allocation_symbols? : Array[@semantic_machv.ExternalSymbol] = [],
   record_metrics? : Bool = false,
+  compilation_session? : @aarch64_target.CompilationSession = @aarch64_target.CompilationSession::new(),
   root_scope_symbols? : (
     @semantic_machv.ExternalSymbol,
     @semantic_machv.ExternalSymbol,
@@ -85,13 +86,13 @@ fn build_aarch64_target(
   let compiled = try {
     match observer {
       Some(observe) =>
-        @aarch64_target.compile_selected(
+        compilation_session.compile_selected(
           selected,
           on_event=observe,
           verify_allocation=regalloc_validation(),
         )
       None =>
-        @aarch64_target.compile_selected(
+        compilation_session.compile_selected(
           selected,
           verify_allocation=regalloc_validation(),
         )

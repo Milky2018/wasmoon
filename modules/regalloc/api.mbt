@@ -131,6 +131,47 @@ pub struct RegallocConfig {
 }
 
 ///|
+/// Reusable storage for a serial sequence of register-allocation jobs.
+///
+/// A session is intentionally not thread-safe. Independent compilation jobs
+/// must own independent sessions; callers compiling functions serially may
+/// reuse one session to retain scratch capacity between functions.
+pub struct AllocationSession {
+  priv context_priorities : Array[Int]
+  priv context_weights : Array[Int]
+  priv context_fixed_constraints : Array[Bool]
+  priv context_boundary_costs : Array[Int]
+  priv context_minimals : Array[Bool]
+  priv context_spill_sets : Array[Int]
+  priv segment_owner : Array[Int]
+  priv segment_spill_set : Array[Int]
+  priv owner_run_count : Array[Int]
+  priv occupied_block_order : Array[Int]
+  priv occupied_roots : Array[Int]
+  priv occupied_left : Array[Int]
+  priv occupied_right : Array[Int]
+  priv occupied_parent : Array[Int]
+  priv occupied_previous : Array[Int]
+  priv occupied_next : Array[Int]
+  priv occupied_start_blocks : Array[Int]
+  priv occupied_start_instructions : Array[Int]
+  priv occupied_end_blocks : Array[Int]
+  priv occupied_end_instructions : Array[Int]
+  priv occupied_stack : Array[Int]
+  priv preferred_by_value : Array[PhysicalReg?]
+  priv conflict_marks : Array[Int]
+  priv probe_conflicts : Array[Int]
+  priv eviction_conflicts : Array[Int]
+  priv register_order : Array[Int]
+  priv register_order_marks : Array[Bool]
+  priv queue_items : Array[Int]
+  priv queue_priorities : Array[Int]
+  priv queue_weights : Array[Int]
+  priv queue_in_queue : Array[Bool]
+  priv queue_hints : Array[PhysicalReg?]
+}
+
+///|
 pub fn RegallocConfig::RegallocConfig(
   verify? : Bool = true,
   observer? : ((RegallocPhase?) -> Unit)? = None,

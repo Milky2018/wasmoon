@@ -260,6 +260,7 @@ fn compile_component_artifact(
     }
   }
   let functions : Array[@artifact.FunctionCode] = []
+  let native_compiler = @wasmoon_jit.NativeCompiler::new(target)
   for local_index, code in module_.codes {
     let function_index = imported_function_index + local_index
     let function_type = module_.validated_func_type_at(
@@ -274,10 +275,9 @@ fn compile_component_artifact(
     )
     @milkir.optimize_with_level(milkir, @milkir.OptLevel::from_int(opt_level))
     |> ignore
-    let compiled = @wasmoon_jit.compile_wasm_body_artifact_function(
+    let compiled = native_compiler.compile_wasm_body_artifact_function(
       milkir,
       validation_context,
-      target,
       function_index~,
       signature=@wasmoon_jit.wasm_function_signature(function_type),
       use_subtype_indirect_check=true,

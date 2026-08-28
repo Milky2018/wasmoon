@@ -121,7 +121,7 @@ fn test_allocation_context(
   segments : Array[AllocationSegment],
   block_order : Array[Int],
 ) -> AllocationContext {
-  let context = AllocationContext::new([])
+  let context = AllocationContext::for_session([], AllocationSession::new())
   for spill_set, segment_ids in bundle_segments {
     let ordered = segment_ids.copy()
     ordered.sort_by((left, right) => {
@@ -150,7 +150,8 @@ test "range split isolates the use-free gap and preserves spillset lineage" {
   let (segments, segments_by_value) = build_allocation_segments(ranges)
   let owners = [4]
   let spill_sets = [0]
-  let occupied = RegisterAllocationIndex::new(
+  let occupied = RegisterAllocationIndex::for_session(
+    AllocationSession::new(),
     1,
     segments,
     owners,
@@ -243,7 +244,8 @@ test "spill bundle is normalized before conflict probes" {
   add_to_spill_bundle(0, 1, context, owners, spill_sets, segments)
   add_to_spill_bundle(0, 2, context, owners, spill_sets, segments)
   prepare_spill_bundle(1, context, segments, [0, 1])
-  let occupied = RegisterAllocationIndex::new(
+  let occupied = RegisterAllocationIndex::for_session(
+    AllocationSession::new(),
     1,
     segments,
     owners,
@@ -293,10 +295,16 @@ test "spillset defers to second chance after two normal splits" {
     bundle_segments: [[0]],
   }
   let (context, owners, spill_sets, segment_spill_sets) = build_allocation_context(
-    plan, segments,
+    plan,
+    segments,
+    AllocationSession::new(),
   )
-  let queue = BundleQueue::new(context.states.length())
-  let occupied = RegisterAllocationIndex::new(
+  let queue = BundleQueue::for_session(
+    AllocationSession::new(),
+    context.states.length(),
+  )
+  let occupied = RegisterAllocationIndex::for_session(
+    AllocationSession::new(),
     1,
     segments,
     owners,
@@ -394,6 +402,7 @@ test "production allocation assigns an SSA bundle atomically" {
     function,
     MachineEnv::new([{ id: 0, class: Int, }], []),
     ranges,
+    AllocationSession::new(),
   )
   debug_inspect(
     snapshot_bundle_allocation(bundles, segments, segment_owner),
@@ -481,6 +490,7 @@ test "production allocation evicts then splits a cheaper long bundle" {
     [[0], [1], [2]],
     [0],
     plan,
+    AllocationSession::new(),
   )
   debug_inspect(
     snapshot_bundle_allocation(bundles, segments, segment_owner),
@@ -585,7 +595,8 @@ test "production eviction accounts for and removes every conflicting bundle" {
   context.states[1] = BundleReg(r0)
   let owners = [0, 1, 2, 2]
   let owner_run_count = Array::make(context.states.length(), 0)
-  let occupied = RegisterAllocationIndex::new(
+  let occupied = RegisterAllocationIndex::for_session(
+    AllocationSession::new(),
     1,
     segments,
     owners,
@@ -636,7 +647,10 @@ test "production eviction accounts for and removes every conflicting bundle" {
       #|}
     ),
   )
-  let queue = BundleQueue::new(context.states.length())
+  let queue = BundleQueue::for_session(
+    AllocationSession::new(),
+    context.states.length(),
+  )
   evict_bundle_conflicts(
     probe.conflicts,
     context,
@@ -647,8 +661,8 @@ test "production eviction accounts for and removes every conflicting bundle" {
     statistics,
   )
   let requeued : Array[Int] = []
-  while queue.pop() is Some(entry) {
-    requeued.push(entry.bundle)
+  while queue.pop() is Some((bundle, _)) {
+    requeued.push(bundle)
   }
   let remaining : Array[Int] = []
   occupied.seek(0, ProgramPoint(0, -1), occupied_stack)
@@ -704,7 +718,8 @@ test "production eviction accounts for and removes every conflicting bundle" {
       #|}
     ),
   )
-  let cutoff_occupied = RegisterAllocationIndex::new(
+  let cutoff_occupied = RegisterAllocationIndex::for_session(
+    AllocationSession::new(),
     1,
     segments,
     owners,
@@ -778,13 +793,16 @@ test "production bundle queue keeps live extent separate from spill weight" {
     },
   ]
   let context = test_allocation_context([[0], [1], [2]], segments, [0])
-  let queue = BundleQueue::new(context.states.length())
+  let queue = BundleQueue::for_session(
+    AllocationSession::new(),
+    context.states.length(),
+  )
   for bundle in 0..<context.states.length() {
     queue.push(bundle, context, None)
   }
   let order : Array[Int] = []
-  while queue.pop() is Some(entry) {
-    order.push(entry.bundle)
+  while queue.pop() is Some((bundle, _)) {
+    order.push(bundle)
   }
   let snapshot : BundleQueueSnapshot = {
     bundles: snapshot_bundles(context),
@@ -1032,7 +1050,14 @@ test "clobber intersection includes starts and excludes ends" {
       location: None,
     },
   ]
-  let occupied = RegisterAllocationIndex::new(1, segments, [0, 0], [0], [0])
+  let occupied = RegisterAllocationIndex::for_session(
+    AllocationSession::new(),
+    1,
+    segments,
+    [0, 0],
+    [0],
+    [0],
+  )
   debug_inspect(
     index.first_intersection(0, [0, 1], occupied),
     content="Some({ block: 0, inst: 1 })",

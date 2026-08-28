@@ -273,6 +273,7 @@ fn[F : FunctionView] allocate_segments_with_context(
   function : F,
   environment : MachineEnv,
   ranges : LiveRangeSet,
+  session : AllocationSession,
   config? : RegallocConfig = RegallocConfig(),
 ) -> (
   Array[AllocationSegment],
@@ -294,6 +295,7 @@ fn[F : FunctionView] allocate_segments_with_context(
   config.enter_phase(Some(BundleAllocation))
   let (context, segment_owner, spill_sets, segment_spill_set, statistics) = allocate_bundles(
     function, environment, ranges, segments, segments_by_value, loop_depths, bundle_plan,
+    session,
   )
   config.report_bundle_statistics(statistics)
   (
@@ -984,6 +986,7 @@ fn[F : FunctionView] assign_segment_operands(
 fn[F : FunctionView] allocate_bundle_plan(
   function : F,
   environment : MachineEnv,
+  session : AllocationSession,
   config : RegallocConfig,
 ) -> AllocationPlan raise VerifyError {
   config.enter_phase(Some(LiveRanges))
@@ -992,6 +995,7 @@ fn[F : FunctionView] allocate_bundle_plan(
     function,
     environment,
     ranges,
+    session,
     config~,
   )
   for value_segments in segments_by_value {
