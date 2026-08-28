@@ -58,7 +58,11 @@ pub fn compile_selected(
   on_event? : (@vcode.TargetCompileEvent) -> Unit = fn(_) { () },
   verify_allocation? : Bool = true,
 ) -> (@code_object.UnlinkedCodeObject, Int) raise X64CompileError {
-  compile_selected_function(selected.function, on_event~, verify_allocation~)
+  compile_selected_function(
+    selected.constructed.function,
+    on_event~,
+    verify_allocation~,
+  )
 }
 
 ///|

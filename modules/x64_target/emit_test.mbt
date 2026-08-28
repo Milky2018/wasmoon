@@ -38,7 +38,7 @@ test "X64 compile runs the complete target pipeline" {
   let sum = builder.emit(IntBinary(Add), builder.parameters(), [I64])[0]
   builder.return_([sum])
   let selection_events : Array[@vcode.TargetCompileEvent] = []
-  let function = lower(builder.finish(), test_lowering_context(), on_event=event => {
+  let selected = select(builder.finish(), test_lowering_context(), on_event=event => {
     selection_events.push(event)
   })
   debug_inspect(
@@ -46,15 +46,13 @@ test "X64 compile runs the complete target pipeline" {
     content=(
       #|[
       #|  TargetConstructionStarted,
-      #|  TargetValidationStarted,
-      #|  TargetCommonValidationStarted,
-      #|  TargetIsaValidationStarted,
+      #|  TargetSealingStarted,
       #|  TargetSelectionFinished,
       #|]
     ),
   )
   let events : Array[@vcode.TargetCompileEvent] = []
-  let (object, frame_size) = compile(function, on_event=fn(event) {
+  let (object, frame_size) = compile_selected(selected, on_event=fn(event) {
     events.push(event)
   })
   debug_inspect(

@@ -2456,11 +2456,11 @@ fn set_terminator(
 }
 
 ///|
-fn lower_validated_semantic(
+fn construct_validated_semantic(
   function : @semantic.Function,
   context : LoweringContext,
   on_event? : (@vcode.TargetCompileEvent) -> Unit = fn(_) { () },
-) -> @vcode.Function[AArch64Inst] raise AArch64LowerError {
+) -> ConstructedFunction raise AArch64LowerError {
   on_event(TargetAnalysisStarted)
   let signature = function.signature()
   let builder : @vcode.Builder[AArch64Inst] = @vcode.Builder::new_with_protocol(
@@ -2762,17 +2762,30 @@ fn lower_validated_semantic(
   lowered.set_layout(layout) catch {
     error => raise BuildFailure(cause=error)
   }
+  { function: lowered, }
+}
+
+///|
+/// The only constructor is the private exhaustive selector above. The wrapper
+/// cannot be minted from externally supplied or subsequently mutated VCode.
+priv struct ConstructedFunction {
+  function : @vcode.Function[AArch64Inst]
+}
+
+///|
+fn validate_constructed(
+  constructed : ConstructedFunction,
+  on_event : (@vcode.TargetCompileEvent) -> Unit,
+) -> Unit raise AArch64LowerError {
   on_event(TargetValidationStarted)
   on_event(TargetCommonValidationStarted)
-  @vcode.verify_selected(lowered) catch {
+  @vcode.verify_selected(constructed.function) catch {
     error => raise InvalidTarget(cause=CommonFailure(cause=error))
   }
   on_event(TargetIsaValidationStarted)
-  verify_target_vcode(lowered) catch {
+  verify_target_vcode(constructed.function) catch {
     error => raise InvalidTarget(cause=error)
   }
-  on_event(TargetSelectionFinished)
-  lowered
 }
 
 ///|
@@ -2785,14 +2798,17 @@ pub fn lower(
   function.verify() catch {
     error => raise InvalidSemantic(cause=error)
   }
-  lower_validated_semantic(function, context, on_event~)
+  let constructed = construct_validated_semantic(function, context, on_event~)
+  validate_constructed(constructed, on_event)
+  on_event(TargetSelectionFinished)
+  constructed.function
 }
 
 ///|
 /// Opaque evidence that AArch64 instruction selection and VCode validation
 /// completed without exposing the selected function for mutation.
 pub struct SelectedFunction {
-  priv function : @vcode.Function[AArch64Inst]
+  priv constructed : ConstructedFunction
 }
 
 ///|
@@ -2802,7 +2818,13 @@ pub fn select(
   context : LoweringContext,
   on_event? : (@vcode.TargetCompileEvent) -> Unit = fn(_) { () },
 ) -> SelectedFunction raise AArch64LowerError {
-  { function: lower(function, context, on_event~), }
+  function.verify() catch {
+    error => raise InvalidSemantic(cause=error)
+  }
+  let constructed = construct_validated_semantic(function, context, on_event~)
+  on_event(TargetSealingStarted)
+  on_event(TargetSelectionFinished)
+  { constructed, }
 }
 
 ///|
@@ -2816,5 +2838,8 @@ pub fn select_verified(
   function.require_verified() catch {
     error => raise InvalidSemantic(cause=error)
   }
-  { function: lower_validated_semantic(function, context, on_event~), }
+  let constructed = construct_validated_semantic(function, context, on_event~)
+  on_event(TargetSealingStarted)
+  on_event(TargetSelectionFinished)
+  { constructed, }
 }

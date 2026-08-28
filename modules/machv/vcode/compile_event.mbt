@@ -27,6 +27,8 @@ pub(all) enum TargetCompileEvent {
   TargetCommonValidationStarted
   // ISA-specific instruction validation began.
   TargetIsaValidationStarted
+  // Private target construction was sealed into an opaque selected function.
+  TargetSealingStarted
   // Target VCode construction and validation completed.
   TargetSelectionFinished
   RegallocStarted

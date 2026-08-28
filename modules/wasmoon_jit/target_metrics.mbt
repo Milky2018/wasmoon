@@ -176,6 +176,11 @@ fn target_compile_metrics_observer(
             ("target_isa_validation", @perf.tick_now()),
           )
         }
+      TargetSealingStarted =>
+        if detail {
+          close_target_phase()
+          target_phase.val = Some(("target_vcode_sealing", @perf.tick_now()))
+        }
       TargetSelectionFinished =>
         if detail {
           close_validation_phase()
