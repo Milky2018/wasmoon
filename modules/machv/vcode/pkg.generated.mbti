@@ -188,6 +188,21 @@ pub fn Allocation::statistics(Self) -> AllocationStatistics
 pub fn Allocation::summary(Self) -> String
 pub fn Allocation::value_location(Self, Value) -> Location?
 
+pub struct AllocationBuilder[Inst] {
+  // private fields
+}
+pub fn[Inst] AllocationBuilder::add_edge_transfer(Self[Inst], Int, Int, Int, Location, Location) -> Bool
+pub fn[Inst] AllocationBuilder::add_safepoint_root(Self[Inst], Int, Int) -> Bool
+pub fn[Inst] AllocationBuilder::add_transfer(Self[Inst], Int, PointPlacement, Int, Location, Location) -> Bool
+pub fn[Inst] AllocationBuilder::assign_operand(Self[Inst], Int, Int, Location) -> Bool
+pub fn[Inst] AllocationBuilder::assign_value(Self[Inst], Int, Location) -> Bool
+pub fn[Inst] AllocationBuilder::create_stack_slot(Self[Inst], Int, Int, Int) -> StackSlot
+pub fn[Inst] AllocationBuilder::finish(Self[Inst]) -> Allocation
+pub fn[Inst] AllocationBuilder::new(Function[Inst]) -> Self[Inst]
+pub fn[Inst] AllocationBuilder::operand_value_at(Self[Inst], Int, Int) -> Int
+pub fn[Inst] AllocationBuilder::value_location(Self[Inst], Int) -> Location?
+pub fn[Inst] AllocationBuilder::value_type_at(Self[Inst], Int) -> @machv.ValueType
+
 pub struct AllocationStatistics {
   spill_slots : Int
   spills : Int

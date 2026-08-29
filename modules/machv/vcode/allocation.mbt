@@ -389,6 +389,12 @@ pub fn Allocation::add_edit(self : Allocation, edit : Edit) -> Bool {
   if !valid {
     return false
   }
+  self.append_edit(edit)
+  true
+}
+
+///|
+fn Allocation::append_edit(self : Allocation, edit : Edit) -> Unit {
   self.edits.push(edit)
   match edit.kind {
     EdgeMove(source~, successor_index~, ..) => {
@@ -406,7 +412,6 @@ pub fn Allocation::add_edit(self : Allocation, edit : Edit) -> Bool {
         }
       }
   }
-  true
 }
 
 ///|

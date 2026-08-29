@@ -35,8 +35,12 @@ pub fn AllocationEdit::to_repr(Self) -> @debug.Repr
 pub struct AllocationPlan {
   // private fields
 }
+pub fn AllocationPlan::edit_at(Self, Int) -> AllocationEdit?
+pub fn AllocationPlan::edit_count(Self) -> Int
 pub fn AllocationPlan::edits(Self) -> Array[AllocationEdit]
+pub fn AllocationPlan::instruction_operand_count(Self, Int) -> Int
 pub fn AllocationPlan::operand_assignments(Self) -> Array[OperandAssignment]
+pub fn AllocationPlan::operand_instruction_count(Self) -> Int
 pub fn AllocationPlan::operand_location(Self, Int, Int) -> Location?
 pub fn AllocationPlan::output(Self, &Logger) -> Unit
 pub fn AllocationPlan::spill_count(Self) -> Int

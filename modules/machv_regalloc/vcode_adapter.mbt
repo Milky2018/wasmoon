@@ -68,43 +68,32 @@ fn[Inst] to_regalloc_vreg(
 
 ///|
 fn[Inst] vcode_reg_for_value(
-  function : @vcode.Function[Inst],
-  value : @vcode.Value,
+  builder : @vcode.AllocationBuilder[Inst],
+  value : Int,
   reg : @regalloc.PhysicalReg,
 ) -> @vcode.PhysicalReg {
   @vcode.PhysicalReg::new(
     reg.id,
-    @vcode.reg_class_for_value_type(function.value_type(value).unwrap()),
+    @vcode.reg_class_for_value_type(builder.value_type_at(value)),
   )
 }
 
 ///|
-fn require_allocation_mutation(
-  accepted : Bool,
-) -> Unit raise VCodeAllocationError {
-  if !accepted {
-    raise AllocationConstructionRejected
-  }
-}
-
-///|
 fn[Inst] materialize_plan_location(
-  function : @vcode.Function[Inst],
-  allocation : @vcode.Allocation,
+  builder : @vcode.AllocationBuilder[Inst],
   plan : @regalloc.AllocationPlan,
   spill_slots : Array[@vcode.StackSlot?],
-  value : @vcode.Value,
+  value : Int,
   location : @regalloc.Location,
 ) -> @vcode.Location {
   match location {
-    Reg(reg) => Register(vcode_reg_for_value(function, value, reg))
+    Reg(reg) => Register(vcode_reg_for_value(builder, value, reg))
     Spill(index) => {
       let slot = match spill_slots[index] {
         Some(slot) => slot
         None => {
-          let ty = function.value_type(value).unwrap()
           let spec = plan.spill_slot(index).unwrap()
-          let slot = allocation.create_stack_slot(ty, spec.size, spec.alignment)
+          let slot = builder.create_stack_slot(value, spec.size, spec.alignment)
           spill_slots[index] = Some(slot)
           slot
         }
@@ -115,21 +104,17 @@ fn[Inst] materialize_plan_location(
 }
 
 ///|
-fn add_materialized_transfer(
-  allocation : @vcode.Allocation,
-  point : @vcode.ProgramPoint,
-  value : @vcode.Value,
+fn[Inst] add_materialized_transfer(
+  builder : @vcode.AllocationBuilder[Inst],
+  instruction : Int,
+  placement : @vcode.PointPlacement,
+  value : Int,
   from : @vcode.Location,
   to : @vcode.Location,
 ) -> Unit raise VCodeAllocationError {
-  let edit = match (from, to) {
-    (Register(from_reg), Register(to_reg)) =>
-      @vcode.Edit::register_move(point, value, from_reg, to_reg)
-    (Register(reg), Stack(slot)) => @vcode.Edit::spill(point, value, reg, slot)
-    (Stack(slot), Register(reg)) => @vcode.Edit::reload(point, value, slot, reg)
-    (Stack(_), Stack(_)) => raise AllocationConstructionRejected
+  if !builder.add_transfer(instruction, placement, value, from, to) {
+    raise AllocationConstructionRejected
   }
-  require_allocation_mutation(allocation.add_edit(edit))
 }
 
 ///|
@@ -205,96 +190,84 @@ pub fn[Inst] AllocationSession::allocate_selected_vcode(
   ) catch {
     error => raise RegallocFailure(cause=error)
   }
-  let allocation = @vcode.Allocation::for_function(function)
+  let builder = @vcode.AllocationBuilder::new(function)
   let spill_slots : Array[@vcode.StackSlot?] = Array::make(
     plan.spill_count(),
     None,
   )
   for value_index in 0..<function.value_count() {
-    let value = function.value_at(value_index).unwrap()
     guard plan.value_location(value_index) is Some(location) else {
       raise AllocationConstructionRejected
     }
-    require_allocation_mutation(
-      allocation.assign_value(
-        value,
+    if !builder.assign_value(
+        value_index,
         materialize_plan_location(
-          function, allocation, plan, spill_slots, value, location,
+          builder, plan, spill_slots, value_index, location,
         ),
-      ),
-    )
+      ) {
+      raise AllocationConstructionRejected
+    }
   }
-  for assignment in plan.operand_assignments() {
-    let instruction = function.instruction_at(assignment.instruction).unwrap()
-    let operand = function
-      .instruction_operand_at(instruction, assignment.operand)
-      .unwrap()
-    require_allocation_mutation(
-      allocation.assign_operand_location(
-        instruction,
-        assignment.operand,
-        materialize_plan_location(
-          function,
-          allocation,
-          plan,
-          spill_slots,
-          operand.value,
-          assignment.location,
-        ),
-      ),
-    )
+  for instruction in 0..<plan.operand_instruction_count() {
+    for operand in 0..<plan.instruction_operand_count(instruction) {
+      guard plan.operand_location(instruction, operand) is Some(location) else {
+        continue
+      }
+      let value = builder.operand_value_at(instruction, operand)
+      if !builder.assign_operand(
+          instruction,
+          operand,
+          materialize_plan_location(builder, plan, spill_slots, value, location),
+        ) {
+        raise AllocationConstructionRejected
+      }
+    }
   }
-  for edit in plan.edits() {
-    let value = function.value_at(edit.value.id).unwrap()
+  for edit_index in 0..<plan.edit_count() {
+    let edit = plan.edit_at(edit_index).unwrap()
     let from = materialize_plan_location(
-      function,
-      allocation,
+      builder,
       plan,
       spill_slots,
-      value,
+      edit.value.id,
       edit.from,
     )
     let to = materialize_plan_location(
-      function,
-      allocation,
+      builder,
       plan,
       spill_slots,
-      value,
+      edit.value.id,
       edit.to,
     )
     match edit.position {
       Before(instruction_id) =>
         add_materialized_transfer(
-          allocation,
-          function
-          .before(function.instruction_at(instruction_id).unwrap())
-          .unwrap(),
-          value,
+          builder,
+          instruction_id,
+          Before,
+          edit.value.id,
           from,
           to,
         )
       After(instruction_id) =>
         add_materialized_transfer(
-          allocation,
-          function
-          .after(function.instruction_at(instruction_id).unwrap())
-          .unwrap(),
-          value,
+          builder,
+          instruction_id,
+          After,
+          edit.value.id,
           from,
           to,
         )
       Edge(source_block~, successor_index~) =>
-        require_allocation_mutation(
-          allocation.add_edit(
-            @vcode.Edit::edge_move(
-              function.block_at(source_block).unwrap(),
-              successor_index,
-              value,
-              from,
-              to,
-            ),
-          ),
-        )
+        if !builder.add_edge_transfer(
+            source_block,
+            successor_index,
+            edit.value.id,
+            from,
+            to,
+          ) {
+          raise AllocationConstructionRejected
+        }
     }
   }
   for block in function.layout() {
@@ -303,16 +276,16 @@ pub fn[Inst] AllocationSession::allocate_selected_vcode(
     for instruction in instructions {
       let metadata = function.instruction_metadata(instruction).unwrap()
       for root in metadata.live_gc_roots {
-        require_allocation_mutation(
-          allocation.add_safepoint_root(
-            instruction,
-            root,
-            allocation.value_location(root).unwrap(),
-          ),
-        )
+        if !builder.add_safepoint_root(
+            function.instruction_index(instruction).unwrap(),
+            function.value_index(root).unwrap(),
+          ) {
+          raise AllocationConstructionRejected
+        }
       }
     }
   }
+  let allocation = builder.finish()
   if verify {
     @vcode.verify_allocation_invariants(function, allocation) catch {
       error => raise InvalidAllocation(cause=error)

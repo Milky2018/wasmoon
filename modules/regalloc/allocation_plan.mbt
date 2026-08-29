@@ -145,8 +145,37 @@ pub fn AllocationPlan::operand_assignments(
 }
 
 ///|
+pub fn AllocationPlan::operand_instruction_count(self : AllocationPlan) -> Int {
+  self.operand_locations.length()
+}
+
+///|
+pub fn AllocationPlan::instruction_operand_count(
+  self : AllocationPlan,
+  instruction : Int,
+) -> Int {
+  match self.operand_locations.get(instruction) {
+    Some(locations) => locations.length()
+    None => 0
+  }
+}
+
+///|
 pub fn AllocationPlan::edits(self : AllocationPlan) -> Array[AllocationEdit] {
   self.edits.copy()
+}
+
+///|
+pub fn AllocationPlan::edit_count(self : AllocationPlan) -> Int {
+  self.edits.length()
+}
+
+///|
+pub fn AllocationPlan::edit_at(
+  self : AllocationPlan,
+  index : Int,
+) -> AllocationEdit? {
+  self.edits.get(index)
 }
 
 ///|
