@@ -375,6 +375,7 @@ pub fn Function::value_count(Self) -> Int
 pub fn Function::value_index(Self, Value) -> Int?
 pub fn Function::value_type(Self, Value) -> ValueType?
 pub fn Function::verify(Self) -> Unit raise MachVVerifyError
+pub impl SelectionInput for Function
 pub impl Show for Function
 pub impl @debug.Debug for Function
 
@@ -1072,3 +1073,35 @@ pub fn VectorStoreLaneSpec::to_repr(Self) -> @debug.Repr
 // Type aliases
 
 // Traits
+pub(open) trait SelectionInput {
+  fn name(Self) -> String
+  fn protocol(Self) -> CallProtocol
+  fn signature(Self) -> Signature
+  fn parameters(Self) -> Array[Value]
+  fn value_count(Self) -> Int
+  fn value_index(Self, Value) -> Int?
+  fn value_type(Self, Value) -> ValueType?
+  fn block_count(Self) -> Int
+  fn block_at(Self, Int) -> Block?
+  fn block_index(Self, Block) -> Int?
+  fn block_parameter_count(Self, Block) -> Int?
+  fn block_parameter_at(Self, Block, Int) -> Value?
+  fn block_instruction_count(Self, Block) -> Int?
+  fn block_instruction_at(Self, Block, Int) -> Instruction?
+  fn block_terminator(Self, Block) -> TerminatorRecord?
+  fn block_indices_in_cfg_order(Self) -> Array[Int]
+  fn instruction_slot_count(Self) -> Int
+  fn instruction_at(Self, Int) -> Instruction?
+  fn instruction_index(Self, Instruction) -> Int?
+  fn instruction_operation(Self, Instruction) -> Operation?
+  fn instruction_operand_count(Self, Instruction) -> Int?
+  fn instruction_operand_at(Self, Instruction, Int) -> Value?
+  fn instruction_result_count(Self, Instruction) -> Int?
+  fn instruction_result_at(Self, Instruction, Int) -> Value?
+  fn instruction_metadata_view(Self, Instruction) -> InstructionMetadataView?
+  fn stack_objects(Self) -> Array[StackObject]
+  fn stack_object_size(Self, StackObject) -> Int?
+  fn stack_object_alignment(Self, StackObject) -> Int?
+  fn verify(Self) -> Unit raise MachVVerifyError
+  fn require_verified(Self) -> Unit raise MachVVerifyError
+}

@@ -49,8 +49,8 @@ fn scalar_access_width(ty : @semantic.ValueType) -> @semantic.AccessWidth? {
 }
 
 ///|
-fn lower_stack_object(
-  function : @semantic.Function,
+fn[F : @semantic.SelectionInput] lower_stack_object(
+  function : F,
   requested : @semantic.StackObject,
 ) -> X64StackObject raise X64LowerError {
   let objects = function.stack_objects()
@@ -222,8 +222,8 @@ fn float_to_int_bounds(
 }
 
 ///|
-fn map_value(
-  function : @semantic.Function,
+fn[F : @semantic.SelectionInput] map_value(
+  function : F,
   values : Array[@vcode.Value?],
   value : @semantic.Value,
 ) -> @vcode.Value raise X64LowerError {
@@ -235,8 +235,8 @@ fn map_value(
 }
 
 ///|
-fn map_values(
-  function : @semantic.Function,
+fn[F : @semantic.SelectionInput] map_values(
+  function : F,
   values : Array[@vcode.Value?],
   source : Array[@semantic.Value],
 ) -> Array[@vcode.Value] raise X64LowerError {
@@ -244,8 +244,8 @@ fn map_values(
 }
 
 ///|
-fn map_instruction_operands(
-  function : @semantic.Function,
+fn[F : @semantic.SelectionInput] map_instruction_operands(
+  function : F,
   values : Array[@vcode.Value?],
   instruction : @semantic.Instruction,
 ) -> Array[@vcode.Value] raise X64LowerError {
@@ -264,8 +264,8 @@ fn map_instruction_operands(
 }
 
 ///|
-fn instruction_result_types(
-  function : @semantic.Function,
+fn[F : @semantic.SelectionInput] instruction_result_types(
+  function : F,
   instruction : @semantic.Instruction,
 ) -> Array[@semantic.ValueType] {
   let result_types = []
@@ -281,8 +281,8 @@ fn instruction_result_types(
 }
 
 ///|
-fn bind_instruction_results(
-  function : @semantic.Function,
+fn[F : @semantic.SelectionInput] bind_instruction_results(
+  function : F,
   values : Array[@vcode.Value?],
   instruction : @semantic.Instruction,
   results : Array[@vcode.Value],
@@ -573,8 +573,8 @@ fn lower_internal_call(
 }
 
 ///|
-fn lower_instruction(
-  function : @semantic.Function,
+fn[F : @semantic.SelectionInput] lower_instruction(
+  function : F,
   context : LoweringContext,
   builder : @vcode.CheckedBuilder[X64Inst],
   block : @vcode.Block,
@@ -1243,8 +1243,8 @@ fn lower_instruction(
 }
 
 ///|
-fn lower_parameters(
-  function : @semantic.Function,
+fn[F : @semantic.SelectionInput] lower_parameters(
+  function : F,
   context : LoweringContext,
   builder : @vcode.CheckedBuilder[X64Inst],
   values : Array[@vcode.Value?],
@@ -1306,8 +1306,8 @@ fn lower_parameters(
 }
 
 ///|
-fn lower_return_values(
-  function : @semantic.Function,
+fn[F : @semantic.SelectionInput] lower_return_values(
+  function : F,
   context : LoweringContext,
   builder : @vcode.CheckedBuilder[X64Inst],
   block : @vcode.Block,
@@ -1376,8 +1376,8 @@ fn set_terminator(
 }
 
 ///|
-fn construct_validated_semantic(
-  function : @semantic.Function,
+fn[F : @semantic.SelectionInput] construct_validated_semantic(
+  function : F,
   context : LoweringContext,
   on_event? : (@vcode.TargetCompileEvent) -> Unit = fn(_) { () },
 ) -> ConstructedFunction raise X64LowerError {
@@ -1664,8 +1664,8 @@ fn validate_constructed(
 
 ///|
 /// Validate and lower externally supplied semantic MachV.
-pub fn lower(
-  function : @semantic.Function,
+pub fn[F : @semantic.SelectionInput] lower(
+  function : F,
   context : LoweringContext,
   on_event? : (@vcode.TargetCompileEvent) -> Unit = fn(_) { () },
 ) -> @vcode.Function[X64Inst] raise X64LowerError {
@@ -1687,8 +1687,8 @@ pub struct SelectedFunction {
 
 ///|
 /// Select and validate x64 VCode for immediate target compilation.
-pub fn select(
-  function : @semantic.Function,
+pub fn[F : @semantic.SelectionInput] select(
+  function : F,
   context : LoweringContext,
   on_event? : (@vcode.TargetCompileEvent) -> Unit = fn(_) { () },
 ) -> SelectedFunction raise X64LowerError {
@@ -1704,8 +1704,8 @@ pub fn select(
 ///|
 /// Select canonical semantic MachV without repeating an established proof.
 /// Falls back to full validation if the producer did not establish it.
-pub fn select_verified(
-  function : @semantic.Function,
+pub fn[F : @semantic.SelectionInput] select_verified(
+  function : F,
   context : LoweringContext,
   on_event? : (@vcode.TargetCompileEvent) -> Unit = fn(_) { () },
 ) -> SelectedFunction raise X64LowerError {

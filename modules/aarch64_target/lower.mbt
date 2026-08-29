@@ -49,8 +49,8 @@ fn scalar_access_width(ty : @semantic.ValueType) -> @semantic.AccessWidth? {
 }
 
 ///|
-fn lower_stack_object(
-  function : @semantic.Function,
+fn[F : @semantic.SelectionInput] lower_stack_object(
+  function : F,
   requested : @semantic.StackObject,
 ) -> AArch64StackObject raise AArch64LowerError {
   let objects = function.stack_objects()
@@ -267,8 +267,8 @@ fn float_to_int_bounds(
 }
 
 ///|
-fn map_value(
-  function : @semantic.Function,
+fn[F : @semantic.SelectionInput] map_value(
+  function : F,
   values : Array[@vcode.Value?],
   value : @semantic.Value,
 ) -> @vcode.Value raise AArch64LowerError {
@@ -280,8 +280,8 @@ fn map_value(
 }
 
 ///|
-fn map_values(
-  function : @semantic.Function,
+fn[F : @semantic.SelectionInput] map_values(
+  function : F,
   values : Array[@vcode.Value?],
   source : Array[@semantic.Value],
 ) -> Array[@vcode.Value] raise AArch64LowerError {
@@ -289,8 +289,8 @@ fn map_values(
 }
 
 ///|
-fn map_instruction_operands(
-  function : @semantic.Function,
+fn[F : @semantic.SelectionInput] map_instruction_operands(
+  function : F,
   values : Array[@vcode.Value?],
   instruction : @semantic.Instruction,
 ) -> Array[@vcode.Value] raise AArch64LowerError {
@@ -309,8 +309,8 @@ fn map_instruction_operands(
 }
 
 ///|
-fn instruction_result_types(
-  function : @semantic.Function,
+fn[F : @semantic.SelectionInput] instruction_result_types(
+  function : F,
   instruction : @semantic.Instruction,
 ) -> Array[@semantic.ValueType] {
   let result_types = []
@@ -326,8 +326,8 @@ fn instruction_result_types(
 }
 
 ///|
-fn bind_instruction_results(
-  function : @semantic.Function,
+fn[F : @semantic.SelectionInput] bind_instruction_results(
+  function : F,
   values : Array[@vcode.Value?],
   instruction : @semantic.Instruction,
   results : Array[@vcode.Value],
@@ -687,8 +687,8 @@ priv struct LoweringAnalysis {
 }
 
 ///|
-fn count_value_use(
-  function : @semantic.Function,
+fn[F : @semantic.SelectionInput] count_value_use(
+  function : F,
   uses : Array[Int],
   value : @semantic.Value,
 ) -> Unit {
@@ -696,8 +696,8 @@ fn count_value_use(
 }
 
 ///|
-fn foldable_definition(
-  function : @semantic.Function,
+fn[F : @semantic.SelectionInput] foldable_definition(
+  function : F,
   definitions : Array[@semantic.Instruction?],
   uses : Array[Int],
   value : @semantic.Value,
@@ -715,8 +715,8 @@ fn foldable_definition(
 }
 
 ///|
-fn reusable_definition(
-  function : @semantic.Function,
+fn[F : @semantic.SelectionInput] reusable_definition(
+  function : F,
   definitions : Array[@semantic.Instruction?],
   value : @semantic.Value,
 ) -> @semantic.Instruction? {
@@ -730,8 +730,8 @@ fn reusable_definition(
 }
 
 ///|
-fn instruction_unary_operand(
-  function : @semantic.Function,
+fn[F : @semantic.SelectionInput] instruction_unary_operand(
+  function : F,
   instruction : @semantic.Instruction,
 ) -> @semantic.Value? {
   guard function.instruction_operand_count(instruction) == Some(1) else {
@@ -741,8 +741,8 @@ fn instruction_unary_operand(
 }
 
 ///|
-fn instruction_binary_operands(
-  function : @semantic.Function,
+fn[F : @semantic.SelectionInput] instruction_binary_operands(
+  function : F,
   instruction : @semantic.Instruction,
 ) -> (@semantic.Value, @semantic.Value)? {
   guard function.instruction_operand_count(instruction) == Some(2) else {
@@ -758,8 +758,8 @@ fn instruction_binary_operands(
 }
 
 ///|
-fn instruction_single_result(
-  function : @semantic.Function,
+fn[F : @semantic.SelectionInput] instruction_single_result(
+  function : F,
   instruction : @semantic.Instruction,
 ) -> @semantic.Value? {
   guard function.instruction_result_count(instruction) == Some(1) else {
@@ -769,8 +769,8 @@ fn instruction_single_result(
 }
 
 ///|
-fn multiply_add_selection(
-  function : @semantic.Function,
+fn[F : @semantic.SelectionInput] multiply_add_selection(
+  function : F,
   definitions : Array[@semantic.Instruction?],
   uses : Array[Int],
   accumulator : @semantic.Value,
@@ -830,8 +830,8 @@ fn natural_register_shift(width : @semantic.AccessWidth) -> Int {
 }
 
 ///|
-fn select_scaled_index(
-  function : @semantic.Function,
+fn[F : @semantic.SelectionInput] select_scaled_index(
+  function : F,
   definitions : Array[@semantic.Instruction?],
   uses : Array[Int],
   constants : Array[UInt64?],
@@ -864,8 +864,8 @@ fn select_scaled_index(
 }
 
 ///|
-fn uxtw_memory_address_selection(
-  function : @semantic.Function,
+fn[F : @semantic.SelectionInput] uxtw_memory_address_selection(
+  function : F,
   definitions : Array[@semantic.Instruction?],
   uses : Array[Int],
   constants : Array[UInt64?],
@@ -1032,7 +1032,9 @@ fn uxtw_memory_address_selection(
 }
 
 ///|
-fn analyze_lowering(function : @semantic.Function) -> LoweringAnalysis {
+fn[F : @semantic.SelectionInput] analyze_lowering(
+  function : F,
+) -> LoweringAnalysis {
   let value_count = function.value_count()
   let constants : Array[UInt64?] = Array::make(value_count, None)
   let definitions : Array[@semantic.Instruction?] = Array::make(
@@ -1501,8 +1503,8 @@ fn analyze_lowering(function : @semantic.Function) -> LoweringAnalysis {
 }
 
 ///|
-fn lower_instruction(
-  function : @semantic.Function,
+fn[F : @semantic.SelectionInput] lower_instruction(
+  function : F,
   context : LoweringContext,
   builder : @vcode.CheckedBuilder[AArch64Inst],
   block : @vcode.Block,
@@ -2317,8 +2319,8 @@ fn lower_instruction(
 }
 
 ///|
-fn lower_parameters(
-  function : @semantic.Function,
+fn[F : @semantic.SelectionInput] lower_parameters(
+  function : F,
   context : LoweringContext,
   builder : @vcode.CheckedBuilder[AArch64Inst],
   values : Array[@vcode.Value?],
@@ -2386,8 +2388,8 @@ fn lower_parameters(
 }
 
 ///|
-fn lower_return_values(
-  function : @semantic.Function,
+fn[F : @semantic.SelectionInput] lower_return_values(
+  function : F,
   context : LoweringContext,
   builder : @vcode.CheckedBuilder[AArch64Inst],
   block : @vcode.Block,
@@ -2456,8 +2458,8 @@ fn set_terminator(
 }
 
 ///|
-fn construct_validated_semantic(
-  function : @semantic.Function,
+fn[F : @semantic.SelectionInput] construct_validated_semantic(
+  function : F,
   context : LoweringContext,
   on_event? : (@vcode.TargetCompileEvent) -> Unit = fn(_) { () },
 ) -> ConstructedFunction raise AArch64LowerError {
@@ -2792,8 +2794,8 @@ fn validate_constructed(
 
 ///|
 /// Validate and lower externally supplied semantic MachV.
-pub fn lower(
-  function : @semantic.Function,
+pub fn[F : @semantic.SelectionInput] lower(
+  function : F,
   context : LoweringContext,
   on_event? : (@vcode.TargetCompileEvent) -> Unit = fn(_) { () },
 ) -> @vcode.Function[AArch64Inst] raise AArch64LowerError {
@@ -2815,8 +2817,8 @@ pub struct SelectedFunction {
 
 ///|
 /// Select and validate AArch64 VCode for immediate target compilation.
-pub fn select(
-  function : @semantic.Function,
+pub fn[F : @semantic.SelectionInput] select(
+  function : F,
   context : LoweringContext,
   on_event? : (@vcode.TargetCompileEvent) -> Unit = fn(_) { () },
 ) -> SelectedFunction raise AArch64LowerError {
@@ -2832,8 +2834,8 @@ pub fn select(
 ///|
 /// Select canonical semantic MachV without repeating an established proof.
 /// Falls back to full validation if the producer did not establish it.
-pub fn select_verified(
-  function : @semantic.Function,
+pub fn[F : @semantic.SelectionInput] select_verified(
+  function : F,
   context : LoweringContext,
   on_event? : (@vcode.TargetCompileEvent) -> Unit = fn(_) { () },
 ) -> SelectedFunction raise AArch64LowerError {

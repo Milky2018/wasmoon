@@ -18,15 +18,15 @@ pub fn compile_selected(SelectedFunction, on_event? : (@vcode.TargetCompileEvent
 
 pub fn emit(@vcode.Function[X64Inst], @vcode.Allocation, X64Frame) -> @code_object.UnlinkedCodeObject raise X64EmitError
 
-pub fn lower(@machv.Function, LoweringContext, on_event? : (@vcode.TargetCompileEvent) -> Unit) -> @vcode.Function[X64Inst] raise X64LowerError
+pub fn[F : @machv.SelectionInput] lower(F, LoweringContext, on_event? : (@vcode.TargetCompileEvent) -> Unit) -> @vcode.Function[X64Inst] raise X64LowerError
 
 pub fn plan_frame(@vcode.Function[X64Inst], @vcode.Allocation) -> X64Frame raise X64FrameError
 
 pub fn prepare_x64_link(@code_object.UnlinkedCodeObject) -> X64LinkPlan raise X64LinkError
 
-pub fn select(@machv.Function, LoweringContext, on_event? : (@vcode.TargetCompileEvent) -> Unit) -> SelectedFunction raise X64LowerError
+pub fn[F : @machv.SelectionInput] select(F, LoweringContext, on_event? : (@vcode.TargetCompileEvent) -> Unit) -> SelectedFunction raise X64LowerError
 
-pub fn select_verified(@machv.Function, LoweringContext, on_event? : (@vcode.TargetCompileEvent) -> Unit) -> SelectedFunction raise X64LowerError
+pub fn[F : @machv.SelectionInput] select_verified(F, LoweringContext, on_event? : (@vcode.TargetCompileEvent) -> Unit) -> SelectedFunction raise X64LowerError
 
 pub fn verify_allocation(@vcode.Function[X64Inst], @vcode.Allocation) -> Unit raise X64AllocationError
 
