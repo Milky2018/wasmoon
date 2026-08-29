@@ -1,4 +1,5 @@
 ///|
+#valtype
 pub(all) struct ProgramPoint {
   block : Int
   inst : Int
@@ -39,6 +40,7 @@ pub fn ProgramPoint::compare_with_order(
 }
 
 ///|
+#valtype
 pub(all) struct ProgramRange {
   start : ProgramPoint
   end : ProgramPoint
