@@ -306,7 +306,7 @@ fn lower_bitcast_value(
   let from = lower_type(source_type)
   let to = lower_type(result_type)
   if from == to {
-    return emit_one(builder, Copy, [operand], to, source, instruction_id)
+    return operand
   }
   if from == GcRef64 {
     let address = emit_one(
@@ -1076,6 +1076,21 @@ fn lower_instruction(
       }
     }
     Scalar(scalar) => {
+      if scalar is Copy &&
+        instruction.args is [argument] &&
+        instruction.results is [result] {
+        let source = mapped_value(values, argument)
+        guard value_types[argument.id] == Some(lower_type(result.ty)) else {
+          raise InvalidMilkIR(
+            message="copy result type does not match its verified operand",
+          )
+        }
+        // MilkIR copies are aliases, not semantic machine operations. Keeping
+        // them as owned MachV instructions forced mandatory cleanup to scan
+        // the complete function only to recover this mapping.
+        values[result.id] = Some(source)
+        return false
+      }
       if scalar is Convert(Bitcast) &&
         instruction.args is [argument] &&
         instruction.results is [result] {

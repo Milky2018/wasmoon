@@ -464,7 +464,7 @@ fn finish_runtime_word(
 ) -> Unit {
   match context.result_types()[0] {
     I32 => context.finish_operation(Convert(I32WrapI64), [word])
-    I64 => context.finish_operation(Copy, [word])
+    I64 => context.forward_results([word])
     F32 => {
       let bits = context.emit(Convert(I32WrapI64), [word], [I32])[0]
       context.finish_operation(Convert(Bitcast(I32, F32)), [bits])
@@ -553,7 +553,7 @@ fn lower_aggregate_get(
       parameter_types,
       Read,
     )
-    context.finish_operation(Copy, [load_v128(context, scratch)])
+    context.forward_results([load_v128(context, scratch)])
     return None
   }
   let word = emit_runtime_word_call(
@@ -1326,7 +1326,7 @@ fn lower_extension(
       None
     }
     AnyConvertExtern | ExternConvertAny => {
-      context.finish_operation(Copy, context.operands())
+      context.forward_results(context.operands())
       None
     }
     RefEq => {

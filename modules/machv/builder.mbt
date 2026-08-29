@@ -104,6 +104,15 @@ pub fn FunctionBuilder::block_parameters(
 }
 
 ///|
+/// Read the type of a value owned by this checked construction.
+pub fn FunctionBuilder::value_type(
+  self : FunctionBuilder,
+  value : Value,
+) -> ValueType? {
+  self.function.value_type(value)
+}
+
+///|
 pub fn FunctionBuilder::switch_to_block(
   self : FunctionBuilder,
   block : Block,

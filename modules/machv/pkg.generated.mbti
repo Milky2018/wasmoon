@@ -402,6 +402,7 @@ pub fn FunctionBuilder::switch_to_block(Self, Block) -> Unit
 pub fn FunctionBuilder::tail_call(Self, SemanticCall, Array[Value]) -> Unit
 pub fn FunctionBuilder::tail_call_with_metadata(Self, SemanticCall, Array[Value], TerminatorMetadata) -> Unit
 pub fn FunctionBuilder::trap(Self, TrapReason) -> Unit
+pub fn FunctionBuilder::value_type(Self, Value) -> ValueType?
 
 pub struct HiddenSafepointAbi {
   // private fields

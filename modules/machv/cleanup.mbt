@@ -43,18 +43,21 @@ fn Function::is_zero_integer_constant(self : Function, value : Value) -> Bool {
 }
 
 ///|
-fn Function::collect_aliases(self : Function) -> Array[Int] {
+fn Function::collect_aliases(self : Function) -> (Array[Int], Int) {
   let aliases = Array::makei(self.values.length(), index => index)
+  let mut alias_count = 0
   for block in self.blocks {
     for instruction in block.instructions {
       let data = self.instructions[instruction.id]
       if data.results.length() == 1 {
         match data.operation {
-          Copy =>
+          Copy => {
             aliases[data.results[0].id] = resolve_alias(
               aliases,
               data.operands[0].id,
             )
+            alias_count += 1
+          }
           IntBinary(
             ShiftLeft
             | SignedShiftRight
@@ -67,13 +70,14 @@ fn Function::collect_aliases(self : Function) -> Array[Int] {
                 aliases,
                 data.operands[0].id,
               )
+              alias_count += 1
             }
           _ => ()
         }
       }
     }
   }
-  aliases
+  (aliases, alias_count)
 }
 
 ///|
@@ -345,9 +349,13 @@ fn Function::run_mandatory_cleanup_verified(
   on_phase? : (MandatoryCleanupPhase) -> Unit = fn(_) { () },
 ) -> CleanupStats {
   on_phase(CollectAliases)
-  let aliases = self.collect_aliases()
+  let (aliases, alias_count) = self.collect_aliases()
   on_phase(RewriteAliases)
-  let aliases_rewritten = self.rewrite_aliases(aliases)
+  let aliases_rewritten = if alias_count == 0 {
+    0
+  } else {
+    self.rewrite_aliases(aliases)
+  }
   on_phase(RemoveDeadInstructions)
   let instructions_removed = self.remove_dead_instructions()
   on_phase(SealOutput)

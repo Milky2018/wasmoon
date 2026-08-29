@@ -231,21 +231,17 @@ pub fn InstructionContext::forward_results(
     )
     return
   }
-  let results : Array[@machv.Value] = []
   for index, value in values {
-    let copied = self.builder.emit_with_metadata(
-      Copy,
-      [value],
-      [self.result_types[index]],
-      self.instruction_metadata(false),
-    )
-    if copied.length() != 1 {
-      self.record_error("failed to construct dialect result copy")
+    if self.builder.value_type(value) != Some(self.result_types[index]) {
+      self.record_error(
+        "forwarded dialect result {index} has the wrong semantic type",
+      )
       return
     }
-    results.push(copied[0])
   }
-  self.complete_once(results)
+  // The source result is already a value in this construction. Keeping an
+  // owned Copy instruction only makes mandatory cleanup rediscover the alias.
+  self.complete_once(values)
 }
 
 ///|
