@@ -6,12 +6,14 @@ pub(all) enum RegClass {
 } derive(Eq, Debug)
 
 ///|
+#valtype
 pub(all) struct VirtualReg {
   id : Int
   class : RegClass
 } derive(Eq, Debug)
 
 ///|
+#valtype
 pub(all) struct PhysicalReg {
   id : Int
   class : RegClass
