@@ -400,6 +400,29 @@ fn RegisterAllocationIndex::segment_end_before_start(
 }
 
 ///|
+/// Find the first ordered bundle segment whose end reaches the occupied
+/// segment's start. Callers use this only after a short linear prefix, so
+/// small bundles retain the cheaper sequential path.
+fn RegisterAllocationIndex::first_not_ending_before(
+  self : RegisterAllocationIndex,
+  segments : Array[Int],
+  from : Int,
+  occupied : Int,
+) -> Int {
+  let mut low = from
+  let mut high = segments.length()
+  while low < high {
+    let middle = low + (high - low) / 2
+    if self.segment_end_before_start(segments[middle], occupied) {
+      low = middle + 1
+    } else {
+      high = middle
+    }
+  }
+  low
+}
+
+///|
 fn RegisterAllocationIndex::segment_end_before_or_equal(
   self : RegisterAllocationIndex,
   left : Int,

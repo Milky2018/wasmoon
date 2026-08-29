@@ -429,6 +429,7 @@ fn probe_bundle_register(
   let mut assigned = occupied.next(occupied_stack)
   let mut bundle_index = 0
   let mut skipped_occupied = 0
+  let mut skipped_bundle = 0
   while bundle_index < bundle_segments.length() && assigned is Some(_) {
     statistics.occupied_segments_scanned = statistics.occupied_segments_scanned +
       1
@@ -438,6 +439,7 @@ fn probe_bundle_register(
     // previously unseen conflict contributes its first overlap point.
     let current_segment = bundle_segments[bundle_index]
     if occupied.segment_end_before_start(conflict_segment, current_segment) {
+      skipped_bundle = 0
       assigned = occupied.next(occupied_stack)
       skipped_occupied = skipped_occupied + 1
       if skipped_occupied >= 16 {
@@ -454,8 +456,16 @@ fn probe_bundle_register(
     skipped_occupied = 0
     if occupied.segment_end_before_start(current_segment, conflict_segment) {
       bundle_index = bundle_index + 1
+      skipped_bundle = skipped_bundle + 1
+      if skipped_bundle >= 4 {
+        bundle_index = occupied.first_not_ending_before(
+          bundle_segments, bundle_index, conflict_segment,
+        )
+        skipped_bundle = 0
+      }
       continue
     }
+    skipped_bundle = 0
     let owner = segment_owner[conflict_segment]
     if owner != bundle && conflict_marks[owner] != probe_id {
       conflict_marks[owner] = probe_id
