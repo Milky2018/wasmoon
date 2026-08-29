@@ -12,8 +12,8 @@ priv struct AArch64TargetDiagnostics {
 }
 
 ///|
-fn aarch64_target_context(
-  function : @semantic_machv.Function,
+fn[F : @semantic_machv.SelectionInput] aarch64_target_context(
+  function : F,
   environment_field_path : ((@semantic_machv.EnvironmentField) -> Array[Int]?)?,
 ) -> @aarch64_target.LoweringContext raise JitPipelineError {
   let abi = @aarch64_target.InternalAbi::new(
@@ -27,8 +27,13 @@ fn aarch64_target_context(
     error => raise AArch64AbiInvalid(cause=error)
   }
   let mut context = @aarch64_target.LoweringContext::new(abi)
-  for block in function.blocks() {
-    for instruction in function.block_instructions(block) {
+  for block_id in function.block_indices_in_cfg_order() {
+    let block = function.block_at(block_id).unwrap()
+    let instruction_count = function.block_instruction_count(block).unwrap()
+    for instruction_index in 0..<instruction_count {
+      let instruction = function
+        .block_instruction_at(block, instruction_index)
+        .unwrap()
       if function.instruction_operation(instruction)
         is Some(EnvironmentField(field, _)) {
         guard environment_field_path is Some(resolve) &&
@@ -43,32 +48,16 @@ fn aarch64_target_context(
 }
 
 ///|
-fn build_aarch64_target(
-  function : @semantic_machv.Function,
-  environment_field_path? : (@semantic_machv.EnvironmentField) -> Array[Int]?,
-  allocation_symbols? : Array[@semantic_machv.ExternalSymbol] = [],
-  record_metrics? : Bool = false,
-  compilation_session? : @aarch64_target.CompilationSession = @aarch64_target.CompilationSession::new(),
-  root_scope_symbols? : (
-    @semantic_machv.ExternalSymbol,
-    @semantic_machv.ExternalSymbol,
-  ),
+fn[F : @semantic_machv.SelectionInput] compile_aarch64_target_input(
+  function : F,
+  environment_field_path : ((@semantic_machv.EnvironmentField) -> Array[Int]?)?,
+  record_metrics : Bool,
+  compilation_session : @aarch64_target.CompilationSession,
+  target_lower_tick : @perf.PerfTick?,
 ) -> AArch64TargetCompilation raise JitPipelineError {
-  let target_lower_tick = target_metrics_tick(record_metrics)
   let observer = target_lower_tick.map(target_compile_metrics_observer)
-  let runtime_abi_tick = detail_metrics_tick(record_metrics)
-  let elaborated = match root_scope_symbols {
-    Some(symbols) =>
-      elaborate_wasmoon_runtime_abi(function, allocation_symbols, symbols)
-    None => function
-  }
-  record_compile_subphase(
-    "runtime_abi_elaboration",
-    runtime_abi_tick,
-    parent="target_lowering",
-  )
   let context_tick = detail_metrics_tick(record_metrics)
-  let context = aarch64_target_context(elaborated, environment_field_path)
+  let context = aarch64_target_context(function, environment_field_path)
   record_compile_subphase(
     "target_context",
     context_tick,
@@ -77,8 +66,8 @@ fn build_aarch64_target(
   let selected = try {
     match observer {
       Some(observe) =>
-        @aarch64_target.select_verified(elaborated, context, on_event=observe)
-      None => @aarch64_target.select_verified(elaborated, context)
+        @aarch64_target.select_verified(function, context, on_event=observe)
+      None => @aarch64_target.select_verified(function, context)
     }
   } catch {
     error => raise AArch64LoweringFailed(cause=error)
@@ -102,6 +91,66 @@ fn build_aarch64_target(
   }
   let (object, frame_size) = compiled
   { object, frame_size, }
+}
+
+///|
+fn build_aarch64_target(
+  function : @semantic_machv.Function,
+  environment_field_path? : (@semantic_machv.EnvironmentField) -> Array[Int]?,
+  allocation_symbols? : Array[@semantic_machv.ExternalSymbol] = [],
+  record_metrics? : Bool = false,
+  compilation_session? : @aarch64_target.CompilationSession = @aarch64_target.CompilationSession::new(),
+  root_scope_symbols? : (
+    @semantic_machv.ExternalSymbol,
+    @semantic_machv.ExternalSymbol,
+  ),
+) -> AArch64TargetCompilation raise JitPipelineError {
+  let target_lower_tick = target_metrics_tick(record_metrics)
+  let runtime_abi_tick = detail_metrics_tick(record_metrics)
+  let elaborated = match root_scope_symbols {
+    Some(symbols) =>
+      elaborate_wasmoon_runtime_abi(function, allocation_symbols, symbols)
+    None => function
+  }
+  record_compile_subphase(
+    "runtime_abi_elaboration",
+    runtime_abi_tick,
+    parent="target_lowering",
+  )
+  compile_aarch64_target_input(
+    elaborated, environment_field_path, record_metrics, compilation_session, target_lower_tick,
+  )
+}
+
+///|
+fn build_aarch64_selection_plan(
+  plan : @semantic_machv.SelectionPlan,
+  environment_field_path? : (@semantic_machv.EnvironmentField) -> Array[Int]?,
+  allocation_symbols? : Array[@semantic_machv.ExternalSymbol] = [],
+  record_metrics? : Bool = false,
+  compilation_session? : @aarch64_target.CompilationSession = @aarch64_target.CompilationSession::new(),
+  root_scope_symbols? : (
+    @semantic_machv.ExternalSymbol,
+    @semantic_machv.ExternalSymbol,
+  ),
+) -> AArch64TargetCompilation raise JitPipelineError {
+  let target_lower_tick = target_metrics_tick(record_metrics)
+  let runtime_abi_tick = detail_metrics_tick(record_metrics)
+  let elaborated = match root_scope_symbols {
+    Some(symbols) =>
+      elaborate_wasmoon_runtime_abi_selection_plan(
+        plan, allocation_symbols, symbols,
+      )
+    None => plan
+  }
+  record_compile_subphase(
+    "runtime_abi_elaboration",
+    runtime_abi_tick,
+    parent="target_lowering",
+  )
+  compile_aarch64_target_input(
+    elaborated, environment_field_path, record_metrics, compilation_session, target_lower_tick,
+  )
 }
 
 ///|

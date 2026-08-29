@@ -1569,3 +1569,45 @@ pub fn lower_function(
     on_event~,
   )
 }
+
+///|
+/// Lower a verified WebAssembly MilkIR function directly into immutable,
+/// verified target-selection input.
+pub fn lower_selection_plan(
+  function : @milkir.Function,
+  validation_context : @wasm_milkir.WasmValidationContext,
+  environment : Environment,
+  on_event? : (@milkir_machv.SemanticLowerEvent) -> Unit = fn(_) { () },
+) -> @machv.SelectionPlan raise @milkir_machv.SemanticLowerError {
+  fn validate(view : @milkir.ExtensionInstView) -> String? {
+    validation_context.validate_extension(view, function.results)
+  }
+  fn lower(
+    context : @adapter.InstructionContext,
+    extension : @milkir.ExtOp,
+  ) -> String? {
+    lower_extension(context, extension, environment)
+  }
+  fn validate_global(data : @milkir.GlobalValueData) -> String? {
+    validation_context.validate_global_value(data)
+  }
+  fn resolve_context_field(
+    field : @milkir.ContextField,
+  ) -> @machv.EnvironmentField? {
+    match @wasm_milkir.decode_memory_base_context_field(field) {
+      Some(memory_index) => Some((environment.memory_base_field)(memory_index))
+      None => None
+    }
+  }
+  @milkir_machv.lower_dialect_selection_plan_with_protocol(
+    function,
+    Internal,
+    @wasm_milkir.WASM_DIALECT,
+    validate,
+    validate_global,
+    [(0, Ptr64)],
+    lower,
+    resolve_context_field,
+    on_event~,
+  )
+}

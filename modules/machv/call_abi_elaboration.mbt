@@ -73,10 +73,12 @@ priv struct CallSiteRequirement {
 }
 
 ///|
-fn Function::integer_constants(self : Function) -> Array[Int64?] {
+fn FunctionConstruction::integer_constants(
+  self : FunctionConstruction,
+) -> Array[Int64?] {
   let constants : Array[Int64?] = Array::make(self.values.length(), None)
-  for block in self.blocks_in_cfg_order() {
-    for instruction in self.blocks[block.id].instructions {
+  for block_id in self.block_indices_in_cfg_order() {
+    for instruction in self.blocks[block_id].instructions {
       let data = self.instructions[instruction.id]
       for result in data.results {
         constants[result.id] = match data.operation {
@@ -107,8 +109,8 @@ fn hidden_safepoint_abi(
 }
 
 ///|
-fn Function::call_context_operand(
-  self : Function,
+fn FunctionConstruction::call_context_operand(
+  self : FunctionConstruction,
   instruction : Instruction,
   call : SemanticCall,
   operands : Array[Value],
@@ -129,8 +131,8 @@ fn Function::call_context_operand(
 }
 
 ///|
-fn Function::hidden_argument_root_count(
-  self : Function,
+fn FunctionConstruction::hidden_argument_root_count(
+  self : FunctionConstruction,
   instruction : Instruction,
   call : SemanticCall,
   abi : HiddenSafepointAbi,
@@ -187,8 +189,8 @@ fn Function::hidden_argument_root_count(
 }
 
 ///|
-fn Function::append_detached_instruction(
-  self : Function,
+fn FunctionConstruction::append_detached_instruction(
+  self : FunctionConstruction,
   block : Block,
   operation : Operation,
   operands : Array[Value],
@@ -236,8 +238,8 @@ fn root_scope_pop_call(symbol : ExternalSymbol) -> SemanticCall {
 }
 
 ///|
-fn Function::append_root_scope_push(
-  self : Function,
+fn FunctionConstruction::append_root_scope_push(
+  self : FunctionConstruction,
   block : Block,
   destination : Array[Instruction],
   context : Value,
@@ -283,8 +285,8 @@ fn Function::append_root_scope_push(
 }
 
 ///|
-fn Function::append_root_scope_pop(
-  self : Function,
+fn FunctionConstruction::append_root_scope_pop(
+  self : FunctionConstruction,
   block : Block,
   destination : Array[Instruction],
   context : Value,
@@ -307,10 +309,10 @@ fn Function::append_root_scope_pop(
 /// The transformation may insert caller-root-scope calls and may append a
 /// stack-map id operand to explicitly configured hidden safepoints. No-op
 /// functions return without changing their canonical storage.
-pub fn Function::elaborate_call_abi(
-  self : Function,
+fn FunctionConstruction::elaborate_call_abi_verified(
+  self : FunctionConstruction,
   elaboration : CallAbiElaboration,
-) -> Function raise CallAbiElaborationError {
+) -> Unit raise CallAbiElaborationError {
   let mut root_scope_capacity = 0
   let mut needs_elaboration = false
   let mut has_hidden_safepoint = false
@@ -345,10 +347,7 @@ pub fn Function::elaborate_call_abi(
     }
   }
   if !needs_elaboration {
-    return self
-  }
-  self.verify() catch {
-    error => raise InvalidInput(cause=error)
+    return
   }
   let constants = if has_hidden_safepoint {
     Some(self.integer_constants())
@@ -427,7 +426,6 @@ pub fn Function::elaborate_call_abi(
       })
     }
   }
-  self.verified = false
   let root_scope_object = if root_scope_capacity > 0 {
     Some(self.allocate_stack_object(root_scope_capacity * 8, 16))
   } else {
@@ -512,7 +510,42 @@ pub fn Function::elaborate_call_abi(
     self.blocks[block_index].instructions.clear()
     self.blocks[block_index].instructions.append(rewritten)
   }
+}
+
+///|
+/// Apply a constrained call-site ABI transformation in place.
+///
+/// Existing blocks, values, instructions, and metadata retain their identity.
+/// The transformation may insert caller-root-scope calls and may append a
+/// stack-map id operand to explicitly configured hidden safepoints. No-op
+/// functions return without changing their canonical storage.
+pub fn Function::elaborate_call_abi(
+  self : Function,
+  elaboration : CallAbiElaboration,
+) -> Function raise CallAbiElaborationError {
   self.verify() catch {
+    error => raise InvalidInput(cause=error)
+  }
+  self.verified = false
+  self.as_construction().elaborate_call_abi_verified(elaboration)
+  self.verify() catch {
+    error => raise InvalidOutput(cause=error)
+  }
+  self
+}
+
+///|
+/// Apply the same target-neutral call ABI directly to compact selection input.
+pub fn SelectionPlan::elaborate_call_abi(
+  self : SelectionPlan,
+  elaboration : CallAbiElaboration,
+) -> SelectionPlan raise CallAbiElaborationError {
+  self.verify() catch {
+    error => raise InvalidInput(cause=error)
+  }
+  self.verified = false
+  self.construction.elaborate_call_abi_verified(elaboration)
+  self.verify_checked_construction() catch {
     error => raise InvalidOutput(cause=error)
   }
   self

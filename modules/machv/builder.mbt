@@ -1,11 +1,12 @@
 ///|
 /// Owner-aware construction seam for semantic MachV functions.
 pub struct FunctionBuilder {
-  priv function : Function
+  priv construction : FunctionConstruction
   priv mut current_block : Block
   priv mut construction_error : MachVVerifyError?
   priv stack_map_ids : Array[Bool]
   priv mut stack_map_count : Int
+  priv copy_inputs : Bool
 }
 
 ///|
@@ -15,13 +16,46 @@ pub fn FunctionBuilder::new(
   params : Array[ValueType],
   results : Array[ValueType],
 ) -> FunctionBuilder {
-  let function = Function::new(name, protocol, Signature::new(params, results))
+  FunctionBuilder::new_with_storage_policy(
+    name, protocol, params, results, true,
+  )
+}
+
+///|
+/// Create a checked builder for direct immutable selection-plan production.
+/// Emitted operation and operand collections are consumed without defensive
+/// copies; the producer must not mutate them after emission.
+pub fn FunctionBuilder::new_selection_plan(
+  name : String,
+  protocol : CallProtocol,
+  params : Array[ValueType],
+  results : Array[ValueType],
+) -> FunctionBuilder {
+  FunctionBuilder::new_with_storage_policy(
+    name, protocol, params, results, false,
+  )
+}
+
+///|
+fn FunctionBuilder::new_with_storage_policy(
+  name : String,
+  protocol : CallProtocol,
+  params : Array[ValueType],
+  results : Array[ValueType],
+  copy_inputs : Bool,
+) -> FunctionBuilder {
+  let construction = FunctionConstruction::new(
+    name,
+    protocol,
+    Signature::new(params, results),
+  )
   let builder = {
-    function,
-    current_block: Block::new(function.owner, 0),
+    construction,
+    current_block: Block::new(construction.owner, 0),
     construction_error: None,
     stack_map_ids: [],
     stack_map_count: 0,
+    copy_inputs,
   }
   if name.is_empty() {
     builder.record_error(
@@ -43,12 +77,12 @@ fn FunctionBuilder::record_error(
 
 ///|
 pub fn FunctionBuilder::parameters(self : FunctionBuilder) -> Array[Value] {
-  self.function.parameters()
+  self.construction.parameters.copy()
 }
 
 ///|
 pub fn FunctionBuilder::entry_block(self : FunctionBuilder) -> Block {
-  Block::new(self.function.owner, 0)
+  Block::new(self.construction.owner, 0)
 }
 
 ///|
@@ -61,7 +95,7 @@ pub fn FunctionBuilder::create_block(
   self : FunctionBuilder,
   parameter_types : Array[ValueType],
 ) -> Block {
-  self.function.allocate_block(parameter_types)
+  self.construction.allocate_block(parameter_types)
 }
 
 ///|
@@ -73,22 +107,22 @@ pub fn FunctionBuilder::create_stack_object(
   if size <= 0 {
     self.record_error(
       InvalidStackObject(
-        object_id=self.function.stack_objects.length(),
+        object_id=self.construction.stack_objects.length(),
         message="stack object size must be positive",
       ),
     )
-    return StackObject::new(self.function.owner, -1)
+    return StackObject::new(self.construction.owner, -1)
   }
   if !is_power_of_two(alignment) {
     self.record_error(
       InvalidStackObject(
-        object_id=self.function.stack_objects.length(),
+        object_id=self.construction.stack_objects.length(),
         message="stack object alignment must be a positive power of two",
       ),
     )
-    return StackObject::new(self.function.owner, -1)
+    return StackObject::new(self.construction.owner, -1)
   }
-  self.function.allocate_stack_object(size, alignment)
+  self.construction.allocate_stack_object(size, alignment)
 }
 
 ///|
@@ -96,11 +130,11 @@ pub fn FunctionBuilder::block_parameters(
   self : FunctionBuilder,
   block : Block,
 ) -> Array[Value] {
-  if !self.function.owns_block(block) {
+  if !self.construction.owns_block(block) {
     self.record_error(ForeignBlock(block_id=block.id))
     return []
   }
-  self.function.block_parameters(block)
+  self.construction.block_parameters(block)
 }
 
 ///|
@@ -109,7 +143,7 @@ pub fn FunctionBuilder::value_type(
   self : FunctionBuilder,
   value : Value,
 ) -> ValueType? {
-  self.function.value_type(value)
+  self.construction.value_type(value)
 }
 
 ///|
@@ -117,7 +151,7 @@ pub fn FunctionBuilder::switch_to_block(
   self : FunctionBuilder,
   block : Block,
 ) -> Unit {
-  if !self.function.owns_block(block) {
+  if !self.construction.owns_block(block) {
     self.record_error(ForeignBlock(block_id=block.id))
     return
   }
@@ -130,7 +164,7 @@ fn FunctionBuilder::require_values(
   values : Array[Value],
 ) -> Bool {
   for value in values {
-    if !self.function.owns_value(value) {
+    if !self.construction.owns_value(value) {
       self.record_error(ForeignValue(value_id=value.id))
       return false
     }
@@ -140,7 +174,7 @@ fn FunctionBuilder::require_values(
 
 ///|
 fn FunctionBuilder::require_block_open(self : FunctionBuilder) -> Bool {
-  if self.function.blocks[self.current_block.id].terminator is Some(_) {
+  if self.construction.blocks[self.current_block.id].terminator is Some(_) {
     self.record_error(TerminatorAlreadySet(block_id=self.current_block.id))
     return false
   }
@@ -152,7 +186,7 @@ fn FunctionBuilder::value_types(
   self : FunctionBuilder,
   values : Array[Value],
 ) -> Array[ValueType] {
-  values.map(value => self.function.values[value.id].ty)
+  values.map(value => self.construction.values[value.id].ty)
 }
 
 ///|
@@ -222,7 +256,7 @@ pub fn FunctionBuilder::emit_with_metadata(
     return []
   }
   if operation is StackAddress(object) &&
-    !self.function.owns_stack_object(object) {
+    !self.construction.owns_stack_object(object) {
     self.record_error(ForeignStackObject(object_id=object.id))
     return []
   }
@@ -288,7 +322,7 @@ pub fn FunctionBuilder::emit_with_metadata(
     return []
   }
   for root in metadata.live_gc_roots {
-    if self.function.values[root.id].ty != GcRef64 {
+    if self.construction.values[root.id].ty != GcRef64 {
       self.record_error(
         InvalidSafepoint(
           block_id=self.current_block.id,
@@ -298,12 +332,13 @@ pub fn FunctionBuilder::emit_with_metadata(
       return []
     }
   }
-  let results = self.function.append_instruction(
+  let results = self.construction.append_instruction(
     self.current_block,
     operation,
     operands,
     result_types,
     metadata,
+    self.copy_inputs,
   )
   self.record_stack_map(stack_map_id)
   results
@@ -316,14 +351,14 @@ fn FunctionBuilder::validate_edge(
   arguments : Array[Value],
   context : String,
 ) -> Bool {
-  if !self.function.owns_block(target) {
+  if !self.construction.owns_block(target) {
     self.record_error(ForeignBlock(block_id=target.id))
     return false
   }
   if !self.require_values(arguments) {
     return false
   }
-  let parameters = self.function.blocks[target.id].parameters
+  let parameters = self.construction.blocks[target.id].parameters
   if arguments.length() != parameters.length() {
     self.record_error(
       InvalidEdge(
@@ -335,8 +370,8 @@ fn FunctionBuilder::validate_edge(
     return false
   }
   for index, argument in arguments {
-    let actual = self.function.values[argument.id].ty
-    let expected = self.function.values[parameters[index].id].ty
+    let actual = self.construction.values[argument.id].ty
+    let expected = self.construction.values[parameters[index].id].ty
     if actual != expected {
       self.record_error(
         InvalidEdge(
@@ -361,7 +396,7 @@ pub fn FunctionBuilder::jump(
     !self.validate_edge(target, arguments, "jump") {
     return
   }
-  self.function.blocks[self.current_block.id].terminator = Some(
+  self.construction.blocks[self.current_block.id].terminator = Some(
     TerminatorRecord::new(
       Jump(Edge::new(target, arguments)),
       TerminatorMetadata::empty(),
@@ -381,7 +416,7 @@ pub fn FunctionBuilder::branch(
   if !self.require_block_open() || !self.require_values([condition]) {
     return
   }
-  if self.function.values[condition.id].ty != I32 {
+  if self.construction.values[condition.id].ty != I32 {
     self.record_error(
       InvalidTerminator(
         block_id=self.current_block.id,
@@ -394,7 +429,7 @@ pub fn FunctionBuilder::branch(
     !self.validate_edge(false_target, false_arguments, "branch") {
     return
   }
-  self.function.blocks[self.current_block.id].terminator = Some(
+  self.construction.blocks[self.current_block.id].terminator = Some(
     TerminatorRecord::new(
       Branch(
         condition,
@@ -417,7 +452,7 @@ pub fn FunctionBuilder::switch(
   if !self.require_block_open() || !self.require_values([index]) {
     return
   }
-  let index_type = self.function.values[index.id].ty
+  let index_type = self.construction.values[index.id].ty
   if index_type != I32 && index_type != I64 {
     self.record_error(
       InvalidTerminator(
@@ -458,7 +493,7 @@ pub fn FunctionBuilder::switch(
   if !self.validate_edge(default_target, default_arguments, "switch") {
     return
   }
-  self.function.blocks[self.current_block.id].terminator = Some(
+  self.construction.blocks[self.current_block.id].terminator = Some(
     TerminatorRecord::new(
       Switch(index, switch_cases, Edge::new(default_target, default_arguments)),
       TerminatorMetadata::empty(),
@@ -474,18 +509,18 @@ pub fn FunctionBuilder::return_(
   if !self.require_block_open() || !self.require_values(values) {
     return
   }
-  if values.length() != self.function.signature.results.length() {
+  if values.length() != self.construction.signature.results.length() {
     self.record_error(
       InvalidTerminator(
         block_id=self.current_block.id,
-        message="return expects \{self.function.signature.results.length()} values, got \{values.length()}",
+        message="return expects \{self.construction.signature.results.length()} values, got \{values.length()}",
       ),
     )
     return
   }
   for index, value in values {
-    let actual = self.function.values[value.id].ty
-    let expected = self.function.signature.results[index]
+    let actual = self.construction.values[value.id].ty
+    let expected = self.construction.signature.results[index]
     if actual != expected {
       self.record_error(
         InvalidTerminator(
@@ -496,7 +531,7 @@ pub fn FunctionBuilder::return_(
       return
     }
   }
-  self.function.blocks[self.current_block.id].terminator = Some(
+  self.construction.blocks[self.current_block.id].terminator = Some(
     TerminatorRecord::new(Return(values.copy()), TerminatorMetadata::empty()),
   )
 }
@@ -532,7 +567,7 @@ pub fn FunctionBuilder::tail_call_with_metadata(
     )
     return
   }
-  if call.signature.results != self.function.signature.results {
+  if call.signature.results != self.construction.signature.results {
     self.record_error(
       InvalidTerminator(
         block_id=self.current_block.id,
@@ -567,7 +602,7 @@ pub fn FunctionBuilder::tail_call_with_metadata(
     return
   }
   for root in metadata.live_gc_roots {
-    if self.function.values[root.id].ty != GcRef64 {
+    if self.construction.values[root.id].ty != GcRef64 {
       self.record_error(
         InvalidSafepoint(
           block_id=self.current_block.id,
@@ -577,7 +612,7 @@ pub fn FunctionBuilder::tail_call_with_metadata(
       return
     }
   }
-  self.function.blocks[self.current_block.id].terminator = Some(
+  self.construction.blocks[self.current_block.id].terminator = Some(
     TerminatorRecord::new(TailCall(call, operands.copy()), metadata),
   )
 }
@@ -648,7 +683,7 @@ pub fn FunctionBuilder::noreturn_call_with_metadata(
     return
   }
   for root in metadata.live_gc_roots {
-    if self.function.values[root.id].ty != GcRef64 {
+    if self.construction.values[root.id].ty != GcRef64 {
       self.record_error(
         InvalidSafepoint(
           block_id=self.current_block.id,
@@ -658,7 +693,7 @@ pub fn FunctionBuilder::noreturn_call_with_metadata(
       return
     }
   }
-  self.function.blocks[self.current_block.id].terminator = Some(
+  self.construction.blocks[self.current_block.id].terminator = Some(
     TerminatorRecord::new(NoReturnCall(call, operands.copy()), metadata),
   )
 }
@@ -671,7 +706,7 @@ pub fn FunctionBuilder::trap(
   if !self.require_block_open() {
     return
   }
-  self.function.blocks[self.current_block.id].terminator = Some(
+  self.construction.blocks[self.current_block.id].terminator = Some(
     TerminatorRecord::new(Trap(reason), TerminatorMetadata::empty()),
   )
 }
@@ -692,7 +727,7 @@ pub fn FunctionBuilder::set_terminator_source(
     )
     return
   }
-  match self.function.blocks[self.current_block.id].terminator {
+  match self.construction.blocks[self.current_block.id].terminator {
     None =>
       self.record_error(
         InvalidTerminator(
@@ -701,7 +736,7 @@ pub fn FunctionBuilder::set_terminator_source(
         ),
       )
     Some(record) =>
-      self.function.blocks[self.current_block.id].terminator = Some(
+      self.construction.blocks[self.current_block.id].terminator = Some(
         TerminatorRecord::new(
           record.kind,
           TerminatorMetadata::new(Some(source), record.metadata.live_gc_roots),
@@ -727,8 +762,34 @@ pub fn FunctionBuilder::finish(
     )
   }
   on_cleanup_phase(VerifyInput)
-  self.function.verify_checked_construction()
-  self.function.run_mandatory_cleanup_verified(on_phase=on_cleanup_phase)
+  let function = Function::from_construction(self.construction)
+  function.verify_checked_construction()
+  function.run_mandatory_cleanup_verified(on_phase=on_cleanup_phase) |> ignore
+  function
+}
+
+///|
+/// Seal checked construction directly as immutable target-selection input.
+/// This path deliberately does not materialize the richer public `Function`
+/// checkpoint or run transformations that require its mutable diagnostics.
+pub fn FunctionBuilder::finish_selection_plan(
+  self : FunctionBuilder,
+  on_cleanup_phase? : (MandatoryCleanupPhase) -> Unit = fn(_) { () },
+) -> SelectionPlan raise MachVVerifyError {
+  if self.construction_error is Some(error) {
+    raise error
+  }
+  if self.stack_map_count != self.stack_map_ids.length() {
+    raise InvalidMetadata(
+      block_id=0,
+      message="stack-map ids must be unique and dense from zero",
+    )
+  }
+  let plan = SelectionPlan::from_construction(self.construction)
+  on_cleanup_phase(VerifyInput)
+  plan.verify_checked_construction()
+  plan.construction.run_mandatory_cleanup_verified(on_phase=on_cleanup_phase)
   |> ignore
-  self.function
+  plan.verified = true
+  plan
 }

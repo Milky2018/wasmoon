@@ -26,7 +26,10 @@ fn resolve_alias(aliases : Array[Int], value_id : Int) -> Int {
 }
 
 ///|
-fn Function::is_zero_integer_constant(self : Function, value : Value) -> Bool {
+fn FunctionConstruction::is_zero_integer_constant(
+  self : FunctionConstruction,
+  value : Value,
+) -> Bool {
   match self.values[value.id].definition {
     InstructionResult(instruction, _) =>
       if self.instructions[instruction.id].alive {
@@ -43,7 +46,9 @@ fn Function::is_zero_integer_constant(self : Function, value : Value) -> Bool {
 }
 
 ///|
-fn Function::collect_aliases(self : Function) -> (Array[Int], Int) {
+fn FunctionConstruction::collect_aliases(
+  self : FunctionConstruction,
+) -> (Array[Int], Int) {
   let aliases = Array::makei(self.values.length(), index => index)
   let mut alias_count = 0
   for block in self.blocks {
@@ -81,8 +86,8 @@ fn Function::collect_aliases(self : Function) -> (Array[Int], Int) {
 }
 
 ///|
-fn Function::rewrite_value(
-  self : Function,
+fn FunctionConstruction::rewrite_value(
+  self : FunctionConstruction,
   value : Value,
   aliases : Array[Int],
 ) -> Value {
@@ -90,8 +95,8 @@ fn Function::rewrite_value(
 }
 
 ///|
-fn Function::rewrite_values(
-  self : Function,
+fn FunctionConstruction::rewrite_values(
+  self : FunctionConstruction,
   values : Array[Value],
   aliases : Array[Int],
 ) -> Int {
@@ -107,7 +112,10 @@ fn Function::rewrite_values(
 }
 
 ///|
-fn Function::deduplicate_values(self : Function, values : Array[Value]) -> Int {
+fn FunctionConstruction::deduplicate_values(
+  self : FunctionConstruction,
+  values : Array[Value],
+) -> Int {
   let seen = Array::make(self.values.length(), false)
   let unique : Array[Value] = []
   for value in values {
@@ -125,8 +133,8 @@ fn Function::deduplicate_values(self : Function, values : Array[Value]) -> Int {
 }
 
 ///|
-fn Function::rewrite_edge(
-  self : Function,
+fn FunctionConstruction::rewrite_edge(
+  self : FunctionConstruction,
   edge : Edge,
   aliases : Array[Int],
 ) -> (Edge, Int) {
@@ -136,8 +144,8 @@ fn Function::rewrite_edge(
 }
 
 ///|
-fn Function::rewrite_terminator(
-  self : Function,
+fn FunctionConstruction::rewrite_terminator(
+  self : FunctionConstruction,
   record : TerminatorRecord,
   aliases : Array[Int],
 ) -> (TerminatorRecord, Int) {
@@ -205,7 +213,10 @@ fn Function::rewrite_terminator(
 }
 
 ///|
-fn Function::rewrite_aliases(self : Function, aliases : Array[Int]) -> Int {
+fn FunctionConstruction::rewrite_aliases(
+  self : FunctionConstruction,
+  aliases : Array[Int],
+) -> Int {
   let mut changed = 0
   for data in self.instructions {
     if data.alive {
@@ -225,7 +236,9 @@ fn Function::rewrite_aliases(self : Function, aliases : Array[Int]) -> Int {
 }
 
 ///|
-fn Function::value_use_counts(self : Function) -> Array[Int] {
+fn FunctionConstruction::value_use_counts(
+  self : FunctionConstruction,
+) -> Array[Int] {
   let counts = Array::make(self.values.length(), 0)
   for data in self.instructions {
     if data.alive {
@@ -251,7 +264,9 @@ fn Function::value_use_counts(self : Function) -> Array[Int] {
 }
 
 ///|
-fn Function::remove_dead_instructions(self : Function) -> Int {
+fn FunctionConstruction::remove_dead_instructions(
+  self : FunctionConstruction,
+) -> Int {
   let use_counts = self.value_use_counts()
   let worklist : Array[Instruction] = []
   let queued = Array::make(self.instructions.length(), false)
@@ -335,7 +350,9 @@ pub fn Function::run_mandatory_cleanup(
 ) -> CleanupStats raise MachVVerifyError {
   on_phase(VerifyInput)
   self.verify()
-  self.run_mandatory_cleanup_verified(on_phase~)
+  let stats = self.as_construction().run_mandatory_cleanup_verified(on_phase~)
+  self.verified = true
+  stats
 }
 
 ///|
@@ -346,6 +363,16 @@ pub fn Function::run_mandatory_cleanup(
 /// second completed-function scan.
 fn Function::run_mandatory_cleanup_verified(
   self : Function,
+  on_phase? : (MandatoryCleanupPhase) -> Unit = fn(_) { () },
+) -> CleanupStats {
+  let stats = self.as_construction().run_mandatory_cleanup_verified(on_phase~)
+  self.verified = true
+  stats
+}
+
+///|
+fn FunctionConstruction::run_mandatory_cleanup_verified(
+  self : FunctionConstruction,
   on_phase? : (MandatoryCleanupPhase) -> Unit = fn(_) { () },
 ) -> CleanupStats {
   on_phase(CollectAliases)
@@ -359,6 +386,5 @@ fn Function::run_mandatory_cleanup_verified(
   on_phase(RemoveDeadInstructions)
   let instructions_removed = self.remove_dead_instructions()
   on_phase(SealOutput)
-  self.verified = true
   { aliases_rewritten, instructions_removed, }
 }

@@ -391,8 +391,10 @@ pub fn FunctionBuilder::emit(Self, Operation, Array[Value], Array[ValueType]) ->
 pub fn FunctionBuilder::emit_with_metadata(Self, Operation, Array[Value], Array[ValueType], InstructionMetadata) -> Array[Value]
 pub fn FunctionBuilder::entry_block(Self) -> Block
 pub fn FunctionBuilder::finish(Self, on_cleanup_phase? : (MandatoryCleanupPhase) -> Unit) -> Function raise MachVVerifyError
+pub fn FunctionBuilder::finish_selection_plan(Self, on_cleanup_phase? : (MandatoryCleanupPhase) -> Unit) -> SelectionPlan raise MachVVerifyError
 pub fn FunctionBuilder::jump(Self, Block, Array[Value]) -> Unit
 pub fn FunctionBuilder::new(String, CallProtocol, Array[ValueType], Array[ValueType]) -> Self
+pub fn FunctionBuilder::new_selection_plan(String, CallProtocol, Array[ValueType], Array[ValueType]) -> Self
 pub fn FunctionBuilder::noreturn_call(Self, SemanticCall, Array[Value]) -> Unit
 pub fn FunctionBuilder::noreturn_call_with_metadata(Self, SemanticCall, Array[Value], TerminatorMetadata) -> Unit
 pub fn FunctionBuilder::parameters(Self) -> Array[Value]
@@ -647,6 +649,42 @@ pub fn SafepointKind::hash(Self) -> Int
 pub fn SafepointKind::hash_combine(Self, Hasher) -> Unit
 pub fn SafepointKind::not_equal(Self, Self) -> Bool
 pub fn SafepointKind::to_repr(Self) -> @debug.Repr
+
+pub struct SelectionPlan {
+  // private fields
+}
+pub fn SelectionPlan::block_at(Self, Int) -> Block?
+pub fn SelectionPlan::block_count(Self) -> Int
+pub fn SelectionPlan::block_index(Self, Block) -> Int?
+pub fn SelectionPlan::block_indices_in_cfg_order(Self) -> Array[Int]
+pub fn SelectionPlan::block_instruction_at(Self, Block, Int) -> Instruction?
+pub fn SelectionPlan::block_instruction_count(Self, Block) -> Int?
+pub fn SelectionPlan::block_parameter_at(Self, Block, Int) -> Value?
+pub fn SelectionPlan::block_parameter_count(Self, Block) -> Int?
+pub fn SelectionPlan::block_terminator(Self, Block) -> TerminatorRecord?
+pub fn SelectionPlan::elaborate_call_abi(Self, CallAbiElaboration) -> Self raise CallAbiElaborationError
+pub fn SelectionPlan::instruction_at(Self, Int) -> Instruction?
+pub fn SelectionPlan::instruction_index(Self, Instruction) -> Int?
+pub fn SelectionPlan::instruction_metadata_view(Self, Instruction) -> InstructionMetadataView?
+pub fn SelectionPlan::instruction_operand_at(Self, Instruction, Int) -> Value?
+pub fn SelectionPlan::instruction_operand_count(Self, Instruction) -> Int?
+pub fn SelectionPlan::instruction_operation(Self, Instruction) -> Operation?
+pub fn SelectionPlan::instruction_result_at(Self, Instruction, Int) -> Value?
+pub fn SelectionPlan::instruction_result_count(Self, Instruction) -> Int?
+pub fn SelectionPlan::instruction_slot_count(Self) -> Int
+pub fn SelectionPlan::name(Self) -> String
+pub fn SelectionPlan::parameters(Self) -> Array[Value]
+pub fn SelectionPlan::protocol(Self) -> CallProtocol
+pub fn SelectionPlan::require_verified(Self) -> Unit raise MachVVerifyError
+pub fn SelectionPlan::signature(Self) -> Signature
+pub fn SelectionPlan::stack_object_alignment(Self, StackObject) -> Int?
+pub fn SelectionPlan::stack_object_size(Self, StackObject) -> Int?
+pub fn SelectionPlan::stack_objects(Self) -> Array[StackObject]
+pub fn SelectionPlan::value_count(Self) -> Int
+pub fn SelectionPlan::value_index(Self, Value) -> Int?
+pub fn SelectionPlan::value_type(Self, Value) -> ValueType?
+pub fn SelectionPlan::verify(Self) -> Unit raise MachVVerifyError
+pub impl SelectionInput for SelectionPlan
 
 pub struct SemanticCall {
   callee : Callee

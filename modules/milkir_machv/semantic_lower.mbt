@@ -1298,12 +1298,13 @@ fn lower_terminator(
 }
 
 ///|
-fn lower_verified_function(
+fn lower_verified_construction(
   function : @milkir.Function,
   protocol : @semantic.CallProtocol,
   dialect : DialectLowering?,
   on_event : (SemanticLowerEvent) -> Unit,
-) -> @semantic.Function raise SemanticLowerError {
+  direct_selection_plan : Bool,
+) -> @semantic.FunctionBuilder raise SemanticLowerError {
   on_event(SemanticConstructionStarted)
   let parameter_types : Array[@semantic.ValueType] = []
   for parameter_index, parameter in function.params {
@@ -1317,12 +1318,21 @@ fn lower_verified_function(
     }
     parameter_types.push(parameter_type)
   }
-  let builder = @semantic.FunctionBuilder::new(
-    function.name,
-    protocol,
-    parameter_types,
-    function.results.map(lower_type),
-  )
+  let builder = if direct_selection_plan {
+    @semantic.FunctionBuilder::new_selection_plan(
+      function.name,
+      protocol,
+      parameter_types,
+      function.results.map(lower_type),
+    )
+  } else {
+    @semantic.FunctionBuilder::new(
+      function.name,
+      protocol,
+      parameter_types,
+      function.results.map(lower_type),
+    )
+  }
   let values : Array[@semantic.Value?] = Array::make(
     function.next_value_id,
     None,
@@ -1440,6 +1450,19 @@ fn lower_verified_function(
       }
     }
   }
+  builder
+}
+
+///|
+fn lower_verified_function(
+  function : @milkir.Function,
+  protocol : @semantic.CallProtocol,
+  dialect : DialectLowering?,
+  on_event : (SemanticLowerEvent) -> Unit,
+) -> @semantic.Function raise SemanticLowerError {
+  let builder = lower_verified_construction(
+    function, protocol, dialect, on_event, false,
+  )
   let lowered = builder.finish(on_cleanup_phase=phase => {
     on_event(CleanupPhaseStarted(phase))
   }) catch {
@@ -1447,6 +1470,25 @@ fn lower_verified_function(
   }
   on_event(SemanticLoweringFinished)
   lowered
+}
+
+///|
+fn lower_verified_selection_plan(
+  function : @milkir.Function,
+  protocol : @semantic.CallProtocol,
+  dialect : DialectLowering?,
+  on_event : (SemanticLowerEvent) -> Unit,
+) -> @semantic.SelectionPlan raise SemanticLowerError {
+  let builder = lower_verified_construction(
+    function, protocol, dialect, on_event, true,
+  )
+  let plan = builder.finish_selection_plan(on_cleanup_phase=phase => {
+    on_event(CleanupPhaseStarted(phase))
+  }) catch {
+    error => raise InvalidMachV(message=error.to_string())
+  }
+  on_event(SemanticLoweringFinished)
+  plan
 }
 
 ///|
@@ -1528,5 +1570,38 @@ pub fn lower_dialect_function(
     lower,
     resolve_context_field,
     on_event~,
+  )
+}
+
+///|
+/// Validate and lower one explicit MilkIR dialect directly into immutable,
+/// verified target-selection input.
+pub fn lower_dialect_selection_plan_with_protocol(
+  function : @milkir.Function,
+  protocol : @semantic.CallProtocol,
+  dialect : String,
+  validator : (@milkir.ExtensionInstView) -> String?,
+  global_value_validator : (@milkir.GlobalValueData) -> String?,
+  environment_parameters : Array[(Int, @semantic.ValueType)],
+  lower : (@adapter.InstructionContext, @milkir.ExtOp) -> String?,
+  resolve_context_field : (@milkir.ContextField) -> @semantic.EnvironmentField?,
+  on_event? : (SemanticLowerEvent) -> Unit = fn(_) { () },
+) -> @semantic.SelectionPlan raise SemanticLowerError {
+  on_event(InputValidationStarted)
+  function.verify_with_dialect_validator(
+    dialect, validator, global_value_validator,
+  ) catch {
+    error => raise InvalidMilkIR(message=error.to_string())
+  }
+  lower_verified_selection_plan(
+    function,
+    protocol,
+    Some({
+      name: dialect,
+      environment_parameters: environment_parameters.copy(),
+      lower,
+      resolve_context_field,
+    }),
+    on_event,
   )
 }

@@ -34,6 +34,33 @@ fn build_cfg(function : Function) -> (Array[Array[Int]], Array[Array[Int]]) {
 }
 
 ///|
+fn FunctionConstruction::block_indices_in_cfg_order(
+  self : FunctionConstruction,
+) -> Array[Int] {
+  let successors : Array[Array[Int]] = Array::makei(self.blocks.length(), _ => {
+    []
+  })
+  for block_id, data in self.blocks {
+    if data.terminator is Some(record) {
+      for edge in terminator_edges(record.kind) {
+        successors[block_id].push(edge.target.id)
+      }
+    }
+  }
+  let order = reverse_postorder(successors)
+  let seen = Array::make(self.blocks.length(), false)
+  for block_id in order {
+    seen[block_id] = true
+  }
+  for block_id in 0..<self.blocks.length() {
+    if !seen[block_id] {
+      order.push(block_id)
+    }
+  }
+  order
+}
+
+///|
 /// Reachable block indices in reverse postorder, entry block first, followed
 /// by unreachable blocks in stable storage order.
 pub fn Function::block_indices_in_cfg_order(self : Function) -> Array[Int] {

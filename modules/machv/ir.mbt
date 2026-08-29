@@ -319,6 +319,212 @@ priv struct StackObjectData {
 }
 
 ///|
+/// Mutable checked-construction storage shared by the public semantic builder
+/// and the compact target-selection result. It is deliberately not a
+/// `Function`: constructing target input does not first create the richer
+/// public semantic checkpoint.
+priv struct FunctionConstruction {
+  owner : Ref[Unit]
+  name : String
+  protocol : CallProtocol
+  signature : Signature
+  parameters : Array[Value]
+  values : Array[ValueData]
+  blocks : Array[BlockData]
+  instructions : Array[InstructionData]
+  stack_objects : Array[StackObjectData]
+}
+
+///|
+fn FunctionConstruction::new(
+  name : String,
+  protocol : CallProtocol,
+  signature : Signature,
+) -> FunctionConstruction {
+  let construction = {
+    owner: Ref(()),
+    name,
+    protocol,
+    signature: Signature::new(signature.params, signature.results),
+    parameters: [],
+    values: [],
+    blocks: [],
+    instructions: [],
+    stack_objects: [],
+  }
+  for index, ty in signature.params {
+    let value = construction.allocate_value(ty, FunctionParameter(index))
+    construction.parameters.push(value)
+  }
+  construction.allocate_block([]) |> ignore
+  construction
+}
+
+///|
+fn FunctionConstruction::owns_value(
+  self : FunctionConstruction,
+  value : Value,
+) -> Bool {
+  physical_equal(self.owner, value.owner) &&
+  value.id >= 0 &&
+  value.id < self.values.length()
+}
+
+///|
+fn FunctionConstruction::owns_block(
+  self : FunctionConstruction,
+  block : Block,
+) -> Bool {
+  physical_equal(self.owner, block.owner) &&
+  block.id >= 0 &&
+  block.id < self.blocks.length()
+}
+
+///|
+fn FunctionConstruction::owns_stack_object(
+  self : FunctionConstruction,
+  object : StackObject,
+) -> Bool {
+  physical_equal(self.owner, object.owner) &&
+  object.id >= 0 &&
+  object.id < self.stack_objects.length()
+}
+
+///|
+fn FunctionConstruction::allocate_stack_object(
+  self : FunctionConstruction,
+  size : Int,
+  alignment : Int,
+) -> StackObject {
+  let object = StackObject::new(self.owner, self.stack_objects.length())
+  self.stack_objects.push({ size, alignment, })
+  object
+}
+
+///|
+fn FunctionConstruction::allocate_value(
+  self : FunctionConstruction,
+  ty : ValueType,
+  definition : ValueDefinition,
+) -> Value {
+  let value = Value::new(self.owner, self.values.length())
+  self.values.push({ ty, definition, })
+  value
+}
+
+///|
+fn FunctionConstruction::allocate_block(
+  self : FunctionConstruction,
+  parameter_types : Array[ValueType],
+) -> Block {
+  let block = Block::new(self.owner, self.blocks.length())
+  let parameters : Array[Value] = []
+  for index, ty in parameter_types {
+    parameters.push(self.allocate_value(ty, BlockParameter(block, index)))
+  }
+  self.blocks.push({ parameters, instructions: [], terminator: None, })
+  block
+}
+
+///|
+fn FunctionConstruction::append_instruction(
+  self : FunctionConstruction,
+  block : Block,
+  operation : Operation,
+  operands : Array[Value],
+  result_types : Array[ValueType],
+  metadata : InstructionMetadata,
+  copy_inputs : Bool,
+) -> Array[Value] {
+  let instruction = Instruction::new(self.owner, self.instructions.length())
+  let results : Array[Value] = []
+  for index, ty in result_types {
+    results.push(self.allocate_value(ty, InstructionResult(instruction, index)))
+  }
+  self.instructions.push({
+    operation: if copy_inputs {
+      operation.copy()
+    } else {
+      operation
+    },
+    operands: if copy_inputs {
+      operands.copy()
+    } else {
+      operands
+    },
+    results,
+    metadata: {
+      source: metadata.source,
+      live_gc_roots: if copy_inputs {
+        metadata.live_gc_roots.copy()
+      } else {
+        metadata.live_gc_roots
+      },
+      stack_map: metadata.stack_map,
+    },
+    alive: true,
+    parent: Some(block),
+  })
+  self.blocks[block.id].instructions.push(instruction)
+  results
+}
+
+///|
+fn FunctionConstruction::block_parameters(
+  self : FunctionConstruction,
+  block : Block,
+) -> Array[Value] {
+  if self.owns_block(block) {
+    self.blocks[block.id].parameters.copy()
+  } else {
+    []
+  }
+}
+
+///|
+fn FunctionConstruction::value_type(
+  self : FunctionConstruction,
+  value : Value,
+) -> ValueType? {
+  if self.owns_value(value) {
+    Some(self.values[value.id].ty)
+  } else {
+    None
+  }
+}
+
+///|
+fn Function::from_construction(construction : FunctionConstruction) -> Function {
+  {
+    owner: construction.owner,
+    verified: false,
+    name: construction.name,
+    protocol: construction.protocol,
+    signature: construction.signature,
+    parameters: construction.parameters,
+    values: construction.values,
+    blocks: construction.blocks,
+    instructions: construction.instructions,
+    stack_objects: construction.stack_objects,
+  }
+}
+
+///|
+fn Function::as_construction(self : Function) -> FunctionConstruction {
+  {
+    owner: self.owner,
+    name: self.name,
+    protocol: self.protocol,
+    signature: self.signature,
+    parameters: self.parameters,
+    values: self.values,
+    blocks: self.blocks,
+    instructions: self.instructions,
+    stack_objects: self.stack_objects,
+  }
+}
+
+///|
 /// A target-neutral semantic machine function.
 ///
 /// Storage is private and canonical. Public queries return handles or
@@ -334,32 +540,6 @@ pub struct Function {
   priv blocks : Array[BlockData]
   priv instructions : Array[InstructionData]
   priv stack_objects : Array[StackObjectData]
-}
-
-///|
-fn Function::new(
-  name : String,
-  protocol : CallProtocol,
-  signature : Signature,
-) -> Function {
-  let function = {
-    owner: Ref(()),
-    verified: false,
-    name,
-    protocol,
-    signature: Signature::new(signature.params, signature.results),
-    parameters: [],
-    values: [],
-    blocks: [],
-    instructions: [],
-    stack_objects: [],
-  }
-  for index, ty in signature.params {
-    let value = function.allocate_value(ty, FunctionParameter(index))
-    function.parameters.push(value)
-  }
-  function.allocate_block([]) |> ignore
-  function
 }
 
 ///|
@@ -391,72 +571,6 @@ fn Function::owns_stack_object(self : Function, object : StackObject) -> Bool {
   physical_equal(self.owner, object.owner) &&
   object.id >= 0 &&
   object.id < self.stack_objects.length()
-}
-
-///|
-fn Function::allocate_stack_object(
-  self : Function,
-  size : Int,
-  alignment : Int,
-) -> StackObject {
-  let object = StackObject::new(self.owner, self.stack_objects.length())
-  self.stack_objects.push({ size, alignment, })
-  object
-}
-
-///|
-fn Function::allocate_value(
-  self : Function,
-  ty : ValueType,
-  definition : ValueDefinition,
-) -> Value {
-  let value = Value::new(self.owner, self.values.length())
-  self.values.push({ ty, definition, })
-  value
-}
-
-///|
-fn Function::allocate_block(
-  self : Function,
-  parameter_types : Array[ValueType],
-) -> Block {
-  let block = Block::new(self.owner, self.blocks.length())
-  let parameters : Array[Value] = []
-  for index, ty in parameter_types {
-    parameters.push(self.allocate_value(ty, BlockParameter(block, index)))
-  }
-  self.blocks.push({ parameters, instructions: [], terminator: None, })
-  block
-}
-
-///|
-fn Function::append_instruction(
-  self : Function,
-  block : Block,
-  operation : Operation,
-  operands : Array[Value],
-  result_types : Array[ValueType],
-  metadata : InstructionMetadata,
-) -> Array[Value] {
-  let instruction = Instruction::new(self.owner, self.instructions.length())
-  let results : Array[Value] = []
-  for index, ty in result_types {
-    results.push(self.allocate_value(ty, InstructionResult(instruction, index)))
-  }
-  self.instructions.push({
-    operation: operation.copy(),
-    operands: operands.copy(),
-    results,
-    metadata: {
-      source: metadata.source,
-      live_gc_roots: metadata.live_gc_roots.copy(),
-      stack_map: metadata.stack_map,
-    },
-    alive: true,
-    parent: Some(block),
-  })
-  self.blocks[block.id].instructions.push(instruction)
-  results
 }
 
 ///|
