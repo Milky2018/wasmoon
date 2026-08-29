@@ -53,18 +53,13 @@ fn run_opt_pass(
 }
 
 ///|
-fn egraph_limits_for_instruction_count(insts : Int) -> @egraph.SaturationLimits {
-  if insts >= 600 {
-    // An e-class starts with one node, so a limit of one would disable all
-    // rewrites. Allow one match and one additional node instead.
-    SaturationLimits(1, 2)
-  } else if insts >= 300 {
-    // Medium functions retain a little more local exploration while still
-    // bounding matches and e-class growth per work item.
-    SaturationLimits(2, 3)
-  } else {
-    @egraph.SaturationLimits::cranelift_default()
-  }
+fn use_egraph_for_instruction_count(insts : Int) -> Bool {
+  // Large functions previously copied every admitted MilkIR expression into
+  // a second graph, only to run a deliberately tiny compact ruleset. The
+  // existing in-place folding and GVN passes cover that tier without the
+  // representation round trip. Keep aegraph for small functions where the
+  // full ruleset can justify its construction cost.
+  insts < 300
 }
 
 ///|
@@ -73,16 +68,11 @@ fn run_egraph_pass_with_analysis(
   analysis : FunctionAnalysis,
 ) -> Bool {
   let before = instruction_count(func)
-  let limits = egraph_limits_for_instruction_count(before)
-  // Large functions keep the compact core rewrite set for predictable
-  // compile time; smaller ones run the full ruleset, whose results
-  // elaboration can now materialize. The limits above additionally scale
-  // the work permitted per e-class.
-  let ruleset = if before >= 300 {
-    @egraph.get_compact_ruleset()
-  } else {
-    @egraph.get_global_ruleset()
+  if !use_egraph_for_instruction_count(before) {
+    return false
   }
+  let limits = @egraph.SaturationLimits::cranelift_default()
+  let ruleset = @egraph.get_global_ruleset()
   if !perf_enabled() {
     return optimize_function_with_stats_with_limits_and_ruleset(
         func, limits, ruleset, analysis,

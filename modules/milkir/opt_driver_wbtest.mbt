@@ -86,21 +86,21 @@ test "O1 folds a 300-instruction live arithmetic chain" {
 }
 
 ///|
-test "egraph uses a bounded rewrite budget at 300 instructions" {
+test "production optimizer skips the duplicate egraph at 300 instructions" {
   let func = egraph_identity_function("egraph_300", 300)
   inspect(
     run_egraph_pass_with_analysis(func, FunctionAnalysis::build(func)),
-    content="true",
+    content="false",
   )
   inspect(func.verify(), content="()")
 }
 
 ///|
-test "egraph retains rewrite work at 600 instructions" {
+test "production optimizer skips the duplicate egraph at 600 instructions" {
   let func = egraph_identity_function("egraph_600", 600)
   inspect(
     run_egraph_pass_with_analysis(func, FunctionAnalysis::build(func)),
-    content="true",
+    content="false",
   )
   inspect(func.verify(), content="()")
 }
@@ -141,17 +141,15 @@ test "mandatory cleanup preserves effects above size boundaries" {
 }
 
 ///|
-test "egraph size tiers retain nonzero rewrite budgets" {
-  let limits_299 = egraph_limits_for_instruction_count(299)
-  let limits_300 = egraph_limits_for_instruction_count(300)
-  let limits_600 = egraph_limits_for_instruction_count(600)
+test "aegraph is reserved for functions that can use the full ruleset" {
   debug_inspect(
     [
-      (limits_299.matches_limit(), limits_299.eclass_enode_limit()),
-      (limits_300.matches_limit(), limits_300.eclass_enode_limit()),
-      (limits_600.matches_limit(), limits_600.eclass_enode_limit()),
+      use_egraph_for_instruction_count(0),
+      use_egraph_for_instruction_count(299),
+      use_egraph_for_instruction_count(300),
+      use_egraph_for_instruction_count(600),
     ],
-    content="[(5, 5), (2, 3), (1, 2)]",
+    content="[true, true, false, false]",
   )
 }
 
@@ -406,7 +404,13 @@ fn deep_operand_chain_function(name : String, count : Int) -> Function {
 test "egraph survives a deep dominator spine" {
   // Well past the depth a native-stack recursion survives.
   let func = deep_block_chain_function("egraph_deep_blocks", 100000)
-  run_egraph_pass_with_analysis(func, FunctionAnalysis::build(func)) |> ignore
+  optimize_function_with_stats_with_limits_and_ruleset(
+    func,
+    @egraph.SaturationLimits::cranelift_default(),
+    @egraph.get_global_ruleset(),
+    FunctionAnalysis::build(func),
+  )
+  |> ignore
   inspect(func.verify(), content="()")
 }
 
@@ -425,7 +429,13 @@ test "the optimizer pipeline survives a deep dominator spine" {
 ///|
 test "egraph survives a deep operand chain" {
   let func = deep_operand_chain_function("egraph_deep_operands", 100000)
-  run_egraph_pass_with_analysis(func, FunctionAnalysis::build(func)) |> ignore
+  optimize_function_with_stats_with_limits_and_ruleset(
+    func,
+    @egraph.SaturationLimits::cranelift_default(),
+    @egraph.get_global_ruleset(),
+    FunctionAnalysis::build(func),
+  )
+  |> ignore
   inspect(func.verify(), content="()")
 }
 
