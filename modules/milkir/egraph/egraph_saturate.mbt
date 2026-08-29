@@ -166,26 +166,27 @@ fn EGraph::apply_indexed_rules_once(
     let mut class_matches = 0
     let mut class_capped = false
 
-    // Apply opcode-indexed rules for any opcode present in the class.
-    let tags : Array[EOpcodeTag] = []
-    for node in nodes {
-      let tag = node.op.tag()
-      let mut exists = false
-      for t in tags {
-        if t == tag {
-          exists = true
-          break
-        }
-      }
-      if !exists {
-        tags.push(tag)
-      }
-    }
-    for tag in tags {
+    // Apply opcode-indexed rules once per opcode present in the class. Classes
+    // admitted by the size limit contain at most a handful of nodes, so a
+    // scan of prior nodes is cheaper than allocating a temporary tag array for
+    // every class.
+    let node_count = nodes.length()
+    let mut node_index = 0
+    while node_index < node_count {
       if class_capped {
         break
       }
-      if ruleset.by_opcode.get(tag) is Some(rules) {
+      let tag = nodes[node_index].op.tag()
+      let mut duplicate = false
+      let mut prior = 0
+      while prior < node_index {
+        if nodes[prior].op.tag() == tag {
+          duplicate = true
+          break
+        }
+        prior = prior + 1
+      }
+      if !duplicate && ruleset.by_opcode.get(tag) is Some(rules) {
         for indexed_rule in rules {
           if class_matches >= limits.matches_limit {
             self.last_matches_limit_hits = self.last_matches_limit_hits + 1
@@ -206,6 +207,7 @@ fn EGraph::apply_indexed_rules_once(
           }
         }
       }
+      node_index = node_index + 1
     }
     if class_capped {
       continue

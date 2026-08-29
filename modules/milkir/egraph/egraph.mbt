@@ -177,15 +177,35 @@ pub fn EGraph::find(self : EGraph, id : EClassId) -> EClassId {
 /// Canonicalize an ENode by finding canonical ids for all children and
 /// normalizing commutative operand order.
 fn EGraph::canonicalize(self : EGraph, node : ENode) -> ENode {
-  let new_children : Array[EClassId] = []
-  for child in node.children {
-    new_children.push(self.find(child))
+  // Most nodes are already canonical. Copy the children only after finding a
+  // stale id, so the common path can return the existing node and array.
+  let mut canonical_children : Array[EClassId]? = None
+  let mut i = 0
+  while i < node.children.length() {
+    let child = node.children[i]
+    let canonical = self.find(child)
+    if canonical != child {
+      let children = match canonical_children {
+        Some(children) => children
+        None => {
+          let children = node.children.copy()
+          canonical_children = Some(children)
+          children
+        }
+      }
+      children[i] = canonical
+    }
+    i = i + 1
+  }
+  let children = match canonical_children {
+    Some(children) => children
+    None => node.children
   }
 
   // Normalize commutative binary ops:
   // - Prefer putting constants on the right (enables simpler pattern matching).
   // - Otherwise, order operands by canonical class id for determinism.
-  if new_children.length() == 2 {
+  if children.length() == 2 {
     let op = node.op
     let is_commutative = match op {
       Add | Mul | And | Or | Xor | Eq | Ne | Smin | Smax | Umin | Umax => true
@@ -193,26 +213,39 @@ fn EGraph::canonicalize(self : EGraph, node : ENode) -> ENode {
       _ => false
     }
     if is_commutative {
-      let a = new_children[0]
-      let b = new_children[1]
-      let a_is_const = self.get_const(a) is Some(_) ||
-        self.get_fconst(a) is Some(_)
-      let b_is_const = self.get_const(b) is Some(_) ||
-        self.get_fconst(b) is Some(_)
+      let a = children[0]
+      let b = children[1]
+      let a_is_const = self.class_has_constant(a)
+      let b_is_const = self.class_has_constant(b)
       if a_is_const && !b_is_const {
         return { op, children: [b, a], }
       }
       if !a_is_const && b_is_const {
-        return { op, children: [a, b], }
+        return if canonical_children is None { node } else { { op, children, } }
       }
       if a.0 <= b.0 {
-        return { op, children: [a, b], }
+        return if canonical_children is None { node } else { { op, children, } }
       } else {
         return { op, children: [b, a], }
       }
     }
   }
-  { op: node.op, children: new_children, }
+  match canonical_children {
+    Some(children) => { op: node.op, children, }
+    None => node
+  }
+}
+
+///|
+/// Whether a canonical class contains a usable integer or float constant.
+/// This avoids retaining and releasing boxed option payloads when callers only
+/// need the presence bit.
+fn EGraph::class_has_constant(self : EGraph, id : EClassId) -> Bool {
+  match self.class_at(id.0) {
+    Some(eclass) =>
+      eclass.const_value is Some(_) || eclass.fconst_value is Some(_)
+    None => false
+  }
 }
 
 ///|

@@ -66,14 +66,14 @@ fn node_cost(node : ENode) -> Int {
 }
 
 ///|
-/// Extraction cost uses Cranelift-style ordering:
-/// 1) lower op_cost is always better
-/// 2) tie-break with shallower depth
-/// Arithmetic is saturating and reserves an infinity sentinel.
-priv struct ExtractCost {
-  op_cost : Int
-  depth : Int
-  infinite : Bool
+/// Extraction state is indexed directly by eclass id. Costs and depths stay in
+/// unboxed scalar arrays; the optional node is also the entry's presence bit.
+/// This avoids rebuilding an `Option<(ExtractCost, ENode)>` object graph on
+/// every successful relaxation.
+priv struct ExtractionTable {
+  op_costs : Array[Int]
+  depths : Array[Int]
+  nodes : Array[ENode?]
 }
 
 ///|
@@ -85,71 +85,34 @@ fn extract_cost_max_finite() -> Int {
 const EXTRACT_INFINITY_DEPTH : Int = 255
 
 ///|
-fn extract_cost_finite(op_cost : Int, depth : Int) -> ExtractCost {
-  if op_cost >= extract_cost_max_finite() {
-    extract_cost_infinity()
-  } else {
-    { op_cost, depth, infinite: false, }
-  }
-}
-
-///|
-fn extract_cost_infinity() -> ExtractCost {
-  {
-    op_cost: extract_cost_max_finite(),
-    depth: EXTRACT_INFINITY_DEPTH,
-    infinite: true,
-  }
-}
-
-///|
-fn extract_cost_is_better(lhs : ExtractCost, rhs : ExtractCost) -> Bool {
-  if lhs.infinite {
+fn extract_cost_is_better(
+  lhs_cost : Int,
+  lhs_depth : Int,
+  rhs_cost : Int,
+  rhs_depth : Int,
+) -> Bool {
+  let infinity = extract_cost_max_finite()
+  if lhs_cost == infinity {
     false
-  } else if rhs.infinite {
+  } else if rhs_cost == infinity {
     true
-  } else if lhs.op_cost < rhs.op_cost {
+  } else if lhs_cost < rhs_cost {
     true
-  } else if lhs.op_cost > rhs.op_cost {
+  } else if lhs_cost > rhs_cost {
     false
   } else {
-    lhs.depth < rhs.depth
+    lhs_depth < rhs_depth
   }
 }
 
 ///|
-fn extract_cost_add(lhs : ExtractCost, rhs : ExtractCost) -> ExtractCost {
-  if lhs.infinite || rhs.infinite {
-    return extract_cost_infinity()
-  }
+fn extract_cost_add(lhs : Int, rhs : Int) -> Int {
   let max_finite = extract_cost_max_finite()
-  let op_cost = if lhs.op_cost > max_finite - rhs.op_cost {
-    return extract_cost_infinity()
+  if lhs == max_finite || rhs == max_finite || lhs > max_finite - rhs {
+    max_finite
   } else {
-    lhs.op_cost + rhs.op_cost
+    lhs + rhs
   }
-  let depth = if lhs.depth >= rhs.depth { lhs.depth } else { rhs.depth }
-  extract_cost_finite(op_cost, depth)
-}
-
-///|
-fn extract_cost_increment_depth(cost : ExtractCost) -> ExtractCost {
-  if cost.infinite {
-    return cost
-  }
-  let depth = if cost.depth >= EXTRACT_INFINITY_DEPTH {
-    EXTRACT_INFINITY_DEPTH
-  } else {
-    cost.depth + 1
-  }
-  extract_cost_finite(cost.op_cost, depth)
-}
-
-///|
-fn extract_cost_equal(lhs : ExtractCost, rhs : ExtractCost) -> Bool {
-  lhs.infinite == rhs.infinite &&
-  lhs.op_cost == rhs.op_cost &&
-  lhs.depth == rhs.depth
 }
 
 ///|
@@ -170,12 +133,12 @@ fn extract_node_tiebreak_less(lhs : ENode, rhs : ENode) -> Bool {
 pub fn EGraph::extract(self : EGraph, id : EClassId) -> (Int, ENode) {
   let canonical = self.find(id)
   let table = self.compute_extraction_table()
-  match table[canonical.0] {
-    Some((cost, node)) =>
-      if cost.infinite {
+  match table.nodes[canonical.0] {
+    Some(node) =>
+      if table.op_costs[canonical.0] == extract_cost_max_finite() {
         (@int.MAX_VALUE, node)
       } else {
-        (cost.op_cost, node)
+        (table.op_costs[canonical.0], node)
       }
     // No finite extraction exists (every node participates in a cycle).
     None => (@int.MAX_VALUE, { op: Var(-1), children: [], })
@@ -190,8 +153,9 @@ pub fn EGraph::extract(self : EGraph, id : EClassId) -> (Int, ENode) {
 /// Classes with no finite extraction (every node cyclic) are absent.
 pub fn EGraph::best_nodes(self : EGraph) -> Map[Int, ENode] {
   let best : Map[Int, ENode] = Map([])
-  for class_id, entry in self.compute_extraction_table() {
-    if entry is Some((_, node)) {
+  let table = self.compute_extraction_table()
+  for class_id, entry in table.nodes {
+    if entry is Some(node) {
       best.set(class_id, node)
     }
   }
@@ -201,15 +165,15 @@ pub fn EGraph::best_nodes(self : EGraph) -> Map[Int, ENode] {
 ///|
 /// Relax per-class best costs with a dependency worklist. A class is revisited
 /// only when one of its children's costs improves.
-fn EGraph::compute_extraction_table(
-  self : EGraph,
-) -> Array[(ExtractCost, ENode)?] {
-  let table : Array[(ExtractCost, ENode)?] = Array::make(
-    self.uf.parent.length(),
-    None,
-  )
+fn EGraph::compute_extraction_table(self : EGraph) -> ExtractionTable {
+  let class_count = self.uf.parent.length()
+  let table : ExtractionTable = {
+    op_costs: Array::make(class_count, extract_cost_max_finite()),
+    depths: Array::make(class_count, EXTRACT_INFINITY_DEPTH),
+    nodes: Array::make(class_count, None),
+  }
   let pending : Array[Int] = []
-  let in_pending = Array::make(self.uf.parent.length(), false)
+  let in_pending = Array::make(class_count, false)
   for class_id, eclass in self.classes {
     if eclass is Some(_) {
       pending.push(class_id)
@@ -221,13 +185,21 @@ fn EGraph::compute_extraction_table(
     guard self.class_at(class_id) is Some(eclass) else { continue }
     let mut improved = false
     for node in eclass.nodes {
-      let mut total_cost = extract_cost_finite(node_cost(node), 0)
+      let mut total_cost = node_cost(node)
+      let mut total_depth = 0
       let mut priceable = true
       for child in node.children {
         let child_root = self.find(child).0
-        match table[child_root] {
-          Some((child_cost, _)) =>
-            total_cost = extract_cost_add(total_cost, child_cost)
+        match table.nodes[child_root] {
+          Some(_) => {
+            total_cost = extract_cost_add(
+              total_cost,
+              table.op_costs[child_root],
+            )
+            if table.depths[child_root] > total_depth {
+              total_depth = table.depths[child_root]
+            }
+          }
           None => {
             priceable = false
             break
@@ -237,19 +209,33 @@ fn EGraph::compute_extraction_table(
       if !priceable {
         continue
       }
-      total_cost = extract_cost_increment_depth(total_cost)
-      match table[class_id] {
-        Some((best_cost, best_node)) =>
-          if extract_cost_is_better(total_cost, best_cost) ||
+      if total_cost == extract_cost_max_finite() {
+        total_depth = EXTRACT_INFINITY_DEPTH
+      } else if total_depth < EXTRACT_INFINITY_DEPTH {
+        total_depth = total_depth + 1
+      }
+      match table.nodes[class_id] {
+        Some(best_node) =>
+          if extract_cost_is_better(
+              total_cost,
+              total_depth,
+              table.op_costs[class_id],
+              table.depths[class_id],
+            ) ||
             (
-              extract_cost_equal(total_cost, best_cost) &&
+              total_cost == table.op_costs[class_id] &&
+              total_depth == table.depths[class_id] &&
               extract_node_tiebreak_less(node, best_node)
             ) {
-            table[class_id] = Some((total_cost, node))
+            table.op_costs[class_id] = total_cost
+            table.depths[class_id] = total_depth
+            table.nodes[class_id] = Some(node)
             improved = true
           }
         None => {
-          table[class_id] = Some((total_cost, node))
+          table.op_costs[class_id] = total_cost
+          table.depths[class_id] = total_depth
+          table.nodes[class_id] = Some(node)
           improved = true
         }
       }
