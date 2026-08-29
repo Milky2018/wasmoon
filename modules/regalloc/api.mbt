@@ -153,12 +153,10 @@ pub struct AllocationSession {
   priv occupied_parent : Array[Int]
   priv occupied_previous : Array[Int]
   priv occupied_next : Array[Int]
-  priv occupied_start_blocks : Array[Int]
-  priv occupied_start_instructions : Array[Int]
-  priv occupied_end_blocks : Array[Int]
-  priv occupied_end_instructions : Array[Int]
+  priv occupied_starts : Array[Int64]
+  priv occupied_ends : Array[Int64]
   priv occupied_stack : Array[Int]
-  priv preferred_by_value : Array[PhysicalReg?]
+  priv preferred_by_value : Array[Int]
   priv conflict_marks : Array[Int]
   priv probe_conflicts : Array[Int]
   priv eviction_conflicts : Array[Int]
@@ -169,7 +167,7 @@ pub struct AllocationSession {
   priv queue_priorities : Array[Int]
   priv queue_weights : Array[Int]
   priv queue_in_queue : Array[Bool]
-  priv queue_hints : Array[PhysicalReg?]
+  priv queue_hints : Array[Int]
 }
 
 ///|

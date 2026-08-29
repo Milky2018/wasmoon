@@ -9,7 +9,7 @@ priv enum AllocationBundleState {
 
 ///|
 priv struct SpillSet {
-  mut hint : PhysicalReg?
+  mut hint : Int
   mut spill_bundle : Int?
   mut splits : Int
 }
@@ -35,7 +35,7 @@ priv struct BundleQueue {
   priorities : Array[Int]
   weights : Array[Int]
   in_queue : Array[Bool]
-  hints : Array[PhysicalReg?]
+  hints : Array[Int]
   mut prioritize_weight : Bool
 }
 
@@ -58,10 +58,8 @@ pub fn AllocationSession::new() -> AllocationSession {
     occupied_parent: [],
     occupied_previous: [],
     occupied_next: [],
-    occupied_start_blocks: [],
-    occupied_start_instructions: [],
-    occupied_end_blocks: [],
-    occupied_end_instructions: [],
+    occupied_starts: [],
+    occupied_ends: [],
     occupied_stack: [],
     preferred_by_value: [],
     conflict_marks: [],
@@ -138,7 +136,7 @@ fn BundleQueue::push(
   self : BundleQueue,
   bundle : Int,
   context : AllocationContext,
-  hint : PhysicalReg?,
+  hint : Int,
 ) -> Unit {
   self.ensure_slot(bundle)
   if self.in_queue[bundle] {
@@ -172,7 +170,7 @@ fn BundleQueue::push(
 }
 
 ///|
-fn BundleQueue::pop(self : BundleQueue) -> (Int, PhysicalReg?)? {
+fn BundleQueue::pop(self : BundleQueue) -> (Int, Int)? {
   if self.items.is_empty() {
     return None
   }
@@ -224,7 +222,8 @@ fn BundleQueue::pop(self : BundleQueue) -> (Int, PhysicalReg?)? {
 priv struct BundleRegisterProbe {
   conflicts : Array[Int]
   mut conflict_cost : Int
-  mut first_conflict : ProgramPoint?
+  mut has_first_conflict : Bool
+  mut first_conflict : ProgramPoint
   mut clobbered : Bool
   mut cutoff_exceeded : Bool
 }
@@ -234,17 +233,36 @@ fn BundleRegisterProbe::new(conflicts : Array[Int]) -> BundleRegisterProbe {
   {
     conflicts,
     conflict_cost: 0,
-    first_conflict: None,
+    has_first_conflict: false,
+    first_conflict: ProgramPoint(-1, -1),
     clobbered: false,
     cutoff_exceeded: false,
   }
 }
 
 ///|
-priv enum BundleProbeConflictPolicy {
-  Unlimited
-  CostLimit(Int)
-  RejectAnyConflict
+/// Probe conflict policy is numeric control state carried through the hottest
+/// allocation loop. Keep it inline instead of allocating the payload-bearing
+/// cost-limit case for every register probe.
+#valtype
+priv struct BundleProbeConflictPolicy {
+  kind : Int
+  limit : Int
+}
+
+///|
+fn unlimited_conflicts() -> BundleProbeConflictPolicy {
+  { kind: 0, limit: 0, }
+}
+
+///|
+fn limited_conflicts(limit : Int) -> BundleProbeConflictPolicy {
+  { kind: 1, limit, }
+}
+
+///|
+fn reject_conflicts() -> BundleProbeConflictPolicy {
+  { kind: 2, limit: 0, }
 }
 
 ///|
@@ -351,7 +369,7 @@ fn build_allocation_context(
   for bundle, segment_ids in context.segments {
     let spill_set = spill_sets.length()
     context.add_bundle(segment_ids, segments, spill_set) |> ignore
-    spill_sets.push({ hint: None, spill_bundle: None, splits: 0, })
+    spill_sets.push({ hint: -1, spill_bundle: None, splits: 0, })
     for segment_id in segment_ids {
       segment_owner[segment_id] = bundle
       segment_spill_set[segment_id] = spill_set
@@ -371,18 +389,15 @@ fn bundle_class(
 
 ///|
 fn earlier_conflict_point(
-  current : ProgramPoint?,
+  has_current : Bool,
+  current : ProgramPoint,
   candidate : ProgramPoint,
   block_order : Array[Int],
 ) -> ProgramPoint {
-  match current {
-    Some(point) =>
-      if candidate.compare_with_order(point, block_order) < 0 {
-        candidate
-      } else {
-        point
-      }
-    None => candidate
+  if has_current && candidate.compare_with_order(current, block_order) >= 0 {
+    current
+  } else {
+    candidate
   }
 }
 
@@ -407,16 +422,17 @@ fn probe_bundle_register(
   statistics.register_probes = statistics.register_probes + 1
   conflicts.clear()
   result.conflict_cost = 0
-  result.first_conflict = None
+  result.has_first_conflict = false
   result.clobbered = false
   result.cutoff_exceeded = false
   let bundle_segments = context.segments[bundle]
-  if clobbers.first_intersection(register, bundle_segments, occupied)
-    is Some(point) {
+  let clobber = clobbers.first_intersection(register, bundle_segments, occupied)
+  if clobber.present {
     result.clobbered = true
-    result.first_conflict = Some(point)
+    result.has_first_conflict = true
+    result.first_conflict = clobber.point
   }
-  if result.clobbered && conflict_policy is RejectAnyConflict {
+  if result.clobbered && conflict_policy.kind == 2 {
     result.cutoff_exceeded = true
     return
   }
@@ -474,18 +490,18 @@ fn probe_bundle_register(
       result.conflict_cost = result.conflict_cost.max(context.weights[owner])
       let current = segments[current_segment]
       let conflict = segments[conflict_segment]
-      result.first_conflict = Some(
-        earlier_conflict_point(
-          result.first_conflict,
-          later_point(current.range.start, conflict.range.start, block_order),
-          block_order,
-        ),
+      result.first_conflict = earlier_conflict_point(
+        result.has_first_conflict,
+        result.first_conflict,
+        later_point(current.range.start, conflict.range.start, block_order),
+        block_order,
       )
-      let cutoff_exceeded = match conflict_policy {
-        Unlimited => false
-        CostLimit(limit) => result.conflict_cost > limit
-        RejectAnyConflict => true
-      }
+      result.has_first_conflict = true
+      let cutoff_exceeded = conflict_policy.kind == 2 ||
+        (
+          conflict_policy.kind == 1 &&
+          result.conflict_cost > conflict_policy.limit
+        )
       if cutoff_exceeded {
         result.cutoff_exceeded = true
         return
@@ -525,13 +541,25 @@ fn push_bundle_register_candidates(
 }
 
 ///|
+fn push_bundle_register_index(
+  order : Array[Int],
+  order_marks : Array[Bool],
+  candidate : Int,
+) -> Unit {
+  if candidate >= 0 && !order_marks[candidate] {
+    order_marks[candidate] = true
+    order.push(candidate)
+  }
+}
+
+///|
 fn bundle_register_order(
   bundle : Int,
   context : AllocationContext,
-  hint : PhysicalReg?,
+  hint : Int,
   segments : Array[AllocationSegment],
   environment : MachineEnv,
-  preferred_by_value : Array[PhysicalReg?],
+  preferred_by_value : Array[Int],
   register_indexes : PhysicalRegisterIndex,
   order : Array[Int],
   order_marks : Array[Bool],
@@ -540,13 +568,7 @@ fn bundle_register_order(
     order_marks[register] = false
   }
   order.clear()
-  push_bundle_register_candidates(
-    order,
-    order_marks,
-    register_indexes,
-    environment.allocatable_regs,
-    hint,
-  )
+  push_bundle_register_index(order, order_marks, hint)
   for segment_id in context.segments[bundle] {
     let segment = segments[segment_id]
     push_bundle_register_candidates(
@@ -563,11 +585,9 @@ fn bundle_register_order(
       environment.allocatable_regs,
       segment.preference_hint,
     )
-    push_bundle_register_candidates(
+    push_bundle_register_index(
       order,
       order_marks,
-      register_indexes,
-      environment.allocatable_regs,
       preferred_by_value[segment.value.id],
     )
   }
@@ -609,8 +629,9 @@ fn evict_bundle_conflicts(
 ) -> Unit {
   for conflict in conflicts {
     let hint = match context.states[conflict] {
-      BundleReg(reg) => Some(reg)
-      _ => None
+      BundleReg(reg) =>
+        register_index(environment.allocatable_regs, reg).unwrap()
+      _ => -1
     }
     remove_bundle_allocation(conflict, context, environment, segments, occupied)
     queue.push(conflict, context, hint)
@@ -626,17 +647,17 @@ fn record_bundle_allocation(
   environment : MachineEnv,
   segments : Array[AllocationSegment],
   occupied : RegisterAllocationIndex,
-  preferred_by_value : Array[PhysicalReg?],
+  preferred_by_value : Array[Int],
   spill_sets : Array[SpillSet],
 ) -> Unit {
   let reg = environment.allocatable_regs[register]
   for segment_id in context.segments[bundle] {
     let segment = segments[segment_id]
     segment.location = Some(SegmentReg(reg))
-    preferred_by_value[segment.value.id] = Some(reg)
+    preferred_by_value[segment.value.id] = register
     occupied.insert(register, segment_id)
   }
-  spill_sets[context.spill_sets[bundle]].hint = Some(reg)
+  spill_sets[context.spill_sets[bundle]].hint = register
   context.states[bundle] = BundleReg(reg)
 }
 
@@ -719,7 +740,7 @@ fn enqueue_child_bundle(
   segments : Array[AllocationSegment],
   segment_ids : Array[Int],
   block_order : Array[Int],
-  hint : PhysicalReg?,
+  hint : Int,
   spill_set : Int,
   boundary_cost? : Int = 0,
 ) -> Unit {
@@ -926,8 +947,8 @@ fn segment_carries_no_use(
 /// bundle, or removes a non-empty gap from a singleton range.
 fn split_bundle_at_conflict(
   bundle : Int,
-  split_point : ProgramPoint?,
-  hint : PhysicalReg?,
+  split_point : ProgramPoint,
+  hint : Int,
   context : AllocationContext,
   segment_owner : Array[Int],
   queue : BundleQueue,
@@ -941,7 +962,6 @@ fn split_bundle_at_conflict(
   allocatable : Array[PhysicalReg],
   statistics : BundleAllocationStatistics,
 ) -> Bool {
-  guard split_point is Some(initial_point) else { return false }
   if context.minimals[bundle] {
     return false
   }
@@ -952,7 +972,7 @@ fn split_bundle_at_conflict(
   }
   let bundle_segments = context.segments[bundle]
   let bundle_start = segments[bundle_segments[0]].range.start
-  let mut point = initial_point
+  let mut point = split_point
   if point.compare_with_order(bundle_start, ranges.block_order) <= 0 {
     point = ProgramPoint(bundle_start.block, bundle_start.inst + 1)
   }
@@ -1065,22 +1085,19 @@ fn split_bundle_at_conflict(
 
 ///|
 fn should_take_bundle_split(
-  best_cost : Int?,
-  best_point : ProgramPoint?,
+  has_best : Bool,
+  best_cost : Int,
+  best_point : ProgramPoint,
   candidate_cost : Int,
   candidate_point : ProgramPoint,
   block_order : Array[Int],
 ) -> Bool {
-  match (best_cost, best_point) {
-    (None, None) => true
-    (Some(cost), Some(point)) =>
-      candidate_cost < cost ||
-      (
-        candidate_cost == cost &&
-        candidate_point.compare_with_order(point, block_order) > 0
-      )
-    _ => false
-  }
+  !has_best ||
+  candidate_cost < best_cost ||
+  (
+    candidate_cost == best_cost &&
+    candidate_point.compare_with_order(best_point, block_order) > 0
+  )
 }
 
 ///|
@@ -1220,7 +1237,7 @@ fn[F : FunctionView] allocate_bundles(
     register_indexes,
   )
   let preferred_by_value = session.preferred_by_value
-  reset_dense_array(preferred_by_value, function.value_count(), None)
+  reset_dense_array(preferred_by_value, function.value_count(), -1)
   let conflict_marks = session.conflict_marks
   reset_dense_array(conflict_marks, context.states.length(), 0)
   let probe_conflicts = session.probe_conflicts
@@ -1239,7 +1256,7 @@ fn[F : FunctionView] allocate_bundles(
   let mut probe_id = 0
   let queue = BundleQueue::for_session(session, context.states.length())
   for bundle in 0..<context.states.length() {
-    queue.push(bundle, context, None)
+    queue.push(bundle, context, -1)
   }
   statistics.max_queue_length = queue.items.length()
   while queue.pop() is Some((bundle, queue_hint)) {
@@ -1250,9 +1267,10 @@ fn[F : FunctionView] allocate_bundles(
     bundle_register_order(
       bundle,
       context,
-      match spill_sets[context.spill_sets[bundle]].hint {
-        Some(reg) => Some(reg)
-        None => queue_hint
+      if spill_sets[context.spill_sets[bundle]].hint >= 0 {
+        spill_sets[context.spill_sets[bundle]].hint
+      } else {
+        queue_hint
       },
       segments,
       environment,
@@ -1266,8 +1284,9 @@ fn[F : FunctionView] allocate_bundles(
     eviction_conflicts.clear()
     let mut eviction_cost : Int? = None
     let mut split_register = -1
-    let mut split_cost : Int? = None
-    let mut split_point : ProgramPoint? = None
+    let mut has_split = false
+    let mut split_cost = 0
+    let mut split_point = ProgramPoint(-1, -1)
     let class = bundle_class(bundle, context, segments)
     for register in register_order {
       let reg = environment.allocatable_regs[register]
@@ -1278,9 +1297,10 @@ fn[F : FunctionView] allocate_bundles(
         conflict_marks.push(0)
       }
       probe_id = probe_id + 1
-      let conflict_policy = match (eviction_cost, split_cost) {
-        (Some(evict), Some(split)) => CostLimit(evict.max(split))
-        _ => Unlimited
+      let conflict_policy = if has_split && eviction_cost is Some(evict) {
+        limited_conflicts(evict.max(split_cost))
+      } else {
+        unlimited_conflicts()
       }
       probe_bundle_register(
         bundle,
@@ -1316,8 +1336,8 @@ fn[F : FunctionView] allocate_bundles(
           eviction_conflicts.push(conflict)
         }
       }
-      if probe.first_conflict is Some(conflict_point) &&
-        !context.minimals[bundle] {
+      if probe.has_first_conflict && !context.minimals[bundle] {
+        let conflict_point = probe.first_conflict
         let move_cost = use_weight(
           UsePosition(conflict_point, LiveDef, AnyReg),
           loop_depths,
@@ -1327,6 +1347,7 @@ fn[F : FunctionView] allocate_bundles(
           .min(2_147_483_647L)
           .to_int()
         if should_take_bundle_split(
+            has_split,
             split_cost,
             split_point,
             candidate_cost,
@@ -1334,8 +1355,9 @@ fn[F : FunctionView] allocate_bundles(
             ranges.block_order,
           ) {
           split_register = register
-          split_cost = Some(candidate_cost)
-          split_point = Some(conflict_point)
+          has_split = true
+          split_cost = candidate_cost
+          split_point = conflict_point
         }
       }
     }
@@ -1346,17 +1368,13 @@ fn[F : FunctionView] allocate_bundles(
       )
       continue
     }
-    let choose_split = split_point is Some(_) &&
+    let choose_split = has_split &&
       (
         eviction_cost is None ||
         context.weights[bundle] <= eviction_cost.unwrap()
       )
     if choose_split {
-      let split_hint = if split_register >= 0 {
-        Some(environment.allocatable_regs[split_register])
-      } else {
-        None
-      }
+      let split_hint = split_register
       if split_bundle_at_conflict(
           bundle,
           split_point,
@@ -1396,12 +1414,8 @@ fn[F : FunctionView] allocate_bundles(
       )
       continue
     }
-    let split_hint = if split_register >= 0 {
-      Some(environment.allocatable_regs[split_register])
-    } else {
-      None
-    }
-    if split_point is None ||
+    let split_hint = split_register
+    if !has_split ||
       !split_bundle_at_conflict(
         bundle,
         split_point,
@@ -1478,7 +1492,7 @@ fn[F : FunctionView] allocate_bundles(
         probe_conflicts,
         probe,
         statistics,
-        conflict_policy=RejectAnyConflict,
+        conflict_policy=reject_conflicts(),
       )
       if !probe.clobbered && probe.conflicts.is_empty() {
         free_register = register

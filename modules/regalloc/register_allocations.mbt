@@ -19,10 +19,8 @@ priv struct RegisterAllocationIndex {
   parent : Array[Int]
   previous_order : Array[Int]
   next_order : Array[Int]
-  start_block_order : Array[Int]
-  start_instruction : Array[Int]
-  end_block_order : Array[Int]
-  end_instruction : Array[Int]
+  starts : Array[Int64]
+  ends : Array[Int64]
 }
 
 ///|
@@ -46,19 +44,15 @@ fn program_point_block_order(
 }
 
 ///|
-fn compare_cached_points(
-  left_block : Int,
-  left_instruction : Int,
-  right_block : Int,
-  right_instruction : Int,
-) -> Int {
-  if left_block < right_block {
-    -1
-  } else if left_block > right_block {
-    1
-  } else {
-    left_instruction.compare(right_instruction)
-  }
+fn ordered_program_point_key(
+  point : ProgramPoint,
+  block_order : Array[Int],
+) -> Int64 {
+  // Bias the signed instruction into the low 32 bits. The ordered block id in
+  // the high 32 bits then preserves ProgramPoint's lexicographic order exactly.
+  program_point_block_order(point, block_order).to_int64() * 4294967296L +
+  point.inst.to_int64() +
+  2147483648L
 }
 
 ///|
@@ -80,10 +74,8 @@ fn RegisterAllocationIndex::for_session(
   reset_dense_array(session.occupied_parent, segments.length(), -1)
   reset_dense_array(session.occupied_previous, segments.length(), -1)
   reset_dense_array(session.occupied_next, segments.length(), -1)
-  reset_dense_array(session.occupied_start_blocks, segments.length(), 0)
-  reset_dense_array(session.occupied_start_instructions, segments.length(), 0)
-  reset_dense_array(session.occupied_end_blocks, segments.length(), 0)
-  reset_dense_array(session.occupied_end_instructions, segments.length(), 0)
+  reset_dense_array(session.occupied_starts, segments.length(), 0L)
+  reset_dense_array(session.occupied_ends, segments.length(), 0L)
   let index : RegisterAllocationIndex = {
     segments,
     segment_owner,
@@ -95,10 +87,8 @@ fn RegisterAllocationIndex::for_session(
     parent: session.occupied_parent,
     previous_order: session.occupied_previous,
     next_order: session.occupied_next,
-    start_block_order: session.occupied_start_blocks,
-    start_instruction: session.occupied_start_instructions,
-    end_block_order: session.occupied_end_blocks,
-    end_instruction: session.occupied_end_instructions,
+    starts: session.occupied_starts,
+    ends: session.occupied_ends,
   }
   for segment in segments {
     index.refresh_segment(segment.id)
@@ -112,16 +102,11 @@ fn RegisterAllocationIndex::refresh_segment(
   segment : Int,
 ) -> Unit {
   let range = self.segments[segment].range
-  self.start_block_order[segment] = program_point_block_order(
+  self.starts[segment] = ordered_program_point_key(
     range.start,
     self.block_order,
   )
-  self.start_instruction[segment] = range.start.inst
-  self.end_block_order[segment] = program_point_block_order(
-    range.end,
-    self.block_order,
-  )
-  self.end_instruction[segment] = range.end.inst
+  self.ends[segment] = ordered_program_point_key(range.end, self.block_order)
 }
 
 ///|
@@ -135,10 +120,8 @@ fn RegisterAllocationIndex::add_segment(
     self.parent.push(-1)
     self.previous_order.push(-1)
     self.next_order.push(-1)
-    self.start_block_order.push(0)
-    self.start_instruction.push(0)
-    self.end_block_order.push(0)
-    self.end_instruction.push(0)
+    self.starts.push(0L)
+    self.ends.push(0L)
   }
   self.refresh_segment(segment)
 }
@@ -165,12 +148,7 @@ fn RegisterAllocationIndex::compare_segments(
   left : Int,
   right : Int,
 ) -> Int {
-  let by_end = compare_cached_points(
-    self.end_block_order[left],
-    self.end_instruction[left],
-    self.end_block_order[right],
-    self.end_instruction[right],
-  )
+  let by_end = self.ends[left].compare(self.ends[right])
   if by_end != 0 {
     by_end
   } else {
@@ -362,17 +340,11 @@ fn RegisterAllocationIndex::seek(
   stack : Array[Int],
 ) -> Unit {
   stack.clear()
-  let point_block_order = program_point_block_order(point, self.block_order)
+  let point_key = ordered_program_point_key(point, self.block_order)
   let mut current = self.roots[register]
   let mut candidate = -1
   while current >= 0 {
-    if compare_cached_points(
-        self.end_block_order[current],
-        self.end_instruction[current],
-        point_block_order,
-        point.inst,
-      ) >=
-      0 {
+    if self.ends[current] >= point_key {
       candidate = current
       current = self.left[current]
     } else {
@@ -390,13 +362,7 @@ fn RegisterAllocationIndex::segment_end_before_start(
   end_segment : Int,
   start_segment : Int,
 ) -> Bool {
-  compare_cached_points(
-    self.end_block_order[end_segment],
-    self.end_instruction[end_segment],
-    self.start_block_order[start_segment],
-    self.start_instruction[start_segment],
-  ) <
-  0
+  self.ends[end_segment] < self.starts[start_segment]
 }
 
 ///|
@@ -428,13 +394,7 @@ fn RegisterAllocationIndex::segment_end_before_or_equal(
   left : Int,
   right : Int,
 ) -> Bool {
-  compare_cached_points(
-    self.end_block_order[left],
-    self.end_instruction[left],
-    self.end_block_order[right],
-    self.end_instruction[right],
-  ) <=
-  0
+  self.ends[left] <= self.ends[right]
 }
 
 ///|

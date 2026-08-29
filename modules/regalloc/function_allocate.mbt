@@ -1,13 +1,29 @@
 ///|
 priv struct RegisterClobberPoints {
   points : Array[ProgramPoint]
-  block_orders : Array[Int]
-  instructions : Array[Int]
+  keys : Array[Int64]
 }
 
 ///|
 priv struct RegisterClobberIndex {
   by_register : Array[RegisterClobberPoints]
+}
+
+///|
+#valtype
+priv struct OptionalProgramPoint {
+  present : Bool
+  point : ProgramPoint
+}
+
+///|
+fn no_program_point() -> OptionalProgramPoint {
+  { present: false, point: ProgramPoint(-1, -1), }
+}
+
+///|
+fn some_program_point(point : ProgramPoint) -> OptionalProgramPoint {
+  { present: true, point, }
 }
 
 ///|
@@ -75,7 +91,7 @@ fn PhysicalRegisterIndex::find(
 fn RegisterClobberIndex::new(register_count : Int) -> RegisterClobberIndex {
   let by_register : Array[RegisterClobberPoints] = []
   for _ in 0..<register_count {
-    by_register.push({ points: [], block_orders: [], instructions: [], })
+    by_register.push({ points: [], keys: [], })
   }
   { by_register, }
 }
@@ -86,12 +102,11 @@ fn RegisterClobberIndex::reset(
   register_count : Int,
 ) -> Unit {
   while self.by_register.length() < register_count {
-    self.by_register.push({ points: [], block_orders: [], instructions: [], })
+    self.by_register.push({ points: [], keys: [], })
   }
   for register in self.by_register {
     register.points.clear()
-    register.block_orders.clear()
-    register.instructions.clear()
+    register.keys.clear()
   }
 }
 
@@ -172,8 +187,7 @@ fn[F : FunctionView] build_register_clobber_index(
       })
     }
     for point in clobbers.points {
-      clobbers.block_orders.push(program_point_block_order(point, block_order))
-      clobbers.instructions.push(point.inst)
+      clobbers.keys.push(ordered_program_point_key(point, block_order))
     }
   }
   index
@@ -185,21 +199,15 @@ fn RegisterClobberIndex::first_intersection(
   register : Int,
   segment_ids : Array[Int],
   segments : RegisterAllocationIndex,
-) -> ProgramPoint? {
-  guard !segment_ids.is_empty() else { return None }
+) -> OptionalProgramPoint {
+  guard !segment_ids.is_empty() else { return no_program_point() }
   let clobbers = self.by_register[register]
   let mut lo = 0
   let mut hi = clobbers.points.length()
   let first_segment = segment_ids[0]
   while lo < hi {
     let mid = lo + (hi - lo) / 2
-    if compare_cached_points(
-        clobbers.block_orders[mid],
-        clobbers.instructions[mid],
-        segments.start_block_order[first_segment],
-        segments.start_instruction[first_segment],
-      ) <
-      0 {
+    if clobbers.keys[mid] < segments.starts[first_segment] {
       lo = mid + 1
     } else {
       hi = mid
@@ -208,27 +216,15 @@ fn RegisterClobberIndex::first_intersection(
   let mut segment_index = 0
   while lo < clobbers.points.length() && segment_index < segment_ids.length() {
     let segment = segment_ids[segment_index]
-    if compare_cached_points(
-        clobbers.block_orders[lo],
-        clobbers.instructions[lo],
-        segments.start_block_order[segment],
-        segments.start_instruction[segment],
-      ) <
-      0 {
+    if clobbers.keys[lo] < segments.starts[segment] {
       lo = lo + 1
-    } else if compare_cached_points(
-        clobbers.block_orders[lo],
-        clobbers.instructions[lo],
-        segments.end_block_order[segment],
-        segments.end_instruction[segment],
-      ) <
-      0 {
-      return Some(clobbers.points[lo])
+    } else if clobbers.keys[lo] < segments.ends[segment] {
+      return some_program_point(clobbers.points[lo])
     } else {
       segment_index = segment_index + 1
     }
   }
-  None
+  no_program_point()
 }
 
 ///|

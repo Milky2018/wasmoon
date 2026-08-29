@@ -67,6 +67,26 @@ priv struct GapSplitSnapshot {
 } derive(Debug)
 
 ///|
+fn optional_program_point_snapshot(
+  value : OptionalProgramPoint,
+) -> ProgramPoint? {
+  if value.present {
+    Some(value.point)
+  } else {
+    None
+  }
+}
+
+///|
+fn probe_first_conflict_snapshot(probe : BundleRegisterProbe) -> ProgramPoint? {
+  if probe.has_first_conflict {
+    Some(probe.first_conflict)
+  } else {
+    None
+  }
+}
+
+///|
 fn snapshot_bundle_state(state : AllocationBundleState) -> BundleStateSnapshot {
   match state {
     BundlePending => SnapshotPending
@@ -239,7 +259,7 @@ test "spill bundle is normalized before conflict probes" {
   context.states[0] = BundleReg(r0)
   let owners = [0, -1, -1]
   let spill_sets : Array[SpillSet] = [
-    { hint: None, spill_bundle: None, splits: 0, },
+    { hint: -1, spill_bundle: None, splits: 0, },
   ]
   add_to_spill_bundle(0, 1, context, owners, spill_sets, segments)
   add_to_spill_bundle(0, 2, context, owners, spill_sets, segments)
@@ -271,7 +291,7 @@ test "spill bundle is normalized before conflict probes" {
     probe_conflicts,
     probe,
     statistics,
-    conflict_policy=RejectAnyConflict,
+    conflict_policy=reject_conflicts(),
   )
   debug_inspect(
     (context.segments[1], probe.cutoff_exceeded, probe.conflicts),
@@ -318,8 +338,8 @@ test "spillset defers to second chance after two normal splits" {
     inspect(
       split_bundle_at_conflict(
         current_bundle,
-        Some(ProgramPoint(0, instruction)),
-        None,
+        ProgramPoint(0, instruction),
+        -1,
         context,
         owners,
         queue,
@@ -624,12 +644,12 @@ test "production eviction accounts for and removes every conflicting bundle" {
     probe_conflicts,
     probe,
     statistics,
-    conflict_policy=Unlimited,
+    conflict_policy=unlimited_conflicts(),
   )
   let probe_snapshot : BundleProbeSnapshot = {
     conflicts: probe.conflicts,
     conflict_cost: probe.conflict_cost,
-    first_conflict: probe.first_conflict,
+    first_conflict: probe_first_conflict_snapshot(probe),
     clobbered: probe.clobbered,
     can_evict: !probe.clobbered &&
     !probe.conflicts.is_empty() &&
@@ -745,14 +765,14 @@ test "production eviction accounts for and removes every conflicting bundle" {
     cutoff_conflicts,
     cutoff_probe,
     statistics,
-    conflict_policy=CostLimit(4),
+    conflict_policy=limited_conflicts(4),
   )
   debug_inspect(
     (
       cutoff_probe.cutoff_exceeded,
       cutoff_probe.conflicts,
       cutoff_probe.conflict_cost,
-      cutoff_probe.first_conflict,
+      probe_first_conflict_snapshot(cutoff_probe),
     ),
     content="(true, [0, 1], 5, Some({ block: 0, inst: 1 }))",
   )
@@ -798,7 +818,7 @@ test "production bundle queue keeps live extent separate from spill weight" {
     context.states.length(),
   )
   for bundle in 0..<context.states.length() {
-    queue.push(bundle, context, None)
+    queue.push(bundle, context, -1)
   }
   let order : Array[Int] = []
   while queue.pop() is Some((bundle, _)) {
@@ -1028,8 +1048,9 @@ test "clobber intersection includes starts and excludes ends" {
   let points = index.by_register[0]
   for instruction in [1, 3, 5, 7, 9] {
     points.points.push(ProgramPoint(0, instruction))
-    points.block_orders.push(0)
-    points.instructions.push(instruction)
+    points.keys.push(
+      ordered_program_point_key(ProgramPoint(0, instruction), [0]),
+    )
   }
   let segments : Array[AllocationSegment] = [
     {
@@ -1062,7 +1083,21 @@ test "clobber intersection includes starts and excludes ends" {
     [0],
   )
   debug_inspect(
-    index.first_intersection(0, [0, 1], occupied),
+    optional_program_point_snapshot(
+      index.first_intersection(0, [0, 1], occupied),
+    ),
     content="Some({ block: 0, inst: 1 })",
   )
+}
+
+///|
+test "packed program points preserve signed instruction and block order" {
+  let block_order = [2, 0, 1]
+  let first = ordered_program_point_key(ProgramPoint(1, -1), block_order)
+  let second = ordered_program_point_key(ProgramPoint(1, 3), block_order)
+  let third = ordered_program_point_key(ProgramPoint(2, -1), block_order)
+  let fourth = ordered_program_point_key(ProgramPoint(0, -1), block_order)
+  inspect(first < second, content="true")
+  inspect(second < third, content="true")
+  inspect(third < fourth, content="true")
 }
