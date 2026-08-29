@@ -57,7 +57,7 @@ fn allocation_register_role(reg : @vcode.PhysicalReg) -> AllocationRegisterRole 
       } else {
         Reserved
       }
-    FpVector =>
+    Float | Vector | FpVector =>
       if reg.id >= 0 && reg.id < 13 {
         ValueHome
       } else if reg.id == 13 {

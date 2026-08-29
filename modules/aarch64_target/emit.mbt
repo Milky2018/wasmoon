@@ -2240,7 +2240,8 @@ fn emit_register_save_or_restore(
 ) -> Unit raise AArch64EmitError {
   match reg.class {
     Int => emit_stack_access(buffer, load, I64, reg, offset)
-    FpVector => emit_stack_access(buffer, load, F64, reg, offset)
+    Float | Vector | FpVector =>
+      emit_stack_access(buffer, load, F64, reg, offset)
   }
 }
 
@@ -2269,6 +2270,8 @@ fn emit_register_pair_save_or_restore(
     (Int, true) => 0xA9400000U
     (FpVector, false) => 0x6D000000U
     (FpVector, true) => 0x6D400000U
+    (Float | Vector, false) => 0x6D000000U
+    (Float | Vector, true) => 0x6D400000U
   }
   buffer.emit_word(
     base |
@@ -2289,7 +2292,7 @@ fn record_saved_register_unwind(
   let (reg, offset) = saved
   let bank : @code_object.RegisterBank = match reg.class {
     Int => Int
-    FpVector => FpVector
+    Float | Vector | FpVector => FpVector
   }
   unwind.push(
     @code_object.UnwindDirective::new(

@@ -74,7 +74,7 @@ pub impl Show for X64FrameError with fn output(self, logger) {
 fn is_callee_saved(reg : @vcode.PhysicalReg) -> Bool {
   match reg.class {
     Int => reg.id == 3 || (reg.id >= 12 && reg.id <= 15)
-    FpVector => false
+    Float | Vector | FpVector => false
   }
 }
 

@@ -2716,7 +2716,8 @@ fn emit_register_save_or_restore(
 ) -> Unit raise X64EmitError {
   match reg.class {
     Int => emit_stack_access(buffer, load, I64, reg, offset)
-    FpVector => emit_stack_access(buffer, load, V128, reg, offset)
+    Float | Vector | FpVector =>
+      emit_stack_access(buffer, load, V128, reg, offset)
   }
 }
 
@@ -2751,7 +2752,7 @@ fn emit_prologue(
     emit_register_save_or_restore(buffer, false, reg, offset)
     let bank : @code_object.RegisterBank = match reg.class {
       Int => Int
-      FpVector => FpVector
+      Float | Vector | FpVector => FpVector
     }
     unwind.push(
       @code_object.UnwindDirective::new(

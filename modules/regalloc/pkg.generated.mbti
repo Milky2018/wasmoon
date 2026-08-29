@@ -2,13 +2,14 @@
 package "Milky2018/regalloc"
 
 import {
+  "Milky2018/machv/allocation_types",
   "moonbitlang/core/debug",
 }
 
 // Values
 pub fn[F : FunctionView] allocate_function(F, MachineEnv, config? : RegallocConfig) -> AllocationPlan raise VerifyError
 
-pub fn reserve_spill_slot(Int, RegClass) -> SpillSlotReservation
+pub fn reserve_spill_slot(Int, @allocation_types.RegClass) -> SpillSlotReservation
 
 // Errors
 pub suberror VerifyError {
@@ -207,7 +208,7 @@ pub fn OperandTiming::to_repr(Self) -> @debug.Repr
 
 pub(all) struct PhysicalReg {
   id : Int
-  class : RegClass
+  class : @allocation_types.RegClass
 } derive(Eq, @debug.Debug)
 pub fn PhysicalReg::equal(Self, Self) -> Bool
 pub fn PhysicalReg::not_equal(Self, Self) -> Bool
@@ -233,15 +234,6 @@ pub fn ProgramRange::equal(Self, Self) -> Bool
 pub fn ProgramRange::not_equal(Self, Self) -> Bool
 pub fn ProgramRange::overlaps(Self, Self, Array[Int]) -> Bool
 pub fn ProgramRange::to_repr(Self) -> @debug.Repr
-
-pub(all) enum RegClass {
-  Int
-  Float
-  Vector
-} derive(Eq, @debug.Debug)
-pub fn RegClass::equal(Self, Self) -> Bool
-pub fn RegClass::not_equal(Self, Self) -> Bool
-pub fn RegClass::to_repr(Self) -> @debug.Repr
 
 pub struct RegallocConfig {
   verify : Bool
@@ -313,18 +305,19 @@ pub fn UsePosition::with_tie(Self, Int) -> Self
 
 pub(all) struct VirtualReg {
   id : Int
-  class : RegClass
+  class : @allocation_types.RegClass
 } derive(Eq, @debug.Debug)
 pub fn VirtualReg::equal(Self, Self) -> Bool
 pub fn VirtualReg::not_equal(Self, Self) -> Bool
 pub fn VirtualReg::to_repr(Self) -> @debug.Repr
 
 // Type aliases
+pub using @allocation_types {type RegClass}
 
 // Traits
 pub(open) trait FunctionView {
   fn value_count(Self) -> Int
-  fn value_class(Self, Int) -> RegClass
+  fn value_class(Self, Int) -> @allocation_types.RegClass
   fn value_spill_size(Self, Int) -> Int
   fn value_spill_alignment(Self, Int) -> Int
   fn values_share_spill_slot(Self, Int, Int) -> Bool

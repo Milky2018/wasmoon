@@ -10,8 +10,10 @@ fn allocation_location_key(location : Location) -> (Int, Int) {
       match reg.class {
         Int => (0, reg.id)
         FpVector => (1, reg.id)
+        Float => (1, reg.id)
+        Vector => (2, reg.id)
       }
-    Stack(slot) => (2, slot.id)
+    Stack(slot) => (3, slot.id)
   }
 }
 

@@ -38,6 +38,7 @@ fn physical_register_class_index(class : RegClass) -> Int {
     Int => 0
     Float => 1
     Vector => 2
+    FpVector => 1
   }
 }
 

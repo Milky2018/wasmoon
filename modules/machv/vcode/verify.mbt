@@ -454,8 +454,10 @@ fn[Inst] allocation_location_ids(
         match reg.class {
           Int => (0, reg.id)
           FpVector => (1, reg.id)
+          Float => (1, reg.id)
+          Vector => (2, reg.id)
         }
-      Stack(slot) => (2, slot.id)
+      Stack(slot) => (3, slot.id)
     }
     match ids_by_location.get(key) {
       Some(id) => ids[index] = id
@@ -610,6 +612,8 @@ fn[Inst] verify_allocation_interference(
         let class = match reg.class {
           Int => 0
           FpVector => 1
+          Float => 1
+          Vector => 2
         }
         if ids_by_location.get((class, reg.id)) is Some(location_id) &&
           occupants[location_id] >= 0 {

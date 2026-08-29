@@ -1,0 +1,28 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "Milky2018/machv/allocation_types"
+
+import {
+  "moonbitlang/core/debug",
+}
+
+// Values
+
+// Errors
+
+// Types and methods
+pub(all) enum RegClass {
+  Int
+  Float
+  Vector
+  FpVector
+} derive(Eq, Hash, @debug.Debug)
+pub fn RegClass::equal(Self, Self) -> Bool
+pub fn RegClass::hash(Self) -> Int
+pub fn RegClass::hash_combine(Self, Hasher) -> Unit
+pub fn RegClass::not_equal(Self, Self) -> Bool
+pub fn RegClass::text(Self) -> String
+pub fn RegClass::to_repr(Self) -> @debug.Repr
+
+// Type aliases
+
+// Traits

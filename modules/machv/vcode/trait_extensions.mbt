@@ -131,15 +131,6 @@ pub extend ProgramPoint with Debug::{to_repr}
 pub extend ProgramPoint with Eq::{not_equal, equal}
 
 ///|
-pub extend RegClass with Debug::{to_repr}
-
-///|
-pub extend RegClass with Eq::{not_equal, equal}
-
-///|
-pub extend RegClass with Hash::{hash, hash_combine}
-
-///|
 pub extend RegallocLoopStatistics with Debug::{to_repr}
 
 ///|

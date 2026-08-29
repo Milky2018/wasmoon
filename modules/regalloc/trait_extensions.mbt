@@ -92,12 +92,6 @@ pub extend ProgramRange with Debug::{to_repr}
 pub extend ProgramRange with Eq::{not_equal, equal}
 
 ///|
-pub extend RegClass with Debug::{to_repr}
-
-///|
-pub extend RegClass with Eq::{not_equal, equal}
-
-///|
 pub extend RegallocPhase with Debug::{to_repr}
 
 ///|

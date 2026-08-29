@@ -60,7 +60,7 @@ fn fp_transfer_scratch_regs() -> Array[@vcode.PhysicalReg] {
 fn transfer_scratch_for_type(ty : @semantic.ValueType) -> @vcode.PhysicalReg {
   match @vcode.reg_class_for_value_type(ty) {
     Int => int_transfer_scratch()
-    FpVector => fp_transfer_scratch()
+    Float | Vector | FpVector => fp_transfer_scratch()
   }
 }
 
@@ -88,7 +88,7 @@ fn allocation_register_role(reg : @vcode.PhysicalReg) -> AllocationRegisterRole 
       } else {
         Reserved
       }
-    FpVector =>
+    Float | Vector | FpVector =>
       if (reg.id >= 0 && reg.id < 16) || (reg.id >= 19 && reg.id < 32) {
         ValueHome
       } else if reg.id == 16 || reg.id == 17 {

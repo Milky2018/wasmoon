@@ -63,7 +63,7 @@ pub impl Show for AArch64FrameError with fn output(self, logger) {
 fn is_callee_saved(reg : @vcode.PhysicalReg) -> Bool {
   match reg.class {
     Int => reg.id >= 19 && reg.id <= 28
-    FpVector => reg.id >= 8 && reg.id <= 15
+    Float | Vector | FpVector => reg.id >= 8 && reg.id <= 15
   }
 }
 

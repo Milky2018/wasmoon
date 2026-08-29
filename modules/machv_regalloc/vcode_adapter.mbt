@@ -42,10 +42,7 @@ pub impl Show for VCodeAllocationError with fn output(self, logger) {
 
 ///|
 fn to_regalloc_class(class : @vcode.RegClass) -> @regalloc.RegClass {
-  match class {
-    Int => Int
-    FpVector => Float
-  }
+  class
 }
 
 ///|

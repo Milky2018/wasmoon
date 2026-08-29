@@ -1,16 +1,5 @@
 ///|
-pub(all) enum RegClass {
-  Int
-  FpVector
-} derive(Eq, Debug, Hash)
-
-///|
-fn RegClass::text(self : RegClass) -> String {
-  match self {
-    Int => "int"
-    FpVector => "fpvec"
-  }
-}
+pub type RegClass = @allocation_types.RegClass
 
 ///|
 pub type ValueType = @semantic.ValueType

@@ -12,6 +12,10 @@ keywords = [ "compiler", "register-allocation", "algorithm" ]
 
 description = "Target-independent register allocation algorithm"
 
+import {
+  "Milky2018/machv@0.12.6",
+}
+
 preferred_target = "wasm-gc"
 
 supported_targets = "all"

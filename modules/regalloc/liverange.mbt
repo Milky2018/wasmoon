@@ -399,6 +399,7 @@ fn LiveRangeSet::ranges_by_id_for_class(
     Int => self.int_ranges_by_id
     Float => self.float_ranges_by_id
     Vector => self.vector_ranges_by_id
+    FpVector => self.float_ranges_by_id
   }
 }
 

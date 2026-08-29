@@ -1,9 +1,5 @@
 ///|
-pub(all) enum RegClass {
-  Int
-  Float
-  Vector
-} derive(Eq, Debug)
+pub type RegClass = @allocation_types.RegClass
 
 ///|
 #valtype
@@ -25,6 +21,7 @@ fn physical_reg_key(reg : PhysicalReg) -> (Int, Int) {
     Int => 0
     Float => 1
     Vector => 2
+    FpVector => 1
   }
   (class, reg.id)
 }

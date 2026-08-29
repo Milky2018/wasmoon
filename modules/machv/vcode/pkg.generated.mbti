@@ -3,6 +3,7 @@ package "Milky2018/machv/vcode"
 
 import {
   "Milky2018/machv",
+  "Milky2018/machv/allocation_types",
   "moonbitlang/core/debug",
 }
 
@@ -13,7 +14,7 @@ pub fn plan_parallel_moves(Array[ParallelMove], PhysicalReg, PhysicalReg) -> Res
 
 pub fn plan_resolved_call_transfers(Allocation, Array[CallTransfer], Int, Int, Array[PhysicalReg], Array[PhysicalReg], PhysicalReg, PhysicalReg, Array[Location]) -> ResolvedCallTransferPlan raise CallTransferError
 
-pub fn reg_class_for_value_type(@machv.ValueType) -> RegClass
+pub fn reg_class_for_value_type(@machv.ValueType) -> @allocation_types.RegClass
 
 pub fn resolve_parallel_moves(Array[ParallelMove], Array[PhysicalReg], Array[PhysicalReg]) -> Array[ParallelMove] raise MoveResolveError
 
@@ -101,9 +102,9 @@ pub fn FrameVerifyError::to_string(Self) -> String
 pub impl Show for FrameVerifyError
 
 pub suberror MoveResolveError {
-  MissingScratch(class~ : RegClass)
-  InvalidScratch(reg~ : PhysicalReg, expected~ : RegClass)
-  NoSafeCycleScratch(class~ : RegClass)
+  MissingScratch(class~ : @allocation_types.RegClass)
+  InvalidScratch(reg~ : PhysicalReg, expected~ : @allocation_types.RegClass)
+  NoSafeCycleScratch(class~ : @allocation_types.RegClass)
   BrokenCycle
 } derive(Eq, @debug.Debug)
 pub fn MoveResolveError::equal(Self, Self) -> Bool
@@ -462,10 +463,10 @@ pub fn ParallelMove::to_repr(Self) -> @debug.Repr
 
 pub struct PhysicalReg {
   id : Int
-  class : RegClass
+  class : @allocation_types.RegClass
 } derive(Eq)
 pub fn PhysicalReg::equal(Self, Self) -> Bool
-pub fn PhysicalReg::new(Int, RegClass) -> Self
+pub fn PhysicalReg::new(Int, @allocation_types.RegClass) -> Self
 pub fn PhysicalReg::not_equal(Self, Self) -> Bool
 pub fn PhysicalReg::to_repr(Self) -> @debug.Repr
 pub impl @debug.Debug for PhysicalReg
@@ -488,16 +489,6 @@ pub fn ProgramPoint::placement(Self) -> PointPlacement
 pub fn ProgramPoint::to_repr(Self) -> @debug.Repr
 pub impl Eq for ProgramPoint
 pub impl @debug.Debug for ProgramPoint
-
-pub(all) enum RegClass {
-  Int
-  FpVector
-} derive(Eq, Hash, @debug.Debug)
-pub fn RegClass::equal(Self, Self) -> Bool
-pub fn RegClass::hash(Self) -> Int
-pub fn RegClass::hash_combine(Self, Hasher) -> Unit
-pub fn RegClass::not_equal(Self, Self) -> Bool
-pub fn RegClass::to_repr(Self) -> @debug.Repr
 
 pub(all) struct RegallocLoopStatistics {
   queue_pops : Int
@@ -602,6 +593,8 @@ pub impl Show for Value
 pub impl @debug.Debug for Value
 
 // Type aliases
+pub using @allocation_types {type RegClass}
+
 pub using @machv {type SafepointKind}
 
 pub using @machv {type ValueType}
