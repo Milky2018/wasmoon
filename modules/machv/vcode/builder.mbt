@@ -52,6 +52,7 @@ pub fn[Inst] Builder::create_block(
   parameter_types : Array[ValueType],
 ) -> Block {
   let block = self.function.allocate_block(parameter_types)
+  self.function.blocks[block.id].layout_index = self.function.layout.length()
   self.function.layout.push(block)
   block
 }

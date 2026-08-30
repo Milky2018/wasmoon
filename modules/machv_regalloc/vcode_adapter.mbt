@@ -41,39 +41,7 @@ pub impl Show for VCodeAllocationError with fn output(self, logger) {
 }
 
 ///|
-fn[Inst] to_regalloc_vreg(
-  function : @vcode.Function[Inst],
-  value : @vcode.Value,
-) -> @regalloc.VirtualReg {
-  function.allocation_vreg(value).unwrap()
-}
-
-///|
-fn[Inst] materialize_plan_location(
-  builder : @vcode.AllocationBuilder[Inst],
-  plan : @regalloc.AllocationPlan,
-  spill_slots : Array[Int?],
-  value : Int,
-  location : @regalloc.Location,
-) -> @vcode.AllocationLocation {
-  if location.is_register() {
-    return location
-  }
-  let index = location.spill_index_unchecked()
-  let slot = match spill_slots[index] {
-    Some(slot) => slot
-    None => {
-      let spec = plan.spill_slot(index).unwrap()
-      let slot = builder.create_stack_slot(value, spec.size, spec.alignment)
-      spill_slots[index] = Some(slot)
-      slot
-    }
-  }
-  @vcode.AllocationLocation::spill(slot)
-}
-
-///|
-fn[Inst] add_materialized_transfer(
+fn[Inst] add_plan_transfer(
   builder : @vcode.AllocationBuilder[Inst],
   instruction : Int,
   placement : @vcode.PointPlacement,
@@ -157,78 +125,54 @@ pub fn[Inst] AllocationSession::allocate_selected_vcode(
   ) catch {
     error => raise RegallocFailure(cause=error)
   }
-  let builder = @vcode.AllocationBuilder::new(function)
-  let spill_slots : Array[Int?] = Array::make(plan.spill_count(), None)
-  for value_index in 0..<function.value_count() {
-    guard plan.value_location(value_index) is Some(location) else {
-      raise AllocationConstructionRejected
-    }
-    if !builder.assign_value(
-        value_index,
-        materialize_plan_location(
-          builder, plan, spill_slots, value_index, location,
-        ),
-      ) {
-      raise AllocationConstructionRejected
-    }
+  let spill_owners : Array[Int] = []
+  let spill_sizes : Array[Int] = []
+  let spill_alignments : Array[Int] = []
+  for slot in 0..<plan.spill_count() {
+    let spec = plan.spill_slot(slot).unwrap()
+    spill_owners.push(plan.spill_slot_owner(slot).unwrap())
+    spill_sizes.push(spec.size)
+    spill_alignments.push(spec.alignment)
   }
-  for instruction in 0..<plan.operand_instruction_count() {
-    for operand in 0..<plan.instruction_operand_count(instruction) {
-      guard plan.operand_location(instruction, operand) is Some(location) else {
-        continue
-      }
-      let value = builder.operand_value_at(instruction, operand)
-      if !builder.assign_operand(
-          instruction,
-          operand,
-          materialize_plan_location(builder, plan, spill_slots, value, location),
-        ) {
-        raise AllocationConstructionRejected
-      }
-    }
+  guard @vcode.AllocationBuilder::from_plan_storage(
+      function,
+      plan.value_location_storage(),
+      plan.operand_location_storage(),
+      spill_owners,
+      spill_sizes,
+      spill_alignments,
+    )
+    is Some(builder) else {
+    raise AllocationConstructionRejected
   }
   for edit_index in 0..<plan.edit_count() {
     let edit = plan.edit_at(edit_index).unwrap()
-    let from = materialize_plan_location(
-      builder,
-      plan,
-      spill_slots,
-      edit.value.id,
-      edit.from,
-    )
-    let to = materialize_plan_location(
-      builder,
-      plan,
-      spill_slots,
-      edit.value.id,
-      edit.to,
-    )
     match edit.position {
       Before(instruction_id) =>
-        add_materialized_transfer(
+        add_plan_transfer(
           builder,
           instruction_id,
           Before,
           edit.value.id,
-          from,
-          to,
+          edit.from,
+          edit.to,
         )
       After(instruction_id) =>
-        add_materialized_transfer(
+        add_plan_transfer(
           builder,
           instruction_id,
           After,
           edit.value.id,
-          from,
-          to,
+          edit.from,
+          edit.to,
         )
       Edge(source_block~, successor_index~) =>
         if !builder.add_edge_transfer(
             source_block,
             successor_index,
             edit.value.id,
-            from,
-            to,
+            edit.from,
+            edit.to,
           ) {
           raise AllocationConstructionRejected
         }

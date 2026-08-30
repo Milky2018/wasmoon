@@ -50,10 +50,13 @@ impl FunctionView for CfgTestFunction with fn values_share_spill_slot(
 }
 
 ///|
-impl FunctionView for CfgTestFunction with fn entry_values(self) -> ArrayView[
-  VirtualReg,
-] {
-  self.entry_values[:]
+impl FunctionView for CfgTestFunction with fn entry_value_count(self) -> Int {
+  self.entry_values.length()
+}
+
+///|
+impl FunctionView for CfgTestFunction with fn entry_value_at(self, parameter) -> VirtualReg {
+  self.entry_values[parameter]
 }
 
 ///|
@@ -67,33 +70,67 @@ impl FunctionView for CfgTestFunction with fn block_id_at(_self, index) -> Int {
 }
 
 ///|
-impl FunctionView for CfgTestFunction with fn block_parameters(self, block) -> ArrayView[
-  VirtualReg,
-] {
-  self.parameters[block][:]
+impl FunctionView for CfgTestFunction with fn block_parameter_count(self, block) -> Int {
+  self.parameters[block].length()
 }
 
 ///|
-impl FunctionView for CfgTestFunction with fn block_instructions(self, block) -> ArrayView[
-  Int,
-] {
-  self.blocks[block][:]
+impl FunctionView for CfgTestFunction with fn block_parameter_at(
+  self,
+  block,
+  parameter,
+) -> VirtualReg {
+  self.parameters[block][parameter]
 }
 
 ///|
-impl FunctionView for CfgTestFunction with fn block_successors(self, block) -> ArrayView[
-  Int,
-] {
-  self.successors[block][:]
+impl FunctionView for CfgTestFunction with fn block_instruction_count(
+  self,
+  block,
+) -> Int {
+  self.blocks[block].length()
 }
 
 ///|
-impl FunctionView for CfgTestFunction with fn edge_arguments(
+impl FunctionView for CfgTestFunction with fn block_instruction_at(
+  self,
+  block,
+  instruction,
+) -> Int {
+  self.blocks[block][instruction]
+}
+
+///|
+impl FunctionView for CfgTestFunction with fn block_successor_count(self, block) -> Int {
+  self.successors[block].length()
+}
+
+///|
+impl FunctionView for CfgTestFunction with fn block_successor_at(
   self,
   block,
   successor,
-) -> ArrayView[VirtualReg] {
-  self.edge_arguments[block][successor][:]
+) -> Int {
+  self.successors[block][successor]
+}
+
+///|
+impl FunctionView for CfgTestFunction with fn edge_argument_count(
+  self,
+  block,
+  successor,
+) -> Int {
+  self.edge_arguments[block][successor].length()
+}
+
+///|
+impl FunctionView for CfgTestFunction with fn edge_argument_at(
+  self,
+  block,
+  successor,
+  argument,
+) -> VirtualReg {
+  self.edge_arguments[block][successor][argument]
 }
 
 ///|
@@ -142,10 +179,13 @@ impl FunctionView for TestFunction with fn values_share_spill_slot(
 }
 
 ///|
-impl FunctionView for TestFunction with fn entry_values(self) -> ArrayView[
-  VirtualReg,
-] {
-  self.block_parameters[:]
+impl FunctionView for TestFunction with fn entry_value_count(self) -> Int {
+  self.block_parameters.length()
+}
+
+///|
+impl FunctionView for TestFunction with fn entry_value_at(self, parameter) -> VirtualReg {
+  self.block_parameters[parameter]
 }
 
 ///|
@@ -159,37 +199,64 @@ impl FunctionView for TestFunction with fn block_id_at(_self, index) -> Int {
 }
 
 ///|
-impl FunctionView for TestFunction with fn block_parameters(_self, _block) -> ArrayView[
-  VirtualReg,
-] {
-  let empty : Array[VirtualReg] = []
-  empty[:]
+impl FunctionView for TestFunction with fn block_parameter_count(_self, _block) -> Int {
+  0
 }
 
 ///|
-impl FunctionView for TestFunction with fn block_instructions(self, _block) -> ArrayView[
-  Int,
-] {
-  let instructions = Array::makei(self.instructions.length(), index => index)
-  instructions[:]
+impl FunctionView for TestFunction with fn block_parameter_at(
+  _self,
+  _block,
+  _parameter,
+) -> VirtualReg {
+  abort("invalid block parameter index")
 }
 
 ///|
-impl FunctionView for TestFunction with fn block_successors(_self, _block) -> ArrayView[
-  Int,
-] {
-  let empty : Array[Int] = []
-  empty[:]
+impl FunctionView for TestFunction with fn block_instruction_count(self, _block) -> Int {
+  self.instructions.length()
 }
 
 ///|
-impl FunctionView for TestFunction with fn edge_arguments(
+impl FunctionView for TestFunction with fn block_instruction_at(
+  _self,
+  _block,
+  instruction,
+) -> Int {
+  instruction
+}
+
+///|
+impl FunctionView for TestFunction with fn block_successor_count(_self, _block) -> Int {
+  0
+}
+
+///|
+impl FunctionView for TestFunction with fn block_successor_at(
   _self,
   _block,
   _successor,
-) -> ArrayView[VirtualReg] {
-  let empty : Array[VirtualReg] = []
-  empty[:]
+) -> Int {
+  abort("invalid block successor index")
+}
+
+///|
+impl FunctionView for TestFunction with fn edge_argument_count(
+  _self,
+  _block,
+  _successor,
+) -> Int {
+  0
+}
+
+///|
+impl FunctionView for TestFunction with fn edge_argument_at(
+  _self,
+  _block,
+  _successor,
+  _argument,
+) -> VirtualReg {
+  abort("invalid edge argument index")
 }
 
 ///|

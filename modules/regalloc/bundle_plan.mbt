@@ -454,15 +454,15 @@ fn[F : FunctionView] collect_production_bundle_edges(
 ) -> Array[(Int, Int)] {
   let edges : Array[(Int, Int)] = []
   for block in 0..<function.block_count() {
-    for successor_index, target in function.block_successors(block) {
-      let arguments = function.edge_arguments(block, successor_index)
-      let parameters = function.block_parameters(target)
-      for index in 0..<arguments.length().min(parameters.length()) {
-        match
-          (
-            ranges.get_by_vreg(parameters[index]),
-            ranges.get_by_vreg(arguments[index]),
-          ) {
+    for successor_index in 0..<function.block_successor_count(block) {
+      let target = function.block_successor_at(block, successor_index)
+      let count = function
+        .edge_argument_count(block, successor_index)
+        .min(function.block_parameter_count(target))
+      for index in 0..<count {
+        let argument = function.edge_argument_at(block, successor_index, index)
+        let parameter = function.block_parameter_at(target, index)
+        match (ranges.get_by_vreg(parameter), ranges.get_by_vreg(argument)) {
           (Some(target_range), Some(source_range)) => {
             let edge = (target_range.id, source_range.id)
             if target_range.id != source_range.id {

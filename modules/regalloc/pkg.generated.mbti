@@ -43,12 +43,15 @@ pub fn AllocationPlan::instruction_operand_count(Self, Int) -> Int
 pub fn AllocationPlan::operand_assignments(Self) -> Array[OperandAssignment]
 pub fn AllocationPlan::operand_instruction_count(Self) -> Int
 pub fn AllocationPlan::operand_location(Self, Int, Int) -> @allocation_types.AllocationLocation?
+pub fn AllocationPlan::operand_location_storage(Self) -> Array[Array[@allocation_types.AllocationLocation?]]
 pub fn AllocationPlan::output(Self, &Logger) -> Unit
 pub fn AllocationPlan::spill_count(Self) -> Int
 pub fn AllocationPlan::spill_slot(Self, Int) -> SpillSlotSpec?
+pub fn AllocationPlan::spill_slot_owner(Self, Int) -> Int?
 pub fn AllocationPlan::to_repr(Self) -> @debug.Repr
 pub fn AllocationPlan::to_string(Self) -> String
 pub fn AllocationPlan::value_location(Self, Int) -> @allocation_types.AllocationLocation?
+pub fn AllocationPlan::value_location_storage(Self) -> Array[@allocation_types.AllocationLocation?]
 pub impl Show for AllocationPlan
 pub impl @debug.Debug for AllocationPlan
 
@@ -267,13 +270,18 @@ pub(open) trait FunctionView {
   fn value_spill_size(Self, Int) -> Int
   fn value_spill_alignment(Self, Int) -> Int
   fn values_share_spill_slot(Self, Int, Int) -> Bool
-  fn entry_values(Self) -> ArrayView[@allocation_types.VirtualReg]
+  fn entry_value_count(Self) -> Int
+  fn entry_value_at(Self, Int) -> @allocation_types.VirtualReg
   fn block_count(Self) -> Int
   fn block_id_at(Self, Int) -> Int
-  fn block_parameters(Self, Int) -> ArrayView[@allocation_types.VirtualReg]
-  fn block_instructions(Self, Int) -> ArrayView[Int]
-  fn block_successors(Self, Int) -> ArrayView[Int]
-  fn edge_arguments(Self, Int, Int) -> ArrayView[@allocation_types.VirtualReg]
+  fn block_parameter_count(Self, Int) -> Int
+  fn block_parameter_at(Self, Int, Int) -> @allocation_types.VirtualReg
+  fn block_instruction_count(Self, Int) -> Int
+  fn block_instruction_at(Self, Int, Int) -> Int
+  fn block_successor_count(Self, Int) -> Int
+  fn block_successor_at(Self, Int, Int) -> Int
+  fn edge_argument_count(Self, Int, Int) -> Int
+  fn edge_argument_at(Self, Int, Int, Int) -> @allocation_types.VirtualReg
   fn instruction_operands(Self, Int) -> ArrayView[@allocation_types.AllocationOperand]
   fn instruction_clobbers(Self, Int) -> ArrayView[@allocation_types.PhysicalReg]
 }

@@ -239,10 +239,13 @@ impl FunctionView for VerifierCfgView with fn values_share_spill_slot(
 }
 
 ///|
-impl FunctionView for VerifierCfgView with fn entry_values(self) -> ArrayView[
-  VirtualReg,
-] {
-  self.entry_values[:]
+impl FunctionView for VerifierCfgView with fn entry_value_count(self) -> Int {
+  self.entry_values.length()
+}
+
+///|
+impl FunctionView for VerifierCfgView with fn entry_value_at(self, parameter) -> VirtualReg {
+  self.entry_values[parameter]
 }
 
 ///|
@@ -256,35 +259,69 @@ impl FunctionView for VerifierCfgView with fn block_id_at(_self, block) -> Int {
 }
 
 ///|
-impl FunctionView for VerifierCfgView with fn block_parameters(self, block) -> ArrayView[
-  VirtualReg,
-] {
-  self.parameters[block][:]
+impl FunctionView for VerifierCfgView with fn block_parameter_count(self, block) -> Int {
+  self.parameters[block].length()
 }
 
 ///|
-impl FunctionView for VerifierCfgView with fn block_instructions(self, block) -> ArrayView[
-  Int,
-] {
+impl FunctionView for VerifierCfgView with fn block_parameter_at(
+  self,
+  block,
+  parameter,
+) -> VirtualReg {
+  self.parameters[block][parameter]
+}
+
+///|
+impl FunctionView for VerifierCfgView with fn block_instruction_count(
+  self,
+  block,
+) -> Int {
   self.block_visits.val = self.block_visits.val + 1
-  self.blocks[block][:]
+  self.blocks[block].length()
 }
 
 ///|
-impl FunctionView for VerifierCfgView with fn block_successors(self, block) -> ArrayView[
-  Int,
-] {
+impl FunctionView for VerifierCfgView with fn block_instruction_at(
+  self,
+  block,
+  instruction,
+) -> Int {
+  self.blocks[block][instruction]
+}
+
+///|
+impl FunctionView for VerifierCfgView with fn block_successor_count(self, block) -> Int {
   self.successor_queries.val = self.successor_queries.val + 1
-  self.successors[block][:]
+  self.successors[block].length()
 }
 
 ///|
-impl FunctionView for VerifierCfgView with fn edge_arguments(
+impl FunctionView for VerifierCfgView with fn block_successor_at(
   self,
   block,
   successor,
-) -> ArrayView[VirtualReg] {
-  self.edge_arguments[block][successor][:]
+) -> Int {
+  self.successors[block][successor]
+}
+
+///|
+impl FunctionView for VerifierCfgView with fn edge_argument_count(
+  self,
+  block,
+  successor,
+) -> Int {
+  self.edge_arguments[block][successor].length()
+}
+
+///|
+impl FunctionView for VerifierCfgView with fn edge_argument_at(
+  self,
+  block,
+  successor,
+  argument,
+) -> VirtualReg {
+  self.edge_arguments[block][successor][argument]
 }
 
 ///|
@@ -326,7 +363,7 @@ test "operand assignment reuses a tied group's resident register" {
     block_visits: Ref(0),
   }
   let plan = AllocationPlan::new(2)
-  let slot = plan.create_spill_slot(8, 8)
+  let slot = plan.create_spill_slot(0, 8, 8)
   plan.assign_value(spilled, spill_location(slot))
   plan.assign_value(resident, reg_location(r0))
   let (segments, segments_by_value) = build_allocation_segments(
@@ -393,7 +430,7 @@ test "plan verifier rejects a spilled AnyReg operand" {
     block_visits: Ref(0),
   }
   let plan = AllocationPlan::new(1)
-  let slot = plan.create_spill_slot(8, 8)
+  let slot = plan.create_spill_slot(0, 8, 8)
   plan.assign_value(value, spill_location(slot))
   plan.assign_operand(0, 0, spill_location(slot))
   let error = try {
@@ -610,7 +647,7 @@ test "any-location definitions materialize in their stable home" {
     block_visits: Ref(0),
   }
   let plan = AllocationPlan::new(1)
-  let slot = plan.create_spill_slot(8, 8)
+  let slot = plan.create_spill_slot(0, 8, 8)
   plan.assign_value(value, spill_location(slot))
   let segments : Array[AllocationSegment] = [
     {

@@ -232,6 +232,59 @@ test "flat function access follows layout without collection snapshots" {
 }
 
 ///|
+test "allocation view resolves successors after layout changes" {
+  let function = build_test_function()
+  function.set_layout([function.block_at(1).unwrap(), function.entry_block()])
+  inspect(function.allocation_layout_block_id_at(0), content="1")
+  inspect(function.allocation_layout_block_id_at(1), content="0")
+  inspect(function.allocation_block_instruction_count(1), content="2")
+  inspect(function.allocation_block_instruction_at(1, 1), content="1")
+  inspect(function.allocation_block_successor_count(1), content="1")
+  inspect(function.allocation_block_successor_at(1, 0), content="0")
+  inspect(function.allocation_edge_argument_count(1, 0), content="1")
+  inspect(function.allocation_edge_argument_at(1, 0, 0).id, content="2")
+}
+
+///|
+test "plan storage adoption rejects undersized spill metadata" {
+  let builder : Builder[TestInst] = Builder::new("plan_storage", [I64])
+  builder.set_terminator(
+    builder.entry_block(),
+    Return,
+    [],
+    [],
+    [],
+    InstructionMetadata::empty(),
+  )
+  |> ignore
+  let function = builder.finish()
+  inspect(
+    AllocationBuilder::from_plan_storage(
+      function,
+      [Some(AllocationLocation::spill(0))],
+      [[]],
+      [0],
+      [4],
+      [4],
+    )
+    is None,
+    content="true",
+  )
+  inspect(
+    AllocationBuilder::from_plan_storage(
+      function,
+      [Some(AllocationLocation::spill(0))],
+      [[]],
+      [0],
+      [8],
+      [8],
+    )
+    is Some(_),
+    content="true",
+  )
+}
+
+///|
 test "Allocation remains separate and verifies edits, slots, and safepoints" {
   let builder : Builder[TestInst] = Builder::new("pressure", [GcRef64])
   let entry = builder.entry_block()

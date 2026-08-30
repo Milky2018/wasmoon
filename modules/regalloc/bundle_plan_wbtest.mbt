@@ -58,11 +58,16 @@ impl FunctionView for BundleTestFunction with fn values_share_spill_slot(
 }
 
 ///|
-impl FunctionView for BundleTestFunction with fn entry_values(_self) -> ArrayView[
-  VirtualReg,
-] {
-  let empty : Array[VirtualReg] = []
-  empty[:]
+impl FunctionView for BundleTestFunction with fn entry_value_count(_self) -> Int {
+  0
+}
+
+///|
+impl FunctionView for BundleTestFunction with fn entry_value_at(
+  _self,
+  _parameter,
+) -> VirtualReg {
+  abort("invalid entry value index")
 }
 
 ///|
@@ -76,35 +81,73 @@ impl FunctionView for BundleTestFunction with fn block_id_at(_self, block) -> In
 }
 
 ///|
-impl FunctionView for BundleTestFunction with fn block_parameters(self, block) -> ArrayView[
-  VirtualReg,
-] {
-  self.parameters[block][:]
+impl FunctionView for BundleTestFunction with fn block_parameter_count(
+  self,
+  block,
+) -> Int {
+  self.parameters[block].length()
 }
 
 ///|
-impl FunctionView for BundleTestFunction with fn block_instructions(
+impl FunctionView for BundleTestFunction with fn block_parameter_at(
+  self,
+  block,
+  parameter,
+) -> VirtualReg {
+  self.parameters[block][parameter]
+}
+
+///|
+impl FunctionView for BundleTestFunction with fn block_instruction_count(
   _self,
   _block,
-) -> ArrayView[Int] {
-  let empty : Array[Int] = []
-  empty[:]
+) -> Int {
+  0
 }
 
 ///|
-impl FunctionView for BundleTestFunction with fn block_successors(self, block) -> ArrayView[
-  Int,
-] {
-  self.successors[block][:]
+impl FunctionView for BundleTestFunction with fn block_instruction_at(
+  _self,
+  _block,
+  _instruction,
+) -> Int {
+  abort("invalid block instruction index")
 }
 
 ///|
-impl FunctionView for BundleTestFunction with fn edge_arguments(
+impl FunctionView for BundleTestFunction with fn block_successor_count(
+  self,
+  block,
+) -> Int {
+  self.successors[block].length()
+}
+
+///|
+impl FunctionView for BundleTestFunction with fn block_successor_at(
   self,
   block,
   successor,
-) -> ArrayView[VirtualReg] {
-  self.edge_arguments[block][successor][:]
+) -> Int {
+  self.successors[block][successor]
+}
+
+///|
+impl FunctionView for BundleTestFunction with fn edge_argument_count(
+  self,
+  block,
+  successor,
+) -> Int {
+  self.edge_arguments[block][successor].length()
+}
+
+///|
+impl FunctionView for BundleTestFunction with fn edge_argument_at(
+  self,
+  block,
+  successor,
+  argument,
+) -> VirtualReg {
+  self.edge_arguments[block][successor][argument]
 }
 
 ///|

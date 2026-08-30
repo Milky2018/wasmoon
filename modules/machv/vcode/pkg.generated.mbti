@@ -201,6 +201,7 @@ pub fn[Inst] AllocationBuilder::assign_operand(Self[Inst], Int, Int, @allocation
 pub fn[Inst] AllocationBuilder::assign_value(Self[Inst], Int, @allocation_types.AllocationLocation) -> Bool
 pub fn[Inst] AllocationBuilder::create_stack_slot(Self[Inst], Int, Int, Int) -> Int
 pub fn[Inst] AllocationBuilder::finish(Self[Inst]) -> Allocation
+pub fn[Inst] AllocationBuilder::from_plan_storage(Function[Inst], Array[@allocation_types.AllocationLocation?], Array[Array[@allocation_types.AllocationLocation?]], Array[Int], Array[Int], Array[Int]) -> Self[Inst]?
 pub fn[Inst] AllocationBuilder::new(Function[Inst]) -> Self[Inst]
 pub fn[Inst] AllocationBuilder::operand_value_at(Self[Inst], Int, Int) -> Int
 pub fn[Inst] AllocationBuilder::value_location(Self[Inst], Int) -> @allocation_types.AllocationLocation?
@@ -311,6 +312,19 @@ pub struct Function[Inst] {
   // private fields
 }
 pub fn[Inst] Function::after(Self[Inst], Instruction) -> ProgramPoint?
+pub fn[Inst] Function::allocation_block_instruction_at(Self[Inst], Int, Int) -> Int
+pub fn[Inst] Function::allocation_block_instruction_count(Self[Inst], Int) -> Int
+pub fn[Inst] Function::allocation_block_parameter_at(Self[Inst], Int, Int) -> @allocation_types.VirtualReg
+pub fn[Inst] Function::allocation_block_parameter_count(Self[Inst], Int) -> Int
+pub fn[Inst] Function::allocation_block_successor_at(Self[Inst], Int, Int) -> Int
+pub fn[Inst] Function::allocation_block_successor_count(Self[Inst], Int) -> Int
+pub fn[Inst] Function::allocation_edge_argument_at(Self[Inst], Int, Int, Int) -> @allocation_types.VirtualReg
+pub fn[Inst] Function::allocation_edge_argument_count(Self[Inst], Int, Int) -> Int
+pub fn[Inst] Function::allocation_entry_value_at(Self[Inst], Int) -> @allocation_types.VirtualReg
+pub fn[Inst] Function::allocation_instruction_clobbers(Self[Inst], Int) -> ArrayView[@allocation_types.PhysicalReg]
+pub fn[Inst] Function::allocation_instruction_operands(Self[Inst], Int) -> ArrayView[@allocation_types.AllocationOperand]
+pub fn[Inst] Function::allocation_layout_block_id_at(Self[Inst], Int) -> Int
+pub fn[Inst] Function::allocation_value_type_at(Self[Inst], Int) -> @machv.ValueType
 pub fn[Inst] Function::allocation_vreg(Self[Inst], Value) -> @allocation_types.VirtualReg?
 pub fn[Inst] Function::before(Self[Inst], Instruction) -> ProgramPoint?
 pub fn[Inst] Function::block_at(Self[Inst], Int) -> Block?

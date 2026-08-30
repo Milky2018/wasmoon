@@ -16,6 +16,7 @@ priv struct BlockData {
   parameters : Array[Value]
   body : Array[Instruction]
   mut terminator : Instruction?
+  mut layout_index : Int
 }
 
 ///|
@@ -79,6 +80,7 @@ fn[Inst] Function::new(
   }
   let entry = function.allocate_block([])
   function.layout.push(entry)
+  function.blocks[0].layout_index = 0
   function
 }
 
@@ -115,7 +117,7 @@ fn[Inst] Function::allocate_block(
   for ty in parameter_types {
     parameters.push(self.allocate_value(ty, BlockParameter(block)))
   }
-  self.blocks.push({ parameters, body: [], terminator: None, })
+  self.blocks.push({ parameters, body: [], terminator: None, layout_index: -1, })
   block
 }
 
@@ -635,6 +637,9 @@ pub fn[Inst] Function::set_layout(
       raise InvalidLayout
     }
     seen[block.id] = true
+  }
+  for layout_index, block in layout {
+    self.blocks[block.id].layout_index = layout_index
   }
   self.layout = layout.copy()
 }

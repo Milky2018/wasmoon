@@ -132,7 +132,8 @@ fn[F : FunctionView] build_register_clobber_index(
     }
   }
   for block in 0..<function.block_count() {
-    for instruction_index, instruction in function.block_instructions(block) {
+    for instruction_index in 0..<function.block_instruction_count(block) {
+      let instruction = function.block_instruction_at(block, instruction_index)
       // A clobber happens after Early operands and before Late operands. Place
       // it at the Early boundary: ranges ending in an Early use may occupy the
       // register, Late definitions start after it, and live-through ranges
@@ -270,15 +271,16 @@ fn[F : FunctionView] assign_edge_transfers(
   function : F,
 ) -> Unit raise VerifyError {
   for block_index in 0..<function.block_count() {
-    let successors = function.block_successors(block_index)
-    for successor_index, target in successors {
-      let arguments = function.edge_arguments(block_index, successor_index)
-      let parameters = function.block_parameters(target)
-      for argument_index, argument in arguments {
-        if argument_index >= parameters.length() {
-          break
-        }
-        let parameter = parameters[argument_index]
+    for successor_index in 0..<function.block_successor_count(block_index) {
+      let target = function.block_successor_at(block_index, successor_index)
+      let count = function
+        .edge_argument_count(block_index, successor_index)
+        .min(function.block_parameter_count(target))
+      for argument_index in 0..<count {
+        let argument = function.edge_argument_at(
+          block_index, successor_index, argument_index,
+        )
+        let parameter = function.block_parameter_at(target, argument_index)
         guard plan.value_location(argument.id) is Some(from) else {
           raise Unassigned(vreg=argument)
         }
@@ -307,7 +309,8 @@ fn[F : FunctionView] verify_operand_preferences(
   environment : MachineEnv,
 ) -> Unit raise VerifyError {
   for block in 0..<function.block_count() {
-    for instruction in function.block_instructions(block) {
+    for instruction_index in 0..<function.block_instruction_count(block) {
+      let instruction = function.block_instruction_at(block, instruction_index)
       for operand in function.instruction_operands(instruction) {
         if operand.preference is Some(preferred) &&
           (

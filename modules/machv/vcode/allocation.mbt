@@ -153,7 +153,12 @@ pub struct Allocation {
 }
 
 ///|
-pub fn[Inst] Allocation::for_function(function : Function[Inst]) -> Allocation {
+fn[Inst] Allocation::for_function_with_storage(
+  function : Function[Inst],
+  value_locations : Array[AllocationLocation?],
+  operand_locations : Array[Array[AllocationLocation?]],
+  stack_slots : Array[StackSlotData],
+) -> Allocation {
   let operand_counts : Array[Int] = []
   let operand_values : Array[Array[Value]] = []
   for index in 0..<function.instruction_count() {
@@ -179,15 +184,28 @@ pub fn[Inst] Allocation::for_function(function : Function[Inst]) -> Allocation {
     value_types,
     operand_counts,
     operand_values,
-    value_locations: Array::make(function.value_count(), None),
-    operand_locations: operand_counts.map(count => Array::make(count, None)),
-    stack_slots: [],
+    value_locations,
+    operand_locations,
+    stack_slots,
     edits: [],
     before_edits: Array::makei(function.instruction_count(), _ => []),
     after_edits: Array::makei(function.instruction_count(), _ => []),
     edge_edits: Map([]),
     safepoint_roots: [],
   }
+}
+
+///|
+pub fn[Inst] Allocation::for_function(function : Function[Inst]) -> Allocation {
+  Allocation::for_function_with_storage(
+    function,
+    Array::make(function.value_count(), None),
+    Array::makei(function.instruction_count(), instruction => {
+      let data = function.instructions[instruction]
+      Array::make(data.operand_count, None)
+    }),
+    [],
+  )
 }
 
 ///|

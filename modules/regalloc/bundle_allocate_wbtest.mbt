@@ -938,11 +938,16 @@ impl FunctionView for ClobberIndexTestFunction with fn values_share_spill_slot(
 }
 
 ///|
-impl FunctionView for ClobberIndexTestFunction with fn entry_values(_self) -> ArrayView[
-  VirtualReg,
-] {
-  let empty : Array[VirtualReg] = []
-  empty[:]
+impl FunctionView for ClobberIndexTestFunction with fn entry_value_count(_self) -> Int {
+  0
+}
+
+///|
+impl FunctionView for ClobberIndexTestFunction with fn entry_value_at(
+  _self,
+  _parameter,
+) -> VirtualReg {
+  abort("invalid entry value index")
 }
 
 ///|
@@ -956,39 +961,73 @@ impl FunctionView for ClobberIndexTestFunction with fn block_id_at(_self, block)
 }
 
 ///|
-impl FunctionView for ClobberIndexTestFunction with fn block_parameters(
+impl FunctionView for ClobberIndexTestFunction with fn block_parameter_count(
   _self,
   _block,
-) -> ArrayView[VirtualReg] {
-  let empty : Array[VirtualReg] = []
-  empty[:]
+) -> Int {
+  0
 }
 
 ///|
-impl FunctionView for ClobberIndexTestFunction with fn block_instructions(
+impl FunctionView for ClobberIndexTestFunction with fn block_parameter_at(
+  _self,
+  _block,
+  _parameter,
+) -> VirtualReg {
+  abort("invalid block parameter index")
+}
+
+///|
+impl FunctionView for ClobberIndexTestFunction with fn block_instruction_count(
   self,
   block,
-) -> ArrayView[Int] {
-  self.blocks[block][:]
+) -> Int {
+  self.blocks[block].length()
 }
 
 ///|
-impl FunctionView for ClobberIndexTestFunction with fn block_successors(
+impl FunctionView for ClobberIndexTestFunction with fn block_instruction_at(
+  self,
+  block,
+  instruction,
+) -> Int {
+  self.blocks[block][instruction]
+}
+
+///|
+impl FunctionView for ClobberIndexTestFunction with fn block_successor_count(
   _self,
   _block,
-) -> ArrayView[Int] {
-  let empty : Array[Int] = []
-  empty[:]
+) -> Int {
+  0
 }
 
 ///|
-impl FunctionView for ClobberIndexTestFunction with fn edge_arguments(
+impl FunctionView for ClobberIndexTestFunction with fn block_successor_at(
   _self,
   _block,
   _successor,
-) -> ArrayView[VirtualReg] {
-  let empty : Array[VirtualReg] = []
-  empty[:]
+) -> Int {
+  abort("invalid block successor index")
+}
+
+///|
+impl FunctionView for ClobberIndexTestFunction with fn edge_argument_count(
+  _self,
+  _block,
+  _successor,
+) -> Int {
+  0
+}
+
+///|
+impl FunctionView for ClobberIndexTestFunction with fn edge_argument_at(
+  _self,
+  _block,
+  _successor,
+  _argument,
+) -> VirtualReg {
+  abort("invalid edge argument index")
 }
 
 ///|

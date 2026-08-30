@@ -19,6 +19,75 @@ pub fn[Inst] AllocationBuilder::new(
 }
 
 ///|
+/// Adopts canonical location tables produced for this exact selected function.
+///
+/// The caller must stop mutating the source tables after adoption. Shape,
+/// location class, spill ownership, size, and alignment are checked here so
+/// callers that disable the final allocation verifier retain the same local
+/// construction guarantees as incremental builder writes.
+pub fn[Inst] AllocationBuilder::from_plan_storage(
+  function : Function[Inst],
+  value_locations : Array[AllocationLocation?],
+  operand_locations : Array[Array[AllocationLocation?]],
+  spill_owners : Array[Int],
+  spill_sizes : Array[Int],
+  spill_alignments : Array[Int],
+) -> AllocationBuilder[Inst]? {
+  if value_locations.length() != function.values.length() ||
+    operand_locations.length() != function.instructions.length() ||
+    spill_owners.length() != spill_sizes.length() ||
+    spill_owners.length() != spill_alignments.length() {
+    return None
+  }
+  let stack_slots : Array[StackSlotData] = []
+  for slot in 0..<spill_owners.length() {
+    let owner = spill_owners[slot]
+    if owner < 0 || owner >= function.values.length() {
+      return None
+    }
+    let minimum = match function.values[owner].ty {
+      I32 | F32 => 4
+      I64 | F64 | Ptr64 | GcRef64 => 8
+      V128 => 16
+    }
+    if spill_sizes[slot] < minimum ||
+      spill_alignments[slot] < minimum ||
+      (spill_alignments[slot] & (spill_alignments[slot] - 1)) != 0 {
+      return None
+    }
+    stack_slots.push({
+      ty: function.values[owner].ty,
+      size: spill_sizes[slot],
+      alignment: spill_alignments[slot],
+    })
+  }
+  let allocation = Allocation::for_function_with_storage(
+    function, value_locations, operand_locations, stack_slots,
+  )
+  for value in 0..<value_locations.length() {
+    guard value_locations[value] is Some(location) else { return None }
+    if !allocation.dense_location_matches(location, function.values[value].ty) {
+      return None
+    }
+  }
+  for instruction in 0..<operand_locations.length() {
+    let data = function.instructions[instruction]
+    let locations = operand_locations[instruction]
+    if locations.length() != data.operand_count {
+      return None
+    }
+    for operand in 0..<locations.length() {
+      guard locations[operand] is Some(location) else { return None }
+      let value = function.operands[data.operand_start + operand].vreg.id
+      if !allocation.dense_location_matches(location, function.values[value].ty) {
+        return None
+      }
+    }
+  }
+  Some({ function, allocation, })
+}
+
+///|
 pub fn[Inst] AllocationBuilder::value_type_at(
   self : AllocationBuilder[Inst],
   value : Int,

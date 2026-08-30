@@ -247,7 +247,8 @@ fn[F : FunctionView] process_plan_block(
   edits_at : Map[EditPosition, Array[AllocationEdit]],
 ) -> PlanState raise VerifyError {
   let current = state.copy()
-  for instruction in function.block_instructions(block) {
+  for instruction_index in 0..<function.block_instruction_count(block) {
+    let instruction = function.block_instruction_at(block, instruction_index)
     apply_position_edits(current, edits_at, Before(instruction))
     process_operand_phase(
       current,
@@ -280,7 +281,8 @@ fn[F : FunctionView] initialize_block_parameters(
   plan : AllocationPlan,
   block : Int,
 ) -> Unit raise VerifyError {
-  for parameter in function.block_parameters(block) {
+  for parameter_index in 0..<function.block_parameter_count(block) {
+    let parameter = function.block_parameter_at(block, parameter_index)
     guard plan.value_location(parameter.id) is Some(location) else {
       raise Unassigned(vreg=parameter)
     }
@@ -309,15 +311,16 @@ fn[F : FunctionView] prepare_successor_state(
       state.values[location_key(edit.to)] = edit.value
     }
   }
-  let arguments = function.edge_arguments(block, successor)
-  let parameters = function.block_parameters(target)
-  if arguments.length() != parameters.length() {
+  let argument_count = function.edge_argument_count(block, successor)
+  let parameter_count = function.block_parameter_count(target)
+  if argument_count != parameter_count {
     raise InvalidPlan(
       message="edge argument count does not match block parameters",
     )
   }
-  for index, argument in arguments {
-    let parameter = parameters[index]
+  for index in 0..<argument_count {
+    let argument = function.edge_argument_at(block, successor, index)
+    let parameter = function.block_parameter_at(target, index)
     guard plan.value_location(parameter.id) is Some(parameter_home) else {
       raise Unassigned(vreg=parameter)
     }
@@ -351,7 +354,9 @@ fn[F : FunctionView] verify_function_allocation(
   let edits_at = index_plan_edits(plan.edits())
   let block_count = function.block_count()
   let successors = Array::makei(block_count, block => {
-    function.block_successors(block).to_owned()
+    Array::makei(function.block_successor_count(block), successor => {
+      function.block_successor_at(block, successor)
+    })
   })
   let has_predecessor = Array::make(block_count, false)
   for source_successors in successors {
@@ -388,7 +393,8 @@ fn[F : FunctionView] verify_function_allocation(
     if block == 0 || !has_predecessor[block] {
       let state = PlanState::new()
       if block == 0 {
-        for parameter in function.entry_values() {
+        for parameter_index in 0..<function.entry_value_count() {
+          let parameter = function.entry_value_at(parameter_index)
           guard plan.value_location(parameter.id) is Some(location) else {
             raise Unassigned(vreg=parameter)
           }

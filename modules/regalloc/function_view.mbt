@@ -11,13 +11,18 @@ pub(open) trait FunctionView {
   fn value_spill_size(Self, Int) -> Int
   fn value_spill_alignment(Self, Int) -> Int
   fn values_share_spill_slot(Self, Int, Int) -> Bool
-  fn entry_values(Self) -> ArrayView[VirtualReg]
+  fn entry_value_count(Self) -> Int
+  fn entry_value_at(Self, Int) -> VirtualReg
   fn block_count(Self) -> Int
   fn block_id_at(Self, Int) -> Int
-  fn block_parameters(Self, Int) -> ArrayView[VirtualReg]
-  fn block_instructions(Self, Int) -> ArrayView[Int]
-  fn block_successors(Self, Int) -> ArrayView[Int]
-  fn edge_arguments(Self, Int, Int) -> ArrayView[VirtualReg]
+  fn block_parameter_count(Self, Int) -> Int
+  fn block_parameter_at(Self, Int, Int) -> VirtualReg
+  fn block_instruction_count(Self, Int) -> Int
+  fn block_instruction_at(Self, Int, Int) -> Int
+  fn block_successor_count(Self, Int) -> Int
+  fn block_successor_at(Self, Int, Int) -> Int
+  fn edge_argument_count(Self, Int, Int) -> Int
+  fn edge_argument_at(Self, Int, Int, Int) -> VirtualReg
   fn instruction_operands(Self, Int) -> ArrayView[Operand]
   fn instruction_clobbers(Self, Int) -> ArrayView[PhysicalReg]
 }

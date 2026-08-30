@@ -240,7 +240,8 @@ fn[F : FunctionView] compute_allocator_loop_depths(function : F) -> Array[Int] {
   let backedge_in = Array::make(block_count, 0)
   let backedge_out = Array::make(block_count, 0)
   for block in 0..<block_count {
-    for successor in function.block_successors(block) {
+    for successor_index in 0..<function.block_successor_count(block) {
+      let successor = function.block_successor_at(block, successor_index)
       if successor >= 0 && successor < block_count && successor <= block {
         backedge_in[successor] = backedge_in[successor] + 1
         backedge_out[block] = backedge_out[block] + 1
@@ -527,6 +528,7 @@ fn[F : FunctionView] assign_backtracking_homes(
     }
     if selected < 0 {
       selected = plan.create_spill_slot(
+        value,
         function.value_spill_size(value),
         function.value_spill_alignment(value),
       )
@@ -651,6 +653,7 @@ fn[F : FunctionView] borrow_allocatable_register(
     Some(slot) => slot
     None => {
       let slot = plan.create_spill_slot(
+        occupant.id,
         function.value_spill_size(occupant.id),
         function.value_spill_alignment(occupant.id),
       )
@@ -737,7 +740,8 @@ fn[F : FunctionView] assign_segment_operands(
   let resident_operand_segments : Array[Int?] = []
   let has_predecessor = Array::make(function.block_count(), false)
   for block in 0..<function.block_count() {
-    for successor in function.block_successors(block) {
+    for successor_index in 0..<function.block_successor_count(block) {
+      let successor = function.block_successor_at(block, successor_index)
       if successor >= 0 && successor < function.block_count() {
         has_predecessor[successor] = true
       }
@@ -759,7 +763,8 @@ fn[F : FunctionView] assign_segment_operands(
         }
       }
     }
-    for instruction_index, instruction in function.block_instructions(block) {
+    for instruction_index in 0..<function.block_instruction_count(block) {
+      let instruction = function.block_instruction_at(block, instruction_index)
       let operands = function.instruction_operands(instruction)
       assigned.clear()
       natural_locations.clear()
@@ -1057,5 +1062,6 @@ fn[F : FunctionView] allocate_bundle_plan(
   )
   config.enter_phase(Some(EdgeTransfers))
   assign_edge_transfers(plan, function)
+  plan.seal_operand_storage(function)
   plan
 }
