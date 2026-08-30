@@ -5,6 +5,9 @@ pub type RegClass = @allocation_types.RegClass
 pub type OperandTiming = @allocation_types.OperandTiming
 
 ///|
+pub type OperandRole = @allocation_types.OperandRole
+
+///|
 #valtype
 pub(all) struct VirtualReg {
   id : Int
@@ -33,13 +36,6 @@ fn physical_reg_key(reg : PhysicalReg) -> (Int, Int) {
 pub(all) enum Location {
   Reg(PhysicalReg)
   Spill(Int)
-} derive(Eq, Debug)
-
-///|
-pub(all) enum OperandRole {
-  Use
-  Def
-  UseDef
 } derive(Eq, Debug)
 
 ///|

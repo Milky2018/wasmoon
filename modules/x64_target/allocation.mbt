@@ -204,7 +204,7 @@ fn require_legal_edit_register(
   }
   if role.allows_fixed_operand() && edit.point() is Some(point) {
     let required_role = match (point.placement(), source) {
-      (Before, false) => Some(@vcode.Use)
+      (Before, false) => Some(@vcode.OperandRole::Use)
       (After, true) => Some(Def)
       _ => None
     }

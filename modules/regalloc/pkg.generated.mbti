@@ -155,7 +155,7 @@ pub fn MachineEnv::with_operand_scratch_regs(Self, Array[PhysicalReg]) -> Self
 
 pub(all) struct Operand {
   vreg : VirtualReg
-  role : OperandRole
+  role : @allocation_types.OperandRole
   constraint : OperandConstraint
   preference : PhysicalReg?
   tie_id : Int
@@ -188,15 +188,6 @@ pub(all) enum OperandConstraint {
 pub fn OperandConstraint::equal(Self, Self) -> Bool
 pub fn OperandConstraint::not_equal(Self, Self) -> Bool
 pub fn OperandConstraint::to_repr(Self) -> @debug.Repr
-
-pub(all) enum OperandRole {
-  Use
-  Def
-  UseDef
-} derive(Eq, @debug.Debug)
-pub fn OperandRole::equal(Self, Self) -> Bool
-pub fn OperandRole::not_equal(Self, Self) -> Bool
-pub fn OperandRole::to_repr(Self) -> @debug.Repr
 
 pub(all) struct PhysicalReg {
   id : Int
@@ -304,6 +295,8 @@ pub fn VirtualReg::not_equal(Self, Self) -> Bool
 pub fn VirtualReg::to_repr(Self) -> @debug.Repr
 
 // Type aliases
+pub using @allocation_types {type OperandRole}
+
 pub using @allocation_types {type OperandTiming}
 
 pub using @allocation_types {type RegClass}

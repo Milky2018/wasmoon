@@ -11,3 +11,21 @@ pub extend OperandTiming with Debug::{to_repr}
 
 ///|
 pub extend OperandTiming with Eq::{not_equal, equal}
+
+///|
+/// Whether an allocation operand reads, writes, or both reads and writes its
+/// virtual register.
+///
+/// SSA VCode producers use `Use` and `Def`. `UseDef` remains available to
+/// standalone register-allocation clients that model in-place updates.
+pub(all) enum OperandRole {
+  Use
+  Def
+  UseDef
+} derive(Eq, Debug)
+
+///|
+pub extend OperandRole with Debug::{to_repr}
+
+///|
+pub extend OperandRole with Eq::{not_equal, equal}

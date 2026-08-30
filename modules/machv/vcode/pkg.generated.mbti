@@ -402,7 +402,7 @@ pub impl @debug.Debug for Location
 
 pub struct Operand {
   value : Value
-  role : OperandRole
+  role : @allocation_types.OperandRole
   constraint : OperandConstraint
   preference : PhysicalReg?
   timing : @allocation_types.OperandTiming
@@ -421,14 +421,6 @@ pub(all) enum OperandConstraint {
 pub fn OperandConstraint::equal(Self, Self) -> Bool
 pub fn OperandConstraint::not_equal(Self, Self) -> Bool
 pub fn OperandConstraint::to_repr(Self) -> @debug.Repr
-
-pub(all) enum OperandRole {
-  Use
-  Def
-} derive(Eq, @debug.Debug)
-pub fn OperandRole::equal(Self, Self) -> Bool
-pub fn OperandRole::not_equal(Self, Self) -> Bool
-pub fn OperandRole::to_repr(Self) -> @debug.Repr
 
 pub struct Output {
   ty : @machv.ValueType
@@ -585,6 +577,8 @@ pub impl Show for Value
 pub impl @debug.Debug for Value
 
 // Type aliases
+pub using @allocation_types {type OperandRole}
+
 pub using @allocation_types {type OperandTiming}
 
 pub using @allocation_types {type RegClass}

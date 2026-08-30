@@ -5,6 +5,9 @@ pub type RegClass = @allocation_types.RegClass
 pub type OperandTiming = @allocation_types.OperandTiming
 
 ///|
+pub type OperandRole = @allocation_types.OperandRole
+
+///|
 pub type ValueType = @semantic.ValueType
 
 ///|
@@ -176,12 +179,6 @@ pub(all) enum OperandConstraint {
   AnyLocation
   Fixed(PhysicalReg)
   TiedTo(Int)
-} derive(Eq, Debug)
-
-///|
-pub(all) enum OperandRole {
-  Use
-  Def
 } derive(Eq, Debug)
 
 ///|

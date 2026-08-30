@@ -157,14 +157,6 @@ fn regalloc_value_size(ty : @semantic.ValueType) -> Int {
 }
 
 ///|
-fn to_regalloc_operand_role(role : @vcode.OperandRole) -> @regalloc.OperandRole {
-  match role {
-    Use => Use
-    Def => Def
-  }
-}
-
-///|
 fn to_regalloc_operand_constraint(
   constraint : @vcode.OperandConstraint,
 ) -> @regalloc.OperandConstraint {
@@ -183,7 +175,7 @@ fn[Inst] to_regalloc_operand(
 ) -> @regalloc.Operand {
   {
     vreg: to_regalloc_vreg(function, operand.value),
-    role: to_regalloc_operand_role(operand.role),
+    role: operand.role,
     constraint: to_regalloc_operand_constraint(operand.constraint),
     preference: operand.preference.map(to_regalloc_preg),
     tie_id: operand.tie_id,
