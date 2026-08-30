@@ -82,13 +82,6 @@ pub(all) enum UseKind {
 } derive(Eq, Debug)
 
 ///|
-pub(all) enum OperandConstraint {
-  AnyReg
-  AnyLocation
-  FixedReg(PhysicalReg)
-} derive(Eq, Debug)
-
-///|
 pub(all) struct UsePosition {
   point : ProgramPoint
   kind : UseKind

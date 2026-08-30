@@ -303,7 +303,7 @@ fn require_fixed_use(
   let operand = function
     .instruction_operand_at(instruction, operand_index)
     .unwrap()
-  if operand.constraint != Fixed(expected) {
+  if operand.constraint != FixedReg(expected) {
     raise InvalidInstruction(
       instruction~,
       message="operand does not use the required ABI register",

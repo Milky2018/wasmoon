@@ -112,10 +112,14 @@ fn[Inst] Builder::append_instruction(
     if input.constraint is Fixed(reg) && reg.class != expected {
       raise InvalidOperandConstraint
     }
+    if input.constraint is TiedTo(_) {
+      raise InvalidOperandConstraint
+    }
     if input.preference is Some(preference) && preference.class != expected {
       raise InvalidOperandConstraint
     }
   }
+  let tied_inputs = Array::make(inputs.length(), false)
   for output in outputs {
     let expected = reg_class_for_value_type(output.ty)
     match output.constraint {
@@ -123,8 +127,11 @@ fn[Inst] Builder::append_instruction(
       TiedTo(tied_to) =>
         if tied_to < 0 ||
           tied_to >= inputs.length() ||
+          tied_inputs[tied_to] ||
           self.function.value_type(inputs[tied_to].value) != Some(output.ty) {
           raise InvalidOperandConstraint
+        } else {
+          tied_inputs[tied_to] = true
         }
       AnyLocation | Any => ()
     }
@@ -154,28 +161,38 @@ fn[Inst] Builder::append_instruction(
   }
   let operand_start = self.function.operands.length()
   for input in inputs {
+    let constraint : AllocationConstraint = match input.constraint {
+      Any => AnyReg
+      AnyLocation => AnyLocation
+      Fixed(reg) => FixedReg(reg)
+      TiedTo(_) => raise InvalidOperandConstraint
+    }
     self.function.operands.push({
       value: input.value,
       role: Use,
-      constraint: input.constraint,
+      constraint,
       preference: input.preference,
       timing: input.timing,
       tie_id: -1,
     })
   }
   for index, output in outputs {
-    let operand_index = inputs.length() + index
     let tie_id = match output.constraint {
       TiedTo(tied_to) => {
-        self.function.operands[operand_start + tied_to].tie_id = operand_index
-        operand_index
+        self.function.operands[operand_start + tied_to].tie_id = tied_to
+        tied_to
       }
       _ => -1
+    }
+    let constraint : AllocationConstraint = match output.constraint {
+      Any | TiedTo(_) => AnyReg
+      AnyLocation => AnyLocation
+      Fixed(reg) => FixedReg(reg)
     }
     self.function.operands.push({
       value: results[index],
       role: Def,
-      constraint: output.constraint,
+      constraint,
       preference: output.preference,
       timing: output.timing,
       tie_id,

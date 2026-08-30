@@ -318,7 +318,7 @@ fn require_fixed_use(
   let operand = function
     .instruction_operand_at(instruction, operand_index)
     .unwrap()
-  if operand.constraint != Fixed(expected) {
+  if operand.constraint != FixedReg(expected) {
     raise InvalidInstruction(
       instruction~,
       message="operand does not use the required ABI register",
@@ -992,8 +992,9 @@ fn verify_target_vcode(
           false,
           0,
         )
-        if function.instruction_operand_at(instruction, 2).unwrap().constraint !=
-          TiedTo(0) {
+        let source = function.instruction_operand_at(instruction, 0).unwrap()
+        let result = function.instruction_operand_at(instruction, 2).unwrap()
+        if result.tie_id < 0 || result.tie_id != source.tie_id {
           raise InvalidInstruction(
             instruction~,
             message="vector lane replacement result must be tied to its source vector",

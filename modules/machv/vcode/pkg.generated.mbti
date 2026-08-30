@@ -403,7 +403,7 @@ pub impl @debug.Debug for Location
 pub struct Operand {
   value : Value
   role : @allocation_types.OperandRole
-  constraint : OperandConstraint
+  constraint : @allocation_types.AllocationConstraint
   preference : @allocation_types.PhysicalReg?
   timing : @allocation_types.OperandTiming
   tie_id : Int
@@ -567,6 +567,8 @@ pub impl Show for Value
 pub impl @debug.Debug for Value
 
 // Type aliases
+pub using @allocation_types {type AllocationConstraint}
+
 pub using @allocation_types {type OperandRole}
 
 pub using @allocation_types {type OperandTiming}

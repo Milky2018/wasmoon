@@ -56,12 +56,6 @@ pub extend OperandAssignment with Debug::{to_repr}
 pub extend OperandAssignment with Eq::{not_equal, equal}
 
 ///|
-pub extend OperandConstraint with Debug::{to_repr}
-
-///|
-pub extend OperandConstraint with Eq::{not_equal, equal}
-
-///|
 pub extend ProgramPoint with Debug::{to_repr}
 
 ///|

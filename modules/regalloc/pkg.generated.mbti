@@ -156,7 +156,7 @@ pub fn MachineEnv::with_operand_scratch_regs(Self, Array[@allocation_types.Physi
 pub(all) struct Operand {
   vreg : VirtualReg
   role : @allocation_types.OperandRole
-  constraint : OperandConstraint
+  constraint : @allocation_types.AllocationConstraint
   preference : @allocation_types.PhysicalReg?
   tie_id : Int
   timing : @allocation_types.OperandTiming
@@ -166,7 +166,7 @@ pub fn Operand::equal(Self, Self) -> Bool
 pub fn Operand::not_equal(Self, Self) -> Bool
 pub fn Operand::to_repr(Self) -> @debug.Repr
 pub fn Operand::use_reg(VirtualReg) -> Self
-pub fn Operand::with_constraint(Self, OperandConstraint) -> Self
+pub fn Operand::with_constraint(Self, @allocation_types.AllocationConstraint) -> Self
 pub fn Operand::with_preference(Self, @allocation_types.PhysicalReg) -> Self
 pub fn Operand::with_tie(Self, Int) -> Self
 pub fn Operand::with_timing(Self, @allocation_types.OperandTiming) -> Self
@@ -179,15 +179,6 @@ pub struct OperandAssignment {
 pub fn OperandAssignment::equal(Self, Self) -> Bool
 pub fn OperandAssignment::not_equal(Self, Self) -> Bool
 pub fn OperandAssignment::to_repr(Self) -> @debug.Repr
-
-pub(all) enum OperandConstraint {
-  AnyReg
-  AnyLocation
-  FixedReg(@allocation_types.PhysicalReg)
-} derive(Eq, @debug.Debug)
-pub fn OperandConstraint::equal(Self, Self) -> Bool
-pub fn OperandConstraint::not_equal(Self, Self) -> Bool
-pub fn OperandConstraint::to_repr(Self) -> @debug.Repr
 
 pub(all) struct ProgramPoint {
   block : Int
@@ -267,11 +258,11 @@ pub fn UseKind::to_repr(Self) -> @debug.Repr
 pub(all) struct UsePosition {
   point : ProgramPoint
   kind : UseKind
-  constraint : OperandConstraint
+  constraint : @allocation_types.AllocationConstraint
   preference : @allocation_types.PhysicalReg?
   tie_id : Int
 } derive(Eq, @debug.Debug)
-pub fn UsePosition::UsePosition(ProgramPoint, UseKind, OperandConstraint) -> Self
+pub fn UsePosition::UsePosition(ProgramPoint, UseKind, @allocation_types.AllocationConstraint) -> Self
 pub fn UsePosition::equal(Self, Self) -> Bool
 pub fn UsePosition::not_equal(Self, Self) -> Bool
 pub fn UsePosition::to_repr(Self) -> @debug.Repr
@@ -287,6 +278,8 @@ pub fn VirtualReg::not_equal(Self, Self) -> Bool
 pub fn VirtualReg::to_repr(Self) -> @debug.Repr
 
 // Type aliases
+pub using @allocation_types {type AllocationConstraint as OperandConstraint}
+
 pub using @allocation_types {type OperandRole}
 
 pub using @allocation_types {type OperandTiming}

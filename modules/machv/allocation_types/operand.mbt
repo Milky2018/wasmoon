@@ -29,3 +29,20 @@ pub extend OperandRole with Debug::{to_repr}
 
 ///|
 pub extend OperandRole with Eq::{not_equal, equal}
+
+///|
+/// A normalized register-allocation constraint.
+///
+/// Operand ties are represented separately by a shared nonnegative tie label,
+/// so this type contains only location constraints.
+pub(all) enum AllocationConstraint {
+  AnyReg
+  AnyLocation
+  FixedReg(PhysicalReg)
+} derive(Eq, Debug)
+
+///|
+pub extend AllocationConstraint with Debug::{to_repr}
+
+///|
+pub extend AllocationConstraint with Eq::{not_equal, equal}

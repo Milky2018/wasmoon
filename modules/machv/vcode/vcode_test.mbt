@@ -92,6 +92,39 @@ test "CheckedBuilder rejects malformed edges before mutation" {
 }
 
 ///|
+test "Builder rejects duplicate tied outputs before mutation" {
+  let builder : Builder[TestInst] = Builder::new("duplicate_tie", [I64])
+  let entry = builder.entry_block()
+  let value = builder.parameter(0)
+  try
+    builder.append_body(
+      entry,
+      Add,
+      [Input::any(value)],
+      [Output::tied(I64, 0), Output::tied(I64, 0)],
+      [],
+      InstructionMetadata::empty(),
+    )
+    |> ignore
+  catch {
+    InvalidOperandConstraint => ()
+    _ => fail("expected duplicate tie rejection")
+  } noraise {
+    _ => fail("expected duplicate tie rejection")
+  }
+  builder.set_terminator(
+    entry,
+    Return,
+    [Input::any(value)],
+    [],
+    [],
+    InstructionMetadata::empty(),
+  )
+  |> ignore
+  inspect(builder.finish().instruction_count(), content="1")
+}
+
+///|
 test "Target VCode snapshots selected SSA and compact allocation facts" {
   let function = build_test_function()
   verify_selected(function)
@@ -220,6 +253,16 @@ test "Allocation remains separate and verifies edits, slots, and safepoints" {
     InstructionMetadata::empty(),
   )
   let function = builder.finish()
+  let operands = function.instruction_operands(call)
+  inspect(
+    operands[0].constraint == FixedReg(PhysicalReg::new(0, Int)),
+    content="true",
+  )
+  inspect(operands[1].constraint == AnyReg, content="true")
+  inspect(
+    operands[0].tie_id >= 0 && operands[0].tie_id == operands[1].tie_id,
+    content="true",
+  )
   let allocation = Allocation::for_function(function)
   let slot = allocation.create_stack_slot(GcRef64, 8, 8)
   allocation.assign_value(root, Stack(slot)) |> ignore

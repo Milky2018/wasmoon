@@ -11,6 +11,9 @@ pub type OperandRole = @allocation_types.OperandRole
 pub type PhysicalReg = @allocation_types.PhysicalReg
 
 ///|
+pub type OperandConstraint = @allocation_types.AllocationConstraint
+
+///|
 #valtype
 pub(all) struct VirtualReg {
   id : Int

@@ -11,6 +11,9 @@ pub type OperandRole = @allocation_types.OperandRole
 pub type PhysicalReg = @allocation_types.PhysicalReg
 
 ///|
+pub type AllocationConstraint = @allocation_types.AllocationConstraint
+
+///|
 pub type ValueType = @semantic.ValueType
 
 ///|
@@ -255,7 +258,7 @@ pub fn Output::with_timing(self : Output, timing : OperandTiming) -> Output {
 priv struct OperandData {
   value : Value
   role : OperandRole
-  constraint : OperandConstraint
+  constraint : AllocationConstraint
   preference : PhysicalReg?
   timing : OperandTiming
   mut tie_id : Int
@@ -265,7 +268,7 @@ priv struct OperandData {
 pub struct Operand {
   value : Value
   role : OperandRole
-  constraint : OperandConstraint
+  constraint : AllocationConstraint
   preference : PhysicalReg?
   timing : OperandTiming
   tie_id : Int

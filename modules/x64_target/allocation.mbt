@@ -183,7 +183,7 @@ fn require_legal_operand_register(
   let operand = function
     .instruction_operand_at(instruction, operand_index)
     .unwrap()
-  if operand.constraint is Fixed(required) &&
+  if operand.constraint is FixedReg(required) &&
     required == reg &&
     role.allows_fixed_operand() {
     return
@@ -219,7 +219,7 @@ fn require_legal_edit_register(
       for operand in function.instruction_operands(instruction) {
         if operand.value == edit_value &&
           operand.role == role &&
-          operand.constraint == Fixed(reg) {
+          operand.constraint == FixedReg(reg) {
           return
         }
       }

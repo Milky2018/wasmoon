@@ -1,10 +1,9 @@
 ///|
-fn constraint_text(constraint : OperandConstraint) -> String {
+fn constraint_text(constraint : AllocationConstraint) -> String {
   match constraint {
-    Any => "any"
+    AnyReg => "any"
     AnyLocation => "any-location"
-    Fixed(reg) => "fixed(\{Repr(reg)})"
-    TiedTo(index) => "tied(\{index})"
+    FixedReg(reg) => "fixed(\{Repr(reg)})"
   }
 }
 
@@ -17,12 +16,16 @@ fn timing_text(timing : OperandTiming) -> String {
 }
 
 ///|
-fn operand_text(operand : Operand) -> String {
+fn operand_text(operand : Operand, tied_to : Int?) -> String {
   let preference = match operand.preference {
     Some(reg) => "(prefer=\{Repr(reg)})"
     None => ""
   }
-  "\{Repr(operand.value)}:\{constraint_text(operand.constraint)}\{preference}@\{timing_text(operand.timing)}"
+  let constraint = match tied_to {
+    Some(index) => "tied(\{index})"
+    None => constraint_text(operand.constraint)
+  }
+  "\{Repr(operand.value)}:\{constraint}\{preference}@\{timing_text(operand.timing)}"
 }
 
 ///|
@@ -78,7 +81,7 @@ pub fn[Inst : Debug] Function::summary(self : Function[Inst]) -> String {
           if index > 0 {
             output += ", "
           }
-          output += operand_text(operand)
+          output += operand_text(operand, None)
         }
         output += "]"
       }
@@ -88,7 +91,15 @@ pub fn[Inst : Debug] Function::summary(self : Function[Inst]) -> String {
           if index > 0 {
             output += ", "
           }
-          output += operand_text(operand)
+          let mut tied_to = None
+          if operand.tie_id >= 0 {
+            for operand_index, candidate in operands {
+              if candidate.role == Use && candidate.tie_id == operand.tie_id {
+                tied_to = Some(operand_index)
+              }
+            }
+          }
+          output += operand_text(operand, tied_to)
         }
         output += "]"
       }

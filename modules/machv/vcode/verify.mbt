@@ -115,24 +115,26 @@ fn[Inst] Function::verify_instruction(
       raise InvalidOperandPreference(instruction~, operand=index)
     }
     match operand.constraint {
-      Fixed(reg) =>
+      FixedReg(reg) =>
         if reg.class != reg_class_for_value_type(ty) {
           raise FixedRegisterClassMismatch(instruction~, operand=index)
         }
-      TiedTo(tied_to) => {
-        if tied_to < 0 || tied_to >= operands.length() || tied_to == index {
-          raise InvalidTie(instruction~, operand=index, tied_to~)
-        }
-        let tied = operands[tied_to]
-        if tied.role == operand.role ||
-          self.values[tied.value.id].ty != ty ||
-          tied.tie_id != operand.tie_id ||
-          operand.tie_id < 0 {
-          raise InvalidTie(instruction~, operand=index, tied_to~)
-        }
+      AnyReg | AnyLocation => ()
+    }
+    if operand.tie_id < -1 {
+      raise InvalidTie(instruction~, operand=index, tied_to=operand.tie_id)
+    }
+    if operand.role == Def && operand.tie_id >= 0 {
+      let tied_to = operand.tie_id
+      if tied_to >= operands.length() || tied_to == index {
+        raise InvalidTie(instruction~, operand=index, tied_to~)
       }
-      AnyLocation => ()
-      Any => ()
+      let tied = operands[tied_to]
+      if tied.role != Use ||
+        self.values[tied.value.id].ty != ty ||
+        tied.tie_id != operand.tie_id {
+        raise InvalidTie(instruction~, operand=index, tied_to~)
+      }
     }
     if operand.role == Use &&
       !self.definition_dominates(
@@ -677,17 +679,11 @@ pub fn[Inst] verify_allocation_invariants(
         raise OperandClassMismatch(instruction~, operand=operand_index)
       }
       match operand.constraint {
-        Fixed(required) =>
+        FixedReg(required) =>
           if assignment != Register(required) {
             raise FixedConstraintViolation(instruction~, operand=operand_index)
           }
-        TiedTo(tied_to) => {
-          let tied = allocation.assignment_for(instruction, tied_to)
-          if tied is None || tied.unwrap() != assignment {
-            raise TiedConstraintViolation(instruction~, operand=operand_index)
-          }
-        }
-        Any =>
+        AnyReg =>
           if assignment is Stack(_) {
             raise RegisterConstraintViolation(
               instruction~,
@@ -695,6 +691,12 @@ pub fn[Inst] verify_allocation_invariants(
             )
           }
         AnyLocation => ()
+      }
+      if operand.role == Def && operand.tie_id >= 0 {
+        if allocation.assignment_for(instruction, operand.tie_id) !=
+          Some(assignment) {
+          raise TiedConstraintViolation(instruction~, operand=operand_index)
+        }
       }
     }
   }
