@@ -619,6 +619,8 @@ test "Allocation mutation rejects foreign handles without changing data" {
   let function = build_test_function()
   let foreign = build_test_function()
   let allocation = Allocation::for_function(function)
+  let foreign_allocation = Allocation::for_function(foreign)
+  let foreign_slot = foreign_allocation.create_stack_slot(I64, 8, 8)
   assert_false(
     allocation.assign_value(
       foreign.value_at(0).unwrap(),
@@ -630,6 +632,16 @@ test "Allocation mutation rejects foreign handles without changing data" {
       foreign.instruction_at(0).unwrap(),
       0,
       PhysicalReg::new(0, Int),
+    ),
+  )
+  assert_false(
+    allocation.assign_value(function.value_at(0).unwrap(), Stack(foreign_slot)),
+  )
+  assert_false(
+    allocation.assign_operand_location(
+      function.instruction_at(0).unwrap(),
+      0,
+      Stack(foreign_slot),
     ),
   )
   inspect(

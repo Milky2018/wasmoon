@@ -71,19 +71,21 @@ fn plan_location_is_legal(
   value : VirtualReg,
   location : Location,
 ) -> Bool {
-  match location {
-    Reg(reg) =>
+  match location.register() {
+    Some(reg) =>
       reg.class == value.class &&
       (
         environment.allocatable_regs.contains(reg) ||
         environment.scratch_regs.contains(reg)
       )
-    Spill(slot) =>
+    None => {
+      let slot = location.spill_index().unwrap()
       if plan.spill_slot(slot) is Some(spec) {
         spec.size > 0 && spec.alignment > 0
       } else {
         false
       }
+    }
   }
 }
 
@@ -109,10 +111,14 @@ fn operand_location_is_legal(
   if plan_location_is_legal(environment, plan, operand.vreg, location) {
     return true
   }
-  match (operand.constraint, location) {
-    (FixedReg(_), Reg(reg)) =>
-      reg.class == operand.vreg.class &&
-      environment.fixed_operand_regs.contains(reg)
+  match operand.constraint {
+    FixedReg(_) =>
+      match location.register() {
+        Some(reg) =>
+          reg.class == operand.vreg.class &&
+          environment.fixed_operand_regs.contains(reg)
+        None => false
+      }
     _ => false
   }
 }
@@ -148,7 +154,7 @@ fn apply_plan_edit(
   edit : AllocationEdit,
 ) -> Unit raise VerifyError {
   require_value_at(state, edit.value, edit.from)
-  if edit.from is Spill(_) && edit.to is Spill(_) {
+  if edit.from.is_spill() && edit.to.is_spill() {
     raise InvalidPlan(message="stack-to-stack allocation edit")
   }
   state.values[location_key(edit.to)] = edit.value
@@ -208,12 +214,13 @@ fn[F : FunctionView] process_operand_phase(
       )
     }
     require_operand_location(environment, plan, operand, location)
-    if operand.constraint is AnyReg && location is Spill(_) {
+    if operand.constraint is AnyReg && location.is_spill() {
       raise InvalidPlan(
         message="register-constrained operand allocated outside a register",
       )
     }
-    if operand.constraint is FixedReg(required) && location != Reg(required) {
+    if operand.constraint is FixedReg(required) &&
+      location != reg_location(required) {
       raise FixedConstraintViolation(
         vreg=operand.vreg,
         required~,
@@ -333,7 +340,7 @@ fn[F : FunctionView] verify_function_allocation(
       raise Unassigned(vreg~)
     }
     require_plan_location(environment, plan, vreg, location)
-    if location is Spill(slot) {
+    if location.spill_index() is Some(slot) {
       let spec = plan.spill_slot(slot).unwrap()
       if spec.size < function.value_spill_size(value) ||
         spec.alignment < function.value_spill_alignment(value) {

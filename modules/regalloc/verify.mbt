@@ -14,8 +14,8 @@ pub suberror VerifyError {
 
 ///|
 fn location_key(location : Location) -> (Int, Int) {
-  match location {
-    Reg(reg) => physical_reg_key(reg)
-    Spill(slot) => (3, slot)
+  match location.register() {
+    Some(reg) => physical_reg_key(reg)
+    None => (3, location.spill_index().unwrap())
   }
 }

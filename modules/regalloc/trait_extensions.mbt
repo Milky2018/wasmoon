@@ -38,12 +38,6 @@ pub extend LiveRange with Debug::{to_repr}
 pub extend LiveRangeSet with Debug::{to_repr}
 
 ///|
-pub extend Location with Debug::{to_repr}
-
-///|
-pub extend Location with Eq::{not_equal, equal}
-
-///|
 pub extend OperandAssignment with Debug::{to_repr}
 
 ///|

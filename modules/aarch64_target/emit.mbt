@@ -2971,10 +2971,15 @@ fn emit_instruction(
   instruction : @vcode.Instruction,
   next_block : @vcode.Block?,
 ) -> Int raise AArch64EmitError {
+  let instruction_index = function.instruction_index(instruction).unwrap()
   let reg = fn(index : Int) -> @vcode.PhysicalReg raise AArch64EmitError {
-    match allocation.operand_location(instruction, index).unwrap() {
-      Register(reg) => reg
-      Stack(_) => raise UnexpectedStackOperand(instruction~, operand=index)
+    let location = allocation
+      .allocated_operand_location_at(instruction_index, index)
+      .unwrap()
+    if location.is_register() {
+      location.register_unchecked()
+    } else {
+      raise UnexpectedStackOperand(instruction~, operand=index)
     }
   }
   let mut metadata_offset = buffer.position()

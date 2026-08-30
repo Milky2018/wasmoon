@@ -20,6 +20,9 @@ pub type AllocationOperand = @allocation_types.AllocationOperand
 pub type AllocationVirtualReg = @allocation_types.VirtualReg
 
 ///|
+pub type AllocationLocation = @allocation_types.AllocationLocation
+
+///|
 pub type ValueType = @semantic.ValueType
 
 ///|

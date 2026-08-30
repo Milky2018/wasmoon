@@ -30,7 +30,7 @@ fn safe_move_scratch(
     if scratch.class != class {
       continue
     }
-    let location = Reg(scratch)
+    let location = reg_location(scratch)
     let mut used = false
     for transfer in pending {
       if move_aliases(transfer.from, location) ||
@@ -52,15 +52,23 @@ fn emit_resolved_move(
   transfer : PlanMove,
   environment : MachineEnv,
 ) -> Unit raise VerifyError {
-  if transfer.from is Spill(_) && transfer.to is Spill(_) {
+  if transfer.from.is_spill() && transfer.to.is_spill() {
     guard safe_move_scratch(environment, transfer.value.class, [transfer])
       is Some(reg) else {
       raise ScratchRegisterUnavailable(
         message="no scratch register for stack-to-stack transfer",
       )
     }
-    result.push({ value: transfer.value, from: transfer.from, to: Reg(reg), })
-    result.push({ value: transfer.value, from: Reg(reg), to: transfer.to, })
+    result.push({
+      value: transfer.value,
+      from: transfer.from,
+      to: reg_location(reg),
+    })
+    result.push({
+      value: transfer.value,
+      from: reg_location(reg),
+      to: transfer.to,
+    })
   } else {
     result.push(transfer)
   }
@@ -108,7 +116,7 @@ fn resolve_plan_moves(
         message="no safe scratch register for parallel-transfer cycle",
       )
     }
-    let temporary = Reg(scratch)
+    let temporary = reg_location(scratch)
     let mut source_value : VirtualReg? = None
     for transfer in pending {
       if move_aliases(transfer.from, cycle.to) {

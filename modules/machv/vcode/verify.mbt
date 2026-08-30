@@ -278,23 +278,30 @@ fn Allocation::assignment_for(
   self : Allocation,
   instruction : Instruction,
   operand_index : Int,
-) -> Location? {
-  self.operand_location(instruction, operand_index)
+) -> AllocationLocation? {
+  if !self.owns_instruction(instruction) ||
+    operand_index < 0 ||
+    operand_index >= self.operand_counts[instruction.id] {
+    return None
+  }
+  self.operand_locations[instruction.id][operand_index]
 }
 
 ///|
-fn Allocation::location_class(
+fn Allocation::dense_location_class(
   self : Allocation,
-  location : Location,
+  location : AllocationLocation,
 ) -> RegClass? {
-  match location {
-    Register(reg) => Some(reg.class)
-    Stack(slot) =>
-      if self.owns_slot(slot) {
-        Some(reg_class_for_value_type(self.stack_slots[slot.id].ty))
+  match location.register() {
+    Some(reg) => Some(reg.class)
+    None => {
+      let index = location.spill_index().unwrap()
+      if index >= 0 && index < self.stack_slots.length() {
+        Some(reg_class_for_value_type(self.stack_slots[index].ty))
       } else {
         None
       }
+    }
   }
 }
 
@@ -451,15 +458,15 @@ fn[Inst] allocation_location_ids(
   let mut location_count = 0
   for index in 0..<function.value_count() {
     let location = allocation.value_locations[index].unwrap()
-    let key = match location {
-      Register(reg) =>
+    let key = match location.register() {
+      Some(reg) =>
         match reg.class {
           Int => (0, reg.id)
           FpVector => (1, reg.id)
           Float => (1, reg.id)
           Vector => (2, reg.id)
         }
-      Stack(slot) => (3, slot.id)
+      None => (3, location.spill_index().unwrap())
     }
     match ids_by_location.get(key) {
       Some(id) => ids[index] = id
@@ -655,10 +662,13 @@ pub fn[Inst] verify_allocation_invariants(
     match allocation.value_locations[index] {
       None => raise MissingValueLocation(value~)
       Some(location) =>
-        match allocation.location_class(location) {
+        match allocation.dense_location_class(location) {
           None => raise ForeignLocation(value~)
           Some(_) =>
-            if !allocation.location_matches(location, function.values[index].ty) {
+            if !allocation.dense_location_matches(
+                location,
+                function.values[index].ty,
+              ) {
               raise LocationClassMismatch(value~)
             }
         }
@@ -674,17 +684,17 @@ pub fn[Inst] verify_allocation_invariants(
         None =>
           raise MissingOperandLocation(instruction~, operand=operand_index)
       }
-      if allocation.location_class(assignment) !=
+      if allocation.dense_location_class(assignment) !=
         Some(reg_class_for_value_type(function.values[operand.value.id].ty)) {
         raise OperandClassMismatch(instruction~, operand=operand_index)
       }
       match operand.constraint {
         FixedReg(required) =>
-          if assignment != Register(required) {
+          if assignment != AllocationLocation::reg(required) {
             raise FixedConstraintViolation(instruction~, operand=operand_index)
           }
         AnyReg =>
-          if assignment is Stack(_) {
+          if assignment.is_spill() {
             raise RegisterConstraintViolation(
               instruction~,
               operand=operand_index,

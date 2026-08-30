@@ -207,18 +207,19 @@ fn verify_target_allocation(
   allocation : @vcode.Allocation,
 ) -> Unit raise AArch64AllocationError {
   for index in 0..<function.value_count() {
-    let value = function.value_at(index).unwrap()
-    match allocation.value_location(value).unwrap() {
-      Register(reg) => require_legal_value_register(reg)
-      Stack(_) => ()
+    let location = allocation.allocated_value_location_at(index).unwrap()
+    if location.is_register() {
+      require_legal_value_register(location.register_unchecked())
     }
   }
   for instruction_index in 0..<function.instruction_count() {
     let instruction = function.instruction_at(instruction_index).unwrap()
     for operand_index in 0..<function.instruction_operand_count(instruction) {
-      if allocation.operand_location(instruction, operand_index).unwrap()
-        is Register(reg) {
-        require_legal_operand_register(reg)
+      let location = allocation
+        .allocated_operand_location_at(instruction_index, operand_index)
+        .unwrap()
+      if location.is_register() {
+        require_legal_operand_register(location.register_unchecked())
       }
     }
   }

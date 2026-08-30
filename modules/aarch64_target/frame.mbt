@@ -88,17 +88,19 @@ fn used_callee_saved_registers(
     }
   }
   for index in 0..<function.value_count() {
-    let value = function.value_at(index).unwrap()
-    if allocation.value_location(value) is Some(Register(reg)) {
-      record(regs, reg)
+    let location = allocation.allocated_value_location_at(index).unwrap()
+    if location.is_register() {
+      record(regs, location.register_unchecked())
     }
   }
   for index in 0..<function.instruction_count() {
     let instruction = function.instruction_at(index).unwrap()
     for operand in 0..<function.instruction_operand_count(instruction) {
-      if allocation.operand_location(instruction, operand)
-        is Some(Register(reg)) {
-        record(regs, reg)
+      let location = allocation
+        .allocated_operand_location_at(index, operand)
+        .unwrap()
+      if location.is_register() {
+        record(regs, location.register_unchecked())
       }
     }
   }

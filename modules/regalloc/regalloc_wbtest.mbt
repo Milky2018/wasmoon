@@ -117,14 +117,34 @@ test "instruction edit resolution preserves position order and edge edits" {
   let v0 : VirtualReg = { id: 0, class: Int, }
   let v1 : VirtualReg = { id: 1, class: Int, }
   let v2 : VirtualReg = { id: 2, class: Int, }
-  plan.add_edit({ value: v0, from: Reg(r0), to: Reg(r1), position: Before(2), })
-  plan.add_edit({ value: v1, from: Reg(r1), to: Reg(r2), position: After(0), })
-  plan.add_edit({ value: v2, from: Reg(r2), to: Reg(r0), position: Before(1), })
-  plan.add_edit({ value: v0, from: Reg(r0), to: Reg(r1), position: Before(2), })
+  plan.add_edit({
+    value: v0,
+    from: reg_location(r0),
+    to: reg_location(r1),
+    position: Before(2),
+  })
   plan.add_edit({
     value: v1,
-    from: Reg(r1),
-    to: Reg(r0),
+    from: reg_location(r1),
+    to: reg_location(r2),
+    position: After(0),
+  })
+  plan.add_edit({
+    value: v2,
+    from: reg_location(r2),
+    to: reg_location(r0),
+    position: Before(1),
+  })
+  plan.add_edit({
+    value: v0,
+    from: reg_location(r0),
+    to: reg_location(r1),
+    position: Before(2),
+  })
+  plan.add_edit({
+    value: v1,
+    from: reg_location(r1),
+    to: reg_location(r0),
     position: Edge(source_block=3, successor_index=1),
   })
   resolve_instruction_edits(plan, MachineEnv::new([r0, r1, r2], [r2]))
@@ -307,8 +327,8 @@ test "operand assignment reuses a tied group's resident register" {
   }
   let plan = AllocationPlan::new(2)
   let slot = plan.create_spill_slot(8, 8)
-  plan.assign_value(spilled, Spill(slot))
-  plan.assign_value(resident, Reg(r0))
+  plan.assign_value(spilled, spill_location(slot))
+  plan.assign_value(resident, reg_location(r0))
   let (segments, segments_by_value) = build_allocation_segments(
     build_function_live_ranges(function),
     allocatable=[r0],
@@ -345,11 +365,11 @@ fn verify_wrong_location(
   let r0 : PhysicalReg = { id: 0, class: Int, }
   let r1 : PhysicalReg = { id: 1, class: Int, }
   let plan = AllocationPlan::new(1)
-  plan.assign_value(value, Reg(r0))
+  plan.assign_value(value, reg_location(r0))
   if def_instruction is Some(instruction) {
-    plan.assign_operand(instruction, 0, Reg(r0))
+    plan.assign_operand(instruction, 0, reg_location(r0))
   }
-  plan.assign_operand(use_instruction, 0, Reg(r1))
+  plan.assign_operand(use_instruction, 0, reg_location(r1))
   try {
     verify_function_allocation(function, MachineEnv::new([r0, r1], []), plan)
     None
@@ -374,8 +394,8 @@ test "plan verifier rejects a spilled AnyReg operand" {
   }
   let plan = AllocationPlan::new(1)
   let slot = plan.create_spill_slot(8, 8)
-  plan.assign_value(value, Spill(slot))
-  plan.assign_operand(0, 0, Spill(slot))
+  plan.assign_value(value, spill_location(slot))
+  plan.assign_operand(0, 0, spill_location(slot))
   let error = try {
     verify_function_allocation(function, MachineEnv::new([], []), plan)
     None
@@ -406,12 +426,12 @@ test "plan verifier accepts a declared fixed-operand-only register" {
     block_visits: Ref(0),
   }
   let plan = AllocationPlan::new(1)
-  plan.assign_value(value, Reg(home))
-  plan.assign_operand(0, 0, Reg(fixed_only))
+  plan.assign_value(value, reg_location(home))
+  plan.assign_operand(0, 0, reg_location(fixed_only))
   plan.add_edit({
     value,
-    from: Reg(home),
-    to: Reg(fixed_only),
+    from: reg_location(home),
+    to: reg_location(fixed_only),
     position: Before(0),
   })
   verify_function_allocation(
@@ -440,12 +460,12 @@ test "plan verifier rejects an unconstrained operand in a fixed-only register" {
     block_visits: Ref(0),
   }
   let plan = AllocationPlan::new(1)
-  plan.assign_value(value, Reg(home))
-  plan.assign_operand(0, 0, Reg(fixed_only))
+  plan.assign_value(value, reg_location(home))
+  plan.assign_operand(0, 0, reg_location(fixed_only))
   plan.add_edit({
     value,
-    from: Reg(home),
-    to: Reg(fixed_only),
+    from: reg_location(home),
+    to: reg_location(fixed_only),
     position: Before(0),
   })
   let error = try {
@@ -533,7 +553,7 @@ test "plan verifier queries each block successor list once" {
     block_visits: Ref(0),
   }
   let plan = AllocationPlan::new(1)
-  plan.assign_value(value, Reg(register))
+  plan.assign_value(value, reg_location(register))
   verify_function_allocation(function, MachineEnv::new([register], []), plan)
   inspect(successor_queries.val, content="4")
 }
@@ -591,7 +611,7 @@ test "any-location definitions materialize in their stable home" {
   }
   let plan = AllocationPlan::new(1)
   let slot = plan.create_spill_slot(8, 8)
-  plan.assign_value(value, Spill(slot))
+  plan.assign_value(value, spill_location(slot))
   let segments : Array[AllocationSegment] = [
     {
       id: 0,
@@ -737,11 +757,26 @@ test "plan verifier applies same-position edits in plan order" {
     block_visits: Ref(0),
   }
   let plan = AllocationPlan::new(1)
-  plan.assign_value(value, Reg(r0))
-  plan.add_edit({ value, from: Reg(r0), to: Reg(r1), position: Before(0), })
-  plan.add_edit({ value, from: Reg(r1), to: Reg(r2), position: Before(0), })
-  plan.add_edit({ value, from: Reg(r2), to: Reg(r0), position: Before(0), })
-  plan.assign_operand(0, 0, Reg(r0))
+  plan.assign_value(value, reg_location(r0))
+  plan.add_edit({
+    value,
+    from: reg_location(r0),
+    to: reg_location(r1),
+    position: Before(0),
+  })
+  plan.add_edit({
+    value,
+    from: reg_location(r1),
+    to: reg_location(r2),
+    position: Before(0),
+  })
+  plan.add_edit({
+    value,
+    from: reg_location(r2),
+    to: reg_location(r0),
+    position: Before(0),
+  })
+  plan.assign_operand(0, 0, reg_location(r0))
   verify_function_allocation(function, MachineEnv::new([r0, r1, r2], []), plan)
 }
 
@@ -771,7 +806,7 @@ test "plan verifier processes a deep diamond join chain once per block" {
     _ => [],
   )
   let plan = AllocationPlan::new(1)
-  plan.assign_value(value, Reg(r0))
+  plan.assign_value(value, reg_location(r0))
   for i in 0..<diamonds {
     let top = 3 * i
     let left = 3 * i + 1
@@ -789,8 +824,8 @@ test "plan verifier processes a deep diamond join chain once per block" {
     // predecessor state has to re-propagate the shrink one level at a time.
     plan.add_edit({
       value,
-      from: Reg(r0),
-      to: Reg(registers[i + 1]),
+      from: reg_location(r0),
+      to: reg_location(registers[i + 1]),
       position: Edge(source_block=right, successor_index=0),
     })
   }

@@ -164,20 +164,42 @@ fn Allocation::location_text(self : Allocation, location : Location) -> String {
 }
 
 ///|
+fn Allocation::dense_location_text(
+  self : Allocation,
+  location : AllocationLocation,
+) -> String {
+  match location.register() {
+    Some(reg) => Repr(reg).to_string()
+    None =>
+      self.slot_text(
+        StackSlot::new(self.owner, location.spill_index().unwrap()),
+      )
+  }
+}
+
+///|
+fn dense_location_repr(location : AllocationLocation) -> String {
+  match location.register() {
+    Some(reg) => Repr(reg).to_string()
+    None => "stack\{location.spill_index().unwrap()}"
+  }
+}
+
+///|
 pub fn Allocation::summary(self : Allocation) -> String {
   let mut output = "allocation \{self.function_name}\n"
   for index, location in self.value_locations {
     match location {
       Some(location) =>
-        output += "  v\{index}:\{value_type_text(self.value_types[index])} -> \{self.location_text(location)}\n"
+        output += "  v\{index}:\{value_type_text(self.value_types[index])} -> \{self.dense_location_text(location)}\n"
       None => ()
     }
   }
   for instruction_index, locations in self.operand_locations {
     for operand_index, location in locations {
       match location {
-        Some(reg) =>
-          output += "  i\{instruction_index} operand\{operand_index} -> \{Repr(reg)}\n"
+        Some(location) =>
+          output += "  i\{instruction_index} operand\{operand_index} -> \{dense_location_repr(location)}\n"
         None => ()
       }
     }
@@ -196,9 +218,9 @@ pub fn Allocation::summary(self : Allocation) -> String {
   }
   for root in self.safepoint_roots {
     output += "  i\{root.instruction.id} root \{Repr(root.value)} -> "
-    output += match root.location {
-      Register(reg) => Repr(reg).to_string()
-      Stack(slot) => "stack\{slot.id}"
+    output += match root.location.register() {
+      Some(reg) => Repr(reg).to_string()
+      None => "stack\{root.location.spill_index().unwrap()}"
     }
     output += "\n"
   }

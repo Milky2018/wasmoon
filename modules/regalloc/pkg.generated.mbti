@@ -14,9 +14,9 @@ pub fn reserve_spill_slot(Int, @allocation_types.RegClass) -> SpillSlotReservati
 // Errors
 pub suberror VerifyError {
   Unassigned(vreg~ : @allocation_types.VirtualReg)
-  FixedConstraintViolation(vreg~ : @allocation_types.VirtualReg, required~ : @allocation_types.PhysicalReg, actual~ : Location)
+  FixedConstraintViolation(vreg~ : @allocation_types.VirtualReg, required~ : @allocation_types.PhysicalReg, actual~ : @allocation_types.AllocationLocation)
   InvalidPreference(vreg~ : @allocation_types.VirtualReg, preferred~ : @allocation_types.PhysicalReg)
-  IncorrectValue(vreg~ : @allocation_types.VirtualReg, location~ : Location)
+  IncorrectValue(vreg~ : @allocation_types.VirtualReg, location~ : @allocation_types.AllocationLocation)
   ScratchRegisterUnavailable(message~ : String)
   InvalidPlan(message~ : String)
 } derive(@debug.Debug)
@@ -25,8 +25,8 @@ pub fn VerifyError::to_repr(Self) -> @debug.Repr
 // Types and methods
 pub(all) struct AllocationEdit {
   value : @allocation_types.VirtualReg
-  from : Location
-  to : Location
+  from : @allocation_types.AllocationLocation
+  to : @allocation_types.AllocationLocation
   position : EditPosition
 } derive(Eq, @debug.Debug)
 pub fn AllocationEdit::equal(Self, Self) -> Bool
@@ -42,13 +42,13 @@ pub fn AllocationPlan::edits(Self) -> Array[AllocationEdit]
 pub fn AllocationPlan::instruction_operand_count(Self, Int) -> Int
 pub fn AllocationPlan::operand_assignments(Self) -> Array[OperandAssignment]
 pub fn AllocationPlan::operand_instruction_count(Self) -> Int
-pub fn AllocationPlan::operand_location(Self, Int, Int) -> Location?
+pub fn AllocationPlan::operand_location(Self, Int, Int) -> @allocation_types.AllocationLocation?
 pub fn AllocationPlan::output(Self, &Logger) -> Unit
 pub fn AllocationPlan::spill_count(Self) -> Int
 pub fn AllocationPlan::spill_slot(Self, Int) -> SpillSlotSpec?
 pub fn AllocationPlan::to_repr(Self) -> @debug.Repr
 pub fn AllocationPlan::to_string(Self) -> String
-pub fn AllocationPlan::value_location(Self, Int) -> Location?
+pub fn AllocationPlan::value_location(Self, Int) -> @allocation_types.AllocationLocation?
 pub impl Show for AllocationPlan
 pub impl @debug.Debug for AllocationPlan
 
@@ -131,14 +131,6 @@ pub fn LiveRangeSet::get_by_vreg(Self, @allocation_types.VirtualReg) -> LiveRang
 pub fn LiveRangeSet::length(Self) -> Int
 pub fn LiveRangeSet::to_repr(Self) -> @debug.Repr
 
-pub(all) enum Location {
-  Reg(@allocation_types.PhysicalReg)
-  Spill(Int)
-} derive(Eq, @debug.Debug)
-pub fn Location::equal(Self, Self) -> Bool
-pub fn Location::not_equal(Self, Self) -> Bool
-pub fn Location::to_repr(Self) -> @debug.Repr
-
 pub struct MachineEnv {
   allocatable_regs : Array[@allocation_types.PhysicalReg]
   scratch_regs : Array[@allocation_types.PhysicalReg]
@@ -156,7 +148,7 @@ pub fn MachineEnv::with_operand_scratch_regs(Self, Array[@allocation_types.Physi
 pub struct OperandAssignment {
   instruction : Int
   operand : Int
-  location : Location
+  location : @allocation_types.AllocationLocation
 } derive(Eq, @debug.Debug)
 pub fn OperandAssignment::equal(Self, Self) -> Bool
 pub fn OperandAssignment::not_equal(Self, Self) -> Bool
@@ -252,6 +244,8 @@ pub fn UsePosition::with_preference(Self, @allocation_types.PhysicalReg?) -> Sel
 pub fn UsePosition::with_tie(Self, Int) -> Self
 
 // Type aliases
+pub using @allocation_types {type AllocationLocation as Location}
+
 pub using @allocation_types {type AllocationOperand as Operand}
 
 pub using @allocation_types {type AllocationConstraint as OperandConstraint}

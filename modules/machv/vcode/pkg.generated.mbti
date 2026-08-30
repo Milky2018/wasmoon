@@ -168,6 +168,8 @@ pub struct Allocation {
 }
 pub fn Allocation::add_edit(Self, Edit) -> Bool
 pub fn Allocation::add_safepoint_root(Self, Instruction, Value, Location) -> Bool
+pub fn Allocation::allocated_operand_location_at(Self, Int, Int) -> @allocation_types.AllocationLocation?
+pub fn Allocation::allocated_value_location_at(Self, Int) -> @allocation_types.AllocationLocation?
 pub fn Allocation::assign_operand(Self, Instruction, Int, @allocation_types.PhysicalReg) -> Bool
 pub fn Allocation::assign_operand_location(Self, Instruction, Int, Location) -> Bool
 pub fn Allocation::assign_value(Self, Value, Location) -> Bool
@@ -192,16 +194,16 @@ pub fn Allocation::value_location(Self, Value) -> Location?
 pub struct AllocationBuilder[Inst] {
   // private fields
 }
-pub fn[Inst] AllocationBuilder::add_edge_transfer(Self[Inst], Int, Int, Int, Location, Location) -> Bool
+pub fn[Inst] AllocationBuilder::add_edge_transfer(Self[Inst], Int, Int, Int, @allocation_types.AllocationLocation, @allocation_types.AllocationLocation) -> Bool
 pub fn[Inst] AllocationBuilder::add_safepoint_root(Self[Inst], Int, Int) -> Bool
-pub fn[Inst] AllocationBuilder::add_transfer(Self[Inst], Int, PointPlacement, Int, Location, Location) -> Bool
-pub fn[Inst] AllocationBuilder::assign_operand(Self[Inst], Int, Int, Location) -> Bool
-pub fn[Inst] AllocationBuilder::assign_value(Self[Inst], Int, Location) -> Bool
-pub fn[Inst] AllocationBuilder::create_stack_slot(Self[Inst], Int, Int, Int) -> StackSlot
+pub fn[Inst] AllocationBuilder::add_transfer(Self[Inst], Int, PointPlacement, Int, @allocation_types.AllocationLocation, @allocation_types.AllocationLocation) -> Bool
+pub fn[Inst] AllocationBuilder::assign_operand(Self[Inst], Int, Int, @allocation_types.AllocationLocation) -> Bool
+pub fn[Inst] AllocationBuilder::assign_value(Self[Inst], Int, @allocation_types.AllocationLocation) -> Bool
+pub fn[Inst] AllocationBuilder::create_stack_slot(Self[Inst], Int, Int, Int) -> Int
 pub fn[Inst] AllocationBuilder::finish(Self[Inst]) -> Allocation
 pub fn[Inst] AllocationBuilder::new(Function[Inst]) -> Self[Inst]
 pub fn[Inst] AllocationBuilder::operand_value_at(Self[Inst], Int, Int) -> Int
-pub fn[Inst] AllocationBuilder::value_location(Self[Inst], Int) -> Location?
+pub fn[Inst] AllocationBuilder::value_location(Self[Inst], Int) -> @allocation_types.AllocationLocation?
 pub fn[Inst] AllocationBuilder::value_type_at(Self[Inst], Int) -> @machv.ValueType
 
 pub struct AllocationStatistics {
@@ -570,6 +572,8 @@ pub impl @debug.Debug for Value
 
 // Type aliases
 pub using @allocation_types {type AllocationConstraint}
+
+pub using @allocation_types {type AllocationLocation}
 
 pub using @allocation_types {type AllocationOperand}
 

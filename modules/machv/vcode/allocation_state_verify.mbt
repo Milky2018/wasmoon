@@ -4,16 +4,17 @@ priv struct AllocationState {
 }
 
 ///|
-fn allocation_location_key(location : Location) -> (Int, Int) {
-  match location {
-    Register(reg) =>
-      match reg.class {
-        Int => (0, reg.id)
-        FpVector => (1, reg.id)
-        Float => (1, reg.id)
-        Vector => (2, reg.id)
-      }
-    Stack(slot) => (3, slot.id)
+fn allocation_location_key(location : AllocationLocation) -> (Int, Int) {
+  if location.is_register() {
+    let reg = location.register_unchecked()
+    match reg.class {
+      Int => (0, reg.id)
+      FpVector => (1, reg.id)
+      Float => (1, reg.id)
+      Vector => (2, reg.id)
+    }
+  } else {
+    (3, location.spill_index_unchecked())
   }
 }
 
@@ -84,14 +85,14 @@ fn AllocationState::remove_register(
   self : AllocationState,
   reg : PhysicalReg,
 ) -> Unit {
-  self.values.remove(allocation_location_key(Register(reg)))
+  self.values.remove(allocation_location_key(AllocationLocation::reg(reg)))
 }
 
 ///|
 fn AllocationState::contains(
   self : AllocationState,
   value : Value,
-  location : Location,
+  location : AllocationLocation,
 ) -> Bool {
   self.values.get(allocation_location_key(location)) == Some(value)
 }
@@ -100,7 +101,7 @@ fn AllocationState::contains(
 fn AllocationState::set(
   self : AllocationState,
   value : Value,
-  location : Location,
+  location : AllocationLocation,
 ) -> Unit {
   self.values[allocation_location_key(location)] = value
 }
@@ -121,11 +122,20 @@ fn apply_state_edit(
   allocation : Allocation,
   edit : Edit,
 ) -> Unit raise AllocationVerifyError {
-  let (value, from, to) = match edit.kind {
-    Spill(value~, reg~, slot~) => (value, Register(reg), Stack(slot))
-    Reload(value~, slot~, reg~) => (value, Stack(slot), Register(reg))
-    Move(value~, from~, to~) => (value, Register(from), Register(to))
-    EdgeMove(value~, from~, to~, ..) => (value, from, to)
+  let (value, from, to) : (Value, AllocationLocation, AllocationLocation) = match
+    edit.kind {
+    Spill(value~, reg~, slot~) =>
+      (value, AllocationLocation::reg(reg), AllocationLocation::spill(slot.id))
+    Reload(value~, slot~, reg~) =>
+      (value, AllocationLocation::spill(slot.id), AllocationLocation::reg(reg))
+    Move(value~, from~, to~) =>
+      (value, AllocationLocation::reg(from), AllocationLocation::reg(to))
+    EdgeMove(value~, from~, to~, ..) =>
+      (
+        value,
+        allocation.import_location(from).unwrap(),
+        allocation.import_location(to).unwrap(),
+      )
   }
   if !state.contains(value, from) {
     raise InvalidEdit(index=allocation.edit_index(edit))
@@ -239,10 +249,10 @@ fn[Inst] prepare_allocation_successor_state(
         guard edit.kind is EdgeMove(value~, from~, to~, ..) else {
           raise InvalidEdit(index=allocation.edit_index(edit))
         }
-        if !original.contains(value, from) {
+        if !original.contains(value, allocation.import_location(from).unwrap()) {
           raise InvalidEdit(index=allocation.edit_index(edit))
         }
-        state.set(value, to)
+        state.set(value, allocation.import_location(to).unwrap())
       }
     None => ()
   }

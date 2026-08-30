@@ -128,7 +128,7 @@ pub fn Edit::edge_move(
 priv struct SafepointRootLocation {
   instruction : Instruction
   value : Value
-  location : Location
+  location : AllocationLocation
 }
 
 ///|
@@ -142,8 +142,8 @@ pub struct Allocation {
   priv value_types : Array[ValueType]
   priv operand_counts : Array[Int]
   priv operand_values : Array[Array[Value]]
-  priv value_locations : Array[Location?]
-  priv operand_locations : Array[Array[Location?]]
+  priv value_locations : Array[AllocationLocation?]
+  priv operand_locations : Array[Array[AllocationLocation?]]
   priv stack_slots : Array[StackSlotData]
   priv edits : Array[Edit]
   priv before_edits : Array[Array[Edit]]
@@ -222,6 +222,55 @@ fn Allocation::owns_slot(self : Allocation, slot : StackSlot) -> Bool {
 }
 
 ///|
+fn Allocation::import_location(
+  self : Allocation,
+  location : Location,
+) -> AllocationLocation? {
+  match location {
+    Register(reg) => Some(AllocationLocation::reg(reg))
+    Stack(slot) =>
+      if self.owns_slot(slot) {
+        Some(AllocationLocation::spill(slot.id))
+      } else {
+        None
+      }
+  }
+}
+
+///|
+fn Allocation::export_location(
+  self : Allocation,
+  location : AllocationLocation,
+) -> Location? {
+  if location.is_register() {
+    Some(Register(location.register_unchecked()))
+  } else {
+    let index = location.spill_index_unchecked()
+    if index >= 0 && index < self.stack_slots.length() {
+      Some(Stack(StackSlot::new(self.owner, index)))
+    } else {
+      None
+    }
+  }
+}
+
+///|
+fn Allocation::dense_location_matches(
+  self : Allocation,
+  location : AllocationLocation,
+  ty : ValueType,
+) -> Bool {
+  if location.is_register() {
+    location.register_unchecked().class == reg_class_for_value_type(ty)
+  } else {
+    let index = location.spill_index_unchecked()
+    index >= 0 &&
+    index < self.stack_slots.length() &&
+    self.stack_slots[index].ty == ty
+  }
+}
+
+///|
 pub fn Allocation::source_instruction_count(self : Allocation) -> Int {
   self.source_instruction_count
 }
@@ -291,11 +340,14 @@ pub fn Allocation::assign_value(
   value : Value,
   location : Location,
 ) -> Bool {
-  if !self.owns_value(value) ||
-    !self.location_matches(location, self.value_types[value.id]) {
+  if !self.owns_value(value) {
     return false
   }
-  self.value_locations[value.id] = Some(location)
+  guard self.import_location(location) is Some(dense) else { return false }
+  if !self.dense_location_matches(dense, self.value_types[value.id]) {
+    return false
+  }
+  self.value_locations[value.id] = Some(dense)
   true
 }
 
@@ -309,7 +361,26 @@ pub fn Allocation::value_location(
   value : Value,
 ) -> Location? {
   if self.owns_value(value) {
-    self.value_locations[value.id]
+    self.value_locations[value.id].bind(location => {
+      self.export_location(location)
+    })
+  } else {
+    None
+  }
+}
+
+///|
+/// Return a canonical allocation location by dense value index.
+///
+/// Spill indices belong to this allocation and must not be used as public
+/// stack-slot handles. Compiler infrastructure that needs such a handle must
+/// call `stack_slot_at` on the same allocation.
+pub fn Allocation::allocated_value_location_at(
+  self : Allocation,
+  value : Int,
+) -> AllocationLocation? {
+  if value >= 0 && value < self.value_locations.length() {
+    self.value_locations[value]
   } else {
     None
   }
@@ -328,10 +399,11 @@ pub fn Allocation::assign_operand_location(
     return false
   }
   let value = self.operand_values[instruction.id][operand_index]
-  if !self.location_matches(location, self.value_types[value.id]) {
+  guard self.import_location(location) is Some(dense) else { return false }
+  if !self.dense_location_matches(dense, self.value_types[value.id]) {
     return false
   }
-  self.operand_locations[instruction.id][operand_index] = Some(location)
+  self.operand_locations[instruction.id][operand_index] = Some(dense)
   true
 }
 
@@ -356,7 +428,28 @@ pub fn Allocation::operand_location(
     operand_index >= self.operand_counts[instruction.id] {
     return None
   }
-  self.operand_locations[instruction.id][operand_index]
+  self.operand_locations[instruction.id][operand_index].bind(location => {
+    self.export_location(location)
+  })
+}
+
+///|
+/// Return a canonical allocation location by dense instruction and operand
+/// indices. Spill indices belong to this allocation.
+pub fn Allocation::allocated_operand_location_at(
+  self : Allocation,
+  instruction : Int,
+  operand : Int,
+) -> AllocationLocation? {
+  if instruction < 0 || instruction >= self.operand_locations.length() {
+    return None
+  }
+  let locations = self.operand_locations[instruction]
+  if operand >= 0 && operand < locations.length() {
+    locations[operand]
+  } else {
+    None
+  }
 }
 
 ///|
@@ -466,12 +559,14 @@ pub fn Allocation::add_safepoint_root(
   value : Value,
   location : Location,
 ) -> Bool {
-  if !self.owns_instruction(instruction) ||
-    !self.owns_value(value) ||
-    !self.location_matches(location, self.value_types[value.id]) {
+  if !self.owns_instruction(instruction) || !self.owns_value(value) {
     return false
   }
-  self.safepoint_roots.push({ instruction, value, location, })
+  guard self.import_location(location) is Some(dense) else { return false }
+  if !self.dense_location_matches(dense, self.value_types[value.id]) {
+    return false
+  }
+  self.safepoint_roots.push({ instruction, value, location: dense, })
   true
 }
 
@@ -525,7 +620,7 @@ pub fn Allocation::safepoint_roots(
   let roots : Array[(Value, Location)] = []
   for root in self.safepoint_roots {
     if root.instruction == instruction {
-      roots.push((root.value, root.location))
+      roots.push((root.value, self.export_location(root.location).unwrap()))
     }
   }
   roots

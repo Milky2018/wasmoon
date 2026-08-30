@@ -52,25 +52,24 @@ fn[Inst] to_regalloc_vreg(
 fn[Inst] materialize_plan_location(
   builder : @vcode.AllocationBuilder[Inst],
   plan : @regalloc.AllocationPlan,
-  spill_slots : Array[@vcode.StackSlot?],
+  spill_slots : Array[Int?],
   value : Int,
   location : @regalloc.Location,
-) -> @vcode.Location {
-  match location {
-    Reg(reg) => Register(reg)
-    Spill(index) => {
-      let slot = match spill_slots[index] {
-        Some(slot) => slot
-        None => {
-          let spec = plan.spill_slot(index).unwrap()
-          let slot = builder.create_stack_slot(value, spec.size, spec.alignment)
-          spill_slots[index] = Some(slot)
-          slot
-        }
-      }
-      Stack(slot)
+) -> @vcode.AllocationLocation {
+  if location.is_register() {
+    return location
+  }
+  let index = location.spill_index_unchecked()
+  let slot = match spill_slots[index] {
+    Some(slot) => slot
+    None => {
+      let spec = plan.spill_slot(index).unwrap()
+      let slot = builder.create_stack_slot(value, spec.size, spec.alignment)
+      spill_slots[index] = Some(slot)
+      slot
     }
   }
+  @vcode.AllocationLocation::spill(slot)
 }
 
 ///|
@@ -79,8 +78,8 @@ fn[Inst] add_materialized_transfer(
   instruction : Int,
   placement : @vcode.PointPlacement,
   value : Int,
-  from : @vcode.Location,
-  to : @vcode.Location,
+  from : @vcode.AllocationLocation,
+  to : @vcode.AllocationLocation,
 ) -> Unit raise VCodeAllocationError {
   if !builder.add_transfer(instruction, placement, value, from, to) {
     raise AllocationConstructionRejected
@@ -159,10 +158,7 @@ pub fn[Inst] AllocationSession::allocate_selected_vcode(
     error => raise RegallocFailure(cause=error)
   }
   let builder = @vcode.AllocationBuilder::new(function)
-  let spill_slots : Array[@vcode.StackSlot?] = Array::make(
-    plan.spill_count(),
-    None,
-  )
+  let spill_slots : Array[Int?] = Array::make(plan.spill_count(), None)
   for value_index in 0..<function.value_count() {
     guard plan.value_location(value_index) is Some(location) else {
       raise AllocationConstructionRejected

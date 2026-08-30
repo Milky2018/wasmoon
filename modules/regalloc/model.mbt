@@ -20,6 +20,19 @@ pub type VirtualReg = @allocation_types.VirtualReg
 pub type Operand = @allocation_types.AllocationOperand
 
 ///|
+pub type Location = @allocation_types.AllocationLocation
+
+///|
+fn reg_location(reg : PhysicalReg) -> Location {
+  Location::reg(reg)
+}
+
+///|
+fn spill_location(index : Int) -> Location {
+  Location::spill(index)
+}
+
+///|
 fn physical_reg_key(reg : PhysicalReg) -> (Int, Int) {
   let class = match reg.class {
     Int => 0
@@ -29,11 +42,5 @@ fn physical_reg_key(reg : PhysicalReg) -> (Int, Int) {
   }
   (class, reg.id)
 }
-
-///|
-pub(all) enum Location {
-  Reg(PhysicalReg)
-  Spill(Int)
-} derive(Eq, Debug)
 
 ///|

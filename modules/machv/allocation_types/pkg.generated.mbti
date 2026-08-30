@@ -19,6 +19,22 @@ pub fn AllocationConstraint::equal(Self, Self) -> Bool
 pub fn AllocationConstraint::not_equal(Self, Self) -> Bool
 pub fn AllocationConstraint::to_repr(Self) -> @debug.Repr
 
+pub(all) struct AllocationLocation {
+  encoded : Int64
+} derive(Eq)
+pub fn AllocationLocation::equal(Self, Self) -> Bool
+pub fn AllocationLocation::is_register(Self) -> Bool
+pub fn AllocationLocation::is_spill(Self) -> Bool
+pub fn AllocationLocation::not_equal(Self, Self) -> Bool
+pub fn AllocationLocation::reg(PhysicalReg) -> Self
+pub fn AllocationLocation::register(Self) -> PhysicalReg?
+pub fn AllocationLocation::register_unchecked(Self) -> PhysicalReg
+pub fn AllocationLocation::spill(Int) -> Self
+pub fn AllocationLocation::spill_index(Self) -> Int?
+pub fn AllocationLocation::spill_index_unchecked(Self) -> Int
+pub fn AllocationLocation::to_repr(Self) -> @debug.Repr
+pub impl @debug.Debug for AllocationLocation
+
 pub(all) struct AllocationOperand {
   vreg : VirtualReg
   role : OperandRole
