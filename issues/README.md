@@ -478,6 +478,7 @@ graph TD
   ISS_450["ISS-450: Allocate directly into VCode allocation tables"]
   ISS_451["ISS-451: Reuse one serial module compilation context"]
   ISS_452["ISS-452: Unify the VCode and regalloc allocation vocabulary"]
+  ISS_453["ISS-453: Keep target operand descriptors inline"]
   ISS_002 --> ISS_003
   ISS_002 --> ISS_004
   ISS_003 --> ISS_005

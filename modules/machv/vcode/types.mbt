@@ -181,6 +181,7 @@ pub(all) enum OperandConstraint {
 } derive(Eq, Debug)
 
 ///|
+#valtype
 pub struct Input {
   value : Value
   constraint : OperandConstraint
@@ -219,6 +220,7 @@ pub fn Input::with_timing(self : Input, timing : OperandTiming) -> Input {
 }
 
 ///|
+#valtype
 pub struct Output {
   ty : ValueType
   constraint : OperandConstraint
