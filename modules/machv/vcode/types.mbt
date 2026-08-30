@@ -14,6 +14,12 @@ pub type PhysicalReg = @allocation_types.PhysicalReg
 pub type AllocationConstraint = @allocation_types.AllocationConstraint
 
 ///|
+pub type AllocationOperand = @allocation_types.AllocationOperand
+
+///|
+pub type AllocationVirtualReg = @allocation_types.VirtualReg
+
+///|
 pub type ValueType = @semantic.ValueType
 
 ///|
@@ -255,16 +261,6 @@ pub fn Output::with_timing(self : Output, timing : OperandTiming) -> Output {
 }
 
 ///|
-priv struct OperandData {
-  value : Value
-  role : OperandRole
-  constraint : AllocationConstraint
-  preference : PhysicalReg?
-  timing : OperandTiming
-  mut tie_id : Int
-}
-
-///|
 pub struct Operand {
   value : Value
   role : OperandRole
@@ -275,14 +271,17 @@ pub struct Operand {
 } derive(Eq, Debug)
 
 ///|
-fn OperandData::snapshot(self : OperandData) -> Operand {
+fn allocation_operand_snapshot(
+  operand : AllocationOperand,
+  owner : Ref[Unit],
+) -> Operand {
   {
-    value: self.value,
-    role: self.role,
-    constraint: self.constraint,
-    preference: self.preference,
-    timing: self.timing,
-    tie_id: self.tie_id,
+    value: Value::new(owner, operand.vreg.id),
+    role: operand.role,
+    constraint: operand.constraint,
+    preference: operand.preference,
+    timing: operand.timing,
+    tie_id: operand.tie_id,
   }
 }
 

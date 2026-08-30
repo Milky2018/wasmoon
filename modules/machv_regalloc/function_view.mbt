@@ -109,10 +109,9 @@ fn[Inst] VCodeFunctionView::new(
     operand_offsets.push(operands.length())
     for operand in 0..<function.instruction_operand_count(instruction) {
       operands.push(
-        to_regalloc_operand(
-          function,
-          function.instruction_operand_at(instruction, operand).unwrap(),
-        ),
+        function
+        .instruction_allocation_operand_at(instruction, operand)
+        .unwrap(),
       )
     }
     clobber_offsets.push(clobbers.length())
@@ -151,21 +150,6 @@ fn regalloc_value_size(ty : @semantic.ValueType) -> Int {
     I32 | F32 => 4
     I64 | F64 | Ptr64 | GcRef64 => 8
     V128 => 16
-  }
-}
-
-///|
-fn[Inst] to_regalloc_operand(
-  function : @vcode.Function[Inst],
-  operand : @vcode.Operand,
-) -> @regalloc.Operand {
-  {
-    vreg: to_regalloc_vreg(function, operand.value),
-    role: operand.role,
-    constraint: operand.constraint,
-    preference: operand.preference,
-    tie_id: operand.tie_id,
-    timing: operand.timing,
   }
 }
 

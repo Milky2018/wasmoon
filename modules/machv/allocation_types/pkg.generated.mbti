@@ -19,6 +19,24 @@ pub fn AllocationConstraint::equal(Self, Self) -> Bool
 pub fn AllocationConstraint::not_equal(Self, Self) -> Bool
 pub fn AllocationConstraint::to_repr(Self) -> @debug.Repr
 
+pub(all) struct AllocationOperand {
+  vreg : VirtualReg
+  role : OperandRole
+  constraint : AllocationConstraint
+  preference : PhysicalReg?
+  tie_id : Int
+  timing : OperandTiming
+} derive(Eq, @debug.Debug)
+pub fn AllocationOperand::def(VirtualReg) -> Self
+pub fn AllocationOperand::equal(Self, Self) -> Bool
+pub fn AllocationOperand::not_equal(Self, Self) -> Bool
+pub fn AllocationOperand::to_repr(Self) -> @debug.Repr
+pub fn AllocationOperand::use_reg(VirtualReg) -> Self
+pub fn AllocationOperand::with_constraint(Self, AllocationConstraint) -> Self
+pub fn AllocationOperand::with_preference(Self, PhysicalReg) -> Self
+pub fn AllocationOperand::with_tie(Self, Int) -> Self
+pub fn AllocationOperand::with_timing(Self, OperandTiming) -> Self
+
 pub(all) enum OperandRole {
   Use
   Def
@@ -58,6 +76,14 @@ pub fn RegClass::hash_combine(Self, Hasher) -> Unit
 pub fn RegClass::not_equal(Self, Self) -> Bool
 pub fn RegClass::text(Self) -> String
 pub fn RegClass::to_repr(Self) -> @debug.Repr
+
+pub(all) struct VirtualReg {
+  id : Int
+  class : RegClass
+} derive(Eq, @debug.Debug)
+pub fn VirtualReg::equal(Self, Self) -> Bool
+pub fn VirtualReg::not_equal(Self, Self) -> Bool
+pub fn VirtualReg::to_repr(Self) -> @debug.Repr
 
 // Type aliases
 

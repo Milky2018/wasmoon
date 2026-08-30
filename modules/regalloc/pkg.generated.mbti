@@ -13,10 +13,10 @@ pub fn reserve_spill_slot(Int, @allocation_types.RegClass) -> SpillSlotReservati
 
 // Errors
 pub suberror VerifyError {
-  Unassigned(vreg~ : VirtualReg)
-  FixedConstraintViolation(vreg~ : VirtualReg, required~ : @allocation_types.PhysicalReg, actual~ : Location)
-  InvalidPreference(vreg~ : VirtualReg, preferred~ : @allocation_types.PhysicalReg)
-  IncorrectValue(vreg~ : VirtualReg, location~ : Location)
+  Unassigned(vreg~ : @allocation_types.VirtualReg)
+  FixedConstraintViolation(vreg~ : @allocation_types.VirtualReg, required~ : @allocation_types.PhysicalReg, actual~ : Location)
+  InvalidPreference(vreg~ : @allocation_types.VirtualReg, preferred~ : @allocation_types.PhysicalReg)
+  IncorrectValue(vreg~ : @allocation_types.VirtualReg, location~ : Location)
   ScratchRegisterUnavailable(message~ : String)
   InvalidPlan(message~ : String)
 } derive(@debug.Debug)
@@ -24,7 +24,7 @@ pub fn VerifyError::to_repr(Self) -> @debug.Repr
 
 // Types and methods
 pub(all) struct AllocationEdit {
-  value : VirtualReg
+  value : @allocation_types.VirtualReg
   from : Location
   to : Location
   position : EditPosition
@@ -98,7 +98,7 @@ pub fn EditPosition::not_equal(Self, Self) -> Bool
 pub fn EditPosition::to_repr(Self) -> @debug.Repr
 
 type LiveRange derive(@debug.Debug)
-pub fn LiveRange::LiveRange(Int, VirtualReg) -> Self
+pub fn LiveRange::LiveRange(Int, @allocation_types.VirtualReg) -> Self
 pub fn LiveRange::add_range(Self, ProgramRange) -> Unit
 pub fn LiveRange::add_use(Self, UsePosition) -> Unit
 pub fn LiveRange::end(Self) -> ProgramPoint?
@@ -118,7 +118,7 @@ pub fn LiveRange::touch(Self, ProgramPoint) -> Unit
 pub fn LiveRange::touch_with_order(Self, ProgramPoint, Array[Int]) -> Unit
 pub fn LiveRange::use_at(Self, Int) -> UsePosition?
 pub fn LiveRange::use_count(Self) -> Int
-pub fn LiveRange::vreg(Self) -> VirtualReg
+pub fn LiveRange::vreg(Self) -> @allocation_types.VirtualReg
 
 type LiveRangeSet derive(@debug.Debug)
 pub fn LiveRangeSet::LiveRangeSet(Array[Int]) -> Self
@@ -127,7 +127,7 @@ pub fn LiveRangeSet::block_order(Self) -> Array[Int]
 pub fn LiveRangeSet::block_order_at(Self, Int) -> Int?
 pub fn LiveRangeSet::block_order_count(Self) -> Int
 pub fn LiveRangeSet::get(Self, Int) -> LiveRange
-pub fn LiveRangeSet::get_by_vreg(Self, VirtualReg) -> LiveRange?
+pub fn LiveRangeSet::get_by_vreg(Self, @allocation_types.VirtualReg) -> LiveRange?
 pub fn LiveRangeSet::length(Self) -> Int
 pub fn LiveRangeSet::to_repr(Self) -> @debug.Repr
 
@@ -152,24 +152,6 @@ pub fn MachineEnv::operand_scratch_regs(Self) -> Array[@allocation_types.Physica
 pub fn MachineEnv::scratch_regs(Self) -> Array[@allocation_types.PhysicalReg]
 pub fn MachineEnv::with_fixed_operand_regs(Self, Array[@allocation_types.PhysicalReg]) -> Self
 pub fn MachineEnv::with_operand_scratch_regs(Self, Array[@allocation_types.PhysicalReg]) -> Self
-
-pub(all) struct Operand {
-  vreg : VirtualReg
-  role : @allocation_types.OperandRole
-  constraint : @allocation_types.AllocationConstraint
-  preference : @allocation_types.PhysicalReg?
-  tie_id : Int
-  timing : @allocation_types.OperandTiming
-} derive(Eq, @debug.Debug)
-pub fn Operand::def(VirtualReg) -> Self
-pub fn Operand::equal(Self, Self) -> Bool
-pub fn Operand::not_equal(Self, Self) -> Bool
-pub fn Operand::to_repr(Self) -> @debug.Repr
-pub fn Operand::use_reg(VirtualReg) -> Self
-pub fn Operand::with_constraint(Self, @allocation_types.AllocationConstraint) -> Self
-pub fn Operand::with_preference(Self, @allocation_types.PhysicalReg) -> Self
-pub fn Operand::with_tie(Self, Int) -> Self
-pub fn Operand::with_timing(Self, @allocation_types.OperandTiming) -> Self
 
 pub struct OperandAssignment {
   instruction : Int
@@ -269,15 +251,9 @@ pub fn UsePosition::to_repr(Self) -> @debug.Repr
 pub fn UsePosition::with_preference(Self, @allocation_types.PhysicalReg?) -> Self
 pub fn UsePosition::with_tie(Self, Int) -> Self
 
-pub(all) struct VirtualReg {
-  id : Int
-  class : @allocation_types.RegClass
-} derive(Eq, @debug.Debug)
-pub fn VirtualReg::equal(Self, Self) -> Bool
-pub fn VirtualReg::not_equal(Self, Self) -> Bool
-pub fn VirtualReg::to_repr(Self) -> @debug.Repr
-
 // Type aliases
+pub using @allocation_types {type AllocationOperand as Operand}
+
 pub using @allocation_types {type AllocationConstraint as OperandConstraint}
 
 pub using @allocation_types {type OperandRole}
@@ -288,6 +264,8 @@ pub using @allocation_types {type PhysicalReg}
 
 pub using @allocation_types {type RegClass}
 
+pub using @allocation_types {type VirtualReg}
+
 // Traits
 pub(open) trait FunctionView {
   fn value_count(Self) -> Int
@@ -295,13 +273,13 @@ pub(open) trait FunctionView {
   fn value_spill_size(Self, Int) -> Int
   fn value_spill_alignment(Self, Int) -> Int
   fn values_share_spill_slot(Self, Int, Int) -> Bool
-  fn entry_values(Self) -> ArrayView[VirtualReg]
+  fn entry_values(Self) -> ArrayView[@allocation_types.VirtualReg]
   fn block_count(Self) -> Int
   fn block_id_at(Self, Int) -> Int
-  fn block_parameters(Self, Int) -> ArrayView[VirtualReg]
+  fn block_parameters(Self, Int) -> ArrayView[@allocation_types.VirtualReg]
   fn block_instructions(Self, Int) -> ArrayView[Int]
   fn block_successors(Self, Int) -> ArrayView[Int]
-  fn edge_arguments(Self, Int, Int) -> ArrayView[VirtualReg]
-  fn instruction_operands(Self, Int) -> ArrayView[Operand]
+  fn edge_arguments(Self, Int, Int) -> ArrayView[@allocation_types.VirtualReg]
+  fn instruction_operands(Self, Int) -> ArrayView[@allocation_types.AllocationOperand]
   fn instruction_clobbers(Self, Int) -> ArrayView[@allocation_types.PhysicalReg]
 }

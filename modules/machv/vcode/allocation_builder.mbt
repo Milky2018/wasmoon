@@ -33,7 +33,7 @@ pub fn[Inst] AllocationBuilder::operand_value_at(
   operand : Int,
 ) -> Int {
   let data = self.function.instructions[instruction]
-  self.function.operands[data.operand_start + operand].value.id
+  self.function.operands[data.operand_start + operand].vreg.id
 }
 
 ///|
@@ -87,7 +87,7 @@ pub fn[Inst] AllocationBuilder::assign_operand(
   if operand < 0 || operand >= data.operand_count {
     return false
   }
-  let value = self.function.operands[data.operand_start + operand].value.id
+  let value = self.function.operands[data.operand_start + operand].vreg.id
   if !self.allocation.location_matches(location, self.function.values[value].ty) {
     return false
   }

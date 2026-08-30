@@ -309,6 +309,7 @@ pub struct Function[Inst] {
   // private fields
 }
 pub fn[Inst] Function::after(Self[Inst], Instruction) -> ProgramPoint?
+pub fn[Inst] Function::allocation_vreg(Self[Inst], Value) -> @allocation_types.VirtualReg?
 pub fn[Inst] Function::before(Self[Inst], Instruction) -> ProgramPoint?
 pub fn[Inst] Function::block_at(Self[Inst], Int) -> Block?
 pub fn[Inst] Function::block_body(Self[Inst], Block) -> Array[Instruction]
@@ -322,6 +323,7 @@ pub fn[Inst] Function::block_parameters(Self[Inst], Block) -> Array[Value]
 pub fn[Inst] Function::block_terminator(Self[Inst], Block) -> Instruction?
 pub fn[Inst] Function::entry_block(Self[Inst]) -> Block
 pub fn[Inst] Function::instruction(Self[Inst], Instruction) -> Inst?
+pub fn[Inst] Function::instruction_allocation_operand_at(Self[Inst], Instruction, Int) -> @allocation_types.AllocationOperand?
 pub fn[Inst] Function::instruction_at(Self[Inst], Int) -> Instruction?
 pub fn[Inst] Function::instruction_clobber_at(Self[Inst], Instruction, Int) -> @allocation_types.PhysicalReg?
 pub fn[Inst] Function::instruction_clobber_count(Self[Inst], Instruction) -> Int
@@ -568,6 +570,10 @@ pub impl @debug.Debug for Value
 
 // Type aliases
 pub using @allocation_types {type AllocationConstraint}
+
+pub using @allocation_types {type AllocationOperand}
+
+pub using @allocation_types {type VirtualReg as AllocationVirtualReg}
 
 pub using @allocation_types {type OperandRole}
 

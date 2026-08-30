@@ -45,10 +45,7 @@ fn[Inst] to_regalloc_vreg(
   function : @vcode.Function[Inst],
   value : @vcode.Value,
 ) -> @regalloc.VirtualReg {
-  {
-    id: function.value_index(value).unwrap(),
-    class: @vcode.reg_class_for_value_type(function.value_type(value).unwrap()),
-  }
+  function.allocation_vreg(value).unwrap()
 }
 
 ///|

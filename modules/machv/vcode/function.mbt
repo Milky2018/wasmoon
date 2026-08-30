@@ -48,7 +48,7 @@ pub struct Function[Inst] {
   priv values : Array[ValueData]
   priv blocks : Array[BlockData]
   priv instructions : Array[InstructionData[Inst]]
-  priv operands : Array[OperandData]
+  priv operands : Array[AllocationOperand]
   priv clobbers : Array[PhysicalReg]
   priv mut layout : Array[Block]
 }
@@ -380,7 +380,10 @@ pub fn[Inst] Function::instruction_operands(
   }
   let data = self.instructions[instruction.id]
   Array::makei(data.operand_count, index => {
-    self.operands[data.operand_start + index].snapshot()
+    allocation_operand_snapshot(
+      self.operands[data.operand_start + index],
+      self.owner,
+    )
   })
 }
 
@@ -409,7 +412,42 @@ pub fn[Inst] Function::instruction_operand_at(
   if index < 0 || index >= data.operand_count {
     return None
   }
-  Some(self.operands[data.operand_start + index].snapshot())
+  Some(
+    allocation_operand_snapshot(
+      self.operands[data.operand_start + index],
+      self.owner,
+    ),
+  )
+}
+
+///|
+pub fn[Inst] Function::allocation_vreg(
+  self : Function[Inst],
+  value : Value,
+) -> AllocationVirtualReg? {
+  if !self.owns_value(value) {
+    return None
+  }
+  Some({
+    id: value.id,
+    class: reg_class_for_value_type(self.values[value.id].ty),
+  })
+}
+
+///|
+pub fn[Inst] Function::instruction_allocation_operand_at(
+  self : Function[Inst],
+  instruction : Instruction,
+  index : Int,
+) -> AllocationOperand? {
+  if !self.owns_instruction(instruction) {
+    return None
+  }
+  let data = self.instructions[instruction.id]
+  if index < 0 || index >= data.operand_count {
+    return None
+  }
+  Some(self.operands[data.operand_start + index])
 }
 
 ///|

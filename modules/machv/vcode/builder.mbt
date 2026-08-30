@@ -119,7 +119,7 @@ fn[Inst] Builder::append_instruction(
       raise InvalidOperandConstraint
     }
   }
-  let tied_inputs = Array::make(inputs.length(), false)
+  let input_tie_ids = Array::make(inputs.length(), -1)
   for output in outputs {
     let expected = reg_class_for_value_type(output.ty)
     match output.constraint {
@@ -127,11 +127,11 @@ fn[Inst] Builder::append_instruction(
       TiedTo(tied_to) =>
         if tied_to < 0 ||
           tied_to >= inputs.length() ||
-          tied_inputs[tied_to] ||
+          input_tie_ids[tied_to] >= 0 ||
           self.function.value_type(inputs[tied_to].value) != Some(output.ty) {
           raise InvalidOperandConstraint
         } else {
-          tied_inputs[tied_to] = true
+          input_tie_ids[tied_to] = tied_to
         }
       AnyLocation | Any => ()
     }
@@ -160,7 +160,7 @@ fn[Inst] Builder::append_instruction(
     )
   }
   let operand_start = self.function.operands.length()
-  for input in inputs {
+  for input_index, input in inputs {
     let constraint : AllocationConstraint = match input.constraint {
       Any => AnyReg
       AnyLocation => AnyLocation
@@ -168,20 +168,20 @@ fn[Inst] Builder::append_instruction(
       TiedTo(_) => raise InvalidOperandConstraint
     }
     self.function.operands.push({
-      value: input.value,
+      vreg: {
+        id: input.value.id,
+        class: reg_class_for_value_type(self.function.values[input.value.id].ty),
+      },
       role: Use,
       constraint,
       preference: input.preference,
       timing: input.timing,
-      tie_id: -1,
+      tie_id: input_tie_ids[input_index],
     })
   }
   for index, output in outputs {
     let tie_id = match output.constraint {
-      TiedTo(tied_to) => {
-        self.function.operands[operand_start + tied_to].tie_id = tied_to
-        tied_to
-      }
+      TiedTo(tied_to) => tied_to
       _ => -1
     }
     let constraint : AllocationConstraint = match output.constraint {
@@ -190,7 +190,10 @@ fn[Inst] Builder::append_instruction(
       Fixed(reg) => FixedReg(reg)
     }
     self.function.operands.push({
-      value: results[index],
+      vreg: {
+        id: results[index].id,
+        class: reg_class_for_value_type(output.ty),
+      },
       role: Def,
       constraint,
       preference: output.preference,

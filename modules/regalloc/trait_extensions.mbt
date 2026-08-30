@@ -44,12 +44,6 @@ pub extend Location with Debug::{to_repr}
 pub extend Location with Eq::{not_equal, equal}
 
 ///|
-pub extend Operand with Debug::{to_repr}
-
-///|
-pub extend Operand with Eq::{not_equal, equal}
-
-///|
 pub extend OperandAssignment with Debug::{to_repr}
 
 ///|
@@ -104,7 +98,3 @@ pub extend UsePosition with Eq::{not_equal, equal}
 pub extend VerifyError with Debug::{to_repr}
 
 ///|
-pub extend VirtualReg with Debug::{to_repr}
-
-///|
-pub extend VirtualReg with Eq::{not_equal, equal}
