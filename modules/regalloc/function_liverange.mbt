@@ -131,7 +131,7 @@ fn[F : FunctionView] build_function_range_fragments(
       let operands = function.instruction_operands(
         instructions[instruction_index],
       )
-      for timing in [Late, Early] {
+      for timing in [OperandTiming::Late, Early] {
         for operand in operands {
           if operand.timing == timing &&
             (operand.role is Def || operand.role is UseDef) {

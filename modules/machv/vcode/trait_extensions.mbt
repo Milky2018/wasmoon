@@ -101,12 +101,6 @@ pub extend OperandRole with Debug::{to_repr}
 pub extend OperandRole with Eq::{not_equal, equal}
 
 ///|
-pub extend OperandTiming with Debug::{to_repr}
-
-///|
-pub extend OperandTiming with Eq::{not_equal, equal}
-
-///|
 pub extend ParallelMove with Debug::{to_repr}
 
 ///|

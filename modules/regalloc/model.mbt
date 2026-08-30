@@ -2,6 +2,9 @@
 pub type RegClass = @allocation_types.RegClass
 
 ///|
+pub type OperandTiming = @allocation_types.OperandTiming
+
+///|
 #valtype
 pub(all) struct VirtualReg {
   id : Int
@@ -37,12 +40,6 @@ pub(all) enum OperandRole {
   Use
   Def
   UseDef
-} derive(Eq, Debug)
-
-///|
-pub(all) enum OperandTiming {
-  Early
-  Late
 } derive(Eq, Debug)
 
 ///|

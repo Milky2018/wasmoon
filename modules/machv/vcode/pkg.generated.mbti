@@ -359,13 +359,13 @@ pub struct Input {
   value : Value
   constraint : OperandConstraint
   preference : PhysicalReg?
-  timing : OperandTiming
+  timing : @allocation_types.OperandTiming
 }
 pub fn Input::any(Value) -> Self
 pub fn Input::any_location(Value) -> Self
 pub fn Input::fixed(Value, PhysicalReg) -> Self
 pub fn Input::with_preference(Self, PhysicalReg) -> Self
-pub fn Input::with_timing(Self, OperandTiming) -> Self
+pub fn Input::with_timing(Self, @allocation_types.OperandTiming) -> Self
 
 pub struct Instruction {
   // private fields
@@ -405,7 +405,7 @@ pub struct Operand {
   role : OperandRole
   constraint : OperandConstraint
   preference : PhysicalReg?
-  timing : OperandTiming
+  timing : @allocation_types.OperandTiming
   tie_id : Int
 } derive(Eq, @debug.Debug)
 pub fn Operand::equal(Self, Self) -> Bool
@@ -430,26 +430,18 @@ pub fn OperandRole::equal(Self, Self) -> Bool
 pub fn OperandRole::not_equal(Self, Self) -> Bool
 pub fn OperandRole::to_repr(Self) -> @debug.Repr
 
-pub(all) enum OperandTiming {
-  Early
-  Late
-} derive(Eq, @debug.Debug)
-pub fn OperandTiming::equal(Self, Self) -> Bool
-pub fn OperandTiming::not_equal(Self, Self) -> Bool
-pub fn OperandTiming::to_repr(Self) -> @debug.Repr
-
 pub struct Output {
   ty : @machv.ValueType
   constraint : OperandConstraint
   preference : PhysicalReg?
-  timing : OperandTiming
+  timing : @allocation_types.OperandTiming
 }
 pub fn Output::any(@machv.ValueType) -> Self
 pub fn Output::any_location(@machv.ValueType) -> Self
 pub fn Output::fixed(@machv.ValueType, PhysicalReg) -> Self
 pub fn Output::tied(@machv.ValueType, Int) -> Self
 pub fn Output::with_preference(Self, PhysicalReg) -> Self
-pub fn Output::with_timing(Self, OperandTiming) -> Self
+pub fn Output::with_timing(Self, @allocation_types.OperandTiming) -> Self
 
 pub struct ParallelMove {
   ty : @machv.ValueType
@@ -593,6 +585,8 @@ pub impl Show for Value
 pub impl @debug.Debug for Value
 
 // Type aliases
+pub using @allocation_types {type OperandTiming}
+
 pub using @allocation_types {type RegClass}
 
 pub using @machv {type SafepointKind}

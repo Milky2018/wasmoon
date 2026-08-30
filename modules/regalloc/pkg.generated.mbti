@@ -159,7 +159,7 @@ pub(all) struct Operand {
   constraint : OperandConstraint
   preference : PhysicalReg?
   tie_id : Int
-  timing : OperandTiming
+  timing : @allocation_types.OperandTiming
 } derive(Eq, @debug.Debug)
 pub fn Operand::def(VirtualReg) -> Self
 pub fn Operand::equal(Self, Self) -> Bool
@@ -169,7 +169,7 @@ pub fn Operand::use_reg(VirtualReg) -> Self
 pub fn Operand::with_constraint(Self, OperandConstraint) -> Self
 pub fn Operand::with_preference(Self, PhysicalReg) -> Self
 pub fn Operand::with_tie(Self, Int) -> Self
-pub fn Operand::with_timing(Self, OperandTiming) -> Self
+pub fn Operand::with_timing(Self, @allocation_types.OperandTiming) -> Self
 
 pub struct OperandAssignment {
   instruction : Int
@@ -197,14 +197,6 @@ pub(all) enum OperandRole {
 pub fn OperandRole::equal(Self, Self) -> Bool
 pub fn OperandRole::not_equal(Self, Self) -> Bool
 pub fn OperandRole::to_repr(Self) -> @debug.Repr
-
-pub(all) enum OperandTiming {
-  Early
-  Late
-} derive(Eq, @debug.Debug)
-pub fn OperandTiming::equal(Self, Self) -> Bool
-pub fn OperandTiming::not_equal(Self, Self) -> Bool
-pub fn OperandTiming::to_repr(Self) -> @debug.Repr
 
 pub(all) struct PhysicalReg {
   id : Int
@@ -312,6 +304,8 @@ pub fn VirtualReg::not_equal(Self, Self) -> Bool
 pub fn VirtualReg::to_repr(Self) -> @debug.Repr
 
 // Type aliases
+pub using @allocation_types {type OperandTiming}
+
 pub using @allocation_types {type RegClass}
 
 // Traits

@@ -936,7 +936,7 @@ fn[F : FunctionView] assign_segment_operands(
         )
         plan.assign_operand(instruction, operand_index, selected)
       }
-      for timing in [Early, Late] {
+      for timing in [OperandTiming::Early, Late] {
         for operand_index, operand in operands {
           if operand.timing != timing {
             continue

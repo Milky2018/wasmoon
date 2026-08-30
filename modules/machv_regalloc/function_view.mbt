@@ -165,16 +165,6 @@ fn to_regalloc_operand_role(role : @vcode.OperandRole) -> @regalloc.OperandRole 
 }
 
 ///|
-fn to_regalloc_operand_timing(
-  timing : @vcode.OperandTiming,
-) -> @regalloc.OperandTiming {
-  match timing {
-    Early => Early
-    Late => Late
-  }
-}
-
-///|
 fn to_regalloc_operand_constraint(
   constraint : @vcode.OperandConstraint,
 ) -> @regalloc.OperandConstraint {
@@ -197,7 +187,7 @@ fn[Inst] to_regalloc_operand(
     constraint: to_regalloc_operand_constraint(operand.constraint),
     preference: operand.preference.map(to_regalloc_preg),
     tie_id: operand.tie_id,
-    timing: to_regalloc_operand_timing(operand.timing),
+    timing: operand.timing,
   }
 }
 

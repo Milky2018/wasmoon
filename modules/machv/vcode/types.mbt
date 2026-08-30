@@ -2,6 +2,9 @@
 pub type RegClass = @allocation_types.RegClass
 
 ///|
+pub type OperandTiming = @allocation_types.OperandTiming
+
+///|
 pub type ValueType = @semantic.ValueType
 
 ///|
@@ -166,12 +169,6 @@ pub fn ProgramPoint::instruction(self : ProgramPoint) -> Instruction {
 pub fn ProgramPoint::placement(self : ProgramPoint) -> PointPlacement {
   self.placement
 }
-
-///|
-pub(all) enum OperandTiming {
-  Early
-  Late
-} derive(Eq, Debug)
 
 ///|
 pub(all) enum OperandConstraint {

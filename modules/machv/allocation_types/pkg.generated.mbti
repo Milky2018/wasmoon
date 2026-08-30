@@ -10,6 +10,14 @@ import {
 // Errors
 
 // Types and methods
+pub(all) enum OperandTiming {
+  Early
+  Late
+} derive(Eq, @debug.Debug)
+pub fn OperandTiming::equal(Self, Self) -> Bool
+pub fn OperandTiming::not_equal(Self, Self) -> Bool
+pub fn OperandTiming::to_repr(Self) -> @debug.Repr
+
 pub(all) enum RegClass {
   Int
   Float
