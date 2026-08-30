@@ -1178,6 +1178,7 @@ fn[F : @semantic.SelectionInput] analyze_lowering(
       .unwrap()] += 1
     }
   }
+  let zero_pointer_offsets : Array[Int] = []
   for instruction_index in 0..<instruction_slots {
     guard function.instruction_at(instruction_index) is Some(instruction) else {
       continue
@@ -1195,6 +1196,9 @@ fn[F : @semantic.SelectionInput] analyze_lowering(
         input,
         constant,
       })
+      if bits == 0UL {
+        zero_pointer_offsets.push(instruction_index)
+      }
       folded_uses[function.value_index(constant).unwrap()] += 1
     }
     if operation is IntBinary(Add) &&
@@ -1459,25 +1463,16 @@ fn[F : @semantic.SelectionInput] analyze_lowering(
   // become `add xD, xN, #0`. A WebAssembly access with no static offset emits
   // one per address, and a base-relative access has no `add` underneath for the
   // register-offset form to match, so nothing else removes it.
-  for instruction_index in 0..<instruction_slots {
-    guard function.instruction_at(instruction_index) is Some(instruction) else {
-      continue
-    }
-    guard function.instruction_operation(instruction) is Some(PointerOffset) else {
-      continue
-    }
+  for instruction_index in zero_pointer_offsets {
+    let instruction = function.instruction_at(instruction_index).unwrap()
     guard instruction_single_result(function, instruction) is Some(result) else {
       continue
     }
-    guard instruction_binary_operands(function, instruction)
-      is Some((input, constant)) else {
+    guard instruction_binary_operands(function, instruction) is Some((input, _)) else {
       continue
     }
     let result_index = function.value_index(result).unwrap()
     if skip_results[result_index] || value_aliases[result_index] is Some(_) {
-      continue
-    }
-    if constants[function.value_index(constant).unwrap()] != Some(0UL) {
       continue
     }
     // Forwarding drops this instruction, so it must not carry roots.

@@ -479,6 +479,7 @@ graph TD
   ISS_451["ISS-451: Reuse one serial module compilation context"]
   ISS_452["ISS-452: Unify the VCode and regalloc allocation vocabulary"]
   ISS_453["ISS-453: Keep target operand descriptors inline"]
+  ISS_454["ISS-454: Avoid rescanning AArch64 lowering for zero offsets"]
   ISS_002 --> ISS_003
   ISS_002 --> ISS_004
   ISS_003 --> ISS_005
@@ -860,6 +861,7 @@ graph TD
   ISS_452 --> ISS_450
   ISS_450 --> ISS_451
   ISS_449 --> ISS_452
+  ISS_453 --> ISS_454
 ```
 
 ## Warnings
