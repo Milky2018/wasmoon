@@ -276,6 +276,31 @@ pub fn[Inst] AllocationBuilder::add_safepoint_root(
 }
 
 ///|
+/// Adds every selected VCode safepoint root through dense internal ids.
+///
+/// Selected-function validation already established metadata ownership and
+/// root types; this method retains allocation-location checks without copying
+/// layouts, instruction metadata, or owner-tagged root snapshots.
+pub fn[Inst] AllocationBuilder::add_function_safepoint_roots(
+  self : AllocationBuilder[Inst],
+) -> Bool {
+  for instruction, data in self.function.instructions {
+    for root in data.metadata.live_gc_roots {
+      if !self.function.owns_value(root) ||
+        self.allocation.value_locations[root.id] is None {
+        return false
+      }
+      self.allocation.safepoint_roots.push({
+        instruction: Instruction::new(self.function.owner, instruction),
+        value: root,
+        location: self.allocation.value_locations[root.id].unwrap(),
+      })
+    }
+  }
+  true
+}
+
+///|
 pub fn[Inst] AllocationBuilder::finish(
   self : AllocationBuilder[Inst],
 ) -> Allocation {

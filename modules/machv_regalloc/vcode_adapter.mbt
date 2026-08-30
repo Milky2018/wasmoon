@@ -178,20 +178,8 @@ pub fn[Inst] AllocationSession::allocate_selected_vcode(
         }
     }
   }
-  for block in function.layout() {
-    let instructions = function.block_body(block)
-    instructions.push(function.block_terminator(block).unwrap())
-    for instruction in instructions {
-      let metadata = function.instruction_metadata(instruction).unwrap()
-      for root in metadata.live_gc_roots {
-        if !builder.add_safepoint_root(
-            function.instruction_index(instruction).unwrap(),
-            function.value_index(root).unwrap(),
-          ) {
-          raise AllocationConstructionRejected
-        }
-      }
-    }
+  if !builder.add_function_safepoint_roots() {
+    raise AllocationConstructionRejected
   }
   let allocation = builder.finish()
   if verify {

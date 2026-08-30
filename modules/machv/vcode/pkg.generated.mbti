@@ -195,6 +195,7 @@ pub struct AllocationBuilder[Inst] {
   // private fields
 }
 pub fn[Inst] AllocationBuilder::add_edge_transfer(Self[Inst], Int, Int, Int, @allocation_types.AllocationLocation, @allocation_types.AllocationLocation) -> Bool
+pub fn[Inst] AllocationBuilder::add_function_safepoint_roots(Self[Inst]) -> Bool
 pub fn[Inst] AllocationBuilder::add_safepoint_root(Self[Inst], Int, Int) -> Bool
 pub fn[Inst] AllocationBuilder::add_transfer(Self[Inst], Int, PointPlacement, Int, @allocation_types.AllocationLocation, @allocation_types.AllocationLocation) -> Bool
 pub fn[Inst] AllocationBuilder::assign_operand(Self[Inst], Int, Int, @allocation_types.AllocationLocation) -> Bool
