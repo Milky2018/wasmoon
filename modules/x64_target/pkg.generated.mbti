@@ -3,6 +3,7 @@ package "Milky2018/x64_target"
 
 import {
   "Milky2018/machv",
+  "Milky2018/machv/allocation_types",
   "Milky2018/machv/code_object",
   "Milky2018/machv/vcode",
   "Milky2018/machv_regalloc",
@@ -64,7 +65,7 @@ pub suberror X64AllocationError {
   InvalidVCode(cause~ : TargetVCodeVerifyError)
   AllocatorFailure(cause~ : @machv_regalloc.VCodeAllocationError)
   InvalidAllocation(cause~ : @vcode.AllocationVerifyError)
-  IllegalRegister(reg~ : @vcode.PhysicalReg)
+  IllegalRegister(reg~ : @allocation_types.PhysicalReg)
 } derive(@debug.Debug)
 pub fn X64AllocationError::output(Self, &Logger) -> Unit
 pub fn X64AllocationError::to_repr(Self) -> @debug.Repr
@@ -109,7 +110,7 @@ pub impl Show for X64EmitError
 pub suberror X64FrameError {
   InvalidAllocation(cause~ : X64AllocationError)
   InvalidGenericFrame(cause~ : @vcode.FrameVerifyError)
-  InvalidSavedRegister(reg~ : @vcode.PhysicalReg, offset~ : Int)
+  InvalidSavedRegister(reg~ : @allocation_types.PhysicalReg, offset~ : Int)
   InvalidStackSlot(slot~ : @vcode.StackSlot)
   OutgoingAreaMismatch(expected~ : Int, actual~ : Int)
   ResultAreaMismatch(expected~ : Int, actual~ : Int)
@@ -312,19 +313,19 @@ pub fn X64Frame::emergency_move_offset(Self) -> Int?
 pub fn X64Frame::frame_size(Self) -> Int
 pub fn X64Frame::incoming_args_size(Self) -> Int
 pub fn X64Frame::outgoing_args_size(Self) -> Int
-pub fn X64Frame::saved_registers(Self) -> Array[(@vcode.PhysicalReg, Int)]
+pub fn X64Frame::saved_registers(Self) -> Array[(@allocation_types.PhysicalReg, Int)]
 pub fn X64Frame::slot_offset(Self, @vcode.StackSlot) -> Int?
 pub fn X64Frame::stack_object_offset(Self, X64StackObject) -> Int?
 pub fn X64Frame::summary(Self) -> String
 pub fn X64Frame::tail_args_size(Self) -> Int
 
 pub(all) enum X64Inst {
-  IncomingReg(@machv.ValueType, @vcode.PhysicalReg)
+  IncomingReg(@machv.ValueType, @allocation_types.PhysicalReg)
   IncomingStack(@machv.ValueType, Int)
-  IncomingResultArea(@vcode.PhysicalReg)
-  IncomingCallResult(@machv.ValueType, @vcode.PhysicalReg)
+  IncomingResultArea(@allocation_types.PhysicalReg)
+  IncomingCallResult(@machv.ValueType, @allocation_types.PhysicalReg)
   IncomingCallAreaResult(@machv.ValueType, Int)
-  OutgoingReg(@machv.ValueType, @vcode.PhysicalReg)
+  OutgoingReg(@machv.ValueType, @allocation_types.PhysicalReg)
   OutgoingAreaResult(@machv.ValueType, Int)
   KeepAlive(@machv.ValueType)
   LoadConstant(GprWidth, UInt64)

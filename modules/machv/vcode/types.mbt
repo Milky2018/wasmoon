@@ -8,6 +8,9 @@ pub type OperandTiming = @allocation_types.OperandTiming
 pub type OperandRole = @allocation_types.OperandRole
 
 ///|
+pub type PhysicalReg = @allocation_types.PhysicalReg
+
+///|
 pub type ValueType = @semantic.ValueType
 
 ///|
@@ -29,22 +32,6 @@ fn value_type_text(ty : ValueType) -> String {
     Ptr64 => "ptr64"
     GcRef64 => "gcref64"
   }
-}
-
-///|
-pub struct PhysicalReg {
-  id : Int
-  class : RegClass
-} derive(Eq)
-
-///|
-pub fn PhysicalReg::new(id : Int, class : RegClass) -> PhysicalReg {
-  { id, class, }
-}
-
-///|
-pub impl Debug for PhysicalReg with fn to_repr(self) {
-  Repr::literal("p\{self.id}:\{self.class.text()}")
 }
 
 ///|

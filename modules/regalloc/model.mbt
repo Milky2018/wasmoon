@@ -8,15 +8,11 @@ pub type OperandTiming = @allocation_types.OperandTiming
 pub type OperandRole = @allocation_types.OperandRole
 
 ///|
-#valtype
-pub(all) struct VirtualReg {
-  id : Int
-  class : RegClass
-} derive(Eq, Debug)
+pub type PhysicalReg = @allocation_types.PhysicalReg
 
 ///|
 #valtype
-pub(all) struct PhysicalReg {
+pub(all) struct VirtualReg {
   id : Int
   class : RegClass
 } derive(Eq, Debug)

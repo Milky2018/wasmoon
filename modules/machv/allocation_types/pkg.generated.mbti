@@ -27,6 +27,16 @@ pub fn OperandTiming::equal(Self, Self) -> Bool
 pub fn OperandTiming::not_equal(Self, Self) -> Bool
 pub fn OperandTiming::to_repr(Self) -> @debug.Repr
 
+pub(all) struct PhysicalReg {
+  id : Int
+  class : RegClass
+} derive(Eq)
+pub fn PhysicalReg::equal(Self, Self) -> Bool
+pub fn PhysicalReg::new(Int, RegClass) -> Self
+pub fn PhysicalReg::not_equal(Self, Self) -> Bool
+pub fn PhysicalReg::to_repr(Self) -> @debug.Repr
+pub impl @debug.Debug for PhysicalReg
+
 pub(all) enum RegClass {
   Int
   Float

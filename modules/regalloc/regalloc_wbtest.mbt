@@ -134,26 +134,26 @@ test "instruction edit resolution preserves position order and edge edits" {
       #|[
       #|  {
       #|    value: { id: 0, class: Int },
-      #|    from: Reg({ id: 0, class: Int }),
-      #|    to: Reg({ id: 1, class: Int }),
+      #|    from: Reg(p0:int),
+      #|    to: Reg(p1:int),
       #|    position: Before(2),
       #|  },
       #|  {
       #|    value: { id: 1, class: Int },
-      #|    from: Reg({ id: 1, class: Int }),
-      #|    to: Reg({ id: 2, class: Int }),
+      #|    from: Reg(p1:int),
+      #|    to: Reg(p2:int),
       #|    position: After(0),
       #|  },
       #|  {
       #|    value: { id: 2, class: Int },
-      #|    from: Reg({ id: 2, class: Int }),
-      #|    to: Reg({ id: 0, class: Int }),
+      #|    from: Reg(p2:int),
+      #|    to: Reg(p0:int),
       #|    position: Before(1),
       #|  },
       #|  {
       #|    value: { id: 1, class: Int },
-      #|    from: Reg({ id: 1, class: Int }),
-      #|    to: Reg({ id: 0, class: Int }),
+      #|    from: Reg(p1:int),
+      #|    to: Reg(p0:int),
       #|    position: Edge(source_block=3, successor_index=1),
       #|  },
       #|]
@@ -329,7 +329,9 @@ test "operand assignment reuses a tied group's resident register" {
   verify_function_allocation(function, MachineEnv::new([r0], []), plan)
   debug_inspect(
     (plan.operand_location(0, 0), plan.operand_location(0, 1)),
-    content="(Some(Reg({ id: 0, class: Int })), Some(Reg({ id: 0, class: Int })))",
+    content=(
+      #|(Some(Reg(p0:int)), Some(Reg(p0:int)))
+    ),
   )
 }
 
@@ -484,12 +486,7 @@ test "plan verifier always enters a self-looping entry block" {
       0,
     ),
     content=(
-      #|Some(
-      #|  IncorrectValue(
-      #|    vreg={ id: 0, class: Int },
-      #|    location=Reg({ id: 1, class: Int }),
-      #|  ),
-      #|)
+      #|Some(IncorrectValue(vreg={ id: 0, class: Int }, location=Reg(p1:int)))
     ),
   )
 }
@@ -514,12 +511,7 @@ test "plan verifier checks an unreachable cyclic component" {
       1,
     ),
     content=(
-      #|Some(
-      #|  IncorrectValue(
-      #|    vreg={ id: 0, class: Int },
-      #|    location=Reg({ id: 1, class: Int }),
-      #|  ),
-      #|)
+      #|Some(IncorrectValue(vreg={ id: 0, class: Int }, location=Reg(p1:int)))
     ),
   )
 }
@@ -575,8 +567,8 @@ test "production fragments cache local allocation metadata" {
     }),
     content=(
       #|[
-      #|  (667, false, None, Some({ id: 1, class: Int })),
-      #|  (1000, true, Some({ id: 0, class: Int }), Some({ id: 0, class: Int })),
+      #|  (667, false, None, Some(p1:int)),
+      #|  (1000, true, Some(p0:int), Some(p0:int)),
       #|]
     ),
   )

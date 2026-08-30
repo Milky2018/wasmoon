@@ -8,15 +8,15 @@ import {
 }
 
 // Values
-pub fn plan_call_transfers(Allocation, Array[CallTransfer], Int, Int, Array[PhysicalReg], Array[PhysicalReg], Array[Location]) -> CallTransferPlan raise CallTransferError
+pub fn plan_call_transfers(Allocation, Array[CallTransfer], Int, Int, Array[@allocation_types.PhysicalReg], Array[@allocation_types.PhysicalReg], Array[Location]) -> CallTransferPlan raise CallTransferError
 
-pub fn plan_parallel_moves(Array[ParallelMove], PhysicalReg, PhysicalReg) -> ResolvedMovePlan raise MoveResolveError
+pub fn plan_parallel_moves(Array[ParallelMove], @allocation_types.PhysicalReg, @allocation_types.PhysicalReg) -> ResolvedMovePlan raise MoveResolveError
 
-pub fn plan_resolved_call_transfers(Allocation, Array[CallTransfer], Int, Int, Array[PhysicalReg], Array[PhysicalReg], PhysicalReg, PhysicalReg, Array[Location]) -> ResolvedCallTransferPlan raise CallTransferError
+pub fn plan_resolved_call_transfers(Allocation, Array[CallTransfer], Int, Int, Array[@allocation_types.PhysicalReg], Array[@allocation_types.PhysicalReg], @allocation_types.PhysicalReg, @allocation_types.PhysicalReg, Array[Location]) -> ResolvedCallTransferPlan raise CallTransferError
 
 pub fn reg_class_for_value_type(@machv.ValueType) -> @allocation_types.RegClass
 
-pub fn resolve_parallel_moves(Array[ParallelMove], Array[PhysicalReg], Array[PhysicalReg]) -> Array[ParallelMove] raise MoveResolveError
+pub fn resolve_parallel_moves(Array[ParallelMove], Array[@allocation_types.PhysicalReg], Array[@allocation_types.PhysicalReg]) -> Array[ParallelMove] raise MoveResolveError
 
 pub fn[Inst] verify_allocated(Function[Inst], Allocation) -> Unit raise AllocationVerifyError
 
@@ -65,7 +65,7 @@ pub suberror CallTransferError {
   InvalidStackOffset(index~ : Int, offset~ : Int)
   InvalidOutgoingStackRange(start~ : Int, size~ : Int)
   OutgoingStackDestinationOutOfRange(index~ : Int, offset~ : Int)
-  DuplicateRegisterDestination(index~ : Int, register~ : PhysicalReg)
+  DuplicateRegisterDestination(index~ : Int, register~ : @allocation_types.PhysicalReg)
   OverlappingStackDestination(first~ : Int, second~ : Int)
   ProtectedLocationOverwrite(index~ : Int, location~ : Location)
   MoveResolutionFailed(cause~ : MoveResolveError)
@@ -103,7 +103,7 @@ pub impl Show for FrameVerifyError
 
 pub suberror MoveResolveError {
   MissingScratch(class~ : @allocation_types.RegClass)
-  InvalidScratch(reg~ : PhysicalReg, expected~ : @allocation_types.RegClass)
+  InvalidScratch(reg~ : @allocation_types.PhysicalReg, expected~ : @allocation_types.RegClass)
   NoSafeCycleScratch(class~ : @allocation_types.RegClass)
   BrokenCycle
 } derive(Eq, @debug.Debug)
@@ -124,7 +124,7 @@ pub suberror VCodeBuildError {
   BlockAlreadyTerminated(block~ : Block)
   InvalidEdgeArity(block~ : Block)
   EdgeClassMismatch(block~ : Block, index~ : Int)
-  DuplicateClobber(reg~ : PhysicalReg)
+  DuplicateClobber(reg~ : @allocation_types.PhysicalReg)
   InvalidSafepointRoot(value~ : Value)
   InvalidStackMap
   MissingTerminator(block~ : Block)
@@ -147,7 +147,7 @@ pub suberror VCodeVerifyError {
   InvalidTie(instruction~ : Instruction, operand~ : Int, tied_to~ : Int)
   FixedRegisterClassMismatch(instruction~ : Instruction, operand~ : Int)
   InvalidOperandPreference(instruction~ : Instruction, operand~ : Int)
-  DuplicateClobber(instruction~ : Instruction, reg~ : PhysicalReg)
+  DuplicateClobber(instruction~ : Instruction, reg~ : @allocation_types.PhysicalReg)
   InvalidSafepointRoot(instruction~ : Instruction, value~ : Value)
   InvalidStackMap(instruction~ : Instruction)
   UnreachableBlock(block~ : Block)
@@ -168,7 +168,7 @@ pub struct Allocation {
 }
 pub fn Allocation::add_edit(Self, Edit) -> Bool
 pub fn Allocation::add_safepoint_root(Self, Instruction, Value, Location) -> Bool
-pub fn Allocation::assign_operand(Self, Instruction, Int, PhysicalReg) -> Bool
+pub fn Allocation::assign_operand(Self, Instruction, Int, @allocation_types.PhysicalReg) -> Bool
 pub fn Allocation::assign_operand_location(Self, Instruction, Int, Location) -> Bool
 pub fn Allocation::assign_value(Self, Value, Location) -> Bool
 pub fn Allocation::create_stack_slot(Self, @machv.ValueType, Int, Int) -> StackSlot
@@ -230,7 +230,7 @@ pub impl @debug.Debug for Block
 pub struct Builder[Inst] {
   // private fields
 }
-pub fn[Inst] Builder::append_body(Self[Inst], Block, Inst, Array[Input], Array[Output], Array[PhysicalReg], InstructionMetadata) -> (Instruction, Array[Value]) raise VCodeBuildError
+pub fn[Inst] Builder::append_body(Self[Inst], Block, Inst, Array[Input], Array[Output], Array[@allocation_types.PhysicalReg], InstructionMetadata) -> (Instruction, Array[Value]) raise VCodeBuildError
 pub fn[Inst] Builder::block_parameter(Self[Inst], Block, Int) -> Value raise VCodeBuildError
 pub fn[Inst] Builder::create_block(Self[Inst], Array[@machv.ValueType]) -> Block
 pub fn[Inst] Builder::entry_block(Self[Inst]) -> Block
@@ -239,12 +239,12 @@ pub fn[Inst] Builder::new(String, Array[@machv.ValueType]) -> Self[Inst]
 pub fn[Inst] Builder::new_with_protocol(String, @machv.CallProtocol, Array[@machv.ValueType], Array[@machv.ValueType]) -> Self[Inst]
 pub fn[Inst] Builder::new_with_results(String, Array[@machv.ValueType], Array[@machv.ValueType]) -> Self[Inst]
 pub fn[Inst] Builder::parameter(Self[Inst], Int) -> Value raise VCodeBuildError
-pub fn[Inst] Builder::set_terminator(Self[Inst], Block, Inst, Array[Input], Array[Edge], Array[PhysicalReg], InstructionMetadata) -> Instruction raise VCodeBuildError
+pub fn[Inst] Builder::set_terminator(Self[Inst], Block, Inst, Array[Input], Array[Edge], Array[@allocation_types.PhysicalReg], InstructionMetadata) -> Instruction raise VCodeBuildError
 
 pub struct CallTransfer {
   // private fields
 }
-pub fn CallTransfer::to_register(@machv.ValueType, Location, PhysicalReg) -> Self
+pub fn CallTransfer::to_register(@machv.ValueType, Location, @allocation_types.PhysicalReg) -> Self
 pub fn CallTransfer::to_stack(@machv.ValueType, Location, Int) -> Self
 
 pub struct CallTransferPlan {
@@ -258,7 +258,7 @@ pub fn CallTransferPlan::to_repr(Self) -> @debug.Repr
 pub struct CheckedBuilder[Inst] {
   // private fields
 }
-pub fn[Inst] CheckedBuilder::append_body(Self[Inst], Block, Inst, Array[Input], Array[Output], Array[PhysicalReg], InstructionMetadata) -> (Instruction, Array[Value]) raise VCodeBuildError
+pub fn[Inst] CheckedBuilder::append_body(Self[Inst], Block, Inst, Array[Input], Array[Output], Array[@allocation_types.PhysicalReg], InstructionMetadata) -> (Instruction, Array[Value]) raise VCodeBuildError
 pub fn[Inst] CheckedBuilder::block_parameter(Self[Inst], Block, Int) -> Value raise VCodeBuildError
 pub fn[Inst] CheckedBuilder::create_block(Self[Inst], Array[@machv.ValueType]) -> Block
 pub fn[Inst] CheckedBuilder::entry_block(Self[Inst]) -> Block
@@ -267,7 +267,7 @@ pub fn[Inst] CheckedBuilder::new(String, Array[@machv.ValueType]) -> Self[Inst]
 pub fn[Inst] CheckedBuilder::new_with_protocol(String, @machv.CallProtocol, Array[@machv.ValueType], Array[@machv.ValueType]) -> Self[Inst]
 pub fn[Inst] CheckedBuilder::new_with_results(String, Array[@machv.ValueType], Array[@machv.ValueType]) -> Self[Inst]
 pub fn[Inst] CheckedBuilder::parameter(Self[Inst], Int) -> Value raise VCodeBuildError
-pub fn[Inst] CheckedBuilder::set_terminator(Self[Inst], Block, Inst, Array[Input], Array[Edge], Array[PhysicalReg], InstructionMetadata) -> Instruction raise VCodeBuildError
+pub fn[Inst] CheckedBuilder::set_terminator(Self[Inst], Block, Inst, Array[Input], Array[Edge], Array[@allocation_types.PhysicalReg], InstructionMetadata) -> Instruction raise VCodeBuildError
 
 pub struct Edge {
   target : Block
@@ -282,14 +282,14 @@ pub struct Edit {
 pub fn Edit::edge_move(Block, Int, Value, Location, Location) -> Self
 pub fn Edit::kind(Self) -> EditKind
 pub fn Edit::point(Self) -> ProgramPoint?
-pub fn Edit::register_move(ProgramPoint, Value, PhysicalReg, PhysicalReg) -> Self
-pub fn Edit::reload(ProgramPoint, Value, StackSlot, PhysicalReg) -> Self
-pub fn Edit::spill(ProgramPoint, Value, PhysicalReg, StackSlot) -> Self
+pub fn Edit::register_move(ProgramPoint, Value, @allocation_types.PhysicalReg, @allocation_types.PhysicalReg) -> Self
+pub fn Edit::reload(ProgramPoint, Value, StackSlot, @allocation_types.PhysicalReg) -> Self
+pub fn Edit::spill(ProgramPoint, Value, @allocation_types.PhysicalReg, StackSlot) -> Self
 
 pub(all) enum EditKind {
-  Spill(value~ : Value, reg~ : PhysicalReg, slot~ : StackSlot)
-  Reload(value~ : Value, slot~ : StackSlot, reg~ : PhysicalReg)
-  Move(value~ : Value, from~ : PhysicalReg, to~ : PhysicalReg)
+  Spill(value~ : Value, reg~ : @allocation_types.PhysicalReg, slot~ : StackSlot)
+  Reload(value~ : Value, slot~ : StackSlot, reg~ : @allocation_types.PhysicalReg)
+  Move(value~ : Value, from~ : @allocation_types.PhysicalReg, to~ : @allocation_types.PhysicalReg)
   EdgeMove(source~ : Block, successor_index~ : Int, value~ : Value, from~ : Location, to~ : Location)
 } derive(Eq, @debug.Debug)
 pub fn EditKind::equal(Self, Self) -> Bool
@@ -323,9 +323,9 @@ pub fn[Inst] Function::block_terminator(Self[Inst], Block) -> Instruction?
 pub fn[Inst] Function::entry_block(Self[Inst]) -> Block
 pub fn[Inst] Function::instruction(Self[Inst], Instruction) -> Inst?
 pub fn[Inst] Function::instruction_at(Self[Inst], Int) -> Instruction?
-pub fn[Inst] Function::instruction_clobber_at(Self[Inst], Instruction, Int) -> PhysicalReg?
+pub fn[Inst] Function::instruction_clobber_at(Self[Inst], Instruction, Int) -> @allocation_types.PhysicalReg?
 pub fn[Inst] Function::instruction_clobber_count(Self[Inst], Instruction) -> Int
-pub fn[Inst] Function::instruction_clobbers(Self[Inst], Instruction) -> Array[PhysicalReg]
+pub fn[Inst] Function::instruction_clobbers(Self[Inst], Instruction) -> Array[@allocation_types.PhysicalReg]
 pub fn[Inst] Function::instruction_count(Self[Inst]) -> Int
 pub fn[Inst] Function::instruction_index(Self[Inst], Instruction) -> Int?
 pub fn[Inst] Function::instruction_is_terminator(Self[Inst], Instruction) -> Bool
@@ -358,13 +358,13 @@ pub fn[Inst] Function::value_type(Self[Inst], Value) -> @machv.ValueType?
 pub struct Input {
   value : Value
   constraint : OperandConstraint
-  preference : PhysicalReg?
+  preference : @allocation_types.PhysicalReg?
   timing : @allocation_types.OperandTiming
 }
 pub fn Input::any(Value) -> Self
 pub fn Input::any_location(Value) -> Self
-pub fn Input::fixed(Value, PhysicalReg) -> Self
-pub fn Input::with_preference(Self, PhysicalReg) -> Self
+pub fn Input::fixed(Value, @allocation_types.PhysicalReg) -> Self
+pub fn Input::with_preference(Self, @allocation_types.PhysicalReg) -> Self
 pub fn Input::with_timing(Self, @allocation_types.OperandTiming) -> Self
 
 pub struct Instruction {
@@ -392,7 +392,7 @@ pub fn InstructionMetadata::new(source? : @machv.SourceLocation, trap? : @machv.
 pub fn InstructionMetadata::safepoint(Array[Value]) -> Self
 
 pub(all) enum Location {
-  Register(PhysicalReg)
+  Register(@allocation_types.PhysicalReg)
   Stack(StackSlot)
 } derive(Eq)
 pub fn Location::equal(Self, Self) -> Bool
@@ -404,7 +404,7 @@ pub struct Operand {
   value : Value
   role : @allocation_types.OperandRole
   constraint : OperandConstraint
-  preference : PhysicalReg?
+  preference : @allocation_types.PhysicalReg?
   timing : @allocation_types.OperandTiming
   tie_id : Int
 } derive(Eq, @debug.Debug)
@@ -415,7 +415,7 @@ pub fn Operand::to_repr(Self) -> @debug.Repr
 pub(all) enum OperandConstraint {
   Any
   AnyLocation
-  Fixed(PhysicalReg)
+  Fixed(@allocation_types.PhysicalReg)
   TiedTo(Int)
 } derive(Eq, @debug.Debug)
 pub fn OperandConstraint::equal(Self, Self) -> Bool
@@ -425,14 +425,14 @@ pub fn OperandConstraint::to_repr(Self) -> @debug.Repr
 pub struct Output {
   ty : @machv.ValueType
   constraint : OperandConstraint
-  preference : PhysicalReg?
+  preference : @allocation_types.PhysicalReg?
   timing : @allocation_types.OperandTiming
 }
 pub fn Output::any(@machv.ValueType) -> Self
 pub fn Output::any_location(@machv.ValueType) -> Self
-pub fn Output::fixed(@machv.ValueType, PhysicalReg) -> Self
+pub fn Output::fixed(@machv.ValueType, @allocation_types.PhysicalReg) -> Self
 pub fn Output::tied(@machv.ValueType, Int) -> Self
-pub fn Output::with_preference(Self, PhysicalReg) -> Self
+pub fn Output::with_preference(Self, @allocation_types.PhysicalReg) -> Self
 pub fn Output::with_timing(Self, @allocation_types.OperandTiming) -> Self
 
 pub struct ParallelMove {
@@ -444,16 +444,6 @@ pub fn ParallelMove::equal(Self, Self) -> Bool
 pub fn ParallelMove::new(@machv.ValueType, Location, Location) -> Self
 pub fn ParallelMove::not_equal(Self, Self) -> Bool
 pub fn ParallelMove::to_repr(Self) -> @debug.Repr
-
-pub struct PhysicalReg {
-  id : Int
-  class : @allocation_types.RegClass
-} derive(Eq)
-pub fn PhysicalReg::equal(Self, Self) -> Bool
-pub fn PhysicalReg::new(Int, @allocation_types.RegClass) -> Self
-pub fn PhysicalReg::not_equal(Self, Self) -> Bool
-pub fn PhysicalReg::to_repr(Self) -> @debug.Repr
-pub impl @debug.Debug for PhysicalReg
 
 pub(all) enum PointPlacement {
   Before
@@ -507,8 +497,8 @@ pub fn ResolvedMovePlan::to_repr(Self) -> @debug.Repr
 
 pub(all) enum ResolvedMoveStep {
   Transfer(ParallelMove)
-  SpillScratchToEmergency(ty~ : @machv.ValueType, scratch~ : PhysicalReg)
-  ReloadScratchFromEmergency(ty~ : @machv.ValueType, scratch~ : PhysicalReg)
+  SpillScratchToEmergency(ty~ : @machv.ValueType, scratch~ : @allocation_types.PhysicalReg)
+  ReloadScratchFromEmergency(ty~ : @machv.ValueType, scratch~ : @allocation_types.PhysicalReg)
 } derive(Eq, @debug.Debug)
 pub fn ResolvedMoveStep::equal(Self, Self) -> Bool
 pub fn ResolvedMoveStep::not_equal(Self, Self) -> Bool
@@ -518,7 +508,7 @@ pub struct StackArgumentTransfer {
   ty : @machv.ValueType
   source : Location
   offset : Int
-  scratch : PhysicalReg?
+  scratch : @allocation_types.PhysicalReg?
 } derive(Eq, @debug.Debug)
 pub fn StackArgumentTransfer::equal(Self, Self) -> Bool
 pub fn StackArgumentTransfer::not_equal(Self, Self) -> Bool
@@ -580,6 +570,8 @@ pub impl @debug.Debug for Value
 pub using @allocation_types {type OperandRole}
 
 pub using @allocation_types {type OperandTiming}
+
+pub using @allocation_types {type PhysicalReg}
 
 pub using @allocation_types {type RegClass}
 

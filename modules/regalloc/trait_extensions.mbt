@@ -62,12 +62,6 @@ pub extend OperandConstraint with Debug::{to_repr}
 pub extend OperandConstraint with Eq::{not_equal, equal}
 
 ///|
-pub extend PhysicalReg with Debug::{to_repr}
-
-///|
-pub extend PhysicalReg with Eq::{not_equal, equal}
-
-///|
 pub extend ProgramPoint with Debug::{to_repr}
 
 ///|

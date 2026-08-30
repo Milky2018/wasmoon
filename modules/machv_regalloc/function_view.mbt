@@ -36,7 +36,7 @@ fn[Inst] VCodeFunctionView::new(
       .value_type(function.value_at(value_index).unwrap())
       .unwrap()
     value_types.push(ty)
-    value_classes.push(to_regalloc_class(@vcode.reg_class_for_value_type(ty)))
+    value_classes.push(@vcode.reg_class_for_value_type(ty))
     value_sizes.push(regalloc_value_size(ty))
   }
   let entry_values = Array::makei(function.parameter_count(), index => {
@@ -118,9 +118,7 @@ fn[Inst] VCodeFunctionView::new(
     clobber_offsets.push(clobbers.length())
     for clobber in 0..<function.instruction_clobber_count(instruction) {
       clobbers.push(
-        to_regalloc_preg(
-          function.instruction_clobber_at(instruction, clobber).unwrap(),
-        ),
+        function.instruction_clobber_at(instruction, clobber).unwrap(),
       )
     }
   }
@@ -163,7 +161,7 @@ fn to_regalloc_operand_constraint(
   match constraint {
     Any => AnyReg
     AnyLocation => AnyLocation
-    Fixed(reg) => FixedReg(to_regalloc_preg(reg))
+    Fixed(reg) => FixedReg(reg)
     TiedTo(_) => AnyReg
   }
 }
@@ -177,7 +175,7 @@ fn[Inst] to_regalloc_operand(
     vreg: to_regalloc_vreg(function, operand.value),
     role: operand.role,
     constraint: to_regalloc_operand_constraint(operand.constraint),
-    preference: operand.preference.map(to_regalloc_preg),
+    preference: operand.preference,
     tie_id: operand.tie_id,
     timing: operand.timing,
   }

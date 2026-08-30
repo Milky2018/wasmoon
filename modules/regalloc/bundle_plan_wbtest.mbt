@@ -173,10 +173,7 @@ test "segment metadata follows custom block order in one use pass" {
       )
     }),
     content=(
-      #|[
-      #|  (2500, true, Some({ id: 0, class: Int }), None),
-      #|  (1500, false, None, Some({ id: 1, class: Int })),
-      #|]
+      #|[(2500, true, Some(p0:int), None), (1500, false, None, Some(p1:int))]
     ),
   )
 }

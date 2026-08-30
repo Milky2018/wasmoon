@@ -14,8 +14,8 @@ pub fn reserve_spill_slot(Int, @allocation_types.RegClass) -> SpillSlotReservati
 // Errors
 pub suberror VerifyError {
   Unassigned(vreg~ : VirtualReg)
-  FixedConstraintViolation(vreg~ : VirtualReg, required~ : PhysicalReg, actual~ : Location)
-  InvalidPreference(vreg~ : VirtualReg, preferred~ : PhysicalReg)
+  FixedConstraintViolation(vreg~ : VirtualReg, required~ : @allocation_types.PhysicalReg, actual~ : Location)
+  InvalidPreference(vreg~ : VirtualReg, preferred~ : @allocation_types.PhysicalReg)
   IncorrectValue(vreg~ : VirtualReg, location~ : Location)
   ScratchRegisterUnavailable(message~ : String)
   InvalidPlan(message~ : String)
@@ -102,7 +102,7 @@ pub fn LiveRange::LiveRange(Int, VirtualReg) -> Self
 pub fn LiveRange::add_range(Self, ProgramRange) -> Unit
 pub fn LiveRange::add_use(Self, UsePosition) -> Unit
 pub fn LiveRange::end(Self) -> ProgramPoint?
-pub fn LiveRange::get_fixed_reg(Self) -> PhysicalReg?
+pub fn LiveRange::get_fixed_reg(Self) -> @allocation_types.PhysicalReg?
 pub fn LiveRange::has_fixed_constraint(Self) -> Bool
 pub fn LiveRange::has_tie_at(Self, Self, ProgramPoint) -> Bool
 pub fn LiveRange::id(Self) -> Int
@@ -132,7 +132,7 @@ pub fn LiveRangeSet::length(Self) -> Int
 pub fn LiveRangeSet::to_repr(Self) -> @debug.Repr
 
 pub(all) enum Location {
-  Reg(PhysicalReg)
+  Reg(@allocation_types.PhysicalReg)
   Spill(Int)
 } derive(Eq, @debug.Debug)
 pub fn Location::equal(Self, Self) -> Bool
@@ -140,24 +140,24 @@ pub fn Location::not_equal(Self, Self) -> Bool
 pub fn Location::to_repr(Self) -> @debug.Repr
 
 pub struct MachineEnv {
-  allocatable_regs : Array[PhysicalReg]
-  scratch_regs : Array[PhysicalReg]
-  operand_scratch_regs : Array[PhysicalReg]
-  fixed_operand_regs : Array[PhysicalReg]
+  allocatable_regs : Array[@allocation_types.PhysicalReg]
+  scratch_regs : Array[@allocation_types.PhysicalReg]
+  operand_scratch_regs : Array[@allocation_types.PhysicalReg]
+  fixed_operand_regs : Array[@allocation_types.PhysicalReg]
 }
-pub fn MachineEnv::allocatable_regs(Self) -> Array[PhysicalReg]
-pub fn MachineEnv::fixed_operand_regs(Self) -> Array[PhysicalReg]
-pub fn MachineEnv::new(Array[PhysicalReg], Array[PhysicalReg]) -> Self
-pub fn MachineEnv::operand_scratch_regs(Self) -> Array[PhysicalReg]
-pub fn MachineEnv::scratch_regs(Self) -> Array[PhysicalReg]
-pub fn MachineEnv::with_fixed_operand_regs(Self, Array[PhysicalReg]) -> Self
-pub fn MachineEnv::with_operand_scratch_regs(Self, Array[PhysicalReg]) -> Self
+pub fn MachineEnv::allocatable_regs(Self) -> Array[@allocation_types.PhysicalReg]
+pub fn MachineEnv::fixed_operand_regs(Self) -> Array[@allocation_types.PhysicalReg]
+pub fn MachineEnv::new(Array[@allocation_types.PhysicalReg], Array[@allocation_types.PhysicalReg]) -> Self
+pub fn MachineEnv::operand_scratch_regs(Self) -> Array[@allocation_types.PhysicalReg]
+pub fn MachineEnv::scratch_regs(Self) -> Array[@allocation_types.PhysicalReg]
+pub fn MachineEnv::with_fixed_operand_regs(Self, Array[@allocation_types.PhysicalReg]) -> Self
+pub fn MachineEnv::with_operand_scratch_regs(Self, Array[@allocation_types.PhysicalReg]) -> Self
 
 pub(all) struct Operand {
   vreg : VirtualReg
   role : @allocation_types.OperandRole
   constraint : OperandConstraint
-  preference : PhysicalReg?
+  preference : @allocation_types.PhysicalReg?
   tie_id : Int
   timing : @allocation_types.OperandTiming
 } derive(Eq, @debug.Debug)
@@ -167,7 +167,7 @@ pub fn Operand::not_equal(Self, Self) -> Bool
 pub fn Operand::to_repr(Self) -> @debug.Repr
 pub fn Operand::use_reg(VirtualReg) -> Self
 pub fn Operand::with_constraint(Self, OperandConstraint) -> Self
-pub fn Operand::with_preference(Self, PhysicalReg) -> Self
+pub fn Operand::with_preference(Self, @allocation_types.PhysicalReg) -> Self
 pub fn Operand::with_tie(Self, Int) -> Self
 pub fn Operand::with_timing(Self, @allocation_types.OperandTiming) -> Self
 
@@ -183,19 +183,11 @@ pub fn OperandAssignment::to_repr(Self) -> @debug.Repr
 pub(all) enum OperandConstraint {
   AnyReg
   AnyLocation
-  FixedReg(PhysicalReg)
+  FixedReg(@allocation_types.PhysicalReg)
 } derive(Eq, @debug.Debug)
 pub fn OperandConstraint::equal(Self, Self) -> Bool
 pub fn OperandConstraint::not_equal(Self, Self) -> Bool
 pub fn OperandConstraint::to_repr(Self) -> @debug.Repr
-
-pub(all) struct PhysicalReg {
-  id : Int
-  class : @allocation_types.RegClass
-} derive(Eq, @debug.Debug)
-pub fn PhysicalReg::equal(Self, Self) -> Bool
-pub fn PhysicalReg::not_equal(Self, Self) -> Bool
-pub fn PhysicalReg::to_repr(Self) -> @debug.Repr
 
 pub(all) struct ProgramPoint {
   block : Int
@@ -276,14 +268,14 @@ pub(all) struct UsePosition {
   point : ProgramPoint
   kind : UseKind
   constraint : OperandConstraint
-  preference : PhysicalReg?
+  preference : @allocation_types.PhysicalReg?
   tie_id : Int
 } derive(Eq, @debug.Debug)
 pub fn UsePosition::UsePosition(ProgramPoint, UseKind, OperandConstraint) -> Self
 pub fn UsePosition::equal(Self, Self) -> Bool
 pub fn UsePosition::not_equal(Self, Self) -> Bool
 pub fn UsePosition::to_repr(Self) -> @debug.Repr
-pub fn UsePosition::with_preference(Self, PhysicalReg?) -> Self
+pub fn UsePosition::with_preference(Self, @allocation_types.PhysicalReg?) -> Self
 pub fn UsePosition::with_tie(Self, Int) -> Self
 
 pub(all) struct VirtualReg {
@@ -298,6 +290,8 @@ pub fn VirtualReg::to_repr(Self) -> @debug.Repr
 pub using @allocation_types {type OperandRole}
 
 pub using @allocation_types {type OperandTiming}
+
+pub using @allocation_types {type PhysicalReg}
 
 pub using @allocation_types {type RegClass}
 
@@ -316,5 +310,5 @@ pub(open) trait FunctionView {
   fn block_successors(Self, Int) -> ArrayView[Int]
   fn edge_arguments(Self, Int, Int) -> ArrayView[VirtualReg]
   fn instruction_operands(Self, Int) -> ArrayView[Operand]
-  fn instruction_clobbers(Self, Int) -> ArrayView[PhysicalReg]
+  fn instruction_clobbers(Self, Int) -> ArrayView[@allocation_types.PhysicalReg]
 }

@@ -3,6 +3,7 @@ package "Milky2018/aarch64_target"
 
 import {
   "Milky2018/machv",
+  "Milky2018/machv/allocation_types",
   "Milky2018/machv/code_object",
   "Milky2018/machv/vcode",
   "Milky2018/machv_regalloc",
@@ -39,7 +40,7 @@ pub suberror AArch64AllocationError {
   InvalidVCode(cause~ : TargetVCodeVerifyError)
   AllocatorFailure(cause~ : @machv_regalloc.VCodeAllocationError)
   InvalidAllocation(cause~ : @vcode.AllocationVerifyError)
-  IllegalRegister(reg~ : @vcode.PhysicalReg)
+  IllegalRegister(reg~ : @allocation_types.PhysicalReg)
 } derive(@debug.Debug)
 pub fn AArch64AllocationError::output(Self, &Logger) -> Unit
 pub fn AArch64AllocationError::to_repr(Self) -> @debug.Repr
@@ -85,7 +86,7 @@ pub impl Show for AArch64EmitError
 pub suberror AArch64FrameError {
   InvalidAllocation(cause~ : AArch64AllocationError)
   InvalidGenericFrame(cause~ : @vcode.FrameVerifyError)
-  InvalidSavedRegister(reg~ : @vcode.PhysicalReg, offset~ : Int)
+  InvalidSavedRegister(reg~ : @allocation_types.PhysicalReg, offset~ : Int)
   InvalidStackSlot(slot~ : @vcode.StackSlot)
   OutgoingAreaMismatch(expected~ : Int, actual~ : Int)
   ResultAreaMismatch(expected~ : Int, actual~ : Int)
@@ -261,19 +262,19 @@ pub fn AArch64Frame::emergency_move_offset(Self) -> Int?
 pub fn AArch64Frame::frame_size(Self) -> Int
 pub fn AArch64Frame::incoming_args_size(Self) -> Int
 pub fn AArch64Frame::outgoing_args_size(Self) -> Int
-pub fn AArch64Frame::saved_registers(Self) -> Array[(@vcode.PhysicalReg, Int)]
+pub fn AArch64Frame::saved_registers(Self) -> Array[(@allocation_types.PhysicalReg, Int)]
 pub fn AArch64Frame::slot_offset(Self, @vcode.StackSlot) -> Int?
 pub fn AArch64Frame::stack_object_offset(Self, AArch64StackObject) -> Int?
 pub fn AArch64Frame::summary(Self) -> String
 pub fn AArch64Frame::tail_args_size(Self) -> Int
 
 pub(all) enum AArch64Inst {
-  IncomingReg(@machv.ValueType, @vcode.PhysicalReg)
+  IncomingReg(@machv.ValueType, @allocation_types.PhysicalReg)
   IncomingStack(@machv.ValueType, Int)
-  IncomingResultArea(@vcode.PhysicalReg)
-  IncomingCallResult(@machv.ValueType, @vcode.PhysicalReg)
+  IncomingResultArea(@allocation_types.PhysicalReg)
+  IncomingCallResult(@machv.ValueType, @allocation_types.PhysicalReg)
   IncomingCallAreaResult(@machv.ValueType, Int)
-  OutgoingReg(@machv.ValueType, @vcode.PhysicalReg)
+  OutgoingReg(@machv.ValueType, @allocation_types.PhysicalReg)
   OutgoingAreaResult(@machv.ValueType, Int)
   KeepAlive(@machv.ValueType)
   LoadConstant(GprWidth, UInt64)

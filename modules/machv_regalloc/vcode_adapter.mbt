@@ -41,38 +41,14 @@ pub impl Show for VCodeAllocationError with fn output(self, logger) {
 }
 
 ///|
-fn to_regalloc_class(class : @vcode.RegClass) -> @regalloc.RegClass {
-  class
-}
-
-///|
-fn to_regalloc_preg(reg : @vcode.PhysicalReg) -> @regalloc.PhysicalReg {
-  { id: reg.id, class: to_regalloc_class(reg.class), }
-}
-
-///|
 fn[Inst] to_regalloc_vreg(
   function : @vcode.Function[Inst],
   value : @vcode.Value,
 ) -> @regalloc.VirtualReg {
   {
     id: function.value_index(value).unwrap(),
-    class: to_regalloc_class(
-      @vcode.reg_class_for_value_type(function.value_type(value).unwrap()),
-    ),
+    class: @vcode.reg_class_for_value_type(function.value_type(value).unwrap()),
   }
-}
-
-///|
-fn[Inst] vcode_reg_for_value(
-  builder : @vcode.AllocationBuilder[Inst],
-  value : Int,
-  reg : @regalloc.PhysicalReg,
-) -> @vcode.PhysicalReg {
-  @vcode.PhysicalReg::new(
-    reg.id,
-    @vcode.reg_class_for_value_type(builder.value_type_at(value)),
-  )
 }
 
 ///|
@@ -84,7 +60,7 @@ fn[Inst] materialize_plan_location(
   location : @regalloc.Location,
 ) -> @vcode.Location {
   match location {
-    Reg(reg) => Register(vcode_reg_for_value(builder, value, reg))
+    Reg(reg) => Register(reg)
     Spill(index) => {
       let slot = match spill_slots[index] {
         Some(slot) => slot
@@ -176,13 +152,11 @@ pub fn[Inst] AllocationSession::allocate_selected_vcode(
   let plan = self.core.allocate_function(
     function_view,
     @regalloc.MachineEnv::new(
-      environment.allocatable_regs.map(reg => to_regalloc_preg(reg)),
-      environment.spill_scratch_regs.map(reg => to_regalloc_preg(reg)),
+      environment.allocatable_regs,
+      environment.spill_scratch_regs,
     )
     .with_operand_scratch_regs([])
-    .with_fixed_operand_regs(
-      environment.fixed_operand_regs.map(reg => to_regalloc_preg(reg)),
-    ),
+    .with_fixed_operand_regs(environment.fixed_operand_regs),
     config=RegallocConfig(verify~, observer~, statistics_observer~),
   ) catch {
     error => raise RegallocFailure(cause=error)

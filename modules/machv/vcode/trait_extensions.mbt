@@ -101,12 +101,6 @@ pub extend ParallelMove with Debug::{to_repr}
 pub extend ParallelMove with Eq::{not_equal, equal}
 
 ///|
-pub extend PhysicalReg with Debug::{to_repr}
-
-///|
-pub extend PhysicalReg with Eq::{not_equal, equal}
-
-///|
 pub extend PointPlacement with Debug::{to_repr}
 
 ///|

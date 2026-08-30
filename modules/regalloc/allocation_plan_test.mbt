@@ -236,11 +236,11 @@ test "backtracking reuses a register across early use and late def" {
     allocate_function(function, MachineEnv::new([int_reg(0)], [int_reg(1)])),
     content=(
       #|{
-      #|  value_locations: [Some(Reg({ id: 0, class: Int })), Some(Reg({ id: 0, class: Int }))],
+      #|  value_locations: [Some(Reg(p0:int)), Some(Reg(p0:int))],
       #|  operand_assignments: [
-      #|    { instruction: 0, operand: 0, location: Reg({ id: 0, class: Int }) },
-      #|    { instruction: 0, operand: 1, location: Reg({ id: 0, class: Int }) },
-      #|    { instruction: 1, operand: 0, location: Reg({ id: 0, class: Int }) },
+      #|    { instruction: 0, operand: 0, location: Reg(p0:int) },
+      #|    { instruction: 0, operand: 1, location: Reg(p0:int) },
+      #|    { instruction: 1, operand: 0, location: Reg(p0:int) },
       #|  ],
       #|  edits: [],
       #|  spill_slots: [],
@@ -267,37 +267,32 @@ test "backtracking reuses spill slots for disjoint values" {
     ),
     content=(
       #|{
-      #|  value_locations: [
-      #|    Some(Reg({ id: 0, class: Int })),
-      #|    Some(Spill(0)),
-      #|    Some(Reg({ id: 0, class: Int })),
-      #|    Some(Spill(0)),
-      #|  ],
+      #|  value_locations: [Some(Reg(p0:int)), Some(Spill(0)), Some(Reg(p0:int)), Some(Spill(0))],
       #|  operand_assignments: [
-      #|    { instruction: 0, operand: 0, location: Reg({ id: 0, class: Int }) },
-      #|    { instruction: 0, operand: 1, location: Reg({ id: 1, class: Int }) },
-      #|    { instruction: 1, operand: 0, location: Reg({ id: 0, class: Int }) },
-      #|    { instruction: 1, operand: 1, location: Reg({ id: 1, class: Int }) },
-      #|    { instruction: 2, operand: 0, location: Reg({ id: 0, class: Int }) },
-      #|    { instruction: 2, operand: 1, location: Reg({ id: 1, class: Int }) },
+      #|    { instruction: 0, operand: 0, location: Reg(p0:int) },
+      #|    { instruction: 0, operand: 1, location: Reg(p1:int) },
+      #|    { instruction: 1, operand: 0, location: Reg(p0:int) },
+      #|    { instruction: 1, operand: 1, location: Reg(p1:int) },
+      #|    { instruction: 2, operand: 0, location: Reg(p0:int) },
+      #|    { instruction: 2, operand: 1, location: Reg(p1:int) },
       #|  ],
       #|  edits: [
       #|    {
       #|      value: { id: 1, class: Int },
       #|      from: Spill(0),
-      #|      to: Reg({ id: 1, class: Int }),
+      #|      to: Reg(p1:int),
       #|      position: Before(0),
       #|    },
       #|    {
       #|      value: { id: 3, class: Int },
-      #|      from: Reg({ id: 1, class: Int }),
+      #|      from: Reg(p1:int),
       #|      to: Spill(0),
       #|      position: After(1),
       #|    },
       #|    {
       #|      value: { id: 3, class: Int },
       #|      from: Spill(0),
-      #|      to: Reg({ id: 1, class: Int }),
+      #|      to: Reg(p1:int),
       #|      position: Before(2),
       #|    },
       #|  ],
@@ -330,37 +325,32 @@ test "backtracking keeps spill homes distinct across CFG blocks" {
     ),
     content=(
       #|{
-      #|  value_locations: [
-      #|    Some(Reg({ id: 0, class: Int })),
-      #|    Some(Spill(0)),
-      #|    Some(Reg({ id: 0, class: Int })),
-      #|    Some(Spill(1)),
-      #|  ],
+      #|  value_locations: [Some(Reg(p0:int)), Some(Spill(0)), Some(Reg(p0:int)), Some(Spill(1))],
       #|  operand_assignments: [
-      #|    { instruction: 0, operand: 0, location: Reg({ id: 0, class: Int }) },
-      #|    { instruction: 0, operand: 1, location: Reg({ id: 1, class: Int }) },
-      #|    { instruction: 1, operand: 0, location: Reg({ id: 0, class: Int }) },
-      #|    { instruction: 1, operand: 1, location: Reg({ id: 1, class: Int }) },
-      #|    { instruction: 2, operand: 0, location: Reg({ id: 0, class: Int }) },
-      #|    { instruction: 2, operand: 1, location: Reg({ id: 1, class: Int }) },
+      #|    { instruction: 0, operand: 0, location: Reg(p0:int) },
+      #|    { instruction: 0, operand: 1, location: Reg(p1:int) },
+      #|    { instruction: 1, operand: 0, location: Reg(p0:int) },
+      #|    { instruction: 1, operand: 1, location: Reg(p1:int) },
+      #|    { instruction: 2, operand: 0, location: Reg(p0:int) },
+      #|    { instruction: 2, operand: 1, location: Reg(p1:int) },
       #|  ],
       #|  edits: [
       #|    {
       #|      value: { id: 1, class: Int },
       #|      from: Spill(0),
-      #|      to: Reg({ id: 1, class: Int }),
+      #|      to: Reg(p1:int),
       #|      position: Before(0),
       #|    },
       #|    {
       #|      value: { id: 3, class: Int },
-      #|      from: Reg({ id: 1, class: Int }),
+      #|      from: Reg(p1:int),
       #|      to: Spill(1),
       #|      position: After(1),
       #|    },
       #|    {
       #|      value: { id: 3, class: Int },
       #|      from: Spill(1),
-      #|      to: Reg({ id: 1, class: Int }),
+      #|      to: Reg(p1:int),
       #|      position: Before(2),
       #|    },
       #|  ],
@@ -387,19 +377,19 @@ test "backtracking keeps the dense live range resident" {
     allocate_function(function, environment),
     content=(
       #|{
-      #|  value_locations: [Some(Spill(0)), Some(Reg({ id: 0, class: Int }))],
+      #|  value_locations: [Some(Spill(0)), Some(Reg(p0:int))],
       #|  operand_assignments: [
-      #|    { instruction: 0, operand: 0, location: Reg({ id: 0, class: Int }) },
-      #|    { instruction: 1, operand: 0, location: Reg({ id: 0, class: Int }) },
-      #|    { instruction: 2, operand: 0, location: Reg({ id: 0, class: Int }) },
-      #|    { instruction: 3, operand: 0, location: Reg({ id: 1, class: Int }) },
-      #|    { instruction: 3, operand: 1, location: Reg({ id: 0, class: Int }) },
+      #|    { instruction: 0, operand: 0, location: Reg(p0:int) },
+      #|    { instruction: 1, operand: 0, location: Reg(p0:int) },
+      #|    { instruction: 2, operand: 0, location: Reg(p0:int) },
+      #|    { instruction: 3, operand: 0, location: Reg(p1:int) },
+      #|    { instruction: 3, operand: 1, location: Reg(p0:int) },
       #|  ],
       #|  edits: [
       #|    {
       #|      value: { id: 0, class: Int },
       #|      from: Spill(0),
-      #|      to: Reg({ id: 1, class: Int }),
+      #|      to: Reg(p1:int),
       #|      position: Before(3),
       #|    },
       #|  ],
@@ -431,20 +421,20 @@ test "backtracking splits a live range around a clobbered CFG fragment" {
       #|{
       #|  value_locations: [Some(Spill(0))],
       #|  operand_assignments: [
-      #|    { instruction: 0, operand: 0, location: Reg({ id: 0, class: Int }) },
-      #|    { instruction: 2, operand: 0, location: Reg({ id: 0, class: Int }) },
+      #|    { instruction: 0, operand: 0, location: Reg(p0:int) },
+      #|    { instruction: 2, operand: 0, location: Reg(p0:int) },
       #|  ],
       #|  edits: [
       #|    {
       #|      value: { id: 0, class: Int },
       #|      from: Spill(0),
-      #|      to: Reg({ id: 0, class: Int }),
+      #|      to: Reg(p0:int),
       #|      position: Before(0),
       #|    },
       #|    {
       #|      value: { id: 0, class: Int },
       #|      from: Spill(0),
-      #|      to: Reg({ id: 0, class: Int }),
+      #|      to: Reg(p0:int),
       #|      position: Before(2),
       #|    },
       #|  ],
@@ -478,14 +468,14 @@ test "backtracking spills a value defined before a same-block clobber" {
       #|  [
       #|    {
       #|      value: { id: 0, class: Int },
-      #|      from: Reg({ id: 0, class: Int }),
+      #|      from: Reg(p0:int),
       #|      to: Spill(0),
       #|      position: After(0),
       #|    },
       #|    {
       #|      value: { id: 0, class: Int },
       #|      from: Spill(0),
-      #|      to: Reg({ id: 0, class: Int }),
+      #|      to: Reg(p0:int),
       #|      position: Before(2),
       #|    },
       #|  ],
@@ -549,24 +539,24 @@ test "backtracking parks cold live-through values outside hot loops" {
       #|{
       #|  value_locations: [
       #|    Some(Spill(0)),
-      #|    Some(Reg({ id: 1, class: Int })),
-      #|    Some(Reg({ id: 0, class: Int })),
-      #|    Some(Reg({ id: 1, class: Int })),
-      #|    Some(Reg({ id: 0, class: Int })),
+      #|    Some(Reg(p1:int)),
+      #|    Some(Reg(p0:int)),
+      #|    Some(Reg(p1:int)),
+      #|    Some(Reg(p0:int)),
       #|  ],
       #|  operand_assignments: [
-      #|    { instruction: 19, operand: 0, location: Reg({ id: 1, class: Int }) },
-      #|    { instruction: 19, operand: 1, location: Reg({ id: 0, class: Int }) },
-      #|    { instruction: 21, operand: 0, location: Reg({ id: 0, class: Int }) },
-      #|    { instruction: 21, operand: 1, location: Reg({ id: 0, class: Int }) },
-      #|    { instruction: 21, operand: 2, location: Reg({ id: 0, class: Int }) },
-      #|    { instruction: 21, operand: 3, location: Reg({ id: 0, class: Int }) },
+      #|    { instruction: 19, operand: 0, location: Reg(p1:int) },
+      #|    { instruction: 19, operand: 1, location: Reg(p0:int) },
+      #|    { instruction: 21, operand: 0, location: Reg(p0:int) },
+      #|    { instruction: 21, operand: 1, location: Reg(p0:int) },
+      #|    { instruction: 21, operand: 2, location: Reg(p0:int) },
+      #|    { instruction: 21, operand: 3, location: Reg(p0:int) },
       #|  ],
       #|  edits: [
       #|    {
       #|      value: { id: 0, class: Int },
       #|      from: Spill(0),
-      #|      to: Reg({ id: 0, class: Int }),
+      #|      to: Reg(p0:int),
       #|      position: Before(21),
       #|    },
       #|  ],
@@ -599,19 +589,19 @@ test "backtracking shares a spill home across a loop-carried SSA bundle" {
       #|{
       #|  value_locations: [Some(Spill(0)), Some(Spill(0)), Some(Spill(0))],
       #|  operand_assignments: [
-      #|    { instruction: 0, operand: 0, location: Reg({ id: 0, class: Int }) },
-      #|    { instruction: 0, operand: 1, location: Reg({ id: 1, class: Int }) },
+      #|    { instruction: 0, operand: 0, location: Reg(p0:int) },
+      #|    { instruction: 0, operand: 1, location: Reg(p1:int) },
       #|  ],
       #|  edits: [
       #|    {
       #|      value: { id: 0, class: Int },
       #|      from: Spill(0),
-      #|      to: Reg({ id: 0, class: Int }),
+      #|      to: Reg(p0:int),
       #|      position: Before(0),
       #|    },
       #|    {
       #|      value: { id: 1, class: Int },
-      #|      from: Reg({ id: 1, class: Int }),
+      #|      from: Reg(p1:int),
       #|      to: Spill(0),
       #|      position: After(0),
       #|    },
@@ -651,13 +641,13 @@ test "backtracking reloads a resident segment only once" {
       #|  {
       #|    value: { id: 0, class: Int },
       #|    from: Spill(0),
-      #|    to: Reg({ id: 0, class: Int }),
+      #|    to: Reg(p0:int),
       #|    position: Before(0),
       #|  },
       #|  {
       #|    value: { id: 0, class: Int },
       #|    from: Spill(0),
-      #|    to: Reg({ id: 0, class: Int }),
+      #|    to: Reg(p0:int),
       #|    position: Before(3),
       #|  },
       #|]
@@ -698,30 +688,30 @@ test "backtracking coalesces conflict-free edges and preserves loop transfers" {
     content=(
       #|{
       #|  value_locations: [
-      #|    Some(Reg({ id: 2, class: Int })),
-      #|    Some(Reg({ id: 0, class: Int })),
-      #|    Some(Reg({ id: 1, class: Int })),
-      #|    Some(Reg({ id: 2, class: Int })),
-      #|    Some(Reg({ id: 0, class: Int })),
-      #|    Some(Reg({ id: 1, class: Int })),
-      #|    Some(Reg({ id: 2, class: Int })),
+      #|    Some(Reg(p2:int)),
+      #|    Some(Reg(p0:int)),
+      #|    Some(Reg(p1:int)),
+      #|    Some(Reg(p2:int)),
+      #|    Some(Reg(p0:int)),
+      #|    Some(Reg(p1:int)),
+      #|    Some(Reg(p2:int)),
       #|  ],
       #|  operand_assignments: [
-      #|    { instruction: 1, operand: 0, location: Reg({ id: 2, class: Int }) },
-      #|    { instruction: 1, operand: 1, location: Reg({ id: 0, class: Int }) },
-      #|    { instruction: 1, operand: 2, location: Reg({ id: 2, class: Int }) },
+      #|    { instruction: 1, operand: 0, location: Reg(p2:int) },
+      #|    { instruction: 1, operand: 1, location: Reg(p0:int) },
+      #|    { instruction: 1, operand: 2, location: Reg(p2:int) },
       #|  ],
       #|  edits: [
       #|    {
       #|      value: { id: 4, class: Int },
-      #|      from: Reg({ id: 0, class: Int }),
-      #|      to: Reg({ id: 2, class: Int }),
+      #|      from: Reg(p0:int),
+      #|      to: Reg(p2:int),
       #|      position: Edge(source_block=1, successor_index=0),
       #|    },
       #|    {
       #|      value: { id: 6, class: Int },
-      #|      from: Reg({ id: 2, class: Int }),
-      #|      to: Reg({ id: 0, class: Int }),
+      #|      from: Reg(p2:int),
+      #|      to: Reg(p0:int),
       #|      position: Edge(source_block=1, successor_index=0),
       #|    },
       #|  ],
@@ -754,15 +744,11 @@ test "backtracking coalesces the conflict-free side of a critical-edge parameter
     ),
     content=(
       #|{
-      #|  value_locations: [
-      #|    Some(Reg({ id: 0, class: Int })),
-      #|    Some(Reg({ id: 0, class: Int })),
-      #|    Some(Reg({ id: 0, class: Int })),
-      #|  ],
+      #|  value_locations: [Some(Reg(p0:int)), Some(Reg(p0:int)), Some(Reg(p0:int))],
       #|  operand_assignments: [
-      #|    { instruction: 0, operand: 0, location: Reg({ id: 0, class: Int }) },
-      #|    { instruction: 1, operand: 0, location: Reg({ id: 0, class: Int }) },
-      #|    { instruction: 2, operand: 0, location: Reg({ id: 0, class: Int }) },
+      #|    { instruction: 0, operand: 0, location: Reg(p0:int) },
+      #|    { instruction: 1, operand: 0, location: Reg(p0:int) },
+      #|    { instruction: 2, operand: 0, location: Reg(p0:int) },
       #|  ],
       #|  edits: [],
       #|  spill_slots: [],
@@ -791,8 +777,8 @@ test "soft register preference chooses a legal home without an edit" {
     ),
     content=(
       #|{
-      #|  value_locations: [Some(Reg({ id: 2, class: Int }))],
-      #|  operand_assignments: [{ instruction: 0, operand: 0, location: Reg({ id: 2, class: Int }) }],
+      #|  value_locations: [Some(Reg(p2:int))],
+      #|  operand_assignments: [{ instruction: 0, operand: 0, location: Reg(p2:int) }],
       #|  edits: [],
       #|  spill_slots: [],
       #|}
@@ -820,10 +806,7 @@ test "non-allocatable register preference is rejected structurally" {
       debug_inspect(
         error,
         content=(
-          #|InvalidPreference(
-          #|  vreg={ id: 0, class: Int },
-          #|  preferred={ id: 9, class: Int },
-          #|)
+          #|InvalidPreference(vreg={ id: 0, class: Int }, preferred=p9:int)
         ),
       )
   } noraise {
@@ -847,8 +830,8 @@ test "backtracking honors a fixed-register operand" {
     ),
     content=(
       #|{
-      #|  value_locations: [Some(Reg({ id: 1, class: Int }))],
-      #|  operand_assignments: [{ instruction: 0, operand: 0, location: Reg({ id: 1, class: Int }) }],
+      #|  value_locations: [Some(Reg(p1:int))],
+      #|  operand_assignments: [{ instruction: 0, operand: 0, location: Reg(p1:int) }],
       #|  edits: [],
       #|  spill_slots: [],
       #|}
@@ -885,11 +868,7 @@ test "backtracking preserves tied and fixed operands across a clobber" {
       plan.operand_location(1, 0),
     ),
     content=(
-      #|(
-      #|  Some(Reg({ id: 0, class: Int })),
-      #|  Some(Reg({ id: 0, class: Int })),
-      #|  Some(Reg({ id: 1, class: Int })),
-      #|)
+      #|(Some(Reg(p0:int)), Some(Reg(p0:int)), Some(Reg(p1:int)))
     ),
   )
 }
@@ -909,7 +888,9 @@ test "backtracking applies AnyReg to a sparse tied group" {
   let plan = allocate_function(function, MachineEnv::new([], [int_reg(0)]))
   debug_inspect(
     (plan.operand_location(0, 0), plan.operand_location(0, 1)),
-    content="(Some(Reg({ id: 0, class: Int })), Some(Reg({ id: 0, class: Int })))",
+    content=(
+      #|(Some(Reg(p0:int)), Some(Reg(p0:int)))
+    ),
   )
 }
 
@@ -939,50 +920,45 @@ test "backtracking borrows an allocatable register when spill temporaries are ex
     ),
     content=(
       #|{
-      #|  value_locations: [
-      #|    Some(Reg({ id: 0, class: Int })),
-      #|    Some(Spill(0)),
-      #|    Some(Spill(1)),
-      #|    Some(Spill(2)),
-      #|  ],
+      #|  value_locations: [Some(Reg(p0:int)), Some(Spill(0)), Some(Spill(1)), Some(Spill(2))],
       #|  operand_assignments: [
-      #|    { instruction: 0, operand: 0, location: Reg({ id: 1, class: Int }) },
-      #|    { instruction: 0, operand: 1, location: Reg({ id: 2, class: Int }) },
-      #|    { instruction: 0, operand: 2, location: Reg({ id: 0, class: Int }) },
-      #|    { instruction: 1, operand: 0, location: Reg({ id: 0, class: Int }) },
-      #|    { instruction: 1, operand: 1, location: Reg({ id: 0, class: Int }) },
-      #|    { instruction: 1, operand: 2, location: Reg({ id: 0, class: Int }) },
-      #|    { instruction: 1, operand: 3, location: Reg({ id: 0, class: Int }) },
+      #|    { instruction: 0, operand: 0, location: Reg(p1:int) },
+      #|    { instruction: 0, operand: 1, location: Reg(p2:int) },
+      #|    { instruction: 0, operand: 2, location: Reg(p0:int) },
+      #|    { instruction: 1, operand: 0, location: Reg(p0:int) },
+      #|    { instruction: 1, operand: 1, location: Reg(p0:int) },
+      #|    { instruction: 1, operand: 2, location: Reg(p0:int) },
+      #|    { instruction: 1, operand: 3, location: Reg(p0:int) },
       #|  ],
       #|  edits: [
       #|    {
       #|      value: { id: 0, class: Int },
-      #|      from: Reg({ id: 0, class: Int }),
+      #|      from: Reg(p0:int),
       #|      to: Spill(3),
       #|      position: Before(0),
       #|    },
       #|    {
       #|      value: { id: 1, class: Int },
       #|      from: Spill(0),
-      #|      to: Reg({ id: 1, class: Int }),
+      #|      to: Reg(p1:int),
       #|      position: Before(0),
       #|    },
       #|    {
       #|      value: { id: 2, class: Int },
       #|      from: Spill(1),
-      #|      to: Reg({ id: 2, class: Int }),
+      #|      to: Reg(p2:int),
       #|      position: Before(0),
       #|    },
       #|    {
       #|      value: { id: 3, class: Int },
       #|      from: Spill(2),
-      #|      to: Reg({ id: 0, class: Int }),
+      #|      to: Reg(p0:int),
       #|      position: Before(0),
       #|    },
       #|    {
       #|      value: { id: 0, class: Int },
       #|      from: Spill(3),
-      #|      to: Reg({ id: 0, class: Int }),
+      #|      to: Reg(p0:int),
       #|      position: After(0),
       #|    },
       #|  ],
@@ -1018,36 +994,32 @@ test "backtracking keeps edit-only scratch registers out of instruction operands
     allocate_function(function, environment),
     content=(
       #|{
-      #|  value_locations: [
-      #|    Some(Reg({ id: 0, class: Int })),
-      #|    Some(Reg({ id: 1, class: Int })),
-      #|    Some(Spill(0)),
-      #|  ],
+      #|  value_locations: [Some(Reg(p0:int)), Some(Reg(p1:int)), Some(Spill(0))],
       #|  operand_assignments: [
-      #|    { instruction: 0, operand: 0, location: Reg({ id: 1, class: Int }) },
-      #|    { instruction: 0, operand: 1, location: Reg({ id: 0, class: Int }) },
-      #|    { instruction: 1, operand: 0, location: Reg({ id: 0, class: Int }) },
-      #|    { instruction: 1, operand: 1, location: Reg({ id: 0, class: Int }) },
-      #|    { instruction: 1, operand: 2, location: Reg({ id: 0, class: Int }) },
-      #|    { instruction: 1, operand: 3, location: Reg({ id: 0, class: Int }) },
+      #|    { instruction: 0, operand: 0, location: Reg(p1:int) },
+      #|    { instruction: 0, operand: 1, location: Reg(p0:int) },
+      #|    { instruction: 1, operand: 0, location: Reg(p0:int) },
+      #|    { instruction: 1, operand: 1, location: Reg(p0:int) },
+      #|    { instruction: 1, operand: 2, location: Reg(p0:int) },
+      #|    { instruction: 1, operand: 3, location: Reg(p0:int) },
       #|  ],
       #|  edits: [
       #|    {
       #|      value: { id: 0, class: Int },
-      #|      from: Reg({ id: 0, class: Int }),
+      #|      from: Reg(p0:int),
       #|      to: Spill(1),
       #|      position: Before(0),
       #|    },
       #|    {
       #|      value: { id: 2, class: Int },
       #|      from: Spill(0),
-      #|      to: Reg({ id: 0, class: Int }),
+      #|      to: Reg(p0:int),
       #|      position: Before(0),
       #|    },
       #|    {
       #|      value: { id: 0, class: Int },
       #|      from: Spill(1),
-      #|      to: Reg({ id: 0, class: Int }),
+      #|      to: Reg(p0:int),
       #|      position: After(0),
       #|    },
       #|  ],

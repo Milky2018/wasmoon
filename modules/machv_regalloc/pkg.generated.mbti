@@ -2,6 +2,7 @@
 package "Milky2018/machv_regalloc"
 
 import {
+  "Milky2018/machv/allocation_types",
   "Milky2018/machv/vcode",
   "Milky2018/regalloc",
   "moonbitlang/core/debug",
@@ -32,12 +33,12 @@ pub fn[Inst] AllocationSession::allocate_selected_vcode(Self, @vcode.Function[In
 pub fn AllocationSession::new() -> Self
 
 pub struct VCodeAllocationEnvironment {
-  allocatable_regs : Array[@vcode.PhysicalReg]
-  spill_scratch_regs : Array[@vcode.PhysicalReg]
-  fixed_operand_regs : Array[@vcode.PhysicalReg]
+  allocatable_regs : Array[@allocation_types.PhysicalReg]
+  spill_scratch_regs : Array[@allocation_types.PhysicalReg]
+  fixed_operand_regs : Array[@allocation_types.PhysicalReg]
 }
-pub fn VCodeAllocationEnvironment::new(Array[@vcode.PhysicalReg], Array[@vcode.PhysicalReg]) -> Self
-pub fn VCodeAllocationEnvironment::with_fixed_operand_regs(Self, Array[@vcode.PhysicalReg]) -> Self
+pub fn VCodeAllocationEnvironment::new(Array[@allocation_types.PhysicalReg], Array[@allocation_types.PhysicalReg]) -> Self
+pub fn VCodeAllocationEnvironment::with_fixed_operand_regs(Self, Array[@allocation_types.PhysicalReg]) -> Self
 
 // Type aliases
 
