@@ -535,17 +535,24 @@ pub fn Function::elaborate_call_abi(
 }
 
 ///|
-/// Apply the same target-neutral call ABI directly to compact selection input.
-pub fn SelectionPlan::elaborate_call_abi(
-  self : SelectionPlan,
+/// Apply the same target-neutral call ABI before compact selection input is
+/// sealed for target selection.
+pub fn PreparedSelection::elaborate_call_abi(
+  self : PreparedSelection,
   elaboration : CallAbiElaboration,
-) -> SelectionPlan raise CallAbiElaborationError {
-  self.verify() catch {
+) -> PreparedSelection raise CallAbiElaborationError {
+  self.require_prepared() catch {
     error => raise InvalidInput(cause=error)
   }
-  self.verified = false
-  self.construction.elaborate_call_abi_verified(elaboration)
-  self.verify_checked_construction() catch {
+  let plan = self.plan
+  if !plan.verified {
+    plan.verify_checked_construction() catch {
+      error => raise InvalidInput(cause=error)
+    }
+  }
+  plan.verified = false
+  plan.construction.elaborate_call_abi_verified(elaboration)
+  plan.verify_checked_construction() catch {
     error => raise InvalidOutput(cause=error)
   }
   self

@@ -1,10 +1,26 @@
 ///|
+/// Construction state shared by the prepared and sealed selection handles.
+priv enum SelectionPlanState {
+  Prepared
+  Sealed
+}
+
+///|
+/// Verified semantic input that may still receive constrained target-neutral
+/// elaboration before it becomes visible to target selection.
+pub struct PreparedSelection {
+  priv plan : SelectionPlan
+}
+
+///|
 /// Immutable verified semantic input retained only for target selection.
 ///
 /// Unlike `Function`, this type is produced directly from checked construction
-/// storage and does not expose transformation or diagnostic mutation seams.
+/// storage. Only `PreparedSelection::seal` can create this handle, and no
+/// transformation seam remains available after sealing.
 pub struct SelectionPlan {
   priv construction : FunctionConstruction
+  priv state : Ref[SelectionPlanState]
   priv mut verified : Bool
 }
 
@@ -41,10 +57,34 @@ pub extend SelectionPlan with SelectionInput::{
 }
 
 ///|
-fn SelectionPlan::from_construction(
+fn PreparedSelection::from_construction(
   construction : FunctionConstruction,
-) -> SelectionPlan {
-  { construction, verified: false, }
+) -> PreparedSelection {
+  { plan: { construction, state: Ref(Prepared), verified: false, }, }
+}
+
+///|
+fn PreparedSelection::require_prepared(
+  self : PreparedSelection,
+) -> Unit raise MachVVerifyError {
+  if self.plan.state.val is Sealed {
+    raise InvalidSelectionState(
+      message="selection input has already been sealed",
+    )
+  }
+}
+
+///|
+/// Permanently seal verified semantic input for target selection.
+pub fn PreparedSelection::seal(
+  self : PreparedSelection,
+) -> SelectionPlan raise MachVVerifyError {
+  self.require_prepared()
+  if !self.plan.verified {
+    self.plan.verify_checked_construction()
+  }
+  self.plan.state.val = Sealed
+  self.plan
 }
 
 ///|
@@ -381,6 +421,11 @@ fn SelectionPlan::verify_checked_construction(
 pub fn SelectionPlan::verify(
   self : SelectionPlan,
 ) -> Unit raise MachVVerifyError {
+  if self.state.val is Prepared {
+    raise InvalidSelectionState(
+      message="selection input must be sealed before target selection",
+    )
+  }
   if !self.verified {
     self.verify_checked_construction()
   }

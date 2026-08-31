@@ -87,7 +87,7 @@ fn wasmoon_allocation_symbols(
 
 ///|
 fn build_wasmoon_aarch64_target(
-  semantic : @semantic_machv.SelectionPlan,
+  semantic : @semantic_machv.PreparedSelection,
   environment : WasmoonSemanticEnvironment,
   record_metrics? : Bool = false,
   compilation_session? : @aarch64_target.CompilationSession = @aarch64_target.CompilationSession::new(),
@@ -109,7 +109,7 @@ fn build_wasmoon_aarch64_target(
 
 ///|
 fn build_wasmoon_x64_target(
-  semantic : @semantic_machv.SelectionPlan,
+  semantic : @semantic_machv.PreparedSelection,
   environment : WasmoonSemanticEnvironment,
   record_metrics? : Bool = false,
   compilation_session? : @x64_target.CompilationSession = @x64_target.CompilationSession::new(),
@@ -147,13 +147,13 @@ fn lower_wasm_body_semantic_with_environment(
 }
 
 ///|
-fn lower_wasm_body_selection_plan_with_environment(
+fn lower_wasm_body_prepared_selection_with_environment(
   function : @milkir.Function,
   validation_context : @wasm_milkir.WasmValidationContext,
   environment : WasmoonSemanticEnvironment,
   on_event? : (@milkir_machv.SemanticLowerEvent) -> Unit = fn(_) { () },
-) -> @semantic_machv.SelectionPlan raise JitPipelineError {
-  @wasm_machv.lower_selection_plan(
+) -> @semantic_machv.PreparedSelection raise JitPipelineError {
+  @wasm_machv.lower_prepared_selection(
     function,
     validation_context,
     environment.wasm,
@@ -257,14 +257,14 @@ fn compile_wasm_body_aarch64_target(
   record_compile_subphase("semantic_environment", environment_tick)
   let semantic_lower_tick = target_metrics_tick(record_metrics)
   let semantic = if record_metrics && @perf.detail_enabled() {
-    lower_wasm_body_selection_plan_with_environment(
+    lower_wasm_body_prepared_selection_with_environment(
       function,
       validation_context,
       environment,
       on_event=semantic_lower_metrics_observer(),
     )
   } else {
-    lower_wasm_body_selection_plan_with_environment(
+    lower_wasm_body_prepared_selection_with_environment(
       function, validation_context, environment,
     )
   }
@@ -293,14 +293,14 @@ fn compile_wasm_body_x64_target(
   record_compile_subphase("semantic_environment", environment_tick)
   let semantic_lower_tick = target_metrics_tick(record_metrics)
   let semantic = if record_metrics && @perf.detail_enabled() {
-    lower_wasm_body_selection_plan_with_environment(
+    lower_wasm_body_prepared_selection_with_environment(
       function,
       validation_context,
       environment,
       on_event=semantic_lower_metrics_observer(),
     )
   } else {
-    lower_wasm_body_selection_plan_with_environment(
+    lower_wasm_body_prepared_selection_with_environment(
       function, validation_context, environment,
     )
   }

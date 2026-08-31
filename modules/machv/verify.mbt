@@ -3,6 +3,7 @@
 pub suberror MachVVerifyError {
   EmptyFunction
   InvalidFunction(message~ : String)
+  InvalidSelectionState(message~ : String)
   ForeignValue(value_id~ : Int)
   ForeignBlock(block_id~ : Int)
   ForeignInstruction(instruction_id~ : Int)

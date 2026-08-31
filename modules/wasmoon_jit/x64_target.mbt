@@ -124,7 +124,7 @@ fn build_x64_target(
 
 ///|
 fn build_x64_selection_plan(
-  plan : @semantic_machv.SelectionPlan,
+  prepared : @semantic_machv.PreparedSelection,
   environment_field_path? : (@semantic_machv.EnvironmentField) -> Array[Int]?,
   allocation_symbols? : Array[@semantic_machv.ExternalSymbol] = [],
   record_metrics? : Bool = false,
@@ -139,9 +139,12 @@ fn build_x64_selection_plan(
   let elaborated = match root_scope_symbols {
     Some(symbols) =>
       elaborate_wasmoon_runtime_abi_selection_plan(
-        plan, allocation_symbols, symbols,
+        prepared, allocation_symbols, symbols,
       )
-    None => plan
+    None =>
+      prepared.seal() catch {
+        error => raise RuntimeAbiOutputInvalid(cause=error)
+      }
   }
   record_compile_subphase(
     "runtime_abi_elaboration",

@@ -23,6 +23,7 @@ pub impl Show for CallAbiElaborationError
 pub suberror MachVVerifyError {
   EmptyFunction
   InvalidFunction(message~ : String)
+  InvalidSelectionState(message~ : String)
   ForeignValue(value_id~ : Int)
   ForeignBlock(block_id~ : Int)
   ForeignInstruction(instruction_id~ : Int)
@@ -391,6 +392,7 @@ pub fn FunctionBuilder::emit(Self, Operation, Array[Value], Array[ValueType]) ->
 pub fn FunctionBuilder::emit_with_metadata(Self, Operation, Array[Value], Array[ValueType], InstructionMetadata) -> Array[Value]
 pub fn FunctionBuilder::entry_block(Self) -> Block
 pub fn FunctionBuilder::finish(Self, on_cleanup_phase? : (MandatoryCleanupPhase) -> Unit) -> Function raise MachVVerifyError
+pub fn FunctionBuilder::finish_prepared_selection(Self, on_cleanup_phase? : (MandatoryCleanupPhase) -> Unit) -> PreparedSelection raise MachVVerifyError
 pub fn FunctionBuilder::finish_selection_plan(Self, on_cleanup_phase? : (MandatoryCleanupPhase) -> Unit) -> SelectionPlan raise MachVVerifyError
 pub fn FunctionBuilder::jump(Self, Block, Array[Value]) -> Unit
 pub fn FunctionBuilder::new(String, CallProtocol, Array[ValueType], Array[ValueType]) -> Self
@@ -629,6 +631,12 @@ pub fn OperationSemantics::not_equal(Self, Self) -> Bool
 pub fn OperationSemantics::pure() -> Self
 pub fn OperationSemantics::to_repr(Self) -> @debug.Repr
 
+pub struct PreparedSelection {
+  // private fields
+}
+pub fn PreparedSelection::elaborate_call_abi(Self, CallAbiElaboration) -> Self raise CallAbiElaborationError
+pub fn PreparedSelection::seal(Self) -> SelectionPlan raise MachVVerifyError
+
 pub(all) enum ReferenceComparison {
   Equal
   NotEqual
@@ -662,7 +670,6 @@ pub fn SelectionPlan::block_instruction_count(Self, Block) -> Int?
 pub fn SelectionPlan::block_parameter_at(Self, Block, Int) -> Value?
 pub fn SelectionPlan::block_parameter_count(Self, Block) -> Int?
 pub fn SelectionPlan::block_terminator(Self, Block) -> TerminatorRecord?
-pub fn SelectionPlan::elaborate_call_abi(Self, CallAbiElaboration) -> Self raise CallAbiElaborationError
 pub fn SelectionPlan::instruction_at(Self, Int) -> Instruction?
 pub fn SelectionPlan::instruction_index(Self, Instruction) -> Int?
 pub fn SelectionPlan::instruction_metadata_view(Self, Instruction) -> InstructionMetadataView?

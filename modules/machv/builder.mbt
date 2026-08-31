@@ -776,6 +776,16 @@ pub fn FunctionBuilder::finish_selection_plan(
   self : FunctionBuilder,
   on_cleanup_phase? : (MandatoryCleanupPhase) -> Unit = fn(_) { () },
 ) -> SelectionPlan raise MachVVerifyError {
+  self.finish_prepared_selection(on_cleanup_phase~).seal()
+}
+
+///|
+/// Finish checked construction while retaining the one constrained
+/// target-neutral elaboration stage that precedes target selection.
+pub fn FunctionBuilder::finish_prepared_selection(
+  self : FunctionBuilder,
+  on_cleanup_phase? : (MandatoryCleanupPhase) -> Unit = fn(_) { () },
+) -> PreparedSelection raise MachVVerifyError {
   if self.construction_error is Some(error) {
     raise error
   }
@@ -785,11 +795,12 @@ pub fn FunctionBuilder::finish_selection_plan(
       message="stack-map ids must be unique and dense from zero",
     )
   }
-  let plan = SelectionPlan::from_construction(self.construction)
+  let prepared = PreparedSelection::from_construction(self.construction)
+  let plan = prepared.plan
   on_cleanup_phase(VerifyInput)
   plan.verify_checked_construction()
   plan.construction.run_mandatory_cleanup_verified(on_phase=on_cleanup_phase)
   |> ignore
   plan.verified = true
-  plan
+  prepared
 }

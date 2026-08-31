@@ -76,8 +76,8 @@ test "selection plan elaborates caller GC roots without semantic Function" {
       InstructionMetadata::new(None, [parameters[1]]),
     )[0]
   builder.return_([result])
-  let plan = builder
-    .finish_selection_plan()
+  let prepared = builder
+    .finish_prepared_selection()
     .elaborate_call_abi(
       CallAbiElaboration::new(
         root_scope=CallerRootScopeAbi::new(
@@ -86,6 +86,7 @@ test "selection plan elaborates caller GC roots without semantic Function" {
         ),
       ),
     )
+  let plan = prepared.seal()
   plan.require_verified()
   assert_eq(plan.stack_objects().length(), 1)
   let entry = plan.block_at(0).unwrap()
@@ -102,4 +103,25 @@ test "selection plan elaborates caller GC roots without semantic Function" {
   assert_true(operations[3] is Some(Call(_)))
   assert_true(operations[4] is Some(Call(_)))
   assert_true(operations[5] is Some(Call(_)))
+}
+
+///|
+test "sealed selection plan rejects retained prepared aliases" {
+  let builder = FunctionBuilder::new_selection_plan(
+    "sealed_selection_plan",
+    Internal,
+    [],
+    [I32],
+  )
+  let result = builder.emit(I32Const(42U), [], [I32])[0]
+  builder.return_([result])
+  let prepared = builder.finish_prepared_selection()
+  prepared.seal() |> ignore
+  try prepared.elaborate_call_abi(CallAbiElaboration::new()) catch {
+    InvalidInput(cause=InvalidSelectionState(message~)) =>
+      inspect(message, content="selection input has already been sealed")
+    error => fail("unexpected error: \{error}")
+  } noraise {
+    _ => fail("expected sealed prepared input to reject elaboration")
+  }
 }

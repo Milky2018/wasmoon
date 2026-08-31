@@ -38,7 +38,7 @@ fn elaborate_wasmoon_runtime_abi(
 
 ///|
 fn elaborate_wasmoon_runtime_abi_selection_plan(
-  plan : @semantic_machv.SelectionPlan,
+  prepared : @semantic_machv.PreparedSelection,
   allocation_symbols : Array[@semantic_machv.ExternalSymbol],
   root_scope_symbols : (
     @semantic_machv.ExternalSymbol,
@@ -50,7 +50,7 @@ fn elaborate_wasmoon_runtime_abi_selection_plan(
     hidden_safepoints.push(hidden_safepoint_abi(symbol))
   }
   let (push_symbol, pop_symbol) = root_scope_symbols
-  plan.elaborate_call_abi(
+  let elaborated = prepared.elaborate_call_abi(
     @semantic_machv.CallAbiElaboration::new(
       root_scope=@semantic_machv.CallerRootScopeAbi::new(
         push_symbol, pop_symbol,
@@ -60,7 +60,9 @@ fn elaborate_wasmoon_runtime_abi_selection_plan(
   ) catch {
     InvalidInput(cause~) => raise RuntimeAbiInputInvalid(cause~)
     InvalidOutput(cause~) => raise RuntimeAbiOutputInvalid(cause~)
-    InvalidCall(message~, ..) =>
-      raise RuntimeAbiContractViolation(message="\{plan.name()}: \{message}")
+    InvalidCall(message~, ..) => raise RuntimeAbiContractViolation(message~)
+  }
+  elaborated.seal() catch {
+    error => raise RuntimeAbiOutputInvalid(cause=error)
   }
 }

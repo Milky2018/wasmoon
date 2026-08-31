@@ -1473,22 +1473,34 @@ fn lower_verified_function(
 }
 
 ///|
+fn lower_verified_prepared_selection(
+  function : @milkir.Function,
+  protocol : @semantic.CallProtocol,
+  dialect : DialectLowering?,
+  on_event : (SemanticLowerEvent) -> Unit,
+) -> @semantic.PreparedSelection raise SemanticLowerError {
+  let builder = lower_verified_construction(
+    function, protocol, dialect, on_event, true,
+  )
+  let prepared = builder.finish_prepared_selection(on_cleanup_phase=phase => {
+    on_event(CleanupPhaseStarted(phase))
+  }) catch {
+    error => raise InvalidMachV(message=error.to_string())
+  }
+  on_event(SemanticLoweringFinished)
+  prepared
+}
+
+///|
 fn lower_verified_selection_plan(
   function : @milkir.Function,
   protocol : @semantic.CallProtocol,
   dialect : DialectLowering?,
   on_event : (SemanticLowerEvent) -> Unit,
 ) -> @semantic.SelectionPlan raise SemanticLowerError {
-  let builder = lower_verified_construction(
-    function, protocol, dialect, on_event, true,
-  )
-  let plan = builder.finish_selection_plan(on_cleanup_phase=phase => {
-    on_event(CleanupPhaseStarted(phase))
-  }) catch {
+  lower_verified_prepared_selection(function, protocol, dialect, on_event).seal() catch {
     error => raise InvalidMachV(message=error.to_string())
   }
-  on_event(SemanticLoweringFinished)
-  plan
 }
 
 ///|
@@ -1594,6 +1606,40 @@ pub fn lower_dialect_selection_plan_with_protocol(
     error => raise InvalidMilkIR(message=error.to_string())
   }
   lower_verified_selection_plan(
+    function,
+    protocol,
+    Some({
+      name: dialect,
+      environment_parameters: environment_parameters.copy(),
+      lower,
+      resolve_context_field,
+    }),
+    on_event,
+  )
+}
+
+///|
+/// Validate and lower one explicit MilkIR dialect while retaining the final
+/// constrained target-neutral elaboration stage. The result must be sealed
+/// before it is passed to a target selector.
+pub fn lower_dialect_prepared_selection_with_protocol(
+  function : @milkir.Function,
+  protocol : @semantic.CallProtocol,
+  dialect : String,
+  validator : (@milkir.ExtensionInstView) -> String?,
+  global_value_validator : (@milkir.GlobalValueData) -> String?,
+  environment_parameters : Array[(Int, @semantic.ValueType)],
+  lower : (@adapter.InstructionContext, @milkir.ExtOp) -> String?,
+  resolve_context_field : (@milkir.ContextField) -> @semantic.EnvironmentField?,
+  on_event? : (SemanticLowerEvent) -> Unit = fn(_) { () },
+) -> @semantic.PreparedSelection raise SemanticLowerError {
+  on_event(InputValidationStarted)
+  function.verify_with_dialect_validator(
+    dialect, validator, global_value_validator,
+  ) catch {
+    error => raise InvalidMilkIR(message=error.to_string())
+  }
+  lower_verified_prepared_selection(
     function,
     protocol,
     Some({
