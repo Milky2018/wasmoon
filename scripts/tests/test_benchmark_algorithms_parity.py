@@ -100,6 +100,7 @@ class AlgorithmsParityTests(unittest.TestCase):
                     (cache / "current.cwasm").write_bytes(b"artifact")
                 else:
                     self.assertIn("cache=y", command)
+                    self.assertIn("parallel-compilation=n", command)
                     config_arg = next(
                         arg for arg in command if arg.startswith("cache-config=")
                     )
@@ -153,6 +154,7 @@ class AlgorithmsParityTests(unittest.TestCase):
                 payload["config"]["cache_policy"],
                 "cold-isolated-per-workload",
             )
+            self.assertFalse(payload["config"]["wasmtime_parallel_compilation"])
             for row in payload["rows"]:
                 self.assertEqual(row["pair"]["value_ratio"], 2.0)
                 self.assertEqual(row["pair"]["wall_ratio"], 2.0)

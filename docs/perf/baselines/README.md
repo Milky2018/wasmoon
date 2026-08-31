@@ -43,3 +43,21 @@ cp -R docs/perf/baselines/latest docs/perf/baselines/2026-02-06-amd64-step1
 - Keep local scratch runs in `latest/`.
 - Keep architecture-specific diagnostic snapshots under `linux-amd64/` and
   `darwin-arm64/` (or other explicit arch folders).
+
+## Algorithm corpus sweeps
+
+Run the algorithms corpus through the dedicated cold-cache runner:
+
+```bash
+python3 scripts/benchmark_algorithms_parity.py \
+  --wasmoon ./wasmoon \
+  --wasmtime wasmtime
+```
+
+The runner must invoke Wasmtime with `-C parallel-compilation=n`. Wasmoon
+currently compiles module functions serially, so allowing Wasmtime's default
+parallel compilation would mix parallel throughput with serial cold-compilation
+latency and overstate the compiler gap. Keep the Wasmtime serial setting for
+all future corpus sweeps and any baseline derived from them. If parallel
+throughput is measured separately, label it as a distinct experiment and do
+not compare it directly with the serial corpus history.

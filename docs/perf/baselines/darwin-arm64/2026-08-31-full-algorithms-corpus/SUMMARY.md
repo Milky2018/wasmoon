@@ -43,6 +43,13 @@ Raw generated artifact checksums before path sanitization:
 
 ## Method
 
+> Historical comparability note: this snapshot allowed Wasmtime's default
+> parallel function compilation. It remains valid as the recorded observation
+> at the timestamp above, but its cold wall ratios are not directly comparable
+> with future corpus sweeps. The corpus runner now requires
+> `-C parallel-compilation=n` so both compiler measurements use serial function
+> compilation.
+
 - Each engine was invoked once per workload, with no warmup.
 - Wasmoon and Wasmtime used separate cold caches for every workload.
 - Engine order alternated by workload.
