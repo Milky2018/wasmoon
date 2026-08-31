@@ -92,7 +92,7 @@ fn build_wasmoon_aarch64_target(
   record_metrics? : Bool = false,
   compilation_session? : @aarch64_target.CompilationSession = @aarch64_target.CompilationSession::new(),
 ) -> AArch64TargetCompilation raise JitPipelineError {
-  build_aarch64_selection_plan(
+  build_aarch64_target(
     semantic,
     environment_field_path=fn(field : @semantic_machv.EnvironmentField) {
       environment.field_paths.get(field.name)
@@ -114,7 +114,7 @@ fn build_wasmoon_x64_target(
   record_metrics? : Bool = false,
   compilation_session? : @x64_target.CompilationSession = @x64_target.CompilationSession::new(),
 ) -> X64TargetCompilation raise JitPipelineError {
-  build_x64_selection_plan(
+  build_x64_target(
     semantic,
     environment_field_path=fn(field : @semantic_machv.EnvironmentField) {
       environment.field_paths.get(field.name)

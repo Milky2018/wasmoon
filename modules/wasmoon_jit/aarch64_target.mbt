@@ -63,8 +63,8 @@ fn compile_aarch64_target_input(
   let selected = try {
     match observer {
       Some(observe) =>
-        @aarch64_target.select_verified(function, context, on_event=observe)
-      None => @aarch64_target.select_verified(function, context)
+        @aarch64_target.select(function, context, on_event=observe)
+      None => @aarch64_target.select(function, context)
     }
   } catch {
     error => raise AArch64LoweringFailed(cause=error)
@@ -92,40 +92,6 @@ fn compile_aarch64_target_input(
 
 ///|
 fn build_aarch64_target(
-  prepared : @semantic_machv.PreparedSelection,
-  environment_field_path? : (@semantic_machv.EnvironmentField) -> Array[Int]?,
-  allocation_symbols? : Array[@semantic_machv.ExternalSymbol] = [],
-  record_metrics? : Bool = false,
-  compilation_session? : @aarch64_target.CompilationSession = @aarch64_target.CompilationSession::new(),
-  root_scope_symbols? : (
-    @semantic_machv.ExternalSymbol,
-    @semantic_machv.ExternalSymbol,
-  ),
-) -> AArch64TargetCompilation raise JitPipelineError {
-  let target_lower_tick = target_metrics_tick(record_metrics)
-  let runtime_abi_tick = detail_metrics_tick(record_metrics)
-  let elaborated = match root_scope_symbols {
-    Some(symbols) =>
-      elaborate_wasmoon_runtime_abi_selection_plan(
-        prepared, allocation_symbols, symbols,
-      )
-    None =>
-      prepared.seal() catch {
-        error => raise RuntimeAbiOutputInvalid(cause=error)
-      }
-  }
-  record_compile_subphase(
-    "runtime_abi_elaboration",
-    runtime_abi_tick,
-    parent="target_lowering",
-  )
-  compile_aarch64_target_input(
-    elaborated, environment_field_path, record_metrics, compilation_session, target_lower_tick,
-  )
-}
-
-///|
-fn build_aarch64_selection_plan(
   prepared : @semantic_machv.PreparedSelection,
   environment_field_path? : (@semantic_machv.EnvironmentField) -> Array[Int]?,
   allocation_symbols? : Array[@semantic_machv.ExternalSymbol] = [],

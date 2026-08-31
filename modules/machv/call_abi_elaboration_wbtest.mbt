@@ -88,21 +88,19 @@ test "selection plan elaborates caller GC roots without semantic Function" {
     )
   let plan = prepared.seal()
   plan.require_verified()
-  assert_eq(plan.stack_objects().length(), 1)
-  let entry = plan.block_at(0).unwrap()
-  assert_eq(plan.block_instruction_count(entry), Some(6))
+  let view = plan.view()
+  assert_eq(view.stack_object_count(), 1)
+  let instructions = view.block(0).instructions()
+  assert_eq(instructions.length(), 6)
   let operations = Array::makei(6, index => {
-    match plan.block_instruction_at(entry, index) {
-      Some(instruction) => plan.instruction_operation(instruction)
-      None => None
-    }
+    view.instruction(instructions[index]).operation()
   })
-  assert_true(operations[0] is Some(StackAddress(_)))
-  assert_true(operations[1] is Some(Store(_)))
-  assert_true(operations[2] is Some(I32Const(1U)))
-  assert_true(operations[3] is Some(Call(_)))
-  assert_true(operations[4] is Some(Call(_)))
-  assert_true(operations[5] is Some(Call(_)))
+  assert_true(operations[0] is StackAddress(_))
+  assert_true(operations[1] is Store(_))
+  assert_true(operations[2] is I32Const(1U))
+  assert_true(operations[3] is Call(_))
+  assert_true(operations[4] is Call(_))
+  assert_true(operations[5] is Call(_))
 }
 
 ///|

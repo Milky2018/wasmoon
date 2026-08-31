@@ -27,8 +27,6 @@ pub fn prepare_aarch64_link(@code_object.UnlinkedCodeObject) -> AArch64LinkPlan 
 
 pub fn select(@machv.SelectionPlan, LoweringContext, on_event? : (@vcode.TargetCompileEvent) -> Unit) -> SelectedFunction raise AArch64LowerError
 
-pub fn select_verified(@machv.SelectionPlan, LoweringContext, on_event? : (@vcode.TargetCompileEvent) -> Unit) -> SelectedFunction raise AArch64LowerError
-
 pub fn verify_allocation(@vcode.Function[AArch64Inst], @vcode.Allocation) -> Unit raise AArch64AllocationError
 
 pub fn verify_frame(@vcode.Function[AArch64Inst], @vcode.Allocation, AArch64Frame) -> Unit raise AArch64FrameError

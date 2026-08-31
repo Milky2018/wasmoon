@@ -2768,24 +2768,3 @@ pub fn select(
   on_event(TargetSelectionFinished)
   { constructed, }
 }
-
-///|
-/// Select canonical semantic MachV without repeating an established proof.
-/// Falls back to full validation if the producer did not establish it.
-pub fn select_verified(
-  plan : @semantic.SelectionPlan,
-  context : LoweringContext,
-  on_event? : (@vcode.TargetCompileEvent) -> Unit = fn(_) { () },
-) -> SelectedFunction raise AArch64LowerError {
-  plan.require_verified() catch {
-    error => raise InvalidSemantic(cause=error)
-  }
-  let constructed = construct_validated_semantic(
-    plan.view(),
-    context,
-    on_event~,
-  )
-  on_event(TargetSealingStarted)
-  on_event(TargetSelectionFinished)
-  { constructed, }
-}
