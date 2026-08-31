@@ -410,28 +410,35 @@ fn analyze_counted_loop(
       }
     _ => return Skip("preheader must jump to the loop header")
   }
-  let (condition, predicate_true_target, predicate_false_target) = match
-    header.terminator {
+  let (
+    condition,
+    predicate_true_target,
+    predicate_true_args,
+    predicate_false_target,
+    predicate_false_args,
+  ) = match header.terminator {
     Some(Brnz(cond, true_target, false_target)) =>
-      (cond, true_target, false_target)
+      (cond, true_target, [], false_target, [])
     Some(Brz(cond, zero_target, nonzero_target)) =>
-      (cond, nonzero_target, zero_target)
+      (cond, nonzero_target, [], zero_target, [])
     Some(Branch(cond, true_target, true_args, false_target, false_args)) =>
-      if true_args.is_empty() && false_args.is_empty() {
-        (cond, true_target, false_target)
-      } else {
-        return Skip("header branch arguments are unsupported")
-      }
+      (cond, true_target, true_args, false_target, false_args)
     _ => return Skip("header must use a canonical conditional branch")
   }
-  let (body_id, exit_id, continue_on_true) = if loop_.contains(
+  let (body_id, body_args, exit_id, exit_args, continue_on_true) = if loop_.contains(
       predicate_true_target,
     ) &&
     !loop_.contains(predicate_false_target) {
-    (predicate_true_target, predicate_false_target, true)
+    (
+      predicate_true_target, predicate_true_args, predicate_false_target, predicate_false_args,
+      true,
+    )
   } else if loop_.contains(predicate_false_target) &&
     !loop_.contains(predicate_true_target) {
-    (predicate_false_target, predicate_true_target, false)
+    (
+      predicate_false_target, predicate_false_args, predicate_true_target, predicate_true_args,
+      false,
+    )
   } else {
     return Skip("header must have one loop edge and one exit edge")
   }
@@ -442,8 +449,17 @@ fn analyze_counted_loop(
     Some(block) => block
     None => return Skip("missing loop exit")
   }
-  if !exit.params.is_empty() {
-    return Skip("initial slice does not support exit parameters")
+  if !body_args.is_empty() {
+    return Skip("loop body branch arguments are unsupported")
+  }
+  if exit_args.length() != exit.params.length() {
+    return Skip("exit arguments must match exit parameters")
+  }
+  for index, argument in exit_args {
+    let (_, expected_type) = exit.params[index]
+    if argument.ty != expected_type {
+      return Skip("exit argument types must match exit parameters")
+    }
   }
   if header.instructions.length() != 1 {
     return Skip("header must contain only the induction comparison")

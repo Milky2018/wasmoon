@@ -345,6 +345,33 @@ test "full unrolling clones dependent pure instructions with fresh ids" {
 }
 
 ///|
+test "counted loops preserve direct branch arguments on the exit edge" {
+  let builder = FunctionBuilder::FunctionBuilder("branch_exit_arguments")
+  builder.add_result(I32)
+  let initial = builder.iconst_i32(0)
+  let bound = builder.iconst_i32(3)
+  let step = builder.iconst_i32(1)
+  let header = builder.create_block()
+  let body = builder.create_block()
+  let exit = builder.create_block()
+  builder.jump(header, [initial])
+  let induction = builder.add_block_param(header, I32)
+  let exit_value = builder.add_block_param(exit, I32)
+  builder.switch_to_block(header)
+  let condition = builder.icmp_slt(induction, bound)
+  builder.branch(condition, body, [], exit, [induction])
+  builder.switch_to_block(body)
+  let next = builder.iadd(induction, step)
+  builder.jump(header, [next])
+  builder.switch_to_block(exit)
+  builder.return_([exit_value])
+  let func = builder.get_function()
+
+  inspect(unroll_counted_loops(func).changed, content="true")
+  func.verify()
+}
+
+///|
 test "full unrolling preserves carried values, multi-results, and effect order" {
   let fixture = make_carried_effect_loop(2)
   let original_preheader_insts = fixture.preheader.instructions.length()

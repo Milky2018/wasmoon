@@ -246,11 +246,15 @@ fn optimize_o2_pipeline(func : Function) -> OptResult {
   if final_cleanup.changed {
     result.mark_changed()
   }
-  let sink_result = run_opt_pass(
+  result
+}
+
+///|
+fn run_final_materialization_sink(func : Function) -> OptResult {
+  let result = run_opt_pass(
     func, "sink_materializations", sink_single_use_materializations,
   )
-  if sink_result.changed {
-    result.mark_changed()
+  if result.changed {
     run_opt_pass(func, "dce", eliminate_dead_code) |> ignore
   }
   result
@@ -284,7 +288,11 @@ fn optimize_o1(func : Function) -> OptResult {
 ///|
 /// Run default optimizations (Cranelift-aligned O2 path).
 pub fn optimize(func : Function) -> OptResult {
-  optimize_o2_pipeline(func)
+  let result = optimize_o2_pipeline(func)
+  if run_final_materialization_sink(func).changed {
+    result.mark_changed()
+  }
+  result
 }
 
 ///|
@@ -312,6 +320,9 @@ fn optimize_o3(func : Function) -> OptResult {
   // Run O2 again to clean up
   let cleanup_result = optimize_o2_pipeline(func)
   if cleanup_result.changed {
+    result.mark_changed()
+  }
+  if run_final_materialization_sink(func).changed {
     result.mark_changed()
   }
   result
