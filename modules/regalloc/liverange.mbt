@@ -163,6 +163,37 @@ fn LiveRange::sort_ranges(self : LiveRange, block_order : Array[Int]) -> Unit {
 }
 
 ///|
+fn LiveRange::coalesce_contiguous_ranges(
+  self : LiveRange,
+  block_order : Array[Int],
+  block_ends : Array[Int],
+) -> Unit {
+  guard self.ranges.length() > 1 else { return }
+  let mut write_index = 1
+  for read_index in 1..<self.ranges.length() {
+    let previous = self.ranges[write_index - 1]
+    let next = self.ranges[read_index]
+    let previous_block = previous.end.block
+    let next_block = next.start.block
+    let contiguous = previous_block >= 0 &&
+      previous_block < block_order.length() &&
+      previous_block < block_ends.length() &&
+      next_block >= 0 &&
+      next_block < block_order.length() &&
+      block_order[next_block] == block_order[previous_block] + 1 &&
+      previous.end.inst == block_ends[previous_block] &&
+      next.start.inst == -1
+    if contiguous {
+      self.ranges[write_index - 1] = ProgramRange(previous.start, next.end)
+    } else {
+      self.ranges[write_index] = next
+      write_index = write_index + 1
+    }
+  }
+  self.ranges.truncate(write_index)
+}
+
+///|
 pub fn LiveRange::use_count(self : LiveRange) -> Int {
   self.uses.length()
 }
@@ -367,6 +398,8 @@ pub fn LiveRange::total_length(self : LiveRange) -> Int {
 struct LiveRangeSet {
   ranges : Array[LiveRange]
   block_order : Array[Int]
+  block_ends : Array[Int]
+  block_offsets : Array[Int64]
   int_ranges_by_id : Array[LiveRange?]
   float_ranges_by_id : Array[LiveRange?]
   vector_ranges_by_id : Array[LiveRange?]
@@ -377,10 +410,59 @@ pub fn LiveRangeSet::LiveRangeSet(block_order : Array[Int]) -> LiveRangeSet {
   {
     ranges: [],
     block_order,
+    block_ends: Array::make(block_order.length(), -1),
+    block_offsets: Array::make(block_order.length(), 0L),
     int_ranges_by_id: [],
     float_ranges_by_id: [],
     vector_ranges_by_id: [],
   }
+}
+
+///|
+fn LiveRangeSet::record_block_ends(
+  self : LiveRangeSet,
+  block_ends : Array[Int],
+) -> Unit {
+  self.block_ends.clear()
+  for end in block_ends {
+    self.block_ends.push(end)
+  }
+  self.block_offsets.clear()
+  self.block_offsets.resize(block_ends.length(), 0L)
+  let blocks_by_order = Array::make(block_ends.length(), -1)
+  for block, order in self.block_order {
+    if order >= 0 && order < blocks_by_order.length() {
+      blocks_by_order[order] = block
+    }
+  }
+  let mut offset = 0L
+  for block in blocks_by_order {
+    if block >= 0 {
+      self.block_offsets[block] = offset
+      offset = offset + self.block_ends[block].to_int64() + 2L
+    }
+  }
+}
+
+///|
+fn LiveRangeSet::program_range_length(
+  self : LiveRangeSet,
+  range : ProgramRange,
+) -> Int {
+  if range.start.block == range.end.block {
+    return (range.end.inst - range.start.inst).abs() + 1
+  }
+  let start_block = range.start.block
+  let end_block = range.end.block
+  if start_block < 0 ||
+    start_block >= self.block_offsets.length() ||
+    end_block < 0 ||
+    end_block >= self.block_offsets.length() {
+    return 1
+  }
+  let start = self.block_offsets[start_block] + range.start.inst.to_int64() + 1L
+  let end = self.block_offsets[end_block] + range.end.inst.to_int64() + 1L
+  (end - start + 1L).max(1L).min(2_147_483_647L).to_int()
 }
 
 ///|

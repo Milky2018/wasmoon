@@ -61,7 +61,7 @@ fn segment_metadata(
   range : LiveRange,
   fragment : ProgramRange,
   loop_depths : Array[Int],
-  block_order : Array[Int],
+  ranges : LiveRangeSet,
   allocatable : Array[PhysicalReg],
   use_start? : Int = 0,
   use_end? : Int = -1,
@@ -74,7 +74,7 @@ fn segment_metadata(
   let end = if use_end < 0 { range.uses.length() } else { use_end }
   for use_index in use_start..<end {
     let use_position = range.uses[use_index]
-    if fragment.contains(use_position.point, block_order) {
+    if fragment.contains(use_position.point, ranges.block_order) {
       use_cost = use_cost + use_weight(use_position, loop_depths)
       if use_position.constraint is FixedReg(_) {
         has_fixed_constraint = true
@@ -106,11 +106,7 @@ fn segment_metadata(
       }
     }
   }
-  let length = if fragment.start.block == fragment.end.block {
-    (fragment.end.inst - fragment.start.inst).abs() + 1
-  } else {
-    1
-  }
+  let length = ranges.program_range_length(fragment)
   let weight = if use_cost == 0 {
     1
   } else {
@@ -138,11 +134,11 @@ fn AllocationSegment::with_range(
   range : ProgramRange,
   live_range : LiveRange,
   loop_depths : Array[Int],
-  block_order : Array[Int],
+  ranges : LiveRangeSet,
   allocatable : Array[PhysicalReg],
 ) -> AllocationSegment {
   let metadata = segment_metadata(
-    live_range, range, loop_depths, block_order, allocatable,
+    live_range, range, loop_depths, ranges, allocatable,
   )
   {
     ..self,
@@ -202,7 +198,7 @@ fn build_allocation_segments(
         range,
         fragment,
         loop_depths,
-        ranges.block_order,
+        ranges,
         allocatable,
         use_start~,
         use_end~,

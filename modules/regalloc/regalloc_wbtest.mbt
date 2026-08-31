@@ -342,6 +342,30 @@ impl FunctionView for VerifierCfgView with fn instruction_clobbers(
 }
 
 ///|
+test "liveness coalesces contiguous cross-block fragments" {
+  let value : VirtualReg = { id: 0, class: Int, }
+  let function : VerifierCfgView = {
+    value_count: 1,
+    blocks: [[0], [1], [2]],
+    operands: [[], [], [Operand::use_reg(value)]],
+    successors: [[1], [2], []],
+    entry_values: [value],
+    parameters: [[], [], []],
+    edge_arguments: [[[]], [[]], []],
+    successor_queries: Ref(0),
+    block_visits: Ref(0),
+  }
+  let range = build_function_live_ranges(function).get_by_vreg(value).unwrap()
+  inspect(range.range_count(), content="1")
+  debug_inspect(
+    range.range_at(0),
+    content=(
+      #|Some({ start: { block: 0, inst: -1 }, end: { block: 2, inst: 0 } })
+    ),
+  )
+}
+
+///|
 test "operand assignment reuses a tied group's resident register" {
   let spilled : VirtualReg = { id: 0, class: Int, }
   let resident : VirtualReg = { id: 1, class: Int, }

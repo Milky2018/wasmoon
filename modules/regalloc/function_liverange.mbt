@@ -109,6 +109,7 @@ fn[F : FunctionView] build_function_range_fragments(
   function : F,
   live_out : Array[Array[Int]],
 ) -> Unit {
+  let block_ends = Array::make(function.block_count(), 0)
   let open_ends : Array[ProgramPoint?] = Array::make(
     function.value_count(),
     None,
@@ -118,6 +119,7 @@ fn[F : FunctionView] build_function_range_fragments(
     let instruction_count = function.block_instruction_count(block)
     let block_start = ProgramPoint(block, -1)
     let block_end = ProgramPoint(block, instruction_count * 2)
+    block_ends[block] = block_end.inst
     for value in live_out[block] {
       if open_ends[value] is None {
         open_values.push(value)
@@ -207,8 +209,10 @@ fn[F : FunctionView] build_function_range_fragments(
     }
     open_values.clear()
   }
+  ranges.record_block_ends(block_ends)
   for range in ranges.ranges {
     range.sort_ranges(ranges.block_order)
+    range.coalesce_contiguous_ranges(ranges.block_order, block_ends)
   }
 }
 
