@@ -91,20 +91,13 @@ fn[Inst] Builder::validate_inputs(
 }
 
 ///|
-fn[Inst] Builder::append_instruction(
+fn[Inst] Builder::validate_instruction(
   self : Builder[Inst],
-  block : Block,
-  inst : Inst,
-  role : InstructionRole,
   inputs : Array[Input],
   outputs : Array[Output],
   successors : Array[Edge],
-  clobbers : Array[PhysicalReg],
   metadata : InstructionMetadata,
-) -> (Instruction, Array[Value]) raise VCodeBuildError {
-  if !self.function.owns_block(block) {
-    raise ForeignBlock(block~)
-  }
+) -> Array[Int]? raise VCodeBuildError {
   self.validate_inputs(inputs, metadata)
   for input in inputs {
     let expected = reg_class_for_value_type(
@@ -120,7 +113,7 @@ fn[Inst] Builder::append_instruction(
       raise InvalidOperandConstraint
     }
   }
-  let input_tie_ids = Array::make(inputs.length(), -1)
+  let mut input_tie_ids : Array[Int]? = None
   for output in outputs {
     let expected = reg_class_for_value_type(output.ty)
     match output.constraint {
@@ -128,11 +121,14 @@ fn[Inst] Builder::append_instruction(
       TiedTo(tied_to) =>
         if tied_to < 0 ||
           tied_to >= inputs.length() ||
-          input_tie_ids[tied_to] >= 0 ||
+          (input_tie_ids is Some(ids) && ids[tied_to] >= 0) ||
           self.function.value_type(inputs[tied_to].value) != Some(output.ty) {
           raise InvalidOperandConstraint
         } else {
-          input_tie_ids[tied_to] = tied_to
+          if input_tie_ids is None {
+            input_tie_ids = Some(Array::make(inputs.length(), -1))
+          }
+          input_tie_ids.unwrap()[tied_to] = tied_to
         }
       AnyLocation | Any => ()
     }
@@ -150,6 +146,48 @@ fn[Inst] Builder::append_instruction(
       }
     }
   }
+  input_tie_ids
+}
+
+///|
+fn[Inst] Builder::require_body_open(
+  self : Builder[Inst],
+  block : Block,
+) -> Unit raise VCodeBuildError {
+  if !self.function.owns_block(block) {
+    raise ForeignBlock(block~)
+  }
+  if self.function.blocks[block.id].terminator is Some(_) {
+    raise BlockAlreadyTerminated(block~)
+  }
+}
+
+///|
+fn[Inst] Builder::require_terminator_open(
+  self : Builder[Inst],
+  block : Block,
+) -> Unit raise VCodeBuildError {
+  if !self.function.owns_block(block) {
+    raise ForeignBlock(block~)
+  }
+  if self.function.blocks[block.id].terminator is Some(_) {
+    raise DuplicateTerminator(block~)
+  }
+}
+
+///|
+fn[Inst] Builder::commit_instruction(
+  self : Builder[Inst],
+  block : Block,
+  inst : Inst,
+  role : InstructionRole,
+  inputs : Array[Input],
+  outputs : Array[Output],
+  successors : Array[Edge],
+  clobbers : Array[PhysicalReg],
+  metadata : InstructionMetadata,
+  input_tie_ids : Array[Int]?,
+) -> (Instruction, Array[Value]) raise VCodeBuildError {
   let instruction = Instruction::new(
     self.function.owner,
     self.function.instructions.length(),
@@ -177,7 +215,10 @@ fn[Inst] Builder::append_instruction(
       constraint,
       preference: input.preference,
       timing: input.timing,
-      tie_id: input_tie_ids[input_index],
+      tie_id: match input_tie_ids {
+        Some(ids) => ids[input_index]
+        None => -1
+      },
     })
   }
   for index, output in outputs {
@@ -216,6 +257,10 @@ fn[Inst] Builder::append_instruction(
     successors: successors.map(edge => edge.copy()),
     metadata: metadata.copy(),
   })
+  match role {
+    Body => self.function.blocks[block.id].body.push(instruction)
+    Terminator => self.function.blocks[block.id].terminator = Some(instruction)
+  }
   (instruction, results)
 }
 
@@ -229,13 +274,9 @@ pub fn[Inst] Builder::append_body(
   clobbers : Array[PhysicalReg],
   metadata : InstructionMetadata,
 ) -> (Instruction, Array[Value]) raise VCodeBuildError {
-  if !self.function.owns_block(block) {
-    raise ForeignBlock(block~)
-  }
-  if self.function.blocks[block.id].terminator is Some(_) {
-    raise BlockAlreadyTerminated(block~)
-  }
-  let result = self.append_instruction(
+  self.require_body_open(block)
+  let input_tie_ids = self.validate_instruction(inputs, outputs, [], metadata)
+  self.commit_instruction(
     block,
     inst,
     Body,
@@ -244,9 +285,8 @@ pub fn[Inst] Builder::append_body(
     [],
     clobbers,
     metadata,
+    input_tie_ids,
   )
-  self.function.blocks[block.id].body.push(result.0)
-  result
 }
 
 ///|
@@ -259,13 +299,14 @@ pub fn[Inst] Builder::set_terminator(
   clobbers : Array[PhysicalReg],
   metadata : InstructionMetadata,
 ) -> Instruction raise VCodeBuildError {
-  if !self.function.owns_block(block) {
-    raise ForeignBlock(block~)
-  }
-  if self.function.blocks[block.id].terminator is Some(_) {
-    raise DuplicateTerminator(block~)
-  }
-  let result = self.append_instruction(
+  self.require_terminator_open(block)
+  let input_tie_ids = self.validate_instruction(
+    inputs,
+    [],
+    successors,
+    metadata,
+  )
+  self.commit_instruction(
     block,
     inst,
     Terminator,
@@ -274,9 +315,8 @@ pub fn[Inst] Builder::set_terminator(
     successors,
     clobbers,
     metadata,
-  )
-  self.function.blocks[block.id].terminator = Some(result.0)
-  result.0
+    input_tie_ids,
+  ).0
 }
 
 ///|

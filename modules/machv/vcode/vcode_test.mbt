@@ -92,6 +92,59 @@ test "CheckedBuilder rejects malformed edges before mutation" {
 }
 
 ///|
+test "CheckedBuilder preserves operand checks on the single validation path" {
+  let builder : CheckedBuilder[TestInst] = CheckedBuilder::new(
+    "checked_operands",
+    [I64],
+  )
+  let foreign : CheckedBuilder[TestInst] = CheckedBuilder::new("foreign", [I64])
+  let entry = builder.entry_block()
+  let value = builder.parameter(0)
+  try
+    builder.append_body(
+      entry,
+      Add,
+      [Input::any(foreign.parameter(0))],
+      [Output::any(I64)],
+      [],
+      InstructionMetadata::empty(),
+    )
+    |> ignore
+  catch {
+    ForeignValue(_) => ()
+    _ => fail("expected foreign input rejection")
+  } noraise {
+    _ => fail("expected foreign input rejection")
+  }
+  try
+    builder.append_body(
+      entry,
+      Add,
+      [Input::any(value)],
+      [Output::tied(I64, 0), Output::tied(I64, 0)],
+      [],
+      InstructionMetadata::empty(),
+    )
+    |> ignore
+  catch {
+    InvalidOperandConstraint => ()
+    _ => fail("expected duplicate tie rejection")
+  } noraise {
+    _ => fail("expected duplicate tie rejection")
+  }
+  builder.set_terminator(
+    entry,
+    Return,
+    [Input::any(value)],
+    [],
+    [],
+    InstructionMetadata::empty(),
+  )
+  |> ignore
+  inspect(builder.finish().instruction_count(), content="1")
+}
+
+///|
 test "Builder rejects duplicate tied outputs before mutation" {
   let builder : Builder[TestInst] = Builder::new("duplicate_tie", [I64])
   let entry = builder.entry_block()

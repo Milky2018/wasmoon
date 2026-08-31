@@ -93,17 +93,11 @@ fn[Inst] CheckedBuilder::validate_local_facts(
     }
   }
   for edge in successors {
-    if !function.owns_block(edge.target) {
-      raise ForeignBlock(block=edge.target)
-    }
     let parameters = function.blocks[edge.target.id].parameters
     if edge.arguments.length() != parameters.length() {
       raise InvalidEdgeArity(block=edge.target)
     }
     for index, argument in edge.arguments {
-      if !function.owns_value(argument) {
-        raise ForeignValue(value=argument)
-      }
       if function.values[argument.id].ty !=
         function.values[parameters[index].id].ty {
         raise EdgeClassMismatch(block=edge.target, index~)
@@ -114,9 +108,6 @@ fn[Inst] CheckedBuilder::validate_local_facts(
     raise InvalidSafepointRoot(value=metadata.live_gc_roots[0])
   }
   for root in metadata.live_gc_roots {
-    if !function.owns_value(root) {
-      raise ForeignValue(value=root)
-    }
     if function.values[root.id].ty != GcRef64 {
       raise InvalidSafepointRoot(value=root)
     }
@@ -162,9 +153,24 @@ pub fn[Inst] CheckedBuilder::append_body(
   clobbers : Array[PhysicalReg],
   metadata : InstructionMetadata,
 ) -> (Instruction, Array[Value]) raise VCodeBuildError {
+  self.builder.require_body_open(block)
+  let input_tie_ids = self.builder.validate_instruction(
+    inputs,
+    outputs,
+    [],
+    metadata,
+  )
   let stack_map_id = self.validate_local_facts([], clobbers, metadata)
-  let result = self.builder.append_body(
-    block, inst, inputs, outputs, clobbers, metadata,
+  let result = self.builder.commit_instruction(
+    block,
+    inst,
+    Body,
+    inputs,
+    outputs,
+    [],
+    clobbers,
+    metadata,
+    input_tie_ids,
   )
   self.record_stack_map(stack_map_id)
   result
@@ -180,10 +186,25 @@ pub fn[Inst] CheckedBuilder::set_terminator(
   clobbers : Array[PhysicalReg],
   metadata : InstructionMetadata,
 ) -> Instruction raise VCodeBuildError {
-  let stack_map_id = self.validate_local_facts(successors, clobbers, metadata)
-  let instruction = self.builder.set_terminator(
-    block, inst, inputs, successors, clobbers, metadata,
+  self.builder.require_terminator_open(block)
+  let input_tie_ids = self.builder.validate_instruction(
+    inputs,
+    [],
+    successors,
+    metadata,
   )
+  let stack_map_id = self.validate_local_facts(successors, clobbers, metadata)
+  let instruction = self.builder.commit_instruction(
+      block,
+      inst,
+      Terminator,
+      inputs,
+      [],
+      successors,
+      clobbers,
+      metadata,
+      input_tie_ids,
+    ).0
   self.record_stack_map(stack_map_id)
   instruction
 }
