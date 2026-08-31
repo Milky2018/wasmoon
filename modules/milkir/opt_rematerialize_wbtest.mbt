@@ -25,6 +25,46 @@ test "cheap rematerialization accepts only one-lane integer constants" {
 }
 
 ///|
+test "single-use materialization sinks without cloning multi-use values" {
+  let builder = FunctionBuilder::FunctionBuilder("sink_materialization")
+  let condition = builder.add_param(I32)
+  builder.add_result(I32)
+  let use_block = builder.create_block()
+  let other_block = builder.create_block()
+  let single = builder.iconst_i32(65535)
+  let shared = builder.iconst_i32(7)
+  builder.brnz(condition, use_block, other_block)
+  builder.switch_to_block(use_block)
+  let with_single = builder.iadd(condition, single)
+  let with_shared = builder.imul(with_single, shared)
+  builder.return_([with_shared])
+  builder.switch_to_block(other_block)
+  builder.return_([shared])
+  let func = builder.get_function()
+
+  inspect(optimize_with_level(func, O2).changed, content="true")
+  inspect(
+    func.print(),
+    content=(
+      #|function sink_materialization(v0:i32) -> i32 {
+      #|block0:
+      #|    v2:i32 = iconst 7
+      #|    brnz v0, block1, block2
+      #|block1:
+      #|    v5:i32 = iconst 65535
+      #|    v3:i32 = iadd v0, v5
+      #|    v4:i32 = imul v3, v2
+      #|    return v4
+      #|block2:
+      #|    return v2
+      #|}
+      #|
+    ),
+  )
+  func.verify()
+}
+
+///|
 test "O2 keeps repeated cheap address recipes local" {
   let builder = FunctionBuilder::FunctionBuilder("local_address_recipes")
   builder.add_result(I64)

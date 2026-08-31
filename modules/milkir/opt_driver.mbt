@@ -246,6 +246,13 @@ fn optimize_o2_pipeline(func : Function) -> OptResult {
   if final_cleanup.changed {
     result.mark_changed()
   }
+  let sink_result = run_opt_pass(
+    func, "sink_materializations", sink_single_use_materializations,
+  )
+  if sink_result.changed {
+    result.mark_changed()
+    run_opt_pass(func, "dce", eliminate_dead_code) |> ignore
+  }
   result
 }
 
