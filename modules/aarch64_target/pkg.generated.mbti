@@ -19,15 +19,15 @@ pub fn compile_selected(SelectedFunction, on_event? : (@vcode.TargetCompileEvent
 
 pub fn emit(@vcode.Function[AArch64Inst], @vcode.Allocation, AArch64Frame) -> @code_object.UnlinkedCodeObject raise AArch64EmitError
 
-pub fn[F : @machv.SelectionInput] lower(F, LoweringContext, on_event? : (@vcode.TargetCompileEvent) -> Unit) -> @vcode.Function[AArch64Inst] raise AArch64LowerError
+pub fn lower(@machv.SelectionPlan, LoweringContext, on_event? : (@vcode.TargetCompileEvent) -> Unit) -> @vcode.Function[AArch64Inst] raise AArch64LowerError
 
 pub fn plan_frame(@vcode.Function[AArch64Inst], @vcode.Allocation) -> AArch64Frame raise AArch64FrameError
 
 pub fn prepare_aarch64_link(@code_object.UnlinkedCodeObject) -> AArch64LinkPlan raise AArch64LinkError
 
-pub fn[F : @machv.SelectionInput] select(F, LoweringContext, on_event? : (@vcode.TargetCompileEvent) -> Unit) -> SelectedFunction raise AArch64LowerError
+pub fn select(@machv.SelectionPlan, LoweringContext, on_event? : (@vcode.TargetCompileEvent) -> Unit) -> SelectedFunction raise AArch64LowerError
 
-pub fn[F : @machv.SelectionInput] select_verified(F, LoweringContext, on_event? : (@vcode.TargetCompileEvent) -> Unit) -> SelectedFunction raise AArch64LowerError
+pub fn select_verified(@machv.SelectionPlan, LoweringContext, on_event? : (@vcode.TargetCompileEvent) -> Unit) -> SelectedFunction raise AArch64LowerError
 
 pub fn verify_allocation(@vcode.Function[AArch64Inst], @vcode.Allocation) -> Unit raise AArch64AllocationError
 

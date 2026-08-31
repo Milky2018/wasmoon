@@ -49,17 +49,17 @@ fn scalar_access_width(ty : @semantic.ValueType) -> @semantic.AccessWidth? {
 }
 
 ///|
-fn[F : @semantic.SelectionInput] lower_stack_object(
-  function : F,
+fn lower_stack_object(
+  function : @semantic.SelectionView,
   requested : @semantic.StackObject,
 ) -> AArch64StackObject raise AArch64LowerError {
-  let objects = function.stack_objects()
   let offsets : Array[Int] = []
   let mut cursor = 0
   let mut area_alignment = 1
-  for object in objects {
-    let alignment = function.stack_object_alignment(object).unwrap()
-    let size = function.stack_object_size(object).unwrap()
+  for index in 0..<function.stack_object_count() {
+    let object = function.stack_object(index)
+    let alignment = object.alignment()
+    let size = object.size()
     cursor = align_up(cursor, alignment)
     offsets.push(cursor)
     cursor += size
@@ -68,12 +68,13 @@ fn[F : @semantic.SelectionInput] lower_stack_object(
     }
   }
   let area_size = align_up(cursor, area_alignment)
-  for index, object in objects {
-    if object == requested {
+  for index in 0..<function.stack_object_count() {
+    let object = function.stack_object(index)
+    if object.handle() == requested {
       return AArch64StackObject::new(
         offsets[index],
-        function.stack_object_size(object).unwrap(),
-        function.stack_object_alignment(object).unwrap(),
+        object.size(),
+        object.alignment(),
         area_size,
         area_alignment,
       )
@@ -267,12 +268,12 @@ fn float_to_int_bounds(
 }
 
 ///|
-fn[F : @semantic.SelectionInput] map_value(
-  function : F,
+fn map_value(
+  function : @semantic.SelectionView,
   values : Array[@vcode.Value?],
   value : @semantic.Value,
 ) -> @vcode.Value raise AArch64LowerError {
-  let index = function.value_index(value).unwrap()
+  let index = function.value_index(value)
   match values[index] {
     Some(mapped) => mapped
     None => raise MissingMappedValue(value_index=index)
@@ -280,62 +281,46 @@ fn[F : @semantic.SelectionInput] map_value(
 }
 
 ///|
-fn[F : @semantic.SelectionInput] map_values(
-  function : F,
+fn map_values(
+  function : @semantic.SelectionView,
   values : Array[@vcode.Value?],
-  source : Array[@semantic.Value],
+  source : ArrayView[@semantic.Value],
 ) -> Array[@vcode.Value] raise AArch64LowerError {
   source.map(value => map_value(function, values, value))
 }
 
 ///|
-fn[F : @semantic.SelectionInput] map_instruction_operands(
-  function : F,
+fn map_instruction_operands(
+  function : @semantic.SelectionView,
   values : Array[@vcode.Value?],
   instruction : @semantic.Instruction,
 ) -> Array[@vcode.Value] raise AArch64LowerError {
-  let mapped = []
-  let count = function.instruction_operand_count(instruction).unwrap()
-  for index in 0..<count {
-    mapped.push(
-      map_value(
-        function,
-        values,
-        function.instruction_operand_at(instruction, index).unwrap(),
-      ),
-    )
-  }
-  mapped
+  function
+  .instruction(instruction)
+  .operands()
+  .map(value => map_value(function, values, value))
 }
 
 ///|
-fn[F : @semantic.SelectionInput] instruction_result_types(
-  function : F,
+fn instruction_result_types(
+  function : @semantic.SelectionView,
   instruction : @semantic.Instruction,
 ) -> Array[@semantic.ValueType] {
-  let result_types = []
-  let count = function.instruction_result_count(instruction).unwrap()
-  for index in 0..<count {
-    result_types.push(
-      function
-      .value_type(function.instruction_result_at(instruction, index).unwrap())
-      .unwrap(),
-    )
-  }
-  result_types
+  function
+  .instruction(instruction)
+  .results()
+  .map(value => function.value_type(value))
 }
 
 ///|
-fn[F : @semantic.SelectionInput] bind_instruction_results(
-  function : F,
+fn bind_instruction_results(
+  function : @semantic.SelectionView,
   values : Array[@vcode.Value?],
   instruction : @semantic.Instruction,
   results : Array[@vcode.Value],
 ) -> Unit {
-  let count = function.instruction_result_count(instruction).unwrap()
-  for index in 0..<count {
-    let result = function.instruction_result_at(instruction, index).unwrap()
-    values[function.value_index(result).unwrap()] = Some(results[index])
+  for index, result in function.instruction(instruction).results() {
+    values[function.value_index(result)] = Some(results[index])
   }
 }
 
@@ -396,7 +381,7 @@ fn source_metadata(
 
 ///|
 fn terminator_call_metadata(
-  metadata : @semantic.TerminatorMetadata,
+  source : @semantic.SourceLocation?,
   semantics : @semantic.OperationSemantics,
 ) -> @vcode.InstructionMetadata {
   let safepoint : @semantic.SafepointKind? = match
@@ -406,7 +391,7 @@ fn terminator_call_metadata(
     (false, true) => Some(Cancellation)
     (false, false) => None
   }
-  match metadata.source {
+  match source {
     Some(source) => @vcode.InstructionMetadata::new(source~, safepoint?)
     None => @vcode.InstructionMetadata::new(safepoint?)
   }
@@ -414,10 +399,10 @@ fn terminator_call_metadata(
 
 ///|
 fn terminator_trap_metadata(
-  metadata : @semantic.TerminatorMetadata,
+  source : @semantic.SourceLocation?,
   reason : @semantic.TrapReason,
 ) -> @vcode.InstructionMetadata {
-  match metadata.source {
+  match source {
     Some(source) => @vcode.InstructionMetadata::new(source~, trap=reason)
     None => @vcode.InstructionMetadata::new(trap=reason)
   }
@@ -687,27 +672,27 @@ priv struct LoweringAnalysis {
 }
 
 ///|
-fn[F : @semantic.SelectionInput] count_value_use(
-  function : F,
+fn count_value_use(
+  function : @semantic.SelectionView,
   uses : Array[Int],
   value : @semantic.Value,
 ) -> Unit {
-  uses[function.value_index(value).unwrap()] += 1
+  uses[function.value_index(value)] += 1
 }
 
 ///|
-fn[F : @semantic.SelectionInput] foldable_definition(
-  function : F,
+fn foldable_definition(
+  function : @semantic.SelectionView,
   definitions : Array[@semantic.Instruction?],
   uses : Array[Int],
   value : @semantic.Value,
 ) -> @semantic.Instruction? {
-  let index = function.value_index(value).unwrap()
+  let index = function.value_index(value)
   if uses[index] != 1 {
     return None
   }
   guard definitions[index] is Some(instruction) else { return None }
-  let metadata = function.instruction_metadata_view(instruction).unwrap()
+  let metadata = function.instruction(instruction).metadata()
   if metadata.live_gc_root_count() != 0 {
     return None
   }
@@ -715,14 +700,14 @@ fn[F : @semantic.SelectionInput] foldable_definition(
 }
 
 ///|
-fn[F : @semantic.SelectionInput] reusable_definition(
-  function : F,
+fn reusable_definition(
+  function : @semantic.SelectionView,
   definitions : Array[@semantic.Instruction?],
   value : @semantic.Value,
 ) -> @semantic.Instruction? {
-  let index = function.value_index(value).unwrap()
+  let index = function.value_index(value)
   guard definitions[index] is Some(instruction) else { return None }
-  let metadata = function.instruction_metadata_view(instruction).unwrap()
+  let metadata = function.instruction(instruction).metadata()
   if metadata.live_gc_root_count() != 0 {
     return None
   }
@@ -730,47 +715,38 @@ fn[F : @semantic.SelectionInput] reusable_definition(
 }
 
 ///|
-fn[F : @semantic.SelectionInput] instruction_unary_operand(
-  function : F,
+fn instruction_unary_operand(
+  function : @semantic.SelectionView,
   instruction : @semantic.Instruction,
 ) -> @semantic.Value? {
-  guard function.instruction_operand_count(instruction) == Some(1) else {
-    return None
-  }
-  function.instruction_operand_at(instruction, 0)
+  let operands = function.instruction(instruction).operands()
+  guard operands.length() == 1 else { return None }
+  Some(operands[0])
 }
 
 ///|
-fn[F : @semantic.SelectionInput] instruction_binary_operands(
-  function : F,
+fn instruction_binary_operands(
+  function : @semantic.SelectionView,
   instruction : @semantic.Instruction,
 ) -> (@semantic.Value, @semantic.Value)? {
-  guard function.instruction_operand_count(instruction) == Some(2) else {
-    return None
-  }
-  guard function.instruction_operand_at(instruction, 0) is Some(left) else {
-    return None
-  }
-  guard function.instruction_operand_at(instruction, 1) is Some(right) else {
-    return None
-  }
-  Some((left, right))
+  let operands = function.instruction(instruction).operands()
+  guard operands.length() == 2 else { return None }
+  Some((operands[0], operands[1]))
 }
 
 ///|
-fn[F : @semantic.SelectionInput] instruction_single_result(
-  function : F,
+fn instruction_single_result(
+  function : @semantic.SelectionView,
   instruction : @semantic.Instruction,
 ) -> @semantic.Value? {
-  guard function.instruction_result_count(instruction) == Some(1) else {
-    return None
-  }
-  function.instruction_result_at(instruction, 0)
+  let results = function.instruction(instruction).results()
+  guard results.length() == 1 else { return None }
+  Some(results[0])
 }
 
 ///|
-fn[F : @semantic.SelectionInput] multiply_add_selection(
-  function : F,
+fn multiply_add_selection(
+  function : @semantic.SelectionView,
   definitions : Array[@semantic.Instruction?],
   uses : Array[Int],
   accumulator : @semantic.Value,
@@ -781,7 +757,7 @@ fn[F : @semantic.SelectionInput] multiply_add_selection(
     is Some(instruction) else {
     return None
   }
-  guard function.instruction_operation(instruction) is Some(IntBinary(Mul)) else {
+  guard function.instruction(instruction).operation() is IntBinary(Mul) else {
     return None
   }
   guard instruction_binary_operands(function, instruction)
@@ -830,8 +806,8 @@ fn natural_register_shift(width : @semantic.AccessWidth) -> Int {
 }
 
 ///|
-fn[F : @semantic.SelectionInput] select_scaled_index(
-  function : F,
+fn select_scaled_index(
+  function : @semantic.SelectionView,
   definitions : Array[@semantic.Instruction?],
   uses : Array[Int],
   constants : Array[UInt64?],
@@ -846,7 +822,7 @@ fn[F : @semantic.SelectionInput] select_scaled_index(
     is Some(instruction) else {
     return (index, 0, None, None)
   }
-  guard function.instruction_operation(instruction) is Some(IntBinary(Mul)) else {
+  guard function.instruction(instruction).operation() is IntBinary(Mul) else {
     return (index, 0, None, None)
   }
   guard instruction_binary_operands(function, instruction)
@@ -854,9 +830,9 @@ fn[F : @semantic.SelectionInput] select_scaled_index(
     return (index, 0, None, None)
   }
   let scale = 1UL << shift
-  if constants[function.value_index(right).unwrap()] == Some(scale) {
+  if constants[function.value_index(right)] == Some(scale) {
     (left, shift, Some(index), Some(right))
-  } else if constants[function.value_index(left).unwrap()] == Some(scale) {
+  } else if constants[function.value_index(left)] == Some(scale) {
     (right, shift, Some(index), Some(left))
   } else {
     (index, 0, None, None)
@@ -864,8 +840,8 @@ fn[F : @semantic.SelectionInput] select_scaled_index(
 }
 
 ///|
-fn[F : @semantic.SelectionInput] uxtw_memory_address_selection(
-  function : F,
+fn uxtw_memory_address_selection(
+  function : @semantic.SelectionView,
   definitions : Array[@semantic.Instruction?],
   uses : Array[Int],
   constants : Array[UInt64?],
@@ -876,23 +852,22 @@ fn[F : @semantic.SelectionInput] uxtw_memory_address_selection(
     is Some(offset_instruction) else {
     return None
   }
-  guard function.instruction_operation(offset_instruction)
-    is Some(PointerOffset) else {
+  guard function.instruction(offset_instruction).operation() is PointerOffset else {
     return None
   }
   guard instruction_binary_operands(function, offset_instruction)
     is Some((pointer, zero)) else {
     return None
   }
-  if constants[function.value_index(zero).unwrap()] != Some(0UL) {
+  if constants[function.value_index(zero)] != Some(0UL) {
     return None
   }
   guard foldable_definition(function, definitions, uses, pointer)
     is Some(pointer_instruction) else {
     return None
   }
-  guard function.instruction_operation(pointer_instruction)
-    is Some(Convert(Bitcast(I64, Ptr64))) else {
+  guard function.instruction(pointer_instruction).operation()
+    is Convert(Bitcast(I64, Ptr64)) else {
     return None
   }
   guard instruction_unary_operand(function, pointer_instruction) is Some(sum) else {
@@ -902,7 +877,7 @@ fn[F : @semantic.SelectionInput] uxtw_memory_address_selection(
     is Some(add_instruction) else {
     return None
   }
-  guard function.instruction_operation(add_instruction) is Some(IntBinary(Add)) else {
+  guard function.instruction(add_instruction).operation() is IntBinary(Add) else {
     return None
   }
   guard instruction_binary_operands(function, add_instruction)
@@ -923,8 +898,8 @@ fn[F : @semantic.SelectionInput] uxtw_memory_address_selection(
       is Some(base_instruction) else {
       return None
     }
-    guard function.instruction_operation(base_instruction)
-      is Some(Convert(Bitcast(Ptr64, I64))) else {
+    guard function.instruction(base_instruction).operation()
+      is Convert(Bitcast(Ptr64, I64)) else {
       return None
     }
     guard instruction_unary_operand(function, base_instruction) is Some(base) else {
@@ -933,17 +908,14 @@ fn[F : @semantic.SelectionInput] uxtw_memory_address_selection(
     let match_extended_index = fn(
       extended : @semantic.Value,
     ) -> @semantic.Value? {
-      let extended_index = function.value_index(extended).unwrap()
+      let extended_index = function.value_index(extended)
       guard definitions[extended_index] is Some(index_instruction) else {
         return None
       }
-      guard function.instruction_metadata_view(index_instruction)
-        is Some(metadata) &&
-        metadata.live_gc_root_count() == 0 else {
-        return None
-      }
-      guard function.instruction_operation(index_instruction)
-        is Some(Convert(I64ExtendI32(Unsigned))) else {
+      let metadata = function.instruction(index_instruction).metadata()
+      guard metadata.live_gc_root_count() == 0 else { return None }
+      guard function.instruction(index_instruction).operation()
+        is Convert(I64ExtendI32(Unsigned)) else {
         return None
       }
       guard instruction_unary_operand(function, index_instruction)
@@ -953,11 +925,11 @@ fn[F : @semantic.SelectionInput] uxtw_memory_address_selection(
       Some(index)
     }
     if match_extended_index(index_bits) is Some(index) {
-      if constants[function.value_index(index).unwrap()] is Some(offset) {
+      if constants[function.value_index(index)] is Some(offset) {
         let byte_scale = 1UL << natural_register_shift(width)
         if offset % byte_scale == 0UL && offset / byte_scale <= 4095UL {
           let folded_constants = [base_bits, index_bits]
-          if uses[function.value_index(index_bits).unwrap()] == 1 {
+          if uses[function.value_index(index_bits)] == 1 {
             folded_constants.push(index)
           }
           return Some((base, None, offset, [], folded_constants))
@@ -969,8 +941,7 @@ fn[F : @semantic.SelectionInput] uxtw_memory_address_selection(
       is Some(offset_instruction) else {
       return None
     }
-    guard function.instruction_operation(offset_instruction)
-      is Some(IntBinary(Add)) else {
+    guard function.instruction(offset_instruction).operation() is IntBinary(Add) else {
       return None
     }
     guard instruction_binary_operands(function, offset_instruction)
@@ -978,10 +949,10 @@ fn[F : @semantic.SelectionInput] uxtw_memory_address_selection(
       return None
     }
     let extended_and_constant = match
-      constants[function.value_index(offset_right).unwrap()] {
+      constants[function.value_index(offset_right)] {
       Some(bits) => Some((offset_left, offset_right, bits))
       None =>
-        match constants[function.value_index(offset_left).unwrap()] {
+        match constants[function.value_index(offset_left)] {
           Some(bits) => Some((offset_right, offset_left, bits))
           None => None
         }
@@ -1032,9 +1003,7 @@ fn[F : @semantic.SelectionInput] uxtw_memory_address_selection(
 }
 
 ///|
-fn[F : @semantic.SelectionInput] analyze_lowering(
-  function : F,
-) -> LoweringAnalysis {
+fn analyze_lowering(function : @semantic.SelectionView) -> LoweringAnalysis {
   let value_count = function.value_count()
   let constants : Array[UInt64?] = Array::make(value_count, None)
   let definitions : Array[@semantic.Instruction?] = Array::make(
@@ -1072,71 +1041,59 @@ fn[F : @semantic.SelectionInput] analyze_lowering(
   )
   let skip_results = Array::make(value_count, false)
   for instruction_index in 0..<instruction_slots {
-    guard function.instruction_at(instruction_index) is Some(instruction) else {
+    guard function.instruction_at(instruction_index) is Some(instruction_view) else {
       continue
     }
-    let result_count = function.instruction_result_count(instruction).unwrap()
-    for result_index in 0..<result_count {
-      let result = function
-        .instruction_result_at(instruction, result_index)
-        .unwrap()
-      definitions[function.value_index(result).unwrap()] = Some(instruction)
+    let instruction = instruction_view.handle()
+    let results = instruction_view.results()
+    for result in results {
+      definitions[function.value_index(result)] = Some(instruction)
     }
-    match
-      (
-        function.instruction_operation(instruction),
-        function.instruction_result_at(instruction, 0),
-      ) {
-      (Some(I32Const(bits)), Some(result)) =>
-        constants[function.value_index(result).unwrap()] = Some(
-          bits.to_uint64(),
-        )
-      (Some(I64Const(bits)), Some(result)) =>
-        constants[function.value_index(result).unwrap()] = Some(bits)
+    match (instruction_view.operation(), results.get(0)) {
+      (I32Const(bits), Some(result)) =>
+        constants[function.value_index(result)] = Some(bits.to_uint64())
+      (I64Const(bits), Some(result)) =>
+        constants[function.value_index(result)] = Some(bits)
       _ => ()
     }
-    let operand_count = function.instruction_operand_count(instruction).unwrap()
-    for operand_index in 0..<operand_count {
-      count_value_use(
-        function,
-        uses,
-        function.instruction_operand_at(instruction, operand_index).unwrap(),
-      )
+    for operand in instruction_view.operands() {
+      count_value_use(function, uses, operand)
     }
   }
   for block_index in 0..<function.block_count() {
-    let block = function.block_at(block_index).unwrap()
-    let record = function.block_terminator(block).unwrap()
-    match record.kind {
-      Jump(edge) =>
-        for argument in edge.arguments {
+    let record = function.block(block_index).terminator()
+    match record.kind() {
+      SelectionJump(edge) =>
+        for argument in edge.arguments() {
           count_value_use(function, uses, argument)
         }
-      Branch(condition, when_true, when_false) => {
+      SelectionBranch(condition, when_true, when_false) => {
         count_value_use(function, uses, condition)
-        for argument in when_true.arguments {
+        for argument in when_true.arguments() {
           count_value_use(function, uses, argument)
         }
-        for argument in when_false.arguments {
+        for argument in when_false.arguments() {
           count_value_use(function, uses, argument)
         }
       }
-      Switch(index, cases, default_edge) => {
+      SelectionSwitch(index, cases, default_edge) => {
         count_value_use(function, uses, index)
         for case in cases {
           for argument in case.edge.arguments {
             count_value_use(function, uses, argument)
           }
         }
-        for argument in default_edge.arguments {
+        for argument in default_edge.arguments() {
           count_value_use(function, uses, argument)
         }
       }
-      Return(values) | TailCall(_, values) | NoReturnCall(_, values) =>
+      SelectionReturn(values)
+      | SelectionTailCall(_, values)
+      | SelectionNoReturnCall(_, values) =>
         for value in values {
           count_value_use(function, uses, value)
         }
-      Trap(_) => ()
+      SelectionTrap(_) => ()
     }
   }
   let record_folded_memory_address = fn(
@@ -1148,50 +1105,44 @@ fn[F : @semantic.SelectionInput] analyze_lowering(
         function, definitions, uses, constants, address, width,
       )
       is Some((selection, skipped, folded_constants)) {
-      memory_addresses[function.instruction_index(instruction).unwrap()] = Some(
+      memory_addresses[function.instruction(instruction).index()] = Some(
         selection,
       )
       for value in skipped {
-        let value_index = function.value_index(value).unwrap()
+        let value_index = function.value_index(value)
         skip_results[value_index] = true
         if shift_immediates[value_index] is Some(selected_shift) {
-          folded_uses[function.value_index(selected_shift.constant).unwrap()] -= 1
+          folded_uses[function.value_index(selected_shift.constant)] -= 1
           shift_immediates[value_index] = None
         }
         if address_immediates[value_index] is Some(selected_address) {
-          folded_uses[function.value_index(selected_address.constant).unwrap()] -= 1
+          folded_uses[function.value_index(selected_address.constant)] -= 1
           address_immediates[value_index] = None
         }
       }
       for value in folded_constants {
-        folded_uses[function.value_index(value).unwrap()] += 1
+        folded_uses[function.value_index(value)] += 1
       }
-      folded_uses[function
-      .value_index(
-        function
-        .instruction_operand_at(
-          definitions[function.value_index(address).unwrap()].unwrap(),
-          1,
-        )
-        .unwrap(),
-      )
-      .unwrap()] += 1
+      let defining_instruction = definitions[function.value_index(address)].unwrap()
+      let zero = function.instruction(defining_instruction).operands()[1]
+      folded_uses[function.value_index(zero)] += 1
     }
   }
   let zero_pointer_offsets : Array[Int] = []
   for instruction_index in 0..<instruction_slots {
-    guard function.instruction_at(instruction_index) is Some(instruction) else {
+    guard function.instruction_at(instruction_index) is Some(instruction_view) else {
       continue
     }
-    let operation = function.instruction_operation(instruction).unwrap()
+    let instruction = instruction_view.handle()
+    let operation = instruction_view.operation()
     let result = instruction_single_result(function, instruction)
     if operation is PointerOffset &&
       result is Some(result) &&
       instruction_binary_operands(function, instruction)
       is Some((input, constant)) &&
-      constants[function.value_index(constant).unwrap()] is Some(bits) &&
+      constants[function.value_index(constant)] is Some(bits) &&
       add_sub_immediate_shift(bits) is Some(_) {
-      address_immediates[function.value_index(result).unwrap()] = Some({
+      address_immediates[function.value_index(result)] = Some({
         bits,
         input,
         constant,
@@ -1199,11 +1150,11 @@ fn[F : @semantic.SelectionInput] analyze_lowering(
       if bits == 0UL {
         zero_pointer_offsets.push(instruction_index)
       }
-      folded_uses[function.value_index(constant).unwrap()] += 1
+      folded_uses[function.value_index(constant)] += 1
     }
     if operation is IntBinary(Add) &&
       result is Some(result) &&
-      optional_gpr_width(function.value_type(result)) is Some(width) &&
+      optional_gpr_width(Some(function.value_type(result))) is Some(width) &&
       instruction_binary_operands(function, instruction) is Some((left, right)) {
       let selected = match
         multiply_add_selection(function, definitions, uses, left, right, width) {
@@ -1218,20 +1169,20 @@ fn[F : @semantic.SelectionInput] analyze_lowering(
           }
       }
       if selected is Some((selected, product)) {
-        multiply_adds[function.value_index(result).unwrap()] = Some(selected)
-        let product_index = function.value_index(product).unwrap()
+        multiply_adds[function.value_index(result)] = Some(selected)
+        let product_index = function.value_index(product)
         skip_results[product_index] = true
         if shift_immediates[product_index] is Some(selected_shift) {
-          folded_uses[function.value_index(selected_shift.constant).unwrap()] -= 1
+          folded_uses[function.value_index(selected_shift.constant)] -= 1
           shift_immediates[product_index] = None
         }
       }
-      if multiply_adds[function.value_index(result).unwrap()] is None {
+      if multiply_adds[function.value_index(result)] is None {
         let select_shifted = fn(
           accumulator : @semantic.Value,
           shifted : @semantic.Value,
         ) -> ShiftedAddSelection? {
-          let shifted_index = function.value_index(shifted).unwrap()
+          let shifted_index = function.value_index(shifted)
           guard foldable_definition(function, definitions, uses, shifted)
             is Some(_) else {
             return None
@@ -1251,8 +1202,8 @@ fn[F : @semantic.SelectionInput] analyze_lowering(
             }
         }
         if shifted is Some((selected, shifted_result)) {
-          shifted_adds[function.value_index(result).unwrap()] = Some(selected)
-          skip_results[function.value_index(shifted_result).unwrap()] = true
+          shifted_adds[function.value_index(result)] = Some(selected)
+          skip_results[function.value_index(shifted_result)] = true
         }
       }
     }
@@ -1278,19 +1229,19 @@ fn[F : @semantic.SelectionInput] analyze_lowering(
     }
     guard operation is IntBinary(binary) else { continue }
     guard result is Some(result) else { continue }
-    let result_index = function.value_index(result).unwrap()
+    let result_index = function.value_index(result)
     if multiply_adds[result_index] is Some(_) ||
       shifted_adds[result_index] is Some(_) {
       continue
     }
-    guard optional_gpr_width(function.value_type(result)) is Some(width) else {
+    guard optional_gpr_width(Some(function.value_type(result))) is Some(width) else {
       continue
     }
     guard instruction_binary_operands(function, instruction)
       is Some((left, right)) else {
       continue
     }
-    if constants[function.value_index(right).unwrap()] is Some(bits) &&
+    if constants[function.value_index(right)] is Some(bits) &&
       immediate_shift_selection(binary, width, bits)
       is Some((shift_operation, amount)) {
       shift_immediates[result_index] = Some({
@@ -1300,7 +1251,7 @@ fn[F : @semantic.SelectionInput] analyze_lowering(
         input: left,
         constant: right,
       })
-      folded_uses[function.value_index(right).unwrap()] += 1
+      folded_uses[function.value_index(right)] += 1
       continue
     }
     let binary_operation = match lower_binary(binary) {
@@ -1310,10 +1261,10 @@ fn[F : @semantic.SelectionInput] analyze_lowering(
     }
     if binary == Mul && !skip_results[result_index] {
       let selected : (@semantic.Value, @semantic.Value, UInt64)? = match
-        constants[function.value_index(right).unwrap()] {
+        constants[function.value_index(right)] {
         Some(bits) => Some((left, right, bits))
         None =>
-          match constants[function.value_index(left).unwrap()] {
+          match constants[function.value_index(left)] {
             Some(bits) => Some((right, left, bits))
             None => None
           }
@@ -1331,12 +1282,12 @@ fn[F : @semantic.SelectionInput] analyze_lowering(
             input,
             constant,
           })
-          folded_uses[function.value_index(constant).unwrap()] += 1
+          folded_uses[function.value_index(constant)] += 1
         }
       }
     }
     let selected : (UInt64, @semantic.Value, @semantic.Value)? = match
-      constants[function.value_index(right).unwrap()] {
+      constants[function.value_index(right)] {
       Some(bits) if binary == UnsignedRem &&
         bits > 1UL &&
         (bits & (bits - 1UL)) == 0UL &&
@@ -1346,7 +1297,7 @@ fn[F : @semantic.SelectionInput] analyze_lowering(
         valid_int_binary_immediate(width, binary_operation, bits) =>
         Some((bits, left, right))
       _ =>
-        match constants[function.value_index(left).unwrap()] {
+        match constants[function.value_index(left)] {
           Some(bits) if binary is (Add | And | Or | Xor) &&
             valid_int_binary_immediate(width, binary_operation, bits) =>
             Some((bits, right, left))
@@ -1360,45 +1311,44 @@ fn[F : @semantic.SelectionInput] analyze_lowering(
         bits,
         input,
       })
-      folded_uses[function.value_index(constant).unwrap()] += 1
+      folded_uses[function.value_index(constant)] += 1
     }
   }
   for block_index in 0..<function.block_count() {
-    let block = function.block_at(block_index).unwrap()
-    guard function.block_terminator(block).unwrap().kind
-      is Branch(condition, _, _) else {
+    let block = function.block(block_index)
+    guard block.terminator().kind() is SelectionBranch(condition, _, _) else {
       continue
     }
-    let condition_index = function.value_index(condition).unwrap()
+    let condition_index = function.value_index(condition)
     if uses[condition_index] != 1 {
       continue
     }
     guard definitions[condition_index] is Some(instruction) else { continue }
-    guard function.instruction_operation(instruction)
-      is Some(IntCompare(comparison)) else {
+    guard function.instruction(instruction).operation()
+      is IntCompare(comparison) else {
       continue
     }
     guard instruction_binary_operands(function, instruction)
       is Some((left, right)) else {
       continue
     }
-    guard optional_gpr_width(function.value_type(left)) is Some(width) else {
+    guard optional_gpr_width(Some(function.value_type(left))) is Some(width) else {
       continue
     }
     skip_results[condition_index] = true
     let zero_selected : (@semantic.Value, @semantic.Value)? = if comparison
       is (Equal | NotEqual) &&
-      constants[function.value_index(right).unwrap()] == Some(0UL) {
+      constants[function.value_index(right)] == Some(0UL) {
       Some((left, right))
     } else if comparison is (Equal | NotEqual) &&
-      constants[function.value_index(left).unwrap()] == Some(0UL) {
+      constants[function.value_index(left)] == Some(0UL) {
       Some((right, left))
     } else {
       None
     }
     match zero_selected {
       Some((input, zero)) => {
-        branches[function.block_index(block).unwrap()] = Some({
+        branches[block_index] = Some({
           width,
           input,
           other: None,
@@ -1406,7 +1356,7 @@ fn[F : @semantic.SelectionInput] analyze_lowering(
           condition: None,
           swap_edges: comparison == Equal,
         })
-        folded_uses[function.value_index(zero).unwrap()] += 1
+        folded_uses[function.value_index(zero)] += 1
       }
       None => {
         let lowered_condition = lower_condition(comparison)
@@ -1415,11 +1365,11 @@ fn[F : @semantic.SelectionInput] analyze_lowering(
           @semantic.Value,
           UInt64,
           AArch64Condition,
-        )? = match constants[function.value_index(right).unwrap()] {
+        )? = match constants[function.value_index(right)] {
           Some(bits) if add_sub_immediate_shift(bits) is Some(_) =>
             Some((left, right, bits, lowered_condition))
           _ =>
-            match constants[function.value_index(left).unwrap()] {
+            match constants[function.value_index(left)] {
               Some(bits) if add_sub_immediate_shift(bits) is Some(_) =>
                 Some((right, left, bits, swapped_condition(lowered_condition)))
               _ => None
@@ -1427,7 +1377,7 @@ fn[F : @semantic.SelectionInput] analyze_lowering(
         }
         match immediate_selected {
           Some((input, constant, bits, condition)) => {
-            branches[function.block_index(block).unwrap()] = Some({
+            branches[block_index] = Some({
               width,
               input,
               other: None,
@@ -1435,10 +1385,10 @@ fn[F : @semantic.SelectionInput] analyze_lowering(
               condition: Some(condition),
               swap_edges: false,
             })
-            folded_uses[function.value_index(constant).unwrap()] += 1
+            folded_uses[function.value_index(constant)] += 1
           }
           None =>
-            branches[function.block_index(block).unwrap()] = Some({
+            branches[block_index] = Some({
               width,
               input: left,
               other: Some(right),
@@ -1464,19 +1414,22 @@ fn[F : @semantic.SelectionInput] analyze_lowering(
   // one per address, and a base-relative access has no `add` underneath for the
   // register-offset form to match, so nothing else removes it.
   for instruction_index in zero_pointer_offsets {
-    let instruction = function.instruction_at(instruction_index).unwrap()
+    let instruction = function
+      .instruction_at(instruction_index)
+      .unwrap()
+      .handle()
     guard instruction_single_result(function, instruction) is Some(result) else {
       continue
     }
     guard instruction_binary_operands(function, instruction) is Some((input, _)) else {
       continue
     }
-    let result_index = function.value_index(result).unwrap()
+    let result_index = function.value_index(result)
     if skip_results[result_index] || value_aliases[result_index] is Some(_) {
       continue
     }
     // Forwarding drops this instruction, so it must not carry roots.
-    let metadata = function.instruction_metadata_view(instruction).unwrap()
+    let metadata = function.instruction(instruction).metadata()
     if metadata.live_gc_root_count() != 0 {
       continue
     }
@@ -1498,8 +1451,8 @@ fn[F : @semantic.SelectionInput] analyze_lowering(
 }
 
 ///|
-fn[F : @semantic.SelectionInput] lower_instruction(
-  function : F,
+fn lower_instruction(
+  function : @semantic.SelectionView,
   context : LoweringContext,
   builder : @vcode.CheckedBuilder[AArch64Inst],
   block : @vcode.Block,
@@ -1508,14 +1461,14 @@ fn[F : @semantic.SelectionInput] lower_instruction(
   values : Array[@vcode.Value?],
   analysis : LoweringAnalysis,
 ) -> Unit raise AArch64LowerError {
-  let instruction_index = function.instruction_index(instruction).unwrap()
-  let operation = function.instruction_operation(instruction).unwrap()
-  let semantic_metadata = function
-    .instruction_metadata_view(instruction)
-    .unwrap()
-  let result_index = function
-    .instruction_result_at(instruction, 0)
-    .map(result => function.value_index(result).unwrap())
+  let instruction_view = function.instruction(instruction)
+  let instruction_index = instruction_view.index()
+  let operation = instruction_view.operation()
+  let semantic_metadata = instruction_view.metadata()
+  let result_index = instruction_view
+    .results()
+    .get(0)
+    .map(result => function.value_index(result))
   if result_index is Some(index) &&
     analysis.value_aliases[index] is Some(alias_value) {
     values[index] = Some(map_value(function, values, alias_value))
@@ -1572,11 +1525,7 @@ fn[F : @semantic.SelectionInput] lower_instruction(
       }
       if operation is Store(_) {
         selected_operands.push(
-          map_value(
-            function,
-            values,
-            function.instruction_operand_at(instruction, 1).unwrap(),
-          ),
+          map_value(function, values, instruction_view.operands()[1]),
         )
       }
       selected_operands
@@ -1964,9 +1913,7 @@ fn[F : @semantic.SelectionInput] lower_instruction(
           },
         )[0]
     }
-    values[function
-    .value_index(function.instruction_result_at(instruction, 0).unwrap())
-    .unwrap()] = Some(current)
+    values[function.value_index(instruction_view.results()[0])] = Some(current)
     return
   }
   if operation is Vector(ReplaceLane(lane, index)) {
@@ -1978,9 +1925,9 @@ fn[F : @semantic.SelectionInput] lower_instruction(
       [@vcode.Output::tied(V128, 0)],
       source_metadata(semantic_metadata, roots, operation.semantics()),
     )
-    values[function
-    .value_index(function.instruction_result_at(instruction, 0).unwrap())
-    .unwrap()] = Some(results[0])
+    values[function.value_index(instruction_view.results()[0])] = Some(
+      results[0],
+    )
     return
   }
   if operation is Vector(Relaxed(Dot8To32AddSigned)) {
@@ -2024,9 +1971,7 @@ fn[F : @semantic.SelectionInput] lower_instruction(
         [@vcode.Output::any(V128)],
         source_metadata(semantic_metadata, roots, operation.semantics()),
       )[0]
-    values[function
-    .value_index(function.instruction_result_at(instruction, 0).unwrap())
-    .unwrap()] = Some(result)
+    values[function.value_index(instruction_view.results()[0])] = Some(result)
     return
   }
   let selected = match operation {
@@ -2116,10 +2061,10 @@ fn[F : @semantic.SelectionInput] lower_instruction(
       Some(VectorIntBinary(I16x8, Q15MultiplyRoundedSaturating))
     Vector(Relaxed(Dot8To16Signed)) => Some(VectorRelaxedDot8To16)
     ReferenceCompare(comparison) => {
-      let operand_type = match function.instruction_operand_at(instruction, 0) {
-        Some(value) => function.value_type(value)
-        None => None
-      }
+      let operand_type = instruction_view
+        .operands()
+        .get(0)
+        .map(value => function.value_type(value))
       match operand_type {
         Some(Ptr64) =>
           Some(
@@ -2161,10 +2106,10 @@ fn[F : @semantic.SelectionInput] lower_instruction(
         None => None
       }
     IntCompare(comparison) => {
-      let operand_type = match function.instruction_operand_at(instruction, 0) {
-        Some(value) => function.value_type(value)
-        None => None
-      }
+      let operand_type = instruction_view
+        .operands()
+        .get(0)
+        .map(value => function.value_type(value))
       match optional_gpr_width(operand_type) {
         Some(width) => Some(CompareSet(width, lower_condition(comparison)))
         None => None
@@ -2199,10 +2144,10 @@ fn[F : @semantic.SelectionInput] lower_instruction(
         _ => None
       }
     FloatCompare(comparison) => {
-      let operand_type = match function.instruction_operand_at(instruction, 0) {
-        Some(value) => function.value_type(value)
-        None => None
-      }
+      let operand_type = instruction_view
+        .operands()
+        .get(0)
+        .map(value => function.value_type(value))
       match (operand_type, lower_float_condition(comparison)) {
         (Some(F32), Some(condition)) => Some(FloatCompareSet(F32, condition))
         (Some(F64), Some(condition)) => Some(FloatCompareSet(F64, condition))
@@ -2314,15 +2259,17 @@ fn[F : @semantic.SelectionInput] lower_instruction(
 }
 
 ///|
-fn[F : @semantic.SelectionInput] lower_parameters(
-  function : F,
+fn lower_parameters(
+  function : @semantic.SelectionView,
   context : LoweringContext,
   builder : @vcode.CheckedBuilder[AArch64Inst],
   values : Array[@vcode.Value?],
   analysis : LoweringAnalysis,
 ) -> @vcode.Value? raise AArch64LowerError {
   let entry = builder.entry_block()
-  let signature = function.signature()
+  let parameter_types = function.parameter_types().to_owned()
+  let result_types = function.result_types().to_owned()
+  let signature = @semantic.Signature::new(parameter_types, result_types)
   let layout = match function.protocol() {
     Platform => platform_call_layout(signature.params)
     Internal =>
@@ -2331,8 +2278,8 @@ fn[F : @semantic.SelectionInput] lower_parameters(
       }
   }
   for index, parameter in function.parameters() {
-    let ty = function.value_type(parameter).unwrap()
-    let parameter_index = function.value_index(parameter).unwrap()
+    let ty = function.value_type(parameter)
+    let parameter_index = function.value_index(parameter)
     if layout.arguments[index] is CallStack(_) &&
       analysis.uses[parameter_index] == 0 {
       continue
@@ -2383,8 +2330,8 @@ fn[F : @semantic.SelectionInput] lower_parameters(
 }
 
 ///|
-fn[F : @semantic.SelectionInput] lower_return_values(
-  function : F,
+fn lower_return_values(
+  function : @semantic.SelectionView,
   context : LoweringContext,
   builder : @vcode.CheckedBuilder[AArch64Inst],
   block : @vcode.Block,
@@ -2453,13 +2400,15 @@ fn set_terminator(
 }
 
 ///|
-fn[F : @semantic.SelectionInput] construct_validated_semantic(
-  function : F,
+fn construct_validated_semantic(
+  function : @semantic.SelectionView,
   context : LoweringContext,
   on_event? : (@vcode.TargetCompileEvent) -> Unit = fn(_) { () },
 ) -> ConstructedFunction raise AArch64LowerError {
   on_event(TargetAnalysisStarted)
-  let signature = function.signature()
+  let parameter_types = function.parameter_types().to_owned()
+  let result_types = function.result_types().to_owned()
+  let signature = @semantic.Signature::new(parameter_types, result_types)
   let builder : @vcode.CheckedBuilder[AArch64Inst] = @vcode.CheckedBuilder::new_with_protocol(
     function.name(),
     function.protocol(),
@@ -2474,59 +2423,45 @@ fn[F : @semantic.SelectionInput] construct_validated_semantic(
   )
   let blocks : Array[@vcode.Block] = []
   for index in 0..<function.block_count() {
-    let semantic_block = function.block_at(index).unwrap()
-    let parameter_count = function
-      .block_parameter_count(semantic_block)
-      .unwrap()
+    let semantic_block = function.block(index)
+    let parameters = semantic_block.parameters()
+    let parameter_count = parameters.length()
     let block = if index == 0 {
       builder.entry_block()
     } else {
       builder.create_block(
         Array::makei(parameter_count, parameter_index => {
-          function
-          .value_type(
-            function
-            .block_parameter_at(semantic_block, parameter_index)
-            .unwrap(),
-          )
-          .unwrap()
+          function.value_type(parameters[parameter_index])
         }),
       )
     }
     blocks.push(block)
     for parameter_index in 0..<parameter_count {
-      let parameter = function
-        .block_parameter_at(semantic_block, parameter_index)
-        .unwrap()
-      values[function.value_index(parameter).unwrap()] = Some(
+      let parameter = parameters[parameter_index]
+      values[function.value_index(parameter)] = Some(
         builder.block_parameter(block, parameter_index) catch {
           error => raise BuildFailure(cause=error)
         },
       )
     }
   }
-  let semantic_layout = function.block_indices_in_cfg_order()
+  let semantic_layout = function.layout()
   for block_index in semantic_layout {
-    let semantic_block = function.block_at(block_index).unwrap()
+    let semantic_block = function.block(block_index)
     let block = blocks[block_index]
-    let instruction_count = function
-      .block_instruction_count(semantic_block)
-      .unwrap()
-    for instruction_index in 0..<instruction_count {
-      let instruction = function
-        .block_instruction_at(semantic_block, instruction_index)
-        .unwrap()
+    for instruction in semantic_block.instructions() {
       lower_instruction(
         function, context, builder, block, block_index, instruction, values, analysis,
       )
     }
-    let record = function.block_terminator(semantic_block).unwrap()
-    let metadata = match record.metadata.source {
+    let record = semantic_block.terminator()
+    let source = record.source()
+    let metadata = match source {
       Some(source) => @vcode.InstructionMetadata::new(source~)
       None => @vcode.InstructionMetadata::empty()
     }
-    match record.kind {
-      Jump(edge) =>
+    match record.kind() {
+      SelectionJump(edge) =>
         set_terminator(
           builder,
           block,
@@ -2534,13 +2469,13 @@ fn[F : @semantic.SelectionInput] construct_validated_semantic(
           [],
           [
             @vcode.Edge::new(
-              blocks[function.block_index(edge.target).unwrap()],
-              map_values(function, values, edge.arguments),
+              blocks[function.block_index(edge.target())],
+              map_values(function, values, edge.arguments()),
             ),
           ],
           metadata,
         )
-      Branch(condition, true_edge, false_edge) => {
+      SelectionBranch(condition, true_edge, false_edge) => {
         let selected = analysis.branches[block_index]
         let (terminator, inputs, first_edge, second_edge) = match selected {
           Some(selected) if selected.other is Some(other) &&
@@ -2591,30 +2526,30 @@ fn[F : @semantic.SelectionInput] construct_validated_semantic(
           inputs,
           [
             @vcode.Edge::new(
-              blocks[function.block_index(first_edge.target).unwrap()],
-              map_values(function, values, first_edge.arguments),
+              blocks[function.block_index(first_edge.target())],
+              map_values(function, values, first_edge.arguments()),
             ),
             @vcode.Edge::new(
-              blocks[function.block_index(second_edge.target).unwrap()],
-              map_values(function, values, second_edge.arguments),
+              blocks[function.block_index(second_edge.target())],
+              map_values(function, values, second_edge.arguments()),
             ),
           ],
           metadata,
         )
       }
-      Switch(index, cases, default_edge) => {
-        let index_type = function.value_type(index).unwrap()
+      SelectionSwitch(index, cases, default_edge) => {
+        let index_type = function.value_type(index)
         let width = if index_type == I32 { W32 } else { W64 }
         let successors : Array[@vcode.Edge] = cases.map(case => {
           @vcode.Edge::new(
-            blocks[function.block_index(case.edge.target).unwrap()],
-            map_values(function, values, case.edge.arguments),
+            blocks[function.block_index(case.edge.target)],
+            map_values(function, values, case.edge.arguments[:]),
           )
         })
         successors.push(
           @vcode.Edge::new(
-            blocks[function.block_index(default_edge.target).unwrap()],
-            map_values(function, values, default_edge.arguments),
+            blocks[function.block_index(default_edge.target())],
+            map_values(function, values, default_edge.arguments()),
           ),
         )
         set_terminator(
@@ -2626,7 +2561,7 @@ fn[F : @semantic.SelectionInput] construct_validated_semantic(
           metadata,
         )
       }
-      Return(return_values) => {
+      SelectionReturn(return_values) => {
         let mapped = map_values(function, values, return_values)
         lower_return_values(
           function,
@@ -2639,7 +2574,7 @@ fn[F : @semantic.SelectionInput] construct_validated_semantic(
         )
         set_terminator(builder, block, Return, [], [], metadata)
       }
-      TailCall(call, semantic_operands) => {
+      SelectionTailCall(call, semantic_operands) => {
         if function.protocol() != Internal || call.protocol != Internal {
           raise UnsupportedAbi(
             message="true tail calls require Internal caller and callee protocols",
@@ -2699,11 +2634,11 @@ fn[F : @semantic.SelectionInput] construct_validated_semantic(
           clobbers=platform_call_clobbers(),
         )
       }
-      NoReturnCall(call, semantic_operands) => {
+      SelectionNoReturnCall(call, semantic_operands) => {
         let operands = map_values(function, values, semantic_operands)
-        let roots = map_values(function, values, record.metadata.live_gc_roots)
+        let roots = map_values(function, values, record.live_gc_roots())
         let call_metadata = terminator_call_metadata(
-          record.metadata,
+          source,
           call.behavior.semantics(),
         )
         let call_metadata = @vcode.InstructionMetadata::new(
@@ -2740,17 +2675,17 @@ fn[F : @semantic.SelectionInput] construct_validated_semantic(
           Trap(Unreachable),
           [],
           [],
-          terminator_trap_metadata(record.metadata, Unreachable),
+          terminator_trap_metadata(source, Unreachable),
         )
       }
-      Trap(reason) =>
+      SelectionTrap(reason) =>
         set_terminator(
           builder,
           block,
           Trap(reason),
           [],
           [],
-          terminator_trap_metadata(record.metadata, reason),
+          terminator_trap_metadata(source, reason),
         )
     }
   }
@@ -2789,15 +2724,19 @@ fn validate_constructed(
 
 ///|
 /// Validate and lower externally supplied semantic MachV.
-pub fn[F : @semantic.SelectionInput] lower(
-  function : F,
+pub fn lower(
+  plan : @semantic.SelectionPlan,
   context : LoweringContext,
   on_event? : (@vcode.TargetCompileEvent) -> Unit = fn(_) { () },
 ) -> @vcode.Function[AArch64Inst] raise AArch64LowerError {
-  function.verify() catch {
+  plan.require_verified() catch {
     error => raise InvalidSemantic(cause=error)
   }
-  let constructed = construct_validated_semantic(function, context, on_event~)
+  let constructed = construct_validated_semantic(
+    plan.view(),
+    context,
+    on_event~,
+  )
   validate_constructed(constructed, on_event)
   on_event(TargetSelectionFinished)
   constructed.function
@@ -2812,15 +2751,19 @@ pub struct SelectedFunction {
 
 ///|
 /// Select and validate AArch64 VCode for immediate target compilation.
-pub fn[F : @semantic.SelectionInput] select(
-  function : F,
+pub fn select(
+  plan : @semantic.SelectionPlan,
   context : LoweringContext,
   on_event? : (@vcode.TargetCompileEvent) -> Unit = fn(_) { () },
 ) -> SelectedFunction raise AArch64LowerError {
-  function.verify() catch {
+  plan.require_verified() catch {
     error => raise InvalidSemantic(cause=error)
   }
-  let constructed = construct_validated_semantic(function, context, on_event~)
+  let constructed = construct_validated_semantic(
+    plan.view(),
+    context,
+    on_event~,
+  )
   on_event(TargetSealingStarted)
   on_event(TargetSelectionFinished)
   { constructed, }
@@ -2829,15 +2772,19 @@ pub fn[F : @semantic.SelectionInput] select(
 ///|
 /// Select canonical semantic MachV without repeating an established proof.
 /// Falls back to full validation if the producer did not establish it.
-pub fn[F : @semantic.SelectionInput] select_verified(
-  function : F,
+pub fn select_verified(
+  plan : @semantic.SelectionPlan,
   context : LoweringContext,
   on_event? : (@vcode.TargetCompileEvent) -> Unit = fn(_) { () },
 ) -> SelectedFunction raise AArch64LowerError {
-  function.require_verified() catch {
+  plan.require_verified() catch {
     error => raise InvalidSemantic(cause=error)
   }
-  let constructed = construct_validated_semantic(function, context, on_event~)
+  let constructed = construct_validated_semantic(
+    plan.view(),
+    context,
+    on_event~,
+  )
   on_event(TargetSealingStarted)
   on_event(TargetSelectionFinished)
   { constructed, }

@@ -8,7 +8,7 @@ test "AArch64 allocation honors incoming and return ABI constraints" {
   )
   let sum = builder.emit(IntBinary(Add), builder.parameters(), [I64])[0]
   builder.return_([sum])
-  let function = lower(builder.finish(), test_lowering_context())
+  let function = lower(builder.finish_selection_plan(), test_lowering_context())
   let allocation = allocate(function)
   inspect(
     allocation.summary(),
@@ -49,7 +49,7 @@ test "AArch64 allocation rejects transfer scratch as an unconstrained operand" {
   )
   let sum = builder.emit(IntBinary(Add), builder.parameters(), [I64])[0]
   builder.return_([sum])
-  let function = lower(builder.finish(), test_lowering_context())
+  let function = lower(builder.finish_selection_plan(), test_lowering_context())
   let allocation = allocate(function)
   let instruction = function.instruction_at(2).unwrap()
   let operand = function.instruction_operand_at(instruction, 0).unwrap()
@@ -88,7 +88,7 @@ test "AArch64 allocation rejects transfer scratch in an allocator edit" {
   )
   let sum = builder.emit(IntBinary(Add), builder.parameters(), [I64])[0]
   builder.return_([sum])
-  let function = lower(builder.finish(), test_lowering_context())
+  let function = lower(builder.finish_selection_plan(), test_lowering_context())
   let allocation = allocate(function)
   let instruction = function.instruction_at(2).unwrap()
   let operand = function.instruction_operand_at(instruction, 0).unwrap()
@@ -180,7 +180,7 @@ test "AArch64 allocation rejects stack-address scratch in an allocator edit" {
   )
   let sum = builder.emit(IntBinary(Add), builder.parameters(), [I64])[0]
   builder.return_([sum])
-  let function = lower(builder.finish(), test_lowering_context())
+  let function = lower(builder.finish_selection_plan(), test_lowering_context())
   let allocation = allocate(function)
   let instruction = function.instruction_at(2).unwrap()
   let operand = function.instruction_operand_at(instruction, 0).unwrap()
@@ -217,7 +217,7 @@ test "AArch64 allocation keeps spill scratch out of unconstrained operands" {
   )
   let sum = builder.emit(IntBinary(Add), builder.parameters(), [I64])[0]
   builder.return_([sum])
-  let function = lower(builder.finish(), test_lowering_context())
+  let function = lower(builder.finish_selection_plan(), test_lowering_context())
   let allocation = allocate(function)
   let instruction = function.instruction_at(2).unwrap()
   let operand = function.instruction_operand_at(instruction, 0).unwrap()
@@ -380,7 +380,7 @@ test "AArch64 frame plans spills and callee-saved registers" {
     sum = builder.emit(IntBinary(Add), [sum, values[index]], [I64])[0]
   }
   builder.return_([sum])
-  let function = lower(builder.finish(), test_lowering_context())
+  let function = lower(builder.finish_selection_plan(), test_lowering_context())
   let allocation = allocate(function)
   inspect(
     plan_frame(function, allocation).summary(),
@@ -410,7 +410,7 @@ test "AArch64 allocation keeps values live across a direct call out of clobbers"
       I64,
     ])[0]
   builder.return_([result])
-  let function = lower(builder.finish(), test_lowering_context())
+  let function = lower(builder.finish_selection_plan(), test_lowering_context())
   let allocation = allocate(function)
   inspect(
     allocation.summary(),
@@ -467,7 +467,7 @@ test "AArch64 allocation preserves state across both returns from setjmp" {
   let widened = builder.emit(Convert(I64ExtendI32(Unsigned)), [result], [I64])[0]
   let sum = builder.emit(IntBinary(Add), [parameters[2], widened], [I64])[0]
   builder.return_([sum])
-  let function = lower(builder.finish(), test_lowering_context())
+  let function = lower(builder.finish_selection_plan(), test_lowering_context())
   let allocation = allocate(function)
   inspect(
     allocation.summary(),
@@ -528,7 +528,7 @@ test "AArch64 call inputs may remain in spill slots" {
   )
   builder.emit(Call(call), builder.parameters(), []) |> ignore
   builder.return_([])
-  let function = lower(builder.finish(), test_lowering_context())
+  let function = lower(builder.finish_selection_plan(), test_lowering_context())
   let allocation = allocate(function)
   inspect(
     allocation.summary(),
@@ -700,7 +700,7 @@ test "AArch64 allocation honors internal call register affinities" {
   )
   builder.emit(Call(call), [builder.parameters()[0], one], []) |> ignore
   builder.return_([builder.parameters()[0]])
-  let function = lower(builder.finish(), test_lowering_context())
+  let function = lower(builder.finish_selection_plan(), test_lowering_context())
   inspect(
     allocate(function).summary(),
     content=(
@@ -736,7 +736,7 @@ test "AArch64 frame reserves one aligned outgoing stack-argument area" {
   )
   builder.emit(Call(call), builder.parameters(), []) |> ignore
   builder.return_([])
-  let function = lower(builder.finish(), test_lowering_context())
+  let function = lower(builder.finish_selection_plan(), test_lowering_context())
   let allocation = allocate(function)
   inspect(
     plan_frame(function, allocation).summary(),
@@ -779,7 +779,7 @@ test "AArch64 frame separates semantic objects from outgoing spills and saves" {
   }
   let result = builder.emit(PointerOffset, [address, sum], [Ptr64])[0]
   builder.return_([result])
-  let function = lower(builder.finish(), test_lowering_context())
+  let function = lower(builder.finish_selection_plan(), test_lowering_context())
   let allocation = allocate(function)
   inspect(
     plan_frame(function, allocation).summary(),

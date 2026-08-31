@@ -216,6 +216,14 @@ pub fn SelectionInstructionView::index(self : SelectionInstructionView) -> Int {
 }
 
 ///|
+/// Return the canonical handle for this live instruction.
+pub fn SelectionInstructionView::handle(
+  self : SelectionInstructionView,
+) -> Instruction {
+  Instruction::new(self.construction.owner, self.index)
+}
+
+///|
 /// Borrow the canonical operation. The returned operation is read-only by
 /// contract; target selection must not mutate aggregate payload storage.
 pub fn SelectionInstructionView::operation(

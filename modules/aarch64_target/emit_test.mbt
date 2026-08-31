@@ -8,7 +8,7 @@ test "AArch64 pipeline emits an allocated scalar function" {
   )
   let sum = builder.emit(IntBinary(Add), builder.parameters(), [I64])[0]
   builder.return_([sum])
-  let function = lower(builder.finish(), test_lowering_context())
+  let function = lower(builder.finish_selection_plan(), test_lowering_context())
   let allocation = allocate(function)
   let frame = plan_frame(function, allocation)
   debug_inspect(
@@ -41,7 +41,7 @@ test "AArch64 pipeline emits multiply-add as one instruction" {
     ])[0]
   let sum = builder.emit(IntBinary(Add), [parameters[2], product], [I32])[0]
   builder.return_([sum])
-  let selected = lower(builder.finish(), test_lowering_context())
+  let selected = lower(builder.finish_selection_plan(), test_lowering_context())
   let (object, _) = compile(selected)
   debug_inspect(
     object.code(),
@@ -76,7 +76,7 @@ test "AArch64 pipeline emits a scaled zero-extended register-offset load" {
       [I32],
     )[0]
   builder.return_([loaded])
-  let selected = lower(builder.finish(), test_lowering_context())
+  let selected = lower(builder.finish_selection_plan(), test_lowering_context())
   let (object, _) = compile(selected)
   debug_inspect(
     object.code(),
@@ -113,7 +113,7 @@ test "AArch64 pipeline emits an extended address with a constant displacement" {
       [I32],
     )[0]
   builder.return_([loaded])
-  let selected = lower(builder.finish(), test_lowering_context())
+  let selected = lower(builder.finish_selection_plan(), test_lowering_context())
   let (object, _) = compile(selected)
   debug_inspect(
     object.code(),
@@ -147,9 +147,11 @@ test "AArch64 compile runs the complete target pipeline" {
   let sum = builder.emit(IntBinary(Add), builder.parameters(), [I64])[0]
   builder.return_([sum])
   let selection_events : Array[@vcode.TargetCompileEvent] = []
-  let selected = select(builder.finish(), test_lowering_context(), on_event=event => {
-    selection_events.push(event)
-  })
+  let selected = select(
+    builder.finish_selection_plan(),
+    test_lowering_context(),
+    on_event=event => selection_events.push(event),
+  )
   debug_inspect(
     selection_events,
     content=(
@@ -228,7 +230,7 @@ test "AArch64 lowering does not materialize unused incoming stack parameters" {
     [],
   )
   builder.return_([])
-  let selected = lower(builder.finish(), test_lowering_context())
+  let selected = lower(builder.finish_selection_plan(), test_lowering_context())
   let (object, frame_size) = compile(selected)
   debug_inspect(
     object,
@@ -256,7 +258,7 @@ test "AArch64 lowering materializes an incoming stack parameter when used" {
     [I64],
   )
   builder.return_([builder.parameters()[12]])
-  let selected = lower(builder.finish(), test_lowering_context())
+  let selected = lower(builder.finish_selection_plan(), test_lowering_context())
   let (object, frame_size) = compile(selected)
   debug_inspect(
     object,
@@ -297,7 +299,7 @@ test "AArch64 pipeline emits a fused integer comparison branch" {
   builder.switch_to_block(when_false)
   let zero = builder.emit(I32Const(0U), [], [I32])[0]
   builder.return_([zero])
-  let selected = lower(builder.finish(), test_lowering_context())
+  let selected = lower(builder.finish_selection_plan(), test_lowering_context())
   let (object, frame_size) = compile(selected)
   debug_inspect(
     object,
@@ -352,7 +354,7 @@ test "AArch64 pipeline preserves coalesced unsigned i32 extension" {
   let wrapped = builder.emit(Convert(I32WrapI64), builder.parameters(), [I32])[0]
   let extended = builder.emit(Convert(I64ExtendI32(Unsigned)), [wrapped], [I64])[0]
   builder.return_([extended])
-  let function = lower(builder.finish(), test_lowering_context())
+  let function = lower(builder.finish_selection_plan(), test_lowering_context())
   let allocation = allocate(function)
   let frame = plan_frame(function, allocation)
   debug_inspect(
@@ -385,7 +387,7 @@ test "AArch64 pipeline emits multi-result overflow arithmetic" {
     [I64, I32],
   )
   builder.return_([results[0]])
-  let function = lower(builder.finish(), test_lowering_context())
+  let function = lower(builder.finish_selection_plan(), test_lowering_context())
   let allocation = allocate(function)
   let frame = plan_frame(function, allocation)
   debug_inspect(
@@ -450,7 +452,7 @@ test "AArch64 pipeline emits allocated vector foundation operations" {
       [V128],
     )[0]
   builder.return_([selected])
-  let function = lower(builder.finish(), test_lowering_context())
+  let function = lower(builder.finish_selection_plan(), test_lowering_context())
   let allocation = allocate(function)
   let frame = plan_frame(function, allocation)
   debug_inspect(
@@ -560,7 +562,7 @@ test "AArch64 pipeline preserves vector lane replacement ties" {
       V128,
     ])[0]
   builder.return_([replaced])
-  let function = lower(builder.finish(), test_lowering_context())
+  let function = lower(builder.finish_selection_plan(), test_lowering_context())
   let allocation = allocate(function)
   let frame = plan_frame(function, allocation)
   inspect(
@@ -630,7 +632,7 @@ test "AArch64 pipeline emits vector permutation operations" {
     )[0]
   let swizzled = builder.emit(Vector(Swizzle), [shuffled, parameters[2]], [V128])[0]
   builder.return_([swizzled])
-  let function = lower(builder.finish(), test_lowering_context())
+  let function = lower(builder.finish_selection_plan(), test_lowering_context())
   let allocation = allocate(function)
   let frame = plan_frame(function, allocation)
   debug_inspect(
@@ -794,7 +796,7 @@ test "AArch64 pipeline emits basic vector integer arithmetic" {
       [V128],
     )[0]
   builder.return_([multiplied_words])
-  let function = lower(builder.finish(), test_lowering_context())
+  let function = lower(builder.finish_selection_plan(), test_lowering_context())
   let allocation = allocate(function)
   let frame = plan_frame(function, allocation)
   debug_inspect(
@@ -901,7 +903,7 @@ test "AArch64 pipeline emits vector integer shifts" {
       [V128],
     )[0]
   builder.return_([shifted_unsigned])
-  let function = lower(builder.finish(), test_lowering_context())
+  let function = lower(builder.finish_selection_plan(), test_lowering_context())
   let allocation = allocate(function)
   let frame = plan_frame(function, allocation)
   debug_inspect(
@@ -994,7 +996,7 @@ test "AArch64 pipeline emits vector integer comparisons" {
       [V128],
     )[0]
   builder.return_([greater_or_equal])
-  let function = lower(builder.finish(), test_lowering_context())
+  let function = lower(builder.finish_selection_plan(), test_lowering_context())
   let allocation = allocate(function)
   let frame = plan_frame(function, allocation)
   debug_inspect(
@@ -1064,7 +1066,7 @@ test "AArch64 pipeline emits saturating vector integer arithmetic" {
       [V128],
     )[0]
   builder.return_([unsigned_sub])
-  let function = lower(builder.finish(), test_lowering_context())
+  let function = lower(builder.finish_selection_plan(), test_lowering_context())
   let allocation = allocate(function)
   let frame = plan_frame(function, allocation)
   debug_inspect(
@@ -1134,7 +1136,7 @@ test "AArch64 pipeline emits vector integer min and max" {
       [V128],
     )[0]
   builder.return_([unsigned_max_i64])
-  let function = lower(builder.finish(), test_lowering_context())
+  let function = lower(builder.finish_selection_plan(), test_lowering_context())
   let allocation = allocate(function)
   let frame = plan_frame(function, allocation)
   debug_inspect(
@@ -1218,7 +1220,7 @@ test "AArch64 pipeline emits vector unsigned averages" {
       [V128],
     )[0]
   builder.return_([halfwords])
-  let function = lower(builder.finish(), test_lowering_context())
+  let function = lower(builder.finish_selection_plan(), test_lowering_context())
   let allocation = allocate(function)
   let frame = plan_frame(function, allocation)
   debug_inspect(
@@ -1264,7 +1266,7 @@ test "AArch64 pipeline emits vector byte population count" {
       [V128],
     )[0]
   builder.return_([result])
-  let function = lower(builder.finish(), test_lowering_context())
+  let function = lower(builder.finish_selection_plan(), test_lowering_context())
   let allocation = allocate(function)
   let frame = plan_frame(function, allocation)
   debug_inspect(
@@ -1313,7 +1315,7 @@ test "AArch64 pipeline emits widening vector integer arithmetic" {
       [V128],
     )[0]
   builder.return_([q15])
-  let function = lower(builder.finish(), test_lowering_context())
+  let function = lower(builder.finish_selection_plan(), test_lowering_context())
   let allocation = allocate(function)
   let frame = plan_frame(function, allocation)
   debug_inspect(
@@ -1375,7 +1377,7 @@ test "AArch64 pipeline emits vector integer extension" {
       [V128],
     )[0]
   builder.return_([result])
-  let function = lower(builder.finish(), test_lowering_context())
+  let function = lower(builder.finish_selection_plan(), test_lowering_context())
   let allocation = allocate(function)
   let frame = plan_frame(function, allocation)
   debug_inspect(
@@ -1408,7 +1410,7 @@ test "AArch64 pipeline emits saturating vector narrowing" {
       [V128],
     )[0]
   builder.return_([result])
-  let function = lower(builder.finish(), test_lowering_context())
+  let function = lower(builder.finish_selection_plan(), test_lowering_context())
   let allocation = allocate(function)
   let frame = plan_frame(function, allocation)
   debug_inspect(
@@ -1453,7 +1455,7 @@ test "AArch64 pipeline emits vector truth predicates" {
   let all = builder.emit(Vector(Predicate(AllTrue(I64x2))), [source], [I32])[0]
   let result = builder.emit(IntBinary(Add), [any, all], [I32])[0]
   builder.return_([result])
-  let function = lower(builder.finish(), test_lowering_context())
+  let function = lower(builder.finish_selection_plan(), test_lowering_context())
   let allocation = allocate(function)
   let frame = plan_frame(function, allocation)
   debug_inspect(
@@ -1530,7 +1532,7 @@ test "AArch64 pipeline emits vector integer bitmasks" {
   let doubles = builder.emit(Vector(Predicate(BitMask(I64x2))), [source], [I32])[0]
   let result = builder.emit(IntBinary(Add), [bytes, doubles], [I32])[0]
   builder.return_([result])
-  let function = lower(builder.finish(), test_lowering_context())
+  let function = lower(builder.finish_selection_plan(), test_lowering_context())
   let allocation = allocate(function)
   let frame = plan_frame(function, allocation)
   debug_inspect(
@@ -1659,7 +1661,7 @@ test "AArch64 pipeline emits representative vector float operations" {
       [V128],
     )[0]
   builder.return_([not_equal])
-  let function = lower(builder.finish(), test_lowering_context())
+  let function = lower(builder.finish_selection_plan(), test_lowering_context())
   let allocation = allocate(function)
   let frame = plan_frame(function, allocation)
   debug_inspect(
@@ -1722,7 +1724,7 @@ test "AArch64 pipeline emits vector fused operations without tied operands" {
       [V128],
     )[0]
   builder.return_([result])
-  let function = lower(builder.finish(), test_lowering_context())
+  let function = lower(builder.finish_selection_plan(), test_lowering_context())
   let allocation = allocate(function)
   let frame = plan_frame(function, allocation)
   debug_inspect(
@@ -1787,7 +1789,7 @@ test "AArch64 pipeline emits representative vector numeric conversions" {
     )[0]
   let result = builder.emit(Vector(Convert(DemoteZeroF64x2)), [float], [V128])[0]
   builder.return_([result])
-  let function = lower(builder.finish(), test_lowering_context())
+  let function = lower(builder.finish_selection_plan(), test_lowering_context())
   let allocation = allocate(function)
   let frame = plan_frame(function, allocation)
   debug_inspect(
@@ -1846,7 +1848,7 @@ test "AArch64 pipeline emits relaxed dot8-to16 across allocation aliases" {
       [V128],
     )[0]
   builder.return_([result])
-  let function = lower(builder.finish(), test_lowering_context())
+  let function = lower(builder.finish_selection_plan(), test_lowering_context())
   let allocation = allocate(function)
   let frame = plan_frame(function, allocation)
   debug_inspect(
@@ -1905,7 +1907,7 @@ test "AArch64 pipeline emits relaxed dot8-to32-add with allocated temporaries" {
       [V128],
     )[0]
   builder.return_([result])
-  let function = lower(builder.finish(), test_lowering_context())
+  let function = lower(builder.finish_selection_plan(), test_lowering_context())
   let allocation = allocate(function)
   let frame = plan_frame(function, allocation)
   debug_inspect(
@@ -2052,7 +2054,7 @@ test "AArch64 pipeline emits vector memory at the faulting instruction" {
   )
   |> ignore
   builder.return_([lane])
-  let function = lower(builder.finish(), test_lowering_context())
+  let function = lower(builder.finish_selection_plan(), test_lowering_context())
   let allocation = allocate(function)
   let frame = plan_frame(function, allocation)
   debug_inspect(
@@ -2188,7 +2190,7 @@ test "AArch64 pipeline emits sequentially consistent atomic loops" {
     )[0]
   builder.emit(AtomicFence, [], []) |> ignore
   builder.return_([exchanged])
-  let function = lower(builder.finish(), test_lowering_context())
+  let function = lower(builder.finish_selection_plan(), test_lowering_context())
   let allocation = allocate(function)
   let frame = plan_frame(function, allocation)
   inspect(
@@ -2366,7 +2368,7 @@ test "AArch64 pipeline emits standalone safepoint roots at a NOP marker" {
   )
   |> ignore
   builder.return_([])
-  let function = lower(builder.finish(), test_lowering_context())
+  let function = lower(builder.finish_selection_plan(), test_lowering_context())
   let allocation = allocate(function)
   let frame = plan_frame(function, allocation)
   debug_inspect(
@@ -2408,7 +2410,7 @@ test "AArch64 pipeline emits addresses inside the semantic stack-object area" {
   let last_address = builder.emit(StackAddress(last), [], [Ptr64])[0]
   ignore(first_address)
   builder.return_([last_address])
-  let function = lower(builder.finish(), test_lowering_context())
+  let function = lower(builder.finish_selection_plan(), test_lowering_context())
   let allocation = allocate(function)
   let frame = plan_frame(function, allocation)
   debug_inspect(
@@ -2456,7 +2458,7 @@ test "AArch64 pipeline materializes a large semantic stack-object offset" {
   let object = builder.create_stack_object(8, 8)
   let address = builder.emit(StackAddress(object), [], [Ptr64])[0]
   builder.return_([address])
-  let function = lower(builder.finish(), test_lowering_context())
+  let function = lower(builder.finish_selection_plan(), test_lowering_context())
   let allocation = allocate(function)
   let frame = plan_frame(function, allocation)
   debug_inspect(
@@ -2530,7 +2532,7 @@ test "AArch64 pipeline emits far I32 spill slots" {
   let offset = builder.emit(Convert(I64ExtendI32(Unsigned)), [sum], [I64])[0]
   let result = builder.emit(PointerOffset, [address, offset], [Ptr64])[0]
   builder.return_([result])
-  let selected = lower(builder.finish(), test_lowering_context())
+  let selected = lower(builder.finish_selection_plan(), test_lowering_context())
   let (_, frame_size) = compile(selected)
   inspect(frame_size, content="16512")
 }
@@ -2558,7 +2560,7 @@ test "AArch64 pipeline emits far F32 spill slots" {
   )
   |> ignore
   builder.return_([sum])
-  let selected = lower(builder.finish(), test_lowering_context())
+  let selected = lower(builder.finish_selection_plan(), test_lowering_context())
   let (_, frame_size) = compile(selected)
   inspect(frame_size, content="16480")
 }
@@ -2581,7 +2583,7 @@ test "AArch64 pipeline patches conditional control flow" {
   builder.switch_to_block(when_false)
   let zero = builder.emit(I32Const(0U), [], [I32])[0]
   builder.return_([zero])
-  let function = lower(builder.finish(), test_lowering_context())
+  let function = lower(builder.finish_selection_plan(), test_lowering_context())
   let allocation = allocate(function)
   let frame = plan_frame(function, allocation)
   debug_inspect(
@@ -2640,7 +2642,7 @@ test "AArch64 pipeline materializes block arguments on their selected edges" {
   builder.jump(merge, [parameters[2]])
   builder.switch_to_block(merge)
   builder.return_([builder.block_parameters(merge)[0]])
-  let function = lower(builder.finish(), test_lowering_context())
+  let function = lower(builder.finish_selection_plan(), test_lowering_context())
   let allocation = allocate(function)
   let frame = plan_frame(function, allocation)
   inspect(
@@ -2716,7 +2718,7 @@ test "AArch64 conditional edges isolate their parallel copies" {
   builder.branch(parameters[0], merge, [parameters[1]], merge, [parameters[2]])
   builder.switch_to_block(merge)
   builder.return_([builder.block_parameters(merge)[0]])
-  let function = lower(builder.finish(), test_lowering_context())
+  let function = lower(builder.finish_selection_plan(), test_lowering_context())
   let allocation = allocate(function)
   let frame = plan_frame(function, allocation)
   inspect(
@@ -2858,7 +2860,7 @@ test "AArch64 direct calls preserve LR and emit typed call relocations" {
   )
   |> ignore
   builder.return_([])
-  let function = lower(builder.finish(), test_lowering_context())
+  let function = lower(builder.finish_selection_plan(), test_lowering_context())
   let allocation = allocate(function)
   let frame = plan_frame(function, allocation)
   inspect(
@@ -2951,7 +2953,10 @@ test "AArch64 emits the internal result-area ABI" {
   )
   let results = builder.emit(Call(call), builder.parameters(), types)
   builder.return_(results)
-  let function = lower(builder.finish(), compact_result_context())
+  let function = lower(
+    builder.finish_selection_plan(),
+    compact_result_context(),
+  )
   let allocation = allocate(function)
   let frame = plan_frame(function, allocation)
   inspect(
@@ -3056,7 +3061,10 @@ test "AArch64 emits result-area forwarding for internal tail calls" {
     @semantic.CallBehavior::new(ReadWrite, true, true, false, false),
   )
   builder.tail_call(call, builder.parameters())
-  let function = lower(builder.finish(), compact_result_context())
+  let function = lower(
+    builder.finish_selection_plan(),
+    compact_result_context(),
+  )
   let allocation = allocate(function)
   let frame = plan_frame(function, allocation)
   inspect(
@@ -3110,7 +3118,10 @@ test "AArch64 emits jump-table and sparse switches" {
     dense.switch_to_block(target)
     dense.return_([])
   }
-  let dense_function = lower(dense.finish(), test_lowering_context())
+  let dense_function = lower(
+    dense.finish_selection_plan(),
+    test_lowering_context(),
+  )
   let dense_allocation = allocate(dense_function)
   debug_inspect(
     emit(
@@ -3190,7 +3201,10 @@ test "AArch64 emits jump-table and sparse switches" {
     sparse.switch_to_block(target)
     sparse.return_([])
   }
-  let sparse_function = lower(sparse.finish(), test_lowering_context())
+  let sparse_function = lower(
+    sparse.finish_selection_plan(),
+    test_lowering_context(),
+  )
   let sparse_allocation = allocate(sparse_function)
   debug_inspect(
     emit(
@@ -3267,7 +3281,10 @@ test "AArch64 emits jump-table and sparse switches" {
     edge_switch.switch_to_block(target)
     edge_switch.return_(edge_switch.block_parameters(target))
   }
-  let edge_function = lower(edge_switch.finish(), test_lowering_context())
+  let edge_function = lower(
+    edge_switch.finish_selection_plan(),
+    test_lowering_context(),
+  )
   let edge_allocation = allocate(edge_function)
   debug_inspect(
     emit(
@@ -3364,7 +3381,10 @@ test "AArch64 emits noreturn calls and typed traps" {
       [noreturn.parameters()[0]],
     ),
   )
-  let noreturn_function = lower(noreturn.finish(), test_lowering_context())
+  let noreturn_function = lower(
+    noreturn.finish_selection_plan(),
+    test_lowering_context(),
+  )
   let noreturn_allocation = allocate(noreturn_function)
   debug_inspect(
     emit(
@@ -3441,7 +3461,10 @@ test "AArch64 emits noreturn calls and typed traps" {
   )
   trapped.trap(User(7))
   trapped.set_terminator_source(@semantic.SourceLocation::new("trap.wat", 3, 9))
-  let trap_function = lower(trapped.finish(), test_lowering_context())
+  let trap_function = lower(
+    trapped.finish_selection_plan(),
+    test_lowering_context(),
+  )
   let trap_allocation = allocate(trap_function)
   debug_inspect(
     emit(
@@ -3486,7 +3509,7 @@ test "AArch64 platform calls store overflow arguments in the outgoing area" {
   )
   builder.emit(Call(call), builder.parameters(), []) |> ignore
   builder.return_([])
-  let function = lower(builder.finish(), test_lowering_context())
+  let function = lower(builder.finish_selection_plan(), test_lowering_context())
   let allocation = allocate(function)
   let frame = plan_frame(function, allocation)
   debug_inspect(
@@ -3564,7 +3587,7 @@ test "AArch64 internal calls emit code-symbol relocations" {
   )
   builder.emit(Call(call), builder.parameters(), []) |> ignore
   builder.return_([])
-  let function = lower(builder.finish(), test_lowering_context())
+  let function = lower(builder.finish_selection_plan(), test_lowering_context())
   let allocation = allocate(function)
   let frame = plan_frame(function, allocation)
   debug_inspect(
@@ -3652,7 +3675,7 @@ test "AArch64 calls zero-extend stack i32 arguments" {
   )
   builder.emit(Call(call), operands, []) |> ignore
   builder.return_([])
-  let function = lower(builder.finish(), test_lowering_context())
+  let function = lower(builder.finish_selection_plan(), test_lowering_context())
   let allocation = allocate(function)
   let frame = plan_frame(function, allocation)
   let code = emit(function, allocation, frame).code()
@@ -3693,7 +3716,7 @@ test "AArch64 internal calls keep caller-owned outgoing stack arguments" {
   )
   builder.emit(Call(call), operands, []) |> ignore
   builder.return_([])
-  let function = lower(builder.finish(), test_lowering_context())
+  let function = lower(builder.finish_selection_plan(), test_lowering_context())
   let allocation = allocate(function)
   let frame = plan_frame(function, allocation)
   inspect(
@@ -3809,7 +3832,7 @@ test "AArch64 indirect calls resolve callee and arguments before BLR" {
   )
   builder.emit(Call(call), [parameters[1], parameters[0]], []) |> ignore
   builder.return_([])
-  let function = lower(builder.finish(), test_lowering_context())
+  let function = lower(builder.finish_selection_plan(), test_lowering_context())
   let allocation = allocate(function)
   let frame = plan_frame(function, allocation)
   debug_inspect(
@@ -3875,7 +3898,7 @@ test "AArch64 true tail calls tear down the frame and emit jump relocations" {
     @semantic.CallBehavior::new(ReadWrite, true, true, false, false),
   )
   builder.tail_call(call, builder.parameters())
-  let function = lower(builder.finish(), test_lowering_context())
+  let function = lower(builder.finish_selection_plan(), test_lowering_context())
   let allocation = allocate(function)
   let frame = plan_frame(function, allocation)
   debug_inspect(
@@ -3917,7 +3940,7 @@ test "AArch64 indirect true tail calls resolve the callee before BR" {
     @semantic.CallBehavior::new(ReadWrite, true, true, false, false),
   )
   builder.tail_call(call, [parameters[1], parameters[0]])
-  let function = lower(builder.finish(), test_lowering_context())
+  let function = lower(builder.finish_selection_plan(), test_lowering_context())
   let allocation = allocate(function)
   let frame = plan_frame(function, allocation)
   debug_inspect(
@@ -3966,7 +3989,7 @@ test "AArch64 true tail calls preserve caller SP with stack arguments" {
     @semantic.CallBehavior::new(ReadWrite, true, true, false, false),
   )
   builder.tail_call(call, operands)
-  let function = lower(builder.finish(), test_lowering_context())
+  let function = lower(builder.finish_selection_plan(), test_lowering_context())
   let allocation = allocate(function)
   let frame = plan_frame(function, allocation)
   inspect(
@@ -4123,7 +4146,7 @@ test "AArch64 scalar memory emission records faulting instructions and legalizes
   )
   |> ignore
   builder.return_([loaded])
-  let function = lower(builder.finish(), test_lowering_context())
+  let function = lower(builder.finish_selection_plan(), test_lowering_context())
   let allocation = allocate(function)
   let frame = plan_frame(function, allocation)
   debug_inspect(
@@ -4198,7 +4221,7 @@ test "AArch64 checked division emits distinct trap sites" {
       ),
     )[0]
   builder.return_([result])
-  let function = lower(builder.finish(), test_lowering_context())
+  let function = lower(builder.finish_selection_plan(), test_lowering_context())
   let allocation = allocate(function)
   let frame = plan_frame(function, allocation)
   debug_inspect(
@@ -4280,7 +4303,7 @@ test "AArch64 signed remainder skips the division overflow trap" {
       [I32],
     )[0]
   builder.return_([result])
-  let function = lower(builder.finish(), test_lowering_context())
+  let function = lower(builder.finish_selection_plan(), test_lowering_context())
   let allocation = allocate(function)
   let frame = plan_frame(function, allocation)
   debug_inspect(
@@ -4372,7 +4395,7 @@ test "AArch64 emits remaining pure scalar integer operations" {
       [I64],
     )[0]
   builder.return_([unsigned_high32, unsigned_high64])
-  let function = lower(builder.finish(), test_lowering_context())
+  let function = lower(builder.finish_selection_plan(), test_lowering_context())
   let allocation = allocate(function)
   let frame = plan_frame(function, allocation)
   debug_inspect(
@@ -4541,7 +4564,7 @@ test "AArch64 emits null carriers references and scalar values" {
     pointer_equal, reference_not_equal, selected32, selected64, selected_pointer,
     selected_reference, selected32_float, selected64_float,
   ])
-  let function = lower(builder.finish(), test_lowering_context())
+  let function = lower(builder.finish_selection_plan(), test_lowering_context())
   let allocation = allocate(function)
   let frame = plan_frame(function, allocation)
   debug_inspect(
@@ -4692,7 +4715,7 @@ test "AArch64 emits environment paths and typed symbol relocations" {
     )[0]
   builder.return_([code, external, data, environment])
   let context = test_lowering_context().with_environment_field(field, [8, 24])
-  let function = lower(builder.finish(), context)
+  let function = lower(builder.finish_selection_plan(), context)
   let allocation = allocate(function)
   let frame = plan_frame(function, allocation)
   debug_inspect(
@@ -4808,7 +4831,7 @@ test "AArch64 scalar floating-point emission preserves constant bits" {
       [I32],
     )[0]
   builder.return_([sum, comparison])
-  let function = lower(builder.finish(), test_lowering_context())
+  let function = lower(builder.finish_selection_plan(), test_lowering_context())
   let allocation = allocate(function)
   let frame = plan_frame(function, allocation)
   debug_inspect(
@@ -4890,7 +4913,7 @@ test "AArch64 scalar conversion emission preserves register-bank transfers" {
   let promoted = builder.emit(Convert(F64PromoteF32), [parameters[3]], [F64])[0]
   let float_result = builder.emit(FloatBinary(Add), [converted, promoted], [F64])[0]
   builder.return_([integer_result, float_result])
-  let function = lower(builder.finish(), test_lowering_context())
+  let function = lower(builder.finish_selection_plan(), test_lowering_context())
   let allocation = allocate(function)
   let frame = plan_frame(function, allocation)
   debug_inspect(
@@ -4966,7 +4989,7 @@ test "AArch64 emits scalar rounding and NaN predicates" {
       [I32],
     )[0]
   builder.return_([nearest32, nearest64, ordered, unordered])
-  let function = lower(builder.finish(), test_lowering_context())
+  let function = lower(builder.finish_selection_plan(), test_lowering_context())
   let allocation = allocate(function)
   let frame = plan_frame(function, allocation)
   debug_inspect(
@@ -5077,7 +5100,7 @@ test "AArch64 emits scalar min max and bit-exact copy-sign" {
       F64,
     ])[0]
   builder.return_([minimum, maximum, copied32, copied64])
-  let function = lower(builder.finish(), test_lowering_context())
+  let function = lower(builder.finish_selection_plan(), test_lowering_context())
   let allocation = allocate(function)
   let frame = plan_frame(function, allocation)
   debug_inspect(
@@ -5275,7 +5298,7 @@ test "AArch64 emits every scalar fused operation" {
       [F64],
     )[0]
   builder.return_([negated_subtract32, negated_subtract64])
-  let function = lower(builder.finish(), test_lowering_context())
+  let function = lower(builder.finish_selection_plan(), test_lowering_context())
   let allocation = allocate(function)
   let frame = plan_frame(function, allocation)
   debug_inspect(
@@ -5355,7 +5378,7 @@ test "AArch64 trapping float-to-int emits three precise trap sites" {
       [I64],
     )[0]
   builder.return_([trapping, saturating])
-  let function = lower(builder.finish(), test_lowering_context())
+  let function = lower(builder.finish_selection_plan(), test_lowering_context())
   let allocation = allocate(function)
   let frame = plan_frame(function, allocation)
   debug_inspect(
@@ -5587,7 +5610,7 @@ test "AArch64 pipeline threads a moveless loop back edge to the loop head" {
   builder.jump(loop_head, [next_n, next_x])
   builder.switch_to_block(exit)
   builder.return_([next_x])
-  let selected = lower(builder.finish(), test_lowering_context())
+  let selected = lower(builder.finish_selection_plan(), test_lowering_context())
   let (object, _) = compile(selected)
   // Decode every branch and record its byte displacement. The loop's
   // conditional branch must jump backward to the loop body, and no
@@ -5652,7 +5675,7 @@ test "AArch64 pipeline keeps a loop back edge with moves unthreaded" {
   builder.jump(loop_head, [next_n, next_n])
   builder.switch_to_block(exit)
   builder.return_([next_x])
-  let selected = lower(builder.finish(), test_lowering_context())
+  let selected = lower(builder.finish_selection_plan(), test_lowering_context())
   let (object, _) = compile(selected)
   let code = object.code()
   let branch_targets : Array[(Int, Int)] = []

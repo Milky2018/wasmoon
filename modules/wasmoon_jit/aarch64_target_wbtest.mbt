@@ -12,7 +12,7 @@ test "AArch64 target compiles semantic MachV through the final target seams" {
     ])[0]
   builder.return_([result])
   debug_inspect(
-    build_aarch64_target(builder.finish()).object,
+    build_aarch64_target(builder.finish_prepared_selection()).object,
     content=(
       #|{
       #|  architecture: AArch64,
@@ -46,7 +46,7 @@ test "AArch64 target binds product environment fields explicitly" {
     )[0]
   builder.return_([result])
   debug_inspect(
-    build_aarch64_target(builder.finish(), environment_field_path=fn(
+    build_aarch64_target(builder.finish_prepared_selection(), environment_field_path=fn(
       candidate,
     ) {
       if candidate == field {
@@ -103,8 +103,8 @@ test "Wasmoon runtime ABI elaboration makes roots and stack maps explicit" {
     )[0]
   builder.return_([result])
   inspect(
-    elaborate_wasmoon_runtime_abi(
-      builder.finish(),
+    elaborate_wasmoon_runtime_abi_selection_plan(
+      builder.finish_prepared_selection(),
       [allocation_symbol],
       (
         @semantic_machv.ExternalSymbol::new(
@@ -112,7 +112,7 @@ test "Wasmoon runtime ABI elaboration makes roots and stack maps explicit" {
         ),
         @semantic_machv.ExternalSymbol::new("wasmoon.runtime.gc.pop_root_scope"),
       ),
-    ),
+    ).print(),
     content=(
       #|machv shadow_allocation_abi [internal](v0:ptr64, v1:gcref64, v2:gcref64) -> (i64) {
       #|stack0: size=8, alignment=8
@@ -187,8 +187,8 @@ test "Wasmoon runtime ABI elaboration shares one root-scope stack object" {
     )[0]
   builder.return_([result])
   inspect(
-    elaborate_wasmoon_runtime_abi(
-      builder.finish(),
+    elaborate_wasmoon_runtime_abi_selection_plan(
+      builder.finish_prepared_selection(),
       [],
       (
         @semantic_machv.ExternalSymbol::new(
@@ -196,7 +196,7 @@ test "Wasmoon runtime ABI elaboration shares one root-scope stack object" {
         ),
         @semantic_machv.ExternalSymbol::new("wasmoon.runtime.gc.pop_root_scope"),
       ),
-    ),
+    ).print(),
     content=(
       #|machv shared_root_scope_object [internal](v0:ptr64, v1:gcref64, v2:gcref64, v3:gcref64) -> (i64) {
       #|stack0: size=24, alignment=16
@@ -262,8 +262,8 @@ test "runtime ABI elaboration follows CFG order instead of block storage order" 
   builder.switch_to_block(return_block)
   builder.return_([value])
   inspect(
-    elaborate_wasmoon_runtime_abi(
-      builder.finish(),
+    elaborate_wasmoon_runtime_abi_selection_plan(
+      builder.finish_prepared_selection(),
       [],
       (
         @semantic_machv.ExternalSymbol::new(
@@ -271,7 +271,7 @@ test "runtime ABI elaboration follows CFG order instead of block storage order" 
         ),
         @semantic_machv.ExternalSymbol::new("wasmoon.runtime.gc.pop_root_scope"),
       ),
-    ),
+    ).print(),
     content=(
       #|machv shadow_cfg_order [internal]() -> (i32) {
       #|block0:
@@ -304,7 +304,7 @@ test "AArch64 target code executes through the production entry ABI" {
       I64,
     ])[0]
   builder.return_([result])
-  let object = build_aarch64_target(builder.finish()).object
+  let object = build_aarch64_target(builder.finish_prepared_selection()).object
   let candidate_bytes = object.code().map(byte => byte.to_int())
   guard ExecCode::try_alloc(candidate_bytes) is Some(candidate) else {
     fail("failed to allocate executable candidate code")
@@ -346,7 +346,7 @@ test "JIT orchestration preserves the typed target link failure" {
   )
   let entry = function.new_block0()
   entry.set_terminator(Return([]))
-  let semantic = @milkir_machv.lower_core_function_with_protocol(
+  let semantic = @milkir_machv.lower_core_prepared_selection_with_protocol(
     function,
     Platform,
   )
@@ -439,12 +439,12 @@ test "AArch64 target executes internal and external relocations" {
   caller.return_([called])
 
   let callee_plan = @aarch64_target.prepare_aarch64_link(
-    build_aarch64_target(callee.finish()).object,
+    build_aarch64_target(callee.finish_prepared_selection()).object,
   ) catch {
     error => fail("failed to prepare callee link plan: \{error}")
   }
   let caller_plan = @aarch64_target.prepare_aarch64_link(
-    build_aarch64_target(caller.finish()).object,
+    build_aarch64_target(caller.finish_prepared_selection()).object,
   ) catch {
     error => fail("failed to prepare caller link plan: \{error}")
   }

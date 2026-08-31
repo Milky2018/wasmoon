@@ -237,6 +237,15 @@ pub fn Function::print(self : Function) -> String {
 }
 
 ///|
+/// Render a sealed selection plan without exposing its canonical storage.
+pub fn SelectionPlan::print(
+  self : SelectionPlan,
+) -> String raise MachVVerifyError {
+  self.require_verified()
+  Function::from_construction(self.construction).print()
+}
+
+///|
 fn format_stack_map(stack_map : StackMapMetadata?) -> String {
   match stack_map {
     Some(metadata) =>

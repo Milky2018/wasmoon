@@ -76,7 +76,7 @@ pub fn plan_milkir_integration_for_target(
   target : NativeTarget,
 ) -> JitIntegrationPlan raise JitPipelineError {
   if target is AArch64 {
-    let semantic = @milkir_machv.lower_core_function_with_protocol(
+    let semantic = @milkir_machv.lower_core_prepared_selection_with_protocol(
       func,
       Platform,
     ) catch {

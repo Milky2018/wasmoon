@@ -675,6 +675,7 @@ pub fn SelectionEdgeView::target(Self) -> Block
 pub struct SelectionInstructionView {
   // private fields
 }
+pub fn SelectionInstructionView::handle(Self) -> Instruction
 pub fn SelectionInstructionView::index(Self) -> Int
 pub fn SelectionInstructionView::metadata(Self) -> InstructionMetadataView
 pub fn SelectionInstructionView::operands(Self) -> ArrayView[Value]
@@ -704,6 +705,7 @@ pub fn SelectionPlan::instruction_result_count(Self, Instruction) -> Int?
 pub fn SelectionPlan::instruction_slot_count(Self) -> Int
 pub fn SelectionPlan::name(Self) -> String
 pub fn SelectionPlan::parameters(Self) -> Array[Value]
+pub fn SelectionPlan::print(Self) -> String raise MachVVerifyError
 pub fn SelectionPlan::protocol(Self) -> CallProtocol
 pub fn SelectionPlan::require_verified(Self) -> Unit raise MachVVerifyError
 pub fn SelectionPlan::signature(Self) -> Signature
