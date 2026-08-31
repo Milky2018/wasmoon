@@ -972,6 +972,38 @@ test "optimizer keeps block params forwarded through jump args" {
 }
 
 ///|
+test "optimizer removes dead branch arguments with their block parameters" {
+  let builder = FunctionBuilder::FunctionBuilder("dead_branch_params")
+  let cond = builder.add_param(I32)
+  builder.add_result(I32)
+  let join = builder.create_block()
+  let used = builder.iconst_i32(7)
+  let dead = builder.iconst_i32(9)
+  builder.branch(cond, join, [used, dead], join, [used, dead])
+  let result = builder.add_block_param(join, I32)
+  builder.add_block_param(join, I32) |> ignore
+  builder.switch_to_block(join)
+  builder.return_([result])
+  let func = builder.get_function()
+  inspect(eliminate_dead_block_params(func).changed, content="true")
+  inspect(
+    func.print(),
+    content=(
+      #|function dead_branch_params(v0:i32) -> i32 {
+      #|block0:
+      #|    v1:i32 = iconst 7
+      #|    v2:i32 = iconst 9
+      #|    branch v0, block1(v1), block1(v1)
+      #|block1(v3:i32):
+      #|    return v3
+      #|}
+      #|
+    ),
+  )
+  inspect(func.verify(), content="()")
+}
+
+///|
 test "optimizer removes constant block params and rewrites uses" {
   let builder = FunctionBuilder::FunctionBuilder("const_block_params")
   builder.add_result(I32)
@@ -1013,10 +1045,8 @@ test "optimizer removes constant branch block params" {
   builder.switch_to_block(join)
   builder.return_([param])
   let func = builder.get_function()
-  // TODO(milkir): extend constant block-param elimination to inspect Branch
-  // arguments directly, or run branch simplification before this standalone pass.
   let result = eliminate_constant_block_params(func)
-  inspect(result.changed, content="false")
+  inspect(result.changed, content="true")
   inspect(
     func.print(),
     content=(
@@ -1024,9 +1054,9 @@ test "optimizer removes constant branch block params" {
       #|block0:
       #|    v0:i32 = iconst 1
       #|    v1:i32 = iconst 7
-      #|    branch v0, block1(v1), block1(v1)
-      #|block1(v2:i32):
-      #|    return v2
+      #|    branch v0, block1(), block1()
+      #|block1:
+      #|    return v1
       #|}
       #|
     ),
@@ -1115,6 +1145,38 @@ test "optimizer simplifies constant brz" {
       #|block2:
       #|    v2:i32 = iconst 100
       #|    return v2
+      #|}
+      #|
+    ),
+  )
+  inspect(func.verify(), content="()")
+}
+
+///|
+test "optimizer simplifies constant branch with block arguments" {
+  let builder = FunctionBuilder::FunctionBuilder("branch_simp_args")
+  builder.add_result(I32)
+  let target = builder.create_block()
+  let condition = builder.iconst_i32(1)
+  let on_true = builder.iconst_i32(42)
+  let on_false = builder.iconst_i32(100)
+  builder.branch(condition, target, [on_true], target, [on_false])
+  let result = builder.add_block_param(target, I32)
+  builder.switch_to_block(target)
+  builder.return_([result])
+  let func = builder.get_function()
+  inspect(simplify_branches(func).changed, content="true")
+  inspect(
+    func.print(),
+    content=(
+      #|function branch_simp_args() -> i32 {
+      #|block0:
+      #|    v0:i32 = iconst 1
+      #|    v1:i32 = iconst 42
+      #|    v2:i32 = iconst 100
+      #|    jump block1(v1)
+      #|block1(v3:i32):
+      #|    return v3
       #|}
       #|
     ),
@@ -1219,6 +1281,45 @@ test "optimizer threads jump args through block params" {
       #|block2(v4:i32, v5:i32):
       #|    v6:i32 = iadd v4, v5
       #|    return v6
+      #|}
+      #|
+    ),
+  )
+  inspect(func.verify(), content="()")
+}
+
+///|
+test "optimizer threads branch args through block params" {
+  let builder = FunctionBuilder::FunctionBuilder("thread_branch_args")
+  let condition = builder.add_param(I32)
+  builder.add_result(I32)
+  let middle = builder.create_block()
+  let exit = builder.create_block()
+  let a = builder.iconst_i32(1)
+  let b = builder.iconst_i32(2)
+  builder.branch(condition, middle, [a, b], middle, [b, a])
+  let p0 = builder.add_block_param(middle, I32)
+  let p1 = builder.add_block_param(middle, I32)
+  builder.switch_to_block(middle)
+  builder.jump(exit, [p1, p0])
+  let q0 = builder.add_block_param(exit, I32)
+  let q1 = builder.add_block_param(exit, I32)
+  builder.switch_to_block(exit)
+  let sum = builder.iadd(q0, q1)
+  builder.return_([sum])
+  let func = builder.get_function()
+  inspect(thread_jumps(func).changed, content="true")
+  inspect(
+    func.print(),
+    content=(
+      #|function thread_branch_args(v0:i32) -> i32 {
+      #|block0:
+      #|    v1:i32 = iconst 1
+      #|    v2:i32 = iconst 2
+      #|    branch v0, block2(v2, v1), block2(v1, v2)
+      #|block2(v5:i32, v6:i32):
+      #|    v7:i32 = iadd v5, v6
+      #|    return v7
       #|}
       #|
     ),

@@ -274,6 +274,7 @@ pub fn FunctionBuilder::block_params(Self, Block) -> Array[Value]
 pub fn FunctionBuilder::bnot(Self, Value) -> Value
 pub fn FunctionBuilder::bor(Self, Value, Value) -> Value
 pub fn FunctionBuilder::br_table(Self, Value, Array[Block], Block) -> Unit
+pub fn FunctionBuilder::branch(Self, Value, Block, Array[Value], Block, Array[Value]) -> Unit
 pub fn FunctionBuilder::brnz(Self, Value, Block, Block) -> Unit
 pub fn FunctionBuilder::brz(Self, Value, Block, Block) -> Unit
 pub fn FunctionBuilder::bxor(Self, Value, Value) -> Value

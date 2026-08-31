@@ -214,15 +214,34 @@ fn Translator::translate_br(self : Translator, depth : Int) -> Unit {
 }
 
 ///|
-/// Translate a br_if instruction
-/// Critical edge splitting is needed because brnz doesn't support block args
+/// Branch directly when no try-table cleanup is needed. An edge that exits a
+/// handler scope still needs its own block because cleanup executes only when
+/// that edge is taken.
+fn Translator::branch_with_unwind(
+  self : Translator,
+  condition : Value,
+  target : Block,
+  arguments : Array[Value],
+  fallthrough : Block,
+  target_handler_depth : Int,
+) -> Unit {
+  if target_handler_depth == self.try_handler_stack.length() {
+    self.builder.branch(condition, target, arguments, fallthrough, [])
+    return
+  }
+  let taken = self.builder.create_block()
+  self.builder.brnz(condition, taken, fallthrough)
+  self.builder.switch_to_block(taken)
+  self.unwind_try_handlers_to_depth(target_handler_depth)
+  self.builder.jump(target, arguments)
+}
+
+///|
+/// Translate a br_if instruction.
 fn Translator::translate_br_if(self : Translator, depth : Int) -> Unit {
   let cond = self.pop()
   let idx = self.block_stack.length() - 1 - depth
-
-  // For br_if, we need a fallthrough block and a taken block (critical edge split)
   let fallthrough = self.builder.create_block()
-  let taken = self.builder.create_block()
   if idx >= 0 && idx < self.block_stack.length() {
     // Jump to a block within the function
     let frame = self.block_stack[idx]
@@ -238,17 +257,14 @@ fn Translator::translate_br_if(self : Translator, depth : Int) -> Unit {
     }
 
     self.push_local_args(args, frame.local_params)
-
-    // Branch: taken goes to intermediate block, not-taken falls through
-    self.builder.brnz(cond, taken, fallthrough)
-
-    // Critical edge split: taken block jumps to target with args
-    self.builder.switch_to_block(taken)
     self.mark_block_frame_reachable(idx)
-    self.unwind_try_handlers_to_depth(frame.handler_depth)
-    self.builder.jump(frame.block, args)
-
-    // Continue with fallthrough
+    self.branch_with_unwind(
+      cond,
+      frame.block,
+      args,
+      fallthrough,
+      frame.handler_depth,
+    )
     self.builder.switch_to_block(fallthrough)
   } else if idx == -1 {
     // Jump to function level (early return)
@@ -264,15 +280,7 @@ fn Translator::translate_br_if(self : Translator, depth : Int) -> Unit {
       )
     }
 
-    // Branch: taken goes to intermediate block, not-taken falls through
-    self.builder.brnz(cond, taken, fallthrough)
-
-    // Critical edge split: taken block jumps to return continuation
-    self.builder.switch_to_block(taken)
-    self.unwind_try_handlers_to_depth(0)
-    self.builder.jump(ret_cont, args)
-
-    // Continue with fallthrough
+    self.branch_with_unwind(cond, ret_cont, args, fallthrough, 0)
     self.builder.switch_to_block(fallthrough)
   }
 }

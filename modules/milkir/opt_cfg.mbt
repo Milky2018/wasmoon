@@ -94,6 +94,75 @@ fn compress_replace_array(replace_ids : Array[Int]) -> Unit {
 }
 
 ///|
+fn append_block_argument_pairs(
+  pairs : Array[(Int, Int)],
+  target : Int,
+  arguments : Array[Value],
+  func : Function,
+  block_idx : Array[Int],
+) -> Unit {
+  if target < 0 || target >= block_idx.length() || block_idx[target] < 0 {
+    return
+  }
+  let target_block = func.blocks[block_idx[target]]
+  let count = target_block.params.length().min(arguments.length())
+  for i in 0..<count {
+    pairs.push((target_block.params[i].0.id, arguments[i].id))
+  }
+}
+
+///|
+fn collect_block_argument_pairs(
+  func : Function,
+  block_idx : Array[Int],
+) -> Array[(Int, Int)] {
+  let pairs : Array[(Int, Int)] = []
+  for block in func.blocks {
+    match block.terminator {
+      Some(Jump(target, arguments)) =>
+        append_block_argument_pairs(pairs, target, arguments, func, block_idx)
+      Some(Branch(_, true_target, true_args, false_target, false_args)) => {
+        append_block_argument_pairs(
+          pairs, true_target, true_args, func, block_idx,
+        )
+        append_block_argument_pairs(
+          pairs, false_target, false_args, func, block_idx,
+        )
+      }
+      _ => ()
+    }
+  }
+  pairs
+}
+
+///|
+fn retained_block_arguments(
+  target : Int,
+  arguments : Array[Value],
+  block_idx : Array[Int],
+  params_to_keep : Array[Array[Int]],
+) -> Array[Value]? {
+  if target < 0 || target >= block_idx.length() {
+    return None
+  }
+  let target_index = block_idx[target]
+  if target_index < 0 || target_index >= params_to_keep.length() {
+    return None
+  }
+  let keep = params_to_keep[target_index]
+  if keep.length() == arguments.length() {
+    return None
+  }
+  let retained : Array[Value] = []
+  for index in keep {
+    if index < arguments.length() {
+      retained.push(arguments[index])
+    }
+  }
+  Some(retained)
+}
+
+///|
 /// Constant Block Parameter Elimination
 /// Removes block parameters that always take the same value across all incoming edges.
 /// This mirrors Cranelift's constant-phi removal, but operates on IR block params.
@@ -129,30 +198,10 @@ fn eliminate_constant_block_params(func : Function) -> OptResult {
   // This mirrors Cranelift's block-summary approach and avoids repeated
   // block/edge lookup work in each solver iteration.
   let propagation_pairs : Array[(Int, Int)] = []
-  for block in func.blocks {
-    if block.terminator is Some(Jump(target, args)) {
-      if args.length() == 0 {
-        continue
-      }
-      if target < 0 || target >= block_idx.length() {
-        continue
-      }
-      let target_i = block_idx[target]
-      if target_i < 0 {
-        continue
-      }
-      let target_block = func.blocks[target_i]
-      let param_count = target_block.params.length()
-      let arg_count = args.length()
-      let count = if param_count < arg_count { param_count } else { arg_count }
-      for i in 0..<count {
-        let (formal, _) = target_block.params[i]
-        if formal.id >= 0 &&
-          formal.id < value_count &&
-          state[formal.id] is Some(_) {
-          propagation_pairs.push((formal.id, args[i].id))
-        }
-      }
+  for pair in collect_block_argument_pairs(func, block_idx) {
+    let (formal_id, actual_id) = pair
+    if formal_id >= 0 && formal_id < value_count && state[formal_id] is Some(_) {
+      propagation_pairs.push((formal_id, actual_id))
     }
   }
   if propagation_pairs.length() == 0 {
@@ -259,25 +308,36 @@ fn eliminate_constant_block_params(func : Function) -> OptResult {
     }
   }
   for block in func.blocks {
-    if block.terminator is Some(Jump(target, args)) {
-      let keep = if target >= 0 &&
-        target < block_idx.length() &&
-        block_idx[target] >= 0 &&
-        block_idx[target] < params_to_keep.length() {
-        params_to_keep[block_idx[target]]
-      } else {
-        []
-      }
-      if keep.length() != args.length() {
-        let new_args : Array[Value] = []
-        for idx in keep {
-          if idx < args.length() {
-            new_args.push(args[idx])
-          }
+    match block.terminator {
+      Some(Jump(target, arguments)) =>
+        if retained_block_arguments(
+            target, arguments, block_idx, params_to_keep,
+          )
+          is Some(retained) {
+          block.terminator = Some(Jump(target, retained))
+          result.mark_changed()
         }
-        block.terminator = Some(Jump(target, new_args))
-        result.mark_changed()
+      Some(Branch(cond, true_target, true_args, false_target, false_args)) => {
+        let retained_true = retained_block_arguments(
+          true_target, true_args, block_idx, params_to_keep,
+        )
+        let retained_false = retained_block_arguments(
+          false_target, false_args, block_idx, params_to_keep,
+        )
+        if retained_true is Some(_) || retained_false is Some(_) {
+          block.terminator = Some(
+            Branch(
+              cond,
+              true_target,
+              retained_true.unwrap_or(true_args),
+              false_target,
+              retained_false.unwrap_or(false_args),
+            ),
+          )
+          result.mark_changed()
+        }
       }
+      _ => ()
     }
   }
   let replace_values : Array[Value?] = Array::make(value_count, None)
@@ -489,23 +549,31 @@ fn eliminate_dead_block_params(func : Function) -> OptResult {
   // Update terminators - remove arguments corresponding to removed parameters
   for block in func.blocks {
     match block.terminator {
-      Some(Jump(target, args)) => {
-        let keep = if target >= 0 &&
-          target < block_idx.length() &&
-          block_idx[target] >= 0 &&
-          block_idx[target] < params_to_keep.length() {
-          params_to_keep[block_idx[target]]
-        } else {
-          []
+      Some(Jump(target, arguments)) =>
+        if retained_block_arguments(
+            target, arguments, block_idx, params_to_keep,
+          )
+          is Some(retained) {
+          block.terminator = Some(Jump(target, retained))
+          result.mark_changed()
         }
-        if keep.length() != args.length() {
-          let new_args : Array[Value] = []
-          for idx in keep {
-            if idx < args.length() {
-              new_args.push(args[idx])
-            }
-          }
-          block.terminator = Some(Jump(target, new_args))
+      Some(Branch(cond, true_target, true_args, false_target, false_args)) => {
+        let retained_true = retained_block_arguments(
+          true_target, true_args, block_idx, params_to_keep,
+        )
+        let retained_false = retained_block_arguments(
+          false_target, false_args, block_idx, params_to_keep,
+        )
+        if retained_true is Some(_) || retained_false is Some(_) {
+          block.terminator = Some(
+            Branch(
+              cond,
+              true_target,
+              retained_true.unwrap_or(true_args),
+              false_target,
+              retained_false.unwrap_or(false_args),
+            ),
+          )
           result.mark_changed()
         }
       }
@@ -531,29 +599,12 @@ fn compute_used_block_params(
   }
   let used = Array::make(value_count, false)
   let propagation_edges : Array[Array[Int]?] = Array::make(value_count, None)
-  for block in func.blocks {
-    if block.terminator is Some(Jump(target, args)) {
-      if target >= 0 && target < block_idx.length() {
-        let target_idx = block_idx[target]
-        if target_idx < 0 {
-          continue
-        }
-        let target_block = func.blocks[target_idx]
-        let count = if target_block.params.length() < args.length() {
-          target_block.params.length()
-        } else {
-          args.length()
-        }
-        for i in 0..<count {
-          let (param_v, _) = target_block.params[i]
-          if param_v.id < 0 || param_v.id >= value_count {
-            continue
-          }
-          match propagation_edges[param_v.id] {
-            Some(edges) => edges.push(args[i].id)
-            None => propagation_edges[param_v.id] = Some([args[i].id])
-          }
-        }
+  for pair in collect_block_argument_pairs(func, block_idx) {
+    let (formal_id, actual_id) = pair
+    if formal_id >= 0 && formal_id < value_count {
+      match propagation_edges[formal_id] {
+        Some(edges) => edges.push(actual_id)
+        None => propagation_edges[formal_id] = Some([actual_id])
       }
     }
   }
@@ -583,21 +634,12 @@ fn compute_used_block_params(
           if cond.id >= 0 && cond.id < value_count {
             used[cond.id] = true
           }
-        Branch(cond, _, true_args, _, false_args) => {
+        Branch(cond, _, _, _, _) =>
           if cond.id >= 0 && cond.id < value_count {
             used[cond.id] = true
           }
-          for v in true_args {
-            if v.id >= 0 && v.id < value_count {
-              used[v.id] = true
-            }
-          }
-          for v in false_args {
-            if v.id >= 0 && v.id < value_count {
-              used[v.id] = true
-            }
-          }
-        }
+        // Edge arguments are propagated only when the corresponding target
+        // parameter is live, just like Jump arguments.
         BrTable(index, _, _) =>
           if index.id >= 0 && index.id < value_count {
             used[index.id] = true
@@ -680,6 +722,23 @@ fn simplify_branches(func : Function) -> OptResult {
       } else if constants.get(cond.id) is Some(I64(v)) {
         let target = if v != 0L { then_target } else { else_target }
         block.terminator = Some(Jump(target, []))
+        result.mark_changed()
+      }
+    } else if block.terminator
+      is Some(Branch(cond, true_target, true_args, false_target, false_args)) {
+      if constants.get(cond.id) is Some(I32(value)) {
+        block.terminator = if value != 0 {
+          Some(Jump(true_target, true_args))
+        } else {
+          Some(Jump(false_target, false_args))
+        }
+        result.mark_changed()
+      } else if constants.get(cond.id) is Some(I64(value)) {
+        block.terminator = if value != 0L {
+          Some(Jump(true_target, true_args))
+        } else {
+          Some(Jump(false_target, false_args))
+        }
         result.mark_changed()
       }
     } else if block.terminator is Some(BrTable(index, targets, default_target)) {
@@ -1026,6 +1085,25 @@ fn thread_jumps(func : Function) -> OptResult {
         }
         if new_then != then_target || new_else != else_target {
           block.terminator = Some(Brnz(cond, new_then, new_else))
+          result.mark_changed()
+        }
+      }
+      Some(Branch(cond, true_target, true_args, false_target, false_args)) => {
+        let (resolved_true, resolved_true_args) = resolve_jump_target_with_args(
+          true_target, true_args, func, block_idx, empty_jump_targets, forward_only_params,
+        )
+        let (resolved_false, resolved_false_args) = resolve_jump_target_with_args(
+          false_target, false_args, func, block_idx, empty_jump_targets, forward_only_params,
+        )
+        if resolved_true != true_target ||
+          !block_arg_arrays_equal(resolved_true_args, true_args) ||
+          resolved_false != false_target ||
+          !block_arg_arrays_equal(resolved_false_args, false_args) {
+          block.terminator = Some(
+            Branch(
+              cond, resolved_true, resolved_true_args, resolved_false, resolved_false_args,
+            ),
+          )
           result.mark_changed()
         }
       }
