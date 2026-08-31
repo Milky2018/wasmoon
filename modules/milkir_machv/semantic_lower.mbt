@@ -1521,6 +1521,21 @@ pub fn lower_core_function_with_protocol(
 }
 
 ///|
+/// Lower verified core MilkIR while retaining the final constrained
+/// target-neutral elaboration stage.
+pub fn lower_core_prepared_selection_with_protocol(
+  function : @milkir.Function,
+  protocol : @semantic.CallProtocol,
+  on_event? : (SemanticLowerEvent) -> Unit = fn(_) { () },
+) -> @semantic.PreparedSelection raise SemanticLowerError {
+  on_event(InputValidationStarted)
+  function.verify_core() catch {
+    error => raise InvalidMilkIR(message=error.to_string())
+  }
+  lower_verified_prepared_selection(function, protocol, None, on_event)
+}
+
+///|
 /// Lower an ordinary internally callable core MilkIR function.
 pub fn lower_core_function(
   function : @milkir.Function,

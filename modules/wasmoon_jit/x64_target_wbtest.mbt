@@ -25,7 +25,7 @@ test "x64 target preserves the Wasmoon overflow-result ABI" {
   }
   builder.return_(results)
   debug_inspect(
-    build_x64_target(builder.finish()).object,
+    build_x64_target(builder.finish_prepared_selection()).object,
     content=(
       #|{
       #|  architecture: X64,
@@ -275,7 +275,7 @@ test "x64 target preserves an incoming result area across indirect calls" {
   )
   builder.return_(results)
   debug_inspect(
-    build_x64_target(builder.finish()).object,
+    build_x64_target(builder.finish_prepared_selection()).object,
     content=(
       #|{
       #|  architecture: X64,
@@ -495,12 +495,12 @@ test "x64 expanded tail calls preserve native helper stack alignment" {
   )
 
   let callee_plan = @x64_target.prepare_x64_link(
-    build_x64_target(callee.finish()).object,
+    build_x64_target(callee.finish_prepared_selection()).object,
   ) catch {
     error => fail("failed to prepare x64 callee link plan: \{error}")
   }
   let caller_plan = @x64_target.prepare_x64_link(
-    build_x64_target(caller.finish()).object,
+    build_x64_target(caller.finish_prepared_selection()).object,
   ) catch {
     error => fail("failed to prepare x64 caller link plan: \{error}")
   }

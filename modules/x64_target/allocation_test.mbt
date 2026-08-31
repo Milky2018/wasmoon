@@ -9,7 +9,7 @@ test "x64 target allocates selected scalar VCode" {
   let parameters = builder.parameters()
   let sum = builder.emit(IntBinary(Add), [parameters[1], parameters[2]], [I64])[0]
   builder.return_([sum])
-  let selected = lower(builder.finish(), test_lowering_context())
+  let selected = lower(builder.finish_selection_plan(), test_lowering_context())
   inspect(
     allocate(selected).summary(),
     content=(
@@ -47,7 +47,7 @@ test "x64 allocation rejects transfer scratch as an unconstrained operand" {
   let parameters = builder.parameters()
   let sum = builder.emit(IntBinary(Add), [parameters[1], parameters[2]], [I64])[0]
   builder.return_([sum])
-  let function = lower(builder.finish(), test_lowering_context())
+  let function = lower(builder.finish_selection_plan(), test_lowering_context())
   let allocation = allocate(function)
   let instruction = function.instruction_at(3).unwrap()
   let operand = function.instruction_operand_at(instruction, 0).unwrap()
@@ -87,7 +87,7 @@ test "x64 allocation rejects transfer scratch in an allocator edit" {
   let parameters = builder.parameters()
   let sum = builder.emit(IntBinary(Add), [parameters[1], parameters[2]], [I64])[0]
   builder.return_([sum])
-  let function = lower(builder.finish(), test_lowering_context())
+  let function = lower(builder.finish_selection_plan(), test_lowering_context())
   let allocation = allocate(function)
   let instruction = function.instruction_at(3).unwrap()
   let operand = function.instruction_operand_at(instruction, 0).unwrap()
@@ -125,7 +125,7 @@ test "x64 allocation rejects emitter scratch as an unconstrained operand" {
   let parameters = builder.parameters()
   let sum = builder.emit(FloatBinary(Add), [parameters[1], parameters[2]], [F32])[0]
   builder.return_([sum])
-  let function = lower(builder.finish(), test_lowering_context())
+  let function = lower(builder.finish_selection_plan(), test_lowering_context())
   let allocation = allocate(function)
   let instruction = function.instruction_at(3).unwrap()
   let operand = function.instruction_operand_at(instruction, 0).unwrap()
@@ -220,7 +220,7 @@ test "x64 allocation rejects emitter scratch in an allocator edit" {
   let parameters = builder.parameters()
   let sum = builder.emit(FloatBinary(Add), [parameters[1], parameters[2]], [F64])[0]
   builder.return_([sum])
-  let function = lower(builder.finish(), test_lowering_context())
+  let function = lower(builder.finish_selection_plan(), test_lowering_context())
   let allocation = allocate(function)
   let instruction = function.instruction_at(3).unwrap()
   let operand = function.instruction_operand_at(instruction, 0).unwrap()
@@ -258,7 +258,7 @@ test "x64 allocation keeps spill scratch out of unconstrained operands" {
   let parameters = builder.parameters()
   let sum = builder.emit(IntBinary(Add), [parameters[1], parameters[2]], [I64])[0]
   builder.return_([sum])
-  let function = lower(builder.finish(), test_lowering_context())
+  let function = lower(builder.finish_selection_plan(), test_lowering_context())
   let allocation = allocate(function)
   let instruction = function.instruction_at(3).unwrap()
   let operand = function.instruction_operand_at(instruction, 0).unwrap()
@@ -356,7 +356,10 @@ test "x64 allocation preserves fixed-only and spill-fixed operands" {
       [I64],
     )[0]
   divide_builder.return_([quotient])
-  let divide_function = lower(divide_builder.finish(), test_lowering_context())
+  let divide_function = lower(
+    divide_builder.finish_selection_plan(),
+    test_lowering_context(),
+  )
   let divide_allocation = allocate(divide_function)
   let divide = divide_function.instruction_at(4).unwrap()
   assert_eq(
@@ -380,7 +383,10 @@ test "x64 allocation preserves fixed-only and spill-fixed operands" {
   )
   |> ignore
   store_builder.return_([])
-  let store_function = lower(store_builder.finish(), test_lowering_context())
+  let store_function = lower(
+    store_builder.finish_selection_plan(),
+    test_lowering_context(),
+  )
   let store_allocation = allocate(store_function)
   let store = store_function.instruction_at(2).unwrap()
   assert_eq(

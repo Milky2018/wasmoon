@@ -22,6 +22,7 @@ pub struct SelectionPlan {
   priv construction : FunctionConstruction
   priv state : Ref[SelectionPlanState]
   priv mut verified : Bool
+  priv mut layout : Array[Int]
 }
 
 ///|
@@ -60,7 +61,9 @@ pub extend SelectionPlan with SelectionInput::{
 fn PreparedSelection::from_construction(
   construction : FunctionConstruction,
 ) -> PreparedSelection {
-  { plan: { construction, state: Ref(Prepared), verified: false, }, }
+  {
+    plan: { construction, state: Ref(Prepared), verified: false, layout: [], },
+  }
 }
 
 ///|
@@ -83,6 +86,7 @@ pub fn PreparedSelection::seal(
   if !self.plan.verified {
     self.plan.verify_checked_construction()
   }
+  self.plan.layout = self.plan.construction.block_indices_in_cfg_order()
   self.plan.state.val = Sealed
   self.plan
 }
@@ -557,7 +561,7 @@ pub impl SelectionInput for SelectionPlan with fn block_terminator(self, block) 
 pub impl SelectionInput for SelectionPlan with fn block_indices_in_cfg_order(
   self,
 ) {
-  self.construction.block_indices_in_cfg_order()
+  self.layout.copy()
 }
 
 ///|

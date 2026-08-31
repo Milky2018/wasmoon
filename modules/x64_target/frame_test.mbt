@@ -12,7 +12,7 @@ test "x64 frame reserves the SysV setup area for calls" {
   )
   let result = builder.emit(Call(call), parameters, [I64])[0]
   builder.return_([result])
-  let selected = lower(builder.finish(), test_lowering_context())
+  let selected = lower(builder.finish_selection_plan(), test_lowering_context())
   let allocation = allocate(selected)
   inspect(
     plan_frame(selected, allocation).summary(),

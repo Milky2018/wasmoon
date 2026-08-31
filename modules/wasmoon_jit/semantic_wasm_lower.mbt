@@ -219,7 +219,9 @@ pub fn compile_wasm_body_diagnostics_for_target(
     }
   }
   let diagnostics = diagnose_x64_target(
-    semantic,
+    lower_wasm_body_prepared_selection_with_environment(
+      function, validation_context, environment,
+    ),
     environment_field_path=fn(field : @semantic_machv.EnvironmentField) {
       environment.field_paths.get(field.name)
     },

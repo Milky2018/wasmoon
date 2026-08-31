@@ -13,6 +13,8 @@ pub fn lower_core_function(@milkir.Function) -> @machv.Function raise SemanticLo
 
 pub fn lower_core_function_with_protocol(@milkir.Function, @machv.CallProtocol, on_event? : (SemanticLowerEvent) -> Unit) -> @machv.Function raise SemanticLowerError
 
+pub fn lower_core_prepared_selection_with_protocol(@milkir.Function, @machv.CallProtocol, on_event? : (SemanticLowerEvent) -> Unit) -> @machv.PreparedSelection raise SemanticLowerError
+
 pub fn lower_dialect_function(@milkir.Function, String, (@milkir.ExtensionInstView) -> String?, (@milkir.GlobalValueData) -> String?, Array[(Int, @machv.ValueType)], (@adapter.InstructionContext, @milkir.ExtOp) -> String?, (@milkir.ContextField) -> @machv.EnvironmentField?, on_event? : (SemanticLowerEvent) -> Unit) -> @machv.Function raise SemanticLowerError
 
 pub fn lower_dialect_function_with_protocol(@milkir.Function, @machv.CallProtocol, String, (@milkir.ExtensionInstView) -> String?, (@milkir.GlobalValueData) -> String?, Array[(Int, @machv.ValueType)], (@adapter.InstructionContext, @milkir.ExtOp) -> String?, (@milkir.ContextField) -> @machv.EnvironmentField?, on_event? : (SemanticLowerEvent) -> Unit) -> @machv.Function raise SemanticLowerError

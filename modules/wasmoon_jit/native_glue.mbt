@@ -89,7 +89,10 @@ pub fn plan_milkir_integration_for_target(
       object: jit_code_object_from_aarch64(compiled.object, compiled.frame_size),
     }
   }
-  let semantic = @milkir_machv.lower_core_function_with_protocol(func, Platform) catch {
+  let semantic = @milkir_machv.lower_core_prepared_selection_with_protocol(
+    func,
+    Platform,
+  ) catch {
     error => raise SemanticLoweringFailed(cause=error)
   }
   let compiled = build_x64_target(semantic)

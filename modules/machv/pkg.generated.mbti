@@ -658,6 +658,29 @@ pub fn SafepointKind::hash_combine(Self, Hasher) -> Unit
 pub fn SafepointKind::not_equal(Self, Self) -> Bool
 pub fn SafepointKind::to_repr(Self) -> @debug.Repr
 
+pub struct SelectionBlockView {
+  // private fields
+}
+pub fn SelectionBlockView::index(Self) -> Int
+pub fn SelectionBlockView::instructions(Self) -> ArrayView[Instruction]
+pub fn SelectionBlockView::parameters(Self) -> ArrayView[Value]
+pub fn SelectionBlockView::terminator(Self) -> SelectionTerminatorRecordView
+
+pub struct SelectionEdgeView {
+  // private fields
+}
+pub fn SelectionEdgeView::arguments(Self) -> ArrayView[Value]
+pub fn SelectionEdgeView::target(Self) -> Block
+
+pub struct SelectionInstructionView {
+  // private fields
+}
+pub fn SelectionInstructionView::index(Self) -> Int
+pub fn SelectionInstructionView::metadata(Self) -> InstructionMetadataView
+pub fn SelectionInstructionView::operands(Self) -> ArrayView[Value]
+pub fn SelectionInstructionView::operation(Self) -> Operation
+pub fn SelectionInstructionView::results(Self) -> ArrayView[Value]
+
 pub struct SelectionPlan {
   // private fields
 }
@@ -691,7 +714,55 @@ pub fn SelectionPlan::value_count(Self) -> Int
 pub fn SelectionPlan::value_index(Self, Value) -> Int?
 pub fn SelectionPlan::value_type(Self, Value) -> ValueType?
 pub fn SelectionPlan::verify(Self) -> Unit raise MachVVerifyError
+pub fn SelectionPlan::view(Self) -> SelectionView
 pub impl SelectionInput for SelectionPlan
+
+pub struct SelectionStackObjectView {
+  // private fields
+}
+pub fn SelectionStackObjectView::alignment(Self) -> Int
+pub fn SelectionStackObjectView::handle(Self) -> StackObject
+pub fn SelectionStackObjectView::index(Self) -> Int
+pub fn SelectionStackObjectView::size(Self) -> Int
+
+pub struct SelectionTerminatorRecordView {
+  // private fields
+}
+pub fn SelectionTerminatorRecordView::kind(Self) -> SelectionTerminatorView
+pub fn SelectionTerminatorRecordView::live_gc_roots(Self) -> ArrayView[Value]
+pub fn SelectionTerminatorRecordView::source(Self) -> SourceLocation?
+
+pub(all) enum SelectionTerminatorView {
+  SelectionJump(SelectionEdgeView)
+  SelectionBranch(Value, SelectionEdgeView, SelectionEdgeView)
+  SelectionSwitch(Value, ArrayView[SwitchCase], SelectionEdgeView)
+  SelectionReturn(ArrayView[Value])
+  SelectionTailCall(SemanticCall, ArrayView[Value])
+  SelectionNoReturnCall(SemanticCall, ArrayView[Value])
+  SelectionTrap(TrapReason)
+}
+
+pub struct SelectionView {
+  // private fields
+}
+pub fn SelectionView::block(Self, Int) -> SelectionBlockView
+pub fn SelectionView::block_count(Self) -> Int
+pub fn SelectionView::block_index(Self, Block) -> Int
+pub fn SelectionView::instruction(Self, Instruction) -> SelectionInstructionView
+pub fn SelectionView::instruction_at(Self, Int) -> SelectionInstructionView?
+pub fn SelectionView::instruction_slot_count(Self) -> Int
+pub fn SelectionView::layout(Self) -> ArrayView[Int]
+pub fn SelectionView::name(Self) -> String
+pub fn SelectionView::parameter_types(Self) -> ArrayView[ValueType]
+pub fn SelectionView::parameters(Self) -> ArrayView[Value]
+pub fn SelectionView::protocol(Self) -> CallProtocol
+pub fn SelectionView::result_types(Self) -> ArrayView[ValueType]
+pub fn SelectionView::stack_object(Self, Int) -> SelectionStackObjectView
+pub fn SelectionView::stack_object_count(Self) -> Int
+pub fn SelectionView::value_count(Self) -> Int
+pub fn SelectionView::value_index(Self, Value) -> Int
+pub fn SelectionView::value_type(Self, Value) -> ValueType
+pub fn SelectionView::value_type_at(Self, Int) -> ValueType
 
 pub struct SemanticCall {
   callee : Callee

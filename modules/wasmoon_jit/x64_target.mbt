@@ -12,10 +12,11 @@ priv struct X64TargetDiagnostics {
 }
 
 ///|
-fn[F : @semantic_machv.SelectionInput] x64_target_context(
-  function : F,
+fn x64_target_context(
+  plan : @semantic_machv.SelectionPlan,
   environment_field_path : ((@semantic_machv.EnvironmentField) -> Array[Int]?)?,
 ) -> @x64_target.LoweringContext raise JitPipelineError {
+  let function = plan.view()
   let abi = @x64_target.InternalAbi::new(
     7,
     12,
@@ -27,15 +28,11 @@ fn[F : @semantic_machv.SelectionInput] x64_target_context(
     error => raise X64AbiInvalid(cause=error)
   }
   let mut context = @x64_target.LoweringContext::new(abi)
-  for block_id in function.block_indices_in_cfg_order() {
-    let block = function.block_at(block_id).unwrap()
-    let instruction_count = function.block_instruction_count(block).unwrap()
-    for instruction_index in 0..<instruction_count {
-      let instruction = function
-        .block_instruction_at(block, instruction_index)
-        .unwrap()
-      if function.instruction_operation(instruction)
-        is Some(EnvironmentField(field, _)) {
+  for block_id in function.layout() {
+    let block = function.block(block_id)
+    for instruction in block.instructions() {
+      if function.instruction(instruction).operation()
+        is EnvironmentField(field, _) {
         guard environment_field_path is Some(resolve) &&
           resolve(field) is Some(offsets) else {
           raise MissingEnvironmentField(target=X64, field=field.name)
@@ -48,8 +45,8 @@ fn[F : @semantic_machv.SelectionInput] x64_target_context(
 }
 
 ///|
-fn[F : @semantic_machv.SelectionInput] compile_x64_target_input(
-  function : F,
+fn compile_x64_target_input(
+  function : @semantic_machv.SelectionPlan,
   environment_field_path : ((@semantic_machv.EnvironmentField) -> Array[Int]?)?,
   record_metrics : Bool,
   compilation_session : @x64_target.CompilationSession,
@@ -95,7 +92,7 @@ fn[F : @semantic_machv.SelectionInput] compile_x64_target_input(
 
 ///|
 fn build_x64_target(
-  function : @semantic_machv.Function,
+  prepared : @semantic_machv.PreparedSelection,
   environment_field_path? : (@semantic_machv.EnvironmentField) -> Array[Int]?,
   allocation_symbols? : Array[@semantic_machv.ExternalSymbol] = [],
   record_metrics? : Bool = false,
@@ -109,8 +106,13 @@ fn build_x64_target(
   let runtime_abi_tick = detail_metrics_tick(record_metrics)
   let elaborated = match root_scope_symbols {
     Some(symbols) =>
-      elaborate_wasmoon_runtime_abi(function, allocation_symbols, symbols)
-    None => function
+      elaborate_wasmoon_runtime_abi_selection_plan(
+        prepared, allocation_symbols, symbols,
+      )
+    None =>
+      prepared.seal() catch {
+        error => raise RuntimeAbiOutputInvalid(cause=error)
+      }
   }
   record_compile_subphase(
     "runtime_abi_elaboration",
@@ -158,7 +160,7 @@ fn build_x64_selection_plan(
 
 ///|
 fn diagnose_x64_target(
-  function : @semantic_machv.Function,
+  prepared : @semantic_machv.PreparedSelection,
   environment_field_path? : (@semantic_machv.EnvironmentField) -> Array[Int]?,
   allocation_symbols? : Array[@semantic_machv.ExternalSymbol] = [],
   root_scope_symbols? : (
@@ -168,8 +170,13 @@ fn diagnose_x64_target(
 ) -> X64TargetDiagnostics raise JitPipelineError {
   let elaborated = match root_scope_symbols {
     Some(symbols) =>
-      elaborate_wasmoon_runtime_abi(function, allocation_symbols, symbols)
-    None => function
+      elaborate_wasmoon_runtime_abi_selection_plan(
+        prepared, allocation_symbols, symbols,
+      )
+    None =>
+      prepared.seal() catch {
+        error => raise RuntimeAbiOutputInvalid(cause=error)
+      }
   }
   let context = x64_target_context(elaborated, environment_field_path)
   let selected = @x64_target.lower(elaborated, context) catch {

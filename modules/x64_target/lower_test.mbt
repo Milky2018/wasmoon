@@ -17,7 +17,7 @@ test "X64 lowering selects scalar SSA and preserves source metadata" {
       ),
     )[0]
   builder.return_([sum])
-  let selected = lower(builder.finish(), test_lowering_context())
+  let selected = lower(builder.finish_selection_plan(), test_lowering_context())
   inspect(
     selected.summary(),
     content=(
@@ -49,7 +49,7 @@ test "X64 lowering lays out a loop for fallthrough before allocation" {
   builder.jump(header, builder.block_parameters(body))
   builder.switch_to_block(exit)
   builder.return_(builder.block_parameters(exit))
-  let selected = lower(builder.finish(), test_lowering_context())
+  let selected = lower(builder.finish_selection_plan(), test_lowering_context())
   debug_inspect(
     selected.layout().map(block => selected.block_index(block).unwrap()),
     content="[0, 3, 1, 2]",
@@ -72,7 +72,9 @@ test "X64 lowering rejects unsupported valid operations structurally" {
       [I32],
     )[0]
   builder.return_([loaded])
-  try lower(builder.finish(), test_lowering_context()) |> ignore catch {
+  try
+    lower(builder.finish_selection_plan(), test_lowering_context()) |> ignore
+  catch {
     error =>
       inspect(
         error,
@@ -156,7 +158,7 @@ test "X64 lowering selects sequentially consistent atomic families" {
   builder.emit(AtomicFence, [], []) |> ignore
   builder.return_([exchanged])
   inspect(
-    lower(builder.finish(), test_lowering_context()).summary(),
+    lower(builder.finish_selection_plan(), test_lowering_context()).summary(),
     content=(
       #|vcode atomic_families(v0:ptr64, v1:i32, v2:i64) -> (i32)
       #|block0:
@@ -205,7 +207,7 @@ test "X64 lowering selects standalone safepoint metadata markers" {
   |> ignore
   builder.return_([])
   inspect(
-    lower(builder.finish(), test_lowering_context()).summary(),
+    lower(builder.finish_selection_plan(), test_lowering_context()).summary(),
     content=(
       #|vcode safepoint_marker(v0:ptr64, v1:gcref64)
       #|block0:
@@ -257,7 +259,7 @@ test "X64 lowering selects the vector foundation" {
   value = builder.emit(Select, [parameters[1], value, parameters[7]], [V128])[0]
   builder.return_([value])
   inspect(
-    lower(builder.finish(), test_lowering_context()).summary(),
+    lower(builder.finish_selection_plan(), test_lowering_context()).summary(),
     content=(
       #|vcode vector_foundation(v0:ptr64, v1:i32, v2:i64, v3:f32, v4:f64, v5:v128, v6:v128, v7:v128) -> (v128)
       #|block0:
@@ -355,7 +357,7 @@ test "X64 lowering selects vector lane movement" {
     )[0]
   builder.return_([replaced, scalar32, scalar64, scalar_f32, scalar_f64])
   inspect(
-    lower(builder.finish(), test_lowering_context()).summary(),
+    lower(builder.finish_selection_plan(), test_lowering_context()).summary(),
     content=(
       #|vcode vector_lane_movement(v0:ptr64, v1:v128) -> (v128, i32, i64, f32, f64)
       #|block0:
@@ -411,7 +413,7 @@ test "X64 lowering selects vector shuffle and swizzle" {
   let swizzled = builder.emit(Vector(Swizzle), [shuffled, parameters[3]], [V128])[0]
   builder.return_([swizzled])
   inspect(
-    lower(builder.finish(), test_lowering_context()).summary(),
+    lower(builder.finish_selection_plan(), test_lowering_context()).summary(),
     content=(
       #|vcode vector_permute(v0:ptr64, v1:v128, v2:v128, v3:v128) -> (v128)
       #|block0:
@@ -463,7 +465,7 @@ test "X64 lowering selects basic vector integer arithmetic" {
   }
   builder.return_([result])
   inspect(
-    lower(builder.finish(), test_lowering_context()).summary(),
+    lower(builder.finish_selection_plan(), test_lowering_context()).summary(),
     content=(
       #|vcode vector_integer_arithmetic(v0:ptr64, v1:v128, v2:v128) -> (v128)
       #|block0:
@@ -527,7 +529,7 @@ test "X64 lowering selects vector integer shifts" {
   }
   builder.return_([result])
   inspect(
-    lower(builder.finish(), test_lowering_context()).summary(),
+    lower(builder.finish_selection_plan(), test_lowering_context()).summary(),
     content=(
       #|vcode vector_integer_shifts(v0:ptr64, v1:v128, v2:i32) -> (v128)
       #|block0:
@@ -587,7 +589,7 @@ test "X64 lowering selects vector integer comparisons" {
   }
   builder.return_([result])
   inspect(
-    lower(builder.finish(), test_lowering_context()).summary(),
+    lower(builder.finish_selection_plan(), test_lowering_context()).summary(),
     content=(
       #|vcode vector_integer_comparisons(v0:ptr64, v1:v128, v2:v128) -> (v128)
       #|block0:
@@ -669,7 +671,7 @@ test "X64 lowering selects saturating vector integer arithmetic" {
   }
   builder.return_([result])
   inspect(
-    lower(builder.finish(), test_lowering_context()).summary(),
+    lower(builder.finish_selection_plan(), test_lowering_context()).summary(),
     content=(
       #|vcode vector_saturating_arithmetic(v0:ptr64, v1:v128, v2:v128) -> (v128)
       #|block0:
@@ -727,7 +729,7 @@ test "X64 lowering selects vector integer min and max" {
   }
   builder.return_([result])
   inspect(
-    lower(builder.finish(), test_lowering_context()).summary(),
+    lower(builder.finish_selection_plan(), test_lowering_context()).summary(),
     content=(
       #|vcode vector_integer_min_max(v0:ptr64, v1:v128, v2:v128) -> (v128)
       #|block0:
@@ -778,7 +780,7 @@ test "X64 lowering selects legal vector unsigned averages" {
     )[0]
   builder.return_([halfwords])
   inspect(
-    lower(builder.finish(), test_lowering_context()).summary(),
+    lower(builder.finish_selection_plan(), test_lowering_context()).summary(),
     content=(
       #|vcode vector_unsigned_average(v0:ptr64, v1:v128, v2:v128) -> (v128)
       #|block0:
@@ -810,7 +812,7 @@ test "X64 lowering selects vector byte population count" {
     )[0]
   builder.return_([result])
   inspect(
-    lower(builder.finish(), test_lowering_context()).summary(),
+    lower(builder.finish_selection_plan(), test_lowering_context()).summary(),
     content=(
       #|vcode vector_population_count(v0:ptr64, v1:v128) -> (v128)
       #|block0:
@@ -869,7 +871,7 @@ test "X64 lowering selects widening vector integer arithmetic" {
     )[0]
   builder.return_([result])
   inspect(
-    lower(builder.finish(), test_lowering_context()).summary(),
+    lower(builder.finish_selection_plan(), test_lowering_context()).summary(),
     content=(
       #|vcode vector_widening_arithmetic(v0:ptr64, v1:v128, v2:v128) -> (v128)
       #|block0:
@@ -929,7 +931,7 @@ test "X64 lowering selects vector integer extension" {
   }
   builder.return_([result])
   inspect(
-    lower(builder.finish(), test_lowering_context()).summary(),
+    lower(builder.finish_selection_plan(), test_lowering_context()).summary(),
     content=(
       #|vcode vector_integer_extension(v0:ptr64, v1:v128) -> (v128)
       #|block0:
@@ -977,7 +979,7 @@ test "X64 lowering selects saturating vector narrowing" {
   }
   builder.return_([result])
   inspect(
-    lower(builder.finish(), test_lowering_context()).summary(),
+    lower(builder.finish_selection_plan(), test_lowering_context()).summary(),
     content=(
       #|vcode vector_narrowing(v0:ptr64, v1:v128, v2:v128) -> (v128)
       #|block0:
@@ -1016,7 +1018,7 @@ test "X64 lowering selects vector truth predicates" {
   }
   builder.return_(results)
   inspect(
-    lower(builder.finish(), test_lowering_context()).summary(),
+    lower(builder.finish_selection_plan(), test_lowering_context()).summary(),
     content=(
       #|vcode vector_truth_predicates(v0:ptr64, v1:v128) -> (i32, i32, i32, i32, i32)
       #|block0:
@@ -1054,7 +1056,7 @@ test "X64 lowering selects vector integer bitmasks" {
   })
   builder.return_(results)
   inspect(
-    lower(builder.finish(), test_lowering_context()).summary(),
+    lower(builder.finish_selection_plan(), test_lowering_context()).summary(),
     content=(
       #|vcode vector_integer_bitmasks(v0:ptr64, v1:v128) -> (i32, i32, i32, i32)
       #|block0:
@@ -1138,7 +1140,7 @@ test "X64 lowering selects every non-fused vector float operation" {
   }
   builder.return_(results)
   inspect(
-    lower(builder.finish(), test_lowering_context()).summary(),
+    lower(builder.finish_selection_plan(), test_lowering_context()).summary(),
     content=(
       #|vcode vector_float_operations(v0:ptr64, v1:v128, v2:v128) -> (v128, v128, v128, v128)
       #|block0:
@@ -1229,7 +1231,7 @@ test "X64 lowering selects vector fused operations and relaxed producers" {
   }
   builder.return_([direct, relaxed])
   inspect(
-    lower(builder.finish(), test_lowering_context()).summary(),
+    lower(builder.finish_selection_plan(), test_lowering_context()).summary(),
     content=(
       #|vcode vector_float_fused(v0:ptr64, v1:v128, v2:v128, v3:v128) -> (v128, v128)
       #|block0:
@@ -1294,7 +1296,7 @@ test "X64 lowering selects every remaining vector conversion" {
     )[0]
   builder.return_([value])
   inspect(
-    lower(builder.finish(), test_lowering_context()).summary(),
+    lower(builder.finish_selection_plan(), test_lowering_context()).summary(),
     content=(
       #|vcode vector_conversions(v0:ptr64, v1:v128) -> (v128)
       #|block0:
@@ -1354,7 +1356,7 @@ test "X64 lowering reuses exact target operations for relaxed SIMD" {
     )[0]
   builder.return_([result])
   inspect(
-    lower(builder.finish(), test_lowering_context()).summary(),
+    lower(builder.finish_selection_plan(), test_lowering_context()).summary(),
     content=(
       #|vcode relaxed_vector_reuse(v0:ptr64, v1:v128, v2:v128, v3:v128) -> (v128)
       #|block0:
@@ -1390,7 +1392,7 @@ test "X64 lowering selects relaxed dot8-to16" {
     )[0]
   builder.return_([result])
   inspect(
-    lower(builder.finish(), test_lowering_context()).summary(),
+    lower(builder.finish_selection_plan(), test_lowering_context()).summary(),
     content=(
       #|vcode relaxed_dot8_to16(v0:ptr64, v1:v128, v2:v128) -> (v128)
       #|block0:
@@ -1421,7 +1423,7 @@ test "X64 lowering expands relaxed dot8-to32-add into allocatable temporaries" {
     )[0]
   builder.return_([result])
   inspect(
-    lower(builder.finish(), test_lowering_context()).summary(),
+    lower(builder.finish_selection_plan(), test_lowering_context()).summary(),
     content=(
       #|vcode relaxed_dot8_to32_add(v0:ptr64, v1:v128, v2:v128, v3:v128) -> (v128)
       #|block0:
@@ -1456,7 +1458,7 @@ test "X64 lowering assigns one aligned semantic stack-object area" {
   let last_address = builder.emit(StackAddress(last), [], [Ptr64])[0]
   builder.return_([first_address, last_address])
   inspect(
-    lower(builder.finish(), test_lowering_context()).summary(),
+    lower(builder.finish_selection_plan(), test_lowering_context()).summary(),
     content=(
       #|vcode stack_object_layout(v0:ptr64) -> (ptr64, ptr64)
       #|block0:
@@ -1498,7 +1500,7 @@ test "X64 lowering inserts explicit traps before signed division" {
   let value = builder.emit(IntBinary(SignedDiv), builder.parameters(), [I64])[0]
   builder.return_([value])
   inspect(
-    lower(builder.finish(), test_lowering_context()).summary(),
+    lower(builder.finish_selection_plan(), test_lowering_context()).summary(),
     content=(
       #|vcode checked_divide(v0:i64, v1:i64) -> (i64)
       #|block0:
@@ -1567,7 +1569,7 @@ test "X64 lowering legalizes remaining pure scalar integer operations" {
     )[0]
   builder.return_([unsigned_high32, unsigned_high64])
   inspect(
-    lower(builder.finish(), test_lowering_context()).summary(),
+    lower(builder.finish_selection_plan(), test_lowering_context()).summary(),
     content=(
       #|vcode pure_integer_operations(v0:ptr64, v1:i32, v2:i32, v3:i64, v4:i64) -> (i32, i64)
       #|block0:
@@ -1638,7 +1640,7 @@ test "X64 lowering selects every scalar overflow arithmetic contract" {
   }
   builder.return_([value32, value64, overflow])
   inspect(
-    lower(builder.finish(), test_lowering_context()).summary(),
+    lower(builder.finish_selection_plan(), test_lowering_context()).summary(),
     content=(
       #|vcode overflow_arithmetic(v0:ptr64, v1:i32, v2:i32, v3:i64, v4:i64) -> (i32, i64, i32)
       #|block0:
@@ -1740,7 +1742,7 @@ test "X64 lowering selects null carriers references and scalar values" {
     selected_reference, selected32_float, selected64_float,
   ])
   inspect(
-    lower(builder.finish(), test_lowering_context()).summary(),
+    lower(builder.finish_selection_plan(), test_lowering_context()).summary(),
     content=(
       #|vcode scalar_carriers_and_select(v0:ptr64, v1:i32, v2:i32, v3:i64, v4:i64, v5:f32, v6:f32, v7:f64, v8:f64) -> (i32, i32, i32, i64, ptr64, gcref64, f32, f64)
       #|block0:
@@ -1812,7 +1814,7 @@ test "X64 lowering resolves environment paths and typed symbol addresses" {
   builder.return_([code, external, data, environment])
   let context = test_lowering_context().with_environment_field(field, [8, 24])
   inspect(
-    lower(builder.finish(), context).summary(),
+    lower(builder.finish_selection_plan(), context).summary(),
     content=(
       #|vcode addresses_and_environment(v0:ptr64) -> (ptr64, ptr64, ptr64, i64)
       #|block0:
@@ -1848,7 +1850,7 @@ test "X64 lowering materializes each stable environment field" {
   builder.return_([first, second])
   let lowering = test_lowering_context().with_environment_field(field, [24])
   inspect(
-    lower(builder.finish(), lowering).summary(),
+    lower(builder.finish_selection_plan(), lowering).summary(),
     content=(
       #|vcode stable_environment_fields(v0:ptr64) -> (i64, i64)
       #|block0:
@@ -1888,7 +1890,7 @@ test "X64 lowering selects a direct platform call with explicit ABI facts" {
     )[0]
   builder.return_([result])
   inspect(
-    lower(builder.finish(), test_lowering_context()).summary(),
+    lower(builder.finish_selection_plan(), test_lowering_context()).summary(),
     content=(
       #|vcode direct_platform_call(v0:i64, v1:f64) -> (i64)
       #|block0:
@@ -1933,7 +1935,7 @@ test "X64 lowering preserves returns-twice platform calls" {
   let preserved = builder.emit(IntBinary(Add), [parameters[2], widened], [I64])[0]
   builder.return_([preserved])
   inspect(
-    lower(builder.finish(), test_lowering_context()).summary(),
+    lower(builder.finish_selection_plan(), test_lowering_context()).summary(),
     content=(
       #|vcode returns_twice_platform_call(v0:ptr64, v1:i32, v2:i64) -> (i64)
       #|block0:
@@ -1971,7 +1973,7 @@ test "X64 lowering derives internal entry and direct-call layouts" {
   let result = builder.emit(Call(call), builder.parameters(), [I64])[0]
   builder.return_([result])
   inspect(
-    lower(builder.finish(), test_lowering_context()).summary(),
+    lower(builder.finish_selection_plan(), test_lowering_context()).summary(),
     content=(
       #|vcode direct_internal_call(v0:ptr64, v1:i64, v2:f64) -> (i64)
       #|block0:
@@ -2018,7 +2020,7 @@ test "X64 lowering keeps the indirect callee outside the logical signature" {
     )[0]
   builder.return_([result])
   inspect(
-    lower(builder.finish(), test_lowering_context()).summary(),
+    lower(builder.finish_selection_plan(), test_lowering_context()).summary(),
     content=(
       #|vcode indirect_internal_call(v0:ptr64, v1:ptr64, v2:i64) -> (i64)
       #|block0:
@@ -2058,7 +2060,7 @@ test "X64 lowering selects a compatible true internal tail call" {
   )
   builder.tail_call(call, builder.parameters())
   inspect(
-    lower(builder.finish(), test_lowering_context()).summary(),
+    lower(builder.finish_selection_plan(), test_lowering_context()).summary(),
     content=(
       #|vcode direct_tail_call(v0:ptr64, v1:i64) -> (i64)
       #|block0:
@@ -2100,7 +2102,7 @@ test "X64 tail calls transfer GC references without a caller safepoint" {
     @semantic.TerminatorMetadata::new(None, [parameters[1]]),
   )
   inspect(
-    lower(builder.finish(), test_lowering_context()).summary(),
+    lower(builder.finish_selection_plan(), test_lowering_context()).summary(),
     content=(
       #|vcode tail_call_gc_argument(v0:ptr64, v1:gcref64)
       #|block0:
@@ -2153,7 +2155,7 @@ test "X64 internal calls materialize register and result-area returns" {
   let results = builder.emit(Call(call), builder.parameters(), types)
   builder.return_(results)
   inspect(
-    lower(builder.finish(), compact_result_context()).summary(),
+    lower(builder.finish_selection_plan(), compact_result_context()).summary(),
     content=(
       #|vcode internal_result_area_call(v0:ptr64, v1:i64, v2:i64, v3:f32, v4:v128) -> (i64, i64, f32, v128)
       #|block0:
@@ -2218,7 +2220,7 @@ test "X64 internal tail calls forward the incoming result area" {
   )
   builder.tail_call(call, builder.parameters())
   inspect(
-    lower(builder.finish(), compact_result_context()).summary(),
+    lower(builder.finish_selection_plan(), compact_result_context()).summary(),
     content=(
       #|vcode internal_result_area_tail_call(v0:ptr64, v1:i64, v2:i64, v3:f32, v4:v128) -> (i64, i64, f32, v128)
       #|block0:
@@ -2303,7 +2305,7 @@ test "X64 lowers dense and sparse switches with edge arguments" {
     sparse.return_(sparse.block_parameters(target))
   }
   inspect(
-    lower(dense.finish(), test_lowering_context()).summary(),
+    lower(dense.finish_selection_plan(), test_lowering_context()).summary(),
     content=(
       #|vcode dense_switch(v0:ptr64, v1:i32) -> (i32)
       #|block0:
@@ -2323,7 +2325,7 @@ test "X64 lowers dense and sparse switches with edge arguments" {
     ),
   )
   inspect(
-    lower(sparse.finish(), test_lowering_context()).summary(),
+    lower(sparse.finish_selection_plan(), test_lowering_context()).summary(),
     content=(
       #|vcode sparse_switch(v0:ptr64, v1:i64) -> (i64)
       #|block0:
@@ -2375,7 +2377,7 @@ test "X64 lowers noreturn calls and explicit traps" {
   trapped.trap(User(7))
   trapped.set_terminator_source(@semantic.SourceLocation::new("trap.wat", 3, 9))
   inspect(
-    lower(noreturn.finish(), test_lowering_context()).summary(),
+    lower(noreturn.finish_selection_plan(), test_lowering_context()).summary(),
     content=(
       #|vcode noreturn_call(v0:gcref64)
       #|block0:
@@ -2387,7 +2389,7 @@ test "X64 lowers noreturn calls and explicit traps" {
     ),
   )
   inspect(
-    lower(trapped.finish(), test_lowering_context()).summary(),
+    lower(trapped.finish_selection_plan(), test_lowering_context()).summary(),
     content=(
       #|vcode explicit_trap(v0:ptr64)
       #|block0:
@@ -2418,7 +2420,7 @@ test "X64 selects tail calls larger than the incoming argument area" {
   )
   builder.tail_call(call, operands)
   inspect(
-    lower(builder.finish(), test_lowering_context()).summary(),
+    lower(builder.finish_selection_plan(), test_lowering_context()).summary(),
     content=(
       #|vcode oversized_tail_call(v0:ptr64)
       #|block0:
@@ -2545,7 +2547,7 @@ test "X64 lowering selects typed scalar memory operations and traps" {
   |> ignore
   builder.return_([loaded])
   inspect(
-    lower(builder.finish(), test_lowering_context()).summary(),
+    lower(builder.finish_selection_plan(), test_lowering_context()).summary(),
     content=(
       #|vcode scalar_memory(v0:ptr64, v1:i32, v2:i64, v3:f32, v4:f64) -> (i64)
       #|block0:
@@ -2593,7 +2595,9 @@ test "X64 lowering rejects non-native scalar memory endianness" {
       [I32],
     )[0]
   builder.return_([loaded])
-  try lower(builder.finish(), test_lowering_context()) |> ignore catch {
+  try
+    lower(builder.finish_selection_plan(), test_lowering_context()) |> ignore
+  catch {
     error =>
       inspect(
         error,
@@ -2723,7 +2727,7 @@ test "X64 lowering selects complete vector memory families" {
   |> ignore
   builder.return_([lane])
   inspect(
-    lower(builder.finish(), test_lowering_context()).summary(),
+    lower(builder.finish_selection_plan(), test_lowering_context()).summary(),
     content=(
       #|vcode vector_memory(v0:ptr64, v1:v128) -> (v128)
       #|block0:
@@ -2770,7 +2774,7 @@ test "X64 lowering selects non-trapping scalar floating-point operations" {
     )[0]
   builder.return_([sum, quotient, less, not_equal])
   inspect(
-    lower(builder.finish(), test_lowering_context()).summary(),
+    lower(builder.finish_selection_plan(), test_lowering_context()).summary(),
     content=(
       #|vcode scalar_float(v0:ptr64, v1:f32, v2:f32, v3:f64, v4:f64) -> (f32, f64, i32, i32)
       #|block0:
@@ -2826,7 +2830,7 @@ test "X64 lowering selects scalar rounding and NaN predicates" {
     )[0]
   builder.return_([nearest32, nearest64, ordered, unordered])
   inspect(
-    lower(builder.finish(), test_lowering_context()).summary(),
+    lower(builder.finish_selection_plan(), test_lowering_context()).summary(),
     content=(
       #|vcode scalar_float_rounding(v0:ptr64, v1:f32, v2:f32, v3:f64, v4:f64) -> (f32, f64, i32, i32)
       #|block0:
@@ -2887,7 +2891,7 @@ test "X64 lowering selects scalar min max and bit-exact copy-sign" {
     ])[0]
   builder.return_([minimum, maximum, copied32, copied64])
   inspect(
-    lower(builder.finish(), test_lowering_context()).summary(),
+    lower(builder.finish_selection_plan(), test_lowering_context()).summary(),
     content=(
       #|vcode scalar_float_minmax_copysign(v0:ptr64) -> (f32, f64, f32, f64)
       #|block0:
@@ -2964,7 +2968,7 @@ test "X64 lowering maps all scalar fused operations explicitly" {
     )[0]
   builder.return_([negated_subtract32, negated_subtract64])
   inspect(
-    lower(builder.finish(), test_lowering_context()).summary(),
+    lower(builder.finish_selection_plan(), test_lowering_context()).summary(),
     content=(
       #|vcode scalar_float_fused(v0:ptr64, v1:f32, v2:f32, v3:f32, v4:f64, v5:f64, v6:f64) -> (f32, f64)
       #|block0:
@@ -3032,7 +3036,7 @@ test "X64 lowering selects non-trapping scalar conversions" {
   let float64 = builder.emit(FloatBinary(Add), [promoted, int_float64], [F64])[0]
   builder.return_([wrapped, extended, float32, float64])
   inspect(
-    lower(builder.finish(), test_lowering_context()).summary(),
+    lower(builder.finish_selection_plan(), test_lowering_context()).summary(),
     content=(
       #|vcode scalar_conversions(v0:ptr64, v1:i32, v2:i64, v3:f32, v4:f64) -> (i32, i64, f32, f64)
       #|block0:
@@ -3088,7 +3092,7 @@ test "X64 lowering legalizes trapping and saturating float-to-int" {
     )[0]
   builder.return_([trapping, saturating])
   inspect(
-    lower(builder.finish(), test_lowering_context()).summary(),
+    lower(builder.finish_selection_plan(), test_lowering_context()).summary(),
     content=(
       #|vcode float_to_int(v0:ptr64, v1:f32, v2:f64) -> (i32, i64)
       #|block0:
@@ -3147,7 +3151,7 @@ test "X64 lowering always declares the rcx clobber for shifts and rotates" {
           [ty],
         )[0]
       builder.return_([shifted])
-      let text = lower(builder.finish(), test_lowering_context()).summary()
+      let text = lower(builder.finish_selection_plan(), test_lowering_context()).summary()
       for line in text.split("\n") {
         let line = line.to_owned()
         if line.contains("IntBinary(") &&

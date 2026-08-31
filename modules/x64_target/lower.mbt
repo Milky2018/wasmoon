@@ -49,17 +49,17 @@ fn scalar_access_width(ty : @semantic.ValueType) -> @semantic.AccessWidth? {
 }
 
 ///|
-fn[F : @semantic.SelectionInput] lower_stack_object(
-  function : F,
+fn lower_stack_object(
+  function : @semantic.SelectionView,
   requested : @semantic.StackObject,
 ) -> X64StackObject raise X64LowerError {
-  let objects = function.stack_objects()
   let offsets : Array[Int] = []
   let mut cursor = 0
   let mut area_alignment = 1
-  for object in objects {
-    let alignment = function.stack_object_alignment(object).unwrap()
-    let size = function.stack_object_size(object).unwrap()
+  for index in 0..<function.stack_object_count() {
+    let object = function.stack_object(index)
+    let alignment = object.alignment()
+    let size = object.size()
     cursor = align_up(cursor, alignment)
     offsets.push(cursor)
     cursor += size
@@ -68,12 +68,13 @@ fn[F : @semantic.SelectionInput] lower_stack_object(
     }
   }
   let area_size = align_up(cursor, area_alignment)
-  for index, object in objects {
-    if object == requested {
+  for index in 0..<function.stack_object_count() {
+    let object = function.stack_object(index)
+    if object.handle() == requested {
       return X64StackObject::new(
         offsets[index],
-        function.stack_object_size(object).unwrap(),
-        function.stack_object_alignment(object).unwrap(),
+        object.size(),
+        object.alignment(),
         area_size,
         area_alignment,
       )
@@ -222,12 +223,12 @@ fn float_to_int_bounds(
 }
 
 ///|
-fn[F : @semantic.SelectionInput] map_value(
-  function : F,
+fn map_value(
+  function : @semantic.SelectionView,
   values : Array[@vcode.Value?],
   value : @semantic.Value,
 ) -> @vcode.Value raise X64LowerError {
-  let index = function.value_index(value).unwrap()
+  let index = function.value_index(value)
   match values[index] {
     Some(mapped) => mapped
     None => raise MissingMappedValue(value_index=index)
@@ -235,62 +236,46 @@ fn[F : @semantic.SelectionInput] map_value(
 }
 
 ///|
-fn[F : @semantic.SelectionInput] map_values(
-  function : F,
+fn map_values(
+  function : @semantic.SelectionView,
   values : Array[@vcode.Value?],
-  source : Array[@semantic.Value],
+  source : ArrayView[@semantic.Value],
 ) -> Array[@vcode.Value] raise X64LowerError {
   source.map(value => map_value(function, values, value))
 }
 
 ///|
-fn[F : @semantic.SelectionInput] map_instruction_operands(
-  function : F,
+fn map_instruction_operands(
+  function : @semantic.SelectionView,
   values : Array[@vcode.Value?],
   instruction : @semantic.Instruction,
 ) -> Array[@vcode.Value] raise X64LowerError {
-  let mapped = []
-  let count = function.instruction_operand_count(instruction).unwrap()
-  for index in 0..<count {
-    mapped.push(
-      map_value(
-        function,
-        values,
-        function.instruction_operand_at(instruction, index).unwrap(),
-      ),
-    )
-  }
-  mapped
+  function
+  .instruction(instruction)
+  .operands()
+  .map(value => map_value(function, values, value))
 }
 
 ///|
-fn[F : @semantic.SelectionInput] instruction_result_types(
-  function : F,
+fn instruction_result_types(
+  function : @semantic.SelectionView,
   instruction : @semantic.Instruction,
 ) -> Array[@semantic.ValueType] {
-  let result_types = []
-  let count = function.instruction_result_count(instruction).unwrap()
-  for index in 0..<count {
-    result_types.push(
-      function
-      .value_type(function.instruction_result_at(instruction, index).unwrap())
-      .unwrap(),
-    )
-  }
-  result_types
+  function
+  .instruction(instruction)
+  .results()
+  .map(value => function.value_type(value))
 }
 
 ///|
-fn[F : @semantic.SelectionInput] bind_instruction_results(
-  function : F,
+fn bind_instruction_results(
+  function : @semantic.SelectionView,
   values : Array[@vcode.Value?],
   instruction : @semantic.Instruction,
   results : Array[@vcode.Value],
 ) -> Unit {
-  let count = function.instruction_result_count(instruction).unwrap()
-  for index in 0..<count {
-    let result = function.instruction_result_at(instruction, index).unwrap()
-    values[function.value_index(result).unwrap()] = Some(results[index])
+  for index, result in function.instruction(instruction).results() {
+    values[function.value_index(result)] = Some(results[index])
   }
 }
 
@@ -355,7 +340,7 @@ fn source_metadata(
 
 ///|
 fn terminator_call_metadata(
-  metadata : @semantic.TerminatorMetadata,
+  source : @semantic.SourceLocation?,
   semantics : @semantic.OperationSemantics,
 ) -> @vcode.InstructionMetadata {
   let safepoint : @semantic.SafepointKind? = match
@@ -365,7 +350,7 @@ fn terminator_call_metadata(
     (false, true) => Some(Cancellation)
     (false, false) => None
   }
-  match metadata.source {
+  match source {
     Some(source) => @vcode.InstructionMetadata::new(source~, safepoint?)
     None => @vcode.InstructionMetadata::new(safepoint?)
   }
@@ -373,10 +358,10 @@ fn terminator_call_metadata(
 
 ///|
 fn terminator_trap_metadata(
-  metadata : @semantic.TerminatorMetadata,
+  source : @semantic.SourceLocation?,
   reason : @semantic.TrapReason,
 ) -> @vcode.InstructionMetadata {
-  match metadata.source {
+  match source {
     Some(source) => @vcode.InstructionMetadata::new(source~, trap=reason)
     None => @vcode.InstructionMetadata::new(trap=reason)
   }
@@ -573,8 +558,8 @@ fn lower_internal_call(
 }
 
 ///|
-fn[F : @semantic.SelectionInput] lower_instruction(
-  function : F,
+fn lower_instruction(
+  function : @semantic.SelectionView,
   context : LoweringContext,
   builder : @vcode.CheckedBuilder[X64Inst],
   block : @vcode.Block,
@@ -582,11 +567,10 @@ fn[F : @semantic.SelectionInput] lower_instruction(
   instruction : @semantic.Instruction,
   values : Array[@vcode.Value?],
 ) -> Unit raise X64LowerError {
-  let instruction_index = function.instruction_index(instruction).unwrap()
-  let operation = function.instruction_operation(instruction).unwrap()
-  let semantic_metadata = function
-    .instruction_metadata_view(instruction)
-    .unwrap()
+  let instruction_view = function.instruction(instruction)
+  let instruction_index = instruction_view.index()
+  let operation = instruction_view.operation()
+  let semantic_metadata = instruction_view.metadata()
   let operands = map_instruction_operands(function, values, instruction)
   let result_types = instruction_result_types(function, instruction)
   let roots = []
@@ -852,9 +836,7 @@ fn[F : @semantic.SelectionInput] lower_instruction(
           },
         )[0]
     }
-    values[function
-    .value_index(function.instruction_result_at(instruction, 0).unwrap())
-    .unwrap()] = Some(current)
+    values[function.value_index(instruction_view.results()[0])] = Some(current)
     return
   }
   if operation is Vector(ReplaceLane(lane, index)) {
@@ -866,9 +848,9 @@ fn[F : @semantic.SelectionInput] lower_instruction(
       [@vcode.Output::any(V128)],
       source_metadata(semantic_metadata, roots, operation.semantics()),
     )
-    values[function
-    .value_index(function.instruction_result_at(instruction, 0).unwrap())
-    .unwrap()] = Some(results[0])
+    values[function.value_index(instruction_view.results()[0])] = Some(
+      results[0],
+    )
     return
   }
   if operation is Vector(Relaxed(Dot8To32AddSigned)) {
@@ -912,9 +894,7 @@ fn[F : @semantic.SelectionInput] lower_instruction(
         [@vcode.Output::any(V128)],
         source_metadata(semantic_metadata, roots, operation.semantics()),
       )[0]
-    values[function
-    .value_index(function.instruction_result_at(instruction, 0).unwrap())
-    .unwrap()] = Some(result)
+    values[function.value_index(instruction_view.results()[0])] = Some(result)
     return
   }
   let selected = match operation {
@@ -1004,10 +984,10 @@ fn[F : @semantic.SelectionInput] lower_instruction(
       Some(VectorIntBinary(I16x8, Q15MultiplyRoundedSaturating))
     Vector(Relaxed(Dot8To16Signed)) => Some(VectorRelaxedDot8To16)
     ReferenceCompare(comparison) => {
-      let operand_type = match function.instruction_operand_at(instruction, 0) {
-        Some(value) => function.value_type(value)
-        None => None
-      }
+      let operand_type = instruction_view
+        .operands()
+        .get(0)
+        .map(value => function.value_type(value))
       match operand_type {
         Some(Ptr64) =>
           Some(
@@ -1041,10 +1021,10 @@ fn[F : @semantic.SelectionInput] lower_instruction(
         _ => None
       }
     IntCompare(comparison) => {
-      let operand_type = match function.instruction_operand_at(instruction, 0) {
-        Some(value) => function.value_type(value)
-        None => None
-      }
+      let operand_type = instruction_view
+        .operands()
+        .get(0)
+        .map(value => function.value_type(value))
       match optional_gpr_width(operand_type) {
         Some(width) => Some(CompareSet(width, lower_condition(comparison)))
         None => None
@@ -1079,10 +1059,10 @@ fn[F : @semantic.SelectionInput] lower_instruction(
         _ => None
       }
     FloatCompare(comparison) => {
-      let operand_type = match function.instruction_operand_at(instruction, 0) {
-        Some(value) => function.value_type(value)
-        None => None
-      }
+      let operand_type = instruction_view
+        .operands()
+        .get(0)
+        .map(value => function.value_type(value))
       match (operand_type, lower_float_condition(comparison)) {
         (Some(F32), Some(condition)) => Some(FloatCompareSet(F32, condition))
         (Some(F64), Some(condition)) => Some(FloatCompareSet(F64, condition))
@@ -1243,14 +1223,16 @@ fn[F : @semantic.SelectionInput] lower_instruction(
 }
 
 ///|
-fn[F : @semantic.SelectionInput] lower_parameters(
-  function : F,
+fn lower_parameters(
+  function : @semantic.SelectionView,
   context : LoweringContext,
   builder : @vcode.CheckedBuilder[X64Inst],
   values : Array[@vcode.Value?],
 ) -> @vcode.Value? raise X64LowerError {
   let entry = builder.entry_block()
-  let signature = function.signature()
+  let parameter_types = function.parameter_types().to_owned()
+  let result_types = function.result_types().to_owned()
+  let signature = @semantic.Signature::new(parameter_types, result_types)
   let layout = match function.protocol() {
     Platform => platform_call_layout(signature.params)
     Internal =>
@@ -1259,7 +1241,7 @@ fn[F : @semantic.SelectionInput] lower_parameters(
       }
   }
   for index, parameter in function.parameters() {
-    let ty = function.value_type(parameter).unwrap()
+    let ty = function.value_type(parameter)
     let raw = builder.parameter(index) catch {
       error => raise BuildFailure(cause=error)
     }
@@ -1283,7 +1265,7 @@ fn[F : @semantic.SelectionInput] lower_parameters(
           @vcode.InstructionMetadata::empty(),
         )[0]
     }
-    values[function.value_index(parameter).unwrap()] = Some(selected)
+    values[function.value_index(parameter)] = Some(selected)
   }
   if function.protocol() == Internal {
     let plan = context.internal_abi.call_plan(signature) catch {
@@ -1306,8 +1288,8 @@ fn[F : @semantic.SelectionInput] lower_parameters(
 }
 
 ///|
-fn[F : @semantic.SelectionInput] lower_return_values(
-  function : F,
+fn lower_return_values(
+  function : @semantic.SelectionView,
   context : LoweringContext,
   builder : @vcode.CheckedBuilder[X64Inst],
   block : @vcode.Block,
@@ -1376,13 +1358,15 @@ fn set_terminator(
 }
 
 ///|
-fn[F : @semantic.SelectionInput] construct_validated_semantic(
-  function : F,
+fn construct_validated_semantic(
+  function : @semantic.SelectionView,
   context : LoweringContext,
   on_event? : (@vcode.TargetCompileEvent) -> Unit = fn(_) { () },
 ) -> ConstructedFunction raise X64LowerError {
   on_event(TargetConstructionStarted)
-  let signature = function.signature()
+  let parameter_types = function.parameter_types().to_owned()
+  let result_types = function.result_types().to_owned()
+  let signature = @semantic.Signature::new(parameter_types, result_types)
   let builder : @vcode.CheckedBuilder[X64Inst] = @vcode.CheckedBuilder::new_with_protocol(
     function.name(),
     function.protocol(),
@@ -1393,59 +1377,44 @@ fn[F : @semantic.SelectionInput] construct_validated_semantic(
   let result_area = lower_parameters(function, context, builder, values)
   let blocks : Array[@vcode.Block] = []
   for index in 0..<function.block_count() {
-    let semantic_block = function.block_at(index).unwrap()
-    let parameter_count = function
-      .block_parameter_count(semantic_block)
-      .unwrap()
+    let semantic_block = function.block(index)
+    let parameters = semantic_block.parameters()
+    let parameter_count = parameters.length()
     let block = if index == 0 {
       builder.entry_block()
     } else {
       builder.create_block(
         Array::makei(parameter_count, parameter_index => {
-          function
-          .value_type(
-            function
-            .block_parameter_at(semantic_block, parameter_index)
-            .unwrap(),
-          )
-          .unwrap()
+          function.value_type(parameters[parameter_index])
         }),
       )
     }
     blocks.push(block)
     for parameter_index in 0..<parameter_count {
-      let parameter = function
-        .block_parameter_at(semantic_block, parameter_index)
-        .unwrap()
-      values[function.value_index(parameter).unwrap()] = Some(
+      let parameter = parameters[parameter_index]
+      values[function.value_index(parameter)] = Some(
         builder.block_parameter(block, parameter_index) catch {
           error => raise BuildFailure(cause=error)
         },
       )
     }
   }
-  let semantic_layout = function.block_indices_in_cfg_order()
+  let semantic_layout = function.layout()
   for block_index in semantic_layout {
-    let semantic_block = function.block_at(block_index).unwrap()
+    let semantic_block = function.block(block_index)
     let block = blocks[block_index]
-    let instruction_count = function
-      .block_instruction_count(semantic_block)
-      .unwrap()
-    for instruction_index in 0..<instruction_count {
-      let instruction = function
-        .block_instruction_at(semantic_block, instruction_index)
-        .unwrap()
+    for instruction in semantic_block.instructions() {
       lower_instruction(
         function, context, builder, block, block_index, instruction, values,
       )
     }
-    let record = function.block_terminator(semantic_block).unwrap()
-    let metadata = match record.metadata.source {
+    let record = semantic_block.terminator()
+    let metadata = match record.source() {
       Some(source) => @vcode.InstructionMetadata::new(source~)
       None => @vcode.InstructionMetadata::empty()
     }
-    match record.kind {
-      Jump(edge) =>
+    match record.kind() {
+      SelectionJump(edge) =>
         set_terminator(
           builder,
           block,
@@ -1453,13 +1422,13 @@ fn[F : @semantic.SelectionInput] construct_validated_semantic(
           [],
           [
             @vcode.Edge::new(
-              blocks[function.block_index(edge.target).unwrap()],
-              map_values(function, values, edge.arguments),
+              blocks[function.block_index(edge.target())],
+              map_values(function, values, edge.arguments()),
             ),
           ],
           metadata,
         )
-      Branch(condition, true_edge, false_edge) =>
+      SelectionBranch(condition, true_edge, false_edge) =>
         set_terminator(
           builder,
           block,
@@ -1467,29 +1436,29 @@ fn[F : @semantic.SelectionInput] construct_validated_semantic(
           [@vcode.Input::any(map_value(function, values, condition))],
           [
             @vcode.Edge::new(
-              blocks[function.block_index(true_edge.target).unwrap()],
-              map_values(function, values, true_edge.arguments),
+              blocks[function.block_index(true_edge.target())],
+              map_values(function, values, true_edge.arguments()),
             ),
             @vcode.Edge::new(
-              blocks[function.block_index(false_edge.target).unwrap()],
-              map_values(function, values, false_edge.arguments),
+              blocks[function.block_index(false_edge.target())],
+              map_values(function, values, false_edge.arguments()),
             ),
           ],
           metadata,
         )
-      Switch(index, cases, default_edge) => {
-        let index_type = function.value_type(index).unwrap()
+      SelectionSwitch(index, cases, default_edge) => {
+        let index_type = function.value_type(index)
         let width = if index_type == I32 { W32 } else { W64 }
         let successors : Array[@vcode.Edge] = cases.map(case => {
           @vcode.Edge::new(
-            blocks[function.block_index(case.edge.target).unwrap()],
-            map_values(function, values, case.edge.arguments),
+            blocks[function.block_index(case.edge.target)],
+            map_values(function, values, case.edge.arguments[:]),
           )
         })
         successors.push(
           @vcode.Edge::new(
-            blocks[function.block_index(default_edge.target).unwrap()],
-            map_values(function, values, default_edge.arguments),
+            blocks[function.block_index(default_edge.target())],
+            map_values(function, values, default_edge.arguments()),
           ),
         )
         set_terminator(
@@ -1501,7 +1470,7 @@ fn[F : @semantic.SelectionInput] construct_validated_semantic(
           metadata,
         )
       }
-      Return(return_values) => {
+      SelectionReturn(return_values) => {
         let mapped = map_values(function, values, return_values)
         lower_return_values(
           function,
@@ -1514,7 +1483,7 @@ fn[F : @semantic.SelectionInput] construct_validated_semantic(
         )
         set_terminator(builder, block, Return, [], [], metadata)
       }
-      TailCall(call, semantic_operands) => {
+      SelectionTailCall(call, semantic_operands) => {
         if function.protocol() != Internal || call.protocol != Internal {
           raise UnsupportedAbi(
             message="true tail calls require Internal caller and callee protocols",
@@ -1574,11 +1543,11 @@ fn[F : @semantic.SelectionInput] construct_validated_semantic(
           clobbers=platform_call_clobbers(),
         )
       }
-      NoReturnCall(call, semantic_operands) => {
+      SelectionNoReturnCall(call, semantic_operands) => {
         let operands = map_values(function, values, semantic_operands)
-        let roots = map_values(function, values, record.metadata.live_gc_roots)
+        let roots = map_values(function, values, record.live_gc_roots())
         let call_metadata = terminator_call_metadata(
-          record.metadata,
+          record.source(),
           call.behavior.semantics(),
         )
         let call_metadata = @vcode.InstructionMetadata::new(
@@ -1615,17 +1584,17 @@ fn[F : @semantic.SelectionInput] construct_validated_semantic(
           Trap(Unreachable),
           [],
           [],
-          terminator_trap_metadata(record.metadata, Unreachable),
+          terminator_trap_metadata(record.source(), Unreachable),
         )
       }
-      Trap(reason) =>
+      SelectionTrap(reason) =>
         set_terminator(
           builder,
           block,
           Trap(reason),
           [],
           [],
-          terminator_trap_metadata(record.metadata, reason),
+          terminator_trap_metadata(record.source(), reason),
         )
     }
   }
@@ -1664,15 +1633,19 @@ fn validate_constructed(
 
 ///|
 /// Validate and lower externally supplied semantic MachV.
-pub fn[F : @semantic.SelectionInput] lower(
-  function : F,
+pub fn lower(
+  plan : @semantic.SelectionPlan,
   context : LoweringContext,
   on_event? : (@vcode.TargetCompileEvent) -> Unit = fn(_) { () },
 ) -> @vcode.Function[X64Inst] raise X64LowerError {
-  function.verify() catch {
+  plan.require_verified() catch {
     error => raise InvalidSemantic(cause=error)
   }
-  let constructed = construct_validated_semantic(function, context, on_event~)
+  let constructed = construct_validated_semantic(
+    plan.view(),
+    context,
+    on_event~,
+  )
   validate_constructed(constructed, on_event)
   on_event(TargetSelectionFinished)
   constructed.function
@@ -1687,15 +1660,19 @@ pub struct SelectedFunction {
 
 ///|
 /// Select and validate x64 VCode for immediate target compilation.
-pub fn[F : @semantic.SelectionInput] select(
-  function : F,
+pub fn select(
+  plan : @semantic.SelectionPlan,
   context : LoweringContext,
   on_event? : (@vcode.TargetCompileEvent) -> Unit = fn(_) { () },
 ) -> SelectedFunction raise X64LowerError {
-  function.verify() catch {
+  plan.require_verified() catch {
     error => raise InvalidSemantic(cause=error)
   }
-  let constructed = construct_validated_semantic(function, context, on_event~)
+  let constructed = construct_validated_semantic(
+    plan.view(),
+    context,
+    on_event~,
+  )
   on_event(TargetSealingStarted)
   on_event(TargetSelectionFinished)
   { constructed, }
@@ -1704,15 +1681,19 @@ pub fn[F : @semantic.SelectionInput] select(
 ///|
 /// Select canonical semantic MachV without repeating an established proof.
 /// Falls back to full validation if the producer did not establish it.
-pub fn[F : @semantic.SelectionInput] select_verified(
-  function : F,
+pub fn select_verified(
+  plan : @semantic.SelectionPlan,
   context : LoweringContext,
   on_event? : (@vcode.TargetCompileEvent) -> Unit = fn(_) { () },
 ) -> SelectedFunction raise X64LowerError {
-  function.require_verified() catch {
+  plan.require_verified() catch {
     error => raise InvalidSemantic(cause=error)
   }
-  let constructed = construct_validated_semantic(function, context, on_event~)
+  let constructed = construct_validated_semantic(
+    plan.view(),
+    context,
+    on_event~,
+  )
   on_event(TargetSealingStarted)
   on_event(TargetSelectionFinished)
   { constructed, }

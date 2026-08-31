@@ -8,7 +8,7 @@ test "X64 pipeline emits an allocated scalar function" {
   )
   let sum = builder.emit(IntBinary(Add), builder.parameters(), [I64])[0]
   builder.return_([sum])
-  let function = lower(builder.finish(), test_lowering_context())
+  let function = lower(builder.finish_selection_plan(), test_lowering_context())
   let allocation = allocate(function)
   let frame = plan_frame(function, allocation)
   debug_inspect(
@@ -38,9 +38,11 @@ test "X64 compile runs the complete target pipeline" {
   let sum = builder.emit(IntBinary(Add), builder.parameters(), [I64])[0]
   builder.return_([sum])
   let selection_events : Array[@vcode.TargetCompileEvent] = []
-  let selected = select(builder.finish(), test_lowering_context(), on_event=event => {
-    selection_events.push(event)
-  })
+  let selected = select(
+    builder.finish_selection_plan(),
+    test_lowering_context(),
+    on_event=event => selection_events.push(event),
+  )
   debug_inspect(
     selection_events,
     content=(
@@ -119,7 +121,7 @@ test "X64 pipeline emits masked scalar shifts" {
   )
   let shifted = builder.emit(IntBinary(ShiftLeft), builder.parameters(), [I32])[0]
   builder.return_([shifted])
-  let function = lower(builder.finish(), test_lowering_context())
+  let function = lower(builder.finish_selection_plan(), test_lowering_context())
   let allocation = allocate(function)
   let frame = plan_frame(function, allocation)
   debug_inspect(
@@ -152,7 +154,7 @@ test "X64 pipeline preserves constant i32 shift operands" {
   let ten = builder.emit(I32Const(10U), [], [I32])[0]
   let result = builder.emit(IntBinary(Add), [ten, shifted], [I32])[0]
   builder.return_([result])
-  let function = lower(builder.finish(), test_lowering_context())
+  let function = lower(builder.finish_selection_plan(), test_lowering_context())
   let allocation = allocate(function)
   let frame = plan_frame(function, allocation)
   debug_inspect(
@@ -236,7 +238,7 @@ test "X64 pipeline preserves wrapped i32 branch conditions" {
   builder.switch_to_block(when_false)
   let not_taken = builder.emit(I32Const(42U), [], [I32])[0]
   builder.return_([not_taken])
-  let function = lower(builder.finish(), test_lowering_context())
+  let function = lower(builder.finish_selection_plan(), test_lowering_context())
   let allocation = allocate(function)
   let frame = plan_frame(function, allocation)
   debug_inspect(
@@ -348,7 +350,7 @@ test "X64 pipeline emits chained scalar conversions" {
       [I32],
     )[0]
   builder.return_([as_integer])
-  let function = lower(builder.finish(), test_lowering_context())
+  let function = lower(builder.finish_selection_plan(), test_lowering_context())
   let allocation = allocate(function)
   let frame = plan_frame(function, allocation)
   debug_inspect(
@@ -482,7 +484,10 @@ test "X64 pipeline emits every saturating scalar float conversion" {
         [result_type],
       )[0]
     builder.return_([result])
-    let function = lower(builder.finish(), test_lowering_context())
+    let function = lower(
+      builder.finish_selection_plan(),
+      test_lowering_context(),
+    )
     let allocation = allocate(function)
     let frame = plan_frame(function, allocation)
     objects.push(emit(function, allocation, frame))
@@ -1542,7 +1547,7 @@ test "X64 pipeline emits scalar float and vector operations" {
       [V128],
     )[0]
   builder.return_([vector])
-  let function = lower(builder.finish(), test_lowering_context())
+  let function = lower(builder.finish_selection_plan(), test_lowering_context())
   let allocation = allocate(function)
   let frame = plan_frame(function, allocation)
   debug_inspect(
@@ -1578,7 +1583,7 @@ test "X64 pipeline emits internal result-area calls" {
   )
   let results = builder.emit(Call(call), builder.parameters(), types)
   builder.return_(results)
-  let function = lower(builder.finish(), test_lowering_context())
+  let function = lower(builder.finish_selection_plan(), test_lowering_context())
   let allocation = allocate(function)
   let frame = plan_frame(function, allocation)
   debug_inspect(
@@ -1712,7 +1717,7 @@ test "X64 pipeline emits indirect internal result-area calls" {
     result_types,
   )
   builder.return_(results)
-  let function = lower(builder.finish(), test_lowering_context())
+  let function = lower(builder.finish_selection_plan(), test_lowering_context())
   let allocation = allocate(function)
   let frame = plan_frame(function, allocation)
   debug_inspect(
@@ -1814,7 +1819,7 @@ test "X64 pipeline forwards result areas through internal tail calls" {
     @semantic.CallBehavior::new(ReadWrite, true, true, false, false),
   )
   builder.tail_call(call, builder.parameters())
-  let function = lower(builder.finish(), test_lowering_context())
+  let function = lower(builder.finish_selection_plan(), test_lowering_context())
   let allocation = allocate(function)
   let frame = plan_frame(function, allocation)
   debug_inspect(
@@ -1871,7 +1876,7 @@ test "X64 calls zero-extend stack i32 arguments" {
   )
   builder.emit(Call(call), operands, []) |> ignore
   builder.return_([])
-  let function = lower(builder.finish(), test_lowering_context())
+  let function = lower(builder.finish_selection_plan(), test_lowering_context())
   let allocation = allocate(function)
   let frame = plan_frame(function, allocation)
   let code = emit(function, allocation, frame).code()
@@ -1911,7 +1916,7 @@ test "X64 pipeline threads a moveless loop back edge to the loop head" {
   builder.jump(loop_head, [next_n, next_x])
   builder.switch_to_block(exit)
   builder.return_([next_x])
-  let selected = lower(builder.finish(), test_lowering_context())
+  let selected = lower(builder.finish_selection_plan(), test_lowering_context())
   let (object, _) = compile(selected)
   // Find every jcc rel32 (0x0F 0x8x) and record its resolved target. The
   // loop's conditional branch must resolve backward to the loop body, and
@@ -1967,7 +1972,7 @@ test "X64 pipeline keeps a loop back edge with moves unthreaded" {
   builder.jump(loop_head, [next_n, next_n])
   builder.switch_to_block(exit)
   builder.return_([next_x])
-  let selected = lower(builder.finish(), test_lowering_context())
+  let selected = lower(builder.finish_selection_plan(), test_lowering_context())
   let (object, _) = compile(selected)
   let code = object.code()
   let branch_targets : Array[(Int, Int)] = []
@@ -2030,7 +2035,7 @@ test "X64 expanded tail calls preserve SysV callee-entry alignment" {
     @semantic.CallBehavior::new(ReadWrite, true, true, false, false),
   )
   builder.tail_call(call, operands)
-  let selected = lower(builder.finish(), test_lowering_context())
+  let selected = lower(builder.finish_selection_plan(), test_lowering_context())
   let allocation = allocate(selected)
   let frame = plan_frame(selected, allocation)
   inspect(
