@@ -1455,7 +1455,7 @@ fn run_with_jit(
             use_subtype_indirect_check,
           )
           // Enable arbitrary host function imports via JIT -> hostcall bridge.
-          @wast.install_jit_hostcall_dispatcher(jm, store, instance, jit_ctx)
+          jit_ctx.install_hostcall_dispatcher(store, instance)
           // Find and call the function
           let jit_func = jm.get_func_by_name(func_name)
           match jit_func {

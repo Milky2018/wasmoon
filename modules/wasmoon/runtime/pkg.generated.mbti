@@ -77,8 +77,12 @@ pub(all) suberror RuntimeError {
   AsyncHostCallInProgress
   AsyncHostCallCancelled
   AsyncHostError(String)
-}
+} derive(Eq, @debug.Debug)
+pub fn RuntimeError::equal(Self, Self) -> Bool
+pub fn RuntimeError::from_error(Error) -> Self?
+pub fn RuntimeError::not_equal(Self, Self) -> Bool
 pub fn RuntimeError::output(Self, &Logger) -> Unit
+pub fn RuntimeError::to_repr(Self) -> @debug.Repr
 pub fn RuntimeError::to_string(Self) -> String
 pub impl Show for RuntimeError
 
@@ -183,6 +187,11 @@ pub struct GCStats {
   bytes_collected : Int64
 } derive(@debug.Debug)
 pub fn GCStats::to_repr(Self) -> @debug.Repr
+
+pub struct GcRootLease {
+  // private fields
+}
+pub fn GcRootLease::release(Self) -> Unit
 
 pub struct GcStats {
   total_slots : Int
@@ -500,6 +509,7 @@ pub fn Store::lookup_jit_funcref_ptr(Self, Int) -> Int64?
 pub fn Store::lookup_jit_funcref_store_addr(Self, Int64) -> Int?
 pub fn Store::maybe_collect(Self, additional_roots? : Array[@types.Value], threshold? : Double) -> Int
 pub fn Store::native_execution_state(Self) -> @wasmoon_jit.NativeExecutionState
+pub fn Store::pin_gc_roots(Self, Array[@types.Value]) -> GcRootLease
 pub fn Store::register_instance(Self, ModuleInstance) -> Int raise RuntimeError
 pub fn Store::register_jit_funcrefs(Self, Array[StoreFuncrefEntry]) -> StoreFuncrefRegistration
 pub fn Store::set_module_types(Self, Array[@types.SubType], rec_groups? : Array[Int]) -> Unit raise RuntimeError

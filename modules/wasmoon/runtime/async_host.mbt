@@ -13,13 +13,11 @@ pub(all) enum AsyncHostPoll {
 } derive(Debug)
 
 ///|
-const ASYNC_HOST_IDLE : Int = 0
-
-///|
-const ASYNC_HOST_WAITING : Int = 1
-
-///|
-const ASYNC_HOST_RESULT : Int = 2
+priv enum AsyncHostCallState {
+  Idle
+  Waiting(Int, @async.Task[Result[Array[@types.Value], Error]])
+  Result(Int, Result[Array[@types.Value], Error])
+}
 
 ///|
 /// Invocation-local owner of one pending asynchronous host operation.
@@ -30,10 +28,7 @@ pub struct AsyncHostCallDriver {
   priv spawn : (async () -> Result[Array[@types.Value], Error]) -> @async.Task[
     Result[Array[@types.Value], Error],
   ]
-  priv phase : Ref[Int]
-  priv func_addr : Ref[Int]
-  priv task : Array[@async.Task[Result[Array[@types.Value], Error]]?]
-  priv result : Array[Result[Array[@types.Value], Error]?]
+  priv state : Ref[AsyncHostCallState]
 }
 
 ///|
@@ -50,10 +45,7 @@ pub async fn[X] with_async_host_call_driver(
   @async.with_task_group(group => {
     let driver : AsyncHostCallDriver = {
       spawn: fn(task) { group.spawn(task) },
-      phase: Ref(ASYNC_HOST_IDLE),
-      func_addr: Ref(-1),
-      task: [None],
-      result: [None],
+      state: Ref(Idle),
     }
     errdefer driver.cancel()
     body(driver)
@@ -72,69 +64,37 @@ pub fn AsyncHostCallDriver::poll(
   caller : Caller,
   args : Array[@types.Value],
 ) -> AsyncHostPoll raise RuntimeError {
-  match self.phase.val {
-    ASYNC_HOST_IDLE => {
+  match self.state.val {
+    Idle => {
       let task = (self.spawn)(async fn() { func(caller, args) })
-      self.phase.val = ASYNC_HOST_WAITING
-      self.func_addr.val = func_addr
-      self.task[0] = Some(task)
+      self.state.val = Waiting(func_addr, task)
       AsyncHostPending
     }
-    ASYNC_HOST_WAITING => {
-      if self.func_addr.val != func_addr {
+    Waiting(pending_addr, _) => {
+      if pending_addr != func_addr {
         raise AsyncHostCallInProgress
       }
       AsyncHostPending
     }
-    ASYNC_HOST_RESULT => {
-      if self.func_addr.val != func_addr {
+    Result(result_addr, result) => {
+      if result_addr != func_addr {
         raise AsyncHostCallInProgress
       }
-      guard self.result[0] is Some(result) else { raise Unreachable }
-      self.phase.val = ASYNC_HOST_IDLE
-      self.func_addr.val = -1
-      self.result[0] = None
+      self.state.val = Idle
       match result {
         Ok(values) => AsyncHostReady(values)
         Err(error) => raise normalize_async_host_error(error)
       }
     }
-    _ => raise Unreachable
   }
 }
 
 ///|
 pub fn normalize_async_host_error(error : Error) -> RuntimeError {
-  match error {
-    StackUnderflow => StackUnderflow
-    StackOverflow => StackOverflow
-    TypeMismatch => TypeMismatch
-    StoreClosed => StoreClosed
-    MemoryClosed => MemoryClosed
-    OutOfBoundsMemoryAccess => OutOfBoundsMemoryAccess
-    OutOfBoundsTableAccess => OutOfBoundsTableAccess
-    OutOfBoundsArrayAccess => OutOfBoundsArrayAccess
-    UndefinedElement => UndefinedElement
-    UninitializedElement => UninitializedElement
-    IndirectCallTypeMismatch => IndirectCallTypeMismatch
-    DivisionByZero => DivisionByZero
-    IntegerOverflow => IntegerOverflow
-    InvalidConversion => InvalidConversion
-    OutOfMemory => OutOfMemory
-    Unreachable => Unreachable
-    CallStackExhausted => CallStackExhausted
-    UnknownImport(_, _) as runtime_error => runtime_error
-    LinkError => LinkError
-    LinkErrorDetail(_) as runtime_error => runtime_error
-    NullReference => NullReference
-    UnalignedAtomic => UnalignedAtomic
-    InvalidConstantExpression(_) as runtime_error => runtime_error
-    AsyncHostRequiresAsyncCall => AsyncHostRequiresAsyncCall
-    AsyncHostCallInProgress => AsyncHostCallInProgress
-    AsyncHostCallCancelled => AsyncHostCallCancelled
-    AsyncHostError(_) as runtime_error => runtime_error
-    _ if @async.is_cancellation_error(error) => AsyncHostCallCancelled
-    _ => AsyncHostError(error.to_string())
+  match RuntimeError::from_error(error) {
+    Some(runtime_error) => runtime_error
+    None if @async.is_cancellation_error(error) => AsyncHostCallCancelled
+    None => AsyncHostError(error.to_string())
   }
 }
 
@@ -144,29 +104,22 @@ pub fn normalize_async_host_error(error : Error) -> RuntimeError {
 pub async fn AsyncHostCallDriver::wait_pending(
   self : AsyncHostCallDriver,
 ) -> Unit raise RuntimeError {
-  if self.phase.val != ASYNC_HOST_WAITING {
-    raise Unreachable
-  }
-  guard self.task[0] is Some(task) else { raise Unreachable }
+  guard self.state.val is Waiting(func_addr, task) else { raise Unreachable }
   let result = task.wait() catch {
     _ => {
       self.cancel()
       raise AsyncHostCallCancelled
     }
   }
-  self.task[0] = None
-  self.result[0] = Some(result)
-  self.phase.val = ASYNC_HOST_RESULT
+  self.state.val = Result(func_addr, result)
 }
 
 ///|
 /// Cancel the pending host operation, if any.
 pub fn AsyncHostCallDriver::cancel(self : AsyncHostCallDriver) -> Unit {
-  if self.task[0] is Some(task) {
-    task.cancel()
+  match self.state.val {
+    Waiting(_, task) => task.cancel()
+    Idle | Result(_, _) => ()
   }
-  self.phase.val = ASYNC_HOST_IDLE
-  self.func_addr.val = -1
-  self.task[0] = None
-  self.result[0] = None
+  self.state.val = Idle
 }

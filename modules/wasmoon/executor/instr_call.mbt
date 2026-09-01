@@ -231,9 +231,11 @@ fn ExecContext::invoke_host_func(
   let caller = @runtime.Caller::Caller(self.store, caller_instance)
   let results = host_fn(caller, args) catch {
     error => {
-      self.suspend_host_call(error, fn() raise {
-        self.invoke_host_func(host_fn, caller_instance, args)
-      })
+      self.suspend_host_call(
+        error,
+        fn() raise { self.invoke_host_func(host_fn, caller_instance, args) },
+        roots=args,
+      )
       return
     }
   }
@@ -260,6 +262,7 @@ fn ExecContext::invoke_async_host_func(
         self.stack.push(result)
       }
     AsyncHostPending => {
+      self.suspension_roots = args.copy()
       self.set_base_resume_action(0L, fn() raise {
         self.invoke_async_host_func(store_addr, host_fn, caller_instance, args)
       })

@@ -107,6 +107,17 @@ an async import through a synchronous entry point fails explicitly instead of
 blocking the host thread. Cancelling the surrounding MoonBit task cancels the
 host future and releases the parked Wasm continuation or native fiber.
 
+If a module's start function can reach an async import, instantiate it with
+`instantiate_with_linker_async` or
+`instantiate_module_with_imports_async`. The synchronous instantiation APIs
+reject that path with `AsyncHostRequiresAsyncCall`.
+
+MoonBit async functions do not expose a synchronously pollable Future to a
+synchronous native callback. Wasmoon therefore starts the host operation as a
+structured child task and parks Wasm once on the first encounter, even when the
+host function completes without awaiting. Subsequent waiting and resumption do
+not block the host thread.
+
 ## Quick Start (60 seconds)
 
 ```bash

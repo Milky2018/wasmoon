@@ -1527,19 +1527,19 @@ priv enum ImportedCallOutcome {
 }
 
 ///|
-/// Install a JIT hostcall dispatcher closure on `jit_module`.
+/// Install a JIT hostcall dispatcher closure on this module context.
 ///
 /// This enables arbitrary imported host functions (stored in `store`) to be
 /// called from JIT-compiled wasm via `wasmoon_jit_hostcall`.
-pub fn install_jit_hostcall_dispatcher(
-  jit_module : @jit.JITModule,
+pub fn JITModuleContext::install_hostcall_dispatcher(
+  self : JITModuleContext,
   store : @runtime.Store,
   instance : @runtime.ModuleInstance,
-  jit_context : JITModuleContext,
   before_dispatch? : () -> Unit = fn() { () },
   after_dispatch? : () -> Unit = fn() { () },
   classify_suspension? : (@runtime.RuntimeError) -> Bool = fn(_error) { false },
 ) -> Unit {
+  let jit_module = self.jit_module
   fn call_func_by_addr(
     store : @runtime.Store,
     caller_instance : @runtime.ModuleInstance,
@@ -1553,9 +1553,13 @@ pub fn install_jit_hostcall_dispatcher(
         ImportedReturned(f(caller, args))
       }
       AsyncHostFunc(f) => {
-        guard jit_context.async_host_driver.val is Some(driver) else {
+        guard store.native_execution_state().current_invocation()
+          is Some(invocation_id) else {
+          raise AsyncHostRequiresAsyncCall
+        }
+        guard self.async_host_drivers.get(invocation_id) is Some(driver) else {
           let error = @runtime.AsyncHostRequiresAsyncCall
-          jit_context.async_host_error.val = Some(error)
+          self.async_host_errors.set(invocation_id, error)
           raise error
         }
         let caller = @runtime.Caller::Caller(store, caller_instance)
@@ -1621,7 +1625,10 @@ pub fn install_jit_hostcall_dispatcher(
       e => {
         after_dispatch()
         if store.get_func_inst_opt(func_addr) is Some(AsyncHostFunc(_)) {
-          jit_context.async_host_error.val = Some(e)
+          if store.native_execution_state().current_invocation()
+            is Some(invocation_id) {
+            self.async_host_errors.set(invocation_id, e)
+          }
         }
         if classify_suspension(e) {
           return HostcallSuspended

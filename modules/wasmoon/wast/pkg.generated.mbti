@@ -51,8 +51,6 @@ pub fn init_jit_globals_from_store(@runtime.ModuleInstance, @runtime.Store, @jit
 
 pub fn init_jit_memories_from_store(@runtime.ModuleInstance, @runtime.Store, @jit.JITModule) -> Array[@wasmoon_jit.MemoryInfo]?
 
-pub fn install_jit_hostcall_dispatcher(@jit.JITModule, @runtime.Store, @runtime.ModuleInstance, JITModuleContext, before_dispatch? : () -> Unit, after_dispatch? : () -> Unit, classify_suspension? : (@runtime.RuntimeError) -> Bool) -> Unit
-
 pub fn invoke_action(WastContext, @wat.WastAction) -> Array[@types.Value] raise WastRunnerError
 
 pub fn parse(String) -> @wat.WastScript raise @wat.WatError
@@ -90,7 +88,7 @@ pub(all) suberror JITCoreCallError {
   NativeFiberFailure(String)
   Cancelled
   Exit(Int)
-  HostInvocation(String)
+  HostInvocation(@runtime.RuntimeError)
   GcSetupFailed(String)
   ExecutionStateFailure(@wasmoon_jit.NativeExecutionStateError)
 } derive(Eq, @debug.Debug)
@@ -146,6 +144,7 @@ pub fn JITModuleContext::call_core_func(Self, @runtime.Store, @runtime.ModuleIns
 pub async fn JITModuleContext::call_core_func_async(Self, @runtime.Store, @runtime.ModuleInstance, Int, Array[@types.Value]) -> Array[@types.Value] raise JITCoreCallError
 pub fn JITModuleContext::call_core_func_resumable(Self, @runtime.Store, @runtime.ModuleInstance, Int, Array[@types.Value]) -> JITCoreCallOutcome raise JITCoreCallError
 pub fn JITModuleContext::close(Self) -> Unit
+pub fn JITModuleContext::install_hostcall_dispatcher(Self, @runtime.Store, @runtime.ModuleInstance, before_dispatch? : () -> Unit, after_dispatch? : () -> Unit, classify_suspension? : (@runtime.RuntimeError) -> Bool) -> Unit
 
 pub struct WastContext {
   store : @runtime.Store

@@ -15,6 +15,7 @@ struct ExecutionContinuation {
   context : ExecContext
   return_arity : Int
   active : Array[Bool]
+  root_lease : @runtime.GcRootLease
 }
 
 ///|
@@ -89,11 +90,13 @@ fn ExecContext::suspend_host_call(
   self : ExecContext,
   error : @runtime.RuntimeError,
   retry : () -> Unit raise,
+  roots? : Array[@types.Value] = [],
 ) -> Unit raise {
   match self.suspension_classifier {
     Some(classifier) =>
       match (classifier.classify)(error) {
         Some(token) => {
+          self.suspension_roots = roots.copy()
           self.set_base_resume_action(token, retry)
           raise ExecutionSuspended
         }
@@ -126,7 +129,13 @@ fn suspended_outcome(
     abort("missing interpreter suspension token")
   }
   context.suspension_token = None
-  Suspended(token, { context, return_arity, active, })
+  let roots = context.collect_gc_additional_roots()
+  for value in context.suspension_roots {
+    roots.push(value)
+  }
+  context.suspension_roots.clear()
+  let root_lease = context.store.pin_gc_roots(roots)
+  Suspended(token, { context, return_arity, active, root_lease, })
 }
 
 ///|
@@ -139,8 +148,10 @@ pub fn ExecutionContinuation::continue_execution(
   }
   guard self.context.resume_action is Some(action) else {
     self.active[0] = false
+    self.root_lease.release()
     raise Unreachable
   }
+  self.root_lease.release()
   self.context.resume_action = None
   (action.run)() catch {
     ExecutionSuspended =>
@@ -159,6 +170,7 @@ pub fn ExecutionContinuation::continue_execution(
 pub fn ExecutionContinuation::cancel(self : ExecutionContinuation) -> Unit {
   if self.active[0] {
     self.active[0] = false
+    self.root_lease.release()
     self.context.resume_action = None
     self.context.frames.clear()
     self.context.labels.clear()

@@ -32,9 +32,13 @@ pub fn instantiate_module_with_import_diagnostics(@runtime.Store, @types.Module,
 
 pub fn instantiate_module_with_imports(@runtime.Store, @types.Module, @runtime.Imports) -> @runtime.ModuleInstance raise @runtime.RuntimeError
 
+pub async fn instantiate_module_with_imports_async(@runtime.Store, @types.Module, @runtime.Imports) -> @runtime.ModuleInstance raise @runtime.RuntimeError
+
 pub fn instantiate_module_with_init(@types.Module) -> (@runtime.Store, @runtime.ModuleInstance) raise @runtime.RuntimeError
 
 pub fn instantiate_with_linker(@runtime.Linker, String, @types.Module) -> @runtime.ModuleInstance raise @runtime.RuntimeError
+
+pub async fn instantiate_with_linker_async(@runtime.Linker, String, @types.Module) -> @runtime.ModuleInstance raise @runtime.RuntimeError
 
 pub fn validate_imports_with_diagnostics(@runtime.Store, @types.Module, @runtime.Imports) -> ImportDiagnosticsResult raise @runtime.RuntimeError
 

@@ -121,6 +121,7 @@ struct ExecContext {
   async_host_driver : @runtime.AsyncHostCallDriver?
   mut resume_action : ResumeAction?
   mut suspension_token : Int64?
+  mut suspension_roots : Array[@types.Value]
 } derive(Debug)
 
 ///|
@@ -146,6 +147,7 @@ fn ExecContext::ExecContext(
     async_host_driver,
     resume_action: None,
     suspension_token: None,
+    suspension_roots: [],
   }
 }
 

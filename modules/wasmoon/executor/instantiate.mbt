@@ -8,36 +8,13 @@
 /// The executor uses internal `ControlSignal`s for structured control flow; any
 /// leaked signal should be surfaced as `unreachable` externally.
 fn normalize_runtime_error(e : Error) -> @runtime.RuntimeError {
-  match e {
-    @runtime.StackUnderflow => StackUnderflow
-    @runtime.StackOverflow => StackOverflow
-    @runtime.TypeMismatch => TypeMismatch
-    @runtime.StoreClosed => StoreClosed
-    @runtime.MemoryClosed => MemoryClosed
-    @runtime.OutOfBoundsMemoryAccess => OutOfBoundsMemoryAccess
-    @runtime.OutOfBoundsTableAccess => OutOfBoundsTableAccess
-    @runtime.OutOfBoundsArrayAccess => OutOfBoundsArrayAccess
-    @runtime.UndefinedElement => UndefinedElement
-    @runtime.UninitializedElement => UninitializedElement
-    @runtime.IndirectCallTypeMismatch => IndirectCallTypeMismatch
-    @runtime.DivisionByZero => DivisionByZero
-    @runtime.IntegerOverflow => IntegerOverflow
-    @runtime.InvalidConversion => InvalidConversion
-    @runtime.OutOfMemory => OutOfMemory
-    @runtime.Unreachable => Unreachable
-    @runtime.CallStackExhausted => CallStackExhausted
-    @runtime.UnknownImport(_, _) as err => err
-    @runtime.LinkError => LinkError
-    @runtime.LinkErrorDetail(_) as err => err
-    @runtime.NullReference => NullReference
-    @runtime.UnalignedAtomic => UnalignedAtomic
-    @runtime.InvalidConstantExpression(_) as err => err
-    @runtime.AsyncHostRequiresAsyncCall => AsyncHostRequiresAsyncCall
-    @runtime.AsyncHostCallInProgress => AsyncHostCallInProgress
-    @runtime.AsyncHostCallCancelled => AsyncHostCallCancelled
-    @runtime.AsyncHostError(_) as err => err
-    InvocationSignal::HostInvocation(err) => normalize_runtime_error(err)
-    _ => Unreachable
+  match @runtime.RuntimeError::from_error(e) {
+    Some(runtime_error) => runtime_error
+    None =>
+      match e {
+        InvocationSignal::HostInvocation(err) => normalize_runtime_error(err)
+        _ => Unreachable
+      }
   }
 }
 
@@ -1298,7 +1275,7 @@ pub fn instantiate_module_with_import_diagnostics(
 ///|
 /// Create a module instance with imports using an existing store
 /// Raises UnknownImport if any required import is not provided
-pub fn instantiate_module_with_imports(
+fn instantiate_module_with_imports_unstarted(
   store : @runtime.Store,
   mod : @types.Module,
   imports : @runtime.Imports,
@@ -1719,14 +1696,37 @@ pub fn instantiate_module_with_imports(
   // This also sets the store_idx field
   store.register_instance(instance) |> ignore
 
-  // Execute start function if present
+  instance
+}
+
+///|
+/// Create a module instance and execute its start function synchronously.
+///
+/// An async host import reached from the start function is rejected; use
+/// `instantiate_module_with_imports_async` for that case.
+pub fn instantiate_module_with_imports(
+  store : @runtime.Store,
+  mod : @types.Module,
+  imports : @runtime.Imports,
+) -> @runtime.ModuleInstance raise @runtime.RuntimeError {
+  let instance = instantiate_module_with_imports_unstarted(store, mod, imports)
   if mod.start is Some(start_func_idx) {
-    let ctx = ExecContext::ExecContext(store, instance)
-    (ctx.call_func(start_func_idx, []) catch {
-      BranchWith(_, _) | Return => raise Unreachable
-      e => raise normalize_runtime_error(e)
-    })
-    |> ignore
+    call_func_by_index(store, instance, start_func_idx, []) |> ignore
+  }
+  instance
+}
+
+///|
+/// Create a module instance and allow its start function to call asynchronous
+/// host imports without blocking the host thread.
+pub async fn instantiate_module_with_imports_async(
+  store : @runtime.Store,
+  mod : @types.Module,
+  imports : @runtime.Imports,
+) -> @runtime.ModuleInstance raise @runtime.RuntimeError {
+  let instance = instantiate_module_with_imports_unstarted(store, mod, imports)
+  if mod.start is Some(start_func_idx) {
+    call_func_by_index_async(store, instance, start_func_idx, []) |> ignore
   }
   instance
 }
@@ -2011,66 +2011,21 @@ pub fn instantiate_with_linker(
   let imports = linker.build_imports()
   let store = linker.get_store()
   let instance = instantiate_module_with_imports(store, mod, imports)
+  linker.register(name, instance)
+  instance
+}
 
-  // Register the instance with the store for cross-module call resolution
-  store.register_instance(instance) |> ignore
-
-  // Initialize data segments (copy data to memory)
-  let globals_for_linker_data = get_global_instances(
-    store,
-    instance.global_addrs,
-  )
-  for data in mod.datas {
-    if data.memory_idx >= 0 &&
-      data.offset.length() > 0 &&
-      instance.mem_addrs.length() > data.memory_idx {
-      let mem = store.get_mem(instance.mem_addrs[data.memory_idx])
-      let offset = eval_extended_const_expr(
-        data.offset,
-        globals_for_linker_data,
-      )
-      mem.init_data(offset, data.init)
-    }
-  }
-
-  // Initialize element segments (populate tables with function references)
-  for elem_idx, elem in mod.elems {
-    // Only process active element segments
-    if elem.mode is Active(table_idx, offset_expr) {
-      if instance.table_addrs.length() > table_idx {
-        let table = store.get_table(instance.table_addrs[table_idx])
-        // Evaluate offset expression using extended const expr evaluator
-        let globals = get_global_instances(store, instance.global_addrs)
-        let offset = eval_extended_const_expr(offset_expr, globals)
-
-        // Check bounds before initializing
-        // offset + num_elements must not exceed table size
-        if offset < 0 || offset + elem.init.length() > table.size() {
-          raise OutOfBoundsTableAccess
-        }
-
-        // Set table entries - evaluate init expression to get value
-        for i, init_expr in elem.init {
-          match eval_elem_init_expr(init_expr, instance.func_addrs, globals) {
-            Some(value) => table.set(offset + i, value)
-            None => continue
-          }
-        }
-      }
-      // Active elem segments are implicitly dropped after initialization
-      instance.dropped_elems[elem_idx] = true
-    }
-  }
-
-  // Execute start function if present
-  if mod.start is Some(start_func_idx) {
-    let ctx = ExecContext::ExecContext(store, instance)
-    (ctx.call_func(start_func_idx, []) catch {
-      BranchWith(_, _) | Return => raise Unreachable
-      e => raise normalize_runtime_error(e)
-    })
-    |> ignore
-  }
+///|
+/// Instantiate and register a module whose start function may call
+/// asynchronous host imports.
+pub async fn instantiate_with_linker_async(
+  linker : @runtime.Linker,
+  name : String,
+  mod : @types.Module,
+) -> @runtime.ModuleInstance raise @runtime.RuntimeError {
+  let imports = linker.build_imports()
+  let store = linker.get_store()
+  let instance = instantiate_module_with_imports_async(store, mod, imports)
   linker.register(name, instance)
   instance
 }

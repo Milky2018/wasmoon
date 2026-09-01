@@ -31,6 +31,45 @@ pub(all) suberror RuntimeError {
   AsyncHostCallInProgress
   AsyncHostCallCancelled
   AsyncHostError(String)
+} derive(Debug, Eq)
+
+///|
+/// Recover a structured runtime error from the language-wide `Error` type.
+///
+/// This is the single transport boundary used by executors and asynchronous
+/// host-call adapters; unrelated errors return `None` instead of being
+/// flattened to a string here.
+pub fn RuntimeError::from_error(error : Error) -> RuntimeError? {
+  match error {
+    StackUnderflow => Some(StackUnderflow)
+    StackOverflow => Some(StackOverflow)
+    TypeMismatch => Some(TypeMismatch)
+    StoreClosed => Some(StoreClosed)
+    MemoryClosed => Some(MemoryClosed)
+    OutOfBoundsMemoryAccess => Some(OutOfBoundsMemoryAccess)
+    OutOfBoundsTableAccess => Some(OutOfBoundsTableAccess)
+    OutOfBoundsArrayAccess => Some(OutOfBoundsArrayAccess)
+    UndefinedElement => Some(UndefinedElement)
+    UninitializedElement => Some(UninitializedElement)
+    IndirectCallTypeMismatch => Some(IndirectCallTypeMismatch)
+    DivisionByZero => Some(DivisionByZero)
+    IntegerOverflow => Some(IntegerOverflow)
+    InvalidConversion => Some(InvalidConversion)
+    OutOfMemory => Some(OutOfMemory)
+    Unreachable => Some(Unreachable)
+    CallStackExhausted => Some(CallStackExhausted)
+    UnknownImport(_, _) as runtime_error => Some(runtime_error)
+    LinkError => Some(LinkError)
+    LinkErrorDetail(_) as runtime_error => Some(runtime_error)
+    NullReference => Some(NullReference)
+    UnalignedAtomic => Some(UnalignedAtomic)
+    InvalidConstantExpression(_) as runtime_error => Some(runtime_error)
+    AsyncHostRequiresAsyncCall => Some(AsyncHostRequiresAsyncCall)
+    AsyncHostCallInProgress => Some(AsyncHostCallInProgress)
+    AsyncHostCallCancelled => Some(AsyncHostCallCancelled)
+    AsyncHostError(_) as runtime_error => Some(runtime_error)
+    _ => None
+  }
 }
 
 ///|

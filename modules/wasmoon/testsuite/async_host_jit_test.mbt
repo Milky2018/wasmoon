@@ -21,6 +21,7 @@ async test "JIT async host function parks and resumes its native fiber" {
       @async.sleep(10)
       events.push("host ready")
       match args[0] {
+        I32(value) if value < 0 => raise @runtime.DivisionByZero
         I32(value) => [I32(value * 2)]
         _ => raise @runtime.TypeMismatch
       }
@@ -83,9 +84,7 @@ async test "JIT async host function parks and resumes its native fiber" {
     mod_.type_rec_groups.copy(),
     true,
   )
-  @wast.install_jit_hostcall_dispatcher(
-    jit_module, store, instance, jit_context,
-  )
+  jit_context.install_hostcall_dispatcher(store, instance)
   let sync_error = try
     jit_context.call_core_func(store, instance, 1, [I32(20)])
   catch {
@@ -96,7 +95,7 @@ async test "JIT async host function parks and resumes its native fiber" {
   inspect(
     sync_error,
     content=(
-      #|HostInvocation("async host function requires an async wasm call")
+      #|HostInvocation(AsyncHostRequiresAsyncCall)
     ),
   )
   let result = @async.with_task_group(group => {
@@ -114,6 +113,44 @@ async test "JIT async host function parks and resumes its native fiber" {
     events,
     content="[\"host started\", \"other task ran\", \"host ready\"]",
   )
+  let isolated = @async.with_task_group(group => {
+    let outer = group.spawn(no_wait=true, () => {
+      jit_context.call_core_func_async(store, instance, 1, [I32(6)])
+    })
+    @async.sleep(1)
+    let nested_error = try
+      jit_context.call_core_func(store, instance, 1, [I32(7)])
+    catch {
+      error => error
+    } noraise {
+      _ => fail("expected synchronous entry to reject the async import")
+    }
+    (nested_error, outer.wait())
+  })
+  debug_inspect(
+    isolated,
+    content=(
+      #|(HostInvocation(AsyncHostRequiresAsyncCall), [I32(13)])
+    ),
+  )
+  let overlapping = @async.with_task_group(group => {
+    let first = group.spawn(no_wait=true, () => {
+      jit_context.call_core_func_async(store, instance, 1, [I32(2)])
+    })
+    let second = group.spawn(no_wait=true, () => {
+      jit_context.call_core_func_async(store, instance, 1, [I32(3)])
+    })
+    (first.wait(), second.wait())
+  })
+  debug_inspect(overlapping, content="([I32(5)], [I32(7)])")
+  let host_error = try
+    jit_context.call_core_func_async(store, instance, 1, [I32(-1)])
+  catch {
+    error => error
+  } noraise {
+    _ => fail("expected the asynchronous host function to fail")
+  }
+  debug_inspect(host_error, content="HostInvocation(DivisionByZero)")
   let cancellation = @async.with_task_group(group => {
     let call = group.spawn(no_wait=true, allow_failure=true, () => {
       jit_context.call_core_func_async(store, instance, 1, [I32(10)])

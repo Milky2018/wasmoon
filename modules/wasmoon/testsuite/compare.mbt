@@ -491,7 +491,7 @@ fn run_jit_with_opt_level(
       jm, globals_ptr, global_addrs, table_addrs, func_addrs, func_type_indices,
       canonical_type_indices, module_types, module_rec_groups, use_subtype_indirect_check,
     )
-    @wast.install_jit_hostcall_dispatcher(jm, store, instance, jit_context)
+    jit_context.install_hostcall_dispatcher(store, instance)
     let c_heap = @wasmoon_jit.CHeap::CHeap()
     jm.setup_gc(c_heap, module_types, canonical_type_indices, func_type_indices) catch {
       err => return Err("GC setup failed: \{err}")

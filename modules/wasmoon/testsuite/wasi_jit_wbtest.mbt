@@ -418,7 +418,7 @@ fn run_wasi_jit_quiet(
       jm, globals_ptr, global_addrs, table_addrs, func_addrs, func_type_indices,
       canonical_type_indices, module_types, module_rec_groups, use_subtype_indirect_check,
     )
-    @wast.install_jit_hostcall_dispatcher(jm, store, instance, jit_context)
+    jit_context.install_hostcall_dispatcher(store, instance)
     guard jm.get_func(func_idx) is Some(func) else {
       return (Err("JIT function \{func_idx} not loaded"), Bytes::from_array([]))
     }

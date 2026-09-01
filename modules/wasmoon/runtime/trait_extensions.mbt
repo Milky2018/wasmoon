@@ -74,6 +74,12 @@ pub extend ModuleInstance with Show::{to_string, output}
 pub extend RuntimeError with Show::{to_string, output}
 
 ///|
+pub extend RuntimeError with Debug::{to_repr}
+
+///|
+pub extend RuntimeError with Eq::{not_equal, equal}
+
+///|
 pub extend RuntimeErrorContext with Show::{to_string, output}
 
 ///|

@@ -414,11 +414,9 @@ fn load_component_jit_context(
     lowered_module.type_rec_groups.copy(),
     true,
   )
-  @wast.install_jit_hostcall_dispatcher(
-    jit_module,
+  context.install_hostcall_dispatcher(
     store,
     instance,
-    context,
     before_dispatch=fn() {
       @wast.sync_jit_globals_to_store(context, store)
       @wast.sync_jit_tables_to_store(context, store)
