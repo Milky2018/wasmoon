@@ -498,6 +498,30 @@ fn lower_direct_operation(
     return [result]
   }
   if operation is LoadIndexed(spec, shift) {
+    if spec.width == W128 {
+      let address = append_body(
+          builder,
+          block,
+          AddAddressUxtw(shift),
+          [@vcode.Input::any(operands[0]), @vcode.Input::any(operands[1])],
+          [@vcode.Output::any(Ptr64)],
+          @vcode.InstructionMetadata::empty(),
+        )[0]
+      return append_body(
+        builder,
+        block,
+        VectorLoad128(spec.offset),
+        [@vcode.Input::any(address)],
+        result_types.map(@vcode.Output::any),
+        direct_source_metadata(
+          source_location,
+          stack_map,
+          roots,
+          operation.semantics(),
+          trap?=spec.trap,
+        ),
+      )
+    }
     let selected = if spec.offset == 0UL {
       ScalarLoadUxtw(spec.width, spec.extension, spec.result_type, shift)
     } else {
@@ -540,6 +564,30 @@ fn lower_direct_operation(
     )
   }
   if operation is StoreIndexed(spec, shift) {
+    if spec.width == W128 {
+      let address = append_body(
+          builder,
+          block,
+          AddAddressUxtw(shift),
+          [@vcode.Input::any(operands[0]), @vcode.Input::any(operands[1])],
+          [@vcode.Output::any(Ptr64)],
+          @vcode.InstructionMetadata::empty(),
+        )[0]
+      return append_body(
+        builder,
+        block,
+        VectorStore128(spec.offset),
+        [@vcode.Input::any(address), @vcode.Input::any(operands[2])],
+        [],
+        direct_source_metadata(
+          source_location,
+          stack_map,
+          roots,
+          operation.semantics(),
+          trap?=spec.trap,
+        ),
+      )
+    }
     if spec.offset == 0UL {
       return append_body(
         builder,

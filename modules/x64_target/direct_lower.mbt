@@ -573,7 +573,11 @@ fn lower_direct_operation(
     return append_body(
       builder,
       block,
-      ScalarLoad(spec.width, spec.extension, spec.result_type, spec.offset),
+      if spec.width == W128 {
+        VectorLoad128(spec.offset)
+      } else {
+        ScalarLoad(spec.width, spec.extension, spec.result_type, spec.offset)
+      },
       [@vcode.Input::any(address)],
       result_types.map(@vcode.Output::any),
       direct_source_metadata(
@@ -625,7 +629,11 @@ fn lower_direct_operation(
     return append_body(
       builder,
       block,
-      ScalarStore(spec.width, spec.value_type, spec.offset),
+      if spec.width == W128 {
+        VectorStore128(spec.offset)
+      } else {
+        ScalarStore(spec.width, spec.value_type, spec.offset)
+      },
       [@vcode.Input::any(address), @vcode.Input::any(operands[2])],
       [],
       direct_source_metadata(
