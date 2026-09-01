@@ -435,6 +435,11 @@ fn analyze_lowering(function : @milkir.Function) -> LoweringAnalysis {
         is Some((selection, consumed)) else {
         continue
       }
+      if consumed.any(value => {
+          constants[value.id] is None && uses[value.id] != 1
+        }) {
+        continue
+      }
       memory_addresses[instruction.id] = Some(selection)
       for value in consumed {
         folded_uses[value.id] += 1

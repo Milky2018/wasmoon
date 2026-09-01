@@ -134,3 +134,27 @@ test "native selection folds canonical MilkIR addresses into indexed memory" {
   inspect(analysis.skip_results[address.id], content="true")
   inspect(analysis.skip_results[zero.id], content="true")
 }
+
+///|
+test "native selection leaves shared address trees materialized" {
+  let builder = @milkir.FunctionBuilder::FunctionBuilder("shared_address")
+  let base = builder.add_param(Ptr)
+  let index = builder.add_param(I32)
+  builder.add_result(I32)
+  builder.add_result(I32)
+  let base_bits = builder.bitcast(I64, base)
+  let extended = builder.uextend(I64, index)
+  let address = builder.iadd(base_bits, extended)
+  let zero = builder.iconst_i64(0L)
+  let first = builder.load_ptr(I32, address, zero)
+  let second = builder.load_ptr(I32, address, zero)
+  builder.return_([first, second])
+  let function = builder.finalize()
+  let instructions = function.blocks[0].instructions
+  let analysis = analyze_lowering(function)
+  inspect(analysis.memory_addresses[instructions[4].id] is None, content="true")
+  inspect(analysis.memory_addresses[instructions[5].id] is None, content="true")
+  inspect(analysis.skip_results[base_bits.id], content="false")
+  inspect(analysis.skip_results[extended.id], content="false")
+  inspect(analysis.skip_results[address.id], content="false")
+}
