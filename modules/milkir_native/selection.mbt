@@ -350,18 +350,23 @@ fn select_scalar_instruction(
   }
   let width = if result.ty == I32 { 32 } else { 64 }
   let select_right = fn(bits : UInt64) -> ScalarSelection? {
-    let lowered = selection_binary_operation(binary)
     match binary {
       ShiftLeft
       | SignedShiftRight
       | UnsignedShiftRight
       | RotateLeft
       | RotateRight =>
-        Some(ShiftImmediate(left, lowered, (bits % width.to_uint64()).to_int()))
+        Some(
+          ShiftImmediate(
+            left,
+            selection_binary_operation(binary),
+            (bits % width.to_uint64()).to_int(),
+          ),
+        )
       Add | Sub | Mul | And | Or | Xor =>
-        Some(IntImmediate(left, lowered, bits))
+        Some(IntImmediate(left, selection_binary_operation(binary), bits))
       UnsignedRem if bits > 1UL && (bits & (bits - 1UL)) == 0UL =>
-        Some(IntImmediate(left, lowered, bits))
+        Some(IntImmediate(left, UnsignedRem, bits))
       SignedDiv | UnsignedDiv | SignedRem | UnsignedRem => None
       SignedMulHigh | UnsignedMulHigh => None
     }

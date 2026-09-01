@@ -39,6 +39,21 @@ test "native selection fuses multiply-add and shifted-add without a second IR" {
 }
 
 ///|
+test "native selection leaves high multiply constants materialized" {
+  let builder = @milkir.FunctionBuilder::FunctionBuilder("high_multiply")
+  let input = builder.add_param(I64)
+  builder.add_result(I64)
+  let constant = builder.iconst_i64(17L)
+  let result = builder.umulh(input, constant)
+  builder.return_([result])
+  let function = builder.finalize()
+  let multiply = function.blocks[0].instructions[1]
+  let analysis = analyze_lowering(function)
+  inspect(analysis.scalar_instructions[multiply.id] is None, content="true")
+  inspect(analysis.skip_results[constant.id], content="false")
+}
+
+///|
 test "native selection fuses compare into brz and brnz terminators" {
   let builder = @milkir.FunctionBuilder::FunctionBuilder("compare_branch")
   let input = builder.add_param(I32)
