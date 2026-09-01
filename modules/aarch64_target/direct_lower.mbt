@@ -372,6 +372,88 @@ fn lower_direct_operation(
       )[0]
     return [result]
   }
+  if operation is LoadIndexed(spec, shift) {
+    let selected = if spec.offset == 0UL {
+      ScalarLoadUxtw(spec.width, spec.extension, spec.result_type, shift)
+    } else {
+      let address = append_body(
+          builder,
+          block,
+          AddAddressUxtw(shift),
+          [@vcode.Input::any(operands[0]), @vcode.Input::any(operands[1])],
+          [@vcode.Output::any(Ptr64)],
+          @vcode.InstructionMetadata::empty(),
+        )[0]
+      return append_body(
+        builder,
+        block,
+        ScalarLoad(spec.width, spec.extension, spec.result_type, spec.offset),
+        [@vcode.Input::any(address)],
+        result_types.map(@vcode.Output::any),
+        direct_source_metadata(
+          source_location,
+          stack_map,
+          roots,
+          operation.semantics(),
+          trap?=spec.trap,
+        ),
+      )
+    }
+    return append_body(
+      builder,
+      block,
+      selected,
+      operands.map(@vcode.Input::any),
+      result_types.map(@vcode.Output::any),
+      direct_source_metadata(
+        source_location,
+        stack_map,
+        roots,
+        operation.semantics(),
+        trap?=spec.trap,
+      ),
+    )
+  }
+  if operation is StoreIndexed(spec, shift) {
+    if spec.offset == 0UL {
+      return append_body(
+        builder,
+        block,
+        ScalarStoreUxtw(spec.width, spec.value_type, shift),
+        operands.map(@vcode.Input::any),
+        [],
+        direct_source_metadata(
+          source_location,
+          stack_map,
+          roots,
+          operation.semantics(),
+          trap?=spec.trap,
+        ),
+      )
+    }
+    let address = append_body(
+        builder,
+        block,
+        AddAddressUxtw(shift),
+        [@vcode.Input::any(operands[0]), @vcode.Input::any(operands[1])],
+        [@vcode.Output::any(Ptr64)],
+        @vcode.InstructionMetadata::empty(),
+      )[0]
+    return append_body(
+      builder,
+      block,
+      ScalarStore(spec.width, spec.value_type, spec.offset),
+      [@vcode.Input::any(address), @vcode.Input::any(operands[2])],
+      [],
+      direct_source_metadata(
+        source_location,
+        stack_map,
+        roots,
+        operation.semantics(),
+        trap?=spec.trap,
+      ),
+    )
+  }
   let selected = match operation {
     I32Const(bits) => Some(LoadConstant(W32, bits.to_uint64()))
     I64Const(bits) => Some(LoadConstant(W64, bits))

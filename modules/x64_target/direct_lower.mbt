@@ -393,6 +393,110 @@ fn lower_direct_operation(
       )[0]
     return [result]
   }
+  if operation is LoadIndexed(spec, shift) {
+    let widened = append_body(
+        builder,
+        block,
+        Convert(ExtendI32ToI64(Unsigned)),
+        [@vcode.Input::any(operands[1])],
+        [@vcode.Output::any(I64)],
+        @vcode.InstructionMetadata::empty(),
+      )[0]
+    let scaled = if shift == 0 {
+      widened
+    } else {
+      let amount = append_body(
+          builder,
+          block,
+          LoadConstant(W64, shift.to_uint64()),
+          [],
+          [@vcode.Output::any(I64)],
+          @vcode.InstructionMetadata::empty(),
+        )[0]
+      append_body(
+        builder,
+        block,
+        IntBinary(W64, Lsl),
+        [@vcode.Input::any(widened), @vcode.Input::any(amount)],
+        [@vcode.Output::any(I64)],
+        @vcode.InstructionMetadata::empty(),
+      )[0]
+    }
+    let address = append_body(
+        builder,
+        block,
+        AddAddress,
+        [@vcode.Input::any(operands[0]), @vcode.Input::any(scaled)],
+        [@vcode.Output::any(Ptr64)],
+        @vcode.InstructionMetadata::empty(),
+      )[0]
+    return append_body(
+      builder,
+      block,
+      ScalarLoad(spec.width, spec.extension, spec.result_type, spec.offset),
+      [@vcode.Input::any(address)],
+      result_types.map(@vcode.Output::any),
+      direct_source_metadata(
+        source_location,
+        stack_map,
+        roots,
+        operation.semantics(),
+        trap?=spec.trap,
+      ),
+    )
+  }
+  if operation is StoreIndexed(spec, shift) {
+    let widened = append_body(
+        builder,
+        block,
+        Convert(ExtendI32ToI64(Unsigned)),
+        [@vcode.Input::any(operands[1])],
+        [@vcode.Output::any(I64)],
+        @vcode.InstructionMetadata::empty(),
+      )[0]
+    let scaled = if shift == 0 {
+      widened
+    } else {
+      let amount = append_body(
+          builder,
+          block,
+          LoadConstant(W64, shift.to_uint64()),
+          [],
+          [@vcode.Output::any(I64)],
+          @vcode.InstructionMetadata::empty(),
+        )[0]
+      append_body(
+        builder,
+        block,
+        IntBinary(W64, Lsl),
+        [@vcode.Input::any(widened), @vcode.Input::any(amount)],
+        [@vcode.Output::any(I64)],
+        @vcode.InstructionMetadata::empty(),
+      )[0]
+    }
+    let address = append_body(
+        builder,
+        block,
+        AddAddress,
+        [@vcode.Input::any(operands[0]), @vcode.Input::any(scaled)],
+        [@vcode.Output::any(Ptr64)],
+        @vcode.InstructionMetadata::empty(),
+      )[0]
+    return append_body(
+      builder,
+      block,
+      ScalarStore(spec.width, spec.value_type, spec.offset),
+      [@vcode.Input::any(address), @vcode.Input::any(operands[2])],
+      [],
+      direct_source_metadata(
+        source_location,
+        stack_map,
+        roots,
+        operation.semantics(),
+        trap?=spec.trap,
+      ),
+    )
+  }
   let selected = match operation {
     I32Const(bits) => Some(LoadConstant(W32, bits.to_uint64()))
     I64Const(bits) => Some(LoadConstant(W64, bits))

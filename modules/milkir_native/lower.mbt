@@ -470,58 +470,96 @@ fn lower_memory_instruction(
   value_types : Array[@native.ValueType?],
   instruction : @milkir.Inst,
   memory : @milkir.MemoryOp,
+  analysis : LoweringAnalysis,
 ) -> Unit raise NativeLowerError {
   let source = instruction_source(instruction)
+  let selected_address = fn(
+    base : @milkir.Value,
+    offset : @milkir.Value,
+  ) -> (Array[@lowering.Value], UInt64, Int?) raise NativeLowerError {
+    match analysis.memory_addresses[instruction.id] {
+      Some(selected) => {
+        let operands = [
+          lower_pointer_value(
+            builder,
+            values,
+            value_types,
+            selected.base,
+            source,
+            instruction.id,
+          ),
+        ]
+        match selected.index {
+          Some(index) => {
+            operands.push(mapped_value(values, index))
+            (operands, selected.offset, Some(selected.shift))
+          }
+          None => (operands, selected.offset, None)
+        }
+      }
+      None =>
+        (
+          [
+            lower_address(
+              builder,
+              values,
+              value_types,
+              base,
+              offset,
+              source,
+              instruction.id,
+            ),
+          ],
+          0UL,
+          None,
+        )
+    }
+  }
   let results = match memory {
     Load(result_type) => {
       let lowered_type = lower_type(result_type)
-      let address = lower_address(
-        builder,
-        values,
-        value_types,
+      let (address, offset, shift) = selected_address(
         instruction.args[0],
         instruction.args[1],
-        source,
-        instruction.id,
+      )
+      let spec = @lowering.LoadSpec::new(
+        access_width_for_type(lowered_type),
+        None,
+        lowered_type,
+        offset,
+        Little,
+        None,
       )
       builder.emit_with_metadata(
-        Load(
-          @lowering.LoadSpec::new(
-            access_width_for_type(lowered_type),
-            None,
-            lowered_type,
-            0UL,
-            Little,
-            None,
-          ),
-        ),
-        [address],
+        match shift {
+          Some(shift) => LoadIndexed(spec, shift)
+          None => Load(spec)
+        },
+        address,
         [lowered_type],
         instruction_metadata(instruction, []),
       )
     }
     Store(value_type) => {
       let lowered_type = lower_type(value_type)
-      let address = lower_address(
-        builder,
-        values,
-        value_types,
+      let (address, offset, shift) = selected_address(
         instruction.args[0],
         instruction.args[2],
-        source,
-        instruction.id,
+      )
+      address.push(mapped_value(values, instruction.args[1]))
+      let spec = @lowering.StoreSpec::new(
+        access_width_for_type(lowered_type),
+        lowered_type,
+        offset,
+        Little,
+        None,
       )
       builder.emit_with_metadata(
-        Store(
-          @lowering.StoreSpec::new(
-            access_width_for_type(lowered_type),
-            lowered_type,
-            0UL,
-            Little,
-            None,
-          ),
-        ),
-        [address, mapped_value(values, instruction.args[1])],
+        match shift {
+          Some(shift) => StoreIndexed(spec, shift)
+          None => Store(spec)
+        },
+        address,
         [],
         instruction_metadata(instruction, []),
       )
@@ -535,31 +573,28 @@ fn lower_memory_instruction(
           )
       }
       let lowered_type = lower_type(result_type)
-      let address = lower_address(
-        builder,
-        values,
-        value_types,
+      let (address, offset, shift) = selected_address(
         instruction.args[0],
         instruction.args[1],
-        source,
-        instruction.id,
+      )
+      let spec = @lowering.LoadSpec::new(
+        width,
+        if signed {
+          Signed
+        } else {
+          Unsigned
+        },
+        lowered_type,
+        offset,
+        Little,
+        None,
       )
       builder.emit_with_metadata(
-        Load(
-          @lowering.LoadSpec::new(
-            width,
-            if signed {
-              Signed
-            } else {
-              Unsigned
-            },
-            lowered_type,
-            0UL,
-            Little,
-            None,
-          ),
-        ),
-        [address],
+        match shift {
+          Some(shift) => LoadIndexed(spec, shift)
+          None => Load(spec)
+        },
+        address,
         [lowered_type],
         instruction_metadata(instruction, []),
       )
@@ -573,18 +608,24 @@ fn lower_memory_instruction(
           )
       }
       let value_type = lower_type(instruction.args[1].ty)
-      let address = lower_address(
-        builder,
-        values,
-        value_types,
+      let (address, offset, shift) = selected_address(
         instruction.args[0],
         instruction.args[2],
-        source,
-        instruction.id,
+      )
+      address.push(mapped_value(values, instruction.args[1]))
+      let spec = @lowering.StoreSpec::new(
+        width,
+        value_type,
+        offset,
+        Little,
+        None,
       )
       builder.emit_with_metadata(
-        Store(@lowering.StoreSpec::new(width, value_type, 0UL, Little, None)),
-        [address, mapped_value(values, instruction.args[1])],
+        match shift {
+          Some(shift) => StoreIndexed(spec, shift)
+          None => Store(spec)
+        },
+        address,
         [],
         instruction_metadata(instruction, []),
       )
@@ -1009,11 +1050,16 @@ fn lower_instruction(
   value_types : Array[@native.ValueType?],
   instruction : @milkir.Inst,
   block_id : Int,
+  analysis : LoweringAnalysis,
   gc_roots : Array[Array[Int]]?,
   function_result_types : Array[@native.ValueType],
   environment : Array[@lowering.Value],
   dialect : DialectLowering?,
 ) -> Bool raise NativeLowerError {
+  if !instruction.results.is_empty() &&
+    instruction.results.all(result => analysis.skip_results[result.id]) {
+    return false
+  }
   match instruction.opcode {
     Call(call) => {
       lower_call_instruction(
@@ -1034,7 +1080,7 @@ fn lower_instruction(
     }
     Memory(memory) => {
       lower_memory_instruction(
-        builder, values, value_types, instruction, memory,
+        builder, values, value_types, instruction, memory, analysis,
       )
       return false
     }
@@ -1358,6 +1404,7 @@ fn lower_verified_construction(
     }
   }
   let cfg = @milkir.CFG::build(function)
+  let analysis = analyze_lowering(function)
   let gc_roots = if has_gc_references {
     Some(compute_gc_roots(function, cfg))
   } else {
@@ -1445,6 +1492,7 @@ fn lower_verified_construction(
           value_types,
           instruction,
           block.id,
+          analysis,
           gc_roots,
           function_result_types,
           environment,

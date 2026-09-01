@@ -412,7 +412,9 @@ pub(all) enum Operation {
   FloatCompare(FloatComparison)
   Convert(ConversionOp)
   Load(LoadSpec)
+  LoadIndexed(LoadSpec, Int)
   Store(StoreSpec)
+  StoreIndexed(StoreSpec, Int)
   AtomicLoad(AtomicSpec)
   AtomicStore(AtomicSpec)
   AtomicRmw(AtomicSpec, AtomicRmwOp)
@@ -483,7 +485,9 @@ pub fn Operation::copy(self : Operation) -> Operation {
     | FloatCompare(_)
     | Convert(_)
     | Load(_)
+    | LoadIndexed(_, _)
     | Store(_)
+    | StoreIndexed(_, _)
     | AtomicLoad(_)
     | AtomicStore(_)
     | AtomicRmw(_, _)
@@ -1318,6 +1322,20 @@ pub fn verify_operation_contract(
         None =>
           require_shape(operands, results, [Ptr64], [spec.result_type], "load")
       }
+    LoadIndexed(spec, shift) =>
+      match verify_load_spec(spec) {
+        Some(error) => Some(error)
+        None if shift < 0 || shift > 4 =>
+          operation_error("indexed load scale must be between 0 and 4")
+        None =>
+          require_shape(
+            operands,
+            results,
+            [Ptr64, I32],
+            [spec.result_type],
+            "indexed load",
+          )
+      }
     Store(spec) =>
       match verify_store_spec(spec) {
         Some(error) => Some(error)
@@ -1328,6 +1346,20 @@ pub fn verify_operation_contract(
             [Ptr64, spec.value_type],
             [],
             "store",
+          )
+      }
+    StoreIndexed(spec, shift) =>
+      match verify_store_spec(spec) {
+        Some(error) => Some(error)
+        None if shift < 0 || shift > 4 =>
+          operation_error("indexed store scale must be between 0 and 4")
+        None =>
+          require_shape(
+            operands,
+            results,
+            [Ptr64, I32, spec.value_type],
+            [],
+            "indexed store",
           )
       }
     AtomicLoad(spec) =>
@@ -1438,7 +1470,19 @@ pub fn Operation::semantics(self : Operation) -> @native.OperationSemantics {
         memory: Read,
         may_trap: spec.trap is Some(_),
       }
+    LoadIndexed(spec, _) =>
+      {
+        ..@native.OperationSemantics::pure(),
+        memory: Read,
+        may_trap: spec.trap is Some(_),
+      }
     Store(spec) =>
+      {
+        ..@native.OperationSemantics::pure(),
+        memory: Write,
+        may_trap: spec.trap is Some(_),
+      }
+    StoreIndexed(spec, _) =>
       {
         ..@native.OperationSemantics::pure(),
         memory: Write,
