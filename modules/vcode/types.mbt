@@ -23,7 +23,7 @@ pub type AllocationVirtualReg = @allocation_types.VirtualReg
 pub type AllocationLocation = @allocation_types.AllocationLocation
 
 ///|
-pub type ValueType = @semantic.ValueType
+pub type ValueType = @native.ValueType
 
 ///|
 pub fn reg_class_for_value_type(ty : ValueType) -> RegClass {
@@ -307,23 +307,23 @@ fn Edge::copy(self : Edge) -> Edge {
 }
 
 ///|
-pub type SafepointKind = @semantic.SafepointKind
+pub type SafepointKind = @native.SafepointKind
 
 ///|
 pub(all) enum SymbolReference {
-  Code(@semantic.CodeSymbol)
-  External(@semantic.ExternalSymbol)
-  Data(@semantic.DataSymbol)
+  Code(@native.CodeSymbol)
+  External(@native.ExternalSymbol)
+  Data(@native.DataSymbol)
 } derive(Eq, Debug)
 
 ///|
 pub struct InstructionMetadata {
-  source : @semantic.SourceLocation?
-  trap : @semantic.TrapReason?
+  source : @native.SourceLocation?
+  trap : @native.TrapReason?
   safepoint : SafepointKind?
   live_gc_roots : Array[Value]
   symbol : SymbolReference?
-  stack_map : @semantic.StackMapMetadata?
+  stack_map : @native.StackMapMetadata?
 }
 
 ///|
@@ -354,12 +354,12 @@ pub fn InstructionMetadata::safepoint(
 
 ///|
 pub fn InstructionMetadata::new(
-  source? : @semantic.SourceLocation,
-  trap? : @semantic.TrapReason,
+  source? : @native.SourceLocation,
+  trap? : @native.TrapReason,
   safepoint? : SafepointKind,
   live_gc_roots? : Array[Value] = [],
   symbol? : SymbolReference,
-  stack_map? : @semantic.StackMapMetadata,
+  stack_map? : @native.StackMapMetadata,
 ) -> InstructionMetadata {
   {
     source,

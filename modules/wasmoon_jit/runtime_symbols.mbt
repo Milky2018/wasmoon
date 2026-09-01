@@ -102,11 +102,9 @@ pub fn RuntimeSymbolResolver::with_wasmoon_runtime_symbols() -> RuntimeSymbolRes
 
 ///|
 /// Stable external-symbol whitelist accepted by Wasmoon artifacts.
-pub fn wasmoon_runtime_external_symbols() -> Array[
-  @semantic_machv.ExternalSymbol,
-] {
+pub fn wasmoon_runtime_external_symbols() -> Array[@native.ExternalSymbol] {
   RuntimeSymbolResolver::with_wasmoon_runtime_symbols().symbols.map(symbol => {
-    @semantic_machv.ExternalSymbol::new(symbol.name)
+    @native.ExternalSymbol::new(symbol.name)
   })
 }
 

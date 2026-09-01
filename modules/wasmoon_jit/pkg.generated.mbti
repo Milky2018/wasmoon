@@ -4,9 +4,10 @@ package "Milky2018/wasmoon_jit"
 import {
   "Milky2018/aarch64_target",
   "Milky2018/code_object",
-  "Milky2018/machv",
   "Milky2018/milkir",
   "Milky2018/milkir_machv",
+  "Milky2018/native_types",
+  "Milky2018/native_types/semantic",
   "Milky2018/wasm_core/types",
   "Milky2018/wasm_milkir",
   "Milky2018/wasmoon_jit/artifact",
@@ -26,7 +27,7 @@ pub fn alloc_memory(Int64) -> Int64
 
 pub fn alloc_memory_desc(Int64, Int?, is_memory64? : Bool, page_size_log2? : Int, is_shared? : Bool) -> Int64
 
-pub fn artifact_compatibility(@artifact.CompatibilityManifest, available_cpu_features~ : Array[@artifact.CpuFeature], runtime_symbols~ : Array[@machv.ExternalSymbol], data_symbols~ : Array[@machv.DataSymbol]) -> ArtifactCompatibility
+pub fn artifact_compatibility(@artifact.CompatibilityManifest, available_cpu_features~ : Array[@artifact.CpuFeature], runtime_symbols~ : Array[@native_types.ExternalSymbol], data_symbols~ : Array[@native_types.DataSymbol]) -> ArtifactCompatibility
 
 pub fn artifact_module_identity(String, Bytes, Bytes) -> @artifact.ModuleIdentity
 
@@ -44,7 +45,7 @@ pub fn classify_import_function_ptr(Int64) -> ImportFunctionResolution
 
 pub fn collect_gc_root_args(Array[Int64], Array[@types.ValueType]) -> Array[Int64]
 
-pub fn compile_wasm_body_artifact_function(@milkir.Function, @wasm_milkir.WasmValidationContext, NativeTarget, function_index~ : Int, signature~ : @machv.Signature, use_subtype_indirect_check? : Bool, canonical_type_indices? : Array[Int]) -> @artifact.FunctionCode raise JitPipelineError
+pub fn compile_wasm_body_artifact_function(@milkir.Function, @wasm_milkir.WasmValidationContext, NativeTarget, function_index~ : Int, signature~ : @native_types.Signature, use_subtype_indirect_check? : Bool, canonical_type_indices? : Array[Int]) -> @artifact.FunctionCode raise JitPipelineError
 
 pub fn compile_wasm_body_diagnostics_for_target(@milkir.Function, @wasm_milkir.WasmValidationContext, NativeTarget, use_subtype_indirect_check? : Bool, canonical_type_indices? : Array[Int]) -> JitPipelineDiagnostics raise JitPipelineError
 
@@ -134,7 +135,7 @@ pub fn jit_trap_message(Int) -> String
 
 pub fn load_artifact(Bytes, ArtifactCompatibility, limits? : @artifact.DecodeLimits) -> LoadedArtifact raise ArtifactLoadError
 
-pub fn lower_wasm_body_semantic_machv(@milkir.Function, @wasm_milkir.WasmValidationContext, use_subtype_indirect_check? : Bool, canonical_type_indices? : Array[Int]) -> @machv.Function raise JitPipelineError
+pub fn lower_wasm_body_semantic_machv(@milkir.Function, @wasm_milkir.WasmValidationContext, use_subtype_indirect_check? : Bool, canonical_type_indices? : Array[Int]) -> @semantic.Function raise JitPipelineError
 
 pub fn make_cstring(String) -> FixedArray[Byte]
 
@@ -198,7 +199,7 @@ pub fn verify_artifact(@artifact.Artifact, ArtifactCompatibility) -> LoadedArtif
 
 pub fn vmcontext_layout() -> VMContextLayout
 
-pub fn wasm_function_signature(@types.FuncType) -> @machv.Signature
+pub fn wasm_function_signature(@types.FuncType) -> @native_types.Signature
 
 pub fn wasm_import_identity(Int, String, String, @types.FuncType) -> @artifact.ImportIdentity
 
@@ -206,7 +207,7 @@ pub fn wasm_runtime_symbols() -> @wasm_milkir.RuntimeSymbols
 
 pub fn wasm_trap_payload(String) -> Int
 
-pub fn wasmoon_runtime_external_symbols() -> Array[@machv.ExternalSymbol]
+pub fn wasmoon_runtime_external_symbols() -> Array[@native_types.ExternalSymbol]
 
 // Errors
 pub suberror ArtifactIncompatible {
@@ -276,8 +277,8 @@ pub fn JitInstallError::to_repr(Self) -> @debug.Repr
 
 pub suberror JitPipelineError {
   SemanticLoweringFailed(cause~ : @milkir_machv.SemanticLowerError)
-  RuntimeAbiInputInvalid(cause~ : @machv.MachVVerifyError)
-  RuntimeAbiOutputInvalid(cause~ : @machv.MachVVerifyError)
+  RuntimeAbiInputInvalid(cause~ : @semantic.MachVVerifyError)
+  RuntimeAbiOutputInvalid(cause~ : @semantic.MachVVerifyError)
   RuntimeAbiContractViolation(message~ : String)
   AArch64AbiInvalid(cause~ : @aarch64_target.InternalAbiError)
   X64AbiInvalid(cause~ : @x64_target.InternalAbiError)
@@ -342,8 +343,8 @@ pub(all) struct ArtifactCompatibility {
   codegen_revision : String
   module_identity : @artifact.ModuleIdentity
   policy : @artifact.CompilationPolicy
-  runtime_symbols : Array[@machv.ExternalSymbol]
-  data_symbols : Array[@machv.DataSymbol]
+  runtime_symbols : Array[@native_types.ExternalSymbol]
+  data_symbols : Array[@native_types.DataSymbol]
 } derive(Eq, @debug.Debug)
 pub fn ArtifactCompatibility::equal(Self, Self) -> Bool
 pub fn ArtifactCompatibility::not_equal(Self, Self) -> Bool
@@ -650,7 +651,7 @@ pub fn MemoryInfo::MemoryInfo(Int64, Int64, Int?) -> Self
 pub struct NativeCompiler {
   // private fields
 }
-pub fn NativeCompiler::compile_wasm_body_artifact_function(Self, @milkir.Function, @wasm_milkir.WasmValidationContext, function_index~ : Int, signature~ : @machv.Signature, use_subtype_indirect_check? : Bool, canonical_type_indices? : Array[Int]) -> @artifact.FunctionCode raise JitPipelineError
+pub fn NativeCompiler::compile_wasm_body_artifact_function(Self, @milkir.Function, @wasm_milkir.WasmValidationContext, function_index~ : Int, signature~ : @native_types.Signature, use_subtype_indirect_check? : Bool, canonical_type_indices? : Array[Int]) -> @artifact.FunctionCode raise JitPipelineError
 pub fn NativeCompiler::new(NativeTarget) -> Self
 
 type NativeExecutionState

@@ -34,7 +34,7 @@ pub fn[Inst] CheckedBuilder::new_with_results(
 ///|
 pub fn[Inst] CheckedBuilder::new_with_protocol(
   name : String,
-  protocol : @semantic.CallProtocol,
+  protocol : @native.CallProtocol,
   parameter_types : Array[ValueType],
   result_types : Array[ValueType],
 ) -> CheckedBuilder[Inst] {

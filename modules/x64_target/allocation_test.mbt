@@ -157,7 +157,7 @@ test "x64 allocation rejects emitter scratch as an unconstrained operand" {
 ///|
 test "x64 allocation rejects every reserved register as a value home" {
   let errors : Array[X64AllocationError?] = []
-  let cases : Array[(@semantic.ValueType, @vcode.PhysicalReg)] = [
+  let cases : Array[(@native.ValueType, @vcode.PhysicalReg)] = [
     (I64, @vcode.PhysicalReg::new(10, Int)),
     (I64, @vcode.PhysicalReg::new(11, Int)),
     (I64, @vcode.PhysicalReg::new(15, Int)),

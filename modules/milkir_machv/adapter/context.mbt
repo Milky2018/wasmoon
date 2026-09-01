@@ -7,11 +7,11 @@
 struct InstructionContext {
   builder : @machv.FunctionBuilder
   operands : Array[@machv.Value]
-  operand_types : Array[@machv.ValueType]
-  result_types : Array[@machv.ValueType]
-  function_result_types : Array[@machv.ValueType]
+  operand_types : Array[@native.ValueType]
+  result_types : Array[@native.ValueType]
+  function_result_types : Array[@native.ValueType]
   environment : Array[@machv.Value]
-  source : @machv.SourceLocation?
+  source : @native.SourceLocation?
   live_gc_roots : Array[@machv.Value]
   completed : Ref[Bool]
   terminates_block : Ref[Bool]
@@ -23,11 +23,11 @@ struct InstructionContext {
 pub fn InstructionContext::new(
   builder : @machv.FunctionBuilder,
   operands : Array[@machv.Value],
-  operand_types : Array[@machv.ValueType],
-  result_types : Array[@machv.ValueType],
-  function_result_types : Array[@machv.ValueType],
+  operand_types : Array[@native.ValueType],
+  result_types : Array[@native.ValueType],
+  function_result_types : Array[@native.ValueType],
   environment : Array[@machv.Value],
-  source : @machv.SourceLocation?,
+  source : @native.SourceLocation?,
   live_gc_roots : Array[@machv.Value],
   complete : (Array[@machv.Value]) -> Unit,
 ) -> InstructionContext {
@@ -108,21 +108,21 @@ pub fn InstructionContext::operands(
 ///|
 pub fn InstructionContext::result_types(
   self : InstructionContext,
-) -> Array[@machv.ValueType] {
+) -> Array[@native.ValueType] {
   self.result_types.copy()
 }
 
 ///|
 pub fn InstructionContext::operand_types(
   self : InstructionContext,
-) -> Array[@machv.ValueType] {
+) -> Array[@native.ValueType] {
   self.operand_types.copy()
 }
 
 ///|
 pub fn InstructionContext::function_result_types(
   self : InstructionContext,
-) -> Array[@machv.ValueType] {
+) -> Array[@native.ValueType] {
   self.function_result_types.copy()
 }
 
@@ -136,7 +136,7 @@ pub fn InstructionContext::environment(
 ///|
 pub fn InstructionContext::source(
   self : InstructionContext,
-) -> @machv.SourceLocation? {
+) -> @native.SourceLocation? {
   self.source
 }
 
@@ -145,7 +145,7 @@ pub fn InstructionContext::emit(
   self : InstructionContext,
   operation : @machv.Operation,
   operands : Array[@machv.Value],
-  result_types : Array[@machv.ValueType],
+  result_types : Array[@native.ValueType],
 ) -> Array[@machv.Value] {
   self.builder.emit_with_metadata(
     operation,
@@ -175,7 +175,7 @@ pub fn InstructionContext::emit_call(
   self : InstructionContext,
   call : @machv.SemanticCall,
   operands : Array[@machv.Value],
-  result_types : Array[@machv.ValueType],
+  result_types : Array[@native.ValueType],
 ) -> Array[@machv.Value] {
   self.builder.emit_with_metadata(
     Call(call),
@@ -190,7 +190,7 @@ pub fn InstructionContext::emit_call_without_roots(
   self : InstructionContext,
   call : @machv.SemanticCall,
   operands : Array[@machv.Value],
-  result_types : Array[@machv.ValueType],
+  result_types : Array[@native.ValueType],
 ) -> Array[@machv.Value] {
   self.builder.emit_with_metadata(
     Call(call),
@@ -252,7 +252,7 @@ pub fn InstructionContext::finish_void(self : InstructionContext) -> Unit {
 ///|
 pub fn InstructionContext::create_block(
   self : InstructionContext,
-  parameter_types : Array[@machv.ValueType],
+  parameter_types : Array[@native.ValueType],
 ) -> @machv.Block {
   self.builder.create_block(parameter_types)
 }
@@ -308,7 +308,7 @@ pub fn InstructionContext::branch(
 ///|
 pub fn InstructionContext::trap(
   self : InstructionContext,
-  reason : @machv.TrapReason,
+  reason : @native.TrapReason,
 ) -> Unit {
   self.builder.trap(reason)
   if self.source is Some(source) {
@@ -324,7 +324,7 @@ pub fn InstructionContext::trap(
 /// complete the instruction there.
 pub fn InstructionContext::set_trap_terminator(
   self : InstructionContext,
-  reason : @machv.TrapReason,
+  reason : @native.TrapReason,
 ) -> Unit {
   self.builder.trap(reason)
   if self.source is Some(source) {

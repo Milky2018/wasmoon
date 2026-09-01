@@ -77,7 +77,7 @@ pub(all) enum X64VectorIntUnary {
   Absolute
   Negate
   PopulationCount
-  ExtendAddPairwise(@semantic.Signedness)
+  ExtendAddPairwise(@native.Signedness)
 } derive(Eq, Debug)
 
 ///|
@@ -86,22 +86,22 @@ pub(all) enum X64VectorIntBinary {
   Sub
   Mul
   AverageUnsigned
-  Min(@semantic.Signedness)
-  Max(@semantic.Signedness)
-  SaturatingAdd(@semantic.Signedness)
-  SaturatingSub(@semantic.Signedness)
-  ExtendMultiply(@semantic.VectorHalf, @semantic.Signedness)
+  Min(@native.Signedness)
+  Max(@native.Signedness)
+  SaturatingAdd(@native.Signedness)
+  SaturatingSub(@native.Signedness)
+  ExtendMultiply(@semantic.VectorHalf, @native.Signedness)
   Dot16To32Signed
   Q15MultiplyRoundedSaturating
 } derive(Eq, Debug)
 
 ///|
 pub(all) enum X64VectorConversion {
-  ExtendLow(@semantic.VectorLane, @semantic.Signedness)
-  ExtendHigh(@semantic.VectorLane, @semantic.Signedness)
-  Narrow(@semantic.VectorLane, @semantic.Signedness)
-  FloatToInt(@semantic.VectorLane, @semantic.Signedness)
-  IntToFloat(@semantic.VectorLane, @semantic.Signedness)
+  ExtendLow(@semantic.VectorLane, @native.Signedness)
+  ExtendHigh(@semantic.VectorLane, @native.Signedness)
+  Narrow(@semantic.VectorLane, @native.Signedness)
+  FloatToInt(@semantic.VectorLane, @native.Signedness)
+  IntToFloat(@semantic.VectorLane, @native.Signedness)
   PromoteLowF32x4
   DemoteZeroF64x2
 } derive(Eq, Debug)
@@ -135,25 +135,25 @@ pub(all) enum X64FloatTrapCondition {
 
 ///|
 pub(all) enum X64Address {
-  Code(@semantic.CodeSymbol)
-  External(@semantic.ExternalSymbol)
-  Data(@semantic.DataSymbol)
+  Code(@native.CodeSymbol)
+  External(@native.ExternalSymbol)
+  Data(@native.DataSymbol)
 } derive(Eq, Debug)
 
 ///|
 pub(all) enum X64Conversion {
   WrapI64ToI32
-  ExtendI32ToI64(@semantic.Signedness)
-  SignExtend(@semantic.IntegerType, @semantic.AccessWidth)
+  ExtendI32ToI64(@native.Signedness)
+  SignExtend(@native.IntegerType, @native.AccessWidth)
   DemoteF64ToF32
   PromoteF32ToF64
-  Bitcast(@semantic.ValueType, @semantic.ValueType)
-  IntToFloat(@semantic.IntegerType, @semantic.FloatType, @semantic.Signedness)
-  FloatToInt(@semantic.FloatType, @semantic.IntegerType, @semantic.Signedness)
+  Bitcast(@native.ValueType, @native.ValueType)
+  IntToFloat(@native.IntegerType, @native.FloatType, @native.Signedness)
+  FloatToInt(@native.FloatType, @native.IntegerType, @native.Signedness)
   FloatToIntSaturating(
-    @semantic.FloatType,
-    @semantic.IntegerType,
-    @semantic.Signedness
+    @native.FloatType,
+    @native.IntegerType,
+    @native.Signedness
   )
 } derive(Eq, Debug)
 
@@ -196,26 +196,26 @@ fn X64StackObject::is_valid(self : X64StackObject) -> Bool {
 
 ///|
 pub(all) enum X64Inst {
-  IncomingReg(@semantic.ValueType, @vcode.PhysicalReg)
-  IncomingStack(@semantic.ValueType, Int)
+  IncomingReg(@native.ValueType, @vcode.PhysicalReg)
+  IncomingStack(@native.ValueType, Int)
   IncomingResultArea(@vcode.PhysicalReg)
-  IncomingCallResult(@semantic.ValueType, @vcode.PhysicalReg)
-  IncomingCallAreaResult(@semantic.ValueType, Int)
-  OutgoingReg(@semantic.ValueType, @vcode.PhysicalReg)
-  OutgoingAreaResult(@semantic.ValueType, Int)
-  KeepAlive(@semantic.ValueType)
+  IncomingCallResult(@native.ValueType, @vcode.PhysicalReg)
+  IncomingCallAreaResult(@native.ValueType, Int)
+  OutgoingReg(@native.ValueType, @vcode.PhysicalReg)
+  OutgoingAreaResult(@native.ValueType, Int)
+  KeepAlive(@native.ValueType)
   LoadConstant(GprWidth, UInt64)
   LoadVectorConstant(UInt64, UInt64)
-  LoadNull(@semantic.ValueType)
+  LoadNull(@native.ValueType)
   LoadAddress(X64Address)
   StackAddress(X64StackObject)
-  LoadFloatConstant(@semantic.ValueType, UInt64)
-  Move(@semantic.ValueType)
-  CarrierMove(@semantic.ValueType, @semantic.ValueType)
-  Select(@semantic.ValueType)
+  LoadFloatConstant(@native.ValueType, UInt64)
+  Move(@native.ValueType)
+  CarrierMove(@native.ValueType, @native.ValueType)
+  Select(@native.ValueType)
   VectorSelect
   VectorSplat(@semantic.VectorLane)
-  VectorExtractLane(@semantic.VectorLane, Int, @semantic.Signedness?)
+  VectorExtractLane(@semantic.VectorLane, Int, @native.Signedness?)
   VectorReplaceLane(@semantic.VectorLane, Int)
   VectorShuffle(FixedArray[Int])
   VectorSwizzle
@@ -235,50 +235,50 @@ pub(all) enum X64Inst {
   IntUnary(GprWidth, X64IntUnary)
   IntBinary(GprWidth, X64IntBinary)
   PopulationCount(GprWidth)
-  IntHighMultiply(GprWidth, @semantic.Signedness)
+  IntHighMultiply(GprWidth, @native.Signedness)
   IntWithOverflow(GprWidth, @semantic.IntOverflowOp)
-  IntRemainder(GprWidth, @semantic.Signedness)
+  IntRemainder(GprWidth, @native.Signedness)
   TrapIfZero(GprWidth)
   TrapIfSignedDivOverflow(GprWidth)
   CompareSet(GprWidth, X64Condition)
-  ReferenceCompareSet(@semantic.ValueType, X64Condition)
-  FloatUnary(@semantic.ValueType, X64FloatUnary)
-  FloatBinary(@semantic.ValueType, X64FloatBinary)
-  FloatTernary(@semantic.ValueType, X64FloatTernary)
-  FloatCompareSet(@semantic.ValueType, X64FloatCondition)
-  TrapIfFloat(@semantic.ValueType, X64FloatTrapCondition)
+  ReferenceCompareSet(@native.ValueType, X64Condition)
+  FloatUnary(@native.ValueType, X64FloatUnary)
+  FloatBinary(@native.ValueType, X64FloatBinary)
+  FloatTernary(@native.ValueType, X64FloatTernary)
+  FloatCompareSet(@native.ValueType, X64FloatCondition)
+  TrapIfFloat(@native.ValueType, X64FloatTrapCondition)
   Convert(X64Conversion)
   AddAddress
   ScalarLoad(
-    @semantic.AccessWidth,
-    @semantic.LoadExtension,
-    @semantic.ValueType,
+    @native.AccessWidth,
+    @native.LoadExtension,
+    @native.ValueType,
     UInt64
   )
-  ScalarStore(@semantic.AccessWidth, @semantic.ValueType, UInt64)
+  ScalarStore(@native.AccessWidth, @native.ValueType, UInt64)
   VectorLoad128(UInt64)
   VectorStore128(UInt64)
   VectorLoadSplat(@semantic.VectorLane, UInt64)
-  VectorLoadExtend(@semantic.VectorLane, @semantic.Signedness, UInt64)
-  VectorLoadZero(@semantic.AccessWidth, UInt64)
+  VectorLoadExtend(@semantic.VectorLane, @native.Signedness, UInt64)
+  VectorLoadZero(@native.AccessWidth, UInt64)
   VectorLoadLane(@semantic.VectorLane, Int, UInt64)
   VectorStoreLane(@semantic.VectorLane, Int, UInt64)
-  AtomicLoad(@semantic.AccessWidth, @semantic.ValueType)
-  AtomicStore(@semantic.AccessWidth, @semantic.ValueType)
-  AtomicRmw(@semantic.AccessWidth, @semantic.ValueType, @semantic.AtomicRmwOp)
-  AtomicCompareExchange(@semantic.AccessWidth, @semantic.ValueType)
+  AtomicLoad(@native.AccessWidth, @native.ValueType)
+  AtomicStore(@native.AccessWidth, @native.ValueType)
+  AtomicRmw(@native.AccessWidth, @native.ValueType, @semantic.AtomicRmwOp)
+  AtomicCompareExchange(@native.AccessWidth, @native.ValueType)
   AtomicFence
   SafepointMarker
-  PlatformCall(@semantic.ExternalSymbol, @semantic.Signature)
-  ReturnsTwicePlatformCall(@semantic.ExternalSymbol, @semantic.Signature)
-  InternalCall(@semantic.CodeSymbol, @semantic.Signature, InternalCallPlan)
-  InternalCallIndirect(@semantic.Signature, InternalCallPlan)
-  TailCallDirect(@semantic.CodeSymbol, @semantic.Signature, InternalCallPlan)
-  TailCallIndirect(@semantic.Signature, InternalCallPlan)
+  PlatformCall(@native.ExternalSymbol, @native.Signature)
+  ReturnsTwicePlatformCall(@native.ExternalSymbol, @native.Signature)
+  InternalCall(@native.CodeSymbol, @native.Signature, InternalCallPlan)
+  InternalCallIndirect(@native.Signature, InternalCallPlan)
+  TailCallDirect(@native.CodeSymbol, @native.Signature, InternalCallPlan)
+  TailCallIndirect(@native.Signature, InternalCallPlan)
   Jump
   BranchNonZero32
   Switch(GprWidth, Array[UInt64])
-  Trap(@semantic.TrapReason)
+  Trap(@native.TrapReason)
   Return
 } derive(Eq, Debug)
 
@@ -350,7 +350,7 @@ enum CallResultLocation {
 } derive(Eq, Debug)
 
 ///|
-fn call_stack_size(ty : @semantic.ValueType) -> Int {
+fn call_stack_size(ty : @native.ValueType) -> Int {
   if ty == V128 {
     16
   } else {
@@ -359,7 +359,7 @@ fn call_stack_size(ty : @semantic.ValueType) -> Int {
 }
 
 ///|
-fn platform_call_layout(types : Array[@semantic.ValueType]) -> CallLayout {
+fn platform_call_layout(types : Array[@native.ValueType]) -> CallLayout {
   let integer_registers = [7, 6, 2, 1, 8, 9]
   let arguments : Array[CallArgumentLocation] = []
   let mut int_index = 0
@@ -435,7 +435,7 @@ fn require_call_argument_inputs(
 
 ///|
 fn platform_result_registers(
-  types : Array[@semantic.ValueType],
+  types : Array[@native.ValueType],
 ) -> Array[@vcode.PhysicalReg] {
   let integer_registers = [0, 2]
   let registers : Array[@vcode.PhysicalReg] = []
@@ -491,8 +491,8 @@ fn internal_call_clobbers(plan : InternalCallPlan) -> Array[@vcode.PhysicalReg] 
 fn require_instruction_shape(
   function : @vcode.Function[X64Inst],
   instruction : @vcode.Instruction,
-  use_types : Array[@semantic.ValueType],
-  def_types : Array[@semantic.ValueType],
+  use_types : Array[@native.ValueType],
+  def_types : Array[@native.ValueType],
   terminator : Bool,
   successor_count : Int,
 ) -> Unit raise TargetVCodeVerifyError {
@@ -537,7 +537,7 @@ fn incoming_stack_capacity(function : @vcode.Function[X64Inst]) -> Int {
 
 ///|
 fn valid_result_plan(
-  types : Array[@semantic.ValueType],
+  types : Array[@native.ValueType],
   plan : InternalCallPlan,
 ) -> Bool {
   if plan.results.length() != types.length() ||
@@ -583,7 +583,7 @@ fn valid_result_plan(
 fn require_tail_call_plan(
   function : @vcode.Function[X64Inst],
   instruction : @vcode.Instruction,
-  signature : @semantic.Signature,
+  signature : @native.Signature,
   plan : InternalCallPlan,
   indirect : Bool,
 ) -> Unit raise TargetVCodeVerifyError {
@@ -598,7 +598,7 @@ fn require_tail_call_plan(
       message="tail-call plan is not compatible with the current function",
     )
   }
-  let use_types : Array[@semantic.ValueType] = if indirect {
+  let use_types : Array[@native.ValueType] = if indirect {
     [Ptr64, ..signature.params]
   } else {
     signature.params.copy()
@@ -653,7 +653,7 @@ fn require_tail_call_plan(
 }
 
 ///|
-fn integer_type(width : GprWidth) -> @semantic.ValueType {
+fn integer_type(width : GprWidth) -> @native.ValueType {
   match width {
     W32 => I32
     W64 => I64
@@ -662,9 +662,9 @@ fn integer_type(width : GprWidth) -> @semantic.ValueType {
 
 ///|
 fn valid_scalar_load(
-  width : @semantic.AccessWidth,
-  extension : @semantic.LoadExtension,
-  result_type : @semantic.ValueType,
+  width : @native.AccessWidth,
+  extension : @native.LoadExtension,
+  result_type : @native.ValueType,
 ) -> Bool {
   match (result_type, width, extension) {
     (I32, W8 | W16, Signed | Unsigned) | (I32, W32, None) => true
@@ -677,8 +677,8 @@ fn valid_scalar_load(
 
 ///|
 fn valid_scalar_store(
-  width : @semantic.AccessWidth,
-  value_type : @semantic.ValueType,
+  width : @native.AccessWidth,
+  value_type : @native.ValueType,
 ) -> Bool {
   match (value_type, width) {
     (I32, W8 | W16 | W32) => true
@@ -748,7 +748,7 @@ fn require_mandatory_clobbers(
 }
 
 ///|
-fn vector_lane_scalar_type(lane : @semantic.VectorLane) -> @semantic.ValueType {
+fn vector_lane_scalar_type(lane : @semantic.VectorLane) -> @native.ValueType {
   match lane {
     I8x16 | I16x8 | I32x4 => I32
     I64x2 => I64
@@ -777,8 +777,8 @@ fn is_integer_vector_lane(lane : @semantic.VectorLane) -> Bool {
 
 ///|
 fn valid_atomic_access(
-  width : @semantic.AccessWidth,
-  ty : @semantic.ValueType,
+  width : @native.AccessWidth,
+  ty : @native.ValueType,
 ) -> Bool {
   match (ty, width) {
     (I32, W8 | W16 | W32) => true
@@ -789,8 +789,8 @@ fn valid_atomic_access(
 
 ///|
 fn valid_scalar_bitcast(
-  from : @semantic.ValueType,
-  to : @semantic.ValueType,
+  from : @native.ValueType,
+  to : @native.ValueType,
 ) -> Bool {
   match (from, to) {
     (I32, I32 | F32) | (F32, I32 | F32) => true
@@ -804,7 +804,7 @@ fn valid_scalar_bitcast(
 ///|
 fn conversion_shape(
   conversion : X64Conversion,
-) -> (@semantic.ValueType, @semantic.ValueType)? {
+) -> (@native.ValueType, @native.ValueType)? {
   match conversion {
     WrapI64ToI32 => Some((I64, I32))
     ExtendI32ToI64(_) => Some((I32, I64))

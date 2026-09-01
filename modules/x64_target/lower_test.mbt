@@ -12,7 +12,7 @@ test "X64 lowering selects scalar SSA and preserves source metadata" {
       parameters,
       [I64],
       @semantic.InstructionMetadata::new(
-        Some(@semantic.SourceLocation::new("selected.wat", 3, 9)),
+        Some(@native.SourceLocation::new("selected.wat", 3, 9)),
         [],
       ),
     )[0]
@@ -200,7 +200,7 @@ test "X64 lowering selects standalone safepoint metadata markers" {
     [],
     [],
     @semantic.InstructionMetadata::new(
-      Some(@semantic.SourceLocation::new("safepoint.wat", 3, 5)),
+      Some(@native.SourceLocation::new("safepoint.wat", 3, 5)),
       [root],
     ),
   )
@@ -837,7 +837,7 @@ test "X64 lowering selects widening vector integer arithmetic" {
   let parameters = builder.parameters()
   let mut result = parameters[1]
   let lanes : Array[@semantic.VectorLane] = [I16x8, I32x4, I64x2]
-  let signednesses : Array[@semantic.Signedness] = [Signed, Unsigned]
+  let signednesses : Array[@native.Signedness] = [Signed, Unsigned]
   for lane in lanes {
     for signedness in signednesses {
       result = builder.emit(
@@ -917,7 +917,7 @@ test "X64 lowering selects vector integer extension" {
   let mut result = parameters[1]
   let lanes : Array[@semantic.VectorLane] = [I16x8, I32x4, I64x2]
   let halves : Array[@semantic.VectorHalf] = [Low, High]
-  let signednesses : Array[@semantic.Signedness] = [Signed, Unsigned]
+  let signednesses : Array[@native.Signedness] = [Signed, Unsigned]
   for lane in lanes {
     for half in halves {
       for signedness in signednesses {
@@ -967,7 +967,7 @@ test "X64 lowering selects saturating vector narrowing" {
   let parameters = builder.parameters()
   let mut result = parameters[1]
   let lanes : Array[@semantic.VectorLane] = [I8x16, I16x8]
-  let signednesses : Array[@semantic.Signedness] = [Signed, Unsigned]
+  let signednesses : Array[@native.Signedness] = [Signed, Unsigned]
   for lane in lanes {
     for signedness in signednesses {
       result = builder.emit(
@@ -1264,7 +1264,7 @@ test "X64 lowering selects every remaining vector conversion" {
     [V128],
   )
   let mut value = builder.parameters()[1]
-  let signednesses : Array[@semantic.Signedness] = [Signed, Unsigned]
+  let signednesses : Array[@native.Signedness] = [Signed, Unsigned]
   for signedness in signednesses {
     value = builder.emit(
         Vector(Convert(FloatToInt(F32x4, I32x4, signedness, Saturating))),
@@ -1784,25 +1784,23 @@ test "X64 lowering selects null carriers references and scalar values" {
 
 ///|
 test "X64 lowering resolves environment paths and typed symbol addresses" {
-  let field = @semantic.EnvironmentField::new("runtime.memory.base", I64)
+  let field = @native.EnvironmentField::new("runtime.memory.base", I64)
   let builder = @semantic.FunctionBuilder::new(
     "addresses_and_environment",
     Internal,
     [Ptr64],
     [Ptr64, Ptr64, Ptr64, I64],
   )
-  let code = builder.emit(
-      CodeAddress(@semantic.CodeSymbol::new("callee")),
-      [],
-      [Ptr64],
-    )[0]
+  let code = builder.emit(CodeAddress(@native.CodeSymbol::new("callee")), [], [
+      Ptr64,
+    ])[0]
   let external = builder.emit(
-      ExternalAddress(@semantic.ExternalSymbol::new("runtime.helper")),
+      ExternalAddress(@native.ExternalSymbol::new("runtime.helper")),
       [],
       [Ptr64],
     )[0]
   let data = builder.emit(
-      DataAddress(@semantic.DataSymbol::new("constant.pool")),
+      DataAddress(@native.DataSymbol::new("constant.pool")),
       [],
       [Ptr64],
     )[0]
@@ -1837,7 +1835,7 @@ test "X64 lowering resolves environment paths and typed symbol addresses" {
 
 ///|
 test "X64 lowering materializes each stable environment field" {
-  let field = @semantic.EnvironmentField::new("runtime.memory.base", I64)
+  let field = @native.EnvironmentField::new("runtime.memory.base", I64)
   let builder = @semantic.FunctionBuilder::new(
     "stable_environment_fields",
     Internal,
@@ -1874,17 +1872,17 @@ test "X64 lowering selects a direct platform call with explicit ABI facts" {
     [I64],
   )
   let call = @semantic.SemanticCall::new(
-    External(@semantic.ExternalSymbol::new("runtime.helper")),
-    @semantic.Signature::new([I64, F64], [I64]),
+    External(@native.ExternalSymbol::new("runtime.helper")),
+    @native.Signature::new([I64, F64], [I64]),
     Platform,
-    @semantic.CallBehavior::new(ReadWrite, true, true, true, true),
+    @native.CallBehavior::new(ReadWrite, true, true, true, true),
   )
   let result = builder.emit_with_metadata(
       Call(call),
       builder.parameters(),
       [I64],
       @semantic.InstructionMetadata::new(
-        Some(@semantic.SourceLocation::new("call.wat", 7, 11)),
+        Some(@native.SourceLocation::new("call.wat", 7, 11)),
         [],
       ),
     )[0]
@@ -1917,10 +1915,10 @@ test "X64 lowering preserves returns-twice platform calls" {
     [I64],
   )
   let call = @semantic.SemanticCall::new(
-    External(@semantic.ExternalSymbol::new("runtime.sigsetjmp")),
-    @semantic.Signature::new([Ptr64, I32], [I32]),
+    External(@native.ExternalSymbol::new("runtime.sigsetjmp")),
+    @native.Signature::new([Ptr64, I32], [I32]),
     Platform,
-    @semantic.CallBehavior::new(
+    @native.CallBehavior::new(
       ReadWrite,
       false,
       false,
@@ -1965,10 +1963,10 @@ test "X64 lowering derives internal entry and direct-call layouts" {
     [I64],
   )
   let call = @semantic.SemanticCall::new(
-    Internal(@semantic.CodeSymbol::new("wasm.func.7")),
-    @semantic.Signature::new([Ptr64, I64, F64], [I64]),
+    Internal(@native.CodeSymbol::new("wasm.func.7")),
+    @native.Signature::new([Ptr64, I64, F64], [I64]),
     Internal,
-    @semantic.CallBehavior::new(ReadWrite, true, true, true, true),
+    @native.CallBehavior::new(ReadWrite, true, true, true, true),
   )
   let result = builder.emit(Call(call), builder.parameters(), [I64])[0]
   builder.return_([result])
@@ -2009,9 +2007,9 @@ test "X64 lowering keeps the indirect callee outside the logical signature" {
   let parameters = builder.parameters()
   let call = @semantic.SemanticCall::new(
     Indirect,
-    @semantic.Signature::new([Ptr64, I64], [I64]),
+    @native.Signature::new([Ptr64, I64], [I64]),
     Internal,
-    @semantic.CallBehavior::new(ReadWrite, true, true, false, false),
+    @native.CallBehavior::new(ReadWrite, true, true, false, false),
   )
   let result = builder.emit(
       Call(call),
@@ -2053,10 +2051,10 @@ test "X64 lowering selects a compatible true internal tail call" {
     [I64],
   )
   let call = @semantic.SemanticCall::new(
-    Internal(@semantic.CodeSymbol::new("wasm.func.9")),
-    @semantic.Signature::new([Ptr64, I64], [I64]),
+    Internal(@native.CodeSymbol::new("wasm.func.9")),
+    @native.Signature::new([Ptr64, I64], [I64]),
     Internal,
-    @semantic.CallBehavior::new(ReadWrite, true, true, false, false),
+    @native.CallBehavior::new(ReadWrite, true, true, false, false),
   )
   builder.tail_call(call, builder.parameters())
   inspect(
@@ -2091,10 +2089,10 @@ test "X64 tail calls transfer GC references without a caller safepoint" {
   )
   let parameters = builder.parameters()
   let call = @semantic.SemanticCall::new(
-    Internal(@semantic.CodeSymbol::new("wasm.func.gc_argument")),
-    @semantic.Signature::new([Ptr64, GcRef64], []),
+    Internal(@native.CodeSymbol::new("wasm.func.gc_argument")),
+    @native.Signature::new([Ptr64, GcRef64], []),
     Internal,
-    @semantic.CallBehavior::new(ReadWrite, true, true, true, false),
+    @native.CallBehavior::new(ReadWrite, true, true, true, false),
   )
   builder.tail_call_with_metadata(
     call,
@@ -2139,7 +2137,7 @@ fn compact_result_context() -> LoweringContext {
 
 ///|
 test "X64 internal calls materialize register and result-area returns" {
-  let types : Array[@semantic.ValueType] = [I64, I64, F32, V128]
+  let types : Array[@native.ValueType] = [I64, I64, F32, V128]
   let builder = @semantic.FunctionBuilder::new(
     "internal_result_area_call",
     Internal,
@@ -2147,10 +2145,10 @@ test "X64 internal calls materialize register and result-area returns" {
     types,
   )
   let call = @semantic.SemanticCall::new(
-    Internal(@semantic.CodeSymbol::new("wasm.func.result_area")),
-    @semantic.Signature::new([Ptr64, ..types], types),
+    Internal(@native.CodeSymbol::new("wasm.func.result_area")),
+    @native.Signature::new([Ptr64, ..types], types),
     Internal,
-    @semantic.CallBehavior::new(ReadWrite, true, true, false, false),
+    @native.CallBehavior::new(ReadWrite, true, true, false, false),
   )
   let results = builder.emit(Call(call), builder.parameters(), types)
   builder.return_(results)
@@ -2205,7 +2203,7 @@ test "X64 internal calls materialize register and result-area returns" {
 
 ///|
 test "X64 internal tail calls forward the incoming result area" {
-  let types : Array[@semantic.ValueType] = [I64, I64, F32, V128]
+  let types : Array[@native.ValueType] = [I64, I64, F32, V128]
   let builder = @semantic.FunctionBuilder::new(
     "internal_result_area_tail_call",
     Internal,
@@ -2213,10 +2211,10 @@ test "X64 internal tail calls forward the incoming result area" {
     types,
   )
   let call = @semantic.SemanticCall::new(
-    Internal(@semantic.CodeSymbol::new("wasm.func.result_area_tail")),
-    @semantic.Signature::new([Ptr64, ..types], types),
+    Internal(@native.CodeSymbol::new("wasm.func.result_area_tail")),
+    @native.Signature::new([Ptr64, ..types], types),
     Internal,
-    @semantic.CallBehavior::new(ReadWrite, true, true, false, false),
+    @native.CallBehavior::new(ReadWrite, true, true, false, false),
   )
   builder.tail_call(call, builder.parameters())
   inspect(
@@ -2355,16 +2353,16 @@ test "X64 lowers noreturn calls and explicit traps" {
     [],
   )
   let call = @semantic.SemanticCall::new(
-    External(@semantic.ExternalSymbol::new("runtime.abort")),
-    @semantic.Signature::new([], []),
+    External(@native.ExternalSymbol::new("runtime.abort")),
+    @native.Signature::new([], []),
     Platform,
-    @semantic.CallBehavior::new(ReadWrite, true, true, true, true),
+    @native.CallBehavior::new(ReadWrite, true, true, true, true),
   )
   noreturn.noreturn_call_with_metadata(
     call,
     [],
     @semantic.TerminatorMetadata::new(
-      Some(@semantic.SourceLocation::new("trap.wat", 9, 4)),
+      Some(@native.SourceLocation::new("trap.wat", 9, 4)),
       [noreturn.parameters()[0]],
     ),
   )
@@ -2375,7 +2373,7 @@ test "X64 lowers noreturn calls and explicit traps" {
     [],
   )
   trapped.trap(User(7))
-  trapped.set_terminator_source(@semantic.SourceLocation::new("trap.wat", 3, 9))
+  trapped.set_terminator_source(@native.SourceLocation::new("trap.wat", 3, 9))
   inspect(
     lower(noreturn.finish_selection_plan(), test_lowering_context()).summary(),
     content=(
@@ -2413,10 +2411,10 @@ test "X64 selects tail calls larger than the incoming argument area" {
     operands.push(builder.emit(I64Const(index.to_uint64()), [], [I64])[0])
   }
   let call = @semantic.SemanticCall::new(
-    Internal(@semantic.CodeSymbol::new("wasm.func.10")),
-    @semantic.Signature::new([Ptr64, I64, I64, I64, I64, I64, I64, I64, I64], []),
+    Internal(@native.CodeSymbol::new("wasm.func.10")),
+    @native.Signature::new([Ptr64, I64, I64, I64, I64, I64, I64, I64, I64], []),
     Internal,
-    @semantic.CallBehavior::new(ReadWrite, true, true, false, false),
+    @native.CallBehavior::new(ReadWrite, true, true, false, false),
   )
   builder.tail_call(call, operands)
   inspect(
@@ -2484,7 +2482,7 @@ test "X64 lowering selects typed scalar memory operations and traps" {
     [parameters[0]],
     [I32],
     @semantic.InstructionMetadata::new(
-      Some(@semantic.SourceLocation::new("memory.wat", 4, 7)),
+      Some(@native.SourceLocation::new("memory.wat", 4, 7)),
       [],
     ),
   )
@@ -3137,7 +3135,7 @@ test "X64 lowering always declares the rcx clobber for shifts and rotates" {
   let missing : Array[String] = []
   let seen : Array[String] = []
   for operation in shift_operations {
-    for ty in [@semantic.ValueType::I32, I64] {
+    for ty in [@native.ValueType::I32, I64] {
       let builder = @semantic.FunctionBuilder::new(
         "shift_clobber",
         Internal,

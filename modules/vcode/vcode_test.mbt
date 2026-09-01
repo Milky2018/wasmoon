@@ -803,11 +803,11 @@ test "VCode preserves typed source trap safepoint and symbol metadata" {
     [],
     [],
     InstructionMetadata::new(
-      source=@semantic.SourceLocation::new("fixture.wat", 7, 11),
+      source=@native.SourceLocation::new("fixture.wat", 7, 11),
       trap=MemoryOutOfBounds,
       safepoint=GcAndCancellation,
       live_gc_roots=[root],
-      symbol=External(@semantic.ExternalSymbol::new("runtime.grow")),
+      symbol=External(@native.ExternalSymbol::new("runtime.grow")),
     ),
   )
   |> ignore

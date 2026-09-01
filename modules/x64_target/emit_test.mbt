@@ -452,7 +452,7 @@ test "X64 pipeline emits chained scalar conversions" {
 ///|
 test "X64 pipeline emits every saturating scalar float conversion" {
   let cases : Array[
-    (@semantic.FloatType, @semantic.IntegerType, @semantic.Signedness),
+    (@native.FloatType, @native.IntegerType, @native.Signedness),
   ] = [
     (F32, I32, Signed),
     (F32, I32, Unsigned),
@@ -466,12 +466,8 @@ test "X64 pipeline emits every saturating scalar float conversion" {
   let objects : Array[@code_object.UnlinkedCodeObject] = []
   for index, conversion in cases {
     let (float, integer, signedness) = conversion
-    let source_type : @semantic.ValueType = if float == F32 { F32 } else { F64 }
-    let result_type : @semantic.ValueType = if integer == I32 {
-      I32
-    } else {
-      I64
-    }
+    let source_type : @native.ValueType = if float == F32 { F32 } else { F64 }
+    let result_type : @native.ValueType = if integer == I32 { I32 } else { I64 }
     let builder = @semantic.FunctionBuilder::new(
       "saturating_float_to_int_\{index}",
       Platform,
@@ -1568,7 +1564,7 @@ test "X64 pipeline emits scalar float and vector operations" {
 
 ///|
 test "X64 pipeline emits internal result-area calls" {
-  let types : Array[@semantic.ValueType] = [I64, I64, I64, F32, F64, V128]
+  let types : Array[@native.ValueType] = [I64, I64, I64, F32, F64, V128]
   let builder = @semantic.FunctionBuilder::new(
     "emitted_internal_result_area",
     Internal,
@@ -1576,10 +1572,10 @@ test "X64 pipeline emits internal result-area calls" {
     types,
   )
   let call = @semantic.SemanticCall::new(
-    Internal(@semantic.CodeSymbol::new("wasm.func.result_area")),
-    @semantic.Signature::new([Ptr64, ..types], types),
+    Internal(@native.CodeSymbol::new("wasm.func.result_area")),
+    @native.Signature::new([Ptr64, ..types], types),
     Internal,
-    @semantic.CallBehavior::new(ReadWrite, true, true, false, false),
+    @native.CallBehavior::new(ReadWrite, true, true, false, false),
   )
   let results = builder.emit(Call(call), builder.parameters(), types)
   builder.return_(results)
@@ -1697,7 +1693,7 @@ test "X64 pipeline emits internal result-area calls" {
 
 ///|
 test "X64 pipeline emits indirect internal result-area calls" {
-  let result_types : Array[@semantic.ValueType] = [I32, I32, I32]
+  let result_types : Array[@native.ValueType] = [I32, I32, I32]
   let builder = @semantic.FunctionBuilder::new(
     "emitted_indirect_internal_result_area",
     Internal,
@@ -1707,9 +1703,9 @@ test "X64 pipeline emits indirect internal result-area calls" {
   let parameters = builder.parameters()
   let call = @semantic.SemanticCall::new(
     Indirect,
-    @semantic.Signature::new([Ptr64], result_types),
+    @native.Signature::new([Ptr64], result_types),
     Internal,
-    @semantic.CallBehavior::new(ReadWrite, true, true, false, false),
+    @native.CallBehavior::new(ReadWrite, true, true, false, false),
   )
   let results = builder.emit(
     Call(call),
@@ -1805,7 +1801,7 @@ test "X64 pipeline emits indirect internal result-area calls" {
 
 ///|
 test "X64 pipeline forwards result areas through internal tail calls" {
-  let types : Array[@semantic.ValueType] = [I64, I64, I64, F32, F64, V128]
+  let types : Array[@native.ValueType] = [I64, I64, I64, F32, F64, V128]
   let builder = @semantic.FunctionBuilder::new(
     "emitted_internal_result_area_tail",
     Internal,
@@ -1813,10 +1809,10 @@ test "X64 pipeline forwards result areas through internal tail calls" {
     types,
   )
   let call = @semantic.SemanticCall::new(
-    Internal(@semantic.CodeSymbol::new("wasm.func.result_area_tail")),
-    @semantic.Signature::new([Ptr64, ..types], types),
+    Internal(@native.CodeSymbol::new("wasm.func.result_area_tail")),
+    @native.Signature::new([Ptr64, ..types], types),
     Internal,
-    @semantic.CallBehavior::new(ReadWrite, true, true, false, false),
+    @native.CallBehavior::new(ReadWrite, true, true, false, false),
   )
   builder.tail_call(call, builder.parameters())
   let function = lower(builder.finish_selection_plan(), test_lowering_context())
@@ -1847,7 +1843,7 @@ test "X64 pipeline forwards result areas through internal tail calls" {
 
 ///|
 test "X64 calls zero-extend stack i32 arguments" {
-  let parameter_types : Array[@semantic.ValueType] = [
+  let parameter_types : Array[@native.ValueType] = [
     Ptr64,
     I32,
     I32,
@@ -1869,10 +1865,10 @@ test "X64 calls zero-extend stack i32 arguments" {
     )
   }
   let call = @semantic.SemanticCall::new(
-    Internal(@semantic.CodeSymbol::new("wasm.func.i32_stack_args")),
-    @semantic.Signature::new(parameter_types, []),
+    Internal(@native.CodeSymbol::new("wasm.func.i32_stack_args")),
+    @native.Signature::new(parameter_types, []),
     Internal,
-    @semantic.CallBehavior::new(ReadWrite, true, true, false, false),
+    @native.CallBehavior::new(ReadWrite, true, true, false, false),
   )
   builder.emit(Call(call), operands, []) |> ignore
   builder.return_([])
@@ -2029,10 +2025,10 @@ test "X64 expanded tail calls preserve SysV callee-entry alignment" {
     operands.push(builder.emit(I64Const(index.to_uint64()), [], [I64])[0])
   }
   let call = @semantic.SemanticCall::new(
-    Internal(@semantic.CodeSymbol::new("wasm.func.expanded_tail_callee")),
-    @semantic.Signature::new([Ptr64, I64, I64, I64, I64, I64, I64, I64, I64], []),
+    Internal(@native.CodeSymbol::new("wasm.func.expanded_tail_callee")),
+    @native.Signature::new([Ptr64, I64, I64, I64, I64, I64, I64, I64, I64], []),
     Internal,
-    @semantic.CallBehavior::new(ReadWrite, true, true, false, false),
+    @native.CallBehavior::new(ReadWrite, true, true, false, false),
   )
   builder.tail_call(call, operands)
   let selected = lower(builder.finish_selection_plan(), test_lowering_context())

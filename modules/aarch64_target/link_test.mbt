@@ -1,6 +1,6 @@
 ///|
 test "AArch64 link plans share veneers and preserve branch kinds" {
-  let target = @code_object.External(@semantic.ExternalSymbol::new("callee"))
+  let target = @code_object.External(@native.ExternalSymbol::new("callee"))
   let object = @code_object.build(
     AArch64,
     [b'\x00', b'\x00', b'\x00', b'\x94', b'\x00', b'\x00', b'\x00', b'\x14'],
@@ -124,7 +124,7 @@ test "AArch64 link plans share veneers and preserve branch kinds" {
 
 ///|
 test "AArch64 linker applies page and absolute relocations" {
-  let target = @code_object.Data(@semantic.DataSymbol::new("fixture.data"))
+  let target = @code_object.Data(@native.DataSymbol::new("fixture.data"))
   let object = @code_object.build(
     AArch64,
     [

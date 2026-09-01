@@ -5,7 +5,7 @@ contracts used after target instruction selection.
 
 ## Packages
 
-- `Milky2018/machv`: typed target-neutral SSA, builders, cleanup, printing, and
+- `Milky2018/native_types/semantic`: typed target-neutral SSA, builders, cleanup, printing, and
   verification.
 - `Milky2018/vcode`: generic dense Target VCode storage parameterized by
   a target-owned instruction type, plus allocation, frame, and final-emission

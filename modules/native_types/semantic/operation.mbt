@@ -41,9 +41,9 @@ pub(all) enum IntComparison {
 
 ///|
 pub(all) enum IntOverflowOp {
-  Add(Signedness)
-  Sub(Signedness)
-  Mul(Signedness)
+  Add(@native.Signedness)
+  Sub(@native.Signedness)
+  Mul(@native.Signedness)
 } derive(Debug, Eq, Hash)
 
 ///|
@@ -97,53 +97,58 @@ pub(all) enum ReferenceComparison {
 ///|
 pub(all) enum ConversionOp {
   I32WrapI64
-  I64ExtendI32(Signedness)
+  I64ExtendI32(@native.Signedness)
   F32DemoteF64
   F64PromoteF32
-  FloatToInt(FloatType, IntegerType, Signedness, ConversionMode)
-  IntToFloat(IntegerType, FloatType, Signedness)
-  SignExtend(IntegerType, AccessWidth)
-  Bitcast(ValueType, ValueType)
+  FloatToInt(
+    @native.FloatType,
+    @native.IntegerType,
+    @native.Signedness,
+    @native.ConversionMode
+  )
+  IntToFloat(@native.IntegerType, @native.FloatType, @native.Signedness)
+  SignExtend(@native.IntegerType, @native.AccessWidth)
+  Bitcast(@native.ValueType, @native.ValueType)
 } derive(Debug, Eq, Hash)
 
 ///|
 pub struct LoadSpec {
-  width : AccessWidth
-  extension : LoadExtension
-  result_type : ValueType
+  width : @native.AccessWidth
+  extension : @native.LoadExtension
+  result_type : @native.ValueType
   offset : UInt64
-  endianness : Endianness
-  trap : TrapReason?
+  endianness : @native.Endianness
+  trap : @native.TrapReason?
 } derive(Debug, Eq, Hash)
 
 ///|
 pub fn LoadSpec::new(
-  width : AccessWidth,
-  extension : LoadExtension,
-  result_type : ValueType,
+  width : @native.AccessWidth,
+  extension : @native.LoadExtension,
+  result_type : @native.ValueType,
   offset : UInt64,
-  endianness : Endianness,
-  trap : TrapReason?,
+  endianness : @native.Endianness,
+  trap : @native.TrapReason?,
 ) -> LoadSpec {
   { width, extension, result_type, offset, endianness, trap, }
 }
 
 ///|
 pub struct StoreSpec {
-  width : AccessWidth
-  value_type : ValueType
+  width : @native.AccessWidth
+  value_type : @native.ValueType
   offset : UInt64
-  endianness : Endianness
-  trap : TrapReason?
+  endianness : @native.Endianness
+  trap : @native.TrapReason?
 } derive(Debug, Eq, Hash)
 
 ///|
 pub fn StoreSpec::new(
-  width : AccessWidth,
-  value_type : ValueType,
+  width : @native.AccessWidth,
+  value_type : @native.ValueType,
   offset : UInt64,
-  endianness : Endianness,
-  trap : TrapReason?,
+  endianness : @native.Endianness,
+  trap : @native.TrapReason?,
 ) -> StoreSpec {
   { width, value_type, offset, endianness, trap, }
 }
@@ -162,20 +167,20 @@ pub(all) enum AtomicRmwOp {
 /// A sequentially consistent atomic memory access. Weaker memory orders are
 /// not part of the current semantic MachV contract.
 pub struct AtomicSpec {
-  width : AccessWidth
-  value_type : ValueType
+  width : @native.AccessWidth
+  value_type : @native.ValueType
   offset : UInt64
-  endianness : Endianness
-  trap : TrapReason?
+  endianness : @native.Endianness
+  trap : @native.TrapReason?
 } derive(Debug, Eq, Hash)
 
 ///|
 pub fn AtomicSpec::new(
-  width : AccessWidth,
-  value_type : ValueType,
+  width : @native.AccessWidth,
+  value_type : @native.ValueType,
   offset : UInt64,
-  endianness : Endianness,
-  trap : TrapReason?,
+  endianness : @native.Endianness,
+  trap : @native.TrapReason?,
 ) -> AtomicSpec {
   { width, value_type, offset, endianness, trap, }
 }
@@ -205,7 +210,7 @@ pub(all) enum VectorIntUnaryOp {
   Absolute
   Negate
   PopulationCount
-  ExtendAddPairwise(Signedness)
+  ExtendAddPairwise(@native.Signedness)
 } derive(Debug, Eq, Hash)
 
 ///|
@@ -219,12 +224,12 @@ pub(all) enum VectorIntBinaryOp {
   Add
   Sub
   Mul
-  Min(Signedness)
-  Max(Signedness)
+  Min(@native.Signedness)
+  Max(@native.Signedness)
   AverageUnsigned
-  SaturatingAdd(Signedness)
-  SaturatingSub(Signedness)
-  ExtendMultiply(VectorHalf, Signedness)
+  SaturatingAdd(@native.Signedness)
+  SaturatingSub(@native.Signedness)
+  ExtendMultiply(VectorHalf, @native.Signedness)
   Dot16To32Signed
   Q15MultiplyRoundedSaturating
 } derive(Debug, Eq, Hash)
@@ -232,17 +237,17 @@ pub(all) enum VectorIntBinaryOp {
 ///|
 pub(all) enum VectorIntShiftOp {
   Left
-  Right(Signedness)
+  Right(@native.Signedness)
 } derive(Debug, Eq, Hash)
 
 ///|
 pub(all) enum VectorIntComparison {
   Equal
   NotEqual
-  LessThan(Signedness)
-  LessOrEqual(Signedness)
-  GreaterThan(Signedness)
-  GreaterOrEqual(Signedness)
+  LessThan(@native.Signedness)
+  LessOrEqual(@native.Signedness)
+  GreaterThan(@native.Signedness)
+  GreaterOrEqual(@native.Signedness)
 } derive(Debug, Eq, Hash)
 
 ///|
@@ -287,11 +292,11 @@ pub(all) enum VectorPredicateOp {
 
 ///|
 pub(all) enum VectorConversionOp {
-  ExtendLow(VectorLane, Signedness)
-  ExtendHigh(VectorLane, Signedness)
-  Narrow(VectorLane, Signedness)
-  FloatToInt(VectorLane, VectorLane, Signedness, ConversionMode)
-  IntToFloat(VectorLane, VectorLane, Signedness)
+  ExtendLow(VectorLane, @native.Signedness)
+  ExtendHigh(VectorLane, @native.Signedness)
+  Narrow(VectorLane, @native.Signedness)
+  FloatToInt(VectorLane, VectorLane, @native.Signedness, @native.ConversionMode)
+  IntToFloat(VectorLane, VectorLane, @native.Signedness)
   PromoteLowF32x4
   DemoteZeroF64x2
 } derive(Debug, Eq, Hash)
@@ -299,7 +304,7 @@ pub(all) enum VectorConversionOp {
 ///|
 pub(all) enum VectorRelaxedOp {
   Swizzle
-  FloatToInt(VectorLane, VectorLane, Signedness)
+  FloatToInt(VectorLane, VectorLane, @native.Signedness)
   FusedMultiplyAdd(VectorLane, FloatTernaryOp)
   LaneSelect(VectorLane)
   Min(VectorLane)
@@ -312,8 +317,8 @@ pub(all) enum VectorRelaxedOp {
 ///|
 pub(all) enum VectorLoadKind {
   Splat(VectorLane)
-  Extend(VectorLane, Signedness)
-  Zero(AccessWidth)
+  Extend(VectorLane, @native.Signedness)
+  Zero(@native.AccessWidth)
   Lane(VectorLane, Int)
 } derive(Debug, Eq, Hash)
 
@@ -321,16 +326,16 @@ pub(all) enum VectorLoadKind {
 pub struct VectorLoadSpec {
   kind : VectorLoadKind
   offset : UInt64
-  endianness : Endianness
-  trap : TrapReason?
+  endianness : @native.Endianness
+  trap : @native.TrapReason?
 } derive(Debug, Eq, Hash)
 
 ///|
 pub fn VectorLoadSpec::new(
   kind : VectorLoadKind,
   offset : UInt64,
-  endianness : Endianness,
-  trap : TrapReason?,
+  endianness : @native.Endianness,
+  trap : @native.TrapReason?,
 ) -> VectorLoadSpec {
   { kind, offset, endianness, trap, }
 }
@@ -340,8 +345,8 @@ pub struct VectorStoreLaneSpec {
   lane : VectorLane
   lane_index : Int
   offset : UInt64
-  endianness : Endianness
-  trap : TrapReason?
+  endianness : @native.Endianness
+  trap : @native.TrapReason?
 } derive(Debug, Eq, Hash)
 
 ///|
@@ -349,8 +354,8 @@ pub fn VectorStoreLaneSpec::new(
   lane : VectorLane,
   lane_index : Int,
   offset : UInt64,
-  endianness : Endianness,
-  trap : TrapReason?,
+  endianness : @native.Endianness,
+  trap : @native.TrapReason?,
 ) -> VectorStoreLaneSpec {
   { lane, lane_index, offset, endianness, trap, }
 }
@@ -358,7 +363,7 @@ pub fn VectorStoreLaneSpec::new(
 ///|
 pub(all) enum VectorOp {
   Splat(VectorLane)
-  ExtractLane(VectorLane, Int, Signedness?)
+  ExtractLane(VectorLane, Int, @native.Signedness?)
   ReplaceLane(VectorLane, Int)
   Shuffle(FixedArray[Int])
   Swizzle
@@ -378,29 +383,29 @@ pub(all) enum VectorOp {
 
 ///|
 pub(all) enum Callee {
-  Internal(CodeSymbol)
-  External(ExternalSymbol)
+  Internal(@native.CodeSymbol)
+  External(@native.ExternalSymbol)
   Indirect
 } derive(Debug, Eq, Hash)
 
 ///|
 pub struct SemanticCall {
   callee : Callee
-  signature : Signature
-  protocol : CallProtocol
-  behavior : CallBehavior
+  signature : @native.Signature
+  protocol : @native.CallProtocol
+  behavior : @native.CallBehavior
 } derive(Debug, Eq, Hash)
 
 ///|
 pub fn SemanticCall::new(
   callee : Callee,
-  signature : Signature,
-  protocol : CallProtocol,
-  behavior : CallBehavior,
+  signature : @native.Signature,
+  protocol : @native.CallProtocol,
+  behavior : @native.CallBehavior,
 ) -> SemanticCall {
   {
     callee,
-    signature: Signature::new(signature.params, signature.results),
+    signature: @native.Signature::new(signature.params, signature.results),
     protocol,
     behavior,
   }
@@ -420,10 +425,10 @@ pub(all) enum Operation {
   V128Const(UInt64, UInt64)
   NullPtr
   NullGcRef
-  CodeAddress(CodeSymbol)
-  ExternalAddress(ExternalSymbol)
-  DataAddress(DataSymbol)
-  EnvironmentField(EnvironmentField, EnvironmentFieldStability)
+  CodeAddress(@native.CodeSymbol)
+  ExternalAddress(@native.ExternalSymbol)
+  DataAddress(@native.DataSymbol)
+  EnvironmentField(@native.EnvironmentField, @native.EnvironmentFieldStability)
   StackAddress(StackObject)
   Copy
   Select
@@ -433,7 +438,7 @@ pub(all) enum Operation {
   ReferenceCompare(ReferenceComparison)
   IntUnary(IntUnaryOp)
   IntBinary(IntBinaryOp)
-  IntHighMultiply(Signedness)
+  IntHighMultiply(@native.Signedness)
   IntWithOverflow(IntOverflowOp)
   IntCompare(IntComparison)
   FloatUnary(FloatUnaryOp)
@@ -452,7 +457,7 @@ pub(all) enum Operation {
   VectorLoad(VectorLoadSpec)
   VectorStoreLane(VectorStoreLaneSpec)
   Call(SemanticCall)
-  Safepoint(SafepointKind)
+  Safepoint(@native.SafepointKind)
 } derive(Debug, Eq)
 
 ///|
@@ -526,38 +531,38 @@ fn Operation::copy(self : Operation) -> Operation {
 }
 
 ///|
-fn integer_value_type(ty : IntegerType) -> ValueType {
+fn integer_value_type(ty : @native.IntegerType) -> @native.ValueType {
   match ty {
-    I32 => I32
-    I64 => I64
+    @native.I32 => @native.I32
+    @native.I64 => @native.I64
   }
 }
 
 ///|
-fn float_value_type(ty : FloatType) -> ValueType {
+fn float_value_type(ty : @native.FloatType) -> @native.ValueType {
   match ty {
-    F32 => F32
-    F64 => F64
+    @native.F32 => @native.F32
+    @native.F64 => @native.F64
   }
 }
 
 ///|
-fn is_integer_type(ty : ValueType) -> Bool {
-  ty == I32 || ty == I64
+fn is_integer_type(ty : @native.ValueType) -> Bool {
+  ty == @native.I32 || ty == @native.I64
 }
 
 ///|
-fn is_float_type(ty : ValueType) -> Bool {
-  ty == F32 || ty == F64
+fn is_float_type(ty : @native.ValueType) -> Bool {
+  ty == @native.F32 || ty == @native.F64
 }
 
 ///|
-fn scalar_type_for_lane(lane : VectorLane) -> ValueType {
+fn scalar_type_for_lane(lane : VectorLane) -> @native.ValueType {
   match lane {
-    I8x16 | I16x8 | I32x4 => I32
-    I64x2 => I64
-    F32x4 => F32
-    F64x2 => F64
+    I8x16 | I16x8 | I32x4 => @native.I32
+    I64x2 => @native.I64
+    F32x4 => @native.F32
+    F64x2 => @native.F64
   }
 }
 
@@ -630,16 +635,16 @@ fn verify_vector_conversion(op : VectorConversionOp) -> String? {
 ///|
 fn verify_relaxed_vector_operation(
   op : VectorRelaxedOp,
-  operands : Array[ValueType],
-  results : Array[ValueType],
+  operands : Array[@native.ValueType],
+  results : Array[@native.ValueType],
 ) -> String? {
   match op {
     Swizzle =>
       require_shape(
         operands,
         results,
-        [V128, V128],
-        [V128],
+        [@native.V128, @native.V128],
+        [@native.V128],
         "vector.relaxed_swizzle",
       )
     FloatToInt(source, result, _) =>
@@ -650,8 +655,8 @@ fn verify_relaxed_vector_operation(
           require_shape(
             operands,
             results,
-            [V128],
-            [V128],
+            [@native.V128],
+            [@native.V128],
             "vector.relaxed_float_to_int",
           )
       }
@@ -664,8 +669,8 @@ fn verify_relaxed_vector_operation(
       require_shape(
         operands,
         results,
-        [V128, V128, V128],
-        [V128],
+        [@native.V128, @native.V128, @native.V128],
+        [@native.V128],
         "vector.relaxed_fma",
       )
     }
@@ -676,8 +681,8 @@ fn verify_relaxed_vector_operation(
       require_shape(
         operands,
         results,
-        [V128, V128, V128],
-        [V128],
+        [@native.V128, @native.V128, @native.V128],
+        [@native.V128],
         "vector.relaxed_lane_select",
       )
     }
@@ -688,8 +693,8 @@ fn verify_relaxed_vector_operation(
       require_shape(
         operands,
         results,
-        [V128, V128],
-        [V128],
+        [@native.V128, @native.V128],
+        [@native.V128],
         "vector.relaxed_minmax",
       )
     }
@@ -697,31 +702,31 @@ fn verify_relaxed_vector_operation(
       require_shape(
         operands,
         results,
-        [V128, V128],
-        [V128],
+        [@native.V128, @native.V128],
+        [@native.V128],
         "vector.relaxed_q15mulr",
       )
     Dot8To16Signed =>
       require_shape(
         operands,
         results,
-        [V128, V128],
-        [V128],
+        [@native.V128, @native.V128],
+        [@native.V128],
         "vector.relaxed_dot8_to16",
       )
     Dot8To32AddSigned =>
       require_shape(
         operands,
         results,
-        [V128, V128, V128],
-        [V128],
+        [@native.V128, @native.V128, @native.V128],
+        [@native.V128],
         "vector.relaxed_dot8_to32_add",
       )
   }
 }
 
 ///|
-fn width_bits(width : AccessWidth) -> Int {
+fn width_bits(width : @native.AccessWidth) -> Int {
   match width {
     W8 => 8
     W16 => 16
@@ -732,11 +737,11 @@ fn width_bits(width : AccessWidth) -> Int {
 }
 
 ///|
-fn value_type_bits(ty : ValueType) -> Int {
+fn value_type_bits(ty : @native.ValueType) -> Int {
   match ty {
-    I32 | F32 => 32
-    I64 | F64 | Ptr64 | GcRef64 => 64
-    V128 => 128
+    @native.I32 | @native.F32 => 32
+    @native.I64 | @native.F64 | @native.Ptr64 | @native.GcRef64 => 64
+    @native.V128 => 128
   }
 }
 
@@ -747,10 +752,10 @@ fn operation_error(message : String) -> String? {
 
 ///|
 fn require_shape(
-  operands : Array[ValueType],
-  results : Array[ValueType],
-  expected_operands : Array[ValueType],
-  expected_results : Array[ValueType],
+  operands : Array[@native.ValueType],
+  results : Array[@native.ValueType],
+  expected_operands : Array[@native.ValueType],
+  expected_results : Array[@native.ValueType],
   name : String,
 ) -> String? {
   if operands != expected_operands {
@@ -770,11 +775,12 @@ fn require_shape(
 fn verify_load_spec(spec : LoadSpec) -> String? {
   let result_bits = value_type_bits(spec.result_type)
   let access_bits = width_bits(spec.width)
-  if spec.result_type == V128 {
+  if spec.result_type == @native.V128 {
     if spec.width != W128 || spec.extension != None {
       return operation_error("v128 load requires width 128 without extension")
     }
-  } else if spec.result_type == Ptr64 || spec.result_type == GcRef64 {
+  } else if spec.result_type == @native.Ptr64 ||
+    spec.result_type == @native.GcRef64 {
     if spec.width != W64 || spec.extension != None {
       return operation_error(
         "pointer and GC-reference loads require width 64 without extension",
@@ -800,11 +806,12 @@ fn verify_load_spec(spec : LoadSpec) -> String? {
 fn verify_store_spec(spec : StoreSpec) -> String? {
   let access_bits = width_bits(spec.width)
   let value_bits = value_type_bits(spec.value_type)
-  if spec.value_type == V128 {
+  if spec.value_type == @native.V128 {
     if spec.width != W128 {
       return operation_error("v128 store requires width 128")
     }
-  } else if spec.value_type == Ptr64 || spec.value_type == GcRef64 {
+  } else if spec.value_type == @native.Ptr64 ||
+    spec.value_type == @native.GcRef64 {
     if spec.width != W64 {
       return operation_error("pointer and GC-reference stores require width 64")
     }
@@ -831,8 +838,8 @@ fn verify_atomic_spec(spec : AtomicSpec) -> String? {
 ///|
 fn verify_vector_operation(
   op : VectorOp,
-  operands : Array[ValueType],
-  results : Array[ValueType],
+  operands : Array[@native.ValueType],
+  results : Array[@native.ValueType],
 ) -> String? {
   match op {
     Splat(lane) =>
@@ -840,7 +847,7 @@ fn verify_vector_operation(
         operands,
         results,
         [scalar_type_for_lane(lane)],
-        [V128],
+        [@native.V128],
         "vector.splat",
       )
     ExtractLane(lane, index, extension) => {
@@ -861,7 +868,7 @@ fn verify_vector_operation(
       require_shape(
         operands,
         results,
-        [V128],
+        [@native.V128],
         [scalar_type_for_lane(lane)],
         "vector.extract_lane",
       )
@@ -873,8 +880,8 @@ fn verify_vector_operation(
       require_shape(
         operands,
         results,
-        [V128, scalar_type_for_lane(lane)],
-        [V128],
+        [@native.V128, scalar_type_for_lane(lane)],
+        [@native.V128],
         "vector.replace_lane",
       )
     }
@@ -889,10 +896,22 @@ fn verify_vector_operation(
           return operation_error("vector.shuffle lane index is out of range")
         }
       }
-      require_shape(operands, results, [V128, V128], [V128], "vector.shuffle")
+      require_shape(
+        operands,
+        results,
+        [@native.V128, @native.V128],
+        [@native.V128],
+        "vector.shuffle",
+      )
     }
     Swizzle =>
-      require_shape(operands, results, [V128, V128], [V128], "vector.swizzle")
+      require_shape(
+        operands,
+        results,
+        [@native.V128, @native.V128],
+        [@native.V128],
+        "vector.swizzle",
+      )
     Bitwise(kind) => {
       let arity = match kind {
         Not => 1
@@ -902,8 +921,8 @@ fn verify_vector_operation(
       require_shape(
         operands,
         results,
-        Array::make(arity, V128),
-        [V128],
+        Array::make(arity, @native.V128),
+        [@native.V128],
         "vector.bitwise",
       )
     }
@@ -921,7 +940,13 @@ fn verify_vector_operation(
       if operation == PopulationCount && lane != I8x16 {
         return operation_error("vector population count requires i8x16 lanes")
       }
-      require_shape(operands, results, [V128], [V128], "vector.int_unary")
+      require_shape(
+        operands,
+        results,
+        [@native.V128],
+        [@native.V128],
+        "vector.int_unary",
+      )
     }
     IntBinary(lane, operation) => {
       if !is_integer_lane(lane) {
@@ -965,8 +990,8 @@ fn verify_vector_operation(
       require_shape(
         operands,
         results,
-        [V128, V128],
-        [V128],
+        [@native.V128, @native.V128],
+        [@native.V128],
         "vector.int_binary",
       )
     }
@@ -979,8 +1004,8 @@ fn verify_vector_operation(
       require_shape(
         operands,
         results,
-        [V128, V128],
-        [V128],
+        [@native.V128, @native.V128],
+        [@native.V128],
         "vector.int_compare",
       )
     }
@@ -988,7 +1013,13 @@ fn verify_vector_operation(
       if !is_integer_lane(lane) {
         return operation_error("vector integer shift requires integer lanes")
       }
-      require_shape(operands, results, [V128, I32], [V128], "vector.int_shift")
+      require_shape(
+        operands,
+        results,
+        [@native.V128, @native.I32],
+        [@native.V128],
+        "vector.int_shift",
+      )
     }
     FloatUnary(lane, _) => {
       if !is_float_lane(lane) {
@@ -996,7 +1027,13 @@ fn verify_vector_operation(
           "vector float unary operation requires float lanes",
         )
       }
-      require_shape(operands, results, [V128], [V128], "vector.float_unary")
+      require_shape(
+        operands,
+        results,
+        [@native.V128],
+        [@native.V128],
+        "vector.float_unary",
+      )
     }
     FloatBinary(lane, _) | FloatCompare(lane, _) => {
       if !is_float_lane(lane) {
@@ -1005,8 +1042,8 @@ fn verify_vector_operation(
       require_shape(
         operands,
         results,
-        [V128, V128],
-        [V128],
+        [@native.V128, @native.V128],
+        [@native.V128],
         "vector.float_binary",
       )
     }
@@ -1017,26 +1054,32 @@ fn verify_vector_operation(
       require_shape(
         operands,
         results,
-        [V128, V128, V128],
-        [V128],
+        [@native.V128, @native.V128, @native.V128],
+        [@native.V128],
         "vector.float_ternary",
       )
     }
     Predicate(_) =>
-      require_shape(operands, results, [V128], [I32], "vector.predicate")
+      require_shape(
+        operands,
+        results,
+        [@native.V128],
+        [@native.I32],
+        "vector.predicate",
+      )
     Convert(conversion) =>
       match verify_vector_conversion(conversion) {
         Some(error) => Some(error)
         None => {
           let operand_types = match conversion {
-            Narrow(_, _) => [V128, V128]
-            _ => [V128]
+            Narrow(_, _) => [@native.V128, @native.V128]
+            _ => [@native.V128]
           }
           require_shape(
             operands,
             results,
             operand_types,
-            [V128],
+            [@native.V128],
             "vector.convert",
           )
         }
@@ -1083,10 +1126,10 @@ fn verify_vector_store_lane_spec(spec : VectorStoreLaneSpec) -> String? {
 }
 
 ///|
-fn call_operand_types(call : SemanticCall) -> Array[ValueType] {
+fn call_operand_types(call : SemanticCall) -> Array[@native.ValueType] {
   let types = call.signature.params.copy()
   if call.callee is Indirect {
-    types.insert(0, Ptr64)
+    types.insert(0, @native.Ptr64)
   }
   types
 }
@@ -1094,7 +1137,7 @@ fn call_operand_types(call : SemanticCall) -> Array[ValueType] {
 ///|
 fn verify_call_operands(
   call : SemanticCall,
-  operands : Array[ValueType],
+  operands : Array[@native.ValueType],
   context : String,
 ) -> String? {
   match call.callee {
@@ -1120,35 +1163,46 @@ fn verify_call_operands(
 ///|
 fn verify_operation_contract(
   op : Operation,
-  operands : Array[ValueType],
-  results : Array[ValueType],
+  operands : Array[@native.ValueType],
+  results : Array[@native.ValueType],
 ) -> String? {
   match op {
-    I32Const(_) => require_shape(operands, results, [], [I32], "i32.const")
-    I64Const(_) => require_shape(operands, results, [], [I64], "i64.const")
-    F32Const(_) => require_shape(operands, results, [], [F32], "f32.const")
-    F64Const(_) => require_shape(operands, results, [], [F64], "f64.const")
+    I32Const(_) =>
+      require_shape(operands, results, [], [@native.I32], "i32.const")
+    I64Const(_) =>
+      require_shape(operands, results, [], [@native.I64], "i64.const")
+    F32Const(_) =>
+      require_shape(operands, results, [], [@native.F32], "f32.const")
+    F64Const(_) =>
+      require_shape(operands, results, [], [@native.F64], "f64.const")
     V128Const(_, _) =>
-      require_shape(operands, results, [], [V128], "v128.const")
-    NullPtr => require_shape(operands, results, [], [Ptr64], "ptr.null")
-    NullGcRef => require_shape(operands, results, [], [GcRef64], "gcref.null")
+      require_shape(operands, results, [], [@native.V128], "v128.const")
+    NullPtr => require_shape(operands, results, [], [@native.Ptr64], "ptr.null")
+    NullGcRef =>
+      require_shape(operands, results, [], [@native.GcRef64], "gcref.null")
     CodeAddress(symbol) =>
       if symbol.name.is_empty() {
         operation_error("code symbol must not be empty")
       } else {
-        require_shape(operands, results, [], [Ptr64], "code.address")
+        require_shape(operands, results, [], [@native.Ptr64], "code.address")
       }
     ExternalAddress(symbol) =>
       if symbol.name.is_empty() {
         operation_error("external symbol must not be empty")
       } else {
-        require_shape(operands, results, [], [Ptr64], "external.address")
+        require_shape(
+          operands,
+          results,
+          [],
+          [@native.Ptr64],
+          "external.address",
+        )
       }
     DataAddress(symbol) =>
       if symbol.name.is_empty() {
         operation_error("data symbol must not be empty")
       } else {
-        require_shape(operands, results, [], [Ptr64], "data.address")
+        require_shape(operands, results, [], [@native.Ptr64], "data.address")
       }
     EnvironmentField(field, _) =>
       if field.name.is_empty() {
@@ -1157,13 +1211,13 @@ fn verify_operation_contract(
         require_shape(
           operands,
           results,
-          [Ptr64],
+          [@native.Ptr64],
           [field.value_type],
           "environment.field",
         )
       }
     StackAddress(_) =>
-      require_shape(operands, results, [], [Ptr64], "stack.address")
+      require_shape(operands, results, [], [@native.Ptr64], "stack.address")
     Copy => {
       if operands.length() != 1 || results.length() != 1 {
         return operation_error("copy expects one operand and one result")
@@ -1177,7 +1231,7 @@ fn verify_operation_contract(
       if operands.length() != 3 || results.length() != 1 {
         return operation_error("select expects three operands and one result")
       }
-      if operands[0] != I32 ||
+      if operands[0] != @native.I32 ||
         operands[1] != operands[2] ||
         operands[1] != results[0] {
         return operation_error(
@@ -1187,16 +1241,34 @@ fn verify_operation_contract(
       None
     }
     GcRefAddress =>
-      require_shape(operands, results, [GcRef64], [Ptr64], "gcref.address")
+      require_shape(
+        operands,
+        results,
+        [@native.GcRef64],
+        [@native.Ptr64],
+        "gcref.address",
+      )
     GcRefFromBits =>
-      require_shape(operands, results, [I64], [GcRef64], "gcref.from_bits")
+      require_shape(
+        operands,
+        results,
+        [@native.I64],
+        [@native.GcRef64],
+        "gcref.from_bits",
+      )
     PointerOffset =>
-      require_shape(operands, results, [Ptr64, I64], [Ptr64], "pointer.offset")
+      require_shape(
+        operands,
+        results,
+        [@native.Ptr64, @native.I64],
+        [@native.Ptr64],
+        "pointer.offset",
+      )
     ReferenceCompare(_) => {
       if operands.length() != 2 ||
-        results != [I32] ||
+        results != [@native.I32] ||
         operands[0] != operands[1] ||
-        (operands[0] != Ptr64 && operands[0] != GcRef64) {
+        (operands[0] != @native.Ptr64 && operands[0] != @native.GcRef64) {
         return operation_error(
           "reference comparison expects matching ptr64 or gcref64 operands and i32 result",
         )
@@ -1244,7 +1316,7 @@ fn verify_operation_contract(
         !is_integer_type(operands[0]) ||
         operands[0] != operands[1] ||
         results[0] != operands[0] ||
-        results[1] != I32 {
+        results[1] != @native.I32 {
         return operation_error(
           "integer overflow operation expects matching integer operands and [integer, i32] results",
         )
@@ -1253,7 +1325,7 @@ fn verify_operation_contract(
     }
     IntCompare(_) => {
       if operands.length() != 2 ||
-        results != [I32] ||
+        results != [@native.I32] ||
         !is_integer_type(operands[0]) ||
         operands[0] != operands[1] {
         return operation_error(
@@ -1300,7 +1372,7 @@ fn verify_operation_contract(
     }
     FloatCompare(_) => {
       if operands.length() != 2 ||
-        results != [I32] ||
+        results != [@native.I32] ||
         !is_float_type(operands[0]) ||
         operands[0] != operands[1] {
         return operation_error(
@@ -1310,11 +1382,12 @@ fn verify_operation_contract(
       None
     }
     Convert(conversion) => {
-      let expected : (Array[ValueType], Array[ValueType]) = match conversion {
-        I32WrapI64 => ([I64], [I32])
-        I64ExtendI32(_) => ([I32], [I64])
-        F32DemoteF64 => ([F64], [F32])
-        F64PromoteF32 => ([F32], [F64])
+      let expected : (Array[@native.ValueType], Array[@native.ValueType]) = match
+        conversion {
+        I32WrapI64 => ([@native.I64], [@native.I32])
+        I64ExtendI32(_) => ([@native.I32], [@native.I64])
+        F32DemoteF64 => ([@native.F64], [@native.F32])
+        F64PromoteF32 => ([@native.F32], [@native.F64])
         FloatToInt(from, to, _, _) =>
           ([float_value_type(from)], [integer_value_type(to)])
         IntToFloat(from, to, _) =>
@@ -1330,8 +1403,8 @@ fn verify_operation_contract(
         }
         Bitcast(from, to) => {
           if value_type_bits(from) != value_type_bits(to) ||
-            from == GcRef64 ||
-            to == GcRef64 {
+            from == @native.GcRef64 ||
+            to == @native.GcRef64 {
             return operation_error(
               "bitcast requires equal-width non-GC value types",
             )
@@ -1345,7 +1418,13 @@ fn verify_operation_contract(
       match verify_load_spec(spec) {
         Some(error) => Some(error)
         None =>
-          require_shape(operands, results, [Ptr64], [spec.result_type], "load")
+          require_shape(
+            operands,
+            results,
+            [@native.Ptr64],
+            [spec.result_type],
+            "load",
+          )
       }
     Store(spec) =>
       match verify_store_spec(spec) {
@@ -1354,7 +1433,7 @@ fn verify_operation_contract(
           require_shape(
             operands,
             results,
-            [Ptr64, spec.value_type],
+            [@native.Ptr64, spec.value_type],
             [],
             "store",
           )
@@ -1366,7 +1445,7 @@ fn verify_operation_contract(
           require_shape(
             operands,
             results,
-            [Ptr64],
+            [@native.Ptr64],
             [spec.value_type],
             "atomic.load",
           )
@@ -1378,7 +1457,7 @@ fn verify_operation_contract(
           require_shape(
             operands,
             results,
-            [Ptr64, spec.value_type],
+            [@native.Ptr64, spec.value_type],
             [],
             "atomic.store",
           )
@@ -1390,7 +1469,7 @@ fn verify_operation_contract(
           require_shape(
             operands,
             results,
-            [Ptr64, spec.value_type],
+            [@native.Ptr64, spec.value_type],
             [spec.value_type],
             "atomic.rmw",
           )
@@ -1402,7 +1481,7 @@ fn verify_operation_contract(
           require_shape(
             operands,
             results,
-            [Ptr64, spec.value_type, spec.value_type],
+            [@native.Ptr64, spec.value_type, spec.value_type],
             [spec.value_type],
             "atomic.compare_exchange",
           )
@@ -1414,14 +1493,14 @@ fn verify_operation_contract(
         Some(error) => Some(error)
         None => {
           let expected_operands = match spec.kind {
-            Lane(_, _) => [Ptr64, V128]
-            Splat(_) | Extend(_, _) | Zero(_) => [Ptr64]
+            Lane(_, _) => [@native.Ptr64, @native.V128]
+            Splat(_) | Extend(_, _) | Zero(_) => [@native.Ptr64]
           }
           require_shape(
             operands,
             results,
             expected_operands,
-            [V128],
+            [@native.V128],
             "vector.load",
           )
         }
@@ -1433,7 +1512,7 @@ fn verify_operation_contract(
           require_shape(
             operands,
             results,
-            [Ptr64, V128],
+            [@native.Ptr64, @native.V128],
             [],
             "vector.store_lane",
           )
@@ -1455,63 +1534,65 @@ fn verify_operation_contract(
 }
 
 ///|
-pub fn Operation::semantics(self : Operation) -> OperationSemantics {
+pub fn Operation::semantics(self : Operation) -> @native.OperationSemantics {
   match self {
     IntBinary(SignedDiv | UnsignedDiv | SignedRem | UnsignedRem) =>
-      { ..OperationSemantics::pure(), may_trap: true, }
+      { ..@native.OperationSemantics::pure(), may_trap: true, }
     Convert(FloatToInt(_, _, _, Trapping)) =>
-      { ..OperationSemantics::pure(), may_trap: true, }
+      { ..@native.OperationSemantics::pure(), may_trap: true, }
     Load(spec) =>
       {
-        ..OperationSemantics::pure(),
+        ..@native.OperationSemantics::pure(),
         memory: Read,
         may_trap: spec.trap is Some(_),
       }
     Store(spec) =>
       {
-        ..OperationSemantics::pure(),
+        ..@native.OperationSemantics::pure(),
         memory: Write,
         may_trap: spec.trap is Some(_),
       }
     AtomicLoad(spec) =>
       {
-        ..OperationSemantics::pure(),
+        ..@native.OperationSemantics::pure(),
         memory: Read,
         may_trap: spec.trap is Some(_),
       }
     AtomicStore(spec) =>
       {
-        ..OperationSemantics::pure(),
+        ..@native.OperationSemantics::pure(),
         memory: Write,
         may_trap: spec.trap is Some(_),
       }
     AtomicRmw(spec, _) | AtomicCompareExchange(spec) =>
       {
-        ..OperationSemantics::pure(),
+        ..@native.OperationSemantics::pure(),
         memory: ReadWrite,
         may_trap: spec.trap is Some(_),
       }
-    AtomicFence => { ..OperationSemantics::pure(), memory: ReadWrite, }
+    AtomicFence => { ..@native.OperationSemantics::pure(), memory: ReadWrite, }
     VectorLoad(spec) =>
       {
-        ..OperationSemantics::pure(),
+        ..@native.OperationSemantics::pure(),
         memory: Read,
         may_trap: spec.trap is Some(_),
       }
     VectorStoreLane(spec) =>
       {
-        ..OperationSemantics::pure(),
+        ..@native.OperationSemantics::pure(),
         memory: Write,
         may_trap: spec.trap is Some(_),
       }
-    EnvironmentField(_, _) => { ..OperationSemantics::pure(), memory: Read, }
+    EnvironmentField(_, _) =>
+      { ..@native.OperationSemantics::pure(), memory: Read, }
     Call(call) => call.behavior.semantics()
-    Safepoint(Gc) => { ..OperationSemantics::pure(), gc_safepoint: true, }
+    Safepoint(Gc) =>
+      { ..@native.OperationSemantics::pure(), gc_safepoint: true, }
     Safepoint(Cancellation) =>
-      { ..OperationSemantics::pure(), cancellation_safepoint: true, }
+      { ..@native.OperationSemantics::pure(), cancellation_safepoint: true, }
     Safepoint(GcAndCancellation) =>
       {
-        ..OperationSemantics::pure(),
+        ..@native.OperationSemantics::pure(),
         gc_safepoint: true,
         cancellation_safepoint: true,
       }
@@ -1542,6 +1623,6 @@ pub fn Operation::semantics(self : Operation) -> OperationSemantics {
     | FloatTernary(_)
     | FloatCompare(_)
     | Convert(_)
-    | Vector(_) => OperationSemantics::pure()
+    | Vector(_) => @native.OperationSemantics::pure()
   }
 }

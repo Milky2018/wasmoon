@@ -1,7 +1,7 @@
 ///|
 fn lower_signedness(
   signedness : @milkir.VectorSignedness,
-) -> @semantic.Signedness {
+) -> @native.Signedness {
   match signedness {
     Signed => Signed
     Unsigned => Unsigned
@@ -47,9 +47,7 @@ fn lower_lane(lane : @milkir.VectorLane) -> @semantic.VectorLane {
 }
 
 ///|
-fn lower_extension(
-  extension : @milkir.VectorExtension,
-) -> @semantic.Signedness? {
+fn lower_extension(extension : @milkir.VectorExtension) -> @native.Signedness? {
   match extension {
     None => None
     Signed => Some(Signed)
@@ -323,7 +321,7 @@ fn widened_lane(lane : @milkir.VectorIntLane) -> @semantic.VectorLane {
 fn lower_vector_memory_instruction(
   builder : @semantic.FunctionBuilder,
   values : Array[@semantic.Value?],
-  value_types : Array[@semantic.ValueType?],
+  value_types : Array[@native.ValueType?],
   instruction : @milkir.Inst,
   operation : @milkir.VectorMemoryOp,
 ) -> Unit raise SemanticLowerError {
@@ -338,7 +336,7 @@ fn lower_vector_memory_instruction(
   let (operation, operands, result_types) : (
     @semantic.Operation,
     Array[@semantic.Value],
-    Array[@semantic.ValueType],
+    Array[@native.ValueType],
   ) = match operation {
     LoadExtend(lane, signedness) =>
       (

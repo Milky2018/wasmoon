@@ -2,7 +2,8 @@
 package "Milky2018/milkir_machv/adapter"
 
 import {
-  "Milky2018/machv",
+  "Milky2018/native_types",
+  "Milky2018/native_types/semantic",
 }
 
 // Values
@@ -11,33 +12,33 @@ import {
 
 // Types and methods
 type InstructionContext
-pub fn InstructionContext::block_parameters(Self, @machv.Block) -> Array[@machv.Value]
-pub fn InstructionContext::branch(Self, @machv.Value, @machv.Block, Array[@machv.Value], @machv.Block, Array[@machv.Value]) -> Unit
-pub fn InstructionContext::create_block(Self, Array[@machv.ValueType]) -> @machv.Block
-pub fn InstructionContext::create_stack_object(Self, Int, Int) -> @machv.StackObject
-pub fn InstructionContext::emit(Self, @machv.Operation, Array[@machv.Value], Array[@machv.ValueType]) -> Array[@machv.Value]
-pub fn InstructionContext::emit_call(Self, @machv.SemanticCall, Array[@machv.Value], Array[@machv.ValueType]) -> Array[@machv.Value]
-pub fn InstructionContext::emit_call_without_roots(Self, @machv.SemanticCall, Array[@machv.Value], Array[@machv.ValueType]) -> Array[@machv.Value]
-pub fn InstructionContext::environment(Self) -> Array[@machv.Value]
-pub fn InstructionContext::finish_call(Self, @machv.SemanticCall, Array[@machv.Value]) -> Unit
-pub fn InstructionContext::finish_call_without_roots(Self, @machv.SemanticCall, Array[@machv.Value]) -> Unit
-pub fn InstructionContext::finish_operation(Self, @machv.Operation, Array[@machv.Value]) -> Unit
+pub fn InstructionContext::block_parameters(Self, @semantic.Block) -> Array[@semantic.Value]
+pub fn InstructionContext::branch(Self, @semantic.Value, @semantic.Block, Array[@semantic.Value], @semantic.Block, Array[@semantic.Value]) -> Unit
+pub fn InstructionContext::create_block(Self, Array[@native_types.ValueType]) -> @semantic.Block
+pub fn InstructionContext::create_stack_object(Self, Int, Int) -> @semantic.StackObject
+pub fn InstructionContext::emit(Self, @semantic.Operation, Array[@semantic.Value], Array[@native_types.ValueType]) -> Array[@semantic.Value]
+pub fn InstructionContext::emit_call(Self, @semantic.SemanticCall, Array[@semantic.Value], Array[@native_types.ValueType]) -> Array[@semantic.Value]
+pub fn InstructionContext::emit_call_without_roots(Self, @semantic.SemanticCall, Array[@semantic.Value], Array[@native_types.ValueType]) -> Array[@semantic.Value]
+pub fn InstructionContext::environment(Self) -> Array[@semantic.Value]
+pub fn InstructionContext::finish_call(Self, @semantic.SemanticCall, Array[@semantic.Value]) -> Unit
+pub fn InstructionContext::finish_call_without_roots(Self, @semantic.SemanticCall, Array[@semantic.Value]) -> Unit
+pub fn InstructionContext::finish_operation(Self, @semantic.Operation, Array[@semantic.Value]) -> Unit
 pub fn InstructionContext::finish_void(Self) -> Unit
-pub fn InstructionContext::forward_results(Self, Array[@machv.Value]) -> Unit
-pub fn InstructionContext::function_result_types(Self) -> Array[@machv.ValueType]
-pub fn InstructionContext::jump(Self, @machv.Block, Array[@machv.Value]) -> Unit
-pub fn InstructionContext::new(@machv.FunctionBuilder, Array[@machv.Value], Array[@machv.ValueType], Array[@machv.ValueType], Array[@machv.ValueType], Array[@machv.Value], @machv.SourceLocation?, Array[@machv.Value], (Array[@machv.Value]) -> Unit) -> Self
-pub fn InstructionContext::noreturn_call(Self, @machv.SemanticCall, Array[@machv.Value]) -> Unit
-pub fn InstructionContext::operand_types(Self) -> Array[@machv.ValueType]
-pub fn InstructionContext::operands(Self) -> Array[@machv.Value]
-pub fn InstructionContext::result_types(Self) -> Array[@machv.ValueType]
-pub fn InstructionContext::set_trap_terminator(Self, @machv.TrapReason) -> Unit
-pub fn InstructionContext::source(Self) -> @machv.SourceLocation?
+pub fn InstructionContext::forward_results(Self, Array[@semantic.Value]) -> Unit
+pub fn InstructionContext::function_result_types(Self) -> Array[@native_types.ValueType]
+pub fn InstructionContext::jump(Self, @semantic.Block, Array[@semantic.Value]) -> Unit
+pub fn InstructionContext::new(@semantic.FunctionBuilder, Array[@semantic.Value], Array[@native_types.ValueType], Array[@native_types.ValueType], Array[@native_types.ValueType], Array[@semantic.Value], @native_types.SourceLocation?, Array[@semantic.Value], (Array[@semantic.Value]) -> Unit) -> Self
+pub fn InstructionContext::noreturn_call(Self, @semantic.SemanticCall, Array[@semantic.Value]) -> Unit
+pub fn InstructionContext::operand_types(Self) -> Array[@native_types.ValueType]
+pub fn InstructionContext::operands(Self) -> Array[@semantic.Value]
+pub fn InstructionContext::result_types(Self) -> Array[@native_types.ValueType]
+pub fn InstructionContext::set_trap_terminator(Self, @native_types.TrapReason) -> Unit
+pub fn InstructionContext::source(Self) -> @native_types.SourceLocation?
 pub fn InstructionContext::status(Self) -> String?
-pub fn InstructionContext::switch_to_block(Self, @machv.Block) -> Unit
-pub fn InstructionContext::tail_call(Self, @machv.SemanticCall, Array[@machv.Value]) -> Unit
+pub fn InstructionContext::switch_to_block(Self, @semantic.Block) -> Unit
+pub fn InstructionContext::tail_call(Self, @semantic.SemanticCall, Array[@semantic.Value]) -> Unit
 pub fn InstructionContext::terminates_block(Self) -> Bool
-pub fn InstructionContext::trap(Self, @machv.TrapReason) -> Unit
+pub fn InstructionContext::trap(Self, @native_types.TrapReason) -> Unit
 
 // Type aliases
 

@@ -1,7 +1,7 @@
 ///|
 fn sample_artifact() -> Artifact {
-  let source = @machv.SourceLocation::new("answer.wasm", 12, 4)
-  let function_signature = @machv.Signature::new([I64], [I64])
+  let source = @native.SourceLocation::new("answer.wasm", 12, 4)
+  let function_signature = @native.Signature::new([I64], [I64])
   {
     manifest: {
       format_version: FORMAT_VERSION,
@@ -32,15 +32,15 @@ fn sample_artifact() -> Artifact {
         function_index: 0,
         module_name: "env",
         function_name: "host_log",
-        symbol: @machv.ExternalSymbol::new("wasm.runtime.host_log"),
-        signature: @machv.Signature::new([I64], []),
+        symbol: @native.ExternalSymbol::new("wasm.runtime.host_log"),
+        signature: @native.Signature::new([I64], []),
       },
     ],
     functions: [
       {
         identity: {
           function_index: 1,
-          symbol: @machv.CodeSymbol::new("wasm.function.1"),
+          symbol: @native.CodeSymbol::new("wasm.function.1"),
           signature: function_signature,
         },
         entry_offset: 0,
@@ -50,7 +50,7 @@ fn sample_artifact() -> Artifact {
           @code_object.Relocation::new(
             0,
             AArch64Call26,
-            External(@machv.ExternalSymbol::new("wasm.runtime.host_log")),
+            External(@native.ExternalSymbol::new("wasm.runtime.host_log")),
           ),
         ],
         sources: [@code_object.SourceSite::new(0, source)],
@@ -61,7 +61,7 @@ fn sample_artifact() -> Artifact {
             GcAndCancellation,
             [Stack(offset=8, ty=GcRef64)],
             source~,
-            stack_map=@machv.StackMapMetadata::new(0, argument_root_count=1),
+            stack_map=@native.StackMapMetadata::new(0, argument_root_count=1),
           ),
         ],
         unwind: [@code_object.UnwindDirective::new(4, StackAlloc(size=16))],

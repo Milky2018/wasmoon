@@ -138,7 +138,7 @@ fn Function::require_edge(
 fn Function::verify_metadata(
   self : Function,
   block_id : Int,
-  semantics : OperationSemantics,
+  semantics : @native.OperationSemantics,
   metadata : InstructionMetadata,
 ) -> Unit raise MachVVerifyError {
   if metadata.source is Some(source) && !source.is_valid() {
@@ -169,7 +169,7 @@ fn Function::verify_metadata(
   }
   for index, root in metadata.live_gc_roots {
     self.require_value(root)
-    if self.values[root.id].ty != GcRef64 {
+    if self.values[root.id].ty != @native.GcRef64 {
       raise InvalidSafepoint(
         block_id~,
         message="live GC roots must have type gcref64",
@@ -206,7 +206,7 @@ fn Function::verify_terminator_shape(
     Jump(_) | Trap(_) => ()
     Branch(condition, _, _) => {
       self.require_value(condition)
-      if self.values[condition.id].ty != I32 {
+      if self.values[condition.id].ty != @native.I32 {
         raise InvalidTerminator(
           block_id~,
           message="branch condition must have type i32",
@@ -216,14 +216,14 @@ fn Function::verify_terminator_shape(
     Switch(index, cases, _) => {
       self.require_value(index)
       let index_type = self.values[index.id].ty
-      if index_type != I32 && index_type != I64 {
+      if index_type != @native.I32 && index_type != @native.I64 {
         raise InvalidTerminator(
           block_id~,
           message="switch index must have type i32 or i64",
         )
       }
       for case_index, case in cases {
-        if index_type == I32 && case.bits > 0xFFFFFFFFUL {
+        if index_type == @native.I32 && case.bits > 0xFFFFFFFFUL {
           raise InvalidTerminator(
             block_id~,
             message="i32 switch case value exceeds 32 bits",
@@ -337,7 +337,7 @@ fn Function::verify_terminator_shape(
   }
   for index, root in record.metadata.live_gc_roots {
     self.require_value(root)
-    if self.values[root.id].ty != GcRef64 {
+    if self.values[root.id].ty != @native.GcRef64 {
       raise InvalidSafepoint(
         block_id~,
         message="terminator live GC roots must have type gcref64",
@@ -361,7 +361,7 @@ fn Function::mark_gc_use(
   definitions : Array[Bool],
   uses : Array[Bool],
 ) -> Unit {
-  if self.values[value.id].ty == GcRef64 && !definitions[value.id] {
+  if self.values[value.id].ty == @native.GcRef64 && !definitions[value.id] {
     uses[value.id] = true
   }
 }
@@ -381,13 +381,13 @@ fn Function::compute_gc_liveness(
     let uses = Array::make(value_count, false)
     if block_id == 0 {
       for parameter in self.parameters {
-        if self.values[parameter.id].ty == GcRef64 {
+        if self.values[parameter.id].ty == @native.GcRef64 {
           definitions[parameter.id] = true
         }
       }
     }
     for parameter in block.parameters {
-      if self.values[parameter.id].ty == GcRef64 {
+      if self.values[parameter.id].ty == @native.GcRef64 {
         definitions[parameter.id] = true
       }
     }
@@ -397,7 +397,7 @@ fn Function::compute_gc_liveness(
         self.mark_gc_use(operand, definitions, uses)
       }
       for result in data.results {
-        if self.values[result.id].ty == GcRef64 {
+        if self.values[result.id].ty == @native.GcRef64 {
           definitions[result.id] = true
         }
       }
@@ -470,7 +470,9 @@ fn Function::require_gc_root_coverage(
     declared[root.id] = true
   }
   for value_id, is_live in live {
-    if is_live && self.values[value_id].ty == GcRef64 && !declared[value_id] {
+    if is_live &&
+      self.values[value_id].ty == @native.GcRef64 &&
+      !declared[value_id] {
       raise MissingGcRoot(block_id~, instruction_id~, value_id~)
     }
   }
@@ -484,7 +486,7 @@ fn Function::verify_gc_safepoint_roots(
 ) -> Unit raise MachVVerifyError {
   let mut has_gc_values = false
   for value in self.values {
-    if value.ty == GcRef64 {
+    if value.ty == @native.GcRef64 {
       has_gc_values = true
       break
     }
@@ -497,7 +499,7 @@ fn Function::verify_gc_safepoint_roots(
     let live = live_out[block_id].copy()
     if block.terminator is Some(record) {
       for value in terminator_values(record.kind) {
-        if self.values[value.id].ty == GcRef64 {
+        if self.values[value.id].ty == @native.GcRef64 {
           live[value.id] = true
         }
       }
@@ -528,12 +530,12 @@ fn Function::verify_gc_safepoint_roots(
       let instruction = block.instructions[position]
       let data = self.instructions[instruction.id]
       for result in data.results {
-        if self.values[result.id].ty == GcRef64 {
+        if self.values[result.id].ty == @native.GcRef64 {
           live[result.id] = false
         }
       }
       for operand in data.operands {
-        if self.values[operand.id].ty == GcRef64 {
+        if self.values[operand.id].ty == @native.GcRef64 {
           live[operand.id] = true
         }
       }

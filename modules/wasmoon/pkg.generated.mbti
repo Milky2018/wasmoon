@@ -2,8 +2,8 @@
 package "Milky2018/wasmoon"
 
 import {
-  "Milky2018/machv",
   "Milky2018/milkir",
+  "Milky2018/native_types/semantic",
   "Milky2018/wasm_core/types",
   "Milky2018/wasmoon/wasm_frontend/embedding",
   "Milky2018/wasmoon_jit",
@@ -33,7 +33,7 @@ pub impl Show for WasmCompilerPipelineError
 // Types and methods
 pub(all) struct CompilerInfrastructureAssembly {
   signature : @milkir.Signature
-  machv_function : @machv.Function
+  machv_function : @semantic.Function
   code_object : @wasmoon_jit.JitCodeObject
 }
 

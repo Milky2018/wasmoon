@@ -14,7 +14,7 @@ priv struct X64TargetDiagnostics {
 ///|
 fn x64_target_context(
   plan : @semantic_machv.SelectionPlan,
-  environment_field_path : ((@semantic_machv.EnvironmentField) -> Array[Int]?)?,
+  environment_field_path : ((@native.EnvironmentField) -> Array[Int]?)?,
 ) -> @x64_target.LoweringContext raise JitPipelineError {
   let function = plan.view()
   let abi = @x64_target.InternalAbi::new(
@@ -47,7 +47,7 @@ fn x64_target_context(
 ///|
 fn compile_x64_target_input(
   function : @semantic_machv.SelectionPlan,
-  environment_field_path : ((@semantic_machv.EnvironmentField) -> Array[Int]?)?,
+  environment_field_path : ((@native.EnvironmentField) -> Array[Int]?)?,
   record_metrics : Bool,
   compilation_session : @x64_target.CompilationSession,
   target_lower_tick : @perf.PerfTick?,
@@ -92,14 +92,11 @@ fn compile_x64_target_input(
 ///|
 fn build_x64_target(
   prepared : @semantic_machv.PreparedSelection,
-  environment_field_path? : (@semantic_machv.EnvironmentField) -> Array[Int]?,
-  allocation_symbols? : Array[@semantic_machv.ExternalSymbol] = [],
+  environment_field_path? : (@native.EnvironmentField) -> Array[Int]?,
+  allocation_symbols? : Array[@native.ExternalSymbol] = [],
   record_metrics? : Bool = false,
   compilation_session? : @x64_target.CompilationSession = @x64_target.CompilationSession::new(),
-  root_scope_symbols? : (
-    @semantic_machv.ExternalSymbol,
-    @semantic_machv.ExternalSymbol,
-  ),
+  root_scope_symbols? : (@native.ExternalSymbol, @native.ExternalSymbol),
 ) -> X64TargetCompilation raise JitPipelineError {
   let target_lower_tick = target_metrics_tick(record_metrics)
   let runtime_abi_tick = detail_metrics_tick(record_metrics)
@@ -126,12 +123,9 @@ fn build_x64_target(
 ///|
 fn diagnose_x64_target(
   prepared : @semantic_machv.PreparedSelection,
-  environment_field_path? : (@semantic_machv.EnvironmentField) -> Array[Int]?,
-  allocation_symbols? : Array[@semantic_machv.ExternalSymbol] = [],
-  root_scope_symbols? : (
-    @semantic_machv.ExternalSymbol,
-    @semantic_machv.ExternalSymbol,
-  ),
+  environment_field_path? : (@native.EnvironmentField) -> Array[Int]?,
+  allocation_symbols? : Array[@native.ExternalSymbol] = [],
+  root_scope_symbols? : (@native.ExternalSymbol, @native.ExternalSymbol),
 ) -> X64TargetDiagnostics raise JitPipelineError {
   let elaborated = match root_scope_symbols {
     Some(symbols) =>

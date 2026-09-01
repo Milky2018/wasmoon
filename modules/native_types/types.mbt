@@ -31,7 +31,7 @@ pub impl Show for ValueType with fn output(self, logger) {
 ///|
 /// Ordered logical parameters and results. ABI placement is intentionally
 /// absent.
-pub struct Signature {
+pub(all) struct Signature {
   params : Array[ValueType]
   results : Array[ValueType]
 } derive(Debug, Eq, Hash)
@@ -51,7 +51,7 @@ pub(all) enum CallProtocol {
 } derive(Debug, Eq, Hash)
 
 ///|
-pub struct CodeSymbol {
+pub(all) struct CodeSymbol {
   name : String
 } derive(Debug, Eq, Hash)
 
@@ -61,7 +61,7 @@ pub fn CodeSymbol::new(name : String) -> CodeSymbol {
 }
 
 ///|
-pub struct ExternalSymbol {
+pub(all) struct ExternalSymbol {
   name : String
 } derive(Debug, Eq, Hash)
 
@@ -71,7 +71,7 @@ pub fn ExternalSymbol::new(name : String) -> ExternalSymbol {
 }
 
 ///|
-pub struct DataSymbol {
+pub(all) struct DataSymbol {
   name : String
 } derive(Debug, Eq, Hash)
 
@@ -85,7 +85,7 @@ pub fn DataSymbol::new(name : String) -> DataSymbol {
 ///
 /// The identity carries no byte offset or target addressing mode. The
 /// embedding target environment resolves it during target lowering.
-pub struct EnvironmentField {
+pub(all) struct EnvironmentField {
   name : String
   value_type : ValueType
 } derive(Debug, Eq, Hash)
@@ -166,7 +166,7 @@ pub(all) enum MemoryEffect {
 
 ///|
 /// Canonical observable behavior of one semantic operation.
-pub struct OperationSemantics {
+pub(all) struct OperationSemantics {
   memory : MemoryEffect
   may_trap : Bool
   may_unwind : Bool
@@ -201,7 +201,7 @@ pub fn OperationSemantics::must_preserve_if_unused(
 
 ///|
 /// Explicit call behavior. Protocol and callee identity never imply effects.
-pub struct CallBehavior {
+pub(all) struct CallBehavior {
   memory : MemoryEffect
   may_trap : Bool
   may_unwind : Bool
@@ -277,7 +277,7 @@ pub(all) enum TrapReason {
 } derive(Debug, Eq, Hash)
 
 ///|
-pub struct SourceLocation {
+pub(all) struct SourceLocation {
   file : String
   line : Int
   column : Int
@@ -293,6 +293,6 @@ pub fn SourceLocation::new(
 }
 
 ///|
-fn SourceLocation::is_valid(self : SourceLocation) -> Bool {
+pub fn SourceLocation::is_valid(self : SourceLocation) -> Bool {
   !self.file.is_empty() && self.line >= 0 && self.column >= 0
 }

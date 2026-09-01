@@ -12,9 +12,9 @@ pub struct FunctionBuilder {
 ///|
 pub fn FunctionBuilder::new(
   name : String,
-  protocol : CallProtocol,
-  params : Array[ValueType],
-  results : Array[ValueType],
+  protocol : @native.CallProtocol,
+  params : Array[@native.ValueType],
+  results : Array[@native.ValueType],
 ) -> FunctionBuilder {
   FunctionBuilder::new_with_storage_policy(
     name, protocol, params, results, true,
@@ -27,9 +27,9 @@ pub fn FunctionBuilder::new(
 /// copies; the producer must not mutate them after emission.
 pub fn FunctionBuilder::new_selection_plan(
   name : String,
-  protocol : CallProtocol,
-  params : Array[ValueType],
-  results : Array[ValueType],
+  protocol : @native.CallProtocol,
+  params : Array[@native.ValueType],
+  results : Array[@native.ValueType],
 ) -> FunctionBuilder {
   FunctionBuilder::new_with_storage_policy(
     name, protocol, params, results, false,
@@ -39,15 +39,15 @@ pub fn FunctionBuilder::new_selection_plan(
 ///|
 fn FunctionBuilder::new_with_storage_policy(
   name : String,
-  protocol : CallProtocol,
-  params : Array[ValueType],
-  results : Array[ValueType],
+  protocol : @native.CallProtocol,
+  params : Array[@native.ValueType],
+  results : Array[@native.ValueType],
   copy_inputs : Bool,
 ) -> FunctionBuilder {
   let construction = FunctionConstruction::new(
     name,
     protocol,
-    Signature::new(params, results),
+    @native.Signature::new(params, results),
   )
   let builder = {
     construction,
@@ -93,7 +93,7 @@ pub fn FunctionBuilder::current_block(self : FunctionBuilder) -> Block {
 ///|
 pub fn FunctionBuilder::create_block(
   self : FunctionBuilder,
-  parameter_types : Array[ValueType],
+  parameter_types : Array[@native.ValueType],
 ) -> Block {
   self.construction.allocate_block(parameter_types)
 }
@@ -142,7 +142,7 @@ pub fn FunctionBuilder::block_parameters(
 pub fn FunctionBuilder::value_type(
   self : FunctionBuilder,
   value : Value,
-) -> ValueType? {
+) -> @native.ValueType? {
   self.construction.value_type(value)
 }
 
@@ -185,7 +185,7 @@ fn FunctionBuilder::require_block_open(self : FunctionBuilder) -> Bool {
 fn FunctionBuilder::value_types(
   self : FunctionBuilder,
   values : Array[Value],
-) -> Array[ValueType] {
+) -> Array[@native.ValueType] {
   values.map(value => self.construction.values[value.id].ty)
 }
 
@@ -231,7 +231,7 @@ pub fn FunctionBuilder::emit(
   self : FunctionBuilder,
   operation : Operation,
   operands : Array[Value],
-  result_types : Array[ValueType],
+  result_types : Array[@native.ValueType],
 ) -> Array[Value] {
   self.emit_with_metadata(
     operation,
@@ -246,7 +246,7 @@ pub fn FunctionBuilder::emit_with_metadata(
   self : FunctionBuilder,
   operation : Operation,
   operands : Array[Value],
-  result_types : Array[ValueType],
+  result_types : Array[@native.ValueType],
   metadata : InstructionMetadata,
 ) -> Array[Value] {
   if !self.require_block_open() ||
@@ -322,7 +322,7 @@ pub fn FunctionBuilder::emit_with_metadata(
     return []
   }
   for root in metadata.live_gc_roots {
-    if self.construction.values[root.id].ty != GcRef64 {
+    if self.construction.values[root.id].ty != @native.GcRef64 {
       self.record_error(
         InvalidSafepoint(
           block_id=self.current_block.id,
@@ -416,7 +416,7 @@ pub fn FunctionBuilder::branch(
   if !self.require_block_open() || !self.require_values([condition]) {
     return
   }
-  if self.construction.values[condition.id].ty != I32 {
+  if self.construction.values[condition.id].ty != @native.I32 {
     self.record_error(
       InvalidTerminator(
         block_id=self.current_block.id,
@@ -453,7 +453,7 @@ pub fn FunctionBuilder::switch(
     return
   }
   let index_type = self.construction.values[index.id].ty
-  if index_type != I32 && index_type != I64 {
+  if index_type != @native.I32 && index_type != @native.I64 {
     self.record_error(
       InvalidTerminator(
         block_id=self.current_block.id,
@@ -465,7 +465,7 @@ pub fn FunctionBuilder::switch(
   let switch_cases : Array[SwitchCase] = []
   for case_index, item in cases {
     let (bits, target, arguments) = item
-    if index_type == I32 && bits > 0xFFFFFFFFUL {
+    if index_type == @native.I32 && bits > 0xFFFFFFFFUL {
       self.record_error(
         InvalidTerminator(
           block_id=self.current_block.id,
@@ -602,7 +602,7 @@ pub fn FunctionBuilder::tail_call_with_metadata(
     return
   }
   for root in metadata.live_gc_roots {
-    if self.construction.values[root.id].ty != GcRef64 {
+    if self.construction.values[root.id].ty != @native.GcRef64 {
       self.record_error(
         InvalidSafepoint(
           block_id=self.current_block.id,
@@ -683,7 +683,7 @@ pub fn FunctionBuilder::noreturn_call_with_metadata(
     return
   }
   for root in metadata.live_gc_roots {
-    if self.construction.values[root.id].ty != GcRef64 {
+    if self.construction.values[root.id].ty != @native.GcRef64 {
       self.record_error(
         InvalidSafepoint(
           block_id=self.current_block.id,
@@ -701,7 +701,7 @@ pub fn FunctionBuilder::noreturn_call_with_metadata(
 ///|
 pub fn FunctionBuilder::trap(
   self : FunctionBuilder,
-  reason : TrapReason,
+  reason : @native.TrapReason,
 ) -> Unit {
   if !self.require_block_open() {
     return
@@ -716,7 +716,7 @@ pub fn FunctionBuilder::trap(
 /// mutable terminator storage.
 pub fn FunctionBuilder::set_terminator_source(
   self : FunctionBuilder,
-  source : SourceLocation,
+  source : @native.SourceLocation,
 ) -> Unit {
   if !source.is_valid() {
     self.record_error(

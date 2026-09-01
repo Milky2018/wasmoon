@@ -2515,7 +2515,7 @@ test "AArch64 pipeline materializes a large semantic stack-object offset" {
 
 ///|
 test "AArch64 pipeline emits far I32 spill slots" {
-  let parameter_types : Array[@semantic.ValueType] = Array::make(32, I32)
+  let parameter_types : Array[@native.ValueType] = Array::make(32, I32)
   let builder = @semantic.FunctionBuilder::new(
     "emitted_far_i32_spill",
     Platform,
@@ -2539,7 +2539,7 @@ test "AArch64 pipeline emits far I32 spill slots" {
 
 ///|
 test "AArch64 pipeline emits far F32 spill slots" {
-  let parameter_types : Array[@semantic.ValueType] = Array::make(32, F32)
+  let parameter_types : Array[@native.ValueType] = Array::make(32, F32)
   let builder = @semantic.FunctionBuilder::new(
     "emitted_far_f32_spill",
     Platform,
@@ -2792,7 +2792,7 @@ test "AArch64 code objects retain safepoints and allocated GC roots" {
     [@vcode.Output::any(GcRef64)],
     [],
     @vcode.InstructionMetadata::new(
-      source=@semantic.SourceLocation::new("metadata.wat", 4, 12),
+      source=@native.SourceLocation::new("metadata.wat", 4, 12),
       safepoint=Gc,
       live_gc_roots=[root],
     ),
@@ -2843,19 +2843,19 @@ test "AArch64 direct calls preserve LR and emit typed call relocations" {
     [],
   )
   let call = @semantic.SemanticCall::new(
-    External(@semantic.ExternalSymbol::new("runtime.poll")),
-    @semantic.Signature::new([], []),
+    External(@native.ExternalSymbol::new("runtime.poll")),
+    @native.Signature::new([], []),
     Platform,
-    @semantic.CallBehavior::new(ReadWrite, true, true, true, true),
+    @native.CallBehavior::new(ReadWrite, true, true, true, true),
   )
   builder.emit_with_metadata(
     Call(call),
     [],
     [],
     @semantic.InstructionMetadata::new(
-      Some(@semantic.SourceLocation::new("poll.wat", 5, 2)),
+      Some(@native.SourceLocation::new("poll.wat", 5, 2)),
       [builder.parameters()[0]],
-      stack_map=@semantic.StackMapMetadata::new(0, argument_root_count=1),
+      stack_map=@native.StackMapMetadata::new(0, argument_root_count=1),
     ),
   )
   |> ignore
@@ -2938,7 +2938,7 @@ test "AArch64 direct calls preserve LR and emit typed call relocations" {
 
 ///|
 test "AArch64 emits the internal result-area ABI" {
-  let types : Array[@semantic.ValueType] = [I64, I64, F32, V128]
+  let types : Array[@native.ValueType] = [I64, I64, F32, V128]
   let builder = @semantic.FunctionBuilder::new(
     "emitted_internal_result_area",
     Internal,
@@ -2946,10 +2946,10 @@ test "AArch64 emits the internal result-area ABI" {
     types,
   )
   let call = @semantic.SemanticCall::new(
-    Internal(@semantic.CodeSymbol::new("wasm.func.result_area")),
-    @semantic.Signature::new([Ptr64, ..types], types),
+    Internal(@native.CodeSymbol::new("wasm.func.result_area")),
+    @native.Signature::new([Ptr64, ..types], types),
     Internal,
-    @semantic.CallBehavior::new(ReadWrite, true, true, false, false),
+    @native.CallBehavior::new(ReadWrite, true, true, false, false),
   )
   let results = builder.emit(Call(call), builder.parameters(), types)
   builder.return_(results)
@@ -3047,7 +3047,7 @@ test "AArch64 emits the internal result-area ABI" {
 
 ///|
 test "AArch64 emits result-area forwarding for internal tail calls" {
-  let types : Array[@semantic.ValueType] = [I64, I64, F32, V128]
+  let types : Array[@native.ValueType] = [I64, I64, F32, V128]
   let builder = @semantic.FunctionBuilder::new(
     "emitted_internal_result_area_tail",
     Internal,
@@ -3055,10 +3055,10 @@ test "AArch64 emits result-area forwarding for internal tail calls" {
     types,
   )
   let call = @semantic.SemanticCall::new(
-    Internal(@semantic.CodeSymbol::new("wasm.func.result_area_tail")),
-    @semantic.Signature::new([Ptr64, ..types], types),
+    Internal(@native.CodeSymbol::new("wasm.func.result_area_tail")),
+    @native.Signature::new([Ptr64, ..types], types),
     Internal,
-    @semantic.CallBehavior::new(ReadWrite, true, true, false, false),
+    @native.CallBehavior::new(ReadWrite, true, true, false, false),
   )
   builder.tail_call(call, builder.parameters())
   let function = lower(
@@ -3368,16 +3368,16 @@ test "AArch64 emits noreturn calls and typed traps" {
     [],
   )
   let call = @semantic.SemanticCall::new(
-    External(@semantic.ExternalSymbol::new("runtime.abort")),
-    @semantic.Signature::new([], []),
+    External(@native.ExternalSymbol::new("runtime.abort")),
+    @native.Signature::new([], []),
     Platform,
-    @semantic.CallBehavior::new(ReadWrite, true, true, true, true),
+    @native.CallBehavior::new(ReadWrite, true, true, true, true),
   )
   noreturn.noreturn_call_with_metadata(
     call,
     [],
     @semantic.TerminatorMetadata::new(
-      Some(@semantic.SourceLocation::new("trap.wat", 9, 4)),
+      Some(@native.SourceLocation::new("trap.wat", 9, 4)),
       [noreturn.parameters()[0]],
     ),
   )
@@ -3460,7 +3460,7 @@ test "AArch64 emits noreturn calls and typed traps" {
     [],
   )
   trapped.trap(User(7))
-  trapped.set_terminator_source(@semantic.SourceLocation::new("trap.wat", 3, 9))
+  trapped.set_terminator_source(@native.SourceLocation::new("trap.wat", 3, 9))
   let trap_function = lower(
     trapped.finish_selection_plan(),
     test_lowering_context(),
@@ -3494,7 +3494,7 @@ test "AArch64 emits noreturn calls and typed traps" {
 
 ///|
 test "AArch64 platform calls store overflow arguments in the outgoing area" {
-  let parameter_types : Array[@semantic.ValueType] = Array::make(9, I64)
+  let parameter_types : Array[@native.ValueType] = Array::make(9, I64)
   let builder = @semantic.FunctionBuilder::new(
     "emitted_stack_call",
     Platform,
@@ -3502,10 +3502,10 @@ test "AArch64 platform calls store overflow arguments in the outgoing area" {
     [],
   )
   let call = @semantic.SemanticCall::new(
-    External(@semantic.ExternalSymbol::new("runtime.many")),
-    @semantic.Signature::new(parameter_types, []),
+    External(@native.ExternalSymbol::new("runtime.many")),
+    @native.Signature::new(parameter_types, []),
     Platform,
-    @semantic.CallBehavior::new(ReadWrite, true, true, false, false),
+    @native.CallBehavior::new(ReadWrite, true, true, false, false),
   )
   builder.emit(Call(call), builder.parameters(), []) |> ignore
   builder.return_([])
@@ -3580,10 +3580,10 @@ test "AArch64 internal calls emit code-symbol relocations" {
     [],
   )
   let call = @semantic.SemanticCall::new(
-    Internal(@semantic.CodeSymbol::new("wasm.func.8")),
-    @semantic.Signature::new([Ptr64], []),
+    Internal(@native.CodeSymbol::new("wasm.func.8")),
+    @native.Signature::new([Ptr64], []),
     Internal,
-    @semantic.CallBehavior::new(ReadWrite, true, true, false, false),
+    @native.CallBehavior::new(ReadWrite, true, true, false, false),
   )
   builder.emit(Call(call), builder.parameters(), []) |> ignore
   builder.return_([])
@@ -3643,7 +3643,7 @@ test "AArch64 internal calls emit code-symbol relocations" {
 
 ///|
 test "AArch64 calls zero-extend stack i32 arguments" {
-  let parameter_types : Array[@semantic.ValueType] = [
+  let parameter_types : Array[@native.ValueType] = [
     Ptr64,
     I32,
     I32,
@@ -3668,10 +3668,10 @@ test "AArch64 calls zero-extend stack i32 arguments" {
     )
   }
   let call = @semantic.SemanticCall::new(
-    Internal(@semantic.CodeSymbol::new("wasm.func.i32_stack_args")),
-    @semantic.Signature::new(parameter_types, []),
+    Internal(@native.CodeSymbol::new("wasm.func.i32_stack_args")),
+    @native.Signature::new(parameter_types, []),
     Internal,
-    @semantic.CallBehavior::new(ReadWrite, true, true, false, false),
+    @native.CallBehavior::new(ReadWrite, true, true, false, false),
   )
   builder.emit(Call(call), operands, []) |> ignore
   builder.return_([])
@@ -3687,7 +3687,7 @@ test "AArch64 calls zero-extend stack i32 arguments" {
 
 ///|
 test "AArch64 internal calls keep caller-owned outgoing stack arguments" {
-  let callee_parameter_types : Array[@semantic.ValueType] = [
+  let callee_parameter_types : Array[@native.ValueType] = [
     Ptr64,
     I64,
     I64,
@@ -3709,10 +3709,10 @@ test "AArch64 internal calls keep caller-owned outgoing stack arguments" {
     operands.push(builder.emit(I64Const(index.to_uint64()), [], [I64])[0])
   }
   let call = @semantic.SemanticCall::new(
-    Internal(@semantic.CodeSymbol::new("wasm.func.stack")),
-    @semantic.Signature::new(callee_parameter_types, []),
+    Internal(@native.CodeSymbol::new("wasm.func.stack")),
+    @native.Signature::new(callee_parameter_types, []),
     Internal,
-    @semantic.CallBehavior::new(ReadWrite, true, true, false, false),
+    @native.CallBehavior::new(ReadWrite, true, true, false, false),
   )
   builder.emit(Call(call), operands, []) |> ignore
   builder.return_([])
@@ -3826,9 +3826,9 @@ test "AArch64 indirect calls resolve callee and arguments before BLR" {
   let parameters = builder.parameters()
   let call = @semantic.SemanticCall::new(
     Indirect,
-    @semantic.Signature::new([Ptr64], []),
+    @native.Signature::new([Ptr64], []),
     Internal,
-    @semantic.CallBehavior::new(ReadWrite, true, true, false, false),
+    @native.CallBehavior::new(ReadWrite, true, true, false, false),
   )
   builder.emit(Call(call), [parameters[1], parameters[0]], []) |> ignore
   builder.return_([])
@@ -3892,10 +3892,10 @@ test "AArch64 true tail calls tear down the frame and emit jump relocations" {
     [I64],
   )
   let call = @semantic.SemanticCall::new(
-    Internal(@semantic.CodeSymbol::new("wasm.func.11")),
-    @semantic.Signature::new([Ptr64, I64], [I64]),
+    Internal(@native.CodeSymbol::new("wasm.func.11")),
+    @native.Signature::new([Ptr64, I64], [I64]),
     Internal,
-    @semantic.CallBehavior::new(ReadWrite, true, true, false, false),
+    @native.CallBehavior::new(ReadWrite, true, true, false, false),
   )
   builder.tail_call(call, builder.parameters())
   let function = lower(builder.finish_selection_plan(), test_lowering_context())
@@ -3935,9 +3935,9 @@ test "AArch64 indirect true tail calls resolve the callee before BR" {
   let parameters = builder.parameters()
   let call = @semantic.SemanticCall::new(
     Indirect,
-    @semantic.Signature::new([Ptr64], []),
+    @native.Signature::new([Ptr64], []),
     Internal,
-    @semantic.CallBehavior::new(ReadWrite, true, true, false, false),
+    @native.CallBehavior::new(ReadWrite, true, true, false, false),
   )
   builder.tail_call(call, [parameters[1], parameters[0]])
   let function = lower(builder.finish_selection_plan(), test_lowering_context())
@@ -3961,7 +3961,7 @@ test "AArch64 indirect true tail calls resolve the callee before BR" {
 
 ///|
 test "AArch64 true tail calls preserve caller SP with stack arguments" {
-  let callee_parameter_types : Array[@semantic.ValueType] = [
+  let callee_parameter_types : Array[@native.ValueType] = [
     Ptr64,
     I64,
     I64,
@@ -3983,10 +3983,10 @@ test "AArch64 true tail calls preserve caller SP with stack arguments" {
     operands.push(builder.emit(I64Const(index.to_uint64()), [], [I64])[0])
   }
   let call = @semantic.SemanticCall::new(
-    Internal(@semantic.CodeSymbol::new("wasm.func.12")),
-    @semantic.Signature::new(callee_parameter_types, []),
+    Internal(@native.CodeSymbol::new("wasm.func.12")),
+    @native.Signature::new(callee_parameter_types, []),
     Internal,
-    @semantic.CallBehavior::new(ReadWrite, true, true, false, false),
+    @native.CallBehavior::new(ReadWrite, true, true, false, false),
   )
   builder.tail_call(call, operands)
   let function = lower(builder.finish_selection_plan(), test_lowering_context())
@@ -4119,7 +4119,7 @@ test "AArch64 scalar memory emission records faulting instructions and legalizes
       [parameters[0]],
       [I64],
       @semantic.InstructionMetadata::new(
-        Some(@semantic.SourceLocation::new("memory.wat", 8, 13)),
+        Some(@native.SourceLocation::new("memory.wat", 8, 13)),
         [],
       ),
     )[0]
@@ -4216,7 +4216,7 @@ test "AArch64 checked division emits distinct trap sites" {
       [parameters[1], parameters[2]],
       [I64],
       @semantic.InstructionMetadata::new(
-        Some(@semantic.SourceLocation::new("divide.wat", 2, 5)),
+        Some(@native.SourceLocation::new("divide.wat", 2, 5)),
         [],
       ),
     )[0]
@@ -4686,25 +4686,23 @@ test "AArch64 emits null carriers references and scalar values" {
 
 ///|
 test "AArch64 emits environment paths and typed symbol relocations" {
-  let field = @semantic.EnvironmentField::new("runtime.memory.base", I64)
+  let field = @native.EnvironmentField::new("runtime.memory.base", I64)
   let builder = @semantic.FunctionBuilder::new(
     "emitted_addresses_and_environment",
     Internal,
     [Ptr64],
     [Ptr64, Ptr64, Ptr64, I64],
   )
-  let code = builder.emit(
-      CodeAddress(@semantic.CodeSymbol::new("callee")),
-      [],
-      [Ptr64],
-    )[0]
+  let code = builder.emit(CodeAddress(@native.CodeSymbol::new("callee")), [], [
+      Ptr64,
+    ])[0]
   let external = builder.emit(
-      ExternalAddress(@semantic.ExternalSymbol::new("runtime.helper")),
+      ExternalAddress(@native.ExternalSymbol::new("runtime.helper")),
       [],
       [Ptr64],
     )[0]
   let data = builder.emit(
-      DataAddress(@semantic.DataSymbol::new("constant.pool")),
+      DataAddress(@native.DataSymbol::new("constant.pool")),
       [],
       [Ptr64],
     )[0]
@@ -5368,7 +5366,7 @@ test "AArch64 trapping float-to-int emits three precise trap sites" {
       [parameters[1]],
       [I32],
       @semantic.InstructionMetadata::new(
-        Some(@semantic.SourceLocation::new("convert.wat", 6, 9)),
+        Some(@native.SourceLocation::new("convert.wat", 6, 9)),
         [],
       ),
     )[0]

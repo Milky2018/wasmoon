@@ -4120,7 +4120,7 @@ fn CodeBuffer::x86_emit_trap_imm16(self : CodeBuffer, imm16 : Int) -> Unit {
 ///|
 fn CodeBuffer::x86_emit_atomic_memory_prefix(
   self : CodeBuffer,
-  width : @semantic.AccessWidth,
+  width : @native.AccessWidth,
   reg : Int,
   base : Int,
 ) -> Unit {
@@ -4152,7 +4152,7 @@ fn CodeBuffer::x86_emit_atomic_modrm(
 ///|
 fn CodeBuffer::x86_emit_lock_xadd(
   self : CodeBuffer,
-  width : @semantic.AccessWidth,
+  width : @native.AccessWidth,
   base : Int,
   reg : Int,
 ) -> Unit {
@@ -4166,7 +4166,7 @@ fn CodeBuffer::x86_emit_lock_xadd(
 ///|
 fn CodeBuffer::x86_emit_xchg_memory(
   self : CodeBuffer,
-  width : @semantic.AccessWidth,
+  width : @native.AccessWidth,
   base : Int,
   reg : Int,
 ) -> Unit {
@@ -4178,7 +4178,7 @@ fn CodeBuffer::x86_emit_xchg_memory(
 ///|
 fn CodeBuffer::x86_emit_lock_cmpxchg(
   self : CodeBuffer,
-  width : @semantic.AccessWidth,
+  width : @native.AccessWidth,
   base : Int,
   replacement : Int,
 ) -> Unit {

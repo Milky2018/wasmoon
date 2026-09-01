@@ -42,7 +42,7 @@ pub(all) enum SelectionTerminatorView {
   SelectionReturn(ArrayView[Value])
   SelectionTailCall(SemanticCall, ArrayView[Value])
   SelectionNoReturnCall(SemanticCall, ArrayView[Value])
-  SelectionTrap(TrapReason)
+  SelectionTrap(@native.TrapReason)
 }
 
 ///|
@@ -72,21 +72,21 @@ pub fn SelectionView::name(self : SelectionView) -> String {
 }
 
 ///|
-pub fn SelectionView::protocol(self : SelectionView) -> CallProtocol {
+pub fn SelectionView::protocol(self : SelectionView) -> @native.CallProtocol {
   self.construction.protocol
 }
 
 ///|
 pub fn SelectionView::parameter_types(
   self : SelectionView,
-) -> ArrayView[ValueType] {
+) -> ArrayView[@native.ValueType] {
   self.construction.signature.params[:]
 }
 
 ///|
 pub fn SelectionView::result_types(
   self : SelectionView,
-) -> ArrayView[ValueType] {
+) -> ArrayView[@native.ValueType] {
   self.construction.signature.results[:]
 }
 
@@ -110,7 +110,7 @@ pub fn SelectionView::value_index(_self : SelectionView, value : Value) -> Int {
 pub fn SelectionView::value_type(
   self : SelectionView,
   value : Value,
-) -> ValueType {
+) -> @native.ValueType {
   self.construction.values[value.id].ty
 }
 
@@ -118,7 +118,7 @@ pub fn SelectionView::value_type(
 pub fn SelectionView::value_type_at(
   self : SelectionView,
   index : Int,
-) -> ValueType {
+) -> @native.ValueType {
   self.construction.values[index].ty
 }
 
@@ -290,7 +290,7 @@ pub fn SelectionTerminatorRecordView::kind(
 ///|
 pub fn SelectionTerminatorRecordView::source(
   self : SelectionTerminatorRecordView,
-) -> SourceLocation? {
+) -> @native.SourceLocation? {
   self.record.metadata.source
 }
 

@@ -4,17 +4,17 @@ fn test_environment() -> Environment {
     "wasm.runtime",
   )
   Environment::new(
-    fn(index) { @machv.CodeSymbol::new("wasm.function.\{index}") },
+    fn(index) { @native.CodeSymbol::new("wasm.function.\{index}") },
     fn(index) {
-      @machv.EnvironmentField::new("wasm.memory.\{index}.base", Ptr64)
+      @native.EnvironmentField::new("wasm.memory.\{index}.base", Ptr64)
     },
-    @machv.EnvironmentField::new("wasm.function_table", Ptr64),
+    @native.EnvironmentField::new("wasm.function_table", Ptr64),
     fn(index) {
-      @machv.EnvironmentField::new("wasm.table.\{index}.base", Ptr64)
+      @native.EnvironmentField::new("wasm.table.\{index}.base", Ptr64)
     },
     fn(index) { index + 100 },
     fn(helper) {
-      @machv.ExternalSymbol::new(runtime_symbols.symbol_name(helper))
+      @native.ExternalSymbol::new(runtime_symbols.symbol_name(helper))
     },
   )
 }

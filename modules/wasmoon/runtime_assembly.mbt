@@ -104,8 +104,8 @@ pub fn runtime_assembly() -> RuntimeAssembly {
     ],
     product_support_modules: ["Milky2018/wasmoon_jit"],
     reusable_modules: [
-      "Milky2018/wasm_core", "Milky2018/milkir", "Milky2018/machv", "Milky2018/regalloc",
-      "Milky2018/vcode_regalloc", "Milky2018/x64_target", "Milky2018/aarch64_target",
+      "Milky2018/wasm_core", "Milky2018/milkir", "Milky2018/native_types/semantic",
+      "Milky2018/regalloc", "Milky2018/vcode_regalloc", "Milky2018/x64_target", "Milky2018/aarch64_target",
     ],
   }
 }
@@ -120,7 +120,7 @@ pub fn compiler_infrastructure_assembly() -> CompilerInfrastructureAssembly rais
   entry.set_terminator(Return([]))
   let machv_function = @milkir_machv.lower_core_function_with_protocol(
     milk,
-    Platform,
+    @native.Platform,
   ) catch {
     err => raise WasmCompilerPipelineFailure(message=Repr(err).to_string())
   }

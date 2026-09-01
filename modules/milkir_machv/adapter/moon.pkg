@@ -1,3 +1,4 @@
 import {
-  "Milky2018/machv",
+  "Milky2018/native_types" @native,
+  "Milky2018/native_types/semantic" @machv,
 }

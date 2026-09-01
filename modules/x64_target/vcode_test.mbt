@@ -348,8 +348,8 @@ test "X64 verifier rejects a call with missing ABI results" {
   builder.append_body(
     entry,
     PlatformCall(
-      @semantic.ExternalSymbol::new("runtime.value"),
-      @semantic.Signature::new([], [I64]),
+      @native.ExternalSymbol::new("runtime.value"),
+      @native.Signature::new([], [I64]),
     ),
     [],
     [],
@@ -390,8 +390,8 @@ test "X64 verifier rejects an incomplete call clobber set" {
   builder.append_body(
     entry,
     PlatformCall(
-      @semantic.ExternalSymbol::new("runtime.effect"),
-      @semantic.Signature::new([], []),
+      @native.ExternalSymbol::new("runtime.effect"),
+      @native.Signature::new([], []),
     ),
     [],
     [],

@@ -341,9 +341,7 @@ fn resolve_static_targets(
     )
     resolve_target_before_allocation(installer, resolved, external_target)
     let address = lookup_resolved_target(resolved, external_target).unwrap()
-    resolved.push(
-      (Code(@semantic_machv.CodeSymbol::new(import_.symbol.name)), address),
-    )
+    resolved.push((Code(@native.CodeSymbol::new(import_.symbol.name)), address))
   }
   for function in artifact.functions {
     for relocation in function.relocations {

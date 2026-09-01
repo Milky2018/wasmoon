@@ -57,7 +57,7 @@ fn fp_transfer_scratch_regs() -> Array[@vcode.PhysicalReg] {
 }
 
 ///|
-fn transfer_scratch_for_type(ty : @semantic.ValueType) -> @vcode.PhysicalReg {
+fn transfer_scratch_for_type(ty : @native.ValueType) -> @vcode.PhysicalReg {
   match @vcode.reg_class_for_value_type(ty) {
     Int => int_transfer_scratch()
     Float | Vector | FpVector => fp_transfer_scratch()

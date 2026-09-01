@@ -43,7 +43,7 @@ priv struct InstructionData[Inst] {
 pub struct Function[Inst] {
   priv owner : Ref[Unit]
   priv name : String
-  priv protocol : @semantic.CallProtocol
+  priv protocol : @native.CallProtocol
   priv parameters : Array[Value]
   priv result_types : Array[ValueType]
   priv values : Array[ValueData]
@@ -57,7 +57,7 @@ pub struct Function[Inst] {
 ///|
 fn[Inst] Function::new(
   name : String,
-  protocol : @semantic.CallProtocol,
+  protocol : @native.CallProtocol,
   parameter_types : Array[ValueType],
   result_types : Array[ValueType],
 ) -> Function[Inst] {
@@ -85,9 +85,7 @@ fn[Inst] Function::new(
 }
 
 ///|
-pub fn[Inst] Function::protocol(
-  self : Function[Inst],
-) -> @semantic.CallProtocol {
+pub fn[Inst] Function::protocol(self : Function[Inst]) -> @native.CallProtocol {
   self.protocol
 }
 

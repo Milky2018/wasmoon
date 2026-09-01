@@ -2,7 +2,7 @@
 package "Milky2018/vcode"
 
 import {
-  "Milky2018/machv",
+  "Milky2018/native_types",
   "Milky2018/vcode/allocation_types",
   "moonbitlang/core/debug",
 }
@@ -14,7 +14,7 @@ pub fn plan_parallel_moves(Array[ParallelMove], @allocation_types.PhysicalReg, @
 
 pub fn plan_resolved_call_transfers(Allocation, Array[CallTransfer], Int, Int, Array[@allocation_types.PhysicalReg], Array[@allocation_types.PhysicalReg], @allocation_types.PhysicalReg, @allocation_types.PhysicalReg, Array[Location]) -> ResolvedCallTransferPlan raise CallTransferError
 
-pub fn reg_class_for_value_type(@machv.ValueType) -> @allocation_types.RegClass
+pub fn reg_class_for_value_type(@native_types.ValueType) -> @allocation_types.RegClass
 
 pub fn resolve_parallel_moves(Array[ParallelMove], Array[@allocation_types.PhysicalReg], Array[@allocation_types.PhysicalReg]) -> Array[ParallelMove] raise MoveResolveError
 
@@ -59,7 +59,7 @@ pub impl Show for AllocationVerifyError
 pub suberror CallTransferError {
   InvalidSourceClass(index~ : Int)
   ForeignSourceStack(index~ : Int)
-  InvalidSourceStackType(index~ : Int, expected~ : @machv.ValueType, actual~ : @machv.ValueType)
+  InvalidSourceStackType(index~ : Int, expected~ : @native_types.ValueType, actual~ : @native_types.ValueType)
   InvalidSourceStackLayout(index~ : Int)
   InvalidDestinationClass(index~ : Int)
   InvalidStackOffset(index~ : Int, offset~ : Int)
@@ -173,7 +173,7 @@ pub fn Allocation::allocated_value_location_at(Self, Int) -> @allocation_types.A
 pub fn Allocation::assign_operand(Self, Instruction, Int, @allocation_types.PhysicalReg) -> Bool
 pub fn Allocation::assign_operand_location(Self, Instruction, Int, Location) -> Bool
 pub fn Allocation::assign_value(Self, Value, Location) -> Bool
-pub fn Allocation::create_stack_slot(Self, @machv.ValueType, Int, Int) -> StackSlot
+pub fn Allocation::create_stack_slot(Self, @native_types.ValueType, Int, Int) -> StackSlot
 pub fn Allocation::edge_edits_at(Self, Block, Int) -> ArrayView[Edit]
 pub fn Allocation::edit_count(Self) -> Int
 pub fn Allocation::edits(Self) -> Array[Edit]
@@ -186,7 +186,7 @@ pub fn Allocation::stack_slot_alignment(Self, StackSlot) -> Int?
 pub fn Allocation::stack_slot_at(Self, Int) -> StackSlot?
 pub fn Allocation::stack_slot_count(Self) -> Int
 pub fn Allocation::stack_slot_size(Self, StackSlot) -> Int?
-pub fn Allocation::stack_slot_type(Self, StackSlot) -> @machv.ValueType?
+pub fn Allocation::stack_slot_type(Self, StackSlot) -> @native_types.ValueType?
 pub fn Allocation::statistics(Self) -> AllocationStatistics
 pub fn Allocation::summary(Self) -> String
 pub fn Allocation::value_location(Self, Value) -> Location?
@@ -206,7 +206,7 @@ pub fn[Inst] AllocationBuilder::from_plan_storage(Function[Inst], Array[@allocat
 pub fn[Inst] AllocationBuilder::new(Function[Inst]) -> Self[Inst]
 pub fn[Inst] AllocationBuilder::operand_value_at(Self[Inst], Int, Int) -> Int
 pub fn[Inst] AllocationBuilder::value_location(Self[Inst], Int) -> @allocation_types.AllocationLocation?
-pub fn[Inst] AllocationBuilder::value_type_at(Self[Inst], Int) -> @machv.ValueType
+pub fn[Inst] AllocationBuilder::value_type_at(Self[Inst], Int) -> @native_types.ValueType
 
 pub struct AllocationStatistics {
   spill_slots : Int
@@ -236,20 +236,20 @@ pub struct Builder[Inst] {
 }
 pub fn[Inst] Builder::append_body(Self[Inst], Block, Inst, Array[Input], Array[Output], Array[@allocation_types.PhysicalReg], InstructionMetadata) -> (Instruction, Array[Value]) raise VCodeBuildError
 pub fn[Inst] Builder::block_parameter(Self[Inst], Block, Int) -> Value raise VCodeBuildError
-pub fn[Inst] Builder::create_block(Self[Inst], Array[@machv.ValueType]) -> Block
+pub fn[Inst] Builder::create_block(Self[Inst], Array[@native_types.ValueType]) -> Block
 pub fn[Inst] Builder::entry_block(Self[Inst]) -> Block
 pub fn[Inst] Builder::finish(Self[Inst]) -> Function[Inst]
-pub fn[Inst] Builder::new(String, Array[@machv.ValueType]) -> Self[Inst]
-pub fn[Inst] Builder::new_with_protocol(String, @machv.CallProtocol, Array[@machv.ValueType], Array[@machv.ValueType]) -> Self[Inst]
-pub fn[Inst] Builder::new_with_results(String, Array[@machv.ValueType], Array[@machv.ValueType]) -> Self[Inst]
+pub fn[Inst] Builder::new(String, Array[@native_types.ValueType]) -> Self[Inst]
+pub fn[Inst] Builder::new_with_protocol(String, @native_types.CallProtocol, Array[@native_types.ValueType], Array[@native_types.ValueType]) -> Self[Inst]
+pub fn[Inst] Builder::new_with_results(String, Array[@native_types.ValueType], Array[@native_types.ValueType]) -> Self[Inst]
 pub fn[Inst] Builder::parameter(Self[Inst], Int) -> Value raise VCodeBuildError
 pub fn[Inst] Builder::set_terminator(Self[Inst], Block, Inst, Array[Input], Array[Edge], Array[@allocation_types.PhysicalReg], InstructionMetadata) -> Instruction raise VCodeBuildError
 
 pub struct CallTransfer {
   // private fields
 }
-pub fn CallTransfer::to_register(@machv.ValueType, Location, @allocation_types.PhysicalReg) -> Self
-pub fn CallTransfer::to_stack(@machv.ValueType, Location, Int) -> Self
+pub fn CallTransfer::to_register(@native_types.ValueType, Location, @allocation_types.PhysicalReg) -> Self
+pub fn CallTransfer::to_stack(@native_types.ValueType, Location, Int) -> Self
 
 pub struct CallTransferPlan {
   stack_transfers : Array[StackArgumentTransfer]
@@ -264,12 +264,12 @@ pub struct CheckedBuilder[Inst] {
 }
 pub fn[Inst] CheckedBuilder::append_body(Self[Inst], Block, Inst, Array[Input], Array[Output], Array[@allocation_types.PhysicalReg], InstructionMetadata) -> (Instruction, Array[Value]) raise VCodeBuildError
 pub fn[Inst] CheckedBuilder::block_parameter(Self[Inst], Block, Int) -> Value raise VCodeBuildError
-pub fn[Inst] CheckedBuilder::create_block(Self[Inst], Array[@machv.ValueType]) -> Block
+pub fn[Inst] CheckedBuilder::create_block(Self[Inst], Array[@native_types.ValueType]) -> Block
 pub fn[Inst] CheckedBuilder::entry_block(Self[Inst]) -> Block
 pub fn[Inst] CheckedBuilder::finish(Self[Inst]) -> Function[Inst] raise VCodeBuildError
-pub fn[Inst] CheckedBuilder::new(String, Array[@machv.ValueType]) -> Self[Inst]
-pub fn[Inst] CheckedBuilder::new_with_protocol(String, @machv.CallProtocol, Array[@machv.ValueType], Array[@machv.ValueType]) -> Self[Inst]
-pub fn[Inst] CheckedBuilder::new_with_results(String, Array[@machv.ValueType], Array[@machv.ValueType]) -> Self[Inst]
+pub fn[Inst] CheckedBuilder::new(String, Array[@native_types.ValueType]) -> Self[Inst]
+pub fn[Inst] CheckedBuilder::new_with_protocol(String, @native_types.CallProtocol, Array[@native_types.ValueType], Array[@native_types.ValueType]) -> Self[Inst]
+pub fn[Inst] CheckedBuilder::new_with_results(String, Array[@native_types.ValueType], Array[@native_types.ValueType]) -> Self[Inst]
 pub fn[Inst] CheckedBuilder::parameter(Self[Inst], Int) -> Value raise VCodeBuildError
 pub fn[Inst] CheckedBuilder::set_terminator(Self[Inst], Block, Inst, Array[Input], Array[Edge], Array[@allocation_types.PhysicalReg], InstructionMetadata) -> Instruction raise VCodeBuildError
 
@@ -325,7 +325,7 @@ pub fn[Inst] Function::allocation_entry_value_at(Self[Inst], Int) -> @allocation
 pub fn[Inst] Function::allocation_instruction_clobbers(Self[Inst], Int) -> ArrayView[@allocation_types.PhysicalReg]
 pub fn[Inst] Function::allocation_instruction_operands(Self[Inst], Int) -> ArrayView[@allocation_types.AllocationOperand]
 pub fn[Inst] Function::allocation_layout_block_id_at(Self[Inst], Int) -> Int
-pub fn[Inst] Function::allocation_value_type_at(Self[Inst], Int) -> @machv.ValueType
+pub fn[Inst] Function::allocation_value_type_at(Self[Inst], Int) -> @native_types.ValueType
 pub fn[Inst] Function::allocation_vreg(Self[Inst], Value) -> @allocation_types.VirtualReg?
 pub fn[Inst] Function::before(Self[Inst], Instruction) -> ProgramPoint?
 pub fn[Inst] Function::block_at(Self[Inst], Int) -> Block?
@@ -365,14 +365,14 @@ pub fn[Inst] Function::name(Self[Inst]) -> String
 pub fn[Inst] Function::parameter_at(Self[Inst], Int) -> Value?
 pub fn[Inst] Function::parameter_count(Self[Inst]) -> Int
 pub fn[Inst] Function::program_point_instruction(Self[Inst], ProgramPoint) -> Instruction?
-pub fn[Inst] Function::protocol(Self[Inst]) -> @machv.CallProtocol
-pub fn[Inst] Function::result_types(Self[Inst]) -> Array[@machv.ValueType]
+pub fn[Inst] Function::protocol(Self[Inst]) -> @native_types.CallProtocol
+pub fn[Inst] Function::result_types(Self[Inst]) -> Array[@native_types.ValueType]
 pub fn[Inst] Function::set_layout(Self[Inst], Array[Block]) -> Unit raise VCodeBuildError
 pub fn[Inst : @debug.Debug] Function::summary(Self[Inst]) -> String
 pub fn[Inst] Function::value_at(Self[Inst], Int) -> Value?
 pub fn[Inst] Function::value_count(Self[Inst]) -> Int
 pub fn[Inst] Function::value_index(Self[Inst], Value) -> Int?
-pub fn[Inst] Function::value_type(Self[Inst], Value) -> @machv.ValueType?
+pub fn[Inst] Function::value_type(Self[Inst], Value) -> @native_types.ValueType?
 
 pub struct Input {
   value : Value
@@ -399,15 +399,15 @@ pub impl Show for Instruction
 pub impl @debug.Debug for Instruction
 
 pub struct InstructionMetadata {
-  source : @machv.SourceLocation?
-  trap : @machv.TrapReason?
-  safepoint : @machv.SafepointKind?
+  source : @native_types.SourceLocation?
+  trap : @native_types.TrapReason?
+  safepoint : @native_types.SafepointKind?
   live_gc_roots : Array[Value]
   symbol : SymbolReference?
-  stack_map : @machv.StackMapMetadata?
+  stack_map : @native_types.StackMapMetadata?
 }
 pub fn InstructionMetadata::empty() -> Self
-pub fn InstructionMetadata::new(source? : @machv.SourceLocation, trap? : @machv.TrapReason, safepoint? : @machv.SafepointKind, live_gc_roots? : Array[Value], symbol? : SymbolReference, stack_map? : @machv.StackMapMetadata) -> Self
+pub fn InstructionMetadata::new(source? : @native_types.SourceLocation, trap? : @native_types.TrapReason, safepoint? : @native_types.SafepointKind, live_gc_roots? : Array[Value], symbol? : SymbolReference, stack_map? : @native_types.StackMapMetadata) -> Self
 pub fn InstructionMetadata::safepoint(Array[Value]) -> Self
 
 pub(all) enum Location {
@@ -442,25 +442,25 @@ pub fn OperandConstraint::not_equal(Self, Self) -> Bool
 pub fn OperandConstraint::to_repr(Self) -> @debug.Repr
 
 pub struct Output {
-  ty : @machv.ValueType
+  ty : @native_types.ValueType
   constraint : OperandConstraint
   preference : @allocation_types.PhysicalReg?
   timing : @allocation_types.OperandTiming
 }
-pub fn Output::any(@machv.ValueType) -> Self
-pub fn Output::any_location(@machv.ValueType) -> Self
-pub fn Output::fixed(@machv.ValueType, @allocation_types.PhysicalReg) -> Self
-pub fn Output::tied(@machv.ValueType, Int) -> Self
+pub fn Output::any(@native_types.ValueType) -> Self
+pub fn Output::any_location(@native_types.ValueType) -> Self
+pub fn Output::fixed(@native_types.ValueType, @allocation_types.PhysicalReg) -> Self
+pub fn Output::tied(@native_types.ValueType, Int) -> Self
 pub fn Output::with_preference(Self, @allocation_types.PhysicalReg) -> Self
 pub fn Output::with_timing(Self, @allocation_types.OperandTiming) -> Self
 
 pub struct ParallelMove {
-  ty : @machv.ValueType
+  ty : @native_types.ValueType
   from : Location
   to : Location
 } derive(Eq, @debug.Debug)
 pub fn ParallelMove::equal(Self, Self) -> Bool
-pub fn ParallelMove::new(@machv.ValueType, Location, Location) -> Self
+pub fn ParallelMove::new(@native_types.ValueType, Location, Location) -> Self
 pub fn ParallelMove::not_equal(Self, Self) -> Bool
 pub fn ParallelMove::to_repr(Self) -> @debug.Repr
 
@@ -516,15 +516,15 @@ pub fn ResolvedMovePlan::to_repr(Self) -> @debug.Repr
 
 pub(all) enum ResolvedMoveStep {
   Transfer(ParallelMove)
-  SpillScratchToEmergency(ty~ : @machv.ValueType, scratch~ : @allocation_types.PhysicalReg)
-  ReloadScratchFromEmergency(ty~ : @machv.ValueType, scratch~ : @allocation_types.PhysicalReg)
+  SpillScratchToEmergency(ty~ : @native_types.ValueType, scratch~ : @allocation_types.PhysicalReg)
+  ReloadScratchFromEmergency(ty~ : @native_types.ValueType, scratch~ : @allocation_types.PhysicalReg)
 } derive(Eq, @debug.Debug)
 pub fn ResolvedMoveStep::equal(Self, Self) -> Bool
 pub fn ResolvedMoveStep::not_equal(Self, Self) -> Bool
 pub fn ResolvedMoveStep::to_repr(Self) -> @debug.Repr
 
 pub struct StackArgumentTransfer {
-  ty : @machv.ValueType
+  ty : @native_types.ValueType
   source : Location
   offset : Int
   scratch : @allocation_types.PhysicalReg?
@@ -543,9 +543,9 @@ pub impl Eq for StackSlot
 pub impl @debug.Debug for StackSlot
 
 pub(all) enum SymbolReference {
-  Code(@machv.CodeSymbol)
-  External(@machv.ExternalSymbol)
-  Data(@machv.DataSymbol)
+  Code(@native_types.CodeSymbol)
+  External(@native_types.ExternalSymbol)
+  Data(@native_types.DataSymbol)
 } derive(Eq, @debug.Debug)
 pub fn SymbolReference::equal(Self, Self) -> Bool
 pub fn SymbolReference::not_equal(Self, Self) -> Bool
@@ -602,8 +602,8 @@ pub using @allocation_types {type PhysicalReg}
 
 pub using @allocation_types {type RegClass}
 
-pub using @machv {type SafepointKind}
+pub using @native_types {type SafepointKind}
 
-pub using @machv {type ValueType}
+pub using @native_types {type ValueType}
 
 // Traits

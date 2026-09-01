@@ -13,7 +13,7 @@ fn wasmoon_semantic_environment(
   let layout = vmcontext_layout()
   let field_paths : Map[String, Array[Int]] = Map([])
   let runtime_symbols = wasm_runtime_symbols()
-  let function_table_field = @semantic_machv.EnvironmentField::new(
+  let function_table_field = @native.EnvironmentField::new(
     "wasmoon.vmctx.function_table",
     Ptr64,
   )
@@ -22,10 +22,10 @@ fn wasmoon_semantic_environment(
   let wasm = @wasm_machv.Environment::new(
     fn(index) {
       let name = "wasm.func.\{index}"
-      @semantic_machv.CodeSymbol::new(name)
+      @native.CodeSymbol::new(name)
     },
     fn(index) {
-      let field = @semantic_machv.EnvironmentField::new(
+      let field = @native.EnvironmentField::new(
         "wasmoon.vmctx.memory.\{index}.base",
         Ptr64,
       )
@@ -39,7 +39,7 @@ fn wasmoon_semantic_environment(
     },
     function_table_field,
     fn(index) {
-      let field = @semantic_machv.EnvironmentField::new(
+      let field = @native.EnvironmentField::new(
         "wasmoon.vmctx.table.\{index}.base",
         Ptr64,
       )
@@ -62,7 +62,7 @@ fn wasmoon_semantic_environment(
       }
     },
     fn(helper) {
-      @semantic_machv.ExternalSymbol::new(runtime_symbols.symbol_name(helper))
+      @native.ExternalSymbol::new(runtime_symbols.symbol_name(helper))
     },
   )
   { wasm, field_paths, runtime_symbols, }
@@ -71,15 +71,15 @@ fn wasmoon_semantic_environment(
 ///|
 fn wasmoon_allocation_symbols(
   environment : WasmoonSemanticEnvironment,
-) -> Array[@semantic_machv.ExternalSymbol] {
+) -> Array[@native.ExternalSymbol] {
   [
-    @semantic_machv.ExternalSymbol::new(
+    @native.ExternalSymbol::new(
       environment.runtime_symbols.symbol_name(GcAllocStructSlow),
     ),
-    @semantic_machv.ExternalSymbol::new(
+    @native.ExternalSymbol::new(
       environment.runtime_symbols.symbol_name(GcAllocArrayFromValuesSlow),
     ),
-    @semantic_machv.ExternalSymbol::new(
+    @native.ExternalSymbol::new(
       environment.runtime_symbols.symbol_name(GcAllocArraySlow),
     ),
   ]
@@ -94,15 +94,15 @@ fn build_wasmoon_aarch64_target(
 ) -> AArch64TargetCompilation raise JitPipelineError {
   build_aarch64_target(
     semantic,
-    environment_field_path=fn(field : @semantic_machv.EnvironmentField) {
+    environment_field_path=fn(field : @native.EnvironmentField) {
       environment.field_paths.get(field.name)
     },
     allocation_symbols=wasmoon_allocation_symbols(environment),
     record_metrics~,
     compilation_session~,
     root_scope_symbols=(
-      @semantic_machv.ExternalSymbol::new(gc_push_root_scope_symbol()),
-      @semantic_machv.ExternalSymbol::new(gc_pop_root_scope_symbol()),
+      @native.ExternalSymbol::new(gc_push_root_scope_symbol()),
+      @native.ExternalSymbol::new(gc_pop_root_scope_symbol()),
     ),
   )
 }
@@ -116,15 +116,15 @@ fn build_wasmoon_x64_target(
 ) -> X64TargetCompilation raise JitPipelineError {
   build_x64_target(
     semantic,
-    environment_field_path=fn(field : @semantic_machv.EnvironmentField) {
+    environment_field_path=fn(field : @native.EnvironmentField) {
       environment.field_paths.get(field.name)
     },
     allocation_symbols=wasmoon_allocation_symbols(environment),
     record_metrics~,
     compilation_session~,
     root_scope_symbols=(
-      @semantic_machv.ExternalSymbol::new(gc_push_root_scope_symbol()),
-      @semantic_machv.ExternalSymbol::new(gc_pop_root_scope_symbol()),
+      @native.ExternalSymbol::new(gc_push_root_scope_symbol()),
+      @native.ExternalSymbol::new(gc_pop_root_scope_symbol()),
     ),
   )
 }
@@ -200,13 +200,13 @@ pub fn compile_wasm_body_diagnostics_for_target(
       lower_wasm_body_prepared_selection_with_environment(
         function, validation_context, environment,
       ),
-      environment_field_path=fn(field : @semantic_machv.EnvironmentField) {
+      environment_field_path=fn(field : @native.EnvironmentField) {
         environment.field_paths.get(field.name)
       },
       allocation_symbols=wasmoon_allocation_symbols(environment),
       root_scope_symbols=(
-        @semantic_machv.ExternalSymbol::new(gc_push_root_scope_symbol()),
-        @semantic_machv.ExternalSymbol::new(gc_pop_root_scope_symbol()),
+        @native.ExternalSymbol::new(gc_push_root_scope_symbol()),
+        @native.ExternalSymbol::new(gc_pop_root_scope_symbol()),
       ),
     )
     return {
@@ -224,13 +224,13 @@ pub fn compile_wasm_body_diagnostics_for_target(
     lower_wasm_body_prepared_selection_with_environment(
       function, validation_context, environment,
     ),
-    environment_field_path=fn(field : @semantic_machv.EnvironmentField) {
+    environment_field_path=fn(field : @native.EnvironmentField) {
       environment.field_paths.get(field.name)
     },
     allocation_symbols=wasmoon_allocation_symbols(environment),
     root_scope_symbols=(
-      @semantic_machv.ExternalSymbol::new(gc_push_root_scope_symbol()),
-      @semantic_machv.ExternalSymbol::new(gc_pop_root_scope_symbol()),
+      @native.ExternalSymbol::new(gc_push_root_scope_symbol()),
+      @native.ExternalSymbol::new(gc_pop_root_scope_symbol()),
     ),
   )
   {

@@ -66,7 +66,8 @@ fn SelectionPlan::mark_gc_use(
   definitions : Array[Bool],
   uses : Array[Bool],
 ) -> Unit {
-  if self.construction.values[value.id].ty == GcRef64 && !definitions[value.id] {
+  if self.construction.values[value.id].ty == @native.GcRef64 &&
+    !definitions[value.id] {
     uses[value.id] = true
   }
 }
@@ -86,13 +87,13 @@ fn SelectionPlan::compute_gc_liveness(
     let uses = Array::make(value_count, false)
     if block_id == 0 {
       for parameter in self.construction.parameters {
-        if self.construction.values[parameter.id].ty == GcRef64 {
+        if self.construction.values[parameter.id].ty == @native.GcRef64 {
           definitions[parameter.id] = true
         }
       }
     }
     for parameter in block.parameters {
-      if self.construction.values[parameter.id].ty == GcRef64 {
+      if self.construction.values[parameter.id].ty == @native.GcRef64 {
         definitions[parameter.id] = true
       }
     }
@@ -102,7 +103,7 @@ fn SelectionPlan::compute_gc_liveness(
         self.mark_gc_use(operand, definitions, uses)
       }
       for result in data.results {
-        if self.construction.values[result.id].ty == GcRef64 {
+        if self.construction.values[result.id].ty == @native.GcRef64 {
           definitions[result.id] = true
         }
       }
@@ -176,7 +177,7 @@ fn SelectionPlan::require_gc_root_coverage(
   }
   for value_id, is_live in live {
     if is_live &&
-      self.construction.values[value_id].ty == GcRef64 &&
+      self.construction.values[value_id].ty == @native.GcRef64 &&
       !declared[value_id] {
       raise MissingGcRoot(block_id~, instruction_id~, value_id~)
     }
@@ -191,7 +192,7 @@ fn SelectionPlan::verify_gc_safepoint_roots(
 ) -> Unit raise MachVVerifyError {
   let mut has_gc_values = false
   for value in self.construction.values {
-    if value.ty == GcRef64 {
+    if value.ty == @native.GcRef64 {
       has_gc_values = true
       break
     }
@@ -204,7 +205,7 @@ fn SelectionPlan::verify_gc_safepoint_roots(
     let live = live_out[block_id].copy()
     if block.terminator is Some(record) {
       for value in terminator_values(record.kind) {
-        if self.construction.values[value.id].ty == GcRef64 {
+        if self.construction.values[value.id].ty == @native.GcRef64 {
           live[value.id] = true
         }
       }
@@ -226,12 +227,12 @@ fn SelectionPlan::verify_gc_safepoint_roots(
       let instruction = block.instructions[position]
       let data = self.construction.instructions[instruction.id]
       for result in data.results {
-        if self.construction.values[result.id].ty == GcRef64 {
+        if self.construction.values[result.id].ty == @native.GcRef64 {
           live[result.id] = false
         }
       }
       for operand in data.operands {
-        if self.construction.values[operand.id].ty == GcRef64 {
+        if self.construction.values[operand.id].ty == @native.GcRef64 {
           live[operand.id] = true
         }
       }

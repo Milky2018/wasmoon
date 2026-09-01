@@ -23,7 +23,7 @@ fn align_up(value : Int, alignment : Int) -> Int {
 }
 
 ///|
-fn gpr_width(ty : @semantic.ValueType) -> GprWidth? {
+fn gpr_width(ty : @native.ValueType) -> GprWidth? {
   match ty {
     I32 => Some(W32)
     I64 => Some(W64)
@@ -32,7 +32,7 @@ fn gpr_width(ty : @semantic.ValueType) -> GprWidth? {
 }
 
 ///|
-fn optional_gpr_width(ty : @semantic.ValueType?) -> GprWidth? {
+fn optional_gpr_width(ty : @native.ValueType?) -> GprWidth? {
   match ty {
     Some(ty) => gpr_width(ty)
     None => None
@@ -40,7 +40,7 @@ fn optional_gpr_width(ty : @semantic.ValueType?) -> GprWidth? {
 }
 
 ///|
-fn scalar_access_width(ty : @semantic.ValueType) -> @semantic.AccessWidth? {
+fn scalar_access_width(ty : @native.ValueType) -> @native.AccessWidth? {
   match ty {
     I32 | F32 => Some(W32)
     I64 | Ptr64 | GcRef64 | F64 => Some(W64)
@@ -197,7 +197,7 @@ fn lower_conversion(conversion : @semantic.ConversionOp) -> X64Conversion? {
 }
 
 ///|
-fn float_value_type(ty : @semantic.FloatType) -> @semantic.ValueType {
+fn float_value_type(ty : @native.FloatType) -> @native.ValueType {
   match ty {
     F32 => F32
     F64 => F64
@@ -206,9 +206,9 @@ fn float_value_type(ty : @semantic.FloatType) -> @semantic.ValueType {
 
 ///|
 fn float_to_int_bounds(
-  source : @semantic.FloatType,
-  result : @semantic.IntegerType,
-  signedness : @semantic.Signedness,
+  source : @native.FloatType,
+  result : @native.IntegerType,
+  signedness : @native.Signedness,
 ) -> (UInt64, UInt64, Bool) {
   match (source, result, signedness) {
     (F32, I32, Signed) => (0xCF000000UL, 0x4F000000UL, false)
@@ -260,7 +260,7 @@ fn map_instruction_operands(
 fn instruction_result_types(
   function : @semantic.SelectionView,
   instruction : @semantic.Instruction,
-) -> Array[@semantic.ValueType] {
+) -> Array[@native.ValueType] {
   function
   .instruction(instruction)
   .results()
@@ -309,10 +309,10 @@ fn append_body(
 fn source_metadata(
   metadata : @semantic.InstructionMetadataView,
   values : Array[@vcode.Value],
-  semantics : @semantic.OperationSemantics,
-  trap? : @semantic.TrapReason,
+  semantics : @native.OperationSemantics,
+  trap? : @native.TrapReason,
 ) -> @vcode.InstructionMetadata {
-  let safepoint : @semantic.SafepointKind? = match
+  let safepoint : @native.SafepointKind? = match
     (semantics.gc_safepoint, semantics.cancellation_safepoint) {
     (true, true) => Some(GcAndCancellation)
     (true, false) => Some(Gc)
@@ -340,10 +340,10 @@ fn source_metadata(
 
 ///|
 fn terminator_call_metadata(
-  source : @semantic.SourceLocation?,
-  semantics : @semantic.OperationSemantics,
+  source : @native.SourceLocation?,
+  semantics : @native.OperationSemantics,
 ) -> @vcode.InstructionMetadata {
-  let safepoint : @semantic.SafepointKind? = match
+  let safepoint : @native.SafepointKind? = match
     (semantics.gc_safepoint, semantics.cancellation_safepoint) {
     (true, true) => Some(GcAndCancellation)
     (true, false) => Some(Gc)
@@ -358,8 +358,8 @@ fn terminator_call_metadata(
 
 ///|
 fn terminator_trap_metadata(
-  source : @semantic.SourceLocation?,
-  reason : @semantic.TrapReason,
+  source : @native.SourceLocation?,
+  reason : @native.TrapReason,
 ) -> @vcode.InstructionMetadata {
   match source {
     Some(source) => @vcode.InstructionMetadata::new(source~, trap=reason)
@@ -383,7 +383,7 @@ fn call_argument_inputs(
 
 ///|
 fn abi_home_output(
-  ty : @semantic.ValueType,
+  ty : @native.ValueType,
   incoming : @vcode.PhysicalReg,
 ) -> @vcode.Output {
   let output = @vcode.Output::any_location(ty)
@@ -400,7 +400,7 @@ fn lower_direct_platform_call(
   block : @vcode.Block,
   call : @semantic.SemanticCall,
   operands : Array[@vcode.Value],
-  result_types : Array[@semantic.ValueType],
+  result_types : Array[@native.ValueType],
   metadata : @vcode.InstructionMetadata,
 ) -> Array[@vcode.Value] raise X64LowerError {
   if call.protocol != Platform {
@@ -478,7 +478,7 @@ fn lower_internal_call(
   block : @vcode.Block,
   call : @semantic.SemanticCall,
   operands : Array[@vcode.Value],
-  result_types : Array[@semantic.ValueType],
+  result_types : Array[@native.ValueType],
   metadata : @vcode.InstructionMetadata,
 ) -> Array[@vcode.Value] raise X64LowerError {
   if call.protocol != Internal {
@@ -1232,7 +1232,7 @@ fn lower_parameters(
   let entry = builder.entry_block()
   let parameter_types = function.parameter_types().to_owned()
   let result_types = function.result_types().to_owned()
-  let signature = @semantic.Signature::new(parameter_types, result_types)
+  let signature = @native.Signature::new(parameter_types, result_types)
   let layout = match function.protocol() {
     Platform => platform_call_layout(signature.params)
     Internal =>
@@ -1294,7 +1294,7 @@ fn lower_return_values(
   builder : @vcode.CheckedBuilder[X64Inst],
   block : @vcode.Block,
   values : Array[@vcode.Value],
-  result_types : Array[@semantic.ValueType],
+  result_types : Array[@native.ValueType],
   result_area : @vcode.Value?,
 ) -> Unit raise X64LowerError {
   let locations : Array[CallResultLocation] = match function.protocol() {
@@ -1366,7 +1366,7 @@ fn construct_validated_semantic(
   on_event(TargetConstructionStarted)
   let parameter_types = function.parameter_types().to_owned()
   let result_types = function.result_types().to_owned()
-  let signature = @semantic.Signature::new(parameter_types, result_types)
+  let signature = @native.Signature::new(parameter_types, result_types)
   let builder : @vcode.CheckedBuilder[X64Inst] = @vcode.CheckedBuilder::new_with_protocol(
     function.name(),
     function.protocol(),

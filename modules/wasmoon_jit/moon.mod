@@ -18,7 +18,7 @@ import {
   "Milky2018/wasm_milkir@0.12.6",
   "Milky2018/wasm_machv@0.12.6",
   "Milky2018/milkir@0.12.6",
-  "Milky2018/machv@0.12.6",
+  "Milky2018/native_types@0.12.6",
   "Milky2018/milkir_machv@0.12.6",
   "Milky2018/vcode@0.12.6",
   "Milky2018/code_object@0.12.6",

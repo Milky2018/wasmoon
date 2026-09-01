@@ -29,10 +29,7 @@ test "AArch64 target compiles semantic MachV through the final target seams" {
 
 ///|
 test "AArch64 target binds product environment fields explicitly" {
-  let field = @semantic_machv.EnvironmentField::new(
-    "wasmoon.test.pointer",
-    Ptr64,
-  )
+  let field = @native.EnvironmentField::new("wasmoon.test.pointer", Ptr64)
   let builder = @semantic_machv.FunctionBuilder::new(
     "shadow_environment_field",
     Internal,
@@ -82,16 +79,16 @@ test "Wasmoon runtime ABI elaboration makes roots and stack maps explicit" {
   let type_index = builder.emit(I32Const(7U), [], [I32])[0]
   let fields_address = builder.emit(StackAddress(fields), [], [Ptr64])[0]
   let field_count = builder.emit(I32Const(1U), [], [I32])[0]
-  let allocation_symbol = @semantic_machv.ExternalSymbol::new(
+  let allocation_symbol = @native.ExternalSymbol::new(
     "wasm.runtime.gc.alloc_struct_slow",
   )
   let result = builder.emit_with_metadata(
       Call(
         @semantic_machv.SemanticCall::new(
           External(allocation_symbol),
-          @semantic_machv.Signature::new([Ptr64, I32, Ptr64, I32], [I64]),
+          @native.Signature::new([Ptr64, I32, Ptr64, I32], [I64]),
           Platform,
-          @semantic_machv.CallBehavior::new(ReadWrite, true, false, true, false),
+          @native.CallBehavior::new(ReadWrite, true, false, true, false),
         ),
       ),
       [parameters[0], type_index, fields_address, field_count],
@@ -107,10 +104,8 @@ test "Wasmoon runtime ABI elaboration makes roots and stack maps explicit" {
       builder.finish_prepared_selection(),
       [allocation_symbol],
       (
-        @semantic_machv.ExternalSymbol::new(
-          "wasmoon.runtime.gc.push_root_scope",
-        ),
-        @semantic_machv.ExternalSymbol::new("wasmoon.runtime.gc.pop_root_scope"),
+        @native.ExternalSymbol::new("wasmoon.runtime.gc.push_root_scope"),
+        @native.ExternalSymbol::new("wasmoon.runtime.gc.pop_root_scope"),
       ),
     ).print(),
     content=(
@@ -157,10 +152,10 @@ test "Wasmoon runtime ABI elaboration shares one root-scope stack object" {
   )
   let parameters = builder.parameters()
   let first_call = @semantic_machv.SemanticCall::new(
-    External(@semantic_machv.ExternalSymbol::new("host.first")),
-    @semantic_machv.Signature::new([Ptr64], [I64]),
+    External(@native.ExternalSymbol::new("host.first")),
+    @native.Signature::new([Ptr64], [I64]),
     Platform,
-    @semantic_machv.CallBehavior::new(ReadWrite, true, false, true, false),
+    @native.CallBehavior::new(ReadWrite, true, false, true, false),
   )
   builder.emit_with_metadata(
     Call(first_call),
@@ -174,10 +169,10 @@ test "Wasmoon runtime ABI elaboration shares one root-scope stack object" {
   )
   |> ignore
   let second_call = @semantic_machv.SemanticCall::new(
-    External(@semantic_machv.ExternalSymbol::new("host.second")),
-    @semantic_machv.Signature::new([Ptr64], [I64]),
+    External(@native.ExternalSymbol::new("host.second")),
+    @native.Signature::new([Ptr64], [I64]),
     Platform,
-    @semantic_machv.CallBehavior::new(ReadWrite, true, false, true, false),
+    @native.CallBehavior::new(ReadWrite, true, false, true, false),
   )
   let result = builder.emit_with_metadata(
       Call(second_call),
@@ -191,10 +186,8 @@ test "Wasmoon runtime ABI elaboration shares one root-scope stack object" {
       builder.finish_prepared_selection(),
       [],
       (
-        @semantic_machv.ExternalSymbol::new(
-          "wasmoon.runtime.gc.push_root_scope",
-        ),
-        @semantic_machv.ExternalSymbol::new("wasmoon.runtime.gc.pop_root_scope"),
+        @native.ExternalSymbol::new("wasmoon.runtime.gc.push_root_scope"),
+        @native.ExternalSymbol::new("wasmoon.runtime.gc.pop_root_scope"),
       ),
     ).print(),
     content=(
@@ -266,10 +259,8 @@ test "runtime ABI elaboration follows CFG order instead of block storage order" 
       builder.finish_prepared_selection(),
       [],
       (
-        @semantic_machv.ExternalSymbol::new(
-          "wasmoon.runtime.gc.push_root_scope",
-        ),
-        @semantic_machv.ExternalSymbol::new("wasmoon.runtime.gc.pop_root_scope"),
+        @native.ExternalSymbol::new("wasmoon.runtime.gc.push_root_scope"),
+        @native.ExternalSymbol::new("wasmoon.runtime.gc.pop_root_scope"),
       ),
     ).print(),
     content=(
@@ -381,10 +372,8 @@ test "AArch64 target executes internal and external relocations" {
     AArch64 => ()
     _ => return
   }
-  let callee_symbol = @semantic_machv.CodeSymbol::new("shadow.callee")
-  let poll_symbol = @semantic_machv.ExternalSymbol::new(
-    "wasmoon.runtime.cancel_poll",
-  )
+  let callee_symbol = @native.CodeSymbol::new("shadow.callee")
+  let poll_symbol = @native.ExternalSymbol::new("wasmoon.runtime.cancel_poll")
   let callee = @semantic_machv.FunctionBuilder::new(
     "shadow_linked_callee",
     Internal,
@@ -396,9 +385,9 @@ test "AArch64 target executes internal and external relocations" {
     Call(
       @semantic_machv.SemanticCall::new(
         External(poll_symbol),
-        @semantic_machv.Signature::new([Ptr64], [I32]),
+        @native.Signature::new([Ptr64], [I32]),
         Platform,
-        @semantic_machv.CallBehavior::new(ReadWrite, true, false, false, true),
+        @native.CallBehavior::new(ReadWrite, true, false, false, true),
       ),
     ),
     [callee_parameters[0]],
@@ -422,15 +411,9 @@ test "AArch64 target executes internal and external relocations" {
       Call(
         @semantic_machv.SemanticCall::new(
           Internal(callee_symbol),
-          @semantic_machv.Signature::new([Ptr64, I64], [I64]),
+          @native.Signature::new([Ptr64, I64], [I64]),
           Internal,
-          @semantic_machv.CallBehavior::new(
-            ReadWrite,
-            true,
-            false,
-            false,
-            false,
-          ),
+          @native.CallBehavior::new(ReadWrite, true, false, false, false),
         ),
       ),
       caller_parameters,

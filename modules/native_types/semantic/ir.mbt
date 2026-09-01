@@ -146,7 +146,7 @@ pub(all) enum Terminator {
   Return(Array[Value])
   TailCall(SemanticCall, Array[Value])
   NoReturnCall(SemanticCall, Array[Value])
-  Trap(TrapReason)
+  Trap(@native.TrapReason)
 } derive(Debug, Eq)
 
 ///|
@@ -166,7 +166,7 @@ fn Terminator::copy(self : Terminator) -> Terminator {
 
 ///|
 pub struct TerminatorMetadata {
-  source : SourceLocation?
+  source : @native.SourceLocation?
   live_gc_roots : Array[Value]
 } derive(Debug, Eq)
 
@@ -177,7 +177,7 @@ pub fn TerminatorMetadata::empty() -> TerminatorMetadata {
 
 ///|
 pub fn TerminatorMetadata::new(
-  source : SourceLocation?,
+  source : @native.SourceLocation?,
   live_gc_roots : Array[Value],
 ) -> TerminatorMetadata {
   { source, live_gc_roots: live_gc_roots.copy(), }
@@ -210,31 +210,31 @@ fn TerminatorRecord::copy(self : TerminatorRecord) -> TerminatorRecord {
 
 ///|
 pub struct InstructionMetadata {
-  source : SourceLocation?
+  source : @native.SourceLocation?
   live_gc_roots : Array[Value]
-  stack_map : StackMapMetadata?
+  stack_map : @native.StackMapMetadata?
 } derive(Debug, Eq)
 
 ///|
 /// Read-only access to canonical instruction metadata without copying the live
 /// GC-root collection.
 pub struct InstructionMetadataView {
-  priv source : SourceLocation?
+  priv source : @native.SourceLocation?
   priv live_gc_roots : Array[Value]
-  priv stack_map : StackMapMetadata?
+  priv stack_map : @native.StackMapMetadata?
 }
 
 ///|
 pub fn InstructionMetadataView::source(
   self : InstructionMetadataView,
-) -> SourceLocation? {
+) -> @native.SourceLocation? {
   self.source
 }
 
 ///|
 pub fn InstructionMetadataView::stack_map(
   self : InstructionMetadataView,
-) -> StackMapMetadata? {
+) -> @native.StackMapMetadata? {
   self.stack_map
 }
 
@@ -259,24 +259,10 @@ pub fn InstructionMetadata::empty() -> InstructionMetadata {
 }
 
 ///|
-pub struct StackMapMetadata {
-  id : Int
-  argument_root_count : Int
-} derive(Debug, Eq)
-
-///|
-pub fn StackMapMetadata::new(
-  id : Int,
-  argument_root_count~ : Int,
-) -> StackMapMetadata {
-  { id, argument_root_count, }
-}
-
-///|
 pub fn InstructionMetadata::new(
-  source : SourceLocation?,
+  source : @native.SourceLocation?,
   live_gc_roots : Array[Value],
-  stack_map? : StackMapMetadata,
+  stack_map? : @native.StackMapMetadata,
 ) -> InstructionMetadata {
   { source, live_gc_roots: live_gc_roots.copy(), stack_map, }
 }
@@ -291,7 +277,7 @@ priv enum ValueDefinition {
 
 ///|
 priv struct ValueData {
-  ty : ValueType
+  ty : @native.ValueType
   mut definition : ValueDefinition
 }
 
@@ -326,8 +312,8 @@ priv struct StackObjectData {
 priv struct FunctionConstruction {
   owner : Ref[Unit]
   name : String
-  protocol : CallProtocol
-  signature : Signature
+  protocol : @native.CallProtocol
+  signature : @native.Signature
   parameters : Array[Value]
   values : Array[ValueData]
   blocks : Array[BlockData]
@@ -338,14 +324,14 @@ priv struct FunctionConstruction {
 ///|
 fn FunctionConstruction::new(
   name : String,
-  protocol : CallProtocol,
-  signature : Signature,
+  protocol : @native.CallProtocol,
+  signature : @native.Signature,
 ) -> FunctionConstruction {
   let construction = {
     owner: Ref(()),
     name,
     protocol,
-    signature: Signature::new(signature.params, signature.results),
+    signature: @native.Signature::new(signature.params, signature.results),
     parameters: [],
     values: [],
     blocks: [],
@@ -404,7 +390,7 @@ fn FunctionConstruction::allocate_stack_object(
 ///|
 fn FunctionConstruction::allocate_value(
   self : FunctionConstruction,
-  ty : ValueType,
+  ty : @native.ValueType,
   definition : ValueDefinition,
 ) -> Value {
   let value = Value::new(self.owner, self.values.length())
@@ -415,7 +401,7 @@ fn FunctionConstruction::allocate_value(
 ///|
 fn FunctionConstruction::allocate_block(
   self : FunctionConstruction,
-  parameter_types : Array[ValueType],
+  parameter_types : Array[@native.ValueType],
 ) -> Block {
   let block = Block::new(self.owner, self.blocks.length())
   let parameters : Array[Value] = []
@@ -432,7 +418,7 @@ fn FunctionConstruction::append_instruction(
   block : Block,
   operation : Operation,
   operands : Array[Value],
-  result_types : Array[ValueType],
+  result_types : Array[@native.ValueType],
   metadata : InstructionMetadata,
   copy_inputs : Bool,
 ) -> Array[Value] {
@@ -485,7 +471,7 @@ fn FunctionConstruction::block_parameters(
 fn FunctionConstruction::value_type(
   self : FunctionConstruction,
   value : Value,
-) -> ValueType? {
+) -> @native.ValueType? {
   if self.owns_value(value) {
     Some(self.values[value.id].ty)
   } else {
@@ -533,8 +519,8 @@ pub struct Function {
   priv owner : Ref[Unit]
   priv mut verified : Bool
   priv name : String
-  priv protocol : CallProtocol
-  priv signature : Signature
+  priv protocol : @native.CallProtocol
+  priv signature : @native.Signature
   priv parameters : Array[Value]
   priv values : Array[ValueData]
   priv blocks : Array[BlockData]
@@ -579,13 +565,13 @@ pub fn Function::name(self : Function) -> String {
 }
 
 ///|
-pub fn Function::protocol(self : Function) -> CallProtocol {
+pub fn Function::protocol(self : Function) -> @native.CallProtocol {
   self.protocol
 }
 
 ///|
-pub fn Function::signature(self : Function) -> Signature {
-  Signature::new(self.signature.params, self.signature.results)
+pub fn Function::signature(self : Function) -> @native.Signature {
+  @native.Signature::new(self.signature.params, self.signature.results)
 }
 
 ///|
@@ -712,7 +698,10 @@ pub fn Function::instruction_index(
 }
 
 ///|
-pub fn Function::value_type(self : Function, value : Value) -> ValueType? {
+pub fn Function::value_type(
+  self : Function,
+  value : Value,
+) -> @native.ValueType? {
   if self.owns_value(value) {
     Some(self.values[value.id].ty)
   } else {

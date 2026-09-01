@@ -1,7 +1,7 @@
 ///|
 test "X64 linker applies relative and absolute relocations" {
-  let call = @code_object.External(@semantic.ExternalSymbol::new("callee"))
-  let data = @code_object.Data(@semantic.DataSymbol::new("fixture.data"))
+  let call = @code_object.External(@native.ExternalSymbol::new("callee"))
+  let data = @code_object.Data(@native.DataSymbol::new("fixture.data"))
   let object = @code_object.build(
     X64,
     [
@@ -59,7 +59,7 @@ test "X64 linker applies relative and absolute relocations" {
 
 ///|
 test "X64 linker routes out-of-range relative targets through a veneer" {
-  let target = @code_object.External(@semantic.ExternalSymbol::new("far"))
+  let target = @code_object.External(@native.ExternalSymbol::new("far"))
   let object = @code_object.build(
     X64,
     [b'\xe8', b'\x00', b'\x00', b'\x00', b'\x00'],
@@ -95,7 +95,7 @@ test "X64 linker routes out-of-range relative targets through a veneer" {
 
 ///|
 test "X64 linker deduplicates call veneers by target and addend" {
-  let target = @code_object.External(@semantic.ExternalSymbol::new("callee"))
+  let target = @code_object.External(@native.ExternalSymbol::new("callee"))
   let object = @code_object.build(
     X64,
     [

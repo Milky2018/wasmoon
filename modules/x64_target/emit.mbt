@@ -8,7 +8,7 @@ const X64_INTEGER_OVERFLOW_BRK : UInt = 5U
 const X64_INVALID_CONVERSION_BRK : UInt = 3U
 
 ///|
-fn trap_brk_payload(reason : @semantic.TrapReason) -> UInt {
+fn trap_brk_payload(reason : @native.TrapReason) -> UInt {
   match reason {
     Unreachable => 0U
     MemoryOutOfBounds | TableOutOfBounds => 1U
@@ -106,7 +106,7 @@ fn CodeBuffer::patch_word(self : CodeBuffer, offset : Int, word : UInt) -> Unit 
 ///|
 fn emit_move(
   buffer : CodeBuffer,
-  ty : @semantic.ValueType,
+  ty : @native.ValueType,
   to : @vcode.PhysicalReg,
   from : @vcode.PhysicalReg,
 ) -> Unit {
@@ -137,7 +137,7 @@ fn emit_constant(
 fn emit_stack_access(
   buffer : CodeBuffer,
   load : Bool,
-  ty : @semantic.ValueType,
+  ty : @native.ValueType,
   reg : @vcode.PhysicalReg,
   offset : Int,
 ) -> Unit raise X64EmitError {
@@ -164,7 +164,7 @@ fn emit_stack_access(
 fn emit_result_area_access(
   buffer : CodeBuffer,
   load : Bool,
-  ty : @semantic.ValueType,
+  ty : @native.ValueType,
   address~ : @vcode.PhysicalReg,
   value~ : @vcode.PhysicalReg,
   offset : Int,
@@ -194,7 +194,7 @@ fn emit_result_area_access(
 fn scalar_memory_address(
   buffer : CodeBuffer,
   address : @vcode.PhysicalReg,
-  width : @semantic.AccessWidth,
+  width : @native.AccessWidth,
   offset : UInt64,
 ) -> (@vcode.PhysicalReg, Int) {
   ignore(width)
@@ -212,9 +212,9 @@ fn scalar_memory_address(
 ///|
 fn emit_scalar_load(
   buffer : CodeBuffer,
-  width : @semantic.AccessWidth,
-  extension : @semantic.LoadExtension,
-  result_type : @semantic.ValueType,
+  width : @native.AccessWidth,
+  extension : @native.LoadExtension,
+  result_type : @native.ValueType,
   address : @vcode.PhysicalReg,
   offset : Int,
   destination : @vcode.PhysicalReg,
@@ -245,8 +245,8 @@ fn emit_scalar_load(
 ///|
 fn emit_scalar_store(
   buffer : CodeBuffer,
-  width : @semantic.AccessWidth,
-  value_type : @semantic.ValueType,
+  width : @native.AccessWidth,
+  value_type : @native.ValueType,
   address : @vcode.PhysicalReg,
   offset : Int,
   source : @vcode.PhysicalReg,
@@ -266,7 +266,7 @@ fn emit_scalar_store(
 }
 
 ///|
-fn atomic_operation_width(width : @semantic.AccessWidth) -> GprWidth {
+fn atomic_operation_width(width : @native.AccessWidth) -> GprWidth {
   if width == W64 {
     W64
   } else {
@@ -277,7 +277,7 @@ fn atomic_operation_width(width : @semantic.AccessWidth) -> GprWidth {
 ///|
 fn emit_atomic_rmw(
   buffer : CodeBuffer,
-  width : @semantic.AccessWidth,
+  width : @native.AccessWidth,
   operation : @semantic.AtomicRmwOp,
   address : @vcode.PhysicalReg,
   value : @vcode.PhysicalReg,
@@ -371,7 +371,7 @@ fn emit_atomic_rmw(
 ///|
 fn emit_atomic_compare_exchange(
   buffer : CodeBuffer,
-  width : @semantic.AccessWidth,
+  width : @native.AccessWidth,
   address : @vcode.PhysicalReg,
   expected : @vcode.PhysicalReg,
   replacement : @vcode.PhysicalReg,
@@ -891,7 +891,7 @@ fn emit_vector_extract_lane(
   buffer : CodeBuffer,
   lane : @semantic.VectorLane,
   index : Int,
-  extension : @semantic.Signedness?,
+  extension : @native.Signedness?,
   source : @vcode.PhysicalReg,
   destination : @vcode.PhysicalReg,
 ) -> Unit {
@@ -1381,7 +1381,7 @@ fn emit_vector_extension(
   buffer : CodeBuffer,
   lane : @semantic.VectorLane,
   high : Bool,
-  signedness : @semantic.Signedness,
+  signedness : @native.Signedness,
   source : @vcode.PhysicalReg,
   destination : @vcode.PhysicalReg,
 ) -> Unit raise X64EmitError {
@@ -1417,7 +1417,7 @@ fn emit_vector_extension(
 fn emit_vector_narrow(
   buffer : CodeBuffer,
   lane : @semantic.VectorLane,
-  signedness : @semantic.Signedness,
+  signedness : @native.Signedness,
   low : @vcode.PhysicalReg,
   high : @vcode.PhysicalReg,
   destination : @vcode.PhysicalReg,
@@ -2130,7 +2130,7 @@ fn prepare_xmm_two_operand(
 ///|
 fn materialize_scalar_mask(
   buffer : CodeBuffer,
-  ty : @semantic.ValueType,
+  ty : @native.ValueType,
   bits : UInt64,
   destination : @vcode.PhysicalReg,
 ) -> Unit raise X64EmitError {
@@ -2151,7 +2151,7 @@ fn materialize_scalar_mask(
 ///|
 fn emit_float_unary(
   buffer : CodeBuffer,
-  ty : @semantic.ValueType,
+  ty : @native.ValueType,
   operation : X64FloatUnary,
   source : @vcode.PhysicalReg,
   destination : @vcode.PhysicalReg,
@@ -2215,7 +2215,7 @@ fn emit_float_unary(
 ///|
 fn emit_scalar_min_max(
   buffer : CodeBuffer,
-  ty : @semantic.ValueType,
+  ty : @native.ValueType,
   minimum : Bool,
   left : @vcode.PhysicalReg,
   right : @vcode.PhysicalReg,
@@ -2278,7 +2278,7 @@ fn emit_scalar_min_max(
 ///|
 fn emit_float_binary(
   buffer : CodeBuffer,
-  ty : @semantic.ValueType,
+  ty : @native.ValueType,
   operation : X64FloatBinary,
   left : @vcode.PhysicalReg,
   right : @vcode.PhysicalReg,
@@ -2305,7 +2305,7 @@ fn emit_float_binary(
 ///|
 fn emit_float_copy_sign(
   buffer : CodeBuffer,
-  ty : @semantic.ValueType,
+  ty : @native.ValueType,
   magnitude : @vcode.PhysicalReg,
   sign : @vcode.PhysicalReg,
   destination : @vcode.PhysicalReg,
@@ -2367,7 +2367,7 @@ fn emit_float_copy_sign(
 ///|
 fn emit_float_compare(
   buffer : CodeBuffer,
-  ty : @semantic.ValueType,
+  ty : @native.ValueType,
   condition : X64FloatCondition,
   left : @vcode.PhysicalReg,
   right : @vcode.PhysicalReg,
@@ -2422,7 +2422,7 @@ fn emit_float_compare(
 ///|
 fn emit_float_trap(
   buffer : CodeBuffer,
-  ty : @semantic.ValueType,
+  ty : @native.ValueType,
   condition : X64FloatTrapCondition,
   left : @vcode.PhysicalReg,
   right : @vcode.PhysicalReg,
@@ -2459,9 +2459,9 @@ fn emit_float_trap(
 ///|
 fn emit_unchecked_float_to_int(
   buffer : CodeBuffer,
-  float : @semantic.FloatType,
-  integer : @semantic.IntegerType,
-  signedness : @semantic.Signedness,
+  float : @native.FloatType,
+  integer : @native.IntegerType,
+  signedness : @native.Signedness,
   source : @vcode.PhysicalReg,
   destination : @vcode.PhysicalReg,
 ) -> Unit raise X64EmitError {
@@ -2479,7 +2479,7 @@ fn emit_unchecked_float_to_int(
       buffer.x86_emit_cvttsd2si_r64_xmm(destination.id, source.id)
     }
   } else {
-    let scalar_type : @semantic.ValueType = if float == F32 { F32 } else { F64 }
+    let scalar_type : @native.ValueType = if float == F32 { F32 } else { F64 }
     let threshold = @vcode.PhysicalReg::new(15, FpVector)
     let adjusted = @vcode.PhysicalReg::new(14, FpVector)
     materialize_scalar_mask(
@@ -2527,13 +2527,13 @@ fn emit_unchecked_float_to_int(
 ///|
 fn emit_saturating_float_to_int(
   buffer : CodeBuffer,
-  float : @semantic.FloatType,
-  integer : @semantic.IntegerType,
-  signedness : @semantic.Signedness,
+  float : @native.FloatType,
+  integer : @native.IntegerType,
+  signedness : @native.Signedness,
   source : @vcode.PhysicalReg,
   destination : @vcode.PhysicalReg,
 ) -> Unit raise X64EmitError {
-  let scalar_type : @semantic.ValueType = if float == F32 { F32 } else { F64 }
+  let scalar_type : @native.ValueType = if float == F32 { F32 } else { F64 }
   let width = if integer == I32 { W32 } else { W64 }
   let (lower_bits, upper_bits, minimum, maximum) = match
     (float, integer, signedness) {
@@ -2851,7 +2851,7 @@ fn emit_call_arguments(
   allocation : @vcode.Allocation,
   frame : X64Frame,
   instruction : @vcode.Instruction,
-  types : Array[@semantic.ValueType],
+  types : Array[@native.ValueType],
   locations : Array[CallArgumentLocation],
   stack_size : Int,
   operand_start? : Int = 0,
@@ -2936,7 +2936,7 @@ fn emit_call_arguments(
     }
     // Integer call slots are eight bytes. Write the full slot so its upper
     // half is canonical for callees that consume the native-width value.
-    let stack_type : @semantic.ValueType = if transfer.ty == I32 {
+    let stack_type : @native.ValueType = if transfer.ty == I32 {
       I64
     } else {
       transfer.ty
@@ -3031,7 +3031,7 @@ fn emit_function_inputs(
     return
   }
   let register_moves : Array[@vcode.ParallelMove] = []
-  let stack_inputs : Array[(@vcode.Instruction, @semantic.ValueType, Int)] = []
+  let stack_inputs : Array[(@vcode.Instruction, @native.ValueType, Int)] = []
   let mut index = current_index
   while index < body.length() {
     let input_instruction = body[index]
@@ -3132,7 +3132,7 @@ fn emit_incoming_call_results(
     return
   }
   let register_moves : Array[@vcode.ParallelMove] = []
-  let area_results : Array[(@vcode.Instruction, @semantic.ValueType, Int)] = []
+  let area_results : Array[(@vcode.Instruction, @native.ValueType, Int)] = []
   let mut index = current_index
   while index < body.length() {
     let result_instruction = body[index]
@@ -3234,7 +3234,7 @@ fn emit_function_outputs(
     return
   }
   let register_moves : Array[@vcode.ParallelMove] = []
-  let area_results : Array[(@vcode.Instruction, @semantic.ValueType, Int)] = []
+  let area_results : Array[(@vcode.Instruction, @native.ValueType, Int)] = []
   let mut index = current_index
   while index < body.length() {
     let output_instruction = body[index]

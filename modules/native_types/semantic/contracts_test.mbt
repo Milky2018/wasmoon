@@ -1,5 +1,5 @@
 ///|
-fn single(values : Array[@machv.Value]) -> @machv.Value {
+fn single(values : Array[Value]) -> Value {
   if values.length() != 1 {
     abort("expected one result")
   }
@@ -8,11 +8,11 @@ fn single(values : Array[@machv.Value]) -> @machv.Value {
 
 ///|
 test "address-visible stack objects retain target-neutral layout requirements" {
-  let builder = @machv.FunctionBuilder::new("stack_buffer", Internal, [I64], [])
+  let builder = FunctionBuilder::new("stack_buffer", Internal, [@native.I64], [])
   let object = builder.create_stack_object(24, 16)
-  let address = single(builder.emit(StackAddress(object), [], [Ptr64]))
+  let address = single(builder.emit(StackAddress(object), [], [@native.Ptr64]))
   builder.emit(
-    Store(@machv.StoreSpec::new(W64, I64, 0UL, Little, None)),
+    Store(StoreSpec::new(W64, @native.I64, 0UL, Little, None)),
     [address, builder.parameters()[0]],
     [],
   )
@@ -42,12 +42,12 @@ test "address-visible stack objects retain target-neutral layout requirements" {
 
 ///|
 test "stack objects cannot cross function ownership" {
-  let producer = @machv.FunctionBuilder::new("producer", Internal, [], [])
+  let producer = FunctionBuilder::new("producer", Internal, [], [])
   let foreign = producer.create_stack_object(8, 8)
   producer.return_([])
   producer.finish() |> ignore
-  let consumer = @machv.FunctionBuilder::new("consumer", Internal, [], [])
-  consumer.emit(StackAddress(foreign), [], [Ptr64]) |> ignore
+  let consumer = FunctionBuilder::new("consumer", Internal, [], [])
+  consumer.emit(StackAddress(foreign), [], [@native.Ptr64]) |> ignore
   consumer.return_([])
   try consumer.finish() catch {
     error => inspect(error, content="ForeignStackObject(object_id=0)")
@@ -58,7 +58,7 @@ test "stack objects cannot cross function ownership" {
 
 ///|
 test "stack object alignment must be a positive power of two" {
-  let builder = @machv.FunctionBuilder::new("bad_stack", Internal, [], [])
+  let builder = FunctionBuilder::new("bad_stack", Internal, [], [])
   builder.create_stack_object(8, 3) |> ignore
   builder.return_([])
   try builder.finish() catch {
@@ -79,13 +79,13 @@ test "stack object alignment must be a positive power of two" {
 
 ///|
 test "noreturn calls are first-class control-flow terminators" {
-  let builder = @machv.FunctionBuilder::new("noreturn", Internal, [GcRef64], [])
+  let builder = FunctionBuilder::new("noreturn", Internal, [@native.GcRef64], [])
   builder.noreturn_call(
-    @machv.SemanticCall::new(
-      External(@machv.ExternalSymbol::new("runtime.throw")),
-      @machv.Signature::new([GcRef64], []),
+    SemanticCall::new(
+      External(@native.ExternalSymbol::new("runtime.throw")),
+      @native.Signature::new([@native.GcRef64], []),
       Platform,
-      @machv.CallBehavior::new(ReadWrite, true, false, false, false),
+      @native.CallBehavior::new(ReadWrite, true, false, false, false),
     ),
     builder.parameters(),
   )
@@ -102,13 +102,13 @@ test "noreturn calls are first-class control-flow terminators" {
 
 ///|
 test "noreturn calls cannot declare results" {
-  let builder = @machv.FunctionBuilder::new("bad_noreturn", Internal, [], [])
+  let builder = FunctionBuilder::new("bad_noreturn", Internal, [], [])
   builder.noreturn_call(
-    @machv.SemanticCall::new(
-      External(@machv.ExternalSymbol::new("runtime.bad")),
-      @machv.Signature::new([], [I32]),
+    SemanticCall::new(
+      External(@native.ExternalSymbol::new("runtime.bad")),
+      @native.Signature::new([], [@native.I32]),
       Platform,
-      @machv.CallBehavior::conservative(),
+      @native.CallBehavior::conservative(),
     ),
     [],
   )
@@ -130,20 +130,20 @@ test "noreturn calls cannot declare results" {
 
 ///|
 test "returns-twice calls preserve their exceptional control behavior" {
-  let builder = @machv.FunctionBuilder::new(
+  let builder = FunctionBuilder::new(
     "returns_twice",
     Internal,
-    [Ptr64],
-    [I32],
+    [@native.Ptr64],
+    [@native.I32],
   )
   let result = single(
     builder.emit(
       Call(
-        @machv.SemanticCall::new(
-          External(@machv.ExternalSymbol::new("runtime.setjmp")),
-          @machv.Signature::new([Ptr64], [I32]),
+        SemanticCall::new(
+          External(@native.ExternalSymbol::new("runtime.setjmp")),
+          @native.Signature::new([@native.Ptr64], [@native.I32]),
           Platform,
-          @machv.CallBehavior::new(
+          @native.CallBehavior::new(
             ReadWrite,
             false,
             false,
@@ -154,7 +154,7 @@ test "returns-twice calls preserve their exceptional control behavior" {
         ),
       ),
       builder.parameters(),
-      [I32],
+      [@native.I32],
     ),
   )
   builder.return_([result])
@@ -172,18 +172,13 @@ test "returns-twice calls preserve their exceptional control behavior" {
 
 ///|
 test "tail calls cannot use returns-twice behavior" {
-  let builder = @machv.FunctionBuilder::new(
-    "tail_returns_twice",
-    Internal,
-    [],
-    [],
-  )
+  let builder = FunctionBuilder::new("tail_returns_twice", Internal, [], [])
   builder.tail_call(
-    @machv.SemanticCall::new(
-      External(@machv.ExternalSymbol::new("runtime.setjmp")),
-      @machv.Signature::new([], []),
+    SemanticCall::new(
+      External(@native.ExternalSymbol::new("runtime.setjmp")),
+      @native.Signature::new([], []),
       Platform,
-      @machv.CallBehavior::new(
+      @native.CallBehavior::new(
         ReadWrite,
         false,
         false,
@@ -207,10 +202,12 @@ test "tail calls cannot use returns-twice behavior" {
 
 ///|
 test "i64 switch carries typed edge arguments" {
-  let builder = @machv.FunctionBuilder::new("switch64", Internal, [I64], [I64])
-  let case_block = builder.create_block([I64])
-  let default_block = builder.create_block([I64])
-  let exit_block = builder.create_block([I64])
+  let builder = FunctionBuilder::new("switch64", Internal, [@native.I64], [
+    @native.I64,
+  ])
+  let case_block = builder.create_block([@native.I64])
+  let default_block = builder.create_block([@native.I64])
+  let exit_block = builder.create_block([@native.I64])
   let index = builder.parameters()[0]
   builder.switch(index, [(0x100000000UL, case_block, [index])], default_block, [
     index,
@@ -240,10 +237,10 @@ test "i64 switch carries typed edge arguments" {
 
 ///|
 test "switch rejects duplicate case values" {
-  let builder = @machv.FunctionBuilder::new(
+  let builder = FunctionBuilder::new(
     "duplicate_switch",
     Internal,
-    [I32],
+    [@native.I32],
     [],
   )
   let target = builder.create_block([])
@@ -269,13 +266,8 @@ test "switch rejects duplicate case values" {
 
 ///|
 test "edges reject missing block arguments" {
-  let builder = @machv.FunctionBuilder::new(
-    "missing_edge_argument",
-    Internal,
-    [],
-    [],
-  )
-  let target = builder.create_block([I32])
+  let builder = FunctionBuilder::new("missing_edge_argument", Internal, [], [])
+  let target = builder.create_block([@native.I32])
   builder.jump(target, [])
   builder.switch_to_block(target)
   builder.return_([])
@@ -298,10 +290,10 @@ test "edges reject missing block arguments" {
 
 ///|
 test "i32 switch rejects case bits wider than its index" {
-  let builder = @machv.FunctionBuilder::new(
+  let builder = FunctionBuilder::new(
     "wide_switch_case",
     Internal,
-    [I32],
+    [@native.I32],
     [],
   )
   let target = builder.create_block([])
@@ -331,7 +323,7 @@ test "i32 switch rejects case bits wider than its index" {
 
 ///|
 test "semantic MachV exposes definition-safe CFG lowering order" {
-  let builder = @machv.FunctionBuilder::new("cfg_order", Internal, [], [])
+  let builder = FunctionBuilder::new("cfg_order", Internal, [], [])
   let physically_first = builder.create_block([])
   let dominating = builder.create_block([])
   builder.jump(dominating, [])
@@ -349,8 +341,8 @@ test "semantic MachV exposes definition-safe CFG lowering order" {
 
 ///|
 test "semantic MachV indexed traversal preserves ownership and bounds" {
-  let builder = @machv.FunctionBuilder::new("indexed", Internal, [], [I32])
-  let result = single(builder.emit(I32Const(7), [], [I32]))
+  let builder = FunctionBuilder::new("indexed", Internal, [], [@native.I32])
+  let result = single(builder.emit(I32Const(7), [], [@native.I32]))
   builder.return_([result])
   let function = builder.finish()
   let block = function.block_at(0).unwrap()
@@ -405,7 +397,7 @@ test "semantic MachV indexed traversal preserves ownership and bounds" {
       #|)
     ),
   )
-  let foreign_builder = @machv.FunctionBuilder::new("foreign", Internal, [], [])
+  let foreign_builder = FunctionBuilder::new("foreign", Internal, [], [])
   foreign_builder.return_([])
   let foreign = foreign_builder.finish().block_at(0).unwrap()
   debug_inspect(
@@ -420,21 +412,21 @@ test "semantic MachV indexed traversal preserves ownership and bounds" {
 
 ///|
 test "indirect calls use an explicit ptr64 callee" {
-  let builder = @machv.FunctionBuilder::new(
+  let builder = FunctionBuilder::new(
     "indirect",
     Internal,
-    [Ptr64, I64],
-    [I64],
+    [@native.Ptr64, @native.I64],
+    [@native.I64],
   )
   let parameters = builder.parameters()
   let call = SemanticCall::new(
     Indirect,
-    Signature::new([I64], [I64]),
+    @native.Signature::new([@native.I64], [@native.I64]),
     Internal,
-    CallBehavior::conservative(),
+    @native.CallBehavior::conservative(),
   )
   let result = single(
-    builder.emit(Call(call), [parameters[0], parameters[1]], [I64]),
+    builder.emit(Call(call), [parameters[0], parameters[1]], [@native.I64]),
   )
   builder.return_([result])
   inspect(
@@ -451,14 +443,14 @@ test "indirect calls use an explicit ptr64 callee" {
 
 ///|
 test "vector lane operations remain parameterized" {
-  let builder = @machv.FunctionBuilder::new("vector_lane", Internal, [V128], [
-    I32,
+  let builder = FunctionBuilder::new("vector_lane", Internal, [@native.V128], [
+    @native.I32,
   ])
   let extracted = single(
     builder.emit(
       Vector(ExtractLane(I16x8, 3, Some(Unsigned))),
       [builder.parameters()[0]],
-      [I32],
+      [@native.I32],
     ),
   )
   builder.return_([extracted])
@@ -476,14 +468,15 @@ test "vector lane operations remain parameterized" {
 
 ///|
 test "vector shuffle validates all semantic lane indices" {
-  let builder = @machv.FunctionBuilder::new(
+  let builder = FunctionBuilder::new(
     "bad_shuffle",
     Internal,
-    [V128, V128],
+    [@native.V128, @native.V128],
     [],
   )
   let mask = FixedArray::makei(16, index => if index == 15 { 32 } else { index })
-  builder.emit(Vector(Shuffle(mask)), builder.parameters(), [V128]) |> ignore
+  builder.emit(Vector(Shuffle(mask)), builder.parameters(), [@native.V128])
+  |> ignore
   builder.return_([])
   try builder.finish() catch {
     error =>
@@ -503,16 +496,16 @@ test "vector shuffle validates all semantic lane indices" {
 
 ///|
 test "vector average rejects unsupported lane widths" {
-  let builder = @machv.FunctionBuilder::new(
+  let builder = FunctionBuilder::new(
     "bad_vector_average",
     Internal,
-    [V128, V128],
+    [@native.V128, @native.V128],
     [],
   )
   builder.emit(
     Vector(IntBinary(I32x4, AverageUnsigned)),
     builder.parameters(),
-    [V128],
+    [@native.V128],
   )
   |> ignore
   builder.return_([])
@@ -534,14 +527,14 @@ test "vector average rejects unsupported lane widths" {
 
 ///|
 test "vector population count rejects non-byte lanes" {
-  let builder = @machv.FunctionBuilder::new(
+  let builder = FunctionBuilder::new(
     "bad_vector_population_count",
     Internal,
-    [V128],
+    [@native.V128],
     [],
   )
   builder.emit(Vector(IntUnary(I16x8, PopulationCount)), builder.parameters(), [
-    V128,
+    @native.V128,
   ])
   |> ignore
   builder.return_([])
@@ -563,11 +556,13 @@ test "vector population count rejects non-byte lanes" {
 
 ///|
 test "narrow loads require an explicit extension" {
-  let builder = @machv.FunctionBuilder::new("bad_load", Internal, [Ptr64], [])
+  let builder = FunctionBuilder::new("bad_load", Internal, [@native.Ptr64], [])
   builder.emit(
-    Load(LoadSpec::new(W8, None, I32, 0UL, Little, Some(MemoryOutOfBounds))),
+    Load(
+      LoadSpec::new(W8, None, @native.I32, 0UL, Little, Some(MemoryOutOfBounds)),
+    ),
     builder.parameters(),
-    [I32],
+    [@native.I32],
   )
   |> ignore
   builder.return_([])
@@ -589,14 +584,16 @@ test "narrow loads require an explicit extension" {
 
 ///|
 test "atomic width is part of the semantic contract" {
-  let builder = @machv.FunctionBuilder::new(
+  let builder = FunctionBuilder::new(
     "bad_atomic_width",
     Internal,
-    [Ptr64, I32],
+    [@native.Ptr64, @native.I32],
     [],
   )
   builder.emit(
-    AtomicStore(AtomicSpec::new(W64, I32, 0UL, Little, Some(MemoryOutOfBounds))),
+    AtomicStore(
+      AtomicSpec::new(W64, @native.I32, 0UL, Little, Some(MemoryOutOfBounds)),
+    ),
     builder.parameters(),
     [],
   )
@@ -620,12 +617,12 @@ test "atomic width is part of the semantic contract" {
 
 ///|
 test "symbols must have stable non-empty identities" {
-  let builder = @machv.FunctionBuilder::new("empty_symbol", Internal, [], [])
+  let builder = FunctionBuilder::new("empty_symbol", Internal, [], [])
   let call = SemanticCall::new(
-    External(ExternalSymbol::new("")),
-    Signature::new([], []),
+    External(@native.ExternalSymbol::new("")),
+    @native.Signature::new([], []),
     Platform,
-    CallBehavior::conservative(),
+    @native.CallBehavior::conservative(),
   )
   builder.emit(Call(call), [], []) |> ignore
   builder.return_([])
@@ -647,12 +644,12 @@ test "symbols must have stable non-empty identities" {
 
 ///|
 test "source locations reject invalid coordinates" {
-  let builder = @machv.FunctionBuilder::new("bad_source", Internal, [], [])
+  let builder = FunctionBuilder::new("bad_source", Internal, [], [])
   builder.emit_with_metadata(
     Safepoint(Cancellation),
     [],
     [],
-    InstructionMetadata::new(Some(SourceLocation::new("", -1, -1)), []),
+    InstructionMetadata::new(Some(@native.SourceLocation::new("", -1, -1)), []),
   )
   |> ignore
   builder.return_([])
@@ -674,7 +671,7 @@ test "source locations reject invalid coordinates" {
 
 ///|
 test "stack maps require GC safepoints and dense unique ids" {
-  let builder = @machv.FunctionBuilder::new("bad_stack_map", Internal, [], [])
+  let builder = FunctionBuilder::new("bad_stack_map", Internal, [], [])
   builder.emit_with_metadata(
     Safepoint(Cancellation),
     [],
@@ -682,7 +679,7 @@ test "stack maps require GC safepoints and dense unique ids" {
     InstructionMetadata::new(
       None,
       [],
-      stack_map=StackMapMetadata::new(0, argument_root_count=1),
+      stack_map=@native.StackMapMetadata::new(0, argument_root_count=1),
     ),
   )
   |> ignore
@@ -702,12 +699,7 @@ test "stack maps require GC safepoints and dense unique ids" {
     _ => fail("expected stack-map metadata on a non-GC safepoint to fail")
   }
 
-  let duplicate = @machv.FunctionBuilder::new(
-    "duplicate_stack_map",
-    Internal,
-    [],
-    [],
-  )
+  let duplicate = FunctionBuilder::new("duplicate_stack_map", Internal, [], [])
   for _ in 0..<2 {
     duplicate.emit_with_metadata(
       Safepoint(Gc),
@@ -716,7 +708,7 @@ test "stack maps require GC safepoints and dense unique ids" {
       InstructionMetadata::new(
         None,
         [],
-        stack_map=StackMapMetadata::new(0, argument_root_count=0),
+        stack_map=@native.StackMapMetadata::new(0, argument_root_count=0),
       ),
     )
     |> ignore
@@ -740,7 +732,7 @@ test "stack maps require GC safepoints and dense unique ids" {
 
 ///|
 test "entry block cannot acquire a predecessor" {
-  let builder = @machv.FunctionBuilder::new("entry_predecessor", Internal, [], [])
+  let builder = FunctionBuilder::new("entry_predecessor", Internal, [], [])
   let loop_block = builder.create_block([])
   builder.jump(loop_block, [])
   builder.switch_to_block(loop_block)
@@ -760,7 +752,9 @@ test "entry block cannot acquire a predecessor" {
 
 ///|
 test "return values must match the function signature" {
-  let builder = @machv.FunctionBuilder::new("bad_return", Internal, [I32], [I64])
+  let builder = FunctionBuilder::new("bad_return", Internal, [@native.I32], [
+    @native.I64,
+  ])
   builder.return_([builder.parameters()[0]])
   try builder.finish() catch {
     error =>
@@ -780,21 +774,23 @@ test "return values must match the function signature" {
 
 ///|
 test "instruction storage owns mutable call signatures" {
-  let builder = @machv.FunctionBuilder::new(
+  let builder = FunctionBuilder::new(
     "owned_call_signature",
     Internal,
-    [I32],
-    [I32],
+    [@native.I32],
+    [@native.I32],
   )
   let call = SemanticCall::new(
-    External(ExternalSymbol::new("identity")),
-    Signature::new([I32], [I32]),
+    External(@native.ExternalSymbol::new("identity")),
+    @native.Signature::new([@native.I32], [@native.I32]),
     Platform,
-    CallBehavior::conservative(),
+    @native.CallBehavior::conservative(),
   )
-  let result = single(builder.emit(Call(call), builder.parameters(), [I32]))
-  call.signature.params[0] = I64
-  call.signature.results[0] = I64
+  let result = single(
+    builder.emit(Call(call), builder.parameters(), [@native.I32]),
+  )
+  call.signature.params[0] = @native.I64
+  call.signature.results[0] = @native.I64
   builder.return_([result])
   inspect(
     builder.finish(),
@@ -810,15 +806,15 @@ test "instruction storage owns mutable call signatures" {
 
 ///|
 test "instruction storage owns mutable shuffle masks" {
-  let builder = @machv.FunctionBuilder::new(
+  let builder = FunctionBuilder::new(
     "owned_shuffle",
     Internal,
-    [V128, V128],
-    [V128],
+    [@native.V128, @native.V128],
+    [@native.V128],
   )
   let mask = FixedArray::makei(16, index => index)
   let result = single(
-    builder.emit(Vector(Shuffle(mask)), builder.parameters(), [V128]),
+    builder.emit(Vector(Shuffle(mask)), builder.parameters(), [@native.V128]),
   )
   mask[0] = 32
   builder.return_([result])
@@ -836,10 +832,13 @@ test "instruction storage owns mutable shuffle masks" {
 
 ///|
 test "public queries return snapshots instead of canonical arrays" {
-  let builder = @machv.FunctionBuilder::new("query_snapshot", Internal, [I32], [
-    I32,
-  ])
-  let exit = builder.create_block([I32])
+  let builder = FunctionBuilder::new(
+    "query_snapshot",
+    Internal,
+    [@native.I32],
+    [@native.I32],
+  )
+  let exit = builder.create_block([@native.I32])
   builder.jump(exit, builder.parameters())
   builder.switch_to_block(exit)
   builder.return_([builder.block_parameters(exit)[0]])
@@ -869,15 +868,15 @@ test "public queries return snapshots instead of canonical arrays" {
 
 ///|
 test "mandatory cleanup collapses a long alias chain" {
-  let builder = @machv.FunctionBuilder::new(
+  let builder = FunctionBuilder::new(
     "long_alias_chain",
     Internal,
-    [I32],
-    [I32],
+    [@native.I32],
+    [@native.I32],
   )
   let mut value = builder.parameters()[0]
   for _ in 0..<1000 {
-    value = single(builder.emit(Copy, [value], [I32]))
+    value = single(builder.emit(Copy, [value], [@native.I32]))
   }
   builder.return_([value])
   inspect(
@@ -893,31 +892,50 @@ test "mandatory cleanup collapses a long alias chain" {
 
 ///|
 test "semantic superinstructions and vector memory remain target neutral" {
-  let builder = @machv.FunctionBuilder::new(
+  let builder = FunctionBuilder::new(
     "semantic_superinstructions",
     Internal,
-    [Ptr64, GcRef64, I64, F64, F64, F64, V128],
-    [I32, I64, I32, F64, V128, V128],
+    [
+      @native.Ptr64,
+      @native.GcRef64,
+      @native.I64,
+      @native.F64,
+      @native.F64,
+      @native.F64,
+      @native.V128,
+    ],
+    [
+      @native.I32,
+      @native.I64,
+      @native.I32,
+      @native.F64,
+      @native.V128,
+      @native.V128,
+    ],
   )
   let parameters = builder.parameters()
-  let gc_address = single(builder.emit(GcRefAddress, [parameters[1]], [Ptr64]))
-  let address = single(
-    builder.emit(PointerOffset, [gc_address, parameters[2]], [Ptr64]),
+  let gc_address = single(
+    builder.emit(GcRefAddress, [parameters[1]], [@native.Ptr64]),
   )
-  let null_reference = single(builder.emit(NullGcRef, [], [GcRef64]))
+  let address = single(
+    builder.emit(PointerOffset, [gc_address, parameters[2]], [@native.Ptr64]),
+  )
+  let null_reference = single(builder.emit(NullGcRef, [], [@native.GcRef64]))
   let reference_test = single(
-    builder.emit(ReferenceCompare(Equal), [parameters[1], null_reference], [I32]),
+    builder.emit(ReferenceCompare(Equal), [parameters[1], null_reference], [
+      @native.I32,
+    ]),
   )
   let overflow_results = builder.emit(
     IntWithOverflow(Add(Unsigned)),
     [parameters[2], parameters[2]],
-    [I64, I32],
+    [@native.I64, @native.I32],
   )
   let fused = single(
     builder.emit(
       FloatTernary(FusedMultiplyAdd),
       [parameters[3], parameters[4], parameters[5]],
-      [F64],
+      [@native.F64],
     ),
   )
   let loaded = single(
@@ -926,14 +944,14 @@ test "semantic superinstructions and vector memory remain target neutral" {
         VectorLoadSpec::new(Splat(I32x4), 8UL, Little, Some(MemoryOutOfBounds)),
       ),
       [address],
-      [V128],
+      [@native.V128],
     ),
   )
   let fused_vector = single(
     builder.emit(
       Vector(FloatTernary(F32x4, FusedMultiplyAdd)),
       [parameters[6], loaded, loaded],
-      [V128],
+      [@native.V128],
     ),
   )
   builder.emit(
@@ -985,13 +1003,15 @@ test "semantic superinstructions and vector memory remain target neutral" {
 
 ///|
 test "sign extension rejects an equal-width source" {
-  let builder = @machv.FunctionBuilder::new(
+  let builder = FunctionBuilder::new(
     "bad_sign_extend",
     Internal,
-    [I64],
+    [@native.I64],
     [],
   )
-  builder.emit(Convert(SignExtend(I64, W64)), builder.parameters(), [I64])
+  builder.emit(Convert(SignExtend(@native.I64, W64)), builder.parameters(), [
+    @native.I64,
+  ])
   |> ignore
   builder.return_([])
   try builder.finish() catch {
@@ -1012,10 +1032,10 @@ test "sign extension rejects an equal-width source" {
 
 ///|
 test "vector lane memory validates lane indices" {
-  let builder = @machv.FunctionBuilder::new(
+  let builder = FunctionBuilder::new(
     "bad_vector_lane_load",
     Internal,
-    [Ptr64, V128],
+    [@native.Ptr64, @native.V128],
     [],
   )
   builder.emit(
@@ -1023,7 +1043,7 @@ test "vector lane memory validates lane indices" {
       VectorLoadSpec::new(Lane(I64x2, 2), 0UL, Little, Some(MemoryOutOfBounds)),
     ),
     builder.parameters(),
-    [V128],
+    [@native.V128],
   )
   |> ignore
   builder.return_([])
@@ -1045,17 +1065,17 @@ test "vector lane memory validates lane indices" {
 
 ///|
 test "GC safepoints reject omitted live roots" {
-  let builder = @machv.FunctionBuilder::new(
+  let builder = FunctionBuilder::new(
     "missing_gc_root",
     Internal,
-    [GcRef64],
-    [GcRef64],
+    [@native.GcRef64],
+    [@native.GcRef64],
   )
   let call = SemanticCall::new(
-    External(ExternalSymbol::new("collect")),
-    Signature::new([], []),
+    External(@native.ExternalSymbol::new("collect")),
+    @native.Signature::new([], []),
     Platform,
-    CallBehavior::new(ReadWrite, false, false, true, false),
+    @native.CallBehavior::new(ReadWrite, false, false, true, false),
   )
   builder.emit(Call(call), [], []) |> ignore
   builder.return_(builder.parameters())
@@ -1074,10 +1094,10 @@ test "GC safepoints reject omitted live roots" {
 
 ///|
 test "GC safepoints reject duplicate root entries" {
-  let builder = @machv.FunctionBuilder::new(
+  let builder = FunctionBuilder::new(
     "duplicate_gc_root",
     Internal,
-    [GcRef64],
+    [@native.GcRef64],
     [],
   )
   let root = builder.parameters()[0]
@@ -1107,20 +1127,22 @@ test "GC safepoints reject duplicate root entries" {
 
 ///|
 test "mandatory cleanup deduplicates roots collapsed by alias rewriting" {
-  let builder = @machv.FunctionBuilder::new(
+  let builder = FunctionBuilder::new(
     "canonical_gc_roots",
     Internal,
-    [GcRef64],
-    [GcRef64],
+    [@native.GcRef64],
+    [@native.GcRef64],
   )
   let root = builder.parameters()[0]
-  let first_alias = single(builder.emit(Copy, [root], [GcRef64]))
-  let second_alias = single(builder.emit(Copy, [first_alias], [GcRef64]))
+  let first_alias = single(builder.emit(Copy, [root], [@native.GcRef64]))
+  let second_alias = single(
+    builder.emit(Copy, [first_alias], [@native.GcRef64]),
+  )
   let call = SemanticCall::new(
-    External(ExternalSymbol::new("collect")),
-    Signature::new([], []),
+    External(@native.ExternalSymbol::new("collect")),
+    @native.Signature::new([], []),
     Platform,
-    CallBehavior::new(ReadWrite, false, false, true, false),
+    @native.CallBehavior::new(ReadWrite, false, false, true, false),
   )
   builder.emit_with_metadata(
     Call(call),
@@ -1146,9 +1168,9 @@ test "mandatory cleanup deduplicates roots collapsed by alias rewriting" {
 
 ///|
 test "terminator source metadata is preserved" {
-  let builder = @machv.FunctionBuilder::new("trap_source", Internal, [], [])
+  let builder = FunctionBuilder::new("trap_source", Internal, [], [])
   builder.trap(User(7))
-  builder.set_terminator_source(SourceLocation::new("trap.wat", 3, 9))
+  builder.set_terminator_source(@native.SourceLocation::new("trap.wat", 3, 9))
   inspect(
     builder.finish(),
     content=(
@@ -1162,9 +1184,9 @@ test "terminator source metadata is preserved" {
 
 ///|
 test "mandatory cleanup exposes ordered observation phases" {
-  let builder = @machv.FunctionBuilder::new("observed_cleanup", Internal, [], [])
+  let builder = FunctionBuilder::new("observed_cleanup", Internal, [], [])
   builder.return_([])
-  let phases : Array[@machv.MandatoryCleanupPhase] = []
+  let phases : Array[MandatoryCleanupPhase] = []
   builder.finish(on_cleanup_phase=phase => phases.push(phase)) |> ignore
   debug_inspect(
     phases,

@@ -13,7 +13,7 @@ pub(all) enum RegisterBank {
 ///|
 pub(all) enum RootLocation {
   Register(RegisterBank, Int)
-  Stack(offset~ : Int, ty~ : @semantic.ValueType)
+  Stack(offset~ : Int, ty~ : @native.ValueType)
 } derive(Eq, Debug)
 
 ///|
@@ -39,9 +39,9 @@ pub fn UnwindDirective::new(
 
 ///|
 pub(all) enum RelocationTarget {
-  Code(@semantic.CodeSymbol)
-  External(@semantic.ExternalSymbol)
-  Data(@semantic.DataSymbol)
+  Code(@native.CodeSymbol)
+  External(@native.ExternalSymbol)
+  Data(@native.DataSymbol)
 } derive(Eq, Debug)
 
 ///|
@@ -75,15 +75,15 @@ pub fn Relocation::new(
 ///|
 pub struct TrapSite {
   offset : Int
-  reason : @semantic.TrapReason
-  source : @semantic.SourceLocation?
+  reason : @native.TrapReason
+  source : @native.SourceLocation?
 } derive(Eq, Debug)
 
 ///|
 pub fn TrapSite::new(
   offset : Int,
-  reason : @semantic.TrapReason,
-  source? : @semantic.SourceLocation,
+  reason : @native.TrapReason,
+  source? : @native.SourceLocation,
 ) -> TrapSite {
   { offset, reason, source, }
 }
@@ -91,13 +91,13 @@ pub fn TrapSite::new(
 ///|
 pub struct SourceSite {
   offset : Int
-  source : @semantic.SourceLocation
+  source : @native.SourceLocation
 } derive(Eq, Debug)
 
 ///|
 pub fn SourceSite::new(
   offset : Int,
-  source : @semantic.SourceLocation,
+  source : @native.SourceLocation,
 ) -> SourceSite {
   { offset, source, }
 }
@@ -105,19 +105,19 @@ pub fn SourceSite::new(
 ///|
 pub struct SafepointSite {
   offset : Int
-  kind : @semantic.SafepointKind
+  kind : @native.SafepointKind
   roots : Array[RootLocation]
-  source : @semantic.SourceLocation?
-  stack_map : @semantic.StackMapMetadata?
+  source : @native.SourceLocation?
+  stack_map : @native.StackMapMetadata?
 } derive(Eq, Debug)
 
 ///|
 pub fn SafepointSite::new(
   offset : Int,
-  kind : @semantic.SafepointKind,
+  kind : @native.SafepointKind,
   roots : Array[RootLocation],
-  source? : @semantic.SourceLocation,
-  stack_map? : @semantic.StackMapMetadata,
+  source? : @native.SourceLocation,
+  stack_map? : @native.StackMapMetadata,
 ) -> SafepointSite {
   { offset, kind, roots: roots.copy(), source, stack_map, }
 }

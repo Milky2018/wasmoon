@@ -5,10 +5,10 @@ test "x64 frame reserves the SysV setup area for calls" {
   ])
   let parameters = builder.parameters()
   let call = @semantic.SemanticCall::new(
-    External(@semantic.ExternalSymbol::new("runtime.helper")),
-    @semantic.Signature::new([I64], [I64]),
+    External(@native.ExternalSymbol::new("runtime.helper")),
+    @native.Signature::new([I64], [I64]),
     Platform,
-    @semantic.CallBehavior::new(ReadWrite, true, true, false, false),
+    @native.CallBehavior::new(ReadWrite, true, true, false, false),
   )
   let result = builder.emit(Call(call), parameters, [I64])[0]
   builder.return_([result])

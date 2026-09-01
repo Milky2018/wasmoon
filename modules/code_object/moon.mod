@@ -13,7 +13,7 @@ keywords = [ "compiler", "machine-code", "jit" ]
 description = "Target-independent native code artifact model"
 
 import {
-  "Milky2018/machv@0.12.6",
+  "Milky2018/native_types@0.12.6",
 }
 
 preferred_target = "wasm-gc"

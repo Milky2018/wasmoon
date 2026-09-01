@@ -12,7 +12,7 @@ fn[Inst] VCodeFunctionView::new(
 }
 
 ///|
-fn regalloc_value_size(ty : @semantic.ValueType) -> Int {
+fn regalloc_value_size(ty : @native.ValueType) -> Int {
   match ty {
     I32 | F32 => 4
     I64 | F64 | Ptr64 | GcRef64 => 8

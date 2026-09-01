@@ -109,8 +109,8 @@ pub fn build_host_artifact_manifest(
 pub fn artifact_compatibility(
   manifest : @artifact.CompatibilityManifest,
   available_cpu_features~ : Array[@artifact.CpuFeature],
-  runtime_symbols~ : Array[@semantic_machv.ExternalSymbol],
-  data_symbols~ : Array[@semantic_machv.DataSymbol],
+  runtime_symbols~ : Array[@native.ExternalSymbol],
+  data_symbols~ : Array[@native.DataSymbol],
 ) -> ArtifactCompatibility {
   {
     target: manifest.target,
@@ -125,7 +125,7 @@ pub fn artifact_compatibility(
 }
 
 ///|
-fn wasm_value_type(ty : @types.ValueType) -> @semantic_machv.ValueType {
+fn wasm_value_type(ty : @types.ValueType) -> @native.ValueType {
   match ty {
     I32 => I32
     I64 => I64
@@ -164,8 +164,8 @@ fn wasm_value_type(ty : @types.ValueType) -> @semantic_machv.ValueType {
 ///|
 pub fn wasm_function_signature(
   function_type : @types.FuncType,
-) -> @semantic_machv.Signature {
-  @semantic_machv.Signature::new(
+) -> @native.Signature {
+  @native.Signature::new(
     function_type.params.map(wasm_value_type),
     function_type.results.map(wasm_value_type),
   )
@@ -187,9 +187,7 @@ pub fn wasm_import_identity(
     function_index,
     module_name,
     function_name,
-    symbol: @semantic_machv.ExternalSymbol::new(
-      wasm_function_symbol(function_index),
-    ),
+    symbol: @native.ExternalSymbol::new(wasm_function_symbol(function_index)),
     signature: wasm_function_signature(function_type),
   }
 }
@@ -199,14 +197,12 @@ fn artifact_function_from_code_object(
   object : @code_object.UnlinkedCodeObject,
   frame_size~ : Int,
   function_index~ : Int,
-  signature~ : @semantic_machv.Signature,
+  signature~ : @native.Signature,
 ) -> @artifact.FunctionCode {
   {
     identity: {
       function_index,
-      symbol: @semantic_machv.CodeSymbol::new(
-        wasm_function_symbol(function_index),
-      ),
+      symbol: @native.CodeSymbol::new(wasm_function_symbol(function_index)),
       signature,
     },
     entry_offset: 0,
@@ -253,7 +249,7 @@ pub fn compile_wasm_body_artifact_function(
   validation_context : @wasm_milkir.WasmValidationContext,
   target : NativeTarget,
   function_index~ : Int,
-  signature~ : @semantic_machv.Signature,
+  signature~ : @native.Signature,
   use_subtype_indirect_check? : Bool = true,
   canonical_type_indices? : Array[Int] = [],
 ) -> @artifact.FunctionCode raise JitPipelineError {
@@ -275,7 +271,7 @@ pub fn NativeCompiler::compile_wasm_body_artifact_function(
   function : @milkir.Function,
   validation_context : @wasm_milkir.WasmValidationContext,
   function_index~ : Int,
-  signature~ : @semantic_machv.Signature,
+  signature~ : @native.Signature,
   use_subtype_indirect_check? : Bool = true,
   canonical_type_indices? : Array[Int] = [],
 ) -> @artifact.FunctionCode raise JitPipelineError {

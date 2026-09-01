@@ -14,14 +14,14 @@ fn format_values(values : Array[Value]) -> String {
 }
 
 ///|
-fn format_signature(signature : Signature) -> String {
+fn format_signature(signature : @native.Signature) -> String {
   let params = signature.params.map(type_ => type_.to_string()).join(", ")
   let results = signature.results.map(type_ => type_.to_string()).join(", ")
   "(\{params}) -> (\{results})"
 }
 
 ///|
-fn format_protocol(protocol : CallProtocol) -> String {
+fn format_protocol(protocol : @native.CallProtocol) -> String {
   match protocol {
     Internal => "internal"
     Platform => "platform"
@@ -90,7 +90,7 @@ fn format_operation(operation : Operation) -> String {
 }
 
 ///|
-fn format_memory_effect(effect : MemoryEffect) -> String {
+fn format_memory_effect(effect : @native.MemoryEffect) -> String {
   match effect {
     None => "none"
     Read => "read"
@@ -100,7 +100,7 @@ fn format_memory_effect(effect : MemoryEffect) -> String {
 }
 
 ///|
-fn format_semantics(semantics : OperationSemantics) -> String {
+fn format_semantics(semantics : @native.OperationSemantics) -> String {
   let facts : Array[String] = []
   if semantics.memory != None {
     facts.push("memory=\{format_memory_effect(semantics.memory)}")
@@ -129,7 +129,7 @@ fn format_semantics(semantics : OperationSemantics) -> String {
 }
 
 ///|
-fn format_source(source : SourceLocation?) -> String {
+fn format_source(source : @native.SourceLocation?) -> String {
   match source {
     None => ""
     Some(location) =>
@@ -246,7 +246,7 @@ pub fn SelectionPlan::print(
 }
 
 ///|
-fn format_stack_map(stack_map : StackMapMetadata?) -> String {
+fn format_stack_map(stack_map : @native.StackMapMetadata?) -> String {
   match stack_map {
     Some(metadata) =>
       " stack-map=\{metadata.id}:\{metadata.argument_root_count}"

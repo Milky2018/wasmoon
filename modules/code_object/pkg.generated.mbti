@@ -2,7 +2,7 @@
 package "Milky2018/code_object"
 
 import {
-  "Milky2018/machv",
+  "Milky2018/native_types",
   "moonbitlang/core/debug",
 }
 
@@ -70,9 +70,9 @@ pub fn RelocationKind::not_equal(Self, Self) -> Bool
 pub fn RelocationKind::to_repr(Self) -> @debug.Repr
 
 pub(all) enum RelocationTarget {
-  Code(@machv.CodeSymbol)
-  External(@machv.ExternalSymbol)
-  Data(@machv.DataSymbol)
+  Code(@native_types.CodeSymbol)
+  External(@native_types.ExternalSymbol)
+  Data(@native_types.DataSymbol)
 } derive(Eq, @debug.Debug)
 pub fn RelocationTarget::equal(Self, Self) -> Bool
 pub fn RelocationTarget::not_equal(Self, Self) -> Bool
@@ -80,7 +80,7 @@ pub fn RelocationTarget::to_repr(Self) -> @debug.Repr
 
 pub(all) enum RootLocation {
   Register(RegisterBank, Int)
-  Stack(offset~ : Int, ty~ : @machv.ValueType)
+  Stack(offset~ : Int, ty~ : @native_types.ValueType)
 } derive(Eq, @debug.Debug)
 pub fn RootLocation::equal(Self, Self) -> Bool
 pub fn RootLocation::not_equal(Self, Self) -> Bool
@@ -88,32 +88,32 @@ pub fn RootLocation::to_repr(Self) -> @debug.Repr
 
 pub struct SafepointSite {
   offset : Int
-  kind : @machv.SafepointKind
+  kind : @native_types.SafepointKind
   roots : Array[RootLocation]
-  source : @machv.SourceLocation?
-  stack_map : @machv.StackMapMetadata?
+  source : @native_types.SourceLocation?
+  stack_map : @native_types.StackMapMetadata?
 } derive(Eq, @debug.Debug)
 pub fn SafepointSite::equal(Self, Self) -> Bool
-pub fn SafepointSite::new(Int, @machv.SafepointKind, Array[RootLocation], source? : @machv.SourceLocation, stack_map? : @machv.StackMapMetadata) -> Self
+pub fn SafepointSite::new(Int, @native_types.SafepointKind, Array[RootLocation], source? : @native_types.SourceLocation, stack_map? : @native_types.StackMapMetadata) -> Self
 pub fn SafepointSite::not_equal(Self, Self) -> Bool
 pub fn SafepointSite::to_repr(Self) -> @debug.Repr
 
 pub struct SourceSite {
   offset : Int
-  source : @machv.SourceLocation
+  source : @native_types.SourceLocation
 } derive(Eq, @debug.Debug)
 pub fn SourceSite::equal(Self, Self) -> Bool
-pub fn SourceSite::new(Int, @machv.SourceLocation) -> Self
+pub fn SourceSite::new(Int, @native_types.SourceLocation) -> Self
 pub fn SourceSite::not_equal(Self, Self) -> Bool
 pub fn SourceSite::to_repr(Self) -> @debug.Repr
 
 pub struct TrapSite {
   offset : Int
-  reason : @machv.TrapReason
-  source : @machv.SourceLocation?
+  reason : @native_types.TrapReason
+  source : @native_types.SourceLocation?
 } derive(Eq, @debug.Debug)
 pub fn TrapSite::equal(Self, Self) -> Bool
-pub fn TrapSite::new(Int, @machv.TrapReason, source? : @machv.SourceLocation) -> Self
+pub fn TrapSite::new(Int, @native_types.TrapReason, source? : @native_types.SourceLocation) -> Self
 pub fn TrapSite::not_equal(Self, Self) -> Bool
 pub fn TrapSite::to_repr(Self) -> @debug.Repr
 

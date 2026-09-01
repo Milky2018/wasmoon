@@ -3,7 +3,7 @@ members = [
   "./modules/wasm_milkir",
   "./modules/wasm_machv",
   "./modules/milkir",
-  "./modules/machv",
+  "./modules/native_types",
   "./modules/milkir_machv",
   "./modules/code_object",
   "./modules/vcode",

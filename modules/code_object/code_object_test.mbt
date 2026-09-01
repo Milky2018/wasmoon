@@ -7,11 +7,11 @@ test "verified code object snapshots complete typed metadata" {
       Relocation::new(
         0,
         AArch64Call26,
-        External(@semantic.ExternalSymbol::new("runtime.poll")),
+        External(@native.ExternalSymbol::new("runtime.poll")),
       ),
     ],
     sources=[
-      SourceSite::new(0, @semantic.SourceLocation::new("fixture.wat", 8, 3)),
+      SourceSite::new(0, @native.SourceLocation::new("fixture.wat", 8, 3)),
     ],
     traps=[TrapSite::new(0, MemoryOutOfBounds)],
     safepoints=[
@@ -19,7 +19,7 @@ test "verified code object snapshots complete typed metadata" {
         0,
         Gc,
         [Register(Int, 0), Stack(offset=16, ty=GcRef64)],
-        stack_map=@semantic.StackMapMetadata::new(0, argument_root_count=1),
+        stack_map=@native.StackMapMetadata::new(0, argument_root_count=1),
       ),
     ],
     unwind=[UnwindDirective::new(4, StackAlloc(size=16))],
@@ -66,13 +66,13 @@ test "code object rejects duplicate or non-dense stack-map ids" {
           0,
           Gc,
           [],
-          stack_map=@semantic.StackMapMetadata::new(0, argument_root_count=0),
+          stack_map=@native.StackMapMetadata::new(0, argument_root_count=0),
         ),
         SafepointSite::new(
           4,
           Gc,
           [],
-          stack_map=@semantic.StackMapMetadata::new(0, argument_root_count=0),
+          stack_map=@native.StackMapMetadata::new(0, argument_root_count=0),
         ),
       ],
     )
@@ -91,7 +91,7 @@ test "code object rejects target-mismatched relocations before escape" {
       Relocation::new(
         0,
         X64PcRelative32,
-        Code(@semantic.CodeSymbol::new("callee")),
+        Code(@native.CodeSymbol::new("callee")),
       ),
     ])
     |> ignore
@@ -118,7 +118,7 @@ test "code object rejects a call relocation on a non-call instruction" {
       Relocation::new(
         0,
         AArch64Call26,
-        External(@semantic.ExternalSymbol::new("runtime.poll")),
+        External(@native.ExternalSymbol::new("runtime.poll")),
       ),
     ])
     |> ignore

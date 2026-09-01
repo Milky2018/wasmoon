@@ -38,7 +38,7 @@ fn artifact_test_manifest(
 
 ///|
 test "live compiler produces complete x64 and AArch64 artifact functions" {
-  let signature = @semantic_machv.Signature::new([I64, I64], [I64])
+  let signature = @native.Signature::new([I64, I64], [I64])
   let function = artifact_test_function("artifact_add")
   let validation_context = @wasm_milkir.WasmValidationContext::empty()
   let x64 = compile_wasm_body_artifact_function(
@@ -102,7 +102,7 @@ test "live artifact and encoded artifact share verification" {
     @wasm_milkir.WasmValidationContext::empty(),
     X64,
     function_index=1,
-    signature=@semantic_machv.Signature::new([I64, I64], [I64]),
+    signature=@native.Signature::new([I64, I64], [I64]),
   )
   let artifact : @artifact.Artifact = {
     manifest,

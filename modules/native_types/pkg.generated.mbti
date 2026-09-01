@@ -1,0 +1,277 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "Milky2018/native_types"
+
+import {
+  "moonbitlang/core/debug",
+}
+
+// Values
+
+// Errors
+
+// Types and methods
+pub(all) enum AccessWidth {
+  W8
+  W16
+  W32
+  W64
+  W128
+} derive(Eq, Hash, @debug.Debug)
+pub fn AccessWidth::equal(Self, Self) -> Bool
+pub fn AccessWidth::hash(Self) -> Int
+pub fn AccessWidth::hash_combine(Self, Hasher) -> Unit
+pub fn AccessWidth::not_equal(Self, Self) -> Bool
+pub fn AccessWidth::to_repr(Self) -> @debug.Repr
+
+pub(all) struct CallBehavior {
+  memory : MemoryEffect
+  may_trap : Bool
+  may_unwind : Bool
+  gc_safepoint : Bool
+  cancellation_safepoint : Bool
+  returns_twice : Bool
+} derive(Eq, Hash, @debug.Debug)
+pub fn CallBehavior::conservative() -> Self
+pub fn CallBehavior::equal(Self, Self) -> Bool
+pub fn CallBehavior::hash(Self) -> Int
+pub fn CallBehavior::hash_combine(Self, Hasher) -> Unit
+pub fn CallBehavior::new(MemoryEffect, Bool, Bool, Bool, Bool, returns_twice? : Bool) -> Self
+pub fn CallBehavior::not_equal(Self, Self) -> Bool
+pub fn CallBehavior::semantics(Self) -> OperationSemantics
+pub fn CallBehavior::to_repr(Self) -> @debug.Repr
+
+pub(all) enum CallProtocol {
+  Internal
+  Platform
+} derive(Eq, Hash, @debug.Debug)
+pub fn CallProtocol::equal(Self, Self) -> Bool
+pub fn CallProtocol::hash(Self) -> Int
+pub fn CallProtocol::hash_combine(Self, Hasher) -> Unit
+pub fn CallProtocol::not_equal(Self, Self) -> Bool
+pub fn CallProtocol::to_repr(Self) -> @debug.Repr
+
+pub(all) struct CodeSymbol {
+  name : String
+} derive(Eq, Hash, @debug.Debug)
+pub fn CodeSymbol::equal(Self, Self) -> Bool
+pub fn CodeSymbol::hash(Self) -> Int
+pub fn CodeSymbol::hash_combine(Self, Hasher) -> Unit
+pub fn CodeSymbol::new(String) -> Self
+pub fn CodeSymbol::not_equal(Self, Self) -> Bool
+pub fn CodeSymbol::to_repr(Self) -> @debug.Repr
+
+pub(all) enum ConversionMode {
+  Trapping
+  Saturating
+} derive(Eq, Hash, @debug.Debug)
+pub fn ConversionMode::equal(Self, Self) -> Bool
+pub fn ConversionMode::hash(Self) -> Int
+pub fn ConversionMode::hash_combine(Self, Hasher) -> Unit
+pub fn ConversionMode::not_equal(Self, Self) -> Bool
+pub fn ConversionMode::to_repr(Self) -> @debug.Repr
+
+pub(all) struct DataSymbol {
+  name : String
+} derive(Eq, Hash, @debug.Debug)
+pub fn DataSymbol::equal(Self, Self) -> Bool
+pub fn DataSymbol::hash(Self) -> Int
+pub fn DataSymbol::hash_combine(Self, Hasher) -> Unit
+pub fn DataSymbol::new(String) -> Self
+pub fn DataSymbol::not_equal(Self, Self) -> Bool
+pub fn DataSymbol::to_repr(Self) -> @debug.Repr
+
+pub(all) enum Endianness {
+  Little
+  Big
+} derive(Eq, Hash, @debug.Debug)
+pub fn Endianness::equal(Self, Self) -> Bool
+pub fn Endianness::hash(Self) -> Int
+pub fn Endianness::hash_combine(Self, Hasher) -> Unit
+pub fn Endianness::not_equal(Self, Self) -> Bool
+pub fn Endianness::to_repr(Self) -> @debug.Repr
+
+pub(all) struct EnvironmentField {
+  name : String
+  value_type : ValueType
+} derive(Eq, Hash, @debug.Debug)
+pub fn EnvironmentField::equal(Self, Self) -> Bool
+pub fn EnvironmentField::hash(Self) -> Int
+pub fn EnvironmentField::hash_combine(Self, Hasher) -> Unit
+pub fn EnvironmentField::new(String, ValueType) -> Self
+pub fn EnvironmentField::not_equal(Self, Self) -> Bool
+pub fn EnvironmentField::to_repr(Self) -> @debug.Repr
+
+pub(all) enum EnvironmentFieldStability {
+  Stable
+  Mutable
+} derive(Eq, Hash, @debug.Debug)
+pub fn EnvironmentFieldStability::equal(Self, Self) -> Bool
+pub fn EnvironmentFieldStability::hash(Self) -> Int
+pub fn EnvironmentFieldStability::hash_combine(Self, Hasher) -> Unit
+pub fn EnvironmentFieldStability::not_equal(Self, Self) -> Bool
+pub fn EnvironmentFieldStability::to_repr(Self) -> @debug.Repr
+
+pub(all) struct ExternalSymbol {
+  name : String
+} derive(Eq, Hash, @debug.Debug)
+pub fn ExternalSymbol::equal(Self, Self) -> Bool
+pub fn ExternalSymbol::hash(Self) -> Int
+pub fn ExternalSymbol::hash_combine(Self, Hasher) -> Unit
+pub fn ExternalSymbol::new(String) -> Self
+pub fn ExternalSymbol::not_equal(Self, Self) -> Bool
+pub fn ExternalSymbol::to_repr(Self) -> @debug.Repr
+
+pub(all) enum FloatType {
+  F32
+  F64
+} derive(Eq, Hash, @debug.Debug)
+pub fn FloatType::equal(Self, Self) -> Bool
+pub fn FloatType::hash(Self) -> Int
+pub fn FloatType::hash_combine(Self, Hasher) -> Unit
+pub fn FloatType::not_equal(Self, Self) -> Bool
+pub fn FloatType::to_repr(Self) -> @debug.Repr
+
+pub(all) enum IntegerType {
+  I32
+  I64
+} derive(Eq, Hash, @debug.Debug)
+pub fn IntegerType::equal(Self, Self) -> Bool
+pub fn IntegerType::hash(Self) -> Int
+pub fn IntegerType::hash_combine(Self, Hasher) -> Unit
+pub fn IntegerType::not_equal(Self, Self) -> Bool
+pub fn IntegerType::to_repr(Self) -> @debug.Repr
+
+pub(all) enum LoadExtension {
+  None
+  Signed
+  Unsigned
+} derive(Eq, Hash, @debug.Debug)
+pub fn LoadExtension::equal(Self, Self) -> Bool
+pub fn LoadExtension::hash(Self) -> Int
+pub fn LoadExtension::hash_combine(Self, Hasher) -> Unit
+pub fn LoadExtension::not_equal(Self, Self) -> Bool
+pub fn LoadExtension::to_repr(Self) -> @debug.Repr
+
+pub(all) enum MemoryEffect {
+  None
+  Read
+  Write
+  ReadWrite
+} derive(Eq, Hash, @debug.Debug)
+pub fn MemoryEffect::equal(Self, Self) -> Bool
+pub fn MemoryEffect::hash(Self) -> Int
+pub fn MemoryEffect::hash_combine(Self, Hasher) -> Unit
+pub fn MemoryEffect::not_equal(Self, Self) -> Bool
+pub fn MemoryEffect::to_repr(Self) -> @debug.Repr
+
+pub(all) struct OperationSemantics {
+  memory : MemoryEffect
+  may_trap : Bool
+  may_unwind : Bool
+  gc_safepoint : Bool
+  cancellation_safepoint : Bool
+  returns_twice : Bool
+} derive(Eq, Hash, @debug.Debug)
+pub fn OperationSemantics::equal(Self, Self) -> Bool
+pub fn OperationSemantics::hash(Self) -> Int
+pub fn OperationSemantics::hash_combine(Self, Hasher) -> Unit
+pub fn OperationSemantics::must_preserve_if_unused(Self) -> Bool
+pub fn OperationSemantics::not_equal(Self, Self) -> Bool
+pub fn OperationSemantics::pure() -> Self
+pub fn OperationSemantics::to_repr(Self) -> @debug.Repr
+
+pub(all) enum SafepointKind {
+  Gc
+  Cancellation
+  GcAndCancellation
+} derive(Eq, Hash, @debug.Debug)
+pub fn SafepointKind::equal(Self, Self) -> Bool
+pub fn SafepointKind::hash(Self) -> Int
+pub fn SafepointKind::hash_combine(Self, Hasher) -> Unit
+pub fn SafepointKind::not_equal(Self, Self) -> Bool
+pub fn SafepointKind::to_repr(Self) -> @debug.Repr
+
+pub(all) struct Signature {
+  params : Array[ValueType]
+  results : Array[ValueType]
+} derive(Eq, Hash, @debug.Debug)
+pub fn Signature::equal(Self, Self) -> Bool
+pub fn Signature::hash(Self) -> Int
+pub fn Signature::hash_combine(Self, Hasher) -> Unit
+pub fn Signature::new(Array[ValueType], Array[ValueType]) -> Self
+pub fn Signature::not_equal(Self, Self) -> Bool
+pub fn Signature::to_repr(Self) -> @debug.Repr
+
+pub(all) enum Signedness {
+  Signed
+  Unsigned
+} derive(Eq, Hash, @debug.Debug)
+pub fn Signedness::equal(Self, Self) -> Bool
+pub fn Signedness::hash(Self) -> Int
+pub fn Signedness::hash_combine(Self, Hasher) -> Unit
+pub fn Signedness::not_equal(Self, Self) -> Bool
+pub fn Signedness::to_repr(Self) -> @debug.Repr
+
+pub(all) struct SourceLocation {
+  file : String
+  line : Int
+  column : Int
+} derive(Eq, Hash, @debug.Debug)
+pub fn SourceLocation::equal(Self, Self) -> Bool
+pub fn SourceLocation::hash(Self) -> Int
+pub fn SourceLocation::hash_combine(Self, Hasher) -> Unit
+pub fn SourceLocation::is_valid(Self) -> Bool
+pub fn SourceLocation::new(String, Int, Int) -> Self
+pub fn SourceLocation::not_equal(Self, Self) -> Bool
+pub fn SourceLocation::to_repr(Self) -> @debug.Repr
+
+pub(all) struct StackMapMetadata {
+  id : Int
+  argument_root_count : Int
+} derive(Eq, @debug.Debug)
+pub fn StackMapMetadata::equal(Self, Self) -> Bool
+pub fn StackMapMetadata::new(Int, argument_root_count~ : Int) -> Self
+pub fn StackMapMetadata::not_equal(Self, Self) -> Bool
+pub fn StackMapMetadata::to_repr(Self) -> @debug.Repr
+
+pub(all) enum TrapReason {
+  Unreachable
+  IntegerDivisionByZero
+  IntegerOverflow
+  InvalidConversionToInteger
+  MemoryOutOfBounds
+  TableOutOfBounds
+  IndirectCallTypeMismatch
+  NullReference
+  UnalignedAtomic
+  UnsupportedOperation
+  StackOverflow
+  User(Int)
+} derive(Eq, Hash, @debug.Debug)
+pub fn TrapReason::equal(Self, Self) -> Bool
+pub fn TrapReason::hash(Self) -> Int
+pub fn TrapReason::hash_combine(Self, Hasher) -> Unit
+pub fn TrapReason::not_equal(Self, Self) -> Bool
+pub fn TrapReason::to_repr(Self) -> @debug.Repr
+
+pub(all) enum ValueType {
+  I32
+  I64
+  F32
+  F64
+  V128
+  Ptr64
+  GcRef64
+} derive(Eq, Hash, @debug.Debug)
+pub fn ValueType::equal(Self, Self) -> Bool
+pub fn ValueType::hash(Self) -> Int
+pub fn ValueType::hash_combine(Self, Hasher) -> Unit
+pub fn ValueType::not_equal(Self, Self) -> Bool
+pub fn ValueType::output(Self, &Logger) -> Unit
+pub fn ValueType::to_repr(Self) -> @debug.Repr
+pub fn ValueType::to_string(Self) -> String
+pub impl Show for ValueType
+
+// Type aliases
+
+// Traits

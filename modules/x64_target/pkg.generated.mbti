@@ -3,7 +3,8 @@ package "Milky2018/x64_target"
 
 import {
   "Milky2018/code_object",
-  "Milky2018/machv",
+  "Milky2018/native_types",
+  "Milky2018/native_types/semantic",
   "Milky2018/vcode",
   "Milky2018/vcode/allocation_types",
   "Milky2018/vcode_regalloc",
@@ -19,13 +20,13 @@ pub fn compile_selected(SelectedFunction, on_event? : (@vcode.TargetCompileEvent
 
 pub fn emit(@vcode.Function[X64Inst], @vcode.Allocation, X64Frame) -> @code_object.UnlinkedCodeObject raise X64EmitError
 
-pub fn lower(@machv.SelectionPlan, LoweringContext, on_event? : (@vcode.TargetCompileEvent) -> Unit) -> @vcode.Function[X64Inst] raise X64LowerError
+pub fn lower(@semantic.SelectionPlan, LoweringContext, on_event? : (@vcode.TargetCompileEvent) -> Unit) -> @vcode.Function[X64Inst] raise X64LowerError
 
 pub fn plan_frame(@vcode.Function[X64Inst], @vcode.Allocation) -> X64Frame raise X64FrameError
 
 pub fn prepare_x64_link(@code_object.UnlinkedCodeObject) -> X64LinkPlan raise X64LinkError
 
-pub fn select(@machv.SelectionPlan, LoweringContext, on_event? : (@vcode.TargetCompileEvent) -> Unit) -> SelectedFunction raise X64LowerError
+pub fn select(@semantic.SelectionPlan, LoweringContext, on_event? : (@vcode.TargetCompileEvent) -> Unit) -> SelectedFunction raise X64LowerError
 
 pub fn verify_allocation(@vcode.Function[X64Inst], @vcode.Allocation) -> Unit raise X64AllocationError
 
@@ -139,9 +140,9 @@ pub fn X64LinkError::to_string(Self) -> String
 pub impl Show for X64LinkError
 
 pub suberror X64LowerError {
-  InvalidSemantic(cause~ : @machv.MachVVerifyError)
+  InvalidSemantic(cause~ : @semantic.MachVVerifyError)
   MissingMappedValue(value_index~ : Int)
-  UnsupportedOperation(block_index~ : Int, instruction_index~ : Int, operation~ : @machv.Operation)
+  UnsupportedOperation(block_index~ : Int, instruction_index~ : Int, operation~ : @semantic.Operation)
   UnsupportedAbi(message~ : String)
   BuildFailure(cause~ : @vcode.VCodeBuildError)
   InvalidTarget(cause~ : TargetVCodeVerifyError)
@@ -197,16 +198,16 @@ pub struct LoweringContext {
   // private fields
 }
 pub fn LoweringContext::new(InternalAbi) -> Self
-pub fn LoweringContext::with_environment_field(Self, @machv.EnvironmentField, Array[Int]) -> Self
+pub fn LoweringContext::with_environment_field(Self, @native_types.EnvironmentField, Array[Int]) -> Self
 
 pub struct SelectedFunction {
   // private fields
 }
 
 pub(all) enum X64Address {
-  Code(@machv.CodeSymbol)
-  External(@machv.ExternalSymbol)
-  Data(@machv.DataSymbol)
+  Code(@native_types.CodeSymbol)
+  External(@native_types.ExternalSymbol)
+  Data(@native_types.DataSymbol)
 } derive(Eq, @debug.Debug)
 pub fn X64Address::equal(Self, Self) -> Bool
 pub fn X64Address::not_equal(Self, Self) -> Bool
@@ -230,14 +231,14 @@ pub fn X64Condition::to_repr(Self) -> @debug.Repr
 
 pub(all) enum X64Conversion {
   WrapI64ToI32
-  ExtendI32ToI64(@machv.Signedness)
-  SignExtend(@machv.IntegerType, @machv.AccessWidth)
+  ExtendI32ToI64(@native_types.Signedness)
+  SignExtend(@native_types.IntegerType, @native_types.AccessWidth)
   DemoteF64ToF32
   PromoteF32ToF64
-  Bitcast(@machv.ValueType, @machv.ValueType)
-  IntToFloat(@machv.IntegerType, @machv.FloatType, @machv.Signedness)
-  FloatToInt(@machv.FloatType, @machv.IntegerType, @machv.Signedness)
-  FloatToIntSaturating(@machv.FloatType, @machv.IntegerType, @machv.Signedness)
+  Bitcast(@native_types.ValueType, @native_types.ValueType)
+  IntToFloat(@native_types.IntegerType, @native_types.FloatType, @native_types.Signedness)
+  FloatToInt(@native_types.FloatType, @native_types.IntegerType, @native_types.Signedness)
+  FloatToIntSaturating(@native_types.FloatType, @native_types.IntegerType, @native_types.Signedness)
 } derive(Eq, @debug.Debug)
 pub fn X64Conversion::equal(Self, Self) -> Bool
 pub fn X64Conversion::not_equal(Self, Self) -> Bool
@@ -318,84 +319,84 @@ pub fn X64Frame::summary(Self) -> String
 pub fn X64Frame::tail_args_size(Self) -> Int
 
 pub(all) enum X64Inst {
-  IncomingReg(@machv.ValueType, @allocation_types.PhysicalReg)
-  IncomingStack(@machv.ValueType, Int)
+  IncomingReg(@native_types.ValueType, @allocation_types.PhysicalReg)
+  IncomingStack(@native_types.ValueType, Int)
   IncomingResultArea(@allocation_types.PhysicalReg)
-  IncomingCallResult(@machv.ValueType, @allocation_types.PhysicalReg)
-  IncomingCallAreaResult(@machv.ValueType, Int)
-  OutgoingReg(@machv.ValueType, @allocation_types.PhysicalReg)
-  OutgoingAreaResult(@machv.ValueType, Int)
-  KeepAlive(@machv.ValueType)
+  IncomingCallResult(@native_types.ValueType, @allocation_types.PhysicalReg)
+  IncomingCallAreaResult(@native_types.ValueType, Int)
+  OutgoingReg(@native_types.ValueType, @allocation_types.PhysicalReg)
+  OutgoingAreaResult(@native_types.ValueType, Int)
+  KeepAlive(@native_types.ValueType)
   LoadConstant(GprWidth, UInt64)
   LoadVectorConstant(UInt64, UInt64)
-  LoadNull(@machv.ValueType)
+  LoadNull(@native_types.ValueType)
   LoadAddress(X64Address)
   StackAddress(X64StackObject)
-  LoadFloatConstant(@machv.ValueType, UInt64)
-  Move(@machv.ValueType)
-  CarrierMove(@machv.ValueType, @machv.ValueType)
-  Select(@machv.ValueType)
+  LoadFloatConstant(@native_types.ValueType, UInt64)
+  Move(@native_types.ValueType)
+  CarrierMove(@native_types.ValueType, @native_types.ValueType)
+  Select(@native_types.ValueType)
   VectorSelect
-  VectorSplat(@machv.VectorLane)
-  VectorExtractLane(@machv.VectorLane, Int, @machv.Signedness?)
-  VectorReplaceLane(@machv.VectorLane, Int)
+  VectorSplat(@semantic.VectorLane)
+  VectorExtractLane(@semantic.VectorLane, Int, @native_types.Signedness?)
+  VectorReplaceLane(@semantic.VectorLane, Int)
   VectorShuffle(FixedArray[Int])
   VectorSwizzle
-  VectorBitwise(@machv.VectorBitwiseOp)
-  VectorIntUnary(@machv.VectorLane, X64VectorIntUnary)
-  VectorIntBinary(@machv.VectorLane, X64VectorIntBinary)
-  VectorIntShift(@machv.VectorLane, @machv.VectorIntShiftOp)
-  VectorIntCompare(@machv.VectorLane, @machv.VectorIntComparison)
+  VectorBitwise(@semantic.VectorBitwiseOp)
+  VectorIntUnary(@semantic.VectorLane, X64VectorIntUnary)
+  VectorIntBinary(@semantic.VectorLane, X64VectorIntBinary)
+  VectorIntShift(@semantic.VectorLane, @semantic.VectorIntShiftOp)
+  VectorIntCompare(@semantic.VectorLane, @semantic.VectorIntComparison)
   VectorConvert(X64VectorConversion)
   VectorPredicate(X64VectorPredicate)
-  VectorFloatUnary(@machv.VectorLane, @machv.VectorFloatUnaryOp)
-  VectorFloatBinary(@machv.VectorLane, @machv.VectorFloatBinaryOp)
-  VectorFloatTernary(@machv.VectorLane, @machv.FloatTernaryOp)
-  VectorFloatCompare(@machv.VectorLane, @machv.VectorFloatComparison)
+  VectorFloatUnary(@semantic.VectorLane, @semantic.VectorFloatUnaryOp)
+  VectorFloatBinary(@semantic.VectorLane, @semantic.VectorFloatBinaryOp)
+  VectorFloatTernary(@semantic.VectorLane, @semantic.FloatTernaryOp)
+  VectorFloatCompare(@semantic.VectorLane, @semantic.VectorFloatComparison)
   VectorPairwiseAddI16x8
   VectorRelaxedDot8To16
   IntUnary(GprWidth, X64IntUnary)
   IntBinary(GprWidth, X64IntBinary)
   PopulationCount(GprWidth)
-  IntHighMultiply(GprWidth, @machv.Signedness)
-  IntWithOverflow(GprWidth, @machv.IntOverflowOp)
-  IntRemainder(GprWidth, @machv.Signedness)
+  IntHighMultiply(GprWidth, @native_types.Signedness)
+  IntWithOverflow(GprWidth, @semantic.IntOverflowOp)
+  IntRemainder(GprWidth, @native_types.Signedness)
   TrapIfZero(GprWidth)
   TrapIfSignedDivOverflow(GprWidth)
   CompareSet(GprWidth, X64Condition)
-  ReferenceCompareSet(@machv.ValueType, X64Condition)
-  FloatUnary(@machv.ValueType, X64FloatUnary)
-  FloatBinary(@machv.ValueType, X64FloatBinary)
-  FloatTernary(@machv.ValueType, X64FloatTernary)
-  FloatCompareSet(@machv.ValueType, X64FloatCondition)
-  TrapIfFloat(@machv.ValueType, X64FloatTrapCondition)
+  ReferenceCompareSet(@native_types.ValueType, X64Condition)
+  FloatUnary(@native_types.ValueType, X64FloatUnary)
+  FloatBinary(@native_types.ValueType, X64FloatBinary)
+  FloatTernary(@native_types.ValueType, X64FloatTernary)
+  FloatCompareSet(@native_types.ValueType, X64FloatCondition)
+  TrapIfFloat(@native_types.ValueType, X64FloatTrapCondition)
   Convert(X64Conversion)
   AddAddress
-  ScalarLoad(@machv.AccessWidth, @machv.LoadExtension, @machv.ValueType, UInt64)
-  ScalarStore(@machv.AccessWidth, @machv.ValueType, UInt64)
+  ScalarLoad(@native_types.AccessWidth, @native_types.LoadExtension, @native_types.ValueType, UInt64)
+  ScalarStore(@native_types.AccessWidth, @native_types.ValueType, UInt64)
   VectorLoad128(UInt64)
   VectorStore128(UInt64)
-  VectorLoadSplat(@machv.VectorLane, UInt64)
-  VectorLoadExtend(@machv.VectorLane, @machv.Signedness, UInt64)
-  VectorLoadZero(@machv.AccessWidth, UInt64)
-  VectorLoadLane(@machv.VectorLane, Int, UInt64)
-  VectorStoreLane(@machv.VectorLane, Int, UInt64)
-  AtomicLoad(@machv.AccessWidth, @machv.ValueType)
-  AtomicStore(@machv.AccessWidth, @machv.ValueType)
-  AtomicRmw(@machv.AccessWidth, @machv.ValueType, @machv.AtomicRmwOp)
-  AtomicCompareExchange(@machv.AccessWidth, @machv.ValueType)
+  VectorLoadSplat(@semantic.VectorLane, UInt64)
+  VectorLoadExtend(@semantic.VectorLane, @native_types.Signedness, UInt64)
+  VectorLoadZero(@native_types.AccessWidth, UInt64)
+  VectorLoadLane(@semantic.VectorLane, Int, UInt64)
+  VectorStoreLane(@semantic.VectorLane, Int, UInt64)
+  AtomicLoad(@native_types.AccessWidth, @native_types.ValueType)
+  AtomicStore(@native_types.AccessWidth, @native_types.ValueType)
+  AtomicRmw(@native_types.AccessWidth, @native_types.ValueType, @semantic.AtomicRmwOp)
+  AtomicCompareExchange(@native_types.AccessWidth, @native_types.ValueType)
   AtomicFence
   SafepointMarker
-  PlatformCall(@machv.ExternalSymbol, @machv.Signature)
-  ReturnsTwicePlatformCall(@machv.ExternalSymbol, @machv.Signature)
-  InternalCall(@machv.CodeSymbol, @machv.Signature, InternalCallPlan)
-  InternalCallIndirect(@machv.Signature, InternalCallPlan)
-  TailCallDirect(@machv.CodeSymbol, @machv.Signature, InternalCallPlan)
-  TailCallIndirect(@machv.Signature, InternalCallPlan)
+  PlatformCall(@native_types.ExternalSymbol, @native_types.Signature)
+  ReturnsTwicePlatformCall(@native_types.ExternalSymbol, @native_types.Signature)
+  InternalCall(@native_types.CodeSymbol, @native_types.Signature, InternalCallPlan)
+  InternalCallIndirect(@native_types.Signature, InternalCallPlan)
+  TailCallDirect(@native_types.CodeSymbol, @native_types.Signature, InternalCallPlan)
+  TailCallIndirect(@native_types.Signature, InternalCallPlan)
   Jump
   BranchNonZero32
   Switch(GprWidth, Array[UInt64])
-  Trap(@machv.TrapReason)
+  Trap(@native_types.TrapReason)
   Return
 } derive(Eq, @debug.Debug)
 pub fn X64Inst::equal(Self, Self) -> Bool
@@ -451,11 +452,11 @@ pub fn X64StackObject::not_equal(Self, Self) -> Bool
 pub fn X64StackObject::to_repr(Self) -> @debug.Repr
 
 pub(all) enum X64VectorConversion {
-  ExtendLow(@machv.VectorLane, @machv.Signedness)
-  ExtendHigh(@machv.VectorLane, @machv.Signedness)
-  Narrow(@machv.VectorLane, @machv.Signedness)
-  FloatToInt(@machv.VectorLane, @machv.Signedness)
-  IntToFloat(@machv.VectorLane, @machv.Signedness)
+  ExtendLow(@semantic.VectorLane, @native_types.Signedness)
+  ExtendHigh(@semantic.VectorLane, @native_types.Signedness)
+  Narrow(@semantic.VectorLane, @native_types.Signedness)
+  FloatToInt(@semantic.VectorLane, @native_types.Signedness)
+  IntToFloat(@semantic.VectorLane, @native_types.Signedness)
   PromoteLowF32x4
   DemoteZeroF64x2
 } derive(Eq, @debug.Debug)
@@ -468,11 +469,11 @@ pub(all) enum X64VectorIntBinary {
   Sub
   Mul
   AverageUnsigned
-  Min(@machv.Signedness)
-  Max(@machv.Signedness)
-  SaturatingAdd(@machv.Signedness)
-  SaturatingSub(@machv.Signedness)
-  ExtendMultiply(@machv.VectorHalf, @machv.Signedness)
+  Min(@native_types.Signedness)
+  Max(@native_types.Signedness)
+  SaturatingAdd(@native_types.Signedness)
+  SaturatingSub(@native_types.Signedness)
+  ExtendMultiply(@semantic.VectorHalf, @native_types.Signedness)
   Dot16To32Signed
   Q15MultiplyRoundedSaturating
 } derive(Eq, @debug.Debug)
@@ -484,7 +485,7 @@ pub(all) enum X64VectorIntUnary {
   Absolute
   Negate
   PopulationCount
-  ExtendAddPairwise(@machv.Signedness)
+  ExtendAddPairwise(@native_types.Signedness)
 } derive(Eq, @debug.Debug)
 pub fn X64VectorIntUnary::equal(Self, Self) -> Bool
 pub fn X64VectorIntUnary::not_equal(Self, Self) -> Bool
@@ -492,8 +493,8 @@ pub fn X64VectorIntUnary::to_repr(Self) -> @debug.Repr
 
 pub(all) enum X64VectorPredicate {
   AnyTrue
-  AllTrue(@machv.VectorLane)
-  BitMask(@machv.VectorLane)
+  AllTrue(@semantic.VectorLane)
+  BitMask(@semantic.VectorLane)
 } derive(Eq, @debug.Debug)
 pub fn X64VectorPredicate::equal(Self, Self) -> Bool
 pub fn X64VectorPredicate::not_equal(Self, Self) -> Bool

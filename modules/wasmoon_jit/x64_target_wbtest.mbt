@@ -1,6 +1,6 @@
 ///|
 test "x64 target preserves the Wasmoon overflow-result ABI" {
-  let result_types : Array[@semantic_machv.ValueType] = [
+  let result_types : Array[@native.ValueType] = [
     I32,
     I32,
     I32,
@@ -244,7 +244,7 @@ test "x64 target preserves the Wasmoon overflow-result ABI" {
 
 ///|
 test "x64 target preserves an incoming result area across indirect calls" {
-  let result_types : Array[@semantic_machv.ValueType] = [
+  let result_types : Array[@native.ValueType] = [
     I32,
     I32,
     I32,
@@ -264,9 +264,9 @@ test "x64 target preserves an incoming result area across indirect calls" {
   let parameters = builder.parameters()
   let call = @semantic_machv.SemanticCall::new(
     Indirect,
-    @semantic_machv.Signature::new([Ptr64], result_types),
+    @native.Signature::new([Ptr64], result_types),
     Internal,
-    @semantic_machv.CallBehavior::new(ReadWrite, true, true, false, false),
+    @native.CallBehavior::new(ReadWrite, true, true, false, false),
   )
   let results = builder.emit(
     Call(call),
@@ -420,13 +420,13 @@ test "x64 expanded tail calls preserve native helper stack alignment" {
   if alignment_probe == 0L {
     return
   }
-  let callee_symbol = @semantic_machv.CodeSymbol::new(
+  let callee_symbol = @native.CodeSymbol::new(
     "shadow.expanded_tail_alignment_callee",
   )
-  let probe_symbol = @semantic_machv.ExternalSymbol::new(
+  let probe_symbol = @native.ExternalSymbol::new(
     "wasmoon.test.x64_stack_alignment_probe",
   )
-  let callee_params : Array[@semantic_machv.ValueType] = [Ptr64]
+  let callee_params : Array[@native.ValueType] = [Ptr64]
   for _ in 0..<8 {
     callee_params.push(I64)
   }
@@ -441,15 +441,9 @@ test "x64 expanded tail calls preserve native helper stack alignment" {
       Call(
         @semantic_machv.SemanticCall::new(
           External(probe_symbol),
-          @semantic_machv.Signature::new([], [I64]),
+          @native.Signature::new([], [I64]),
           Platform,
-          @semantic_machv.CallBehavior::new(
-            ReadWrite,
-            true,
-            false,
-            false,
-            false,
-          ),
+          @native.CallBehavior::new(ReadWrite, true, false, false, false),
         ),
       ),
       [],
@@ -487,9 +481,9 @@ test "x64 expanded tail calls preserve native helper stack alignment" {
   caller.tail_call(
     @semantic_machv.SemanticCall::new(
       Internal(callee_symbol),
-      @semantic_machv.Signature::new(callee_params, [I64]),
+      @native.Signature::new(callee_params, [I64]),
       Internal,
-      @semantic_machv.CallBehavior::new(ReadWrite, true, true, false, false),
+      @native.CallBehavior::new(ReadWrite, true, true, false, false),
     ),
     caller_operands,
   )

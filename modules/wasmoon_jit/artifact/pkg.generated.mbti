@@ -3,7 +3,7 @@ package "Milky2018/wasmoon_jit/artifact"
 
 import {
   "Milky2018/code_object",
-  "Milky2018/machv",
+  "Milky2018/native_types",
   "moonbitlang/core/debug",
 }
 
@@ -140,8 +140,8 @@ pub fn FunctionCode::to_repr(Self) -> @debug.Repr
 
 pub(all) struct FunctionIdentity {
   function_index : Int
-  symbol : @machv.CodeSymbol
-  signature : @machv.Signature
+  symbol : @native_types.CodeSymbol
+  signature : @native_types.Signature
 } derive(Eq, @debug.Debug)
 pub fn FunctionIdentity::equal(Self, Self) -> Bool
 pub fn FunctionIdentity::not_equal(Self, Self) -> Bool
@@ -151,8 +151,8 @@ pub(all) struct ImportIdentity {
   function_index : Int
   module_name : String
   function_name : String
-  symbol : @machv.ExternalSymbol
-  signature : @machv.Signature
+  symbol : @native_types.ExternalSymbol
+  signature : @native_types.Signature
 } derive(Eq, @debug.Debug)
 pub fn ImportIdentity::equal(Self, Self) -> Bool
 pub fn ImportIdentity::not_equal(Self, Self) -> Bool
@@ -197,7 +197,7 @@ pub fn PointerWidth::to_repr(Self) -> @debug.Repr
 pub(all) struct TargetSpec {
   architecture : @code_object.Architecture
   operating_system_abi : OperatingSystemAbi
-  endianness : @machv.Endianness
+  endianness : @native_types.Endianness
   pointer_width : PointerWidth
 } derive(Eq, @debug.Debug)
 pub fn TargetSpec::equal(Self, Self) -> Bool

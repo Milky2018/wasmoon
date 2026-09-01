@@ -11,7 +11,7 @@ keywords = [ "compiler", "vcode", "register-allocation", "codegen" ]
 description = "Target-independent virtual-register code infrastructure"
 
 import {
-  "Milky2018/machv@0.12.6",
+  "Milky2018/native_types@0.12.6",
 }
 
 preferred_target = "wasm-gc"

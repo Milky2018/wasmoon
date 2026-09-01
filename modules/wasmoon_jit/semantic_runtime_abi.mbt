@@ -1,6 +1,6 @@
 ///|
 fn hidden_safepoint_abi(
-  symbol : @semantic_machv.ExternalSymbol,
+  symbol : @native.ExternalSymbol,
 ) -> @semantic_machv.HiddenSafepointAbi {
   @semantic_machv.HiddenSafepointAbi::new(symbol, AllocationOperands)
 }
@@ -8,11 +8,8 @@ fn hidden_safepoint_abi(
 ///|
 fn elaborate_wasmoon_runtime_abi_selection_plan(
   prepared : @semantic_machv.PreparedSelection,
-  allocation_symbols : Array[@semantic_machv.ExternalSymbol],
-  root_scope_symbols : (
-    @semantic_machv.ExternalSymbol,
-    @semantic_machv.ExternalSymbol,
-  ),
+  allocation_symbols : Array[@native.ExternalSymbol],
+  root_scope_symbols : (@native.ExternalSymbol, @native.ExternalSymbol),
 ) -> @semantic_machv.SelectionPlan raise JitPipelineError {
   let hidden_safepoints : Array[@semantic_machv.HiddenSafepointAbi] = []
   for symbol in allocation_symbols {

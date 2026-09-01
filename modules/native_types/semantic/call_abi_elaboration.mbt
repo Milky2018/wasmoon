@@ -10,13 +10,13 @@ pub(all) enum StackMapArgumentRoots {
 ///|
 /// One external call whose runtime ABI requires an explicit stack-map id.
 pub struct HiddenSafepointAbi {
-  priv symbol : ExternalSymbol
+  priv symbol : @native.ExternalSymbol
   priv argument_roots : StackMapArgumentRoots
 }
 
 ///|
 pub fn HiddenSafepointAbi::new(
-  symbol : ExternalSymbol,
+  symbol : @native.ExternalSymbol,
   argument_roots : StackMapArgumentRoots,
 ) -> HiddenSafepointAbi {
   { symbol, argument_roots, }
@@ -25,14 +25,14 @@ pub fn HiddenSafepointAbi::new(
 ///|
 /// Runtime calls used to make caller-owned GC roots visible while a call runs.
 pub struct CallerRootScopeAbi {
-  priv push_symbol : ExternalSymbol
-  priv pop_symbol : ExternalSymbol
+  priv push_symbol : @native.ExternalSymbol
+  priv pop_symbol : @native.ExternalSymbol
 }
 
 ///|
 pub fn CallerRootScopeAbi::new(
-  push_symbol : ExternalSymbol,
-  pop_symbol : ExternalSymbol,
+  push_symbol : @native.ExternalSymbol,
+  pop_symbol : @native.ExternalSymbol,
 ) -> CallerRootScopeAbi {
   { push_symbol, pop_symbol, }
 }
@@ -121,7 +121,7 @@ fn FunctionConstruction::call_context_operand(
   }
   guard index >= 0 &&
     index < operands.length() &&
-    self.values[operands[index].id].ty == Ptr64 else {
+    self.values[operands[index].id].ty == @native.Ptr64 else {
     raise InvalidCall(
       instruction_id=instruction.id,
       message="caller root scope requires a ptr64 execution environment",
@@ -157,7 +157,7 @@ fn FunctionConstruction::hidden_argument_root_count(
         )
       }
       let value = operands[index]
-      guard self.values[value.id].ty == I32 &&
+      guard self.values[value.id].ty == @native.I32 &&
         constants[value.id] is Some(count) &&
         count >= 0L &&
         count <= 2147483647L else {
@@ -170,8 +170,8 @@ fn FunctionConstruction::hidden_argument_root_count(
     }
     AllocationOperands =>
       match call.signature.params {
-        [Ptr64, I32, I32, I64] => 1
-        [Ptr64, I32, Ptr64, I32] =>
+        [@native.Ptr64, @native.I32, @native.I32, @native.I64] => 1
+        [@native.Ptr64, @native.I32, @native.Ptr64, @native.I32] =>
           self.hidden_argument_root_count(
             instruction,
             call,
@@ -194,7 +194,7 @@ fn FunctionConstruction::append_detached_instruction(
   block : Block,
   operation : Operation,
   operands : Array[Value],
-  result_types : Array[ValueType],
+  result_types : Array[@native.ValueType],
   metadata : InstructionMetadata,
 ) -> (Instruction, Array[Value]) {
   let instruction = Instruction::new(self.owner, self.instructions.length())
@@ -218,22 +218,22 @@ fn FunctionConstruction::append_detached_instruction(
 }
 
 ///|
-fn root_scope_push_call(symbol : ExternalSymbol) -> SemanticCall {
+fn root_scope_push_call(symbol : @native.ExternalSymbol) -> SemanticCall {
   SemanticCall::new(
     External(symbol),
-    Signature::new([Ptr64, Ptr64, I32], []),
+    @native.Signature::new([@native.Ptr64, @native.Ptr64, @native.I32], []),
     Platform,
-    CallBehavior::new(ReadWrite, true, false, false, false),
+    @native.CallBehavior::new(ReadWrite, true, false, false, false),
   )
 }
 
 ///|
-fn root_scope_pop_call(symbol : ExternalSymbol) -> SemanticCall {
+fn root_scope_pop_call(symbol : @native.ExternalSymbol) -> SemanticCall {
   SemanticCall::new(
     External(symbol),
-    Signature::new([Ptr64], []),
+    @native.Signature::new([@native.Ptr64], []),
     Platform,
-    CallBehavior::new(ReadWrite, true, false, false, false),
+    @native.CallBehavior::new(ReadWrite, true, false, false, false),
   )
 }
 
@@ -245,13 +245,13 @@ fn FunctionConstruction::append_root_scope_push(
   context : Value,
   roots : Array[Value],
   object : StackObject,
-  symbol : ExternalSymbol,
+  symbol : @native.ExternalSymbol,
 ) -> Unit {
   let (address_instruction, address_results) = self.append_detached_instruction(
     block,
     StackAddress(object),
     [],
-    [Ptr64],
+    [@native.Ptr64],
     InstructionMetadata::empty(),
   )
   destination.push(address_instruction)
@@ -259,7 +259,15 @@ fn FunctionConstruction::append_root_scope_push(
   for index, root in roots {
     let (store, _) = self.append_detached_instruction(
       block,
-      Store(StoreSpec::new(W64, GcRef64, (index * 8).to_uint64(), Little, None)),
+      Store(
+        StoreSpec::new(
+          W64,
+          @native.GcRef64,
+          (index * 8).to_uint64(),
+          Little,
+          None,
+        ),
+      ),
       [address, root],
       [],
       InstructionMetadata::empty(),
@@ -270,7 +278,7 @@ fn FunctionConstruction::append_root_scope_push(
     block,
     I32Const(roots.length().reinterpret_as_uint()),
     [],
-    [I32],
+    [@native.I32],
     InstructionMetadata::empty(),
   )
   destination.push(count_instruction)
@@ -290,7 +298,7 @@ fn FunctionConstruction::append_root_scope_pop(
   block : Block,
   destination : Array[Instruction],
   context : Value,
-  symbol : ExternalSymbol,
+  symbol : @native.ExternalSymbol,
 ) -> Unit {
   let (pop, _) = self.append_detached_instruction(
     block,
@@ -462,20 +470,23 @@ fn FunctionConstruction::elaborate_call_abi_verified(
               Block::new(self.owner, block_index),
               I32Const(next_stack_map_id.reinterpret_as_uint()),
               [],
-              [I32],
+              [@native.I32],
               InstructionMetadata::empty(),
             )
             rewritten.push(id_instruction)
             let operands = requirement.operands.copy()
             operands.push(id_results[0])
             let parameters = requirement.call.signature.params.copy()
-            parameters.push(I32)
+            parameters.push(@native.I32)
             let old = self.instructions[instruction.id]
             self.instructions[instruction.id] = {
               operation: Call(
                 SemanticCall::new(
                   requirement.call.callee,
-                  Signature::new(parameters, requirement.call.signature.results),
+                  @native.Signature::new(
+                    parameters,
+                    requirement.call.signature.results,
+                  ),
                   requirement.call.protocol,
                   requirement.call.behavior,
                 ),
@@ -485,7 +496,7 @@ fn FunctionConstruction::elaborate_call_abi_verified(
               metadata: InstructionMetadata::new(
                 requirement.metadata.source,
                 requirement.metadata.live_gc_roots,
-                stack_map=StackMapMetadata::new(
+                stack_map=@native.StackMapMetadata::new(
                   next_stack_map_id,
                   argument_root_count~,
                 ),

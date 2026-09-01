@@ -11,22 +11,22 @@ const GC_SLOT_BYTES : Int = 16
 /// Symbols remain unresolved and target-neutral. Address resolution belongs to
 /// the embedding product after target emission.
 struct Environment {
-  function_symbol : (Int) -> @machv.CodeSymbol
-  memory_base_field : (Int) -> @machv.EnvironmentField
-  function_table_field : @machv.EnvironmentField
-  table_base_field : (Int) -> @machv.EnvironmentField
+  function_symbol : (Int) -> @native.CodeSymbol
+  memory_base_field : (Int) -> @native.EnvironmentField
+  function_table_field : @native.EnvironmentField
+  table_base_field : (Int) -> @native.EnvironmentField
   canonical_type_index : (Int) -> Int
-  runtime_symbol : (@wasm_milkir.WasmRuntimeHelper) -> @machv.ExternalSymbol
+  runtime_symbol : (@wasm_milkir.WasmRuntimeHelper) -> @native.ExternalSymbol
 }
 
 ///|
 pub fn Environment::new(
-  function_symbol : (Int) -> @machv.CodeSymbol,
-  memory_base_field : (Int) -> @machv.EnvironmentField,
-  function_table_field : @machv.EnvironmentField,
-  table_base_field : (Int) -> @machv.EnvironmentField,
+  function_symbol : (Int) -> @native.CodeSymbol,
+  memory_base_field : (Int) -> @native.EnvironmentField,
+  function_table_field : @native.EnvironmentField,
+  table_base_field : (Int) -> @native.EnvironmentField,
   canonical_type_index : (Int) -> Int,
-  runtime_symbol : (@wasm_milkir.WasmRuntimeHelper) -> @machv.ExternalSymbol,
+  runtime_symbol : (@wasm_milkir.WasmRuntimeHelper) -> @native.ExternalSymbol,
 ) -> Environment {
   {
     function_symbol,
@@ -43,9 +43,9 @@ fn direct_call_contract(
   context : @adapter.InstructionContext,
   function_index : Int,
   environment : Environment,
-  result_types : Array[@machv.ValueType],
+  result_types : Array[@native.ValueType],
 ) -> (@machv.SemanticCall, Array[@machv.Value]) {
-  let parameter_types : Array[@machv.ValueType] = [Ptr64]
+  let parameter_types : Array[@native.ValueType] = [Ptr64]
   for ty in context.operand_types() {
     parameter_types.push(ty)
   }
@@ -56,9 +56,9 @@ fn direct_call_contract(
   (
     @machv.SemanticCall::new(
       Internal((environment.function_symbol)(function_index)),
-      @machv.Signature::new(parameter_types, result_types),
+      @native.Signature::new(parameter_types, result_types),
       Internal,
-      @machv.CallBehavior::conservative(),
+      @native.CallBehavior::conservative(),
     ),
     operands,
   )
@@ -109,11 +109,11 @@ fn untag_callable_reference(
 ///|
 fn indirect_reference_call_contract(
   context : @adapter.InstructionContext,
-  result_types : Array[@machv.ValueType],
+  result_types : Array[@native.ValueType],
 ) -> (@machv.SemanticCall, Array[@machv.Value]) {
   let source_operands = context.operands()
   let source_types = context.operand_types()
-  let parameter_types : Array[@machv.ValueType] = [Ptr64]
+  let parameter_types : Array[@native.ValueType] = [Ptr64]
   for index in 1..<source_types.length() {
     parameter_types.push(source_types[index])
   }
@@ -129,9 +129,9 @@ fn indirect_reference_call_contract(
   (
     @machv.SemanticCall::new(
       Indirect,
-      @machv.Signature::new(parameter_types, result_types),
+      @native.Signature::new(parameter_types, result_types),
       Internal,
-      @machv.CallBehavior::conservative(),
+      @native.CallBehavior::conservative(),
     ),
     operands,
   )
@@ -274,9 +274,9 @@ fn check_indirect_type(
   context.emit_call_without_roots(
     @machv.SemanticCall::new(
       External((environment.runtime_symbol)(GcTypeCheckSubtype)),
-      @machv.Signature::new([I32, I32], []),
+      @native.Signature::new([I32, I32], []),
       Platform,
-      @machv.CallBehavior::new(Read, true, false, false, false),
+      @native.CallBehavior::new(Read, true, false, false, false),
     ),
     [actual, expected],
     [],
@@ -311,7 +311,7 @@ fn lower_indirect_call(
     )[0]
   let source_operands = context.operands()
   let source_types = context.operand_types()
-  let parameter_types : Array[@machv.ValueType] = [Ptr64]
+  let parameter_types : Array[@native.ValueType] = [Ptr64]
   let call_operands : Array[@machv.Value] = [function_pointer]
   for value in context.environment() {
     call_operands.push(value)
@@ -327,9 +327,9 @@ fn lower_indirect_call(
   }
   let call = @machv.SemanticCall::new(
     Indirect,
-    @machv.Signature::new(parameter_types, result_types),
+    @native.Signature::new(parameter_types, result_types),
     Internal,
-    @machv.CallBehavior::conservative(),
+    @native.CallBehavior::conservative(),
   )
   if tail {
     context.tail_call(call, call_operands)
@@ -344,13 +344,13 @@ fn finish_runtime_call(
   environment : Environment,
   helper : @wasm_milkir.WasmRuntimeHelper,
   operands : Array[@machv.Value],
-  parameter_types : Array[@machv.ValueType],
-  behavior : @machv.CallBehavior,
+  parameter_types : Array[@native.ValueType],
+  behavior : @native.CallBehavior,
 ) -> Unit {
   context.finish_call_without_roots(
     @machv.SemanticCall::new(
       External((environment.runtime_symbol)(helper)),
-      @machv.Signature::new(parameter_types, context.result_types()),
+      @native.Signature::new(parameter_types, context.result_types()),
       Platform,
       behavior,
     ),
@@ -390,7 +390,7 @@ fn lower_ref_test(
     GcRefTest,
     operands,
     [GcRef64, I32, I32],
-    @machv.CallBehavior::new(Read, false, false, false, false),
+    @native.CallBehavior::new(Read, false, false, false, false),
   )
 }
 
@@ -410,7 +410,7 @@ fn lower_ref_cast(
     GcRefCast,
     operands,
     [GcRef64, I32, I32],
-    @machv.CallBehavior::new(Read, true, false, false, false),
+    @native.CallBehavior::new(Read, true, false, false, false),
   )
 }
 
@@ -425,12 +425,12 @@ fn lower_array_len(
     GcArrayLen,
     context.operands(),
     [GcRef64],
-    @machv.CallBehavior::new(Read, true, false, false, false),
+    @native.CallBehavior::new(Read, true, false, false, false),
   )
 }
 
 ///|
-fn is_runtime_word_type(ty : @machv.ValueType) -> Bool {
+fn is_runtime_word_type(ty : @native.ValueType) -> Bool {
   ty != V128
 }
 
@@ -438,7 +438,7 @@ fn is_runtime_word_type(ty : @machv.ValueType) -> Bool {
 fn encode_runtime_word(
   context : @adapter.InstructionContext,
   value : @machv.Value,
-  ty : @machv.ValueType,
+  ty : @native.ValueType,
 ) -> @machv.Value {
   match ty {
     I32 => context.emit(Convert(I64ExtendI32(Unsigned)), [value], [I64])[0]
@@ -486,15 +486,15 @@ fn emit_runtime_void_call(
   environment : Environment,
   helper : @wasm_milkir.WasmRuntimeHelper,
   operands : Array[@machv.Value],
-  parameter_types : Array[@machv.ValueType],
-  memory : @machv.MemoryEffect,
+  parameter_types : Array[@native.ValueType],
+  memory : @native.MemoryEffect,
 ) -> Unit {
   context.emit_call_without_roots(
     @machv.SemanticCall::new(
       External((environment.runtime_symbol)(helper)),
-      @machv.Signature::new(parameter_types, []),
+      @native.Signature::new(parameter_types, []),
       Platform,
-      @machv.CallBehavior::new(memory, true, false, false, false),
+      @native.CallBehavior::new(memory, true, false, false, false),
     ),
     operands,
     [],
@@ -508,15 +508,15 @@ fn emit_runtime_word_call(
   environment : Environment,
   helper : @wasm_milkir.WasmRuntimeHelper,
   operands : Array[@machv.Value],
-  parameter_types : Array[@machv.ValueType],
-  memory : @machv.MemoryEffect,
+  parameter_types : Array[@native.ValueType],
+  memory : @native.MemoryEffect,
 ) -> @machv.Value {
   context.emit_call_without_roots(
     @machv.SemanticCall::new(
       External((environment.runtime_symbol)(helper)),
-      @machv.Signature::new(parameter_types, [I64]),
+      @native.Signature::new(parameter_types, [I64]),
       Platform,
-      @machv.CallBehavior::new(memory, true, false, false, false),
+      @native.CallBehavior::new(memory, true, false, false, false),
     ),
     operands,
     [I64],
@@ -533,7 +533,7 @@ fn lower_aggregate_get(
 ) -> String? {
   let source_operands = context.operands()
   let operands : Array[@machv.Value] = [source_operands[0]]
-  let parameter_types : Array[@machv.ValueType] = [GcRef64, I32, I32]
+  let parameter_types : Array[@native.ValueType] = [GcRef64, I32, I32]
   operands.push(i32_immediate(context, type_index))
   if field_index is Some(index) {
     operands.push(i32_immediate(context, index))
@@ -591,7 +591,7 @@ fn finish_packed_runtime_word(
 ) -> Unit {
   let narrowed = context.emit(Convert(I32WrapI64), [word], [I32])[0]
   if signed {
-    let width : @machv.AccessWidth = if byte_width == 1 { W8 } else { W16 }
+    let width : @native.AccessWidth = if byte_width == 1 { W8 } else { W16 }
     context.finish_operation(Convert(SignExtend(I32, width)), [narrowed])
   } else {
     let mask = context.emit(
@@ -615,7 +615,7 @@ fn lower_packed_aggregate_get(
 ) -> Unit {
   let source_operands = context.operands()
   let operands : Array[@machv.Value] = [source_operands[0]]
-  let parameter_types : Array[@machv.ValueType] = [GcRef64, I32, I32]
+  let parameter_types : Array[@native.ValueType] = [GcRef64, I32, I32]
   operands.push(i32_immediate(context, type_index))
   if field_index is Some(index) {
     operands.push(i32_immediate(context, index))
@@ -656,7 +656,7 @@ fn lower_aggregate_set(
     )
   }
   let operands : Array[@machv.Value] = [source_operands[0]]
-  let parameter_types : Array[@machv.ValueType] = [GcRef64, I32]
+  let parameter_types : Array[@native.ValueType] = [GcRef64, I32]
   operands.push(i32_immediate(context, type_index))
   if field_index is Some(index) {
     operands.push(i32_immediate(context, index))
@@ -677,7 +677,7 @@ fn lower_aggregate_set(
     },
     operands,
     parameter_types,
-    @machv.CallBehavior::new(ReadWrite, true, false, false, false),
+    @native.CallBehavior::new(ReadWrite, true, false, false, false),
   )
   None
 }
@@ -705,7 +705,7 @@ fn lower_array_fill(
     },
     [source_operands[0], source_operands[1], value, source_operands[3]],
     [GcRef64, I32, if is_vector { Ptr64 } else { I64 }, I32],
-    @machv.CallBehavior::new(ReadWrite, true, false, false, false),
+    @native.CallBehavior::new(ReadWrite, true, false, false, false),
   )
   None
 }
@@ -721,7 +721,7 @@ fn lower_array_copy(
     GcArrayCopy,
     context.operands(),
     [GcRef64, I32, GcRef64, I32, I32],
-    @machv.CallBehavior::new(ReadWrite, true, false, false, false),
+    @native.CallBehavior::new(ReadWrite, true, false, false, false),
   )
 }
 
@@ -731,14 +731,14 @@ fn emit_gc_allocation(
   environment : Environment,
   helper : @wasm_milkir.WasmRuntimeHelper,
   operands : Array[@machv.Value],
-  parameter_types : Array[@machv.ValueType],
+  parameter_types : Array[@native.ValueType],
 ) -> @machv.Value {
   context.emit_call(
     @machv.SemanticCall::new(
       External((environment.runtime_symbol)(helper)),
-      @machv.Signature::new(parameter_types, [I64]),
+      @native.Signature::new(parameter_types, [I64]),
       Platform,
-      @machv.CallBehavior::new(ReadWrite, true, false, true, false),
+      @native.CallBehavior::new(ReadWrite, true, false, true, false),
     ),
     operands,
     [I64],
@@ -846,7 +846,7 @@ fn lower_array_segment_init(
     helper,
     operands,
     [Ptr64, I32, I32, GcRef64, I32, I32, I32],
-    @machv.CallBehavior::new(ReadWrite, true, false, false, false),
+    @native.CallBehavior::new(ReadWrite, true, false, false, false),
   )
 }
 
@@ -908,7 +908,7 @@ fn load_v128(
 fn emit_slot_buffer(
   context : @adapter.InstructionContext,
   values : Array[@machv.Value],
-  types : Array[@machv.ValueType],
+  types : Array[@native.ValueType],
 ) -> @machv.Value {
   if values.is_empty() {
     return context.emit(NullPtr, [], [Ptr64])[0]
@@ -955,7 +955,7 @@ fn emit_slot_buffer(
 fn emit_payload_word_buffer(
   context : @adapter.InstructionContext,
   values : Array[@machv.Value],
-  types : Array[@machv.ValueType],
+  types : Array[@native.ValueType],
 ) -> (@machv.Value, Int) {
   let mut words = 0
   for ty in types {
@@ -1001,7 +1001,7 @@ fn emit_payload_word_buffer(
 fn emit_runtime_word_buffer(
   context : @adapter.InstructionContext,
   values : Array[@machv.Value],
-  types : Array[@machv.ValueType],
+  types : Array[@native.ValueType],
 ) -> @machv.Value {
   if values.is_empty() {
     return context.emit(NullPtr, [], [Ptr64])[0]
@@ -1101,7 +1101,7 @@ fn lower_spill_locals(
     ExceptionSpillLocals,
     operands,
     [Ptr64, Ptr64, I32],
-    @machv.CallBehavior::new(ReadWrite, false, false, false, false),
+    @native.CallBehavior::new(ReadWrite, false, false, false, false),
   )
   None
 }
@@ -1112,14 +1112,14 @@ fn finish_noreturn_runtime_call(
   environment : Environment,
   helper : @wasm_milkir.WasmRuntimeHelper,
   operands : Array[@machv.Value],
-  parameter_types : Array[@machv.ValueType],
+  parameter_types : Array[@native.ValueType],
 ) -> Unit {
   context.noreturn_call(
     @machv.SemanticCall::new(
       External((environment.runtime_symbol)(helper)),
-      @machv.Signature::new(parameter_types, []),
+      @native.Signature::new(parameter_types, []),
       Platform,
-      @machv.CallBehavior::new(ReadWrite, true, false, false, false),
+      @native.CallBehavior::new(ReadWrite, true, false, false, false),
     ),
     operands,
   )
@@ -1202,7 +1202,7 @@ fn lower_exception_query(
   immediate : Int?,
 ) -> Unit {
   let operands = context.environment()
-  let parameter_types : Array[@machv.ValueType] = [Ptr64]
+  let parameter_types : Array[@native.ValueType] = [Ptr64]
   if immediate is Some(value) {
     operands.push(
       context.emit(I32Const(value.reinterpret_as_uint()), [], [I32])[0],
@@ -1215,7 +1215,7 @@ fn lower_exception_query(
     helper,
     operands,
     parameter_types,
-    @machv.CallBehavior::new(Read, false, false, false, false),
+    @native.CallBehavior::new(Read, false, false, false, false),
   )
 }
 
@@ -1235,7 +1235,7 @@ fn lower_try_table_end(
     ExceptionTryEnd,
     operands,
     [Ptr64, I32],
-    @machv.CallBehavior::new(ReadWrite, false, false, false, false),
+    @native.CallBehavior::new(ReadWrite, false, false, false, false),
   )
 }
 
@@ -1250,9 +1250,9 @@ fn lower_try_table_begin(
   let buffer = context.emit_call_without_roots(
       @machv.SemanticCall::new(
         External((environment.runtime_symbol)(ExceptionTryBegin)),
-        @machv.Signature::new([Ptr64, I32], [Ptr64]),
+        @native.Signature::new([Ptr64, I32], [Ptr64]),
         Platform,
-        @machv.CallBehavior::new(ReadWrite, true, false, false, false),
+        @native.CallBehavior::new(ReadWrite, true, false, false, false),
       ),
       operands,
       [Ptr64],
@@ -1263,7 +1263,7 @@ fn lower_try_table_begin(
     ExceptionSigsetjmp,
     [buffer, i32_immediate(context, 0)],
     [Ptr64, I32],
-    @machv.CallBehavior::new(
+    @native.CallBehavior::new(
       ReadWrite,
       false,
       false,
@@ -1552,7 +1552,7 @@ pub fn lower_function(
   }
   fn resolve_context_field(
     field : @milkir.ContextField,
-  ) -> @machv.EnvironmentField? {
+  ) -> @native.EnvironmentField? {
     match @wasm_milkir.decode_memory_base_context_field(field) {
       Some(memory_index) => Some((environment.memory_base_field)(memory_index))
       None => None
@@ -1593,7 +1593,7 @@ pub fn lower_selection_plan(
   }
   fn resolve_context_field(
     field : @milkir.ContextField,
-  ) -> @machv.EnvironmentField? {
+  ) -> @native.EnvironmentField? {
     match @wasm_milkir.decode_memory_base_context_field(field) {
       Some(memory_index) => Some((environment.memory_base_field)(memory_index))
       None => None
@@ -1636,7 +1636,7 @@ pub fn lower_prepared_selection(
   }
   fn resolve_context_field(
     field : @milkir.ContextField,
-  ) -> @machv.EnvironmentField? {
+  ) -> @native.EnvironmentField? {
     match @wasm_milkir.decode_memory_base_context_field(field) {
       Some(memory_index) => Some((environment.memory_base_field)(memory_index))
       None => None

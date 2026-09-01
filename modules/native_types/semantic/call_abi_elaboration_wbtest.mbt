@@ -3,21 +3,21 @@ test "call ABI elaboration preserves existing instruction and value handles" {
   let builder = FunctionBuilder::new(
     "call_abi_identity",
     Internal,
-    [Ptr64, GcRef64],
-    [I64],
+    [@native.Ptr64, @native.GcRef64],
+    [@native.I64],
   )
   let parameters = builder.parameters()
   let result = builder.emit_with_metadata(
       Call(
         SemanticCall::new(
-          External(ExternalSymbol::new("host.call")),
-          Signature::new([Ptr64], [I64]),
+          External(@native.ExternalSymbol::new("host.call")),
+          @native.Signature::new([@native.Ptr64], [@native.I64]),
           Platform,
-          CallBehavior::new(ReadWrite, true, false, true, false),
+          @native.CallBehavior::new(ReadWrite, true, false, true, false),
         ),
       ),
       [parameters[0]],
-      [I64],
+      [@native.I64],
       InstructionMetadata::new(None, [parameters[1]]),
     )[0]
   builder.return_([result])
@@ -26,8 +26,8 @@ test "call ABI elaboration preserves existing instruction and value handles" {
   let elaborated = function.elaborate_call_abi(
     CallAbiElaboration::new(
       root_scope=CallerRootScopeAbi::new(
-        ExternalSymbol::new("runtime.push_roots"),
-        ExternalSymbol::new("runtime.pop_roots"),
+        @native.ExternalSymbol::new("runtime.push_roots"),
+        @native.ExternalSymbol::new("runtime.pop_roots"),
       ),
     ),
   )
@@ -42,8 +42,10 @@ test "call ABI elaboration preserves existing instruction and value handles" {
 
 ///|
 test "call ABI elaboration leaves no-op functions unchanged" {
-  let builder = FunctionBuilder::new("call_abi_noop", Internal, [], [I32])
-  let result = builder.emit(I32Const(42U), [], [I32])[0]
+  let builder = FunctionBuilder::new("call_abi_noop", Internal, [], [
+    @native.I32,
+  ])
+  let result = builder.emit(I32Const(42U), [], [@native.I32])[0]
   builder.return_([result])
   let function = builder.finish()
   let instructions = function.block_instructions(function.blocks()[0])
@@ -58,21 +60,21 @@ test "selection plan elaborates caller GC roots without semantic Function" {
   let builder = FunctionBuilder::new(
     "selection_plan_call_abi",
     Internal,
-    [Ptr64, GcRef64],
-    [I64],
+    [@native.Ptr64, @native.GcRef64],
+    [@native.I64],
   )
   let parameters = builder.parameters()
   let result = builder.emit_with_metadata(
       Call(
         SemanticCall::new(
-          External(ExternalSymbol::new("host.call")),
-          Signature::new([Ptr64], [I64]),
+          External(@native.ExternalSymbol::new("host.call")),
+          @native.Signature::new([@native.Ptr64], [@native.I64]),
           Platform,
-          CallBehavior::new(ReadWrite, true, false, true, false),
+          @native.CallBehavior::new(ReadWrite, true, false, true, false),
         ),
       ),
       [parameters[0]],
-      [I64],
+      [@native.I64],
       InstructionMetadata::new(None, [parameters[1]]),
     )[0]
   builder.return_([result])
@@ -81,8 +83,8 @@ test "selection plan elaborates caller GC roots without semantic Function" {
     .elaborate_call_abi(
       CallAbiElaboration::new(
         root_scope=CallerRootScopeAbi::new(
-          ExternalSymbol::new("runtime.push_roots"),
-          ExternalSymbol::new("runtime.pop_roots"),
+          @native.ExternalSymbol::new("runtime.push_roots"),
+          @native.ExternalSymbol::new("runtime.pop_roots"),
         ),
       ),
     )
@@ -109,9 +111,9 @@ test "sealed selection plan rejects retained prepared aliases" {
     "sealed_selection_plan",
     Internal,
     [],
-    [I32],
+    [@native.I32],
   )
-  let result = builder.emit(I32Const(42U), [], [I32])[0]
+  let result = builder.emit(I32Const(42U), [], [@native.I32])[0]
   builder.return_([result])
   let prepared = builder.finish_prepared_selection()
   prepared.seal() |> ignore

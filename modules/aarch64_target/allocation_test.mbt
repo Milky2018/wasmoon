@@ -118,7 +118,7 @@ test "AArch64 allocation rejects transfer scratch in an allocator edit" {
 ///|
 test "AArch64 allocation rejects every reserved register as a value home" {
   let errors : Array[AArch64AllocationError?] = []
-  let cases : Array[(@semantic.ValueType, @vcode.PhysicalReg)] = [
+  let cases : Array[(@native.ValueType, @vcode.PhysicalReg)] = [
     (I64, @vcode.PhysicalReg::new(15, Int)),
     (I64, @vcode.PhysicalReg::new(16, Int)),
     (I64, @vcode.PhysicalReg::new(17, Int)),
@@ -400,10 +400,10 @@ test "AArch64 allocation keeps values live across a direct call out of clobbers"
     [I64],
   )
   let call = @semantic.SemanticCall::new(
-    External(@semantic.ExternalSymbol::new("runtime.value")),
-    @semantic.Signature::new([], [I64]),
+    External(@native.ExternalSymbol::new("runtime.value")),
+    @native.Signature::new([], [I64]),
     Platform,
-    @semantic.CallBehavior::new(ReadWrite, true, true, false, false),
+    @native.CallBehavior::new(ReadWrite, true, true, false, false),
   )
   let called = builder.emit(Call(call), [], [I64])[0]
   let result = builder.emit(IntBinary(Add), [builder.parameters()[0], called], [
@@ -451,10 +451,10 @@ test "AArch64 allocation preserves state across both returns from setjmp" {
   )
   let parameters = builder.parameters()
   let call = @semantic.SemanticCall::new(
-    External(@semantic.ExternalSymbol::new("runtime.sigsetjmp")),
-    @semantic.Signature::new([Ptr64, I32], [I32]),
+    External(@native.ExternalSymbol::new("runtime.sigsetjmp")),
+    @native.Signature::new([Ptr64, I32], [I32]),
     Platform,
-    @semantic.CallBehavior::new(
+    @native.CallBehavior::new(
       ReadWrite,
       false,
       false,
@@ -513,7 +513,7 @@ test "AArch64 allocation preserves state across both returns from setjmp" {
 
 ///|
 test "AArch64 call inputs may remain in spill slots" {
-  let parameter_types : Array[@semantic.ValueType] = Array::make(32, I64)
+  let parameter_types : Array[@native.ValueType] = Array::make(32, I64)
   let builder = @semantic.FunctionBuilder::new(
     "spilled_call_inputs",
     Platform,
@@ -521,10 +521,10 @@ test "AArch64 call inputs may remain in spill slots" {
     [],
   )
   let call = @semantic.SemanticCall::new(
-    External(@semantic.ExternalSymbol::new("runtime.many")),
-    @semantic.Signature::new(parameter_types, []),
+    External(@native.ExternalSymbol::new("runtime.many")),
+    @native.Signature::new(parameter_types, []),
     Platform,
-    @semantic.CallBehavior::new(ReadWrite, true, true, false, false),
+    @native.CallBehavior::new(ReadWrite, true, true, false, false),
   )
   builder.emit(Call(call), builder.parameters(), []) |> ignore
   builder.return_([])
@@ -693,10 +693,10 @@ test "AArch64 allocation honors internal call register affinities" {
   )
   let one = builder.emit(I64Const(1UL), [], [I64])[0]
   let call = @semantic.SemanticCall::new(
-    Internal(@semantic.CodeSymbol::new("wasm.func.affinity")),
-    @semantic.Signature::new([Ptr64, I64], []),
+    Internal(@native.CodeSymbol::new("wasm.func.affinity")),
+    @native.Signature::new([Ptr64, I64], []),
     Internal,
-    @semantic.CallBehavior::new(ReadWrite, true, true, false, false),
+    @native.CallBehavior::new(ReadWrite, true, true, false, false),
   )
   builder.emit(Call(call), [builder.parameters()[0], one], []) |> ignore
   builder.return_([builder.parameters()[0]])
@@ -721,7 +721,7 @@ test "AArch64 allocation honors internal call register affinities" {
 
 ///|
 test "AArch64 frame reserves one aligned outgoing stack-argument area" {
-  let parameter_types : Array[@semantic.ValueType] = Array::make(9, I64)
+  let parameter_types : Array[@native.ValueType] = Array::make(9, I64)
   let builder = @semantic.FunctionBuilder::new(
     "stack_call_frame",
     Platform,
@@ -729,10 +729,10 @@ test "AArch64 frame reserves one aligned outgoing stack-argument area" {
     [],
   )
   let call = @semantic.SemanticCall::new(
-    External(@semantic.ExternalSymbol::new("runtime.many")),
-    @semantic.Signature::new(parameter_types, []),
+    External(@native.ExternalSymbol::new("runtime.many")),
+    @native.Signature::new(parameter_types, []),
     Platform,
-    @semantic.CallBehavior::new(ReadWrite, true, true, false, false),
+    @native.CallBehavior::new(ReadWrite, true, true, false, false),
   )
   builder.emit(Call(call), builder.parameters(), []) |> ignore
   builder.return_([])
@@ -751,7 +751,7 @@ test "AArch64 frame reserves one aligned outgoing stack-argument area" {
 
 ///|
 test "AArch64 frame separates semantic objects from outgoing spills and saves" {
-  let parameter_types : Array[@semantic.ValueType] = Array::make(9, I64)
+  let parameter_types : Array[@native.ValueType] = Array::make(9, I64)
   let builder = @semantic.FunctionBuilder::new(
     "stack_object_frame",
     Platform,
@@ -762,10 +762,10 @@ test "AArch64 frame separates semantic objects from outgoing spills and saves" {
   builder.create_stack_object(16, 16) |> ignore
   let object = builder.create_stack_object(24, 8)
   let call = @semantic.SemanticCall::new(
-    External(@semantic.ExternalSymbol::new("runtime.many")),
-    @semantic.Signature::new(parameter_types, []),
+    External(@native.ExternalSymbol::new("runtime.many")),
+    @native.Signature::new(parameter_types, []),
     Platform,
-    @semantic.CallBehavior::new(ReadWrite, true, true, false, false),
+    @native.CallBehavior::new(ReadWrite, true, true, false, false),
   )
   builder.emit(Call(call), builder.parameters(), []) |> ignore
   let address = builder.emit(StackAddress(object), [], [Ptr64])[0]

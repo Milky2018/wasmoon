@@ -19,13 +19,13 @@ pub impl Show for SemanticLowerError with fn output(self, logger) {
 ///|
 priv struct DialectLowering {
   name : String
-  environment_parameters : Array[(Int, @semantic.ValueType)]
+  environment_parameters : Array[(Int, @native.ValueType)]
   lower : (@adapter.InstructionContext, @milkir.ExtOp) -> String?
-  resolve_context_field : (@milkir.ContextField) -> @semantic.EnvironmentField?
+  resolve_context_field : (@milkir.ContextField) -> @native.EnvironmentField?
 }
 
 ///|
-fn lower_type(ty : @milkir.Type) -> @semantic.ValueType {
+fn lower_type(ty : @milkir.Type) -> @native.ValueType {
   match ty {
     I32 => I32
     I64 => I64
@@ -40,7 +40,7 @@ fn lower_type(ty : @milkir.Type) -> @semantic.ValueType {
 ///|
 fn lower_integer_type(
   ty : @milkir.Type,
-) -> @semantic.IntegerType raise SemanticLowerError {
+) -> @native.IntegerType raise SemanticLowerError {
   match ty {
     I32 => I32
     I64 => I64
@@ -52,7 +52,7 @@ fn lower_integer_type(
 ///|
 fn lower_float_type(
   ty : @milkir.Type,
-) -> @semantic.FloatType raise SemanticLowerError {
+) -> @native.FloatType raise SemanticLowerError {
   match ty {
     F32 => F32
     F64 => F64
@@ -148,7 +148,7 @@ fn lower_float_comparison(op : @milkir.FloatCC) -> @semantic.FloatComparison {
 }
 
 ///|
-fn lower_width(bits : Int) -> @semantic.AccessWidth? {
+fn lower_width(bits : Int) -> @native.AccessWidth? {
   match bits {
     8 => Some(W8)
     16 => Some(W16)
@@ -248,13 +248,13 @@ fn mapped_block(
 }
 
 ///|
-fn instruction_source(instruction : @milkir.Inst) -> @semantic.SourceLocation? {
+fn instruction_source(instruction : @milkir.Inst) -> @native.SourceLocation? {
   for metadata in instruction.metadata {
     if metadata is SourceLoc(source) {
       // MilkIR stores an opaque source label rather than structured
       // coordinates. Preserve that label verbatim and mark coordinates as
       // unknown until the producer carries a structured location.
-      return Some(@semantic.SourceLocation::new(source, 0, 0))
+      return Some(@native.SourceLocation::new(source, 0, 0))
     }
   }
   None
@@ -276,8 +276,8 @@ fn emit_one(
   builder : @semantic.FunctionBuilder,
   operation : @semantic.Operation,
   operands : Array[@semantic.Value],
-  result_type : @semantic.ValueType,
-  source : @semantic.SourceLocation?,
+  result_type : @native.ValueType,
+  source : @native.SourceLocation?,
   instruction_id : Int,
 ) -> @semantic.Value raise SemanticLowerError {
   let results = builder.emit_with_metadata(
@@ -300,7 +300,7 @@ fn lower_bitcast_value(
   operand : @semantic.Value,
   source_type : @milkir.Type,
   result_type : @milkir.Type,
-  source : @semantic.SourceLocation?,
+  source : @native.SourceLocation?,
   instruction_id : Int,
 ) -> @semantic.Value raise SemanticLowerError {
   let from = lower_type(source_type)
@@ -376,9 +376,9 @@ fn lower_bitcast_value(
 fn lower_pointer_value(
   builder : @semantic.FunctionBuilder,
   values : Array[@semantic.Value?],
-  value_types : Array[@semantic.ValueType?],
+  value_types : Array[@native.ValueType?],
   source : @milkir.Value,
-  location : @semantic.SourceLocation?,
+  location : @native.SourceLocation?,
   instruction_id : Int,
 ) -> @semantic.Value raise SemanticLowerError {
   let mapped = mapped_value(values, source)
@@ -405,10 +405,10 @@ fn lower_pointer_value(
 fn lower_address(
   builder : @semantic.FunctionBuilder,
   values : Array[@semantic.Value?],
-  value_types : Array[@semantic.ValueType?],
+  value_types : Array[@native.ValueType?],
   base : @milkir.Value,
   offset : @milkir.Value,
-  source : @semantic.SourceLocation?,
+  source : @native.SourceLocation?,
   instruction_id : Int,
 ) -> @semantic.Value raise SemanticLowerError {
   let pointer = lower_pointer_value(
@@ -425,7 +425,7 @@ fn lower_address(
 }
 
 ///|
-fn access_width_for_type(ty : @semantic.ValueType) -> @semantic.AccessWidth {
+fn access_width_for_type(ty : @native.ValueType) -> @native.AccessWidth {
   match ty {
     I32 | F32 => W32
     I64 | F64 | Ptr64 | GcRef64 => W64
@@ -453,7 +453,7 @@ fn assign_instruction_results(
 fn lower_memory_instruction(
   builder : @semantic.FunctionBuilder,
   values : Array[@semantic.Value?],
-  value_types : Array[@semantic.ValueType?],
+  value_types : Array[@native.ValueType?],
   instruction : @milkir.Inst,
   memory : @milkir.MemoryOp,
 ) -> Unit raise SemanticLowerError {
@@ -790,7 +790,7 @@ fn gc_roots_for_instruction(
 fn lower_call_instruction(
   builder : @semantic.FunctionBuilder,
   values : Array[@semantic.Value?],
-  value_types : Array[@semantic.ValueType?],
+  value_types : Array[@native.ValueType?],
   instruction : @milkir.Inst,
   call : @milkir.CallOp,
   root_ids : Array[Int],
@@ -799,13 +799,13 @@ fn lower_call_instruction(
     Direct(symbol, signature) =>
       (
         @semantic.SemanticCall::new(
-          External(@semantic.ExternalSymbol::new(symbol.name)),
-          @semantic.Signature::new(
+          External(@native.ExternalSymbol::new(symbol.name)),
+          @native.Signature::new(
             instruction.args.map(argument => value_types[argument.id].unwrap()),
             signature.results.map(lower_type),
           ),
           Platform,
-          @semantic.CallBehavior::conservative(),
+          @native.CallBehavior::conservative(),
         ),
         mapped_values(values, instruction.args),
       )
@@ -830,9 +830,9 @@ fn lower_call_instruction(
       (
         @semantic.SemanticCall::new(
           Indirect,
-          @semantic.Signature::new(parameter_types, result_types),
+          @native.Signature::new(parameter_types, result_types),
           Internal,
-          @semantic.CallBehavior::conservative(),
+          @native.CallBehavior::conservative(),
         ),
         call_operands,
       )
@@ -874,10 +874,10 @@ fn mapped_gc_roots(
 fn lower_dialect_instruction(
   builder : @semantic.FunctionBuilder,
   values : Array[@semantic.Value?],
-  value_types : Array[@semantic.ValueType?],
+  value_types : Array[@native.ValueType?],
   environment : Array[@semantic.Value],
   instruction : @milkir.Inst,
-  function_result_types : Array[@semantic.ValueType],
+  function_result_types : Array[@native.ValueType],
   ext : @milkir.ExtOp,
   block_id : Int,
   root_ids : Array[Int],
@@ -992,11 +992,11 @@ fn lower_instruction(
   function : @milkir.Function,
   builder : @semantic.FunctionBuilder,
   values : Array[@semantic.Value?],
-  value_types : Array[@semantic.ValueType?],
+  value_types : Array[@native.ValueType?],
   instruction : @milkir.Inst,
   block_id : Int,
   gc_roots : Array[Array[Int]]?,
-  function_result_types : Array[@semantic.ValueType],
+  function_result_types : Array[@native.ValueType],
   environment : Array[@semantic.Value],
   dialect : DialectLowering?,
 ) -> Bool raise SemanticLowerError {
@@ -1204,7 +1204,7 @@ fn lower_instruction(
 ///|
 fn lower_trap_reason(
   reason : String,
-) -> @semantic.TrapReason raise SemanticLowerError {
+) -> @native.TrapReason raise SemanticLowerError {
   if reason.contains("unreachable") {
     return Unreachable
   }
@@ -1300,13 +1300,13 @@ fn lower_terminator(
 ///|
 fn lower_verified_construction(
   function : @milkir.Function,
-  protocol : @semantic.CallProtocol,
+  protocol : @native.CallProtocol,
   dialect : DialectLowering?,
   on_event : (SemanticLowerEvent) -> Unit,
   direct_selection_plan : Bool,
 ) -> @semantic.FunctionBuilder raise SemanticLowerError {
   on_event(SemanticConstructionStarted)
-  let parameter_types : Array[@semantic.ValueType] = []
+  let parameter_types : Array[@native.ValueType] = []
   for parameter_index, parameter in function.params {
     let mut parameter_type = lower_type(parameter.1)
     if dialect is Some(lowering) {
@@ -1337,7 +1337,7 @@ fn lower_verified_construction(
     function.next_value_id,
     None,
   )
-  let value_types : Array[@semantic.ValueType?] = Array::make(
+  let value_types : Array[@native.ValueType?] = Array::make(
     function.next_value_id,
     None,
   )
@@ -1456,7 +1456,7 @@ fn lower_verified_construction(
 ///|
 fn lower_verified_function(
   function : @milkir.Function,
-  protocol : @semantic.CallProtocol,
+  protocol : @native.CallProtocol,
   dialect : DialectLowering?,
   on_event : (SemanticLowerEvent) -> Unit,
 ) -> @semantic.Function raise SemanticLowerError {
@@ -1475,7 +1475,7 @@ fn lower_verified_function(
 ///|
 fn lower_verified_prepared_selection(
   function : @milkir.Function,
-  protocol : @semantic.CallProtocol,
+  protocol : @native.CallProtocol,
   dialect : DialectLowering?,
   on_event : (SemanticLowerEvent) -> Unit,
 ) -> @semantic.PreparedSelection raise SemanticLowerError {
@@ -1494,7 +1494,7 @@ fn lower_verified_prepared_selection(
 ///|
 fn lower_verified_selection_plan(
   function : @milkir.Function,
-  protocol : @semantic.CallProtocol,
+  protocol : @native.CallProtocol,
   dialect : DialectLowering?,
   on_event : (SemanticLowerEvent) -> Unit,
 ) -> @semantic.SelectionPlan raise SemanticLowerError {
@@ -1510,7 +1510,7 @@ fn lower_verified_selection_plan(
 /// consulting a target ISA or silently routing them through the legacy backend.
 pub fn lower_core_function_with_protocol(
   function : @milkir.Function,
-  protocol : @semantic.CallProtocol,
+  protocol : @native.CallProtocol,
   on_event? : (SemanticLowerEvent) -> Unit = fn(_) { () },
 ) -> @semantic.Function raise SemanticLowerError {
   on_event(InputValidationStarted)
@@ -1525,7 +1525,7 @@ pub fn lower_core_function_with_protocol(
 /// target-neutral elaboration stage.
 pub fn lower_core_prepared_selection_with_protocol(
   function : @milkir.Function,
-  protocol : @semantic.CallProtocol,
+  protocol : @native.CallProtocol,
   on_event? : (SemanticLowerEvent) -> Unit = fn(_) { () },
 ) -> @semantic.PreparedSelection raise SemanticLowerError {
   on_event(InputValidationStarted)
@@ -1548,13 +1548,13 @@ pub fn lower_core_function(
 /// construction adapter.
 pub fn lower_dialect_function_with_protocol(
   function : @milkir.Function,
-  protocol : @semantic.CallProtocol,
+  protocol : @native.CallProtocol,
   dialect : String,
   validator : (@milkir.ExtensionInstView) -> String?,
   global_value_validator : (@milkir.GlobalValueData) -> String?,
-  environment_parameters : Array[(Int, @semantic.ValueType)],
+  environment_parameters : Array[(Int, @native.ValueType)],
   lower : (@adapter.InstructionContext, @milkir.ExtOp) -> String?,
-  resolve_context_field : (@milkir.ContextField) -> @semantic.EnvironmentField?,
+  resolve_context_field : (@milkir.ContextField) -> @native.EnvironmentField?,
   on_event? : (SemanticLowerEvent) -> Unit = fn(_) { () },
 ) -> @semantic.Function raise SemanticLowerError {
   on_event(InputValidationStarted)
@@ -1582,9 +1582,9 @@ pub fn lower_dialect_function(
   dialect : String,
   validator : (@milkir.ExtensionInstView) -> String?,
   global_value_validator : (@milkir.GlobalValueData) -> String?,
-  environment_parameters : Array[(Int, @semantic.ValueType)],
+  environment_parameters : Array[(Int, @native.ValueType)],
   lower : (@adapter.InstructionContext, @milkir.ExtOp) -> String?,
-  resolve_context_field : (@milkir.ContextField) -> @semantic.EnvironmentField?,
+  resolve_context_field : (@milkir.ContextField) -> @native.EnvironmentField?,
   on_event? : (SemanticLowerEvent) -> Unit = fn(_) { () },
 ) -> @semantic.Function raise SemanticLowerError {
   lower_dialect_function_with_protocol(
@@ -1605,13 +1605,13 @@ pub fn lower_dialect_function(
 /// verified target-selection input.
 pub fn lower_dialect_selection_plan_with_protocol(
   function : @milkir.Function,
-  protocol : @semantic.CallProtocol,
+  protocol : @native.CallProtocol,
   dialect : String,
   validator : (@milkir.ExtensionInstView) -> String?,
   global_value_validator : (@milkir.GlobalValueData) -> String?,
-  environment_parameters : Array[(Int, @semantic.ValueType)],
+  environment_parameters : Array[(Int, @native.ValueType)],
   lower : (@adapter.InstructionContext, @milkir.ExtOp) -> String?,
-  resolve_context_field : (@milkir.ContextField) -> @semantic.EnvironmentField?,
+  resolve_context_field : (@milkir.ContextField) -> @native.EnvironmentField?,
   on_event? : (SemanticLowerEvent) -> Unit = fn(_) { () },
 ) -> @semantic.SelectionPlan raise SemanticLowerError {
   on_event(InputValidationStarted)
@@ -1639,13 +1639,13 @@ pub fn lower_dialect_selection_plan_with_protocol(
 /// before it is passed to a target selector.
 pub fn lower_dialect_prepared_selection_with_protocol(
   function : @milkir.Function,
-  protocol : @semantic.CallProtocol,
+  protocol : @native.CallProtocol,
   dialect : String,
   validator : (@milkir.ExtensionInstView) -> String?,
   global_value_validator : (@milkir.GlobalValueData) -> String?,
-  environment_parameters : Array[(Int, @semantic.ValueType)],
+  environment_parameters : Array[(Int, @native.ValueType)],
   lower : (@adapter.InstructionContext, @milkir.ExtOp) -> String?,
-  resolve_context_field : (@milkir.ContextField) -> @semantic.EnvironmentField?,
+  resolve_context_field : (@milkir.ContextField) -> @native.EnvironmentField?,
   on_event? : (SemanticLowerEvent) -> Unit = fn(_) { () },
 ) -> @semantic.PreparedSelection raise SemanticLowerError {
   on_event(InputValidationStarted)

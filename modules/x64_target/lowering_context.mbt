@@ -1,6 +1,6 @@
 ///|
 priv struct EnvironmentFieldBinding {
-  field : @semantic.EnvironmentField
+  field : @native.EnvironmentField
   offsets : Array[Int]
 }
 
@@ -18,7 +18,7 @@ pub fn LoweringContext::new(internal_abi : InternalAbi) -> LoweringContext {
 ///|
 pub fn LoweringContext::with_environment_field(
   self : LoweringContext,
-  field : @semantic.EnvironmentField,
+  field : @native.EnvironmentField,
   offsets : Array[Int],
 ) -> LoweringContext {
   let bindings = self.environment_fields.copy()
@@ -38,7 +38,7 @@ pub fn LoweringContext::with_environment_field(
 ///|
 fn LoweringContext::environment_field_offsets(
   self : LoweringContext,
-  field : @semantic.EnvironmentField,
+  field : @native.EnvironmentField,
 ) -> Array[Int]? {
   for binding in self.environment_fields {
     if binding.field == field {

@@ -1661,7 +1661,7 @@ test "AArch64 widening vector integer encodings cover every legal form" {
   let right = @vcode.PhysicalReg::new(5, FpVector)
   let destination = @vcode.PhysicalReg::new(7, FpVector)
   let lanes : Array[@semantic.VectorLane] = [I16x8, I32x4, I64x2]
-  let signednesses : Array[@semantic.Signedness] = [Signed, Unsigned]
+  let signednesses : Array[@native.Signedness] = [Signed, Unsigned]
   for lane in lanes {
     for signedness in signednesses {
       emit_vector_int_unary(
@@ -1808,7 +1808,7 @@ test "AArch64 vector integer extension encodings cover every legal form" {
   let destination = @vcode.PhysicalReg::new(7, FpVector)
   let lanes : Array[@semantic.VectorLane] = [I16x8, I32x4, I64x2]
   let halves : Array[@semantic.VectorHalf] = [Low, High]
-  let signednesses : Array[@semantic.Signedness] = [Signed, Unsigned]
+  let signednesses : Array[@native.Signedness] = [Signed, Unsigned]
   for lane in lanes {
     for half in halves {
       for signedness in signednesses {
@@ -1887,7 +1887,7 @@ test "AArch64 saturating vector narrowing handles every form and alias" {
   let high = @vcode.PhysicalReg::new(5, FpVector)
   let destination = @vcode.PhysicalReg::new(7, FpVector)
   let lanes : Array[@semantic.VectorLane] = [I8x16, I16x8]
-  let signednesses : Array[@semantic.Signedness] = [Signed, Unsigned]
+  let signednesses : Array[@native.Signedness] = [Signed, Unsigned]
   for lane in lanes {
     for signedness in signednesses {
       emit_vector_narrow(buffer, lane, signedness, low, high, destination)
@@ -2925,7 +2925,7 @@ test "AArch64 atomic encodings cover widths, RMW operations, and compare-exchang
     rmw_code.push(buffer.code)
   }
   let compare_exchange_code : Array[Array[Byte]] = []
-  let widths : Array[@semantic.AccessWidth] = [W8, W16, W32, W64]
+  let widths : Array[@native.AccessWidth] = [W8, W16, W32, W64]
   for width in widths {
     let buffer = CodeBuffer::new()
     emit_atomic_compare_exchange(
@@ -3278,7 +3278,7 @@ test "validated internal ABI derives context, overflow, and result locations" {
     [0, 1, 2, 3, 4, 5, 6, 7],
   )
   let layout = abi.call_layout(
-    @semantic.Signature::new(
+    @native.Signature::new(
       [
         Ptr64,
         I64,
