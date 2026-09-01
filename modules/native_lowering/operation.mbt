@@ -403,6 +403,8 @@ pub(all) enum Operation {
   ReferenceCompare(ReferenceComparison)
   IntUnary(IntUnaryOp)
   IntBinary(IntBinaryOp)
+  IntBinaryImmediate(IntBinaryOp, UInt64)
+  IntShiftImmediate(IntBinaryOp, Int)
   IntHighMultiply(@native.Signedness)
   IntWithOverflow(IntOverflowOp)
   IntCompare(IntComparison)
@@ -476,6 +478,8 @@ pub fn Operation::copy(self : Operation) -> Operation {
     | ReferenceCompare(_)
     | IntUnary(_)
     | IntBinary(_)
+    | IntBinaryImmediate(_, _)
+    | IntShiftImmediate(_, _)
     | IntHighMultiply(_)
     | IntWithOverflow(_)
     | IntCompare(_)
@@ -1200,6 +1204,41 @@ pub fn verify_operation_contract(
       }
       None
     }
+    IntBinaryImmediate(_, _) => {
+      if operands.length() != 1 ||
+        results.length() != 1 ||
+        !is_integer_type(operands[0]) ||
+        operands[0] != results[0] {
+        return operation_error(
+          "integer immediate operation expects one matching i32 or i64 result",
+        )
+      }
+      None
+    }
+    IntShiftImmediate(operation, amount) => {
+      if operation != ShiftLeft &&
+        operation != SignedShiftRight &&
+        operation != UnsignedShiftRight &&
+        operation != RotateLeft &&
+        operation != RotateRight {
+        return operation_error(
+          "integer shift immediate requires a shift operation",
+        )
+      }
+      if operands.length() != 1 ||
+        results.length() != 1 ||
+        !is_integer_type(operands[0]) ||
+        operands[0] != results[0] {
+        return operation_error(
+          "integer shift immediate expects one matching i32 or i64 result",
+        )
+      }
+      let width = value_type_bits(operands[0])
+      if amount < 0 || amount >= width {
+        return operation_error("integer shift immediate amount is out of range")
+      }
+      None
+    }
     IntHighMultiply(_) => {
       if operands.length() != 2 ||
         results.length() != 1 ||
@@ -1551,6 +1590,8 @@ pub fn Operation::semantics(self : Operation) -> @native.OperationSemantics {
     | ReferenceCompare(_)
     | IntUnary(_)
     | IntBinary(_)
+    | IntBinaryImmediate(_, _)
+    | IntShiftImmediate(_, _)
     | IntHighMultiply(_)
     | IntWithOverflow(_)
     | IntCompare(_)

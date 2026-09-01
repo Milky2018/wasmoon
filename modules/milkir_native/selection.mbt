@@ -7,8 +7,15 @@ priv struct MemoryAddressSelection {
 }
 
 ///|
+priv enum ScalarSelection {
+  IntImmediate(@milkir.Value, @lowering.IntBinaryOp, UInt64)
+  ShiftImmediate(@milkir.Value, @lowering.IntBinaryOp, Int)
+}
+
+///|
 priv struct LoweringAnalysis {
   memory_addresses : Array[MemoryAddressSelection?]
+  scalar_instructions : Array[ScalarSelection?]
   skip_results : Array[Bool]
 }
 
@@ -252,6 +259,76 @@ fn memory_access(
 }
 
 ///|
+fn selection_binary_operation(
+  operation : @milkir.IntBinaryOp,
+) -> @lowering.IntBinaryOp {
+  match operation {
+    Add => Add
+    Sub => Sub
+    Mul => Mul
+    SignedDiv => SignedDiv
+    UnsignedDiv => UnsignedDiv
+    SignedRem => SignedRem
+    UnsignedRem => UnsignedRem
+    And => And
+    Or => Or
+    Xor => Xor
+    ShiftLeft => ShiftLeft
+    SignedShiftRight => SignedShiftRight
+    UnsignedShiftRight => UnsignedShiftRight
+    RotateLeft => RotateLeft
+    RotateRight => RotateRight
+    SignedMulHigh | UnsignedMulHigh =>
+      abort("high multiply is not a selectable binary immediate")
+  }
+}
+
+///|
+fn select_scalar_instruction(
+  instruction : @milkir.Inst,
+  constants : Array[UInt64?],
+) -> (ScalarSelection, @milkir.Value)? {
+  guard instruction.opcode is Scalar(IntBinary(binary)) else { return None }
+  guard binary_operands(instruction) is Some((left, right)) else { return None }
+  guard instruction.results is [result] &&
+    (result.ty == I32 || result.ty == I64) else {
+    return None
+  }
+  let width = if result.ty == I32 { 32 } else { 64 }
+  let select_right = fn(bits : UInt64) -> ScalarSelection? {
+    let lowered = selection_binary_operation(binary)
+    match binary {
+      ShiftLeft
+      | SignedShiftRight
+      | UnsignedShiftRight
+      | RotateLeft
+      | RotateRight =>
+        Some(ShiftImmediate(left, lowered, (bits % width.to_uint64()).to_int()))
+      Add | Sub | Mul | And | Or | Xor =>
+        Some(IntImmediate(left, lowered, bits))
+      UnsignedRem if bits > 1UL && (bits & (bits - 1UL)) == 0UL =>
+        Some(IntImmediate(left, lowered, bits))
+      SignedDiv | UnsignedDiv | SignedRem | UnsignedRem => None
+      SignedMulHigh | UnsignedMulHigh => None
+    }
+  }
+  match constants[right.id] {
+    Some(bits) => select_right(bits).map(selection => (selection, right))
+    None =>
+      match constants[left.id] {
+        Some(bits) if binary is (Add | Mul | And | Or | Xor) =>
+          Some(
+            (
+              IntImmediate(right, selection_binary_operation(binary), bits),
+              left,
+            ),
+          )
+        _ => None
+      }
+  }
+}
+
+///|
 fn analyze_lowering(function : @milkir.Function) -> LoweringAnalysis {
   let uses = Array::make(function.next_value_id, 0)
   let constants : Array[UInt64?] = Array::make(function.next_value_id, None)
@@ -266,7 +343,13 @@ fn analyze_lowering(function : @milkir.Function) -> LoweringAnalysis {
       }
       match (instruction.opcode, instruction.results) {
         (Scalar(IntConst(bits)), [result]) =>
-          constants[result.id] = Some(bits.reinterpret_as_uint64())
+          constants[result.id] = Some(
+            if result.ty == I32 {
+              bits.to_int().reinterpret_as_uint().to_uint64()
+            } else {
+              bits.reinterpret_as_uint64()
+            },
+          )
         _ => ()
       }
       for argument in instruction.args {
@@ -299,11 +382,29 @@ fn analyze_lowering(function : @milkir.Function) -> LoweringAnalysis {
       }
     }
   }
+  let scalar_instructions : Array[ScalarSelection?] = Array::make(
+    function.next_inst_id,
+    None,
+  )
+  for block in function.blocks {
+    for instruction in block.instructions {
+      guard instruction.results is [result] else { continue }
+      if uses[result.id] > 0 && uses[result.id] == folded_uses[result.id] {
+        continue
+      }
+      guard select_scalar_instruction(instruction, constants)
+        is Some((selection, constant)) else {
+        continue
+      }
+      scalar_instructions[instruction.id] = Some(selection)
+      folded_uses[constant.id] += 1
+    }
+  }
   let skip_results = Array::make(function.next_value_id, false)
   for value_id in 0..<function.next_value_id {
     if uses[value_id] > 0 && uses[value_id] == folded_uses[value_id] {
       skip_results[value_id] = true
     }
   }
-  { memory_addresses, skip_results, }
+  { memory_addresses, scalar_instructions, skip_results, }
 }

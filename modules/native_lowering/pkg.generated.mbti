@@ -282,6 +282,8 @@ pub(all) enum Operation {
   ReferenceCompare(ReferenceComparison)
   IntUnary(IntUnaryOp)
   IntBinary(IntBinaryOp)
+  IntBinaryImmediate(IntBinaryOp, UInt64)
+  IntShiftImmediate(IntBinaryOp, Int)
   IntHighMultiply(@native_types.Signedness)
   IntWithOverflow(IntOverflowOp)
   IntCompare(IntComparison)

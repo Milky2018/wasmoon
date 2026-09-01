@@ -48,6 +48,86 @@ fn lower_direct_operation(
   stack_map : @native.StackMapMetadata?,
   stack_object : (@native.StackObject) -> X64StackObject,
 ) -> Array[@vcode.Value] raise X64LowerError {
+  if operation is IntShiftImmediate(binary, amount) {
+    guard optional_gpr_width(result_types.get(0)) is Some(width) else {
+      raise UnsupportedOperation(block_index~, instruction_index~, operation~)
+    }
+    let bit_width = if width == W32 { 32 } else { 64 }
+    let (selected, selected_amount) = match binary {
+      RotateLeft => (Ror, (bit_width - amount) % bit_width)
+      _ =>
+        match lower_binary(binary) {
+          Some(selected) => (selected, amount)
+          None =>
+            raise UnsupportedOperation(
+              block_index~,
+              instruction_index~,
+              operation~,
+            )
+        }
+    }
+    let constant = append_body(
+        builder,
+        block,
+        LoadConstant(width, selected_amount.to_uint64()),
+        [],
+        [@vcode.Output::any(result_types[0])],
+        @vcode.InstructionMetadata::empty(),
+      )[0]
+    return append_body(
+      builder,
+      block,
+      IntBinary(width, selected),
+      [@vcode.Input::any(operands[0]), @vcode.Input::any(constant)],
+      result_types.map(@vcode.Output::any),
+      direct_source_metadata(
+        source_location,
+        stack_map,
+        roots,
+        operation.semantics(),
+      ),
+    )
+  }
+  if operation is IntBinaryImmediate(binary, bits) {
+    guard optional_gpr_width(result_types.get(0)) is Some(width) else {
+      raise UnsupportedOperation(block_index~, instruction_index~, operation~)
+    }
+    let (selected, selected_bits) = match binary {
+      UnsignedRem if bits > 1UL && (bits & (bits - 1UL)) == 0UL =>
+        (And, bits - 1UL)
+      _ =>
+        match lower_binary(binary) {
+          Some(selected) => (selected, bits)
+          None =>
+            raise UnsupportedOperation(
+              block_index~,
+              instruction_index~,
+              operation~,
+            )
+        }
+    }
+    let constant = append_body(
+        builder,
+        block,
+        LoadConstant(width, selected_bits),
+        [],
+        [@vcode.Output::any(result_types[0])],
+        @vcode.InstructionMetadata::empty(),
+      )[0]
+    return append_body(
+      builder,
+      block,
+      IntBinary(width, selected),
+      [@vcode.Input::any(operands[0]), @vcode.Input::any(constant)],
+      result_types.map(@vcode.Output::any),
+      direct_source_metadata(
+        source_location,
+        stack_map,
+        roots,
+        operation.semantics(),
+      ),
+    )
+  }
   if operation is Call(call) {
     let metadata = direct_source_metadata(
       source_location,

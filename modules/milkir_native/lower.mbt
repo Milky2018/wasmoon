@@ -1060,6 +1060,29 @@ fn lower_instruction(
     instruction.results.all(result => analysis.skip_results[result.id]) {
     return false
   }
+  match analysis.scalar_instructions[instruction.id] {
+    Some(IntImmediate(input, operation, bits)) => {
+      let lowered_results = builder.emit_with_metadata(
+        IntBinaryImmediate(operation, bits),
+        [mapped_value(values, input)],
+        instruction.results.map(result => lower_type(result.ty)),
+        instruction_metadata(instruction, []),
+      )
+      assign_instruction_results(values, instruction, lowered_results)
+      return false
+    }
+    Some(ShiftImmediate(input, operation, amount)) => {
+      let lowered_results = builder.emit_with_metadata(
+        IntShiftImmediate(operation, amount),
+        [mapped_value(values, input)],
+        instruction.results.map(result => lower_type(result.ty)),
+        instruction_metadata(instruction, []),
+      )
+      assign_instruction_results(values, instruction, lowered_results)
+      return false
+    }
+    None => ()
+  }
   match instruction.opcode {
     Call(call) => {
       lower_call_instruction(
