@@ -5,5 +5,5 @@ import {
   "Milky2018/wasmoon_jit",
   "Milky2018/wasmoon",
   "Milky2018/wasm_core/validator",
-  "Milky2018/wasmoon/wasm_frontend",
+  "Milky2018/wasm_milkir/frontend" @wasm_frontend,
 }

@@ -1,0 +1,4 @@
+import {
+  "Milky2018/wasmoon/component",
+  "Milky2018/wasm_component/wit",
+}

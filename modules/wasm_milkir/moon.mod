@@ -15,6 +15,7 @@ description = "WebAssembly dialect adapter for MilkIR extension operations"
 import {
   "Milky2018/milkir@0.13.0",
   "Milky2018/vcode@0.13.0",
+  "Milky2018/wasm_core@0.13.0",
 }
 
 preferred_target = "wasm-gc"

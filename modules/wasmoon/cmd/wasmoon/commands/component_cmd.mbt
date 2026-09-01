@@ -29,7 +29,7 @@ priv struct ComponentCommandEvalResult {
   code : ComponentErrorCode?
   phase : String
   detail : String
-  parsed : @component.Component?
+  parsed : @component_types.Component?
   summary_lines : Array[String]
 }
 
@@ -46,7 +46,7 @@ fn component_error_code_string(code : ComponentErrorCode) -> String {
 
 ///|
 fn component_parse_error_code(
-  e : @component.ComponentParseError,
+  e : @component_types.ComponentParseError,
 ) -> ComponentErrorCode {
   match e {
     UnsupportedComponentPreamble(_, _)
@@ -126,7 +126,7 @@ fn component_error_json(
 
 ///|
 fn build_component_summary_lines(
-  parsed : @component.Component,
+  parsed : @component_types.Component,
 ) -> Array[String] {
   let has_start = match parsed.start {
     Some(_) => true
@@ -156,7 +156,7 @@ fn run_component_command_eval(
         summary_lines: [],
       }
   }
-  let parsed = @component.parse_component(bytes) catch {
+  let parsed = @component_types.parse_component(bytes) catch {
     e =>
       return {
         ok: false,

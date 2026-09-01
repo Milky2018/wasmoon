@@ -127,7 +127,8 @@ and unsigned 64-bit JSON numbers preserve their exact decimal spelling.
 
 ## WIT bindings
 
-`Milky2018/wasmoon/wit` turns a resolved world into an eagerly checked binding
+`Milky2018/wasm_component/wit` parses and resolves the world, while
+`Milky2018/wasmoon/wit_binding` turns it into an eagerly checked runtime binding
 set:
 
 ```moonbit skip
@@ -135,7 +136,7 @@ set:
 let resolved = @wit.resolve_package(root_package, dependencies)
 
 ///|
-let bindings = resolved.bind_world("demo", instance)
+let bindings = @wit_binding.bind_world(resolved, "demo", instance)
 
 ///|
 let function = bindings.function("math#increment")

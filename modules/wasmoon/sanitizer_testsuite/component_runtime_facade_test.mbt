@@ -826,7 +826,7 @@ test "component runtime facade rejects an unvalidated component" {
     // One function import references type index 0, but no types are defined.
      b'\x0a', b'\x06', b'\x01', b'\x00', b'\x01', b'\x61', b'\x01', b'\x00',
   ])
-  let component = @component.parse_component(bytes)
+  let component = @component_types.parse_component(bytes)
   let runtime = @component.ComponentRuntime()
   defer runtime.close()
   inspect(
@@ -886,8 +886,10 @@ test "resolved WIT world binds and invokes a typed interface export" {
       #|
     ),
   )
-  let bindings = @wit.resolve_package(wit_package, []).bind_world(
-    "demo", instance,
+  let bindings = @wit_binding.bind_world(
+    @wit.resolve_package(wit_package, []),
+    "demo",
+    instance,
   )
   debug_inspect(bindings.paths(), content="[\"math#increment\"]")
   debug_inspect(
@@ -922,7 +924,11 @@ test "WIT binding rejects a mismatched export before invocation" {
   )
   inspect(
     try
-      @wit.resolve_package(wit_package, []).bind_world("demo", instance)
+      @wit_binding.bind_world(
+        @wit.resolve_package(wit_package, []),
+        "demo",
+        instance,
+      )
     catch {
       error => error
     } noraise {
@@ -955,8 +961,10 @@ test "WIT binding covers direct and inline world exports" {
       #|
     ),
   )
-  let bindings = @wit.resolve_package(wit_package, []).bind_world(
-    "demo", instance,
+  let bindings = @wit_binding.bind_world(
+    @wit.resolve_package(wit_package, []),
+    "demo",
+    instance,
   )
   debug_inspect(bindings.paths(), content="[\"increment\", \"math#increment\"]")
 }
@@ -989,8 +997,10 @@ test "WIT binding resolves referenced dependency interfaces" {
       #|
     ),
   )
-  let bindings = @wit.resolve_package(root, [dependency]).bind_world(
-    "demo", instance,
+  let bindings = @wit_binding.bind_world(
+    @wit.resolve_package(root, [dependency]),
+    "demo",
+    instance,
   )
   debug_inspect(bindings.paths(), content="[\"dep:math/math@1.0.0#increment\"]")
 }

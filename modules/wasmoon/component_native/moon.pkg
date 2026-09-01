@@ -7,14 +7,14 @@ import {
   "Milky2018/wasmoon/jit",
   "Milky2018/wasmoon/runtime",
   "Milky2018/wasm_core/validator",
-  "Milky2018/wasmoon/wasm_frontend",
+  "Milky2018/wasm_milkir/frontend" @wasm_frontend,
   "Milky2018/wasmoon/wast",
   "Milky2018/wasmoon_jit",
   "Milky2018/wasmoon_jit/artifact",
 }
 
 import {
-  "Milky2018/wasmoon/component/model" @component,
-  "Milky2018/wasmoon/component/text_parser" @component_text,
-  "Milky2018/wasmoon/validator/component_model" @component_validator,
+  "Milky2018/wasm_component" @component,
+  "Milky2018/wasm_component/text" @component_text,
+  "Milky2018/wasm_component/validator" @component_validator,
 } for "wbtest"

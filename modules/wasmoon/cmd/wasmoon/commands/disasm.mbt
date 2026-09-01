@@ -7,7 +7,12 @@ pub fn run_disasm(wasm_path : String) -> Int {
       return 1
     }
   }
-  let output = @disasm.disassemble(mod_)
+  let output = @core_wat.render(mod_) catch {
+    e => {
+      @logger.error("Failed to render WebAssembly text: \{e}")
+      return 1
+    }
+  }
   println(output)
   0
 }

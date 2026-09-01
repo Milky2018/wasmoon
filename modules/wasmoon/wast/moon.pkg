@@ -1,5 +1,5 @@
 import {
-  "Milky2018/wasmoon/wat",
+  "Milky2018/wasm_core/wat",
   "Milky2018/wasm_core/types",
   "Milky2018/wasm_milkir",
   "Milky2018/wasmoon/runtime",

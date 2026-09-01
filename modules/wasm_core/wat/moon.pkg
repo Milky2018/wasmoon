@@ -1,4 +1,9 @@
 import {
   "Milky2018/wasm_core/types",
+  "Milky2018/wasm_core/parser",
+  "moonbitlang/core/buffer",
+  "moonbitlang/core/debug",
   "moonbitlang/core/encoding/utf8",
+  "moonbitlang/core/string",
+  "moonbitlang/core/strconv",
 }

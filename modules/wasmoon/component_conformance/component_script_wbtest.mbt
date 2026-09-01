@@ -18,7 +18,7 @@ test "component conformance JSON status fields remain stable" {
 
 ///|
 test "component conformance parses typed named composite values" {
-  let types : Array[@component.TypeDef?] = [
+  let types : Array[@component_types.TypeDef?] = [
     Some(Enum(["red", "green", "blue"])),
     Some(Flags(["a", "b", "c"])),
     Some(

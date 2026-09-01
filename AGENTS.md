@@ -4,9 +4,11 @@
 
 Wasmoon is a WebAssembly runtime written in MoonBit. Its compiler pipeline is:
 
-`wat/wast/parser` → `validator` → `runtime` → interpreter, or `wasm_frontend` →
-`milkir` → direct target lowering → target VCode → `vcode_regalloc` → emitter
-→ JIT artifact.
+`wasm_core/wat` → `wasm_core/validator` → `runtime` → interpreter, or
+`wasm_milkir/frontend` → `milkir` → direct target lowering → target VCode →
+`vcode_regalloc` → emitter → JIT artifact. Portable Component Model and WIT
+tooling lives in `wasm_component`; Wasmoon owns the corresponding runtime
+adapters.
 
 - `modules/wasmoon/cmd/wasmoon` builds the CLI.
 - `modules/wasmoon/wasi` implements WASI Preview 1.
@@ -67,11 +69,11 @@ remove or override it when recording comparable corpus history.
 
 ## Compiler Boundaries
 
-Reusable infrastructure comprises the `wasm_core`, `wasm_milkir`, `milkir`,
-`vcode`, `regalloc`, `vcode_regalloc`, `aarch64_target`, and `x64_target`
-modules. Native types, streaming lowering, and code objects are packages under
-`vcode`; generic and Wasm-specific producers live under `milkir/native` and
-`wasm_milkir/native`.
+Reusable infrastructure comprises the `wasm_core`, `wasm_component`,
+`wasm_milkir`, `milkir`, `vcode`, `regalloc`, `vcode_regalloc`,
+`aarch64_target`, and `x64_target` modules. Native types, streaming lowering,
+and code objects are packages under `vcode`; generic and Wasm-specific
+producers live under `milkir/native` and `wasm_milkir/native`.
 
 - These modules and packages must not import Wasmoon-owned packages; run
   `scripts/audit_module_boundaries.py` when changing package dependencies.

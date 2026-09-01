@@ -1,14 +1,14 @@
 import {
-  "Milky2018/wasmoon/component/model",
+  "Milky2018/wasm_component" @model,
   "Milky2018/wasmoon/component_native",
   "Milky2018/wasmoon/component/runtime_impl",
   "Milky2018/wasmoon/wasi_component",
-  "Milky2018/wasmoon/validator/component_model",
+  "Milky2018/wasm_component/validator" @component_model,
   "moonbitlang/core/json",
   "moonbitlang/core/string",
 }
 
 import {
-  "Milky2018/wasmoon/component/text_parser" @component_text,
+  "Milky2018/wasm_component/text" @component_text,
   "moonbitlang/async",
 } for "wbtest"

@@ -70,7 +70,7 @@ fn cmd_wat2wasm(file : String, output_opt : String?) -> Unit {
   }
 
   // Parse WAT text
-  let mod = @wat.parse(text) catch {
+  let mod = @core_wat.parse(text) catch {
     e => {
       exit_error("parsing WAT: \{e}")
       panic()

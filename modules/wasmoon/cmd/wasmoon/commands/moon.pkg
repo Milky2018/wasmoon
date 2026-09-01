@@ -1,4 +1,5 @@
 import {
+  "Milky2018/wasm_component" @component_types,
   "Milky2018/wasm_core/types",
   "Milky2018/wasm_core/encoder",
   "Milky2018/wasm_core/wat" @core_wat,
@@ -8,9 +9,7 @@ import {
   "Milky2018/wasmoon/wasi_component",
   "Milky2018/wasm_core/parser",
   "Milky2018/wasm_core/validator",
-  "Milky2018/wasmoon/validator/component_model",
-  "Milky2018/wasmoon/disasm",
-  "Milky2018/wasmoon/wat",
+  "Milky2018/wasm_component/validator" @component_model,
   "Milky2018/wasmoon/wast",
   "Milky2018/milkir",
   "Milky2018/wasm_milkir",
@@ -25,7 +24,7 @@ import {
   "Milky2018/wasmoon/runtime",
   "Milky2018/wasmoon/jit",
   "Milky2018/wasmoon",
-  "Milky2018/wasmoon/wasm_frontend",
+  "Milky2018/wasm_milkir/frontend" @wasm_frontend,
   "Milky2018/wasmoon/logger",
   "moonbitlang/core/buffer",
   "moonbitlang/core/hashset",
@@ -35,5 +34,5 @@ import {
 }
 
 import {
-  "Milky2018/wasmoon/component/text_parser" @component_text,
+  "Milky2018/wasm_component/text" @component_text,
 } for "wbtest"

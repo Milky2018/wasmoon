@@ -1,0 +1,6 @@
+import {
+  "Milky2018/wasm_core/encoder",
+  "Milky2018/wasm_component" @component,
+  "Milky2018/wasm_component/validator" @component_model,
+  "Milky2018/wasm_core/wat",
+}

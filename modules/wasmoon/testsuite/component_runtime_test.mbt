@@ -137,7 +137,7 @@ fn canon_lower_entry(func_idx : Int) -> Array[Byte] {
 /// Parse and validate a WAT component, returning instantiation evidence.
 fn validated_wat(wat : String) -> @component_model.ValidatedComponent raise {
   @component_model.validate_component_for_instantiation_with_config(
-    @component.parse_component(@component_text.parse_component_wat(wat)),
+    @component_types.parse_component(@component_text.parse_component_wat(wat)),
     ComponentValidationConfig(false),
   )
 }
@@ -183,11 +183,11 @@ test "component runtime: host import canonical roundtrip" {
     (8, canon_payload),
     (11, export_payload),
   ])
-  let component = @component.parse_component(bytes) catch {
+  let component = @component_types.parse_component(bytes) catch {
     e => return fail("parse component failed: \{e}")
   }
   let linker = @runtime_impl.ComponentLinker::ComponentLinker()
-  let func_type : @component.FuncType = {
+  let func_type : @component_types.FuncType = {
     is_async: false,
     params: [{ label: "", ty: Prim(S32), }],
     result: Some(Prim(S32)),
@@ -231,7 +231,7 @@ test "component runtime: canon lift core func" {
     (8, canon_payload),
     (11, export_payload),
   ])
-  let component = @component.parse_component(bytes) catch {
+  let component = @component_types.parse_component(bytes) catch {
     e => return fail("parse component failed: \{e}")
   }
   let linker = @runtime_impl.ComponentLinker::ComponentLinker()
@@ -256,7 +256,7 @@ test "component runtime: core trap names are isolated per Linker" {
     ),
   )
   let validated = @component_model.validate_component_for_instantiation_with_config(
-    @component.parse_component(bytes),
+    @component_types.parse_component(bytes),
     ComponentValidationConfig(false),
   )
   let first_linker = @runtime_impl.ComponentLinker::ComponentLinker()
@@ -294,7 +294,7 @@ test "component runtime: core execution crosses the configured engine seam" {
     (8, canon_payload),
     (11, export_payload),
   ])
-  let component = @component.parse_component(bytes) catch {
+  let component = @component_types.parse_component(bytes) catch {
     e => return fail("parse component failed: \{e}")
   }
   let registrations : Array[(Int, Int)] = []
@@ -587,11 +587,11 @@ test "component runtime: canon lower to core func" {
     (8, canon_payload),
     (11, export_payload),
   ])
-  let component = @component.parse_component(bytes) catch {
+  let component = @component_types.parse_component(bytes) catch {
     e => return fail("parse component failed: \{e}")
   }
   let linker = @runtime_impl.ComponentLinker::ComponentLinker()
-  let func_type : @component.FuncType = {
+  let func_type : @component_types.FuncType = {
     is_async: false,
     params: [{ label: "", ty: Prim(S32), }],
     result: Some(Prim(S32)),
@@ -651,7 +651,7 @@ test "linker close releases nested-component instance graphs" {
       #|
     ),
   )
-  let component = @component.parse_component(bytes)
+  let component = @component_types.parse_component(bytes)
   let validated = @component_model.validate_component_for_instantiation_with_config(
     component,
     ComponentValidationConfig(false),
@@ -691,7 +691,7 @@ test "component runtime: evidence survives raw component mutation" {
       #|
     ),
   )
-  let component = @component.parse_component(bytes)
+  let component = @component_types.parse_component(bytes)
   let validated = @component_model.validate_component_for_instantiation_with_config(
     component,
     ComponentValidationConfig(false),
@@ -1119,7 +1119,7 @@ fn core_registration_then_start_trap() -> @component_model.ValidatedComponent ra
       #|
     ),
   )
-  let component = @component.parse_component(bytes)
+  let component = @component_types.parse_component(bytes)
   @component_model.validate_component_for_instantiation_with_config(
     component,
     ComponentValidationConfig(false),
@@ -1245,7 +1245,7 @@ test "component runtime: failed instantiation leaves open linker intact" {
       #|
     ),
   )
-  let failing = @component.parse_component(failing_bytes)
+  let failing = @component_types.parse_component(failing_bytes)
   let failing_validated = @component_model.validate_component_for_instantiation_with_config(
     failing,
     ComponentValidationConfig(false),

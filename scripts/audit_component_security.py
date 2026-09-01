@@ -94,7 +94,7 @@ def has_validated_instantiation_boundary(
     )
     has_evidence_producer = re.search(
         r"pub fn validate_component_for_instantiation_with_config"
-        r"\(@model\.Component, ComponentValidationConfig\)"
+        r"\(@[A-Za-z_][A-Za-z0-9_]*\.Component, ComponentValidationConfig\)"
         r" -> ValidatedComponent raise ComponentValidationError",
         validator,
     )
@@ -104,7 +104,7 @@ def has_validated_instantiation_boundary(
     )
     linker_requires_evidence = re.search(
         r"pub fn ComponentLinker::instantiate"
-        r"\(Self, String, @component_model\.ValidatedComponent\)"
+        r"\(Self, String, @[A-Za-z_][A-Za-z0-9_]*\.ValidatedComponent\)"
         r" -> ComponentInstance raise ComponentRuntimeError",
         runtime,
     )
@@ -112,7 +112,7 @@ def has_validated_instantiation_boundary(
     # so the registration boundary needs the same evidence as instantiation.
     component_import_requires_evidence = re.search(
         r"pub fn ComponentLinker::add_component"
-        r"\(Self, String, @component_model\.ValidatedComponent\) -> Unit",
+        r"\(Self, String, @[A-Za-z_][A-Za-z0-9_]*\.ValidatedComponent\) -> Unit",
         runtime,
     )
     # A constructible closure would let external code forge a

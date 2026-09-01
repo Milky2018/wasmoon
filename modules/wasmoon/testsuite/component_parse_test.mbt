@@ -1,8 +1,8 @@
 ///|
 fn parse_component(
   bytes : Array[Byte],
-) -> Result[@component.ComponentBinary, String] {
-  let parsed = @component.parse_component_binary(Bytes::from_array(bytes)) catch {
+) -> Result[@component_types.ComponentBinary, String] {
+  let parsed = @component_types.parse_component_binary(Bytes::from_array(bytes)) catch {
     e => return Err(e.to_string())
   }
   Ok(parsed)

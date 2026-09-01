@@ -7,8 +7,8 @@
   },
   "source_checks": {
     "stable_interface": "modules/wasmoon/component/pkg.generated.mbti",
-    "validator": "modules/wasmoon/validator/component_model/validate.mbt",
-    "validator_interface": "modules/wasmoon/validator/component_model/pkg.generated.mbti",
+    "validator": "modules/wasm_component/validator/validate.mbt",
+    "validator_interface": "modules/wasm_component/validator/pkg.generated.mbti",
     "runtime_interface": "modules/wasmoon/component/runtime_impl/pkg.generated.mbti",
     "interface_scan_root": "modules/wasmoon",
     "implementation_owner_roots": [
@@ -22,10 +22,10 @@
       "modules/wasmoon/wasi_component/pkg.generated.mbti"
     ],
     "forbidden_termination_roots": [
-      "modules/wasmoon/component/model",
+      "modules/wasm_component",
       "modules/wasmoon/component/runtime_impl",
-      "modules/wasmoon/validator/component_model",
-      "modules/wasmoon/wit"
+      "modules/wasm_component/validator",
+      "modules/wasm_component/wit"
     ],
     "forbidden_termination_patterns": [
       "abort(",
@@ -34,7 +34,7 @@
     "termination_allowlist": [],
     "unsafe_conversion_allowlist": [
       {
-        "path": "modules/wasmoon/component/model/binary.mbt",
+        "path": "modules/wasm_component/binary.mbt",
         "max_occurrences": 4,
         "rationale": "UTF-8 decoder validates byte and scalar ranges before conversion."
       },
@@ -54,34 +54,39 @@
         "rationale": "Canonical memory string paths range-check code points before conversion."
       },
       {
-        "path": "modules/wasmoon/validator/component_model/core_type.mbt",
+        "path": "modules/wasm_component/validator/core_type.mbt",
         "max_occurrences": 1,
         "rationale": "Name normalization adds a bounded ASCII offset."
       },
       {
-        "path": "modules/wasmoon/validator/component_model/prelude.mbt",
+        "path": "modules/wasm_component/validator/prelude.mbt",
         "max_occurrences": 1,
         "rationale": "Validated name bytes are converted after range checks."
       },
       {
-        "path": "modules/wasmoon/wit/component_decoding.mbt",
+        "path": "modules/wasm_component/wit/component_decoding.mbt",
         "max_occurrences": 2,
         "rationale": "Decoded component name bytes are already validated as byte values."
       },
       {
-        "path": "modules/wasmoon/wit/component_encoding.mbt",
+        "path": "modules/wasm_component/wit/component_encoding.mbt",
         "max_occurrences": 1,
         "rationale": "Encoded bytes are read from a valid generated UTF-8 sequence."
       },
       {
-        "path": "modules/wasmoon/wit/parser.mbt",
+        "path": "modules/wasm_component/wit/parser.mbt",
         "max_occurrences": 3,
         "rationale": "Lexer branches validate ASCII and escaped scalar ranges first."
       },
       {
-        "path": "modules/wasmoon/wit/resolve.mbt",
+        "path": "modules/wasm_component/wit/resolve.mbt",
         "max_occurrences": 1,
         "rationale": "Resolution copies an existing valid code unit."
+      },
+      {
+        "path": "modules/wasm_component/text/component_wat.mbt",
+        "max_occurrences": 6,
+        "rationale": "The lexer converts bounded UTF-16 code units already stored in a MoonBit String, while byte escapes are restricted to 0x00 through 0xff."
       }
     ]
   },

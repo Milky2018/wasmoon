@@ -1,6 +1,6 @@
 ///|
 fn find_component_section_payload(
-  comp : @component.ComponentBinary,
+  comp : @component_types.ComponentBinary,
   id : Int,
 ) -> Bytes? {
   for s in comp.sections {

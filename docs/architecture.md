@@ -122,9 +122,10 @@ structured errors; applications do not depend on `component/runtime_impl`.
 Default construction uses the strict native engine, while
 `interpreter_component_engine()` selects the continuation-aware interpreter
 explicitly. The CLI uses this same facade and engine seam.
-`Milky2018/wasmoon/wit` can bind a resolved world eagerly against a stable
-component instance, rejecting missing or incompatible exports before the first
-call.
+`Milky2018/wasm_component/wit` owns portable WIT parsing and resolution.
+`Milky2018/wasmoon/wit_binding` can bind a resolved world eagerly against a
+stable component instance, rejecting missing or incompatible exports before
+the first call.
 
 Component async execution uses one cooperative host event loop. MoonBit
 processes and component tasks are logical scheduling units, not operating-system

@@ -5,6 +5,7 @@ version = "0.13.0"
 import {
   "moonbitlang/x@0.4.48",
   "Milky2018/wasm_core@0.13.0",
+  "Milky2018/wasm_component@0.13.0",
   "Milky2018/wasm_milkir@0.13.0",
   "Milky2018/milkir@0.13.0",
   "Milky2018/vcode@0.13.0",
