@@ -1,8 +1,8 @@
 import {
   "Milky2018/wasmoon_jit",
   "Milky2018/wasmoon_jit/artifact",
-  "Milky2018/native_types",
-  "Milky2018/code_object",
+  "Milky2018/vcode/native_types",
+  "Milky2018/vcode/code_object",
   "Milky2018/wasm_core/types",
   "Milky2018/wasm_milkir",
   "moonbitlang/core/hashset",
@@ -10,11 +10,11 @@ import {
 }
 
 import {
-  "Milky2018/native_types" @native,
+  "Milky2018/vcode/native_types" @native,
 } for "test"
 
 import {
-  "Milky2018/native_types" @native,
+  "Milky2018/vcode/native_types" @native,
 } for "wbtest"
 
 options(

@@ -96,7 +96,7 @@ fn extended_i32_source(
 }
 
 ///|
-fn natural_memory_shift(width : @native.AccessWidth) -> Int {
+fn natural_memory_shift(width : @native_types.AccessWidth) -> Int {
   match width {
     W8 => 0
     W16 => 1
@@ -111,7 +111,7 @@ fn scaled_i32_source(
   definitions : Array[@milkir.Inst?],
   constants : Array[UInt64?],
   value : @milkir.Value,
-  width : @native.AccessWidth,
+  width : @native_types.AccessWidth,
 ) -> (@milkir.Value, Int, Array[@milkir.Value]) {
   let shift = natural_memory_shift(width)
   if shift == 0 {
@@ -141,7 +141,7 @@ fn select_index_and_offset(
   definitions : Array[@milkir.Inst?],
   constants : Array[UInt64?],
   value : @milkir.Value,
-  width : @native.AccessWidth,
+  width : @native_types.AccessWidth,
 ) -> (@milkir.Value, Int, UInt64, Array[@milkir.Value])? {
   if extended_i32_source(definitions, value) is Some(index) {
     let (selected, shift, folded) = scaled_i32_source(
@@ -182,7 +182,7 @@ fn select_memory_address(
   constants : Array[UInt64?],
   base : @milkir.Value,
   offset : @milkir.Value,
-  width : @native.AccessWidth,
+  width : @native_types.AccessWidth,
 ) -> (MemoryAddressSelection, Array[@milkir.Value])? {
   guard constants[offset.id] is Some(static_offset) else { return None }
   if pointer_source(definitions, base) is Some(pointer) {
@@ -248,7 +248,7 @@ fn select_memory_address(
 ///|
 fn memory_access(
   instruction : @milkir.Inst,
-) -> (@milkir.Value, @milkir.Value, @native.AccessWidth)? {
+) -> (@milkir.Value, @milkir.Value, @native_types.AccessWidth)? {
   match instruction.opcode {
     Memory(Load(result_type)) =>
       Some(

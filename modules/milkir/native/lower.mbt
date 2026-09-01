@@ -19,13 +19,13 @@ pub impl Show for NativeLowerError with fn output(self, logger) {
 ///|
 priv struct DialectLowering {
   name : String
-  environment_parameters : Array[(Int, @native.ValueType)]
+  environment_parameters : Array[(Int, @native_types.ValueType)]
   lower : (@adapter.InstructionContext, @milkir.ExtOp) -> String?
-  resolve_context_field : (@milkir.ContextField) -> @native.EnvironmentField?
+  resolve_context_field : (@milkir.ContextField) -> @native_types.EnvironmentField?
 }
 
 ///|
-fn lower_type(ty : @milkir.Type) -> @native.ValueType {
+fn lower_type(ty : @milkir.Type) -> @native_types.ValueType {
   match ty {
     I32 => I32
     I64 => I64
@@ -40,21 +40,21 @@ fn lower_type(ty : @milkir.Type) -> @native.ValueType {
 ///|
 pub fn function_signature(
   function : @milkir.Function,
-  environment_parameters? : Array[(Int, @native.ValueType)] = [],
-) -> @native.Signature {
+  environment_parameters? : Array[(Int, @native_types.ValueType)] = [],
+) -> @native_types.Signature {
   let parameters = function.params.map(parameter => lower_type(parameter.1))
   for binding in environment_parameters {
     if binding.0 >= 0 && binding.0 < parameters.length() {
       parameters[binding.0] = binding.1
     }
   }
-  @native.Signature::new(parameters, function.results.map(lower_type))
+  @native_types.Signature::new(parameters, function.results.map(lower_type))
 }
 
 ///|
 fn lower_integer_type(
   ty : @milkir.Type,
-) -> @native.IntegerType raise NativeLowerError {
+) -> @native_types.IntegerType raise NativeLowerError {
   match ty {
     I32 => I32
     I64 => I64
@@ -66,7 +66,7 @@ fn lower_integer_type(
 ///|
 fn lower_float_type(
   ty : @milkir.Type,
-) -> @native.FloatType raise NativeLowerError {
+) -> @native_types.FloatType raise NativeLowerError {
   match ty {
     F32 => F32
     F64 => F64
@@ -162,7 +162,7 @@ fn lower_float_comparison(op : @milkir.FloatCC) -> @lowering.FloatComparison {
 }
 
 ///|
-fn lower_width(bits : Int) -> @native.AccessWidth? {
+fn lower_width(bits : Int) -> @native_types.AccessWidth? {
   match bits {
     8 => Some(W8)
     16 => Some(W16)
@@ -262,13 +262,15 @@ fn mapped_block(
 }
 
 ///|
-fn instruction_source(instruction : @milkir.Inst) -> @native.SourceLocation? {
+fn instruction_source(
+  instruction : @milkir.Inst,
+) -> @native_types.SourceLocation? {
   for metadata in instruction.metadata {
     if metadata is SourceLoc(source) {
       // MilkIR stores an opaque source label rather than structured
       // coordinates. Preserve that label verbatim and mark coordinates as
       // unknown until the producer carries a structured location.
-      return Some(@native.SourceLocation::new(source, 0, 0))
+      return Some(@native_types.SourceLocation::new(source, 0, 0))
     }
   }
   None
@@ -290,8 +292,8 @@ fn emit_one(
   builder : @lowering.DirectBuilder,
   operation : @lowering.Operation,
   operands : Array[@lowering.Value],
-  result_type : @native.ValueType,
-  source : @native.SourceLocation?,
+  result_type : @native_types.ValueType,
+  source : @native_types.SourceLocation?,
   instruction_id : Int,
 ) -> @lowering.Value raise NativeLowerError {
   let results = builder.emit_with_metadata(
@@ -314,7 +316,7 @@ fn lower_bitcast_value(
   operand : @lowering.Value,
   source_type : @milkir.Type,
   result_type : @milkir.Type,
-  source : @native.SourceLocation?,
+  source : @native_types.SourceLocation?,
   instruction_id : Int,
 ) -> @lowering.Value raise NativeLowerError {
   let from = lower_type(source_type)
@@ -390,9 +392,9 @@ fn lower_bitcast_value(
 fn lower_pointer_value(
   builder : @lowering.DirectBuilder,
   values : Array[@lowering.Value?],
-  value_types : Array[@native.ValueType?],
+  value_types : Array[@native_types.ValueType?],
   source : @milkir.Value,
-  location : @native.SourceLocation?,
+  location : @native_types.SourceLocation?,
   instruction_id : Int,
 ) -> @lowering.Value raise NativeLowerError {
   let mapped = mapped_value(values, source)
@@ -419,10 +421,10 @@ fn lower_pointer_value(
 fn lower_address(
   builder : @lowering.DirectBuilder,
   values : Array[@lowering.Value?],
-  value_types : Array[@native.ValueType?],
+  value_types : Array[@native_types.ValueType?],
   base : @milkir.Value,
   offset : @milkir.Value,
-  source : @native.SourceLocation?,
+  source : @native_types.SourceLocation?,
   instruction_id : Int,
 ) -> @lowering.Value raise NativeLowerError {
   let pointer = lower_pointer_value(
@@ -439,7 +441,9 @@ fn lower_address(
 }
 
 ///|
-fn access_width_for_type(ty : @native.ValueType) -> @native.AccessWidth {
+fn access_width_for_type(
+  ty : @native_types.ValueType,
+) -> @native_types.AccessWidth {
   match ty {
     I32 | F32 => W32
     I64 | F64 | Ptr64 | GcRef64 => W64
@@ -467,7 +471,7 @@ fn assign_instruction_results(
 fn lower_memory_instruction(
   builder : @lowering.DirectBuilder,
   values : Array[@lowering.Value?],
-  value_types : Array[@native.ValueType?],
+  value_types : Array[@native_types.ValueType?],
   instruction : @milkir.Inst,
   memory : @milkir.MemoryOp,
   analysis : LoweringAnalysis,
@@ -845,7 +849,7 @@ fn gc_roots_for_instruction(
 fn lower_call_instruction(
   builder : @lowering.DirectBuilder,
   values : Array[@lowering.Value?],
-  value_types : Array[@native.ValueType?],
+  value_types : Array[@native_types.ValueType?],
   instruction : @milkir.Inst,
   call : @milkir.CallOp,
   root_ids : Array[Int],
@@ -853,14 +857,14 @@ fn lower_call_instruction(
   let (semantic_call, operands) = match call {
     Direct(symbol, signature) =>
       (
-        @native.NativeCall::new(
-          External(@native.ExternalSymbol::new(symbol.name)),
-          @native.Signature::new(
+        @native_types.NativeCall::new(
+          External(@native_types.ExternalSymbol::new(symbol.name)),
+          @native_types.Signature::new(
             instruction.args.map(argument => value_types[argument.id].unwrap()),
             signature.results.map(lower_type),
           ),
           Platform,
-          @native.CallBehavior::conservative(),
+          @native_types.CallBehavior::conservative(),
         ),
         mapped_values(values, instruction.args),
       )
@@ -883,11 +887,11 @@ fn lower_call_instruction(
         call_operands.push(mapped_value(values, argument))
       }
       (
-        @native.NativeCall::new(
+        @native_types.NativeCall::new(
           Indirect,
-          @native.Signature::new(parameter_types, result_types),
+          @native_types.Signature::new(parameter_types, result_types),
           Internal,
-          @native.CallBehavior::conservative(),
+          @native_types.CallBehavior::conservative(),
         ),
         call_operands,
       )
@@ -929,10 +933,10 @@ fn mapped_gc_roots(
 fn lower_dialect_instruction(
   builder : @lowering.DirectBuilder,
   values : Array[@lowering.Value?],
-  value_types : Array[@native.ValueType?],
+  value_types : Array[@native_types.ValueType?],
   environment : Array[@lowering.Value],
   instruction : @milkir.Inst,
-  function_result_types : Array[@native.ValueType],
+  function_result_types : Array[@native_types.ValueType],
   ext : @milkir.ExtOp,
   block_id : Int,
   root_ids : Array[Int],
@@ -1047,12 +1051,12 @@ fn lower_instruction(
   function : @milkir.Function,
   builder : @lowering.DirectBuilder,
   values : Array[@lowering.Value?],
-  value_types : Array[@native.ValueType?],
+  value_types : Array[@native_types.ValueType?],
   instruction : @milkir.Inst,
   block_id : Int,
   analysis : LoweringAnalysis,
   gc_roots : Array[Array[Int]]?,
-  function_result_types : Array[@native.ValueType],
+  function_result_types : Array[@native_types.ValueType],
   environment : Array[@lowering.Value],
   dialect : DialectLowering?,
 ) -> Bool raise NativeLowerError {
@@ -1311,7 +1315,7 @@ fn lower_instruction(
 ///|
 fn lower_trap_reason(
   reason : String,
-) -> @native.TrapReason raise NativeLowerError {
+) -> @native_types.TrapReason raise NativeLowerError {
   if reason.contains("unreachable") {
     return Unreachable
   }
@@ -1488,7 +1492,7 @@ fn lower_verified_construction(
   on_event : (NativeLowerEvent) -> Unit,
 ) -> @lowering.DirectBuilder raise NativeLowerError {
   on_event(TargetConstructionStarted)
-  let parameter_types : Array[@native.ValueType] = []
+  let parameter_types : Array[@native_types.ValueType] = []
   for parameter_index, parameter in function.params {
     let mut parameter_type = lower_type(parameter.1)
     if dialect is Some(lowering) {
@@ -1504,7 +1508,7 @@ fn lower_verified_construction(
     function.next_value_id,
     None,
   )
-  let value_types : Array[@native.ValueType?] = Array::make(
+  let value_types : Array[@native_types.ValueType?] = Array::make(
     function.next_value_id,
     None,
   )
@@ -1678,9 +1682,9 @@ pub fn lower_dialect_to_sink(
   dialect : String,
   validator : (@milkir.ExtensionInstView) -> String?,
   global_value_validator : (@milkir.GlobalValueData) -> String?,
-  environment_parameters : Array[(Int, @native.ValueType)],
+  environment_parameters : Array[(Int, @native_types.ValueType)],
   lower : (@adapter.InstructionContext, @milkir.ExtOp) -> String?,
-  resolve_context_field : (@milkir.ContextField) -> @native.EnvironmentField?,
+  resolve_context_field : (@milkir.ContextField) -> @native_types.EnvironmentField?,
   sink : @lowering.TargetSink,
   call_abi? : @lowering.CallAbiElaboration,
   on_event? : (NativeLowerEvent) -> Unit = fn(_) { () },

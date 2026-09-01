@@ -8,12 +8,12 @@ Wasmoon runtime integration packages. The main public packages are:
 | `Milky2018/wasm_core` | Root facade for WebAssembly spec-model construction. | `empty_module`, `simple_module`, `func_type`, `func_subtype`; detailed types remain in `Milky2018/wasm_core/types`. |
 | `Milky2018/wasm_core/types` | WebAssembly value, instruction, module, and type-system model. | `ValueType`, `Instruction`, `Module`, `FuncType`, `SubType`, type equality/subtyping helpers. |
 | `Milky2018/milkir` | Cranelift-like SSA IR. | `Function`, `FunctionBuilder`, `Signature`, `Type`, verification, CFG, and optimization passes. |
-| `Milky2018/native_types` | Target-independent native ABI and metadata vocabulary. | `ValueType`, `Signature`, calls, symbols, traps, safepoints, and source locations. |
-| `Milky2018/native_lowering` | Streaming target-lowering protocol with no retained program graph. | `TargetSink`, `DirectBuilder`, target-neutral operations, call ABI elaboration, and structured errors. |
-| `Milky2018/milkir_native` | Direct MilkIR-to-native-target producer. | `lower_core_to_sink`, `function_signature`, and explicit dialect-adapter entry points. |
-| `Milky2018/wasm_native` | WebAssembly MilkIR dialect adapter for native targets. | `Environment`, `lower_to_sink`, and typed runtime-capability seams. |
+| `Milky2018/vcode/native_types` | Target-independent native ABI and metadata vocabulary. | `ValueType`, `Signature`, calls, symbols, traps, safepoints, and source locations. |
+| `Milky2018/vcode/native_lowering` | Streaming target-lowering protocol with no retained program graph. | `TargetSink`, `DirectBuilder`, target-neutral operations, call ABI elaboration, and structured errors. |
+| `Milky2018/milkir/native` | Direct MilkIR-to-native-target producer. | `lower_core_to_sink`, `function_signature`, and explicit dialect-adapter entry points. |
+| `Milky2018/wasm_milkir/native` | WebAssembly MilkIR dialect adapter for native targets. | `Environment`, `lower_to_sink`, and typed runtime-capability seams. |
 | `Milky2018/vcode` | Generic dense target VCode and allocation-side-table infrastructure. | `Builder`, `Function`, allocation verification, parallel-move resolution, and compile events. |
-| `Milky2018/code_object` | Verified unlinked native code and metadata. | `build`, typed relocations, traps, safepoints, roots, and unwind directives. |
+| `Milky2018/vcode/code_object` | Verified unlinked native code and metadata. | `build`, typed relocations, traps, safepoints, roots, and unwind directives. |
 | `Milky2018/regalloc` | Target-independent register allocation algorithm. | Read-only `FunctionView`, `MachineEnv`, `RegallocConfig`, and verified `AllocationPlan`. |
 | `Milky2018/vcode_regalloc` | Direct Target VCode adapter for the reusable register allocator. | `allocate_vcode`, `VCodeAllocationEnvironment`, verified allocation materialization, and structured allocation errors. |
 | `Milky2018/x64_target` | x64 streaming instruction selection, ABI, allocation, frame layout, emission, and linking. | `DirectLoweringSession`, `compile_selected`, `allocate`, `plan_frame`, `emit`, and `prepare_x64_link`. |

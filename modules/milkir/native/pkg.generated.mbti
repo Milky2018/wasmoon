@@ -1,11 +1,11 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "Milky2018/milkir_native"
+package "Milky2018/milkir/native"
 
 import {
   "Milky2018/milkir",
-  "Milky2018/milkir_native/adapter",
-  "Milky2018/native_lowering",
-  "Milky2018/native_types",
+  "Milky2018/milkir/native/adapter",
+  "Milky2018/vcode/native_lowering",
+  "Milky2018/vcode/native_types",
   "moonbitlang/core/debug",
 }
 

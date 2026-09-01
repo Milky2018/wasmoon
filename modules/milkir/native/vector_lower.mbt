@@ -1,7 +1,7 @@
 ///|
 fn lower_signedness(
   signedness : @milkir.VectorSignedness,
-) -> @native.Signedness {
+) -> @native_types.Signedness {
   match signedness {
     Signed => Signed
     Unsigned => Unsigned
@@ -47,7 +47,9 @@ fn lower_lane(lane : @milkir.VectorLane) -> @lowering.VectorLane {
 }
 
 ///|
-fn lower_extension(extension : @milkir.VectorExtension) -> @native.Signedness? {
+fn lower_extension(
+  extension : @milkir.VectorExtension,
+) -> @native_types.Signedness? {
   match extension {
     None => None
     Signed => Some(Signed)
@@ -321,7 +323,7 @@ fn widened_lane(lane : @milkir.VectorIntLane) -> @lowering.VectorLane {
 fn lower_vector_memory_instruction(
   builder : @lowering.DirectBuilder,
   values : Array[@lowering.Value?],
-  value_types : Array[@native.ValueType?],
+  value_types : Array[@native_types.ValueType?],
   instruction : @milkir.Inst,
   operation : @milkir.VectorMemoryOp,
 ) -> Unit raise NativeLowerError {
@@ -336,7 +338,7 @@ fn lower_vector_memory_instruction(
   let (operation, operands, result_types) : (
     @lowering.Operation,
     Array[@lowering.Value],
-    Array[@native.ValueType],
+    Array[@native_types.ValueType],
   ) = match operation {
     LoadExtend(lane, signedness) =>
       (

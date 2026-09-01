@@ -2,11 +2,11 @@
 package "Milky2018/aarch64_target"
 
 import {
-  "Milky2018/code_object",
-  "Milky2018/native_lowering",
-  "Milky2018/native_types",
   "Milky2018/vcode",
   "Milky2018/vcode/allocation_types",
+  "Milky2018/vcode/code_object",
+  "Milky2018/vcode/native_lowering",
+  "Milky2018/vcode/native_types",
   "Milky2018/vcode_regalloc",
   "moonbitlang/core/debug",
 }

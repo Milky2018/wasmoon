@@ -15,6 +15,8 @@ Typed constructors, serialized opcode names, and immediate layouts are defined o
 
 - `Milky2018/wasm_milkir`: Wasm opcode encoding/decoding and builder helpers
   for `Milky2018/milkir`.
+- `Milky2018/wasm_milkir/native`: contextual Wasm dialect validation and
+  streaming lowering into a native target sink.
 
 ## How it fits
 
@@ -33,7 +35,7 @@ Wasm extension opcode. `memory_base_context_field` identifies the memory index,
 the declaration records `Heap(memidx)` provenance, and the frontend chooses
 `Stable` only when the embedding guarantees that the base cannot move during
 the function invocation. Contextual validation checks that the memory exists;
-`wasm_native` resolves the opaque field through its embedding environment.
+`wasm_milkir/native` resolves the opaque field through its embedding environment.
 
 ## Example: map Wasm reference types to MilkIR
 

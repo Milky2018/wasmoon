@@ -116,9 +116,9 @@ trap transport, and GC integration.
   packages.
 - MilkIR is the only target-independent retained program graph in native
   compilation.
-- `native_types`, `native_lowering`, `milkir_native`, `wasm_native`, `vcode`,
-  `regalloc`, `vcode_regalloc`, and both target modules are reusable and do not
-  import Wasmoon-owned packages.
+- `vcode/native_types`, `vcode/native_lowering`, `milkir/native`,
+  `wasm_milkir/native`, `vcode`, `regalloc`, `vcode_regalloc`, and both target
+  modules are reusable and do not import Wasmoon-owned packages.
 - A Native Lowering Stream is consumed once. It is not printable, optimizable,
   serializable, or exposed as a compatibility representation.
 - A target session explicitly maps transient stream handles to target-owned

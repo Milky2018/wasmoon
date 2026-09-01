@@ -1,6 +1,6 @@
 # MilkIR
 
-MilkIR is a reusable, target-independent intermediate representation for compiler middle ends. A frontend translates source operations into MilkIR, optimization passes simplify the MilkIR function, and `Milky2018/milkir_native` streams it directly into a native target selector.
+MilkIR is a reusable, target-independent intermediate representation for compiler middle ends. A frontend translates source operations into MilkIR, optimization passes simplify the MilkIR function, and `Milky2018/milkir/native` streams it directly into a native target selector.
 
 Target-independent means that MilkIR operations do not encode a particular instruction set or calling convention; it does not mean that every data width is target-configurable. MilkIR pointer/reference carriers are always 64-bit: `Ptr`, `Ref`, `CallableRef`, and `OpaqueRef` each have a fixed 64-bit representation. A backend for a non-64-bit target would require an explicit IR contract change rather than interpreting these types using the host pointer width.
 
@@ -121,7 +121,7 @@ When adding a built-in opcode:
 1. Add its operand and result contract to the verifier.
 2. Classify its trap, memory, and observable-effect behavior in the opcode semantic summary.
 3. Add its textual representation to the printer.
-4. Add its instruction selection to `milkir_native` or the owning dialect adapter.
+4. Add its instruction selection to `milkir/native` or the owning dialect adapter.
 5. Add an e-graph encoding only if the e-graph node language represents it.
 
 The built-in family matches in those stages are exhaustive, so adding a new family or operation leaves a compiler error until its required behavior is supplied. E-graph admission is intentionally conservative: an operation without an explicit encoding remains outside the e-graph.
@@ -366,7 +366,7 @@ A frontend using MilkIR normally follows this sequence:
 4. Represent merges and loop-carried values with block parameters and jump arguments.
 5. Finalize and verify the function.
 6. Optimize it at the desired level.
-7. Stream it into a native target with `Milky2018/milkir_native`.
+7. Stream it into a native target with `Milky2018/milkir/native`.
 
 For debugging, `Function::print` produces a readable textual view and `CFG::to_dot` produces Graphviz DOT for the control-flow graph. `CFG` also provides predecessors, successors, traversal orders, dominators, back edges, and loop discovery.
 
@@ -378,5 +378,5 @@ MilkIR focuses on target-independent SSA construction, verification, control-flo
 | --- | --- |
 | SSA construction, verification, CFGs, and optimization | `Milky2018/milkir` |
 | Optional WebAssembly extension operations | `Milky2018/wasm_milkir` |
-| Direct native target lowering | `Milky2018/milkir_native` |
+| Direct native target lowering | `Milky2018/milkir/native` |
 | Target instruction selection and ABI details | `Milky2018/aarch64_target` and `Milky2018/x64_target` |

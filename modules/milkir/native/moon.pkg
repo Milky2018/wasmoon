@@ -1,0 +1,7 @@
+import {
+  "Milky2018/milkir",
+  "Milky2018/vcode/native_types",
+  "Milky2018/vcode/native_lowering" @lowering,
+  "Milky2018/milkir/native/adapter",
+  "moonbitlang/core/hashset",
+}

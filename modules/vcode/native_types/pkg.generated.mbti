@@ -1,5 +1,5 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "Milky2018/native_types"
+package "Milky2018/vcode/native_types"
 
 import {
   "moonbitlang/core/debug",

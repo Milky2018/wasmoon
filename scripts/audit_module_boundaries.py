@@ -11,13 +11,8 @@ ROOT = Path(__file__).resolve().parents[1]
 REUSABLE_MODULES = [
     "modules/wasm_core",
     "modules/wasm_milkir",
-    "modules/wasm_native",
     "modules/milkir",
-    "modules/milkir_native",
-    "modules/native_types",
-    "modules/native_lowering",
     "modules/vcode",
-    "modules/code_object",
     "modules/regalloc",
     "modules/vcode_regalloc",
     "modules/aarch64_target",

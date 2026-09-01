@@ -14,7 +14,7 @@ import {
   "Milky2018/wasmoon/wast",
   "Milky2018/milkir",
   "Milky2018/wasm_milkir",
-  "Milky2018/code_object",
+  "Milky2018/vcode/code_object",
   "Milky2018/wasmoon_jit/artifact",
   "Milky2018/wasmoon_jit",
   "Milky2018/wasmoon_jit/perf",

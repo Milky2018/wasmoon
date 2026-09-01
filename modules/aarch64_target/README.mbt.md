@@ -13,7 +13,7 @@ layout, machine-code emission, relocations, veneers, and final linking.
 
 ## When to use it
 
-Use this module as the target sink for `Milky2018/milkir_native`, then install
+Use this module as the target sink for `Milky2018/milkir/native`, then install
 its generated code object through the embedding runtime.
 
 Environment fields are materialized at each lowered occurrence. MilkIR
@@ -41,8 +41,9 @@ test "validate the AArch64 internal ABI" {
 ## Integration
 
 Finish a `DirectLoweringSession`, then use `compile_selected` for the complete
-AArch64 target pipeline. It produces a verified `Milky2018/code_object` value. Runtime
-symbol resolution, relocation application, and executable-memory ownership
+AArch64 target pipeline. It produces a verified
+`Milky2018/vcode/code_object` value. Runtime symbol resolution, relocation
+application, and executable-memory ownership
 remain responsibilities of the embedding application.
 
 `compile` performs allocation, frame planning, and emission without repeating

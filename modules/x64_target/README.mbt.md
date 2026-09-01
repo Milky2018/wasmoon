@@ -15,7 +15,7 @@ constructs verified x64 Target VCode without an intermediate function graph.
 
 ## When to use it
 
-Use this module as the target sink for `Milky2018/milkir_native`, then install
+Use this module as the target sink for `Milky2018/milkir/native`, then install
 its generated code object through the embedding runtime.
 
 ## Example: define the internal ABI

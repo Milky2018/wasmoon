@@ -3,10 +3,10 @@ package "Milky2018/wasmoon_jit"
 
 import {
   "Milky2018/aarch64_target",
-  "Milky2018/code_object",
   "Milky2018/milkir",
-  "Milky2018/milkir_native",
-  "Milky2018/native_types",
+  "Milky2018/milkir/native",
+  "Milky2018/vcode/code_object",
+  "Milky2018/vcode/native_types",
   "Milky2018/wasm_core/types",
   "Milky2018/wasm_milkir",
   "Milky2018/wasmoon_jit/artifact",
@@ -273,7 +273,7 @@ pub fn JitInstallError::not_equal(Self, Self) -> Bool
 pub fn JitInstallError::to_repr(Self) -> @debug.Repr
 
 pub suberror JitPipelineError {
-  NativeLoweringFailed(cause~ : @milkir_native.NativeLowerError)
+  NativeLoweringFailed(cause~ : @native.NativeLowerError)
   AArch64AbiInvalid(cause~ : @aarch64_target.InternalAbiError)
   X64AbiInvalid(cause~ : @x64_target.InternalAbiError)
   AArch64LoweringFailed(cause~ : @aarch64_target.AArch64LowerError)

@@ -1,6 +1,6 @@
 # Wasm native lowering
 
-`Milky2018/wasm_native` validates WebAssembly-specific MilkIR extensions and
+`Milky2018/wasm_milkir/native` validates WebAssembly-specific MilkIR extensions and
 streams target-neutral native operations into an AArch64 or x64 target sink.
 It does not own a second function graph, select concrete instructions, or
 depend on the Wasmoon runtime.

@@ -1,7 +1,4 @@
 import {
   "Milky2018/vcode/native_types" @native,
   "Milky2018/vcode/native_lowering" @lowering,
-  "Milky2018/vcode",
-  "Milky2018/vcode/code_object",
-  "Milky2018/vcode_regalloc",
 }

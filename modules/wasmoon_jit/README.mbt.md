@@ -57,9 +57,10 @@ compatibility decoder for the removed v8 format.
 
 ## Compiler pipeline
 
-JIT planning composes `milkir`, `milkir_native`, `wasm_native`, `vcode_regalloc`, and the
-selected target package. Each target owns instruction selection, allocation
-policy, frame layout, and emission. The resulting code object is combined with
+JIT planning composes `milkir`, `milkir/native`, `wasm_milkir/native`,
+`vcode_regalloc`, and the selected target package. Each target owns instruction
+selection, allocation policy, frame layout, and emission. The resulting code
+object is combined with
 VMContext metadata, runtime symbols, and trampolines before it is installed and
 invoked by Wasmoon. Native stubs are private implementation details of this
 package rather than a separate public package.

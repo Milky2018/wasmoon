@@ -6,7 +6,7 @@ Wasmoon is a WebAssembly runtime written in MoonBit. It provides an interpreter 
 
 ```text
 WAT text ───────────────→ wasmoon/wat ──┐
-core Wasm binary ───────→ wasmoon/parser ├─→ wasm_core model ─→ validator ─→ instantiation
+core Wasm binary ───────→ wasm_core/parser ├─→ wasm_core model ─→ validator ─→ instantiation
 WAST test script ───────→ wasmoon/wast ──┘                                      │
                                                                                  ├─→ executor interpreter
                                                                                  └─→ Wasm frontend
@@ -27,21 +27,22 @@ The repository is a `moon.work` workspace containing several independently versi
 
 ### Reusable specification and compiler infrastructure
 
-| Module | Responsibility |
+| Module or package | Responsibility |
 | --- | --- |
 | `wasm_core` | WebAssembly specification data model shared by parsers, validators, frontends, and runtimes. |
 | `milkir` | Target-independent SSA IR, builders, verification, optimization, and CFG utilities. |
-| `native_types` | Target-independent native ABI, type, symbol, trap, safepoint, and metadata vocabulary. |
-| `native_lowering` | Streaming target-lowering protocol; carries one operation at a time and retains no function graph. |
+| `vcode/native_types` | Target-independent native ABI, type, symbol, trap, safepoint, and metadata vocabulary. |
+| `vcode/native_lowering` | Streaming target-lowering protocol; carries one operation at a time and retains no function graph. |
 | `regalloc` | Machine-IR-independent register-allocation algorithms. |
 | `wasm_milkir` | WebAssembly dialect definitions and extension contracts for MilkIR. |
-| `milkir_native` | Verified direct streaming from core MilkIR into a native target sink. |
-| `wasm_native` | WebAssembly dialect validation and streaming native lowering through an embedding environment. |
+| `milkir/native` | Verified direct streaming from core MilkIR into a native target sink. |
+| `wasm_milkir/native` | WebAssembly dialect validation and streaming native lowering through an embedding environment. |
 | `vcode` | Generic dense Target VCode, allocation side tables, validation, and parallel-move planning. |
+| `vcode/code_object` | Verified unlinked native code, relocations, traps, safepoints, roots, and unwind metadata. |
 | `vcode_regalloc` | Narrow adapter from generic Target VCode to the reusable register allocator. |
 | `x64_target`, `aarch64_target` | Complete AMD64 and AArch64 target pipelines: instruction selection, ABI legalization, allocation policy, frame layout, emission, relocations, and linking. |
 
-Reusable modules must not import `Milky2018/wasmoon`, `Milky2018/wasmoon_jit`, or Wasmoon-native FFI packages. `scripts/audit_module_boundaries.py` enforces that hard dependency direction.
+Reusable modules and packages must not import `Milky2018/wasmoon`, `Milky2018/wasmoon_jit`, or Wasmoon-native FFI packages. `scripts/audit_module_boundaries.py` enforces that hard dependency direction.
 
 ### Wasmoon-owned product modules
 
@@ -58,7 +59,7 @@ Reusable modules must not import `Milky2018/wasmoon`, `Milky2018/wasmoon_jit`, o
 
 | Input | Entry package | Result |
 | --- | --- | --- |
-| Core `.wasm` binary | `wasmoon/parser` | `wasm_core/types.Module` |
+| Core `.wasm` binary | `wasm_core/parser` | `wasm_core/types.Module` |
 | Core `.wat` text | `wasmoon/wat` | `wasm_core/types.Module` |
 | `.wast` script | `wasmoon/wat` plus `wasmoon/wast` runner | Test commands and modules |
 | Component binary or text | `wasmoon/component` | Validated component instances, typed exports, and WIT-shaped values |
@@ -148,7 +149,7 @@ the terminal, idempotent `ComponentLinker::close` call.
 
 MilkIR uses SSA values and block parameters rather than WebAssembly operand-stack state. Its core opcode contract consists of five semantic families: scalar, memory, call, vector, and typed extension operations. WebAssembly-specific operations are represented through the `wasm_milkir` dialect or lowered into ordinary MilkIR operations by the frontend. Source-only fields such as WebAssembly SIMD memory indices, alignment hints, and immediate offsets are consumed before core IR construction.
 
-`native_lowering` passes opaque transient value and block handles plus one operation at a time to the selected target. It deliberately does not own function CFG, SSA, instruction, or verification storage; MilkIR remains the sole target-independent program representation. Target-specific operations exist only inside `aarch64_target` or `x64_target` VCode, so an instruction from one architecture cannot be represented in the other target function. Each target module owns calling-convention legalization and physical-register policy, while Wasmoon-specific VMContext meanings remain owned by `wasmoon_jit`.
+`vcode/native_lowering` passes opaque transient value and block handles plus one operation at a time to the selected target. It deliberately does not own function CFG, SSA, instruction, or verification storage; MilkIR remains the sole target-independent program representation. Target-specific operations exist only inside `aarch64_target` or `x64_target` VCode, so an instruction from one architecture cannot be represented in the other target function. Each target module owns calling-convention legalization and physical-register policy, while Wasmoon-specific VMContext meanings remain owned by `wasmoon_jit`.
 
 Register allocation does not own or copy a second machine-IR graph. `vcode_regalloc` adapts the selected target VCode to the reusable allocator's read-only `FunctionView`; both production targets use the same bundle-aware allocator. The aggregate target pipeline verifies selected VCode before allocation and independently verifies the materialized VCode allocation before frame planning. There is no lower-quality fallback allocator.
 

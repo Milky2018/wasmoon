@@ -1,16 +1,15 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "Milky2018/wasm_native"
+package "Milky2018/wasm_milkir/native"
 
 import {
   "Milky2018/milkir",
-  "Milky2018/milkir_native",
-  "Milky2018/native_lowering",
-  "Milky2018/native_types",
+  "Milky2018/vcode/native_lowering",
+  "Milky2018/vcode/native_types",
   "Milky2018/wasm_milkir",
 }
 
 // Values
-pub fn lower_to_sink(@milkir.Function, @wasm_milkir.WasmValidationContext, Environment, @native_lowering.TargetSink, call_abi? : @native_lowering.CallAbiElaboration, on_event? : (@milkir_native.NativeLowerEvent) -> Unit) -> Unit raise @milkir_native.NativeLowerError
+pub fn lower_to_sink(@milkir.Function, @wasm_milkir.WasmValidationContext, Environment, @native_lowering.TargetSink, call_abi? : @native_lowering.CallAbiElaboration, on_event? : (@Milky2018/milkir/native.NativeLowerEvent) -> Unit) -> Unit raise @Milky2018/milkir/native.NativeLowerError
 
 // Errors
 

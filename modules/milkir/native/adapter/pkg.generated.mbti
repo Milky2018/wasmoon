@@ -1,9 +1,9 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "Milky2018/milkir_native/adapter"
+package "Milky2018/milkir/native/adapter"
 
 import {
-  "Milky2018/native_lowering",
-  "Milky2018/native_types",
+  "Milky2018/vcode/native_lowering",
+  "Milky2018/vcode/native_types",
 }
 
 // Values

@@ -14,7 +14,6 @@ description = "Target VCode adapter for the reusable register allocator"
 
 import {
   "moonbitlang/x@0.4.48",
-  "Milky2018/native_types@0.12.6",
   "Milky2018/vcode@0.12.6",
   "Milky2018/regalloc@0.12.6",
 }

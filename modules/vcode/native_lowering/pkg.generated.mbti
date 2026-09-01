@@ -1,8 +1,8 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "Milky2018/native_lowering"
+package "Milky2018/vcode/native_lowering"
 
 import {
-  "Milky2018/native_types",
+  "Milky2018/vcode/native_types",
   "moonbitlang/core/debug",
 }
 

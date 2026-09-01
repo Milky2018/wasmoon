@@ -67,11 +67,13 @@ remove or override it when recording comparable corpus history.
 
 ## Compiler Boundaries
 
-Reusable infrastructure comprises `wasm_core`, `milkir`, `native_types`,
-`native_lowering`, `vcode`, `regalloc`, `vcode_regalloc`, `milkir_native`,
-`wasm_native`, `aarch64_target`, and `x64_target`.
+Reusable infrastructure comprises the `wasm_core`, `wasm_milkir`, `milkir`,
+`vcode`, `regalloc`, `vcode_regalloc`, `aarch64_target`, and `x64_target`
+modules. Native types, streaming lowering, and code objects are packages under
+`vcode`; generic and Wasm-specific producers live under `milkir/native` and
+`wasm_milkir/native`.
 
-- These modules must not import Wasmoon-owned packages; run
+- These modules and packages must not import Wasmoon-owned packages; run
   `scripts/audit_module_boundaries.py` when changing package dependencies.
 - Generic compiler code should use product-neutral names and emit symbolic
   relocations; Wasmoon runtime address resolution belongs in `wasmoon_jit`.
