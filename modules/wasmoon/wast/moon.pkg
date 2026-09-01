@@ -13,4 +13,5 @@ import {
   "moonbitlang/core/double",
   "moonbitlang/core/float",
   "moonbitlang/core/hashset",
+  "moonbitlang/async",
 }

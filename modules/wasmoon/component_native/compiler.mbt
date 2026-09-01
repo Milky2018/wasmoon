@@ -418,6 +418,7 @@ fn load_component_jit_context(
     jit_module,
     store,
     instance,
+    context,
     before_dispatch=fn() {
       @wast.sync_jit_globals_to_store(context, store)
       @wast.sync_jit_tables_to_store(context, store)

@@ -1395,8 +1395,6 @@ fn run_with_jit(
           raise CommandFailure(1)
         }
         Ok(jm) => {
-          // Enable arbitrary host function imports via JIT -> hostcall bridge.
-          @wast.install_jit_hostcall_dispatcher(jm, store, instance)
           // Configure the guarded native-fiber stack allocated for each JIT
           // invocation. Real-world programs may have large native frames after
           // register allocation, so the CLI uses a larger budget than the API
@@ -1456,6 +1454,8 @@ fn run_with_jit(
             mod_.type_rec_groups,
             use_subtype_indirect_check,
           )
+          // Enable arbitrary host function imports via JIT -> hostcall bridge.
+          @wast.install_jit_hostcall_dispatcher(jm, store, instance, jit_ctx)
           // Find and call the function
           let jit_func = jm.get_func_by_name(func_name)
           match jit_func {

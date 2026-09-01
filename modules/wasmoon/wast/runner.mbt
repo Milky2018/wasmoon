@@ -45,6 +45,8 @@ pub struct JITModuleContext {
   module_rec_groups : Array[Int]
   // Whether this module uses subtype helper for call_indirect checks
   use_subtype_indirect_check : Bool
+  priv async_host_driver : Ref[@runtime.AsyncHostCallDriver?]
+  priv async_host_error : Ref[@runtime.RuntimeError?]
 }
 
 ///|
@@ -71,6 +73,8 @@ pub fn JITModuleContext::JITModuleContext(
     module_types,
     module_rec_groups,
     use_subtype_indirect_check,
+    async_host_driver: Ref(None),
+    async_host_error: Ref(None),
   }
 }
 

@@ -1520,6 +1520,13 @@ fn find_local_tag_idx(
 }
 
 ///|
+priv enum ImportedCallOutcome {
+  ImportedReturned(Array[@types.Value])
+  ImportedThrown(Int, Array[@types.Value])
+  ImportedPending
+}
+
+///|
 /// Install a JIT hostcall dispatcher closure on `jit_module`.
 ///
 /// This enables arbitrary imported host functions (stored in `store`) to be
@@ -1528,6 +1535,7 @@ pub fn install_jit_hostcall_dispatcher(
   jit_module : @jit.JITModule,
   store : @runtime.Store,
   instance : @runtime.ModuleInstance,
+  jit_context : JITModuleContext,
   before_dispatch? : () -> Unit = fn() { () },
   after_dispatch? : () -> Unit = fn() { () },
   classify_suspension? : (@runtime.RuntimeError) -> Bool = fn(_error) { false },
@@ -1537,12 +1545,25 @@ pub fn install_jit_hostcall_dispatcher(
     caller_instance : @runtime.ModuleInstance,
     func_addr : Int,
     args : Array[@types.Value],
-  ) -> @executor.InvokeWithExceptionResult raise @runtime.RuntimeError {
+  ) -> ImportedCallOutcome raise @runtime.RuntimeError {
     let inst = store.get_func_inst(func_addr)
     match inst {
       HostFunc(f) => {
         let caller = @runtime.Caller::Caller(store, caller_instance)
-        Returned(f(caller, args))
+        ImportedReturned(f(caller, args))
+      }
+      AsyncHostFunc(f) => {
+        guard jit_context.async_host_driver.val is Some(driver) else {
+          let error = @runtime.AsyncHostRequiresAsyncCall
+          jit_context.async_host_error.val = Some(error)
+          raise error
+        }
+        let caller = @runtime.Caller::Caller(store, caller_instance)
+        let polled = driver.poll(func_addr, f, caller, args)
+        match polled {
+          AsyncHostReady(values) => ImportedReturned(values)
+          AsyncHostPending => ImportedPending
+        }
       }
       WasmFunc(_) => {
         let owner = match store.get_func_owner(func_addr) {
@@ -1559,9 +1580,13 @@ pub fn install_jit_hostcall_dispatcher(
         if func_idx < 0 {
           raise UndefinedElement
         }
-        @executor.call_func_by_index_with_exception(
-          store, owner, func_idx, args,
-        )
+        match
+          @executor.call_func_by_index_with_exception(
+            store, owner, func_idx, args,
+          ) {
+          Returned(values) => ImportedReturned(values)
+          Thrown(tag_addr, values) => ImportedThrown(tag_addr, values)
+        }
       }
     }
   }
@@ -1595,6 +1620,9 @@ pub fn install_jit_hostcall_dispatcher(
     let invoke_result = call_func_by_addr(store, instance, func_addr, args) catch {
       e => {
         after_dispatch()
+        if store.get_func_inst_opt(func_addr) is Some(AsyncHostFunc(_)) {
+          jit_context.async_host_error.val = Some(e)
+        }
         if classify_suspension(e) {
           return HostcallSuspended
         }
@@ -1603,8 +1631,9 @@ pub fn install_jit_hostcall_dispatcher(
     }
     after_dispatch()
     let results : Array[@types.Value] = match invoke_result {
-      Returned(values) => values
-      Thrown(tag_addr, values) => {
+      ImportedReturned(values) => values
+      ImportedPending => return HostcallSuspended
+      ImportedThrown(tag_addr, values) => {
         let local_tag_idx = find_local_tag_idx(instance, tag_addr).unwrap_or(-1)
         // Imported wasm callees can throw; route the exception into the active
         // JIT try_table chain instead of flattening it to a generic trap.

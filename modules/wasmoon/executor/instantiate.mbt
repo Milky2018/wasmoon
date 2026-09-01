@@ -32,6 +32,10 @@ fn normalize_runtime_error(e : Error) -> @runtime.RuntimeError {
     @runtime.NullReference => NullReference
     @runtime.UnalignedAtomic => UnalignedAtomic
     @runtime.InvalidConstantExpression(_) as err => err
+    @runtime.AsyncHostRequiresAsyncCall => AsyncHostRequiresAsyncCall
+    @runtime.AsyncHostCallInProgress => AsyncHostCallInProgress
+    @runtime.AsyncHostCallCancelled => AsyncHostCallCancelled
+    @runtime.AsyncHostError(_) as err => err
     InvocationSignal::HostInvocation(err) => normalize_runtime_error(err)
     _ => Unreachable
   }

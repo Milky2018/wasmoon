@@ -348,7 +348,6 @@ fn run_wasi_jit_quiet(
       debug_db~,
     )
     @wast.register_instance_funcrefs_for_jit(jm, instance, store)
-    @wast.install_jit_hostcall_dispatcher(jm, store, instance)
     jm.configure_native_fiber_stack_size(1048576L) |> ignore
     jm.init_wasi_with_stdio(
       [],
@@ -415,11 +414,11 @@ fn run_wasi_jit_quiet(
     for group in mod_.type_rec_groups {
       module_rec_groups.push(group)
     }
-    @wast.JITModuleContext::JITModuleContext(
+    let jit_context = @wast.JITModuleContext::JITModuleContext(
       jm, globals_ptr, global_addrs, table_addrs, func_addrs, func_type_indices,
       canonical_type_indices, module_types, module_rec_groups, use_subtype_indirect_check,
     )
-    |> ignore
+    @wast.install_jit_hostcall_dispatcher(jm, store, instance, jit_context)
     guard jm.get_func(func_idx) is Some(func) else {
       return (Err("JIT function \{func_idx} not loaded"), Bytes::from_array([]))
     }

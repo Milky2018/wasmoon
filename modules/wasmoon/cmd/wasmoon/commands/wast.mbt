@@ -596,6 +596,7 @@ fn try_compile_jit_with_suspension(
             jm,
             store,
             instance,
+            jit_ctx,
             before_dispatch=fn() {
               @wast.sync_jit_globals_to_store(jit_ctx, store)
               @wast.sync_jit_tables_to_store(jit_ctx, store)

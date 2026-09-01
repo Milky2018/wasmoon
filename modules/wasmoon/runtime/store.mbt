@@ -389,6 +389,52 @@ pub fn Store::alloc_host_func_with_caller(
 }
 
 ///|
+/// Allocate an asynchronous host function with its type.
+pub fn Store::alloc_async_host_func(
+  self : Store,
+  func : async (Array[@types.Value]) -> Array[@types.Value] raise Error,
+  func_type? : @types.FuncType = { params: [], results: [], },
+  type_idx? : Int = -1,
+) -> Int raise RuntimeError {
+  self.ensure_open()
+  let wrapped : AsyncHostFunction = async fn(_caller, args) {
+    try func(args) catch {
+      error => Err(error)
+    } noraise {
+      values => Ok(values)
+    }
+  }
+  let idx = self.push_allocation(self.funcs, AsyncHostFunc(wrapped))
+  self.push_allocation(self.func_types, func_type) |> ignore
+  self.push_allocation(self.func_type_indices, type_idx) |> ignore
+  self.push_allocation(self.func_owners, HostFunc) |> ignore
+  idx
+}
+
+///|
+/// Allocate an asynchronous host function that receives the caller context.
+pub fn Store::alloc_async_host_func_with_caller(
+  self : Store,
+  func : async (Caller, Array[@types.Value]) -> Array[@types.Value] raise Error,
+  func_type? : @types.FuncType = { params: [], results: [], },
+  type_idx? : Int = -1,
+) -> Int raise RuntimeError {
+  self.ensure_open()
+  let wrapped : AsyncHostFunction = async fn(caller, args) {
+    try func(caller, args) catch {
+      error => Err(error)
+    } noraise {
+      values => Ok(values)
+    }
+  }
+  let idx = self.push_allocation(self.funcs, AsyncHostFunc(wrapped))
+  self.push_allocation(self.func_types, func_type) |> ignore
+  self.push_allocation(self.func_type_indices, type_idx) |> ignore
+  self.push_allocation(self.func_owners, HostFunc) |> ignore
+  idx
+}
+
+///|
 /// Allocate a table in the store
 /// Always creates a corresponding JIT table for cross-module sharing
 pub fn Store::alloc_table(
@@ -844,7 +890,7 @@ pub fn Store::get_func(
 ) -> @types.FunctionCode raise RuntimeError {
   match self.get_func_inst(idx) {
     WasmFunc(code) => code
-    HostFunc(_) => raise TypeMismatch // Cannot get code from host function
+    HostFunc(_) | AsyncHostFunc(_) => raise TypeMismatch // Cannot get code from host function
   }
 }
 

@@ -188,3 +188,71 @@ pub fn call_func_by_index_resumable(
   }
   Returned(context.collect_call_results(return_arity))
 }
+
+///|
+fn start_async_host_call(
+  store : @runtime.Store,
+  instance : @runtime.ModuleInstance,
+  func_idx : Int,
+  args : Array[@types.Value],
+  driver : @runtime.AsyncHostCallDriver,
+) -> ResumableCallOutcome raise @runtime.RuntimeError {
+  let context = ExecContext(store, instance, async_host_driver=Some(driver))
+  let store_addr = instance.func_addrs[func_idx]
+  let func_inst = store.get_func_inst(store_addr)
+  let type_idx = instance.func_type_indices[func_idx]
+  let func_type = instance.validated_func_type_at(type_idx)
+  let return_arity = func_type.results.length()
+  context.call_func_inst_with_context(store_addr, func_inst, args, return_arity) catch {
+    ExecutionSuspended =>
+      return suspended_outcome(context, return_arity, [true])
+    error => raise normalize_runtime_error(error)
+  }
+  Returned(context.collect_call_results(return_arity))
+}
+
+///|
+/// Call a function while allowing asynchronous host imports to suspend Wasm.
+///
+/// The host future is awaited only after the interpreter continuation has been
+/// captured, so waiting never blocks the host thread or consumes a Wasm stack.
+pub async fn call_func_by_index_async(
+  store : @runtime.Store,
+  instance : @runtime.ModuleInstance,
+  func_idx : Int,
+  args : Array[@types.Value],
+) -> Array[@types.Value] raise @runtime.RuntimeError {
+  @runtime.with_async_host_call_driver(async fn(driver) raise Error {
+    let mut outcome = start_async_host_call(
+      store, instance, func_idx, args, driver,
+    )
+    for ;; {
+      match outcome {
+        Returned(values) => return values
+        Suspended(_, continuation) => {
+          errdefer continuation.cancel()
+          driver.wait_pending()
+          outcome = continuation.continue_execution()
+        }
+      }
+    }
+  }) catch {
+    error => raise @runtime.normalize_async_host_error(error)
+  }
+}
+
+///|
+/// Call an exported function while allowing asynchronous host imports to
+/// suspend Wasm.
+pub async fn call_exported_func_async(
+  store : @runtime.Store,
+  instance : @runtime.ModuleInstance,
+  name : String,
+  args : Array[@types.Value],
+) -> Array[@types.Value] raise @runtime.RuntimeError {
+  match find_export_by_name(instance.exports, name) {
+    Some({ desc: Func(func_idx), .. }) =>
+      call_func_by_index_async(store, instance, func_idx, args)
+    Some(_) | None => raise UndefinedElement
+  }
+}

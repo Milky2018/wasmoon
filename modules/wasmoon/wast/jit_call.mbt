@@ -8,6 +8,7 @@ pub(all) suberror JITCoreCallError {
   NativeFiberFailure(String)
   Cancelled
   Exit(Int)
+  HostInvocation(String)
   GcSetupFailed(String)
   ExecutionStateFailure(@wasmoon_jit.NativeExecutionStateError)
 } derive(Debug, Eq)
@@ -118,9 +119,19 @@ fn finish_jit_core_environment(
 }
 
 ///|
-fn map_jit_call_error(error : @jit.JITTrap) -> JITCoreCallError {
+fn JITModuleContext::map_jit_call_error(
+  self : JITModuleContext,
+  error : @jit.JITTrap,
+) -> JITCoreCallError {
   match error {
-    JITTrap(message) => Trap(message)
+    JITTrap(message) =>
+      match self.async_host_error.val {
+        Some(host_error) => {
+          self.async_host_error.val = None
+          HostInvocation(host_error.to_string())
+        }
+        None => Trap(message)
+      }
     JITNativeFiberFailure(message) => NativeFiberFailure(message)
     JITCancelled => Cancelled
     JITExit(code) => Exit(code)
@@ -198,7 +209,7 @@ pub fn JITCoreContinuation::continue_execution(
       finish_jit_core_environment(self.context, self.store, gc_active)
       self.invocation.release_if_live()
       self.active[0] = false
-      raise map_jit_call_error(error)
+      raise self.context.map_jit_call_error(error)
     }
   }
   finish_jit_core_environment(self.context, self.store, gc_active)
@@ -240,6 +251,7 @@ pub fn JITModuleContext::call_core_func_resumable(
   let invocation = store.native_execution_state().begin() catch {
       error => raise ExecutionStateFailure(error)
     }
+  self.async_host_error.val = None
   let gc_active = {
     errdefer invocation.release_if_live()
     prepare_jit_core_environment(self, store, instance)
@@ -248,7 +260,7 @@ pub fn JITModuleContext::call_core_func_resumable(
     error => {
       finish_jit_core_environment(self, store, gc_active)
       invocation.release_if_live()
-      raise map_jit_call_error(error)
+      raise self.map_jit_call_error(error)
     }
   }
   finish_jit_core_environment(self, store, gc_active)
@@ -311,11 +323,9 @@ pub fn JITModuleContext::call_core_func(
       error => raise ExecutionStateFailure(error)
     }
   defer invocation.release_if_live()
+  self.async_host_error.val = None
   let raw_results = self.jit_module.call_with_context(func, encoded_args) catch {
-    JITTrap(message) => raise Trap(message)
-    JITNativeFiberFailure(message) => raise NativeFiberFailure(message)
-    JITCancelled => raise Cancelled
-    JITExit(code) => raise Exit(code)
+    error => raise self.map_jit_call_error(error)
   }
   invocation.complete() catch {
     error => raise ExecutionStateFailure(error)
@@ -327,4 +337,59 @@ pub fn JITModuleContext::call_core_func(
     self.jit_module,
     instance,
   )
+}
+
+///|
+fn normalize_async_jit_call_error(error : Error) -> JITCoreCallError {
+  match error {
+    FunctionUnavailable(_) as call_error => call_error
+    ArgumentTypeMismatch(_) as call_error => call_error
+    ResultTypeMismatch(_) as call_error => call_error
+    Trap(_) as call_error => call_error
+    NativeFiberFailure(_) as call_error => call_error
+    Cancelled => Cancelled
+    Exit(_) as call_error => call_error
+    HostInvocation(_) as call_error => call_error
+    GcSetupFailed(_) as call_error => call_error
+    ExecutionStateFailure(_) as call_error => call_error
+    @runtime.AsyncHostCallCancelled => Cancelled
+    _ if @async.is_cancellation_error(error) => Cancelled
+    _ => HostInvocation(@runtime.normalize_async_host_error(error).to_string())
+  }
+}
+
+///|
+/// Call JIT-compiled Wasm while allowing asynchronous host imports to park its
+/// native fiber until their futures are ready.
+pub async fn JITModuleContext::call_core_func_async(
+  self : JITModuleContext,
+  store : @runtime.Store,
+  instance : @runtime.ModuleInstance,
+  func_idx : Int,
+  args : Array[@types.Value],
+) -> Array[@types.Value] raise JITCoreCallError {
+  @runtime.with_async_host_call_driver(async fn(driver) raise Error {
+    guard self.async_host_driver.val is None else {
+      raise HostInvocation("another async JIT call is already active")
+    }
+    self.async_host_driver.val = Some(driver)
+    defer {
+      self.async_host_driver.val = None
+    }
+    let mut outcome = self.call_core_func_resumable(
+      store, instance, func_idx, args,
+    )
+    for ;; {
+      match outcome {
+        NativeCoreReturned(values) => return values
+        NativeCoreSuspended(continuation) => {
+          errdefer continuation.cancel()
+          driver.wait_pending()
+          outcome = continuation.continue_execution()
+        }
+      }
+    }
+  }) catch {
+    error => raise normalize_async_jit_call_error(error)
+  }
 }

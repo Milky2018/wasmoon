@@ -10,9 +10,13 @@ import {
 // Values
 pub fn call_exported_func(@runtime.Store, @runtime.ModuleInstance, String, Array[@types.Value]) -> Array[@types.Value] raise @runtime.RuntimeError
 
+pub async fn call_exported_func_async(@runtime.Store, @runtime.ModuleInstance, String, Array[@types.Value]) -> Array[@types.Value] raise @runtime.RuntimeError
+
 pub fn call_exported_func_with_options(@runtime.Store, @runtime.ModuleInstance, String, Array[@types.Value], options? : CallExportOptions) -> CallExportResult
 
 pub fn call_func_by_index(@runtime.Store, @runtime.ModuleInstance, Int, Array[@types.Value]) -> Array[@types.Value] raise @runtime.RuntimeError
+
+pub async fn call_func_by_index_async(@runtime.Store, @runtime.ModuleInstance, Int, Array[@types.Value]) -> Array[@types.Value] raise @runtime.RuntimeError
 
 pub fn call_func_by_index_resumable(@runtime.Store, @runtime.ModuleInstance, Int, Array[@types.Value], (@runtime.RuntimeError) -> Int64?) -> ResumableCallOutcome raise @runtime.RuntimeError
 

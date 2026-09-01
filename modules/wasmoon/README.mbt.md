@@ -10,6 +10,7 @@ A WebAssembly runtime written in MoonBit with JIT compilation support.
 
 - **JIT Compiler**: AArch64 and amd64 native code generation with SSA-based IR
 - **Interpreter**: Full WebAssembly 1.0 execution engine, available via `--no-jit`
+- **Async host functions**: Suspend interpreter continuations or JIT native fibers without blocking the host thread
 - **WAT/WASM Parser**: Parse both text and binary formats
 - **WASI Preview 1 Support**: File I/O, environment variables, command-line arguments
 - **GC Proposal Support**: i31/struct/array/ref operations in interpreter and JIT
@@ -74,6 +75,37 @@ After code changes, re-run `./install.sh` to refresh both executables.
 ```bash
 moon add Milky2018/wasmoon
 ```
+
+### Async host functions
+
+Register an async import with `Linker::add_async_host_func`, then enter Wasm
+through an async call API. Wasm observes an ordinary blocking import call, while
+the host future is awaited only after the interpreter continuation or JIT native
+fiber has been parked.
+
+```moonbit nocheck
+linker.add_async_host_func(
+  "host",
+  "double_later",
+  async fn(args) {
+    @async.sleep(10)
+    match args[0] {
+      I32(value) => [I32(value * 2)]
+      _ => raise @runtime.TypeMismatch
+    }
+  },
+  func_type={ params: [I32], results: [I32], },
+)
+
+let values = @executor.call_exported_func_async(
+  linker.get_store(), instance, "run", [I32(21)],
+)
+```
+
+Use `JITModuleContext::call_core_func_async` for a prepared JIT module. Calling
+an async import through a synchronous entry point fails explicitly instead of
+blocking the host thread. Cancelling the surrounding MoonBit task cancels the
+host future and releases the parked Wasm continuation or native fiber.
 
 ## Quick Start (60 seconds)
 

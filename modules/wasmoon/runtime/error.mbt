@@ -27,6 +27,10 @@ pub(all) suberror RuntimeError {
   // Used when evaluating init expressions during instantiation; this should
   // never be reached for validated modules, but helps diagnose engine gaps.
   InvalidConstantExpression(String)
+  AsyncHostRequiresAsyncCall
+  AsyncHostCallInProgress
+  AsyncHostCallCancelled
+  AsyncHostError(String)
 }
 
 ///|
@@ -67,6 +71,11 @@ pub impl Show for RuntimeError with fn output(self, logger) {
       } else {
         "invalid constant expression: \{detail}"
       }
+    AsyncHostRequiresAsyncCall =>
+      "async host function requires an async wasm call"
+    AsyncHostCallInProgress => "another async host call is already pending"
+    AsyncHostCallCancelled => "async wasm call was cancelled"
+    AsyncHostError(message) => "async host function failed: \{message}"
   }
   logger.write_string(msg)
 }

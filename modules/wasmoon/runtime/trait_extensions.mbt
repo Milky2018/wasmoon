@@ -2,6 +2,12 @@
 pub extend ArrayInstance with Debug::{to_repr}
 
 ///|
+pub extend AsyncHostPoll with Debug::{to_repr}
+
+///|
+pub extend AsyncHostCallDriver with Debug::{to_repr}
+
+///|
 pub extend ArrayInstance with Show::{to_string, output}
 
 ///|

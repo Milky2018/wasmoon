@@ -201,18 +201,23 @@ fn ExecContext::call_func_inst_with_context(
   args : Array[@types.Value],
   num_results : Int,
 ) -> Unit raise {
-  if func_inst is WasmFunc(code) {
-    // Check if this function belongs to a different module
-    let owner = self.store.get_func_owner(store_addr)
-    if owner is Some(owner_instance) {
-      // Call with the owner's context
-      self.call_wasm_func_with_instance(owner_instance, code, args, num_results)
-    } else {
-      // Imported host-created function instances may not have an owning module.
-      self.call_wasm_func(code, args, num_results)
+  match func_inst {
+    WasmFunc(code) => {
+      // Check if this function belongs to a different module
+      let owner = self.store.get_func_owner(store_addr)
+      if owner is Some(owner_instance) {
+        // Call with the owner's context
+        self.call_wasm_func_with_instance(
+          owner_instance, code, args, num_results,
+        )
+      } else {
+        // Imported host-created function instances may not have an owning module.
+        self.call_wasm_func(code, args, num_results)
+      }
     }
-  } else if func_inst is HostFunc(host_fn) {
-    self.invoke_host_func(host_fn, self.instance, args)
+    HostFunc(host_fn) => self.invoke_host_func(host_fn, self.instance, args)
+    AsyncHostFunc(host_fn) =>
+      self.invoke_async_host_func(store_addr, host_fn, self.instance, args)
   }
 }
 
@@ -234,6 +239,32 @@ fn ExecContext::invoke_host_func(
   }
   for result in results {
     self.stack.push(result)
+  }
+}
+
+///|
+fn ExecContext::invoke_async_host_func(
+  self : ExecContext,
+  store_addr : Int,
+  host_fn : @runtime.AsyncHostFunction,
+  caller_instance : @runtime.ModuleInstance,
+  args : Array[@types.Value],
+) -> Unit raise {
+  guard self.async_host_driver is Some(driver) else {
+    raise InvocationSignal::HostInvocation(@runtime.AsyncHostRequiresAsyncCall)
+  }
+  let caller = @runtime.Caller::Caller(self.store, caller_instance)
+  match driver.poll(store_addr, host_fn, caller, args) {
+    AsyncHostReady(results) =>
+      for result in results {
+        self.stack.push(result)
+      }
+    AsyncHostPending => {
+      self.set_base_resume_action(0L, fn() raise {
+        self.invoke_async_host_func(store_addr, host_fn, caller_instance, args)
+      })
+      raise ExecutionSuspended
+    }
   }
 }
 
@@ -320,13 +351,31 @@ fn ExecContext::call_wasm_func_with_instance(
             should_continue = true
           }
           HostFunc(host_fn) => {
-            // Host function - call directly and exit
-            let caller = @runtime.Caller::Caller(self.store, self.instance)
-            let results = host_fn(caller, tail_args) catch {
-              e => raise InvocationSignal::HostInvocation(e)
+            self.invoke_host_func(host_fn, self.instance, tail_args) catch {
+              ExecutionSuspended => {
+                self.append_resume_suffix(fn() {
+                  self.instance = saved_instance
+                })
+                raise ExecutionSuspended
+              }
+              error => raise error
             }
-            for result in results {
-              self.stack.push(result)
+            should_continue = false
+          }
+          AsyncHostFunc(host_fn) => {
+            self.invoke_async_host_func(
+              store_addr,
+              host_fn,
+              self.instance,
+              tail_args,
+            ) catch {
+              ExecutionSuspended => {
+                self.append_resume_suffix(fn() {
+                  self.instance = saved_instance
+                })
+                raise ExecutionSuspended
+              }
+              error => raise error
             }
             should_continue = false
           }
@@ -374,6 +423,18 @@ fn ExecContext::finish_suspended_wasm_frame(
         }
         HostFunc(host_fn) => {
           self.invoke_host_func(host_fn, caller_instance, tail_args) catch {
+            ExecutionSuspended => {
+              self.append_resume_suffix(fn() { self.instance = saved_instance })
+              raise ExecutionSuspended
+            }
+            error => raise error
+          }
+          self.instance = saved_instance
+        }
+        AsyncHostFunc(host_fn) => {
+          self.invoke_async_host_func(
+            store_addr, host_fn, caller_instance, tail_args,
+          ) catch {
             ExecutionSuspended => {
               self.append_resume_suffix(fn() { self.instance = saved_instance })
               raise ExecutionSuspended

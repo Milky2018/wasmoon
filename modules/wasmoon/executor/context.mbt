@@ -118,6 +118,7 @@ struct ExecContext {
   mut gc_stress_alloc_count : Int
   cancel : CancellationPoller?
   suspension_classifier : SuspensionClassifier?
+  async_host_driver : @runtime.AsyncHostCallDriver?
   mut resume_action : ResumeAction?
   mut suspension_token : Int64?
 } derive(Debug)
@@ -128,6 +129,7 @@ fn ExecContext::ExecContext(
   instance : @runtime.ModuleInstance,
   cancel? : (() -> Bool)? = None,
   classify_suspension? : (@runtime.RuntimeError) -> Int64? = fn(_) { None },
+  async_host_driver? : @runtime.AsyncHostCallDriver? = None,
 ) -> ExecContext {
   {
     stack: Stack(),
@@ -141,6 +143,7 @@ fn ExecContext::ExecContext(
     gc_stress_alloc_count: 0,
     cancel: cancel.map(fn(callback) { { callback, } }),
     suspension_classifier: Some({ classify: classify_suspension, }),
+    async_host_driver,
     resume_action: None,
     suspension_token: None,
   }

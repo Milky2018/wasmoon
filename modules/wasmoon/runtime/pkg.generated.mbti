@@ -10,6 +10,8 @@ import {
 // Values
 pub fn format_runtime_error(RuntimeError) -> String
 
+pub fn normalize_async_host_error(Error) -> RuntimeError
+
 pub fn runtime_capabilities() -> RuntimeCapabilities
 
 pub fn runtime_version() -> String
@@ -44,6 +46,8 @@ pub fn supports_threads() -> Bool
 
 pub fn supports_wasi_preview1() -> Bool
 
+pub async fn[X] with_async_host_call_driver(async (AsyncHostCallDriver) -> X) -> X
+
 // Errors
 pub(all) suberror RuntimeError {
   StackUnderflow
@@ -69,6 +73,10 @@ pub(all) suberror RuntimeError {
   NullReference
   UnalignedAtomic
   InvalidConstantExpression(String)
+  AsyncHostRequiresAsyncCall
+  AsyncHostCallInProgress
+  AsyncHostCallCancelled
+  AsyncHostError(String)
 }
 pub fn RuntimeError::output(Self, &Logger) -> Unit
 pub fn RuntimeError::to_string(Self) -> String
@@ -83,6 +91,21 @@ pub fn ArrayInstance::output(Self, &Logger) -> Unit
 pub fn ArrayInstance::to_repr(Self) -> @debug.Repr
 pub fn ArrayInstance::to_string(Self) -> String
 pub impl Show for ArrayInstance
+
+pub struct AsyncHostCallDriver {
+  // private fields
+}
+pub fn AsyncHostCallDriver::cancel(Self) -> Unit
+pub fn AsyncHostCallDriver::poll(Self, Int, async (Caller, Array[@types.Value]) -> Result[Array[@types.Value], Error], Caller, Array[@types.Value]) -> AsyncHostPoll raise RuntimeError
+pub fn AsyncHostCallDriver::to_repr(Self) -> @debug.Repr
+pub async fn AsyncHostCallDriver::wait_pending(Self) -> Unit raise RuntimeError
+pub impl @debug.Debug for AsyncHostCallDriver
+
+pub(all) enum AsyncHostPoll {
+  AsyncHostPending
+  AsyncHostReady(Array[@types.Value])
+} derive(@debug.Debug)
+pub fn AsyncHostPoll::to_repr(Self) -> @debug.Repr
 
 pub(all) struct CallStackEntry {
   func_idx : Int
@@ -125,6 +148,7 @@ pub fn Frame::to_repr(Self) -> @debug.Repr
 pub(all) enum FuncInst {
   WasmFunc(@types.FunctionCode)
   HostFunc((Caller, Array[@types.Value]) -> Array[@types.Value] raise RuntimeError)
+  AsyncHostFunc(async (Caller, Array[@types.Value]) -> Result[Array[@types.Value], Error])
 }
 pub fn FuncInst::output(Self, &Logger) -> Unit
 pub fn FuncInst::to_repr(Self) -> @debug.Repr
@@ -194,6 +218,8 @@ pub fn InstantiationTransaction::rollback(Self) -> Unit
 
 type Linker
 pub fn Linker::Linker() -> Self
+pub fn Linker::add_async_host_func(Self, String, String, async (Array[@types.Value]) -> Array[@types.Value], func_type? : @types.FuncType) -> Unit raise RuntimeError
+pub fn Linker::add_async_host_func_with_caller(Self, String, String, async (Caller, Array[@types.Value]) -> Array[@types.Value], func_type? : @types.FuncType) -> Unit raise RuntimeError
 pub fn Linker::add_global(Self, String, String, GlobalInstance) -> Unit raise RuntimeError
 pub fn Linker::add_host_func(Self, String, String, (Array[@types.Value]) -> Array[@types.Value] raise RuntimeError, func_type? : @types.FuncType) -> Unit raise RuntimeError
 pub fn Linker::add_host_func_with_caller(Self, String, String, (Caller, Array[@types.Value]) -> Array[@types.Value] raise RuntimeError, func_type? : @types.FuncType) -> Unit raise RuntimeError
@@ -424,6 +450,8 @@ pub struct Store {
 } derive(@debug.Debug)
 pub fn Store::Store() -> Self
 pub fn Store::alloc_array(Self, Int, Array[@types.Value]) -> Int raise RuntimeError
+pub fn Store::alloc_async_host_func(Self, async (Array[@types.Value]) -> Array[@types.Value], func_type? : @types.FuncType, type_idx? : Int) -> Int raise RuntimeError
+pub fn Store::alloc_async_host_func_with_caller(Self, async (Caller, Array[@types.Value]) -> Array[@types.Value], func_type? : @types.FuncType, type_idx? : Int) -> Int raise RuntimeError
 pub fn Store::alloc_exn(Self, Int, Array[@types.Value]) -> Int raise RuntimeError
 pub fn Store::alloc_func(Self, @types.FunctionCode, func_type? : @types.FuncType, type_idx? : Int) -> Int raise RuntimeError
 pub fn Store::alloc_global(Self, GlobalInstance) -> Int raise RuntimeError
@@ -520,6 +548,7 @@ pub fn Table::size(Self) -> Int
 pub fn Table::to_repr(Self) -> @debug.Repr
 
 // Type aliases
+pub type AsyncHostFunction = async (Caller, Array[@types.Value]) -> Result[Array[@types.Value], Error]
 
 // Traits
 pub(open) trait GcHeap {
