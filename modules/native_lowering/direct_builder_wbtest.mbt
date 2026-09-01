@@ -83,12 +83,12 @@ fn platform_call(
 ///|
 test "direct builder maps transient handles to non-dense target ids" {
   let (sink, trace) = traced_sink([101, 303], 509)
-  let builder = DirectBuilder::new([@native.I64, @native.I64], sink)
+  let builder = DirectBuilder::new([I64, I64], sink)
   let parameters = builder.parameters()
   let result = builder.emit_with_metadata(
       IntBinary(Add),
       parameters,
-      [@native.I64],
+      [I64],
       InstructionMetadata::empty(),
     )[0]
   builder.return_([result])
@@ -106,7 +106,7 @@ test "direct builder maps transient handles to non-dense target ids" {
 test "direct builder elaborates caller roots in the lowering stream" {
   let (sink, trace) = traced_sink([11, 22], 509)
   let builder = DirectBuilder::new(
-    [@native.Ptr64, @native.GcRef64],
+    [Ptr64, GcRef64],
     sink,
     call_abi=CallAbiElaboration::new(
       root_scope=CallerRootScopeAbi::new(
@@ -118,9 +118,9 @@ test "direct builder elaborates caller roots in the lowering stream" {
   )
   let parameters = builder.parameters()
   let result = builder.emit_with_metadata(
-      Call(platform_call("host.call", [@native.Ptr64], [@native.I64])),
+      Call(platform_call("host.call", [Ptr64], [I64])),
       [parameters[0]],
-      [@native.I64],
+      [I64],
       InstructionMetadata::new(None, [parameters[1]]),
     )[0]
   builder.return_([result])
@@ -160,7 +160,7 @@ test "direct builder assigns hidden allocation stack maps monotonically" {
   let (sink, trace) = traced_sink([11, 22, 33, 44], 509)
   let allocation_symbol = @native.ExternalSymbol::new("runtime.allocate")
   let builder = DirectBuilder::new(
-    [@native.Ptr64, @native.I32, @native.I32, @native.I64],
+    [Ptr64, I32, I32, I64],
     sink,
     call_abi=CallAbiElaboration::new(hidden_safepoints=[
       HiddenSafepointAbi::new(allocation_symbol, AllocationOperands),
@@ -169,20 +169,20 @@ test "direct builder assigns hidden allocation stack maps monotonically" {
   let parameters = builder.parameters()
   let call = platform_call(
     "runtime.allocate",
-    [@native.Ptr64, @native.I32, @native.I32, @native.I64],
-    [@native.GcRef64],
+    [Ptr64, I32, I32, I64],
+    [GcRef64],
     gc_safepoint=true,
   )
   let first = builder.emit_with_metadata(
       Call(call),
       parameters,
-      [@native.GcRef64],
+      [GcRef64],
       InstructionMetadata::empty(),
     )[0]
   let second = builder.emit_with_metadata(
       Call(call),
       parameters,
-      [@native.GcRef64],
+      [GcRef64],
       InstructionMetadata::empty(),
     )[0]
   builder.return_([first, second])
