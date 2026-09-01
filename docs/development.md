@@ -56,13 +56,15 @@ With git hooks enabled (`core.hooksPath=.githooks`), `git commit` runs:
 
 ## Project Structure
 
+The target-portable binary parser lives in `modules/wasm_core/parser`; the
+native runtime and command-line packages live under `modules/wasmoon`:
+
 ```
 wasmoon/
 ├── cmd/wasmoon/    # wasmoon CLI entry point
 ├── cmd/wasmoon-tools/ # wasmoon-tools CLI entry point
 ├── wat/            # WAT parser
 ├── wast/           # WAST parser
-├── parser/         # Core Wasm binary parser
 ├── validator/      # Module validation
 ├── runtime/        # Runtime structures
 ├── executor/       # Interpreter

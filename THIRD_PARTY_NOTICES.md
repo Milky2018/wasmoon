@@ -53,4 +53,3 @@ The repository does not vendor `.mooncakes/` in git. Declared package
 dependencies are:
 
 - `moonbitlang/x` - Apache-2.0
-- `TheWaWaR/clap` - MIT

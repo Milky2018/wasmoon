@@ -1,5 +1,5 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "Milky2018/wasmoon/parser"
+package "Milky2018/wasm_core/parser"
 
 import {
   "Milky2018/wasm_core/types",

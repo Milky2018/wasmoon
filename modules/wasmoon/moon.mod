@@ -4,7 +4,6 @@ version = "0.12.6"
 
 import {
   "moonbitlang/x@0.4.48",
-  "TheWaWaR/clap@0.2.6",
   "Milky2018/wasm_core@0.12.6",
   "Milky2018/wasm_milkir@0.12.6",
   "Milky2018/milkir@0.12.6",
