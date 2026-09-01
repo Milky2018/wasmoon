@@ -156,6 +156,34 @@ test "direct builder elaborates caller roots in the lowering stream" {
 }
 
 ///|
+test "direct builder does not reserve an unused caller-root stack object" {
+  let (sink, trace) = traced_sink([], 509)
+  let builder = DirectBuilder::new(
+    [],
+    sink,
+    call_abi=CallAbiElaboration::new(
+      root_scope=CallerRootScopeAbi::new(
+        @native.ExternalSymbol::new("runtime.push_roots"),
+        @native.ExternalSymbol::new("runtime.pop_roots"),
+      ),
+    ),
+    root_scope_capacity=4,
+  )
+  inspect(trace.stack_objects.length(), content="0")
+  let object = builder.create_stack_object(16, 16)
+  let address = builder.emit_with_metadata(
+      StackAddress(object),
+      [],
+      [Ptr64],
+      InstructionMetadata::empty(),
+    )[0]
+  builder.return_([address])
+  builder.finish()
+  debug_inspect(trace.stack_objects, content="[(16, 16)]")
+  assert_true(trace.operations[0] is StackAddress({ id: 0, }))
+}
+
+///|
 test "direct builder assigns hidden allocation stack maps monotonically" {
   let (sink, trace) = traced_sink([11, 22, 33, 44], 509)
   let allocation_symbol = @native.ExternalSymbol::new("runtime.allocate")

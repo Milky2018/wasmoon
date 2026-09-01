@@ -155,6 +155,7 @@ pub struct DirectBuilder {
   priv target_blocks : Array[Int]
   priv stack_objects : Array[@native.StackObject]
   priv call_abi : CallAbiElaboration?
+  priv root_scope_capacity : Int
   priv mut root_scope_object : @native.StackObject?
   priv mut next_stack_map_id : Int
   priv error : Ref[String?]
@@ -192,6 +193,7 @@ pub fn DirectBuilder::new(
     target_blocks: [],
     stack_objects: [],
     call_abi,
+    root_scope_capacity,
     root_scope_object: None,
     next_stack_map_id: 0,
     error: Ref(None),
@@ -209,13 +211,6 @@ pub fn DirectBuilder::new(
   }
   builder.target_blocks.push(builder.current_block.id)
   builder.current_block = { id: 0, }
-  if root_scope_capacity > 0 &&
-    call_abi is Some(elaboration) &&
-    elaboration.root_scope is Some(_) {
-    builder.root_scope_object = Some(
-      builder.create_stack_object(root_scope_capacity * 8, 16),
-    )
-  }
   builder
 }
 
@@ -468,7 +463,15 @@ fn DirectBuilder::emit_call_with_abi(
     if call.behavior.returns_twice {
       self.record_error("returns-twice calls cannot use a caller root scope")
     } else if elaboration.root_scope is Some(scope) &&
-      self.root_scope_object is Some(object) {
+      metadata.live_gc_roots.length() <= self.root_scope_capacity {
+      if self.root_scope_object is None {
+        self.root_scope_object = Some(
+          self.create_stack_object(self.root_scope_capacity * 8, 16),
+        )
+      }
+      guard self.root_scope_object is Some(object) else {
+        abort("native lowering root-scope object was not created")
+      }
       let context_index = match call.protocol {
         Internal => if call.callee is Indirect { 1 } else { 0 }
         Platform => 0
@@ -519,8 +522,10 @@ fn DirectBuilder::emit_call_with_abi(
         )
         |> ignore
       }
-    } else {
+    } else if elaboration.root_scope is None {
       self.record_error("live GC roots require a caller root-scope ABI")
+    } else {
+      self.record_error("live GC roots exceed the caller root-scope capacity")
     }
   }
   let results = self.emit_raw(
