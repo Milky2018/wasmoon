@@ -55,9 +55,10 @@ Collection starts in `cmd/wasmoon/run.mbt` during `compile_module_to_jit(...)`.
     orchestration work outside the named compiler stages.
 - Stage time:
   - `optimize_us`: MilkIR optimization.
-  - `lower_us`: validated streaming MilkIR-to-native-target lowering.
-  - `target_lower_us`: embedding ABI elaboration, target instruction selection,
-    and selected-VCode verification.
+  - `lower_us`: streaming MilkIR-to-native-target construction, including
+    embedding ABI elaboration and instruction selection.
+  - `target_lower_us`: selected-VCode verification and sealing after streaming
+    construction completes.
   - `regalloc_us`: production VCode register allocation.
   - `frame_plan_us`: target frame planning.
   - `emit_us`: final code-object emission.
@@ -66,10 +67,10 @@ Collection starts in `cmd/wasmoon/run.mbt` during `compile_module_to_jit(...)`.
   - `spill_slots`, `spills`, `reloads`, `reg_moves`, `spill_to_spill`
 - Pass list:
   - `compile_subphases[]` when detailed metrics are enabled. This attributes
-    frontend translation, semantic validation/construction/cleanup sealing, embedding
-    ABI and target-context preparation, target analysis/VCode construction and
-    validation or trusted sealing, flat allocation-input normalization, generic
-    allocation input validation, and artifact packaging.
+    frontend translation, semantic validation/construction/cleanup sealing,
+    embedding ABI and target-context preparation, streamed target construction,
+    selected-VCode validation or trusted sealing, flat allocation-input
+    normalization, generic allocation input validation, and artifact packaging.
     Detailed external validation further splits into common and ISA phases
     under `target_vcode_validation`. The `parent` field identifies
     whether a subphase reconciles against `function_compile_us`, `lower_us`, or

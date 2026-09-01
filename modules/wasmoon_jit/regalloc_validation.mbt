@@ -1,23 +1,19 @@
 ///|
-/// Whether to run the register allocator's own plan verifier during JIT
-/// compilation.
+/// Whether to run internal compiler verifiers during JIT compilation.
 ///
-/// The verifier is a debugging gate, not a correctness requirement of the
-/// emitted code: it re-checks the allocator's plan against the function it
-/// allocated. Measured on `examples/algorithms`, it is 15 to 20 percent of
-/// register allocation, which is itself about 90 percent of module compile
-/// time (ISS-371) — so it is off unless asked for.
+/// Wasm validation remains unconditional. This gate covers redundant checks of
+/// compiler-owned MilkIR, selected VCode, and the allocator's completed plan.
+/// Wasmtime likewise disables Cranelift's internal verifier in its production
+/// compiler builder while retaining it for development configurations. CI sets
+/// this flag so every internally trusted boundary remains checked there.
 ///
-/// `docs/optimization-vs-cranelift.md` records this gate as
-/// `VCODE_REGALLOC_VALIDATION` (entry `wasmoon-il8.10`). The gate was lost
-/// when the allocator moved into `modules/`, leaving the verifier
-/// unconditional and the variable dead; this restores it. CI's `moon test`
-/// step sets the variable, so the test matrix keeps full verification.
-let regalloc_validation_enabled : Ref[Bool?] = { val: None, }
+/// The existing `VCODE_REGALLOC_VALIDATION` name is retained for compatibility
+/// with CI and local compiler-validation runs.
+let compiler_validation_enabled : Ref[Bool?] = { val: None, }
 
 ///|
-fn regalloc_validation() -> Bool {
-  match regalloc_validation_enabled.val {
+fn compiler_validation() -> Bool {
+  match compiler_validation_enabled.val {
     Some(value) => value
     None => {
       let value = match @env.get_env_var("VCODE_REGALLOC_VALIDATION") {
@@ -25,7 +21,7 @@ fn regalloc_validation() -> Bool {
           true
         _ => false
       }
-      regalloc_validation_enabled.val = Some(value)
+      compiler_validation_enabled.val = Some(value)
       value
     }
   }

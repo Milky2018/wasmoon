@@ -86,7 +86,7 @@ fn native_lower_metrics_observer() -> (@milkir_native.NativeLowerEvent) -> Unit 
 
 ///|
 fn target_compile_metrics_observer(
-  target_lower_tick : @perf.PerfTick,
+  target_lower_tick : Ref[@perf.PerfTick?],
 ) -> (@vcode.TargetCompileEvent) -> Unit {
   let detail = @perf.detail_enabled()
   let phase_tick : Ref[@perf.PerfTick?] = { val: None, }
@@ -131,13 +131,9 @@ fn target_compile_metrics_observer(
           close_target_phase()
           target_phase.val = Some(("target_analysis", @perf.tick_now()))
         }
-      TargetConstructionStarted =>
-        if detail {
-          close_target_phase()
-          target_phase.val = Some(
-            ("target_vcode_construction", @perf.tick_now()),
-          )
-        }
+      // Direct target construction is streamed inside NativeLowering and is
+      // already attributed by native_lower_metrics_observer.
+      TargetConstructionStarted => ()
       TargetValidationStarted =>
         if detail {
           close_target_phase()
@@ -169,7 +165,7 @@ fn target_compile_metrics_observer(
         }
       RegallocStarted => {
         close_target_phase()
-        record_target_stage(TargetLowering, Some(target_lower_tick)) |> ignore
+        record_target_stage(TargetLowering, target_lower_tick.val) |> ignore
         phase_tick.val = Some(@perf.tick_now())
       }
       RegallocPhaseStarted(name) =>

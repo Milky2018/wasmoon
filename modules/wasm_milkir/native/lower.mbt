@@ -1550,15 +1550,20 @@ fn lower_extension(
 }
 
 ///|
-/// Stream a verified WebAssembly MilkIR function into one target selector.
+/// Stream a WebAssembly MilkIR function into one target selector, verifying it
+/// by default.
 /// MilkIR parameter zero is the explicit embedding execution environment; its
 /// legacy `i64` carrier is exposed to the native target as `ptr64`.
+///
+/// `verify_input=false` is reserved for compiler-owned IR that has already
+/// crossed a checked boundary. Public callers should keep the default.
 pub fn lower_to_sink(
   function : @milkir.Function,
   validation_context : @wasm_milkir.WasmValidationContext,
   environment : Environment,
   sink : @lowering.TargetSink,
   call_abi? : @lowering.CallAbiElaboration,
+  verify_input? : Bool = true,
   on_event? : (@milkir_native.NativeLowerEvent) -> Unit = fn(_) { () },
 ) -> Unit raise @milkir_native.NativeLowerError {
   fn validate(view : @milkir.ExtensionInstView) -> String? {
@@ -1591,6 +1596,7 @@ pub fn lower_to_sink(
     resolve_context_field,
     sink,
     call_abi?,
+    verify_input~,
     on_event~,
   )
 }

@@ -160,8 +160,12 @@ fn compile_wasm_body_x64_target(
   let signature = @milkir_native.function_signature(function, environment_parameters=[
     (0, Ptr64),
   ])
-  let target_lower_tick = target_metrics_tick(record_metrics)
-  let observer = target_lower_tick.map(target_compile_metrics_observer)
+  let target_lower_tick : Ref[@perf.PerfTick?] = { val: None, }
+  let observer = if record_metrics {
+    Some(target_compile_metrics_observer(target_lower_tick))
+  } else {
+    None
+  }
   let session = try {
     match observer {
       Some(observe) =>
@@ -192,6 +196,7 @@ fn compile_wasm_body_x64_target(
     environment.wasm,
     session.sink(),
     call_abi=wasmoon_call_abi(environment),
+    verify_input=compiler_validation(),
     on_event=if record_metrics && @perf.detail_enabled() {
       native_lower_metrics_observer()
     } else {
@@ -201,7 +206,8 @@ fn compile_wasm_body_x64_target(
     error => raise NativeLoweringFailed(cause=error)
   }
   record_target_stage(NativeLowering, native_lower_tick) |> ignore
-  let selected = session.finish_selected() catch {
+  target_lower_tick.val = target_metrics_tick(record_metrics)
+  let selected = session.finish_selected(verify_selected=compiler_validation()) catch {
     error => raise X64LoweringFailed(cause=error)
   }
   let compiled = try {
@@ -210,12 +216,12 @@ fn compile_wasm_body_x64_target(
         compilation_session.compile_selected(
           selected,
           on_event=observe,
-          verify_allocation=regalloc_validation(),
+          verify_allocation=compiler_validation(),
         )
       None =>
         compilation_session.compile_selected(
           selected,
-          verify_allocation=regalloc_validation(),
+          verify_allocation=compiler_validation(),
         )
     }
   } catch {
@@ -243,8 +249,12 @@ fn compile_wasm_body_aarch64_target(
   let signature = @milkir_native.function_signature(function, environment_parameters=[
     (0, Ptr64),
   ])
-  let target_lower_tick = target_metrics_tick(record_metrics)
-  let observer = target_lower_tick.map(target_compile_metrics_observer)
+  let target_lower_tick : Ref[@perf.PerfTick?] = { val: None, }
+  let observer = if record_metrics {
+    Some(target_compile_metrics_observer(target_lower_tick))
+  } else {
+    None
+  }
   let session = try {
     match observer {
       Some(observe) =>
@@ -275,6 +285,7 @@ fn compile_wasm_body_aarch64_target(
     environment.wasm,
     session.sink(),
     call_abi=wasmoon_call_abi(environment),
+    verify_input=compiler_validation(),
     on_event=if record_metrics && @perf.detail_enabled() {
       native_lower_metrics_observer()
     } else {
@@ -284,7 +295,8 @@ fn compile_wasm_body_aarch64_target(
     error => raise NativeLoweringFailed(cause=error)
   }
   record_target_stage(NativeLowering, native_lower_tick) |> ignore
-  let selected = session.finish_selected() catch {
+  target_lower_tick.val = target_metrics_tick(record_metrics)
+  let selected = session.finish_selected(verify_selected=compiler_validation()) catch {
     error => raise AArch64LoweringFailed(cause=error)
   }
   let compiled = try {
@@ -293,12 +305,12 @@ fn compile_wasm_body_aarch64_target(
         compilation_session.compile_selected(
           selected,
           on_event=observe,
-          verify_allocation=regalloc_validation(),
+          verify_allocation=compiler_validation(),
         )
       None =>
         compilation_session.compile_selected(
           selected,
-          verify_allocation=regalloc_validation(),
+          verify_allocation=compiler_validation(),
         )
     }
   } catch {

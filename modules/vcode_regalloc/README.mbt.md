@@ -23,13 +23,14 @@ edits, edge moves, and safepoint roots before it is returned.
 The production adapter normalizes Target VCode once into flat tables and offset
 vectors, then exposes non-owning `ArrayView` spans through `FunctionView`; it
 does not build a second nested instruction or CFG graph. The aggregate target
-pipeline first verifies selected VCode, runs the root bundle-aware allocator,
-materializes its `AllocationPlan` into VCode `Allocation` side tables, and then
-runs the independent VCode allocation verifier. Production enables both the
-reusable plan verifier and the
-materialized VCode state verifier; the latter follows resident values through
-edits, clobbers, and CFG joins. There is no second backtracking policy package
-and no alternate allocation strategy.
+pipeline can verify selected VCode, run the root bundle-aware allocator,
+materialize its `AllocationPlan` into VCode `Allocation` side tables, and then
+run the independent VCode allocation verifier. Safe public entry points enable
+both the reusable plan verifier and the materialized VCode state verifier; the
+latter follows resident values through edits, clobbers, and CFG joins. The
+Wasmoon JIT skips these redundant checks for compiler-owned VCode in production
+and restores them in strict CI with `VCODE_REGALLOC_VALIDATION=1`. There is no
+second backtracking policy package and no alternate allocation strategy.
 
 Ordinary `Input::any` operands require a register at the instruction. A target
 operation that can consume a register or spill slot directly uses
