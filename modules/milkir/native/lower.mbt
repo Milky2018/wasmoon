@@ -1648,18 +1648,23 @@ fn lower_verified_construction(
 }
 
 ///|
-
-///|
-/// Verify and stream core MilkIR directly into a native target selector.
+/// Stream core MilkIR directly into a native target selector, verifying it by
+/// default.
+///
+/// `verify_input=false` is reserved for compiler-owned IR that has already
+/// crossed a checked boundary. Public callers should keep the default.
 pub fn lower_core_to_sink(
   function : @milkir.Function,
   sink : @lowering.TargetSink,
   call_abi? : @lowering.CallAbiElaboration,
+  verify_input? : Bool = true,
   on_event? : (NativeLowerEvent) -> Unit = fn(_) { () },
 ) -> Unit raise NativeLowerError {
-  on_event(InputValidationStarted)
-  function.verify_core() catch {
-    error => raise InvalidMilkIR(message=error.to_string())
+  if verify_input {
+    on_event(InputValidationStarted)
+    function.verify_core() catch {
+      error => raise InvalidMilkIR(message=error.to_string())
+    }
   }
   let builder = lower_verified_construction(
     function,
@@ -1675,8 +1680,12 @@ pub fn lower_core_to_sink(
 }
 
 ///|
-/// Verify one MilkIR dialect and stream it directly into a native target
-/// selector. No target-neutral function or instruction graph is materialized.
+/// Stream one MilkIR dialect directly into a native target selector, verifying
+/// it by default. No target-neutral function or instruction graph is
+/// materialized.
+///
+/// `verify_input=false` is reserved for compiler-owned IR that has already
+/// crossed a checked boundary. Public callers should keep the default.
 pub fn lower_dialect_to_sink(
   function : @milkir.Function,
   dialect : String,
@@ -1687,13 +1696,16 @@ pub fn lower_dialect_to_sink(
   resolve_context_field : (@milkir.ContextField) -> @native_types.EnvironmentField?,
   sink : @lowering.TargetSink,
   call_abi? : @lowering.CallAbiElaboration,
+  verify_input? : Bool = true,
   on_event? : (NativeLowerEvent) -> Unit = fn(_) { () },
 ) -> Unit raise NativeLowerError {
-  on_event(InputValidationStarted)
-  function.verify_with_dialect_validator(
-    dialect, validator, global_value_validator,
-  ) catch {
-    error => raise InvalidMilkIR(message=error.to_string())
+  if verify_input {
+    on_event(InputValidationStarted)
+    function.verify_with_dialect_validator(
+      dialect, validator, global_value_validator,
+    ) catch {
+      error => raise InvalidMilkIR(message=error.to_string())
+    }
   }
   let builder = lower_verified_construction(
     function,

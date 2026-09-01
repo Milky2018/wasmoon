@@ -1,7 +1,0 @@
-import {
-  "Milky2018/wasmoon/component/model" @component,
-  "Milky2018/wasm_core/parser",
-  "Milky2018/wasm_core/types",
-  "Milky2018/wasmoon/validator",
-  "moonbitlang/core/hashset",
-}

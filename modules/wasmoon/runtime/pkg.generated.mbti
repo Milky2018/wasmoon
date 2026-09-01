@@ -10,6 +10,8 @@ import {
 // Values
 pub fn format_runtime_error(RuntimeError) -> String
 
+pub fn normalize_async_host_error(Error) -> RuntimeError
+
 pub fn runtime_capabilities() -> RuntimeCapabilities
 
 pub fn runtime_version() -> String
@@ -44,6 +46,8 @@ pub fn supports_threads() -> Bool
 
 pub fn supports_wasi_preview1() -> Bool
 
+pub async fn[X] with_async_host_call_driver(async (AsyncHostCallDriver) -> X) -> X
+
 // Errors
 pub(all) suberror RuntimeError {
   StackUnderflow
@@ -69,8 +73,16 @@ pub(all) suberror RuntimeError {
   NullReference
   UnalignedAtomic
   InvalidConstantExpression(String)
-}
+  AsyncHostRequiresAsyncCall
+  AsyncHostCallInProgress
+  AsyncHostCallCancelled
+  AsyncHostError(String)
+} derive(Eq, @debug.Debug)
+pub fn RuntimeError::equal(Self, Self) -> Bool
+pub fn RuntimeError::from_error(Error) -> Self?
+pub fn RuntimeError::not_equal(Self, Self) -> Bool
 pub fn RuntimeError::output(Self, &Logger) -> Unit
+pub fn RuntimeError::to_repr(Self) -> @debug.Repr
 pub fn RuntimeError::to_string(Self) -> String
 pub impl Show for RuntimeError
 
@@ -83,6 +95,21 @@ pub fn ArrayInstance::output(Self, &Logger) -> Unit
 pub fn ArrayInstance::to_repr(Self) -> @debug.Repr
 pub fn ArrayInstance::to_string(Self) -> String
 pub impl Show for ArrayInstance
+
+pub struct AsyncHostCallDriver {
+  // private fields
+}
+pub fn AsyncHostCallDriver::cancel(Self) -> Unit
+pub fn AsyncHostCallDriver::poll(Self, Int, async (Caller, Array[@types.Value]) -> Result[Array[@types.Value], Error], Caller, Array[@types.Value]) -> AsyncHostPoll raise RuntimeError
+pub fn AsyncHostCallDriver::to_repr(Self) -> @debug.Repr
+pub async fn AsyncHostCallDriver::wait_pending(Self) -> Unit raise RuntimeError
+pub impl @debug.Debug for AsyncHostCallDriver
+
+pub(all) enum AsyncHostPoll {
+  AsyncHostPending
+  AsyncHostReady(Array[@types.Value])
+} derive(@debug.Debug)
+pub fn AsyncHostPoll::to_repr(Self) -> @debug.Repr
 
 pub(all) struct CallStackEntry {
   func_idx : Int
@@ -125,6 +152,7 @@ pub fn Frame::to_repr(Self) -> @debug.Repr
 pub(all) enum FuncInst {
   WasmFunc(@types.FunctionCode)
   HostFunc((Caller, Array[@types.Value]) -> Array[@types.Value] raise RuntimeError)
+  AsyncHostFunc(async (Caller, Array[@types.Value]) -> Result[Array[@types.Value], Error])
 }
 pub fn FuncInst::output(Self, &Logger) -> Unit
 pub fn FuncInst::to_repr(Self) -> @debug.Repr
@@ -160,6 +188,11 @@ pub struct GCStats {
 } derive(@debug.Debug)
 pub fn GCStats::to_repr(Self) -> @debug.Repr
 
+pub struct GcRootLease {
+  // private fields
+}
+pub fn GcRootLease::release(Self) -> Unit
+
 pub struct GcStats {
   total_slots : Int
   live_objects : Int
@@ -194,6 +227,8 @@ pub fn InstantiationTransaction::rollback(Self) -> Unit
 
 type Linker
 pub fn Linker::Linker() -> Self
+pub fn Linker::add_async_host_func(Self, String, String, async (Array[@types.Value]) -> Array[@types.Value], func_type? : @types.FuncType) -> Unit raise RuntimeError
+pub fn Linker::add_async_host_func_with_caller(Self, String, String, async (Caller, Array[@types.Value]) -> Array[@types.Value], func_type? : @types.FuncType) -> Unit raise RuntimeError
 pub fn Linker::add_global(Self, String, String, GlobalInstance) -> Unit raise RuntimeError
 pub fn Linker::add_host_func(Self, String, String, (Array[@types.Value]) -> Array[@types.Value] raise RuntimeError, func_type? : @types.FuncType) -> Unit raise RuntimeError
 pub fn Linker::add_host_func_with_caller(Self, String, String, (Caller, Array[@types.Value]) -> Array[@types.Value] raise RuntimeError, func_type? : @types.FuncType) -> Unit raise RuntimeError
@@ -424,6 +459,8 @@ pub struct Store {
 } derive(@debug.Debug)
 pub fn Store::Store() -> Self
 pub fn Store::alloc_array(Self, Int, Array[@types.Value]) -> Int raise RuntimeError
+pub fn Store::alloc_async_host_func(Self, async (Array[@types.Value]) -> Array[@types.Value], func_type? : @types.FuncType, type_idx? : Int) -> Int raise RuntimeError
+pub fn Store::alloc_async_host_func_with_caller(Self, async (Caller, Array[@types.Value]) -> Array[@types.Value], func_type? : @types.FuncType, type_idx? : Int) -> Int raise RuntimeError
 pub fn Store::alloc_exn(Self, Int, Array[@types.Value]) -> Int raise RuntimeError
 pub fn Store::alloc_func(Self, @types.FunctionCode, func_type? : @types.FuncType, type_idx? : Int) -> Int raise RuntimeError
 pub fn Store::alloc_global(Self, GlobalInstance) -> Int raise RuntimeError
@@ -472,6 +509,7 @@ pub fn Store::lookup_jit_funcref_ptr(Self, Int) -> Int64?
 pub fn Store::lookup_jit_funcref_store_addr(Self, Int64) -> Int?
 pub fn Store::maybe_collect(Self, additional_roots? : Array[@types.Value], threshold? : Double) -> Int
 pub fn Store::native_execution_state(Self) -> @wasmoon_jit.NativeExecutionState
+pub fn Store::pin_gc_roots(Self, Array[@types.Value]) -> GcRootLease
 pub fn Store::register_instance(Self, ModuleInstance) -> Int raise RuntimeError
 pub fn Store::register_jit_funcrefs(Self, Array[StoreFuncrefEntry]) -> StoreFuncrefRegistration
 pub fn Store::set_module_types(Self, Array[@types.SubType], rec_groups? : Array[Int]) -> Unit raise RuntimeError
@@ -520,6 +558,7 @@ pub fn Table::size(Self) -> Int
 pub fn Table::to_repr(Self) -> @debug.Repr
 
 // Type aliases
+pub type AsyncHostFunction = async (Caller, Array[@types.Value]) -> Result[Array[@types.Value], Error]
 
 // Traits
 pub(open) trait GcHeap {

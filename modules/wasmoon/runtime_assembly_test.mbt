@@ -23,6 +23,10 @@ test "wasmoon remains the product runtime module" {
     assembly.reusable_modules.contains("Milky2018/milkir"),
     content="true",
   )
+  inspect(
+    assembly.reusable_modules.contains("Milky2018/wasm_component"),
+    content="true",
+  )
 }
 
 ///|
@@ -57,6 +61,7 @@ test "wasmoon planning restores hidden vmctx for wasm body ABI" {
     "add64",
   )
   let env = @wasm_frontend.EmbeddingEnvironment::EmbeddingEnvironment(
+    runtime_symbol_prefix="wasmoon",
     hidden_context_type=None,
   )
   let plan = try! plan_wasm_function_with_compiler_infra(env, mod_, 0, X64)

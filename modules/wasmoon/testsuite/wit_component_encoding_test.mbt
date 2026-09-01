@@ -28,11 +28,11 @@ test "wit component encode (minimal)" {
       panic()
     }
   }
-  match @component.sniff_binary_kind(bytes) {
+  match @component_types.sniff_binary_kind(bytes) {
     Some(Component) => ()
     _ => fail("expected component binary kind")
   }
-  let c = @component.parse_component(bytes) catch {
+  let c = @component_types.parse_component(bytes) catch {
     e => {
       fail(e.to_string())
       panic()
@@ -109,7 +109,7 @@ test "wit component encode (non-scalar + resources + use)" {
     }
   }
   // Must parse as a component.
-  let c = @component.parse_component(bytes) catch {
+  let c = @component_types.parse_component(bytes) catch {
     e => {
       fail(e.to_string())
       panic()

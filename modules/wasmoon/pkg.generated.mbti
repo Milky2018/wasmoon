@@ -4,7 +4,7 @@ package "Milky2018/wasmoon"
 import {
   "Milky2018/milkir",
   "Milky2018/wasm_core/types",
-  "Milky2018/wasmoon/wasm_frontend/embedding",
+  "Milky2018/wasm_milkir/frontend/embedding",
   "Milky2018/wasmoon_jit",
   "moonbitlang/core/debug",
 }

@@ -1655,8 +1655,13 @@ pub fn DirectLoweringSession::sink(
 }
 
 ///|
+/// Finish direct selection and return the VCode consumed by target compilation.
+///
+/// `verify_selected=false` is reserved for compiler-owned construction paths
+/// covered by strict validation in CI. Public callers should keep the default.
 pub fn DirectLoweringSession::finish_selected(
   self : DirectLoweringSession,
+  verify_selected? : Bool = true,
 ) -> SelectedFunction raise X64LowerError {
   if self.constructed is None {
     self.finish_construction()
@@ -1667,7 +1672,9 @@ pub fn DirectLoweringSession::finish_selected(
   guard self.constructed is Some(constructed) else {
     raise UnsupportedAbi(message="direct lowering did not construct VCode")
   }
-  validate_constructed(constructed, self.on_event)
+  if verify_selected {
+    validate_constructed(constructed, self.on_event)
+  }
   (self.on_event)(TargetSealingStarted)
   (self.on_event)(TargetSelectionFinished)
   { constructed, }

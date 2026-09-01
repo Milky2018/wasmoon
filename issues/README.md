@@ -483,6 +483,7 @@ graph TD
   ISS_454["ISS-454: Avoid rescanning AArch64 lowering for zero offsets"]
   ISS_455["ISS-455: Deepen the semantic MachV selection seam"]
   ISS_456["ISS-456: Remove semantic MachV from native compilation"]
+  ISS_457["ISS-457: Complete async core host-call lifecycle safety"]
   ISS_002 --> ISS_003
   ISS_002 --> ISS_004
   ISS_003 --> ISS_005

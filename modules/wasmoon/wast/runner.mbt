@@ -26,6 +26,12 @@ pub fn WastResult::WastResult() -> WastResult {
 }
 
 ///|
+priv struct ImportedWasmCallContinuation {
+  func_addr : Int
+  continuation : @executor.ExecutionContinuation
+}
+
+///|
 /// JIT module context containing compiled module and runtime state
 pub struct JITModuleContext {
   jit_module : @jit.JITModule
@@ -45,6 +51,9 @@ pub struct JITModuleContext {
   module_rec_groups : Array[Int]
   // Whether this module uses subtype helper for call_indirect checks
   use_subtype_indirect_check : Bool
+  priv async_host_drivers : Map[Int64, @runtime.AsyncHostCallDriver]
+  priv async_host_errors : Map[Int64, @runtime.RuntimeError]
+  priv imported_wasm_continuations : Map[Int64, ImportedWasmCallContinuation]
 }
 
 ///|
@@ -71,6 +80,9 @@ pub fn JITModuleContext::JITModuleContext(
     module_types,
     module_rec_groups,
     use_subtype_indirect_check,
+    async_host_drivers: Map([]),
+    async_host_errors: Map([]),
+    imported_wasm_continuations: Map([]),
   }
 }
 

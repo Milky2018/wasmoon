@@ -11,7 +11,7 @@ test "component: parse_component collects types/imports/exports" {
     // section 11 (export), payload size=6
      0x0b, 0x06, 0x01, 0x00, 0x00, 0x01, 0x00, 0x00,
   ]
-  let comp = @component.parse_component(Bytes::from_array(bytes)) catch {
+  let comp = @component_types.parse_component(Bytes::from_array(bytes)) catch {
     e => return fail("parse failed: \{e}")
   }
   inspect(comp.binary.version, content="13")

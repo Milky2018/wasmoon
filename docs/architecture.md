@@ -5,18 +5,19 @@ Wasmoon is a WebAssembly runtime written in MoonBit. It provides an interpreter 
 ## System Overview
 
 ```text
-WAT text ───────────────→ wasmoon/wat ──┐
-core Wasm binary ───────→ wasm_core/parser ├─→ wasm_core model ─→ validator ─→ instantiation
-WAST test script ───────→ wasmoon/wast ──┘                                      │
-                                                                                 ├─→ executor interpreter
-                                                                                 └─→ Wasm frontend
-                                                                                      → MilkIR
-                                                                                      → direct target lowering
-                                                                                      → target VCode
-                                                                                      → target allocation/emission
-                                                                                      → verified code object
-                                                                                      → v9 artifact
-                                                                                      → wasmoon_jit installer
+WAT text ───────────────→ wasm_core/wat ─────┐
+core Wasm binary ───────→ wasm_core/parser ──┴→ wasm_core model → wasm_core/validator
+                                                                     ├→ instantiation → wasmoon/executor
+                                                                     └→ wasm_milkir/frontend
+                                                                          → MilkIR
+                                                                          → direct target lowering
+                                                                          → target VCode
+                                                                          → target allocation/emission
+                                                                          → verified code object
+                                                                          → v9 artifact
+                                                                          → wasmoon_jit installer
+
+WAST test script → wasm_core/wat → wasmoon/wast runner → the same validation and execution paths
 ```
 
 The `wasmoon run` command validates both the main module and preloaded core modules before instantiation. Library callers that assemble parsing, validation, and execution themselves remain responsible for preserving the same boundary.
@@ -29,12 +30,14 @@ The repository is a `moon.work` workspace containing several independently versi
 
 | Module or package | Responsibility |
 | --- | --- |
-| `wasm_core` | WebAssembly specification data model shared by parsers, validators, frontends, and runtimes. |
+| `wasm_core` | WebAssembly specification data model, binary parser, and core validator shared by frontends, runtimes, and tools. |
+| `wasm_component` | Portable Component Model syntax, binary and text decoding, canonical ABI modeling, validation, and WIT tooling. |
 | `milkir` | Target-independent SSA IR, builders, verification, optimization, and CFG utilities. |
 | `vcode/native_types` | Target-independent native ABI, type, symbol, trap, safepoint, and metadata vocabulary. |
 | `vcode/native_lowering` | Streaming target-lowering protocol; carries one operation at a time and retains no function graph. |
 | `regalloc` | Machine-IR-independent register-allocation algorithms. |
 | `wasm_milkir` | WebAssembly dialect definitions and extension contracts for MilkIR. |
+| `wasm_milkir/frontend` | Canonical reusable Wasm-to-MilkIR frontend API; its `ir` and `embedding` subpackages separate translation internals from embedding configuration. |
 | `milkir/native` | Verified direct streaming from core MilkIR into a native target sink. |
 | `wasm_milkir/native` | WebAssembly dialect validation and streaming native lowering through an embedding environment. |
 | `vcode` | Generic dense Target VCode, allocation side tables, validation, and parallel-move planning. |
@@ -48,8 +51,7 @@ Reusable modules and packages must not import `Milky2018/wasmoon`, `Milky2018/wa
 
 | Module or package | Responsibility |
 | --- | --- |
-| `wasmoon` | Product assembly, CLI, parsing, validation, runtime objects, interpreter, WASI Preview 1, component-model work, and test runners. |
-| `wasmoon/wasm_frontend` | Canonical product-facing Wasm-to-MilkIR frontend API. Its `ir` subpackage is an implementation detail; embedding configuration lives in the dependency-neutral `embedding` subpackage. |
+| `wasmoon` | Product assembly, CLI, runtime objects, interpreter, WASI hosts, component execution, and test runners. |
 | `wasmoon_jit` | Wasmoon VMContext layout, native runtime helpers, trampolines, runtime symbol resolution, and transactional executable-code installation. |
 | `wasmoon_jit/artifact` | Bounded v9 persisted-artifact format with exact compatibility manifests and symbolic unlinked code objects. |
 
@@ -60,12 +62,16 @@ Reusable modules and packages must not import `Milky2018/wasmoon`, `Milky2018/wa
 | Input | Entry package | Result |
 | --- | --- | --- |
 | Core `.wasm` binary | `wasm_core/parser` | `wasm_core/types.Module` |
-| Core `.wat` text | `wasmoon/wat` | `wasm_core/types.Module` |
-| `.wast` script | `wasmoon/wat` plus `wasmoon/wast` runner | Test commands and modules |
-| Component binary or text | `wasmoon/component` | Validated component instances, typed exports, and WIT-shaped values |
+| Core `.wat` text | `wasm_core/wat` | `wasm_core/types.Module` |
+| `.wast` script | `wasm_core/wat` plus `wasmoon/wast` runner | Test commands and modules |
+| Component binary | `wasm_component` plus `wasm_component/validator` | Validated portable component model |
+| Component text | `wasm_component/text` plus `wasm_component/validator` | Validated portable component model |
 | Persisted JIT artifact | `wasmoon_jit/artifact` | Verified v9 ordinary-data artifact |
 
-Core modules pass through `wasmoon/validator` before the CLI instantiates or compiles them. Component validation is implemented separately under `wasmoon/validator/component_model`.
+Core modules pass through `wasm_core/validator` before the CLI instantiates or
+compiles them. Portable component syntax and validation live in
+`wasm_component` and `wasm_component/validator`; `wasmoon/component` composes
+that validated model with product-owned execution.
 
 ## Execution Paths
 
@@ -79,7 +85,7 @@ Core modules pass through `wasmoon/validator` before the CLI instantiates or com
 ### Native JIT
 
 1. Parse and validate the core module.
-2. Build a canonical `wasmoon/wasm_frontend` translation context.
+2. Build a canonical `wasm_milkir/frontend` translation context.
 3. Translate each selected function into MilkIR and run the requested optimization level.
 4. Stream verified core and WebAssembly-dialect MilkIR operations directly into an AArch64 or x64 lowering session, which constructs verified Target VCode.
 5. Expose Target VCode directly through the read-only `regalloc.FunctionView`, run the verified backtracking allocator through `vcode_regalloc`, materialize its `AllocationPlan`, and construct a verified target frame.
@@ -89,7 +95,9 @@ Core modules pass through `wasmoon/validator` before the CLI instantiates or com
 
 At O3, MilkIR may unroll only canonical constant-trip natural loops after checked signed/unsigned I32 or I64 trip analysis and complete SSA/effect remapping. Unsupported shapes, dynamic bounds, possible arithmetic wraparound, and transformations beyond the code-growth budget remain unchanged.
 
-The top-level `wasmoon/wasm_frontend` package is the product API boundary. Product callers do not import `wasmoon/wasm_frontend/ir` directly.
+The top-level `wasm_milkir/frontend` package is the reusable translation
+boundary. Product callers do not import `wasm_milkir/frontend/ir` directly;
+Wasmoon supplies its embedding environment when assembling the JIT pipeline.
 
 ### Component Core Execution
 
@@ -120,9 +128,10 @@ structured errors; applications do not depend on `component/runtime_impl`.
 Default construction uses the strict native engine, while
 `interpreter_component_engine()` selects the continuation-aware interpreter
 explicitly. The CLI uses this same facade and engine seam.
-`Milky2018/wasmoon/wit` can bind a resolved world eagerly against a stable
-component instance, rejecting missing or incompatible exports before the first
-call.
+`Milky2018/wasm_component/wit` owns portable WIT parsing and resolution.
+`Milky2018/wasmoon/wit_binding` can bind a resolved world eagerly against a
+stable component instance, rejecting missing or incompatible exports before
+the first call.
 
 Component async execution uses one cooperative host event loop. MoonBit
 processes and component tasks are logical scheduling units, not operating-system

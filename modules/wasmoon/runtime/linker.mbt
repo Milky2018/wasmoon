@@ -129,6 +129,24 @@ pub fn Linker::get_module(self : Linker, name : String) -> ModuleInstance? {
 }
 
 ///|
+fn Linker::add_func_export(
+  self : Linker,
+  mod_name : String,
+  name : String,
+  func_addr : Int,
+) -> Unit {
+  let (instance, modules) = self.host_module(mod_name)
+  let func_addrs = instance.func_addrs.length()
+  let exports = instance.exports.length()
+  self.rollback_module_change(modules, fn() {
+    instance.func_addrs.truncate(func_addrs)
+    instance.exports.truncate(exports)
+  })
+  instance.func_addrs.push(func_addr)
+  instance.exports.push({ name, desc: Func(instance.func_addrs.length() - 1), })
+}
+
+///|
 /// Add a host function to the linker
 /// This function will be available as an import for all subsequently instantiated modules
 pub fn Linker::add_host_func(
@@ -140,15 +158,7 @@ pub fn Linker::add_host_func(
 ) -> Unit raise RuntimeError {
   self.store.ensure_open()
   let func_addr = self.store.alloc_host_func(func, func_type~)
-  let (instance, modules) = self.host_module(mod_name)
-  let func_addrs = instance.func_addrs.length()
-  let exports = instance.exports.length()
-  self.rollback_module_change(modules, fn() {
-    instance.func_addrs.truncate(func_addrs)
-    instance.exports.truncate(exports)
-  })
-  instance.func_addrs.push(func_addr)
-  instance.exports.push({ name, desc: Func(instance.func_addrs.length() - 1), })
+  self.add_func_export(mod_name, name, func_addr)
 }
 
 ///|
@@ -162,15 +172,38 @@ pub fn Linker::add_host_func_with_caller(
 ) -> Unit raise RuntimeError {
   self.store.ensure_open()
   let func_addr = self.store.alloc_host_func_with_caller(func, func_type~)
-  let (instance, modules) = self.host_module(mod_name)
-  let func_addrs = instance.func_addrs.length()
-  let exports = instance.exports.length()
-  self.rollback_module_change(modules, fn() {
-    instance.func_addrs.truncate(func_addrs)
-    instance.exports.truncate(exports)
-  })
-  instance.func_addrs.push(func_addr)
-  instance.exports.push({ name, desc: Func(instance.func_addrs.length() - 1), })
+  self.add_func_export(mod_name, name, func_addr)
+}
+
+///|
+/// Add an asynchronous host function to the linker.
+///
+/// The function can only be invoked through an asynchronous Wasm call. Its
+/// future is polled while the Wasm continuation is parked.
+pub fn Linker::add_async_host_func(
+  self : Linker,
+  mod_name : String,
+  name : String,
+  func : async (Array[@types.Value]) -> Array[@types.Value] raise Error,
+  func_type? : @types.FuncType = { params: [], results: [], },
+) -> Unit raise RuntimeError {
+  self.store.ensure_open()
+  let func_addr = self.store.alloc_async_host_func(func, func_type~)
+  self.add_func_export(mod_name, name, func_addr)
+}
+
+///|
+/// Add an asynchronous host function that receives the caller context.
+pub fn Linker::add_async_host_func_with_caller(
+  self : Linker,
+  mod_name : String,
+  name : String,
+  func : async (Caller, Array[@types.Value]) -> Array[@types.Value] raise Error,
+  func_type? : @types.FuncType = { params: [], results: [], },
+) -> Unit raise RuntimeError {
+  self.store.ensure_open()
+  let func_addr = self.store.alloc_async_host_func_with_caller(func, func_type~)
+  self.add_func_export(mod_name, name, func_addr)
 }
 
 ///|

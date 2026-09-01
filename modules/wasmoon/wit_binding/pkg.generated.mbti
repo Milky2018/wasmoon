@@ -1,0 +1,38 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "Milky2018/wasmoon/wit_binding"
+
+import {
+  "Milky2018/wasm_component/wit",
+  "Milky2018/wasmoon/component",
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub fn bind_world(@wit.ResolveResult, String, @component.ComponentInstance) -> WitBindings raise WitBindingError
+
+// Errors
+pub(all) suberror WitBindingError {
+  UnknownWorld(String)
+  UnknownInterface(String)
+  UnknownType(String)
+  RecursiveType(String)
+  InvalidType(String)
+  DuplicateFunction(String)
+  MissingFunction(String)
+  RuntimeBindingFailed(String)
+} derive(Eq, @debug.Debug)
+pub fn WitBindingError::equal(Self, Self) -> Bool
+pub fn WitBindingError::not_equal(Self, Self) -> Bool
+pub fn WitBindingError::output(Self, &Logger) -> Unit
+pub fn WitBindingError::to_repr(Self) -> @debug.Repr
+pub fn WitBindingError::to_string(Self) -> String
+pub impl Show for WitBindingError
+
+// Types and methods
+type WitBindings
+pub fn WitBindings::function(Self, String) -> @component.ComponentFunction raise WitBindingError
+pub fn WitBindings::paths(Self) -> Array[String]
+
+// Type aliases
+
+// Traits

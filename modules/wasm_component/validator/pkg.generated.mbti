@@ -1,0 +1,84 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "Milky2018/wasm_component/validator"
+
+import {
+  "Milky2018/wasm_component",
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub fn validate_component(@wasm_component.Component) -> Unit raise ComponentValidationError
+
+pub fn validate_component_for_instantiation(@wasm_component.Component) -> ValidatedComponent raise ComponentValidationError
+
+pub fn validate_component_for_instantiation_with_config(@wasm_component.Component, ComponentValidationConfig) -> ValidatedComponent raise ComponentValidationError
+
+pub fn validate_component_with_config(@wasm_component.Component, ComponentValidationConfig) -> Unit raise ComponentValidationError
+
+// Errors
+pub(all) suberror ComponentValidationError {
+  InvalidTypeIndex(Int)
+  TypeIndexNotFuncType(Int)
+  TypeIndexNotComponentType(Int)
+  TypeIndexNotInstanceType(Int)
+  TypeIndexNotDefinedType(Int)
+  TypeIndexNotResourceType(Int)
+  InvalidFuncIndex(Int)
+  InvalidValueIndex(Int)
+  InvalidComponentIndex(Int)
+  InvalidInstanceIndex(Int)
+  InvalidCoreFuncIndex(Int)
+  InvalidCoreModuleIndex(Int)
+  InvalidCoreInstanceIndex(Int)
+  InvalidCoreTypeIndex(Int)
+  CoreTypeIndexNotModuleType(Int)
+  InvalidCoreTableIndex(Int)
+  InvalidCoreMemoryIndex(Int)
+  InvalidCoreGlobalIndex(Int)
+  InvalidCoreTagIndex(Int)
+  DuplicateCanonOption(String)
+  MissingCanonOption(String)
+  CanonExpectedFuncType(Int)
+  CanonAsyncTypeMismatch(Int)
+  CanonMemoryNot32Bit(Int)
+  CanonCoreFuncTypeMismatch(String)
+  CanonOptionNotAllowed(String)
+  UnsupportedCoreSort(Int)
+  UnsupportedComponentImport
+  UnsupportedComponentExport
+  ExportedImportedFunc(Int)
+  InvalidKebabName(String)
+  DuplicateImportName(String)
+  DuplicateExportName(String)
+  FuncParamNameConflict(String, String)
+  DuplicateInstantiationArg(String)
+  MissingInstanceExport(Int, String)
+  MissingCoreInstanceExport(Int, String)
+  MissingComponentImport(String)
+  ComponentImportTypeMismatch(String)
+  MissingExpectedExport(String)
+  AscribedExportTypeIncompatible
+  AliasTargetMismatch(String)
+  SectionParseError(Int, String)
+  CoreModuleError(String)
+} derive(Eq, @debug.Debug)
+pub fn ComponentValidationError::equal(Self, Self) -> Bool
+pub fn ComponentValidationError::not_equal(Self, Self) -> Bool
+pub fn ComponentValidationError::output(Self, &Logger) -> Unit
+pub fn ComponentValidationError::to_repr(Self) -> @debug.Repr
+pub fn ComponentValidationError::to_string(Self) -> String
+pub impl Show for ComponentValidationError
+
+// Types and methods
+pub struct ComponentValidationConfig {
+  wit_names : Bool
+}
+pub fn ComponentValidationConfig::ComponentValidationConfig(Bool) -> Self
+pub fn ComponentValidationConfig::default() -> Self
+
+type ValidatedComponent
+pub fn ValidatedComponent::component_bytes(Self) -> Bytes
+
+// Type aliases
+
+// Traits

@@ -12,14 +12,14 @@ test "component: parse canon section (lower, no opts)" {
     // lower: 0x01 0x00 f=0 opts=[]
      0x01, 0x00, 0x00, 0x00,
   ]
-  let comp = @component.parse_component_binary(Bytes::from_array(bytes)) catch {
+  let comp = @component_types.parse_component_binary(Bytes::from_array(bytes)) catch {
     e => return fail("parse component failed: \{e}")
   }
   let payload = match find_component_section_payload(comp, 8) {
     Some(p) => p
     None => return fail("missing canon section")
   }
-  let canons = @component.parse_canon_section(payload) catch {
+  let canons = @component_types.parse_canon_section(payload) catch {
     e => return fail("parse canon section failed: \{e}")
   }
   inspect(canons.length(), content="1")
@@ -35,14 +35,14 @@ test "component: parse start section (empty args, 0 results)" {
     // f=0, arg*=[], r=0
      0x00, 0x00, 0x00,
   ]
-  let comp = @component.parse_component_binary(Bytes::from_array(bytes)) catch {
+  let comp = @component_types.parse_component_binary(Bytes::from_array(bytes)) catch {
     e => return fail("parse component failed: \{e}")
   }
   let payload = match find_component_section_payload(comp, 9) {
     Some(p) => p
     None => return fail("missing start section")
   }
-  let start = @component.parse_start_section(payload) catch {
+  let start = @component_types.parse_start_section(payload) catch {
     e => return fail("parse start section failed: \{e}")
   }
   inspect(start, content="{func_idx: 0, args: [], results: 0}")
@@ -54,7 +54,7 @@ test "component: parse_component collects canons + start" {
     0x00, 0x61, 0x73, 0x6d, 0x0d, 0x00, 0x01, 0x00, 0x08, 0x05, 0x01, 0x01, 0x00,
     0x00, 0x00, 0x09, 0x03, 0x00, 0x00, 0x00,
   ]
-  let parsed = @component.parse_component(Bytes::from_array(bytes)) catch {
+  let parsed = @component_types.parse_component(Bytes::from_array(bytes)) catch {
     e => return fail("parse failed: \{e}")
   }
   inspect(parsed.canons.length(), content="1")
@@ -75,14 +75,14 @@ test "component: parse canon lift async callback options" {
     // lift: 0x00 0x00 core-func=0 opts=[async, callback(1)] typeidx=0
      0x00, 0x00, 0x00, 0x02, 0x06, 0x07, 0x01, 0x00,
   ]
-  let comp = @component.parse_component_binary(Bytes::from_array(bytes)) catch {
+  let comp = @component_types.parse_component_binary(Bytes::from_array(bytes)) catch {
     e => return fail("parse component failed: \{e}")
   }
   let payload = match find_component_section_payload(comp, 8) {
     Some(p) => p
     None => return fail("missing canon section")
   }
-  let canons = @component.parse_canon_section(payload) catch {
+  let canons = @component_types.parse_canon_section(payload) catch {
     e => return fail("parse canon section failed: \{e}")
   }
   inspect(canons.length(), content="1")

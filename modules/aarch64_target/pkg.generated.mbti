@@ -490,7 +490,7 @@ pub fn CompilationSession::new() -> Self
 pub struct DirectLoweringSession {
   // private fields
 }
-pub fn DirectLoweringSession::finish_selected(Self) -> SelectedFunction raise AArch64LowerError
+pub fn DirectLoweringSession::finish_selected(Self, verify_selected? : Bool) -> SelectedFunction raise AArch64LowerError
 pub fn DirectLoweringSession::new(String, @native_types.CallProtocol, Array[@native_types.ValueType], Array[@native_types.ValueType], LoweringContext, on_event? : (@vcode.TargetCompileEvent) -> Unit) -> Self raise AArch64LowerError
 pub fn DirectLoweringSession::sink(Self) -> @native_lowering.TargetSink
 

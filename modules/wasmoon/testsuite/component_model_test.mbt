@@ -12,7 +12,7 @@ test "component_sniff_minimal_preamble" {
   let bytes = Bytes::from_array([
     b'\x00', b'\x61', b'\x73', b'\x6d', b'\x0d', b'\x00', b'\x01', b'\x00',
   ])
-  let kind = @component.sniff_binary_kind(bytes)
+  let kind = @component_types.sniff_binary_kind(bytes)
   inspect(@debug.to_string(kind), content="Some(Component)")
 }
 
@@ -21,7 +21,7 @@ test "component_parse_minimal_preamble" {
   let bytes = Bytes::from_array([
     b'\x00', b'\x61', b'\x73', b'\x6d', b'\x0d', b'\x00', b'\x01', b'\x00',
   ])
-  let component = @component.parse_component(bytes)
+  let component = @component_types.parse_component(bytes)
   inspect(
     "version=\{component.binary.version} layer=\{component.binary.layer} sections=\{component.binary.sections.length()}",
     content="version=13 layer=1 sections=0",
@@ -37,7 +37,7 @@ test "component_validate_minimal_preamble" {
   let bytes = Bytes::from_array([
     b'\x00', b'\x61', b'\x73', b'\x6d', b'\x0d', b'\x00', b'\x01', b'\x00',
   ])
-  let component = @component.parse_component(bytes)
+  let component = @component_types.parse_component(bytes)
   @component_model.validate_component(component)
 }
 
@@ -51,7 +51,7 @@ test "component_validate_embedded_core_module" {
     // embedded core module (empty)
      b'\x00', b'\x61', b'\x73', b'\x6d', b'\x01', b'\x00', b'\x00', b'\x00',
   ])
-  let component = @component.parse_component(bytes)
+  let component = @component_types.parse_component(bytes)
   @component_model.validate_component(component)
 }
 
@@ -69,7 +69,7 @@ test "component_validate_import_typeidx_oob" {
     // externdesc = functype, typeidx = 0
      b'\x01', b'\x00',
   ])
-  let component = @component.parse_component(bytes)
+  let component = @component_types.parse_component(bytes)
   inspect(
     !component_model_succeeds(() => {
       @component_model.validate_component(component)
@@ -94,7 +94,7 @@ test "component_validate_export_sortidx_oob" {
     // opt externdesc = none
      b'\x00',
   ])
-  let component = @component.parse_component(bytes)
+  let component = @component_types.parse_component(bytes)
   inspect(
     !component_model_succeeds(() => {
       @component_model.validate_component(component)
@@ -136,7 +136,7 @@ test "component_validate_canon_string_requires_memory" {
     // canon.lift (core funcidx=0, opts=[], typeidx=0)
      b'\x00', b'\x00', b'\x00', b'\x00', b'\x00',
   ])
-  let component = @component.parse_component(bytes)
+  let component = @component_types.parse_component(bytes)
   inspect(
     !component_model_succeeds(() => {
       @component_model.validate_component(component)

@@ -9,7 +9,7 @@ import {
 }
 
 // Values
-pub fn lower_to_sink(@milkir.Function, @wasm_milkir.WasmValidationContext, Environment, @native_lowering.TargetSink, call_abi? : @native_lowering.CallAbiElaboration, on_event? : (@Milky2018/milkir/native.NativeLowerEvent) -> Unit) -> Unit raise @Milky2018/milkir/native.NativeLowerError
+pub fn lower_to_sink(@milkir.Function, @wasm_milkir.WasmValidationContext, Environment, @native_lowering.TargetSink, call_abi? : @native_lowering.CallAbiElaboration, verify_input? : Bool, on_event? : (@Milky2018/milkir/native.NativeLowerEvent) -> Unit) -> Unit raise @Milky2018/milkir/native.NativeLowerError
 
 // Errors
 

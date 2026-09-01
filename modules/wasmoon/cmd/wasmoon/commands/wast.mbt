@@ -592,8 +592,7 @@ fn try_compile_jit_with_suspension(
           )
           // Cross an explicit state-coherence boundary around imported host or
           // interpreter calls made from native component code.
-          @wast.install_jit_hostcall_dispatcher(
-            jm,
+          jit_ctx.install_hostcall_dispatcher(
             store,
             instance,
             before_dispatch=fn() {

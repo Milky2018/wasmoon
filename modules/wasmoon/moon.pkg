@@ -2,11 +2,11 @@ import {
   "Milky2018/milkir",
   "Milky2018/wasm_core/types",
   "Milky2018/wasmoon_jit",
-  "Milky2018/wasmoon/wasm_frontend",
+  "Milky2018/wasm_milkir/frontend" @wasm_frontend,
 }
 
 import {
   "Milky2018/wasmoon/executor",
-  "Milky2018/wasmoon/wat",
+  "Milky2018/wasm_core/wat",
   "Milky2018/wasmoon/runtime",
 } for "test"

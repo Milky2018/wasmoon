@@ -9,7 +9,7 @@ fn load_module_with_binary_from_path(
     let content = @fs.read_file_to_string(path) catch {
       IOError(_e) => raise FileNotFound(path)
     }
-    let mod_ = @wat.parse(content) catch {
+    let mod_ = @core_wat.parse(content) catch {
       e => raise ParseWatError(e.to_string())
     }
     (mod_, None)
@@ -17,7 +17,7 @@ fn load_module_with_binary_from_path(
     let bytes = @fs.read_file_to_bytes(path) catch {
       IOError(_e) => raise FileNotFound(path)
     }
-    if @component.sniff_binary_kind(bytes) is Some(Component) {
+    if @component_types.sniff_binary_kind(bytes) is Some(Component) {
       raise ComponentModelNotSupported
     }
     let mod_ = @parser.parse_module(bytes) catch {

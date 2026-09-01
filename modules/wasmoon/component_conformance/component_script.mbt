@@ -445,7 +445,7 @@ fn parse_component_value(
 fn component_func_contract(
   instance : @runtime_impl.ComponentInstance,
   field : String,
-) -> (@component.FuncType, Array[@component.TypeDef?]) raise ComponentTestError {
+) -> (@component_types.FuncType, Array[@component_types.TypeDef?]) raise ComponentTestError {
   match instance.get_export(field) {
     Some(Func(func)) =>
       match func {
@@ -460,8 +460,8 @@ fn component_func_contract(
 ///|
 fn parse_typed_component_value(
   val : JsonValue,
-  ty : @component.ValType,
-  types : Array[@component.TypeDef?],
+  ty : @component_types.ValType,
+  types : Array[@component_types.TypeDef?],
 ) -> @runtime_impl.ComponentValue raise ComponentTestError {
   match ty {
     Prim(_) => parse_component_value(val)
@@ -707,8 +707,8 @@ fn parse_typed_component_value(
 ///|
 fn parse_typed_arguments(
   vals : Array[JsonValue]?,
-  func_type : @component.FuncType,
-  types : Array[@component.TypeDef?],
+  func_type : @component_types.FuncType,
+  types : Array[@component_types.TypeDef?],
 ) -> Array[@runtime_impl.ComponentValue] raise ComponentTestError {
   let values = vals.unwrap_or([])
   if values.length() != func_type.params.length() {
@@ -726,8 +726,8 @@ fn parse_typed_arguments(
 ///|
 fn parse_typed_results(
   vals : Array[JsonValue]?,
-  func_type : @component.FuncType,
-  types : Array[@component.TypeDef?],
+  func_type : @component_types.FuncType,
+  types : Array[@component_types.TypeDef?],
 ) -> Array[@runtime_impl.ComponentValue] raise ComponentTestError {
   let values = vals.unwrap_or([])
   match func_type.result {
@@ -765,11 +765,11 @@ fn values_equal(
 ///|
 fn load_component(
   path : String,
-) -> @component.Component raise ComponentTestError {
+) -> @component_types.Component raise ComponentTestError {
   let bytes = @fs.read_file_to_bytes(path) catch {
     IOError(e) => raise ParseError(e)
   }
-  @component.parse_component(bytes) catch {
+  @component_types.parse_component(bytes) catch {
     e => raise ParseError(e.to_string())
   }
 }
@@ -777,7 +777,7 @@ fn load_component(
 ///|
 /// Produce the validation evidence `ComponentLinker::add_component` requires.
 fn component_import_evidence(
-  component : @component.Component,
+  component : @component_types.Component,
 ) -> Result[@component_model.ValidatedComponent, String] {
   try
     @component_model.validate_component_for_instantiation_with_config(
@@ -795,7 +795,7 @@ fn component_import_evidence(
 fn instantiate_component(
   linker : @runtime_impl.ComponentLinker,
   name : String,
-  component : @component.Component,
+  component : @component_types.Component,
 ) -> Result[@runtime_impl.ComponentInstance, String] {
   let validated = try
     @component_model.validate_component_for_instantiation_with_config(
@@ -832,7 +832,7 @@ fn run_invoke(
 
 ///|
 fn make_const_u32_func(value : Int) -> @runtime_impl.ComponentFunc {
-  let func_type : @component.FuncType = {
+  let func_type : @component_types.FuncType = {
     is_async: false,
     params: [],
     result: Some(Prim(U32)),
@@ -855,7 +855,7 @@ fn make_const_u32_func(value : Int) -> @runtime_impl.ComponentFunc {
 
 ///|
 fn make_echo_u32_func() -> @runtime_impl.ComponentFunc {
-  let func_type : @component.FuncType = {
+  let func_type : @component_types.FuncType = {
     is_async: false,
     params: [{ label: "p1", ty: Prim(U32), }],
     result: Some(Prim(U32)),
@@ -1018,10 +1018,10 @@ fn run_component_script_impl(
   // Host instance used by component-spec/wasmtime suites.
   let resource1_id = 100
   let resource2_id = 101
-  let resource1_type : @component.TypeDef? = Some(
+  let resource1_type : @component_types.TypeDef? = Some(
     ResourceType(resource1_id, 0x7f, None, HostDefined),
   )
-  let resource2_type : @component.TypeDef? = Some(
+  let resource2_type : @component_types.TypeDef? = Some(
     ResourceType(resource2_id, 0x7f, None, HostDefined),
   )
   host_exports.set("resource1", Type(resource1_type))
@@ -1082,8 +1082,11 @@ fn run_component_script_impl(
     }
   }
 
-  let ctor_types : Array[@component.TypeDef?] = [resource1_type, Some(Own(0))]
-  let ctor_func_type : @component.FuncType = {
+  let ctor_types : Array[@component_types.TypeDef?] = [
+    resource1_type,
+    Some(Own(0)),
+  ]
+  let ctor_func_type : @component_types.FuncType = {
     is_async: false,
     params: [{ label: "r", ty: Prim(U32), }],
     result: Some(TypeIdx(1)),
@@ -1111,7 +1114,7 @@ fn run_component_script_impl(
     }
   })
   host_exports.set("[constructor]resource1", Func(ctor))
-  let drops_func_type : @component.FuncType = {
+  let drops_func_type : @component_types.FuncType = {
     is_async: false,
     params: [],
     result: Some(Prim(U32)),
@@ -1136,8 +1139,11 @@ fn run_component_script_impl(
     [U32(resource1_last_drop[0])]
   })
   host_exports.set("[static]resource1.last-drop", Func(last_drop))
-  let assert_types : Array[@component.TypeDef?] = [resource1_type, Some(Own(0))]
-  let assert_func_type : @component.FuncType = {
+  let assert_types : Array[@component_types.TypeDef?] = [
+    resource1_type,
+    Some(Own(0)),
+  ]
+  let assert_func_type : @component_types.FuncType = {
     is_async: false,
     params: [{ label: "r", ty: TypeIdx(1), }, { label: "rep", ty: Prim(U32), }],
     result: None,
@@ -1164,9 +1170,11 @@ fn run_component_script_impl(
     },
   )
   host_exports.set("[static]resource1.assert", Func(assert_func))
-  let borrow_ty = Some(@component.TypeDef::Borrow(0))
-  let simple_types : Array[@component.TypeDef?] = [resource1_type, borrow_ty]
-  let simple_func_type : @component.FuncType = {
+  let borrow_ty = Some(@component_types.TypeDef::Borrow(0))
+  let simple_types : Array[@component_types.TypeDef?] = [
+    resource1_type, borrow_ty,
+  ]
+  let simple_func_type : @component_types.FuncType = {
     is_async: false,
     params: [
       { label: "self", ty: TypeIdx(1), },
@@ -1194,7 +1202,7 @@ fn run_component_script_impl(
     },
   )
   host_exports.set("[method]resource1.simple", Func(simple))
-  let take_borrow_func_type : @component.FuncType = {
+  let take_borrow_func_type : @component_types.FuncType = {
     is_async: false,
     params: [
       { label: "self", ty: TypeIdx(1), },
@@ -1220,11 +1228,11 @@ fn run_component_script_impl(
     },
   )
   host_exports.set("[method]resource1.take-borrow", Func(take_borrow))
-  let own_ty = Some(@component.TypeDef::Own(0))
-  let take_own_types : Array[@component.TypeDef?] = [
+  let own_ty = Some(@component_types.TypeDef::Own(0))
+  let take_own_types : Array[@component_types.TypeDef?] = [
     resource1_type, borrow_ty, own_ty,
   ]
-  let take_own_func_type : @component.FuncType = {
+  let take_own_func_type : @component_types.FuncType = {
     is_async: false,
     params: [
       { label: "self", ty: TypeIdx(1), },
@@ -1258,9 +1266,9 @@ fn run_component_script_impl(
   host_exports.set("[method]resource1.take-own", Func(take_own))
   let host_instance = make_instance("host", store, host_exports)
   try! linker.add_instance("host", host_instance)
-  let components : Map[String, @component.Component] = Map([])
+  let components : Map[String, @component_types.Component] = Map([])
   let instances : Map[String, @runtime_impl.ComponentInstance] = Map([])
-  let mut last_component : @component.Component? = None
+  let mut last_component : @component_types.Component? = None
   let mut last_component_name : String? = None
   let mut last_instance : @runtime_impl.ComponentInstance? = None
   let mut anon_count = 0

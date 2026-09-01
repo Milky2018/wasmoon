@@ -1,6 +1,8 @@
 name = "Milky2018/vcode"
 
-version = "0.12.6"
+version = "0.13.0"
+
+readme = "README.mbt.md"
 
 repository = "https://github.com/Milky2018/wasmoon.git"
 

@@ -27,6 +27,49 @@ pub(all) suberror RuntimeError {
   // Used when evaluating init expressions during instantiation; this should
   // never be reached for validated modules, but helps diagnose engine gaps.
   InvalidConstantExpression(String)
+  AsyncHostRequiresAsyncCall
+  AsyncHostCallInProgress
+  AsyncHostCallCancelled
+  AsyncHostError(String)
+} derive(Debug, Eq)
+
+///|
+/// Recover a structured runtime error from the language-wide `Error` type.
+///
+/// This is the single transport boundary used by executors and asynchronous
+/// host-call adapters; unrelated errors return `None` instead of being
+/// flattened to a string here.
+pub fn RuntimeError::from_error(error : Error) -> RuntimeError? {
+  match error {
+    StackUnderflow => Some(StackUnderflow)
+    StackOverflow => Some(StackOverflow)
+    TypeMismatch => Some(TypeMismatch)
+    StoreClosed => Some(StoreClosed)
+    MemoryClosed => Some(MemoryClosed)
+    OutOfBoundsMemoryAccess => Some(OutOfBoundsMemoryAccess)
+    OutOfBoundsTableAccess => Some(OutOfBoundsTableAccess)
+    OutOfBoundsArrayAccess => Some(OutOfBoundsArrayAccess)
+    UndefinedElement => Some(UndefinedElement)
+    UninitializedElement => Some(UninitializedElement)
+    IndirectCallTypeMismatch => Some(IndirectCallTypeMismatch)
+    DivisionByZero => Some(DivisionByZero)
+    IntegerOverflow => Some(IntegerOverflow)
+    InvalidConversion => Some(InvalidConversion)
+    OutOfMemory => Some(OutOfMemory)
+    Unreachable => Some(Unreachable)
+    CallStackExhausted => Some(CallStackExhausted)
+    UnknownImport(_, _) as runtime_error => Some(runtime_error)
+    LinkError => Some(LinkError)
+    LinkErrorDetail(_) as runtime_error => Some(runtime_error)
+    NullReference => Some(NullReference)
+    UnalignedAtomic => Some(UnalignedAtomic)
+    InvalidConstantExpression(_) as runtime_error => Some(runtime_error)
+    AsyncHostRequiresAsyncCall => Some(AsyncHostRequiresAsyncCall)
+    AsyncHostCallInProgress => Some(AsyncHostCallInProgress)
+    AsyncHostCallCancelled => Some(AsyncHostCallCancelled)
+    AsyncHostError(_) as runtime_error => Some(runtime_error)
+    _ => None
+  }
 }
 
 ///|
@@ -67,6 +110,11 @@ pub impl Show for RuntimeError with fn output(self, logger) {
       } else {
         "invalid constant expression: \{detail}"
       }
+    AsyncHostRequiresAsyncCall =>
+      "async host function requires an async wasm call"
+    AsyncHostCallInProgress => "another async host call is already pending"
+    AsyncHostCallCancelled => "async wasm call was cancelled"
+    AsyncHostError(message) => "async host function failed: \{message}"
   }
   logger.write_string(msg)
 }

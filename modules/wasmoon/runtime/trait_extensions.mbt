@@ -2,6 +2,12 @@
 pub extend ArrayInstance with Debug::{to_repr}
 
 ///|
+pub extend AsyncHostPoll with Debug::{to_repr}
+
+///|
+pub extend AsyncHostCallDriver with Debug::{to_repr}
+
+///|
 pub extend ArrayInstance with Show::{to_string, output}
 
 ///|
@@ -66,6 +72,12 @@ pub extend ModuleInstance with Show::{to_string, output}
 
 ///|
 pub extend RuntimeError with Show::{to_string, output}
+
+///|
+pub extend RuntimeError with Debug::{to_repr}
+
+///|
+pub extend RuntimeError with Eq::{not_equal, equal}
 
 ///|
 pub extend RuntimeErrorContext with Show::{to_string, output}

@@ -2,7 +2,7 @@
 package "Milky2018/wasmoon/component"
 
 import {
-  "Milky2018/wasmoon/component/model",
+  "Milky2018/wasm_component",
   "Milky2018/wasmoon/wasi_component",
   "moonbitlang/core/debug",
 }
@@ -18,29 +18,29 @@ pub fn interpreter_component_engine() -> ComponentEngine
 
 pub fn native_component_engine(opt_level? : Int, on_execution? : (NativeComponentExecutionEvent) -> Unit) -> ComponentEngine
 
-pub fn parse_alias_section(Bytes) -> Array[@model.Alias] raise @model.ComponentParseError
+pub fn parse_alias_section(Bytes) -> Array[@wasm_component.Alias] raise @wasm_component.ComponentParseError
 
-pub fn parse_canon_section(Bytes) -> Array[@model.Canon] raise @model.ComponentParseError
+pub fn parse_canon_section(Bytes) -> Array[@wasm_component.Canon] raise @wasm_component.ComponentParseError
 
-pub fn parse_component(Bytes) -> @model.Component raise @model.ComponentParseError
+pub fn parse_component(Bytes) -> @wasm_component.Component raise @wasm_component.ComponentParseError
 
-pub fn parse_component_binary(Bytes) -> @model.ComponentBinary raise @model.ComponentParseError
+pub fn parse_component_binary(Bytes) -> @wasm_component.ComponentBinary raise @wasm_component.ComponentParseError
 
 pub fn parse_component_value_json(String, ComponentValueType) -> ComponentValue raise ComponentRuntimeError
 
-pub fn parse_core_instance_section(Bytes) -> Array[@model.CoreInstanceDecl] raise @model.ComponentParseError
+pub fn parse_core_instance_section(Bytes) -> Array[@wasm_component.CoreInstanceDecl] raise @wasm_component.ComponentParseError
 
-pub fn parse_export_section(Bytes) -> Array[@model.Export] raise @model.ComponentParseError
+pub fn parse_export_section(Bytes) -> Array[@wasm_component.Export] raise @wasm_component.ComponentParseError
 
-pub fn parse_import_section(Bytes) -> Array[@model.Import] raise @model.ComponentParseError
+pub fn parse_import_section(Bytes) -> Array[@wasm_component.Import] raise @wasm_component.ComponentParseError
 
-pub fn parse_instance_section(Bytes) -> Array[@model.Instance] raise @model.ComponentParseError
+pub fn parse_instance_section(Bytes) -> Array[@wasm_component.Instance] raise @wasm_component.ComponentParseError
 
-pub fn parse_start_section(Bytes) -> @model.Start raise @model.ComponentParseError
+pub fn parse_start_section(Bytes) -> @wasm_component.Start raise @wasm_component.ComponentParseError
 
-pub fn parse_type_section(Bytes) -> Array[@model.TypeDef] raise @model.ComponentParseError
+pub fn parse_type_section(Bytes) -> Array[@wasm_component.TypeDef] raise @wasm_component.ComponentParseError
 
-pub fn sniff_binary_kind(Bytes) -> @model.BinaryKind?
+pub fn sniff_binary_kind(Bytes) -> @wasm_component.BinaryKind?
 
 pub fn wasi_command_component_host(@wasi_component.WasiComponentCtx) -> ComponentHostInstaller
 
@@ -170,7 +170,7 @@ pub fn ComponentRuntime::ComponentRuntime(engine? : ComponentEngine, wit_names? 
 pub fn ComponentRuntime::close(Self) -> Unit
 pub fn ComponentRuntime::install(Self, ComponentHostInstaller) -> Unit raise ComponentRuntimeError
 pub fn ComponentRuntime::instantiate(Self, String, Bytes) -> ComponentInstance raise ComponentRuntimeError
-pub fn ComponentRuntime::instantiate_component(Self, String, @model.Component) -> ComponentInstance raise ComponentRuntimeError
+pub fn ComponentRuntime::instantiate_component(Self, String, @wasm_component.Component) -> ComponentInstance raise ComponentRuntimeError
 
 pub(all) enum ComponentValue {
   Bool(Bool)
@@ -253,82 +253,82 @@ pub fn NativeComponentExecutionEvent::not_equal(Self, Self) -> Bool
 pub fn NativeComponentExecutionEvent::to_repr(Self) -> @debug.Repr
 
 // Type aliases
-pub using @model {type Alias}
+pub using @wasm_component {type Alias}
 
-pub using @model {type AliasTarget}
+pub using @wasm_component {type AliasTarget}
 
-pub using @model {type BinaryKind}
+pub using @wasm_component {type BinaryKind}
 
-pub using @model {type Canon}
+pub using @wasm_component {type Canon}
 
-pub using @model {type CanonOpt}
+pub using @wasm_component {type CanonOpt}
 
-pub using @model {type Component}
+pub using @wasm_component {type Component}
 
-pub using @model {type ComponentBinary}
+pub using @wasm_component {type ComponentBinary}
 
-pub using @model {type ComponentDecl}
+pub using @wasm_component {type ComponentDecl}
 
-pub using @model {type ComponentParseError}
+pub using @wasm_component {type ComponentParseError}
 
-pub using @model {type CoreInlineExport}
+pub using @wasm_component {type CoreInlineExport}
 
-pub using @model {type CoreInstanceDecl}
+pub using @wasm_component {type CoreInstanceDecl}
 
-pub using @model {type CoreInstanceExpr}
+pub using @wasm_component {type CoreInstanceExpr}
 
-pub using @model {type CoreInstantiateArg}
+pub using @wasm_component {type CoreInstantiateArg}
 
-pub using @model {type Export}
+pub using @wasm_component {type Export}
 
-pub using @model {type ExportName}
+pub using @wasm_component {type ExportName}
 
-pub using @model {type ExternDesc}
+pub using @wasm_component {type ExternDesc}
 
-pub using @model {type FuncType}
+pub using @wasm_component {type FuncType}
 
-pub using @model {type Import}
+pub using @wasm_component {type Import}
 
-pub using @model {type ImportName}
+pub using @wasm_component {type ImportName}
 
-pub using @model {type InlineExport}
+pub using @wasm_component {type InlineExport}
 
-pub using @model {type Instance}
+pub using @wasm_component {type Instance}
 
-pub using @model {type InstanceDecl}
+pub using @wasm_component {type InstanceDecl}
 
-pub using @model {type InstanceExpr}
+pub using @wasm_component {type InstanceExpr}
 
-pub using @model {type InstantiateArg}
+pub using @wasm_component {type InstantiateArg}
 
-pub using @model {type NameAttribute}
+pub using @wasm_component {type NameAttribute}
 
-pub using @model {type Param}
+pub using @wasm_component {type Param}
 
-pub using @model {type PrimValType}
+pub using @wasm_component {type PrimValType}
 
-pub using @model {type RecordField}
+pub using @wasm_component {type RecordField}
 
-pub using @model {type ResourceKind}
+pub using @wasm_component {type ResourceKind}
 
-pub using @model {type Section}
+pub using @wasm_component {type Section}
 
-pub using @model {type Sort}
+pub using @wasm_component {type Sort}
 
-pub using @model {type SortIdx}
+pub using @wasm_component {type SortIdx}
 
-pub using @model {type Start}
+pub using @wasm_component {type Start}
 
-pub using @model {type StringEncoding}
+pub using @wasm_component {type StringEncoding}
 
-pub using @model {type TypeBound}
+pub using @wasm_component {type TypeBound}
 
-pub using @model {type TypeDef}
+pub using @wasm_component {type TypeDef}
 
-pub using @model {type ValType}
+pub using @wasm_component {type ValType}
 
-pub using @model {type ValueBound}
+pub using @wasm_component {type ValueBound}
 
-pub using @model {type VariantCase}
+pub using @wasm_component {type VariantCase}
 
 // Traits

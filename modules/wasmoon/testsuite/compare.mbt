@@ -438,7 +438,6 @@ fn run_jit_with_opt_level(
       jm.close()
     }
     @wast.register_instance_funcrefs_for_jit(jm, instance, store)
-    @wast.install_jit_hostcall_dispatcher(jm, store, instance)
     jm.configure_native_fiber_stack_size(1048576L) |> ignore
     guard @wast.init_jit_memories_from_store(instance, store, jm) is Some(_) else {
       return Err("JIT memory initialization failed")
@@ -488,11 +487,11 @@ fn run_jit_with_opt_level(
     for group in mod_.type_rec_groups {
       module_rec_groups.push(group)
     }
-    @wast.JITModuleContext::JITModuleContext(
+    let jit_context = @wast.JITModuleContext::JITModuleContext(
       jm, globals_ptr, global_addrs, table_addrs, func_addrs, func_type_indices,
       canonical_type_indices, module_types, module_rec_groups, use_subtype_indirect_check,
     )
-    |> ignore
+    jit_context.install_hostcall_dispatcher(store, instance)
     let c_heap = @wasmoon_jit.CHeap::CHeap()
     jm.setup_gc(c_heap, module_types, canonical_type_indices, func_type_indices) catch {
       err => return Err("GC setup failed: \{err}")

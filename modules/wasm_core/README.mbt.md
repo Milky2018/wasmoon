@@ -14,8 +14,10 @@ frontends, runtimes, and tests.
   the shared module model.
 - `Milky2018/wasm_core/types`: WebAssembly value types, instructions,
   modules, function types, subtyping helpers, and related spec data.
-- `Milky2018/wasm_core/wat`: deterministic WAT rendering for a complete module
-  or one defined function.
+- `Milky2018/wasm_core/validator`: target-portable core WebAssembly validation
+  with structured errors and optional instruction context.
+- `Milky2018/wasm_core/wat`: target-portable WAT and WAST parsing plus
+  deterministic WAT rendering for a complete module or one defined function.
 
 ## Example: build a small core module model
 
@@ -37,8 +39,7 @@ test "build a module with one exported function" {
 ## Example: render a module as WAT
 
 The renderer depends only on `wasm_core` packages. A library consumer can use
-it without importing the Wasmoon runtime, validator, parser, or command-line
-packages.
+it without importing the Wasmoon runtime or command-line packages.
 
 ```moonbit nocheck
 ///|
@@ -52,6 +53,10 @@ let text = @wat.render(mod_)
 functions because they do not have a code body. Both public entry points return
 `WatPrintError` for malformed in-memory module shapes that cannot be expressed
 faithfully as WAT.
+
+The same package parses WAT into the shared module model and parses WAST into a
+command script. Parsing and rendering therefore share one specification-model
+owner and remain available on every MoonBit target.
 
 ## Example: model GC proposal types
 

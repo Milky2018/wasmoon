@@ -1,6 +1,6 @@
 name = "Milky2018/milkir"
 
-version = "0.12.6"
+version = "0.13.0"
 
 readme = "README.mbt.md"
 
@@ -13,7 +13,7 @@ keywords = [ "compiler", "ir", "ssa", "optimization" ]
 description = "Reusable Cranelift-like SSA intermediate representation"
 
 import {
-  "Milky2018/vcode@0.12.6",
+  "Milky2018/vcode@0.13.0",
 }
 
 preferred_target = "wasm-gc"

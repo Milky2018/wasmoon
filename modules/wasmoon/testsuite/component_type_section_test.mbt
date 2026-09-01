@@ -14,14 +14,14 @@ test "component: parse type section (functype, empty params/results)" {
     // functype (sync) with empty params and empty results
      0x40, 0x00, 0x01, 0x00,
   ]
-  let comp = @component.parse_component_binary(Bytes::from_array(bytes)) catch {
+  let comp = @component_types.parse_component_binary(Bytes::from_array(bytes)) catch {
     e => return fail("parse component failed: \{e}")
   }
   let payload = match find_component_section_payload(comp, 7) {
     Some(p) => p
     None => return fail("missing type section")
   }
-  let defs = @component.parse_type_section(payload) catch {
+  let defs = @component_types.parse_type_section(payload) catch {
     e => return fail("parse type section failed: \{e}")
   }
   inspect(defs.length(), content="1")

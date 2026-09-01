@@ -10,11 +10,17 @@ import {
 // Values
 pub fn call_exported_func(@runtime.Store, @runtime.ModuleInstance, String, Array[@types.Value]) -> Array[@types.Value] raise @runtime.RuntimeError
 
+pub async fn call_exported_func_async(@runtime.Store, @runtime.ModuleInstance, String, Array[@types.Value]) -> Array[@types.Value] raise @runtime.RuntimeError
+
 pub fn call_exported_func_with_options(@runtime.Store, @runtime.ModuleInstance, String, Array[@types.Value], options? : CallExportOptions) -> CallExportResult
 
 pub fn call_func_by_index(@runtime.Store, @runtime.ModuleInstance, Int, Array[@types.Value]) -> Array[@types.Value] raise @runtime.RuntimeError
 
+pub async fn call_func_by_index_async(@runtime.Store, @runtime.ModuleInstance, Int, Array[@types.Value]) -> Array[@types.Value] raise @runtime.RuntimeError
+
 pub fn call_func_by_index_resumable(@runtime.Store, @runtime.ModuleInstance, Int, Array[@types.Value], (@runtime.RuntimeError) -> Int64?) -> ResumableCallOutcome raise @runtime.RuntimeError
+
+pub fn call_func_by_index_resumable_async_with_exception(@runtime.Store, @runtime.ModuleInstance, Int, Array[@types.Value], @runtime.AsyncHostCallDriver) -> ResumableCallWithExceptionOutcome raise @runtime.RuntimeError
 
 pub fn call_func_by_index_with_exception(@runtime.Store, @runtime.ModuleInstance, Int, Array[@types.Value]) -> InvokeWithExceptionResult raise @runtime.RuntimeError
 
@@ -28,9 +34,13 @@ pub fn instantiate_module_with_import_diagnostics(@runtime.Store, @types.Module,
 
 pub fn instantiate_module_with_imports(@runtime.Store, @types.Module, @runtime.Imports) -> @runtime.ModuleInstance raise @runtime.RuntimeError
 
+pub async fn instantiate_module_with_imports_async(@runtime.Store, @types.Module, @runtime.Imports) -> @runtime.ModuleInstance raise @runtime.RuntimeError
+
 pub fn instantiate_module_with_init(@types.Module) -> (@runtime.Store, @runtime.ModuleInstance) raise @runtime.RuntimeError
 
 pub fn instantiate_with_linker(@runtime.Linker, String, @types.Module) -> @runtime.ModuleInstance raise @runtime.RuntimeError
+
+pub async fn instantiate_with_linker_async(@runtime.Linker, String, @types.Module) -> @runtime.ModuleInstance raise @runtime.RuntimeError
 
 pub fn validate_imports_with_diagnostics(@runtime.Store, @types.Module, @runtime.Imports) -> ImportDiagnosticsResult raise @runtime.RuntimeError
 
@@ -79,6 +89,7 @@ pub fn ExecContext::to_repr(Self) -> @debug.Repr
 type ExecutionContinuation
 pub fn ExecutionContinuation::cancel(Self) -> Unit
 pub fn ExecutionContinuation::continue_execution(Self) -> ResumableCallOutcome raise @runtime.RuntimeError
+pub fn ExecutionContinuation::continue_execution_with_exception(Self) -> ResumableCallWithExceptionOutcome raise @runtime.RuntimeError
 pub fn ExecutionContinuation::to_repr(Self) -> @debug.Repr
 pub impl @debug.Debug for ExecutionContinuation
 
@@ -120,6 +131,13 @@ pub(all) enum ResumableCallOutcome {
   Suspended(Int64, ExecutionContinuation)
 } derive(@debug.Debug)
 pub fn ResumableCallOutcome::to_repr(Self) -> @debug.Repr
+
+pub(all) enum ResumableCallWithExceptionOutcome {
+  ResumableReturned(Array[@types.Value])
+  ResumableSuspended(ExecutionContinuation)
+  ResumableThrown(Int, Array[@types.Value])
+  ResumableHostFailed(@runtime.RuntimeError)
+}
 
 // Type aliases
 

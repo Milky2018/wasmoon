@@ -55,6 +55,8 @@ pub struct Store {
   // Native invocation/fiber lifetimes belong to the Store, not a JIT module.
   native_execution : @wasmoon_jit.NativeExecutionState
   priv funcref_registry : StoreFuncrefRegistry
+  priv pinned_gc_roots : Array[(Int64, Array[@types.Value], Ref[Bool])]
+  priv mut next_pinned_gc_roots_id : Int64
   priv mut instantiation : RollbackRegistrar?
   priv closed : Ref[Bool]
 } derive(Debug)
@@ -153,6 +155,8 @@ pub fn Store::Store() -> Store {
     wasi_ctx_handle: 0,
     native_execution: NativeExecutionState(),
     funcref_registry: StoreFuncrefRegistry::new(),
+    pinned_gc_roots: [],
+    next_pinned_gc_roots_id: 0L,
     instantiation: None,
     closed: Ref(false),
   }
@@ -186,6 +190,8 @@ pub fn Store::with_c_heap() -> Store {
     wasi_ctx_handle: 0,
     native_execution: NativeExecutionState(),
     funcref_registry: StoreFuncrefRegistry::new(),
+    pinned_gc_roots: [],
+    next_pinned_gc_roots_id: 0L,
     instantiation: None,
     closed: Ref(false),
   }
@@ -203,6 +209,10 @@ pub fn Store::close(self : Store) -> Unit {
   }
   self.closed.val = true
   self.native_execution.seal()
+  for roots in self.pinned_gc_roots {
+    roots.2.val = false
+  }
+  self.pinned_gc_roots.clear()
   self.funcref_registry.clear()
   self.funcs.clear()
   self.func_types.clear()
@@ -253,6 +263,43 @@ pub fn Store::native_execution_state(
   self : Store,
 ) -> @wasmoon_jit.NativeExecutionState {
   self.native_execution
+}
+
+///|
+/// One Store-owned lease that keeps a snapshot of GC references alive.
+///
+/// Executors use this while an invocation is parked outside an active Wasm
+/// stack. Releasing a lease is idempotent.
+pub struct GcRootLease {
+  priv store : Store
+  priv id : Int64
+  priv active : Ref[Bool]
+}
+
+///|
+pub fn Store::pin_gc_roots(
+  self : Store,
+  values : Array[@types.Value],
+) -> GcRootLease {
+  let id = self.next_pinned_gc_roots_id
+  let active = Ref(true)
+  self.next_pinned_gc_roots_id = self.next_pinned_gc_roots_id + 1L
+  self.pinned_gc_roots.push((id, values.copy(), active))
+  { store: self, id, active, }
+}
+
+///|
+pub fn GcRootLease::release(self : GcRootLease) -> Unit {
+  if !self.active.val {
+    return
+  }
+  self.active.val = false
+  for index, roots in self.store.pinned_gc_roots {
+    if roots.0 == self.id {
+      self.store.pinned_gc_roots.remove(index) |> ignore
+      break
+    }
+  }
 }
 
 ///|
@@ -336,6 +383,22 @@ pub fn Store::unwrap_extern(
 }
 
 ///|
+fn Store::alloc_func_inst(
+  self : Store,
+  func : FuncInst,
+  func_type : @types.FuncType,
+  type_idx : Int,
+  owner : FuncOwner,
+) -> Int raise RuntimeError {
+  self.ensure_open()
+  let idx = self.push_allocation(self.funcs, func)
+  self.push_allocation(self.func_types, func_type) |> ignore
+  self.push_allocation(self.func_type_indices, type_idx) |> ignore
+  self.push_allocation(self.func_owners, owner) |> ignore
+  idx
+}
+
+///|
 /// Allocate a WASM function with its type
 pub fn Store::alloc_func(
   self : Store,
@@ -343,12 +406,7 @@ pub fn Store::alloc_func(
   func_type? : @types.FuncType = { params: [], results: [], },
   type_idx? : Int = -1,
 ) -> Int raise RuntimeError {
-  self.ensure_open()
-  let idx = self.push_allocation(self.funcs, WasmFunc(func))
-  self.push_allocation(self.func_types, func_type) |> ignore
-  self.push_allocation(self.func_type_indices, type_idx) |> ignore
-  self.push_allocation(self.func_owners, Unowned) |> ignore
-  idx
+  self.alloc_func_inst(WasmFunc(func), func_type, type_idx, Unowned)
 }
 
 ///|
@@ -359,17 +417,12 @@ pub fn Store::alloc_host_func(
   func_type? : @types.FuncType = { params: [], results: [], },
   type_idx? : Int = -1,
 ) -> Int raise RuntimeError {
-  self.ensure_open()
   // Back-compat: old-style host funcs don't take a Caller.
   let wrapped : (Caller, Array[@types.Value]) -> Array[@types.Value] raise RuntimeError = (
     _caller,
     args,
   ) => func(args)
-  let idx = self.push_allocation(self.funcs, HostFunc(wrapped))
-  self.push_allocation(self.func_types, func_type) |> ignore
-  self.push_allocation(self.func_type_indices, type_idx) |> ignore
-  self.push_allocation(self.func_owners, HostFunc) |> ignore
-  idx
+  self.alloc_func_inst(HostFunc(wrapped), func_type, type_idx, HostFunc)
 }
 
 ///|
@@ -380,12 +433,43 @@ pub fn Store::alloc_host_func_with_caller(
   func_type? : @types.FuncType = { params: [], results: [], },
   type_idx? : Int = -1,
 ) -> Int raise RuntimeError {
-  self.ensure_open()
-  let idx = self.push_allocation(self.funcs, HostFunc(func))
-  self.push_allocation(self.func_types, func_type) |> ignore
-  self.push_allocation(self.func_type_indices, type_idx) |> ignore
-  self.push_allocation(self.func_owners, HostFunc) |> ignore
-  idx
+  self.alloc_func_inst(HostFunc(func), func_type, type_idx, HostFunc)
+}
+
+///|
+/// Allocate an asynchronous host function with its type.
+pub fn Store::alloc_async_host_func(
+  self : Store,
+  func : async (Array[@types.Value]) -> Array[@types.Value] raise Error,
+  func_type? : @types.FuncType = { params: [], results: [], },
+  type_idx? : Int = -1,
+) -> Int raise RuntimeError {
+  let wrapped : AsyncHostFunction = async fn(_caller, args) {
+    try func(args) catch {
+      error => Err(error)
+    } noraise {
+      values => Ok(values)
+    }
+  }
+  self.alloc_func_inst(AsyncHostFunc(wrapped), func_type, type_idx, HostFunc)
+}
+
+///|
+/// Allocate an asynchronous host function that receives the caller context.
+pub fn Store::alloc_async_host_func_with_caller(
+  self : Store,
+  func : async (Caller, Array[@types.Value]) -> Array[@types.Value] raise Error,
+  func_type? : @types.FuncType = { params: [], results: [], },
+  type_idx? : Int = -1,
+) -> Int raise RuntimeError {
+  let wrapped : AsyncHostFunction = async fn(caller, args) {
+    try func(caller, args) catch {
+      error => Err(error)
+    } noraise {
+      values => Ok(values)
+    }
+  }
+  self.alloc_func_inst(AsyncHostFunc(wrapped), func_type, type_idx, HostFunc)
 }
 
 ///|
@@ -844,7 +928,7 @@ pub fn Store::get_func(
 ) -> @types.FunctionCode raise RuntimeError {
   match self.get_func_inst(idx) {
     WasmFunc(code) => code
-    HostFunc(_) => raise TypeMismatch // Cannot get code from host function
+    HostFunc(_) | AsyncHostFunc(_) => raise TypeMismatch // Cannot get code from host function
   }
 }
 
@@ -1067,6 +1151,18 @@ pub fn Store::collect_roots(
   for value in self.wrapped_externs {
     if is_gc_ref(value) {
       roots.push(value)
+    }
+  }
+
+  // Parked interpreter continuations have no active stack frame from which an
+  // allocator can provide roots, so their leases participate in every cycle.
+  for pinned in self.pinned_gc_roots {
+    if pinned.2.val {
+      for value in pinned.1 {
+        if is_gc_ref(value) {
+          roots.push(value)
+        }
+      }
     }
   }
 

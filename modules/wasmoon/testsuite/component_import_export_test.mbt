@@ -30,7 +30,7 @@ test "component: parse import/export sections (framing only)" {
     // no explicit externdesc
      0x00,
   ]
-  let comp = @component.parse_component_binary(Bytes::from_array(bytes)) catch {
+  let comp = @component_types.parse_component_binary(Bytes::from_array(bytes)) catch {
     e => return fail("parse component failed: \{e}")
   }
   let import_payload = match find_component_section_payload(comp, 10) {
@@ -41,10 +41,10 @@ test "component: parse import/export sections (framing only)" {
     Some(p) => p
     None => return fail("missing export section")
   }
-  let imports = @component.parse_import_section(import_payload) catch {
+  let imports = @component_types.parse_import_section(import_payload) catch {
     e => return fail("parse import section failed: \{e}")
   }
-  let exports = @component.parse_export_section(export_payload) catch {
+  let exports = @component_types.parse_export_section(export_payload) catch {
     e => return fail("parse export section failed: \{e}")
   }
   inspect(imports.length(), content="1")

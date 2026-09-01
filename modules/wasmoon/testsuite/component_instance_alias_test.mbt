@@ -20,7 +20,7 @@ test "component: parse instance + alias sections (minimal instantiate + outer al
     // aliastarget=outer ct=0 idx=0
      0x02, 0x00, 0x00,
   ]
-  let comp = @component.parse_component_binary(Bytes::from_array(bytes)) catch {
+  let comp = @component_types.parse_component_binary(Bytes::from_array(bytes)) catch {
     e => return fail("parse component failed: \{e}")
   }
   let inst_payload = match find_component_section_payload(comp, 5) {
@@ -31,10 +31,10 @@ test "component: parse instance + alias sections (minimal instantiate + outer al
     Some(p) => p
     None => return fail("missing alias section")
   }
-  let instances = @component.parse_instance_section(inst_payload) catch {
+  let instances = @component_types.parse_instance_section(inst_payload) catch {
     e => return fail("parse instance section failed: \{e}")
   }
-  let aliases = @component.parse_alias_section(alias_payload) catch {
+  let aliases = @component_types.parse_alias_section(alias_payload) catch {
     e => return fail("parse alias section failed: \{e}")
   }
   inspect(instances.length(), content="1")
@@ -49,7 +49,7 @@ test "component: parse_component collects instances + aliases" {
     0x00, 0x61, 0x73, 0x6d, 0x0d, 0x00, 0x01, 0x00, 0x05, 0x04, 0x01, 0x00, 0x00,
     0x00, 0x06, 0x05, 0x01, 0x01, 0x02, 0x00, 0x00,
   ]
-  let parsed = @component.parse_component(Bytes::from_array(bytes)) catch {
+  let parsed = @component_types.parse_component(Bytes::from_array(bytes)) catch {
     e => return fail("parse failed: \{e}")
   }
   inspect(parsed.instances.length(), content="1")

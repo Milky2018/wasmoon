@@ -208,7 +208,7 @@ fn parse_module(path : String) -> @types.Module {
   // Check if it's WAT (text) or WASM (binary)
   if path.has_suffix(".wat") || path.has_suffix(".wast") {
     let text = read_text_file(path)
-    @wat.parse(text) catch {
+    @core_wat.parse(text) catch {
       e => {
         exit_error("parsing WAT: \{e}")
         panic() // unreachable

@@ -9,3 +9,7 @@ import {
   "moonbitlang/core/float",
   "moonbitlang/core/math",
 }
+
+import {
+  "moonbitlang/async",
+} for "test"

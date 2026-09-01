@@ -6,7 +6,7 @@ test "component: capture core-prefix section 1 (core module bytes)" {
     // section 1 (core module), size=8
      0x01, 0x08, 0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00,
   ]
-  let comp = @component.parse_component(Bytes::from_array(bytes)) catch {
+  let comp = @component_types.parse_component(Bytes::from_array(bytes)) catch {
     e => return fail("parse failed: \{e}")
   }
   inspect(comp.core_modules.length(), content="1")

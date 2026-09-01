@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Audit reusable compiler-infrastructure module dependency boundaries."""
+"""Audit reusable module dependency boundaries."""
 
 from pathlib import Path
 import sys
@@ -9,6 +9,7 @@ from typing import Optional
 ROOT = Path(__file__).resolve().parents[1]
 
 REUSABLE_MODULES = [
+    "modules/wasm_component",
     "modules/wasm_core",
     "modules/wasm_milkir",
     "modules/milkir",
