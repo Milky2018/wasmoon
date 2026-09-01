@@ -29,7 +29,7 @@ The repository is a `moon.work` workspace containing several independently versi
 
 | Module or package | Responsibility |
 | --- | --- |
-| `wasm_core` | WebAssembly specification data model shared by parsers, validators, frontends, and runtimes. |
+| `wasm_core` | WebAssembly specification data model, binary parser, and core validator shared by frontends, runtimes, and tools. |
 | `milkir` | Target-independent SSA IR, builders, verification, optimization, and CFG utilities. |
 | `vcode/native_types` | Target-independent native ABI, type, symbol, trap, safepoint, and metadata vocabulary. |
 | `vcode/native_lowering` | Streaming target-lowering protocol; carries one operation at a time and retains no function graph. |
@@ -48,7 +48,7 @@ Reusable modules and packages must not import `Milky2018/wasmoon`, `Milky2018/wa
 
 | Module or package | Responsibility |
 | --- | --- |
-| `wasmoon` | Product assembly, CLI, parsing, validation, runtime objects, interpreter, WASI Preview 1, component-model work, and test runners. |
+| `wasmoon` | Product assembly, CLI, text parsing, component validation, runtime objects, interpreter, WASI Preview 1, component-model work, and test runners. |
 | `wasmoon/wasm_frontend` | Canonical product-facing Wasm-to-MilkIR frontend API. Its `ir` subpackage is an implementation detail; embedding configuration lives in the dependency-neutral `embedding` subpackage. |
 | `wasmoon_jit` | Wasmoon VMContext layout, native runtime helpers, trampolines, runtime symbol resolution, and transactional executable-code installation. |
 | `wasmoon_jit/artifact` | Bounded v9 persisted-artifact format with exact compatibility manifests and symbolic unlinked code objects. |
@@ -65,7 +65,9 @@ Reusable modules and packages must not import `Milky2018/wasmoon`, `Milky2018/wa
 | Component binary or text | `wasmoon/component` | Validated component instances, typed exports, and WIT-shaped values |
 | Persisted JIT artifact | `wasmoon_jit/artifact` | Verified v9 ordinary-data artifact |
 
-Core modules pass through `wasmoon/validator` before the CLI instantiates or compiles them. Component validation is implemented separately under `wasmoon/validator/component_model`.
+Core modules pass through `wasm_core/validator` before the CLI instantiates or
+compiles them. Component validation is implemented separately under
+`wasmoon/validator/component_model`.
 
 ## Execution Paths
 

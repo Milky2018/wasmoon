@@ -4,7 +4,7 @@ import {
   "Milky2018/wasm_core/encoder",
   "Milky2018/wasm_core/wat" @core_wat,
   "Milky2018/wasm_core/parser",
-  "Milky2018/wasmoon/validator",
+  "Milky2018/wasm_core/validator",
   "Milky2018/wasmoon/wat",
   "Milky2018/wasmoon/component/text_parser",
   "Milky2018/wasmoon/wit",

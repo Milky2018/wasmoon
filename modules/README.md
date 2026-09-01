@@ -7,6 +7,7 @@ Wasmoon runtime integration packages. The main public packages are:
 | --- | --- | --- |
 | `Milky2018/wasm_core` | Root facade for WebAssembly spec-model construction. | `empty_module`, `simple_module`, `func_type`, `func_subtype`; detailed types remain in `Milky2018/wasm_core/types`. |
 | `Milky2018/wasm_core/types` | WebAssembly value, instruction, module, and type-system model. | `ValueType`, `Instruction`, `Module`, `FuncType`, `SubType`, type equality/subtyping helpers. |
+| `Milky2018/wasm_core/validator` | Target-portable core WebAssembly validation. | `validate_module`, `validate_module_with_context`, structured validation errors, and diagnostic formatting. |
 | `Milky2018/milkir` | Cranelift-like SSA IR. | `Function`, `FunctionBuilder`, `Signature`, `Type`, verification, CFG, and optimization passes. |
 | `Milky2018/vcode/native_types` | Target-independent native ABI and metadata vocabulary. | `ValueType`, `Signature`, calls, symbols, traps, safepoints, and source locations. |
 | `Milky2018/vcode/native_lowering` | Streaming target-lowering protocol with no retained program graph. | `TargetSink`, `DirectBuilder`, target-neutral operations, call ABI elaboration, and structured errors. |
