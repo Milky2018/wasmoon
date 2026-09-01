@@ -3,7 +3,9 @@
 > Historical methodology: this report used one warmup and three measured pairs,
 > and did not isolate Wasmtime's global cache. New corpus sweeps must clear
 > separate Wasmoon and Wasmtime caches per workload and invoke each engine
-> exactly once, with no warmup or repeated aggregation.
+> exactly once, with no warmup or repeated aggregation. Wasmtime must also run
+> with `-C parallel-compilation=n` so its cold-compilation result is comparable
+> with Wasmoon's serial compiler.
 
 ## Executive summary
 

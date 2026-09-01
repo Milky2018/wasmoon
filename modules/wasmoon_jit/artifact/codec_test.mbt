@@ -71,7 +71,7 @@ fn replace_i64_payload(
 fn artifact_with_signed_metadata_markers() -> Artifact {
   let artifact = sample_artifact()
   let function = artifact.functions[0]
-  let source = @machv.SourceLocation::new("signed-metadata.wasm", 1, 1)
+  let source = @native.SourceLocation::new("signed-metadata.wasm", 1, 1)
   {
     ..artifact,
     functions: [

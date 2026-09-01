@@ -341,9 +341,7 @@ fn resolve_static_targets(
     )
     resolve_target_before_allocation(installer, resolved, external_target)
     let address = lookup_resolved_target(resolved, external_target).unwrap()
-    resolved.push(
-      (Code(@semantic_machv.CodeSymbol::new(import_.symbol.name)), address),
-    )
+    resolved.push((Code(@native.CodeSymbol::new(import_.symbol.name)), address))
   }
   for function in artifact.functions {
     for relocation in function.relocations {
@@ -429,74 +427,64 @@ fn install_artifact_with_failure(
   let resolved = resolve_static_targets(installer, loaded)
   let plans = prepare_links(loaded)
   let staged : Array[ExecCode] = []
-  try {
-    for index, plan in plans {
-      let source = artifact.functions[index]
-      let code = match ExecCode::try_stage(plan.code().length()) {
-        Some(code) => code
-        None =>
-          raise AllocationFailed(function_index=source.identity.function_index)
-      }
-      staged.push(code)
-      if failure == Some(Allocation) {
+  errdefer release_staged_code(staged)
+  for index, plan in plans {
+    let source = artifact.functions[index]
+    let code = match ExecCode::try_stage(plan.code().length()) {
+      Some(code) => code
+      None =>
         raise AllocationFailed(function_index=source.identity.function_index)
-      }
     }
-    for index, source in artifact.functions {
-      let address = staged[index].ptr() + source.entry_offset.to_int64()
-      resolved.push((Code(source.identity.symbol), address))
-    }
-    if failure == Some(Relocation) {
-      raise RelocationFailed(function_index~, message="injected failure")
-    }
-    let linked_code : Array[Array[Byte]] = []
-    for index, plan in plans {
-      let current_index = artifact.functions[index].identity.function_index
-      let bytes = plan.link(staged[index].ptr(), fn(target) {
-        lookup_resolved_target(resolved, target)
-      }) catch {
-        RelocationFailed(function_index=_, message~) =>
-          raise RelocationFailed(function_index=current_index, message~)
-        error => raise error
-      }
-      linked_code.push(bytes)
-    }
-    if failure == Some(Registration) {
-      raise RegistrationFailed(function_index~, message="injected failure")
-    }
-    let functions : Array[InstalledFunction] = []
-    for index, source in artifact.functions {
-      functions.push(
-        build_installed_function(
-          source,
-          staged[index].ptr(),
-          linked_code[index],
-        ),
-      )
-    }
-    let imports = build_installed_imports(artifact, resolved)
-    if failure == Some(Protection) {
-      raise ProtectionFailed(function_index~)
-    }
-    for index, code in staged {
-      if !code.finalize(linked_code[index]) {
-        raise ProtectionFailed(
-          function_index=artifact.functions[index].identity.function_index,
-        )
-      }
-    }
-    let installed = { executable_code: staged, imports, functions, }
-    if failure == Some(Publication) {
-      raise PublicationFailed(message="injected failure")
-    }
-    installer.current.val = Some(installed)
-    installed
-  } catch {
-    error => {
-      release_staged_code(staged)
-      raise error
+    staged.push(code)
+    if failure == Some(Allocation) {
+      raise AllocationFailed(function_index=source.identity.function_index)
     }
   }
+  for index, source in artifact.functions {
+    let address = staged[index].ptr() + source.entry_offset.to_int64()
+    resolved.push((Code(source.identity.symbol), address))
+  }
+  if failure == Some(Relocation) {
+    raise RelocationFailed(function_index~, message="injected failure")
+  }
+  let linked_code : Array[Array[Byte]] = []
+  for index, plan in plans {
+    let current_index = artifact.functions[index].identity.function_index
+    let bytes = plan.link(staged[index].ptr(), fn(target) {
+      lookup_resolved_target(resolved, target)
+    }) catch {
+      RelocationFailed(function_index=_, message~) =>
+        raise RelocationFailed(function_index=current_index, message~)
+      error => raise error
+    }
+    linked_code.push(bytes)
+  }
+  if failure == Some(Registration) {
+    raise RegistrationFailed(function_index~, message="injected failure")
+  }
+  let functions : Array[InstalledFunction] = []
+  for index, source in artifact.functions {
+    functions.push(
+      build_installed_function(source, staged[index].ptr(), linked_code[index]),
+    )
+  }
+  let imports = build_installed_imports(artifact, resolved)
+  if failure == Some(Protection) {
+    raise ProtectionFailed(function_index~)
+  }
+  for index, code in staged {
+    if !code.finalize(linked_code[index]) {
+      raise ProtectionFailed(
+        function_index=artifact.functions[index].identity.function_index,
+      )
+    }
+  }
+  let installed = { executable_code: staged, imports, functions, }
+  if failure == Some(Publication) {
+    raise PublicationFailed(message="injected failure")
+  }
+  installer.current.val = Some(installed)
+  installed
 }
 
 ///|

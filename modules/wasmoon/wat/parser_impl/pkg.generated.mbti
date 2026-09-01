@@ -23,6 +23,8 @@ pub(all) suberror WatError {
   DuplicateIdentifier(String, SourceLoc)
   ParseError(String, SourceLoc)
 }
+pub fn WatError::output(Self, &Logger) -> Unit
+pub fn WatError::to_string(Self) -> String
 pub impl Show for WatError
 
 // Types and methods
@@ -30,12 +32,15 @@ pub(all) struct SourceLoc {
   line : Int
   column : Int
 }
+pub fn SourceLoc::output(Self, &Logger) -> Unit
+pub fn SourceLoc::to_string(Self) -> String
 pub impl Show for SourceLoc
 
 pub enum WastAction {
   Invoke(String?, String, Array[WastValue])
   Get(String?, String)
 } derive(@debug.Debug)
+pub fn WastAction::to_repr(Self) -> @debug.Repr
 
 pub enum WastCommand {
   Module(@types.Module, String?)
@@ -54,6 +59,7 @@ pub enum WastCommand {
   Register(String, String?)
   Action(WastAction)
 } derive(@debug.Debug)
+pub fn WastCommand::to_repr(Self) -> @debug.Repr
 
 pub enum WastLaneValue {
   F32(Float)
@@ -63,6 +69,7 @@ pub enum WastLaneValue {
   F64CanonicalNan
   F64ArithmeticNan
 } derive(@debug.Debug)
+pub fn WastLaneValue::to_repr(Self) -> @debug.Repr
 
 pub enum WastModuleSource {
   Binary(Bytes)
@@ -70,6 +77,7 @@ pub enum WastModuleSource {
   Inline(@types.Module)
   FailedToParse(String)
 } derive(@debug.Debug)
+pub fn WastModuleSource::to_repr(Self) -> @debug.Repr
 
 pub struct WastScript {
   commands : Array[(WastCommand, Int)]
@@ -98,6 +106,9 @@ pub enum WastValue {
   RefAny
   Either(Array[WastValue])
 } derive(@debug.Debug)
+pub fn WastValue::output(Self, &Logger) -> Unit
+pub fn WastValue::to_repr(Self) -> @debug.Repr
+pub fn WastValue::to_string(Self) -> String
 pub impl Show for WastValue
 
 // Type aliases

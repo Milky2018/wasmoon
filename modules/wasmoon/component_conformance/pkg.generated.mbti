@@ -17,6 +17,9 @@ pub(all) enum ComponentTestOutputFormat {
   Text
   Json
 } derive(Eq, @debug.Debug)
+pub fn ComponentTestOutputFormat::equal(Self, Self) -> Bool
+pub fn ComponentTestOutputFormat::not_equal(Self, Self) -> Bool
+pub fn ComponentTestOutputFormat::to_repr(Self) -> @debug.Repr
 
 // Type aliases
 

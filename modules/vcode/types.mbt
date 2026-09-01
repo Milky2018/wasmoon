@@ -1,0 +1,432 @@
+///|
+pub type RegClass = @allocation_types.RegClass
+
+///|
+pub type OperandTiming = @allocation_types.OperandTiming
+
+///|
+pub type OperandRole = @allocation_types.OperandRole
+
+///|
+pub type PhysicalReg = @allocation_types.PhysicalReg
+
+///|
+pub type AllocationConstraint = @allocation_types.AllocationConstraint
+
+///|
+pub type AllocationOperand = @allocation_types.AllocationOperand
+
+///|
+pub type AllocationVirtualReg = @allocation_types.VirtualReg
+
+///|
+pub type AllocationLocation = @allocation_types.AllocationLocation
+
+///|
+pub type ValueType = @native.ValueType
+
+///|
+pub fn reg_class_for_value_type(ty : ValueType) -> RegClass {
+  match ty {
+    I32 | I64 | Ptr64 | GcRef64 => Int
+    F32 | F64 | V128 => FpVector
+  }
+}
+
+///|
+fn value_type_text(ty : ValueType) -> String {
+  match ty {
+    I32 => "i32"
+    I64 => "i64"
+    F32 => "f32"
+    F64 => "f64"
+    V128 => "v128"
+    Ptr64 => "ptr64"
+    GcRef64 => "gcref64"
+  }
+}
+
+///|
+pub struct Value {
+  priv owner : Ref[Unit]
+  priv id : Int
+}
+
+///|
+fn Value::new(owner : Ref[Unit], id : Int) -> Value {
+  { owner, id, }
+}
+
+///|
+pub impl Eq for Value with fn equal(self, other) {
+  physical_equal(self.owner, other.owner) && self.id == other.id
+}
+
+///|
+pub impl Debug for Value with fn to_repr(self) {
+  Repr::literal("v\{self.id}")
+}
+
+///|
+pub impl Show for Value with fn output(self, logger) {
+  logger.write_string(Repr(self).to_string())
+}
+
+///|
+pub struct Block {
+  priv owner : Ref[Unit]
+  priv id : Int
+}
+
+///|
+fn Block::new(owner : Ref[Unit], id : Int) -> Block {
+  { owner, id, }
+}
+
+///|
+pub impl Eq for Block with fn equal(self, other) {
+  physical_equal(self.owner, other.owner) && self.id == other.id
+}
+
+///|
+pub impl Debug for Block with fn to_repr(self) {
+  Repr::literal("block\{self.id}")
+}
+
+///|
+pub impl Show for Block with fn output(self, logger) {
+  logger.write_string(Repr(self).to_string())
+}
+
+///|
+pub struct Instruction {
+  priv owner : Ref[Unit]
+  priv id : Int
+}
+
+///|
+fn Instruction::new(owner : Ref[Unit], id : Int) -> Instruction {
+  { owner, id, }
+}
+
+///|
+pub impl Eq for Instruction with fn equal(self, other) {
+  physical_equal(self.owner, other.owner) && self.id == other.id
+}
+
+///|
+pub impl Debug for Instruction with fn to_repr(self) {
+  Repr::literal("i\{self.id}")
+}
+
+///|
+pub impl Show for Instruction with fn output(self, logger) {
+  logger.write_string(Repr(self).to_string())
+}
+
+///|
+pub(all) enum PointPlacement {
+  Before
+  After
+} derive(Eq, Debug)
+
+///|
+pub struct ProgramPoint {
+  priv owner : Ref[Unit]
+  priv instruction : Instruction
+  priv placement : PointPlacement
+}
+
+///|
+fn ProgramPoint::new(
+  owner : Ref[Unit],
+  instruction : Instruction,
+  placement : PointPlacement,
+) -> ProgramPoint {
+  { owner, instruction, placement, }
+}
+
+///|
+pub impl Eq for ProgramPoint with fn equal(self, other) {
+  physical_equal(self.owner, other.owner) &&
+  self.instruction == other.instruction &&
+  self.placement == other.placement
+}
+
+///|
+pub impl Debug for ProgramPoint with fn to_repr(self) {
+  let placement = match self.placement {
+    Before => "before"
+    After => "after"
+  }
+  Repr::literal("\{placement}(\{Repr(self.instruction)})")
+}
+
+///|
+pub fn ProgramPoint::instruction(self : ProgramPoint) -> Instruction {
+  self.instruction
+}
+
+///|
+pub fn ProgramPoint::placement(self : ProgramPoint) -> PointPlacement {
+  self.placement
+}
+
+///|
+pub(all) enum OperandConstraint {
+  Any
+  AnyLocation
+  Fixed(PhysicalReg)
+  TiedTo(Int)
+} derive(Eq, Debug)
+
+///|
+#valtype
+pub struct Input {
+  value : Value
+  constraint : OperandConstraint
+  preference : PhysicalReg?
+  timing : OperandTiming
+}
+
+///|
+pub fn Input::any(value : Value) -> Input {
+  { value, constraint: Any, preference: None, timing: Early, }
+}
+
+///|
+/// Keep an input in its allocated register or spill slot. This is intended for
+/// target operations, such as ABI argument setup, whose emitter can consume a
+/// stack-resident value directly instead of requiring every input in a register
+/// at the same program point.
+pub fn Input::any_location(value : Value) -> Input {
+  { value, constraint: AnyLocation, preference: None, timing: Early, }
+}
+
+///|
+pub fn Input::fixed(value : Value, reg : PhysicalReg) -> Input {
+  { value, constraint: Fixed(reg), preference: None, timing: Early, }
+}
+
+///|
+/// Prefer a physical register without making it an allocation constraint.
+pub fn Input::with_preference(self : Input, preference : PhysicalReg) -> Input {
+  { ..self, preference: Some(preference), }
+}
+
+///|
+pub fn Input::with_timing(self : Input, timing : OperandTiming) -> Input {
+  { ..self, timing, }
+}
+
+///|
+#valtype
+pub struct Output {
+  ty : ValueType
+  constraint : OperandConstraint
+  preference : PhysicalReg?
+  timing : OperandTiming
+}
+
+///|
+pub fn Output::any(ty : ValueType) -> Output {
+  { ty, constraint: Any, preference: None, timing: Late, }
+}
+
+///|
+/// Materialize the result directly in its stable register or stack home.
+/// This is intended for target ABI pseudos whose emitter owns the transfer
+/// from an implicit incoming location.
+pub fn Output::any_location(ty : ValueType) -> Output {
+  { ty, constraint: AnyLocation, preference: None, timing: Late, }
+}
+
+///|
+pub fn Output::fixed(ty : ValueType, reg : PhysicalReg) -> Output {
+  { ty, constraint: Fixed(reg), preference: None, timing: Late, }
+}
+
+///|
+pub fn Output::tied(ty : ValueType, operand_index : Int) -> Output {
+  { ty, constraint: TiedTo(operand_index), preference: None, timing: Late, }
+}
+
+///|
+/// Prefer a physical register without making it an allocation constraint.
+pub fn Output::with_preference(
+  self : Output,
+  preference : PhysicalReg,
+) -> Output {
+  { ..self, preference: Some(preference), }
+}
+
+///|
+pub fn Output::with_timing(self : Output, timing : OperandTiming) -> Output {
+  { ..self, timing, }
+}
+
+///|
+pub struct Operand {
+  value : Value
+  role : OperandRole
+  constraint : AllocationConstraint
+  preference : PhysicalReg?
+  timing : OperandTiming
+  tie_id : Int
+} derive(Eq, Debug)
+
+///|
+fn allocation_operand_snapshot(
+  operand : AllocationOperand,
+  owner : Ref[Unit],
+) -> Operand {
+  {
+    value: Value::new(owner, operand.vreg.id),
+    role: operand.role,
+    constraint: operand.constraint,
+    preference: operand.preference,
+    timing: operand.timing,
+    tie_id: operand.tie_id,
+  }
+}
+
+///|
+pub struct Edge {
+  target : Block
+  arguments : Array[Value]
+}
+
+///|
+pub fn Edge::new(target : Block, arguments : Array[Value]) -> Edge {
+  { target, arguments: arguments.copy(), }
+}
+
+///|
+fn Edge::copy(self : Edge) -> Edge {
+  Edge::new(self.target, self.arguments)
+}
+
+///|
+pub type SafepointKind = @native.SafepointKind
+
+///|
+pub(all) enum SymbolReference {
+  Code(@native.CodeSymbol)
+  External(@native.ExternalSymbol)
+  Data(@native.DataSymbol)
+} derive(Eq, Debug)
+
+///|
+pub struct InstructionMetadata {
+  source : @native.SourceLocation?
+  trap : @native.TrapReason?
+  safepoint : SafepointKind?
+  live_gc_roots : Array[Value]
+  symbol : SymbolReference?
+  stack_map : @native.StackMapMetadata?
+}
+
+///|
+pub fn InstructionMetadata::empty() -> InstructionMetadata {
+  {
+    source: None,
+    trap: None,
+    safepoint: None,
+    live_gc_roots: [],
+    symbol: None,
+    stack_map: None,
+  }
+}
+
+///|
+pub fn InstructionMetadata::safepoint(
+  live_gc_roots : Array[Value],
+) -> InstructionMetadata {
+  {
+    source: None,
+    trap: None,
+    safepoint: Some(Gc),
+    live_gc_roots: live_gc_roots.copy(),
+    symbol: None,
+    stack_map: None,
+  }
+}
+
+///|
+pub fn InstructionMetadata::new(
+  source? : @native.SourceLocation,
+  trap? : @native.TrapReason,
+  safepoint? : SafepointKind,
+  live_gc_roots? : Array[Value] = [],
+  symbol? : SymbolReference,
+  stack_map? : @native.StackMapMetadata,
+) -> InstructionMetadata {
+  {
+    source,
+    trap,
+    safepoint,
+    live_gc_roots: live_gc_roots.copy(),
+    symbol,
+    stack_map,
+  }
+}
+
+///|
+fn InstructionMetadata::copy(self : InstructionMetadata) -> InstructionMetadata {
+  {
+    source: self.source,
+    trap: self.trap,
+    safepoint: self.safepoint,
+    live_gc_roots: self.live_gc_roots.copy(),
+    symbol: self.symbol,
+    stack_map: self.stack_map,
+  }
+}
+
+///|
+pub suberror VCodeBuildError {
+  InvalidParameter(index~ : Int)
+  InvalidBlockParameter(block~ : Block, index~ : Int)
+  ForeignBlock(block~ : Block)
+  ForeignValue(value~ : Value)
+  InvalidOperandConstraint
+  DuplicateTerminator(block~ : Block)
+  BlockAlreadyTerminated(block~ : Block)
+  InvalidEdgeArity(block~ : Block)
+  EdgeClassMismatch(block~ : Block, index~ : Int)
+  DuplicateClobber(reg~ : PhysicalReg)
+  InvalidSafepointRoot(value~ : Value)
+  InvalidStackMap
+  MissingTerminator(block~ : Block)
+  InvalidLayout
+} derive(Eq, Debug)
+
+///|
+pub impl Show for VCodeBuildError with fn output(self, logger) {
+  logger.write_string(Repr(self).to_string())
+}
+
+///|
+pub suberror VCodeVerifyError {
+  EmptyFunction
+  MissingTerminator(block~ : Block)
+  ForeignValue(instruction~ : Instruction, value~ : Value)
+  ForeignBlock(instruction~ : Instruction, block~ : Block)
+  InvalidEdgeArity(instruction~ : Instruction, block~ : Block)
+  EdgeClassMismatch(instruction~ : Instruction, block~ : Block, index~ : Int)
+  InvalidTie(instruction~ : Instruction, operand~ : Int, tied_to~ : Int)
+  FixedRegisterClassMismatch(instruction~ : Instruction, operand~ : Int)
+  InvalidOperandPreference(instruction~ : Instruction, operand~ : Int)
+  DuplicateClobber(instruction~ : Instruction, reg~ : PhysicalReg)
+  InvalidSafepointRoot(instruction~ : Instruction, value~ : Value)
+  InvalidStackMap(instruction~ : Instruction)
+  UnreachableBlock(block~ : Block)
+  UseBeforeDefinition(instruction~ : Instruction, value~ : Value)
+  DefinitionDoesNotDominate(instruction~ : Instruction, value~ : Value)
+  InvalidLayout
+} derive(Eq, Debug)
+
+///|
+pub impl Show for VCodeVerifyError with fn output(self, logger) {
+  logger.write_string(Repr(self).to_string())
+}

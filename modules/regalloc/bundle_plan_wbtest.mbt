@@ -58,10 +58,16 @@ impl FunctionView for BundleTestFunction with fn values_share_spill_slot(
 }
 
 ///|
-impl FunctionView for BundleTestFunction with fn entry_values(_self) -> Array[
-  VirtualReg,
-] {
-  []
+impl FunctionView for BundleTestFunction with fn entry_value_count(_self) -> Int {
+  0
+}
+
+///|
+impl FunctionView for BundleTestFunction with fn entry_value_at(
+  _self,
+  _parameter,
+) -> VirtualReg {
+  abort("invalid entry value index")
 }
 
 ///|
@@ -75,50 +81,91 @@ impl FunctionView for BundleTestFunction with fn block_id_at(_self, block) -> In
 }
 
 ///|
-impl FunctionView for BundleTestFunction with fn block_parameters(self, block) -> Array[
-  VirtualReg,
-] {
-  self.parameters[block].copy()
+impl FunctionView for BundleTestFunction with fn block_parameter_count(
+  self,
+  block,
+) -> Int {
+  self.parameters[block].length()
 }
 
 ///|
-impl FunctionView for BundleTestFunction with fn block_instructions(
+impl FunctionView for BundleTestFunction with fn block_parameter_at(
+  self,
+  block,
+  parameter,
+) -> VirtualReg {
+  self.parameters[block][parameter]
+}
+
+///|
+impl FunctionView for BundleTestFunction with fn block_instruction_count(
   _self,
   _block,
-) -> Array[Int] {
-  []
+) -> Int {
+  0
 }
 
 ///|
-impl FunctionView for BundleTestFunction with fn block_successors(self, block) -> Array[
-  Int,
-] {
-  self.successors[block].copy()
+impl FunctionView for BundleTestFunction with fn block_instruction_at(
+  _self,
+  _block,
+  _instruction,
+) -> Int {
+  abort("invalid block instruction index")
 }
 
 ///|
-impl FunctionView for BundleTestFunction with fn edge_arguments(
+impl FunctionView for BundleTestFunction with fn block_successor_count(
+  self,
+  block,
+) -> Int {
+  self.successors[block].length()
+}
+
+///|
+impl FunctionView for BundleTestFunction with fn block_successor_at(
   self,
   block,
   successor,
-) -> Array[VirtualReg] {
-  self.edge_arguments[block][successor].copy()
+) -> Int {
+  self.successors[block][successor]
+}
+
+///|
+impl FunctionView for BundleTestFunction with fn edge_argument_count(
+  self,
+  block,
+  successor,
+) -> Int {
+  self.edge_arguments[block][successor].length()
+}
+
+///|
+impl FunctionView for BundleTestFunction with fn edge_argument_at(
+  self,
+  block,
+  successor,
+  argument,
+) -> VirtualReg {
+  self.edge_arguments[block][successor][argument]
 }
 
 ///|
 impl FunctionView for BundleTestFunction with fn instruction_operands(
   _self,
   _instruction,
-) -> Array[Operand] {
-  []
+) -> ArrayView[Operand] {
+  let empty : Array[Operand] = []
+  empty[:]
 }
 
 ///|
 impl FunctionView for BundleTestFunction with fn instruction_clobbers(
   _self,
   _instruction,
-) -> Array[PhysicalReg] {
-  []
+) -> ArrayView[PhysicalReg] {
+  let empty : Array[PhysicalReg] = []
+  empty[:]
 }
 
 ///|
@@ -169,10 +216,7 @@ test "segment metadata follows custom block order in one use pass" {
       )
     }),
     content=(
-      #|[
-      #|  (2500, true, Some({ id: 0, class: Int }), None),
-      #|  (1500, false, None, Some({ id: 1, class: Int })),
-      #|]
+      #|[(2500, true, Some(p0:int), None), (1500, false, None, Some(p1:int))]
     ),
   )
 }
@@ -202,7 +246,7 @@ test "production bundle plan follows transitive SSA edge affinities" {
       #|  range_to_bundle: [0, 0, 0],
       #|  segment_to_bundle: [0, 0, 0, 0],
       #|  bundle_ranges: [[0, 1, 2]],
-      #|  bundle_segments: [[0, 1, 2, 3]],
+      #|  bundle_segments: [[0, 2, 3, 1]],
       #|}
     ),
   )
@@ -226,7 +270,7 @@ test "spill-home groups follow spillset lineage after layout sorting" {
     (0, 1),
   ])
   let spill_sets : Array[SpillSet] = plan.bundle_segments.map(_ => {
-    hint: None,
+    hint: -1,
     spill_bundle: None,
     splits: 0,
   })

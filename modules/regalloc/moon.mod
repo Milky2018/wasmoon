@@ -1,6 +1,6 @@
 name = "Milky2018/regalloc"
 
-version = "0.7.3"
+version = "0.12.6"
 
 readme = "README.mbt.md"
 
@@ -11,6 +11,10 @@ license = "Apache-2.0"
 keywords = [ "compiler", "register-allocation", "algorithm" ]
 
 description = "Target-independent register allocation algorithm"
+
+import {
+  "Milky2018/vcode@0.12.6",
+}
 
 preferred_target = "wasm-gc"
 

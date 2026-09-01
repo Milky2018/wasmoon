@@ -1,5 +1,0 @@
-import {
-  "Milky2018/machv" @semantic,
-  "Milky2018/machv/vcode",
-  "Milky2018/regalloc",
-}

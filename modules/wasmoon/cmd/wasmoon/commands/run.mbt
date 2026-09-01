@@ -214,7 +214,7 @@ pub(all) enum CompileStage {
 }
 
 ///|
-fn CompileStage::to_string(self : CompileStage) -> String {
+pub fn CompileStage::to_string(self : CompileStage) -> String {
   match self {
     Parse => "parse"
     Verify => "verify"
@@ -1752,6 +1752,11 @@ fn compile_validated_module_to_jit(
   let progress_start = compile_start.unwrap_or(@perf.tick_now())
   let perf_on = @perf.enabled()
   let module_tick = if perf_on { Some(@perf.tick_now()) } else { None }
+  let module_preparation_tick = if perf_on && @perf.detail_enabled() {
+    Some(@perf.tick_now())
+  } else {
+    None
+  }
   let native_target = @wasmoon_jit.host_native_target() catch {
     err => {
       emit_compile_progress(
@@ -1859,6 +1864,7 @@ fn compile_validated_module_to_jit(
   }
   let imports : Array[@artifact.ImportIdentity] = []
   let functions : Array[@artifact.FunctionCode] = []
+  let native_compiler = @wasmoon_jit.NativeCompiler::new(native_target)
   let mut import_func_idx = 0
   for imp in mod_.imports {
     if imp.desc is Func(type_idx) {
@@ -1874,6 +1880,12 @@ fn compile_validated_module_to_jit(
       import_func_idx = import_func_idx + 1
     }
   }
+  if module_preparation_tick is Some(tick) {
+    @perf.record_module_subphase_us(
+      "module_preparation",
+      @perf.elapsed_us(tick),
+    )
+  }
   // Compile each function
   for i, _ in mod_.codes {
     let should_compile = match compile_mask {
@@ -1882,6 +1894,11 @@ fn compile_validated_module_to_jit(
     }
     if !should_compile {
       continue
+    }
+    let function_preparation_tick = if perf_on && @perf.detail_enabled() {
+      Some(@perf.tick_now())
+    } else {
+      None
     }
     let func_idx = num_imports + i
     let type_idx = mod_.funcs[i]
@@ -1903,6 +1920,14 @@ fn compile_validated_module_to_jit(
     )
     let normalized_opt_level = normalize_opt_level(opt_level)
     let code = mod_.codes[i]
+    let translation_tick = if perf_on && @perf.detail_enabled() {
+      Some(@perf.tick_now())
+    } else {
+      None
+    }
+    let function_preparation_us = function_preparation_tick.map(
+      @perf.elapsed_us,
+    )
     let ir_func = @wasm_frontend.translate_function_body(
       translation_ctx,
       compiler_name,
@@ -1910,6 +1935,7 @@ fn compile_validated_module_to_jit(
       code.locals,
       code.body,
     )
+    let translation_us = translation_tick.map(@perf.elapsed_us)
     emit_compile_progress(
       on_progress,
       Optimize,
@@ -1927,6 +1953,12 @@ fn compile_validated_module_to_jit(
         normalized_opt_level,
         @milkir.instruction_count(ir_func),
       )
+      if function_preparation_us is Some(duration_us) {
+        @perf.record_compile_subphase_us("function_preparation", duration_us)
+      }
+      if translation_us is Some(duration_us) {
+        @perf.record_compile_subphase_us("frontend_translation", duration_us)
+      }
       @perf.install_milkir_metrics_sink()
     }
     @milkir.optimize_with_level(
@@ -1953,10 +1985,9 @@ fn compile_validated_module_to_jit(
       func_idx=Some(func_idx),
       func_name=Some(func_name),
     )
-    let entry = @wasmoon_jit.compile_wasm_body_artifact_function(
+    let entry = native_compiler.compile_wasm_body_artifact_function(
       ir_func,
       wasm_validation_context,
-      native_target,
       function_index=func_idx,
       signature=@wasmoon_jit.wasm_function_signature(func_type),
       use_subtype_indirect_check~,
@@ -1975,6 +2006,11 @@ fn compile_validated_module_to_jit(
         )
         return None
       }
+    }
+    let function_finalization_tick = if perf_on && @perf.detail_enabled() {
+      Some(@perf.tick_now())
+    } else {
+      None
     }
     emit_compile_progress(
       on_progress,
@@ -2005,6 +2041,15 @@ fn compile_validated_module_to_jit(
       func_name=Some(func_name),
     )
     if perf_on {
+      if function_finalization_tick is Some(tick) {
+        @perf.record_compile_subphase_us(
+          "function_finalization",
+          @perf.elapsed_us(tick),
+        )
+      }
+      if function_preparation_tick is Some(tick) {
+        @perf.record_function_compile_us(@perf.elapsed_us(tick))
+      }
       @perf.finish_function(
         @milkir.instruction_count(ir_func),
         entry.code.length(),

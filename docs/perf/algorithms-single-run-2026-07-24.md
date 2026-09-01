@@ -3,7 +3,8 @@
 > Historical methodology: this report used a warmup and measured cached
 > execution. New corpus sweeps must clear separate Wasmoon and Wasmtime caches
 > per workload and invoke each engine exactly once, with no warmup or repeated
-> aggregation.
+> aggregation. Wasmtime must also run with `-C parallel-compilation=n` so its
+> cold-compilation result is comparable with Wasmoon's serial compiler.
 
 This report compares the current Wasmoon AArch64 JIT with Wasmtime across all
 70 workloads in `examples/algorithms`. Ratios are Wasmoon divided by Wasmtime;

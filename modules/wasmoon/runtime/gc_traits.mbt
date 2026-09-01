@@ -4,7 +4,7 @@
 // 1. GcHeap - Low-level object storage and access
 // 2. GcRuntime - Runtime GC coordination (barriers, collection)
 //
-// GcCompiler trait is defined in machv/ package due to dependencies.
+// GcCompiler belongs to the runtime boundary because it depends on GC state.
 
 // ============================================================
 // GcHeap - Object Storage Layer

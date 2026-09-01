@@ -1,0 +1,45 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "Milky2018/vcode_regalloc"
+
+import {
+  "Milky2018/regalloc",
+  "Milky2018/vcode",
+  "Milky2018/vcode/allocation_types",
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub fn[Inst] allocate_selected_vcode(@vcode.Function[Inst], VCodeAllocationEnvironment, on_phase? : ((String?) -> Unit)?, on_statistics? : ((@vcode.RegallocLoopStatistics) -> Unit)?, verify? : Bool) -> @vcode.Allocation raise VCodeAllocationError
+
+pub fn[Inst] allocate_vcode(@vcode.Function[Inst], VCodeAllocationEnvironment) -> @vcode.Allocation raise VCodeAllocationError
+
+// Errors
+pub suberror VCodeAllocationError {
+  InvalidSelected(cause~ : @vcode.VCodeVerifyError)
+  RegallocFailure(cause~ : @regalloc.VerifyError)
+  AllocationConstructionRejected
+  InvalidAllocation(cause~ : @vcode.AllocationVerifyError)
+} derive(@debug.Debug)
+pub fn VCodeAllocationError::output(Self, &Logger) -> Unit
+pub fn VCodeAllocationError::to_repr(Self) -> @debug.Repr
+pub fn VCodeAllocationError::to_string(Self) -> String
+pub impl Show for VCodeAllocationError
+
+// Types and methods
+pub struct AllocationSession {
+  // private fields
+}
+pub fn[Inst] AllocationSession::allocate_selected_vcode(Self, @vcode.Function[Inst], VCodeAllocationEnvironment, on_phase? : ((String?) -> Unit)?, on_statistics? : ((@vcode.RegallocLoopStatistics) -> Unit)?, verify? : Bool) -> @vcode.Allocation raise VCodeAllocationError
+pub fn AllocationSession::new() -> Self
+
+pub struct VCodeAllocationEnvironment {
+  allocatable_regs : Array[@allocation_types.PhysicalReg]
+  spill_scratch_regs : Array[@allocation_types.PhysicalReg]
+  fixed_operand_regs : Array[@allocation_types.PhysicalReg]
+}
+pub fn VCodeAllocationEnvironment::new(Array[@allocation_types.PhysicalReg], Array[@allocation_types.PhysicalReg]) -> Self
+pub fn VCodeAllocationEnvironment::with_fixed_operand_regs(Self, Array[@allocation_types.PhysicalReg]) -> Self
+
+// Type aliases
+
+// Traits

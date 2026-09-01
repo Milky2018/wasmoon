@@ -70,6 +70,8 @@ pub(all) suberror RuntimeError {
   UnalignedAtomic
   InvalidConstantExpression(String)
 }
+pub fn RuntimeError::output(Self, &Logger) -> Unit
+pub fn RuntimeError::to_string(Self) -> String
 pub impl Show for RuntimeError
 
 // Types and methods
@@ -77,6 +79,9 @@ pub(all) struct ArrayInstance {
   type_idx : Int
   elements : Array[@types.Value]
 } derive(@debug.Debug)
+pub fn ArrayInstance::output(Self, &Logger) -> Unit
+pub fn ArrayInstance::to_repr(Self) -> @debug.Repr
+pub fn ArrayInstance::to_string(Self) -> String
 pub impl Show for ArrayInstance
 
 pub(all) struct CallStackEntry {
@@ -93,11 +98,13 @@ pub fn Caller::get_exported_func_addr(Self, String) -> Int?
 pub fn Caller::get_exported_memory(Self, String) -> Memory? raise RuntimeError
 pub fn Caller::instance(Self) -> ModuleInstance
 pub fn Caller::store(Self) -> Store
+pub fn Caller::to_repr(Self) -> @debug.Repr
 
 pub struct ExnInstance {
   tag_addr : Int
   values : Array[@types.Value]
 } derive(@debug.Debug)
+pub fn ExnInstance::to_repr(Self) -> @debug.Repr
 
 pub(all) enum ExternVal {
   Func(Int)
@@ -113,11 +120,15 @@ pub fn Frame::get_func_idx(Self) -> Int
 pub fn Frame::get_local(Self, Int) -> @types.Value raise RuntimeError
 pub fn Frame::locals_values(Self) -> Array[@types.Value]
 pub fn Frame::set_local(Self, Int, @types.Value) -> Unit raise RuntimeError
+pub fn Frame::to_repr(Self) -> @debug.Repr
 
 pub(all) enum FuncInst {
   WasmFunc(@types.FunctionCode)
   HostFunc((Caller, Array[@types.Value]) -> Array[@types.Value] raise RuntimeError)
 }
+pub fn FuncInst::output(Self, &Logger) -> Unit
+pub fn FuncInst::to_repr(Self) -> @debug.Repr
+pub fn FuncInst::to_string(Self) -> String
 pub impl Show for FuncInst
 pub impl @debug.Debug for FuncInst
 
@@ -126,11 +137,17 @@ pub(all) enum FuncOwner {
   Unowned
   Module(Int)
 } derive(Eq, @debug.Debug)
+pub fn FuncOwner::equal(Self, Self) -> Bool
+pub fn FuncOwner::not_equal(Self, Self) -> Bool
+pub fn FuncOwner::to_repr(Self) -> @debug.Repr
 
 pub(all) enum GCObject {
   Struct(StructInstance)
   Array(ArrayInstance)
 } derive(@debug.Debug)
+pub fn GCObject::output(Self, &Logger) -> Unit
+pub fn GCObject::to_repr(Self) -> @debug.Repr
+pub fn GCObject::to_string(Self) -> String
 pub impl Show for GCObject
 
 pub struct GCStats {
@@ -141,6 +158,7 @@ pub struct GCStats {
   bytes_allocated : Int64
   bytes_collected : Int64
 } derive(@debug.Debug)
+pub fn GCStats::to_repr(Self) -> @debug.Repr
 
 pub struct GcStats {
   total_slots : Int
@@ -150,12 +168,14 @@ pub struct GcStats {
   bytes_allocated : Int64
   bytes_collected : Int64
 } derive(@debug.Debug)
+pub fn GcStats::to_repr(Self) -> @debug.Repr
 
 type GlobalInstance derive(@debug.Debug)
 pub fn GlobalInstance::GlobalInstance(@types.GlobalType, @types.Value) -> Self
 pub fn GlobalInstance::get(Self) -> @types.Value
 pub fn GlobalInstance::get_type(Self) -> @types.GlobalType
 pub fn GlobalInstance::set(Self, @types.Value) -> Unit raise RuntimeError
+pub fn GlobalInstance::to_repr(Self) -> @debug.Repr
 
 type Imports
 pub fn Imports::Imports() -> Self
@@ -206,6 +226,8 @@ pub fn MarkSweepHeap::array_get(Self, Int, Int) -> @types.Value raise RuntimeErr
 pub fn MarkSweepHeap::array_len(Self, Int) -> Int raise RuntimeError
 pub fn MarkSweepHeap::array_set(Self, Int, Int, @types.Value) -> Unit raise RuntimeError
 pub fn MarkSweepHeap::collect(Self, Array[@types.Value]) -> Int
+pub fn MarkSweepHeap::collection_count(Self) -> Int
+pub fn MarkSweepHeap::force_collect(Self, Array[@types.Value]) -> Unit
 pub fn MarkSweepHeap::get(Self, Int) -> GCObject raise RuntimeError
 pub fn MarkSweepHeap::get_array(Self, Int) -> ArrayInstance raise RuntimeError
 pub fn MarkSweepHeap::get_struct(Self, Int) -> StructInstance raise RuntimeError
@@ -216,13 +238,18 @@ pub fn MarkSweepHeap::is_valid(Self, Int) -> Bool
 pub fn MarkSweepHeap::length(Self) -> Int
 pub fn MarkSweepHeap::mark(Self, Int) -> Unit
 pub fn MarkSweepHeap::mark_roots(Self, Array[@types.Value]) -> Unit
+pub fn MarkSweepHeap::read_barrier(Self, Int) -> @types.Value
 pub fn MarkSweepHeap::set_threshold(Self, Int) -> Unit
 pub fn MarkSweepHeap::should_collect(Self) -> Bool
 pub fn MarkSweepHeap::stats(Self) -> GCStats
 pub fn MarkSweepHeap::struct_get(Self, Int, Int) -> @types.Value raise RuntimeError
 pub fn MarkSweepHeap::struct_set(Self, Int, Int, @types.Value) -> Unit raise RuntimeError
 pub fn MarkSweepHeap::sweep(Self) -> Int
+pub fn MarkSweepHeap::to_repr(Self) -> @debug.Repr
 pub fn MarkSweepHeap::with_threshold(Int) -> Self
+pub fn MarkSweepHeap::write_barrier(Self, Int, @types.Value, @types.Value) -> Unit
+pub fn MarkSweepHeap::write_barrier_post(Self, Int, @types.Value) -> Unit
+pub fn MarkSweepHeap::write_barrier_pre(Self, Int, @types.Value, @types.Value) -> Unit
 pub impl GcHeap for MarkSweepHeap
 pub impl GcManager for MarkSweepHeap
 pub impl GcRuntime for MarkSweepHeap
@@ -269,6 +296,7 @@ pub fn Memory::store_i64(Self, Int, Int64) -> Unit raise RuntimeError
 pub fn Memory::store_i64_16(Self, Int, Int64) -> Unit raise RuntimeError
 pub fn Memory::store_i64_32(Self, Int, Int64) -> Unit raise RuntimeError
 pub fn Memory::store_i64_8(Self, Int, Int64) -> Unit raise RuntimeError
+pub fn Memory::to_repr(Self) -> @debug.Repr
 pub fn Memory::write_byte(Self, Int, Byte) -> Unit
 pub fn Memory::write_i32(Self, Int, Int) -> Unit
 pub fn Memory::write_i64(Self, Int, Int64) -> Unit
@@ -291,6 +319,9 @@ pub(all) struct ModuleInstance {
   dropped_datas : Array[Bool]
 } derive(@debug.Debug)
 pub fn ModuleInstance::ModuleInstance() -> Self
+pub fn ModuleInstance::output(Self, &Logger) -> Unit
+pub fn ModuleInstance::to_repr(Self) -> @debug.Repr
+pub fn ModuleInstance::to_string(Self) -> String
 pub fn ModuleInstance::validated_array_type_at(Self, Int) -> @types.ArrayType
 pub fn ModuleInstance::validated_func_type_at(Self, Int) -> @types.FuncType
 pub fn ModuleInstance::validated_struct_type_at(Self, Int) -> @types.StructType
@@ -326,6 +357,8 @@ pub struct RuntimeErrorContext {
 }
 pub fn RuntimeErrorContext::RuntimeErrorContext(RuntimeError) -> Self
 pub fn RuntimeErrorContext::format(Self) -> String
+pub fn RuntimeErrorContext::output(Self, &Logger) -> Unit
+pub fn RuntimeErrorContext::to_string(Self) -> String
 pub fn RuntimeErrorContext::with_call_stack(Self, Array[CallStackEntry]) -> Self
 pub fn RuntimeErrorContext::with_func_idx(Self, Int) -> Self
 pub fn RuntimeErrorContext::with_instruction(Self, String) -> Self
@@ -363,6 +396,7 @@ pub fn Stack::pop_v128(Self) -> Bytes raise RuntimeError
 pub fn Stack::push(Self, @types.Value) -> Unit raise RuntimeError
 pub fn Stack::push_v128(Self, Bytes) -> Unit raise RuntimeError
 pub fn Stack::size(Self) -> Int
+pub fn Stack::to_repr(Self) -> @debug.Repr
 
 pub struct Store {
   funcs : Array[FuncInst]
@@ -446,6 +480,7 @@ pub fn Store::set_wasi_mem_addr(Self, Int) -> Unit raise RuntimeError
 pub fn Store::should_collect(Self, threshold? : Double) -> Bool
 pub fn Store::struct_get(Self, Int, Int) -> @types.Value raise RuntimeError
 pub fn Store::struct_set(Self, Int, Int, @types.Value) -> Unit raise RuntimeError
+pub fn Store::to_repr(Self) -> @debug.Repr
 pub fn Store::unwrap_extern(Self, @types.Value) -> @types.Value raise RuntimeError
 pub fn Store::with_c_heap() -> Self
 pub fn Store::wrap_as_extern(Self, @types.Value) -> @types.Value raise RuntimeError
@@ -455,6 +490,9 @@ pub struct StoreFuncrefEntry {
   func_ptr : Int64
 } derive(Eq, @debug.Debug)
 pub fn StoreFuncrefEntry::StoreFuncrefEntry(store_addr~ : Int, func_ptr~ : Int64) -> Self
+pub fn StoreFuncrefEntry::equal(Self, Self) -> Bool
+pub fn StoreFuncrefEntry::not_equal(Self, Self) -> Bool
+pub fn StoreFuncrefEntry::to_repr(Self) -> @debug.Repr
 
 type StoreFuncrefRegistration
 pub fn StoreFuncrefRegistration::release(Self) -> Unit
@@ -463,6 +501,9 @@ pub(all) struct StructInstance {
   type_idx : Int
   fields : Array[@types.Value]
 } derive(@debug.Debug)
+pub fn StructInstance::output(Self, &Logger) -> Unit
+pub fn StructInstance::to_repr(Self) -> @debug.Repr
+pub fn StructInstance::to_string(Self) -> String
 pub impl Show for StructInstance
 
 type Table derive(@debug.Debug)
@@ -476,6 +517,7 @@ pub fn Table::grow(Self, Int, @types.Value) -> Int
 pub fn Table::is_table64(Self) -> Bool
 pub fn Table::set(Self, Int, @types.Value) -> Unit raise RuntimeError
 pub fn Table::size(Self) -> Int
+pub fn Table::to_repr(Self) -> @debug.Repr
 
 // Type aliases
 

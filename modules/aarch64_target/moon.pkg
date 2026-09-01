@@ -1,6 +1,7 @@
 import {
-  "Milky2018/machv" @semantic,
-  "Milky2018/machv/vcode",
-  "Milky2018/machv/code_object",
-  "Milky2018/machv_regalloc" @vcode_regalloc,
+  "Milky2018/vcode/native_types" @native,
+  "Milky2018/vcode/native_lowering" @lowering,
+  "Milky2018/vcode",
+  "Milky2018/vcode/code_object",
+  "Milky2018/vcode_regalloc",
 }

@@ -21,7 +21,7 @@ fn artifact_wbtest_manifest(
 
 ///|
 test "artifact producer preserves symbolic imported and internal code targets" {
-  let source = @semantic_machv.SourceLocation::new("calls.wat", 9, 4)
+  let source = @native.SourceLocation::new("calls.wat", 9, 4)
   let object = @code_object.build(
     X64,
     [
@@ -32,12 +32,12 @@ test "artifact producer preserves symbolic imported and internal code targets" {
       @code_object.Relocation::new(
         1,
         X64PcRelative32,
-        Code(@semantic_machv.CodeSymbol::new("wasm.func.0")),
+        Code(@native.CodeSymbol::new("wasm.func.0")),
       ),
       @code_object.Relocation::new(
         6,
         X64PcRelative32,
-        Code(@semantic_machv.CodeSymbol::new("wasm.func.2")),
+        Code(@native.CodeSymbol::new("wasm.func.2")),
       ),
     ],
     sources=[@code_object.SourceSite::new(0, source)],
@@ -48,10 +48,7 @@ test "artifact producer preserves symbolic imported and internal code targets" {
         GcAndCancellation,
         [Stack(offset=8, ty=GcRef64)],
         source~,
-        stack_map=@semantic_machv.StackMapMetadata::new(
-          0,
-          argument_root_count=1,
-        ),
+        stack_map=@native.StackMapMetadata::new(0, argument_root_count=1),
       ),
     ],
     unwind=[@code_object.UnwindDirective::new(1, StackAlloc(size=16))],
@@ -60,7 +57,7 @@ test "artifact producer preserves symbolic imported and internal code targets" {
     object,
     frame_size=16,
     function_index=2,
-    signature=@semantic_machv.Signature::new([], []),
+    signature=@native.Signature::new([], []),
   )
   debug_inspect(
     function,
@@ -137,7 +134,7 @@ test "artifact producer preserves symbolic imported and internal code targets" {
       #|    },
       #|    required_cpu_features: [],
       #|    jit_abi_version: 3,
-      #|    codegen_revision: "machv-vcode-8",
+      #|    codegen_revision: "direct-vcode-1",
       #|    module_identity: {
       #|      name: "artifact-producer",
       #|      source_digest: sha256:211dcf04280f2ac1d686baab63a361ea45dd13543dac493b14e3af963860a86c,

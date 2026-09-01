@@ -1,0 +1,610 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "Milky2018/vcode"
+
+import {
+  "Milky2018/vcode/allocation_types",
+  "Milky2018/vcode/native_types",
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub fn plan_call_transfers(Allocation, Array[CallTransfer], Int, Int, Array[@allocation_types.PhysicalReg], Array[@allocation_types.PhysicalReg], Array[Location]) -> CallTransferPlan raise CallTransferError
+
+pub fn plan_parallel_moves(Array[ParallelMove], @allocation_types.PhysicalReg, @allocation_types.PhysicalReg) -> ResolvedMovePlan raise MoveResolveError
+
+pub fn plan_resolved_call_transfers(Allocation, Array[CallTransfer], Int, Int, Array[@allocation_types.PhysicalReg], Array[@allocation_types.PhysicalReg], @allocation_types.PhysicalReg, @allocation_types.PhysicalReg, Array[Location]) -> ResolvedCallTransferPlan raise CallTransferError
+
+pub fn reg_class_for_value_type(@native_types.ValueType) -> @allocation_types.RegClass
+
+pub fn resolve_parallel_moves(Array[ParallelMove], Array[@allocation_types.PhysicalReg], Array[@allocation_types.PhysicalReg]) -> Array[ParallelMove] raise MoveResolveError
+
+pub fn[Inst] verify_allocated(Function[Inst], Allocation) -> Unit raise AllocationVerifyError
+
+pub fn[Inst] verify_allocation_invariants(Function[Inst], Allocation) -> Unit raise AllocationVerifyError
+
+pub fn[Inst] verify_emission_input(Function[Inst], Allocation, FrameLayout) -> Unit raise EmissionVerifyError
+
+pub fn[Inst] verify_framed(Function[Inst], Allocation, FrameLayout) -> Unit raise FrameVerifyError
+
+pub fn[Inst] verify_selected(Function[Inst]) -> Unit raise VCodeVerifyError
+
+// Errors
+pub suberror AllocationVerifyError {
+  SelectedFailure(cause~ : VCodeVerifyError)
+  SourceMismatch
+  MissingValueLocation(value~ : Value)
+  ForeignLocation(value~ : Value)
+  LocationClassMismatch(value~ : Value)
+  MissingOperandLocation(instruction~ : Instruction, operand~ : Int)
+  OperandClassMismatch(instruction~ : Instruction, operand~ : Int)
+  RegisterConstraintViolation(instruction~ : Instruction, operand~ : Int)
+  FixedConstraintViolation(instruction~ : Instruction, operand~ : Int)
+  PreservedHomeConstraintViolation(instruction~ : Instruction, operand~ : Int)
+  TiedConstraintViolation(instruction~ : Instruction, operand~ : Int)
+  Interference(left~ : Value, right~ : Value, location~ : Location)
+  ClobberViolation(instruction~ : Instruction, value~ : Value)
+  InvalidStackSlotLayout(slot~ : StackSlot)
+  InvalidEdit(index~ : Int)
+  MissingReload(instruction~ : Instruction, operand~ : Int)
+  InvalidEdgeMove(index~ : Int)
+  MissingSafepointRoot(instruction~ : Instruction, value~ : Value)
+  UnexpectedSafepointRoot(instruction~ : Instruction, value~ : Value)
+} derive(Eq, @debug.Debug)
+pub fn AllocationVerifyError::equal(Self, Self) -> Bool
+pub fn AllocationVerifyError::not_equal(Self, Self) -> Bool
+pub fn AllocationVerifyError::output(Self, &Logger) -> Unit
+pub fn AllocationVerifyError::to_repr(Self) -> @debug.Repr
+pub fn AllocationVerifyError::to_string(Self) -> String
+pub impl Show for AllocationVerifyError
+
+pub suberror CallTransferError {
+  InvalidSourceClass(index~ : Int)
+  ForeignSourceStack(index~ : Int)
+  InvalidSourceStackType(index~ : Int, expected~ : @native_types.ValueType, actual~ : @native_types.ValueType)
+  InvalidSourceStackLayout(index~ : Int)
+  InvalidDestinationClass(index~ : Int)
+  InvalidStackOffset(index~ : Int, offset~ : Int)
+  InvalidOutgoingStackRange(start~ : Int, size~ : Int)
+  OutgoingStackDestinationOutOfRange(index~ : Int, offset~ : Int)
+  DuplicateRegisterDestination(index~ : Int, register~ : @allocation_types.PhysicalReg)
+  OverlappingStackDestination(first~ : Int, second~ : Int)
+  ProtectedLocationOverwrite(index~ : Int, location~ : Location)
+  MoveResolutionFailed(cause~ : MoveResolveError)
+} derive(Eq, @debug.Debug)
+pub fn CallTransferError::equal(Self, Self) -> Bool
+pub fn CallTransferError::not_equal(Self, Self) -> Bool
+pub fn CallTransferError::to_repr(Self) -> @debug.Repr
+
+pub suberror EmissionVerifyError {
+  FrameFailure(cause~ : FrameVerifyError)
+} derive(Eq, @debug.Debug)
+pub fn EmissionVerifyError::equal(Self, Self) -> Bool
+pub fn EmissionVerifyError::not_equal(Self, Self) -> Bool
+pub fn EmissionVerifyError::output(Self, &Logger) -> Unit
+pub fn EmissionVerifyError::to_repr(Self) -> @debug.Repr
+pub fn EmissionVerifyError::to_string(Self) -> String
+pub impl Show for EmissionVerifyError
+
+pub suberror FrameVerifyError {
+  AllocationFailure(cause~ : AllocationVerifyError)
+  SourceMismatch
+  InvalidFrameSize(size~ : Int)
+  InvalidFrameAlignment(alignment~ : Int)
+  MissingStackSlot(slot~ : StackSlot)
+  MisalignedStackSlot(slot~ : StackSlot)
+  OverlappingStackSlots(left~ : StackSlot, right~ : StackSlot)
+  StackSlotOutOfFrame(slot~ : StackSlot)
+} derive(Eq, @debug.Debug)
+pub fn FrameVerifyError::equal(Self, Self) -> Bool
+pub fn FrameVerifyError::not_equal(Self, Self) -> Bool
+pub fn FrameVerifyError::output(Self, &Logger) -> Unit
+pub fn FrameVerifyError::to_repr(Self) -> @debug.Repr
+pub fn FrameVerifyError::to_string(Self) -> String
+pub impl Show for FrameVerifyError
+
+pub suberror MoveResolveError {
+  MissingScratch(class~ : @allocation_types.RegClass)
+  InvalidScratch(reg~ : @allocation_types.PhysicalReg, expected~ : @allocation_types.RegClass)
+  NoSafeCycleScratch(class~ : @allocation_types.RegClass)
+  BrokenCycle
+} derive(Eq, @debug.Debug)
+pub fn MoveResolveError::equal(Self, Self) -> Bool
+pub fn MoveResolveError::not_equal(Self, Self) -> Bool
+pub fn MoveResolveError::output(Self, &Logger) -> Unit
+pub fn MoveResolveError::to_repr(Self) -> @debug.Repr
+pub fn MoveResolveError::to_string(Self) -> String
+pub impl Show for MoveResolveError
+
+pub suberror VCodeBuildError {
+  InvalidParameter(index~ : Int)
+  InvalidBlockParameter(block~ : Block, index~ : Int)
+  ForeignBlock(block~ : Block)
+  ForeignValue(value~ : Value)
+  InvalidOperandConstraint
+  DuplicateTerminator(block~ : Block)
+  BlockAlreadyTerminated(block~ : Block)
+  InvalidEdgeArity(block~ : Block)
+  EdgeClassMismatch(block~ : Block, index~ : Int)
+  DuplicateClobber(reg~ : @allocation_types.PhysicalReg)
+  InvalidSafepointRoot(value~ : Value)
+  InvalidStackMap
+  MissingTerminator(block~ : Block)
+  InvalidLayout
+} derive(Eq, @debug.Debug)
+pub fn VCodeBuildError::equal(Self, Self) -> Bool
+pub fn VCodeBuildError::not_equal(Self, Self) -> Bool
+pub fn VCodeBuildError::output(Self, &Logger) -> Unit
+pub fn VCodeBuildError::to_repr(Self) -> @debug.Repr
+pub fn VCodeBuildError::to_string(Self) -> String
+pub impl Show for VCodeBuildError
+
+pub suberror VCodeVerifyError {
+  EmptyFunction
+  MissingTerminator(block~ : Block)
+  ForeignValue(instruction~ : Instruction, value~ : Value)
+  ForeignBlock(instruction~ : Instruction, block~ : Block)
+  InvalidEdgeArity(instruction~ : Instruction, block~ : Block)
+  EdgeClassMismatch(instruction~ : Instruction, block~ : Block, index~ : Int)
+  InvalidTie(instruction~ : Instruction, operand~ : Int, tied_to~ : Int)
+  FixedRegisterClassMismatch(instruction~ : Instruction, operand~ : Int)
+  InvalidOperandPreference(instruction~ : Instruction, operand~ : Int)
+  DuplicateClobber(instruction~ : Instruction, reg~ : @allocation_types.PhysicalReg)
+  InvalidSafepointRoot(instruction~ : Instruction, value~ : Value)
+  InvalidStackMap(instruction~ : Instruction)
+  UnreachableBlock(block~ : Block)
+  UseBeforeDefinition(instruction~ : Instruction, value~ : Value)
+  DefinitionDoesNotDominate(instruction~ : Instruction, value~ : Value)
+  InvalidLayout
+} derive(Eq, @debug.Debug)
+pub fn VCodeVerifyError::equal(Self, Self) -> Bool
+pub fn VCodeVerifyError::not_equal(Self, Self) -> Bool
+pub fn VCodeVerifyError::output(Self, &Logger) -> Unit
+pub fn VCodeVerifyError::to_repr(Self) -> @debug.Repr
+pub fn VCodeVerifyError::to_string(Self) -> String
+pub impl Show for VCodeVerifyError
+
+// Types and methods
+pub struct Allocation {
+  // private fields
+}
+pub fn Allocation::add_edit(Self, Edit) -> Bool
+pub fn Allocation::add_safepoint_root(Self, Instruction, Value, Location) -> Bool
+pub fn Allocation::allocated_operand_location_at(Self, Int, Int) -> @allocation_types.AllocationLocation?
+pub fn Allocation::allocated_value_location_at(Self, Int) -> @allocation_types.AllocationLocation?
+pub fn Allocation::assign_operand(Self, Instruction, Int, @allocation_types.PhysicalReg) -> Bool
+pub fn Allocation::assign_operand_location(Self, Instruction, Int, Location) -> Bool
+pub fn Allocation::assign_value(Self, Value, Location) -> Bool
+pub fn Allocation::create_stack_slot(Self, @native_types.ValueType, Int, Int) -> StackSlot
+pub fn Allocation::edge_edits_at(Self, Block, Int) -> ArrayView[Edit]
+pub fn Allocation::edit_count(Self) -> Int
+pub fn Allocation::edits(Self) -> Array[Edit]
+pub fn Allocation::edits_at(Self, Instruction, PointPlacement) -> ArrayView[Edit]
+pub fn[Inst] Allocation::for_function(Function[Inst]) -> Self
+pub fn Allocation::operand_location(Self, Instruction, Int) -> Location?
+pub fn Allocation::safepoint_roots(Self, Instruction) -> Array[(Value, Location)]
+pub fn Allocation::source_instruction_count(Self) -> Int
+pub fn Allocation::stack_slot_alignment(Self, StackSlot) -> Int?
+pub fn Allocation::stack_slot_at(Self, Int) -> StackSlot?
+pub fn Allocation::stack_slot_count(Self) -> Int
+pub fn Allocation::stack_slot_size(Self, StackSlot) -> Int?
+pub fn Allocation::stack_slot_type(Self, StackSlot) -> @native_types.ValueType?
+pub fn Allocation::statistics(Self) -> AllocationStatistics
+pub fn Allocation::summary(Self) -> String
+pub fn Allocation::value_location(Self, Value) -> Location?
+
+pub struct AllocationBuilder[Inst] {
+  // private fields
+}
+pub fn[Inst] AllocationBuilder::add_edge_transfer(Self[Inst], Int, Int, Int, @allocation_types.AllocationLocation, @allocation_types.AllocationLocation) -> Bool
+pub fn[Inst] AllocationBuilder::add_function_safepoint_roots(Self[Inst]) -> Bool
+pub fn[Inst] AllocationBuilder::add_safepoint_root(Self[Inst], Int, Int) -> Bool
+pub fn[Inst] AllocationBuilder::add_transfer(Self[Inst], Int, PointPlacement, Int, @allocation_types.AllocationLocation, @allocation_types.AllocationLocation) -> Bool
+pub fn[Inst] AllocationBuilder::assign_operand(Self[Inst], Int, Int, @allocation_types.AllocationLocation) -> Bool
+pub fn[Inst] AllocationBuilder::assign_value(Self[Inst], Int, @allocation_types.AllocationLocation) -> Bool
+pub fn[Inst] AllocationBuilder::create_stack_slot(Self[Inst], Int, Int, Int) -> Int
+pub fn[Inst] AllocationBuilder::finish(Self[Inst]) -> Allocation
+pub fn[Inst] AllocationBuilder::from_plan_storage(Function[Inst], Array[@allocation_types.AllocationLocation?], Array[Array[@allocation_types.AllocationLocation?]], Array[Int], Array[Int], Array[Int]) -> Self[Inst]?
+pub fn[Inst] AllocationBuilder::new(Function[Inst]) -> Self[Inst]
+pub fn[Inst] AllocationBuilder::operand_value_at(Self[Inst], Int, Int) -> Int
+pub fn[Inst] AllocationBuilder::value_location(Self[Inst], Int) -> @allocation_types.AllocationLocation?
+pub fn[Inst] AllocationBuilder::value_type_at(Self[Inst], Int) -> @native_types.ValueType
+
+pub struct AllocationStatistics {
+  spill_slots : Int
+  spills : Int
+  reloads : Int
+  reg_moves : Int
+  spill_to_spill : Int
+} derive(Eq, @debug.Debug)
+pub fn AllocationStatistics::equal(Self, Self) -> Bool
+pub fn AllocationStatistics::not_equal(Self, Self) -> Bool
+pub fn AllocationStatistics::to_repr(Self) -> @debug.Repr
+
+pub struct Block {
+  // private fields
+}
+pub fn Block::equal(Self, Self) -> Bool
+pub fn Block::not_equal(Self, Self) -> Bool
+pub fn Block::output(Self, &Logger) -> Unit
+pub fn Block::to_repr(Self) -> @debug.Repr
+pub fn Block::to_string(Self) -> String
+pub impl Eq for Block
+pub impl Show for Block
+pub impl @debug.Debug for Block
+
+pub struct Builder[Inst] {
+  // private fields
+}
+pub fn[Inst] Builder::append_body(Self[Inst], Block, Inst, Array[Input], Array[Output], Array[@allocation_types.PhysicalReg], InstructionMetadata) -> (Instruction, Array[Value]) raise VCodeBuildError
+pub fn[Inst] Builder::block_parameter(Self[Inst], Block, Int) -> Value raise VCodeBuildError
+pub fn[Inst] Builder::create_block(Self[Inst], Array[@native_types.ValueType]) -> Block
+pub fn[Inst] Builder::entry_block(Self[Inst]) -> Block
+pub fn[Inst] Builder::finish(Self[Inst]) -> Function[Inst]
+pub fn[Inst] Builder::new(String, Array[@native_types.ValueType]) -> Self[Inst]
+pub fn[Inst] Builder::new_with_protocol(String, @native_types.CallProtocol, Array[@native_types.ValueType], Array[@native_types.ValueType]) -> Self[Inst]
+pub fn[Inst] Builder::new_with_results(String, Array[@native_types.ValueType], Array[@native_types.ValueType]) -> Self[Inst]
+pub fn[Inst] Builder::parameter(Self[Inst], Int) -> Value raise VCodeBuildError
+pub fn[Inst] Builder::set_terminator(Self[Inst], Block, Inst, Array[Input], Array[Edge], Array[@allocation_types.PhysicalReg], InstructionMetadata) -> Instruction raise VCodeBuildError
+
+pub struct CallTransfer {
+  // private fields
+}
+pub fn CallTransfer::to_register(@native_types.ValueType, Location, @allocation_types.PhysicalReg) -> Self
+pub fn CallTransfer::to_stack(@native_types.ValueType, Location, Int) -> Self
+
+pub struct CallTransferPlan {
+  stack_transfers : Array[StackArgumentTransfer]
+  register_moves : Array[ParallelMove]
+} derive(Eq, @debug.Debug)
+pub fn CallTransferPlan::equal(Self, Self) -> Bool
+pub fn CallTransferPlan::not_equal(Self, Self) -> Bool
+pub fn CallTransferPlan::to_repr(Self) -> @debug.Repr
+
+pub struct CheckedBuilder[Inst] {
+  // private fields
+}
+pub fn[Inst] CheckedBuilder::append_body(Self[Inst], Block, Inst, Array[Input], Array[Output], Array[@allocation_types.PhysicalReg], InstructionMetadata) -> (Instruction, Array[Value]) raise VCodeBuildError
+pub fn[Inst] CheckedBuilder::block_parameter(Self[Inst], Block, Int) -> Value raise VCodeBuildError
+pub fn[Inst] CheckedBuilder::create_block(Self[Inst], Array[@native_types.ValueType]) -> Block
+pub fn[Inst] CheckedBuilder::entry_block(Self[Inst]) -> Block
+pub fn[Inst] CheckedBuilder::finish(Self[Inst]) -> Function[Inst] raise VCodeBuildError
+pub fn[Inst] CheckedBuilder::new(String, Array[@native_types.ValueType]) -> Self[Inst]
+pub fn[Inst] CheckedBuilder::new_with_protocol(String, @native_types.CallProtocol, Array[@native_types.ValueType], Array[@native_types.ValueType]) -> Self[Inst]
+pub fn[Inst] CheckedBuilder::new_with_results(String, Array[@native_types.ValueType], Array[@native_types.ValueType]) -> Self[Inst]
+pub fn[Inst] CheckedBuilder::parameter(Self[Inst], Int) -> Value raise VCodeBuildError
+pub fn[Inst] CheckedBuilder::set_terminator(Self[Inst], Block, Inst, Array[Input], Array[Edge], Array[@allocation_types.PhysicalReg], InstructionMetadata) -> Instruction raise VCodeBuildError
+
+pub struct Edge {
+  target : Block
+  arguments : Array[Value]
+}
+pub fn Edge::new(Block, Array[Value]) -> Self
+
+pub struct Edit {
+  point : ProgramPoint?
+  kind : EditKind
+}
+pub fn Edit::edge_move(Block, Int, Value, Location, Location) -> Self
+pub fn Edit::kind(Self) -> EditKind
+pub fn Edit::point(Self) -> ProgramPoint?
+pub fn Edit::register_move(ProgramPoint, Value, @allocation_types.PhysicalReg, @allocation_types.PhysicalReg) -> Self
+pub fn Edit::reload(ProgramPoint, Value, StackSlot, @allocation_types.PhysicalReg) -> Self
+pub fn Edit::spill(ProgramPoint, Value, @allocation_types.PhysicalReg, StackSlot) -> Self
+
+pub(all) enum EditKind {
+  Spill(value~ : Value, reg~ : @allocation_types.PhysicalReg, slot~ : StackSlot)
+  Reload(value~ : Value, slot~ : StackSlot, reg~ : @allocation_types.PhysicalReg)
+  Move(value~ : Value, from~ : @allocation_types.PhysicalReg, to~ : @allocation_types.PhysicalReg)
+  EdgeMove(source~ : Block, successor_index~ : Int, value~ : Value, from~ : Location, to~ : Location)
+} derive(Eq, @debug.Debug)
+pub fn EditKind::equal(Self, Self) -> Bool
+pub fn EditKind::not_equal(Self, Self) -> Bool
+pub fn EditKind::to_repr(Self) -> @debug.Repr
+
+pub struct FrameLayout {
+  // private fields
+}
+pub fn FrameLayout::alignment(Self) -> Int
+pub fn FrameLayout::frame_size(Self) -> Int
+pub fn[Inst] FrameLayout::new(Function[Inst], Allocation, Int, Int) -> Self
+pub fn FrameLayout::place_slot(Self, StackSlot, Int) -> Bool
+pub fn FrameLayout::slot_offset(Self, StackSlot) -> Int?
+
+pub struct Function[Inst] {
+  // private fields
+}
+pub fn[Inst] Function::after(Self[Inst], Instruction) -> ProgramPoint?
+pub fn[Inst] Function::allocation_block_instruction_at(Self[Inst], Int, Int) -> Int
+pub fn[Inst] Function::allocation_block_instruction_count(Self[Inst], Int) -> Int
+pub fn[Inst] Function::allocation_block_parameter_at(Self[Inst], Int, Int) -> @allocation_types.VirtualReg
+pub fn[Inst] Function::allocation_block_parameter_count(Self[Inst], Int) -> Int
+pub fn[Inst] Function::allocation_block_successor_at(Self[Inst], Int, Int) -> Int
+pub fn[Inst] Function::allocation_block_successor_count(Self[Inst], Int) -> Int
+pub fn[Inst] Function::allocation_edge_argument_at(Self[Inst], Int, Int, Int) -> @allocation_types.VirtualReg
+pub fn[Inst] Function::allocation_edge_argument_count(Self[Inst], Int, Int) -> Int
+pub fn[Inst] Function::allocation_entry_value_at(Self[Inst], Int) -> @allocation_types.VirtualReg
+pub fn[Inst] Function::allocation_instruction_clobbers(Self[Inst], Int) -> ArrayView[@allocation_types.PhysicalReg]
+pub fn[Inst] Function::allocation_instruction_operands(Self[Inst], Int) -> ArrayView[@allocation_types.AllocationOperand]
+pub fn[Inst] Function::allocation_layout_block_id_at(Self[Inst], Int) -> Int
+pub fn[Inst] Function::allocation_value_type_at(Self[Inst], Int) -> @native_types.ValueType
+pub fn[Inst] Function::allocation_vreg(Self[Inst], Value) -> @allocation_types.VirtualReg?
+pub fn[Inst] Function::before(Self[Inst], Instruction) -> ProgramPoint?
+pub fn[Inst] Function::block_at(Self[Inst], Int) -> Block?
+pub fn[Inst] Function::block_body(Self[Inst], Block) -> Array[Instruction]
+pub fn[Inst] Function::block_count(Self[Inst]) -> Int
+pub fn[Inst] Function::block_index(Self[Inst], Block) -> Int?
+pub fn[Inst] Function::block_instruction_at(Self[Inst], Block, Int) -> Instruction?
+pub fn[Inst] Function::block_instruction_count(Self[Inst], Block) -> Int
+pub fn[Inst] Function::block_parameter_at(Self[Inst], Block, Int) -> Value?
+pub fn[Inst] Function::block_parameter_count(Self[Inst], Block) -> Int
+pub fn[Inst] Function::block_parameters(Self[Inst], Block) -> Array[Value]
+pub fn[Inst] Function::block_terminator(Self[Inst], Block) -> Instruction?
+pub fn[Inst] Function::entry_block(Self[Inst]) -> Block
+pub fn[Inst] Function::instruction(Self[Inst], Instruction) -> Inst?
+pub fn[Inst] Function::instruction_allocation_operand_at(Self[Inst], Instruction, Int) -> @allocation_types.AllocationOperand?
+pub fn[Inst] Function::instruction_at(Self[Inst], Int) -> Instruction?
+pub fn[Inst] Function::instruction_clobber_at(Self[Inst], Instruction, Int) -> @allocation_types.PhysicalReg?
+pub fn[Inst] Function::instruction_clobber_count(Self[Inst], Instruction) -> Int
+pub fn[Inst] Function::instruction_clobbers(Self[Inst], Instruction) -> Array[@allocation_types.PhysicalReg]
+pub fn[Inst] Function::instruction_count(Self[Inst]) -> Int
+pub fn[Inst] Function::instruction_index(Self[Inst], Instruction) -> Int?
+pub fn[Inst] Function::instruction_is_terminator(Self[Inst], Instruction) -> Bool
+pub fn[Inst] Function::instruction_metadata(Self[Inst], Instruction) -> InstructionMetadata?
+pub fn[Inst] Function::instruction_operand_at(Self[Inst], Instruction, Int) -> Operand?
+pub fn[Inst] Function::instruction_operand_count(Self[Inst], Instruction) -> Int
+pub fn[Inst] Function::instruction_operands(Self[Inst], Instruction) -> Array[Operand]
+pub fn[Inst] Function::instruction_results(Self[Inst], Instruction) -> Array[Value]
+pub fn[Inst] Function::instruction_successor_argument_at(Self[Inst], Instruction, Int, Int) -> Value?
+pub fn[Inst] Function::instruction_successor_argument_count(Self[Inst], Instruction, Int) -> Int
+pub fn[Inst] Function::instruction_successor_at(Self[Inst], Instruction, Int) -> Edge?
+pub fn[Inst] Function::instruction_successor_count(Self[Inst], Instruction) -> Int
+pub fn[Inst] Function::instruction_successor_target(Self[Inst], Instruction, Int) -> Block?
+pub fn[Inst] Function::instruction_successors(Self[Inst], Instruction) -> Array[Edge]
+pub fn[Inst] Function::layout(Self[Inst]) -> Array[Block]
+pub fn[Inst] Function::layout_block_at(Self[Inst], Int) -> Block?
+pub fn[Inst] Function::name(Self[Inst]) -> String
+pub fn[Inst] Function::parameter_at(Self[Inst], Int) -> Value?
+pub fn[Inst] Function::parameter_count(Self[Inst]) -> Int
+pub fn[Inst] Function::program_point_instruction(Self[Inst], ProgramPoint) -> Instruction?
+pub fn[Inst] Function::protocol(Self[Inst]) -> @native_types.CallProtocol
+pub fn[Inst] Function::result_types(Self[Inst]) -> Array[@native_types.ValueType]
+pub fn[Inst] Function::set_layout(Self[Inst], Array[Block]) -> Unit raise VCodeBuildError
+pub fn[Inst : @debug.Debug] Function::summary(Self[Inst]) -> String
+pub fn[Inst] Function::value_at(Self[Inst], Int) -> Value?
+pub fn[Inst] Function::value_count(Self[Inst]) -> Int
+pub fn[Inst] Function::value_index(Self[Inst], Value) -> Int?
+pub fn[Inst] Function::value_type(Self[Inst], Value) -> @native_types.ValueType?
+
+pub struct Input {
+  value : Value
+  constraint : OperandConstraint
+  preference : @allocation_types.PhysicalReg?
+  timing : @allocation_types.OperandTiming
+}
+pub fn Input::any(Value) -> Self
+pub fn Input::any_location(Value) -> Self
+pub fn Input::fixed(Value, @allocation_types.PhysicalReg) -> Self
+pub fn Input::with_preference(Self, @allocation_types.PhysicalReg) -> Self
+pub fn Input::with_timing(Self, @allocation_types.OperandTiming) -> Self
+
+pub struct Instruction {
+  // private fields
+}
+pub fn Instruction::equal(Self, Self) -> Bool
+pub fn Instruction::not_equal(Self, Self) -> Bool
+pub fn Instruction::output(Self, &Logger) -> Unit
+pub fn Instruction::to_repr(Self) -> @debug.Repr
+pub fn Instruction::to_string(Self) -> String
+pub impl Eq for Instruction
+pub impl Show for Instruction
+pub impl @debug.Debug for Instruction
+
+pub struct InstructionMetadata {
+  source : @native_types.SourceLocation?
+  trap : @native_types.TrapReason?
+  safepoint : @native_types.SafepointKind?
+  live_gc_roots : Array[Value]
+  symbol : SymbolReference?
+  stack_map : @native_types.StackMapMetadata?
+}
+pub fn InstructionMetadata::empty() -> Self
+pub fn InstructionMetadata::new(source? : @native_types.SourceLocation, trap? : @native_types.TrapReason, safepoint? : @native_types.SafepointKind, live_gc_roots? : Array[Value], symbol? : SymbolReference, stack_map? : @native_types.StackMapMetadata) -> Self
+pub fn InstructionMetadata::safepoint(Array[Value]) -> Self
+
+pub(all) enum Location {
+  Register(@allocation_types.PhysicalReg)
+  Stack(StackSlot)
+} derive(Eq)
+pub fn Location::equal(Self, Self) -> Bool
+pub fn Location::not_equal(Self, Self) -> Bool
+pub fn Location::to_repr(Self) -> @debug.Repr
+pub impl @debug.Debug for Location
+
+pub struct Operand {
+  value : Value
+  role : @allocation_types.OperandRole
+  constraint : @allocation_types.AllocationConstraint
+  preference : @allocation_types.PhysicalReg?
+  timing : @allocation_types.OperandTiming
+  tie_id : Int
+} derive(Eq, @debug.Debug)
+pub fn Operand::equal(Self, Self) -> Bool
+pub fn Operand::not_equal(Self, Self) -> Bool
+pub fn Operand::to_repr(Self) -> @debug.Repr
+
+pub(all) enum OperandConstraint {
+  Any
+  AnyLocation
+  Fixed(@allocation_types.PhysicalReg)
+  TiedTo(Int)
+} derive(Eq, @debug.Debug)
+pub fn OperandConstraint::equal(Self, Self) -> Bool
+pub fn OperandConstraint::not_equal(Self, Self) -> Bool
+pub fn OperandConstraint::to_repr(Self) -> @debug.Repr
+
+pub struct Output {
+  ty : @native_types.ValueType
+  constraint : OperandConstraint
+  preference : @allocation_types.PhysicalReg?
+  timing : @allocation_types.OperandTiming
+}
+pub fn Output::any(@native_types.ValueType) -> Self
+pub fn Output::any_location(@native_types.ValueType) -> Self
+pub fn Output::fixed(@native_types.ValueType, @allocation_types.PhysicalReg) -> Self
+pub fn Output::tied(@native_types.ValueType, Int) -> Self
+pub fn Output::with_preference(Self, @allocation_types.PhysicalReg) -> Self
+pub fn Output::with_timing(Self, @allocation_types.OperandTiming) -> Self
+
+pub struct ParallelMove {
+  ty : @native_types.ValueType
+  from : Location
+  to : Location
+} derive(Eq, @debug.Debug)
+pub fn ParallelMove::equal(Self, Self) -> Bool
+pub fn ParallelMove::new(@native_types.ValueType, Location, Location) -> Self
+pub fn ParallelMove::not_equal(Self, Self) -> Bool
+pub fn ParallelMove::to_repr(Self) -> @debug.Repr
+
+pub(all) enum PointPlacement {
+  Before
+  After
+} derive(Eq, @debug.Debug)
+pub fn PointPlacement::equal(Self, Self) -> Bool
+pub fn PointPlacement::not_equal(Self, Self) -> Bool
+pub fn PointPlacement::to_repr(Self) -> @debug.Repr
+
+pub struct ProgramPoint {
+  // private fields
+}
+pub fn ProgramPoint::equal(Self, Self) -> Bool
+pub fn ProgramPoint::instruction(Self) -> Instruction
+pub fn ProgramPoint::not_equal(Self, Self) -> Bool
+pub fn ProgramPoint::placement(Self) -> PointPlacement
+pub fn ProgramPoint::to_repr(Self) -> @debug.Repr
+pub impl Eq for ProgramPoint
+pub impl @debug.Debug for ProgramPoint
+
+pub(all) struct RegallocLoopStatistics {
+  queue_pops : Int
+  register_probes : Int
+  occupied_segments_scanned : Int
+  conflicts : Int
+  evictions : Int
+  bundle_splits : Int
+  second_chance_attempts : Int
+  max_queue_length : Int
+} derive(Eq, @debug.Debug)
+pub fn RegallocLoopStatistics::equal(Self, Self) -> Bool
+pub fn RegallocLoopStatistics::not_equal(Self, Self) -> Bool
+pub fn RegallocLoopStatistics::to_repr(Self) -> @debug.Repr
+
+pub struct ResolvedCallTransferPlan {
+  stack_transfers : Array[StackArgumentTransfer]
+  register_moves : ResolvedMovePlan
+} derive(Eq, @debug.Debug)
+pub fn ResolvedCallTransferPlan::equal(Self, Self) -> Bool
+pub fn ResolvedCallTransferPlan::not_equal(Self, Self) -> Bool
+pub fn ResolvedCallTransferPlan::to_repr(Self) -> @debug.Repr
+
+pub struct ResolvedMovePlan {
+  steps : Array[ResolvedMoveStep]
+  requires_emergency : Bool
+} derive(Eq, @debug.Debug)
+pub fn ResolvedMovePlan::empty() -> Self
+pub fn ResolvedMovePlan::equal(Self, Self) -> Bool
+pub fn ResolvedMovePlan::not_equal(Self, Self) -> Bool
+pub fn ResolvedMovePlan::to_repr(Self) -> @debug.Repr
+
+pub(all) enum ResolvedMoveStep {
+  Transfer(ParallelMove)
+  SpillScratchToEmergency(ty~ : @native_types.ValueType, scratch~ : @allocation_types.PhysicalReg)
+  ReloadScratchFromEmergency(ty~ : @native_types.ValueType, scratch~ : @allocation_types.PhysicalReg)
+} derive(Eq, @debug.Debug)
+pub fn ResolvedMoveStep::equal(Self, Self) -> Bool
+pub fn ResolvedMoveStep::not_equal(Self, Self) -> Bool
+pub fn ResolvedMoveStep::to_repr(Self) -> @debug.Repr
+
+pub struct StackArgumentTransfer {
+  ty : @native_types.ValueType
+  source : Location
+  offset : Int
+  scratch : @allocation_types.PhysicalReg?
+} derive(Eq, @debug.Debug)
+pub fn StackArgumentTransfer::equal(Self, Self) -> Bool
+pub fn StackArgumentTransfer::not_equal(Self, Self) -> Bool
+pub fn StackArgumentTransfer::to_repr(Self) -> @debug.Repr
+
+pub struct StackSlot {
+  // private fields
+}
+pub fn StackSlot::equal(Self, Self) -> Bool
+pub fn StackSlot::not_equal(Self, Self) -> Bool
+pub fn StackSlot::to_repr(Self) -> @debug.Repr
+pub impl Eq for StackSlot
+pub impl @debug.Debug for StackSlot
+
+pub(all) enum SymbolReference {
+  Code(@native_types.CodeSymbol)
+  External(@native_types.ExternalSymbol)
+  Data(@native_types.DataSymbol)
+} derive(Eq, @debug.Debug)
+pub fn SymbolReference::equal(Self, Self) -> Bool
+pub fn SymbolReference::not_equal(Self, Self) -> Bool
+pub fn SymbolReference::to_repr(Self) -> @debug.Repr
+
+pub(all) enum TargetCompileEvent {
+  TargetAnalysisStarted
+  TargetConstructionStarted
+  TargetValidationStarted
+  TargetCommonValidationStarted
+  TargetIsaValidationStarted
+  TargetSealingStarted
+  TargetSelectionFinished
+  RegallocStarted
+  RegallocPhaseStarted(String)
+  RegallocPhasesFinished
+  RegallocLoopMeasured(RegallocLoopStatistics)
+  RegallocFinished(AllocationStatistics)
+  FramePlanningStarted
+  FramePlanningFinished
+  EmissionStarted
+  EmissionFinished
+} derive(Eq, @debug.Debug)
+pub fn TargetCompileEvent::equal(Self, Self) -> Bool
+pub fn TargetCompileEvent::not_equal(Self, Self) -> Bool
+pub fn TargetCompileEvent::to_repr(Self) -> @debug.Repr
+
+pub struct Value {
+  // private fields
+}
+pub fn Value::equal(Self, Self) -> Bool
+pub fn Value::not_equal(Self, Self) -> Bool
+pub fn Value::output(Self, &Logger) -> Unit
+pub fn Value::to_repr(Self) -> @debug.Repr
+pub fn Value::to_string(Self) -> String
+pub impl Eq for Value
+pub impl Show for Value
+pub impl @debug.Debug for Value
+
+// Type aliases
+pub using @allocation_types {type AllocationConstraint}
+
+pub using @allocation_types {type AllocationLocation}
+
+pub using @allocation_types {type AllocationOperand}
+
+pub using @allocation_types {type VirtualReg as AllocationVirtualReg}
+
+pub using @allocation_types {type OperandRole}
+
+pub using @allocation_types {type OperandTiming}
+
+pub using @allocation_types {type PhysicalReg}
+
+pub using @allocation_types {type RegClass}
+
+pub using @native_types {type SafepointKind}
+
+pub using @native_types {type ValueType}
+
+// Traits

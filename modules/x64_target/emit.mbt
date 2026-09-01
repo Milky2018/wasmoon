@@ -8,7 +8,7 @@ const X64_INTEGER_OVERFLOW_BRK : UInt = 5U
 const X64_INVALID_CONVERSION_BRK : UInt = 3U
 
 ///|
-fn trap_brk_payload(reason : @semantic.TrapReason) -> UInt {
+fn trap_brk_payload(reason : @native.TrapReason) -> UInt {
   match reason {
     Unreachable => 0U
     MemoryOutOfBounds | TableOutOfBounds => 1U
@@ -106,7 +106,7 @@ fn CodeBuffer::patch_word(self : CodeBuffer, offset : Int, word : UInt) -> Unit 
 ///|
 fn emit_move(
   buffer : CodeBuffer,
-  ty : @semantic.ValueType,
+  ty : @native.ValueType,
   to : @vcode.PhysicalReg,
   from : @vcode.PhysicalReg,
 ) -> Unit {
@@ -137,7 +137,7 @@ fn emit_constant(
 fn emit_stack_access(
   buffer : CodeBuffer,
   load : Bool,
-  ty : @semantic.ValueType,
+  ty : @native.ValueType,
   reg : @vcode.PhysicalReg,
   offset : Int,
 ) -> Unit raise X64EmitError {
@@ -164,7 +164,7 @@ fn emit_stack_access(
 fn emit_result_area_access(
   buffer : CodeBuffer,
   load : Bool,
-  ty : @semantic.ValueType,
+  ty : @native.ValueType,
   address~ : @vcode.PhysicalReg,
   value~ : @vcode.PhysicalReg,
   offset : Int,
@@ -194,7 +194,7 @@ fn emit_result_area_access(
 fn scalar_memory_address(
   buffer : CodeBuffer,
   address : @vcode.PhysicalReg,
-  width : @semantic.AccessWidth,
+  width : @native.AccessWidth,
   offset : UInt64,
 ) -> (@vcode.PhysicalReg, Int) {
   ignore(width)
@@ -212,9 +212,9 @@ fn scalar_memory_address(
 ///|
 fn emit_scalar_load(
   buffer : CodeBuffer,
-  width : @semantic.AccessWidth,
-  extension : @semantic.LoadExtension,
-  result_type : @semantic.ValueType,
+  width : @native.AccessWidth,
+  extension : @native.LoadExtension,
+  result_type : @native.ValueType,
   address : @vcode.PhysicalReg,
   offset : Int,
   destination : @vcode.PhysicalReg,
@@ -245,8 +245,8 @@ fn emit_scalar_load(
 ///|
 fn emit_scalar_store(
   buffer : CodeBuffer,
-  width : @semantic.AccessWidth,
-  value_type : @semantic.ValueType,
+  width : @native.AccessWidth,
+  value_type : @native.ValueType,
   address : @vcode.PhysicalReg,
   offset : Int,
   source : @vcode.PhysicalReg,
@@ -266,7 +266,7 @@ fn emit_scalar_store(
 }
 
 ///|
-fn atomic_operation_width(width : @semantic.AccessWidth) -> GprWidth {
+fn atomic_operation_width(width : @native.AccessWidth) -> GprWidth {
   if width == W64 {
     W64
   } else {
@@ -277,8 +277,8 @@ fn atomic_operation_width(width : @semantic.AccessWidth) -> GprWidth {
 ///|
 fn emit_atomic_rmw(
   buffer : CodeBuffer,
-  width : @semantic.AccessWidth,
-  operation : @semantic.AtomicRmwOp,
+  width : @native.AccessWidth,
+  operation : @lowering.AtomicRmwOp,
   address : @vcode.PhysicalReg,
   value : @vcode.PhysicalReg,
   result : @vcode.PhysicalReg,
@@ -371,7 +371,7 @@ fn emit_atomic_rmw(
 ///|
 fn emit_atomic_compare_exchange(
   buffer : CodeBuffer,
-  width : @semantic.AccessWidth,
+  width : @native.AccessWidth,
   address : @vcode.PhysicalReg,
   expected : @vcode.PhysicalReg,
   replacement : @vcode.PhysicalReg,
@@ -744,7 +744,7 @@ fn emit_int_binary(
 fn emit_int_with_overflow(
   buffer : CodeBuffer,
   width : GprWidth,
-  operation : @semantic.IntOverflowOp,
+  operation : @lowering.IntOverflowOp,
   left : @vcode.PhysicalReg,
   right : @vcode.PhysicalReg,
   result : @vcode.PhysicalReg,
@@ -851,7 +851,7 @@ fn emit_vector_select(
 ///|
 fn emit_vector_splat(
   buffer : CodeBuffer,
-  lane : @semantic.VectorLane,
+  lane : @lowering.VectorLane,
   source : @vcode.PhysicalReg,
   destination : @vcode.PhysicalReg,
 ) -> Unit {
@@ -889,9 +889,9 @@ fn emit_vector_splat(
 ///|
 fn emit_vector_extract_lane(
   buffer : CodeBuffer,
-  lane : @semantic.VectorLane,
+  lane : @lowering.VectorLane,
   index : Int,
-  extension : @semantic.Signedness?,
+  extension : @native.Signedness?,
   source : @vcode.PhysicalReg,
   destination : @vcode.PhysicalReg,
 ) -> Unit {
@@ -938,7 +938,7 @@ fn emit_vector_extract_lane(
 ///|
 fn emit_vector_replace_lane(
   buffer : CodeBuffer,
-  lane : @semantic.VectorLane,
+  lane : @lowering.VectorLane,
   index : Int,
   source : @vcode.PhysicalReg,
   destination : @vcode.PhysicalReg,
@@ -1024,7 +1024,7 @@ fn emit_vector_shuffle(
 
 ///|
 fn raw_integer_lane(
-  lane : @semantic.VectorLane,
+  lane : @lowering.VectorLane,
 ) -> RawLaneSize raise X64EmitError {
   match lane {
     I8x16 => B8
@@ -1038,7 +1038,7 @@ fn raw_integer_lane(
 ///|
 fn emit_vector_int_unary(
   buffer : CodeBuffer,
-  lane : @semantic.VectorLane,
+  lane : @lowering.VectorLane,
   operation : X64VectorIntUnary,
   source : @vcode.PhysicalReg,
   destination : @vcode.PhysicalReg,
@@ -1165,7 +1165,7 @@ fn emit_vector_int_unary(
 ///|
 fn emit_vector_int_binary(
   buffer : CodeBuffer,
-  lane : @semantic.VectorLane,
+  lane : @lowering.VectorLane,
   operation : X64VectorIntBinary,
   left : @vcode.PhysicalReg,
   right : @vcode.PhysicalReg,
@@ -1379,9 +1379,9 @@ fn emit_vector_int_binary(
 ///|
 fn emit_vector_extension(
   buffer : CodeBuffer,
-  lane : @semantic.VectorLane,
+  lane : @lowering.VectorLane,
   high : Bool,
-  signedness : @semantic.Signedness,
+  signedness : @native.Signedness,
   source : @vcode.PhysicalReg,
   destination : @vcode.PhysicalReg,
 ) -> Unit raise X64EmitError {
@@ -1416,8 +1416,8 @@ fn emit_vector_extension(
 ///|
 fn emit_vector_narrow(
   buffer : CodeBuffer,
-  lane : @semantic.VectorLane,
-  signedness : @semantic.Signedness,
+  lane : @lowering.VectorLane,
+  signedness : @native.Signedness,
   low : @vcode.PhysicalReg,
   high : @vcode.PhysicalReg,
   destination : @vcode.PhysicalReg,
@@ -1599,7 +1599,7 @@ fn emit_vector_predicate(
 ///|
 fn emit_vector_bitmask(
   buffer : CodeBuffer,
-  lane : @semantic.VectorLane,
+  lane : @lowering.VectorLane,
   source : @vcode.PhysicalReg,
   destination : @vcode.PhysicalReg,
 ) -> Unit raise X64EmitError {
@@ -1629,8 +1629,8 @@ fn emit_vector_bitmask(
 ///|
 fn emit_vector_int_shift(
   buffer : CodeBuffer,
-  lane : @semantic.VectorLane,
-  operation : @semantic.VectorIntShiftOp,
+  lane : @lowering.VectorLane,
+  operation : @lowering.VectorIntShiftOp,
   source : @vcode.PhysicalReg,
   amount : @vcode.PhysicalReg,
   destination : @vcode.PhysicalReg,
@@ -1720,8 +1720,8 @@ fn emit_vector_int_shift(
 ///|
 fn emit_vector_int_compare(
   buffer : CodeBuffer,
-  lane : @semantic.VectorLane,
-  comparison : @semantic.VectorIntComparison,
+  lane : @lowering.VectorLane,
+  comparison : @lowering.VectorIntComparison,
   left : @vcode.PhysicalReg,
   right : @vcode.PhysicalReg,
   destination : @vcode.PhysicalReg,
@@ -1819,8 +1819,8 @@ fn emit_vector_int_compare(
 ///|
 fn emit_vector_float_unary(
   buffer : CodeBuffer,
-  lane : @semantic.VectorLane,
-  operation : @semantic.VectorFloatUnaryOp,
+  lane : @lowering.VectorLane,
+  operation : @lowering.VectorFloatUnaryOp,
   source : @vcode.PhysicalReg,
   destination : @vcode.PhysicalReg,
 ) -> Unit raise X64EmitError {
@@ -1875,8 +1875,8 @@ fn emit_vector_float_unary(
 ///|
 fn emit_vector_float_binary(
   buffer : CodeBuffer,
-  lane : @semantic.VectorLane,
-  operation : @semantic.VectorFloatBinaryOp,
+  lane : @lowering.VectorLane,
+  operation : @lowering.VectorFloatBinaryOp,
   left : @vcode.PhysicalReg,
   right : @vcode.PhysicalReg,
   destination : @vcode.PhysicalReg,
@@ -1972,8 +1972,8 @@ fn emit_vector_float_binary(
 ///|
 fn emit_vector_float_compare(
   buffer : CodeBuffer,
-  lane : @semantic.VectorLane,
-  comparison : @semantic.VectorFloatComparison,
+  lane : @lowering.VectorLane,
+  comparison : @lowering.VectorFloatComparison,
   left : @vcode.PhysicalReg,
   right : @vcode.PhysicalReg,
   destination : @vcode.PhysicalReg,
@@ -2001,8 +2001,8 @@ fn emit_vector_float_compare(
 ///|
 fn emit_vector_float_ternary(
   buffer : CodeBuffer,
-  lane : @semantic.VectorLane,
-  operation : @semantic.FloatTernaryOp,
+  lane : @lowering.VectorLane,
+  operation : @lowering.FloatTernaryOp,
   left : @vcode.PhysicalReg,
   right : @vcode.PhysicalReg,
   addend : @vcode.PhysicalReg,
@@ -2060,7 +2060,7 @@ fn emit_vector_relaxed_dot8_to16(
 ///|
 fn emit_vector_bitwise(
   buffer : CodeBuffer,
-  operation : @semantic.VectorBitwiseOp,
+  operation : @lowering.VectorBitwiseOp,
   first : @vcode.PhysicalReg,
   second : @vcode.PhysicalReg,
   mask : @vcode.PhysicalReg,
@@ -2130,7 +2130,7 @@ fn prepare_xmm_two_operand(
 ///|
 fn materialize_scalar_mask(
   buffer : CodeBuffer,
-  ty : @semantic.ValueType,
+  ty : @native.ValueType,
   bits : UInt64,
   destination : @vcode.PhysicalReg,
 ) -> Unit raise X64EmitError {
@@ -2151,7 +2151,7 @@ fn materialize_scalar_mask(
 ///|
 fn emit_float_unary(
   buffer : CodeBuffer,
-  ty : @semantic.ValueType,
+  ty : @native.ValueType,
   operation : X64FloatUnary,
   source : @vcode.PhysicalReg,
   destination : @vcode.PhysicalReg,
@@ -2215,7 +2215,7 @@ fn emit_float_unary(
 ///|
 fn emit_scalar_min_max(
   buffer : CodeBuffer,
-  ty : @semantic.ValueType,
+  ty : @native.ValueType,
   minimum : Bool,
   left : @vcode.PhysicalReg,
   right : @vcode.PhysicalReg,
@@ -2278,7 +2278,7 @@ fn emit_scalar_min_max(
 ///|
 fn emit_float_binary(
   buffer : CodeBuffer,
-  ty : @semantic.ValueType,
+  ty : @native.ValueType,
   operation : X64FloatBinary,
   left : @vcode.PhysicalReg,
   right : @vcode.PhysicalReg,
@@ -2305,7 +2305,7 @@ fn emit_float_binary(
 ///|
 fn emit_float_copy_sign(
   buffer : CodeBuffer,
-  ty : @semantic.ValueType,
+  ty : @native.ValueType,
   magnitude : @vcode.PhysicalReg,
   sign : @vcode.PhysicalReg,
   destination : @vcode.PhysicalReg,
@@ -2367,7 +2367,7 @@ fn emit_float_copy_sign(
 ///|
 fn emit_float_compare(
   buffer : CodeBuffer,
-  ty : @semantic.ValueType,
+  ty : @native.ValueType,
   condition : X64FloatCondition,
   left : @vcode.PhysicalReg,
   right : @vcode.PhysicalReg,
@@ -2422,7 +2422,7 @@ fn emit_float_compare(
 ///|
 fn emit_float_trap(
   buffer : CodeBuffer,
-  ty : @semantic.ValueType,
+  ty : @native.ValueType,
   condition : X64FloatTrapCondition,
   left : @vcode.PhysicalReg,
   right : @vcode.PhysicalReg,
@@ -2459,9 +2459,9 @@ fn emit_float_trap(
 ///|
 fn emit_unchecked_float_to_int(
   buffer : CodeBuffer,
-  float : @semantic.FloatType,
-  integer : @semantic.IntegerType,
-  signedness : @semantic.Signedness,
+  float : @native.FloatType,
+  integer : @native.IntegerType,
+  signedness : @native.Signedness,
   source : @vcode.PhysicalReg,
   destination : @vcode.PhysicalReg,
 ) -> Unit raise X64EmitError {
@@ -2479,7 +2479,7 @@ fn emit_unchecked_float_to_int(
       buffer.x86_emit_cvttsd2si_r64_xmm(destination.id, source.id)
     }
   } else {
-    let scalar_type : @semantic.ValueType = if float == F32 { F32 } else { F64 }
+    let scalar_type : @native.ValueType = if float == F32 { F32 } else { F64 }
     let threshold = @vcode.PhysicalReg::new(15, FpVector)
     let adjusted = @vcode.PhysicalReg::new(14, FpVector)
     materialize_scalar_mask(
@@ -2527,13 +2527,13 @@ fn emit_unchecked_float_to_int(
 ///|
 fn emit_saturating_float_to_int(
   buffer : CodeBuffer,
-  float : @semantic.FloatType,
-  integer : @semantic.IntegerType,
-  signedness : @semantic.Signedness,
+  float : @native.FloatType,
+  integer : @native.IntegerType,
+  signedness : @native.Signedness,
   source : @vcode.PhysicalReg,
   destination : @vcode.PhysicalReg,
 ) -> Unit raise X64EmitError {
-  let scalar_type : @semantic.ValueType = if float == F32 { F32 } else { F64 }
+  let scalar_type : @native.ValueType = if float == F32 { F32 } else { F64 }
   let width = if integer == I32 { W32 } else { W64 }
   let (lower_bits, upper_bits, minimum, maximum) = match
     (float, integer, signedness) {
@@ -2716,7 +2716,8 @@ fn emit_register_save_or_restore(
 ) -> Unit raise X64EmitError {
   match reg.class {
     Int => emit_stack_access(buffer, load, I64, reg, offset)
-    FpVector => emit_stack_access(buffer, load, V128, reg, offset)
+    Float | Vector | FpVector =>
+      emit_stack_access(buffer, load, V128, reg, offset)
   }
 }
 
@@ -2751,7 +2752,7 @@ fn emit_prologue(
     emit_register_save_or_restore(buffer, false, reg, offset)
     let bank : @code_object.RegisterBank = match reg.class {
       Int => Int
-      FpVector => FpVector
+      Float | Vector | FpVector => FpVector
     }
     unwind.push(
       @code_object.UnwindDirective::new(
@@ -2831,6 +2832,9 @@ fn[Inst] emit_edits_at(
   instruction : @vcode.Instruction,
   placement : @vcode.PointPlacement,
 ) -> Unit raise X64EmitError {
+  if allocation.edits_at(instruction, placement).is_empty() {
+    return
+  }
   let resolved = @vcode.plan_parallel_moves(
     edit_parallel_moves(function, allocation, instruction, placement),
     int_transfer_scratch(),
@@ -2847,7 +2851,7 @@ fn emit_call_arguments(
   allocation : @vcode.Allocation,
   frame : X64Frame,
   instruction : @vcode.Instruction,
-  types : Array[@semantic.ValueType],
+  types : Array[@native.ValueType],
   locations : Array[CallArgumentLocation],
   stack_size : Int,
   operand_start? : Int = 0,
@@ -2932,7 +2936,7 @@ fn emit_call_arguments(
     }
     // Integer call slots are eight bytes. Write the full slot so its upper
     // half is canonical for callees that consume the native-width value.
-    let stack_type : @semantic.ValueType = if transfer.ty == I32 {
+    let stack_type : @native.ValueType = if transfer.ty == I32 {
       I64
     } else {
       transfer.ty
@@ -2945,11 +2949,10 @@ fn emit_call_arguments(
 ///|
 fn emit_tail_return_thunk_setup(
   buffer : CodeBuffer,
-  frame : X64Frame,
-  callee_args_size : Int,
+  plan : TailCallFramePlan,
 ) -> Int? raise X64EmitError {
-  if callee_args_size > frame.incoming_args_size() {
-    emit_sp_adjust(buffer, true, callee_args_size + 8)
+  if plan.synthetic_return_size > 0 {
+    emit_sp_adjust(buffer, true, plan.transfer_size)
     emit_rex_w(buffer, 1, 0)
     buffer.emit_byte(0x8D)
     emit_modrm(buffer, 0, 10, 5)
@@ -2964,13 +2967,12 @@ fn emit_tail_return_thunk_setup(
 ///|
 fn emit_tail_return_thunk(
   buffer : CodeBuffer,
-  frame : X64Frame,
-  callee_args_size : Int,
+  plan : TailCallFramePlan,
   thunk_address : Int?,
 ) -> Unit raise X64EmitError {
-  if callee_args_size > frame.incoming_args_size() {
+  if plan.synthetic_return_size > 0 {
     buffer.patch_local_rel32(thunk_address.unwrap(), buffer.position())
-    emit_sp_adjust(buffer, false, callee_args_size)
+    emit_sp_adjust(buffer, false, plan.thunk_cleanup_size)
     buffer.x86_emit_ret()
   }
 }
@@ -3029,7 +3031,7 @@ fn emit_function_inputs(
     return
   }
   let register_moves : Array[@vcode.ParallelMove] = []
-  let stack_inputs : Array[(@vcode.Instruction, @semantic.ValueType, Int)] = []
+  let stack_inputs : Array[(@vcode.Instruction, @native.ValueType, Int)] = []
   let mut index = current_index
   while index < body.length() {
     let input_instruction = body[index]
@@ -3130,7 +3132,7 @@ fn emit_incoming_call_results(
     return
   }
   let register_moves : Array[@vcode.ParallelMove] = []
-  let area_results : Array[(@vcode.Instruction, @semantic.ValueType, Int)] = []
+  let area_results : Array[(@vcode.Instruction, @native.ValueType, Int)] = []
   let mut index = current_index
   while index < body.length() {
     let result_instruction = body[index]
@@ -3232,7 +3234,7 @@ fn emit_function_outputs(
     return
   }
   let register_moves : Array[@vcode.ParallelMove] = []
-  let area_results : Array[(@vcode.Instruction, @semantic.ValueType, Int)] = []
+  let area_results : Array[(@vcode.Instruction, @native.ValueType, Int)] = []
   let mut index = current_index
   while index < body.length() {
     let output_instruction = body[index]
@@ -3312,10 +3314,15 @@ fn emit_instruction(
   instruction : @vcode.Instruction,
   next_block : @vcode.Block?,
 ) -> Int raise X64EmitError {
+  let instruction_index = function.instruction_index(instruction).unwrap()
   let reg = fn(index : Int) -> @vcode.PhysicalReg raise X64EmitError {
-    match allocation.operand_location(instruction, index).unwrap() {
-      Register(reg) => reg
-      Stack(_) => raise UnexpectedStackOperand(instruction~, operand=index)
+    let location = allocation
+      .allocated_operand_location_at(instruction_index, index)
+      .unwrap()
+    if location.is_register() {
+      location.register_unchecked()
+    } else {
+      raise UnexpectedStackOperand(instruction~, operand=index)
     }
   }
   let mut metadata_offset = buffer.position()
@@ -3919,6 +3926,7 @@ fn emit_instruction(
       buffer.x86_emit_call_r64(callee_register.id)
     }
     TailCallDirect(target, signature, plan) => {
+      let tail_frame = frame.tail_call_plan(plan.stack_size)
       let result_area = result_area_register(plan).map(destination => {
         (signature.params.length(), destination)
       })
@@ -3930,15 +3938,11 @@ fn emit_instruction(
         signature.params,
         plan.arguments,
         plan.stack_size,
-        stack_base=frame.tail_call_stack_base(plan.stack_size),
+        stack_base=tail_frame.stack_argument_base,
         result_area?,
       )
       emit_epilogue(buffer, frame)
-      let thunk_address = emit_tail_return_thunk_setup(
-        buffer,
-        frame,
-        plan.stack_size,
-      )
+      let thunk_address = emit_tail_return_thunk_setup(buffer, tail_frame)
       metadata_offset = buffer.position()
       buffer.emit_byte(0xE9)
       let displacement = buffer.position()
@@ -3950,9 +3954,10 @@ fn emit_instruction(
           Code(target),
         ),
       )
-      emit_tail_return_thunk(buffer, frame, plan.stack_size, thunk_address)
+      emit_tail_return_thunk(buffer, tail_frame, thunk_address)
     }
     TailCallIndirect(signature, plan) => {
+      let tail_frame = frame.tail_call_plan(plan.stack_size)
       let callee_register = @vcode.PhysicalReg::new(0, Int)
       let result_area = result_area_register(plan).map(destination => {
         (signature.params.length() + 1, destination)
@@ -3966,19 +3971,15 @@ fn emit_instruction(
         plan.arguments,
         plan.stack_size,
         operand_start=1,
-        stack_base=frame.tail_call_stack_base(plan.stack_size),
+        stack_base=tail_frame.stack_argument_base,
         callee=(0, callee_register),
         result_area?,
       )
       emit_epilogue(buffer, frame)
-      let thunk_address = emit_tail_return_thunk_setup(
-        buffer,
-        frame,
-        plan.stack_size,
-      )
+      let thunk_address = emit_tail_return_thunk_setup(buffer, tail_frame)
       metadata_offset = buffer.position()
       buffer.x86_emit_jmp_r64(callee_register.id)
-      emit_tail_return_thunk(buffer, frame, plan.stack_size, thunk_address)
+      emit_tail_return_thunk(buffer, tail_frame, thunk_address)
     }
     Jump => {
       emit_edge_moves(buffer, function, allocation, frame, block, 0)

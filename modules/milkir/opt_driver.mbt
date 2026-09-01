@@ -53,18 +53,13 @@ fn run_opt_pass(
 }
 
 ///|
-fn egraph_limits_for_instruction_count(insts : Int) -> @egraph.SaturationLimits {
-  if insts >= 600 {
-    // An e-class starts with one node, so a limit of one would disable all
-    // rewrites. Allow one match and one additional node instead.
-    SaturationLimits(1, 2)
-  } else if insts >= 300 {
-    // Medium functions retain a little more local exploration while still
-    // bounding matches and e-class growth per work item.
-    SaturationLimits(2, 3)
-  } else {
-    @egraph.SaturationLimits::cranelift_default()
-  }
+fn use_egraph_for_instruction_count(insts : Int) -> Bool {
+  // Large functions previously copied every admitted MilkIR expression into
+  // a second graph, only to run a deliberately tiny compact ruleset. The
+  // existing in-place folding and GVN passes cover that tier without the
+  // representation round trip. Keep aegraph for small functions where the
+  // full ruleset can justify its construction cost.
+  insts < 300
 }
 
 ///|
@@ -73,16 +68,11 @@ fn run_egraph_pass_with_analysis(
   analysis : FunctionAnalysis,
 ) -> Bool {
   let before = instruction_count(func)
-  let limits = egraph_limits_for_instruction_count(before)
-  // Large functions keep the compact core rewrite set for predictable
-  // compile time; smaller ones run the full ruleset, whose results
-  // elaboration can now materialize. The limits above additionally scale
-  // the work permitted per e-class.
-  let ruleset = if before >= 300 {
-    @egraph.get_compact_ruleset()
-  } else {
-    @egraph.get_global_ruleset()
+  if !use_egraph_for_instruction_count(before) {
+    return false
   }
+  let limits = @egraph.SaturationLimits::cranelift_default()
+  let ruleset = @egraph.get_global_ruleset()
   if !perf_enabled() {
     return optimize_function_with_stats_with_limits_and_ruleset(
         func, limits, ruleset, analysis,
@@ -260,6 +250,17 @@ fn optimize_o2_pipeline(func : Function) -> OptResult {
 }
 
 ///|
+fn run_final_materialization_sink(func : Function) -> OptResult {
+  let result = run_opt_pass(
+    func, "sink_materializations", sink_single_use_materializations,
+  )
+  if result.changed {
+    run_opt_pass(func, "dce", eliminate_dead_code) |> ignore
+  }
+  result
+}
+
+///|
 /// Run optimizations based on level
 pub fn optimize_with_level(func : Function, level : OptLevel) -> OptResult {
   // NOTE: Even at O0 we still need a small set of IR cleanups to keep the
@@ -287,7 +288,11 @@ fn optimize_o1(func : Function) -> OptResult {
 ///|
 /// Run default optimizations (Cranelift-aligned O2 path).
 pub fn optimize(func : Function) -> OptResult {
-  optimize_o2_pipeline(func)
+  let result = optimize_o2_pipeline(func)
+  if run_final_materialization_sink(func).changed {
+    result.mark_changed()
+  }
+  result
 }
 
 ///|
@@ -315,6 +320,9 @@ fn optimize_o3(func : Function) -> OptResult {
   // Run O2 again to clean up
   let cleanup_result = optimize_o2_pipeline(func)
   if cleanup_result.changed {
+    result.mark_changed()
+  }
+  if run_final_materialization_sink(func).changed {
     result.mark_changed()
   }
   result

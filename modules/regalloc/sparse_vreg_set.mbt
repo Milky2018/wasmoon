@@ -2,6 +2,7 @@
 priv enum SparseVRegWords {
   Small(Array[(Int, UInt64)])
   Large(Map[Int, UInt64])
+  Dense(Array[UInt64])
 }
 
 ///|
@@ -12,6 +13,11 @@ priv struct SparseVRegSet {
 ///|
 fn SparseVRegSet::new() -> SparseVRegSet {
   { words: Small([]), }
+}
+
+///|
+fn SparseVRegSet::dense(value_count : Int) -> SparseVRegSet {
+  { words: Dense(Array::make((value_count + 63) / 64, 0UL)), }
 }
 
 ///|
@@ -26,6 +32,7 @@ fn SparseVRegSet::word(self : SparseVRegSet, word_id : Int) -> UInt64 {
       0UL
     }
     Large(words) => words.get(word_id).unwrap_or(0UL)
+    Dense(words) => words.get(word_id).unwrap_or(0UL)
   }
 }
 
@@ -65,6 +72,10 @@ fn SparseVRegSet::set_word(
       if bits == 0UL {
         words.remove(word_id)
       } else {
+        words[word_id] = bits
+      }
+    Dense(words) =>
+      if word_id >= 0 && word_id < words.length() {
         words[word_id] = bits
       }
   }
@@ -117,6 +128,19 @@ fn SparseVRegSet::union_with(
   other : SparseVRegSet,
 ) -> Bool {
   let mut changed = false
+  match (self.words, other.words) {
+    (Dense(destination), Dense(source)) => {
+      for word_id, bits in source {
+        let combined = destination[word_id] | bits
+        if combined != destination[word_id] {
+          destination[word_id] = combined
+          changed = true
+        }
+      }
+      return changed
+    }
+    _ => ()
+  }
   match other.words {
     Small(entries) =>
       for entry in entries {
@@ -125,6 +149,12 @@ fn SparseVRegSet::union_with(
         }
       }
     Large(words) =>
+      for word_id, bits in words {
+        if self.merge_word(word_id, bits) {
+          changed = true
+        }
+      }
+    Dense(words) =>
       for word_id, bits in words {
         if self.merge_word(word_id, bits) {
           changed = true
@@ -141,6 +171,19 @@ fn SparseVRegSet::union_without(
   excluded : SparseVRegSet,
 ) -> Bool {
   let mut changed = false
+  match (self.words, other.words, excluded.words) {
+    (Dense(destination), Dense(source), Dense(mask)) => {
+      for word_id, bits in source {
+        let combined = destination[word_id] | (bits & mask[word_id].lnot())
+        if combined != destination[word_id] {
+          destination[word_id] = combined
+          changed = true
+        }
+      }
+      return changed
+    }
+    _ => ()
+  }
   match other.words {
     Small(entries) =>
       for entry in entries {
@@ -149,6 +192,12 @@ fn SparseVRegSet::union_without(
         }
       }
     Large(words) =>
+      for word_id, bits in words {
+        if self.merge_word(word_id, bits & excluded.word(word_id).lnot()) {
+          changed = true
+        }
+      }
+    Dense(words) =>
       for word_id, bits in words {
         if self.merge_word(word_id, bits & excluded.word(word_id).lnot()) {
           changed = true
@@ -175,6 +224,10 @@ fn SparseVRegSet::to_sorted_array(self : SparseVRegSet) -> Array[Int] {
         append_word(values, entry.0, entry.1)
       }
     Large(words) =>
+      for word_id, bits in words {
+        append_word(values, word_id, bits)
+      }
+    Dense(words) =>
       for word_id, bits in words {
         append_word(values, word_id, bits)
       }

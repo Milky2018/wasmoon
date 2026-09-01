@@ -57,10 +57,10 @@ fn fp_transfer_scratch_regs() -> Array[@vcode.PhysicalReg] {
 }
 
 ///|
-fn transfer_scratch_for_type(ty : @semantic.ValueType) -> @vcode.PhysicalReg {
+fn transfer_scratch_for_type(ty : @native.ValueType) -> @vcode.PhysicalReg {
   match @vcode.reg_class_for_value_type(ty) {
     Int => int_transfer_scratch()
-    FpVector => fp_transfer_scratch()
+    Float | Vector | FpVector => fp_transfer_scratch()
   }
 }
 
@@ -88,7 +88,7 @@ fn allocation_register_role(reg : @vcode.PhysicalReg) -> AllocationRegisterRole 
       } else {
         Reserved
       }
-    FpVector =>
+    Float | Vector | FpVector =>
       if (reg.id >= 0 && reg.id < 16) || (reg.id >= 19 && reg.id < 32) {
         ValueHome
       } else if reg.id == 16 || reg.id == 17 {
@@ -207,18 +207,19 @@ fn verify_target_allocation(
   allocation : @vcode.Allocation,
 ) -> Unit raise AArch64AllocationError {
   for index in 0..<function.value_count() {
-    let value = function.value_at(index).unwrap()
-    match allocation.value_location(value).unwrap() {
-      Register(reg) => require_legal_value_register(reg)
-      Stack(_) => ()
+    let location = allocation.allocated_value_location_at(index).unwrap()
+    if location.is_register() {
+      require_legal_value_register(location.register_unchecked())
     }
   }
   for instruction_index in 0..<function.instruction_count() {
     let instruction = function.instruction_at(instruction_index).unwrap()
     for operand_index in 0..<function.instruction_operand_count(instruction) {
-      if allocation.operand_location(instruction, operand_index).unwrap()
-        is Register(reg) {
-        require_legal_operand_register(reg)
+      let location = allocation
+        .allocated_operand_location_at(instruction_index, operand_index)
+        .unwrap()
+      if location.is_register() {
+        require_legal_operand_register(location.register_unchecked())
       }
     }
   }
@@ -245,15 +246,19 @@ fn verify_target_allocation(
 fn allocate_verified(
   function : @vcode.Function[AArch64Inst],
   on_phase? : ((String?) -> Unit)? = None,
+  on_statistics? : ((@vcode.RegallocLoopStatistics) -> Unit)? = None,
   verify_allocation? : Bool = true,
+  allocation_session? : @vcode_regalloc.AllocationSession = @vcode_regalloc.AllocationSession::new(),
+  allocation_environment? : @vcode_regalloc.VCodeAllocationEnvironment = @vcode_regalloc.VCodeAllocationEnvironment::new(
+    allocatable_physical_regs(),
+    spill_scratch_regs(),
+  ),
 ) -> @vcode.Allocation raise AArch64AllocationError {
-  let allocation = @vcode_regalloc.allocate_selected_vcode(
+  let allocation = allocation_session.allocate_selected_vcode(
     function,
-    @vcode_regalloc.VCodeAllocationEnvironment::new(
-      allocatable_physical_regs(),
-      spill_scratch_regs(),
-    ),
+    allocation_environment,
     on_phase~,
+    on_statistics~,
     verify=verify_allocation,
   ) catch {
     error => raise AllocatorFailure(cause=error)

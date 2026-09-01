@@ -3,7 +3,7 @@
 /// by `scripts/tests/test_cli_version.py`. MoonBit gives the program no way
 /// to read its own module manifest, so the manifest stays the single source
 /// of truth and the test is what keeps this copy from drifting.
-const WASMOON_VERSION : String = "0.12.4"
+const WASMOON_VERSION : String = "0.12.6"
 
 ///|
 /// Print usage text as a diagnostic.
@@ -39,8 +39,8 @@ fn require_choice(
 ///|
 /// Values accepted by `explore --stage`.
 let stage_choices : Array[String] = [
-  "source", "ir", "opt-ir", "machv", "vcode", "allocated-vcode", "regalloc", "code-object",
-  "mc", "milkir", "opt-milkir", "machv-mc",
+  "source", "ir", "opt-ir", "vcode", "allocated-vcode", "regalloc", "code-object",
+  "mc", "milkir", "opt-milkir",
 ]
 
 ///|
@@ -115,7 +115,7 @@ fn build_command() -> @argparse.Command {
           FlagArg("debug", short='D', about="Enable debug output"),
           FlagArg(
             "dump-on-trap",
-            about="On JIT trap, dump IR/MachV/MC for the failing function",
+            about="On JIT trap, dump MilkIR/VCode/MC for the failing function",
           ),
           FlagArg(
             "dwarf",
@@ -249,7 +249,7 @@ fn build_command() -> @argparse.Command {
             "stage",
             short='s',
             action=Append,
-            about="Stages to show: source, milkir, opt-milkir, machv, vcode, allocated-vcode, code-object, mc (default all; ir, opt-ir, regalloc, and machv-mc are aliases)",
+            about="Stages to show: source, milkir, opt-milkir, vcode, allocated-vcode, code-object, mc (default all; ir, opt-ir, and regalloc are aliases)",
           ),
           OptionArg(
             "target",

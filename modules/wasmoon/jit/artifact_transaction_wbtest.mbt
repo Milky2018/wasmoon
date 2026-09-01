@@ -25,8 +25,8 @@ fn transaction_test_artifact() -> @artifact.Artifact raise @wasmoon_jit.JitPipel
       {
         identity: {
           function_index: 0,
-          symbol: @machv.CodeSymbol::new("wasm.func.0"),
-          signature: @machv.Signature::new([], []),
+          symbol: @native.CodeSymbol::new("wasm.func.0"),
+          signature: @native.Signature::new([], []),
         },
         entry_offset: 0,
         frame_size: 0,

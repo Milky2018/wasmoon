@@ -275,21 +275,21 @@ pub fn ComponentInstance::call_exported_func(
         self.async_state.can_block_stack[self.async_state.can_block_stack.length() -
         1] = func_type.is_async
       }
-      let res = call_component_func(
-        func,
-        args,
-        self.store,
-        self.resource_table,
-        self.async_state,
-      ) catch {
-        e => {
+      let res = {
+        errdefer {
           self.async_state.task_can_block[0] = prev_can_block
           if self.async_state.can_block_stack.length() > 0 {
             self.async_state.can_block_stack[self.async_state.can_block_stack.length() -
             1] = prev_can_block_stack
           }
-          raise e
         }
+        call_component_func(
+          func,
+          args,
+          self.store,
+          self.resource_table,
+          self.async_state,
+        )
       }
       self.async_state.task_can_block[0] = prev_can_block
       if self.async_state.can_block_stack.length() > 0 {

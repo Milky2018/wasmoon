@@ -117,14 +117,34 @@ test "instruction edit resolution preserves position order and edge edits" {
   let v0 : VirtualReg = { id: 0, class: Int, }
   let v1 : VirtualReg = { id: 1, class: Int, }
   let v2 : VirtualReg = { id: 2, class: Int, }
-  plan.add_edit({ value: v0, from: Reg(r0), to: Reg(r1), position: Before(2), })
-  plan.add_edit({ value: v1, from: Reg(r1), to: Reg(r2), position: After(0), })
-  plan.add_edit({ value: v2, from: Reg(r2), to: Reg(r0), position: Before(1), })
-  plan.add_edit({ value: v0, from: Reg(r0), to: Reg(r1), position: Before(2), })
+  plan.add_edit({
+    value: v0,
+    from: reg_location(r0),
+    to: reg_location(r1),
+    position: Before(2),
+  })
   plan.add_edit({
     value: v1,
-    from: Reg(r1),
-    to: Reg(r0),
+    from: reg_location(r1),
+    to: reg_location(r2),
+    position: After(0),
+  })
+  plan.add_edit({
+    value: v2,
+    from: reg_location(r2),
+    to: reg_location(r0),
+    position: Before(1),
+  })
+  plan.add_edit({
+    value: v0,
+    from: reg_location(r0),
+    to: reg_location(r1),
+    position: Before(2),
+  })
+  plan.add_edit({
+    value: v1,
+    from: reg_location(r1),
+    to: reg_location(r0),
     position: Edge(source_block=3, successor_index=1),
   })
   resolve_instruction_edits(plan, MachineEnv::new([r0, r1, r2], [r2]))
@@ -134,26 +154,26 @@ test "instruction edit resolution preserves position order and edge edits" {
       #|[
       #|  {
       #|    value: { id: 0, class: Int },
-      #|    from: Reg({ id: 0, class: Int }),
-      #|    to: Reg({ id: 1, class: Int }),
+      #|    from: Reg(p0:int),
+      #|    to: Reg(p1:int),
       #|    position: Before(2),
       #|  },
       #|  {
       #|    value: { id: 1, class: Int },
-      #|    from: Reg({ id: 1, class: Int }),
-      #|    to: Reg({ id: 2, class: Int }),
+      #|    from: Reg(p1:int),
+      #|    to: Reg(p2:int),
       #|    position: After(0),
       #|  },
       #|  {
       #|    value: { id: 2, class: Int },
-      #|    from: Reg({ id: 2, class: Int }),
-      #|    to: Reg({ id: 0, class: Int }),
+      #|    from: Reg(p2:int),
+      #|    to: Reg(p0:int),
       #|    position: Before(1),
       #|  },
       #|  {
       #|    value: { id: 1, class: Int },
-      #|    from: Reg({ id: 1, class: Int }),
-      #|    to: Reg({ id: 0, class: Int }),
+      #|    from: Reg(p1:int),
+      #|    to: Reg(p0:int),
       #|    position: Edge(source_block=3, successor_index=1),
       #|  },
       #|]
@@ -219,10 +239,13 @@ impl FunctionView for VerifierCfgView with fn values_share_spill_slot(
 }
 
 ///|
-impl FunctionView for VerifierCfgView with fn entry_values(self) -> Array[
-  VirtualReg,
-] {
-  self.entry_values.copy()
+impl FunctionView for VerifierCfgView with fn entry_value_count(self) -> Int {
+  self.entry_values.length()
+}
+
+///|
+impl FunctionView for VerifierCfgView with fn entry_value_at(self, parameter) -> VirtualReg {
+  self.entry_values[parameter]
 }
 
 ///|
@@ -236,51 +259,110 @@ impl FunctionView for VerifierCfgView with fn block_id_at(_self, block) -> Int {
 }
 
 ///|
-impl FunctionView for VerifierCfgView with fn block_parameters(self, block) -> Array[
-  VirtualReg,
-] {
-  self.parameters[block].copy()
+impl FunctionView for VerifierCfgView with fn block_parameter_count(self, block) -> Int {
+  self.parameters[block].length()
 }
 
 ///|
-impl FunctionView for VerifierCfgView with fn block_instructions(self, block) -> Array[
-  Int,
-] {
+impl FunctionView for VerifierCfgView with fn block_parameter_at(
+  self,
+  block,
+  parameter,
+) -> VirtualReg {
+  self.parameters[block][parameter]
+}
+
+///|
+impl FunctionView for VerifierCfgView with fn block_instruction_count(
+  self,
+  block,
+) -> Int {
   self.block_visits.val = self.block_visits.val + 1
-  self.blocks[block].copy()
+  self.blocks[block].length()
 }
 
 ///|
-impl FunctionView for VerifierCfgView with fn block_successors(self, block) -> Array[
-  Int,
-] {
+impl FunctionView for VerifierCfgView with fn block_instruction_at(
+  self,
+  block,
+  instruction,
+) -> Int {
+  self.blocks[block][instruction]
+}
+
+///|
+impl FunctionView for VerifierCfgView with fn block_successor_count(self, block) -> Int {
   self.successor_queries.val = self.successor_queries.val + 1
-  self.successors[block].copy()
+  self.successors[block].length()
 }
 
 ///|
-impl FunctionView for VerifierCfgView with fn edge_arguments(
+impl FunctionView for VerifierCfgView with fn block_successor_at(
   self,
   block,
   successor,
-) -> Array[VirtualReg] {
-  self.edge_arguments[block][successor].copy()
+) -> Int {
+  self.successors[block][successor]
+}
+
+///|
+impl FunctionView for VerifierCfgView with fn edge_argument_count(
+  self,
+  block,
+  successor,
+) -> Int {
+  self.edge_arguments[block][successor].length()
+}
+
+///|
+impl FunctionView for VerifierCfgView with fn edge_argument_at(
+  self,
+  block,
+  successor,
+  argument,
+) -> VirtualReg {
+  self.edge_arguments[block][successor][argument]
 }
 
 ///|
 impl FunctionView for VerifierCfgView with fn instruction_operands(
   self,
   instruction,
-) -> Array[Operand] {
-  self.operands[instruction].copy()
+) -> ArrayView[Operand] {
+  self.operands[instruction][:]
 }
 
 ///|
 impl FunctionView for VerifierCfgView with fn instruction_clobbers(
   _self,
   _instruction,
-) -> Array[PhysicalReg] {
-  []
+) -> ArrayView[PhysicalReg] {
+  let empty : Array[PhysicalReg] = []
+  empty[:]
+}
+
+///|
+test "liveness coalesces contiguous cross-block fragments" {
+  let value : VirtualReg = { id: 0, class: Int, }
+  let function : VerifierCfgView = {
+    value_count: 1,
+    blocks: [[0], [1], [2]],
+    operands: [[], [], [Operand::use_reg(value)]],
+    successors: [[1], [2], []],
+    entry_values: [value],
+    parameters: [[], [], []],
+    edge_arguments: [[[]], [[]], []],
+    successor_queries: Ref(0),
+    block_visits: Ref(0),
+  }
+  let range = build_function_live_ranges(function).get_by_vreg(value).unwrap()
+  inspect(range.range_count(), content="1")
+  debug_inspect(
+    range.range_at(0),
+    content=(
+      #|Some({ start: { block: 0, inst: -1 }, end: { block: 2, inst: 0 } })
+    ),
+  )
 }
 
 ///|
@@ -305,9 +387,9 @@ test "operand assignment reuses a tied group's resident register" {
     block_visits: Ref(0),
   }
   let plan = AllocationPlan::new(2)
-  let slot = plan.create_spill_slot(8, 8)
-  plan.assign_value(spilled, Spill(slot))
-  plan.assign_value(resident, Reg(r0))
+  let slot = plan.create_spill_slot(0, 8, 8)
+  plan.assign_value(spilled, spill_location(slot))
+  plan.assign_value(resident, reg_location(r0))
   let (segments, segments_by_value) = build_allocation_segments(
     build_function_live_ranges(function),
     allocatable=[r0],
@@ -328,7 +410,9 @@ test "operand assignment reuses a tied group's resident register" {
   verify_function_allocation(function, MachineEnv::new([r0], []), plan)
   debug_inspect(
     (plan.operand_location(0, 0), plan.operand_location(0, 1)),
-    content="(Some(Reg({ id: 0, class: Int })), Some(Reg({ id: 0, class: Int })))",
+    content=(
+      #|(Some(Reg(p0:int)), Some(Reg(p0:int)))
+    ),
   )
 }
 
@@ -342,11 +426,11 @@ fn verify_wrong_location(
   let r0 : PhysicalReg = { id: 0, class: Int, }
   let r1 : PhysicalReg = { id: 1, class: Int, }
   let plan = AllocationPlan::new(1)
-  plan.assign_value(value, Reg(r0))
+  plan.assign_value(value, reg_location(r0))
   if def_instruction is Some(instruction) {
-    plan.assign_operand(instruction, 0, Reg(r0))
+    plan.assign_operand(instruction, 0, reg_location(r0))
   }
-  plan.assign_operand(use_instruction, 0, Reg(r1))
+  plan.assign_operand(use_instruction, 0, reg_location(r1))
   try {
     verify_function_allocation(function, MachineEnv::new([r0, r1], []), plan)
     None
@@ -370,9 +454,9 @@ test "plan verifier rejects a spilled AnyReg operand" {
     block_visits: Ref(0),
   }
   let plan = AllocationPlan::new(1)
-  let slot = plan.create_spill_slot(8, 8)
-  plan.assign_value(value, Spill(slot))
-  plan.assign_operand(0, 0, Spill(slot))
+  let slot = plan.create_spill_slot(0, 8, 8)
+  plan.assign_value(value, spill_location(slot))
+  plan.assign_operand(0, 0, spill_location(slot))
   let error = try {
     verify_function_allocation(function, MachineEnv::new([], []), plan)
     None
@@ -403,12 +487,12 @@ test "plan verifier accepts a declared fixed-operand-only register" {
     block_visits: Ref(0),
   }
   let plan = AllocationPlan::new(1)
-  plan.assign_value(value, Reg(home))
-  plan.assign_operand(0, 0, Reg(fixed_only))
+  plan.assign_value(value, reg_location(home))
+  plan.assign_operand(0, 0, reg_location(fixed_only))
   plan.add_edit({
     value,
-    from: Reg(home),
-    to: Reg(fixed_only),
+    from: reg_location(home),
+    to: reg_location(fixed_only),
     position: Before(0),
   })
   verify_function_allocation(
@@ -437,12 +521,12 @@ test "plan verifier rejects an unconstrained operand in a fixed-only register" {
     block_visits: Ref(0),
   }
   let plan = AllocationPlan::new(1)
-  plan.assign_value(value, Reg(home))
-  plan.assign_operand(0, 0, Reg(fixed_only))
+  plan.assign_value(value, reg_location(home))
+  plan.assign_operand(0, 0, reg_location(fixed_only))
   plan.add_edit({
     value,
-    from: Reg(home),
-    to: Reg(fixed_only),
+    from: reg_location(home),
+    to: reg_location(fixed_only),
     position: Before(0),
   })
   let error = try {
@@ -483,12 +567,7 @@ test "plan verifier always enters a self-looping entry block" {
       0,
     ),
     content=(
-      #|Some(
-      #|  IncorrectValue(
-      #|    vreg={ id: 0, class: Int },
-      #|    location=Reg({ id: 1, class: Int }),
-      #|  ),
-      #|)
+      #|Some(IncorrectValue(vreg={ id: 0, class: Int }, location=Reg(p1:int)))
     ),
   )
 }
@@ -513,12 +592,7 @@ test "plan verifier checks an unreachable cyclic component" {
       1,
     ),
     content=(
-      #|Some(
-      #|  IncorrectValue(
-      #|    vreg={ id: 0, class: Int },
-      #|    location=Reg({ id: 1, class: Int }),
-      #|  ),
-      #|)
+      #|Some(IncorrectValue(vreg={ id: 0, class: Int }, location=Reg(p1:int)))
     ),
   )
 }
@@ -540,7 +614,7 @@ test "plan verifier queries each block successor list once" {
     block_visits: Ref(0),
   }
   let plan = AllocationPlan::new(1)
-  plan.assign_value(value, Reg(register))
+  plan.assign_value(value, reg_location(register))
   verify_function_allocation(function, MachineEnv::new([register], []), plan)
   inspect(successor_queries.val, content="4")
 }
@@ -574,8 +648,8 @@ test "production fragments cache local allocation metadata" {
     }),
     content=(
       #|[
-      #|  (667, false, None, Some({ id: 1, class: Int })),
-      #|  (1000, true, Some({ id: 0, class: Int }), Some({ id: 0, class: Int })),
+      #|  (667, false, None, Some(p1:int)),
+      #|  (1000, true, Some(p0:int), Some(p0:int)),
       #|]
     ),
   )
@@ -597,8 +671,8 @@ test "any-location definitions materialize in their stable home" {
     block_visits: Ref(0),
   }
   let plan = AllocationPlan::new(1)
-  let slot = plan.create_spill_slot(8, 8)
-  plan.assign_value(value, Spill(slot))
+  let slot = plan.create_spill_slot(0, 8, 8)
+  plan.assign_value(value, spill_location(slot))
   let segments : Array[AllocationSegment] = [
     {
       id: 0,
@@ -622,6 +696,24 @@ test "any-location definitions materialize in their stable home" {
   debug_inspect(
     (plan.operand_location(0, 0), plan.edits()),
     content="(Some(Spill(0)), [])",
+  )
+}
+
+///|
+test "physical register index preserves classes and bounded fallback" {
+  let int3 : PhysicalReg = { id: 3, class: Int, }
+  let float3 : PhysicalReg = { id: 3, class: Float, }
+  let dense_registers = [int3, float3]
+  let session = AllocationSession::new()
+  let dense = PhysicalRegisterIndex::for_session(session, dense_registers)
+  let dense_int = dense.find(dense_registers, int3)
+  let dense_float = dense.find(dense_registers, float3)
+  let far : PhysicalReg = { id: 300, class: Int, }
+  let fallback_registers = [far]
+  let fallback = PhysicalRegisterIndex::for_session(session, fallback_registers)
+  debug_inspect(
+    (dense_int, dense_float, fallback.find(fallback_registers, far)),
+    content="(Some(0), Some(1), Some(0))",
   )
 }
 
@@ -669,10 +761,19 @@ test "production register allocation index orders updates by range end" {
       location: None,
     },
   ]
-  let allocations = RegisterAllocationIndex::new(1, segments, [0])
+  let allocations = RegisterAllocationIndex::for_session(
+    AllocationSession::new(),
+    1,
+    segments,
+    [0, 1, 0, 0],
+    Array::make(2, 0),
+    [0],
+  )
   allocations.insert(0, 2)
   allocations.insert(0, 0)
+  debug_inspect(allocations.owner_is_contiguous(0), content="true")
   allocations.insert(0, 1)
+  debug_inspect(allocations.owner_is_contiguous(0), content="false")
   let stack : Array[Int] = []
   let ordered : Array[Int] = []
   allocations.seek(0, ProgramPoint(0, -1), stack)
@@ -681,6 +782,11 @@ test "production register allocation index orders updates by range end" {
   }
   debug_inspect(ordered, content="[0, 1, 2]")
   allocations.remove(0, 1)
+  debug_inspect(allocations.owner_is_contiguous(0), content="true")
+  allocations.insert(0, 3)
+  debug_inspect(allocations.owner_is_contiguous(0), content="true")
+  allocations.remove(0, 3)
+  debug_inspect(allocations.owner_is_contiguous(0), content="true")
   ordered.clear()
   allocations.seek(0, ProgramPoint(0, -1), stack)
   while allocations.next(stack) is Some(segment) {
@@ -712,11 +818,26 @@ test "plan verifier applies same-position edits in plan order" {
     block_visits: Ref(0),
   }
   let plan = AllocationPlan::new(1)
-  plan.assign_value(value, Reg(r0))
-  plan.add_edit({ value, from: Reg(r0), to: Reg(r1), position: Before(0), })
-  plan.add_edit({ value, from: Reg(r1), to: Reg(r2), position: Before(0), })
-  plan.add_edit({ value, from: Reg(r2), to: Reg(r0), position: Before(0), })
-  plan.assign_operand(0, 0, Reg(r0))
+  plan.assign_value(value, reg_location(r0))
+  plan.add_edit({
+    value,
+    from: reg_location(r0),
+    to: reg_location(r1),
+    position: Before(0),
+  })
+  plan.add_edit({
+    value,
+    from: reg_location(r1),
+    to: reg_location(r2),
+    position: Before(0),
+  })
+  plan.add_edit({
+    value,
+    from: reg_location(r2),
+    to: reg_location(r0),
+    position: Before(0),
+  })
+  plan.assign_operand(0, 0, reg_location(r0))
   verify_function_allocation(function, MachineEnv::new([r0, r1, r2], []), plan)
 }
 
@@ -746,7 +867,7 @@ test "plan verifier processes a deep diamond join chain once per block" {
     _ => [],
   )
   let plan = AllocationPlan::new(1)
-  plan.assign_value(value, Reg(r0))
+  plan.assign_value(value, reg_location(r0))
   for i in 0..<diamonds {
     let top = 3 * i
     let left = 3 * i + 1
@@ -764,8 +885,8 @@ test "plan verifier processes a deep diamond join chain once per block" {
     // predecessor state has to re-propagate the shrink one level at a time.
     plan.add_edit({
       value,
-      from: Reg(r0),
-      to: Reg(registers[i + 1]),
+      from: reg_location(r0),
+      to: reg_location(registers[i + 1]),
       position: Edge(source_block=right, successor_index=0),
     })
   }

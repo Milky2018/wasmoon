@@ -1,18 +1,4 @@
 ///|
-fn test_lowering_context() -> LoweringContext {
-  LoweringContext::new(
-    try! InternalAbi::new(
-      0,
-      8,
-      [1, 2, 3, 4, 5, 6, 7],
-      [0, 1, 2, 3, 4, 5, 6, 7],
-      [0, 1, 2, 3, 4, 5, 6, 7],
-      [0, 1, 2, 3, 4, 5, 6, 7],
-    ),
-  )
-}
-
-///|
 test "AArch64 rejects an internal ABI that reuses the context register" {
   try
     InternalAbi::new(0, 8, [0, 1, 2], [0, 1], [0, 1], [0, 1]) |> ignore

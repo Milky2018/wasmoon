@@ -57,7 +57,7 @@ fn allocation_register_role(reg : @vcode.PhysicalReg) -> AllocationRegisterRole 
       } else {
         Reserved
       }
-    FpVector =>
+    Float | Vector | FpVector =>
       if reg.id >= 0 && reg.id < 13 {
         ValueHome
       } else if reg.id == 13 {
@@ -183,7 +183,7 @@ fn require_legal_operand_register(
   let operand = function
     .instruction_operand_at(instruction, operand_index)
     .unwrap()
-  if operand.constraint is Fixed(required) &&
+  if operand.constraint is FixedReg(required) &&
     required == reg &&
     role.allows_fixed_operand() {
     return
@@ -204,7 +204,7 @@ fn require_legal_edit_register(
   }
   if role.allows_fixed_operand() && edit.point() is Some(point) {
     let required_role = match (point.placement(), source) {
-      (Before, false) => Some(@vcode.Use)
+      (Before, false) => Some(@vcode.OperandRole::Use)
       (After, true) => Some(Def)
       _ => None
     }
@@ -219,7 +219,7 @@ fn require_legal_edit_register(
       for operand in function.instruction_operands(instruction) {
         if operand.value == edit_value &&
           operand.role == role &&
-          operand.constraint == Fixed(reg) {
+          operand.constraint == FixedReg(reg) {
           return
         }
       }
@@ -248,19 +248,23 @@ fn verify_target_allocation(
   allocation : @vcode.Allocation,
 ) -> Unit raise X64AllocationError {
   for index in 0..<function.value_count() {
-    let value = function.value_at(index).unwrap()
-    match allocation.value_location(value).unwrap() {
-      Register(reg) => require_legal_value_register(reg)
-      Stack(_) => ()
+    let location = allocation.allocated_value_location_at(index).unwrap()
+    if location.is_register() {
+      require_legal_value_register(location.register_unchecked())
     }
   }
   for instruction_index in 0..<function.instruction_count() {
     let instruction = function.instruction_at(instruction_index).unwrap()
     for operand_index in 0..<function.instruction_operand_count(instruction) {
-      if allocation.operand_location(instruction, operand_index).unwrap()
-        is Register(reg) {
+      let location = allocation
+        .allocated_operand_location_at(instruction_index, operand_index)
+        .unwrap()
+      if location.is_register() {
         require_legal_operand_register(
-          function, instruction, operand_index, reg,
+          function,
+          instruction,
+          operand_index,
+          location.register_unchecked(),
         )
       }
     }
@@ -290,15 +294,19 @@ fn verify_target_allocation(
 fn allocate_verified(
   function : @vcode.Function[X64Inst],
   on_phase? : ((String?) -> Unit)? = None,
+  on_statistics? : ((@vcode.RegallocLoopStatistics) -> Unit)? = None,
   verify_allocation? : Bool = true,
+  allocation_session? : @vcode_regalloc.AllocationSession = @vcode_regalloc.AllocationSession::new(),
+  allocation_environment? : @vcode_regalloc.VCodeAllocationEnvironment = @vcode_regalloc.VCodeAllocationEnvironment::new(
+    allocatable_physical_regs(),
+    spill_scratch_regs(),
+  ).with_fixed_operand_regs(fixed_operand_only_regs()),
 ) -> @vcode.Allocation raise X64AllocationError {
-  let allocation = @vcode_regalloc.allocate_selected_vcode(
+  let allocation = allocation_session.allocate_selected_vcode(
     function,
-    @vcode_regalloc.VCodeAllocationEnvironment::new(
-      allocatable_physical_regs(),
-      spill_scratch_regs(),
-    ).with_fixed_operand_regs(fixed_operand_only_regs()),
+    allocation_environment,
     on_phase~,
+    on_statistics~,
     verify=verify_allocation,
   ) catch {
     error => raise AllocatorFailure(cause=error)

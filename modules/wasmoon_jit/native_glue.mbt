@@ -10,7 +10,6 @@ pub(all) struct JitIntegrationPlan {
 /// Concrete target instruction, allocation, and frame types remain owned by
 /// their target modules and do not cross this diagnostics facade.
 pub struct JitPipelineDiagnostics {
-  semantic_machv : String
   target_vcode : String
   allocated_vcode : String
   code_object : String
@@ -39,23 +38,13 @@ fn code_object_diagnostic_text(
 
 ///|
 pub suberror JitPipelineError {
-  SemanticLoweringFailed(cause~ : @milkir_machv.SemanticLowerError)
-  RuntimeAbiInputInvalid(cause~ : @semantic_machv.MachVVerifyError)
-  RuntimeAbiOutputInvalid(cause~ : @semantic_machv.MachVVerifyError)
-  RuntimeAbiContractViolation(message~ : String)
+  NativeLoweringFailed(cause~ : @milkir_native.NativeLowerError)
   AArch64AbiInvalid(cause~ : @aarch64_target.InternalAbiError)
   X64AbiInvalid(cause~ : @x64_target.InternalAbiError)
-  MissingEnvironmentField(target~ : NativeTarget, field~ : String)
   AArch64LoweringFailed(cause~ : @aarch64_target.AArch64LowerError)
   X64LoweringFailed(cause~ : @x64_target.X64LowerError)
   AArch64CompilationFailed(cause~ : @aarch64_target.AArch64CompileError)
   X64CompilationFailed(cause~ : @x64_target.X64CompileError)
-  AArch64AllocationFailed(cause~ : @aarch64_target.AArch64AllocationError)
-  X64AllocationFailed(cause~ : @x64_target.X64AllocationError)
-  AArch64FramePlanningFailed(cause~ : @aarch64_target.AArch64FrameError)
-  X64FramePlanningFailed(cause~ : @x64_target.X64FrameError)
-  AArch64EmissionFailed(cause~ : @aarch64_target.AArch64EmitError)
-  X64EmissionFailed(cause~ : @x64_target.X64EmitError)
   AArch64LinkPreparationFailed(cause~ : @aarch64_target.AArch64LinkError)
   X64LinkPreparationFailed(cause~ : @x64_target.X64LinkError)
   InvalidJitRelocation(target~ : NativeTarget, index~ : Int, message~ : String)
@@ -75,28 +64,58 @@ pub fn plan_milkir_integration_for_target(
   func : @milkir.Function,
   target : NativeTarget,
 ) -> JitIntegrationPlan raise JitPipelineError {
+  let signature = @milkir_native.function_signature(func)
   if target is AArch64 {
-    let semantic = @milkir_machv.lower_core_function_with_protocol(
-      func,
+    let context = default_aarch64_context()
+    let session = @aarch64_target.DirectLoweringSession::new(
+      func.name,
       Platform,
+      signature.params,
+      signature.results,
+      context,
     ) catch {
-      error => raise SemanticLoweringFailed(cause=error)
+      error => raise AArch64LoweringFailed(cause=error)
     }
-    let compiled = build_aarch64_target(semantic)
+    @milkir_native.lower_core_to_sink(func, session.sink()) catch {
+      error => raise NativeLoweringFailed(cause=error)
+    }
+    let selected = session.finish_selected() catch {
+      error => raise AArch64LoweringFailed(cause=error)
+    }
+    let compiled = @aarch64_target.compile_selected(selected) catch {
+      error => raise AArch64CompilationFailed(cause=error)
+    }
+    let (object, frame_size) = compiled
     return {
       entry_symbol: func.name,
       target,
-      object: jit_code_object_from_aarch64(compiled.object, compiled.frame_size),
+      object: jit_code_object_from_aarch64(object, frame_size),
     }
   }
-  let semantic = @milkir_machv.lower_core_function_with_protocol(func, Platform) catch {
-    error => raise SemanticLoweringFailed(cause=error)
+  let context = default_x64_context()
+  let session = @x64_target.DirectLoweringSession::new(
+    func.name,
+    Platform,
+    signature.params,
+    signature.results,
+    context,
+  ) catch {
+    error => raise X64LoweringFailed(cause=error)
   }
-  let compiled = build_x64_target(semantic)
-  return {
+  @milkir_native.lower_core_to_sink(func, session.sink()) catch {
+    error => raise NativeLoweringFailed(cause=error)
+  }
+  let selected = session.finish_selected() catch {
+    error => raise X64LoweringFailed(cause=error)
+  }
+  let compiled = @x64_target.compile_selected(selected) catch {
+    error => raise X64CompilationFailed(cause=error)
+  }
+  let (object, frame_size) = compiled
+  {
     entry_symbol: func.name,
     target,
-    object: jit_code_object_from_x64(compiled.object, compiled.frame_size),
+    object: jit_code_object_from_x64(object, frame_size),
   }
 }
 

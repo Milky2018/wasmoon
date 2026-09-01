@@ -1,3 +1,4 @@
 import {
+  "Milky2018/vcode/allocation_types",
   "Milky2018/regalloc/unionfind",
 }

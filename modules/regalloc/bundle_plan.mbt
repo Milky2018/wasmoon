@@ -8,10 +8,7 @@ priv struct BundlePlanSpan {
 ///|
 priv struct BundleRangeFact {
   class : RegClass
-  spans : Array[BundlePlanSpan]
-  fixed_reg : PhysicalReg?
-  fixed_conflict : Bool
-  has_fixed_def : Bool
+  range : LiveRange
 }
 
 ///|
@@ -146,20 +143,7 @@ fn compare_bundle_span_point(lhs : ProgramPoint, rhs : ProgramPoint) -> Int {
 fn build_bundle_range_facts(ranges : LiveRangeSet) -> Array[BundleRangeFact] {
   let facts : Array[BundleRangeFact?] = Array::make(ranges.length(), None)
   for range in ranges.ranges {
-    let spans : Array[BundlePlanSpan] = []
-    for span in range.ranges {
-      spans.push(bundle_span(span, ranges.block_order))
-    }
-    let (fixed_reg, fixed_conflict, has_fixed_def) = bundle_range_fixed_contract(
-      range,
-    )
-    facts[range.id] = Some({
-      class: range.vreg.class,
-      spans,
-      fixed_reg,
-      fixed_conflict,
-      has_fixed_def,
-    })
+    facts[range.id] = Some({ class: range.vreg.class, range, })
   }
   facts.map(fact => fact.unwrap())
 }
@@ -169,11 +153,16 @@ fn bundle_span_runs_for_root(
   facts : Array[BundleRangeFact],
   span_cache : Array[BundleSpanRuns?],
   root : Int,
+  block_order : Array[Int],
 ) -> BundleSpanRuns {
   match span_cache[root] {
     Some(runs) => runs
     None => {
-      let runs : BundleSpanRuns = { levels: [Some(facts[root].spans)], }
+      let spans : Array[BundlePlanSpan] = []
+      for range in facts[root].range.ranges {
+        spans.push(bundle_span(range, block_order))
+      }
+      let runs : BundleSpanRuns = { levels: [Some(spans)], }
       span_cache[root] = Some(runs)
       runs
     }
@@ -310,7 +299,9 @@ fn try_merge_bundle_edge(
   fixed_reg_cache : Array[PhysicalReg?],
   fixed_conflict_cache : Array[Bool],
   fixed_def_cache : Array[Bool],
+  fixed_initialized : Array[Bool],
   span_cache : Array[BundleSpanRuns?],
+  block_order : Array[Int],
 ) -> Unit {
   let (target, source) = edge
   if target < 0 ||
@@ -322,17 +313,33 @@ fn try_merge_bundle_edge(
   let target_root = union_find.find(target)
   let source_root = union_find.find(source)
   if target_root == source_root ||
-    facts[target_root].class != facts[source_root].class ||
-    fixed_conflict_cache[target_root] ||
-    fixed_conflict_cache[source_root] {
+    facts[target_root].class != facts[source_root].class {
+    return
+  }
+  for root in [target_root, source_root] {
+    if !fixed_initialized[root] {
+      let (fixed_reg, fixed_conflict, has_fixed_def) = bundle_range_fixed_contract(
+        facts[root].range,
+      )
+      fixed_reg_cache[root] = fixed_reg
+      fixed_conflict_cache[root] = fixed_conflict
+      fixed_def_cache[root] = has_fixed_def
+      fixed_initialized[root] = true
+    }
+  }
+  if fixed_conflict_cache[target_root] || fixed_conflict_cache[source_root] {
     return
   }
   match (fixed_reg_cache[target_root], fixed_reg_cache[source_root]) {
     (Some(lhs), Some(rhs)) => if lhs != rhs { return }
     _ => ()
   }
-  let target_spans = bundle_span_runs_for_root(facts, span_cache, target_root)
-  let source_spans = bundle_span_runs_for_root(facts, span_cache, source_root)
+  let target_spans = bundle_span_runs_for_root(
+    facts, span_cache, target_root, block_order,
+  )
+  let source_spans = bundle_span_runs_for_root(
+    facts, span_cache, source_root, block_order,
+  )
   if target_spans.conflicts(
       fixed_def_cache[target_root],
       source_spans,
@@ -361,22 +368,31 @@ fn build_production_bundle_plan_from_range_edges(
   ranges : LiveRangeSet,
   segments : Array[AllocationSegment],
   edges : Array[(Int, Int)],
+  verify? : Bool = true,
 ) -> ProductionBundlePlan raise VerifyError {
   let facts = build_bundle_range_facts(ranges)
   let union_find = @unionfind.UnionFind::UnionFind(facts.length())
   let fixed_reg_cache : Array[PhysicalReg?] = []
   let fixed_conflict_cache : Array[Bool] = []
   let fixed_def_cache : Array[Bool] = []
+  let fixed_initialized = Array::make(facts.length(), false)
   let span_cache : Array[BundleSpanRuns?] = Array::make(facts.length(), None)
-  for fact in facts {
-    fixed_reg_cache.push(fact.fixed_reg)
-    fixed_conflict_cache.push(fact.fixed_conflict)
-    fixed_def_cache.push(fact.has_fixed_def)
+  for _ in facts {
+    fixed_reg_cache.push(None)
+    fixed_conflict_cache.push(false)
+    fixed_def_cache.push(false)
   }
   for edge in edges {
     try_merge_bundle_edge(
-      union_find, facts, edge, fixed_reg_cache, fixed_conflict_cache, fixed_def_cache,
+      union_find,
+      facts,
+      edge,
+      fixed_reg_cache,
+      fixed_conflict_cache,
+      fixed_def_cache,
+      fixed_initialized,
       span_cache,
+      ranges.block_order,
     )
   }
   let range_to_bundle = Array::make(facts.length(), -1)
@@ -406,13 +422,28 @@ fn build_production_bundle_plan_from_range_edges(
     segment_to_bundle[segment.id] = bundle
     bundle_segments[bundle].push(segment.id)
   }
+  for segment_ids in bundle_segments {
+    segment_ids.sort_by((left, right) => {
+      let by_end = segments[left].range.end.compare_with_order(
+        segments[right].range.end,
+        ranges.block_order,
+      )
+      if by_end != 0 {
+        by_end
+      } else {
+        left - right
+      }
+    })
+  }
   let plan : ProductionBundlePlan = {
     range_to_bundle,
     segment_to_bundle,
     bundle_ranges,
     bundle_segments,
   }
-  plan.validate(facts.length(), segments.length())
+  if verify {
+    plan.validate(facts.length(), segments.length())
+  }
   plan
 }
 
@@ -423,15 +454,15 @@ fn[F : FunctionView] collect_production_bundle_edges(
 ) -> Array[(Int, Int)] {
   let edges : Array[(Int, Int)] = []
   for block in 0..<function.block_count() {
-    for successor_index, target in function.block_successors(block) {
-      let arguments = function.edge_arguments(block, successor_index)
-      let parameters = function.block_parameters(target)
-      for index in 0..<arguments.length().min(parameters.length()) {
-        match
-          (
-            ranges.get_by_vreg(parameters[index]),
-            ranges.get_by_vreg(arguments[index]),
-          ) {
+    for successor_index in 0..<function.block_successor_count(block) {
+      let target = function.block_successor_at(block, successor_index)
+      let count = function
+        .edge_argument_count(block, successor_index)
+        .min(function.block_parameter_count(target))
+      for index in 0..<count {
+        let argument = function.edge_argument_at(block, successor_index, index)
+        let parameter = function.block_parameter_at(target, index)
+        match (ranges.get_by_vreg(parameter), ranges.get_by_vreg(argument)) {
           (Some(target_range), Some(source_range)) => {
             let edge = (target_range.id, source_range.id)
             if target_range.id != source_range.id {
@@ -451,10 +482,12 @@ fn[F : FunctionView] build_production_bundle_plan(
   function : F,
   ranges : LiveRangeSet,
   segments : Array[AllocationSegment],
+  verify? : Bool = true,
 ) -> ProductionBundlePlan raise VerifyError {
   build_production_bundle_plan_from_range_edges(
     ranges,
     segments,
     collect_production_bundle_edges(function, ranges),
+    verify~,
   )
 }

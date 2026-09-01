@@ -86,21 +86,21 @@ test "O1 folds a 300-instruction live arithmetic chain" {
 }
 
 ///|
-test "egraph uses a bounded rewrite budget at 300 instructions" {
+test "production optimizer skips the duplicate egraph at 300 instructions" {
   let func = egraph_identity_function("egraph_300", 300)
   inspect(
     run_egraph_pass_with_analysis(func, FunctionAnalysis::build(func)),
-    content="true",
+    content="false",
   )
   inspect(func.verify(), content="()")
 }
 
 ///|
-test "egraph retains rewrite work at 600 instructions" {
+test "production optimizer skips the duplicate egraph at 600 instructions" {
   let func = egraph_identity_function("egraph_600", 600)
   inspect(
     run_egraph_pass_with_analysis(func, FunctionAnalysis::build(func)),
-    content="true",
+    content="false",
   )
   inspect(func.verify(), content="()")
 }
@@ -141,22 +141,20 @@ test "mandatory cleanup preserves effects above size boundaries" {
 }
 
 ///|
-test "egraph size tiers retain nonzero rewrite budgets" {
-  let limits_299 = egraph_limits_for_instruction_count(299)
-  let limits_300 = egraph_limits_for_instruction_count(300)
-  let limits_600 = egraph_limits_for_instruction_count(600)
+test "aegraph is reserved for functions that can use the full ruleset" {
   debug_inspect(
     [
-      (limits_299.matches_limit(), limits_299.eclass_enode_limit()),
-      (limits_300.matches_limit(), limits_300.eclass_enode_limit()),
-      (limits_600.matches_limit(), limits_600.eclass_enode_limit()),
+      use_egraph_for_instruction_count(0),
+      use_egraph_for_instruction_count(299),
+      use_egraph_for_instruction_count(300),
+      use_egraph_for_instruction_count(600),
     ],
-    content="[(5, 5), (2, 3), (1, 2)]",
+    content="[true, true, false, false]",
   )
 }
 
 ///|
-test "GVN work budget stops safely after partial optimization" {
+test "GVN memory budget does not stop cheap expression numbering" {
   let func = duplicate_expression_function("gvn_partial", 5)
   let stats = run_global_value_numbering_with_budget_and_analysis(
     func,
@@ -166,10 +164,8 @@ test "GVN work budget stops safely after partial optimization" {
   inspect(stats.work_done, content="2")
   inspect(stats.budget_exhausted, content="true")
   inspect(func.blocks[0].instructions[1].opcode, content="Scalar(Copy)")
-  inspect(
-    func.blocks[0].instructions[2].opcode,
-    content="Scalar(IntBinary(Add))",
-  )
+  inspect(func.blocks[0].instructions[2].opcode, content="Scalar(Copy)")
+  inspect(func.blocks[0].instructions[4].opcode, content="Scalar(Copy)")
   inspect(func.verify(), content="()")
 }
 
@@ -354,18 +350,15 @@ fn deep_block_chain_function(name : String, count : Int) -> Function {
 }
 
 ///|
-/// The same spine with nothing in the blocks but their terminator. GVN stops
-/// descending once its work budget runs out, and only instructions consume
-/// that budget, so blocks that hold no instruction let the walk reach the
-/// full depth of the tree however large the function is.
+/// The same spine with nothing in the blocks but their terminator. GVN walks
+/// the complete dominator tree even after its precise-memory budget runs out,
+/// so this locks down the non-recursive traversal at extreme depth.
 fn deep_empty_block_chain_function(name : String, count : Int) -> Function {
   let builder = FunctionBuilder::FunctionBuilder(name)
   let input = builder.add_param(I32)
   builder.add_result(I32)
-  // The entry block carries the only instructions, which is what gives the
-  // pass a non-zero budget to begin with — a function of nothing but empty
-  // blocks is refused before the walk starts. Nothing below the entry can
-  // spend that budget, so the descent runs the full depth of the chain.
+  // The entry block carries the only instructions. Nothing below it spends
+  // the precise-memory budget, but every dominated block is still visited.
   let zero = builder.iconst_i32(0)
   let value = builder.iadd(input, zero)
   for _ in 0..<count {
@@ -411,7 +404,13 @@ fn deep_operand_chain_function(name : String, count : Int) -> Function {
 test "egraph survives a deep dominator spine" {
   // Well past the depth a native-stack recursion survives.
   let func = deep_block_chain_function("egraph_deep_blocks", 100000)
-  run_egraph_pass_with_analysis(func, FunctionAnalysis::build(func)) |> ignore
+  optimize_function_with_stats_with_limits_and_ruleset(
+    func,
+    @egraph.SaturationLimits::cranelift_default(),
+    @egraph.get_global_ruleset(),
+    FunctionAnalysis::build(func),
+  )
+  |> ignore
   inspect(func.verify(), content="()")
 }
 
@@ -430,7 +429,13 @@ test "the optimizer pipeline survives a deep dominator spine" {
 ///|
 test "egraph survives a deep operand chain" {
   let func = deep_operand_chain_function("egraph_deep_operands", 100000)
-  run_egraph_pass_with_analysis(func, FunctionAnalysis::build(func)) |> ignore
+  optimize_function_with_stats_with_limits_and_ruleset(
+    func,
+    @egraph.SaturationLimits::cranelift_default(),
+    @egraph.get_global_ruleset(),
+    FunctionAnalysis::build(func),
+  )
+  |> ignore
   inspect(func.verify(), content="()")
 }
 

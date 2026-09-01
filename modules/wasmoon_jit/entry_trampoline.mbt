@@ -189,7 +189,7 @@ pub fn can_use_reusable_entry_trampoline(
   // Keep the MilkIR-planned entry trampoline conservative. The direct
   // machine-code entry trampoline covers the broader production ABI; this path
   // remains limited to the scalar register-only signature covered by the
-  // reusable MilkIR/MachV pipeline test.
+  // reusable direct MilkIR-to-native pipeline test.
   if param_types.length() != 2 || result_types.length() != 1 {
     return false
   }

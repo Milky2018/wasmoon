@@ -63,6 +63,21 @@ fn merge_params(num_locals : Int, num_merges : Int, written : Int) -> Int raise 
 }
 
 ///|
+test "br_if passes block arguments without a taken trampoline" {
+  let mod_ = @types.Module::simple(
+    [I32],
+    [I32],
+    [Block(Value(I32), [I32Const(7), LocalGet(0), BrIf(0), Drop, I32Const(9)])],
+    "direct_br_if_args",
+  )
+  let func = translate_function(native_test_env(), mod_, 0)
+  @wasm_milkir.verify_function(func)
+  let text = func.print()
+  inspect(text.contains("branch "), content="true")
+  inspect(text.contains("brnz "), content="false")
+}
+
+///|
 /// 32 locals across 24 merges, one local written per merge. Threading every
 /// local would build 32 * 24 = 768 parameters; only the written one needs to
 /// cross each merge, so 24 do.

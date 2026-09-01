@@ -2,7 +2,6 @@
 package "Milky2018/wasmoon"
 
 import {
-  "Milky2018/machv",
   "Milky2018/milkir",
   "Milky2018/wasm_core/types",
   "Milky2018/wasmoon/wasm_frontend/embedding",
@@ -23,12 +22,17 @@ pub fn wasm_frontend_embedding_environment(runtime_symbol_prefix? : String, hidd
 pub suberror WasmCompilerPipelineError {
   WasmCompilerPipelineFailure(message~ : String)
 } derive(Eq, @debug.Debug)
+pub fn WasmCompilerPipelineError::equal(Self, Self) -> Bool
+pub fn WasmCompilerPipelineError::not_equal(Self, Self) -> Bool
+pub fn WasmCompilerPipelineError::output(Self, &Logger) -> Unit
+pub fn WasmCompilerPipelineError::to_repr(Self) -> @debug.Repr
+pub fn WasmCompilerPipelineError::to_string(Self) -> String
 pub impl Show for WasmCompilerPipelineError
 
 // Types and methods
 pub(all) struct CompilerInfrastructureAssembly {
   signature : @milkir.Signature
-  machv_function : @machv.Function
+  milkir_function : @milkir.Function
   code_object : @wasmoon_jit.JitCodeObject
 }
 
@@ -38,6 +42,9 @@ pub(all) struct RuntimeAssembly {
   product_support_modules : Array[String]
   reusable_modules : Array[String]
 } derive(Eq, @debug.Debug)
+pub fn RuntimeAssembly::equal(Self, Self) -> Bool
+pub fn RuntimeAssembly::not_equal(Self, Self) -> Bool
+pub fn RuntimeAssembly::to_repr(Self) -> @debug.Repr
 
 pub(all) enum RuntimeComponent {
   Cli
@@ -46,6 +53,9 @@ pub(all) enum RuntimeComponent {
   WasiPreview1
   JitSelection
 } derive(Eq, @debug.Debug)
+pub fn RuntimeComponent::equal(Self, Self) -> Bool
+pub fn RuntimeComponent::not_equal(Self, Self) -> Bool
+pub fn RuntimeComponent::to_repr(Self) -> @debug.Repr
 
 // Type aliases
 

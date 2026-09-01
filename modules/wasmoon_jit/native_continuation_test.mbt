@@ -245,7 +245,7 @@ test "synchronous calls use the configured native fiber" {
     values.length(),
     true,
   )
-  inspect(
+  debug_inspect(
     (trap, values[0], values[1] >= requested_stack_size),
     content="(0, 1, true)",
   )
@@ -301,7 +301,7 @@ test "synchronous calls cancel an unexpected hostcall suspension" {
   }
   context.set_hostcall_callback(fn() { HostcallCompleted })
   let completed_values = FixedArray::from_array([0L])
-  inspect(
+  debug_inspect(
     (
       context.call_trampoline(
         @native_test_support.hostcall_probe_trampoline(),
@@ -338,6 +338,32 @@ test "repeated synchronous traps release their native fibers" {
       fail("trap \{index} published stale details")
     }
   }
+}
+
+///|
+test "mismatched try end becomes an explicit JIT invariant trap" {
+  let context = native_continuation_test_context()
+  let first_values = FixedArray::from_array([0L])
+  let second_values = FixedArray::from_array([0L])
+  debug_inspect(
+    (
+      context.call_trampoline(
+        @native_test_support.mismatched_try_end_probe(),
+        1L,
+        first_values,
+        first_values.length(),
+        true,
+      ),
+      context.call_trampoline(
+        @native_test_support.mismatched_try_end_probe(),
+        1L,
+        second_values,
+        second_values.length(),
+        true,
+      ),
+    ),
+    content="(8, 8)",
+  )
 }
 
 ///|

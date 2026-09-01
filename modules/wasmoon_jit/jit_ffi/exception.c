@@ -36,11 +36,14 @@ sigjmp_buf* exception_try_begin_impl(jit_context_t *ctx, int32_t handler_id) {
 void exception_try_end_impl(jit_context_t *ctx, int32_t handler_id) {
     exception_handler_t *handler = (exception_handler_t *)ctx->exception_handler;
 
-    // Pop handler from chain (should match handler_id)
-    if (handler && handler->handler_id == handler_id) {
-        ctx->exception_handler = handler->prev;
-        free(handler);
+    // A mismatch means generated control flow violated lexical handler order.
+    // Continuing would leave a stale jmp_buf linked into the runtime chain.
+    if (!handler || handler->handler_id != handler_id) {
+        g_trap_code = 8;
+        siglongjmp(g_trap_jmp_buf, 1);
     }
+    ctx->exception_handler = handler->prev;
+    free(handler);
 
     // Clear any pending exception values
     if (ctx->exception_values) {

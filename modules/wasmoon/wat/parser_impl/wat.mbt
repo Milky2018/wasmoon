@@ -14,7 +14,7 @@ pub(all) suberror WatError {
 }
 
 ///|
-fn WatError::to_string(self : WatError) -> String {
+pub fn WatError::to_string(self : WatError) -> String {
   match self {
     UnexpectedToken(msg, loc) => "at \{loc}: unexpected token: \{msg}"
     UnexpectedEof(loc) => "at \{loc}: unexpected end of file"
@@ -39,7 +39,7 @@ pub(all) struct SourceLoc {
 }
 
 ///|
-fn SourceLoc::to_string(self : SourceLoc) -> String {
+pub fn SourceLoc::to_string(self : SourceLoc) -> String {
   "\{self.line}:\{self.column}"
 }
 

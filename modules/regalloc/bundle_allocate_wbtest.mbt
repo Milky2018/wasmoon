@@ -67,6 +67,26 @@ priv struct GapSplitSnapshot {
 } derive(Debug)
 
 ///|
+fn optional_program_point_snapshot(
+  value : OptionalProgramPoint,
+) -> ProgramPoint? {
+  if value.present {
+    Some(value.point)
+  } else {
+    None
+  }
+}
+
+///|
+fn probe_first_conflict_snapshot(probe : BundleRegisterProbe) -> ProgramPoint? {
+  if probe.has_first_conflict {
+    Some(probe.first_conflict)
+  } else {
+    None
+  }
+}
+
+///|
 fn snapshot_bundle_state(state : AllocationBundleState) -> BundleStateSnapshot {
   match state {
     BundlePending => SnapshotPending
@@ -89,30 +109,55 @@ fn snapshot_segment_location(
 }
 
 ///|
-fn snapshot_bundles(bundles : Array[AllocationBundle]) -> Array[BundleSnapshot] {
-  bundles.map(bundle => {
-    id: bundle.id,
-    segments: bundle.segments,
-    priority: bundle.priority,
-    weight: bundle.weight,
-    has_fixed_constraint: bundle.has_fixed_constraint,
-    state: snapshot_bundle_state(bundle.state),
+fn snapshot_bundles(context : AllocationContext) -> Array[BundleSnapshot] {
+  Array::makei(context.states.length(), bundle => {
+    id: bundle,
+    segments: context.segments[bundle],
+    priority: context.priorities[bundle],
+    weight: context.weights[bundle],
+    has_fixed_constraint: context.fixed_constraints[bundle],
+    state: snapshot_bundle_state(context.states[bundle]),
   })
 }
 
 ///|
 fn snapshot_bundle_allocation(
-  bundles : Array[AllocationBundle],
+  context : AllocationContext,
   segments : Array[AllocationSegment],
   segment_owner : Array[Int],
 ) -> BundleAllocationSnapshot {
   {
-    bundles: snapshot_bundles(bundles),
+    bundles: snapshot_bundles(context),
     segment_owner,
     segment_locations: segments.map(segment => {
       snapshot_segment_location(segment.location)
     }),
   }
+}
+
+///|
+fn test_allocation_context(
+  bundle_segments : Array[Array[Int]],
+  segments : Array[AllocationSegment],
+  block_order : Array[Int],
+) -> AllocationContext {
+  let context = AllocationContext::for_session([], AllocationSession::new())
+  for spill_set, segment_ids in bundle_segments {
+    let ordered = segment_ids.copy()
+    ordered.sort_by((left, right) => {
+      let by_end = segments[left].range.end.compare_with_order(
+        segments[right].range.end,
+        block_order,
+      )
+      if by_end != 0 {
+        by_end
+      } else {
+        left - right
+      }
+    })
+    context.add_bundle(ordered, segments, spill_set) |> ignore
+  }
+  context
 }
 
 ///|
@@ -125,7 +170,14 @@ test "range split isolates the use-free gap and preserves spillset lineage" {
   let (segments, segments_by_value) = build_allocation_segments(ranges)
   let owners = [4]
   let spill_sets = [0]
-  let occupied = RegisterAllocationIndex::new(1, segments, [0])
+  let occupied = RegisterAllocationIndex::for_session(
+    AllocationSession::new(),
+    1,
+    segments,
+    owners,
+    Array::make(5, 0),
+    [0],
+  )
   let parts = split_segment_around_gap(
     0,
     ProgramPoint(0, 5),
@@ -203,35 +255,46 @@ test "spill bundle is normalized before conflict probes" {
       location: None,
     },
   ]
-  let bundles = [allocation_bundle(0, [0], segments, [0, 1])]
-  bundles[0].state = BundleReg(r0)
+  let context = test_allocation_context([[0]], segments, [0, 1])
+  context.states[0] = BundleReg(r0)
   let owners = [0, -1, -1]
   let spill_sets : Array[SpillSet] = [
-    { hint: None, spill_bundle: None, splits: 0, },
+    { hint: -1, spill_bundle: None, splits: 0, },
   ]
-  add_to_spill_bundle(0, 1, bundles, owners, spill_sets, segments, [0, 1])
-  add_to_spill_bundle(0, 2, bundles, owners, spill_sets, segments, [0, 1])
-  prepare_spill_bundle(bundles[1], segments, [0, 1])
-  let occupied = RegisterAllocationIndex::new(1, segments, [0, 1])
+  add_to_spill_bundle(0, 1, context, owners, spill_sets, segments)
+  add_to_spill_bundle(0, 2, context, owners, spill_sets, segments)
+  prepare_spill_bundle(1, context, segments, [0, 1])
+  let occupied = RegisterAllocationIndex::for_session(
+    AllocationSession::new(),
+    1,
+    segments,
+    owners,
+    Array::make(context.states.length(), 0),
+    [0, 1],
+  )
   occupied.insert(0, 0)
-  let probe = probe_bundle_register(
-    bundles[1],
+  let probe_conflicts : Array[Int] = []
+  let probe = BundleRegisterProbe::new(probe_conflicts)
+  let statistics = BundleAllocationStatistics::new()
+  probe_bundle_register(
+    1,
     0,
-    r0,
-    bundles,
+    context,
     segments,
     owners,
     occupied,
-    { points_by_reg: Map([]), block_order: [0, 1], },
+    RegisterClobberIndex::new(1),
     [0, 1],
-    Array::make(bundles.length(), 0),
+    Array::make(context.states.length(), 0),
     1,
     [],
-    [],
-    conflict_policy=RejectAnyConflict,
+    probe_conflicts,
+    probe,
+    statistics,
+    conflict_policy=reject_conflicts(),
   )
   debug_inspect(
-    (bundles[1].segments, probe.cutoff_exceeded, probe.conflicts),
+    (context.segments[1], probe.cutoff_exceeded, probe.conflicts),
     content="([2, 1], true, [0])",
   )
 }
@@ -251,22 +314,33 @@ test "spillset defers to second chance after two normal splits" {
     bundle_ranges: [[0]],
     bundle_segments: [[0]],
   }
-  let (bundles, owners, spill_sets, segment_spill_sets) = build_allocation_bundles(
+  let (context, owners, spill_sets, segment_spill_sets) = build_allocation_context(
     plan,
     segments,
+    AllocationSession::new(),
+  )
+  let queue = BundleQueue::for_session(
+    AllocationSession::new(),
+    context.states.length(),
+  )
+  let occupied = RegisterAllocationIndex::for_session(
+    AllocationSession::new(),
+    1,
+    segments,
+    owners,
+    Array::make(context.states.length(), 0),
     [0],
   )
-  let queue = BundleQueue::new(bundles)
-  let occupied = RegisterAllocationIndex::new(1, segments, [0])
   let split_points = [5, 15, 25]
+  let statistics = BundleAllocationStatistics::new()
   let mut current_bundle = 0
   for index, instruction in split_points {
     inspect(
       split_bundle_at_conflict(
-        bundles[current_bundle],
-        Some(ProgramPoint(0, instruction)),
-        None,
-        bundles,
+        current_bundle,
+        ProgramPoint(0, instruction),
+        -1,
+        context,
         owners,
         queue,
         segments,
@@ -277,17 +351,18 @@ test "spillset defers to second chance after two normal splits" {
         ranges,
         [0],
         [],
+        statistics,
       ),
       content="true",
     )
     if index + 1 < split_points.length() {
       let next_point = ProgramPoint(0, split_points[index + 1])
       let mut next_bundle = -1
-      for candidate in bundles {
-        if candidate.state is BundlePending {
-          for segment_id in candidate.segments {
+      for candidate, state in context.states {
+        if state is BundlePending {
+          for segment_id in context.segments[candidate] {
             if segments[segment_id].range.contains(next_point, [0]) {
-              next_bundle = candidate.id
+              next_bundle = candidate
             }
           }
         }
@@ -296,21 +371,31 @@ test "spillset defers to second chance after two normal splits" {
       current_bundle = next_bundle
     }
   }
-  let spill_bundle = bundles[spill_sets[0].spill_bundle.unwrap()]
-  let pending = bundles.filter(bundle => bundle.state is BundlePending)
-  let deferred = bundles.filter(bundle => bundle.state is BundleDeferredSpill)
+  let spill_bundle = spill_sets[0].spill_bundle.unwrap()
+  let mut pending = 0
+  let mut pending_minimal = true
+  let mut deferred = 0
+  for bundle, state in context.states {
+    if state is BundlePending {
+      pending = pending + 1
+      pending_minimal = pending_minimal && context.minimals[bundle]
+    }
+    if state is BundleDeferredSpill {
+      deferred = deferred + 1
+    }
+  }
   debug_inspect(
     (
       spill_sets[0].splits,
-      pending.length(),
-      pending.all(bundle => bundle.minimal),
-      deferred.length(),
-      bundles[current_bundle].state is BundleDeferredSpill,
+      pending,
+      pending_minimal,
+      deferred,
+      context.states[current_bundle] is BundleDeferredSpill,
     ),
     content="(2, 2, true, 2, true)",
   )
   debug_inspect(
-    spill_bundle.segments.map(segment_id => segments[segment_id].range),
+    context.segments[spill_bundle].map(segment_id => segments[segment_id].range),
     content=(
       #|[
       #|  { start: { block: 0, inst: 1 }, end: { block: 0, inst: 9 } },
@@ -333,10 +418,11 @@ test "production allocation assigns an SSA bundle atomically" {
     parameters: [[], [{ id: 1, class: Int, }], [{ id: 2, class: Int, }]],
     edge_arguments: [[[{ id: 0, class: Int, }]], [[{ id: 1, class: Int, }]], []],
   }
-  let (segments, _, bundles, segment_owner, _, _) = allocate_segments_with_bundles(
+  let (segments, _, bundles, segment_owner, _, _) = allocate_segments_with_context(
     function,
     MachineEnv::new([{ id: 0, class: Int, }], []),
     ranges,
+    AllocationSession::new(),
   )
   debug_inspect(
     snapshot_bundle_allocation(bundles, segments, segment_owner),
@@ -349,14 +435,14 @@ test "production allocation assigns an SSA bundle atomically" {
       #|      priority: 9,
       #|      weight: 1,
       #|      has_fixed_constraint: false,
-      #|      state: SnapshotReg({ id: 0, class: Int }),
+      #|      state: SnapshotReg(p0:int),
       #|    },
       #|  ],
       #|  segment_owner: [0, 0, 0],
       #|  segment_locations: [
-      #|    SnapshotSegmentReg({ id: 0, class: Int }),
-      #|    SnapshotSegmentReg({ id: 0, class: Int }),
-      #|    SnapshotSegmentReg({ id: 0, class: Int }),
+      #|    SnapshotSegmentReg(p0:int),
+      #|    SnapshotSegmentReg(p0:int),
+      #|    SnapshotSegmentReg(p0:int),
       #|  ],
       #|}
     ),
@@ -416,7 +502,7 @@ test "production allocation evicts then splits a cheaper long bundle" {
     parameters: [[]],
     edge_arguments: [[]],
   }
-  let (bundles, segment_owner, _, _) = allocate_bundles(
+  let (bundles, segment_owner, _, _, statistics) = allocate_bundles(
     function,
     MachineEnv::new([r0], []),
     ranges,
@@ -424,6 +510,7 @@ test "production allocation evicts then splits a cheaper long bundle" {
     [[0], [1], [2]],
     [0],
     plan,
+    AllocationSession::new(),
   )
   debug_inspect(
     snapshot_bundle_allocation(bundles, segments, segment_owner),
@@ -444,7 +531,7 @@ test "production allocation evicts then splits a cheaper long bundle" {
       #|      priority: 3,
       #|      weight: 20,
       #|      has_fixed_constraint: false,
-      #|      state: SnapshotReg({ id: 0, class: Int }),
+      #|      state: SnapshotReg(p0:int),
       #|    },
       #|    {
       #|      id: 2,
@@ -460,18 +547,22 @@ test "production allocation evicts then splits a cheaper long bundle" {
       #|      priority: 3,
       #|      weight: 1,
       #|      has_fixed_constraint: true,
-      #|      state: SnapshotReg({ id: 0, class: Int }),
+      #|      state: SnapshotReg(p0:int),
       #|    },
       #|  ],
       #|  segment_owner: [3, 2, 1],
       #|  segment_locations: [
-      #|    SnapshotSegmentReg({ id: 0, class: Int }),
+      #|    SnapshotSegmentReg(p0:int),
       #|    SnapshotSegmentSpill,
-      #|    SnapshotSegmentReg({ id: 0, class: Int }),
+      #|    SnapshotSegmentReg(p0:int),
       #|  ],
       #|}
     ),
   )
+  inspect(statistics.queue_pops() > 0, content="true")
+  inspect(statistics.register_probes() > 0, content="true")
+  inspect(statistics.occupied_segments_scanned() > 0, content="true")
+  inspect(statistics.bundle_splits() > 0, content="true")
 }
 
 ///|
@@ -519,41 +610,50 @@ test "production eviction accounts for and removes every conflicting bundle" {
       location: None,
     },
   ]
-  let bundles : Array[AllocationBundle] = [
-    allocation_bundle(0, [0], segments, [0]),
-    allocation_bundle(1, [1], segments, [0]),
-    allocation_bundle(2, [2, 3], segments, [0]),
-  ]
-  bundles[0].state = BundleReg(r0)
-  bundles[1].state = BundleReg(r0)
-  let occupied = RegisterAllocationIndex::new(1, segments, [0])
+  let context = test_allocation_context([[0], [1], [2, 3]], segments, [0])
+  context.states[0] = BundleReg(r0)
+  context.states[1] = BundleReg(r0)
+  let owners = [0, 1, 2, 2]
+  let owner_run_count = Array::make(context.states.length(), 0)
+  let occupied = RegisterAllocationIndex::for_session(
+    AllocationSession::new(),
+    1,
+    segments,
+    owners,
+    owner_run_count,
+    [0],
+  )
   occupied.insert(0, 0)
   occupied.insert(0, 1)
   let occupied_stack : Array[Int] = []
-  let probe = probe_bundle_register(
-    bundles[2],
+  let probe_conflicts : Array[Int] = []
+  let probe = BundleRegisterProbe::new(probe_conflicts)
+  let statistics = BundleAllocationStatistics::new()
+  probe_bundle_register(
+    2,
     0,
-    r0,
-    bundles,
+    context,
     segments,
-    [0, 1, 2, 2],
+    owners,
     occupied,
-    { points_by_reg: Map([]), block_order: [0], },
+    RegisterClobberIndex::new(1),
     [0],
-    Array::make(bundles.length(), 0),
+    Array::make(context.states.length(), 0),
     1,
     occupied_stack,
-    [],
-    conflict_policy=Unlimited,
+    probe_conflicts,
+    probe,
+    statistics,
+    conflict_policy=unlimited_conflicts(),
   )
   let probe_snapshot : BundleProbeSnapshot = {
     conflicts: probe.conflicts,
     conflict_cost: probe.conflict_cost,
-    first_conflict: probe.first_conflict,
+    first_conflict: probe_first_conflict_snapshot(probe),
     clobbered: probe.clobbered,
     can_evict: !probe.clobbered &&
     !probe.conflicts.is_empty() &&
-    probe.conflict_cost < bundles[2].weight,
+    probe.conflict_cost < context.weights[2],
   }
   debug_inspect(
     probe_snapshot,
@@ -567,18 +667,22 @@ test "production eviction accounts for and removes every conflicting bundle" {
       #|}
     ),
   )
-  let queue = BundleQueue::new(bundles)
+  let queue = BundleQueue::for_session(
+    AllocationSession::new(),
+    context.states.length(),
+  )
   evict_bundle_conflicts(
     probe.conflicts,
-    bundles,
+    context,
     MachineEnv::new([r0], []),
     segments,
     occupied,
     queue,
+    statistics,
   )
   let requeued : Array[Int] = []
-  while queue.pop() is Some(entry) {
-    requeued.push(entry.bundle)
+  while queue.pop() is Some((bundle, _)) {
+    requeued.push(bundle)
   }
   let remaining : Array[Int] = []
   occupied.seek(0, ProgramPoint(0, -1), occupied_stack)
@@ -586,7 +690,7 @@ test "production eviction accounts for and removes every conflicting bundle" {
     remaining.push(segment)
   }
   let eviction_snapshot : BundleEvictionSnapshot = {
-    bundles: snapshot_bundles(bundles),
+    bundles: snapshot_bundles(context),
     segment_locations: segments.map(segment => {
       snapshot_segment_location(segment.location)
     }),
@@ -634,31 +738,41 @@ test "production eviction accounts for and removes every conflicting bundle" {
       #|}
     ),
   )
-  let cutoff_occupied = RegisterAllocationIndex::new(1, segments, [0])
+  let cutoff_occupied = RegisterAllocationIndex::for_session(
+    AllocationSession::new(),
+    1,
+    segments,
+    owners,
+    Array::make(context.states.length(), 0),
+    [0],
+  )
   cutoff_occupied.insert(0, 0)
   cutoff_occupied.insert(0, 1)
-  let cutoff_probe = probe_bundle_register(
-    bundles[2],
+  let cutoff_conflicts : Array[Int] = []
+  let cutoff_probe = BundleRegisterProbe::new(cutoff_conflicts)
+  probe_bundle_register(
+    2,
     0,
-    r0,
-    bundles,
+    context,
     segments,
-    [0, 1, 2, 2],
+    owners,
     cutoff_occupied,
-    { points_by_reg: Map([]), block_order: [0], },
+    RegisterClobberIndex::new(1),
     [0],
-    Array::make(bundles.length(), 0),
+    Array::make(context.states.length(), 0),
     1,
     occupied_stack,
-    [],
-    conflict_policy=CostLimit(4),
+    cutoff_conflicts,
+    cutoff_probe,
+    statistics,
+    conflict_policy=limited_conflicts(4),
   )
   debug_inspect(
     (
       cutoff_probe.cutoff_exceeded,
       cutoff_probe.conflicts,
       cutoff_probe.conflict_cost,
-      cutoff_probe.first_conflict,
+      probe_first_conflict_snapshot(cutoff_probe),
     ),
     content="(true, [0, 1], 5, Some({ block: 0, inst: 1 }))",
   )
@@ -698,22 +812,20 @@ test "production bundle queue keeps live extent separate from spill weight" {
       location: None,
     },
   ]
-  let bundles : Array[AllocationBundle] = []
-  for segment in segments {
-    bundles.push(
-      allocation_bundle(bundles.length(), [segment.id], segments, [0]),
-    )
-  }
-  let queue = BundleQueue::new(bundles)
-  for bundle in bundles {
-    queue.push(bundle.id, None)
+  let context = test_allocation_context([[0], [1], [2]], segments, [0])
+  let queue = BundleQueue::for_session(
+    AllocationSession::new(),
+    context.states.length(),
+  )
+  for bundle in 0..<context.states.length() {
+    queue.push(bundle, context, -1)
   }
   let order : Array[Int] = []
-  while queue.pop() is Some(entry) {
-    order.push(entry.bundle)
+  while queue.pop() is Some((bundle, _)) {
+    order.push(bundle)
   }
   let snapshot : BundleQueueSnapshot = {
-    bundles: snapshot_bundles(bundles),
+    bundles: snapshot_bundles(context),
     order,
   }
   debug_inspect(
@@ -776,7 +888,8 @@ test "two-fragment bundle keeps density eviction cost" {
       location: None,
     },
   ]
-  inspect(allocation_bundle(0, [0, 1], segments, [0, 1]).weight, content="30")
+  let context = test_allocation_context([[0, 1]], segments, [0, 1])
+  inspect(context.weights[0], content="30")
 }
 
 ///|
@@ -825,10 +938,16 @@ impl FunctionView for ClobberIndexTestFunction with fn values_share_spill_slot(
 }
 
 ///|
-impl FunctionView for ClobberIndexTestFunction with fn entry_values(_self) -> Array[
-  VirtualReg,
-] {
-  []
+impl FunctionView for ClobberIndexTestFunction with fn entry_value_count(_self) -> Int {
+  0
+}
+
+///|
+impl FunctionView for ClobberIndexTestFunction with fn entry_value_at(
+  _self,
+  _parameter,
+) -> VirtualReg {
+  abort("invalid entry value index")
 }
 
 ///|
@@ -842,52 +961,89 @@ impl FunctionView for ClobberIndexTestFunction with fn block_id_at(_self, block)
 }
 
 ///|
-impl FunctionView for ClobberIndexTestFunction with fn block_parameters(
+impl FunctionView for ClobberIndexTestFunction with fn block_parameter_count(
   _self,
   _block,
-) -> Array[VirtualReg] {
-  []
+) -> Int {
+  0
 }
 
 ///|
-impl FunctionView for ClobberIndexTestFunction with fn block_instructions(
+impl FunctionView for ClobberIndexTestFunction with fn block_parameter_at(
+  _self,
+  _block,
+  _parameter,
+) -> VirtualReg {
+  abort("invalid block parameter index")
+}
+
+///|
+impl FunctionView for ClobberIndexTestFunction with fn block_instruction_count(
   self,
   block,
-) -> Array[Int] {
-  self.blocks[block].copy()
+) -> Int {
+  self.blocks[block].length()
 }
 
 ///|
-impl FunctionView for ClobberIndexTestFunction with fn block_successors(
+impl FunctionView for ClobberIndexTestFunction with fn block_instruction_at(
+  self,
+  block,
+  instruction,
+) -> Int {
+  self.blocks[block][instruction]
+}
+
+///|
+impl FunctionView for ClobberIndexTestFunction with fn block_successor_count(
   _self,
   _block,
-) -> Array[Int] {
-  []
+) -> Int {
+  0
 }
 
 ///|
-impl FunctionView for ClobberIndexTestFunction with fn edge_arguments(
+impl FunctionView for ClobberIndexTestFunction with fn block_successor_at(
   _self,
   _block,
   _successor,
-) -> Array[VirtualReg] {
-  []
+) -> Int {
+  abort("invalid block successor index")
+}
+
+///|
+impl FunctionView for ClobberIndexTestFunction with fn edge_argument_count(
+  _self,
+  _block,
+  _successor,
+) -> Int {
+  0
+}
+
+///|
+impl FunctionView for ClobberIndexTestFunction with fn edge_argument_at(
+  _self,
+  _block,
+  _successor,
+  _argument,
+) -> VirtualReg {
+  abort("invalid edge argument index")
 }
 
 ///|
 impl FunctionView for ClobberIndexTestFunction with fn instruction_operands(
   self,
   instruction,
-) -> Array[Operand] {
-  self.operands[instruction].copy()
+) -> ArrayView[Operand] {
+  self.operands[instruction][:]
 }
 
 ///|
 impl FunctionView for ClobberIndexTestFunction with fn instruction_clobbers(
   self,
   instruction,
-) -> Array[PhysicalReg] {
-  self.clobbers[instruction].copy()
+) -> ArrayView[PhysicalReg] {
+  self.clobbers[instruction][:]
 }
 
 ///|
@@ -901,18 +1057,25 @@ test "clobber index follows custom block order and fixed operands" {
     operands: [[], [Operand::use_reg(value).with_constraint(FixedReg(r1))], []],
     clobbers: [[r0], [], [r0]],
   }
-  let index = build_register_clobber_index(function, [2, 0, 1])
+  let environment = MachineEnv::new([r0, r1, r2], [])
+  let session = AllocationSession::new()
+  let index = build_register_clobber_index(
+    function,
+    environment,
+    [2, 0, 1],
+    PhysicalRegisterIndex::for_session(session, environment.allocatable_regs),
+  )
   debug_inspect(
     (
-      index.points_by_reg.get(physical_reg_key(r0)),
-      index.points_by_reg.get(physical_reg_key(r1)),
-      index.points_by_reg.get(physical_reg_key(r2)),
+      index.by_register[0].points,
+      index.by_register[1].points,
+      index.by_register[2].points,
     ),
     content=(
       #|(
-      #|  Some([{ block: 2, inst: 0 }, { block: 0, inst: 0 }]),
-      #|  Some([{ block: 1, inst: 0 }]),
-      #|  None,
+      #|  [{ block: 2, inst: 0 }, { block: 0, inst: 0 }],
+      #|  [{ block: 1, inst: 0 }],
+      #|  [],
       #|)
     ),
   )
@@ -920,21 +1083,13 @@ test "clobber index follows custom block order and fixed operands" {
 
 ///|
 test "clobber intersection includes starts and excludes ends" {
-  let r0 : PhysicalReg = { id: 0, class: Int, }
-  let index : RegisterClobberIndex = {
-    points_by_reg: Map([
-      (
-        physical_reg_key(r0),
-        [
-          ProgramPoint(0, 1),
-          ProgramPoint(0, 3),
-          ProgramPoint(0, 5),
-          ProgramPoint(0, 7),
-          ProgramPoint(0, 9),
-        ],
-      ),
-    ]),
-    block_order: [0],
+  let index = RegisterClobberIndex::new(1)
+  let points = index.by_register[0]
+  for instruction in [1, 3, 5, 7, 9] {
+    points.points.push(ProgramPoint(0, instruction))
+    points.keys.push(
+      ordered_program_point_key(ProgramPoint(0, instruction), [0]),
+    )
   }
   let segments : Array[AllocationSegment] = [
     {
@@ -958,8 +1113,30 @@ test "clobber intersection includes starts and excludes ends" {
       location: None,
     },
   ]
+  let occupied = RegisterAllocationIndex::for_session(
+    AllocationSession::new(),
+    1,
+    segments,
+    [0, 0],
+    [0],
+    [0],
+  )
   debug_inspect(
-    index.first_intersection(r0, [0, 1], segments),
+    optional_program_point_snapshot(
+      index.first_intersection(0, [0, 1], occupied),
+    ),
     content="Some({ block: 0, inst: 1 })",
   )
+}
+
+///|
+test "packed program points preserve signed instruction and block order" {
+  let block_order = [2, 0, 1]
+  let first = ordered_program_point_key(ProgramPoint(1, -1), block_order)
+  let second = ordered_program_point_key(ProgramPoint(1, 3), block_order)
+  let third = ordered_program_point_key(ProgramPoint(2, -1), block_order)
+  let fourth = ordered_program_point_key(ProgramPoint(0, -1), block_order)
+  inspect(first < second, content="true")
+  inspect(second < third, content="true")
+  inspect(third < fourth, content="true")
 }

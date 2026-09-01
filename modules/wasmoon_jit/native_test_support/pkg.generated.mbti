@@ -16,6 +16,8 @@ pub fn fiber_stack_hostcall_probe_trampoline() -> Int64
 
 pub fn hostcall_probe_trampoline() -> Int64
 
+pub fn mismatched_try_end_probe() -> Int64
+
 pub fn nested_activation_exception_probe() -> Int64
 
 pub fn nested_activation_gc_root_probe() -> Int64
@@ -33,6 +35,8 @@ pub fn shared_indirect_table_live_count() -> Int64
 pub fn transfer_cancellation_callback_to_null_context(() -> Bool) -> Unit
 
 pub fn transfer_wasi_stdin_callback_to_null_context(() -> Bytes) -> Unit
+
+pub fn x64_stack_alignment_probe_ptr() -> Int64
 
 // Errors
 

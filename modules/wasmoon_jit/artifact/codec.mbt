@@ -343,7 +343,7 @@ fn read_os_abi(
 }
 
 ///|
-fn write_endianness(writer : ByteWriter, value : @machv.Endianness) -> Unit {
+fn write_endianness(writer : ByteWriter, value : @native.Endianness) -> Unit {
   writer.write_u8(
     match value {
       Little => 0
@@ -355,7 +355,7 @@ fn write_endianness(writer : ByteWriter, value : @machv.Endianness) -> Unit {
 ///|
 fn read_endianness(
   reader : ByteReader,
-) -> @machv.Endianness raise ArtifactDecodeError {
+) -> @native.Endianness raise ArtifactDecodeError {
   match reader.read_u8("manifest.target.endianness") {
     0 => Little
     1 => Big
@@ -449,7 +449,7 @@ fn read_call_binding(
 }
 
 ///|
-fn write_value_type(writer : ByteWriter, value : @machv.ValueType) -> Unit {
+fn write_value_type(writer : ByteWriter, value : @native.ValueType) -> Unit {
   writer.write_u8(
     match value {
       I32 => 0
@@ -467,7 +467,7 @@ fn write_value_type(writer : ByteWriter, value : @machv.ValueType) -> Unit {
 fn read_value_type(
   reader : ByteReader,
   field : String,
-) -> @machv.ValueType raise ArtifactDecodeError {
+) -> @native.ValueType raise ArtifactDecodeError {
   match reader.read_u8(field) {
     0 => I32
     1 => I64
@@ -483,7 +483,7 @@ fn read_value_type(
 ///|
 fn write_signature(
   writer : ByteWriter,
-  signature : @machv.Signature,
+  signature : @native.Signature,
   field : String,
 ) -> Unit raise ArtifactEncodeError {
   writer.write_u32(signature.params.length(), field + ".params.length")
@@ -500,12 +500,12 @@ fn write_signature(
 fn read_signature(
   reader : ByteReader,
   field : String,
-) -> @machv.Signature raise ArtifactDecodeError {
+) -> @native.Signature raise ArtifactDecodeError {
   let params_count = reader.read_count(
     field + ".params.length",
     reader.limits.max_signature_values,
   )
-  let params : Array[@machv.ValueType] = []
+  let params : Array[@native.ValueType] = []
   for _ in 0..<params_count {
     params.push(read_value_type(reader, field + ".params"))
   }
@@ -513,17 +513,17 @@ fn read_signature(
     field + ".results.length",
     reader.limits.max_signature_values,
   )
-  let results : Array[@machv.ValueType] = []
+  let results : Array[@native.ValueType] = []
   for _ in 0..<results_count {
     results.push(read_value_type(reader, field + ".results"))
   }
-  @machv.Signature::new(params, results)
+  @native.Signature::new(params, results)
 }
 
 ///|
 fn write_source(
   writer : ByteWriter,
-  source : @machv.SourceLocation,
+  source : @native.SourceLocation,
   field : String,
 ) -> Unit raise ArtifactEncodeError {
   writer.write_string(source.file, field + ".file")
@@ -535,8 +535,8 @@ fn write_source(
 fn read_source(
   reader : ByteReader,
   field : String,
-) -> @machv.SourceLocation raise ArtifactDecodeError {
-  @machv.SourceLocation::new(
+) -> @native.SourceLocation raise ArtifactDecodeError {
+  @native.SourceLocation::new(
     reader.read_string(field + ".file"),
     reader.read_u32(field + ".line"),
     reader.read_u32(field + ".column"),
@@ -546,7 +546,7 @@ fn read_source(
 ///|
 fn write_optional_source(
   writer : ByteWriter,
-  source : @machv.SourceLocation?,
+  source : @native.SourceLocation?,
   field : String,
 ) -> Unit raise ArtifactEncodeError {
   match source {
@@ -562,7 +562,7 @@ fn write_optional_source(
 fn read_optional_source(
   reader : ByteReader,
   field : String,
-) -> @machv.SourceLocation? raise ArtifactDecodeError {
+) -> @native.SourceLocation? raise ArtifactDecodeError {
   if reader.read_bool(field + ".present") {
     Some(read_source(reader, field))
   } else {
@@ -630,19 +630,19 @@ fn read_relocation_target(
   match reader.read_u8("function.relocation.target") {
     0 =>
       Code(
-        @machv.CodeSymbol::new(
+        @native.CodeSymbol::new(
           reader.read_string("function.relocation.target.code"),
         ),
       )
     1 =>
       External(
-        @machv.ExternalSymbol::new(
+        @native.ExternalSymbol::new(
           reader.read_string("function.relocation.target.external"),
         ),
       )
     2 =>
       Data(
-        @machv.DataSymbol::new(
+        @native.DataSymbol::new(
           reader.read_string("function.relocation.target.data"),
         ),
       )
@@ -651,7 +651,7 @@ fn read_relocation_target(
 }
 
 ///|
-fn write_trap_reason(writer : ByteWriter, reason : @machv.TrapReason) -> Unit {
+fn write_trap_reason(writer : ByteWriter, reason : @native.TrapReason) -> Unit {
   match reason {
     Unreachable => writer.write_u8(0)
     IntegerDivisionByZero => writer.write_u8(1)
@@ -674,7 +674,7 @@ fn write_trap_reason(writer : ByteWriter, reason : @machv.TrapReason) -> Unit {
 ///|
 fn read_trap_reason(
   reader : ByteReader,
-) -> @machv.TrapReason raise ArtifactDecodeError {
+) -> @native.TrapReason raise ArtifactDecodeError {
   match reader.read_u8("function.trap.reason") {
     0 => Unreachable
     1 => IntegerDivisionByZero
@@ -695,7 +695,7 @@ fn read_trap_reason(
 ///|
 fn write_safepoint_kind(
   writer : ByteWriter,
-  kind : @machv.SafepointKind,
+  kind : @native.SafepointKind,
 ) -> Unit {
   writer.write_u8(
     match kind {
@@ -709,7 +709,7 @@ fn write_safepoint_kind(
 ///|
 fn read_safepoint_kind(
   reader : ByteReader,
-) -> @machv.SafepointKind raise ArtifactDecodeError {
+) -> @native.SafepointKind raise ArtifactDecodeError {
   match reader.read_u8("function.safepoint.kind") {
     0 => Gc
     1 => Cancellation
@@ -968,7 +968,7 @@ fn read_import(reader : ByteReader) -> ImportIdentity raise ArtifactDecodeError 
     function_index: reader.read_u32("import.function_index"),
     module_name: reader.read_string("import.module_name"),
     function_name: reader.read_string("import.function_name"),
-    symbol: @machv.ExternalSymbol::new(reader.read_string("import.symbol")),
+    symbol: @native.ExternalSymbol::new(reader.read_string("import.symbol")),
     signature: read_signature(reader, "import.signature"),
   }
 }
@@ -1046,7 +1046,7 @@ fn read_function(
 ) -> FunctionCode raise ArtifactDecodeError {
   let identity : FunctionIdentity = {
     function_index: reader.read_u32("function.identity.function_index"),
-    symbol: @machv.CodeSymbol::new(
+    symbol: @native.CodeSymbol::new(
       reader.read_string("function.identity.symbol"),
     ),
     signature: read_signature(reader, "function.identity.signature"),
@@ -1134,7 +1134,7 @@ fn read_function(
     let source = read_optional_source(reader, "function.safepoint.source")
     let stack_map = if reader.read_bool("function.safepoint.stack_map.present") {
       Some(
-        @machv.StackMapMetadata::new(
+        @native.StackMapMetadata::new(
           reader.read_u32("function.safepoint.stack_map.id"),
           argument_root_count=reader.read_u32(
             "function.safepoint.stack_map.argument_root_count",

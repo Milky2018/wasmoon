@@ -52,15 +52,9 @@ test "public builder passes values through block parameters" {
   let on_true = builder.add_param(I64)
   let on_false = builder.add_param(I64)
   builder.add_result(I64)
-  let true_block = builder.create_block()
-  let false_block = builder.create_block()
   let join_block = builder.create_block()
   let selected = builder.add_block_param(join_block, I64)
-  builder.brnz(condition, true_block, false_block)
-  builder.switch_to_block(true_block)
-  builder.jump(join_block, [on_true])
-  builder.switch_to_block(false_block)
-  builder.jump(join_block, [on_false])
+  builder.branch(condition, join_block, [on_true], join_block, [on_false])
   builder.switch_to_block(join_block)
   builder.return_([selected])
   let func = builder.finalize()
@@ -69,12 +63,8 @@ test "public builder passes values through block parameters" {
     content=(
       #|function choose(v0:i32, v1:i64, v2:i64) -> i64 {
       #|block0:
-      #|    brnz v0, block1, block2
-      #|block1:
-      #|    jump block3(v1)
-      #|block2:
-      #|    jump block3(v2)
-      #|block3(v3:i64):
+      #|    branch v0, block1(v1), block1(v2)
+      #|block1(v3:i64):
       #|    return v3
       #|}
       #|

@@ -123,7 +123,7 @@ fn InternalAbi::copy(self : InternalAbi) -> InternalAbi {
 ///|
 fn InternalAbi::call_layout(
   self : InternalAbi,
-  signature : @semantic.Signature,
+  signature : @native.Signature,
 ) -> CallLayout raise InternalAbiError {
   if signature.params.is_empty() || signature.params[0] != Ptr64 {
     raise InvalidSignature(
@@ -176,7 +176,7 @@ fn InternalAbi::call_layout(
 ///|
 fn InternalAbi::result_layout(
   self : InternalAbi,
-  result_types : Array[@semantic.ValueType],
+  result_types : Array[@native.ValueType],
 ) -> (Array[CallResultLocation], Int) {
   let locations : Array[CallResultLocation] = []
   let mut integer_index = 0
@@ -233,7 +233,7 @@ fn InternalAbi::result_layout(
 ///|
 fn InternalAbi::call_plan(
   self : InternalAbi,
-  signature : @semantic.Signature,
+  signature : @native.Signature,
 ) -> InternalCallPlan raise InternalAbiError {
   let layout = self.call_layout(signature)
   let (results, result_area_size) = self.result_layout(signature.results)

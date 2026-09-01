@@ -32,6 +32,8 @@ pub(all) enum PreflightSeverity {
   Error
   Warning
 }
+pub fn PreflightSeverity::output(Self, &Logger) -> Unit
+pub fn PreflightSeverity::to_string(Self) -> String
 pub impl Show for PreflightSeverity
 
 pub(all) enum PreflightStage {
@@ -41,6 +43,8 @@ pub(all) enum PreflightStage {
   Lower
   Regalloc
 }
+pub fn PreflightStage::output(Self, &Logger) -> Unit
+pub fn PreflightStage::to_string(Self) -> String
 pub impl Show for PreflightStage
 
 // Type aliases

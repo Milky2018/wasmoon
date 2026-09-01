@@ -109,7 +109,7 @@ pub(all) enum FunctionTemperature {
 }
 
 ///|
-fn FunctionTemperature::to_string(self : FunctionTemperature) -> String {
+pub fn FunctionTemperature::to_string(self : FunctionTemperature) -> String {
   match self {
     Cold => "cold"
     Warm => "warm"
@@ -244,7 +244,7 @@ pub fn Profiler::stats(self : Profiler) -> (Int, Int, Int, Int) {
 }
 
 ///|
-fn Profiler::to_string(self : Profiler) -> String {
+pub fn Profiler::to_string(self : Profiler) -> String {
   let (total, unique, hot, compiled) = self.stats()
   "Profiler(calls=\{total}, functions=\{unique}, hot=\{hot}, compiled=\{compiled})"
 }

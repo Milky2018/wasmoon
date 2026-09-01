@@ -1,6 +1,6 @@
 ///|
 fn loader_artifact() -> @artifact.Artifact {
-  let source = @semantic_machv.SourceLocation::new("answer.wasm", 12, 4)
+  let source = @native.SourceLocation::new("answer.wasm", 12, 4)
   {
     manifest: {
       format_version: @artifact.FORMAT_VERSION,
@@ -12,7 +12,7 @@ fn loader_artifact() -> @artifact.Artifact {
       },
       required_cpu_features: [{ name: "neon", }],
       jit_abi_version: 3,
-      codegen_revision: "machv-2026-07-22",
+      codegen_revision: "legacy-codegen-1",
       module_identity: {
         name: "answer",
         source_digest: { bytes: Bytes::make(32, b'\x11'), },
@@ -31,16 +31,16 @@ fn loader_artifact() -> @artifact.Artifact {
         function_index: 0,
         module_name: "env",
         function_name: "host_log",
-        symbol: @semantic_machv.ExternalSymbol::new("wasm.runtime.host_log"),
-        signature: @semantic_machv.Signature::new([I64], []),
+        symbol: @native.ExternalSymbol::new("wasm.runtime.host_log"),
+        signature: @native.Signature::new([I64], []),
       },
     ],
     functions: [
       {
         identity: {
           function_index: 1,
-          symbol: @semantic_machv.CodeSymbol::new("wasm.function.1"),
-          signature: @semantic_machv.Signature::new([I64], [I64]),
+          symbol: @native.CodeSymbol::new("wasm.function.1"),
+          signature: @native.Signature::new([I64], [I64]),
         },
         entry_offset: 0,
         frame_size: 16,
@@ -49,9 +49,7 @@ fn loader_artifact() -> @artifact.Artifact {
           @code_object.Relocation::new(
             0,
             AArch64Call26,
-            External(
-              @semantic_machv.ExternalSymbol::new("wasm.runtime.host_log"),
-            ),
+            External(@native.ExternalSymbol::new("wasm.runtime.host_log")),
           ),
         ],
         sources: [@code_object.SourceSite::new(0, source)],
@@ -62,10 +60,7 @@ fn loader_artifact() -> @artifact.Artifact {
             GcAndCancellation,
             [Stack(offset=8, ty=GcRef64)],
             source~,
-            stack_map=@semantic_machv.StackMapMetadata::new(
-              0,
-              argument_root_count=1,
-            ),
+            stack_map=@native.StackMapMetadata::new(0, argument_root_count=1),
           ),
         ],
         unwind: [@code_object.UnwindDirective::new(4, StackAlloc(size=16))],
@@ -201,7 +196,7 @@ test "artifact compatibility reports exact mismatch causes" {
       #|  JitAbiVersionMismatch(expected=4, actual=3),
       #|  CodegenRevisionMismatch(
       #|    expected="different",
-      #|    actual="machv-2026-07-22",
+      #|    actual="legacy-codegen-1",
       #|  ),
       #|  ModuleIdentityMismatch(
       #|    expected={
@@ -239,7 +234,7 @@ test "artifact compatibility reports exact mismatch causes" {
 ///|
 test "artifact identity verification rejects unknown symbols" {
   let artifact = loader_artifact()
-  let unknown_target = @semantic_machv.ExternalSymbol::new("unknown.runtime")
+  let unknown_target = @native.ExternalSymbol::new("unknown.runtime")
   let function = artifact.functions[0]
   let malformed : @artifact.Artifact = {
     ..artifact,

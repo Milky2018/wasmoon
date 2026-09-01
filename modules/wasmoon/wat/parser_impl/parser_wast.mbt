@@ -555,9 +555,7 @@ fn Parser::parse_wast_module_command(
         _ => {
           let module_text = self.collect_wast_module_text()
           self.expect_rparen()
-          let mod_ = parse("(module " + module_text + ")") catch {
-            e => raise e
-          }
+          let mod_ = parse("(module " + module_text + ")")
           ModuleDefinition(mod_, final_name)
         }
       }
@@ -581,7 +579,7 @@ fn Parser::parse_wast_module_command(
     _ => {
       let module_text = self.collect_wast_module_text()
       self.expect_rparen()
-      let mod_ = parse("(module " + module_text + ")") catch { e => raise e }
+      let mod_ = parse("(module " + module_text + ")")
       Module(mod_, name)
     }
   }

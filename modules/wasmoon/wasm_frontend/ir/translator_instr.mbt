@@ -717,6 +717,7 @@ fn Translator::translate_instruction(
         return_vals.push(self.pop())
       }
       return_vals.rev_in_place()
+      self.unwind_try_handlers_to_depth(0)
       self.builder.return_(return_vals)
       self.is_unreachable = true
     }
@@ -746,23 +747,23 @@ fn Translator::translate_instruction(
     }
     ReturnCall(func_idx) => {
       self.spill_locals_if_in_try()
-      self.unwind_try_handlers_for_tail_call()
+      self.unwind_try_handlers_to_depth(0)
       self.translate_return_call(func_idx)
     }
     ReturnCallIndirect(type_idx, table_idx) => {
       self.spill_locals_if_in_try()
-      self.unwind_try_handlers_for_tail_call()
+      self.unwind_try_handlers_to_depth(0)
       self.translate_return_call_indirect(type_idx, table_idx)
     }
     ReturnCallRef(type_idx) => {
       self.spill_locals_if_in_try()
-      self.unwind_try_handlers_for_tail_call()
+      self.unwind_try_handlers_to_depth(0)
       self.translate_return_call_ref(type_idx)
     }
 
     // Memory management (multi-memory support via memidx)
     // Note: These use IR opcodes instead of desugaring because they require
-    // libcalls that are handled in the MachV emit phase
+    // libcalls that are handled during native lowering
     MemoryGrow(memidx) => {
       let delta = self.pop()
       let is_mem64 = memidx < self.memory_is_64.length() &&
@@ -1007,7 +1008,7 @@ fn Translator::translate_instruction(
     }
     TableGrow(table_idx) => {
       // Note: Uses IR opcode instead of desugaring because it requires
-      // a libcall that is handled in the MachV emit phase
+      // a libcall that is handled during native lowering
       // Stack: [init_value, delta] -> [result]
       let delta = self.pop()
       let init_value = self.pop()
@@ -1507,7 +1508,7 @@ fn Translator::translate_instruction(
 
             // In handler block: pop handler and branch to label
             self.builder.switch_to_block(handler_block)
-            self.emit_catch_branch(tag_idx, label_depth, handler_id)
+            self.emit_catch_branch(tag_idx, label_depth)
             self.builder.switch_to_block(next_check)
           }
           CatchRef(tag_idx, label_depth) => {
@@ -1518,18 +1519,18 @@ fn Translator::translate_instruction(
             let handler_block = self.builder.create_block()
             self.builder.brnz(tag_matches, handler_block, next_check)
             self.builder.switch_to_block(handler_block)
-            self.emit_catch_ref_branch(tag_idx, label_depth, handler_id)
+            self.emit_catch_ref_branch(tag_idx, label_depth)
             self.builder.switch_to_block(next_check)
           }
           CatchAll(label_depth) => {
             // Catch any exception - no tag check needed
-            self.emit_catch_all_branch(label_depth, handler_id)
+            self.emit_catch_all_branch(label_depth)
             // No need to continue checking after catch_all
             break
           }
           CatchAllRef(label_depth) => {
             // Catch any exception with exnref
-            self.emit_catch_all_ref_branch(label_depth, handler_id)
+            self.emit_catch_all_ref_branch(label_depth)
             break
           }
         }

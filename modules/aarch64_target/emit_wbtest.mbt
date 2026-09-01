@@ -273,7 +273,7 @@ test "AArch64 immediate shift encodings cover both widths and boundaries" {
 ///|
 test "AArch64 overflow arithmetic encodes every width and signedness" {
   let buffer = CodeBuffer::new()
-  let operations : Array[@semantic.IntOverflowOp] = [
+  let operations : Array[@lowering.IntOverflowOp] = [
     Add(Signed),
     Add(Unsigned),
     Sub(Signed),
@@ -444,11 +444,11 @@ test "AArch64 vector foundation encodings preserve lanes and aliases" {
   emit_vector_constant(
     buffer, vector3, 0x0706050403020100UL, 0x0F0E0D0C0B0A0908UL,
   )
-  let integer_lanes : Array[@semantic.VectorLane] = [I8x16, I16x8, I32x4, I64x2]
+  let integer_lanes : Array[@lowering.VectorLane] = [I8x16, I16x8, I32x4, I64x2]
   for lane in integer_lanes {
     emit_vector_splat(buffer, lane, int0, vector1)
   }
-  let float_lanes : Array[@semantic.VectorLane] = [F32x4, F64x2]
+  let float_lanes : Array[@lowering.VectorLane] = [F32x4, F64x2]
   for lane in float_lanes {
     emit_vector_splat(buffer, lane, vector0, vector1)
   }
@@ -846,7 +846,7 @@ test "AArch64 basic vector integer encodings preserve every lane width" {
   let left = @vcode.PhysicalReg::new(3, FpVector)
   let right = @vcode.PhysicalReg::new(5, FpVector)
   let destination = @vcode.PhysicalReg::new(7, FpVector)
-  let lanes : Array[@semantic.VectorLane] = [I8x16, I16x8, I32x4, I64x2]
+  let lanes : Array[@lowering.VectorLane] = [I8x16, I16x8, I32x4, I64x2]
   for lane in lanes {
     emit_vector_int_unary(buffer, lane, Absolute, left, destination)
     emit_vector_int_unary(buffer, lane, Negate, left, destination)
@@ -985,7 +985,7 @@ test "AArch64 vector integer shift encodings preserve width and signedness" {
   let vector3 = @vcode.PhysicalReg::new(3, FpVector)
   let int5 = @vcode.PhysicalReg::new(5, Int)
   let vector7 = @vcode.PhysicalReg::new(7, FpVector)
-  let lanes : Array[@semantic.VectorLane] = [I8x16, I16x8, I32x4, I64x2]
+  let lanes : Array[@lowering.VectorLane] = [I8x16, I16x8, I32x4, I64x2]
   for lane in lanes {
     emit_vector_int_shift(buffer, lane, Left, vector3, int5, vector7)
     emit_vector_int_shift(buffer, lane, Right(Signed), vector3, int5, vector7)
@@ -1182,8 +1182,8 @@ test "AArch64 vector integer comparison encodings cover the full relation matrix
   let left = @vcode.PhysicalReg::new(3, FpVector)
   let right = @vcode.PhysicalReg::new(5, FpVector)
   let destination = @vcode.PhysicalReg::new(7, FpVector)
-  let lanes : Array[@semantic.VectorLane] = [I8x16, I16x8, I32x4, I64x2]
-  let comparisons : Array[@semantic.VectorIntComparison] = [
+  let lanes : Array[@lowering.VectorLane] = [I8x16, I16x8, I32x4, I64x2]
+  let comparisons : Array[@lowering.VectorIntComparison] = [
     Equal,
     NotEqual,
     LessThan(Signed),
@@ -1393,7 +1393,7 @@ test "AArch64 saturating vector arithmetic encodings cover every lane width" {
   let left = @vcode.PhysicalReg::new(3, FpVector)
   let right = @vcode.PhysicalReg::new(5, FpVector)
   let destination = @vcode.PhysicalReg::new(7, FpVector)
-  let lanes : Array[@semantic.VectorLane] = [I8x16, I16x8, I32x4, I64x2]
+  let lanes : Array[@lowering.VectorLane] = [I8x16, I16x8, I32x4, I64x2]
   let operations : Array[AArch64VectorIntBinary] = [
     SaturatingAdd(Signed),
     SaturatingAdd(Unsigned),
@@ -1484,7 +1484,7 @@ test "AArch64 vector integer min and max cover direct and legalized lanes" {
   let left = @vcode.PhysicalReg::new(3, FpVector)
   let right = @vcode.PhysicalReg::new(5, FpVector)
   let destination = @vcode.PhysicalReg::new(7, FpVector)
-  let lanes : Array[@semantic.VectorLane] = [I8x16, I16x8, I32x4, I64x2]
+  let lanes : Array[@lowering.VectorLane] = [I8x16, I16x8, I32x4, I64x2]
   let operations : Array[AArch64VectorIntBinary] = [
     Min(Signed),
     Min(Unsigned),
@@ -1660,8 +1660,8 @@ test "AArch64 widening vector integer encodings cover every legal form" {
   let left = @vcode.PhysicalReg::new(3, FpVector)
   let right = @vcode.PhysicalReg::new(5, FpVector)
   let destination = @vcode.PhysicalReg::new(7, FpVector)
-  let lanes : Array[@semantic.VectorLane] = [I16x8, I32x4, I64x2]
-  let signednesses : Array[@semantic.Signedness] = [Signed, Unsigned]
+  let lanes : Array[@lowering.VectorLane] = [I16x8, I32x4, I64x2]
+  let signednesses : Array[@native.Signedness] = [Signed, Unsigned]
   for lane in lanes {
     for signedness in signednesses {
       emit_vector_int_unary(
@@ -1673,7 +1673,7 @@ test "AArch64 widening vector integer encodings cover every legal form" {
       )
     }
   }
-  let halves : Array[@semantic.VectorHalf] = [Low, High]
+  let halves : Array[@lowering.VectorHalf] = [Low, High]
   for lane in lanes {
     for half in halves {
       for signedness in signednesses {
@@ -1806,9 +1806,9 @@ test "AArch64 vector integer extension encodings cover every legal form" {
   let buffer = CodeBuffer::new()
   let source = @vcode.PhysicalReg::new(3, FpVector)
   let destination = @vcode.PhysicalReg::new(7, FpVector)
-  let lanes : Array[@semantic.VectorLane] = [I16x8, I32x4, I64x2]
-  let halves : Array[@semantic.VectorHalf] = [Low, High]
-  let signednesses : Array[@semantic.Signedness] = [Signed, Unsigned]
+  let lanes : Array[@lowering.VectorLane] = [I16x8, I32x4, I64x2]
+  let halves : Array[@lowering.VectorHalf] = [Low, High]
+  let signednesses : Array[@native.Signedness] = [Signed, Unsigned]
   for lane in lanes {
     for half in halves {
       for signedness in signednesses {
@@ -1886,8 +1886,8 @@ test "AArch64 saturating vector narrowing handles every form and alias" {
   let low = @vcode.PhysicalReg::new(3, FpVector)
   let high = @vcode.PhysicalReg::new(5, FpVector)
   let destination = @vcode.PhysicalReg::new(7, FpVector)
-  let lanes : Array[@semantic.VectorLane] = [I8x16, I16x8]
-  let signednesses : Array[@semantic.Signedness] = [Signed, Unsigned]
+  let lanes : Array[@lowering.VectorLane] = [I8x16, I16x8]
+  let signednesses : Array[@native.Signedness] = [Signed, Unsigned]
   for lane in lanes {
     for signedness in signednesses {
       emit_vector_narrow(buffer, lane, signedness, low, high, destination)
@@ -1953,7 +1953,7 @@ test "AArch64 vector truth predicate encodings cover every lane" {
   let source = @vcode.PhysicalReg::new(3, FpVector)
   let destination = @vcode.PhysicalReg::new(7, Int)
   emit_vector_predicate(buffer, AnyTrue, source, destination)
-  let lanes : Array[@semantic.VectorLane] = [I8x16, I16x8, I32x4, I64x2]
+  let lanes : Array[@lowering.VectorLane] = [I8x16, I16x8, I32x4, I64x2]
   for lane in lanes {
     emit_vector_predicate(buffer, AllTrue(lane), source, destination)
   }
@@ -2055,7 +2055,7 @@ test "AArch64 vector integer bitmask encodings cover every lane" {
   let buffer = CodeBuffer::new()
   let source = @vcode.PhysicalReg::new(3, FpVector)
   let destination = @vcode.PhysicalReg::new(7, Int)
-  let lanes : Array[@semantic.VectorLane] = [I8x16, I16x8, I32x4, I64x2]
+  let lanes : Array[@lowering.VectorLane] = [I8x16, I16x8, I32x4, I64x2]
   for lane in lanes {
     emit_vector_bitmask(buffer, lane, source, destination)
   }
@@ -2286,7 +2286,7 @@ test "AArch64 vector float encodings cover every non-fused operation" {
   let left = @vcode.PhysicalReg::new(3, FpVector)
   let right = @vcode.PhysicalReg::new(5, FpVector)
   let destination = @vcode.PhysicalReg::new(7, FpVector)
-  let unary_operations : Array[@semantic.VectorFloatUnaryOp] = [
+  let unary_operations : Array[@lowering.VectorFloatUnaryOp] = [
     Absolute,
     Negate,
     SquareRoot,
@@ -2295,7 +2295,7 @@ test "AArch64 vector float encodings cover every non-fused operation" {
     Truncate,
     Nearest,
   ]
-  let binary_operations : Array[@semantic.VectorFloatBinaryOp] = [
+  let binary_operations : Array[@lowering.VectorFloatBinaryOp] = [
     Add,
     Sub,
     Mul,
@@ -2305,7 +2305,7 @@ test "AArch64 vector float encodings cover every non-fused operation" {
     PseudoMin,
     PseudoMax,
   ]
-  let comparisons : Array[@semantic.VectorFloatComparison] = [
+  let comparisons : Array[@lowering.VectorFloatComparison] = [
     Equal,
     NotEqual,
     LessThan,
@@ -2313,7 +2313,7 @@ test "AArch64 vector float encodings cover every non-fused operation" {
     GreaterThan,
     GreaterOrEqual,
   ]
-  let lanes : Array[@semantic.VectorLane] = [F32x4, F64x2]
+  let lanes : Array[@lowering.VectorLane] = [F32x4, F64x2]
   for lane in lanes {
     for operation in unary_operations {
       emit_vector_float_unary(buffer, lane, operation, left, destination)
@@ -2553,13 +2553,13 @@ test "AArch64 vector fused encodings cover both lanes and every sign form" {
   let right = @vcode.PhysicalReg::new(5, FpVector)
   let addend = @vcode.PhysicalReg::new(7, FpVector)
   let destination = @vcode.PhysicalReg::new(9, FpVector)
-  let operations : Array[@semantic.FloatTernaryOp] = [
+  let operations : Array[@lowering.FloatTernaryOp] = [
     FusedMultiplyAdd,
     FusedNegatedMultiplyAdd,
     FusedMultiplySubtract,
     FusedNegatedMultiplySubtract,
   ]
-  let lanes : Array[@semantic.VectorLane] = [F32x4, F64x2]
+  let lanes : Array[@lowering.VectorLane] = [F32x4, F64x2]
   for lane in lanes {
     for operation in operations {
       emit_vector_float_ternary(
@@ -2911,7 +2911,7 @@ test "AArch64 atomic encodings cover widths, RMW operations, and compare-exchang
   let value = @vcode.PhysicalReg::new(5, Int)
   let result = @vcode.PhysicalReg::new(7, Int)
   let rmw_code : Array[Array[Byte]] = []
-  let rmw_operations : Array[@semantic.AtomicRmwOp] = [
+  let rmw_operations : Array[@lowering.AtomicRmwOp] = [
     Add,
     Sub,
     And,
@@ -2925,7 +2925,7 @@ test "AArch64 atomic encodings cover widths, RMW operations, and compare-exchang
     rmw_code.push(buffer.code)
   }
   let compare_exchange_code : Array[Array[Byte]] = []
-  let widths : Array[@semantic.AccessWidth] = [W8, W16, W32, W64]
+  let widths : Array[@native.AccessWidth] = [W8, W16, W32, W64]
   for width in widths {
     let buffer = CodeBuffer::new()
     emit_atomic_compare_exchange(
@@ -3278,7 +3278,7 @@ test "validated internal ABI derives context, overflow, and result locations" {
     [0, 1, 2, 3, 4, 5, 6, 7],
   )
   let layout = abi.call_layout(
-    @semantic.Signature::new(
+    @native.Signature::new(
       [
         Ptr64,
         I64,

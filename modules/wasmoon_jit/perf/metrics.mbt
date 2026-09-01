@@ -36,7 +36,7 @@ let perf_detail_metrics_enabled : Bool = match
 }
 
 ///|
-fn detail_enabled() -> Bool {
+pub fn detail_enabled() -> Bool {
   perf_detail_metrics_enabled
 }
 
@@ -60,7 +60,7 @@ pub fn elapsed_us(start : PerfTick) -> Int64 {
 /// cannot silently lose metrics through an unknown string.
 pub(all) enum FunctionCompileStage {
   Optimize
-  SemanticLowering
+  NativeLowering
   TargetLowering
   RegisterAllocation
   FramePlanning
@@ -88,24 +88,46 @@ pub struct RegallocPhaseMetric {
 } derive(ToJson)
 
 ///|
+pub struct CompileSubphaseMetric {
+  name : String
+  parent : String
+  duration_us : Int64
+} derive(ToJson)
+
+///|
+pub struct RegallocLoopMetric {
+  queue_pops : Int
+  register_probes : Int
+  occupied_segments_scanned : Int
+  conflicts : Int
+  evictions : Int
+  bundle_splits : Int
+  second_chance_attempts : Int
+  max_queue_length : Int
+} derive(ToJson)
+
+///|
 pub struct FunctionMetrics {
   func_idx : Int
   func_name : String
   opt_level : Int
   ir_insts_before : Int
   mut ir_insts_after : Int
+  mut function_compile_us : Int64
   mut optimize_us : Int64
   mut lower_us : Int64
   mut target_lower_us : Int64
   mut regalloc_us : Int64
   mut frame_plan_us : Int64
   mut emit_us : Int64
+  compile_subphases : Array[CompileSubphaseMetric]
   mut code_size : Int
   mut spill_slots : Int
   mut spills : Int
   mut reloads : Int
   mut reg_moves : Int
   mut spill_to_spill : Int
+  mut regalloc_loop : RegallocLoopMetric?
   ir_passes : Array[IRPassMetric]
   regalloc_phases : Array[RegallocPhaseMetric]
 } derive(ToJson)
@@ -115,6 +137,7 @@ pub struct ModuleMetricsReport {
   schema_version : Int
   expected_functions : Int
   mut module_compile_us : Int64
+  compile_subphases : Array[CompileSubphaseMetric]
   functions : Array[FunctionMetrics]
 } derive(ToJson)
 
@@ -130,9 +153,10 @@ fn ensure_module_state() -> ModuleMetricsReport {
     Some(m) => m
     None => {
       let m = {
-        schema_version: 3,
+        schema_version: 5,
         expected_functions: 0,
         module_compile_us: 0L,
+        compile_subphases: [],
         functions: [],
       }
       module_state.val = Some(m)
@@ -153,9 +177,10 @@ fn flush_current_function_if_any() -> Unit {
 pub fn reset_module(expected_functions : Int) -> Unit {
   guard enabled() else { return }
   module_state.val = Some({
-    schema_version: 3,
+    schema_version: 5,
     expected_functions,
     module_compile_us: 0L,
+    compile_subphases: [],
     functions: [],
   })
   current_function_state.val = None
@@ -164,7 +189,27 @@ pub fn reset_module(expected_functions : Int) -> Unit {
 ///|
 pub fn set_module_compile_us(us : Int64) -> Unit {
   guard enabled() else { return }
-  ensure_module_state().module_compile_us = us
+  let report = ensure_module_state()
+  report.module_compile_us = us
+  if detail_enabled() {
+    let mut attributed = 0L
+    for subphase in report.compile_subphases {
+      if subphase.parent == "module" {
+        attributed = attributed + subphase.duration_us
+      }
+    }
+    for function in report.functions {
+      attributed = attributed + function.function_compile_us
+    }
+    let orchestration = us - attributed
+    if orchestration > 0L {
+      report.compile_subphases.push({
+        name: "module_orchestration",
+        parent: "module",
+        duration_us: orchestration,
+      })
+    }
+  }
 }
 
 ///|
@@ -182,18 +227,21 @@ pub fn begin_function(
     opt_level,
     ir_insts_before,
     ir_insts_after: ir_insts_before,
+    function_compile_us: 0L,
     optimize_us: 0L,
     lower_us: 0L,
     target_lower_us: 0L,
     regalloc_us: 0L,
     frame_plan_us: 0L,
     emit_us: 0L,
+    compile_subphases: [],
     code_size: 0,
     spill_slots: 0,
     spills: 0,
     reloads: 0,
     reg_moves: 0,
     spill_to_spill: 0,
+    regalloc_loop: None,
     ir_passes: [],
     regalloc_phases: [],
   })
@@ -284,11 +332,77 @@ pub fn record_stage_us(
   if current_function_state.val is Some(m) {
     match stage {
       Optimize => m.optimize_us = duration_us
-      SemanticLowering => m.lower_us = duration_us
+      NativeLowering => m.lower_us = duration_us
       TargetLowering => m.target_lower_us = duration_us
       RegisterAllocation => m.regalloc_us = duration_us
       FramePlanning => m.frame_plan_us = duration_us
       Emission => m.emit_us = duration_us
+    }
+    if detail_enabled() {
+      let parent_and_residual_name = match stage {
+        NativeLowering => Some(("native_lowering", "native_orchestration"))
+        TargetLowering => Some(("target_lowering", "target_orchestration"))
+        _ => None
+      }
+      if parent_and_residual_name is Some((parent, residual_name)) {
+        let mut attributed = 0L
+        for subphase in m.compile_subphases {
+          if subphase.parent == parent {
+            attributed = attributed + subphase.duration_us
+          }
+        }
+        let orchestration = duration_us - attributed
+        if orchestration > 0L {
+          m.compile_subphases.push({
+            name: residual_name,
+            parent,
+            duration_us: orchestration,
+          })
+        }
+      }
+      match stage {
+        RegisterAllocation => {
+          let mut attributed = 0L
+          for phase in m.regalloc_phases {
+            attributed = attributed + phase.duration_us
+          }
+          let orchestration = duration_us - attributed
+          if orchestration > 0L {
+            m.regalloc_phases.push({
+              name: "regalloc_orchestration",
+              duration_us: orchestration,
+            })
+          }
+        }
+        _ => ()
+      }
+    }
+  }
+}
+
+///|
+pub fn record_function_compile_us(duration_us : Int64) -> Unit {
+  guard enabled() && detail_enabled() else { return }
+  if current_function_state.val is Some(m) {
+    m.function_compile_us = duration_us
+    let mut attributed = m.optimize_us +
+      m.lower_us +
+      m.target_lower_us +
+      m.regalloc_us +
+      m.frame_plan_us +
+      m.emit_us
+    for subphase in m.compile_subphases {
+      if subphase.parent == "function" {
+        attributed = attributed + subphase.duration_us
+      }
+    }
+    let orchestration = duration_us - attributed
+    if orchestration > 0L {
+      m.compile_subphases.push({
+        name: "function_orchestration",
+        parent: "function",
+        duration_us: orchestration,
+      })
     }
   }
 }
@@ -306,6 +420,31 @@ pub fn record_regalloc_phase_us(
 }
 
 ///|
+pub fn record_compile_subphase_us(
+  phase_name : String,
+  duration_us : Int64,
+  parent? : String = "function",
+) -> Unit {
+  guard enabled() && detail_enabled() else { return }
+  if current_function_state.val is Some(m) {
+    m.compile_subphases.push({ name: phase_name, parent, duration_us, })
+  }
+}
+
+///|
+pub fn record_module_subphase_us(
+  phase_name : String,
+  duration_us : Int64,
+) -> Unit {
+  guard enabled() && detail_enabled() else { return }
+  ensure_module_state().compile_subphases.push({
+    name: phase_name,
+    parent: "module",
+    duration_us,
+  })
+}
+
+///|
 pub fn record_regalloc_stats(
   spill_slots : Int,
   spills : Int,
@@ -320,6 +459,32 @@ pub fn record_regalloc_stats(
     m.reloads = reloads
     m.reg_moves = reg_moves
     m.spill_to_spill = spill_to_spill
+  }
+}
+
+///|
+pub fn record_regalloc_loop(
+  queue_pops : Int,
+  register_probes : Int,
+  occupied_segments_scanned : Int,
+  conflicts : Int,
+  evictions : Int,
+  bundle_splits : Int,
+  second_chance_attempts : Int,
+  max_queue_length : Int,
+) -> Unit {
+  guard enabled() else { return }
+  if current_function_state.val is Some(m) {
+    m.regalloc_loop = Some({
+      queue_pops,
+      register_probes,
+      occupied_segments_scanned,
+      conflicts,
+      evictions,
+      bundle_splits,
+      second_chance_attempts,
+      max_queue_length,
+    })
   }
 }
 

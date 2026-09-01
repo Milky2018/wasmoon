@@ -32,6 +32,7 @@ pub struct AllocationPlan {
   priv operand_locations : Array[Array[Location?]]
   priv edits : Array[AllocationEdit]
   priv spill_slots : Array[SpillSlotSpec]
+  priv spill_slot_owners : Array[Int]
 }
 
 ///|
@@ -56,6 +57,7 @@ fn AllocationPlan::new(value_count : Int) -> AllocationPlan {
     operand_locations: [],
     edits: [],
     spill_slots: [],
+    spill_slot_owners: [],
   }
 }
 
@@ -98,12 +100,34 @@ fn AllocationPlan::add_edit(
 ///|
 fn AllocationPlan::create_spill_slot(
   self : AllocationPlan,
+  owner : Int,
   size : Int,
   alignment : Int,
 ) -> Int {
   let slot = self.spill_slots.length()
   self.spill_slots.push({ size, alignment, })
+  self.spill_slot_owners.push(owner)
   slot
+}
+
+///|
+fn[F : FunctionView] AllocationPlan::seal_operand_storage(
+  self : AllocationPlan,
+  function : F,
+) -> Unit {
+  for block in 0..<function.block_count() {
+    for instruction_index in 0..<function.block_instruction_count(block) {
+      let instruction = function.block_instruction_at(block, instruction_index)
+      while self.operand_locations.length() <= instruction {
+        self.operand_locations.push([])
+      }
+      let locations = self.operand_locations[instruction]
+      let operand_count = function.instruction_operands(instruction).length()
+      while locations.length() < operand_count {
+        locations.push(None)
+      }
+    }
+  }
 }
 
 ///|
@@ -145,8 +169,37 @@ pub fn AllocationPlan::operand_assignments(
 }
 
 ///|
+pub fn AllocationPlan::operand_instruction_count(self : AllocationPlan) -> Int {
+  self.operand_locations.length()
+}
+
+///|
+pub fn AllocationPlan::instruction_operand_count(
+  self : AllocationPlan,
+  instruction : Int,
+) -> Int {
+  match self.operand_locations.get(instruction) {
+    Some(locations) => locations.length()
+    None => 0
+  }
+}
+
+///|
 pub fn AllocationPlan::edits(self : AllocationPlan) -> Array[AllocationEdit] {
   self.edits.copy()
+}
+
+///|
+pub fn AllocationPlan::edit_count(self : AllocationPlan) -> Int {
+  self.edits.length()
+}
+
+///|
+pub fn AllocationPlan::edit_at(
+  self : AllocationPlan,
+  index : Int,
+) -> AllocationEdit? {
+  self.edits.get(index)
 }
 
 ///|
@@ -160,4 +213,31 @@ pub fn AllocationPlan::spill_slot(
   index : Int,
 ) -> SpillSlotSpec? {
   self.spill_slots.get(index)
+}
+
+///|
+pub fn AllocationPlan::spill_slot_owner(
+  self : AllocationPlan,
+  index : Int,
+) -> Int? {
+  self.spill_slot_owners.get(index)
+}
+
+///|
+/// Shares the allocator's finalized dense value-location table with an
+/// embedding. The plan must not be mutated after this table is adopted.
+pub fn AllocationPlan::value_location_storage(
+  self : AllocationPlan,
+) -> Array[Location?] {
+  self.value_locations
+}
+
+///|
+/// Shares the allocator's finalized dense operand-location tables with an
+/// embedding. `seal_operand_storage` establishes the source function's exact
+/// instruction and operand shape before allocation returns.
+pub fn AllocationPlan::operand_location_storage(
+  self : AllocationPlan,
+) -> Array[Array[Location?]] {
+  self.operand_locations
 }

@@ -52,13 +52,13 @@ fn runtime_artifact_code(
 fn runtime_artifact_function(
   function_index : Int,
   code : Array[Byte],
-  signature : @machv.Signature,
+  signature : @native.Signature,
   relocations? : Array[@code_object.Relocation] = [],
 ) -> @artifact.FunctionCode {
   {
     identity: {
       function_index,
-      symbol: @machv.CodeSymbol::new("wasm.func.\{function_index}"),
+      symbol: @native.CodeSymbol::new("wasm.func.\{function_index}"),
       signature,
     },
     entry_offset: 0,
@@ -75,7 +75,7 @@ fn runtime_artifact_function(
 ///|
 fn load_runtime_artifact(
   artifact : @artifact.Artifact,
-  runtime_symbols? : Array[@machv.ExternalSymbol] = [],
+  runtime_symbols? : Array[@native.ExternalSymbol] = [],
 ) -> @wasmoon_jit.LoadedArtifact raise @wasmoon_jit.ArtifactLoadError {
   let compatibility = @wasmoon_jit.artifact_compatibility(
     artifact.manifest,
@@ -105,7 +105,7 @@ test "JITModule publishes a complete installed artifact" {
       runtime_artifact_function(
         0,
         runtime_artifact_code(Some(42)),
-        @machv.Signature::new([], [I32]),
+        @native.Signature::new([], [I32]),
       ),
     ],
   }
@@ -132,7 +132,7 @@ test "JITModule preserves native fiber allocation failure" {
       runtime_artifact_function(
         0,
         runtime_artifact_code(Some(42)),
-        @machv.Signature::new([], [I32]),
+        @native.Signature::new([], [I32]),
       ),
     ],
   }
@@ -159,7 +159,7 @@ test "JITModule preserves native fiber allocation failure" {
 ///|
 test "JITModule resolves imported Code symbols transactionally" {
   let relocation = runtime_call_relocation(
-    Code(@machv.CodeSymbol::new("wasm.func.0")),
+    Code(@native.CodeSymbol::new("wasm.func.0")),
   )
   let artifact : @artifact.Artifact = {
     manifest: runtime_artifact_manifest(),
@@ -168,15 +168,15 @@ test "JITModule resolves imported Code symbols transactionally" {
         function_index: 0,
         module_name: "env",
         function_name: "host",
-        symbol: @machv.ExternalSymbol::new("wasm.func.0"),
-        signature: @machv.Signature::new([], []),
+        symbol: @native.ExternalSymbol::new("wasm.func.0"),
+        signature: @native.Signature::new([], []),
       },
     ],
     functions: [
       runtime_artifact_function(
         1,
         runtime_artifact_code(None),
-        @machv.Signature::new([], []),
+        @native.Signature::new([], []),
         relocations=[relocation],
       ),
     ],
@@ -205,7 +205,9 @@ test "JITModule resolves imported Code symbols transactionally" {
 
 ///|
 test "JITModule resolves named Wasmoon runtime symbols" {
-  let runtime_symbol = @machv.ExternalSymbol::new("wasmoon.runtime.cancel_poll")
+  let runtime_symbol = @native.ExternalSymbol::new(
+    "wasmoon.runtime.cancel_poll",
+  )
   let artifact : @artifact.Artifact = {
     manifest: runtime_artifact_manifest(),
     imports: [],
@@ -213,7 +215,7 @@ test "JITModule resolves named Wasmoon runtime symbols" {
       runtime_artifact_function(
         0,
         runtime_artifact_code(None),
-        @machv.Signature::new([], []),
+        @native.Signature::new([], []),
         relocations=[runtime_call_relocation(External(runtime_symbol))],
       ),
     ],
@@ -244,8 +246,8 @@ test "JITModule retains generated hostcall import trampolines" {
         function_index: 0,
         module_name: "env",
         function_name: "hostcall",
-        symbol: @machv.ExternalSymbol::new("wasm.func.0"),
-        signature: @machv.Signature::new([], []),
+        symbol: @native.ExternalSymbol::new("wasm.func.0"),
+        signature: @native.Signature::new([], []),
       },
     ],
     functions: [],
@@ -270,7 +272,7 @@ test "failed artifact replacement leaves the previous module executable" {
       runtime_artifact_function(
         0,
         runtime_artifact_code(Some(42)),
-        @machv.Signature::new([], [I32]),
+        @native.Signature::new([], [I32]),
       ),
     ],
   }
@@ -279,7 +281,7 @@ test "failed artifact replacement leaves the previous module executable" {
     [([], [I32])],
     function_names=["answer"],
   )
-  let missing = @machv.ExternalSymbol::new("missing.runtime.symbol")
+  let missing = @native.ExternalSymbol::new("missing.runtime.symbol")
   let bad_artifact : @artifact.Artifact = {
     manifest: runtime_artifact_manifest(),
     imports: [],
@@ -287,7 +289,7 @@ test "failed artifact replacement leaves the previous module executable" {
       runtime_artifact_function(
         0,
         runtime_artifact_code(None),
-        @machv.Signature::new([], []),
+        @native.Signature::new([], []),
         relocations=[runtime_call_relocation(External(missing))],
       ),
     ],

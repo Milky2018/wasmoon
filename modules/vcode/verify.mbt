@@ -1,0 +1,823 @@
+///|
+fn[Inst] Function::definition_dominates(
+  self : Function[Inst],
+  value : Value,
+  use_instruction : Instruction,
+  dominators : Array[Array[UInt64]],
+  instruction_positions : Array[Int],
+) -> Bool {
+  let use_data = self.instructions[use_instruction.id]
+  match self.values[value.id].definition {
+    FunctionParameter => true
+    BlockParameter(block) =>
+      value_bitset_contains(dominators[use_data.parent.id], block.id)
+    InstructionResult(definition) => {
+      let definition_data = self.instructions[definition.id]
+      if definition_data.parent == use_data.parent {
+        instruction_positions[definition.id] <
+        instruction_positions[use_instruction.id]
+      } else {
+        value_bitset_contains(
+          dominators[use_data.parent.id],
+          definition_data.parent.id,
+        )
+      }
+    }
+  }
+}
+
+///|
+fn[Inst] Function::predecessors(self : Function[Inst]) -> Array[Array[Int]] {
+  let predecessors : Array[Array[Int]] = Array::makei(self.blocks.length(), _ => {
+    []
+  })
+  for block_index, block in self.blocks {
+    match block.terminator {
+      Some(terminator) =>
+        for edge in self.instructions[terminator.id].successors {
+          if self.owns_block(edge.target) {
+            predecessors[edge.target.id].push(block_index)
+          }
+        }
+      None => ()
+    }
+  }
+  predecessors
+}
+
+///|
+fn[Inst] Function::compute_dominators(
+  self : Function[Inst],
+  predecessors : Array[Array[Int]],
+) -> Array[Array[UInt64]] {
+  let count = self.blocks.length()
+  let dominators = Array::makei(count, block => {
+    if block == 0 {
+      let entry = value_bitset(count)
+      value_bitset_set(entry, 0)
+      entry
+    } else {
+      Array::make((count + 63) / 64, 0xFFFFFFFFFFFFFFFFUL)
+    }
+  })
+  let mut changed = true
+  while changed {
+    changed = false
+    for block in 1..<count {
+      let next = Array::make((count + 63) / 64, 0xFFFFFFFFFFFFFFFFUL)
+      for predecessor in predecessors[block] {
+        for word in 0..<next.length() {
+          next[word] = next[word] & dominators[predecessor][word]
+        }
+      }
+      value_bitset_set(next, block)
+      if next != dominators[block] {
+        dominators[block] = next
+        changed = true
+      }
+    }
+  }
+  dominators
+}
+
+///|
+fn[Inst] Function::verify_layout(
+  self : Function[Inst],
+) -> Unit raise VCodeVerifyError {
+  if self.layout.length() != self.blocks.length() {
+    raise InvalidLayout
+  }
+  let seen = Array::make(self.blocks.length(), false)
+  for block in self.layout {
+    if !self.owns_block(block) || seen[block.id] {
+      raise InvalidLayout
+    }
+    seen[block.id] = true
+  }
+}
+
+///|
+fn[Inst] Function::verify_instruction(
+  self : Function[Inst],
+  instruction : Instruction,
+  dominators : Array[Array[UInt64]],
+  instruction_positions : Array[Int],
+) -> Unit raise VCodeVerifyError {
+  let data = self.instructions[instruction.id]
+  let operands = self.instruction_operands(instruction)
+  for index, operand in operands {
+    if !self.owns_value(operand.value) {
+      raise ForeignValue(instruction~, value=operand.value)
+    }
+    let ty = self.values[operand.value.id].ty
+    if operand.preference is Some(preference) &&
+      preference.class != reg_class_for_value_type(ty) {
+      raise InvalidOperandPreference(instruction~, operand=index)
+    }
+    match operand.constraint {
+      FixedReg(reg) =>
+        if reg.class != reg_class_for_value_type(ty) {
+          raise FixedRegisterClassMismatch(instruction~, operand=index)
+        }
+      AnyReg | AnyLocation | PreservedHome => ()
+    }
+    if operand.tie_id < -1 {
+      raise InvalidTie(instruction~, operand=index, tied_to=operand.tie_id)
+    }
+    if operand.role == Def && operand.tie_id >= 0 {
+      let tied_to = operand.tie_id
+      if tied_to >= operands.length() || tied_to == index {
+        raise InvalidTie(instruction~, operand=index, tied_to~)
+      }
+      let tied = operands[tied_to]
+      if tied.role != Use ||
+        self.values[tied.value.id].ty != ty ||
+        tied.tie_id != operand.tie_id {
+        raise InvalidTie(instruction~, operand=index, tied_to~)
+      }
+    }
+    if operand.role == Use &&
+      !self.definition_dominates(
+        operand.value,
+        instruction,
+        dominators,
+        instruction_positions,
+      ) {
+      let definition = self.values[operand.value.id].definition
+      match definition {
+        InstructionResult(definition) => {
+          let definition_data = self.instructions[definition.id]
+          if definition_data.parent == data.parent {
+            raise UseBeforeDefinition(instruction~, value=operand.value)
+          }
+        }
+        _ => ()
+      }
+      raise DefinitionDoesNotDominate(instruction~, value=operand.value)
+    }
+  }
+  for index, reg in self.instruction_clobbers(instruction) {
+    for earlier in 0..<index {
+      if self.clobbers[data.clobber_start + earlier] == reg {
+        raise DuplicateClobber(instruction~, reg~)
+      }
+    }
+  }
+  let metadata = data.metadata
+  if metadata.stack_map is Some(stack_map) {
+    if metadata.safepoint is None ||
+      stack_map.id < 0 ||
+      stack_map.argument_root_count < 0 {
+      raise InvalidStackMap(instruction~)
+    }
+  }
+  if metadata.live_gc_roots.length() > 0 && metadata.safepoint is None {
+    raise InvalidSafepointRoot(instruction~, value=metadata.live_gc_roots[0])
+  }
+  for root in metadata.live_gc_roots {
+    if !self.owns_value(root) ||
+      self.values[root.id].ty != GcRef64 ||
+      !self.definition_dominates(
+        root, instruction, dominators, instruction_positions,
+      ) {
+      raise InvalidSafepointRoot(instruction~, value=root)
+    }
+  }
+  if data.role == Terminator {
+    for edge in data.successors {
+      if !self.owns_block(edge.target) {
+        raise ForeignBlock(instruction~, block=edge.target)
+      }
+      let parameters = self.blocks[edge.target.id].parameters
+      if edge.arguments.length() != parameters.length() {
+        raise InvalidEdgeArity(instruction~, block=edge.target)
+      }
+      for index, argument in edge.arguments {
+        if !self.owns_value(argument) {
+          raise ForeignValue(instruction~, value=argument)
+        }
+        if self.values[argument.id].ty != self.values[parameters[index].id].ty {
+          raise EdgeClassMismatch(instruction~, block=edge.target, index~)
+        }
+        if !self.definition_dominates(
+            argument, instruction, dominators, instruction_positions,
+          ) {
+          raise DefinitionDoesNotDominate(instruction~, value=argument)
+        }
+      }
+    }
+  }
+}
+
+///|
+pub fn[Inst] verify_selected(
+  function : Function[Inst],
+) -> Unit raise VCodeVerifyError {
+  if function.blocks.is_empty() {
+    raise EmptyFunction
+  }
+  function.verify_layout()
+  for index, block in function.blocks {
+    if block.terminator is None {
+      raise MissingTerminator(block=Block::new(function.owner, index))
+    }
+  }
+  let predecessors = function.predecessors()
+  let reachable = Array::make(function.blocks.length(), false)
+  let worklist = [0]
+  reachable[0] = true
+  while worklist.length() > 0 {
+    let block = worklist.pop().unwrap()
+    let terminator = function.blocks[block].terminator.unwrap()
+    for edge in function.instructions[terminator.id].successors {
+      if function.owns_block(edge.target) && !reachable[edge.target.id] {
+        reachable[edge.target.id] = true
+        worklist.push(edge.target.id)
+      }
+    }
+  }
+  for index, is_reachable in reachable {
+    if !is_reachable {
+      raise UnreachableBlock(block=Block::new(function.owner, index))
+    }
+  }
+  let dominators = function.compute_dominators(predecessors)
+  let instruction_positions = Array::make(function.instructions.length(), -1)
+  for block in function.blocks {
+    for position, instruction in block.body {
+      instruction_positions[instruction.id] = position
+    }
+    let terminator = block.terminator.unwrap()
+    instruction_positions[terminator.id] = block.body.length()
+  }
+  let stack_map_ids : Array[Int] = []
+  for index in 0..<function.instructions.length() {
+    let instruction = Instruction::new(function.owner, index)
+    function.verify_instruction(instruction, dominators, instruction_positions)
+    if function.instructions[index].metadata.stack_map is Some(stack_map) {
+      if stack_map_ids.contains(stack_map.id) {
+        raise InvalidStackMap(instruction~)
+      }
+      stack_map_ids.push(stack_map.id)
+    }
+  }
+  for id in 0..<stack_map_ids.length() {
+    if !stack_map_ids.contains(id) {
+      raise InvalidLayout
+    }
+  }
+}
+
+///|
+fn is_power_of_two(value : Int) -> Bool {
+  value > 0 && (value & (value - 1)) == 0
+}
+
+///|
+fn Allocation::assignment_for(
+  self : Allocation,
+  instruction : Instruction,
+  operand_index : Int,
+) -> AllocationLocation? {
+  if !self.owns_instruction(instruction) ||
+    operand_index < 0 ||
+    operand_index >= self.operand_counts[instruction.id] {
+    return None
+  }
+  self.operand_locations[instruction.id][operand_index]
+}
+
+///|
+fn Allocation::dense_location_class(
+  self : Allocation,
+  location : AllocationLocation,
+) -> RegClass? {
+  match location.register() {
+    Some(reg) => Some(reg.class)
+    None => {
+      let index = location.spill_index().unwrap()
+      if index >= 0 && index < self.stack_slots.length() {
+        Some(reg_class_for_value_type(self.stack_slots[index].ty))
+      } else {
+        None
+      }
+    }
+  }
+}
+
+///|
+fn Allocation::location_matches(
+  self : Allocation,
+  location : Location,
+  ty : ValueType,
+) -> Bool {
+  match location {
+    Register(reg) => reg.class == reg_class_for_value_type(ty)
+    Stack(slot) => self.owns_slot(slot) && self.stack_slots[slot.id].ty == ty
+  }
+}
+
+///|
+fn[Inst] verify_allocation_edits(
+  function : Function[Inst],
+  allocation : Allocation,
+) -> Unit raise AllocationVerifyError {
+  for index, edit in allocation.edits {
+    match edit.kind {
+      Spill(value~, reg~, slot~) | Reload(value~, slot~, reg~) => {
+        if !allocation.owns_value(value) ||
+          !allocation.owns_slot(slot) ||
+          allocation.stack_slots[slot.id].ty !=
+          function.value_type(value).unwrap() ||
+          reg_class_for_value_type(function.value_type(value).unwrap()) !=
+          reg.class {
+          raise InvalidEdit(index~)
+        }
+        match edit.point {
+          Some(point) =>
+            if !physical_equal(point.owner, function.owner) ||
+              !function.owns_instruction(point.instruction) {
+              raise InvalidEdit(index~)
+            }
+          None => raise InvalidEdit(index~)
+        }
+      }
+      Move(value~, from~, to~) =>
+        if !allocation.owns_value(value) ||
+          from.class != to.class ||
+          reg_class_for_value_type(function.value_type(value).unwrap()) !=
+          from.class ||
+          edit.point is None {
+          raise InvalidEdit(index~)
+        }
+      EdgeMove(source~, successor_index~, value~, from~, to~) => {
+        if !function.owns_block(source) ||
+          !allocation.owns_value(value) ||
+          !allocation.location_matches(
+            from,
+            function.value_type(value).unwrap(),
+          ) ||
+          !allocation.location_matches(to, function.value_type(value).unwrap()) {
+          raise InvalidEdgeMove(index~)
+        }
+        let terminator = function.block_terminator(source)
+        if terminator is None ||
+          successor_index < 0 ||
+          successor_index >=
+          function.instruction_successors(terminator.unwrap()).length() {
+          raise InvalidEdgeMove(index~)
+        }
+      }
+    }
+  }
+}
+
+///|
+fn value_bitset(value_count : Int) -> Array[UInt64] {
+  Array::make((value_count + 63) / 64, 0UL)
+}
+
+///|
+fn value_bitset_contains(bits : Array[UInt64], value : Int) -> Bool {
+  (bits[value / 64] & (1UL << (value % 64))) != 0UL
+}
+
+///|
+fn value_bitset_set(bits : Array[UInt64], value : Int) -> Unit {
+  let word = value / 64
+  bits[word] = bits[word] | (1UL << (value % 64))
+}
+
+///|
+fn value_bitset_clear(bits : Array[UInt64], value : Int) -> Unit {
+  let word = value / 64
+  bits[word] = bits[word] & (1UL << (value % 64)).lnot()
+}
+
+///|
+fn[Inst] Function::allocation_block_live_out(
+  self : Function[Inst],
+) -> Array[Array[UInt64]] {
+  let value_count = self.value_count()
+  let block_count = self.block_count()
+  let live_in = Array::makei(block_count, _ => value_bitset(value_count))
+  let live_out = Array::makei(block_count, _ => value_bitset(value_count))
+  let mut changed = true
+  while changed {
+    changed = false
+    for reverse_index in 0..<block_count {
+      let block_index = block_count - reverse_index - 1
+      let next_out = value_bitset(value_count)
+      let terminator = self.blocks[block_index].terminator.unwrap()
+      for edge in self.instructions[terminator.id].successors {
+        for word in 0..<next_out.length() {
+          next_out[word] = next_out[word] | live_in[edge.target.id][word]
+        }
+        for argument in edge.arguments {
+          value_bitset_set(next_out, argument.id)
+        }
+      }
+      let next_in = next_out.copy()
+      let instructions = self.blocks[block_index].body.copy()
+      instructions.push(terminator)
+      for reverse_inst in 0..<instructions.length() {
+        let instruction = instructions[instructions.length() - reverse_inst - 1]
+        let data = self.instructions[instruction.id]
+        for result in data.results {
+          value_bitset_clear(next_in, result.id)
+        }
+        for operand in self.instruction_operands(instruction) {
+          if operand.role == Use {
+            value_bitset_set(next_in, operand.value.id)
+          }
+        }
+        for root in data.metadata.live_gc_roots {
+          value_bitset_set(next_in, root.id)
+        }
+      }
+      for parameter in self.blocks[block_index].parameters {
+        value_bitset_clear(next_in, parameter.id)
+      }
+      if next_out != live_out[block_index] || next_in != live_in[block_index] {
+        live_out[block_index] = next_out
+        live_in[block_index] = next_in
+        changed = true
+      }
+    }
+  }
+  live_out
+}
+
+///|
+fn[Inst] allocation_location_ids(
+  function : Function[Inst],
+  allocation : Allocation,
+) -> (Array[Int], Int, Map[(Int, Int), Int]) {
+  let ids = Array::make(function.value_count(), -1)
+  let ids_by_location : Map[(Int, Int), Int] = Map([])
+  let mut location_count = 0
+  for index in 0..<function.value_count() {
+    let location = allocation.value_locations[index].unwrap()
+    let key = match location.register() {
+      Some(reg) =>
+        match reg.class {
+          Int => (0, reg.id)
+          FpVector => (1, reg.id)
+          Float => (1, reg.id)
+          Vector => (2, reg.id)
+        }
+      None => (3, location.spill_index().unwrap())
+    }
+    match ids_by_location.get(key) {
+      Some(id) => ids[index] = id
+      None => {
+        ids_by_location[key] = location_count
+        ids[index] = location_count
+        location_count += 1
+      }
+    }
+  }
+  (ids, location_count, ids_by_location)
+}
+
+///|
+fn find_or_add_affected_value(
+  value_index : Int,
+  live : Array[UInt64],
+  affected_values : Array[Int],
+  before_states : Array[Bool],
+  middle_states : Array[Bool],
+) -> Int {
+  for index, affected in affected_values {
+    if affected == value_index {
+      return index
+    }
+  }
+  affected_values.push(value_index)
+  let is_live = value_bitset_contains(live, value_index)
+  before_states.push(is_live)
+  middle_states.push(is_live)
+  affected_values.length() - 1
+}
+
+///|
+fn[Inst] transition_live_locations(
+  function : Function[Inst],
+  allocation : Allocation,
+  location_ids : Array[Int],
+  live : Array[UInt64],
+  occupants : Array[Int],
+  affected_values : Array[Int],
+  desired_states : Array[Bool],
+) -> Unit raise AllocationVerifyError {
+  for index, value_index in affected_values {
+    if value_bitset_contains(live, value_index) && !desired_states[index] {
+      occupants[location_ids[value_index]] = -1
+      value_bitset_clear(live, value_index)
+    }
+  }
+  for index, value_index in affected_values {
+    if !value_bitset_contains(live, value_index) && desired_states[index] {
+      let location_id = location_ids[value_index]
+      let earlier = occupants[location_id]
+      if earlier >= 0 {
+        let earlier_value = function.value_at(earlier).unwrap()
+        raise Interference(
+          left=earlier_value,
+          right=function.value_at(value_index).unwrap(),
+          location=allocation.value_location(earlier_value).unwrap(),
+        )
+      }
+      occupants[location_id] = value_index
+      value_bitset_set(live, value_index)
+    }
+  }
+}
+
+///|
+fn[Inst] verify_allocation_interference(
+  function : Function[Inst],
+  allocation : Allocation,
+  block_live_out : Array[Array[UInt64]],
+) -> Unit raise AllocationVerifyError {
+  let (location_ids, location_count, ids_by_location) = allocation_location_ids(
+    function, allocation,
+  )
+  for block_index in 0..<function.block_count() {
+    let live = block_live_out[block_index].copy()
+    let occupants = Array::make(location_count, -1)
+    for value_index in 0..<function.value_count() {
+      if value_bitset_contains(live, value_index) {
+        let location_id = location_ids[value_index]
+        let earlier = occupants[location_id]
+        if earlier >= 0 {
+          let earlier_value = function.value_at(earlier).unwrap()
+          raise Interference(
+            left=earlier_value,
+            right=function.value_at(value_index).unwrap(),
+            location=allocation.value_location(earlier_value).unwrap(),
+          )
+        }
+        occupants[location_id] = value_index
+      }
+    }
+    let terminator = function.blocks[block_index].terminator.unwrap()
+    let instructions = function.blocks[block_index].body.copy()
+    instructions.push(terminator)
+    for reverse_index in 0..<instructions.length() {
+      let instruction = instructions[instructions.length() - reverse_index - 1]
+      let affected_values : Array[Int] = []
+      let before_states : Array[Bool] = []
+      let middle_states : Array[Bool] = []
+      for operand in function.instruction_operands(instruction) {
+        let index = find_or_add_affected_value(
+          operand.value.id,
+          live,
+          affected_values,
+          before_states,
+          middle_states,
+        )
+        if operand.role == Def {
+          before_states[index] = false
+          if operand.timing == Late {
+            middle_states[index] = false
+          }
+        } else {
+          before_states[index] = true
+          if operand.timing == Late {
+            middle_states[index] = true
+          }
+        }
+      }
+      let metadata = function.instruction_metadata(instruction).unwrap()
+      for root in metadata.live_gc_roots {
+        let index = find_or_add_affected_value(
+          root.id,
+          live,
+          affected_values,
+          before_states,
+          middle_states,
+        )
+        before_states[index] = true
+        middle_states[index] = true
+      }
+      for edge in function.instruction_successors(instruction) {
+        for argument in edge.arguments {
+          let index = find_or_add_affected_value(
+            argument.id,
+            live,
+            affected_values,
+            before_states,
+            middle_states,
+          )
+          before_states[index] = true
+        }
+      }
+      transition_live_locations(
+        function, allocation, location_ids, live, occupants, affected_values, middle_states,
+      )
+      let clobbers = function.instruction_clobbers(instruction)
+      for reg in clobbers {
+        let class = match reg.class {
+          Int => 0
+          FpVector => 1
+          Float => 1
+          Vector => 2
+        }
+        if ids_by_location.get((class, reg.id)) is Some(location_id) &&
+          occupants[location_id] >= 0 {
+          raise ClobberViolation(
+            instruction~,
+            value=function.value_at(occupants[location_id]).unwrap(),
+          )
+        }
+      }
+      transition_live_locations(
+        function, allocation, location_ids, live, occupants, affected_values, before_states,
+      )
+    }
+  }
+}
+
+///|
+/// Verifies allocation-specific invariants for VCode that has already passed
+/// `verify_selected`. The caller must not mutate `function` between the two
+/// checks.
+pub fn[Inst] verify_allocation_invariants(
+  function : Function[Inst],
+  allocation : Allocation,
+) -> Unit raise AllocationVerifyError {
+  if !physical_equal(function.owner, allocation.source_owner) ||
+    function.value_count() != allocation.source_value_count ||
+    function.instruction_count() != allocation.source_instruction_count {
+    raise SourceMismatch
+  }
+  for index, slot in allocation.stack_slots {
+    if slot.size <= 0 || !is_power_of_two(slot.alignment) {
+      raise InvalidStackSlotLayout(slot=StackSlot::new(allocation.owner, index))
+    }
+  }
+  for index in 0..<function.value_count() {
+    let value = function.value_at(index).unwrap()
+    match allocation.value_locations[index] {
+      None => raise MissingValueLocation(value~)
+      Some(location) =>
+        match allocation.dense_location_class(location) {
+          None => raise ForeignLocation(value~)
+          Some(_) =>
+            if !allocation.dense_location_matches(
+                location,
+                function.values[index].ty,
+              ) {
+              raise LocationClassMismatch(value~)
+            }
+        }
+    }
+  }
+  for instruction_index in 0..<function.instruction_count() {
+    let instruction = function.instruction_at(instruction_index).unwrap()
+    let operands = function.instruction_operands(instruction)
+    for operand_index, operand in operands {
+      let assignment = match
+        allocation.assignment_for(instruction, operand_index) {
+        Some(assignment) => assignment
+        None =>
+          raise MissingOperandLocation(instruction~, operand=operand_index)
+      }
+      if allocation.dense_location_class(assignment) !=
+        Some(reg_class_for_value_type(function.values[operand.value.id].ty)) {
+        raise OperandClassMismatch(instruction~, operand=operand_index)
+      }
+      match operand.constraint {
+        FixedReg(required) =>
+          if assignment != AllocationLocation::reg(required) {
+            raise FixedConstraintViolation(instruction~, operand=operand_index)
+          }
+        AnyReg =>
+          if assignment.is_spill() {
+            raise RegisterConstraintViolation(
+              instruction~,
+              operand=operand_index,
+            )
+          }
+        AnyLocation => ()
+        PreservedHome =>
+          if assignment != allocation.value_locations[operand.value.id].unwrap() {
+            raise PreservedHomeConstraintViolation(
+              instruction~,
+              operand=operand_index,
+            )
+          }
+      }
+      if operand.role == Def && operand.tie_id >= 0 {
+        if allocation.assignment_for(instruction, operand.tie_id) !=
+          Some(assignment) {
+          raise TiedConstraintViolation(instruction~, operand=operand_index)
+        }
+      }
+    }
+  }
+  verify_allocation_edits(function, allocation)
+  let block_live_out = function.allocation_block_live_out()
+  verify_allocation_interference(function, allocation, block_live_out)
+  verify_allocation_state(function, allocation)
+  for instruction_index in 0..<function.instruction_count() {
+    let instruction = function.instruction_at(instruction_index).unwrap()
+    let metadata = function.instructions[instruction_index].metadata
+    for root in metadata.live_gc_roots {
+      let expected = allocation.value_locations[root.id].unwrap()
+      let mut found = false
+      for entry in allocation.safepoint_roots {
+        if entry.instruction == instruction &&
+          entry.value == root &&
+          entry.location == expected {
+          found = true
+        }
+      }
+      if !found {
+        raise MissingSafepointRoot(instruction~, value=root)
+      }
+    }
+  }
+  for root in allocation.safepoint_roots {
+    if !function.owns_instruction(root.instruction) ||
+      !function.instructions[root.instruction.id].metadata.live_gc_roots.contains(
+        root.value,
+      ) {
+      raise UnexpectedSafepointRoot(
+        instruction=root.instruction,
+        value=root.value,
+      )
+    }
+  }
+}
+
+///|
+pub fn[Inst] verify_allocated(
+  function : Function[Inst],
+  allocation : Allocation,
+) -> Unit raise AllocationVerifyError {
+  verify_selected(function) catch {
+    error => raise SelectedFailure(cause=error)
+  }
+  verify_allocation_invariants(function, allocation)
+}
+
+///|
+pub fn[Inst] verify_framed(
+  function : Function[Inst],
+  allocation : Allocation,
+  frame : FrameLayout,
+) -> Unit raise FrameVerifyError {
+  verify_allocated(function, allocation) catch {
+    error => raise AllocationFailure(cause=error)
+  }
+  if !physical_equal(frame.source_owner, function.owner) {
+    raise SourceMismatch
+  }
+  if !physical_equal(frame.allocation_owner, allocation.owner) ||
+    frame.source_slot_count != allocation.stack_slot_count() {
+    raise SourceMismatch
+  }
+  if frame.frame_size < 0 || frame.frame_size % frame.alignment != 0 {
+    raise InvalidFrameSize(size=frame.frame_size)
+  }
+  if !is_power_of_two(frame.alignment) {
+    raise InvalidFrameAlignment(alignment=frame.alignment)
+  }
+  for index, slot in allocation.stack_slots {
+    let handle = StackSlot::new(allocation.owner, index)
+    if index >= frame.slot_offsets.length() || frame.slot_offsets[index] is None {
+      raise MissingStackSlot(slot=handle)
+    }
+    let offset = frame.slot_offsets[index].unwrap()
+    if offset % slot.alignment != 0 {
+      raise MisalignedStackSlot(slot=handle)
+    }
+    if offset < 0 || offset + slot.size > frame.frame_size {
+      raise StackSlotOutOfFrame(slot=handle)
+    }
+    for earlier in 0..<index {
+      let earlier_offset = frame.slot_offsets[earlier].unwrap()
+      let earlier_slot = allocation.stack_slots[earlier]
+      if offset < earlier_offset + earlier_slot.size &&
+        earlier_offset < offset + slot.size {
+        raise OverlappingStackSlots(
+          left=StackSlot::new(allocation.owner, earlier),
+          right=handle,
+        )
+      }
+    }
+  }
+}
+
+///|
+pub fn[Inst] verify_emission_input(
+  function : Function[Inst],
+  allocation : Allocation,
+  frame : FrameLayout,
+) -> Unit raise EmissionVerifyError {
+  verify_framed(function, allocation, frame) catch {
+    error => raise FrameFailure(cause=error)
+  }
+}

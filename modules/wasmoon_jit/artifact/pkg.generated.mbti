@@ -2,8 +2,8 @@
 package "Milky2018/wasmoon_jit/artifact"
 
 import {
-  "Milky2018/machv",
-  "Milky2018/machv/code_object",
+  "Milky2018/vcode/code_object",
+  "Milky2018/vcode/native_types",
   "moonbitlang/core/debug",
 }
 
@@ -26,10 +26,16 @@ pub suberror ArtifactDecodeError {
   LimitExceeded(field~ : String, count~ : Int, limit~ : Int)
   TrailingBytes(count~ : Int)
 } derive(Eq, @debug.Debug)
+pub fn ArtifactDecodeError::equal(Self, Self) -> Bool
+pub fn ArtifactDecodeError::not_equal(Self, Self) -> Bool
+pub fn ArtifactDecodeError::to_repr(Self) -> @debug.Repr
 
 pub suberror ArtifactEncodeError {
   InvalidArtifactField(field~ : String, message~ : String)
 } derive(Eq, @debug.Debug)
+pub fn ArtifactEncodeError::equal(Self, Self) -> Bool
+pub fn ArtifactEncodeError::not_equal(Self, Self) -> Bool
+pub fn ArtifactEncodeError::to_repr(Self) -> @debug.Repr
 
 // Types and methods
 pub(all) struct Artifact {
@@ -37,16 +43,25 @@ pub(all) struct Artifact {
   imports : Array[ImportIdentity]
   functions : Array[FunctionCode]
 } derive(Eq, @debug.Debug)
+pub fn Artifact::equal(Self, Self) -> Bool
+pub fn Artifact::not_equal(Self, Self) -> Bool
+pub fn Artifact::to_repr(Self) -> @debug.Repr
 
 pub(all) enum CallBinding {
   StableEntry
   DirectBody
 } derive(Eq, @debug.Debug)
+pub fn CallBinding::equal(Self, Self) -> Bool
+pub fn CallBinding::not_equal(Self, Self) -> Bool
+pub fn CallBinding::to_repr(Self) -> @debug.Repr
 
 pub(all) enum CodeModel {
   Small
   Large
 } derive(Eq, @debug.Debug)
+pub fn CodeModel::equal(Self, Self) -> Bool
+pub fn CodeModel::not_equal(Self, Self) -> Bool
+pub fn CodeModel::to_repr(Self) -> @debug.Repr
 
 pub(all) struct CompatibilityManifest {
   format_version : Int
@@ -57,6 +72,9 @@ pub(all) struct CompatibilityManifest {
   module_identity : ModuleIdentity
   policy : CompilationPolicy
 } derive(Eq, @debug.Debug)
+pub fn CompatibilityManifest::equal(Self, Self) -> Bool
+pub fn CompatibilityManifest::not_equal(Self, Self) -> Bool
+pub fn CompatibilityManifest::to_repr(Self) -> @debug.Repr
 
 pub(all) struct CompilationPolicy {
   optimization_level : OptimizationLevel
@@ -65,10 +83,16 @@ pub(all) struct CompilationPolicy {
   cancellation_safepoints : Bool
   debug_info : Bool
 } derive(Eq, @debug.Debug)
+pub fn CompilationPolicy::equal(Self, Self) -> Bool
+pub fn CompilationPolicy::not_equal(Self, Self) -> Bool
+pub fn CompilationPolicy::to_repr(Self) -> @debug.Repr
 
 pub(all) struct CpuFeature {
   name : String
 } derive(Eq, @debug.Debug)
+pub fn CpuFeature::equal(Self, Self) -> Bool
+pub fn CpuFeature::not_equal(Self, Self) -> Bool
+pub fn CpuFeature::to_repr(Self) -> @debug.Repr
 
 pub(all) struct DecodeLimits {
   max_artifact_bytes : Int
@@ -87,10 +111,16 @@ pub(all) struct DecodeLimits {
   max_roots_per_safepoint : Int
 } derive(Eq, @debug.Debug)
 pub fn DecodeLimits::default() -> Self
+pub fn DecodeLimits::equal(Self, Self) -> Bool
+pub fn DecodeLimits::not_equal(Self, Self) -> Bool
+pub fn DecodeLimits::to_repr(Self) -> @debug.Repr
 
 pub(all) struct Digest {
   bytes : Bytes
 } derive(Eq)
+pub fn Digest::equal(Self, Self) -> Bool
+pub fn Digest::not_equal(Self, Self) -> Bool
+pub fn Digest::to_repr(Self) -> @debug.Repr
 pub impl @debug.Debug for Digest
 
 pub(all) struct FunctionCode {
@@ -104,26 +134,38 @@ pub(all) struct FunctionCode {
   safepoints : Array[@code_object.SafepointSite]
   unwind : Array[@code_object.UnwindDirective]
 } derive(Eq, @debug.Debug)
+pub fn FunctionCode::equal(Self, Self) -> Bool
+pub fn FunctionCode::not_equal(Self, Self) -> Bool
+pub fn FunctionCode::to_repr(Self) -> @debug.Repr
 
 pub(all) struct FunctionIdentity {
   function_index : Int
-  symbol : @machv.CodeSymbol
-  signature : @machv.Signature
+  symbol : @native_types.CodeSymbol
+  signature : @native_types.Signature
 } derive(Eq, @debug.Debug)
+pub fn FunctionIdentity::equal(Self, Self) -> Bool
+pub fn FunctionIdentity::not_equal(Self, Self) -> Bool
+pub fn FunctionIdentity::to_repr(Self) -> @debug.Repr
 
 pub(all) struct ImportIdentity {
   function_index : Int
   module_name : String
   function_name : String
-  symbol : @machv.ExternalSymbol
-  signature : @machv.Signature
+  symbol : @native_types.ExternalSymbol
+  signature : @native_types.Signature
 } derive(Eq, @debug.Debug)
+pub fn ImportIdentity::equal(Self, Self) -> Bool
+pub fn ImportIdentity::not_equal(Self, Self) -> Bool
+pub fn ImportIdentity::to_repr(Self) -> @debug.Repr
 
 pub(all) struct ModuleIdentity {
   name : String
   source_digest : Digest
   semantic_features_digest : Digest
 } derive(Eq, @debug.Debug)
+pub fn ModuleIdentity::equal(Self, Self) -> Bool
+pub fn ModuleIdentity::not_equal(Self, Self) -> Bool
+pub fn ModuleIdentity::to_repr(Self) -> @debug.Repr
 
 pub(all) enum OperatingSystemAbi {
   MacOS
@@ -131,6 +173,9 @@ pub(all) enum OperatingSystemAbi {
   LinuxMusl
   WindowsMsvc
 } derive(Eq, @debug.Debug)
+pub fn OperatingSystemAbi::equal(Self, Self) -> Bool
+pub fn OperatingSystemAbi::not_equal(Self, Self) -> Bool
+pub fn OperatingSystemAbi::to_repr(Self) -> @debug.Repr
 
 pub(all) enum OptimizationLevel {
   O0
@@ -138,17 +183,26 @@ pub(all) enum OptimizationLevel {
   O2
   O3
 } derive(Eq, @debug.Debug)
+pub fn OptimizationLevel::equal(Self, Self) -> Bool
+pub fn OptimizationLevel::not_equal(Self, Self) -> Bool
+pub fn OptimizationLevel::to_repr(Self) -> @debug.Repr
 
 pub(all) enum PointerWidth {
   Bits64
 } derive(Eq, @debug.Debug)
+pub fn PointerWidth::equal(Self, Self) -> Bool
+pub fn PointerWidth::not_equal(Self, Self) -> Bool
+pub fn PointerWidth::to_repr(Self) -> @debug.Repr
 
 pub(all) struct TargetSpec {
   architecture : @code_object.Architecture
   operating_system_abi : OperatingSystemAbi
-  endianness : @machv.Endianness
+  endianness : @native_types.Endianness
   pointer_width : PointerWidth
 } derive(Eq, @debug.Debug)
+pub fn TargetSpec::equal(Self, Self) -> Bool
+pub fn TargetSpec::not_equal(Self, Self) -> Bool
+pub fn TargetSpec::to_repr(Self) -> @debug.Repr
 
 // Type aliases
 

@@ -5,7 +5,8 @@
 Wasmoon is a WebAssembly runtime written in MoonBit. Its compiler pipeline is:
 
 `wat/wast/parser` → `validator` → `runtime` → interpreter, or `wasm_frontend` →
-`milkir` → `machv` → target VCode → `machv_regalloc` → emitter → JIT artifact.
+`milkir` → direct target lowering → target VCode → `vcode_regalloc` → emitter
+→ JIT artifact.
 
 - `modules/wasmoon/cmd/wasmoon` builds the CLI.
 - `modules/wasmoon/wasi` implements WASI Preview 1.
@@ -57,16 +58,22 @@ python3 scripts/run_all_wast.py --rec
 python3 scripts/run_component_wast.py --suite stable-0.2
 python3 scripts/run_component_wast.py --suite async-0.3
 python3 scripts/run_component_wast.py --suite future-gated
-python3 scripts/benchmark_algorithms_parity.py  # Cold caches; one run per engine and workload
+python3 scripts/benchmark_algorithms_parity.py  # Cold caches; one serial compile per engine and workload
 ```
+
+Algorithm corpus sweeps must disable Wasmtime parallel compilation with
+`-C parallel-compilation=n`. The benchmark runner enforces this setting; do not
+remove or override it when recording comparable corpus history.
 
 ## Compiler Boundaries
 
-Reusable infrastructure comprises `wasm_core`, `milkir`, `machv`, `regalloc`,
-`machv_regalloc`, `milkir_machv`, `wasm_machv`, `aarch64_target`, and
-`x64_target`.
+Reusable infrastructure comprises the `wasm_core`, `wasm_milkir`, `milkir`,
+`vcode`, `regalloc`, `vcode_regalloc`, `aarch64_target`, and `x64_target`
+modules. Native types, streaming lowering, and code objects are packages under
+`vcode`; generic and Wasm-specific producers live under `milkir/native` and
+`wasm_milkir/native`.
 
-- These modules must not import Wasmoon-owned packages; run
+- These modules and packages must not import Wasmoon-owned packages; run
   `scripts/audit_module_boundaries.py` when changing package dependencies.
 - Generic compiler code should use product-neutral names and emit symbolic
   relocations; Wasmoon runtime address resolution belongs in `wasmoon_jit`.

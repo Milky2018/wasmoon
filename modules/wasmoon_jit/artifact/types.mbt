@@ -22,7 +22,7 @@ pub(all) enum PointerWidth {
 pub(all) struct TargetSpec {
   architecture : @code_object.Architecture
   operating_system_abi : OperatingSystemAbi
-  endianness : @machv.Endianness
+  endianness : @native.Endianness
   pointer_width : PointerWidth
 } derive(Eq, Debug)
 
@@ -119,16 +119,16 @@ pub(all) struct ImportIdentity {
   function_index : Int
   module_name : String
   function_name : String
-  symbol : @machv.ExternalSymbol
-  signature : @machv.Signature
+  symbol : @native.ExternalSymbol
+  signature : @native.Signature
 } derive(Eq, Debug)
 
 ///|
 /// Stable identity and logical signature for a defined function.
 pub(all) struct FunctionIdentity {
   function_index : Int
-  symbol : @machv.CodeSymbol
-  signature : @machv.Signature
+  symbol : @native.CodeSymbol
+  signature : @native.Signature
 } derive(Eq, Debug)
 
 ///|

@@ -1,0 +1,25 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "Milky2018/wasm_core/parser"
+
+import {
+  "Milky2018/wasm_core/types",
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub fn parse_module(Bytes) -> @types.Module raise ParserError
+
+// Errors
+type ParserError
+pub fn ParserError::output(Self, &Logger) -> Unit
+pub fn ParserError::to_string(Self) -> String
+pub impl Show for ParserError
+
+// Types and methods
+type Parser derive(@debug.Debug)
+pub fn Parser::Parser(Bytes) -> Self
+pub fn Parser::to_repr(Self) -> @debug.Repr
+
+// Type aliases
+
+// Traits

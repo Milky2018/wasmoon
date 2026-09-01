@@ -1,216 +1,151 @@
 ///|
-fn clap_parser(
-  prog~ : String,
-  description~ : String,
-  subcmds~ : Map[String, @clap.SubCommand],
-) -> @clap.Parser {
-  { prog, args: Map([]), subcmds, description, }
-}
-
-///|
-fn clap_subcommand(
-  help~ : String,
-  args? : Map[String, @clap.Arg] = Map([]),
-  subcmds? : Map[String, @clap.SubCommand] = Map([]),
-) -> @clap.SubCommand {
-  { args, subcmds, help, }
-}
-
-///|
-fn clap_simple_value(name : String) -> @clap.SimpleValue {
-  {
-    name,
-    args: HashMap([]),
-    flags: HashMap([]),
-    positional_args: [],
-    subcmd: None,
+fn write_usage(message : String) -> Unit {
+  for line in message.split("\n") {
+    @logger.plain_error(line.to_owned())
   }
+}
+
+///|
+fn build_command() -> @argparse.Command {
+  let required = @argparse.ValueRange::single()
+  Command(
+    "wasmoon-tools",
+    about="WebAssembly Utility Tools",
+    subcommand_required=true,
+    subcommands=[
+      Command("validate", about="Validate a WebAssembly module", positionals=[
+        PositionArg("file", about="Path to WASM or WAT file", num_args=required),
+      ]),
+      Command(
+        "wit",
+        about="Parse and resolve WIT packages and print as normalized text/JSON",
+        positionals=[
+          PositionArg(
+            "input",
+            about="Input .wit file or a directory containing .wit files",
+            num_args=ValueRange(lower=0, upper=1),
+          ),
+        ],
+        options=[
+          OptionArg("output", short='o', about="Output file (default: stdout)"),
+          OptionArg(
+            "out-dir",
+            about="Emit the resolved WIT graph to this directory (writes root + deps/*.wit)",
+          ),
+          OptionArg(
+            "importize-world",
+            about="Generate a WIT world that imports the exports of the selected world in a WIT package",
+          ),
+          OptionArg(
+            "importize-out-world-name",
+            about="Name of the generated world for --importize/--importize-world",
+          ),
+        ],
+        flags=[
+          FlagArg("json", short='j', about="Emit JSON AST instead of WIT"),
+          FlagArg(
+            "no-docs",
+            about="Do not include doc comments when emitting WIT text (currently a no-op)",
+          ),
+          FlagArg(
+            "skip-validation",
+            about="Skip validation when emitting --wasm/--wat (currently a no-op)",
+          ),
+          FlagArg(
+            "wasm",
+            short='w',
+            about="Emit a WebAssembly Component binary instead of WIT text",
+          ),
+          FlagArg(
+            "wat",
+            short='t',
+            about="Emit a WebAssembly Component text format instead of WIT text",
+          ),
+          FlagArg(
+            "importize",
+            about="Generate a WIT world that imports the exports of the input component (.wasm)",
+          ),
+        ],
+      ),
+      Command(
+        "wasm2wat",
+        about="Convert WASM binary to WAT text format",
+        positionals=[
+          PositionArg("file", about="Path to WASM file", num_args=required),
+        ],
+        options=[
+          OptionArg("output", short='o', about="Output file (default: stdout)"),
+        ],
+      ),
+      Command(
+        "wat2wasm",
+        about="Convert WAT text to WASM binary format",
+        positionals=[
+          PositionArg("file", about="Path to WAT file", num_args=required),
+        ],
+        options=[
+          OptionArg(
+            "output",
+            short='o',
+            about="Output file (default: input.wasm)",
+          ),
+        ],
+      ),
+    ],
+  )
+}
+
+///|
+fn match_value(matches : @argparse.Matches, name : String) -> String? {
+  match matches.values.get(name) {
+    Some([value]) => Some(value)
+    None => None
+    _ => abort("argparse returned multiple values for \{name}")
+  }
+}
+
+///|
+fn match_flag(matches : @argparse.Matches, name : String) -> Bool {
+  matches.flags.get(name) is Some(true)
 }
 
 ///|
 fn main {
-  let args = @env.args()
-  let parser = clap_parser(
-    prog="wasmoon-tools",
-    description="WebAssembly Utility Tools",
-    subcmds={
-      "validate": clap_subcommand(help="Validate a WebAssembly module", args={
-        "file": @clap.Arg::positional(help="Path to WASM or WAT file"),
-      }),
-      "wit": clap_subcommand(
-        help="Parse and resolve WIT packages and print as normalized text/JSON",
-        args={
-          "input": @clap.Arg::positional(
-            nargs=AtMost(1),
-            help="Input .wit file or a directory containing .wit files",
-          ),
-          "output": @clap.Arg::named(
-            short='o',
-            nargs=AtMost(1),
-            help="Output file (default: stdout)",
-          ),
-          "out-dir": @clap.Arg::named(
-            nargs=AtMost(1),
-            help="Emit the resolved WIT graph to this directory (writes root + deps/*.wit)",
-          ),
-          "json": @clap.Arg::flag(
-            short='j',
-            help="Emit JSON AST instead of WIT",
-          ),
-          "no-docs": @clap.Arg::flag(
-            help="Do not include doc comments when emitting WIT text (currently a no-op)",
-          ),
-          "skip-validation": @clap.Arg::flag(
-            help="Skip validation when emitting --wasm/--wat (currently a no-op)",
-          ),
-          "wasm": @clap.Arg::flag(
-            short='w',
-            help="Emit a WebAssembly Component binary instead of WIT text",
-          ),
-          "wat": @clap.Arg::flag(
-            short='t',
-            help="Emit a WebAssembly Component text format instead of WIT text",
-          ),
-          "importize": @clap.Arg::flag(
-            help="Generate a WIT world that imports the exports of the input component (.wasm)",
-          ),
-          "importize-world": @clap.Arg::named(
-            nargs=AtMost(1),
-            help="Generate a WIT world that imports the exports of the selected world in a WIT package",
-          ),
-          "importize-out-world-name": @clap.Arg::named(
-            nargs=AtMost(1),
-            help="Name of the generated world for --importize/--importize-world",
-          ),
-        },
-      ),
-      "wasm2wat": clap_subcommand(
-        help="Convert WASM binary to WAT text format",
-        args={
-          "file": @clap.Arg::positional(help="Path to WASM file"),
-          "output": @clap.Arg::named(
-            short='o',
-            nargs=AtMost(1),
-            help="Output file (default: stdout)",
-          ),
-        },
-      ),
-      "wat2wasm": clap_subcommand(
-        help="Convert WAT text to WASM binary format",
-        args={
-          "file": @clap.Arg::positional(help="Path to WAT file"),
-          "output": @clap.Arg::named(
-            short='o',
-            nargs=AtMost(1),
-            help="Output file (default: input.wasm)",
-          ),
-        },
-      ),
-      "help": clap_subcommand(help="Display help message"),
-    },
-  )
-  let help_msg = parser.gen_help_message(["wasmoon-tools"], Map([]))
-  if args.length() < 2 {
-    println(help_msg)
+  let command = build_command()
+  let argv = @env.args()[1:]
+  if argv.length() == 0 {
+    println(command.render_help())
     return
   }
-  let value = clap_simple_value("wasmoon-tools")
-  let cli_args : Array[String] = []
-  for i in 1..<args.length() {
-    cli_args.push(args[i])
-  }
-  let subcmd_help = parser.parse(value, cli_args[:]) catch {
-    e => {
-      println(e)
-      println(help_msg)
+  let matches = command.parse(argv~) catch {
+    err => {
+      write_usage(err.to_string())
+      @sys.exit(2)
       return
     }
   }
-  match subcmd_help {
-    Some(msg) => println(msg)
-    None =>
-      match value.subcmd {
-        Some(sub) => {
-          let positional = sub.positional_args
-          match sub.name {
-            "validate" =>
-              if positional.length() > 0 {
-                cmd_validate(positional[0])
-              } else {
-                exit_error("missing file argument")
-              }
-            "wit" => {
-              let input_opt : String? = if positional.length() > 0 {
-                Some(positional[0])
-              } else {
-                None
-              }
-              let output_opt : String? = match sub.args.get("output") {
-                Some(arr) => if arr.length() > 0 { Some(arr[0]) } else { None }
-                None => None
-              }
-              let out_dir_opt : String? = match sub.args.get("out-dir") {
-                Some(arr) => if arr.length() > 0 { Some(arr[0]) } else { None }
-                None => None
-              }
-              let as_json = sub.flags.get("json") is Some(true)
-              let no_docs = sub.flags.get("no-docs") is Some(true)
-              let skip_validation = sub.flags.get("skip-validation")
-                is Some(true)
-              let as_wasm = sub.flags.get("wasm") is Some(true)
-              let as_wat = sub.flags.get("wat") is Some(true)
-              let importize = sub.flags.get("importize") is Some(true)
-              let importize_world : String? = match
-                sub.args.get("importize-world") {
-                Some(arr) => if arr.length() > 0 { Some(arr[0]) } else { None }
-                None => None
-              }
-              let importize_out_world_name : String? = match
-                sub.args.get("importize-out-world-name") {
-                Some(arr) => if arr.length() > 0 { Some(arr[0]) } else { None }
-                None => None
-              }
-              cmd_wit(
-                input_opt, output_opt, out_dir_opt, as_json, no_docs, skip_validation,
-                as_wasm, as_wat, importize, importize_world, importize_out_world_name,
-              )
-            }
-            "wasm2wat" =>
-              if positional.length() > 0 {
-                let output_opt : String? = match sub.args.get("output") {
-                  Some(arr) =>
-                    if arr.length() > 0 {
-                      Some(arr[0])
-                    } else {
-                      None
-                    }
-                  None => None
-                }
-                cmd_wasm2wat(positional[0], output_opt)
-              } else {
-                exit_error("missing file argument")
-              }
-            "wat2wasm" =>
-              if positional.length() > 0 {
-                let output_opt : String? = match sub.args.get("output") {
-                  Some(arr) =>
-                    if arr.length() > 0 {
-                      Some(arr[0])
-                    } else {
-                      None
-                    }
-                  None => None
-                }
-                cmd_wat2wasm(positional[0], output_opt)
-              } else {
-                exit_error("missing file argument")
-              }
-            "help" => println(help_msg)
-            _ => println(help_msg)
-          }
-        }
-        None => println(help_msg)
-      }
+  match matches.subcommand {
+    Some(("validate", sub)) => cmd_validate(sub.values["file"][0])
+    Some(("wit", sub)) =>
+      cmd_wit(
+        match_value(sub, "input"),
+        match_value(sub, "output"),
+        match_value(sub, "out-dir"),
+        match_flag(sub, "json"),
+        match_flag(sub, "no-docs"),
+        match_flag(sub, "skip-validation"),
+        match_flag(sub, "wasm"),
+        match_flag(sub, "wat"),
+        match_flag(sub, "importize"),
+        match_value(sub, "importize-world"),
+        match_value(sub, "importize-out-world-name"),
+      )
+    Some(("wasm2wat", sub)) =>
+      cmd_wasm2wat(sub.values["file"][0], match_value(sub, "output"))
+    Some(("wat2wasm", sub)) =>
+      cmd_wat2wasm(sub.values["file"][0], match_value(sub, "output"))
+    Some((name, _)) => abort("invalid argparse matches for \{name}")
+    None => abort("argparse omitted the required subcommand")
   }
 }
 

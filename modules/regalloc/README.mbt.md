@@ -17,6 +17,10 @@ register is a hard correctness requirement and may require an insertion edit.
 A physical-register preference only orders otherwise legal allocation choices;
 it is ignored rather than causing an extra spill, split, move, or failure when
 the preferred register cannot hold the live range.
+`PreservedHome` is reserved for metadata operands that must remain at a
+canonical register or spill home that survives the instruction's clobbers,
+without temporary materialization. Safepoint roots use this constraint so
+stack maps never point at an ephemeral call-transfer location.
 
 ## Allocation
 
@@ -33,7 +37,9 @@ rather than a lower-quality fallback.
 Implement `FunctionView` over the machine IR and provide a `MachineEnv` with
 allocatable and scratch registers. Block arguments passed to CFG methods are
 dense layout indices; `block_id_at` maps them back to the machine IR's stable
-block id for edge edits.
+block id for edge edits. Collection queries return non-owning, read-only
+`ArrayView` spans. Implementations must keep their backing storage alive for
+the allocation call and should not allocate a collection per query.
 
 Scratch registers have two distinct roles. `scratch_regs` are always available
 to resolve allocator edits such as spill reloads and parallel moves. By default
@@ -59,12 +65,12 @@ enabled (the default), the allocator symbolically checks operand values,
 clobbers, instruction edits, CFG joins, and block-argument transfers before
 returning the plan.
 
-`Milky2018/machv_regalloc` is the reference adapter. AArch64 and x64 both use
+`Milky2018/vcode_regalloc` is the reference adapter. AArch64 and x64 both use
 this path before target emission.
 
 ## Production integration
 
-Wasmoon's AArch64 and x64 JIT pipelines lower semantic MachV to target-owned
+Wasmoon's AArch64 and x64 JIT pipelines lower MilkIR directly to target-owned
 VCode and expose that VCode directly through `FunctionView`. The adapter
 materializes the returned plan into Target VCode's separate `Allocation` side
 tables. The aggregate target pipeline verifies

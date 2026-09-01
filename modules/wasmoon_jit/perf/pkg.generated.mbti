@@ -6,6 +6,8 @@ pub fn begin_function(Int, String, Int, Int) -> Unit
 
 pub fn clear_milkir_metrics_sink() -> Unit
 
+pub fn detail_enabled() -> Bool
+
 pub fn elapsed_us(Instant) -> Int64
 
 pub fn enabled() -> Bool
@@ -20,7 +22,15 @@ pub fn instant_elapsed_as_secs_f64(Instant) -> Double
 
 pub fn instant_now() -> Instant
 
+pub fn record_compile_subphase_us(String, Int64, parent? : String) -> Unit
+
+pub fn record_function_compile_us(Int64) -> Unit
+
 pub fn record_ir_pass(String, Int, Int, Bool, Int64, egraph_classes? : Int?, egraph_nodes? : Int?, egraph_rule_apps? : Int?, work_done? : Int?, budget_exhausted? : Bool?) -> Unit
+
+pub fn record_module_subphase_us(String, Int64) -> Unit
+
+pub fn record_regalloc_loop(Int, Int, Int, Int, Int, Int, Int, Int) -> Unit
 
 pub fn record_regalloc_phase_us(String, Int64) -> Unit
 
@@ -37,9 +47,16 @@ pub fn tick_now() -> Instant
 // Errors
 
 // Types and methods
+pub struct CompileSubphaseMetric {
+  name : String
+  parent : String
+  duration_us : Int64
+} derive(ToJson)
+pub fn CompileSubphaseMetric::to_json(Self) -> Json
+
 pub(all) enum FunctionCompileStage {
   Optimize
-  SemanticLowering
+  NativeLowering
   TargetLowering
   RegisterAllocation
   FramePlanning
@@ -52,21 +69,25 @@ pub struct FunctionMetrics {
   opt_level : Int
   ir_insts_before : Int
   mut ir_insts_after : Int
+  mut function_compile_us : Int64
   mut optimize_us : Int64
   mut lower_us : Int64
   mut target_lower_us : Int64
   mut regalloc_us : Int64
   mut frame_plan_us : Int64
   mut emit_us : Int64
+  compile_subphases : Array[CompileSubphaseMetric]
   mut code_size : Int
   mut spill_slots : Int
   mut spills : Int
   mut reloads : Int
   mut reg_moves : Int
   mut spill_to_spill : Int
+  mut regalloc_loop : RegallocLoopMetric?
   ir_passes : Array[IRPassMetric]
   regalloc_phases : Array[RegallocPhaseMetric]
 } derive(ToJson)
+pub fn FunctionMetrics::to_json(Self) -> Json
 
 pub struct IRPassMetric {
   name : String
@@ -80,6 +101,7 @@ pub struct IRPassMetric {
   work_done : Int?
   budget_exhausted : Bool?
 } derive(ToJson)
+pub fn IRPassMetric::to_json(Self) -> Json
 
 #alias(PerfTick)
 type Instant
@@ -88,13 +110,28 @@ pub struct ModuleMetricsReport {
   schema_version : Int
   expected_functions : Int
   mut module_compile_us : Int64
+  compile_subphases : Array[CompileSubphaseMetric]
   functions : Array[FunctionMetrics]
 } derive(ToJson)
+pub fn ModuleMetricsReport::to_json(Self) -> Json
+
+pub struct RegallocLoopMetric {
+  queue_pops : Int
+  register_probes : Int
+  occupied_segments_scanned : Int
+  conflicts : Int
+  evictions : Int
+  bundle_splits : Int
+  second_chance_attempts : Int
+  max_queue_length : Int
+} derive(ToJson)
+pub fn RegallocLoopMetric::to_json(Self) -> Json
 
 pub struct RegallocPhaseMetric {
   name : String
   duration_us : Int64
 } derive(ToJson)
+pub fn RegallocPhaseMetric::to_json(Self) -> Json
 
 // Type aliases
 

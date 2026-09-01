@@ -75,13 +75,16 @@ pub fn Function::verify(self : Function) -> Unit raise VerifyError {
       raise MissingTerminator(block_id=block.id)
     }
   }
-  let definitions : @hashmap.HashMap[Int, ValueDefinition] = HashMap([])
+  let definitions : Array[ValueDefinition?] = Array::make(
+    self.next_value_id,
+    None,
+  )
   for item in self.params {
     let (param, ty) = item
     require_owned_value(self, param)
     record_definition(param, ty, FunctionParameter(ty), definitions)
   }
-  let instruction_ids : @hashset.HashSet[Int] = HashSet([])
+  let instruction_ids = Array::make(self.next_inst_id, false)
   for block in self.blocks {
     for item in block.params {
       let (param, ty) = item
@@ -101,11 +104,14 @@ pub fn Function::verify(self : Function) -> Unit raise VerifyError {
       for result in inst.results {
         require_owned_value(self, result)
       }
-      if instruction_ids.contains(inst.id) {
+      verify_instruction_operands(inst)
+      if inst.id < 0 || inst.id >= instruction_ids.length() {
+        raise ForeignInstruction(inst_id=inst.id)
+      }
+      if instruction_ids[inst.id] {
         raise DuplicateInstructionId(inst_id=inst.id)
       }
-      instruction_ids.add(inst.id)
-      verify_instruction_operands(inst)
+      instruction_ids[inst.id] = true
       for result in inst.results {
         record_definition(
           result,
@@ -242,17 +248,20 @@ fn record_definition(
   value : Value,
   declared_type : Type,
   definition : ValueDefinition,
-  definitions : @hashmap.HashMap[Int, ValueDefinition],
+  definitions : Array[ValueDefinition?],
 ) -> Unit raise VerifyError {
   if value.ty != declared_type {
     raise TypeMismatch(
       message="value \{value.id} has type \{value.ty}, but its declaration has type \{declared_type}",
     )
   }
-  if definitions.get(value.id) is Some(_) {
+  if value.id < 0 || value.id >= definitions.length() {
+    raise UndefinedValue(value_id=value.id)
+  }
+  if definitions[value.id] is Some(_) {
     raise DuplicateValueDefinition(value_id=value.id)
   }
-  definitions.set(value.id, definition)
+  definitions[value.id] = Some(definition)
 }
 
 ///|
@@ -267,12 +276,15 @@ fn definition_type(definition : ValueDefinition) -> Type {
 ///|
 fn verify_defined(
   value : Value,
-  definitions : @hashmap.HashMap[Int, ValueDefinition],
+  definitions : Array[ValueDefinition?],
   use_block : Int,
   use_position : Int,
   dominance : Dominance,
 ) -> Unit raise VerifyError {
-  match definitions.get(value.id) {
+  if value.id < 0 || value.id >= definitions.length() {
+    raise UndefinedValue(value_id=value.id)
+  }
+  match definitions[value.id] {
     None => raise UndefinedValue(value_id=value.id)
     Some(definition) => {
       let defined_type = definition_type(definition)
@@ -364,7 +376,7 @@ fn verify_block_args(
   block_id : Int,
   args : Array[Value],
   blocks : Array[Block?],
-  definitions : @hashmap.HashMap[Int, ValueDefinition],
+  definitions : Array[ValueDefinition?],
   edge : String,
   use_block : Int,
   use_position : Int,
@@ -400,7 +412,7 @@ fn verify_i32(value : Value, context : String) -> Unit raise VerifyError {
 fn verify_inst(
   func : Function,
   inst : Inst,
-  definitions : @hashmap.HashMap[Int, ValueDefinition],
+  definitions : Array[ValueDefinition?],
   use_block : Int,
   use_position : Int,
   dominance : Dominance,
@@ -456,7 +468,7 @@ fn extension_inst_view(inst : Inst) -> ExtensionInstView {
 ///|
 fn verify_terminator(
   term : Terminator,
-  definitions : @hashmap.HashMap[Int, ValueDefinition],
+  definitions : Array[ValueDefinition?],
   blocks : Array[Block?],
   result_types : Array[Type],
   use_block : Int,

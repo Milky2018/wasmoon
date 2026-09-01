@@ -1,0 +1,107 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "Milky2018/vcode/allocation_types"
+
+import {
+  "moonbitlang/core/debug",
+}
+
+// Values
+
+// Errors
+
+// Types and methods
+pub(all) enum AllocationConstraint {
+  AnyReg
+  AnyLocation
+  PreservedHome
+  FixedReg(PhysicalReg)
+} derive(Eq, @debug.Debug)
+pub fn AllocationConstraint::equal(Self, Self) -> Bool
+pub fn AllocationConstraint::not_equal(Self, Self) -> Bool
+pub fn AllocationConstraint::to_repr(Self) -> @debug.Repr
+
+pub(all) struct AllocationLocation {
+  encoded : Int64
+} derive(Eq)
+pub fn AllocationLocation::equal(Self, Self) -> Bool
+pub fn AllocationLocation::is_register(Self) -> Bool
+pub fn AllocationLocation::is_spill(Self) -> Bool
+pub fn AllocationLocation::not_equal(Self, Self) -> Bool
+pub fn AllocationLocation::reg(PhysicalReg) -> Self
+pub fn AllocationLocation::register(Self) -> PhysicalReg?
+pub fn AllocationLocation::register_unchecked(Self) -> PhysicalReg
+pub fn AllocationLocation::spill(Int) -> Self
+pub fn AllocationLocation::spill_index(Self) -> Int?
+pub fn AllocationLocation::spill_index_unchecked(Self) -> Int
+pub fn AllocationLocation::to_repr(Self) -> @debug.Repr
+pub impl @debug.Debug for AllocationLocation
+
+pub(all) struct AllocationOperand {
+  vreg : VirtualReg
+  role : OperandRole
+  constraint : AllocationConstraint
+  preference : PhysicalReg?
+  tie_id : Int
+  timing : OperandTiming
+} derive(Eq, @debug.Debug)
+pub fn AllocationOperand::def(VirtualReg) -> Self
+pub fn AllocationOperand::equal(Self, Self) -> Bool
+pub fn AllocationOperand::not_equal(Self, Self) -> Bool
+pub fn AllocationOperand::to_repr(Self) -> @debug.Repr
+pub fn AllocationOperand::use_reg(VirtualReg) -> Self
+pub fn AllocationOperand::with_constraint(Self, AllocationConstraint) -> Self
+pub fn AllocationOperand::with_preference(Self, PhysicalReg) -> Self
+pub fn AllocationOperand::with_tie(Self, Int) -> Self
+pub fn AllocationOperand::with_timing(Self, OperandTiming) -> Self
+
+pub(all) enum OperandRole {
+  Use
+  Def
+  UseDef
+} derive(Eq, @debug.Debug)
+pub fn OperandRole::equal(Self, Self) -> Bool
+pub fn OperandRole::not_equal(Self, Self) -> Bool
+pub fn OperandRole::to_repr(Self) -> @debug.Repr
+
+pub(all) enum OperandTiming {
+  Early
+  Late
+} derive(Eq, @debug.Debug)
+pub fn OperandTiming::equal(Self, Self) -> Bool
+pub fn OperandTiming::not_equal(Self, Self) -> Bool
+pub fn OperandTiming::to_repr(Self) -> @debug.Repr
+
+pub(all) struct PhysicalReg {
+  id : Int
+  class : RegClass
+} derive(Eq)
+pub fn PhysicalReg::equal(Self, Self) -> Bool
+pub fn PhysicalReg::new(Int, RegClass) -> Self
+pub fn PhysicalReg::not_equal(Self, Self) -> Bool
+pub fn PhysicalReg::to_repr(Self) -> @debug.Repr
+pub impl @debug.Debug for PhysicalReg
+
+pub(all) enum RegClass {
+  Int
+  Float
+  Vector
+  FpVector
+} derive(Eq, Hash, @debug.Debug)
+pub fn RegClass::equal(Self, Self) -> Bool
+pub fn RegClass::hash(Self) -> Int
+pub fn RegClass::hash_combine(Self, Hasher) -> Unit
+pub fn RegClass::not_equal(Self, Self) -> Bool
+pub fn RegClass::text(Self) -> String
+pub fn RegClass::to_repr(Self) -> @debug.Repr
+
+pub(all) struct VirtualReg {
+  id : Int
+  class : RegClass
+} derive(Eq, @debug.Debug)
+pub fn VirtualReg::equal(Self, Self) -> Bool
+pub fn VirtualReg::not_equal(Self, Self) -> Bool
+pub fn VirtualReg::to_repr(Self) -> @debug.Repr
+
+// Type aliases
+
+// Traits

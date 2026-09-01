@@ -16,30 +16,44 @@ fn[F : FunctionView] collect_function_liveness(
   function : F,
   ranges : LiveRangeSet,
 ) -> DenseLiveSets {
+  let word_count = (function.value_count() + 63) / 64
+  let block_count = function.block_count()
+  let use_dense = block_count == 0 || word_count <= 262144 / block_count
   let block_defs : Array[SparseVRegSet] = []
   let live_in : Array[SparseVRegSet] = []
   let successors : Array[Array[Int]] = []
   let block_ids : Array[Int] = []
   for block in 0..<function.block_count() {
-    let definitions = SparseVRegSet::new()
-    let uses = SparseVRegSet::new()
+    let definitions = if use_dense {
+      SparseVRegSet::dense(function.value_count())
+    } else {
+      SparseVRegSet::new()
+    }
+    let uses = if use_dense {
+      SparseVRegSet::dense(function.value_count())
+    } else {
+      SparseVRegSet::new()
+    }
     let block_start = ProgramPoint(block, -1)
-    for value in function.block_parameters(block) {
+    for parameter in 0..<function.block_parameter_count(block) {
+      let value = function.block_parameter_at(block, parameter)
       definitions.set(value.id, true)
       find_or_create_live_range(ranges, value).add_use(
         UsePosition(block_start, LiveDef, AnyReg),
       )
     }
     if block == 0 {
-      for value in function.entry_values() {
+      for parameter in 0..<function.entry_value_count() {
+        let value = function.entry_value_at(parameter)
         definitions.set(value.id, true)
         find_or_create_live_range(ranges, value).add_use(
           UsePosition(block_start, LiveDef, AnyReg),
         )
       }
     }
-    let instructions = function.block_instructions(block)
-    for instruction_index, instruction in instructions {
+    let instruction_count = function.block_instruction_count(block)
+    for instruction_index in 0..<instruction_count {
+      let instruction = function.block_instruction_at(block, instruction_index)
       for operand in function.instruction_operands(instruction) {
         let point = operand_program_point(
           block,
@@ -61,9 +75,12 @@ fn[F : FunctionView] collect_function_liveness(
         }
       }
     }
-    let block_successors = function.block_successors(block)
-    for successor in 0..<block_successors.length() {
-      for argument in function.edge_arguments(block, successor) {
+    let successor_count = function.block_successor_count(block)
+    for successor in 0..<successor_count {
+      for argument_index in 0..<function.edge_argument_count(block, successor) {
+        let argument = function.edge_argument_at(
+          block, successor, argument_index,
+        )
         if !definitions.contains(argument.id) {
           uses.set(argument.id, true)
         }
@@ -72,7 +89,11 @@ fn[F : FunctionView] collect_function_liveness(
     block_defs.push(definitions)
     live_in.push(uses)
     block_ids.push(block)
-    successors.push(block_successors)
+    successors.push(
+      Array::makei(successor_count, successor => {
+        function.block_successor_at(block, successor)
+      }),
+    )
   }
   propagate_live_sets(
     function.block_count(),
@@ -88,25 +109,30 @@ fn[F : FunctionView] build_function_range_fragments(
   function : F,
   live_out : Array[Array[Int]],
 ) -> Unit {
+  let block_ends = Array::make(function.block_count(), 0)
   let open_ends : Array[ProgramPoint?] = Array::make(
     function.value_count(),
     None,
   )
   let open_values : Array[Int] = []
   for block in 0..<function.block_count() {
-    let instructions = function.block_instructions(block)
+    let instruction_count = function.block_instruction_count(block)
     let block_start = ProgramPoint(block, -1)
-    let block_end = ProgramPoint(block, instructions.length() * 2)
+    let block_end = ProgramPoint(block, instruction_count * 2)
+    block_ends[block] = block_end.inst
     for value in live_out[block] {
       if open_ends[value] is None {
         open_values.push(value)
       }
       open_ends[value] = Some(block_end)
     }
-    if !instructions.is_empty() {
-      let edge_point = ProgramPoint(block, (instructions.length() - 1) * 2)
-      for successor in 0..<function.block_successors(block).length() {
-        for argument in function.edge_arguments(block, successor) {
+    if instruction_count > 0 {
+      let edge_point = ProgramPoint(block, (instruction_count - 1) * 2)
+      for successor in 0..<function.block_successor_count(block) {
+        for argument_index in 0..<function.edge_argument_count(block, successor) {
+          let argument = function.edge_argument_at(
+            block, successor, argument_index,
+          )
           if open_ends[argument.id] is None {
             open_values.push(argument.id)
             open_ends[argument.id] = Some(edge_point)
@@ -114,13 +140,12 @@ fn[F : FunctionView] build_function_range_fragments(
         }
       }
     }
-    let mut instruction_index = instructions.length()
+    let mut instruction_index = instruction_count
     while instruction_index > 0 {
       instruction_index = instruction_index - 1
-      let operands = function.instruction_operands(
-        instructions[instruction_index],
-      )
-      for timing in [Late, Early] {
+      let instruction = function.block_instruction_at(block, instruction_index)
+      let operands = function.instruction_operands(instruction)
+      for timing in [OperandTiming::Late, Early] {
         for operand in operands {
           if operand.timing == timing &&
             (operand.role is Def || operand.role is UseDef) {
@@ -147,7 +172,8 @@ fn[F : FunctionView] build_function_range_fragments(
         }
       }
     }
-    for parameter in function.block_parameters(block) {
+    for parameter_index in 0..<function.block_parameter_count(block) {
+      let parameter = function.block_parameter_at(block, parameter_index)
       match open_ends[parameter.id] {
         Some(end) => {
           add_live_range_fragment(ranges, parameter, block_start, end)
@@ -158,7 +184,8 @@ fn[F : FunctionView] build_function_range_fragments(
       }
     }
     if block == 0 {
-      for parameter in function.entry_values() {
+      for parameter_index in 0..<function.entry_value_count() {
+        let parameter = function.entry_value_at(parameter_index)
         match open_ends[parameter.id] {
           Some(end) => {
             add_live_range_fragment(ranges, parameter, block_start, end)
@@ -182,8 +209,10 @@ fn[F : FunctionView] build_function_range_fragments(
     }
     open_values.clear()
   }
+  ranges.record_block_ends(block_ends)
   for range in ranges.ranges {
     range.sort_ranges(ranges.block_order)
+    range.coalesce_contiguous_ranges(ranges.block_order, block_ends)
   }
 }
 

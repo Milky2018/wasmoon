@@ -7,8 +7,8 @@ pub(all) struct ArtifactCompatibility {
   codegen_revision : String
   module_identity : @artifact.ModuleIdentity
   policy : @artifact.CompilationPolicy
-  runtime_symbols : Array[@semantic_machv.ExternalSymbol]
-  data_symbols : Array[@semantic_machv.DataSymbol]
+  runtime_symbols : Array[@native.ExternalSymbol]
+  data_symbols : Array[@native.DataSymbol]
 } derive(Eq, Debug)
 
 ///|
@@ -70,7 +70,7 @@ fn contains_cpu_feature(
 
 ///|
 fn contains_external_symbol(
-  symbols : Array[@semantic_machv.ExternalSymbol],
+  symbols : Array[@native.ExternalSymbol],
   name : String,
 ) -> Bool {
   symbols.any(fn(symbol) { symbol.name == name })
@@ -78,7 +78,7 @@ fn contains_external_symbol(
 
 ///|
 fn contains_data_symbol(
-  symbols : Array[@semantic_machv.DataSymbol],
+  symbols : Array[@native.DataSymbol],
   name : String,
 ) -> Bool {
   symbols.any(fn(symbol) { symbol.name == name })

@@ -161,7 +161,10 @@ pub fn wasm_funcref_type() -> @milkir.Type
 
 // Types and methods
 type RuntimeSymbols derive(Eq, @debug.Debug)
+pub fn RuntimeSymbols::equal(Self, Self) -> Bool
+pub fn RuntimeSymbols::not_equal(Self, Self) -> Bool
 pub fn RuntimeSymbols::symbol_name(Self, WasmRuntimeHelper) -> String
+pub fn RuntimeSymbols::to_repr(Self) -> @debug.Repr
 pub fn RuntimeSymbols::with_runtime_prefix(String) -> Self
 
 pub(all) enum WasmDefinedTypeContract {
@@ -169,17 +172,26 @@ pub(all) enum WasmDefinedTypeContract {
   Struct(Array[WasmFieldContract])
   Array(WasmFieldContract)
 } derive(Eq, @debug.Debug)
+pub fn WasmDefinedTypeContract::equal(Self, Self) -> Bool
+pub fn WasmDefinedTypeContract::not_equal(Self, Self) -> Bool
+pub fn WasmDefinedTypeContract::to_repr(Self) -> @debug.Repr
 
 pub(all) struct WasmFieldContract {
   storage : WasmStorageContract
   mutable_ : Bool
   defaultable : Bool
 } derive(Eq, @debug.Debug)
+pub fn WasmFieldContract::equal(Self, Self) -> Bool
+pub fn WasmFieldContract::not_equal(Self, Self) -> Bool
+pub fn WasmFieldContract::to_repr(Self) -> @debug.Repr
 
 pub(all) struct WasmFunctionContract {
   params : Array[@milkir.Type]
   results : Array[@milkir.Type]
 } derive(Eq, @debug.Debug)
+pub fn WasmFunctionContract::equal(Self, Self) -> Bool
+pub fn WasmFunctionContract::not_equal(Self, Self) -> Bool
+pub fn WasmFunctionContract::to_repr(Self) -> @debug.Repr
 
 pub(all) enum WasmOpcode {
   WasmCall(Int)
@@ -228,6 +240,11 @@ pub(all) enum WasmOpcode {
   SpillLocalsForThrow(Int)
   GetSpilledLocal(Int)
 } derive(Eq, Hash, @debug.Debug)
+pub fn WasmOpcode::equal(Self, Self) -> Bool
+pub fn WasmOpcode::hash(Self) -> Int
+pub fn WasmOpcode::hash_combine(Self, Hasher) -> Unit
+pub fn WasmOpcode::not_equal(Self, Self) -> Bool
+pub fn WasmOpcode::to_repr(Self) -> @debug.Repr
 
 pub(all) enum WasmRuntimeHelper {
   MemoryGrow
@@ -282,17 +299,26 @@ pub(all) enum WasmRuntimeHelper {
   ExceptionSpillLocals
   ExceptionGetSpilledLocal
 } derive(Eq, @debug.Debug)
+pub fn WasmRuntimeHelper::equal(Self, Self) -> Bool
+pub fn WasmRuntimeHelper::not_equal(Self, Self) -> Bool
+pub fn WasmRuntimeHelper::to_repr(Self) -> @debug.Repr
 
 pub(all) enum WasmStorageContract {
   Value(@milkir.Type)
   Packed8
   Packed16
 } derive(Eq, @debug.Debug)
+pub fn WasmStorageContract::equal(Self, Self) -> Bool
+pub fn WasmStorageContract::not_equal(Self, Self) -> Bool
+pub fn WasmStorageContract::to_repr(Self) -> @debug.Repr
 
 pub(all) struct WasmTableContract {
   index_type : @milkir.Type
   element_type : @milkir.Type
 } derive(Eq, @debug.Debug)
+pub fn WasmTableContract::equal(Self, Self) -> Bool
+pub fn WasmTableContract::not_equal(Self, Self) -> Bool
+pub fn WasmTableContract::to_repr(Self) -> @debug.Repr
 
 type WasmValidationContext
 pub fn WasmValidationContext::empty() -> Self

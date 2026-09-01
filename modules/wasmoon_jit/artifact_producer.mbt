@@ -3,12 +3,12 @@
 pub const WASMOON_JIT_ABI_VERSION : Int = 3
 
 ///|
-/// Revision of the current semantic-MachV target code generator.
+/// Revision of the current direct native target code generator.
 ///
 /// Advance this value whenever compiler changes can alter emitted code while
 /// preserving the artifact format and JIT ABI. Persistent caches use it as part
 /// of their compatibility identity.
-pub const WASMOON_CODEGEN_REVISION : String = "machv-vcode-8"
+pub const WASMOON_CODEGEN_REVISION : String = "direct-vcode-1"
 
 ///|
 extern "c" fn host_operating_system_abi_tag() -> Int = "wasmoon_jit_host_operating_system_abi"
@@ -109,8 +109,8 @@ pub fn build_host_artifact_manifest(
 pub fn artifact_compatibility(
   manifest : @artifact.CompatibilityManifest,
   available_cpu_features~ : Array[@artifact.CpuFeature],
-  runtime_symbols~ : Array[@semantic_machv.ExternalSymbol],
-  data_symbols~ : Array[@semantic_machv.DataSymbol],
+  runtime_symbols~ : Array[@native.ExternalSymbol],
+  data_symbols~ : Array[@native.DataSymbol],
 ) -> ArtifactCompatibility {
   {
     target: manifest.target,
@@ -125,7 +125,7 @@ pub fn artifact_compatibility(
 }
 
 ///|
-fn wasm_value_type(ty : @types.ValueType) -> @semantic_machv.ValueType {
+fn wasm_value_type(ty : @types.ValueType) -> @native.ValueType {
   match ty {
     I32 => I32
     I64 => I64
@@ -164,8 +164,8 @@ fn wasm_value_type(ty : @types.ValueType) -> @semantic_machv.ValueType {
 ///|
 pub fn wasm_function_signature(
   function_type : @types.FuncType,
-) -> @semantic_machv.Signature {
-  @semantic_machv.Signature::new(
+) -> @native.Signature {
+  @native.Signature::new(
     function_type.params.map(wasm_value_type),
     function_type.results.map(wasm_value_type),
   )
@@ -187,9 +187,7 @@ pub fn wasm_import_identity(
     function_index,
     module_name,
     function_name,
-    symbol: @semantic_machv.ExternalSymbol::new(
-      wasm_function_symbol(function_index),
-    ),
+    symbol: @native.ExternalSymbol::new(wasm_function_symbol(function_index)),
     signature: wasm_function_signature(function_type),
   }
 }
@@ -199,14 +197,12 @@ fn artifact_function_from_code_object(
   object : @code_object.UnlinkedCodeObject,
   frame_size~ : Int,
   function_index~ : Int,
-  signature~ : @semantic_machv.Signature,
+  signature~ : @native.Signature,
 ) -> @artifact.FunctionCode {
   {
     identity: {
       function_index,
-      symbol: @semantic_machv.CodeSymbol::new(
-        wasm_function_symbol(function_index),
-      ),
+      symbol: @native.CodeSymbol::new(wasm_function_symbol(function_index)),
       signature,
     },
     entry_offset: 0,
@@ -223,19 +219,66 @@ fn artifact_function_from_code_object(
 ///|
 /// Compile one verified Wasm MilkIR body directly into the final unlinked
 /// artifact representation. Symbolic relocations are retained unchanged.
+pub struct NativeCompiler {
+  priv target : NativeTarget
+  priv aarch64 : @aarch64_target.CompilationSession?
+  priv x64 : @x64_target.CompilationSession?
+}
+
+///|
+pub fn NativeCompiler::new(target : NativeTarget) -> NativeCompiler {
+  match target {
+    AArch64 =>
+      {
+        target,
+        aarch64: Some(@aarch64_target.CompilationSession::new()),
+        x64: None,
+      }
+    X64 =>
+      {
+        target,
+        aarch64: None,
+        x64: Some(@x64_target.CompilationSession::new()),
+      }
+  }
+}
+
+///|
 pub fn compile_wasm_body_artifact_function(
   function : @milkir.Function,
   validation_context : @wasm_milkir.WasmValidationContext,
   target : NativeTarget,
   function_index~ : Int,
-  signature~ : @semantic_machv.Signature,
+  signature~ : @native.Signature,
+  use_subtype_indirect_check? : Bool = true,
+  canonical_type_indices? : Array[Int] = [],
+) -> @artifact.FunctionCode raise JitPipelineError {
+  NativeCompiler::new(target).compile_wasm_body_artifact_function(
+    function,
+    validation_context,
+    function_index~,
+    signature~,
+    use_subtype_indirect_check~,
+    canonical_type_indices~,
+  )
+}
+
+///|
+/// Compile one function while retaining target allocator scratch capacity for
+/// the next serial call on this compiler.
+pub fn NativeCompiler::compile_wasm_body_artifact_function(
+  self : NativeCompiler,
+  function : @milkir.Function,
+  validation_context : @wasm_milkir.WasmValidationContext,
+  function_index~ : Int,
+  signature~ : @native.Signature,
   use_subtype_indirect_check? : Bool = true,
   canonical_type_indices? : Array[Int] = [],
 ) -> @artifact.FunctionCode raise JitPipelineError {
   if function_index < 0 {
     raise InvalidFunctionIndex(index=function_index)
   }
-  match target {
+  match self.target {
     AArch64 => {
       let compiled = compile_wasm_body_aarch64_target(
         function,
@@ -243,13 +286,17 @@ pub fn compile_wasm_body_artifact_function(
         use_subtype_indirect_check,
         canonical_type_indices,
         record_metrics=@perf.enabled(),
+        compilation_session=self.aarch64.unwrap(),
       )
-      artifact_function_from_code_object(
+      let packaging_tick = detail_metrics_tick(@perf.enabled())
+      let result = artifact_function_from_code_object(
         compiled.object,
         frame_size=compiled.frame_size,
         function_index~,
         signature~,
       )
+      record_compile_subphase("artifact_packaging", packaging_tick)
+      result
     }
     X64 => {
       let compiled = compile_wasm_body_x64_target(
@@ -258,13 +305,17 @@ pub fn compile_wasm_body_artifact_function(
         use_subtype_indirect_check,
         canonical_type_indices,
         record_metrics=@perf.enabled(),
+        compilation_session=self.x64.unwrap(),
       )
-      artifact_function_from_code_object(
+      let packaging_tick = detail_metrics_tick(@perf.enabled())
+      let result = artifact_function_from_code_object(
         compiled.object,
         frame_size=compiled.frame_size,
         function_index~,
         signature~,
       )
+      record_compile_subphase("artifact_packaging", packaging_tick)
+      result
     }
   }
 }

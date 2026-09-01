@@ -95,7 +95,7 @@ python3 scripts/run_component_wast.py --suite stable-0.2 --no-jit
 Explore the compilation pipeline stages for debugging and analysis.
 
 `--target` selects which native backend to inspect: `host` (default), `x64`, or
-`aarch64`. Because every stage below `machv` is target-parameterized, this
+`aarch64`. Because target VCode and later stages are target-parameterized, this
 inspects the other architecture's lowering, allocation, and machine code from
 whichever host you are on. It only prints stages; it never executes the code.
 
@@ -103,7 +103,6 @@ Stages:
 - `source`: Function source text
 - `milkir`: MilkIR SSA before optimization (`ir` is retained as a CLI alias)
 - `opt-milkir`: Optimized MilkIR (`opt-ir` is retained as a CLI alias)
-- `machv`: Target-neutral semantic MachV
 - `vcode`: Selected target VCode before register allocation
 - `allocated-vcode`: Target VCode after allocation materialization
 - `code-object`: Verified unlinked code object and metadata
@@ -112,7 +111,7 @@ Stages:
 Example:
 ```bash
 ./wasmoon explore test.wat \
-  --stage milkir machv vcode allocated-vcode code-object mc
+  --stage milkir opt-milkir vcode allocated-vcode code-object mc
 ```
 
 Cross-inspect the AMD64 backend from an AArch64 host:
@@ -169,7 +168,7 @@ python3 scripts/run_all_wast.py
 
 # View full pipeline
 ./wasmoon explore mymodule.wat \
-  --stage milkir machv vcode allocated-vcode code-object mc
+  --stage milkir opt-milkir vcode allocated-vcode code-object mc
 ```
 
 ## Exit Codes

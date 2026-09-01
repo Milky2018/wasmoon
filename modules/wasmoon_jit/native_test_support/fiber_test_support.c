@@ -14,6 +14,25 @@ typedef struct {
 
 static _Atomic int callback_capture_releases;
 
+#if defined(__x86_64__) && !defined(_WIN32)
+__attribute__((naked, noinline))
+static int64_t x64_sysv_stack_alignment_probe(void) {
+    __asm__ volatile(
+        "movq %rsp, %rax\n\t"
+        "andq $15, %rax\n\t"
+        "retq\n\t"
+    );
+}
+#endif
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_test_x64_stack_alignment_probe_ptr(void) {
+#if defined(__x86_64__) && !defined(_WIN32)
+    return (int64_t)(uintptr_t)x64_sysv_stack_alignment_probe;
+#else
+    return 0;
+#endif
+}
+
 static void finalize_callback_capture(void *self) {
     (void)self;
     atomic_fetch_add_explicit(
@@ -244,6 +263,22 @@ static int nested_activation_exception_probe(
 MOONBIT_FFI_EXPORT int64_t
 wasmoon_test_nested_activation_exception_probe(void) {
     return (int64_t)nested_activation_exception_probe;
+}
+
+static int mismatched_try_end_probe(
+    jit_context_t *ctx,
+    int64_t *values,
+    void *func_ptr
+) {
+    (void)values;
+    (void)func_ptr;
+    exception_try_begin_impl(ctx, 17);
+    exception_try_end_impl(ctx, 18);
+    return 0;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_test_mismatched_try_end_probe(void) {
+    return (int64_t)mismatched_try_end_probe;
 }
 
 static int nested_activation_gc_root_probe(

@@ -82,6 +82,309 @@ test "exception_try_table_no_throw" {
 }
 
 ///|
+/// A return that exits a try_table must unlink the handler before its function
+/// frame disappears. Otherwise the later throw jumps through a stale jmp_buf.
+test "exception_return_unwinds_try_handler" {
+  let source =
+    #|(module
+    #|  (tag $e)
+    #|  (func $return-from-try
+    #|    (block $ignored
+    #|      (try_table (catch $e $ignored)
+    #|        (return)
+    #|      )
+    #|      (unreachable)
+    #|    )
+    #|  )
+    #|  (func $raise (throw $e))
+    #|  (func (export "test") (result i32)
+    #|    (block $caught
+    #|      (try_table (catch $e $caught)
+    #|        (call $return-from-try)
+    #|        (call $raise)
+    #|      )
+    #|      (unreachable)
+    #|    )
+    #|    (i32.const 1)
+    #|  )
+    #|)
+  let result = compare_jit_interp(source, "test", [])
+  inspect(result, content="matched")
+}
+
+///|
+/// An unconditional branch that crosses a try_table boundary must unlink the
+/// handler before execution continues outside its lexical scope.
+test "exception_br_unwinds_try_handler" {
+  let source =
+    #|(module
+    #|  (tag $e)
+    #|  (func $branch-from-try
+    #|    (block $outside
+    #|      (try_table (catch $e $outside)
+    #|        (br $outside)
+    #|      )
+    #|      (unreachable)
+    #|    )
+    #|  )
+    #|  (func $raise (throw $e))
+    #|  (func (export "test") (result i32)
+    #|    (block $caught
+    #|      (try_table (catch $e $caught)
+    #|        (call $branch-from-try)
+    #|        (call $raise)
+    #|      )
+    #|      (unreachable)
+    #|    )
+    #|    (i32.const 2)
+    #|  )
+    #|)
+  let result = compare_jit_interp(source, "test", [])
+  inspect(result, content="matched")
+}
+
+///|
+/// Only the taken br_if edge exits the try_table. The fallthrough edge must
+/// retain the handler so the following throw is still caught by the inner try.
+test "exception_br_if_unwinds_only_taken_edge" {
+  let source =
+    #|(module
+    #|  (tag $e)
+    #|  (func $branch-from-try (param $take i32)
+    #|    (block $outside
+    #|      (try_table (catch $e $outside)
+    #|        (br_if $outside (local.get $take))
+    #|        (throw $e)
+    #|      )
+    #|      (unreachable)
+    #|    )
+    #|  )
+    #|  (func $raise (throw $e))
+    #|  (func (export "test") (param $take i32) (result i32)
+    #|    (block $caught
+    #|      (try_table (catch $e $caught)
+    #|        (call $branch-from-try (local.get $take))
+    #|        (call $raise)
+    #|      )
+    #|      (unreachable)
+    #|    )
+    #|    (i32.const 3)
+    #|  )
+    #|)
+  inspect(compare_jit_interp(source, "test", [I32(0)]), content="matched")
+  inspect(compare_jit_interp(source, "test", [I32(1)]), content="matched")
+}
+
+///|
+/// br_table targets can retain or leave the current handler depth. The inner
+/// target keeps the handler for its following throw; the outer target pops it.
+test "exception_br_table_unwinds_to_target_depth" {
+  let source =
+    #|(module
+    #|  (tag $e)
+    #|  (func $branch-from-try (param $target i32) (result i32)
+    #|    (local $marker i32)
+    #|    (block $outside
+    #|      (try_table (catch $e $outside)
+    #|        (block $inside
+    #|          (local.set $marker (i32.const 10))
+    #|          (br_table $inside $outside (local.get $target))
+    #|        )
+    #|        (local.set $marker (i32.const 11))
+    #|        (throw $e)
+    #|      )
+    #|      (unreachable)
+    #|    )
+    #|    (local.get $marker)
+    #|  )
+    #|  (func $raise (throw $e))
+    #|  (func (export "test") (param $target i32) (result i32)
+    #|    (local $result i32)
+    #|    (block $caught
+    #|      (try_table (catch $e $caught)
+    #|        (local.set $result (call $branch-from-try (local.get $target)))
+    #|        (call $raise)
+    #|      )
+    #|      (unreachable)
+    #|    )
+    #|    (local.get $result)
+    #|  )
+    #|)
+  inspect(compare_jit_interp(source, "test", [I32(0)]), content="matched")
+  inspect(compare_jit_interp(source, "test", [I32(1)]), content="matched")
+}
+
+///|
+/// A catch target can cross additional enclosing try_table scopes. Cleanup is
+/// determined by the target depth, not just by the handler that caught.
+test "exception_catch_unwinds_to_target_depth" {
+  let source =
+    #|(module
+    #|  (tag $e)
+    #|  (func $catch-across-outer-try
+    #|    (block $outside
+    #|      (try_table (catch $e $outside)
+    #|        (block $inner
+    #|          (try_table (catch $e $outside)
+    #|            (throw $e)
+    #|          )
+    #|          (unreachable)
+    #|        )
+    #|      )
+    #|      (unreachable)
+    #|    )
+    #|  )
+    #|  (func $raise (throw $e))
+    #|  (func (export "test") (result i32)
+    #|    (block $caught
+    #|      (try_table (catch $e $caught)
+    #|        (call $catch-across-outer-try)
+    #|        (call $raise)
+    #|      )
+    #|      (unreachable)
+    #|    )
+    #|    (i32.const 8)
+    #|  )
+    #|)
+  inspect(compare_jit_interp(source, "test", []), content="matched")
+}
+
+///|
+test "exception_br_on_null_unwinds_taken_edge" {
+  let source =
+    #|(module
+    #|  (tag $e)
+    #|  (func $branch-from-try
+    #|    (block $outside
+    #|      (try_table (catch $e $outside)
+    #|        (drop (br_on_null $outside (ref.null extern)))
+    #|      )
+    #|      (unreachable)
+    #|    )
+    #|  )
+    #|  (func $raise (throw $e))
+    #|  (func (export "test") (result i32)
+    #|    (block $caught
+    #|      (try_table (catch $e $caught)
+    #|        (call $branch-from-try)
+    #|        (call $raise)
+    #|      )
+    #|      (unreachable)
+    #|    )
+    #|    (i32.const 4)
+    #|  )
+    #|)
+  inspect(compare_jit_interp(source, "test", []), content="matched")
+}
+
+///|
+test "exception_br_on_non_null_unwinds_taken_edge" {
+  let source =
+    #|(module
+    #|  (type $target-type (func))
+    #|  (tag $e (param (ref $target-type)))
+    #|  (func $target (type $target-type))
+    #|  (elem declare func $target)
+    #|  (func $branch-from-try
+    #|    (drop
+    #|      (block $outside (result (ref $target-type))
+    #|        (try_table (catch $e $outside)
+    #|          (br_on_non_null $outside (ref.func $target))
+    #|        )
+    #|        (unreachable)
+    #|      )
+    #|    )
+    #|  )
+    #|  (func $raise (throw $e (ref.func $target)))
+    #|  (func (export "test") (result i32)
+    #|    (drop
+    #|      (block $caught (result (ref $target-type))
+    #|        (try_table (catch $e $caught)
+    #|          (call $branch-from-try)
+    #|          (call $raise)
+    #|        )
+    #|        (unreachable)
+    #|      )
+    #|    )
+    #|    (i32.const 5)
+    #|  )
+    #|)
+  inspect(compare_jit_interp(source, "test", []), content="matched")
+}
+
+///|
+test "exception_br_on_cast_unwinds_taken_edge" {
+  let source =
+    #|(module
+    #|  (tag $e (param (ref i31)))
+    #|  (func $branch-from-try
+    #|    (drop
+    #|      (block $outside (result (ref i31))
+    #|        (try_table (catch $e $outside)
+    #|          (drop
+    #|            (br_on_cast $outside anyref (ref i31)
+    #|              (ref.i31 (i32.const 1))
+    #|            )
+    #|          )
+    #|        )
+    #|        (unreachable)
+    #|      )
+    #|    )
+    #|  )
+    #|  (func $raise (throw $e (ref.i31 (i32.const 2))))
+    #|  (func (export "test") (result i32)
+    #|    (drop
+    #|      (block $caught (result (ref i31))
+    #|        (try_table (catch $e $caught)
+    #|          (call $branch-from-try)
+    #|          (call $raise)
+    #|        )
+    #|        (unreachable)
+    #|      )
+    #|    )
+    #|    (i32.const 6)
+    #|  )
+    #|)
+  inspect(compare_jit_interp(source, "test", []), content="matched")
+}
+
+///|
+test "exception_br_on_cast_fail_unwinds_taken_edge" {
+  let source =
+    #|(module
+    #|  (tag $e (param anyref))
+    #|  (func $branch-from-try
+    #|    (drop
+    #|      (block $outside (result anyref)
+    #|        (try_table (catch $e $outside)
+    #|          (drop
+    #|            (br_on_cast_fail $outside anyref (ref i31)
+    #|              (ref.null any)
+    #|            )
+    #|          )
+    #|        )
+    #|        (unreachable)
+    #|      )
+    #|    )
+    #|  )
+    #|  (func $raise (throw $e (ref.null any)))
+    #|  (func (export "test") (result i32)
+    #|    (drop
+    #|      (block $caught (result anyref)
+    #|        (try_table (catch $e $caught)
+    #|          (call $branch-from-try)
+    #|          (call $raise)
+    #|        )
+    #|        (unreachable)
+    #|      )
+    #|    )
+    #|    (i32.const 7)
+    #|  )
+    #|)
+  inspect(compare_jit_interp(source, "test", []), content="matched")
+}
+
+///|
 /// Test catch_all handler
 test "exception_catch_all" {
   let source =

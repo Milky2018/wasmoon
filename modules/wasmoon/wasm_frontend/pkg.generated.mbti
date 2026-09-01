@@ -31,6 +31,11 @@ pub suberror LowerError {
   MissingCode(index~ : Int)
   UnsupportedNativeLowering(index~ : Int, reason~ : String)
 } derive(Eq, @debug.Debug)
+pub fn LowerError::equal(Self, Self) -> Bool
+pub fn LowerError::not_equal(Self, Self) -> Bool
+pub fn LowerError::output(Self, &Logger) -> Unit
+pub fn LowerError::to_repr(Self) -> @debug.Repr
+pub fn LowerError::to_string(Self) -> String
 pub impl Show for LowerError
 
 // Types and methods

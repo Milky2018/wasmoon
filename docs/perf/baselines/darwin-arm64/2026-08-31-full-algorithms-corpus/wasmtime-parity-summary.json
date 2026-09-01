@@ -1,0 +1,4326 @@
+{
+  "schema_version": 3,
+  "generated_at_unix_sec": 1788182273,
+  "config": {
+    "wasmoon": "./wasmoon",
+    "wasmtime": "wasmtime",
+    "timeout_sec": 300,
+    "runs_per_engine": 1,
+    "cache_policy": "cold-isolated-per-workload",
+    "value_ratio_threshold": 1.05,
+    "wall_ratio_threshold": 2.0,
+    "cache_root": "<sweep-artifacts>/jit-cache"
+  },
+  "stats": {
+    "total": 70,
+    "failures": 0,
+    "perf_gaps": 31,
+    "ok": 39
+  },
+  "failures": [],
+  "perf_gaps": [
+    "examples/algorithms/aead_chacha20poly1305.wasm: paired wall ratio 2.2391 (threshold 2.0000)",
+    "examples/algorithms/aead_xchacha20poly1305.wasm: paired wall ratio 2.2053 (threshold 2.0000)",
+    "examples/algorithms/auth.wasm: paired wall ratio 3.0440 (threshold 2.0000)",
+    "examples/algorithms/auth2.wasm: paired wall ratio 3.1969 (threshold 2.0000)",
+    "examples/algorithms/auth3.wasm: paired wall ratio 3.0894 (threshold 2.0000)",
+    "examples/algorithms/auth6.wasm: paired output ratio 1.0820 (threshold 1.0500)",
+    "examples/algorithms/box.wasm: paired output ratio 1.0566 (threshold 1.0500)",
+    "examples/algorithms/box2.wasm: paired wall ratio 2.2657 (threshold 2.0000)",
+    "examples/algorithms/box_easy2.wasm: paired output ratio 1.0683 (threshold 1.0500)",
+    "examples/algorithms/box_seed.wasm: paired wall ratio 3.6046 (threshold 2.0000)",
+    "examples/algorithms/hash.wasm: paired wall ratio 3.5986 (threshold 2.0000)",
+    "examples/algorithms/hash3.wasm: paired wall ratio 2.7387 (threshold 2.0000)",
+    "examples/algorithms/keygen.wasm: paired wall ratio 2.7261 (threshold 2.0000)",
+    "examples/algorithms/onetimeauth.wasm: paired wall ratio 2.9003 (threshold 2.0000)",
+    "examples/algorithms/onetimeauth2.wasm: paired wall ratio 2.3371 (threshold 2.0000)",
+    "examples/algorithms/pwhash_scrypt.wasm: paired output ratio 1.0639 (threshold 1.0500)",
+    "examples/algorithms/pwhash_scrypt_ll.wasm: paired output ratio 1.0594 (threshold 1.0500)",
+    "examples/algorithms/scalarmult2.wasm: paired wall ratio 3.4857 (threshold 2.0000)",
+    "examples/algorithms/scalarmult5.wasm: paired wall ratio 2.7763 (threshold 2.0000)",
+    "examples/algorithms/scalarmult6.wasm: paired wall ratio 2.9347 (threshold 2.0000)",
+    "examples/algorithms/scalarmult7.wasm: paired wall ratio 2.1836 (threshold 2.0000)",
+    "examples/algorithms/scalarmult_ristretto255.wasm: paired output ratio 1.0560 (threshold 1.0500)",
+    "examples/algorithms/secretbox.wasm: paired output ratio 1.2520 (threshold 1.0500)",
+    "examples/algorithms/secretbox2.wasm: paired output ratio 1.1129 (threshold 1.0500)",
+    "examples/algorithms/secretbox_easy.wasm: paired wall ratio 3.2974 (threshold 2.0000)",
+    "examples/algorithms/secretbox_easy2.wasm: paired output ratio 1.1259 (threshold 1.0500)",
+    "examples/algorithms/secretstream_xchacha20poly1305.wasm: paired wall ratio 2.9502 (threshold 2.0000)",
+    "examples/algorithms/shorthash.wasm: paired wall ratio 2.6402 (threshold 2.0000)",
+    "examples/algorithms/siphashx24.wasm: paired wall ratio 2.8562 (threshold 2.0000)",
+    "examples/algorithms/stream3.wasm: paired output ratio 1.0811 (threshold 1.0500)",
+    "examples/algorithms/stream4.wasm: paired output ratio 1.1250 (threshold 1.0500)"
+  ],
+  "rows": [
+    {
+      "workload": "examples/algorithms/aead_aegis128l.wasm",
+      "status": "ok",
+      "cache": {
+        "directory": "<sweep-artifacts>/jit-cache/aead_aegis128l",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "<sweep-artifacts>/jit-cache/aead_aegis128l/wasmoon",
+        "wasmtime_directory": "<sweep-artifacts>/jit-cache/aead_aegis128l/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmoon",
+          "wasmtime"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/aead_aegis128l.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.8725736249471083,
+          "parsed_value": 3942350000.0,
+          "stdout": "3942350000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v9-aarch64-macos-o2-small-direct-no-cancel-no-debug-r006d0061006300680076002d00760063006f00640065002d0039-seaa87f6e73636360bfb158126515b71dcc56bc8e63a3abd9b7b4d76240ce3bf4-x67abdd721024f0ff4e0b3f4c2fc13bc5bad42d0b7851d456d88d203d15aaa450.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=<sweep-artifacts>/jit-cache/aead_aegis128l/wasmtime-cache.toml",
+            "examples/algorithms/aead_aegis128l.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.782298665959388,
+          "parsed_value": 3805905000.0,
+          "stdout": "3805905000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-46132",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/p5Z9zQ9ntuPI8Lf3UzJbe0kApVzjffwWJeHyUv2PzsA",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/p5Z9zQ9ntuPI8Lf3UzJbe0kApVzjffwWJeHyUv2PzsA.stats"
+          ]
+        },
+        "value_ratio": 1.035850868584476,
+        "wall_ratio": 1.1153970509166211
+      }
+    },
+    {
+      "workload": "examples/algorithms/aead_aegis256.wasm",
+      "status": "ok",
+      "cache": {
+        "directory": "<sweep-artifacts>/jit-cache/aead_aegis256",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "<sweep-artifacts>/jit-cache/aead_aegis256/wasmoon",
+        "wasmtime_directory": "<sweep-artifacts>/jit-cache/aead_aegis256/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmtime",
+          "wasmoon"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/aead_aegis256.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.967910666950047,
+          "parsed_value": 4403710000.0,
+          "stdout": "4403710000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v9-aarch64-macos-o2-small-direct-no-cancel-no-debug-r006d0061006300680076002d00760063006f00640065002d0039-s7eea1434e12bd02afa73d25d6fba42db2e1f362149fc1e282cf0550a824e63bc-x67abdd721024f0ff4e0b3f4c2fc13bc5bad42d0b7851d456d88d203d15aaa450.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=<sweep-artifacts>/jit-cache/aead_aegis256/wasmtime-cache.toml",
+            "examples/algorithms/aead_aegis256.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.8616512499283999,
+          "parsed_value": 4205285000.0,
+          "stdout": "4205285000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-46133",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/M0Trx2iDfP5kek9DNgA5S-6isFKNsbnRk-6yVYffyRA",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/M0Trx2iDfP5kek9DNgA5S-6isFKNsbnRk-6yVYffyRA.stats"
+          ]
+        },
+        "value_ratio": 1.0471846735714703,
+        "wall_ratio": 1.123320678790261
+      }
+    },
+    {
+      "workload": "examples/algorithms/aead_chacha20poly1305.wasm",
+      "status": "perf_gap",
+      "cache": {
+        "directory": "<sweep-artifacts>/jit-cache/aead_chacha20poly1305",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "<sweep-artifacts>/jit-cache/aead_chacha20poly1305/wasmoon",
+        "wasmtime_directory": "<sweep-artifacts>/jit-cache/aead_chacha20poly1305/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmoon",
+          "wasmtime"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/aead_chacha20poly1305.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.08967804198618978,
+          "parsed_value": 84080000.0,
+          "stdout": "84080000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v9-aarch64-macos-o2-small-direct-no-cancel-no-debug-r006d0061006300680076002d00760063006f00640065002d0039-sf95f9c724ab58a443bb8f20c139728f6acc8cfae05bd091519ab5c0da271f997-x67abdd721024f0ff4e0b3f4c2fc13bc5bad42d0b7851d456d88d203d15aaa450.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=<sweep-artifacts>/jit-cache/aead_chacha20poly1305/wasmtime-cache.toml",
+            "examples/algorithms/aead_chacha20poly1305.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.040050124982371926,
+          "parsed_value": 96470000.0,
+          "stdout": "96470000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-46327",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/aNM40DwVe6vP7ZhykgVmob5DmhjdBWrThLEYdF8t_Yc",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/aNM40DwVe6vP7ZhykgVmob5DmhjdBWrThLEYdF8t_Yc.stats"
+          ]
+        },
+        "value_ratio": 0.8715662900383538,
+        "wall_ratio": 2.2391451219106457
+      }
+    },
+    {
+      "workload": "examples/algorithms/aead_chacha20poly13052.wasm",
+      "status": "ok",
+      "cache": {
+        "directory": "<sweep-artifacts>/jit-cache/aead_chacha20poly13052",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "<sweep-artifacts>/jit-cache/aead_chacha20poly13052/wasmoon",
+        "wasmtime_directory": "<sweep-artifacts>/jit-cache/aead_chacha20poly13052/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmtime",
+          "wasmoon"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/aead_chacha20poly13052.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.09950462507549673,
+          "parsed_value": 157590000.0,
+          "stdout": "157590000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v9-aarch64-macos-o2-small-direct-no-cancel-no-debug-r006d0061006300680076002d00760063006f00640065002d0039-sc23e855082d2273b178116199785609702e98fc60c412a0ce890f33e0897aa15-x67abdd721024f0ff4e0b3f4c2fc13bc5bad42d0b7851d456d88d203d15aaa450.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=<sweep-artifacts>/jit-cache/aead_chacha20poly13052/wasmtime-cache.toml",
+            "examples/algorithms/aead_chacha20poly13052.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.05741941707674414,
+          "parsed_value": 173535000.0,
+          "stdout": "173535000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-46328",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/tL0Q3H6MpDp0hu4dWAlaaD1hA7F21X4rpi70C36naXI",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/tL0Q3H6MpDp0hu4dWAlaaD1hA7F21X4rpi70C36naXI.stats"
+          ]
+        },
+        "value_ratio": 0.9081165182816147,
+        "wall_ratio": 1.7329438392330498
+      }
+    },
+    {
+      "workload": "examples/algorithms/aead_xchacha20poly1305.wasm",
+      "status": "perf_gap",
+      "cache": {
+        "directory": "<sweep-artifacts>/jit-cache/aead_xchacha20poly1305",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "<sweep-artifacts>/jit-cache/aead_xchacha20poly1305/wasmoon",
+        "wasmtime_directory": "<sweep-artifacts>/jit-cache/aead_xchacha20poly1305/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmoon",
+          "wasmtime"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/aead_xchacha20poly1305.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.0868588340235874,
+          "parsed_value": 87045000.0,
+          "stdout": "87045000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v9-aarch64-macos-o2-small-direct-no-cancel-no-debug-r006d0061006300680076002d00760063006f00640065002d0039-sf87c89591453b5ce3a98e5a75d7c2783206a1e5c759b42cfd07dca4bd9114155-x67abdd721024f0ff4e0b3f4c2fc13bc5bad42d0b7851d456d88d203d15aaa450.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=<sweep-artifacts>/jit-cache/aead_xchacha20poly1305/wasmtime-cache.toml",
+            "examples/algorithms/aead_xchacha20poly1305.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.03938624996226281,
+          "parsed_value": 93020000.0,
+          "stdout": "93020000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-46331",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/rH4wHrLse16YSo8o86KSrTw2Mrqdm63cEXUPUj25FP4",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/rH4wHrLse16YSo8o86KSrTw2Mrqdm63cEXUPUj25FP4.stats"
+          ]
+        },
+        "value_ratio": 0.9357665018275639,
+        "wall_ratio": 2.2053085558236583
+      }
+    },
+    {
+      "workload": "examples/algorithms/auth.wasm",
+      "status": "perf_gap",
+      "cache": {
+        "directory": "<sweep-artifacts>/jit-cache/auth",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "<sweep-artifacts>/jit-cache/auth/wasmoon",
+        "wasmtime_directory": "<sweep-artifacts>/jit-cache/auth/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmtime",
+          "wasmoon"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/auth.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.07853354210965335,
+          "parsed_value": 23015000.0,
+          "stdout": "23015000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v9-aarch64-macos-o2-small-direct-no-cancel-no-debug-r006d0061006300680076002d00760063006f00640065002d0039-s9cfb57fca117153a9962fca1250940d7502aabde655e65738c24ea0f191d0425-x67abdd721024f0ff4e0b3f4c2fc13bc5bad42d0b7851d456d88d203d15aaa450.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=<sweep-artifacts>/jit-cache/auth/wasmtime-cache.toml",
+            "examples/algorithms/auth.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.02579941600561142,
+          "parsed_value": 24840000.0,
+          "stdout": "24840000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-46332",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/NoCXXQrP7xMExH7l-mjjTvcgWIcqdsQBlo-okYvtDpA",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/NoCXXQrP7xMExH7l-mjjTvcgWIcqdsQBlo-okYvtDpA.stats"
+          ]
+        },
+        "value_ratio": 0.9265297906602254,
+        "wall_ratio": 3.0440046430730123
+      }
+    },
+    {
+      "workload": "examples/algorithms/auth2.wasm",
+      "status": "perf_gap",
+      "cache": {
+        "directory": "<sweep-artifacts>/jit-cache/auth2",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "<sweep-artifacts>/jit-cache/auth2/wasmoon",
+        "wasmtime_directory": "<sweep-artifacts>/jit-cache/auth2/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmoon",
+          "wasmtime"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/auth2.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.061952374991960824,
+          "parsed_value": 1195000.0,
+          "stdout": "1195000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v9-aarch64-macos-o2-small-direct-no-cancel-no-debug-r006d0061006300680076002d00760063006f00640065002d0039-s1f796c139b977c6cffb09138c1c1537c3e8db3787243cb60db7413fb82fa0e3d-x67abdd721024f0ff4e0b3f4c2fc13bc5bad42d0b7851d456d88d203d15aaa450.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=<sweep-artifacts>/jit-cache/auth2/wasmtime-cache.toml",
+            "examples/algorithms/auth2.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.019379041041247547,
+          "parsed_value": 1390000.0,
+          "stdout": "1390000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-46335",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/wKRbgEQJrW-c4IphCEVz4-ZOMlTq688Dclj28pyLikM",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/wKRbgEQJrW-c4IphCEVz4-ZOMlTq688Dclj28pyLikM.stats"
+          ]
+        },
+        "value_ratio": 0.8597122302158273,
+        "wall_ratio": 3.196875163229056
+      }
+    },
+    {
+      "workload": "examples/algorithms/auth3.wasm",
+      "status": "perf_gap",
+      "cache": {
+        "directory": "<sweep-artifacts>/jit-cache/auth3",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "<sweep-artifacts>/jit-cache/auth3/wasmoon",
+        "wasmtime_directory": "<sweep-artifacts>/jit-cache/auth3/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmtime",
+          "wasmoon"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/auth3.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.0629755420377478,
+          "parsed_value": 1905000.0,
+          "stdout": "1905000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v9-aarch64-macos-o2-small-direct-no-cancel-no-debug-r006d0061006300680076002d00760063006f00640065002d0039-s754a5ae3fd5954851e7ce03e9bad14f684f3df95ca3142587651db4c860389c8-x67abdd721024f0ff4e0b3f4c2fc13bc5bad42d0b7851d456d88d203d15aaa450.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=<sweep-artifacts>/jit-cache/auth3/wasmtime-cache.toml",
+            "examples/algorithms/auth3.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.020384249975904822,
+          "parsed_value": 3330000.0,
+          "stdout": "3330000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-46336",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/MpMoZjRxgrRK0-npa95rZBP_2H1FZCpJnNfO0w6w7Xg",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/MpMoZjRxgrRK0-npa95rZBP_2H1FZCpJnNfO0w6w7Xg.stats"
+          ]
+        },
+        "value_ratio": 0.5720720720720721,
+        "wall_ratio": 3.0894215932491
+      }
+    },
+    {
+      "workload": "examples/algorithms/auth5.wasm",
+      "status": "ok",
+      "cache": {
+        "directory": "<sweep-artifacts>/jit-cache/auth5",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "<sweep-artifacts>/jit-cache/auth5/wasmoon",
+        "wasmtime_directory": "<sweep-artifacts>/jit-cache/auth5/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmoon",
+          "wasmtime"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/auth5.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 2.417341792024672,
+          "parsed_value": 11763710000.0,
+          "stdout": "11763710000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v9-aarch64-macos-o2-small-direct-no-cancel-no-debug-r006d0061006300680076002d00760063006f00640065002d0039-sa27efe1e778edd63b05020cd860bba19943b787e12276408e099f74cb23410e3-x67abdd721024f0ff4e0b3f4c2fc13bc5bad42d0b7851d456d88d203d15aaa450.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=<sweep-artifacts>/jit-cache/auth5/wasmtime-cache.toml",
+            "examples/algorithms/auth5.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 2.9852335420437157,
+          "parsed_value": 14820750000.0,
+          "stdout": "14820750000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-46675",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/xQzfpZ29oALXsgptVmkvp1Ze23xRy3tCOR7iGhvggKc",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/xQzfpZ29oALXsgptVmkvp1Ze23xRy3tCOR7iGhvggKc.stats"
+          ]
+        },
+        "value_ratio": 0.7937324359428504,
+        "wall_ratio": 0.8097663911312412
+      }
+    },
+    {
+      "workload": "examples/algorithms/auth6.wasm",
+      "status": "perf_gap",
+      "cache": {
+        "directory": "<sweep-artifacts>/jit-cache/auth6",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "<sweep-artifacts>/jit-cache/auth6/wasmoon",
+        "wasmtime_directory": "<sweep-artifacts>/jit-cache/auth6/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmtime",
+          "wasmoon"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/auth6.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.06175350002013147,
+          "parsed_value": 1980000.0,
+          "stdout": "1980000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v9-aarch64-macos-o2-small-direct-no-cancel-no-debug-r006d0061006300680076002d00760063006f00640065002d0039-seb77ec7793a7ea37beb8da2db74bdbf8ee44cbc42bbdf0e14ab611db8097e76f-x67abdd721024f0ff4e0b3f4c2fc13bc5bad42d0b7851d456d88d203d15aaa450.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=<sweep-artifacts>/jit-cache/auth6/wasmtime-cache.toml",
+            "examples/algorithms/auth6.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.021172666922211647,
+          "parsed_value": 1830000.0,
+          "stdout": "1830000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-46936",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/KvETAPOsgB1HwLFYXn2PsvTbevxa4Ko6cKwc6Dh6WBc",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/KvETAPOsgB1HwLFYXn2PsvTbevxa4Ko6cKwc6Dh6WBc.stats"
+          ]
+        },
+        "value_ratio": 1.0819672131147542,
+        "wall_ratio": 2.916661384558391
+      }
+    },
+    {
+      "workload": "examples/algorithms/auth7.wasm",
+      "status": "ok",
+      "cache": {
+        "directory": "<sweep-artifacts>/jit-cache/auth7",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "<sweep-artifacts>/jit-cache/auth7/wasmoon",
+        "wasmtime_directory": "<sweep-artifacts>/jit-cache/auth7/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmoon",
+          "wasmtime"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/auth7.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 1.3528607500484213,
+          "parsed_value": 6449815000.0,
+          "stdout": "6449815000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v9-aarch64-macos-o2-small-direct-no-cancel-no-debug-r006d0061006300680076002d00760063006f00640065002d0039-s02a6c0ec8188100203d4ca6c89c7f8ca336b762ecbb0399964bec4ec2c6bfbc3-x67abdd721024f0ff4e0b3f4c2fc13bc5bad42d0b7851d456d88d203d15aaa450.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=<sweep-artifacts>/jit-cache/auth7/wasmtime-cache.toml",
+            "examples/algorithms/auth7.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 1.5796341249952093,
+          "parsed_value": 7794660000.0,
+          "stdout": "7794660000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-47072",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/mKkrFN1kwvbTsxfEZEqA7itTcrWJGrZEetgU6LUD7SY",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/mKkrFN1kwvbTsxfEZEqA7itTcrWJGrZEetgU6LUD7SY.stats"
+          ]
+        },
+        "value_ratio": 0.8274658548288187,
+        "wall_ratio": 0.8564393036599689
+      }
+    },
+    {
+      "workload": "examples/algorithms/box.wasm",
+      "status": "perf_gap",
+      "cache": {
+        "directory": "<sweep-artifacts>/jit-cache/box",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "<sweep-artifacts>/jit-cache/box/wasmoon",
+        "wasmtime_directory": "<sweep-artifacts>/jit-cache/box/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmtime",
+          "wasmoon"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/box.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.17361354199238122,
+          "parsed_value": 244365000.0,
+          "stdout": "244365000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v9-aarch64-macos-o2-small-direct-no-cancel-no-debug-r006d0061006300680076002d00760063006f00640065002d0039-sf72cbfdc01391b1807c71c131ab7878c63347d9fd54747a999344ef9a0e7cb31-x67abdd721024f0ff4e0b3f4c2fc13bc5bad42d0b7851d456d88d203d15aaa450.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=<sweep-artifacts>/jit-cache/box/wasmtime-cache.toml",
+            "examples/algorithms/box.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.07400420890189707,
+          "parsed_value": 231265000.0,
+          "stdout": "231265000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-47127",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/yi4Hi-3IGAT5JtgJ310a2C32bcbdk2rPl_hteObExW4",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/yi4Hi-3IGAT5JtgJ310a2C32bcbdk2rPl_hteObExW4.stats"
+          ]
+        },
+        "value_ratio": 1.0566449743800401,
+        "wall_ratio": 2.3459955125326757
+      }
+    },
+    {
+      "workload": "examples/algorithms/box2.wasm",
+      "status": "perf_gap",
+      "cache": {
+        "directory": "<sweep-artifacts>/jit-cache/box2",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "<sweep-artifacts>/jit-cache/box2/wasmoon",
+        "wasmtime_directory": "<sweep-artifacts>/jit-cache/box2/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmoon",
+          "wasmtime"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/box2.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.17352437495719641,
+          "parsed_value": 242900000.0,
+          "stdout": "242900000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v9-aarch64-macos-o2-small-direct-no-cancel-no-debug-r006d0061006300680076002d00760063006f00640065002d0039-s988984eb3899efa27f82a12f70a9e5b768bdc3dcbe9d6b3632f1f7e9ed561eff-x67abdd721024f0ff4e0b3f4c2fc13bc5bad42d0b7851d456d88d203d15aaa450.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=<sweep-artifacts>/jit-cache/box2/wasmtime-cache.toml",
+            "examples/algorithms/box2.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.07658666709903628,
+          "parsed_value": 243345000.0,
+          "stdout": "243345000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-47130",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/C5qnrrCyb2EB2G_PrBCBf9DN34ZSezDSChiOCqw0g5A",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/C5qnrrCyb2EB2G_PrBCBf9DN34ZSezDSChiOCqw0g5A.stats"
+          ]
+        },
+        "value_ratio": 0.9981713205531242,
+        "wall_ratio": 2.265725635152753
+      }
+    },
+    {
+      "workload": "examples/algorithms/box7.wasm",
+      "status": "ok",
+      "cache": {
+        "directory": "<sweep-artifacts>/jit-cache/box7",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "<sweep-artifacts>/jit-cache/box7/wasmoon",
+        "wasmtime_directory": "<sweep-artifacts>/jit-cache/box7/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmtime",
+          "wasmoon"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/box7.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 43.74088000005577,
+          "parsed_value": 218113285000.0,
+          "stdout": "218113285000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v9-aarch64-macos-o2-small-direct-no-cancel-no-debug-r006d0061006300680076002d00760063006f00640065002d0039-sb1c3878ff09a5810215699f40cb8018d70f8f27ea1c7d296666ce84d16b7eb12-x67abdd721024f0ff4e0b3f4c2fc13bc5bad42d0b7851d456d88d203d15aaa450.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=<sweep-artifacts>/jit-cache/box7/wasmtime-cache.toml",
+            "examples/algorithms/box7.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 45.297608125023544,
+          "parsed_value": 226353440000.0,
+          "stdout": "226353440000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-47174",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/OsU8JXoPYjNNaDLU_GRNbJRMcJO_X6RylQd-10oX-Hs",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/OsU8JXoPYjNNaDLU_GRNbJRMcJO_X6RylQd-10oX-Hs.stats"
+          ]
+        },
+        "value_ratio": 0.9635960690502429,
+        "wall_ratio": 0.9656333261422737
+      }
+    },
+    {
+      "workload": "examples/algorithms/box8.wasm",
+      "status": "ok",
+      "cache": {
+        "directory": "<sweep-artifacts>/jit-cache/box8",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "<sweep-artifacts>/jit-cache/box8/wasmoon",
+        "wasmtime_directory": "<sweep-artifacts>/jit-cache/box8/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmoon",
+          "wasmtime"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/box8.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 135.2509584580548,
+          "parsed_value": 675647385000.0,
+          "stdout": "675647385000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v9-aarch64-macos-o2-small-direct-no-cancel-no-debug-r006d0061006300680076002d00760063006f00640065002d0039-sfba66ed3965fdd0a1ee23017db1ffcf9c280dbabe568cd9669c57597755cb92b-x67abdd721024f0ff4e0b3f4c2fc13bc5bad42d0b7851d456d88d203d15aaa450.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=<sweep-artifacts>/jit-cache/box8/wasmtime-cache.toml",
+            "examples/algorithms/box8.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 136.30296445800923,
+          "parsed_value": 681389110000.0,
+          "stdout": "681389110000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-66911",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/qYH3VUkxZbZyRX5vDH106nWXnnT33ujAqYZWzloA1Xs",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/qYH3VUkxZbZyRX5vDH106nWXnnT33ujAqYZWzloA1Xs.stats"
+          ]
+        },
+        "value_ratio": 0.9915735004922518,
+        "wall_ratio": 0.9922818553203331
+      }
+    },
+    {
+      "workload": "examples/algorithms/box_easy.wasm",
+      "status": "ok",
+      "cache": {
+        "directory": "<sweep-artifacts>/jit-cache/box_easy",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "<sweep-artifacts>/jit-cache/box_easy/wasmoon",
+        "wasmtime_directory": "<sweep-artifacts>/jit-cache/box_easy/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmtime",
+          "wasmoon"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/box_easy.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.22594633302651346,
+          "parsed_value": 485085000.0,
+          "stdout": "485085000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v9-aarch64-macos-o2-small-direct-no-cancel-no-debug-r006d0061006300680076002d00760063006f00640065002d0039-s5433da87ca392ddd03b651bc12f9bfd70b37521a8050a77e182b691956a29807-x67abdd721024f0ff4e0b3f4c2fc13bc5bad42d0b7851d456d88d203d15aaa450.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=<sweep-artifacts>/jit-cache/box_easy/wasmtime-cache.toml",
+            "examples/algorithms/box_easy.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.12675012508407235,
+          "parsed_value": 490230000.0,
+          "stdout": "490230000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-78811",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/9zqbKmem_j4mp7OQ7CRDiDMxyOY4Qbkl0Ffw27khYgE",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/9zqbKmem_j4mp7OQ7CRDiDMxyOY4Qbkl0Ffw27khYgE.stats"
+          ]
+        },
+        "value_ratio": 0.9895049262591029,
+        "wall_ratio": 1.7826123080876255
+      }
+    },
+    {
+      "workload": "examples/algorithms/box_easy2.wasm",
+      "status": "perf_gap",
+      "cache": {
+        "directory": "<sweep-artifacts>/jit-cache/box_easy2",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "<sweep-artifacts>/jit-cache/box_easy2/wasmoon",
+        "wasmtime_directory": "<sweep-artifacts>/jit-cache/box_easy2/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmoon",
+          "wasmtime"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/box_easy2.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 6.840003791963682,
+          "parsed_value": 33501090000.0,
+          "stdout": "33501090000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v9-aarch64-macos-o2-small-direct-no-cancel-no-debug-r006d0061006300680076002d00760063006f00640065002d0039-s4d77f4b10dea1845fdab54bde0ff88e9a5c9b80df70c6279b07f2fde39978bee-x67abdd721024f0ff4e0b3f4c2fc13bc5bad42d0b7851d456d88d203d15aaa450.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=<sweep-artifacts>/jit-cache/box_easy2/wasmtime-cache.toml",
+            "examples/algorithms/box_easy2.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 6.299606917076744,
+          "parsed_value": 31360560000.0,
+          "stdout": "31360560000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-79372",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/GTRNolJkE8duVKI9yMakui2xYY4_DuuM245zuS3gg1g",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/GTRNolJkE8duVKI9yMakui2xYY4_DuuM245zuS3gg1g.stats"
+          ]
+        },
+        "value_ratio": 1.0682554775807576,
+        "wall_ratio": 1.0857826340596028
+      }
+    },
+    {
+      "workload": "examples/algorithms/box_seal.wasm",
+      "status": "ok",
+      "cache": {
+        "directory": "<sweep-artifacts>/jit-cache/box_seal",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "<sweep-artifacts>/jit-cache/box_seal/wasmoon",
+        "wasmtime_directory": "<sweep-artifacts>/jit-cache/box_seal/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmtime",
+          "wasmoon"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/box_seal.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.38385800004471093,
+          "parsed_value": 1200305000.0,
+          "stdout": "1200305000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v9-aarch64-macos-o2-small-direct-no-cancel-no-debug-r006d0061006300680076002d00760063006f00640065002d0039-s3a82d1545c544e76076e5cba31cd9ec4ed812aa8c79669e39a3cbfc19363c0a1-x67abdd721024f0ff4e0b3f4c2fc13bc5bad42d0b7851d456d88d203d15aaa450.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=<sweep-artifacts>/jit-cache/box_seal/wasmtime-cache.toml",
+            "examples/algorithms/box_seal.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.3022537090582773,
+          "parsed_value": 1332420000.0,
+          "stdout": "1332420000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-79928",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/2yRj1orMuKd1hs59MaBMpYA6nI6m22y3gsWN87xSpYk",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/2yRj1orMuKd1hs59MaBMpYA6nI6m22y3gsWN87xSpYk.stats"
+          ]
+        },
+        "value_ratio": 0.9008458293931343,
+        "wall_ratio": 1.2699860697845053
+      }
+    },
+    {
+      "workload": "examples/algorithms/box_seed.wasm",
+      "status": "perf_gap",
+      "cache": {
+        "directory": "<sweep-artifacts>/jit-cache/box_seed",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "<sweep-artifacts>/jit-cache/box_seed/wasmoon",
+        "wasmtime_directory": "<sweep-artifacts>/jit-cache/box_seed/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmoon",
+          "wasmtime"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/box_seed.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.12029412493575364,
+          "parsed_value": 36540000.0,
+          "stdout": "36540000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v9-aarch64-macos-o2-small-direct-no-cancel-no-debug-r006d0061006300680076002d00760063006f00640065002d0039-s2c0b59b81a4a3f426cba10d72fdbfae30099fd93c75898027590f4c84f95b1b1-x67abdd721024f0ff4e0b3f4c2fc13bc5bad42d0b7851d456d88d203d15aaa450.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=<sweep-artifacts>/jit-cache/box_seed/wasmtime-cache.toml",
+            "examples/algorithms/box_seed.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.03337275004014373,
+          "parsed_value": 38010000.0,
+          "stdout": "38010000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-79931",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/5hR2G1jGBo_c3hX3pqSMMKIHxZcQ8FW0AsTx1t_IXdY",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/5hR2G1jGBo_c3hX3pqSMMKIHxZcQ8FW0AsTx1t_IXdY.stats"
+          ]
+        },
+        "value_ratio": 0.9613259668508287,
+        "wall_ratio": 3.604561349935295
+      }
+    },
+    {
+      "workload": "examples/algorithms/chacha20.wasm",
+      "status": "ok",
+      "cache": {
+        "directory": "<sweep-artifacts>/jit-cache/chacha20",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "<sweep-artifacts>/jit-cache/chacha20/wasmoon",
+        "wasmtime_directory": "<sweep-artifacts>/jit-cache/chacha20/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmtime",
+          "wasmoon"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/chacha20.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.14481929200701416,
+          "parsed_value": 397185000.0,
+          "stdout": "397185000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v9-aarch64-macos-o2-small-direct-no-cancel-no-debug-r006d0061006300680076002d00760063006f00640065002d0039-sdda582b03b684a88987a32cfff0d79849792cfb8c339acfb4382c95f9d01fc7f-x67abdd721024f0ff4e0b3f4c2fc13bc5bad42d0b7851d456d88d203d15aaa450.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=<sweep-artifacts>/jit-cache/chacha20/wasmtime-cache.toml",
+            "examples/algorithms/chacha20.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.12043899996206164,
+          "parsed_value": 502045000.0,
+          "stdout": "502045000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-79932",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/xaKFXewqiHnjVP353RLYsJ3m570k2XGRSxJZwBl2Yww",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/xaKFXewqiHnjVP353RLYsJ3m570k2XGRSxJZwBl2Yww.stats"
+          ]
+        },
+        "value_ratio": 0.7911342608730293,
+        "wall_ratio": 1.2024285493289741
+      }
+    },
+    {
+      "workload": "examples/algorithms/codecs.wasm",
+      "status": "ok",
+      "cache": {
+        "directory": "<sweep-artifacts>/jit-cache/codecs",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "<sweep-artifacts>/jit-cache/codecs/wasmoon",
+        "wasmtime_directory": "<sweep-artifacts>/jit-cache/codecs/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmoon",
+          "wasmtime"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/codecs.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.216271165991202,
+          "parsed_value": 744210000.0,
+          "stdout": "744210000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v9-aarch64-macos-o2-small-direct-no-cancel-no-debug-r006d0061006300680076002d00760063006f00640065002d0039-sf99b5bfcbe695fa44a3144eeaee31d3b5117b2e36e54946ed5278103c2a051d0-x67abdd721024f0ff4e0b3f4c2fc13bc5bad42d0b7851d456d88d203d15aaa450.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=<sweep-artifacts>/jit-cache/codecs/wasmtime-cache.toml",
+            "examples/algorithms/codecs.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.17997241602279246,
+          "parsed_value": 797205000.0,
+          "stdout": "797205000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-79935",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/u93qdA8u6bA1nJkdOriG_Ryjnwsb6aM0wH8tll-7p5Q",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/u93qdA8u6bA1nJkdOriG_Ryjnwsb6aM0wH8tll-7p5Q.stats"
+          ]
+        },
+        "value_ratio": 0.9335239994731593,
+        "wall_ratio": 1.201690629989723
+      }
+    },
+    {
+      "workload": "examples/algorithms/core3.wasm",
+      "status": "ok",
+      "cache": {
+        "directory": "<sweep-artifacts>/jit-cache/core3",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "<sweep-artifacts>/jit-cache/core3/wasmoon",
+        "wasmtime_directory": "<sweep-artifacts>/jit-cache/core3/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmtime",
+          "wasmoon"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/core3.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 7.622536584036425,
+          "parsed_value": 37768045000.0,
+          "stdout": "37768045000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v9-aarch64-macos-o2-small-direct-no-cancel-no-debug-r006d0061006300680076002d00760063006f00640065002d0039-s01f0b1e9cb47371e4f5f378f251cea50b5f4ea2726ff495be6cf3efde6084e71-x67abdd721024f0ff4e0b3f4c2fc13bc5bad42d0b7851d456d88d203d15aaa450.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=<sweep-artifacts>/jit-cache/core3/wasmtime-cache.toml",
+            "examples/algorithms/core3.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 11.668208042043261,
+          "parsed_value": 58217110000.0,
+          "stdout": "58217110000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-80022",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/ybgUo1n8vULzeJkZ6GeW6eZGh0w7szx-09iarL4bx7A",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/ybgUo1n8vULzeJkZ6GeW6eZGh0w7szx-09iarL4bx7A.stats"
+          ]
+        },
+        "value_ratio": 0.648744759057947,
+        "wall_ratio": 0.6532739694536347
+      }
+    },
+    {
+      "workload": "examples/algorithms/core_ed25519.wasm",
+      "status": "ok",
+      "cache": {
+        "directory": "<sweep-artifacts>/jit-cache/core_ed25519",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "<sweep-artifacts>/jit-cache/core_ed25519/wasmoon",
+        "wasmtime_directory": "<sweep-artifacts>/jit-cache/core_ed25519/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmoon",
+          "wasmtime"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/core_ed25519.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 172.12123654200695,
+          "parsed_value": 859463455000.0,
+          "stdout": "859463455000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v9-aarch64-macos-o2-small-direct-no-cancel-no-debug-r006d0061006300680076002d00760063006f00640065002d0039-sfb01e2a77c49f20cbb5036f66260f7ed19845e9c0fbfd2b61647ac130be94eb3-x67abdd721024f0ff4e0b3f4c2fc13bc5bad42d0b7851d456d88d203d15aaa450.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=<sweep-artifacts>/jit-cache/core_ed25519/wasmtime-cache.toml",
+            "examples/algorithms/core_ed25519.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 183.55971462500747,
+          "parsed_value": 917654395000.0,
+          "stdout": "917654395000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-97048",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/ut0-tIzE2myIOV6nbMeXhep4RDP6-ESJxRZDH5in5xA",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/ut0-tIzE2myIOV6nbMeXhep4RDP6-ESJxRZDH5in5xA.stats"
+          ]
+        },
+        "value_ratio": 0.9365873031099033,
+        "wall_ratio": 0.9376852480601853
+      }
+    },
+    {
+      "workload": "examples/algorithms/core_ed25519_h2c.wasm",
+      "status": "ok",
+      "cache": {
+        "directory": "<sweep-artifacts>/jit-cache/core_ed25519_h2c",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "<sweep-artifacts>/jit-cache/core_ed25519_h2c/wasmoon",
+        "wasmtime_directory": "<sweep-artifacts>/jit-cache/core_ed25519_h2c/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmtime",
+          "wasmoon"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/core_ed25519_h2c.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.5296465000137687,
+          "parsed_value": 1614960000.0,
+          "stdout": "1614960000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v9-aarch64-macos-o2-small-direct-no-cancel-no-debug-r006d0061006300680076002d00760063006f00640065002d0039-s973c5a55c77fc41309fa8e6134f3353918783b7852c3d93a4d9ac363bfcc2927-x67abdd721024f0ff4e0b3f4c2fc13bc5bad42d0b7851d456d88d203d15aaa450.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=<sweep-artifacts>/jit-cache/core_ed25519_h2c/wasmtime-cache.toml",
+            "examples/algorithms/core_ed25519_h2c.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.346315291011706,
+          "parsed_value": 1580905000.0,
+          "stdout": "1580905000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-14968",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/4i9wOidFaWm0qw9C-Jg01nnB-Txt--KZ6aoZ8Eblolw",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/4i9wOidFaWm0qw9C-Jg01nnB-Txt--KZ6aoZ8Eblolw.stats"
+          ]
+        },
+        "value_ratio": 1.0215414588479383,
+        "wall_ratio": 1.5293765934114234
+      }
+    },
+    {
+      "workload": "examples/algorithms/core_ristretto255.wasm",
+      "status": "ok",
+      "cache": {
+        "directory": "<sweep-artifacts>/jit-cache/core_ristretto255",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "<sweep-artifacts>/jit-cache/core_ristretto255/wasmoon",
+        "wasmtime_directory": "<sweep-artifacts>/jit-cache/core_ristretto255/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmoon",
+          "wasmtime"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/core_ristretto255.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 196.56869837502018,
+          "parsed_value": 981925195000.0,
+          "stdout": "981925195000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v9-aarch64-macos-o2-small-direct-no-cancel-no-debug-r006d0061006300680076002d00760063006f00640065002d0039-sbb46718d188754bc77685a5bfcd2b912000ba986423fe21faac007b7a97fc8a2-x67abdd721024f0ff4e0b3f4c2fc13bc5bad42d0b7851d456d88d203d15aaa450.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=<sweep-artifacts>/jit-cache/core_ristretto255/wasmtime-cache.toml",
+            "examples/algorithms/core_ristretto255.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 195.01383666705806,
+          "parsed_value": 974925620000.0,
+          "stdout": "974925620000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-32029",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/VeX0einPcXalo2YMS_ej6412EfeJ28RGKBOzksgdy00",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/VeX0einPcXalo2YMS_ej6412EfeJ28RGKBOzksgdy00.stats"
+          ]
+        },
+        "value_ratio": 1.0071795989934083,
+        "wall_ratio": 1.0079730840361687
+      }
+    },
+    {
+      "workload": "examples/algorithms/ed25519_convert.wasm",
+      "status": "ok",
+      "cache": {
+        "directory": "<sweep-artifacts>/jit-cache/ed25519_convert",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "<sweep-artifacts>/jit-cache/ed25519_convert/wasmoon",
+        "wasmtime_directory": "<sweep-artifacts>/jit-cache/ed25519_convert/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmtime",
+          "wasmoon"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/ed25519_convert.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 19.413532290956937,
+          "parsed_value": 96200825000.0,
+          "stdout": "96200825000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v9-aarch64-macos-o2-small-direct-no-cancel-no-debug-r006d0061006300680076002d00760063006f00640065002d0039-s27f37065f5fb4c99d33ffdc375a90a85eef688cbe2d4592f4b9d9fb96d50ab36-x67abdd721024f0ff4e0b3f4c2fc13bc5bad42d0b7851d456d88d203d15aaa450.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=<sweep-artifacts>/jit-cache/ed25519_convert/wasmtime-cache.toml",
+            "examples/algorithms/ed25519_convert.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 19.60922295798082,
+          "parsed_value": 97849495000.0,
+          "stdout": "97849495000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-48067",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/Evsn5eWIF_k76fda_TaNRjkrR7aKs_6AFVQAjZIcoIA",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/Evsn5eWIF_k76fda_TaNRjkrR7aKs_6AFVQAjZIcoIA.stats"
+          ]
+        },
+        "value_ratio": 0.9831509605644874,
+        "wall_ratio": 0.9900204782492803
+      }
+    },
+    {
+      "workload": "examples/algorithms/generichash.wasm",
+      "status": "ok",
+      "cache": {
+        "directory": "<sweep-artifacts>/jit-cache/generichash",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "<sweep-artifacts>/jit-cache/generichash/wasmoon",
+        "wasmtime_directory": "<sweep-artifacts>/jit-cache/generichash/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmoon",
+          "wasmtime"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/generichash.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.1316913750488311,
+          "parsed_value": 328110000.0,
+          "stdout": "328110000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v9-aarch64-macos-o2-small-direct-no-cancel-no-debug-r006d0061006300680076002d00760063006f00640065002d0039-s6d2f53678a031a1d25bfc47f68de7b2e75b05e384f5e2be3e2533d2e58058871-x67abdd721024f0ff4e0b3f4c2fc13bc5bad42d0b7851d456d88d203d15aaa450.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=<sweep-artifacts>/jit-cache/generichash/wasmtime-cache.toml",
+            "examples/algorithms/generichash.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.12088604096788913,
+          "parsed_value": 445780000.0,
+          "stdout": "445780000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-51372",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/1UyhhY7ct5tb_QP-GJ39aMfcbROKqHQv9YGSwhsZWvo",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/1UyhhY7ct5tb_QP-GJ39aMfcbROKqHQv9YGSwhsZWvo.stats"
+          ]
+        },
+        "value_ratio": 0.7360357126833864,
+        "wall_ratio": 1.0893844648598607
+      }
+    },
+    {
+      "workload": "examples/algorithms/generichash2.wasm",
+      "status": "ok",
+      "cache": {
+        "directory": "<sweep-artifacts>/jit-cache/generichash2",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "<sweep-artifacts>/jit-cache/generichash2/wasmoon",
+        "wasmtime_directory": "<sweep-artifacts>/jit-cache/generichash2/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmtime",
+          "wasmoon"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/generichash2.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.07005124993156642,
+          "parsed_value": 25415000.0,
+          "stdout": "25415000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v9-aarch64-macos-o2-small-direct-no-cancel-no-debug-r006d0061006300680076002d00760063006f00640065002d0039-sd32833a13ddbaa5c6dcc098539ef5a6b50210811239ae8ed469ef1cf97ed3440-x67abdd721024f0ff4e0b3f4c2fc13bc5bad42d0b7851d456d88d203d15aaa450.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=<sweep-artifacts>/jit-cache/generichash2/wasmtime-cache.toml",
+            "examples/algorithms/generichash2.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.04166779189836234,
+          "parsed_value": 50025000.0,
+          "stdout": "50025000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-51373",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/qnDSRq62xnhyBNyIWf2dATuib2mu6ztmed-uw7zCtDU",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/qnDSRq62xnhyBNyIWf2dATuib2mu6ztmed-uw7zCtDU.stats"
+          ]
+        },
+        "value_ratio": 0.5080459770114942,
+        "wall_ratio": 1.6811845970249177
+      }
+    },
+    {
+      "workload": "examples/algorithms/generichash3.wasm",
+      "status": "ok",
+      "cache": {
+        "directory": "<sweep-artifacts>/jit-cache/generichash3",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "<sweep-artifacts>/jit-cache/generichash3/wasmoon",
+        "wasmtime_directory": "<sweep-artifacts>/jit-cache/generichash3/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmoon",
+          "wasmtime"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/generichash3.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.071831832989119,
+          "parsed_value": 24440000.0,
+          "stdout": "24440000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v9-aarch64-macos-o2-small-direct-no-cancel-no-debug-r006d0061006300680076002d00760063006f00640065002d0039-s44229cd8b56c1ffd6def9fcdb1fecf505d25827d89ddeba971a24e21ef0ad625-x67abdd721024f0ff4e0b3f4c2fc13bc5bad42d0b7851d456d88d203d15aaa450.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=<sweep-artifacts>/jit-cache/generichash3/wasmtime-cache.toml",
+            "examples/algorithms/generichash3.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.04120670794509351,
+          "parsed_value": 50290000.0,
+          "stdout": "50290000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-51388",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/sE3dQO9_KRFcAqM4JAJUAhY66v2iwuUFtwL3SqmSRss",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/sE3dQO9_KRFcAqM4JAJUAhY66v2iwuUFtwL3SqmSRss.stats"
+          ]
+        },
+        "value_ratio": 0.48598130841121495,
+        "wall_ratio": 1.7432072730690444
+      }
+    },
+    {
+      "workload": "examples/algorithms/hash.wasm",
+      "status": "perf_gap",
+      "cache": {
+        "directory": "<sweep-artifacts>/jit-cache/hash",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "<sweep-artifacts>/jit-cache/hash/wasmoon",
+        "wasmtime_directory": "<sweep-artifacts>/jit-cache/hash/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmtime",
+          "wasmoon"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/hash.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.06819237500894815,
+          "parsed_value": 2340000.0,
+          "stdout": "2340000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v9-aarch64-macos-o2-small-direct-no-cancel-no-debug-r006d0061006300680076002d00760063006f00640065002d0039-s7a1a3deae146f2f2835eb33646f0ed849979cf2441b73951de7bf004ea417f24-x67abdd721024f0ff4e0b3f4c2fc13bc5bad42d0b7851d456d88d203d15aaa450.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=<sweep-artifacts>/jit-cache/hash/wasmtime-cache.toml",
+            "examples/algorithms/hash.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.018949749995954335,
+          "parsed_value": 2690000.0,
+          "stdout": "2690000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-51396",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/Rt5g1qZAq3j61HDH9nvw4FJ3NxjBtsUKzZhZ1qe6P_Q",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/Rt5g1qZAq3j61HDH9nvw4FJ3NxjBtsUKzZhZ1qe6P_Q.stats"
+          ]
+        },
+        "value_ratio": 0.8698884758364313,
+        "wall_ratio": 3.598589692397358
+      }
+    },
+    {
+      "workload": "examples/algorithms/hash3.wasm",
+      "status": "perf_gap",
+      "cache": {
+        "directory": "<sweep-artifacts>/jit-cache/hash3",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "<sweep-artifacts>/jit-cache/hash3/wasmoon",
+        "wasmtime_directory": "<sweep-artifacts>/jit-cache/hash3/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmoon",
+          "wasmtime"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/hash3.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.056639333022758365,
+          "parsed_value": 370000.0,
+          "stdout": "370000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v9-aarch64-macos-o2-small-direct-no-cancel-no-debug-r006d0061006300680076002d00760063006f00640065002d0039-s4fe8c1632a152e6eff53eea68826253745efe7cf2c4b1e26e886e02a108e8a55-x67abdd721024f0ff4e0b3f4c2fc13bc5bad42d0b7851d456d88d203d15aaa450.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=<sweep-artifacts>/jit-cache/hash3/wasmtime-cache.toml",
+            "examples/algorithms/hash3.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.020680874935351312,
+          "parsed_value": 530000.0,
+          "stdout": "530000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-51406",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/EA31NiperHNNCbeSN759_aWE52audD0Q8XWLoOVqXAo",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/EA31NiperHNNCbeSN759_aWE52audD0Q8XWLoOVqXAo.stats"
+          ]
+        },
+        "value_ratio": 0.6981132075471698,
+        "wall_ratio": 2.7387300198765123
+      }
+    },
+    {
+      "workload": "examples/algorithms/kdf.wasm",
+      "status": "ok",
+      "cache": {
+        "directory": "<sweep-artifacts>/jit-cache/kdf",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "<sweep-artifacts>/jit-cache/kdf/wasmoon",
+        "wasmtime_directory": "<sweep-artifacts>/jit-cache/kdf/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmtime",
+          "wasmoon"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/kdf.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.06975383299868554,
+          "parsed_value": 16755000.0,
+          "stdout": "16755000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v9-aarch64-macos-o2-small-direct-no-cancel-no-debug-r006d0061006300680076002d00760063006f00640065002d0039-s1a0bdc22a9015c22cc9bb43651e4dff1560f5d4a3428adbde61e6ea783c1b7e6-x67abdd721024f0ff4e0b3f4c2fc13bc5bad42d0b7851d456d88d203d15aaa450.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=<sweep-artifacts>/jit-cache/kdf/wasmtime-cache.toml",
+            "examples/algorithms/kdf.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.0382070840569213,
+          "parsed_value": 25575000.0,
+          "stdout": "25575000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-51407",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/n0WBkXlx-I8OApGEWKG-IbR4dEB5WxbQxQBOLTQv2AY",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/n0WBkXlx-I8OApGEWKG-IbR4dEB5WxbQxQBOLTQv2AY.stats"
+          ]
+        },
+        "value_ratio": 0.6551319648093842,
+        "wall_ratio": 1.8256780050203665
+      }
+    },
+    {
+      "workload": "examples/algorithms/kdf_hkdf.wasm",
+      "status": "ok",
+      "cache": {
+        "directory": "<sweep-artifacts>/jit-cache/kdf_hkdf",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "<sweep-artifacts>/jit-cache/kdf_hkdf/wasmoon",
+        "wasmtime_directory": "<sweep-artifacts>/jit-cache/kdf_hkdf/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmoon",
+          "wasmtime"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/kdf_hkdf.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.17863304202910513,
+          "parsed_value": 506430000.0,
+          "stdout": "506430000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v9-aarch64-macos-o2-small-direct-no-cancel-no-debug-r006d0061006300680076002d00760063006f00640065002d0039-s46d8497e125e4bd3cbf35fb9a6574d5bdc405b26806439302bae214adc7e4c6e-x67abdd721024f0ff4e0b3f4c2fc13bc5bad42d0b7851d456d88d203d15aaa450.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=<sweep-artifacts>/jit-cache/kdf_hkdf/wasmtime-cache.toml",
+            "examples/algorithms/kdf_hkdf.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.14947983401361853,
+          "parsed_value": 643905000.0,
+          "stdout": "643905000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-51413",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/_FM04Gnktt4oHynHk_mJ-rMZz1vrsPLey25itFU22qo",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/_FM04Gnktt4oHynHk_mJ-rMZz1vrsPLey25itFU22qo.stats"
+          ]
+        },
+        "value_ratio": 0.7864980082465581,
+        "wall_ratio": 1.1950310435374885
+      }
+    },
+    {
+      "workload": "examples/algorithms/keygen.wasm",
+      "status": "perf_gap",
+      "cache": {
+        "directory": "<sweep-artifacts>/jit-cache/keygen",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "<sweep-artifacts>/jit-cache/keygen/wasmoon",
+        "wasmtime_directory": "<sweep-artifacts>/jit-cache/keygen/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmtime",
+          "wasmoon"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/keygen.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.05606162501499057,
+          "parsed_value": 6235000.0,
+          "stdout": "6235000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v9-aarch64-macos-o2-small-direct-no-cancel-no-debug-r006d0061006300680076002d00760063006f00640065002d0039-s11e0fe3358812e8b4bbf9b17b99142da76a472960363b14f1ff4afb3f9cdfdad-x67abdd721024f0ff4e0b3f4c2fc13bc5bad42d0b7851d456d88d203d15aaa450.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=<sweep-artifacts>/jit-cache/keygen/wasmtime-cache.toml",
+            "examples/algorithms/keygen.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.02056512504350394,
+          "parsed_value": 8375000.0,
+          "stdout": "8375000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-51414",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/P32huS8UkWBlb3EJ-QmA-vp7JhIIWeikbevXs5u_H1o",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/P32huS8UkWBlb3EJ-QmA-vp7JhIIWeikbevXs5u_H1o.stats"
+          ]
+        },
+        "value_ratio": 0.7444776119402985,
+        "wall_ratio": 2.726053203975007
+      }
+    },
+    {
+      "workload": "examples/algorithms/kx.wasm",
+      "status": "ok",
+      "cache": {
+        "directory": "<sweep-artifacts>/jit-cache/kx",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "<sweep-artifacts>/jit-cache/kx/wasmoon",
+        "wasmtime_directory": "<sweep-artifacts>/jit-cache/kx/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmoon",
+          "wasmtime"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/kx.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.39415029191877693,
+          "parsed_value": 1301295000.0,
+          "stdout": "1301295000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v9-aarch64-macos-o2-small-direct-no-cancel-no-debug-r006d0061006300680076002d00760063006f00640065002d0039-sfecd3c6a5196473e2ce768898683fbae7a755fbf804d84ca7ec62ef8ed34c19c-x67abdd721024f0ff4e0b3f4c2fc13bc5bad42d0b7851d456d88d203d15aaa450.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=<sweep-artifacts>/jit-cache/kx/wasmtime-cache.toml",
+            "examples/algorithms/kx.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.30345583404414356,
+          "parsed_value": 1351995000.0,
+          "stdout": "1351995000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-51512",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/TNPFCUBFaUI-Fb3xmi7l0MAGBvRNX1ly6Di32-m3ljE",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/TNPFCUBFaUI-Fb3xmi7l0MAGBvRNX1ly6Di32-m3ljE.stats"
+          ]
+        },
+        "value_ratio": 0.9624998613160551,
+        "wall_ratio": 1.298872019252199
+      }
+    },
+    {
+      "workload": "examples/algorithms/metamorphic.wasm",
+      "status": "ok",
+      "cache": {
+        "directory": "<sweep-artifacts>/jit-cache/metamorphic",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "<sweep-artifacts>/jit-cache/metamorphic/wasmoon",
+        "wasmtime_directory": "<sweep-artifacts>/jit-cache/metamorphic/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmtime",
+          "wasmoon"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/metamorphic.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 2.8759347919840366,
+          "parsed_value": 13776205000.0,
+          "stdout": "13776205000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v9-aarch64-macos-o2-small-direct-no-cancel-no-debug-r006d0061006300680076002d00760063006f00640065002d0039-s433d2410e7ce4b586bf59ff7077dd56e66d681a88c16183685966a1b5a493745-x67abdd721024f0ff4e0b3f4c2fc13bc5bad42d0b7851d456d88d203d15aaa450.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=<sweep-artifacts>/jit-cache/metamorphic/wasmtime-cache.toml",
+            "examples/algorithms/metamorphic.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 3.5897271669236943,
+          "parsed_value": 17787845000.0,
+          "stdout": "17787845000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-51608",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/JXELSweH2xYC0me5S17J9BafapLUu56y3flFcOlH3e8",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/JXELSweH2xYC0me5S17J9BafapLUu56y3flFcOlH3e8.stats"
+          ]
+        },
+        "value_ratio": 0.7744729617331385,
+        "wall_ratio": 0.801156928716853
+      }
+    },
+    {
+      "workload": "examples/algorithms/onetimeauth.wasm",
+      "status": "perf_gap",
+      "cache": {
+        "directory": "<sweep-artifacts>/jit-cache/onetimeauth",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "<sweep-artifacts>/jit-cache/onetimeauth/wasmoon",
+        "wasmtime_directory": "<sweep-artifacts>/jit-cache/onetimeauth/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmoon",
+          "wasmtime"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/onetimeauth.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.05802458291873336,
+          "parsed_value": 390000.0,
+          "stdout": "390000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v9-aarch64-macos-o2-small-direct-no-cancel-no-debug-r006d0061006300680076002d00760063006f00640065002d0039-sfe48edb4d77368cffe59d91935ce46dc93f4f5b02080eadf5fe2d9eb9cb3234e-x67abdd721024f0ff4e0b3f4c2fc13bc5bad42d0b7851d456d88d203d15aaa450.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=<sweep-artifacts>/jit-cache/onetimeauth/wasmtime-cache.toml",
+            "examples/algorithms/onetimeauth.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.02000675001181662,
+          "parsed_value": 450000.0,
+          "stdout": "450000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-52172",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/p3Iavv12o8hIZ2bziuYtkUhx2IGawzK0RDj1UYYGeIU",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/p3Iavv12o8hIZ2bziuYtkUhx2IGawzK0RDj1UYYGeIU.stats"
+          ]
+        },
+        "value_ratio": 0.8666666666666667,
+        "wall_ratio": 2.9002503097435715
+      }
+    },
+    {
+      "workload": "examples/algorithms/onetimeauth2.wasm",
+      "status": "perf_gap",
+      "cache": {
+        "directory": "<sweep-artifacts>/jit-cache/onetimeauth2",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "<sweep-artifacts>/jit-cache/onetimeauth2/wasmoon",
+        "wasmtime_directory": "<sweep-artifacts>/jit-cache/onetimeauth2/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmtime",
+          "wasmoon"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/onetimeauth2.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.049952041008509696,
+          "parsed_value": 0.0,
+          "stdout": "0",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v9-aarch64-macos-o2-small-direct-no-cancel-no-debug-r006d0061006300680076002d00760063006f00640065002d0039-s2e30d6b3714426c2c443d40f4282e8af0c6c136069ec883d4d6e6c7a4218d21a-x67abdd721024f0ff4e0b3f4c2fc13bc5bad42d0b7851d456d88d203d15aaa450.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=<sweep-artifacts>/jit-cache/onetimeauth2/wasmtime-cache.toml",
+            "examples/algorithms/onetimeauth2.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.02137370896525681,
+          "parsed_value": 0.0,
+          "stdout": "0",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-52198",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/fkLx5wcvOXFE70lolh7OEnIp75youail3pbEw4NEvjI",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/fkLx5wcvOXFE70lolh7OEnIp75youail3pbEw4NEvjI.stats"
+          ]
+        },
+        "value_ratio": 1.0,
+        "wall_ratio": 2.3370787489296907
+      }
+    },
+    {
+      "workload": "examples/algorithms/onetimeauth7.wasm",
+      "status": "ok",
+      "cache": {
+        "directory": "<sweep-artifacts>/jit-cache/onetimeauth7",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "<sweep-artifacts>/jit-cache/onetimeauth7/wasmoon",
+        "wasmtime_directory": "<sweep-artifacts>/jit-cache/onetimeauth7/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmoon",
+          "wasmtime"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/onetimeauth7.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.8298902499955148,
+          "parsed_value": 3868345000.0,
+          "stdout": "3868345000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v9-aarch64-macos-o2-small-direct-no-cancel-no-debug-r006d0061006300680076002d00760063006f00640065002d0039-sc018e354305a7a26647d791406a8e765ed073cd02a3627fd575e3dd3aaaaacce-x67abdd721024f0ff4e0b3f4c2fc13bc5bad42d0b7851d456d88d203d15aaa450.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=<sweep-artifacts>/jit-cache/onetimeauth7/wasmtime-cache.toml",
+            "examples/algorithms/onetimeauth7.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.8640977080212906,
+          "parsed_value": 4215795000.0,
+          "stdout": "4215795000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-52228",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/Tn9wuiVEozCvehXjeXBakwgl35eYjbKaj7MSEC_NYaI",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/Tn9wuiVEozCvehXjeXBakwgl35eYjbKaj7MSEC_NYaI.stats"
+          ]
+        },
+        "value_ratio": 0.9175837534794742,
+        "wall_ratio": 0.9604125115617909
+      }
+    },
+    {
+      "workload": "examples/algorithms/pwhash_argon2i.wasm",
+      "status": "ok",
+      "cache": {
+        "directory": "<sweep-artifacts>/jit-cache/pwhash_argon2i",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "<sweep-artifacts>/jit-cache/pwhash_argon2i/wasmoon",
+        "wasmtime_directory": "<sweep-artifacts>/jit-cache/pwhash_argon2i/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmtime",
+          "wasmoon"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/pwhash_argon2i.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 41.778483457979746,
+          "parsed_value": 208395155000.0,
+          "stdout": "208395155000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v9-aarch64-macos-o2-small-direct-no-cancel-no-debug-r006d0061006300680076002d00760063006f00640065002d0039-s8d9eea35995e59e31161fd1455f2ead8026a317096a5caa569092f082bf387b0-x67abdd721024f0ff4e0b3f4c2fc13bc5bad42d0b7851d456d88d203d15aaa450.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=<sweep-artifacts>/jit-cache/pwhash_argon2i/wasmtime-cache.toml",
+            "examples/algorithms/pwhash_argon2i.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 42.336092874989845,
+          "parsed_value": 211517505000.0,
+          "stdout": "211517505000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-52229",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/azp3NR1EgAaAHd_9V5yCKagL26sQi7r6te8FMmxhHhg",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/azp3NR1EgAaAHd_9V5yCKagL26sQi7r6te8FMmxhHhg.stats"
+          ]
+        },
+        "value_ratio": 0.9852383376023653,
+        "wall_ratio": 0.9868289825738854
+      }
+    },
+    {
+      "workload": "examples/algorithms/pwhash_argon2id.wasm",
+      "status": "ok",
+      "cache": {
+        "directory": "<sweep-artifacts>/jit-cache/pwhash_argon2id",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "<sweep-artifacts>/jit-cache/pwhash_argon2id/wasmoon",
+        "wasmtime_directory": "<sweep-artifacts>/jit-cache/pwhash_argon2id/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmoon",
+          "wasmtime"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/pwhash_argon2id.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 46.9354647079017,
+          "parsed_value": 234151785000.0,
+          "stdout": "234151785000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v9-aarch64-macos-o2-small-direct-no-cancel-no-debug-r006d0061006300680076002d00760063006f00640065002d0039-sd38d1bb88ae5ea95b53de3100c09977d3e344df562f2b038be29ef739a8c4959-x67abdd721024f0ff4e0b3f4c2fc13bc5bad42d0b7851d456d88d203d15aaa450.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=<sweep-artifacts>/jit-cache/pwhash_argon2id/wasmtime-cache.toml",
+            "examples/algorithms/pwhash_argon2id.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 45.58124341594521,
+          "parsed_value": 227751270000.0,
+          "stdout": "227751270000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-63258",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/PtGbIzS0X2Ls3HlLRPd2UcH9Tc8NpFwDq_cu_5ijuwo",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/PtGbIzS0X2Ls3HlLRPd2UcH9Tc8NpFwDq_cu_5ijuwo.stats"
+          ]
+        },
+        "value_ratio": 1.0281030924657413,
+        "wall_ratio": 1.0297100559455725
+      }
+    },
+    {
+      "workload": "examples/algorithms/pwhash_scrypt.wasm",
+      "status": "perf_gap",
+      "cache": {
+        "directory": "<sweep-artifacts>/jit-cache/pwhash_scrypt",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "<sweep-artifacts>/jit-cache/pwhash_scrypt/wasmoon",
+        "wasmtime_directory": "<sweep-artifacts>/jit-cache/pwhash_scrypt/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmtime",
+          "wasmoon"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/pwhash_scrypt.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 143.22136887500528,
+          "parsed_value": 715651780000.0,
+          "stdout": "715651780000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v9-aarch64-macos-o2-small-direct-no-cancel-no-debug-r006d0061006300680076002d00760063006f00640065002d0039-sfacdac0c9d140685803b7d31080460f667307e19736641a51e5fa33dceb1aec1-x67abdd721024f0ff4e0b3f4c2fc13bc5bad42d0b7851d456d88d203d15aaa450.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=<sweep-artifacts>/jit-cache/pwhash_scrypt/wasmtime-cache.toml",
+            "examples/algorithms/pwhash_scrypt.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 134.63742000004277,
+          "parsed_value": 672659355000.0,
+          "stdout": "672659355000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-66980",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/cveyD_S55p_5vl222IafkHPJJxh2WxacKIUxvJSwjbE",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/cveyD_S55p_5vl222IafkHPJJxh2WxacKIUxvJSwjbE.stats"
+          ]
+        },
+        "value_ratio": 1.0639141114747448,
+        "wall_ratio": 1.0637560410394062
+      }
+    },
+    {
+      "workload": "examples/algorithms/pwhash_scrypt_ll.wasm",
+      "status": "perf_gap",
+      "cache": {
+        "directory": "<sweep-artifacts>/jit-cache/pwhash_scrypt_ll",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "<sweep-artifacts>/jit-cache/pwhash_scrypt_ll/wasmoon",
+        "wasmtime_directory": "<sweep-artifacts>/jit-cache/pwhash_scrypt_ll/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmoon",
+          "wasmtime"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/pwhash_scrypt_ll.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 9.198550374945626,
+          "parsed_value": 45653865000.0,
+          "stdout": "45653865000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v9-aarch64-macos-o2-small-direct-no-cancel-no-debug-r006d0061006300680076002d00760063006f00640065002d0039-s7b0c3722ea85c8cc79b1725692fc821aa7f7510e9d988f1c5bab4ac9f83a9ff1-x67abdd721024f0ff4e0b3f4c2fc13bc5bad42d0b7851d456d88d203d15aaa450.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=<sweep-artifacts>/jit-cache/pwhash_scrypt_ll/wasmtime-cache.toml",
+            "examples/algorithms/pwhash_scrypt_ll.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 8.639365833019838,
+          "parsed_value": 43095400000.0,
+          "stdout": "43095400000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-91049",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/B_MI-r4PfGsdY4PTS2iwM5xlrFOt4UhOJJWUVdzv_g8",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/B_MI-r4PfGsdY4PTS2iwM5xlrFOt4UhOJJWUVdzv_g8.stats"
+          ]
+        },
+        "value_ratio": 1.0593674730945761,
+        "wall_ratio": 1.0647251838541867
+      }
+    },
+    {
+      "workload": "examples/algorithms/randombytes.wasm",
+      "status": "ok",
+      "cache": {
+        "directory": "<sweep-artifacts>/jit-cache/randombytes",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "<sweep-artifacts>/jit-cache/randombytes/wasmoon",
+        "wasmtime_directory": "<sweep-artifacts>/jit-cache/randombytes/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmtime",
+          "wasmoon"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/randombytes.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.3490517920581624,
+          "parsed_value": 1488995000.0,
+          "stdout": "1488995000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v9-aarch64-macos-o2-small-direct-no-cancel-no-debug-r006d0061006300680076002d00760063006f00640065002d0039-s0dad8aed85b63e18545629eb24f5f182bd4a2c86ad2d0be5e8b02884294241fa-x67abdd721024f0ff4e0b3f4c2fc13bc5bad42d0b7851d456d88d203d15aaa450.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=<sweep-artifacts>/jit-cache/randombytes/wasmtime-cache.toml",
+            "examples/algorithms/randombytes.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.6710453749401495,
+          "parsed_value": 3256845000.0,
+          "stdout": "3256845000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-91701",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/Wb7nBHjXdHkQDuCJnwOSnl3bKdbBDTZ3VelT0SupioA",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/Wb7nBHjXdHkQDuCJnwOSnl3bKdbBDTZ3VelT0SupioA.stats"
+          ]
+        },
+        "value_ratio": 0.45718939648647694,
+        "wall_ratio": 0.5201612366217326
+      }
+    },
+    {
+      "workload": "examples/algorithms/scalarmult.wasm",
+      "status": "ok",
+      "cache": {
+        "directory": "<sweep-artifacts>/jit-cache/scalarmult",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "<sweep-artifacts>/jit-cache/scalarmult/wasmoon",
+        "wasmtime_directory": "<sweep-artifacts>/jit-cache/scalarmult/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmoon",
+          "wasmtime"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/scalarmult.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.1918125409865752,
+          "parsed_value": 396860000.0,
+          "stdout": "396860000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v9-aarch64-macos-o2-small-direct-no-cancel-no-debug-r006d0061006300680076002d00760063006f00640065002d0039-s771c74fd97ca35afda3393f2575e5dbc1a8d1f9a91d133e2f043e44fa7d9dfbf-x67abdd721024f0ff4e0b3f4c2fc13bc5bad42d0b7851d456d88d203d15aaa450.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=<sweep-artifacts>/jit-cache/scalarmult/wasmtime-cache.toml",
+            "examples/algorithms/scalarmult.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.10462270805146545,
+          "parsed_value": 403340000.0,
+          "stdout": "403340000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-91887",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/c9kInjSp1x7gShZAL5jewcSUiUzxTevktIkexuR9J4M",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/c9kInjSp1x7gShZAL5jewcSUiUzxTevktIkexuR9J4M.stats"
+          ]
+        },
+        "value_ratio": 0.9839341498487628,
+        "wall_ratio": 1.8333738875524017
+      }
+    },
+    {
+      "workload": "examples/algorithms/scalarmult2.wasm",
+      "status": "perf_gap",
+      "cache": {
+        "directory": "<sweep-artifacts>/jit-cache/scalarmult2",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "<sweep-artifacts>/jit-cache/scalarmult2/wasmoon",
+        "wasmtime_directory": "<sweep-artifacts>/jit-cache/scalarmult2/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmtime",
+          "wasmoon"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/scalarmult2.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.11237029195763171,
+          "parsed_value": 36010000.0,
+          "stdout": "36010000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v9-aarch64-macos-o2-small-direct-no-cancel-no-debug-r006d0061006300680076002d00760063006f00640065002d0039-sde557f12d28bda0714534696c760ad127cf9c13118b4da60072f305128789a31-x67abdd721024f0ff4e0b3f4c2fc13bc5bad42d0b7851d456d88d203d15aaa450.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=<sweep-artifacts>/jit-cache/scalarmult2/wasmtime-cache.toml",
+            "examples/algorithms/scalarmult2.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.03223741694819182,
+          "parsed_value": 36490000.0,
+          "stdout": "36490000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-91888",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/XmWSGAL5rUQ3lAbcsssXDbgU9HYTr1xxY3hPdk28ei0",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/XmWSGAL5rUQ3lAbcsssXDbgU9HYTr1xxY3hPdk28ei0.stats"
+          ]
+        },
+        "value_ratio": 0.9868457111537408,
+        "wall_ratio": 3.4857101652474203
+      }
+    },
+    {
+      "workload": "examples/algorithms/scalarmult5.wasm",
+      "status": "perf_gap",
+      "cache": {
+        "directory": "<sweep-artifacts>/jit-cache/scalarmult5",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "<sweep-artifacts>/jit-cache/scalarmult5/wasmoon",
+        "wasmtime_directory": "<sweep-artifacts>/jit-cache/scalarmult5/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmoon",
+          "wasmtime"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/scalarmult5.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.12843795795924962,
+          "parsed_value": 109330000.0,
+          "stdout": "109330000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v9-aarch64-macos-o2-small-direct-no-cancel-no-debug-r006d0061006300680076002d00760063006f00640065002d0039-sb2f41f3f15a660f303a000a0031d5638def70550e2c96b634f6aaf62a5406759-x67abdd721024f0ff4e0b3f4c2fc13bc5bad42d0b7851d456d88d203d15aaa450.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=<sweep-artifacts>/jit-cache/scalarmult5/wasmtime-cache.toml",
+            "examples/algorithms/scalarmult5.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.046262458083219826,
+          "parsed_value": 110850000.0,
+          "stdout": "110850000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-91891",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/FDuBvL3wOQ1EfL6cebqb8vG001bpbonmsg0ch3MM3lI",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/FDuBvL3wOQ1EfL6cebqb8vG001bpbonmsg0ch3MM3lI.stats"
+          ]
+        },
+        "value_ratio": 0.9862877762742445,
+        "wall_ratio": 2.7762890966192786
+      }
+    },
+    {
+      "workload": "examples/algorithms/scalarmult6.wasm",
+      "status": "perf_gap",
+      "cache": {
+        "directory": "<sweep-artifacts>/jit-cache/scalarmult6",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "<sweep-artifacts>/jit-cache/scalarmult6/wasmoon",
+        "wasmtime_directory": "<sweep-artifacts>/jit-cache/scalarmult6/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmtime",
+          "wasmoon"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/scalarmult6.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.13354187493678182,
+          "parsed_value": 109280000.0,
+          "stdout": "109280000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v9-aarch64-macos-o2-small-direct-no-cancel-no-debug-r006d0061006300680076002d00760063006f00640065002d0039-sa2f6a14f56bbd4e261c00df103a09e7619a1e9a13511c6b19e40ecd78120df38-x67abdd721024f0ff4e0b3f4c2fc13bc5bad42d0b7851d456d88d203d15aaa450.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=<sweep-artifacts>/jit-cache/scalarmult6/wasmtime-cache.toml",
+            "examples/algorithms/scalarmult6.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.04550458397716284,
+          "parsed_value": 110625000.0,
+          "stdout": "110625000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-91892",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/PBkOJqZ0HCNbeLZ6cvbKjWHsXJDaV8S0t8fQSFv8wXg",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/PBkOJqZ0HCNbeLZ6cvbKjWHsXJDaV8S0t8fQSFv8wXg.stats"
+          ]
+        },
+        "value_ratio": 0.9878418079096045,
+        "wall_ratio": 2.9346906018040255
+      }
+    },
+    {
+      "workload": "examples/algorithms/scalarmult7.wasm",
+      "status": "perf_gap",
+      "cache": {
+        "directory": "<sweep-artifacts>/jit-cache/scalarmult7",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "<sweep-artifacts>/jit-cache/scalarmult7/wasmoon",
+        "wasmtime_directory": "<sweep-artifacts>/jit-cache/scalarmult7/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmoon",
+          "wasmtime"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/scalarmult7.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.1532362080179155,
+          "parsed_value": 219880000.0,
+          "stdout": "219880000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v9-aarch64-macos-o2-small-direct-no-cancel-no-debug-r006d0061006300680076002d00760063006f00640065002d0039-see5f7938f5c16c791c5236f6948008177e04356259a8238750a244ca4c52c878-x67abdd721024f0ff4e0b3f4c2fc13bc5bad42d0b7851d456d88d203d15aaa450.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=<sweep-artifacts>/jit-cache/scalarmult7/wasmtime-cache.toml",
+            "examples/algorithms/scalarmult7.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.07017720898147672,
+          "parsed_value": 224555000.0,
+          "stdout": "224555000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-91895",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/MCqca0u36zYhL_V4EUNI1qIuz1hHNERtjG2MmyaqUA8",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/MCqca0u36zYhL_V4EUNI1qIuz1hHNERtjG2MmyaqUA8.stats"
+          ]
+        },
+        "value_ratio": 0.9791810469595422,
+        "wall_ratio": 2.1835608774119555
+      }
+    },
+    {
+      "workload": "examples/algorithms/scalarmult8.wasm",
+      "status": "ok",
+      "cache": {
+        "directory": "<sweep-artifacts>/jit-cache/scalarmult8",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "<sweep-artifacts>/jit-cache/scalarmult8/wasmoon",
+        "wasmtime_directory": "<sweep-artifacts>/jit-cache/scalarmult8/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmtime",
+          "wasmoon"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/scalarmult8.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 1.4615935410838574,
+          "parsed_value": 6734355000.0,
+          "stdout": "6734355000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v9-aarch64-macos-o2-small-direct-no-cancel-no-debug-r006d0061006300680076002d00760063006f00640065002d0039-sd65f6c0bfb06f18e56bce5b51c58a97dddb8a43de190f0b051bf26cfb5636e2e-x67abdd721024f0ff4e0b3f4c2fc13bc5bad42d0b7851d456d88d203d15aaa450.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=<sweep-artifacts>/jit-cache/scalarmult8/wasmtime-cache.toml",
+            "examples/algorithms/scalarmult8.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 1.3742612500209361,
+          "parsed_value": 6744165000.0,
+          "stdout": "6744165000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-91896",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/8RUDnKjVNM29orIHs1jH0LMl2rxCzodwI8qE2QFyIVc",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/8RUDnKjVNM29orIHs1jH0LMl2rxCzodwI8qE2QFyIVc.stats"
+          ]
+        },
+        "value_ratio": 0.9985454092537771,
+        "wall_ratio": 1.0635485363948018
+      }
+    },
+    {
+      "workload": "examples/algorithms/scalarmult_ed25519.wasm",
+      "status": "ok",
+      "cache": {
+        "directory": "<sweep-artifacts>/jit-cache/scalarmult_ed25519",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "<sweep-artifacts>/jit-cache/scalarmult_ed25519/wasmoon",
+        "wasmtime_directory": "<sweep-artifacts>/jit-cache/scalarmult_ed25519/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmoon",
+          "wasmtime"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/scalarmult_ed25519.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.628412791993469,
+          "parsed_value": 2250040000.0,
+          "stdout": "2250040000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v9-aarch64-macos-o2-small-direct-no-cancel-no-debug-r006d0061006300680076002d00760063006f00640065002d0039-s858b14fae04eb8f37dcf1f1d47fe2ec267aab8cb31c6e923ff89a89507aa027a-x67abdd721024f0ff4e0b3f4c2fc13bc5bad42d0b7851d456d88d203d15aaa450.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=<sweep-artifacts>/jit-cache/scalarmult_ed25519/wasmtime-cache.toml",
+            "examples/algorithms/scalarmult_ed25519.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.4870033749612048,
+          "parsed_value": 2245770000.0,
+          "stdout": "2245770000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-92267",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/dUNhqp8DrlA2eSdrM0deU6KqnuvXbF4MhIRbQh8B_FM",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/dUNhqp8DrlA2eSdrM0deU6KqnuvXbF4MhIRbQh8B_FM.stats"
+          ]
+        },
+        "value_ratio": 1.0019013523201397,
+        "wall_ratio": 1.2903664005275712
+      }
+    },
+    {
+      "workload": "examples/algorithms/scalarmult_ristretto255.wasm",
+      "status": "perf_gap",
+      "cache": {
+        "directory": "<sweep-artifacts>/jit-cache/scalarmult_ristretto255",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "<sweep-artifacts>/jit-cache/scalarmult_ristretto255/wasmoon",
+        "wasmtime_directory": "<sweep-artifacts>/jit-cache/scalarmult_ristretto255/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmtime",
+          "wasmoon"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/scalarmult_ristretto255.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.7013147920370102,
+          "parsed_value": 2773885000.0,
+          "stdout": "2773885000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v9-aarch64-macos-o2-small-direct-no-cancel-no-debug-r006d0061006300680076002d00760063006f00640065002d0039-sa58f87a3ede88ed3a15405a37832ad130f100f4b17c83c5d7c9aaff4a75d9b55-x67abdd721024f0ff4e0b3f4c2fc13bc5bad42d0b7851d456d88d203d15aaa450.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=<sweep-artifacts>/jit-cache/scalarmult_ristretto255/wasmtime-cache.toml",
+            "examples/algorithms/scalarmult_ristretto255.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.5563223329372704,
+          "parsed_value": 2626675000.0,
+          "stdout": "2626675000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-92268",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/5XWtzYAbIocQ0kYlzBJiQ5YAEzZ0OIzWwNz-tzKKxvw",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/5XWtzYAbIocQ0kYlzBJiQ5YAEzZ0OIzWwNz-tzKKxvw.stats"
+          ]
+        },
+        "value_ratio": 1.0560442384383297,
+        "wall_ratio": 1.2606267095807724
+      }
+    },
+    {
+      "workload": "examples/algorithms/secretbox.wasm",
+      "status": "perf_gap",
+      "cache": {
+        "directory": "<sweep-artifacts>/jit-cache/secretbox",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "<sweep-artifacts>/jit-cache/secretbox/wasmoon",
+        "wasmtime_directory": "<sweep-artifacts>/jit-cache/secretbox/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmoon",
+          "wasmtime"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/secretbox.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.06403137499000877,
+          "parsed_value": 1565000.0,
+          "stdout": "1565000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v9-aarch64-macos-o2-small-direct-no-cancel-no-debug-r006d0061006300680076002d00760063006f00640065002d0039-sb6b6db5ce5c80ddb7546e8f01682e31e07e04d99d2e7607a3f22d5c18364d7e1-x67abdd721024f0ff4e0b3f4c2fc13bc5bad42d0b7851d456d88d203d15aaa450.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=<sweep-artifacts>/jit-cache/secretbox/wasmtime-cache.toml",
+            "examples/algorithms/secretbox.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.02066687506157905,
+          "parsed_value": 1250000.0,
+          "stdout": "1250000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-92454",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/G6DC_Bysglw6kzXVx84etG7mLSksWZ7MZ3MCyF2C2AI",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/G6DC_Bysglw6kzXVx84etG7mLSksWZ7MZ3MCyF2C2AI.stats"
+          ]
+        },
+        "value_ratio": 1.252,
+        "wall_ratio": 3.098261096523824
+      }
+    },
+    {
+      "workload": "examples/algorithms/secretbox2.wasm",
+      "status": "perf_gap",
+      "cache": {
+        "directory": "<sweep-artifacts>/jit-cache/secretbox2",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "<sweep-artifacts>/jit-cache/secretbox2/wasmoon",
+        "wasmtime_directory": "<sweep-artifacts>/jit-cache/secretbox2/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmtime",
+          "wasmoon"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/secretbox2.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.06340712506789714,
+          "parsed_value": 1035000.0,
+          "stdout": "1035000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v9-aarch64-macos-o2-small-direct-no-cancel-no-debug-r006d0061006300680076002d00760063006f00640065002d0039-s69b37cbd5c9bbdf50bea8c8f0b667f1ec066c30066b4310492bc68fa6915bfd2-x67abdd721024f0ff4e0b3f4c2fc13bc5bad42d0b7851d456d88d203d15aaa450.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=<sweep-artifacts>/jit-cache/secretbox2/wasmtime-cache.toml",
+            "examples/algorithms/secretbox2.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.022784166038036346,
+          "parsed_value": 930000.0,
+          "stdout": "930000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-92455",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/6k8nglBCqo4byhrDul1UWreOB33bQED2t5k0IH3NQiA",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/6k8nglBCqo4byhrDul1UWreOB33bQED2t5k0IH3NQiA.stats"
+          ]
+        },
+        "value_ratio": 1.1129032258064515,
+        "wall_ratio": 2.782946936132927
+      }
+    },
+    {
+      "workload": "examples/algorithms/secretbox7.wasm",
+      "status": "ok",
+      "cache": {
+        "directory": "<sweep-artifacts>/jit-cache/secretbox7",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "<sweep-artifacts>/jit-cache/secretbox7/wasmoon",
+        "wasmtime_directory": "<sweep-artifacts>/jit-cache/secretbox7/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmoon",
+          "wasmtime"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/secretbox7.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 1.0716013750061393,
+          "parsed_value": 5039420000.0,
+          "stdout": "5039420000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v9-aarch64-macos-o2-small-direct-no-cancel-no-debug-r006d0061006300680076002d00760063006f00640065002d0039-s9de219a83bd05c59955b48c4e4b68e5548fe5d3b802e26767d5e1f40289ff5ac-x67abdd721024f0ff4e0b3f4c2fc13bc5bad42d0b7851d456d88d203d15aaa450.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=<sweep-artifacts>/jit-cache/secretbox7/wasmtime-cache.toml",
+            "examples/algorithms/secretbox7.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 1.0519705840852112,
+          "parsed_value": 5153820000.0,
+          "stdout": "5153820000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-92460",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/YTzMcRLG5LTD6JLnJ17unn-zP8FvN-0yMJ-TdOWzfWQ",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/YTzMcRLG5LTD6JLnJ17unn-zP8FvN-0yMJ-TdOWzfWQ.stats"
+          ]
+        },
+        "value_ratio": 0.977802872432487,
+        "wall_ratio": 1.018660969439558
+      }
+    },
+    {
+      "workload": "examples/algorithms/secretbox8.wasm",
+      "status": "ok",
+      "cache": {
+        "directory": "<sweep-artifacts>/jit-cache/secretbox8",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "<sweep-artifacts>/jit-cache/secretbox8/wasmoon",
+        "wasmtime_directory": "<sweep-artifacts>/jit-cache/secretbox8/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmtime",
+          "wasmoon"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/secretbox8.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 2.299472250044346,
+          "parsed_value": 11212340000.0,
+          "stdout": "11212340000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v9-aarch64-macos-o2-small-direct-no-cancel-no-debug-r006d0061006300680076002d00760063006f00640065002d0039-sd74d2d276ac4bf37e1078c7f9d21ebebcd53216586dddb021860133afdddbf53-x67abdd721024f0ff4e0b3f4c2fc13bc5bad42d0b7851d456d88d203d15aaa450.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=<sweep-artifacts>/jit-cache/secretbox8/wasmtime-cache.toml",
+            "examples/algorithms/secretbox8.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 2.3461966670583934,
+          "parsed_value": 11626345000.0,
+          "stdout": "11626345000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-92642",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/KClk3xPMOjprKdgIc2IcBgD6KIQWiJ4n3EtkkJnY8ME",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/KClk3xPMOjprKdgIc2IcBgD6KIQWiJ4n3EtkkJnY8ME.stats"
+          ]
+        },
+        "value_ratio": 0.964390786614366,
+        "wall_ratio": 0.9800850381939084
+      }
+    },
+    {
+      "workload": "examples/algorithms/secretbox_easy.wasm",
+      "status": "perf_gap",
+      "cache": {
+        "directory": "<sweep-artifacts>/jit-cache/secretbox_easy",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "<sweep-artifacts>/jit-cache/secretbox_easy/wasmoon",
+        "wasmtime_directory": "<sweep-artifacts>/jit-cache/secretbox_easy/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmoon",
+          "wasmtime"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/secretbox_easy.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.06453058298211545,
+          "parsed_value": 5290000.0,
+          "stdout": "5290000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v9-aarch64-macos-o2-small-direct-no-cancel-no-debug-r006d0061006300680076002d00760063006f00640065002d0039-s5c12b980c4e43eec12140a117e928f301625100e7949139a69ab92a5c182a76d-x67abdd721024f0ff4e0b3f4c2fc13bc5bad42d0b7851d456d88d203d15aaa450.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=<sweep-artifacts>/jit-cache/secretbox_easy/wasmtime-cache.toml",
+            "examples/algorithms/secretbox_easy.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.019570000004023314,
+          "parsed_value": 5855000.0,
+          "stdout": "5855000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-93019",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/ZALiikYWja8Zp3beb-ndEDoEeAtuUADdgyGA2lnvivY",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/ZALiikYWja8Zp3beb-ndEDoEeAtuUADdgyGA2lnvivY.stats"
+          ]
+        },
+        "value_ratio": 0.9035012809564474,
+        "wall_ratio": 3.2974237592666773
+      }
+    },
+    {
+      "workload": "examples/algorithms/secretbox_easy2.wasm",
+      "status": "perf_gap",
+      "cache": {
+        "directory": "<sweep-artifacts>/jit-cache/secretbox_easy2",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "<sweep-artifacts>/jit-cache/secretbox_easy2/wasmoon",
+        "wasmtime_directory": "<sweep-artifacts>/jit-cache/secretbox_easy2/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmtime",
+          "wasmoon"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/secretbox_easy2.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 4.364897333900444,
+          "parsed_value": 21468710000.0,
+          "stdout": "21468710000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v9-aarch64-macos-o2-small-direct-no-cancel-no-debug-r006d0061006300680076002d00760063006f00640065002d0039-s8fa76648afccb06881a5b5f87edb3ffe6659dad242e15523cfeb4ea92c4ffab8-x67abdd721024f0ff4e0b3f4c2fc13bc5bad42d0b7851d456d88d203d15aaa450.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=<sweep-artifacts>/jit-cache/secretbox_easy2/wasmtime-cache.toml",
+            "examples/algorithms/secretbox_easy2.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 3.8326241249451414,
+          "parsed_value": 19067460000.0,
+          "stdout": "19067460000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-93020",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/UWiVAYEAbM-UKv3sISnAZQcVnX4j4FY1Q7p9CF3MN-Q",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/UWiVAYEAbM-UKv3sISnAZQcVnX4j4FY1Q7p9CF3MN-Q.stats"
+          ]
+        },
+        "value_ratio": 1.1259344453849647,
+        "wall_ratio": 1.1388795748299272
+      }
+    },
+    {
+      "workload": "examples/algorithms/secretstream_xchacha20poly1305.wasm",
+      "status": "perf_gap",
+      "cache": {
+        "directory": "<sweep-artifacts>/jit-cache/secretstream_xchacha20poly1305",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "<sweep-artifacts>/jit-cache/secretstream_xchacha20poly1305/wasmoon",
+        "wasmtime_directory": "<sweep-artifacts>/jit-cache/secretstream_xchacha20poly1305/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmoon",
+          "wasmtime"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/secretstream_xchacha20poly1305.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.09607537498231977,
+          "parsed_value": 60740000.0,
+          "stdout": "60740000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v9-aarch64-macos-o2-small-direct-no-cancel-no-debug-r006d0061006300680076002d00760063006f00640065002d0039-s101c48a3eeb8df930ddf46ed1ac630337a520bec480ef72902882c637d21185b-x67abdd721024f0ff4e0b3f4c2fc13bc5bad42d0b7851d456d88d203d15aaa450.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=<sweep-artifacts>/jit-cache/secretstream_xchacha20poly1305/wasmtime-cache.toml",
+            "examples/algorithms/secretstream_xchacha20poly1305.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.0325660000089556,
+          "parsed_value": 60600000.0,
+          "stdout": "60600000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-93620",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/n0FXHl4raVTKkZqDv7pgduICKQL88v4-hvk5ysGU8WE",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/n0FXHl4raVTKkZqDv7pgduICKQL88v4-hvk5ysGU8WE.stats"
+          ]
+        },
+        "value_ratio": 1.0023102310231022,
+        "wall_ratio": 2.950174260145526
+      }
+    },
+    {
+      "workload": "examples/algorithms/shorthash.wasm",
+      "status": "perf_gap",
+      "cache": {
+        "directory": "<sweep-artifacts>/jit-cache/shorthash",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "<sweep-artifacts>/jit-cache/shorthash/wasmoon",
+        "wasmtime_directory": "<sweep-artifacts>/jit-cache/shorthash/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmtime",
+          "wasmoon"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/shorthash.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.05410820909310132,
+          "parsed_value": 900000.0,
+          "stdout": "900000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v9-aarch64-macos-o2-small-direct-no-cancel-no-debug-r006d0061006300680076002d00760063006f00640065002d0039-s506b0770236f15f8a852c78519ff2710ff14c1e1785460ef195eee81101500fd-x67abdd721024f0ff4e0b3f4c2fc13bc5bad42d0b7851d456d88d203d15aaa450.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=<sweep-artifacts>/jit-cache/shorthash/wasmtime-cache.toml",
+            "examples/algorithms/shorthash.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.02049408305902034,
+          "parsed_value": 1535000.0,
+          "stdout": "1535000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-93621",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/W6CDpLtGU6Ox5RbTxcB1Hrh5FAiDSIAjMKe4CkTS-6A",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/W6CDpLtGU6Ox5RbTxcB1Hrh5FAiDSIAjMKe4CkTS-6A.stats"
+          ]
+        },
+        "value_ratio": 0.5863192182410424,
+        "wall_ratio": 2.640186874293258
+      }
+    },
+    {
+      "workload": "examples/algorithms/sign.wasm",
+      "status": "ok",
+      "cache": {
+        "directory": "<sweep-artifacts>/jit-cache/sign",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "<sweep-artifacts>/jit-cache/sign/wasmoon",
+        "wasmtime_directory": "<sweep-artifacts>/jit-cache/sign/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmoon",
+          "wasmtime"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/sign.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 84.47841208300088,
+          "parsed_value": 421320210000.0,
+          "stdout": "421320210000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v9-aarch64-macos-o2-small-direct-no-cancel-no-debug-r006d0061006300680076002d00760063006f00640065002d0039-scd610a286279087bb7a2891969adc248ad4c4784f0773f83990d9de37ab7dec6-x67abdd721024f0ff4e0b3f4c2fc13bc5bad42d0b7851d456d88d203d15aaa450.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=<sweep-artifacts>/jit-cache/sign/wasmtime-cache.toml",
+            "examples/algorithms/sign.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 88.94261995796114,
+          "parsed_value": 444568540000.0,
+          "stdout": "444568540000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-1493",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/oXpmkcO0HN51sOAOXisAicJ0tMhfTJe_71s-Mxhwv8w",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/oXpmkcO0HN51sOAOXisAicJ0tMhfTJe_71s-Mxhwv8w.stats"
+          ]
+        },
+        "value_ratio": 0.9477058588086328,
+        "wall_ratio": 0.9498080011914392
+      }
+    },
+    {
+      "workload": "examples/algorithms/sign2.wasm",
+      "status": "ok",
+      "cache": {
+        "directory": "<sweep-artifacts>/jit-cache/sign2",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "<sweep-artifacts>/jit-cache/sign2/wasmoon",
+        "wasmtime_directory": "<sweep-artifacts>/jit-cache/sign2/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmtime",
+          "wasmoon"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/sign2.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.3159824169706553,
+          "parsed_value": 689755000.0,
+          "stdout": "689755000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v9-aarch64-macos-o2-small-direct-no-cancel-no-debug-r006d0061006300680076002d00760063006f00640065002d0039-sa655ae06530d5eaa19739e19f53da495296066c09b6da237da8057f8b972bd9c-x67abdd721024f0ff4e0b3f4c2fc13bc5bad42d0b7851d456d88d203d15aaa450.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=<sweep-artifacts>/jit-cache/sign2/wasmtime-cache.toml",
+            "examples/algorithms/sign2.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.17331291688606143,
+          "parsed_value": 690990000.0,
+          "stdout": "690990000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-10130",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/srHeTvxiHjAGiQlYblplVZquFNd-xvfPvf0o_ClWkPY",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/srHeTvxiHjAGiQlYblplVZquFNd-xvfPvf0o_ClWkPY.stats"
+          ]
+        },
+        "value_ratio": 0.9982127093011476,
+        "wall_ratio": 1.8231902309877284
+      }
+    },
+    {
+      "workload": "examples/algorithms/siphashx24.wasm",
+      "status": "perf_gap",
+      "cache": {
+        "directory": "<sweep-artifacts>/jit-cache/siphashx24",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "<sweep-artifacts>/jit-cache/siphashx24/wasmoon",
+        "wasmtime_directory": "<sweep-artifacts>/jit-cache/siphashx24/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmoon",
+          "wasmtime"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/siphashx24.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.05390120798256248,
+          "parsed_value": 1200000.0,
+          "stdout": "1200000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v9-aarch64-macos-o2-small-direct-no-cancel-no-debug-r006d0061006300680076002d00760063006f00640065002d0039-s518af68b4f9412c3114d06b8f5a22a4932ba84e9373b2093303a04499daa6759-x67abdd721024f0ff4e0b3f4c2fc13bc5bad42d0b7851d456d88d203d15aaa450.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=<sweep-artifacts>/jit-cache/siphashx24/wasmtime-cache.toml",
+            "examples/algorithms/siphashx24.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.01887162507046014,
+          "parsed_value": 1545000.0,
+          "stdout": "1545000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-10135",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/7olGD96IyppcLzbUpMvu-I8ozlOREjqH2Oj_SlWLz1s",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/7olGD96IyppcLzbUpMvu-I8ozlOREjqH2Oj_SlWLz1s.stats"
+          ]
+        },
+        "value_ratio": 0.7766990291262136,
+        "wall_ratio": 2.856203839431631
+      }
+    },
+    {
+      "workload": "examples/algorithms/sodium_utils.wasm",
+      "status": "ok",
+      "cache": {
+        "directory": "<sweep-artifacts>/jit-cache/sodium_utils",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "<sweep-artifacts>/jit-cache/sodium_utils/wasmoon",
+        "wasmtime_directory": "<sweep-artifacts>/jit-cache/sodium_utils/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmtime",
+          "wasmoon"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/sodium_utils.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 3.9034261669730768,
+          "parsed_value": 19184690000.0,
+          "stdout": "19184690000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v9-aarch64-macos-o2-small-direct-no-cancel-no-debug-r006d0061006300680076002d00760063006f00640065002d0039-sc3538d8602890d0f7fa68d2ca7bab7be13c6a41bac766e993444276e3ab0c47d-x67abdd721024f0ff4e0b3f4c2fc13bc5bad42d0b7851d456d88d203d15aaa450.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=<sweep-artifacts>/jit-cache/sodium_utils/wasmtime-cache.toml",
+            "examples/algorithms/sodium_utils.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 3.928976666997187,
+          "parsed_value": 19544725000.0,
+          "stdout": "19544725000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-10136",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/U2mlmmQYgLJsSdn7kfwF_ruE0rLuQescovozGlrYzlI",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/U2mlmmQYgLJsSdn7kfwF_ruE0rLuQescovozGlrYzlI.stats"
+          ]
+        },
+        "value_ratio": 0.9815789170735326,
+        "wall_ratio": 0.9934969071619258
+      }
+    },
+    {
+      "workload": "examples/algorithms/stream.wasm",
+      "status": "ok",
+      "cache": {
+        "directory": "<sweep-artifacts>/jit-cache/stream",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "<sweep-artifacts>/jit-cache/stream/wasmoon",
+        "wasmtime_directory": "<sweep-artifacts>/jit-cache/stream/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmoon",
+          "wasmtime"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/stream.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 5.824503457988612,
+          "parsed_value": 28746890000.0,
+          "stdout": "28746890000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v9-aarch64-macos-o2-small-direct-no-cancel-no-debug-r006d0061006300680076002d00760063006f00640065002d0039-s2e1f29853a6aabab876b6abefd4a0f88fda45d6c81304d028c5ef501e573774a-x67abdd721024f0ff4e0b3f4c2fc13bc5bad42d0b7851d456d88d203d15aaa450.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=<sweep-artifacts>/jit-cache/stream/wasmtime-cache.toml",
+            "examples/algorithms/stream.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 8.194270249921829,
+          "parsed_value": 40866805000.0,
+          "stdout": "40866805000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-11411",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/l8f-5kVdTj-HgpfWQ69uyBfoZLnjLLC0DbvKpbYeIFw",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/l8f-5kVdTj-HgpfWQ69uyBfoZLnjLLC0DbvKpbYeIFw.stats"
+          ]
+        },
+        "value_ratio": 0.7034288587032923,
+        "wall_ratio": 0.7108019726398671
+      }
+    },
+    {
+      "workload": "examples/algorithms/stream2.wasm",
+      "status": "ok",
+      "cache": {
+        "directory": "<sweep-artifacts>/jit-cache/stream2",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "<sweep-artifacts>/jit-cache/stream2/wasmoon",
+        "wasmtime_directory": "<sweep-artifacts>/jit-cache/stream2/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmtime",
+          "wasmoon"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/stream2.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 4.802592542022467,
+          "parsed_value": 23672690000.0,
+          "stdout": "23672690000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v9-aarch64-macos-o2-small-direct-no-cancel-no-debug-r006d0061006300680076002d00760063006f00640065002d0039-s403d62518681ca159778e5fa8ebeb6c94cf455acd676d070c9b8ee2bdfd3bdfa-x67abdd721024f0ff4e0b3f4c2fc13bc5bad42d0b7851d456d88d203d15aaa450.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=<sweep-artifacts>/jit-cache/stream2/wasmtime-cache.toml",
+            "examples/algorithms/stream2.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 7.077710792073049,
+          "parsed_value": 35281315000.0,
+          "stdout": "35281315000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-12187",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/j7NMyYdkzXC2D6dDfz60JrRjzwVOyn4oXCNdeZCtQnU",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/j7NMyYdkzXC2D6dDfz60JrRjzwVOyn4oXCNdeZCtQnU.stats"
+          ]
+        },
+        "value_ratio": 0.6709696052995757,
+        "wall_ratio": 0.6785516790826368
+      }
+    },
+    {
+      "workload": "examples/algorithms/stream3.wasm",
+      "status": "perf_gap",
+      "cache": {
+        "directory": "<sweep-artifacts>/jit-cache/stream3",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "<sweep-artifacts>/jit-cache/stream3/wasmoon",
+        "wasmtime_directory": "<sweep-artifacts>/jit-cache/stream3/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmoon",
+          "wasmtime"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/stream3.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.05723050003871322,
+          "parsed_value": 200000.0,
+          "stdout": "200000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v9-aarch64-macos-o2-small-direct-no-cancel-no-debug-r006d0061006300680076002d00760063006f00640065002d0039-se145dfeceea93fa7113c427dae0f4e22721399f85a63a98ea6ebb3eec2e857db-x67abdd721024f0ff4e0b3f4c2fc13bc5bad42d0b7851d456d88d203d15aaa450.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=<sweep-artifacts>/jit-cache/stream3/wasmtime-cache.toml",
+            "examples/algorithms/stream3.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.019626208930276334,
+          "parsed_value": 185000.0,
+          "stdout": "185000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-13186",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/9CXjLQyeUNeFnJGjSMjx_OjH4eRnmDd4azxT5BkYiqY",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/9CXjLQyeUNeFnJGjSMjx_OjH4eRnmDd4azxT5BkYiqY.stats"
+          ]
+        },
+        "value_ratio": 1.0810810810810811,
+        "wall_ratio": 2.916024192039793
+      }
+    },
+    {
+      "workload": "examples/algorithms/stream4.wasm",
+      "status": "perf_gap",
+      "cache": {
+        "directory": "<sweep-artifacts>/jit-cache/stream4",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "<sweep-artifacts>/jit-cache/stream4/wasmoon",
+        "wasmtime_directory": "<sweep-artifacts>/jit-cache/stream4/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmtime",
+          "wasmoon"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/stream4.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.05402037501335144,
+          "parsed_value": 405000.0,
+          "stdout": "405000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v9-aarch64-macos-o2-small-direct-no-cancel-no-debug-r006d0061006300680076002d00760063006f00640065002d0039-s83a8d19dd1e76dd92de98cc39bbee023ce2d38ea794d9cec2e5d62c69b658f74-x67abdd721024f0ff4e0b3f4c2fc13bc5bad42d0b7851d456d88d203d15aaa450.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=<sweep-artifacts>/jit-cache/stream4/wasmtime-cache.toml",
+            "examples/algorithms/stream4.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.0188521669479087,
+          "parsed_value": 360000.0,
+          "stdout": "360000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-13187",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/CrUb3M3AVJo4hsYCeCSin4PnoVRjRlDZnWVMxLmc0d0",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/CrUb3M3AVJo4hsYCeCSin4PnoVRjRlDZnWVMxLmc0d0.stats"
+          ]
+        },
+        "value_ratio": 1.125,
+        "wall_ratio": 2.865472980512938
+      }
+    },
+    {
+      "workload": "examples/algorithms/verify1.wasm",
+      "status": "ok",
+      "cache": {
+        "directory": "<sweep-artifacts>/jit-cache/verify1",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "<sweep-artifacts>/jit-cache/verify1/wasmoon",
+        "wasmtime_directory": "<sweep-artifacts>/jit-cache/verify1/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmoon",
+          "wasmtime"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/verify1.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 9.200422708992846,
+          "parsed_value": 45695215000.0,
+          "stdout": "45695215000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v9-aarch64-macos-o2-small-direct-no-cancel-no-debug-r006d0061006300680076002d00760063006f00640065002d0039-se7c27577c7ad8abfaef41ceaef0ba7512636404d25189550537999084ccf6298-x67abdd721024f0ff4e0b3f4c2fc13bc5bad42d0b7851d456d88d203d15aaa450.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=<sweep-artifacts>/jit-cache/verify1/wasmtime-cache.toml",
+            "examples/algorithms/verify1.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 10.437256000004709,
+          "parsed_value": 52079985000.0,
+          "stdout": "52079985000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-13923",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/P5oeoO_120C76T767QWqucj6ua5TibE2BKLpfjJ-kCk",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/P5oeoO_120C76T767QWqucj6ua5TibE2BKLpfjJ-kCk.stats"
+          ]
+        },
+        "value_ratio": 0.8774045345827193,
+        "wall_ratio": 0.881498231813869
+      }
+    },
+    {
+      "workload": "examples/algorithms/xchacha20.wasm",
+      "status": "ok",
+      "cache": {
+        "directory": "<sweep-artifacts>/jit-cache/xchacha20",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "<sweep-artifacts>/jit-cache/xchacha20/wasmoon",
+        "wasmtime_directory": "<sweep-artifacts>/jit-cache/xchacha20/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmtime",
+          "wasmoon"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/xchacha20.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 1.6039994159946218,
+          "parsed_value": 7240370000.0,
+          "stdout": "7240370000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v9-aarch64-macos-o2-small-direct-no-cancel-no-debug-r006d0061006300680076002d00760063006f00640065002d0039-s395bdf563e2151356b7bc5dfcb01cfe246f126f6da2a7e62684a180b5b2b4899-x67abdd721024f0ff4e0b3f4c2fc13bc5bad42d0b7851d456d88d203d15aaa450.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=<sweep-artifacts>/jit-cache/xchacha20/wasmtime-cache.toml",
+            "examples/algorithms/xchacha20.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 1.5142669170163572,
+          "parsed_value": 7430965000.0,
+          "stdout": "7430965000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-14877",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/wnqGIMCm6vKkT6M0cZ7KBKQp6-n_4Mk4K_cKq2XevVA",
+            "modules/wasmtime-68a6afd4f925724fd359c13a27fac5a6163d12f4/wnqGIMCm6vKkT6M0cZ7KBKQp6-n_4Mk4K_cKq2XevVA.stats"
+          ]
+        },
+        "value_ratio": 0.9743512450940086,
+        "wall_ratio": 1.059258046233401
+      }
+    }
+  ]
+}

@@ -9,7 +9,7 @@ pub(all) enum PreflightStage {
 }
 
 ///|
-fn PreflightStage::to_string(self : PreflightStage) -> String {
+pub fn PreflightStage::to_string(self : PreflightStage) -> String {
   match self {
     Parse => "parse"
     Validate => "validate"
@@ -32,7 +32,7 @@ pub(all) enum PreflightSeverity {
 }
 
 ///|
-fn PreflightSeverity::to_string(self : PreflightSeverity) -> String {
+pub fn PreflightSeverity::to_string(self : PreflightSeverity) -> String {
   match self {
     Error => "error"
     Warning => "warning"

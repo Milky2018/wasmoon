@@ -18,7 +18,7 @@ pub(all) struct RuntimeAssembly {
 ///|
 pub(all) struct CompilerInfrastructureAssembly {
   signature : @milkir.Signature
-  machv_function : @machv.Function
+  milkir_function : @milkir.Function
   code_object : @wasmoon_jit.JitCodeObject
 }
 
@@ -104,8 +104,8 @@ pub fn runtime_assembly() -> RuntimeAssembly {
     ],
     product_support_modules: ["Milky2018/wasmoon_jit"],
     reusable_modules: [
-      "Milky2018/wasm_core", "Milky2018/milkir", "Milky2018/machv", "Milky2018/regalloc",
-      "Milky2018/machv_regalloc", "Milky2018/x64_target", "Milky2018/aarch64_target",
+      "Milky2018/wasm_core", "Milky2018/wasm_milkir", "Milky2018/milkir", "Milky2018/regalloc",
+      "Milky2018/vcode", "Milky2018/vcode_regalloc", "Milky2018/x64_target", "Milky2018/aarch64_target",
     ],
   }
 }
@@ -118,16 +118,10 @@ pub fn compiler_infrastructure_assembly() -> CompilerInfrastructureAssembly rais
   )
   let entry = milk.new_block0()
   entry.set_terminator(Return([]))
-  let machv_function = @milkir_machv.lower_core_function_with_protocol(
-    milk,
-    Platform,
-  ) catch {
-    err => raise WasmCompilerPipelineFailure(message=Repr(err).to_string())
-  }
   let plan = @wasmoon_jit.plan_milkir_integration_for_target(milk, X64) catch {
     err => raise WasmCompilerPipelineFailure(message=err.to_string())
   }
-  { signature, machv_function, code_object: plan.object, }
+  { signature, milkir_function: milk, code_object: plan.object, }
 }
 
 ///|

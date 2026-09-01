@@ -5,7 +5,7 @@ pub suberror ComponentTextError {
 }
 
 ///|
-fn ComponentTextError::to_string(self : ComponentTextError) -> String {
+pub fn ComponentTextError::to_string(self : ComponentTextError) -> String {
   match self {
     ParseError(msg) => "parse error: \{msg}"
     Unsupported(msg) => "unsupported: \{msg}"

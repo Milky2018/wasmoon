@@ -250,8 +250,21 @@ fn[T] CoreExecutionLifecycle::with_lease(
   rollback? : () -> Unit = fn() {  },
 ) -> T raise ComponentRuntimeError {
   self.enter()
-  let result = operation() catch {
-    error => {
+  let cancellation_cleanup_armed = [true]
+  errdefer (if cancellation_cleanup_armed[0] {
+    rollback()
+    self.leave()
+  })
+  let operation_result : Result[T, ComponentRuntimeError] = try
+    operation()
+  catch {
+    error => Err(error)
+  } noraise {
+    result => Ok(result)
+  }
+  cancellation_cleanup_armed[0] = false
+  match operation_result {
+    Err(error) => {
       rollback()
       let closing = self.closing.val
       self.leave()
@@ -260,14 +273,16 @@ fn[T] CoreExecutionLifecycle::with_lease(
       }
       raise error
     }
+    Ok(result) => {
+      if self.closing.val {
+        rollback()
+        self.leave()
+        raise Cancelled
+      }
+      self.leave()
+      result
+    }
   }
-  if self.closing.val {
-    rollback()
-    self.leave()
-    raise Cancelled
-  }
-  self.leave()
-  result
 }
 
 ///|
@@ -287,8 +302,19 @@ fn CoreContinuation::with_lifecycle(
         lifecycle.leave()
         raise Cancelled
       }
-      let outcome = self.continue_execution() catch {
-        error => {
+      let cancellation_cleanup_armed = [true]
+      errdefer (if cancellation_cleanup_armed[0] { lifecycle.leave() })
+      let continuation_result : Result[
+        CoreExecutionOutcome,
+        ComponentRuntimeError,
+      ] = try self.continue_execution() catch {
+        error => Err(error)
+      } noraise {
+        outcome => Ok(outcome)
+      }
+      cancellation_cleanup_armed[0] = false
+      let outcome = match continuation_result {
+        Err(error) => {
           let closing = lifecycle.closing.val
           lifecycle.leave()
           if closing {
@@ -296,6 +322,7 @@ fn CoreContinuation::with_lifecycle(
           }
           raise error
         }
+        Ok(outcome) => outcome
       }
       lifecycle.finish_outcome(outcome)
     },
@@ -350,8 +377,19 @@ fn CoreExecutionEngine::with_lifecycle(
     },
     fn(store, instance, func_idx, args, request) raise ComponentRuntimeError {
       lifecycle.enter()
-      let outcome = self.invoke(store, instance, func_idx, args, request) catch {
-        error => {
+      let cancellation_cleanup_armed = [true]
+      errdefer (if cancellation_cleanup_armed[0] { lifecycle.leave() })
+      let invocation_result : Result[
+        CoreExecutionOutcome,
+        ComponentRuntimeError,
+      ] = try self.invoke(store, instance, func_idx, args, request) catch {
+        error => Err(error)
+      } noraise {
+        outcome => Ok(outcome)
+      }
+      cancellation_cleanup_armed[0] = false
+      let outcome = match invocation_result {
+        Err(error) => {
           let closing = lifecycle.closing.val
           lifecycle.leave()
           if closing {
@@ -359,6 +397,7 @@ fn CoreExecutionEngine::with_lifecycle(
           }
           raise error
         }
+        Ok(outcome) => outcome
       }
       lifecycle.finish_outcome(outcome)
     },

@@ -29,7 +29,7 @@ test "wasmoon remains the product runtime module" {
 test "wasmoon consumes reusable compiler infrastructure" {
   let assembly = compiler_infrastructure_assembly()
   inspect(assembly.signature.params.length(), content="0")
-  inspect(assembly.machv_function.blocks().length(), content="1")
+  inspect(assembly.milkir_function.blocks.length(), content="1")
   inspect(assembly.code_object.get_bytes().length() > 0, content="true")
 }
 

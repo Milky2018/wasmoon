@@ -66,11 +66,9 @@ fn instantiate_component(
     async_state,
     staged,
   }
-  run_component_sections(frame) catch {
-    error => {
-      state.release_aborted()
-      raise error
-    }
+  {
+    errdefer state.release_aborted()
+    run_component_sections(frame)
   }
   entry_state.enable()
   let instance = env_instance_from_state(name, state, store)

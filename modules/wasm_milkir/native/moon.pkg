@@ -1,0 +1,8 @@
+import {
+  "Milky2018/wasm_milkir",
+  "Milky2018/milkir",
+  "Milky2018/vcode/native_types",
+  "Milky2018/vcode/native_lowering" @lowering,
+  "Milky2018/milkir/native" @milkir_native,
+  "Milky2018/milkir/native/adapter",
+}

@@ -15,6 +15,11 @@ pub suberror NativeReactorError {
   WaitFailed(Int)
   WakeFailed(Int)
 } derive(Eq, @debug.Debug)
+pub fn NativeReactorError::equal(Self, Self) -> Bool
+pub fn NativeReactorError::not_equal(Self, Self) -> Bool
+pub fn NativeReactorError::output(Self, &Logger) -> Unit
+pub fn NativeReactorError::to_repr(Self) -> @debug.Repr
+pub fn NativeReactorError::to_string(Self) -> String
 pub impl Show for NativeReactorError
 
 // Types and methods
@@ -25,6 +30,7 @@ pub fn NativeReactor::register_read(Self, Int) -> NativeRegistration raise Nativ
 pub fn NativeReactor::register_timer(Self, Int64) -> NativeRegistration raise NativeReactorError
 pub fn NativeReactor::register_write(Self, Int) -> NativeRegistration raise NativeReactorError
 pub fn NativeReactor::supported() -> Bool
+pub fn NativeReactor::to_repr(Self) -> @debug.Repr
 pub fn NativeReactor::try_new() -> Self raise NativeReactorError
 pub fn NativeReactor::wait(Self, Int64?) -> Int raise NativeReactorError
 pub fn NativeReactor::wake(Self) -> Unit raise NativeReactorError

@@ -66,6 +66,8 @@ pub(all) enum CompileStage {
   Done
   Failed
 }
+pub fn CompileStage::output(Self, &Logger) -> Unit
+pub fn CompileStage::to_string(Self) -> String
 pub impl Show for CompileStage
 
 pub(all) enum ComponentErrorCode {
@@ -75,12 +77,22 @@ pub(all) enum ComponentErrorCode {
   CompUnsupported
   CompRuntimeError
 } derive(Eq, @debug.Debug)
+pub fn ComponentErrorCode::equal(Self, Self) -> Bool
+pub fn ComponentErrorCode::not_equal(Self, Self) -> Bool
+pub fn ComponentErrorCode::output(Self, &Logger) -> Unit
+pub fn ComponentErrorCode::to_repr(Self) -> @debug.Repr
+pub fn ComponentErrorCode::to_string(Self) -> String
 pub impl Show for ComponentErrorCode
 
 pub(all) enum ComponentErrorFormat {
   Text
   Json
 } derive(Eq, @debug.Debug)
+pub fn ComponentErrorFormat::equal(Self, Self) -> Bool
+pub fn ComponentErrorFormat::not_equal(Self, Self) -> Bool
+pub fn ComponentErrorFormat::output(Self, &Logger) -> Unit
+pub fn ComponentErrorFormat::to_repr(Self) -> @debug.Repr
+pub fn ComponentErrorFormat::to_string(Self) -> String
 pub impl Show for ComponentErrorFormat
 
 // Type aliases

@@ -12,9 +12,26 @@ priv struct StackObjectArea {
 }
 
 ///|
+priv struct StackObjectRequirements {
+  size : Int
+  alignment : Int
+  offsets : Array[Int]
+}
+
+///|
 priv struct ResultArea {
   offset : Int
   size : Int
+}
+
+///|
+priv struct TailCallFramePlan {
+  stack_argument_size : Int
+  stack_argument_base : Int
+  synthetic_return_size : Int
+  alignment_padding : Int
+  transfer_size : Int
+  thunk_cleanup_size : Int
 }
 
 ///|
@@ -27,7 +44,10 @@ pub struct X64Frame {
   priv outgoing_args_size : Int
   priv result_area : ResultArea?
   priv stack_objects : StackObjectArea?
+  priv stack_object_offsets : Array[Int]
   priv emergency_move_offset : Int?
+  priv requires_emergency_moves : Bool
+  priv allocation_edit_count : Int
   priv slots : Array[(@vcode.StackSlot, Int)]
   priv saved_registers : Array[SavedRegister]
 }
@@ -49,6 +69,7 @@ pub suberror X64FrameError {
   InvalidStackObjectArea(message~ : String)
   MovePlanningFailed(cause~ : @vcode.MoveResolveError)
   InvalidEmergencyMoveArea(offset~ : Int?)
+  StaleAllocation(expected_edits~ : Int, actual_edits~ : Int)
   SavedRegisterSetMismatch
 } derive(Debug)
 
@@ -61,7 +82,7 @@ pub impl Show for X64FrameError with fn output(self, logger) {
 fn is_callee_saved(reg : @vcode.PhysicalReg) -> Bool {
   match reg.class {
     Int => reg.id == 3 || (reg.id >= 12 && reg.id <= 15)
-    FpVector => false
+    Float | Vector | FpVector => false
   }
 }
 
@@ -86,17 +107,19 @@ fn used_callee_saved_registers(
     }
   }
   for index in 0..<function.value_count() {
-    let value = function.value_at(index).unwrap()
-    if allocation.value_location(value) is Some(Register(reg)) {
-      record(regs, reg)
+    let location = allocation.allocated_value_location_at(index).unwrap()
+    if location.is_register() {
+      record(regs, location.register_unchecked())
     }
   }
   for index in 0..<function.instruction_count() {
     let instruction = function.instruction_at(index).unwrap()
     for operand in 0..<function.instruction_operand_count(instruction) {
-      if allocation.operand_location(instruction, operand)
-        is Some(Register(reg)) {
-        record(regs, reg)
+      let location = allocation
+        .allocated_operand_location_at(index, operand)
+        .unwrap()
+      if location.is_register() {
+        record(regs, location.register_unchecked())
       }
     }
   }
@@ -213,9 +236,8 @@ fn maximum_result_area_size(function : @vcode.Function[X64Inst]) -> Int {
 ///|
 fn stack_object_area_requirements(
   function : @vcode.Function[X64Inst],
-) -> (Int, Int)? raise X64FrameError {
-  let mut requirements : (Int, Int)? = None
-  let objects : Array[X64StackObject] = []
+) -> StackObjectRequirements? raise X64FrameError {
+  let objects : Array[X64StackObject?] = []
   for index in 0..<function.instruction_count() {
     let instruction = function.instruction_at(index).unwrap()
     if function.instruction(instruction) is Some(StackAddress(object)) {
@@ -224,29 +246,43 @@ fn stack_object_area_requirements(
           message="invalid stack-object descriptor in target VCode",
         )
       }
-      let current = (object.area_size, object.area_alignment)
-      match requirements {
-        Some(expected) if expected != current =>
-          raise InvalidStackObjectArea(
-            message="stack-address instructions disagree about the object area",
-          )
-        None => requirements = Some(current)
-        _ => ()
+      while objects.length() <= object.id {
+        objects.push(None)
       }
-      if !objects.contains(object) {
-        for existing in objects {
-          if object.offset < existing.offset + existing.size &&
-            existing.offset < object.offset + object.size {
-            raise InvalidStackObjectArea(
-              message="stack objects overlap in the target frame",
-            )
-          }
-        }
-        objects.push(object)
+      match objects[object.id] {
+        Some(existing) if existing != object =>
+          raise InvalidStackObjectArea(
+            message="stack-object id has conflicting size or alignment",
+          )
+        None => objects[object.id] = Some(object)
+        _ => ()
       }
     }
   }
-  requirements
+  if objects.is_empty() {
+    return None
+  }
+  let offsets : Array[Int] = []
+  let mut cursor = 0
+  let mut area_alignment = 1
+  for object in objects {
+    guard object is Some(object) else {
+      raise InvalidStackObjectArea(
+        message="stack-object ids must be dense within one function",
+      )
+    }
+    cursor = align_up(cursor, object.alignment)
+    offsets.push(cursor)
+    cursor += object.size
+    if object.alignment > area_alignment {
+      area_alignment = object.alignment
+    }
+  }
+  Some({
+    size: align_up(cursor, area_alignment),
+    alignment: area_alignment,
+    offsets,
+  })
 }
 
 ///|
@@ -263,6 +299,36 @@ fn moves_require_emergency(
 }
 
 ///|
+fn instruction_edits_require_emergency(
+  function : @vcode.Function[X64Inst],
+  allocation : @vcode.Allocation,
+  instruction : @vcode.Instruction,
+  placement : @vcode.PointPlacement,
+) -> Bool raise X64FrameError {
+  if allocation.edits_at(instruction, placement).is_empty() {
+    return false
+  }
+  moves_require_emergency(
+    edit_parallel_moves(function, allocation, instruction, placement),
+  )
+}
+
+///|
+fn edge_edits_require_emergency(
+  function : @vcode.Function[X64Inst],
+  allocation : @vcode.Allocation,
+  block : @vcode.Block,
+  successor_index : Int,
+) -> Bool raise X64FrameError {
+  if allocation.edge_edits_at(block, successor_index).is_empty() {
+    return false
+  }
+  moves_require_emergency(
+    edge_parallel_moves(function, allocation, block, successor_index),
+  )
+}
+
+///|
 fn requires_emergency_move_area(
   function : @vcode.Function[X64Inst],
   allocation : @vcode.Allocation,
@@ -270,28 +336,40 @@ fn requires_emergency_move_area(
   for block in function.layout() {
     for instruction in function.block_body(block) {
       if !is_abi_materialization(function.instruction(instruction).unwrap()) {
-        if moves_require_emergency(
-            edit_parallel_moves(function, allocation, instruction, Before),
+        if instruction_edits_require_emergency(
+            function,
+            allocation,
+            instruction,
+            Before,
           ) ||
-          moves_require_emergency(
-            edit_parallel_moves(function, allocation, instruction, After),
+          instruction_edits_require_emergency(
+            function,
+            allocation,
+            instruction,
+            After,
           ) {
           return true
         }
       }
     }
     let terminator = function.block_terminator(block).unwrap()
-    if moves_require_emergency(
-        edit_parallel_moves(function, allocation, terminator, Before),
+    if instruction_edits_require_emergency(
+        function,
+        allocation,
+        terminator,
+        Before,
       ) ||
-      moves_require_emergency(
-        edit_parallel_moves(function, allocation, terminator, After),
+      instruction_edits_require_emergency(
+        function,
+        allocation,
+        terminator,
+        After,
       ) {
       return true
     }
     for successor_index in 0..<function.instruction_successor_count(terminator) {
-      if moves_require_emergency(
-          edge_parallel_moves(function, allocation, block, successor_index),
+      if edge_edits_require_emergency(
+          function, allocation, block, successor_index,
         ) {
         return true
       }
@@ -330,19 +408,63 @@ pub fn X64Frame::tail_args_size(self : X64Frame) -> Int {
 }
 
 ///|
-fn X64Frame::tail_call_stack_base(
+fn X64Frame::tail_call_plan(
   self : X64Frame,
   callee_args_size : Int,
-) -> Int {
+) -> TailCallFramePlan {
   if callee_args_size <= self.incoming_args_size {
-    self.frame_size() + 8
+    {
+      stack_argument_size: callee_args_size,
+      stack_argument_base: self.frame_size() + 8,
+      synthetic_return_size: 0,
+      alignment_padding: 0,
+      transfer_size: 0,
+      thunk_cleanup_size: 0,
+    }
   } else {
-    self.frame_size() - callee_args_size
+    let synthetic_return_size = 8
+    let transfer_size = align_up(synthetic_return_size + callee_args_size, 16)
+    let alignment_padding = transfer_size -
+      synthetic_return_size -
+      callee_args_size
+    {
+      stack_argument_size: callee_args_size,
+      stack_argument_base: self.frame_size() +
+      synthetic_return_size -
+      transfer_size,
+      synthetic_return_size,
+      alignment_padding,
+      transfer_size,
+      thunk_cleanup_size: transfer_size - synthetic_return_size,
+    }
   }
 }
 
 ///|
-fn tail_cleanup_area_size(
+fn X64Frame::valid_tail_call_plan(
+  self : X64Frame,
+  plan : TailCallFramePlan,
+) -> Bool {
+  if plan.stack_argument_size <= self.incoming_args_size {
+    return plan.stack_argument_base == self.frame_size() + 8 &&
+      plan.synthetic_return_size == 0 &&
+      plan.alignment_padding == 0 &&
+      plan.transfer_size == 0 &&
+      plan.thunk_cleanup_size == 0
+  }
+  plan.stack_argument_size % 16 == 0 &&
+  plan.synthetic_return_size == 8 &&
+  plan.alignment_padding >= 0 &&
+  plan.synthetic_return_size + plan.stack_argument_size + plan.alignment_padding ==
+  plan.transfer_size &&
+  plan.transfer_size % 16 == 0 &&
+  plan.stack_argument_base ==
+  self.frame_size() + plan.synthetic_return_size - plan.transfer_size &&
+  plan.thunk_cleanup_size + plan.synthetic_return_size == plan.transfer_size
+}
+
+///|
+fn tail_argument_staging_size(
   incoming_args_size : Int,
   tail_args_size : Int,
 ) -> Int {
@@ -380,9 +502,8 @@ pub fn X64Frame::stack_object_offset(
 ) -> Int? {
   match self.stack_objects {
     Some(area) if object.is_valid() &&
-      area.size == object.area_size &&
-      area.alignment == object.area_alignment =>
-      Some(area.offset + object.offset)
+      object.id < self.stack_object_offsets.length() =>
+      Some(area.offset + self.stack_object_offsets[object.id])
     _ => None
   }
 }
@@ -403,7 +524,9 @@ pub fn X64Frame::saved_registers(
 pub fn X64Frame::summary(self : X64Frame) -> String {
   let mut output = "x64 frame size=\{self.frame_size()} align=\{self.alignment()}\n"
   if self.tail_args_size > self.incoming_args_size {
-    output += "  tail-args \{self.tail_args_size} bytes at sp+\{self.local_size} (incoming \{self.incoming_args_size})\n"
+    let plan = self.tail_call_plan(self.tail_args_size)
+    output += "  tail-args \{plan.stack_argument_size} bytes at sp+\{plan.stack_argument_base}\n"
+    output += "  tail-transfer return=\{plan.synthetic_return_size} padding=\{plan.alignment_padding} adjust=\{plan.transfer_size} cleanup=\{plan.thunk_cleanup_size}\n"
   }
   if self.outgoing_args_size > 0 {
     output += "  outgoing \{self.outgoing_args_size} bytes at sp+0\n"
@@ -448,6 +571,13 @@ fn verify_target_frame(
   allocation : @vcode.Allocation,
   frame : X64Frame,
 ) -> Unit raise X64FrameError {
+  let actual_edit_count = allocation.edit_count()
+  if frame.allocation_edit_count != actual_edit_count {
+    raise StaleAllocation(
+      expected_edits=frame.allocation_edit_count,
+      actual_edits=actual_edit_count,
+    )
+  }
   let expected_outgoing = maximum_outgoing_args_size(function)
   if frame.outgoing_args_size != expected_outgoing {
     raise OutgoingAreaMismatch(
@@ -461,7 +591,7 @@ fn verify_target_frame(
   } else {
     expected_incoming
   }
-  let expected_tail_area = tail_cleanup_area_size(
+  let expected_tail_area = tail_argument_staging_size(
     expected_incoming, expected_tail,
   )
   if frame.incoming_args_size != expected_incoming ||
@@ -473,6 +603,23 @@ fn verify_target_frame(
       expected_tail~,
       actual_tail=frame.tail_args_size,
     )
+  }
+  for index in 0..<function.instruction_count() {
+    let instruction = function.instruction_at(index).unwrap()
+    let stack_arguments = match function.instruction(instruction) {
+      Some(TailCallDirect(_, _, plan) | TailCallIndirect(_, plan)) =>
+        Some(plan.stack_size)
+      _ => None
+    }
+    if stack_arguments is Some(size) &&
+      !frame.valid_tail_call_plan(frame.tail_call_plan(size)) {
+      raise TailAreaMismatch(
+        expected_incoming~,
+        actual_incoming=frame.incoming_args_size,
+        expected_tail=size,
+        actual_tail=frame.tail_args_size,
+      )
+    }
   }
   let expected_result_area = maximum_result_area_size(function)
   let actual_result_area = frame.result_area.map(area => area.size).unwrap_or(0)
@@ -497,12 +644,13 @@ fn verify_target_frame(
   }
   match (expected_stack_objects, frame.stack_objects) {
     (None, None) => ()
-    (Some((size, alignment)), Some(area)) =>
-      if area.size != size ||
-        area.alignment != alignment ||
+    (Some(requirements), Some(area)) =>
+      if area.size != requirements.size ||
+        area.alignment != requirements.alignment ||
         area.offset < reserved_call_area_end ||
-        area.offset % alignment != 0 ||
-        area.offset + size > frame.local_size {
+        area.offset % requirements.alignment != 0 ||
+        area.offset + requirements.size > frame.local_size ||
+        frame.stack_object_offsets != requirements.offsets {
         raise InvalidStackObjectArea(
           message="planned stack-object area does not satisfy target requirements",
         )
@@ -516,8 +664,7 @@ fn verify_target_frame(
     Some(area) => area.offset + area.size
     None => reserved_call_area_end
   }
-  let expected_emergency = requires_emergency_move_area(function, allocation)
-  match (expected_emergency, frame.emergency_move_offset) {
+  match (frame.requires_emergency_moves, frame.emergency_move_offset) {
     (false, None) => ()
     (true, Some(offset)) =>
       if offset < reserved_object_area_end ||
@@ -584,18 +731,24 @@ fn plan_frame_verified(
   } else {
     None
   }
-  let stack_objects = match stack_object_area_requirements(function) {
-    Some((size, alignment)) => {
-      offset = align_up(offset, alignment)
-      let area = { offset, size, alignment, }
-      offset += size
+  let stack_object_requirements = stack_object_area_requirements(function)
+  let stack_objects = match stack_object_requirements {
+    Some(requirements) => {
+      offset = align_up(offset, requirements.alignment)
+      let area = {
+        offset,
+        size: requirements.size,
+        alignment: requirements.alignment,
+      }
+      offset += requirements.size
       Some(area)
     }
     None => None
   }
-  let emergency_move_offset = if requires_emergency_move_area(
-      function, allocation,
-    ) {
+  let requires_emergency_moves = requires_emergency_move_area(
+    function, allocation,
+  )
+  let emergency_move_offset = if requires_emergency_moves {
     offset = align_up(offset, 16)
     let emergency_offset = offset
     offset += 16
@@ -625,7 +778,7 @@ fn plan_frame_verified(
   } else {
     incoming_args_size
   }
-  let tail_area_size = tail_cleanup_area_size(
+  let tail_area_size = tail_argument_staging_size(
     incoming_args_size, tail_args_size,
   )
   let allocation_size = local_size + tail_area_size
@@ -648,7 +801,13 @@ fn plan_frame_verified(
     outgoing_args_size,
     result_area,
     stack_objects,
+    stack_object_offsets: match stack_object_requirements {
+      Some(requirements) => requirements.offsets
+      None => []
+    },
     emergency_move_offset,
+    requires_emergency_moves,
+    allocation_edit_count: allocation.edit_count(),
     slots,
     saved_registers,
   }

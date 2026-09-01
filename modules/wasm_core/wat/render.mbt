@@ -18,7 +18,7 @@ pub(all) suberror WatPrintError {
 }
 
 ///|
-fn WatPrintError::to_string(self : WatPrintError) -> String {
+pub fn WatPrintError::to_string(self : WatPrintError) -> String {
   match self {
     NotAFunctionType(idx) => "type \{idx} is not a function type"
     FunctionCodeCountMismatch(declarations~, bodies~) =>

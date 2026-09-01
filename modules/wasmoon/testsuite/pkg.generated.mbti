@@ -53,10 +53,12 @@ pub suberror TestRunnerError {
   ParseError(String)
   ModuleLoadError(String)
 } derive(@debug.Debug)
+pub fn TestRunnerError::to_repr(Self) -> @debug.Repr
 
 // Types and methods
 type CompareResult
 pub fn CompareResult::matched(Self) -> Bool
+pub fn CompareResult::output(Self, &Logger) -> Unit
 pub fn CompareResult::to_string(Self) -> String
 pub impl Show for CompareResult
 
@@ -64,6 +66,8 @@ pub(all) struct JsonValue {
   type_ : String
   value : String?
 } derive(@debug.Debug, @json.FromJson)
+pub fn JsonValue::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn JsonValue::to_repr(Self) -> @debug.Repr
 
 pub struct ParsedTestFile {
   source_filename : String?
@@ -74,6 +78,7 @@ pub enum TestAction {
   Invoke(String?, String, Array[TestValue])
   Get(String?, String)
 } derive(@debug.Debug)
+pub fn TestAction::to_repr(Self) -> @debug.Repr
 
 pub enum TestCommand {
   Module(String)
@@ -85,11 +90,13 @@ pub enum TestCommand {
   Register(String, String?)
   Action(TestAction)
 } derive(@debug.Debug)
+pub fn TestCommand::to_repr(Self) -> @debug.Repr
 
 pub struct TestCommandWithLine {
   line : Int?
   command : TestCommand
 } derive(@debug.Debug)
+pub fn TestCommandWithLine::to_repr(Self) -> @debug.Repr
 
 pub struct TestContext {
   store : @runtime.Store
@@ -116,11 +123,13 @@ pub fn TestResult::TestResult() -> Self
 pub fn TestResult::add_failed(Self, String) -> Unit
 pub fn TestResult::add_passed(Self) -> Unit
 pub fn TestResult::add_skipped(Self, String) -> Unit
+pub fn TestResult::to_repr(Self) -> @debug.Repr
 
 pub struct TestValue {
   type_ : String
   value : String?
 } derive(@debug.Debug)
+pub fn TestValue::to_repr(Self) -> @debug.Repr
 
 // Type aliases
 

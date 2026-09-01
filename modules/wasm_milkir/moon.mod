@@ -1,6 +1,6 @@
 name = "Milky2018/wasm_milkir"
 
-version = "0.6.3"
+version = "0.12.6"
 
 readme = "README.mbt.md"
 
@@ -13,7 +13,8 @@ keywords = [ "wasm", "webassembly", "milkir", "compiler", "dialect" ]
 description = "WebAssembly dialect adapter for MilkIR extension operations"
 
 import {
-  "Milky2018/milkir@0.6.3",
+  "Milky2018/milkir@0.12.6",
+  "Milky2018/vcode@0.12.6",
 }
 
 preferred_target = "wasm-gc"

@@ -25,12 +25,16 @@ pub fn EmbeddingEnvironment::cancellation_safepoints(Self) -> Bool
 pub fn EmbeddingEnvironment::hidden_context_param(Self) -> @milkir.Type?
 pub fn EmbeddingEnvironment::memory_descriptor_layout(Self) -> MemoryDescriptorLayout?
 pub fn EmbeddingEnvironment::runtime_layout(Self) -> RuntimeLayout?
+pub fn EmbeddingEnvironment::to_repr(Self) -> @debug.Repr
 pub fn EmbeddingEnvironment::wasm_runtime_symbols(Self) -> @wasm_milkir.RuntimeSymbols
 
 pub(all) struct MemoryDescriptorLayout {
   base_offset : Int
   current_length_offset : Int
 } derive(Eq, @debug.Debug)
+pub fn MemoryDescriptorLayout::equal(Self, Self) -> Bool
+pub fn MemoryDescriptorLayout::not_equal(Self, Self) -> Bool
+pub fn MemoryDescriptorLayout::to_repr(Self) -> @debug.Repr
 
 pub(all) struct RuntimeLayout {
   memory0_base_offset : Int
@@ -48,6 +52,9 @@ pub(all) struct RuntimeLayout {
   table_entry_stride : Int
   func_table_entry_stride : Int
 } derive(Eq, @debug.Debug)
+pub fn RuntimeLayout::equal(Self, Self) -> Bool
+pub fn RuntimeLayout::not_equal(Self, Self) -> Bool
+pub fn RuntimeLayout::to_repr(Self) -> @debug.Repr
 
 // Type aliases
 

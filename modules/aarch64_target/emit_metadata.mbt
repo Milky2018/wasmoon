@@ -9,7 +9,7 @@ fn code_object_root(
     Register(reg) => {
       let bank : @code_object.RegisterBank = match reg.class {
         Int => Int
-        FpVector => FpVector
+        Float | Vector | FpVector => FpVector
       }
       Register(bank, reg.id)
     }

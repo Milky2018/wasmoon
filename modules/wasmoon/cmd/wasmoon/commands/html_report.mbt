@@ -169,12 +169,6 @@ fn generate_html_report(funcs : Array[CompiledFunc]) -> String {
     )
     sb.write_string(html_escape(func.ir_opt))
     sb.write_string("</pre></div></div>\n")
-    // MachV column
-    sb.write_string(
-      "          <div class=\"column stage-machv\"><div class=\"column-header\">MachV</div><div class=\"column-content\"><pre>",
-    )
-    sb.write_string(html_escape(func.machv))
-    sb.write_string("</pre></div></div>\n")
     // Target VCode column
     sb.write_string(
       "          <div class=\"column stage-vcode\"><div class=\"column-header\">Target VCode</div><div class=\"column-content\"><pre>",
@@ -212,7 +206,6 @@ fn generate_html_report(funcs : Array[CompiledFunc]) -> String {
       #|        <label><input type="checkbox" id="toggle-source" checked onchange="toggleStage('source')"> WAT Source</label>
       #|        <label><input type="checkbox" id="toggle-ir" onchange="toggleStage('ir')"> IR (SSA)</label>
       #|        <label><input type="checkbox" id="toggle-opt" onchange="toggleStage('opt')"> Optimized IR</label>
-      #|        <label><input type="checkbox" id="toggle-machv" checked onchange="toggleStage('machv')"> MachV</label>
       #|        <label><input type="checkbox" id="toggle-vcode" checked onchange="toggleStage('vcode')"> Target VCode</label>
       #|        <label><input type="checkbox" id="toggle-reg" onchange="toggleStage('reg')"> Allocated VCode</label>
       #|        <label><input type="checkbox" id="toggle-object" onchange="toggleStage('object')"> Code Object</label>

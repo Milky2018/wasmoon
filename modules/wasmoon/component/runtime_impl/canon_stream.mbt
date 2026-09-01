@@ -16,9 +16,7 @@ fn instantiate_canon_stream_new(
   let (elem_size, own_resource_type_id) = stream_payload_info(
     payload_ty,
     state.types,
-  ) catch {
-    e => raise e
-  }
+  )
   let table = state.stream_table
   let async_state = state.async_state
   let owner_component_id = state.resource_table.id
@@ -253,7 +251,7 @@ fn instantiate_canon_stream_read(
   store : @runtime.Store,
 ) -> Unit raise ComponentRuntimeError {
   let core_type : @types.FuncType = { params: [I32, I32, I32], results: [I32], }
-  let resources = resolve_canon_resources(opts, state) catch { e => raise e }
+  let resources = resolve_canon_resources(opts, state)
   let payload_ty : ValType? = match state.types.get(_tyidx) {
     Some(Some(Stream(v))) => v
     _ => None
@@ -877,7 +875,7 @@ fn instantiate_canon_stream_write(
   store : @runtime.Store,
 ) -> Unit raise ComponentRuntimeError {
   let core_type : @types.FuncType = { params: [I32, I32, I32], results: [I32], }
-  let resources = resolve_canon_resources(opts, state) catch { e => raise e }
+  let resources = resolve_canon_resources(opts, state)
   let payload_ty : ValType? = match state.types.get(_tyidx) {
     Some(Some(Stream(v))) => v
     _ => None

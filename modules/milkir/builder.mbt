@@ -1001,6 +1001,28 @@ pub fn FunctionBuilder::jump(
 }
 
 ///|
+/// Conditional branch with arguments for both successor blocks.
+pub fn FunctionBuilder::branch(
+  self : FunctionBuilder,
+  cond : Value,
+  then_block : Block,
+  then_args : Array[Value],
+  else_block : Block,
+  else_args : Array[Value],
+) -> Unit {
+  if !self.require_values([cond]) ||
+    !self.require_block(then_block) ||
+    !self.require_values(then_args) ||
+    !self.require_block(else_block) ||
+    !self.require_values(else_args) {
+    return
+  }
+  self.current_block.set_terminator(
+    Branch(cond, then_block.id, then_args, else_block.id, else_args),
+  )
+}
+
+///|
 /// Conditional branch (branch if zero)
 pub fn FunctionBuilder::brz(
   self : FunctionBuilder,

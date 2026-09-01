@@ -474,11 +474,9 @@ fn component_command_context(
   }
   for pair in parsed_dirs {
     let (host_path, guest_path) = pair
-    builder = builder.preopened_directory(host_path, guest_path, false) catch {
-      e => {
-        builder.build().close()
-        raise e
-      }
+    builder = {
+      errdefer builder.build().close()
+      builder.preopened_directory(host_path, guest_path, false)
     }
   }
   builder.build()
