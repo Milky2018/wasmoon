@@ -72,6 +72,9 @@ async test "JIT async host function parks and resumes its native fiber" {
     exports: [{ name: "run", desc: Func(1), }],
   }
   let events : Array[String] = []
+  let gate_first_async_call = Ref(true)
+  let host_started = @async.Semaphore(1, initial_value=0)
+  let host_may_finish = @async.Semaphore(1, initial_value=0)
   let linker = @runtime.Linker::Linker()
   defer linker.close()
   linker.add_async_host_func(
@@ -79,7 +82,13 @@ async test "JIT async host function parks and resumes its native fiber" {
     "double",
     async fn(args) {
       events.push("host started")
-      @async.sleep(10)
+      if gate_first_async_call.val {
+        gate_first_async_call.val = false
+        host_started.release()
+        host_may_finish.acquire()
+      } else {
+        @async.sleep(10)
+      }
       events.push("host ready")
       match args[0] {
         I32(value) if value < 0 => raise @runtime.DivisionByZero
@@ -111,9 +120,10 @@ async test "JIT async host function parks and resumes its native fiber" {
     let call = group.spawn(no_wait=true, () => {
       jit_context.call_core_func_async(store, instance, 1, [I32(20)])
     })
+    host_started.acquire()
     group.spawn_bg() <| () => {
-      @async.sleep(1)
       events.push("other task ran")
+      host_may_finish.release()
     }
     call.wait()
   })

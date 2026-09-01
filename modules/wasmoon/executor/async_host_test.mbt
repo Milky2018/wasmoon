@@ -144,6 +144,8 @@ fn async_host_throw_after_wait_test_module() -> @types.Module {
 ///|
 async test "async host function suspends wasm without blocking the host task" {
   let events : Array[String] = []
+  let host_started = @async.Semaphore(1, initial_value=0)
+  let host_may_finish = @async.Semaphore(1, initial_value=0)
   let linker = @runtime.Linker::Linker()
   defer linker.close()
   linker.add_async_host_func(
@@ -151,7 +153,8 @@ async test "async host function suspends wasm without blocking the host task" {
     "double",
     async fn(args) {
       events.push("host started")
-      @async.sleep(10)
+      host_started.release()
+      host_may_finish.acquire()
       events.push("host ready")
       match args[0] {
         I32(value) => [I32(value * 2)]
@@ -169,9 +172,10 @@ async test "async host function suspends wasm without blocking the host task" {
     let call = group.spawn(no_wait=true, () => {
       call_exported_func_async(linker.get_store(), instance, "run", [I32(20)])
     })
+    host_started.acquire()
     group.spawn_bg() <| () => {
-      @async.sleep(1)
       events.push("other task ran")
+      host_may_finish.release()
     }
     call.wait()
   })
