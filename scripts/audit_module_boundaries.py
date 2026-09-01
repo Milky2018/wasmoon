@@ -12,8 +12,10 @@ REUSABLE_MODULES = [
     "modules/wasm_core",
     "modules/milkir",
     "modules/machv",
+    "modules/vcode",
+    "modules/code_object",
     "modules/regalloc",
-    "modules/machv_regalloc",
+    "modules/vcode_regalloc",
     "modules/milkir_machv",
     "modules/wasm_machv",
     "modules/aarch64_target",
@@ -27,7 +29,7 @@ FORBIDDEN_IMPORT_PREFIXES = [
 
 SEMANTIC_MACHV_FORBIDDEN_IMPORT_PREFIXES = [
     "Milky2018/regalloc",
-    "Milky2018/machv_regalloc",
+    "Milky2018/vcode_regalloc",
     "Milky2018/aarch64_target",
     "Milky2018/x64_target",
     "Milky2018/wasmoon",

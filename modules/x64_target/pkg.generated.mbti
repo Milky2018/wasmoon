@@ -2,11 +2,11 @@
 package "Milky2018/x64_target"
 
 import {
+  "Milky2018/code_object",
   "Milky2018/machv",
-  "Milky2018/machv/allocation_types",
-  "Milky2018/machv/code_object",
-  "Milky2018/machv/vcode",
-  "Milky2018/machv_regalloc",
+  "Milky2018/vcode",
+  "Milky2018/vcode/allocation_types",
+  "Milky2018/vcode_regalloc",
   "moonbitlang/core/debug",
 }
 
@@ -61,7 +61,7 @@ pub impl Show for TargetVCodeVerifyError
 
 pub suberror X64AllocationError {
   InvalidVCode(cause~ : TargetVCodeVerifyError)
-  AllocatorFailure(cause~ : @machv_regalloc.VCodeAllocationError)
+  AllocatorFailure(cause~ : @vcode_regalloc.VCodeAllocationError)
   InvalidAllocation(cause~ : @vcode.AllocationVerifyError)
   IllegalRegister(reg~ : @allocation_types.PhysicalReg)
 } derive(@debug.Debug)

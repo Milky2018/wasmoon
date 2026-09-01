@@ -3,8 +3,8 @@ package "Milky2018/wasmoon_jit"
 
 import {
   "Milky2018/aarch64_target",
+  "Milky2018/code_object",
   "Milky2018/machv",
-  "Milky2018/machv/code_object",
   "Milky2018/milkir",
   "Milky2018/milkir_machv",
   "Milky2018/wasm_core/types",

@@ -2,8 +2,8 @@
 package "Milky2018/wasmoon_jit/artifact"
 
 import {
+  "Milky2018/code_object",
   "Milky2018/machv",
-  "Milky2018/machv/code_object",
   "moonbitlang/core/debug",
 }
 

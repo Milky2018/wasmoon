@@ -1,5 +1,5 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "Milky2018/machv/code_object"
+package "Milky2018/code_object"
 
 import {
   "Milky2018/machv",

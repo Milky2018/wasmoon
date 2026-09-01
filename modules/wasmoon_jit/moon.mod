@@ -20,7 +20,9 @@ import {
   "Milky2018/milkir@0.12.6",
   "Milky2018/machv@0.12.6",
   "Milky2018/milkir_machv@0.12.6",
-  "Milky2018/machv_regalloc@0.12.6",
+  "Milky2018/vcode@0.12.6",
+  "Milky2018/code_object@0.12.6",
+  "Milky2018/vcode_regalloc@0.12.6",
   "Milky2018/aarch64_target@0.12.6",
   "Milky2018/x64_target@0.12.6",
 }

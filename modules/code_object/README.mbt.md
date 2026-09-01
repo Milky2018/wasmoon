@@ -1,4 +1,4 @@
-# machv/code_object
+# code_object
 
 This package is the final reusable boundary between target emission and an
 embedding runtime. It stores copied machine-code bytes together with typed

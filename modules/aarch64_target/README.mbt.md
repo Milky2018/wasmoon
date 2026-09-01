@@ -41,7 +41,7 @@ test "validate the AArch64 internal ABI" {
 ## Integration
 
 Use this package for the complete AArch64 target pipeline after semantic
-MachV. It produces a verified `Milky2018/machv/code_object` value. Runtime
+MachV. It produces a verified `Milky2018/code_object` value. Runtime
 symbol resolution, relocation application, and executable-memory ownership
 remain responsibilities of the embedding application.
 

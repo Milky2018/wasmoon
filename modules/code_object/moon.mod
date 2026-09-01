@@ -1,4 +1,4 @@
-name = "Milky2018/regalloc"
+name = "Milky2018/code_object"
 
 version = "0.12.6"
 
@@ -8,12 +8,12 @@ repository = "https://github.com/Milky2018/wasmoon.git"
 
 license = "Apache-2.0"
 
-keywords = [ "compiler", "register-allocation", "algorithm" ]
+keywords = [ "compiler", "machine-code", "jit" ]
 
-description = "Target-independent register allocation algorithm"
+description = "Target-independent native code artifact model"
 
 import {
-  "Milky2018/vcode@0.12.6",
+  "Milky2018/machv@0.12.6",
 }
 
 preferred_target = "wasm-gc"

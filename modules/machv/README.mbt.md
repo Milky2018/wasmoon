@@ -7,10 +7,10 @@ contracts used after target instruction selection.
 
 - `Milky2018/machv`: typed target-neutral SSA, builders, cleanup, printing, and
   verification.
-- `Milky2018/machv/vcode`: generic dense Target VCode storage parameterized by
+- `Milky2018/vcode`: generic dense Target VCode storage parameterized by
   a target-owned instruction type, plus allocation, frame, and final-emission
   input contracts.
-- `Milky2018/machv/code_object`: verified, unlinked machine code plus typed
+- `Milky2018/code_object`: verified, unlinked machine code plus typed
   relocations, traps, safepoints, roots, and unwind bytes.
 
 The VCode package does not define a union of AArch64 and x64 instructions.

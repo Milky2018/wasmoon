@@ -61,7 +61,7 @@ enabled (the default), the allocator symbolically checks operand values,
 clobbers, instruction edits, CFG joins, and block-argument transfers before
 returning the plan.
 
-`Milky2018/machv_regalloc` is the reference adapter. AArch64 and x64 both use
+`Milky2018/vcode_regalloc` is the reference adapter. AArch64 and x64 both use
 this path before target emission.
 
 ## Production integration

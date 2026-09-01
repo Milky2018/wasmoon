@@ -1,4 +1,4 @@
-name = "Milky2018/machv_regalloc"
+name = "Milky2018/vcode_regalloc"
 
 version = "0.12.6"
 
@@ -8,13 +8,14 @@ repository = "https://github.com/Milky2018/wasmoon.git"
 
 license = "Apache-2.0"
 
-keywords = [ "compiler", "register-allocation", "machv", "jit" ]
+keywords = [ "compiler", "register-allocation", "vcode", "jit" ]
 
 description = "Target VCode adapter for the reusable register allocator"
 
 import {
   "moonbitlang/x@0.4.48",
   "Milky2018/machv@0.12.6",
+  "Milky2018/vcode@0.12.6",
   "Milky2018/regalloc@0.12.6",
 }
 

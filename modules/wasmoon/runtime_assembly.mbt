@@ -105,7 +105,7 @@ pub fn runtime_assembly() -> RuntimeAssembly {
     product_support_modules: ["Milky2018/wasmoon_jit"],
     reusable_modules: [
       "Milky2018/wasm_core", "Milky2018/milkir", "Milky2018/machv", "Milky2018/regalloc",
-      "Milky2018/machv_regalloc", "Milky2018/x64_target", "Milky2018/aarch64_target",
+      "Milky2018/vcode_regalloc", "Milky2018/x64_target", "Milky2018/aarch64_target",
     ],
   }
 }

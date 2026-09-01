@@ -11,8 +11,10 @@ Wasmoon runtime integration packages. The main public packages are:
 | `Milky2018/machv` | Target-neutral semantic machine IR. | `Function`, `FunctionBuilder`, typed values, blocks, semantic operations, calls, traps, effects, verification, and printing. |
 | `Milky2018/milkir_machv` | Verified MilkIR-to-semantic-MachV producer. | `lower_core_function`, `lower_core_function_with_protocol`, and explicit dialect-adapter entry points. |
 | `Milky2018/wasm_machv` | WebAssembly dialect adapter for semantic MachV. | `Environment`, `lower_function`, and typed runtime-capability seams. |
+| `Milky2018/vcode` | Generic dense target VCode and allocation-side-table infrastructure. | `Builder`, `Function`, allocation verification, parallel-move resolution, and compile events. |
+| `Milky2018/code_object` | Verified unlinked native code and metadata. | `build`, typed relocations, traps, safepoints, roots, and unwind directives. |
 | `Milky2018/regalloc` | Target-independent register allocation algorithm. | Read-only `FunctionView`, `MachineEnv`, `RegallocConfig`, and verified `AllocationPlan`. |
-| `Milky2018/machv_regalloc` | Direct Target VCode adapter for the reusable register allocator. | `allocate_vcode`, `VCodeAllocationEnvironment`, verified allocation materialization, and structured allocation errors. |
+| `Milky2018/vcode_regalloc` | Direct Target VCode adapter for the reusable register allocator. | `allocate_vcode`, `VCodeAllocationEnvironment`, verified allocation materialization, and structured allocation errors. |
 | `Milky2018/x64_target` | x64 instruction selection, ABI, allocation, frame layout, emission, and linking. | `lower`, `allocate`, `plan_frame`, `emit`, and `prepare_x64_link`. |
 | `Milky2018/aarch64_target` | AArch64 instruction selection, ABI, allocation, frame layout, emission, and linking. | `lower`, `allocate`, `plan_frame`, `emit`, and `prepare_aarch64_link`. |
 | `Milky2018/wasmoon_jit` | Native runtime and JIT integration for Wasmoon. | v9 artifact production, bounded loading, transactional installation, Wasm entry/hostcall trampolines, VMContext layout, runtime symbols, and integration planning. |

@@ -1,8 +1,8 @@
-# machv_regalloc
+# vcode_regalloc
 
 Target VCode adapter for the reusable register allocator.
 
-`machv_regalloc` bridges `Milky2018/machv/vcode` functions to the
+`vcode_regalloc` bridges `Milky2018/vcode` functions to the
 target-independent `Milky2018/regalloc` algorithm. The adapter reads compact
 operand and clobber side tables without inspecting target instructions. It
 returns a separate Allocation containing value locations, operand locations,
@@ -10,7 +10,7 @@ spill and reload edits, edge moves, stack slots, and safepoint root locations.
 
 ## Packages
 
-- `Milky2018/machv_regalloc`: read-only Target VCode adapter, allocation entry
+- `Milky2018/vcode_regalloc`: read-only Target VCode adapter, allocation entry
   points, validation, spill handling, and output construction.
 
 ## When to use it
