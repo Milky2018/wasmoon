@@ -11,7 +11,7 @@ WAST test script ───────→ wasmoon/wast ──┘                
                                                                                  ├─→ executor interpreter
                                                                                  └─→ Wasm frontend
                                                                                       → MilkIR
-                                                                                      → MachV
+                                                                                      → direct target lowering
                                                                                       → target VCode
                                                                                       → target allocation/emission
                                                                                       → verified code object
@@ -31,12 +31,14 @@ The repository is a `moon.work` workspace containing several independently versi
 | --- | --- |
 | `wasm_core` | WebAssembly specification data model shared by parsers, validators, frontends, and runtimes. |
 | `milkir` | Target-independent SSA IR, builders, verification, optimization, and CFG utilities. |
-| `machv` | Target-neutral semantic machine IR: typed values, CFG, calls, effects, traps, and safepoints. |
+| `native_types` | Target-independent native ABI, type, symbol, trap, safepoint, and metadata vocabulary. |
+| `native_lowering` | Streaming target-lowering protocol; carries one operation at a time and retains no function graph. |
 | `regalloc` | Machine-IR-independent register-allocation algorithms. |
 | `wasm_milkir` | WebAssembly dialect definitions and extension contracts for MilkIR. |
-| `milkir_machv` | Verified lowering from core MilkIR into target-neutral MachV. |
-| `wasm_machv` | WebAssembly dialect lowering into target-neutral MachV through an embedding environment. |
-| `machv_regalloc` | Narrow adapter from generic Target VCode to the reusable register allocator. |
+| `milkir_native` | Verified direct streaming from core MilkIR into a native target sink. |
+| `wasm_native` | WebAssembly dialect validation and streaming native lowering through an embedding environment. |
+| `vcode` | Generic dense Target VCode, allocation side tables, validation, and parallel-move planning. |
+| `vcode_regalloc` | Narrow adapter from generic Target VCode to the reusable register allocator. |
 | `x64_target`, `aarch64_target` | Complete AMD64 and AArch64 target pipelines: instruction selection, ABI legalization, allocation policy, frame layout, emission, relocations, and linking. |
 
 Reusable modules must not import `Milky2018/wasmoon`, `Milky2018/wasmoon_jit`, or Wasmoon-native FFI packages. `scripts/audit_module_boundaries.py` enforces that hard dependency direction.
@@ -78,12 +80,11 @@ Core modules pass through `wasmoon/validator` before the CLI instantiates or com
 1. Parse and validate the core module.
 2. Build a canonical `wasmoon/wasm_frontend` translation context.
 3. Translate each selected function into MilkIR and run the requested optimization level.
-4. Lower verified MilkIR through `milkir_machv` and `wasm_machv` into target-neutral MachV.
-5. Lower semantic MachV into verified AArch64 or x64 Target VCode.
-6. Expose Target VCode directly through the read-only `regalloc.FunctionView`, run the verified backtracking allocator through `machv_regalloc`, materialize its `AllocationPlan`, and construct a verified target frame.
-7. Let the selected target emit machine code, relocations, traps, and safepoint metadata into an unlinked code object.
-8. Package compiled functions as an in-memory or serialized v9 artifact with symbolic relocations and an exact compatibility manifest.
-9. Let `wasmoon_jit` verify compatibility, resolve runtime symbols, transactionally install code, initialize VMContext state, and enter native code through Wasmoon-owned trampolines.
+4. Stream verified core and WebAssembly-dialect MilkIR operations directly into an AArch64 or x64 lowering session, which constructs verified Target VCode.
+5. Expose Target VCode directly through the read-only `regalloc.FunctionView`, run the verified backtracking allocator through `vcode_regalloc`, materialize its `AllocationPlan`, and construct a verified target frame.
+6. Let the selected target emit machine code, relocations, traps, and safepoint metadata into an unlinked code object.
+7. Package compiled functions as an in-memory or serialized artifact with symbolic relocations and an exact compatibility manifest.
+8. Let `wasmoon_jit` verify compatibility, resolve runtime symbols, transactionally install code, initialize VMContext state, and enter native code through Wasmoon-owned trampolines.
 
 At O3, MilkIR may unroll only canonical constant-trip natural loops after checked signed/unsigned I32 or I64 trip analysis and complete SSA/effect remapping. Unsupported shapes, dynamic bounds, possible arithmetic wraparound, and transformations beyond the code-growth budget remain unchanged.
 
@@ -147,11 +148,11 @@ the terminal, idempotent `ComponentLinker::close` call.
 
 MilkIR uses SSA values and block parameters rather than WebAssembly operand-stack state. Its core opcode contract consists of five semantic families: scalar, memory, call, vector, and typed extension operations. WebAssembly-specific operations are represented through the `wasm_milkir` dialect or lowered into ordinary MilkIR operations by the frontend. Source-only fields such as WebAssembly SIMD memory indices, alignment hints, and immediate offsets are consumed before core IR construction.
 
-Semantic MachV represents function-owned typed values, blocks, explicit edge arguments, calls, effects, traps, safepoints, and target-neutral operations. Target-specific operations exist only inside `aarch64_target` or `x64_target` VCode, so an instruction from one architecture cannot be represented in the other target function. Each target module owns calling-convention legalization and physical-register policy, while Wasmoon-specific VMContext meanings remain owned by `wasmoon_jit`.
+`native_lowering` passes opaque transient value and block handles plus one operation at a time to the selected target. It deliberately does not own function CFG, SSA, instruction, or verification storage; MilkIR remains the sole target-independent program representation. Target-specific operations exist only inside `aarch64_target` or `x64_target` VCode, so an instruction from one architecture cannot be represented in the other target function. Each target module owns calling-convention legalization and physical-register policy, while Wasmoon-specific VMContext meanings remain owned by `wasmoon_jit`.
 
-Register allocation does not own or copy a second machine-IR graph. `machv_regalloc` adapts the selected target VCode to the reusable allocator's read-only `FunctionView`; both production targets use the same bundle-aware allocator. The aggregate target pipeline verifies selected VCode before allocation and independently verifies the materialized VCode allocation before frame planning. There is no lower-quality fallback allocator.
+Register allocation does not own or copy a second machine-IR graph. `vcode_regalloc` adapts the selected target VCode to the reusable allocator's read-only `FunctionView`; both production targets use the same bundle-aware allocator. The aggregate target pipeline verifies selected VCode before allocation and independently verifies the materialized VCode allocation before frame planning. There is no lower-quality fallback allocator.
 
-Target-neutral parallel assignments are linearized in `machv/vcode` with one
+Target-neutral parallel assignments are linearized in `vcode` with one
 dedicated transfer scratch per register bank. A shared legalization pass emits
 explicit emergency save and restore steps when a stack-to-stack transfer would
 otherwise clobber a live cycle value. Each target owns the optional physical

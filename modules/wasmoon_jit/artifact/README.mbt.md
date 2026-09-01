@@ -6,7 +6,7 @@ entries.
 The package defines the compatibility manifest, stable import and function
 identities, logical signatures, and the complete unlinked code-object payload.
 Relocations remain symbolic. Artifacts never contain process addresses,
-executable-memory addresses, linked images, MilkIR, MachV, Target VCode,
+executable-memory addresses, linked images, MilkIR, Target VCode,
 allocation results, or frame-planning objects.
 
 Decoding and encoding belong to this package. Compatibility checks, target

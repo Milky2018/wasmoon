@@ -1,7 +1,4 @@
 import {
-  "Milky2018/native_types" @native,
-  "Milky2018/native_types/semantic" @machv,
-  "Milky2018/milkir_machv",
   "Milky2018/milkir",
   "Milky2018/wasm_core/types",
   "Milky2018/wasmoon_jit",

@@ -1,5 +1,5 @@
 ///|
-/// Exact target-neutral value types carried by semantic MachV SSA values.
+/// Exact target-neutral value types shared by native lowering and target VCode.
 ///
 /// `Ptr64` is an untraced address or opaque handle. `GcRef64` is a nullable
 /// managed reference and must be reported as a root at GC safepoints.
@@ -49,6 +49,51 @@ pub(all) enum CallProtocol {
   Internal
   Platform
 } derive(Debug, Eq, Hash)
+
+///|
+/// Function-local stack-object request used during native lowering. The id is
+/// interpreted only by the current target-lowering session.
+pub(all) struct StackObject {
+  id : Int
+} derive(Debug, Eq, Hash)
+
+///|
+/// Native call target selected during streaming lowering.
+pub(all) enum Callee {
+  Internal(CodeSymbol)
+  External(ExternalSymbol)
+  Indirect
+} derive(Debug, Eq, Hash)
+
+///|
+/// Target-independent native call contract. This is ABI metadata, not an
+/// instruction or an intermediate representation node.
+pub(all) struct NativeCall {
+  callee : Callee
+  signature : Signature
+  protocol : CallProtocol
+  behavior : CallBehavior
+} derive(Debug, Eq, Hash)
+
+///|
+pub fn NativeCall::new(
+  callee : Callee,
+  signature : Signature,
+  protocol : CallProtocol,
+  behavior : CallBehavior,
+) -> NativeCall {
+  {
+    callee,
+    signature: Signature::new(signature.params, signature.results),
+    protocol,
+    behavior,
+  }
+}
+
+///|
+pub fn NativeCall::copy(self : NativeCall) -> NativeCall {
+  NativeCall::new(self.callee, self.signature, self.protocol, self.behavior)
+}
 
 ///|
 pub(all) struct CodeSymbol {

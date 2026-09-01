@@ -148,7 +148,7 @@ lldb -- ./wasmoon test path/to/test.wast
 
 # View every native compiler boundary
 ./wasmoon explore test.wat \
-  --stage milkir machv vcode allocated-vcode code-object mc
+  --stage milkir opt-milkir vcode allocated-vcode code-object mc
 
 # View machine code
 ./wasmoon explore test.wat --stage mc

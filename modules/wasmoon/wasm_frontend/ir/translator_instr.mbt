@@ -763,7 +763,7 @@ fn Translator::translate_instruction(
 
     // Memory management (multi-memory support via memidx)
     // Note: These use IR opcodes instead of desugaring because they require
-    // libcalls that are handled in the MachV emit phase
+    // libcalls that are handled during native lowering
     MemoryGrow(memidx) => {
       let delta = self.pop()
       let is_mem64 = memidx < self.memory_is_64.length() &&
@@ -1008,7 +1008,7 @@ fn Translator::translate_instruction(
     }
     TableGrow(table_idx) => {
       // Note: Uses IR opcode instead of desugaring because it requires
-      // a libcall that is handled in the MachV emit phase
+      // a libcall that is handled during native lowering
       // Stack: [init_value, delta] -> [result]
       let delta = self.pop()
       let init_value = self.pop()

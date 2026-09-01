@@ -99,7 +99,7 @@ test "run JIT cache version tracks the artifact format" {
 ///|
 test "run JIT cache encodes the codegen revision as a path-safe component" {
   inspect(
-    cache_revision_file_tag("machv-vcode-9"),
+    cache_revision_file_tag("direct-vcode-1"),
     content="006d0061006300680076002d00760063006f00640065002d0039",
   )
 }
@@ -298,7 +298,7 @@ test "run JIT cache rejects an artifact from the previous codegen revision" {
   }
   let previous : @artifact.Artifact = {
     ..current,
-    manifest: { ..current.manifest, codegen_revision: "machv-vcode-8", },
+    manifest: { ..current.manifest, codegen_revision: "direct-vcode-0", },
   }
   let path = cache_test_file("previous-codegen")
   save_run_jit_cache(path, previous)
@@ -314,7 +314,7 @@ test "run JIT cache rejects an artifact from the previous codegen revision" {
       @fs.path_exists(path),
     ),
     content=(
-      #|("machv-vcode-9", "machv-vcode-8", true, false)
+      #|("direct-vcode-1", "direct-vcode-0", true, false)
     ),
   )
 }

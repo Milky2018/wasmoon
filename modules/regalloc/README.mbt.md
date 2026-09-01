@@ -66,7 +66,7 @@ this path before target emission.
 
 ## Production integration
 
-Wasmoon's AArch64 and x64 JIT pipelines lower semantic MachV to target-owned
+Wasmoon's AArch64 and x64 JIT pipelines lower MilkIR directly to target-owned
 VCode and expose that VCode directly through `FunctionView`. The adapter
 materializes the returned plan into Target VCode's separate `Allocation` side
 tables. The aggregate target pipeline verifies

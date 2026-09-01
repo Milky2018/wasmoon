@@ -6,7 +6,7 @@ test "compile metrics preserve every production phase and allocation summary" {
   reset_module(1)
   begin_function(7, "measured", 2, 30)
   record_stage_us(Optimize, 10L)
-  record_stage_us(SemanticLowering, 20L)
+  record_stage_us(NativeLowering, 20L)
   record_stage_us(TargetLowering, 30L)
   record_stage_us(RegisterAllocation, 40L)
   record_stage_us(FramePlanning, 50L)
@@ -77,12 +77,8 @@ test "detailed compile subphases reconcile their declared parent" {
   begin_function(7, "measured", 2, 30)
   record_stage_us(Optimize, 10L)
   record_compile_subphase_us("frontend_translation", 5L)
-  record_compile_subphase_us(
-    "semantic_validation",
-    7L,
-    parent="semantic_lowering",
-  )
-  record_stage_us(SemanticLowering, 9L)
+  record_compile_subphase_us("native_validation", 7L, parent="native_lowering")
+  record_stage_us(NativeLowering, 9L)
   record_function_compile_us(30L)
   finish_function(18, 96)
   record_module_subphase_us("module_preparation", 3L)
@@ -101,8 +97,8 @@ test "detailed compile subphases reconcile their declared parent" {
   inspect(
     report.contains(
       (
-        #|"name": "semantic_validation",
-        #|          "parent": "semantic_lowering",
+        #|"name": "native_validation",
+        #|          "parent": "native_lowering",
         #|          "duration_us": "7"
       ),
     ),
@@ -111,8 +107,8 @@ test "detailed compile subphases reconcile their declared parent" {
   inspect(
     report.contains(
       (
-        #|"name": "semantic_orchestration",
-        #|          "parent": "semantic_lowering",
+        #|"name": "native_orchestration",
+        #|          "parent": "native_lowering",
         #|          "duration_us": "2"
       ),
     ),

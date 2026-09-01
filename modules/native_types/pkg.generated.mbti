@@ -50,6 +50,17 @@ pub fn CallProtocol::hash_combine(Self, Hasher) -> Unit
 pub fn CallProtocol::not_equal(Self, Self) -> Bool
 pub fn CallProtocol::to_repr(Self) -> @debug.Repr
 
+pub(all) enum Callee {
+  Internal(CodeSymbol)
+  External(ExternalSymbol)
+  Indirect
+} derive(Eq, Hash, @debug.Debug)
+pub fn Callee::equal(Self, Self) -> Bool
+pub fn Callee::hash(Self) -> Int
+pub fn Callee::hash_combine(Self, Hasher) -> Unit
+pub fn Callee::not_equal(Self, Self) -> Bool
+pub fn Callee::to_repr(Self) -> @debug.Repr
+
 pub(all) struct CodeSymbol {
   name : String
 } derive(Eq, Hash, @debug.Debug)
@@ -164,6 +175,20 @@ pub fn MemoryEffect::hash_combine(Self, Hasher) -> Unit
 pub fn MemoryEffect::not_equal(Self, Self) -> Bool
 pub fn MemoryEffect::to_repr(Self) -> @debug.Repr
 
+pub(all) struct NativeCall {
+  callee : Callee
+  signature : Signature
+  protocol : CallProtocol
+  behavior : CallBehavior
+} derive(Eq, Hash, @debug.Debug)
+pub fn NativeCall::copy(Self) -> Self
+pub fn NativeCall::equal(Self, Self) -> Bool
+pub fn NativeCall::hash(Self) -> Int
+pub fn NativeCall::hash_combine(Self, Hasher) -> Unit
+pub fn NativeCall::new(Callee, Signature, CallProtocol, CallBehavior) -> Self
+pub fn NativeCall::not_equal(Self, Self) -> Bool
+pub fn NativeCall::to_repr(Self) -> @debug.Repr
+
 pub(all) struct OperationSemantics {
   memory : MemoryEffect
   may_trap : Bool
@@ -233,6 +258,15 @@ pub fn StackMapMetadata::equal(Self, Self) -> Bool
 pub fn StackMapMetadata::new(Int, argument_root_count~ : Int) -> Self
 pub fn StackMapMetadata::not_equal(Self, Self) -> Bool
 pub fn StackMapMetadata::to_repr(Self) -> @debug.Repr
+
+pub(all) struct StackObject {
+  id : Int
+} derive(Eq, Hash, @debug.Debug)
+pub fn StackObject::equal(Self, Self) -> Bool
+pub fn StackObject::hash(Self) -> Int
+pub fn StackObject::hash_combine(Self, Hasher) -> Unit
+pub fn StackObject::not_equal(Self, Self) -> Bool
+pub fn StackObject::to_repr(Self) -> @debug.Repr
 
 pub(all) enum TrapReason {
   Unreachable

@@ -904,14 +904,14 @@ fn JITModule::build_trap_report(
       "x10: \{@wasmoon_jit.format_u64_hex(details.x10)}\n" +
       "x11: \{@wasmoon_jit.format_u64_hex(details.x11)}\n" +
       "x15: \{@wasmoon_jit.format_u64_hex(details.x15)}\n\n" +
-      "== IR ==\n" +
+      "== MilkIR ==\n" +
       dbg.ir +
       "\n\n" +
-      "== MachV (before regalloc) ==\n" +
-      dbg.machv_before_regalloc +
+      "== Target VCode ==\n" +
+      dbg.target_vcode +
       "\n\n" +
-      "== MachV (after regalloc) ==\n" +
-      dbg.machv_after_regalloc +
+      "== Allocated Target VCode ==\n" +
+      dbg.allocated_vcode +
       "\n\n" +
       "== Machine Code ==\n" +
       dbg.machine_code +
@@ -934,14 +934,14 @@ fn JITModule::build_trap_report(
             "caller_func_idx: \{caller_idx}\n" +
             "caller_name: \{caller_name}\n" +
             "caller_pc: \{@wasmoon_jit.format_u64_hex(caller_pc)}\n\n" +
-            "== Caller IR ==\n" +
+            "== Caller MilkIR ==\n" +
             cdbg.ir +
             "\n\n" +
-            "== Caller MachV (before regalloc) ==\n" +
-            cdbg.machv_before_regalloc +
+            "== Caller Target VCode ==\n" +
+            cdbg.target_vcode +
             "\n\n" +
-            "== Caller MachV (after regalloc) ==\n" +
-            cdbg.machv_after_regalloc +
+            "== Caller Allocated Target VCode ==\n" +
+            cdbg.allocated_vcode +
             "\n\n" +
             "== Caller Machine Code ==\n" +
             cdbg.machine_code +

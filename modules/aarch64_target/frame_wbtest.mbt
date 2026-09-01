@@ -1,5 +1,5 @@
 ///|
-test "AArch64 frame rejects overlapping target stack-object descriptors" {
+test "AArch64 frame rejects conflicting target stack-object descriptors" {
   let builder : @vcode.Builder[AArch64Inst] = @vcode.Builder::new(
     "overlapping_stack_objects",
     [],
@@ -7,7 +7,7 @@ test "AArch64 frame rejects overlapping target stack-object descriptors" {
   let block = builder.entry_block()
   builder.append_body(
     block,
-    StackAddress(AArch64StackObject::new(0, 16, 8, 32, 8)),
+    StackAddress(AArch64StackObject::new(0, 16, 8)),
     [],
     [@vcode.Output::any(Ptr64)],
     [],
@@ -16,7 +16,7 @@ test "AArch64 frame rejects overlapping target stack-object descriptors" {
   |> ignore
   builder.append_body(
     block,
-    StackAddress(AArch64StackObject::new(8, 8, 8, 32, 8)),
+    StackAddress(AArch64StackObject::new(0, 8, 8)),
     [],
     [@vcode.Output::any(Ptr64)],
     [],
@@ -39,9 +39,9 @@ test "AArch64 frame rejects overlapping target stack-object descriptors" {
     error =>
       inspect(
         error,
-        content="InvalidStackObjectArea(message=\"stack objects overlap in the target frame\")",
+        content="InvalidStackObjectArea(message=\"stack-object id has conflicting size or alignment\")",
       )
   } noraise {
-    _ => fail("expected overlapping target stack objects to be rejected")
+    _ => fail("expected conflicting target stack objects to be rejected")
   }
 }

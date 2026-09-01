@@ -126,7 +126,7 @@ pub fn is_cancelled_trap_code(code : Int) -> Bool {
 
 ///|
 /// Map Wasm trap reasons to the payload consumed by Wasmoon's native trap
-/// handler. MachV only carries the integer payload; this module owns the
+/// handler. Native lowering only carries the integer payload; this module owns the
 /// Wasmoon-specific reason-to-payload policy.
 pub fn wasm_trap_payload(reason : String) -> Int {
   if reason == "unreachable" {

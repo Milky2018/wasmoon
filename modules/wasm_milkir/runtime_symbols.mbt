@@ -3,7 +3,7 @@
 ///
 /// The helper identity stays typed throughout lowering. An embedding assigns
 /// its external symbol spelling only when the operation enters MilkIR or
-/// MachV.
+/// native lowering.
 pub(all) enum WasmRuntimeHelper {
   MemoryGrow
   MemorySize

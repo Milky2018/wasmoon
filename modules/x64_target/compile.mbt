@@ -102,6 +102,34 @@ pub fn CompilationSession::compile_selected(
 }
 
 ///|
+pub(all) struct CompilationDiagnostics {
+  target_vcode : String
+  allocated_vcode : String
+  object : @code_object.UnlinkedCodeObject
+}
+
+///|
+pub fn diagnose_selected(
+  selected : SelectedFunction,
+) -> CompilationDiagnostics raise X64CompileError {
+  let function = selected.constructed.function
+  let allocation = allocate(function) catch {
+    error => raise AllocationFailed(cause=error)
+  }
+  let frame = plan_frame(function, allocation) catch {
+    error => raise FramePlanningFailed(cause=error)
+  }
+  let object = emit(function, allocation, frame) catch {
+    error => raise EmissionFailed(cause=error)
+  }
+  {
+    target_vcode: function.summary(),
+    allocated_vcode: function.summary() + allocation.summary(),
+    object,
+  }
+}
+
+///|
 /// Compile externally supplied x64 VCode through the safe validated entry.
 pub fn compile(
   function : @vcode.Function[X64Inst],

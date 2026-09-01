@@ -113,7 +113,7 @@ wasmoon test --help
 
 # explore
 wasmoon explore examples/add.wat \
-  --stage milkir machv vcode allocated-vcode code-object mc
+  --stage milkir opt-milkir vcode allocated-vcode code-object mc
 wasmoon explore --help
 
 # component
@@ -149,7 +149,7 @@ python3 scripts/smith_diff/run.py run --count 1000
 Use these options when diagnosing JIT failures:
 
 - `-D`: debug logging
-- `--dump-on-trap`: dump IR/MachV/MC for the trapping function
+- `--dump-on-trap`: dump MilkIR/Target VCode/MC for the trapping function
 - `-W`: generate DWARF debug info for JIT code (better stack traces in LLDB)
 
 Example:

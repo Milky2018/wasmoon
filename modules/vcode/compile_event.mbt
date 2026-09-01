@@ -16,7 +16,7 @@ pub(all) struct RegallocLoopStatistics {
 ///
 /// The observer must not mutate compiler inputs from inside the callback.
 pub(all) enum TargetCompileEvent {
-  // Target-neutral semantic MachV analysis began. Targets without a distinct
+  // Target instruction-selection analysis began. Targets without a distinct
   // analysis pass may proceed directly to `TargetConstructionStarted`.
   TargetAnalysisStarted
   // Construction of selected target VCode began.

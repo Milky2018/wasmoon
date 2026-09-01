@@ -10,15 +10,15 @@ license = "Apache-2.0"
 
 keywords = [ "aarch64", "compiler", "codegen", "jit" ]
 
-description = "AArch64 target pipeline from semantic MachV to native code"
+description = "AArch64 direct MilkIR target pipeline to native code"
 
 import {
   "Milky2018/milkir@0.12.6",
   "Milky2018/native_types@0.12.6",
+  "Milky2018/native_lowering@0.12.6",
   "Milky2018/vcode@0.12.6",
   "Milky2018/code_object@0.12.6",
   "Milky2018/vcode_regalloc@0.12.6",
-  "Milky2018/milkir_machv@0.12.6",
 }
 
 preferred_target = "wasm-gc"

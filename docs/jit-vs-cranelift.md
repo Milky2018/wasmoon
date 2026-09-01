@@ -151,7 +151,7 @@ const ECLASS_ENODE_LIMIT: usize = 5;
 
 ## 3. Register Allocation
 
-### Wasmoon (`regalloc/` and `machv_regalloc/`)
+### Wasmoon (`regalloc/` and `vcode_regalloc/`)
 
 ```moonbit
 struct BacktrackingAllocator {

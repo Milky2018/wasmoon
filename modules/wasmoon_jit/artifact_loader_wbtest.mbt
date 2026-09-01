@@ -12,7 +12,7 @@ fn loader_artifact() -> @artifact.Artifact {
       },
       required_cpu_features: [{ name: "neon", }],
       jit_abi_version: 3,
-      codegen_revision: "machv-2026-07-22",
+      codegen_revision: "legacy-codegen-1",
       module_identity: {
         name: "answer",
         source_digest: { bytes: Bytes::make(32, b'\x11'), },
@@ -196,7 +196,7 @@ test "artifact compatibility reports exact mismatch causes" {
       #|  JitAbiVersionMismatch(expected=4, actual=3),
       #|  CodegenRevisionMismatch(
       #|    expected="different",
-      #|    actual="machv-2026-07-22",
+      #|    actual="legacy-codegen-1",
       #|  ),
       #|  ModuleIdentityMismatch(
       #|    expected={

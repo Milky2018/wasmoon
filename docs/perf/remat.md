@@ -100,7 +100,7 @@ Pipeline integration point (proposed):
 
 1. `@ir.translate_function(...)`
 2. `@ir.optimize_with_level(...)` (existing passes, plus a final remat+DCE step)
-3. `@milkir_machv.lower_core_function(...)`
+3. `@milkir_native.lower_core_to_sink(...)`
 4. `@regalloc.allocate_registers_backtracking_output(...)`
 
 This matches Cranelift’s intent: shrink live ranges *before* lowering/regalloc.

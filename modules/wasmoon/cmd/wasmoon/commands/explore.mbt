@@ -6,7 +6,6 @@ priv struct CompiledFunc {
   source : String // WAT source code
   ir : String
   ir_opt : String
-  machv : String
   vcode : String
   regalloc : String
   code_object : String
@@ -68,8 +67,7 @@ fn run_explore_with_compiler(
   let show_regalloc = show_all ||
     stages.contains("allocated-vcode") ||
     stages.contains("regalloc")
-  let show_mc = show_all || stages.contains("mc") || stages.contains("machv-mc")
-  let show_machv = show_all || stages.contains("machv")
+  let show_mc = show_all || stages.contains("mc")
   let show_vcode = show_all || stages.contains("vcode")
   let show_code_object = show_all || stages.contains("code-object")
   // Load the module
@@ -195,7 +193,6 @@ fn run_explore_with_compiler(
             source: source_text,
             ir: text,
             ir_opt: text,
-            machv: text,
             vcode: text,
             regalloc: text,
             code_object: text,
@@ -236,7 +233,6 @@ fn run_explore_with_compiler(
             source: source_text,
             ir: ir_text,
             ir_opt: ir_optimized,
-            machv: text,
             vcode: text,
             regalloc: text,
             code_object: text,
@@ -246,7 +242,6 @@ fn run_explore_with_compiler(
         continue
       }
     }
-    let machv_text = diagnostics.semantic_machv
     let vcode_text = diagnostics.target_vcode
     let allocated_text = diagnostics.allocated_vcode
     let code_object_text = diagnostics.code_object
@@ -261,11 +256,6 @@ fn run_explore_with_compiler(
       println("")
       println("── Optimized MilkIR ──")
       println(ir_optimized)
-    }
-    if !html_output && show_machv {
-      println("")
-      println("── Semantic MachV ──")
-      println(machv_text)
     }
     if !html_output && show_vcode {
       println("")
@@ -296,7 +286,6 @@ fn run_explore_with_compiler(
         source: source_text,
         ir: ir_text,
         ir_opt: ir_optimized,
-        machv: machv_text,
         vcode: vcode_text,
         regalloc: allocated_text,
         code_object: code_object_text,

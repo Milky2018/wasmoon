@@ -13,7 +13,7 @@ fn sample_artifact() -> Artifact {
       },
       required_cpu_features: [{ name: "neon", }],
       jit_abi_version: 3,
-      codegen_revision: "machv-2026-07-22",
+      codegen_revision: "legacy-codegen-1",
       module_identity: {
         name: "answer",
         source_digest: { bytes: Bytes::make(32, b'\x11'), },
@@ -87,7 +87,7 @@ test "artifact preserves the complete unlinked function contract" {
       #|    },
       #|    required_cpu_features: [{ name: "neon" }],
       #|    jit_abi_version: 3,
-      #|    codegen_revision: "machv-2026-07-22",
+      #|    codegen_revision: "legacy-codegen-1",
       #|    module_identity: {
       #|      name: "answer",
       #|      source_digest: sha256:1111111111111111111111111111111111111111111111111111111111111111,

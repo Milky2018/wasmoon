@@ -56,27 +56,14 @@ fn record_target_allocation_stats(
 }
 
 ///|
-fn semantic_cleanup_phase_name(
-  phase : @semantic_machv.MandatoryCleanupPhase,
-) -> String {
-  match phase {
-    VerifyInput => "semantic_cleanup.verify_input"
-    CollectAliases => "semantic_cleanup.collect_aliases"
-    RewriteAliases => "semantic_cleanup.rewrite_aliases"
-    RemoveDeadInstructions => "semantic_cleanup.remove_dead_instructions"
-    SealOutput => "semantic_cleanup.seal_output"
-  }
-}
-
-///|
-fn semantic_lower_metrics_observer() -> (@milkir_machv.SemanticLowerEvent) -> Unit {
+fn native_lower_metrics_observer() -> (@milkir_native.NativeLowerEvent) -> Unit {
   let phase : Ref[(String, @perf.PerfTick)?] = { val: None, }
   fn close_phase() -> Unit {
     if phase.val is Some((name, tick)) {
       @perf.record_compile_subphase_us(
         name,
         @perf.elapsed_us(tick),
-        parent="semantic_lowering",
+        parent="native_lowering",
       )
       phase.val = None
     }
@@ -86,19 +73,13 @@ fn semantic_lower_metrics_observer() -> (@milkir_machv.SemanticLowerEvent) -> Un
     match event {
       InputValidationStarted => {
         close_phase()
-        phase.val = Some(("semantic_input_validation", @perf.tick_now()))
+        phase.val = Some(("native_input_validation", @perf.tick_now()))
       }
-      SemanticConstructionStarted => {
+      TargetConstructionStarted => {
         close_phase()
-        phase.val = Some(("semantic_construction", @perf.tick_now()))
+        phase.val = Some(("target_construction", @perf.tick_now()))
       }
-      CleanupPhaseStarted(cleanup_phase) => {
-        close_phase()
-        phase.val = Some(
-          (semantic_cleanup_phase_name(cleanup_phase), @perf.tick_now()),
-        )
-      }
-      SemanticLoweringFinished => close_phase()
+      NativeLoweringFinished => close_phase()
     }
   }
 }

@@ -90,18 +90,18 @@ pub(all) enum X64VectorIntBinary {
   Max(@native.Signedness)
   SaturatingAdd(@native.Signedness)
   SaturatingSub(@native.Signedness)
-  ExtendMultiply(@semantic.VectorHalf, @native.Signedness)
+  ExtendMultiply(@lowering.VectorHalf, @native.Signedness)
   Dot16To32Signed
   Q15MultiplyRoundedSaturating
 } derive(Eq, Debug)
 
 ///|
 pub(all) enum X64VectorConversion {
-  ExtendLow(@semantic.VectorLane, @native.Signedness)
-  ExtendHigh(@semantic.VectorLane, @native.Signedness)
-  Narrow(@semantic.VectorLane, @native.Signedness)
-  FloatToInt(@semantic.VectorLane, @native.Signedness)
-  IntToFloat(@semantic.VectorLane, @native.Signedness)
+  ExtendLow(@lowering.VectorLane, @native.Signedness)
+  ExtendHigh(@lowering.VectorLane, @native.Signedness)
+  Narrow(@lowering.VectorLane, @native.Signedness)
+  FloatToInt(@lowering.VectorLane, @native.Signedness)
+  IntToFloat(@lowering.VectorLane, @native.Signedness)
   PromoteLowF32x4
   DemoteZeroF64x2
 } derive(Eq, Debug)
@@ -109,8 +109,8 @@ pub(all) enum X64VectorConversion {
 ///|
 pub(all) enum X64VectorPredicate {
   AnyTrue
-  AllTrue(@semantic.VectorLane)
-  BitMask(@semantic.VectorLane)
+  AllTrue(@lowering.VectorLane)
+  BitMask(@lowering.VectorLane)
 } derive(Eq, Debug)
 
 ///|
@@ -159,22 +159,18 @@ pub(all) enum X64Conversion {
 
 ///|
 pub struct X64StackObject {
-  offset : Int
+  id : Int
   size : Int
   alignment : Int
-  area_size : Int
-  area_alignment : Int
 } derive(Eq, Debug)
 
 ///|
 pub fn X64StackObject::new(
-  offset : Int,
+  id : Int,
   size : Int,
   alignment : Int,
-  area_size : Int,
-  area_alignment : Int,
 ) -> X64StackObject {
-  { offset, size, alignment, area_size, area_alignment, }
+  { id, size, alignment, }
 }
 
 ///|
@@ -184,14 +180,7 @@ fn is_power_of_two(value : Int) -> Bool {
 
 ///|
 fn X64StackObject::is_valid(self : X64StackObject) -> Bool {
-  self.offset >= 0 &&
-  self.size > 0 &&
-  is_power_of_two(self.alignment) &&
-  self.offset % self.alignment == 0 &&
-  self.area_size >= self.offset + self.size &&
-  is_power_of_two(self.area_alignment) &&
-  self.area_alignment >= self.alignment &&
-  self.area_size % self.area_alignment == 0
+  self.id >= 0 && self.size > 0 && is_power_of_two(self.alignment)
 }
 
 ///|
@@ -214,29 +203,29 @@ pub(all) enum X64Inst {
   CarrierMove(@native.ValueType, @native.ValueType)
   Select(@native.ValueType)
   VectorSelect
-  VectorSplat(@semantic.VectorLane)
-  VectorExtractLane(@semantic.VectorLane, Int, @native.Signedness?)
-  VectorReplaceLane(@semantic.VectorLane, Int)
+  VectorSplat(@lowering.VectorLane)
+  VectorExtractLane(@lowering.VectorLane, Int, @native.Signedness?)
+  VectorReplaceLane(@lowering.VectorLane, Int)
   VectorShuffle(FixedArray[Int])
   VectorSwizzle
-  VectorBitwise(@semantic.VectorBitwiseOp)
-  VectorIntUnary(@semantic.VectorLane, X64VectorIntUnary)
-  VectorIntBinary(@semantic.VectorLane, X64VectorIntBinary)
-  VectorIntShift(@semantic.VectorLane, @semantic.VectorIntShiftOp)
-  VectorIntCompare(@semantic.VectorLane, @semantic.VectorIntComparison)
+  VectorBitwise(@lowering.VectorBitwiseOp)
+  VectorIntUnary(@lowering.VectorLane, X64VectorIntUnary)
+  VectorIntBinary(@lowering.VectorLane, X64VectorIntBinary)
+  VectorIntShift(@lowering.VectorLane, @lowering.VectorIntShiftOp)
+  VectorIntCompare(@lowering.VectorLane, @lowering.VectorIntComparison)
   VectorConvert(X64VectorConversion)
   VectorPredicate(X64VectorPredicate)
-  VectorFloatUnary(@semantic.VectorLane, @semantic.VectorFloatUnaryOp)
-  VectorFloatBinary(@semantic.VectorLane, @semantic.VectorFloatBinaryOp)
-  VectorFloatTernary(@semantic.VectorLane, @semantic.FloatTernaryOp)
-  VectorFloatCompare(@semantic.VectorLane, @semantic.VectorFloatComparison)
+  VectorFloatUnary(@lowering.VectorLane, @lowering.VectorFloatUnaryOp)
+  VectorFloatBinary(@lowering.VectorLane, @lowering.VectorFloatBinaryOp)
+  VectorFloatTernary(@lowering.VectorLane, @lowering.FloatTernaryOp)
+  VectorFloatCompare(@lowering.VectorLane, @lowering.VectorFloatComparison)
   VectorPairwiseAddI16x8
   VectorRelaxedDot8To16
   IntUnary(GprWidth, X64IntUnary)
   IntBinary(GprWidth, X64IntBinary)
   PopulationCount(GprWidth)
   IntHighMultiply(GprWidth, @native.Signedness)
-  IntWithOverflow(GprWidth, @semantic.IntOverflowOp)
+  IntWithOverflow(GprWidth, @lowering.IntOverflowOp)
   IntRemainder(GprWidth, @native.Signedness)
   TrapIfZero(GprWidth)
   TrapIfSignedDivOverflow(GprWidth)
@@ -258,14 +247,14 @@ pub(all) enum X64Inst {
   ScalarStore(@native.AccessWidth, @native.ValueType, UInt64)
   VectorLoad128(UInt64)
   VectorStore128(UInt64)
-  VectorLoadSplat(@semantic.VectorLane, UInt64)
-  VectorLoadExtend(@semantic.VectorLane, @native.Signedness, UInt64)
+  VectorLoadSplat(@lowering.VectorLane, UInt64)
+  VectorLoadExtend(@lowering.VectorLane, @native.Signedness, UInt64)
   VectorLoadZero(@native.AccessWidth, UInt64)
-  VectorLoadLane(@semantic.VectorLane, Int, UInt64)
-  VectorStoreLane(@semantic.VectorLane, Int, UInt64)
+  VectorLoadLane(@lowering.VectorLane, Int, UInt64)
+  VectorStoreLane(@lowering.VectorLane, Int, UInt64)
   AtomicLoad(@native.AccessWidth, @native.ValueType)
   AtomicStore(@native.AccessWidth, @native.ValueType)
-  AtomicRmw(@native.AccessWidth, @native.ValueType, @semantic.AtomicRmwOp)
+  AtomicRmw(@native.AccessWidth, @native.ValueType, @lowering.AtomicRmwOp)
   AtomicCompareExchange(@native.AccessWidth, @native.ValueType)
   AtomicFence
   SafepointMarker
@@ -748,7 +737,7 @@ fn require_mandatory_clobbers(
 }
 
 ///|
-fn vector_lane_scalar_type(lane : @semantic.VectorLane) -> @native.ValueType {
+fn vector_lane_scalar_type(lane : @lowering.VectorLane) -> @native.ValueType {
   match lane {
     I8x16 | I16x8 | I32x4 => I32
     I64x2 => I64
@@ -758,7 +747,7 @@ fn vector_lane_scalar_type(lane : @semantic.VectorLane) -> @native.ValueType {
 }
 
 ///|
-fn vector_lane_count(lane : @semantic.VectorLane) -> Int {
+fn vector_lane_count(lane : @lowering.VectorLane) -> Int {
   match lane {
     I8x16 => 16
     I16x8 => 8
@@ -768,7 +757,7 @@ fn vector_lane_count(lane : @semantic.VectorLane) -> Int {
 }
 
 ///|
-fn is_integer_vector_lane(lane : @semantic.VectorLane) -> Bool {
+fn is_integer_vector_lane(lane : @lowering.VectorLane) -> Bool {
   match lane {
     I8x16 | I16x8 | I32x4 | I64x2 => true
     F32x4 | F64x2 => false

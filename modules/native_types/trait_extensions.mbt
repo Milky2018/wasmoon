@@ -195,3 +195,30 @@ pub extend ValueType with Hash::{hash, hash_combine}
 
 ///|
 pub extend ValueType with Show::{to_string, output}
+
+///|
+pub extend StackObject with Debug::{to_repr}
+
+///|
+pub extend StackObject with Eq::{not_equal, equal}
+
+///|
+pub extend StackObject with Hash::{hash, hash_combine}
+
+///|
+pub extend Callee with Debug::{to_repr}
+
+///|
+pub extend Callee with Eq::{not_equal, equal}
+
+///|
+pub extend Callee with Hash::{hash, hash_combine}
+
+///|
+pub extend NativeCall with Debug::{to_repr}
+
+///|
+pub extend NativeCall with Eq::{not_equal, equal}
+
+///|
+pub extend NativeCall with Hash::{hash, hash_combine}

@@ -1,6 +1,6 @@
 # MilkIR
 
-MilkIR is a reusable, target-independent intermediate representation for compiler middle ends. A frontend translates source operations into MilkIR, optimization passes simplify the MilkIR function, and a lowering package such as `Milky2018/milkir_machv` turns it into machine-oriented IR.
+MilkIR is a reusable, target-independent intermediate representation for compiler middle ends. A frontend translates source operations into MilkIR, optimization passes simplify the MilkIR function, and `Milky2018/milkir_native` streams it directly into a native target selector.
 
 Target-independent means that MilkIR operations do not encode a particular instruction set or calling convention; it does not mean that every data width is target-configurable. MilkIR pointer/reference carriers are always 64-bit: `Ptr`, `Ref`, `CallableRef`, and `OpaqueRef` each have a fixed 64-bit representation. A backend for a non-64-bit target would require an explicit IR contract change rather than interpreting these types using the host pointer width.
 
@@ -11,7 +11,7 @@ frontend IR or bytecode
      MilkIR SSA  -- verify and optimize here
         |
         v
-      MachV IR   -- select instructions and allocate registers later
+    Target VCode -- select instructions directly, then allocate registers
 ```
 
 ## Start with one small function
@@ -106,7 +106,7 @@ Frontends must consume source-only metadata before constructing a core instructi
 
 ### Embedding context fields
 
-`GlobalValue` models a typed value loaded from an embedding-provided context, such as a linear-memory base pointer. Its declaration is interned in the `Function`; the instruction names that declaration and takes the context pointer explicitly. MilkIR does not know the field offset or runtime layout. The owning dialect validates the opaque `ContextField`, and its MilkIR-to-MachV adapter resolves it to a semantic `EnvironmentField`.
+`GlobalValue` models a typed value loaded from an embedding-provided context, such as a linear-memory base pointer. Its declaration is interned in the `Function`; the instruction names that declaration and takes the context pointer explicitly. MilkIR does not know the field offset or runtime layout. The owning dialect validates the opaque `ContextField`, and its native-lowering adapter resolves it to an `EnvironmentField`.
 
 Every declaration also states whether the field is `Stable` for the whole function invocation or `Mutable` across calls, plus the abstract region reached by the resulting pointer. Stable fields remain explicit and cheap to rematerialize: general GVN and LICM do not turn them into function-wide live ranges. Mutable fields may be reused across unrelated heap stores but are invalidated by calls and unknown memory writes. Targets materialize the semantic occurrences they receive rather than applying a second reuse policy. These contracts permit local redundancy elimination without pinning a physical register or hard-coding an embedding layout into MilkIR.
 
@@ -114,14 +114,14 @@ Every declaration also states whether the field is `Stable` for the whole functi
 
 MilkIR records the optimizer-visible facts of each built-in opcode in one semantic summary: whether it may trap, whether it reads or writes memory, and whether it has another observable effect. Dead-code elimination, loop optimization, global value numbering, and e-graph admission derive their safety decisions from that summary instead of maintaining independent opcode lists. Unknown extension operations are conservatively treated as trapping and effectful.
 
-Other concerns remain with the adapter that implements them. The verifier owns operand and result contracts, the printer owns textual syntax, MilkIR-MachV Lowering owns instruction selection, and the e-graph adapter owns which operations have an e-graph encoding. These are different responsibilities rather than duplicate semantic facts.
+Other concerns remain with the adapter that implements them. The verifier owns operand and result contracts, the printer owns textual syntax, native lowering owns instruction selection, and the e-graph adapter owns which operations have an e-graph encoding. These are different responsibilities rather than duplicate semantic facts.
 
 When adding a built-in opcode:
 
 1. Add its operand and result contract to the verifier.
 2. Classify its trap, memory, and observable-effect behavior in the opcode semantic summary.
 3. Add its textual representation to the printer.
-4. Add its instruction selection to MilkIR-MachV Lowering.
+4. Add its instruction selection to `milkir_native` or the owning dialect adapter.
 5. Add an e-graph encoding only if the e-graph node language represents it.
 
 The built-in family matches in those stages are exhaustive, so adding a new family or operation leaves a compiler error until its required behavior is supplied. E-graph admission is intentionally conservative: an operation without an explicit encoding remains outside the e-graph.
@@ -366,7 +366,7 @@ A frontend using MilkIR normally follows this sequence:
 4. Represent merges and loop-carried values with block parameters and jump arguments.
 5. Finalize and verify the function.
 6. Optimize it at the desired level.
-7. Lower it to the next IR, for example with `Milky2018/milkir_machv`.
+7. Stream it into a native target with `Milky2018/milkir_native`.
 
 For debugging, `Function::print` produces a readable textual view and `CFG::to_dot` produces Graphviz DOT for the control-flow graph. `CFG` also provides predecessors, successors, traversal orders, dominators, back edges, and loop discovery.
 
@@ -378,5 +378,5 @@ MilkIR focuses on target-independent SSA construction, verification, control-flo
 | --- | --- |
 | SSA construction, verification, CFGs, and optimization | `Milky2018/milkir` |
 | Optional WebAssembly extension operations | `Milky2018/wasm_milkir` |
-| Lowering from MilkIR to machine-oriented IR | `Milky2018/milkir_machv` |
+| Direct native target lowering | `Milky2018/milkir_native` |
 | Target instruction selection and ABI details | `Milky2018/aarch64_target` and `Milky2018/x64_target` |

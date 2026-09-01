@@ -13,7 +13,7 @@
    - JIT path calls `@ir.optimize_with_level(..., O2)` in `cmd/wasmoon/commands/run.mbt:1366`
 
 2. **Target pattern selection (being rebuilt at the Target VCode seam)**
-   - The former target-aware lowering pattern matcher was removed when production cut over to target-neutral semantic MachV.
+   - Target-aware instruction selection now consumes optimized MilkIR directly through a streaming protocol.
    - Target-specific fusion and immediate selection now belong in the AArch64 and x64 VCode pipelines tracked after ISS-196.
    - Generic MilkIR algebraic simplification remains in the MilkIR optimization pipeline.
 

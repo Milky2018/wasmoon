@@ -55,7 +55,7 @@ Collection starts in `cmd/wasmoon/run.mbt` during `compile_module_to_jit(...)`.
     orchestration work outside the named compiler stages.
 - Stage time:
   - `optimize_us`: MilkIR optimization.
-  - `lower_us`: validated Wasm MilkIR to semantic MachV lowering.
+  - `lower_us`: validated streaming MilkIR-to-native-target lowering.
   - `target_lower_us`: embedding ABI elaboration, target instruction selection,
     and selected-VCode verification.
   - `regalloc_us`: production VCode register allocation.

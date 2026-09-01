@@ -5,7 +5,8 @@
 Wasmoon is a WebAssembly runtime written in MoonBit. Its compiler pipeline is:
 
 `wat/wast/parser` → `validator` → `runtime` → interpreter, or `wasm_frontend` →
-`milkir` → `machv` → target VCode → `machv_regalloc` → emitter → JIT artifact.
+`milkir` → direct target lowering → target VCode → `vcode_regalloc` → emitter
+→ JIT artifact.
 
 - `modules/wasmoon/cmd/wasmoon` builds the CLI.
 - `modules/wasmoon/wasi` implements WASI Preview 1.
@@ -66,9 +67,9 @@ remove or override it when recording comparable corpus history.
 
 ## Compiler Boundaries
 
-Reusable infrastructure comprises `wasm_core`, `milkir`, `machv`, `regalloc`,
-`machv_regalloc`, `milkir_machv`, `wasm_machv`, `aarch64_target`, and
-`x64_target`.
+Reusable infrastructure comprises `wasm_core`, `milkir`, `native_types`,
+`native_lowering`, `vcode`, `regalloc`, `vcode_regalloc`, `milkir_native`,
+`wasm_native`, `aarch64_target`, and `x64_target`.
 
 - These modules must not import Wasmoon-owned packages; run
   `scripts/audit_module_boundaries.py` when changing package dependencies.

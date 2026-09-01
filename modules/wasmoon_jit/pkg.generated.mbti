@@ -5,9 +5,8 @@ import {
   "Milky2018/aarch64_target",
   "Milky2018/code_object",
   "Milky2018/milkir",
-  "Milky2018/milkir_machv",
+  "Milky2018/milkir_native",
   "Milky2018/native_types",
-  "Milky2018/native_types/semantic",
   "Milky2018/wasm_core/types",
   "Milky2018/wasm_milkir",
   "Milky2018/wasmoon_jit/artifact",
@@ -17,7 +16,7 @@ import {
 }
 
 // Values
-pub const WASMOON_CODEGEN_REVISION : String = "machv-vcode-9"
+pub const WASMOON_CODEGEN_REVISION : String = "direct-vcode-1"
 
 pub const WASMOON_JIT_ABI_VERSION : Int = 3
 
@@ -134,8 +133,6 @@ pub fn is_wasi_exit_trap_code(Int) -> Bool
 pub fn jit_trap_message(Int) -> String
 
 pub fn load_artifact(Bytes, ArtifactCompatibility, limits? : @artifact.DecodeLimits) -> LoadedArtifact raise ArtifactLoadError
-
-pub fn lower_wasm_body_semantic_machv(@milkir.Function, @wasm_milkir.WasmValidationContext, use_subtype_indirect_check? : Bool, canonical_type_indices? : Array[Int]) -> @semantic.Function raise JitPipelineError
 
 pub fn make_cstring(String) -> FixedArray[Byte]
 
@@ -276,23 +273,13 @@ pub fn JitInstallError::not_equal(Self, Self) -> Bool
 pub fn JitInstallError::to_repr(Self) -> @debug.Repr
 
 pub suberror JitPipelineError {
-  SemanticLoweringFailed(cause~ : @milkir_machv.SemanticLowerError)
-  RuntimeAbiInputInvalid(cause~ : @semantic.MachVVerifyError)
-  RuntimeAbiOutputInvalid(cause~ : @semantic.MachVVerifyError)
-  RuntimeAbiContractViolation(message~ : String)
+  NativeLoweringFailed(cause~ : @milkir_native.NativeLowerError)
   AArch64AbiInvalid(cause~ : @aarch64_target.InternalAbiError)
   X64AbiInvalid(cause~ : @x64_target.InternalAbiError)
-  MissingEnvironmentField(target~ : NativeTarget, field~ : String)
   AArch64LoweringFailed(cause~ : @aarch64_target.AArch64LowerError)
   X64LoweringFailed(cause~ : @x64_target.X64LowerError)
   AArch64CompilationFailed(cause~ : @aarch64_target.AArch64CompileError)
   X64CompilationFailed(cause~ : @x64_target.X64CompileError)
-  AArch64AllocationFailed(cause~ : @aarch64_target.AArch64AllocationError)
-  X64AllocationFailed(cause~ : @x64_target.X64AllocationError)
-  AArch64FramePlanningFailed(cause~ : @aarch64_target.AArch64FrameError)
-  X64FramePlanningFailed(cause~ : @x64_target.X64FrameError)
-  AArch64EmissionFailed(cause~ : @aarch64_target.AArch64EmitError)
-  X64EmissionFailed(cause~ : @x64_target.X64EmitError)
   AArch64LinkPreparationFailed(cause~ : @aarch64_target.AArch64LinkError)
   X64LinkPreparationFailed(cause~ : @x64_target.X64LinkError)
   InvalidJitRelocation(target~ : NativeTarget, index~ : Int, message~ : String)
@@ -579,8 +566,8 @@ pub fn JITDebugDB::set(Self, Int, JITFunctionDebug) -> Unit
 
 pub struct JITFunctionDebug {
   ir : String
-  machv_before_regalloc : String
-  machv_after_regalloc : String
+  target_vcode : String
+  allocated_vcode : String
   machine_code : String
 }
 pub fn JITFunctionDebug::JITFunctionDebug(String, String, String, String) -> Self
@@ -621,7 +608,6 @@ pub(all) struct JitIntegrationPlan {
 }
 
 pub struct JitPipelineDiagnostics {
-  semantic_machv : String
   target_vcode : String
   allocated_vcode : String
   code_object : String

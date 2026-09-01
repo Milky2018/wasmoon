@@ -1,10 +1,10 @@
 import {
-  "Milky2018/milkir_machv",
+  "Milky2018/milkir_native",
   "Milky2018/native_types" @native,
-  "Milky2018/native_types/semantic" @semantic_machv,
+  "Milky2018/native_lowering",
   "Milky2018/code_object",
   "Milky2018/vcode",
-  "Milky2018/wasm_machv",
+  "Milky2018/wasm_native",
   "Milky2018/aarch64_target",
   "Milky2018/x64_target",
   "Milky2018/milkir",
@@ -21,10 +21,6 @@ import {
 import {
   "Milky2018/wasmoon_jit/native_test_support",
 } for "test"
-
-import {
-  "Milky2018/wasmoon_jit/native_test_support",
-} for "wbtest"
 
 options(
   "native-stub": [

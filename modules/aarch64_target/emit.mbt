@@ -451,7 +451,7 @@ fn vector_structure_address(
 ///|
 fn vector_lane_memory_word(
   load : Bool,
-  lane : @semantic.VectorLane,
+  lane : @lowering.VectorLane,
   index : Int,
   address : @vcode.PhysicalReg,
   vector : @vcode.PhysicalReg,
@@ -493,7 +493,7 @@ fn vector_lane_memory_word(
 }
 
 ///|
-fn vector_splat_load_base(lane : @semantic.VectorLane) -> UInt {
+fn vector_splat_load_base(lane : @lowering.VectorLane) -> UInt {
   match lane {
     I8x16 => 0x4D40C000U
     I16x8 => 0x4D40C400U
@@ -545,7 +545,7 @@ fn atomic_operation_width(width : @native.AccessWidth) -> GprWidth {
 fn emit_atomic_rmw(
   buffer : CodeBuffer,
   width : @native.AccessWidth,
-  operation : @semantic.AtomicRmwOp,
+  operation : @lowering.AtomicRmwOp,
   address : @vcode.PhysicalReg,
   value : @vcode.PhysicalReg,
   result : @vcode.PhysicalReg,
@@ -977,7 +977,7 @@ fn emit_overflow_flag(
 fn emit_int_with_overflow(
   buffer : CodeBuffer,
   width : GprWidth,
-  operation : @semantic.IntOverflowOp,
+  operation : @lowering.IntOverflowOp,
   left : @vcode.PhysicalReg,
   right : @vcode.PhysicalReg,
   result : @vcode.PhysicalReg,
@@ -1110,7 +1110,7 @@ fn emit_vector_select(
 ///|
 fn emit_vector_splat(
   buffer : CodeBuffer,
-  lane : @semantic.VectorLane,
+  lane : @lowering.VectorLane,
   source : @vcode.PhysicalReg,
   destination : @vcode.PhysicalReg,
 ) -> Unit {
@@ -1128,7 +1128,7 @@ fn emit_vector_splat(
 ///|
 fn emit_vector_extract_lane(
   buffer : CodeBuffer,
-  lane : @semantic.VectorLane,
+  lane : @lowering.VectorLane,
   index : Int,
   extension : @native.Signedness?,
   source : @vcode.PhysicalReg,
@@ -1159,7 +1159,7 @@ fn emit_vector_extract_lane(
 ///|
 fn emit_vector_replace_lane(
   buffer : CodeBuffer,
-  lane : @semantic.VectorLane,
+  lane : @lowering.VectorLane,
   index : Int,
   source : @vcode.PhysicalReg,
   destination : @vcode.PhysicalReg,
@@ -1240,7 +1240,7 @@ fn emit_vector_shuffle(
 
 ///|
 fn vector_lane_encoding(
-  lane : @semantic.VectorLane,
+  lane : @lowering.VectorLane,
   byte_base : UInt,
   half_base : UInt,
   word_base : UInt,
@@ -1258,7 +1258,7 @@ fn vector_lane_encoding(
 ///|
 fn emit_vector_int_unary(
   buffer : CodeBuffer,
-  lane : @semantic.VectorLane,
+  lane : @lowering.VectorLane,
   operation : AArch64VectorIntUnary,
   source : @vcode.PhysicalReg,
   destination : @vcode.PhysicalReg,
@@ -1293,7 +1293,7 @@ fn emit_vector_int_unary(
 ///|
 fn emit_vector_int_binary(
   buffer : CodeBuffer,
-  lane : @semantic.VectorLane,
+  lane : @lowering.VectorLane,
   operation : AArch64VectorIntBinary,
   left : @vcode.PhysicalReg,
   right : @vcode.PhysicalReg,
@@ -1491,7 +1491,7 @@ fn emit_vector_int_binary(
 ///|
 fn emit_vector_extension(
   buffer : CodeBuffer,
-  lane : @semantic.VectorLane,
+  lane : @lowering.VectorLane,
   high : Bool,
   signedness : @native.Signedness,
   source : @vcode.PhysicalReg,
@@ -1518,7 +1518,7 @@ fn emit_vector_extension(
 ///|
 fn emit_vector_narrow(
   buffer : CodeBuffer,
-  lane : @semantic.VectorLane,
+  lane : @lowering.VectorLane,
   signedness : @native.Signedness,
   low : @vcode.PhysicalReg,
   high : @vcode.PhysicalReg,
@@ -1644,7 +1644,7 @@ fn emit_vector_predicate(
 ///|
 fn emit_vector_bitmask(
   buffer : CodeBuffer,
-  lane : @semantic.VectorLane,
+  lane : @lowering.VectorLane,
   source : @vcode.PhysicalReg,
   destination : @vcode.PhysicalReg,
 ) -> Unit raise AArch64EmitError {
@@ -1708,8 +1708,8 @@ fn emit_vector_bitmask(
 ///|
 fn emit_vector_int_shift(
   buffer : CodeBuffer,
-  lane : @semantic.VectorLane,
-  operation : @semantic.VectorIntShiftOp,
+  lane : @lowering.VectorLane,
+  operation : @lowering.VectorIntShiftOp,
   source : @vcode.PhysicalReg,
   amount : @vcode.PhysicalReg,
   destination : @vcode.PhysicalReg,
@@ -1762,8 +1762,8 @@ fn emit_vector_int_shift(
 ///|
 fn emit_vector_int_compare(
   buffer : CodeBuffer,
-  lane : @semantic.VectorLane,
-  comparison : @semantic.VectorIntComparison,
+  lane : @lowering.VectorLane,
+  comparison : @lowering.VectorIntComparison,
   left : @vcode.PhysicalReg,
   right : @vcode.PhysicalReg,
   destination : @vcode.PhysicalReg,
@@ -1832,7 +1832,7 @@ fn emit_vector_binary(
 
 ///|
 fn vector_float_lane_encoding(
-  lane : @semantic.VectorLane,
+  lane : @lowering.VectorLane,
   f32_base : UInt,
   f64_base : UInt,
 ) -> UInt raise AArch64EmitError {
@@ -1846,8 +1846,8 @@ fn vector_float_lane_encoding(
 ///|
 fn emit_vector_float_unary(
   buffer : CodeBuffer,
-  lane : @semantic.VectorLane,
-  operation : @semantic.VectorFloatUnaryOp,
+  lane : @lowering.VectorLane,
+  operation : @lowering.VectorFloatUnaryOp,
   source : @vcode.PhysicalReg,
   destination : @vcode.PhysicalReg,
 ) -> Unit raise AArch64EmitError {
@@ -1866,8 +1866,8 @@ fn emit_vector_float_unary(
 ///|
 fn emit_vector_float_binary(
   buffer : CodeBuffer,
-  lane : @semantic.VectorLane,
-  operation : @semantic.VectorFloatBinaryOp,
+  lane : @lowering.VectorLane,
+  operation : @lowering.VectorFloatBinaryOp,
   left : @vcode.PhysicalReg,
   right : @vcode.PhysicalReg,
   destination : @vcode.PhysicalReg,
@@ -1900,8 +1900,8 @@ fn emit_vector_float_binary(
 ///|
 fn emit_vector_float_compare(
   buffer : CodeBuffer,
-  lane : @semantic.VectorLane,
-  comparison : @semantic.VectorFloatComparison,
+  lane : @lowering.VectorLane,
+  comparison : @lowering.VectorFloatComparison,
   left : @vcode.PhysicalReg,
   right : @vcode.PhysicalReg,
   destination : @vcode.PhysicalReg,
@@ -1931,8 +1931,8 @@ fn emit_vector_float_compare(
 ///|
 fn emit_vector_float_ternary(
   buffer : CodeBuffer,
-  lane : @semantic.VectorLane,
-  operation : @semantic.FloatTernaryOp,
+  lane : @lowering.VectorLane,
+  operation : @lowering.FloatTernaryOp,
   left : @vcode.PhysicalReg,
   right : @vcode.PhysicalReg,
   addend : @vcode.PhysicalReg,
@@ -1981,7 +1981,7 @@ fn emit_vector_relaxed_dot8_to16(
 ///|
 fn emit_vector_bitwise(
   buffer : CodeBuffer,
-  operation : @semantic.VectorBitwiseOp,
+  operation : @lowering.VectorBitwiseOp,
   first : @vcode.PhysicalReg,
   second : @vcode.PhysicalReg,
   mask : @vcode.PhysicalReg,

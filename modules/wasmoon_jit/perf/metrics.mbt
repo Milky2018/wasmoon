@@ -60,7 +60,7 @@ pub fn elapsed_us(start : PerfTick) -> Int64 {
 /// cannot silently lose metrics through an unknown string.
 pub(all) enum FunctionCompileStage {
   Optimize
-  SemanticLowering
+  NativeLowering
   TargetLowering
   RegisterAllocation
   FramePlanning
@@ -332,7 +332,7 @@ pub fn record_stage_us(
   if current_function_state.val is Some(m) {
     match stage {
       Optimize => m.optimize_us = duration_us
-      SemanticLowering => m.lower_us = duration_us
+      NativeLowering => m.lower_us = duration_us
       TargetLowering => m.target_lower_us = duration_us
       RegisterAllocation => m.regalloc_us = duration_us
       FramePlanning => m.frame_plan_us = duration_us
@@ -340,8 +340,7 @@ pub fn record_stage_us(
     }
     if detail_enabled() {
       let parent_and_residual_name = match stage {
-        SemanticLowering =>
-          Some(("semantic_lowering", "semantic_orchestration"))
+        NativeLowering => Some(("native_lowering", "native_orchestration"))
         TargetLowering => Some(("target_lowering", "target_orchestration"))
         _ => None
       }

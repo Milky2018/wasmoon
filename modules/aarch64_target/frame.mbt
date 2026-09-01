@@ -18,6 +18,13 @@ priv struct ResultArea {
 }
 
 ///|
+priv struct StackObjectRequirements {
+  size : Int
+  alignment : Int
+  offsets : Array[Int]
+}
+
+///|
 pub struct AArch64Frame {
   priv layout : @vcode.FrameLayout
   priv local_size : Int
@@ -26,6 +33,7 @@ pub struct AArch64Frame {
   priv outgoing_args_size : Int
   priv result_area : ResultArea?
   priv stack_objects : StackObjectArea?
+  priv stack_object_offsets : Array[Int]
   priv emergency_move_offset : Int?
   priv requires_emergency_moves : Bool
   priv allocation_edit_count : Int
@@ -216,9 +224,8 @@ fn maximum_result_area_size(function : @vcode.Function[AArch64Inst]) -> Int {
 ///|
 fn stack_object_area_requirements(
   function : @vcode.Function[AArch64Inst],
-) -> (Int, Int)? raise AArch64FrameError {
-  let mut requirements : (Int, Int)? = None
-  let objects : Array[AArch64StackObject] = []
+) -> StackObjectRequirements? raise AArch64FrameError {
+  let objects : Array[AArch64StackObject?] = []
   for index in 0..<function.instruction_count() {
     let instruction = function.instruction_at(index).unwrap()
     if function.instruction(instruction) is Some(StackAddress(object)) {
@@ -227,29 +234,43 @@ fn stack_object_area_requirements(
           message="invalid stack-object descriptor in target VCode",
         )
       }
-      let current = (object.area_size, object.area_alignment)
-      match requirements {
-        Some(expected) if expected != current =>
-          raise InvalidStackObjectArea(
-            message="stack-address instructions disagree about the object area",
-          )
-        None => requirements = Some(current)
-        _ => ()
+      while objects.length() <= object.id {
+        objects.push(None)
       }
-      if !objects.contains(object) {
-        for existing in objects {
-          if object.offset < existing.offset + existing.size &&
-            existing.offset < object.offset + object.size {
-            raise InvalidStackObjectArea(
-              message="stack objects overlap in the target frame",
-            )
-          }
-        }
-        objects.push(object)
+      match objects[object.id] {
+        Some(existing) if existing != object =>
+          raise InvalidStackObjectArea(
+            message="stack-object id has conflicting size or alignment",
+          )
+        None => objects[object.id] = Some(object)
+        _ => ()
       }
     }
   }
-  requirements
+  if objects.is_empty() {
+    return None
+  }
+  let offsets : Array[Int] = []
+  let mut cursor = 0
+  let mut area_alignment = 1
+  for object in objects {
+    guard object is Some(object) else {
+      raise InvalidStackObjectArea(
+        message="stack-object ids must be dense within one function",
+      )
+    }
+    cursor = align_up(cursor, object.alignment)
+    offsets.push(cursor)
+    cursor += object.size
+    if object.alignment > area_alignment {
+      area_alignment = object.alignment
+    }
+  }
+  Some({
+    size: align_up(cursor, area_alignment),
+    alignment: area_alignment,
+    offsets,
+  })
 }
 
 ///|
@@ -411,9 +432,8 @@ pub fn AArch64Frame::stack_object_offset(
 ) -> Int? {
   match self.stack_objects {
     Some(area) if object.is_valid() &&
-      area.size == object.area_size &&
-      area.alignment == object.area_alignment =>
-      Some(area.offset + object.offset)
+      object.id < self.stack_object_offsets.length() =>
+      Some(area.offset + self.stack_object_offsets[object.id])
     _ => None
   }
 }
@@ -538,12 +558,13 @@ fn verify_target_frame(
   }
   match (expected_stack_objects, frame.stack_objects) {
     (None, None) => ()
-    (Some((size, alignment)), Some(area)) =>
-      if area.size != size ||
-        area.alignment != alignment ||
+    (Some(requirements), Some(area)) =>
+      if area.size != requirements.size ||
+        area.alignment != requirements.alignment ||
         area.offset < reserved_call_area_end ||
-        area.offset % alignment != 0 ||
-        area.offset + size > frame.local_size {
+        area.offset % requirements.alignment != 0 ||
+        area.offset + requirements.size > frame.local_size ||
+        frame.stack_object_offsets != requirements.offsets {
         raise InvalidStackObjectArea(
           message="planned stack-object area does not satisfy target requirements",
         )
@@ -624,11 +645,16 @@ fn plan_frame_verified(
   } else {
     None
   }
-  let stack_objects = match stack_object_area_requirements(function) {
-    Some((size, alignment)) => {
-      offset = align_up(offset, alignment)
-      let area = { offset, size, alignment, }
-      offset += size
+  let stack_object_requirements = stack_object_area_requirements(function)
+  let stack_objects = match stack_object_requirements {
+    Some(requirements) => {
+      offset = align_up(offset, requirements.alignment)
+      let area = {
+        offset,
+        size: requirements.size,
+        alignment: requirements.alignment,
+      }
+      offset += requirements.size
       Some(area)
     }
     None => None
@@ -690,6 +716,9 @@ fn plan_frame_verified(
     outgoing_args_size,
     result_area,
     stack_objects,
+    stack_object_offsets: stack_object_requirements
+    .map(requirements => requirements.offsets)
+    .unwrap_or([]),
     emergency_move_offset,
     requires_emergency_moves,
     allocation_edit_count: allocation.edit_count(),

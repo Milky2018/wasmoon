@@ -35,31 +35,7 @@ test "plan Wasmoon JIT integration through a target-owned code object" {
 }
 
 ///|
-test "semantic Wasm lowering is inspectable before target selection" {
-  let builder = @milkir.FunctionBuilder::FunctionBuilder(
-    "inspect_semantic_wasm",
-  )
-  builder.add_param(Ptr) |> ignore
-  builder.add_result(I32)
-  let tag = @wasm_milkir.get_exception_tag(builder)
-  builder.return_([tag])
-  inspect(
-    lower_wasm_body_semantic_machv(
-      builder.finalize(),
-      @wasm_milkir.WasmValidationContext::empty(),
-    ).print(),
-    content=(
-      #|machv inspect_semantic_wasm [internal](v0:ptr64) -> (i32) {
-      #|block0:
-      #|  v1:i32 = call external @wasmoon.runtime.exception.get_tag (ptr64) -> (i32) [platform] v0 [memory=read]
-      #|  return v1
-      #|}
-    ),
-  )
-}
-
-///|
-test "final native diagnostics expose real x64 and AArch64 checkpoints" {
+test "native diagnostics stream MilkIR directly into both targets" {
   let signature = @milkir.Signature::Signature([Ptr, I64, I64], [I64])
   let function = @milkir.Function::with_signature("diagnostic_add64", signature)
   let lhs = function.param(1).unwrap()
@@ -70,43 +46,26 @@ test "final native diagnostics expose real x64 and AArch64 checkpoints" {
     function.new_inst(Scalar(IntBinary(Add)), [lhs, rhs], [sum]),
   )
   entry.set_terminator(Return([sum]))
-  debug_inspect(
-    [
-      compile_wasm_body_diagnostics_for_target(
-        function,
-        @wasm_milkir.WasmValidationContext::empty(),
-        X64,
-      ),
-      compile_wasm_body_diagnostics_for_target(
-        function,
-        @wasm_milkir.WasmValidationContext::empty(),
-        AArch64,
-      ),
-    ],
-    content=(
-      #|[
-      #|  {
-      #|    semantic_machv: "machv diagnostic_add64 [internal](v0:ptr64, v1:i64, v2:i64) -> (i64) {\nblock0:\n  v3:i64 = int.binary.Add v1, v2\n  return v3\n}",
-      #|    target_vcode: "vcode diagnostic_add64(v0:ptr64, v1:i64, v2:i64) -> (i64)\nblock0:\n  i0 IncomingReg(Ptr64, p7:int) uses=[v0:fixed(p7:int)@early] defs=[v3:any-location(prefer=p7:int)@late]\n  i1 IncomingReg(I64, p6:int) uses=[v1:fixed(p6:int)@early] defs=[v4:any-location(prefer=p6:int)@late]\n  i2 IncomingReg(I64, p2:int) uses=[v2:fixed(p2:int)@early] defs=[v5:any-location(prefer=p2:int)@late]\n  i3 IntBinary(W64, Add) uses=[v4:any@early, v5:any@early] defs=[v6:any@late]\n  i4 OutgoingReg(I64, p0:int) uses=[v6:any@early]\n  i5 Return\n",
-      #|    allocated_vcode: "vcode diagnostic_add64(v0:ptr64, v1:i64, v2:i64) -> (i64)\nblock0:\n  i0 IncomingReg(Ptr64, p7:int) uses=[v0:fixed(p7:int)@early] defs=[v3:any-location(prefer=p7:int)@late]\n  i1 IncomingReg(I64, p6:int) uses=[v1:fixed(p6:int)@early] defs=[v4:any-location(prefer=p6:int)@late]\n  i2 IncomingReg(I64, p2:int) uses=[v2:fixed(p2:int)@early] defs=[v5:any-location(prefer=p2:int)@late]\n  i3 IntBinary(W64, Add) uses=[v4:any@early, v5:any@early] defs=[v6:any@late]\n  i4 OutgoingReg(I64, p0:int) uses=[v6:any@early]\n  i5 Return\nallocation diagnostic_add64\n  v0:ptr64 -> p7:int\n  v1:i64 -> p6:int\n  v2:i64 -> p2:int\n  v3:ptr64 -> p7:int\n  v4:i64 -> p6:int\n  v5:i64 -> p2:int\n  v6:i64 -> p0:int\n  i0 operand0 -> p7:int\n  i0 operand1 -> p7:int\n  i1 operand0 -> p6:int\n  i1 operand1 -> p6:int\n  i2 operand0 -> p2:int\n  i2 operand1 -> p2:int\n  i3 operand0 -> p6:int\n  i3 operand1 -> p2:int\n  i3 operand2 -> p0:int\n  i4 operand0 -> p0:int\n",
-      #|    code_object: "code-object x64\n  code-size: 7\n  relocations: []\n  sources: []\n  traps: []\n  safepoints: []\n  unwind: []\n  bytes: 48 89 f0 48 01 d0 c3",
-      #|    machine_code: "48 89 f0 48 01 d0 c3",
-      #|  },
-      #|  {
-      #|    semantic_machv: "machv diagnostic_add64 [internal](v0:ptr64, v1:i64, v2:i64) -> (i64) {\nblock0:\n  v3:i64 = int.binary.Add v1, v2\n  return v3\n}",
-      #|    target_vcode: "vcode diagnostic_add64(v0:ptr64, v1:i64, v2:i64) -> (i64)\nblock0:\n  i0 IncomingReg(Ptr64, p0:int) uses=[v0:fixed(p0:int)@early] defs=[v3:any-location(prefer=p0:int)@late]\n  i1 IncomingReg(I64, p1:int) uses=[v1:fixed(p1:int)@early] defs=[v4:any-location(prefer=p1:int)@late]\n  i2 IncomingReg(I64, p2:int) uses=[v2:fixed(p2:int)@early] defs=[v5:any-location(prefer=p2:int)@late]\n  i3 IntBinary(W64, Add) uses=[v4:any@early, v5:any@early] defs=[v6:any@late]\n  i4 OutgoingReg(I64, p0:int) uses=[v6:any@early]\n  i5 Return\n",
-      #|    allocated_vcode: "vcode diagnostic_add64(v0:ptr64, v1:i64, v2:i64) -> (i64)\nblock0:\n  i0 IncomingReg(Ptr64, p0:int) uses=[v0:fixed(p0:int)@early] defs=[v3:any-location(prefer=p0:int)@late]\n  i1 IncomingReg(I64, p1:int) uses=[v1:fixed(p1:int)@early] defs=[v4:any-location(prefer=p1:int)@late]\n  i2 IncomingReg(I64, p2:int) uses=[v2:fixed(p2:int)@early] defs=[v5:any-location(prefer=p2:int)@late]\n  i3 IntBinary(W64, Add) uses=[v4:any@early, v5:any@early] defs=[v6:any@late]\n  i4 OutgoingReg(I64, p0:int) uses=[v6:any@early]\n  i5 Return\nallocation diagnostic_add64\n  v0:ptr64 -> p0:int\n  v1:i64 -> p1:int\n  v2:i64 -> p2:int\n  v3:ptr64 -> p0:int\n  v4:i64 -> p1:int\n  v5:i64 -> p2:int\n  v6:i64 -> p0:int\n  i0 operand0 -> p0:int\n  i0 operand1 -> p0:int\n  i1 operand0 -> p1:int\n  i1 operand1 -> p1:int\n  i2 operand0 -> p2:int\n  i2 operand1 -> p2:int\n  i3 operand0 -> p1:int\n  i3 operand1 -> p2:int\n  i3 operand2 -> p0:int\n  i4 operand0 -> p0:int\n",
-      #|    code_object: "code-object aarch64\n  code-size: 8\n  relocations: []\n  sources: []\n  traps: []\n  safepoints: []\n  unwind: []\n  bytes: 20 00 02 8b c0 03 5f d6",
-      #|    machine_code: "20 00 02 8b c0 03 5f d6",
-      #|  },
-      #|]
-    ),
+  let x64 = compile_wasm_body_diagnostics_for_target(
+    function,
+    @wasm_milkir.WasmValidationContext::empty(),
+    X64,
   )
+  let aarch64 = compile_wasm_body_diagnostics_for_target(
+    function,
+    @wasm_milkir.WasmValidationContext::empty(),
+    AArch64,
+  )
+  inspect(x64.target_vcode.contains("IntBinary(W64, Add)"), content="true")
+  inspect(x64.machine_code, content="48 89 f0 48 01 d0 c3")
+  inspect(aarch64.target_vcode.contains("IntBinary(W64, Add)"), content="true")
+  inspect(aarch64.machine_code, content="20 00 02 8b c0 03 5f d6")
 }
 
 ///|
 test "JIT diagnostics return invalid Wasm dialect errors" {
   let builder = @milkir.FunctionBuilder::FunctionBuilder("invalid_wasm_dialect")
+  builder.add_param(Ptr) |> ignore
   @wasm_milkir.get_exception_tag(builder) |> ignore
   builder.emit_void_ext_inst(ExtOp("wasm", "typo", []), [])
   builder.return_([])
@@ -121,7 +80,7 @@ test "JIT diagnostics return invalid Wasm dialect errors" {
       inspect(
         err,
         content=(
-          #|SemanticLoweringFailed(cause=InvalidMilkIR(message="UnverifiableInstruction(message=\"unknown Wasm MilkIR extension opcode 'typo'\")"))
+          #|NativeLoweringFailed(cause=InvalidMilkIR(message="UnverifiableInstruction(message=\"unknown Wasm MilkIR extension opcode 'typo'\")"))
         ),
       )
   } noraise {
@@ -1309,7 +1268,7 @@ test "plan MilkIR vector memory through reusable AArch64 JIT pipeline" {
 }
 
 ///|
-test "emit MachV regalloc through reusable x64 pipeline" {
+test "emit VCode regalloc through reusable x64 pipeline" {
   let signature = @milkir.Signature::Signature([I64, I64], [I64])
   let milk = @milkir.Function::with_signature("regalloc_x64", signature)
   let lhs = milk.param(0).unwrap()

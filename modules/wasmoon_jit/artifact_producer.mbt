@@ -3,12 +3,12 @@
 pub const WASMOON_JIT_ABI_VERSION : Int = 3
 
 ///|
-/// Revision of the current semantic-MachV target code generator.
+/// Revision of the current direct native target code generator.
 ///
 /// Advance this value whenever compiler changes can alter emitted code while
 /// preserving the artifact format and JIT ABI. Persistent caches use it as part
 /// of their compatibility identity.
-pub const WASMOON_CODEGEN_REVISION : String = "machv-vcode-9"
+pub const WASMOON_CODEGEN_REVISION : String = "direct-vcode-1"
 
 ///|
 extern "c" fn host_operating_system_abi_tag() -> Int = "wasmoon_jit_host_operating_system_abi"

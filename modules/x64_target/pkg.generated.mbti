@@ -3,8 +3,8 @@ package "Milky2018/x64_target"
 
 import {
   "Milky2018/code_object",
+  "Milky2018/native_lowering",
   "Milky2018/native_types",
-  "Milky2018/native_types/semantic",
   "Milky2018/vcode",
   "Milky2018/vcode/allocation_types",
   "Milky2018/vcode_regalloc",
@@ -18,15 +18,13 @@ pub fn compile(@vcode.Function[X64Inst], on_event? : (@vcode.TargetCompileEvent)
 
 pub fn compile_selected(SelectedFunction, on_event? : (@vcode.TargetCompileEvent) -> Unit, verify_allocation? : Bool) -> (@code_object.UnlinkedCodeObject, Int) raise X64CompileError
 
-pub fn emit(@vcode.Function[X64Inst], @vcode.Allocation, X64Frame) -> @code_object.UnlinkedCodeObject raise X64EmitError
+pub fn diagnose_selected(SelectedFunction) -> CompilationDiagnostics raise X64CompileError
 
-pub fn lower(@semantic.SelectionPlan, LoweringContext, on_event? : (@vcode.TargetCompileEvent) -> Unit) -> @vcode.Function[X64Inst] raise X64LowerError
+pub fn emit(@vcode.Function[X64Inst], @vcode.Allocation, X64Frame) -> @code_object.UnlinkedCodeObject raise X64EmitError
 
 pub fn plan_frame(@vcode.Function[X64Inst], @vcode.Allocation) -> X64Frame raise X64FrameError
 
 pub fn prepare_x64_link(@code_object.UnlinkedCodeObject) -> X64LinkPlan raise X64LinkError
-
-pub fn select(@semantic.SelectionPlan, LoweringContext, on_event? : (@vcode.TargetCompileEvent) -> Unit) -> SelectedFunction raise X64LowerError
 
 pub fn verify_allocation(@vcode.Function[X64Inst], @vcode.Allocation) -> Unit raise X64AllocationError
 
@@ -140,9 +138,7 @@ pub fn X64LinkError::to_string(Self) -> String
 pub impl Show for X64LinkError
 
 pub suberror X64LowerError {
-  InvalidSemantic(cause~ : @semantic.MachVVerifyError)
-  MissingMappedValue(value_index~ : Int)
-  UnsupportedOperation(block_index~ : Int, instruction_index~ : Int, operation~ : @semantic.Operation)
+  UnsupportedOperation(block_index~ : Int, instruction_index~ : Int, operation~ : @native_lowering.Operation)
   UnsupportedAbi(message~ : String)
   BuildFailure(cause~ : @vcode.VCodeBuildError)
   InvalidTarget(cause~ : TargetVCodeVerifyError)
@@ -168,11 +164,24 @@ pub fn CallResultLocation::equal(Self, Self) -> Bool
 pub fn CallResultLocation::not_equal(Self, Self) -> Bool
 pub fn CallResultLocation::to_repr(Self) -> @debug.Repr
 
+pub(all) struct CompilationDiagnostics {
+  target_vcode : String
+  allocated_vcode : String
+  object : @code_object.UnlinkedCodeObject
+}
+
 pub struct CompilationSession {
   // private fields
 }
 pub fn CompilationSession::compile_selected(Self, SelectedFunction, on_event? : (@vcode.TargetCompileEvent) -> Unit, verify_allocation? : Bool) -> (@code_object.UnlinkedCodeObject, Int) raise X64CompileError
 pub fn CompilationSession::new() -> Self
+
+pub struct DirectLoweringSession {
+  // private fields
+}
+pub fn DirectLoweringSession::finish_selected(Self) -> SelectedFunction raise X64LowerError
+pub fn DirectLoweringSession::new(String, @native_types.CallProtocol, Array[@native_types.ValueType], Array[@native_types.ValueType], LoweringContext, on_event? : (@vcode.TargetCompileEvent) -> Unit) -> Self raise X64LowerError
+pub fn DirectLoweringSession::sink(Self) -> @native_lowering.TargetSink
 
 pub(all) enum GprWidth {
   W32
@@ -199,6 +208,7 @@ pub struct LoweringContext {
 }
 pub fn LoweringContext::new(InternalAbi) -> Self
 pub fn LoweringContext::with_environment_field(Self, @native_types.EnvironmentField, Array[Int]) -> Self
+pub fn LoweringContext::with_environment_field_resolver(Self, (@native_types.EnvironmentField) -> Array[Int]?) -> Self
 
 pub struct SelectedFunction {
   // private fields
@@ -337,29 +347,29 @@ pub(all) enum X64Inst {
   CarrierMove(@native_types.ValueType, @native_types.ValueType)
   Select(@native_types.ValueType)
   VectorSelect
-  VectorSplat(@semantic.VectorLane)
-  VectorExtractLane(@semantic.VectorLane, Int, @native_types.Signedness?)
-  VectorReplaceLane(@semantic.VectorLane, Int)
+  VectorSplat(@native_lowering.VectorLane)
+  VectorExtractLane(@native_lowering.VectorLane, Int, @native_types.Signedness?)
+  VectorReplaceLane(@native_lowering.VectorLane, Int)
   VectorShuffle(FixedArray[Int])
   VectorSwizzle
-  VectorBitwise(@semantic.VectorBitwiseOp)
-  VectorIntUnary(@semantic.VectorLane, X64VectorIntUnary)
-  VectorIntBinary(@semantic.VectorLane, X64VectorIntBinary)
-  VectorIntShift(@semantic.VectorLane, @semantic.VectorIntShiftOp)
-  VectorIntCompare(@semantic.VectorLane, @semantic.VectorIntComparison)
+  VectorBitwise(@native_lowering.VectorBitwiseOp)
+  VectorIntUnary(@native_lowering.VectorLane, X64VectorIntUnary)
+  VectorIntBinary(@native_lowering.VectorLane, X64VectorIntBinary)
+  VectorIntShift(@native_lowering.VectorLane, @native_lowering.VectorIntShiftOp)
+  VectorIntCompare(@native_lowering.VectorLane, @native_lowering.VectorIntComparison)
   VectorConvert(X64VectorConversion)
   VectorPredicate(X64VectorPredicate)
-  VectorFloatUnary(@semantic.VectorLane, @semantic.VectorFloatUnaryOp)
-  VectorFloatBinary(@semantic.VectorLane, @semantic.VectorFloatBinaryOp)
-  VectorFloatTernary(@semantic.VectorLane, @semantic.FloatTernaryOp)
-  VectorFloatCompare(@semantic.VectorLane, @semantic.VectorFloatComparison)
+  VectorFloatUnary(@native_lowering.VectorLane, @native_lowering.VectorFloatUnaryOp)
+  VectorFloatBinary(@native_lowering.VectorLane, @native_lowering.VectorFloatBinaryOp)
+  VectorFloatTernary(@native_lowering.VectorLane, @native_lowering.FloatTernaryOp)
+  VectorFloatCompare(@native_lowering.VectorLane, @native_lowering.VectorFloatComparison)
   VectorPairwiseAddI16x8
   VectorRelaxedDot8To16
   IntUnary(GprWidth, X64IntUnary)
   IntBinary(GprWidth, X64IntBinary)
   PopulationCount(GprWidth)
   IntHighMultiply(GprWidth, @native_types.Signedness)
-  IntWithOverflow(GprWidth, @semantic.IntOverflowOp)
+  IntWithOverflow(GprWidth, @native_lowering.IntOverflowOp)
   IntRemainder(GprWidth, @native_types.Signedness)
   TrapIfZero(GprWidth)
   TrapIfSignedDivOverflow(GprWidth)
@@ -376,14 +386,14 @@ pub(all) enum X64Inst {
   ScalarStore(@native_types.AccessWidth, @native_types.ValueType, UInt64)
   VectorLoad128(UInt64)
   VectorStore128(UInt64)
-  VectorLoadSplat(@semantic.VectorLane, UInt64)
-  VectorLoadExtend(@semantic.VectorLane, @native_types.Signedness, UInt64)
+  VectorLoadSplat(@native_lowering.VectorLane, UInt64)
+  VectorLoadExtend(@native_lowering.VectorLane, @native_types.Signedness, UInt64)
   VectorLoadZero(@native_types.AccessWidth, UInt64)
-  VectorLoadLane(@semantic.VectorLane, Int, UInt64)
-  VectorStoreLane(@semantic.VectorLane, Int, UInt64)
+  VectorLoadLane(@native_lowering.VectorLane, Int, UInt64)
+  VectorStoreLane(@native_lowering.VectorLane, Int, UInt64)
   AtomicLoad(@native_types.AccessWidth, @native_types.ValueType)
   AtomicStore(@native_types.AccessWidth, @native_types.ValueType)
-  AtomicRmw(@native_types.AccessWidth, @native_types.ValueType, @semantic.AtomicRmwOp)
+  AtomicRmw(@native_types.AccessWidth, @native_types.ValueType, @native_lowering.AtomicRmwOp)
   AtomicCompareExchange(@native_types.AccessWidth, @native_types.ValueType)
   AtomicFence
   SafepointMarker
@@ -440,23 +450,21 @@ pub fn X64LinkPlan::to_repr(Self) -> @debug.Repr
 pub fn X64LinkPlan::veneer_offsets(Self) -> Array[Int]
 
 pub struct X64StackObject {
-  offset : Int
+  id : Int
   size : Int
   alignment : Int
-  area_size : Int
-  area_alignment : Int
 } derive(Eq, @debug.Debug)
 pub fn X64StackObject::equal(Self, Self) -> Bool
-pub fn X64StackObject::new(Int, Int, Int, Int, Int) -> Self
+pub fn X64StackObject::new(Int, Int, Int) -> Self
 pub fn X64StackObject::not_equal(Self, Self) -> Bool
 pub fn X64StackObject::to_repr(Self) -> @debug.Repr
 
 pub(all) enum X64VectorConversion {
-  ExtendLow(@semantic.VectorLane, @native_types.Signedness)
-  ExtendHigh(@semantic.VectorLane, @native_types.Signedness)
-  Narrow(@semantic.VectorLane, @native_types.Signedness)
-  FloatToInt(@semantic.VectorLane, @native_types.Signedness)
-  IntToFloat(@semantic.VectorLane, @native_types.Signedness)
+  ExtendLow(@native_lowering.VectorLane, @native_types.Signedness)
+  ExtendHigh(@native_lowering.VectorLane, @native_types.Signedness)
+  Narrow(@native_lowering.VectorLane, @native_types.Signedness)
+  FloatToInt(@native_lowering.VectorLane, @native_types.Signedness)
+  IntToFloat(@native_lowering.VectorLane, @native_types.Signedness)
   PromoteLowF32x4
   DemoteZeroF64x2
 } derive(Eq, @debug.Debug)
@@ -473,7 +481,7 @@ pub(all) enum X64VectorIntBinary {
   Max(@native_types.Signedness)
   SaturatingAdd(@native_types.Signedness)
   SaturatingSub(@native_types.Signedness)
-  ExtendMultiply(@semantic.VectorHalf, @native_types.Signedness)
+  ExtendMultiply(@native_lowering.VectorHalf, @native_types.Signedness)
   Dot16To32Signed
   Q15MultiplyRoundedSaturating
 } derive(Eq, @debug.Debug)
@@ -493,8 +501,8 @@ pub fn X64VectorIntUnary::to_repr(Self) -> @debug.Repr
 
 pub(all) enum X64VectorPredicate {
   AnyTrue
-  AllTrue(@semantic.VectorLane)
-  BitMask(@semantic.VectorLane)
+  AllTrue(@native_lowering.VectorLane)
+  BitMask(@native_lowering.VectorLane)
 } derive(Eq, @debug.Debug)
 pub fn X64VectorPredicate::equal(Self, Self) -> Bool
 pub fn X64VectorPredicate::not_equal(Self, Self) -> Bool

@@ -3,8 +3,8 @@ package "Milky2018/aarch64_target"
 
 import {
   "Milky2018/code_object",
+  "Milky2018/native_lowering",
   "Milky2018/native_types",
-  "Milky2018/native_types/semantic",
   "Milky2018/vcode",
   "Milky2018/vcode/allocation_types",
   "Milky2018/vcode_regalloc",
@@ -18,15 +18,13 @@ pub fn compile(@vcode.Function[AArch64Inst], on_event? : (@vcode.TargetCompileEv
 
 pub fn compile_selected(SelectedFunction, on_event? : (@vcode.TargetCompileEvent) -> Unit, verify_allocation? : Bool) -> (@code_object.UnlinkedCodeObject, Int) raise AArch64CompileError
 
-pub fn emit(@vcode.Function[AArch64Inst], @vcode.Allocation, AArch64Frame) -> @code_object.UnlinkedCodeObject raise AArch64EmitError
+pub fn diagnose_selected(SelectedFunction) -> CompilationDiagnostics raise AArch64CompileError
 
-pub fn lower(@semantic.SelectionPlan, LoweringContext, on_event? : (@vcode.TargetCompileEvent) -> Unit) -> @vcode.Function[AArch64Inst] raise AArch64LowerError
+pub fn emit(@vcode.Function[AArch64Inst], @vcode.Allocation, AArch64Frame) -> @code_object.UnlinkedCodeObject raise AArch64EmitError
 
 pub fn plan_frame(@vcode.Function[AArch64Inst], @vcode.Allocation) -> AArch64Frame raise AArch64FrameError
 
 pub fn prepare_aarch64_link(@code_object.UnlinkedCodeObject) -> AArch64LinkPlan raise AArch64LinkError
-
-pub fn select(@semantic.SelectionPlan, LoweringContext, on_event? : (@vcode.TargetCompileEvent) -> Unit) -> SelectedFunction raise AArch64LowerError
 
 pub fn verify_allocation(@vcode.Function[AArch64Inst], @vcode.Allocation) -> Unit raise AArch64AllocationError
 
@@ -116,9 +114,7 @@ pub fn AArch64LinkError::to_string(Self) -> String
 pub impl Show for AArch64LinkError
 
 pub suberror AArch64LowerError {
-  InvalidSemantic(cause~ : @semantic.MachVVerifyError)
-  MissingMappedValue(value_index~ : Int)
-  UnsupportedOperation(block_index~ : Int, instruction_index~ : Int, operation~ : @semantic.Operation)
+  UnsupportedOperation(block_index~ : Int, instruction_index~ : Int, operation~ : @native_lowering.Operation)
   UnsupportedAbi(message~ : String)
   BuildFailure(cause~ : @vcode.VCodeBuildError)
   InvalidTarget(cause~ : TargetVCodeVerifyError)
@@ -286,22 +282,22 @@ pub(all) enum AArch64Inst {
   CarrierMove(@native_types.ValueType, @native_types.ValueType)
   Select(@native_types.ValueType)
   VectorSelect
-  VectorSplat(@semantic.VectorLane)
-  VectorExtractLane(@semantic.VectorLane, Int, @native_types.Signedness?)
-  VectorReplaceLane(@semantic.VectorLane, Int)
+  VectorSplat(@native_lowering.VectorLane)
+  VectorExtractLane(@native_lowering.VectorLane, Int, @native_types.Signedness?)
+  VectorReplaceLane(@native_lowering.VectorLane, Int)
   VectorShuffle(FixedArray[Int])
   VectorSwizzle
-  VectorBitwise(@semantic.VectorBitwiseOp)
-  VectorIntUnary(@semantic.VectorLane, AArch64VectorIntUnary)
-  VectorIntBinary(@semantic.VectorLane, AArch64VectorIntBinary)
-  VectorIntShift(@semantic.VectorLane, @semantic.VectorIntShiftOp)
-  VectorIntCompare(@semantic.VectorLane, @semantic.VectorIntComparison)
+  VectorBitwise(@native_lowering.VectorBitwiseOp)
+  VectorIntUnary(@native_lowering.VectorLane, AArch64VectorIntUnary)
+  VectorIntBinary(@native_lowering.VectorLane, AArch64VectorIntBinary)
+  VectorIntShift(@native_lowering.VectorLane, @native_lowering.VectorIntShiftOp)
+  VectorIntCompare(@native_lowering.VectorLane, @native_lowering.VectorIntComparison)
   VectorConvert(AArch64VectorConversion)
   VectorPredicate(AArch64VectorPredicate)
-  VectorFloatUnary(@semantic.VectorLane, @semantic.VectorFloatUnaryOp)
-  VectorFloatBinary(@semantic.VectorLane, @semantic.VectorFloatBinaryOp)
-  VectorFloatTernary(@semantic.VectorLane, @semantic.FloatTernaryOp)
-  VectorFloatCompare(@semantic.VectorLane, @semantic.VectorFloatComparison)
+  VectorFloatUnary(@native_lowering.VectorLane, @native_lowering.VectorFloatUnaryOp)
+  VectorFloatBinary(@native_lowering.VectorLane, @native_lowering.VectorFloatBinaryOp)
+  VectorFloatTernary(@native_lowering.VectorLane, @native_lowering.FloatTernaryOp)
+  VectorFloatCompare(@native_lowering.VectorLane, @native_lowering.VectorFloatComparison)
   VectorPairwiseAddI16x8
   VectorRelaxedDot8To16
   IntUnary(GprWidth, AArch64IntUnary)
@@ -313,7 +309,7 @@ pub(all) enum AArch64Inst {
   IntAddShiftedLeft(GprWidth, Int)
   PopulationCount(GprWidth)
   IntHighMultiply(GprWidth, @native_types.Signedness)
-  IntWithOverflow(GprWidth, @semantic.IntOverflowOp)
+  IntWithOverflow(GprWidth, @native_lowering.IntOverflowOp)
   IntRemainder(GprWidth, @native_types.Signedness)
   TrapIfZero(GprWidth)
   TrapIfSignedDivOverflow(GprWidth)
@@ -334,14 +330,14 @@ pub(all) enum AArch64Inst {
   ScalarStoreUxtw(@native_types.AccessWidth, @native_types.ValueType, Int)
   VectorLoad128(UInt64)
   VectorStore128(UInt64)
-  VectorLoadSplat(@semantic.VectorLane, UInt64)
-  VectorLoadExtend(@semantic.VectorLane, @native_types.Signedness, UInt64)
+  VectorLoadSplat(@native_lowering.VectorLane, UInt64)
+  VectorLoadExtend(@native_lowering.VectorLane, @native_types.Signedness, UInt64)
   VectorLoadZero(@native_types.AccessWidth, UInt64)
-  VectorLoadLane(@semantic.VectorLane, Int, UInt64)
-  VectorStoreLane(@semantic.VectorLane, Int, UInt64)
+  VectorLoadLane(@native_lowering.VectorLane, Int, UInt64)
+  VectorStoreLane(@native_lowering.VectorLane, Int, UInt64)
   AtomicLoad(@native_types.AccessWidth, @native_types.ValueType)
   AtomicStore(@native_types.AccessWidth, @native_types.ValueType)
-  AtomicRmw(@native_types.AccessWidth, @native_types.ValueType, @semantic.AtomicRmwOp)
+  AtomicRmw(@native_types.AccessWidth, @native_types.ValueType, @native_lowering.AtomicRmwOp)
   AtomicCompareExchange(@native_types.AccessWidth, @native_types.ValueType)
   AtomicFence
   SafepointMarker
@@ -406,23 +402,21 @@ pub fn AArch64Shift::not_equal(Self, Self) -> Bool
 pub fn AArch64Shift::to_repr(Self) -> @debug.Repr
 
 pub struct AArch64StackObject {
-  offset : Int
+  id : Int
   size : Int
   alignment : Int
-  area_size : Int
-  area_alignment : Int
 } derive(Eq, @debug.Debug)
 pub fn AArch64StackObject::equal(Self, Self) -> Bool
-pub fn AArch64StackObject::new(Int, Int, Int, Int, Int) -> Self
+pub fn AArch64StackObject::new(Int, Int, Int) -> Self
 pub fn AArch64StackObject::not_equal(Self, Self) -> Bool
 pub fn AArch64StackObject::to_repr(Self) -> @debug.Repr
 
 pub(all) enum AArch64VectorConversion {
-  ExtendLow(@semantic.VectorLane, @native_types.Signedness)
-  ExtendHigh(@semantic.VectorLane, @native_types.Signedness)
-  Narrow(@semantic.VectorLane, @native_types.Signedness)
-  FloatToInt(@semantic.VectorLane, @native_types.Signedness)
-  IntToFloat(@semantic.VectorLane, @native_types.Signedness)
+  ExtendLow(@native_lowering.VectorLane, @native_types.Signedness)
+  ExtendHigh(@native_lowering.VectorLane, @native_types.Signedness)
+  Narrow(@native_lowering.VectorLane, @native_types.Signedness)
+  FloatToInt(@native_lowering.VectorLane, @native_types.Signedness)
+  IntToFloat(@native_lowering.VectorLane, @native_types.Signedness)
   PromoteLowF32x4
   DemoteZeroF64x2
 } derive(Eq, @debug.Debug)
@@ -439,7 +433,7 @@ pub(all) enum AArch64VectorIntBinary {
   Max(@native_types.Signedness)
   SaturatingAdd(@native_types.Signedness)
   SaturatingSub(@native_types.Signedness)
-  ExtendMultiply(@semantic.VectorHalf, @native_types.Signedness)
+  ExtendMultiply(@native_lowering.VectorHalf, @native_types.Signedness)
   Dot16To32Signed
   Q15MultiplyRoundedSaturating
 } derive(Eq, @debug.Debug)
@@ -459,8 +453,8 @@ pub fn AArch64VectorIntUnary::to_repr(Self) -> @debug.Repr
 
 pub(all) enum AArch64VectorPredicate {
   AnyTrue
-  AllTrue(@semantic.VectorLane)
-  BitMask(@semantic.VectorLane)
+  AllTrue(@native_lowering.VectorLane)
+  BitMask(@native_lowering.VectorLane)
 } derive(Eq, @debug.Debug)
 pub fn AArch64VectorPredicate::equal(Self, Self) -> Bool
 pub fn AArch64VectorPredicate::not_equal(Self, Self) -> Bool
@@ -481,11 +475,24 @@ pub fn CallResultLocation::equal(Self, Self) -> Bool
 pub fn CallResultLocation::not_equal(Self, Self) -> Bool
 pub fn CallResultLocation::to_repr(Self) -> @debug.Repr
 
+pub(all) struct CompilationDiagnostics {
+  target_vcode : String
+  allocated_vcode : String
+  object : @code_object.UnlinkedCodeObject
+}
+
 pub struct CompilationSession {
   // private fields
 }
 pub fn CompilationSession::compile_selected(Self, SelectedFunction, on_event? : (@vcode.TargetCompileEvent) -> Unit, verify_allocation? : Bool) -> (@code_object.UnlinkedCodeObject, Int) raise AArch64CompileError
 pub fn CompilationSession::new() -> Self
+
+pub struct DirectLoweringSession {
+  // private fields
+}
+pub fn DirectLoweringSession::finish_selected(Self) -> SelectedFunction raise AArch64LowerError
+pub fn DirectLoweringSession::new(String, @native_types.CallProtocol, Array[@native_types.ValueType], Array[@native_types.ValueType], LoweringContext, on_event? : (@vcode.TargetCompileEvent) -> Unit) -> Self raise AArch64LowerError
+pub fn DirectLoweringSession::sink(Self) -> @native_lowering.TargetSink
 
 pub(all) enum GprWidth {
   W32
@@ -512,6 +519,7 @@ pub struct LoweringContext {
 }
 pub fn LoweringContext::new(InternalAbi) -> Self
 pub fn LoweringContext::with_environment_field(Self, @native_types.EnvironmentField, Array[Int]) -> Self
+pub fn LoweringContext::with_environment_field_resolver(Self, (@native_types.EnvironmentField) -> Array[Int]?) -> Self
 
 pub struct SelectedFunction {
   // private fields

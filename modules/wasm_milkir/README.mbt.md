@@ -33,7 +33,7 @@ Wasm extension opcode. `memory_base_context_field` identifies the memory index,
 the declaration records `Heap(memidx)` provenance, and the frontend chooses
 `Stable` only when the embedding guarantees that the base cannot move during
 the function invocation. Contextual validation checks that the memory exists;
-`wasm_machv` resolves the opaque field through its embedding environment.
+`wasm_native` resolves the opaque field through its embedding environment.
 
 ## Example: map Wasm reference types to MilkIR
 
