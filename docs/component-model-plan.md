@@ -1,16 +1,19 @@
 # Component Model Architecture
 
 Wasmoon layers the WebAssembly Component Model above its validated core Wasm
-runtime. Component parsing, validation, linking, canonical ABI adaptation, and
-WASI component hosts remain product-owned code; embedded core modules reuse the
-same runtime objects, interpreter, and native compiler as ordinary core Wasm.
+runtime. Portable component syntax, text parsing, validation, and WIT tooling
+live in `wasm_component`; linking, runtime canonical ABI adaptation, and WASI
+component hosts remain product-owned. Embedded core modules reuse the same
+runtime objects, interpreter, and native compiler as ordinary core Wasm.
 
 ## Package Boundaries
 
+- `wasm_component`: portable component data model, binary decoding, and
+  canonical ABI types.
+- `wasm_component/text`: Component Model text parsing and encoding.
+- `wasm_component/validator`: portable component validation.
 - `wasmoon/component`: stable parse, validation, instantiation, typed-value, and
-  invocation facade.
-- `wasmoon/component/model`: component binary data model and section parsers.
-- `wasmoon/validator/component_model`: component validation.
+  invocation facade over the portable model.
 - `wasmoon/component/runtime_impl`: linker, instantiation, canonical ABI,
   resources, tasks, streams, futures, and host adapters.
 - `wasmoon/component_native`: strict native JIT session factory used by the
@@ -27,9 +30,10 @@ owns its opaque engine, execution-event, and host-installer types and the
 private closures that create execution sessions or populate linkers. Only
 concrete interpreter, native, and WASI constructors are public: embedders
 cannot inject a reused mutable execution session or directly receive the
-linker. The validator and runtime implementation depend directly on
-`component/model`, so the root package can compose them without a dependency
-cycle. Public facade signatures do not contain runtime implementation types.
+linker. The facade and runtime implementation consume the portable
+`wasm_component` model and validator, so product execution does not own a
+second syntax or validation model. Public facade signatures do not contain
+runtime implementation types.
 
 ## Core Execution Contract
 
