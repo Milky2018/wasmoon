@@ -48,6 +48,66 @@ fn lower_direct_operation(
   stack_map : @native.StackMapMetadata?,
   stack_object : (@native.StackObject) -> X64StackObject,
 ) -> Array[@vcode.Value] raise X64LowerError {
+  if operation is IntMultiplyAdd {
+    guard optional_gpr_width(result_types.get(0)) is Some(width) else {
+      raise UnsupportedOperation(block_index~, instruction_index~, operation~)
+    }
+    let product = append_body(
+        builder,
+        block,
+        IntBinary(width, Mul),
+        [@vcode.Input::any(operands[1]), @vcode.Input::any(operands[2])],
+        result_types.map(@vcode.Output::any),
+        @vcode.InstructionMetadata::empty(),
+      )[0]
+    return append_body(
+      builder,
+      block,
+      IntBinary(width, Add),
+      [@vcode.Input::any(operands[0]), @vcode.Input::any(product)],
+      result_types.map(@vcode.Output::any),
+      direct_source_metadata(
+        source_location,
+        stack_map,
+        roots,
+        operation.semantics(),
+      ),
+    )
+  }
+  if operation is IntAddShiftedLeft(amount) {
+    guard optional_gpr_width(result_types.get(0)) is Some(width) else {
+      raise UnsupportedOperation(block_index~, instruction_index~, operation~)
+    }
+    let constant = append_body(
+        builder,
+        block,
+        LoadConstant(width, amount.to_uint64()),
+        [],
+        [@vcode.Output::any(result_types[0])],
+        @vcode.InstructionMetadata::empty(),
+      )[0]
+    let shifted = append_body(
+        builder,
+        block,
+        IntBinary(width, Lsl),
+        [@vcode.Input::any(operands[1]), @vcode.Input::any(constant)],
+        result_types.map(@vcode.Output::any),
+        @vcode.InstructionMetadata::empty(),
+      )[0]
+    return append_body(
+      builder,
+      block,
+      IntBinary(width, Add),
+      [@vcode.Input::any(operands[0]), @vcode.Input::any(shifted)],
+      result_types.map(@vcode.Output::any),
+      direct_source_metadata(
+        source_location,
+        stack_map,
+        roots,
+        operation.semantics(),
+      ),
+    )
+  }
   if operation is IntShiftImmediate(binary, amount) {
     guard optional_gpr_width(result_types.get(0)) is Some(width) else {
       raise UnsupportedOperation(block_index~, instruction_index~, operation~)

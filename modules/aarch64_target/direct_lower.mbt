@@ -48,6 +48,42 @@ fn lower_direct_operation(
   stack_map : @native.StackMapMetadata?,
   stack_object : (@native.StackObject) -> AArch64StackObject,
 ) -> Array[@vcode.Value] raise AArch64LowerError {
+  if operation is IntMultiplyAdd {
+    guard optional_gpr_width(result_types.get(0)) is Some(width) else {
+      raise UnsupportedOperation(block_index~, instruction_index~, operation~)
+    }
+    return append_body(
+      builder,
+      block,
+      IntMultiplyAdd(width),
+      operands.map(@vcode.Input::any),
+      result_types.map(@vcode.Output::any),
+      direct_source_metadata(
+        source_location,
+        stack_map,
+        roots,
+        operation.semantics(),
+      ),
+    )
+  }
+  if operation is IntAddShiftedLeft(amount) {
+    guard optional_gpr_width(result_types.get(0)) is Some(width) else {
+      raise UnsupportedOperation(block_index~, instruction_index~, operation~)
+    }
+    return append_body(
+      builder,
+      block,
+      IntAddShiftedLeft(width, amount),
+      operands.map(@vcode.Input::any),
+      result_types.map(@vcode.Output::any),
+      direct_source_metadata(
+        source_location,
+        stack_map,
+        roots,
+        operation.semantics(),
+      ),
+    )
+  }
   if operation is IntShiftImmediate(binary, amount) {
     guard optional_gpr_width(result_types.get(0)) is Some(width) else {
       raise UnsupportedOperation(block_index~, instruction_index~, operation~)

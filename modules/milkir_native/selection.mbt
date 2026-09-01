@@ -10,6 +10,8 @@ priv struct MemoryAddressSelection {
 priv enum ScalarSelection {
   IntImmediate(@milkir.Value, @lowering.IntBinaryOp, UInt64)
   ShiftImmediate(@milkir.Value, @lowering.IntBinaryOp, Int)
+  MultiplyAdd(@milkir.Value, @milkir.Value, @milkir.Value)
+  AddShiftedLeft(@milkir.Value, @milkir.Value, Int)
 }
 
 ///|
@@ -195,9 +197,18 @@ fn select_memory_address(
       ),
     )
   }
-  guard scalar_definition(definitions, base) is Some(add) else { return None }
-  guard add.opcode is Scalar(IntBinary(Add)) else { return None }
-  guard binary_operands(add) is Some((left, right)) else { return None }
+  let direct_i64 = fn() -> (MemoryAddressSelection, Array[@milkir.Value])? {
+    if base.ty == I64 {
+      Some(({ base, index: None, shift: 0, offset: static_offset, }, [offset]))
+    } else {
+      None
+    }
+  }
+  guard scalar_definition(definitions, base) is Some(add) else {
+    return direct_i64()
+  }
+  guard add.opcode is Scalar(IntBinary(Add)) else { return direct_i64() }
+  guard binary_operands(add) is Some((left, right)) else { return direct_i64() }
   let parts = match pointer_source(definitions, left) {
     Some(pointer) =>
       select_index_and_offset(definitions, constants, right, width).map(selected => {
@@ -212,7 +223,9 @@ fn select_memory_address(
         None => None
       }
   }
-  guard parts is Some((pointer, pointer_bits, selected)) else { return None }
+  guard parts is Some((pointer, pointer_bits, selected)) else {
+    return direct_i64()
+  }
   let (index, shift, dynamic_offset, consumed_index) = selected
   let consumed = [base, offset]
   if pointer_bits != pointer {
@@ -429,8 +442,73 @@ fn analyze_lowering(function : @milkir.Function) -> LoweringAnalysis {
   )
   for block in function.blocks {
     for instruction in block.instructions {
+      guard instruction.opcode is Scalar(IntBinary(Add)) else { continue }
       guard instruction.results is [result] else { continue }
       if uses[result.id] > 0 && uses[result.id] == folded_uses[result.id] {
+        continue
+      }
+      guard binary_operands(instruction) is Some((left, right)) else {
+        continue
+      }
+      let multiply_add = fn(
+        accumulator : @milkir.Value,
+        product : @milkir.Value,
+      ) -> ScalarSelection? {
+        if uses[product.id] != 1 || folded_uses[product.id] != 0 {
+          return None
+        }
+        guard definitions[product.id] is Some(multiply) else { return None }
+        guard multiply.opcode is Scalar(IntBinary(Mul)) else { return None }
+        guard binary_operands(multiply) is Some((first, second)) else {
+          return None
+        }
+        Some(MultiplyAdd(accumulator, first, second))
+      }
+      let selected_multiply = match multiply_add(left, right) {
+        Some(selection) => Some((selection, right))
+        None => multiply_add(right, left).map(selection => (selection, left))
+      }
+      if selected_multiply is Some((selection, product)) {
+        scalar_instructions[instruction.id] = Some(selection)
+        folded_uses[product.id] += 1
+        continue
+      }
+      let shifted_add = fn(
+        accumulator : @milkir.Value,
+        shifted : @milkir.Value,
+      ) -> (ScalarSelection, @milkir.Value)? {
+        if uses[shifted.id] != 1 || folded_uses[shifted.id] != 0 {
+          return None
+        }
+        guard definitions[shifted.id] is Some(shift) else { return None }
+        guard shift.opcode is Scalar(IntBinary(ShiftLeft)) else { return None }
+        guard binary_operands(shift) is Some((input, amount)) else {
+          return None
+        }
+        guard constants[amount.id] is Some(bits) else { return None }
+        let width = if shifted.ty == I32 { 32UL } else { 64UL }
+        Some(
+          (AddShiftedLeft(accumulator, input, (bits % width).to_int()), amount),
+        )
+      }
+      let selected_shift = match shifted_add(left, right) {
+        Some(selection) => Some((selection, right))
+        None => shifted_add(right, left).map(selection => (selection, left))
+      }
+      if selected_shift is Some(((selection, constant), shifted)) {
+        scalar_instructions[instruction.id] = Some(selection)
+        folded_uses[shifted.id] += 1
+        folded_uses[constant.id] += 1
+      }
+    }
+  }
+  for block in function.blocks {
+    for instruction in block.instructions {
+      guard instruction.results is [result] else { continue }
+      if uses[result.id] > 0 && uses[result.id] == folded_uses[result.id] {
+        continue
+      }
+      if scalar_instructions[instruction.id] is Some(_) {
         continue
       }
       guard select_scalar_instruction(instruction, constants)

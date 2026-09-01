@@ -405,6 +405,8 @@ pub(all) enum Operation {
   IntBinary(IntBinaryOp)
   IntBinaryImmediate(IntBinaryOp, UInt64)
   IntShiftImmediate(IntBinaryOp, Int)
+  IntMultiplyAdd
+  IntAddShiftedLeft(Int)
   IntHighMultiply(@native.Signedness)
   IntWithOverflow(IntOverflowOp)
   IntCompare(IntComparison)
@@ -480,6 +482,8 @@ pub fn Operation::copy(self : Operation) -> Operation {
     | IntBinary(_)
     | IntBinaryImmediate(_, _)
     | IntShiftImmediate(_, _)
+    | IntMultiplyAdd
+    | IntAddShiftedLeft(_)
     | IntHighMultiply(_)
     | IntWithOverflow(_)
     | IntCompare(_)
@@ -1239,6 +1243,35 @@ pub fn verify_operation_contract(
       }
       None
     }
+    IntMultiplyAdd => {
+      if operands.length() != 3 ||
+        results.length() != 1 ||
+        !is_integer_type(operands[0]) ||
+        operands[0] != operands[1] ||
+        operands[0] != operands[2] ||
+        operands[0] != results[0] {
+        return operation_error(
+          "integer multiply-add expects three matching i32 or i64 operands",
+        )
+      }
+      None
+    }
+    IntAddShiftedLeft(amount) => {
+      if operands.length() != 2 ||
+        results.length() != 1 ||
+        !is_integer_type(operands[0]) ||
+        operands[0] != operands[1] ||
+        operands[0] != results[0] {
+        return operation_error(
+          "shifted integer add expects two matching i32 or i64 operands",
+        )
+      }
+      let width = value_type_bits(operands[0])
+      if amount < 0 || amount >= width {
+        return operation_error("shifted integer add amount is out of range")
+      }
+      None
+    }
     IntHighMultiply(_) => {
       if operands.length() != 2 ||
         results.length() != 1 ||
@@ -1592,6 +1625,8 @@ pub fn Operation::semantics(self : Operation) -> @native.OperationSemantics {
     | IntBinary(_)
     | IntBinaryImmediate(_, _)
     | IntShiftImmediate(_, _)
+    | IntMultiplyAdd
+    | IntAddShiftedLeft(_)
     | IntHighMultiply(_)
     | IntWithOverflow(_)
     | IntCompare(_)

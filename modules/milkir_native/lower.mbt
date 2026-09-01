@@ -1081,6 +1081,30 @@ fn lower_instruction(
       assign_instruction_results(values, instruction, lowered_results)
       return false
     }
+    Some(MultiplyAdd(accumulator, left, right)) => {
+      let lowered_results = builder.emit_with_metadata(
+        IntMultiplyAdd,
+        [
+          mapped_value(values, accumulator),
+          mapped_value(values, left),
+          mapped_value(values, right),
+        ],
+        instruction.results.map(result => lower_type(result.ty)),
+        instruction_metadata(instruction, []),
+      )
+      assign_instruction_results(values, instruction, lowered_results)
+      return false
+    }
+    Some(AddShiftedLeft(accumulator, input, amount)) => {
+      let lowered_results = builder.emit_with_metadata(
+        IntAddShiftedLeft(amount),
+        [mapped_value(values, accumulator), mapped_value(values, input)],
+        instruction.results.map(result => lower_type(result.ty)),
+        instruction_metadata(instruction, []),
+      )
+      assign_instruction_results(values, instruction, lowered_results)
+      return false
+    }
     None => ()
   }
   match instruction.opcode {
