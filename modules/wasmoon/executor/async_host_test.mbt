@@ -123,6 +123,25 @@ fn async_host_argument_root_test_module() -> @types.Module {
 }
 
 ///|
+fn async_host_throw_after_wait_test_module() -> @types.Module {
+  let func_type : @types.FuncType = { params: [I32], results: [I32], }
+  let tag_type : @types.FuncType = { params: [I32], results: [], }
+  {
+    ..@types.Module::empty(),
+    types: [
+      @types.SubType::from_func(func_type),
+      @types.SubType::from_func(tag_type),
+    ],
+    type_rec_groups: [0, 1],
+    imports: [{ mod_name: "host", name: "double", desc: Func(0), }],
+    funcs: [0],
+    codes: [{ locals: [], body: [LocalGet(0), Call(0), Throw(0)], }],
+    tags: [{ type_idx: 1, }],
+    exports: [{ name: "run", desc: Func(1), }],
+  }
+}
+
+///|
 async test "async host function suspends wasm without blocking the host task" {
   let events : Array[String] = []
   let linker = @runtime.Linker::Linker()
@@ -268,6 +287,49 @@ async test "parked async host-call arguments remain GC roots" {
   )
   let result = call_exported_func_async(store, instance, "run", [])
   debug_inspect(result, content="[I32(42)]")
+}
+
+///|
+async test "resumable async calls preserve wasm exceptions after suspension" {
+  let linker = @runtime.Linker::Linker()
+  defer linker.close()
+  linker.add_async_host_func(
+    "host",
+    "double",
+    async fn(args) {
+      @async.sleep(1)
+      match args[0] {
+        I32(value) => [I32(value * 2)]
+        _ => raise @runtime.TypeMismatch
+      }
+    },
+    func_type={ params: [I32], results: [I32], },
+  )
+  let store = linker.get_store()
+  let instance = instantiate_with_linker(
+    linker,
+    "guest",
+    async_host_throw_after_wait_test_module(),
+  )
+  @runtime.with_async_host_call_driver(async fn(driver) {
+    guard call_func_by_index_resumable_async_with_exception(
+        store,
+        instance,
+        1,
+        [I32(21)],
+        driver,
+      )
+      is ResumableSuspended(continuation) else {
+      fail("expected the imported call to suspend")
+    }
+    driver.wait_pending()
+    guard continuation.continue_execution_with_exception()
+      is ResumableThrown(tag_addr, values) else {
+      fail("expected the resumed call to throw")
+    }
+    inspect(tag_addr == instance.tag_addrs[0], content="true")
+    debug_inspect(values, content="[I32(42)]")
+  })
 }
 
 ///|

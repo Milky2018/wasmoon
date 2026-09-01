@@ -105,7 +105,11 @@ let values = @executor.call_exported_func_async(
 Use `JITModuleContext::call_core_func_async` for a prepared JIT module. Calling
 an async import through a synchronous entry point fails explicitly instead of
 blocking the host thread. Cancelling the surrounding MoonBit task cancels the
-host future and releases the parked Wasm continuation or native fiber.
+host future and releases the parked Wasm continuation or native fiber. Async
+suspension and structured host errors also propagate when JIT-compiled Wasm
+calls an interpreted imported-Wasm function before reaching the async host.
+Reference arguments and completed host results remain Store GC roots across
+every parked or not-yet-consumed boundary.
 
 If a module's start function can reach an async import, instantiate it with
 `instantiate_with_linker_async` or

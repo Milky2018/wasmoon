@@ -6,6 +6,16 @@ pub(all) enum ResumableCallOutcome {
 } derive(Debug)
 
 ///|
+/// Suspendable interpreter result for a JIT/import bridge that must preserve
+/// both Wasm exceptions and host-error provenance.
+pub(all) enum ResumableCallWithExceptionOutcome {
+  ResumableReturned(Array[@types.Value])
+  ResumableSuspended(ExecutionContinuation)
+  ResumableThrown(Int, Array[@types.Value])
+  ResumableHostFailed(@runtime.RuntimeError)
+}
+
+///|
 /// Explicit continuation for one interpreter invocation.
 ///
 /// The captured execution context owns the operand stack, Wasm frames, locals,
@@ -139,17 +149,17 @@ fn suspended_outcome(
 }
 
 ///|
-/// Resume this continuation exactly once.
-pub fn ExecutionContinuation::continue_execution(
+/// Resume this continuation without choosing an embedding error policy.
+fn ExecutionContinuation::continue_unchecked(
   self : ExecutionContinuation,
-) -> ResumableCallOutcome raise @runtime.RuntimeError {
+) -> ResumableCallOutcome raise {
   if !self.active[0] {
-    raise Unreachable
+    raise @runtime.Unreachable
   }
   guard self.context.resume_action is Some(action) else {
     self.active[0] = false
     self.root_lease.release()
-    raise Unreachable
+    raise @runtime.Unreachable
   }
   self.root_lease.release()
   self.context.resume_action = None
@@ -158,11 +168,39 @@ pub fn ExecutionContinuation::continue_execution(
       return suspended_outcome(self.context, self.return_arity, self.active)
     error => {
       self.active[0] = false
-      raise normalize_runtime_error(error)
+      raise error
     }
   }
   self.active[0] = false
   Returned(self.context.collect_call_results(self.return_arity))
+}
+
+///|
+/// Resume this continuation exactly once.
+pub fn ExecutionContinuation::continue_execution(
+  self : ExecutionContinuation,
+) -> ResumableCallOutcome raise @runtime.RuntimeError {
+  self.continue_unchecked() catch {
+    error => raise normalize_runtime_error(error)
+  }
+}
+
+///|
+/// Resume a continuation owned by an imported-Wasm bridge while preserving an
+/// uncaught Wasm exception or asynchronous host failure for the native caller.
+pub fn ExecutionContinuation::continue_execution_with_exception(
+  self : ExecutionContinuation,
+) -> ResumableCallWithExceptionOutcome raise @runtime.RuntimeError {
+  let outcome = self.continue_unchecked() catch {
+    ThrowException(tag_addr, values) => return ResumableThrown(tag_addr, values)
+    InvocationSignal::HostInvocation(error) =>
+      return ResumableHostFailed(normalize_runtime_error(error))
+    error => raise normalize_runtime_error(error)
+  }
+  match outcome {
+    Returned(values) => ResumableReturned(values)
+    Suspended(_, continuation) => ResumableSuspended(continuation)
+  }
 }
 
 ///|
@@ -202,13 +240,13 @@ pub fn call_func_by_index_resumable(
 }
 
 ///|
-fn start_async_host_call(
+fn start_async_host_call_unchecked(
   store : @runtime.Store,
   instance : @runtime.ModuleInstance,
   func_idx : Int,
   args : Array[@types.Value],
   driver : @runtime.AsyncHostCallDriver,
-) -> ResumableCallOutcome raise @runtime.RuntimeError {
+) -> ResumableCallOutcome raise {
   let context = ExecContext(store, instance, async_host_driver=Some(driver))
   let store_addr = instance.func_addrs[func_idx]
   let func_inst = store.get_func_inst(store_addr)
@@ -218,9 +256,46 @@ fn start_async_host_call(
   context.call_func_inst_with_context(store_addr, func_inst, args, return_arity) catch {
     ExecutionSuspended =>
       return suspended_outcome(context, return_arity, [true])
-    error => raise normalize_runtime_error(error)
+    error => raise error
   }
   Returned(context.collect_call_results(return_arity))
+}
+
+///|
+fn start_async_host_call(
+  store : @runtime.Store,
+  instance : @runtime.ModuleInstance,
+  func_idx : Int,
+  args : Array[@types.Value],
+  driver : @runtime.AsyncHostCallDriver,
+) -> ResumableCallOutcome raise @runtime.RuntimeError {
+  start_async_host_call_unchecked(store, instance, func_idx, args, driver) catch {
+    error => raise normalize_runtime_error(error)
+  }
+}
+
+///|
+/// Enter an interpreted imported-Wasm function using the native caller's async
+/// driver, preserving suspension, Wasm exceptions, and host failures.
+pub fn call_func_by_index_resumable_async_with_exception(
+  store : @runtime.Store,
+  instance : @runtime.ModuleInstance,
+  func_idx : Int,
+  args : Array[@types.Value],
+  driver : @runtime.AsyncHostCallDriver,
+) -> ResumableCallWithExceptionOutcome raise @runtime.RuntimeError {
+  let outcome = start_async_host_call_unchecked(
+    store, instance, func_idx, args, driver,
+  ) catch {
+    ThrowException(tag_addr, values) => return ResumableThrown(tag_addr, values)
+    InvocationSignal::HostInvocation(error) =>
+      return ResumableHostFailed(normalize_runtime_error(error))
+    error => raise normalize_runtime_error(error)
+  }
+  match outcome {
+    Returned(values) => ResumableReturned(values)
+    Suspended(_, continuation) => ResumableSuspended(continuation)
+  }
 }
 
 ///|

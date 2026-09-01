@@ -20,6 +20,8 @@ pub async fn call_func_by_index_async(@runtime.Store, @runtime.ModuleInstance, I
 
 pub fn call_func_by_index_resumable(@runtime.Store, @runtime.ModuleInstance, Int, Array[@types.Value], (@runtime.RuntimeError) -> Int64?) -> ResumableCallOutcome raise @runtime.RuntimeError
 
+pub fn call_func_by_index_resumable_async_with_exception(@runtime.Store, @runtime.ModuleInstance, Int, Array[@types.Value], @runtime.AsyncHostCallDriver) -> ResumableCallWithExceptionOutcome raise @runtime.RuntimeError
+
 pub fn call_func_by_index_with_exception(@runtime.Store, @runtime.ModuleInstance, Int, Array[@types.Value]) -> InvokeWithExceptionResult raise @runtime.RuntimeError
 
 pub fn eval_const_expr(Array[@types.Instruction], func_addrs? : Array[Int], globals? : Array[@runtime.GlobalInstance], store? : @runtime.Store?, types? : Array[@types.SubType]) -> @types.Value raise @runtime.RuntimeError
@@ -87,6 +89,7 @@ pub fn ExecContext::to_repr(Self) -> @debug.Repr
 type ExecutionContinuation
 pub fn ExecutionContinuation::cancel(Self) -> Unit
 pub fn ExecutionContinuation::continue_execution(Self) -> ResumableCallOutcome raise @runtime.RuntimeError
+pub fn ExecutionContinuation::continue_execution_with_exception(Self) -> ResumableCallWithExceptionOutcome raise @runtime.RuntimeError
 pub fn ExecutionContinuation::to_repr(Self) -> @debug.Repr
 pub impl @debug.Debug for ExecutionContinuation
 
@@ -128,6 +131,13 @@ pub(all) enum ResumableCallOutcome {
   Suspended(Int64, ExecutionContinuation)
 } derive(@debug.Debug)
 pub fn ResumableCallOutcome::to_repr(Self) -> @debug.Repr
+
+pub(all) enum ResumableCallWithExceptionOutcome {
+  ResumableReturned(Array[@types.Value])
+  ResumableSuspended(ExecutionContinuation)
+  ResumableThrown(Int, Array[@types.Value])
+  ResumableHostFailed(@runtime.RuntimeError)
+}
 
 // Type aliases
 

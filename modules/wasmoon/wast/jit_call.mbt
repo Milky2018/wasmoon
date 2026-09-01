@@ -144,6 +144,13 @@ fn JITModuleContext::clear_async_host_state(
   self : JITModuleContext,
   invocation_id : Int64,
 ) -> Unit {
+  match self.imported_wasm_continuations.get(invocation_id) {
+    Some(pending) => {
+      self.imported_wasm_continuations.remove(invocation_id)
+      pending.continuation.cancel()
+    }
+    None => ()
+  }
   self.async_host_drivers.remove(invocation_id)
   self.async_host_errors.remove(invocation_id)
 }

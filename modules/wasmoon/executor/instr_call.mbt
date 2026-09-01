@@ -256,7 +256,10 @@ fn ExecContext::invoke_async_host_func(
     raise InvocationSignal::HostInvocation(@runtime.AsyncHostRequiresAsyncCall)
   }
   let caller = @runtime.Caller::Caller(self.store, caller_instance)
-  match driver.poll(store_addr, host_fn, caller, args) {
+  let poll = driver.poll(store_addr, host_fn, caller, args) catch {
+    error => raise InvocationSignal::HostInvocation(error)
+  }
+  match poll {
     AsyncHostReady(results) =>
       for result in results {
         self.stack.push(result)

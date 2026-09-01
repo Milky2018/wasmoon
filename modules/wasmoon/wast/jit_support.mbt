@@ -1584,12 +1584,58 @@ pub fn JITModuleContext::install_hostcall_dispatcher(
         if func_idx < 0 {
           raise UndefinedElement
         }
-        match
-          @executor.call_func_by_index_with_exception(
-            store, owner, func_idx, args,
-          ) {
-          Returned(values) => ImportedReturned(values)
-          Thrown(tag_addr, values) => ImportedThrown(tag_addr, values)
+        match store.native_execution_state().current_invocation() {
+          Some(invocation_id) =>
+            match self.async_host_drivers.get(invocation_id) {
+              Some(driver) => {
+                let outcome = match
+                  self.imported_wasm_continuations.get(invocation_id) {
+                  Some(pending) => {
+                    if pending.func_addr != func_addr {
+                      raise AsyncHostCallInProgress
+                    }
+                    self.imported_wasm_continuations.remove(invocation_id)
+                    pending.continuation.continue_execution_with_exception()
+                  }
+                  None =>
+                    @executor.call_func_by_index_resumable_async_with_exception(
+                      store, owner, func_idx, args, driver,
+                    )
+                }
+                match outcome {
+                  ResumableReturned(values) => ImportedReturned(values)
+                  ResumableThrown(tag_addr, values) =>
+                    ImportedThrown(tag_addr, values)
+                  ResumableSuspended(continuation) => {
+                    self.imported_wasm_continuations.set(invocation_id, {
+                      func_addr,
+                      continuation,
+                    })
+                    ImportedPending
+                  }
+                  ResumableHostFailed(error) => {
+                    self.async_host_errors.set(invocation_id, error)
+                    raise error
+                  }
+                }
+              }
+              None =>
+                match
+                  @executor.call_func_by_index_with_exception(
+                    store, owner, func_idx, args,
+                  ) {
+                  Returned(values) => ImportedReturned(values)
+                  Thrown(tag_addr, values) => ImportedThrown(tag_addr, values)
+                }
+            }
+          None =>
+            match
+              @executor.call_func_by_index_with_exception(
+                store, owner, func_idx, args,
+              ) {
+              Returned(values) => ImportedReturned(values)
+              Thrown(tag_addr, values) => ImportedThrown(tag_addr, values)
+            }
         }
       }
     }
@@ -1624,7 +1670,8 @@ pub fn JITModuleContext::install_hostcall_dispatcher(
     let invoke_result = call_func_by_addr(store, instance, func_addr, args) catch {
       e => {
         after_dispatch()
-        if store.get_func_inst_opt(func_addr) is Some(AsyncHostFunc(_)) {
+        if store.get_func_inst_opt(func_addr) is Some(AsyncHostFunc(_)) ||
+          e is AsyncHostRequiresAsyncCall {
           if store.native_execution_state().current_invocation()
             is Some(invocation_id) {
             self.async_host_errors.set(invocation_id, e)
