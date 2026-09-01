@@ -56,6 +56,24 @@ pub(all) struct SwitchCase {
 pub(all) enum Terminator {
   Jump(Block, Array[Value])
   Branch(Value, Block, Array[Value], Block, Array[Value])
+  BranchIntCompare(
+    IntComparison,
+    Value,
+    Value,
+    Block,
+    Array[Value],
+    Block,
+    Array[Value]
+  )
+  BranchIntCompareImmediate(
+    IntComparison,
+    Value,
+    UInt64,
+    Block,
+    Array[Value],
+    Block,
+    Array[Value]
+  )
   Switch(Value, Array[SwitchCase], Block, Array[Value])
   Return(Array[Value])
   TailCall(@native.NativeCall, Array[Value])
@@ -80,6 +98,16 @@ pub(all) struct TargetTerminatorMetadata {
 pub(all) enum TargetTerminator {
   Jump(Int, Array[Int])
   Branch(Int, Int, Array[Int], Int, Array[Int])
+  BranchIntCompare(IntComparison, Int, Int, Int, Array[Int], Int, Array[Int])
+  BranchIntCompareImmediate(
+    IntComparison,
+    Int,
+    UInt64,
+    Int,
+    Array[Int],
+    Int,
+    Array[Int]
+  )
   Switch(Int, Array[TargetSwitchCase], Int, Array[Int])
   Return(Array[Int])
   TailCall(@native.NativeCall, Array[Int])
@@ -273,6 +301,42 @@ fn DirectBuilder::flush_terminator(self : DirectBuilder) -> Unit {
     ) =>
       Branch(
         value_id(condition),
+        block_id(true_target),
+        true_arguments.map(value_id),
+        block_id(false_target),
+        false_arguments.map(value_id),
+      )
+    BranchIntCompare(
+      comparison,
+      left,
+      right,
+      true_target,
+      true_arguments,
+      false_target,
+      false_arguments
+    ) =>
+      BranchIntCompare(
+        comparison,
+        value_id(left),
+        value_id(right),
+        block_id(true_target),
+        true_arguments.map(value_id),
+        block_id(false_target),
+        false_arguments.map(value_id),
+      )
+    BranchIntCompareImmediate(
+      comparison,
+      input,
+      bits,
+      true_target,
+      true_arguments,
+      false_target,
+      false_arguments
+    ) =>
+      BranchIntCompareImmediate(
+        comparison,
+        value_id(input),
+        bits,
         block_id(true_target),
         true_arguments.map(value_id),
         block_id(false_target),
@@ -614,6 +678,56 @@ pub fn DirectBuilder::branch(
   self.set_terminator(
     Branch(
       condition,
+      true_target,
+      true_arguments.copy(),
+      false_target,
+      false_arguments.copy(),
+    ),
+    TerminatorMetadata::new(None, []),
+  )
+}
+
+///|
+pub fn DirectBuilder::branch_int_compare(
+  self : DirectBuilder,
+  comparison : IntComparison,
+  left : Value,
+  right : Value,
+  true_target : Block,
+  true_arguments : Array[Value],
+  false_target : Block,
+  false_arguments : Array[Value],
+) -> Unit {
+  self.set_terminator(
+    BranchIntCompare(
+      comparison,
+      left,
+      right,
+      true_target,
+      true_arguments.copy(),
+      false_target,
+      false_arguments.copy(),
+    ),
+    TerminatorMetadata::new(None, []),
+  )
+}
+
+///|
+pub fn DirectBuilder::branch_int_compare_immediate(
+  self : DirectBuilder,
+  comparison : IntComparison,
+  input : Value,
+  bits : UInt64,
+  true_target : Block,
+  true_arguments : Array[Value],
+  false_target : Block,
+  false_arguments : Array[Value],
+) -> Unit {
+  self.set_terminator(
+    BranchIntCompareImmediate(
+      comparison,
+      input,
+      bits,
       true_target,
       true_arguments.copy(),
       false_target,

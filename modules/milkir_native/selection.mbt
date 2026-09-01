@@ -13,9 +13,16 @@ priv enum ScalarSelection {
 }
 
 ///|
+priv enum BranchSelection {
+  Compare(@milkir.Value, @milkir.Value, @lowering.IntComparison)
+  CompareImmediate(@milkir.Value, UInt64, @lowering.IntComparison)
+}
+
+///|
 priv struct LoweringAnalysis {
   memory_addresses : Array[MemoryAddressSelection?]
   scalar_instructions : Array[ScalarSelection?]
+  branches : Array[BranchSelection?]
   skip_results : Array[Bool]
 }
 
@@ -284,6 +291,40 @@ fn selection_binary_operation(
 }
 
 ///|
+fn selection_comparison(comparison : @milkir.IntCC) -> @lowering.IntComparison {
+  match comparison {
+    Eq => Equal
+    Ne => NotEqual
+    Slt => SignedLessThan
+    Sle => SignedLessOrEqual
+    Sgt => SignedGreaterThan
+    Sge => SignedGreaterOrEqual
+    Ult => UnsignedLessThan
+    Ule => UnsignedLessOrEqual
+    Ugt => UnsignedGreaterThan
+    Uge => UnsignedGreaterOrEqual
+  }
+}
+
+///|
+fn swapped_comparison(
+  comparison : @lowering.IntComparison,
+) -> @lowering.IntComparison {
+  match comparison {
+    Equal => Equal
+    NotEqual => NotEqual
+    SignedLessThan => SignedGreaterThan
+    SignedLessOrEqual => SignedGreaterOrEqual
+    SignedGreaterThan => SignedLessThan
+    SignedGreaterOrEqual => SignedLessOrEqual
+    UnsignedLessThan => UnsignedGreaterThan
+    UnsignedLessOrEqual => UnsignedGreaterOrEqual
+    UnsignedGreaterThan => UnsignedLessThan
+    UnsignedGreaterOrEqual => UnsignedLessOrEqual
+  }
+}
+
+///|
 fn select_scalar_instruction(
   instruction : @milkir.Inst,
   constants : Array[UInt64?],
@@ -400,11 +441,48 @@ fn analyze_lowering(function : @milkir.Function) -> LoweringAnalysis {
       folded_uses[constant.id] += 1
     }
   }
+  let branches : Array[BranchSelection?] = Array::make(
+    function.next_block_id,
+    None,
+  )
+  for block in function.blocks {
+    let condition = match block.terminator {
+      Some(Branch(condition, _, _, _, _)) => Some(condition)
+      Some(Brnz(condition, _, _)) | Some(Brz(condition, _, _)) =>
+        Some(condition)
+      _ => None
+    }
+    guard condition is Some(condition) else { continue }
+    if uses[condition.id] != 1 {
+      continue
+    }
+    guard definitions[condition.id] is Some(instruction) else { continue }
+    guard instruction.opcode is Scalar(IntCompare(comparison)) else { continue }
+    guard binary_operands(instruction) is Some((left, right)) else { continue }
+    let lowered = selection_comparison(comparison)
+    match constants[right.id] {
+      Some(bits) => {
+        branches[block.id] = Some(CompareImmediate(left, bits, lowered))
+        folded_uses[right.id] += 1
+      }
+      None =>
+        match constants[left.id] {
+          Some(bits) => {
+            branches[block.id] = Some(
+              CompareImmediate(right, bits, swapped_comparison(lowered)),
+            )
+            folded_uses[left.id] += 1
+          }
+          None => branches[block.id] = Some(Compare(left, right, lowered))
+        }
+    }
+    folded_uses[condition.id] += 1
+  }
   let skip_results = Array::make(function.next_value_id, false)
   for value_id in 0..<function.next_value_id {
     if uses[value_id] > 0 && uses[value_id] == folded_uses[value_id] {
       skip_results[value_id] = true
     }
   }
-  { memory_addresses, scalar_instructions, skip_results, }
+  { memory_addresses, scalar_instructions, branches, skip_results, }
 }

@@ -91,6 +91,8 @@ pub struct DirectBuilder {
 }
 pub fn DirectBuilder::block_parameters(Self, Block) -> Array[Value]
 pub fn DirectBuilder::branch(Self, Value, Block, Array[Value], Block, Array[Value]) -> Unit
+pub fn DirectBuilder::branch_int_compare(Self, IntComparison, Value, Value, Block, Array[Value], Block, Array[Value]) -> Unit
+pub fn DirectBuilder::branch_int_compare_immediate(Self, IntComparison, Value, UInt64, Block, Array[Value], Block, Array[Value]) -> Unit
 pub fn DirectBuilder::create_block(Self, Array[@native_types.ValueType]) -> Block
 pub fn DirectBuilder::create_stack_object(Self, Int, Int) -> @native_types.StackObject
 pub fn DirectBuilder::emit_with_metadata(Self, Operation, Array[Value], Array[@native_types.ValueType], InstructionMetadata) -> Array[Value]
@@ -369,6 +371,8 @@ pub(all) struct TargetSwitchCase {
 pub(all) enum TargetTerminator {
   Jump(Int, Array[Int])
   Branch(Int, Int, Array[Int], Int, Array[Int])
+  BranchIntCompare(IntComparison, Int, Int, Int, Array[Int], Int, Array[Int])
+  BranchIntCompareImmediate(IntComparison, Int, UInt64, Int, Array[Int], Int, Array[Int])
   Switch(Int, Array[TargetSwitchCase], Int, Array[Int])
   Return(Array[Int])
   TailCall(@native_types.NativeCall, Array[Int])
@@ -384,6 +388,8 @@ pub(all) struct TargetTerminatorMetadata {
 pub(all) enum Terminator {
   Jump(Block, Array[Value])
   Branch(Value, Block, Array[Value], Block, Array[Value])
+  BranchIntCompare(IntComparison, Value, Value, Block, Array[Value], Block, Array[Value])
+  BranchIntCompareImmediate(IntComparison, Value, UInt64, Block, Array[Value], Block, Array[Value])
   Switch(Value, Array[SwitchCase], Block, Array[Value])
   Return(Array[Value])
   TailCall(@native_types.NativeCall, Array[Value])

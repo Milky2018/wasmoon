@@ -1276,6 +1276,92 @@ fn DirectLoweringSession::terminate(
           ],
           ordinary_metadata,
         )
+      BranchIntCompare(
+        comparison,
+        left,
+        right,
+        true_target,
+        true_arguments,
+        false_target,
+        false_arguments
+      ) => {
+        let width = if self.value_types[left] == I32 { W32 } else { W64 }
+        let condition = append_body(
+            self.builder,
+            block,
+            CompareSet(width, lower_condition(comparison)),
+            [
+              @vcode.Input::any(self.target_value(left)),
+              @vcode.Input::any(self.target_value(right)),
+            ],
+            [@vcode.Output::any(I32)],
+            @vcode.InstructionMetadata::empty(),
+          )[0]
+        set_terminator(
+          self.builder,
+          block,
+          BranchNonZero32,
+          [@vcode.Input::any(condition)],
+          [
+            @vcode.Edge::new(
+              self.blocks[true_target],
+              self.target_values(true_arguments),
+            ),
+            @vcode.Edge::new(
+              self.blocks[false_target],
+              self.target_values(false_arguments),
+            ),
+          ],
+          ordinary_metadata,
+        )
+      }
+      BranchIntCompareImmediate(
+        comparison,
+        input,
+        bits,
+        true_target,
+        true_arguments,
+        false_target,
+        false_arguments
+      ) => {
+        let width = if self.value_types[input] == I32 { W32 } else { W64 }
+        let constant = append_body(
+            self.builder,
+            block,
+            LoadConstant(width, bits),
+            [],
+            [@vcode.Output::any(self.value_types[input])],
+            @vcode.InstructionMetadata::empty(),
+          )[0]
+        let condition = append_body(
+            self.builder,
+            block,
+            CompareSet(width, lower_condition(comparison)),
+            [
+              @vcode.Input::any(self.target_value(input)),
+              @vcode.Input::any(constant),
+            ],
+            [@vcode.Output::any(I32)],
+            @vcode.InstructionMetadata::empty(),
+          )[0]
+        set_terminator(
+          self.builder,
+          block,
+          BranchNonZero32,
+          [@vcode.Input::any(condition)],
+          [
+            @vcode.Edge::new(
+              self.blocks[true_target],
+              self.target_values(true_arguments),
+            ),
+            @vcode.Edge::new(
+              self.blocks[false_target],
+              self.target_values(false_arguments),
+            ),
+          ],
+          ordinary_metadata,
+        )
+      }
       Switch(index, cases, default_target, default_arguments) => {
         let width = if self.value_types[index] == I32 { W32 } else { W64 }
         let successors = cases.map(case => {

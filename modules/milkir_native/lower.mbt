@@ -1320,6 +1320,7 @@ fn lower_terminator(
   blocks : Array[@lowering.Block?],
   block_id : Int,
   terminator : @milkir.Terminator,
+  analysis : LoweringAnalysis,
 ) -> Unit raise NativeLowerError {
   match terminator {
     Jump(target, arguments) =>
@@ -1333,30 +1334,104 @@ fn lower_terminator(
       true_arguments,
       false_target,
       false_arguments
-    ) =>
-      builder.branch(
-        mapped_value(values, condition),
-        mapped_block(blocks, true_target),
-        mapped_values(values, true_arguments),
-        mapped_block(blocks, false_target),
-        mapped_values(values, false_arguments),
-      )
+    ) => {
+      let lowered_true_target = mapped_block(blocks, true_target)
+      let lowered_true_arguments = mapped_values(values, true_arguments)
+      let lowered_false_target = mapped_block(blocks, false_target)
+      let lowered_false_arguments = mapped_values(values, false_arguments)
+      match analysis.branches[block_id] {
+        Some(Compare(left, right, comparison)) =>
+          builder.branch_int_compare(
+            comparison,
+            mapped_value(values, left),
+            mapped_value(values, right),
+            lowered_true_target,
+            lowered_true_arguments,
+            lowered_false_target,
+            lowered_false_arguments,
+          )
+        Some(CompareImmediate(input, bits, comparison)) =>
+          builder.branch_int_compare_immediate(
+            comparison,
+            mapped_value(values, input),
+            bits,
+            lowered_true_target,
+            lowered_true_arguments,
+            lowered_false_target,
+            lowered_false_arguments,
+          )
+        None =>
+          builder.branch(
+            mapped_value(values, condition),
+            lowered_true_target,
+            lowered_true_arguments,
+            lowered_false_target,
+            lowered_false_arguments,
+          )
+      }
+    }
     Brnz(condition, true_target, false_target) =>
-      builder.branch(
-        mapped_value(values, condition),
-        mapped_block(blocks, true_target),
-        [],
-        mapped_block(blocks, false_target),
-        [],
-      )
+      match analysis.branches[block_id] {
+        Some(Compare(left, right, comparison)) =>
+          builder.branch_int_compare(
+            comparison,
+            mapped_value(values, left),
+            mapped_value(values, right),
+            mapped_block(blocks, true_target),
+            [],
+            mapped_block(blocks, false_target),
+            [],
+          )
+        Some(CompareImmediate(input, bits, comparison)) =>
+          builder.branch_int_compare_immediate(
+            comparison,
+            mapped_value(values, input),
+            bits,
+            mapped_block(blocks, true_target),
+            [],
+            mapped_block(blocks, false_target),
+            [],
+          )
+        None =>
+          builder.branch(
+            mapped_value(values, condition),
+            mapped_block(blocks, true_target),
+            [],
+            mapped_block(blocks, false_target),
+            [],
+          )
+      }
     Brz(condition, true_target, false_target) =>
-      builder.branch(
-        mapped_value(values, condition),
-        mapped_block(blocks, false_target),
-        [],
-        mapped_block(blocks, true_target),
-        [],
-      )
+      match analysis.branches[block_id] {
+        Some(Compare(left, right, comparison)) =>
+          builder.branch_int_compare(
+            comparison,
+            mapped_value(values, left),
+            mapped_value(values, right),
+            mapped_block(blocks, false_target),
+            [],
+            mapped_block(blocks, true_target),
+            [],
+          )
+        Some(CompareImmediate(input, bits, comparison)) =>
+          builder.branch_int_compare_immediate(
+            comparison,
+            mapped_value(values, input),
+            bits,
+            mapped_block(blocks, false_target),
+            [],
+            mapped_block(blocks, true_target),
+            [],
+          )
+        None =>
+          builder.branch(
+            mapped_value(values, condition),
+            mapped_block(blocks, false_target),
+            [],
+            mapped_block(blocks, true_target),
+            [],
+          )
+      }
     BrTable(index, targets, default_target) => {
       let cases : Array[(UInt64, @lowering.Block, Array[@lowering.Value])] = []
       for case_index, target in targets {
@@ -1526,7 +1601,14 @@ fn lower_verified_construction(
     if !terminator_replaced {
       match block.terminator {
         Some(terminator) =>
-          lower_terminator(builder, values, blocks, block.id, terminator)
+          lower_terminator(
+            builder,
+            values,
+            blocks,
+            block.id,
+            terminator,
+            analysis,
+          )
         None =>
           raise InvalidMilkIR(
             message="block \{block.id} has no terminator after verification",
