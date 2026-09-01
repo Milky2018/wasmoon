@@ -67,4 +67,3 @@ vectors, and per-function code-size vectors. Function 56 remains 16,036 bytes
 and total emitted code remains 59,428 bytes. The cacheable `.cwasm` is
 byte-identical to the ISS-447 control with SHA-256
 `0c31ca17b8f04e9ecd0022eb185d367d7027d197ba83f87cd762a8e2f4639840`.
-
