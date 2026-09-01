@@ -542,6 +542,9 @@ fn analyze_lowering(function : @milkir.Function) -> LoweringAnalysis {
     guard definitions[condition.id] is Some(instruction) else { continue }
     guard instruction.opcode is Scalar(IntCompare(comparison)) else { continue }
     guard binary_operands(instruction) is Some((left, right)) else { continue }
+    if left.ty != right.ty || !(left.ty is (I32 | I64)) {
+      continue
+    }
     let lowered = selection_comparison(comparison)
     match constants[right.id] {
       Some(bits) => {

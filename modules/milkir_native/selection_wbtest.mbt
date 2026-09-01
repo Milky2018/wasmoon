@@ -81,6 +81,26 @@ test "native selection fuses compare into brz and brnz terminators" {
 }
 
 ///|
+test "native selection leaves reference comparisons semantic" {
+  let builder = @milkir.FunctionBuilder::FunctionBuilder("reference_branch")
+  let left = builder.add_param(Ref)
+  let right = builder.add_param(Ref)
+  let when_true = builder.create_block()
+  let when_false = builder.create_block()
+  let condition = builder.icmp_eq(left, right)
+  let entry = builder.current_block()
+  builder.brnz(condition, when_true, when_false)
+  builder.switch_to_block(when_true)
+  builder.return_([])
+  builder.switch_to_block(when_false)
+  builder.return_([])
+  let function = builder.finalize()
+  let analysis = analyze_lowering(function)
+  inspect(analysis.branches[entry.id] is None, content="true")
+  inspect(analysis.skip_results[condition.id], content="false")
+}
+
+///|
 test "native selection folds canonical MilkIR addresses into indexed memory" {
   let builder = @milkir.FunctionBuilder::FunctionBuilder("indexed_memory")
   let base = builder.add_param(Ptr)
