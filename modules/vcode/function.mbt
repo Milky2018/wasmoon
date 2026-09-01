@@ -32,6 +32,7 @@ priv struct InstructionData[Inst] {
   role : InstructionRole
   operand_start : Int
   operand_count : Int
+  allocation_operand_count : Int
   clobber_start : Int
   clobber_count : Int
   results : Array[Value]

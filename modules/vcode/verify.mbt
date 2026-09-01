@@ -717,8 +717,15 @@ pub fn[Inst] verify_allocation_invariants(
   for instruction_index in 0..<function.instruction_count() {
     let instruction = function.instruction_at(instruction_index).unwrap()
     let metadata = function.instructions[instruction_index].metadata
-    for root in metadata.live_gc_roots {
-      let expected = allocation.value_locations[root.id].unwrap()
+    let data = function.instructions[instruction_index]
+    for root_index, root in metadata.live_gc_roots {
+      let expected = match
+        allocation.operand_locations[instruction_index].get(
+          data.operand_count + root_index,
+        ) {
+        Some(Some(location)) => location
+        _ => allocation.value_locations[root.id].unwrap()
+      }
       let mut found = false
       for entry in allocation.safepoint_roots {
         if entry.instruction == instruction &&

@@ -243,6 +243,19 @@ fn[Inst] Builder::commit_instruction(
       tie_id,
     })
   }
+  for root in metadata.live_gc_roots {
+    self.function.operands.push({
+      vreg: {
+        id: root.id,
+        class: reg_class_for_value_type(self.function.values[root.id].ty),
+      },
+      role: Use,
+      constraint: AnyLocation,
+      preference: None,
+      timing: Late,
+      tie_id: -1,
+    })
+  }
   let clobber_start = self.function.clobbers.length()
   self.function.clobbers.push_iter(clobbers.iter())
   self.function.instructions.push({
@@ -251,6 +264,9 @@ fn[Inst] Builder::commit_instruction(
     role,
     operand_start,
     operand_count: inputs.length() + outputs.length(),
+    allocation_operand_count: inputs.length() +
+    outputs.length() +
+    metadata.live_gc_roots.length(),
     clobber_start,
     clobber_count: clobbers.length(),
     results,

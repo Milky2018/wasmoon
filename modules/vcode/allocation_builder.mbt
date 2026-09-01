@@ -73,7 +73,7 @@ pub fn[Inst] AllocationBuilder::from_plan_storage(
   for instruction in 0..<operand_locations.length() {
     let data = function.instructions[instruction]
     let locations = operand_locations[instruction]
-    if locations.length() != data.operand_count {
+    if locations.length() != data.allocation_operand_count {
       return None
     }
     for operand in 0..<locations.length() {
@@ -285,15 +285,20 @@ pub fn[Inst] AllocationBuilder::add_function_safepoint_roots(
   self : AllocationBuilder[Inst],
 ) -> Bool {
   for instruction, data in self.function.instructions {
-    for root in data.metadata.live_gc_roots {
-      if !self.function.owns_value(root) ||
-        self.allocation.value_locations[root.id] is None {
+    for root_index, root in data.metadata.live_gc_roots {
+      if !self.function.owns_value(root) {
+        return false
+      }
+      guard self.allocation.operand_locations[instruction].get(
+          data.operand_count + root_index,
+        )
+        is Some(Some(location)) else {
         return false
       }
       self.allocation.safepoint_roots.push({
         instruction: Instruction::new(self.function.owner, instruction),
         value: root,
-        location: self.allocation.value_locations[root.id].unwrap(),
+        location,
       })
     }
   }

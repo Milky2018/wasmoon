@@ -1197,6 +1197,15 @@ fn DirectLoweringSession::terminate_tail_call(
       },
     )
   }
+  let call_metadata = terminator_call_metadata(
+    metadata.source,
+    call.behavior.semantics(),
+  )
+  let metadata = @vcode.InstructionMetadata::new(
+    source?=call_metadata.source,
+    safepoint?=call_metadata.safepoint,
+    live_gc_roots=metadata.live_gc_roots,
+  )
   set_terminator(
     self.builder,
     block,

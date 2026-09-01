@@ -122,7 +122,8 @@ pub fn[Inst] Function::allocation_instruction_operands(
   instruction : Int,
 ) -> ArrayView[AllocationOperand] {
   let data = self.instructions[instruction]
-  self.operands[data.operand_start:data.operand_start + data.operand_count]
+  self.operands[data.operand_start:data.operand_start +
+  data.allocation_operand_count]
 }
 
 ///|
