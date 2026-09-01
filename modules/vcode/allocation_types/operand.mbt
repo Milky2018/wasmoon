@@ -38,6 +38,9 @@ pub extend OperandRole with Eq::{not_equal, equal}
 pub(all) enum AllocationConstraint {
   AnyReg
   AnyLocation
+  /// Keep this operand at a canonical home that survives the instruction's
+  /// clobbers without materializing a temporary. This is used for stack maps.
+  PreservedHome
   FixedReg(PhysicalReg)
 } derive(Eq, Debug)
 

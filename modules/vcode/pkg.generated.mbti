@@ -39,6 +39,7 @@ pub suberror AllocationVerifyError {
   OperandClassMismatch(instruction~ : Instruction, operand~ : Int)
   RegisterConstraintViolation(instruction~ : Instruction, operand~ : Int)
   FixedConstraintViolation(instruction~ : Instruction, operand~ : Int)
+  PreservedHomeConstraintViolation(instruction~ : Instruction, operand~ : Int)
   TiedConstraintViolation(instruction~ : Instruction, operand~ : Int)
   Interference(left~ : Value, right~ : Value, location~ : Location)
   ClobberViolation(instruction~ : Instruction, value~ : Value)

@@ -285,14 +285,11 @@ pub fn[Inst] AllocationBuilder::add_function_safepoint_roots(
   self : AllocationBuilder[Inst],
 ) -> Bool {
   for instruction, data in self.function.instructions {
-    for root_index, root in data.metadata.live_gc_roots {
+    for root in data.metadata.live_gc_roots {
       if !self.function.owns_value(root) {
         return false
       }
-      guard self.allocation.operand_locations[instruction].get(
-          data.operand_count + root_index,
-        )
-        is Some(Some(location)) else {
+      guard self.allocation.value_locations[root.id] is Some(location) else {
         return false
       }
       self.allocation.safepoint_roots.push({

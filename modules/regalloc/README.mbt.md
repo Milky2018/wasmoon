@@ -17,6 +17,10 @@ register is a hard correctness requirement and may require an insertion edit.
 A physical-register preference only orders otherwise legal allocation choices;
 it is ignored rather than causing an extra spill, split, move, or failure when
 the preferred register cannot hold the live range.
+`PreservedHome` is reserved for metadata operands that must remain at a
+canonical register or spill home that survives the instruction's clobbers,
+without temporary materialization. Safepoint roots use this constraint so
+stack maps never point at an ephemeral call-transfer location.
 
 ## Allocation
 

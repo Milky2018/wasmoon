@@ -108,6 +108,9 @@ fn operand_location_is_legal(
   operand : Operand,
   location : Location,
 ) -> Bool {
+  if operand.constraint is PreservedHome {
+    return plan.value_location(operand.vreg.id) == Some(location)
+  }
   if plan_location_is_legal(environment, plan, operand.vreg, location) {
     return true
   }
@@ -119,7 +122,7 @@ fn operand_location_is_legal(
           environment.fixed_operand_regs.contains(reg)
         None => false
       }
-    _ => false
+    AnyReg | AnyLocation | PreservedHome => false
   }
 }
 

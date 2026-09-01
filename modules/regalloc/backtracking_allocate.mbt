@@ -47,7 +47,7 @@ fn use_weight(use_position : UsePosition, loop_depths : Array[Int]) -> Int {
     LiveUse => 0
   }
   let constraint_weight = match use_position.constraint {
-    AnyLocation => 0
+    AnyLocation | PreservedHome => 0
     AnyReg => 1000
     FixedReg(_) => 2000
   }
@@ -455,6 +455,34 @@ fn[F : FunctionView] assign_backtracking_homes(
   segment_spill_set : Array[Int],
 ) -> Unit {
   let needs_spill = Array::make(function.value_count(), false)
+  let forbidden_home_regs : Array[Array[PhysicalReg]?] = Array::make(
+    function.value_count(),
+    None,
+  )
+  let home_reg_is_forbidden = fn(value : Int, reg : PhysicalReg) -> Bool {
+    match forbidden_home_regs[value] {
+      Some(regs) => regs.contains(reg)
+      None => false
+    }
+  }
+  for block in 0..<function.block_count() {
+    for instruction_index in 0..<function.block_instruction_count(block) {
+      let instruction = function.block_instruction_at(block, instruction_index)
+      for operand in function.instruction_operands(instruction) {
+        if operand.constraint is PreservedHome {
+          for clobber in function.instruction_clobbers(instruction) {
+            if clobber.class == operand.vreg.class &&
+              !home_reg_is_forbidden(operand.vreg.id, clobber) {
+              match forbidden_home_regs[operand.vreg.id] {
+                Some(regs) => regs.push(clobber)
+                None => forbidden_home_regs[operand.vreg.id] = Some([clobber])
+              }
+            }
+          }
+        }
+      }
+    }
+  }
   let register_homes : Array[PhysicalReg?] = Array::make(
     function.value_count(),
     None,
@@ -474,13 +502,17 @@ fn[F : FunctionView] assign_backtracking_homes(
         }
       }
     }
+    if common is Some(reg) && home_reg_is_forbidden(value, reg) {
+      split = true
+    }
     if split {
       needs_spill[value] = true
     } else if common is Some(reg) {
       register_homes[value] = Some(reg)
     } else {
       for reg in environment.allocatable_regs {
-        if reg.class == function.value_class(value) {
+        if reg.class == function.value_class(value) &&
+          !home_reg_is_forbidden(value, reg) {
           register_homes[value] = Some(reg)
           break
         }
@@ -806,6 +838,7 @@ fn[F : FunctionView] assign_segment_operands(
                 _ => AnyReg
               }
             Some(AnyLocation) => operand.constraint
+            Some(PreservedHome) => PreservedHome
           }
           tied_constraints[slot] = Some(constraint)
         }
@@ -838,6 +871,7 @@ fn[F : FunctionView] assign_segment_operands(
           FixedReg(reg) => Some(reg)
           AnyLocation => any_location.register()
           AnyReg => natural.register()
+          PreservedHome => home.register()
         }
         if tie_slot is Some(slot) &&
           constraint is AnyReg &&
@@ -866,6 +900,7 @@ fn[F : FunctionView] assign_segment_operands(
                 None => operand.constraint
               }) {
               FixedReg(reg) => reg_location(reg)
+              PreservedHome => home
               AnyLocation =>
                 if operand.role is Def {
                   home

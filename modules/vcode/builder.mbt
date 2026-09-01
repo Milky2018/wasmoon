@@ -250,7 +250,7 @@ fn[Inst] Builder::commit_instruction(
         class: reg_class_for_value_type(self.function.values[root.id].ty),
       },
       role: Use,
-      constraint: AnyLocation,
+      constraint: PreservedHome,
       preference: None,
       timing: Late,
       tie_id: -1,

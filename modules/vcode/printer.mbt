@@ -3,6 +3,7 @@ fn constraint_text(constraint : AllocationConstraint) -> String {
   match constraint {
     AnyReg => "any"
     AnyLocation => "any-location"
+    PreservedHome => "preserved-home"
     FixedReg(reg) => "fixed(\{Repr(reg)})"
   }
 }

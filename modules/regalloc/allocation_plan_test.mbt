@@ -552,6 +552,77 @@ test "backtracking spills a value defined before a same-block clobber" {
 }
 
 ///|
+test "safepoint metadata keeps a live root at its value home" {
+  let function : CfgTestFunction = {
+    value_count: 1,
+    blocks: [[0, 1]],
+    instructions: [
+      [Operand::def(value(0))],
+      [
+        Operand::use_reg(value(0))
+        .with_constraint(PreservedHome)
+        .with_timing(Late),
+      ],
+    ],
+    clobbers: [[], [int_reg(0)]],
+    successors: [[]],
+    entry_values: [],
+    parameters: [[]],
+    edge_arguments: [[]],
+  }
+  let plan = allocate_function(
+    function,
+    MachineEnv::new([int_reg(0)], [int_reg(1)]),
+  )
+  debug_inspect(
+    (plan.value_location(0), plan.operand_location(1, 0), plan.edits()),
+    content=(
+      #|(
+      #|  Some(Spill(0)),
+      #|  Some(Spill(0)),
+      #|  [
+      #|    {
+      #|      value: { id: 0, class: Int },
+      #|      from: Reg(p0:int),
+      #|      to: Spill(0),
+      #|      position: After(0),
+      #|    },
+      #|  ],
+      #|)
+    ),
+  )
+}
+
+///|
+test "safepoint metadata may use an unclobbered register home" {
+  let function : CfgTestFunction = {
+    value_count: 1,
+    blocks: [[0, 1]],
+    instructions: [
+      [Operand::def(value(0))],
+      [
+        Operand::use_reg(value(0))
+        .with_constraint(PreservedHome)
+        .with_timing(Late),
+      ],
+    ],
+    clobbers: [[], [int_reg(0)]],
+    successors: [[]],
+    entry_values: [],
+    parameters: [[]],
+    edge_arguments: [[]],
+  }
+  let plan = allocate_function(
+    function,
+    MachineEnv::new([int_reg(0), int_reg(1)], [int_reg(2)]),
+  )
+  debug_inspect(
+    (plan.value_location(0), plan.operand_location(1, 0), plan.edits()),
+    content="(Some(Reg(p1:int)), Some(Reg(p1:int)), [])",
+  )
+}
+
+///|
 test "backtracking parks cold live-through values outside hot loops" {
   let instructions : Array[Array[Operand]] = []
   for _ in 0..<19 {

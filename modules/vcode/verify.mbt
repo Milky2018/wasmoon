@@ -119,7 +119,7 @@ fn[Inst] Function::verify_instruction(
         if reg.class != reg_class_for_value_type(ty) {
           raise FixedRegisterClassMismatch(instruction~, operand=index)
         }
-      AnyReg | AnyLocation => ()
+      AnyReg | AnyLocation | PreservedHome => ()
     }
     if operand.tie_id < -1 {
       raise InvalidTie(instruction~, operand=index, tied_to=operand.tie_id)
@@ -701,6 +701,13 @@ pub fn[Inst] verify_allocation_invariants(
             )
           }
         AnyLocation => ()
+        PreservedHome =>
+          if assignment != allocation.value_locations[operand.value.id].unwrap() {
+            raise PreservedHomeConstraintViolation(
+              instruction~,
+              operand=operand_index,
+            )
+          }
       }
       if operand.role == Def && operand.tie_id >= 0 {
         if allocation.assignment_for(instruction, operand.tie_id) !=
@@ -717,15 +724,8 @@ pub fn[Inst] verify_allocation_invariants(
   for instruction_index in 0..<function.instruction_count() {
     let instruction = function.instruction_at(instruction_index).unwrap()
     let metadata = function.instructions[instruction_index].metadata
-    let data = function.instructions[instruction_index]
-    for root_index, root in metadata.live_gc_roots {
-      let expected = match
-        allocation.operand_locations[instruction_index].get(
-          data.operand_count + root_index,
-        ) {
-        Some(Some(location)) => location
-        _ => allocation.value_locations[root.id].unwrap()
-      }
+    for root in metadata.live_gc_roots {
+      let expected = allocation.value_locations[root.id].unwrap()
       let mut found = false
       for entry in allocation.safepoint_roots {
         if entry.instruction == instruction &&
