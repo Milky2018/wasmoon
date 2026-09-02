@@ -53,44 +53,7 @@ fn run_opt_pass(
 }
 
 ///|
-fn run_egraph_pass_with_analysis(
-  func : Function,
-  analysis : FunctionAnalysis,
-) -> Bool {
-  let before = instruction_count(func)
-  let limits = @egraph.SaturationLimits::cranelift_default()
-  let ruleset = @egraph.get_global_ruleset()
-  if !perf_enabled() {
-    return optimize_function_with_stats_with_limits_and_ruleset(
-        func, limits, ruleset, analysis,
-      ).changed
-  }
-  let tick = perf_tick_now()
-  let stats = optimize_function_with_stats_with_limits_and_ruleset(
-    func, limits, ruleset, analysis,
-  )
-  let duration_us = perf_elapsed_us(tick)
-  let after = instruction_count(func)
-  perf_record_ir_pass(
-    "egraph",
-    before,
-    after,
-    stats.changed,
-    duration_us,
-    egraph_classes=Some(stats.total_classes),
-    egraph_nodes=Some(stats.total_nodes),
-    egraph_rule_apps=Some(stats.total_rule_applications),
-    egraph_regions=Some(stats.regions),
-    egraph_peak_nodes=Some(stats.peak_nodes),
-    egraph_rule_attempts=Some(stats.total_rule_attempts),
-    egraph_extraction_work=Some(stats.total_extraction_work),
-    egraph_elaborated_insts=Some(stats.total_elaborated_instructions),
-    budget_exhausted=Some(stats.budget_exhausted),
-  )
-  stats.changed
-}
-
-///|
+#warnings("-unused_value")
 fn gvn_work_budget_for_instruction_count(insts : Int) -> Int {
   if insts > 300 {
     300
@@ -100,29 +63,40 @@ fn gvn_work_budget_for_instruction_count(insts : Int) -> Int {
 }
 
 ///|
-fn run_gvn_pass_with_analysis(
+fn run_egraph_gvn_pass_with_analysis(
   func : Function,
   analysis : FunctionAnalysis,
-) -> OptResult {
+) -> (Bool, OptResult) {
   let before = instruction_count(func)
-  let budget = gvn_work_budget_for_instruction_count(before)
+  let limits = @egraph.SaturationLimits::cranelift_default()
+  let ruleset = @egraph.get_global_ruleset()
   let perf_on = perf_enabled()
   let tick = if perf_on { perf_tick_now() } else { 0L }
-  let stats = run_global_value_numbering_with_budget_and_analysis(
-    func, budget, analysis,
+  let (egraph_stats, gvn_stats) = optimize_function_and_gvn_with_stats(
+    func, limits, ruleset, analysis,
   )
   if perf_on {
     perf_record_ir_pass(
-      "cse_gvn_global",
+      "egraph_gvn",
       before,
       instruction_count(func),
-      stats.result.changed,
+      egraph_stats.changed || gvn_stats.result.changed,
       perf_elapsed_us(tick),
-      work_done=Some(stats.work_done),
-      budget_exhausted=Some(stats.budget_exhausted),
+      work_done=Some(gvn_stats.work_done),
+      egraph_classes=Some(egraph_stats.total_classes),
+      egraph_nodes=Some(egraph_stats.total_nodes),
+      egraph_rule_apps=Some(egraph_stats.total_rule_applications),
+      egraph_regions=Some(egraph_stats.regions),
+      egraph_peak_nodes=Some(egraph_stats.peak_nodes),
+      egraph_rule_attempts=Some(egraph_stats.total_rule_attempts),
+      egraph_extraction_work=Some(egraph_stats.total_extraction_work),
+      egraph_elaborated_insts=Some(egraph_stats.total_elaborated_instructions),
+      budget_exhausted=Some(
+        egraph_stats.budget_exhausted || gvn_stats.budget_exhausted,
+      ),
     )
   }
-  stats.result
+  (egraph_stats.changed, gvn_stats.result)
 }
 
 ///|
@@ -221,11 +195,12 @@ fn optimize_o2_pipeline(func : Function) -> OptResult {
     result.mark_changed()
   }
   let analysis = FunctionAnalysis::build(func)
-  let egraph_changed = run_egraph_pass_with_analysis(func, analysis)
+  let (egraph_changed, gvn_result) = run_egraph_gvn_pass_with_analysis(
+    func, analysis,
+  )
   if egraph_changed {
     result.mark_changed()
   }
-  let gvn_result = run_gvn_pass_with_analysis(func, analysis)
   if gvn_result.changed {
     result.mark_changed()
   }

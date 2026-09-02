@@ -14,7 +14,7 @@ test "rule_uextend_const_with_extract" {
 
   // Apply only the uextend_const rule
   let rules = IndexedRuleSet::IndexedRuleSet()
-  rules.add_rule(rule_uextend_const(), [TUextend])
+  rules.add_rule(rule_uextend_const, [TUextend])
   eg.saturate_indexed(rules, 10) |> ignore
 
   // After saturation, uextend(const) should simplify to a constant representative.

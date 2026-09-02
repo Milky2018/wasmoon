@@ -94,15 +94,114 @@ fn SaturationBudgetState::can_attempt(self : SaturationBudgetState) -> Bool {
 }
 
 ///|
-/// A rewrite rule matches a pattern and produces equivalent expressions
-priv struct RewriteRule {
-  apply : (EGraph, EClassId) -> Bool // Returns true if any changes were made
+/// One indirect rule entry for custom rule sets. The generated default path
+/// dispatches statically and does not pay this indirection.
+priv struct IndexedRule {
+  apply : (EGraph, EClassId, ENode) -> Bool
 }
 
 ///|
-/// An indexed rule with its RewriteRule
-priv struct IndexedRule {
-  rule : RewriteRule
+/// Candidate masks for the small e-classes admitted by saturation. The common
+/// case stays inline instead of allocating a temporary array per class/tag.
+#valtype
+priv struct RuleNodeMatches {
+  node0 : UInt64
+  node1 : UInt64
+  node2 : UInt64
+  node3 : UInt64
+  node4 : UInt64
+  node5 : UInt64
+  node6 : UInt64
+  node7 : UInt64
+  overflow : Array[UInt64]?
+  union_bits : UInt64
+}
+
+///|
+fn RuleNodeMatches::at(self : RuleNodeMatches, index : Int) -> UInt64 {
+  match index {
+    0 => self.node0
+    1 => self.node1
+    2 => self.node2
+    3 => self.node3
+    4 => self.node4
+    5 => self.node5
+    6 => self.node6
+    7 => self.node7
+    _ =>
+      match self.overflow {
+        Some(bits) => bits[index - 8]
+        None => 0UL
+      }
+  }
+}
+
+///|
+fn EGraph::collect_rule_node_matches(
+  self : EGraph,
+  nodes : Array[ENode],
+  tag : EOpcodeTag,
+  rules_length : Int,
+  generated : Bool,
+  min_rule_index : Int,
+) -> RuleNodeMatches {
+  let allowed = if min_rule_index >= 64 {
+    0UL
+  } else {
+    0xFFFFFFFFFFFFFFFFUL << min_rule_index
+  }
+  let bucket = if rules_length == 64 {
+    allowed
+  } else {
+    ((1UL << rules_length) - 1UL) & allowed
+  }
+  let match_node = fn(index : Int) -> UInt64 {
+    if index >= nodes.length() || nodes[index].op.tag() != tag {
+      0UL
+    } else if generated {
+      generated_rule_match_bits(self, nodes[index], tag) & allowed
+    } else {
+      bucket
+    }
+  }
+  let node0 = if nodes.length() > 0 { match_node(0) } else { 0UL }
+  let node1 = if nodes.length() > 1 { match_node(1) } else { 0UL }
+  let node2 = if nodes.length() > 2 { match_node(2) } else { 0UL }
+  let node3 = if nodes.length() > 3 { match_node(3) } else { 0UL }
+  let node4 = if nodes.length() > 4 { match_node(4) } else { 0UL }
+  let node5 = if nodes.length() > 5 { match_node(5) } else { 0UL }
+  let node6 = if nodes.length() > 6 { match_node(6) } else { 0UL }
+  let node7 = if nodes.length() > 7 { match_node(7) } else { 0UL }
+  let overflow = if nodes.length() > 8 {
+    Some(Array::makei(nodes.length() - 8, index => match_node(index + 8)))
+  } else {
+    None
+  }
+  let mut union_bits = node0 |
+    node1 |
+    node2 |
+    node3 |
+    node4 |
+    node5 |
+    node6 |
+    node7
+  if overflow is Some(bits) {
+    for node_bits in bits {
+      union_bits = union_bits | node_bits
+    }
+  }
+  {
+    node0,
+    node1,
+    node2,
+    node3,
+    node4,
+    node5,
+    node6,
+    node7,
+    overflow,
+    union_bits,
+  }
 }
 
 ///|
@@ -134,10 +233,10 @@ fn IndexedRuleSet::use_generated_matcher(self : IndexedRuleSet) -> Unit {
 /// Add a rule that matches specific opcodes
 fn IndexedRuleSet::add_rule(
   self : IndexedRuleSet,
-  rule : RewriteRule,
+  apply : (EGraph, EClassId, ENode) -> Bool,
   tags : Array[EOpcodeTag],
 ) -> Unit {
-  let indexed = { rule, }
+  let indexed = { apply, }
   if tags.is_empty() {
     self.universal.push(indexed)
   } else {
@@ -284,40 +383,73 @@ fn EGraph::apply_indexed_rules_once(
         prior = prior + 1
       }
       if !duplicate && ruleset.by_opcode.get(tag) is Some(rules) {
-        let mut match_bits = if ruleset.generated_matcher {
-          generated_rule_match_bits(self, class_id, tag)
-        } else {
-          0xFFFFFFFFFFFFFFFFUL
-        }
-        for rule_index, indexed_rule in rules {
+        let mut current_nodes = self.get_nodes(class_id)
+        let mut next_rule_index = 0
+        let mut matches = self.collect_rule_node_matches(
+          current_nodes,
+          tag,
+          rules.length(),
+          ruleset.generated_matcher,
+          next_rule_index,
+        )
+        while next_rule_index < rules.length() {
+          let pending = matches.union_bits >> next_rule_index
+          if pending == 0UL {
+            break
+          }
           if class_matches >= limits.matches_limit {
             self.last_matches_limit_hits = self.last_matches_limit_hits + 1
             class_capped = true
             break
           }
+          let rule_index = next_rule_index + pending.ctz()
+          next_rule_index = rule_index + 1
           if !budget.can_attempt() {
             class_capped = true
             break
           }
-          if (match_bits & (1UL << rule_index)) == 0UL {
-            continue
+          let rule_bit = 1UL << rule_index
+          let mut rule_changed = false
+          for match_index in 0..<current_nodes.length() {
+            if (matches.at(match_index) & rule_bit) != 0UL {
+              let node_changed = if ruleset.generated_matcher {
+                generated_apply_rule(
+                  self,
+                  class_id,
+                  current_nodes[match_index],
+                  tag,
+                  rule_index,
+                )
+              } else {
+                (rules[rule_index].apply)(
+                  self,
+                  class_id,
+                  current_nodes[match_index],
+                )
+              }
+              rule_changed = node_changed || rule_changed
+            }
           }
-          if (indexed_rule.rule.apply)(self, class_id) {
+          if rule_changed {
             changed = true
             applied = applied + 1
             budget.rule_applications = budget.rule_applications + 1
             budget.current_nodes = self.num_nodes()
-            if ruleset.generated_matcher {
-              match_bits = generated_rule_match_bits(self, class_id, tag)
-            }
             class_matches = class_matches + 1
-            let current_nodes = self.get_nodes(class_id).length()
-            if current_nodes >= limits.eclass_enode_limit {
+            current_nodes = self.get_nodes(class_id)
+            if current_nodes.length() >= limits.eclass_enode_limit {
               self.last_eclass_size_limit_hits = self.last_eclass_size_limit_hits +
                 1
               class_capped = true
               break
             }
+            matches = self.collect_rule_node_matches(
+              current_nodes,
+              tag,
+              rules.length(),
+              ruleset.generated_matcher,
+              next_rule_index,
+            )
           }
         }
       }
@@ -334,7 +466,12 @@ fn EGraph::apply_indexed_rules_once(
       if !budget.can_attempt() {
         break
       }
-      if (indexed_rule.rule.apply)(self, class_id) {
+      let mut rule_changed = false
+      for node in self.get_nodes(class_id) {
+        rule_changed = (indexed_rule.apply)(self, class_id, node) ||
+          rule_changed
+      }
+      if rule_changed {
         changed = true
         applied = applied + 1
         budget.rule_applications = budget.rule_applications + 1

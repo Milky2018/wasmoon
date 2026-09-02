@@ -19,145 +19,103 @@ fn EGraph::find_fconst(self : EGraph, id : EClassId) -> UInt64? {
 
 ///|
 /// x + 0 = x
-fn rule_add_zero() -> RewriteRule {
-  {
-    apply: fn(eg, class_id) {
-      let mut changed = false
-      for node in eg.get_nodes(class_id) {
-        if node.op is Add &&
-          node.children.length() == 2 &&
-          eg.find_const(node.children[1]) is Some(0L) {
-          // x + 0 = x
-          changed = eg.merge_changed(class_id, node.children[0]) || changed
-        } else if node.op is Add &&
-          node.children.length() == 2 &&
-          eg.find_const(node.children[0]) is Some(0L) {
-          // 0 + x = x
-          changed = eg.merge_changed(class_id, node.children[1]) || changed
-        }
-      }
-      changed
-    },
+fn rule_add_zero(eg : EGraph, class_id : EClassId, node : ENode) -> Bool {
+  let mut changed = false
+  if node.op is Add &&
+    node.children.length() == 2 &&
+    eg.find_const(node.children[1]) is Some(0L) {
+    // x + 0 = x
+    changed = eg.merge_changed(class_id, node.children[0]) || changed
+  } else if node.op is Add &&
+    node.children.length() == 2 &&
+    eg.find_const(node.children[0]) is Some(0L) {
+    // 0 + x = x
+    changed = eg.merge_changed(class_id, node.children[1]) || changed
   }
+  changed
 }
 
 ///|
 /// x - 0 = x
-fn rule_sub_zero() -> RewriteRule {
-  {
-    apply: fn(eg, class_id) {
-      let mut changed = false
-      for node in eg.get_nodes(class_id) {
-        if node.op is Sub &&
-          node.children.length() == 2 &&
-          eg.find_const(node.children[1]) is Some(0L) {
-          // x - 0 = x
-          changed = eg.merge_changed(class_id, node.children[0]) || changed
-        }
-      }
-      changed
-    },
+fn rule_sub_zero(eg : EGraph, class_id : EClassId, node : ENode) -> Bool {
+  let mut changed = false
+  if node.op is Sub &&
+    node.children.length() == 2 &&
+    eg.find_const(node.children[1]) is Some(0L) {
+    // x - 0 = x
+    changed = eg.merge_changed(class_id, node.children[0]) || changed
   }
+  changed
 }
 
 ///|
 /// x * 1 = x
-fn rule_mul_one() -> RewriteRule {
-  {
-    apply: fn(eg, class_id) {
-      let mut changed = false
-      for node in eg.get_nodes(class_id) {
-        if node.op is Mul &&
-          node.children.length() == 2 &&
-          eg.find_const(node.children[1]) is Some(1L) {
-          changed = eg.merge_changed(class_id, node.children[0]) || changed
-        } else if node.op is Mul &&
-          node.children.length() == 2 &&
-          eg.find_const(node.children[0]) is Some(1L) {
-          changed = eg.merge_changed(class_id, node.children[1]) || changed
-        }
-      }
-      changed
-    },
+fn rule_mul_one(eg : EGraph, class_id : EClassId, node : ENode) -> Bool {
+  let mut changed = false
+  if node.op is Mul &&
+    node.children.length() == 2 &&
+    eg.find_const(node.children[1]) is Some(1L) {
+    changed = eg.merge_changed(class_id, node.children[0]) || changed
+  } else if node.op is Mul &&
+    node.children.length() == 2 &&
+    eg.find_const(node.children[0]) is Some(1L) {
+    changed = eg.merge_changed(class_id, node.children[1]) || changed
   }
+  changed
 }
 
 ///|
 /// x * 0 = 0
-fn rule_mul_zero() -> RewriteRule {
-  {
-    apply: fn(eg, class_id) {
-      let mut changed = false
-      for node in eg.get_nodes(class_id) {
-        if node.op is Mul &&
-          node.children.length() == 2 &&
-          (
-            eg.find_const(node.children[1]) is Some(0L) ||
-            eg.find_const(node.children[0]) is Some(0L)
-          ) {
-          let zero = eg.add_const(0L)
-          changed = eg.merge_changed(class_id, zero) || changed
-        }
-      }
-      changed
-    },
+fn rule_mul_zero(eg : EGraph, class_id : EClassId, node : ENode) -> Bool {
+  let mut changed = false
+  if node.op is Mul &&
+    node.children.length() == 2 &&
+    (
+      eg.find_const(node.children[1]) is Some(0L) ||
+      eg.find_const(node.children[0]) is Some(0L)
+    ) {
+    let zero = eg.add_const(0L)
+    changed = eg.merge_changed(class_id, zero) || changed
   }
+  changed
 }
 
 ///|
 /// x & x = x, x | x = x
-fn rule_idempotent() -> RewriteRule {
-  {
-    apply: fn(eg, class_id) {
-      let mut changed = false
-      for node in eg.get_nodes(class_id) {
-        if (node.op is And || node.op is Or) &&
-          node.children.length() == 2 &&
-          eg.equiv(node.children[0], node.children[1]) {
-          changed = eg.merge_changed(class_id, node.children[0]) || changed
-        }
-      }
-      changed
-    },
+fn rule_idempotent(eg : EGraph, class_id : EClassId, node : ENode) -> Bool {
+  let mut changed = false
+  if (node.op is And || node.op is Or) &&
+    node.children.length() == 2 &&
+    eg.equiv(node.children[0], node.children[1]) {
+    changed = eg.merge_changed(class_id, node.children[0]) || changed
   }
+  changed
 }
 
 ///|
 /// x ^ x = 0
-fn rule_xor_self() -> RewriteRule {
-  {
-    apply: fn(eg, class_id) {
-      let mut changed = false
-      for node in eg.get_nodes(class_id) {
-        if node.op is Xor &&
-          node.children.length() == 2 &&
-          eg.equiv(node.children[0], node.children[1]) {
-          let zero = eg.add_const(0L)
-          changed = eg.merge_changed(class_id, zero) || changed
-        }
-      }
-      changed
-    },
+fn rule_xor_self(eg : EGraph, class_id : EClassId, node : ENode) -> Bool {
+  let mut changed = false
+  if node.op is Xor &&
+    node.children.length() == 2 &&
+    eg.equiv(node.children[0], node.children[1]) {
+    let zero = eg.add_const(0L)
+    changed = eg.merge_changed(class_id, zero) || changed
   }
+  changed
 }
 
 ///|
 /// x - x = 0
-fn rule_sub_self() -> RewriteRule {
-  {
-    apply: fn(eg, class_id) {
-      let mut changed = false
-      for node in eg.get_nodes(class_id) {
-        if node.op is Sub &&
-          node.children.length() == 2 &&
-          eg.equiv(node.children[0], node.children[1]) {
-          let zero = eg.add_const(0L)
-          changed = eg.merge_changed(class_id, zero) || changed
-        }
-      }
-      changed
-    },
+fn rule_sub_self(eg : EGraph, class_id : EClassId, node : ENode) -> Bool {
+  let mut changed = false
+  if node.op is Sub &&
+    node.children.length() == 2 &&
+    eg.equiv(node.children[0], node.children[1]) {
+    let zero = eg.add_const(0L)
+    changed = eg.merge_changed(class_id, zero) || changed
   }
+  changed
 }
 
 ///|

@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
-"""Generate the default e-graph rule registry and its compiled prefilter.
+"""Generate the default e-graph rule registry and its compiled dispatcher.
 
 Each ``rule NAME TAG,...`` line registers one rewrite. Its ``when`` lines are
 alternative necessary conditions for invoking that rewrite. A condition may be
 conservative and admit false positives, but it must never reject an e-node on
 which the handwritten rewrite can succeed. Rules without ``when`` lines remain
 unfiltered. The generator shares identical conditions and emits a dispatch tree
-over root opcode, child arity, and integer-comparison condition.
+over root opcode, child arity, and integer-comparison condition. Child facts
+are computed once per e-node and shared by all candidate-rule predicates.
 """
 
 from __future__ import annotations
@@ -185,98 +186,148 @@ def moon_int64(value: int) -> str:
     return f"{value}L"
 
 
-def emit_pattern(
-    pattern: Pattern,
-    *,
-    include_arity: bool = True,
-    include_root_icmp: bool = True,
-) -> str:
-    checks: list[str] = []
-    required_indices = [
-        *pattern.child_consts,
-        *(index for index, _ in pattern.child_const_values),
-        *pattern.child_fconsts,
-        *pattern.child_not_consts,
-        *(index for index, _ in pattern.child_opcodes),
-        *(index for pair in pattern.equivalent_children for index in pair),
+@dataclass(frozen=True, order=True)
+class MatchAtom:
+    kind: str
+    left: int
+    value: int | str | None = None
+
+
+def pattern_atoms(pattern: Pattern) -> frozenset[MatchAtom]:
+    atoms = [
+        *(MatchAtom("const", index) for index in pattern.child_consts),
+        *(
+            MatchAtom("const_value", index, value)
+            for index, value in pattern.child_const_values
+        ),
+        *(MatchAtom("fconst", index) for index in pattern.child_fconsts),
+        *(MatchAtom("not_const", index) for index in pattern.child_not_consts),
+        *(
+            MatchAtom("child_opcode", index, tag)
+            for index, tag in pattern.child_opcodes
+        ),
+        *(
+            MatchAtom("equivalent", left, right)
+            for left, right in pattern.equivalent_children
+        ),
+        *(
+            [MatchAtom("root_icmp", pattern.root_icmp)]
+            if pattern.root_icmp is not None
+            else []
+        ),
     ]
-    if include_arity and pattern.arity is not None:
-        checks.append(f"node.children.length() == {pattern.arity}")
-    elif include_arity and required_indices:
-        checks.append(f"node.children.length() > {max(required_indices)}")
-    if include_root_icmp and pattern.root_icmp is not None:
-        checks.append(f"node.op is Icmp({pattern.root_icmp})")
-    for index in pattern.child_consts:
-        checks.append(f"eg.find_const(node.children[{index}]) is Some(_)")
-    for index, value in pattern.child_const_values:
-        checks.append(
-            f"eg.find_const(node.children[{index}]) is Some({moon_int64(value)})"
-        )
-    for index in pattern.child_fconsts:
-        checks.append(f"eg.find_fconst(node.children[{index}]) is Some(_)")
-    for index in pattern.child_not_consts:
-        checks.append(f"eg.find_const(node.children[{index}]) is None")
-    for index, tag in pattern.child_opcodes:
-        checks.append(
-            f"generated_child_has_opcode(eg, node.children[{index}], {tag})"
-        )
-    for left, right in pattern.equivalent_children:
-        checks.append(
-            f"eg.equiv(node.children[{left}], node.children[{right}])"
-        )
-    return " && ".join(checks) if checks else "true"
+    return frozenset(atoms)
 
 
-def emit_pattern_leaves(
-    pattern_masks: dict[Pattern, int],
-    *,
-    indent: str,
+def atom_expression(atom: MatchAtom, opcode_bits: dict[str, int]) -> str:
+    if atom.kind == "const":
+        return f"child_{atom.left}_const is Some(_)"
+    if atom.kind == "const_value":
+        return (
+            f"child_{atom.left}_const is Some("
+            f"{moon_int64(int(atom.value))})"
+        )
+    if atom.kind == "fconst":
+        return f"child_{atom.left}_fconst is Some(_)"
+    if atom.kind == "not_const":
+        return f"child_{atom.left}_const is None"
+    if atom.kind == "child_opcode":
+        return (
+            f"(child_{atom.left}_opcodes & "
+            f"0x{opcode_bits[str(atom.value)]:016X}UL) != 0UL"
+        )
+    if atom.kind == "equivalent":
+        return f"eg.equiv(node.children[{atom.left}], node.children[{atom.value}])"
+    if atom.kind == "root_icmp":
+        return f"node.op is Icmp({atom.left})"
+    raise ValueError(f"unknown matcher atom {atom}")
+
+
+def emit_bucket_tree(
+    bucket: list[Rule], opcode_bits: dict[str, int]
 ) -> list[str]:
-    lines: list[str] = []
-    for pattern, mask in pattern_masks.items():
-        expression = emit_pattern(
-            pattern,
-            include_arity=False,
-            include_root_icmp=False,
-        )
-        lines.extend([
-            f"{indent}if {expression} {{",
-            f"{indent}  bits = bits | 0x{mask:016X}UL",
-            f"{indent}}}",
-        ])
-    return lines
-
-
-def emit_bucket_tree(bucket: list[Rule]) -> list[str]:
-    by_arity: dict[int, dict[Pattern, int]] = {}
+    by_arity: dict[int, list[tuple[int, Pattern]]] = {}
     for index, rule in enumerate(bucket):
         for pattern in rule.patterns:
             if pattern.arity is None:
                 raise ValueError(f"{rule.name}: matcher patterns require arity")
-            masks = by_arity.setdefault(pattern.arity, {})
-            masks[pattern] = masks.get(pattern, 0) | (1 << index)
+            by_arity.setdefault(pattern.arity, []).append((index, pattern))
 
     lines = ["        match node.children.length() {"]
-    for arity, pattern_masks in by_arity.items():
-        generic = {
-            pattern: mask
-            for pattern, mask in pattern_masks.items()
-            if pattern.root_icmp is None
-        }
-        by_icmp: dict[int, dict[Pattern, int]] = {}
-        for pattern, mask in pattern_masks.items():
-            if pattern.root_icmp is not None:
-                by_icmp.setdefault(pattern.root_icmp, {})[pattern] = mask
+    for arity, indexed_patterns in by_arity.items():
         lines.append(f"          {arity} => {{")
-        lines.extend(emit_pattern_leaves(generic, indent="            "))
-        if by_icmp:
-            lines.append("            match node.op {")
-            for condition, masks in by_icmp.items():
-                lines.append(f"              Icmp({condition}) => {{")
-                lines.extend(emit_pattern_leaves(masks, indent="                "))
-                lines.append("              }")
-            lines.append("              _ => ()")
+        used_atoms = {
+            atom
+            for _, pattern in indexed_patterns
+            for atom in pattern_atoms(pattern)
+        }
+        const_indices = sorted({
+            atom.left
+            for atom in used_atoms
+            if atom.kind in ("const", "const_value", "not_const")
+        })
+        fconst_indices = sorted({
+            atom.left for atom in used_atoms if atom.kind == "fconst"
+        })
+        opcode_indices = sorted({
+            atom.left for atom in used_atoms if atom.kind == "child_opcode"
+        })
+        for index in const_indices:
+            lines.append(
+                f"            let child_{index}_const = "
+                f"eg.find_const(node.children[{index}])"
+            )
+        for index in fconst_indices:
+            lines.append(
+                f"            let child_{index}_fconst = "
+                f"eg.find_fconst(node.children[{index}])"
+            )
+        for index in opcode_indices:
+            lines.append(
+                f"            let child_{index}_opcodes = "
+                f"generated_child_opcode_bits(eg, node.children[{index}])"
+            )
+        pattern_count = len(indexed_patterns)
+        word_count = (pattern_count + 63) // 64
+        for word in range(word_count):
+            bits = min(64, pattern_count - word * 64)
+            initial = (1 << bits) - 1
+            lines.append(
+                f"            let mut patterns_{word} = 0x{initial:016X}UL"
+            )
+        for atom in sorted(used_atoms):
+            masks = [0] * word_count
+            for pattern_index, (_, pattern) in enumerate(indexed_patterns):
+                if atom in pattern_atoms(pattern):
+                    masks[pattern_index // 64] |= 1 << (pattern_index % 64)
+            lines.append(
+                f"            if !({atom_expression(atom, opcode_bits)}) {{"
+            )
+            for word, mask in enumerate(masks):
+                if mask:
+                    lines.append(
+                        f"              patterns_{word} = patterns_{word} & "
+                        f"0x{(~mask & ((1 << 64) - 1)):016X}UL"
+                    )
             lines.append("            }")
+        for word in range(word_count):
+            lines.extend([
+                f"            while patterns_{word} != 0UL {{",
+                f"              let pattern_index = patterns_{word}.ctz() + {word * 64}",
+                f"              patterns_{word} = patterns_{word} & (patterns_{word} - 1UL)",
+                "              match pattern_index {",
+            ])
+            for pattern_index, (rule_index, _) in enumerate(indexed_patterns):
+                if pattern_index // 64 == word:
+                    lines.append(
+                        f"                {pattern_index} => bits = bits | "
+                        f"0x{1 << rule_index:016X}UL"
+                    )
+            lines.extend([
+                "                _ => ()",
+                "              }",
+                "            }",
+            ])
         lines.append("          }")
     lines.extend(["          _ => ()", "        }"])
     return lines
@@ -292,7 +343,7 @@ def emit_registry(rules: list[Rule]) -> list[str]:
     for rule in rules:
         lines.extend(f"  // {comment}" for comment in rule.comments)
         tags = ", ".join(rule.tags)
-        lines.append(f"  rs.add_rule({rule.name}(), [{tags}])")
+        lines.append(f"  rs.add_rule({rule.name}, [{tags}])")
     lines.extend([
         "  rs.use_generated_matcher()",
         "  rs",
@@ -307,6 +358,13 @@ def emit_matcher(rules: list[Rule]) -> list[str]:
     for rule in rules:
         for tag in rule.tags:
             buckets.setdefault(tag, []).append(rule)
+    child_opcodes = sorted({
+        tag
+        for rule in rules
+        for pattern in rule.patterns
+        for _, tag in pattern.child_opcodes
+    })
+    opcode_bits = {tag: 1 << index for index, tag in enumerate(child_opcodes)}
     lines = [
         "///|",
         "fn generated_rule_bucket_size(tag : EOpcodeTag) -> Int {",
@@ -319,17 +377,46 @@ def emit_matcher(rules: list[Rule]) -> list[str]:
     ]
     lines.extend([
         "///|",
-        "fn generated_child_has_opcode(",
+        "fn generated_child_opcode_bits(",
         "  eg : EGraph,",
         "  class_id : EClassId,",
-        "  tag : EOpcodeTag,",
-        ") -> Bool {",
+        ") -> UInt64 {",
+        "  let mut bits = 0UL",
         "  for node in eg.get_nodes(class_id) {",
-        "    if node.op.tag() == tag {",
-        "      return true",
+        "    match node.op.tag() {",
+        *(f"      {tag} => bits = bits | 0x{opcode_bits[tag]:016X}UL" for tag in child_opcodes),
+        "      _ => ()",
         "    }",
         "  }",
-        "  false",
+        "  bits",
+        "}",
+        "",
+    ])
+    lines.extend([
+        "///|",
+        "fn generated_apply_rule(",
+        "  eg : EGraph,",
+        "  class_id : EClassId,",
+        "  node : ENode,",
+        "  tag : EOpcodeTag,",
+        "  rule_index : Int,",
+        ") -> Bool {",
+        "  match tag {",
+    ])
+    for tag, bucket in buckets.items():
+        lines.extend([
+            f"    {tag} =>",
+            "      match rule_index {",
+            *(
+                f"        {index} => {rule.name}(eg, class_id, node)"
+                for index, rule in enumerate(bucket)
+            ),
+            "        _ => false",
+            "      }",
+        ])
+    lines.extend([
+        "    _ => false",
+        "  }",
         "}",
         "",
     ])
@@ -337,7 +424,7 @@ def emit_matcher(rules: list[Rule]) -> list[str]:
         "///|",
         "fn generated_rule_match_bits(",
         "  eg : EGraph,",
-        "  class_id : EClassId,",
+        "  node : ENode,",
         "  tag : EOpcodeTag,",
         ") -> UInt64 {",
         "  match tag {",
@@ -351,13 +438,10 @@ def emit_matcher(rules: list[Rule]) -> list[str]:
         lines.extend([
             f"    {tag} => {{",
             f"      let mut bits = 0x{always_mask:016X}UL",
-            "      for node in eg.get_nodes(class_id) {",
-            f"        if node.op.tag() != {tag} {{",
-            "          continue",
-            "        }",
+            f"      guard node.op.tag() == {tag} else {{ return 0UL }}",
         ])
-        lines.extend(emit_bucket_tree(bucket))
-        lines.extend(["      }", "      bits", "    }"])
+        lines.extend(emit_bucket_tree(bucket, opcode_bits))
+        lines.extend(["      bits", "    }"])
     lines.extend([
         "    _ => 0xFFFFFFFFFFFFFFFFUL",
         "  }",

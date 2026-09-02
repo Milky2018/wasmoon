@@ -247,9 +247,11 @@ test "GVN metrics count only instructions visited in reachable blocks" {
       fn(event) { events.push(event) },
     ),
   )
-  run_gvn_pass_with_analysis(func, FunctionAnalysis::build(func)) |> ignore
+  run_egraph_gvn_pass_with_analysis(func, FunctionAnalysis::build(func))
+  |> ignore
   clear_optimization_metrics_sink()
   inspect(events.length(), content="1")
+  inspect(events[0].name, content="egraph_gvn")
   debug_inspect(events[0].work_done, content="Some(1)")
   debug_inspect(events[0].budget_exhausted, content="Some(false)")
 }
@@ -403,7 +405,13 @@ test "egraph elaborates a strength-reduced form into the IR" {
   let product = builder.imul(x, eight)
   builder.return_([product])
   let func = builder.get_function()
-  run_egraph_pass_with_analysis(func, FunctionAnalysis::build(func)) |> ignore
+  optimize_function_with_stats_with_limits_and_ruleset(
+    func,
+    @egraph.SaturationLimits::cranelift_default(),
+    @egraph.get_global_ruleset(),
+    FunctionAnalysis::build(func),
+  )
+  |> ignore
   inspect(func.verify(), content="()")
   let text = func.print()
   inspect(text.contains("ishl"), content="true")

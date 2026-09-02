@@ -58,188 +58,172 @@ fn get_xor_operands(eg : EGraph, id : EClassId) -> (EClassId, EClassId)? {
 
 ///|
 /// Rebalance right-skewed add: a + (b + (c + d)) -> (a + b) + (c + d)
-fn rule_rebalance_add_right() -> RewriteRule {
-  {
-    apply: fn(eg, class_id) {
-      let mut changed = false
-      for node in eg.get_nodes(class_id) {
-        if node.op is Add && node.children.length() == 2 {
-          let a = node.children[0]
-          // Check pattern: a + (b + (c + d))
-          if get_add_operands(eg, node.children[1]) is Some((b, inner)) &&
-            get_add_operands(eg, inner) is Some((c, d)) {
-            // Rebalance: (a + b) + (c + d)
-            let ab = eg.add_add(a, b)
-            let cd = eg.add_add(c, d)
-            let result = eg.add_add(ab, cd)
-            changed = eg.subsume_changed(class_id, result) || changed
-          }
-        }
-      }
-      changed
-    },
+fn rule_rebalance_add_right(
+  eg : EGraph,
+  class_id : EClassId,
+  node : ENode,
+) -> Bool {
+  let mut changed = false
+  if node.op is Add && node.children.length() == 2 {
+    let a = node.children[0]
+    // Check pattern: a + (b + (c + d))
+    if get_add_operands(eg, node.children[1]) is Some((b, inner)) &&
+      get_add_operands(eg, inner) is Some((c, d)) {
+      // Rebalance: (a + b) + (c + d)
+      let ab = eg.add_add(a, b)
+      let cd = eg.add_add(c, d)
+      let result = eg.add_add(ab, cd)
+      changed = eg.subsume_changed(class_id, result) || changed
+    }
   }
+  changed
 }
 
 ///|
 /// Rebalance left-skewed add: ((a + b) + c) + d -> (a + b) + (c + d)
-fn rule_rebalance_add_left() -> RewriteRule {
-  {
-    apply: fn(eg, class_id) {
-      let mut changed = false
-      for node in eg.get_nodes(class_id) {
-        if node.op is Add && node.children.length() == 2 {
-          let d = node.children[1]
-          // Check pattern: ((a + b) + c) + d
-          if get_add_operands(eg, node.children[0]) is Some((inner, c)) &&
-            get_add_operands(eg, inner) is Some((a, b)) {
-            // Rebalance: (a + b) + (c + d)
-            let ab = eg.add_add(a, b)
-            let cd = eg.add_add(c, d)
-            let result = eg.add_add(ab, cd)
-            changed = eg.subsume_changed(class_id, result) || changed
-          }
-        }
-      }
-      changed
-    },
+fn rule_rebalance_add_left(
+  eg : EGraph,
+  class_id : EClassId,
+  node : ENode,
+) -> Bool {
+  let mut changed = false
+  if node.op is Add && node.children.length() == 2 {
+    let d = node.children[1]
+    // Check pattern: ((a + b) + c) + d
+    if get_add_operands(eg, node.children[0]) is Some((inner, c)) &&
+      get_add_operands(eg, inner) is Some((a, b)) {
+      // Rebalance: (a + b) + (c + d)
+      let ab = eg.add_add(a, b)
+      let cd = eg.add_add(c, d)
+      let result = eg.add_add(ab, cd)
+      changed = eg.subsume_changed(class_id, result) || changed
+    }
   }
+  changed
 }
 
 ///|
 /// Rebalance right-skewed mul: a * (b * (c * d)) -> (a * b) * (c * d)
-fn rule_rebalance_mul_right() -> RewriteRule {
-  {
-    apply: fn(eg, class_id) {
-      let mut changed = false
-      for node in eg.get_nodes(class_id) {
-        if node.op is Mul && node.children.length() == 2 {
-          let a = node.children[0]
-          if get_mul_operands(eg, node.children[1]) is Some((b, inner)) &&
-            get_mul_operands(eg, inner) is Some((c, d)) {
-            let ab = eg.add_mul(a, b)
-            let cd = eg.add_mul(c, d)
-            let result = eg.add_mul(ab, cd)
-            changed = eg.subsume_changed(class_id, result) || changed
-          }
-        }
-      }
-      changed
-    },
+fn rule_rebalance_mul_right(
+  eg : EGraph,
+  class_id : EClassId,
+  node : ENode,
+) -> Bool {
+  let mut changed = false
+  if node.op is Mul && node.children.length() == 2 {
+    let a = node.children[0]
+    if get_mul_operands(eg, node.children[1]) is Some((b, inner)) &&
+      get_mul_operands(eg, inner) is Some((c, d)) {
+      let ab = eg.add_mul(a, b)
+      let cd = eg.add_mul(c, d)
+      let result = eg.add_mul(ab, cd)
+      changed = eg.subsume_changed(class_id, result) || changed
+    }
   }
+  changed
 }
 
 ///|
 /// Rebalance left-skewed mul: ((a * b) * c) * d -> (a * b) * (c * d)
-fn rule_rebalance_mul_left() -> RewriteRule {
-  {
-    apply: fn(eg, class_id) {
-      let mut changed = false
-      for node in eg.get_nodes(class_id) {
-        if node.op is Mul && node.children.length() == 2 {
-          let d = node.children[1]
-          if get_mul_operands(eg, node.children[0]) is Some((inner, c)) &&
-            get_mul_operands(eg, inner) is Some((a, b)) {
-            let ab = eg.add_mul(a, b)
-            let cd = eg.add_mul(c, d)
-            let result = eg.add_mul(ab, cd)
-            changed = eg.subsume_changed(class_id, result) || changed
-          }
-        }
-      }
-      changed
-    },
+fn rule_rebalance_mul_left(
+  eg : EGraph,
+  class_id : EClassId,
+  node : ENode,
+) -> Bool {
+  let mut changed = false
+  if node.op is Mul && node.children.length() == 2 {
+    let d = node.children[1]
+    if get_mul_operands(eg, node.children[0]) is Some((inner, c)) &&
+      get_mul_operands(eg, inner) is Some((a, b)) {
+      let ab = eg.add_mul(a, b)
+      let cd = eg.add_mul(c, d)
+      let result = eg.add_mul(ab, cd)
+      changed = eg.subsume_changed(class_id, result) || changed
+    }
   }
+  changed
 }
 
 ///|
 /// Rebalance right-skewed and: a & (b & (c & d)) -> (a & b) & (c & d)
-fn rule_rebalance_and_right() -> RewriteRule {
-  {
-    apply: fn(eg, class_id) {
-      let mut changed = false
-      for node in eg.get_nodes(class_id) {
-        if node.op is And && node.children.length() == 2 {
-          let a = node.children[0]
-          if get_and_operands(eg, node.children[1]) is Some((b, inner)) &&
-            get_and_operands(eg, inner) is Some((c, d)) {
-            let ab = eg.add_and(a, b)
-            let cd = eg.add_and(c, d)
-            let result = eg.add_and(ab, cd)
-            changed = eg.subsume_changed(class_id, result) || changed
-          }
-        }
-      }
-      changed
-    },
+fn rule_rebalance_and_right(
+  eg : EGraph,
+  class_id : EClassId,
+  node : ENode,
+) -> Bool {
+  let mut changed = false
+  if node.op is And && node.children.length() == 2 {
+    let a = node.children[0]
+    if get_and_operands(eg, node.children[1]) is Some((b, inner)) &&
+      get_and_operands(eg, inner) is Some((c, d)) {
+      let ab = eg.add_and(a, b)
+      let cd = eg.add_and(c, d)
+      let result = eg.add_and(ab, cd)
+      changed = eg.subsume_changed(class_id, result) || changed
+    }
   }
+  changed
 }
 
 ///|
 /// Rebalance left-skewed and: ((a & b) & c) & d -> (a & b) & (c & d)
-fn rule_rebalance_and_left() -> RewriteRule {
-  {
-    apply: fn(eg, class_id) {
-      let mut changed = false
-      for node in eg.get_nodes(class_id) {
-        if node.op is And && node.children.length() == 2 {
-          let d = node.children[1]
-          if get_and_operands(eg, node.children[0]) is Some((inner, c)) &&
-            get_and_operands(eg, inner) is Some((a, b)) {
-            let ab = eg.add_and(a, b)
-            let cd = eg.add_and(c, d)
-            let result = eg.add_and(ab, cd)
-            changed = eg.subsume_changed(class_id, result) || changed
-          }
-        }
-      }
-      changed
-    },
+fn rule_rebalance_and_left(
+  eg : EGraph,
+  class_id : EClassId,
+  node : ENode,
+) -> Bool {
+  let mut changed = false
+  if node.op is And && node.children.length() == 2 {
+    let d = node.children[1]
+    if get_and_operands(eg, node.children[0]) is Some((inner, c)) &&
+      get_and_operands(eg, inner) is Some((a, b)) {
+      let ab = eg.add_and(a, b)
+      let cd = eg.add_and(c, d)
+      let result = eg.add_and(ab, cd)
+      changed = eg.subsume_changed(class_id, result) || changed
+    }
   }
+  changed
 }
 
 ///|
 /// Rebalance right-skewed xor: a ^ (b ^ (c ^ d)) -> (a ^ b) ^ (c ^ d)
-fn rule_rebalance_xor_right() -> RewriteRule {
-  {
-    apply: fn(eg, class_id) {
-      let mut changed = false
-      for node in eg.get_nodes(class_id) {
-        if node.op is Xor && node.children.length() == 2 {
-          let a = node.children[0]
-          if get_xor_operands(eg, node.children[1]) is Some((b, inner)) &&
-            get_xor_operands(eg, inner) is Some((c, d)) {
-            let ab = eg.add_xor(a, b)
-            let cd = eg.add_xor(c, d)
-            let result = eg.add_xor(ab, cd)
-            changed = eg.subsume_changed(class_id, result) || changed
-          }
-        }
-      }
-      changed
-    },
+fn rule_rebalance_xor_right(
+  eg : EGraph,
+  class_id : EClassId,
+  node : ENode,
+) -> Bool {
+  let mut changed = false
+  if node.op is Xor && node.children.length() == 2 {
+    let a = node.children[0]
+    if get_xor_operands(eg, node.children[1]) is Some((b, inner)) &&
+      get_xor_operands(eg, inner) is Some((c, d)) {
+      let ab = eg.add_xor(a, b)
+      let cd = eg.add_xor(c, d)
+      let result = eg.add_xor(ab, cd)
+      changed = eg.subsume_changed(class_id, result) || changed
+    }
   }
+  changed
 }
 
 ///|
 /// Rebalance left-skewed xor: ((a ^ b) ^ c) ^ d -> (a ^ b) ^ (c ^ d)
-fn rule_rebalance_xor_left() -> RewriteRule {
-  {
-    apply: fn(eg, class_id) {
-      let mut changed = false
-      for node in eg.get_nodes(class_id) {
-        if node.op is Xor && node.children.length() == 2 {
-          let d = node.children[1]
-          if get_xor_operands(eg, node.children[0]) is Some((inner, c)) &&
-            get_xor_operands(eg, inner) is Some((a, b)) {
-            let ab = eg.add_xor(a, b)
-            let cd = eg.add_xor(c, d)
-            let result = eg.add_xor(ab, cd)
-            changed = eg.subsume_changed(class_id, result) || changed
-          }
-        }
-      }
-      changed
-    },
+fn rule_rebalance_xor_left(
+  eg : EGraph,
+  class_id : EClassId,
+  node : ENode,
+) -> Bool {
+  let mut changed = false
+  if node.op is Xor && node.children.length() == 2 {
+    let d = node.children[1]
+    if get_xor_operands(eg, node.children[0]) is Some((inner, c)) &&
+      get_xor_operands(eg, inner) is Some((a, b)) {
+      let ab = eg.add_xor(a, b)
+      let cd = eg.add_xor(c, d)
+      let result = eg.add_xor(ab, cd)
+      changed = eg.subsume_changed(class_id, result) || changed
+    }
   }
+  changed
 }

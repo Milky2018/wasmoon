@@ -523,11 +523,13 @@ fn merge_egraph_optimize_stats(
 ///|
 priv struct EGraphRegionSlice {
   block : Block
+  output_index : Int
   instructions : Array[Inst]
   context_start : Int
   start : Int
   end : Int
   rewritten : Array[Inst]
+  completes_block : Bool
 }
 
 ///|
@@ -551,11 +553,11 @@ fn egraph_region_context_start(
 }
 
 ///|
-fn optimize_function_with_stats_with_limits_and_ruleset(
+fn prepare_egraph_rewrite_with_stats_with_limits_and_ruleset(
   func : Function,
   limits : @egraph.SaturationLimits,
   ruleset : @egraph.IndexedRuleSet,
-  _analysis : FunctionAnalysis,
+  on_block_ready : (Block, Array[Inst]) -> Unit,
 ) -> EGraphOptimizeStats {
   let work_limits = default_egraph_work_limits()
   let external_constants : Map[Int, Int64] = Map([])
@@ -569,11 +571,36 @@ fn optimize_function_with_stats_with_limits_and_ruleset(
   let mut aggregate = empty_egraph_optimize_stats()
   let pending : Array[EGraphRegionSlice] = []
   let rewritten_blocks : Array[(Block, Array[Inst])] = []
+  let ready : Array[Bool] = []
+  let next_ready : Ref[Int] = { val: 0, }
   let mut pending_pure_values = 0
+  fn drain_ready() -> Unit {
+    while next_ready.val < ready.length() && ready[next_ready.val] {
+      let (block, rewritten) = rewritten_blocks[next_ready.val]
+      on_block_ready(block, rewritten)
+      next_ready.val = next_ready.val + 1
+    }
+  }
+  fn finish_region() -> Unit {
+    let stats = optimize_egraph_region(
+      func, pending, limits, ruleset, work_limits, external_constants,
+    )
+    aggregate = merge_egraph_optimize_stats(aggregate, stats)
+    for slice in pending {
+      if slice.completes_block {
+        ready[slice.output_index] = true
+      }
+    }
+    pending.clear()
+    pending_pure_values = 0
+    drain_ready()
+  }
   for block in func.blocks {
     let original = block.instructions
     let rewritten : Array[Inst] = []
+    let output_index = rewritten_blocks.length()
     rewritten_blocks.push((block, rewritten))
+    ready.push(false)
     let mut region_start = 0
     for index in 0..<original.length() {
       if inst_is_egraph_pure(original[index]) {
@@ -582,6 +609,7 @@ fn optimize_function_with_stats_with_limits_and_ruleset(
       if pending_pure_values >= work_limits.pure_values_per_region {
         pending.push({
           block,
+          output_index,
           instructions: original,
           context_start: egraph_region_context_start(
             original,
@@ -591,20 +619,17 @@ fn optimize_function_with_stats_with_limits_and_ruleset(
           start: region_start,
           end: index + 1,
           rewritten,
+          completes_block: index + 1 == original.length(),
         })
-        let stats = optimize_egraph_region(
-          func, pending, limits, ruleset, work_limits, external_constants,
-        )
-        aggregate = merge_egraph_optimize_stats(aggregate, stats)
-        pending.clear()
+        finish_region()
         region_start = index + 1
-        pending_pure_values = 0
       }
     }
     if region_start < original.length() {
       if pending_pure_values > 0 {
         pending.push({
           block,
+          output_index,
           instructions: original,
           context_start: egraph_region_context_start(
             original,
@@ -614,33 +639,97 @@ fn optimize_function_with_stats_with_limits_and_ruleset(
           start: region_start,
           end: original.length(),
           rewritten,
+          completes_block: true,
         })
       } else {
         for index in region_start..<original.length() {
           rewritten.push(original[index])
         }
+        ready[output_index] = true
+        drain_ready()
       }
+    } else {
+      ready[output_index] = true
+      drain_ready()
     }
     if pending.length() >= work_limits.block_slices_per_region {
-      let stats = optimize_egraph_region(
-        func, pending, limits, ruleset, work_limits, external_constants,
-      )
-      aggregate = merge_egraph_optimize_stats(aggregate, stats)
-      pending.clear()
-      pending_pure_values = 0
+      finish_region()
     }
   }
   if !pending.is_empty() {
-    let stats = optimize_egraph_region(
-      func, pending, limits, ruleset, work_limits, external_constants,
-    )
-    aggregate = merge_egraph_optimize_stats(aggregate, stats)
+    finish_region()
   }
-  for entry in rewritten_blocks {
-    let (block, rewritten) = entry
-    block.instructions = rewritten
-  }
+  drain_ready()
   aggregate
+}
+
+///|
+#warnings("-unused_value")
+fn optimize_function_with_stats_with_limits_and_ruleset(
+  func : Function,
+  limits : @egraph.SaturationLimits,
+  ruleset : @egraph.IndexedRuleSet,
+  analysis : FunctionAnalysis,
+) -> EGraphOptimizeStats {
+  analysis |> ignore
+  prepare_egraph_rewrite_with_stats_with_limits_and_ruleset(
+    func,
+    limits,
+    ruleset,
+    fn(block, rewritten) { block.instructions = rewritten },
+  )
+}
+
+///|
+fn optimize_function_and_gvn_with_stats(
+  func : Function,
+  limits : @egraph.SaturationLimits,
+  ruleset : @egraph.IndexedRuleSet,
+  analysis : FunctionAnalysis,
+) -> (EGraphOptimizeStats, GVNStats) {
+  let original_block_instructions = fn(block_id : Int) -> Array[Inst] {
+    func.blocks[analysis.block_idx[block_id]].instructions
+  }
+  let original_count = instruction_count(func)
+  let memory_budget = if original_count > 300 { 300 } else { 2147483647 }
+  let stream = StreamingGVN::new(
+    func, memory_budget, analysis, original_block_instructions,
+  )
+  let dom_order : Array[Int] = []
+  fn collect_block(block_id : Int) -> (Unit, Bool) {
+    dom_order.push(block_id)
+    ((), true)
+  }
+  if analysis.cfg.is_valid(0) {
+    visit_dominator_tree(analysis.domtree, 0, collect_block, fn(_) { () })
+  }
+  let prepared : Array[Array[Inst]?] = Array::make(func.next_block_id, None)
+  let dom_cursor : Ref[Int] = { val: 0, }
+  fn drain_dominator_order() -> Unit {
+    while dom_cursor.val < dom_order.length() {
+      let block_id = dom_order[dom_cursor.val]
+      guard prepared[block_id] is Some(rewritten) else { break }
+      stream.process_block(block_id, rewritten)
+      func.blocks[analysis.block_idx[block_id]].instructions = rewritten
+      prepared[block_id] = None
+      dom_cursor.val = dom_cursor.val + 1
+    }
+  }
+  let egraph_stats = prepare_egraph_rewrite_with_stats_with_limits_and_ruleset(
+    func,
+    limits,
+    ruleset,
+    fn(block, rewritten) {
+      if analysis.dominance.preorder[block.id] >= 0 {
+        prepared[block.id] = Some(rewritten)
+        drain_dominator_order()
+      } else {
+        block.instructions = rewritten
+      }
+    },
+  )
+  drain_dominator_order()
+  (egraph_stats, stream.finish())
 }
 
 ///|

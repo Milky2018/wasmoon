@@ -1478,7 +1478,7 @@ test "egraph: x + 0 extract returns Var not Const" {
 
   // Apply only add_zero rule
   let rules = IndexedRuleSet::IndexedRuleSet()
-  rules.add_rule(rule_add_zero(), [TAdd])
+  rules.add_rule(rule_add_zero, [TAdd])
   eg.saturate_indexed(rules, 10) |> ignore
 
   // After saturation, x + 0 should equal x

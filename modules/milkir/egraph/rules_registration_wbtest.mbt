@@ -66,3 +66,15 @@ test "generated matcher keeps left-nested add-sub rewrites" {
   sub_graph.saturate_indexed(get_global_ruleset(), 10) |> ignore
   inspect(sub_graph.equiv(sub_expression, sub_expected), content="true")
 }
+
+///|
+test "generated matcher rejects inapplicable rules before budget accounting" {
+  let eg = EGraph::EGraph()
+  let x = eg.add_var(0)
+  let y = eg.add_var(1)
+  let sum = eg.add_add(x, y)
+  let candidates = generated_rule_match_bits(eg, eg.get_nodes(sum)[0], TAdd).popcnt()
+  inspect(candidates < generated_rule_bucket_size(TAdd), content="true")
+  let ruleset = get_global_ruleset()
+  inspect(ruleset.generated_matcher, content="true")
+}

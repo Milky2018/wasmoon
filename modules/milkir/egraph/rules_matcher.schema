@@ -218,8 +218,11 @@ when arity=2 child-op=1:TSub
 rule rule_mul_shl_one TMul
 when arity=2 child-op=0:TShl
 when arity=2 child-op=1:TShl
-# Constant folding - universal (operates on any opcode with const children)
-rule rule_const_fold *
+# Constant folding is indexed by the foldable root op. Keeping it out of the
+# universal list avoids probing every variable and non-constant e-class.
+rule rule_const_fold TAdd,TSub,TMul,TAnd,TOr,TXor,TShl,TSshr,TUshr,TRotl,TRotr,TSdiv,TUdiv,TSrem,TUrem,TIcmp,TEq,TNe,TNeg,TBnot,TClz,TCtz,TPopcnt,TBswap,TBitrev
+when arity=2 const=0 const=1
+when arity=1 const=0
 # Reassociation
 rule rule_reassoc_add_const TAdd
 when arity=2 child-op=0:TAdd const=1

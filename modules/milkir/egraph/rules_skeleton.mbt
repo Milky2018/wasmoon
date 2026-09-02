@@ -23,38 +23,36 @@ fn is_power_of_two(n : Int64) -> Int64? {
 ///|
 /// udiv(y, select(cond, 2^n, 2^m)) = ushr(y, select(cond, n, m))
 /// Convert division by power-of-two select to shift by select
-fn rule_udiv_select_pow2() -> RewriteRule {
-  {
-    apply: fn(eg, class_id) {
-      let mut changed = false
-      for node in eg.get_nodes(class_id) {
-        if node.op is Udiv && node.children.length() == 2 {
-          let y = node.children[0]
-          // Check if divisor is a select
-          for divisor_node in eg.get_nodes(node.children[1]) {
-            if divisor_node.op is Select && divisor_node.children.length() == 3 {
-              let cond = divisor_node.children[0]
-              // Check if both branches are power of 2 constants
-              if eg.find_const(divisor_node.children[1]) is Some(n_val) &&
-                eg.find_const(divisor_node.children[2]) is Some(m_val) &&
-                is_power_of_two(n_val) is Some(n_log) &&
-                is_power_of_two(m_val) is Some(m_log) {
-                // Create select(cond, n_log, m_log)
-                let n_const = eg.add_const(n_log)
-                let m_const = eg.add_const(m_log)
-                let shift_select = eg.add({
-                  op: Select,
-                  children: [cond, n_const, m_const],
-                })
-                // Create ushr(y, select(...))
-                let new_node = eg.add({ op: Ushr, children: [y, shift_select], })
-                changed = eg.merge_changed(class_id, new_node) || changed
-              }
-            }
-          }
+fn rule_udiv_select_pow2(
+  eg : EGraph,
+  class_id : EClassId,
+  node : ENode,
+) -> Bool {
+  let mut changed = false
+  if node.op is Udiv && node.children.length() == 2 {
+    let y = node.children[0]
+    // Check if divisor is a select
+    for divisor_node in eg.get_nodes(node.children[1]) {
+      if divisor_node.op is Select && divisor_node.children.length() == 3 {
+        let cond = divisor_node.children[0]
+        // Check if both branches are power of 2 constants
+        if eg.find_const(divisor_node.children[1]) is Some(n_val) &&
+          eg.find_const(divisor_node.children[2]) is Some(m_val) &&
+          is_power_of_two(n_val) is Some(n_log) &&
+          is_power_of_two(m_val) is Some(m_log) {
+          // Create select(cond, n_log, m_log)
+          let n_const = eg.add_const(n_log)
+          let m_const = eg.add_const(m_log)
+          let shift_select = eg.add({
+            op: Select,
+            children: [cond, n_const, m_const],
+          })
+          // Create ushr(y, select(...))
+          let new_node = eg.add({ op: Ushr, children: [y, shift_select], })
+          changed = eg.merge_changed(class_id, new_node) || changed
         }
       }
-      changed
-    },
+    }
   }
+  changed
 }

@@ -270,7 +270,7 @@ fn EGraph::compute_extraction_table_with_budget(
     if exhausted {
       break
     }
-    if improved && self.parent_set(class_id) is Some(owners) {
+    if improved && self.parent_list(class_id) is Some(owners) {
       for owner in owners {
         let root = self.uf.find(owner)
         if root >= 0 && root < in_pending.length() && !in_pending[root] {

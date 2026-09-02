@@ -305,6 +305,7 @@ fn compute_block_input_last_store_states(
   cfg : CFG,
   block_idx : Array[Int],
   ptr_base_infos : Array[PtrBaseInfo?],
+  block_instructions : (Int) -> Array[Inst],
 ) -> @hashmap.HashMap[Int, LastStoreState] {
   let block_input : @hashmap.HashMap[Int, LastStoreState] = HashMap([])
   if !cfg.is_valid(0) {
@@ -320,9 +321,7 @@ fn compute_block_input_last_store_states(
       Some(existing) => existing.clone()
       None => LastStoreState()
     }
-    let idx = block_idx[block_id]
-    let block = func.blocks[idx]
-    for inst_index, inst in block.instructions {
+    for inst_index, inst in block_instructions(block_id) {
       update_last_store_state(
         state,
         inst,
@@ -514,17 +513,16 @@ fn collect_ptr_base_infos(
 
 ///|
 fn gvn_instruction_prefix(
-  func : Function,
   work_budget : Int,
   analysis : FunctionAnalysis,
+  block_instructions : (Int) -> Array[Inst],
 ) -> Array[Inst] {
   let prefix : Array[Inst] = []
   fn enter(block_id : Int) -> (Unit, Bool) {
     if prefix.length() >= work_budget {
       return ((), false)
     }
-    let block = func.blocks[analysis.block_idx[block_id]]
-    for inst in block.instructions {
+    for inst in block_instructions(block_id) {
       if prefix.length() >= work_budget {
         break
       }
@@ -540,7 +538,26 @@ fn gvn_instruction_prefix(
 
 ///|
 fn is_known_iconst(value_id : Int, iconst_values : Array[Int64?]) -> Bool {
+  value_id >= 0 &&
+  value_id < iconst_values.length() &&
   iconst_values[value_id] is Some(_)
+}
+
+///|
+fn ptr_base_region(
+  value_id : Int,
+  ptr_base_infos : Array[PtrBaseInfo?],
+) -> AliasRegion {
+  if value_id >= 0 && value_id < ptr_base_infos.length() {
+    match ptr_base_infos[value_id] {
+      Some(base_info) => base_info.region
+      None => Other
+    }
+  } else {
+    // E-graph elaboration may introduce a value after pointer pre-analysis.
+    // Unknown must stay conservative rather than indexing past the fact table.
+    Other
+  }
 }
 
 ///|
@@ -553,10 +570,7 @@ fn ptr_access_from_inst(
       if inst.operands.length() >= 2 {
         let base = inst.operands[0]
         let offset = inst.operands[1]
-        let region = match ptr_base_infos[base.id] {
-          Some(base_info) => base_info.region
-          None => Other
-        }
+        let region = ptr_base_region(base.id, ptr_base_infos)
         Some({ base_id: base.id, offset_id: offset.id, region, })
       } else {
         None
@@ -565,10 +579,7 @@ fn ptr_access_from_inst(
       if inst.operands.length() >= 2 {
         let base = inst.operands[0]
         let offset = inst.operands[1]
-        let region = match ptr_base_infos[base.id] {
-          Some(base_info) => base_info.region
-          None => Other
-        }
+        let region = ptr_base_region(base.id, ptr_base_infos)
         Some({ base_id: base.id, offset_id: offset.id, region, })
       } else {
         None
@@ -577,10 +588,7 @@ fn ptr_access_from_inst(
       if inst.operands.length() >= 3 {
         let base = inst.operands[0]
         let offset = inst.operands[2]
-        let region = match ptr_base_infos[base.id] {
-          Some(base_info) => base_info.region
-          None => Other
-        }
+        let region = ptr_base_region(base.id, ptr_base_infos)
         Some({ base_id: base.id, offset_id: offset.id, region, })
       } else {
         None
@@ -589,10 +597,7 @@ fn ptr_access_from_inst(
       if inst.operands.length() >= 3 {
         let base = inst.operands[0]
         let offset = inst.operands[2]
-        let region = match ptr_base_infos[base.id] {
-          Some(base_info) => base_info.region
-          None => Other
-        }
+        let region = ptr_base_region(base.id, ptr_base_infos)
         Some({ base_id: base.id, offset_id: offset.id, region, })
       } else {
         None
@@ -672,12 +677,33 @@ priv struct GVNStats {
 }
 
 ///|
-priv struct GVNValueEntry {
-  key : Inst
+/// One available expression in the insertion-time GVN table. Entries are
+/// retained instead of destructively scoped: lookup checks dominance and the
+/// relevant memory version, so sibling blocks cannot hide an available value
+/// from their common dominator.
+priv struct StreamingGVNEntry {
   value : Value
   dependency : AliasRegion?
+  memory_version : StoreVersion?
+  def_block_id : Int
+  def_inst_index : Int
   position : Int
   reuse_count : Int
+}
+
+///|
+priv struct StreamingGVN {
+  func : Function
+  analysis : FunctionAnalysis
+  memory_work_budget : Int
+  ptr_base_infos : Array[PtrBaseInfo?]
+  block_input_state : @hashmap.HashMap[Int, LastStoreState]
+  value_table : @hashmap.HashMap[Inst, Array[StreamingGVNEntry]]
+  memory_values : @hashmap.HashMap[MemoryValueKey, MemoryValueEntry]
+  result : OptResult
+  mut work_done : Int
+  mut budget_exhausted : Bool
+  mut instruction_position : Int
 }
 
 ///|
@@ -699,239 +725,231 @@ fn is_stable_global_value(func : Function, inst : Inst) -> Bool {
 }
 
 ///|
-fn run_global_value_numbering_with_budget_and_analysis(
+fn StreamingGVN::new(
   func : Function,
   work_budget : Int,
   analysis : FunctionAnalysis,
-) -> GVNStats {
-  let result = OptResult::OptResult()
-  if func.blocks.length() == 0 {
-    return { result, work_done: 0, budget_exhausted: false, }
-  }
+  source_block_instructions : (Int) -> Array[Inst],
+) -> StreamingGVN {
   let memory_work_budget = if work_budget > 0 { work_budget } else { 0 }
-  let complete_memory_analysis = instruction_count(func) <= memory_work_budget
-  let ptr_base_infos = if complete_memory_analysis {
-    collect_ptr_base_infos(func, collect_iconst_values(func))
+  let mut total_instructions = 0
+  for block in func.blocks {
+    total_instructions = total_instructions +
+      source_block_instructions(block.id).length()
+  }
+  let complete_memory_analysis = total_instructions <= memory_work_budget
+  let source = if complete_memory_analysis {
+    let instructions : Array[Inst] = []
+    for block in func.blocks {
+      for inst in source_block_instructions(block.id) {
+        instructions.push(inst)
+      }
+    }
+    instructions
   } else {
-    let prefix = gvn_instruction_prefix(func, memory_work_budget, analysis)
-    collect_ptr_base_infos(
-      func,
-      collect_iconst_values(func, instructions=prefix),
-      instructions=prefix,
+    gvn_instruction_prefix(
+      memory_work_budget, analysis, source_block_instructions,
     )
   }
-  // Expression environment: key -> available value and reuse state.
-  let value_table : @hashmap.HashMap[Inst, GVNValueEntry] = HashMap([])
-  // Track memory-dependent keys separately for scoped invalidation.
-  let memory_keys : @hashmap.HashMap[Inst, AliasRegion] = HashMap([])
+  let ptr_base_infos = collect_ptr_base_infos(
+    func,
+    collect_iconst_values(func, instructions=source),
+    instructions=source,
+  )
   let block_input_state = if complete_memory_analysis {
     compute_block_input_last_store_states(
       func,
       analysis.cfg,
       analysis.block_idx,
       ptr_base_infos,
+      source_block_instructions,
     )
   } else {
     HashMap([])
   }
-  let memory_values : @hashmap.HashMap[MemoryValueKey, MemoryValueEntry] = HashMap([],
-  )
-  let work_done : Ref[Int] = { val: 0, }
-  let budget_exhausted : Ref[Bool] = { val: false, }
-  let instruction_position : Ref[Int] = { val: 0, }
-  // Walk the dominator tree
-  fn enter(block_id : Int) -> (Array[(Inst, GVNValueEntry?)], Bool) {
-    let idx = analysis.block_idx[block_id]
-    let block = func.blocks[idx]
-    // Track expressions added/modified in this block (to restore later)
-    // Stores (key, previous_entry) where previous_entry is None if new
-    let local_entries : Array[(Inst, GVNValueEntry?)] = []
-    let last_store_state = match block_input_state.get(block_id) {
-      Some(state) => state.clone()
-      None => LastStoreState()
+  {
+    func,
+    analysis,
+    memory_work_budget,
+    ptr_base_infos,
+    block_input_state,
+    value_table: HashMap([]),
+    memory_values: HashMap([]),
+    result: OptResult(),
+    work_done: 0,
+    budget_exhausted: false,
+    instruction_position: 0,
+  }
+}
+
+///|
+fn StreamingGVN::process_block(
+  self : StreamingGVN,
+  block_id : Int,
+  instructions : Array[Inst],
+) -> Unit {
+  let last_store_state = match self.block_input_state.get(block_id) {
+    Some(state) => state.clone()
+    None => LastStoreState()
+  }
+  for inst_index, inst in instructions {
+    let position = self.instruction_position
+    self.instruction_position = position + 1
+    let within_memory_budget = self.work_done < self.memory_work_budget
+    if within_memory_budget {
+      self.work_done = self.work_done + 1
+    } else {
+      self.budget_exhausted = true
     }
-    // Process instructions
-    for inst_index, inst in block.instructions {
-      let position = instruction_position.val
-      instruction_position.val = position + 1
-      let within_memory_budget = work_done.val < memory_work_budget
-      if within_memory_budget {
-        work_done.val = work_done.val + 1
-      } else {
-        budget_exhausted.val = true
+    let mut replaced_by_memory = false
+    if within_memory_budget &&
+      inst.opcode is Memory(Load(load_ty)) &&
+      ptr_access_from_inst(inst, self.ptr_base_infos) is Some(load_access) {
+      let key = memory_key_from_access(
+        load_access,
+        load_ty,
+        last_store_state.get_region_token(load_access.region),
+      )
+      if self.memory_values.get(key) is Some(entry) &&
+        inst_dominates(
+          entry.def_block_id,
+          entry.def_inst_index,
+          block_id,
+          inst_index,
+          self.analysis.dominance,
+        ) {
+        inst.opcode = Scalar(Copy)
+        inst.operands.clear()
+        inst.operands.push(entry.value)
+        self.result.mark_changed()
+        replaced_by_memory = true
       }
-      let mut replaced_by_memory = false
-      if within_memory_budget &&
-        inst.opcode is Memory(Load(load_ty)) &&
-        ptr_access_from_inst(inst, ptr_base_infos) is Some(load_access) {
-        let key = memory_key_from_access(
-          load_access,
-          load_ty,
-          last_store_state.get_region_token(load_access.region),
-        )
-        if memory_values.get(key) is Some(entry) &&
+    }
+    if within_memory_budget &&
+      inst.opcode is Memory(Store(store_ty)) &&
+      ptr_access_from_inst(inst, self.ptr_base_infos) is Some(store_access) &&
+      inst.operands.length() >= 2 {
+      let key = memory_key_from_access(
+        store_access,
+        store_ty,
+        Some({ block_id, inst_index, }),
+      )
+      self.memory_values.set(key, {
+        def_block_id: block_id,
+        def_inst_index: inst_index,
+        value: inst.operands[1],
+      })
+    }
+    // Memory forwarding is budgeted, but dependency versioning is not: an
+    // effect after the precision budget must still prevent reusing a mutable
+    // context/global expression across that effect.
+    update_last_store_state(
+      last_store_state,
+      inst,
+      { block_id, inst_index, },
+      self.ptr_base_infos,
+    )
+    if replaced_by_memory || !is_gvn_candidate(inst) {
+      continue
+    }
+    guard inst.first_result() is Some(result_val) else { continue }
+    let dependency = gvn_memory_dependency(self.func, inst, self.ptr_base_infos)
+    let memory_version = match dependency {
+      Some(region) => last_store_state.get_region_token(region)
+      None => None
+    }
+    let bounded_stable_global = !within_memory_budget &&
+      is_stable_global_value(self.func, inst)
+    let mut reusable_index = -1
+    if self.value_table.get(inst) is Some(entries) {
+      let mut index = entries.length() - 1
+      while index >= 0 {
+        let entry = entries[index]
+        if entry.dependency == dependency &&
+          entry.memory_version == memory_version &&
           inst_dominates(
             entry.def_block_id,
             entry.def_inst_index,
             block_id,
             inst_index,
-            analysis.dominance,
+            self.analysis.dominance,
           ) {
-          inst.opcode = Scalar(Copy)
-          inst.operands.clear()
-          inst.operands.push(entry.value)
-          result.mark_changed()
-          replaced_by_memory = true
+          reusable_index = index
+          break
         }
-      }
-      if within_memory_budget &&
-        inst.opcode is Memory(Store(store_ty)) &&
-        ptr_access_from_inst(inst, ptr_base_infos) is Some(store_access) &&
-        inst.operands.length() >= 2 {
-        let key = memory_key_from_access(
-          store_access,
-          store_ty,
-          Some({ block_id, inst_index, }),
-        )
-        memory_values.set(key, {
-          def_block_id: block_id,
-          def_inst_index: inst_index,
-          value: inst.operands[1],
-        })
-      }
-      if within_memory_budget {
-        update_last_store_state(
-          last_store_state,
-          inst,
-          { block_id, inst_index, },
-          ptr_base_infos,
-        )
-      }
-      if replaced_by_memory {
-        continue
-      }
-      // Invalidate only expressions that depend on the written abstract region.
-      match instruction_memory_write_scope(inst, ptr_base_infos) {
-        NoWrite => ()
-        WriteRegion(written_region) => {
-          let invalidated : Array[Inst] = []
-          for entry in memory_keys.iter() {
-            let (key, dependency) = entry
-            if dependency == written_region || dependency == Other {
-              invalidated.push(key)
-            }
-          }
-          for key in invalidated {
-            if value_table.get(key) is Some(previous) {
-              local_entries.push((key, Some(previous)))
-            }
-            value_table.remove(key)
-            memory_keys.remove(key)
-          }
-          continue
-        }
-        WriteAll => {
-          for entry in memory_keys.iter() {
-            let (key, _) = entry
-            if value_table.get(key) is Some(previous) {
-              local_entries.push((key, Some(previous)))
-            }
-          }
-          for entry in memory_keys.iter() {
-            value_table.remove(entry.0)
-          }
-          memory_keys.clear()
-          continue
-        }
-      }
-      if !is_gvn_candidate(inst) {
-        continue
-      }
-      if inst.first_result() is Some(result_val) {
-        let key = inst
-        let bounded_stable_global = !within_memory_budget &&
-          is_stable_global_value(func, inst)
-        if value_table.get(key) is Some(existing_entry) {
-          // Already computed - replace with copy. The type check is defensive:
-          // Inst identity includes result types, so a mismatch is not expected.
-          if existing_entry.value.ty == result_val.ty &&
-            (
-              !bounded_stable_global ||
-              (
-                position - existing_entry.position <=
-                GVN_POST_BUDGET_STABLE_GLOBAL_REUSE_DISTANCE &&
-                existing_entry.reuse_count <
-                GVN_POST_BUDGET_STABLE_GLOBAL_REUSE_LIMIT
-              )
-            ) {
-            inst.opcode = Scalar(Copy)
-            inst.operands.clear()
-            inst.operands.push(existing_entry.value)
-            result.mark_changed()
-            if bounded_stable_global {
-              local_entries.push((existing_entry.key, Some(existing_entry)))
-              value_table.set(existing_entry.key, {
-                ..existing_entry,
-                reuse_count: existing_entry.reuse_count + 1,
-              })
-            }
-          } else if bounded_stable_global {
-            local_entries.push((existing_entry.key, Some(existing_entry)))
-            value_table.set(existing_entry.key, {
-              key: existing_entry.key,
-              value: result_val,
-              dependency: None,
-              position,
-              reuse_count: 0,
-            })
-          }
-        } else {
-          // Record previous value (None if new)
-          let prev = value_table.get(key)
-          local_entries.push((key, prev))
-          let dependency = gvn_memory_dependency(func, inst, ptr_base_infos)
-          value_table.set(key, {
-            key,
-            value: result_val,
-            dependency,
-            position,
-            reuse_count: 0,
-          })
-          if dependency is Some(region) {
-            memory_keys.set(key, region)
-          }
-        }
+        index = index - 1
       }
     }
-    // Cheap value numbering covers the complete dominator tree. The bounded
-    // budget only disables precise memory forwarding.
-    (local_entries, true)
-  }
-
-  // Restore the value table to the state it had before the block.
-  fn exit(local_entries : Array[(Inst, GVNValueEntry?)]) -> Unit {
-    for entry in local_entries.rev_iter() {
-      let (key, prev) = entry
-      match prev {
-        Some(v) => {
-          value_table.set(key, v)
-          if v.dependency is Some(region) {
-            memory_keys.set(key, region)
+    if reusable_index >= 0 && self.value_table.get(inst) is Some(entries) {
+      let existing = entries[reusable_index]
+      if existing.value.ty == result_val.ty &&
+        (
+          !bounded_stable_global ||
+          (
+            position - existing.position <=
+            GVN_POST_BUDGET_STABLE_GLOBAL_REUSE_DISTANCE &&
+            existing.reuse_count < GVN_POST_BUDGET_STABLE_GLOBAL_REUSE_LIMIT
+          )
+        ) {
+        inst.opcode = Scalar(Copy)
+        inst.operands.clear()
+        inst.operands.push(existing.value)
+        self.result.mark_changed()
+        if bounded_stable_global {
+          entries[reusable_index] = {
+            ..existing,
+            reuse_count: existing.reuse_count + 1,
           }
         }
-        None => {
-          value_table.remove(key)
-          memory_keys.remove(key)
-        }
+        continue
       }
     }
+    let entry : StreamingGVNEntry = {
+      value: result_val,
+      dependency,
+      memory_version,
+      def_block_id: block_id,
+      def_inst_index: inst_index,
+      position,
+      reuse_count: 0,
+    }
+    match self.value_table.get(inst) {
+      Some(entries) => entries.push(entry)
+      None => self.value_table.set(inst, [entry])
+    }
   }
+}
 
-  // Start from the entry block (block 0)
+///|
+fn StreamingGVN::finish(self : StreamingGVN) -> GVNStats {
+  {
+    result: self.result,
+    work_done: self.work_done,
+    budget_exhausted: self.budget_exhausted,
+  }
+}
+
+///|
+#warnings("-unused_value")
+fn run_global_value_numbering_with_budget_and_analysis(
+  func : Function,
+  work_budget : Int,
+  analysis : FunctionAnalysis,
+) -> GVNStats {
+  let block_instructions = fn(block_id : Int) -> Array[Inst] {
+    func.blocks[analysis.block_idx[block_id]].instructions
+  }
+  let stream = StreamingGVN::new(
+    func, work_budget, analysis, block_instructions,
+  )
+  fn enter(block_id : Int) -> (Unit, Bool) {
+    stream.process_block(block_id, block_instructions(block_id))
+    ((), true)
+  }
   if analysis.cfg.is_valid(0) {
-    visit_dominator_tree(analysis.domtree, 0, enter, exit)
+    visit_dominator_tree(analysis.domtree, 0, enter, fn(_) { () })
   }
-  { result, work_done: work_done.val, budget_exhausted: budget_exhausted.val, }
+  stream.finish()
 }
 
 ///|
