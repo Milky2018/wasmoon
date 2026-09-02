@@ -112,11 +112,22 @@ struct IndexedRuleSet {
   by_opcode : Map[EOpcodeTag, Array[IndexedRule]]
   // Rules that match any opcode (e.g., constant folding)
   universal : Array[IndexedRule]
+  mut generated_matcher : Bool
 }
 
 ///|
 fn IndexedRuleSet::IndexedRuleSet() -> IndexedRuleSet {
-  { by_opcode: Map([]), universal: [], }
+  { by_opcode: Map([]), universal: [], generated_matcher: false, }
+}
+
+///|
+fn IndexedRuleSet::use_generated_matcher(self : IndexedRuleSet) -> Unit {
+  for tag, rules in self.by_opcode {
+    if generated_rule_bucket_size(tag) != rules.length() {
+      abort("generated e-graph matcher does not match the rule registry")
+    }
+  }
+  self.generated_matcher = true
 }
 
 ///|
@@ -273,7 +284,12 @@ fn EGraph::apply_indexed_rules_once(
         prior = prior + 1
       }
       if !duplicate && ruleset.by_opcode.get(tag) is Some(rules) {
-        for indexed_rule in rules {
+        let mut match_bits = if ruleset.generated_matcher {
+          generated_rule_match_bits(self, class_id, tag)
+        } else {
+          0xFFFFFFFFFFFFFFFFUL
+        }
+        for rule_index, indexed_rule in rules {
           if class_matches >= limits.matches_limit {
             self.last_matches_limit_hits = self.last_matches_limit_hits + 1
             class_capped = true
@@ -283,11 +299,17 @@ fn EGraph::apply_indexed_rules_once(
             class_capped = true
             break
           }
+          if (match_bits & (1UL << rule_index)) == 0UL {
+            continue
+          }
           if (indexed_rule.rule.apply)(self, class_id) {
             changed = true
             applied = applied + 1
             budget.rule_applications = budget.rule_applications + 1
             budget.current_nodes = self.num_nodes()
+            if ruleset.generated_matcher {
+              match_bits = generated_rule_match_bits(self, class_id, tag)
+            }
             class_matches = class_matches + 1
             let current_nodes = self.get_nodes(class_id).length()
             if current_nodes >= limits.eclass_enode_limit {

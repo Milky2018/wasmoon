@@ -1,0 +1,687 @@
+# Identity rules - indexed by opcode
+rule rule_add_zero TAdd
+when arity=2 const-value=0:0
+when arity=2 const-value=1:0
+rule rule_sub_zero TSub
+when arity=2 const-value=1:0
+rule rule_mul_one TMul
+when arity=2 const-value=0:1
+when arity=2 const-value=1:1
+rule rule_mul_zero TMul
+when arity=2 const-value=0:0
+when arity=2 const-value=1:0
+rule rule_idempotent TAnd,TOr
+when arity=2 equiv=0:1
+rule rule_xor_self TXor
+when arity=2 equiv=0:1
+rule rule_sub_self TSub
+when arity=2 equiv=0:1
+# Bitwise identity
+rule rule_and_zero TAnd
+when arity=2 const-value=0:0
+when arity=2 const-value=1:0
+rule rule_or_zero TOr
+when arity=2 const-value=0:0
+when arity=2 const-value=1:0
+rule rule_xor_zero TXor
+when arity=2 const-value=0:0
+when arity=2 const-value=1:0
+rule rule_and_all_ones TAnd
+when arity=2 const-value=0:-1
+when arity=2 const-value=1:-1
+rule rule_or_all_ones TOr
+when arity=2 const-value=0:-1
+when arity=2 const-value=1:-1
+rule rule_or_self TOr
+when arity=2 equiv=0:1
+rule rule_xor_all_ones TXor
+when arity=2 const-value=0:-1
+when arity=2 const-value=1:-1
+# Bitwise with not
+rule rule_xor_not TXor
+when arity=2 child-op=0:TBnot
+when arity=2 child-op=1:TBnot
+rule rule_or_not TOr
+when arity=2 child-op=0:TBnot
+when arity=2 child-op=1:TBnot
+rule rule_and_not TAnd
+when arity=2 child-op=0:TBnot
+when arity=2 child-op=1:TBnot
+rule rule_double_bnot TBnot
+when arity=1 child-op=0:TBnot
+rule rule_demorgan_or TBnot
+when arity=1 child-op=0:TOr
+rule rule_demorgan_and TBnot
+when arity=1 child-op=0:TAnd
+# Bitwise algebraic
+rule rule_and_xor_xor TXor
+when arity=2 child-op=0:TAnd child-op=1:TXor
+when arity=2 child-op=0:TXor child-op=1:TAnd
+rule rule_or_xor_and TXor
+when arity=2 child-op=0:TOr child-op=1:TAnd
+when arity=2 child-op=0:TAnd child-op=1:TOr
+rule rule_and_or_absorb TOr
+when arity=2 child-op=0:TAnd
+when arity=2 child-op=1:TAnd
+rule rule_xor_xor_cancel TXor
+when arity=2 child-op=0:TXor
+when arity=2 child-op=1:TXor
+rule rule_factor_and_xor TXor
+when arity=2 child-op=0:TAnd child-op=1:TAnd
+rule rule_and_add_xor TAdd
+when arity=2 child-op=0:TAnd child-op=1:TXor
+when arity=2 child-op=0:TXor child-op=1:TAnd
+rule rule_or_add_and TAdd
+when arity=2 child-op=0:TOr child-op=1:TAnd
+when arity=2 child-op=0:TAnd child-op=1:TOr
+rule rule_or_and_not TOr
+when arity=2 child-op=0:TAnd
+when arity=2 child-op=1:TAnd
+rule rule_or_or_absorb TOr
+when arity=2 child-op=0:TOr
+when arity=2 child-op=1:TOr
+rule rule_and_and_absorb TAnd
+when arity=2 child-op=0:TAnd
+when arity=2 child-op=1:TAnd
+rule rule_xor_not_and TAnd
+when arity=2 child-op=0:TXor
+when arity=2 child-op=1:TXor
+rule rule_and_or_not TOr
+when arity=2 child-op=0:TAnd
+when arity=2 child-op=1:TAnd
+# Shift identity
+rule rule_shl_zero TShl
+when arity=2 const-value=1:0
+rule rule_shr_zero TSshr,TUshr
+when arity=2 const-value=1:0
+rule rule_shift_of_zero TShl,TSshr,TUshr
+when arity=2 const-value=0:0
+rule rule_rot_zero TRotl,TRotr
+when arity=2 const-value=1:0
+rule rule_shl_shl TShl
+when arity=2 child-op=0:TShl
+rule rule_ushr_ushr TUshr
+when arity=2 child-op=0:TUshr
+rule rule_sshr_sshr TSshr
+when arity=2 child-op=0:TSshr
+rule rule_rotl_rotr_cancel TRotl
+when arity=2 child-op=0:TRotr
+rule rule_rotr_rotl_cancel TRotr
+when arity=2 child-op=0:TRotl
+rule rule_ushr_shl_mask TShl
+when arity=2 child-op=0:TUshr
+rule rule_shl_ushr_mask TUshr
+when arity=2 child-op=0:TShl
+rule rule_band_shl_shl TAnd
+when arity=2 child-op=0:TShl child-op=1:TShl
+rule rule_sub_shl_shl TSub
+when arity=2 child-op=0:TShl child-op=1:TShl
+rule rule_add_shl_shl TAdd
+when arity=2 child-op=0:TShl child-op=1:TShl
+rule rule_ushr_band_shl TUshr
+when arity=2 child-op=0:TAnd
+rule rule_shl_ushr_to_rotl TOr
+when arity=2 child-op=0:TShl child-op=1:TUshr
+when arity=2 child-op=0:TUshr child-op=1:TShl
+rule rule_neg_ushr_to_sshr TNeg
+when arity=1 child-op=0:TUshr
+rule rule_shl_shl_overflow TShl
+when arity=2 child-op=0:TShl
+rule rule_ushr_ushr_overflow TUshr
+when arity=2 child-op=0:TUshr
+# Rotation combining
+rule rule_rotl_rotl_combine TRotl
+when arity=2 child-op=0:TRotl
+rule rule_rotr_rotr_combine TRotr
+when arity=2 child-op=0:TRotr
+rule rule_rotr_rotl_to_rotl TRotr
+when arity=2 child-op=0:TRotl
+rule rule_rotl_rotr_to_rotr TRotl
+when arity=2 child-op=0:TRotr
+# Shift amount extend/reduce removal
+rule rule_shift_extend_amount TShl,TUshr,TSshr,TRotl,TRotr
+when arity=2 child-op=1:TUextend
+when arity=2 child-op=1:TSextend
+rule rule_shift_reduce_amount TShl,TUshr,TSshr,TRotl,TRotr
+when arity=2 child-op=1:TIreduce
+# Strength reduction
+rule rule_mul_pow2 TMul
+when arity=2 const=0
+when arity=2 const=1
+# Constant reassociation should run before lowering mul to shift/add forms.
+rule rule_reassoc_mul_const TMul
+when arity=2 child-op=0:TMul const=1
+rule rule_mul_shl_const TMul
+when arity=2 child-op=0:TShl const=1
+when arity=2 const=0 child-op=1:TShl
+rule rule_double TAdd
+when arity=2 equiv=0:1
+# TODO(ISS-017): re-enable div/rem strength reduction through a
+# legality-aware rule set once MilkIR carries non-zero/overflow facts.
+rule rule_mul_3 TMul
+when arity=2 const-value=0:3
+when arity=2 const-value=1:3
+rule rule_mul_5 TMul
+when arity=2 const-value=0:5
+when arity=2 const-value=1:5
+rule rule_mul_7 TMul
+when arity=2 const-value=0:7
+when arity=2 const-value=1:7
+rule rule_mul_9 TMul
+when arity=2 const-value=0:9
+when arity=2 const-value=1:9
+# Negation patterns
+rule rule_neg_zero TSub
+when arity=2 const-value=0:0
+rule rule_sub_neg TSub
+when arity=2 child-op=1:TNeg
+when arity=2 child-op=1:TSub
+rule rule_add_neg TAdd
+when arity=2 child-op=1:TNeg
+when arity=2 child-op=1:TSub
+rule rule_mul_neg_one TMul
+when arity=2 const-value=0:-1
+when arity=2 const-value=1:-1
+rule rule_neg_mul_neg TMul
+when arity=2 child-op=0:TNeg
+when arity=2 child-op=1:TNeg
+# TODO(ISS-017): signed div/rem rewrites need explicit trapping/overflow
+# legality metadata before they belong in the generic MilkIR ruleset.
+rule rule_neg_sub_swap TNeg
+when arity=1 child-op=0:TSub
+# TODO(ISS-017): division/remainder-by-one rewrites still need the same
+# definedness metadata because generic MilkIR does not yet state whether
+# division opcodes are total, trapping, or poison-producing.
+# Bnot patterns
+rule rule_bnot_add_one TAdd
+when arity=2 child-op=0:TBnot const-value=1:1
+when arity=2 const-value=0:1 child-op=1:TBnot
+rule rule_bnot_sub_one TBnot
+when arity=1 child-op=0:TSub
+rule rule_bnot_add_neg_one TBnot
+when arity=1 child-op=0:TAdd
+# Additional patterns
+rule rule_or_add_neg TAdd
+when arity=2 child-op=0:TOr const=1
+rule rule_add_sub_or_to_and TSub
+when arity=2 child-op=0:TAdd child-op=1:TOr
+# Cancellation patterns
+rule rule_sub_add_cancel TAdd
+when arity=2 child-op=0:TSub
+when arity=2 child-op=1:TSub
+rule rule_add_sub_cancel TSub
+when arity=2 child-op=0:TAdd
+rule rule_sub_sub_cancel TSub
+when arity=2 child-op=0:TSub
+when arity=2 child-op=1:TSub
+# Additional strength reduction
+rule rule_mul_shl_one TMul
+when arity=2 child-op=0:TShl
+when arity=2 child-op=1:TShl
+# Constant folding - universal (operates on any opcode with const children)
+rule rule_const_fold *
+# Reassociation
+rule rule_reassoc_add_const TAdd
+when arity=2 child-op=0:TAdd const=1
+rule rule_reassoc_sub_const TSub
+when arity=2 child-op=0:TSub const=1
+rule rule_reassoc_or_const TOr
+when arity=2 child-op=0:TOr const=1
+rule rule_reassoc_and_const TAnd
+when arity=2 child-op=0:TAnd const=1
+rule rule_reassoc_xor_const TXor
+when arity=2 child-op=0:TXor const=1
+rule rule_reassoc_sub_add_const TSub
+when arity=2 child-op=0:TAdd const=1
+rule rule_reassoc_add_sub_const TAdd
+when arity=2 child-op=0:TSub const=1
+rule rule_reassoc_sub_sub_const_left TSub
+when arity=2 child-op=0:TSub const=1
+rule rule_reassoc_add_sub_const_left TAdd
+when arity=2 child-op=0:TSub const=1
+# Shift reassociation for constant propagation
+rule rule_reassoc_shl_const TShl
+when arity=2 child-op=0:TShl const=1
+rule rule_reassoc_ushr_const TUshr
+when arity=2 child-op=0:TUshr const=1
+rule rule_reassoc_sshr_const TSshr
+when arity=2 child-op=0:TSshr const=1
+# Select simplification
+rule rule_select_const TSelect
+when arity=3 const=0
+# Sub negative constant
+rule rule_sub_neg_const TSub
+when arity=2 const=1
+# Tree rebalancing for constants
+rule rule_rebalance_add_consts TAdd
+when arity=2 child-op=0:TAdd const=1
+rule rule_rebalance_mul_consts TMul
+when arity=2 child-op=0:TMul const=1
+rule rule_rebalance_and_consts TAnd
+when arity=2 child-op=0:TAnd const=1
+rule rule_rebalance_or_consts TOr
+when arity=2 child-op=0:TOr const=1
+rule rule_rebalance_xor_consts TXor
+when arity=2 child-op=0:TXor const=1
+# Float constant folding
+rule rule_fconst_fold_binary TFadd,TFsub,TFmul,TFdiv,TFmin,TFmax,TFcopysign
+when arity=2 fconst=0 fconst=1
+rule rule_fconst_fold_unary TFneg,TFabs,TFsqrt,TFceil,TFfloor,TFtrunc,TFnearest
+when arity=1 fconst=0
+rule rule_fneg_fneg TFneg
+when arity=1 child-op=0:TFneg
+rule rule_fabs_fneg TFabs
+when arity=1 child-op=0:TFneg
+rule rule_fabs_fabs TFabs
+when arity=1 child-op=0:TFabs
+rule rule_fneg_fabs TFneg
+when arity=1 child-op=0:TFabs
+# Vector constant folding
+rule rule_splat_const TSplat
+when arity=1 const=0
+# Vector splat lifting: op(splat(x), splat(y)) -> splat(op(x, y))
+rule rule_band_splat_splat TAnd
+when arity=2 child-op=0:TSplat child-op=1:TSplat
+rule rule_bor_splat_splat TOr
+when arity=2 child-op=0:TSplat child-op=1:TSplat
+rule rule_bxor_splat_splat TXor
+when arity=2 child-op=0:TSplat child-op=1:TSplat
+rule rule_bnot_splat TBnot
+when arity=1 child-op=0:TSplat
+rule rule_iadd_splat_splat TAdd
+when arity=2 child-op=0:TSplat child-op=1:TSplat
+rule rule_isub_splat_splat TSub
+when arity=2 child-op=0:TSplat child-op=1:TSplat
+rule rule_imul_splat_splat TMul
+when arity=2 child-op=0:TSplat child-op=1:TSplat
+rule rule_ineg_splat TNeg
+when arity=1 child-op=0:TSplat
+rule rule_iabs_splat TIabs
+when arity=1 child-op=0:TSplat
+rule rule_popcnt_splat TPopcnt
+when arity=1 child-op=0:TSplat
+rule rule_smin_splat_splat TSmin
+when arity=2 child-op=0:TSplat child-op=1:TSplat
+rule rule_umin_splat_splat TUmin
+when arity=2 child-op=0:TSplat child-op=1:TSplat
+rule rule_smax_splat_splat TSmax
+when arity=2 child-op=0:TSplat child-op=1:TSplat
+rule rule_umax_splat_splat TUmax
+when arity=2 child-op=0:TSplat child-op=1:TSplat
+# Shift/rotate with splat on first operand only
+rule rule_rotl_splat TRotl
+when arity=2 child-op=0:TSplat
+rule rule_rotr_splat TRotr
+when arity=2 child-op=0:TSplat
+rule rule_ishl_splat TShl
+when arity=2 child-op=0:TSplat
+rule rule_ushr_splat TUshr
+when arity=2 child-op=0:TSplat
+rule rule_sshr_splat TSshr
+when arity=2 child-op=0:TSplat
+# Extend/reduce optimizations
+rule rule_uextend_uextend TUextend
+when arity=1 child-op=0:TUextend
+rule rule_sextend_sextend TSextend
+when arity=1 child-op=0:TSextend
+rule rule_sextend_uextend TSextend
+when arity=1 child-op=0:TUextend
+rule rule_sextend_icmp TSextend
+when arity=1 child-op=0:TIcmp
+when arity=1 child-op=0:TEq
+when arity=1 child-op=0:TNe
+rule rule_ireduce_uextend TIreduce
+when arity=1 child-op=0:TUextend
+rule rule_ireduce_sextend TIreduce
+when arity=1 child-op=0:TSextend
+rule rule_band_uextend TAnd
+when arity=2 child-op=0:TUextend child-op=1:TUextend
+rule rule_bor_uextend TOr
+when arity=2 child-op=0:TUextend child-op=1:TUextend
+rule rule_bxor_uextend TXor
+when arity=2 child-op=0:TUextend child-op=1:TUextend
+rule rule_ireduce_ineg TIreduce
+when arity=1 child-op=0:TNeg
+rule rule_ireduce_bnot TIreduce
+when arity=1 child-op=0:TBnot
+rule rule_ireduce_iadd TIreduce
+when arity=1 child-op=0:TAdd
+rule rule_ireduce_isub TIreduce
+when arity=1 child-op=0:TSub
+rule rule_ireduce_imul TIreduce
+when arity=1 child-op=0:TMul
+rule rule_ireduce_band TIreduce
+when arity=1 child-op=0:TAnd
+rule rule_ireduce_bor TIreduce
+when arity=1 child-op=0:TOr
+rule rule_ireduce_bxor TIreduce
+when arity=1 child-op=0:TXor
+rule rule_ireduce_ireduce TIreduce
+when arity=1 child-op=0:TIreduce
+rule rule_ireduce_ishl TIreduce
+when arity=1 child-op=0:TShl
+# Extend with comparison
+rule rule_eq_sextend_zero TEq
+when arity=2 child-op=0:TSextend const-value=1:0
+when arity=2 const-value=0:0 child-op=1:TSextend
+rule rule_ne_sextend_zero TNe
+when arity=2 child-op=0:TSextend const-value=1:0
+when arity=2 const-value=0:0 child-op=1:TSextend
+rule rule_icmp_sextend_zero TIcmp
+when arity=2 child-op=0:TSextend const-value=1:0
+# Arithmetic with extends
+rule rule_iadd_uextend TAdd
+when arity=2 child-op=0:TUextend child-op=1:TUextend
+rule rule_isub_uextend TSub
+when arity=2 child-op=0:TUextend child-op=1:TUextend
+# Uextend comparison optimizations (uextend values are always non-negative)
+rule rule_slt_uextend_zero TIcmp
+when arity=2 child-op=0:TUextend const-value=1:0 root-icmp=2
+rule rule_sge_uextend_zero TIcmp
+when arity=2 child-op=0:TUextend const-value=1:0 root-icmp=5
+# Masking with type masks
+rule rule_band_uextend_mask TAnd
+when arity=2 child-op=0:TUextend const=1
+when arity=2 const=0 child-op=1:TUextend
+rule rule_band_sextend_mask TAnd
+when arity=2 child-op=0:TSextend const=1
+when arity=2 const=0 child-op=1:TSextend
+# Type-dependent extend/reduce rules (use bit width info)
+rule rule_ireduce_const TIreduce
+when arity=1 const=0
+rule rule_uextend_const TUextend
+when arity=1 const=0
+rule rule_sextend_const TSextend
+when arity=1 const=0
+rule rule_uextend_identity TUextend
+rule rule_sextend_identity TSextend
+rule rule_ireduce_identity TIreduce
+rule rule_band_uextend_mask_precise TAnd
+when arity=2 child-op=0:TUextend const=1
+when arity=2 const=0 child-op=1:TUextend
+rule rule_ireduce_uextend_skip TIreduce
+when arity=1 child-op=0:TUextend
+rule rule_ireduce_sextend_skip TIreduce
+when arity=1 child-op=0:TSextend
+rule rule_ireduce_uextend_to_extend TIreduce
+when arity=1 child-op=0:TUextend
+rule rule_ireduce_sextend_to_extend TIreduce
+when arity=1 child-op=0:TSextend
+# Canonicalization rules (push constants to the right)
+# Push constants to the right: (k + x) -> (x + k)
+rule rule_canon_add TAdd
+when arity=2 const=0 not-const=1
+rule rule_canon_mul TMul
+when arity=2 const=0 not-const=1
+rule rule_canon_and TAnd
+when arity=2 const=0 not-const=1
+rule rule_canon_or TOr
+when arity=2 const=0 not-const=1
+rule rule_canon_xor TXor
+when arity=2 const=0 not-const=1
+# Tree rebalancing rules (improve ILP)
+# Rebalance 4-deep chains: a op (b op (c op d)) -> (a op b) op (c op d)
+rule rule_rebalance_add_right TAdd
+when arity=2 child-op=1:TAdd
+rule rule_rebalance_add_left TAdd
+when arity=2 child-op=0:TAdd
+rule rule_rebalance_mul_right TMul
+when arity=2 child-op=1:TMul
+rule rule_rebalance_mul_left TMul
+when arity=2 child-op=0:TMul
+rule rule_rebalance_and_right TAnd
+when arity=2 child-op=1:TAnd
+rule rule_rebalance_and_left TAnd
+when arity=2 child-op=0:TAnd
+rule rule_rebalance_xor_right TXor
+when arity=2 child-op=1:TXor
+rule rule_rebalance_xor_left TXor
+when arity=2 child-op=0:TXor
+# Add/Sub mixed rebalancing rules
+rule rule_sub_sub_sub_right TSub
+when arity=2 child-op=1:TSub
+rule rule_sub_sub_add_right TSub
+when arity=2 child-op=1:TSub
+rule rule_sub_add_sub_right TSub
+when arity=2 child-op=1:TAdd
+rule rule_sub_add_add_right TSub
+when arity=2 child-op=1:TAdd
+rule rule_add_sub_sub_right TAdd
+when arity=2 child-op=1:TSub
+rule rule_add_sub_add_right TAdd
+when arity=2 child-op=1:TSub
+rule rule_add_add_sub_right TAdd
+when arity=2 child-op=1:TAdd
+rule rule_sub_sub_sub_left TSub
+when arity=2 child-op=0:TSub
+rule rule_sub_sub_add_left TAdd
+when arity=2 child-op=0:TSub
+rule rule_sub_add_sub_left TSub
+when arity=2 child-op=0:TAdd
+rule rule_sub_add_add_left TAdd
+when arity=2 child-op=0:TAdd
+rule rule_add_sub_sub_left TSub
+when arity=2 child-op=0:TSub
+rule rule_add_sub_add_left TAdd
+when arity=2 child-op=0:TSub
+rule rule_add_add_sub_left TSub
+when arity=2 child-op=0:TAdd
+# Integer comparison optimizations
+rule rule_eq_self TEq
+when arity=2 equiv=0:1
+rule rule_ne_self TNe
+when arity=2 equiv=0:1
+rule rule_icmp_self TIcmp
+when arity=2 equiv=0:1
+rule rule_ne_icmp_zero TNe
+when arity=2 child-op=0:TIcmp const-value=1:0
+when arity=2 child-op=0:TUextend const-value=1:0
+when arity=2 const-value=0:0 child-op=1:TIcmp
+when arity=2 const-value=0:0 child-op=1:TUextend
+rule rule_eq_icmp_zero TEq
+when arity=2 child-op=0:TIcmp const-value=1:0
+when arity=2 child-op=0:TUextend const-value=1:0
+when arity=2 const-value=0:0 child-op=1:TIcmp
+when arity=2 const-value=0:0 child-op=1:TUextend
+rule rule_ne_icmp_one TNe
+when arity=2 child-op=0:TIcmp const-value=1:1
+when arity=2 child-op=0:TUextend const-value=1:1
+rule rule_eq_icmp_one TEq
+when arity=2 child-op=0:TIcmp const-value=1:1
+when arity=2 child-op=0:TUextend const-value=1:1
+rule rule_band_icmp_one TAnd
+when arity=2 child-op=0:TIcmp const-value=1:1
+when arity=2 child-op=0:TEq const-value=1:1
+when arity=2 child-op=0:TNe const-value=1:1
+when arity=2 child-op=0:TUextend const-value=1:1
+when arity=2 const-value=0:1 child-op=1:TIcmp
+when arity=2 const-value=0:1 child-op=1:TEq
+when arity=2 const-value=0:1 child-op=1:TNe
+when arity=2 const-value=0:1 child-op=1:TUextend
+rule rule_ult_zero TIcmp
+when arity=2 root-icmp=6 const-value=1:0
+rule rule_ule_zero TIcmp
+when arity=2 root-icmp=7 const-value=1:0
+rule rule_ugt_zero TIcmp
+when arity=2 root-icmp=8 const-value=1:0
+rule rule_uge_zero TIcmp
+when arity=2 root-icmp=9 const-value=1:0
+rule rule_uge_one_to_ne_zero TIcmp
+when arity=2 root-icmp=9 const-value=1:1
+rule rule_ult_one_to_eq_zero TIcmp
+when arity=2 root-icmp=6 const-value=1:1
+rule rule_sge_one_to_sgt_zero TIcmp
+when arity=2 root-icmp=5 const-value=1:1
+rule rule_slt_one_to_sle_zero TIcmp
+when arity=2 root-icmp=2 const-value=1:1
+rule rule_sgt_neg_one_to_sge_zero TIcmp
+when arity=2 root-icmp=4 const-value=1:-1
+rule rule_sle_neg_one_to_slt_zero TIcmp
+when arity=2 root-icmp=3 const-value=1:-1
+rule rule_eq_add_cancel TEq
+when arity=2 child-op=0:TAdd child-op=1:TAdd
+rule rule_ne_add_cancel TNe
+when arity=2 child-op=0:TAdd child-op=1:TAdd
+rule rule_eq_xor_self TEq
+when arity=2 child-op=0:TXor
+when arity=2 child-op=1:TXor
+rule rule_ne_xor_self TNe
+when arity=2 child-op=0:TXor
+when arity=2 child-op=1:TXor
+rule rule_ugt_sub_self TIcmp
+when arity=2 root-icmp=8 child-op=0:TSub
+rule rule_ule_sub_self TIcmp
+when arity=2 root-icmp=7 child-op=0:TSub
+rule rule_ult_bnot_swap TIcmp
+when arity=2 root-icmp=6 child-op=0:TBnot child-op=1:TBnot
+rule rule_slt_bnot_swap TIcmp
+when arity=2 root-icmp=2 child-op=0:TBnot child-op=1:TBnot
+rule rule_xor_cmp_to_ne TXor
+when arity=2 child-op=0:TIcmp child-op=1:TIcmp
+rule rule_band_contradictory_cmp TAnd
+when arity=2 child-op=0:TIcmp child-op=1:TIcmp
+rule rule_select_uextend_icmp TSelect
+when arity=3 child-op=0:TUextend
+# Comparison reassociation with constants
+rule rule_eq_add_const TEq
+when arity=2 child-op=0:TAdd const=1
+rule rule_ne_add_const TNe
+when arity=2 child-op=0:TAdd const=1
+rule rule_eq_sub_const TEq
+when arity=2 child-op=0:TSub const=1
+rule rule_ne_sub_const TNe
+when arity=2 child-op=0:TSub const=1
+# icmp swap and add-add comparison
+rule rule_icmp_swap_const TIcmp,TEq,TNe
+when arity=2 const=0 not-const=1
+rule rule_eq_add_add_const TEq
+when arity=2 child-op=0:TAdd child-op=1:TAdd
+rule rule_ne_add_add_const TNe
+when arity=2 child-op=0:TAdd child-op=1:TAdd
+# Select optimization rules
+rule rule_select_same TSelect
+when arity=3 equiv=1:2
+rule rule_select_icmp_one_zero TSelect
+when arity=3 child-op=0:TIcmp const-value=1:1 const-value=2:0
+when arity=3 child-op=0:TEq const-value=1:1 const-value=2:0
+when arity=3 child-op=0:TNe const-value=1:1 const-value=2:0
+rule rule_select_icmp_zero_one TSelect
+when arity=3 child-op=0:TIcmp const-value=1:0 const-value=2:1
+when arity=3 child-op=0:TEq const-value=1:0 const-value=2:1
+when arity=3 child-op=0:TNe const-value=1:0 const-value=2:1
+rule rule_select_nested_same_cond_right TSelect
+when arity=3 child-op=2:TSelect
+rule rule_select_nested_same_cond_left TSelect
+when arity=3 child-op=1:TSelect
+rule rule_select_uextend_cond TSelect
+when arity=3 child-op=0:TUextend
+rule rule_add_select_const TAdd
+when arity=2 child-op=0:TSelect const=1
+when arity=2 const=0 child-op=1:TSelect
+# Select-to-min/max rules
+rule rule_select_to_smax TSelect
+when arity=3 child-op=0:TIcmp
+rule rule_select_to_smin TSelect
+when arity=3 child-op=0:TIcmp
+rule rule_select_to_umax TSelect
+when arity=3 child-op=0:TIcmp
+rule rule_select_to_umin TSelect
+when arity=3 child-op=0:TIcmp
+rule rule_select_to_smax_swapped TSelect
+when arity=3 child-op=0:TIcmp
+rule rule_select_to_smin_swapped TSelect
+when arity=3 child-op=0:TIcmp
+rule rule_select_to_umax_swapped TSelect
+when arity=3 child-op=0:TIcmp
+rule rule_select_to_umin_swapped TSelect
+when arity=3 child-op=0:TIcmp
+# Select-to-iabs rules
+rule rule_select_to_iabs_positive TSelect
+when arity=3 child-op=0:TIcmp
+rule rule_select_to_iabs_negative TSelect
+when arity=3 child-op=0:TIcmp
+# Min/max comparison rules
+rule rule_smin_never_greater TIcmp
+when arity=2 child-op=0:TSmin
+when arity=2 child-op=1:TSmin
+rule rule_never_less_than_smin TIcmp
+when arity=2 child-op=0:TSmin
+when arity=2 child-op=1:TSmin
+rule rule_umin_never_greater TIcmp
+when arity=2 child-op=0:TUmin
+when arity=2 child-op=1:TUmin
+rule rule_never_less_than_umin TIcmp
+when arity=2 child-op=0:TUmin
+when arity=2 child-op=1:TUmin
+# Type-aware comparison rules (use type bounds UMAX, SMIN, SMAX)
+rule rule_ugt_umax TIcmp
+when arity=2 root-icmp=8 const=1
+rule rule_uge_umax TIcmp
+when arity=2 root-icmp=9 const=1
+rule rule_ule_umax TIcmp
+when arity=2 root-icmp=7 const=1
+rule rule_sgt_smax TIcmp
+when arity=2 root-icmp=4 const=1
+rule rule_sge_smax TIcmp
+when arity=2 root-icmp=5 const=1
+rule rule_slt_smin TIcmp
+when arity=2 root-icmp=2 const=1
+rule rule_sle_smin TIcmp
+when arity=2 root-icmp=3 const=1
+rule rule_sge_smin TIcmp
+when arity=2 root-icmp=5 const=1
+rule rule_sle_smax TIcmp
+when arity=2 root-icmp=3 const=1
+# TODO(ISS-017): skeleton div-select strength reduction is legality-specific
+# and must remain out of the generic default ruleset until facts are modeled.
+# Spaceship comparison simplification rules
+rule rule_spaceship_eq_zero TEq,TIcmp
+when arity=2 child-op=0:TSpaceshipS const-value=1:0
+when arity=2 child-op=0:TSpaceshipU const-value=1:0
+when arity=2 const-value=0:0 child-op=1:TSpaceshipS
+when arity=2 const-value=0:0 child-op=1:TSpaceshipU
+rule rule_spaceship_ne_zero TNe,TIcmp
+when arity=2 child-op=0:TSpaceshipS const-value=1:0
+when arity=2 child-op=0:TSpaceshipU const-value=1:0
+when arity=2 const-value=0:0 child-op=1:TSpaceshipS
+when arity=2 const-value=0:0 child-op=1:TSpaceshipU
+rule rule_spaceship_s_lt_zero TIcmp
+when arity=2 child-op=0:TSpaceshipS const-value=1:0
+rule rule_spaceship_u_lt_zero TIcmp
+when arity=2 child-op=0:TSpaceshipU const-value=1:0
+rule rule_spaceship_s_le_zero TIcmp
+when arity=2 child-op=0:TSpaceshipS const-value=1:0
+rule rule_spaceship_u_le_zero TIcmp
+when arity=2 child-op=0:TSpaceshipU const-value=1:0
+rule rule_spaceship_s_gt_zero TIcmp
+when arity=2 child-op=0:TSpaceshipS const-value=1:0
+rule rule_spaceship_u_gt_zero TIcmp
+when arity=2 child-op=0:TSpaceshipU const-value=1:0
+rule rule_spaceship_s_ge_zero TIcmp
+when arity=2 child-op=0:TSpaceshipS const-value=1:0
+rule rule_spaceship_u_ge_zero TIcmp
+when arity=2 child-op=0:TSpaceshipU const-value=1:0
+rule rule_spaceship_s_eq_neg_one TEq,TIcmp
+when arity=2 child-op=0:TSpaceshipS const-value=1:-1
+when arity=2 const-value=0:-1 child-op=1:TSpaceshipS
+rule rule_spaceship_u_eq_neg_one TEq,TIcmp
+when arity=2 child-op=0:TSpaceshipU const-value=1:-1
+when arity=2 const-value=0:-1 child-op=1:TSpaceshipU
+rule rule_spaceship_s_ne_neg_one TNe,TIcmp
+when arity=2 child-op=0:TSpaceshipS const-value=1:-1
+when arity=2 const-value=0:-1 child-op=1:TSpaceshipS
+rule rule_spaceship_u_ne_neg_one TNe,TIcmp
+when arity=2 child-op=0:TSpaceshipU const-value=1:-1
+when arity=2 const-value=0:-1 child-op=1:TSpaceshipU
+rule rule_spaceship_s_eq_one TEq,TIcmp
+when arity=2 child-op=0:TSpaceshipS const-value=1:1
+when arity=2 const-value=0:1 child-op=1:TSpaceshipS
+rule rule_spaceship_u_eq_one TEq,TIcmp
+when arity=2 child-op=0:TSpaceshipU const-value=1:1
+when arity=2 const-value=0:1 child-op=1:TSpaceshipU
+rule rule_spaceship_s_ne_one TNe,TIcmp
+when arity=2 child-op=0:TSpaceshipS const-value=1:1
+when arity=2 const-value=0:1 child-op=1:TSpaceshipS
+rule rule_spaceship_u_ne_one TNe,TIcmp
+when arity=2 child-op=0:TSpaceshipU const-value=1:1
+when arity=2 const-value=0:1 child-op=1:TSpaceshipU
