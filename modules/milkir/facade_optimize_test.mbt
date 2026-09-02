@@ -178,6 +178,89 @@ test "public O2 eliminates a duplicate expression" {
 }
 
 ///|
+fn build_egraph_boundary_function(
+  name : String,
+  instruction_count : Int,
+) -> @milkir.Function raise @milkir.VerifyError {
+  let builder = @milkir.FunctionBuilder::FunctionBuilder(name)
+  let value = builder.add_param(I32)
+  builder.add_result(I32)
+  let effect = builder.get_function().declare_external_symbol("effect")
+  for _ in 0..<(instruction_count - 2) {
+    builder.call_symbol(effect, None, []) |> ignore
+  }
+  let eight = builder.iconst_i32(8)
+  let product = builder.imul(value, eight)
+  builder.return_([product])
+  builder.finalize()
+}
+
+///|
+test "public O2 optimization quality is continuous across 300 instructions" {
+  let optimized : Array[Bool] = []
+  for count in [299, 300, 301] {
+    let func = build_egraph_boundary_function("boundary_\{count}", count)
+    inspect(@milkir.instruction_count(func), content="\{count}")
+    @milkir.optimize_with_level(func, O2) |> ignore
+    let text = func.print()
+    optimized.push(text.contains("ishl") && !text.contains("imul"))
+    func.verify()
+  }
+  debug_inspect(optimized, content="[true, true, true]")
+}
+
+///|
+test "public O2 gives late regions an independent optimization budget" {
+  let builder = @milkir.FunctionBuilder::FunctionBuilder("regional_fairness")
+  let value = builder.add_param(I32)
+  let results : Array[@milkir.Value] = []
+  builder.add_result(I32)
+  let eight = builder.iconst_i32(8)
+  results.push(builder.imul(value, eight))
+  // Keep the intervening pure expressions live. This is deliberately larger
+  // than one e-graph region, so a function-prefix fuel policy would starve the
+  // second multiplication.
+  for offset in 0..<300 {
+    builder.add_result(I32)
+    let constant = builder.iconst_i32(offset + 17)
+    results.push(builder.iadd(value, constant))
+  }
+  builder.add_result(I32)
+  results.push(builder.imul(value, eight))
+  builder.return_(results)
+  let func = builder.finalize()
+  @milkir.optimize_with_level(func, O2) |> ignore
+  let text = func.print()
+  inspect(text.contains("ishl"), content="true")
+  inspect(text.contains("imul"), content="false")
+  func.verify()
+}
+
+///|
+test "public O2 preserves local rewrites across a region boundary" {
+  let builder = @milkir.FunctionBuilder::FunctionBuilder("regional_context")
+  let value = builder.add_param(I32)
+  let results : Array[@milkir.Value] = []
+  // 126 one-node definitions plus the constant and first shift put that shift
+  // exactly at the 128-value boundary.
+  for _ in 0..<126 {
+    builder.add_result(I32)
+    results.push(builder.bnot(value))
+  }
+  builder.add_result(I32)
+  let one = builder.iconst_i32(1)
+  let first = builder.ishl(value, one)
+  let two = builder.iconst_i32(2)
+  results.push(builder.ishl(first, two))
+  builder.return_(results)
+  let func = builder.finalize()
+  @milkir.optimize_with_level(func, O2) |> ignore
+  let text = func.print()
+  inspect(text.contains("ishl v128"), content="false")
+  func.verify()
+}
+
+///|
 test "public O3 derives power-of-two strength-reduction constants" {
   let builder = @milkir.FunctionBuilder::FunctionBuilder("strength_reduce")
   let value = builder.add_param(I32)

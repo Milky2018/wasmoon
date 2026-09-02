@@ -290,6 +290,10 @@ fn EGraphBuilder::elaborate_inst(
   if steps.length() > ELABORATION_BUDGET {
     return false
   }
+  if steps.length() > self.remaining_elaboration_budget {
+    self.elaboration_budget_exhausted = true
+    return false
+  }
   // Past every point of failure. From here the work is total: each step
   // carries its own opcode and the source of each of its operands, and
   // post-order means a `FromStep` index is always one this loop has already
@@ -311,9 +315,11 @@ fn EGraphBuilder::elaborate_inst(
     emitted.push(materialized)
     self.register_def(materialized)
     built.push(value)
-    self.ensure_value_slot(value.id)
-    self.value_map[value.id] = Some(EClassId(step.class_id))
+    self.value_map.set(value.id, EClassId(step.class_id))
   }
+  self.remaining_elaboration_budget = self.remaining_elaboration_budget -
+    steps.length()
+  self.elaborated_instructions = self.elaborated_instructions + steps.length()
   let new_operands : Array[Value] = []
   for operand in root_operands {
     let value = match operand {

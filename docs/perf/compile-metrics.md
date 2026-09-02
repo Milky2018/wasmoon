@@ -35,7 +35,7 @@ Collection starts in `cmd/wasmoon/run.mbt` during `compile_module_to_jit(...)`.
 
 ### Module-level fields
 
-- `schema_version` (`5` for compiler subphase attribution)
+- `schema_version` (`6` for bounded regional e-graph work attribution)
 - `expected_functions`
 - `module_compile_us`
 - `compile_subphases[]` for module preparation when detailed metrics are
@@ -104,11 +104,21 @@ stack-to-stack is `spill_to_spill`.
 - `duration_us`
 - `before_insts`, `after_insts`, `changed`
 - Optional e-graph stats:
-  - `egraph_classes`, `egraph_nodes`, `egraph_rule_apps`
+  - `egraph_regions`: number of independently bounded transient regions
+  - `egraph_classes`, `egraph_nodes`: classes and nodes summed across regions
+  - `egraph_peak_nodes`: maximum node count of any one region
+  - `egraph_rule_attempts`, `egraph_rule_apps`: evaluated rewrite candidates and
+    successful applications
+  - `egraph_extraction_work`: e-nodes priced by extraction fixpoints
+  - `egraph_elaborated_insts`: new MilkIR instructions materialized from chosen
+    e-graph forms
 - Optional bounded-work stats:
-  - `work_done`, `budget_exhausted` (for `cse_gvn_global`, these describe the
-    bounded precise-memory prefix; cheap value numbering still visits the
-    complete reachable dominator tree)
+  - `work_done`, `budget_exhausted`
+  - For `egraph`, `budget_exhausted` reports that saturation, extraction, or
+    elaboration stopped at a regional hard bound. Unresolved expressions keep
+    their original MilkIR form.
+  - For `cse_gvn_global`, these describe the bounded precise-memory prefix;
+    cheap value numbering still visits the complete reachable dominator tree.
 
 ## Baseline Capture Script
 

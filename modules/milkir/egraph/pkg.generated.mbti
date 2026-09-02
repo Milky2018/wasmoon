@@ -98,6 +98,7 @@ pub fn EGraph::add_var(Self, Int) -> EClassId
 pub fn EGraph::add_vconst(Self, Bytes) -> EClassId
 pub fn EGraph::add_xor(Self, EClassId, EClassId) -> EClassId
 pub fn EGraph::best_nodes(Self) -> Map[Int, ENode]
+pub fn EGraph::best_nodes_with_budget(Self, Int) -> Map[Int, ENode]
 pub fn EGraph::const_conflict_count(Self) -> Int
 pub fn EGraph::equiv(Self, EClassId, EClassId) -> Bool
 pub fn EGraph::extract(Self, EClassId) -> (Int, ENode)
@@ -107,15 +108,20 @@ pub fn EGraph::get_const(Self, EClassId) -> Int64?
 pub fn EGraph::get_fconst(Self, EClassId) -> UInt64?
 pub fn EGraph::get_nodes(Self, EClassId) -> Array[ENode]
 pub fn EGraph::last_eclass_size_limit_hits(Self) -> Int
+pub fn EGraph::last_extraction_budget_exhausted(Self) -> Bool
+pub fn EGraph::last_extraction_work(Self) -> Int
 pub fn EGraph::last_matches_limit_hits(Self) -> Int
 pub fn EGraph::last_rebuild_repairs(Self) -> Int
 pub fn EGraph::last_rule_applications(Self) -> Int
+pub fn EGraph::last_rule_attempts(Self) -> Int
+pub fn EGraph::last_saturation_budget_exhausted(Self) -> Bool
 pub fn EGraph::merge(Self, EClassId, EClassId) -> EClassId
 pub fn EGraph::merge_changed(Self, EClassId, EClassId) -> Bool
 pub fn EGraph::num_classes(Self) -> Int
 pub fn EGraph::num_nodes(Self) -> Int
 pub fn EGraph::rebuild(Self) -> Unit
 pub fn EGraph::saturate_indexed(Self, IndexedRuleSet, Int) -> Int
+pub fn EGraph::saturate_indexed_with_budget(Self, IndexedRuleSet, Int, SaturationLimits, SaturationBudget) -> Int
 pub fn EGraph::saturate_indexed_with_limits(Self, IndexedRuleSet, Int, SaturationLimits) -> Int
 pub fn EGraph::set_type(Self, EClassId, Int) -> Unit
 pub fn EGraph::subsume(Self, EClassId, EClassId) -> EClassId
@@ -225,6 +231,13 @@ pub fn EOpcodeTag::not_equal(Self, Self) -> Bool
 pub fn EOpcodeTag::to_repr(Self) -> @debug.Repr
 
 type IndexedRuleSet
+
+pub struct SaturationBudget {
+  max_nodes : Int
+  max_rule_attempts : Int
+  max_rule_applications : Int
+}
+pub fn SaturationBudget::SaturationBudget(Int, Int, Int) -> Self
 
 pub struct SaturationLimits {
   matches_limit : Int

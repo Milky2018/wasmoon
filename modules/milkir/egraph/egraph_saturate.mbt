@@ -42,6 +42,58 @@ pub fn SaturationLimits::eclass_enode_limit(self : SaturationLimits) -> Int {
 }
 
 ///|
+/// Global work bounds for one transient e-graph region.
+///
+/// Per-class caps keep a single equivalence class small. These bounds are
+/// complementary: they cap aggregate work when a region contains many small
+/// classes, which the Cranelift-style per-class limits alone cannot do.
+pub struct SaturationBudget {
+  max_nodes : Int
+  max_rule_attempts : Int
+  max_rule_applications : Int
+}
+
+///|
+pub fn SaturationBudget::SaturationBudget(
+  max_nodes : Int,
+  max_rule_attempts : Int,
+  max_rule_applications : Int,
+) -> SaturationBudget {
+  { max_nodes, max_rule_attempts, max_rule_applications, }
+}
+
+///|
+fn SaturationBudget::unlimited() -> SaturationBudget {
+  {
+    max_nodes: @int.MAX_VALUE,
+    max_rule_attempts: @int.MAX_VALUE,
+    max_rule_applications: @int.MAX_VALUE,
+  }
+}
+
+///|
+priv struct SaturationBudgetState {
+  budget : SaturationBudget
+  mut rule_attempts : Int
+  mut rule_applications : Int
+  mut current_nodes : Int
+  mut exhausted : Bool
+}
+
+///|
+fn SaturationBudgetState::can_attempt(self : SaturationBudgetState) -> Bool {
+  if self.rule_attempts >= self.budget.max_rule_attempts ||
+    self.rule_applications >= self.budget.max_rule_applications ||
+    self.current_nodes >= self.budget.max_nodes {
+    self.exhausted = true
+    false
+  } else {
+    self.rule_attempts = self.rule_attempts + 1
+    true
+  }
+}
+
+///|
 /// A rewrite rule matches a pattern and produces equivalent expressions
 priv struct RewriteRule {
   apply : (EGraph, EClassId) -> Bool // Returns true if any changes were made
@@ -109,21 +161,51 @@ pub fn EGraph::saturate_indexed_with_limits(
   max_iterations : Int,
   limits : SaturationLimits,
 ) -> Int {
+  self.saturate_indexed_with_budget(
+    ruleset,
+    max_iterations,
+    limits,
+    SaturationBudget::unlimited(),
+  )
+}
+
+///|
+/// Apply the indexed ruleset with both per-class and aggregate work bounds.
+pub fn EGraph::saturate_indexed_with_budget(
+  self : EGraph,
+  ruleset : IndexedRuleSet,
+  max_iterations : Int,
+  limits : SaturationLimits,
+  budget : SaturationBudget,
+) -> Int {
   self.last_rule_applications = 0
+  self.last_rule_attempts = 0
+  self.last_saturation_budget_exhausted = false
   self.last_matches_limit_hits = 0
   self.last_eclass_size_limit_hits = 0
   if max_iterations <= 0 {
     return 0
   }
+  let state : SaturationBudgetState = {
+    budget,
+    rule_attempts: 0,
+    rule_applications: 0,
+    current_nodes: self.num_nodes(),
+    exhausted: false,
+  }
   let mut iters = 0
   while iters < max_iterations {
-    let (changed, applied) = self.apply_indexed_rules_once(ruleset, limits)
+    let (changed, applied) = self.apply_indexed_rules_once(
+      ruleset, limits, state,
+    )
     self.last_rule_applications = self.last_rule_applications + applied
     iters = iters + 1
-    if !changed {
+    if !changed || state.exhausted {
       break
     }
   }
+  self.last_rule_attempts = state.rule_attempts
+  self.last_saturation_budget_exhausted = state.exhausted
   iters
 }
 
@@ -134,6 +216,7 @@ fn EGraph::apply_indexed_rules_once(
   self : EGraph,
   ruleset : IndexedRuleSet,
   limits : SaturationLimits,
+  budget : SaturationBudgetState,
 ) -> (Bool, Int) {
   let mut changed = false
   let mut applied = 0
@@ -149,6 +232,9 @@ fn EGraph::apply_indexed_rules_once(
     i = i + 1
   }
   for id in ids {
+    if budget.exhausted {
+      break
+    }
     let canonical = self.find(id).0
     guard self.class_at(canonical) is Some(_) else { continue }
     let class_id = EClassId(canonical)
@@ -193,9 +279,15 @@ fn EGraph::apply_indexed_rules_once(
             class_capped = true
             break
           }
+          if !budget.can_attempt() {
+            class_capped = true
+            break
+          }
           if (indexed_rule.rule.apply)(self, class_id) {
             changed = true
             applied = applied + 1
+            budget.rule_applications = budget.rule_applications + 1
+            budget.current_nodes = self.num_nodes()
             class_matches = class_matches + 1
             let current_nodes = self.get_nodes(class_id).length()
             if current_nodes >= limits.eclass_enode_limit {
@@ -217,9 +309,14 @@ fn EGraph::apply_indexed_rules_once(
         self.last_matches_limit_hits = self.last_matches_limit_hits + 1
         break
       }
+      if !budget.can_attempt() {
+        break
+      }
       if (indexed_rule.rule.apply)(self, class_id) {
         changed = true
         applied = applied + 1
+        budget.rule_applications = budget.rule_applications + 1
+        budget.current_nodes = self.num_nodes()
         class_matches = class_matches + 1
         let current_nodes = self.get_nodes(class_id).length()
         if current_nodes >= limits.eclass_enode_limit {

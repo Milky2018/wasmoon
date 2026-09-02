@@ -152,8 +152,20 @@ pub fn EGraph::extract(self : EGraph, id : EClassId) -> (Int, ENode) {
 /// for the shared fixpoint once instead of re-running extraction per value.
 /// Classes with no finite extraction (every node cyclic) are absent.
 pub fn EGraph::best_nodes(self : EGraph) -> Map[Int, ENode] {
+  self.best_nodes_with_budget(@int.MAX_VALUE)
+}
+
+///|
+/// Best node per class with an aggregate cap on e-nodes priced.
+///
+/// A partial table is safe: callers preserve the original IR for classes
+/// whose best node was not established before the bound.
+pub fn EGraph::best_nodes_with_budget(
+  self : EGraph,
+  max_work : Int,
+) -> Map[Int, ENode] {
   let best : Map[Int, ENode] = Map([])
-  let table = self.compute_extraction_table()
+  let table = self.compute_extraction_table_with_budget(max_work)
   for class_id, entry in table.nodes {
     if entry is Some(node) {
       best.set(class_id, node)
@@ -166,6 +178,14 @@ pub fn EGraph::best_nodes(self : EGraph) -> Map[Int, ENode] {
 /// Relax per-class best costs with a dependency worklist. A class is revisited
 /// only when one of its children's costs improves.
 fn EGraph::compute_extraction_table(self : EGraph) -> ExtractionTable {
+  self.compute_extraction_table_with_budget(@int.MAX_VALUE)
+}
+
+///|
+fn EGraph::compute_extraction_table_with_budget(
+  self : EGraph,
+  max_work : Int,
+) -> ExtractionTable {
   let class_count = self.uf.parent.length()
   let table : ExtractionTable = {
     op_costs: Array::make(class_count, extract_cost_max_finite()),
@@ -180,11 +200,18 @@ fn EGraph::compute_extraction_table(self : EGraph) -> ExtractionTable {
       in_pending[class_id] = true
     }
   }
+  let mut work = 0
+  let mut exhausted = false
   while pending.pop() is Some(class_id) {
     in_pending[class_id] = false
     guard self.class_at(class_id) is Some(eclass) else { continue }
     let mut improved = false
     for node in eclass.nodes {
+      if work >= max_work {
+        exhausted = true
+        break
+      }
+      work = work + 1
       let mut total_cost = node_cost(node)
       let mut total_depth = 0
       let mut priceable = true
@@ -240,6 +267,9 @@ fn EGraph::compute_extraction_table(self : EGraph) -> ExtractionTable {
         }
       }
     }
+    if exhausted {
+      break
+    }
     if improved && self.parent_set(class_id) is Some(owners) {
       for owner in owners {
         let root = self.uf.find(owner)
@@ -250,5 +280,7 @@ fn EGraph::compute_extraction_table(self : EGraph) -> ExtractionTable {
       }
     }
   }
+  self.last_extraction_work = work
+  self.last_extraction_budget_exhausted = exhausted
   table
 }

@@ -35,20 +35,6 @@ fn foldable_chain_function(name : String, count : Int) -> Function {
 }
 
 ///|
-fn egraph_identity_function(name : String, count : Int) -> Function {
-  let builder = FunctionBuilder::FunctionBuilder(name)
-  let input = builder.add_param(I32)
-  builder.add_result(I32)
-  let zero = builder.iconst_i32(0)
-  let mut value = builder.iadd(input, zero)
-  for _ in 2..<count {
-    value = builder.copy(value)
-  }
-  builder.return_([value])
-  builder.get_function()
-}
-
-///|
 fn duplicate_expression_function(name : String, count : Int) -> Function {
   let builder = FunctionBuilder::FunctionBuilder(name)
   let lhs = builder.add_param(I32)
@@ -86,26 +72,6 @@ test "O1 folds a 300-instruction live arithmetic chain" {
 }
 
 ///|
-test "production optimizer skips the duplicate egraph at 300 instructions" {
-  let func = egraph_identity_function("egraph_300", 300)
-  inspect(
-    run_egraph_pass_with_analysis(func, FunctionAnalysis::build(func)),
-    content="false",
-  )
-  inspect(func.verify(), content="()")
-}
-
-///|
-test "production optimizer skips the duplicate egraph at 600 instructions" {
-  let func = egraph_identity_function("egraph_600", 600)
-  inspect(
-    run_egraph_pass_with_analysis(func, FunctionAnalysis::build(func)),
-    content="false",
-  )
-  inspect(func.verify(), content="()")
-}
-
-///|
 test "O0 O1 and O2 mandatory cleanup cross size boundaries" {
   let counts = [299, 300, 301, 599, 600, 601]
   let remaining : Array[Int] = []
@@ -138,19 +104,6 @@ test "mandatory cleanup preserves effects above size boundaries" {
   inspect(instruction_count(func), content="1")
   inspect(func.blocks[0].instructions[0].opcode is Call(_), content="true")
   inspect(func.verify(), content="()")
-}
-
-///|
-test "aegraph is reserved for functions that can use the full ruleset" {
-  debug_inspect(
-    [
-      use_egraph_for_instruction_count(0),
-      use_egraph_for_instruction_count(299),
-      use_egraph_for_instruction_count(300),
-      use_egraph_for_instruction_count(600),
-    ],
-    content="[true, true, false, false]",
-  )
 }
 
 ///|
@@ -401,7 +354,7 @@ fn deep_operand_chain_function(name : String, count : Int) -> Function {
 }
 
 ///|
-test "egraph survives a deep dominator spine" {
+test "egraph survives a deep block spine" {
   // Well past the depth a native-stack recursion survives.
   let func = deep_block_chain_function("egraph_deep_blocks", 100000)
   optimize_function_with_stats_with_limits_and_ruleset(
@@ -455,4 +408,50 @@ test "egraph elaborates a strength-reduced form into the IR" {
   let text = func.print()
   inspect(text.contains("ishl"), content="true")
   inspect(text.contains("imul"), content="false")
+}
+
+///|
+test "egraph work follows pure regions instead of total function size" {
+  let builder = FunctionBuilder::FunctionBuilder("effect_heavy_egraph")
+  let value = builder.add_param(I32)
+  builder.add_result(I32)
+  let effect = builder.get_function().declare_external_symbol("effect")
+  for _ in 0..<600 {
+    builder.call_symbol(effect, None, []) |> ignore
+  }
+  let eight = builder.iconst_i32(8)
+  let product = builder.imul(value, eight)
+  builder.return_([product])
+  let func = builder.get_function()
+  let stats = optimize_function_with_stats_with_limits_and_ruleset(
+    func,
+    @egraph.SaturationLimits::cranelift_default(),
+    @egraph.get_global_ruleset(),
+    FunctionAnalysis::build(func),
+  )
+  inspect(stats.regions, content="1")
+  inspect(stats.peak_nodes < 32, content="true")
+  inspect(stats.total_rule_attempts < 128, content="true")
+  inspect(stats.total_extraction_work < 128, content="true")
+  inspect(func.verify(), content="()")
+}
+
+///|
+test "large pure functions use bounded independent egraph regions" {
+  let func = deep_operand_chain_function("regional_egraph", 400)
+  let stats = optimize_function_with_stats_with_limits_and_ruleset(
+    func,
+    @egraph.SaturationLimits::cranelift_default(),
+    @egraph.get_global_ruleset(),
+    FunctionAnalysis::build(func),
+  )
+  inspect(stats.regions > 1, content="true")
+  inspect(stats.peak_nodes <= 1024, content="true")
+  inspect(stats.total_rule_attempts <= stats.regions * 8192, content="true")
+  inspect(stats.total_extraction_work <= stats.regions * 8192, content="true")
+  inspect(
+    stats.total_elaborated_instructions <= stats.regions * 128,
+    content="true",
+  )
+  inspect(func.verify(), content="()")
 }

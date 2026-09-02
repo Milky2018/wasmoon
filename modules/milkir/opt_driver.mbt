@@ -53,24 +53,11 @@ fn run_opt_pass(
 }
 
 ///|
-fn use_egraph_for_instruction_count(insts : Int) -> Bool {
-  // Large functions previously copied every admitted MilkIR expression into
-  // a second graph, only to run a deliberately tiny compact ruleset. The
-  // existing in-place folding and GVN passes cover that tier without the
-  // representation round trip. Keep aegraph for small functions where the
-  // full ruleset can justify its construction cost.
-  insts < 300
-}
-
-///|
 fn run_egraph_pass_with_analysis(
   func : Function,
   analysis : FunctionAnalysis,
 ) -> Bool {
   let before = instruction_count(func)
-  if !use_egraph_for_instruction_count(before) {
-    return false
-  }
   let limits = @egraph.SaturationLimits::cranelift_default()
   let ruleset = @egraph.get_global_ruleset()
   if !perf_enabled() {
@@ -93,6 +80,12 @@ fn run_egraph_pass_with_analysis(
     egraph_classes=Some(stats.total_classes),
     egraph_nodes=Some(stats.total_nodes),
     egraph_rule_apps=Some(stats.total_rule_applications),
+    egraph_regions=Some(stats.regions),
+    egraph_peak_nodes=Some(stats.peak_nodes),
+    egraph_rule_attempts=Some(stats.total_rule_attempts),
+    egraph_extraction_work=Some(stats.total_extraction_work),
+    egraph_elaborated_insts=Some(stats.total_elaborated_instructions),
+    budget_exhausted=Some(stats.budget_exhausted),
   )
   stats.changed
 }

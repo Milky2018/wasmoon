@@ -9,6 +9,11 @@ pub struct OptimizationPassMetric {
   egraph_classes : Int?
   egraph_nodes : Int?
   egraph_rule_apps : Int?
+  egraph_regions : Int?
+  egraph_peak_nodes : Int?
+  egraph_rule_attempts : Int?
+  egraph_extraction_work : Int?
+  egraph_elaborated_insts : Int?
   work_done : Int?
   budget_exhausted : Bool?
 }
@@ -77,6 +82,11 @@ fn perf_record_ir_pass(
   egraph_classes? : Int? = None,
   egraph_nodes? : Int? = None,
   egraph_rule_apps? : Int? = None,
+  egraph_regions? : Int? = None,
+  egraph_peak_nodes? : Int? = None,
+  egraph_rule_attempts? : Int? = None,
+  egraph_extraction_work? : Int? = None,
+  egraph_elaborated_insts? : Int? = None,
   work_done? : Int? = None,
   budget_exhausted? : Bool? = None,
 ) -> Unit {
@@ -90,6 +100,11 @@ fn perf_record_ir_pass(
       egraph_classes,
       egraph_nodes,
       egraph_rule_apps,
+      egraph_regions,
+      egraph_peak_nodes,
+      egraph_rule_attempts,
+      egraph_extraction_work,
+      egraph_elaborated_insts,
       work_done,
       budget_exhausted,
     })

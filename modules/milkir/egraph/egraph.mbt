@@ -43,10 +43,18 @@ struct EGraph {
   mut const_conflict_hits : Int
   // Number of successful rule applications in the most recent saturate call.
   mut last_rule_applications : Int
+  // Number of rewrite rules attempted in the most recent saturate call.
+  mut last_rule_attempts : Int
+  // Whether the most recent saturation stopped at a global work bound.
+  mut last_saturation_budget_exhausted : Bool
   // Number of times rewrite candidates were truncated by matches limit.
   mut last_matches_limit_hits : Int
   // Number of times rule application was skipped due to eclass size limit.
   mut last_eclass_size_limit_hits : Int
+  // Work performed by the most recent shared extraction fixpoint.
+  mut last_extraction_work : Int
+  // Whether the most recent extraction stopped at its work bound.
+  mut last_extraction_budget_exhausted : Bool
 }
 
 ///|
@@ -66,8 +74,12 @@ pub fn EGraph::EGraph() -> EGraph {
     type_conflict_hits: 0,
     const_conflict_hits: 0,
     last_rule_applications: 0,
+    last_rule_attempts: 0,
+    last_saturation_budget_exhausted: false,
     last_matches_limit_hits: 0,
     last_eclass_size_limit_hits: 0,
+    last_extraction_work: 0,
+    last_extraction_budget_exhausted: false,
   }
 }
 
@@ -753,6 +765,31 @@ pub fn EGraph::num_nodes(self : EGraph) -> Int {
 /// `saturate` / `saturate_indexed` invocation.
 pub fn EGraph::last_rule_applications(self : EGraph) -> Int {
   self.last_rule_applications
+}
+
+///|
+/// Number of rewrite rules evaluated by the most recent saturation.
+pub fn EGraph::last_rule_attempts(self : EGraph) -> Int {
+  self.last_rule_attempts
+}
+
+///|
+/// Whether saturation stopped before its normal fixpoint because a global
+/// region budget was consumed.
+pub fn EGraph::last_saturation_budget_exhausted(self : EGraph) -> Bool {
+  self.last_saturation_budget_exhausted
+}
+
+///|
+/// Number of e-nodes priced by the most recent extraction fixpoint.
+pub fn EGraph::last_extraction_work(self : EGraph) -> Int {
+  self.last_extraction_work
+}
+
+///|
+/// Whether extraction stopped before its worklist was empty.
+pub fn EGraph::last_extraction_budget_exhausted(self : EGraph) -> Bool {
+  self.last_extraction_budget_exhausted
 }
 
 ///|

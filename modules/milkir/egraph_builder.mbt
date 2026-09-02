@@ -7,18 +7,55 @@
 /// Builder for constructing an EGraph from IR instructions
 priv struct EGraphBuilder {
   egraph : @egraph.EGraph
-  // Dense map from IR Value id to EClassId (Cranelift SecondaryMap style).
-  value_map : Array[@egraph.EClassId?]
+  // Region-local maps stay sparse: global Value ids can be arbitrarily large
+  // even when this transient graph contains only a few dozen expressions.
+  value_map : Map[Int, @egraph.EClassId]
   // Reverse map from (canonical EClassId, Type) to an in-scope IR Value (for operand rewriting)
   class_to_value : Map[RepKey, Value]
-  // Dense map from IR Value id to its defining instruction.
-  def_map : Array[Inst?]
-  // Dense map from IR Value id to its e-graph-encodable opcode (if pure/admitted).
-  def_eop_map : Array[@egraph.EOpcode?]
+  // Region-local definition and encoding maps.
+  def_map : Map[Int, Inst]
+  def_eop_map : Map[Int, @egraph.EOpcode]
   // Ruleset for eager optimization
   ruleset : @egraph.IndexedRuleSet
   // Rewrite limits (Cranelift-style hard caps).
   saturation_limits : @egraph.SaturationLimits
+  mut saturation_budget : @egraph.SaturationBudget
+  mut extraction_work_budget : Int
+  mut remaining_elaboration_budget : Int
+  mut elaborated_instructions : Int
+  mut elaboration_budget_exhausted : Bool
+  // Constants are cheap leaves even when their defining instruction belongs
+  // to an earlier region. Other out-of-region definitions stay opaque Vars.
+  mut external_constants : Map[Int, Int64]
+}
+
+///|
+/// Aggregate work limits for one transient pure-expression region.
+///
+/// The e-graph is a separate representation from MilkIR, unlike Cranelift's
+/// DFG-backed aegraph. Keeping it regional prevents large functions from
+/// paying for a second whole-function object graph while still giving every
+/// part of the function an optimization opportunity.
+priv struct EGraphWorkLimits {
+  pure_values_per_region : Int
+  block_slices_per_region : Int
+  context_pure_values_per_slice : Int
+  saturation_budget : @egraph.SaturationBudget
+  extraction_work_per_region : Int
+  elaboration_instructions_per_region : Int
+}
+
+///|
+fn default_egraph_work_limits() -> EGraphWorkLimits {
+  {
+    pure_values_per_region: 128,
+    block_slices_per_region: 32,
+    // Match the bounded rewrite depth used by Cranelift's aegraph design.
+    context_pure_values_per_slice: 5,
+    saturation_budget: SaturationBudget(1024, 8192, 512),
+    extraction_work_per_region: 8192,
+    elaboration_instructions_per_region: 128,
+  }
 }
 
 ///|
@@ -35,62 +72,50 @@ fn EGraphBuilder::new_with_limits_and_ruleset(
   saturation_limits : @egraph.SaturationLimits,
   ruleset : @egraph.IndexedRuleSet,
 ) -> EGraphBuilder {
+  let work_limits = default_egraph_work_limits()
   {
     egraph: EGraph(),
-    value_map: [],
+    value_map: Map([]),
     class_to_value: Map([]),
-    def_map: [],
-    def_eop_map: [],
+    def_map: Map([]),
+    def_eop_map: Map([]),
     ruleset,
     saturation_limits,
+    saturation_budget: work_limits.saturation_budget,
+    extraction_work_budget: work_limits.extraction_work_per_region,
+    remaining_elaboration_budget: work_limits.elaboration_instructions_per_region,
+    elaborated_instructions: 0,
+    elaboration_budget_exhausted: false,
+    external_constants: Map([]),
   }
 }
 
 ///|
-fn EGraphBuilder::ensure_value_slot(
-  self : EGraphBuilder,
-  value_id : Int,
-) -> Unit {
-  if value_id < 0 {
-    return
-  }
-  while self.value_map.length() <= value_id {
-    self.value_map.push(None)
-  }
-  while self.def_map.length() <= value_id {
-    self.def_map.push(None)
-  }
-  while self.def_eop_map.length() <= value_id {
-    self.def_eop_map.push(None)
-  }
-}
-
-///|
-fn EGraphBuilder::reserve_value_slots(
-  self : EGraphBuilder,
-  count : Int,
-) -> Unit {
-  if count <= 0 {
-    return
-  }
-  while self.value_map.length() < count {
-    self.value_map.push(None)
-  }
-  while self.def_map.length() < count {
-    self.def_map.push(None)
-  }
-  while self.def_eop_map.length() < count {
-    self.def_eop_map.push(None)
-  }
+fn EGraphBuilder::new_for_region(
+  saturation_limits : @egraph.SaturationLimits,
+  ruleset : @egraph.IndexedRuleSet,
+  work_limits : EGraphWorkLimits,
+  external_constants : Map[Int, Int64],
+) -> EGraphBuilder {
+  let builder = EGraphBuilder::new_with_limits_and_ruleset(
+    saturation_limits, ruleset,
+  )
+  builder.saturation_budget = work_limits.saturation_budget
+  builder.extraction_work_budget = work_limits.extraction_work_per_region
+  builder.remaining_elaboration_budget = work_limits.elaboration_instructions_per_region
+  builder.external_constants = external_constants
+  builder
 }
 
 ///|
 /// Register an instruction's definition
 fn EGraphBuilder::register_def(self : EGraphBuilder, inst : Inst) -> Unit {
   if inst.first_result() is Some(v) {
-    self.ensure_value_slot(v.id)
-    self.def_map[v.id] = Some(inst)
-    self.def_eop_map[v.id] = opcode_to_eopcode(inst)
+    self.def_map.set(v.id, inst)
+    match opcode_to_eopcode(inst) {
+      Some(eop) => self.def_eop_map.set(v.id, eop)
+      None => self.def_eop_map.remove(v.id)
+    }
   }
 }
 
@@ -244,9 +269,7 @@ fn EGraphBuilder::lookup_value(
   self : EGraphBuilder,
   value : Value,
 ) -> @egraph.EClassId? {
-  if value.id >= 0 &&
-    value.id < self.value_map.length() &&
-    self.value_map[value.id] is Some(id) {
+  if self.value_map.get(value.id) is Some(id) {
     Some(self.egraph.find(id))
   } else {
     None
@@ -261,10 +284,9 @@ fn EGraphBuilder::add_leaf_value(
   value : Value,
 ) -> @egraph.EClassId {
   let bits = type_bits(value.ty)
-  let class_id = if value.id >= 0 &&
-    value.id < self.def_map.length() &&
-    self.def_map[value.id] is Some(_) &&
-    self.def_eop_map[value.id] is Some(Const(c)) {
+  let class_id = if self.def_eop_map.get(value.id) is Some(Const(c)) {
+    self.egraph.add_const(c)
+  } else if self.external_constants.get(value.id) is Some(c) {
     self.egraph.add_const(c)
   } else {
     self.egraph.add_var(value.id)
@@ -279,10 +301,8 @@ fn EGraphBuilder::value_has_children(
   self : EGraphBuilder,
   value : Value,
 ) -> Bool {
-  value.id >= 0 &&
-  value.id < self.def_map.length() &&
-  self.def_map[value.id] is Some(_) &&
-  self.def_eop_map[value.id] is Some(eop) &&
+  self.def_map.get(value.id) is Some(_) &&
+  self.def_eop_map.get(value.id) is Some(eop) &&
   !(eop is Const(_))
 }
 
@@ -310,12 +330,11 @@ fn EGraphBuilder::add_value(
     }
     if !self.value_has_children(current) {
       let class_id = self.add_leaf_value(current)
-      self.ensure_value_slot(current.id)
-      self.value_map[current.id] = Some(class_id)
+      self.value_map.set(current.id, class_id)
       continue
     }
-    guard self.def_map[current.id] is Some(inst) else { continue }
-    guard self.def_eop_map[current.id] is Some(eop) else { continue }
+    guard self.def_map.get(current.id) is Some(inst) else { continue }
+    guard self.def_eop_map.get(current.id) is Some(eop) else { continue }
     if expanded {
       let children : Array[@egraph.EClassId] = []
       for operand in inst.operands {
@@ -330,8 +349,7 @@ fn EGraphBuilder::add_value(
         { op: eop, children, },
         type_bits(current.ty),
       )
-      self.ensure_value_slot(current.id)
-      self.value_map[current.id] = Some(class_id)
+      self.value_map.set(current.id, class_id)
     } else {
       stack.push((current, true))
       for operand in inst.operands {
@@ -354,10 +372,11 @@ fn EGraphBuilder::add_value(
 fn EGraphBuilder::optimize(self : EGraphBuilder) -> Unit {
   // One-pass, directed simplification (Cranelift-style aegraph).
   // Additional improvement opportunities are handled by later passes.
-  self.egraph.saturate_indexed_with_limits(
+  self.egraph.saturate_indexed_with_budget(
     self.ruleset,
     1,
     self.saturation_limits,
+    self.saturation_budget,
   )
   |> ignore
 }
@@ -379,9 +398,7 @@ fn EGraphBuilder::get_simplified_opcode(
   self : EGraphBuilder,
   value : Value,
 ) -> Opcode? {
-  if value.id >= 0 &&
-    value.id < self.value_map.length() &&
-    self.value_map[value.id] is Some(class_id) {
+  if self.value_map.get(value.id) is Some(class_id) {
     match self.egraph.get_const(class_id) {
       Some(c) => Some(Scalar(IntConst(c)))
       None => None
@@ -399,12 +416,10 @@ fn EGraphBuilder::get_simplified_operand(
   self : EGraphBuilder,
   value : Value,
 ) -> Value? {
-  if is_cheap_rematerializable_value(value, self.def_map) {
+  if self.is_cheap_rematerializable(value) {
     return None
   }
-  if value.id >= 0 &&
-    value.id < self.value_map.length() &&
-    self.value_map[value.id] is Some(class_id) {
+  if self.value_map.get(value.id) is Some(class_id) {
     // Get the canonical class after optimization
     let canonical = self.egraph.find(class_id)
     // Check if this class maps to a different (simpler) value with same IR type
@@ -425,6 +440,29 @@ fn EGraphBuilder::get_simplified_operand(
 }
 
 ///|
+fn EGraphBuilder::is_cheap_rematerializable(
+  self : EGraphBuilder,
+  value : Value,
+) -> Bool {
+  match self.def_map.get(value.id) {
+    Some(inst) => {
+      if is_cheap_rematerializable_constant(inst) {
+        return true
+      }
+      match (inst.opcode, inst.operands) {
+        (Scalar(Convert(UnsignedExtend)), [source]) =>
+          self.def_map.get(source.id) is Some(source_inst) &&
+          is_cheap_rematerializable_constant(source_inst)
+        _ => false
+      }
+    }
+    // An out-of-region constant is still a cheap leaf. Treating all such
+    // constants as rematerializable is conservative for register pressure.
+    None => self.external_constants.get(value.id) is Some(_)
+  }
+}
+
+///|
 /// Apply e-graph optimization to a function
 /// Returns true if any optimization was applied
 priv struct EGraphOptimizeStats {
@@ -432,6 +470,84 @@ priv struct EGraphOptimizeStats {
   total_classes : Int
   total_nodes : Int
   total_rule_applications : Int
+  total_rule_attempts : Int
+  total_extraction_work : Int
+  total_elaborated_instructions : Int
+  regions : Int
+  peak_nodes : Int
+  budget_exhausted : Bool
+}
+
+///|
+fn empty_egraph_optimize_stats() -> EGraphOptimizeStats {
+  {
+    changed: false,
+    total_classes: 0,
+    total_nodes: 0,
+    total_rule_applications: 0,
+    total_rule_attempts: 0,
+    total_extraction_work: 0,
+    total_elaborated_instructions: 0,
+    regions: 0,
+    peak_nodes: 0,
+    budget_exhausted: false,
+  }
+}
+
+///|
+fn merge_egraph_optimize_stats(
+  left : EGraphOptimizeStats,
+  right : EGraphOptimizeStats,
+) -> EGraphOptimizeStats {
+  {
+    changed: left.changed || right.changed,
+    total_classes: left.total_classes + right.total_classes,
+    total_nodes: left.total_nodes + right.total_nodes,
+    total_rule_applications: left.total_rule_applications +
+    right.total_rule_applications,
+    total_rule_attempts: left.total_rule_attempts + right.total_rule_attempts,
+    total_extraction_work: left.total_extraction_work +
+    right.total_extraction_work,
+    total_elaborated_instructions: left.total_elaborated_instructions +
+    right.total_elaborated_instructions,
+    regions: left.regions + right.regions,
+    peak_nodes: if left.peak_nodes > right.peak_nodes {
+      left.peak_nodes
+    } else {
+      right.peak_nodes
+    },
+    budget_exhausted: left.budget_exhausted || right.budget_exhausted,
+  }
+}
+
+///|
+priv struct EGraphRegionSlice {
+  block : Block
+  instructions : Array[Inst]
+  context_start : Int
+  start : Int
+  end : Int
+  rewritten : Array[Inst]
+}
+
+///|
+/// Include a small read-only pure-expression window before a split point.
+/// This preserves local rewrites that straddle an artificial region boundary
+/// without recursively importing an unbounded producer chain.
+fn egraph_region_context_start(
+  instructions : Array[Inst],
+  start : Int,
+  pure_values : Int,
+) -> Int {
+  let mut index = start
+  let mut remaining = pure_values
+  while index > 0 && remaining > 0 {
+    index = index - 1
+    if inst_is_egraph_pure(instructions[index]) {
+      remaining = remaining - 1
+    }
+  }
+  index
 }
 
 ///|
@@ -439,158 +555,225 @@ fn optimize_function_with_stats_with_limits_and_ruleset(
   func : Function,
   limits : @egraph.SaturationLimits,
   ruleset : @egraph.IndexedRuleSet,
-  analysis : FunctionAnalysis,
+  _analysis : FunctionAnalysis,
 ) -> EGraphOptimizeStats {
-  let mut changed = false
-  let builder = EGraphBuilder::new_with_limits_and_ruleset(limits, ruleset)
-  builder.reserve_value_slots(func.next_value_id)
-
-  // Function-scoped e-graph construction (Cranelift-directional alignment):
-  // build one e-graph for the whole function instead of isolated per-block
-  // e-graphs.
+  let work_limits = default_egraph_work_limits()
+  let external_constants : Map[Int, Int64] = Map([])
   for block in func.blocks {
     for inst in block.instructions {
-      builder.register_def(inst)
+      if inst.opcode is Scalar(IntConst(c)) && inst.first_result() is Some(v) {
+        external_constants.set(v.id, c)
+      }
     }
   }
-
-  let value_stack : Array[(Value, Bool)] = []
+  let mut aggregate = empty_egraph_optimize_stats()
+  let pending : Array[EGraphRegionSlice] = []
+  let rewritten_blocks : Array[(Block, Array[Inst])] = []
+  let mut pending_pure_values = 0
   for block in func.blocks {
-    // Add all e-graph-admitted values from all blocks.
-    for inst in block.instructions {
+    let original = block.instructions
+    let rewritten : Array[Inst] = []
+    rewritten_blocks.push((block, rewritten))
+    let mut region_start = 0
+    for index in 0..<original.length() {
+      if inst_is_egraph_pure(original[index]) {
+        pending_pure_values = pending_pure_values + 1
+      }
+      if pending_pure_values >= work_limits.pure_values_per_region {
+        pending.push({
+          block,
+          instructions: original,
+          context_start: egraph_region_context_start(
+            original,
+            region_start,
+            work_limits.context_pure_values_per_slice,
+          ),
+          start: region_start,
+          end: index + 1,
+          rewritten,
+        })
+        let stats = optimize_egraph_region(
+          func, pending, limits, ruleset, work_limits, external_constants,
+        )
+        aggregate = merge_egraph_optimize_stats(aggregate, stats)
+        pending.clear()
+        region_start = index + 1
+        pending_pure_values = 0
+      }
+    }
+    if region_start < original.length() {
+      if pending_pure_values > 0 {
+        pending.push({
+          block,
+          instructions: original,
+          context_start: egraph_region_context_start(
+            original,
+            region_start,
+            work_limits.context_pure_values_per_slice,
+          ),
+          start: region_start,
+          end: original.length(),
+          rewritten,
+        })
+      } else {
+        for index in region_start..<original.length() {
+          rewritten.push(original[index])
+        }
+      }
+    }
+    if pending.length() >= work_limits.block_slices_per_region {
+      let stats = optimize_egraph_region(
+        func, pending, limits, ruleset, work_limits, external_constants,
+      )
+      aggregate = merge_egraph_optimize_stats(aggregate, stats)
+      pending.clear()
+      pending_pure_values = 0
+    }
+  }
+  if !pending.is_empty() {
+    let stats = optimize_egraph_region(
+      func, pending, limits, ruleset, work_limits, external_constants,
+    )
+    aggregate = merge_egraph_optimize_stats(aggregate, stats)
+  }
+  for entry in rewritten_blocks {
+    let (block, rewritten) = entry
+    block.instructions = rewritten
+  }
+  aggregate
+}
+
+///|
+/// Optimize one bounded region spanning one or more block slices. Definitions
+/// outside the region are opaque leaves, except constants, so construction
+/// can never recursively pull the rest of a large function into this graph.
+fn optimize_egraph_region(
+  func : Function,
+  slices : Array[EGraphRegionSlice],
+  limits : @egraph.SaturationLimits,
+  ruleset : @egraph.IndexedRuleSet,
+  work_limits : EGraphWorkLimits,
+  external_constants : Map[Int, Int64],
+) -> EGraphOptimizeStats {
+  let builder = EGraphBuilder::new_for_region(
+    limits, ruleset, work_limits, external_constants,
+  )
+  for slice in slices {
+    for index in slice.context_start..<slice.end {
+      builder.register_def(slice.instructions[index])
+    }
+  }
+  let value_stack : Array[(Value, Bool)] = []
+  for slice in slices {
+    for index in slice.context_start..<slice.end {
+      let inst = slice.instructions[index]
       if inst.first_result() is Some(v) &&
-        v.id >= 0 &&
-        v.id < builder.def_eop_map.length() &&
-        builder.def_eop_map[v.id] is Some(_) {
+        builder.def_eop_map.get(v.id) is Some(_) {
         builder.add_value(v, value_stack) |> ignore
       }
     }
   }
-
-  // Run one saturation pass on the function-wide e-graph.
   builder.optimize()
   let egraph = builder.get_egraph()
-  // Extraction results are shared by every elaboration site, so the fixpoint
-  // runs once here rather than per value.
-  let best_nodes = egraph.best_nodes()
-  let total_classes = egraph.num_classes()
-  let total_nodes = egraph.num_nodes()
-  let total_rule_applications = egraph.last_rule_applications()
+  let best_nodes = egraph.best_nodes_with_budget(builder.extraction_work_budget)
+  let nodes = egraph.num_nodes()
+  let mut changed = false
 
-  // Rewrite blocks with scoped representatives along the dominator tree.
-  // This mirrors Cranelift's ScopedHashMap elaboration direction: each block
-  // sees dominating representatives, can refine them locally, and restores on
-  // scope exit.
-  // The dominator tree is walked with `visit_dominator_tree`'s explicit
-  // stack rather than native recursion, so a deep block chain costs heap
-  // (ISS-380). Entering a block rewrites it and returns the bindings it
-  // introduced; the matching exit restores them.
-  fn rewrite_block(block_id : Int) -> (Array[(RepKey, Value?)], Bool) {
-    let idx = analysis.block_idx[block_id]
-    guard idx >= 0 else { return ([], true) }
-    let block = func.blocks[idx]
-    let scoped_entries : Array[(RepKey, Value?)] = []
-    fn bind_rep(builder : EGraphBuilder, value : Value) -> Unit {
-      if is_cheap_rematerializable_value(value, builder.def_map) {
-        return
-      }
-      if value.id >= 0 &&
-        value.id < builder.value_map.length() &&
-        builder.value_map[value.id] is Some(class_id) {
-        let canonical = builder.egraph.find(class_id)
-        let key : RepKey = { class_id: canonical.0, ty: value.ty, }
-        let previous = builder.class_to_value.get(key)
-        let should_bind = previous is None
-        if should_bind {
-          scoped_entries.push((key, previous))
-          builder.class_to_value.set(key, value)
-        }
+  fn bind_rep(value : Value) -> Unit {
+    if builder.is_cheap_rematerializable(value) {
+      return
+    }
+    if builder.value_map.get(value.id) is Some(class_id) {
+      let canonical = builder.egraph.find(class_id)
+      let key : RepKey = { class_id: canonical.0, ty: value.ty, }
+      if builder.class_to_value.get(key) is None {
+        builder.class_to_value.set(key, value)
       }
     }
+  }
 
-    for pair in block.params {
+  for slice in slices {
+    // Never carry a representative from one block into another. The graph may
+    // span sibling blocks for amortization, but reuse remains dominance-safe.
+    builder.class_to_value.clear()
+    for pair in slice.block.params {
       let (param, _) = pair
-      bind_rep(builder, param)
+      bind_rep(param)
     }
-
-    // Apply optimizations: constant folding, operand rewriting, and
-    // elaboration. Elaborated instructions are spliced in ahead of the
-    // instruction that needed them, so the block is rebuilt rather
-    // than mutated in place.
-    let rewritten : Array[Inst] = []
-    for inst in block.instructions {
-      for operand in inst.operands {
-        bind_rep(builder, operand)
+    // Read-only context instructions precede this slice in the same block, so
+    // their operands and results dominate every rewritten instruction here.
+    // Bind them without rewriting or emitting them a second time.
+    for index in slice.context_start..<slice.start {
+      let context_inst = slice.instructions[index]
+      for operand in context_inst.operands {
+        bind_rep(operand)
       }
-      for i in 0..<inst.operands.length() {
-        let operand = inst.operands[i]
+      if context_inst.first_result() is Some(result) {
+        bind_rep(result)
+      }
+    }
+    for index in slice.start..<slice.end {
+      let inst = slice.instructions[index]
+      for operand in inst.operands {
+        bind_rep(operand)
+      }
+      for operand_index in 0..<inst.operands.length() {
+        let operand = inst.operands[operand_index]
         if builder.get_simplified_operand(operand) is Some(simplified) {
-          inst.operands[i] = simplified
+          inst.operands[operand_index] = simplified
           changed = true
         }
       }
-
       if inst.first_result() is Some(v) &&
         builder.get_simplified_opcode(v) is Some(op) {
         if op is Scalar(IntConst(c)) {
-          let mut inst_changed = false
           match inst.opcode {
             Scalar(IntConst(old_c)) =>
-              if old_c != c || inst.operands.length() > 0 {
+              if old_c != c || !inst.operands.is_empty() {
                 inst.opcode = Scalar(IntConst(c))
                 inst.operands.clear()
-                inst_changed = true
+                changed = true
               }
             _ => {
               inst.opcode = Scalar(IntConst(c))
               inst.operands.clear()
-              inst_changed = true
+              changed = true
             }
-          }
-          if inst_changed {
-            changed = true
           }
         } else if inst.opcode != op {
           inst.opcode = op
           changed = true
         }
       } else {
-        // Elaboration may prepend instructions that build the operands
-        // the rewritten form needs; those dominate every later use.
-        let before = rewritten.length()
-        if builder.elaborate_inst(func, best_nodes, inst, rewritten) {
+        let before = slice.rewritten.length()
+        if builder.elaborate_inst(func, best_nodes, inst, slice.rewritten) {
           changed = true
         }
-        for i in before..<rewritten.length() {
-          if rewritten[i].first_result() is Some(v) {
-            bind_rep(builder, v)
+        for emitted_index in before..<slice.rewritten.length() {
+          if slice.rewritten[emitted_index].first_result() is Some(v) {
+            bind_rep(v)
           }
         }
       }
-
-      rewritten.push(inst)
+      slice.rewritten.push(inst)
       if inst.first_result() is Some(v) {
         builder.register_def(inst)
-        bind_rep(builder, v)
+        bind_rep(v)
       }
     }
-    block.instructions = rewritten
-    (scoped_entries, true)
   }
-
-  if analysis.cfg.is_valid(0) {
-    builder.class_to_value.clear()
-    visit_dominator_tree(analysis.domtree, 0, rewrite_block, fn(
-      scoped_entries,
-    ) {
-      for entry in scoped_entries.rev_iter() {
-        let (key, previous) = entry
-        match previous {
-          Some(value) => builder.class_to_value.set(key, value)
-          None => builder.class_to_value.remove(key)
-        }
-      }
-    })
+  {
+    changed,
+    total_classes: egraph.num_classes(),
+    total_nodes: nodes,
+    total_rule_applications: egraph.last_rule_applications(),
+    total_rule_attempts: egraph.last_rule_attempts(),
+    total_extraction_work: egraph.last_extraction_work(),
+    total_elaborated_instructions: builder.elaborated_instructions,
+    regions: 1,
+    peak_nodes: nodes,
+    budget_exhausted: egraph.last_saturation_budget_exhausted() ||
+    egraph.last_extraction_budget_exhausted() ||
+    builder.elaboration_budget_exhausted,
   }
-  { changed, total_classes, total_nodes, total_rule_applications, }
 }

@@ -1769,3 +1769,31 @@ test "merge reports progress independently of which side becomes root" {
   inspect(eg.merge_changed(small, big), content="false")
   inspect(eg.merge_changed(big, small), content="false")
 }
+
+///|
+test "aggregate saturation budget caps rule attempts" {
+  let eg = EGraph::EGraph()
+  let x = eg.add_var(1)
+  let zero = eg.add_const(0)
+  eg.add_add(x, zero) |> ignore
+  eg.saturate_indexed_with_budget(
+    get_global_ruleset(),
+    10,
+    SaturationLimits::cranelift_default(),
+    SaturationBudget(100, 1, 100),
+  )
+  |> ignore
+  inspect(eg.last_rule_attempts(), content="1")
+  inspect(eg.last_saturation_budget_exhausted(), content="true")
+}
+
+///|
+test "aggregate extraction budget returns a safe partial table" {
+  let eg = EGraph::EGraph()
+  let x = eg.add_var(1)
+  let one = eg.add_const(1)
+  eg.add_add(x, one) |> ignore
+  eg.best_nodes_with_budget(1) |> ignore
+  inspect(eg.last_extraction_work(), content="1")
+  inspect(eg.last_extraction_budget_exhausted(), content="true")
+}
