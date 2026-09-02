@@ -13,7 +13,7 @@ keywords = [ "wasm", "jit", "runtime", "native" ]
 description = "Wasmoon-specific JIT integration and native runtime glue"
 
 import {
-  "moonbitlang/x@0.4.48",
+  "moonbitlang/x@0.5.1",
   "Milky2018/wasm_core@0.14.0",
   "Milky2018/wasm_milkir@0.14.0",
   "Milky2018/milkir@0.14.0",
