@@ -15,7 +15,7 @@ pub fn lower_to_sink(@milkir.Function, @wasm_milkir.WasmValidationContext, Envir
 
 // Types and methods
 type Environment
-pub fn Environment::new((Int) -> @native_types.CodeSymbol, (Int) -> @native_types.EnvironmentField, @native_types.EnvironmentField, (Int) -> @native_types.EnvironmentField, (Int) -> Int, (@wasm_milkir.WasmRuntimeHelper) -> @native_types.ExternalSymbol) -> Self
+pub fn Environment::new((Int) -> @native_types.CodeSymbol, (Int) -> @native_types.EnvironmentField, @native_types.EnvironmentField, (Int) -> @native_types.EnvironmentField, (Int) -> @native_types.EnvironmentField, (Int) -> Int, (@wasm_milkir.WasmRuntimeHelper) -> @native_types.ExternalSymbol) -> Self
 
 // Type aliases
 

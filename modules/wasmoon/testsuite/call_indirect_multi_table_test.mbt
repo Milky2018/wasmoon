@@ -29,3 +29,31 @@ test "call_indirect with multiple tables" {
   let result4 = compare_jit_interp(source, "call-2", [I32(2), I32(3), I32(1)])
   inspect(result4, content="matched")
 }
+
+///|
+/// Non-zero tables use the table array in VMContext rather than table 0's
+/// dedicated fast-path fields. Their live base and size must move together.
+test "call_indirect uses live bounds after growing a non-zero table" {
+  let source =
+    #|(module
+    #|  (type $result-i32 (func (result i32)))
+    #|  (table 1 funcref)
+    #|  (table $target 1 2 funcref)
+    #|  (func $answer (type $result-i32) (result i32)
+    #|    i32.const 42)
+    #|  (elem declare func $answer)
+    #|  (func (export "test") (result i32)
+    #|    ref.null func
+    #|    i32.const 1
+    #|    table.grow $target
+    #|    drop
+    #|    i32.const 1
+    #|    ref.func $answer
+    #|    table.set $target
+    #|    i32.const 1
+    #|    call_indirect $target (type $result-i32)))
+  inspect(
+    compare_jit_interp_with_opt_level(source, "test", [], 2),
+    content="matched",
+  )
+}

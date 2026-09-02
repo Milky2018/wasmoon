@@ -644,6 +644,7 @@ fn lower_direct_operation(
     GcRefFromBits => Some(CarrierMove(I64, GcRef64))
     Select if result_types.get(0) is Some(V128) => Some(VectorSelect)
     Select if result_types.get(0) is Some(ty) => Some(Select(ty))
+    SpectreGuard => Some(SpectreGuard)
     Vector(Splat(lane)) => Some(VectorSplat(lane))
     Vector(ExtractLane(lane, index, extension)) =>
       Some(VectorExtractLane(lane, index, extension))

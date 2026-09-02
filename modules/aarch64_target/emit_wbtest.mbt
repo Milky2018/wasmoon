@@ -31,6 +31,37 @@ test "AArch64 stack access encodings preserve width and scaled offset" {
 }
 
 ///|
+test "AArch64 Spectre guard emits conditional select followed by CSDB" {
+  let buffer = CodeBuffer::new()
+  emit_spectre_guard(
+    buffer,
+    @vcode.PhysicalReg::new(0, Int),
+    @vcode.PhysicalReg::new(1, Int),
+    @vcode.PhysicalReg::new(2, Int),
+    @vcode.PhysicalReg::new(3, Int),
+  )
+  debug_inspect(
+    buffer.code,
+    content=(
+      #|[
+      #|  0x1f,
+      #|  0x00,
+      #|  0x00,
+      #|  0x71,
+      #|  0x23,
+      #|  0x10,
+      #|  0x82,
+      #|  0x9a,
+      #|  0x9f,
+      #|  0x22,
+      #|  0x03,
+      #|  0xd5,
+      #|]
+    ),
+  )
+}
+
+///|
 test "AArch64 far stack accesses use IP0 and fall back to IP1 on conflict" {
   let buffer = CodeBuffer::new()
   emit_stack_access(buffer, false, I32, @vcode.PhysicalReg::new(0, Int), 17600)

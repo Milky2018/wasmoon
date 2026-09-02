@@ -281,6 +281,7 @@ pub(all) enum AArch64Inst {
   Move(@native_types.ValueType)
   CarrierMove(@native_types.ValueType, @native_types.ValueType)
   Select(@native_types.ValueType)
+  SpectreGuard
   VectorSelect
   VectorSplat(@native_lowering.VectorLane)
   VectorExtractLane(@native_lowering.VectorLane, Int, @native_types.Signedness?)

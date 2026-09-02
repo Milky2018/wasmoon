@@ -85,3 +85,47 @@ test "call_indirect_block_last" {
   let result = compare_jit_interp(source, "test", [])
   inspect(result, content="matched")
 }
+
+///|
+/// A compiled indirect call must use the table's live size and base. Both can
+/// change when `table.grow` reallocates the runtime table.
+test "call_indirect uses live table bounds after grow" {
+  let source =
+    #|(module
+    #|  (type $result-i32 (func (result i32)))
+    #|  (table 1 2 funcref)
+    #|  (func $answer (type $result-i32) (result i32)
+    #|    i32.const 42)
+    #|  (elem declare func $answer)
+    #|  (func (export "test") (result i32)
+    #|    ref.null func
+    #|    i32.const 1
+    #|    table.grow 0
+    #|    drop
+    #|    i32.const 1
+    #|    ref.func $answer
+    #|    table.set 0
+    #|    i32.const 1
+    #|    call_indirect (type $result-i32)))
+  inspect(
+    compare_jit_interp_with_opt_level(source, "test", [], 2),
+    content="matched",
+  )
+}
+
+///|
+test "call_indirect traps on the live table bound" {
+  let source =
+    #|(module
+    #|  (type $result-i32 (func (result i32)))
+    #|  (table 1 funcref)
+    #|  (func (export "test") (result i32)
+    #|    i32.const 1
+    #|    call_indirect (type $result-i32)))
+  let result = compare_jit_interp_with_opt_level(source, "test", [], 2)
+  inspect(compare_result_is_match(result), content="true")
+  inspect(
+    compare_result_errors_contain(result, "out of bounds"),
+    content="true",
+  )
+}

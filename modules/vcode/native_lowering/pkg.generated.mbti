@@ -278,6 +278,7 @@ pub(all) enum Operation {
   StackAddress(@native_types.StackObject)
   Copy
   Select
+  SpectreGuard
   GcRefAddress
   GcRefFromBits
   PointerOffset

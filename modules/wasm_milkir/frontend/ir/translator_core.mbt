@@ -31,9 +31,6 @@ priv struct Translator {
   // Memory is 64-bit indexed (for memory64 proposal)
   // memory_is_64[i] = true if memory i uses 64-bit addresses
   memory_is_64 : Array[Bool]
-  // Table sizes for bounds checking
-  // table_sizes[i] = number of elements in table i
-  table_sizes : Array[Int]
   // Number of wasm function parameters (excludes vmctx params)
   // Used to distinguish params from locals in self.locals array
   num_wasm_params : Int
@@ -287,12 +284,9 @@ fn Translator::Translator(
   }
   // Calculate table base offsets for multi-table support
   // All tables are flattened into a single indirect_table at runtime
-  let table_sizes : Array[Int] = []
   let table_is_64 : Array[Bool] = []
   let table_elem_types : Array[Type] = []
   for table in tables {
-    let size = table.type_.limits.min.to_int() // Tables always use 32-bit limits
-    table_sizes.push(size)
     table_is_64.push(table.type_.is_table64)
     table_elem_types.push(type_from_wasm(table.type_.elem_type))
   }
@@ -310,7 +304,6 @@ fn Translator::Translator(
     func_result_types,
     memory_max,
     memory_is_64,
-    table_sizes,
     table_is_64,
     table_elem_types,
     num_wasm_params: func_type.params.length(),

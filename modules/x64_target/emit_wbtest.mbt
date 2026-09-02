@@ -11,6 +11,22 @@ test "x64 pairwise i16 add uses horizontal lane semantics" {
 }
 
 ///|
+test "x64 Spectre guard emits a branch-free conditional move" {
+  let buffer = CodeBuffer::new()
+  emit_spectre_guard(
+    buffer,
+    @vcode.PhysicalReg::new(0, Int),
+    @vcode.PhysicalReg::new(1, Int),
+    @vcode.PhysicalReg::new(2, Int),
+    @vcode.PhysicalReg::new(3, Int),
+  )
+  debug_inspect(
+    buffer.code,
+    content="[0x85, 0xc0, 0x48, 0x89, 0xd3, 0x48, 0x0f, 0x45, 0xd9]",
+  )
+}
+
+///|
 test "x64 stack allocation probes every guard-page interval" {
   let buffer = CodeBuffer::new()
   emit_sp_adjust(buffer, true, 8192)

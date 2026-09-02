@@ -849,6 +849,23 @@ fn emit_vector_select(
 }
 
 ///|
+fn emit_spectre_guard(
+  buffer : CodeBuffer,
+  condition : @vcode.PhysicalReg,
+  true_address : @vcode.PhysicalReg,
+  false_address : @vcode.PhysicalReg,
+  destination : @vcode.PhysicalReg,
+) -> Unit {
+  buffer.x86_emit_test_rr32(condition.id, condition.id)
+  if destination == true_address {
+    buffer.x86_emit_cmovcc_rr(RawEq, destination.id, false_address.id)
+  } else {
+    buffer.x86_emit_mov_rr(destination.id, false_address.id)
+    buffer.x86_emit_cmovcc_rr(RawNe, destination.id, true_address.id)
+  }
+}
+
+///|
 fn emit_vector_splat(
   buffer : CodeBuffer,
   lane : @lowering.VectorLane,
@@ -3407,6 +3424,10 @@ fn emit_instruction(
         V128 => raise InvalidFloatInstruction
       }
     }
+    SpectreGuard =>
+      // CMOV preserves the bounds-condition data dependency without creating
+      // a second branch for the processor to mispredict.
+      emit_spectre_guard(buffer, reg(0), reg(1), reg(2), reg(3))
     VectorSelect => emit_vector_select(buffer, reg(0), reg(1), reg(2), reg(3))
     VectorSplat(lane) => emit_vector_splat(buffer, lane, reg(0), reg(1))
     VectorExtractLane(lane, index, extension) =>

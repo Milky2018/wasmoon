@@ -768,30 +768,8 @@ fn Translator::translate_call_indirect(
     // Pop callee (element index within the table)
     let elem_idx = self.pop()
 
-    // Bounds check: elem_idx must be < table_size[table_idx]
-    // Generate: if (elem_idx >= table_size) trap "out of bounds table access"
-    if table_idx < self.table_sizes.length() {
-      let table_size = self.table_sizes[table_idx]
-      let size_const = self.builder.iconst(elem_idx.ty, table_size.to_int64())
-      let out_of_bounds = self.builder.icmp_uge(elem_idx, size_const)
-
-      // Create trap block and continuation block
-      let trap_block = self.builder.create_block()
-      let continue_block = self.builder.create_block()
-
-      // Branch: if out_of_bounds goto trap_block else continue_block
-      self.builder.brnz(out_of_bounds, trap_block, continue_block)
-
-      // Trap block: emit trap instruction
-      self.builder.switch_to_block(trap_block)
-      self.builder.trap("out of bounds table access")
-
-      // Continue block: proceed with call
-      self.builder.switch_to_block(continue_block)
-    }
-
-    // Multi-table support: use elem_idx directly (no flattening needed)
-    // The lowering phase handles table access via indirect_tables[table_idx]
+    // Native lowering reads the live table size and base because table.grow can
+    // change both, and guards the resulting address against speculation.
     // Pop arguments
     let args : Array[Value] = []
     for _ in 0..<func_type.params.length() {

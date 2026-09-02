@@ -201,6 +201,7 @@ pub(all) enum AArch64Inst {
   Move(@native.ValueType)
   CarrierMove(@native.ValueType, @native.ValueType)
   Select(@native.ValueType)
+  SpectreGuard
   VectorSelect
   VectorSplat(@lowering.VectorLane)
   VectorExtractLane(@lowering.VectorLane, Int, @native.Signedness?)
@@ -928,6 +929,15 @@ fn verify_target_vcode(
           0,
         )
       }
+      SpectreGuard =>
+        require_instruction_shape(
+          function,
+          instruction,
+          [I32, Ptr64, Ptr64],
+          [Ptr64],
+          false,
+          0,
+        )
       VectorSelect =>
         require_instruction_shape(
           function,

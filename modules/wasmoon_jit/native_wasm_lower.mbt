@@ -51,6 +51,19 @@ fn wasmoon_native_environment(
       field_paths.set(field.name, path)
       field
     },
+    fn(index) {
+      let field = @native.EnvironmentField::new(
+        "wasmoon.vmctx.table.\{index}.size",
+        I64,
+      )
+      let path = if index == 0 {
+        [layout.table0_elements_offset]
+      } else {
+        [layout.table_sizes_offset, index * layout.pointer_stride]
+      }
+      field_paths.set(field.name, path)
+      field
+    },
     fn(raw_type_index) {
       if use_subtype_indirect_check {
         return raw_type_index
