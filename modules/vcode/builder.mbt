@@ -91,6 +91,24 @@ fn[Inst] Builder::validate_inputs(
 }
 
 ///|
+fn[Inst] Builder::validate_unconstrained_inputs(
+  self : Builder[Inst],
+  inputs : Array[Value],
+  metadata : InstructionMetadata,
+) -> Unit raise VCodeBuildError {
+  for value in inputs {
+    if !self.function.owns_value(value) {
+      raise ForeignValue(value~)
+    }
+  }
+  for root in metadata.live_gc_roots {
+    if !self.function.owns_value(root) {
+      raise ForeignValue(value=root)
+    }
+  }
+}
+
+///|
 fn[Inst] Builder::validate_instruction(
   self : Builder[Inst],
   inputs : Array[Input],
@@ -187,6 +205,7 @@ fn[Inst] Builder::commit_instruction(
   clobbers : Array[PhysicalReg],
   metadata : InstructionMetadata,
   input_tie_ids : Array[Int]?,
+  payloads_owned : Bool,
 ) -> (Instruction, Array[Value]) raise VCodeBuildError {
   let instruction = Instruction::new(
     self.function.owner,
@@ -270,13 +289,102 @@ fn[Inst] Builder::commit_instruction(
     clobber_start,
     clobber_count: clobbers.length(),
     results,
-    successors: successors.map(edge => edge.copy()),
-    metadata: metadata.copy(),
+    successors: if payloads_owned {
+      successors
+    } else {
+      successors.map(edge => edge.copy())
+    },
+    metadata: if payloads_owned {
+      metadata
+    } else {
+      metadata.copy()
+    },
   })
   match role {
     Body => self.function.blocks[block.id].body.push(instruction)
     Terminator => self.function.blocks[block.id].terminator = Some(instruction)
   }
+  (instruction, results)
+}
+
+///|
+/// Commit the common target-selected instruction shape directly into the flat
+/// allocation tables. Inputs and outputs have no fixed, tied, or preference
+/// constraints; callers validate ownership and local facts before mutation.
+fn[Inst] Builder::commit_unconstrained_body(
+  self : Builder[Inst],
+  block : Block,
+  inst : Inst,
+  inputs : Array[Value],
+  output_types : Array[ValueType],
+  clobbers : Array[PhysicalReg],
+  metadata : InstructionMetadata,
+) -> (Instruction, Array[Value]) {
+  let instruction = Instruction::new(
+    self.function.owner,
+    self.function.instructions.length(),
+  )
+  let results : Array[Value] = []
+  for ty in output_types {
+    results.push(
+      self.function.allocate_value(ty, InstructionResult(instruction)),
+    )
+  }
+  let operand_start = self.function.operands.length()
+  for value in inputs {
+    self.function.operands.push({
+      vreg: {
+        id: value.id,
+        class: reg_class_for_value_type(self.function.values[value.id].ty),
+      },
+      role: Use,
+      constraint: AnyReg,
+      preference: None,
+      timing: Early,
+      tie_id: -1,
+    })
+  }
+  for index, ty in output_types {
+    self.function.operands.push({
+      vreg: { id: results[index].id, class: reg_class_for_value_type(ty), },
+      role: Def,
+      constraint: AnyReg,
+      preference: None,
+      timing: Late,
+      tie_id: -1,
+    })
+  }
+  for root in metadata.live_gc_roots {
+    self.function.operands.push({
+      vreg: {
+        id: root.id,
+        class: reg_class_for_value_type(self.function.values[root.id].ty),
+      },
+      role: Use,
+      constraint: PreservedHome,
+      preference: None,
+      timing: Late,
+      tie_id: -1,
+    })
+  }
+  let clobber_start = self.function.clobbers.length()
+  self.function.clobbers.push_iter(clobbers.iter())
+  self.function.instructions.push({
+    inst,
+    parent: block,
+    role: Body,
+    operand_start,
+    operand_count: inputs.length() + output_types.length(),
+    allocation_operand_count: inputs.length() +
+    output_types.length() +
+    metadata.live_gc_roots.length(),
+    clobber_start,
+    clobber_count: clobbers.length(),
+    results,
+    successors: [],
+    metadata,
+  })
+  self.function.blocks[block.id].body.push(instruction)
   (instruction, results)
 }
 
@@ -302,6 +410,7 @@ pub fn[Inst] Builder::append_body(
     clobbers,
     metadata,
     input_tie_ids,
+    false,
   )
 }
 
@@ -332,6 +441,7 @@ pub fn[Inst] Builder::set_terminator(
     clobbers,
     metadata,
     input_tie_ids,
+    false,
   ).0
 }
 

@@ -145,6 +145,61 @@ test "CheckedBuilder preserves operand checks on the single validation path" {
 }
 
 ///|
+test "CheckedBuilder unconstrained path preserves ownership and VCode facts" {
+  let builder : CheckedBuilder[TestInst] = CheckedBuilder::new(
+    "checked_unconstrained",
+    [I64],
+  )
+  let foreign : CheckedBuilder[TestInst] = CheckedBuilder::new("foreign", [I64])
+  let entry = builder.entry_block()
+  try
+    builder.append_body_unconstrained(
+      entry,
+      Add,
+      [foreign.parameter(0)],
+      [I64],
+      [],
+      InstructionMetadata::empty(),
+    )
+    |> ignore
+  catch {
+    ForeignValue(_) => ()
+    _ => fail("expected foreign input rejection")
+  } noraise {
+    _ => fail("expected foreign input rejection")
+  }
+  let (_, results) = builder.append_body_unconstrained(
+    entry,
+    Add,
+    [builder.parameter(0)],
+    [I64],
+    [PhysicalReg::new(9, Int)],
+    InstructionMetadata::empty(),
+  )
+  builder.set_terminator(
+    entry,
+    Return,
+    [Input::any(results[0])],
+    [],
+    [],
+    InstructionMetadata::empty(),
+  )
+  |> ignore
+  let function = builder.finish()
+  verify_selected(function)
+  inspect(
+    function.summary(),
+    content=(
+      #|vcode checked_unconstrained(v0:i64)
+      #|block0:
+      #|  i0 Add uses=[v0:any@early] defs=[v1:any@late] clobbers=[p9:int]
+      #|  i1 Return uses=[v1:any@early]
+      #|
+    ),
+  )
+}
+
+///|
 test "Builder rejects duplicate tied outputs before mutation" {
   let builder : Builder[TestInst] = Builder::new("duplicate_tie", [I64])
   let entry = builder.entry_block()

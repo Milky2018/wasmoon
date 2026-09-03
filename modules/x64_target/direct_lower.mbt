@@ -33,6 +33,47 @@ fn direct_source_metadata(
 }
 
 ///|
+/// Reusable lowering views for the common unconstrained VCode path. Checked
+/// VCode construction consumes these arrays synchronously and stores normalized
+/// operands, so the buffers can be cleared after every selected instruction.
+priv struct DirectLoweringScratch {
+  operands : Array[@vcode.Value]
+  operand_types : Array[@native.ValueType]
+  roots : Array[@vcode.Value]
+  inputs : Array[@vcode.Input]
+  outputs : Array[@vcode.Output]
+}
+
+///|
+fn DirectLoweringScratch::new() -> DirectLoweringScratch {
+  { operands: [], operand_types: [], roots: [], inputs: [], outputs: [], }
+}
+
+///|
+fn DirectLoweringScratch::any_inputs(
+  self : DirectLoweringScratch,
+  values : Array[@vcode.Value],
+) -> Array[@vcode.Input] {
+  self.inputs.clear()
+  for value in values {
+    self.inputs.push(@vcode.Input::any(value))
+  }
+  self.inputs
+}
+
+///|
+fn DirectLoweringScratch::any_outputs(
+  self : DirectLoweringScratch,
+  types : Array[@native.ValueType],
+) -> Array[@vcode.Output] {
+  self.outputs.clear()
+  for ty in types {
+    self.outputs.push(@vcode.Output::any(ty))
+  }
+  self.outputs
+}
+
+///|
 fn lower_direct_operation(
   context : LoweringContext,
   builder : @vcode.CheckedBuilder[X64Inst],
@@ -47,6 +88,7 @@ fn lower_direct_operation(
   source_location : @native.SourceLocation?,
   stack_map : @native.StackMapMetadata?,
   stack_object : (@native.StackObject) -> X64StackObject,
+  scratch : DirectLoweringScratch,
 ) -> Array[@vcode.Value] raise X64LowerError {
   if operation is IntMultiplyAdd {
     guard optional_gpr_width(result_types.get(0)) is Some(width) else {
@@ -57,7 +99,7 @@ fn lower_direct_operation(
         block,
         IntBinary(width, Mul),
         [@vcode.Input::any(operands[1]), @vcode.Input::any(operands[2])],
-        result_types.map(@vcode.Output::any),
+        scratch.any_outputs(result_types),
         @vcode.InstructionMetadata::empty(),
       )[0]
     return append_body(
@@ -65,7 +107,7 @@ fn lower_direct_operation(
       block,
       IntBinary(width, Add),
       [@vcode.Input::any(operands[0]), @vcode.Input::any(product)],
-      result_types.map(@vcode.Output::any),
+      scratch.any_outputs(result_types),
       direct_source_metadata(
         source_location,
         stack_map,
@@ -91,7 +133,7 @@ fn lower_direct_operation(
         block,
         IntBinary(width, Lsl),
         [@vcode.Input::any(operands[1]), @vcode.Input::any(constant)],
-        result_types.map(@vcode.Output::any),
+        scratch.any_outputs(result_types),
         @vcode.InstructionMetadata::empty(),
       )[0]
     return append_body(
@@ -99,7 +141,7 @@ fn lower_direct_operation(
       block,
       IntBinary(width, Add),
       [@vcode.Input::any(operands[0]), @vcode.Input::any(shifted)],
-      result_types.map(@vcode.Output::any),
+      scratch.any_outputs(result_types),
       direct_source_metadata(
         source_location,
         stack_map,
@@ -139,7 +181,7 @@ fn lower_direct_operation(
       block,
       IntBinary(width, selected),
       [@vcode.Input::any(operands[0]), @vcode.Input::any(constant)],
-      result_types.map(@vcode.Output::any),
+      scratch.any_outputs(result_types),
       direct_source_metadata(
         source_location,
         stack_map,
@@ -179,7 +221,7 @@ fn lower_direct_operation(
       block,
       IntBinary(width, selected),
       [@vcode.Input::any(operands[0]), @vcode.Input::any(constant)],
-      result_types.map(@vcode.Output::any),
+      scratch.any_outputs(result_types),
       direct_source_metadata(
         source_location,
         stack_map,
@@ -232,7 +274,7 @@ fn lower_direct_operation(
         builder,
         block,
         TrapIfSignedDivOverflow(width),
-        operands.map(@vcode.Input::any),
+        scratch.any_inputs(operands),
         [],
         direct_source_metadata(
           source_location,
@@ -364,8 +406,8 @@ fn lower_direct_operation(
           FloatToInt(source, result, signedness)
         },
       ),
-      operands.map(@vcode.Input::any),
-      result_types.map(@vcode.Output::any),
+      scratch.any_inputs(operands),
+      scratch.any_outputs(result_types),
       direct_source_metadata(
         source_location,
         stack_map,
@@ -383,8 +425,8 @@ fn lower_direct_operation(
         builder,
         block,
         IntUnary(width, Rbit),
-        operands.map(@vcode.Input::any),
-        result_types.map(@vcode.Output::any),
+        scratch.any_inputs(operands),
+        scratch.any_outputs(result_types),
         @vcode.InstructionMetadata::empty(),
       )[0]
     let results = append_body(
@@ -392,7 +434,7 @@ fn lower_direct_operation(
       block,
       IntUnary(width, Clz),
       [@vcode.Input::any(reversed)],
-      result_types.map(@vcode.Output::any),
+      scratch.any_outputs(result_types),
       direct_source_metadata(
         source_location,
         stack_map,
@@ -411,7 +453,7 @@ fn lower_direct_operation(
         block,
         IntUnary(width, Neg),
         [@vcode.Input::any(operands[1])],
-        result_types.map(@vcode.Output::any),
+        scratch.any_outputs(result_types),
         @vcode.InstructionMetadata::empty(),
       )[0]
     let results = append_body(
@@ -419,7 +461,7 @@ fn lower_direct_operation(
       block,
       IntBinary(width, Ror),
       [@vcode.Input::any(operands[0]), @vcode.Input::any(negated_shift)],
-      result_types.map(@vcode.Output::any),
+      scratch.any_outputs(result_types),
       direct_source_metadata(
         source_location,
         stack_map,
@@ -474,7 +516,7 @@ fn lower_direct_operation(
       builder,
       block,
       VectorReplaceLane(lane, index),
-      operands.map(@vcode.Input::any),
+      scratch.any_inputs(operands),
       [@vcode.Output::any(V128)],
       direct_source_metadata(
         source_location,
@@ -579,7 +621,7 @@ fn lower_direct_operation(
         ScalarLoad(spec.width, spec.extension, spec.result_type, spec.offset)
       },
       [@vcode.Input::any(address)],
-      result_types.map(@vcode.Output::any),
+      scratch.any_outputs(result_types),
       direct_source_metadata(
         source_location,
         stack_map,
@@ -883,17 +925,17 @@ fn lower_direct_operation(
   }
   let accumulator = @vcode.PhysicalReg::new(0, Int)
   let high = @vcode.PhysicalReg::new(2, Int)
-  let scratch = @vcode.PhysicalReg::new(11, Int)
+  let temp_reg = @vcode.PhysicalReg::new(11, Int)
   let inputs = match selected {
     IntHighMultiply(_, _) =>
       [
         @vcode.Input::fixed(selected_operands[0], accumulator),
-        @vcode.Input::fixed(selected_operands[1], scratch),
+        @vcode.Input::fixed(selected_operands[1], temp_reg),
       ]
     IntWithOverflow(_, Mul(_)) =>
       [
         @vcode.Input::fixed(selected_operands[0], accumulator),
-        @vcode.Input::fixed(selected_operands[1], scratch),
+        @vcode.Input::fixed(selected_operands[1], temp_reg),
       ]
     AtomicCompareExchange(_, _) =>
       [
@@ -903,7 +945,7 @@ fn lower_direct_operation(
       ]
     AtomicRmw(_, _, And | Or | Xor) =>
       [
-        @vcode.Input::fixed(selected_operands[0], scratch),
+        @vcode.Input::fixed(selected_operands[0], temp_reg),
         @vcode.Input::fixed(
           selected_operands[1],
           @vcode.PhysicalReg::new(10, Int),
@@ -917,7 +959,7 @@ fn lower_direct_operation(
           @vcode.PhysicalReg::new(10, Int),
         ),
       ]
-    _ => selected_operands.map(@vcode.Input::any)
+    _ => scratch.any_inputs(selected_operands)
   }
   let outputs = match selected {
     IntHighMultiply(_, _) => [@vcode.Output::fixed(result_types[0], high)]
@@ -932,7 +974,7 @@ fn lower_direct_operation(
       [@vcode.Output::fixed(result_types[0], accumulator).with_timing(Early)]
     AtomicCompareExchange(_, _) =>
       [@vcode.Output::fixed(result_types[0], accumulator).with_timing(Early)]
-    _ => result_types.map(@vcode.Output::any)
+    _ => scratch.any_outputs(result_types)
   }
   // Clobbers come from `X64Inst::mandatory_clobbers`.
   let results = append_body(
@@ -979,6 +1021,7 @@ pub struct DirectLoweringSession {
   priv blocks : Array[@vcode.Block]
   priv layout : Array[@vcode.Block]
   priv stack_objects : Array[DirectStackObjectRequest]
+  priv scratch : DirectLoweringScratch
   priv result_area : @vcode.Value?
   priv mut instruction_index : Int
   priv mut first_error : X64LowerError?
@@ -1109,6 +1152,7 @@ pub fn DirectLoweringSession::new(
     blocks: [entry],
     layout: [entry],
     stack_objects: [],
+    scratch: DirectLoweringScratch::new(),
     result_area,
     instruction_index: 0,
     first_error: None,
@@ -1133,6 +1177,19 @@ fn DirectLoweringSession::target_value(
   id : Int,
 ) -> @vcode.Value {
   self.values[id]
+}
+
+///|
+fn DirectLoweringSession::target_values_into(
+  self : DirectLoweringSession,
+  ids : Array[Int],
+  values : Array[@vcode.Value],
+) -> Array[@vcode.Value] {
+  values.clear()
+  for id in ids {
+    values.push(self.target_value(id))
+  }
+  values
 }
 
 ///|
@@ -1195,6 +1252,12 @@ fn DirectLoweringSession::emit(
   stack_map : @native.StackMapMetadata?,
 ) -> Array[Int] {
   let block = self.blocks[block_id]
+  let operands = self.target_values_into(operand_ids, self.scratch.operands)
+  self.scratch.operand_types.clear()
+  for id in operand_ids {
+    self.scratch.operand_types.push(self.value_types[id])
+  }
+  let roots = self.target_values_into(root_ids, self.scratch.roots)
   let results = if self.first_error is Some(_) {
     result_types.map(ty => append_placeholder(self.builder, block, ty))
   } else {
@@ -1205,16 +1268,17 @@ fn DirectLoweringSession::emit(
       block_id,
       self.instruction_index,
       operation,
-      self.target_values(operand_ids),
-      operand_ids.map(id => self.value_types[id]),
+      operands,
+      self.scratch.operand_types,
       result_types,
-      self.target_values(root_ids),
+      roots,
       source,
       stack_map,
       object => {
         let request = self.stack_objects[object.id]
         X64StackObject::new(object.id, request.size, request.alignment)
       },
+      self.scratch,
     ) catch {
       error => {
         self.record_error(error)

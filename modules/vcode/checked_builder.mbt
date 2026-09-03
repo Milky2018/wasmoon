@@ -171,6 +171,30 @@ pub fn[Inst] CheckedBuilder::append_body(
     clobbers,
     metadata,
     input_tie_ids,
+    true,
+  )
+  self.record_stack_map(stack_map_id)
+  result
+}
+
+///|
+/// Append the common target-selected instruction shape without materializing
+/// temporary `Input` and `Output` records. Values remain ownership-checked and
+/// all CheckedBuilder local invariants are enforced before mutation.
+pub fn[Inst] CheckedBuilder::append_body_unconstrained(
+  self : CheckedBuilder[Inst],
+  block : Block,
+  inst : Inst,
+  inputs : Array[Value],
+  output_types : Array[ValueType],
+  clobbers : Array[PhysicalReg],
+  metadata : InstructionMetadata,
+) -> (Instruction, Array[Value]) raise VCodeBuildError {
+  self.builder.require_body_open(block)
+  self.builder.validate_unconstrained_inputs(inputs, metadata)
+  let stack_map_id = self.validate_local_facts([], clobbers, metadata)
+  let result = self.builder.commit_unconstrained_body(
+    block, inst, inputs, output_types, clobbers, metadata,
   )
   self.record_stack_map(stack_map_id)
   result
@@ -204,6 +228,7 @@ pub fn[Inst] CheckedBuilder::set_terminator(
       clobbers,
       metadata,
       input_tie_ids,
+      true,
     ).0
   self.record_stack_map(stack_map_id)
   instruction

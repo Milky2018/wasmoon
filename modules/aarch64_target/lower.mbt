@@ -237,6 +237,28 @@ fn append_body(
 }
 
 ///|
+fn append_unconstrained_body(
+  builder : @vcode.CheckedBuilder[AArch64Inst],
+  block : @vcode.Block,
+  instruction : AArch64Inst,
+  inputs : Array[@vcode.Value],
+  output_types : Array[@native.ValueType],
+  metadata : @vcode.InstructionMetadata,
+) -> Array[@vcode.Value] raise AArch64LowerError {
+  let (_, results) = builder.append_body_unconstrained(
+    block,
+    instruction,
+    inputs,
+    output_types,
+    [],
+    metadata,
+  ) catch {
+    error => raise BuildFailure(cause=error)
+  }
+  results
+}
+
+///|
 fn terminator_call_metadata(
   source : @native.SourceLocation?,
   semantics : @native.OperationSemantics,

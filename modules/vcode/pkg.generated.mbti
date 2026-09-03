@@ -264,6 +264,7 @@ pub struct CheckedBuilder[Inst] {
   // private fields
 }
 pub fn[Inst] CheckedBuilder::append_body(Self[Inst], Block, Inst, Array[Input], Array[Output], Array[@allocation_types.PhysicalReg], InstructionMetadata) -> (Instruction, Array[Value]) raise VCodeBuildError
+pub fn[Inst] CheckedBuilder::append_body_unconstrained(Self[Inst], Block, Inst, Array[Value], Array[@native_types.ValueType], Array[@allocation_types.PhysicalReg], InstructionMetadata) -> (Instruction, Array[Value]) raise VCodeBuildError
 pub fn[Inst] CheckedBuilder::block_parameter(Self[Inst], Block, Int) -> Value raise VCodeBuildError
 pub fn[Inst] CheckedBuilder::create_block(Self[Inst], Array[@native_types.ValueType]) -> Block
 pub fn[Inst] CheckedBuilder::entry_block(Self[Inst]) -> Block
