@@ -1,6 +1,10 @@
 ///|
 fn test_block_instructions(func : Function, block : Block) -> Array[Inst] {
-  func.block_instruction_snapshot(block)
+  let instructions : Array[Inst] = []
+  for inst_id in block.instructions {
+    instructions.push(func.instructions[inst_id])
+  }
+  instructions
 }
 
 ///|

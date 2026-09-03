@@ -1390,23 +1390,6 @@ pub fn Function::block_instruction_at(
 }
 
 ///|
-/// Materialize a transient instruction snapshot for a transformation that
-/// rewrites a block while traversing its original layout.
-fn Function::block_instruction_snapshot(
-  self : Function,
-  block : Block,
-) -> Array[Inst] {
-  let snapshot : Array[Inst] = []
-  if !self.owns_block(block) {
-    return snapshot
-  }
-  for inst_id in block.instructions {
-    snapshot.push(self.instructions[inst_id])
-  }
-  snapshot
-}
-
-///|
 fn Function::defining_inst(self : Function, value : Value) -> Inst? {
   if !self.owns_value(value) || value.id < 0 || value.id >= self.values.length() {
     return None

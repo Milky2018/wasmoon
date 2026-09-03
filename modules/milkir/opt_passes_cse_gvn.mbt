@@ -305,7 +305,7 @@ fn compute_block_input_last_store_states(
   cfg : CFG,
   block_idx : Array[Int],
   ptr_base_infos : Array[PtrBaseInfo?],
-  block_instructions : (Int) -> Array[Inst],
+  block_instructions : (Int) -> ArrayView[InstId],
 ) -> @hashmap.HashMap[Int, LastStoreState] {
   let block_input : @hashmap.HashMap[Int, LastStoreState] = HashMap([])
   if !cfg.is_valid(0) {
@@ -321,7 +321,8 @@ fn compute_block_input_last_store_states(
       Some(existing) => existing.clone()
       None => LastStoreState()
     }
-    for inst in block_instructions(block_id) {
+    for inst_id in block_instructions(block_id) {
+      let inst = func.instructions[inst_id]
       update_last_store_state(
         state,
         inst,
@@ -513,20 +514,21 @@ fn collect_ptr_base_infos(
 
 ///|
 fn gvn_instruction_prefix(
+  func : Function,
   work_budget : Int,
   analysis : FunctionAnalysis,
-  block_instructions : (Int) -> Array[Inst],
+  block_instructions : (Int) -> ArrayView[InstId],
 ) -> Array[Inst] {
   let prefix : Array[Inst] = []
   fn enter(block_id : Int) -> (Unit, Bool) {
     if prefix.length() >= work_budget {
       return ((), false)
     }
-    for inst in block_instructions(block_id) {
+    for inst_id in block_instructions(block_id) {
       if prefix.length() >= work_budget {
         break
       }
-      prefix.push(inst)
+      prefix.push(func.instructions[inst_id])
     }
     ((), prefix.length() < work_budget)
   }
@@ -731,7 +733,7 @@ fn AcyclicOptimizer::new(
   func : Function,
   work_budget : Int,
   analysis : FunctionAnalysis,
-  source_block_instructions : (Int) -> Array[Inst],
+  source_block_instructions : (Int) -> ArrayView[InstId],
 ) -> AcyclicOptimizer {
   let memory_work_budget = if work_budget > 0 { work_budget } else { 0 }
   let mut total_instructions = 0
@@ -743,14 +745,14 @@ fn AcyclicOptimizer::new(
   let source = if complete_memory_analysis {
     let instructions : Array[Inst] = []
     for block in func.blocks {
-      for inst in source_block_instructions(block.id) {
-        instructions.push(inst)
+      for inst_id in source_block_instructions(block.id) {
+        instructions.push(func.instructions[inst_id])
       }
     }
     instructions
   } else {
     gvn_instruction_prefix(
-      memory_work_budget, analysis, source_block_instructions,
+      func, memory_work_budget, analysis, source_block_instructions,
     )
   }
   let ptr_base_infos = collect_ptr_base_infos(
@@ -789,14 +791,15 @@ fn AcyclicOptimizer::new(
 fn AcyclicOptimizer::process_block(
   self : AcyclicOptimizer,
   block_id : Int,
-  instructions : Array[Inst],
+  instructions : ArrayView[InstId],
 ) -> Array[Inst] {
   let last_store_state = match self.block_input_state.get(block_id) {
     Some(state) => state.clone()
     None => LastStoreState()
   }
   let rewritten : Array[Inst] = []
-  for inst in instructions {
+  for inst_id in instructions {
+    let inst = self.func.instructions[inst_id]
     let prefix : Array[Inst] = []
     if self.rewriter.rewrite_inst(inst, prefix) {
       self.result.mark_changed()
@@ -997,8 +1000,8 @@ fn run_acyclic_optimization_with_budget_and_analysis(
   work_budget : Int,
   analysis : FunctionAnalysis,
 ) -> AcyclicOptimizeStats {
-  let block_instructions = fn(block_id : Int) -> Array[Inst] {
-    func.block_instruction_snapshot(func.blocks[analysis.block_idx[block_id]])
+  let block_instructions = fn(block_id : Int) -> ArrayView[InstId] {
+    func.blocks[analysis.block_idx[block_id]].instructions[:]
   }
   let stream = AcyclicOptimizer::new(
     func, work_budget, analysis, block_instructions,
