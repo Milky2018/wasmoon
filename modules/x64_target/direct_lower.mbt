@@ -1252,6 +1252,20 @@ fn DirectLoweringSession::emit(
   stack_map : @native.StackMapMetadata?,
 ) -> Array[Int] {
   let block = self.blocks[block_id]
+  // I64 and Ptr64 are the same untraced 64-bit register representation.
+  // Preserve the semantic result type without creating another live range.
+  if operation is Convert(Bitcast(from, to)) &&
+    operand_ids is [operand_id] &&
+    result_types is [result_type] &&
+    self.value_types[operand_id] == from &&
+    result_type == to &&
+    ((from == I64 && to == Ptr64) || (from == Ptr64 && to == I64)) {
+    let id = self.values.length()
+    self.values.push(self.target_value(operand_id))
+    self.value_types.push(result_type)
+    self.instruction_index += 1
+    return [id]
+  }
   let operands = self.target_values_into(operand_ids, self.scratch.operands)
   self.scratch.operand_types.clear()
   for id in operand_ids {

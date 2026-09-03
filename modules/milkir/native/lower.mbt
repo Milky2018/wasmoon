@@ -406,6 +406,9 @@ fn lower_address(
   let pointer = lower_pointer_value(
     builder, values, value_types, facts, base, source, instruction_id,
   )
+  if facts.constants[offset.id] == Some(0UL) {
+    return pointer
+  }
   emit_one(
     builder,
     PointerOffset,

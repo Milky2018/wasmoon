@@ -123,7 +123,7 @@ priv struct EGraphBuilder {
   mut elaboration_budget_exhausted : Bool
   // Constants are cheap leaves even when their defining instruction belongs
   // to an earlier region. Other out-of-region definitions stay opaque Vars.
-  mut external_constants : Map[Int, Int64]
+  mut external_constants : Array[Int64?]
 }
 
 ///|
@@ -232,7 +232,7 @@ fn EGraphBuilder::new_with_limits_and_ruleset(
     remaining_elaboration_budget: work_limits.elaboration_instructions_per_region,
     elaborated_instructions: 0,
     elaboration_budget_exhausted: false,
-    external_constants: Map([]),
+    external_constants: [],
   }
 }
 
@@ -241,7 +241,7 @@ fn EGraphBuilder::new_for_region(
   saturation_limits : @egraph.SaturationLimits,
   ruleset : @egraph.IndexedRuleSet,
   work_limits : EGraphWorkLimits,
-  external_constants : Map[Int, Int64],
+  external_constants : Array[Int64?],
   region_table : EGraphRegionTable,
 ) -> EGraphBuilder {
   region_table.clear()
@@ -423,6 +423,18 @@ fn EGraphBuilder::lookup_value(
 }
 
 ///|
+fn EGraphBuilder::external_constant(
+  self : EGraphBuilder,
+  value_id : Int,
+) -> Int64? {
+  if value_id >= 0 && value_id < self.external_constants.length() {
+    self.external_constants[value_id]
+  } else {
+    None
+  }
+}
+
+///|
 /// Add a leaf class (variable or constant) for a value that has no operands
 /// to convert first.
 fn EGraphBuilder::add_leaf_value(
@@ -432,7 +444,7 @@ fn EGraphBuilder::add_leaf_value(
   let bits = type_bits(value.ty)
   let class_id = if self.region_table.get_eop(value.id) is Some(Const(c)) {
     self.egraph.add_const(c)
-  } else if self.external_constants.get(value.id) is Some(c) {
+  } else if self.external_constant(value.id) is Some(c) {
     self.egraph.add_const(c)
   } else {
     self.egraph.add_var(value.id)
@@ -603,7 +615,7 @@ fn EGraphBuilder::is_cheap_rematerializable(
     }
     // An out-of-region constant is still a cheap leaf. Treating all such
     // constants as rematerializable is conservative for register pressure.
-    None => self.external_constants.get(value.id) is Some(_)
+    None => self.external_constant(value.id) is Some(_)
   }
 }
 
@@ -706,11 +718,11 @@ fn prepare_egraph_rewrite_with_stats_with_limits_and_ruleset(
 ) -> EGraphOptimizeStats {
   let work_limits = default_egraph_work_limits()
   let region_table = EGraphRegionTable::new()
-  let external_constants : Map[Int, Int64] = Map([])
+  let external_constants : Array[Int64?] = Array::make(func.next_value_id, None)
   for block in func.blocks {
     for inst in block.instructions {
       if inst.opcode is Scalar(IntConst(c)) && inst.first_result() is Some(v) {
-        external_constants.set(v.id, c)
+        external_constants[v.id] = Some(c)
       }
     }
   }
@@ -888,7 +900,7 @@ fn optimize_egraph_region(
   limits : @egraph.SaturationLimits,
   ruleset : @egraph.IndexedRuleSet,
   work_limits : EGraphWorkLimits,
-  external_constants : Map[Int, Int64],
+  external_constants : Array[Int64?],
   region_table : EGraphRegionTable,
 ) -> EGraphOptimizeStats {
   let builder = EGraphBuilder::new_for_region(

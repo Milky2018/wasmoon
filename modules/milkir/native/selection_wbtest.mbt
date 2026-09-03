@@ -210,7 +210,7 @@ test "native demand selection preserves shared address definitions" {
   let trace = trace_lowering(builder.finalize())
   inspect(
     trace.operations.filter(operation => operation is PointerOffset).length(),
-    content="2",
+    content="0",
   )
   inspect(
     trace.operations.any(operation => operation is IntBinary(Add)),

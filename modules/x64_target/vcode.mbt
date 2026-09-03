@@ -499,7 +499,11 @@ fn require_instruction_shape(
     )
   }
   for index, operand in uses {
-    if function.value_type(operand.value) != Some(use_types[index]) {
+    let expected = use_types[index]
+    let actual = function.value_type(operand.value)
+    if actual != Some(expected) &&
+      !((actual == Some(I64) && expected == Ptr64) ||
+      (actual == Some(Ptr64) && expected == I64)) {
       raise InvalidInstruction(instruction~, message="invalid use value type")
     }
   }
@@ -1549,6 +1553,12 @@ fn verify_target_vcode(
         require_instruction_shape(function, instruction, uses, [], false, 0)
       }
       Convert(conversion) => {
+        if conversion is (Bitcast(I64, Ptr64) | Bitcast(Ptr64, I64)) {
+          raise InvalidInstruction(
+            instruction~,
+            message="raw-word pointer bitcasts must be erased before VCode",
+          )
+        }
         guard conversion_shape(conversion) is Some((source, result)) else {
           raise InvalidInstruction(
             instruction~,
