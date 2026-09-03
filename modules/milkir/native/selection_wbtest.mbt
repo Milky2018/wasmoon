@@ -6,7 +6,10 @@ priv struct LoweringTrace {
 }
 
 ///|
-fn trace_lowering(function : @milkir.Function) -> LoweringTrace raise {
+fn trace_lowering(
+  function : @milkir.Function,
+  folds_unsigned_index_into_memory? : Bool = false,
+) -> LoweringTrace raise {
   let operations : Array[@lowering.Operation] = []
   let operation_blocks : Array[Int] = []
   let terminators : Array[@lowering.TargetTerminator] = []
@@ -36,6 +39,7 @@ fn trace_lowering(function : @milkir.Function) -> LoweringTrace raise {
     },
     fn(_, terminator, _) { terminators.push(terminator) },
     fn() { () },
+    folds_unsigned_index_into_memory~,
   )
   lower_core_to_sink(function, sink, verify_input=false)
   { operations, operation_blocks, terminators, }
@@ -223,6 +227,104 @@ test "native demand selection shares zero-cost pointer bitcasts" {
       operation is (PointerOffset | Convert(Bitcast(Ptr64, I64)))
     }),
     content="false",
+  )
+}
+
+///|
+test "native demand selection shares zero-extended memory indices" {
+  let builder = @milkir.FunctionBuilder::FunctionBuilder("shared_uxtw_index")
+  let base = builder.add_param(Ptr)
+  let index = builder.add_param(I32)
+  builder.add_result(I32)
+  builder.add_result(I32)
+  let base_bits = builder.bitcast(I64, base)
+  let extended = builder.uextend(I64, index)
+  let first_address = builder.iadd(base_bits, extended)
+  let second_address = builder.iadd(base_bits, extended)
+  let zero = builder.iconst_i64(0L)
+  let first = builder.load_ptr(I32, first_address, zero)
+  let second = builder.load_ptr(I32, second_address, zero)
+  builder.return_([first, second])
+  let trace = trace_lowering(
+    builder.finalize(),
+    folds_unsigned_index_into_memory=true,
+  )
+  inspect(
+    trace.operations
+    .filter(operation => operation is LoadIndexed(_, 0))
+    .length(),
+    content="2",
+  )
+  inspect(
+    trace.operations.any(operation => {
+      operation is (PointerOffset | Convert(I64ExtendI32(Unsigned)))
+    }),
+    content="false",
+  )
+}
+
+///|
+test "native demand selection preserves shared indices for other targets" {
+  let builder = @milkir.FunctionBuilder::FunctionBuilder("shared_x64_index")
+  let base = builder.add_param(Ptr)
+  let index = builder.add_param(I32)
+  builder.add_result(I32)
+  builder.add_result(I32)
+  let base_bits = builder.bitcast(I64, base)
+  let extended = builder.uextend(I64, index)
+  let first_address = builder.iadd(base_bits, extended)
+  let second_address = builder.iadd(base_bits, extended)
+  let zero = builder.iconst_i64(0L)
+  let first = builder.load_ptr(I32, first_address, zero)
+  let second = builder.load_ptr(I32, second_address, zero)
+  builder.return_([first, second])
+  let trace = trace_lowering(builder.finalize())
+  inspect(
+    trace.operations
+    .filter(operation => operation is Convert(I64ExtendI32(Unsigned)))
+    .length(),
+    content="1",
+  )
+  inspect(
+    trace.operations.filter(operation => operation is IntBinary(Add)).length(),
+    content="2",
+  )
+  inspect(
+    trace.operations.any(operation => operation is LoadIndexed(_, _)),
+    content="false",
+  )
+}
+
+///|
+test "native demand selection retains shared zero extension for arithmetic" {
+  let builder = @milkir.FunctionBuilder::FunctionBuilder("mixed_uxtw_index")
+  let base = builder.add_param(Ptr)
+  let index = builder.add_param(I32)
+  builder.add_result(I32)
+  builder.add_result(I64)
+  let base_bits = builder.bitcast(I64, base)
+  let extended = builder.uextend(I64, index)
+  let address = builder.iadd(base_bits, extended)
+  let zero = builder.iconst_i64(0L)
+  let one = builder.iconst_i64(1L)
+  let loaded = builder.load_ptr(I32, address, zero)
+  let arithmetic = builder.iadd(extended, one)
+  builder.return_([loaded, arithmetic])
+  let trace = trace_lowering(
+    builder.finalize(),
+    folds_unsigned_index_into_memory=true,
+  )
+  inspect(
+    trace.operations
+    .filter(operation => operation is LoadIndexed(_, 0))
+    .length(),
+    content="1",
+  )
+  inspect(
+    trace.operations
+    .filter(operation => operation is Convert(I64ExtendI32(Unsigned)))
+    .length(),
+    content="1",
   )
 }
 

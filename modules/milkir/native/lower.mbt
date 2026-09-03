@@ -1616,7 +1616,10 @@ fn lower_verified_construction(
     }
   }
   let cfg = @milkir.CFG::build(function)
-  let facts = build_selection_facts(function)
+  let facts = build_selection_facts(
+    function,
+    sink.folds_unsigned_index_into_memory(),
+  )
   let gc_roots = if has_gc_references {
     Some(compute_gc_roots(function, cfg))
   } else {

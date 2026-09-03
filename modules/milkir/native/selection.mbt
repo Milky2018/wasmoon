@@ -28,6 +28,7 @@ priv enum BranchSelection {
 
 ///|
 priv struct SelectionFacts {
+  folds_unsigned_index_into_memory : Bool
   uses : Array[Int]
   consumers : Array[Int]
   shared_consumers : Array[Array[Int]?]
@@ -291,10 +292,16 @@ fn memory_address_value_is_free(
   guard scalar_definition(facts.definitions, value) is Some(instruction) else {
     return false
   }
-  instruction.opcode is Scalar(Convert(Bitcast)) &&
-  instruction.args is [source] &&
-  source.ty == Ptr &&
-  value.ty == I64
+  match instruction.opcode {
+    Scalar(Convert(Bitcast)) =>
+      instruction.args is [source] && source.ty == Ptr && value.ty == I64
+    Scalar(Convert(UnsignedExtend)) =>
+      facts.folds_unsigned_index_into_memory &&
+      instruction.args is [source] &&
+      source.ty == I32 &&
+      value.ty == I64
+    _ => false
+  }
 }
 
 ///|
@@ -471,22 +478,32 @@ fn selection_tracks_shared_consumers(
   value : @milkir.Value,
   constants : Array[UInt64?],
   definitions : Array[@milkir.Inst?],
+  folds_unsigned_index_into_memory : Bool,
 ) -> Bool {
   if constants[value.id] is Some(_) {
     return true
   }
   match definitions[value.id] {
     Some(definition) =>
-      definition.opcode is Scalar(Convert(Bitcast)) &&
-      definition.args is [source] &&
-      source.ty == Ptr &&
-      value.ty == I64
+      match definition.opcode {
+        Scalar(Convert(Bitcast)) =>
+          definition.args is [source] && source.ty == Ptr && value.ty == I64
+        Scalar(Convert(UnsignedExtend)) =>
+          folds_unsigned_index_into_memory &&
+          definition.args is [source] &&
+          source.ty == I32 &&
+          value.ty == I64
+        _ => false
+      }
     None => false
   }
 }
 
 ///|
-fn build_selection_facts(function : @milkir.Function) -> SelectionFacts {
+fn build_selection_facts(
+  function : @milkir.Function,
+  folds_unsigned_index_into_memory : Bool,
+) -> SelectionFacts {
   let uses = Array::make(function.next_value_id, 0)
   let consumers = Array::make(function.next_value_id, -2)
   let shared_consumers : Array[Array[Int]?] = Array::make(
@@ -544,7 +561,9 @@ fn build_selection_facts(function : @milkir.Function) -> SelectionFacts {
           shared_consumers,
           argument,
           instruction.id,
-          selection_tracks_shared_consumers(argument, constants, definitions),
+          selection_tracks_shared_consumers(
+            argument, constants, definitions, folds_unsigned_index_into_memory,
+          ),
         )
       }
     }
@@ -556,12 +575,15 @@ fn build_selection_facts(function : @milkir.Function) -> SelectionFacts {
           shared_consumers,
           value,
           -1,
-          selection_tracks_shared_consumers(value, constants, definitions),
+          selection_tracks_shared_consumers(
+            value, constants, definitions, folds_unsigned_index_into_memory,
+          ),
         )
       }
     }
   }
   {
+    folds_unsigned_index_into_memory,
     uses,
     consumers,
     shared_consumers,
@@ -738,6 +760,12 @@ fn compute_should_defer_instruction(
     result.ty == I64 {
     return fully_selected_by_memory_addresses(result, facts)
   }
+  if instruction.opcode is Scalar(Convert(UnsignedExtend)) &&
+    instruction.args is [source] &&
+    source.ty == I32 &&
+    result.ty == I64 {
+    return fully_selected_by_memory_addresses(result, facts)
+  }
   guard facts.uses[result.id] == 1 else { return false }
   match instruction.opcode {
     Scalar(IntBinary(Add)) => selected_by_memory_address(result, facts)
@@ -766,11 +794,7 @@ fn compute_should_defer_instruction(
     Scalar(IntCompare(_)) =>
       facts.consumers[result.id] == -1 &&
       select_branch_lowering(result, facts) is Some(_)
-    Scalar(Convert(UnsignedExtend)) =>
-      instruction.args is [source] &&
-      source.ty == I32 &&
-      result.ty == I64 &&
-      selected_by_memory_address(result, facts)
+    Scalar(Convert(UnsignedExtend)) => false
     Scalar(Convert(Bitcast)) =>
       instruction.args is [source] &&
       source.ty == Ptr &&

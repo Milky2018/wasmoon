@@ -21,7 +21,9 @@ test "x64 trusted direct selection skips redundant VCode validation" {
       }
     },
   )
-  let builder = @lowering.DirectBuilder::new([Ptr64], session.sink())
+  let sink = session.sink()
+  inspect(sink.folds_unsigned_index_into_memory(), content="false")
+  let builder = @lowering.DirectBuilder::new([Ptr64], sink)
   builder.return_([])
   builder.finish()
   session.finish_selected(verify_selected=false) |> ignore

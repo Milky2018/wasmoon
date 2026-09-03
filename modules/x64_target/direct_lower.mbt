@@ -1730,6 +1730,7 @@ pub fn DirectLoweringSession::sink(
       self.terminate(block, terminator, metadata)
     },
     fn() { self.finish_construction() },
+    folds_unsigned_index_into_memory=false,
   )
 }
 
