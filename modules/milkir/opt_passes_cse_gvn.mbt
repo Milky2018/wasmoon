@@ -698,7 +698,7 @@ priv struct AvailableExpression {
 priv struct AcyclicOptimizer {
   func : Function
   analysis : FunctionAnalysis
-  rewriter : AcyclicRewriter
+  session : OptimizerSession
   memory_work_budget : Int
   ptr_base_infos : Array[PtrBaseInfo?]
   block_input_state : @hashmap.HashMap[Int, LastStoreState]
@@ -774,7 +774,7 @@ fn AcyclicOptimizer::new(
   {
     func,
     analysis,
-    rewriter: AcyclicRewriter::new(func),
+    session: OptimizerSession::new(func),
     memory_work_budget,
     ptr_base_infos,
     block_input_state,
@@ -801,7 +801,7 @@ fn AcyclicOptimizer::process_block(
   for inst_id in instructions {
     let inst = self.func.instructions[inst_id]
     let prefix : Array[Inst] = []
-    if self.rewriter.rewrite_inst(inst, prefix) {
+    if self.session.rewrite_inst(inst, prefix) {
       self.result.mark_changed()
     }
     for created in prefix {
@@ -814,7 +814,7 @@ fn AcyclicOptimizer::process_block(
       )
       rewritten.push(created)
     }
-    if self.rewriter.canonicalize_operands(inst) {
+    if self.session.canonicalize_operands(inst) {
       self.result.mark_changed()
     }
     self.process_inst(
@@ -875,7 +875,7 @@ fn AcyclicOptimizer::process_inst(
       inst.operands.clear()
       inst.operands.push(entry.value)
       if inst.first_result() is Some(result) {
-        self.rewriter.record_alias(result, entry.value)
+        self.session.record_alias(result, entry.value)
       }
       self.result.mark_changed()
       replaced_by_memory = true
@@ -906,7 +906,7 @@ fn AcyclicOptimizer::process_inst(
     self.ptr_base_infos,
   )
   if replaced_by_memory || !is_gvn_candidate(inst) {
-    self.rewriter.record_definition(inst)
+    self.session.record_definition(inst)
     return
   }
   guard inst.first_result() is Some(result_val) else { return }
@@ -956,7 +956,7 @@ fn AcyclicOptimizer::process_inst(
       // doing so turns local address recipes into long-lived values and
       // defeats the bounded-reuse policy before final alias cleanup.
       if !bounded_stable_global {
-        self.rewriter.record_alias(result_val, existing.value)
+        self.session.record_alias(result_val, existing.value)
       }
       self.result.mark_changed()
       if bounded_stable_global {
@@ -981,7 +981,7 @@ fn AcyclicOptimizer::process_inst(
     Some(entries) => entries.push(entry)
     None => self.value_table.set(inst, [entry])
   }
-  self.rewriter.record_definition(inst)
+  self.session.record_definition(inst)
 }
 
 ///|
@@ -990,7 +990,7 @@ fn AcyclicOptimizer::finish(self : AcyclicOptimizer) -> AcyclicOptimizeStats {
     result: self.result,
     work_done: self.work_done,
     budget_exhausted: self.budget_exhausted,
-    rewrite_stats: self.rewriter.stats,
+    rewrite_stats: self.session.stats,
   }
 }
 
@@ -1007,7 +1007,7 @@ fn run_acyclic_optimization_with_budget_and_analysis(
     func, work_budget, analysis, block_instructions,
   )
   fn enter(block_id : Int) -> (Int, Bool) {
-    let scope = stream.rewriter.begin_scope()
+    let scope = stream.session.begin_scope()
     func.blocks[analysis.block_idx[block_id]].replace_instructions(
       stream.process_block(block_id, block_instructions(block_id)),
     )
@@ -1015,7 +1015,7 @@ fn run_acyclic_optimization_with_budget_and_analysis(
   }
   if analysis.cfg.is_valid(0) {
     visit_dominator_tree(analysis.domtree, 0, enter, fn(scope) {
-      stream.rewriter.end_scope(scope)
+      stream.session.end_scope(scope)
     })
   }
   stream.finish()

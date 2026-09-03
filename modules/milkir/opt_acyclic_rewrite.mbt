@@ -17,21 +17,25 @@ fn AcyclicRewriteStats::new() -> AcyclicRewriteStats {
 }
 
 ///|
-priv struct AcyclicRewriter {
+priv struct OptimizerSession {
   func : Function
-  aliases : Array[Value?]
-  alias_changes : Array[(Int, Value?)]
+  // Optimizer-private typed unions. Links are directional from a newly
+  // defined SSA value to an older canonical value and roll back with the
+  // dominator scope. Keep these arrays inline: canonical lookup is one of the
+  // hottest operations in the optimizer.
+  union_parents : Array[Value?]
+  union_changes : Array[(Int, Value?)]
   constants : Array[Int64?]
   use_counts : Array[Int]
   stats : AcyclicRewriteStats
 }
 
 ///|
-fn AcyclicRewriter::new(func : Function) -> AcyclicRewriter {
+fn OptimizerSession::new(func : Function) -> OptimizerSession {
   let self = {
     func,
-    aliases: Array::make(func.next_value_id, None),
-    alias_changes: [],
+    union_parents: Array::make(func.next_value_id, None),
+    union_changes: [],
     constants: Array::make(func.next_value_id, None),
     use_counts: compute_use_counts(func),
     stats: AcyclicRewriteStats::new(),
@@ -46,33 +50,33 @@ fn AcyclicRewriter::new(func : Function) -> AcyclicRewriter {
 }
 
 ///|
-fn AcyclicRewriter::begin_scope(self : AcyclicRewriter) -> Int {
-  self.alias_changes.length()
+fn OptimizerSession::begin_scope(self : OptimizerSession) -> Int {
+  self.union_changes.length()
 }
 
 ///|
-fn AcyclicRewriter::end_scope(self : AcyclicRewriter, marker : Int) -> Unit {
-  while self.alias_changes.length() > marker {
-    let (value_id, previous) = self.alias_changes.pop().unwrap()
-    self.aliases[value_id] = previous
+fn OptimizerSession::end_scope(self : OptimizerSession, marker : Int) -> Unit {
+  while self.union_changes.length() > marker {
+    let (value_id, previous) = self.union_changes.pop().unwrap()
+    self.union_parents[value_id] = previous
   }
 }
 
 ///|
-fn AcyclicRewriter::ensure_value_capacity(
-  self : AcyclicRewriter,
+fn OptimizerSession::ensure_value_capacity(
+  self : OptimizerSession,
   value_id : Int,
 ) -> Unit {
-  while self.aliases.length() <= value_id {
-    self.aliases.push(None)
+  while self.union_parents.length() <= value_id {
+    self.union_parents.push(None)
     self.constants.push(None)
     self.use_counts.push(0)
   }
 }
 
 ///|
-fn AcyclicRewriter::has_single_use(
-  self : AcyclicRewriter,
+fn OptimizerSession::has_single_use(
+  self : OptimizerSession,
   value : Value,
 ) -> Bool {
   let canonical = self.canonical_value(value)
@@ -82,14 +86,14 @@ fn AcyclicRewriter::has_single_use(
 }
 
 ///|
-fn AcyclicRewriter::canonical_value(
-  self : AcyclicRewriter,
+fn OptimizerSession::canonical_value(
+  self : OptimizerSession,
   value : Value,
 ) -> Value {
   let mut current = value
-  let mut remaining = self.aliases.length()
-  while remaining > 0 && current.id < self.aliases.length() {
-    match self.aliases[current.id] {
+  let mut remaining = self.union_parents.length()
+  while remaining > 0 && current.id < self.union_parents.length() {
+    match self.union_parents[current.id] {
       Some(next) if next.id != current.id => current = next
       _ => break
     }
@@ -99,8 +103,8 @@ fn AcyclicRewriter::canonical_value(
 }
 
 ///|
-fn AcyclicRewriter::index_definition(
-  self : AcyclicRewriter,
+fn OptimizerSession::index_definition(
+  self : OptimizerSession,
   inst : Inst,
 ) -> Unit {
   guard inst.first_result() is Some(result) else { return }
@@ -113,8 +117,8 @@ fn AcyclicRewriter::index_definition(
 }
 
 ///|
-fn AcyclicRewriter::record_definition(
-  self : AcyclicRewriter,
+fn OptimizerSession::record_definition(
+  self : OptimizerSession,
   inst : Inst,
 ) -> Unit {
   self.index_definition(inst)
@@ -126,24 +130,25 @@ fn AcyclicRewriter::record_definition(
 }
 
 ///|
-fn AcyclicRewriter::record_alias(
-  self : AcyclicRewriter,
+fn OptimizerSession::record_alias(
+  self : OptimizerSession,
   result : Value,
   source : Value,
 ) -> Unit {
   self.ensure_value_capacity(result.id)
   let canonical = self.canonical_value(source)
-  if self.aliases[result.id] is Some(previous) && previous.id == canonical.id {
+  if self.union_parents[result.id] is Some(previous) &&
+    previous.id == canonical.id {
     return
   }
-  self.alias_changes.push((result.id, self.aliases[result.id]))
-  self.aliases[result.id] = Some(canonical)
+  self.union_changes.push((result.id, self.union_parents[result.id]))
+  self.union_parents[result.id] = Some(canonical)
   self.constants[result.id] = self.int_constant(canonical)
 }
 
 ///|
-fn AcyclicRewriter::int_constant(
-  self : AcyclicRewriter,
+fn OptimizerSession::int_constant(
+  self : OptimizerSession,
   value : Value,
 ) -> Int64? {
   let canonical = self.canonical_value(value)
@@ -155,14 +160,17 @@ fn AcyclicRewriter::int_constant(
 }
 
 ///|
-fn AcyclicRewriter::definition(self : AcyclicRewriter, value : Value) -> Inst? {
+fn OptimizerSession::definition(
+  self : OptimizerSession,
+  value : Value,
+) -> Inst? {
   let canonical = self.canonical_value(value)
   self.func.defining_inst(canonical)
 }
 
 ///|
-fn AcyclicRewriter::canonicalize_operands(
-  self : AcyclicRewriter,
+fn OptimizerSession::canonicalize_operands(
+  self : OptimizerSession,
   inst : Inst,
 ) -> Bool {
   let mut changed = false
@@ -177,8 +185,8 @@ fn AcyclicRewriter::canonicalize_operands(
 }
 
 ///|
-fn AcyclicRewriter::replace_with_alias(
-  self : AcyclicRewriter,
+fn OptimizerSession::replace_with_alias(
+  self : OptimizerSession,
   inst : Inst,
   source : Value,
 ) -> Bool {
@@ -193,8 +201,8 @@ fn AcyclicRewriter::replace_with_alias(
 }
 
 ///|
-fn AcyclicRewriter::replace_with_constant(
-  self : AcyclicRewriter,
+fn OptimizerSession::replace_with_constant(
+  self : OptimizerSession,
   inst : Inst,
   value : Int64,
 ) -> Bool {
@@ -205,8 +213,8 @@ fn AcyclicRewriter::replace_with_constant(
 }
 
 ///|
-fn AcyclicRewriter::append_int_constant(
-  self : AcyclicRewriter,
+fn OptimizerSession::append_int_constant(
+  self : OptimizerSession,
   output : Array[Inst],
   ty : Type,
   value : Int64,
@@ -278,8 +286,8 @@ fn is_commutative_integer_op(op : IntBinaryOp) -> Bool {
 }
 
 ///|
-fn AcyclicRewriter::canonicalize_commutative_constant(
-  self : AcyclicRewriter,
+fn OptimizerSession::canonicalize_commutative_constant(
+  self : OptimizerSession,
   inst : Inst,
   op : IntBinaryOp,
 ) -> Bool {
@@ -298,8 +306,8 @@ fn AcyclicRewriter::canonicalize_commutative_constant(
 }
 
 ///|
-fn AcyclicRewriter::rewrite_integer_identity(
-  self : AcyclicRewriter,
+fn OptimizerSession::rewrite_integer_identity(
+  self : OptimizerSession,
   inst : Inst,
   op : IntBinaryOp,
   prefix : Array[Inst],
@@ -394,8 +402,8 @@ fn AcyclicRewriter::rewrite_integer_identity(
 }
 
 ///|
-fn AcyclicRewriter::rewrite_nested_integer(
-  self : AcyclicRewriter,
+fn OptimizerSession::rewrite_nested_integer(
+  self : OptimizerSession,
   inst : Inst,
   op : IntBinaryOp,
   prefix : Array[Inst],
@@ -454,8 +462,8 @@ fn AcyclicRewriter::rewrite_nested_integer(
 }
 
 ///|
-fn AcyclicRewriter::rewrite_nested_shift(
-  self : AcyclicRewriter,
+fn OptimizerSession::rewrite_nested_shift(
+  self : OptimizerSession,
   inst : Inst,
   op : IntBinaryOp,
   prefix : Array[Inst],
@@ -498,8 +506,8 @@ fn self_compare_result(cc : IntCC) -> Int64 {
 }
 
 ///|
-fn AcyclicRewriter::rewrite_compare(
-  self : AcyclicRewriter,
+fn OptimizerSession::rewrite_compare(
+  self : OptimizerSession,
   inst : Inst,
   cc : IntCC,
 ) -> Bool {
@@ -518,8 +526,8 @@ fn AcyclicRewriter::rewrite_compare(
 }
 
 ///|
-fn AcyclicRewriter::rewrite_conversion(
-  self : AcyclicRewriter,
+fn OptimizerSession::rewrite_conversion(
+  self : OptimizerSession,
   inst : Inst,
   conversion : ConversionOp,
 ) -> Bool {
@@ -585,7 +593,10 @@ fn AcyclicRewriter::rewrite_conversion(
 }
 
 ///|
-fn AcyclicRewriter::rewrite_select(self : AcyclicRewriter, inst : Inst) -> Bool {
+fn OptimizerSession::rewrite_select(
+  self : OptimizerSession,
+  inst : Inst,
+) -> Bool {
   guard inst.operands is [condition, if_true, if_false] else { return false }
   if self.canonical_value(if_true).id == self.canonical_value(if_false).id {
     return self.replace_with_alias(inst, if_true)
@@ -598,8 +609,8 @@ fn AcyclicRewriter::rewrite_select(self : AcyclicRewriter, inst : Inst) -> Bool 
 }
 
 ///|
-fn AcyclicRewriter::rewrite_inst(
-  self : AcyclicRewriter,
+fn OptimizerSession::rewrite_inst(
+  self : OptimizerSession,
   inst : Inst,
   prefix : Array[Inst],
 ) -> Bool {
