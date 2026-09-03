@@ -4,17 +4,114 @@
 // ============================================================================
 
 ///|
+/// Function-local direct indices for the current region's definitions,
+/// e-graph opcodes, and classes. Clearing only touched entries lets
+/// consecutive regions reuse the storage without retaining mappings across
+/// region boundaries.
+priv struct EGraphRegionTable {
+  values : Array[@egraph.EClassId?]
+  touched : Array[Int]
+  defs : Array[Inst?]
+  eops : Array[@egraph.EOpcode?]
+  touched_defs : Array[Int]
+}
+
+///|
+fn EGraphRegionTable::new() -> EGraphRegionTable {
+  { values: [], touched: [], defs: [], eops: [], touched_defs: [], }
+}
+
+///|
+fn EGraphRegionTable::get(
+  self : EGraphRegionTable,
+  value_id : Int,
+) -> @egraph.EClassId? {
+  if value_id >= 0 && value_id < self.values.length() {
+    self.values[value_id]
+  } else {
+    None
+  }
+}
+
+///|
+fn EGraphRegionTable::set(
+  self : EGraphRegionTable,
+  value_id : Int,
+  class_id : @egraph.EClassId,
+) -> Unit {
+  while self.values.length() <= value_id {
+    self.values.push(None)
+  }
+  if self.values[value_id] is None {
+    self.touched.push(value_id)
+  }
+  self.values[value_id] = Some(class_id)
+}
+
+///|
+fn EGraphRegionTable::get_def(
+  self : EGraphRegionTable,
+  value_id : Int,
+) -> Inst? {
+  if value_id >= 0 && value_id < self.defs.length() {
+    self.defs[value_id]
+  } else {
+    None
+  }
+}
+
+///|
+fn EGraphRegionTable::get_eop(
+  self : EGraphRegionTable,
+  value_id : Int,
+) -> @egraph.EOpcode? {
+  if value_id >= 0 && value_id < self.eops.length() {
+    self.eops[value_id]
+  } else {
+    None
+  }
+}
+
+///|
+fn EGraphRegionTable::set_def(
+  self : EGraphRegionTable,
+  value_id : Int,
+  inst : Inst,
+  eop : @egraph.EOpcode?,
+) -> Unit {
+  while self.defs.length() <= value_id {
+    self.defs.push(None)
+    self.eops.push(None)
+  }
+  if self.defs[value_id] is None {
+    self.touched_defs.push(value_id)
+  }
+  self.defs[value_id] = Some(inst)
+  self.eops[value_id] = eop
+}
+
+///|
+fn EGraphRegionTable::clear(self : EGraphRegionTable) -> Unit {
+  for value_id in self.touched {
+    self.values[value_id] = None
+  }
+  self.touched.clear()
+  for value_id in self.touched_defs {
+    self.defs[value_id] = None
+    self.eops[value_id] = None
+  }
+  self.touched_defs.clear()
+}
+
+///|
 /// Builder for constructing an EGraph from IR instructions
 priv struct EGraphBuilder {
   egraph : @egraph.EGraph
-  // Region-local maps stay sparse: global Value ids can be arbitrarily large
-  // even when this transient graph contains only a few dozen expressions.
-  value_map : Map[Int, @egraph.EClassId]
-  // Reverse map from (canonical EClassId, Type) to an in-scope IR Value (for operand rewriting)
-  class_to_value : Map[RepKey, Value]
-  // Region-local definition and encoding maps.
-  def_map : Map[Int, Inst]
-  def_eop_map : Map[Int, @egraph.EOpcode]
+  region_table : EGraphRegionTable
+  // Dense reverse table from (Type, canonical EClassId) to an in-scope IR
+  // value. Region-local class ids are compact, so direct indexing avoids a
+  // hash-table probe for every operand and result during elaboration.
+  class_to_value : Array[Array[Value?]]
   // Ruleset for eager optimization
   ruleset : @egraph.IndexedRuleSet
   // Rewrite limits (Cranelift-style hard caps).
@@ -68,17 +165,66 @@ priv struct RepKey {
 } derive(Eq, Hash)
 
 ///|
+fn egraph_value_type_slot(ty : Type) -> Int {
+  match ty {
+    I32 => 0
+    I64 => 1
+    F32 => 2
+    F64 => 3
+    V128 => 4
+    Ptr => 5
+    Ref => 6
+    CallableRef => 7
+    OpaqueRef => 8
+  }
+}
+
+///|
+fn EGraphBuilder::get_class_value(
+  self : EGraphBuilder,
+  class_id : Int,
+  ty : Type,
+) -> Value? {
+  let values = self.class_to_value[egraph_value_type_slot(ty)]
+  if class_id >= 0 && class_id < values.length() {
+    values[class_id]
+  } else {
+    None
+  }
+}
+
+///|
+fn EGraphBuilder::set_class_value(
+  self : EGraphBuilder,
+  class_id : Int,
+  ty : Type,
+  value : Value,
+) -> Unit {
+  let values = self.class_to_value[egraph_value_type_slot(ty)]
+  while values.length() <= class_id {
+    values.push(None)
+  }
+  values[class_id] = Some(value)
+}
+
+///|
+fn EGraphBuilder::clear_class_values(self : EGraphBuilder) -> Unit {
+  for values in self.class_to_value {
+    values.clear()
+  }
+}
+
+///|
 fn EGraphBuilder::new_with_limits_and_ruleset(
   saturation_limits : @egraph.SaturationLimits,
   ruleset : @egraph.IndexedRuleSet,
+  region_table? : EGraphRegionTable = EGraphRegionTable::new(),
 ) -> EGraphBuilder {
   let work_limits = default_egraph_work_limits()
   {
     egraph: EGraph(),
-    value_map: Map([]),
-    class_to_value: Map([]),
-    def_map: Map([]),
-    def_eop_map: Map([]),
+    region_table,
+    class_to_value: [[], [], [], [], [], [], [], [], []],
     ruleset,
     saturation_limits,
     saturation_budget: work_limits.saturation_budget,
@@ -96,9 +242,13 @@ fn EGraphBuilder::new_for_region(
   ruleset : @egraph.IndexedRuleSet,
   work_limits : EGraphWorkLimits,
   external_constants : Map[Int, Int64],
+  region_table : EGraphRegionTable,
 ) -> EGraphBuilder {
+  region_table.clear()
   let builder = EGraphBuilder::new_with_limits_and_ruleset(
-    saturation_limits, ruleset,
+    saturation_limits,
+    ruleset,
+    region_table~,
   )
   builder.saturation_budget = work_limits.saturation_budget
   builder.extraction_work_budget = work_limits.extraction_work_per_region
@@ -111,11 +261,7 @@ fn EGraphBuilder::new_for_region(
 /// Register an instruction's definition
 fn EGraphBuilder::register_def(self : EGraphBuilder, inst : Inst) -> Unit {
   if inst.first_result() is Some(v) {
-    self.def_map.set(v.id, inst)
-    match opcode_to_eopcode(inst) {
-      Some(eop) => self.def_eop_map.set(v.id, eop)
-      None => self.def_eop_map.remove(v.id)
-    }
+    self.region_table.set_def(v.id, inst, opcode_to_eopcode(inst))
   }
 }
 
@@ -269,7 +415,7 @@ fn EGraphBuilder::lookup_value(
   self : EGraphBuilder,
   value : Value,
 ) -> @egraph.EClassId? {
-  if self.value_map.get(value.id) is Some(id) {
+  if self.region_table.get(value.id) is Some(id) {
     Some(self.egraph.find(id))
   } else {
     None
@@ -284,7 +430,7 @@ fn EGraphBuilder::add_leaf_value(
   value : Value,
 ) -> @egraph.EClassId {
   let bits = type_bits(value.ty)
-  let class_id = if self.def_eop_map.get(value.id) is Some(Const(c)) {
+  let class_id = if self.region_table.get_eop(value.id) is Some(Const(c)) {
     self.egraph.add_const(c)
   } else if self.external_constants.get(value.id) is Some(c) {
     self.egraph.add_const(c)
@@ -301,8 +447,8 @@ fn EGraphBuilder::value_has_children(
   self : EGraphBuilder,
   value : Value,
 ) -> Bool {
-  self.def_map.get(value.id) is Some(_) &&
-  self.def_eop_map.get(value.id) is Some(eop) &&
+  self.region_table.get_def(value.id) is Some(_) &&
+  self.region_table.get_eop(value.id) is Some(eop) &&
   !(eop is Const(_))
 }
 
@@ -330,11 +476,11 @@ fn EGraphBuilder::add_value(
     }
     if !self.value_has_children(current) {
       let class_id = self.add_leaf_value(current)
-      self.value_map.set(current.id, class_id)
+      self.region_table.set(current.id, class_id)
       continue
     }
-    guard self.def_map.get(current.id) is Some(inst) else { continue }
-    guard self.def_eop_map.get(current.id) is Some(eop) else { continue }
+    guard self.region_table.get_def(current.id) is Some(inst) else { continue }
+    guard self.region_table.get_eop(current.id) is Some(eop) else { continue }
     if expanded {
       let children : Array[@egraph.EClassId] = []
       for operand in inst.operands {
@@ -349,7 +495,7 @@ fn EGraphBuilder::add_value(
         { op: eop, children, },
         type_bits(current.ty),
       )
-      self.value_map.set(current.id, class_id)
+      self.region_table.set(current.id, class_id)
     } else {
       stack.push((current, true))
       for operand in inst.operands {
@@ -398,7 +544,7 @@ fn EGraphBuilder::get_simplified_opcode(
   self : EGraphBuilder,
   value : Value,
 ) -> Opcode? {
-  if self.value_map.get(value.id) is Some(class_id) {
+  if self.region_table.get(value.id) is Some(class_id) {
     match self.egraph.get_const(class_id) {
       Some(c) => Some(Scalar(IntConst(c)))
       None => None
@@ -419,12 +565,11 @@ fn EGraphBuilder::get_simplified_operand(
   if self.is_cheap_rematerializable(value) {
     return None
   }
-  if self.value_map.get(value.id) is Some(class_id) {
+  if self.region_table.get(value.id) is Some(class_id) {
     // Get the canonical class after optimization
     let canonical = self.egraph.find(class_id)
     // Check if this class maps to a different (simpler) value with same IR type
-    let key : RepKey = { class_id: canonical.0, ty: value.ty, }
-    match self.class_to_value.get(key) {
+    match self.get_class_value(canonical.0, value.ty) {
       None => None
       Some(simplified_value) =>
         // Only return if it's different from the original
@@ -444,14 +589,14 @@ fn EGraphBuilder::is_cheap_rematerializable(
   self : EGraphBuilder,
   value : Value,
 ) -> Bool {
-  match self.def_map.get(value.id) {
+  match self.region_table.get_def(value.id) {
     Some(inst) => {
       if is_cheap_rematerializable_constant(inst) {
         return true
       }
       match (inst.opcode, inst.operands) {
         (Scalar(Convert(UnsignedExtend)), [source]) =>
-          self.def_map.get(source.id) is Some(source_inst) &&
+          self.region_table.get_def(source.id) is Some(source_inst) &&
           is_cheap_rematerializable_constant(source_inst)
         _ => false
       }
@@ -560,6 +705,7 @@ fn prepare_egraph_rewrite_with_stats_with_limits_and_ruleset(
   on_block_ready : (Block, Array[Inst]) -> Unit,
 ) -> EGraphOptimizeStats {
   let work_limits = default_egraph_work_limits()
+  let region_table = EGraphRegionTable::new()
   let external_constants : Map[Int, Int64] = Map([])
   for block in func.blocks {
     for inst in block.instructions {
@@ -583,7 +729,7 @@ fn prepare_egraph_rewrite_with_stats_with_limits_and_ruleset(
   }
   fn finish_region() -> Unit {
     let stats = optimize_egraph_region(
-      func, pending, limits, ruleset, work_limits, external_constants,
+      func, pending, limits, ruleset, work_limits, external_constants, region_table,
     )
     aggregate = merge_egraph_optimize_stats(aggregate, stats)
     for slice in pending {
@@ -743,9 +889,10 @@ fn optimize_egraph_region(
   ruleset : @egraph.IndexedRuleSet,
   work_limits : EGraphWorkLimits,
   external_constants : Map[Int, Int64],
+  region_table : EGraphRegionTable,
 ) -> EGraphOptimizeStats {
   let builder = EGraphBuilder::new_for_region(
-    limits, ruleset, work_limits, external_constants,
+    limits, ruleset, work_limits, external_constants, region_table,
   )
   for slice in slices {
     for index in slice.context_start..<slice.end {
@@ -757,7 +904,7 @@ fn optimize_egraph_region(
     for index in slice.context_start..<slice.end {
       let inst = slice.instructions[index]
       if inst.first_result() is Some(v) &&
-        builder.def_eop_map.get(v.id) is Some(_) {
+        builder.region_table.get_eop(v.id) is Some(_) {
         builder.add_value(v, value_stack) |> ignore
       }
     }
@@ -772,11 +919,10 @@ fn optimize_egraph_region(
     if builder.is_cheap_rematerializable(value) {
       return
     }
-    if builder.value_map.get(value.id) is Some(class_id) {
+    if builder.region_table.get(value.id) is Some(class_id) {
       let canonical = builder.egraph.find(class_id)
-      let key : RepKey = { class_id: canonical.0, ty: value.ty, }
-      if builder.class_to_value.get(key) is None {
-        builder.class_to_value.set(key, value)
+      if builder.get_class_value(canonical.0, value.ty) is None {
+        builder.set_class_value(canonical.0, value.ty, value)
       }
     }
   }
@@ -784,7 +930,7 @@ fn optimize_egraph_region(
   for slice in slices {
     // Never carry a representative from one block into another. The graph may
     // span sibling blocks for amortization, but reuse remains dominance-safe.
-    builder.class_to_value.clear()
+    builder.clear_class_values()
     for pair in slice.block.params {
       let (param, _) = pair
       bind_rep(param)

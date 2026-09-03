@@ -177,7 +177,7 @@ fn EGraphBuilder::collect_elaboration_steps(
   let canonical = self.egraph.find(class_id).0
   // Already available as an IR value that dominates this point: free.
   let key : RepKey = { class_id: canonical, ty, }
-  if self.class_to_value.get(key) is Some(value) {
+  if self.get_class_value(canonical, ty) is Some(value) {
     return Some(Existing(value))
   }
   // Keyed by `RepKey`, not by class alone: one class can be needed at two
@@ -235,7 +235,7 @@ fn EGraphBuilder::collect_elaboration_steps(
 /// any instructions needed to build that form's operands to `emitted`.
 ///
 /// Returns whether the instruction changed. An abandoned rewrite leaves no
-/// trace at all: nothing appended, `inst` untouched, `value_map` unchanged,
+/// trace at all: nothing appended, `inst` untouched, region mappings unchanged,
 /// and `func`'s value and instruction counters where they were.
 ///
 /// That last part is why planning resolves the whole shape before building
@@ -315,7 +315,7 @@ fn EGraphBuilder::elaborate_inst(
     emitted.push(materialized)
     self.register_def(materialized)
     built.push(value)
-    self.value_map.set(value.id, EClassId(step.class_id))
+    self.region_table.set(value.id, EClassId(step.class_id))
   }
   self.remaining_elaboration_budget = self.remaining_elaboration_budget -
     steps.length()
@@ -360,29 +360,23 @@ fn EGraphBuilder::operands_match(
   if inst.operands.length() != node.children.length() {
     return false
   }
-  let operand_classes : Array[@egraph.EClassId] = []
-  for operand in inst.operands {
-    guard self.lookup_value(operand) is Some(operand_class) else {
+  if inst.operands.length() == 2 && eopcode_is_commutative(node.op) {
+    guard self.lookup_value(inst.operands[0]) is Some(operand0) else {
       return false
     }
-    operand_classes.push(operand_class)
+    guard self.lookup_value(inst.operands[1]) is Some(operand1) else {
+      return false
+    }
+    let child0 = self.egraph.find(node.children[0])
+    let child1 = self.egraph.find(node.children[1])
+    return (operand0 == child0 && operand1 == child1) ||
+      (operand0 == child1 && operand1 == child0)
   }
-  let child_classes : Array[@egraph.EClassId] = []
-  for child in node.children {
-    child_classes.push(self.egraph.find(child))
-  }
-  if operand_classes.length() == 2 && eopcode_is_commutative(node.op) {
-    return (
-        operand_classes[0] == child_classes[0] &&
-        operand_classes[1] == child_classes[1]
-      ) ||
-      (
-        operand_classes[0] == child_classes[1] &&
-        operand_classes[1] == child_classes[0]
-      )
-  }
-  for index in 0..<operand_classes.length() {
-    if operand_classes[index] != child_classes[index] {
+  for index in 0..<inst.operands.length() {
+    guard self.lookup_value(inst.operands[index]) is Some(operand_class) else {
+      return false
+    }
+    if operand_class != self.egraph.find(node.children[index]) {
       return false
     }
   }

@@ -30,11 +30,8 @@ fn dual_width_const_function() -> (
   let root = eg.add({ op: Add, children: [widened, three], })
   // `narrow` is the one value elaboration may reuse; everything else in the
   // shape has to be built.
-  builder.class_to_value.set(
-    { class_id: eg.find(narrow_var).0, ty: I32, },
-    narrow,
-  )
-  builder.value_map.set(sum.id, root)
+  builder.set_class_value(eg.find(narrow_var).0, I32, narrow)
+  builder.region_table.set(sum.id, root)
   // Each class here holds exactly one node, but read it back rather than
   // reusing the literal: `add` canonicalizes commutative operands.
   let best_nodes : Map[Int, @egraph.ENode] = Map([])
@@ -107,7 +104,7 @@ test "an abandoned elaboration appends nothing" {
   let left = eg.add({ op: Add, children: [eg.add_const(1), eg.add_const(2)], })
   let right = eg.add({ op: Add, children: [eg.add_const(3), eg.add_const(4)], })
   let root = eg.add({ op: Add, children: [left, right], })
-  builder.value_map.set(sum.id, root)
+  builder.region_table.set(sum.id, root)
   let best_nodes : Map[Int, @egraph.ENode] = Map([])
   for
     class_id in [
