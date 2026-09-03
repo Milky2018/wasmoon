@@ -636,9 +636,8 @@ fn inst_dominates(
 /// Trapping instructions and memory operations remain excluded. Load CSE is a
 /// separate correctness change even though this pass tracks memory versions.
 fn is_gvn_candidate(inst : Inst) -> Bool {
-  // Replacement currently emits one copy, so only single-result instructions
-  // can participate in GVN.
-  if inst.results.length() != 1 {
+  if inst.results.length() != 1 ||
+    !inst.opcode.semantics().can_stage_as_pure_candidate() {
     return false
   }
   if is_cheap_rematerializable_constant(inst) {
