@@ -66,3 +66,29 @@ test "optimizer candidate scopes reject effectful instructions before staging" {
   session.discard_candidates(marker)
   inspect(func.verify(), content="()")
 }
+
+///|
+test "optimizer candidate extraction rejects equal-cost alternatives" {
+  let func = Function::new_empty("reject_equal_cost_candidate")
+  let input = func.add_param(I32)
+  func.add_result(I32)
+  let entry = func.new_block0()
+  entry.set_terminator(Return([input]))
+  let session = OptimizerSession::new(func)
+  let marker = session.begin_candidates()
+  guard session.stage_pure_candidate(
+      Scalar(IntBinary(Add)),
+      [input, input],
+      I32,
+    )
+    is Some(_) else {
+    fail("pure candidate was rejected")
+  }
+  let placement : Array[Inst] = []
+  inspect(
+    session.commit_candidates_if_cheaper(marker, 1, placement),
+    content="false",
+  )
+  inspect(placement.length(), content="0")
+  inspect(func.verify(), content="()")
+}

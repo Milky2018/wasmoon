@@ -496,6 +496,26 @@ test "acyclic rewrite creates a strength-reduced MilkIR form" {
 }
 
 ///|
+test "acyclic extraction keeps equal-cost integer addition" {
+  let builder = FunctionBuilder::FunctionBuilder("keep_equal_cost_add")
+  let input = builder.add_param(I32)
+  builder.add_result(I32)
+  let doubled = builder.iadd(input, input)
+  builder.return_([doubled])
+  let func = builder.get_function()
+  run_acyclic_optimization_with_budget_and_analysis(
+    func,
+    instruction_count(func),
+    FunctionAnalysis::build(func),
+  )
+  |> ignore
+  let text = func.print()
+  inspect(text.contains("iadd"), content="true")
+  inspect(text.contains("ishl"), content="false")
+  inspect(func.verify(), content="()")
+}
+
+///|
 test "acyclic rewrite reduces integer constants to the result width" {
   let builder = FunctionBuilder::FunctionBuilder("reduce_constant_width")
   builder.add_result(I32)

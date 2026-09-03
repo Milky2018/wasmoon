@@ -111,6 +111,55 @@ fn OptimizerSession::discard_candidates(
 }
 
 ///|
+fn pure_candidate_cost(opcode : Opcode) -> Int {
+  match opcode {
+    Scalar(IntConst(_) | FloatConst32(_) | FloatConst64(_) | Copy) => 0
+    // This is an IR-complexity cost, not a target latency table. Integer
+    // multiplication has greater algebraic complexity than the other pure
+    // scalar primitives; target-specific instruction costs remain in target
+    // lowering.
+    Scalar(IntBinary(Mul)) => 2
+    _ => 1
+  }
+}
+
+///|
+fn OptimizerSession::commit_candidates_if_cheaper(
+  self : OptimizerSession,
+  marker : Int,
+  original_cost : Int,
+  output : Array[Inst],
+) -> Bool {
+  guard self.staged_candidates is Some(candidates) else { return false }
+  let mut candidate_cost = 0
+  for index in marker..<candidates.length() {
+    candidate_cost = candidate_cost +
+      pure_candidate_cost(candidates[index].opcode)
+  }
+  if candidate_cost >= original_cost {
+    self.discard_candidates(marker)
+    return false
+  }
+  self.commit_candidates(marker, output)
+  true
+}
+
+///|
+fn OptimizerSession::stage_int_binary_with_constant(
+  self : OptimizerSession,
+  op : IntBinaryOp,
+  left : Value,
+  result_type : Type,
+  constant : Int64,
+) -> Value? {
+  guard self.stage_pure_candidate(Scalar(IntConst(constant)), [], result_type)
+    is Some(right) else {
+    return None
+  }
+  self.stage_pure_candidate(Scalar(IntBinary(op)), [left, right], result_type)
+}
+
+///|
 fn OptimizerSession::begin_scope(self : OptimizerSession) -> Int {
   self.union_changes.length()
 }
@@ -274,21 +323,6 @@ fn OptimizerSession::replace_with_constant(
 }
 
 ///|
-fn OptimizerSession::append_int_constant(
-  self : OptimizerSession,
-  output : Array[Inst],
-  ty : Type,
-  value : Int64,
-) -> Value {
-  let result = self.func.new_value(ty)
-  let inst = self.func.new_inst(Scalar(IntConst(value)), [], [result])
-  output.push(inst)
-  self.index_definition(inst)
-  self.stats.created_instructions = self.stats.created_instructions + 1
-  result
-}
-
-///|
 fn integer_width(ty : Type) -> Int? {
   match ty {
     I32 => Some(32)
@@ -378,19 +412,10 @@ fn OptimizerSession::rewrite_integer_identity(
   let right_const = self.int_constant(right)
   let same = self.canonical_value(left).id == self.canonical_value(right).id
   match op {
-    Add => {
+    Add =>
       if right_const is Some(0L) {
         return self.replace_with_alias(inst, left)
       }
-      if same && inst.first_result() is Some(result) {
-        let one = self.append_int_constant(prefix, result.ty, 1L)
-        inst.opcode = Scalar(IntBinary(ShiftLeft))
-        inst.operands.clear()
-        inst.operands.push(left)
-        inst.operands.push(one)
-        return true
-      }
-    }
     Sub => {
       if right_const is Some(0L) {
         return self.replace_with_alias(inst, left)
@@ -410,25 +435,23 @@ fn OptimizerSession::rewrite_integer_identity(
         power_of_two_shift(constant) is Some(shift) &&
         inst.first_result() is Some(result) {
         let marker = self.begin_candidates()
-        guard self.stage_pure_candidate(
-            Scalar(IntConst(shift.to_int64())),
-            [],
+        guard self.stage_int_binary_with_constant(
+            ShiftLeft,
+            left,
             result.ty,
-          )
-          is Some(amount) else {
-          self.discard_candidates(marker)
-          return false
-        }
-        guard self.stage_pure_candidate(
-            Scalar(IntBinary(ShiftLeft)),
-            [left, amount],
-            result.ty,
+            shift.to_int64(),
           )
           is Some(shifted) else {
           self.discard_candidates(marker)
           return false
         }
-        self.commit_candidates(marker, prefix)
+        if !self.commit_candidates_if_cheaper(
+            marker,
+            pure_candidate_cost(inst.opcode),
+            prefix,
+          ) {
+          return false
+        }
         return self.replace_with_alias(inst, shifted)
       }
     }
@@ -525,12 +548,25 @@ fn OptimizerSession::rewrite_nested_integer(
     inst.first_result() is Some(result) else {
     return false
   }
-  let constant = self.append_int_constant(prefix, result.ty, new_constant)
-  inst.opcode = Scalar(IntBinary(new_op))
-  inst.operands.clear()
-  inst.operands.push(inner_left)
-  inst.operands.push(constant)
-  true
+  let marker = self.begin_candidates()
+  guard self.stage_int_binary_with_constant(
+      new_op,
+      inner_left,
+      result.ty,
+      new_constant,
+    )
+    is Some(replacement) else {
+    self.discard_candidates(marker)
+    return false
+  }
+  if !self.commit_candidates_if_cheaper(
+      marker,
+      pure_candidate_cost(inner.opcode) + pure_candidate_cost(inst.opcode),
+      prefix,
+    ) {
+    return false
+  }
+  self.replace_with_alias(inst, replacement)
 }
 
 ///|
@@ -562,11 +598,25 @@ fn OptimizerSession::rewrite_nested_shift(
   if total >= width {
     return false
   }
-  let amount = self.append_int_constant(prefix, result.ty, total.to_int64())
-  inst.operands.clear()
-  inst.operands.push(source)
-  inst.operands.push(amount)
-  true
+  let marker = self.begin_candidates()
+  guard self.stage_int_binary_with_constant(
+      op,
+      source,
+      result.ty,
+      total.to_int64(),
+    )
+    is Some(replacement) else {
+    self.discard_candidates(marker)
+    return false
+  }
+  if !self.commit_candidates_if_cheaper(
+      marker,
+      pure_candidate_cost(inner.opcode) + pure_candidate_cost(inst.opcode),
+      prefix,
+    ) {
+    return false
+  }
+  self.replace_with_alias(inst, replacement)
 }
 
 ///|
