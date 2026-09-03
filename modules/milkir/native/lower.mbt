@@ -222,32 +222,6 @@ fn lower_conversion(
 }
 
 ///|
-fn mapped_value(
-  values : Array[@lowering.Value?],
-  value : @milkir.Value,
-) -> @lowering.Value raise NativeLowerError {
-  if value.id < 0 || value.id >= values.length() {
-    raise MissingValue(value_id=value.id)
-  }
-  match values[value.id] {
-    Some(mapped) => mapped
-    None => raise MissingValue(value_id=value.id)
-  }
-}
-
-///|
-fn mapped_values(
-  values : Array[@lowering.Value?],
-  source : Array[@milkir.Value],
-) -> Array[@lowering.Value] raise NativeLowerError {
-  let result : Array[@lowering.Value] = []
-  for value in source {
-    result.push(mapped_value(values, value))
-  }
-  result
-}
-
-///|
 fn mapped_block(
   blocks : Array[@lowering.Block?],
   block_id : Int,
@@ -393,11 +367,12 @@ fn lower_pointer_value(
   builder : @lowering.DirectBuilder,
   values : Array[@lowering.Value?],
   value_types : Array[@native_types.ValueType?],
+  facts : SelectionFacts,
   source : @milkir.Value,
   location : @native_types.SourceLocation?,
   instruction_id : Int,
 ) -> @lowering.Value raise NativeLowerError {
-  let mapped = mapped_value(values, source)
+  let mapped = demand_value(builder, values, value_types, facts, source)
   match value_types[source.id] {
     Some(Ptr64) => mapped
     Some(I64) =>
@@ -422,18 +397,19 @@ fn lower_address(
   builder : @lowering.DirectBuilder,
   values : Array[@lowering.Value?],
   value_types : Array[@native_types.ValueType?],
+  facts : SelectionFacts,
   base : @milkir.Value,
   offset : @milkir.Value,
   source : @native_types.SourceLocation?,
   instruction_id : Int,
 ) -> @lowering.Value raise NativeLowerError {
   let pointer = lower_pointer_value(
-    builder, values, value_types, base, source, instruction_id,
+    builder, values, value_types, facts, base, source, instruction_id,
   )
   emit_one(
     builder,
     PointerOffset,
-    [pointer, mapped_value(values, offset)],
+    [pointer, demand_value(builder, values, value_types, facts, offset)],
     Ptr64,
     source,
     instruction_id,
@@ -474,20 +450,22 @@ fn lower_memory_instruction(
   value_types : Array[@native_types.ValueType?],
   instruction : @milkir.Inst,
   memory : @milkir.MemoryOp,
-  analysis : LoweringAnalysis,
+  facts : SelectionFacts,
 ) -> Unit raise NativeLowerError {
   let source = instruction_source(instruction)
   let selected_address = fn(
     base : @milkir.Value,
     offset : @milkir.Value,
   ) -> (Array[@lowering.Value], UInt64, Int?) raise NativeLowerError {
-    match analysis.memory_addresses[instruction.id] {
-      Some(selected) => {
+    match memory_selection(instruction, facts) {
+      Some(matched) => {
+        let selected = matched.selection
         let operands = [
           lower_pointer_value(
             builder,
             values,
             value_types,
+            facts,
             selected.base,
             source,
             instruction.id,
@@ -495,7 +473,9 @@ fn lower_memory_instruction(
         ]
         match selected.index {
           Some(index) => {
-            operands.push(mapped_value(values, index))
+            operands.push(
+              demand_value(builder, values, value_types, facts, index),
+            )
             (operands, selected.offset, Some(selected.shift))
           }
           None => (operands, selected.offset, None)
@@ -508,6 +488,7 @@ fn lower_memory_instruction(
               builder,
               values,
               value_types,
+              facts,
               base,
               offset,
               source,
@@ -550,7 +531,9 @@ fn lower_memory_instruction(
         instruction.args[0],
         instruction.args[2],
       )
-      address.push(mapped_value(values, instruction.args[1]))
+      address.push(
+        demand_value(builder, values, value_types, facts, instruction.args[1]),
+      )
       let spec = @lowering.StoreSpec::new(
         access_width_for_type(lowered_type),
         lowered_type,
@@ -616,7 +599,9 @@ fn lower_memory_instruction(
         instruction.args[0],
         instruction.args[2],
       )
-      address.push(mapped_value(values, instruction.args[1]))
+      address.push(
+        demand_value(builder, values, value_types, facts, instruction.args[1]),
+      )
       let spec = @lowering.StoreSpec::new(
         width,
         value_type,
@@ -850,6 +835,7 @@ fn lower_call_instruction(
   builder : @lowering.DirectBuilder,
   values : Array[@lowering.Value?],
   value_types : Array[@native_types.ValueType?],
+  facts : SelectionFacts,
   instruction : @milkir.Inst,
   call : @milkir.CallOp,
   root_ids : Array[Int],
@@ -866,7 +852,7 @@ fn lower_call_instruction(
           Platform,
           @native_types.CallBehavior::conservative(),
         ),
-        mapped_values(values, instruction.args),
+        demand_values(builder, values, value_types, facts, instruction.args),
       )
     Pointer(_, _) => {
       let parameter_types = instruction.args[1:].map(value => {
@@ -878,13 +864,16 @@ fn lower_call_instruction(
           builder,
           values,
           value_types,
+          facts,
           instruction.args[0],
           instruction_source(instruction),
           instruction.id,
         ),
       ]
       for argument in instruction.args[1:] {
-        call_operands.push(mapped_value(values, argument))
+        call_operands.push(
+          demand_value(builder, values, value_types, facts, argument),
+        )
       }
       (
         @native_types.NativeCall::new(
@@ -934,6 +923,7 @@ fn lower_dialect_instruction(
   builder : @lowering.DirectBuilder,
   values : Array[@lowering.Value?],
   value_types : Array[@native_types.ValueType?],
+  facts : SelectionFacts,
   environment : Array[@lowering.Value],
   instruction : @milkir.Inst,
   function_result_types : Array[@native_types.ValueType],
@@ -956,7 +946,7 @@ fn lower_dialect_instruction(
   }
   let context = @adapter.InstructionContext::new(
     builder,
-    mapped_values(values, instruction.args),
+    demand_values(builder, values, value_types, facts, instruction.args),
     instruction.args.map(operand => value_types[operand.id].unwrap()),
     instruction.results.map(result => lower_type(result.ty)),
     function_result_types,
@@ -1047,6 +1037,214 @@ fn lower_scalar_operation(
 }
 
 ///|
+fn demand_value(
+  builder : @lowering.DirectBuilder,
+  values : Array[@lowering.Value?],
+  value_types : Array[@native_types.ValueType?],
+  facts : SelectionFacts,
+  value : @milkir.Value,
+) -> @lowering.Value raise NativeLowerError {
+  if value.id < 0 || value.id >= values.length() {
+    raise MissingValue(value_id=value.id)
+  }
+  if values[value.id] is Some(mapped) {
+    return mapped
+  }
+  guard facts.definitions[value.id] is Some(instruction) &&
+    should_defer_instruction(instruction, facts) else {
+    raise MissingValue(value_id=value.id)
+  }
+  lower_scalar_instruction(
+    builder,
+    values,
+    value_types,
+    instruction,
+    facts.instruction_blocks[instruction.id],
+    facts,
+  )
+  match values[value.id] {
+    Some(mapped) => mapped
+    None => raise MissingValue(value_id=value.id)
+  }
+}
+
+///|
+fn demand_values(
+  builder : @lowering.DirectBuilder,
+  values : Array[@lowering.Value?],
+  value_types : Array[@native_types.ValueType?],
+  facts : SelectionFacts,
+  source : Array[@milkir.Value],
+) -> Array[@lowering.Value] raise NativeLowerError {
+  let result : Array[@lowering.Value] = []
+  for value in source {
+    result.push(demand_value(builder, values, value_types, facts, value))
+  }
+  result
+}
+
+///|
+fn lower_scalar_instruction(
+  builder : @lowering.DirectBuilder,
+  values : Array[@lowering.Value?],
+  value_types : Array[@native_types.ValueType?],
+  instruction : @milkir.Inst,
+  block_id : Int,
+  facts : SelectionFacts,
+) -> Unit raise NativeLowerError {
+  match select_scalar_lowering(instruction, facts) {
+    Some(IntImmediate(input, operation, bits)) => {
+      let lowered_results = builder.emit_with_metadata(
+        IntBinaryImmediate(operation, bits),
+        [demand_value(builder, values, value_types, facts, input)],
+        instruction.results.map(result => lower_type(result.ty)),
+        instruction_metadata(instruction, []),
+      )
+      assign_instruction_results(values, instruction, lowered_results)
+      return
+    }
+    Some(ShiftImmediate(input, operation, amount)) => {
+      let lowered_results = builder.emit_with_metadata(
+        IntShiftImmediate(operation, amount),
+        [demand_value(builder, values, value_types, facts, input)],
+        instruction.results.map(result => lower_type(result.ty)),
+        instruction_metadata(instruction, []),
+      )
+      assign_instruction_results(values, instruction, lowered_results)
+      return
+    }
+    Some(MultiplyAdd(accumulator, left, right)) => {
+      let lowered_results = builder.emit_with_metadata(
+        IntMultiplyAdd,
+        [
+          demand_value(builder, values, value_types, facts, accumulator),
+          demand_value(builder, values, value_types, facts, left),
+          demand_value(builder, values, value_types, facts, right),
+        ],
+        instruction.results.map(result => lower_type(result.ty)),
+        instruction_metadata(instruction, []),
+      )
+      assign_instruction_results(values, instruction, lowered_results)
+      return
+    }
+    Some(AddShiftedLeft(accumulator, input, amount)) => {
+      let lowered_results = builder.emit_with_metadata(
+        IntAddShiftedLeft(amount),
+        [
+          demand_value(builder, values, value_types, facts, accumulator),
+          demand_value(builder, values, value_types, facts, input),
+        ],
+        instruction.results.map(result => lower_type(result.ty)),
+        instruction_metadata(instruction, []),
+      )
+      assign_instruction_results(values, instruction, lowered_results)
+      return
+    }
+    None => ()
+  }
+  guard instruction.opcode is Scalar(scalar) else {
+    raise InvalidMilkIR(message="demanded instruction is not scalar")
+  }
+  if scalar is Copy &&
+    instruction.args is [argument] &&
+    instruction.results is [result] {
+    let source = demand_value(builder, values, value_types, facts, argument)
+    guard value_types[argument.id] == Some(lower_type(result.ty)) else {
+      raise InvalidMilkIR(
+        message="copy result type does not match its verified operand",
+      )
+    }
+    values[result.id] = Some(source)
+    return
+  }
+  if scalar is Convert(Bitcast) &&
+    instruction.args is [argument] &&
+    instruction.results is [result] {
+    values[result.id] = Some(
+      lower_bitcast_value(
+        builder,
+        demand_value(builder, values, value_types, facts, argument),
+        argument.ty,
+        result.ty,
+        instruction_source(instruction),
+        instruction.id,
+      ),
+    )
+    return
+  }
+  if scalar is IntConst(bits) &&
+    instruction.results is [result] &&
+    (
+      result.ty is Ptr ||
+      result.ty is Ref ||
+      result.ty is CallableRef ||
+      result.ty is OpaqueRef
+    ) {
+    let source = instruction_source(instruction)
+    let lowered = match result.ty {
+      Ptr => {
+        let raw = emit_one(
+          builder,
+          I64Const(bits.reinterpret_as_uint64()),
+          [],
+          I64,
+          source,
+          instruction.id,
+        )
+        emit_one(
+          builder,
+          Convert(Bitcast(I64, Ptr64)),
+          [raw],
+          Ptr64,
+          source,
+          instruction.id,
+        )
+      }
+      Ref | CallableRef | OpaqueRef =>
+        if bits == 0L {
+          emit_one(builder, NullGcRef, [], GcRef64, source, instruction.id)
+        } else {
+          let raw = emit_one(
+            builder,
+            I64Const(bits.reinterpret_as_uint64()),
+            [],
+            I64,
+            source,
+            instruction.id,
+          )
+          emit_one(
+            builder,
+            GcRefFromBits,
+            [raw],
+            GcRef64,
+            source,
+            instruction.id,
+          )
+        }
+      _ => abort("matched pointer or reference carrier above")
+    }
+    values[result.id] = Some(lowered)
+    return
+  }
+  let operation = lower_scalar_operation(scalar, instruction, block_id)
+  let operands = demand_values(
+    builder,
+    values,
+    value_types,
+    facts,
+    instruction.args,
+  )
+  let result_types = instruction.results.map(result => lower_type(result.ty))
+  let lowered_results = builder.emit_with_metadata(
+    operation,
+    operands,
+    result_types,
+    instruction_metadata(instruction, []),
+  )
+  assign_instruction_results(values, instruction, lowered_results)
+}
+
+///|
 fn lower_instruction(
   function : @milkir.Function,
   builder : @lowering.DirectBuilder,
@@ -1054,62 +1252,21 @@ fn lower_instruction(
   value_types : Array[@native_types.ValueType?],
   instruction : @milkir.Inst,
   block_id : Int,
-  analysis : LoweringAnalysis,
+  facts : SelectionFacts,
   gc_roots : Array[Array[Int]]?,
   function_result_types : Array[@native_types.ValueType],
   environment : Array[@lowering.Value],
   dialect : DialectLowering?,
 ) -> Bool raise NativeLowerError {
-  if !instruction.results.is_empty() &&
-    instruction.results.all(result => analysis.skip_results[result.id]) {
+  if instruction.opcode
+    is Scalar(
+      IntConst(_)
+      | IntBinary(Add | Mul | ShiftLeft)
+      | IntCompare(_)
+      | Convert(UnsignedExtend | Bitcast)
+    ) &&
+    should_defer_instruction(instruction, facts) {
     return false
-  }
-  match analysis.scalar_instructions[instruction.id] {
-    Some(IntImmediate(input, operation, bits)) => {
-      let lowered_results = builder.emit_with_metadata(
-        IntBinaryImmediate(operation, bits),
-        [mapped_value(values, input)],
-        instruction.results.map(result => lower_type(result.ty)),
-        instruction_metadata(instruction, []),
-      )
-      assign_instruction_results(values, instruction, lowered_results)
-      return false
-    }
-    Some(ShiftImmediate(input, operation, amount)) => {
-      let lowered_results = builder.emit_with_metadata(
-        IntShiftImmediate(operation, amount),
-        [mapped_value(values, input)],
-        instruction.results.map(result => lower_type(result.ty)),
-        instruction_metadata(instruction, []),
-      )
-      assign_instruction_results(values, instruction, lowered_results)
-      return false
-    }
-    Some(MultiplyAdd(accumulator, left, right)) => {
-      let lowered_results = builder.emit_with_metadata(
-        IntMultiplyAdd,
-        [
-          mapped_value(values, accumulator),
-          mapped_value(values, left),
-          mapped_value(values, right),
-        ],
-        instruction.results.map(result => lower_type(result.ty)),
-        instruction_metadata(instruction, []),
-      )
-      assign_instruction_results(values, instruction, lowered_results)
-      return false
-    }
-    Some(AddShiftedLeft(accumulator, input, amount)) => {
-      let lowered_results = builder.emit_with_metadata(
-        IntAddShiftedLeft(amount),
-        [mapped_value(values, accumulator), mapped_value(values, input)],
-        instruction.results.map(result => lower_type(result.ty)),
-        instruction_metadata(instruction, []),
-      )
-      assign_instruction_results(values, instruction, lowered_results)
-      return false
-    }
-    None => ()
   }
   match instruction.opcode {
     Call(call) => {
@@ -1117,6 +1274,7 @@ fn lower_instruction(
         builder,
         values,
         value_types,
+        facts,
         instruction,
         call,
         gc_roots_for_instruction(gc_roots, instruction.id),
@@ -1125,13 +1283,13 @@ fn lower_instruction(
     }
     Memory(Vector(operation)) => {
       lower_vector_memory_instruction(
-        builder, values, value_types, instruction, operation,
+        builder, values, value_types, facts, instruction, operation,
       )
       return false
     }
     Memory(memory) => {
       lower_memory_instruction(
-        builder, values, value_types, instruction, memory, analysis,
+        builder, values, value_types, instruction, memory, facts,
       )
       return false
     }
@@ -1177,7 +1335,7 @@ fn lower_instruction(
                 Mutable => Mutable
               },
             ),
-            mapped_values(values, instruction.args),
+            demand_values(builder, values, value_types, facts, instruction.args),
             [expected_type],
             instruction_metadata(instruction, []),
           )
@@ -1186,105 +1344,16 @@ fn lower_instruction(
         }
       }
     }
-    Scalar(scalar) => {
-      if scalar is Copy &&
-        instruction.args is [argument] &&
-        instruction.results is [result] {
-        let source = mapped_value(values, argument)
-        guard value_types[argument.id] == Some(lower_type(result.ty)) else {
-          raise InvalidMilkIR(
-            message="copy result type does not match its verified operand",
-          )
-        }
-        // MilkIR copies are aliases, not semantic machine operations. Keeping
-        // them as owned native lowering instructions forced mandatory cleanup to scan
-        // the complete function only to recover this mapping.
-        values[result.id] = Some(source)
-        return false
-      }
-      if scalar is Convert(Bitcast) &&
-        instruction.args is [argument] &&
-        instruction.results is [result] {
-        values[result.id] = Some(
-          lower_bitcast_value(
-            builder,
-            mapped_value(values, argument),
-            argument.ty,
-            result.ty,
-            instruction_source(instruction),
-            instruction.id,
-          ),
-        )
-        return false
-      }
-      if scalar is IntConst(bits) &&
-        instruction.results is [result] &&
-        (
-          result.ty is Ptr ||
-          result.ty is Ref ||
-          result.ty is CallableRef ||
-          result.ty is OpaqueRef
-        ) {
-        let source = instruction_source(instruction)
-        let lowered = match result.ty {
-          Ptr => {
-            let raw = emit_one(
-              builder,
-              I64Const(bits.reinterpret_as_uint64()),
-              [],
-              I64,
-              source,
-              instruction.id,
-            )
-            emit_one(
-              builder,
-              Convert(Bitcast(I64, Ptr64)),
-              [raw],
-              Ptr64,
-              source,
-              instruction.id,
-            )
-          }
-          Ref | CallableRef | OpaqueRef =>
-            if bits == 0L {
-              emit_one(builder, NullGcRef, [], GcRef64, source, instruction.id)
-            } else {
-              let raw = emit_one(
-                builder,
-                I64Const(bits.reinterpret_as_uint64()),
-                [],
-                I64,
-                source,
-                instruction.id,
-              )
-              emit_one(
-                builder,
-                GcRefFromBits,
-                [raw],
-                GcRef64,
-                source,
-                instruction.id,
-              )
-            }
-          _ => abort("matched pointer or reference carrier above")
-        }
-        values[result.id] = Some(lowered)
-        return false
-      }
-      let operation = lower_scalar_operation(scalar, instruction, block_id)
-      let operands = mapped_values(values, instruction.args)
-      let result_types = instruction.results.map(result => lower_type(result.ty))
-      let lowered_results = builder.emit_with_metadata(
-        operation,
-        operands,
-        result_types,
-        instruction_metadata(instruction, []),
+    Scalar(_) => {
+      lower_scalar_instruction(
+        builder, values, value_types, instruction, block_id, facts,
       )
-      assign_instruction_results(values, instruction, lowered_results)
       false
     }
     Vector(operation) => {
-      lower_vector_instruction(builder, values, instruction, operation)
+      lower_vector_instruction(
+        builder, values, value_types, facts, instruction, operation,
+      )
       false
     }
     Ext(ext, _) =>
@@ -1294,6 +1363,7 @@ fn lower_instruction(
             builder,
             values,
             value_types,
+            facts,
             environment,
             instruction,
             function_result_types,
@@ -1345,16 +1415,17 @@ fn lower_trap_reason(
 fn lower_terminator(
   builder : @lowering.DirectBuilder,
   values : Array[@lowering.Value?],
+  value_types : Array[@native_types.ValueType?],
   blocks : Array[@lowering.Block?],
   block_id : Int,
   terminator : @milkir.Terminator,
-  analysis : LoweringAnalysis,
+  facts : SelectionFacts,
 ) -> Unit raise NativeLowerError {
   match terminator {
     Jump(target, arguments) =>
       builder.jump(
         mapped_block(blocks, target),
-        mapped_values(values, arguments),
+        demand_values(builder, values, value_types, facts, arguments),
       )
     Branch(
       condition,
@@ -1364,15 +1435,19 @@ fn lower_terminator(
       false_arguments
     ) => {
       let lowered_true_target = mapped_block(blocks, true_target)
-      let lowered_true_arguments = mapped_values(values, true_arguments)
+      let lowered_true_arguments = demand_values(
+        builder, values, value_types, facts, true_arguments,
+      )
       let lowered_false_target = mapped_block(blocks, false_target)
-      let lowered_false_arguments = mapped_values(values, false_arguments)
-      match analysis.branches[block_id] {
+      let lowered_false_arguments = demand_values(
+        builder, values, value_types, facts, false_arguments,
+      )
+      match select_branch_lowering(condition, facts) {
         Some(Compare(left, right, comparison)) =>
           builder.branch_int_compare(
             comparison,
-            mapped_value(values, left),
-            mapped_value(values, right),
+            demand_value(builder, values, value_types, facts, left),
+            demand_value(builder, values, value_types, facts, right),
             lowered_true_target,
             lowered_true_arguments,
             lowered_false_target,
@@ -1381,7 +1456,7 @@ fn lower_terminator(
         Some(CompareImmediate(input, bits, comparison)) =>
           builder.branch_int_compare_immediate(
             comparison,
-            mapped_value(values, input),
+            demand_value(builder, values, value_types, facts, input),
             bits,
             lowered_true_target,
             lowered_true_arguments,
@@ -1390,7 +1465,7 @@ fn lower_terminator(
           )
         None =>
           builder.branch(
-            mapped_value(values, condition),
+            demand_value(builder, values, value_types, facts, condition),
             lowered_true_target,
             lowered_true_arguments,
             lowered_false_target,
@@ -1399,12 +1474,12 @@ fn lower_terminator(
       }
     }
     Brnz(condition, true_target, false_target) =>
-      match analysis.branches[block_id] {
+      match select_branch_lowering(condition, facts) {
         Some(Compare(left, right, comparison)) =>
           builder.branch_int_compare(
             comparison,
-            mapped_value(values, left),
-            mapped_value(values, right),
+            demand_value(builder, values, value_types, facts, left),
+            demand_value(builder, values, value_types, facts, right),
             mapped_block(blocks, true_target),
             [],
             mapped_block(blocks, false_target),
@@ -1413,7 +1488,7 @@ fn lower_terminator(
         Some(CompareImmediate(input, bits, comparison)) =>
           builder.branch_int_compare_immediate(
             comparison,
-            mapped_value(values, input),
+            demand_value(builder, values, value_types, facts, input),
             bits,
             mapped_block(blocks, true_target),
             [],
@@ -1422,7 +1497,7 @@ fn lower_terminator(
           )
         None =>
           builder.branch(
-            mapped_value(values, condition),
+            demand_value(builder, values, value_types, facts, condition),
             mapped_block(blocks, true_target),
             [],
             mapped_block(blocks, false_target),
@@ -1430,12 +1505,12 @@ fn lower_terminator(
           )
       }
     Brz(condition, true_target, false_target) =>
-      match analysis.branches[block_id] {
+      match select_branch_lowering(condition, facts) {
         Some(Compare(left, right, comparison)) =>
           builder.branch_int_compare(
             comparison,
-            mapped_value(values, left),
-            mapped_value(values, right),
+            demand_value(builder, values, value_types, facts, left),
+            demand_value(builder, values, value_types, facts, right),
             mapped_block(blocks, false_target),
             [],
             mapped_block(blocks, true_target),
@@ -1444,7 +1519,7 @@ fn lower_terminator(
         Some(CompareImmediate(input, bits, comparison)) =>
           builder.branch_int_compare_immediate(
             comparison,
-            mapped_value(values, input),
+            demand_value(builder, values, value_types, facts, input),
             bits,
             mapped_block(blocks, false_target),
             [],
@@ -1453,7 +1528,7 @@ fn lower_terminator(
           )
         None =>
           builder.branch(
-            mapped_value(values, condition),
+            demand_value(builder, values, value_types, facts, condition),
             mapped_block(blocks, false_target),
             [],
             mapped_block(blocks, true_target),
@@ -1466,13 +1541,16 @@ fn lower_terminator(
         cases.push((case_index.to_uint64(), mapped_block(blocks, target), []))
       }
       builder.switch(
-        mapped_value(values, index),
+        demand_value(builder, values, value_types, facts, index),
         cases,
         mapped_block(blocks, default_target),
         [],
       )
     }
-    Return(results) => builder.return_(mapped_values(values, results))
+    Return(results) =>
+      builder.return_(
+        demand_values(builder, values, value_types, facts, results),
+      )
     Trap(reason) => builder.trap(lower_trap_reason(reason))
     TrapExit(reason) =>
       raise UnsupportedOperation(
@@ -1530,7 +1608,7 @@ fn lower_verified_construction(
     }
   }
   let cfg = @milkir.CFG::build(function)
-  let analysis = analyze_lowering(function)
+  let facts = build_selection_facts(function)
   let gc_roots = if has_gc_references {
     Some(compute_gc_roots(function, cfg))
   } else {
@@ -1618,7 +1696,7 @@ fn lower_verified_construction(
           value_types,
           instruction,
           block.id,
-          analysis,
+          facts,
           gc_roots,
           function_result_types,
           environment,
@@ -1632,10 +1710,11 @@ fn lower_verified_construction(
           lower_terminator(
             builder,
             values,
+            value_types,
             blocks,
             block.id,
             terminator,
-            analysis,
+            facts,
           )
         None =>
           raise InvalidMilkIR(
