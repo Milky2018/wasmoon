@@ -401,37 +401,38 @@ fn OptimizerSession::canonicalize_commutative_constant(
 }
 
 ///|
-fn OptimizerSession::rewrite_integer_identity(
+fn OptimizerSession::rewrite_int_binary(
   self : OptimizerSession,
   inst : Inst,
   op : IntBinaryOp,
   prefix : Array[Inst],
 ) -> Bool {
   guard inst.operands is [left, right] else { return false }
-  let left_const = self.int_constant(left)
-  let right_const = self.int_constant(right)
-  let same = self.canonical_value(left).id == self.canonical_value(right).id
   match op {
-    Add =>
-      if right_const is Some(0L) {
+    Add => {
+      if self.int_constant(right) is Some(0L) {
         return self.replace_with_alias(inst, left)
       }
+      self.rewrite_nested_integer(inst, Add, prefix)
+    }
     Sub => {
-      if right_const is Some(0L) {
+      if self.int_constant(right) is Some(0L) {
         return self.replace_with_alias(inst, left)
       }
-      if same {
+      if self.canonical_value(left).id == self.canonical_value(right).id {
         return self.replace_with_constant(inst, 0L)
       }
+      self.rewrite_nested_integer(inst, Sub, prefix)
     }
     Mul => {
-      if right_const is Some(0L) {
+      let right_constant = self.int_constant(right)
+      if right_constant is Some(0L) {
         return self.replace_with_constant(inst, 0L)
       }
-      if right_const is Some(1L) {
+      if right_constant is Some(1L) {
         return self.replace_with_alias(inst, left)
       }
-      if right_const is Some(constant) &&
+      if right_constant is Some(constant) &&
         power_of_two_shift(constant) is Some(shift) &&
         inst.first_result() is Some(result) {
         let marker = self.begin_candidates()
@@ -454,46 +455,61 @@ fn OptimizerSession::rewrite_integer_identity(
         }
         return self.replace_with_alias(inst, shifted)
       }
+      false
     }
     And => {
-      if right_const is Some(0L) {
+      let right_constant = self.int_constant(right)
+      if right_constant is Some(0L) {
         return self.replace_with_constant(inst, 0L)
       }
-      if right_const is Some(-1L) || same {
+      if right_constant is Some(-1L) ||
+        self.canonical_value(left).id == self.canonical_value(right).id {
         return self.replace_with_alias(inst, left)
       }
+      self.rewrite_nested_integer(inst, And, prefix)
     }
     Or => {
-      if right_const is Some(0L) || same {
+      let right_constant = self.int_constant(right)
+      if right_constant is Some(0L) ||
+        self.canonical_value(left).id == self.canonical_value(right).id {
         return self.replace_with_alias(inst, left)
       }
-      if right_const is Some(-1L) {
+      if right_constant is Some(-1L) {
         return self.replace_with_constant(inst, -1L)
       }
+      self.rewrite_nested_integer(inst, Or, prefix)
     }
     Xor => {
-      if right_const is Some(0L) {
+      if self.int_constant(right) is Some(0L) {
         return self.replace_with_alias(inst, left)
       }
-      if same {
+      if self.canonical_value(left).id == self.canonical_value(right).id {
         return self.replace_with_constant(inst, 0L)
       }
+      self.rewrite_nested_integer(inst, Xor, prefix)
     }
     ShiftLeft | SignedShiftRight | UnsignedShiftRight => {
-      if right_const is Some(0L) {
+      if self.int_constant(right) is Some(0L) {
         return self.replace_with_alias(inst, left)
       }
-      if left_const is Some(0L) {
+      if self.int_constant(left) is Some(0L) {
         return self.replace_with_constant(inst, 0L)
       }
+      self.rewrite_nested_shift(inst, op, prefix)
     }
     RotateLeft | RotateRight =>
-      if right_const is Some(0L) {
+      if self.int_constant(right) is Some(0L) {
         return self.replace_with_alias(inst, left)
+      } else {
+        false
       }
-    _ => ()
+    UnsignedMulHigh
+    | SignedMulHigh
+    | SignedDiv
+    | UnsignedDiv
+    | SignedRem
+    | UnsignedRem => false
   }
-  false
 }
 
 ///|
@@ -742,9 +758,7 @@ fn OptimizerSession::rewrite_inst(
     Scalar(IntBinary(op)) => {
       let canonicalized = self.canonicalize_commutative_constant(inst, op)
       changed = changed || canonicalized
-      self.rewrite_integer_identity(inst, op, prefix) ||
-      self.rewrite_nested_shift(inst, op, prefix) ||
-      self.rewrite_nested_integer(inst, op, prefix)
+      self.rewrite_int_binary(inst, op, prefix)
     }
     Scalar(IntUnary(Not)) => {
       guard inst.operands is [source] else { false }
