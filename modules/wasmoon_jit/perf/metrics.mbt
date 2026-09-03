@@ -78,6 +78,7 @@ pub struct IRPassMetric {
   rewrite_apps : Int?
   rewrite_created_insts : Int?
   work_done : Int?
+  value_lookup_probes : Int?
   budget_exhausted : Bool?
 } derive(ToJson)
 
@@ -258,6 +259,7 @@ pub fn record_ir_pass(
   rewrite_apps? : Int? = None,
   rewrite_created_insts? : Int? = None,
   work_done? : Int? = None,
+  value_lookup_probes? : Int? = None,
   budget_exhausted? : Bool? = None,
 ) -> Unit {
   guard enabled() else { return }
@@ -273,6 +275,7 @@ pub fn record_ir_pass(
       rewrite_apps,
       rewrite_created_insts,
       work_done,
+      value_lookup_probes,
       budget_exhausted,
     })
   }
@@ -309,6 +312,7 @@ pub fn install_milkir_metrics_sink() -> Unit {
           rewrite_apps=metric.rewrite_apps,
           rewrite_created_insts=metric.rewrite_created_insts,
           work_done=metric.work_done,
+          value_lookup_probes=metric.value_lookup_probes,
           budget_exhausted=metric.budget_exhausted,
         )
       }),

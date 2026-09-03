@@ -53,25 +53,37 @@ fn run_opt_pass(
 }
 
 ///|
-fn gvn_work_budget_for_instruction_count(insts : Int) -> Int {
-  if insts > 300 {
-    300
+const O2_MEMORY_ANALYSIS_LIMIT : Int = 300
+
+///|
+const O3_MEMORY_ANALYSIS_LIMIT : Int = 1200
+
+///|
+fn acyclic_memory_work_budget(insts : Int, level : OptLevel) -> Int {
+  let limit = if level is O3 {
+    O3_MEMORY_ANALYSIS_LIMIT
+  } else {
+    O2_MEMORY_ANALYSIS_LIMIT
+  }
+  if insts > limit {
+    limit
   } else {
     insts
   }
 }
 
 ///|
-fn run_acyclic_optimization_pass_with_analysis(
+fn run_acyclic_optimization_pass_with_analysis_at_level(
   func : Function,
   analysis : FunctionAnalysis,
+  level : OptLevel,
 ) -> (Bool, OptResult) {
   let before = instruction_count(func)
   let perf_on = perf_enabled()
   let tick = if perf_on { perf_tick_now() } else { 0L }
   let optimize_stats = run_acyclic_optimization_with_budget_and_analysis(
     func,
-    gvn_work_budget_for_instruction_count(before),
+    acyclic_memory_work_budget(before, level),
     analysis,
   )
   if perf_on {
@@ -88,6 +100,7 @@ fn run_acyclic_optimization_pass_with_analysis(
         optimize_stats.rewrite_stats.created_instructions,
       ),
       budget_exhausted=Some(optimize_stats.budget_exhausted),
+      value_lookup_probes=Some(optimize_stats.value_lookup_probes),
     )
   }
   (optimize_stats.rewrite_stats.changed, optimize_stats.result)
@@ -183,11 +196,12 @@ fn run_mandatory_final_cleanup_with_analysis(
 fn run_acyclic_pipeline_after_normalization(
   func : Function,
   needs_dce : Bool,
+  level : OptLevel,
 ) -> OptResult {
   let result = OptResult::OptResult()
   let analysis = FunctionAnalysis::build(func)
-  let (rewrite_changed, gvn_result) = run_acyclic_optimization_pass_with_analysis(
-    func, analysis,
+  let (rewrite_changed, gvn_result) = run_acyclic_optimization_pass_with_analysis_at_level(
+    func, analysis, level,
   )
   if rewrite_changed {
     result.mark_changed()
@@ -217,7 +231,7 @@ fn optimize_o2_pipeline(func : Function) -> OptResult {
   if pre_cleanup.changed {
     result.mark_changed()
   }
-  if run_acyclic_pipeline_after_normalization(func, false).changed {
+  if run_acyclic_pipeline_after_normalization(func, false, O2).changed {
     result.mark_changed()
   }
   result
@@ -295,7 +309,7 @@ fn optimize_o3(func : Function) -> OptResult {
   let loop_changed = licm_result.changed ||
     unroll_result.changed ||
     sr_result.changed
-  if run_acyclic_pipeline_after_normalization(func, loop_changed).changed {
+  if run_acyclic_pipeline_after_normalization(func, loop_changed, O3).changed {
     result.mark_changed()
   }
   if run_final_materialization_sink(func).changed {

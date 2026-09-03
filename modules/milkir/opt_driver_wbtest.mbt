@@ -163,12 +163,26 @@ test "GVN early termination preserves external effects" {
 test "GVN uses work units instead of a function-size switch" {
   debug_inspect(
     [
-      gvn_work_budget_for_instruction_count(299),
-      gvn_work_budget_for_instruction_count(300),
-      gvn_work_budget_for_instruction_count(301),
-      gvn_work_budget_for_instruction_count(600),
+      acyclic_memory_work_budget(299, O2),
+      acyclic_memory_work_budget(300, O2),
+      acyclic_memory_work_budget(301, O2),
+      acyclic_memory_work_budget(600, O2),
     ],
     content="[299, 300, 300, 300]",
+  )
+}
+
+///|
+test "O3 receives a larger but bounded memory-analysis budget" {
+  debug_inspect(
+    [
+      acyclic_memory_work_budget(300, O2),
+      acyclic_memory_work_budget(301, O2),
+      acyclic_memory_work_budget(301, O3),
+      acyclic_memory_work_budget(1200, O3),
+      acyclic_memory_work_budget(1201, O3),
+    ],
+    content="[300, 300, 301, 1200, 1200]",
   )
 }
 
@@ -301,9 +315,10 @@ test "GVN metrics count only instructions visited in reachable blocks" {
       fn(event) { events.push(event) },
     ),
   )
-  run_acyclic_optimization_pass_with_analysis(
+  run_acyclic_optimization_pass_with_analysis_at_level(
     func,
     FunctionAnalysis::build(func),
+    O2,
   )
   |> ignore
   clear_optimization_metrics_sink()

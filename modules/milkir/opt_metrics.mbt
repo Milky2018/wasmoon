@@ -10,6 +10,7 @@ pub struct OptimizationPassMetric {
   rewrite_apps : Int?
   rewrite_created_insts : Int?
   work_done : Int?
+  value_lookup_probes : Int?
   budget_exhausted : Bool?
 }
 
@@ -78,6 +79,7 @@ fn perf_record_ir_pass(
   rewrite_apps? : Int? = None,
   rewrite_created_insts? : Int? = None,
   work_done? : Int? = None,
+  value_lookup_probes? : Int? = None,
   budget_exhausted? : Bool? = None,
 ) -> Unit {
   if optimization_metrics_sink.val is Some(sink) {
@@ -91,6 +93,7 @@ fn perf_record_ir_pass(
       rewrite_apps,
       rewrite_created_insts,
       work_done,
+      value_lookup_probes,
       budget_exhausted,
     })
   }

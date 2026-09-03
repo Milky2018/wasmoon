@@ -586,6 +586,7 @@ pub struct OptimizationPassMetric {
   rewrite_apps : Int?
   rewrite_created_insts : Int?
   work_done : Int?
+  value_lookup_probes : Int?
   budget_exhausted : Bool?
 }
 

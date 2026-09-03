@@ -675,14 +675,12 @@ priv struct AcyclicOptimizeStats {
   result : OptResult
   work_done : Int
   budget_exhausted : Bool
+  value_lookup_probes : Int
   rewrite_stats : AcyclicRewriteStats
 }
 
 ///|
-/// One available expression in the insertion-time GVN table. Entries are
-/// retained instead of destructively scoped: lookup checks dominance and the
-/// relevant memory version, so sibling blocks cannot hide an available value
-/// from their common dominator.
+/// One available expression in the insertion-time GVN table.
 priv struct AvailableExpression {
   value : Value
   dependency : AliasRegion?
@@ -694,6 +692,14 @@ priv struct AvailableExpression {
 }
 
 ///|
+/// One reversible mutation of a scoped available-expression stack. The stack
+/// object is recorded directly so rollback never has to hash a mutable `Inst`.
+priv enum ValueTableChange {
+  Inserted(Array[AvailableExpression])
+  Updated(Array[AvailableExpression], Int, AvailableExpression)
+}
+
+///|
 priv struct AcyclicOptimizer {
   func : Function
   analysis : FunctionAnalysis
@@ -702,11 +708,13 @@ priv struct AcyclicOptimizer {
   ptr_base_infos : Array[PtrBaseInfo?]
   block_input_state : @hashmap.HashMap[Int, LastStoreState]
   value_table : @hashmap.HashMap[Inst, Array[AvailableExpression]]
+  value_table_changes : Array[ValueTableChange]
   memory_values : @hashmap.HashMap[MemoryValueKey, MemoryValueEntry]
   result : OptResult
   mut work_done : Int
   mut budget_exhausted : Bool
   mut instruction_position : Int
+  mut value_lookup_probes : Int
 }
 
 ///|
@@ -778,12 +786,50 @@ fn AcyclicOptimizer::new(
     ptr_base_infos,
     block_input_state,
     value_table: HashMap([]),
+    value_table_changes: [],
     memory_values: HashMap([]),
     result: OptResult(),
     work_done: 0,
     budget_exhausted: false,
     instruction_position: 0,
+    value_lookup_probes: 0,
   }
+}
+
+///|
+fn AcyclicOptimizer::begin_value_scope(self : AcyclicOptimizer) -> Int {
+  self.value_table_changes.length()
+}
+
+///|
+fn AcyclicOptimizer::end_value_scope(
+  self : AcyclicOptimizer,
+  marker : Int,
+) -> Unit {
+  while self.value_table_changes.length() > marker {
+    match self.value_table_changes.pop().unwrap() {
+      Inserted(entries) => entries.pop() |> ignore
+      Updated(entries, index, previous) => entries[index] = previous
+    }
+  }
+}
+
+///|
+fn AcyclicOptimizer::insert_available_expression(
+  self : AcyclicOptimizer,
+  inst : Inst,
+  entry : AvailableExpression,
+) -> Unit {
+  let entries = match self.value_table.get(inst) {
+    Some(entries) => entries
+    None => {
+      let entries : Array[AvailableExpression] = []
+      self.value_table.set(inst, entries)
+      entries
+    }
+  }
+  entries.push(entry)
+  self.value_table_changes.push(Inserted(entries))
 }
 
 ///|
@@ -916,27 +962,29 @@ fn AcyclicOptimizer::process_inst(
   }
   let bounded_stable_global = !within_memory_budget &&
     is_stable_global_value(self.func, inst)
+  let mut reusable_entries : Array[AvailableExpression]? = None
   let mut reusable_index = -1
-  if self.value_table.get(inst) is Some(entries) {
-    let mut index = entries.length() - 1
-    while index >= 0 {
-      let entry = entries[index]
-      if entry.dependency == dependency &&
-        entry.memory_version == memory_version &&
-        inst_dominates(
-          entry.def_block_id,
-          entry.def_inst_index,
-          block_id,
-          inst_index,
-          self.analysis.dominance,
-        ) {
-        reusable_index = index
-        break
-      }
-      index = index - 1
+  if self.value_table.get(inst) is Some(entries) && !entries.is_empty() {
+    // Dominator-scoped rollback guarantees that the last entry is the nearest
+    // definition on the current dominance path. If its memory version differs,
+    // every older entry precedes the same invalidating effect and is stale too.
+    let index = entries.length() - 1
+    let entry = entries[index]
+    self.value_lookup_probes = self.value_lookup_probes + 1
+    if entry.dependency == dependency &&
+      entry.memory_version == memory_version &&
+      inst_dominates(
+        entry.def_block_id,
+        entry.def_inst_index,
+        block_id,
+        inst_index,
+        self.analysis.dominance,
+      ) {
+      reusable_entries = Some(entries)
+      reusable_index = index
     }
   }
-  if reusable_index >= 0 && self.value_table.get(inst) is Some(entries) {
+  if reusable_index >= 0 && reusable_entries is Some(entries) {
     let existing = entries[reusable_index]
     if existing.value.ty == result_val.ty &&
       (
@@ -959,6 +1007,9 @@ fn AcyclicOptimizer::process_inst(
       }
       self.result.mark_changed()
       if bounded_stable_global {
+        self.value_table_changes.push(
+          Updated(entries, reusable_index, existing),
+        )
         entries[reusable_index] = {
           ..existing,
           reuse_count: existing.reuse_count + 1,
@@ -976,10 +1027,7 @@ fn AcyclicOptimizer::process_inst(
     position,
     reuse_count: 0,
   }
-  match self.value_table.get(inst) {
-    Some(entries) => entries.push(entry)
-    None => self.value_table.set(inst, [entry])
-  }
+  self.insert_available_expression(inst, entry)
   self.session.record_definition(inst)
 }
 
@@ -992,6 +1040,7 @@ fn AcyclicOptimizer::finish(self : AcyclicOptimizer) -> AcyclicOptimizeStats {
     result: self.result,
     work_done: self.work_done,
     budget_exhausted: self.budget_exhausted,
+    value_lookup_probes: self.value_lookup_probes,
     rewrite_stats: self.session.stats,
   }
 }
@@ -1008,16 +1057,19 @@ fn run_acyclic_optimization_with_budget_and_analysis(
   let stream = AcyclicOptimizer::new(
     func, work_budget, analysis, block_instructions,
   )
-  fn enter(block_id : Int) -> (Int, Bool) {
-    let scope = stream.session.begin_scope()
+  fn enter(block_id : Int) -> ((Int, Int), Bool) {
+    let union_scope = stream.session.begin_scope()
+    let value_scope = stream.begin_value_scope()
     func.blocks[analysis.block_idx[block_id]].replace_instructions(
       stream.process_block(block_id, block_instructions(block_id)),
     )
-    (scope, true)
+    ((union_scope, value_scope), true)
   }
   if analysis.cfg.is_valid(0) {
     visit_dominator_tree(analysis.domtree, 0, enter, fn(scope) {
-      stream.session.end_scope(scope)
+      let (union_scope, value_scope) = scope
+      stream.end_value_scope(value_scope)
+      stream.session.end_scope(union_scope)
     })
   }
   stream.finish()

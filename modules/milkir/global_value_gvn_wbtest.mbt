@@ -253,6 +253,31 @@ test "GVN reloads mutable context globals after calls" {
 }
 
 ///|
+test "GVN probes one scoped value candidate after each invalidation" {
+  let (builder, context, global) = context_global_fixture(
+    "scoped_global_probe_bound",
+    Mutable,
+    0,
+  )
+  builder.add_result(I64)
+  let symbol = builder.get_function().declare_external_symbol("effect")
+  let mut last = builder.global_value(global, context)
+  for _ in 0..<64 {
+    builder.call_symbol(symbol, None, []) |> ignore
+    last = builder.global_value(global, context)
+  }
+  builder.return_([last])
+  let function = builder.get_function()
+  let stats = run_acyclic_optimization_with_budget_and_analysis(
+    function,
+    instruction_count(function),
+    FunctionAnalysis::build(function),
+  )
+  inspect(stats.value_lookup_probes, content="64")
+  inspect(function.verify(), content="()")
+}
+
+///|
 test "GVN does not merge distinct context globals" {
   let builder = FunctionBuilder::FunctionBuilder("distinct_globals")
   let context = builder.add_param(Ptr)
