@@ -11,7 +11,7 @@ test "build and verify minimal MilkIR function" {
   entry.append_inst(add)
   entry.set_terminator(Return([sum]))
   inspect(func.blocks.length(), content="1")
-  inspect(entry.instructions.length(), content="1")
+  inspect(entry.instruction_count(), content="1")
   inspect(func.verify(), content="()")
 }
 
@@ -431,14 +431,9 @@ test "memory operations use the semantic opcode family" {
   builder.store_ptr(I32, address, value, offset)
   builder.return_([loaded])
   let func = builder.get_function()
-  inspect(
-    func.blocks[0].instructions[1].opcode is Memory(Load(I32)),
-    content="true",
-  )
-  inspect(
-    func.blocks[0].instructions[2].opcode is Memory(Store(I32)),
-    content="true",
-  )
+  let instructions = test_block_instructions(func, func.blocks[0])
+  inspect(instructions[1].opcode is Memory(Load(I32)), content="true")
+  inspect(instructions[2].opcode is Memory(Store(I32)), content="true")
   inspect(func.verify(), content="()")
 }
 
@@ -450,10 +445,8 @@ test "vector operations use the semantic opcode family" {
   let vector = builder.v128_splat32(scalar)
   builder.return_([vector])
   let func = builder.get_function()
-  inspect(
-    func.blocks[0].instructions[0].opcode is Vector(Splat(I32)),
-    content="true",
-  )
+  let instructions = test_block_instructions(func, func.blocks[0])
+  inspect(instructions[0].opcode is Vector(Splat(I32)), content="true")
   inspect(func.verify(), content="()")
 }
 
@@ -466,7 +459,8 @@ test "scalar operations use typed semantic families" {
   let sum = builder.iadd(lhs, rhs)
   let compared = builder.icmp(Ult, sum, rhs)
   builder.return_([compared])
-  let instructions = builder.get_function().blocks[0].instructions
+  let func = builder.get_function()
+  let instructions = test_block_instructions(func, func.blocks[0])
   inspect(instructions[0].opcode is Scalar(IntBinary(Add)), content="true")
   inspect(instructions[1].opcode is Scalar(IntCompare(Ult)), content="true")
 }
@@ -540,9 +534,9 @@ test "vector memory operations discard Wasm memory arguments" {
   let loaded = builder.v128_load_with_addr(LoadExtend(I8, Signed), address)
   builder.return_([loaded])
   let func = builder.get_function()
+  let instructions = test_block_instructions(func, func.blocks[0])
   inspect(
-    func.blocks[0].instructions[0].opcode
-    is Memory(Vector(LoadExtend(I8, Signed))),
+    instructions[0].opcode is Memory(Vector(LoadExtend(I8, Signed))),
     content="true",
   )
   let printed = func.print()
@@ -604,7 +598,7 @@ test "O3 derives power-of-two constants in a large function" {
   builder.return_([product, quotient, remainder])
   let func = builder.get_function()
   optimize_with_level(func, O3) |> ignore
-  let instructions = func.blocks[0].instructions
+  let instructions = test_block_instructions(func, func.blocks[0])
   inspect(instructions.length(), content="6")
   inspect(instructions[0].opcode, content="Scalar(IntConst(3))")
   inspect(instructions[1].opcode, content="Scalar(IntBinary(ShiftLeft))")
@@ -640,7 +634,7 @@ test "O3 does not duplicate loop side effects without a safe unroll proof" {
   optimize_with_level(func, O3) |> ignore
   let mut external_calls = 0
   for block in func.blocks {
-    for inst in block.instructions {
+    for inst in test_block_instructions(func, block) {
       if inst.opcode is Call(_) {
         external_calls = external_calls + 1
       }
@@ -740,7 +734,10 @@ test "GVN reuses float constants with identical NaN bits" {
     FunctionAnalysis::build(func),
   )
   inspect(stats.result.changed, content="true")
-  inspect(func.blocks[0].instructions[1].opcode is Scalar(Copy), content="true")
+  inspect(
+    func.block_instruction_at(func.blocks[0], 1).unwrap().opcode is Scalar(Copy),
+    content="true",
+  )
   inspect(func.verify(), content="()")
 }
 

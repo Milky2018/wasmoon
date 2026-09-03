@@ -22,7 +22,8 @@ fn hoist_loop_invariants(func : Function) -> OptResult {
       value_to_block.set(v.id, block.id)
     }
     // Instruction results
-    for inst in block.instructions {
+    for inst_id in block.instructions {
+      let inst = func.instructions[inst_id]
       if inst.first_result() is Some(v) {
         value_to_block.set(v.id, block.id)
       }
@@ -121,7 +122,7 @@ fn hoist_from_loop(
           // Check each instruction
           let mut i = 0
           while i < block.instructions.length() {
-            let inst = block.instructions[i]
+            let inst = func.instructions[block.instructions[i]]
 
             // Skip if already marked or has no result
             let already_invariant = match inst.first_result() {
@@ -136,7 +137,7 @@ fn hoist_from_loop(
               }
 
               // Move instruction to preheader (before terminator)
-              block.remove_inst_at(i) |> ignore
+              block.take_inst_at(i) |> ignore
               preheader.add_inst(inst)
 
               // Update value_to_block
@@ -170,7 +171,8 @@ fn reduce_strength(func : Function) -> OptResult {
   // Build constant map
   let constants : @hashmap.HashMap[Int, ConstValue] = HashMap([])
   for block in func.blocks {
-    for inst in block.instructions {
+    for inst_id in block.instructions {
+      let inst = func.instructions[inst_id]
       if inst.opcode is Scalar(IntConst(v)) && inst.first_result() is Some(r) {
         if r.ty is I32 {
           constants.set(r.id, I32(v.to_int()))
@@ -184,7 +186,8 @@ fn reduce_strength(func : Function) -> OptResult {
   // Apply strength reduction
   for block in func.blocks {
     let rewritten : Array[Inst] = []
-    for inst in block.instructions {
+    for inst_id in block.instructions {
+      let inst = func.instructions[inst_id]
       match inst.opcode {
         // Multiplication by power of 2 -> left shift
         Scalar(IntBinary(Mul)) =>

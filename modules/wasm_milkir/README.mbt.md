@@ -69,7 +69,7 @@ test "build a Wasm memory.size extension instruction" {
   let func = builder.get_function()
   inspect(func.blocks.length(), content="1")
   verify_function(func)
-  match func.blocks[0].instructions[1].opcode {
+  match func.block_instruction_at(func.blocks[0], 1).unwrap().opcode {
     Call(Direct(symbol, _)) =>
       inspect(symbol.name, content="example.runtime.memory_size")
     _ => inspect(false, content="true")

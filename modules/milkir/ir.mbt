@@ -2,8 +2,15 @@
 // Based on SSA (Static Single Assignment) form
 
 ///|
+
+///|
+/// Stable index into a function's instruction arena.
+pub type InstId = Int
+
+///|
 priv struct FunctionOwnerContext {
   mut construction_error : VerifyError?
+  mut deleted_instructions : Array[Bool]?
 }
 
 ///|
@@ -13,7 +20,7 @@ priv struct FunctionOwnerContext {
 priv enum ValueDefinition {
   FunctionParameter(Int)
   BlockParameter(Int, Int)
-  InstructionResult(Int, Int)
+  InstructionResult(InstId, Int)
 } derive(Eq)
 
 ///|
@@ -24,7 +31,40 @@ priv struct ValueData {
 
 ///|
 fn FunctionOwnerContext::new() -> Ref[FunctionOwnerContext] {
-  Ref({ construction_error: None, })
+  Ref({ construction_error: None, deleted_instructions: None, })
+}
+
+///|
+fn FunctionOwnerContext::mark_instruction_deleted(
+  self : FunctionOwnerContext,
+  inst_id : InstId,
+) -> Unit {
+  if inst_id < 0 {
+    return
+  }
+  let deleted = match self.deleted_instructions {
+    Some(bits) => bits
+    None => {
+      let bits : Array[Bool] = []
+      self.deleted_instructions = Some(bits)
+      bits
+    }
+  }
+  while deleted.length() <= inst_id {
+    deleted.push(false)
+  }
+  deleted[inst_id] = true
+}
+
+///|
+fn FunctionOwnerContext::instruction_is_deleted(
+  self : FunctionOwnerContext,
+  inst_id : InstId,
+) -> Bool {
+  match self.deleted_instructions {
+    Some(bits) => inst_id >= 0 && inst_id < bits.length() && bits[inst_id]
+    None => false
+  }
 }
 
 ///|
@@ -413,15 +453,15 @@ pub(all) enum Metadata {
 /// - One entry point (the first instruction)
 /// - One exit point (the last instruction, a terminator)
 ///
-/// The public fields are exposed for zero-copy inspection. Callers must not
-/// mutate `params`, `instructions`, or `terminator` directly. Use
-/// `FunctionBuilder`, `append_inst`, and `set_terminator` so ownership checks
-/// run, then verify the containing function before optimization or lowering.
+/// Parameters and the terminator are exposed for zero-copy inspection. The
+/// instruction layout is private because it stores arena IDs rather than
+/// instruction data. Use `Block::instruction_count` and
+/// `Function::block_instruction_at` to inspect it.
 pub struct Block {
   priv owner : Ref[FunctionOwnerContext]
   id : Int // Unique block identifier
   params : Array[(Value, Type)] // Block parameters (for phi nodes)
-  mut instructions : Array[Inst] // Instructions in this block
+  priv mut instructions : Array[InstId] // Stable instruction arena IDs
   mut terminator : Terminator? // How this block ends
 }
 
@@ -472,17 +512,17 @@ fn Block::add_inst(self : Block, inst : Inst) -> Unit {
   if !self.accepts_inst(inst) {
     return
   }
-  self.instructions.push(inst)
+  self.instructions.push(inst.id)
 }
 
 ///|
-fn Block::remove_inst_at(self : Block, index : Int) -> Inst? {
+fn Block::take_inst_at(self : Block, index : Int) -> Int? {
   if index < 0 || index >= self.instructions.length() {
     return None
   }
-  let inst = self.instructions[index]
+  let inst_id = self.instructions[index]
   self.instructions.remove(index) |> ignore
-  Some(inst)
+  Some(inst_id)
 }
 
 ///|
@@ -495,17 +535,44 @@ fn Block::replace_instructions(
       return
     }
   }
-  self.instructions = instructions
+  if instructions.length() < self.instructions.length() {
+    let retained : @hashset.HashSet[InstId] = HashSet([])
+    for inst in instructions {
+      retained.add(inst.id)
+    }
+    for inst_id in self.instructions {
+      if !retained.contains(inst_id) {
+        self.owner.val.mark_instruction_deleted(inst_id)
+      }
+    }
+  }
+  self.instructions = instructions.map(inst => inst.id)
 }
 
 ///|
-fn Block::retain_instructions(self : Block, keep : (Inst) -> Bool) -> Unit {
+fn Block::retain_instruction_ids(self : Block, keep : (Int) -> Bool) -> Unit {
+  for inst_id in self.instructions {
+    if !keep(inst_id) {
+      self.owner.val.mark_instruction_deleted(inst_id)
+    }
+  }
   self.instructions.retain(keep)
+}
+
+///|
+fn Block::clear_instructions_for_move(self : Block) -> Unit {
+  self.instructions.clear()
 }
 
 ///|
 pub fn Block::append_inst(self : Block, inst : Inst) -> Unit {
   self.add_inst(inst)
+}
+
+///|
+/// Return the number of instructions placed in this block.
+pub fn Block::instruction_count(self : Block) -> Int {
+  self.instructions.length()
 }
 
 ///|
@@ -526,7 +593,7 @@ pub fn Block::set_terminator(self : Block, term : Terminator) -> Unit {
 /// and add metadata through `add_metadata`.
 pub struct Inst {
   priv owner : Ref[FunctionOwnerContext]
-  id : Int
+  id : InstId
   results : Array[Value] // Values produced (empty for void instructions)
   mut opcode : Opcode // The operation
   args : Array[Value] // Generic MilkIR spelling for operands.
@@ -601,7 +668,7 @@ fn opcode_identity_equal(lhs : Opcode, rhs : Opcode) -> Bool {
 ///|
 fn Inst::new_with_id(
   owner : Ref[FunctionOwnerContext],
-  id : Int,
+  id : InstId,
   opcode : Opcode,
   args : Array[Value],
   results : Array[Value],
@@ -1231,6 +1298,18 @@ pub fn Function::new_block0(self : Function) -> Block {
 }
 
 ///|
+fn Function::retain_blocks(self : Function, keep : (Block) -> Bool) -> Unit {
+  for block in self.blocks {
+    if !keep(block) {
+      for inst_id in block.instructions {
+        self.owner.val.mark_instruction_deleted(inst_id)
+      }
+    }
+  }
+  self.blocks.retain(keep)
+}
+
+///|
 pub fn Function::new_inst(
   self : Function,
   opcode : Opcode,
@@ -1276,8 +1355,55 @@ fn Function::owns_inst(self : Function, inst : Inst) -> Bool {
 }
 
 ///|
-fn Function::instruction_by_id(self : Function, inst_id : Int) -> Inst? {
+pub fn Function::instruction_by_id(self : Function, inst_id : InstId) -> Inst? {
   self.instructions.get(inst_id)
+}
+
+///|
+/// Return a zero-copy view of one block's stable instruction IDs.
+///
+/// The view remains valid until that block's layout is mutated.
+pub fn Function::block_instruction_ids(
+  self : Function,
+  block : Block,
+) -> ArrayView[InstId] {
+  if !self.owns_block(block) {
+    let empty : Array[InstId] = []
+    return empty[:]
+  }
+  block.instructions[:]
+}
+
+///|
+/// Return the instruction at one position in a block's layout.
+pub fn Function::block_instruction_at(
+  self : Function,
+  block : Block,
+  index : Int,
+) -> Inst? {
+  if !self.owns_block(block) ||
+    index < 0 ||
+    index >= block.instructions.length() {
+    return None
+  }
+  self.instruction_by_id(block.instructions[index])
+}
+
+///|
+/// Materialize a transient instruction snapshot for a transformation that
+/// rewrites a block while traversing its original layout.
+fn Function::block_instruction_snapshot(
+  self : Function,
+  block : Block,
+) -> Array[Inst] {
+  let snapshot : Array[Inst] = []
+  if !self.owns_block(block) {
+    return snapshot
+  }
+  for inst_id in block.instructions {
+    snapshot.push(self.instructions[inst_id])
+  }
+  snapshot
 }
 
 ///|

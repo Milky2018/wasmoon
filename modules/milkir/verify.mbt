@@ -10,6 +10,8 @@ pub suberror VerifyError {
   DuplicateBlockId(block_id~ : Int)
   DuplicateValueDefinition(value_id~ : Int)
   DuplicateInstructionId(inst_id~ : Int)
+  UnplacedInstruction(inst_id~ : Int)
+  InstructionPlacementMismatch(inst_id~ : Int)
   UseBeforeDefinition(value_id~ : Int)
   NonDominatingUse(value_id~ : Int, defining_block~ : Int, use_block~ : Int)
   InstructionOperandMismatch(inst_id~ : Int)
@@ -98,7 +100,10 @@ pub fn Function::verify(self : Function) -> Unit raise VerifyError {
         BlockParameter(block.id, param_index),
       )
     }
-    for inst_index, inst in block.instructions {
+    for inst_index, inst_id in block.instructions {
+      guard self.instruction_by_id(inst_id) is Some(inst) else {
+        raise ForeignInstruction(inst_id~)
+      }
       if !physical_equal(self.owner, inst.owner) {
         raise ForeignInstruction(inst_id=inst.id)
       }
@@ -134,7 +139,10 @@ pub fn Function::verify(self : Function) -> Unit raise VerifyError {
   }
   let dominance = CFG::build(self).compute_dominance()
   for block in self.blocks {
-    for inst_index, inst in block.instructions {
+    for inst_index, inst_id in block.instructions {
+      guard self.instruction_by_id(inst_id) is Some(inst) else {
+        raise ForeignInstruction(inst_id~)
+      }
       verify_inst(self, inst, placements, block.id, inst_index, dominance)
     }
     if block.terminator is Some(term) {
@@ -148,6 +156,13 @@ pub fn Function::verify(self : Function) -> Unit raise VerifyError {
         block.instructions.length(),
         dominance,
       )
+    }
+  }
+  for inst_id in 0..<self.instructions.length() {
+    let deleted = self.owner.val.instruction_is_deleted(inst_id)
+    match placements[inst_id] {
+      Some(_) => if deleted { raise InstructionPlacementMismatch(inst_id~) }
+      None => if !deleted { raise UnplacedInstruction(inst_id~) }
     }
   }
 }
@@ -201,7 +216,8 @@ pub fn Function::verify_core(self : Function) -> Unit raise VerifyError {
     )
   }
   for block in self.blocks {
-    for inst in block.instructions {
+    for inst_id in block.instructions {
+      let inst = self.instructions[inst_id]
       if inst.opcode is Ext(ext, _) {
         raise UnverifiableInstruction(
           message="unresolved dialect operation \{ext.dialect}.\{ext.opcode} is not core MilkIR",
@@ -235,7 +251,8 @@ pub fn Function::verify_with_dialect_validator(
     }
   }
   for block in self.blocks {
-    for inst in block.instructions {
+    for inst_id in block.instructions {
+      let inst = self.instructions[inst_id]
       if inst.opcode is Ext(_, _) {
         let view = extension_inst_view(inst)
         if view.op.dialect != dialect {

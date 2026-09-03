@@ -29,7 +29,8 @@ fn eliminate_dead_code(func : Function) -> OptResult {
   let dead_insts = Array::make(func.next_inst_id, false)
   let worklist : Array[Inst] = []
   for block in func.blocks {
-    for inst in block.instructions {
+    for inst_id in block.instructions {
+      let inst = func.instructions[inst_id]
       if inst.results.length() > 0 &&
         inst.results.all(v => use_counts[v.id] == 0) &&
         !inst.opcode.semantics().must_preserve_if_unused() {
@@ -59,7 +60,7 @@ fn eliminate_dead_code(func : Function) -> OptResult {
   }
   if result.changed {
     for block in func.blocks {
-      block.retain_instructions(inst => !dead_insts[inst.id])
+      block.retain_instruction_ids(inst_id => !dead_insts[inst_id])
     }
   }
   result
@@ -73,7 +74,8 @@ fn compute_use_counts(func : Function) -> Array[Int] {
     counts[value.id] = counts[value.id] + 1
   }
   for block in func.blocks {
-    for inst in block.instructions {
+    for inst_id in block.instructions {
+      let inst = func.instructions[inst_id]
       for op in inst.operands {
         count(op)
       }
@@ -112,7 +114,8 @@ fn fold_constants(func : Function) -> OptResult {
   // Map from value id to constant value (if known)
   let constants : @hashmap.HashMap[Int, ConstValue] = HashMap([])
   for block in func.blocks {
-    for inst in block.instructions {
+    for inst_id in block.instructions {
+      let inst = func.instructions[inst_id]
       // First, record any constant instruction
       match inst.opcode {
         Scalar(IntConst(v)) =>
@@ -542,7 +545,8 @@ fn canonicalize_aliases_with_analysis(
     let block = func.blocks[idx]
     // Track aliases introduced in this block so we can pop on exit.
     let local_aliases : Array[Int] = []
-    for inst in block.instructions {
+    for inst_id in block.instructions {
+      let inst = func.instructions[inst_id]
       // Canonicalize operands through currently visible alias chain.
       for i, op in inst.operands {
         let resolved = resolve_copy(op, aliases)

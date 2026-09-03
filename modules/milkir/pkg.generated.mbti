@@ -28,6 +28,8 @@ pub suberror VerifyError {
   DuplicateBlockId(block_id~ : Int)
   DuplicateValueDefinition(value_id~ : Int)
   DuplicateInstructionId(inst_id~ : Int)
+  UnplacedInstruction(inst_id~ : Int)
+  InstructionPlacementMismatch(inst_id~ : Int)
   UseBeforeDefinition(value_id~ : Int)
   NonDominatingUse(value_id~ : Int, defining_block~ : Int, use_block~ : Int)
   InstructionOperandMismatch(inst_id~ : Int)
@@ -60,11 +62,11 @@ pub fn AliasRegion::to_repr(Self) -> @debug.Repr
 pub struct Block {
   id : Int
   params : Array[(Value, Type)]
-  mut instructions : Array[Inst]
   mut terminator : Terminator?
   // private fields
 }
 pub fn Block::append_inst(Self, Inst) -> Unit
+pub fn Block::instruction_count(Self) -> Int
 pub fn Block::set_terminator(Self, Terminator) -> Unit
 pub fn Block::to_repr(Self) -> @debug.Repr
 pub impl @debug.Debug for Block
@@ -243,9 +245,12 @@ pub struct Function {
 }
 pub fn Function::add_param(Self, Type) -> Value
 pub fn Function::add_result(Self, Type) -> Unit
+pub fn Function::block_instruction_at(Self, Block, Int) -> Inst?
+pub fn Function::block_instruction_ids(Self, Block) -> ArrayView[Int]
 pub fn Function::declare_external_symbol(Self, String) -> ExternalSymbol
 pub fn Function::declare_global_value(Self, GlobalValueData) -> GlobalValue
 pub fn Function::global_value_data(Self, GlobalValue) -> GlobalValueData?
+pub fn Function::instruction_by_id(Self, Int) -> Inst?
 pub fn Function::new_block(Self, Array[Value]) -> Block
 pub fn Function::new_block0(Self) -> Block
 pub fn Function::new_empty(String) -> Self
@@ -937,5 +942,6 @@ pub fn VectorSignedness::not_equal(Self, Self) -> Bool
 pub fn VectorSignedness::to_repr(Self) -> @debug.Repr
 
 // Type aliases
+pub type InstId = Int
 
 // Traits

@@ -64,7 +64,8 @@ fn definition_outside_loop(
     if loop_.contains(block.id) {
       continue
     }
-    for inst in block.instructions {
+    for inst_id in block.instructions {
+      let inst = func.instructions[inst_id]
       if inst.results.any(result => result.id == value.id) {
         return Some(inst)
       }
@@ -111,11 +112,13 @@ fn find_integer_constant_outside_loop(
 
 ///|
 fn find_iteration_definition(
+  func : Function,
   iteration_blocks : Array[Block],
   value_id : Int,
 ) -> Inst? {
   for block in iteration_blocks {
-    for inst in block.instructions {
+    for inst_id in block.instructions {
+      let inst = func.instructions[inst_id]
       for result in inst.results {
         if result.id == value_id {
           return Some(inst)
@@ -142,7 +145,8 @@ fn is_defined_in_unroll_loop(
         return true
       }
     }
-    for inst in block.instructions {
+    for inst_id in block.instructions {
+      let inst = func.instructions[inst_id]
       for result in inst.results {
         if result.id == value_id {
           return true
@@ -464,7 +468,7 @@ fn analyze_counted_loop(
   if header.instructions.length() != 1 {
     return Skip("header must contain only the induction comparison")
   }
-  let comparison = header.instructions[0]
+  let comparison = func.instructions[header.instructions[0]]
   let mut induction_index = -1
   let mut induction_operand = -1
   if comparison.operands.length() == 2 {
@@ -573,7 +577,8 @@ fn analyze_counted_loop(
   }
   let clone_available : @hashset.HashSet[Int] = HashSet([])
   for block in iteration_blocks {
-    for inst in block.instructions {
+    for inst_id in block.instructions {
+      let inst = func.instructions[inst_id]
       for arg in inst.args {
         if !header_param_ids.contains(arg.id) &&
           is_defined_in_unroll_loop(func, loop_, arg.id) &&
@@ -609,7 +614,11 @@ fn analyze_counted_loop(
     }
   }
   let update = match
-    find_iteration_definition(iteration_blocks, latch_args[induction_index].id) {
+    find_iteration_definition(
+      func,
+      iteration_blocks,
+      latch_args[induction_index].id,
+    ) {
     Some(inst) => inst
     None => return Skip("latch induction update must be defined in the loop")
   }
@@ -723,11 +732,14 @@ fn clone_unrolled_instruction(
 }
 
 ///|
-fn unroll_transition_instructions(plan : CountedLoopPlan) -> Array[Inst] {
+fn unroll_transition_instructions(
+  func : Function,
+  plan : CountedLoopPlan,
+) -> Array[Inst] {
   let instructions : Array[Inst] = []
   for block in plan.iteration_blocks {
-    for inst in block.instructions {
-      instructions.push(inst)
+    for inst_id in block.instructions {
+      instructions.push(func.instructions[inst_id])
     }
   }
   instructions
@@ -739,14 +751,14 @@ fn clone_unrolled_transition(
   plan : CountedLoopPlan,
   source : Array[Inst],
   start_args : Array[Value],
-  destination : Array[Inst],
+  destination : Block,
 ) -> Array[Value] {
   let values : @hashmap.HashMap[Int, Value] = HashMap([])
   for i, param in plan.header_params {
     values.set(param.id, start_args[i])
   }
   for inst in source {
-    destination.push(clone_unrolled_instruction(func, inst, values))
+    destination.add_inst(clone_unrolled_instruction(func, inst, values))
   }
   plan.latch_args.map(fn(value) { remap_unrolled_value(value, values) })
 }
@@ -756,7 +768,7 @@ fn apply_full_unroll(func : Function, plan : CountedLoopPlan) -> Bool {
   if plan.trip_count == 0 {
     return false
   }
-  let source = unroll_transition_instructions(plan)
+  let source = unroll_transition_instructions(func, plan)
   let mut current_args = plan.initial_args.copy()
   for _ in 0..<plan.trip_count {
     current_args = clone_unrolled_transition(
@@ -764,7 +776,7 @@ fn apply_full_unroll(func : Function, plan : CountedLoopPlan) -> Bool {
       plan,
       source,
       current_args,
-      plan.preheader.instructions,
+      plan.preheader,
     )
   }
   plan.preheader.set_terminator(Jump(plan.header.id, current_args))
@@ -776,7 +788,7 @@ fn apply_factor_two_unroll(func : Function, plan : CountedLoopPlan) -> Bool {
   if plan.trip_count == 0 {
     return false
   }
-  let source = unroll_transition_instructions(plan)
+  let source = unroll_transition_instructions(func, plan)
   let remainder = plan.trip_count % 2
   let mut entry_args = plan.initial_args.copy()
   if remainder == 1 {
@@ -785,7 +797,7 @@ fn apply_factor_two_unroll(func : Function, plan : CountedLoopPlan) -> Bool {
       plan,
       source,
       entry_args,
-      plan.preheader.instructions,
+      plan.preheader,
     )
     plan.preheader.set_terminator(Jump(plan.header.id, entry_args))
   }
@@ -797,7 +809,7 @@ fn apply_factor_two_unroll(func : Function, plan : CountedLoopPlan) -> Bool {
     plan,
     source,
     plan.latch_args,
-    plan.latch.instructions,
+    plan.latch,
   )
   plan.latch.set_terminator(Jump(plan.header.id, second_args))
   true
@@ -826,7 +838,7 @@ fn unroll_counted_loops(func : Function) -> OptResult {
     }
   }
   for plan in plans {
-    let instruction_count = unroll_transition_instructions(plan).length()
+    let instruction_count = unroll_transition_instructions(func, plan).length()
     let full_growth = instruction_count.to_int64() * plan.trip_count.to_int64()
     let factor_growth = factor_two_growth(plan, instruction_count)
     let changed = if plan.trip_count <= MAX_FULL_UNROLL_TRIP_COUNT &&

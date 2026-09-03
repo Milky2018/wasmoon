@@ -102,7 +102,10 @@ test "mandatory cleanup preserves effects above size boundaries" {
   let func = builder.get_function()
   optimize_with_level(func, O1) |> ignore
   inspect(instruction_count(func), content="1")
-  inspect(func.blocks[0].instructions[0].opcode is Call(_), content="true")
+  inspect(
+    func.block_instruction_at(func.blocks[0], 0).unwrap().opcode is Call(_),
+    content="true",
+  )
   inspect(func.verify(), content="()")
 }
 
@@ -116,9 +119,18 @@ test "GVN memory budget does not stop cheap expression numbering" {
   )
   inspect(stats.work_done, content="2")
   inspect(stats.budget_exhausted, content="true")
-  inspect(func.blocks[0].instructions[1].opcode, content="Scalar(Copy)")
-  inspect(func.blocks[0].instructions[2].opcode, content="Scalar(Copy)")
-  inspect(func.blocks[0].instructions[4].opcode, content="Scalar(Copy)")
+  inspect(
+    func.block_instruction_at(func.blocks[0], 1).unwrap().opcode,
+    content="Scalar(Copy)",
+  )
+  inspect(
+    func.block_instruction_at(func.blocks[0], 2).unwrap().opcode,
+    content="Scalar(Copy)",
+  )
+  inspect(
+    func.block_instruction_at(func.blocks[0], 4).unwrap().opcode,
+    content="Scalar(Copy)",
+  )
   inspect(func.verify(), content="()")
 }
 
@@ -140,7 +152,10 @@ test "GVN early termination preserves external effects" {
     FunctionAnalysis::build(func),
   )
   inspect(stats.budget_exhausted, content="true")
-  inspect(func.blocks[0].instructions[1].opcode is Call(_), content="true")
+  inspect(
+    func.block_instruction_at(func.blocks[0], 1).unwrap().opcode is Call(_),
+    content="true",
+  )
   inspect(func.verify(), content="()")
 }
 
@@ -178,7 +193,10 @@ test "GVN retains memory forwarding in a large function budget prefix" {
   )
   inspect(stats.work_done, content="300")
   inspect(stats.budget_exhausted, content="true")
-  inspect(func.blocks[0].instructions[2].opcode, content="Scalar(Copy)")
+  inspect(
+    func.block_instruction_at(func.blocks[0], 2).unwrap().opcode,
+    content="Scalar(Copy)",
+  )
   inspect(func.verify(), content="()")
 }
 
@@ -204,7 +222,10 @@ test "rewrite insertion preserves cross-block memory versions" {
     FunctionAnalysis::build(func),
   )
   |> ignore
-  inspect(func.blocks[1].instructions[0].opcode, content="Scalar(Copy)")
+  inspect(
+    func.block_instruction_at(func.blocks[1], 0).unwrap().opcode,
+    content="Scalar(Copy)",
+  )
   inspect(func.print().contains("ishl"), content="true")
   inspect(func.verify(), content="()")
 }
@@ -235,7 +256,10 @@ test "bounded memory GVN keeps unknown block entries conservative" {
     FunctionAnalysis::build(small),
   )
   |> ignore
-  inspect(small.blocks[1].instructions[0].opcode, content="Scalar(Copy)")
+  inspect(
+    small.block_instruction_at(small.blocks[1], 0).unwrap().opcode,
+    content="Scalar(Copy)",
+  )
   let large = build("gvn_unknown_bounded_block_input", 300)
   let stats = run_acyclic_optimization_with_budget_and_analysis(
     large,
@@ -244,7 +268,10 @@ test "bounded memory GVN keeps unknown block entries conservative" {
   )
   inspect(stats.work_done, content="300")
   inspect(stats.budget_exhausted, content="true")
-  inspect(large.blocks[1].instructions[0].opcode, content="Memory(Load(I32))")
+  inspect(
+    large.block_instruction_at(large.blocks[1], 0).unwrap().opcode,
+    content="Memory(Load(I32))",
+  )
   inspect(small.verify(), content="()")
   inspect(large.verify(), content="()")
 }
@@ -449,7 +476,10 @@ test "acyclic rewrite reduces integer constants to the result width" {
     FunctionAnalysis::build(func),
   )
   |> ignore
-  inspect(func.blocks[0].instructions[1].opcode, content="Scalar(IntConst(0))")
+  inspect(
+    func.block_instruction_at(func.blocks[0], 1).unwrap().opcode,
+    content="Scalar(IntConst(0))",
+  )
   inspect(func.verify(), content="()")
 }
 

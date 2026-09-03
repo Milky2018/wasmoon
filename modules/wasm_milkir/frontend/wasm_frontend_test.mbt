@@ -51,7 +51,7 @@ test "lower simple wasm body into MilkIR operations" {
   let func = lower_function(env, mod_, 0)
   inspect(func.signature().params.length(), content="2")
   inspect(func.signature().results.length(), content="1")
-  inspect(func.blocks[0].instructions.length(), content="2")
+  inspect(func.blocks[0].instruction_count(), content="2")
   inspect(func.print().contains("iadd"), content="true")
   inspect(func.print().contains("ireduce"), content="true")
   inspect(func.print().contains("TODO(wasm_frontend)"), content="false")

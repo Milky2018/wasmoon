@@ -379,8 +379,8 @@ fn collect_iconst_values(
       }
     None =>
       for block in func.blocks {
-        for inst in block.instructions {
-          record(inst)
+        for inst_id in block.instructions {
+          record(func.instructions[inst_id])
         }
       }
   }
@@ -423,8 +423,8 @@ fn collect_ptr_base_infos(
       }
     None =>
       for block in func.blocks {
-        for inst in block.instructions {
-          enqueue(inst)
+        for inst_id in block.instructions {
+          enqueue(func.instructions[inst_id])
         }
       }
   }
@@ -998,7 +998,7 @@ fn run_acyclic_optimization_with_budget_and_analysis(
   analysis : FunctionAnalysis,
 ) -> AcyclicOptimizeStats {
   let block_instructions = fn(block_id : Int) -> Array[Inst] {
-    func.blocks[analysis.block_idx[block_id]].instructions
+    func.block_instruction_snapshot(func.blocks[analysis.block_idx[block_id]])
   }
   let stream = AcyclicOptimizer::new(
     func, work_budget, analysis, block_instructions,

@@ -44,7 +44,8 @@ fn sink_single_use_materializations(func : Function) -> OptResult {
   let defining_blocks = Array::make(original_value_count, -1)
   let uses = compute_use_counts(func)
   for block in func.blocks {
-    for inst in block.instructions {
+    for inst_id in block.instructions {
+      let inst = func.instructions[inst_id]
       if inst.results is [value] {
         defining_blocks[value.id] = block.id
       }
@@ -75,7 +76,8 @@ fn sink_single_use_materializations(func : Function) -> OptResult {
       localized
     }
 
-    for inst in block.instructions {
+    for inst_id in block.instructions {
+      let inst = func.instructions[inst_id]
       for index, operand in inst.operands {
         inst.operands[index] = sink(operand)
       }

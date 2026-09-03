@@ -39,7 +39,9 @@ test "GVN reuses a mutable context global across heap stores" {
   )
   |> ignore
   debug_inspect(
-    function.blocks[0].instructions.map(inst => inst.opcode),
+    test_block_instructions(function, function.blocks[0]).map(inst => {
+      inst.opcode
+    }),
     content=(
       #|[
       #|  GlobalValue({ id: 0 }),
@@ -77,7 +79,9 @@ test "GVN reloads a mutable context global after an unknown store" {
   )
   |> ignore
   debug_inspect(
-    function.blocks[0].instructions.map(inst => inst.opcode),
+    test_block_instructions(function, function.blocks[0]).map(inst => {
+      inst.opcode
+    }),
     content=(
       #|[
       #|  GlobalValue({ id: 0 }),
@@ -112,7 +116,9 @@ test "GVN reuses a stable context global" {
   )
   |> ignore
   debug_inspect(
-    function.blocks[0].instructions.map(inst => inst.opcode),
+    test_block_instructions(function, function.blocks[0]).map(inst => {
+      inst.opcode
+    }),
     content="[GlobalValue({ id: 0 }), Scalar(Copy), Scalar(Copy), Scalar(Copy)]",
   )
   function.verify()
@@ -148,7 +154,7 @@ test "GVN reuses a stable context global after the memory budget" {
   inspect(stats.budget_exhausted, content="true")
   debug_inspect(
     [300, 301, 302, 320, 321].map(index => {
-      function.blocks[0].instructions[index].opcode
+      function.block_instruction_at(function.blocks[0], index).unwrap().opcode
     }),
     content=(
       #|[
@@ -194,7 +200,9 @@ test "GVN invalidates mutable context globals after the memory budget" {
   inspect(stats.work_done, content="300")
   inspect(stats.budget_exhausted, content="true")
   debug_inspect(
-    function.blocks[0].instructions[302:].map(inst => inst.opcode),
+    test_block_instructions(function, function.blocks[0])[302:].map(inst => {
+      inst.opcode
+    }),
     content=(
       #|[
       #|  GlobalValue({ id: 0 }),
@@ -230,7 +238,9 @@ test "GVN reloads mutable context globals after calls" {
   )
   |> ignore
   debug_inspect(
-    function.blocks[0].instructions.map(inst => inst.opcode),
+    test_block_instructions(function, function.blocks[0]).map(inst => {
+      inst.opcode
+    }),
     content=(
       #|[
       #|  GlobalValue({ id: 0 }),
@@ -276,7 +286,9 @@ test "GVN does not merge distinct context globals" {
   )
   |> ignore
   debug_inspect(
-    function.blocks[0].instructions.map(inst => inst.opcode),
+    test_block_instructions(function, function.blocks[0]).map(inst => {
+      inst.opcode
+    }),
     content=(
       #|[GlobalValue({ id: 0 }), GlobalValue({ id: 1 })]
     ),

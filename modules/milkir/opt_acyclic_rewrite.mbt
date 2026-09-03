@@ -37,7 +37,8 @@ fn AcyclicRewriter::new(func : Function) -> AcyclicRewriter {
     stats: AcyclicRewriteStats::new(),
   }
   for block in func.blocks {
-    for inst in block.instructions {
+    for inst_id in block.instructions {
+      let inst = func.instructions[inst_id]
       self.index_definition(inst)
     }
   }

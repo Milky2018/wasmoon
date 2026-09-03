@@ -16,7 +16,10 @@ test "floating constants preserve zero signs and NaN payloads" {
   }
   for index, bits in f32_bits {
     inspect(
-      f32_builder.current_block().instructions[index].opcode ==
+      f32_builder
+      .get_function()
+      .block_instruction_at(f32_builder.current_block(), index)
+      .unwrap().opcode ==
       Scalar(FloatConst32(bits)),
       content="true",
     )
@@ -30,7 +33,10 @@ test "floating constants preserve zero signs and NaN payloads" {
   }
   for index, bits in f64_bits {
     inspect(
-      f64_builder.current_block().instructions[index].opcode ==
+      f64_builder
+      .get_function()
+      .block_instruction_at(f64_builder.current_block(), index)
+      .unwrap().opcode ==
       Scalar(FloatConst64(bits)),
       content="true",
     )

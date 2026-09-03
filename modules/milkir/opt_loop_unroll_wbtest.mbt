@@ -255,11 +255,13 @@ fn evaluate_canonical_i32_loop(
 ) -> (Int64, Int) raise {
   let values : @hashmap.HashMap[Int, Int64] = HashMap([])
   let mut body_executions = evaluate_canonical_instructions(
-    fixture.preheader.instructions,
+    test_block_instructions(fixture.func, fixture.preheader),
     values,
   )
   let bound_value = values
-    .get(fixture.header.instructions[0].operands[1].id)
+    .get(
+      test_block_instructions(fixture.func, fixture.header)[0].operands[1].id,
+    )
     .unwrap()
   let mut induction = match fixture.preheader.terminator {
     Some(Jump(_, args)) => values.get(args[0].id).unwrap()
@@ -269,9 +271,15 @@ fn evaluate_canonical_i32_loop(
   while induction < bound_value {
     values.set(fixture.induction.id, induction)
     body_executions = body_executions +
-      evaluate_canonical_instructions(fixture.body.instructions, values)
+      evaluate_canonical_instructions(
+        test_block_instructions(fixture.func, fixture.body),
+        values,
+      )
     body_executions = body_executions +
-      evaluate_canonical_instructions(fixture.latch.instructions, values)
+      evaluate_canonical_instructions(
+        test_block_instructions(fixture.func, fixture.latch),
+        values,
+      )
     induction = match fixture.latch.terminator {
       Some(Jump(_, args)) => values.get(args[0].id).unwrap()
       _ => fail("expected latch jump")
@@ -298,14 +306,18 @@ test "full-unroll analysis counts canonical I32 trips from zero through the boun
 ///|
 test "full unrolling clones dependent pure instructions with fresh ids" {
   let fixture = make_canonical_i32_loop(0, 3, 1)
-  let original_preheader_insts = fixture.preheader.instructions.length()
+  let original_preheader_insts = fixture.preheader.instruction_count()
   let first_fresh_value = fixture.func.next_value_id
   let first_fresh_inst = fixture.func.next_inst_id
   let result = unroll_counted_loops(fixture.func)
   inspect(result.changed, content="true")
-  let cloned = fixture.preheader.instructions[original_preheader_insts:]
+  let preheader_instructions = test_block_instructions(
+    fixture.func,
+    fixture.preheader,
+  )
+  let cloned = preheader_instructions[original_preheader_insts:]
   inspect(cloned.length(), content="9")
-  let mut current_induction = fixture.preheader.instructions[0].results[0]
+  let mut current_induction = preheader_instructions[0].results[0]
   for iteration in 0..<3 {
     let body_add = cloned[iteration * 3]
     let body_mul = cloned[iteration * 3 + 1]
@@ -374,15 +386,19 @@ test "counted loops preserve direct branch arguments on the exit edge" {
 ///|
 test "full unrolling preserves carried values, multi-results, and effect order" {
   let fixture = make_carried_effect_loop(2)
-  let original_preheader_insts = fixture.preheader.instructions.length()
+  let original_preheader_insts = fixture.preheader.instruction_count()
   let first_fresh_value = fixture.func.next_value_id
   let first_fresh_inst = fixture.func.next_inst_id
   let result = unroll_counted_loops(fixture.func)
   inspect(result.changed, content="true")
-  let cloned = fixture.preheader.instructions[original_preheader_insts:]
+  let preheader_instructions = test_block_instructions(
+    fixture.func,
+    fixture.preheader,
+  )
+  let cloned = preheader_instructions[original_preheader_insts:]
   inspect(cloned.length(), content="16")
-  let mut current_induction = fixture.preheader.instructions[0].results[0]
-  let mut current_accumulator = fixture.preheader.instructions[3].results[0]
+  let mut current_induction = preheader_instructions[0].results[0]
+  let mut current_accumulator = preheader_instructions[3].results[0]
   for iteration in 0..<2 {
     let base = iteration * 8
     let call = cloned[base]
@@ -450,8 +466,8 @@ test "full unrolling preserves carried values, multi-results, and effect order" 
 ///|
 test "full unrolling rejects an unmappable carried edge without mutation" {
   let fixture = make_carried_effect_loop(2)
-  let next_induction = fixture.latch.instructions[0].results[0]
-  let header_condition = fixture.header.instructions[0].results[0]
+  let next_induction = test_block_instructions(fixture.func, fixture.latch)[0].results[0]
+  let header_condition = test_block_instructions(fixture.func, fixture.header)[0].results[0]
   fixture.latch.set_terminator(
     Jump(fixture.header.id, [next_induction, header_condition]),
   )
@@ -461,19 +477,20 @@ test "full unrolling rejects an unmappable carried edge without mutation" {
 ///|
 test "factor-two unrolling composes two transitions for an even trip count" {
   let fixture = make_canonical_i32_loop(0, 10, 1)
-  let original_preheader_insts = fixture.preheader.instructions.length()
-  let original_latch_insts = fixture.latch.instructions.length()
-  let first_state = fixture.latch.instructions[0].results[0]
+  let original_preheader_insts = fixture.preheader.instruction_count()
+  let original_latch_insts = fixture.latch.instruction_count()
+  let first_state = test_block_instructions(fixture.func, fixture.latch)[0].results[0]
   let result = unroll_counted_loops(fixture.func)
   inspect(result.changed, content="true")
   inspect(
-    fixture.preheader.instructions.length(),
+    fixture.preheader.instruction_count(),
     content=original_preheader_insts.to_string(),
   )
-  inspect(fixture.latch.instructions.length(), content="4")
-  let second_body_add = fixture.latch.instructions[original_latch_insts]
-  let second_body_mul = fixture.latch.instructions[original_latch_insts + 1]
-  let second_latch_add = fixture.latch.instructions[original_latch_insts + 2]
+  inspect(fixture.latch.instruction_count(), content="4")
+  let latch_instructions = test_block_instructions(fixture.func, fixture.latch)
+  let second_body_add = latch_instructions[original_latch_insts]
+  let second_body_mul = latch_instructions[original_latch_insts + 1]
+  let second_latch_add = latch_instructions[original_latch_insts + 2]
   if second_body_add.operands[0] != first_state ||
     second_body_mul.operands[0] != second_body_add.results[0] ||
     second_latch_add.operands[0] != first_state {
@@ -494,20 +511,20 @@ test "factor-two unrolling composes two transitions for an even trip count" {
 ///|
 test "factor-two unrolling peels one transition for an odd trip count" {
   let fixture = make_canonical_i32_loop(0, 11, 1)
-  let original_preheader_insts = fixture.preheader.instructions.length()
-  let original_latch_insts = fixture.latch.instructions.length()
+  let original_preheader_insts = fixture.preheader.instruction_count()
+  let original_latch_insts = fixture.latch.instruction_count()
   let result = unroll_counted_loops(fixture.func)
   inspect(result.changed, content="true")
   inspect(
-    fixture.preheader.instructions.length() - original_preheader_insts,
+    fixture.preheader.instruction_count() - original_preheader_insts,
     content="3",
   )
-  inspect(
-    fixture.latch.instructions.length() - original_latch_insts,
-    content="3",
+  inspect(fixture.latch.instruction_count() - original_latch_insts, content="3")
+  let preheader_instructions = test_block_instructions(
+    fixture.func,
+    fixture.preheader,
   )
-  let peeled_latch = fixture.preheader.instructions[fixture.preheader.instructions.length() -
-    1]
+  let peeled_latch = preheader_instructions[preheader_instructions.length() - 1]
   match fixture.preheader.terminator {
     Some(Jump(target, args)) =>
       if target != fixture.header.id ||
@@ -529,38 +546,36 @@ test "factor-two policy preserves zero-trip and one-trip loops" {
     fail("zero-trip loop was mutated")
   }
   let one = make_canonical_i32_loop(0, 1, 1)
-  let original_preheader_insts = one.preheader.instructions.length()
+  let original_preheader_insts = one.preheader.instruction_count()
   inspect(unroll_counted_loops(one.func).changed, content="true")
   inspect(
-    one.preheader.instructions.length() - original_preheader_insts,
+    one.preheader.instruction_count() - original_preheader_insts,
     content="3",
   )
-  inspect(one.latch.instructions.length(), content="1")
+  inspect(one.latch.instruction_count(), content="1")
   one.func.verify()
 }
 
 ///|
 test "factor-two unrolling preserves carried effects in both transitions" {
   let fixture = make_carried_effect_loop(10)
-  let original_latch_insts = fixture.latch.instructions.length()
+  let original_latch_insts = fixture.latch.instruction_count()
   let first_state = match fixture.latch.terminator {
     Some(Jump(_, args)) => args
     _ => fail("expected latch jump")
   }
   let result = unroll_counted_loops(fixture.func)
   inspect(result.changed, content="true")
-  inspect(
-    fixture.latch.instructions.length() - original_latch_insts,
-    content="8",
-  )
-  let call = fixture.latch.instructions[original_latch_insts]
-  let pair_sum = fixture.latch.instructions[original_latch_insts + 1]
-  let load = fixture.latch.instructions[original_latch_insts + 2]
-  let accumulated = fixture.latch.instructions[original_latch_insts + 3]
-  let next_accumulator = fixture.latch.instructions[original_latch_insts + 4]
-  let store = fixture.latch.instructions[original_latch_insts + 5]
-  let effect = fixture.latch.instructions[original_latch_insts + 6]
-  let next_induction = fixture.latch.instructions[original_latch_insts + 7]
+  inspect(fixture.latch.instruction_count() - original_latch_insts, content="8")
+  let latch_instructions = test_block_instructions(fixture.func, fixture.latch)
+  let call = latch_instructions[original_latch_insts]
+  let pair_sum = latch_instructions[original_latch_insts + 1]
+  let load = latch_instructions[original_latch_insts + 2]
+  let accumulated = latch_instructions[original_latch_insts + 3]
+  let next_accumulator = latch_instructions[original_latch_insts + 4]
+  let store = latch_instructions[original_latch_insts + 5]
+  let effect = latch_instructions[original_latch_insts + 6]
+  let next_induction = latch_instructions[original_latch_insts + 7]
   if !(call.opcode is Call(_)) ||
     pair_sum.opcode != Scalar(IntBinary(Add)) ||
     load.opcode != Memory(Load(I32)) ||
@@ -880,7 +895,7 @@ test "counted-loop analysis rejects wraparound and invalid directions unchanged"
     ContinueOnTrue,
   )
   let dynamic_bound = dynamic.func.add_param(I64)
-  dynamic.func.blocks[1].instructions[0].operands[1] = dynamic_bound
+  dynamic.func.block_instruction_at(dynamic.func.blocks[1], 0).unwrap().operands[1] = dynamic_bound
   require_unroll_skip_without_mutation(dynamic.func)
 }
 
@@ -922,7 +937,7 @@ test "O3 invokes safe counted-loop unrolling" {
   optimize_with_level(fixture.func, O3) |> ignore
   let mut pair_calls = 0
   for block in fixture.func.blocks {
-    for inst in block.instructions {
+    for inst in test_block_instructions(fixture.func, block) {
       if inst.opcode is Call(Direct(symbol, _)) && symbol.name == "effect_pair" {
         pair_calls = pair_calls + 1
       }
@@ -935,17 +950,21 @@ test "O3 invokes safe counted-loop unrolling" {
 ///|
 test "full-unroll analysis skips reversed predicates and dynamic bounds" {
   let reversed = make_canonical_i32_loop(0, 4, 1)
-  let compare = reversed.header.instructions[0]
+  let compare = reversed.func.block_instruction_at(reversed.header, 0).unwrap()
   let lhs = compare.operands[0]
   compare.operands[0] = compare.operands[1]
   compare.operands[1] = lhs
   require_unroll_skip_without_mutation(reversed.func)
   let dynamic = make_canonical_i32_loop(0, 4, 1)
   let dynamic_bound = dynamic.func.add_param(I32)
-  dynamic.header.instructions[0].operands[1] = dynamic_bound
+  dynamic.func.block_instruction_at(dynamic.header, 0).unwrap().operands[1] = dynamic_bound
   require_unroll_skip_without_mutation(dynamic.func)
   let header_dependency = make_canonical_i32_loop(0, 4, 1)
-  header_dependency.body.instructions[0].operands[0] = header_dependency.header.instructions[0].results[0]
+  header_dependency.func
+  .block_instruction_at(header_dependency.body, 0)
+  .unwrap().operands[0] = header_dependency.func
+    .block_instruction_at(header_dependency.header, 0)
+    .unwrap().results[0]
   require_unroll_skip_without_mutation(header_dependency.func)
 }
 

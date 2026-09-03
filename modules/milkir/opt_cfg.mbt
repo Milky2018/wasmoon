@@ -40,7 +40,8 @@ fn build_value_array(func : Function, value_count : Int) -> Array[Value?] {
         values[v.id] = Some(v)
       }
     }
-    for inst in block.instructions {
+    for inst_id in block.instructions {
+      let inst = func.instructions[inst_id]
       for result in inst.results {
         if result.id >= 0 && result.id < value_count {
           values[result.id] = Some(result)
@@ -344,7 +345,8 @@ fn eliminate_constant_block_params(func : Function) -> OptResult {
     }
   }
   for block in func.blocks {
-    for inst in block.instructions {
+    for inst_id in block.instructions {
+      let inst = func.instructions[inst_id]
       let mut changed_inst = false
       for i, op in inst.operands {
         if op.id >= 0 && op.id < value_count {
@@ -611,7 +613,8 @@ fn compute_used_block_params(
 
   // First pass: mark values used directly in instructions
   for block in func.blocks {
-    for inst in block.instructions {
+    for inst_id in block.instructions {
+      let inst = func.instructions[inst_id]
       for op in inst.operands {
         if op.id >= 0 && op.id < value_count {
           used[op.id] = true
@@ -682,7 +685,8 @@ fn simplify_branches(func : Function) -> OptResult {
   // Build constant map from constant folding
   let constants : @hashmap.HashMap[Int, ConstValue] = HashMap([])
   for block in func.blocks {
-    for inst in block.instructions {
+    for inst_id in block.instructions {
+      let inst = func.instructions[inst_id]
       if inst.opcode is Scalar(IntConst(v)) && inst.first_result() is Some(r) {
         if r.ty is I32 {
           constants.set(r.id, I32(v.to_int()))
@@ -782,7 +786,7 @@ fn eliminate_unreachable_code(func : Function) -> OptResult {
     }
   }
   let old_block_count = func.blocks.length()
-  func.blocks.retain(fn(block) {
+  func.retain_blocks(fn(block) {
     block.id >= 0 && block.id < reachable.length() && reachable[block.id]
   })
   if func.blocks.length() != old_block_count {
@@ -838,9 +842,10 @@ fn merge_blocks(func : Function) -> OptResult {
             done = true
             continue
           }
-          for inst in successor.instructions {
-            block.add_inst(inst)
+          for inst_id in successor.instructions {
+            block.add_inst(func.instructions[inst_id])
           }
+          successor.clear_instructions_for_move()
           block.terminator = successor.terminator
           removed[target] = true
           result.mark_changed()
@@ -850,7 +855,7 @@ fn merge_blocks(func : Function) -> OptResult {
     }
   }
   if result.changed {
-    func.blocks.retain(fn(block) {
+    func.retain_blocks(fn(block) {
       block.id < 0 || block.id >= removed.length() || !removed[block.id]
     })
   }

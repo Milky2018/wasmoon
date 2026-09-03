@@ -723,7 +723,8 @@ fn compute_gc_roots(
         definitions.add(parameter.0.id)
       }
     }
-    for instruction in block.instructions {
+    for instruction_id in function.block_instruction_ids(block) {
+      let instruction = function.instruction_by_id(instruction_id).unwrap()
       for operand in instruction.args {
         add_gc_use(operand, definitions, uses)
       }
@@ -797,9 +798,12 @@ fn compute_gc_roots(
         }
       }
     }
-    let mut position = block.instructions.length() - 1
+    let instruction_ids = function.block_instruction_ids(block)
+    let mut position = instruction_ids.length() - 1
     while position >= 0 {
-      let instruction = block.instructions[position]
+      let instruction = function
+        .instruction_by_id(instruction_ids[position])
+        .unwrap()
       for result in instruction.results {
         if is_gc_reference_type(result.ty) {
           live.remove(result.id)
@@ -1603,7 +1607,8 @@ fn lower_verified_construction(
       value_types[parameter.0.id] = Some(lower_type(parameter.1))
       has_gc_references = has_gc_references || is_gc_reference_type(parameter.1)
     }
-    for instruction in block.instructions {
+    for instruction_id in function.block_instruction_ids(block) {
+      let instruction = function.instruction_by_id(instruction_id).unwrap()
       for result in instruction.results {
         value_types[result.id] = Some(lower_type(result.ty))
         has_gc_references = has_gc_references || is_gc_reference_type(result.ty)
@@ -1690,7 +1695,8 @@ fn lower_verified_construction(
     let block = source_blocks[block_id].unwrap()
     builder.switch_to_block(mapped_block(blocks, block.id))
     let mut terminator_replaced = false
-    for instruction in block.instructions {
+    for instruction_id in function.block_instruction_ids(block) {
+      let instruction = function.instruction_by_id(instruction_id).unwrap()
       if !terminator_replaced {
         terminator_replaced = lower_instruction(
           function,

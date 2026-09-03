@@ -511,7 +511,8 @@ fn build_selection_facts(function : @milkir.Function) -> SelectionFacts {
     None,
   )
   for block in function.blocks {
-    for instruction in block.instructions {
+    for instruction_id in function.block_instruction_ids(block) {
+      let instruction = function.instruction_by_id(instruction_id).unwrap()
       instructions[instruction.id] = Some(instruction)
       instruction_blocks[instruction.id] = block.id
       for result in instruction.results {
@@ -534,7 +535,8 @@ fn build_selection_facts(function : @milkir.Function) -> SelectionFacts {
   // SSA dominance does not require the function's block array to be in
   // dominator order.
   for block in function.blocks {
-    for instruction in block.instructions {
+    for instruction_id in function.block_instruction_ids(block) {
+      let instruction = function.instruction_by_id(instruction_id).unwrap()
       for argument in instruction.args {
         record_use(
           uses,

@@ -29,7 +29,7 @@ pub fn OptLevel::from_int(n : Int) -> OptLevel {
 pub fn instruction_count(func : Function) -> Int {
   let mut count = 0
   for block in func.blocks {
-    count = count + block.instructions.length()
+    count = count + block.instruction_count()
   }
   count
 }

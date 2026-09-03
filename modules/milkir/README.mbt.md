@@ -79,6 +79,29 @@ The important detail is that `x`, `one`, and `answer` are not runtime integers i
 | `Inst` | An operation that may produce one or more values. | `iconst`, `iadd` |
 | `Terminator` | The final control-flow operation in a block. | `return` |
 
+### DFG and layout ownership
+
+`Function` is the sole owner of instruction data and value definitions. A
+`Block` contains only the ordered `InstId` layout for that data; moving or
+deleting an instruction changes the layout without renumbering the function's
+instruction arena. Deleted instructions become lazy tombstones, while the
+verifier rejects arena instructions that are neither placed nor explicitly
+deleted. This keeps `Value` and `InstId` identities stable across ordinary
+transformations without adding work to the normal instruction-construction
+path.
+
+The instruction layout is intentionally not a mutable public array. Use
+`block.instruction_count()` and `func.block_instruction_at(block, index)` for
+individual inspection. Consumers that traverse a complete block without
+mutating it can use `func.block_instruction_ids(block)` to obtain a zero-copy,
+read-only view, then resolve each ID with `func.instruction_by_id(id)`. The view
+remains valid only until that block's layout changes.
+
+This replaces the pre-0.15 interface that exposed
+`Block.instructions : Array[Inst]`. Producers should continue to place
+instructions through `FunctionBuilder` or `Block::append_inst`; optimization
+passes must use the checked layout mutation methods.
+
 `FunctionBuilder` is the normal construction API. It creates an entry block automatically and keeps track of the block that receives new instructions. For a straight-line function, the usual order is:
 
 1. Create a builder.
