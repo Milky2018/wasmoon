@@ -364,7 +364,7 @@ test "O3 generated counted loops cover predicate and step combinations" {
 }
 
 ///|
-test "O3 safely skips structured branch shapes outside the supported subset" {
+test "O3 transforms structured continue branches before acyclic cleanup" {
   let source = generated_counted_loop_wat(
     "i32",
     "0",
@@ -375,7 +375,5 @@ test "O3 safely skips structured branch shapes outside the supported subset" {
     continue_on_true=true,
   )
   require_o3_jit_match(source, "run")
-  let (before, after) = optimized_milkir(source, "run")
-  inspect(before.split("iadd").count(), content="3")
-  inspect(after.split("iadd").count(), content="3")
+  require_o3_transforms_loop(source, "run")
 }

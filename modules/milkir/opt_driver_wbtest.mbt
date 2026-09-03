@@ -342,6 +342,39 @@ test "optimization metrics sink receives pass events and can be cleared" {
 }
 
 ///|
+test "O3 runs one acyclic pipeline after structural loop transforms" {
+  let events : Array[OptimizationPassMetric] = []
+  let mut now = 0L
+  install_optimization_metrics_sink(
+    OptimizationMetricsSink::new(
+      fn() {
+        now = now + 10L
+        now
+      },
+      fn(event) { events.push(event) },
+    ),
+  )
+  let func = dead_constant_function("o3_pipeline_order", 1)
+  optimize_with_level(func, O3) |> ignore
+  clear_optimization_metrics_sink()
+  let mut acyclic_count = 0
+  let mut acyclic_index = -1
+  let mut strength_reduce_index = -1
+  for index, event in events {
+    if event.name == "acyclic_optimize" {
+      acyclic_count = acyclic_count + 1
+      acyclic_index = index
+    }
+    if event.name == "loop_strength_reduce" {
+      strength_reduce_index = index
+    }
+  }
+  inspect(acyclic_count, content="1")
+  inspect(strength_reduce_index >= 0, content="true")
+  inspect(acyclic_index > strength_reduce_index, content="true")
+}
+
+///|
 /// A single straight-line chain of `count` blocks, each jumping to the next.
 /// The dominator tree is one long spine, so optimizer walks must be iterative.
 fn deep_block_chain_function(name : String, count : Int) -> Function {

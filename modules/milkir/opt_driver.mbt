@@ -180,14 +180,11 @@ fn run_mandatory_final_cleanup_with_analysis(
 }
 
 ///|
-fn optimize_o2_pipeline(func : Function) -> OptResult {
+fn run_acyclic_pipeline_after_normalization(
+  func : Function,
+  needs_dce : Bool,
+) -> OptResult {
   let result = OptResult::OptResult()
-  // Mandatory passes are independent of function size and run before budgets
-  // are selected, so dead and aliased IR does not consume expensive work.
-  let pre_cleanup = run_optimized_mandatory_pre_cleanup(func)
-  if pre_cleanup.changed {
-    result.mark_changed()
-  }
   let analysis = FunctionAnalysis::build(func)
   let (rewrite_changed, gvn_result) = run_acyclic_optimization_pass_with_analysis(
     func, analysis,
@@ -203,9 +200,24 @@ fn optimize_o2_pipeline(func : Function) -> OptResult {
   let final_cleanup = run_mandatory_final_cleanup_with_analysis(
     func,
     analysis,
-    rewrite_changed || gvn_result.changed,
+    needs_dce || rewrite_changed || gvn_result.changed,
   )
   if final_cleanup.changed {
+    result.mark_changed()
+  }
+  result
+}
+
+///|
+fn optimize_o2_pipeline(func : Function) -> OptResult {
+  let result = OptResult::OptResult()
+  // Mandatory passes are independent of function size and run before budgets
+  // are selected, so dead and aliased IR does not consume expensive work.
+  let pre_cleanup = run_optimized_mandatory_pre_cleanup(func)
+  if pre_cleanup.changed {
+    result.mark_changed()
+  }
+  if run_acyclic_pipeline_after_normalization(func, false).changed {
     result.mark_changed()
   }
   result
@@ -261,12 +273,13 @@ pub fn optimize(func : Function) -> OptResult {
 /// O3: Aggressive optimizations including loop optimizations
 fn optimize_o3(func : Function) -> OptResult {
   let result = OptResult::OptResult()
-  // First run O2 optimizations
-  let o2_result = optimize_o2_pipeline(func)
-  if o2_result.changed {
+  // Normalize once so loop transforms do not spend work on dead or aliased
+  // input. The full acyclic rewrite/GVN pipeline runs only after structural
+  // loop transforms have exposed their final expression graph.
+  let normalization = run_optimized_mandatory_pre_cleanup(func)
+  if normalization.changed {
     result.mark_changed()
   }
-  // Then apply loop optimizations
   let licm_result = run_opt_pass(func, "loop_licm", hoist_loop_invariants)
   if licm_result.changed {
     result.mark_changed()
@@ -279,9 +292,10 @@ fn optimize_o3(func : Function) -> OptResult {
   if sr_result.changed {
     result.mark_changed()
   }
-  // Run O2 again to clean up
-  let cleanup_result = optimize_o2_pipeline(func)
-  if cleanup_result.changed {
+  let loop_changed = licm_result.changed ||
+    unroll_result.changed ||
+    sr_result.changed
+  if run_acyclic_pipeline_after_normalization(func, loop_changed).changed {
     result.mark_changed()
   }
   if run_final_materialization_sink(func).changed {
