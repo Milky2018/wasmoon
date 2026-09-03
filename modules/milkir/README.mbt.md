@@ -112,9 +112,9 @@ Every declaration also states whether the field is `Stable` for the whole functi
 
 ### Semantic ownership
 
-MilkIR records the optimizer-visible facts of each built-in opcode in one semantic summary: whether it may trap, whether it reads or writes memory, and whether it has another observable effect. Dead-code elimination, loop optimization, global value numbering, and e-graph admission derive their safety decisions from that summary instead of maintaining independent opcode lists. Unknown extension operations are conservatively treated as trapping and effectful.
+MilkIR records the optimizer-visible facts of each built-in opcode in one semantic summary: whether it may trap, whether it reads or writes memory, and whether it has another observable effect. Dead-code elimination, loop optimization, and global value numbering derive their safety decisions from that summary instead of maintaining independent opcode lists. Unknown extension operations are conservatively treated as trapping and effectful.
 
-Other concerns remain with the adapter that implements them. The verifier owns operand and result contracts, the printer owns textual syntax, native lowering owns instruction selection, and the e-graph adapter owns which operations have an e-graph encoding. These are different responsibilities rather than duplicate semantic facts.
+Other concerns remain with the stage that implements them. The verifier owns operand and result contracts, the printer owns textual syntax, direct acyclic rewriting owns local canonical forms, and native lowering owns instruction selection. These are different responsibilities rather than duplicate semantic facts.
 
 When adding a built-in opcode:
 
@@ -122,9 +122,10 @@ When adding a built-in opcode:
 2. Classify its trap, memory, and observable-effect behavior in the opcode semantic summary.
 3. Add its textual representation to the printer.
 4. Add its instruction selection to `milkir/native` or the owning dialect adapter.
-5. Add an e-graph encoding only if the e-graph node language represents it.
+5. Add a direct rewrite only when it is locally profitable and preserves the
+   instruction's semantic contract.
 
-The built-in family matches in those stages are exhaustive, so adding a new family or operation leaves a compiler error until its required behavior is supplied. E-graph admission is intentionally conservative: an operation without an explicit encoding remains outside the e-graph.
+The built-in family matches in those stages are exhaustive, so adding a new family or operation leaves a compiler error until its required behavior is supplied. The direct rewriter is intentionally conservative: operations without a proven local canonicalization remain unchanged.
 
 ## Why values are called SSA values
 
@@ -304,7 +305,7 @@ The optimization levels are:
 | --- | --- |
 | `O0` | Minimal pipeline: removes dead code plus constant and unused block parameters. |
 | `O1` | Inexpensive simplification: mandatory cleanup, constant folding, alias canonicalization, and dead-code elimination. |
-| `O2` | The default pipeline: O1-style cleanup plus e-graph rewriting, budgeted global value numbering, and CFG simplification. |
+| `O2` | The default pipeline: O1-style cleanup plus direct acyclic rewriting, budgeted memory GVN, unbudgeted cheap value numbering, and CFG simplification. |
 | `O3` | The `O2` pipeline, loop-invariant code motion, checked counted-loop unrolling, strength reduction, and a final `O2` cleanup. |
 
 Use `optimize(func)` for the default pipeline or `optimize_with_level(func, level)` when the caller chooses the level explicitly. Optimizers assume a valid SSA and block-parameter structure. Verify before optimization when the input comes from a frontend, then verify again after developing a new transformation.

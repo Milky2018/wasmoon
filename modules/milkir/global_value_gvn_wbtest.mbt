@@ -32,7 +32,7 @@ test "GVN reuses a mutable context global across heap stores" {
   let second = builder.global_value(global, context)
   builder.return_([second])
   let function = builder.get_function()
-  run_global_value_numbering_with_budget_and_analysis(
+  run_acyclic_optimization_with_budget_and_analysis(
     function,
     instruction_count(function),
     FunctionAnalysis::build(function),
@@ -70,7 +70,7 @@ test "GVN reloads a mutable context global after an unknown store" {
   let second = builder.global_value(global, context)
   builder.return_([second])
   let function = builder.get_function()
-  run_global_value_numbering_with_budget_and_analysis(
+  run_acyclic_optimization_with_budget_and_analysis(
     function,
     instruction_count(function),
     FunctionAnalysis::build(function),
@@ -105,7 +105,7 @@ test "GVN reuses a stable context global" {
   let last = builder.global_value(global, context)
   builder.return_([last])
   let function = builder.get_function()
-  run_global_value_numbering_with_budget_and_analysis(
+  run_acyclic_optimization_with_budget_and_analysis(
     function,
     instruction_count(function),
     FunctionAnalysis::build(function),
@@ -139,7 +139,7 @@ test "GVN reuses a stable context global after the memory budget" {
   let last = builder.global_value(global, context)
   builder.return_([last])
   let function = builder.get_function()
-  let stats = run_global_value_numbering_with_budget_and_analysis(
+  let stats = run_acyclic_optimization_with_budget_and_analysis(
     function,
     300,
     FunctionAnalysis::build(function),
@@ -186,7 +186,7 @@ test "GVN invalidates mutable context globals after the memory budget" {
   let last = builder.global_value(global, context)
   builder.return_([last])
   let function = builder.get_function()
-  let stats = run_global_value_numbering_with_budget_and_analysis(
+  let stats = run_acyclic_optimization_with_budget_and_analysis(
     function,
     300,
     FunctionAnalysis::build(function),
@@ -223,7 +223,7 @@ test "GVN reloads mutable context globals after calls" {
   let second = builder.global_value(global, context)
   builder.return_([second])
   let function = builder.get_function()
-  run_global_value_numbering_with_budget_and_analysis(
+  run_acyclic_optimization_with_budget_and_analysis(
     function,
     instruction_count(function),
     FunctionAnalysis::build(function),
@@ -269,7 +269,7 @@ test "GVN does not merge distinct context globals" {
   let second = builder.global_value(memory1, context)
   builder.return_([second])
   let function = builder.get_function()
-  run_global_value_numbering_with_budget_and_analysis(
+  run_acyclic_optimization_with_budget_and_analysis(
     function,
     instruction_count(function),
     FunctionAnalysis::build(function),

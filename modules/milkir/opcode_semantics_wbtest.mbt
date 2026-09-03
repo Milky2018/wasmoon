@@ -82,7 +82,7 @@ test "dead code preserves unused trapping and observable instructions" {
 }
 
 ///|
-test "GVN and egraph derive policy from opcode semantics" {
+test "GVN derives policy from opcode semantics" {
   let func = Function::new_empty("semantic_policy")
   let opcodes : Array[Opcode] = [
     Scalar(IntBinary(Add)),
@@ -98,9 +98,5 @@ test "GVN and egraph derive policy from opcode semantics" {
   debug_inspect(
     instructions.map(is_gvn_candidate),
     content="[true, true, false, false, false, false]",
-  )
-  debug_inspect(
-    instructions.map(inst_is_egraph_pure),
-    content="[true, false, false, false, false, false]",
   )
 }

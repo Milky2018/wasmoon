@@ -19,7 +19,7 @@ test "compile metrics preserve every production phase and allocation summary" {
     export_json(),
     content=(
       #|{
-      #|  "schema_version": 6,
+      #|  "schema_version": 7,
       #|  "expected_functions": 1,
       #|  "module_compile_us": "240",
       #|  "compile_subphases": [],

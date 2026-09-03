@@ -268,12 +268,33 @@ fn select_memory_address(
   }
   guard selected is Some((selection, consumed)) else { return None }
   if consumed.any(value => {
-      facts.constants[value.id] is None && facts.uses[value.id] != 1
+      !memory_address_value_is_free(value, facts) && facts.uses[value.id] != 1
     }) {
     None
   } else {
     Some({ selection, consumed, })
   }
+}
+
+///|
+/// Values that add no instruction when folded into an address may be consumed
+/// by more than one memory selection. A raw-word pointer bitcast is a typed IR
+/// boundary, not a machine operation; requiring a single use here makes GVN of
+/// that bitcast pessimize every later address.
+fn memory_address_value_is_free(
+  value : @milkir.Value,
+  facts : SelectionFacts,
+) -> Bool {
+  if facts.constants[value.id] is Some(_) {
+    return true
+  }
+  guard scalar_definition(facts.definitions, value) is Some(instruction) else {
+    return false
+  }
+  instruction.opcode is Scalar(Convert(Bitcast)) &&
+  instruction.args is [source] &&
+  source.ty == Ptr &&
+  value.ty == I64
 }
 
 ///|
@@ -446,6 +467,25 @@ fn select_scalar_instruction(
 }
 
 ///|
+fn selection_tracks_shared_consumers(
+  value : @milkir.Value,
+  constants : Array[UInt64?],
+  definitions : Array[@milkir.Inst?],
+) -> Bool {
+  if constants[value.id] is Some(_) {
+    return true
+  }
+  match definitions[value.id] {
+    Some(definition) =>
+      definition.opcode is Scalar(Convert(Bitcast)) &&
+      definition.args is [source] &&
+      source.ty == Ptr &&
+      value.ty == I64
+    None => false
+  }
+}
+
+///|
 fn build_selection_facts(function : @milkir.Function) -> SelectionFacts {
   let uses = Array::make(function.next_value_id, 0)
   let consumers = Array::make(function.next_value_id, -2)
@@ -488,6 +528,13 @@ fn build_selection_facts(function : @milkir.Function) -> SelectionFacts {
           )
         _ => ()
       }
+    }
+  }
+  // Definitions must be complete before classifying shared consumers: valid
+  // SSA dominance does not require the function's block array to be in
+  // dominator order.
+  for block in function.blocks {
+    for instruction in block.instructions {
       for argument in instruction.args {
         record_use(
           uses,
@@ -495,7 +542,7 @@ fn build_selection_facts(function : @milkir.Function) -> SelectionFacts {
           shared_consumers,
           argument,
           instruction.id,
-          constants[argument.id] is Some(_),
+          selection_tracks_shared_consumers(argument, constants, definitions),
         )
       }
     }
@@ -507,7 +554,7 @@ fn build_selection_facts(function : @milkir.Function) -> SelectionFacts {
           shared_consumers,
           value,
           -1,
-          constants[value.id] is Some(_),
+          selection_tracks_shared_consumers(value, constants, definitions),
         )
       }
     }
@@ -580,6 +627,26 @@ fn selected_by_memory_address_use(
     return false
   }
   selected.consumed.any(consumed_value => consumed_value == value)
+}
+
+///|
+fn fully_selected_by_memory_addresses(
+  value : @milkir.Value,
+  facts : SelectionFacts,
+) -> Bool {
+  if facts.uses[value.id] == 1 && facts.consumers[value.id] >= 0 {
+    return selected_by_memory_address(value, facts)
+  }
+  guard facts.uses[value.id] > 1 &&
+    facts.shared_consumers[value.id] is Some(consumers) else {
+    return false
+  }
+  consumers.all(consumer => {
+    guard facts.instructions[consumer] is Some(instruction) else {
+      return false
+    }
+    selected_by_memory_address_use(value, instruction, facts)
+  })
 }
 
 ///|
@@ -662,6 +729,12 @@ fn compute_should_defer_instruction(
   guard result.ty is (I32 | I64) else { return false }
   if instruction.opcode is Scalar(IntConst(_)) {
     return constant_is_fully_selected(result, facts)
+  }
+  if instruction.opcode is Scalar(Convert(Bitcast)) &&
+    instruction.args is [source] &&
+    source.ty == Ptr &&
+    result.ty == I64 {
+    return fully_selected_by_memory_addresses(result, facts)
   }
   guard facts.uses[result.id] == 1 else { return false }
   match instruction.opcode {

@@ -109,7 +109,7 @@ test "mandatory cleanup preserves effects above size boundaries" {
 ///|
 test "GVN memory budget does not stop cheap expression numbering" {
   let func = duplicate_expression_function("gvn_partial", 5)
-  let stats = run_global_value_numbering_with_budget_and_analysis(
+  let stats = run_acyclic_optimization_with_budget_and_analysis(
     func,
     2,
     FunctionAnalysis::build(func),
@@ -134,7 +134,7 @@ test "GVN early termination preserves external effects" {
   let result = builder.iadd(lhs, rhs)
   builder.return_([result])
   let func = builder.get_function()
-  let stats = run_global_value_numbering_with_budget_and_analysis(
+  let stats = run_acyclic_optimization_with_budget_and_analysis(
     func,
     2,
     FunctionAnalysis::build(func),
@@ -171,7 +171,7 @@ test "GVN retains memory forwarding in a large function budget prefix" {
   }
   builder.return_([loaded])
   let func = builder.get_function()
-  let stats = run_global_value_numbering_with_budget_and_analysis(
+  let stats = run_acyclic_optimization_with_budget_and_analysis(
     func,
     300,
     FunctionAnalysis::build(func),
@@ -179,6 +179,33 @@ test "GVN retains memory forwarding in a large function budget prefix" {
   inspect(stats.work_done, content="300")
   inspect(stats.budget_exhausted, content="true")
   inspect(func.blocks[0].instructions[2].opcode, content="Scalar(Copy)")
+  inspect(func.verify(), content="()")
+}
+
+///|
+test "rewrite insertion preserves cross-block memory versions" {
+  let builder = FunctionBuilder::FunctionBuilder("rewrite_before_store")
+  let pointer = builder.add_param(Ptr)
+  let input = builder.add_param(I32)
+  builder.add_result(I32)
+  let next = builder.create_block()
+  let offset = builder.iconst_i64(0L)
+  let eight = builder.iconst_i32(8)
+  let product = builder.imul(input, eight)
+  builder.store_ptr(I32, pointer, product, offset)
+  builder.jump(next, [])
+  builder.switch_to_block(next)
+  let loaded = builder.load_ptr(I32, pointer, offset)
+  builder.return_([loaded])
+  let func = builder.get_function()
+  run_acyclic_optimization_with_budget_and_analysis(
+    func,
+    instruction_count(func),
+    FunctionAnalysis::build(func),
+  )
+  |> ignore
+  inspect(func.blocks[1].instructions[0].opcode, content="Scalar(Copy)")
+  inspect(func.print().contains("ishl"), content="true")
   inspect(func.verify(), content="()")
 }
 
@@ -202,7 +229,7 @@ test "bounded memory GVN keeps unknown block entries conservative" {
     builder.get_function()
   }
   let small = build("gvn_complete_block_input", 0)
-  run_global_value_numbering_with_budget_and_analysis(
+  run_acyclic_optimization_with_budget_and_analysis(
     small,
     instruction_count(small),
     FunctionAnalysis::build(small),
@@ -210,7 +237,7 @@ test "bounded memory GVN keeps unknown block entries conservative" {
   |> ignore
   inspect(small.blocks[1].instructions[0].opcode, content="Scalar(Copy)")
   let large = build("gvn_unknown_bounded_block_input", 300)
-  let stats = run_global_value_numbering_with_budget_and_analysis(
+  let stats = run_acyclic_optimization_with_budget_and_analysis(
     large,
     300,
     FunctionAnalysis::build(large),
@@ -247,11 +274,14 @@ test "GVN metrics count only instructions visited in reachable blocks" {
       fn(event) { events.push(event) },
     ),
   )
-  run_egraph_gvn_pass_with_analysis(func, FunctionAnalysis::build(func))
+  run_acyclic_optimization_pass_with_analysis(
+    func,
+    FunctionAnalysis::build(func),
+  )
   |> ignore
   clear_optimization_metrics_sink()
   inspect(events.length(), content="1")
-  inspect(events[0].name, content="egraph_gvn")
+  inspect(events[0].name, content="acyclic_optimize")
   debug_inspect(events[0].work_done, content="Some(1)")
   debug_inspect(events[0].budget_exhausted, content="Some(false)")
 }
@@ -286,8 +316,7 @@ test "optimization metrics sink receives pass events and can be cleared" {
 
 ///|
 /// A single straight-line chain of `count` blocks, each jumping to the next.
-/// The dominator tree is one long spine, which the e-graph block rewriter
-/// used to walk with native recursion.
+/// The dominator tree is one long spine, so optimizer walks must be iterative.
 fn deep_block_chain_function(name : String, count : Int) -> Function {
   let builder = FunctionBuilder::FunctionBuilder(name)
   let input = builder.add_param(I32)
@@ -328,7 +357,7 @@ fn deep_empty_block_chain_function(name : String, count : Int) -> Function {
 ///|
 test "global value numbering survives a deep spine of empty blocks" {
   let func = deep_empty_block_chain_function("gvn_deep_empty_blocks", 100000)
-  run_global_value_numbering_with_budget_and_analysis(
+  run_acyclic_optimization_with_budget_and_analysis(
     func,
     instruction_count(func),
     FunctionAnalysis::build(func),
@@ -338,10 +367,7 @@ test "global value numbering survives a deep spine of empty blocks" {
 }
 
 ///|
-/// One long chain of e-graph-encodable `iadd`s, each consuming the previous
-/// result. The value converter used to walk this with native recursion.
-/// `copy` is deliberately not used: it has no e-graph encoding, so a copy
-/// chain becomes a row of leaves rather than a deep operand chain.
+/// One long chain of `iadd`s, each consuming the previous result.
 fn deep_operand_chain_function(name : String, count : Int) -> Function {
   let builder = FunctionBuilder::FunctionBuilder(name)
   let input = builder.add_param(I32)
@@ -356,13 +382,11 @@ fn deep_operand_chain_function(name : String, count : Int) -> Function {
 }
 
 ///|
-test "egraph survives a deep block spine" {
-  // Well past the depth a native-stack recursion survives.
-  let func = deep_block_chain_function("egraph_deep_blocks", 100000)
-  optimize_function_with_stats_with_limits_and_ruleset(
+test "acyclic optimization survives a deep block spine" {
+  let func = deep_block_chain_function("acyclic_deep_blocks", 100000)
+  run_acyclic_optimization_with_budget_and_analysis(
     func,
-    @egraph.SaturationLimits::cranelift_default(),
-    @egraph.get_global_ruleset(),
+    instruction_count(func),
     FunctionAnalysis::build(func),
   )
   |> ignore
@@ -371,23 +395,19 @@ test "egraph survives a deep block spine" {
 
 ///|
 test "the optimizer pipeline survives a deep dominator spine" {
-  // The e-graph pass is not the only descent of the dominator tree, and the
-  // test above only covers that one. Alias canonicalization descends on every
-  // level above O0 with no budget to cut it short, and GVN descends as far as
-  // its budget reaches, so the pipeline has to be driven end to end to cover
-  // them.
+  // Alias canonicalization and acyclic optimization both traverse the full
+  // dominator tree, so drive the complete pipeline to cover their composition.
   let func = deep_block_chain_function("optimize_deep_blocks", 100000)
   optimize_with_level(func, O3) |> ignore
   inspect(func.verify(), content="()")
 }
 
 ///|
-test "egraph survives a deep operand chain" {
-  let func = deep_operand_chain_function("egraph_deep_operands", 100000)
-  optimize_function_with_stats_with_limits_and_ruleset(
+test "acyclic optimization survives a deep operand chain" {
+  let func = deep_operand_chain_function("acyclic_deep_operands", 100000)
+  run_acyclic_optimization_with_budget_and_analysis(
     func,
-    @egraph.SaturationLimits::cranelift_default(),
-    @egraph.get_global_ruleset(),
+    instruction_count(func),
     FunctionAnalysis::build(func),
   )
   |> ignore
@@ -395,20 +415,17 @@ test "egraph survives a deep operand chain" {
 }
 
 ///|
-test "egraph elaborates a strength-reduced form into the IR" {
-  // x * 8 has a cheaper form as x << 3. Realizing it requires building a
-  // new expression shape, which only elaboration can do.
-  let builder = FunctionBuilder::FunctionBuilder("elaborate_mul_pow2")
+test "acyclic rewrite creates a strength-reduced MilkIR form" {
+  let builder = FunctionBuilder::FunctionBuilder("rewrite_mul_pow2")
   let x = builder.add_param(I32)
   builder.add_result(I32)
   let eight = builder.iconst_i32(8)
   let product = builder.imul(x, eight)
   builder.return_([product])
   let func = builder.get_function()
-  optimize_function_with_stats_with_limits_and_ruleset(
+  run_acyclic_optimization_with_budget_and_analysis(
     func,
-    @egraph.SaturationLimits::cranelift_default(),
-    @egraph.get_global_ruleset(),
+    instruction_count(func),
     FunctionAnalysis::build(func),
   )
   |> ignore
@@ -419,8 +436,26 @@ test "egraph elaborates a strength-reduced form into the IR" {
 }
 
 ///|
-test "egraph work follows pure regions instead of total function size" {
-  let builder = FunctionBuilder::FunctionBuilder("effect_heavy_egraph")
+test "acyclic rewrite reduces integer constants to the result width" {
+  let builder = FunctionBuilder::FunctionBuilder("reduce_constant_width")
+  builder.add_result(I32)
+  let wide = builder.iconst_i64(0x100000000L)
+  let reduced = builder.ireduce(I32, wide)
+  builder.return_([reduced])
+  let func = builder.get_function()
+  run_acyclic_optimization_with_budget_and_analysis(
+    func,
+    instruction_count(func),
+    FunctionAnalysis::build(func),
+  )
+  |> ignore
+  inspect(func.blocks[0].instructions[1].opcode, content="Scalar(IntConst(0))")
+  inspect(func.verify(), content="()")
+}
+
+///|
+test "acyclic rewrite dispatch is linear in reachable instructions" {
+  let builder = FunctionBuilder::FunctionBuilder("effect_heavy_rewrite")
   let value = builder.add_param(I32)
   builder.add_result(I32)
   let effect = builder.get_function().declare_external_symbol("effect")
@@ -431,35 +466,38 @@ test "egraph work follows pure regions instead of total function size" {
   let product = builder.imul(value, eight)
   builder.return_([product])
   let func = builder.get_function()
-  let stats = optimize_function_with_stats_with_limits_and_ruleset(
+  let before = instruction_count(func)
+  let stats = run_acyclic_optimization_with_budget_and_analysis(
     func,
-    @egraph.SaturationLimits::cranelift_default(),
-    @egraph.get_global_ruleset(),
+    before,
     FunctionAnalysis::build(func),
   )
-  inspect(stats.regions, content="1")
-  inspect(stats.peak_nodes < 32, content="true")
-  inspect(stats.total_rule_attempts < 128, content="true")
-  inspect(stats.total_extraction_work < 128, content="true")
+  inspect(stats.rewrite_stats.attempts, content=before.to_string())
+  inspect(stats.rewrite_stats.applied, content="1")
+  inspect(stats.rewrite_stats.created_instructions, content="1")
   inspect(func.verify(), content="()")
 }
 
 ///|
-test "large pure functions use bounded independent egraph regions" {
-  let func = deep_operand_chain_function("regional_egraph", 400)
-  let stats = optimize_function_with_stats_with_limits_and_ruleset(
+test "acyclic rewrite does not expand a shared definition" {
+  let builder = FunctionBuilder::FunctionBuilder("shared_definition")
+  let input = builder.add_param(I32)
+  builder.add_result(I32)
+  let one = builder.iconst_i32(1)
+  let two = builder.iconst_i32(2)
+  let base = builder.iadd(input, one)
+  let combined = builder.iadd(base, two)
+  let result = builder.iadd(base, combined)
+  builder.return_([result])
+  let func = builder.get_function()
+  run_acyclic_optimization_with_budget_and_analysis(
     func,
-    @egraph.SaturationLimits::cranelift_default(),
-    @egraph.get_global_ruleset(),
+    instruction_count(func),
     FunctionAnalysis::build(func),
   )
-  inspect(stats.regions > 1, content="true")
-  inspect(stats.peak_nodes <= 1024, content="true")
-  inspect(stats.total_rule_attempts <= stats.regions * 8192, content="true")
-  inspect(stats.total_extraction_work <= stats.regions * 8192, content="true")
-  inspect(
-    stats.total_elaborated_instructions <= stats.regions * 128,
-    content="true",
-  )
+  |> ignore
+  let text = func.print()
+  inspect(text.contains("iadd v0, v1"), content="true")
+  inspect(text.contains("iadd v3, v2"), content="true")
   inspect(func.verify(), content="()")
 }

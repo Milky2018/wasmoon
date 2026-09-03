@@ -577,14 +577,9 @@ pub struct OptimizationPassMetric {
   before_insts : Int
   after_insts : Int
   changed : Bool
-  egraph_classes : Int?
-  egraph_nodes : Int?
-  egraph_rule_apps : Int?
-  egraph_regions : Int?
-  egraph_peak_nodes : Int?
-  egraph_rule_attempts : Int?
-  egraph_extraction_work : Int?
-  egraph_elaborated_insts : Int?
+  rewrite_attempts : Int?
+  rewrite_apps : Int?
+  rewrite_created_insts : Int?
   work_done : Int?
   budget_exhausted : Bool?
 }

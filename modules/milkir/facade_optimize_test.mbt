@@ -178,7 +178,7 @@ test "public O2 eliminates a duplicate expression" {
 }
 
 ///|
-fn build_egraph_boundary_function(
+fn build_optimization_boundary_function(
   name : String,
   instruction_count : Int,
 ) -> @milkir.Function raise @milkir.VerifyError {
@@ -199,7 +199,7 @@ fn build_egraph_boundary_function(
 test "public O2 optimization quality is continuous across 300 instructions" {
   let optimized : Array[Bool] = []
   for count in [299, 300, 301] {
-    let func = build_egraph_boundary_function("boundary_\{count}", count)
+    let func = build_optimization_boundary_function("boundary_\{count}", count)
     inspect(@milkir.instruction_count(func), content="\{count}")
     @milkir.optimize_with_level(func, O2) |> ignore
     let text = func.print()
@@ -210,16 +210,15 @@ test "public O2 optimization quality is continuous across 300 instructions" {
 }
 
 ///|
-test "public O2 gives late regions an independent optimization budget" {
-  let builder = @milkir.FunctionBuilder::FunctionBuilder("regional_fairness")
+test "public O2 rewrites the complete reachable function" {
+  let builder = @milkir.FunctionBuilder::FunctionBuilder("rewrite_fairness")
   let value = builder.add_param(I32)
   let results : Array[@milkir.Value] = []
   builder.add_result(I32)
   let eight = builder.iconst_i32(8)
   results.push(builder.imul(value, eight))
-  // Keep the intervening pure expressions live. This is deliberately larger
-  // than one e-graph region, so a function-prefix fuel policy would starve the
-  // second multiplication.
+  // Keep the intervening pure expressions live. Direct acyclic rewriting is
+  // linear and must not stop when the precise-memory GVN budget is exhausted.
   for offset in 0..<300 {
     builder.add_result(I32)
     let constant = builder.iconst_i32(offset + 17)

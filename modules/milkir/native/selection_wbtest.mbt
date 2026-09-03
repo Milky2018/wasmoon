@@ -194,6 +194,39 @@ test "native demand selection folds canonical addresses at the load" {
 }
 
 ///|
+test "native demand selection shares zero-cost pointer bitcasts" {
+  let builder = @milkir.FunctionBuilder::FunctionBuilder("shared_base_bits")
+  let base = builder.add_param(Ptr)
+  let first_index = builder.add_param(I32)
+  let second_index = builder.add_param(I32)
+  builder.add_result(I32)
+  builder.add_result(I32)
+  let base_bits = builder.bitcast(I64, base)
+  let first_address = builder.iadd(base_bits, builder.uextend(I64, first_index))
+  let second_address = builder.iadd(
+    base_bits,
+    builder.uextend(I64, second_index),
+  )
+  let zero = builder.iconst_i64(0L)
+  let first = builder.load_ptr(I32, first_address, zero)
+  let second = builder.load_ptr(I32, second_address, zero)
+  builder.return_([first, second])
+  let trace = trace_lowering(builder.finalize())
+  inspect(
+    trace.operations
+    .filter(operation => operation is LoadIndexed(_, 0))
+    .length(),
+    content="2",
+  )
+  inspect(
+    trace.operations.any(operation => {
+      operation is (PointerOffset | Convert(Bitcast(Ptr64, I64)))
+    }),
+    content="false",
+  )
+}
+
+///|
 test "native demand selection preserves shared address definitions" {
   let builder = @milkir.FunctionBuilder::FunctionBuilder("shared_address")
   let base = builder.add_param(Ptr)

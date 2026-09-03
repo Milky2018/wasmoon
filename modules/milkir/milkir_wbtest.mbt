@@ -588,7 +588,7 @@ test "strength reduction derives shift amounts and remainder masks" {
 }
 
 ///|
-test "O3 derives power-of-two constants with a bounded large-function egraph" {
+test "O3 derives power-of-two constants in a large function" {
   let builder = FunctionBuilder::FunctionBuilder("o3_large_strength_reduce")
   let value = builder.add_param(I32)
   builder.add_result(I32)
@@ -734,7 +734,7 @@ test "GVN reuses float constants with identical NaN bits" {
   let second = builder.fconst_f64(nan)
   builder.return_([second])
   let func = builder.get_function()
-  let stats = run_global_value_numbering_with_budget_and_analysis(
+  let stats = run_acyclic_optimization_with_budget_and_analysis(
     func,
     instruction_count(func),
     FunctionAnalysis::build(func),
@@ -752,7 +752,7 @@ test "GVN does not conflate integer constants with different widths" {
   let wide = builder.iconst_i64(1L)
   builder.return_([wide])
   let func = builder.get_function()
-  let stats = run_global_value_numbering_with_budget_and_analysis(
+  let stats = run_acyclic_optimization_with_budget_and_analysis(
     func,
     instruction_count(func),
     FunctionAnalysis::build(func),
@@ -1474,7 +1474,7 @@ test "CSE keeps duplicate loads without alias metadata" {
   let loaded1 = builder.load_ptr(I32, ptr, offset)
   builder.return_([loaded1])
   let func = builder.get_function()
-  let stats = run_global_value_numbering_with_budget_and_analysis(
+  let stats = run_acyclic_optimization_with_budget_and_analysis(
     func,
     instruction_count(func),
     FunctionAnalysis::build(func),

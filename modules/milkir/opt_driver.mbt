@@ -4,7 +4,7 @@
 /// Optimization level
 /// - 0: No optimization
 /// - 1: Inexpensive optimizations (constant folding, alias cleanup, DCE)
-/// - 2: Default optimizations (adds e-graph, global GVN, and CFG transforms)
+/// - 2: Default optimizations (adds acyclic rewrites, GVN, and CFG transforms)
 /// - 3: Aggressive optimizations (includes loop optimizations)
 pub(all) enum OptLevel {
   O0 // No optimization
@@ -53,7 +53,6 @@ fn run_opt_pass(
 }
 
 ///|
-#warnings("-unused_value")
 fn gvn_work_budget_for_instruction_count(insts : Int) -> Int {
   if insts > 300 {
     300
@@ -63,40 +62,35 @@ fn gvn_work_budget_for_instruction_count(insts : Int) -> Int {
 }
 
 ///|
-fn run_egraph_gvn_pass_with_analysis(
+fn run_acyclic_optimization_pass_with_analysis(
   func : Function,
   analysis : FunctionAnalysis,
 ) -> (Bool, OptResult) {
   let before = instruction_count(func)
-  let limits = @egraph.SaturationLimits::cranelift_default()
-  let ruleset = @egraph.get_global_ruleset()
   let perf_on = perf_enabled()
   let tick = if perf_on { perf_tick_now() } else { 0L }
-  let (egraph_stats, gvn_stats) = optimize_function_and_gvn_with_stats(
-    func, limits, ruleset, analysis,
+  let optimize_stats = run_acyclic_optimization_with_budget_and_analysis(
+    func,
+    gvn_work_budget_for_instruction_count(before),
+    analysis,
   )
   if perf_on {
     perf_record_ir_pass(
-      "egraph_gvn",
+      "acyclic_optimize",
       before,
       instruction_count(func),
-      egraph_stats.changed || gvn_stats.result.changed,
+      optimize_stats.result.changed,
       perf_elapsed_us(tick),
-      work_done=Some(gvn_stats.work_done),
-      egraph_classes=Some(egraph_stats.total_classes),
-      egraph_nodes=Some(egraph_stats.total_nodes),
-      egraph_rule_apps=Some(egraph_stats.total_rule_applications),
-      egraph_regions=Some(egraph_stats.regions),
-      egraph_peak_nodes=Some(egraph_stats.peak_nodes),
-      egraph_rule_attempts=Some(egraph_stats.total_rule_attempts),
-      egraph_extraction_work=Some(egraph_stats.total_extraction_work),
-      egraph_elaborated_insts=Some(egraph_stats.total_elaborated_instructions),
-      budget_exhausted=Some(
-        egraph_stats.budget_exhausted || gvn_stats.budget_exhausted,
+      work_done=Some(optimize_stats.work_done),
+      rewrite_apps=Some(optimize_stats.rewrite_stats.applied),
+      rewrite_attempts=Some(optimize_stats.rewrite_stats.attempts),
+      rewrite_created_insts=Some(
+        optimize_stats.rewrite_stats.created_instructions,
       ),
+      budget_exhausted=Some(optimize_stats.budget_exhausted),
     )
   }
-  (egraph_stats.changed, gvn_stats.result)
+  (optimize_stats.rewrite_stats.changed, optimize_stats.result)
 }
 
 ///|
@@ -195,10 +189,10 @@ fn optimize_o2_pipeline(func : Function) -> OptResult {
     result.mark_changed()
   }
   let analysis = FunctionAnalysis::build(func)
-  let (egraph_changed, gvn_result) = run_egraph_gvn_pass_with_analysis(
+  let (rewrite_changed, gvn_result) = run_acyclic_optimization_pass_with_analysis(
     func, analysis,
   )
-  if egraph_changed {
+  if rewrite_changed {
     result.mark_changed()
   }
   if gvn_result.changed {
@@ -209,7 +203,7 @@ fn optimize_o2_pipeline(func : Function) -> OptResult {
   let final_cleanup = run_mandatory_final_cleanup_with_analysis(
     func,
     analysis,
-    egraph_changed || gvn_result.changed,
+    rewrite_changed || gvn_result.changed,
   )
   if final_cleanup.changed {
     result.mark_changed()

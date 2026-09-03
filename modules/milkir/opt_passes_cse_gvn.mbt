@@ -22,7 +22,7 @@ priv struct PtrLocationKey {
 ///|
 priv struct StoreVersion {
   block_id : Int
-  inst_index : Int
+  inst_id : Int
 } derive(Eq, Hash)
 
 ///|
@@ -321,11 +321,11 @@ fn compute_block_input_last_store_states(
       Some(existing) => existing.clone()
       None => LastStoreState()
     }
-    for inst_index, inst in block_instructions(block_id) {
+    for inst in block_instructions(block_id) {
       update_last_store_state(
         state,
         inst,
-        { block_id, inst_index, },
+        { block_id, inst_id: inst.id, },
         ptr_base_infos,
       )
     }
@@ -333,9 +333,9 @@ fn compute_block_input_last_store_states(
       let succ_idx = block_idx[succ]
       let succ_block = func.blocks[succ_idx]
       let join_token = if succ_block.instructions.length() > 0 {
-        { block_id: succ, inst_index: 0, }
+        { block_id: succ, inst_id: -1, }
       } else {
-        { block_id: succ, inst_index: -1, }
+        { block_id: succ, inst_id: -1, }
       }
       let updated = match block_input.get(succ) {
         Some(existing) => existing.meet_from(state, join_token)
@@ -670,10 +670,11 @@ fn gvn_memory_dependency(
 }
 
 ///|
-priv struct GVNStats {
+priv struct AcyclicOptimizeStats {
   result : OptResult
   work_done : Int
   budget_exhausted : Bool
+  rewrite_stats : AcyclicRewriteStats
 }
 
 ///|
@@ -681,7 +682,7 @@ priv struct GVNStats {
 /// retained instead of destructively scoped: lookup checks dominance and the
 /// relevant memory version, so sibling blocks cannot hide an available value
 /// from their common dominator.
-priv struct StreamingGVNEntry {
+priv struct AvailableExpression {
   value : Value
   dependency : AliasRegion?
   memory_version : StoreVersion?
@@ -692,13 +693,14 @@ priv struct StreamingGVNEntry {
 }
 
 ///|
-priv struct StreamingGVN {
+priv struct AcyclicOptimizer {
   func : Function
   analysis : FunctionAnalysis
+  rewriter : AcyclicRewriter
   memory_work_budget : Int
   ptr_base_infos : Array[PtrBaseInfo?]
   block_input_state : @hashmap.HashMap[Int, LastStoreState]
-  value_table : @hashmap.HashMap[Inst, Array[StreamingGVNEntry]]
+  value_table : @hashmap.HashMap[Inst, Array[AvailableExpression]]
   memory_values : @hashmap.HashMap[MemoryValueKey, MemoryValueEntry]
   result : OptResult
   mut work_done : Int
@@ -725,12 +727,12 @@ fn is_stable_global_value(func : Function, inst : Inst) -> Bool {
 }
 
 ///|
-fn StreamingGVN::new(
+fn AcyclicOptimizer::new(
   func : Function,
   work_budget : Int,
   analysis : FunctionAnalysis,
   source_block_instructions : (Int) -> Array[Inst],
-) -> StreamingGVN {
+) -> AcyclicOptimizer {
   let memory_work_budget = if work_budget > 0 { work_budget } else { 0 }
   let mut total_instructions = 0
   for block in func.blocks {
@@ -770,6 +772,7 @@ fn StreamingGVN::new(
   {
     func,
     analysis,
+    rewriter: AcyclicRewriter::new(func),
     memory_work_budget,
     ptr_base_infos,
     block_input_state,
@@ -783,34 +786,141 @@ fn StreamingGVN::new(
 }
 
 ///|
-fn StreamingGVN::process_block(
-  self : StreamingGVN,
+fn AcyclicOptimizer::process_block(
+  self : AcyclicOptimizer,
   block_id : Int,
   instructions : Array[Inst],
-) -> Unit {
+) -> Array[Inst] {
   let last_store_state = match self.block_input_state.get(block_id) {
     Some(state) => state.clone()
     None => LastStoreState()
   }
-  for inst_index, inst in instructions {
-    let position = self.instruction_position
-    self.instruction_position = position + 1
-    let within_memory_budget = self.work_done < self.memory_work_budget
-    if within_memory_budget {
+  let rewritten : Array[Inst] = []
+  for inst in instructions {
+    let prefix : Array[Inst] = []
+    if self.rewriter.rewrite_inst(inst, prefix) {
+      self.result.mark_changed()
+    }
+    for created in prefix {
+      self.process_inst(
+        block_id,
+        rewritten.length(),
+        created,
+        last_store_state,
+        false,
+      )
+      rewritten.push(created)
+    }
+    if self.rewriter.canonicalize_operands(inst) {
+      self.result.mark_changed()
+    }
+    self.process_inst(
+      block_id,
+      rewritten.length(),
+      inst,
+      last_store_state,
+      true,
+    )
+    rewritten.push(inst)
+  }
+  rewritten
+}
+
+///|
+fn AcyclicOptimizer::process_inst(
+  self : AcyclicOptimizer,
+  block_id : Int,
+  inst_index : Int,
+  inst : Inst,
+  last_store_state : LastStoreState,
+  charge_memory_work : Bool,
+) -> Unit {
+  let position = self.instruction_position
+  self.instruction_position = position + 1
+  let within_memory_budget = if charge_memory_work {
+    if self.work_done < self.memory_work_budget {
       self.work_done = self.work_done + 1
+      true
     } else {
       self.budget_exhausted = true
+      false
     }
-    let mut replaced_by_memory = false
-    if within_memory_budget &&
-      inst.opcode is Memory(Load(load_ty)) &&
-      ptr_access_from_inst(inst, self.ptr_base_infos) is Some(load_access) {
-      let key = memory_key_from_access(
-        load_access,
-        load_ty,
-        last_store_state.get_region_token(load_access.region),
-      )
-      if self.memory_values.get(key) is Some(entry) &&
+  } else {
+    // Direct rewrites create only pure helper instructions. They participate
+    // in value numbering but must not consume the source IR's memory-analysis
+    // budget or move a later source load outside the analyzed prefix.
+    true
+  }
+  let mut replaced_by_memory = false
+  if within_memory_budget &&
+    inst.opcode is Memory(Load(load_ty)) &&
+    ptr_access_from_inst(inst, self.ptr_base_infos) is Some(load_access) {
+    let key = memory_key_from_access(
+      load_access,
+      load_ty,
+      last_store_state.get_region_token(load_access.region),
+    )
+    if self.memory_values.get(key) is Some(entry) &&
+      inst_dominates(
+        entry.def_block_id,
+        entry.def_inst_index,
+        block_id,
+        inst_index,
+        self.analysis.dominance,
+      ) {
+      inst.opcode = Scalar(Copy)
+      inst.operands.clear()
+      inst.operands.push(entry.value)
+      if inst.first_result() is Some(result) {
+        self.rewriter.record_alias(result, entry.value)
+      }
+      self.result.mark_changed()
+      replaced_by_memory = true
+    }
+  }
+  if within_memory_budget &&
+    inst.opcode is Memory(Store(store_ty)) &&
+    ptr_access_from_inst(inst, self.ptr_base_infos) is Some(store_access) &&
+    inst.operands.length() >= 2 {
+    let key = memory_key_from_access(
+      store_access,
+      store_ty,
+      Some({ block_id, inst_id: inst.id, }),
+    )
+    self.memory_values.set(key, {
+      def_block_id: block_id,
+      def_inst_index: inst_index,
+      value: inst.operands[1],
+    })
+  }
+  // Memory forwarding is budgeted, but dependency versioning is not: an
+  // effect after the precision budget must still prevent reusing a mutable
+  // context/global expression across that effect.
+  update_last_store_state(
+    last_store_state,
+    inst,
+    { block_id, inst_id: inst.id, },
+    self.ptr_base_infos,
+  )
+  if replaced_by_memory || !is_gvn_candidate(inst) {
+    self.rewriter.record_definition(inst)
+    return
+  }
+  guard inst.first_result() is Some(result_val) else { return }
+  let dependency = gvn_memory_dependency(self.func, inst, self.ptr_base_infos)
+  let memory_version = match dependency {
+    Some(region) => last_store_state.get_region_token(region)
+    None => None
+  }
+  let bounded_stable_global = !within_memory_budget &&
+    is_stable_global_value(self.func, inst)
+  let mut reusable_index = -1
+  if self.value_table.get(inst) is Some(entries) {
+    let mut index = entries.length() - 1
+    while index >= 0 {
+      let entry = entries[index]
+      if entry.dependency == dependency &&
+        entry.memory_version == memory_version &&
         inst_dominates(
           entry.def_block_id,
           entry.def_inst_index,
@@ -818,136 +928,93 @@ fn StreamingGVN::process_block(
           inst_index,
           self.analysis.dominance,
         ) {
-        inst.opcode = Scalar(Copy)
-        inst.operands.clear()
-        inst.operands.push(entry.value)
-        self.result.mark_changed()
-        replaced_by_memory = true
+        reusable_index = index
+        break
       }
-    }
-    if within_memory_budget &&
-      inst.opcode is Memory(Store(store_ty)) &&
-      ptr_access_from_inst(inst, self.ptr_base_infos) is Some(store_access) &&
-      inst.operands.length() >= 2 {
-      let key = memory_key_from_access(
-        store_access,
-        store_ty,
-        Some({ block_id, inst_index, }),
-      )
-      self.memory_values.set(key, {
-        def_block_id: block_id,
-        def_inst_index: inst_index,
-        value: inst.operands[1],
-      })
-    }
-    // Memory forwarding is budgeted, but dependency versioning is not: an
-    // effect after the precision budget must still prevent reusing a mutable
-    // context/global expression across that effect.
-    update_last_store_state(
-      last_store_state,
-      inst,
-      { block_id, inst_index, },
-      self.ptr_base_infos,
-    )
-    if replaced_by_memory || !is_gvn_candidate(inst) {
-      continue
-    }
-    guard inst.first_result() is Some(result_val) else { continue }
-    let dependency = gvn_memory_dependency(self.func, inst, self.ptr_base_infos)
-    let memory_version = match dependency {
-      Some(region) => last_store_state.get_region_token(region)
-      None => None
-    }
-    let bounded_stable_global = !within_memory_budget &&
-      is_stable_global_value(self.func, inst)
-    let mut reusable_index = -1
-    if self.value_table.get(inst) is Some(entries) {
-      let mut index = entries.length() - 1
-      while index >= 0 {
-        let entry = entries[index]
-        if entry.dependency == dependency &&
-          entry.memory_version == memory_version &&
-          inst_dominates(
-            entry.def_block_id,
-            entry.def_inst_index,
-            block_id,
-            inst_index,
-            self.analysis.dominance,
-          ) {
-          reusable_index = index
-          break
-        }
-        index = index - 1
-      }
-    }
-    if reusable_index >= 0 && self.value_table.get(inst) is Some(entries) {
-      let existing = entries[reusable_index]
-      if existing.value.ty == result_val.ty &&
-        (
-          !bounded_stable_global ||
-          (
-            position - existing.position <=
-            GVN_POST_BUDGET_STABLE_GLOBAL_REUSE_DISTANCE &&
-            existing.reuse_count < GVN_POST_BUDGET_STABLE_GLOBAL_REUSE_LIMIT
-          )
-        ) {
-        inst.opcode = Scalar(Copy)
-        inst.operands.clear()
-        inst.operands.push(existing.value)
-        self.result.mark_changed()
-        if bounded_stable_global {
-          entries[reusable_index] = {
-            ..existing,
-            reuse_count: existing.reuse_count + 1,
-          }
-        }
-        continue
-      }
-    }
-    let entry : StreamingGVNEntry = {
-      value: result_val,
-      dependency,
-      memory_version,
-      def_block_id: block_id,
-      def_inst_index: inst_index,
-      position,
-      reuse_count: 0,
-    }
-    match self.value_table.get(inst) {
-      Some(entries) => entries.push(entry)
-      None => self.value_table.set(inst, [entry])
+      index = index - 1
     }
   }
+  if reusable_index >= 0 && self.value_table.get(inst) is Some(entries) {
+    let existing = entries[reusable_index]
+    if existing.value.ty == result_val.ty &&
+      (
+        !bounded_stable_global ||
+        (
+          position - existing.position <=
+          GVN_POST_BUDGET_STABLE_GLOBAL_REUSE_DISTANCE &&
+          existing.reuse_count < GVN_POST_BUDGET_STABLE_GLOBAL_REUSE_LIMIT
+        )
+      ) {
+      inst.opcode = Scalar(Copy)
+      inst.operands.clear()
+      inst.operands.push(existing.value)
+      // Post-budget stable globals are deliberately reused only at a short
+      // distance. Do not transitively canonicalize their consumers here:
+      // doing so turns local address recipes into long-lived values and
+      // defeats the bounded-reuse policy before final alias cleanup.
+      if !bounded_stable_global {
+        self.rewriter.record_alias(result_val, existing.value)
+      }
+      self.result.mark_changed()
+      if bounded_stable_global {
+        entries[reusable_index] = {
+          ..existing,
+          reuse_count: existing.reuse_count + 1,
+        }
+      }
+      return
+    }
+  }
+  let entry : AvailableExpression = {
+    value: result_val,
+    dependency,
+    memory_version,
+    def_block_id: block_id,
+    def_inst_index: inst_index,
+    position,
+    reuse_count: 0,
+  }
+  match self.value_table.get(inst) {
+    Some(entries) => entries.push(entry)
+    None => self.value_table.set(inst, [entry])
+  }
+  self.rewriter.record_definition(inst)
 }
 
 ///|
-fn StreamingGVN::finish(self : StreamingGVN) -> GVNStats {
+fn AcyclicOptimizer::finish(self : AcyclicOptimizer) -> AcyclicOptimizeStats {
   {
     result: self.result,
     work_done: self.work_done,
     budget_exhausted: self.budget_exhausted,
+    rewrite_stats: self.rewriter.stats,
   }
 }
 
 ///|
-#warnings("-unused_value")
-fn run_global_value_numbering_with_budget_and_analysis(
+fn run_acyclic_optimization_with_budget_and_analysis(
   func : Function,
   work_budget : Int,
   analysis : FunctionAnalysis,
-) -> GVNStats {
+) -> AcyclicOptimizeStats {
   let block_instructions = fn(block_id : Int) -> Array[Inst] {
     func.blocks[analysis.block_idx[block_id]].instructions
   }
-  let stream = StreamingGVN::new(
+  let stream = AcyclicOptimizer::new(
     func, work_budget, analysis, block_instructions,
   )
-  fn enter(block_id : Int) -> (Unit, Bool) {
-    stream.process_block(block_id, block_instructions(block_id))
-    ((), true)
+  fn enter(block_id : Int) -> (Int, Bool) {
+    let scope = stream.rewriter.begin_scope()
+    func.blocks[analysis.block_idx[block_id]].instructions = stream.process_block(
+      block_id,
+      block_instructions(block_id),
+    )
+    (scope, true)
   }
   if analysis.cfg.is_valid(0) {
-    visit_dominator_tree(analysis.domtree, 0, enter, fn(_) { () })
+    visit_dominator_tree(analysis.domtree, 0, enter, fn(scope) {
+      stream.rewriter.end_scope(scope)
+    })
   }
   stream.finish()
 }

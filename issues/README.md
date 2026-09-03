@@ -484,6 +484,7 @@ graph TD
   ISS_455["ISS-455: Deepen the semantic MachV selection seam"]
   ISS_456["ISS-456: Remove semantic MachV from native compilation"]
   ISS_457["ISS-457: Complete async core host-call lifecycle safety"]
+  ISS_458["ISS-458: Make MilkIR optimization operate on the canonical DFG"]
   ISS_002 --> ISS_003
   ISS_002 --> ISS_004
   ISS_003 --> ISS_005
