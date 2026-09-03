@@ -299,11 +299,7 @@ fn eliminate_constant_block_params(func : Function) -> OptResult {
     }
     let keep = params_to_keep[block_i]
     if keep.length() != block.params.length() {
-      let old_params = block.params.copy()
-      block.params.clear()
-      for idx in keep {
-        block.params.push(old_params[idx])
-      }
+      func.retain_block_params(block, keep)
       result.mark_changed()
     }
   }
@@ -537,11 +533,7 @@ fn eliminate_dead_block_params(func : Function) -> OptResult {
     }
     let keep = params_to_keep[block_i]
     if keep.length() != block.params.length() {
-      let old_params = block.params.copy()
-      block.params.clear()
-      for idx in keep {
-        block.params.push(old_params[idx])
-      }
+      func.retain_block_params(block, keep)
       result.mark_changed()
     }
   }
@@ -847,7 +839,7 @@ fn merge_blocks(func : Function) -> OptResult {
             continue
           }
           for inst in successor.instructions {
-            block.instructions.push(inst)
+            block.add_inst(inst)
           }
           block.terminator = successor.terminator
           removed[target] = true

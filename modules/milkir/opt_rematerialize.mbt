@@ -19,23 +19,17 @@ fn is_cheap_rematerializable_constant(inst : Inst) -> Bool {
 }
 
 ///|
-fn is_cheap_rematerializable_value(
-  value : Value,
-  definitions : Array[Inst?],
-) -> Bool {
-  if value.id < 0 || value.id >= definitions.length() {
-    return false
-  }
-  guard definitions[value.id] is Some(inst) else { return false }
+fn is_cheap_rematerializable_value(func : Function, value : Value) -> Bool {
+  guard func.defining_inst(value) is Some(inst) else { return false }
   if is_cheap_rematerializable_constant(inst) {
     return true
   }
   match (inst.opcode, inst.operands) {
     (Scalar(Convert(UnsignedExtend)), [source]) =>
-      source.id >= 0 &&
-      source.id < definitions.length() &&
-      definitions[source.id] is Some(source_inst) &&
-      is_cheap_rematerializable_constant(source_inst)
+      match func.defining_inst(source) {
+        Some(source_inst) => is_cheap_rematerializable_constant(source_inst)
+        None => false
+      }
     _ => false
   }
 }
@@ -47,13 +41,11 @@ fn sink_single_use_materializations(func : Function) -> OptResult {
     return result
   }
   let original_value_count = func.next_value_id
-  let definitions : Array[Inst?] = Array::make(original_value_count, None)
   let defining_blocks = Array::make(original_value_count, -1)
   let uses = compute_use_counts(func)
   for block in func.blocks {
     for inst in block.instructions {
       if inst.results is [value] {
-        definitions[value.id] = Some(inst)
         defining_blocks[value.id] = block.id
       }
     }
@@ -67,10 +59,10 @@ fn sink_single_use_materializations(func : Function) -> OptResult {
         uses[value.id] != 1 ||
         defining_blocks[value.id] < 0 ||
         defining_blocks[value.id] == block.id ||
-        !is_cheap_rematerializable_value(value, definitions) {
+        !is_cheap_rematerializable_value(func, value) {
         return value
       }
-      guard definitions[value.id] is Some(definition) else { return value }
+      guard func.defining_inst(value) is Some(definition) else { return value }
       let localized = func.new_value(value.ty)
       let clone = func.new_inst(definition.opcode, definition.operands.copy(), [
         localized,
@@ -112,7 +104,7 @@ fn sink_single_use_materializations(func : Function) -> OptResult {
         },
       )
     }
-    block.instructions = rewritten
+    block.replace_instructions(rewritten)
   }
   result
 }

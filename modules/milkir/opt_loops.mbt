@@ -136,8 +136,8 @@ fn hoist_from_loop(
               }
 
               // Move instruction to preheader (before terminator)
-              block.instructions.remove(i) |> ignore
-              preheader.instructions.push(inst)
+              block.remove_inst_at(i) |> ignore
+              preheader.add_inst(inst)
 
               // Update value_to_block
               if inst.first_result() is Some(v) {
@@ -267,10 +267,7 @@ fn reduce_strength(func : Function) -> OptResult {
       }
       rewritten.push(inst)
     }
-    block.instructions.clear()
-    for inst in rewritten {
-      block.instructions.push(inst)
-    }
+    block.replace_instructions(rewritten)
   }
   result
 }

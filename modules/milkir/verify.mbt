@@ -20,10 +20,9 @@ pub suberror VerifyError {
 } derive(Debug, Eq)
 
 ///|
-priv enum ValueDefinition {
-  FunctionParameter(Type)
-  BlockParameter(Type, Int)
-  InstructionResult(Type, Int, Int)
+priv struct InstructionPlacement {
+  block_id : Int
+  position : Int
 }
 
 ///|
@@ -75,24 +74,32 @@ pub fn Function::verify(self : Function) -> Unit raise VerifyError {
       raise MissingTerminator(block_id=block.id)
     }
   }
-  let definitions : Array[ValueDefinition?] = Array::make(
-    self.next_value_id,
+  if self.values.length() != self.next_value_id {
+    raise UndefinedValue(value_id=self.next_value_id)
+  }
+  if self.instructions.length() != self.next_inst_id {
+    raise ForeignInstruction(inst_id=self.next_inst_id)
+  }
+  for param_index, item in self.params {
+    let (param, ty) = item
+    verify_value_definition(self, param, ty, FunctionParameter(param_index))
+  }
+  let placements : Array[InstructionPlacement?] = Array::make(
+    self.instructions.length(),
     None,
   )
-  for item in self.params {
-    let (param, ty) = item
-    require_owned_value(self, param)
-    record_definition(param, ty, FunctionParameter(ty), definitions)
-  }
-  let instruction_ids = Array::make(self.next_inst_id, false)
   for block in self.blocks {
-    for item in block.params {
+    for param_index, item in block.params {
       let (param, ty) = item
-      require_owned_value(self, param)
-      record_definition(param, ty, BlockParameter(ty, block.id), definitions)
+      verify_value_definition(
+        self,
+        param,
+        ty,
+        BlockParameter(block.id, param_index),
+      )
     }
     for inst_index, inst in block.instructions {
-      if !self.owns_inst(inst) {
+      if !physical_equal(self.owner, inst.owner) {
         raise ForeignInstruction(inst_id=inst.id)
       }
       for operand in inst.args {
@@ -105,19 +112,19 @@ pub fn Function::verify(self : Function) -> Unit raise VerifyError {
         require_owned_value(self, result)
       }
       verify_instruction_operands(inst)
-      if inst.id < 0 || inst.id >= instruction_ids.length() {
+      if !self.owns_inst(inst) {
         raise ForeignInstruction(inst_id=inst.id)
       }
-      if instruction_ids[inst.id] {
+      if placements[inst.id] is Some(_) {
         raise DuplicateInstructionId(inst_id=inst.id)
       }
-      instruction_ids[inst.id] = true
-      for result in inst.results {
-        record_definition(
+      placements[inst.id] = Some({ block_id: block.id, position: inst_index, })
+      for result_index, result in inst.results {
+        verify_value_definition(
+          self,
           result,
           result.ty,
-          InstructionResult(result.ty, block.id, inst_index),
-          definitions,
+          InstructionResult(inst.id, result_index),
         )
       }
     }
@@ -128,12 +135,13 @@ pub fn Function::verify(self : Function) -> Unit raise VerifyError {
   let dominance = CFG::build(self).compute_dominance()
   for block in self.blocks {
     for inst_index, inst in block.instructions {
-      verify_inst(self, inst, definitions, block.id, inst_index, dominance)
+      verify_inst(self, inst, placements, block.id, inst_index, dominance)
     }
     if block.terminator is Some(term) {
       verify_terminator(
         term,
-        definitions,
+        self,
+        placements,
         blocks,
         self.results,
         block.id,
@@ -244,58 +252,56 @@ pub fn Function::verify_with_dialect_validator(
 }
 
 ///|
-fn record_definition(
+fn verify_value_definition(
+  func : Function,
   value : Value,
   declared_type : Type,
-  definition : ValueDefinition,
-  definitions : Array[ValueDefinition?],
+  expected : ValueDefinition,
 ) -> Unit raise VerifyError {
-  if value.ty != declared_type {
+  require_owned_value(func, value)
+  if value.id < 0 || value.id >= func.values.length() {
+    raise UndefinedValue(value_id=value.id)
+  }
+  let data = func.values[value.id]
+  if value.ty != declared_type || data.ty != declared_type {
     raise TypeMismatch(
       message="value \{value.id} has type \{value.ty}, but its declaration has type \{declared_type}",
     )
   }
-  if value.id < 0 || value.id >= definitions.length() {
-    raise UndefinedValue(value_id=value.id)
-  }
-  if definitions[value.id] is Some(_) {
-    raise DuplicateValueDefinition(value_id=value.id)
-  }
-  definitions[value.id] = Some(definition)
-}
-
-///|
-fn definition_type(definition : ValueDefinition) -> Type {
-  match definition {
-    FunctionParameter(ty)
-    | BlockParameter(ty, _)
-    | InstructionResult(ty, _, _) => ty
+  match data.definition {
+    None => raise UndefinedValue(value_id=value.id)
+    Some(actual) =>
+      if actual != expected {
+        raise DuplicateValueDefinition(value_id=value.id)
+      }
   }
 }
 
 ///|
 fn verify_defined(
   value : Value,
-  definitions : Array[ValueDefinition?],
+  func : Function,
+  placements : Array[InstructionPlacement?],
   use_block : Int,
   use_position : Int,
   dominance : Dominance,
 ) -> Unit raise VerifyError {
-  if value.id < 0 || value.id >= definitions.length() {
+  require_owned_value(func, value)
+  if value.id < 0 || value.id >= func.values.length() {
     raise UndefinedValue(value_id=value.id)
   }
-  match definitions[value.id] {
+  let data = func.values[value.id]
+  match data.definition {
     None => raise UndefinedValue(value_id=value.id)
     Some(definition) => {
-      let defined_type = definition_type(definition)
-      if value.ty != defined_type {
+      if value.ty != data.ty {
         raise TypeMismatch(
-          message="value \{value.id} has type \{value.ty}, but its definition has type \{defined_type}",
+          message="value \{value.id} has type \{value.ty}, but its definition has type \{data.ty}",
         )
       }
       match definition {
         FunctionParameter(_) => ()
-        BlockParameter(_, defining_block) =>
+        BlockParameter(defining_block, _) =>
           if defining_block != use_block &&
             !dominance.dominates(defining_block, use_block) {
             raise NonDominatingUse(
@@ -304,18 +310,25 @@ fn verify_defined(
               use_block~,
             )
           }
-        InstructionResult(_, defining_block, defining_position) =>
-          if defining_block == use_block {
-            if defining_position >= use_position {
+        InstructionResult(inst_id, _) => {
+          if inst_id < 0 || inst_id >= placements.length() {
+            raise UndefinedValue(value_id=value.id)
+          }
+          guard placements[inst_id] is Some(placement) else {
+            raise UndefinedValue(value_id=value.id)
+          }
+          if placement.block_id == use_block {
+            if placement.position >= use_position {
               raise UseBeforeDefinition(value_id=value.id)
             }
-          } else if !dominance.dominates(defining_block, use_block) {
+          } else if !dominance.dominates(placement.block_id, use_block) {
             raise NonDominatingUse(
               value_id=value.id,
-              defining_block~,
+              defining_block=placement.block_id,
               use_block~,
             )
           }
+        }
       }
     }
   }
@@ -376,7 +389,8 @@ fn verify_block_args(
   block_id : Int,
   args : Array[Value],
   blocks : Array[Block?],
-  definitions : Array[ValueDefinition?],
+  func : Function,
+  placements : Array[InstructionPlacement?],
   edge : String,
   use_block : Int,
   use_position : Int,
@@ -384,7 +398,7 @@ fn verify_block_args(
 ) -> Unit raise VerifyError {
   let block = require_block(block_id, blocks)
   for arg in args {
-    verify_defined(arg, definitions, use_block, use_position, dominance)
+    verify_defined(arg, func, placements, use_block, use_position, dominance)
   }
   if args.length() != block.params.length() {
     raise ArityMismatch(
@@ -412,13 +426,13 @@ fn verify_i32(value : Value, context : String) -> Unit raise VerifyError {
 fn verify_inst(
   func : Function,
   inst : Inst,
-  definitions : Array[ValueDefinition?],
+  placements : Array[InstructionPlacement?],
   use_block : Int,
   use_position : Int,
   dominance : Dominance,
 ) -> Unit raise VerifyError {
   for arg in inst.args {
-    verify_defined(arg, definitions, use_block, use_position, dominance)
+    verify_defined(arg, func, placements, use_block, use_position, dominance)
   }
   verify_opcode_contract(func, inst)
 }
@@ -468,7 +482,8 @@ fn extension_inst_view(inst : Inst) -> ExtensionInstView {
 ///|
 fn verify_terminator(
   term : Terminator,
-  definitions : Array[ValueDefinition?],
+  func : Function,
+  placements : Array[InstructionPlacement?],
   blocks : Array[Block?],
   result_types : Array[Type],
   use_block : Int,
@@ -478,7 +493,9 @@ fn verify_terminator(
   match term {
     Return(values) => {
       for value in values {
-        verify_defined(value, definitions, use_block, use_position, dominance)
+        verify_defined(
+          value, func, placements, use_block, use_position, dominance,
+        )
       }
       if values.length() != result_types.length() {
         raise ArityMismatch(
@@ -496,29 +513,31 @@ fn verify_terminator(
     }
     Jump(target, values) =>
       verify_block_args(
-        target, values, blocks, definitions, "jump", use_block, use_position, dominance,
+        target, values, blocks, func, placements, "jump", use_block, use_position,
+        dominance,
       )
     Branch(cond, true_target, true_args, false_target, false_args) => {
-      verify_defined(cond, definitions, use_block, use_position, dominance)
+      verify_defined(cond, func, placements, use_block, use_position, dominance)
       verify_i32(cond, "branch condition")
       verify_block_args(
-        true_target, true_args, blocks, definitions, "branch", use_block, use_position,
+        true_target, true_args, blocks, func, placements, "branch", use_block, use_position,
         dominance,
       )
       verify_block_args(
-        false_target, false_args, blocks, definitions, "branch", use_block, use_position,
-        dominance,
+        false_target, false_args, blocks, func, placements, "branch", use_block,
+        use_position, dominance,
       )
     }
     Brz(cond, true_target, false_target)
     | Brnz(cond, true_target, false_target) => {
-      verify_defined(cond, definitions, use_block, use_position, dominance)
+      verify_defined(cond, func, placements, use_block, use_position, dominance)
       verify_i32(cond, "branch condition")
       verify_block_args(
         true_target,
         [],
         blocks,
-        definitions,
+        func,
+        placements,
         "branch",
         use_block,
         use_position,
@@ -528,7 +547,8 @@ fn verify_terminator(
         false_target,
         [],
         blocks,
-        definitions,
+        func,
+        placements,
         "branch",
         use_block,
         use_position,
@@ -536,14 +556,17 @@ fn verify_terminator(
       )
     }
     BrTable(index, targets, default_target) => {
-      verify_defined(index, definitions, use_block, use_position, dominance)
+      verify_defined(
+        index, func, placements, use_block, use_position, dominance,
+      )
       verify_i32(index, "branch table index")
       for target in targets {
         verify_block_args(
           target,
           [],
           blocks,
-          definitions,
+          func,
+          placements,
           "branch table",
           use_block,
           use_position,
@@ -554,7 +577,8 @@ fn verify_terminator(
         default_target,
         [],
         blocks,
-        definitions,
+        func,
+        placements,
         "branch table",
         use_block,
         use_position,

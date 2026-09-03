@@ -1005,9 +1005,8 @@ fn run_acyclic_optimization_with_budget_and_analysis(
   )
   fn enter(block_id : Int) -> (Int, Bool) {
     let scope = stream.rewriter.begin_scope()
-    func.blocks[analysis.block_idx[block_id]].instructions = stream.process_block(
-      block_id,
-      block_instructions(block_id),
+    func.blocks[analysis.block_idx[block_id]].replace_instructions(
+      stream.process_block(block_id, block_instructions(block_id)),
     )
     (scope, true)
   }

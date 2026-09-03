@@ -26,14 +26,10 @@ fn OptResult::mark_changed(self : OptResult) -> Unit {
 fn eliminate_dead_code(func : Function) -> OptResult {
   let result = OptResult::OptResult()
   let use_counts = compute_use_counts(func)
-  let definition_by_value : Array[Inst?] = Array::make(func.next_value_id, None)
   let dead_insts = Array::make(func.next_inst_id, false)
   let worklist : Array[Inst] = []
   for block in func.blocks {
     for inst in block.instructions {
-      for value in inst.results {
-        definition_by_value[value.id] = Some(inst)
-      }
       if inst.results.length() > 0 &&
         inst.results.all(v => use_counts[v.id] == 0) &&
         !inst.opcode.semantics().must_preserve_if_unused() {
@@ -49,21 +45,21 @@ fn eliminate_dead_code(func : Function) -> OptResult {
       if count > 0 {
         let remaining = count - 1
         use_counts[operand.id] = remaining
-        if remaining == 0 &&
-          definition_by_value[operand.id] is Some(definition) &&
-          !dead_insts[definition.id] &&
-          definition.results.all(value => use_counts[value.id] == 0) &&
-          !definition.opcode.semantics().must_preserve_if_unused() {
-          dead_insts[definition.id] = true
-          worklist.push(definition)
-          result.mark_changed()
+        if remaining == 0 && func.defining_inst(operand) is Some(definition) {
+          if !dead_insts[definition.id] &&
+            definition.results.all(value => use_counts[value.id] == 0) &&
+            !definition.opcode.semantics().must_preserve_if_unused() {
+            dead_insts[definition.id] = true
+            worklist.push(definition)
+            result.mark_changed()
+          }
         }
       }
     }
   }
   if result.changed {
     for block in func.blocks {
-      block.instructions.retain(inst => !dead_insts[inst.id])
+      block.retain_instructions(inst => !dead_insts[inst.id])
     }
   }
   result

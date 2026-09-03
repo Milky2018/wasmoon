@@ -19,7 +19,6 @@ fn AcyclicRewriteStats::new() -> AcyclicRewriteStats {
 ///|
 priv struct AcyclicRewriter {
   func : Function
-  definitions : Array[Inst?]
   aliases : Array[Value?]
   alias_changes : Array[(Int, Value?)]
   constants : Array[Int64?]
@@ -31,7 +30,6 @@ priv struct AcyclicRewriter {
 fn AcyclicRewriter::new(func : Function) -> AcyclicRewriter {
   let self = {
     func,
-    definitions: Array::make(func.next_value_id, None),
     aliases: Array::make(func.next_value_id, None),
     alias_changes: [],
     constants: Array::make(func.next_value_id, None),
@@ -64,8 +62,7 @@ fn AcyclicRewriter::ensure_value_capacity(
   self : AcyclicRewriter,
   value_id : Int,
 ) -> Unit {
-  while self.definitions.length() <= value_id {
-    self.definitions.push(None)
+  while self.aliases.length() <= value_id {
     self.aliases.push(None)
     self.constants.push(None)
     self.use_counts.push(0)
@@ -107,7 +104,6 @@ fn AcyclicRewriter::index_definition(
 ) -> Unit {
   guard inst.first_result() is Some(result) else { return }
   self.ensure_value_capacity(result.id)
-  self.definitions[result.id] = Some(inst)
   self.constants[result.id] = None
   match inst.opcode {
     Scalar(IntConst(value)) => self.constants[result.id] = Some(value)
@@ -160,11 +156,7 @@ fn AcyclicRewriter::int_constant(
 ///|
 fn AcyclicRewriter::definition(self : AcyclicRewriter, value : Value) -> Inst? {
   let canonical = self.canonical_value(value)
-  if canonical.id >= 0 && canonical.id < self.definitions.length() {
-    self.definitions[canonical.id]
-  } else {
-    None
-  }
+  self.func.defining_inst(canonical)
 }
 
 ///|
