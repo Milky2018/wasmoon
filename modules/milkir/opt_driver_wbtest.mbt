@@ -537,7 +537,9 @@ test "acyclic rewrite dispatch is linear in reachable instructions" {
   )
   inspect(stats.rewrite_stats.attempts, content=before.to_string())
   inspect(stats.rewrite_stats.applied, content="1")
-  inspect(stats.rewrite_stats.created_instructions, content="1")
+  // The selected alternative materializes its shift amount and root as two
+  // staged DFG instructions; the old root becomes an alias for final cleanup.
+  inspect(stats.rewrite_stats.created_instructions, content="2")
   inspect(func.verify(), content="()")
 }
 

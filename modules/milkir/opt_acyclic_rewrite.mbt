@@ -27,6 +27,7 @@ priv struct OptimizerSession {
   union_changes : Array[(Int, Value?)]
   constants : Array[Int64?]
   use_counts : Array[Int]
+  mut staged_candidates : Array[Inst]?
   stats : AcyclicRewriteStats
 }
 
@@ -38,6 +39,7 @@ fn OptimizerSession::new(func : Function) -> OptimizerSession {
     union_changes: [],
     constants: Array::make(func.next_value_id, None),
     use_counts: compute_use_counts(func),
+    staged_candidates: None,
     stats: AcyclicRewriteStats::new(),
   }
   for block in func.blocks {
@@ -47,6 +49,65 @@ fn OptimizerSession::new(func : Function) -> OptimizerSession {
     }
   }
   self
+}
+
+///|
+fn OptimizerSession::begin_candidates(self : OptimizerSession) -> Int {
+  match self.staged_candidates {
+    Some(candidates) => candidates.length()
+    None => 0
+  }
+}
+
+///|
+fn OptimizerSession::stage_pure_candidate(
+  self : OptimizerSession,
+  opcode : Opcode,
+  operands : Array[Value],
+  result_type : Type,
+) -> Value? {
+  if !opcode.semantics().can_stage_as_pure_candidate() {
+    return None
+  }
+  let result = self.func.new_value(result_type)
+  let inst = self.func.new_inst(opcode, operands, [result])
+  let candidates = match self.staged_candidates {
+    Some(candidates) => candidates
+    None => {
+      let candidates : Array[Inst] = []
+      self.staged_candidates = Some(candidates)
+      candidates
+    }
+  }
+  candidates.push(inst)
+  self.index_definition(inst)
+  Some(result)
+}
+
+///|
+fn OptimizerSession::commit_candidates(
+  self : OptimizerSession,
+  marker : Int,
+  output : Array[Inst],
+) -> Unit {
+  guard self.staged_candidates is Some(candidates) else { return }
+  for index in marker..<candidates.length() {
+    output.push(candidates[index])
+    self.stats.created_instructions = self.stats.created_instructions + 1
+  }
+  candidates.truncate(marker)
+}
+
+///|
+fn OptimizerSession::discard_candidates(
+  self : OptimizerSession,
+  marker : Int,
+) -> Unit {
+  guard self.staged_candidates is Some(candidates) else { return }
+  for index in marker..<candidates.length() {
+    self.func.owner.val.mark_instruction_deleted(candidates[index].id)
+  }
+  candidates.truncate(marker)
 }
 
 ///|
@@ -348,16 +409,27 @@ fn OptimizerSession::rewrite_integer_identity(
       if right_const is Some(constant) &&
         power_of_two_shift(constant) is Some(shift) &&
         inst.first_result() is Some(result) {
-        let amount = self.append_int_constant(
-          prefix,
-          result.ty,
-          shift.to_int64(),
-        )
-        inst.opcode = Scalar(IntBinary(ShiftLeft))
-        inst.operands.clear()
-        inst.operands.push(left)
-        inst.operands.push(amount)
-        return true
+        let marker = self.begin_candidates()
+        guard self.stage_pure_candidate(
+            Scalar(IntConst(shift.to_int64())),
+            [],
+            result.ty,
+          )
+          is Some(amount) else {
+          self.discard_candidates(marker)
+          return false
+        }
+        guard self.stage_pure_candidate(
+            Scalar(IntBinary(ShiftLeft)),
+            [left, amount],
+            result.ty,
+          )
+          is Some(shifted) else {
+          self.discard_candidates(marker)
+          return false
+        }
+        self.commit_candidates(marker, prefix)
+        return self.replace_with_alias(inst, shifted)
       }
     }
     And => {

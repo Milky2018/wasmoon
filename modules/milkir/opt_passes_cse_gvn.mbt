@@ -986,6 +986,9 @@ fn AcyclicOptimizer::process_inst(
 
 ///|
 fn AcyclicOptimizer::finish(self : AcyclicOptimizer) -> AcyclicOptimizeStats {
+  // A rule that stops before commit must not leak unplaced DFG nodes through
+  // an otherwise successful optimizer exit.
+  self.session.discard_candidates(0)
   {
     result: self.result,
     work_done: self.work_done,

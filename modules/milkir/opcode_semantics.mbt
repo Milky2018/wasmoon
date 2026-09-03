@@ -193,3 +193,8 @@ fn OpcodeSemantics::must_preserve_if_unused(self : OpcodeSemantics) -> Bool {
   self.other_observable_effect ||
   self.memory.may_write_memory()
 }
+
+///|
+fn OpcodeSemantics::can_stage_as_pure_candidate(self : OpcodeSemantics) -> Bool {
+  !self.may_trap && !self.other_observable_effect && self.memory is None
+}
