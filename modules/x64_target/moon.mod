@@ -1,6 +1,6 @@
 name = "Milky2018/x64_target"
 
-version = "0.14.0"
+version = "0.15.0"
 
 readme = "README.mbt.md"
 
@@ -13,9 +13,9 @@ keywords = [ "x64", "x86-64", "compiler", "codegen" ]
 description = "x64 direct MilkIR target pipeline to native code"
 
 import {
-  "Milky2018/milkir@0.14.0",
-  "Milky2018/vcode@0.14.0",
-  "Milky2018/vcode_regalloc@0.14.0",
+  "Milky2018/milkir@0.15.0",
+  "Milky2018/vcode@0.15.0",
+  "Milky2018/vcode_regalloc@0.15.0",
 }
 
 preferred_target = "wasm-gc"
