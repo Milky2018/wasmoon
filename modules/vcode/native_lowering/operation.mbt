@@ -397,6 +397,11 @@ pub(all) enum Operation {
   StackAddress(@native.StackObject)
   Copy
   Select
+  /// A conditional pointer select that must preserve a data dependency from
+  /// the bounds condition to the selected address. Targets must not lower it
+  /// as a branch; architectures that require it must also emit a speculation
+  /// barrier after the conditional select.
+  SpectreGuard
   GcRefAddress
   GcRefFromBits
   PointerOffset
@@ -474,6 +479,7 @@ pub fn Operation::copy(self : Operation) -> Operation {
     | StackAddress(_)
     | Copy
     | Select
+    | SpectreGuard
     | GcRefAddress
     | GcRefFromBits
     | PointerOffset
@@ -1168,6 +1174,14 @@ pub fn verify_operation_contract(
       }
       None
     }
+    SpectreGuard =>
+      require_shape(
+        operands,
+        results,
+        [I32, Ptr64, Ptr64],
+        [Ptr64],
+        "spectre.guard",
+      )
     GcRefAddress =>
       require_shape(operands, results, [GcRef64], [Ptr64], "gcref.address")
     GcRefFromBits =>
@@ -1617,6 +1631,7 @@ pub fn Operation::semantics(self : Operation) -> @native.OperationSemantics {
     | StackAddress(_)
     | Copy
     | Select
+    | SpectreGuard
     | GcRefAddress
     | GcRefFromBits
     | PointerOffset

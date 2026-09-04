@@ -113,7 +113,7 @@ pub fn FunctionBuilder::add_block_param(
     return self.func.new_value(ty)
   }
   let v = self.func.new_value(ty)
-  block.add_param(v, ty)
+  self.func.add_block_param(block, v, ty)
   v
 }
 
@@ -273,8 +273,6 @@ pub fn FunctionBuilder::emit_multi_ext_inst(
 
 ///|
 /// Get the constant value if a Value was defined by an Iconst instruction.
-/// Searches all blocks in the function to find the defining instruction.
-/// Returns None if the value is not a constant or not found.
 pub fn FunctionBuilder::get_const_value(
   self : FunctionBuilder,
   v : Value,
@@ -282,17 +280,12 @@ pub fn FunctionBuilder::get_const_value(
   if !self.require_values([v]) {
     return None
   }
-  for block in self.func.blocks {
-    for inst in block.instructions {
-      if inst.first_result() is Some(r) && r.id == v.id {
-        if inst.opcode is Scalar(IntConst(c)) {
-          return Some(c)
-        }
-        return None // Found defining instruction but not a constant
-      }
-    }
+  guard self.func.defining_inst(v) is Some(inst) else { return None }
+  if inst.opcode is Scalar(IntConst(c)) {
+    Some(c)
+  } else {
+    None
   }
-  None
 }
 
 ///|

@@ -19,7 +19,7 @@ test "builder rejects a value owned by another function" {
   let second = FunctionBuilder::FunctionBuilder("second")
   let own_value = second.add_param(I32)
   second.iadd(foreign, own_value) |> ignore
-  inspect(second.current_block().instructions.length(), content="0")
+  inspect(second.current_block().instruction_count(), content="0")
   try second.get_function().verify() catch {
     err => inspect(err, content="ForeignValue(value_id=0)")
   } noraise {
@@ -139,7 +139,7 @@ test "block rejects an instruction with a foreign argument" {
     metadata: [],
   }
   entry.append_inst(inst)
-  inspect(entry.instructions.length(), content="0")
+  inspect(entry.instruction_count(), content="0")
   entry.set_terminator(Return([]))
   try second.verify() catch {
     err => inspect(err, content="ForeignValue(value_id=0)")
@@ -166,7 +166,7 @@ test "block rejects an instruction with a foreign operand" {
     metadata: [],
   }
   entry.append_inst(inst)
-  inspect(entry.instructions.length(), content="0")
+  inspect(entry.instruction_count(), content="0")
   entry.set_terminator(Return([]))
   try second.verify() catch {
     err => inspect(err, content="ForeignValue(value_id=0)")
@@ -191,7 +191,7 @@ test "block rejects an instruction with a foreign result" {
     metadata: [],
   }
   entry.append_inst(inst)
-  inspect(entry.instructions.length(), content="0")
+  inspect(entry.instruction_count(), content="0")
   entry.set_terminator(Return([]))
   try second.verify() catch {
     err => inspect(err, content="ForeignValue(value_id=0)")
@@ -222,7 +222,7 @@ test "block rejects an instruction owned by another function" {
   let second = Function::new_empty("second")
   let entry = second.new_block([])
   entry.append_inst(foreign)
-  inspect(entry.instructions.length(), content="0")
+  inspect(entry.instruction_count(), content="0")
   entry.set_terminator(Return([]))
   try second.verify() catch {
     err => inspect(err, content="ForeignInstruction(inst_id=0)")

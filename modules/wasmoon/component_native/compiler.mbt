@@ -273,7 +273,10 @@ fn compile_component_artifact(
       code.locals,
       code.body,
     )
-    @milkir.optimize_with_level(milkir, @milkir.OptLevel::from_int(opt_level))
+    @optimize.optimize_with_level(
+      milkir,
+      @optimize.OptLevel::from_int(opt_level),
+    )
     |> ignore
     let compiled = native_compiler.compile_wasm_body_artifact_function(
       milkir,

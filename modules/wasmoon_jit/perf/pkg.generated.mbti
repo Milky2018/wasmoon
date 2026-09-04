@@ -26,7 +26,7 @@ pub fn record_compile_subphase_us(String, Int64, parent? : String) -> Unit
 
 pub fn record_function_compile_us(Int64) -> Unit
 
-pub fn record_ir_pass(String, Int, Int, Bool, Int64, egraph_classes? : Int?, egraph_nodes? : Int?, egraph_rule_apps? : Int?, work_done? : Int?, budget_exhausted? : Bool?) -> Unit
+pub fn record_ir_pass(String, Int, Int, Bool, Int64, rewrite_attempts? : Int?, rewrite_apps? : Int?, rewrite_created_insts? : Int?, work_done? : Int?, value_lookup_probes? : Int?, budget_exhausted? : Bool?) -> Unit
 
 pub fn record_module_subphase_us(String, Int64) -> Unit
 
@@ -95,10 +95,11 @@ pub struct IRPassMetric {
   before_insts : Int
   after_insts : Int
   changed : Bool
-  egraph_classes : Int?
-  egraph_nodes : Int?
-  egraph_rule_apps : Int?
+  rewrite_attempts : Int?
+  rewrite_apps : Int?
+  rewrite_created_insts : Int?
   work_done : Int?
+  value_lookup_probes : Int?
   budget_exhausted : Bool?
 } derive(ToJson)
 pub fn IRPassMetric::to_json(Self) -> Json

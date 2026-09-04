@@ -203,9 +203,9 @@ fn run_explore_with_compiler(
       }
     }
     let ir_text = milk_result.print()
-    @milkir.optimize_with_level(
+    @optimize.optimize_with_level(
       milk_result,
-      @milkir.OptLevel::from_int(opt_level),
+      @optimize.OptLevel::from_int(opt_level),
     )
     |> ignore
     let ir_optimized = milk_result.print()

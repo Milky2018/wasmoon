@@ -54,7 +54,7 @@ fn optimized_milkir(
 ) -> (String, String) raise {
   let milk = translated_milkir(source, function_name)
   let before = milk.print()
-  @milkir.optimize_with_level(milk, O3) |> ignore
+  @optimize.optimize_with_level(milk, O3) |> ignore
   (before, milk.print())
 }
 
@@ -74,9 +74,9 @@ fn require_o3_transforms_loop(
   function_name : String,
 ) -> Unit raise {
   let o2_func = translated_milkir(source, function_name)
-  @milkir.optimize_with_level(o2_func, O2) |> ignore
+  @optimize.optimize_with_level(o2_func, O2) |> ignore
   let o3_func = translated_milkir(source, function_name)
-  @milkir.optimize_with_level(o3_func, O3) |> ignore
+  @optimize.optimize_with_level(o3_func, O3) |> ignore
   if o2_func.print() == o3_func.print() {
     fail("expected the O3 loop pipeline to transform '\{function_name}'")
   }
@@ -364,7 +364,7 @@ test "O3 generated counted loops cover predicate and step combinations" {
 }
 
 ///|
-test "O3 safely skips structured branch shapes outside the supported subset" {
+test "O3 transforms structured continue branches before acyclic cleanup" {
   let source = generated_counted_loop_wat(
     "i32",
     "0",
@@ -375,7 +375,5 @@ test "O3 safely skips structured branch shapes outside the supported subset" {
     continue_on_true=true,
   )
   require_o3_jit_match(source, "run")
-  let (before, after) = optimized_milkir(source, "run")
-  inspect(before.split("iadd").count(), content="3")
-  inspect(after.split("iadd").count(), content="3")
+  require_o3_transforms_loop(source, "run")
 }

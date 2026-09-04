@@ -74,10 +74,11 @@ pub struct IRPassMetric {
   before_insts : Int
   after_insts : Int
   changed : Bool
-  egraph_classes : Int?
-  egraph_nodes : Int?
-  egraph_rule_apps : Int?
+  rewrite_attempts : Int?
+  rewrite_apps : Int?
+  rewrite_created_insts : Int?
   work_done : Int?
+  value_lookup_probes : Int?
   budget_exhausted : Bool?
 } derive(ToJson)
 
@@ -153,7 +154,7 @@ fn ensure_module_state() -> ModuleMetricsReport {
     Some(m) => m
     None => {
       let m = {
-        schema_version: 5,
+        schema_version: 7,
         expected_functions: 0,
         module_compile_us: 0L,
         compile_subphases: [],
@@ -177,7 +178,7 @@ fn flush_current_function_if_any() -> Unit {
 pub fn reset_module(expected_functions : Int) -> Unit {
   guard enabled() else { return }
   module_state.val = Some({
-    schema_version: 5,
+    schema_version: 7,
     expected_functions,
     module_compile_us: 0L,
     compile_subphases: [],
@@ -254,10 +255,11 @@ pub fn record_ir_pass(
   after_insts : Int,
   changed : Bool,
   duration_us : Int64,
-  egraph_classes? : Int? = None,
-  egraph_nodes? : Int? = None,
-  egraph_rule_apps? : Int? = None,
+  rewrite_attempts? : Int? = None,
+  rewrite_apps? : Int? = None,
+  rewrite_created_insts? : Int? = None,
   work_done? : Int? = None,
+  value_lookup_probes? : Int? = None,
   budget_exhausted? : Bool? = None,
 ) -> Unit {
   guard enabled() else { return }
@@ -269,10 +271,11 @@ pub fn record_ir_pass(
       before_insts,
       after_insts,
       changed,
-      egraph_classes,
-      egraph_nodes,
-      egraph_rule_apps,
+      rewrite_attempts,
+      rewrite_apps,
+      rewrite_created_insts,
       work_done,
+      value_lookup_probes,
       budget_exhausted,
     })
   }
@@ -297,30 +300,31 @@ fn milkir_metrics_now_us() -> Int64 {
 ///|
 pub fn install_milkir_metrics_sink() -> Unit {
   if enabled() && detail_enabled() {
-    @milkir.install_optimization_metrics_sink(
-      @milkir.OptimizationMetricsSink::new(milkir_metrics_now_us, fn(metric) {
+    @optimize.install_optimization_metrics_sink(
+      @optimize.OptimizationMetricsSink::new(milkir_metrics_now_us, fn(metric) {
         record_ir_pass(
           metric.name,
           metric.before_insts,
           metric.after_insts,
           metric.changed,
           metric.duration_us,
-          egraph_classes=metric.egraph_classes,
-          egraph_nodes=metric.egraph_nodes,
-          egraph_rule_apps=metric.egraph_rule_apps,
+          rewrite_attempts=metric.rewrite_attempts,
+          rewrite_apps=metric.rewrite_apps,
+          rewrite_created_insts=metric.rewrite_created_insts,
           work_done=metric.work_done,
+          value_lookup_probes=metric.value_lookup_probes,
           budget_exhausted=metric.budget_exhausted,
         )
       }),
     )
   } else {
-    @milkir.clear_optimization_metrics_sink()
+    @optimize.clear_optimization_metrics_sink()
   }
 }
 
 ///|
 pub fn clear_milkir_metrics_sink() -> Unit {
-  @milkir.clear_optimization_metrics_sink()
+  @optimize.clear_optimization_metrics_sink()
 }
 
 ///|

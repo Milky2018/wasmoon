@@ -1,5 +1,9 @@
 # Rematerialization (Cranelift-Style) for Wasmoon IR
 
+> Historical design note: references to Wasmoon's standalone e-graph describe
+> the pre-ISS-458 pipeline. Rematerialization now operates around the direct
+> acyclic MilkIR optimizer; Cranelift references remain background material.
+
 This document explains how we plan to adopt Cranelift’s rematerialization
 approach in Wasmoon, and where it fits in our pipeline.
 

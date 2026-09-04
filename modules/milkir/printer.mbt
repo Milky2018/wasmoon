@@ -560,7 +560,7 @@ fn format_terminator(term : Terminator) -> String {
 
 ///|
 /// Print a basic block
-fn format_block(block : Block) -> String {
+fn format_block(func : Function, block : Block) -> String {
   let sb = StringBuilder::StringBuilder()
   // Block header with parameters
   if block.params.length() > 0 {
@@ -575,7 +575,8 @@ fn format_block(block : Block) -> String {
     sb.write_string("block\{block.id}:\n")
   }
   // Instructions
-  for inst in block.instructions {
+  for inst_id in block.instructions {
+    let inst = func.instructions[inst_id]
     sb.write_string("    \{format_inst(inst)}\n")
   }
   // Terminator
@@ -612,7 +613,7 @@ pub fn Function::print(self : Function) -> String {
   }
   // Blocks
   for block in self.blocks {
-    sb.write_string(format_block(block))
+    sb.write_string(format_block(self, block))
   }
   sb.write_string("}\n")
   sb.to_string()

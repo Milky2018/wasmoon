@@ -278,6 +278,7 @@ pub(all) enum Operation {
   StackAddress(@native_types.StackObject)
   Copy
   Select
+  SpectreGuard
   GcRefAddress
   GcRefFromBits
   PointerOffset
@@ -362,7 +363,8 @@ pub fn SwitchCase::to_repr(Self) -> @debug.Repr
 pub struct TargetSink {
   // private fields
 }
-pub fn TargetSink::new(() -> Array[Int], () -> Int, (Array[@native_types.ValueType]) -> (Int, Array[Int]), (Int, Int) -> Int, (Int) -> Unit, (Int, Operation, Array[Int], Array[@native_types.ValueType], @native_types.SourceLocation?, Array[Int], @native_types.StackMapMetadata?) -> Array[Int], (Int, TargetTerminator, TargetTerminatorMetadata) -> Unit, () -> Unit) -> Self
+pub fn TargetSink::folds_unsigned_index_into_memory(Self) -> Bool
+pub fn TargetSink::new(() -> Array[Int], () -> Int, (Array[@native_types.ValueType]) -> (Int, Array[Int]), (Int, Int) -> Int, (Int) -> Unit, (Int, Operation, Array[Int], Array[@native_types.ValueType], @native_types.SourceLocation?, Array[Int], @native_types.StackMapMetadata?) -> Array[Int], (Int, TargetTerminator, TargetTerminatorMetadata) -> Unit, () -> Unit, folds_unsigned_index_into_memory? : Bool) -> Self
 
 pub(all) struct TargetSwitchCase {
   bits : UInt64

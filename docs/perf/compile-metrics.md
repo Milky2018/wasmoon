@@ -35,7 +35,7 @@ Collection starts in `cmd/wasmoon/run.mbt` during `compile_module_to_jit(...)`.
 
 ### Module-level fields
 
-- `schema_version` (`5` for compiler subphase attribution)
+- `schema_version` (`7` for direct acyclic rewrite attribution)
 - `expected_functions`
 - `module_compile_us`
 - `compile_subphases[]` for module preparation when detailed metrics are
@@ -103,12 +103,15 @@ stack-to-stack is `spill_to_spill`.
 - `name`
 - `duration_us`
 - `before_insts`, `after_insts`, `changed`
-- Optional e-graph stats:
-  - `egraph_classes`, `egraph_nodes`, `egraph_rule_apps`
+- Optional acyclic-rewrite stats:
+  - `rewrite_attempts`: MilkIR instructions dispatched to the direct rewriter
+  - `rewrite_apps`: successful local rewrites
+  - `rewrite_created_insts`: new MilkIR instructions created by rewrites
 - Optional bounded-work stats:
-  - `work_done`, `budget_exhausted` (for `cse_gvn_global`, these describe the
-    bounded precise-memory prefix; cheap value numbering still visits the
-    complete reachable dominator tree)
+  - `work_done`, `budget_exhausted`
+  - For `acyclic_optimize`, these describe the bounded precise-memory prefix;
+    direct rewrites and cheap value numbering still visit the complete
+    reachable dominator tree.
 
 ## Baseline Capture Script
 
@@ -196,5 +199,7 @@ Aggregate files:
 ## Notes
 
 - Metrics collection is designed to be side-effect free when disabled.
-- Pass-level counters are recorded in `ir/opt_driver.mbt`.
-- E-graph aggregate stats are collected via `optimize_function_with_stats(...)`.
+- Pass-level counters are recorded in `modules/milkir/optimize/driver.mbt`.
+- Acyclic rewrite/GVN aggregate stats are emitted through the optional metrics
+  sink in `modules/milkir/optimize/metrics.mbt`; embeddings install the sink
+  through `@optimize.install_optimization_metrics_sink(...)`.

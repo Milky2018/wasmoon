@@ -6,15 +6,9 @@ import {
 }
 
 // Values
-pub fn clear_optimization_metrics_sink() -> Unit
+pub fn build_dominator_tree(Array[Int]) -> Array[Array[Int]]
 
-pub fn install_optimization_metrics_sink(OptimizationMetricsSink) -> Unit
-
-pub fn instruction_count(Function) -> Int
-
-pub fn optimize(Function) -> OptResult
-
-pub fn optimize_with_level(Function, OptLevel) -> OptResult
+pub fn[Scope] visit_dominator_tree(Array[Array[Int]], Int, (Int) -> (Scope, Bool), (Scope) -> Unit) -> Unit
 
 // Errors
 pub suberror VerifyError {
@@ -28,6 +22,8 @@ pub suberror VerifyError {
   DuplicateBlockId(block_id~ : Int)
   DuplicateValueDefinition(value_id~ : Int)
   DuplicateInstructionId(inst_id~ : Int)
+  UnplacedInstruction(inst_id~ : Int)
+  InstructionPlacementMismatch(inst_id~ : Int)
   UseBeforeDefinition(value_id~ : Int)
   NonDominatingUse(value_id~ : Int, defining_block~ : Int, use_block~ : Int)
   InstructionOperandMismatch(inst_id~ : Int)
@@ -60,12 +56,17 @@ pub fn AliasRegion::to_repr(Self) -> @debug.Repr
 pub struct Block {
   id : Int
   params : Array[(Value, Type)]
-  mut instructions : Array[Inst]
   mut terminator : Terminator?
   // private fields
 }
 pub fn Block::append_inst(Self, Inst) -> Unit
+pub fn Block::clear_instructions_for_move(Self) -> Unit
+pub fn Block::instruction_count(Self) -> Int
+pub fn Block::instruction_ids(Self) -> ArrayView[Int]
+pub fn Block::retain_instruction_ids(Self, (Int) -> Bool) -> Unit
+pub fn Block::set_instructions(Self, Array[Inst]) -> Unit
 pub fn Block::set_terminator(Self, Terminator) -> Unit
+pub fn Block::take_inst_at(Self, Int) -> Int?
 pub fn Block::to_repr(Self) -> @debug.Repr
 pub impl @debug.Debug for Block
 
@@ -77,6 +78,7 @@ pub struct CFG {
   valid : Array[Bool]
 } derive(@debug.Debug)
 pub fn CFG::build(Function) -> Self
+pub fn CFG::compute_dominance(Self) -> Dominance
 pub fn CFG::compute_dominators(Self) -> Array[Int]
 pub fn CFG::dominates(Self, Int, Int) -> Bool
 pub fn CFG::find_back_edges(Self) -> Array[(Int, Int)]
@@ -136,6 +138,12 @@ pub fn ConversionOp::hash(Self) -> Int
 pub fn ConversionOp::hash_combine(Self, Hasher) -> Unit
 pub fn ConversionOp::not_equal(Self, Self) -> Bool
 pub fn ConversionOp::to_repr(Self) -> @debug.Repr
+
+pub struct Dominance {
+  idom : Array[Int]
+  // private fields
+}
+pub fn Dominance::dominates(Self, Int, Int) -> Bool
 
 pub struct ExtOp {
   dialect : String
@@ -243,9 +251,14 @@ pub struct Function {
 }
 pub fn Function::add_param(Self, Type) -> Value
 pub fn Function::add_result(Self, Type) -> Unit
+pub fn Function::block_instruction_at(Self, Block, Int) -> Inst?
+pub fn Function::block_instruction_ids(Self, Block) -> ArrayView[Int]
 pub fn Function::declare_external_symbol(Self, String) -> ExternalSymbol
 pub fn Function::declare_global_value(Self, GlobalValueData) -> GlobalValue
+pub fn Function::defining_inst(Self, Value) -> Inst?
+pub fn Function::discard_inst(Self, Inst) -> Unit
 pub fn Function::global_value_data(Self, GlobalValue) -> GlobalValueData?
+pub fn Function::instruction_by_id(Self, Int) -> Inst?
 pub fn Function::new_block(Self, Array[Value]) -> Block
 pub fn Function::new_block0(Self) -> Block
 pub fn Function::new_empty(String) -> Self
@@ -253,6 +266,8 @@ pub fn Function::new_inst(Self, Opcode, Array[Value], Array[Value]) -> Inst
 pub fn Function::new_value(Self, Type) -> Value
 pub fn Function::param(Self, Int) -> Value?
 pub fn Function::print(Self) -> String
+pub fn Function::retain_block_params(Self, Block, Array[Int]) -> Unit
+pub fn Function::retain_blocks(Self, (Block) -> Bool) -> Unit
 pub fn Function::signature(Self) -> Signature
 pub fn Function::to_repr(Self) -> @debug.Repr
 pub fn Function::verify(Self) -> Unit raise VerifyError
@@ -448,6 +463,7 @@ pub fn Inst::first_result(Self) -> Value?
 pub fn Inst::hash(Self) -> Int
 pub fn Inst::hash_combine(Self, Hasher) -> Unit
 pub fn Inst::not_equal(Self, Self) -> Bool
+pub fn Inst::set_opcode(Self, Opcode) -> Unit
 pub fn Inst::to_repr(Self) -> @debug.Repr
 pub impl Eq for Inst
 pub impl Hash for Inst
@@ -554,36 +570,6 @@ pub fn Opcode::to_repr(Self) -> @debug.Repr
 pub fn Opcode::to_string(Self) -> String
 pub impl Show for Opcode
 
-pub(all) enum OptLevel {
-  O0
-  O1
-  O2
-  O3
-}
-pub fn OptLevel::from_int(Int) -> Self
-
-pub struct OptResult {
-  mut changed : Bool
-} derive(Eq)
-pub fn OptResult::equal(Self, Self) -> Bool
-pub fn OptResult::not_equal(Self, Self) -> Bool
-
-type OptimizationMetricsSink
-pub fn OptimizationMetricsSink::new(() -> Int64, (OptimizationPassMetric) -> Unit) -> Self
-
-pub struct OptimizationPassMetric {
-  name : String
-  duration_us : Int64
-  before_insts : Int
-  after_insts : Int
-  changed : Bool
-  egraph_classes : Int?
-  egraph_nodes : Int?
-  egraph_rule_apps : Int?
-  work_done : Int?
-  budget_exhausted : Bool?
-}
-
 pub(all) enum ScalarOp {
   IntConst(Int64)
   FloatConst32(UInt)
@@ -626,6 +612,7 @@ pub(all) enum Terminator {
   Trap(String)
   TrapExit(String)
 } derive(@debug.Debug)
+pub fn Terminator::targets(Self) -> Array[Int]
 pub fn Terminator::to_repr(Self) -> @debug.Repr
 
 pub(all) enum Type {
@@ -937,5 +924,6 @@ pub fn VectorSignedness::not_equal(Self, Self) -> Bool
 pub fn VectorSignedness::to_repr(Self) -> @debug.Repr
 
 // Type aliases
+pub type InstId = Int
 
 // Traits

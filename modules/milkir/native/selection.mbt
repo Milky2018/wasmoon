@@ -7,6 +7,12 @@ priv struct MemoryAddressSelection {
 }
 
 ///|
+priv struct MemoryAddressMatch {
+  selection : MemoryAddressSelection
+  consumed : Array[@milkir.Value]
+}
+
+///|
 priv enum ScalarSelection {
   IntImmediate(@milkir.Value, @lowering.IntBinaryOp, UInt64)
   ShiftImmediate(@milkir.Value, @lowering.IntBinaryOp, Int)
@@ -21,15 +27,44 @@ priv enum BranchSelection {
 }
 
 ///|
-priv struct LoweringAnalysis {
-  memory_addresses : Array[MemoryAddressSelection?]
-  scalar_instructions : Array[ScalarSelection?]
-  branches : Array[BranchSelection?]
-  skip_results : Array[Bool]
+priv struct SelectionFacts {
+  folds_unsigned_index_into_memory : Bool
+  uses : Array[Int]
+  consumers : Array[Int]
+  shared_consumers : Array[Array[Int]?]
+  constants : Array[UInt64?]
+  definitions : Array[@milkir.Inst?]
+  instructions : Array[@milkir.Inst?]
+  instruction_blocks : Array[Int]
+  deferred : Array[Bool?]
+  memory_consumers : Array[Int]
+  memory_selection_computed : Array[Bool]
+  memory_selections : Array[MemoryAddressMatch?]
 }
 
 ///|
-fn count_use(uses : Array[Int], value : @milkir.Value) -> Unit {
+fn record_use(
+  uses : Array[Int],
+  consumers : Array[Int],
+  shared_consumers : Array[Array[Int]?],
+  value : @milkir.Value,
+  consumer : Int,
+  track_shared : Bool,
+) -> Unit {
+  if uses[value.id] == 0 {
+    consumers[value.id] = consumer
+  } else if uses[value.id] == 1 {
+    if track_shared {
+      let first = consumers[value.id]
+      shared_consumers[value.id] = Some([first, consumer])
+    }
+    consumers[value.id] = -2
+  } else if track_shared {
+    guard shared_consumers[value.id] is Some(recorded) else {
+      abort("shared consumers must exist after the second use")
+    }
+    recorded.push(consumer)
+  }
   uses[value.id] += 1
 }
 
@@ -61,14 +96,14 @@ fn unary_operand(instruction : @milkir.Inst) -> @milkir.Value? {
 
 ///|
 fn pointer_source(
-  definitions : Array[@milkir.Inst?],
+  facts : SelectionFacts,
   value : @milkir.Value,
 ) -> @milkir.Value? {
   if value.ty == Ptr {
     return Some(value)
   }
   guard value.ty == I64 else { return None }
-  guard scalar_definition(definitions, value) is Some(instruction) else {
+  guard scalar_definition(facts.definitions, value) is Some(instruction) else {
     return None
   }
   guard instruction.opcode is Scalar(Convert(Bitcast)) else { return None }
@@ -80,10 +115,10 @@ fn pointer_source(
 
 ///|
 fn extended_i32_source(
-  definitions : Array[@milkir.Inst?],
+  facts : SelectionFacts,
   value : @milkir.Value,
 ) -> @milkir.Value? {
-  guard scalar_definition(definitions, value) is Some(instruction) else {
+  guard scalar_definition(facts.definitions, value) is Some(instruction) else {
     return None
   }
   guard instruction.opcode is Scalar(Convert(UnsignedExtend)) else {
@@ -108,8 +143,7 @@ fn natural_memory_shift(width : @native_types.AccessWidth) -> Int {
 
 ///|
 fn scaled_i32_source(
-  definitions : Array[@milkir.Inst?],
-  constants : Array[UInt64?],
+  facts : SelectionFacts,
   value : @milkir.Value,
   width : @native_types.AccessWidth,
 ) -> (@milkir.Value, Int, Array[@milkir.Value]) {
@@ -117,7 +151,7 @@ fn scaled_i32_source(
   if shift == 0 {
     return (value, 0, [])
   }
-  guard scalar_definition(definitions, value) is Some(instruction) else {
+  guard scalar_definition(facts.definitions, value) is Some(instruction) else {
     return (value, 0, [])
   }
   guard instruction.opcode is Scalar(IntBinary(Mul)) else {
@@ -127,9 +161,9 @@ fn scaled_i32_source(
     return (value, 0, [])
   }
   let scale = 1UL << shift
-  if constants[right.id] == Some(scale) {
+  if facts.constants[right.id] == Some(scale) {
     (left, shift, [value, right])
-  } else if constants[left.id] == Some(scale) {
+  } else if facts.constants[left.id] == Some(scale) {
     (right, shift, [value, left])
   } else {
     (value, 0, [])
@@ -138,39 +172,32 @@ fn scaled_i32_source(
 
 ///|
 fn select_index_and_offset(
-  definitions : Array[@milkir.Inst?],
-  constants : Array[UInt64?],
+  facts : SelectionFacts,
   value : @milkir.Value,
   width : @native_types.AccessWidth,
 ) -> (@milkir.Value, Int, UInt64, Array[@milkir.Value])? {
-  if extended_i32_source(definitions, value) is Some(index) {
-    let (selected, shift, folded) = scaled_i32_source(
-      definitions, constants, index, width,
-    )
+  if extended_i32_source(facts, value) is Some(index) {
+    let (selected, shift, folded) = scaled_i32_source(facts, index, width)
     let consumed = [value]
     consumed.append(folded)
     return Some((selected, shift, 0UL, consumed))
   }
-  guard scalar_definition(definitions, value) is Some(instruction) else {
+  guard scalar_definition(facts.definitions, value) is Some(instruction) else {
     return None
   }
   guard instruction.opcode is Scalar(IntBinary(Add)) else { return None }
   guard binary_operands(instruction) is Some((left, right)) else { return None }
-  let selected = match constants[right.id] {
+  let selected = match facts.constants[right.id] {
     Some(offset) => Some((left, right, offset))
     None =>
-      match constants[left.id] {
+      match facts.constants[left.id] {
         Some(offset) => Some((right, left, offset))
         None => None
       }
   }
   guard selected is Some((extended, constant, offset)) else { return None }
-  guard extended_i32_source(definitions, extended) is Some(index) else {
-    return None
-  }
-  let (selected_index, shift, scaled) = scaled_i32_source(
-    definitions, constants, index, width,
-  )
+  guard extended_i32_source(facts, extended) is Some(index) else { return None }
+  let (selected_index, shift, scaled) = scaled_i32_source(facts, index, width)
   let consumed = [value, extended, constant]
   consumed.append(scaled)
   Some((selected_index, shift, offset, consumed))
@@ -178,71 +205,119 @@ fn select_index_and_offset(
 
 ///|
 fn select_memory_address(
-  definitions : Array[@milkir.Inst?],
-  constants : Array[UInt64?],
+  facts : SelectionFacts,
   base : @milkir.Value,
   offset : @milkir.Value,
   width : @native_types.AccessWidth,
-) -> (MemoryAddressSelection, Array[@milkir.Value])? {
-  guard constants[offset.id] is Some(static_offset) else { return None }
-  if pointer_source(definitions, base) is Some(pointer) {
+) -> MemoryAddressMatch? {
+  guard facts.constants[offset.id] is Some(static_offset) else { return None }
+  let selected = if pointer_source(facts, base) is Some(pointer) {
     let consumed = [offset]
     if pointer != base {
       consumed.push(base)
     }
-    return Some(
+    Some(
       (
         { base: pointer, index: None, shift: 0, offset: static_offset, },
         consumed,
       ),
     )
-  }
-  let direct_i64 = fn() -> (MemoryAddressSelection, Array[@milkir.Value])? {
-    if base.ty == I64 {
-      Some(({ base, index: None, shift: 0, offset: static_offset, }, [offset]))
-    } else {
-      None
+  } else {
+    guard scalar_definition(facts.definitions, base) is Some(add) else {
+      return direct_i64_memory_address(base, offset, static_offset)
     }
+    guard add.opcode is Scalar(IntBinary(Add)) else {
+      return direct_i64_memory_address(base, offset, static_offset)
+    }
+    guard binary_operands(add) is Some((left, right)) else {
+      return direct_i64_memory_address(base, offset, static_offset)
+    }
+    let parts = match pointer_source(facts, left) {
+      Some(pointer) =>
+        select_index_and_offset(facts, right, width).map(selected => {
+          (pointer, left, selected)
+        })
+      None =>
+        match pointer_source(facts, right) {
+          Some(pointer) =>
+            select_index_and_offset(facts, left, width).map(selected => {
+              (pointer, right, selected)
+            })
+          None => None
+        }
+    }
+    guard parts is Some((pointer, pointer_bits, selected)) else {
+      return direct_i64_memory_address(base, offset, static_offset)
+    }
+    let (index, shift, dynamic_offset, consumed_index) = selected
+    let consumed = [base, offset]
+    if pointer_bits != pointer {
+      consumed.push(pointer_bits)
+    }
+    consumed.append(consumed_index)
+    Some(
+      (
+        {
+          base: pointer,
+          index: Some(index),
+          shift,
+          offset: static_offset + dynamic_offset,
+        },
+        consumed,
+      ),
+    )
   }
-  guard scalar_definition(definitions, base) is Some(add) else {
-    return direct_i64()
+  guard selected is Some((selection, consumed)) else { return None }
+  if consumed.any(value => {
+      !memory_address_value_is_free(value, facts) && facts.uses[value.id] != 1
+    }) {
+    None
+  } else {
+    Some({ selection, consumed, })
   }
-  guard add.opcode is Scalar(IntBinary(Add)) else { return direct_i64() }
-  guard binary_operands(add) is Some((left, right)) else { return direct_i64() }
-  let parts = match pointer_source(definitions, left) {
-    Some(pointer) =>
-      select_index_and_offset(definitions, constants, right, width).map(selected => {
-        (pointer, left, selected)
-      })
-    None =>
-      match pointer_source(definitions, right) {
-        Some(pointer) =>
-          select_index_and_offset(definitions, constants, left, width).map(selected => {
-            (pointer, right, selected)
-          })
-        None => None
-      }
+}
+
+///|
+/// Values that add no instruction when folded into an address may be consumed
+/// by more than one memory selection. A raw-word pointer bitcast is a typed IR
+/// boundary, not a machine operation; requiring a single use here makes GVN of
+/// that bitcast pessimize every later address.
+fn memory_address_value_is_free(
+  value : @milkir.Value,
+  facts : SelectionFacts,
+) -> Bool {
+  if facts.constants[value.id] is Some(_) {
+    return true
   }
-  guard parts is Some((pointer, pointer_bits, selected)) else {
-    return direct_i64()
+  guard scalar_definition(facts.definitions, value) is Some(instruction) else {
+    return false
   }
-  let (index, shift, dynamic_offset, consumed_index) = selected
-  let consumed = [base, offset]
-  if pointer_bits != pointer {
-    consumed.push(pointer_bits)
+  match instruction.opcode {
+    Scalar(Convert(Bitcast)) =>
+      instruction.args is [source] && source.ty == Ptr && value.ty == I64
+    Scalar(Convert(UnsignedExtend)) =>
+      facts.folds_unsigned_index_into_memory &&
+      instruction.args is [source] &&
+      source.ty == I32 &&
+      value.ty == I64
+    _ => false
   }
-  consumed.append(consumed_index)
-  Some(
-    (
-      {
-        base: pointer,
-        index: Some(index),
-        shift,
-        offset: static_offset + dynamic_offset,
-      },
-      consumed,
-    ),
-  )
+}
+
+///|
+fn direct_i64_memory_address(
+  base : @milkir.Value,
+  offset : @milkir.Value,
+  static_offset : UInt64,
+) -> MemoryAddressMatch? {
+  if base.ty == I64 {
+    Some({
+      selection: { base, index: None, shift: 0, offset: static_offset, },
+      consumed: [offset],
+    })
+  } else {
+    None
+  }
 }
 
 ///|
@@ -338,6 +413,35 @@ fn swapped_comparison(
 }
 
 ///|
+fn select_right_immediate(
+  binary : @milkir.IntBinaryOp,
+  left : @milkir.Value,
+  width : Int,
+  bits : UInt64,
+) -> ScalarSelection? {
+  match binary {
+    ShiftLeft
+    | SignedShiftRight
+    | UnsignedShiftRight
+    | RotateLeft
+    | RotateRight =>
+      Some(
+        ShiftImmediate(
+          left,
+          selection_binary_operation(binary),
+          (bits % width.to_uint64()).to_int(),
+        ),
+      )
+    Add | Sub | Mul | And | Or | Xor =>
+      Some(IntImmediate(left, selection_binary_operation(binary), bits))
+    UnsignedRem if bits > 1UL && (bits & (bits - 1UL)) == 0UL =>
+      Some(IntImmediate(left, UnsignedRem, bits))
+    SignedDiv | UnsignedDiv | SignedRem | UnsignedRem => None
+    SignedMulHigh | UnsignedMulHigh => None
+  }
+}
+
+///|
 fn select_scalar_instruction(
   instruction : @milkir.Inst,
   constants : Array[UInt64?],
@@ -349,30 +453,12 @@ fn select_scalar_instruction(
     return None
   }
   let width = if result.ty == I32 { 32 } else { 64 }
-  let select_right = fn(bits : UInt64) -> ScalarSelection? {
-    match binary {
-      ShiftLeft
-      | SignedShiftRight
-      | UnsignedShiftRight
-      | RotateLeft
-      | RotateRight =>
-        Some(
-          ShiftImmediate(
-            left,
-            selection_binary_operation(binary),
-            (bits % width.to_uint64()).to_int(),
-          ),
-        )
-      Add | Sub | Mul | And | Or | Xor =>
-        Some(IntImmediate(left, selection_binary_operation(binary), bits))
-      UnsignedRem if bits > 1UL && (bits & (bits - 1UL)) == 0UL =>
-        Some(IntImmediate(left, UnsignedRem, bits))
-      SignedDiv | UnsignedDiv | SignedRem | UnsignedRem => None
-      SignedMulHigh | UnsignedMulHigh => None
-    }
-  }
   match constants[right.id] {
-    Some(bits) => select_right(bits).map(selection => (selection, right))
+    Some(bits) =>
+      match select_right_immediate(binary, left, width, bits) {
+        Some(selection) => Some((selection, right))
+        None => None
+      }
     None =>
       match constants[left.id] {
         Some(bits) if binary is (Add | Mul | And | Or | Xor) =>
@@ -388,15 +474,64 @@ fn select_scalar_instruction(
 }
 
 ///|
-fn analyze_lowering(function : @milkir.Function) -> LoweringAnalysis {
+fn selection_tracks_shared_consumers(
+  value : @milkir.Value,
+  constants : Array[UInt64?],
+  definitions : Array[@milkir.Inst?],
+  folds_unsigned_index_into_memory : Bool,
+) -> Bool {
+  if constants[value.id] is Some(_) {
+    return true
+  }
+  match definitions[value.id] {
+    Some(definition) =>
+      match definition.opcode {
+        Scalar(Convert(Bitcast)) =>
+          definition.args is [source] && source.ty == Ptr && value.ty == I64
+        Scalar(Convert(UnsignedExtend)) =>
+          folds_unsigned_index_into_memory &&
+          definition.args is [source] &&
+          source.ty == I32 &&
+          value.ty == I64
+        _ => false
+      }
+    None => false
+  }
+}
+
+///|
+fn build_selection_facts(
+  function : @milkir.Function,
+  folds_unsigned_index_into_memory : Bool,
+) -> SelectionFacts {
   let uses = Array::make(function.next_value_id, 0)
+  let consumers = Array::make(function.next_value_id, -2)
+  let shared_consumers : Array[Array[Int]?] = Array::make(
+    function.next_value_id,
+    None,
+  )
   let constants : Array[UInt64?] = Array::make(function.next_value_id, None)
   let definitions : Array[@milkir.Inst?] = Array::make(
     function.next_value_id,
     None,
   )
+  let instruction_blocks = Array::make(function.next_inst_id, -1)
+  let instructions : Array[@milkir.Inst?] = Array::make(
+    function.next_inst_id,
+    None,
+  )
+  let deferred : Array[Bool?] = Array::make(function.next_inst_id, None)
+  let memory_consumers = Array::make(function.next_value_id, -2)
+  let memory_selection_computed = Array::make(function.next_inst_id, false)
+  let memory_selections : Array[MemoryAddressMatch?] = Array::make(
+    function.next_inst_id,
+    None,
+  )
   for block in function.blocks {
-    for instruction in block.instructions {
+    for instruction_id in function.block_instruction_ids(block) {
+      let instruction = function.instruction_by_id(instruction_id).unwrap()
+      instructions[instruction.id] = Some(instruction)
+      instruction_blocks[instruction.id] = block.id
       for result in instruction.results {
         definitions[result.id] = Some(instruction)
       }
@@ -411,169 +546,343 @@ fn analyze_lowering(function : @milkir.Function) -> LoweringAnalysis {
           )
         _ => ()
       }
+    }
+  }
+  // Definitions must be complete before classifying shared consumers: valid
+  // SSA dominance does not require the function's block array to be in
+  // dominator order.
+  for block in function.blocks {
+    for instruction_id in function.block_instruction_ids(block) {
+      let instruction = function.instruction_by_id(instruction_id).unwrap()
       for argument in instruction.args {
-        count_use(uses, argument)
+        record_use(
+          uses,
+          consumers,
+          shared_consumers,
+          argument,
+          instruction.id,
+          selection_tracks_shared_consumers(
+            argument, constants, definitions, folds_unsigned_index_into_memory,
+          ),
+        )
       }
     }
     if block.terminator is Some(terminator) {
       for value in terminator_values(terminator) {
-        count_use(uses, value)
-      }
-    }
-  }
-  let folded_uses = Array::make(function.next_value_id, 0)
-  let memory_addresses : Array[MemoryAddressSelection?] = Array::make(
-    function.next_inst_id,
-    None,
-  )
-  for block in function.blocks {
-    for instruction in block.instructions {
-      guard memory_access(instruction) is Some((base, offset, width)) else {
-        continue
-      }
-      guard select_memory_address(definitions, constants, base, offset, width)
-        is Some((selection, consumed)) else {
-        continue
-      }
-      if consumed.any(value => {
-          constants[value.id] is None && uses[value.id] != 1
-        }) {
-        continue
-      }
-      memory_addresses[instruction.id] = Some(selection)
-      for value in consumed {
-        folded_uses[value.id] += 1
-      }
-    }
-  }
-  let scalar_instructions : Array[ScalarSelection?] = Array::make(
-    function.next_inst_id,
-    None,
-  )
-  for block in function.blocks {
-    for instruction in block.instructions {
-      guard instruction.opcode is Scalar(IntBinary(Add)) else { continue }
-      guard instruction.results is [result] else { continue }
-      if uses[result.id] > 0 && uses[result.id] == folded_uses[result.id] {
-        continue
-      }
-      guard binary_operands(instruction) is Some((left, right)) else {
-        continue
-      }
-      let multiply_add = fn(
-        accumulator : @milkir.Value,
-        product : @milkir.Value,
-      ) -> ScalarSelection? {
-        if uses[product.id] != 1 || folded_uses[product.id] != 0 {
-          return None
-        }
-        guard definitions[product.id] is Some(multiply) else { return None }
-        guard multiply.opcode is Scalar(IntBinary(Mul)) else { return None }
-        guard binary_operands(multiply) is Some((first, second)) else {
-          return None
-        }
-        Some(MultiplyAdd(accumulator, first, second))
-      }
-      let selected_multiply = match multiply_add(left, right) {
-        Some(selection) => Some((selection, right))
-        None => multiply_add(right, left).map(selection => (selection, left))
-      }
-      if selected_multiply is Some((selection, product)) {
-        scalar_instructions[instruction.id] = Some(selection)
-        folded_uses[product.id] += 1
-        continue
-      }
-      let shifted_add = fn(
-        accumulator : @milkir.Value,
-        shifted : @milkir.Value,
-      ) -> (ScalarSelection, @milkir.Value)? {
-        if uses[shifted.id] != 1 || folded_uses[shifted.id] != 0 {
-          return None
-        }
-        guard definitions[shifted.id] is Some(shift) else { return None }
-        guard shift.opcode is Scalar(IntBinary(ShiftLeft)) else { return None }
-        guard binary_operands(shift) is Some((input, amount)) else {
-          return None
-        }
-        guard constants[amount.id] is Some(bits) else { return None }
-        let width = if shifted.ty == I32 { 32UL } else { 64UL }
-        Some(
-          (AddShiftedLeft(accumulator, input, (bits % width).to_int()), amount),
+        record_use(
+          uses,
+          consumers,
+          shared_consumers,
+          value,
+          -1,
+          selection_tracks_shared_consumers(
+            value, constants, definitions, folds_unsigned_index_into_memory,
+          ),
         )
       }
-      let selected_shift = match shifted_add(left, right) {
-        Some(selection) => Some((selection, right))
-        None => shifted_add(right, left).map(selection => (selection, left))
-      }
-      if selected_shift is Some(((selection, constant), shifted)) {
-        scalar_instructions[instruction.id] = Some(selection)
-        folded_uses[shifted.id] += 1
-        folded_uses[constant.id] += 1
-      }
     }
   }
-  for block in function.blocks {
-    for instruction in block.instructions {
-      guard instruction.results is [result] else { continue }
-      if uses[result.id] > 0 && uses[result.id] == folded_uses[result.id] {
-        continue
-      }
-      if scalar_instructions[instruction.id] is Some(_) {
-        continue
-      }
-      guard select_scalar_instruction(instruction, constants)
-        is Some((selection, constant)) else {
-        continue
-      }
-      scalar_instructions[instruction.id] = Some(selection)
-      folded_uses[constant.id] += 1
+  {
+    folds_unsigned_index_into_memory,
+    uses,
+    consumers,
+    shared_consumers,
+    constants,
+    definitions,
+    instructions,
+    instruction_blocks,
+    deferred,
+    memory_consumers,
+    memory_selection_computed,
+    memory_selections,
+  }
+}
+
+///|
+fn memory_consumer_id(value : @milkir.Value, facts : SelectionFacts) -> Int {
+  if facts.memory_consumers[value.id] != -2 {
+    return facts.memory_consumers[value.id]
+  }
+  let direct_consumer = facts.consumers[value.id]
+  let consumer_id = if facts.uses[value.id] == 1 && direct_consumer >= 0 {
+    let instruction = facts.instructions[direct_consumer].unwrap()
+    if memory_access(instruction) is Some(_) {
+      instruction.id
+    } else if instruction.results is [result] {
+      memory_consumer_id(result, facts)
+    } else {
+      -1
+    }
+  } else {
+    -1
+  }
+  facts.memory_consumers[value.id] = consumer_id
+  consumer_id
+}
+
+///|
+fn selected_by_memory_address(
+  value : @milkir.Value,
+  facts : SelectionFacts,
+) -> Bool {
+  let consumer_id = facts.consumers[value.id]
+  guard consumer_id >= 0 && facts.instructions[consumer_id] is Some(consumer) else {
+    return false
+  }
+  selected_by_memory_address_use(value, consumer, facts)
+}
+
+///|
+fn selected_by_memory_address_use(
+  value : @milkir.Value,
+  consumer : @milkir.Inst,
+  facts : SelectionFacts,
+) -> Bool {
+  let consumer_id = if memory_access(consumer) is Some(_) {
+    consumer.id
+  } else if consumer.results is [result] {
+    memory_consumer_id(result, facts)
+  } else {
+    -1
+  }
+  guard consumer_id >= 0 &&
+    facts.instructions[consumer_id] is Some(instruction) &&
+    memory_selection(instruction, facts) is Some(selected) else {
+    return false
+  }
+  selected.consumed.any(consumed_value => consumed_value == value)
+}
+
+///|
+fn fully_selected_by_memory_addresses(
+  value : @milkir.Value,
+  facts : SelectionFacts,
+) -> Bool {
+  if facts.uses[value.id] == 1 && facts.consumers[value.id] >= 0 {
+    return selected_by_memory_address(value, facts)
+  }
+  guard facts.uses[value.id] > 1 &&
+    facts.shared_consumers[value.id] is Some(consumers) else {
+    return false
+  }
+  consumers.all(consumer => {
+    guard facts.instructions[consumer] is Some(instruction) else {
+      return false
+    }
+    selected_by_memory_address_use(value, instruction, facts)
+  })
+}
+
+///|
+fn memory_selection(
+  instruction : @milkir.Inst,
+  facts : SelectionFacts,
+) -> MemoryAddressMatch? {
+  if !facts.memory_selection_computed[instruction.id] {
+    facts.memory_selection_computed[instruction.id] = true
+    if memory_access(instruction) is Some((base, offset, width)) {
+      facts.memory_selections[instruction.id] = select_memory_address(
+        facts, base, offset, width,
+      )
     }
   }
-  let branches : Array[BranchSelection?] = Array::make(
-    function.next_block_id,
-    None,
-  )
-  for block in function.blocks {
-    let condition = match block.terminator {
-      Some(Branch(condition, _, _, _, _)) => Some(condition)
-      Some(Brnz(condition, _, _)) | Some(Brz(condition, _, _)) =>
-        Some(condition)
-      _ => None
-    }
-    guard condition is Some(condition) else { continue }
-    if uses[condition.id] != 1 {
-      continue
-    }
-    guard definitions[condition.id] is Some(instruction) else { continue }
-    guard instruction.opcode is Scalar(IntCompare(comparison)) else { continue }
-    guard binary_operands(instruction) is Some((left, right)) else { continue }
-    if left.ty != right.ty || !(left.ty is (I32 | I64)) {
-      continue
-    }
-    let lowered = selection_comparison(comparison)
-    match constants[right.id] {
-      Some(bits) => {
-        branches[block.id] = Some(CompareImmediate(left, bits, lowered))
-        folded_uses[right.id] += 1
+  facts.memory_selections[instruction.id]
+}
+
+///|
+fn consumer_selects_constant(
+  constant : @milkir.Value,
+  consumer_id : Int,
+  facts : SelectionFacts,
+) -> Bool {
+  guard consumer_id >= 0 && facts.instructions[consumer_id] is Some(instruction) else {
+    return false
+  }
+  if select_scalar_instruction(instruction, facts.constants)
+    is Some((_, selected_constant)) &&
+    selected_constant == constant {
+    return true
+  }
+  if instruction.opcode is Scalar(IntCompare(_)) &&
+    instruction.results is [condition] &&
+    facts.consumers[condition.id] == -1 &&
+    select_branch_lowering(condition, facts) is Some(CompareImmediate(_, _, _)) {
+    return true
+  }
+  selected_by_memory_address_use(constant, instruction, facts)
+}
+
+///|
+fn constant_is_fully_selected(
+  constant : @milkir.Value,
+  facts : SelectionFacts,
+) -> Bool {
+  if facts.uses[constant.id] == 1 && facts.consumers[constant.id] != -2 {
+    return consumer_selects_constant(
+      constant,
+      facts.consumers[constant.id],
+      facts,
+    )
+  }
+  guard facts.uses[constant.id] > 1 &&
+    facts.shared_consumers[constant.id] is Some(consumers) else {
+    return false
+  }
+  consumers.all(consumer => consumer_selects_constant(constant, consumer, facts))
+}
+
+///|
+fn should_defer_instruction(
+  instruction : @milkir.Inst,
+  facts : SelectionFacts,
+) -> Bool {
+  if facts.deferred[instruction.id] is Some(deferred) {
+    return deferred
+  }
+  let deferred = compute_should_defer_instruction(instruction, facts)
+  facts.deferred[instruction.id] = Some(deferred)
+  deferred
+}
+
+///|
+fn compute_should_defer_instruction(
+  instruction : @milkir.Inst,
+  facts : SelectionFacts,
+) -> Bool {
+  guard instruction.results is [result] else { return false }
+  guard result.ty is (I32 | I64) else { return false }
+  if instruction.opcode is Scalar(IntConst(_)) {
+    return constant_is_fully_selected(result, facts)
+  }
+  if instruction.opcode is Scalar(Convert(Bitcast)) &&
+    instruction.args is [source] &&
+    source.ty == Ptr &&
+    result.ty == I64 {
+    return fully_selected_by_memory_addresses(result, facts)
+  }
+  if instruction.opcode is Scalar(Convert(UnsignedExtend)) &&
+    instruction.args is [source] &&
+    source.ty == I32 &&
+    result.ty == I64 {
+    return fully_selected_by_memory_addresses(result, facts)
+  }
+  guard facts.uses[result.id] == 1 else { return false }
+  match instruction.opcode {
+    Scalar(IntBinary(Add)) => selected_by_memory_address(result, facts)
+    Scalar(IntBinary(Mul)) => {
+      let composite = match facts.consumers[result.id] {
+        consumer_id if consumer_id >= 0 =>
+          select_scalar_lowering(
+            facts.instructions[consumer_id].unwrap(),
+            facts,
+          )
+          is Some(MultiplyAdd(_, _, _))
+        _ => false
       }
+      composite || selected_by_memory_address(result, facts)
+    }
+    Scalar(IntBinary(ShiftLeft)) =>
+      match facts.consumers[result.id] {
+        consumer_id if consumer_id >= 0 =>
+          select_scalar_lowering(
+            facts.instructions[consumer_id].unwrap(),
+            facts,
+          )
+          is Some(AddShiftedLeft(_, _, _))
+        _ => false
+      }
+    Scalar(IntCompare(_)) =>
+      facts.consumers[result.id] == -1 &&
+      select_branch_lowering(result, facts) is Some(_)
+    Scalar(Convert(UnsignedExtend)) => false
+    Scalar(Convert(Bitcast)) =>
+      instruction.args is [source] &&
+      source.ty == Ptr &&
+      result.ty == I64 &&
+      selected_by_memory_address(result, facts)
+    Scalar(IntConst(_)) => abort("integer constants are handled above")
+    _ => false
+  }
+}
+
+///|
+fn select_multiply_add(
+  accumulator : @milkir.Value,
+  product : @milkir.Value,
+  facts : SelectionFacts,
+) -> ScalarSelection? {
+  guard facts.uses[product.id] == 1 else { return None }
+  guard facts.definitions[product.id] is Some(multiply) else { return None }
+  guard multiply.opcode is Scalar(IntBinary(Mul)) else { return None }
+  guard binary_operands(multiply) is Some((first, second)) else { return None }
+  Some(MultiplyAdd(accumulator, first, second))
+}
+
+///|
+fn select_shifted_add(
+  accumulator : @milkir.Value,
+  shifted : @milkir.Value,
+  facts : SelectionFacts,
+) -> ScalarSelection? {
+  guard facts.uses[shifted.id] == 1 else { return None }
+  guard facts.definitions[shifted.id] is Some(shift) else { return None }
+  guard shift.opcode is Scalar(IntBinary(ShiftLeft)) else { return None }
+  guard binary_operands(shift) is Some((input, amount)) else { return None }
+  guard facts.constants[amount.id] is Some(bits) else { return None }
+  let width = if shifted.ty == I32 { 32UL } else { 64UL }
+  Some(AddShiftedLeft(accumulator, input, (bits % width).to_int()))
+}
+
+///|
+fn select_scalar_lowering(
+  instruction : @milkir.Inst,
+  facts : SelectionFacts,
+) -> ScalarSelection? {
+  if instruction.opcode is Scalar(IntBinary(Add)) &&
+    instruction.results is [_] &&
+    binary_operands(instruction) is Some((left, right)) {
+    match select_multiply_add(left, right, facts) {
+      Some(selection) => return Some(selection)
       None =>
-        match constants[left.id] {
-          Some(bits) => {
-            branches[block.id] = Some(
-              CompareImmediate(right, bits, swapped_comparison(lowered)),
-            )
-            folded_uses[left.id] += 1
-          }
-          None => branches[block.id] = Some(Compare(left, right, lowered))
+        match select_multiply_add(right, left, facts) {
+          Some(selection) => return Some(selection)
+          None => ()
         }
     }
-    folded_uses[condition.id] += 1
-  }
-  let skip_results = Array::make(function.next_value_id, false)
-  for value_id in 0..<function.next_value_id {
-    if uses[value_id] > 0 && uses[value_id] == folded_uses[value_id] {
-      skip_results[value_id] = true
+    match select_shifted_add(left, right, facts) {
+      Some(selection) => return Some(selection)
+      None =>
+        match select_shifted_add(right, left, facts) {
+          Some(selection) => return Some(selection)
+          None => ()
+        }
     }
   }
-  { memory_addresses, scalar_instructions, branches, skip_results, }
+  select_scalar_instruction(instruction, facts.constants).map(value => value.0)
+}
+
+///|
+fn select_branch_lowering(
+  condition : @milkir.Value,
+  facts : SelectionFacts,
+) -> BranchSelection? {
+  guard facts.uses[condition.id] == 1 else { return None }
+  guard facts.definitions[condition.id] is Some(instruction) else {
+    return None
+  }
+  guard instruction.opcode is Scalar(IntCompare(comparison)) else {
+    return None
+  }
+  guard binary_operands(instruction) is Some((left, right)) else { return None }
+  guard left.ty == right.ty && left.ty is (I32 | I64) else { return None }
+  let lowered = selection_comparison(comparison)
+  match facts.constants[right.id] {
+    Some(bits) => Some(CompareImmediate(left, bits, lowered))
+    None =>
+      match facts.constants[left.id] {
+        Some(bits) =>
+          Some(CompareImmediate(right, bits, swapped_comparison(lowered)))
+        None => Some(Compare(left, right, lowered))
+      }
+  }
 }

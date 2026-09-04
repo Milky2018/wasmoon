@@ -297,12 +297,14 @@ fn lower_vector_operation(operation : @milkir.VectorOp) -> @lowering.Operation {
 fn lower_vector_instruction(
   builder : @lowering.DirectBuilder,
   values : Array[@lowering.Value?],
+  value_types : Array[@native_types.ValueType?],
+  facts : SelectionFacts,
   instruction : @milkir.Inst,
   operation : @milkir.VectorOp,
 ) -> Unit raise NativeLowerError {
   let lowered_results = builder.emit_with_metadata(
     lower_vector_operation(operation),
-    mapped_values(values, instruction.args),
+    demand_values(builder, values, value_types, facts, instruction.args),
     instruction.results.map(value => lower_type(value.ty)),
     instruction_metadata(instruction, []),
   )
@@ -324,6 +326,7 @@ fn lower_vector_memory_instruction(
   builder : @lowering.DirectBuilder,
   values : Array[@lowering.Value?],
   value_types : Array[@native_types.ValueType?],
+  facts : SelectionFacts,
   instruction : @milkir.Inst,
   operation : @milkir.VectorMemoryOp,
 ) -> Unit raise NativeLowerError {
@@ -331,6 +334,7 @@ fn lower_vector_memory_instruction(
     builder,
     values,
     value_types,
+    facts,
     instruction.args[0],
     instruction_source(instruction),
     instruction.id,
@@ -389,7 +393,10 @@ fn lower_vector_memory_instruction(
             None,
           ),
         ),
-        [address, mapped_value(values, instruction.args[1])],
+        [
+          address,
+          demand_value(builder, values, value_types, facts, instruction.args[1]),
+        ],
         [V128],
       )
     StoreLane(lane, index) =>
@@ -403,7 +410,10 @@ fn lower_vector_memory_instruction(
             None,
           ),
         ),
-        [address, mapped_value(values, instruction.args[1])],
+        [
+          address,
+          demand_value(builder, values, value_types, facts, instruction.args[1]),
+        ],
         [],
       )
   }

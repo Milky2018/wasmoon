@@ -2,13 +2,69 @@
 // Based on SSA (Static Single Assignment) form
 
 ///|
+
+///|
+/// Stable index into a function's instruction arena.
+pub type InstId = Int
+
+///|
 priv struct FunctionOwnerContext {
   mut construction_error : VerifyError?
+  mut deleted_instructions : Array[Bool]?
+}
+
+///|
+/// The authoritative SSA definition for a value. Instruction placement is
+/// deliberately absent: definitions belong to the DFG while placement belongs
+/// to block layout.
+priv enum ValueDefinition {
+  FunctionParameter(Int)
+  BlockParameter(Int, Int)
+  InstructionResult(InstId, Int)
+} derive(Eq)
+
+///|
+priv struct ValueData {
+  ty : Type
+  mut definition : ValueDefinition?
 }
 
 ///|
 fn FunctionOwnerContext::new() -> Ref[FunctionOwnerContext] {
-  Ref({ construction_error: None, })
+  Ref({ construction_error: None, deleted_instructions: None, })
+}
+
+///|
+fn FunctionOwnerContext::mark_instruction_deleted(
+  self : FunctionOwnerContext,
+  inst_id : InstId,
+) -> Unit {
+  if inst_id < 0 {
+    return
+  }
+  let deleted = match self.deleted_instructions {
+    Some(bits) => bits
+    None => {
+      let bits : Array[Bool] = []
+      self.deleted_instructions = Some(bits)
+      bits
+    }
+  }
+  while deleted.length() <= inst_id {
+    deleted.push(false)
+  }
+  deleted[inst_id] = true
+}
+
+///|
+fn FunctionOwnerContext::instruction_is_deleted(
+  self : FunctionOwnerContext,
+  inst_id : InstId,
+) -> Bool {
+  match self.deleted_instructions {
+    Some(bits) => inst_id >= 0 && inst_id < bits.length() && bits[inst_id]
+    None => false
+  }
 }
 
 ///|
@@ -397,15 +453,15 @@ pub(all) enum Metadata {
 /// - One entry point (the first instruction)
 /// - One exit point (the last instruction, a terminator)
 ///
-/// The public fields are exposed for zero-copy inspection. Callers must not
-/// mutate `params`, `instructions`, or `terminator` directly. Use
-/// `FunctionBuilder`, `append_inst`, and `set_terminator` so ownership checks
-/// run, then verify the containing function before optimization or lowering.
+/// Parameters and the terminator are exposed for zero-copy inspection. The
+/// instruction layout is private because it stores arena IDs rather than
+/// instruction data. Use `Block::instruction_count` and
+/// `Function::block_instruction_at` to inspect it.
 pub struct Block {
   priv owner : Ref[FunctionOwnerContext]
   id : Int // Unique block identifier
   params : Array[(Value, Type)] // Block parameters (for phi nodes)
-  mut instructions : Array[Inst] // Instructions in this block
+  priv mut instructions : Array[InstId] // Stable instruction arena IDs
   mut terminator : Terminator? // How this block ends
 }
 
@@ -425,19 +481,6 @@ fn Block::Block(owner : Ref[FunctionOwnerContext], id : Int) -> Block {
 }
 
 ///|
-fn Block::new_with_params(
-  owner : Ref[FunctionOwnerContext],
-  id : Int,
-  params : Array[Value],
-) -> Block {
-  let block = Block(owner, id)
-  for param in params {
-    block.add_param(param, param.ty)
-  }
-  block
-}
-
-///|
 /// Add a parameter to this block (for SSA phi nodes)
 fn Block::add_param(self : Block, value : Value, ty : Type) -> Unit {
   if reject_foreign_value(self.owner, value) {
@@ -447,26 +490,94 @@ fn Block::add_param(self : Block, value : Value, ty : Type) -> Unit {
 }
 
 ///|
-/// Add an instruction to this block
-fn Block::add_inst(self : Block, inst : Inst) -> Unit {
+fn Block::accepts_inst(self : Block, inst : Inst) -> Bool {
   if !physical_equal(self.owner, inst.owner) {
     self.owner.val.record_construction_error(
       ForeignInstruction(inst_id=inst.id),
     )
-    return
+    return false
   }
   if reject_foreign_values(self.owner, inst.args) ||
     reject_foreign_values(self.owner, inst.operands) ||
     reject_foreign_values(self.owner, inst.results) ||
     reject_foreign_opcode_entities(self.owner, inst.opcode) {
+    return false
+  }
+  true
+}
+
+///|
+/// Add an instruction to this block
+fn Block::add_inst(self : Block, inst : Inst) -> Unit {
+  if !self.accepts_inst(inst) {
     return
   }
-  self.instructions.push(inst)
+  self.instructions.push(inst.id)
+}
+
+///|
+/// Detach an instruction for relocation without marking it deleted.
+pub fn Block::take_inst_at(self : Block, index : Int) -> Int? {
+  if index < 0 || index >= self.instructions.length() {
+    return None
+  }
+  let inst_id = self.instructions[index]
+  self.instructions.remove(index) |> ignore
+  Some(inst_id)
+}
+
+///|
+/// Replace the layout with same-function instructions without deleting them.
+/// Omitted instructions must be relocated or explicitly discarded. Verification
+/// rejects missing or duplicate placements; layout length never implies deletion.
+pub fn Block::set_instructions(
+  self : Block,
+  instructions : Array[Inst],
+) -> Unit {
+  for inst in instructions {
+    if !self.accepts_inst(inst) {
+      return
+    }
+  }
+  self.instructions = instructions.map(inst => inst.id)
+}
+
+///|
+/// Remove instructions rejected by a stable predicate and mark them deleted.
+pub fn Block::retain_instruction_ids(
+  self : Block,
+  keep : (Int) -> Bool,
+) -> Unit {
+  for inst_id in self.instructions {
+    if !keep(inst_id) {
+      self.owner.val.mark_instruction_deleted(inst_id)
+    }
+  }
+  self.instructions.retain(keep)
+}
+
+///|
+/// Detach the complete layout for relocation without deleting instructions.
+pub fn Block::clear_instructions_for_move(self : Block) -> Unit {
+  self.instructions.clear()
 }
 
 ///|
 pub fn Block::append_inst(self : Block, inst : Inst) -> Unit {
   self.add_inst(inst)
+}
+
+///|
+/// Return the number of instructions placed in this block.
+pub fn Block::instruction_count(self : Block) -> Int {
+  self.instructions.length()
+}
+
+///|
+/// Borrow the stable instruction IDs. Do not retain the view across a layout
+/// mutation; the backing layout cannot be mutated through this view.
+pub fn Block::instruction_ids(self : Block) -> ArrayView[InstId] {
+  self.instructions[:]
 }
 
 ///|
@@ -481,13 +592,14 @@ pub fn Block::set_terminator(self : Block, term : Terminator) -> Unit {
 ///|
 /// Instruction - an SSA instruction that produces a value.
 ///
-/// The public fields are exposed for zero-copy inspection. Callers must not
-/// mutate `results`, `opcode`, `args`, `operands`, or `metadata` directly.
-/// Construct instructions through `FunctionBuilder` or `Function::new_inst`
-/// and add metadata through `add_metadata`.
+/// Result identities are fixed by the Function DFG. Transformations may update
+/// the shared `args`/`operands` array in place using same-function values, but
+/// must preserve opcode arity and type contracts. Use `set_opcode` to change
+/// the operation and `add_metadata` to attach metadata; do not mutate results.
+/// Construct instructions through `FunctionBuilder` or `Function::new_inst`.
 pub struct Inst {
   priv owner : Ref[FunctionOwnerContext]
-  id : Int
+  id : InstId
   results : Array[Value] // Values produced (empty for void instructions)
   mut opcode : Opcode // The operation
   args : Array[Value] // Generic MilkIR spelling for operands.
@@ -562,7 +674,7 @@ fn opcode_identity_equal(lhs : Opcode, rhs : Opcode) -> Bool {
 ///|
 fn Inst::new_with_id(
   owner : Ref[FunctionOwnerContext],
-  id : Int,
+  id : InstId,
   opcode : Opcode,
   args : Array[Value],
   results : Array[Value],
@@ -573,6 +685,16 @@ fn Inst::new_with_id(
 ///|
 pub fn Inst::add_metadata(self : Inst, metadata : Metadata) -> Unit {
   self.metadata.push(metadata)
+}
+
+///|
+/// Change the operation without replacing result identities. Operand/result
+/// arity and types must match the new opcode when the function is verified.
+pub fn Inst::set_opcode(self : Inst, opcode : Opcode) -> Unit {
+  if reject_foreign_opcode_entities(self.owner, opcode) {
+    return
+  }
+  self.opcode = opcode
 }
 
 ///|
@@ -996,6 +1118,8 @@ pub struct Function {
   params : Array[(Value, Type)] // Function parameters
   results : Array[Type] // Return types
   blocks : Array[Block] // Basic blocks (block 0 is entry)
+  priv values : Array[ValueData]
+  priv instructions : Array[Inst]
   external_symbols : Array[ExternalSymbol]
   global_values : Array[(GlobalValue, GlobalValueData)]
   mut next_value_id : Int // For generating unique value IDs
@@ -1028,6 +1152,8 @@ pub fn Function::new_empty(name : String) -> Function {
     params: [],
     results: [],
     blocks: [],
+    values: [],
+    instructions: [],
     external_symbols: [],
     global_values: [],
     next_value_id: 0,
@@ -1075,7 +1201,95 @@ pub fn Function::signature(self : Function) -> Signature {
 pub fn Function::new_value(self : Function, ty : Type) -> Value {
   let id = self.next_value_id
   self.next_value_id = self.next_value_id + 1
+  self.values.push({ ty, definition: None, })
   Value::new(self.owner, id, ty)
+}
+
+///|
+fn Function::define_value(
+  self : Function,
+  value : Value,
+  definition : ValueDefinition,
+) -> Unit {
+  if !self.owns_value(value) {
+    self.record_construction_error(ForeignValue(value_id=value.id))
+    return
+  }
+  if value.id < 0 || value.id >= self.values.length() {
+    self.record_construction_error(UndefinedValue(value_id=value.id))
+    return
+  }
+  if self.values[value.id].definition is Some(_) {
+    self.record_construction_error(DuplicateValueDefinition(value_id=value.id))
+    return
+  }
+  self.values[value.id].definition = Some(definition)
+}
+
+///|
+fn Function::add_block_param(
+  self : Function,
+  block : Block,
+  value : Value,
+  ty : Type,
+) -> Unit {
+  if !self.owns_block(block) {
+    self.record_construction_error(ForeignBlock(block_id=block.id))
+    return
+  }
+  let param_index = block.params.length()
+  block.add_param(value, ty)
+  self.define_value(value, BlockParameter(block.id, param_index))
+}
+
+///|
+/// Keep and reorder a block's existing parameters while updating their DFG
+/// definitions atomically with the layout mutation.
+pub fn Function::retain_block_params(
+  self : Function,
+  block : Block,
+  keep : Array[Int],
+) -> Unit {
+  if !self.owns_block(block) {
+    self.record_construction_error(ForeignBlock(block_id=block.id))
+    return
+  }
+  let old_params = block.params.copy()
+  let seen = Array::make(old_params.length(), false)
+  for old_index in keep {
+    if old_index < 0 || old_index >= old_params.length() || seen[old_index] {
+      self.record_construction_error(
+        UnverifiableInstruction(
+          message="block parameter retention contains an invalid or duplicate index",
+        ),
+      )
+      return
+    }
+    seen[old_index] = true
+  }
+  for old_index, item in old_params {
+    let (value, _) = item
+    if value.id < 0 ||
+      value.id >= self.values.length() ||
+      self.values[value.id].definition !=
+      Some(BlockParameter(block.id, old_index)) {
+      self.record_construction_error(
+        DuplicateValueDefinition(value_id=value.id),
+      )
+      return
+    }
+  }
+  for item in old_params {
+    self.values[item.0.id].definition = None
+  }
+  block.params.clear()
+  for new_index, old_index in keep {
+    let item = old_params[old_index]
+    block.params.push(item)
+    self.values[item.0.id].definition = Some(
+      BlockParameter(block.id, new_index),
+    )
+  }
 }
 
 ///|
@@ -1086,14 +1300,30 @@ pub fn Function::new_block(self : Function, params : Array[Value]) -> Block {
   }
   let id = self.next_block_id
   self.next_block_id = self.next_block_id + 1
-  let block = Block::new_with_params(self.owner, id, params)
+  let block = Block(self.owner, id)
   self.blocks.push(block)
+  for param in params {
+    self.add_block_param(block, param, param.ty)
+  }
   block
 }
 
 ///|
 pub fn Function::new_block0(self : Function) -> Block {
   self.new_block([])
+}
+
+///|
+/// Remove blocks rejected by a stable predicate and delete their instructions.
+pub fn Function::retain_blocks(self : Function, keep : (Block) -> Bool) -> Unit {
+  for block in self.blocks {
+    if !keep(block) {
+      for inst_id in block.instructions {
+        self.owner.val.mark_instruction_deleted(inst_id)
+      }
+    }
+  }
+  self.blocks.retain(keep)
 }
 
 ///|
@@ -1116,6 +1346,10 @@ pub fn Function::new_inst(
     results,
   )
   self.next_inst_id = self.next_inst_id + 1
+  self.instructions.push(inst)
+  for result_index, result in results {
+    self.define_value(result, InstructionResult(inst.id, result_index))
+  }
   inst
 }
 
@@ -1131,7 +1365,70 @@ fn Function::owns_block(self : Function, block : Block) -> Bool {
 
 ///|
 fn Function::owns_inst(self : Function, inst : Inst) -> Bool {
-  physical_equal(self.owner, inst.owner)
+  physical_equal(self.owner, inst.owner) &&
+  inst.id >= 0 &&
+  inst.id < self.instructions.length() &&
+  physical_equal(self.instructions[inst.id], inst)
+}
+
+///|
+pub fn Function::instruction_by_id(self : Function, inst_id : InstId) -> Inst? {
+  self.instructions.get(inst_id)
+}
+
+///|
+/// Discard a same-function instruction that was never placed or was detached.
+/// Verification rejects discarded instructions still present in a block or
+/// whose results are still used. Arena IDs are never reused.
+pub fn Function::discard_inst(self : Function, inst : Inst) -> Unit {
+  if !self.owns_inst(inst) {
+    self.record_construction_error(ForeignInstruction(inst_id=inst.id))
+    return
+  }
+  self.owner.val.mark_instruction_deleted(inst.id)
+}
+
+///|
+/// Return a zero-copy view of one block's stable instruction IDs.
+///
+/// The view remains valid until that block's layout is mutated.
+pub fn Function::block_instruction_ids(
+  self : Function,
+  block : Block,
+) -> ArrayView[InstId] {
+  if !self.owns_block(block) {
+    let empty : Array[InstId] = []
+    return empty[:]
+  }
+  block.instructions[:]
+}
+
+///|
+/// Return the instruction at one position in a block's layout.
+pub fn Function::block_instruction_at(
+  self : Function,
+  block : Block,
+  index : Int,
+) -> Inst? {
+  if !self.owns_block(block) ||
+    index < 0 ||
+    index >= block.instructions.length() {
+    return None
+  }
+  self.instruction_by_id(block.instructions[index])
+}
+
+///|
+/// Look up the defining instruction of a same-function SSA value, including
+/// detached definitions. Parameters and foreign values have no instruction.
+pub fn Function::defining_inst(self : Function, value : Value) -> Inst? {
+  if !self.owns_value(value) || value.id < 0 || value.id >= self.values.length() {
+    return None
+  }
+  guard self.values[value.id].definition is Some(InstructionResult(inst_id, _)) else {
+    return None
+  }
+  self.instruction_by_id(inst_id)
 }
 
 ///|
@@ -1154,7 +1451,9 @@ fn Function::record_construction_error(
 /// Add a parameter to the function
 pub fn Function::add_param(self : Function, ty : Type) -> Value {
   let v = self.new_value(ty)
+  let param_index = self.params.length()
   self.params.push((v, ty))
+  self.define_value(v, FunctionParameter(param_index))
   v
 }
 

@@ -46,6 +46,35 @@ test "verify rejects same-block use before definition" {
 }
 
 ///|
+test "verify rejects a use whose DFG definition is not placed" {
+  let func = Function::new_empty("unplaced_definition")
+  let unplaced = func.new_value(I32)
+  let copied = func.new_value(I32)
+  let entry = func.new_block([])
+  func.new_inst(Scalar(IntConst(1L)), [], [unplaced]) |> ignore
+  entry.append_inst(func.new_inst(Scalar(Copy), [unplaced], [copied]))
+  entry.set_terminator(Return([]))
+  try func.verify() catch {
+    err => inspect(err, content="UndefinedValue(value_id=0)")
+  } noraise {
+    _ => fail("expected an unplaced definition to be unavailable")
+  }
+}
+
+///|
+test "verify rejects an unplaced instruction even when its result is unused" {
+  let func = Function::new_empty("unplaced_unused_definition")
+  let entry = func.new_block([])
+  func.new_inst(Scalar(IntConst(1L)), [], [func.new_value(I32)]) |> ignore
+  entry.set_terminator(Return([]))
+  try func.verify() catch {
+    err => inspect(err, content="UnplacedInstruction(inst_id=0)")
+  } noraise {
+    _ => fail("expected unplaced instruction rejection")
+  }
+}
+
+///|
 test "verify rejects cross-block non-dominating uses" {
   let func = Function::new_empty("non_dominating_use")
   let cond = func.add_param(I32)
@@ -93,15 +122,17 @@ test "verify rejects divergent instruction operand views" {
   let argument = func.add_param(I32)
   let copied = func.new_value(I32)
   let entry = func.new_block([])
+  let registered = func.new_inst(Scalar(Copy), [argument], [copied])
   let malformed : Inst = {
     owner: func.owner,
-    id: 0,
+    id: registered.id,
     results: [copied],
     opcode: Scalar(Copy),
     args: [argument],
     operands: [],
     metadata: [],
   }
+  func.instructions[registered.id] = malformed
   entry.append_inst(malformed)
   entry.set_terminator(Return([]))
   try func.verify() catch {

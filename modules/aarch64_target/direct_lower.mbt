@@ -33,6 +33,21 @@ fn direct_source_metadata(
 }
 
 ///|
+/// Reusable lowering views for the common unconstrained VCode path. Checked
+/// VCode construction consumes these arrays synchronously and stores normalized
+/// operands, so the buffers can be cleared after every selected instruction.
+priv struct DirectLoweringScratch {
+  operands : Array[@vcode.Value]
+  operand_types : Array[@native.ValueType]
+  roots : Array[@vcode.Value]
+}
+
+///|
+fn DirectLoweringScratch::new() -> DirectLoweringScratch {
+  { operands: [], operand_types: [], roots: [], }
+}
+
+///|
 fn lower_direct_operation(
   context : LoweringContext,
   builder : @vcode.CheckedBuilder[AArch64Inst],
@@ -52,12 +67,12 @@ fn lower_direct_operation(
     guard optional_gpr_width(result_types.get(0)) is Some(width) else {
       raise UnsupportedOperation(block_index~, instruction_index~, operation~)
     }
-    return append_body(
+    return append_unconstrained_body(
       builder,
       block,
       IntMultiplyAdd(width),
-      operands.map(@vcode.Input::any),
-      result_types.map(@vcode.Output::any),
+      operands,
+      result_types,
       direct_source_metadata(
         source_location,
         stack_map,
@@ -70,12 +85,12 @@ fn lower_direct_operation(
     guard optional_gpr_width(result_types.get(0)) is Some(width) else {
       raise UnsupportedOperation(block_index~, instruction_index~, operation~)
     }
-    return append_body(
+    return append_unconstrained_body(
       builder,
       block,
       IntAddShiftedLeft(width, amount),
-      operands.map(@vcode.Input::any),
-      result_types.map(@vcode.Output::any),
+      operands,
+      result_types,
       direct_source_metadata(
         source_location,
         stack_map,
@@ -103,12 +118,12 @@ fn lower_direct_operation(
             )
         }
     }
-    return append_body(
+    return append_unconstrained_body(
       builder,
       block,
       selected,
-      operands.map(@vcode.Input::any),
-      result_types.map(@vcode.Output::any),
+      operands,
+      result_types,
       direct_source_metadata(
         source_location,
         stack_map,
@@ -145,12 +160,12 @@ fn lower_direct_operation(
           [@vcode.Output::any(result_types[0])],
           @vcode.InstructionMetadata::empty(),
         )[0]
-      return append_body(
+      return append_unconstrained_body(
         builder,
         block,
         IntBinary(width, lowered),
-        [@vcode.Input::any(operands[0]), @vcode.Input::any(constant)],
-        result_types.map(@vcode.Output::any),
+        [operands[0], constant],
+        result_types,
         direct_source_metadata(
           source_location,
           stack_map,
@@ -159,12 +174,12 @@ fn lower_direct_operation(
         ),
       )
     }
-    return append_body(
+    return append_unconstrained_body(
       builder,
       block,
       selected.unwrap(),
-      operands.map(@vcode.Input::any),
-      result_types.map(@vcode.Output::any),
+      operands,
+      result_types,
       direct_source_metadata(
         source_location,
         stack_map,
@@ -213,11 +228,11 @@ fn lower_direct_operation(
     )
     |> ignore
     if binary == SignedDiv {
-      append_body(
+      append_unconstrained_body(
         builder,
         block,
         TrapIfSignedDivOverflow(width),
-        operands.map(@vcode.Input::any),
+        operands,
         [],
         direct_source_metadata(
           source_location,
@@ -236,12 +251,12 @@ fn lower_direct_operation(
       UnsignedRem => IntRemainder(width, Unsigned)
       _ => abort("matched checked integer arithmetic above")
     }
-    let results = append_body(
+    let results = append_unconstrained_body(
       builder,
       block,
       selected,
-      operands.map(@vcode.Input::any),
-      result_types.map(@vcode.Output::any),
+      operands,
+      result_types,
       direct_source_metadata(
         source_location,
         stack_map,
@@ -324,12 +339,12 @@ fn lower_direct_operation(
       )
       |> ignore
     }
-    let results = append_body(
+    let results = append_unconstrained_body(
       builder,
       block,
       Convert(FloatToInt(source, result, signedness)),
-      operands.map(@vcode.Input::any),
-      result_types.map(@vcode.Output::any),
+      operands,
+      result_types,
       direct_source_metadata(
         source_location,
         stack_map,
@@ -343,20 +358,20 @@ fn lower_direct_operation(
     guard optional_gpr_width(result_types.get(0)) is Some(width) else {
       raise UnsupportedOperation(block_index~, instruction_index~, operation~)
     }
-    let reversed = append_body(
+    let reversed = append_unconstrained_body(
         builder,
         block,
         IntUnary(width, Rbit),
-        operands.map(@vcode.Input::any),
-        result_types.map(@vcode.Output::any),
+        operands,
+        result_types,
         @vcode.InstructionMetadata::empty(),
       )[0]
-    let results = append_body(
+    let results = append_unconstrained_body(
       builder,
       block,
       IntUnary(width, Clz),
-      [@vcode.Input::any(reversed)],
-      result_types.map(@vcode.Output::any),
+      [reversed],
+      result_types,
       direct_source_metadata(
         source_location,
         stack_map,
@@ -370,20 +385,20 @@ fn lower_direct_operation(
     guard optional_gpr_width(result_types.get(0)) is Some(width) else {
       raise UnsupportedOperation(block_index~, instruction_index~, operation~)
     }
-    let negated_shift = append_body(
+    let negated_shift = append_unconstrained_body(
         builder,
         block,
         IntUnary(width, Neg),
-        [@vcode.Input::any(operands[1])],
-        result_types.map(@vcode.Output::any),
+        [operands[1]],
+        result_types,
         @vcode.InstructionMetadata::empty(),
       )[0]
-    let results = append_body(
+    let results = append_unconstrained_body(
       builder,
       block,
       IntShiftRegister(width, Ror),
-      [@vcode.Input::any(operands[0]), @vcode.Input::any(negated_shift)],
-      result_types.map(@vcode.Output::any),
+      [operands[0], negated_shift],
+      result_types,
       direct_source_metadata(
         source_location,
         stack_map,
@@ -507,12 +522,12 @@ fn lower_direct_operation(
           [@vcode.Output::any(Ptr64)],
           @vcode.InstructionMetadata::empty(),
         )[0]
-      return append_body(
+      return append_unconstrained_body(
         builder,
         block,
         VectorLoad128(spec.offset),
-        [@vcode.Input::any(address)],
-        result_types.map(@vcode.Output::any),
+        [address],
+        result_types,
         direct_source_metadata(
           source_location,
           stack_map,
@@ -533,12 +548,12 @@ fn lower_direct_operation(
           [@vcode.Output::any(Ptr64)],
           @vcode.InstructionMetadata::empty(),
         )[0]
-      return append_body(
+      return append_unconstrained_body(
         builder,
         block,
         ScalarLoad(spec.width, spec.extension, spec.result_type, spec.offset),
-        [@vcode.Input::any(address)],
-        result_types.map(@vcode.Output::any),
+        [address],
+        result_types,
         direct_source_metadata(
           source_location,
           stack_map,
@@ -548,12 +563,12 @@ fn lower_direct_operation(
         ),
       )
     }
-    return append_body(
+    return append_unconstrained_body(
       builder,
       block,
       selected,
-      operands.map(@vcode.Input::any),
-      result_types.map(@vcode.Output::any),
+      operands,
+      result_types,
       direct_source_metadata(
         source_location,
         stack_map,
@@ -589,11 +604,11 @@ fn lower_direct_operation(
       )
     }
     if spec.offset == 0UL {
-      return append_body(
+      return append_unconstrained_body(
         builder,
         block,
         ScalarStoreUxtw(spec.width, spec.value_type, shift),
-        operands.map(@vcode.Input::any),
+        operands,
         [],
         direct_source_metadata(
           source_location,
@@ -644,6 +659,7 @@ fn lower_direct_operation(
     GcRefFromBits => Some(CarrierMove(I64, GcRef64))
     Select if result_types.get(0) is Some(V128) => Some(VectorSelect)
     Select if result_types.get(0) is Some(ty) => Some(Select(ty))
+    SpectreGuard => Some(SpectreGuard)
     Vector(Splat(lane)) => Some(VectorSplat(lane))
     Vector(ExtractLane(lane, index, extension)) =>
       Some(VectorExtractLane(lane, index, extension))
@@ -870,35 +886,38 @@ fn lower_direct_operation(
       }
     _ => operands
   }
-  let outputs = match operation {
-    AtomicRmw(_, _) | AtomicCompareExchange(_) =>
-      result_types.map(ty => @vcode.Output::any(ty).with_timing(Early))
-    _ => result_types.map(@vcode.Output::any)
-  }
-  let results = append_body(
-    builder,
-    block,
-    selected,
-    selected_operands.map(@vcode.Input::any),
-    outputs,
-    direct_source_metadata(
-      source_location,
-      stack_map,
-      roots,
-      operation.semantics(),
-      trap?=match operation {
-        Load(spec) => spec.trap
-        Store(spec) => spec.trap
-        VectorLoad(spec) => spec.trap
-        VectorStoreLane(spec) => spec.trap
-        AtomicLoad(spec) => spec.trap
-        AtomicStore(spec) => spec.trap
-        AtomicRmw(spec, _) => spec.trap
-        AtomicCompareExchange(spec) => spec.trap
-        _ => None
-      },
-    ),
+  let metadata = direct_source_metadata(
+    source_location,
+    stack_map,
+    roots,
+    operation.semantics(),
+    trap?=match operation {
+      Load(spec) => spec.trap
+      Store(spec) => spec.trap
+      VectorLoad(spec) => spec.trap
+      VectorStoreLane(spec) => spec.trap
+      AtomicLoad(spec) => spec.trap
+      AtomicStore(spec) => spec.trap
+      AtomicRmw(spec, _) => spec.trap
+      AtomicCompareExchange(spec) => spec.trap
+      _ => None
+    },
   )
+  let results = match operation {
+    AtomicRmw(_, _) | AtomicCompareExchange(_) =>
+      append_body(
+        builder,
+        block,
+        selected,
+        selected_operands.map(@vcode.Input::any),
+        result_types.map(ty => @vcode.Output::any(ty).with_timing(Early)),
+        metadata,
+      )
+    _ =>
+      append_unconstrained_body(
+        builder, block, selected, selected_operands, result_types, metadata,
+      )
+  }
   results
 }
 
@@ -921,6 +940,7 @@ pub struct DirectLoweringSession {
   priv blocks : Array[@vcode.Block]
   priv layout : Array[@vcode.Block]
   priv stack_objects : Array[DirectStackObjectRequest]
+  priv scratch : DirectLoweringScratch
   priv result_area : @vcode.Value?
   priv mut instruction_index : Int
   priv mut first_error : AArch64LowerError?
@@ -1054,6 +1074,7 @@ pub fn DirectLoweringSession::new(
     blocks: [entry],
     layout: [entry],
     stack_objects: [],
+    scratch: DirectLoweringScratch::new(),
     result_area,
     instruction_index: 0,
     first_error: None,
@@ -1078,6 +1099,19 @@ fn DirectLoweringSession::target_value(
   id : Int,
 ) -> @vcode.Value {
   self.values[id]
+}
+
+///|
+fn DirectLoweringSession::target_values_into(
+  self : DirectLoweringSession,
+  ids : Array[Int],
+  values : Array[@vcode.Value],
+) -> Array[@vcode.Value] {
+  values.clear()
+  for id in ids {
+    values.push(self.target_value(id))
+  }
+  values
 }
 
 ///|
@@ -1140,6 +1174,26 @@ fn DirectLoweringSession::emit(
   stack_map : @native.StackMapMetadata?,
 ) -> Array[Int] {
   let block = self.blocks[block_id]
+  // I64 and Ptr64 are the same untraced 64-bit register representation.
+  // Preserve the semantic result type without creating another live range.
+  if operation is Convert(Bitcast(from, to)) &&
+    operand_ids is [operand_id] &&
+    result_types is [result_type] &&
+    self.value_types[operand_id] == from &&
+    result_type == to &&
+    ((from == I64 && to == Ptr64) || (from == Ptr64 && to == I64)) {
+    let id = self.values.length()
+    self.values.push(self.target_value(operand_id))
+    self.value_types.push(result_type)
+    self.instruction_index += 1
+    return [id]
+  }
+  let operands = self.target_values_into(operand_ids, self.scratch.operands)
+  self.scratch.operand_types.clear()
+  for id in operand_ids {
+    self.scratch.operand_types.push(self.value_types[id])
+  }
+  let roots = self.target_values_into(root_ids, self.scratch.roots)
   let results = if self.first_error is Some(_) {
     result_types.map(ty => append_placeholder(self.builder, block, ty))
   } else {
@@ -1150,10 +1204,10 @@ fn DirectLoweringSession::emit(
       block_id,
       self.instruction_index,
       operation,
-      self.target_values(operand_ids),
-      operand_ids.map(id => self.value_types[id]),
+      operands,
+      self.scratch.operand_types,
       result_types,
-      self.target_values(root_ids),
+      roots,
       source,
       stack_map,
       object => {
@@ -1605,6 +1659,7 @@ pub fn DirectLoweringSession::sink(
       self.terminate(block, terminator, metadata)
     },
     fn() { self.finish_construction() },
+    folds_unsigned_index_into_memory=true,
   )
 }
 

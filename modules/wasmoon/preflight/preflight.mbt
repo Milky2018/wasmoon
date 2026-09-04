@@ -206,9 +206,9 @@ pub fn validate_jit(
         i,
         name=func_name,
       )
-      @milkir.optimize_with_level(
+      @optimize.optimize_with_level(
         milk,
-        @milkir.OptLevel::from_int(normalized_opt_level),
+        @optimize.OptLevel::from_int(normalized_opt_level),
       )
       |> ignore
       @wasmoon_jit.plan_wasm_body_milkir_integration_for_target(

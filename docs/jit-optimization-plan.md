@@ -3,6 +3,9 @@
 > Historical baseline: the direct target-aware lowering and VCode paths named
 > below were removed by ISS-196. Current target selection and fusion work is
 > owned by the Target VCode milestones beginning with ISS-197.
+> Its equality-saturation proposal is also historical; see the
+> [current MilkIR optimizer](milkir-optimizer.md) and
+> [rule migration ledger](milkir-rewrite-inventory.md).
 
 ## Historical State Analysis
 

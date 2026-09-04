@@ -1,19 +1,19 @@
 name = "Milky2018/wasmoon"
 
-version = "0.13.0"
+version = "0.14.0"
 
 import {
-  "moonbitlang/x@0.4.48",
-  "Milky2018/wasm_core@0.13.0",
-  "Milky2018/wasm_component@0.13.0",
-  "Milky2018/wasm_milkir@0.13.0",
-  "Milky2018/milkir@0.13.0",
-  "Milky2018/vcode@0.13.0",
-  "Milky2018/vcode_regalloc@0.13.0",
-  "Milky2018/x64_target@0.13.0",
-  "Milky2018/aarch64_target@0.13.0",
-  "Milky2018/wasmoon_jit@0.13.0",
-  "moonbitlang/async@0.20.5",
+  "moonbitlang/x@0.5.1",
+  "Milky2018/wasm_core@0.14.0",
+  "Milky2018/wasm_component@0.14.0",
+  "Milky2018/wasm_milkir@0.14.0",
+  "Milky2018/milkir@0.14.0",
+  "Milky2018/vcode@0.14.0",
+  "Milky2018/vcode_regalloc@0.14.0",
+  "Milky2018/x64_target@0.14.0",
+  "Milky2018/aarch64_target@0.14.0",
+  "Milky2018/wasmoon_jit@0.14.0",
+  "moonbitlang/async@0.21.2",
 }
 
 readme = "README.mbt.md"

@@ -79,6 +79,29 @@ The important detail is that `x`, `one`, and `answer` are not runtime integers i
 | `Inst` | An operation that may produce one or more values. | `iconst`, `iadd` |
 | `Terminator` | The final control-flow operation in a block. | `return` |
 
+### DFG and layout ownership
+
+`Function` is the sole owner of instruction data and value definitions. A
+`Block` contains only the ordered `InstId` layout for that data; moving or
+deleting an instruction changes the layout without renumbering the function's
+instruction arena. Deleted instructions become lazy tombstones, while the
+verifier rejects arena instructions that are neither placed nor explicitly
+deleted. This keeps `Value` and `InstId` identities stable across ordinary
+transformations without adding work to the normal instruction-construction
+path.
+
+The instruction layout is intentionally not a mutable public array. Use
+`block.instruction_count()` and `func.block_instruction_at(block, index)` for
+individual inspection. Consumers that traverse a complete block without
+mutating it can use `func.block_instruction_ids(block)` to obtain a zero-copy,
+read-only view, then resolve each ID with `func.instruction_by_id(id)`. The view
+remains valid only until that block's layout changes.
+
+This replaces the pre-0.15 interface that exposed
+`Block.instructions : Array[Inst]`. Producers should continue to place
+instructions through `FunctionBuilder` or `Block::append_inst`; optimization
+passes must use the checked layout mutation methods.
+
 `FunctionBuilder` is the normal construction API. It creates an entry block automatically and keeps track of the block that receives new instructions. For a straight-line function, the usual order is:
 
 1. Create a builder.
@@ -112,9 +135,9 @@ Every declaration also states whether the field is `Stable` for the whole functi
 
 ### Semantic ownership
 
-MilkIR records the optimizer-visible facts of each built-in opcode in one semantic summary: whether it may trap, whether it reads or writes memory, and whether it has another observable effect. Dead-code elimination, loop optimization, global value numbering, and e-graph admission derive their safety decisions from that summary instead of maintaining independent opcode lists. Unknown extension operations are conservatively treated as trapping and effectful.
+MilkIR records the optimizer-visible facts of each built-in opcode in one semantic summary: whether it may trap, whether it reads or writes memory, and whether it has another observable effect. Dead-code elimination, loop optimization, and global value numbering derive their safety decisions from that summary instead of maintaining independent opcode lists. Unknown extension operations are conservatively treated as trapping and effectful.
 
-Other concerns remain with the adapter that implements them. The verifier owns operand and result contracts, the printer owns textual syntax, native lowering owns instruction selection, and the e-graph adapter owns which operations have an e-graph encoding. These are different responsibilities rather than duplicate semantic facts.
+Other concerns remain with the stage that implements them. The verifier owns operand and result contracts, the printer owns textual syntax, direct acyclic rewriting owns local canonical forms, and native lowering owns instruction selection. These are different responsibilities rather than duplicate semantic facts.
 
 When adding a built-in opcode:
 
@@ -122,9 +145,10 @@ When adding a built-in opcode:
 2. Classify its trap, memory, and observable-effect behavior in the opcode semantic summary.
 3. Add its textual representation to the printer.
 4. Add its instruction selection to `milkir/native` or the owning dialect adapter.
-5. Add an e-graph encoding only if the e-graph node language represents it.
+5. Add a direct rewrite only when it is locally profitable and preserves the
+   instruction's semantic contract.
 
-The built-in family matches in those stages are exhaustive, so adding a new family or operation leaves a compiler error until its required behavior is supplied. E-graph admission is intentionally conservative: an operation without an explicit encoding remains outside the e-graph.
+The built-in family matches in those stages are exhaustive, so adding a new family or operation leaves a compiler error until its required behavior is supplied. The direct rewriter is intentionally conservative: operations without a proven local canonicalization remain unchanged.
 
 ## Why values are called SSA values
 
@@ -276,7 +300,10 @@ Verification is a useful construction guard, not a complete proof of every front
 
 ## Optimization
 
-Optimization mutates a `Function` and returns an `OptResult` whose `changed` field reports whether any pass changed the IR.
+Optimization lives in the `Milky2018/milkir/optimize` package within this module.
+Import it alongside `Milky2018/milkir`; the root package owns the IR and does not
+forward optimizer APIs. Optimization mutates a `Function` and returns an
+`@optimize.OptResult` whose `changed` field reports whether any pass changed the IR.
 
 ```moonbit check
 ///|
@@ -289,10 +316,10 @@ test "fold a constant expression" {
   builder.return_([answer])
 
   let func = builder.finalize()
-  let result = optimize_with_level(func, O1)
+  let result = @optimize.optimize_with_level(func, O1)
 
   inspect(result.changed, content="true")
-  inspect(instruction_count(func), content="1")
+  inspect(@optimize.instruction_count(func), content="1")
   inspect(func.print().contains("iconst 30"), content="true")
   inspect(func.verify(), content="()")
 }
@@ -304,10 +331,23 @@ The optimization levels are:
 | --- | --- |
 | `O0` | Minimal pipeline: removes dead code plus constant and unused block parameters. |
 | `O1` | Inexpensive simplification: mandatory cleanup, constant folding, alias canonicalization, and dead-code elimination. |
-| `O2` | The default pipeline: O1-style cleanup plus e-graph rewriting, budgeted global value numbering, and CFG simplification. |
-| `O3` | The `O2` pipeline, loop-invariant code motion, checked counted-loop unrolling, strength reduction, and a final `O2` cleanup. |
+| `O2` | The default pipeline: O1-style cleanup plus direct acyclic rewriting, budgeted memory GVN, unbudgeted cheap value numbering, and CFG simplification. |
+| `O3` | Mandatory normalization, checked loop transformations, then one acyclic rewrite/GVN pipeline and final cleanup. |
 
-Use `optimize(func)` for the default pipeline or `optimize_with_level(func, level)` when the caller chooses the level explicitly. Optimizers assume a valid SSA and block-parameter structure. Verify before optimization when the input comes from a frontend, then verify again after developing a new transformation.
+Use `@optimize.optimize(func)` for the default pipeline or
+`@optimize.optimize_with_level(func, level)` when the caller chooses the level
+explicitly. Optimizers assume a valid SSA and block-parameter structure. Verify
+before optimization when the input comes from a frontend, then verify again
+after developing a new transformation.
+
+The optimizer works directly on the Function DFG. Rules are handwritten and
+dispatched by root opcode; there is no separate e-node graph, generated matcher
+or saturation loop. Staged rewrites require a strictly cheaper expression and
+must not rebuild shared definitions. Integer widths, vector lanes, floating
+NaNs/signed zero and trapping operations remain semantic constraints, not
+optional profitability hints. See the repository's
+[optimizer design](../../docs/milkir-optimizer.md) and
+[rule migration ledger](../../docs/milkir-rewrite-inventory.md).
 
 ### Counted-loop unrolling at O3
 

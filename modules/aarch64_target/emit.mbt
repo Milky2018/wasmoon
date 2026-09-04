@@ -1108,6 +1108,25 @@ fn emit_vector_select(
 }
 
 ///|
+fn emit_spectre_guard(
+  buffer : CodeBuffer,
+  condition : @vcode.PhysicalReg,
+  true_address : @vcode.PhysicalReg,
+  false_address : @vcode.PhysicalReg,
+  destination : @vcode.PhysicalReg,
+) -> Unit {
+  buffer.emit_word(0x7100001FU | (reg_bits(condition) << 5))
+  buffer.emit_word(
+    0x9A800000U |
+    (reg_bits(false_address) << 16) |
+    (1U << 12) |
+    (reg_bits(true_address) << 5) |
+    reg_bits(destination),
+  )
+  buffer.emit_word(0xD503229FU) // CSDB
+}
+
+///|
 fn emit_vector_splat(
   buffer : CodeBuffer,
   lane : @lowering.VectorLane,
@@ -3058,6 +3077,10 @@ fn emit_instruction(
         reg_bits(reg(3)),
       )
     }
+    SpectreGuard =>
+      // Keep the selected address data-dependent on the bounds result, then
+      // stop AArch64 value prediction from bypassing that dependency.
+      emit_spectre_guard(buffer, reg(0), reg(1), reg(2), reg(3))
     VectorSelect => emit_vector_select(buffer, reg(0), reg(1), reg(2), reg(3))
     VectorSplat(lane) => emit_vector_splat(buffer, lane, reg(0), reg(1))
     VectorExtractLane(lane, index, extension) =>

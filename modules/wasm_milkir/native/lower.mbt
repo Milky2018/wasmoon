@@ -15,6 +15,7 @@ struct Environment {
   memory_base_field : (Int) -> @native_types.EnvironmentField
   function_table_field : @native_types.EnvironmentField
   table_base_field : (Int) -> @native_types.EnvironmentField
+  table_size_field : (Int) -> @native_types.EnvironmentField
   canonical_type_index : (Int) -> Int
   runtime_symbol : (@wasm_milkir.WasmRuntimeHelper) -> @native_types.ExternalSymbol
 }
@@ -25,6 +26,7 @@ pub fn Environment::new(
   memory_base_field : (Int) -> @native_types.EnvironmentField,
   function_table_field : @native_types.EnvironmentField,
   table_base_field : (Int) -> @native_types.EnvironmentField,
+  table_size_field : (Int) -> @native_types.EnvironmentField,
   canonical_type_index : (Int) -> Int,
   runtime_symbol : (@wasm_milkir.WasmRuntimeHelper) -> @native_types.ExternalSymbol,
 ) -> Environment {
@@ -33,6 +35,7 @@ pub fn Environment::new(
     memory_base_field,
     function_table_field,
     table_base_field,
+    table_size_field,
     canonical_type_index,
     runtime_symbol,
   }
@@ -244,7 +247,26 @@ fn table_entry_address(
       context.environment(),
       [Ptr64],
     )[0]
-  context.emit(PointerOffset, [table, byte_offset], [Ptr64])[0]
+  let table_size = context.emit(
+      EnvironmentField((environment.table_size_field)(table_index), Mutable),
+      context.environment(),
+      [I64],
+    )[0]
+  let in_bounds = context.emit(
+      IntCompare(UnsignedLessThan),
+      [index, table_size],
+      [I32],
+    )[0]
+  let address = context.emit(PointerOffset, [table, byte_offset], [Ptr64])[0]
+  let null = context.emit(NullPtr, [], [Ptr64])[0]
+  let guarded = context.emit(SpectreGuard, [in_bounds, address, null], [Ptr64])[0]
+  let continuation = context.create_block([])
+  let trap = context.create_block([])
+  context.branch(in_bounds, continuation, [], trap, [])
+  context.switch_to_block(trap)
+  context.set_trap_terminator(TableOutOfBounds)
+  context.switch_to_block(continuation)
+  guarded
 }
 
 ///|

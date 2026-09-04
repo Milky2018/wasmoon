@@ -120,6 +120,7 @@ pub(all) enum TargetTerminator {
 /// and stack-object requests; `DirectBuilder` is the only component that
 /// exposes typed transient handles to legalization code.
 pub struct TargetSink {
+  priv folds_unsigned_index_into_memory : Bool
   priv parameters : () -> Array[Int]
   priv entry_block : () -> Int
   priv create_block : (Array[@native.ValueType]) -> (Int, Array[Int])
@@ -156,8 +157,10 @@ pub fn TargetSink::new(
   ) -> Array[Int],
   terminate : (Int, TargetTerminator, TargetTerminatorMetadata) -> Unit,
   finish : () -> Unit,
+  folds_unsigned_index_into_memory? : Bool = false,
 ) -> TargetSink {
   {
+    folds_unsigned_index_into_memory,
     parameters,
     entry_block,
     create_block,
@@ -167,6 +170,13 @@ pub fn TargetSink::new(
     terminate,
     finish,
   }
+}
+
+///|
+/// Whether an indexed memory operation consumes an unsigned 32-bit index
+/// without materializing a separate extension and address addition.
+pub fn TargetSink::folds_unsigned_index_into_memory(self : TargetSink) -> Bool {
+  self.folds_unsigned_index_into_memory
 }
 
 ///|
