@@ -462,9 +462,15 @@ fn OptimizerSession::rewrite_int_binary(
       if right_constant is Some(0L) {
         return self.replace_with_constant(inst, 0L)
       }
+      if right_constant is Some(1L) && self.boolean_compare(left) is Some(_) {
+        return self.replace_with_alias(inst, left)
+      }
       if right_constant is Some(-1L) ||
         self.canonical_value(left).id == self.canonical_value(right).id {
         return self.replace_with_alias(inst, left)
+      }
+      if self.rewrite_bitwise_relation(inst, And, left, right) {
+        return true
       }
       self.rewrite_nested_integer(inst, And, prefix)
     }
@@ -477,6 +483,9 @@ fn OptimizerSession::rewrite_int_binary(
       if right_constant is Some(-1L) {
         return self.replace_with_constant(inst, -1L)
       }
+      if self.rewrite_bitwise_relation(inst, Or, left, right) {
+        return true
+      }
       self.rewrite_nested_integer(inst, Or, prefix)
     }
     Xor => {
@@ -485,6 +494,9 @@ fn OptimizerSession::rewrite_int_binary(
       }
       if self.canonical_value(left).id == self.canonical_value(right).id {
         return self.replace_with_constant(inst, 0L)
+      }
+      if self.rewrite_bitwise_relation(inst, Xor, left, right) {
+        return true
       }
       self.rewrite_nested_integer(inst, Xor, prefix)
     }
@@ -497,12 +509,12 @@ fn OptimizerSession::rewrite_int_binary(
       }
       self.rewrite_nested_shift(inst, op, prefix)
     }
-    RotateLeft | RotateRight =>
+    RotateLeft | RotateRight => {
       if self.int_constant(right) is Some(0L) {
         return self.replace_with_alias(inst, left)
-      } else {
-        false
       }
+      self.rewrite_rotation(inst, op, prefix)
+    }
     UnsignedMulHigh
     | SignedMulHigh
     | SignedDiv
@@ -602,24 +614,69 @@ fn OptimizerSession::rewrite_nested_shift(
   guard self.int_constant(right) is Some(outer) &&
     self.has_single_use(left) &&
     self.definition(left) is Some(inner) &&
-    inner.opcode == Scalar(IntBinary(op)) &&
+    inner.opcode is Scalar(IntBinary(inner_op)) &&
     inner.operands is [source, inner_amount] &&
     self.int_constant(inner_amount) is Some(inner_constant) &&
     inst.first_result() is Some(result) &&
     integer_width(result.ty) is Some(width) else {
     return false
   }
-  let total = normalized_shift(inner_constant, width) +
-    normalized_shift(outer, width)
-  if total >= width {
+  let outer_shift = normalized_shift(outer, width)
+  let inner_shift = normalized_shift(inner_constant, width)
+  let is_mask_pair = (op == ShiftLeft && inner_op == UnsignedShiftRight) ||
+    (op == UnsignedShiftRight && inner_op == ShiftLeft)
+  if is_mask_pair {
+    if outer_shift != inner_shift {
+      return false
+    }
+    if outer_shift == 0 {
+      return self.replace_with_alias(inst, source)
+    }
+    let mask_bits = if op is ShiftLeft {
+      (integer_mask(width) << outer_shift) & integer_mask(width)
+    } else {
+      low_bits_mask(width - outer_shift)
+    }
+    let marker = self.begin_candidates()
+    guard self.stage_int_binary_with_constant(
+        And,
+        source,
+        result.ty,
+        sign_extend_integer(mask_bits, width),
+      )
+      is Some(replacement) else {
+      self.discard_candidates(marker)
+      return false
+    }
+    if !self.commit_candidates_if_cheaper(
+        marker,
+        pure_candidate_cost(inner.opcode) + pure_candidate_cost(inst.opcode),
+        prefix,
+      ) {
+      return false
+    }
+    return self.replace_with_alias(inst, replacement)
+  }
+  if inner_op != op {
     return false
+  }
+  let total = inner_shift + outer_shift
+  let combined = if total < width {
+    total
+  } else {
+    match op {
+      ShiftLeft | UnsignedShiftRight =>
+        return self.replace_with_constant(inst, 0L)
+      SignedShiftRight => width - 1
+      _ => return false
+    }
   }
   let marker = self.begin_candidates()
   guard self.stage_int_binary_with_constant(
       op,
       source,
       result.ty,
-      total.to_int64(),
+      combined.to_int64(),
     )
     is Some(replacement) else {
     self.discard_candidates(marker)
@@ -633,34 +690,6 @@ fn OptimizerSession::rewrite_nested_shift(
     return false
   }
   self.replace_with_alias(inst, replacement)
-}
-
-///|
-fn self_compare_result(cc : IntCC) -> Int64 {
-  match cc {
-    Eq | Sle | Sge | Ule | Uge => 1L
-    Ne | Slt | Sgt | Ult | Ugt => 0L
-  }
-}
-
-///|
-fn OptimizerSession::rewrite_compare(
-  self : OptimizerSession,
-  inst : Inst,
-  cc : IntCC,
-) -> Bool {
-  guard inst.operands is [left, right] else { return false }
-  if self.canonical_value(left).id == self.canonical_value(right).id {
-    return self.replace_with_constant(inst, self_compare_result(cc))
-  }
-  if self.int_constant(right) is Some(0L) {
-    match cc {
-      Ult => return self.replace_with_constant(inst, 0L)
-      Uge => return self.replace_with_constant(inst, 1L)
-      _ => ()
-    }
-  }
-  false
 }
 
 ///|
@@ -769,7 +798,7 @@ fn OptimizerSession::rewrite_inst(
         _ => false
       }
     }
-    Scalar(IntCompare(cc)) => self.rewrite_compare(inst, cc)
+    Scalar(IntCompare(cc)) => self.rewrite_compare(inst, cc, prefix)
     Scalar(Convert(conversion)) => self.rewrite_conversion(inst, conversion)
     Scalar(Select) => self.rewrite_select(inst)
     _ => false
