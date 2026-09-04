@@ -3,6 +3,8 @@
 > Historical snapshot: the Wasmoon optimizer description predates ISS-458.
 > Current O2 optimization performs direct acyclic MilkIR rewrites and GVN in
 > one dominator-order traversal; the standalone MilkIR e-graph was removed.
+> See [the current optimizer design](milkir-optimizer.md) and
+> [rule migration ledger](milkir-rewrite-inventory.md) for current behavior.
 
 This document provides a detailed comparison between Wasmoon's JIT compiler and Cranelift (Wasmtime's compiler backend).
 

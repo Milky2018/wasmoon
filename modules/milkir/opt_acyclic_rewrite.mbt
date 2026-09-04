@@ -69,6 +69,19 @@ fn OptimizerSession::stage_pure_candidate(
   if !opcode.semantics().can_stage_as_pure_candidate() {
     return None
   }
+  let opcode = match (opcode, operands) {
+    (Scalar(IntBinary(op)), [a, b]) =>
+      if self.int_constant(a) is Some(a) &&
+        self.int_constant(b) is Some(b) &&
+        integer_width(result_type) is Some(width) &&
+        fold_pure_integer_binary(op, a, b, width) is Some(value) {
+        operands.clear()
+        Scalar(IntConst(value))
+      } else {
+        opcode
+      }
+    _ => opcode
+  }
   let result = self.func.new_value(result_type)
   let inst = self.func.new_inst(opcode, operands, [result])
   let candidates = match self.staged_candidates {
@@ -118,7 +131,7 @@ fn pure_candidate_cost(opcode : Opcode) -> Int {
     // multiplication has greater algebraic complexity than the other pure
     // scalar primitives; target-specific instruction costs remain in target
     // lowering.
-    Scalar(IntBinary(Mul)) => 2
+    Scalar(IntBinary(Mul)) | Vector(IntBinary(Mul, _)) => 2
     _ => 1
   }
 }
@@ -221,7 +234,14 @@ fn OptimizerSession::index_definition(
   self.ensure_value_capacity(result.id)
   self.constants[result.id] = None
   match inst.opcode {
-    Scalar(IntConst(value)) => self.constants[result.id] = Some(value)
+    Scalar(IntConst(value)) =>
+      self.constants[result.id] = Some(
+        if result.ty == I32 {
+          value.to_int().to_int64()
+        } else {
+          value
+        },
+      )
     _ => ()
   }
 }
@@ -408,11 +428,22 @@ fn OptimizerSession::rewrite_int_binary(
   prefix : Array[Inst],
 ) -> Bool {
   guard inst.operands is [left, right] else { return false }
+  if self.int_constant(left) is Some(a) &&
+    self.int_constant(right) is Some(b) &&
+    integer_width(left.ty) is Some(width) &&
+    fold_pure_integer_binary(op, a, b, width) is Some(value) {
+    return self.replace_with_constant(inst, value)
+  }
+  if is_commutative_integer_op(op) &&
+    self.combine_branch_constants(inst, op, prefix) {
+    return true
+  }
   match op {
     Add => {
       if self.int_constant(right) is Some(0L) {
         return self.replace_with_alias(inst, left)
       }
+      self.rewrite_arithmetic(inst, Add, prefix) ||
       self.rewrite_nested_integer(inst, Add, prefix)
     }
     Sub => {
@@ -422,6 +453,7 @@ fn OptimizerSession::rewrite_int_binary(
       if self.canonical_value(left).id == self.canonical_value(right).id {
         return self.replace_with_constant(inst, 0L)
       }
+      self.rewrite_arithmetic(inst, Sub, prefix) ||
       self.rewrite_nested_integer(inst, Sub, prefix)
     }
     Mul => {
@@ -431,6 +463,10 @@ fn OptimizerSession::rewrite_int_binary(
       }
       if right_constant is Some(1L) {
         return self.replace_with_alias(inst, left)
+      }
+      if self.rewrite_arithmetic(inst, Mul, prefix) ||
+        self.rewrite_nested_integer(inst, Mul, prefix) {
+        return true
       }
       if right_constant is Some(constant) &&
         power_of_two_shift(constant) is Some(shift) &&
@@ -469,9 +505,10 @@ fn OptimizerSession::rewrite_int_binary(
         self.canonical_value(left).id == self.canonical_value(right).id {
         return self.replace_with_alias(inst, left)
       }
-      if self.rewrite_bitwise_relation(inst, And, left, right) {
+      if self.rewrite_bitwise_relation(inst, And, left, right, prefix) {
         return true
       }
+      self.rewrite_extended_bitwise(inst, And, prefix) ||
       self.rewrite_nested_integer(inst, And, prefix)
     }
     Or => {
@@ -483,9 +520,10 @@ fn OptimizerSession::rewrite_int_binary(
       if right_constant is Some(-1L) {
         return self.replace_with_constant(inst, -1L)
       }
-      if self.rewrite_bitwise_relation(inst, Or, left, right) {
+      if self.rewrite_bitwise_relation(inst, Or, left, right, prefix) {
         return true
       }
+      self.rewrite_extended_bitwise(inst, Or, prefix) ||
       self.rewrite_nested_integer(inst, Or, prefix)
     }
     Xor => {
@@ -495,22 +533,34 @@ fn OptimizerSession::rewrite_int_binary(
       if self.canonical_value(left).id == self.canonical_value(right).id {
         return self.replace_with_constant(inst, 0L)
       }
-      if self.rewrite_bitwise_relation(inst, Xor, left, right) {
+      if self.int_constant(right) == Some(-1L) {
+        inst.opcode = Scalar(IntUnary(Not))
+        inst.operands.remove(1) |> ignore
         return true
       }
+      if self.rewrite_bitwise_relation(inst, Xor, left, right, prefix) {
+        return true
+      }
+      self.rewrite_extended_bitwise(inst, Xor, prefix) ||
       self.rewrite_nested_integer(inst, Xor, prefix)
     }
     ShiftLeft | SignedShiftRight | UnsignedShiftRight => {
-      if self.int_constant(right) is Some(0L) {
+      if self.int_constant(right) is Some(amount) &&
+        integer_width(left.ty) is Some(width) &&
+        normalized_shift(amount, width) == 0 {
         return self.replace_with_alias(inst, left)
       }
       if self.int_constant(left) is Some(0L) {
         return self.replace_with_constant(inst, 0L)
       }
-      self.rewrite_nested_shift(inst, op, prefix)
+      self.rewrite_nested_shift(inst, op, prefix) ||
+      self.reassociate_constant_shift(inst, op, prefix) ||
+      (op == UnsignedShiftRight && self.shift_masked_shift(inst, prefix))
     }
     RotateLeft | RotateRight => {
-      if self.int_constant(right) is Some(0L) {
+      if self.int_constant(right) is Some(amount) &&
+        integer_width(left.ty) is Some(width) &&
+        normalized_shift(amount, width) == 0 {
         return self.replace_with_alias(inst, left)
       }
       self.rewrite_rotation(inst, op, prefix)
@@ -552,11 +602,38 @@ fn OptimizerSession::rewrite_nested_integer(
     _ => ()
   }
   guard self.int_constant(right) is Some(outer_constant) &&
-    self.int_constant(inner_right) is Some(inner_constant) &&
     self.has_single_use(left) else {
     return false
   }
+  if op is (Add | Sub) &&
+    inner.opcode is Scalar(IntBinary(Sub)) &&
+    self.int_constant(inner_left) is Some(c) {
+    let marker = self.begin_candidates()
+    let combined = if op == Add {
+      c + outer_constant
+    } else {
+      c - outer_constant
+    }
+    if self.stage_pure_candidate(Scalar(IntConst(combined)), [], left.ty)
+      is Some(c) {
+      self.commit_candidates(marker, prefix)
+      return self.replace_binary(inst, Sub, c, inner_right)
+    }
+    self.discard_candidates(marker)
+    return false
+  }
+  guard self.int_constant(inner_right) is Some(inner_constant) else {
+    return false
+  }
   let combined : (IntBinaryOp, Int64)? = match (op, inner.opcode) {
+    (Mul, Scalar(IntBinary(Mul))) =>
+      Some((Mul, inner_constant * outer_constant))
+    (Mul, Scalar(IntBinary(ShiftLeft))) =>
+      match integer_width(left.ty) {
+        Some(width) =>
+          Some((Mul, outer_constant << normalized_shift(inner_constant, width)))
+        None => None
+      }
     (Add, Scalar(IntBinary(Add))) =>
       Some((Add, inner_constant + outer_constant))
     (Sub, Scalar(IntBinary(Add))) =>
@@ -726,6 +803,10 @@ fn OptimizerSession::rewrite_conversion(
       _ => ()
     }
   }
+  if conversion == SignedExtend && self.boolean_compare(source) is Some(_) {
+    inst.opcode = Scalar(Convert(UnsignedExtend))
+    return true
+  }
   guard self.definition(source) is Some(inner) &&
     inner.operands is [inner_source] else {
     return false
@@ -751,16 +832,12 @@ fn OptimizerSession::rewrite_conversion(
       inst.operands[0] = inner_source
       true
     }
-    (SignedExtend, Scalar(IntCompare(_))) => {
-      inst.opcode = Scalar(Convert(UnsignedExtend))
-      true
-    }
     _ => false
   }
 }
 
 ///|
-fn OptimizerSession::rewrite_select(
+fn OptimizerSession::rewrite_select_identity(
   self : OptimizerSession,
   inst : Inst,
 ) -> Bool {
@@ -789,18 +866,15 @@ fn OptimizerSession::rewrite_inst(
       changed = changed || canonicalized
       self.rewrite_int_binary(inst, op, prefix)
     }
-    Scalar(IntUnary(Not)) => {
-      guard inst.operands is [source] else { false }
-      match self.definition(source) {
-        Some(inner) if inner.opcode is Scalar(IntUnary(Not)) &&
-          inner.operands is [original] =>
-          self.replace_with_alias(inst, original)
-        _ => false
-      }
-    }
+    Scalar(IntUnary(op)) => self.rewrite_integer_unary(inst, op, prefix)
     Scalar(IntCompare(cc)) => self.rewrite_compare(inst, cc, prefix)
-    Scalar(Convert(conversion)) => self.rewrite_conversion(inst, conversion)
+    Scalar(Convert(conversion)) =>
+      self.rewrite_conversion(inst, conversion) ||
+      (conversion == IntReduce && self.rewrite_reduce_expression(inst, prefix))
     Scalar(Select) => self.rewrite_select(inst)
+    Scalar(FloatUnary(op)) => self.rewrite_float_unary(inst, op)
+    Scalar(FloatBinary(op)) => self.rewrite_float_minmax(inst, op)
+    Vector(op) => self.rewrite_vector(inst, op, prefix)
     _ => false
   }
   if applied {

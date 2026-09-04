@@ -95,6 +95,12 @@ that validated model with product-owned execution.
 
 At O3, MilkIR may unroll only canonical constant-trip natural loops after checked signed/unsigned I32 or I64 trip analysis and complete SSA/effect remapping. Unsupported shapes, dynamic bounds, possible arithmetic wraparound, and transformations beyond the code-growth budget remain unchanged.
 
+MilkIR uses its authoritative DFG for handwritten acyclic rewrites and GVN in
+one dominator-order walk, not a separate equality-saturation graph. See the
+[current optimizer design](milkir-optimizer.md) and
+[legacy rule migration ledger](milkir-rewrite-inventory.md) for semantic,
+profitability and verification boundaries.
+
 The top-level `wasm_milkir/frontend` package is the reusable translation
 boundary. Product callers do not import `wasm_milkir/frontend/ir` directly;
 Wasmoon supplies its embedding environment when assembling the JIT pipeline.

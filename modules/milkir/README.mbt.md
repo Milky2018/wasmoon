@@ -329,9 +329,18 @@ The optimization levels are:
 | `O0` | Minimal pipeline: removes dead code plus constant and unused block parameters. |
 | `O1` | Inexpensive simplification: mandatory cleanup, constant folding, alias canonicalization, and dead-code elimination. |
 | `O2` | The default pipeline: O1-style cleanup plus direct acyclic rewriting, budgeted memory GVN, unbudgeted cheap value numbering, and CFG simplification. |
-| `O3` | The `O2` pipeline, loop-invariant code motion, checked counted-loop unrolling, strength reduction, and a final `O2` cleanup. |
+| `O3` | Mandatory normalization, checked loop transformations, then one acyclic rewrite/GVN pipeline and final cleanup. |
 
 Use `optimize(func)` for the default pipeline or `optimize_with_level(func, level)` when the caller chooses the level explicitly. Optimizers assume a valid SSA and block-parameter structure. Verify before optimization when the input comes from a frontend, then verify again after developing a new transformation.
+
+The optimizer works directly on the Function DFG. Rules are handwritten and
+dispatched by root opcode; there is no separate e-node graph, generated matcher
+or saturation loop. Staged rewrites require a strictly cheaper expression and
+must not rebuild shared definitions. Integer widths, vector lanes, floating
+NaNs/signed zero and trapping operations remain semantic constraints, not
+optional profitability hints. See the repository's
+[optimizer design](../../docs/milkir-optimizer.md) and
+[rule migration ledger](../../docs/milkir-rewrite-inventory.md).
 
 ### Counted-loop unrolling at O3
 

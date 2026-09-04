@@ -208,14 +208,8 @@ fn try_fold_constant(
     Scalar(IntBinary(SignedRem)) => fold_srem(inst, constants)
     Scalar(IntBinary(UnsignedRem)) => fold_urem(inst, constants)
     // Float operations
-    Scalar(FloatBinary(Add)) =>
-      fold_binary_float(inst, constants, fn(a, b) { a + b })
-    Scalar(FloatBinary(Sub)) =>
-      fold_binary_float(inst, constants, fn(a, b) { a - b })
-    Scalar(FloatBinary(Mul)) =>
-      fold_binary_float(inst, constants, fn(a, b) { a * b })
-    Scalar(FloatBinary(Div)) =>
-      fold_binary_float(inst, constants, fn(a, b) { a / b })
+    Scalar(FloatBinary(op)) if op is (Add | Sub | Mul | Div) =>
+      fold_binary_float(inst, constants, op)
     // Comparisons
     Scalar(IntCompare(cc)) => fold_icmp(inst, constants, cc)
     _ => None
@@ -256,7 +250,7 @@ fn fold_binary_int(
 fn fold_binary_float(
   inst : Inst,
   constants : @hashmap.HashMap[Int, ConstValue],
-  op : (Double, Double) -> Double,
+  op : FloatBinaryOp,
 ) -> ConstValue? {
   if inst.operands.length() != 2 {
     return None
@@ -264,9 +258,34 @@ fn fold_binary_float(
   let a = get_const(inst.operands[0], constants)
   let b = get_const(inst.operands[1], constants)
   match (a, b) {
-    (Some(F32(va)), Some(F32(vb))) =>
-      Some(F32(op(va.to_double(), vb.to_double()) |> Float::from_double))
-    (Some(F64(va)), Some(F64(vb))) => Some(F64(op(va, vb)))
+    (Some(F32(va)), Some(F32(vb))) => {
+      let value = match op {
+        Add => va + vb
+        Sub => va - vb
+        Mul => va * vb
+        Div => va / vb
+        _ => return None
+      }
+      if value.is_nan() {
+        None
+      } else {
+        Some(F32(value))
+      }
+    }
+    (Some(F64(va)), Some(F64(vb))) => {
+      let value = match op {
+        Add => va + vb
+        Sub => va - vb
+        Mul => va * vb
+        Div => va / vb
+        _ => return None
+      }
+      if value.is_nan() {
+        None
+      } else {
+        Some(F64(value))
+      }
+    }
     _ => None
   }
 }

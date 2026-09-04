@@ -3,6 +3,8 @@
 > Historical snapshot: the Wasmoon optimizer description is pinned to the
 > commit below. ISS-458 later replaced the standalone MilkIR e-graph with
 > direct acyclic MilkIR rewriting integrated into the GVN dominator walk.
+> See [the current optimizer design](milkir-optimizer.md) and
+> [rule migration ledger](milkir-rewrite-inventory.md) for current behavior.
 
 This document compares Wasmoon’s optimization pipeline and backend policies with
 Wasmtime’s Cranelift, with a focus on **optimization behavior**, **lowering /

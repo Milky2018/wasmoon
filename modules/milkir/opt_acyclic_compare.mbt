@@ -228,6 +228,10 @@ fn OptimizerSession::rewrite_compare(
   if self.canonical_value(left).id == self.canonical_value(right).id {
     return self.replace_with_constant(inst, self_compare_result(cc))
   }
+  if self.compare_select_bound(inst, cc, left, right) ||
+    self.compare_select_bound(inst, swap_intcc(cc), right, left) {
+    return true
+  }
   let mut compare_cc = cc
   let mut compare_left = left
   let mut compare_right = right
@@ -257,5 +261,167 @@ fn OptimizerSession::rewrite_compare(
       _ => ()
     }
   }
+  if self.rewrite_compare_constant(
+      inst, compare_cc, compare_left, compare_right, prefix,
+    ) {
+    return true
+  }
+  if self.rewrite_compare_relation(
+      inst, compare_cc, compare_left, compare_right, prefix,
+    ) {
+    return true
+  }
   changed
+}
+
+///|
+fn OptimizerSession::rewrite_compare_constant(
+  self : OptimizerSession,
+  inst : Inst,
+  cc : IntCC,
+  left : Value,
+  right : Value,
+  prefix : Array[Inst],
+) -> Bool {
+  guard self.int_constant(right) is Some(raw) &&
+    integer_width(left.ty) is Some(width) else {
+    return false
+  }
+  let constant = sign_extend_integer(raw, width)
+  let maximum = low_bits_mask(width - 1)
+  let minimum = sign_extend_integer(1L << (width - 1), width)
+  let bound = match (cc, constant) {
+    (Ugt, -1L) => Some(0L)
+    (Ule, -1L) => Some(1L)
+    (Sgt, c) if c == maximum => Some(0L)
+    (Sle, c) if c == maximum => Some(1L)
+    (Slt, c) if c == minimum => Some(0L)
+    (Sge, c) if c == minimum => Some(1L)
+    _ => None
+  }
+  if bound is Some(value) {
+    return self.replace_with_constant(inst, value)
+  }
+  let equality = match (cc, constant) {
+    (Uge, -1L) => true
+    (Sge, c) if c == maximum => true
+    (Sle, c) if c == minimum => true
+    _ => false
+  }
+  if equality {
+    return self.replace_with_compare(inst, Eq, left, right)
+  }
+  let normalized : IntCC? = match (cc, constant) {
+    (Uge, 1L) => Some(Ne)
+    (Ult, 1L) => Some(Eq)
+    (Sge, 1L) => Some(Sgt)
+    (Slt, 1L) => Some(Sle)
+    (Sgt, -1L) => Some(Sge)
+    (Sle, -1L) => Some(Slt)
+    _ => None
+  }
+  if normalized is Some(new_cc) {
+    let marker = self.begin_candidates()
+    if self.stage_pure_candidate(Scalar(IntConst(0L)), [], left.ty)
+      is Some(zero) {
+      self.commit_candidates(marker, prefix)
+      return self.replace_with_compare(inst, new_cc, left, zero)
+    }
+    self.discard_candidates(marker)
+  }
+  guard cc is (Eq | Ne) &&
+    self.has_single_use(left) &&
+    self.definition(left) is Some(inner) &&
+    inner.operands is [a, b] &&
+    self.int_constant(b) is Some(k) else {
+    return false
+  }
+  let adjusted = match inner.opcode {
+    Scalar(IntBinary(Add)) => constant - k
+    Scalar(IntBinary(Sub)) => constant + k
+    _ => return false
+  }
+  let marker = self.begin_candidates()
+  guard self.stage_pure_candidate(
+      Scalar(IntConst(sign_extend_integer(adjusted, width))),
+      [],
+      a.ty,
+    )
+    is Some(k) else {
+    self.discard_candidates(marker)
+    return false
+  }
+  self.commit_candidates(marker, prefix)
+  self.replace_with_compare(inst, cc, a, k)
+}
+
+///|
+fn OptimizerSession::rewrite_compare_relation(
+  self : OptimizerSession,
+  inst : Inst,
+  cc : IntCC,
+  left : Value,
+  right : Value,
+  prefix : Array[Inst],
+) -> Bool {
+  let left_def = self.definition(left)
+  let right_def = self.definition(right)
+  if cc is (Eq | Ne) {
+    if left_def is Some(l) &&
+      right_def is Some(r) &&
+      l.opcode is Scalar(IntBinary(Add)) &&
+      r.opcode is Scalar(IntBinary(Add)) &&
+      l.operands is [a, k1] &&
+      r.operands is [b, k2] &&
+      self.has_single_use(left) &&
+      self.has_single_use(right) &&
+      self.int_constant(k1) is Some(c1) &&
+      self.int_constant(k2) is Some(c2) {
+      let marker = self.begin_candidates()
+      if self.stage_int_binary_with_constant(Add, b, b.ty, c2 - c1)
+        is Some(adjusted) &&
+        self.commit_candidates_if_cheaper(marker, 2, prefix) {
+        return self.replace_with_compare(inst, cc, a, adjusted)
+      }
+      self.discard_candidates(marker)
+    }
+    let other = match self.other_operand_if_contains(left_def, Xor, right) {
+      Some(other) => Some(other)
+      None => self.other_operand_if_contains(right_def, Xor, left)
+    }
+    if other is Some(other) {
+      let marker = self.begin_candidates()
+      if self.stage_pure_candidate(Scalar(IntConst(0L)), [], other.ty)
+        is Some(zero) {
+        self.commit_candidates(marker, prefix)
+        return self.replace_with_compare(inst, cc, other, zero)
+      }
+      self.discard_candidates(marker)
+    }
+  }
+  if left_def is Some(l) &&
+    right_def is Some(r) &&
+    l.opcode is Scalar(IntUnary(Not)) &&
+    r.opcode is Scalar(IntUnary(Not)) &&
+    l.operands is [a] &&
+    r.operands is [b] {
+    return self.replace_with_compare(inst, swap_intcc(cc), a, b)
+  }
+  if cc is (Ugt | Ule) &&
+    left_def is Some(sub) &&
+    sub.opcode is Scalar(IntBinary(Sub)) &&
+    sub.operands is [a, b] &&
+    self.same_value(a, right) {
+    return self.replace_with_compare(
+      inst,
+      if cc == Ugt {
+        Ult
+      } else {
+        Uge
+      },
+      a,
+      b,
+    )
+  }
+  false
 }
