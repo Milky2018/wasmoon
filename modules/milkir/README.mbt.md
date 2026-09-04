@@ -300,7 +300,10 @@ Verification is a useful construction guard, not a complete proof of every front
 
 ## Optimization
 
-Optimization mutates a `Function` and returns an `OptResult` whose `changed` field reports whether any pass changed the IR.
+Optimization lives in the `Milky2018/milkir/optimize` package within this module.
+Import it alongside `Milky2018/milkir`; the root package owns the IR and does not
+forward optimizer APIs. Optimization mutates a `Function` and returns an
+`@optimize.OptResult` whose `changed` field reports whether any pass changed the IR.
 
 ```moonbit check
 ///|
@@ -313,10 +316,10 @@ test "fold a constant expression" {
   builder.return_([answer])
 
   let func = builder.finalize()
-  let result = optimize_with_level(func, O1)
+  let result = @optimize.optimize_with_level(func, O1)
 
   inspect(result.changed, content="true")
-  inspect(instruction_count(func), content="1")
+  inspect(@optimize.instruction_count(func), content="1")
   inspect(func.print().contains("iconst 30"), content="true")
   inspect(func.verify(), content="()")
 }
@@ -331,7 +334,11 @@ The optimization levels are:
 | `O2` | The default pipeline: O1-style cleanup plus direct acyclic rewriting, budgeted memory GVN, unbudgeted cheap value numbering, and CFG simplification. |
 | `O3` | Mandatory normalization, checked loop transformations, then one acyclic rewrite/GVN pipeline and final cleanup. |
 
-Use `optimize(func)` for the default pipeline or `optimize_with_level(func, level)` when the caller chooses the level explicitly. Optimizers assume a valid SSA and block-parameter structure. Verify before optimization when the input comes from a frontend, then verify again after developing a new transformation.
+Use `@optimize.optimize(func)` for the default pipeline or
+`@optimize.optimize_with_level(func, level)` when the caller chooses the level
+explicitly. Optimizers assume a valid SSA and block-parameter structure. Verify
+before optimization when the input comes from a frontend, then verify again
+after developing a new transformation.
 
 The optimizer works directly on the Function DFG. Rules are handwritten and
 dispatched by root opcode; there is no separate e-node graph, generated matcher

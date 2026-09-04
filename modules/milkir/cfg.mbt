@@ -30,7 +30,7 @@ pub fn CFG::build(func : Function) -> CFG {
   }
   for block in func.blocks {
     if block.terminator is Some(term) {
-      for target in terminator_targets(term) {
+      for target in term.targets() {
         if target >= 0 && target < size && valid[target] {
           successors[block.id].push(target)
           predecessors[target].push(block.id)
@@ -42,8 +42,9 @@ pub fn CFG::build(func : Function) -> CFG {
 }
 
 ///|
-fn terminator_targets(term : Terminator) -> Array[Int] {
-  match term {
+/// Return successor block IDs in terminator order, including duplicate edges.
+pub fn Terminator::targets(self : Terminator) -> Array[Int] {
+  match self {
     Jump(target, _) => [target]
     Branch(_, true_target, _, false_target, _) => [true_target, false_target]
     Brz(_, true_target, false_target) | Brnz(_, true_target, false_target) =>
@@ -58,11 +59,6 @@ fn terminator_targets(term : Terminator) -> Array[Int] {
     }
     Return(_) | Trap(_) | TrapExit(_) => []
   }
-}
-
-///|
-fn get_terminator_targets(term : Terminator) -> Array[Int] {
-  terminator_targets(term)
 }
 
 ///|
@@ -219,35 +215,15 @@ pub fn CFG::dominates(self : CFG, a : Int, b : Int) -> Bool {
 }
 
 ///|
-priv struct Dominance {
+/// Dominator facts for one CFG snapshot; rebuild after changing successors.
+pub struct Dominance {
   idom : Array[Int]
-  preorder : Array[Int]
-  subtree_end : Array[Int]
+  priv preorder : Array[Int]
+  priv subtree_end : Array[Int]
 }
 
 ///|
-/// CFG facts shared by instruction-only optimization passes. The analysis is
-/// valid until a pass changes block successors or block identity.
-priv struct FunctionAnalysis {
-  cfg : CFG
-  dominance : Dominance
-  domtree : Array[Array[Int]]
-  block_idx : Array[Int]
-}
-
-///|
-fn FunctionAnalysis::build(func : Function) -> FunctionAnalysis {
-  let cfg = CFG::build(func)
-  let dominance = cfg.compute_dominance()
-  let block_idx = Array::make(func.next_block_id, -1)
-  for index, block in func.blocks {
-    block_idx[block.id] = index
-  }
-  { cfg, dominance, domtree: build_dominator_tree(dominance.idom), block_idx, }
-}
-
-///|
-fn CFG::compute_dominance(self : CFG) -> Dominance {
+pub fn CFG::compute_dominance(self : CFG) -> Dominance {
   let idom = self.compute_dominators()
   let preorder = Array::make(idom.length(), -1)
   let subtree_end = Array::make(idom.length(), -1)
@@ -268,7 +244,7 @@ fn CFG::compute_dominance(self : CFG) -> Dominance {
 }
 
 ///|
-fn Dominance::dominates(self : Dominance, a : Int, b : Int) -> Bool {
+pub fn Dominance::dominates(self : Dominance, a : Int, b : Int) -> Bool {
   if a == b {
     return true
   }
@@ -286,7 +262,8 @@ fn Dominance::dominates(self : Dominance, a : Int, b : Int) -> Bool {
 }
 
 ///|
-fn build_dominator_tree(idom : Array[Int]) -> Array[Array[Int]] {
+/// Build ordered child lists from an immediate-dominator table.
+pub fn build_dominator_tree(idom : Array[Int]) -> Array[Array[Int]] {
   let children : Array[Array[Int]] = []
   for _ in 0..<idom.length() {
     children.push([])
@@ -322,7 +299,7 @@ priv enum DomWalkEvent[Scope] {
 /// Every dominator-tree pass here used to hand-roll its own descent, which
 /// meant "does this survive a deep function?" got answered independently at
 /// each site — and answered wrong at all but one of them (ISS-401).
-fn[Scope] visit_dominator_tree(
+pub fn[Scope] visit_dominator_tree(
   domtree : Array[Array[Int]],
   root : Int,
   enter : (Int) -> (Scope, Bool),

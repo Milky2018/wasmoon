@@ -32,7 +32,8 @@ The repository is a `moon.work` workspace containing several independently versi
 | --- | --- |
 | `wasm_core` | WebAssembly specification data model, binary parser, and core validator shared by frontends, runtimes, and tools. |
 | `wasm_component` | Portable Component Model syntax, binary and text decoding, canonical ABI modeling, validation, and WIT tooling. |
-| `milkir` | Target-independent SSA IR, builders, verification, optimization, and CFG utilities. |
+| `milkir` | Target-independent SSA IR, builders, verification, and reusable CFG/dominator utilities. |
+| `milkir/optimize` | Optimization driver, acyclic rewrite/GVN session, cleanup and loop passes, and optimization metrics. |
 | `vcode/native_types` | Target-independent native ABI, type, symbol, trap, safepoint, and metadata vocabulary. |
 | `vcode/native_lowering` | Streaming target-lowering protocol; carries one operation at a time and retains no function graph. |
 | `regalloc` | Machine-IR-independent register-allocation algorithms. |

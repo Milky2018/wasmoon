@@ -1,8 +1,27 @@
 # MilkIR optimizer
 
-This document describes the current implementation after ISS-459 and ISS-461.
+This document describes the current implementation after ISS-459, ISS-461 and ISS-462.
 Older e-graph/Cranelift comparison reports are historical analyses, not the
 current pipeline specification.
+
+## Package ownership
+
+`Milky2018/milkir` owns the Function DFG, builders, verifier and reusable CFG/
+dominator analysis. `Milky2018/milkir/optimize` owns the optimization driver,
+session state, GVN, handwritten rewrites, cleanup and loop passes, metrics hooks
+and their tests. These are packages of the same module, not separate modules.
+
+Consumers import `milkir/optimize` explicitly and call
+`@optimize.optimize_with_level(func, level)` or `@optimize.optimize(func)`.
+The root package does not forward these APIs: a production dependency from
+the IR package back to its optimizer would form a cycle. The module README's
+executable example uses a black-box-test-only optimizer import.
+
+Private owner records and mutable arena/layout arrays stay in the IR package.
+The optimizer borrows read-only views and uses ownership-checked opcode/layout
+operations; IDs and definitions retain the same lifetime as before the split.
+`FunctionAnalysis` and `OptimizerSession` remain private to the optimizer and
+are not exposed as public caches or a second expression graph.
 
 ## One authoritative expression graph
 
@@ -23,7 +42,8 @@ before this acyclic walk, rather than running O2 twice.
 
 ## Handwritten direct dispatch
 
-`opt_acyclic_rewrite.mbt` dispatches on the root opcode. Cohesive files implement
+`optimize/rewrite.mbt` dispatches on the root opcode; `optimize/session.mbt`
+owns scoped indexes and candidate staging. Cohesive `rewrite_*.mbt` files implement
 integer arithmetic, bitwise relations, comparisons, select, shifts,
 reassociation, narrowing, floats and vectors. There is no rule schema, generated
 matcher, bucket scan or saturation loop in the runtime optimizer.

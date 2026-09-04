@@ -18,6 +18,7 @@ import {
 
 import {
   "Milky2018/wasm_component" @component_types,
+  "Milky2018/milkir/optimize",
   "Milky2018/milkir",
   "Milky2018/wasm_core/encoder",
   "Milky2018/wasmoon",

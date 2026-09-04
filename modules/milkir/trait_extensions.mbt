@@ -194,9 +194,6 @@ pub extend Opcode with Hash::{hash, hash_combine}
 pub extend Opcode with Show::{to_string, output}
 
 ///|
-pub extend OptResult with Eq::{not_equal, equal}
-
-///|
 pub extend ScalarOp with Debug::{to_repr}
 
 ///|

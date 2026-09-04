@@ -17,7 +17,7 @@ test "block layout keeps stable instruction arena IDs after deletion" {
   let func = builder.get_function()
   let block = func.blocks[0]
   debug_inspect(block.instructions, content="[0, 1]")
-  eliminate_dead_code(func) |> ignore
+  block.retain_instruction_ids(id => id == 1)
   debug_inspect(block.instructions, content="[1]")
   inspect(func.owner.val.instruction_is_deleted(0), content="true")
   inspect(func.owner.val.instruction_is_deleted(1), content="false")

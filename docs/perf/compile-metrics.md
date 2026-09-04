@@ -199,5 +199,7 @@ Aggregate files:
 ## Notes
 
 - Metrics collection is designed to be side-effect free when disabled.
-- Pass-level counters are recorded in `ir/opt_driver.mbt`.
-- E-graph aggregate stats are collected via `optimize_function_with_stats(...)`.
+- Pass-level counters are recorded in `modules/milkir/optimize/driver.mbt`.
+- Acyclic rewrite/GVN aggregate stats are emitted through the optional metrics
+  sink in `modules/milkir/optimize/metrics.mbt`; embeddings install the sink
+  through `@optimize.install_optimization_metrics_sink(...)`.

@@ -1,0 +1,6 @@
+import {
+  "Milky2018/milkir",
+  "moonbitlang/core/debug",
+  "moonbitlang/core/hashmap",
+  "moonbitlang/core/hashset",
+}

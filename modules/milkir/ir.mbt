@@ -516,7 +516,8 @@ fn Block::add_inst(self : Block, inst : Inst) -> Unit {
 }
 
 ///|
-fn Block::take_inst_at(self : Block, index : Int) -> Int? {
+/// Detach an instruction for relocation without marking it deleted.
+pub fn Block::take_inst_at(self : Block, index : Int) -> Int? {
   if index < 0 || index >= self.instructions.length() {
     return None
   }
@@ -526,7 +527,10 @@ fn Block::take_inst_at(self : Block, index : Int) -> Int? {
 }
 
 ///|
-fn Block::replace_instructions(
+/// Replace the layout with same-function instructions without deleting them.
+/// Omitted instructions must be relocated or explicitly discarded. Verification
+/// rejects missing or duplicate placements; layout length never implies deletion.
+pub fn Block::set_instructions(
   self : Block,
   instructions : Array[Inst],
 ) -> Unit {
@@ -535,22 +539,15 @@ fn Block::replace_instructions(
       return
     }
   }
-  if instructions.length() < self.instructions.length() {
-    let retained : @hashset.HashSet[InstId] = HashSet([])
-    for inst in instructions {
-      retained.add(inst.id)
-    }
-    for inst_id in self.instructions {
-      if !retained.contains(inst_id) {
-        self.owner.val.mark_instruction_deleted(inst_id)
-      }
-    }
-  }
   self.instructions = instructions.map(inst => inst.id)
 }
 
 ///|
-fn Block::retain_instruction_ids(self : Block, keep : (Int) -> Bool) -> Unit {
+/// Remove instructions rejected by a stable predicate and mark them deleted.
+pub fn Block::retain_instruction_ids(
+  self : Block,
+  keep : (Int) -> Bool,
+) -> Unit {
   for inst_id in self.instructions {
     if !keep(inst_id) {
       self.owner.val.mark_instruction_deleted(inst_id)
@@ -560,7 +557,8 @@ fn Block::retain_instruction_ids(self : Block, keep : (Int) -> Bool) -> Unit {
 }
 
 ///|
-fn Block::clear_instructions_for_move(self : Block) -> Unit {
+/// Detach the complete layout for relocation without deleting instructions.
+pub fn Block::clear_instructions_for_move(self : Block) -> Unit {
   self.instructions.clear()
 }
 
@@ -576,6 +574,13 @@ pub fn Block::instruction_count(self : Block) -> Int {
 }
 
 ///|
+/// Borrow the stable instruction IDs. Do not retain the view across a layout
+/// mutation; the backing layout cannot be mutated through this view.
+pub fn Block::instruction_ids(self : Block) -> ArrayView[InstId] {
+  self.instructions[:]
+}
+
+///|
 /// Set the terminator for this block
 pub fn Block::set_terminator(self : Block, term : Terminator) -> Unit {
   if reject_foreign_terminator_values(self.owner, term) {
@@ -587,10 +592,11 @@ pub fn Block::set_terminator(self : Block, term : Terminator) -> Unit {
 ///|
 /// Instruction - an SSA instruction that produces a value.
 ///
-/// The public fields are exposed for zero-copy inspection. Callers must not
-/// mutate `results`, `opcode`, `args`, `operands`, or `metadata` directly.
-/// Construct instructions through `FunctionBuilder` or `Function::new_inst`
-/// and add metadata through `add_metadata`.
+/// Result identities are fixed by the Function DFG. Transformations may update
+/// the shared `args`/`operands` array in place using same-function values, but
+/// must preserve opcode arity and type contracts. Use `set_opcode` to change
+/// the operation and `add_metadata` to attach metadata; do not mutate results.
+/// Construct instructions through `FunctionBuilder` or `Function::new_inst`.
 pub struct Inst {
   priv owner : Ref[FunctionOwnerContext]
   id : InstId
@@ -679,6 +685,16 @@ fn Inst::new_with_id(
 ///|
 pub fn Inst::add_metadata(self : Inst, metadata : Metadata) -> Unit {
   self.metadata.push(metadata)
+}
+
+///|
+/// Change the operation without replacing result identities. Operand/result
+/// arity and types must match the new opcode when the function is verified.
+pub fn Inst::set_opcode(self : Inst, opcode : Opcode) -> Unit {
+  if reject_foreign_opcode_entities(self.owner, opcode) {
+    return
+  }
+  self.opcode = opcode
 }
 
 ///|
@@ -1229,7 +1245,7 @@ fn Function::add_block_param(
 ///|
 /// Keep and reorder a block's existing parameters while updating their DFG
 /// definitions atomically with the layout mutation.
-fn Function::retain_block_params(
+pub fn Function::retain_block_params(
   self : Function,
   block : Block,
   keep : Array[Int],
@@ -1298,7 +1314,8 @@ pub fn Function::new_block0(self : Function) -> Block {
 }
 
 ///|
-fn Function::retain_blocks(self : Function, keep : (Block) -> Bool) -> Unit {
+/// Remove blocks rejected by a stable predicate and delete their instructions.
+pub fn Function::retain_blocks(self : Function, keep : (Block) -> Bool) -> Unit {
   for block in self.blocks {
     if !keep(block) {
       for inst_id in block.instructions {
@@ -1360,6 +1377,18 @@ pub fn Function::instruction_by_id(self : Function, inst_id : InstId) -> Inst? {
 }
 
 ///|
+/// Discard a same-function instruction that was never placed or was detached.
+/// Verification rejects discarded instructions still present in a block or
+/// whose results are still used. Arena IDs are never reused.
+pub fn Function::discard_inst(self : Function, inst : Inst) -> Unit {
+  if !self.owns_inst(inst) {
+    self.record_construction_error(ForeignInstruction(inst_id=inst.id))
+    return
+  }
+  self.owner.val.mark_instruction_deleted(inst.id)
+}
+
+///|
 /// Return a zero-copy view of one block's stable instruction IDs.
 ///
 /// The view remains valid until that block's layout is mutated.
@@ -1390,7 +1419,9 @@ pub fn Function::block_instruction_at(
 }
 
 ///|
-fn Function::defining_inst(self : Function, value : Value) -> Inst? {
+/// Look up the defining instruction of a same-function SSA value, including
+/// detached definitions. Parameters and foreign values have no instruction.
+pub fn Function::defining_inst(self : Function, value : Value) -> Inst? {
   if !self.owns_value(value) || value.id < 0 || value.id >= self.values.length() {
     return None
   }

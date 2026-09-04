@@ -486,6 +486,7 @@ graph TD
   ISS_459["ISS-459: Rebuild MilkIR around an authoritative DFG and staged optimizer"]
   ISS_460["ISS-460: Preserve shared zero-extended indices in native address selection"]
   ISS_461["ISS-461: Migrate profitable MilkIR acyclic rewrite coverage"]
+  ISS_462["ISS-462: Separate the MilkIR optimizer package"]
   ISS_002 --> ISS_003
   ISS_002 --> ISS_004
   ISS_003 --> ISS_005

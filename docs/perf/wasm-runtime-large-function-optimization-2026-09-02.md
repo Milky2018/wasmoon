@@ -24,7 +24,7 @@ At O2 and O3, Wasmoon first performs mandatory cleanup and then calls
 the e-graph, while a function with 300 instructions cannot. The skipped function
 still receives classic folding, GVN, DCE, CFG, and loop passes, but loses all
 e-graph-only algebraic rewrites. See
-[`opt_driver.mbt`](../../modules/milkir/opt_driver.mbt).
+[`driver.mbt`](../../modules/milkir/optimize/driver.mbt).
 
 The policy was a valid compile-time emergency brake: Wasmoon's current e-graph
 build copies every admitted pure expression in the function into a second

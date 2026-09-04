@@ -1,0 +1,55 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "Milky2018/milkir/optimize"
+
+import {
+  "Milky2018/milkir",
+}
+
+// Values
+pub fn clear_optimization_metrics_sink() -> Unit
+
+pub fn install_optimization_metrics_sink(OptimizationMetricsSink) -> Unit
+
+pub fn instruction_count(@milkir.Function) -> Int
+
+pub fn optimize(@milkir.Function) -> OptResult
+
+pub fn optimize_with_level(@milkir.Function, OptLevel) -> OptResult
+
+// Errors
+
+// Types and methods
+pub(all) enum OptLevel {
+  O0
+  O1
+  O2
+  O3
+}
+pub fn OptLevel::from_int(Int) -> Self
+
+pub struct OptResult {
+  mut changed : Bool
+} derive(Eq)
+pub fn OptResult::equal(Self, Self) -> Bool
+pub fn OptResult::not_equal(Self, Self) -> Bool
+
+type OptimizationMetricsSink
+pub fn OptimizationMetricsSink::new(() -> Int64, (OptimizationPassMetric) -> Unit) -> Self
+
+pub struct OptimizationPassMetric {
+  name : String
+  duration_us : Int64
+  before_insts : Int
+  after_insts : Int
+  changed : Bool
+  rewrite_attempts : Int?
+  rewrite_apps : Int?
+  rewrite_created_insts : Int?
+  work_done : Int?
+  value_lookup_probes : Int?
+  budget_exhausted : Bool?
+}
+
+// Type aliases
+
+// Traits

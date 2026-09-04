@@ -300,8 +300,8 @@ fn milkir_metrics_now_us() -> Int64 {
 ///|
 pub fn install_milkir_metrics_sink() -> Unit {
   if enabled() && detail_enabled() {
-    @milkir.install_optimization_metrics_sink(
-      @milkir.OptimizationMetricsSink::new(milkir_metrics_now_us, fn(metric) {
+    @optimize.install_optimization_metrics_sink(
+      @optimize.OptimizationMetricsSink::new(milkir_metrics_now_us, fn(metric) {
         record_ir_pass(
           metric.name,
           metric.before_insts,
@@ -318,13 +318,13 @@ pub fn install_milkir_metrics_sink() -> Unit {
       }),
     )
   } else {
-    @milkir.clear_optimization_metrics_sink()
+    @optimize.clear_optimization_metrics_sink()
   }
 }
 
 ///|
 pub fn clear_milkir_metrics_sink() -> Unit {
-  @milkir.clear_optimization_metrics_sink()
+  @optimize.clear_optimization_metrics_sink()
 }
 
 ///|

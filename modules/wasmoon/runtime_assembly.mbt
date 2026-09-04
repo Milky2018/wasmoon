@@ -141,7 +141,7 @@ pub fn plan_wasm_function_with_compiler_infra(
       func_local_idx,
       name="wasm_func_\{func_local_idx}",
     )
-    @milkir.optimize_with_level(milk, @milkir.OptLevel::from_int(opt_level))
+    @optimize.optimize_with_level(milk, @optimize.OptLevel::from_int(opt_level))
     |> ignore
     let translation_context = @wasm_frontend.translation_context_from_module(
       mod_, body_env,

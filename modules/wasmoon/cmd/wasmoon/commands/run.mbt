@@ -1951,7 +1951,7 @@ fn compile_validated_module_to_jit(
         func_idx,
         func_name,
         normalized_opt_level,
-        @milkir.instruction_count(ir_func),
+        @optimize.instruction_count(ir_func),
       )
       if function_preparation_us is Some(duration_us) {
         @perf.record_compile_subphase_us("function_preparation", duration_us)
@@ -1961,9 +1961,9 @@ fn compile_validated_module_to_jit(
       }
       @perf.install_milkir_metrics_sink()
     }
-    @milkir.optimize_with_level(
+    @optimize.optimize_with_level(
       ir_func,
-      @milkir.OptLevel::from_int(normalized_opt_level),
+      @optimize.OptLevel::from_int(normalized_opt_level),
     )
     |> ignore
     if perf_on {
@@ -2051,7 +2051,7 @@ fn compile_validated_module_to_jit(
         @perf.record_function_compile_us(@perf.elapsed_us(tick))
       }
       @perf.finish_function(
-        @milkir.instruction_count(ir_func),
+        @optimize.instruction_count(ir_func),
         entry.code.length(),
       )
     }
