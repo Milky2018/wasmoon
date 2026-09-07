@@ -311,8 +311,8 @@ fn instantiate_canon_stream_read(
           return ret_i32(0)
         }
         // BLOCKED=-1, COMPLETED=0 | (n<<4), DROPPED=1 | (n<<4)
-        if len < 0 {
-          trap_canon("type mismatch")
+        if len.reinterpret_as_uint() > 0x0fffffffU {
+          trap_canon("stream read/write count too large")
           ret_i32(0)
         } else {
           let key = handle_key(owner_component_id, handle)
@@ -541,69 +541,7 @@ fn instantiate_canon_stream_read(
                 match st0.pending_write {
                   Some(pw) => {
                     let elem_size = st0.elem_size
-                    let total_elems = pw.buf.length() / elem_size
-                    // Zero-length reads must block and complete via an event even when a
-                    // zero-length write is already pending (component-spec/async/zero-length.wast).
-                    if is_async && len == 0 && total_elems == 0 {
-                      // Ensure the pending write gets a completion event.
-                      let mut pw_event_enqueued = pw.event_enqueued
-                      if !pw_event_enqueued {
-                        enqueue_waitable_event(
-                          async_state,
-                          handle_key(pw.writer_table.id, pw.writer_handle),
-                          {
-                            owner_component_id: pw.writer_table.id,
-                            code: 3,
-                            index: pw.writer_handle,
-                            payload: (if st0.readable_dropped { 1 } else { 0 }) |
-                            (0 << 4),
-                          },
-                        )
-                        pw_event_enqueued = true
-                      }
-                      // And complete this read via an event too.
-                      enqueue_waitable_event(
-                        async_state,
-                        handle_key(owner_component_id, handle),
-                        {
-                          owner_component_id,
-                          code: 2,
-                          index: handle,
-                          payload: (if st0.writable_dropped { 1 } else { 0 }) |
-                          (0 << 4),
-                        },
-                      )
-                      let pr = {
-                        mem_addr: resources.mem_addr,
-                        realloc: resources.realloc,
-                        encoding: resources.encoding,
-                        reader_table,
-                        ptr,
-                        len: 0,
-                        filled: 0,
-                        reader_handle: handle,
-                        event_enqueued: true,
-                      }
-                      table.streams.set(ep.stream_id, {
-                        elem_size: st0.elem_size,
-                        own_resource_type_id: st0.own_resource_type_id,
-                        pending_read: Some(pr),
-                        pending_write: Some({
-                          writer_table: pw.writer_table,
-                          buf: pw.buf,
-                          sent: pw.sent,
-                          writer_handle: pw.writer_handle,
-                          event_enqueued: pw_event_enqueued,
-                          defer_complete: pw.defer_complete,
-                        }),
-                        readable_dropped: st0.readable_dropped,
-                        writable_dropped: st0.writable_dropped,
-                      })
-                      set_canon_debug_message(
-                        "stream.read(handle=\{handle} len=\{len})-> -1",
-                      )
-                      return ret_i32(-1)
-                    }
+                    let total_elems = pw.count
                     let remain = total_elems - pw.sent
                     if remain <= 0 {
                       let mut pw_event_enqueued = pw.event_enqueued
@@ -630,6 +568,7 @@ fn instantiate_canon_stream_read(
                         pending_write: Some({
                           writer_table: pw.writer_table,
                           buf: pw.buf,
+                          count: pw.count,
                           sent: pw.sent,
                           writer_handle: pw.writer_handle,
                           event_enqueued: pw_event_enqueued,
@@ -663,6 +602,7 @@ fn instantiate_canon_stream_read(
                         pending_write: Some({
                           writer_table: pw.writer_table,
                           buf: pw.buf,
+                          count: pw.count,
                           sent: pw.sent,
                           writer_handle: pw.writer_handle,
                           event_enqueued: pw_event_enqueued,
@@ -779,6 +719,7 @@ fn instantiate_canon_stream_read(
                     let pw2 = Some({
                       writer_table: pw.writer_table,
                       buf: pw.buf,
+                      count: pw.count,
                       sent: new_sent,
                       writer_handle: pw.writer_handle,
                       event_enqueued,
@@ -934,8 +875,8 @@ fn instantiate_canon_stream_write(
           trap_canon("cannot block a synchronous task before returning")
           return ret_i32(0)
         }
-        if len < 0 {
-          trap_canon("type mismatch")
+        if len.reinterpret_as_uint() > 0x0fffffffU {
+          trap_canon("stream read/write count too large")
           ret_i32(0)
         } else {
           match table.endpoints.get(handle_key(owner_component_id, handle)) {
@@ -971,8 +912,7 @@ fn instantiate_canon_stream_write(
                       )
                       return ret_i32(0)
                     } else if pw0.writer_handle == handle {
-                      let elem_size = st0.elem_size
-                      let total_elems = pw0.buf.length() / elem_size
+                      let total_elems = pw0.count
                       if st0.readable_dropped || pw0.sent >= total_elems {
                         // Sync stream.write should observe a drop that happens immediately after a
                         // successful rendezvous (read returns to the caller and then the caller
@@ -989,6 +929,7 @@ fn instantiate_canon_stream_write(
                             pending_write: Some({
                               writer_table: pw0.writer_table,
                               buf: pw0.buf,
+                              count: pw0.count,
                               sent: pw0.sent,
                               writer_handle: pw0.writer_handle,
                               event_enqueued: pw0.event_enqueued,
@@ -1053,11 +994,16 @@ fn instantiate_canon_stream_write(
                 }
                 match st0.pending_read {
                   Some(pr0) => {
-                    // Symmetric zero-length rendezvous: if a zero-length read is pending,
-                    // a zero-length write must also complete via events (not eagerly).
-                    if is_async && len == 0 && pr0.len == 0 {
-                      let mut pr_event_enqueued = pr0.event_enqueued
-                      if !pr_event_enqueued {
+                    // A zero-length write reports readiness without completing the reader.
+                    if len == 0 {
+                      return ret_i32(0)
+                    }
+                    let elem_size = st0.elem_size
+                    let remain = pr0.len - pr0.filled
+                    if remain <= 0 {
+                      // A pending zero-length read completes when a nonempty write arrives.
+                      // Keep the write pending until a subsequent read consumes its data.
+                      let pending_read = if pr0.len == 0 && !pr0.event_enqueued {
                         enqueue_waitable_event(
                           async_state,
                           handle_key(pr0.reader_table.id, pr0.reader_handle),
@@ -1065,27 +1011,10 @@ fn instantiate_canon_stream_write(
                             owner_component_id: pr0.reader_table.id,
                             code: 2,
                             index: pr0.reader_handle,
-                            payload: (if st0.writable_dropped { 1 } else { 0 }) |
-                            (0 << 4),
+                            payload: 0,
                           },
                         )
-                        pr_event_enqueued = true
-                      }
-                      enqueue_waitable_event(
-                        async_state,
-                        handle_key(owner_component_id, handle),
-                        {
-                          owner_component_id,
-                          code: 3,
-                          index: handle,
-                          payload: (if st0.readable_dropped { 1 } else { 0 }) |
-                          (0 << 4),
-                        },
-                      )
-                      table.streams.set(ep.stream_id, {
-                        elem_size: st0.elem_size,
-                        own_resource_type_id: st0.own_resource_type_id,
-                        pending_read: Some({
+                        Some({
                           mem_addr: pr0.mem_addr,
                           realloc: pr0.realloc,
                           encoding: pr0.encoding,
@@ -1094,28 +1023,11 @@ fn instantiate_canon_stream_write(
                           len: pr0.len,
                           filled: pr0.filled,
                           reader_handle: pr0.reader_handle,
-                          event_enqueued: pr_event_enqueued,
-                        }),
-                        pending_write: Some({
-                          writer_table,
-                          buf: [],
-                          sent: 0,
-                          writer_handle: handle,
                           event_enqueued: true,
-                          defer_complete: false,
-                        }),
-                        readable_dropped: st0.readable_dropped,
-                        writable_dropped: st0.writable_dropped,
-                      })
-                      set_canon_debug_message(
-                        "stream.write(handle=\{handle} len=\{len})-> -1",
-                      )
-                      return ret_i32(-1)
-                    }
-                    let elem_size = st0.elem_size
-                    let remain = pr0.len - pr0.filled
-                    if remain <= 0 {
-                      // The reader's buffer is full (completion not yet acknowledged): block.
+                        })
+                      } else {
+                        st0.pending_read
+                      }
                       let buf : Array[Byte] = []
                       let src_bytes = len * elem_size
                       for i in 0..<src_bytes {
@@ -1134,10 +1046,11 @@ fn instantiate_canon_stream_write(
                       table.streams.set(ep.stream_id, {
                         elem_size: st0.elem_size,
                         own_resource_type_id: st0.own_resource_type_id,
-                        pending_read: st0.pending_read,
+                        pending_read,
                         pending_write: Some({
                           writer_table,
                           buf,
+                          count: len,
                           sent: 0,
                           writer_handle: handle,
                           event_enqueued: false,
@@ -1348,6 +1261,7 @@ fn instantiate_canon_stream_write(
                       pending_write: Some({
                         writer_table,
                         buf,
+                        count: len,
                         sent: 0,
                         writer_handle: handle,
                         event_enqueued: false,
@@ -1622,6 +1536,7 @@ fn instantiate_canon_stream_drop_readable(
                     pending_write: Some({
                       writer_table: pw.writer_table,
                       buf: pw.buf,
+                      count: pw.count,
                       sent: pw.sent,
                       writer_handle: pw.writer_handle,
                       event_enqueued: true,

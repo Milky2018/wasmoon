@@ -26,6 +26,7 @@ fn HostRuntimeState::new_closed_host_stream(
     pending_write: Some({
       writer_table: table,
       buf: buffer,
+      count: bytes.length() / element_size,
       sent: 0,
       writer_handle: 0,
       event_enqueued: true,
@@ -339,6 +340,7 @@ pub fn HostRuntimeState::read_host_byte_stream(
           pending_write: Some({
             writer_table: write.writer_table,
             buf: write.buf,
+            count: write.count,
             sent,
             writer_handle: write.writer_handle,
             event_enqueued: true,
@@ -397,6 +399,7 @@ pub fn HostRuntimeState::drop_host_readable_stream(
       Some({
         writer_table: write.writer_table,
         buf: write.buf,
+        count: write.count,
         sent: write.sent,
         writer_handle: write.writer_handle,
         event_enqueued: true,

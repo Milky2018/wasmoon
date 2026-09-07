@@ -220,6 +220,8 @@ struct PendingStreamWrite {
   // Canonical payload bytes. For streams of `own` resources this encodes the original
   // writer-side handle indices (i32 little-endian per element).
   buf : Array[Byte]
+  // Element count is independent of byte length for zero-sized payloads.
+  count : Int
   // Number of elements already consumed by a read.
   sent : Int
   // Writable endpoint handle (waitable index) that initiated this pending write.

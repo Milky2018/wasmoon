@@ -175,7 +175,7 @@ fn stream_payload_info(
   // For `stream u8` the element size is 1 byte; for `stream (own $R)` it is 4 bytes
   // (an i32 handle index in memory).
   match payload_ty {
-    None => (1, None)
+    None => (0, None)
     Some(vt) => {
       let (size, alignment) = canonical_memory_layout(vt, types, false)
       let element_size = align_to(size, alignment)

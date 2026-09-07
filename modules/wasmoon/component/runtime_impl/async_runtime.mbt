@@ -567,6 +567,9 @@ fn step_task_once_impl(
     let outcome = match task.continuation[0] {
       Some(continuation) => {
         task.continuation[0] = None
+        // The scheduler stops waiting before guest code resumes. The intrinsic
+        // releases its own waiter when it consumes the event.
+        set_waiting(None)
         continuation.continue_execution()
       }
       None => invoke()
