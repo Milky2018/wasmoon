@@ -390,15 +390,7 @@ fn load_component_jit_context(
     instance,
     store,
     use_subtype_indirect_check=true,
-  ) catch {
-    error => {
-      funcrefs.release()
-      jit_module.close()
-      raise NativeCompilationFailed(
-        "failed to initialize component core segments: \{error}",
-      )
-    }
-  }
+  )
   @wast.sync_tables_to_jit(
     instance,
     store,

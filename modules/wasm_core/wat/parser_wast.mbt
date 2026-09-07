@@ -423,15 +423,21 @@ fn Parser::parse_module_field_inner(
       mod_.imports.push(imp)
     }
     Keyword("table") => {
-      let (table, export_name, inline_elem, tbl_name) = self.parse_table_def(
+      let (table, export_names, inline_elem, tbl_name) = self.parse_table_def(
         mod_,
       )
-      let table_idx = mod_.tables.length()
-      mod_.tables.push(table)
+      let table_idx = match table {
+        Some(table) => {
+          let idx = count_table_imports(mod_.imports) + mod_.tables.length()
+          mod_.tables.push(table)
+          idx
+        }
+        None => count_table_imports(mod_.imports) - 1
+      }
       if tbl_name is Some(name) {
         self.table_names.set(name, table_idx)
       }
-      if export_name is Some(name) {
+      for name in export_names {
         mod_.exports.push({ name, desc: Table(table_idx), })
       }
       if inline_elem is Some(elem) {
@@ -564,15 +570,7 @@ fn Parser::parse_wast_module_command(
       // (module instance $instance_name $definition_name)
       self.advance() // consume 'instance'
       let instance_name = self.parse_wast_optional_id()
-      // The definition name is required - parse as identifier
-      let def_name = match self.current.token {
-        Id(s) => {
-          self.advance()
-          s
-        }
-        _ =>
-          raise UnexpectedToken("expected module definition name", self.loc())
-      }
+      let def_name = self.parse_wast_optional_id()
       self.expect_rparen()
       ModuleInstance(instance_name, def_name)
     }
@@ -996,7 +994,13 @@ fn Parser::parse_wast_const_value(self : Parser) -> WastValue raise WatError {
     }
     Keyword("ref.func") => {
       self.advance()
-      RefFunc
+      match self.current.token {
+        Number(n) => {
+          self.advance()
+          RefFuncIndex(parse_wast_int(n))
+        }
+        _ => RefFunc
+      }
     }
     // GC reference types
     Keyword("ref.array") => {

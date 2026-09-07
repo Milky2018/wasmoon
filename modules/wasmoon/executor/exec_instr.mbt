@@ -113,12 +113,16 @@ fn ExecContext::exec_instr(
       let table_addr = self.instance.table_addrs[table_idx]
       let table = self.store.get_table(table_addr)
       let delta = if table.is_table64() {
-        self.stack.pop_i64().to_int()
+        self.stack.pop_i64()
       } else {
-        self.stack.pop_i32()
+        self.stack.pop_i32().to_int64()
       }
       let init_val = self.stack.pop()
-      let old_size = table.grow(delta, init_val)
+      let old_size = if delta < 0L || delta > 0x7FFFFFFFL {
+        -1
+      } else {
+        table.grow(delta.to_int(), init_val)
+      }
       if table.is_table64() {
         self.stack.push(I64(old_size.to_int64()))
       } else {
@@ -207,43 +211,7 @@ fn ExecContext::exec_instr(
 
       // Copy elements from elem segment to table
       for i in 0..<n {
-        let init_expr = elem_segment.init[s + i]
-        // Evaluate the init expression to get the value
-        let value = match init_expr {
-          [RefFunc(func_idx)] => {
-            // Convert module function index to store address
-            let store_addr = self.instance.func_addrs[func_idx]
-            @types.Value::FuncRef(store_addr)
-          }
-          [RefNull(ref_type)] =>
-            match ref_type {
-              FuncRef | ExternRef => Null
-              _ => Null
-            }
-          // GC: handle ref.i31 expressions
-          [I32Const(n), RefI31] => {
-            let i31_val = n & 0x7FFFFFFF
-            I31(i31_val)
-          }
-          [GlobalGet(idx), RefI31] => {
-            let globals = get_global_instances(
-              self.store,
-              self.instance.global_addrs,
-            )
-            if idx < globals.length() {
-              match globals[idx].get() {
-                I32(n) => {
-                  let i31_val = n & 0x7FFFFFFF
-                  I31(i31_val)
-                }
-                _ => Null
-              }
-            } else {
-              Null
-            }
-          }
-          _ => Null
-        }
+        let value = self.instance.elem_values[elem_idx][s + i]
         table.set(d + i, value)
       }
     }

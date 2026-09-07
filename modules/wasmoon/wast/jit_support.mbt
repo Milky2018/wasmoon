@@ -844,9 +844,9 @@ pub fn init_bulk_segments(
   mod_ : @types.Module,
   jm : @jit.JITModule,
   instance : @runtime.ModuleInstance,
-  store : @runtime.Store,
+  _store : @runtime.Store,
   use_subtype_indirect_check? : Bool = false,
-) -> Unit raise @runtime.RuntimeError {
+) -> Unit {
   // Precompute canonical indices for type equivalence.
   let canonical = @types.compute_canonical_type_indices(
     mod_.types,
@@ -886,13 +886,6 @@ pub fn init_bulk_segments(
     func_addr_to_idx.set(addr, i)
   }
 
-  // Get globals for GlobalGet evaluation.
-  let globals : Array[@runtime.GlobalInstance] = []
-  for addr in instance.global_addrs {
-    let g = store.get_global(addr) catch { _ => continue }
-    globals.push(g)
-  }
-
   // Initial dropped flags from the instantiated instance state.
   let data_dropped : Array[Bool] = []
   for i in 0..<mod_.datas.length() {
@@ -910,22 +903,11 @@ pub fn init_bulk_segments(
     elem_dropped.push(dropped || declarative)
   }
 
-  // Build element segment (value,type) pairs.
-  // We evaluate element init expressions using the executor's extended const-expr
-  // evaluator so GC const exprs (array.new, struct.new, ref.i31, etc.) work.
+  // Reuse the values evaluated during instantiation, including object identity.
   let elem_pairs : Array[Array[Int64]] = []
-  for elem in mod_.elems {
+  for values in instance.elem_values {
     let pairs : Array[Int64] = []
-    for init_expr in elem.init {
-      // Evaluate the const expression to a runtime Value.
-      let value = @executor.eval_const_expr(
-        init_expr,
-        func_addrs=instance.func_addrs,
-        globals~,
-        store=Some(store),
-        types=mod_.types,
-      )
-
+    for value in values {
       // Encode the value to the JIT segment format (value bits + type idx for funcref).
       let mut raw = @wasm_milkir.NULL_REF
       let mut ty = -1L

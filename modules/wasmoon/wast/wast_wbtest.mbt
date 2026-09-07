@@ -208,3 +208,102 @@ test "funcref registration release restores previous owner" {
   debug_inspect(registered_funcref_ptr(store, 0), content="Some(100)")
   previous.release()
 }
+
+///|
+test "Wasmtime named module imports are opt-in" {
+  let source =
+    #|(module $env (memory (export "memory") 1))
+    #|(module (import "env" "memory" (memory 1))
+    #|  (func (export "size") (result i32) memory.size))
+    #|(assert_return (invoke "size") (i32.const 1))
+  let script = parse(source) catch { e => fail("Parse error: \{e}") }
+  let original = run_wast_commands(script, ".", false, false)
+  inspect(original.failed > 0, content="true")
+  let compatible = run_wast_commands(
+    script,
+    ".",
+    false,
+    false,
+    register_named_modules=true,
+  )
+  inspect(compatible.failed, content="0")
+  inspect(compatible.passed, content="1")
+}
+
+///|
+test "bare invoke traps fail the script" {
+  let source =
+    #|(module (func (export "trap") unreachable))
+    #|(invoke "trap")
+  let script = parse(source) catch { e => fail("Parse error: \{e}") }
+  let result = run_wast_commands(script, ".", false, false)
+  inspect(result.failed, content="1")
+  inspect(result.passed, content="0")
+}
+
+///|
+test "active data segments are dropped after initialization" {
+  let source =
+    #|(module (memory 1) (data (i32.const 0) "a")
+    #|  (func (export "read") (result i32) (i32.load8_u (i32.const 0)))
+    #|  (func (export "init") (param i32 i32)
+    #|    (memory.init 0 (i32.const 0) (local.get 0) (local.get 1))))
+    #|(assert_return (invoke "read") (i32.const 97))
+    #|(assert_return (invoke "init" (i32.const 0) (i32.const 0)))
+    #|(assert_trap (invoke "init" (i32.const 0) (i32.const 1)) "out of bounds")
+    #|(assert_trap (invoke "init" (i32.const 1) (i32.const 0)) "out of bounds")
+  let script = parse(source) catch { e => fail("Parse error: \{e}") }
+  let result = run_wast_commands(script, ".", false, false)
+  inspect(result.failed, content="0")
+  inspect(result.passed, content="4")
+}
+
+///|
+test "indexed ref.func expectations compare function identity" {
+  let source =
+    #|(module (func))
+    #|(module (func $a) (func $b)
+    #|  (elem declare func $a $b)
+    #|  (func (export "get") (result funcref) ref.func $b))
+    #|(assert_return (invoke "get") (ref.func 1))
+    #|(assert_return (invoke "get") (ref.func 0))
+    #|(assert_return (invoke "get") (either (ref.func 0) (ref.func 1)))
+  let script = parse(source) catch { e => fail("Parse error: \{e}") }
+  let result = run_wast_commands(script, ".", false, false)
+  inspect(result.failed, content="1")
+  inspect(result.passed, content="2")
+}
+
+///|
+test "table imports share the index space with local definitions" {
+  let source =
+    #|(module (table (export "table") 1 funcref))
+    #|(register "host")
+    #|(module
+    #|  (table $imported (import "host" "table") (export "imported") 1 funcref)
+    #|  (table $local (export "local") (export "alias") 2 funcref)
+    #|  (func (export "size-imported") (result i32) table.size $imported)
+    #|  (func (export "size-local") (result i32) table.size $local))
+    #|(assert_return (invoke "size-imported") (i32.const 1))
+    #|(assert_return (invoke "size-local") (i32.const 2))
+    #|(register "tables")
+    #|(module (import "tables" "alias" (table 2 funcref))
+    #|  (func (export "size") (result i32) table.size))
+    #|(assert_return (invoke "size") (i32.const 2))
+  let script = parse(source) catch { e => fail("Parse error: \{e}") }
+  let result = run_wast_commands(script, ".", false, false)
+  inspect(result.failed, content="0")
+  inspect(result.passed, content="3")
+}
+
+///|
+test "anonymous module definitions can be instantiated" {
+  let source =
+    #|(module definition (func (export "f") (result i32) i32.const 7))
+    #|(module instance)
+    #|(assert_return (invoke "f") (i32.const 7))
+  let script = parse(source) catch { e => fail("Parse error: \{e}") }
+  let result = run_wast_commands(script, ".", false, false)
+  inspect(result.failed, content="0")
+  inspect(result.passed, content="2")
+}

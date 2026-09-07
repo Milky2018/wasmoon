@@ -552,8 +552,8 @@ fn validate_instr(
       }
       let dst_addr_type = ctx.mems[dst].addr_type()
       let src_addr_type = ctx.mems[src].addr_type()
-      // n uses the larger of the two address types
-      let n_type = if dst_addr_type == I64 || src_addr_type == I64 {
+      // The length uses the smaller of the two address types.
+      let n_type = if dst_addr_type == I64 && src_addr_type == I64 {
         @types.ValueType::I64
       } else {
         I32

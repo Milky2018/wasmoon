@@ -165,6 +165,16 @@ fn ExecContext::exec_struct_set(
 // ============================================================
 
 ///|
+/// Native GC objects use signed 32-bit offsets and 16-byte value slots.
+/// Check before constructing the temporary MoonBit array as well as allocating
+/// the GC object, so a guest length never reaches a host allocation assertion.
+fn check_gc_array_length(len : Int) -> Unit raise @runtime.RuntimeError {
+  if len < 0 || len > (0x7FFFFFFF - 32) / 16 {
+    raise OutOfMemory
+  }
+}
+
+///|
 /// array.new: Create a new array with a fill value and length
 fn ExecContext::exec_array_new(
   self : ExecContext,
@@ -178,6 +188,7 @@ fn ExecContext::exec_array_new(
   }
 
   // Create array with fill value
+  check_gc_array_length(len)
   let elements : Array[@types.Value] = Array::make(len, fill_val)
 
   // Allocate array in the store
@@ -203,6 +214,7 @@ fn ExecContext::exec_array_new_default(
   )
 
   // Create array with default values
+  check_gc_array_length(len)
   let elements : Array[@types.Value] = Array::make(len, default_val)
 
   // Allocate array in the store
@@ -219,6 +231,7 @@ fn ExecContext::exec_array_new_fixed(
   len : Int,
 ) -> Unit raise {
   // Pop elements from stack (in reverse order)
+  check_gc_array_length(len)
   let elements : Array[@types.Value] = Array::make(len, I32(0))
   for i = len - 1; i >= 0; i = i - 1 {
     elements[i] = self.stack.pop()
@@ -542,8 +555,7 @@ fn ExecContext::exec_array_new_elem(
   // Read elements from elem segment
   let elements : Array[@types.Value] = []
   for i in 0..<len {
-    let init_expr = elem_segment.init[offset + i]
-    let value = self.eval_elem_init_expr(init_expr)
+    let value = self.instance.elem_values[elem_idx][offset + i]
     elements.push(value)
   }
 
@@ -669,8 +681,7 @@ fn ExecContext::exec_array_init_elem(
 
   // Copy elements from elem segment to array
   for i in 0..<len {
-    let init_expr = elem_segment.init[src_offset + i]
-    let value = self.eval_elem_init_expr(init_expr)
+    let value = self.instance.elem_values[elem_idx][src_offset + i]
     self.store.array_set(arr_idx, dst_offset + i, value)
   }
 }
@@ -744,37 +755,6 @@ fn read_value_from_bytes(
     Val(_) =>
       // Reference types are not valid for data segments
       Null
-  }
-}
-
-///|
-/// Helper: Evaluate an element init expression to get a value
-/// For complex expressions (like array.new), execute them through the interpreter
-fn ExecContext::eval_elem_init_expr(
-  self : ExecContext,
-  init_expr : Array[@types.Instruction],
-) -> @types.Value raise {
-  match init_expr {
-    [RefFunc(func_idx)] => {
-      let store_addr = self.instance.func_addrs[func_idx]
-      FuncRef(store_addr)
-    }
-    [RefNull(_)] => Null
-    _ => {
-      // For complex expressions, execute them through the interpreter
-      // Save the current stack state
-      let saved_stack_len = self.stack.size()
-      // Execute all instructions
-      for instr in init_expr {
-        self.exec_instr(instr)
-      }
-      // Pop the result
-      if self.stack.size() > saved_stack_len {
-        self.stack.pop()
-      } else {
-        Null
-      }
-    }
   }
 }
 

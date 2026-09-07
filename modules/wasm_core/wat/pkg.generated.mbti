@@ -65,7 +65,7 @@ pub fn WastAction::to_repr(Self) -> @debug.Repr
 pub enum WastCommand {
   Module(@types.Module, String?)
   ModuleDefinition(@types.Module, String?)
-  ModuleInstance(String?, String)
+  ModuleInstance(String?, String?)
   ModuleQuote(Array[String])
   ModuleBinaryFailed(String)
   AssertReturn(WastAction, Array[WastValue])
@@ -119,6 +119,7 @@ pub enum WastValue {
   RefExternAny
   RefHost(Int)
   RefFunc
+  RefFuncIndex(Int)
   RefArray
   RefStruct
   RefEq

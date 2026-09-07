@@ -1463,12 +1463,7 @@ fn run_with_jit(
             is Some(_)
           init_jit_tables(instance, store, jm, use_subtype_indirect_check)
           // Initialize per-context data/elem segments for bulk ops (memory.init/table.init/etc).
-          @wast.init_bulk_segments(mod_, jm, instance, store) catch {
-            err => {
-              @logger.error("Failed to initialize JIT bulk segments: \{err}")
-              raise CommandFailure(1)
-            }
-          }
+          @wast.init_bulk_segments(mod_, jm, instance, store)
           let jit_ctx = @wast.JITModuleContext::JITModuleContext(
             jm,
             globals_ptr,

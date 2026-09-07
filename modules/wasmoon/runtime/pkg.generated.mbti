@@ -348,6 +348,7 @@ pub(all) struct ModuleInstance {
   global_addrs : Array[Int]
   tag_addrs : Array[Int]
   exports : Array[@types.Export]
+  elem_values : Array[Array[@types.Value]]
   elem_segments : Array[@types.Element]
   data_segments : Array[@types.Data]
   dropped_elems : Array[Bool]

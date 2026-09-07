@@ -296,7 +296,7 @@ test "bulk memory: memory.init from data segment" {
         page_size_log2: 16,
       },
     ],
-    datas: [{ memory_idx: 0, offset: [I32Const(0)], init: data_bytes, }],
+    datas: [{ memory_idx: -1, offset: [], init: data_bytes, }],
   }
   let (store, instance) = instantiate_module_with_init(mod) catch {
     _ => fail("instantiate_module_with_init failed")
@@ -330,7 +330,7 @@ test "bulk memory: memory.init with offset" {
         page_size_log2: 16,
       },
     ],
-    datas: [{ memory_idx: 0, offset: [I32Const(0)], init: data_bytes, }],
+    datas: [{ memory_idx: -1, offset: [], init: data_bytes, }],
   }
   let (store, instance) = instantiate_module_with_init(mod) catch {
     _ => fail("instantiate_module_with_init failed")
@@ -398,7 +398,7 @@ test "bulk memory: data.drop" {
     start: None,
     elems: [],
     codes: [drop_func, init_zero_func, init_nonzero_func],
-    datas: [{ memory_idx: 0, offset: [I32Const(0)], init: data_bytes, }],
+    datas: [{ memory_idx: -1, offset: [], init: data_bytes, }],
     tags: [],
     func_names: Map([]),
   }

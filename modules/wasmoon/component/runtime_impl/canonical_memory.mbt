@@ -85,7 +85,9 @@ fn store_flat_component_value_to_memory(
               _ => raise HostCallError("type mismatch")
             }
             if tag < 0 || tag >= cases.length() {
-              raise CanonCallError("invalid variant discriminant")
+              raise CanonCallError(
+                "invalid variant discriminant: discriminant \{tag.reinterpret_as_uint()} out of range [0..\{cases.length()})",
+              )
             }
             let (tag_size, tag_alignment) = discriminant_layout(cases.length())
             store_storage_value(mem, value_addr, I32(tag), {
@@ -324,7 +326,9 @@ fn load_flat_component_value_from_memory(
             _ => raise HostCallError("type mismatch")
           }
           if tag < 0 || tag >= cases.length() {
-            raise CanonCallError("invalid variant discriminant")
+            raise CanonCallError(
+              "invalid variant discriminant: discriminant \{tag.reinterpret_as_uint()} out of range [0..\{cases.length()})",
+            )
           }
           let all_flat = core_types_for_valtype(
             TypeIdx(type_idx),

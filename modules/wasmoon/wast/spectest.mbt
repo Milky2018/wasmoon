@@ -129,6 +129,7 @@ pub fn create_spectest_module(
     ],
     tag_addrs: [],
     exports,
+    elem_values: [],
     elem_segments: [],
     data_segments: [],
     dropped_elems: [],

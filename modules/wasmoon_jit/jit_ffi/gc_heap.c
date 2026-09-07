@@ -145,6 +145,11 @@ static int gc_try_decode_heap_ref_candidate(
 // ============ Internal Helpers ============
 
 static int ensure_heap_capacity(GcHeap* heap, size_t needed) {
+    // Object offsets and header sizes are signed 32-bit values. Reject before
+    // addition or capacity doubling can wrap or truncate those representations.
+    if (needed > INT32_MAX || heap->size > (size_t)INT32_MAX - needed) {
+        return 0;
+    }
     if (heap->size + needed <= heap->capacity) {
         return 1;  // Enough space
     }

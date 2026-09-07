@@ -40,7 +40,13 @@ commands, exit codes, counts, logs and available JIT compilation traces.
 ## Execution contracts
 
 Core scripts execute unchanged through `wasmoon test`, with `--no-jit` in the
-interpreter lane. Component scripts use the existing `run_component_wast.py`
+interpreter lane. The runner enables `WASMOON_WAST_REGISTER_NAMED_MODULES=1`
+to reproduce Wasmtime's automatic registration of named modules for imports.
+Ordinary WAST execution keeps explicit `register` semantics by default. Reports
+record this compatibility setting. Bare `invoke` commands must complete without
+trapping, and indexed `ref.func` expectations compare function identity.
+
+Component scripts use the existing `run_component_wast.py`
 adapter, including its WAST-to-JSON conversion, validation and runtime harness;
 they require `wasmoon-tools` and exactly wasm-tools 1.254.0. Component results
 therefore measure that adapter's coverage as well as Wasmoon's runtime.

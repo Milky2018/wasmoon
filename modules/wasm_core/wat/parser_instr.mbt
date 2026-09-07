@@ -208,13 +208,7 @@ fn Parser::parse_folded_instructions(
         Block(_, _) | Loop(_, _) | If(_, _, _) | TryTable(_, _, _) => [instr]
         _ => {
           // Parse nested folded instructions (operands)
-          let result : Array[@types.Instruction] = []
-          while self.current.token == LParen {
-            self.advance()
-            for i in self.parse_folded_instructions() {
-              result.push(i)
-            }
-          }
+          let result = self.parse_instructions()
           self.expect_rparen()
           result.push(instr)
           result
@@ -969,8 +963,8 @@ fn Parser::parse_plain_instruction(
     "ref.test" => {
       // ref.test <heaptype> or ref.test (ref <heaptype>)
       // Uses RefTestNull if the type is nullable, otherwise RefTest
-      let vt = self.parse_value_type()
-      if vt.is_nullable() {
+      let (vt, nullable) = self.parse_cast_type()
+      if nullable {
         RefTestNull(vt)
       } else {
         RefTest(vt)
@@ -979,8 +973,8 @@ fn Parser::parse_plain_instruction(
     "ref.cast" => {
       // ref.cast <heaptype> or ref.cast (ref <heaptype>)
       // Uses RefCastNull if the type is nullable, otherwise RefCast
-      let vt = self.parse_value_type()
-      if vt.is_nullable() {
+      let (vt, nullable) = self.parse_cast_type()
+      if nullable {
         RefCastNull(vt)
       } else {
         RefCast(vt)

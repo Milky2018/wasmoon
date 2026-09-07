@@ -127,7 +127,9 @@ fn lift_component_value_from_flat(
               _ => raise HostCallError("type mismatch")
             }
             if tag < 0 || tag >= cases.length() {
-              raise CanonCallError("invalid variant discriminant")
+              raise CanonCallError(
+                "invalid variant discriminant: discriminant \{tag.reinterpret_as_uint()} out of range [0..\{cases.length()})",
+              )
             }
             let all_flat = core_types_for_valtype(TypeIdx(ti), types, mem_is_64)
             let joined_types : Array[@types.ValueType] = []

@@ -3,14 +3,21 @@
 fn validate_memory_limits(
   mem : @types.MemoryType,
 ) -> Unit raise ValidationError {
+  if mem.page_size_log2 != 0 && mem.page_size_log2 != 16 {
+    raise InvalidLimits("invalid custom page size")
+  }
   let limits = mem.limits
   // memory32: max 65536 pages (2^16) = 4GB
   // memory64: max 2^48 pages = 16EB (theoretical, but limit to 2^48 pages)
   // Note: 2^48 = 281474976710656, but we use the representation that fits in Int64
   let max_pages : Int64 = if mem.is_memory64 {
-    281474976710656L // 2^48 pages
+    if mem.page_size_log2 == 0 {
+      -1L
+    } else {
+      281474976710656L
+    }
   } else {
-    65536L
+    1L << (32 - mem.page_size_log2)
   }
   let error_msg = if mem.is_memory64 {
     "memory size must be at most 2^48 pages"

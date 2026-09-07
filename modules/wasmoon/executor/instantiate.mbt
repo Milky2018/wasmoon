@@ -138,8 +138,8 @@ pub fn instantiate_module(
   // func_type_indices: type index for each function (from mod.funcs)
   // Initialize dropped arrays with false values
   let dropped_elems : Array[Bool] = []
-  for _ in 0..<mod.elems.length() {
-    dropped_elems.push(false)
+  for elem in mod.elems {
+    dropped_elems.push(elem.mode is Declarative)
   }
   let dropped_datas : Array[Bool] = []
   for _ in 0..<mod.datas.length() {
@@ -149,6 +149,9 @@ pub fn instantiate_module(
   let canonical_type_indices = @types.compute_canonical_type_indices(
     mod.types,
     type_rec_groups=mod.type_rec_groups,
+  )
+  let elem_values = try! evaluate_element_segments(
+    mod, store, func_addrs, global_addrs,
   )
   let instance : @runtime.ModuleInstance = {
     types: mod.types,
@@ -162,11 +165,13 @@ pub fn instantiate_module(
     global_addrs,
     tag_addrs,
     exports: mod.exports,
+    elem_values,
     elem_segments: mod.elems,
     data_segments: mod.datas,
     dropped_elems,
     dropped_datas,
   }
+  try! (store.register_instance(instance) |> ignore)
   (store, instance)
 }
 
@@ -248,6 +253,7 @@ pub fn eval_const_expr(
             let default_val = default_value_for_storage_type(
               array_type.element.storage_type,
             )
+            check_gc_array_length(len)
             let elements : Array[@types.Value] = Array::make(len, default_val)
             let ref_idx = store.unwrap().alloc_array(type_idx, elements)
             stack.push(ArrayRef(ref_idx))
@@ -269,6 +275,7 @@ pub fn eval_const_expr(
           let len_val = stack.pop().unwrap()
           let init_val = stack.pop().unwrap()
           if len_val is I32(len) {
+            check_gc_array_length(len)
             let elements : Array[@types.Value] = Array::make(len, init_val)
             let ref_idx = store.unwrap().alloc_array(type_idx, elements)
             stack.push(ArrayRef(ref_idx))
@@ -299,6 +306,7 @@ pub fn eval_const_expr(
             stack.push(ArrayRef(ref_idx))
           } else if stack.length() >= len {
             // Pop elements in reverse order (last element pushed first).
+            check_gc_array_length(len)
             let elements : Array[@types.Value] = Array::make(len, Null)
             for i = len - 1; i >= 0; i = i - 1 {
               elements[i] = stack.pop().unwrap()
@@ -563,52 +571,30 @@ fn get_global_instances(
 }
 
 ///|
-/// Evaluate an elem segment init expression to get a Value
-/// Returns None for unsupported expressions that should be skipped
-fn eval_elem_init_expr(
-  init_expr : Array[@types.Instruction],
+fn evaluate_element_segments(
+  mod : @types.Module,
+  store : @runtime.Store,
   func_addrs : Array[Int],
-  globals : Array[@runtime.GlobalInstance],
-) -> @types.Value? {
-  match init_expr {
-    [RefFunc(idx)] => {
-      // Convert module function index to store address
-      let store_addr = if idx < func_addrs.length() {
-        func_addrs[idx]
-      } else {
-        idx // fallback, should not happen for valid modules
-      }
-      Some(FuncRef(store_addr))
+  global_addrs : Array[Int],
+) -> Array[Array[@types.Value]] raise @runtime.RuntimeError {
+  let globals = get_global_instances(store, global_addrs)
+  let segments : Array[Array[@types.Value]] = []
+  for elem in mod.elems {
+    let values : Array[@types.Value] = []
+    for expr in elem.init {
+      values.push(
+        eval_const_expr(
+          expr,
+          func_addrs~,
+          globals~,
+          store=Some(store),
+          types=mod.types,
+        ),
+      )
     }
-    [RefNull(_)] => Some(Null)
-    [GlobalGet(idx)] =>
-      // Get funcref from global
-      if idx < globals.length() {
-        Some(globals[idx].get())
-      } else {
-        None
-      }
-    // GC: handle ref.i31 expressions for i31ref element segments
-    [I32Const(n), RefI31] => {
-      // i31 stores only the lower 31 bits
-      let i31_val = n & 0x7FFFFFFF
-      Some(I31(i31_val))
-    }
-    [GlobalGet(idx), RefI31] =>
-      // ref.i31 with global value
-      if idx < globals.length() {
-        match globals[idx].get() {
-          I32(n) => {
-            let i31_val = n & 0x7FFFFFFF
-            Some(I31(i31_val))
-          }
-          _ => None
-        }
-      } else {
-        None
-      }
-    _ => None
+    segments.push(values)
   }
+  segments
 }
 
 ///|
@@ -640,11 +626,8 @@ pub fn instantiate_module_with_init(
         }
 
         // Set table entries - evaluate init expression to get value
-        for i, init_expr in elem.init {
-          match eval_elem_init_expr(init_expr, instance.func_addrs, globals) {
-            Some(value) => table.set(offset + i, value)
-            None => continue
-          }
+        for i in 0..<elem.init.length() {
+          table.set(offset + i, instance.elem_values[elem_idx][i])
         }
       }
       // Active elem segments are implicitly dropped after initialization
@@ -655,7 +638,7 @@ pub fn instantiate_module_with_init(
   // Initialize data segments (copy data to memory)
   // Get global instances for evaluating offset expressions
   let globals_for_data = get_global_instances(store, instance.global_addrs)
-  for data in mod.datas {
+  for data_idx, data in mod.datas {
     if data.memory_idx >= 0 &&
       data.offset.length() > 0 &&
       instance.mem_addrs.length() > data.memory_idx {
@@ -666,6 +649,7 @@ pub fn instantiate_module_with_init(
 
       // Copy data to memory
       mem.init_data(offset, data.init)
+      instance.dropped_datas[data_idx] = true
     }
   }
 
@@ -916,7 +900,9 @@ pub fn validate_imports_with_diagnostics(
               mem => mem
             }
             let actual_limits = actual_mem.get_limits()
-            if actual_mem.is_memory64() != expected_mem_type.is_memory64 {
+            if actual_mem.is_memory64() != expected_mem_type.is_memory64 ||
+              actual_mem.page_size_bytes() !=
+              1L << expected_mem_type.page_size_log2 {
               push_import_diagnostic(
                 result,
                 import_index,
@@ -1371,7 +1357,9 @@ fn instantiate_module_with_imports_unstarted(
             let actual_mem = store.get_mem(addr)
             let actual_limits = actual_mem.get_limits()
             // Memory64 status must match
-            if actual_mem.is_memory64() != expected_mem_type.is_memory64 {
+            if actual_mem.is_memory64() != expected_mem_type.is_memory64 ||
+              actual_mem.page_size_bytes() !=
+              1L << expected_mem_type.page_size_log2 {
               raise LinkError
             }
             // Import memory limits must be compatible:
@@ -1618,13 +1606,17 @@ fn instantiate_module_with_imports_unstarted(
 
   // Initialize dropped arrays with false values
   let dropped_elems : Array[Bool] = []
-  for _ in 0..<mod.elems.length() {
-    dropped_elems.push(false)
+  for elem in mod.elems {
+    dropped_elems.push(elem.mode is Declarative)
   }
   let dropped_datas : Array[Bool] = []
   for _ in 0..<mod.datas.length() {
     dropped_datas.push(false)
   }
+
+  let elem_values = evaluate_element_segments(
+    mod, store, func_addrs, global_addrs,
+  )
 
   // Per WebAssembly spec: element segments are initialized BEFORE data segments
   // This ensures that if data segment initialization traps, the element segment
@@ -1647,11 +1639,8 @@ fn instantiate_module_with_imports_unstarted(
         }
 
         // Set table entries - evaluate init expression to get value
-        for i, init_expr in elem.init {
-          match eval_elem_init_expr(init_expr, func_addrs, globals) {
-            Some(value) => table.set(offset + i, value)
-            None => continue
-          }
+        for i in 0..<elem.init.length() {
+          table.set(offset + i, elem_values[elem_idx][i])
         }
       }
       // Active elem segments are implicitly dropped after initialization
@@ -1661,7 +1650,7 @@ fn instantiate_module_with_imports_unstarted(
 
   // Initialize active data segments (copy data to memory)
   let globals_for_data_init = get_global_instances(store, global_addrs)
-  for data in mod.datas {
+  for data_idx, data in mod.datas {
     // Active data segments have a non-empty offset expression
     if data.memory_idx >= 0 &&
       data.offset.length() > 0 &&
@@ -1671,6 +1660,7 @@ fn instantiate_module_with_imports_unstarted(
       let offset = eval_extended_const_expr(data.offset, globals_for_data_init)
       // Copy data to memory
       mem.init_data(offset, data.init)
+      dropped_datas[data_idx] = true
     }
   }
   // canonical_type_indices was computed at the start of the function (for import type checking)
@@ -1686,6 +1676,7 @@ fn instantiate_module_with_imports_unstarted(
     global_addrs,
     tag_addrs,
     exports: mod.exports,
+    elem_values,
     elem_segments: mod.elems,
     data_segments: mod.datas,
     dropped_elems,

@@ -1138,6 +1138,17 @@ pub fn Store::collect_roots(
     }
   }
 
+  // Passive element values retain their identity until the segment is dropped.
+  for instance in self.instances {
+    for i, values in instance.elem_values {
+      if !instance.dropped_elems[i] {
+        for value in values {
+          roots.push(value)
+        }
+      }
+    }
+  }
+
   // Collect from exception instances
   for exn in self.exns {
     for value in exn.values {

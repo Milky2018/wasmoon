@@ -55,6 +55,11 @@ fn run_wast(wast_path : String, use_jit : Bool, show_success : Bool) -> Int {
     use_jit,
     show_success,
     jit_compiler~,
+    register_named_modules=match
+      @env.get_env_var("WASMOON_WAST_REGISTER_NAMED_MODULES") {
+      Some(value) => is_truthy_env(value)
+      None => false
+    },
   )
 
   // Print results
@@ -541,12 +546,7 @@ fn try_compile_jit_with_suspension(
             instance,
             store,
             use_subtype_indirect_check~,
-          ) catch {
-            err =>
-              return Err(
-                "WAST JIT strict mode: failed to initialize JIT bulk segments: \{err}",
-              )
-          }
+          )
           // One-time sync: copy interpreter table contents (including active elem init)
           // into the shared JIT table memory before any JIT execution.
           @wast.sync_tables_to_jit(

@@ -7,7 +7,7 @@
 pub enum WastCommand {
   Module(@types.Module, String?)
   ModuleDefinition(@types.Module, String?)
-  ModuleInstance(String?, String) // (instance_name, definition_name)
+  ModuleInstance(String?, String?) // (instance_name, definition_name)
   ModuleQuote(Array[String])
   ModuleBinaryFailed(String)
   AssertReturn(WastAction, Array[WastValue])
@@ -57,6 +57,7 @@ pub enum WastValue {
   RefExternAny // (ref.extern) without number - matches any non-null externref
   RefHost(Int) // (ref.host <idx>) - host reference for testing
   RefFunc
+  RefFuncIndex(Int)
   // GC reference types
   RefArray // (ref.array) - any array reference
   RefStruct // (ref.struct) - any struct reference

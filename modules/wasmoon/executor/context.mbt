@@ -242,6 +242,13 @@ fn ExecContext::collect_gc_additional_roots(
       roots.push(local_value)
     }
   }
+  for i, values in self.instance.elem_values {
+    if !self.instance.dropped_elems[i] {
+      for value in values {
+        roots.push(value)
+      }
+    }
+  }
   roots
 }
 

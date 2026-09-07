@@ -927,6 +927,7 @@ fn instantiate_canon_lower(
       global_addrs: [],
       tag_addrs: [],
       exports: [],
+      elem_values: [],
       elem_segments: [],
       data_segments: [],
       dropped_elems: [],

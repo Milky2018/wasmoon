@@ -19,6 +19,7 @@ pub fn alloc_host_core_func(
     global_addrs: [],
     tag_addrs: [],
     exports: [],
+    elem_values: [],
     elem_segments: [],
     data_segments: [],
     dropped_elems: [],

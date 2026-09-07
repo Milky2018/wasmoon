@@ -12,6 +12,7 @@ pub(all) struct ModuleInstance {
   global_addrs : Array[Int] // indices into global store
   tag_addrs : Array[Int] // indices into tag store
   exports : Array[@types.Export]
+  elem_values : Array[Array[@types.Value]]
   elem_segments : Array[@types.Element]
   data_segments : Array[@types.Data]
   dropped_elems : Array[Bool] // true if elem segment has been dropped
@@ -39,6 +40,7 @@ pub fn ModuleInstance::ModuleInstance() -> ModuleInstance {
     global_addrs: [],
     tag_addrs: [],
     exports: [],
+    elem_values: [],
     elem_segments: [],
     data_segments: [],
     dropped_elems: [],

@@ -210,8 +210,9 @@ def main() -> int:
             parent.mkdir(parents=True, exist_ok=True)
             output = Path(tempfile.mkdtemp(prefix="run-", dir=parent)).resolve()
         os.environ["WASMOON_WAST_JIT_TRACE"] = "1"
+        os.environ["WASMOON_WAST_REGISTER_NAMED_MODULES"] = "1"
         results = []
-        report = {"upstream_commit": snapshot["commit"], "snapshot_sha256": digest(CORPUS / "SNAPSHOT.json"),
+        report = {"register_named_modules": True, "upstream_commit": snapshot["commit"], "snapshot_sha256": digest(CORPUS / "SNAPSHOT.json"),
                   "host_contracts_sha256": digest(CORPUS / "HOST_CONTRACTS.json"),
                   "host": platform.platform(), "engine": str(binary), "engine_sha256": digest(binary),
                   "engine_version": subprocess.check_output([str(binary), "--version"], text=True).strip(),

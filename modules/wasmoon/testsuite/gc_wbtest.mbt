@@ -297,3 +297,41 @@ test "gc: ref.i31 high bits" {
   // 0x7FFFFFFF should be preserved (max positive i31)
   debug_inspect(results, content="[I32(2147483647)]")
 }
+
+///|
+test "gc: guest array length overflow traps before host allocation" {
+  for length in [-1, -21, 1073741817] {
+    let source =
+      #|(module
+      #|  (type (array (mut i32)))
+      #|  (func (export "test")
+      #|    (drop (array.new_default 0 (i32.const LENGTH)))))
+    let trapped = try {
+      run_wat(source.replace(old="LENGTH", new=length.to_string())) |> ignore
+      false
+    } catch {
+      @runtime.RuntimeError::OutOfMemory => true
+      _ => false
+    }
+    inspect(trapped, content="true")
+  }
+}
+
+///|
+test "gc: element constant expressions retain object identity" {
+  let source =
+    #|(module
+    #|  (type $arr (array (mut arrayref)))
+    #|  (elem $elem arrayref (item (array.new_default $arr (i32.const 0))))
+    #|  (func (export "test") (result i32)
+    #|    (ref.eq
+    #|      (array.get $arr
+    #|        (array.new_elem $arr $elem (i32.const 0) (i32.const 1))
+    #|        (i32.const 0))
+    #|      (array.get $arr
+    #|        (array.new_elem $arr $elem (i32.const 0) (i32.const 1))
+    #|        (i32.const 0)))))
+  let result = compare_jit_interp(source, "test", [])
+  debug_inspect(result.interp_result, content="Ok([I32(1)])")
+  debug_inspect(result.jit_result, content="Ok([I32(1)])")
+}

@@ -106,6 +106,7 @@ pub struct WastContext {
   named_modules : Map[String, @runtime.ModuleInstance]
   // Module definitions for (module instance ...) command
   module_definitions : Map[String, @types.Module]
+  mut current_definition : @types.Module?
   // Registered modules for imports (module_name -> exports)
   registered_modules : Map[String, @runtime.ModuleInstance]
   // Built-in modules that have been overridden by Register command
@@ -115,6 +116,7 @@ pub struct WastContext {
   jit_modules : Map[String, JITModuleContext]
   mut current_jit : JITModuleContext?
   use_jit : Bool
+  register_named_modules : Bool
   // JIT compiler callback (provided by main package)
   jit_compiler : JITCompiler?
   // WASI context (for WASI function support in tests)
@@ -125,6 +127,7 @@ pub struct WastContext {
 pub fn WastContext::WastContext(
   use_jit : Bool,
   jit_compiler? : JITCompiler? = None,
+  register_named_modules? : Bool = false,
 ) -> WastContext {
   // Use c_heap when JIT is enabled for GC support
   let store = if use_jit { @runtime.Store::with_c_heap() } else { Store() }
@@ -158,11 +161,13 @@ pub fn WastContext::WastContext(
     current_module: None,
     named_modules: Map([]),
     module_definitions: Map([]),
+    current_definition: None,
     registered_modules,
     overridden_builtin_modules: HashSet([]),
     jit_modules: Map([]),
     current_jit: None,
     use_jit,
+    register_named_modules,
     jit_compiler,
     wasi_ctx,
   }
@@ -233,9 +238,14 @@ pub fn run_wast_commands(
   use_jit : Bool,
   show_success : Bool,
   jit_compiler? : JITCompiler? = None,
+  register_named_modules? : Bool = false,
 ) -> WastResult {
   let result = WastResult::WastResult()
-  let ctx = WastContext::WastContext(use_jit, jit_compiler~)
+  let ctx = WastContext::WastContext(
+    use_jit,
+    jit_compiler~,
+    register_named_modules~,
+  )
   for item in script.commands {
     let (cmd, line) = item
     run_wast_command(ctx, cmd, line, result, base_dir, show_success)
@@ -279,6 +289,12 @@ pub fn run_wast_command(
       ctx.current_module = Some(instance)
       if name is Some(n) {
         ctx.named_modules.set(n, instance)
+        if ctx.register_named_modules {
+          ctx.registered_modules.set(n, instance)
+          if n == "spectest" || n == "wasi_snapshot_preview1" {
+            ctx.overridden_builtin_modules.add(n) |> ignore
+          }
+        }
       }
       // Try to compile JIT version (only if JIT is enabled)
       if ctx.use_jit {
@@ -379,6 +395,7 @@ pub fn run_wast_command(
           return
         }
       }
+      ctx.current_definition = Some(mod_)
       // Store the module definition for later instantiation via (module instance ...)
       if name is Some(n) {
         ctx.module_definitions.set(n, mod_)
@@ -387,10 +404,14 @@ pub fn run_wast_command(
     }
     ModuleInstance(instance_name, def_name) => {
       // Instantiate a previously defined module
-      guard ctx.module_definitions.get(def_name) is Some(mod_) else {
+      let definition = match def_name {
+        Some(name) => ctx.module_definitions.get(name)
+        None => ctx.current_definition
+      }
+      guard definition is Some(mod_) else {
         result.failed = result.failed + 1
         result.failures.push(
-          "line \{line}: module definition '\{def_name}' not found",
+          "line \{line}: module definition '\{def_name.unwrap_or("<latest>")}' not found",
         )
         return
       }
@@ -420,6 +441,12 @@ pub fn run_wast_command(
       ctx.current_module = Some(instance)
       if instance_name is Some(n) {
         ctx.named_modules.set(n, instance)
+        if ctx.register_named_modules {
+          ctx.registered_modules.set(n, instance)
+          if n == "spectest" || n == "wasi_snapshot_preview1" {
+            ctx.overridden_builtin_modules.add(n) |> ignore
+          }
+        }
       }
       // Try to compile JIT version (only if JIT is enabled)
       if ctx.use_jit {
@@ -609,9 +636,14 @@ pub fn run_wast_command(
       }
     }
     Action(action) =>
-      // Just invoke the action, ignore result
+      // A bare action asserts successful execution even without result values.
       try invoke_action(ctx, action) |> ignore catch {
-        _ => ()
+        error => {
+          result.failed = result.failed + 1
+          result.failures.push(
+            "line \{line}: action \{format_action(action)} failed: \{error}",
+          )
+        }
       }
   }
 }
@@ -646,8 +678,19 @@ fn run_assert_return(
       "result count mismatch: expected \{expected.length()}, got \{results.length()}",
     )
   }
+  let module_name = match action {
+    Invoke(name, _, _) | Get(name, _) => name
+  }
+  let instance = match module_name {
+    Some(name) => ctx.named_modules.get(name)
+    None => ctx.current_module
+  }
+  let func_addrs = match instance {
+    Some(instance) => instance.func_addrs
+    None => []
+  }
   for i in 0..<results.length() {
-    if !values_match(results[i], expected[i]) {
+    if !values_match(results[i], expected[i], func_addrs~) {
       return Some(
         "result[\{i}] mismatch: expected \{expected[i]}, got \{results[i]}",
       )
@@ -744,6 +787,19 @@ pub fn invoke_action(
                   RefExtern(n) =>
                     i64_args.push(@wasmoon_jit.encode_externref(n))
                   RefHost(n) => i64_args.push(@wasmoon_jit.encode_externref(n))
+                  RefFuncIndex(idx) => {
+                    if idx < 0 || idx >= instance.func_addrs.length() {
+                      raise RuntimeError("invalid ref.func argument index")
+                    }
+                    i64_args.push(
+                      encode_store_funcref_for_jit(
+                        FuncRef(instance.func_addrs[idx]),
+                        ctx.store,
+                        jit.jit_module,
+                        instance,
+                      ),
+                    )
+                  }
                   RefFunc => i64_args.push(NULL_REF) // placeholder
                   RefExternAny => i64_args.push(NULL_REF) // placeholder
                   // GC reference types - these shouldn't appear as args but handle them
@@ -948,6 +1004,20 @@ pub fn invoke_action(
                   break
                 }
                 match result_type {
+                  FuncRef
+                  | RefFunc
+                  | RefFuncTyped(_)
+                  | RefNullFuncTyped(_)
+                  | NullFuncRef => {
+                    values.push(
+                      decode_funcref_from_jit_ctx(
+                        results[result_idx],
+                        jit,
+                        ctx.store,
+                      ),
+                    )
+                    result_idx += 1
+                  }
                   V128 => {
                     // V128 uses two slots: low (first) and high (second)
                     if result_idx + 1 >= results.length() {
@@ -975,7 +1045,9 @@ pub fn invoke_action(
             }
             None => {
               // Function not found in JIT, fall back to interpreter
-              let runtime_args = args.map(wast_value_to_runtime)
+              let runtime_args = args.map(value => {
+                wast_value_to_runtime(value, func_addrs=instance.func_addrs)
+              })
               @executor.call_exported_func(
                 ctx.store,
                 instance,
@@ -988,7 +1060,9 @@ pub fn invoke_action(
           }
         None => {
           // No JIT available, use interpreter
-          let runtime_args = args.map(wast_value_to_runtime)
+          let runtime_args = args.map(value => {
+            wast_value_to_runtime(value, func_addrs=instance.func_addrs)
+          })
           @executor.call_exported_func(
             ctx.store,
             instance,
@@ -1119,7 +1193,10 @@ fn convert_jit_result(
 }
 
 ///|
-pub fn wast_value_to_runtime(v : @wat.WastValue) -> @types.Value {
+pub fn wast_value_to_runtime(
+  v : @wat.WastValue,
+  func_addrs? : Array[Int] = [],
+) -> @types.Value raise WastRunnerError {
   match v {
     I32(n) => I32(n)
     I64(n) => I64(n)
@@ -1134,6 +1211,12 @@ pub fn wast_value_to_runtime(v : @wat.WastValue) -> @types.Value {
     RefNull(_) => Null
     RefExtern(n) => ExternRef(n)
     RefHost(n) => ExternRef(n) // ref.host is like ref.extern for testing
+    RefFuncIndex(idx) => {
+      if idx < 0 || idx >= func_addrs.length() {
+        raise RuntimeError("invalid ref.func argument index")
+      }
+      FuncRef(func_addrs[idx])
+    }
     RefFunc => FuncRef(0) // Placeholder
     RefExternAny => ExternRef(0) // Placeholder for matching
     // GC reference types - these are abstract type matchers, not concrete values
@@ -1144,7 +1227,11 @@ pub fn wast_value_to_runtime(v : @wat.WastValue) -> @types.Value {
 }
 
 ///|
-pub fn values_match(actual : @types.Value, expected : @wat.WastValue) -> Bool {
+pub fn values_match(
+  actual : @types.Value,
+  expected : @wat.WastValue,
+  func_addrs? : Array[Int] = [],
+) -> Bool {
   match (actual, expected) {
     (I32(a), I32(e)) => a == e
     (I64(a), I64(e)) => a == e
@@ -1154,6 +1241,8 @@ pub fn values_match(actual : @types.Value, expected : @wat.WastValue) -> Bool {
     (F64(a), F64CanonicalNan) | (F64(a), F64ArithmeticNan) => a.is_nan()
     (Null, RefNull(_)) => true
     (FuncRef(_), RefFunc) => true
+    (FuncRef(addr), RefFuncIndex(idx)) =>
+      idx >= 0 && idx < func_addrs.length() && addr == func_addrs[idx]
     (ExternRef(a), RefExtern(e)) => a == e
     (ExternRef(_), RefExternAny) => true // any non-null externref
     (ExternRef(a), RefHost(e)) => a == e // ref.host is like ref.extern
@@ -1175,7 +1264,9 @@ pub fn values_match(actual : @types.Value, expected : @wat.WastValue) -> Bool {
     (V128(a), V128Pattern(lanes)) => v128_pattern_match(a, lanes)
     // Relaxed SIMD: Either matches if any alternative matches
     (_, Either(alternatives)) =>
-      alternatives.iter().any(fn(alt) { values_match(actual, alt) })
+      alternatives
+      .iter()
+      .any(fn(alt) { values_match(actual, alt, func_addrs~) })
     _ => false
   }
 }
@@ -1436,6 +1527,7 @@ fn build_partial_instance_for_trapped_module(
     global_addrs,
     tag_addrs,
     exports: mod_.exports,
+    elem_values: [],
     elem_segments: mod_.elems,
     data_segments: mod_.datas,
     dropped_elems,

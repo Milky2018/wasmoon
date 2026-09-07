@@ -305,29 +305,6 @@ fn Parser::parse_field_types(
         self.field_names.get(type_idx) is Some(names) {
         names.set(name, fields.length())
       }
-      // Check for (mut ...) first - this only applies to single field
-      if self.current.token == LParen {
-        self.advance()
-        if self.current.token == Keyword("mut") {
-          self.advance()
-          let storage_type = self.parse_storage_type()
-          self.expect_rparen() // close mut
-          fields.push({ storage_type, mutable: true, })
-          self.expect_rparen() // close field
-          return
-        } else {
-          // Not mut, it's a storage type like (ref ...), parse it but continue for more
-          let storage_type = self.parse_storage_type_after_lparen()
-          fields.push({ storage_type, mutable: false, })
-          // Continue parsing more types if any
-          while self.current.token != RParen {
-            let storage_type = self.parse_storage_type()
-            fields.push({ storage_type, mutable: false, })
-          }
-          self.expect_rparen() // close field
-          return
-        }
-      }
       // Parse one or more storage types (abbreviated form)
       // Can include (mut <valtype>) for mutable fields
       while self.current.token != RParen {
@@ -1252,6 +1229,10 @@ fn Parser::parse_ref_type(self : Parser) -> @types.ValueType raise WatError {
       self.advance()
       RefNullEq
     }
+    Number(_) => {
+      let type_idx = self.parse_u32()
+      self.get_typed_ref(type_idx, true)
+    }
     Id(name) => {
       // Type index like $t - resolve to typed reference
       let type_idx = match self.type_names.get(name) {
@@ -1285,5 +1266,27 @@ fn Parser::parse_label_idx(self : Parser) -> Int raise WatError {
         None => raise UndefinedIdentifier("label $\{name}", self.loc())
       }
     _ => raise UnexpectedToken("expected label index", self.loc())
+  }
+}
+
+///|
+/// Preserve explicit nullability even for bottom heap types whose compact
+/// ValueType representation is shared by nullable and non-nullable targets.
+fn Parser::parse_cast_type(
+  self : Parser,
+) -> (@types.ValueType, Bool) raise WatError {
+  if self.current.token == LParen {
+    self.advance()
+    self.expect_keyword("ref")
+    let nullable = self.current.token == Keyword("null")
+    if nullable {
+      self.advance()
+    }
+    let type_ = self.parse_heap_type(nullable)
+    self.expect_rparen()
+    (type_, nullable)
+  } else {
+    let type_ = self.parse_value_type()
+    (type_, type_.is_nullable())
   }
 }

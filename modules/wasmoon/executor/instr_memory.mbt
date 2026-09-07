@@ -17,7 +17,12 @@ fn compute_effective_addr(
     base_addr & 0xFFFFFFFFL
   }
   // offset is Int64 (supports memory64 64-bit offsets)
-  base_u64 + offset
+  let address = base_u64 + offset
+  if address.reinterpret_as_uint64() < base_u64.reinterpret_as_uint64() {
+    -1L // Unsigned addition overflow cannot address any live memory.
+  } else {
+    address
+  }
 }
 
 ///|
@@ -532,8 +537,8 @@ fn ExecContext::exec_memory_misc(
       let dst_mem_addr = self.instance.mem_addrs[dst_memidx]
       let src_mem = self.store.get_mem(src_mem_addr)
       let dst_mem = self.store.get_mem(dst_mem_addr)
-      // Per spec: n and d depend on dst type, s depends on src type
-      let n64 = if dst_mem.is_memory64() {
+      // The length is i64 only when both memories use i64 addresses.
+      let n64 = if dst_mem.is_memory64() && src_mem.is_memory64() {
         self.stack.pop_i64()
       } else {
         self.stack.pop_i32().to_int64() & 0xFFFF_FFFFL
