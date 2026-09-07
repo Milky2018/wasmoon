@@ -274,6 +274,37 @@ fn dispatch_until_main_scheduled(
 }
 
 ///|
+fn require_suspended_thread(
+  async_state : AsyncState,
+  owner_component_id : Int,
+  root_task_id : Int64,
+  target : Int,
+) -> Unit raise ComponentRuntimeError {
+  let main = current_thread_handle_opt(
+    async_state, owner_component_id, root_task_id,
+  )
+  let runnable = if main == Some(target) {
+    current_task_id(async_state) == root_task_id ||
+    async_state.main_thread_scheduled.get(root_task_id) == Some(true)
+  } else {
+    match async_state.threads.get(handle_key(owner_component_id, target)) {
+      Some(thread) =>
+        thread.parent_task_id == root_task_id &&
+        (
+          thread.scheduled[0] ||
+          thread.task_id == current_task_id(async_state) ||
+          thread.phase[0] == Completed ||
+          thread.waiting_ws[0] is Some(_)
+        )
+      None => false
+    }
+  }
+  if runnable {
+    raise CanonCallError("cannot resume thread which is not suspended")
+  }
+}
+
+///|
 fn schedule_thread_or_main(
   async_state : AsyncState,
   owner_component_id : Int,
@@ -357,6 +388,17 @@ fn execute_thread_suspension_intrinsic(
   }
 
   let resuming = async_state.yield_suspended.get(task_id) is Some(true)
+
+  if !resuming && target is Some(handle) {
+    require_suspended_thread(
+      async_state, owner_component_id, root_task_id, handle,
+    ) catch {
+      error => {
+        trap_canon(canon_err_message(error))
+        return [I32(0)]
+      }
+    }
+  }
 
   if is_explicit {
     if maybe_consume_cancelled(async_state, task_id, cancellable) {
@@ -732,6 +774,14 @@ fn instantiate_canon_thread_resume_later(
     ) catch {
       e => {
         trap_canon(canon_err_message(e))
+        return []
+      }
+    }
+    require_suspended_thread(
+      async_state, owner_component_id, root_task_id, target,
+    ) catch {
+      error => {
+        trap_canon(canon_err_message(error))
         return []
       }
     }

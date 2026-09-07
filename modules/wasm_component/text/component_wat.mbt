@@ -4463,7 +4463,9 @@ fn parse_canon_decl(
   }
   if op_name == "thread.yield" ||
     op_name == "thread.yield-to" ||
+    op_name == "thread.yield-then-resume" ||
     op_name == "thread.switch-to" ||
+    op_name == "thread.suspend-then-resume" ||
     op_name == "thread.suspend" {
     let mut flag = false
     if decl_end == 3 {
@@ -4475,9 +4477,11 @@ fn parse_canon_decl(
     decl.push_u8(
       if op_name == "thread.yield" {
         0x0c
-      } else if op_name == "thread.yield-to" {
+      } else if op_name == "thread.yield-to" ||
+        op_name == "thread.yield-then-resume" {
         0x2b
-      } else if op_name == "thread.switch-to" {
+      } else if op_name == "thread.switch-to" ||
+        op_name == "thread.suspend-then-resume" {
         0x2a
       } else {
         0x29
