@@ -136,6 +136,9 @@ pub fn CanonSuspend::equal(Self, Self) -> Bool
 pub fn CanonSuspend::not_equal(Self, Self) -> Bool
 pub fn CanonSuspend::to_repr(Self) -> @debug.Repr
 
+type CanonicalRealloc
+pub fn CanonicalRealloc::to_repr(Self) -> @debug.Repr
+
 type ComponentClosure
 pub fn ComponentClosure::output(Self, &Logger) -> Unit
 pub fn ComponentClosure::to_string(Self) -> String

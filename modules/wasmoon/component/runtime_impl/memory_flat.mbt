@@ -101,31 +101,19 @@ fn read_string_from_memory_with_encoding(
 fn write_bytes_to_memory_with_align(
   store : @runtime.Store,
   mem : @runtime.Memory,
-  realloc : CoreFuncRef,
+  realloc : CanonicalRealloc,
   mem_is_64 : Bool,
   bytes : Bytes,
   align : Int,
 ) -> Int raise ComponentRuntimeError {
-  let len = bytes.length()
-  let args : Array[@types.Value] = if mem_is_64 {
-    [I64(0L), I64(0L), I64(align.to_int64()), I64(len.to_int64())]
-  } else {
-    [I32(0), I32(0), I32(align), I32(len)]
-  }
-  let results = call_core_func(store, realloc, args)
-  let ptr = match results {
-    [I32(n)] => n
-    [I64(n)] => n.to_int()
-    _ => raise CanonCallError("invalid realloc result")
-  }
-  if align > 1 && ptr % align != 0 {
-    raise CanonCallError("realloc return: result not aligned")
-  }
-  // Even for zero-sized allocations we must validate the returned pointer.
-  let mem_len = mem.byte_len().to_int()
-  if ptr < 0 || ptr > mem_len || ptr + len > mem_len {
-    raise CanonCallError("realloc return: beyond end of memory")
-  }
+  let ptr = alloc_realloc_area(
+    store,
+    mem,
+    realloc,
+    mem_is_64,
+    bytes.length(),
+    align,
+  )
   for i in 0..<bytes.length() {
     mem.store_byte(ptr + i, bytes[i]) catch {
       e => raise CanonCallError(e.to_string())
@@ -289,7 +277,7 @@ fn layout_of_flat_storage_fields(
 fn alloc_realloc_area(
   store : @runtime.Store,
   mem : @runtime.Memory,
-  realloc : CoreFuncRef,
+  realloc : CanonicalRealloc,
   mem_is_64 : Bool,
   size : Int,
   align : Int,
@@ -299,7 +287,7 @@ fn alloc_realloc_area(
   } else {
     [I32(0), I32(0), I32(align), I32(size)]
   }
-  let results = call_core_func(store, realloc, args)
+  let results = realloc.call(store, args)
   let ptr = match results {
     [I32(n)] => n
     [I64(n)] => n.to_int()
@@ -308,8 +296,7 @@ fn alloc_realloc_area(
   if align > 1 && ptr % align != 0 {
     raise CanonCallError("realloc return: result not aligned")
   }
-  let mem_len = mem.byte_len().to_int()
-  if ptr < 0 || ptr > mem_len || ptr + size > mem_len {
+  if ptr < 0 || size < 0 || ptr.to_int64() + size.to_int64() > mem.byte_len() {
     raise CanonCallError("realloc return: beyond end of memory")
   }
   ptr

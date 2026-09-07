@@ -78,7 +78,7 @@ struct TaskReturnContract {
 ///|
 struct CanonResources {
   mem_addr : Int?
-  realloc : CoreFuncRef?
+  realloc : CanonicalRealloc?
   post_return : CoreFuncRef?
   encoding : StringEncoding
 } derive(Debug)
@@ -206,7 +206,7 @@ struct PendingStreamRead {
   // Writes can come from a different component instance/memory, so we must keep
   // enough info to write into the *reader* memory.
   mem_addr : Int?
-  realloc : CoreFuncRef?
+  realloc : CanonicalRealloc?
   encoding : StringEncoding
   // Resource table of the reader component instance (used to transfer `own` resources).
   reader_table : ResourceTable
@@ -463,7 +463,7 @@ struct PendingFutureRead {
   // Memory where the read pointer lives (from the canonical options of future.read).
   // Writes can come from a different component instance/memory.
   mem_addr : Int?
-  realloc : CoreFuncRef?
+  realloc : CanonicalRealloc?
   encoding : StringEncoding
   // Resource table of the reader component instance.
   reader_table : ResourceTable

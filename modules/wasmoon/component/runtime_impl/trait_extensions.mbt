@@ -180,3 +180,6 @@ pub extend WaitableSet with Debug::{to_repr}
 
 ///|
 pub extend TaskReturnContract with Debug::{to_repr}
+
+///|
+pub extend CanonicalRealloc with Debug::{to_repr}

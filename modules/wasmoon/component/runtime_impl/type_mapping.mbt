@@ -256,7 +256,7 @@ fn resolve_canon_resources(
   state : BuildState,
 ) -> CanonResources raise ComponentRuntimeError {
   let mut mem : Int? = None
-  let mut realloc : CoreFuncRef? = None
+  let mut realloc : CanonicalRealloc? = None
   let mut post_return : CoreFuncRef? = None
   let mut encoding = StringEncoding::Utf8
   for opt in opts {
@@ -271,7 +271,11 @@ fn resolve_canon_resources(
         if idx < 0 || idx >= state.core_funcs.length() {
           raise InvalidCoreFuncIndex(idx)
         }
-        realloc = Some(state.core_funcs[idx])
+        realloc = Some({
+          func: state.core_funcs[idx],
+          async_state: state.async_state,
+          owner_component_id: state.resource_table.id,
+        })
       }
       PostReturn(idx) => {
         if idx < 0 || idx >= state.core_funcs.length() {
