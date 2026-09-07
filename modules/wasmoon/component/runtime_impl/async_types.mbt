@@ -2303,6 +2303,26 @@ fn enqueue_waitable_event(
     Some(xs) => xs
     None => []
   }
+  // A subtask exposes its latest unconsumed status, not a history of states.
+  if ev.code == 1 {
+    for i in 0..<list.length() {
+      if list[i].code == 1 {
+        list[i] = ev
+        if async_state.waitable_to_set.get(waitable_key) is Some(ws_key) &&
+          async_state.waitable_sets.get(ws_key) is Some(set) {
+          for j in 0..<set.queue.length() {
+            let previous = set.queue[j]
+            if previous.code == 1 &&
+              previous.owner_component_id == ev.owner_component_id &&
+              previous.index == ev.index {
+              set.queue[j] = ev
+            }
+          }
+        }
+        return
+      }
+    }
+  }
   list.push(ev)
   async_state.waitable_events.set(waitable_key, list)
   if async_state.waitable_to_set.get(waitable_key) is Some(ws_key) &&

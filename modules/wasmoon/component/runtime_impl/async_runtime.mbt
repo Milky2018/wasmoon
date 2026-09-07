@@ -1011,6 +1011,7 @@ fn progress_one_subtask_nonblocking(
   // Start at most one queued subtask when its backpressure slot is free.
   // If multiple subtasks are eligible across different `bp_key`s, choose the oldest
   // (by subtask handle ordering) to match Wasmtime scheduling.
+  let mut admitted_task : Int64? = None
   let candidates : Array[(Int, Int64)] = []
   let pending_keys : Array[Int] = []
   for kv in async_state.pending_by_instance.iter() {
@@ -1106,7 +1107,7 @@ fn progress_one_subtask_nonblocking(
         handle_key(owner_component_id, st.id),
         { owner_component_id, code: 1, index: st.id, payload: 1, },
       )
-      return true
+      admitted_task = Some(next_id)
     }
   }
 
@@ -1133,6 +1134,19 @@ fn progress_one_subtask_nonblocking(
     for _ in 0..<(previous_index + 1) {
       let first = started_ids.remove(0)
       started_ids.push(first)
+    }
+  }
+  // Admission includes the first guest step. An immediate return replaces the
+  // STARTED status before the caller can observe the waitable event.
+  if admitted_task is Some(admitted) {
+    for i in 0..<started_ids.length() {
+      if started_ids[i] == admitted {
+        for j = i; j > 0; j = j - 1 {
+          started_ids[j] = started_ids[j - 1]
+        }
+        started_ids[0] = admitted
+        break
+      }
     }
   }
   for task_id in started_ids {
@@ -1280,7 +1294,7 @@ fn progress_one_subtask_nonblocking(
       }
     }
   }
-  false
+  admitted_task is Some(_)
 }
 
 ///|
