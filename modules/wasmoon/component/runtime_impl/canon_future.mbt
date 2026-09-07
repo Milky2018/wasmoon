@@ -295,6 +295,12 @@ fn instantiate_canon_future_read(
                     ret_i32(1)
                   } else {
                     // Register a pending read and report BLOCKED=-1.
+                    if !is_async && !async_state.task_can_block[0] {
+                      trap_canon(
+                        "cannot block a synchronous task before returning",
+                      )
+                      return ret_i32(0)
+                    }
                     async_state.futures.set(ep.future_id, {
                       payload_ty: st0.payload_ty,
                       pending_read: Some({
@@ -620,6 +626,12 @@ fn instantiate_canon_future_write(
                 }
                 None => {
                   // Register a pending write by reading the payload once.
+                  if !is_async && !async_state.task_can_block[0] {
+                    trap_canon(
+                      "cannot block a synchronous task before returning",
+                    )
+                    return ret_i32(0)
+                  }
                   let payload = load_future_scalar_payload(
                     st0.payload_ty,
                     store,

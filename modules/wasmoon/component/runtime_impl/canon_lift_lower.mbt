@@ -901,16 +901,7 @@ fn instantiate_canon_lower(
               trap_canon("prerun blocked")
               ([] : Array[ComponentValue])
             } else if !can_block {
-              if st.task.continuation[0] is Some(continuation) {
-                st.task.continuation[0] = None
-                continuation.cancel()
-              }
-              if st.task.host_future[0] is Some(future) {
-                st.task.host_future[0] = None
-                (future.cancel)() catch {
-                  _ => ()
-                }
-              }
+              cancel_callback_task(st.task)
               if st.task.waiting_set[0] is Some(ws) &&
                 async_state.waitable_sets.get(ws) is Some(set) {
                 set.waiters[0] -= 1
