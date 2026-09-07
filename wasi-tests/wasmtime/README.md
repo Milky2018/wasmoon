@@ -108,6 +108,8 @@ scenarios and no timeouts in each engine. The two remaining failures are
 `p1_file_write` and `p1_path_open_read_write`: their error assertions exclude
 `NOTCAPABLE` when an intentionally absent read/write capability is required.
 They remain red. See the [rights decision](../../docs/wasip1-rights.md).
+The adapted profile also retains the Wasmtime 40.0.0 reference result of
+54 passes, one extreme-timestamp host panic and four unsupported scenarios.
 
 The recovered coverage exposed and now guards polling ABI alignment, Darwin
 device readiness, directory cursor isolation and heap safety, byte-oriented

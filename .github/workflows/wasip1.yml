@@ -45,7 +45,7 @@ jobs:
         run: ./install.sh
       - name: Check the runner
         run: |
-          python3 -m unittest discover -s scripts/tests -p 'test_wasi*.py'
+          python3 -m unittest discover -s scripts/tests -p 'test_was*.py'
           moon test --target native modules/wasmoon/wasi \
             modules/wasmoon/testsuite/wasi_poll_wbtest.mbt \
             modules/wasmoon/testsuite/wasi_path_regression_wbtest.mbt \
