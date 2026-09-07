@@ -8,6 +8,6 @@ import {
 }
 
 options(
-  "native-stub": [ "ffi_native.c" ],
+  "native-stub": [ "ffi_native.c", "poll_native.c", "directory_native.c" ],
   targets: { "ffi_native.mbt": [ "native" ] },
 )

@@ -26,7 +26,12 @@ python3 scripts/run_wasmtime_p1.py --check
 python3 scripts/run_wasmtime_p1.py --filter 'p1_poll*' --mode interp
 python3 scripts/run_wasmtime_p1.py --mode wasmtime --wasmtime /path/to/wasmtime
 python3 scripts/run_wasmtime_p1.py --output tmp/p1-results --timeout 60
+python3 scripts/run_wasmtime_p1.py --profile explicit-rights
 ```
+
+The default profile uses the unchanged sources. The `explicit-rights` profile
+applies `explicit-rights.patch` to a temporary copy, uses a separate build
+directory and records the patch hash and profile in each report.
 
 The runner verifies the complete upstream file inventory and hashes before
 building with `cargo build --locked`. No source downloads are needed; Cargo
@@ -93,15 +98,23 @@ The Wasmtime reference is older than the source snapshot. Its one failure is a
 host panic on the extreme timestamp fixture; this is not an expected guest
 failure and remains red in the report.
 
-Most Wasmoon file tests stop early because upstream `open_scratch_directory`
-opens a directory with zero base/inheriting rights, then expects later file
-operations to work. Wasmoon enforces the requested rights and returns
-`NOTCAPABLE`. This is a compatibility/model difference to investigate before
-changing either implementation or assertions, not evidence of dozens of
-independent file-operation bugs. See [ISS-464](../../issues/ISS-464.md).
-The stdio polling failures are tracked separately in
-[ISS-465](../../issues/ISS-465.md). Passing the same tests under both engines does
-not make Wasmtime the normative WASIp1 oracle.
+After the P1 fixes, the unchanged profile has 13 passes, 42 failures and four
+unsupported scenarios per engine. Both stdio polling variants now pass.
+
+The separate `explicit-rights` profile requests missing operation rights in a
+temporary source copy. It preserves every guest assertion and the original
+snapshot. On macOS ARM64 it has 53 passes, two failures, four unsupported
+scenarios and no timeouts in each engine. The two remaining failures are
+`p1_file_write` and `p1_path_open_read_write`: their error assertions exclude
+`NOTCAPABLE` when an intentionally absent read/write capability is required.
+They remain red. See the [rights decision](../../docs/wasip1-rights.md).
+
+The recovered coverage exposed and now guards polling ABI alignment, Darwin
+device readiness, directory cursor isolation and heap safety, byte-oriented
+UTF-8 readlink/readdir output, trailing-slash constraints and positioned append
+behavior. Independent ABI probes and a retained native AddressSanitizer test
+cover the fixes. Linux results must be verified by the platform workflow;
+macOS results are not evidence of Linux execution.
 
 The regular CI checks the snapshot and Python runner tests. The separate
 `Upstream WASIp1 programs` workflow is manually dispatched and runs both host

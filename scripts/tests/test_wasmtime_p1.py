@@ -5,6 +5,7 @@ import shutil
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts"))
@@ -30,6 +31,22 @@ class P1RunnerTests(unittest.TestCase):
             (path.parent / "p1_new.rs").write_text("fn main() {}")
             with self.assertRaisesRegex(ValueError, "inventory"):
                 p1.validate_snapshot(corpus)
+
+    def test_rights_profile_is_separate_and_preserves_upstream(self):
+        with tempfile.TemporaryDirectory() as temporary, patch.object(p1, "ROOT", Path(temporary)):
+            with p1.prepare_build("explicit-rights") as (source, build):
+                support = source / "upstream/crates/test-programs/src/preview1.rs"
+                self.assertIn("rights.fs_rights_inheriting", support.read_text())
+                self.assertNotEqual(build, p1.BUILD)
+                for guest in (p1.CORPUS / "upstream/crates/test-programs/src/bin").glob("*.rs"):
+                    # Assert-bearing lines stay verbatim; the reviewed patch only
+                    # changes path_open arguments and the scratch rights query.
+                    adapted = (source / guest.relative_to(p1.CORPUS)).read_text()
+                    for line in guest.read_text().splitlines():
+                        if "assert" in line:
+                            self.assertIn(line, adapted)
+            self.assertFalse(source.exists())
+        p1.validate_snapshot()
 
     def test_process_failure_and_full_output_are_preserved(self):
         with tempfile.TemporaryDirectory() as tmp:

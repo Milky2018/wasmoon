@@ -3299,7 +3299,7 @@ test "wasi: poll_oneoff emits expired clock with ready fd" {
   let sub1 = 48
   mem.write_i64(sub1, 67890L)
   mem.write_byte(sub1 + 8, b'\x02') // tag = fd_write
-  mem.write_i32(sub1 + 12, fd)
+  mem.write_i32(sub1 + 16, fd)
 
   let poll_result = poll_oneoff_impl(ctx, mem, 0, 3000, 2, 2900)
   inspect(poll_result, content="0")
@@ -3376,7 +3376,7 @@ test "wasi: poll_oneoff fd_read reports remaining file bytes" {
 
   mem.write_i64(0, 777L)
   mem.write_byte(8, b'\x01') // tag = fd_read
-  mem.write_i32(12, read_fd)
+  mem.write_i32(16, read_fd)
   inspect(poll_oneoff_impl(ctx, mem, 0, 1000, 1, 900), content="0")
   inspect(mem.read_i32(900), content="1")
   inspect(mem.read_byte(1010).to_int(), content="1")
@@ -3404,10 +3404,10 @@ test "wasi: poll_oneoff fd_read reports remaining file bytes" {
   })
   mem.write_i64(0, 777L)
   mem.write_byte(8, b'\x01')
-  mem.write_i32(12, read_fd)
+  mem.write_i32(16, read_fd)
   mem.write_i64(48, 778L)
   mem.write_byte(56, b'\x01')
-  mem.write_i32(60, second_read_fd)
+  mem.write_i32(64, second_read_fd)
   inspect(poll_oneoff_impl(ctx, mem, 0, 1100, 2, 900), content="0")
   debug_inspect(
     (

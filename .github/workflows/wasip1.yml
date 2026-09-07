@@ -1,7 +1,7 @@
 name: Upstream WASIp1 programs
 
-# Keep this an explicit conformance/compatibility run while ISS-464 and ISS-465
-# are unresolved. Guest failures fail the job; there is no expected-failure mask.
+# Keep compatibility differences visible. Guest failures fail the job;
+# there is no expected-failure mask.
 on:
   workflow_dispatch:
     inputs:
@@ -9,6 +9,11 @@ on:
         description: Guest program name glob
         default: '*'
         type: string
+      profile:
+        description: Source profile (adapted results are reported separately)
+        default: upstream
+        type: choice
+        options: [upstream, explicit-rights]
       mode:
         description: Execution mode
         default: both
@@ -39,20 +44,27 @@ jobs:
       - name: Build Wasmoon
         run: ./install.sh
       - name: Check the runner
-        run: python3 -m unittest discover -s scripts/tests -p 'test_wasmtime_p1.py'
+        run: |
+          python3 -m unittest discover -s scripts/tests -p 'test_wasi*.py'
+          moon test --target native modules/wasmoon/wasi \
+            modules/wasmoon/testsuite/wasi_poll_wbtest.mbt \
+            modules/wasmoon/testsuite/wasi_path_regression_wbtest.mbt \
+            modules/wasmoon/testsuite/wasi_rights_contract_wbtest.mbt \
+            modules/wasmoon/testsuite/wasi_pwrite_wbtest.mbt
       - name: Run upstream P1 programs
         env:
           RUSTUP_TOOLCHAIN: '1.97.0'
           P1_FILTER: ${{ inputs.filter }}
           P1_MODE: ${{ inputs.mode }}
+          P1_PROFILE: ${{ inputs.profile }}
         run: |
           python3 scripts/run_wasmtime_p1.py \
-            --filter "$P1_FILTER" --mode "$P1_MODE" \
+            --filter "$P1_FILTER" --mode "$P1_MODE" --profile "$P1_PROFILE" \
             --output target/wasmtime-p1-ci
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: wasip1-${{ matrix.os }}
+          name: wasip1-${{ inputs.profile }}-${{ matrix.os }}
           path: |
             target/wasmtime-p1-ci/summary.json
             target/wasmtime-p1-ci/**/stdout.txt

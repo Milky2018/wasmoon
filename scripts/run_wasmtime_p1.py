@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+from contextlib import contextmanager
 import errno
 import fnmatch
 import hashlib
@@ -63,6 +64,21 @@ def validate_snapshot(corpus: Path = CORPUS) -> tuple[dict, list[str]]:
     if not set(UNSUPPORTED).issubset(names):
         raise ValueError("stale unsupported-test entry")
     return snapshot, sorted(names)
+
+
+@contextmanager
+def prepare_build(profile: str):
+    if profile == "upstream":
+        yield CORPUS, BUILD
+        return
+    parent = ROOT / "target"
+    parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix="wasmtime-p1-source-", dir=parent) as temporary:
+        source = Path(temporary)
+        shutil.copytree(CORPUS, source, dirs_exist_ok=True)
+        subprocess.run(["git", "apply", str(CORPUS / "explicit-rights.patch")],
+                       cwd=source, check=True)
+        yield source, ROOT / "target/wasmtime-p1-explicit-rights-build"
 
 
 def guest_environment() -> dict[str, str]:
@@ -210,6 +226,7 @@ def verdict(results: list[dict]) -> int:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--profile", choices=["upstream", "explicit-rights"], default="upstream")
     parser.add_argument("--mode", choices=["both", "jit", "interp", "wasmtime"], default="both")
     parser.add_argument("--wasmoon", type=Path, default=ROOT / "wasmoon")
     parser.add_argument("--wasmtime", default="wasmtime")
@@ -239,9 +256,10 @@ def main() -> int:
         binary = binary.resolve()
         if not binary.is_file() or not os.access(binary, os.X_OK):
             parser.error(f"missing executable: {binary}; build Wasmoon with ./install.sh")
-        build_command = ["cargo", "build", "--locked", "--manifest-path", str(CORPUS / "Cargo.toml"),
-                         "--target", "wasm32-wasip1", "--release", "--target-dir", str(BUILD)]
-        subprocess.run(build_command, check=True, cwd=ROOT)
+        with prepare_build(args.profile) as (source, build):
+            build_command = ["cargo", "build", "--locked", "--manifest-path", str(source / "Cargo.toml"),
+                             "--target", "wasm32-wasip1", "--release", "--target-dir", str(build)]
+            subprocess.run(build_command, check=True, cwd=ROOT)
         if args.output:
             output = args.output.resolve()
             output.mkdir(parents=True, exist_ok=True)
@@ -253,6 +271,8 @@ def main() -> int:
             output = Path(tempfile.mkdtemp(prefix="run-", dir=parent)).resolve()
         results = []
         report = {
+            "profile": args.profile,
+            "adaptation_sha256": digest(CORPUS / "explicit-rights.patch") if args.profile != "upstream" else None,
             "upstream_commit": snapshot["commit"], "host": platform.platform(),
             "engine": str(binary), "engine_sha256": digest(binary),
             "engine_version": subprocess.check_output([str(binary), "--version"], text=True).strip(),
@@ -264,7 +284,7 @@ def main() -> int:
         modes = ["interp", "jit"] if args.mode == "both" else [args.mode]
         print(f"Results: {output}", flush=True)
         for name in names:
-            wasm = (BUILD / "wasm32-wasip1/release" / f"{name}.wasm").resolve()
+            wasm = (build / "wasm32-wasip1/release" / f"{name}.wasm").resolve()
             for mode in modes:
                 # Test polling with both EOF and an open, unreadable stdin pipe.
                 for pending in ([False, True] if name == "p1_poll_oneoff_stdio" else [False]):

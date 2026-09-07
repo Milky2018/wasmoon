@@ -695,7 +695,7 @@ test "wasi jit: poll_oneoff fd_read reports remaining file bytes" {
     #|    ;; fd_read subscription
     #|    (i64.store (i32.const 0) (i64.const 555))
     #|    (i32.store8 (i32.const 8) (i32.const 1))
-    #|    (i32.store (i32.const 12) (local.get $read_fd))
+    #|    (i32.store (i32.const 16) (local.get $read_fd))
     #|    (local.set $errno
     #|      (call $poll_oneoff
     #|        (i32.const 0) (i32.const 256) (i32.const 1) (i32.const 240)))
@@ -761,10 +761,10 @@ test "wasi jit: poll_oneoff fans out mixed subscriptions for one native fd" {
     #|    ;; sub[0] = fd_read, sub[1] = fd_write for the same native fd
     #|    (i64.store (i32.const 0) (i64.const 111))
     #|    (i32.store8 (i32.const 8) (i32.const 1))
-    #|    (i32.store (i32.const 12) (local.get $fd))
+    #|    (i32.store (i32.const 16) (local.get $fd))
     #|    (i64.store (i32.const 48) (i64.const 222))
     #|    (i32.store8 (i32.const 56) (i32.const 2))
-    #|    (i32.store (i32.const 60) (local.get $fd))
+    #|    (i32.store (i32.const 64) (local.get $fd))
     #|    (local.set $errno
     #|      (call $poll_oneoff
     #|        (i32.const 0) (i32.const 256) (i32.const 2) (i32.const 240)))
@@ -831,7 +831,7 @@ test "wasi jit: poll_oneoff requires poll and direction rights" {
     #|          (then (return (local.get $errno))))))
     #|    (i64.store (i32.const 0) (i64.const 111))
     #|    (i32.store8 (i32.const 8) (i32.const 1))
-    #|    (i32.store (i32.const 12) (local.get $fd))
+    #|    (i32.store (i32.const 16) (local.get $fd))
     #|    (local.set $errno
     #|      (call $poll_oneoff
     #|        (i32.const 0) (i32.const 256) (i32.const 1) (i32.const 240)))
@@ -893,7 +893,7 @@ test "wasi jit: poll_oneoff keeps expired realtime clock when fd is ready" {
     #|    ;; sub[1] = fd_write(stdout)
     #|    (i64.store (i32.const 48) (i64.const 222))
     #|    (i32.store8 (i32.const 56) (i32.const 2))
-    #|    (i32.store (i32.const 60) (i32.const 1))
+    #|    (i32.store (i32.const 64) (i32.const 1))
     #|    (drop (call $poll_oneoff (i32.const 0) (i32.const 96) (i32.const 2)
     #|      (i32.const 80)))
     #|    (i32.load (i32.const 80))))

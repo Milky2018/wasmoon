@@ -190,7 +190,7 @@ fn decode_poll_subscriptions(
         }),
       )
     } else if tag == 1 || tag == 2 {
-      let wasi_fd = mem.read_i32(sub_ptr + 12)
+      let wasi_fd = mem.read_i32(sub_ptr + 16)
       let source = match resolve_poll_fd_source(descriptors, wasi_fd, tag) {
         Ok(source) => source
         Err(errno) => return Err(errno)

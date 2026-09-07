@@ -2,3 +2,6 @@
 modules/wasmoon/wasi_component/wit/** whitespace=-blank-at-eol
 # Preserve the pinned upstream license byte-for-byte.
 wasi-tests/wasmtime/upstream/LICENSE whitespace=-blank-at-eof
+
+# Unified diff context lines intentionally contain a single space.
+wasi-tests/wasmtime/explicit-rights.patch whitespace=-blank-at-eol
