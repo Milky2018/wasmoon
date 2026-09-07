@@ -5,3 +5,6 @@ wasi-tests/wasmtime/upstream/LICENSE whitespace=-blank-at-eof
 
 # Unified diff context lines intentionally contain a single space.
 wasi-tests/wasmtime/explicit-rights.patch whitespace=-blank-at-eol
+
+# Preserve the pinned Wasmtime misc corpus, including original whitespace.
+wasm-tests/wasmtime/upstream/** whitespace=-blank-at-eol,-blank-at-eof

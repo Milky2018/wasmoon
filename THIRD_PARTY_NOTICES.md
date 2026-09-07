@@ -57,6 +57,16 @@ projects. Their original licenses are preserved below.
 - Guest sources and host reference files are preserved unchanged; hashes are
   recorded in `wasi-tests/wasmtime/SNAPSHOT.json`.
 
+## Wasmtime Miscellaneous Regression Tests
+
+- Path: `wasm-tests/wasmtime/upstream/`
+- Source: https://github.com/bytecodealliance/wasmtime
+- Upstream commit: `668016926adfd1b8a79dbce894f1e203d8892599`
+- Upstream path: `tests/misc_testsuite/` and the host references in the snapshot
+- License: Apache-2.0 WITH LLVM-exception
+- Local license file: `wasm-tests/wasmtime/upstream/LICENSE`
+- Complete original inventory and hashes: `wasm-tests/wasmtime/SNAPSHOT.json`
+
 ## MoonBit Dependencies
 
 The repository does not vendor `.mooncakes/` in git. Declared package

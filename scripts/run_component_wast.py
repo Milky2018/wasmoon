@@ -80,7 +80,9 @@ def run_command(
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
-            start_new_session=True,
+            # An outer corpus worker owns the process group so its timeout also
+            # terminates this tool and its descendants.
+            start_new_session=os.getenv("WASMOON_COMPONENT_SHARED_PROCESS_GROUP") != "1",
         )
     except OSError as err:
         return 127, "", str(err), False

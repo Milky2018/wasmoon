@@ -289,6 +289,19 @@ It reports current rights-model differences and polling failures explicitly;
 it is not yet a passing conformance gate. The separate `Upstream WASIp1 programs`
 workflow runs it on demand.
 
+The pinned [Wasmtime misc_testsuite](https://github.com/Milky2018/wasmoon/blob/dev/wasm-tests/wasmtime/README.md)
+adds core Wasm and Component Model regression scripts:
+
+```bash
+python3 scripts/run_wasmtime_misc.py --check
+python3 scripts/run_wasmtime_misc.py
+```
+
+The full diagnostic currently reports failures; it preserves them without an
+expected-failure mask. Script-only completions, missing host contracts and
+high-memory deferrals are reported separately. Regular CI runs six explicit
+smoke scripts; the full cross-platform scan has its own manual workflow.
+
 ## Library Usage
 
 ### JIT GC Setup

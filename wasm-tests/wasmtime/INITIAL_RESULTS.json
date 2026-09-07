@@ -1,0 +1,7623 @@
+{
+  "upstream_commit": "668016926adfd1b8a79dbce894f1e203d8892599",
+  "snapshot_sha256": "0774b1945403aa6a12a3c37fda2456bc8c9bbe6cd00f23f2f77c6d15162d9357",
+  "host_contracts_sha256": "49c77574afcdd73c561ee2c46a2a52ae09eb0c9627581ba5a272e44c3aae5639",
+  "host": "macOS-26.5.2-arm64-arm-64bit-Mach-O",
+  "engine_sha256": "f13450902ee7af803bc7fbda7d4d1dd5d5fd332b3980ce76b3e3b1d555d8b56a",
+  "engine_version": "0.15.0",
+  "tools": {
+    "wasm_tools": "wasm-tools 1.254.0",
+    "wasmoon_tools_sha256": "ad4b77f5afd1bf4bcddd0163a32b27f8ffc1a5769295a64a014b33da9f30b2fc"
+  },
+  "timeout": 30.0,
+  "counts": {
+    "pass": 362,
+    "script_only": 54,
+    "fail": 260,
+    "timeout": 0,
+    "unsupported": 72,
+    "deferred": 16,
+    "harness_error": 0
+  },
+  "date": "2026-09-07",
+  "runtime_commit": "ebd11ae205495e6f6dc7d7b5432f6e2f872f4cfc",
+  "note": "Historical observation only. The runner never reads this file or masks these failures.",
+  "results": [
+    {
+      "name": "aarch64-extr.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "aarch64-extr.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "add.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "add.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "alias-region-imported-globals.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "alias-region-imported-globals.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "alias-region-imported-memories.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "alias-region-imported-memories.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "alias-region-imported-tables.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "alias-region-imported-tables.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "alias-region-memory-copy.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "alias-region-memory-copy.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "big-memory-behavior.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "deferred",
+      "detail": "Upstream marks this test hogs_memory; opt in with --include-high-memory."
+    },
+    {
+      "name": "big-memory-behavior.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "deferred",
+      "detail": "Upstream marks this test hogs_memory; opt in with --include-high-memory."
+    },
+    {
+      "name": "bit-and-conditions.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 29,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "bit-and-conditions.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 29,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "br-table-fuzzbug.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "script_only",
+      "passed": 0,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": "Completed module/action script with no assertion commands"
+    },
+    {
+      "name": "br-table-fuzzbug.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "script_only",
+      "passed": 0,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": "Completed module/action script with no assertion commands"
+    },
+    {
+      "name": "branch-hinting-invalid.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "branch-hinting-invalid.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "branch-hinting.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 8,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "branch-hinting.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 8,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "call_indirect.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 13,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "call_indirect.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "fail",
+      "passed": 0,
+      "failed": 13,
+      "skipped": 0,
+      "returncode": 1,
+      "detail": "exit=1, passed=0, failed=13, skipped=0"
+    },
+    {
+      "name": "canonicalize-nan-scalar.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "unsupported",
+      "detail": "Requires engine-wide NaN canonicalization configuration, absent from the Wasmoon test CLI."
+    },
+    {
+      "name": "canonicalize-nan-scalar.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "unsupported",
+      "detail": "Requires engine-wide NaN canonicalization configuration, absent from the Wasmoon test CLI."
+    },
+    {
+      "name": "component-model-threading/drop-subtask-on-separate-thread.wast",
+      "mode": "interp",
+      "lane": "component",
+      "status": "fail",
+      "passed": 0,
+      "failed": 2,
+      "skipped": 0,
+      "returncode": 1,
+      "detail": "Component adapter reported failed, skipped or zero passing commands"
+    },
+    {
+      "name": "component-model-threading/drop-subtask-on-separate-thread.wast",
+      "mode": "jit",
+      "lane": "component",
+      "status": "fail",
+      "passed": 0,
+      "failed": 2,
+      "skipped": 0,
+      "returncode": 1,
+      "detail": "Component adapter reported failed, skipped or zero passing commands"
+    },
+    {
+      "name": "component-model-threading/many-threads-indexed.wast",
+      "mode": "interp",
+      "lane": "component",
+      "status": "pass",
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "component-model-threading/many-threads-indexed.wast",
+      "mode": "jit",
+      "lane": "component",
+      "status": "pass",
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "component-model-threading/stackful-cancellation.wast",
+      "mode": "interp",
+      "lane": "component",
+      "status": "fail",
+      "passed": 1,
+      "failed": 1,
+      "skipped": 0,
+      "returncode": 1,
+      "detail": "Component adapter reported failed, skipped or zero passing commands"
+    },
+    {
+      "name": "component-model-threading/stackful-cancellation.wast",
+      "mode": "jit",
+      "lane": "component",
+      "status": "fail",
+      "passed": 1,
+      "failed": 1,
+      "skipped": 0,
+      "returncode": 1,
+      "detail": "Component adapter reported failed, skipped or zero passing commands"
+    },
+    {
+      "name": "component-model-threading/subtask-drop-multithreaded.wast",
+      "mode": "interp",
+      "lane": "component",
+      "status": "pass",
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "component-model-threading/subtask-drop-multithreaded.wast",
+      "mode": "jit",
+      "lane": "component",
+      "status": "pass",
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "component-model-threading/suspend-trap.wast",
+      "mode": "interp",
+      "lane": "component",
+      "status": "fail",
+      "passed": 1,
+      "failed": 1,
+      "skipped": 0,
+      "returncode": 1,
+      "detail": "Component adapter reported failed, skipped or zero passing commands"
+    },
+    {
+      "name": "component-model-threading/suspend-trap.wast",
+      "mode": "jit",
+      "lane": "component",
+      "status": "fail",
+      "passed": 1,
+      "failed": 1,
+      "skipped": 0,
+      "returncode": 1,
+      "detail": "Component adapter reported failed, skipped or zero passing commands"
+    },
+    {
+      "name": "component-model-threading/thread-new-indirect-multi-table.wast",
+      "mode": "interp",
+      "lane": "component",
+      "status": "fail",
+      "passed": 1,
+      "failed": 1,
+      "skipped": 0,
+      "returncode": 1,
+      "detail": "Component adapter reported failed, skipped or zero passing commands"
+    },
+    {
+      "name": "component-model-threading/thread-new-indirect-multi-table.wast",
+      "mode": "jit",
+      "lane": "component",
+      "status": "fail",
+      "passed": 1,
+      "failed": 1,
+      "skipped": 0,
+      "returncode": 1,
+      "detail": "Component adapter reported failed, skipped or zero passing commands"
+    },
+    {
+      "name": "component-model-threading/threading-builtins.wast",
+      "mode": "interp",
+      "lane": "component",
+      "status": "fail",
+      "passed": 5,
+      "failed": 1,
+      "skipped": 0,
+      "returncode": 1,
+      "detail": "Component adapter reported failed, skipped or zero passing commands"
+    },
+    {
+      "name": "component-model-threading/threading-builtins.wast",
+      "mode": "jit",
+      "lane": "component",
+      "status": "fail",
+      "passed": 5,
+      "failed": 1,
+      "skipped": 0,
+      "returncode": 1,
+      "detail": "Component adapter reported failed, skipped or zero passing commands"
+    },
+    {
+      "name": "component-model-threading/threading-trap-in-post-return.wast",
+      "mode": "interp",
+      "lane": "component",
+      "status": "fail",
+      "passed": 13,
+      "failed": 2,
+      "skipped": 0,
+      "returncode": 1,
+      "detail": "Component adapter reported failed, skipped or zero passing commands"
+    },
+    {
+      "name": "component-model-threading/threading-trap-in-post-return.wast",
+      "mode": "jit",
+      "lane": "component",
+      "status": "fail",
+      "passed": 13,
+      "failed": 2,
+      "skipped": 0,
+      "returncode": 1,
+      "detail": "Component adapter reported failed, skipped or zero passing commands"
+    },
+    {
+      "name": "component-model-threading/yield-cancellable.wast",
+      "mode": "interp",
+      "lane": "component",
+      "status": "pass",
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "component-model-threading/yield-cancellable.wast",
+      "mode": "jit",
+      "lane": "component",
+      "status": "pass",
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "component-model/adapter.wast",
+      "mode": "interp",
+      "lane": "component",
+      "status": "fail",
+      "passed": 7,
+      "failed": 1,
+      "skipped": 0,
+      "returncode": 1,
+      "detail": "Component adapter reported failed, skipped or zero passing commands"
+    },
+    {
+      "name": "component-model/adapter.wast",
+      "mode": "jit",
+      "lane": "component",
+      "status": "fail",
+      "passed": 7,
+      "failed": 1,
+      "skipped": 0,
+      "returncode": 1,
+      "detail": "Component adapter reported failed, skipped or zero passing commands"
+    },
+    {
+      "name": "component-model/alias-region-known-imported-adapter-memory.wast",
+      "mode": "interp",
+      "lane": "component",
+      "status": "pass",
+      "passed": 3,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "component-model/alias-region-known-imported-adapter-memory.wast",
+      "mode": "jit",
+      "lane": "component",
+      "status": "pass",
+      "passed": 3,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "component-model/alias-region-known-imported-canonical-abi-memory.wast",
+      "mode": "interp",
+      "lane": "component",
+      "status": "pass",
+      "passed": 4,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "component-model/alias-region-known-imported-canonical-abi-memory.wast",
+      "mode": "jit",
+      "lane": "component",
+      "status": "pass",
+      "passed": 4,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "component-model/alias-region-known-imported-entities.wast",
+      "mode": "interp",
+      "lane": "component",
+      "status": "pass",
+      "passed": 4,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "component-model/alias-region-known-imported-entities.wast",
+      "mode": "jit",
+      "lane": "component",
+      "status": "pass",
+      "passed": 4,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "component-model/alias-region-multiple-instantiations.wast",
+      "mode": "interp",
+      "lane": "component",
+      "status": "pass",
+      "passed": 4,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "component-model/alias-region-multiple-instantiations.wast",
+      "mode": "jit",
+      "lane": "component",
+      "status": "pass",
+      "passed": 4,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "component-model/alias-region-reexported-ambiguous-entities.wast",
+      "mode": "interp",
+      "lane": "component",
+      "status": "pass",
+      "passed": 7,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "component-model/alias-region-reexported-ambiguous-entities.wast",
+      "mode": "jit",
+      "lane": "component",
+      "status": "pass",
+      "passed": 7,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "component-model/alias-region-reexported-entities-to-imported-module.wast",
+      "mode": "interp",
+      "lane": "component",
+      "status": "fail",
+      "passed": 0,
+      "failed": 4,
+      "skipped": 0,
+      "returncode": 1,
+      "detail": "Component adapter reported failed, skipped or zero passing commands"
+    },
+    {
+      "name": "component-model/alias-region-reexported-entities-to-imported-module.wast",
+      "mode": "jit",
+      "lane": "component",
+      "status": "fail",
+      "passed": 0,
+      "failed": 4,
+      "skipped": 0,
+      "returncode": 1,
+      "detail": "Component adapter reported failed, skipped or zero passing commands"
+    },
+    {
+      "name": "component-model/alias-region-reexported-known-entities.wast",
+      "mode": "interp",
+      "lane": "component",
+      "status": "pass",
+      "passed": 4,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "component-model/alias-region-reexported-known-entities.wast",
+      "mode": "jit",
+      "lane": "component",
+      "status": "pass",
+      "passed": 4,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "component-model/aliasing.wast",
+      "mode": "interp",
+      "lane": "component",
+      "status": "pass",
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "component-model/aliasing.wast",
+      "mode": "jit",
+      "lane": "component",
+      "status": "pass",
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "component-model/async/async-builtins.wast",
+      "mode": "interp",
+      "lane": "component",
+      "status": "pass",
+      "passed": 4,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "component-model/async/async-builtins.wast",
+      "mode": "jit",
+      "lane": "component",
+      "status": "pass",
+      "passed": 4,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "component-model/async/backpressure-deadlock.wast",
+      "mode": "interp",
+      "lane": "component",
+      "status": "pass",
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "component-model/async/backpressure-deadlock.wast",
+      "mode": "jit",
+      "lane": "component",
+      "status": "pass",
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "component-model/async/backpressure-overflow.wast",
+      "mode": "interp",
+      "lane": "component",
+      "status": "pass",
+      "passed": 10,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "component-model/async/backpressure-overflow.wast",
+      "mode": "jit",
+      "lane": "component",
+      "status": "pass",
+      "passed": 10,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "component-model/async/callback-yield-then-exit.wast",
+      "mode": "interp",
+      "lane": "component",
+      "status": "fail",
+      "passed": 1,
+      "failed": 1,
+      "skipped": 0,
+      "returncode": 1,
+      "detail": "Component adapter reported failed, skipped or zero passing commands"
+    },
+    {
+      "name": "component-model/async/callback-yield-then-exit.wast",
+      "mode": "jit",
+      "lane": "component",
+      "status": "fail",
+      "passed": 1,
+      "failed": 1,
+      "skipped": 0,
+      "returncode": 1,
+      "detail": "Component adapter reported failed, skipped or zero passing commands"
+    },
+    {
+      "name": "component-model/async/cancel-host.wast",
+      "mode": "interp",
+      "lane": "component",
+      "status": "fail",
+      "passed": 0,
+      "failed": 10,
+      "skipped": 0,
+      "returncode": 1,
+      "detail": "Component adapter reported failed, skipped or zero passing commands"
+    },
+    {
+      "name": "component-model/async/cancel-host.wast",
+      "mode": "jit",
+      "lane": "component",
+      "status": "fail",
+      "passed": 0,
+      "failed": 10,
+      "skipped": 0,
+      "returncode": 1,
+      "detail": "Component adapter reported failed, skipped or zero passing commands"
+    },
+    {
+      "name": "component-model/async/cancel-sibling-subtask.wast",
+      "mode": "interp",
+      "lane": "component",
+      "status": "pass",
+      "passed": 5,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "component-model/async/cancel-sibling-subtask.wast",
+      "mode": "jit",
+      "lane": "component",
+      "status": "pass",
+      "passed": 5,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "component-model/async/cancel-starting-subtask-does-not-leak.wast",
+      "mode": "interp",
+      "lane": "component",
+      "status": "unsupported",
+      "detail": "Requires Wasmtime-specific host imports (forced GC or resource-table capacity)."
+    },
+    {
+      "name": "component-model/async/cancel-starting-subtask-does-not-leak.wast",
+      "mode": "jit",
+      "lane": "component",
+      "status": "unsupported",
+      "detail": "Requires Wasmtime-specific host imports (forced GC or resource-table capacity)."
+    },
+    {
+      "name": "component-model/async/cancel-sync-and-waitable.wast",
+      "mode": "interp",
+      "lane": "component",
+      "status": "pass",
+      "passed": 10,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "component-model/async/cancel-sync-and-waitable.wast",
+      "mode": "jit",
+      "lane": "component",
+      "status": "pass",
+      "passed": 10,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "component-model/async/context-in-compositions.wast",
+      "mode": "interp",
+      "lane": "component",
+      "status": "fail",
+      "passed": 6,
+      "failed": 9,
+      "skipped": 0,
+      "returncode": 1,
+      "detail": "Component adapter reported failed, skipped or zero passing commands"
+    },
+    {
+      "name": "component-model/async/context-in-compositions.wast",
+      "mode": "jit",
+      "lane": "component",
+      "status": "fail",
+      "passed": 6,
+      "failed": 9,
+      "skipped": 0,
+      "returncode": 1,
+      "detail": "Component adapter reported failed, skipped or zero passing commands"
+    },
+    {
+      "name": "component-model/async/context-in-resource-drop.wast",
+      "mode": "interp",
+      "lane": "component",
+      "status": "unsupported",
+      "detail": "Requires Wasmtime-specific host imports (forced GC or resource-table capacity)."
+    },
+    {
+      "name": "component-model/async/context-in-resource-drop.wast",
+      "mode": "jit",
+      "lane": "component",
+      "status": "unsupported",
+      "detail": "Requires Wasmtime-specific host imports (forced GC or resource-table capacity)."
+    },
+    {
+      "name": "component-model/async/drop-deadlock.wast",
+      "mode": "interp",
+      "lane": "component",
+      "status": "fail",
+      "passed": 2,
+      "failed": 1,
+      "skipped": 0,
+      "returncode": 1,
+      "detail": "Component adapter reported failed, skipped or zero passing commands"
+    },
+    {
+      "name": "component-model/async/drop-deadlock.wast",
+      "mode": "jit",
+      "lane": "component",
+      "status": "fail",
+      "passed": 2,
+      "failed": 1,
+      "skipped": 0,
+      "returncode": 1,
+      "detail": "Component adapter reported failed, skipped or zero passing commands"
+    },
+    {
+      "name": "component-model/async/drop-host.wast",
+      "mode": "interp",
+      "lane": "component",
+      "status": "fail",
+      "passed": 0,
+      "failed": 2,
+      "skipped": 0,
+      "returncode": 1,
+      "detail": "Component adapter reported failed, skipped or zero passing commands"
+    },
+    {
+      "name": "component-model/async/drop-host.wast",
+      "mode": "jit",
+      "lane": "component",
+      "status": "fail",
+      "passed": 0,
+      "failed": 2,
+      "skipped": 0,
+      "returncode": 1,
+      "detail": "Component adapter reported failed, skipped or zero passing commands"
+    },
+    {
+      "name": "component-model/async/drop-waitable-set-stackful.wast",
+      "mode": "interp",
+      "lane": "component",
+      "status": "pass",
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "component-model/async/drop-waitable-set-stackful.wast",
+      "mode": "jit",
+      "lane": "component",
+      "status": "pass",
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "component-model/async/error-context.wast",
+      "mode": "interp",
+      "lane": "component",
+      "status": "fail",
+      "passed": 6,
+      "failed": 1,
+      "skipped": 0,
+      "returncode": 1,
+      "detail": "Component adapter reported failed, skipped or zero passing commands"
+    },
+    {
+      "name": "component-model/async/error-context.wast",
+      "mode": "jit",
+      "lane": "component",
+      "status": "fail",
+      "passed": 6,
+      "failed": 1,
+      "skipped": 0,
+      "returncode": 1,
+      "detail": "Component adapter reported failed, skipped or zero passing commands"
+    },
+    {
+      "name": "component-model/async/exceptions.wast",
+      "mode": "interp",
+      "lane": "component",
+      "status": "fail",
+      "passed": 9,
+      "failed": 6,
+      "skipped": 0,
+      "returncode": 1,
+      "detail": "Component adapter reported failed, skipped or zero passing commands"
+    },
+    {
+      "name": "component-model/async/exceptions.wast",
+      "mode": "jit",
+      "lane": "component",
+      "status": "fail",
+      "passed": 9,
+      "failed": 6,
+      "skipped": 0,
+      "returncode": 1,
+      "detail": "Component adapter reported failed, skipped or zero passing commands"
+    },
+    {
+      "name": "component-model/async/fused.wast",
+      "mode": "interp",
+      "lane": "component",
+      "status": "fail",
+      "passed": 5,
+      "failed": 1,
+      "skipped": 0,
+      "returncode": 1,
+      "detail": "Component adapter reported failed, skipped or zero passing commands"
+    },
+    {
+      "name": "component-model/async/fused.wast",
+      "mode": "jit",
+      "lane": "component",
+      "status": "fail",
+      "passed": 5,
+      "failed": 1,
+      "skipped": 0,
+      "returncode": 1,
+      "detail": "Component adapter reported failed, skipped or zero passing commands"
+    },
+    {
+      "name": "component-model/async/future-cancel-read-dropped.wast",
+      "mode": "interp",
+      "lane": "component",
+      "status": "pass",
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "component-model/async/future-cancel-read-dropped.wast",
+      "mode": "jit",
+      "lane": "component",
+      "status": "pass",
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "component-model/async/future-cancel-write-completed.wast",
+      "mode": "interp",
+      "lane": "component",
+      "status": "pass",
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "component-model/async/future-cancel-write-completed.wast",
+      "mode": "jit",
+      "lane": "component",
+      "status": "pass",
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "component-model/async/future-cancel-write-dropped.wast",
+      "mode": "interp",
+      "lane": "component",
+      "status": "pass",
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "component-model/async/future-cancel-write-dropped.wast",
+      "mode": "jit",
+      "lane": "component",
+      "status": "pass",
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "component-model/async/future-drop-writable-after-notified-drop.wast",
+      "mode": "interp",
+      "lane": "component",
+      "status": "fail",
+      "passed": 1,
+      "failed": 1,
+      "skipped": 0,
+      "returncode": 1,
+      "detail": "Component adapter reported failed, skipped or zero passing commands"
+    },
+    {
+      "name": "component-model/async/future-drop-writable-after-notified-drop.wast",
+      "mode": "jit",
+      "lane": "component",
+      "status": "fail",
+      "passed": 1,
+      "failed": 1,
+      "skipped": 0,
+      "returncode": 1,
+      "detail": "Component adapter reported failed, skipped or zero passing commands"
+    },
+    {
+      "name": "component-model/async/future-read.wast",
+      "mode": "interp",
+      "lane": "component",
+      "status": "fail",
+      "passed": 6,
+      "failed": 2,
+      "skipped": 0,
+      "returncode": 1,
+      "detail": "Component adapter reported failed, skipped or zero passing commands"
+    },
+    {
+      "name": "component-model/async/future-read.wast",
+      "mode": "jit",
+      "lane": "component",
+      "status": "fail",
+      "passed": 6,
+      "failed": 2,
+      "skipped": 0,
+      "returncode": 1,
+      "detail": "Component adapter reported failed, skipped or zero passing commands"
+    },
+    {
+      "name": "component-model/async/futures-must-write.wast",
+      "mode": "interp",
+      "lane": "component",
+      "status": "pass",
+      "passed": 3,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "component-model/async/futures-must-write.wast",
+      "mode": "jit",
+      "lane": "component",
+      "status": "pass",
+      "passed": 3,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "component-model/async/futures-must-write2.wast",
+      "mode": "interp",
+      "lane": "component",
+      "status": "pass",
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "component-model/async/futures-must-write2.wast",
+      "mode": "jit",
+      "lane": "component",
+      "status": "pass",
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "component-model/async/futures.wast",
+      "mode": "interp",
+      "lane": "component",
+      "status": "pass",
+      "passed": 8,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "component-model/async/futures.wast",
+      "mode": "jit",
+      "lane": "component",
+      "status": "pass",
+      "passed": 8,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "component-model/async/intra-futures.wast",
+      "mode": "interp",
+      "lane": "component",
+      "status": "fail",
+      "passed": 1,
+      "failed": 1,
+      "skipped": 0,
+      "returncode": 1,
+      "detail": "Component adapter reported failed, skipped or zero passing commands"
+    },
+    {
+      "name": "component-model/async/intra-futures.wast",
+      "mode": "jit",
+      "lane": "component",
+      "status": "fail",
+      "passed": 1,
+      "failed": 1,
+      "skipped": 0,
+      "returncode": 1,
+      "detail": "Component adapter reported failed, skipped or zero passing commands"
+    },
+    {
+      "name": "component-model/async/intra-streams.wast",
+      "mode": "interp",
+      "lane": "component",
+      "status": "fail",
+      "passed": 7,
+      "failed": 1,
+      "skipped": 0,
+      "returncode": 1,
+      "detail": "Component adapter reported failed, skipped or zero passing commands"
+    },
+    {
+      "name": "component-model/async/intra-streams.wast",
+      "mode": "jit",
+      "lane": "component",
+      "status": "fail",
+      "passed": 7,
+      "failed": 1,
+      "skipped": 0,
+      "returncode": 1,
+      "detail": "Component adapter reported failed, skipped or zero passing commands"
+    },
+    {
+      "name": "component-model/async/join-during-sync-read.wast",
+      "mode": "interp",
+      "lane": "component",
+      "status": "pass",
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "component-model/async/join-during-sync-read.wast",
+      "mode": "jit",
+      "lane": "component",
+      "status": "pass",
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "component-model/async/lift.wast",
+      "mode": "interp",
+      "lane": "component",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "component-model/async/lift.wast",
+      "mode": "jit",
+      "lane": "component",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "component-model/async/lower.wast",
+      "mode": "interp",
+      "lane": "component",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "component-model/async/lower.wast",
+      "mode": "jit",
+      "lane": "component",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "component-model/async/many-params-with-retptr.wast",
+      "mode": "interp",
+      "lane": "component",
+      "status": "pass",
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "component-model/async/many-params-with-retptr.wast",
+      "mode": "jit",
+      "lane": "component",
+      "status": "pass",
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "component-model/async/partial-stream-copies.wast",
+      "mode": "interp",
+      "lane": "component",
+      "status": "pass",
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "component-model/async/partial-stream-copies.wast",
+      "mode": "jit",
+      "lane": "component",
+      "status": "pass",
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "component-model/async/reenter-during-yield.wast",
+      "mode": "interp",
+      "lane": "component",
+      "status": "pass",
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "component-model/async/reenter-during-yield.wast",
+      "mode": "jit",
+      "lane": "component",
+      "status": "pass",
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "component-model/async/reentrance.wast",
+      "mode": "interp",
+      "lane": "component",
+      "status": "fail",
+      "passed": 1,
+      "failed": 1,
+      "skipped": 0,
+      "returncode": 1,
+      "detail": "Component adapter reported failed, skipped or zero passing commands"
+    },
+    {
+      "name": "component-model/async/reentrance.wast",
+      "mode": "jit",
+      "lane": "component",
+      "status": "fail",
+      "passed": 1,
+      "failed": 1,
+      "skipped": 0,
+      "returncode": 1,
+      "detail": "Component adapter reported failed, skipped or zero passing commands"
+    },
+    {
+      "name": "component-model/async/stackful.wast",
+      "mode": "interp",
+      "lane": "component",
+      "status": "fail",
+      "passed": 7,
+      "failed": 1,
+      "skipped": 0,
+      "returncode": 1,
+      "detail": "Component adapter reported failed, skipped or zero passing commands"
+    },
+    {
+      "name": "component-model/async/stackful.wast",
+      "mode": "jit",
+      "lane": "component",
+      "status": "fail",
+      "passed": 7,
+      "failed": 1,
+      "skipped": 0,
+      "returncode": 1,
+      "detail": "Component adapter reported failed, skipped or zero passing commands"
+    },
+    {
+      "name": "component-model/async/stream-big-read-and-writes.wast",
+      "mode": "interp",
+      "lane": "component",
+      "status": "fail",
+      "passed": 4,
+      "failed": 1,
+      "skipped": 0,
+      "returncode": 1,
+      "detail": "Component adapter reported failed, skipped or zero passing commands"
+    },
+    {
+      "name": "component-model/async/stream-big-read-and-writes.wast",
+      "mode": "jit",
+      "lane": "component",
+      "status": "fail",
+      "passed": 4,
+      "failed": 1,
+      "skipped": 0,
+      "returncode": 1,
+      "detail": "Component adapter reported failed, skipped or zero passing commands"
+    },
+    {
+      "name": "component-model/async/stream-cancel-finished-op.wast",
+      "mode": "interp",
+      "lane": "component",
+      "status": "fail",
+      "passed": 10,
+      "failed": 9,
+      "skipped": 0,
+      "returncode": 1,
+      "detail": "Component adapter reported failed, skipped or zero passing commands"
+    },
+    {
+      "name": "component-model/async/stream-cancel-finished-op.wast",
+      "mode": "jit",
+      "lane": "component",
+      "status": "fail",
+      "passed": 10,
+      "failed": 9,
+      "skipped": 0,
+      "returncode": 1,
+      "detail": "Component adapter reported failed, skipped or zero passing commands"
+    },
+    {
+      "name": "component-model/async/stream-zero-ops.wast",
+      "mode": "interp",
+      "lane": "component",
+      "status": "fail",
+      "passed": 1,
+      "failed": 1,
+      "skipped": 0,
+      "returncode": 1,
+      "detail": "Component adapter reported failed, skipped or zero passing commands"
+    },
+    {
+      "name": "component-model/async/stream-zero-ops.wast",
+      "mode": "jit",
+      "lane": "component",
+      "status": "fail",
+      "passed": 1,
+      "failed": 1,
+      "skipped": 0,
+      "returncode": 1,
+      "detail": "Component adapter reported failed, skipped or zero passing commands"
+    },
+    {
+      "name": "component-model/async/streams-massive-send.wast",
+      "mode": "interp",
+      "lane": "component",
+      "status": "fail",
+      "passed": 1,
+      "failed": 4,
+      "skipped": 0,
+      "returncode": 1,
+      "detail": "Component adapter reported failed, skipped or zero passing commands"
+    },
+    {
+      "name": "component-model/async/streams-massive-send.wast",
+      "mode": "jit",
+      "lane": "component",
+      "status": "fail",
+      "passed": 1,
+      "failed": 4,
+      "skipped": 0,
+      "returncode": 1,
+      "detail": "Component adapter reported failed, skipped or zero passing commands"
+    },
+    {
+      "name": "component-model/async/streams.wast",
+      "mode": "interp",
+      "lane": "component",
+      "status": "pass",
+      "passed": 15,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "component-model/async/streams.wast",
+      "mode": "jit",
+      "lane": "component",
+      "status": "pass",
+      "passed": 15,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "component-model/async/subtask-wait.wast",
+      "mode": "interp",
+      "lane": "component",
+      "status": "pass",
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "component-model/async/subtask-wait.wast",
+      "mode": "jit",
+      "lane": "component",
+      "status": "pass",
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "component-model/async/sync-and-async-waitable.wast",
+      "mode": "interp",
+      "lane": "component",
+      "status": "pass",
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "component-model/async/sync-and-async-waitable.wast",
+      "mode": "jit",
+      "lane": "component",
+      "status": "pass",
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "component-model/async/sync-call-context-slots.wast",
+      "mode": "interp",
+      "lane": "component",
+      "status": "fail",
+      "passed": 0,
+      "failed": 4,
+      "skipped": 0,
+      "returncode": 1,
+      "detail": "Component adapter reported failed, skipped or zero passing commands"
+    },
+    {
+      "name": "component-model/async/sync-call-context-slots.wast",
+      "mode": "jit",
+      "lane": "component",
+      "status": "fail",
+      "passed": 0,
+      "failed": 4,
+      "skipped": 0,
+      "returncode": 1,
+      "detail": "Component adapter reported failed, skipped or zero passing commands"
+    },
+    {
+      "name": "component-model/async/sync-call-context-trap.wast",
+      "mode": "interp",
+      "lane": "component",
+      "status": "pass",
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "component-model/async/sync-call-context-trap.wast",
+      "mode": "jit",
+      "lane": "component",
+      "status": "pass",
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "component-model/async/sync-call-context.wast",
+      "mode": "interp",
+      "lane": "component",
+      "status": "fail",
+      "passed": 7,
+      "failed": 7,
+      "skipped": 0,
+      "returncode": 1,
+      "detail": "Component adapter reported failed, skipped or zero passing commands"
+    },
+    {
+      "name": "component-model/async/sync-call-context.wast",
+      "mode": "jit",
+      "lane": "component",
+      "status": "fail",
+      "passed": 7,
+      "failed": 7,
+      "skipped": 0,
+      "returncode": 1,
+      "detail": "Component adapter reported failed, skipped or zero passing commands"
+    },
+    {
+      "name": "component-model/async/sync-streams.wast",
+      "mode": "interp",
+      "lane": "component",
+      "status": "pass",
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "component-model/async/sync-streams.wast",
+      "mode": "jit",
+      "lane": "component",
+      "status": "pass",
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "component-model/async/task-builtins.wast",
+      "mode": "interp",
+      "lane": "component",
+      "status": "fail",
+      "passed": 12,
+      "failed": 9,
+      "skipped": 0,
+      "returncode": 1,
+      "detail": "Component adapter reported failed, skipped or zero passing commands"
+    },
+    {
+      "name": "component-model/async/task-builtins.wast",
+      "mode": "jit",
+      "lane": "component",
+      "status": "fail",
+      "passed": 12,
+      "failed": 9,
+      "skipped": 0,
+      "returncode": 1,
+      "detail": "Component adapter reported failed, skipped or zero passing commands"
+    },
+    {
+      "name": "component-model/async/task-deletion.wast",
+      "mode": "interp",
+      "lane": "component",
+      "status": "fail",
+      "passed": 7,
+      "failed": 3,
+      "skipped": 0,
+      "returncode": 1,
+      "detail": "Component adapter reported failed, skipped or zero passing commands"
+    },
+    {
+      "name": "component-model/async/task-deletion.wast",
+      "mode": "jit",
+      "lane": "component",
+      "status": "fail",
+      "passed": 7,
+      "failed": 3,
+      "skipped": 0,
+      "returncode": 1,
+      "detail": "Component adapter reported failed, skipped or zero passing commands"
+    },
+    {
+      "name": "component-model/async/task-return-traps.wast",
+      "mode": "interp",
+      "lane": "component",
+      "status": "fail",
+      "passed": 7,
+      "failed": 7,
+      "skipped": 0,
+      "returncode": 1,
+      "detail": "Component adapter reported failed, skipped or zero passing commands"
+    },
+    {
+      "name": "component-model/async/task-return-traps.wast",
+      "mode": "jit",
+      "lane": "component",
+      "status": "fail",
+      "passed": 7,
+      "failed": 7,
+      "skipped": 0,
+      "returncode": 1,
+      "detail": "Component adapter reported failed, skipped or zero passing commands"
+    },
+    {
+      "name": "component-model/async/trap-if-done.wast",
+      "mode": "interp",
+      "lane": "component",
+      "status": "fail",
+      "passed": 51,
+      "failed": 28,
+      "skipped": 0,
+      "returncode": 1,
+      "detail": "Component adapter reported failed, skipped or zero passing commands"
+    },
+    {
+      "name": "component-model/async/trap-if-done.wast",
+      "mode": "jit",
+      "lane": "component",
+      "status": "fail",
+      "passed": 51,
+      "failed": 28,
+      "skipped": 0,
+      "returncode": 1,
+      "detail": "Component adapter reported failed, skipped or zero passing commands"
+    },
+    {
+      "name": "component-model/async/trap-if-transfer-in-waitable-set.wast",
+      "mode": "interp",
+      "lane": "component",
+      "status": "pass",
+      "passed": 5,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "component-model/async/trap-if-transfer-in-waitable-set.wast",
+      "mode": "jit",
+      "lane": "component",
+      "status": "pass",
+      "passed": 5,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "component-model/async/wait-forever.wast",
+      "mode": "interp",
+      "lane": "component",
+      "status": "pass",
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "component-model/async/wait-forever.wast",
+      "mode": "jit",
+      "lane": "component",
+      "status": "pass",
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "component-model/async/wait-forever2.wast",
+      "mode": "interp",
+      "lane": "component",
+      "status": "pass",
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "component-model/async/wait-forever2.wast",
+      "mode": "jit",
+      "lane": "component",
+      "status": "pass",
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "component-model/async/waitable-set-stale-entry.wast",
+      "mode": "interp",
+      "lane": "component",
+      "status": "pass",
+      "passed": 13,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "component-model/async/waitable-set-stale-entry.wast",
+      "mode": "jit",
+      "lane": "component",
+      "status": "pass",
+      "passed": 13,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "component-model/async/yield-when-cancelled.wast",
+      "mode": "interp",
+      "lane": "component",
+      "status": "fail",
+      "passed": 1,
+      "failed": 1,
+      "skipped": 0,
+      "returncode": 1,
+      "detail": "Component adapter reported failed, skipped or zero passing commands"
+    },
+    {
+      "name": "component-model/async/yield-when-cancelled.wast",
+      "mode": "jit",
+      "lane": "component",
+      "status": "fail",
+      "passed": 1,
+      "failed": 1,
+      "skipped": 0,
+      "returncode": 1,
+      "detail": "Component adapter reported failed, skipped or zero passing commands"
+    },
+    {
+      "name": "component-model/big-strings.wast",
+      "mode": "interp",
+      "lane": "component",
+      "status": "deferred",
+      "detail": "Upstream marks this test hogs_memory; opt in with --include-high-memory."
+    },
+    {
+      "name": "component-model/big-strings.wast",
+      "mode": "jit",
+      "lane": "component",
+      "status": "deferred",
+      "detail": "Upstream marks this test hogs_memory; opt in with --include-high-memory."
+    },
+    {
+      "name": "component-model/enum_discriminant.wast",
+      "mode": "interp",
+      "lane": "component",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "component-model/enum_discriminant.wast",
+      "mode": "jit",
+      "lane": "component",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "component-model/enums.wast",
+      "mode": "interp",
+      "lane": "component",
+      "status": "pass",
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "component-model/enums.wast",
+      "mode": "jit",
+      "lane": "component",
+      "status": "pass",
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "component-model/error-context-trap-in-post-return.wast",
+      "mode": "interp",
+      "lane": "component",
+      "status": "pass",
+      "passed": 7,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "component-model/error-context-trap-in-post-return.wast",
+      "mode": "jit",
+      "lane": "component",
+      "status": "pass",
+      "passed": 7,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "component-model/exceptions.wast",
+      "mode": "interp",
+      "lane": "component",
+      "status": "fail",
+      "passed": 6,
+      "failed": 4,
+      "skipped": 0,
+      "returncode": 1,
+      "detail": "Component adapter reported failed, skipped or zero passing commands"
+    },
+    {
+      "name": "component-model/exceptions.wast",
+      "mode": "jit",
+      "lane": "component",
+      "status": "fail",
+      "passed": 6,
+      "failed": 4,
+      "skipped": 0,
+      "returncode": 1,
+      "detail": "Component adapter reported failed, skipped or zero passing commands"
+    },
+    {
+      "name": "component-model/fixed_length_lists.wast",
+      "mode": "interp",
+      "lane": "component",
+      "status": "fail",
+      "passed": 0,
+      "failed": 2,
+      "skipped": 0,
+      "returncode": 1,
+      "detail": "Component adapter reported failed, skipped or zero passing commands"
+    },
+    {
+      "name": "component-model/fixed_length_lists.wast",
+      "mode": "jit",
+      "lane": "component",
+      "status": "fail",
+      "passed": 0,
+      "failed": 2,
+      "skipped": 0,
+      "returncode": 1,
+      "detail": "Component adapter reported failed, skipped or zero passing commands"
+    },
+    {
+      "name": "component-model/gc/empty.wast",
+      "mode": "interp",
+      "lane": "component",
+      "status": "pass",
+      "passed": 6,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "component-model/gc/empty.wast",
+      "mode": "jit",
+      "lane": "component",
+      "status": "pass",
+      "passed": 6,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "component-model/implements-disabled.wast",
+      "mode": "interp",
+      "lane": "component",
+      "status": "unsupported",
+      "detail": "Requires disabling a proposal in validation; Wasmoon test CLI does not expose per-test feature switches."
+    },
+    {
+      "name": "component-model/implements-disabled.wast",
+      "mode": "jit",
+      "lane": "component",
+      "status": "unsupported",
+      "detail": "Requires disabling a proposal in validation; Wasmoon test CLI does not expose per-test feature switches."
+    },
+    {
+      "name": "component-model/implements.wast",
+      "mode": "interp",
+      "lane": "component",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "component-model/implements.wast",
+      "mode": "jit",
+      "lane": "component",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "component-model/import.wast",
+      "mode": "interp",
+      "lane": "component",
+      "status": "pass",
+      "passed": 3,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "component-model/import.wast",
+      "mode": "jit",
+      "lane": "component",
+      "status": "pass",
+      "passed": 3,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "component-model/instance.wast",
+      "mode": "interp",
+      "lane": "component",
+      "status": "pass",
+      "passed": 28,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "component-model/instance.wast",
+      "mode": "jit",
+      "lane": "component",
+      "status": "pass",
+      "passed": 28,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "component-model/linking.wast",
+      "mode": "interp",
+      "lane": "component",
+      "status": "pass",
+      "passed": 6,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "component-model/linking.wast",
+      "mode": "jit",
+      "lane": "component",
+      "status": "pass",
+      "passed": 6,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "component-model/map-types.wast",
+      "mode": "interp",
+      "lane": "component",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "component-model/map-types.wast",
+      "mode": "jit",
+      "lane": "component",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "component-model/memory64.wast",
+      "mode": "interp",
+      "lane": "component",
+      "status": "deferred",
+      "detail": "Upstream marks this test hogs_memory; opt in with --include-high-memory."
+    },
+    {
+      "name": "component-model/memory64.wast",
+      "mode": "jit",
+      "lane": "component",
+      "status": "deferred",
+      "detail": "Upstream marks this test hogs_memory; opt in with --include-high-memory."
+    },
+    {
+      "name": "component-model/modules.wast",
+      "mode": "interp",
+      "lane": "component",
+      "status": "fail",
+      "passed": 43,
+      "failed": 1,
+      "skipped": 0,
+      "returncode": 1,
+      "detail": "Component adapter reported failed, skipped or zero passing commands"
+    },
+    {
+      "name": "component-model/modules.wast",
+      "mode": "jit",
+      "lane": "component",
+      "status": "fail",
+      "passed": 43,
+      "failed": 1,
+      "skipped": 0,
+      "returncode": 1,
+      "detail": "Component adapter reported failed, skipped or zero passing commands"
+    },
+    {
+      "name": "component-model/nested-many-instantiations.wast",
+      "mode": "interp",
+      "lane": "component",
+      "status": "pass",
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "component-model/nested-many-instantiations.wast",
+      "mode": "jit",
+      "lane": "component",
+      "status": "pass",
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "component-model/nested.wast",
+      "mode": "interp",
+      "lane": "component",
+      "status": "pass",
+      "passed": 19,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "component-model/nested.wast",
+      "mode": "jit",
+      "lane": "component",
+      "status": "pass",
+      "passed": 19,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "component-model/resources.wast",
+      "mode": "interp",
+      "lane": "component",
+      "status": "pass",
+      "passed": 58,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "component-model/resources.wast",
+      "mode": "jit",
+      "lane": "component",
+      "status": "pass",
+      "passed": 58,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "component-model/restrictions.wast",
+      "mode": "interp",
+      "lane": "component",
+      "status": "pass",
+      "passed": 4,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "component-model/restrictions.wast",
+      "mode": "jit",
+      "lane": "component",
+      "status": "pass",
+      "passed": 4,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "component-model/simple.wast",
+      "mode": "interp",
+      "lane": "component",
+      "status": "pass",
+      "passed": 8,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "component-model/simple.wast",
+      "mode": "jit",
+      "lane": "component",
+      "status": "pass",
+      "passed": 8,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "component-model/string-transcode-invalid.wast",
+      "mode": "interp",
+      "lane": "component",
+      "status": "pass",
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "component-model/string-transcode-invalid.wast",
+      "mode": "jit",
+      "lane": "component",
+      "status": "pass",
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "component-model/strings.wast",
+      "mode": "interp",
+      "lane": "component",
+      "status": "fail",
+      "passed": 9,
+      "failed": 8,
+      "skipped": 0,
+      "returncode": 1,
+      "detail": "Component adapter reported failed, skipped or zero passing commands"
+    },
+    {
+      "name": "component-model/strings.wast",
+      "mode": "jit",
+      "lane": "component",
+      "status": "fail",
+      "passed": 9,
+      "failed": 8,
+      "skipped": 0,
+      "returncode": 1,
+      "detail": "Component adapter reported failed, skipped or zero passing commands"
+    },
+    {
+      "name": "component-model/tags.wast",
+      "mode": "interp",
+      "lane": "component",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "component-model/tags.wast",
+      "mode": "jit",
+      "lane": "component",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "component-model/trap.wast",
+      "mode": "interp",
+      "lane": "component",
+      "status": "pass",
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "component-model/trap.wast",
+      "mode": "jit",
+      "lane": "component",
+      "status": "pass",
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "component-model/types.wast",
+      "mode": "interp",
+      "lane": "component",
+      "status": "fail",
+      "passed": 35,
+      "failed": 1,
+      "skipped": 0,
+      "returncode": 1,
+      "detail": "Component adapter reported failed, skipped or zero passing commands"
+    },
+    {
+      "name": "component-model/types.wast",
+      "mode": "jit",
+      "lane": "component",
+      "status": "fail",
+      "passed": 35,
+      "failed": 1,
+      "skipped": 0,
+      "returncode": 1,
+      "detail": "Component adapter reported failed, skipped or zero passing commands"
+    },
+    {
+      "name": "control-flow.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 14,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "control-flow.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 14,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "custom-page-sizes/custom-page-sizes-invalid.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "fail",
+      "passed": 3,
+      "failed": 17,
+      "skipped": 0,
+      "returncode": 1,
+      "detail": "exit=1, passed=3, failed=17, skipped=0"
+    },
+    {
+      "name": "custom-page-sizes/custom-page-sizes-invalid.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "fail",
+      "passed": 3,
+      "failed": 17,
+      "skipped": 0,
+      "returncode": 1,
+      "detail": "exit=1, passed=3, failed=17, skipped=0"
+    },
+    {
+      "name": "custom-page-sizes/custom-page-sizes.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 25,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "custom-page-sizes/custom-page-sizes.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 25,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "custom-page-sizes/max-size-invalid-shared-memory.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "deferred",
+      "detail": "Upstream marks this test hogs_memory; opt in with --include-high-memory."
+    },
+    {
+      "name": "custom-page-sizes/max-size-invalid-shared-memory.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "deferred",
+      "detail": "Upstream marks this test hogs_memory; opt in with --include-high-memory."
+    },
+    {
+      "name": "custom-page-sizes/max-size-invalid.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "deferred",
+      "detail": "Upstream marks this test hogs_memory; opt in with --include-high-memory."
+    },
+    {
+      "name": "custom-page-sizes/max-size-invalid.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "deferred",
+      "detail": "Upstream marks this test hogs_memory; opt in with --include-high-memory."
+    },
+    {
+      "name": "div-rem.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 4,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "div-rem.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 4,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "elem-ref-null.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "script_only",
+      "passed": 0,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": "Completed module/action script with no assertion commands"
+    },
+    {
+      "name": "elem-ref-null.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "script_only",
+      "passed": 0,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": "Completed module/action script with no assertion commands"
+    },
+    {
+      "name": "elem_drop.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "script_only",
+      "passed": 0,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": "Completed module/action script with no assertion commands"
+    },
+    {
+      "name": "elem_drop.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "script_only",
+      "passed": 0,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": "Completed module/action script with no assertion commands"
+    },
+    {
+      "name": "embenchen_fannkuch.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "fail",
+      "passed": 0,
+      "failed": 1,
+      "skipped": 0,
+      "returncode": 1,
+      "detail": "exit=1, passed=0, failed=1, skipped=0"
+    },
+    {
+      "name": "embenchen_fannkuch.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "fail",
+      "passed": 0,
+      "failed": 1,
+      "skipped": 0,
+      "returncode": 1,
+      "detail": "exit=1, passed=0, failed=1, skipped=0"
+    },
+    {
+      "name": "embenchen_fasta.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "fail",
+      "passed": 0,
+      "failed": 1,
+      "skipped": 0,
+      "returncode": 1,
+      "detail": "exit=1, passed=0, failed=1, skipped=0"
+    },
+    {
+      "name": "embenchen_fasta.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "fail",
+      "passed": 0,
+      "failed": 1,
+      "skipped": 0,
+      "returncode": 1,
+      "detail": "exit=1, passed=0, failed=1, skipped=0"
+    },
+    {
+      "name": "embenchen_ifs.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "fail",
+      "passed": 0,
+      "failed": 1,
+      "skipped": 0,
+      "returncode": 1,
+      "detail": "exit=1, passed=0, failed=1, skipped=0"
+    },
+    {
+      "name": "embenchen_ifs.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "fail",
+      "passed": 0,
+      "failed": 1,
+      "skipped": 0,
+      "returncode": 1,
+      "detail": "exit=1, passed=0, failed=1, skipped=0"
+    },
+    {
+      "name": "embenchen_primes.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "fail",
+      "passed": 0,
+      "failed": 1,
+      "skipped": 0,
+      "returncode": 1,
+      "detail": "exit=1, passed=0, failed=1, skipped=0"
+    },
+    {
+      "name": "embenchen_primes.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "fail",
+      "passed": 0,
+      "failed": 1,
+      "skipped": 0,
+      "returncode": 1,
+      "detail": "exit=1, passed=0, failed=1, skipped=0"
+    },
+    {
+      "name": "empty.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "script_only",
+      "passed": 0,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": "Completed module/action script with no assertion commands"
+    },
+    {
+      "name": "empty.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "script_only",
+      "passed": 0,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": "Completed module/action script with no assertion commands"
+    },
+    {
+      "name": "export-large-signature.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "script_only",
+      "passed": 0,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": "Completed module/action script with no assertion commands"
+    },
+    {
+      "name": "export-large-signature.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "script_only",
+      "passed": 0,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": "Completed module/action script with no assertion commands"
+    },
+    {
+      "name": "externref-id-function.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "externref-id-function.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "externref-segment.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "script_only",
+      "passed": 0,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": "Completed module/action script with no assertion commands"
+    },
+    {
+      "name": "externref-segment.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "script_only",
+      "passed": 0,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": "Completed module/action script with no assertion commands"
+    },
+    {
+      "name": "externref-table-dropped-segment-issue-8281.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 3,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "externref-table-dropped-segment-issue-8281.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 3,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "f64-copysign.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "f64-copysign.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "fib.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 22,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "fib.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 22,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "float-round-doesnt-load-too-much.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 4,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "float-round-doesnt-load-too-much.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 4,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "func-400-params.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "func-400-params.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "function-references/call_indirect.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 18,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "function-references/call_indirect.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 18,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "function-references/instance.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 11,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "function-references/instance.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 11,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "function-references/table_fill.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 45,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "function-references/table_fill.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 45,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "function-references/table_get.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 17,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "function-references/table_get.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 17,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "function-references/table_grow.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 51,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "function-references/table_grow.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 51,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "function-references/table_set.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 29,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "function-references/table_set.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 29,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "gc/active-space-end-readonly.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "unsupported",
+      "detail": "Requires Wasmtime-specific host imports (forced GC or resource-table capacity)."
+    },
+    {
+      "name": "gc/active-space-end-readonly.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "unsupported",
+      "detail": "Requires Wasmtime-specific host imports (forced GC or resource-table capacity)."
+    },
+    {
+      "name": "gc/alias-region-array-copy.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "gc/alias-region-array-copy.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "gc/alias-region-table-copy.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "gc/alias-region-table-copy.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "gc/alloc-v128-struct.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "gc/alloc-v128-struct.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "gc/anyref_that_is_i31_barriers.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "gc/anyref_that_is_i31_barriers.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "gc/array-alloc-too-large.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "fail",
+      "returncode": -6,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "gc/array-alloc-too-large.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "gc/array-copy-gc-refs.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "unsupported",
+      "detail": "Requires Wasmtime-specific host imports (forced GC or resource-table capacity)."
+    },
+    {
+      "name": "gc/array-copy-gc-refs.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "unsupported",
+      "detail": "Requires Wasmtime-specific host imports (forced GC or resource-table capacity)."
+    },
+    {
+      "name": "gc/array-copy-inline.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 11,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "gc/array-copy-inline.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 11,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "gc/array-copy-non-gc-refs.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 9,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "gc/array-copy-non-gc-refs.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 9,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "gc/array-copy-overwrite-i31.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "gc/array-copy-overwrite-i31.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "gc/array-fill-gc-refs.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "unsupported",
+      "detail": "Requires Wasmtime-specific host imports (forced GC or resource-table capacity)."
+    },
+    {
+      "name": "gc/array-fill-gc-refs.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "unsupported",
+      "detail": "Requires Wasmtime-specific host imports (forced GC or resource-table capacity)."
+    },
+    {
+      "name": "gc/array-fill-null-funcref.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "gc/array-fill-null-funcref.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "gc/array-gc-refs.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "unsupported",
+      "detail": "Requires Wasmtime-specific host imports (forced GC or resource-table capacity)."
+    },
+    {
+      "name": "gc/array-gc-refs.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "unsupported",
+      "detail": "Requires Wasmtime-specific host imports (forced GC or resource-table capacity)."
+    },
+    {
+      "name": "gc/array-get-s.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 6,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "gc/array-get-s.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 6,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "gc/array-init-data.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 15,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "gc/array-init-data.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 15,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "gc/array-len.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 7,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "gc/array-len.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 7,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "gc/array-new-data-missing-stack-map.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "unsupported",
+      "detail": "Requires Wasmtime-specific host imports (forced GC or resource-table capacity)."
+    },
+    {
+      "name": "gc/array-new-data-missing-stack-map.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "unsupported",
+      "detail": "Requires Wasmtime-specific host imports (forced GC or resource-table capacity)."
+    },
+    {
+      "name": "gc/array-new-data.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 11,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "gc/array-new-data.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 11,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "gc/array-new-elem-missing-stack-map.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "unsupported",
+      "detail": "Requires Wasmtime-specific host imports (forced GC or resource-table capacity)."
+    },
+    {
+      "name": "gc/array-new-elem-missing-stack-map.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "unsupported",
+      "detail": "Requires Wasmtime-specific host imports (forced GC or resource-table capacity)."
+    },
+    {
+      "name": "gc/array-new-elem.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 9,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "gc/array-new-elem.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 9,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "gc/array-set.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 11,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "gc/array-set.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 11,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "gc/array-types.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "script_only",
+      "passed": 0,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": "Completed module/action script with no assertion commands"
+    },
+    {
+      "name": "gc/array-types.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "script_only",
+      "passed": 0,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": "Completed module/action script with no assertion commands"
+    },
+    {
+      "name": "gc/arrays-of-different-types.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "gc/arrays-of-different-types.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "gc/big-array-overflow.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "fail",
+      "returncode": -6,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "gc/big-array-overflow.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "gc/binary-tree.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "unsupported",
+      "detail": "Requires Wasmtime-specific host imports (forced GC or resource-table capacity)."
+    },
+    {
+      "name": "gc/binary-tree.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "unsupported",
+      "detail": "Requires Wasmtime-specific host imports (forced GC or resource-table capacity)."
+    },
+    {
+      "name": "gc/br-on-cast.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 19,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "gc/br-on-cast.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 19,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "gc/br-on-null.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 11,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "gc/br-on-null.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 11,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "gc/bump-ptr-can-move.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "unsupported",
+      "detail": "Requires Wasmtime-specific host imports (forced GC or resource-table capacity)."
+    },
+    {
+      "name": "gc/bump-ptr-can-move.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "unsupported",
+      "detail": "Requires Wasmtime-specific host imports (forced GC or resource-table capacity)."
+    },
+    {
+      "name": "gc/component-async-suspended-fiber-roots.wast",
+      "mode": "interp",
+      "lane": "component",
+      "status": "unsupported",
+      "detail": "Requires Wasmtime-specific host imports (forced GC or resource-table capacity)."
+    },
+    {
+      "name": "gc/component-async-suspended-fiber-roots.wast",
+      "mode": "jit",
+      "lane": "component",
+      "status": "unsupported",
+      "detail": "Requires Wasmtime-specific host imports (forced GC or resource-table capacity)."
+    },
+    {
+      "name": "gc/const-expr-gc-simd.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 5,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "gc/const-expr-gc-simd.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 5,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "gc/const-expr-gc.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 18,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "gc/const-expr-gc.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "fail",
+      "passed": 17,
+      "failed": 1,
+      "skipped": 0,
+      "returncode": 1,
+      "detail": "exit=1, passed=17, failed=1, skipped=0"
+    },
+    {
+      "name": "gc/deeply-nested-struct-survives-gc.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "unsupported",
+      "detail": "Requires Wasmtime-specific host imports (forced GC or resource-table capacity)."
+    },
+    {
+      "name": "gc/deeply-nested-struct-survives-gc.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "unsupported",
+      "detail": "Requires Wasmtime-specific host imports (forced GC or resource-table capacity)."
+    },
+    {
+      "name": "gc/empty-struct.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "unsupported",
+      "detail": "Requires Wasmtime-specific host imports (forced GC or resource-table capacity)."
+    },
+    {
+      "name": "gc/empty-struct.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "unsupported",
+      "detail": "Requires Wasmtime-specific host imports (forced GC or resource-table capacity)."
+    },
+    {
+      "name": "gc/eval-const-expr-once.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "fail",
+      "passed": 0,
+      "failed": 1,
+      "skipped": 0,
+      "returncode": 1,
+      "detail": "exit=1, passed=0, failed=1, skipped=0"
+    },
+    {
+      "name": "gc/eval-const-expr-once.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "gc/extern-any-conversion.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 6,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "gc/extern-any-conversion.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 6,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "gc/externrefs-can-be-i31refs.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "gc/externrefs-can-be-i31refs.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "gc/func-refs-in-gc-heap.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 9,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "gc/func-refs-in-gc-heap.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 9,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "gc/funcref-field.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "unsupported",
+      "detail": "Requires Wasmtime-specific host imports (forced GC or resource-table capacity)."
+    },
+    {
+      "name": "gc/funcref-field.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "unsupported",
+      "detail": "Requires Wasmtime-specific host imports (forced GC or resource-table capacity)."
+    },
+    {
+      "name": "gc/fuzz-segfault.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "gc/fuzz-segfault.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "gc/gc-pressure.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "unsupported",
+      "detail": "Requires Wasmtime-specific host imports (forced GC or resource-table capacity)."
+    },
+    {
+      "name": "gc/gc-pressure.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "unsupported",
+      "detail": "Requires Wasmtime-specific host imports (forced GC or resource-table capacity)."
+    },
+    {
+      "name": "gc/gc-ref-array-pressure.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "unsupported",
+      "detail": "Requires Wasmtime-specific host imports (forced GC or resource-table capacity)."
+    },
+    {
+      "name": "gc/gc-ref-array-pressure.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "unsupported",
+      "detail": "Requires Wasmtime-specific host imports (forced GC or resource-table capacity)."
+    },
+    {
+      "name": "gc/heap-data-ptr-readonly.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "unsupported",
+      "detail": "Requires Wasmtime-specific host imports (forced GC or resource-table capacity)."
+    },
+    {
+      "name": "gc/heap-data-ptr-readonly.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "unsupported",
+      "detail": "Requires Wasmtime-specific host imports (forced GC or resource-table capacity)."
+    },
+    {
+      "name": "gc/i31-as-externref-in-passive-element-segment.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "script_only",
+      "passed": 0,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": "Completed module/action script with no assertion commands"
+    },
+    {
+      "name": "gc/i31-as-externref-in-passive-element-segment.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "script_only",
+      "passed": 0,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": "Completed module/action script with no assertion commands"
+    },
+    {
+      "name": "gc/i31ref-in-struct.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "unsupported",
+      "detail": "Requires Wasmtime-specific host imports (forced GC or resource-table capacity)."
+    },
+    {
+      "name": "gc/i31ref-in-struct.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "unsupported",
+      "detail": "Requires Wasmtime-specific host imports (forced GC or resource-table capacity)."
+    },
+    {
+      "name": "gc/i31ref-of-global-initializers.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 4,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "gc/i31ref-of-global-initializers.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 4,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "gc/i31ref-tables.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 15,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "gc/i31ref-tables.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 15,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "gc/issue-10171.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "gc/issue-10171.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "gc/issue-10182.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "gc/issue-10182.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "gc/issue-10353.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "gc/issue-10353.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "gc/issue-10397.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "gc/issue-10397.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "gc/issue-10459.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "gc/issue-10459.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "gc/issue-10467.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "gc/issue-10467.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "gc/issue-11753.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "unsupported",
+      "detail": "Requires Wasmtime-specific host imports (forced GC or resource-table capacity)."
+    },
+    {
+      "name": "gc/issue-11753.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "unsupported",
+      "detail": "Requires Wasmtime-specific host imports (forced GC or resource-table capacity)."
+    },
+    {
+      "name": "gc/issue-13034.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "fail",
+      "passed": 0,
+      "failed": 1,
+      "skipped": 0,
+      "returncode": 1,
+      "detail": "exit=1, passed=0, failed=1, skipped=0"
+    },
+    {
+      "name": "gc/issue-13034.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "fail",
+      "passed": 0,
+      "failed": 1,
+      "skipped": 0,
+      "returncode": 1,
+      "detail": "exit=1, passed=0, failed=1, skipped=0"
+    },
+    {
+      "name": "gc/issue-13066.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "unsupported",
+      "detail": "Requires Wasmtime-specific host imports (forced GC or resource-table capacity)."
+    },
+    {
+      "name": "gc/issue-13066.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "unsupported",
+      "detail": "Requires Wasmtime-specific host imports (forced GC or resource-table capacity)."
+    },
+    {
+      "name": "gc/issue-13095.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "gc/issue-13095.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "fail",
+      "passed": 1,
+      "failed": 1,
+      "skipped": 0,
+      "returncode": 1,
+      "detail": "exit=1, passed=1, failed=1, skipped=0"
+    },
+    {
+      "name": "gc/issue-13134.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "gc/issue-13134.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "gc/issue-13152.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "fail",
+      "passed": 0,
+      "failed": 1,
+      "skipped": 0,
+      "returncode": 1,
+      "detail": "exit=1, passed=0, failed=1, skipped=0"
+    },
+    {
+      "name": "gc/issue-13152.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "fail",
+      "passed": 0,
+      "failed": 1,
+      "skipped": 0,
+      "returncode": 1,
+      "detail": "exit=1, passed=0, failed=1, skipped=0"
+    },
+    {
+      "name": "gc/issue-13247.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "unsupported",
+      "detail": "Requires Wasmtime-specific host imports (forced GC or resource-table capacity)."
+    },
+    {
+      "name": "gc/issue-13247.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "unsupported",
+      "detail": "Requires Wasmtime-specific host imports (forced GC or resource-table capacity)."
+    },
+    {
+      "name": "gc/issue-13417.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "gc/issue-13417.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "gc/issue-13480.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "unsupported",
+      "detail": "Requires Wasmtime-specific host imports (forced GC or resource-table capacity)."
+    },
+    {
+      "name": "gc/issue-13480.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "unsupported",
+      "detail": "Requires Wasmtime-specific host imports (forced GC or resource-table capacity)."
+    },
+    {
+      "name": "gc/kotlin-benchmark-bug.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "unsupported",
+      "detail": "Requires Wasmtime-specific host imports (forced GC or resource-table capacity)."
+    },
+    {
+      "name": "gc/kotlin-benchmark-bug.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "unsupported",
+      "detail": "Requires Wasmtime-specific host imports (forced GC or resource-table capacity)."
+    },
+    {
+      "name": "gc/linked-list.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "unsupported",
+      "detail": "Requires Wasmtime-specific host imports (forced GC or resource-table capacity)."
+    },
+    {
+      "name": "gc/linked-list.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "unsupported",
+      "detail": "Requires Wasmtime-specific host imports (forced GC or resource-table capacity)."
+    },
+    {
+      "name": "gc/more-rec-groups-than-types.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "script_only",
+      "passed": 0,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": "Completed module/action script with no assertion commands"
+    },
+    {
+      "name": "gc/more-rec-groups-than-types.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "script_only",
+      "passed": 0,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": "Completed module/action script with no assertion commands"
+    },
+    {
+      "name": "gc/null-i31ref.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "gc/null-i31ref.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "gc/packed-struct-fields.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "unsupported",
+      "detail": "Requires Wasmtime-specific host imports (forced GC or resource-table capacity)."
+    },
+    {
+      "name": "gc/packed-struct-fields.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "unsupported",
+      "detail": "Requires Wasmtime-specific host imports (forced GC or resource-table capacity)."
+    },
+    {
+      "name": "gc/rec-group-funcs.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "gc/rec-group-funcs.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "gc/ref-as-non-null.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 8,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "gc/ref-as-non-null.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 8,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "gc/ref-eq.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 13,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "gc/ref-eq.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 13,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "gc/ref-test-readonly.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "unsupported",
+      "detail": "Requires Wasmtime-specific host imports (forced GC or resource-table capacity)."
+    },
+    {
+      "name": "gc/ref-test-readonly.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "unsupported",
+      "detail": "Requires Wasmtime-specific host imports (forced GC or resource-table capacity)."
+    },
+    {
+      "name": "gc/ref-test.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "fail",
+      "passed": 22,
+      "failed": 1,
+      "skipped": 0,
+      "returncode": 1,
+      "detail": "exit=1, passed=22, failed=1, skipped=0"
+    },
+    {
+      "name": "gc/ref-test.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "fail",
+      "passed": 22,
+      "failed": 1,
+      "skipped": 0,
+      "returncode": 1,
+      "detail": "exit=1, passed=22, failed=1, skipped=0"
+    },
+    {
+      "name": "gc/semispace-capacity.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "unsupported",
+      "detail": "Requires Wasmtime-specific host imports (forced GC or resource-table capacity)."
+    },
+    {
+      "name": "gc/semispace-capacity.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "unsupported",
+      "detail": "Requires Wasmtime-specific host imports (forced GC or resource-table capacity)."
+    },
+    {
+      "name": "gc/struct-instructions.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "gc/struct-instructions.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "gc/struct-mixed-fields.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "unsupported",
+      "detail": "Requires Wasmtime-specific host imports (forced GC or resource-table capacity)."
+    },
+    {
+      "name": "gc/struct-mixed-fields.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "unsupported",
+      "detail": "Requires Wasmtime-specific host imports (forced GC or resource-table capacity)."
+    },
+    {
+      "name": "gc/struct-refs-survive-gc.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "unsupported",
+      "detail": "Requires Wasmtime-specific host imports (forced GC or resource-table capacity)."
+    },
+    {
+      "name": "gc/struct-refs-survive-gc.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "unsupported",
+      "detail": "Requires Wasmtime-specific host imports (forced GC or resource-table capacity)."
+    },
+    {
+      "name": "gc/struct-set-gc-ref.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "unsupported",
+      "detail": "Requires Wasmtime-specific host imports (forced GC or resource-table capacity)."
+    },
+    {
+      "name": "gc/struct-set-gc-ref.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "unsupported",
+      "detail": "Requires Wasmtime-specific host imports (forced GC or resource-table capacity)."
+    },
+    {
+      "name": "gc/struct-types.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "script_only",
+      "passed": 0,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": "Completed module/action script with no assertion commands"
+    },
+    {
+      "name": "gc/struct-types.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "script_only",
+      "passed": 0,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": "Completed module/action script with no assertion commands"
+    },
+    {
+      "name": "gc/struct-with-v128.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "unsupported",
+      "detail": "Requires Wasmtime-specific host imports (forced GC or resource-table capacity)."
+    },
+    {
+      "name": "gc/struct-with-v128.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "unsupported",
+      "detail": "Requires Wasmtime-specific host imports (forced GC or resource-table capacity)."
+    },
+    {
+      "name": "gc/v128-with-gc-ref.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "unsupported",
+      "detail": "Requires Wasmtime-specific host imports (forced GC or resource-table capacity)."
+    },
+    {
+      "name": "gc/v128-with-gc-ref.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "unsupported",
+      "detail": "Requires Wasmtime-specific host imports (forced GC or resource-table capacity)."
+    },
+    {
+      "name": "imported-memory-copy.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "imported-memory-copy.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "int-to-float-splat.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "script_only",
+      "passed": 0,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": "Completed module/action script with no assertion commands"
+    },
+    {
+      "name": "int-to-float-splat.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "script_only",
+      "passed": 0,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": "Completed module/action script with no assertion commands"
+    },
+    {
+      "name": "issue11561.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "issue11561.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "issue11748.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "issue11748.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "issue12318.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "issue12318.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "issue1809.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "script_only",
+      "passed": 0,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": "Completed module/action script with no assertion commands"
+    },
+    {
+      "name": "issue1809.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "script_only",
+      "passed": 0,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": "Completed module/action script with no assertion commands"
+    },
+    {
+      "name": "issue4840.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "issue4840.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "issue4857.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "script_only",
+      "passed": 0,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": "Completed module/action script with no assertion commands"
+    },
+    {
+      "name": "issue4857.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "script_only",
+      "passed": 0,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": "Completed module/action script with no assertion commands"
+    },
+    {
+      "name": "issue4890.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "issue4890.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "issue6562.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "script_only",
+      "passed": 0,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": "Completed module/action script with no assertion commands"
+    },
+    {
+      "name": "issue6562.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "script_only",
+      "passed": 0,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": "Completed module/action script with no assertion commands"
+    },
+    {
+      "name": "issue694.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "script_only",
+      "passed": 0,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": "Completed module/action script with no assertion commands"
+    },
+    {
+      "name": "issue694.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "script_only",
+      "passed": 0,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": "Completed module/action script with no assertion commands"
+    },
+    {
+      "name": "linking-errors.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 9,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "linking-errors.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 9,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "many-results-with-exceptions.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "many-results-with-exceptions.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "many-results.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "many-results.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "many-return-values.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "script_only",
+      "passed": 0,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": "Completed module/action script with no assertion commands"
+    },
+    {
+      "name": "many-return-values.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "script_only",
+      "passed": 0,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": "Completed module/action script with no assertion commands"
+    },
+    {
+      "name": "many_table_gets_lead_to_gc.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "script_only",
+      "passed": 0,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": "Completed module/action script with no assertion commands"
+    },
+    {
+      "name": "many_table_gets_lead_to_gc.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "script_only",
+      "passed": 0,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": "Completed module/action script with no assertion commands"
+    },
+    {
+      "name": "memory-combos.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "memory-combos.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "memory-copy.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "deferred",
+      "detail": "Upstream marks this test hogs_memory; opt in with --include-high-memory."
+    },
+    {
+      "name": "memory-copy.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "deferred",
+      "detail": "Upstream marks this test hogs_memory; opt in with --include-high-memory."
+    },
+    {
+      "name": "memory64/bounds.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 7,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "memory64/bounds.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "fail",
+      "passed": 1,
+      "failed": 6,
+      "skipped": 0,
+      "returncode": 1,
+      "detail": "exit=1, passed=1, failed=6, skipped=0"
+    },
+    {
+      "name": "memory64/codegen.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "memory64/codegen.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "memory64/linking-errors.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "memory64/linking-errors.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "memory64/linking.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "memory64/linking.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "memory64/more-than-4gb.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "deferred",
+      "detail": "Upstream marks this test hogs_memory; opt in with --include-high-memory."
+    },
+    {
+      "name": "memory64/more-than-4gb.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "deferred",
+      "detail": "Upstream marks this test hogs_memory; opt in with --include-high-memory."
+    },
+    {
+      "name": "memory64/multi-memory.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "memory64/multi-memory.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "memory64/offsets.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "fail",
+      "passed": 0,
+      "failed": 2,
+      "skipped": 0,
+      "returncode": 1,
+      "detail": "exit=1, passed=0, failed=2, skipped=0"
+    },
+    {
+      "name": "memory64/offsets.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "memory64/simd.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "memory64/simd.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "memory64/table-too-big.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "deferred",
+      "detail": "Upstream marks this test hogs_memory; opt in with --include-high-memory."
+    },
+    {
+      "name": "memory64/table-too-big.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "deferred",
+      "detail": "Upstream marks this test hogs_memory; opt in with --include-high-memory."
+    },
+    {
+      "name": "memory64/table64-grow-huge-delta.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "fail",
+      "passed": 0,
+      "failed": 2,
+      "skipped": 0,
+      "returncode": 1,
+      "detail": "exit=1, passed=0, failed=2, skipped=0"
+    },
+    {
+      "name": "memory64/table64-grow-huge-delta.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "memory64/tables-without-bulk-memory.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "unsupported",
+      "detail": "Requires disabling a proposal in validation; Wasmoon test CLI does not expose per-test feature switches."
+    },
+    {
+      "name": "memory64/tables-without-bulk-memory.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "unsupported",
+      "detail": "Requires disabling a proposal in validation; Wasmoon test CLI does not expose per-test feature switches."
+    },
+    {
+      "name": "memory64/threads.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "memory64/threads.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "memory_fill.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 46,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "memory_fill.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 46,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "memory_init.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "fail",
+      "passed": 63,
+      "failed": 14,
+      "skipped": 0,
+      "returncode": 1,
+      "detail": "exit=1, passed=63, failed=14, skipped=0"
+    },
+    {
+      "name": "memory_init.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "fail",
+      "passed": 57,
+      "failed": 20,
+      "skipped": 0,
+      "returncode": 1,
+      "detail": "exit=1, passed=57, failed=20, skipped=0"
+    },
+    {
+      "name": "misc_traps.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 12,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "misc_traps.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 12,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "mul16-negative.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "mul16-negative.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "multi-memory/simple.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "fail",
+      "passed": 15,
+      "failed": 3,
+      "skipped": 0,
+      "returncode": 1,
+      "detail": "exit=1, passed=15, failed=3, skipped=0"
+    },
+    {
+      "name": "multi-memory/simple.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "fail",
+      "passed": 15,
+      "failed": 3,
+      "skipped": 0,
+      "returncode": 1,
+      "detail": "exit=1, passed=15, failed=3, skipped=0"
+    },
+    {
+      "name": "mutable_externref_globals.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 3,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "mutable_externref_globals.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 3,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "no-mixup-stack-maps.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "no-mixup-stack-maps.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "no-opt-panic-dividing-by-zero.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "script_only",
+      "passed": 0,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": "Completed module/action script with no assertion commands"
+    },
+    {
+      "name": "no-opt-panic-dividing-by-zero.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "script_only",
+      "passed": 0,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": "Completed module/action script with no assertion commands"
+    },
+    {
+      "name": "no-panic-on-invalid.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "no-panic-on-invalid.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "no-panic.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "script_only",
+      "passed": 0,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": "Completed module/action script with no assertion commands"
+    },
+    {
+      "name": "no-panic.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "script_only",
+      "passed": 0,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": "Completed module/action script with no assertion commands"
+    },
+    {
+      "name": "partial-init-memory-segment.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 10,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "partial-init-memory-segment.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 10,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "partial-init-table-segment.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 3,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "partial-init-table-segment.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 3,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "pooling-drop-out-of-order.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "pooling-drop-out-of-order.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "pooling-oob-on-reuse.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "pooling-oob-on-reuse.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "rs2wasm-add-func.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "script_only",
+      "passed": 0,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": "Completed module/action script with no assertion commands"
+    },
+    {
+      "name": "rs2wasm-add-func.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "script_only",
+      "passed": 0,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": "Completed module/action script with no assertion commands"
+    },
+    {
+      "name": "rust_fannkuch.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "script_only",
+      "passed": 0,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": "Completed module/action script with no assertion commands"
+    },
+    {
+      "name": "rust_fannkuch.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "script_only",
+      "passed": 0,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": "Completed module/action script with no assertion commands"
+    },
+    {
+      "name": "shared-everything-threads/flags.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "script_only",
+      "passed": 0,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": "Completed module/action script with no assertion commands"
+    },
+    {
+      "name": "shared-everything-threads/flags.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "script_only",
+      "passed": 0,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": "Completed module/action script with no assertion commands"
+    },
+    {
+      "name": "simd/almost-extmul.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "script_only",
+      "passed": 0,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": "Completed module/action script with no assertion commands"
+    },
+    {
+      "name": "simd/almost-extmul.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "script_only",
+      "passed": 0,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": "Completed module/action script with no assertion commands"
+    },
+    {
+      "name": "simd/canonicalize-nan.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "unsupported",
+      "detail": "Requires engine-wide NaN canonicalization configuration, absent from the Wasmoon test CLI."
+    },
+    {
+      "name": "simd/canonicalize-nan.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "unsupported",
+      "detail": "Requires engine-wide NaN canonicalization configuration, absent from the Wasmoon test CLI."
+    },
+    {
+      "name": "simd/cvt-from-uint.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 6,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "simd/cvt-from-uint.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 6,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "simd/edge-of-memory.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 5,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "simd/edge-of-memory.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 5,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "simd/interesting-float-splat.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "simd/interesting-float-splat.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "simd/issue4807.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "script_only",
+      "passed": 0,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": "Completed module/action script with no assertion commands"
+    },
+    {
+      "name": "simd/issue4807.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "script_only",
+      "passed": 0,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": "Completed module/action script with no assertion commands"
+    },
+    {
+      "name": "simd/issue6725-no-egraph-panic.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "script_only",
+      "passed": 0,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": "Completed module/action script with no assertion commands"
+    },
+    {
+      "name": "simd/issue6725-no-egraph-panic.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "script_only",
+      "passed": 0,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": "Completed module/action script with no assertion commands"
+    },
+    {
+      "name": "simd/issue_3173_select_v128.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "simd/issue_3173_select_v128.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "simd/issue_3327_bnot_lowering.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 4,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "simd/issue_3327_bnot_lowering.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 4,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "simd/load_splat_out_of_bounds.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "simd/load_splat_out_of_bounds.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "simd/replace-lane-preserve.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "simd/replace-lane-preserve.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "simd/riscv64-replicated-imm5-works.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "simd/riscv64-replicated-imm5-works.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "simd/spillslot-size-fuzzbug.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "simd/spillslot-size-fuzzbug.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "simd/sse-cannot-fold-unaligned-loads.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "simd/sse-cannot-fold-unaligned-loads.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "simd/unaligned-load.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "simd/unaligned-load.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "simd/v128-equal.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 8,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "simd/v128-equal.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 8,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "simd/v128-select.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "simd/v128-select.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "simple-unreachable.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "simple-unreachable.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "simple_ref_is_null.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 4,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "simple_ref_is_null.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 4,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "sink-float-but-dont-trap.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 6,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "sink-float-but-dont-trap.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 6,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "stack-args-exceptions.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "script_only",
+      "passed": 0,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": "Completed module/action script with no assertion commands"
+    },
+    {
+      "name": "stack-args-exceptions.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "script_only",
+      "passed": 0,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": "Completed module/action script with no assertion commands"
+    },
+    {
+      "name": "stack-switching-and-gc.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "stack-switching-and-gc.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "stack-switching/cont_args.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "stack-switching/cont_args.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "stack-switching/cont_bind1.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "stack-switching/cont_bind1.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "stack-switching/cont_bind2.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "stack-switching/cont_bind2.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "stack-switching/cont_bind3.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "stack-switching/cont_bind3.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "stack-switching/cont_bind4.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "stack-switching/cont_bind4.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "stack-switching/cont_forwarding1.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "stack-switching/cont_forwarding1.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "stack-switching/cont_forwarding2.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "stack-switching/cont_forwarding2.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "stack-switching/cont_forwarding3.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "stack-switching/cont_forwarding3.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "stack-switching/cont_forwarding4.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "stack-switching/cont_forwarding4.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "stack-switching/cont_forwarding5.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "stack-switching/cont_forwarding5.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "stack-switching/cont_forwarding6.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "stack-switching/cont_forwarding6.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "stack-switching/cont_forwarding7.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "stack-switching/cont_forwarding7.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "stack-switching/cont_forwarding8.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "stack-switching/cont_forwarding8.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "stack-switching/cont_nary.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "stack-switching/cont_nary.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "stack-switching/cont_nested1.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "stack-switching/cont_nested1.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "stack-switching/cont_nested2.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "stack-switching/cont_nested2.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "stack-switching/cont_nested3.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "stack-switching/cont_nested3.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "stack-switching/cont_nested4.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "stack-switching/cont_nested4.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "stack-switching/cont_nested5.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "stack-switching/cont_nested5.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "stack-switching/cont_nested6.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "stack-switching/cont_nested6.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "stack-switching/cont_new.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "stack-switching/cont_new.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "stack-switching/cont_resume.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "stack-switching/cont_resume.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "stack-switching/cont_resume1.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "stack-switching/cont_resume1.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "stack-switching/cont_resume2.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "stack-switching/cont_resume2.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "stack-switching/cont_resume_return.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "stack-switching/cont_resume_return.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "stack-switching/cont_return.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "stack-switching/cont_return.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "stack-switching/cont_suspend.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "stack-switching/cont_suspend.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "stack-switching/cont_table.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "stack-switching/cont_table.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "stack-switching/cont_twice.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "stack-switching/cont_twice.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "stack-switching/dup.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "stack-switching/dup.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "stack-switching/linking_tags1.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "stack-switching/linking_tags1.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "stack-switching/linking_tags2.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "stack-switching/linking_tags2.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "stack-switching/resume_throw.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "stack-switching/resume_throw.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "stack-switching/resume_throw_ref.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "stack-switching/resume_throw_ref.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "stack-switching/switch-type-index-conflation.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "stack-switching/switch-type-index-conflation.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "stack-switching/switch1.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "stack-switching/switch1.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "stack-switching/switch2.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "stack-switching/switch2.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "stack-switching/switch3.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "stack-switching/switch3.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "stack-switching/switch4.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "stack-switching/switch4.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "stack-switching/switch5.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "stack-switching/switch5.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "stack-switching/switch6.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "stack-switching/switch6.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "stack-switching/switch7.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "stack-switching/switch7.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "stack-switching/switch8.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "stack-switching/switch8.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "stack-switching/trap.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "stack-switching/trap.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "stack-switching/unhandled.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "stack-switching/unhandled.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "stack_overflow.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 4,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "stack_overflow.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 4,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "table_copy.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 7,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "table_copy.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 7,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "table_copy_on_imported_tables.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 14,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "table_copy_on_imported_tables.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "fail",
+      "passed": 12,
+      "failed": 2,
+      "skipped": 0,
+      "returncode": 1,
+      "detail": "exit=1, passed=12, failed=2, skipped=0"
+    },
+    {
+      "name": "table_grow_with_funcref.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 3,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "table_grow_with_funcref.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 3,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "tail-call/loop-across-modules.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "fail",
+      "passed": 0,
+      "failed": 2,
+      "skipped": 0,
+      "returncode": 1,
+      "detail": "exit=1, passed=0, failed=2, skipped=0"
+    },
+    {
+      "name": "tail-call/loop-across-modules.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "fail",
+      "passed": 0,
+      "failed": 2,
+      "skipped": 0,
+      "returncode": 1,
+      "detail": "exit=1, passed=0, failed=2, skipped=0"
+    },
+    {
+      "name": "threads/LB.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "threads/LB.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "threads/LB_atomic.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "threads/LB_atomic.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "threads/MP.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "threads/MP.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "threads/MP_atomic.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "threads/MP_atomic.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "threads/MP_wait.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "threads/MP_wait.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "threads/SB.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "threads/SB.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "threads/SB_atomic.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "threads/SB_atomic.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "threads/atomic_wait_endianness.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "threads/atomic_wait_endianness.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "threads/atomics-end-of-memory.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "threads/atomics-end-of-memory.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "threads/atomics_notify.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "threads/atomics_notify.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "threads/atomics_wait_address.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "threads/atomics_wait_address.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "threads/load-store-alignment.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "fail",
+      "passed": 20,
+      "failed": 35,
+      "skipped": 0,
+      "returncode": 1,
+      "detail": "exit=1, passed=20, failed=35, skipped=0"
+    },
+    {
+      "name": "threads/load-store-alignment.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "fail",
+      "passed": 20,
+      "failed": 35,
+      "skipped": 0,
+      "returncode": 1,
+      "detail": "exit=1, passed=20, failed=35, skipped=0"
+    },
+    {
+      "name": "threads/wait_notify.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "threads/wait_notify.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "throw-payloads.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 6,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "throw-payloads.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 6,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "traps-skip-catch-all.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 10,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "traps-skip-catch-all.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 10,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "wast-syntax.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "wast-syntax.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "wide-arithmetic.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "wide-arithmetic.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "winch/br_table.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 131,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "winch/br_table.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 131,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "winch/float-comparison.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "winch/float-comparison.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "winch/gc-refs.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 3,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "winch/gc-refs.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 3,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "winch/global.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 43,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "winch/global.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 43,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "winch/imported_globals_fuzzbug.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "winch/imported_globals_fuzzbug.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "winch/issue-10331.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "winch/issue-10331.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "winch/issue-10357.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "winch/issue-10357.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "winch/issue-10460.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "winch/issue-10460.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "winch/issue-10613.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "winch/issue-10613.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "winch/issue-10751.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "winch/issue-10751.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "winch/issue-12423.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "winch/issue-12423.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "winch/issue-424666628.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "winch/issue-424666628.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "winch/memory_offsets.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "winch/memory_offsets.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "winch/misc.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "winch/misc.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "winch/oob.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "winch/oob.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "winch/oob_extend.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "winch/oob_extend.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "winch/oob_table_grow.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "winch/oob_table_grow.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "winch/ref-types-basic.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "winch/ref-types-basic.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "winch/replace_lane.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 4,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "winch/replace_lane.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 4,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "winch/rmw32_cmpxchg_u_wrap.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "winch/rmw32_cmpxchg_u_wrap.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "winch/select.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 80,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "winch/select.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 80,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "winch/simd_multivalue.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 3,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "winch/simd_multivalue.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 3,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "winch/table-init-fuzz-bug.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "script_only",
+      "passed": 0,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": "Completed module/action script with no assertion commands"
+    },
+    {
+      "name": "winch/table-init-fuzz-bug.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "script_only",
+      "passed": 0,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": "Completed module/action script with no assertion commands"
+    },
+    {
+      "name": "winch/table64.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "winch/table64.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "winch/table_fill.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "winch/table_fill.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "fail",
+      "returncode": 1,
+      "detail": "Missing or ambiguous complete WAST result block"
+    },
+    {
+      "name": "winch/table_get.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 3,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "winch/table_get.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 3,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "winch/table_grow.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 4,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "winch/table_grow.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 4,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "winch/table_set.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 8,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "winch/table_set.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 8,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "winch/use-innermost-frame.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "winch/use-innermost-frame.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "winch/v128_load_lane_invalid_address.wast",
+      "mode": "interp",
+      "lane": "core",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    },
+    {
+      "name": "winch/v128_load_lane_invalid_address.wast",
+      "mode": "jit",
+      "lane": "core",
+      "status": "pass",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "returncode": 0,
+      "detail": ""
+    }
+  ]
+}
