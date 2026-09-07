@@ -556,6 +556,7 @@ fn resolve_start_core_func(
   }
   let func_addr = match v {
     FuncRef(addr) => addr
+    Null => raise CanonCallError("uninitialized element")
     _ => raise CanonCallError("thread start function is not a funcref")
   }
   let owner = match store.get_func_owner(func_addr) {
