@@ -1,0 +1,252 @@
+[package]
+name = "test-programs"
+version = "0.0.0"
+edition = "2024"
+publish = false
+license = "Apache-2.0 WITH LLVM-exception"
+autobins = false
+
+# Build the unchanged P1 programs without the rest of the Wasmtime workspace.
+[workspace]
+
+[lib]
+path = "lib.rs"
+
+[dependencies]
+wasip1 = "=1.0.0"
+libc = "=0.2.185"
+
+[profile.release]
+debug = 1
+
+[[bin]]
+name = "p1_big_random_buf"
+path = "upstream/crates/test-programs/src/bin/p1_big_random_buf.rs"
+
+[[bin]]
+name = "p1_cli_hostcall_fuel"
+path = "upstream/crates/test-programs/src/bin/p1_cli_hostcall_fuel.rs"
+
+[[bin]]
+name = "p1_cli_much_stdout"
+path = "upstream/crates/test-programs/src/bin/p1_cli_much_stdout.rs"
+
+[[bin]]
+name = "p1_clock_time_get"
+path = "upstream/crates/test-programs/src/bin/p1_clock_time_get.rs"
+
+[[bin]]
+name = "p1_close_preopen"
+path = "upstream/crates/test-programs/src/bin/p1_close_preopen.rs"
+
+[[bin]]
+name = "p1_dangling_fd"
+path = "upstream/crates/test-programs/src/bin/p1_dangling_fd.rs"
+
+[[bin]]
+name = "p1_dangling_symlink"
+path = "upstream/crates/test-programs/src/bin/p1_dangling_symlink.rs"
+
+[[bin]]
+name = "p1_dir_fd_op_failures"
+path = "upstream/crates/test-programs/src/bin/p1_dir_fd_op_failures.rs"
+
+[[bin]]
+name = "p1_directory_seek"
+path = "upstream/crates/test-programs/src/bin/p1_directory_seek.rs"
+
+[[bin]]
+name = "p1_fd_advise"
+path = "upstream/crates/test-programs/src/bin/p1_fd_advise.rs"
+
+[[bin]]
+name = "p1_fd_filestat_get"
+path = "upstream/crates/test-programs/src/bin/p1_fd_filestat_get.rs"
+
+[[bin]]
+name = "p1_fd_filestat_set"
+path = "upstream/crates/test-programs/src/bin/p1_fd_filestat_set.rs"
+
+[[bin]]
+name = "p1_fd_flags_set"
+path = "upstream/crates/test-programs/src/bin/p1_fd_flags_set.rs"
+
+[[bin]]
+name = "p1_fd_readdir"
+path = "upstream/crates/test-programs/src/bin/p1_fd_readdir.rs"
+
+[[bin]]
+name = "p1_file_allocate"
+path = "upstream/crates/test-programs/src/bin/p1_file_allocate.rs"
+
+[[bin]]
+name = "p1_file_hardlink_across_perms"
+path = "upstream/crates/test-programs/src/bin/p1_file_hardlink_across_perms.rs"
+
+[[bin]]
+name = "p1_file_pread_pwrite"
+path = "upstream/crates/test-programs/src/bin/p1_file_pread_pwrite.rs"
+
+[[bin]]
+name = "p1_file_read_write"
+path = "upstream/crates/test-programs/src/bin/p1_file_read_write.rs"
+
+[[bin]]
+name = "p1_file_rename_across_perms"
+path = "upstream/crates/test-programs/src/bin/p1_file_rename_across_perms.rs"
+
+[[bin]]
+name = "p1_file_seek_tell"
+path = "upstream/crates/test-programs/src/bin/p1_file_seek_tell.rs"
+
+[[bin]]
+name = "p1_file_truncation"
+path = "upstream/crates/test-programs/src/bin/p1_file_truncation.rs"
+
+[[bin]]
+name = "p1_file_truncation_readonly"
+path = "upstream/crates/test-programs/src/bin/p1_file_truncation_readonly.rs"
+
+[[bin]]
+name = "p1_file_unbuffered_write"
+path = "upstream/crates/test-programs/src/bin/p1_file_unbuffered_write.rs"
+
+[[bin]]
+name = "p1_file_write"
+path = "upstream/crates/test-programs/src/bin/p1_file_write.rs"
+
+[[bin]]
+name = "p1_interesting_paths"
+path = "upstream/crates/test-programs/src/bin/p1_interesting_paths.rs"
+
+[[bin]]
+name = "p1_nofollow_errors"
+path = "upstream/crates/test-programs/src/bin/p1_nofollow_errors.rs"
+
+[[bin]]
+name = "p1_overwrite_preopen"
+path = "upstream/crates/test-programs/src/bin/p1_overwrite_preopen.rs"
+
+[[bin]]
+name = "p1_path_exists"
+path = "upstream/crates/test-programs/src/bin/p1_path_exists.rs"
+
+[[bin]]
+name = "p1_path_filestat"
+path = "upstream/crates/test-programs/src/bin/p1_path_filestat.rs"
+
+[[bin]]
+name = "p1_path_link"
+path = "upstream/crates/test-programs/src/bin/p1_path_link.rs"
+
+[[bin]]
+name = "p1_path_open_create_existing"
+path = "upstream/crates/test-programs/src/bin/p1_path_open_create_existing.rs"
+
+[[bin]]
+name = "p1_path_open_dirfd_not_dir"
+path = "upstream/crates/test-programs/src/bin/p1_path_open_dirfd_not_dir.rs"
+
+[[bin]]
+name = "p1_path_open_lots"
+path = "upstream/crates/test-programs/src/bin/p1_path_open_lots.rs"
+
+[[bin]]
+name = "p1_path_open_missing"
+path = "upstream/crates/test-programs/src/bin/p1_path_open_missing.rs"
+
+[[bin]]
+name = "p1_path_open_nonblock"
+path = "upstream/crates/test-programs/src/bin/p1_path_open_nonblock.rs"
+
+[[bin]]
+name = "p1_path_open_preopen"
+path = "upstream/crates/test-programs/src/bin/p1_path_open_preopen.rs"
+
+[[bin]]
+name = "p1_path_open_read_write"
+path = "upstream/crates/test-programs/src/bin/p1_path_open_read_write.rs"
+
+[[bin]]
+name = "p1_path_rename"
+path = "upstream/crates/test-programs/src/bin/p1_path_rename.rs"
+
+[[bin]]
+name = "p1_path_rename_dir_trailing_slashes"
+path = "upstream/crates/test-programs/src/bin/p1_path_rename_dir_trailing_slashes.rs"
+
+[[bin]]
+name = "p1_path_symlink_trailing_slashes"
+path = "upstream/crates/test-programs/src/bin/p1_path_symlink_trailing_slashes.rs"
+
+[[bin]]
+name = "p1_poll_oneoff_files"
+path = "upstream/crates/test-programs/src/bin/p1_poll_oneoff_files.rs"
+
+[[bin]]
+name = "p1_poll_oneoff_stdio"
+path = "upstream/crates/test-programs/src/bin/p1_poll_oneoff_stdio.rs"
+
+[[bin]]
+name = "p1_readlink"
+path = "upstream/crates/test-programs/src/bin/p1_readlink.rs"
+
+[[bin]]
+name = "p1_regular_file_isatty"
+path = "upstream/crates/test-programs/src/bin/p1_regular_file_isatty.rs"
+
+[[bin]]
+name = "p1_remove_directory"
+path = "upstream/crates/test-programs/src/bin/p1_remove_directory.rs"
+
+[[bin]]
+name = "p1_remove_nonempty_directory"
+path = "upstream/crates/test-programs/src/bin/p1_remove_nonempty_directory.rs"
+
+[[bin]]
+name = "p1_renumber"
+path = "upstream/crates/test-programs/src/bin/p1_renumber.rs"
+
+[[bin]]
+name = "p1_sched_yield"
+path = "upstream/crates/test-programs/src/bin/p1_sched_yield.rs"
+
+[[bin]]
+name = "p1_sleep_quickly_but_lots"
+path = "upstream/crates/test-programs/src/bin/p1_sleep_quickly_but_lots.rs"
+
+[[bin]]
+name = "p1_stat_extreme_host_mtime"
+path = "upstream/crates/test-programs/src/bin/p1_stat_extreme_host_mtime.rs"
+
+[[bin]]
+name = "p1_stdio"
+path = "upstream/crates/test-programs/src/bin/p1_stdio.rs"
+
+[[bin]]
+name = "p1_stdio_isatty"
+path = "upstream/crates/test-programs/src/bin/p1_stdio_isatty.rs"
+
+[[bin]]
+name = "p1_stdio_not_isatty"
+path = "upstream/crates/test-programs/src/bin/p1_stdio_not_isatty.rs"
+
+[[bin]]
+name = "p1_symlink_create"
+path = "upstream/crates/test-programs/src/bin/p1_symlink_create.rs"
+
+[[bin]]
+name = "p1_symlink_filestat"
+path = "upstream/crates/test-programs/src/bin/p1_symlink_filestat.rs"
+
+[[bin]]
+name = "p1_symlink_loop"
+path = "upstream/crates/test-programs/src/bin/p1_symlink_loop.rs"
+
+[[bin]]
+name = "p1_unicode_output"
+path = "upstream/crates/test-programs/src/bin/p1_unicode_output.rs"
+
+[[bin]]
+name = "p1_unlink_file_trailing_slashes"
+path = "upstream/crates/test-programs/src/bin/p1_unlink_file_trailing_slashes.rs"

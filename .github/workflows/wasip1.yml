@@ -1,0 +1,60 @@
+name: Upstream WASIp1 programs
+
+# Keep this an explicit conformance/compatibility run while ISS-464 and ISS-465
+# are unresolved. Guest failures fail the job; there is no expected-failure mask.
+on:
+  workflow_dispatch:
+    inputs:
+      filter:
+        description: Guest program name glob
+        default: '*'
+        type: string
+      mode:
+        description: Execution mode
+        default: both
+        type: choice
+        options: [both, interp, jit]
+
+permissions:
+  contents: read
+
+jobs:
+  p1:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install toolchains
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash -s nightly
+          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
+          rustup toolchain install 1.97.0 --profile minimal --target wasm32-wasip1
+      - name: Build Wasmoon
+        run: ./install.sh
+      - name: Check the runner
+        run: python3 -m unittest discover -s scripts/tests -p 'test_wasmtime_p1.py'
+      - name: Run upstream P1 programs
+        env:
+          RUSTUP_TOOLCHAIN: '1.97.0'
+          P1_FILTER: ${{ inputs.filter }}
+          P1_MODE: ${{ inputs.mode }}
+        run: |
+          python3 scripts/run_wasmtime_p1.py \
+            --filter "$P1_FILTER" --mode "$P1_MODE" \
+            --output target/wasmtime-p1-ci
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: wasip1-${{ matrix.os }}
+          path: |
+            target/wasmtime-p1-ci/summary.json
+            target/wasmtime-p1-ci/**/stdout.txt
+            target/wasmtime-p1-ci/**/stderr.txt
+          if-no-files-found: warn

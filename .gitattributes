@@ -1,2 +1,4 @@
 *.mbti whitespace=-blank-at-eof
 modules/wasmoon/wasi_component/wit/** whitespace=-blank-at-eol
+# Preserve the pinned upstream license byte-for-byte.
+wasi-tests/wasmtime/upstream/LICENSE whitespace=-blank-at-eof

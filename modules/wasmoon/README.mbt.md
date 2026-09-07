@@ -271,6 +271,19 @@ python3 scripts/run_component_wast.py --suite future-gated
 python3 scripts/run_component_wast.py --suite future-gated --no-jit
 ```
 
+For additional runtime testing, the
+[upstream WASIp1 guest suite](../../wasi-tests/wasmtime/README.md) runs unchanged
+Wasmtime P1 programs in interpreter and JIT modes:
+
+```bash
+rustup target add wasm32-wasip1
+python3 scripts/run_wasmtime_p1.py
+```
+
+It reports current rights-model differences and polling failures explicitly;
+it is not yet a passing conformance gate. The separate `Upstream WASIp1 programs`
+workflow runs it on demand.
+
 ## Library Usage
 
 ### JIT GC Setup

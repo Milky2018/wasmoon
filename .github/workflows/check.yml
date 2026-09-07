@@ -73,6 +73,7 @@ jobs:
           python3 scripts/check_committed_diff.py \
             --base "$base" --head "${{ github.event.pull_request.head.sha || github.sha }}"
           python3 scripts/audit_module_boundaries.py
+          python3 scripts/run_wasmtime_p1.py --check
           python3 scripts/audit_jit_context_lifetimes.py
           python3 -m unittest discover -s scripts/tests -p 'test_*.py'
           python3 scripts/audit_component_security.py

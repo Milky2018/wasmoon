@@ -1,0 +1,258 @@
+{
+  "repository": "https://github.com/bytecodealliance/wasmtime",
+  "commit": "668016926adfd1b8a79dbce894f1e203d8892599",
+  "files": [
+    {
+      "path": "LICENSE",
+      "sha256": "268872b9816f90fd8e85db5a28d33f8150ebb8dd016653fb39ef1f94f2686bc5"
+    },
+    {
+      "path": "crates/test-programs/artifacts/src/lib.rs",
+      "sha256": "0481a42d575300f7fc879866c18f9a2b562014c559318c9f36b930e4db6d0a9e"
+    },
+    {
+      "path": "crates/test-programs/src/bin/p1_big_random_buf.rs",
+      "sha256": "d10df82029ff020bffcf983f7128900582fe6bf39a850d6614f6705489f0d898"
+    },
+    {
+      "path": "crates/test-programs/src/bin/p1_cli_hostcall_fuel.rs",
+      "sha256": "2d4aa6dca5308f2fd8756afe6639e70d3afb70ce38234e65395c62a52329ad64"
+    },
+    {
+      "path": "crates/test-programs/src/bin/p1_cli_much_stdout.rs",
+      "sha256": "3407220145aa6dd35a4831578d215a8020550c8482d0967649b10e52753ca18a"
+    },
+    {
+      "path": "crates/test-programs/src/bin/p1_clock_time_get.rs",
+      "sha256": "d235ffd4973b219b5594935623034b8b0c94cdb92e7f5e440ef02e436865e6cd"
+    },
+    {
+      "path": "crates/test-programs/src/bin/p1_close_preopen.rs",
+      "sha256": "ce34dd957afa41d4888b641519562e2b5cda2c23a7ba5356cfa2433bf7954c12"
+    },
+    {
+      "path": "crates/test-programs/src/bin/p1_dangling_fd.rs",
+      "sha256": "0b1a830cf7df80d74ba95f0e66bf09a65f19473bb5168732ff16671f2e33b509"
+    },
+    {
+      "path": "crates/test-programs/src/bin/p1_dangling_symlink.rs",
+      "sha256": "3a7e86492ba0f786e15e126240a6c4cc34c4a08163b2574e043daee6767dfda1"
+    },
+    {
+      "path": "crates/test-programs/src/bin/p1_dir_fd_op_failures.rs",
+      "sha256": "09b76f78c78cc5447f3406abbd8e04768063595527a1f3f361dcc18c5fe0246e"
+    },
+    {
+      "path": "crates/test-programs/src/bin/p1_directory_seek.rs",
+      "sha256": "22791e0f36faf2b3541420b2948090339832c076574a4289664a6c6e7d082d05"
+    },
+    {
+      "path": "crates/test-programs/src/bin/p1_fd_advise.rs",
+      "sha256": "a2ff5ed796d38840a0b3d7f5c439481e6fb1563b210bab6b4ddad83a3422093a"
+    },
+    {
+      "path": "crates/test-programs/src/bin/p1_fd_filestat_get.rs",
+      "sha256": "d31e4e59db9c4f5c0e37dbdc239216d44792e01d65db549e08dd49e1d7ab5a9f"
+    },
+    {
+      "path": "crates/test-programs/src/bin/p1_fd_filestat_set.rs",
+      "sha256": "380f63487bb5eae06a1234789a1881dcf18cd8e2018472575c87529ff15893cd"
+    },
+    {
+      "path": "crates/test-programs/src/bin/p1_fd_flags_set.rs",
+      "sha256": "193abe957fc3186e632feeb0b74bd75619e4d3dcb07d92a9fefe3a2265aff3aa"
+    },
+    {
+      "path": "crates/test-programs/src/bin/p1_fd_readdir.rs",
+      "sha256": "f1dc398985833826d93da8dfd50b788c85370ad128ef20717521298166ddcdd0"
+    },
+    {
+      "path": "crates/test-programs/src/bin/p1_file_allocate.rs",
+      "sha256": "dfd37d859892a6587eb98b8b5be0513d62e0157994fd6f03c6ecc48ac32103ef"
+    },
+    {
+      "path": "crates/test-programs/src/bin/p1_file_hardlink_across_perms.rs",
+      "sha256": "a33190d6b2ecda9b7896e29cf771a85cf6f7592f17844ea9a921e2114f207b5c"
+    },
+    {
+      "path": "crates/test-programs/src/bin/p1_file_pread_pwrite.rs",
+      "sha256": "99129a95ba03f2657e5e0066854e3f02c0761d5bc21bd052aad06c8be78d1367"
+    },
+    {
+      "path": "crates/test-programs/src/bin/p1_file_read_write.rs",
+      "sha256": "07e77d148adfaef28ca1d64f1a15e238ea0f298061b310b587ad2a08c35383b4"
+    },
+    {
+      "path": "crates/test-programs/src/bin/p1_file_rename_across_perms.rs",
+      "sha256": "eeeb761dac3f5385bdb256e91e8cd12cdc586b634be3be0a47ed66372f7c4b38"
+    },
+    {
+      "path": "crates/test-programs/src/bin/p1_file_seek_tell.rs",
+      "sha256": "0bb2517620fc511b2df6a441462e8c8e606702e1dd39184d4574eb1cb08f25dd"
+    },
+    {
+      "path": "crates/test-programs/src/bin/p1_file_truncation.rs",
+      "sha256": "ff57185a806c5e00e4cd653ccb240930d206cb08b85a9a3a4c662fc639a7d13a"
+    },
+    {
+      "path": "crates/test-programs/src/bin/p1_file_truncation_readonly.rs",
+      "sha256": "762db7ffa1aaadbeed6e7b2c85599d7947294a8bf2a198a9d20a23dcb27d95bd"
+    },
+    {
+      "path": "crates/test-programs/src/bin/p1_file_unbuffered_write.rs",
+      "sha256": "e1303c100d900fcc5df54d62f60ee43403491f7ffb8b27a471f89a3c3181bdd1"
+    },
+    {
+      "path": "crates/test-programs/src/bin/p1_file_write.rs",
+      "sha256": "1cfe0216e9552ce9adbfddefc81ad011efc301e0e3e67460878e9b2eccb057fb"
+    },
+    {
+      "path": "crates/test-programs/src/bin/p1_interesting_paths.rs",
+      "sha256": "5291dea35dda6f6ec05577a86745a1f1ef6d1f35656d8e153d2f7cbdf8098802"
+    },
+    {
+      "path": "crates/test-programs/src/bin/p1_nofollow_errors.rs",
+      "sha256": "d8104c444e980264b8dfc27653daa99ee3fe6e5d15d24bcf733e3f2b47afc41f"
+    },
+    {
+      "path": "crates/test-programs/src/bin/p1_overwrite_preopen.rs",
+      "sha256": "e6032ce266a1dff4062a42346ee932536f77dca9eeee4aaa3c236d581acb8a54"
+    },
+    {
+      "path": "crates/test-programs/src/bin/p1_path_exists.rs",
+      "sha256": "d96904ace064eaa0309fb721011e76ecd62d7370912a8489460332abaf06dbc9"
+    },
+    {
+      "path": "crates/test-programs/src/bin/p1_path_filestat.rs",
+      "sha256": "1f17274c95ffbfa91d09cd84c1c72b4d7e95b72fe5837a69f5a91cdc3f0b9ee7"
+    },
+    {
+      "path": "crates/test-programs/src/bin/p1_path_link.rs",
+      "sha256": "471b1bade08fb11329cddfa35e744eca4bdec8a16bd33cb1cb6fba8d346d08d3"
+    },
+    {
+      "path": "crates/test-programs/src/bin/p1_path_open_create_existing.rs",
+      "sha256": "789bc019525b9227b9dd26e9fca415811f6802e889373fae389cc7652698e8c5"
+    },
+    {
+      "path": "crates/test-programs/src/bin/p1_path_open_dirfd_not_dir.rs",
+      "sha256": "49390ae3f660d7b9ee23b2a7a698abff7206127603e7901668a6699e6bdd5d1d"
+    },
+    {
+      "path": "crates/test-programs/src/bin/p1_path_open_lots.rs",
+      "sha256": "6fc00c257219594210161c72e39330bcb5d7945fa2546f7652d285151eecfd4c"
+    },
+    {
+      "path": "crates/test-programs/src/bin/p1_path_open_missing.rs",
+      "sha256": "09a42c2c84120fb3e722d9110b07553bca0c7eb83cb5c8d10d623585fe7536bf"
+    },
+    {
+      "path": "crates/test-programs/src/bin/p1_path_open_nonblock.rs",
+      "sha256": "6539e824189f51b87c17360aed6b43686e8f8a0cbb1d667d8d86c0533e0d3e8d"
+    },
+    {
+      "path": "crates/test-programs/src/bin/p1_path_open_preopen.rs",
+      "sha256": "2609c105ba95f37aa16972f2ff2da5319a28283aee9ec60bcbce28b3d7b00ce9"
+    },
+    {
+      "path": "crates/test-programs/src/bin/p1_path_open_read_write.rs",
+      "sha256": "2656e5b03394ae5cdf651939ccd5c39290856514baf6e25e66b80b1bfd15f544"
+    },
+    {
+      "path": "crates/test-programs/src/bin/p1_path_rename.rs",
+      "sha256": "4575758133721714449c166e07727bcb4d05d97e7216a95559d2b78d24e0a252"
+    },
+    {
+      "path": "crates/test-programs/src/bin/p1_path_rename_dir_trailing_slashes.rs",
+      "sha256": "7606ba7325f7f564fec800498228e5421e472c43131b0f0aea0b6b6453eb2980"
+    },
+    {
+      "path": "crates/test-programs/src/bin/p1_path_symlink_trailing_slashes.rs",
+      "sha256": "5574cbb7563afae86448a1a00ae6fc62ab07e95a0f29789614c47fee4a7df68a"
+    },
+    {
+      "path": "crates/test-programs/src/bin/p1_poll_oneoff_files.rs",
+      "sha256": "de455bb29bb61a9dd3e97a315da32d8a3b4cab47890a48d91f1a1fee1fe34bf9"
+    },
+    {
+      "path": "crates/test-programs/src/bin/p1_poll_oneoff_stdio.rs",
+      "sha256": "0f1872ce3a5373221ea31033789f85d335b104cb50a06b2936866a418adc6ad9"
+    },
+    {
+      "path": "crates/test-programs/src/bin/p1_readlink.rs",
+      "sha256": "d86009d32caad22dc5e407e14c53eccd52140290cf9d1a4494ba8a932db8e72b"
+    },
+    {
+      "path": "crates/test-programs/src/bin/p1_regular_file_isatty.rs",
+      "sha256": "16b8e6527e4ae1e70f81bb872af9b0e8223076311cdd5ab1ceb3d5959fb63d7c"
+    },
+    {
+      "path": "crates/test-programs/src/bin/p1_remove_directory.rs",
+      "sha256": "3d9c0a0c78bb6a9809592669a81f07f7f2534a8422a49f33216236e6b13920be"
+    },
+    {
+      "path": "crates/test-programs/src/bin/p1_remove_nonempty_directory.rs",
+      "sha256": "747ac2b9c112e02f219a72c9529b36f4a3d25a5fa649b47c7b6dfd04896ffa12"
+    },
+    {
+      "path": "crates/test-programs/src/bin/p1_renumber.rs",
+      "sha256": "10d22c1429c4845a0723192cf050ab040f9f4a00e337ceb289679499b231c5eb"
+    },
+    {
+      "path": "crates/test-programs/src/bin/p1_sched_yield.rs",
+      "sha256": "2e4f57c5c558d67786806b909a508a445128c93ba1581c15ad00cf25ad8c3944"
+    },
+    {
+      "path": "crates/test-programs/src/bin/p1_sleep_quickly_but_lots.rs",
+      "sha256": "b8fb2667e42a4246dfc41741660568516ad01b059e169ecdf764f865d34ad6d1"
+    },
+    {
+      "path": "crates/test-programs/src/bin/p1_stat_extreme_host_mtime.rs",
+      "sha256": "935882a605c5f87c494233dc1690c7491ae901049ececddfd0672c2056c0ddb4"
+    },
+    {
+      "path": "crates/test-programs/src/bin/p1_stdio.rs",
+      "sha256": "231671bd840609bf21b688cfdd61f0fbbc769b5571380dfdecba9779dec7cb45"
+    },
+    {
+      "path": "crates/test-programs/src/bin/p1_stdio_isatty.rs",
+      "sha256": "d0f63e65baa469b0b4653ea728af98abaf32769fb2e7ac16e1e5314b94c0d6ad"
+    },
+    {
+      "path": "crates/test-programs/src/bin/p1_stdio_not_isatty.rs",
+      "sha256": "f4a1eedae38adec3e8d782a2849b47f97414f8461687eac155b16139490d463d"
+    },
+    {
+      "path": "crates/test-programs/src/bin/p1_symlink_create.rs",
+      "sha256": "80e1f83f0cdbabdf18af95955c663f529dec4c034280a528e60f254ea9926a8f"
+    },
+    {
+      "path": "crates/test-programs/src/bin/p1_symlink_filestat.rs",
+      "sha256": "a48f591acf19d05086056cce51b4d6b46ad103453854e4d6444f146bd4f8f3bd"
+    },
+    {
+      "path": "crates/test-programs/src/bin/p1_symlink_loop.rs",
+      "sha256": "983b62e37cc84e6c2fcbdc5867628fbc448ef922297d3e2664210cb3284f0b61"
+    },
+    {
+      "path": "crates/test-programs/src/bin/p1_unicode_output.rs",
+      "sha256": "9ffaf453e7f4bfb1991d2ac7edd9c6e24fc5ce5f79657b8a7174c9d3cec1015b"
+    },
+    {
+      "path": "crates/test-programs/src/bin/p1_unlink_file_trailing_slashes.rs",
+      "sha256": "42d62a734fbfbf422d8af2172c072c44d1008cd5eb682299a3037085f6e65c56"
+    },
+    {
+      "path": "crates/test-programs/src/preview1.rs",
+      "sha256": "d3149395d6564c9e9e9727e9a8b28faddfd49ca5db74fe7be688e0d09d44adcc"
+    },
+    {
+      "path": "crates/wasi/tests/all/p1.rs",
+      "sha256": "0bb3ef6588e0d7b4ebd171e1f431e1b983741a80a95232785497a824cf022734"
+    },
+    {
+      "path": "crates/wasi/tests/all/store.rs",
+      "sha256": "69803dfc1936168d3ffebab5f6e5526150c942bd29be4a2faf60ac6763f4832a"
+    }
+  ]
+}
