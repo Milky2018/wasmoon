@@ -238,10 +238,11 @@ fn instantiate_canon_future_read(
                       "cannot read from and write to intra-component future/stream with non-numeric payload",
                     )
                   }
-                  store_future_scalar_payload(
+                  store_future_payload(
                     pw.payload,
                     store,
-                    resources.mem_addr,
+                    resources,
+                    state.resource_table,
                     ptr,
                   ) catch {
                     error => {
@@ -572,10 +573,10 @@ fn instantiate_canon_future_write(
                       "cannot read from and write to intra-component future/stream with non-numeric payload",
                     )
                   }
-                  let payload = load_future_scalar_payload(
+                  let payload = load_future_payload(
                     st0.payload_ty,
                     store,
-                    resources.mem_addr,
+                    resources,
                     ptr,
                   ) catch {
                     error => {
@@ -583,10 +584,16 @@ fn instantiate_canon_future_write(
                       return [I32(0)]
                     }
                   }
-                  store_future_scalar_payload(
+                  store_future_payload(
                     payload,
                     store,
-                    pr.mem_addr,
+                    {
+                      mem_addr: pr.mem_addr,
+                      realloc: pr.realloc,
+                      encoding: pr.encoding,
+                      post_return: None,
+                    },
+                    pr.reader_table,
                     pr.ptr,
                   ) catch {
                     error => {
@@ -632,10 +639,10 @@ fn instantiate_canon_future_write(
                     )
                     return ret_i32(0)
                   }
-                  let payload = load_future_scalar_payload(
+                  let payload = load_future_payload(
                     st0.payload_ty,
                     store,
-                    resources.mem_addr,
+                    resources,
                     ptr,
                   ) catch {
                     error => {

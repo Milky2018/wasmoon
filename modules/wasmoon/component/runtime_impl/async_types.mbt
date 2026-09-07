@@ -481,7 +481,7 @@ struct PendingFutureWrite {
   writer_component_id : Int
   writer_handle : Int
   // Pending write value (already loaded from memory if needed).
-  payload : Bytes
+  payload : FuturePayload
 } derive(Debug)
 
 ///|

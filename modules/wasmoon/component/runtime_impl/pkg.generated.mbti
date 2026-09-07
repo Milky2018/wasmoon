@@ -358,6 +358,9 @@ pub fn FlatStorageField::to_repr(Self) -> @debug.Repr
 type FutureEndpoint derive(@debug.Debug)
 pub fn FutureEndpoint::to_repr(Self) -> @debug.Repr
 
+type FuturePayload derive(@debug.Debug)
+pub fn FuturePayload::to_repr(Self) -> @debug.Repr
+
 type FutureState derive(@debug.Debug)
 pub fn FutureState::to_repr(Self) -> @debug.Repr
 

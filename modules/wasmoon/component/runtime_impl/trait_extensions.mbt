@@ -183,3 +183,6 @@ pub extend TaskReturnContract with Debug::{to_repr}
 
 ///|
 pub extend CanonicalRealloc with Debug::{to_repr}
+
+///|
+pub extend FuturePayload with Debug::{to_repr}

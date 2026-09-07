@@ -1,4 +1,10 @@
 ///|
+enum FuturePayload {
+  Scalar(Bytes)
+  Text(String)
+} derive(Debug)
+
+///|
 fn future_payload_is_numeric(ty : ValType?) -> Bool {
   match ty {
     None => true
@@ -25,13 +31,14 @@ fn future_payload_memory(
   mem_addr : Int?,
   ptr : Int,
   size : Int,
+  align? : Int = size,
 ) -> @runtime.Memory raise ComponentRuntimeError {
   guard mem_addr is Some(addr) else { raise MissingCanonMemory }
   let mem = store.get_mem(addr) catch {
     error => raise CanonCallError(error.to_string())
   }
   let offset = ptr.to_int64() & 0xffffffffL
-  if offset % size.to_int64() != 0L {
+  if offset % align.to_int64() != 0L {
     raise CanonCallError("unaligned pointer")
   }
   if offset > mem.byte_len() || size.to_int64() > mem.byte_len() - offset {
@@ -41,17 +48,48 @@ fn future_payload_memory(
 }
 
 ///|
-fn load_future_scalar_payload(
+fn load_future_payload(
   ty : ValType?,
   store : @runtime.Store,
-  mem_addr : Int?,
+  resources : CanonResources,
   ptr : Int,
-) -> Bytes raise ComponentRuntimeError {
+) -> FuturePayload raise ComponentRuntimeError {
+  if ty == Some(Prim(String)) {
+    let mem = require_memory(resources, store)
+    let width = if mem.is_memory64() { 8 } else { 4 }
+    future_payload_memory(
+      store,
+      resources.mem_addr,
+      ptr,
+      width * 2,
+      align=width,
+    )
+    |> ignore
+    let flat = load_flat_component_value_from_memory(
+      mem,
+      ptr,
+      Prim(String),
+      [],
+      mem.is_memory64(),
+    )
+    let value = lift_component_value_from_flat(
+      Prim(String),
+      flat,
+      [],
+      Some(mem),
+      mem.is_memory64(),
+      resources.encoding,
+    )
+    guard value is String(text) else {
+      raise CanonCallError("invalid string payload")
+    }
+    return Text(text)
+  }
   let size = future_scalar_payload_size(ty)
   if size == 0 {
-    return b""
+    return Scalar(b"")
   }
-  let mem = future_payload_memory(store, mem_addr, ptr, size)
+  let mem = future_payload_memory(store, resources.mem_addr, ptr, size)
   let bytes : Array[Byte] = []
   for i in 0..<size {
     bytes.push(
@@ -71,21 +109,52 @@ fn load_future_scalar_payload(
     }
     _ => ()
   }
-  Bytes::from_array(bytes)
+  Scalar(Bytes::from_array(bytes))
 }
 
 ///|
-fn store_future_scalar_payload(
-  payload : Bytes,
+fn store_future_payload(
+  payload : FuturePayload,
   store : @runtime.Store,
-  mem_addr : Int?,
+  resources : CanonResources,
+  table : ResourceTable,
   ptr : Int,
 ) -> Unit raise ComponentRuntimeError {
-  if payload.is_empty() {
-    return
-  }
-  let mem = future_payload_memory(store, mem_addr, ptr, payload.length())
-  mem.init_data(ptr, payload) catch {
-    error => raise CanonCallError(error.to_string())
+  match payload {
+    Text(text) => {
+      let mem = require_memory(resources, store)
+      let width = if mem.is_memory64() { 8 } else { 4 }
+      future_payload_memory(
+        store,
+        resources.mem_addr,
+        ptr,
+        width * 2,
+        align=width,
+      )
+      |> ignore
+      store_host_stream_value(
+        String(text),
+        Prim(String),
+        [],
+        resources,
+        store,
+        table,
+        ptr,
+      )
+    }
+    Scalar(bytes) => {
+      if bytes.is_empty() {
+        return
+      }
+      let mem = future_payload_memory(
+        store,
+        resources.mem_addr,
+        ptr,
+        bytes.length(),
+      )
+      mem.init_data(ptr, bytes) catch {
+        error => raise CanonCallError(error.to_string())
+      }
+    }
   }
 }
