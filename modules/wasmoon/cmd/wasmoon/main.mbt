@@ -100,6 +100,11 @@ fn build_command() -> @argparse.Command {
             about="Grant access to directory (HOST_DIR or HOST_DIR::GUEST_DIR)",
           ),
           OptionArg(
+            "dir-ro",
+            action=Append,
+            about="Grant read-only access (HOST_DIR or HOST_DIR::GUEST_DIR)",
+          ),
+          OptionArg(
             "env",
             action=Append,
             about="Pass environment variable to WASM module (NAME=VALUE)",
@@ -297,6 +302,7 @@ fn main {
         !(sub.flags.get("no-jit") is Some(true)),
         2,
         sub.flags.get("dwarf") is Some(true),
+        readonly_dirs=sub.values.get("dir-ro").unwrap_or([]),
       )
     Some(("test", sub)) =>
       @commands.run_testsuite(

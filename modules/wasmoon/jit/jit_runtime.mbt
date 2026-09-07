@@ -1229,11 +1229,12 @@ pub fn JITModule::init_wasi(
   args : Array[String],
   env : Array[String],
   preopens : Array[(String, String)],
+  readonly_preopens? : Array[(String, String)] = [],
 ) -> Unit {
   if self.context is Some(ctx) {
     self.wasi_stdout_callback = None
     self.wasi_stderr_callback = None
-    ctx.init_wasi(args, env, preopens)
+    ctx.init_wasi(args, env, preopens, readonly_preopens~)
   }
 }
 
@@ -1248,8 +1249,9 @@ pub fn JITModule::init_wasi_with_stdio(
   stderr : ((Bytes) -> Unit)?,
   stdin_data : Bytes?,
   stdin_callback? : (() -> Bytes)? = None,
+  readonly_preopens? : Array[(String, String)] = [],
 ) -> Unit {
-  self.init_wasi(args, env, preopens)
+  self.init_wasi(args, env, preopens, readonly_preopens~)
   if self.context is Some(ctx) {
     match stdout {
       Some(cb) => {
@@ -1285,11 +1287,12 @@ pub fn JITModule::init_wasi_quiet(
   args : Array[String],
   env : Array[String],
   preopens : Array[(String, String)],
+  readonly_preopens? : Array[(String, String)] = [],
 ) -> Unit {
   if self.context is Some(ctx) {
     self.wasi_stdout_callback = None
     self.wasi_stderr_callback = None
-    ctx.init_wasi_quiet(args, env, preopens)
+    ctx.init_wasi_quiet(args, env, preopens, readonly_preopens~)
   }
 }
 

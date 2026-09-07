@@ -46,6 +46,7 @@ fn compare_wasi_with_options(
   source : String,
   func_name : String,
   preopens? : Array[(String, String)] = [],
+  readonly_preopens? : Array[(String, String)] = [],
   stdin_data? : Bytes,
   stdin_callback? : (() -> Bytes)? = None,
 ) -> WasiCompareResult {
@@ -90,6 +91,7 @@ fn compare_wasi_with_options(
     preopens,
     stdin_data,
     stdin_callback~,
+    readonly_preopens~,
   )
 
   // Run JIT with WASI (stdout suppressed)
@@ -101,6 +103,7 @@ fn compare_wasi_with_options(
     preopens,
     stdin_data,
     stdin_callback~,
+    readonly_preopens~,
   )
 
   // Compare results (return values must match)
@@ -226,6 +229,7 @@ fn run_wasi_interp_quiet(
   func_name : String,
   preopens : Array[(String, String)],
   stdin_data : Bytes?,
+  readonly_preopens? : Array[(String, String)] = [],
   stdin_callback? : (() -> Bytes)? = None,
 ) -> (Result[Array[@types.Value], String], Bytes) {
   try {
@@ -248,6 +252,10 @@ fn run_wasi_interp_quiet(
     for entry in preopens {
       let (host, guest) = entry
       wasi_builder.preopen_dir(host, guest) |> ignore
+    }
+    for entry in readonly_preopens {
+      let (host, guest) = entry
+      wasi_builder.preopen_dir_readonly(host, guest) |> ignore
     }
     match stdin_callback {
       Some(cb) => wasi_builder.stdin(cb) |> ignore
@@ -286,6 +294,7 @@ fn run_wasi_jit_quiet(
   result_types : Array[@types.ValueType],
   preopens : Array[(String, String)],
   stdin_data : Bytes?,
+  readonly_preopens? : Array[(String, String)] = [],
   stdin_callback? : (() -> Bytes)? = None,
 ) -> (Result[Array[@types.Value], String], Bytes) {
   func_name |> ignore
@@ -308,6 +317,10 @@ fn run_wasi_jit_quiet(
     for entry in preopens {
       let (host, guest) = entry
       wasi_builder.preopen_dir(host, guest) |> ignore
+    }
+    for entry in readonly_preopens {
+      let (host, guest) = entry
+      wasi_builder.preopen_dir_readonly(host, guest) |> ignore
     }
     match stdin_callback {
       Some(cb) => wasi_builder.stdin(cb) |> ignore
@@ -365,6 +378,7 @@ fn run_wasi_jit_quiet(
       }),
       stdin_data,
       stdin_callback~,
+      readonly_preopens~,
     )
     guard @wast.init_jit_memories_from_store(instance, store, jm) is Some(_) else {
       return (Err("JIT memory initialization failed"), Bytes::from_array([]))

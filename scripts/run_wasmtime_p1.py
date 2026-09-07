@@ -26,12 +26,23 @@ import tomllib
 ROOT = Path(__file__).resolve().parents[1]
 CORPUS = ROOT / "wasi-tests/wasmtime"
 BUILD = ROOT / "target/wasmtime-p1-build"
-UNSUPPORTED = {
-    "p1_cli_hostcall_fuel": "Requires Wasmtime-specific hostcall fuel limits, not WASIp1 semantics.",
-    "p1_file_truncation_readonly": "Requires a read-only preopen capability; Wasmoon CLI only exposes read-write preopens.",
-    "p1_file_hardlink_across_perms": "Requires a read-only preopen capability; Wasmoon CLI only exposes read-write preopens.",
-    "p1_file_rename_across_perms": "Requires a read-only preopen capability; Wasmoon CLI only exposes read-write preopens.",
+NOT_APPLICABLE = {
+    "p1_cli_hostcall_fuel": "Wasmtime-specific hostcall fuel policy is outside Wasmoon's WASIp1 contract.",
 }
+READONLY_CASES = {
+    "p1_file_truncation_readonly",
+    "p1_file_hardlink_across_perms",
+    "p1_file_rename_across_perms",
+}
+READONLY_CONTENTS = b"read only test file\n"
+
+
+def exclusion(name: str, mode: str) -> tuple[str, str] | None:
+    if name in NOT_APPLICABLE:
+        return "not_applicable", NOT_APPLICABLE[name]
+    if mode == "wasmtime" and name in READONLY_CASES:
+        return "unsupported", "The reference CLI does not expose per-preopen read-only permissions."
+    return None
 
 
 def digest(path: Path) -> str:
@@ -61,8 +72,8 @@ def validate_snapshot(corpus: Path = CORPUS) -> tuple[dict, list[str]]:
     names = [b["name"] for b in bins]
     if len(set(names)) != len(names) or any(Path(b["path"]).stem != b["name"] for b in bins):
         raise ValueError("Cargo binary names must match upstream source names")
-    if not set(UNSUPPORTED).issubset(names):
-        raise ValueError("stale unsupported-test entry")
+    if not (set(NOT_APPLICABLE) | READONLY_CASES).issubset(names):
+        raise ValueError("stale excluded or read-only test entry")
     return snapshot, sorted(names)
 
 
@@ -87,6 +98,10 @@ def guest_environment() -> dict[str, str]:
 
 
 def prepare_fixture(scratch: Path, name: str) -> None:
+    if name in READONLY_CASES:
+        readonly = scratch.parent / "readonly"
+        readonly.mkdir()
+        (readonly / "test.txt").write_bytes(READONLY_CONTENTS)
     if name == "p1_stat_extreme_host_mtime":
         path = scratch / "extreme.dat"
         path.write_bytes(b"hello")
@@ -110,6 +125,8 @@ def command_for(binary: Path, mode: str, wasm: Path, scratch: Path, name: str) -
         args += [str(wasm), "--dir", f"{scratch}::.", "-S", "common"]
         for key, value in guest_environment().items():
             args += ["--env", f"{key}={value}"]
+        if name in READONLY_CASES:
+            args += ["--dir-ro", f"{scratch.parent / 'readonly'}::readonly"]
         if mode == "interp":
             args += ["--no-jit"]
     # The CLI output stress test has its own argument/output contract.
@@ -196,8 +213,8 @@ def run_case(binary: Path, mode: str, wasm: Path, output: Path, timeout: float,
     name = wasm.stem
     case_id = name + ("__pending_stdin" if pending_stdin else "")
     record = {"name": name, "case": case_id, "mode": mode}
-    if name in UNSUPPORTED:
-        return record | {"status": "unsupported", "detail": UNSUPPORTED[name]}
+    if excluded := exclusion(name, mode):
+        return record | {"status": excluded[0], "detail": excluded[1]}
     directory = output / mode / case_id
     directory.mkdir(parents=True)
     scratch = directory / "scratch"
@@ -209,12 +226,23 @@ def run_case(binary: Path, mode: str, wasm: Path, output: Path, timeout: float,
         if result["status"] == "pass" and name == "p1_cli_much_stdout":
             if Path(result["stdout"]).read_bytes() != b"hello, world!" * 10000:
                 result.update(status="fail", detail="stdout differs from the complete expected byte sequence")
+        if name in READONLY_CASES:
+            readonly = directory / "readonly"
+            if (sorted(p.name for p in readonly.iterdir()) != ["test.txt"]
+                    or not (readonly / "test.txt").is_file()
+                    or (readonly / "test.txt").read_bytes() != READONLY_CONTENTS
+                    or list(scratch.iterdir())):
+                result["detail"] = (result.get("detail", "") + "; Read-only operation changed the source or destination fixture").lstrip("; ")
+                if result["status"] == "pass":
+                    result["status"] = "fail"
         return record | result
     except OSError as error:
         return record | {"status": "harness_error", "detail": str(error)}
     finally:
         # Each case/mode gets a fresh filesystem. Logs survive cleanup.
         shutil.rmtree(scratch)
+        if name in READONLY_CASES:
+            shutil.rmtree(directory / "readonly", ignore_errors=True)
 
 
 def verdict(results: list[dict]) -> int:
@@ -250,7 +278,8 @@ def main() -> int:
             parser.error("--filter matched no programs")
         if args.list:
             for name in names:
-                print(name + (f" [unsupported: {UNSUPPORTED[name]}]" if name in UNSUPPORTED else ""))
+                excluded = exclusion(name, args.mode)
+                print(name + (f" [{excluded[0]}: {excluded[1]}]" if excluded else ""))
             return 0
         binary = Path(shutil.which(args.wasmtime) or args.wasmtime) if args.mode == "wasmtime" else args.wasmoon
         binary = binary.resolve()
@@ -294,7 +323,7 @@ def main() -> int:
                     print(f"{mode:8} {result['status']:13} {result['case']} {result.get('detail', '')}", flush=True)
                     (output / "summary.json").write_text(json.dumps(report, indent=2) + "\n")
         counts = {s: sum(r["status"] == s for r in results)
-                  for s in ["pass", "fail", "timeout", "unsupported", "harness_error"]}
+                  for s in ["pass", "fail", "timeout", "unsupported", "not_applicable", "harness_error"]}
         report["counts"] = counts
         (output / "summary.json").write_text(json.dumps(report, indent=2) + "\n")
         print(json.dumps(counts), flush=True)

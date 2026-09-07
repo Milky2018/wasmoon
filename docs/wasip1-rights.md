@@ -17,7 +17,7 @@ independent authority for legacy rights semantics.
 ## Coverage profiles
 
 The runner's default `upstream` profile executes the unchanged, hashed snapshot.
-Its 42 filesystem failures per engine remain visible: the shared scratch
+Its original filesystem rights failures remain visible: the shared scratch
 helper requests zero rights and then attempts operations requiring rights.
 
 `--profile explicit-rights` applies the separately reviewed
@@ -26,8 +26,8 @@ source copy. It requests scratch rights bounded by the preopen and adds the
 operation capabilities used at file-opening callsites. Secondary directories
 receive the specific directory/inheriting rights needed by their tests.
 It never grants an intentionally absent `FD_READ` or `FD_WRITE` capability.
-Fixture behavior and pass/fail rules are unchanged. The only assertion
-adaptations are the three access-denial expectations documented below.
+Pass/fail rules remain strict. Assertion adaptations are limited to the
+access-denial expectations documented below, with additional side-effect checks.
 
 Adapted sources and build artifacts are separate from the original profile.
 The temporary source copy is removed after building; reports identify the
@@ -53,3 +53,36 @@ The independent `wasi_rights_contract_wbtest.mbt` guest verifies zero rights,
 positive requested rights, inheritance bounds, reduction and failed
 re-addition through both execution engines. This validates the chosen boundary;
 it is not a certification of every WASIp1 capability operation.
+
+## Read-only preopens
+
+Use `WasiContextBuilder::preopen_dir_readonly(host_path, guest_path)` or
+`wasmoon run guest.wasm --dir-ro HOST_DIR::GUEST_DIR`. The option can be repeated
+and combined with writable `--dir` mappings. JIT initialization accepts the
+optional `readonly_preopens` array. Both engines assign writable preopen fds
+first, followed by read-only preopens in their supplied order.
+
+Read-only directory base rights allow opening children, listing entries,
+reading symlink targets and querying metadata. Inheriting rights additionally
+allow reading files, seeking, telling, advising, setting descriptor flags and
+polling. They exclude all filesystem mutation rights, including link source
+and rename source: exporting an alias into a writable directory would otherwise
+bypass the boundary. Descendants cannot request or regain excluded rights.
+Denied capability operations return exactly `NOTCAPABLE` before mutation.
+
+The permission applies to the descriptor and its descendants. If the host
+separately grants writable access to the same tree or a hard-linked file, that
+independent authority still permits writes. Keep trees separate when the guest
+must have no writable access to the read-only data. Read-only also does not
+prevent the host or other processes from modifying files.
+
+The adapted truncation, hardlink-across-permissions and rename-across-permissions
+guests replace the upstream `PERM` expectation with exact `NOTCAPABLE`.
+Their existing before/after content assertions remain, and the harness checks
+source bytes, source entries and the writable destination independently.
+The independent guest probe covers successful reads/listing, inherited bounds,
+failed rights escalation, denied file writes/size/timestamp changes and denied
+path creation/deletion/link/rename operations through both engines.
+
+`p1_cli_hostcall_fuel` is deliberately not applicable. Wasmtime-specific fuel
+accounting is not part of this WASIp1 capability contract and is not implemented.

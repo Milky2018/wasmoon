@@ -141,6 +141,11 @@ wasmoon run examples/hello_wasi.wat \
   -S inherit-env
 ```
 
+Use `--dir-ro HOST_DIR::GUEST_DIR` for a read-only WASIp1 preopen; it can be
+repeated and combined with `--dir`. Descendant descriptors cannot acquire
+filesystem mutation rights. See [the rights contract](https://github.com/Milky2018/wasmoon/blob/dev/docs/wasip1-rights.md)
+for the permission boundary and embedding APIs.
+
 For detailed flags, run:
 
 ```bash

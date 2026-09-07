@@ -184,8 +184,9 @@ fn JITContext::init_wasi(
   args : Array[String],
   env : Array[String],
   preopens : Array[(String, String)],
+  readonly_preopens? : Array[(String, String)] = [],
 ) -> Unit {
-  self.ctx.init_wasi(args, env, preopens)
+  self.ctx.init_wasi(args, env, preopens, readonly_preopens~)
 }
 
 ///|
@@ -195,8 +196,9 @@ fn JITContext::init_wasi_quiet(
   args : Array[String],
   env : Array[String],
   preopens : Array[(String, String)],
+  readonly_preopens? : Array[(String, String)] = [],
 ) -> Unit {
-  self.ctx.init_wasi(args, env, preopens, quiet=true)
+  self.ctx.init_wasi(args, env, preopens, quiet=true, readonly_preopens~)
 }
 
 ///|

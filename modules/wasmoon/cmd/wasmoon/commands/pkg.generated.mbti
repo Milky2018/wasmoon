@@ -36,7 +36,7 @@ pub fn run_testsuite(String, Bool, Bool) -> Int
 
 pub fn run_wasi_component_command(String, Array[String], Array[String], Array[String], String, Bool, ComponentErrorFormat, use_jit? : Bool) -> Int
 
-pub fn run_wasm(String, String?, Array[String], Array[String], Array[String], Array[String], Array[String], Array[String], Bool, Bool, Bool, Int, Bool) -> Int
+pub fn run_wasm(String, String?, Array[String], Array[String], Array[String], Array[String], Array[String], Array[String], Bool, Bool, Bool, Int, Bool, readonly_dirs? : Array[String]) -> Int
 
 pub fn verify_compiled_jit_artifact(@artifact.Artifact) -> @wasmoon_jit.LoadedArtifact raise @wasmoon_jit.ArtifactLoadError
 

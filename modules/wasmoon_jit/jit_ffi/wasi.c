@@ -1197,6 +1197,17 @@ static uint8_t mode_to_filetype(mode_t mode) {
 }
 #endif
 
+static uint64_t readonly_directory_base_rights(void) {
+    return WASI_RIGHT_PATH_OPEN | WASI_RIGHT_FD_READDIR | WASI_RIGHT_PATH_READLINK |
+        WASI_RIGHT_PATH_FILESTAT_GET | WASI_RIGHT_FD_FILESTAT_GET;
+}
+
+static uint64_t readonly_directory_inheriting_rights(void) {
+    return readonly_directory_base_rights() | WASI_RIGHT_FD_READ | WASI_RIGHT_FD_SEEK |
+        WASI_RIGHT_FD_TELL | WASI_RIGHT_FD_ADVISE | WASI_RIGHT_FD_FDSTAT_SET_FLAGS |
+        WASI_RIGHT_POLL_FD_READWRITE;
+}
+
 static uint64_t preopen_directory_base_rights(void) {
     return WASI_RIGHT_PATH_CREATE_DIRECTORY |
         WASI_RIGHT_PATH_CREATE_FILE |
@@ -3768,7 +3779,7 @@ MOONBIT_FFI_EXPORT moonbit_bytes_t wasmoon_jit_take_wasi_stderr(int64_t ctx_ptr)
     return bytes;
 }
 
-MOONBIT_FFI_EXPORT void wasmoon_jit_add_preopen(int64_t ctx_ptr, int idx, const char *host_path, const char *guest_path) {
+static void add_preopen_with_mode(int64_t ctx_ptr, int idx, const char *host_path, const char *guest_path, int read_only) {
     jit_context_t *ctx = (jit_context_t *)ctx_ptr;
     if (!ctx || !ctx->preopen_paths || !ctx->preopen_fds || idx < 0 || idx >= ctx->preopen_count) return;
 
@@ -3785,13 +3796,17 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_add_preopen(int64_t ctx_ptr, int idx, const 
                 set_fd_rights(
                     ctx,
                     wasi_fd,
-                    preopen_directory_base_rights(),
-                    preopen_directory_inheriting_rights()
+                    read_only ? readonly_directory_base_rights() : preopen_directory_base_rights(),
+                    read_only ? readonly_directory_inheriting_rights() : preopen_directory_inheriting_rights()
                 );
             }
         }
     }
 #endif
+}
+
+MOONBIT_FFI_EXPORT void wasmoon_jit_add_preopen(int64_t ctx_ptr, int idx, const char *host_path, const char *guest_path) {
+    add_preopen_with_mode(ctx_ptr, idx, host_path, guest_path, 0);
 }
 
 MOONBIT_FFI_EXPORT void wasmoon_jit_set_wasi_args(int64_t ctx_ptr, int argc) {
@@ -4008,10 +4023,11 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_add_preopen_managed(
     void *jit_context,
     int idx,
     const char *host_path,
-    const char *guest_path
+    const char *guest_path,
+    int read_only
 ) {
-    wasmoon_jit_add_preopen(
-        MANAGED_CTX(jit_context), idx, host_path, guest_path
+    add_preopen_with_mode(
+        MANAGED_CTX(jit_context), idx, host_path, guest_path, read_only
     );
 }
 

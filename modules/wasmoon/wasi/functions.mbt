@@ -1108,6 +1108,26 @@ fn fd_rights_for_stdio_slot(slot : Int) -> Int64 {
 }
 
 ///|
+fn readonly_directory_base_rights() -> Int64 {
+  right_path_open |
+  right_fd_readdir |
+  right_path_readlink |
+  right_path_filestat_get |
+  right_fd_filestat_get
+}
+
+///|
+fn readonly_directory_inheriting_rights() -> Int64 {
+  readonly_directory_base_rights() |
+  right_fd_read |
+  right_fd_seek |
+  right_fd_tell |
+  right_fd_advise |
+  right_fd_fdstat_set_flags |
+  right_poll_fd_readwrite
+}
+
+///|
 fn fd_rights_for_preopen_directory_base() -> Int64 {
   right_path_create_directory |
   right_path_create_file |

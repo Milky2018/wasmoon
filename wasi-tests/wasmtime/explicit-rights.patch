@@ -475,3 +475,51 @@
          0,
          blocking_mode.fd_flags(),
      )
+--- a/upstream/crates/test-programs/src/bin/p1_file_hardlink_across_perms.rs
++++ b/upstream/crates/test-programs/src/bin/p1_file_hardlink_across_perms.rs
+@@ -41,7 +41,7 @@
+ 
+     // Creating a hard link of the read-only file into a Descriptor under
+     // which files are read-writable would allow the read-only file to be
+-    // written to. So, this must fail with perm:
++    // written to. So, this must fail with NOTCAPABLE:
+     let err = wasip1::path_link(ro_dir_fd, 0, RO_TEST_FILENAME, rw_dir_fd, RW_ALIAS_FILENAME);
+     assert!(
+         err.is_err(),
+@@ -49,8 +49,8 @@
+     );
+     assert_eq!(
+         err.err().unwrap(),
+-        wasip1::ERRNO_PERM,
+-        "path_link should fail with ERRNO_PERM"
++        wasip1::ERRNO_NOTCAPABLE,
++        "path_link should fail with ERRNO_NOTCAPABLE"
+     );
+ 
+     // Check that contents of link dest did not change
+--- a/upstream/crates/test-programs/src/bin/p1_file_rename_across_perms.rs
++++ b/upstream/crates/test-programs/src/bin/p1_file_rename_across_perms.rs
+@@ -46,8 +46,8 @@
+     );
+     assert_eq!(
+         err.err().unwrap(),
+-        wasip1::ERRNO_PERM,
+-        "path_rename should fail with ERRNO_PERM"
++        wasip1::ERRNO_NOTCAPABLE,
++        "path_rename should fail with ERRNO_NOTCAPABLE"
+     );
+ 
+     // Check that contents of link dest did not change
+--- a/upstream/crates/test-programs/src/bin/p1_file_truncation_readonly.rs
++++ b/upstream/crates/test-programs/src/bin/p1_file_truncation_readonly.rs
+@@ -58,8 +58,8 @@
+     assert!(err.is_err(), "opening file for truncation should fail");
+     assert_eq!(
+         err.err().unwrap(),
+-        wasip1::ERRNO_PERM,
+-        "opening file for truncation should fail with PERM"
++        wasip1::ERRNO_NOTCAPABLE,
++        "opening file for truncation should fail with NOTCAPABLE"
+     );
+ 
+     // Check that truncation did not occur.

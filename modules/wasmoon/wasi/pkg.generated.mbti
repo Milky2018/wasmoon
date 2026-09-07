@@ -562,6 +562,7 @@ pub(all) struct WasiContextBuilder {
   mut args : Array[String]
   env : Array[String]
   preopens : Array[(String, String)]
+  readonly_preopens : Array[(String, String)]
   mut stdout_callback : ((Bytes) -> Unit)?
   mut stderr_callback : ((Bytes) -> Unit)?
   mut stdin_callback : (() -> Bytes)?
@@ -578,6 +579,7 @@ pub fn WasiContextBuilder::inherit_stdin(Self) -> Self
 pub fn WasiContextBuilder::inherit_stdio(Self) -> Self
 pub fn WasiContextBuilder::inherit_stdout(Self) -> Self
 pub fn WasiContextBuilder::preopen_dir(Self, String, String) -> Self
+pub fn WasiContextBuilder::preopen_dir_readonly(Self, String, String) -> Self
 pub fn WasiContextBuilder::stderr(Self, (Bytes) -> Unit) -> Self
 pub fn WasiContextBuilder::stdin(Self, () -> Bytes) -> Self
 pub fn WasiContextBuilder::stdout(Self, (Bytes) -> Unit) -> Self

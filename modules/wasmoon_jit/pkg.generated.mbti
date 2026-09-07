@@ -734,7 +734,7 @@ pub fn NativeJITContext::gc_set_safepoint_table(Self, Int64) -> Unit
 pub fn NativeJITContext::gc_use_func_safepoints(Self, Int) -> Unit
 #alias(has_wasm_stack, deprecated)
 pub fn NativeJITContext::has_configured_native_fiber_stack_size(Self) -> Bool
-pub fn NativeJITContext::init_wasi(Self, Array[String], Array[String], Array[(String, String)], quiet? : Bool) -> Unit
+pub fn NativeJITContext::init_wasi(Self, Array[String], Array[String], Array[(String, String)], quiet? : Bool, readonly_preopens? : Array[(String, String)]) -> Unit
 pub fn NativeJITContext::memory_ptr(Self, Int) -> Int64
 pub fn NativeJITContext::memory_size(Self, Int) -> Int64
 pub fn NativeJITContext::refresh_table_layout(Self, Int) -> Bool

@@ -491,6 +491,7 @@ graph TD
   ISS_464["ISS-464: Resolve the upstream P1 zero-rights directory compatibility boundary"]
   ISS_465["ISS-465: Investigate BADF from P1 polling of valid inherited standard streams"]
   ISS_466["ISS-466: Fix filesystem defects exposed by explicit-rights P1 guests"]
+  ISS_467["ISS-467: Expose read-only WASIp1 preopens and complete applicable P1 coverage"]
   ISS_002 --> ISS_003
   ISS_002 --> ISS_004
   ISS_003 --> ISS_005

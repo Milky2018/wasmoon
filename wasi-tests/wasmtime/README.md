@@ -67,22 +67,27 @@ and `upstream/crates/test-programs/artifacts/src/lib.rs`.
   harness errors remain failures. There is no expected-failure list. Exit status
   is 0 when all executed tests pass, 1 for guest failures/timeouts or no executed
   successes, and 2 for harness/setup errors. Unsupported cases are counted
-  separately and never count as passes. A successful exit does not imply full
-  suite coverage; inspect the unsupported count.
+  separately, as are not-applicable cases; neither counts as a pass. A successful exit does not imply full
+  suite coverage; inspect both exclusion counts.
 
-Four programs are explicitly unsupported by this CLI harness:
+`p1_cli_hostcall_fuel` is **not applicable**: it tests Wasmtime's hostcall fuel
+policy, which Wasmoon does not implement and which is outside the WASIp1
+contract. It is counted as `not_applicable`, never as a pass or a missing P1
+capability.
 
-| Program | Missing contract |
-| --- | --- |
-| `p1_cli_hostcall_fuel` | Wasmtime-specific hostcall resource limits |
-| `p1_file_truncation_readonly` | Read-only preopen capability |
-| `p1_file_hardlink_across_perms` | Read-only preopen capability |
-| `p1_file_rename_across_perms` | Read-only preopen capability |
+The three read-only guests (`p1_file_truncation_readonly`,
+`p1_file_hardlink_across_perms`, `p1_file_rename_across_perms`) receive a separate
+sibling directory mapped as `readonly` through Wasmoon's `--dir-ro` option.
+It contains the upstream `test.txt` fixture. The runner also verifies unchanged
+source bytes and directory entries and an empty writable destination after
+execution. The read-only tree is outside the writable preopen.
 
-These exclusions also apply to `--mode wasmtime`, so the reference run uses the
-same coverage. Host `chmod` is not a substitute for a read-only WASI preopen.
-The runner does not reproduce Wasmtime's host API or table-capacity limits.
-It targets macOS and Linux, not Windows.
+Only `--mode wasmtime` still reports these three guests as `unsupported`:
+the reference CLI cannot configure permissions for individual preopens.
+Its coverage therefore differs from the Wasmoon run. Host `chmod` is not a
+substitute for a read-only WASI preopen. The runner does not reproduce
+Wasmtime's host API or table-capacity limits. It targets macOS and Linux,
+not Windows.
 
 ## Initial results and interpretation
 
@@ -105,11 +110,14 @@ The separate `explicit-rights` profile requests missing operation rights in a
 temporary source copy and adapts three access-denial assertions in
 `p1_file_write` and `p1_path_open_read_write` to require exactly `NOTCAPABLE`.
 It also checks that denied I/O leaves file contents, size, cursor and guest read
-buffers unchanged. The original snapshot is untouched. See the
+buffers unchanged. The three read-only guests likewise require exactly
+`NOTCAPABLE` instead of upstream's `PERM`, retaining their content checks and
+adding host-side source/destination checks. The original snapshot is untouched. See the
 [rights decision](../../docs/wasip1-rights.md) for the complete adaptation policy.
 
-On macOS ARM64 this profile has 55 passes, no failures or timeouts, and four
-unsupported scenarios in each engine. These are adapted legacy-rights results,
+With read-only preopens integrated, on macOS ARM64 this profile has 58 passes,
+no failures, timeouts or unsupported scenarios, and one not-applicable scenario
+in each engine. These are adapted legacy-rights results,
 not unchanged upstream conformance. Wasmtime's P2-backed implementation uses
 different access-denial errors; the historical reference table above applies
 to `upstream`, not the adapted legacy-rights gate.

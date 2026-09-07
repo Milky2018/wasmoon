@@ -310,6 +310,7 @@ pub fn run_wasm(
   use_jit : Bool,
   opt_level : Int,
   enable_dwarf : Bool,
+  readonly_dirs? : Array[String] = [],
 ) -> Int {
   if debug {
     @logger.enable_debug()
@@ -353,6 +354,7 @@ pub fn run_wasm(
   let wasi_args = [program_name] + wasm_args
   wasi_builder.args(wasi_args) |> ignore
   let jit_preopens : Array[(String, String)] = []
+  let jit_readonly_preopens : Array[(String, String)] = []
   let jit_envs : Array[String] = []
   let explicit_env_keys : Map[String, Bool] = Map([])
   for dir in dirs {
@@ -370,6 +372,16 @@ pub fn run_wasm(
         return 1
       }
     }
+  }
+  for dir in readonly_dirs {
+    guard parse_dir_mapping(dir) is Some((host, guest)) else {
+      @logger.error(
+        "invalid --dir-ro format '\{dir}', expected HOST_DIR or HOST_DIR::GUEST_DIR",
+      )
+      return 1
+    }
+    wasi_builder.preopen_dir_readonly(host, guest) |> ignore
+    jit_readonly_preopens.push((host, guest))
   }
   for env_var in envs {
     let parsed = parse_env_var(env_var)
@@ -552,8 +564,21 @@ pub fn run_wasm(
       let jit_args : Array[String] = wasi_args
       let jit_stdin_data = if inherit_stdin { None } else { Some(b"") }
       let jit_results = run_with_jit(
-        mod_, instance, store, func_name, args, debug, dump_on_trap, jit_args, jit_envs,
-        jit_preopens, jit_stdin_data, wasm_binary, opt_level, enable_dwarf,
+        mod_,
+        instance,
+        store,
+        func_name,
+        args,
+        debug,
+        dump_on_trap,
+        jit_args,
+        jit_envs,
+        jit_preopens,
+        jit_stdin_data,
+        wasm_binary,
+        opt_level,
+        enable_dwarf,
+        readonly_preopens=jit_readonly_preopens,
       ) catch {
         CommandFailure(status) => return status
       }
@@ -1261,6 +1286,7 @@ fn run_with_jit(
   wasm_binary : Bytes?,
   opt_level : Int,
   enable_dwarf : Bool,
+  readonly_preopens? : Array[(String, String)] = [],
 ) -> Array[@types.Value] raise CommandFailure {
   @logger.debug("JIT: Compiling module...")
   // Get actual memory max from the store (for imported memories)
@@ -1418,6 +1444,7 @@ fn run_with_jit(
             None,
             None,
             wasi_stdin_data,
+            readonly_preopens~,
           )
           // Initialize all memories (multi-memory support)
           guard @wast.init_jit_memories_from_store(instance, store, jm)

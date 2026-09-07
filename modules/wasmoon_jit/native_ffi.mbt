@@ -1390,6 +1390,7 @@ extern "c" fn c_jit_add_preopen_managed(
   idx : Int,
   host_path : FixedArray[Byte],
   guest_path : FixedArray[Byte],
+  read_only : Int,
 ) -> Unit = "wasmoon_jit_add_preopen_managed"
 
 ///|
