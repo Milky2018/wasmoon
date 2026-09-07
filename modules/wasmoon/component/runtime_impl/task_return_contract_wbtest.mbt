@@ -165,3 +165,48 @@ test "task identity migration preserves child scheduling and cancels owned conti
     content="(0, 0, 0)",
   )
 }
+
+///|
+test "task return preserves flat string and list descriptors for both memory widths" {
+  for memory64 in [false, true] {
+    for list in [false, true] {
+      let source =
+        #|(component
+        #|  (core module $Memory (memory (export "m") MEMORY_WIDTH 1) (data (ADDR.const 0) "hello"))
+        #|  (core instance $memory (instantiate $Memory))
+        #|  (type $result RESULT_TYPE)
+        #|  (core func $return (canon task.return (result $result) (memory (core memory $memory "m"))))
+        #|  (core module $M
+        #|    (import "" "return" (func $return (param ADDR ADDR)))
+        #|    (func (export "run") ADDR.const 0 ADDR.const 5 call $return))
+        #|  (core instance $m (instantiate $M (with "" (instance (export "return" (func $return))))))
+        #|  (func (export "run") async (result $result)
+        #|    (canon lift (core func $m "run") async (memory (core memory $memory "m")))))
+      let source = source
+        .replace_all(old="MEMORY_WIDTH", new=if memory64 { "i64" } else { "" })
+        .replace_all(old="ADDR", new=if memory64 { "i64" } else { "i32" })
+        .replace_all(
+          old="RESULT_TYPE",
+          new=if list { "(list u8)" } else { "string" },
+        )
+      let component = @component.parse_component(
+        @component_text.parse_component_wat(source),
+      )
+      let validated = @component_validator.validate_component_for_instantiation_with_config(
+        component,
+        ComponentValidationConfig(false),
+      )
+      let linker = ComponentLinker::ComponentLinker()
+      defer linker.close()
+      let instance = linker.instantiate("root", validated)
+      debug_inspect(
+        instance.call_exported_func("run", []),
+        content=if list {
+          "[List([U8(104), U8(101), U8(108), U8(108), U8(111)])]"
+        } else {
+          "[String(\"hello\")]"
+        },
+      )
+    }
+  }
+}

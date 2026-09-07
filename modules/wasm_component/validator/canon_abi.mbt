@@ -216,21 +216,22 @@ fn core_functype_for_component_functype(
 fn core_functype_for_task_return(
   result : @component.ValType?,
   type_table : Array[@component.TypeDef?],
+  pointer_type : @types.ValueType,
 ) -> @types.FuncType? {
   let params : Array[@types.ValueType] = []
   match result {
     None => ()
     Some(vt) =>
-      match core_valtypes_for_component_valtype(vt, type_table) {
+      match @component.canonical_flat_types(vt, type_table, pointer_type) {
         Some(ts) =>
           if ts.length() > 16 {
-            params.push(I32)
+            params.push(pointer_type)
           } else {
             for t in ts {
               params.push(t)
             }
           }
-        None => params.push(I32)
+        None => return None
       }
   }
   Some({ params, results: [], })
@@ -240,11 +241,17 @@ fn core_functype_for_task_return(
 fn core_functype_for_canon(
   c : @component.Canon,
   type_table : Array[@component.TypeDef?],
+  core_memory_types : Array[@types.MemoryType?],
 ) -> @types.FuncType? {
   match c {
     BackpressureInc | BackpressureDec | TaskCancel =>
       Some({ params: [], results: [], })
-    TaskReturn(result, _) => core_functype_for_task_return(result, type_table)
+    TaskReturn(result, opts) =>
+      core_functype_for_task_return(
+        result,
+        type_table,
+        canon_address_type(opts, core_memory_types),
+      )
     WaitableSetNew => Some({ params: [], results: [I32], })
     WaitableSetWait(_, _) | WaitableSetPoll(_, _) =>
       Some({ params: [I32, I32], results: [I32], })
@@ -512,8 +519,21 @@ fn validate_canon(
         Some(_) => raise SectionParseError(8, "not a resource type")
       }
     }
-    TaskReturn(_, opts) => {
+    TaskReturn(result, opts) => {
       validate_canon_opts(opts)
+      if result is Some(ty) {
+        validate_valtype(ty, type_table)
+      }
+      if canon_memory_idx(opts) is Some(memory) {
+        if memory < 0 || memory >= core_memory_types.length() {
+          raise InvalidCoreMemoryIndex(memory)
+        }
+      } else if functype_async_lift_needs_memory(
+          { is_async: true, params: [], result, },
+          type_table,
+        ) {
+        raise MissingCanonOption("memory")
+      }
       for opt in opts {
         match opt {
           Async => raise CanonOptionNotAllowed("async")

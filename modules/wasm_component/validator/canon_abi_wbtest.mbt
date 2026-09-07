@@ -127,3 +127,28 @@ test "memory64 canonical realloc requires an i64 address signature" {
     ),
   )
 }
+
+///|
+test "task return validates descriptor memory and result type" {
+  let cases : Array[@component.Canon] = [
+    TaskReturn(Some(Prim(String)), []),
+    TaskReturn(None, [Memory(0)]),
+    TaskReturn(Some(TypeIdx(0)), []),
+  ]
+  for canon in cases {
+    let error = try {
+      validate_canon(canon, [], [], 0, [], [], [])
+      "accepted"
+    } catch {
+      error => error.to_string()
+    }
+    inspect(
+      error,
+      content=match canon {
+        TaskReturn(Some(Prim(String)), _) => "MissingCanonOption(\"memory\")"
+        TaskReturn(None, _) => "InvalidCoreMemoryIndex(0)"
+        _ => "InvalidTypeIndex(0)"
+      },
+    )
+  }
+}

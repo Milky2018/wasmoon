@@ -53,13 +53,24 @@ fn instantiate_canon_task_return(
     }
   }
   let resources = resolve_canon_resources(opts, state)
+  let mem_is_64 = match resources.mem_addr {
+    Some(addr) => {
+      let mem = store.get_mem(addr) catch {
+        error => raise CanonCallError(error.to_string())
+      }
+      mem.is_memory64()
+    }
+    None => false
+  }
   let core_params : Array[@types.ValueType] = match result {
     Some(vt) => {
-      let flat = core_types_for_valtype(vt, state.types, false) catch {
-        _ => []
-      }
+      let flat = core_types_for_valtype(vt, state.types, mem_is_64)
       if flat.length() > 16 {
-        [I32]
+        if mem_is_64 {
+          [I64]
+        } else {
+          [I32]
+        }
       } else {
         flat
       }
