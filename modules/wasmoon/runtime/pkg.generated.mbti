@@ -66,6 +66,7 @@ pub(all) suberror RuntimeError {
   InvalidConversion
   OutOfMemory
   Unreachable
+  UncaughtException
   CallStackExhausted
   UnknownImport(String, String)
   LinkError

@@ -127,6 +127,9 @@ fn call_core_func_outcome(
     ),
   ) catch {
     e => {
+      if e is UncaughtWasmException {
+        raise e
+      }
       match canon_suspend[0] {
         Some(_) => {
           canon_suspend[0] = None
@@ -248,3 +251,11 @@ fn call_core_func_guarded_outcome(
 }
 
 ///|
+
+///|
+fn component_core_error(error : @runtime.RuntimeError) -> ComponentRuntimeError {
+  match error {
+    UncaughtException => UncaughtWasmException
+    _ => CanonCallError(error.to_string())
+  }
+}

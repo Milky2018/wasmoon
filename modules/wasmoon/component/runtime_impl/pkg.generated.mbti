@@ -54,6 +54,7 @@ pub(all) suberror ComponentRuntimeError {
   MissingCanonRealloc
   UnsupportedStringEncoding
   CanonCallError(String)
+  UncaughtWasmException
   HostCallError(String)
   NativeEngineUnavailable(String)
   NativeCompilationFailed(String)

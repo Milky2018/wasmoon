@@ -88,6 +88,33 @@ fn transfer_results_if_needed(
 }
 
 ///|
+fn task_can_resume_without_external_progress(
+  async_state : AsyncState,
+  task_id : Int64,
+) -> Bool {
+  if async_state.yield_suspended.get(task_id) == Some(true) {
+    return true
+  }
+  for key in sync_waitables_for_task(async_state, task_id) {
+    if async_state.waitable_events.get(key) is Some(events) &&
+      !events.is_empty() {
+      return true
+    }
+  }
+  match async_state.sync_lower_states.get(task_id) {
+    Some(lower) => {
+      if lower.task.continuation[0] is None &&
+        lower.task.started[0] &&
+        decode_callback_code(lower.task.code[0]).tag == 1 {
+        return true
+      }
+      task_can_resume_without_external_progress(async_state, lower.task_id)
+    }
+    None => false
+  }
+}
+
+///|
 /// Drive one suspended core invocation on the component host event loop.
 ///
 /// This resumes the captured interpreter state; it never re-enters the
@@ -103,13 +130,23 @@ fn drive_core_to_completion(
       Returned(results) => return results
       Suspended(reason, continuation) => {
         match reason {
-          Yield =>
-            if !progress_one_subtask(async_state, store) {
+          Yield => {
+            let runnable = task_can_resume_without_external_progress(
+              async_state,
+              current_task_id(async_state),
+            )
+            let progressed = if runnable {
+              progress_one_subtask_nonblocking(async_state, store)
+            } else {
+              progress_one_subtask(async_state, store)
+            }
+            if !progressed && !runnable {
               continuation.cancel()
               raise CanonCallError(
                 "wasm trap: deadlock detected: event loop cannot make further progress",
               )
             }
+          }
           Wait(waitable_set) =>
             while !waitable_set_has_event(async_state, waitable_set) {
               if !progress_one_subtask(async_state, store) {
@@ -182,6 +219,7 @@ fn await_component_func(
   take_task_result(async_state, task_id) |> ignore
   let out = {
     errdefer {
+      abort_task_children(async_state, task_id)
       pop_task(async_state)
       drop_task_thread(async_state, task_id)
       remove_task_meta(async_state, task_id)
@@ -1161,20 +1199,17 @@ fn progress_one_subtask_nonblocking(
       continue
     }
     push_task(async_state, task_id, true)
-    let step = match st.driver {
-      CallbackLifted(t) =>
-        step_task_once(t, store, st.caller_table, async_state)
+    let step = {
+      errdefer pop_task(async_state)
+      match st.driver {
+        CallbackLifted(t) =>
+          step_task_once(t, store, st.caller_table, async_state)
+      }
     }
     pop_task(async_state)
     async_state.scheduler_cursor[0] = Some(task_id)
-    let releases_auto_backpressure = match st.driver {
-      CallbackLifted(task) =>
-        match task.func {
-          HostAsync(_, _, _) => true
-          Lifted(_, _, _, _, _, _, Some(_), _) => task.started[0]
-          _ => false
-        }
-    }
+    let CallbackLifted(task) = st.driver
+    let releases_auto_backpressure = callback_releases_backpressure(task)
     match step {
       Blocked =>
         if releases_auto_backpressure {
@@ -1375,6 +1410,7 @@ fn call_component_func(
     push_task(async_state, task_id, can_block)
     let out = {
       errdefer {
+        abort_task_children(async_state, task_id)
         pop_task(async_state)
         drop_task_thread(async_state, task_id)
         remove_task_meta(async_state, task_id)
@@ -1393,6 +1429,27 @@ fn call_component_func(
 
 ///|
 fn call_component_func_in_task(
+  func : ComponentFunc,
+  args : Array[ComponentValue],
+  store : @runtime.Store,
+  resource_table : ResourceTable,
+  async_state : AsyncState,
+) -> Array[ComponentValue] raise ComponentRuntimeError {
+  call_component_func_in_task_impl(
+    func, args, store, resource_table, async_state,
+  ) catch {
+    UncaughtWasmException => {
+      if func is Lifted(_, ty, _, _, _, _, None, false) && !ty.is_async {
+        raise CanonCallError("uncaught exception propagated out of component")
+      }
+      raise UncaughtWasmException
+    }
+    error => raise error
+  }
+}
+
+///|
+fn call_component_func_in_task_impl(
   func : ComponentFunc,
   args : Array[ComponentValue],
   store : @runtime.Store,
@@ -1564,6 +1621,7 @@ fn call_component_func_in_task(
         async_state.task_cancelled.remove(sync_task_id)
         remove_task_meta(async_state, sync_task_id)
       }
+      errdefer abort_task_children(async_state, sync_task_id)
       if func_type_needs_memory(func_type, types) && resources.mem_addr is None {
         raise MissingCanonMemory
       }

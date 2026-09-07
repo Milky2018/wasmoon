@@ -199,7 +199,13 @@ fn instantiate_canon_resource_drop(
                           [I32(real.rep)],
                         ) catch {
                           e => {
-                            trap_canon(e.to_string())
+                            trap_canon(
+                              if e is UncaughtException {
+                                "uncaught exception propagated out of component"
+                              } else {
+                                e.to_string()
+                              },
+                            )
                             []
                           }
                         })

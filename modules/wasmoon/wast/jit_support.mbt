@@ -1428,6 +1428,7 @@ fn runtime_error_to_trap_code(err : @runtime.RuntimeError) -> Int {
     OutOfBoundsMemoryAccess => 1
     CallStackExhausted => 2
     Unreachable => 3
+    UncaughtException => 12
     IndirectCallTypeMismatch => 4
     InvalidConversion => 5
     DivisionByZero => 6

@@ -125,8 +125,8 @@ void exception_throw_impl(jit_context_t *ctx, int32_t tag_addr,
     }
 
     // No handler - propagate as trap (uncaught exception)
-    // Use trap code 8 for uncaught exception
-    g_trap_code = 8;
+    // Keep uncaught exceptions distinct from malformed handler state.
+    g_trap_code = 12;
     ctx_gc_clear_root_scopes_internal(ctx);
     siglongjmp(g_trap_jmp_buf, 1);
 }
@@ -146,7 +146,7 @@ void exception_throw_ref_impl(jit_context_t *ctx, int64_t exnref) {
     }
 
     // No handler - uncaught exception trap
-    g_trap_code = 8;
+    g_trap_code = 12;
     ctx_gc_clear_root_scopes_internal(ctx);
     siglongjmp(g_trap_jmp_buf, 1);
 }
@@ -174,7 +174,7 @@ void exception_delegate_impl(jit_context_t *ctx, int32_t depth) {
     }
 
     // No handler at that depth - uncaught exception
-    g_trap_code = 8;
+    g_trap_code = 12;
     ctx_gc_clear_root_scopes_internal(ctx);
     siglongjmp(g_trap_jmp_buf, 1);
 }

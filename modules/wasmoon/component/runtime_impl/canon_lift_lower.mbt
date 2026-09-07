@@ -292,6 +292,7 @@ fn instantiate_canon_lower(
             e => {
               pop_task(async_state)
               canon_in_handleless_step[0] = false
+              abort_task_children(async_state, tmp_task_id)
               cleanup_task_id(tmp_task_id)
               trap_canon(canon_err_message(e))
               return finish_call([I32(0)])
@@ -474,6 +475,7 @@ fn instantiate_canon_lower(
           e => {
             pop_task(async_state)
             canon_in_handleless_step[0] = false
+            abort_task_children(async_state, tmp_task_id)
             cleanup_task_id(tmp_task_id)
             trap_canon(canon_err_message(e))
             return finish_call([I32(0)])

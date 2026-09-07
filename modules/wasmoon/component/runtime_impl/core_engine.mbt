@@ -503,6 +503,9 @@ fn resume_interpreter_continuation(
 ) -> CoreExecutionOutcome raise ComponentRuntimeError {
   let outcome = continuation.continue_execution() catch {
     error => {
+      if error is UncaughtException {
+        raise UncaughtWasmException
+      }
       let message = match canon_trap_message[0] {
         Some(message) => message
         None => error.to_string()
@@ -555,7 +558,7 @@ pub fn interpreter_core_execution_engine() -> CoreExecutionEngine {
         let results = @executor.call_func_by_index(
           store, instance, func_idx, args,
         ) catch {
-          error => raise CanonCallError(error.to_string())
+          error => raise component_core_error(error)
         }
         Returned(results)
       }
@@ -573,7 +576,7 @@ pub fn interpreter_core_execution_engine() -> CoreExecutionEngine {
             }
           },
         ) catch {
-          error => raise CanonCallError(error.to_string())
+          error => raise component_core_error(error)
         }
         interpreter_outcome(outcome)
       }

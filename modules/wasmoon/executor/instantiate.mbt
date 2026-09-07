@@ -13,6 +13,7 @@ fn normalize_runtime_error(e : Error) -> @runtime.RuntimeError {
     None =>
       match e {
         InvocationSignal::HostInvocation(err) => normalize_runtime_error(err)
+        ThrowException(_, _) => UncaughtException
         _ => Unreachable
       }
   }

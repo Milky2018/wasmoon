@@ -115,6 +115,7 @@ pub fn jit_trap_message(code : Int) -> String {
     9 => "out of memory"
     10 => "gc precise roots unavailable"
     11 => "invocation cancelled"
+    12 => "uncaught exception"
     _ => "unknown trap"
   }
 }

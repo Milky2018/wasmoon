@@ -103,13 +103,8 @@ fn ComponentInvocation::fail(
   self : ComponentInvocation,
   error : ComponentRuntimeError,
 ) -> Unit {
-  match self.task.continuation[0] {
-    Some(continuation) => {
-      self.task.continuation[0] = None
-      continuation.cancel()
-    }
-    None => ()
-  }
+  abort_task_children(self.async_state, self.task_id)
+  cancel_callback_task(self.task)
   self.cleanup_task()
   self.phase[0] = Failed(error)
 }
@@ -136,6 +131,7 @@ fn ComponentInvocation::finish_cancel(
     }
     None => ()
   }
+  abort_task_children(self.async_state, self.task_id)
   self.cleanup_task()
   self.phase[0] = WasCancelled
   match cancellation_error {

@@ -44,7 +44,9 @@ fn component_jit_error(
     Exit(code) => HostExit(code)
     Cancelled => Cancelled
     Trap(message) =>
-      if message.contains("unreachable") {
+      if message == "uncaught exception" {
+        UncaughtWasmException
+      } else if message.contains("unreachable") {
         CanonCallError("wasm trap: wasm `unreachable` instruction executed")
       } else {
         CanonCallError("wasm trap: \{message}")

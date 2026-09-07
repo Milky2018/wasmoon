@@ -16,6 +16,7 @@ pub(all) suberror RuntimeError {
   InvalidConversion
   OutOfMemory
   Unreachable
+  UncaughtException
   CallStackExhausted
   UnknownImport(String, String) // Import not found: (module_name, field_name)
   LinkError // Import type mismatch during linking
@@ -57,6 +58,7 @@ pub fn RuntimeError::from_error(error : Error) -> RuntimeError? {
     InvalidConversion => Some(InvalidConversion)
     OutOfMemory => Some(OutOfMemory)
     Unreachable => Some(Unreachable)
+    UncaughtException => Some(UncaughtException)
     CallStackExhausted => Some(CallStackExhausted)
     UnknownImport(_, _) as runtime_error => Some(runtime_error)
     LinkError => Some(LinkError)
@@ -92,6 +94,7 @@ pub impl Show for RuntimeError with fn output(self, logger) {
     InvalidConversion => "invalid conversion to integer"
     OutOfMemory => "out of memory"
     Unreachable => "unreachable"
+    UncaughtException => "uncaught exception"
     CallStackExhausted => "call stack exhausted"
     UnknownImport(mod_name, field_name) =>
       "unknown import: \{mod_name}.\{field_name}"

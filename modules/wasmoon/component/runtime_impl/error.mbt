@@ -27,6 +27,7 @@ pub(all) suberror ComponentRuntimeError {
   MissingCanonRealloc
   UnsupportedStringEncoding
   CanonCallError(String)
+  UncaughtWasmException
   HostCallError(String)
   /// Native component execution is unavailable on this host.
   NativeEngineUnavailable(String)
@@ -53,7 +54,13 @@ pub(all) suberror ComponentRuntimeError {
 /// Keep `Show` behavior while migrating from deprecated `derive(Show)` to
 /// `derive(Debug)`.
 pub impl Show for ComponentRuntimeError with fn output(self, logger) {
-  logger.write_string(@types.compact_show_repr(Repr(self).to_string()))
+  logger.write_string(
+    if self is UncaughtWasmException {
+      "thrown Wasm exception"
+    } else {
+      @types.compact_show_repr(Repr(self).to_string())
+    },
+  )
 }
 
 ///|
@@ -105,6 +112,7 @@ fn trap_canon(msg : String) -> Unit raise @runtime.RuntimeError {
 fn canon_err_message(e : ComponentRuntimeError) -> String {
   match e {
     CanonCallError(msg) => msg
+    UncaughtWasmException => "thrown Wasm exception"
     HostCallError(msg) => msg
     _ => e.to_string()
   }
