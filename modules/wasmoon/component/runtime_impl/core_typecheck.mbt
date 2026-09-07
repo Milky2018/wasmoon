@@ -48,6 +48,7 @@ priv enum CoreExternType {
   Table(@types.TableType)
   Memory(@types.MemoryType)
   Global(@types.GlobalType)
+  Tag(@types.FuncType)
 }
 
 ///|
@@ -69,18 +70,46 @@ fn bytes_sub(bytes : Bytes, start : Int, end : Int) -> Bytes {
 fn parse_core_valtype(
   reader : Reader,
 ) -> @types.ValueType raise ComponentRuntimeError {
-  let b = reader.read_u8() catch {
-    e => raise ComponentParseError(e.to_string())
-  }
-  match b {
+  let op = reader.read_u8()
+  match op {
     0x7f => I32
     0x7e => I64
     0x7d => F32
     0x7c => F64
     0x7b => V128
-    0x70 => FuncRef
-    0x6f => ExternRef
-    _ => raise ImportTypeMismatch("unsupported core valtype \{b}")
+    _ => {
+      let heap = if op == 0x63 || op == 0x64 {
+        let mut heap = 0L
+        let mut shift = 0
+        while true {
+          let byte = reader.read_u8()
+          let payload = byte & 0x7f
+          if shift == 28 &&
+            ((byte & 0x80) != 0 || (payload > 0x0f && payload < 0x70)) {
+            raise ImportTypeMismatch("heap type LEB128 out of range")
+          }
+          heap = heap | (payload.to_int64() << shift)
+          shift += 7
+          if (byte & 0x80) == 0 {
+            if (byte & 0x40) != 0 {
+              heap = heap | (-1L << shift)
+            }
+            break
+          }
+        }
+        heap
+      } else {
+        (op - 128).to_int64()
+      }
+      if heap >= 0L || heap < -64L {
+        raise ImportTypeMismatch("unsupported concrete core heap type: \{heap}")
+      }
+      match
+        @types.ValueType::from_abstract_heap_type(heap.to_int(), op != 0x64) {
+        Some(value) => value
+        None => raise ImportTypeMismatch("unsupported core heap type: \{heap}")
+      }
+    }
   }
 }
 
@@ -170,6 +199,18 @@ fn parse_core_extern_type_in_moduletype(
       }
       Global({ value_type: vt, mutable: mutability != 0, })
     }
+    0x04 => {
+      if reader.read_u8() != 0 {
+        raise ImportTypeMismatch("invalid tag attribute")
+      }
+      let idx = reader.read_leb_u32()
+      if idx < 0 ||
+        idx >= func_types.length() ||
+        !func_types[idx].results.is_empty() {
+        raise ImportTypeMismatch("invalid module type tag index")
+      }
+      Tag(func_types[idx])
+    }
     _ => raise ImportTypeMismatch("unsupported module type extern kind")
   }
 }
@@ -258,6 +299,7 @@ fn core_extern_kind_name(ty : CoreExternType) -> String {
     Table(_) => "table"
     Memory(_) => "memory"
     Global(_) => "global"
+    Tag(_) => "tag"
   }
 }
 
@@ -383,7 +425,22 @@ fn module_export_type(m : @types.Module, name : String) -> CoreExternType? {
           }
           return Some(Global(m.globals[defined_idx].type_))
         }
-        _ => return None
+        Tag(tag_idx) => {
+          let mut imported = 0
+          for imp in m.imports {
+            if imp.desc is Tag(type_idx) {
+              if imported == tag_idx {
+                return m.func_type_at(type_idx).map(ft => Tag(ft))
+              }
+              imported += 1
+            }
+          }
+          let local_idx = tag_idx - imported
+          if local_idx < 0 || local_idx >= m.tags.length() {
+            return None
+          }
+          return m.func_type_at(m.tags[local_idx].type_idx).map(ft => Tag(ft))
+        }
       }
     }
   }
@@ -403,7 +460,7 @@ fn module_import_type(
         Table(tt) => return Some(Table(tt))
         Memory(mt) => return Some(Memory(mt))
         Global(gt) => return Some(Global(gt))
-        _ => return None
+        Tag(type_idx) => return m.func_type_at(type_idx).map(ft => Tag(ft))
       }
     }
   }
@@ -473,7 +530,7 @@ fn check_core_module_against_type(
             )
         }
         match (expected, actual_ty) {
-          (Func(ft1), Func(ft2)) =>
+          (Func(ft1), Func(ft2)) | (Tag(ft1), Tag(ft2)) =>
             if ft1 != ft2 {
               raise ImportTypeMismatch(
                 "module import `\{key}` has the wrong type",
@@ -515,7 +572,7 @@ fn check_core_module_against_type(
       None => raise ImportTypeMismatch("module export `\{name}` not defined")
       Some(actual_ty) =>
         match (expected, actual_ty) {
-          (Func(ft1), Func(ft2)) =>
+          (Func(ft1), Func(ft2)) | (Tag(ft1), Tag(ft2)) =>
             if ft1 != ft2 {
               raise ImportTypeMismatch(
                 "export `\{name}` has the wrong type (expected type `\{fmt_functype(ft1)}`, found type `\{fmt_functype(ft2)}`)",

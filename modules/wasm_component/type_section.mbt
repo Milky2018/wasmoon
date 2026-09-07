@@ -319,11 +319,19 @@ fn skip_core_functype_inline(reader : Reader) -> Unit raise ComponentParseError 
 fn skip_core_functype_body(reader : Reader) -> Unit raise ComponentParseError {
   let nparams = reader.read_leb_u32()
   for _i in 0..<nparams {
-    reader.read_u8() |> ignore
+    skip_core_valtype(reader)
   }
   let nresults = reader.read_leb_u32()
   for _i in 0..<nresults {
-    reader.read_u8() |> ignore
+    skip_core_valtype(reader)
+  }
+}
+
+///|
+fn skip_core_valtype(reader : Reader) -> Unit raise ComponentParseError {
+  let opcode = reader.read_u8()
+  if opcode == 0x63 || opcode == 0x64 {
+    reader.read_sleb_i32() |> ignore
   }
 }
 
@@ -335,15 +343,20 @@ fn skip_core_extern_type(
   match kind {
     0x00 => reader.read_leb_u32() |> ignore // func type index
     0x01 => {
-      reader.read_u8() |> ignore // elem/ref type
+      skip_core_valtype(reader)
       skip_limits(reader)
     }
     0x02 => skip_limits(reader)
     0x03 => {
-      reader.read_u8() |> ignore // valtype
+      skip_core_valtype(reader)
       reader.read_u8() |> ignore // mut
     }
-    0x04 => reader.read_leb_u32() |> ignore // tag type index
+    0x04 => {
+      if reader.read_u8() != 0x00 {
+        raise InvalidTypeSection
+      }
+      reader.read_leb_u32() |> ignore // tag type index
+    }
     _ => raise InvalidTypeSection
   }
 }

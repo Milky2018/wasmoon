@@ -938,6 +938,7 @@ pub(all) enum ValueType {
   NullExternRef
 } derive(Eq, @debug.Debug)
 pub fn ValueType::equal(Self, Self) -> Bool
+pub fn ValueType::from_abstract_heap_type(Int, Bool) -> Self?
 pub fn ValueType::is_nullable(Self) -> Bool
 pub fn ValueType::not_equal(Self, Self) -> Bool
 pub fn ValueType::output(Self, &Logger) -> Unit

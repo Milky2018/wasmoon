@@ -37,29 +37,11 @@ fn Parser::resolve_heap_type_as_ref_value_type(
     }
   }
 
-  fn resolve_abstract_heap(
-    heap_type : Int,
-    nullable : Bool,
-  ) -> @types.ValueType raise ParserError {
-    match heap_type {
-      -16 => if nullable { FuncRef } else { RefFunc }
-      -17 => if nullable { ExternRef } else { RefExtern }
-      -18 => if nullable { AnyRef } else { RefAny }
-      -19 => if nullable { RefNullEq } else { RefEq }
-      -20 => if nullable { RefNullI31 } else { RefI31 }
-      -21 => if nullable { StructRef } else { RefStructAbs }
-      -22 => if nullable { ArrayRef } else { RefArrayAbs }
-      -23 => ExnRef
-      -15 => if nullable { NullRef } else { RefNone }
-      -14 => NullExternRef
-      -13 => NullFuncRef
-      -12 => NullExnRef
-      _ => raise ParseError("invalid heap type")
-    }
-  }
-
   if heap_type < 0 {
-    resolve_abstract_heap(heap_type, nullable)
+    match @types.ValueType::from_abstract_heap_type(heap_type, nullable) {
+      Some(value) => value
+      None => raise ParseError("invalid heap type")
+    }
   } else {
     resolve_typed_ref(heap_type, nullable)
   }

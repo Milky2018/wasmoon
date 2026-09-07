@@ -64,3 +64,52 @@ test "component binary preamble requires version 0x0d and layer 1" {
     ),
   )
 }
+
+///|
+test "core module types consume complete tag and typed-reference descriptors" {
+  // Encoded by wasm-tools 1.254.0 from instance types exporting core modules.
+  for
+    payload in [
+      Bytes::from_array([
+        0x01, 0x42, 0x02, 0x00, 0x50, 0x02, 0x01, 0x60, 0x01, 0x7f, 0x00, 0x03, 0x01,
+        0x74, 0x04, 0x00, 0x00, 0x04, 0x00, 0x01, 0x6d, 0x00, 0x11, 0x00,
+      ]),
+      Bytes::from_array([
+        0x01, 0x42, 0x02, 0x00, 0x50, 0x01, 0x00, 0x00, 0x01, 0x74, 0x01, 0x64, 0x6c,
+        0x00, 0x01, 0x04, 0x00, 0x01, 0x6d, 0x00, 0x11, 0x00,
+      ]),
+    ] {
+    inspect(parse_type_section(payload).length(), content="1")
+  }
+}
+
+///|
+test "canonical context supports exactly two slots" {
+  debug_inspect(
+    parse_canon_section(
+      Bytes::from_array([
+        0x04, 0x0a, 0x7f, 0x00, 0x0b, 0x7f, 0x00, 0x0a, 0x7f, 0x01, 0x0b, 0x7f, 0x01,
+      ]),
+    ),
+    content=(
+      #|[
+      #|  ContextGet(I32, 0),
+      #|  ContextSet(I32, 0),
+      #|  ContextGet(I32, 1),
+      #|  ContextSet(I32, 1),
+      #|]
+    ),
+  )
+  for opcode in [0x0a, 0x0b] {
+    let accepted = try {
+      parse_canon_section(
+        Bytes::from_array([0x01, opcode.to_byte(), 0x7f, 0x02]),
+      )
+      |> ignore
+      true
+    } catch {
+      _ => false
+    }
+    inspect(accepted, content="false")
+  }
+}

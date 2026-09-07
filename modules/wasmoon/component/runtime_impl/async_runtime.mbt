@@ -1528,6 +1528,23 @@ fn call_component_func_in_task(
         }
         None => ()
       }
+      // A synchronous export still creates a fresh logical task and thread.
+      // Its context slots must not alias the caller's or a previous invocation's.
+      let caller_task_id = current_task_id(async_state)
+      let sync_task_id = alloc_task_id(async_state)
+      init_task_meta(async_state, sync_task_id, callee_table.id, caller_task_id)
+      push_task(async_state, sync_task_id, false)
+      defer {
+        pop_task(async_state)
+        drop_task_thread(async_state, sync_task_id)
+        async_state.task_contexts.remove(sync_task_id)
+        async_state.task_results.remove(sync_task_id)
+        async_state.task_result_owner.remove(sync_task_id)
+        async_state.task_returned.remove(sync_task_id)
+        async_state.task_self_cancelled.remove(sync_task_id)
+        async_state.task_cancelled.remove(sync_task_id)
+        remove_task_meta(async_state, sync_task_id)
+      }
       if func_type_needs_memory(func_type, types) && resources.mem_addr is None {
         raise MissingCanonMemory
       }
