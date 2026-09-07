@@ -88,6 +88,7 @@ pub(all) struct AsyncState {
   task_results : Map[Int64, Array[ComponentValue]]
   task_result_owner : Map[Int64, Int]
   task_return_contracts : Map[Int64, TaskReturnContract]
+  core_start_tasks : Map[Int64, Unit]
   task_returned : Map[Int64, Bool]
   task_self_cancelled : Map[Int64, Bool]
   task_cancelled : Map[Int64, Bool]

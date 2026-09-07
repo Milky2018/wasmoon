@@ -357,6 +357,7 @@ pub(all) struct AsyncState {
   // For `canon task.return`, this is the component instance where the intrinsic lives.
   task_result_owner : Map[Int64, Int]
   task_return_contracts : Map[Int64, TaskReturnContract]
+  core_start_tasks : Map[Int64, Unit]
   task_returned : Map[Int64, Bool]
   // Set only by `canon task.cancel` (distinct from external cancellation requests).
   task_self_cancelled : Map[Int64, Bool]
@@ -636,6 +637,7 @@ pub fn AsyncState::AsyncState(
     task_results: Map([]),
     task_result_owner: Map([]),
     task_return_contracts: Map([]),
+    core_start_tasks: Map([]),
     task_returned: Map([]),
     task_self_cancelled: Map([]),
     task_cancelled: Map([]),

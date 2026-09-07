@@ -128,6 +128,7 @@ fn run_component_sections(
               // canonical host imports. Give start its own task-scoped borrow,
               // cancellation, and continuation state.
               let inst_task_id = alloc_task_id(async_state)
+              async_state.core_start_tasks.set(inst_task_id, ())
               // Core start runs during instantiation and must not block.
               push_task(async_state, inst_task_id, false)
               let instance = @executor.instantiate_module_with_imports(
@@ -135,6 +136,7 @@ fn run_component_sections(
               ) catch {
                 e => {
                   pop_task(async_state)
+                  async_state.core_start_tasks.remove(inst_task_id)
                   drop_task_thread(async_state, inst_task_id)
                   match canon_trap_message[0] {
                     Some(msg) => raise CoreModuleInstantiateError(msg)
@@ -143,6 +145,7 @@ fn run_component_sections(
                 }
               }
               pop_task(async_state)
+              async_state.core_start_tasks.remove(inst_task_id)
               drop_task_thread(async_state, inst_task_id)
               linker.core_linker.register(module_name, instance) catch {
                 error => raise CoreModuleInstantiateError(error.to_string())

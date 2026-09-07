@@ -615,6 +615,11 @@ fn instantiate_canon_lower(
         state.resource_table,
       )
       let outer_task_id = current_task_id(async_state)
+      if func_type.is_async &&
+        async_state.core_start_tasks.get(outer_task_id) is Some(_) {
+        trap_canon("cannot block a synchronous task before returning")
+        return []
+      }
       // A resumed lower continues the existing task. Its handles have already
       // crossed the component boundary, so do not lift the original core args twice.
       let component_args = if func_type.is_async &&
@@ -713,110 +718,171 @@ fn instantiate_canon_lower(
 
         // Drive at most one step, then cooperatively suspend.
         let can_block = async_state.task_can_block[0]
-        if !can_block && !canon_in_prerun[0] {
-          trap_canon("cannot block a synchronous task before returning")
-          ([] : Array[ComponentValue])
-        } else {
-          let callee_instance_id = match st.task.func {
-            Host(_, _, _) => state.resource_table.id
-            HostAsync(_, _, _) => state.resource_table.id
-            Lifted(_, _, _, _, callee_table, _, _, _) => callee_table.id
+        let callee_instance_id = match st.task.func {
+          Host(_, _, _) => state.resource_table.id
+          HostAsync(_, _, _) => state.resource_table.id
+          Lifted(_, _, _, _, callee_table, _, _, _) => callee_table.id
+        }
+        push_task(async_state, st.task_id, can_block)
+        let step = step_task_once(
+          st.task,
+          store,
+          state.resource_table,
+          async_state,
+        ) catch {
+          e => {
+            pop_task(async_state)
+            trap_canon(canon_err_message(e))
+            return []
           }
-          push_task(async_state, st.task_id, can_block)
-          let step = step_task_once(
-            st.task,
-            store,
-            state.resource_table,
-            async_state,
-          ) catch {
+        }
+        pop_task(async_state)
+        let is_callback_task = match st.task.func {
+          Lifted(_, _ft, _res, _tys, _tbl, _may_enter, Some(_cb), _async_abi) =>
+            true
+          _ => false
+        }
+        // Some callback-style async functions (notably stream producers) publish their
+        // results via `canon task.return` and then continue running to drive the stream.
+        // Sync-lowering must return the published result immediately and keep the task
+        // alive as a detached background subtask, otherwise nested components can deadlock
+        // (component-spec/async/zero-length.wast).
+        if is_callback_task &&
+          step != Done &&
+          async_state.task_returned.get(st.task_id) is Some(true) &&
+          async_state.task_results.get(st.task_id) is Some(vals) {
+          // Promote the task to a detached background subtask so the event loop can
+          // continue driving it after this sync-lowered call returns.
+          // Prefer the owner recorded by `canon task.return` if present. This avoids
+          // mis-attributing stream/future handles produced by nested components.
+          let result_owner = match
+            async_state.task_result_owner.get(st.task_id) {
+            Some(o) => o
+            None => callee_instance_id
+          }
+          let vals0 = try {
+            match func_type.result {
+              Some(rty) =>
+                if vals.length() > 0 {
+                  [
+                    transfer_stream_future_value(
+                      rty,
+                      vals[0],
+                      func_types,
+                      async_state,
+                      result_owner,
+                      state.resource_table.id,
+                    ),
+                  ]
+                } else {
+                  vals
+                }
+              None => vals
+            }
+          } catch {
             e => {
-              pop_task(async_state)
               trap_canon(canon_err_message(e))
-              return []
+              return ([] : Array[@types.Value])
             }
           }
-          pop_task(async_state)
-          let is_callback_task = match st.task.func {
-            Lifted(_, _ft, _res, _tys, _tbl, _may_enter, Some(_cb), _async_abi) =>
-              true
-            _ => false
+          async_state.subtasks.set(st.task_id, {
+            // Detached background task: no guest-visible waitable handle.
+            id: 0,
+            detached: true,
+            phase: [Started],
+            caller_table: state.resource_table,
+            callee_instance_id,
+            bp_key: 0,
+            retptr: 0,
+            mem_addr: resources.mem_addr,
+            result_ty: None,
+            types: func_types,
+            resources,
+            driver: CallbackLifted(st.task),
+          })
+          async_state.sync_lower_states.remove(outer_task_id)
+
+          let mut out_ptr : Int? = None
+          if func_type.result is Some(rty) {
+            let flat = core_types_for_valtype(rty, func_types, mem_is_64) catch {
+              _ => []
+            }
+            if flat.length() > 1 {
+              if args.length() == 0 {
+                trap_canon("missing retptr")
+              } else {
+                out_ptr = match args[args.length() - 1] {
+                  I32(n) => Some(n)
+                  I64(n) => Some(n.to_int())
+                  _ => None
+                }
+              }
+            }
           }
-          // Some callback-style async functions (notably stream producers) publish their
-          // results via `canon task.return` and then continue running to drive the stream.
-          // Sync-lowering must return the published result immediately and keep the task
-          // alive as a detached background subtask, otherwise nested components can deadlock
-          // (component-spec/async/zero-length.wast).
-          if is_callback_task &&
-            step != Done &&
-            async_state.task_returned.get(st.task_id) is Some(true) &&
-            async_state.task_results.get(st.task_id) is Some(vals) {
-            // Promote the task to a detached background subtask so the event loop can
-            // continue driving it after this sync-lowered call returns.
-            // Prefer the owner recorded by `canon task.return` if present. This avoids
-            // mis-attributing stream/future handles produced by nested components.
+          let out = component_results_to_core(
+            vals0, func_type, func_types, resources, store, out_ptr,
+          ) catch {
+            e => {
+              trap_canon(canon_err_message(e))
+              ([] : Array[@types.Value])
+            }
+          }
+          return out
+        }
+        match step {
+          Done => {
+            async_state.sync_lower_states.remove(outer_task_id)
+            let vals = match take_task_result(async_state, st.task_id) {
+              Some(v) => v
+              None => []
+            }
+            // Sync-lowering crosses a component boundary (core -> component -> core). If the
+            // component returned any stream/future readable handles, move them into the caller's
+            // handle space before exposing the core i32 indices.
+            let callee_instance_id = match st.task.func {
+              Host(_, _, _) => state.resource_table.id
+              HostAsync(_, _, _) => state.resource_table.id
+              Lifted(_, _, _, _, callee_table, _, _, _) => callee_table.id
+            }
             let result_owner = match
               async_state.task_result_owner.get(st.task_id) {
               Some(o) => o
               None => callee_instance_id
             }
-            let vals0 = try {
-              match func_type.result {
-                Some(rty) =>
-                  if vals.length() > 0 {
-                    [
-                      transfer_stream_future_value(
-                        rty,
-                        vals[0],
-                        func_types,
-                        async_state,
-                        result_owner,
-                        state.resource_table.id,
-                      ),
-                    ]
-                  } else {
-                    vals
-                  }
-                None => vals
-              }
-            } catch {
+            let vals0 = transfer_results_if_needed(
+              vals,
+              func_type.result,
+              func_types,
+              async_state,
+              result_owner,
+              state.resource_table.id,
+            ) catch {
               e => {
                 trap_canon(canon_err_message(e))
                 return ([] : Array[@types.Value])
               }
             }
-            async_state.subtasks.set(st.task_id, {
-              // Detached background task: no guest-visible waitable handle.
-              id: 0,
-              detached: true,
-              phase: [Started],
-              caller_table: state.resource_table,
-              callee_instance_id,
-              bp_key: 0,
-              retptr: 0,
-              mem_addr: resources.mem_addr,
-              result_ty: None,
-              types: func_types,
-              resources,
-              driver: CallbackLifted(st.task),
-            })
-            async_state.sync_lower_states.remove(outer_task_id)
-
+            cleanup_sync_lower_task(st.task_id)
             let mut out_ptr : Int? = None
-            if func_type.result is Some(rty) {
-              let flat = core_types_for_valtype(rty, func_types, mem_is_64) catch {
-                _ => []
-              }
-              if flat.length() > 1 {
-                if args.length() == 0 {
-                  trap_canon("missing retptr")
-                } else {
-                  out_ptr = match args[args.length() - 1] {
-                    I32(n) => Some(n)
-                    I64(n) => Some(n.to_int())
-                    _ => None
+            match func_type.result {
+              Some(rty) => {
+                let flat = core_types_for_valtype(rty, func_types, mem_is_64) catch {
+                  _ => []
+                }
+                if flat.length() > 1 {
+                  // Indirect results use the last core argument as retptr.
+                  if args.length() == 0 {
+                    trap_canon("missing retptr")
+                  } else {
+                    out_ptr = match args[args.length() - 1] {
+                      I32(n) => Some(n)
+                      I64(n) => Some(n.to_int())
+                      _ => None
+                    }
                   }
                 }
               }
+              None => ()
             }
             let out = component_results_to_core(
               vals0, func_type, func_types, resources, store, out_ptr,
@@ -828,85 +894,39 @@ fn instantiate_canon_lower(
             }
             return out
           }
-          match step {
-            Done => {
+          _ =>
+            if canon_in_prerun[0] {
               async_state.sync_lower_states.remove(outer_task_id)
-              let vals = match take_task_result(async_state, st.task_id) {
-                Some(v) => v
-                None => []
-              }
-              // Sync-lowering crosses a component boundary (core -> component -> core). If the
-              // component returned any stream/future readable handles, move them into the caller's
-              // handle space before exposing the core i32 indices.
-              let callee_instance_id = match st.task.func {
-                Host(_, _, _) => state.resource_table.id
-                HostAsync(_, _, _) => state.resource_table.id
-                Lifted(_, _, _, _, callee_table, _, _, _) => callee_table.id
-              }
-              let result_owner = match
-                async_state.task_result_owner.get(st.task_id) {
-                Some(o) => o
-                None => callee_instance_id
-              }
-              let vals0 = transfer_results_if_needed(
-                vals,
-                func_type.result,
-                func_types,
-                async_state,
-                result_owner,
-                state.resource_table.id,
-              ) catch {
-                e => {
-                  trap_canon(canon_err_message(e))
-                  return ([] : Array[@types.Value])
-                }
-              }
               cleanup_sync_lower_task(st.task_id)
-              let mut out_ptr : Int? = None
-              match func_type.result {
-                Some(rty) => {
-                  let flat = core_types_for_valtype(rty, func_types, mem_is_64) catch {
-                    _ => []
-                  }
-                  if flat.length() > 1 {
-                    // Indirect results use the last core argument as retptr.
-                    if args.length() == 0 {
-                      trap_canon("missing retptr")
-                    } else {
-                      out_ptr = match args[args.length() - 1] {
-                        I32(n) => Some(n)
-                        I64(n) => Some(n.to_int())
-                        _ => None
-                      }
-                    }
-                  }
-                }
-                None => ()
+              trap_canon("prerun blocked")
+              ([] : Array[ComponentValue])
+            } else if !can_block {
+              if st.task.continuation[0] is Some(continuation) {
+                st.task.continuation[0] = None
+                continuation.cancel()
               }
-              let out = component_results_to_core(
-                vals0, func_type, func_types, resources, store, out_ptr,
-              ) catch {
-                e => {
-                  trap_canon(canon_err_message(e))
-                  ([] : Array[@types.Value])
+              if st.task.host_future[0] is Some(future) {
+                st.task.host_future[0] = None
+                (future.cancel)() catch {
+                  _ => ()
                 }
               }
-              return out
+              if st.task.waiting_set[0] is Some(ws) &&
+                async_state.waitable_sets.get(ws) is Some(set) {
+                set.waiters[0] -= 1
+                st.task.waiting_set[0] = None
+              }
+              async_state.sync_lower_states.remove(outer_task_id)
+              cleanup_sync_lower_task(st.task_id)
+              trap_canon("cannot block a synchronous task before returning")
+              ([] : Array[ComponentValue])
+            } else {
+              match st.task.waiting_set[0] {
+                Some(ws) => canon_suspend[0] = Some(Wait(ws))
+                None => canon_suspend[0] = Some(Yield)
+              }
+              raise Unreachable
             }
-            _ =>
-              if canon_in_prerun[0] {
-                async_state.sync_lower_states.remove(outer_task_id)
-                cleanup_sync_lower_task(st.task_id)
-                trap_canon("prerun blocked")
-                ([] : Array[ComponentValue])
-              } else {
-                match st.task.waiting_set[0] {
-                  Some(ws) => canon_suspend[0] = Some(Wait(ws))
-                  None => canon_suspend[0] = Some(Yield)
-                }
-                raise Unreachable
-              }
-          }
         }
       } else {
         call_component_func(
