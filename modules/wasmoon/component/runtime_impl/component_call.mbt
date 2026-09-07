@@ -174,9 +174,17 @@ fn ComponentInvocation::drive_once(
     pop_task(self.async_state)
     self.finish_cancel_during_unwind()
   })
-  let step_result : Result[TaskStep, ComponentRuntimeError] = try
-    step_task_once(self.task, self.store, self.caller_table, self.async_state)
-  catch {
+  let step_result : Result[TaskStep, ComponentRuntimeError] = try {
+    if !self.task.started[0] &&
+      self.task.continuation[0] is None &&
+      self.task.func is Lifted(_, ty, _, _, table, _, _, _) &&
+      ty.is_async &&
+      backpressure_value_for_instance(self.async_state, table.id) > 0 {
+      Blocked
+    } else {
+      step_task_once(self.task, self.store, self.caller_table, self.async_state)
+    }
+  } catch {
     error => Err(error)
   } noraise {
     step => Ok(step)
@@ -220,8 +228,7 @@ fn ComponentInvocation::drive_once(
         }
       }
     }
-    Progressed => DriveProgressed
-    Blocked => {
+    Progressed | Blocked => {
       let progress_cleanup_armed = [true]
       errdefer (if progress_cleanup_armed[0] {
         self.finish_cancel_during_unwind()
@@ -240,7 +247,7 @@ fn ComponentInvocation::drive_once(
           let host_progressed = poll_host_event(self.async_state, self.store)
           if self.cancel_requested[0] {
             DriveBlocked
-          } else if subtask_progressed || host_progressed {
+          } else if step == Progressed || subtask_progressed || host_progressed {
             DriveProgressed
           } else {
             DriveBlocked
@@ -366,18 +373,38 @@ pub fn ComponentInstance::start_exported_func(
     Some(Func(func)) => func
     Some(_) | None => raise UnknownExport(name)
   }
-  let (func_type, _types, callee_instance_id) = component_invocation_contract(
+  let (func_type, _, _) = component_invocation_contract(func)
+  start_component_invocation(
     func,
+    args,
+    self.store,
+    self.resource_table,
+    self.async_state,
+    0L,
+    func_type.is_async,
   )
-  let task_id = alloc_task_id(self.async_state)
-  init_task_meta(self.async_state, task_id, callee_instance_id, 0L)
-  take_task_result(self.async_state, task_id) |> ignore
+}
+
+///|
+fn start_component_invocation(
+  func : ComponentFunc,
+  args : Array[ComponentValue],
+  store : @runtime.Store,
+  caller_table : ResourceTable,
+  async_state : AsyncState,
+  caller_task_id : Int64,
+  can_block : Bool,
+) -> ComponentInvocation {
+  let (_, _, callee_instance_id) = component_invocation_contract(func)
+  let task_id = alloc_task_id(async_state)
+  init_task_meta(async_state, task_id, callee_instance_id, caller_task_id)
+  take_task_result(async_state, task_id) |> ignore
   {
     task_id,
     task: {
       func,
       args: args.copy(),
-      args_owner_component_id: [self.resource_table.id],
+      args_owner_component_id: [caller_table.id],
       started: [false],
       main_finished: [false],
       code: [0],
@@ -386,10 +413,10 @@ pub fn ComponentInstance::start_exported_func(
       cancelled: [false],
       continuation: [None],
     },
-    store: self.store,
-    caller_table: self.resource_table,
-    async_state: self.async_state,
-    can_block: func_type.is_async,
+    store,
+    caller_table,
+    async_state,
+    can_block,
     phase: [Running],
     driving: [false],
     cancel_requested: [false],

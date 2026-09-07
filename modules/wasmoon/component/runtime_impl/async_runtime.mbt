@@ -212,325 +212,9 @@ fn await_component_func(
     ) {
     raise CanonCallError("wasm trap: cannot enter component instance")
   }
-  let task_id = alloc_task_id(async_state)
-  init_task_meta(async_state, task_id, callee_instance_id, caller_task_id)
-  install_task_return_contract(async_state, task_id, func)
-  push_task(async_state, task_id, can_block)
-  take_task_result(async_state, task_id) |> ignore
-  let out = {
-    errdefer {
-      abort_task_children(async_state, task_id)
-      pop_task(async_state)
-      drop_task_thread(async_state, task_id)
-      remove_task_meta(async_state, task_id)
-    }
-    match func {
-      Host(_ft, _types, host) => host(args, caller_table)
-      HostAsync(_ft, _types, start) => {
-        let future = start(args, caller_table)
-        let result : Ref[Array[ComponentValue]?] = Ref(None)
-        while result.val is None {
-          match (future.poll)() {
-            Ready(values) => result.val = Some(values)
-            Pending =>
-              if !progress_one_subtask(async_state, store) {
-                match async_state.host_event_loop.val {
-                  Some(event_loop) =>
-                    if !(event_loop.wait)() {
-                      raise CanonCallError(
-                        "wasm trap: async host event loop cannot make further progress",
-                      )
-                    }
-                  None =>
-                    raise CanonCallError(
-                      "wasm trap: async host function has no event loop",
-                    )
-                }
-              }
-          }
-        }
-        match result.val {
-          Some(values) => values
-          None =>
-            raise HostCallError("asynchronous host function did not finish")
-        }
-      }
-      Lifted(
-        core_func,
-        func_type,
-        resources,
-        types,
-        callee_table,
-        may_enter,
-        cb_opt,
-        async_abi
-      ) => {
-        if func_type_needs_memory(func_type, types) &&
-          resources.mem_addr is None {
-          raise MissingCanonMemory
-        }
-        let (xargs, direct_borrow_lends) = transfer_args_if_needed(
-          args,
-          func_type,
-          types,
-          async_state,
-          caller_table.id,
-          callee_table.id,
-        )
-        defer release_direct_borrow_lends(direct_borrow_lends)
-        let core_args = component_args_to_core(
-          xargs, func_type, types, resources, store, callee_table, callee_table,
-        )
-        match cb_opt {
-          None =>
-            if async_abi {
-              let _core_results = drive_core_to_completion(
-                async_state,
-                store,
-                call_core_func_guarded_outcome(
-                  store,
-                  may_enter,
-                  core_func,
-                  core_args,
-                  Stackful,
-                ),
-              )
-              let vals = take_required_task_result(
-                async_state,
-                store,
-                callee_table.id,
-                task_id,
-              )
-              match func_type.result {
-                Some(result_type) =>
-                  if vals.length() > 0 {
-                    validate_lifted_stream_future(
-                      result_type,
-                      vals[0],
-                      types,
-                      async_state,
-                      callee_table.id,
-                    )
-                  }
-                None => ()
-              }
-              let out_vals = transfer_results_if_needed(
-                vals,
-                func_type.result,
-                types,
-                async_state,
-                callee_table.id,
-                caller_table.id,
-              )
-              async_state.task_returned.set(task_id, true)
-              set_task_result(async_state, task_id, caller_table.id, out_vals)
-              pop_task(async_state)
-              drop_task_thread(async_state, task_id)
-              remove_task_meta(async_state, task_id)
-              return out_vals
-            } else {
-              // Sync-style async: the core function returns results directly (no task.return).
-              let core_results = drive_core_to_completion(
-                async_state,
-                store,
-                call_core_func_guarded_outcome(
-                  store,
-                  may_enter,
-                  core_func,
-                  core_args,
-                  Stackful,
-                ),
-              )
-              let vals = core_results_to_component(
-                core_results, func_type, types, resources, store, callee_table,
-              )
-              match func_type.result {
-                Some(rty) =>
-                  if vals.length() > 0 {
-                    validate_lifted_stream_future(
-                      rty,
-                      vals[0],
-                      types,
-                      async_state,
-                      callee_table.id,
-                    )
-                  } else {
-                    ()
-                  }
-                None => ()
-              }
-              run_post_return(resources, core_results, may_enter, store)
-              let out_vals = transfer_results_if_needed(
-                vals,
-                func_type.result,
-                types,
-                async_state,
-                callee_table.id,
-                caller_table.id,
-              )
-              // Mirror task.return bookkeeping so other parts can uniformly query results.
-              async_state.task_returned.set(task_id, true)
-              set_task_result(async_state, task_id, caller_table.id, out_vals)
-              out_vals
-            }
-          Some(cb) => {
-            let core_results = drive_core_to_completion(
-              async_state,
-              store,
-              call_core_func_guarded_outcome(
-                store,
-                may_enter,
-                core_func,
-                core_args,
-                CallbackStep,
-              ),
-            )
-            let mut code = match core_results {
-              [I32(n)] => n
-              _ => raise CanonCallError("type mismatch")
-            }
-            while true {
-              let u = code.reinterpret_as_uint()
-              let tag = (u & 0xFU).reinterpret_as_int()
-              let payload = (u >> 4).reinterpret_as_int()
-              if tag == 0 {
-                break
-              } else if tag == 1 {
-                // YIELD
-                progress_one_subtask(async_state, store) |> ignore
-                async_state.in_async_callback[0] = true
-                preset_canon_debug_message("async.callback.yield(ev=NONE)")
-                let r = {
-                  errdefer {
-                    async_state.in_async_callback[0] = false
-                  }
-                  drive_core_to_completion(
-                    async_state,
-                    store,
-                    call_core_func_guarded_outcome(
-                      store,
-                      may_enter,
-                      cb,
-                      [I32(0), I32(0), I32(0)],
-                      CallbackStep,
-                    ),
-                  )
-                }
-                async_state.in_async_callback[0] = false
-                code = match r {
-                  [I32(n)] => n
-                  _ => raise CanonCallError("type mismatch")
-                }
-              } else if tag == 2 {
-                // WAIT
-                if !can_block {
-                  raise CanonCallError(
-                    "cannot block a synchronous task before returning",
-                  )
-                }
-                let ws_key = handle_key(callee_table.id, payload)
-                let ev = wait_for_event(async_state, store, ws_key)
-                async_state.in_async_callback[0] = true
-                fn subtask_mem_dbg(ev : WaitEvent) -> String {
-                  if ev.code != 1 || ev.payload != 2 {
-                    return ""
-                  }
-                  let sub_key = handle_key(ev.owner_component_id, ev.index)
-                  match async_state.subtasks.get(sub_key) {
-                    Some(st) =>
-                      match st.mem_addr {
-                        Some(addr) => {
-                          let mem = store.get_mem(addr) catch { _ => return "" }
-                          let n = mem.load_i32(st.retptr) catch {
-                            _ => return ""
-                          }
-                          " retptr=\{st.retptr} mem=\{n}"
-                        }
-                        None => ""
-                      }
-                    None => ""
-                  }
-                }
-
-                preset_canon_debug_message(
-                  "async.callback.wait(ev code=\{ev.code} index=\{ev.index} payload=\{ev.payload})\{subtask_mem_dbg(ev)}",
-                )
-                let r = {
-                  errdefer {
-                    async_state.in_async_callback[0] = false
-                  }
-                  drive_core_to_completion(
-                    async_state,
-                    store,
-                    call_core_func_guarded_outcome(
-                      store,
-                      may_enter,
-                      cb,
-                      [I32(ev.code), I32(ev.index), I32(ev.payload)],
-                      CallbackStep,
-                    ),
-                  )
-                }
-                async_state.in_async_callback[0] = false
-                code = match r {
-                  [I32(n)] => n
-                  _ => raise CanonCallError("type mismatch")
-                }
-              } else {
-                raise CanonCallError("unsupported callback code: \{tag}")
-              }
-            }
-            let vals = take_required_task_result(
-              async_state,
-              store,
-              callee_table.id,
-              task_id,
-            )
-            transfer_results_if_needed(
-              vals,
-              func_type.result,
-              types,
-              async_state,
-              callee_table.id,
-              caller_table.id,
-            )
-          }
-        }
-      }
-    }
-  }
-  pop_task(async_state)
-  drop_task_thread(async_state, task_id)
-  remove_task_meta(async_state, task_id)
-  out
-}
-
-///|
-fn wait_for_event(
-  async_state : AsyncState,
-  store : @runtime.Store,
-  ws_key : Int64,
-) -> WaitEvent raise ComponentRuntimeError {
-  match async_state.waitable_sets.get(ws_key) {
-    Some(set) => set.waiters[0] = set.waiters[0] + 1
-    None =>
-      raise CanonCallError("unknown waitable set index \{key_local(ws_key)}")
-  }
-  while true {
-    if pop_waitable_event(async_state, ws_key) is Some(ev) {
-      acknowledge_waitable_event(async_state, ev)
-      if async_state.waitable_sets.get(ws_key) is Some(set) {
-        set.waiters[0] = set.waiters[0] - 1
-      }
-      return ev
-    }
-    if !progress_one_subtask(async_state, store) {
-      raise CanonCallError(
-        "wasm trap: deadlock detected: event loop cannot make further progress",
-      )
-    }
-  }
-  raise CanonCallError("unreachable")
+  start_component_invocation(
+    func, args, store, caller_table, async_state, caller_task_id, can_block,
+  ).wait()
 }
 
 ///|
@@ -643,7 +327,16 @@ fn step_task_once_impl(
         match reason {
           Yield => {
             set_waiting(None)
-            CorePending(Progressed)
+            CorePending(
+              if task_can_resume_without_external_progress(
+                  async_state,
+                  current_task_id(async_state),
+                ) {
+                Progressed
+              } else {
+                Blocked
+              },
+            )
           }
           Wait(waitable_set) => {
             set_waiting(Some(waitable_set))
@@ -742,6 +435,19 @@ fn step_task_once_impl(
 
       // Callback-style async ABI: initial call returns a callback code; resumption uses `callback`.
       if cb_opt is Some(cb) {
+        fn poll_callback(
+          args : Array[@types.Value],
+        ) -> TaskCorePoll raise ComponentRuntimeError {
+          let previous = async_state.in_async_callback[0]
+          async_state.in_async_callback[0] = true
+          defer {
+            async_state.in_async_callback[0] = previous
+          }
+          poll_core(fn() raise ComponentRuntimeError {
+            call_core_func_guarded_outcome(store, entry, cb, args, CallbackStep)
+          })
+        }
+
         // If we were suspended while waiting on a waitable-set, only resume once an event exists.
         match task.waiting_set[0] {
           Some(ws) =>
@@ -796,11 +502,7 @@ fn step_task_once_impl(
           } else {
             [I32(0), I32(0), I32(0)]
           }
-          async_state.in_async_callback[0] = true
-          let polled = poll_core(fn() raise ComponentRuntimeError {
-            call_core_func_guarded_outcome(store, entry, cb, args, CallbackStep)
-          })
-          async_state.in_async_callback[0] = false
+          let polled = poll_callback(args)
           let r = match polled {
             CoreReady(results) => results
             CorePending(step) => return step
@@ -827,17 +529,7 @@ fn step_task_once_impl(
           if task.cancelled[0] {
             task.cancelled[0] = false
             set_waiting(None)
-            async_state.in_async_callback[0] = true
-            let polled = poll_core(fn() raise ComponentRuntimeError {
-              call_core_func_guarded_outcome(
-                store,
-                entry,
-                cb,
-                [I32(6), I32(0), I32(0)],
-                CallbackStep,
-              )
-            })
-            async_state.in_async_callback[0] = false
+            let polled = poll_callback([I32(6), I32(0), I32(0)])
             let r = match polled {
               CoreReady(results) => results
               CorePending(step) => return step
@@ -867,17 +559,11 @@ fn step_task_once_impl(
           acknowledge_waitable_event(async_state, ev)
           // Leaving the waiting state to process one event.
           set_waiting(None)
-          async_state.in_async_callback[0] = true
-          let polled = poll_core(fn() raise ComponentRuntimeError {
-            call_core_func_guarded_outcome(
-              store,
-              entry,
-              cb,
-              [I32(ev.code), I32(ev.index), I32(ev.payload)],
-              CallbackStep,
-            )
-          })
-          async_state.in_async_callback[0] = false
+          let polled = poll_callback([
+            I32(ev.code),
+            I32(ev.index),
+            I32(ev.payload),
+          ])
           let r = match polled {
             CoreReady(results) => results
             CorePending(step) => return step
@@ -1544,10 +1230,11 @@ fn call_component_func_in_task_impl(
               } else if tag == 1 {
                 // YIELD: allowed even for synchronous tasks (must not block).
                 progress_one_subtask(async_state, store) |> ignore
+                let previous_callback = async_state.in_async_callback[0]
                 async_state.in_async_callback[0] = true
                 let r = {
-                  errdefer {
-                    async_state.in_async_callback[0] = false
+                  defer {
+                    async_state.in_async_callback[0] = previous_callback
                   }
                   drive_core_to_completion(
                     async_state,
@@ -1561,7 +1248,6 @@ fn call_component_func_in_task_impl(
                     ),
                   )
                 }
-                async_state.in_async_callback[0] = false
                 code = match r {
                   [I32(n)] => n
                   _ => raise CanonCallError("type mismatch")

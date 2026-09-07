@@ -4437,6 +4437,13 @@ fn parse_canon_decl(
     decl.push_uleb_u32(parse_u32_literal(canon_items[3], "context index"))
     return (decl.to_bytes(), true, target_name_opt)
   }
+  if op_name == "backpressure.inc" || op_name == "backpressure.dec" {
+    if decl_end != 2 {
+      raise Unsupported("\{op_name} does not accept arguments")
+    }
+    let opcode : Byte = if op_name == "backpressure.inc" { 0x24 } else { 0x25 }
+    return (Bytes::from_array([opcode]), true, target_name_opt)
+  }
   if op_name == "thread.index" {
     if decl_end != 2 {
       raise Unsupported("thread.index does not accept arguments")

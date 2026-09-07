@@ -180,3 +180,40 @@ test "failed async subtasks do not contaminate later component invocations" {
     inspect(cancelled[0], content="1")
   }
 }
+
+///|
+test "throwing async callbacks restore the caller callback context" {
+  let source =
+    #|(component
+    #|  (core module $M
+    #|    (tag $t)
+    #|    (func (export "run") (result i32) i32.const 1)
+    #|    (func (export "callback") (param i32 i32 i32) (result i32) throw $t))
+    #|  (core instance $m (instantiate $M))
+    #|  (func (export "run") async (canon lift (core func $m "run") async
+    #|    (callback (core func $m "callback")))))
+  let validated = @component_validator.validate_component_for_instantiation_with_config(
+    @component.parse_component(@component_text.parse_component_wat(source)),
+    ComponentValidationConfig(false),
+  )
+  for native in [false, true] {
+    let engine = if native {
+      open_native_component_session(opt_level=0)
+    } else {
+      @runtime_impl.interpreter_core_execution_engine()
+    }
+    let linker = @runtime_impl.ComponentLinker::with_core_execution_engine(
+      engine,
+    )
+    defer linker.close()
+    let instance = linker.instantiate("root", validated)
+    let message = try {
+      instance.call_exported_func("run", []) |> ignore
+      "unexpected return"
+    } catch {
+      error => error.to_string()
+    }
+    guard message.contains("thrown Wasm exception") else { fail(message) }
+    inspect(instance.async_state.in_async_callback[0], content="false")
+  }
+}
