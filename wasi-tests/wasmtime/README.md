@@ -116,7 +116,8 @@ behavior. Independent ABI probes and a retained native AddressSanitizer test
 cover the fixes. Linux results must be verified by the platform workflow;
 macOS results are not evidence of Linux execution.
 
-The regular CI checks the snapshot and Python runner tests. The separate
+The regular CI checks the snapshot, Python runner and native ASan tests, and
+runs the unchanged EOF/pending-stdin polling guests in both engines. The separate
 `Upstream WASIp1 programs` workflow is manually dispatched and runs both host
 platforms, uploading logs even when tests fail. It intentionally remains a
 strict, red diagnostic run while the current failures are unresolved; it does
