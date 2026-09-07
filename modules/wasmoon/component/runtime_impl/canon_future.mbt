@@ -898,6 +898,7 @@ fn instantiate_canon_future_drop_readable(
           ) {
           Some(ep) =>
             if !ep.is_readable {
+              trap_canon("type mismatch")
               []
             } else {
               let st0 = match async_state.futures.get(ep.future_id) {
@@ -963,7 +964,10 @@ fn instantiate_canon_future_drop_readable(
               cleanup_closed_future(async_state, ep.future_id)
               []
             }
-          None => []
+          None => {
+            trap_canon("unknown future handle index \{handle}")
+            []
+          }
         }
       _ => []
     }
@@ -994,6 +998,7 @@ fn instantiate_canon_future_drop_writable(
           ) {
           Some(ep) =>
             if ep.is_readable {
+              trap_canon("type mismatch")
               []
             } else {
               let st0 = match async_state.futures.get(ep.future_id) {
@@ -1047,7 +1052,10 @@ fn instantiate_canon_future_drop_writable(
               cleanup_closed_future(async_state, ep.future_id)
               []
             }
-          None => []
+          None => {
+            trap_canon("unknown future handle index \{handle}")
+            []
+          }
         }
       _ => []
     }
