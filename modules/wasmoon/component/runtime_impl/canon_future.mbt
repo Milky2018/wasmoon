@@ -451,13 +451,14 @@ fn instantiate_canon_future_write(
     fn ret_i32(n : Int) -> Array[@types.Value] {
       [I32(n)]
     }
-    match args {
+    let resumed_sync = match args {
       [I32(handle), _] => {
-        if !is_async {
+        let resumed = if !is_async {
           resume_sync_waitable_use(
             async_state, caller_component_id, handle, task_id,
           )
-          |> ignore
+        } else {
+          false
         }
         if !is_async &&
           waitable_is_in_set(async_state, caller_component_id, handle) {
@@ -466,8 +467,9 @@ fn instantiate_canon_future_write(
           )
           return ret_i32(0)
         }
+        resumed
       }
-      _ => ()
+      _ => false
     }
     match args {
       [I32(handle), I32(ptr)] =>
@@ -500,14 +502,26 @@ fn instantiate_canon_future_write(
                 }
               }
               if st0.write_succeeded {
+                if resumed_sync {
+                  remove_waitable_events_for(
+                    async_state, caller_component_id, handle, 5,
+                  )
+                  return ret_i32(0)
+                }
                 trap_canon(
-                  "cannot write to future after previous write succeeded",
+                  "cannot write to future after previous write succeeded or readable end dropped",
                 )
                 return ret_i32(0)
               }
               if st0.write_observed_readable_drop {
+                if resumed_sync {
+                  remove_waitable_events_for(
+                    async_state, caller_component_id, handle, 5,
+                  )
+                  return ret_i32(1)
+                }
                 trap_canon(
-                  "cannot write to future after previous write succeeded or readable end dropped",
+                  "cannot write after being notified that the readable end dropped",
                 )
                 return ret_i32(0)
               }

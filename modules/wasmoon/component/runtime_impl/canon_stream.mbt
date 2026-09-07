@@ -293,6 +293,13 @@ fn instantiate_canon_stream_read(
     }
     match args {
       [I32(handle), I32(ptr), I32(len)] => {
+        if table.endpoints.get(handle_key(owner_component_id, handle))
+          is Some(ep) &&
+          ep.notified_peer_dropped[0] {
+          trap_canon(
+            "cannot read after being notified that the writable end dropped",
+          )
+        }
         if !is_async {
           resume_sync_waitable_use(
             async_state, owner_component_id, handle, task_id,
@@ -372,12 +379,6 @@ fn instantiate_canon_stream_read(
                 trap_canon("type mismatch")
                 ret_i32(0)
               } else {
-                if ep.notified_peer_dropped[0] {
-                  trap_canon(
-                    "cannot read from stream after being notified that the writable end dropped",
-                  )
-                  return ret_i32(0)
-                }
                 let st0 = match table.streams.get(ep.stream_id) {
                   Some(s) => s
                   None => {
@@ -891,7 +892,7 @@ fn instantiate_canon_stream_write(
               } else {
                 if ep.notified_peer_dropped[0] {
                   trap_canon(
-                    "cannot write to stream after being notified that the readable end dropped",
+                    "cannot write after being notified that the readable end dropped",
                   )
                   return ret_i32(0)
                 }
@@ -1365,17 +1366,24 @@ fn instantiate_canon_stream_cancel_read(
                 Some(pr) => {
                   let code = if st0.writable_dropped { 1 } else { 2 }
                   let filled = pr.filled
-                  table.streams.set(ep.stream_id, {
-                    elem_size: st0.elem_size,
-                    own_resource_type_id: st0.own_resource_type_id,
-                    pending_read: None,
-                    pending_write: st0.pending_write,
-                    readable_dropped: st0.readable_dropped,
-                    writable_dropped: st0.writable_dropped,
+                  let payload = code | (filled << 4)
+                  remove_waitable_events_for(
+                    async_state, owner_component_id, handle, 2,
+                  )
+                  acknowledge_waitable_event(async_state, {
+                    owner_component_id,
+                    code: 2,
+                    index: handle,
+                    payload,
                   })
                   [I32(code | (filled << 4))]
                 }
-                None => [I32(2)]
+                None => {
+                  trap_canon(
+                    "stream or future read cancelled when no read is pending",
+                  )
+                  [I32(0)]
+                }
               }
             }
         }
@@ -1443,17 +1451,24 @@ fn instantiate_canon_stream_cancel_write(
                 Some(pw) => {
                   let code = if st0.readable_dropped { 1 } else { 2 }
                   let sent = pw.sent
-                  table.streams.set(ep.stream_id, {
-                    elem_size: st0.elem_size,
-                    own_resource_type_id: st0.own_resource_type_id,
-                    pending_read: st0.pending_read,
-                    pending_write: None,
-                    readable_dropped: st0.readable_dropped,
-                    writable_dropped: st0.writable_dropped,
+                  let payload = code | (sent << 4)
+                  remove_waitable_events_for(
+                    async_state, owner_component_id, handle, 3,
+                  )
+                  acknowledge_waitable_event(async_state, {
+                    owner_component_id,
+                    code: 3,
+                    index: handle,
+                    payload,
                   })
                   [I32(code | (sent << 4))]
                 }
-                None => [I32(2)]
+                None => {
+                  trap_canon(
+                    "stream or future write cancelled when no write is pending",
+                  )
+                  [I32(0)]
+                }
               }
             }
         }

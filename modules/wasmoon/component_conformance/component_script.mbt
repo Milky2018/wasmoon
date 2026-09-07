@@ -1540,7 +1540,7 @@ fn run_component_script_impl(
               Err(e) =>
                 match cmd.text {
                   Some(msg) =>
-                    if e.to_string().contains(msg) {
+                    if component_trap_matches(e.to_string(), msg) {
                       result.add_passed()
                     } else {
                       result.add_failed("assert_trap \{field} wrong trap: \{e}")

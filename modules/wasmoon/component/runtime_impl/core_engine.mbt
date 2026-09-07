@@ -80,7 +80,16 @@ pub fn CoreContinuation::CoreContinuation(
 pub fn CoreContinuation::continue_execution(
   self : CoreContinuation,
 ) -> CoreExecutionOutcome raise ComponentRuntimeError {
-  (self.resume_fn)()
+  // Resumption is a new execution boundary, just like the initial core call.
+  // Preserve canonical host errors independently of the engine's trap encoding.
+  clear_canon_trap_message()
+  (self.resume_fn)() catch {
+    error =>
+      match canon_trap_message[0] {
+        Some(message) => raise CanonCallError(message)
+        None => raise error
+      }
+  }
 }
 
 ///|

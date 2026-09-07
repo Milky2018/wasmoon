@@ -484,9 +484,7 @@ struct FutureState {
   writable_dropped : Bool
   // Set once a read has completed (COMPLETED or DROPPED).
   read_done : Bool
-  // Tracks writer state for trap-if-done:
-  // - `write_succeeded` => "cannot write to future after previous write succeeded"
-  // - `write_observed_readable_drop` => "cannot write to future after previous write succeeded or readable end dropped"
+  // Distinguish successful completion from notification that the reader dropped.
   write_succeeded : Bool
   write_observed_readable_drop : Bool
   // True once a value has been provided via `future.write` (even if it blocked).
@@ -890,6 +888,25 @@ fn acknowledge_waitable_event(async_state : AsyncState, ev : WaitEvent) -> Unit 
         })
       }
     }
+  }
+}
+
+///|
+fn validate_lifted_arguments(
+  func_type : FuncType,
+  args : Array[ComponentValue],
+  types : Array[TypeDef?],
+  async_state : AsyncState,
+  owner_component_id : Int,
+) -> Unit raise ComponentRuntimeError {
+  for i, param in func_type.params {
+    validate_lifted_stream_future(
+      param.ty,
+      args[i],
+      types,
+      async_state,
+      owner_component_id,
+    )
   }
 }
 
@@ -2046,7 +2063,25 @@ fn init_task_meta(
 }
 
 ///|
+fn sync_waitables_for_task(
+  async_state : AsyncState,
+  task_id : Int64,
+) -> Array[Int64] {
+  let keys : Array[Int64] = []
+  for entry in async_state.sync_waitable_users {
+    let (key, owner) = entry
+    if owner == task_id {
+      keys.push(key)
+    }
+  }
+  keys
+}
+
+///|
 fn remove_task_meta(async_state : AsyncState, task_id : Int64) -> Unit {
+  for key in sync_waitables_for_task(async_state, task_id) {
+    async_state.sync_waitable_users.remove(key)
+  }
   async_state.task_instance.remove(task_id)
   async_state.task_caller.remove(task_id)
   async_state.task_borrows.remove(task_id)
@@ -2059,6 +2094,9 @@ fn migrate_task_meta(
   from_id : Int64,
   to_id : Int64,
 ) -> Unit {
+  for key in sync_waitables_for_task(async_state, from_id) {
+    async_state.sync_waitable_users.set(key, to_id)
+  }
   if async_state.task_instance.get(from_id) is Some(inst) {
     async_state.task_instance.set(to_id, inst)
   }

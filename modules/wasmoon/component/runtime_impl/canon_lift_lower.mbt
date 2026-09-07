@@ -149,6 +149,18 @@ fn instantiate_canon_lower(
           return finish_call([I32(0)])
         }
       }
+      validate_lifted_arguments(
+        func_type,
+        component_args,
+        func_types,
+        async_state,
+        live_caller_table.id,
+      ) catch {
+        e => {
+          trap_canon(canon_err_message(e))
+          return finish_call([I32(0)])
+        }
+      }
       let inst_id = match func {
         Host(_, _, _) => caller_table.id
         HostAsync(_, _, _) => caller_table.id
@@ -602,13 +614,33 @@ fn instantiate_canon_lower(
         state.resource_table,
       )
       let outer_task_id = current_task_id(async_state)
-      let component_args = core_args_to_component(
-        args, func_type, func_types, resources, store, caller_table, 16, "sync lower argument",
-      ) catch {
-        e => {
-          trap_canon(canon_err_message(e))
-          ([] : Array[ComponentValue])
+      // A resumed lower continues the existing task. Its handles have already
+      // crossed the component boundary, so do not lift the original core args twice.
+      let component_args = if func_type.is_async &&
+        async_state.sync_lower_states.get(outer_task_id) is Some(_) {
+        []
+      } else {
+        let values = core_args_to_component(
+          args, func_type, func_types, resources, store, caller_table, 16, "sync lower argument",
+        ) catch {
+          e => {
+            trap_canon(canon_err_message(e))
+            ([] : Array[ComponentValue])
+          }
         }
+        validate_lifted_arguments(
+          func_type,
+          values,
+          func_types,
+          async_state,
+          caller_table.id,
+        ) catch {
+          e => {
+            trap_canon(canon_err_message(e))
+            return []
+          }
+        }
+        values
       }
       let owner_component_id = caller_table.id
       let inst_id = match func {
