@@ -2077,6 +2077,26 @@ fn init_task_meta(
 }
 
 ///|
+fn async_call_can_enter(func : ComponentFunc, async_state : AsyncState) -> Bool {
+  match func {
+    Lifted(_, _, _, _, table, entry, _, _) =>
+      entry.may_enter() && !instance_has_sync_wait(async_state, table.id)
+    Host(_, _, _) | HostAsync(_, _, _) => true
+  }
+}
+
+///|
+fn instance_has_sync_wait(async_state : AsyncState, instance_id : Int) -> Bool {
+  for entry in async_state.sync_waitable_users {
+    let (_, task_id) = entry
+    if async_state.task_instance.get(task_id) == Some(instance_id) {
+      return true
+    }
+  }
+  false
+}
+
+///|
 fn sync_waitables_for_task(
   async_state : AsyncState,
   task_id : Int64,

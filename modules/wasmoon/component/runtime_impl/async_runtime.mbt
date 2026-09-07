@@ -1044,10 +1044,13 @@ fn progress_one_subtask_nonblocking(
     if queue0.length() > 0 {
       let next_id = queue0[0]
       let can_start = match async_state.subtasks.get(next_id) {
-        Some(st) =>
+        Some(st) => {
+          let CallbackLifted(task) = st.driver
           backpressure_value_for_instance(async_state, st.callee_instance_id) ==
           0 &&
-          inflight == 0
+          inflight == 0 &&
+          async_call_can_enter(task.func, async_state)
+        }
         None => true
       }
       if can_start && !task_on_stack(next_id) {

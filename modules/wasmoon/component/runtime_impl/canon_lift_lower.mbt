@@ -195,10 +195,7 @@ fn instantiate_canon_lower(
       let instance_backpressure = backpressure_value_for_instance(
         async_state, inst_id,
       )
-      let entry_available = match func {
-        Lifted(_, _, _, _, _, entry, _, _) => entry.may_enter()
-        _ => true
-      }
+      let entry_available = async_call_can_enter(func, async_state)
       let task : CallbackTask = {
         func,
         args: component_args,
