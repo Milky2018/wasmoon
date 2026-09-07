@@ -876,9 +876,8 @@ fn make_instance(
   name : String,
   store : @runtime.Store,
   exports : Map[String, @runtime_impl.ComponentExtern],
+  host_runtime : @runtime_impl.HostRuntimeState,
 ) -> @runtime_impl.ComponentInstance {
-  let stream_table = @runtime_impl.StreamTable::StreamTable()
-  let async_state = @runtime_impl.AsyncState::AsyncState(stream_table)
   {
     name,
     types: [],
@@ -886,9 +885,9 @@ fn make_instance(
     values: [],
     components: [],
     instances: [],
-    resource_table: ResourceTable(),
-    stream_table,
-    async_state,
+    resource_table: host_runtime.resource_table(),
+    stream_table: host_runtime.stream_table(),
+    async_state: host_runtime.async_state(),
     core_modules: [],
     core_instances: [],
     core_funcs: [],
@@ -979,6 +978,11 @@ fn run_component_script_impl(
   }
   defer linker.close()
   let store = linker.get_store()
+  let host_runtime = try! linker.host_runtime_state()
+  let host_yields : Array[SpectestYield] = []
+  try! host_runtime.set_event_loop(fn() { wake_spectest_yields(host_yields) }, poll=fn() {
+    wake_spectest_yields(host_yields)
+  })
   let return_two = make_const_u32_func(2)
   let return_three = make_const_u32_func(3)
   let return_four = make_const_u32_func(4)
@@ -1008,12 +1012,41 @@ fn run_component_script_impl(
   }
   let nested_exports : Map[String, @runtime_impl.ComponentExtern] = Map([])
   nested_exports.set("return-four", Func(return_four))
-  let nested_instance = make_instance("host::nested", store, nested_exports)
+  let nested_instance = make_instance(
+    "host::nested", store, nested_exports, host_runtime,
+  )
   let host_exports : Map[String, @runtime_impl.ComponentExtern] = Map([])
   host_exports.set("return-two", Func(return_two))
   host_exports.set("return-three", Func(return_three))
   host_exports.set("simple-module", CoreModule(simple_module))
   host_exports.set("nested", Instance(nested_instance))
+  host_exports.set(
+    "return-two-slowly",
+    Func(make_spectest_slow_func(false, host_yields)),
+  )
+  host_exports.set(
+    "echo-slowly",
+    Func(make_spectest_slow_func(true, host_yields)),
+  )
+  host_exports.set(
+    "never-return",
+    Func(
+      HostAsync({ is_async: true, params: [], result: None, }, [], fn(_, _) {
+        HostFuture(fn() { Pending }, fn() { () })
+      }),
+    ),
+  )
+  host_exports.set(
+    "return-hi",
+    Func(
+      Host({ is_async: false, params: [], result: Some(Prim(String)), }, [], fn(
+        _,
+        _,
+      ) {
+        [String("hi")]
+      }),
+    ),
+  )
 
   // Host instance used by component-spec/wasmtime suites.
   let resource1_id = 100
@@ -1264,7 +1297,27 @@ fn run_component_script_impl(
     },
   )
   host_exports.set("[method]resource1.take-own", Func(take_own))
-  let host_instance = make_instance("host", store, host_exports)
+  host_exports.set(
+    "[method]resource1.never-return",
+    Func(
+      HostAsync(
+        {
+          is_async: true,
+          params: [{ label: "self", ty: TypeIdx(1), }],
+          result: None,
+        },
+        [resource1_type, Some(Borrow(0))],
+        fn(args, table) raise @runtime_impl.ComponentRuntimeError {
+          match args {
+            [U32(handle)] => resource1_expect_handle(table, handle) |> ignore
+            _ => raise HostCallError("argument type mismatch")
+          }
+          HostFuture(fn() { Pending }, fn() { () })
+        },
+      ),
+    ),
+  )
+  let host_instance = make_instance("host", store, host_exports, host_runtime)
   try! linker.add_instance("host", host_instance)
   let components : Map[String, @component_types.Component] = Map([])
   let instances : Map[String, @runtime_impl.ComponentInstance] = Map([])
