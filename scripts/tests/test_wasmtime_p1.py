@@ -39,10 +39,23 @@ class P1RunnerTests(unittest.TestCase):
                 self.assertIn("rights.fs_rights_inheriting", support.read_text())
                 self.assertNotEqual(build, p1.BUILD)
                 for guest in (p1.CORPUS / "upstream/crates/test-programs/src/bin").glob("*.rs"):
-                    # Assert-bearing lines stay verbatim; the reviewed patch only
-                    # changes path_open arguments and the scratch rights query.
+                    # Only the two documented access-denial tests change errno
+                    # expectations. All other assertion-bearing lines stay verbatim.
                     adapted = (source / guest.relative_to(p1.CORPUS)).read_text()
+                    if guest.stem in {"p1_file_write", "p1_path_open_read_write"}:
+                        expected = 1 if guest.stem == "p1_file_write" else 2
+                        self.assertEqual(adapted.count("wasip1::ERRNO_NOTCAPABLE"), expected)
+                        self.assertNotIn("wasip1::ERRNO_BADF", adapted)
+                        self.assertNotIn("wasip1::ERRNO_PERM", adapted)
+                        self.assertNotIn("wasip1::ERRNO_ACCES", adapted)
+                        for effect in ["preserves cursor", "preserves size", "leaves file empty"]:
+                            self.assertIn(effect, adapted)
+                        if guest.stem == "p1_path_open_read_write":
+                            self.assertIn("denied read preserves guest buffer", adapted)
                     for line in guest.read_text().splitlines():
+                        if guest.stem == "p1_file_write" and line == "    assert!(":
+                            # This single disjunction is replaced by exact assert_eq!.
+                            continue
                         if "assert" in line:
                             self.assertIn(line, adapted)
             self.assertFalse(source.exists())

@@ -26,7 +26,8 @@ source copy. It requests scratch rights bounded by the preopen and adds the
 operation capabilities used at file-opening callsites. Secondary directories
 receive the specific directory/inheriting rights needed by their tests.
 It never grants an intentionally absent `FD_READ` or `FD_WRITE` capability.
-Guest assertions, fixture behavior and pass/fail rules are unchanged.
+Fixture behavior and pass/fail rules are unchanged. The only assertion
+adaptations are the three access-denial expectations documented below.
 
 Adapted sources and build artifacts are separate from the original profile.
 The temporary source copy is removed after building; reports identify the
@@ -34,9 +35,19 @@ profile, patch hash and guest binary hashes. These results measure adapted
 operation coverage, not unchanged upstream conformance.
 
 `p1_file_write` and `p1_path_open_read_write` deliberately attempt I/O without
-the corresponding right, but their assertions exclude `NOTCAPABLE`. Both
-remain failures in the adapted profile. No assertion is weakened and no
-expected-failure mask turns them into passes.
+the corresponding right. Their original errno assertions exclude `NOTCAPABLE`
+and remain unchanged in the `upstream` profile. In `explicit-rights`, the three
+denied calls assert exactly `NOTCAPABLE`: a zero-length write, a nonempty write,
+and a read. No alternative errno is accepted and the missing I/O right remains
+absent. Additional observation rights allow verification that denied writes
+leave size, contents and cursor unchanged; denied reads preserve the guest
+buffer and cursor. The later read-write filestat assertion explicitly requests
+its own `FD_FILESTAT_GET` right.
+
+Both affected guests run their blocking and nonblocking variants. The adapted
+profile is a legacy-rights regression gate, including all subsequent operation
+assertions. Its errno expectations intentionally differ from Wasmtime's P2-backed
+implementation; use `upstream` for unchanged Wasmtime compatibility comparisons.
 
 The independent `wasi_rights_contract_wbtest.mbt` guest verifies zero rights,
 positive requested rights, inheritance bounds, reduction and failed

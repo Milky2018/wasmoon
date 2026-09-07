@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build and run the pinned Wasmtime WASIp1 guest programs without changing assertions."""
+"""Run pinned Wasmtime WASIp1 guests with original or explicit legacy-rights expectations."""
 
 from __future__ import annotations
 

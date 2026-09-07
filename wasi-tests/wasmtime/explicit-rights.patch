@@ -238,10 +238,32 @@
          filename,
          0,
 -        wasip1::RIGHTS_FD_READ,
-+        wasip1::RIGHTS_FD_READ | wasip1::RIGHTS_FD_SEEK | wasip1::RIGHTS_FD_FILESTAT_GET,
++        wasip1::RIGHTS_FD_READ | wasip1::RIGHTS_FD_TELL | wasip1::RIGHTS_FD_SEEK | wasip1::RIGHTS_FD_FILESTAT_GET,
          0,
          blocking_mode.fd_flags(),
      )
+@@ -124,12 +124,15 @@
+             buf_len: 0,
+         }],
+     );
+-    assert!(
+-        res == Err(wasip1::ERRNO_BADF)
+-            || res == Err(wasip1::ERRNO_PERM)
+-            || res == Err(wasip1::ERRNO_ACCES),
+-        "bad result {res:?}"
+-    )
++    assert_eq!(res, Err(wasip1::ERRNO_NOTCAPABLE));
++    assert_eq!(wasip1::fd_tell(file_fd).unwrap(), 0, "denied zero write preserves cursor");
++    assert_eq!(wasip1::fd_filestat_get(file_fd).unwrap().size, 0, "denied zero write preserves size");
++    let buffer = &mut [0xA5u8; 1];
++    let iovec = wasip1::Iovec { buf: buffer.as_mut_ptr(), buf_len: buffer.len() };
++    assert_eq!(blocking_mode.read(file_fd, &[iovec]).unwrap(), 0, "denied zero write leaves file empty");
++    assert_eq!(*buffer, [0xA5], "EOF read preserves guest buffer");
++    wasip1::fd_close(file_fd).expect("close readonly file");
++    wasip1::path_unlink_file(dir_fd, filename).expect("remove readonly fixture");
+ }
+ 
+ fn main() {
 --- a/upstream/crates/test-programs/src/bin/p1_path_open_lots.rs
 +++ b/upstream/crates/test-programs/src/bin/p1_path_open_lots.rs
 @@ -12,7 +12,7 @@
@@ -367,3 +389,89 @@
          .expect("open new descriptor to subdir");
  
      assert_errno!(
+--- a/upstream/crates/test-programs/src/bin/p1_path_open_read_write.rs
++++ b/upstream/crates/test-programs/src/bin/p1_path_open_read_write.rs
+@@ -11,7 +11,7 @@
+         0,
+         "file",
+         0,
+-        wasip1::RIGHTS_FD_READ,
++        wasip1::RIGHTS_FD_READ | wasip1::RIGHTS_FD_TELL | wasip1::RIGHTS_FD_FILESTAT_GET,
+         0,
+         blocking_mode.fd_flags(),
+     )
+@@ -27,7 +27,7 @@
+         "readonly does not have write right"
+     );
+ 
+-    let buffer = &mut [0u8; 100];
++    let buffer = &mut [0xA5u8; 100];
+     let iovec = wasip1::Iovec {
+         buf: buffer.as_mut_ptr(),
+         buf_len: buffer.len(),
+@@ -42,18 +42,18 @@
+         buf: write_buffer.as_ptr(),
+         buf_len: write_buffer.len(),
+     };
+-    // PERM is only the failure on windows under wasmtime-wasi. wasi-common
+-    // fails on windows with BADF, so we can't use the `windows =>` syntax
+-    // because that doesn't support alternatives like the agnostic syntax does.
++    // Legacy P1 rejects I/O before touching the file when rights are absent.
+     assert_errno!(
+         blocking_mode
+             .write(f_readonly, &[ciovec])
+             .err()
+-            .expect("read of writeonly fails"),
+-        wasip1::ERRNO_PERM,
+-        wasip1::ERRNO_BADF,
+-        wasip1::ERRNO_ACCES
++            .expect("I/O without its requested right must fail"),
++        wasip1::ERRNO_NOTCAPABLE
+     );
++
++    assert_eq!(wasip1::fd_tell(f_readonly).unwrap(), 0, "denied write preserves cursor");
++    assert_eq!(wasip1::fd_filestat_get(f_readonly).unwrap().size, 0, "denied write preserves size");
++    assert_eq!(blocking_mode.read(f_readonly, &[iovec]).unwrap(), 0, "denied write leaves file empty");
+ 
+     wasip1::fd_close(f_readonly).expect("close readonly");
+ 
+@@ -63,7 +63,7 @@
+         0,
+         "file",
+         0,
+-        wasip1::RIGHTS_FD_WRITE,
++        wasip1::RIGHTS_FD_WRITE | wasip1::RIGHTS_FD_TELL,
+         0,
+         blocking_mode.fd_flags(),
+     )
+@@ -83,16 +83,16 @@
+         "writeonly has write right"
+     );
+ 
+-    // See above for description of PERM
++    // Denied reads preserve both the guest buffer and the file cursor.
+     assert_errno!(
+         blocking_mode
+             .read(f_writeonly, &[iovec])
+             .err()
+-            .expect("read of writeonly fails"),
+-        wasip1::ERRNO_PERM,
+-        wasip1::ERRNO_BADF,
+-        wasip1::ERRNO_ACCES
++            .expect("I/O without its requested right must fail"),
++        wasip1::ERRNO_NOTCAPABLE
+     );
++    assert_eq!(wasip1::fd_tell(f_writeonly).unwrap(), 0, "denied read preserves cursor");
++    assert_eq!(*buffer, [0xA5; 100], "denied read preserves guest buffer");
+     let bytes_written = blocking_mode
+         .write(f_writeonly, &[ciovec])
+         .expect("write to writeonly");
+@@ -107,7 +107,7 @@
+         0,
+         "file",
+         0,
+-        wasip1::RIGHTS_FD_READ | wasip1::RIGHTS_FD_WRITE,
++        wasip1::RIGHTS_FD_READ | wasip1::RIGHTS_FD_WRITE | wasip1::RIGHTS_FD_TELL | wasip1::RIGHTS_FD_FILESTAT_GET,
+         0,
+         blocking_mode.fd_flags(),
+     )

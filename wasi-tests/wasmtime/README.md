@@ -102,14 +102,17 @@ After the P1 fixes, the unchanged profile has 13 passes, 42 failures and four
 unsupported scenarios per engine. Both stdio polling variants now pass.
 
 The separate `explicit-rights` profile requests missing operation rights in a
-temporary source copy. It preserves every guest assertion and the original
-snapshot. On macOS ARM64 it has 53 passes, two failures, four unsupported
-scenarios and no timeouts in each engine. The two remaining failures are
-`p1_file_write` and `p1_path_open_read_write`: their error assertions exclude
-`NOTCAPABLE` when an intentionally absent read/write capability is required.
-They remain red. See the [rights decision](../../docs/wasip1-rights.md).
-The adapted profile also retains the Wasmtime 40.0.0 reference result of
-54 passes, one extreme-timestamp host panic and four unsupported scenarios.
+temporary source copy and adapts three access-denial assertions in
+`p1_file_write` and `p1_path_open_read_write` to require exactly `NOTCAPABLE`.
+It also checks that denied I/O leaves file contents, size, cursor and guest read
+buffers unchanged. The original snapshot is untouched. See the
+[rights decision](../../docs/wasip1-rights.md) for the complete adaptation policy.
+
+On macOS ARM64 this profile has 55 passes, no failures or timeouts, and four
+unsupported scenarios in each engine. These are adapted legacy-rights results,
+not unchanged upstream conformance. Wasmtime's P2-backed implementation uses
+different access-denial errors; the historical reference table above applies
+to `upstream`, not the adapted legacy-rights gate.
 
 The recovered coverage exposed and now guards polling ABI alignment, Darwin
 device readiness, directory cursor isolation and heap safety, byte-oriented
@@ -119,11 +122,11 @@ cover the fixes. Linux results must be verified by the platform workflow;
 macOS results are not evidence of Linux execution.
 
 The regular CI checks the snapshot, Python runner and native ASan tests, and
-runs the unchanged EOF/pending-stdin polling guests in both engines. The separate
+runs the unchanged EOF/pending-stdin polling guests and the full explicit-rights
+profile in both engines. The separate
 `Upstream WASIp1 programs` workflow is manually dispatched and runs both host
-platforms, uploading logs even when tests fail. It intentionally remains a
-strict, red diagnostic run while the current failures are unresolved; it does
-not weaken the normal CI with a blanket expected-failure mask.
+platforms, uploading logs even when tests fail. The original profile retains its compatibility failures; the adapted profile
+is a strict regression gate. Neither uses an expected-failure mask.
 
 ## Updating the snapshot
 

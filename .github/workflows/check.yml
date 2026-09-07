@@ -105,12 +105,19 @@ jobs:
           RUSTUP_TOOLCHAIN=1.97.0 python3 scripts/run_wasmtime_p1.py \
             --filter p1_poll_oneoff_stdio --output target/wasmtime-p1-smoke
 
-      - name: upload WASIp1 polling results
+      - name: run explicit-rights WASIp1 regression suite
+        run: |
+          RUSTUP_TOOLCHAIN=1.97.0 python3 scripts/run_wasmtime_p1.py \
+            --profile explicit-rights --output target/wasmtime-p1-rights
+
+      - name: upload WASIp1 results
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: wasip1-polling-${{ matrix.os }}
-          path: target/wasmtime-p1-smoke
+          name: wasip1-${{ matrix.os }}
+          path: |
+            target/wasmtime-p1-smoke
+            target/wasmtime-p1-rights
           if-no-files-found: ignore
 
       # Before the suites below, because they trust the exit status this
