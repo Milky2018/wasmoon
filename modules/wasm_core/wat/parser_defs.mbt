@@ -77,7 +77,7 @@ fn Parser::parse_memory_def(self : Parser) -> MemoryDefResult raise WatError {
         let min = if is_memory64 {
           self.parse_u64()
         } else {
-          self.parse_u32().to_int64()
+          self.parse_u32().to_int64() & 0xFFFF_FFFFL
         }
         let max = match self.current.token {
           Number(_) =>
@@ -85,17 +85,26 @@ fn Parser::parse_memory_def(self : Parser) -> MemoryDefResult raise WatError {
               if is_memory64 {
                 self.parse_u64()
               } else {
-                self.parse_u32().to_int64()
+                self.parse_u32().to_int64() & 0xFFFF_FFFFL
               },
             )
           _ => None
+        }
+        let is_shared = self.current.token == Keyword("shared")
+        if is_shared {
+          self.advance()
         }
         let page_size_log2 = self.parse_optional_page_size_log2()
         self.expect_rparen() // close memory
         let imp : @types.Import = {
           mod_name,
           name: import_name,
-          desc: Memory({ limits: { min, max, }, is_memory64, page_size_log2, }),
+          desc: Memory({
+            limits: { min, max, },
+            is_memory64,
+            is_shared,
+            page_size_log2,
+          }),
         }
         return MemoryImport(imp, export_names)
       }
@@ -169,7 +178,7 @@ fn Parser::parse_memory_def(self : Parser) -> MemoryDefResult raise WatError {
               let min = if is_memory64 {
                 self.parse_u64()
               } else {
-                self.parse_u32().to_int64()
+                self.parse_u32().to_int64() & 0xFFFF_FFFFL
               }
               let max = match self.current.token {
                 Number(_) =>
@@ -177,10 +186,14 @@ fn Parser::parse_memory_def(self : Parser) -> MemoryDefResult raise WatError {
                     if is_memory64 {
                       self.parse_u64()
                     } else {
-                      self.parse_u32().to_int64()
+                      self.parse_u32().to_int64() & 0xFFFF_FFFFL
                     },
                   )
                 _ => None
+              }
+              let is_shared = self.current.token == Keyword("shared")
+              if is_shared {
+                self.advance()
               }
               let page_size_log2 = self.parse_optional_page_size_log2()
               self.expect_rparen() // close memory
@@ -190,6 +203,7 @@ fn Parser::parse_memory_def(self : Parser) -> MemoryDefResult raise WatError {
                 desc: Memory({
                   limits: { min, max, },
                   is_memory64,
+                  is_shared,
                   page_size_log2,
                 }),
               }
@@ -236,6 +250,7 @@ fn Parser::parse_memory_def(self : Parser) -> MemoryDefResult raise WatError {
           {
             limits: { min, max: Some(min), },
             is_memory64: false,
+            is_shared: false,
             page_size_log2: 16,
           },
           export_names,
@@ -299,7 +314,12 @@ fn Parser::parse_memory_def(self : Parser) -> MemoryDefResult raise WatError {
         min_pages
       }).to_int64()
       return MemoryWithData(
-        { limits: { min, max: Some(min), }, is_memory64, page_size_log2: 16, },
+        {
+          limits: { min, max: Some(min), },
+          is_memory64,
+          is_shared: false,
+          page_size_log2: 16,
+        },
         export_names,
         Bytes::from_array(init_bytes),
       )
@@ -318,7 +338,7 @@ fn Parser::parse_memory_def(self : Parser) -> MemoryDefResult raise WatError {
   let min = if is_memory64 {
     self.parse_u64()
   } else {
-    self.parse_u32().to_int64()
+    self.parse_u32().to_int64() & 0xFFFF_FFFFL
   }
   let max = match self.current.token {
     Number(_) =>
@@ -326,15 +346,19 @@ fn Parser::parse_memory_def(self : Parser) -> MemoryDefResult raise WatError {
         if is_memory64 {
           self.parse_u64()
         } else {
-          self.parse_u32().to_int64()
+          self.parse_u32().to_int64() & 0xFFFF_FFFFL
         },
       )
     _ => None
   }
+  let is_shared = self.current.token == Keyword("shared")
+  if is_shared {
+    self.advance()
+  }
   let page_size_log2 = self.parse_optional_page_size_log2()
   self.expect_rparen()
   MemoryDef(
-    { limits: { min, max, }, is_memory64, page_size_log2, },
+    { limits: { min, max, }, is_memory64, is_shared, page_size_log2, },
     export_names,
   )
 }
@@ -718,7 +742,7 @@ fn Parser::parse_table_def(
         let min = if is_table64 {
           self.parse_u64()
         } else {
-          self.parse_u32().to_int64()
+          self.parse_u32().to_int64() & 0xFFFF_FFFFL
         }
         let max = match self.current.token {
           Number(_) =>
@@ -726,7 +750,7 @@ fn Parser::parse_table_def(
               if is_table64 {
                 self.parse_u64()
               } else {
-                self.parse_u32().to_int64()
+                self.parse_u32().to_int64() & 0xFFFF_FFFFL
               },
             )
           _ => None
@@ -1022,7 +1046,7 @@ fn Parser::parse_table_def(
       let min = if is_table64 {
         self.parse_u64()
       } else {
-        self.parse_u32().to_int64()
+        self.parse_u32().to_int64() & 0xFFFF_FFFFL
       }
       let max = match self.current.token {
         Number(_) =>
@@ -1030,7 +1054,7 @@ fn Parser::parse_table_def(
             if is_table64 {
               self.parse_u64()
             } else {
-              self.parse_u32().to_int64()
+              self.parse_u32().to_int64() & 0xFFFF_FFFFL
             },
           )
         _ => None
@@ -1252,7 +1276,7 @@ fn Parser::parse_import_def(
       let min = if is_memory64 {
         self.parse_u64()
       } else {
-        self.parse_u32().to_int64()
+        self.parse_u32().to_int64() & 0xFFFF_FFFFL
       }
       let max = match self.current.token {
         Number(_) =>
@@ -1260,13 +1284,17 @@ fn Parser::parse_import_def(
             if is_memory64 {
               self.parse_u64()
             } else {
-              self.parse_u32().to_int64()
+              self.parse_u32().to_int64() & 0xFFFF_FFFFL
             },
           )
         _ => None
       }
+      let is_shared = self.current.token == Keyword("shared")
+      if is_shared {
+        self.advance()
+      }
       let page_size_log2 = self.parse_optional_page_size_log2()
-      Memory({ limits: { min, max, }, is_memory64, page_size_log2, })
+      Memory({ limits: { min, max, }, is_memory64, is_shared, page_size_log2, })
     }
     Keyword("table") => {
       self.advance()
@@ -1285,7 +1313,7 @@ fn Parser::parse_import_def(
       let min = if is_table64 {
         self.parse_u64()
       } else {
-        self.parse_u32().to_int64()
+        self.parse_u32().to_int64() & 0xFFFF_FFFFL
       }
       let max = match self.current.token {
         Number(_) =>
@@ -1293,7 +1321,7 @@ fn Parser::parse_import_def(
             if is_table64 {
               self.parse_u64()
             } else {
-              self.parse_u32().to_int64()
+              self.parse_u32().to_int64() & 0xFFFF_FFFFL
             },
           )
         _ => None

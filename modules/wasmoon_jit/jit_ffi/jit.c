@@ -1070,7 +1070,7 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_free_memory_desc(int64_t mem_ptr) {
 // Returns `wasmoon_memory_t*` on success, 0 on failure.
 extern uint8_t *alloc_guarded_memory_external(wasmoon_memory_t *memory, size_t initial_size, size_t max_size);
 
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_alloc_guarded_memory_desc(int64_t initial_pages, int64_t max_pages) {
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_alloc_guarded_memory_desc(int64_t initial_pages, int64_t max_pages, int32_t is_shared) {
     // Guarded memory is used for memory32 bounds-check elimination.
     // Only supported for 64KiB pages.
     if (initial_pages < 0 || initial_pages > 65536) {
@@ -1091,7 +1091,7 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_alloc_guarded_memory_desc(int64_t initial
     memory->max_pages = (max_pages < 0) ? SIZE_MAX : (size_t)max_pages;
     memory->is_memory64 = 0;
     memory->page_size_log2 = 16;
-    memory->is_shared = 0;
+    memory->is_shared = (is_shared != 0);
 
     uint8_t *base = alloc_guarded_memory_external(memory, initial_size, max_size);
     if (!base && initial_size > 0) {

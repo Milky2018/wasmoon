@@ -108,7 +108,7 @@ test "reject malformed instruction immediates" {
   let malformed_atomic = @types.Module::simple(
     [],
     [],
-    [Atomic(67, 0, 0, 0L)],
+    [Atomic(79, 0, 0, 0L)],
     "malformed-atomic",
   )
   let atomic_error : WatPrintError? = try {
@@ -118,7 +118,7 @@ test "reject malformed instruction immediates" {
     error => Some(error)
   }
   match atomic_error {
-    Some(InvalidAtomicSubopcode(67)) => ()
+    Some(InvalidAtomicSubopcode(79)) => ()
     _ => fail("expected malformed atomic subopcode to be rejected")
   }
 }
@@ -129,6 +129,7 @@ test "render custom memory page sizes" {
   module_.memories.push({
     limits: { min: 1L, max: Some(2L), },
     is_memory64: true,
+    is_shared: false,
     page_size_log2: 8,
   })
   assert_true(render(module_).contains("(memory (;0;) i64 1 2 (pagesize 256))"))

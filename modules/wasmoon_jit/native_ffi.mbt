@@ -198,6 +198,7 @@ extern "c" fn c_mem_desc_memset(
 extern "c" fn c_jit_alloc_guarded_memory_desc(
   initial_pages : Int64,
   max_pages : Int64,
+  is_shared : Int,
 ) -> Int64 = "wasmoon_jit_alloc_guarded_memory_desc"
 
 ///|

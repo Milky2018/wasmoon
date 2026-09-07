@@ -263,10 +263,16 @@ pub fn alloc_memory_desc(
 pub fn alloc_guarded_memory_desc(
   initial_pages : Int,
   max_pages : Int?,
+  is_shared? : Bool = false,
 ) -> Int64 {
   c_jit_alloc_guarded_memory_desc(
     initial_pages.to_int64(),
     max_pages.unwrap_or(-1).to_int64(),
+    if is_shared {
+      1
+    } else {
+      0
+    },
   )
 }
 

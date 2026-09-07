@@ -71,11 +71,13 @@ test "canonical memory address type follows the selected memory" {
   let memory32 : @types.MemoryType = {
     limits: { min: 1L, max: None, },
     is_memory64: false,
+    is_shared: false,
     page_size_log2: 16,
   }
   let memory64 : @types.MemoryType = {
     limits: { min: 1L, max: None, },
     is_memory64: true,
+    is_shared: false,
     page_size_log2: 16,
   }
   debug_inspect(
@@ -92,6 +94,7 @@ test "memory64 canonical realloc requires an i64 address signature" {
   let memory64 : @types.MemoryType = {
     limits: { min: 1L, max: None, },
     is_memory64: true,
+    is_shared: false,
     page_size_log2: 16,
   }
   let func_type : @component.FuncType = {

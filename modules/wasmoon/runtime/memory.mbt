@@ -13,6 +13,7 @@ struct Memory {
   descriptor_state : Ref[MemoryDescriptorState]
   max : Int? // max size in logical pages
   is_memory64 : Bool // true for memory64 (i64-indexed)
+  is_shared : Bool
   page_size_log2 : Int
   page_size_bytes : Int64
 } derive(Debug)
@@ -154,6 +155,7 @@ pub fn Memory::Memory(
   min : Int,
   max : Int?,
   is_memory64? : Bool = false,
+  is_shared? : Bool = false,
   page_size_log2? : Int = 16,
 ) -> Memory {
   let l2 = page_size_log2
@@ -164,20 +166,21 @@ pub fn Memory::Memory(
   let size_bytes = min.to_int64() * page_size_bytes
   let mem_desc_ptr = if !is_memory64 && l2 == 16 {
     // Guard pages are required for JIT memory0 correctness.
-    @wasmoon_jit.alloc_guarded_memory_desc(min, max)
+    @wasmoon_jit.alloc_guarded_memory_desc(min, max, is_shared~)
   } else {
     @wasmoon_jit.alloc_memory_desc(
       size_bytes,
       max,
       is_memory64~,
       page_size_log2=l2,
-      is_shared=false,
+      is_shared~,
     )
   }
   {
     descriptor_state: Ref(Open(mem_desc_ptr)),
     max,
     is_memory64,
+    is_shared,
     page_size_log2: l2,
     page_size_bytes,
   }
@@ -186,13 +189,22 @@ pub fn Memory::Memory(
 ///|
 /// Allocate a guarded (reserved) memory for memory32 memory0.
 /// This is required for JIT guard-page-based trapping.
-pub fn Memory::new_guarded_memory0(min : Int, max : Int?) -> Memory {
+pub fn Memory::new_guarded_memory0(
+  min : Int,
+  max : Int?,
+  is_shared? : Bool = false,
+) -> Memory {
   let initial_pages = min
-  let mem_desc_ptr = @wasmoon_jit.alloc_guarded_memory_desc(initial_pages, max)
+  let mem_desc_ptr = @wasmoon_jit.alloc_guarded_memory_desc(
+    initial_pages,
+    max,
+    is_shared~,
+  )
   {
     descriptor_state: Ref(Open(mem_desc_ptr)),
     max,
     is_memory64: false,
+    is_shared,
     page_size_log2: 16,
     page_size_bytes: @types.WASM_PAGE_SIZE_BYTES,
   }
@@ -660,4 +672,9 @@ pub fn Memory::read_bytes(self : Memory, addr : Int, len : Int) -> Bytes {
 /// Get memory limits (min(current), max) for type checking
 pub fn Memory::get_limits(self : Memory) -> (Int, Int?) {
   (self.size_pages(), self.max)
+}
+
+///|
+pub fn Memory::is_shared(self : Memory) -> Bool {
+  self.is_shared
 }

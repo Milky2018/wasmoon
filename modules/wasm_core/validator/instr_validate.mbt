@@ -596,9 +596,9 @@ fn validate_instr(
         natural : Int,
         name : String,
       ) -> Unit raise ValidationError {
-        if align > natural {
+        if align != natural {
           raise InvalidAlignment(
-            "\{name} alignment \{align} exceeds natural alignment \{natural}",
+            "\{name} alignment \{align} must equal natural alignment \{natural}",
           )
         }
       }

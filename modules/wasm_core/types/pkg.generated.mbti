@@ -750,6 +750,7 @@ pub fn Limits::to_repr(Self) -> @debug.Repr
 pub(all) struct MemoryType {
   limits : Limits
   is_memory64 : Bool
+  is_shared : Bool
   page_size_log2 : Int
 } derive(Eq, @debug.Debug)
 pub fn MemoryType::addr_type(Self) -> ValueType

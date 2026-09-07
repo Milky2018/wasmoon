@@ -1335,9 +1335,19 @@ fn Parser::parse_plain_instruction(
       match atomic_subopcode(kw) {
         Some(3) => Atomic(3, 0, 0, 0L)
         Some(subopcode) =>
-          parse_mem_arg(self, fn(memory, align, offset) {
-            Atomic(subopcode, memory, align, offset)
-          })
+          parse_mem_arg(
+            self,
+            fn(memory, align, offset) {
+              Atomic(subopcode, memory, align, offset)
+            },
+            default_align=if subopcode == 2 {
+              3
+            } else if subopcode < 3 {
+              2
+            } else {
+              [2, 3, 0, 1, 0, 1, 2][(subopcode - 0x10) % 7]
+            },
+          )
         None => raise InvalidInstruction(kw, self.loc())
       }
   }
@@ -1350,69 +1360,69 @@ fn atomic_subopcode(keyword : String) -> Int? {
     "memory.atomic.wait32" => Some(1)
     "memory.atomic.wait64" => Some(2)
     "atomic.fence" => Some(3)
-    "i32.atomic.load" => Some(4)
-    "i64.atomic.load" => Some(5)
-    "i32.atomic.load8_u" => Some(6)
-    "i32.atomic.load16_u" => Some(7)
-    "i64.atomic.load8_u" => Some(8)
-    "i64.atomic.load16_u" => Some(9)
-    "i64.atomic.load32_u" => Some(10)
-    "i32.atomic.store" => Some(11)
-    "i64.atomic.store" => Some(12)
-    "i32.atomic.store8" => Some(13)
-    "i32.atomic.store16" => Some(14)
-    "i64.atomic.store8" => Some(15)
-    "i64.atomic.store16" => Some(16)
-    "i64.atomic.store32" => Some(17)
-    "i32.atomic.rmw.add" => Some(18)
-    "i64.atomic.rmw.add" => Some(19)
-    "i32.atomic.rmw8.add_u" => Some(20)
-    "i32.atomic.rmw16.add_u" => Some(21)
-    "i64.atomic.rmw8.add_u" => Some(22)
-    "i64.atomic.rmw16.add_u" => Some(23)
-    "i64.atomic.rmw32.add_u" => Some(24)
-    "i32.atomic.rmw.sub" => Some(25)
-    "i64.atomic.rmw.sub" => Some(26)
-    "i32.atomic.rmw8.sub_u" => Some(27)
-    "i32.atomic.rmw16.sub_u" => Some(28)
-    "i64.atomic.rmw8.sub_u" => Some(29)
-    "i64.atomic.rmw16.sub_u" => Some(30)
-    "i64.atomic.rmw32.sub_u" => Some(31)
-    "i32.atomic.rmw.and" => Some(32)
-    "i64.atomic.rmw.and" => Some(33)
-    "i32.atomic.rmw8.and_u" => Some(34)
-    "i32.atomic.rmw16.and_u" => Some(35)
-    "i64.atomic.rmw8.and_u" => Some(36)
-    "i64.atomic.rmw16.and_u" => Some(37)
-    "i64.atomic.rmw32.and_u" => Some(38)
-    "i32.atomic.rmw.or" => Some(39)
-    "i64.atomic.rmw.or" => Some(40)
-    "i32.atomic.rmw8.or_u" => Some(41)
-    "i32.atomic.rmw16.or_u" => Some(42)
-    "i64.atomic.rmw8.or_u" => Some(43)
-    "i64.atomic.rmw16.or_u" => Some(44)
-    "i64.atomic.rmw32.or_u" => Some(45)
-    "i32.atomic.rmw.xor" => Some(46)
-    "i64.atomic.rmw.xor" => Some(47)
-    "i32.atomic.rmw8.xor_u" => Some(48)
-    "i32.atomic.rmw16.xor_u" => Some(49)
-    "i64.atomic.rmw8.xor_u" => Some(50)
-    "i64.atomic.rmw16.xor_u" => Some(51)
-    "i64.atomic.rmw32.xor_u" => Some(52)
-    "i32.atomic.rmw.xchg" => Some(53)
-    "i64.atomic.rmw.xchg" => Some(54)
-    "i32.atomic.rmw8.xchg_u" => Some(55)
-    "i32.atomic.rmw16.xchg_u" => Some(56)
-    "i64.atomic.rmw8.xchg_u" => Some(57)
-    "i64.atomic.rmw16.xchg_u" => Some(58)
-    "i64.atomic.rmw32.xchg_u" => Some(59)
-    "i32.atomic.rmw.cmpxchg" => Some(60)
-    "i64.atomic.rmw.cmpxchg" => Some(61)
-    "i32.atomic.rmw8.cmpxchg_u" => Some(62)
-    "i32.atomic.rmw16.cmpxchg_u" => Some(63)
-    "i64.atomic.rmw8.cmpxchg_u" => Some(64)
-    "i64.atomic.rmw16.cmpxchg_u" => Some(65)
-    "i64.atomic.rmw32.cmpxchg_u" => Some(66)
+    "i32.atomic.load" => Some(16)
+    "i64.atomic.load" => Some(17)
+    "i32.atomic.load8_u" => Some(18)
+    "i32.atomic.load16_u" => Some(19)
+    "i64.atomic.load8_u" => Some(20)
+    "i64.atomic.load16_u" => Some(21)
+    "i64.atomic.load32_u" => Some(22)
+    "i32.atomic.store" => Some(23)
+    "i64.atomic.store" => Some(24)
+    "i32.atomic.store8" => Some(25)
+    "i32.atomic.store16" => Some(26)
+    "i64.atomic.store8" => Some(27)
+    "i64.atomic.store16" => Some(28)
+    "i64.atomic.store32" => Some(29)
+    "i32.atomic.rmw.add" => Some(30)
+    "i64.atomic.rmw.add" => Some(31)
+    "i32.atomic.rmw8.add_u" => Some(32)
+    "i32.atomic.rmw16.add_u" => Some(33)
+    "i64.atomic.rmw8.add_u" => Some(34)
+    "i64.atomic.rmw16.add_u" => Some(35)
+    "i64.atomic.rmw32.add_u" => Some(36)
+    "i32.atomic.rmw.sub" => Some(37)
+    "i64.atomic.rmw.sub" => Some(38)
+    "i32.atomic.rmw8.sub_u" => Some(39)
+    "i32.atomic.rmw16.sub_u" => Some(40)
+    "i64.atomic.rmw8.sub_u" => Some(41)
+    "i64.atomic.rmw16.sub_u" => Some(42)
+    "i64.atomic.rmw32.sub_u" => Some(43)
+    "i32.atomic.rmw.and" => Some(44)
+    "i64.atomic.rmw.and" => Some(45)
+    "i32.atomic.rmw8.and_u" => Some(46)
+    "i32.atomic.rmw16.and_u" => Some(47)
+    "i64.atomic.rmw8.and_u" => Some(48)
+    "i64.atomic.rmw16.and_u" => Some(49)
+    "i64.atomic.rmw32.and_u" => Some(50)
+    "i32.atomic.rmw.or" => Some(51)
+    "i64.atomic.rmw.or" => Some(52)
+    "i32.atomic.rmw8.or_u" => Some(53)
+    "i32.atomic.rmw16.or_u" => Some(54)
+    "i64.atomic.rmw8.or_u" => Some(55)
+    "i64.atomic.rmw16.or_u" => Some(56)
+    "i64.atomic.rmw32.or_u" => Some(57)
+    "i32.atomic.rmw.xor" => Some(58)
+    "i64.atomic.rmw.xor" => Some(59)
+    "i32.atomic.rmw8.xor_u" => Some(60)
+    "i32.atomic.rmw16.xor_u" => Some(61)
+    "i64.atomic.rmw8.xor_u" => Some(62)
+    "i64.atomic.rmw16.xor_u" => Some(63)
+    "i64.atomic.rmw32.xor_u" => Some(64)
+    "i32.atomic.rmw.xchg" => Some(65)
+    "i64.atomic.rmw.xchg" => Some(66)
+    "i32.atomic.rmw8.xchg_u" => Some(67)
+    "i32.atomic.rmw16.xchg_u" => Some(68)
+    "i64.atomic.rmw8.xchg_u" => Some(69)
+    "i64.atomic.rmw16.xchg_u" => Some(70)
+    "i64.atomic.rmw32.xchg_u" => Some(71)
+    "i32.atomic.rmw.cmpxchg" => Some(72)
+    "i64.atomic.rmw.cmpxchg" => Some(73)
+    "i32.atomic.rmw8.cmpxchg_u" => Some(74)
+    "i32.atomic.rmw16.cmpxchg_u" => Some(75)
+    "i64.atomic.rmw8.cmpxchg_u" => Some(76)
+    "i64.atomic.rmw16.cmpxchg_u" => Some(77)
+    "i64.atomic.rmw32.cmpxchg_u" => Some(78)
     _ => None
   }
 }
@@ -1469,6 +1479,12 @@ fn parse_mem_arg_tuple(parser : Parser) -> (Int, Int, Int64) raise WatError {
             align_str.write_char(s.code_unit_at(i).unsafe_to_char())
           }
           let a = parse_u32(align_str.to_string())
+          if a == 0 || (a & (a - 1)) != 0 {
+            raise UnexpectedToken(
+              "alignment must be a nonzero power of two",
+              parser.loc(),
+            )
+          }
           align = log2(a)
           parser.advance()
         } else {
@@ -1484,10 +1500,11 @@ fn parse_mem_arg_tuple(parser : Parser) -> (Int, Int, Int64) raise WatError {
 fn parse_mem_arg(
   parser : Parser,
   instr : (Int, Int, Int64) -> @types.Instruction,
+  default_align? : Int = 0,
 ) -> @types.Instruction raise WatError {
   let mut memidx = 0
   let mut offset = 0L
-  let mut align = 0
+  let mut align = default_align
   // Multi-memory: Parse optional memory index (e.g., $mem1 or 0)
   match parser.current.token {
     Id(name) => {
@@ -1541,6 +1558,12 @@ fn parse_mem_arg(
             align_str.write_char(s.code_unit_at(i).unsafe_to_char())
           }
           let a = parse_u32(align_str.to_string())
+          if a == 0 || (a & (a - 1)) != 0 {
+            raise UnexpectedToken(
+              "alignment must be a nonzero power of two",
+              parser.loc(),
+            )
+          }
           // Convert alignment to log2
           align = log2(a)
           parser.advance()
@@ -1555,10 +1578,10 @@ fn parse_mem_arg(
 
 ///|
 fn log2(n : Int) -> Int {
-  let mut v = n
+  let mut v = n.reinterpret_as_uint()
   let mut r = 0
-  while v > 1 {
-    v = v / 2
+  while v > 1U {
+    v = v / 2U
     r += 1
   }
   r

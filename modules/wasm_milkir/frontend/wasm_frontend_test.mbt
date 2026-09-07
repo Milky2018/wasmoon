@@ -765,6 +765,7 @@ test "lower memory operations through native MilkIR memory ops" {
       {
         limits: { min: 1, max: None, },
         is_memory64: false,
+        is_shared: false,
         page_size_log2: 16,
       },
     ],
@@ -849,6 +850,7 @@ test "lower narrow memory operations through native MilkIR memory ops" {
       {
         limits: { min: 1, max: None, },
         is_memory64: false,
+        is_shared: false,
         page_size_log2: 16,
       },
     ],
@@ -894,6 +896,7 @@ test "lower memory grow size and bulk helpers as native helper calls" {
       {
         limits: { min: 1, max: None, },
         is_memory64: false,
+        is_shared: false,
         page_size_log2: 16,
       },
     ],
@@ -926,11 +929,13 @@ test "lower non-zero memory.size through native descriptor loads" {
       {
         limits: { min: 1, max: None, },
         is_memory64: false,
+        is_shared: false,
         page_size_log2: 16,
       },
       {
         limits: { min: 2, max: None, },
         is_memory64: false,
+        is_shared: false,
         page_size_log2: 16,
       },
     ],
@@ -964,11 +969,13 @@ test "lower non-zero memory load store with explicit bounds check" {
       {
         limits: { min: 1, max: None, },
         is_memory64: false,
+        is_shared: false,
         page_size_log2: 16,
       },
       {
         limits: { min: 1, max: None, },
         is_memory64: false,
+        is_shared: false,
         page_size_log2: 16,
       },
     ],
@@ -994,7 +1001,12 @@ test "lower memory64 load with overflow-safe bounds check" {
       "memory64_load",
     ),
     memories: [
-      { limits: { min: 1, max: None, }, is_memory64: true, page_size_log2: 16, },
+      {
+        limits: { min: 1, max: None, },
+        is_memory64: true,
+        is_shared: false,
+        page_size_log2: 16,
+      },
     ],
   }
   let env = native_test_env()
@@ -1027,7 +1039,12 @@ test "lower memory64 narrow load store with overflow-safe bounds check" {
       "memory64_narrow_roundtrip",
     ),
     memories: [
-      { limits: { min: 1, max: None, }, is_memory64: true, page_size_log2: 16, },
+      {
+        limits: { min: 1, max: None, },
+        is_memory64: true,
+        is_shared: false,
+        page_size_log2: 16,
+      },
     ],
   }
   let env = native_test_env()
@@ -1059,6 +1076,7 @@ test "lower v128 load store through native memory path" {
       {
         limits: { min: 1, max: None, },
         is_memory64: false,
+        is_shared: false,
         page_size_log2: 16,
       },
     ],
@@ -1243,7 +1261,12 @@ test "unsupported memory64 bulk helper reports runtime ABI capability" {
       "memory64_fill",
     ),
     memories: [
-      { limits: { min: 1, max: None, }, is_memory64: true, page_size_log2: 16, },
+      {
+        limits: { min: 1, max: None, },
+        is_memory64: true,
+        is_shared: false,
+        page_size_log2: 16,
+      },
     ],
   }
   let env = native_test_env()

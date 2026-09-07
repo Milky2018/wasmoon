@@ -87,7 +87,7 @@ fn parse_core_valtype(
 ///|
 fn parse_limits_u32(
   reader : Reader,
-) -> @types.Limits raise ComponentRuntimeError {
+) -> (@types.Limits, Int) raise ComponentRuntimeError {
   let flags = reader.read_u8() catch {
     e => raise ComponentParseError(e.to_string())
   }
@@ -103,7 +103,7 @@ fn parse_limits_u32(
   } else {
     None
   }
-  { min: min.to_int64(), max: max.map(fn(x) { x.to_int64() }), }
+  ({ min: min.to_int64(), max: max.map(fn(x) { x.to_int64() }), }, flags)
 }
 
 ///|
@@ -151,12 +151,17 @@ fn parse_core_extern_type_in_moduletype(
     }
     0x01 => {
       let elem = parse_core_valtype(reader)
-      let limits = parse_limits_u32(reader)
+      let (limits, _flags) = parse_limits_u32(reader)
       Table({ elem_type: elem, limits, is_table64: false, })
     }
     0x02 => {
-      let limits = parse_limits_u32(reader)
-      Memory({ limits, is_memory64: false, page_size_log2: 16, })
+      let (limits, flags) = parse_limits_u32(reader)
+      Memory({
+        limits,
+        is_memory64: false,
+        is_shared: (flags & 0x02) != 0,
+        page_size_log2: 16,
+      })
     }
     0x03 => {
       let vt = parse_core_valtype(reader)
@@ -431,6 +436,7 @@ fn memory_import_compatible(
   expected : @types.MemoryType,
 ) -> Bool {
   actual.is_memory64 == expected.is_memory64 &&
+  actual.is_shared == expected.is_shared &&
   actual.page_size_log2 == expected.page_size_log2 &&
   actual.limits.min <= expected.limits.min
 }
@@ -441,6 +447,7 @@ fn memory_export_compatible(
   expected : @types.MemoryType,
 ) -> Bool {
   actual.is_memory64 == expected.is_memory64 &&
+  actual.is_shared == expected.is_shared &&
   actual.page_size_log2 == expected.page_size_log2 &&
   actual.limits.min >= expected.limits.min
 }

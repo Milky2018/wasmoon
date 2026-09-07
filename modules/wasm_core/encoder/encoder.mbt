@@ -425,6 +425,9 @@ fn encode_memory_limits(w : BinaryWriter, mt : @types.MemoryType) -> Unit {
   if has_max {
     flags = flags | 0x01
   }
+  if mt.is_shared {
+    flags = flags | 0x02
+  }
   if mt.is_memory64 {
     flags = flags | 0x04
   }
@@ -759,6 +762,15 @@ fn encode_instruction(w : BinaryWriter, instr : @types.Instruction) -> Unit {
     MemoryGrow(memidx) => {
       w.write_byte(0x40)
       w.write_u32(memidx)
+    }
+    Atomic(subopcode, memidx, align, offset) => {
+      w.write_byte(0xFE)
+      w.write_u32(subopcode)
+      if subopcode == 3 {
+        w.write_byte(0)
+      } else {
+        encode_memarg(w, memidx, align, offset)
+      }
     }
     MemoryInit(memidx, data_idx) => {
       w.write_byte(0xFC)

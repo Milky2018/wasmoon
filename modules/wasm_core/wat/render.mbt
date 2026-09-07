@@ -84,7 +84,9 @@ fn validate_instructions(
           raise InvalidShuffleLaneCount(lanes.length())
         }
       Atomic(subopcode, _, _, _) =>
-        if subopcode < 0 || subopcode > 66 {
+        if subopcode < 0 ||
+          (subopcode >= 4 && subopcode < 0x10) ||
+          subopcode > 0x4E {
           raise InvalidAtomicSubopcode(subopcode)
         }
       _ => ()
@@ -269,6 +271,9 @@ pub fn render(mod_ : @types.Module) -> String raise WatPrintError {
           sb.write_string("i64 ")
         }
         sb.write_string(limits_to_wat(mem_type.limits))
+        if mem_type.is_shared {
+          sb.write_string(" shared")
+        }
         sb.write_string(memory_page_size_to_wat(mem_type))
         sb.write_string(")")
       }
@@ -323,6 +328,9 @@ pub fn render(mod_ : @types.Module) -> String raise WatPrintError {
       sb.write_string("i64 ")
     }
     sb.write_string(limits_to_wat(mem.limits))
+    if mem.is_shared {
+      sb.write_string(" shared")
+    }
     sb.write_string(memory_page_size_to_wat(mem))
     sb.write_string(")\n")
   }
@@ -798,6 +806,7 @@ fn instr_to_wat(instr : @types.Instruction) -> String {
     align : Int,
     offset : Int64,
   ) -> String {
+    let subop = if subop >= 0x10 { subop - 12 } else { subop }
     let name = match subop {
       0 => "memory.atomic.notify"
       1 => "memory.atomic.wait32"

@@ -6,6 +6,9 @@ fn validate_memory_limits(
   if mem.page_size_log2 != 0 && mem.page_size_log2 != 16 {
     raise InvalidLimits("invalid custom page size")
   }
+  if mem.is_shared && mem.limits.max is None {
+    raise InvalidLimits("shared memory requires a maximum")
+  }
   let limits = mem.limits
   // memory32: max 65536 pages (2^16) = 4GB
   // memory64: max 2^48 pages = 16EB (theoretical, but limit to 2^48 pages)

@@ -454,6 +454,7 @@ test "module linking: import memory from another module" {
       {
         limits: { min: 1, max: None, },
         is_memory64: false,
+        is_shared: false,
         page_size_log2: 16,
       },
     ],
@@ -491,6 +492,7 @@ test "module linking: import memory from another module" {
         desc: Memory({
           limits: { min: 1, max: None, },
           is_memory64: false,
+          is_shared: false,
           page_size_log2: 16,
         }),
       },

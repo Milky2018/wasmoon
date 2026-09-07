@@ -57,12 +57,17 @@ pub fn instantiate_module(
     let mem = if i == 0 &&
       !mem_type.is_memory64 &&
       mem_type.page_size_log2 == 16 {
-      @runtime.Memory::new_guarded_memory0(min, max)
+      @runtime.Memory::new_guarded_memory0(
+        min,
+        max,
+        is_shared=mem_type.is_shared,
+      )
     } else {
       Memory(
         min,
         max,
         is_memory64=mem_type.is_memory64,
+        is_shared=mem_type.is_shared,
         page_size_log2=mem_type.page_size_log2,
       )
     }
@@ -901,6 +906,7 @@ pub fn validate_imports_with_diagnostics(
             }
             let actual_limits = actual_mem.get_limits()
             if actual_mem.is_memory64() != expected_mem_type.is_memory64 ||
+              actual_mem.is_shared() != expected_mem_type.is_shared ||
               actual_mem.page_size_bytes() !=
               1L << expected_mem_type.page_size_log2 {
               push_import_diagnostic(
@@ -1358,6 +1364,7 @@ fn instantiate_module_with_imports_unstarted(
             let actual_limits = actual_mem.get_limits()
             // Memory64 status must match
             if actual_mem.is_memory64() != expected_mem_type.is_memory64 ||
+              actual_mem.is_shared() != expected_mem_type.is_shared ||
               actual_mem.page_size_bytes() !=
               1L << expected_mem_type.page_size_log2 {
               raise LinkError
@@ -1529,6 +1536,7 @@ fn instantiate_module_with_imports_unstarted(
       min_pages,
       mem_type.limits.max.map(fn(m) { m.to_int() }),
       is_memory64=mem_type.is_memory64,
+      is_shared=mem_type.is_shared,
       page_size_log2=mem_type.page_size_log2,
     )
     let addr = store.alloc_mem(mem)

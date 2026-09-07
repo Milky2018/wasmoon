@@ -307,3 +307,21 @@ test "anonymous module definitions can be instantiated" {
   inspect(result.failed, content="0")
   inspect(result.passed, content="2")
 }
+
+///|
+test "shared memory flags participate in import compatibility" {
+  let source =
+    #|(module (memory (export "memory") 1 2 shared))
+    #|(register "shared")
+    #|(module (import "shared" "memory" (memory 1 2 shared)))
+    #|(assert_unlinkable
+    #|  (module (import "shared" "memory" (memory 1 2))) "incompatible import type")
+    #|(module (memory (export "memory") 1 2))
+    #|(register "private")
+    #|(assert_unlinkable
+    #|  (module (import "private" "memory" (memory 1 2 shared))) "incompatible import type")
+  let script = parse(source) catch { e => fail("Parse error: \{e}") }
+  let result = run_wast_commands(script, ".", false, false)
+  inspect(result.failed, content="0")
+  inspect(result.passed, content="2")
+}

@@ -977,6 +977,7 @@ pub(all) struct Limits {
 pub(all) struct MemoryType {
   limits : Limits
   is_memory64 : Bool // true for i64-indexed memory (memory64 proposal)
+  is_shared : Bool
   page_size_log2 : Int // custom-page-sizes proposal (default: 16 for 64KiB)
 } derive(Eq, Debug)
 

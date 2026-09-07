@@ -610,6 +610,7 @@ fn core_import_compatible(
       limits_import_compatible(a.limits, b.limits)
     (Memory(a), Memory(b)) =>
       a.is_memory64 == b.is_memory64 &&
+      a.is_shared == b.is_shared &&
       a.page_size_log2 == b.page_size_log2 &&
       limits_import_compatible(a.limits, b.limits)
     _ => false
@@ -1753,7 +1754,14 @@ fn CoreTypeReader::read_extern_type_sig(
         },
       }
       let is_memory64 = (flags & 0x04) != 0
-      Some(Memory({ limits, is_memory64, page_size_log2: 16, }))
+      Some(
+        Memory({
+          limits,
+          is_memory64,
+          is_shared: (flags & 0x02) != 0,
+          page_size_log2: 16,
+        }),
+      )
     }
     0x03 => {
       // globaltype: valtype + mut
