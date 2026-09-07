@@ -196,6 +196,19 @@ fn instantiate_canon_error_context_debug_message(
         return []
       }
     }
+    // Allocation precedes descriptor validation, but no descriptor field may be
+    // stored until the entire return area fits in memory.
+    let descriptor_size = if mem_is_64 { 16L } else { 8L }
+    let descriptor_base = if mem_is_64 {
+      retptr.to_int64()
+    } else {
+      retptr.to_int64() & 0xFFFF_FFFFL
+    }
+    if descriptor_base < 0L ||
+      descriptor_base + descriptor_size > mem.byte_len() {
+      trap_canon("invalid debug message pointer")
+      return []
+    }
     if mem_is_64 {
       mem.store_i64(retptr, ptr.to_int64()) catch {
         e => {

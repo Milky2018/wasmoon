@@ -4443,6 +4443,20 @@ fn parse_canon_decl(
     decl.push_uleb_u32(parse_u32_literal(canon_items[3], "context index"))
     return (decl.to_bytes(), true, target_name_opt)
   }
+  if op_name == "error-context.new" || op_name == "error-context.debug-message" {
+    let (count, payload) = parse_canon_options(canon_items, 2, decl_end, state)
+    let decl = ByteBuf::ByteBuf()
+    decl.push_u8(if op_name == "error-context.new" { 0x1c } else { 0x1d })
+    decl.push_uleb_u32(count)
+    decl.push_bytes(payload)
+    return (decl.to_bytes(), true, target_name_opt)
+  }
+  if op_name == "error-context.drop" {
+    if decl_end != 2 {
+      raise Unsupported("error-context.drop does not accept arguments")
+    }
+    return (Bytes::from_array([0x1e]), true, target_name_opt)
+  }
   if op_name == "backpressure.inc" || op_name == "backpressure.dec" {
     if decl_end != 2 {
       raise Unsupported("\{op_name} does not accept arguments")
