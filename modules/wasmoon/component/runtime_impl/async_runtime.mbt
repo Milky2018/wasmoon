@@ -177,6 +177,7 @@ fn await_component_func(
   }
   let task_id = alloc_task_id(async_state)
   init_task_meta(async_state, task_id, callee_instance_id, caller_task_id)
+  install_task_return_contract(async_state, task_id, func)
   push_task(async_state, task_id, can_block)
   take_task_result(async_state, task_id) |> ignore
   let out = {
@@ -245,7 +246,7 @@ fn await_component_func(
         match cb_opt {
           None =>
             if async_abi {
-              let core_results = drive_core_to_completion(
+              let _core_results = drive_core_to_completion(
                 async_state,
                 store,
                 call_core_func_guarded_outcome(
@@ -256,15 +257,12 @@ fn await_component_func(
                   Stackful,
                 ),
               )
-              // Prefer results published via `canon task.return` (used by many
-              // async-ABI functions), but fall back to direct core results.
-              let vals = match take_task_result(async_state, task_id) {
-                Some(values) => values
-                None =>
-                  core_results_to_component(
-                    core_results, func_type, types, resources, store, callee_table,
-                  )
-              }
+              let vals = take_required_task_result(
+                async_state,
+                store,
+                callee_table.id,
+                task_id,
+              )
               match func_type.result {
                 Some(result_type) =>
                   if vals.length() > 0 {
@@ -443,10 +441,12 @@ fn await_component_func(
                 raise CanonCallError("unsupported callback code: \{tag}")
               }
             }
-            let vals = match take_task_result(async_state, task_id) {
-              Some(v) => v
-              None => []
-            }
+            let vals = take_required_task_result(
+              async_state,
+              store,
+              callee_table.id,
+              task_id,
+            )
             transfer_results_if_needed(
               vals,
               func_type.result,
@@ -523,7 +523,27 @@ fn step_task_once(
   caller_table : ResourceTable,
   async_state : AsyncState,
 ) -> TaskStep raise ComponentRuntimeError {
-  step_task_once_impl(task, store, caller_table, async_state)
+  let task_id = current_task_id(async_state)
+  install_task_return_contract(async_state, task_id, task.func)
+  let step = if task.main_finished[0] {
+    Done
+  } else {
+    step_task_once_impl(task, store, caller_table, async_state)
+  }
+  if step != Done {
+    return step
+  }
+  task.main_finished[0] = true
+  if task.func is Lifted(_, _, _, _, table, _, _, async_abi) {
+    let children = finish_task_children(async_state, store, table.id, task_id)
+    if children != Done {
+      return children
+    }
+    if async_abi && async_state.task_returned.get(task_id) is None {
+      raise CanonCallError("async-lifted export failed to produce a result")
+    }
+  }
+  Done
 }
 
 ///|
@@ -874,35 +894,10 @@ fn step_task_once_impl(
             return step
           }
         }
-        let task_id = current_task_id(async_state)
-        // Prefer results published via `canon task.return` (many async-abi
-        // functions return `[]` from core and communicate via task.return),
-        // but fall back to direct core results.
-        match async_state.task_results.get(task_id) {
-          Some(_vals) => async_state.task_returned.set(task_id, true)
-          None => {
-            let vals = core_results_to_component(
-              core_results, func_type, types, resources, store, callee_table,
-            )
-            match func_type.result {
-              Some(rty) =>
-                if vals.length() > 0 {
-                  validate_lifted_stream_future(
-                    rty,
-                    vals[0],
-                    types,
-                    async_state,
-                    callee_table.id,
-                  )
-                } else {
-                  ()
-                }
-              None => ()
-            }
-            async_state.task_returned.set(task_id, true)
-            set_task_result(async_state, task_id, callee_table.id, vals)
-          }
-        }
+        // Canonical async results are published exclusively by task.return or
+        // task.cancel. An explicit thread may still publish the result after
+        // this main thread exits.
+        core_results |> ignore
         Done
       } else {
         // A core function without the canonical async option can still suspend
@@ -1442,6 +1437,7 @@ fn call_component_func_in_task(
           let task_id = alloc_task_id(async_state)
           let caller_task_id = current_task_id(async_state)
           init_task_meta(async_state, task_id, callee_table.id, caller_task_id)
+          install_task_return_contract(async_state, task_id, func)
           push_task(async_state, task_id, false)
           take_task_result(async_state, task_id) |> ignore
           let out = {
@@ -1503,10 +1499,12 @@ fn call_component_func_in_task(
                 raise CanonCallError("unsupported callback code: \{tag}")
               }
             }
-            let vals = match take_task_result(async_state, task_id) {
-              Some(v) => v
-              None => []
-            }
+            let vals = take_required_task_result(
+              async_state,
+              store,
+              callee_table.id,
+              task_id,
+            )
             match func_type.result {
               Some(_) =>
                 if vals.length() == 0 {
@@ -1536,6 +1534,7 @@ fn call_component_func_in_task(
       let caller_task_id = current_task_id(async_state)
       let sync_task_id = alloc_task_id(async_state)
       init_task_meta(async_state, sync_task_id, callee_table.id, caller_task_id)
+      install_task_return_contract(async_state, sync_task_id, func)
       push_task(async_state, sync_task_id, false)
       defer {
         pop_task(async_state)
@@ -1591,13 +1590,7 @@ fn call_component_func_in_task(
       async_state.task_can_block[0] = previous_can_block
       let task_id = current_task_id(async_state)
       let component_results = if async_abi {
-        match take_task_result(async_state, task_id) {
-          Some(v) => v
-          None =>
-            core_results_to_component(
-              core_results, func_type, types, resources, store, callee_table,
-            )
-        }
+        take_required_task_result(async_state, store, callee_table.id, task_id)
       } else {
         core_results_to_component(
           core_results, func_type, types, resources, store, callee_table,

@@ -4447,7 +4447,7 @@ fn parse_canon_decl(
     if decl_end != 2 {
       raise Unsupported("thread.resume-later does not accept arguments")
     }
-    return (Bytes::from_array([0x2a]), true, target_name_opt)
+    return (Bytes::from_array([0x28]), true, target_name_opt)
   }
   if op_name == "thread.new-indirect" {
     if decl_end != 4 {
@@ -4478,7 +4478,7 @@ fn parse_canon_decl(
       } else if op_name == "thread.yield-to" {
         0x2b
       } else if op_name == "thread.switch-to" {
-        0x28
+        0x2a
       } else {
         0x29
       },

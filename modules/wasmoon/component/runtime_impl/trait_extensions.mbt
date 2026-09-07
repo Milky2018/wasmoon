@@ -177,3 +177,6 @@ pub extend WaitEvent with Debug::{to_repr}
 
 ///|
 pub extend WaitableSet with Debug::{to_repr}
+
+///|
+pub extend TaskReturnContract with Debug::{to_repr}

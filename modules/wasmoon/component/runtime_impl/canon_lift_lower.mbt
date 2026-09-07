@@ -36,9 +36,9 @@ fn instantiate_canon_lift(
   }
   let resources = resolve_canon_resources(opts, state)
   let callback = resolve_canon_callback(opts, state)
-  // Sync-style async functions (async + no callback) use cooperative suspension.
-  let async_abi = canon_opt_is_async(opts) ||
-    (func_type.is_async && callback is None)
+  // The function type permits suspension; the canonical option selects whether
+  // results arrive through task.return or the ordinary core return values.
+  let async_abi = canon_opt_is_async(opts)
   state.funcs.push(
     Lifted(
       state.core_funcs[core_func_idx],
@@ -204,6 +204,7 @@ fn instantiate_canon_lower(
         args: component_args,
         args_owner_component_id: [caller_table.id],
         started: [false],
+        main_finished: [false],
         code: [0],
         waiting_set: [None],
         host_future: [None],
@@ -694,6 +695,7 @@ fn instantiate_canon_lower(
               args: component_args,
               args_owner_component_id: [owner_component_id],
               started: [false],
+              main_finished: [false],
               code: [0],
               waiting_set: [None],
               host_future: [None],

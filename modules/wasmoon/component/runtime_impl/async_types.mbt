@@ -68,6 +68,14 @@ pub fn HostResourceDestructor::destroy(
 }
 
 ///|
+struct TaskReturnContract {
+  result : ValType?
+  types : Array[TypeDef?]
+  resources : CanonResources
+  owner_component_id : Int
+} derive(Debug)
+
+///|
 struct CanonResources {
   mem_addr : Int?
   realloc : CoreFuncRef?
@@ -348,6 +356,7 @@ pub(all) struct AsyncState {
   // Component instance id whose handle numbering is used by `task_results`.
   // For `canon task.return`, this is the component instance where the intrinsic lives.
   task_result_owner : Map[Int64, Int]
+  task_return_contracts : Map[Int64, TaskReturnContract]
   task_returned : Map[Int64, Bool]
   // Set only by `canon task.cancel` (distinct from external cancellation requests).
   task_self_cancelled : Map[Int64, Bool]
@@ -524,7 +533,7 @@ struct GuestThread {
   // Guest-visible local thread handle.
   handle : Int
   // Root task that owns this thread.
-  parent_task_id : Int64
+  mut parent_task_id : Int64
   // Internal task id that owns the explicit thread continuation.
   task_id : Int64
   start_func : CoreFuncRef
@@ -571,6 +580,8 @@ struct CallbackTask {
   args_owner_component_id : Array[Int]
   // Whether the initial call has been made (for callback-style tasks).
   started : Array[Bool]
+  // The entry function or final callback has exited; guest threads may remain.
+  main_finished : Array[Bool]
   // Latest callback code from the core task or callback.
   code : Array[Int]
   // Waitable-set key (handle_key(owner_component_id, local_index)).
@@ -624,6 +635,7 @@ pub fn AsyncState::AsyncState(
     next_task_id: [-1L],
     task_results: Map([]),
     task_result_owner: Map([]),
+    task_return_contracts: Map([]),
     task_returned: Map([]),
     task_self_cancelled: Map([]),
     task_cancelled: Map([]),
@@ -2079,9 +2091,11 @@ fn sync_waitables_for_task(
 
 ///|
 fn remove_task_meta(async_state : AsyncState, task_id : Int64) -> Unit {
+  discard_task_children(async_state, task_id)
   for key in sync_waitables_for_task(async_state, task_id) {
     async_state.sync_waitable_users.remove(key)
   }
+  async_state.task_return_contracts.remove(task_id)
   async_state.task_instance.remove(task_id)
   async_state.task_caller.remove(task_id)
   async_state.task_borrows.remove(task_id)
@@ -2094,6 +2108,33 @@ fn migrate_task_meta(
   from_id : Int64,
   to_id : Int64,
 ) -> Unit {
+  if async_state.thread_runnable.get(from_id) is Some(queue) {
+    async_state.thread_runnable.remove(from_id)
+    async_state.thread_runnable.set(to_id, queue)
+  }
+  if async_state.main_thread_scheduled.get(from_id) is Some(scheduled) {
+    async_state.main_thread_scheduled.remove(from_id)
+    async_state.main_thread_scheduled.set(to_id, scheduled)
+  }
+  for entry in async_state.threads {
+    let (_, thread) = entry
+    if thread.parent_task_id == from_id {
+      thread.parent_task_id = to_id
+    }
+  }
+  let children : Array[Int64] = []
+  for entry in async_state.task_caller {
+    let (child, parent) = entry
+    if parent == from_id {
+      children.push(child)
+    }
+  }
+  for child in children {
+    async_state.task_caller.set(child, to_id)
+  }
+  if async_state.task_return_contracts.get(from_id) is Some(contract) {
+    async_state.task_return_contracts.set(to_id, contract)
+  }
   for key in sync_waitables_for_task(async_state, from_id) {
     async_state.sync_waitable_users.set(key, to_id)
   }

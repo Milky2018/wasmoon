@@ -76,7 +76,33 @@ fn instantiate_canon_task_return(
     if !canon_may_leave[0] {
       trap_canon("cannot leave component instance")
     }
-    let task_id = current_task_id(async_state)
+    let (_, _, task_id, _) = current_thread_info(
+      async_state, owner_component_id,
+    ) catch {
+      e => {
+        trap_canon(canon_err_message(e))
+        return []
+      }
+    }
+    guard async_state.task_return_contracts.get(task_id) is Some(contract) &&
+      contract.owner_component_id == owner_component_id &&
+      optional_val_types_match(
+        contract.result,
+        contract.types,
+        result,
+        types,
+        0,
+      ) &&
+      (
+        resources.mem_addr is None ||
+        contract.resources.mem_addr == resources.mem_addr
+      ) &&
+      contract.resources.encoding == resources.encoding else {
+      trap_canon(
+        "invalid `task.return` signature and/or options for current task",
+      )
+      return []
+    }
     if async_state.task_borrows.get(task_id) is Some(count) && count > 0 {
       trap_canon("borrow handles still remain at the end of the call")
       return []
@@ -136,7 +162,14 @@ fn instantiate_canon_task_cancel(
     if !canon_may_leave[0] {
       trap_canon("cannot leave component instance")
     }
-    let task_id = current_task_id(async_state)
+    let (_, _, task_id, _) = current_thread_info(
+      async_state, owner_component_id,
+    ) catch {
+      e => {
+        trap_canon(canon_err_message(e))
+        return []
+      }
+    }
     if async_state.task_borrows.get(task_id) is Some(count) && count > 0 {
       trap_canon("borrow handles still remain at the end of the call")
       return []

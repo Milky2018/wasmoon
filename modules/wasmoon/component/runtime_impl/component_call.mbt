@@ -383,6 +383,7 @@ pub fn ComponentInstance::start_exported_func(
       args: args.copy(),
       args_owner_component_id: [self.resource_table.id],
       started: [false],
+      main_finished: [false],
       code: [0],
       waiting_set: [None],
       host_future: [None],

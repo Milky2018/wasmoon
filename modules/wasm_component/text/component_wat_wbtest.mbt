@@ -350,3 +350,16 @@ test "component validator: resource identity includes handle mode" {
     ),
   )
 }
+
+///|
+test "component thread resumption opcodes round trip" {
+  let text =
+    #|(component
+    #|  (core func (canon thread.resume-later))
+    #|  (core func (canon thread.switch-to))
+    #|  (core func (canon thread.switch-to cancellable)))
+  let component = @component.parse_component(parse_component_wat(text))
+  debug_inspect(component.canons[0], content="ThreadResumeLater")
+  debug_inspect(component.canons[1], content="ThreadSuspendThenResume(false)")
+  debug_inspect(component.canons[2], content="ThreadSuspendThenResume(true)")
+}
