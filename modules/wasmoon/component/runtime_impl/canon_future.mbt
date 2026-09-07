@@ -12,7 +12,7 @@ fn instantiate_canon_future_new(
   let async_state = state.async_state
   let creator_component_id = state.resource_table.id
   let payload_ty : ValType? = match state.types.get(_tyidx) {
-    Some(Some(Future(v))) => v
+    Some(Some(Future(v))) => v.map(ty => resolve_valtype(ty, state.types))
     _ => None
   }
   let host = fn(
@@ -232,69 +232,20 @@ fn instantiate_canon_future_read(
               }
               match st0.pending_write {
                 Some(pw) => {
-                  // Intra-component char futures cannot rendezvous.
-                  match st0.payload_ty {
-                    Some(Prim(Char)) =>
-                      if ep.creator_component_id == caller_component_id {
-                        trap_canon(
-                          "cannot read from and write to intra-component future",
-                        )
-                        return [I32(0)]
-                      }
-                    _ => ()
+                  if pw.writer_component_id == caller_component_id &&
+                    !future_payload_is_numeric(st0.payload_ty) {
+                    trap_canon(
+                      "cannot read from and write to intra-component future/stream with non-numeric payload",
+                    )
                   }
-
-                  // Write payload (if any) to memory at `ptr`.
-                  match st0.payload_ty {
-                    None => ()
-                    Some(Prim(U8)) => {
-                      let mem = match resources.mem_addr {
-                        Some(addr) =>
-                          store.get_mem(addr) catch {
-                            e => {
-                              trap_canon(e.to_string())
-                              return [I32(0)]
-                            }
-                          }
-                        None => {
-                          trap_canon("missing canon memory")
-                          return [I32(0)]
-                        }
-                      }
-                      mem.store_byte(ptr, trunc_u8(pw.val).to_byte()) catch {
-                        e => {
-                          trap_canon(e.to_string())
-                          return [I32(0)]
-                        }
-                      }
-                    }
-                    Some(Prim(Char)) => {
-                      if ptr % 4 != 0 {
-                        trap_canon("unaligned pointer")
-                        return [I32(0)]
-                      }
-                      let mem = match resources.mem_addr {
-                        Some(addr) =>
-                          store.get_mem(addr) catch {
-                            e => {
-                              trap_canon(e.to_string())
-                              return [I32(0)]
-                            }
-                          }
-                        None => {
-                          trap_canon("missing canon memory")
-                          return [I32(0)]
-                        }
-                      }
-                      mem.store_i32(ptr, pw.val) catch {
-                        e => {
-                          trap_canon(e.to_string())
-                          return [I32(0)]
-                        }
-                      }
-                    }
-                    _ => {
-                      trap_canon("unsupported future type")
+                  store_future_scalar_payload(
+                    pw.payload,
+                    store,
+                    resources.mem_addr,
+                    ptr,
+                  ) catch {
+                    error => {
+                      trap_canon(canon_err_message(error))
                       return [I32(0)]
                     }
                   }
@@ -595,116 +546,31 @@ fn instantiate_canon_future_write(
               }
               match st0.pending_read {
                 Some(pr) => {
-                  // Intra-component char futures cannot rendezvous.
-                  match st0.payload_ty {
-                    Some(Prim(Char)) =>
-                      if ep.creator_component_id == caller_component_id {
-                        trap_canon(
-                          "cannot read from and write to intra-component future",
-                        )
-                        return [I32(0)]
-                      }
-                    _ => ()
+                  if pr.reader_component_id == caller_component_id &&
+                    !future_payload_is_numeric(st0.payload_ty) {
+                    trap_canon(
+                      "cannot read from and write to intra-component future/stream with non-numeric payload",
+                    )
                   }
-
-                  // Load payload (if any) from writer memory at `ptr` and write to the
-                  // reader memory at `pr.ptr`.
-                  match st0.payload_ty {
-                    None => ()
-                    Some(Prim(U8)) => {
-                      let src_mem = match resources.mem_addr {
-                        Some(addr) =>
-                          store.get_mem(addr) catch {
-                            e => {
-                              trap_canon(e.to_string())
-                              return [I32(0)]
-                            }
-                          }
-                        None => {
-                          trap_canon("missing canon memory")
-                          return [I32(0)]
-                        }
-                      }
-                      let dst_mem = match pr.mem_addr {
-                        Some(addr) =>
-                          store.get_mem(addr) catch {
-                            e => {
-                              trap_canon(e.to_string())
-                              return [I32(0)]
-                            }
-                          }
-                        None => {
-                          trap_canon("missing canon memory")
-                          return [I32(0)]
-                        }
-                      }
-                      let b = src_mem.load_byte(ptr) catch {
-                        e => {
-                          trap_canon(e.to_string())
-                          return [I32(0)]
-                        }
-                      }
-                      dst_mem.store_byte(pr.ptr, b) catch {
-                        e => {
-                          trap_canon(e.to_string())
-                          return [I32(0)]
-                        }
-                      }
+                  let payload = load_future_scalar_payload(
+                    st0.payload_ty,
+                    store,
+                    resources.mem_addr,
+                    ptr,
+                  ) catch {
+                    error => {
+                      trap_canon(canon_err_message(error))
+                      return [I32(0)]
                     }
-                    Some(Prim(Char)) => {
-                      if ptr % 4 != 0 || pr.ptr % 4 != 0 {
-                        trap_canon("unaligned pointer")
-                        return [I32(0)]
-                      }
-                      let src_mem = match resources.mem_addr {
-                        Some(addr) =>
-                          store.get_mem(addr) catch {
-                            e => {
-                              trap_canon(e.to_string())
-                              return [I32(0)]
-                            }
-                          }
-                        None => {
-                          trap_canon("missing canon memory")
-                          return [I32(0)]
-                        }
-                      }
-                      let dst_mem = match pr.mem_addr {
-                        Some(addr) =>
-                          store.get_mem(addr) catch {
-                            e => {
-                              trap_canon(e.to_string())
-                              return [I32(0)]
-                            }
-                          }
-                        None => {
-                          trap_canon("missing canon memory")
-                          return [I32(0)]
-                        }
-                      }
-                      let n = src_mem.load_i32(ptr) catch {
-                        e => {
-                          trap_canon(e.to_string())
-                          return [I32(0)]
-                        }
-                      }
-                      // Validate scalar value.
-                      (char_from_canon_i32(n) catch {
-                        e => {
-                          trap_canon(canon_err_message(e))
-                          return [I32(0)]
-                        }
-                      })
-                      |> ignore
-                      dst_mem.store_i32(pr.ptr, n) catch {
-                        e => {
-                          trap_canon(e.to_string())
-                          return [I32(0)]
-                        }
-                      }
-                    }
-                    _ => {
-                      trap_canon("unsupported future type")
+                  }
+                  store_future_scalar_payload(
+                    payload,
+                    store,
+                    pr.mem_addr,
+                    pr.ptr,
+                  ) catch {
+                    error => {
+                      trap_canon(canon_err_message(error))
                       return [I32(0)]
                     }
                   }
@@ -740,65 +606,14 @@ fn instantiate_canon_future_write(
                 }
                 None => {
                   // Register a pending write by reading the payload once.
-                  let write_val : Int = match st0.payload_ty {
-                    None => 0
-                    Some(Prim(U8)) => {
-                      let mem = match resources.mem_addr {
-                        Some(addr) =>
-                          store.get_mem(addr) catch {
-                            e => {
-                              trap_canon(e.to_string())
-                              return [I32(0)]
-                            }
-                          }
-                        None => {
-                          trap_canon("missing canon memory")
-                          return [I32(0)]
-                        }
-                      }
-                      let b = mem.load_byte(ptr) catch {
-                        e => {
-                          trap_canon(e.to_string())
-                          return [I32(0)]
-                        }
-                      }
-                      b.to_int()
-                    }
-                    Some(Prim(Char)) => {
-                      if ptr % 4 != 0 {
-                        trap_canon("unaligned pointer")
-                        return [I32(0)]
-                      }
-                      let mem = match resources.mem_addr {
-                        Some(addr) =>
-                          store.get_mem(addr) catch {
-                            e => {
-                              trap_canon(e.to_string())
-                              return [I32(0)]
-                            }
-                          }
-                        None => {
-                          trap_canon("missing canon memory")
-                          return [I32(0)]
-                        }
-                      }
-                      let n = mem.load_i32(ptr) catch {
-                        e => {
-                          trap_canon(e.to_string())
-                          return [I32(0)]
-                        }
-                      }
-                      (char_from_canon_i32(n) catch {
-                        e => {
-                          trap_canon(canon_err_message(e))
-                          return [I32(0)]
-                        }
-                      })
-                      |> ignore
-                      n
-                    }
-                    _ => {
-                      trap_canon("unsupported future type")
+                  let payload = load_future_scalar_payload(
+                    st0.payload_ty,
+                    store,
+                    resources.mem_addr,
+                    ptr,
+                  ) catch {
+                    error => {
+                      trap_canon(canon_err_message(error))
                       return [I32(0)]
                     }
                   }
@@ -808,7 +623,7 @@ fn instantiate_canon_future_write(
                     pending_write: Some({
                       writer_component_id: caller_component_id,
                       writer_handle: handle,
-                      val: write_val,
+                      payload,
                     }),
                     readable_dropped: st0.readable_dropped,
                     writable_dropped: st0.writable_dropped,
