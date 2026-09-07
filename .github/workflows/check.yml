@@ -88,21 +88,6 @@ jobs:
           VCODE_REGALLOC_VALIDATION=1 \
             moon test --target native ${{ matrix.native_test_args }}
 
-      - name: run upstream WASIp1 polling regressions
-        run: |
-          rustup toolchain install 1.97.0 --profile minimal --target wasm32-wasip1
-          ./install.sh
-          RUSTUP_TOOLCHAIN=1.97.0 python3 scripts/run_wasmtime_p1.py \
-            --filter p1_poll_oneoff_stdio --output target/wasmtime-p1-smoke
-
-      - name: upload WASIp1 polling results
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: wasip1-polling-${{ matrix.os }}
-          path: target/wasmtime-p1-smoke
-          if-no-files-found: ignore
-
       - name: build Wasmoon
         run: |
           moon build --target native --release
@@ -113,6 +98,20 @@ jobs:
             exit 1
           fi
           ./install.sh
+
+      - name: run upstream WASIp1 polling regressions
+        run: |
+          rustup toolchain install 1.97.0 --profile minimal --target wasm32-wasip1
+          RUSTUP_TOOLCHAIN=1.97.0 python3 scripts/run_wasmtime_p1.py \
+            --filter p1_poll_oneoff_stdio --output target/wasmtime-p1-smoke
+
+      - name: upload WASIp1 polling results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: wasip1-polling-${{ matrix.os }}
+          path: target/wasmtime-p1-smoke
+          if-no-files-found: ignore
 
       # Before the suites below, because they trust the exit status this
       # checks: `run_all_wast.py` reads `wasmoon test`'s status as its
