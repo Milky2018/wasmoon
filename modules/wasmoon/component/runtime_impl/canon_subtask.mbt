@@ -3,6 +3,26 @@
 /// (group: subtask)
 
 ///|
+fn take_subtask_terminal_status(
+  async_state : AsyncState,
+  owner : Int,
+  id : Int,
+) -> Int raise @runtime.RuntimeError {
+  let key = handle_key(owner, id)
+  if async_state.waitable_events.get(key) is Some(events) {
+    for event in events {
+      if event.code == 1 && (event.payload == 2 || event.payload == 4) {
+        let status = event.payload
+        remove_waitable_events_for(async_state, owner, id, 1)
+        return status
+      }
+    }
+  }
+  trap_canon("`subtask.cancel` called after terminal status delivered")
+  0
+}
+
+///|
 fn instantiate_canon_subtask_cancel(
   is_async_cancel : Bool,
   state : BuildState,
@@ -17,133 +37,95 @@ fn instantiate_canon_subtask_cancel(
     if !canon_may_leave[0] {
       trap_canon("cannot leave component instance")
     }
-    fn ret_i32(n : Int) -> Array[@types.Value] {
-      [I32(n)]
+    guard args is [I32(id)] else {
+      trap_canon("type mismatch")
+      return []
     }
-
-    match args {
-      [I32(id)] => {
-        if !is_async_cancel &&
-          waitable_is_in_set(async_state, owner_component_id, id) {
-          trap_canon(
-            "waitable cannot be used synchronously while added to a waitable set",
-          )
-          return ret_i32(0)
-        }
-        if !is_async_cancel && !async_state.task_can_block[0] {
-          trap_canon("cannot block a synchronous task before returning")
-          return ret_i32(0)
-        }
-        let skey = handle_key(owner_component_id, id)
-        match async_state.subtasks.get(skey) {
-          None => {
-            trap_canon("unknown subtask handle index \{id}")
-            ret_i32(0)
-          }
-          Some(st) => {
-            if st.phase[0] == Returned {
-              // Already resolved.
-              return ret_i32(0)
-            }
-            async_state.task_cancelled.set(skey, true)
-
-            // Mark cancellation request for callback-driven tasks.
-            match st.driver {
-              CallbackLifted(t) => t.cancelled[0] = true
-            }
-
-            if st.phase[0] == Starting {
-              st.phase[0] = Returned
-              let pending_keys : Array[Int] = []
-              for kv in async_state.pending_by_instance.iter() {
-                let (key, _) = kv
-                pending_keys.push(key)
-              }
-              for key in pending_keys {
-                if async_state.pending_by_instance.get(key) is Some(queue) {
-                  let mut i = 0
-                  while i < queue.length() {
-                    if queue[i] == skey {
-                      queue.remove(i) |> ignore
-                    } else {
-                      i = i + 1
-                    }
-                  }
-                  if queue.length() == 0 {
-                    async_state.pending_by_instance.remove(key)
-                  }
-                }
-              }
-              // CANCELLED_BEFORE_STARTED.
-              return ret_i32(3)
-            }
-
-            // Best-effort: if the subtask uses the callback-style async ABI,
-            // attempt to deliver the cancellation immediately.
-            let is_callback = match st.driver {
-              CallbackLifted(t) =>
-                match t.func {
-                  Lifted(
-                    _,
-                    _ft,
-                    _res,
-                    _tys,
-                    _tbl,
-                    _may_enter,
-                    Some(_cb),
-                    _async_abi
-                  ) => true
-                  _ => false
-                }
-            }
-            if is_callback {
-              match st.driver {
-                CallbackLifted(t) => {
-                  push_task(async_state, skey, true)
-                  let step = step_task_once(
-                    t,
-                    store,
-                    st.caller_table,
-                    async_state,
-                  ) catch {
-                    e => {
-                      pop_task(async_state)
-                      trap_canon(canon_err_message(e))
-                      return ret_i32(0)
-                    }
-                  }
-                  pop_task(async_state)
-                  match step {
-                    Done => {
-                      st.phase[0] = Returned
-                      async_state.inflight_by_instance.set(st.bp_key, 0)
-                      enqueue_waitable_event(async_state, skey, {
-                        owner_component_id,
-                        code: 1,
-                        index: id,
-                        payload: 4,
-                      })
-                      // CANCELLED_BEFORE_RETURNED=4 (component-spec convention).
-                      return ret_i32(4)
-                    }
-                    _ => ()
-                  }
-                }
-              }
-            }
-
-            // BLOCKED=-1 (cancellation didn't complete synchronously).
-            ret_i32(-1)
+    let caller_task = current_task_id(async_state)
+    if !is_async_cancel {
+      resume_sync_waitable_use(async_state, owner_component_id, id, caller_task)
+      |> ignore
+    }
+    if waitable_is_in_set(async_state, owner_component_id, id) {
+      trap_canon(
+        "waitable cannot be used synchronously while added to a waitable set",
+      )
+    }
+    if waitable_is_in_sync_use(async_state, owner_component_id, id) {
+      trap_canon("waitable already in synchronous use")
+    }
+    let key = handle_key(owner_component_id, id)
+    guard async_state.subtasks.get(key) is Some(subtask) else {
+      trap_canon("unknown subtask handle index \{id}")
+      return []
+    }
+    if subtask.phase[0] == Returned {
+      return [
+        I32(take_subtask_terminal_status(async_state, owner_component_id, id)),
+      ]
+    }
+    async_state.task_cancelled.set(key, true)
+    let CallbackLifted(task) = subtask.driver
+    task.cancelled[0] = true
+    if subtask.phase[0] == Starting {
+      subtask.phase[0] = Returned
+      if async_state.pending_by_instance.get(subtask.bp_key) is Some(queue) {
+        let mut i = 0
+        while i < queue.length() {
+          if queue[i] == key {
+            queue.remove(i) |> ignore
+          } else {
+            i += 1
           }
         }
+        if queue.is_empty() {
+          async_state.pending_by_instance.remove(subtask.bp_key)
+        }
       }
-      _ => {
-        trap_canon("type mismatch")
-        ret_i32(0)
+      remove_waitable_events_for(async_state, owner_component_id, id, 1)
+      return [I32(3)]
+    }
+    let step = {
+      push_task(async_state, key, true)
+      defer pop_task(async_state)
+      step_task_once(task, store, subtask.caller_table, async_state) catch {
+        error => {
+          trap_canon(canon_err_message(error))
+          return []
+        }
       }
     }
+    if step == Done {
+      complete_subtask(async_state, store, key, subtask) catch {
+        error => {
+          trap_canon(canon_err_message(error))
+          return []
+        }
+      }
+      return [
+        I32(take_subtask_terminal_status(async_state, owner_component_id, id)),
+      ]
+    }
+    if is_async_cancel {
+      return [I32(-1)]
+    }
+    if !async_state.task_can_block[0] {
+      trap_canon("cannot block a synchronous task before returning")
+    }
+    // STARTED is not a cancellation result and cannot wake this synchronous wait.
+    remove_waitable_events_for(async_state, owner_component_id, id, 1)
+    mark_sync_waitable_blocked(async_state, owner_component_id, id, caller_task)
+    canon_suspend[0] = Some(Yield)
+    raise Unreachable
   }
-  state.core_funcs.push(alloc_component_host_core_func(store, core_type, host))
+  state.core_funcs.push(
+    alloc_component_host_core_func(
+      store,
+      core_type,
+      host,
+      may_suspend=!is_async_cancel,
+    ),
+  )
 }
 
 ///|
