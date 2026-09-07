@@ -593,9 +593,9 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_jit_memory_size(jit_context_t *ctx, int32_t m
 MOONBIT_FFI_EXPORT void wasmoon_jit_memory_fill(
     jit_context_t *ctx,
     int32_t memidx,
-    int32_t dst,
+    int64_t dst,
     int32_t val,
-    int32_t size
+    int64_t size
 ) {
     memory_fill_indexed_internal(ctx, memidx, dst, val, size);
 }
@@ -604,9 +604,9 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_memory_copy(
     jit_context_t *ctx,
     int32_t dst_memidx,
     int32_t src_memidx,
-    int32_t dst,
-    int32_t src,
-    int32_t size
+    int64_t dst,
+    int64_t src,
+    int64_t size
 ) {
     memory_copy_indexed_internal(ctx, dst_memidx, src_memidx, dst, src, size);
 }

@@ -1252,7 +1252,7 @@ test "unsupported structured branch reports label-stack capability" {
 }
 
 ///|
-test "unsupported memory64 bulk helper reports runtime ABI capability" {
+test "memory64 bulk helper uses the reusable runtime ABI" {
   let mod_ = {
     ..@types.Module::simple(
       [],
@@ -1270,19 +1270,11 @@ test "unsupported memory64 bulk helper reports runtime ABI capability" {
     ],
   }
   let env = native_test_env()
-  try lower_function(env, mod_, 0) catch {
-    err => {
-      let msg = Repr(err).to_string()
-      inspect(
-        msg.contains(
-          "memory64 memory.fill requires a reusable runtime helper ABI",
-        ),
-        content="true",
-      )
-    }
-  } noraise {
-    _ => fail("expected unsupported native lowering")
-  }
+  let func = lower_function(env, mod_, 0)
+  inspect(
+    func.print().contains("call test.runtime.memory_fill"),
+    content="true",
+  )
 }
 
 ///|

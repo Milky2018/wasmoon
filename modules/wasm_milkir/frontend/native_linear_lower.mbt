@@ -1064,23 +1064,11 @@ fn push_memory_fill(
   memidx : Int,
 ) -> Bool {
   guard vmctx is Some(context) else { return false }
-  guard memory_index_type(memory_types, memidx) is Some(I32) else {
-    // TODO(wasm_frontend): add memory64-capable runtime helper ABI before enabling
-    // this reusable call path for memory64 memory.fill.
-    return false
-  }
+  guard memory_index_type(memory_types, memidx) is Some(_) else { return false }
   guard pop3(stack) is Some((dst, value, size)) else { return false }
-  let symbol = builder
-    .get_function()
-    .declare_external_symbol(runtime_symbols.symbol_name(MemoryFill))
-  builder.call_symbol(symbol, None, [
-    context,
-    builder.iconst_i32(memidx),
-    dst,
-    value,
-    size,
-  ])
-  |> ignore
+  @wasm_milkir.memory_fill(
+    builder, runtime_symbols, context, memidx, dst, value, size,
+  )
   true
 }
 
@@ -1095,29 +1083,16 @@ fn push_memory_copy(
   src_memidx : Int,
 ) -> Bool {
   guard vmctx is Some(context) else { return false }
-  guard memory_index_type(memory_types, dst_memidx) is Some(I32) else {
-    // TODO(wasm_frontend): add memory64-capable runtime helper ABI before enabling
-    // this reusable call path for memory64 destination memories.
+  guard memory_index_type(memory_types, dst_memidx) is Some(_) else {
     return false
   }
-  guard memory_index_type(memory_types, src_memidx) is Some(I32) else {
-    // TODO(wasm_frontend): add memory64-capable runtime helper ABI before enabling
-    // this reusable call path for memory64 source memories.
+  guard memory_index_type(memory_types, src_memidx) is Some(_) else {
     return false
   }
   guard pop3(stack) is Some((dst, src, size)) else { return false }
-  let symbol = builder
-    .get_function()
-    .declare_external_symbol(runtime_symbols.symbol_name(MemoryCopy))
-  builder.call_symbol(symbol, None, [
-    context,
-    builder.iconst_i32(dst_memidx),
-    builder.iconst_i32(src_memidx),
-    dst,
-    src,
-    size,
-  ])
-  |> ignore
+  @wasm_milkir.memory_copy(
+    builder, runtime_symbols, context, dst_memidx, src_memidx, dst, src, size,
+  )
   true
 }
 
@@ -1132,51 +1107,11 @@ fn push_memory_init(
   data_idx : Int,
 ) -> Bool {
   guard vmctx is Some(context) else { return false }
-  guard memory_index_type(memory_types, memidx) is Some(I32) else {
-    // TODO(wasm_frontend): add memory64-capable runtime helper ABI before enabling
-    // this reusable call path for memory64 memory.init.
-    return false
-  }
+  guard memory_index_type(memory_types, memidx) is Some(_) else { return false }
   guard pop3(stack) is Some((dst, src, size)) else { return false }
-  let dst_i64 = if dst.ty == I64 {
-    dst
-  } else {
-    guard emit_op(builder, I64, Scalar(Convert(UnsignedExtend)), [dst])
-      is Some(extended) else {
-      return false
-    }
-    extended
-  }
-  let src_i64 = if src.ty == I64 {
-    src
-  } else {
-    guard emit_op(builder, I64, Scalar(Convert(UnsignedExtend)), [src])
-      is Some(extended) else {
-      return false
-    }
-    extended
-  }
-  let size_i64 = if size.ty == I64 {
-    size
-  } else {
-    guard emit_op(builder, I64, Scalar(Convert(UnsignedExtend)), [size])
-      is Some(extended) else {
-      return false
-    }
-    extended
-  }
-  let symbol = builder
-    .get_function()
-    .declare_external_symbol(runtime_symbols.symbol_name(MemoryInit))
-  builder.call_symbol(symbol, None, [
-    context,
-    builder.iconst_i32(memidx),
-    builder.iconst_i32(data_idx),
-    dst_i64,
-    src_i64,
-    size_i64,
-  ])
-  |> ignore
+  @wasm_milkir.memory_init(
+    builder, runtime_symbols, context, memidx, data_idx, dst, src, size,
+  )
   true
 }
 

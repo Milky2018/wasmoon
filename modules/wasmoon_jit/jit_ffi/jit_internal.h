@@ -199,9 +199,9 @@ int is_memory_guard_page_access(jit_context_t *ctx, void *addr);
 // Multi-memory variants (with memidx parameter)
 int32_t memory_grow_indexed_internal(jit_context_t *ctx, int32_t memidx, int64_t delta, int32_t max_pages);
 int32_t memory_size_indexed_internal(jit_context_t *ctx, int32_t memidx);
-void memory_fill_indexed_internal(jit_context_t *ctx, int32_t memidx, int32_t dst, int32_t val, int32_t size);
+void memory_fill_indexed_internal(jit_context_t *ctx, int32_t memidx, int64_t dst, int32_t val, int64_t size);
 void memory_copy_indexed_internal(jit_context_t *ctx, int32_t dst_memidx, int32_t src_memidx,
-                                   int32_t dst, int32_t src, int32_t size);
+                                   int64_t dst, int64_t src, int64_t size);
 
 // Descriptor-only variants (no ctx)
 int32_t memory_grow_desc_internal(wasmoon_memory_t *mem, int32_t delta, int32_t max_pages);

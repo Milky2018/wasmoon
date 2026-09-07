@@ -249,20 +249,14 @@ static void memory_init_impl(
         return;
     }
 
-    // If segment is dropped, only len=0 is valid
     uint64_t len_u32 = (uint64_t)(uint32_t)len;
     uint64_t src_u32 = (uint64_t)(uint32_t)src;
-    if (ctx->data_dropped && ctx->data_dropped[data_idx]) {
-        if (len_u32 != 0) {
-            g_trap_code = 1;
-            if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
-        }
-        return;
-    }
-
-    // Get segment data
     uint8_t *seg_data = ctx->data_segments ? ctx->data_segments[data_idx] : NULL;
     size_t seg_size = ctx->data_segment_sizes ? ctx->data_segment_sizes[data_idx] : 0;
+    // A dropped segment has length zero; both ranges must still be checked.
+    if (ctx->data_dropped && ctx->data_dropped[data_idx]) {
+        seg_size = 0;
+    }
 
     // Bounds check source range in segment
     if ((uint64_t)seg_size < src_u32 || (uint64_t)seg_size - src_u32 < len_u32) {
@@ -282,7 +276,7 @@ static void memory_init_impl(
         }
         mem = ctx->memory0->base;
         mem_size = atomic_load_explicit(&ctx->memory0->current_length, memory_order_relaxed);
-    } else if (ctx->memories && memidx < ctx->memory_count) {
+    } else if (memidx > 0 && ctx->memories && memidx < ctx->memory_count) {
         wasmoon_memory_t *m = ctx->memories[memidx];
         if (!m || !m->base) {
             g_trap_code = 1;

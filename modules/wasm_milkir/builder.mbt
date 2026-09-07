@@ -151,9 +151,17 @@ pub fn memory_fill(
   call_runtime(builder, runtime_symbols.symbol_name(MemoryFill), None, [
     vmctx,
     builder.iconst_i32(memidx),
-    dst,
+    if dst.ty == I64 {
+      dst
+    } else {
+      builder.uextend(I64, dst)
+    },
     val,
-    size,
+    if size.ty == I64 {
+      size
+    } else {
+      builder.uextend(I64, size)
+    },
   ])
   |> ignore
 }
@@ -173,9 +181,21 @@ pub fn memory_copy(
     vmctx,
     builder.iconst_i32(dst_memidx),
     builder.iconst_i32(src_memidx),
-    dst,
-    src,
-    size,
+    if dst.ty == I64 {
+      dst
+    } else {
+      builder.uextend(I64, dst)
+    },
+    if src.ty == I64 {
+      src
+    } else {
+      builder.uextend(I64, src)
+    },
+    if size.ty == I64 {
+      size
+    } else {
+      builder.uextend(I64, size)
+    },
   ])
   |> ignore
 }
@@ -195,9 +215,21 @@ pub fn memory_init(
     vmctx,
     builder.iconst_i32(memidx),
     builder.iconst_i32(data_idx),
-    dst,
-    src,
-    size,
+    if dst.ty == I64 {
+      dst
+    } else {
+      builder.uextend(I64, dst)
+    },
+    if src.ty == I64 {
+      src
+    } else {
+      builder.uextend(I64, src)
+    },
+    if size.ty == I64 {
+      size
+    } else {
+      builder.uextend(I64, size)
+    },
   ])
   |> ignore
 }

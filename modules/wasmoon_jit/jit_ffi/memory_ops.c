@@ -362,7 +362,7 @@ int32_t memory_size_indexed_internal(jit_context_t *ctx, int32_t memidx) {
     return (int32_t)(size / page_size);
 }
 
-void memory_fill_indexed_internal(jit_context_t *ctx, int32_t memidx, int32_t dst, int32_t val, int32_t size) {
+void memory_fill_indexed_internal(jit_context_t *ctx, int32_t memidx, int64_t dst, int32_t val, int64_t size) {
     if (!ctx) {
         g_trap_code = 1;
         if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
@@ -383,19 +383,21 @@ void memory_fill_indexed_internal(jit_context_t *ctx, int32_t memidx, int32_t ds
         return;
     }
 
-    // Check bounds
-    if (dst < 0 || size < 0 || (uint32_t)dst + (uint32_t)size > mem_size) {
+    wasmoon_memory_t *mem = get_memory(ctx, memidx);
+    uint64_t dst_offset = mem->is_memory64 ? (uint64_t)dst : (uint32_t)dst;
+    uint64_t length = mem->is_memory64 ? (uint64_t)size : (uint32_t)size;
+    if (dst_offset > mem_size || length > mem_size - dst_offset) {
         g_trap_code = 1;
         if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
         return;
     }
-
-    // Fill memory with byte value (val & 0xFF)
-    fill_bytes_fast(mem_base + dst, (uint8_t)(val & 0xFF), (size_t)size);
+    if (length != 0) {
+        fill_bytes_fast(mem_base + dst_offset, (uint8_t)val, (size_t)length);
+    }
 }
 
 void memory_copy_indexed_internal(jit_context_t *ctx, int32_t dst_memidx, int32_t src_memidx,
-                                   int32_t dst, int32_t src, int32_t size) {
+                                   int64_t dst, int64_t src, int64_t size) {
     if (!ctx) {
         g_trap_code = 1;
         if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
@@ -424,20 +426,21 @@ void memory_copy_indexed_internal(jit_context_t *ctx, int32_t dst_memidx, int32_
         return;
     }
 
-    // Check bounds for both source and destination
-    if (dst < 0 || src < 0 || size < 0 ||
-        (uint32_t)dst + (uint32_t)size > dst_size ||
-        (uint32_t)src + (uint32_t)size > src_size) {
+    wasmoon_memory_t *dst_mem = get_memory(ctx, dst_memidx);
+    wasmoon_memory_t *src_mem = get_memory(ctx, src_memidx);
+    uint64_t dst_offset = dst_mem->is_memory64 ? (uint64_t)dst : (uint32_t)dst;
+    uint64_t src_offset = src_mem->is_memory64 ? (uint64_t)src : (uint32_t)src;
+    uint64_t length = dst_mem->is_memory64 && src_mem->is_memory64
+        ? (uint64_t)size : (uint32_t)size;
+    if (dst_offset > dst_size || length > dst_size - dst_offset ||
+        src_offset > src_size || length > src_size - src_offset) {
         g_trap_code = 1;
         if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
         return;
     }
-
-    // Use memmove if same memory (handles overlapping regions), memcpy otherwise
-    if (dst_memidx == src_memidx) {
-        memmove(dst_base + dst, src_base + src, size);
-    } else {
-        memcpy(dst_base + dst, src_base + src, size);
+    // Imported memory indices can alias the same memory descriptor.
+    if (length != 0) {
+        memmove(dst_base + dst_offset, src_base + src_offset, (size_t)length);
     }
 }
 
