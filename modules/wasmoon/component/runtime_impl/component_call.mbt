@@ -61,7 +61,7 @@ fn ComponentInvocation::cleanup_task(self : ComponentInvocation) -> Unit {
   self.async_state.task_self_cancelled.remove(self.task_id)
   self.async_state.task_cancelled.remove(self.task_id)
   self.async_state.task_contexts.remove(self.task_id)
-  self.async_state.yield_suspended.remove(self.task_id)
+  self.async_state.task_suspensions.remove(self.task_id)
   self.async_state.waiting_ws.remove(self.task_id)
   self.async_state.sync_lower_states.remove(self.task_id)
   drop_task_thread(self.async_state, self.task_id)

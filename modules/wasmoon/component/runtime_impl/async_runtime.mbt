@@ -92,7 +92,7 @@ fn task_can_resume_without_external_progress(
   async_state : AsyncState,
   task_id : Int64,
 ) -> Bool {
-  if async_state.yield_suspended.get(task_id) == Some(true) {
+  if async_state.task_suspensions.get(task_id) is Some(Yield(_)) {
     return true
   }
   for key in sync_waitables_for_task(async_state, task_id) {

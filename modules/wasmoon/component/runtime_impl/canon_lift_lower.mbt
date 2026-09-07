@@ -223,7 +223,7 @@ fn instantiate_canon_lower(
         async_state.task_contexts.remove(task_id)
         drop_task_thread(async_state, task_id)
         remove_task_meta(async_state, task_id)
-        async_state.yield_suspended.remove(task_id)
+        async_state.task_suspensions.remove(task_id)
         async_state.waiting_ws.remove(task_id)
         async_state.sync_lower_states.remove(task_id)
       }
@@ -261,9 +261,9 @@ fn instantiate_canon_lower(
           async_state.task_contexts.remove(from_id)
           async_state.task_contexts.set(to_id, v)
         }
-        if async_state.yield_suspended.get(from_id) is Some(v) {
-          async_state.yield_suspended.remove(from_id)
-          async_state.yield_suspended.set(to_id, v)
+        if async_state.task_suspensions.get(from_id) is Some(v) {
+          async_state.task_suspensions.remove(from_id)
+          async_state.task_suspensions.set(to_id, v)
         }
         if async_state.waiting_ws.get(from_id) is Some(v) {
           async_state.waiting_ws.remove(from_id)
@@ -691,7 +691,7 @@ fn instantiate_canon_lower(
         async_state.task_contexts.remove(task_id)
         drop_task_thread(async_state, task_id)
         remove_task_meta(async_state, task_id)
-        async_state.yield_suspended.remove(task_id)
+        async_state.task_suspensions.remove(task_id)
         async_state.waiting_ws.remove(task_id)
         async_state.sync_lower_states.remove(task_id)
       }

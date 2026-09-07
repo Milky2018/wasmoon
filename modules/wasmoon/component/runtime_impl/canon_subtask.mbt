@@ -85,6 +85,14 @@ fn instantiate_canon_subtask_cancel(
       remove_waitable_events_for(async_state, owner_component_id, id, 1)
       return [I32(3)]
     }
+    let can_cancel_now = task.continuation[0] is None ||
+      (
+        async_state.task_suspensions.get(key) is Some(point) &&
+        point.is_cancellable()
+      )
+    if is_async_cancel && !can_cancel_now {
+      return [I32(-1)]
+    }
     let step = {
       push_task(async_state, key, true)
       defer pop_task(async_state)
@@ -198,7 +206,7 @@ fn instantiate_canon_subtask_drop(
         async_state.task_contexts.remove(skey)
         drop_task_thread(async_state, skey)
         remove_task_meta(async_state, skey)
-        async_state.yield_suspended.remove(skey)
+        async_state.task_suspensions.remove(skey)
         async_state.waiting_ws.remove(skey)
         async_state.sync_lower_states.remove(skey)
 

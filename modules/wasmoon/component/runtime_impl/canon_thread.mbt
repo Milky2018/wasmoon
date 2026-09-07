@@ -155,7 +155,14 @@ fn wake_ready_waiting_threads(
           t.waiting_ws[0] = None
           to_wake.push(t.handle)
         }
-      None => ()
+      None =>
+        for key in sync_waitables_for_task(async_state, t.task_id) {
+          if async_state.waitable_events.get(key) is Some(events) &&
+            !events.is_empty() {
+            to_wake.push(t.handle)
+            break
+          }
+        }
     }
   }
   for h in to_wake {
@@ -174,7 +181,7 @@ fn cleanup_thread_task(async_state : AsyncState, task_id : Int64) -> Unit {
   async_state.task_contexts.remove(task_id)
   drop_task_thread(async_state, task_id)
   remove_task_meta(async_state, task_id)
-  async_state.yield_suspended.remove(task_id)
+  async_state.task_suspensions.remove(task_id)
   async_state.waiting_ws.remove(task_id)
   async_state.sync_lower_states.remove(task_id)
 }
@@ -387,7 +394,13 @@ fn execute_thread_suspension_intrinsic(
     }
   }
 
-  let resuming = async_state.yield_suspended.get(task_id) is Some(true)
+  let suspension = async_state.task_suspensions.get(task_id)
+  let resuming = suspension is Some(_)
+
+  if maybe_consume_cancelled(async_state, root_task_id, cancellable) {
+    async_state.task_suspensions.remove(task_id)
+    return [I32(1)]
+  }
 
   if !resuming && target is Some(handle) {
     require_suspended_thread(
@@ -401,13 +414,8 @@ fn execute_thread_suspension_intrinsic(
   }
 
   if is_explicit {
-    if maybe_consume_cancelled(async_state, task_id, cancellable) {
-      async_state.yield_suspended.remove(task_id)
-      return [I32(1)]
-    }
-
     if resuming {
-      async_state.yield_suspended.remove(task_id)
+      async_state.task_suspensions.remove(task_id)
       return [I32(0)]
     }
 
@@ -429,20 +437,36 @@ fn execute_thread_suspension_intrinsic(
       |> ignore
     }
 
-    async_state.yield_suspended.set(task_id, true)
+    async_state.task_suspensions.set(
+      task_id,
+      if schedule_current {
+        Yield(cancellable)
+      } else {
+        Suspend(cancellable)
+      },
+    )
     canon_suspend[0] = Some(Yield)
     raise Unreachable
   }
 
   // Implicit `thread.yield` is modeled as cooperative suspension. Resuming
   // retries this host instruction once and then continues at its successor.
-  if maybe_consume_cancelled(async_state, task_id, cancellable) {
-    async_state.yield_suspended.remove(task_id)
-    return [I32(1)]
-  }
-
   if resuming {
-    async_state.yield_suspended.remove(task_id)
+    if suspension is Some(Suspend(_)) {
+      let resumed = dispatch_until_main_scheduled(
+        async_state, store, owner_component_id, root_task_id,
+      ) catch {
+        error => {
+          trap_canon(canon_err_message(error))
+          return [I32(0)]
+        }
+      }
+      if !resumed {
+        canon_suspend[0] = Some(Yield)
+        raise Unreachable
+      }
+    }
+    async_state.task_suspensions.remove(task_id)
     return [I32(0)]
   }
 
@@ -476,9 +500,9 @@ fn execute_thread_suspension_intrinsic(
         if !async_state.task_can_block[0] {
           trap_canon("cannot block a synchronous task before returning")
         } else {
-          trap_canon(
-            "wasm trap: deadlock detected: event loop cannot make further progress",
-          )
+          async_state.task_suspensions.set(task_id, Suspend(cancellable))
+          canon_suspend[0] = Some(Yield)
+          raise Unreachable
         }
         return [I32(0)]
       }
@@ -514,7 +538,14 @@ fn execute_thread_suspension_intrinsic(
         if !async_state.task_can_block[0] {
           return [I32(0)]
         }
-        async_state.yield_suspended.set(task_id, true)
+        async_state.task_suspensions.set(
+          task_id,
+          if schedule_current {
+            Yield(cancellable)
+          } else {
+            Suspend(cancellable)
+          },
+        )
         canon_suspend[0] = Some(Yield)
         raise Unreachable
       }
@@ -530,9 +561,9 @@ fn execute_thread_suspension_intrinsic(
         if !async_state.task_can_block[0] {
           trap_canon("cannot block a synchronous task before returning")
         } else {
-          trap_canon(
-            "wasm trap: deadlock detected: event loop cannot make further progress",
-          )
+          async_state.task_suspensions.set(task_id, Suspend(cancellable))
+          canon_suspend[0] = Some(Yield)
+          raise Unreachable
         }
         return [I32(0)]
       }

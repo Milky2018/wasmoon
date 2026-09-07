@@ -21,7 +21,7 @@ fn complete_subtask(
     async_state.task_cancelled.remove(task_id)
     async_state.task_contexts.remove(task_id)
     remove_task_meta(async_state, task_id)
-    async_state.yield_suspended.remove(task_id)
+    async_state.task_suspensions.remove(task_id)
     async_state.waiting_ws.remove(task_id)
     async_state.sync_lower_states.remove(task_id)
     free_shared_handle(async_state, owner_component_id, st.id)

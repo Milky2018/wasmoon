@@ -186,6 +186,7 @@ fn instantiate_canon_waitable_set_wait(
           return [I32(0)]
         }
         let task_id = current_task_id(async_state)
+        async_state.task_suspensions.remove(task_id)
         if _cancellable && async_state.task_cancelled.get(task_id) is Some(true) {
           async_state.task_cancelled.remove(task_id)
           release_waiter(async_state, task_id, ws_key)
@@ -201,12 +202,14 @@ fn instantiate_canon_waitable_set_wait(
             }
             async_state.waiting_ws.set(task_id, ws_key)
           }
+          async_state.task_suspensions.set(task_id, Wait(_cancellable))
           canon_suspend[0] = Some(Wait(ws_key))
           raise Unreachable
         }
         let ev = match pop_waitable_event(async_state, ws_key) {
           Some(ev) => ev
           None => {
+            async_state.task_suspensions.set(task_id, Wait(_cancellable))
             canon_suspend[0] = Some(Wait(ws_key))
             raise Unreachable
           }

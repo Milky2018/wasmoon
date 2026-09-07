@@ -105,7 +105,7 @@ pub(all) struct AsyncState {
   in_async_callback : Array[Bool]
   task_caller : Map[Int64, Int64]
   task_instance : Map[Int64, Int]
-  yield_suspended : Map[Int64, Bool]
+  task_suspensions : Map[Int64, TaskSuspension]
   waiting_ws : Map[Int64, Int64]
   sync_lower_states : Map[Int64, SyncLowerState]
   waitable_sets : Map[Int64, WaitableSet]
@@ -514,6 +514,9 @@ type TaskStep derive(Eq, @debug.Debug)
 pub fn TaskStep::equal(Self, Self) -> Bool
 pub fn TaskStep::not_equal(Self, Self) -> Bool
 pub fn TaskStep::to_repr(Self) -> @debug.Repr
+
+type TaskSuspension derive(@debug.Debug)
+pub fn TaskSuspension::to_repr(Self) -> @debug.Repr
 
 type WaitEvent derive(@debug.Debug)
 pub fn WaitEvent::to_repr(Self) -> @debug.Repr

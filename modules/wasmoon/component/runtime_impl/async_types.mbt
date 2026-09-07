@@ -392,8 +392,8 @@ pub(all) struct AsyncState {
   task_caller : Map[Int64, Int64]
   // Component instance id (ResourceTable.id) associated with this task.
   task_instance : Map[Int64, Int]
-  // A resumed yield retries the suspended host instruction exactly once.
-  yield_suspended : Map[Int64, Bool]
+  // Suspended canonical instructions are retried when their thread resumes.
+  task_suspensions : Map[Int64, TaskSuspension]
   waiting_ws : Map[Int64, Int64]
   // At most one sync-lowered call can be suspended in a task continuation.
   sync_lower_states : Map[Int64, SyncLowerState]
@@ -648,7 +648,7 @@ pub fn AsyncState::AsyncState(
     in_async_callback: [false],
     task_caller: Map([]),
     task_instance: Map([]),
-    yield_suspended: Map([]),
+    task_suspensions: Map([]),
     waiting_ws: Map([]),
     sync_lower_states: Map([]),
     waitable_sets: Map([]),
@@ -2336,3 +2336,20 @@ fn pop_waitable_event(async_state : AsyncState, ws_key : Int64) -> WaitEvent? {
 }
 
 ///|
+
+///|
+enum TaskSuspension {
+  Yield(Bool)
+  Suspend(Bool)
+  Wait(Bool)
+} derive(Debug)
+
+///|
+pub extend TaskSuspension with Debug::{to_repr}
+
+///|
+fn TaskSuspension::is_cancellable(self : TaskSuspension) -> Bool {
+  match self {
+    Yield(cancellable) | Suspend(cancellable) | Wait(cancellable) => cancellable
+  }
+}
