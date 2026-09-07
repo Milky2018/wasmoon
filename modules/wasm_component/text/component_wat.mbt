@@ -1827,8 +1827,8 @@ fn parse_inline_type_decl(
       return (name_opt, payload.to_bytes(), next_type_count, decl_count)
     }
     if items[0] is Atom("list") {
-      if items.length() != 2 {
-        raise Unsupported("list type must be `(list <valtype>)`")
+      if items.length() != 2 && items.length() != 3 {
+        raise Unsupported("list type must be `(list <valtype> [length])`")
       }
       let (elem, next_next_type_count, elem_decl_count) = parse_inline_valtype_encoding(
         items[1],
@@ -1840,8 +1840,11 @@ fn parse_inline_type_decl(
       next_type_count = next_next_type_count
       decl_count += elem_decl_count
       let payload = ByteBuf::ByteBuf()
-      payload.push_u8(0x70)
+      payload.push_u8(if items.length() == 3 { 0x67 } else { 0x70 })
       push_valtype_encoding(payload, elem)
+      if items.length() == 3 {
+        payload.push_uleb_u32(parse_u32_literal(items[2], "fixed-list length"))
+      }
       return (name_opt, payload.to_bytes(), next_type_count, decl_count)
     }
     if items[0] is Atom("option") {
@@ -3622,12 +3625,15 @@ fn parse_type_field(
       return
     }
     if head == "list" {
-      if items.length() != 2 {
-        raise Unsupported("list type must be `(list <valtype>)`")
+      if items.length() != 2 && items.length() != 3 {
+        raise Unsupported("list type must be `(list <valtype> [length])`")
       }
       let payload = ByteBuf::ByteBuf()
-      payload.push_u8(0x70)
+      payload.push_u8(if items.length() == 3 { 0x67 } else { 0x70 })
       push_valtype_encoding(payload, parse_valtype(items[1], state))
+      if items.length() == 3 {
+        payload.push_uleb_u32(parse_u32_literal(items[2], "fixed-list length"))
+      }
       let type_idx = add_type_entry(state, payload.to_bytes(), None, name_opt)
       push_type_exports(type_idx)
       return

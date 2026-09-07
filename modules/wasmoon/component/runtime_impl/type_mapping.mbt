@@ -47,6 +47,18 @@ fn canonical_memory_layout(
       match types.get(idx) {
         Some(Some(DefValType(p))) =>
           canonical_memory_layout(Prim(p), types, mem_is_64)
+        Some(Some(FixedList(element, length))) => {
+          let (size, alignment) = canonical_memory_layout(
+            element, types, mem_is_64,
+          )
+          let stride = align_to(size, alignment)
+          if length < 0 || (stride != 0 && length > 2147483647 / stride) {
+            raise CanonCallError(
+              "fixed-length list size exceeds addressable memory",
+            )
+          }
+          (stride * length, alignment)
+        }
         Some(Some(Tuple(items))) => {
           let mut size = 0
           let mut alignment = 1
@@ -211,9 +223,10 @@ fn core_types_for_valtype(
   ty : ValType,
   types : Array[TypeDef?],
   mem_is_64 : Bool,
+  max_flat? : Int = 2147483647,
 ) -> Array[@types.ValueType] raise ComponentRuntimeError {
   let pointer_type : @types.ValueType = if mem_is_64 { I64 } else { I32 }
-  match @component.canonical_flat_types(ty, types, pointer_type) {
+  match @component.canonical_flat_types(ty, types, pointer_type, max_flat~) {
     Some(flat) => flat
     None =>
       match ty {

@@ -51,6 +51,25 @@ fn core_valtypes_for_component_valtype(
               Some(td) =>
                 match td {
                   DefValType(p) => scalar_prim(p)
+                  FixedList(element, length) => {
+                    guard scalar_flat_valtype(element) is Some(flat) else {
+                      return None
+                    }
+                    if length <= 0 ||
+                      (!flat.is_empty() && length > 16 / flat.length()) {
+                      None
+                    } else if flat.is_empty() {
+                      Some([])
+                    } else {
+                      let out : Array[@types.ValueType] = []
+                      for _ in 0..<length {
+                        for t in flat {
+                          out.push(t)
+                        }
+                      }
+                      Some(out)
+                    }
+                  }
                   Tuple(tys) => {
                     let out : Array[@types.ValueType] = []
                     for t in tys {
@@ -222,7 +241,13 @@ fn core_functype_for_task_return(
   match result {
     None => ()
     Some(vt) =>
-      match @component.canonical_flat_types(vt, type_table, pointer_type) {
+      match
+        @component.canonical_flat_types(
+          vt,
+          type_table,
+          pointer_type,
+          max_flat=17,
+        ) {
         Some(ts) =>
           if ts.length() > 16 {
             params.push(pointer_type)
@@ -732,7 +757,8 @@ fn typedef_refers_to_resource(
       }
       ok_any || err_any
     }
-    List(v) => valtype_refers_to_resource(v, type_table, visiting)
+    List(v) | FixedList(v, _) =>
+      valtype_refers_to_resource(v, type_table, visiting)
     Stream(v) | Future(v) =>
       match v {
         None => false

@@ -84,7 +84,7 @@ fn instantiate_canon_lower(
     let ptr_ty = if mem_is_64 { @types.ValueType::I64 } else { I32 }
     let flat_params : Array[@types.ValueType] = []
     for p in func_type.params {
-      for t in core_types_for_valtype(p.ty, func_types, mem_is_64) {
+      for t in core_types_for_valtype(p.ty, func_types, mem_is_64, max_flat=5) {
         flat_params.push(t)
       }
     }
@@ -602,7 +602,8 @@ fn instantiate_canon_lower(
       func_type, func_types, mem_is_64,
     )
     let indirect_result = func_type.result is Some(result) &&
-      core_types_for_valtype(result, func_types, mem_is_64).length() > 1
+      core_types_for_valtype(result, func_types, mem_is_64, max_flat=2).length() >
+      1
     let host = fn(
       args : Array[@types.Value],
     ) -> Array[@types.Value] raise @runtime.RuntimeError {
@@ -815,7 +816,12 @@ fn instantiate_canon_lower(
 
           let mut out_ptr : Int? = None
           if func_type.result is Some(rty) {
-            let flat = core_types_for_valtype(rty, func_types, mem_is_64) catch {
+            let flat = core_types_for_valtype(
+              rty,
+              func_types,
+              mem_is_64,
+              max_flat=2,
+            ) catch {
               _ => []
             }
             if flat.length() > 1 {
@@ -877,7 +883,12 @@ fn instantiate_canon_lower(
             let mut out_ptr : Int? = None
             match func_type.result {
               Some(rty) => {
-                let flat = core_types_for_valtype(rty, func_types, mem_is_64) catch {
+                let flat = core_types_for_valtype(
+                  rty,
+                  func_types,
+                  mem_is_64,
+                  max_flat=2,
+                ) catch {
                   _ => []
                 }
                 if flat.length() > 1 {
@@ -942,7 +953,12 @@ fn instantiate_canon_lower(
       }
       let mut out_ptr : Int? = None
       if func_type.result is Some(rty) {
-        let flat = core_types_for_valtype(rty, func_types, mem_is_64) catch {
+        let flat = core_types_for_valtype(
+          rty,
+          func_types,
+          mem_is_64,
+          max_flat=2,
+        ) catch {
           _ => []
         }
         if flat.length() > 1 {

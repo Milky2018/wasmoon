@@ -3,15 +3,20 @@
 ///
 /// `pointer_type` must be `I32` or `I64` and represents the selected canonical
 /// memory. `None` means the type index is invalid, recursive, or does not name
-/// a value type.
+/// a value type. `max_flat` bounds the returned prefix when only an ABI
+/// arity threshold is needed; it avoids expanding large fixed lists.
 pub fn canonical_flat_types(
   ty : ValType,
   types : Array[TypeDef?],
   pointer_type : @types.ValueType,
+  max_flat? : Int = 2147483647,
 ) -> Array[@types.ValueType]? {
   match pointer_type {
     I32 | I64 => ()
     _ => return None
+  }
+  if max_flat < 1 {
+    return None
   }
   let visiting : Map[Int, Unit] = Map([])
   fn join_flat(a : @types.ValueType, b : @types.ValueType) -> @types.ValueType {
@@ -38,7 +43,16 @@ pub fn canonical_flat_types(
 
   fn flatten(value_type : ValType) -> Array[@types.ValueType]? {
     match value_type {
-      Prim(p) => Some(flat_primitive(p))
+      Prim(p) => {
+        let flat = flat_primitive(p)
+        Some(
+          if flat.length() > max_flat {
+            flat[:max_flat].to_owned()
+          } else {
+            flat
+          },
+        )
+      }
       TypeIdx(idx) => {
         if idx < 0 || idx >= types.length() || visiting.get(idx) is Some(_) {
           return None
@@ -46,13 +60,33 @@ pub fn canonical_flat_types(
         visiting.set(idx, ())
         let result = match types[idx] {
           Some(DefValType(p)) => Some(flat_primitive(p))
+          Some(FixedList(element, length)) => {
+            if length <= 0 {
+              return None
+            }
+            guard flatten(element) is Some(flat) else { return None }
+            let output : Array[@types.ValueType] = []
+            if !flat.is_empty() {
+              for i = 0; i < length && output.length() < max_flat; i = i + 1 {
+                for core_type in flat {
+                  if output.length() == max_flat {
+                    break
+                  }
+                  output.push(core_type)
+                }
+              }
+            }
+            Some(output)
+          }
           Some(Tuple(values)) => {
             let output : Array[@types.ValueType] = []
             for value in values {
               match flatten(value) {
                 Some(flat) =>
                   for core_type in flat {
-                    output.push(core_type)
+                    if output.length() < max_flat {
+                      output.push(core_type)
+                    }
                   }
                 None => return None
               }
@@ -65,7 +99,9 @@ pub fn canonical_flat_types(
               match flatten(field.ty) {
                 Some(flat) =>
                   for core_type in flat {
-                    output.push(core_type)
+                    if output.length() < max_flat {
+                      output.push(core_type)
+                    }
                   }
                 None => return None
               }
@@ -162,7 +198,17 @@ pub fn canonical_flat_types(
           _ => None
         }
         visiting.remove(idx)
-        result
+        match result {
+          Some(flat) =>
+            Some(
+              if flat.length() > max_flat {
+                flat[:max_flat].to_owned()
+              } else {
+                flat
+              },
+            )
+          None => None
+        }
       }
     }
   }
@@ -183,7 +229,7 @@ pub fn canonical_lower_core_func_type(
 ) -> @types.FuncType? {
   let flat_params : Array[@types.ValueType] = []
   for param in func_type.params {
-    match canonical_flat_types(param.ty, types, pointer_type) {
+    match canonical_flat_types(param.ty, types, pointer_type, max_flat=17) {
       Some(flat) =>
         for core_type in flat {
           flat_params.push(core_type)
@@ -193,7 +239,7 @@ pub fn canonical_lower_core_func_type(
   }
   let flat_results = match func_type.result {
     Some(result) =>
-      match canonical_flat_types(result, types, pointer_type) {
+      match canonical_flat_types(result, types, pointer_type, max_flat=2) {
         Some(flat) => flat
         None => return None
       }
@@ -227,7 +273,7 @@ pub fn canonical_lift_core_func_type(
 ) -> @types.FuncType? {
   let flat_params : Array[@types.ValueType] = []
   for param in func_type.params {
-    match canonical_flat_types(param.ty, types, pointer_type) {
+    match canonical_flat_types(param.ty, types, pointer_type, max_flat=17) {
       Some(flat) =>
         for core_type in flat {
           flat_params.push(core_type)
@@ -237,7 +283,7 @@ pub fn canonical_lift_core_func_type(
   }
   let flat_results = match func_type.result {
     Some(result) =>
-      match canonical_flat_types(result, types, pointer_type) {
+      match canonical_flat_types(result, types, pointer_type, max_flat=2) {
         Some(flat) => flat
         None => return None
       }

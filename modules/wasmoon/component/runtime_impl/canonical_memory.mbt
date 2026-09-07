@@ -55,6 +55,15 @@ fn store_flat_component_value_to_memory(
       Prim(_) => store_simple(value_ty, value_addr)
       TypeIdx(type_idx) =>
         match types.get(type_idx) {
+          Some(Some(FixedList(element, length))) => {
+            let (size, alignment) = canonical_memory_layout(
+              element, types, mem_is_64,
+            )
+            let stride = align_to(size, alignment)
+            for i in 0..<length {
+              store_inner(element, value_addr + i * stride)
+            }
+          }
           Some(Some(Tuple(items))) => {
             let mut offset = 0
             for item in items {
@@ -268,6 +277,26 @@ fn load_flat_component_value_from_memory(
     Prim(_) => load_simple(ty, addr)
     TypeIdx(type_idx) =>
       match types.get(type_idx) {
+        Some(Some(FixedList(element, length))) => {
+          let (size, alignment) = canonical_memory_layout(
+            element, types, mem_is_64,
+          )
+          let stride = align_to(size, alignment)
+          let out : Array[@types.Value] = []
+          for i in 0..<length {
+            for
+              value in load_flat_component_value_from_memory(
+                mem,
+                addr + i * stride,
+                element,
+                types,
+                mem_is_64,
+              ) {
+              out.push(value)
+            }
+          }
+          out
+        }
         Some(Some(Tuple(items))) => {
           let out : Array[@types.Value] = []
           let mut offset = 0
@@ -460,4 +489,38 @@ fn load_flat_component_value_from_memory(
         _ => raise HostCallError("unsupported memory value type")
       }
   }
+}
+
+///|
+fn canonical_param_layout(
+  params : Array[@component.Param],
+  types : Array[TypeDef?],
+  mem_is_64 : Bool,
+) -> (Array[Int], Int, Int) raise ComponentRuntimeError {
+  let offsets : Array[Int] = []
+  let mut size = 0
+  let mut alignment = 1
+  for param in params {
+    let (field_size, field_alignment) = canonical_memory_layout(
+      param.ty,
+      types,
+      mem_is_64,
+    )
+    size = align_to(size, field_alignment)
+    if size < 0 || field_size > 2147483647 - size {
+      raise CanonCallError(
+        "canonical parameter area exceeds addressable memory",
+      )
+    }
+    offsets.push(size)
+    size += field_size
+    if field_alignment > alignment {
+      alignment = field_alignment
+    }
+  }
+  let aligned = align_to(size, alignment)
+  if aligned < 0 {
+    raise CanonCallError("canonical parameter area exceeds addressable memory")
+  }
+  (offsets, aligned, alignment)
 }

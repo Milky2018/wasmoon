@@ -68,6 +68,13 @@ fn lift_component_value_from_flat(
         }
       TypeIdx(ti) =>
         match types.get(ti) {
+          Some(Some(FixedList(element, length))) => {
+            let items : Array[ComponentValue] = []
+            for _ in 0..<length {
+              items.push(lift_inner(element, vals))
+            }
+            List(items)
+          }
           Some(Some(Tuple(tys))) => {
             let items : Array[ComponentValue] = []
             for t in tys {
@@ -365,6 +372,18 @@ fn component_args_to_core(
         }
       TypeIdx(ti) =>
         match types.get(ti) {
+          Some(Some(FixedList(element, length))) => {
+            guard val is List(items) && items.length() == length else {
+              raise HostCallError("argument type mismatch")
+            }
+            let out : Array[@types.Value] = []
+            for item in items {
+              for value in lower_value(item, element) {
+                out.push(value)
+              }
+            }
+            out
+          }
           Some(Some(Tuple(tys))) =>
             match val {
               Tuple(items) =>
@@ -676,16 +695,13 @@ fn component_args_to_core(
 
   // Determine whether we must pass a pointer to the flattened arguments.
   let flat_param_types : Array[@types.ValueType] = []
-  let flat_param_storage : Array[FlatStorageField] = []
   for p in func_type.params {
-    for t in core_types_for_valtype(p.ty, types, mem_is_64) {
+    for t in core_types_for_valtype(p.ty, types, mem_is_64, max_flat=17) {
       flat_param_types.push(t)
-    }
-    for field in flat_storage_for_valtype(p.ty, types, mem_is_64) {
-      flat_param_storage.push(field)
     }
   }
   let indirect_params = flat_param_types.length() > 16
+  let param_values : Array[Array[@types.Value]] = []
   let flat_vals : Array[@types.Value] = []
   for i, param in func_type.params {
     let val = if i < args.length() {
@@ -693,7 +709,9 @@ fn component_args_to_core(
     } else {
       raise InvalidValueIndex(i)
     }
-    for v in lower_value(val, param.ty) {
+    let values = lower_value(val, param.ty)
+    param_values.push(values)
+    for v in values {
       flat_vals.push(v)
     }
   }
@@ -708,19 +726,23 @@ fn component_args_to_core(
     Some(r) => r
     None => raise MissingCanonRealloc
   }
-  let (offsets, size, struct_align) = layout_of_flat_storage_fields(
-    flat_param_storage,
+  let (offsets, size, struct_align) = canonical_param_layout(
+    func_type.params,
+    types,
+    mem_is_64,
   )
   let ptr = alloc_realloc_area(store, m, realloc, mem_is_64, size, struct_align)
   if ptr.reinterpret_as_uint() % struct_align.reinterpret_as_uint() != 0U {
     raise CanonCallError("unaligned pointer")
   }
-  for i in 0..<flat_vals.length() {
-    store_storage_value(
+  for i, param in func_type.params {
+    store_flat_component_value_to_memory(
       m,
       ptr + offsets[i],
-      flat_vals[i],
-      flat_param_storage[i],
+      param.ty,
+      param_values[i],
+      types,
+      mem_is_64,
     )
   }
   if mem_is_64 {
@@ -894,8 +916,12 @@ fn core_results_to_component(
             }
             None => ()
           }
-          let flat_types = core_types_for_valtype(r, types, mem_is_64)
-          let flat_storage = flat_storage_for_valtype(r, types, mem_is_64)
+          let flat_types = core_types_for_valtype(
+            r,
+            types,
+            mem_is_64,
+            max_flat=17,
+          )
           let flat_vals : Array[@types.Value] = if flat_types.length() == 1 {
             results
           } else if results.length() == flat_types.length() {
@@ -910,19 +936,13 @@ fn core_results_to_component(
               I64(n) => n.to_int()
               _ => raise HostCallError("result type mismatch")
             }
-            let (offsets, _size, struct_align) = layout_of_flat_storage_fields(
-              flat_storage,
-            )
+            let (_, struct_align) = canonical_memory_layout(r, types, mem_is_64)
             if struct_align > 1 &&
               ptr.reinterpret_as_uint() % struct_align.reinterpret_as_uint() !=
               0U {
               raise CanonCallError("unaligned pointer")
             }
-            let out : Array[@types.Value] = []
-            for i in 0..<flat_storage.length() {
-              out.push(load_storage_value(m, ptr + offsets[i], flat_storage[i]))
-            }
-            out
+            load_flat_component_value_from_memory(m, ptr, r, types, mem_is_64)
           } else {
             raise HostCallError("result type mismatch")
           }
@@ -1032,13 +1052,9 @@ fn core_args_to_component(
     mem = Some(m)
   }
   let flat_param_types : Array[@types.ValueType] = []
-  let flat_param_storage : Array[FlatStorageField] = []
   for p in params {
-    for t in core_types_for_valtype(p.ty, types, mem_is_64) {
+    for t in core_types_for_valtype(p.ty, types, mem_is_64, max_flat=17) {
       flat_param_types.push(t)
-    }
-    for field in flat_storage_for_valtype(p.ty, types, mem_is_64) {
-      flat_param_storage.push(field)
     }
   }
   let indirect_params = flat_param_types.length() > max_flat_params
@@ -1056,16 +1072,25 @@ fn core_args_to_component(
       Some(m) => m
       None => raise MissingCanonMemory
     }
-    let (offsets, _size, struct_align) = layout_of_flat_storage_fields(
-      flat_param_storage,
+    let (offsets, _, struct_align) = canonical_param_layout(
+      params, types, mem_is_64,
     )
     if struct_align > 1 &&
       ptr.reinterpret_as_uint() % struct_align.reinterpret_as_uint() != 0U {
       raise CanonCallError("unaligned pointer")
     }
     let out : Array[@types.Value] = []
-    for i in 0..<flat_param_storage.length() {
-      out.push(load_storage_value(m, ptr + offsets[i], flat_param_storage[i]))
+    for i, param in params {
+      for
+        value in load_flat_component_value_from_memory(
+          m,
+          ptr + offsets[i],
+          param.ty,
+          types,
+          mem_is_64,
+        ) {
+        out.push(value)
+      }
     }
     out
   } else {
@@ -1145,7 +1170,6 @@ fn component_results_to_core(
         None => false
       }
       let flat_res_types = core_types_for_valtype(r, types, mem_is_64)
-      let flat_res_storage = flat_storage_for_valtype(r, types, mem_is_64)
       if flat_res_types.length() > 1 {
         if resources.mem_addr is None {
           raise MissingCanonMemory
@@ -1155,9 +1179,7 @@ fn component_results_to_core(
           None => raise HostCallError("missing retptr")
         }
         let mem = require_memory(resources, store)
-        let (offsets, _size, struct_align) = layout_of_flat_storage_fields(
-          flat_res_storage,
-        )
+        let (_, struct_align) = canonical_memory_layout(r, types, mem_is_64)
         if struct_align > 1 &&
           out_ptr.reinterpret_as_uint() % struct_align.reinterpret_as_uint() !=
           0U {
@@ -1207,6 +1229,18 @@ fn component_results_to_core(
               }
             TypeIdx(ti) =>
               match types.get(ti) {
+                Some(Some(FixedList(element, length))) => {
+                  guard v is List(items) && items.length() == length else {
+                    raise HostCallError("result type mismatch")
+                  }
+                  let out : Array[@types.Value] = []
+                  for item in items {
+                    for value in lower_value(item, element) {
+                      out.push(value)
+                    }
+                  }
+                  out
+                }
                 Some(Some(Tuple(tys))) =>
                   match v {
                     Tuple(items) =>
@@ -1432,14 +1466,9 @@ fn component_results_to_core(
         if flat_vals.length() != flat_res_types.length() {
           raise HostCallError("result type mismatch")
         }
-        for i in 0..<flat_vals.length() {
-          store_storage_value(
-            mem,
-            out_ptr + offsets[i],
-            flat_vals[i],
-            flat_res_storage[i],
-          )
-        }
+        store_flat_component_value_to_memory(
+          mem, out_ptr, r, flat_vals, types, mem_is_64,
+        )
         return []
       }
       match resolve_valtype(r, types) {
@@ -1481,6 +1510,66 @@ fn component_results_to_core(
           }
         TypeIdx(ti) =>
           match types.get(ti) {
+            Some(Some(FixedList(element, length))) => {
+              guard val is List(items) && items.length() == length else {
+                raise HostCallError("result type mismatch")
+              }
+              let out : Array[@types.Value] = []
+              for item in items {
+                for
+                  value in component_results_to_core(
+                    [item],
+                    { is_async: false, params: [], result: Some(element), },
+                    types,
+                    resources,
+                    store,
+                    None,
+                  ) {
+                  out.push(value)
+                }
+              }
+              out
+            }
+            Some(Some(Tuple(elements))) => {
+              guard val is Tuple(items) && items.length() == elements.length() else {
+                raise HostCallError("result type mismatch")
+              }
+              let out : Array[@types.Value] = []
+              for i, item in items {
+                for
+                  value in component_results_to_core(
+                    [item],
+                    { is_async: false, params: [], result: Some(elements[i]), },
+                    types,
+                    resources,
+                    store,
+                    None,
+                  ) {
+                  out.push(value)
+                }
+              }
+              out
+            }
+            Some(Some(Record(fields))) => {
+              guard val is Tuple(items) && items.length() == fields.length() else {
+                raise HostCallError("result type mismatch")
+              }
+              let out : Array[@types.Value] = []
+              for i, item in items {
+                for
+                  value in component_results_to_core(
+                    [item],
+                    { is_async: false, params: [], result: Some(fields[i].ty), },
+                    types,
+                    resources,
+                    store,
+                    None,
+                  ) {
+                  out.push(value)
+                }
+              }
+              out
+            }
             Some(Some(Own(_)))
             | Some(Some(Borrow(_)))
             | Some(Some(ResourceType(_, _, _, _)))

@@ -7,7 +7,7 @@ import {
 }
 
 // Values
-pub fn canonical_flat_types(ValType, Array[TypeDef?], @types.ValueType) -> Array[@types.ValueType]?
+pub fn canonical_flat_types(ValType, Array[TypeDef?], @types.ValueType, max_flat? : Int) -> Array[@types.ValueType]?
 
 pub fn canonical_lift_core_func_type(FuncType, Array[TypeDef?], @types.ValueType) -> @types.FuncType?
 

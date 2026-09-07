@@ -783,7 +783,8 @@ fn valtype_contains_borrow(
             }
             ok_any || err_any
           }
-          Some(List(v)) => valtype_contains_borrow(v, type_table, visiting)
+          Some(List(v)) | Some(FixedList(v, _)) =>
+            valtype_contains_borrow(v, type_table, visiting)
           Some(Stream(v)) | Some(Future(v)) =>
             match v {
               None => false

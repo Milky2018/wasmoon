@@ -202,6 +202,10 @@ fn append_flat_storage_for_valtype(
       }
     TypeIdx(ti) =>
       match types.get(ti) {
+        Some(Some(FixedList(element, length))) =>
+          for _ in 0..<length {
+            append_flat_storage_for_valtype(out, element, types, mem_is_64)
+          }
         Some(Some(Tuple(tys))) =>
           for t in tys {
             append_flat_storage_for_valtype(out, t, types, mem_is_64)

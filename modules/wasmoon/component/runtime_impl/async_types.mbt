@@ -955,7 +955,7 @@ fn validate_lifted_stream_future(
               }
             _ => ()
           }
-        Some(Some(List(elem_ty))) =>
+        Some(Some(List(elem_ty))) | Some(Some(FixedList(elem_ty, _))) =>
           match v {
             List(items) =>
               for it in items {
@@ -1290,7 +1290,7 @@ fn transfer_stream_future_value(
             }
             _ => v
           }
-        Some(Some(List(elem_ty))) =>
+        Some(Some(List(elem_ty))) | Some(Some(FixedList(elem_ty, _))) =>
           match v {
             List(items) => {
               let out : Array[ComponentValue] = []
@@ -1715,7 +1715,7 @@ fn clone_stream_future_value(
             }
             _ => v
           }
-        Some(Some(List(elem_ty))) =>
+        Some(Some(List(elem_ty))) | Some(Some(FixedList(elem_ty, _))) =>
           match v {
             List(items) => {
               let out : Array[ComponentValue] = []
