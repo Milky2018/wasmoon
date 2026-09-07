@@ -326,6 +326,8 @@ fn ExecContext::exec_instr(
     I64Add
     | I64Sub
     | I64Mul
+    | I64Add128
+    | I64Sub128
     | I64MulWideS
     | I64MulWideU
     | I64DivS

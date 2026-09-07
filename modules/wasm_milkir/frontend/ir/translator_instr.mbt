@@ -118,6 +118,28 @@ fn Translator::translate_instruction(
     I64Add => self.translate_binary_i64(fn(b, a, v) { b.iadd(a, v) })
     I64Sub => self.translate_binary_i64(fn(b, a, v) { b.isub(a, v) })
     I64Mul => self.translate_binary_i64(fn(b, a, v) { b.imul(a, v) })
+    I64Add128 | I64Sub128 => {
+      let b_hi = self.pop()
+      let b_lo = self.pop()
+      let a_hi = self.pop()
+      let a_lo = self.pop()
+      let (lo, hi) = if instr is I64Add128 {
+        let lo = self.builder.iadd(a_lo, b_lo)
+        let carry = self.builder.uextend(I64, self.builder.icmp_ult(lo, a_lo))
+        (lo, self.builder.iadd(self.builder.iadd(a_hi, b_hi), carry))
+      } else {
+        let borrow = self.builder.uextend(
+          I64,
+          self.builder.icmp_ult(a_lo, b_lo),
+        )
+        (
+          self.builder.isub(a_lo, b_lo),
+          self.builder.isub(self.builder.isub(a_hi, b_hi), borrow),
+        )
+      }
+      self.push(lo)
+      self.push(hi)
+    }
     I64MulWideU => {
       let b = self.pop()
       let a = self.pop()

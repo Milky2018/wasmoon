@@ -783,6 +783,8 @@ fn Parser::parse_plain_instruction(
     "i64.clz" => I64Clz
     "i64.ctz" => I64Ctz
     "i64.popcnt" => I64Popcnt
+    "i64.add128" => I64Add128
+    "i64.sub128" => I64Sub128
     "i64.add" => I64Add
     "i64.sub" => I64Sub
     "i64.mul" => I64Mul

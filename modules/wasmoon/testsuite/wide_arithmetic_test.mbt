@@ -32,3 +32,19 @@ test "wide-arithmetic: i64.mul_wide_s" {
   let result = compare_jit_interp(source, "test", [])
   inspect(result, content="matched")
 }
+
+///|
+test "wide arithmetic: binary encoding preserves every opcode" {
+  let source =
+    #|(module (func (result i64 i64)
+    #|  unreachable i64.add128 i64.sub128 i64.mul_wide_s i64.mul_wide_u))
+  let module_ = @wat.parse(source)
+  @validator.validate_module(module_)
+  let bytes = Bytes::from_array(@encoder.encode(module_).map(n => n.to_byte()))
+  let decoded = @parser.parse_module(bytes)
+  @validator.validate_module(decoded)
+  debug_inspect(
+    decoded.codes[0].body,
+    content="[Unreachable, I64Add128, I64Sub128, I64MulWideS, I64MulWideU]",
+  )
+}

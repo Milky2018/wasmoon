@@ -350,6 +350,8 @@ pub(all) enum Instruction {
   I64Ctz
   I64Popcnt
   I64Add
+  I64Add128
+  I64Sub128
   I64Sub
   I64Mul
   I64MulWideS

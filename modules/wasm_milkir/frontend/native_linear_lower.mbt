@@ -100,6 +100,42 @@ fn push_unary_opcode_as(
 }
 
 ///|
+fn push_wide_arithmetic(
+  builder : @milkir.FunctionBuilder,
+  stack : Array[@milkir.Value],
+  instr : @types.Instruction,
+) -> Bool {
+  if instr is I64MulWideS || instr is I64MulWideU {
+    guard pop_value(stack) is Some(b) else { return false }
+    guard pop_value(stack) is Some(a) else { return false }
+    stack.push(builder.imul(a, b))
+    stack.push(
+      if instr is I64MulWideS {
+        builder.smulh(a, b)
+      } else {
+        builder.umulh(a, b)
+      },
+    )
+  } else {
+    guard pop_value(stack) is Some(b_hi) else { return false }
+    guard pop_value(stack) is Some(b_lo) else { return false }
+    guard pop_value(stack) is Some(a_hi) else { return false }
+    guard pop_value(stack) is Some(a_lo) else { return false }
+    let (lo, hi) = if instr is I64Add128 {
+      let lo = builder.iadd(a_lo, b_lo)
+      let carry = builder.uextend(I64, builder.icmp_ult(lo, a_lo))
+      (lo, builder.iadd(builder.iadd(a_hi, b_hi), carry))
+    } else {
+      let borrow = builder.uextend(I64, builder.icmp_ult(a_lo, b_lo))
+      (builder.isub(a_lo, b_lo), builder.isub(builder.isub(a_hi, b_hi), borrow))
+    }
+    stack.push(lo)
+    stack.push(hi)
+  }
+  true
+}
+
+///|
 fn push_binary_opcode(
   builder : @milkir.FunctionBuilder,
   stack : Array[@milkir.Value],
@@ -1462,14 +1498,8 @@ fn push_simple_expr_instr(
     I32Mul =>
       push_i32_binary_opcode(builder, expr_stack, Scalar(IntBinary(Mul)))
     I64Mul => push_binary(expr_stack, fn(lhs, rhs) { builder.imul(lhs, rhs) })
-    I64MulWideU =>
-      push_binary_opcode(
-        builder,
-        expr_stack,
-        Scalar(IntBinary(UnsignedMulHigh)),
-      )
-    I64MulWideS =>
-      push_binary_opcode(builder, expr_stack, Scalar(IntBinary(SignedMulHigh)))
+    I64Add128 | I64Sub128 | I64MulWideU | I64MulWideS =>
+      push_wide_arithmetic(builder, expr_stack, instr)
     I32And =>
       push_i32_binary_opcode(builder, expr_stack, Scalar(IntBinary(And)))
     I64And => push_binary_opcode(builder, expr_stack, Scalar(IntBinary(And)))
@@ -2221,16 +2251,8 @@ fn try_lower_linear_function(
         if !push_binary(stack, fn(lhs, rhs) { builder.imul(lhs, rhs) }) {
           return None
         }
-      I64MulWideU =>
-        if !push_binary_opcode(
-            builder,
-            stack,
-            Scalar(IntBinary(UnsignedMulHigh)),
-          ) {
-          return None
-        }
-      I64MulWideS =>
-        if !push_binary_opcode(builder, stack, Scalar(IntBinary(SignedMulHigh))) {
+      I64Add128 | I64Sub128 | I64MulWideU | I64MulWideS =>
+        if !push_wide_arithmetic(builder, stack, instr) {
           return None
         }
       I32DivS | I64DivS =>

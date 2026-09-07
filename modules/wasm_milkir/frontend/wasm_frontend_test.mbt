@@ -674,7 +674,7 @@ test "lower pure if expression bodies into native MilkIR select" {
 }
 
 ///|
-test "lower pure if copysign and wide multiply expression bodies" {
+test "lower pure if copysign expression bodies" {
   let float_mod = @types.Module::simple(
     [I32, F32, F32],
     [F32],
@@ -688,31 +688,12 @@ test "lower pure if copysign and wide multiply expression bodies" {
     ],
     "select_copysign_body",
   )
-  let wide_mod = @types.Module::simple(
-    [I32, I64, I64],
-    [I64],
-    [
-      LocalGet(0),
-      If(Value(I64), [LocalGet(1), LocalGet(2), I64MulWideU], [
-        LocalGet(1),
-        LocalGet(2),
-        I64MulWideS,
-      ]),
-    ],
-    "select_wide_mul_body",
-  )
   let env = frontend_test_env()
   let float_func = lower_function(env, float_mod, 0)
-  let wide_func = lower_function(env, wide_mod, 0)
   inspect(float_func.print().contains("bor"), content="true")
   inspect(float_func.print().contains("select"), content="true")
   inspect(float_func.print().contains("TODO(wasm_frontend)"), content="false")
-  inspect(wide_func.print().contains("umulh"), content="true")
-  inspect(wide_func.print().contains("smulh"), content="true")
-  inspect(wide_func.print().contains("select"), content="true")
-  inspect(wide_func.print().contains("TODO(wasm_frontend)"), content="false")
   @wasm_milkir.verify_function(float_func)
-  @wasm_milkir.verify_function(wide_func)
 }
 
 ///|
@@ -828,7 +809,7 @@ test "lower copysign through native MilkIR bit operations" {
 test "lower wide i64 multiply through native MilkIR high-half ops" {
   let mod_ = @types.Module::simple(
     [I64, I64],
-    [I64, I64],
+    [I64, I64, I64, I64],
     [
       LocalGet(0),
       LocalGet(1),
@@ -842,6 +823,7 @@ test "lower wide i64 multiply through native MilkIR high-half ops" {
   let env = frontend_test_env()
   let func = lower_function(env, mod_, 0)
   let text = func.print()
+  inspect(text.contains("imul"), content="true")
   inspect(text.contains("umulh"), content="true")
   inspect(text.contains("smulh"), content="true")
   inspect(text.contains("TODO(wasm_frontend)"), content="false")

@@ -875,6 +875,17 @@ fn encode_instruction(w : BinaryWriter, instr : @types.Instruction) -> Unit {
     I64Clz => w.write_byte(0x79)
     I64Ctz => w.write_byte(0x7A)
     I64Popcnt => w.write_byte(0x7B)
+    I64Add128 | I64Sub128 | I64MulWideS | I64MulWideU => {
+      w.write_byte(0xFC)
+      w.write_u32(
+        match instr {
+          I64Add128 => 19
+          I64Sub128 => 20
+          I64MulWideS => 21
+          _ => 22
+        },
+      )
+    }
     I64Add => w.write_byte(0x7C)
     I64Sub => w.write_byte(0x7D)
     I64Mul => w.write_byte(0x7E)

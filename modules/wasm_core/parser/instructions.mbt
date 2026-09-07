@@ -514,6 +514,8 @@ fn Parser::read_instruction(
           let table_idx = self.read_u32()
           TableFill(table_idx)
         }
+        19 => I64Add128
+        20 => I64Sub128
         21 => I64MulWideS
         22 => I64MulWideU
         _ => raise UnknownOpcode(0xFC00 + subopcode)

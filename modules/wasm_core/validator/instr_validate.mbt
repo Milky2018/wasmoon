@@ -116,6 +116,14 @@ fn validate_instr(
     }
 
     // i64 binary operations
+    I64Add128 | I64Sub128 => {
+      stack.pop(I64)
+      stack.pop(I64)
+      stack.pop(I64)
+      stack.pop(I64)
+      stack.push(I64)
+      stack.push(I64)
+    }
     I64MulWideS | I64MulWideU => {
       stack.pop(I64)
       stack.pop(I64)

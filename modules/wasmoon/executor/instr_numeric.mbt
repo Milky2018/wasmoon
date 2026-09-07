@@ -286,6 +286,31 @@ fn ExecContext::exec_i64_numeric(
       let a = self.stack.pop_i64()
       self.stack.push(I64(a * b))
     }
+    I64Add128 | I64Sub128 => {
+      let b_hi = self.stack.pop_i64()
+      let b_lo = self.stack.pop_i64()
+      let a_hi = self.stack.pop_i64()
+      let a_lo = self.stack.pop_i64()
+      let (lo, hi) = if instr is I64Add128 {
+        let lo = a_lo + b_lo
+        let carry = if lo.reinterpret_as_uint64() < a_lo.reinterpret_as_uint64() {
+          1L
+        } else {
+          0L
+        }
+        (lo, a_hi + b_hi + carry)
+      } else {
+        let borrow = if a_lo.reinterpret_as_uint64() <
+          b_lo.reinterpret_as_uint64() {
+          1L
+        } else {
+          0L
+        }
+        (a_lo - b_lo, a_hi - b_hi - borrow)
+      }
+      self.stack.push(I64(lo))
+      self.stack.push(I64(hi))
+    }
     I64MulWideU => {
       let b = self.stack.pop_i64()
       let a = self.stack.pop_i64()
