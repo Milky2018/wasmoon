@@ -43,11 +43,11 @@ pub fn has_unsupported_instructions(@types.Module) -> Bool
 
 pub fn has_unsupported_instructions_for_wast(@types.Module) -> Bool
 
-pub fn init_bulk_segments(@types.Module, @jit.JITModule, @runtime.ModuleInstance, @runtime.Store, use_subtype_indirect_check? : Bool) -> Unit
+pub fn init_bulk_segments(@types.Module, @jit.JITModule, @runtime.ModuleInstance, @runtime.Store, use_subtype_indirect_check? : Bool) -> Unit raise @runtime.RuntimeError
 
 pub fn init_elem_segments(@types.Module, @jit.JITModule, @runtime.ModuleInstance, @runtime.Store, use_subtype_indirect_check? : Bool) -> Unit
 
-pub fn init_jit_globals_from_store(@runtime.ModuleInstance, @runtime.Store, @jit.JITModule) -> Int64
+pub fn init_jit_globals_from_store(@runtime.ModuleInstance, @runtime.Store, @jit.JITModule) -> Int64 raise @runtime.RuntimeError
 
 pub fn init_jit_memories_from_store(@runtime.ModuleInstance, @runtime.Store, @jit.JITModule) -> Array[@wasmoon_jit.MemoryInfo]?
 
@@ -63,17 +63,17 @@ pub fn run_wast_command(WastContext, @wat.WastCommand, Int, WastResult, String, 
 
 pub fn run_wast_commands(@wat.WastScript, String, Bool, Bool, jit_compiler? : JITCompiler?, register_named_modules? : Bool) -> WastResult
 
-pub fn sync_jit_globals_to_store(JITModuleContext, @runtime.Store) -> Unit
+pub fn sync_jit_globals_to_store(JITModuleContext, @runtime.Store) -> Unit raise @runtime.RuntimeError
 
 pub fn sync_jit_memories_to_store(@runtime.ModuleInstance, @runtime.Store, @jit.JITModule) -> Unit
 
-pub fn sync_jit_tables_to_store(JITModuleContext, @runtime.Store) -> Unit
+pub fn sync_jit_tables_to_store(JITModuleContext, @runtime.Store) -> Unit raise @runtime.RuntimeError
 
-pub fn sync_store_globals_to_jit(JITModuleContext, @runtime.Store) -> Unit
+pub fn sync_store_globals_to_jit(JITModuleContext, @runtime.Store) -> Unit raise @runtime.RuntimeError
 
-pub fn sync_table_to_jit(@runtime.Table, @wasmoon_jit.JITTable, @jit.JITModule, @runtime.ModuleInstance, @runtime.Store, use_subtype_indirect_check? : Bool) -> Unit
+pub fn sync_table_to_jit(@runtime.Table, @wasmoon_jit.JITTable, @jit.JITModule, @runtime.ModuleInstance, @runtime.Store, use_subtype_indirect_check? : Bool) -> Unit raise @runtime.RuntimeError
 
-pub fn sync_tables_to_jit(@runtime.ModuleInstance, @runtime.Store, @jit.JITModule, use_subtype_indirect_check? : Bool) -> Unit
+pub fn sync_tables_to_jit(@runtime.ModuleInstance, @runtime.Store, @jit.JITModule, use_subtype_indirect_check? : Bool) -> Unit raise @runtime.RuntimeError
 
 pub fn values_match(@types.Value, @wat.WastValue, func_addrs? : Array[Int]) -> Bool
 
@@ -144,7 +144,7 @@ pub fn JITModuleContext::call_core_func(Self, @runtime.Store, @runtime.ModuleIns
 pub async fn JITModuleContext::call_core_func_async(Self, @runtime.Store, @runtime.ModuleInstance, Int, Array[@types.Value]) -> Array[@types.Value] raise JITCoreCallError
 pub fn JITModuleContext::call_core_func_resumable(Self, @runtime.Store, @runtime.ModuleInstance, Int, Array[@types.Value]) -> JITCoreCallOutcome raise JITCoreCallError
 pub fn JITModuleContext::close(Self) -> Unit
-pub fn JITModuleContext::install_hostcall_dispatcher(Self, @runtime.Store, @runtime.ModuleInstance, before_dispatch? : () -> Unit, after_dispatch? : () -> Unit, classify_suspension? : (@runtime.RuntimeError) -> Bool) -> Unit
+pub fn JITModuleContext::install_hostcall_dispatcher(Self, @runtime.Store, @runtime.ModuleInstance, before_dispatch? : () -> Unit raise @runtime.RuntimeError, after_dispatch? : () -> Unit raise @runtime.RuntimeError, classify_suspension? : (@runtime.RuntimeError) -> Bool) -> Unit
 
 pub struct WastContext {
   store : @runtime.Store

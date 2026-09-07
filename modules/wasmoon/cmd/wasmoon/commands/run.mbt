@@ -1455,7 +1455,12 @@ fn run_with_jit(
           // Initialize globals (pass jm for tagged funcref pointers)
           let globals_ptr = @wast.init_jit_globals_from_store(
             instance, store, jm,
-          )
+          ) catch {
+            error => {
+              @logger.error("JIT reference transfer failed: \{error}")
+              raise CommandFailure(1)
+            }
+          }
           // Initialize tables for call_indirect and table operations
           let use_subtype_indirect_check = module_indirect_subtype_check_reason(
               mod_,
@@ -1463,7 +1468,12 @@ fn run_with_jit(
             is Some(_)
           init_jit_tables(instance, store, jm, use_subtype_indirect_check)
           // Initialize per-context data/elem segments for bulk ops (memory.init/table.init/etc).
-          @wast.init_bulk_segments(mod_, jm, instance, store)
+          @wast.init_bulk_segments(mod_, jm, instance, store) catch {
+            error => {
+              @logger.error("JIT reference transfer failed: \{error}")
+              raise CommandFailure(1)
+            }
+          }
           let jit_ctx = @wast.JITModuleContext::JITModuleContext(
             jm,
             globals_ptr,
@@ -1513,13 +1523,23 @@ fn run_with_jit(
               let results = jm.call_with_context(f, i64_args) catch {
                 JITExit(code) => {
                   jm.teardown_gc()
-                  @wast.sync_jit_globals_to_store(jit_ctx, store)
+                  @wast.sync_jit_globals_to_store(jit_ctx, store) catch {
+                    error => {
+                      @logger.error("JIT reference transfer failed: \{error}")
+                      raise CommandFailure(1)
+                    }
+                  }
                   raise CommandFailure(code)
                 }
                 JITTrap(msg) => {
                   jm.teardown_gc()
                   // Sync globals back to interpreter store even on trap.
-                  @wast.sync_jit_globals_to_store(jit_ctx, store)
+                  @wast.sync_jit_globals_to_store(jit_ctx, store) catch {
+                    error => {
+                      @logger.error("JIT reference transfer failed: \{error}")
+                      raise CommandFailure(1)
+                    }
+                  }
                   // Capture and display backtrace if DWARF is enabled
                   match dwarf_builder {
                     Some(dwarf) => {
@@ -1545,13 +1565,23 @@ fn run_with_jit(
                 }
                 JITNativeFiberFailure(message) => {
                   jm.teardown_gc()
-                  @wast.sync_jit_globals_to_store(jit_ctx, store)
+                  @wast.sync_jit_globals_to_store(jit_ctx, store) catch {
+                    error => {
+                      @logger.error("JIT reference transfer failed: \{error}")
+                      raise CommandFailure(1)
+                    }
+                  }
                   @logger.error("JIT native-fiber failure: \{message}")
                   raise CommandFailure(1)
                 }
                 JITCancelled => {
                   jm.teardown_gc()
-                  @wast.sync_jit_globals_to_store(jit_ctx, store)
+                  @wast.sync_jit_globals_to_store(jit_ctx, store) catch {
+                    error => {
+                      @logger.error("JIT reference transfer failed: \{error}")
+                      raise CommandFailure(1)
+                    }
+                  }
                   @logger.error("JIT invocation cancelled")
                   raise CommandFailure(1)
                 }
@@ -1559,7 +1589,12 @@ fn run_with_jit(
               // Tear down GC context after JIT call
               jm.teardown_gc()
               // Sync JIT globals back to interpreter store for consistency.
-              @wast.sync_jit_globals_to_store(jit_ctx, store)
+              @wast.sync_jit_globals_to_store(jit_ctx, store) catch {
+                error => {
+                  @logger.error("JIT reference transfer failed: \{error}")
+                  raise CommandFailure(1)
+                }
+              }
               // Convert Int64 results to Value using shared helper
               let values = convert_jit_results(results, f.result_types)
               // NOTE: Memory and globals are freed automatically by JITContext finalizer (GC-managed)

@@ -934,13 +934,17 @@ pub fn invoke_action(
               // Keep JIT shared tables coherent with interpreter-visible table state
               // before each call. This is required for mixed interpreter/JIT flows
               // (e.g. assertions that instantiate/trap between JIT invocations).
-              sync_store_globals_to_jit(jit, ctx.store)
+              sync_store_globals_to_jit(jit, ctx.store) catch {
+                error => raise RuntimeError(error.to_string())
+              }
               sync_tables_to_jit(
                 instance,
                 ctx.store,
                 jit.jit_module,
                 use_subtype_indirect_check=jit.use_subtype_indirect_check,
-              )
+              ) catch {
+                error => raise RuntimeError(error.to_string())
+              }
               let results = jit.jit_module.call_with_context(f, i64_args) catch {
                 JITExit(code) => {
                   // Tear down GC context on exit
@@ -950,8 +954,12 @@ pub fn invoke_action(
                     temp_gc_func_table_ptr = 0L
                   }
                   // Sync globals even on exit
-                  sync_jit_globals_to_store(jit, ctx.store)
-                  sync_jit_tables_to_store(jit, ctx.store)
+                  sync_jit_globals_to_store(jit, ctx.store) catch {
+                    error => raise RuntimeError(error.to_string())
+                  }
+                  sync_jit_tables_to_store(jit, ctx.store) catch {
+                    error => raise RuntimeError(error.to_string())
+                  }
                   raise RuntimeError("WASI exit: \{code}")
                 }
                 JITTrap(msg) => {
@@ -962,8 +970,12 @@ pub fn invoke_action(
                     temp_gc_func_table_ptr = 0L
                   }
                   // Sync globals even on trap (in case globals were modified before trap)
-                  sync_jit_globals_to_store(jit, ctx.store)
-                  sync_jit_tables_to_store(jit, ctx.store)
+                  sync_jit_globals_to_store(jit, ctx.store) catch {
+                    error => raise RuntimeError(error.to_string())
+                  }
+                  sync_jit_tables_to_store(jit, ctx.store) catch {
+                    error => raise RuntimeError(error.to_string())
+                  }
                   raise RuntimeError(msg)
                 }
                 JITNativeFiberFailure(message) => {
@@ -972,8 +984,12 @@ pub fn invoke_action(
                     @wasmoon_jit.free_memory(temp_gc_func_table_ptr)
                     temp_gc_func_table_ptr = 0L
                   }
-                  sync_jit_globals_to_store(jit, ctx.store)
-                  sync_jit_tables_to_store(jit, ctx.store)
+                  sync_jit_globals_to_store(jit, ctx.store) catch {
+                    error => raise RuntimeError(error.to_string())
+                  }
+                  sync_jit_tables_to_store(jit, ctx.store) catch {
+                    error => raise RuntimeError(error.to_string())
+                  }
                   raise RuntimeError("JIT native-fiber failure: \{message}")
                 }
                 JITCancelled => {
@@ -982,8 +998,12 @@ pub fn invoke_action(
                     @wasmoon_jit.free_memory(temp_gc_func_table_ptr)
                     temp_gc_func_table_ptr = 0L
                   }
-                  sync_jit_globals_to_store(jit, ctx.store)
-                  sync_jit_tables_to_store(jit, ctx.store)
+                  sync_jit_globals_to_store(jit, ctx.store) catch {
+                    error => raise RuntimeError(error.to_string())
+                  }
+                  sync_jit_tables_to_store(jit, ctx.store) catch {
+                    error => raise RuntimeError(error.to_string())
+                  }
                   raise RuntimeError("invocation cancelled")
                 }
               }
@@ -993,8 +1013,12 @@ pub fn invoke_action(
                 @wasmoon_jit.free_memory(temp_gc_func_table_ptr)
               }
               // Sync JIT globals back to store after successful call
-              sync_jit_globals_to_store(jit, ctx.store)
-              sync_jit_tables_to_store(jit, ctx.store)
+              sync_jit_globals_to_store(jit, ctx.store) catch {
+                error => raise RuntimeError(error.to_string())
+              }
+              sync_jit_tables_to_store(jit, ctx.store) catch {
+                error => raise RuntimeError(error.to_string())
+              }
               // Convert results back to Values based on function return types
               // V128 results take two slots (low then high 8 bytes)
               let values : Array[@types.Value] = []
@@ -1034,8 +1058,12 @@ pub fn invoke_action(
                       convert_jit_result(
                         results[result_idx],
                         result_type,
-                        ctx.store.c_heap,
-                      ),
+                        ctx.store,
+                        jit.jit_module,
+                        instance,
+                      ) catch {
+                        error => raise RuntimeError(error.to_string())
+                      },
                     )
                     result_idx = result_idx + 1
                   }
@@ -1104,91 +1132,17 @@ pub fn invoke_action(
 fn convert_jit_result(
   v : Int64,
   ty : @types.ValueType,
-  c_heap : @wasmoon_jit.CHeap?,
-) -> @types.Value {
+  store : @runtime.Store,
+  jit_module : @jit.JITModule,
+  instance : @runtime.ModuleInstance,
+) -> @types.Value raise @runtime.RuntimeError {
   match ty {
     I32 => I32(@types.FromInt64::from_int64_bits(v))
     I64 => I64(@types.FromInt64::from_int64_bits(v))
     F32 => F32(@types.FromInt64::from_int64_bits(v))
     F64 => F64(@types.FromInt64::from_int64_bits(v))
-    // Reference types: JIT null is 0.
-    // Funcref may be IR-encoded as negative: value = -(func_idx + 1).
-    FuncRef | RefFunc | RefFuncTyped(_) | RefNullFuncTyped(_) | NullFuncRef =>
-      if v == NULL_REF {
-        Null
-      } else if v < 0L {
-        let func_idx = (-(v + 1L)).to_int()
-        FuncRef(func_idx)
-      } else {
-        // Tagged pointer funcref (bit 61 set) - keep previous decoding fallback.
-        let func_idx = (v & 0x1FFFFFFFFFFFFFFFL).to_int()
-        FuncRef(func_idx)
-      }
-    ExternRef | RefExtern | NullExternRef =>
-      // Externref encoding: null=0, non-null=EXTERNREF_TAG | (host_idx << 1)
-      if v == NULL_REF {
-        Null
-      } else {
-        match @wasmoon_jit.decode_externref(v) {
-          Some(idx) => ExternRef(idx)
-          None => ExternRef(v.to_int())
-        }
-      }
-    // GC reference types - decode using c_heap encoding
-    // Encoding: StructRef/ArrayRef = (gc_ref - 1) << 1 (even), i31 = (value << 1) | 1 (odd), null = NULL_REF
-    // Note: ExternRef can also appear here after any.convert_extern, tagged with EXTERNREF_TAG
-    AnyRef | RefAny | RefEq | RefNullEq =>
-      if v == NULL_REF {
-        Null
-      } else if (v & EXTERNREF_TAG) != 0L {
-        // Host externref that was converted to anyref via any.convert_extern
-        match @wasmoon_jit.decode_externref(v) {
-          Some(idx) => ExternRef(idx)
-          None => ExternRef(v.to_int())
-        }
-      } else if (v & 1L) == 1L {
-        // i31 (odd)
-        I31((v >> 1).to_int())
-      } else {
-        // Struct/array ref (even, non-zero) - query heap for the actual kind
-        // JIT encodes as gc_ref << 1 where gc_ref is 1-based
-        // CHeap::is_array expects 0-based index, so subtract 1
-        let gc_ref = (v >> 1).to_int()
-        let heap_idx = gc_ref - 1
-        match c_heap {
-          Some(heap) =>
-            if heap.is_array(heap_idx) {
-              ArrayRef(heap_idx)
-            } else {
-              StructRef(heap_idx)
-            }
-          None =>
-            // No heap available, default to StructRef
-            StructRef(heap_idx)
-        }
-      }
-    StructRef | RefStructAbs | RefStruct(_) | RefNullStruct(_) =>
-      if v == NULL_REF {
-        Null
-      } else {
-        let gc_ref = (v >> 1).to_int()
-        StructRef(gc_ref - 1)
-      }
-    ArrayRef | RefArrayAbs | RefArray(_) | RefNullArray(_) =>
-      if v == NULL_REF {
-        Null
-      } else {
-        let gc_ref = (v >> 1).to_int()
-        ArrayRef(gc_ref - 1)
-      }
-    RefI31 | RefNullI31 =>
-      if v == NULL_REF {
-        Null
-      } else {
-        I31((v >> 1).to_int())
-      }
-    NullRef | ExnRef | NullExnRef | RefNone => Null
-    V128 => abort("V128 not supported in JIT")
+    V128 => abort("V128 requires two result slots")
+    _ => decode_ref_value(ty, v, store, jit_module, instance)
   }
 }
 

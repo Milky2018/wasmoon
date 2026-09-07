@@ -1,11 +1,41 @@
 // JIT support functions for WAST runner
 
 ///|
+fn encode_extern_value(
+  idx : Int,
+  store : @runtime.Store,
+) -> Int64 raise @runtime.RuntimeError {
+  match store.unwrap_extern(ExternRef(idx)) {
+    ExternRef(host_idx) => @wasmoon_jit.encode_externref(host_idx)
+    I31(value) => @wasmoon_jit.encode_i31(value)
+    StructRef(value) | ArrayRef(value) => @wasmoon_jit.encode_heap_ref(value)
+    Null => NULL_REF
+    _ => raise TypeMismatch
+  }
+}
+
+///|
+fn decode_extern_value(
+  raw : Int64,
+  store : @runtime.Store,
+) -> @types.Value raise @runtime.RuntimeError {
+  if raw == NULL_REF {
+    Null
+  } else if @wasmoon_jit.decode_externref(raw) is Some(idx) {
+    ExternRef(idx)
+  } else {
+    store.wrap_as_extern(decode_gc_value(raw, store))
+  }
+}
+
+///|
 /// Decode JIT GC reference value to @types.Value
 /// JIT GC encoding: null=0, i31=(val<<1)|1, struct/array=gc_ref<<1
 fn decode_gc_value(raw : Int64, store : @runtime.Store) -> @types.Value {
   if raw == 0L {
     Null
+  } else if @wasmoon_jit.decode_externref(raw) is Some(idx) {
+    ExternRef(idx)
   } else if (raw & 1L) == 1L {
     // i31: (value << 1) | 1, decode by shifting right
     I31((raw >> 1).to_int())
@@ -99,7 +129,7 @@ pub fn init_jit_globals_from_store(
   instance : @runtime.ModuleInstance,
   store : @runtime.Store,
   jit_module : @jit.JITModule,
-) -> Int64 {
+) -> Int64 raise @runtime.RuntimeError {
   let num_globals = instance.global_addrs.length()
   if num_globals == 0 {
     return 0L
@@ -129,7 +159,7 @@ pub fn init_jit_globals_from_store(
               None => @wasm_milkir.NULL_REF
             }
         }
-      ExternRef(idx) => idx.to_int64()
+      ExternRef(idx) => encode_extern_value(idx, store)
       ExnRef(idx) => idx.to_int64()
       ArrayRef(gc_ref) => @wasmoon_jit.encode_heap_ref(gc_ref)
       StructRef(gc_ref) => @wasmoon_jit.encode_heap_ref(gc_ref)
@@ -302,7 +332,7 @@ pub fn get_func_name(mod_ : @types.Module, func_idx : Int) -> String {
 pub fn sync_jit_globals_to_store(
   jit_ctx : JITModuleContext,
   store : @runtime.Store,
-) -> Unit {
+) -> Unit raise @runtime.RuntimeError {
   if jit_ctx.globals_ptr == 0L || jit_ctx.global_addrs.is_empty() {
     return
   }
@@ -360,17 +390,7 @@ pub fn sync_jit_globals_to_store(
             FuncRef(raw_value.to_int())
           }
         ExternRef | RefExtern | NullExternRef =>
-          if raw_value == 0L {
-            Null
-          } else if (raw_value & EXTERNREF_TAG) != 0L {
-            match @wasmoon_jit.decode_externref(raw_value) {
-              Some(idx) => ExternRef(idx)
-              None => ExternRef(raw_value.to_int())
-            }
-          } else {
-            // Fallback: treat as raw host index
-            ExternRef(raw_value.to_int())
-          }
+          decode_extern_value(raw_value, store)
         // GC reference types - decode using JIT encoding:
         // null = 0, i31 = (value << 1) | 1, struct/array = gc_ref << 1
         AnyRef | NullRef | RefAny | RefEq | RefNullEq =>
@@ -419,9 +439,10 @@ pub fn sync_jit_globals_to_store(
 ///|
 fn encode_global_value_for_jit(
   value : @types.Value,
+  store : @runtime.Store,
   jit_module : @jit.JITModule,
   func_addrs : Array[Int],
-) -> (Int64, Int64?) {
+) -> (Int64, Int64?) raise @runtime.RuntimeError {
   match value {
     I32(n) => (@types.ToInt64::to_int64_bits(n), None)
     I64(n) => (@types.ToInt64::to_int64_bits(n), None)
@@ -447,7 +468,7 @@ fn encode_global_value_for_jit(
         None => (NULL_REF, None)
       }
     }
-    ExternRef(idx) => (idx.to_int64(), None)
+    ExternRef(idx) => (encode_extern_value(idx, store), None)
     ExnRef(idx) => (idx.to_int64(), None)
     ArrayRef(gc_ref) => (@wasmoon_jit.encode_heap_ref(gc_ref), None)
     StructRef(gc_ref) => (@wasmoon_jit.encode_heap_ref(gc_ref), None)
@@ -469,7 +490,7 @@ fn encode_global_value_for_jit(
 pub fn sync_store_globals_to_jit(
   jit_ctx : JITModuleContext,
   store : @runtime.Store,
-) -> Unit {
+) -> Unit raise @runtime.RuntimeError {
   if jit_ctx.globals_ptr == 0L || jit_ctx.global_addrs.is_empty() {
     return
   }
@@ -480,6 +501,7 @@ pub fn sync_store_globals_to_jit(
     let global_inst = store.globals[global_addr]
     let (low, high) = encode_global_value_for_jit(
       global_inst.get(),
+      store,
       jit_ctx.jit_module,
       jit_ctx.func_addrs,
     )
@@ -539,19 +561,12 @@ fn decode_table_entry_value(
   raw_value : Int64,
   store : @runtime.Store,
   jit_ctx : JITModuleContext,
-) -> @types.Value {
+) -> @types.Value raise @runtime.RuntimeError {
   match elem_type {
     FuncRef | RefFunc | RefFuncTyped(_) | RefNullFuncTyped(_) | NullFuncRef =>
       decode_funcref_from_jit_ctx(raw_value, jit_ctx, store)
     ExternRef | RefExtern | NullExternRef =>
-      if raw_value == NULL_REF {
-        Null
-      } else {
-        match @wasmoon_jit.decode_externref(raw_value) {
-          Some(idx) => ExternRef(idx)
-          None => ExternRef(raw_value.to_int())
-        }
-      }
+      decode_extern_value(raw_value, store)
     AnyRef | NullRef | RefAny | RefEq | RefNullEq =>
       if raw_value == NULL_REF {
         Null
@@ -596,7 +611,7 @@ fn decode_table_entry_value(
 pub fn sync_jit_tables_to_store(
   jit_ctx : JITModuleContext,
   store : @runtime.Store,
-) -> Unit {
+) -> Unit raise @runtime.RuntimeError {
   for table_idx, table_addr in jit_ctx.table_addrs {
     let table = store.get_table(table_addr) catch { _ => continue }
     let jit_table = match store.get_jit_table(table_addr) {
@@ -637,7 +652,7 @@ pub fn sync_tables_to_jit(
   store : @runtime.Store,
   jit_module : @jit.JITModule,
   use_subtype_indirect_check? : Bool = false,
-) -> Unit {
+) -> Unit raise @runtime.RuntimeError {
   // Iterate over all tables in the instance
   for table_addr in instance.table_addrs {
     // Get the interpreter table
@@ -844,9 +859,9 @@ pub fn init_bulk_segments(
   mod_ : @types.Module,
   jm : @jit.JITModule,
   instance : @runtime.ModuleInstance,
-  _store : @runtime.Store,
+  store : @runtime.Store,
   use_subtype_indirect_check? : Bool = false,
-) -> Unit {
+) -> Unit raise @runtime.RuntimeError {
   // Precompute canonical indices for type equivalence.
   let canonical = @types.compute_canonical_type_indices(
     mod_.types,
@@ -914,7 +929,7 @@ pub fn init_bulk_segments(
       match value {
         Null => ()
         I31(n) => raw = @wasmoon_jit.encode_i31(n)
-        ExternRef(host_idx) => raw = @wasmoon_jit.encode_externref(host_idx)
+        ExternRef(host_idx) => raw = encode_extern_value(host_idx, store)
         StructRef(idx) =>
           // JIT GC refs are encoded as (gc_ref << 1), where gc_ref = idx + 1.
           raw = (idx + 1).to_int64() << 1
@@ -1019,7 +1034,7 @@ pub fn sync_table_to_jit(
   instance : @runtime.ModuleInstance,
   store : @runtime.Store,
   use_subtype_indirect_check? : Bool = false,
-) -> Unit {
+) -> Unit raise @runtime.RuntimeError {
   let runtime_size = table.size()
   let jit_size = jit_table.get_size()
   let size = if runtime_size < jit_size { runtime_size } else { jit_size }
@@ -1036,7 +1051,7 @@ pub fn sync_table_to_jit(
       StructRef(idx) | ArrayRef(idx) =>
         // gc_ref is 1-based for the JIT/C heap: (idx + 1) << 1
         encoded = (idx + 1).to_int64() << 1
-      ExternRef(host_idx) => encoded = @wasmoon_jit.encode_externref(host_idx)
+      ExternRef(host_idx) => encoded = encode_extern_value(host_idx, store)
       FuncRef(store_addr) => {
         encoded = encode_store_funcref_for_jit(
           value, store, jit_module, instance,
@@ -1215,7 +1230,7 @@ fn encode_exception_value_for_jit(
   store : @runtime.Store,
   jit_module : @jit.JITModule,
   instance : @runtime.ModuleInstance,
-) -> Int64? {
+) -> Int64? raise @runtime.RuntimeError {
   match value {
     I32(n) => Some(@types.ToInt64::to_int64_bits(n))
     I64(n) => Some(@types.ToInt64::to_int64_bits(n))
@@ -1224,7 +1239,7 @@ fn encode_exception_value_for_jit(
     Null => Some(NULL_REF)
     FuncRef(_) =>
       Some(encode_store_funcref_for_jit(value, store, jit_module, instance))
-    ExternRef(idx) => Some(@wasmoon_jit.encode_externref(idx))
+    ExternRef(idx) => Some(encode_extern_value(idx, store))
     StructRef(idx) => Some(@wasmoon_jit.encode_heap_ref(idx))
     ArrayRef(idx) => Some(@wasmoon_jit.encode_heap_ref(idx))
     I31(n) => Some(@wasmoon_jit.encode_i31(n))
@@ -1240,19 +1255,11 @@ fn decode_ref_value(
   store : @runtime.Store,
   jit_module : @jit.JITModule,
   instance : @runtime.ModuleInstance,
-) -> @types.Value {
+) -> @types.Value raise @runtime.RuntimeError {
   match ty {
     FuncRef | RefFunc | RefFuncTyped(_) | RefNullFuncTyped(_) | NullFuncRef =>
       decode_funcref_to_store_addr(raw, store, jit_module, instance)
-    ExternRef | RefExtern | NullExternRef =>
-      if raw == NULL_REF {
-        Null
-      } else {
-        match @wasmoon_jit.decode_externref(raw) {
-          Some(idx) => ExternRef(idx)
-          None => ExternRef(raw.to_int())
-        }
-      }
+    ExternRef | RefExtern | NullExternRef => decode_extern_value(raw, store)
     ExnRef | NullExnRef =>
       if raw == NULL_REF {
         Null
@@ -1271,23 +1278,7 @@ fn decode_ref_value(
       } else {
         ArrayRef(@wasmoon_jit.decode_heap_ref(raw))
       }
-    AnyRef | NullRef | RefAny | RefEq | RefNullEq =>
-      if raw == NULL_REF {
-        Null
-      } else if (raw & 1L) == 1L {
-        I31((raw >> 1).to_int())
-      } else {
-        let heap_idx = @wasmoon_jit.decode_heap_ref(raw)
-        match store.c_heap {
-          Some(heap) =>
-            if heap.is_array(heap_idx) {
-              ArrayRef(heap_idx)
-            } else {
-              StructRef(heap_idx)
-            }
-          None => StructRef(heap_idx)
-        }
-      }
+    AnyRef | NullRef | RefAny | RefEq | RefNullEq => decode_gc_value(raw, store)
     RefI31 | RefNullI31 =>
       if raw == NULL_REF {
         Null
@@ -1310,7 +1301,7 @@ fn decode_value(
   store : @runtime.Store,
   jit_module : @jit.JITModule,
   instance : @runtime.ModuleInstance,
-) -> (@types.Value, Int) {
+) -> (@types.Value, Int) raise @runtime.RuntimeError {
   match ty {
     I32 =>
       (I32(low_u32_bits(@wasmoon_jit.hostcall_value_slot_read(slot_idx))), 1)
@@ -1349,7 +1340,7 @@ fn encode_value(
   store : @runtime.Store,
   jit_module : @jit.JITModule,
   instance : @runtime.ModuleInstance,
-) -> Array[Int64]? {
+) -> Array[Int64]? raise @runtime.RuntimeError {
   match ty {
     I32 =>
       match value {
@@ -1389,7 +1380,7 @@ fn encode_value(
     ExternRef | RefExtern | NullExternRef =>
       match value {
         Null => Some([NULL_REF])
-        ExternRef(idx) => Some([@wasmoon_jit.encode_externref(idx)])
+        ExternRef(idx) => Some([encode_extern_value(idx, store)])
         _ => None
       }
     ExnRef | NullExnRef =>
@@ -1414,6 +1405,7 @@ fn encode_value(
       }
     AnyRef | NullRef | RefAny | RefEq | RefNullEq =>
       match value {
+        ExternRef(idx) => Some([encode_extern_value(idx, store)])
         Null => Some([NULL_REF])
         I31(n) => Some([@wasmoon_jit.encode_i31(n)])
         StructRef(idx) => Some([@wasmoon_jit.encode_heap_ref(idx)])
@@ -1517,8 +1509,8 @@ pub fn JITModuleContext::install_hostcall_dispatcher(
   self : JITModuleContext,
   store : @runtime.Store,
   instance : @runtime.ModuleInstance,
-  before_dispatch? : () -> Unit = fn() { () },
-  after_dispatch? : () -> Unit = fn() { () },
+  before_dispatch? : () -> Unit raise @runtime.RuntimeError = fn() { () },
+  after_dispatch? : () -> Unit raise @runtime.RuntimeError = fn() { () },
   classify_suspension? : (@runtime.RuntimeError) -> Bool = fn(_error) { false },
 ) -> Unit {
   let jit_module = self.jit_module
@@ -1624,92 +1616,98 @@ pub fn JITModuleContext::install_hostcall_dispatcher(
   }
 
   jit_module.set_hostcall_callback(fn() {
-    let func_addr = @wasmoon_jit.get_hostcall_func_addr()
-    let arg_slots = @wasmoon_jit.get_hostcall_num_arg_slots()
-    let res_slots = @wasmoon_jit.get_hostcall_num_result_slots()
-    let ft = match store.get_func_type_opt(func_addr) {
-      Some(t) => t
-      None => return HostcallTrap(3)
-    }
-    if sum_slot_count(ft.params) != arg_slots ||
-      sum_slot_count(ft.results) != res_slots {
-      return HostcallTrap(3)
-    }
-
-    // Decode args.
-    let args : Array[@types.Value] = []
-    let mut slot = 0
-    for ty in ft.params {
-      let (v, used) = decode_value(ty, slot, store, jit_module, instance)
-      args.push(v)
-      slot = slot + used
-    }
-
-    // Imported code observes interpreter-owned globals and tables. Publish the
-    // caller's native state before dispatch, then pull mutations back before
-    // returning to native code.
-    before_dispatch()
-    let invoke_result = call_func_by_addr(store, instance, func_addr, args) catch {
-      e => {
-        after_dispatch()
-        if store.get_func_inst_opt(func_addr) is Some(AsyncHostFunc(_)) ||
-          e is AsyncHostRequiresAsyncCall {
-          if store.native_execution_state().current_invocation()
-            is Some(invocation_id) {
-            self.async_host_errors.set(invocation_id, e)
-          }
-        }
-        if classify_suspension(e) {
-          return HostcallSuspended
-        }
-        return HostcallTrap(runtime_error_to_trap_code(e))
+    try {
+      let func_addr = @wasmoon_jit.get_hostcall_func_addr()
+      let arg_slots = @wasmoon_jit.get_hostcall_num_arg_slots()
+      let res_slots = @wasmoon_jit.get_hostcall_num_result_slots()
+      let ft = match store.get_func_type_opt(func_addr) {
+        Some(t) => t
+        None => return HostcallTrap(3)
       }
-    }
-    after_dispatch()
-    let results : Array[@types.Value] = match invoke_result {
-      ImportedReturned(values) => values
-      ImportedPending => return HostcallSuspended
-      ImportedThrown(tag_addr, values) => {
-        let local_tag_idx = find_local_tag_idx(instance, tag_addr).unwrap_or(-1)
-        // Imported wasm callees can throw; route the exception into the active
-        // JIT try_table chain instead of flattening it to a generic trap.
-        if values.length() == 0 {
-          jit_module.throw_exception_tag(local_tag_idx)
-        } else {
-          let encoded_values : Array[Int64] = []
-          for v in values {
-            match
-              encode_exception_value_for_jit(v, store, jit_module, instance) {
-              Some(raw) => encoded_values.push(raw)
-              None => return HostcallTrap(8)
+      if sum_slot_count(ft.params) != arg_slots ||
+        sum_slot_count(ft.results) != res_slots {
+        return HostcallTrap(3)
+      }
+
+      // Decode args.
+      let args : Array[@types.Value] = []
+      let mut slot = 0
+      for ty in ft.params {
+        let (v, used) = decode_value(ty, slot, store, jit_module, instance)
+        args.push(v)
+        slot = slot + used
+      }
+
+      // Imported code observes interpreter-owned globals and tables. Publish the
+      // caller's native state before dispatch, then pull mutations back before
+      // returning to native code.
+      before_dispatch()
+      let invoke_result = call_func_by_addr(store, instance, func_addr, args) catch {
+        e => {
+          after_dispatch()
+          if store.get_func_inst_opt(func_addr) is Some(AsyncHostFunc(_)) ||
+            e is AsyncHostRequiresAsyncCall {
+            if store.native_execution_state().current_invocation()
+              is Some(invocation_id) {
+              self.async_host_errors.set(invocation_id, e)
             }
           }
-          jit_module.throw_exception_values(local_tag_idx, encoded_values)
-        }
-        return HostcallTrap(8)
-      }
-    }
-    if results.length() != ft.results.length() {
-      return HostcallTrap(3)
-    }
-
-    // Encode results right after the arg slots region.
-    let mut out_slot = arg_slots
-    for i, ty in ft.results {
-      let slots = encode_value(ty, results[i], store, jit_module, instance)
-      match slots {
-        None => return HostcallTrap(3)
-        Some(encoded_slots) => {
-          for j in 0..<encoded_slots.length() {
-            @wasmoon_jit.hostcall_value_slot_write(
-              out_slot + j,
-              encoded_slots[j],
-            )
+          if classify_suspension(e) {
+            return HostcallSuspended
           }
-          out_slot = out_slot + encoded_slots.length()
+          return HostcallTrap(runtime_error_to_trap_code(e))
         }
       }
+      after_dispatch()
+      let results : Array[@types.Value] = match invoke_result {
+        ImportedReturned(values) => values
+        ImportedPending => return HostcallSuspended
+        ImportedThrown(tag_addr, values) => {
+          let local_tag_idx = find_local_tag_idx(instance, tag_addr).unwrap_or(
+            -1,
+          )
+          // Imported wasm callees can throw; route the exception into the active
+          // JIT try_table chain instead of flattening it to a generic trap.
+          if values.length() == 0 {
+            jit_module.throw_exception_tag(local_tag_idx)
+          } else {
+            let encoded_values : Array[Int64] = []
+            for v in values {
+              match
+                encode_exception_value_for_jit(v, store, jit_module, instance) {
+                Some(raw) => encoded_values.push(raw)
+                None => return HostcallTrap(8)
+              }
+            }
+            jit_module.throw_exception_values(local_tag_idx, encoded_values)
+          }
+          return HostcallTrap(8)
+        }
+      }
+      if results.length() != ft.results.length() {
+        return HostcallTrap(3)
+      }
+
+      // Encode results right after the arg slots region.
+      let mut out_slot = arg_slots
+      for i, ty in ft.results {
+        let slots = encode_value(ty, results[i], store, jit_module, instance)
+        match slots {
+          None => return HostcallTrap(3)
+          Some(encoded_slots) => {
+            for j in 0..<encoded_slots.length() {
+              @wasmoon_jit.hostcall_value_slot_write(
+                out_slot + j,
+                encoded_slots[j],
+              )
+            }
+            out_slot = out_slot + encoded_slots.length()
+          }
+        }
+      }
+      HostcallCompleted
+    } catch {
+      error => HostcallTrap(runtime_error_to_trap_code(error))
     }
-    HostcallCompleted
   })
 }

@@ -376,7 +376,10 @@ fn load_component_jit_context(
   }
   let globals_pointer = @wast.init_jit_globals_from_store(
     instance, store, jit_module,
-  )
+  ) catch {
+    error =>
+      raise NativeCompilationFailed("reference transfer failed: \{error}")
+  }
   @wast.init_elem_segments(
     lowered_module,
     jit_module,
@@ -390,13 +393,19 @@ fn load_component_jit_context(
     instance,
     store,
     use_subtype_indirect_check=true,
-  )
+  ) catch {
+    error =>
+      raise NativeCompilationFailed("reference transfer failed: \{error}")
+  }
   @wast.sync_tables_to_jit(
     instance,
     store,
     jit_module,
     use_subtype_indirect_check=true,
-  )
+  ) catch {
+    error =>
+      raise NativeCompilationFailed("reference transfer failed: \{error}")
+  }
   let context = @wast.JITModuleContext(
     jit_module,
     globals_pointer,
@@ -412,11 +421,11 @@ fn load_component_jit_context(
   context.install_hostcall_dispatcher(
     store,
     instance,
-    before_dispatch=fn() {
+    before_dispatch=() => {
       @wast.sync_jit_globals_to_store(context, store)
       @wast.sync_jit_tables_to_store(context, store)
     },
-    after_dispatch=fn() {
+    after_dispatch=() => {
       @wast.sync_store_globals_to_jit(context, store)
       @wast.sync_tables_to_jit(
         instance,

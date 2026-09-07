@@ -526,7 +526,9 @@ fn try_compile_jit_with_suspension(
           // Initialize globals (pass jm for tagged funcref pointers)
           let globals_ptr = @wast.init_jit_globals_from_store(
             instance, store, jm,
-          )
+          ) catch {
+            error => return Err("WAST JIT reference transfer failed: \{error}")
+          }
           // WAST drives heavy cross-module table/linking flows where table
           // entries can carry function refs from different type-index spaces.
           // Always use subtype-aware indirect checks to keep semantics correct.
@@ -546,7 +548,9 @@ fn try_compile_jit_with_suspension(
             instance,
             store,
             use_subtype_indirect_check~,
-          )
+          ) catch {
+            error => return Err("WAST JIT reference transfer failed: \{error}")
+          }
           // One-time sync: copy interpreter table contents (including active elem init)
           // into the shared JIT table memory before any JIT execution.
           @wast.sync_tables_to_jit(
@@ -554,7 +558,9 @@ fn try_compile_jit_with_suspension(
             store,
             jm,
             use_subtype_indirect_check~,
-          )
+          ) catch {
+            error => return Err("WAST JIT reference transfer failed: \{error}")
+          }
           // NOTE: Memory and globals are owned by JITContext, GC handles cleanup
           // Store global_addrs and func_addrs for syncing after JIT calls
           let global_addrs_copy : Array[Int] = []
@@ -595,11 +601,11 @@ fn try_compile_jit_with_suspension(
           jit_ctx.install_hostcall_dispatcher(
             store,
             instance,
-            before_dispatch=fn() {
+            before_dispatch=() => {
               @wast.sync_jit_globals_to_store(jit_ctx, store)
               @wast.sync_jit_tables_to_store(jit_ctx, store)
             },
-            after_dispatch=fn() {
+            after_dispatch=() => {
               @wast.sync_store_globals_to_jit(jit_ctx, store)
               @wast.sync_tables_to_jit(
                 instance,

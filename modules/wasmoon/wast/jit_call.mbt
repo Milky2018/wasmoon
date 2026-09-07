@@ -31,7 +31,10 @@ fn encode_jit_entry_args(
   }
   let slots : Array[Int64] = []
   for i, ty in param_types {
-    match encode_value(ty, args[i], store, jit_module, instance) {
+    let encoded = encode_value(ty, args[i], store, jit_module, instance) catch {
+      error => raise HostInvocation(error)
+    }
+    match encoded {
       Some(encoded) =>
         for raw in encoded {
           slots.push(raw)
@@ -64,7 +67,10 @@ fn decode_jit_entry_results(
       F64 => F64(@types.FromInt64::from_int64_bits(results[slot]))
       V128 =>
         V128(@types.int64_pair_to_v128_le(results[slot], results[slot + 1]))
-      _ => decode_ref_value(ty, results[slot], store, jit_module, instance)
+      _ =>
+        decode_ref_value(ty, results[slot], store, jit_module, instance) catch {
+          error => raise HostInvocation(error)
+        }
     }
     values.push(value)
     slot = slot + needed
@@ -81,13 +87,17 @@ fn prepare_jit_core_environment(
   store : @runtime.Store,
   instance : @runtime.ModuleInstance,
 ) -> Bool raise JITCoreCallError {
-  sync_store_globals_to_jit(context, store)
+  sync_store_globals_to_jit(context, store) catch {
+    error => raise HostInvocation(error)
+  }
   sync_tables_to_jit(
     instance,
     store,
     context.jit_module,
     use_subtype_indirect_check=context.use_subtype_indirect_check,
-  )
+  ) catch {
+    error => raise HostInvocation(error)
+  }
   match store.c_heap {
     Some(heap) => {
       context.jit_module.setup_gc(
@@ -110,12 +120,16 @@ fn finish_jit_core_environment(
   context : JITModuleContext,
   store : @runtime.Store,
   gc_active : Bool,
-) -> Unit {
+) -> Unit raise JITCoreCallError {
   if gc_active {
     context.jit_module.teardown_gc()
   }
-  sync_jit_globals_to_store(context, store)
-  sync_jit_tables_to_store(context, store)
+  sync_jit_globals_to_store(context, store) catch {
+    error => raise HostInvocation(error)
+  }
+  sync_jit_tables_to_store(context, store) catch {
+    error => raise HostInvocation(error)
+  }
 }
 
 ///|
