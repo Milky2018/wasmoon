@@ -30,32 +30,25 @@ pub fn HostFuture::HostFuture(
 ///|
 /// Entry state for one component instance.
 ///
-/// `ready` prevents lowered imports from entering a partially-instantiated
-/// instance. `active` is a dynamic execution guard and is released while a
-/// stackful invocation is suspended. `poisoned` is permanent after a trap.
+/// Defined adapters can run during core module instantiation. Publication of
+/// the component graph is guarded separately by the linker's staging transaction.
+/// `active` is released while stackful execution is suspended; `poisoned` is
+/// permanent after a trap.
 struct ComponentInstanceEntryState {
-  ready : Ref[Bool]
   active : Ref[Bool]
   poisoned : Ref[Bool]
 } derive(Debug)
 
 ///|
 fn ComponentInstanceEntryState::new() -> ComponentInstanceEntryState {
-  { ready: Ref(false), active: Ref(false), poisoned: Ref(false), }
-}
-
-///|
-fn ComponentInstanceEntryState::enable(
-  self : ComponentInstanceEntryState,
-) -> Unit {
-  self.ready.val = true
+  { active: Ref(false), poisoned: Ref(false), }
 }
 
 ///|
 fn ComponentInstanceEntryState::may_queue(
   self : ComponentInstanceEntryState,
 ) -> Bool {
-  self.ready.val && !self.poisoned.val
+  !self.poisoned.val
 }
 
 ///|
@@ -103,8 +96,7 @@ impl Debug for HostEventLoop with fn to_repr(_self) {
 
 ///|
 pub(all) enum ComponentFunc {
-  // The entry state separates partial instantiation, active execution, and
-  // permanent poisoning.
+  // Entry state tracks active execution and permanent poisoning.
   Lifted(
     CoreFuncRef,
     FuncType,

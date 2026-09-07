@@ -39,15 +39,6 @@ fn instantiate_component(
     }
   }
   let state = BuildState::BuildState(stream_table, async_state)
-  if outer_stack.length() > 0 {
-    let parent_table = outer_stack[outer_stack.length() - 1].resource_table
-    let ancestors : Array[Int] = []
-    for ancestor in parent_table.ancestors.val {
-      ancestors.push(ancestor)
-    }
-    ancestors.push(parent_table.id)
-    state.resource_table.ancestors.val = ancestors
-  }
   state.async_state.resource_tables.set(
     state.resource_table.id,
     state.resource_table,
@@ -70,7 +61,6 @@ fn instantiate_component(
     errdefer state.release_aborted()
     run_component_sections(frame)
   }
-  entry_state.enable()
   let instance = env_instance_from_state(name, state, store)
   // Registration is transactional: the frame stages its instance, nested
   // frames included, and only the root commits the whole tree into the

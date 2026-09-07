@@ -24,6 +24,8 @@ def main() -> int:
     )
     for name, files in snapshot.suites.items():
         print(f"  {name}: {len(files)} .wast files")
+    for name in snapshot.corrections:
+        print(f"  reviewed correction: {name}")
     return 0
 
 

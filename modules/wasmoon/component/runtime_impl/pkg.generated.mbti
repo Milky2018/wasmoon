@@ -463,7 +463,6 @@ pub fn ResourceHandle::to_repr(Self) -> @debug.Repr
 
 pub(all) struct ResourceTable {
   id : Int
-  ancestors : @ref.Ref[Array[Int]]
   next_handle : @ref.Ref[Int]
   free_handles : @ref.Ref[Array[Int]]
   entries : @ref.Ref[Map[Int, ResourceHandle]]

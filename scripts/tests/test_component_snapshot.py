@@ -83,6 +83,40 @@ class ComponentSnapshotTests(unittest.TestCase):
             with self.assertRaisesRegex(SnapshotError, "hash mismatch"):
                 validate_snapshot(root)
 
+    def test_corrections_preserve_and_pin_both_sources(self) -> None:
+        for mutation in (None, "source", "corrected", "unlisted", "upstream"):
+            with self.subTest(mutation=mutation), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                self.create_snapshot(root)
+                component = root / "component-spec"
+                corrected = component / "corrections/async.wast"
+                corrected.parent.mkdir()
+                corrected.write_text("(component)\n(assert_return (invoke \"g\"))\n")
+                entry = {
+                    "path": "async.wast",
+                    "upstream_sha256": hashlib.sha256(b"(component)\n").hexdigest(),
+                    "sha256": hashlib.sha256(corrected.read_bytes()).hexdigest(),
+                    "reason": "Replace an obsolete temporary restriction.",
+                }
+                if mutation == "source":
+                    entry["upstream_sha256"] = "0" * 64
+                elif mutation == "corrected":
+                    corrected.write_text("(component)\n")
+                elif mutation == "unlisted":
+                    (corrected.parent / "extra.wast").write_text("(component)\n")
+                elif mutation == "upstream":
+                    (component / "upstream/async.wast").write_text("(component)\n;; edited\n")
+                (component / "CORRECTIONS.json").write_text(
+                    json.dumps({"schema_version": 1, "files": [entry]})
+                )
+                if mutation is None:
+                    snapshot = validate_snapshot(root)
+                    self.assertEqual(snapshot.corrections, {Path("async.wast"): corrected})
+                    self.assertEqual(snapshot.suites["async-0.3"], (Path("async.wast"),))
+                else:
+                    with self.assertRaises(SnapshotError):
+                        validate_snapshot(root)
+
     def test_rejects_file_assigned_to_two_suites(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

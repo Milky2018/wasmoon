@@ -5,6 +5,20 @@ tree at the commit recorded in `SNAPSHOT.json`. The manifest pins the upstream
 commit, Git tree, parser version, complete path set, and SHA-256 of every file.
 Do not edit files under `upstream/` directly.
 
+`CORRECTIONS.json` records reviewed corrections to obsolete temporary assertions.
+Each entry pins both the original upstream hash and the corrected file under
+`corrections/`, and states its reason. Suite runs announce and use those files;
+the original snapshot remains unchanged and is still verified in full. Running
+an explicit `--dir` executes the files in that directory without corrections.
+
+The current correction changes two containment-based traps in
+`async/trap-on-reenter.wast` into successful parent-to-child and child-to-parent
+calls, matching Wasmtime 40.0.0 and the imported Wasmtime misc suite. Its recursive
+callback trap remains intact. Direct probes of all three component forms used
+`wasmtime run --invoke 'g()'` for the successful calls and
+`wasmtime run -W component-model-async=y -W component-model-async-builtins=y
+--invoke 'c()'` for the recursive trap.
+
 The `.wast` files are partitioned exactly once by the manifests in `suites/`:
 
 - `stable-0.2`: files whose valid component forms require no post-0.2

@@ -1244,6 +1244,7 @@ def main() -> int:
     args = parser.parse_args()
 
     repo_root = Path(__file__).resolve().parent.parent
+    corrections: dict[Path, Path] = {}
     if args.suite is not None:
         if args.dir is not None or args.rec:
             print("Error: --suite cannot be combined with --dir or --rec")
@@ -1255,6 +1256,7 @@ def main() -> int:
             return 1
         test_dir = snapshot.root
         wast_files = [test_dir / path for path in snapshot.suites[args.suite]]
+        corrections = snapshot.corrections
         required_wasm_tools_version = snapshot.wasm_tools_version
         print(
             f"Using suite {args.suite!r} from "
@@ -1328,9 +1330,13 @@ def main() -> int:
     total_passed = total_failed = total_skipped = 0
     files_ok = files_failed = 0
     for wast_file in wast_files:
-        name = str(wast_file.relative_to(test_dir))
+        relative = wast_file.relative_to(test_dir)
+        name = str(relative)
+        source = corrections.get(relative, wast_file)
+        if source != wast_file:
+            print(f"Applying documented correction: {name} ({source})")
         result = run_file(
-            wast_file,
+            source,
             wasmoon,
             wasmoon_tools,
             wasm_tools,

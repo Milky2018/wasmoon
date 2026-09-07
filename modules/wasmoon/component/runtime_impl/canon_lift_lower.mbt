@@ -172,10 +172,6 @@ fn instantiate_canon_lower(
         HostAsync(_, _, _) => caller_table.id
         Lifted(_, _, _, _, callee_table, _, _, _) => callee_table.id
       }
-      if func is Lifted(_, _, _, _, callee_table, _, _, _) &&
-        resource_tables_are_nested(caller_table, callee_table) {
-        trap_canon("wasm trap: cannot enter component instance")
-      }
       let caller_task_id = current_task_id(async_state)
       let meta_inst_id = match func {
         Host(_, _, _) => -1
@@ -672,10 +668,6 @@ fn instantiate_canon_lower(
         Host(_, _, _) => owner_component_id
         HostAsync(_, _, _) => owner_component_id
         Lifted(_, _, _, _, callee_table, _, _, _) => callee_table.id
-      }
-      if func is Lifted(_, _, _, _, callee_table, _, _, _) &&
-        resource_tables_are_nested(caller_table, callee_table) {
-        trap_canon("wasm trap: cannot enter component instance")
       }
       let caller_task_id = current_task_id(async_state)
       let meta_inst_id = match func {

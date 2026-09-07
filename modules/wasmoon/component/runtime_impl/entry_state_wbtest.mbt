@@ -1,30 +1,25 @@
 ///|
-test "component instance entry state separates readiness activity and poison" {
+test "component instance entry state tracks activity and poison" {
   let entry = ComponentInstanceEntryState::new()
   debug_inspect(
     entry,
-    content="{ ready: <Ref: false>, active: <Ref: false>, poisoned: <Ref: false> }",
-  )
-  entry.enable()
-  debug_inspect(
-    entry,
-    content="{ ready: <Ref: true>, active: <Ref: false>, poisoned: <Ref: false> }",
+    content="{ active: <Ref: false>, poisoned: <Ref: false> }",
   )
   entry.enter()
   debug_inspect(
     entry,
-    content="{ ready: <Ref: true>, active: <Ref: true>, poisoned: <Ref: false> }",
+    content="{ active: <Ref: true>, poisoned: <Ref: false> }",
   )
   entry.leave()
   debug_inspect(
     entry,
-    content="{ ready: <Ref: true>, active: <Ref: false>, poisoned: <Ref: false> }",
+    content="{ active: <Ref: false>, poisoned: <Ref: false> }",
   )
   entry.enter()
   entry.poison()
   debug_inspect(
     entry,
-    content="{ ready: <Ref: true>, active: <Ref: false>, poisoned: <Ref: true> }",
+    content="{ active: <Ref: false>, poisoned: <Ref: true> }",
   )
   let rejected = try {
     entry.enter()
@@ -43,7 +38,6 @@ test "component instance entry state separates readiness activity and poison" {
 ///|
 test "component instance rejects re-entry and preserves poison" {
   let entry = ComponentInstanceEntryState::new()
-  entry.enable()
   entry.enter()
   let reentry : Array[ComponentRuntimeError?] = [None]
   entry.enter() catch {
@@ -62,7 +56,7 @@ test "component instance rejects re-entry and preserves poison" {
       #|(
       #|  Some(CanonCallError("cannot enter component instance")),
       #|  Some(CanonCallError("cannot enter component instance")),
-      #|  { ready: <Ref: true>, active: <Ref: false>, poisoned: <Ref: true> },
+      #|  { active: <Ref: false>, poisoned: <Ref: true> },
       #|)
     ),
   )

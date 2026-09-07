@@ -25,6 +25,7 @@ class ComponentSnapshot:
     upstream_path: str
     wasm_tools_version: str
     suites: dict[str, tuple[Path, ...]]
+    corrections: dict[Path, Path]
 
 
 def sha256_file(path: Path) -> str:
@@ -72,6 +73,47 @@ def _load_suite(path: Path) -> tuple[Path, ...]:
     if not entries:
         raise SnapshotError(f"{path}: suite must contain at least one .wast file")
     return tuple(entries)
+
+
+def _load_corrections(
+    component_root: Path, upstream_hashes: dict[str, str]
+) -> dict[Path, Path]:
+    manifest = component_root / "CORRECTIONS.json"
+    corrected_root = component_root / "corrections"
+    if not manifest.exists():
+        if corrected_root.exists():
+            raise SnapshotError("correction files require CORRECTIONS.json")
+        return {}
+    try:
+        data = json.loads(manifest.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise SnapshotError(f"cannot read {manifest}: {error}") from error
+    if not isinstance(data, dict) or data.get("schema_version") != 1:
+        raise SnapshotError(f"{manifest}: unsupported correction schema")
+    entries = data.get("files")
+    if not isinstance(entries, list) or not entries:
+        raise SnapshotError(f"{manifest}: files must be a non-empty array")
+    corrections: dict[Path, Path] = {}
+    for entry in entries:
+        if not isinstance(entry, dict):
+            raise SnapshotError(f"{manifest}: correction must be an object")
+        name = _require_string(entry, "path")
+        relative = _validate_relative_path(name, source=manifest)
+        if relative.suffix != ".wast" or relative in corrections:
+            raise SnapshotError(f"{manifest}: invalid or duplicate correction {name!r}")
+        _require_string(entry, "reason")
+        if upstream_hashes.get(name) != _require_string(entry, "upstream_sha256"):
+            raise SnapshotError(f"{manifest}: correction source hash mismatch for {name}")
+        path = corrected_root / relative
+        if not path.is_file() or path.is_symlink():
+            raise SnapshotError(f"{manifest}: correction file missing or symlink: {name}")
+        if sha256_file(path) != _require_string(entry, "sha256"):
+            raise SnapshotError(f"{manifest}: correction hash mismatch for {name}")
+        corrections[relative] = path
+    actual = {path for path in corrected_root.rglob("*") if path.is_file()}
+    if actual != set(corrections.values()):
+        raise SnapshotError(f"{manifest}: unlisted correction files")
+    return corrections
 
 
 def validate_snapshot(repo_root: Path) -> ComponentSnapshot:
@@ -193,4 +235,5 @@ def validate_snapshot(repo_root: Path) -> ComponentSnapshot:
         upstream_path=upstream_path,
         wasm_tools_version=wasm_tools_version,
         suites=suites,
+        corrections=_load_corrections(component_root, expected_hashes),
     )

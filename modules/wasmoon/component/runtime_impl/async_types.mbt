@@ -99,7 +99,6 @@ pub(all) struct ResourceHandle {
 ///|
 pub(all) struct ResourceTable {
   id : Int
-  ancestors : Ref[Array[Int]]
   next_handle : Ref[Int]
   free_handles : Ref[Array[Int]]
   entries : Ref[Map[Int, ResourceHandle]]
@@ -113,13 +112,7 @@ pub fn ResourceTable::ResourceTable() -> ResourceTable {
   let id = resource_table_id_counter[0]
   resource_table_id_counter[0] = id + 1
   // Handle 0 is always invalid; the first valid allocation is 1.
-  {
-    id,
-    ancestors: Ref([]),
-    next_handle: Ref(1),
-    free_handles: Ref([]),
-    entries: Ref(Map([])),
-  }
+  { id, next_handle: Ref(1), free_handles: Ref([]), entries: Ref(Map([])), }
 }
 
 ///|
@@ -674,24 +667,6 @@ pub fn AsyncState::AsyncState(
     next_error_context_by_component: Map([]),
     error_contexts: Map([]),
   }
-}
-
-///|
-fn resource_tables_are_nested(
-  first : ResourceTable,
-  second : ResourceTable,
-) -> Bool {
-  for ancestor in first.ancestors.val {
-    if ancestor == second.id {
-      return true
-    }
-  }
-  for ancestor in second.ancestors.val {
-    if ancestor == first.id {
-      return true
-    }
-  }
-  false
 }
 
 ///|
