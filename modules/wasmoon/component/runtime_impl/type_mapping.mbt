@@ -330,3 +330,12 @@ fn core_func_type_from_component(
 }
 
 ///|
+
+///|
+fn payload_allows_intra_component_transfer(ty : ValType?) -> Bool {
+  match ty {
+    None => true
+    Some(Prim(S8 | U8 | S16 | U16 | S32 | U32 | S64 | U64 | F32 | F64)) => true
+    _ => false
+  }
+}

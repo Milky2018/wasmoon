@@ -721,6 +721,9 @@ fn instantiate_unsupported_thread_promotion(
   let host = fn(
     _args : Array[@types.Value],
   ) -> Array[@types.Value] raise @runtime.RuntimeError {
+    if !canon_may_leave[0] {
+      trap_canon("cannot leave component instance")
+    }
     trap_canon("\{operation} is not implemented")
     [I32(0)]
   }

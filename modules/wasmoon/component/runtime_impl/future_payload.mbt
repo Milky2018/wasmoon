@@ -5,15 +5,6 @@ enum FuturePayload {
 } derive(Debug)
 
 ///|
-fn future_payload_is_numeric(ty : ValType?) -> Bool {
-  match ty {
-    None => true
-    Some(Prim(S8 | U8 | S16 | U16 | S32 | U32 | S64 | U64 | F32 | F64)) => true
-    _ => false
-  }
-}
-
-///|
 fn future_scalar_payload_size(ty : ValType?) -> Int raise ComponentRuntimeError {
   match ty {
     None => 0

@@ -4466,6 +4466,8 @@ fn parse_canon_decl(
     op_name == "thread.yield-then-resume" ||
     op_name == "thread.switch-to" ||
     op_name == "thread.suspend-then-resume" ||
+    op_name == "thread.suspend-then-promote" ||
+    op_name == "thread.yield-then-promote" ||
     op_name == "thread.suspend" {
     let mut flag = false
     if decl_end == 3 {
@@ -4483,6 +4485,10 @@ fn parse_canon_decl(
       } else if op_name == "thread.switch-to" ||
         op_name == "thread.suspend-then-resume" {
         0x2a
+      } else if op_name == "thread.suspend-then-promote" {
+        0x2c
+      } else if op_name == "thread.yield-then-promote" {
+        0x2d
       } else {
         0x29
       },

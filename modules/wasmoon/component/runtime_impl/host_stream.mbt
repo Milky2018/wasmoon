@@ -20,6 +20,7 @@ fn HostRuntimeState::new_closed_host_stream(
     buffer.push(byte)
   }
   self.stream_table.streams.set(stream_id, {
+    allows_intra_component: true,
     elem_size: element_size,
     own_resource_type_id: None,
     pending_read: None,
@@ -79,6 +80,9 @@ pub fn HostRuntimeState::new_host_value_stream(
   self.stream_table.next_stream_id[0] = stream_id + 1
   let readable = alloc_shared_handle(self.async_state, table.id)
   self.stream_table.streams.set(stream_id, {
+    allows_intra_component: payload_allows_intra_component_transfer(
+      Some(resolve_valtype(payload_ty, types)),
+    ),
     elem_size: element_size,
     own_resource_type_id: own_resource_type,
     pending_read: None,
@@ -127,6 +131,9 @@ pub fn HostRuntimeState::new_host_value_stream_source(
   self.stream_table.next_stream_id[0] = stream_id + 1
   let readable = alloc_shared_handle(self.async_state, table.id)
   self.stream_table.streams.set(stream_id, {
+    allows_intra_component: payload_allows_intra_component_transfer(
+      Some(resolve_valtype(payload_ty, types)),
+    ),
     elem_size: element_size,
     own_resource_type_id: own_resource_type,
     pending_read: None,
@@ -334,6 +341,7 @@ pub fn HostRuntimeState::read_host_byte_stream(
           )
         }
         self.stream_table.streams.set(endpoint.stream_id, {
+          allows_intra_component: state.allows_intra_component,
           elem_size: state.elem_size,
           own_resource_type_id: state.own_resource_type_id,
           pending_read: state.pending_read,
@@ -409,6 +417,7 @@ pub fn HostRuntimeState::drop_host_readable_stream(
     None => None
   }
   self.stream_table.streams.set(endpoint.stream_id, {
+    allows_intra_component: state.allows_intra_component,
     elem_size: state.elem_size,
     own_resource_type_id: state.own_resource_type_id,
     pending_read: state.pending_read,

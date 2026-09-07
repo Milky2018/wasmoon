@@ -244,6 +244,8 @@ struct PendingStreamWrite {
 
 ///|
 struct StreamState {
+  // Whether guest endpoints in the same component may copy this payload.
+  allows_intra_component : Bool
   // Size in bytes of one element in the canonical stream read/write buffers.
   elem_size : Int
   // If `Some`, the stream payload is an `own` resource of this type id and reads
@@ -874,6 +876,7 @@ fn acknowledge_waitable_event(async_state : AsyncState, ev : WaitEvent) -> Unit 
         st0.pending_read is Some(pr) &&
         pr.reader_handle == ev.index {
         async_state.stream_table.streams.set(ep.stream_id, {
+          allows_intra_component: st0.allows_intra_component,
           elem_size: st0.elem_size,
           own_resource_type_id: st0.own_resource_type_id,
           pending_read: None,
@@ -893,6 +896,7 @@ fn acknowledge_waitable_event(async_state : AsyncState, ev : WaitEvent) -> Unit 
         st0.pending_write is Some(pw) &&
         pw.writer_handle == ev.index {
         async_state.stream_table.streams.set(ep.stream_id, {
+          allows_intra_component: st0.allows_intra_component,
           elem_size: st0.elem_size,
           own_resource_type_id: st0.own_resource_type_id,
           pending_read: st0.pending_read,

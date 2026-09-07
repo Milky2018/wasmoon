@@ -17,6 +17,9 @@ fn instantiate_canon_stream_new(
     payload_ty,
     state.types,
   )
+  let allows_intra_component = payload_allows_intra_component_transfer(
+    payload_ty.map(ty => resolve_valtype(ty, state.types)),
+  )
   let table = state.stream_table
   let async_state = state.async_state
   let owner_component_id = state.resource_table.id
@@ -30,6 +33,7 @@ fn instantiate_canon_stream_new(
     let sid = table.next_stream_id[0]
     table.next_stream_id[0] = sid + 1
     table.streams.set(sid, {
+      allows_intra_component,
       elem_size,
       own_resource_type_id,
       pending_read: None,
@@ -160,6 +164,7 @@ fn progress_host_stream_sources(
       Pending => ()
       Closed => {
         table.streams.set(stream_id, {
+          allows_intra_component: state.allows_intra_component,
           elem_size: state.elem_size,
           own_resource_type_id: state.own_resource_type_id,
           pending_read: Some({
@@ -209,6 +214,7 @@ fn progress_host_stream_sources(
         }
         let filled = read.filled + values.length()
         table.streams.set(stream_id, {
+          allows_intra_component: state.allows_intra_component,
           elem_size: state.elem_size,
           own_resource_type_id: state.own_resource_type_id,
           pending_read: Some({
@@ -398,6 +404,7 @@ fn instantiate_canon_stream_read(
                         } else if read.reader_handle == handle &&
                           read.event_enqueued {
                           table.streams.set(ep.stream_id, {
+                            allows_intra_component: st0.allows_intra_component,
                             elem_size: st0.elem_size,
                             own_resource_type_id: st0.own_resource_type_id,
                             pending_read: None,
@@ -446,6 +453,7 @@ fn instantiate_canon_stream_read(
                       Closed => {
                         ep.notified_peer_dropped[0] = true
                         table.streams.set(ep.stream_id, {
+                          allows_intra_component: st0.allows_intra_component,
                           elem_size: st0.elem_size,
                           own_resource_type_id: st0.own_resource_type_id,
                           pending_read: None,
@@ -457,6 +465,7 @@ fn instantiate_canon_stream_read(
                       }
                       Pending => {
                         table.streams.set(ep.stream_id, {
+                          allows_intra_component: st0.allows_intra_component,
                           elem_size: st0.elem_size,
                           own_resource_type_id: st0.own_resource_type_id,
                           pending_read: Some({
@@ -502,6 +511,7 @@ fn instantiate_canon_stream_read(
                           ep.notified_peer_dropped[0] = true
                         }
                         table.streams.set(ep.stream_id, {
+                          allows_intra_component: st0.allows_intra_component,
                           elem_size: st0.elem_size,
                           own_resource_type_id: st0.own_resource_type_id,
                           pending_read: None,
@@ -541,6 +551,12 @@ fn instantiate_canon_stream_read(
                 }
                 match st0.pending_write {
                   Some(pw) => {
+                    if pw.writer_table.id == owner_component_id &&
+                      !st0.allows_intra_component {
+                      trap_canon(
+                        "cannot read from and write to intra-component future/stream with non-numeric payload",
+                      )
+                    }
                     let elem_size = st0.elem_size
                     let total_elems = pw.count
                     let remain = total_elems - pw.sent
@@ -563,6 +579,7 @@ fn instantiate_canon_stream_read(
                       // Persist the updated `event_enqueued` bit and then behave as if there is
                       // no pending data for readers.
                       table.streams.set(ep.stream_id, {
+                        allows_intra_component: st0.allows_intra_component,
                         elem_size: st0.elem_size,
                         own_resource_type_id: st0.own_resource_type_id,
                         pending_read: st0.pending_read,
@@ -597,6 +614,7 @@ fn instantiate_canon_stream_read(
                         event_enqueued: false,
                       }
                       table.streams.set(ep.stream_id, {
+                        allows_intra_component: st0.allows_intra_component,
                         elem_size: st0.elem_size,
                         own_resource_type_id: st0.own_resource_type_id,
                         pending_read: Some(pr),
@@ -727,6 +745,7 @@ fn instantiate_canon_stream_read(
                       defer_complete: pw.defer_complete,
                     })
                     table.streams.set(ep.stream_id, {
+                      allows_intra_component: st0.allows_intra_component,
                       elem_size: st0.elem_size,
                       own_resource_type_id: st0.own_resource_type_id,
                       pending_read: st0.pending_read,
@@ -762,6 +781,7 @@ fn instantiate_canon_stream_read(
                         event_enqueued: false,
                       }
                       table.streams.set(ep.stream_id, {
+                        allows_intra_component: st0.allows_intra_component,
                         elem_size: st0.elem_size,
                         own_resource_type_id: st0.own_resource_type_id,
                         pending_read: Some(pr),
@@ -924,6 +944,7 @@ fn instantiate_canon_stream_write(
                           pw0.sent >= total_elems &&
                           !pw0.defer_complete {
                           table.streams.set(ep.stream_id, {
+                            allows_intra_component: st0.allows_intra_component,
                             elem_size: st0.elem_size,
                             own_resource_type_id: st0.own_resource_type_id,
                             pending_read: st0.pending_read,
@@ -950,6 +971,7 @@ fn instantiate_canon_stream_write(
                           ep.notified_peer_dropped[0] = true
                         }
                         table.streams.set(ep.stream_id, {
+                          allows_intra_component: st0.allows_intra_component,
                           elem_size: st0.elem_size,
                           own_resource_type_id: st0.own_resource_type_id,
                           pending_read: st0.pending_read,
@@ -995,6 +1017,12 @@ fn instantiate_canon_stream_write(
                 }
                 match st0.pending_read {
                   Some(pr0) => {
+                    if pr0.reader_table.id == owner_component_id &&
+                      !st0.allows_intra_component {
+                      trap_canon(
+                        "cannot read from and write to intra-component future/stream with non-numeric payload",
+                      )
+                    }
                     // A zero-length write reports readiness without completing the reader.
                     if len == 0 {
                       return ret_i32(0)
@@ -1045,6 +1073,7 @@ fn instantiate_canon_stream_write(
                         buf.push(b)
                       }
                       table.streams.set(ep.stream_id, {
+                        allows_intra_component: st0.allows_intra_component,
                         elem_size: st0.elem_size,
                         own_resource_type_id: st0.own_resource_type_id,
                         pending_read,
@@ -1224,6 +1253,7 @@ fn instantiate_canon_stream_write(
                       event_enqueued,
                     }
                     table.streams.set(ep.stream_id, {
+                      allows_intra_component: st0.allows_intra_component,
                       elem_size: st0.elem_size,
                       own_resource_type_id: st0.own_resource_type_id,
                       pending_read: Some(pr1),
@@ -1256,6 +1286,7 @@ fn instantiate_canon_stream_write(
                       buf.push(b)
                     }
                     table.streams.set(ep.stream_id, {
+                      allows_intra_component: st0.allows_intra_component,
                       elem_size: st0.elem_size,
                       own_resource_type_id: st0.own_resource_type_id,
                       pending_read: st0.pending_read,
@@ -1545,6 +1576,7 @@ fn instantiate_canon_stream_drop_readable(
                     },
                   )
                   table.streams.set(ep.stream_id, {
+                    allows_intra_component: st0.allows_intra_component,
                     elem_size: st0.elem_size,
                     own_resource_type_id: st0.own_resource_type_id,
                     pending_read: st0.pending_read,
@@ -1563,6 +1595,7 @@ fn instantiate_canon_stream_drop_readable(
                 }
                 None =>
                   table.streams.set(ep.stream_id, {
+                    allows_intra_component: st0.allows_intra_component,
                     elem_size: st0.elem_size,
                     own_resource_type_id: st0.own_resource_type_id,
                     pending_read: st0.pending_read,
@@ -1663,6 +1696,7 @@ fn instantiate_canon_stream_drop_writable(
                     },
                   )
                   table.streams.set(ep.stream_id, {
+                    allows_intra_component: st0.allows_intra_component,
                     elem_size: st0.elem_size,
                     own_resource_type_id: st0.own_resource_type_id,
                     pending_read: Some({
@@ -1683,6 +1717,7 @@ fn instantiate_canon_stream_drop_writable(
                 }
                 None =>
                   table.streams.set(ep.stream_id, {
+                    allows_intra_component: st0.allows_intra_component,
                     elem_size: st0.elem_size,
                     own_resource_type_id: st0.own_resource_type_id,
                     pending_read: st0.pending_read,

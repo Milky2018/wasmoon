@@ -233,7 +233,7 @@ fn instantiate_canon_future_read(
               match st0.pending_write {
                 Some(pw) => {
                   if pw.writer_component_id == caller_component_id &&
-                    !future_payload_is_numeric(st0.payload_ty) {
+                    !payload_allows_intra_component_transfer(st0.payload_ty) {
                     trap_canon(
                       "cannot read from and write to intra-component future/stream with non-numeric payload",
                     )
@@ -568,7 +568,7 @@ fn instantiate_canon_future_write(
               match st0.pending_read {
                 Some(pr) => {
                   if pr.reader_component_id == caller_component_id &&
-                    !future_payload_is_numeric(st0.payload_ty) {
+                    !payload_allows_intra_component_transfer(st0.payload_ty) {
                     trap_canon(
                       "cannot read from and write to intra-component future/stream with non-numeric payload",
                     )
