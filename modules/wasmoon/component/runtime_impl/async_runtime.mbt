@@ -359,6 +359,7 @@ fn await_component_func(
                   }
                 None => ()
               }
+              run_post_return(resources, core_results, may_enter, store)
               let out_vals = transfer_results_if_needed(
                 vals,
                 func_type.result,
@@ -978,6 +979,7 @@ fn step_task_once_impl(
             }
           None => ()
         }
+        run_post_return(resources, core_results, entry, store)
         let task_id = current_task_id(async_state)
         async_state.task_returned.set(task_id, true)
         set_task_result(async_state, task_id, callee_table.id, vals)
@@ -1688,21 +1690,7 @@ fn call_component_func_in_task_impl(
           }
         None => ()
       }
-      match resources.post_return {
-        Some(pr) => {
-          let prev = canon_may_leave[0]
-          canon_may_leave[0] = false
-          ({
-            errdefer {
-              canon_may_leave[0] = prev
-            }
-            call_core_func_guarded(store, entry, pr, core_results)
-          })
-          |> ignore
-          canon_may_leave[0] = prev
-        }
-        None => ()
-      }
+      run_post_return(resources, core_results, entry, store)
       transfer_results_if_needed(
         component_results,
         func_type.result,

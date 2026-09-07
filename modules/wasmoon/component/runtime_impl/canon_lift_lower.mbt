@@ -141,7 +141,13 @@ fn instantiate_canon_lower(
           }
       }
       let component_args = core_args_to_component(
-        param_args, func_type, func_types, resources, store, live_caller_table, 4,
+        param_args,
+        func_type.params,
+        func_types,
+        resources,
+        store,
+        live_caller_table,
+        4,
         "async lower argument",
       ) catch {
         e => {
@@ -599,6 +605,8 @@ fn instantiate_canon_lower(
     let core_type = core_func_type_from_component(
       func_type, func_types, mem_is_64,
     )
+    let indirect_result = func_type.result is Some(result) &&
+      core_types_for_valtype(result, func_types, mem_is_64).length() > 1
     let host = fn(
       args : Array[@types.Value],
     ) -> Array[@types.Value] raise @runtime.RuntimeError {
@@ -625,8 +633,20 @@ fn instantiate_canon_lower(
         async_state.sync_lower_states.get(outer_task_id) is Some(_) {
         []
       } else {
+        let param_args = if indirect_result {
+          args[:args.length() - 1].to_owned()
+        } else {
+          args
+        }
         let values = core_args_to_component(
-          args, func_type, func_types, resources, store, caller_table, 16, "sync lower argument",
+          param_args,
+          func_type.params,
+          func_types,
+          resources,
+          store,
+          caller_table,
+          16,
+          "sync lower argument",
         ) catch {
           e => {
             trap_canon(canon_err_message(e))

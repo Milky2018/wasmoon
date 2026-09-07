@@ -965,7 +965,7 @@ fn core_results_to_component(
 ///|
 fn core_args_to_component(
   args : Array[@types.Value],
-  func_type : FuncType,
+  params : Array[@component.Param],
   types : Array[TypeDef?],
   resources : CanonResources,
   store : @runtime.Store,
@@ -1033,7 +1033,7 @@ fn core_args_to_component(
   }
   let flat_param_types : Array[@types.ValueType] = []
   let flat_param_storage : Array[FlatStorageField] = []
-  for p in func_type.params {
+  for p in params {
     for t in core_types_for_valtype(p.ty, types, mem_is_64) {
       flat_param_types.push(t)
     }
@@ -1041,17 +1041,8 @@ fn core_args_to_component(
       flat_param_storage.push(field)
     }
   }
-  let flat_result_types : Array[@types.ValueType] = match func_type.result {
-    Some(r) => core_types_for_valtype(r, types, mem_is_64)
-    None => []
-  }
-  let indirect_result = flat_result_types.length() > 1
   let indirect_params = flat_param_types.length() > max_flat_params
-  let arg_limit = if indirect_result {
-    args.length() - 1
-  } else {
-    args.length()
-  }
+  let arg_limit = args.length()
   let flat_vals : Array[@types.Value] = if indirect_params {
     if arg_limit < 1 {
       raise HostCallError("argument type mismatch")
@@ -1086,7 +1077,7 @@ fn core_args_to_component(
   }
   let values : Array[ComponentValue] = []
   let mut pos = 0
-  for p in func_type.params {
+  for p in params {
     let flat_types = core_types_for_valtype(p.ty, types, mem_is_64)
     let n = flat_types.length()
     if pos + n > flat_vals.length() {

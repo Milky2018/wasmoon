@@ -12,14 +12,16 @@ fn lift_task_return_value(
   store : @runtime.Store,
 ) -> ComponentValue raise ComponentRuntimeError {
   let result_param : @component.Param = { label: "", ty: result, }
-  let result_func : FuncType = {
-    is_async: false,
-    params: [result_param],
-    result: None,
-  }
   match
     core_args_to_component(
-      args, result_func, types, resources, store, resource_table, 16, "task.return result",
+      args,
+      [result_param],
+      types,
+      resources,
+      store,
+      resource_table,
+      16,
+      "task.return result",
     ) {
     [value] => value
     _ => raise HostCallError("task.return argument type mismatch")

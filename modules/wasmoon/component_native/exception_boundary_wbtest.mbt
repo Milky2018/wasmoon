@@ -149,10 +149,7 @@ test "failed async subtasks do not contaminate later component invocations" {
     )
     defer linker.close()
     let cancelled = [0]
-    let builder = linker.host_instance_builder(
-      "unrelated",
-      @runtime_impl.HostRuntimeState(),
-    )
+    let builder = linker.host_instance_builder("unrelated", HostRuntimeState())
     builder.add_async_func(
       "run",
       { is_async: true, params: [], result: None, },
