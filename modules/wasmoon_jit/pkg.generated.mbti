@@ -16,7 +16,7 @@ import {
 }
 
 // Values
-pub const WASMOON_CODEGEN_REVISION : String = "direct-vcode-1"
+pub const WASMOON_CODEGEN_REVISION : String = "direct-vcode-2"
 
 pub const WASMOON_JIT_ABI_VERSION : Int = 5
 

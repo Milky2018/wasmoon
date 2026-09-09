@@ -23,6 +23,7 @@ priv struct FuncEnvironment {
   // Used to eliminate bounds checks for constant addresses within this range
   memory_mins : Array[Int64]
   // Whether each memory uses 64-bit addressing (memory64 proposal)
+  memory_is_shared : Array[Bool]
   memory_is_64 : Array[Bool]
   // Logical page size log2 for each memory (custom-page-sizes proposal)
   memory_page_size_log2 : Array[Int]
@@ -47,6 +48,7 @@ fn FuncEnvironment::FuncEnvironment(
   global_types : Array[@types.GlobalType],
   memory_mins? : Array[Int64] = [],
   memory_is_64? : Array[Bool] = [],
+  memory_is_shared? : Array[Bool] = [],
   memory_page_size_log2? : Array[Int] = [],
 ) -> FuncEnvironment {
   let runtime_layout = match embedding_env.runtime_layout() {
@@ -74,6 +76,7 @@ fn FuncEnvironment::FuncEnvironment(
     global_types,
     memory_mins,
     memory_is_64,
+    memory_is_shared,
     memory_page_size_log2,
     memory_trap_block: None,
     atomic_unaligned_trap_block: None,
@@ -304,8 +307,8 @@ fn FuncEnvironment::translate_table_set(
 
 ///|
 /// Helper to load memory size in bytes for a given memidx.
-/// For memidx 0: use fast path (direct vmctx field)
-/// For memidx > 0: load from memories array
+/// Shared lengths always come from the descriptor; another owner may grow it.
+/// Ordinary memory zero retains the context fast path.
 fn FuncEnvironment::load_memory_size(
   self : FuncEnvironment,
   builder : FunctionBuilder,
@@ -313,7 +316,9 @@ fn FuncEnvironment::load_memory_size(
   memidx : Int,
 ) -> Value {
   let layout = self.runtime_layout
-  if memidx == 0 {
+  let shared = memidx < self.memory_is_shared.length() &&
+    self.memory_is_shared[memidx]
+  if memidx == 0 && !shared {
     let mem0_size_off = builder.iconst(
       I64,
       layout.memory0_size_offset.to_int64(),
@@ -334,7 +339,11 @@ fn FuncEnvironment::load_memory_size(
     I64,
     memory_layout.current_length_offset.to_int64(),
   )
-  builder.load_ptr(I64, mem_ptr, size_off)
+  if shared {
+    builder.atomic_load(I64, 64, mem_ptr, size_off)
+  } else {
+    builder.load_ptr(I64, mem_ptr, size_off)
+  }
 }
 
 ///|

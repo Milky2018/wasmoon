@@ -29,9 +29,10 @@ typedef struct {
     // Guarded allocation info (memory32, reserved mapping)
     void *alloc_base;
     size_t alloc_size;
-    size_t guard_start;      // start of PROT_NONE region in bytes
+    _Atomic size_t guard_start;      // start of PROT_NONE region in bytes
     int is_guarded;
     int is_shared;
+    _Atomic int growth_lock;
     _Atomic size_t owners;   // Independent Store/context ownership leases.
 } wasmoon_memory_t;
 

@@ -121,7 +121,7 @@ extern "c" fn c_jit_alloc_memory(size : Int64) -> Int64 = "wasmoon_jit_alloc_mem
 /// max_pages is interpreted by the runtime; -1 means "unknown/unlimited".
 extern "c" fn c_jit_alloc_memory_desc(
   size_bytes : Int64,
-  max_pages : Int,
+  max_pages : Int64,
   is_memory64 : Int,
   page_size_log2 : Int,
   is_shared : Int,

@@ -197,6 +197,7 @@ void wasmoon_jit_free_memory_desc(int64_t mem_ptr);
 #define WASM_PAGE_SIZE 65536
 
 // Guard page memory allocation (for bounds check elimination)
+uint8_t *alloc_shared_memory_external(wasmoon_memory_t *memory, size_t initial_size, size_t max_size);
 uint8_t *alloc_guarded_memory_external(wasmoon_memory_t *memory, size_t initial_size, size_t max_size);
 int is_memory_guard_page_access(jit_context_t *ctx, void *addr);
 

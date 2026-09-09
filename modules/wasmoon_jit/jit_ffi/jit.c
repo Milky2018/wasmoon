@@ -1015,7 +1015,7 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_alloc_memory(int64_t size) {
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_alloc_memory_desc(
     int64_t size_bytes,
-    int32_t max_pages,
+    int64_t max_pages,
     int32_t is_memory64,
     int32_t page_size_log2,
     int32_t is_shared
@@ -1024,25 +1024,30 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_alloc_memory_desc(
     wasmoon_memory_t *mem = (wasmoon_memory_t *)calloc(1, sizeof(wasmoon_memory_t));
     if (!mem) return 0;
     atomic_init(&mem->owners, 1);
-
-    if (size_bytes > 0) {
-        uint8_t *base = (uint8_t *)calloc(1, (size_t)size_bytes);
-        if (!base) {
-            free(mem);
-            return 0;
-        }
-        mem->base = base;
-        atomic_store_explicit(&mem->current_length, (size_t)size_bytes, memory_order_relaxed);
-    } else {
-        mem->base = NULL;
-        atomic_store_explicit(&mem->current_length, 0, memory_order_relaxed);
-    }
+    atomic_init(&mem->growth_lock, 0);
 
     mem->max_pages = (max_pages < 0) ? SIZE_MAX : (size_t)max_pages;
     mem->is_memory64 = (is_memory64 != 0);
     mem->page_size_log2 = page_size_log2;
     mem->is_shared = (is_shared != 0);
-    mem->is_guarded = 0;
+    if (mem->is_shared) {
+        if (max_pages < 0 || page_size_log2 < 0 || page_size_log2 > 30 ||
+            (uint64_t)max_pages > SIZE_MAX >> page_size_log2 ||
+            !alloc_shared_memory_external(mem, (size_t)size_bytes,
+                (size_t)max_pages << page_size_log2)) {
+            free(mem);
+            return 0;
+        }
+    } else {
+        if (size_bytes > 0) {
+            mem->base = (uint8_t *)calloc(1, (size_t)size_bytes);
+            if (!mem->base) {
+                free(mem);
+                return 0;
+            }
+        }
+        atomic_store_explicit(&mem->current_length, (size_t)size_bytes, memory_order_relaxed);
+    }
     return (int64_t)mem;
 }
 
@@ -1097,6 +1102,7 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_alloc_guarded_memory_desc(int64_t initial
     }
 
     atomic_init(&memory->owners, 1);
+    atomic_init(&memory->growth_lock, 0);
     memory->max_pages = (max_pages < 0) ? SIZE_MAX : (size_t)max_pages;
     memory->is_memory64 = 0;
     memory->page_size_log2 = 16;
@@ -1153,6 +1159,7 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_ctx_alloc_guarded_memory(
         return 0;
     }
     atomic_init(&memory->owners, 1);
+    atomic_init(&memory->growth_lock, 0);
     memory->max_pages = (max_pages < 0) ? SIZE_MAX : (size_t)max_pages;
     memory->is_memory64 = 0;
     memory->page_size_log2 = 16;

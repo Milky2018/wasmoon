@@ -528,6 +528,7 @@ graph TD
   ISS_493["ISS-493: Isolate resource destructor contexts and honor the execution engine"]
   ISS_494["ISS-494: Preserve atomic memory semantics across interpreter and compiler"]
   ISS_495["ISS-495: Retain shared linear memory across independent Stores"]
+  ISS_496["ISS-496: Preserve shared-memory addresses and serialize growth"]
   ISS_002 --> ISS_003
   ISS_002 --> ISS_004
   ISS_003 --> ISS_005
@@ -914,6 +915,7 @@ graph TD
   ISS_471 --> ISS_472
   ISS_494 --> ISS_476
   ISS_495 --> ISS_476
+  ISS_496 --> ISS_476
   ISS_483 --> ISS_482
   ISS_488 --> ISS_484
   ISS_489 --> ISS_484
@@ -923,6 +925,8 @@ graph TD
   ISS_491 --> ISS_490
   ISS_492 --> ISS_493
   ISS_494 --> ISS_495
+  ISS_494 --> ISS_496
+  ISS_495 --> ISS_496
 ```
 
 ## Warnings

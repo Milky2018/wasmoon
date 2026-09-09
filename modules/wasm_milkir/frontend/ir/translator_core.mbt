@@ -264,6 +264,7 @@ fn Translator::Translator(
     global_types,
     memory_mins~,
     memory_is_64~,
+    memory_is_shared~,
     memory_page_size_log2~,
   )
 
