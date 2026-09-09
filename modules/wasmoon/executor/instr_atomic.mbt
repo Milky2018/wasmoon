@@ -272,19 +272,19 @@ fn ExecContext::exec_atomic(
     | 56 => {
       let v = self.stack.pop_i32()
       let effective_addr = pop_effective_addr()
-      let access_size = if subopcode == 18 ||
-        subopcode == 25 ||
-        subopcode == 32 ||
-        subopcode == 39 ||
-        subopcode == 46 ||
-        subopcode == 53 {
+      let access_size = if op == 18 ||
+        op == 25 ||
+        op == 32 ||
+        op == 39 ||
+        op == 46 ||
+        op == 53 {
         4L
-      } else if subopcode == 20 ||
-        subopcode == 27 ||
-        subopcode == 34 ||
-        subopcode == 41 ||
-        subopcode == 48 ||
-        subopcode == 55 {
+      } else if op == 20 ||
+        op == 27 ||
+        op == 34 ||
+        op == 41 ||
+        op == 48 ||
+        op == 55 {
         1L
       } else {
         2L
@@ -308,7 +308,7 @@ fn ExecContext::exec_atomic(
         0xFFFF
       }
       let v_masked = v & mask
-      let new = match subopcode {
+      let new = match op {
         18 | 20 | 21 => (old + v_masked) & mask
         25 | 27 | 28 => (old - v_masked) & mask
         32 | 34 | 35 => old & v_masked
@@ -354,26 +354,26 @@ fn ExecContext::exec_atomic(
     | 59 => {
       let v = self.stack.pop_i64()
       let effective_addr = pop_effective_addr()
-      let access_size = if subopcode == 19 ||
-        subopcode == 26 ||
-        subopcode == 33 ||
-        subopcode == 40 ||
-        subopcode == 47 ||
-        subopcode == 54 {
+      let access_size = if op == 19 ||
+        op == 26 ||
+        op == 33 ||
+        op == 40 ||
+        op == 47 ||
+        op == 54 {
         8L
-      } else if subopcode == 22 ||
-        subopcode == 29 ||
-        subopcode == 36 ||
-        subopcode == 43 ||
-        subopcode == 50 ||
-        subopcode == 57 {
+      } else if op == 22 ||
+        op == 29 ||
+        op == 36 ||
+        op == 43 ||
+        op == 50 ||
+        op == 57 {
         1L
-      } else if subopcode == 23 ||
-        subopcode == 30 ||
-        subopcode == 37 ||
-        subopcode == 44 ||
-        subopcode == 51 ||
-        subopcode == 58 {
+      } else if op == 23 ||
+        op == 30 ||
+        op == 37 ||
+        op == 44 ||
+        op == 51 ||
+        op == 58 {
         2L
       } else {
         4L
@@ -392,7 +392,7 @@ fn ExecContext::exec_atomic(
         (load_u8(effective_addr).to_int64(), 0xFFL)
       }
       let v_masked = v & mask
-      let new = match subopcode {
+      let new = match op {
         19 | 22 | 23 | 24 => (old + v_masked) & mask
         26 | 29 | 30 | 31 => (old - v_masked) & mask
         33 | 36 | 37 | 38 => old & v_masked
@@ -418,13 +418,7 @@ fn ExecContext::exec_atomic(
       let replacement = self.stack.pop_i32()
       let expected = self.stack.pop_i32()
       let effective_addr = pop_effective_addr()
-      let access_size = if subopcode == 60 {
-        4L
-      } else if subopcode == 62 {
-        1L
-      } else {
-        2L
-      }
+      let access_size = if op == 60 { 4L } else if op == 62 { 1L } else { 2L }
       atomic_check_alignment(effective_addr, access_size)
       if is_mem_oob(effective_addr, access_size, mem) {
         raise @runtime.OutOfBoundsMemoryAccess
@@ -461,11 +455,11 @@ fn ExecContext::exec_atomic(
       let replacement = self.stack.pop_i64()
       let expected = self.stack.pop_i64()
       let effective_addr = pop_effective_addr()
-      let access_size = if subopcode == 61 {
+      let access_size = if op == 61 {
         8L
-      } else if subopcode == 64 {
+      } else if op == 64 {
         1L
-      } else if subopcode == 65 {
+      } else if op == 65 {
         2L
       } else {
         4L

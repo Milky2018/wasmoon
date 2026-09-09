@@ -190,3 +190,26 @@ test "atomics: i32.atomic.rmw.cmpxchg updates memory (interp & jit)" {
   }
   inspect(jit_vals[0], content="I32(11)")
 }
+
+///|
+test "atomics: RMW preserves full-width updates and narrow neighbors" {
+  let source =
+    #| (module (memory 1 1 shared)
+    #|   (func (export "run") (result i32 i64 i64 i64)
+    #|     (i64.store (i32.const 0) (i64.const 0xfedcba9876543210))
+    #|     (i32.atomic.rmw.add (i32.const 0) (i32.const 0x87654321))
+    #|     (i64.load (i32.const 0))
+    #|     (i64.atomic.rmw8.xchg_u (i32.const 0) (i64.const 0x42))
+    #|     (i64.load (i32.const 0))))
+  let result = compare_jit_interp(source, "run", [])
+  assert_eq(
+    result.interp_result,
+    Ok([
+      I32(1985229328),
+      I64(-81985526944926415L),
+      I64(49L),
+      I64(-81985526944926398L),
+    ]),
+  )
+  assert_eq(result.jit_result, result.interp_result)
+}

@@ -1799,19 +1799,19 @@ fn Translator::translate_atomic(
     | 56 => {
       let value = self.pop()
       let addr = self.pop()
-      let bits = if subopcode == 18 ||
-        subopcode == 25 ||
-        subopcode == 32 ||
-        subopcode == 39 ||
-        subopcode == 46 ||
-        subopcode == 53 {
+      let bits = if op == 18 ||
+        op == 25 ||
+        op == 32 ||
+        op == 39 ||
+        op == 46 ||
+        op == 53 {
         32
-      } else if subopcode == 20 ||
-        subopcode == 27 ||
-        subopcode == 34 ||
-        subopcode == 41 ||
-        subopcode == 48 ||
-        subopcode == 55 {
+      } else if op == 20 ||
+        op == 27 ||
+        op == 34 ||
+        op == 41 ||
+        op == 48 ||
+        op == 55 {
         8
       } else {
         16
@@ -1837,7 +1837,7 @@ fn Translator::translate_atomic(
       } else {
         self.builder.band(value, mask)
       }
-      let computed = match subopcode {
+      let computed = match op {
         18 | 20 | 21 => self.builder.iadd(old, v_masked)
         25 | 27 | 28 => self.builder.isub(old, v_masked)
         32 | 34 | 35 => self.builder.band(old, v_masked)
@@ -1886,26 +1886,26 @@ fn Translator::translate_atomic(
     | 59 => {
       let value = self.pop()
       let addr = self.pop()
-      let bits = if subopcode == 19 ||
-        subopcode == 26 ||
-        subopcode == 33 ||
-        subopcode == 40 ||
-        subopcode == 47 ||
-        subopcode == 54 {
+      let bits = if op == 19 ||
+        op == 26 ||
+        op == 33 ||
+        op == 40 ||
+        op == 47 ||
+        op == 54 {
         64
-      } else if subopcode == 22 ||
-        subopcode == 29 ||
-        subopcode == 36 ||
-        subopcode == 43 ||
-        subopcode == 50 ||
-        subopcode == 57 {
+      } else if op == 22 ||
+        op == 29 ||
+        op == 36 ||
+        op == 43 ||
+        op == 50 ||
+        op == 57 {
         8
-      } else if subopcode == 23 ||
-        subopcode == 30 ||
-        subopcode == 37 ||
-        subopcode == 44 ||
-        subopcode == 51 ||
-        subopcode == 58 {
+      } else if op == 23 ||
+        op == 30 ||
+        op == 37 ||
+        op == 44 ||
+        op == 51 ||
+        op == 58 {
         16
       } else {
         32
@@ -1933,7 +1933,7 @@ fn Translator::translate_atomic(
       } else {
         self.builder.band(value, mask)
       }
-      let computed = match subopcode {
+      let computed = match op {
         19 | 22 | 23 | 24 => self.builder.iadd(old, v_masked)
         26 | 29 | 30 | 31 => self.builder.isub(old, v_masked)
         33 | 36 | 37 | 38 => self.builder.band(old, v_masked)
@@ -1960,13 +1960,7 @@ fn Translator::translate_atomic(
       let replacement = self.pop()
       let expected = self.pop()
       let addr = self.pop()
-      let bits = if subopcode == 60 {
-        32
-      } else if subopcode == 62 {
-        8
-      } else {
-        16
-      }
+      let bits = if op == 60 { 32 } else if op == 62 { 8 } else { 16 }
       let access_size = bits / 8
       align_check(addr, access_size)
       let ptr = bounds_ptr(addr, access_size)
@@ -2013,11 +2007,11 @@ fn Translator::translate_atomic(
       let replacement = self.pop()
       let expected = self.pop()
       let addr = self.pop()
-      let bits = if subopcode == 61 {
+      let bits = if op == 61 {
         64
-      } else if subopcode == 64 {
+      } else if op == 64 {
         8
-      } else if subopcode == 65 {
+      } else if op == 65 {
         16
       } else {
         32
