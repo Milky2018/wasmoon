@@ -341,7 +341,7 @@ static void table_fill_impl(
     int64_t len
 ) {
     if (!ctx) {
-        g_trap_code = 1;
+        g_trap_code = WASMOON_TRAP_TABLE_BOUNDS;
         if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
         return;
     }
@@ -357,7 +357,7 @@ static void table_fill_impl(
         table = ctx->tables[table_idx];
         table_size = ctx->table_sizes[table_idx];
     } else {
-        g_trap_code = 1;
+        g_trap_code = WASMOON_TRAP_TABLE_BOUNDS;
         if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
         return;
     }
@@ -377,7 +377,7 @@ static void table_fill_impl(
                 (long long)val
             );
         }
-        g_trap_code = 1;
+        g_trap_code = WASMOON_TRAP_TABLE_BOUNDS;
         if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
         return;
     }
@@ -451,7 +451,7 @@ static void table_copy_impl(
     int64_t len
 ) {
     if (!ctx) {
-        g_trap_code = 1;
+        g_trap_code = WASMOON_TRAP_TABLE_BOUNDS;
         if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
         return;
     }
@@ -466,7 +466,7 @@ static void table_copy_impl(
         src_table = ctx->tables[src_table_idx];
         src_size = ctx->table_sizes[src_table_idx];
     } else {
-        g_trap_code = 1;
+        g_trap_code = WASMOON_TRAP_TABLE_BOUNDS;
         if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
         return;
     }
@@ -481,7 +481,7 @@ static void table_copy_impl(
         dst_table = ctx->tables[dst_table_idx];
         dst_size = ctx->table_sizes[dst_table_idx];
     } else {
-        g_trap_code = 1;
+        g_trap_code = WASMOON_TRAP_TABLE_BOUNDS;
         if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
         return;
     }
@@ -492,7 +492,7 @@ static void table_copy_impl(
         (uint64_t)src_size - (uint64_t)src < (uint64_t)len ||
         (uint64_t)dst_size < (uint64_t)dst ||
         (uint64_t)dst_size - (uint64_t)dst < (uint64_t)len) {
-        g_trap_code = 1;
+        g_trap_code = WASMOON_TRAP_TABLE_BOUNDS;
         if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
         return;
     }
@@ -514,36 +514,29 @@ static void table_init_impl(
     int64_t len
 ) {
     if (!ctx) {
-        g_trap_code = 1;
+        g_trap_code = WASMOON_TRAP_TABLE_BOUNDS;
         if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
         return;
     }
 
     // Bounds check element segment index
     if (elem_idx < 0 || elem_idx >= ctx->elem_segment_count) {
-        g_trap_code = 1;
+        g_trap_code = WASMOON_TRAP_TABLE_BOUNDS;
         if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
-        return;
-    }
-
-    // If segment is dropped, only len=0 is valid
-    if (ctx->elem_dropped && ctx->elem_dropped[elem_idx]) {
-        if (len != 0) {
-            g_trap_code = 1;
-            if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
-        }
         return;
     }
 
     // Get segment data
     int64_t *seg_data = ctx->elem_segments ? ctx->elem_segments[elem_idx] : NULL;
     size_t seg_size = ctx->elem_segment_sizes ? ctx->elem_segment_sizes[elem_idx] : 0;
+    // Dropped segments remain subject to source and destination bounds checks.
+    if (ctx->elem_dropped && ctx->elem_dropped[elem_idx]) seg_size = 0;
 
     // Bounds check source range in segment
     if (src < 0 || len < 0 ||
         (uint64_t)seg_size < (uint64_t)src ||
         (uint64_t)seg_size - (uint64_t)src < (uint64_t)len) {
-        g_trap_code = 1;
+        g_trap_code = WASMOON_TRAP_TABLE_BOUNDS;
         if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
         return;
     }
@@ -558,7 +551,7 @@ static void table_init_impl(
         table = ctx->tables[table_idx];
         table_size = ctx->table_sizes[table_idx];
     } else {
-        g_trap_code = 1;
+        g_trap_code = WASMOON_TRAP_TABLE_BOUNDS;
         if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
         return;
     }
@@ -567,7 +560,7 @@ static void table_init_impl(
     if (dst < 0 ||
         (uint64_t)table_size < (uint64_t)dst ||
         (uint64_t)table_size - (uint64_t)dst < (uint64_t)len) {
-        g_trap_code = 1;
+        g_trap_code = WASMOON_TRAP_TABLE_BOUNDS;
         if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
         return;
     }
@@ -715,18 +708,10 @@ static int64_t gc_array_new_data_impl(
     // If segment is dropped, only length=0 is valid
     uint32_t len_u32 = (uint32_t)length;
     uint32_t off_u32 = (uint32_t)offset;
-    if (ctx->data_dropped && ctx->data_dropped[data_idx]) {
-        if (len_u32 != 0) {
-            g_trap_code = 1;
-            if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
-        }
-        // Return null array for dropped segment with length=0
-        return 0;
-    }
-
     // Get segment data
     uint8_t *seg_data = ctx->data_segments ? ctx->data_segments[data_idx] : NULL;
     size_t seg_size = ctx->data_segment_sizes ? ctx->data_segment_sizes[data_idx] : 0;
+    if (ctx->data_dropped && ctx->data_dropped[data_idx]) seg_size = 0;
 
     // Calculate byte size needed
     size_t elem_size = get_array_elem_byte_size(ctx, type_idx);
@@ -760,7 +745,7 @@ static int64_t gc_array_new_data_impl(
         return 0;
     }
 
-    const uint8_t *p = seg_data + (size_t)off_u32;
+    const uint8_t *p = seg_data ? seg_data + (size_t)off_u32 : NULL;
     for (uint32_t i = 0; i < len_u32; i++) {
         int64_t v = decode_array_elem_from_bytes(p + (size_t)i * elem_size, elem_tag);
         gc_heap_array_set(heap, gc_ref, (int32_t)i, v);
@@ -780,7 +765,7 @@ static int64_t gc_array_new_elem_impl(
 ) {
     (void)type_idx;
     if (!ctx || !ctx->gc_heap) {
-        g_trap_code = 1;
+        g_trap_code = WASMOON_TRAP_TABLE_BOUNDS;
         if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
         return 0;
     }
@@ -788,7 +773,7 @@ static int64_t gc_array_new_elem_impl(
 
     // Bounds check element segment index
     if (elem_idx < 0 || elem_idx >= ctx->elem_segment_count) {
-        g_trap_code = 1;
+        g_trap_code = WASMOON_TRAP_TABLE_BOUNDS;
         if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
         return 0;
     }
@@ -796,21 +781,14 @@ static int64_t gc_array_new_elem_impl(
     // If segment is dropped, only length=0 is valid
     uint32_t len_u32 = (uint32_t)length;
     uint32_t off_u32 = (uint32_t)offset;
-    if (ctx->elem_dropped && ctx->elem_dropped[elem_idx]) {
-        if (len_u32 != 0) {
-            g_trap_code = 1;
-            if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
-        }
-        return 0;
-    }
-
     // Get segment data
     int64_t *seg_data = ctx->elem_segments ? ctx->elem_segments[elem_idx] : NULL;
     size_t seg_size = ctx->elem_segment_sizes ? ctx->elem_segment_sizes[elem_idx] : 0;
+    if (ctx->elem_dropped && ctx->elem_dropped[elem_idx]) seg_size = 0;
 
     // Bounds check source range in segment
     if ((uint64_t)seg_size < (uint64_t)off_u32 || (uint64_t)seg_size - (uint64_t)off_u32 < (uint64_t)len_u32) {
-        g_trap_code = 1;
+        g_trap_code = WASMOON_TRAP_TABLE_BOUNDS;
         if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
         return 0;
     }
@@ -865,17 +843,24 @@ static void gc_array_init_data_impl(
     uint32_t len_u32 = (uint32_t)length;
     uint32_t data_off_u32 = (uint32_t)data_offset;
     uint32_t arr_off_u32 = (uint32_t)arr_offset;
-    if (ctx->data_dropped && ctx->data_dropped[data_idx]) {
-        if (len_u32 != 0) {
-            g_trap_code = 1;
-            if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
-        }
+    if (array_ref == 0) {
+        g_trap_code = WASMOON_TRAP_NULL_REFERENCE;
+        if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
+        return;
+    }
+
+    int32_t gc_ref = (int32_t)(array_ref >> 1);
+    int32_t array_len = gc_heap_array_len(heap, gc_ref);
+    if ((uint64_t)array_len < (uint64_t)arr_off_u32 || (uint64_t)array_len - (uint64_t)arr_off_u32 < (uint64_t)len_u32) {
+        g_trap_code = WASMOON_TRAP_ARRAY_BOUNDS;
+        if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
         return;
     }
 
     // Get segment data
     uint8_t *seg_data = ctx->data_segments ? ctx->data_segments[data_idx] : NULL;
     size_t seg_size = ctx->data_segment_sizes ? ctx->data_segment_sizes[data_idx] : 0;
+    if (ctx->data_dropped && ctx->data_dropped[data_idx]) seg_size = 0;
     size_t elem_size = get_array_elem_byte_size(ctx, type_idx);
     int elem_tag = get_array_elem_tag(ctx, type_idx);
     if (elem_size == 0) {
@@ -892,21 +877,7 @@ static void gc_array_init_data_impl(
         return;
     }
 
-    if (array_ref == 0) {
-        g_trap_code = 3;  // null array reference
-        if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
-        return;
-    }
-
-    int32_t gc_ref = (int32_t)(array_ref >> 1);
-    int32_t array_len = gc_heap_array_len(heap, gc_ref);
-    if ((uint64_t)array_len < (uint64_t)arr_off_u32 || (uint64_t)array_len - (uint64_t)arr_off_u32 < (uint64_t)len_u32) {
-        g_trap_code = 1;
-        if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
-        return;
-    }
-
-    const uint8_t *p = seg_data + (size_t)data_off_u32;
+    const uint8_t *p = seg_data ? seg_data + (size_t)data_off_u32 : NULL;
     for (uint32_t i = 0; i < len_u32; i++) {
         int64_t v = decode_array_elem_from_bytes(p + (size_t)i * elem_size, elem_tag);
         gc_heap_array_set(heap, gc_ref, (int32_t)(arr_off_u32 + i), v);
@@ -925,7 +896,7 @@ static void gc_array_init_elem_impl(
 ) {
     (void)type_idx;
     if (!ctx || !ctx->gc_heap) {
-        g_trap_code = 1;
+        g_trap_code = WASMOON_TRAP_TABLE_BOUNDS;
         if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
         return;
     }
@@ -933,7 +904,7 @@ static void gc_array_init_elem_impl(
 
     // Bounds check element segment index
     if (elem_idx < 0 || elem_idx >= ctx->elem_segment_count) {
-        g_trap_code = 1;
+        g_trap_code = WASMOON_TRAP_TABLE_BOUNDS;
         if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
         return;
     }
@@ -942,27 +913,8 @@ static void gc_array_init_elem_impl(
     uint32_t len_u32 = (uint32_t)length;
     uint32_t elem_off_u32 = (uint32_t)elem_offset;
     uint32_t arr_off_u32 = (uint32_t)arr_offset;
-    if (ctx->elem_dropped && ctx->elem_dropped[elem_idx]) {
-        if (len_u32 != 0) {
-            g_trap_code = 1;
-            if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
-        }
-        return;
-    }
-
-    // Get segment data
-    int64_t *seg_data = ctx->elem_segments ? ctx->elem_segments[elem_idx] : NULL;
-    size_t seg_size = ctx->elem_segment_sizes ? ctx->elem_segment_sizes[elem_idx] : 0;
-
-    // Bounds check source range in segment
-    if ((uint64_t)seg_size < (uint64_t)elem_off_u32 || (uint64_t)seg_size - (uint64_t)elem_off_u32 < (uint64_t)len_u32) {
-        g_trap_code = 1;
-        if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
-        return;
-    }
-
     if (array_ref == 0) {
-        g_trap_code = 3;  // null array reference
+        g_trap_code = WASMOON_TRAP_NULL_REFERENCE;
         if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
         return;
     }
@@ -970,7 +922,19 @@ static void gc_array_init_elem_impl(
     int32_t gc_ref = (int32_t)(array_ref >> 1);
     int32_t array_len = gc_heap_array_len(heap, gc_ref);
     if ((uint64_t)array_len < (uint64_t)arr_off_u32 || (uint64_t)array_len - (uint64_t)arr_off_u32 < (uint64_t)len_u32) {
-        g_trap_code = 1;
+        g_trap_code = WASMOON_TRAP_ARRAY_BOUNDS;
+        if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
+        return;
+    }
+
+    // Get segment data
+    int64_t *seg_data = ctx->elem_segments ? ctx->elem_segments[elem_idx] : NULL;
+    size_t seg_size = ctx->elem_segment_sizes ? ctx->elem_segment_sizes[elem_idx] : 0;
+    if (ctx->elem_dropped && ctx->elem_dropped[elem_idx]) seg_size = 0;
+
+    // Bounds check source range in segment
+    if ((uint64_t)seg_size < (uint64_t)elem_off_u32 || (uint64_t)seg_size - (uint64_t)elem_off_u32 < (uint64_t)len_u32) {
+        g_trap_code = WASMOON_TRAP_TABLE_BOUNDS;
         if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
         return;
     }

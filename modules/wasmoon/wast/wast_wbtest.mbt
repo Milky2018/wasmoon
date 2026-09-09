@@ -360,10 +360,10 @@ test "WAST assertions do not accept host errors as guest failures" {
   let ctx = WastContext(false)
   let linker = @runtime.Linker::with_store(ctx.get_store())
   linker.add_host_func("host", "trap", fn(_args) raise @runtime.RuntimeError {
-    raise @runtime.Unreachable
+    raise Unreachable
   })
   linker.add_host_func("host", "throw", fn(_args) raise @runtime.RuntimeError {
-    raise @runtime.UncaughtException
+    raise UncaughtException
   })
   ctx.registered_modules.set("host", linker.get_module("host").unwrap())
   let source =
@@ -382,4 +382,24 @@ test "WAST assertions do not accept host errors as guest failures" {
   }
   inspect(result.passed, content="0")
   inspect(result.failed, content="4")
+}
+
+///|
+test "native trap diagnostics cannot satisfy the expected trap message" {
+  inspect(
+    wast_trap_message_matches(
+      "unreachable (sig=SIGTRAP(5), wasm=0 'integer divide by zero'+0x0)", "integer divide by zero",
+    ),
+    content="false",
+  )
+  inspect(
+    wast_trap_message_matches("null reference", "null array reference"),
+    content="true",
+  )
+  inspect(
+    wast_trap_message_matches(
+      "out of bounds memory access", "out of bounds table access",
+    ),
+    content="false",
+  )
 }

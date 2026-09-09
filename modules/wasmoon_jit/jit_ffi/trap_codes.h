@@ -1,0 +1,51 @@
+#ifndef WASMOON_TRAP_CODES_H
+#define WASMOON_TRAP_CODES_H
+
+/* Runtime trap codes. Native instruction payloads are a separate protocol. */
+typedef enum {
+    WASMOON_TRAP_MEMORY_BOUNDS = 1,
+    WASMOON_TRAP_STACK_EXHAUSTED = 2,
+    WASMOON_TRAP_UNREACHABLE = 3,
+    WASMOON_TRAP_INDIRECT_TYPE = 4,
+    WASMOON_TRAP_INVALID_CONVERSION = 5,
+    WASMOON_TRAP_DIVISION_BY_ZERO = 6,
+    WASMOON_TRAP_INTEGER_OVERFLOW = 7,
+    WASMOON_TRAP_BACKEND = 8,
+    WASMOON_TRAP_OUT_OF_MEMORY = 9,
+    WASMOON_TRAP_MISSING_ROOTS = 10,
+    WASMOON_TRAP_CANCELLED = 11,
+    WASMOON_TRAP_EXCEPTION = 12,
+    WASMOON_TRAP_TABLE_BOUNDS = 13,
+    WASMOON_TRAP_NULL_REFERENCE = 14,
+    WASMOON_TRAP_UNALIGNED_ATOMIC = 15,
+    WASMOON_TRAP_CAST_FAILURE = 16,
+    WASMOON_TRAP_ARRAY_BOUNDS = 17,
+    WASMOON_TRAP_UNINITIALIZED_ELEMENT = 18,
+    WASMOON_TRAP_UNDEFINED_ELEMENT = 19,
+    WASMOON_TRAP_ALLOCATION_TOO_LARGE = 20,
+    WASMOON_TRAP_ATOMIC_WAIT_NON_SHARED = 21,
+    WASMOON_TRAP_UNKNOWN = 99,
+} wasmoon_trap_code_t;
+
+/* See vcode/native_types/TrapReason::native_payload. */
+static inline int wasmoon_decode_native_trap(int payload) {
+    switch (payload) {
+        case 0: return WASMOON_TRAP_UNREACHABLE;
+        case 1: return WASMOON_TRAP_MEMORY_BOUNDS;
+        case 2: return WASMOON_TRAP_INDIRECT_TYPE;
+        case 3: return WASMOON_TRAP_INVALID_CONVERSION;
+        case 4: return WASMOON_TRAP_DIVISION_BY_ZERO;
+        case 5: return WASMOON_TRAP_INTEGER_OVERFLOW;
+        case 6: return WASMOON_TRAP_BACKEND;
+        case 7: return WASMOON_TRAP_TABLE_BOUNDS;
+        case 8: return WASMOON_TRAP_NULL_REFERENCE;
+        case 9: return WASMOON_TRAP_UNALIGNED_ATOMIC;
+        case 10: return WASMOON_TRAP_STACK_EXHAUSTED;
+        case 11: return WASMOON_TRAP_UNINITIALIZED_ELEMENT;
+        case 12: return WASMOON_TRAP_UNDEFINED_ELEMENT;
+        case 13: return WASMOON_TRAP_ATOMIC_WAIT_NON_SHARED;
+        default: return WASMOON_TRAP_UNKNOWN;
+    }
+}
+
+#endif

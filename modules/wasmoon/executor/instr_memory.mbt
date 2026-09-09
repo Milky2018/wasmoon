@@ -9,7 +9,7 @@ fn compute_effective_addr(
   base_addr : Int64,
   offset : Int64,
   is_memory64 : Bool,
-) -> Int64 {
+) -> Int64 raise @runtime.RuntimeError {
   let base_u64 = if is_memory64 {
     base_addr
   } else {
@@ -19,7 +19,7 @@ fn compute_effective_addr(
   // offset is Int64 (supports memory64 64-bit offsets)
   let address = base_u64 + offset
   if address.reinterpret_as_uint64() < base_u64.reinterpret_as_uint64() {
-    -1L // Unsigned addition overflow cannot address any live memory.
+    raise OutOfBoundsMemoryAccess
   } else {
     address
   }

@@ -180,9 +180,9 @@ fn ExecContext::exec_instr(
       let n = self.stack.pop_i32()
       let s = self.stack.pop_i32()
       let d = if table.is_table64() {
-        self.stack.pop_i64().to_int()
+        self.stack.pop_i64()
       } else {
-        self.stack.pop_i32()
+        self.stack.pop_i32().to_int64() & 0xFFFFFFFFL
       }
 
       // Get elem segment
@@ -192,27 +192,26 @@ fn ExecContext::exec_instr(
       // Declarative elem segments behave as if they have been dropped
       let is_dropped = self.instance.dropped_elems[elem_idx]
       let is_declarative = elem_segment.mode is Declarative
-      if (is_dropped || is_declarative) && n != 0 {
-        // Dropped/declarative segments behave as if they have zero length
-        raise @runtime.RuntimeError::OutOfBoundsTableAccess
-      }
-      if is_dropped || is_declarative {
-        return
-      }
-
       // Check bounds
-      let elem_len = elem_segment.init.length()
-      let table_addr = self.instance.table_addrs[table_idx]
-      let table = self.store.get_table(table_addr)
+      let elem_len = if is_dropped || is_declarative {
+        0
+      } else {
+        elem_segment.init.length()
+      }
       let table_size = table.size()
-      if s < 0 || n < 0 || s + n > elem_len || d < 0 || d + n > table_size {
+      if s < 0 ||
+        n < 0 ||
+        s.to_int64() + n.to_int64() > elem_len.to_int64() ||
+        d < 0L ||
+        d > table_size.to_int64() ||
+        n.to_int64() > table_size.to_int64() - d {
         raise @runtime.RuntimeError::OutOfBoundsTableAccess
       }
 
       // Copy elements from elem segment to table
       for i in 0..<n {
         let value = self.instance.elem_values[elem_idx][s + i]
-        table.set(d + i, value)
+        table.set(d.to_int() + i, value)
       }
     }
 
@@ -265,7 +264,7 @@ fn ExecContext::exec_instr(
       // ref.as_non_null: traps if reference is null
       let value = self.stack.pop()
       match value {
-        Null => raise @runtime.RuntimeError::Unreachable
+        Null => raise @runtime.RuntimeError::NullReference
         _ => self.stack.push(value)
       }
     }

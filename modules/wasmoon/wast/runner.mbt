@@ -715,7 +715,7 @@ fn run_assert_trap(
   expected_msg : String,
 ) -> String? {
   try invoke_action(ctx, action) catch {
-    GuestTrap(message) =>
+    GuestTrap(message) | GuestExhaustion(message) =>
       if wast_trap_message_matches(message, expected_msg) {
         None
       } else {
@@ -731,6 +731,7 @@ fn run_assert_trap(
 // These spelling aliases match the pinned Wasmtime 40 WAST adapter. They
 // preserve the trap category; unrelated trap messages must still fail.
 fn wast_trap_message_matches(actual : String, expected : String) -> Bool {
+  let actual = actual.split(" (sig=").next().unwrap_or("").to_owned()
   actual.contains(expected) ||
   (
     expected == "uninitialized element 2" &&
@@ -762,9 +763,12 @@ fn classify_runtime_failure(error : @runtime.RuntimeError) -> WastRunnerError {
     | IntegerOverflow
     | InvalidConversion
     | Unreachable
+    | CastFailure
     | NullReference
     | UnalignedAtomic
-    | OutOfMemory => GuestTrap(error.to_string())
+    | OutOfMemory
+    | AllocationTooLarge
+    | AtomicWaitNonSharedMemory => GuestTrap(error.to_string())
     _ => RuntimeError(error.to_string())
   }
 }

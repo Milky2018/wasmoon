@@ -45,7 +45,10 @@ fn ExecContext::exec_call_indirect(
   }
 
   // Look up the function reference
-  let elem = table.get(func_ref_idx)
+  let elem = table.get(func_ref_idx) catch {
+    OutOfBoundsTableAccess => raise @runtime.UndefinedElement
+    error => raise error
+  }
 
   // The element should be a function reference
   let store_addr = match elem {
@@ -127,7 +130,7 @@ fn ExecContext::exec_call_ref(self : ExecContext, type_idx : Int) -> Unit raise 
   // The function reference should be a FuncRef value, or Null
   let store_addr = match func_ref {
     FuncRef(addr) => addr
-    Null => raise @runtime.RuntimeError::Unreachable // Null function reference traps
+    Null => raise @runtime.RuntimeError::NullReference // Null function reference traps
     _ => raise @runtime.IndirectCallTypeMismatch
   }
 
@@ -527,7 +530,10 @@ pub fn ExecContext::exec_tail_call_indirect(
   }
 
   // Look up the element
-  let elem = table.get(func_ref_idx)
+  let elem = table.get(func_ref_idx) catch {
+    OutOfBoundsTableAccess => raise @runtime.UndefinedElement
+    error => raise error
+  }
 
   // The element should be a function reference
   let store_addr = match elem {
@@ -610,7 +616,7 @@ pub fn ExecContext::exec_tail_call_ref(
   // The function reference should be a FuncRef value, or Null
   let store_addr = match func_ref {
     FuncRef(addr) => addr
-    Null => raise @runtime.RuntimeError::Unreachable
+    Null => raise @runtime.RuntimeError::NullReference
     _ => raise @runtime.IndirectCallTypeMismatch
   }
 

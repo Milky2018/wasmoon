@@ -1407,6 +1407,7 @@ fn lower_trap_reason(
     "null reference" | "null function reference" | "null i31 reference" =>
       NullReference
     "unaligned atomic" => UnalignedAtomic
+    "atomic wait on non-shared memory" => AtomicWaitNonSharedMemory
     "unsupported atomic" => UnsupportedOperation
     "stack overflow" => StackOverflow
     _ =>

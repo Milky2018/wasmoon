@@ -65,12 +65,15 @@ pub(all) suberror RuntimeError {
   IntegerOverflow
   InvalidConversion
   OutOfMemory
+  AllocationTooLarge
+  AtomicWaitNonSharedMemory
   Unreachable
   UncaughtException
   CallStackExhausted
   UnknownImport(String, String)
   LinkError
   LinkErrorDetail(String)
+  CastFailure
   NullReference
   UnalignedAtomic
   InvalidConstantExpression(String)

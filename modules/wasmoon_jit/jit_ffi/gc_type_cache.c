@@ -230,7 +230,7 @@ int32_t gc_ref_test_impl(jit_context_t *ctx, int64_t value, int32_t type_idx, in
 int64_t gc_ref_cast_impl(jit_context_t *ctx, int64_t value, int32_t type_idx, int32_t nullable) {
     int result = gc_ref_test_impl(ctx, value, type_idx, nullable);
     if (!result) {
-        g_trap_code = 4;  // Type mismatch
+        g_trap_code = WASMOON_TRAP_CAST_FAILURE;
         if (g_trap_active) {
             siglongjmp(g_trap_jmp_buf, 1);
         }

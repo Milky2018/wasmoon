@@ -1541,12 +1541,17 @@ fn verify_target_vcode(
         )
       }
       TrapIfFloat(ty, condition) => {
+        let reason : @native.TrapReason = if condition == Unordered {
+          InvalidConversionToInteger
+        } else {
+          IntegerOverflow
+        }
         if (ty != F32 && ty != F64) ||
           function.instruction_metadata(instruction).unwrap().trap !=
-          Some(InvalidConversionToInteger) {
+          Some(reason) {
           raise InvalidInstruction(
             instruction~,
-            message="float trap check requires a scalar float and invalid-conversion metadata",
+            message="float trap check requires a scalar float and matching conversion trap metadata",
           )
         }
         let uses = if condition == Unordered { [ty] } else { [ty, ty] }

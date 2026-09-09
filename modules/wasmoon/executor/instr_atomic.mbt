@@ -103,6 +103,9 @@ fn ExecContext::exec_atomic(
       if is_mem_oob(effective_addr, 4L, mem) {
         raise @runtime.OutOfBoundsMemoryAccess
       }
+      if !mem.is_shared() {
+        raise @runtime.AtomicWaitNonSharedMemory
+      }
       let actual = load_i32(effective_addr)
       if actual != expected {
         self.stack.push(I32(1)) // not-equal
@@ -119,6 +122,9 @@ fn ExecContext::exec_atomic(
       atomic_check_alignment(effective_addr, 8L)
       if is_mem_oob(effective_addr, 8L, mem) {
         raise @runtime.OutOfBoundsMemoryAccess
+      }
+      if !mem.is_shared() {
+        raise @runtime.AtomicWaitNonSharedMemory
       }
       let actual = load_i64(effective_addr)
       if actual != expected {

@@ -261,7 +261,7 @@ fn table_entry_address(
   let trap = context.create_block([])
   context.branch(in_bounds, continuation, [], trap, [])
   context.switch_to_block(trap)
-  context.set_trap_terminator(TableOutOfBounds)
+  context.set_trap_terminator(UndefinedElement)
   context.switch_to_block(continuation)
   guarded
 }
@@ -306,6 +306,14 @@ fn lower_indirect_call(
       [entry],
       [Ptr64],
     )[0]
+  let null = context.emit(NullPtr, [], [Ptr64])[0]
+  let is_null = context.emit(ReferenceCompare(Equal), [raw_pointer, null], [I32])[0]
+  let trap = context.create_block([])
+  let continuation = context.create_block([])
+  context.branch(is_null, trap, [], continuation, [])
+  context.switch_to_block(trap)
+  context.set_trap_terminator(UninitializedElement)
+  context.switch_to_block(continuation)
   check_indirect_type(context, entry, type_index, environment)
   let bits = context.emit(Convert(Bitcast(Ptr64, I64)), [raw_pointer], [I64])[0]
   let mask = context.emit(I64Const(0xDFFFFFFFFFFFFFFFUL), [], [I64])[0]

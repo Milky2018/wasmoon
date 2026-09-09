@@ -574,8 +574,9 @@ fn FuncEnvironment::emit_bounds_check(
   wasm_addr : Value,
   offset : Int64,
   access_size : Int,
+  explicit_check? : Bool = false,
 ) -> Value {
-  if self.use_guard_pages(memidx) {
+  if !explicit_check && self.use_guard_pages(memidx) {
     // Guard pages (memory32, memidx=0): rely on SIGSEGV for OOB trapping.
     let memory_base = @wasm_milkir.load_mem_base(
       builder,

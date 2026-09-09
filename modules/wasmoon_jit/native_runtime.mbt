@@ -116,6 +116,15 @@ pub fn jit_trap_message(code : Int) -> String {
     10 => "gc precise roots unavailable"
     11 => "invocation cancelled"
     12 => "uncaught exception"
+    13 => "undefined element: out of bounds table access"
+    14 => "null reference"
+    15 => "unaligned atomic"
+    16 => "cast failure"
+    17 => "out of bounds array access"
+    18 => "uninitialized element"
+    19 => "undefined element: out of bounds table access"
+    20 => "allocation size too large"
+    21 => "atomic wait on non-shared memory"
     _ => "unknown trap"
   }
 }

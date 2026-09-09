@@ -313,9 +313,12 @@ pub(all) enum TrapReason {
   InvalidConversionToInteger
   MemoryOutOfBounds
   TableOutOfBounds
+  UninitializedElement
+  UndefinedElement
   IndirectCallTypeMismatch
   NullReference
   UnalignedAtomic
+  AtomicWaitNonSharedMemory
   UnsupportedOperation
   StackOverflow
   User(Int)

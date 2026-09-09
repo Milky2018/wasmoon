@@ -311,7 +311,7 @@ fn lower_direct_operation(
           stack_map,
           roots,
           operation.semantics(),
-          trap=InvalidConversionToInteger,
+          trap=IntegerOverflow,
         ),
       )
       |> ignore
@@ -334,7 +334,7 @@ fn lower_direct_operation(
           stack_map,
           roots,
           operation.semantics(),
-          trap=InvalidConversionToInteger,
+          trap=IntegerOverflow,
         ),
       )
       |> ignore

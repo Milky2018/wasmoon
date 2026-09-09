@@ -1,6 +1,6 @@
 ///|
 /// Version of the Wasmoon internal JIT calling and runtime contract.
-pub const WASMOON_JIT_ABI_VERSION : Int = 4
+pub const WASMOON_JIT_ABI_VERSION : Int = 5
 
 ///|
 /// Revision of the current direct native target code generator.

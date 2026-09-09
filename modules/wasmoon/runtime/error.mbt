@@ -15,6 +15,8 @@ pub(all) suberror RuntimeError {
   IntegerOverflow
   InvalidConversion
   OutOfMemory
+  AllocationTooLarge
+  AtomicWaitNonSharedMemory
   Unreachable
   UncaughtException
   CallStackExhausted
@@ -23,6 +25,7 @@ pub(all) suberror RuntimeError {
   // Link error with extra context (e.g. which import mismatched).
   // The `Show` output still begins with "link error" for compatibility.
   LinkErrorDetail(String)
+  CastFailure
   NullReference // Null exception reference (null exnref thrown)
   UnalignedAtomic
   // Used when evaluating init expressions during instantiation; this should
@@ -57,12 +60,15 @@ pub fn RuntimeError::from_error(error : Error) -> RuntimeError? {
     IntegerOverflow => Some(IntegerOverflow)
     InvalidConversion => Some(InvalidConversion)
     OutOfMemory => Some(OutOfMemory)
+    AllocationTooLarge => Some(AllocationTooLarge)
+    AtomicWaitNonSharedMemory => Some(AtomicWaitNonSharedMemory)
     Unreachable => Some(Unreachable)
     UncaughtException => Some(UncaughtException)
     CallStackExhausted => Some(CallStackExhausted)
     UnknownImport(_, _) as runtime_error => Some(runtime_error)
     LinkError => Some(LinkError)
     LinkErrorDetail(_) as runtime_error => Some(runtime_error)
+    CastFailure => Some(CastFailure)
     NullReference => Some(NullReference)
     UnalignedAtomic => Some(UnalignedAtomic)
     InvalidConstantExpression(_) as runtime_error => Some(runtime_error)
@@ -84,15 +90,17 @@ pub impl Show for RuntimeError with fn output(self, logger) {
     StoreClosed => "store is closed"
     MemoryClosed => "memory is closed"
     OutOfBoundsMemoryAccess => "out of bounds memory access"
-    OutOfBoundsTableAccess => "out of bounds table access"
+    OutOfBoundsTableAccess => "undefined element: out of bounds table access"
     OutOfBoundsArrayAccess => "out of bounds array access"
-    UndefinedElement => "undefined element"
+    UndefinedElement => "undefined element: out of bounds table access"
     UninitializedElement => "uninitialized element"
     IndirectCallTypeMismatch => "indirect call type mismatch"
     DivisionByZero => "integer divide by zero"
     IntegerOverflow => "integer overflow"
     InvalidConversion => "invalid conversion to integer"
     OutOfMemory => "out of memory"
+    AllocationTooLarge => "allocation size too large"
+    AtomicWaitNonSharedMemory => "atomic wait on non-shared memory"
     Unreachable => "unreachable"
     UncaughtException => "uncaught exception"
     CallStackExhausted => "call stack exhausted"
@@ -105,6 +113,7 @@ pub impl Show for RuntimeError with fn output(self, logger) {
       } else {
         "link error: \{detail}"
       }
+    CastFailure => "cast failure"
     NullReference => "null reference"
     UnalignedAtomic => "unaligned atomic"
     InvalidConstantExpression(detail) =>

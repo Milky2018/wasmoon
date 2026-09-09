@@ -1610,6 +1610,7 @@ fn Translator::translate_atomic(
       addr,
       offset,
       access_size,
+      explicit_check=subopcode <= 2,
     )
   }
 
@@ -1672,6 +1673,12 @@ fn Translator::translate_atomic(
       align_check(addr, 4)
       let ptr = bounds_ptr(addr, 4)
       let zero = self.builder.iconst(I64, 0L)
+      if memidx >= self.memory_is_shared.length() ||
+        !self.memory_is_shared[memidx] {
+        self.builder.trap("atomic wait on non-shared memory")
+        self.is_unreachable = true
+        return
+      }
       let actual = self.builder.load_ptr(I32, ptr, zero)
       let eq = self.builder.icmp(Eq, actual, expected)
       let not_equal = self.builder.iconst_i32(1)
@@ -1688,6 +1695,12 @@ fn Translator::translate_atomic(
       align_check(addr, 8)
       let ptr = bounds_ptr(addr, 8)
       let zero = self.builder.iconst(I64, 0L)
+      if memidx >= self.memory_is_shared.length() ||
+        !self.memory_is_shared[memidx] {
+        self.builder.trap("atomic wait on non-shared memory")
+        self.is_unreachable = true
+        return
+      }
       let actual = self.builder.load_ptr(I64, ptr, zero)
       let eq = self.builder.icmp(Eq, actual, expected)
       let not_equal = self.builder.iconst_i32(1)

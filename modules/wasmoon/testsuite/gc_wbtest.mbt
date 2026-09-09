@@ -310,7 +310,7 @@ test "gc: guest array length overflow traps before host allocation" {
       run_wat(source.replace(old="LENGTH", new=length.to_string())) |> ignore
       false
     } catch {
-      @runtime.RuntimeError::OutOfMemory => true
+      @runtime.RuntimeError::AllocationTooLarge => true
       _ => false
     }
     inspect(trapped, content="true")

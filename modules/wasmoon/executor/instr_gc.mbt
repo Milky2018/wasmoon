@@ -178,7 +178,7 @@ fn ExecContext::exec_struct_set(
 /// the GC object, so a guest length never reaches a host allocation assertion.
 fn check_gc_array_length(len : Int) -> Unit raise @runtime.RuntimeError {
   if len < 0 || len > (0x7FFFFFFF - 32) / 16 {
-    raise OutOfMemory
+    raise AllocationTooLarge
   }
 }
 
@@ -493,17 +493,6 @@ fn ExecContext::exec_array_new_data(
     _ => raise @runtime.RuntimeError::TypeMismatch
   }
 
-  // Check if data segment has been dropped
-  if self.instance.dropped_datas[data_idx] {
-    if len != 0 {
-      raise @runtime.RuntimeError::OutOfBoundsMemoryAccess
-    }
-    // Create empty array
-    let ref_idx = self.store.alloc_array(type_idx, [], instance=self.instance)
-    self.stack.push(ArrayRef(ref_idx))
-    self.maybe_collect_gc_stress()
-    return
-  }
   let data_segment = self.instance.data_segments[data_idx]
   let array_type = self.instance.validated_array_type_at(type_idx)
 
@@ -511,8 +500,15 @@ fn ExecContext::exec_array_new_data(
   let bytes_per_elem = storage_type_byte_size(array_type.element.storage_type)
 
   // Check bounds
-  let total_bytes = len * bytes_per_elem
-  if offset < 0 || len < 0 || offset + total_bytes > data_segment.init.length() {
+  let source_len = if self.instance.dropped_datas[data_idx] {
+    0
+  } else {
+    data_segment.init.length()
+  }
+  let total_bytes = len.to_int64() * bytes_per_elem.to_int64()
+  if offset < 0 ||
+    len < 0 ||
+    offset.to_int64() + total_bytes > source_len.to_int64() {
     raise @runtime.RuntimeError::OutOfBoundsMemoryAccess
   }
 
@@ -560,19 +556,14 @@ fn ExecContext::exec_array_new_elem(
   let elem_segment = self.instance.elem_segments[elem_idx]
   let is_dropped = self.instance.dropped_elems[elem_idx]
   let is_declarative = elem_segment.mode is Declarative
-  if (is_dropped || is_declarative) && len != 0 {
-    raise @runtime.RuntimeError::OutOfBoundsTableAccess
+  let elem_len = if is_dropped || is_declarative {
+    0
+  } else {
+    elem_segment.init.length()
   }
-  if is_dropped || is_declarative {
-    let ref_idx = self.store.alloc_array(type_idx, [], instance=self.instance)
-    self.stack.push(ArrayRef(ref_idx))
-    self.maybe_collect_gc_stress()
-    return
-  }
-
-  // Check bounds
-  let elem_len = elem_segment.init.length()
-  if offset < 0 || len < 0 || offset + len > elem_len {
+  if offset < 0 ||
+    len < 0 ||
+    offset.to_int64() + len.to_int64() > elem_len.to_int64() {
     raise @runtime.RuntimeError::OutOfBoundsTableAccess
   }
 
@@ -622,26 +613,23 @@ fn ExecContext::exec_array_init_data(
     _ => raise @runtime.RuntimeError::TypeMismatch
   }
 
-  // Check if data segment has been dropped
-  if self.instance.dropped_datas[data_idx] {
-    if len != 0 {
-      raise @runtime.RuntimeError::OutOfBoundsMemoryAccess
-    }
-    return
+  let arr_len = self.store.array_len(arr_idx)
+  if dst_offset < 0 ||
+    len < 0 ||
+    dst_offset.to_int64() + len.to_int64() > arr_len.to_int64() {
+    raise @runtime.RuntimeError::OutOfBoundsArrayAccess
   }
   let data_segment = self.instance.data_segments[data_idx]
   let array_type = self.instance.validated_array_type_at(type_idx)
   let bytes_per_elem = storage_type_byte_size(array_type.element.storage_type)
-
-  // Check bounds
-  let total_bytes = len * bytes_per_elem
-  if src_offset < 0 ||
-    len < 0 ||
-    src_offset + total_bytes > data_segment.init.length() {
-    raise @runtime.RuntimeError::OutOfBoundsMemoryAccess
+  let source_len = if self.instance.dropped_datas[data_idx] {
+    0
+  } else {
+    data_segment.init.length()
   }
-  let arr_len = self.store.array_len(arr_idx)
-  if dst_offset < 0 || dst_offset + len > arr_len {
+  let total_bytes = len.to_int64() * bytes_per_elem.to_int64()
+  if src_offset < 0 ||
+    src_offset.to_int64() + total_bytes > source_len.to_int64() {
     raise @runtime.RuntimeError::OutOfBoundsMemoryAccess
   }
 
@@ -686,24 +674,21 @@ fn ExecContext::exec_array_init_elem(
     _ => raise @runtime.RuntimeError::TypeMismatch
   }
 
-  // Check if elem segment has been dropped or is declarative
-  let elem_segment = self.instance.elem_segments[elem_idx]
-  let is_dropped = self.instance.dropped_elems[elem_idx]
-  let is_declarative = elem_segment.mode is Declarative
-  if (is_dropped || is_declarative) && len != 0 {
-    raise @runtime.RuntimeError::OutOfBoundsTableAccess
-  }
-  if is_dropped || is_declarative {
-    return
-  }
-
-  // Check bounds
-  let elem_len = elem_segment.init.length()
-  if src_offset < 0 || len < 0 || src_offset + len > elem_len {
-    raise @runtime.RuntimeError::OutOfBoundsTableAccess
-  }
   let arr_len = self.store.array_len(arr_idx)
-  if dst_offset < 0 || dst_offset + len > arr_len {
+  if dst_offset < 0 ||
+    len < 0 ||
+    dst_offset.to_int64() + len.to_int64() > arr_len.to_int64() {
+    raise @runtime.RuntimeError::OutOfBoundsArrayAccess
+  }
+  let elem_segment = self.instance.elem_segments[elem_idx]
+  let elem_len = if self.instance.dropped_elems[elem_idx] ||
+    elem_segment.mode is Declarative {
+    0
+  } else {
+    elem_segment.init.length()
+  }
+  if src_offset < 0 ||
+    src_offset.to_int64() + len.to_int64() > elem_len.to_int64() {
     raise @runtime.RuntimeError::OutOfBoundsTableAccess
   }
 
@@ -1038,11 +1023,11 @@ fn ExecContext::exec_ref_cast(
   let val = self.stack.pop()
   // ref.cast traps on null
   if val is Null {
-    raise @runtime.RuntimeError::NullReference
+    raise @runtime.RuntimeError::CastFailure
   }
   let matches = value_matches_type(val, target_type, self.store, self.instance)
   if !matches {
-    raise @runtime.RuntimeError::TypeMismatch
+    raise @runtime.RuntimeError::CastFailure
   }
   self.stack.push(val)
 }
@@ -1061,7 +1046,7 @@ fn ExecContext::exec_ref_cast_null(
   }
   let matches = value_matches_type(val, target_type, self.store, self.instance)
   if !matches {
-    raise @runtime.RuntimeError::TypeMismatch
+    raise @runtime.RuntimeError::CastFailure
   }
   self.stack.push(val)
 }

@@ -22,6 +22,22 @@ static inline GcHeap *resolve_heap(jit_context_t *ctx) {
     return (GcHeap *)actual->gc_heap;
 }
 
+static int64_t trap_allocation_too_large(void) {
+    g_trap_code = WASMOON_TRAP_ALLOCATION_TOO_LARGE;
+    if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
+    return 0;
+}
+
+static int array_length_exceeds_layout(int32_t len) {
+    return len < 0 || (uint64_t)(uint32_t)len > (INT32_MAX - 32U) / 16U;
+}
+
+static int64_t trap_null_reference(void) {
+    g_trap_code = WASMOON_TRAP_NULL_REFERENCE;
+    if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
+    return 0;
+}
+
 static int64_t trap_unreachable_i64(void) {
     g_trap_code = 3;
     if (g_trap_active) {
@@ -362,7 +378,7 @@ int64_t gc_struct_get_impl(int64_t ref, int32_t type_idx, int32_t field_idx) {
 
     // Check for null reference (encoded as 0)
     if (ref == 0) {
-        return trap_unreachable_i64();
+        return trap_null_reference();
     }
 
     // Decode ref: encoded as gc_ref << 1 (1-based gc_ref)
@@ -381,7 +397,7 @@ void gc_struct_set_impl(int64_t ref, int32_t type_idx, int32_t field_idx, int64_
 
     // Check for null reference (encoded as 0)
     if (ref == 0) {
-        trap_unreachable_void();
+        trap_null_reference();
         return;
     }
 
@@ -393,6 +409,7 @@ void gc_struct_set_impl(int64_t ref, int32_t type_idx, int32_t field_idx, int64_
 // ============ Array Operations ============
 
 int64_t gc_array_new_impl(int32_t type_idx, int32_t len, int64_t fill) {
+    if (array_length_exceeds_layout(len)) return trap_allocation_too_large();
     jit_context_t *ctx = resolve_ctx(NULL);
     GcHeap *heap = resolve_heap(ctx);
     if (!heap) {
@@ -436,7 +453,7 @@ int64_t gc_array_get_impl(int64_t ref, int32_t type_idx, int32_t idx) {
 
     // Check for null reference (encoded as 0)
     if (ref == 0) {
-        return trap_unreachable_i64();
+        return trap_null_reference();
     }
 
     // Decode: gc_ref = ref >> 1 (1-based)
@@ -445,7 +462,7 @@ int64_t gc_array_get_impl(int64_t ref, int32_t type_idx, int32_t idx) {
     // Check bounds
     int32_t len = gc_heap_array_len(heap, gc_ref);
     if (idx < 0 || idx >= len) {
-        g_trap_code = 1;  // Out of bounds
+        g_trap_code = WASMOON_TRAP_ARRAY_BOUNDS;
         if (g_trap_active) {
             siglongjmp(g_trap_jmp_buf, 1);
         }
@@ -466,7 +483,7 @@ void gc_array_set_impl(int64_t ref, int32_t type_idx, int32_t idx, int64_t value
 
     // Check for null reference (encoded as 0)
     if (ref == 0) {
-        trap_unreachable_void();
+        trap_null_reference();
         return;
     }
 
@@ -476,7 +493,7 @@ void gc_array_set_impl(int64_t ref, int32_t type_idx, int32_t idx, int64_t value
     // Check bounds
     int32_t len = gc_heap_array_len(heap, gc_ref);
     if (idx < 0 || idx >= len) {
-        g_trap_code = 1;  // Out of bounds
+        g_trap_code = WASMOON_TRAP_ARRAY_BOUNDS;
         if (g_trap_active) {
             siglongjmp(g_trap_jmp_buf, 1);
         }
@@ -494,7 +511,7 @@ int32_t gc_array_len_impl(int64_t ref) {
 
     // Check for null reference (encoded as 0)
     if (ref == 0) {
-        return trap_unreachable_i32();
+        return trap_null_reference();
     }
 
     // Decode: gc_ref = ref >> 1 (1-based)
@@ -511,7 +528,7 @@ void gc_array_fill_impl(int64_t ref, int32_t offset, int64_t value, int32_t coun
 
     // Check for null reference (encoded as 0)
     if (ref == 0) {
-        g_trap_code = 2;  // Null reference
+        g_trap_code = WASMOON_TRAP_NULL_REFERENCE;
         if (g_trap_active) {
             siglongjmp(g_trap_jmp_buf, 1);
         }
@@ -523,8 +540,8 @@ void gc_array_fill_impl(int64_t ref, int32_t offset, int64_t value, int32_t coun
 
     // Bounds check
     int32_t len = gc_heap_array_len(heap, gc_ref);
-    if (offset < 0 || count < 0 || offset + count > len) {
-        g_trap_code = 1;  // Out of bounds
+    if (offset < 0 || count < 0 || (int64_t)offset + count > len) {
+        g_trap_code = WASMOON_TRAP_ARRAY_BOUNDS;
         if (g_trap_active) {
             siglongjmp(g_trap_jmp_buf, 1);
         }
@@ -549,7 +566,7 @@ void gc_array_copy_impl(
 
     // Check for null references (encoded as 0)
     if (dst_ref == 0 || src_ref == 0) {
-        g_trap_code = 2;  // Null reference
+        g_trap_code = WASMOON_TRAP_NULL_REFERENCE;
         if (g_trap_active) {
             siglongjmp(g_trap_jmp_buf, 1);
         }
@@ -565,9 +582,9 @@ void gc_array_copy_impl(
     int32_t src_len = gc_heap_array_len(heap, src_gc_ref);
     if (
         dst_offset < 0 || src_offset < 0 || count < 0 ||
-        dst_offset + count > dst_len || src_offset + count > src_len
+        (int64_t)dst_offset + count > dst_len || (int64_t)src_offset + count > src_len
     ) {
-        g_trap_code = 1;  // Out of bounds
+        g_trap_code = WASMOON_TRAP_ARRAY_BOUNDS;
         if (g_trap_active) {
             siglongjmp(g_trap_jmp_buf, 1);
         }
@@ -723,6 +740,7 @@ int64_t gc_alloc_array_slow(
     int32_t safepoint_id,
     int32_t function_index
 ) {
+    if (array_length_exceeds_layout(len)) return trap_allocation_too_large();
     jit_context_t *actual_ctx = resolve_ctx(ctx);
     GcHeap *heap = resolve_heap(actual_ctx);
     if (!heap) {
@@ -807,6 +825,7 @@ int64_t gc_alloc_array_from_values_slow(
     int32_t safepoint_id,
     int32_t function_index
 ) {
+    if (array_length_exceeds_layout(len)) return trap_allocation_too_large();
     jit_context_t *actual_ctx = resolve_ctx(ctx);
     GcHeap *heap = resolve_heap(actual_ctx);
     if (!heap) {
@@ -877,7 +896,8 @@ void gc_struct_get_v128_impl(int64_t ref, int32_t type_idx, int32_t field_idx,
     GcSlot *out = (GcSlot *)(uintptr_t)out_ptr;
     GcHeap *heap = resolve_heap(NULL);
     if (!heap || ref == 0) {
-        trap_unreachable_void();
+        if (ref == 0) trap_null_reference();
+        else trap_unreachable_void();
         return;
     }
 
@@ -891,7 +911,8 @@ void gc_struct_set_v128_impl(int64_t ref, int32_t type_idx, int32_t field_idx,
 
     GcHeap *heap = resolve_heap(NULL);
     if (!heap || ref == 0) {
-        trap_unreachable_void();
+        if (ref == 0) trap_null_reference();
+        else trap_unreachable_void();
         return;
     }
 
@@ -907,14 +928,15 @@ void gc_array_get_v128_impl(int64_t ref, int32_t type_idx, int32_t idx,
     GcSlot *out = (GcSlot *)(uintptr_t)out_ptr;
     GcHeap *heap = resolve_heap(NULL);
     if (!heap || ref == 0) {
-        trap_unreachable_void();
+        if (ref == 0) trap_null_reference();
+        else trap_unreachable_void();
         return;
     }
 
     int32_t gc_ref = decode_heap_ref(ref);
     int32_t len = gc_heap_array_len(heap, gc_ref);
     if (idx < 0 || idx >= len) {
-        g_trap_code = 1;  // Out of bounds
+        g_trap_code = WASMOON_TRAP_ARRAY_BOUNDS;
         if (g_trap_active) {
             siglongjmp(g_trap_jmp_buf, 1);
         }
@@ -930,14 +952,15 @@ void gc_array_set_v128_impl(int64_t ref, int32_t type_idx, int32_t idx,
 
     GcHeap *heap = resolve_heap(NULL);
     if (!heap || ref == 0) {
-        trap_unreachable_void();
+        if (ref == 0) trap_null_reference();
+        else trap_unreachable_void();
         return;
     }
 
     int32_t gc_ref = decode_heap_ref(ref);
     int32_t len = gc_heap_array_len(heap, gc_ref);
     if (idx < 0 || idx >= len) {
-        g_trap_code = 1;  // Out of bounds
+        g_trap_code = WASMOON_TRAP_ARRAY_BOUNDS;
         if (g_trap_active) {
             siglongjmp(g_trap_jmp_buf, 1);
         }
@@ -956,7 +979,7 @@ void gc_array_fill_v128_impl(int64_t ref, int32_t offset, int64_t value_ptr,
         return;
     }
     if (ref == 0) {
-        g_trap_code = 2;  // Null reference
+        g_trap_code = WASMOON_TRAP_NULL_REFERENCE;
         if (g_trap_active) {
             siglongjmp(g_trap_jmp_buf, 1);
         }
@@ -965,8 +988,8 @@ void gc_array_fill_v128_impl(int64_t ref, int32_t offset, int64_t value_ptr,
 
     int32_t gc_ref = decode_heap_ref(ref);
     int32_t len = gc_heap_array_len(heap, gc_ref);
-    if (offset < 0 || count < 0 || offset + count > len) {
-        g_trap_code = 1;  // Out of bounds
+    if (offset < 0 || count < 0 || (int64_t)offset + count > len) {
+        g_trap_code = WASMOON_TRAP_ARRAY_BOUNDS;
         if (g_trap_active) {
             siglongjmp(g_trap_jmp_buf, 1);
         }
@@ -1007,6 +1030,7 @@ int64_t gc_alloc_struct_wide_slow_impl(int64_t ctx_ptr, int32_t type_idx,
 
 int64_t gc_alloc_array_wide_slow_impl(int64_t ctx_ptr, int32_t type_idx,
                                        int32_t len, int64_t init_ptr) {
+    if (array_length_exceeds_layout(len)) return trap_allocation_too_large();
     jit_context_t *ctx = resolve_ctx((jit_context_t *)(uintptr_t)ctx_ptr);
     GcHeap *heap = resolve_heap(ctx);
     if (!heap) {
@@ -1034,6 +1058,7 @@ int64_t gc_alloc_array_wide_slow_impl(int64_t ctx_ptr, int32_t type_idx,
 
 int64_t gc_alloc_array_from_slots_slow_impl(int64_t ctx_ptr, int32_t type_idx,
                                              int64_t slots_ptr, int32_t len) {
+    if (array_length_exceeds_layout(len)) return trap_allocation_too_large();
     jit_context_t *ctx = resolve_ctx((jit_context_t *)(uintptr_t)ctx_ptr);
     GcHeap *heap = resolve_heap(ctx);
     if (!heap) {

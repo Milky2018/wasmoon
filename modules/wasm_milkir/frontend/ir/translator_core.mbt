@@ -31,6 +31,7 @@ priv struct Translator {
   // Memory is 64-bit indexed (for memory64 proposal)
   // memory_is_64[i] = true if memory i uses 64-bit addresses
   memory_is_64 : Array[Bool]
+  memory_is_shared : Array[Bool]
   // Number of wasm function parameters (excludes vmctx params)
   // Used to distinguish params from locals in self.locals array
   num_wasm_params : Int
@@ -86,6 +87,7 @@ struct TranslationContext {
   embedding_env : @embedding.EmbeddingEnvironment
   memory_max : Int?
   memory_is_64 : Array[Bool]
+  memory_is_shared : Array[Bool]
   memory_page_size_log2 : Array[Int]
   tables : Array[@types.Table]
   global_types : Array[@types.GlobalType]
@@ -114,7 +116,7 @@ pub fn TranslationContext::from_module(
   let global_types : Array[@types.GlobalType] = []
   let tags : Array[@types.TagType] = []
   let tables : Array[@types.Table] = []
-  let mut memory_count = mod_.memories.length()
+  let memories : Array[@types.MemoryType] = []
   for imp in mod_.imports {
     match imp.desc {
       Func(type_idx) => {
@@ -124,7 +126,7 @@ pub fn TranslationContext::from_module(
       Table(table_type) => tables.push({ type_: table_type, init: None, })
       Global(global_type) => global_types.push(global_type)
       Tag(tag_type_idx) => tags.push({ type_idx: tag_type_idx, })
-      Memory(_) => memory_count = memory_count + 1
+      Memory(memory) => memories.push(memory)
     }
   }
   for global in mod_.globals {
@@ -136,11 +138,14 @@ pub fn TranslationContext::from_module(
   for table in mod_.tables {
     tables.push(table)
   }
+  for memory in mod_.memories {
+    memories.push(memory)
+  }
   let memory_max : Int? = match memory_max_override {
     Some(_) => memory_max_override
     None =>
-      if mod_.memories.length() > 0 {
-        mod_.memories[0].limits.max.map(fn(m) { m.to_int() })
+      if memories.length() > 0 {
+        memories[0].limits.max.map(fn(m) { m.to_int() })
       } else {
         None
       }
@@ -152,8 +157,9 @@ pub fn TranslationContext::from_module(
     import_func_type_indices,
     embedding_env,
     memory_max,
-    memory_is_64: mod_.memories.map(fn(m) { m.is_memory64 }),
-    memory_page_size_log2: mod_.memories.map(fn(m) { m.page_size_log2 }),
+    memory_is_64: memories.map(fn(m) { m.is_memory64 }),
+    memory_is_shared: memories.map(fn(m) { m.is_shared }),
+    memory_page_size_log2: memories.map(fn(m) { m.page_size_log2 }),
     tables,
     global_types,
     type_rec_groups: mod_.type_rec_groups,
@@ -161,10 +167,8 @@ pub fn TranslationContext::from_module(
     import_remap,
     module_types: mod_.types,
     tags,
-    memory_mins: mod_.memories.map(fn(m) {
-      m.limits.min * (1L << m.page_size_log2)
-    }),
-    memory_count,
+    memory_mins: memories.map(fn(m) { m.limits.min * (1L << m.page_size_log2) }),
+    memory_count: memories.length(),
     data_count: mod_.datas.length(),
     element_types: mod_.elems.map(fn(element) { element.type_ }),
   }
@@ -236,6 +240,7 @@ fn Translator::Translator(
   embedding_env : @embedding.EmbeddingEnvironment,
   memory_max? : Int? = None,
   memory_is_64? : Array[Bool] = [],
+  memory_is_shared? : Array[Bool] = [],
   memory_page_size_log2? : Array[Int] = [],
   tables? : Array[@types.Table] = [],
   global_types? : Array[@types.GlobalType] = [],
@@ -304,6 +309,7 @@ fn Translator::Translator(
     func_result_types,
     memory_max,
     memory_is_64,
+    memory_is_shared,
     table_is_64,
     table_elem_types,
     num_wasm_params: func_type.params.length(),
@@ -360,6 +366,7 @@ pub fn translate_function_body(
     ctx.embedding_env,
     memory_max=ctx.memory_max,
     memory_is_64=ctx.memory_is_64,
+    memory_is_shared=ctx.memory_is_shared,
     memory_page_size_log2=ctx.memory_page_size_log2,
     tables=ctx.tables,
     global_types=ctx.global_types,

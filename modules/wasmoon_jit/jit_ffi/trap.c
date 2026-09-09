@@ -648,16 +648,7 @@ static void trap_signal_handler(int sig, siginfo_t *info, void *ucontext) {
         }
 
         // Map BRK immediate to trap code
-        switch (brk_imm) {
-            case 0: trap_code = 3; break;   // unreachable
-            case 1: trap_code = 1; break;   // out of bounds (memory/table access)
-            case 2: trap_code = 4; break;   // indirect call type mismatch
-            case 3: trap_code = 5; break;   // invalid conversion to integer
-            case 4: trap_code = 6; break;   // integer divide by zero
-            case 5: trap_code = 7; break;   // integer overflow
-            case 6: trap_code = 8; break;   // backend/unknown JIT trap
-            default: trap_code = 99; break; // unknown
-        }
+        trap_code = wasmoon_decode_native_trap(brk_imm);
 #elif defined(__linux__) && defined(__aarch64__)
         // On Linux ARM64
         ucontext_t *uc = (ucontext_t *)ucontext;
@@ -669,16 +660,7 @@ static void trap_signal_handler(int sig, siginfo_t *info, void *ucontext) {
             trap_pc = (uintptr_t)pc;
         }
 
-        switch (brk_imm) {
-            case 0: trap_code = 3; break;   // unreachable
-            case 1: trap_code = 1; break;   // out of bounds (memory/table access)
-            case 2: trap_code = 4; break;   // indirect call type mismatch
-            case 3: trap_code = 5; break;   // invalid conversion to integer
-            case 4: trap_code = 6; break;   // integer divide by zero
-            case 5: trap_code = 7; break;   // integer overflow
-            case 6: trap_code = 8; break;   // backend/unknown JIT trap
-            default: trap_code = 99; break; // unknown
-        }
+        trap_code = wasmoon_decode_native_trap(brk_imm);
 #elif defined(__APPLE__) && defined(__x86_64__)
         // macOS x86_64: INT3 payload.
         ucontext_t *uc = (ucontext_t *)ucontext;
@@ -700,16 +682,7 @@ static void trap_signal_handler(int sig, siginfo_t *info, void *ucontext) {
         if (!decode_trap_imm(pc, &trap_pc, &brk_imm)) {
             trap_pc = pc;
         }
-        switch (brk_imm) {
-            case 0: trap_code = 3; break;   // unreachable
-            case 1: trap_code = 1; break;   // out of bounds (memory/table access)
-            case 2: trap_code = 4; break;   // indirect call type mismatch
-            case 3: trap_code = 5; break;   // invalid conversion to integer
-            case 4: trap_code = 6; break;   // integer divide by zero
-            case 5: trap_code = 7; break;   // integer overflow
-            case 6: trap_code = 8; break;   // backend/unknown JIT trap
-            default: trap_code = 99; break; // unknown
-        }
+        trap_code = wasmoon_decode_native_trap(brk_imm);
 #elif defined(__linux__) && defined(__x86_64__)
         // Linux x86_64: INT3 payload.
         ucontext_t *uc = (ucontext_t *)ucontext;
@@ -731,16 +704,7 @@ static void trap_signal_handler(int sig, siginfo_t *info, void *ucontext) {
         if (!decode_trap_imm(pc, &trap_pc, &brk_imm)) {
             trap_pc = pc;
         }
-        switch (brk_imm) {
-            case 0: trap_code = 3; break;   // unreachable
-            case 1: trap_code = 1; break;   // out of bounds (memory/table access)
-            case 2: trap_code = 4; break;   // indirect call type mismatch
-            case 3: trap_code = 5; break;   // invalid conversion to integer
-            case 4: trap_code = 6; break;   // integer divide by zero
-            case 5: trap_code = 7; break;   // integer overflow
-            case 6: trap_code = 8; break;   // backend/unknown JIT trap
-            default: trap_code = 99; break; // unknown
-        }
+        trap_code = wasmoon_decode_native_trap(brk_imm);
 #else
         (void)ucontext;
         trap_code = 99;  // Unknown on unsupported platforms

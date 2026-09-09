@@ -8,20 +8,6 @@ const X64_INTEGER_OVERFLOW_BRK : UInt = 5U
 const X64_INVALID_CONVERSION_BRK : UInt = 3U
 
 ///|
-fn trap_brk_payload(reason : @native.TrapReason) -> UInt {
-  match reason {
-    Unreachable => 0U
-    MemoryOutOfBounds | TableOutOfBounds => 1U
-    IndirectCallTypeMismatch => 2U
-    InvalidConversionToInteger => 3U
-    IntegerDivisionByZero => 4U
-    IntegerOverflow => 5U
-    NullReference | UnalignedAtomic | UnsupportedOperation | StackOverflow => 6U
-    User(payload) => payload.reinterpret_as_uint() & 0xFFFFU
-  }
-}
-
-///|
 priv struct X64RelativeFixup {
   displacement_offset : Int
   next_instruction_offset : Int
@@ -2468,7 +2454,12 @@ fn emit_float_trap(
     },
   )
   let trap_offset = buffer.position()
-  buffer.x86_emit_trap_imm16(X64_INVALID_CONVERSION_BRK.reinterpret_as_int())
+  let payload = if condition == Unordered {
+    X64_INVALID_CONVERSION_BRK
+  } else {
+    X64_INTEGER_OVERFLOW_BRK
+  }
+  buffer.x86_emit_trap_imm16(payload.reinterpret_as_int())
   buffer.patch_local_rel32(skip, buffer.position())
   trap_offset
 }
@@ -4038,7 +4029,7 @@ fn emit_instruction(
       )
     Trap(reason) => {
       metadata_offset = buffer.position()
-      buffer.x86_emit_trap_imm16(trap_brk_payload(reason).reinterpret_as_int())
+      buffer.x86_emit_trap_imm16(reason.native_payload().reinterpret_as_int())
     }
     Return => {
       emit_epilogue(buffer, frame)

@@ -5,6 +5,8 @@
 #ifndef JIT_INTERNAL_H
 #define JIT_INTERNAL_H
 
+#include "trap_codes.h"
+
 #include <stdint.h>
 #include <stdbool.h>
 #include <stddef.h>

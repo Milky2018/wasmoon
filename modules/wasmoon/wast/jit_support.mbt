@@ -1379,6 +1379,13 @@ fn encode_value(
 fn runtime_error_to_trap_code(err : @runtime.RuntimeError) -> Int {
   match err {
     OutOfBoundsMemoryAccess => 1
+    OutOfBoundsTableAccess => 13
+    NullReference => 14
+    UnalignedAtomic => 15
+    CastFailure => 16
+    OutOfBoundsArrayAccess => 17
+    UninitializedElement => 18
+    UndefinedElement => 19
     CallStackExhausted => 2
     Unreachable => 3
     UncaughtException => 12
@@ -1387,6 +1394,8 @@ fn runtime_error_to_trap_code(err : @runtime.RuntimeError) -> Int {
     DivisionByZero => 6
     IntegerOverflow => 7
     OutOfMemory => 9
+    AllocationTooLarge => 20
+    AtomicWaitNonSharedMemory => 21
     _ => 99
   }
 }

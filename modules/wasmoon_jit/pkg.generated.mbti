@@ -18,7 +18,7 @@ import {
 // Values
 pub const WASMOON_CODEGEN_REVISION : String = "direct-vcode-1"
 
-pub const WASMOON_JIT_ABI_VERSION : Int = 4
+pub const WASMOON_JIT_ABI_VERSION : Int = 5
 
 pub fn alloc_guarded_memory_desc(Int, Int?, is_shared? : Bool) -> Int64
 

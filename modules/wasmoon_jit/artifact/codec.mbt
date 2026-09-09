@@ -664,6 +664,9 @@ fn write_trap_reason(writer : ByteWriter, reason : @native.TrapReason) -> Unit {
     UnalignedAtomic => writer.write_u8(8)
     UnsupportedOperation => writer.write_u8(9)
     StackOverflow => writer.write_u8(10)
+    UninitializedElement => writer.write_u8(12)
+    UndefinedElement => writer.write_u8(13)
+    AtomicWaitNonSharedMemory => writer.write_u8(14)
     User(value) => {
       writer.write_u8(11)
       writer.write_i64(value.to_int64())
@@ -688,6 +691,9 @@ fn read_trap_reason(
     9 => UnsupportedOperation
     10 => StackOverflow
     11 => User(reader.read_int_from_i64("function.trap.reason.user"))
+    12 => UninitializedElement
+    13 => UndefinedElement
+    14 => AtomicWaitNonSharedMemory
     tag => raise InvalidTag(field="function.trap.reason", tag~)
   }
 }
