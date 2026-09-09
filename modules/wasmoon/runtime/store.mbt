@@ -1280,3 +1280,16 @@ pub fn Store::get_gc_stats(self : Store) -> (Int64, Int64, Int, Int, Int) {
     None => (0L, 0L, 0, 0, 0)
   }
 }
+
+///|
+/// Import shared memory with ownership independent of the source Store.
+/// Closing either Store invalidates only its own Memory handle.
+pub fn Store::alloc_shared_mem(
+  self : Store,
+  memory : Memory,
+) -> Int raise RuntimeError {
+  self.ensure_open()
+  let owned = memory.share()
+  errdefer owned.close()
+  self.alloc_mem(owned)
+}

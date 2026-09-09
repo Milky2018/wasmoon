@@ -1023,6 +1023,7 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_alloc_memory_desc(
     if (size_bytes < 0) return 0;
     wasmoon_memory_t *mem = (wasmoon_memory_t *)calloc(1, sizeof(wasmoon_memory_t));
     if (!mem) return 0;
+    atomic_init(&mem->owners, 1);
 
     if (size_bytes > 0) {
         uint8_t *base = (uint8_t *)calloc(1, (size_t)size_bytes);
@@ -1045,9 +1046,16 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_alloc_memory_desc(
     return (int64_t)mem;
 }
 
+// The caller must already hold a live reference while acquiring another.
+MOONBIT_FFI_EXPORT void wasmoon_jit_retain_memory_desc(int64_t mem_ptr) {
+    wasmoon_memory_t *mem = (wasmoon_memory_t *)mem_ptr;
+    if (mem) atomic_fetch_add_explicit(&mem->owners, 1, memory_order_relaxed);
+}
+
 MOONBIT_FFI_EXPORT void wasmoon_jit_free_memory_desc(int64_t mem_ptr) {
     wasmoon_memory_t *mem = (wasmoon_memory_t *)mem_ptr;
     if (!mem) return;
+    if (atomic_fetch_sub_explicit(&mem->owners, 1, memory_order_acq_rel) != 1) return;
 
     if (mem->is_guarded) {
         if (mem->alloc_base) {
@@ -1088,6 +1096,7 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_alloc_guarded_memory_desc(int64_t initial
         return 0;
     }
 
+    atomic_init(&memory->owners, 1);
     memory->max_pages = (max_pages < 0) ? SIZE_MAX : (size_t)max_pages;
     memory->is_memory64 = 0;
     memory->page_size_log2 = 16;
@@ -1143,6 +1152,7 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_ctx_alloc_guarded_memory(
     if (!memory) {
         return 0;
     }
+    atomic_init(&memory->owners, 1);
     memory->max_pages = (max_pages < 0) ? SIZE_MAX : (size_t)max_pages;
     memory->is_memory64 = 0;
     memory->page_size_log2 = 16;

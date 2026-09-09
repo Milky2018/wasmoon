@@ -500,6 +500,7 @@ pub fn Store::alloc_global(Self, GlobalInstance) -> Int raise RuntimeError
 pub fn Store::alloc_host_func(Self, (Array[@types.Value]) -> Array[@types.Value] raise RuntimeError, func_type? : @types.FuncType, type_idx? : Int) -> Int raise RuntimeError
 pub fn Store::alloc_host_func_with_caller(Self, (Caller, Array[@types.Value]) -> Array[@types.Value] raise RuntimeError, func_type? : @types.FuncType, type_idx? : Int) -> Int raise RuntimeError
 pub fn Store::alloc_mem(Self, Memory) -> Int raise RuntimeError
+pub fn Store::alloc_shared_mem(Self, Memory) -> Int raise RuntimeError
 pub fn Store::alloc_struct(Self, Int, Array[@types.Value], instance? : ModuleInstance) -> Int raise RuntimeError
 pub fn Store::alloc_table(Self, Table, use_jit? : Bool) -> Int raise RuntimeError
 pub fn Store::alloc_tag(Self, @types.FuncType, type_idx? : Int) -> Int raise RuntimeError

@@ -678,3 +678,20 @@ pub fn Memory::get_limits(self : Memory) -> (Int, Int?) {
 pub fn Memory::is_shared(self : Memory) -> Bool {
   self.is_shared
 }
+
+///|
+fn Memory::share(self : Memory) -> Memory raise RuntimeError {
+  let pointer = self.require_desc_ptr()
+  if !self.is_shared {
+    raise LinkErrorDetail("only shared memory can be imported across Stores")
+  }
+  @wasmoon_jit.retain_memory_desc(pointer)
+  {
+    descriptor_state: Ref(Open(pointer)),
+    max: self.max,
+    is_memory64: self.is_memory64,
+    is_shared: true,
+    page_size_log2: self.page_size_log2,
+    page_size_bytes: self.page_size_bytes,
+  }
+}

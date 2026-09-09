@@ -128,7 +128,7 @@ extern "c" fn c_jit_alloc_memory_desc(
 ) -> Int64 = "wasmoon_jit_alloc_memory_desc"
 
 ///|
-/// Free a `wasmoon_memory_t` descriptor and its owned backing.
+/// Release one descriptor owner; free its backing after the final release.
 extern "c" fn c_jit_free_memory_desc(mem_ptr : Int64) -> Unit = "wasmoon_jit_free_memory_desc"
 
 ///|
@@ -1482,3 +1482,6 @@ extern "c" fn c_jit_get_wasi_exit_code_managed(jit_context : JITContext) -> Int 
 ///|
 #borrow(jit_context)
 extern "c" fn c_jit_clear_wasi_exit_managed(jit_context : JITContext) -> Unit = "wasmoon_jit_clear_wasi_exit_managed"
+
+///|
+extern "c" fn c_jit_retain_memory_desc(mem_ptr : Int64) -> Unit = "wasmoon_jit_retain_memory_desc"

@@ -422,3 +422,9 @@ fn JITTable::refresh_layout(
 pub fn JITTable::get_max(self : JITTable) -> Int? {
   self.max
 }
+
+///|
+/// Acquire a descriptor owner while the caller holds an existing live owner.
+pub fn retain_memory_desc(mem_desc_ptr : Int64) -> Unit {
+  c_jit_retain_memory_desc(mem_desc_ptr)
+}

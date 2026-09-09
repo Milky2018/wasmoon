@@ -32,6 +32,7 @@ typedef struct {
     size_t guard_start;      // start of PROT_NONE region in bytes
     int is_guarded;
     int is_shared;
+    _Atomic size_t owners;   // Independent Store/context ownership leases.
 } wasmoon_memory_t;
 
 // GC safepoint metadata table (owned by compiler/runtime, borrowed by context).

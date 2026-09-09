@@ -186,6 +186,8 @@ pub fn resolve_import_function(Map[String, Map[String, Int64]], String, String) 
 
 pub fn resolve_import_function_ptr(Map[String, Map[String, Int64]], String, String) -> Int64?
 
+pub fn retain_memory_desc(Int64) -> Unit
+
 pub fn sanitize_debug_filename(String) -> String
 
 pub fn slot_to_value(GcSlot, @types.ValueType) -> @types.Value
