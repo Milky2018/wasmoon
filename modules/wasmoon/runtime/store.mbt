@@ -1225,19 +1225,16 @@ pub fn Store::collect_roots(
 }
 
 ///|
-/// Perform garbage collection on the C heap
-/// Returns the number of objects collected, or 0 if no C heap is enabled
-/// The additional_roots parameter allows passing in roots from the interpreter stack
+/// Perform garbage collection using all Store roots and caller-provided roots.
+/// Returns the number of objects collected on either heap representation.
 pub fn Store::collect_garbage(
   self : Store,
   additional_roots? : Array[@types.Value] = [],
 ) -> Int {
+  let roots = self.collect_roots(additional_roots)
   match self.c_heap {
-    Some(heap) => {
-      let roots = self.collect_roots(additional_roots)
-      heap.collect(roots)
-    }
-    None => 0 // No C heap, nothing to collect
+    Some(heap) => heap.collect(roots)
+    None => self.heap.collect(roots)
   }
 }
 

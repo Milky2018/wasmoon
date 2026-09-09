@@ -524,6 +524,8 @@ graph TD
   ISS_489["ISS-489: Validate stream and future operands before synchronous blocking checks"]
   ISS_490["ISS-490: Model component entry using nested activity and shared trap state"]
   ISS_491["ISS-491: Isolate WAST component instances in separate runtime stores"]
+  ISS_492["ISS-492: Collect guest heaps safely from test host callbacks"]
+  ISS_493["ISS-493: Isolate resource destructor contexts and honor the execution engine"]
   ISS_002 --> ISS_003
   ISS_002 --> ISS_004
   ISS_003 --> ISS_005
@@ -915,6 +917,7 @@ graph TD
   ISS_488 --> ISS_489
   ISS_488 --> ISS_490
   ISS_491 --> ISS_490
+  ISS_492 --> ISS_493
 ```
 
 ## Warnings

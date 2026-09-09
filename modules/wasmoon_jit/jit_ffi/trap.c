@@ -213,6 +213,28 @@ static int32_t copy_activation_roots(
     return at;
 }
 
+// Reentrant native calls may collect an outer Store, or share its heap while
+// its activation is detached from a reused context. Both remain live roots.
+void jit_mark_active_gc_roots(GcHeap *heap) {
+    for (jit_trap_activation_t *activation = current_activation;
+         activation; activation = activation->previous) {
+        jit_context_t *context = activation->context;
+        if (!activation->active || !context || context->gc_heap != heap) continue;
+        const wasmoon_gc_root_scope_t *scope = activation->context_detached
+            ? activation->gc_root_scope_head : context->gc_root_scope_head;
+        for (; scope; scope = scope->prev) {
+            gc_heap_mark_roots(heap, scope->roots, scope->root_count);
+        }
+        gc_heap_mark_roots(heap,
+            activation->context_detached ? activation->exception_values : context->exception_values,
+            activation->context_detached ? activation->exception_value_count : context->exception_value_count);
+        gc_heap_mark_roots(heap,
+            activation->context_detached ? activation->spilled_locals : context->spilled_locals,
+            activation->context_detached ? activation->spilled_locals_count : context->spilled_locals_count);
+        gc_heap_mark_roots(heap, context->gc_root_scratch, context->gc_root_scratch_len);
+    }
+}
+
 int jit_parked_gc_roots_register(
     jit_trap_activation_t *activation,
     void **registration

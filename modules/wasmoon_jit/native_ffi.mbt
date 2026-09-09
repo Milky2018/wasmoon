@@ -872,7 +872,7 @@ extern "c" fn c_gc_heap_collect(
   heap : Int64,
   roots : FixedArray[Int64],
   num_roots : Int,
-) -> Int = "wasmoon_gc_heap_collect"
+) -> Int = "wasmoon_jit_collect_heap"
 
 ///|
 /// Discard unreachable objects allocated after the supplied object-table boundary.

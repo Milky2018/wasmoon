@@ -14,6 +14,20 @@ fn create_script_host(
   errdefer linker.close()
   let store = linker.get_store()
   let host_runtime = try! linker.host_runtime_state()
+  let wasmtime_exports : Map[String, @runtime_impl.ComponentExtern] = Map([])
+  wasmtime_exports.set(
+    "gc",
+    Func(
+      Host({ is_async: false, params: [], result: None, }, [], fn(_, _) {
+        store.collect_garbage() |> ignore
+        []
+      }),
+    ),
+  )
+  linker.add_instance(
+    "wasmtime",
+    make_instance("wasmtime", store, wasmtime_exports, host_runtime),
+  )
   let host_yields : Array[SpectestYield] = []
   try! host_runtime.set_event_loop(fn() { wake_spectest_yields(host_yields) }, poll=fn() {
     wake_spectest_yields(host_yields)

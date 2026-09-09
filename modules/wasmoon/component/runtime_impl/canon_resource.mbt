@@ -186,32 +186,13 @@ fn instantiate_canon_resource_drop(
               match taken {
                 Some(real) =>
                   if real.own {
-                    if real.host_dtor is Some(host_dtor) {
-                      host_dtor.destroy(real.rep)
-                    }
-                    match real.dtor {
-                      Some(d) => {
-                        clear_canon_trap_message()
-                        (@executor.call_func_by_index(
-                          store,
-                          d.instance,
-                          d.func_idx,
-                          [I32(real.rep)],
-                        ) catch {
-                          e => {
-                            trap_canon(
-                              if e is UncaughtException {
-                                "uncaught exception propagated out of component"
-                              } else {
-                                e.to_string()
-                              },
-                            )
-                            []
-                          }
-                        })
-                        |> ignore
-                      }
-                      None => ()
+                    call_resource_destructor(state.async_state, store, real) catch {
+                      UncaughtWasmException =>
+                        trap_canon(
+                          "uncaught exception propagated out of component",
+                        )
+                      CanonCallError(message) => trap_canon(message)
+                      error => trap_canon(error.to_string())
                     }
                   } else {
                     real.num_lends[0] -= 1
@@ -253,4 +234,35 @@ fn instantiate_canon_resource_drop(
     }
   }
   state.core_funcs.push(alloc_component_host_core_func(store, core_type, host))
+}
+
+///|
+/// Destructors run synchronously with fresh context slots owned by the resource's
+/// defining component. Retiring their task restores the caller on every exit.
+fn call_resource_destructor(
+  state : AsyncState,
+  store : @runtime.Store,
+  resource : ResourceHandle,
+) -> Unit raise ComponentRuntimeError {
+  if resource.dtor is None && resource.host_dtor is None {
+    return
+  }
+  let task_id = alloc_task_id(state)
+  init_task_meta(
+    state,
+    task_id,
+    resource.impl_component_id,
+    current_task_id(state),
+  )
+  push_task(state, task_id, false)
+  defer {
+    pop_task(state)
+    retire_task(state, task_id)
+  }
+  if resource.host_dtor is Some(dtor) {
+    dtor.destroy(resource.rep)
+  }
+  if resource.dtor is Some(dtor) {
+    call_core_func(store, dtor, [I32(resource.rep)]) |> ignore
+  }
 }

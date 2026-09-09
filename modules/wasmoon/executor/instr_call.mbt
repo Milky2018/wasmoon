@@ -231,6 +231,13 @@ fn ExecContext::invoke_host_func(
   caller_instance : @runtime.ModuleInstance,
   args : Array[@types.Value],
 ) -> Unit raise {
+  // Host code can collect or reenter the Store after arguments leave the stack.
+  let roots = self.collect_gc_additional_roots()
+  for value in args {
+    roots.push(value)
+  }
+  let lease = self.store.pin_gc_roots(roots)
+  defer lease.release()
   let caller = @runtime.Caller::Caller(self.store, caller_instance)
   let results = host_fn(caller, args) catch {
     error => {
@@ -258,6 +265,13 @@ fn ExecContext::invoke_async_host_func(
   guard self.async_host_driver is Some(driver) else {
     raise InvocationSignal::HostInvocation(@runtime.AsyncHostRequiresAsyncCall)
   }
+  // Host code can collect or reenter the Store after arguments leave the stack.
+  let roots = self.collect_gc_additional_roots()
+  for value in args {
+    roots.push(value)
+  }
+  let lease = self.store.pin_gc_roots(roots)
+  defer lease.release()
   let caller = @runtime.Caller::Caller(self.store, caller_instance)
   let poll = driver.poll(store_addr, host_fn, caller, args) catch {
     error => raise InvocationSignal::HostInvocation(error)

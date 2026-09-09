@@ -1633,6 +1633,22 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_jit_gc_collect_for_alloc(
     return gc_collect_for_alloc_internal(ctx, roots, root_count);
 }
 
+// Host-triggered collection must include the dynamically active guest roots.
+// Raw heap collection also retains registered parked continuations.
+MOONBIT_FFI_EXPORT int32_t wasmoon_jit_collect_heap(
+    int64_t heap_ptr,
+    int64_t *roots,
+    int32_t root_count
+) {
+    GcHeap *heap = (GcHeap *)(uintptr_t)heap_ptr;
+    jit_context_t *active = get_current_jit_context();
+    if (active && active->gc_heap == heap) {
+        return gc_collect_for_alloc_internal(active, roots, root_count);
+    }
+    jit_mark_active_gc_roots(heap);
+    return gc_heap_collect(heap, roots, root_count);
+}
+
 MOONBIT_FFI_EXPORT int32_t wasmoon_jit_gc_set_root_scratch(
     int64_t ctx_ptr,
     int64_t *roots,

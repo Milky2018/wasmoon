@@ -57,8 +57,10 @@ not reproduce Wasmtime's compiler, GC collector, pooling allocator or feature
 configuration matrix. Explicit missing host contracts are listed per file in
 [HOST_CONTRACTS.json](HOST_CONTRACTS.json):
 
-- Wasmtime-only forced-GC and resource-table-capacity host imports are not
-  replaced with no-op functions.
+- The `wasmtime.gc` import performs a real collection on the active guest heap,
+  retaining Store roots, interpreter host-call leases, active native invocation
+  chains and parked continuations. Resource-table-capacity imports remain
+  unavailable until their limits are implemented.
 - Engine-wide NaN canonicalization and tests requiring disabled proposals
   cannot be expressed by the Wasmoon WAST CLI.
 - Upstream `hogs_memory` tests are separately `deferred` by default. Use

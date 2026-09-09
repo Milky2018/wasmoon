@@ -125,6 +125,8 @@ void jit_trap_activation_pop(jit_trap_activation_t *activation);
 jit_trap_activation_t *jit_trap_activation_detach(void);
 void jit_trap_activation_attach(jit_trap_activation_t *activation);
 void jit_trap_activation_abandon(jit_trap_activation_t *activation);
+void jit_mark_active_gc_roots(GcHeap *heap);
+
 int jit_parked_gc_roots_register(
     jit_trap_activation_t *activation,
     void **registration

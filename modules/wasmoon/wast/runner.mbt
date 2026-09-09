@@ -153,7 +153,12 @@ pub fn WastContext::WastContext(
     Some(instance) => instance
     None => ModuleInstance() // Fallback: shouldn't happen
   }
+  try! linker.add_host_func("wasmtime", "gc", fn(_args) {
+    store.collect_garbage() |> ignore
+    []
+  })
   let registered_modules : Map[String, @runtime.ModuleInstance] = Map([])
+  registered_modules.set("wasmtime", linker.get_module("wasmtime").unwrap())
   registered_modules.set("spectest", spectest_instance)
   registered_modules.set("wasi_snapshot_preview1", wasi_instance)
   {

@@ -932,9 +932,11 @@ int32_t gc_collect_for_alloc_internal(
         if (table_root_count > 0) {
             at += gc_copy_table_roots(ctx, &merged[at]);
         }
+        jit_mark_active_gc_roots(heap);
         collected = gc_heap_collect(heap, merged, total_roots);
         free(merged);
     } else {
+        jit_mark_active_gc_roots(heap);
         collected = gc_heap_collect(heap, NULL, 0);
     }
 
