@@ -160,9 +160,11 @@ pub struct WastContext {
   register_named_modules : Bool
   jit_compiler : JITCompiler?
   wasi_ctx : @wasi.WasiContext
+  // private fields
 }
 pub fn WastContext::WastContext(Bool, bulk_memory? : Bool, jit_compiler? : JITCompiler?, register_named_modules? : Bool) -> Self
 pub fn WastContext::build_imports(Self) -> @runtime.Imports
+pub fn WastContext::close(Self) -> Unit
 pub fn WastContext::get_store(Self) -> @runtime.Store
 
 pub struct WastResult {

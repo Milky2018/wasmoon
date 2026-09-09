@@ -246,8 +246,10 @@ pub fn Store::close(self : Store) -> Unit {
     heap.free()
     self.c_heap = None
   }
-  self.module_types.clear()
-  self.module_rec_groups.clear()
+  // These arrays are borrowed from the parsed module and may be reused by
+  // other stores. Closing a store must only drop its own references.
+  self.module_types = []
+  self.module_rec_groups = []
   self.wrapped_externs.clear()
   for owner in self.jit_table_owners {
     match owner {

@@ -226,6 +226,7 @@ test "Wasmtime named module imports are opt-in" {
     false,
     register_named_modules=true,
   )
+  debug_inspect(compatible.failures, content="[]")
   inspect(compatible.failed, content="0")
   inspect(compatible.passed, content="1")
 }

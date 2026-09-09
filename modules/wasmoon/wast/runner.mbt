@@ -101,6 +101,8 @@ pub fn builtin_jit_modules() -> Array[String] {
 ///|
 /// WAST execution context
 pub struct WastContext {
+  priv mut closed : Bool
+  priv compiled_modules : Array[JITModuleContext]
   store : @runtime.Store
   mut current_module : @runtime.ModuleInstance?
   named_modules : Map[String, @runtime.ModuleInstance]
@@ -164,6 +166,8 @@ pub fn WastContext::WastContext(
   registered_modules.set("spectest", spectest_instance)
   registered_modules.set("wasi_snapshot_preview1", wasi_instance)
   {
+    closed: false,
+    compiled_modules: [],
     store,
     current_module: None,
     named_modules: Map([]),
@@ -179,6 +183,36 @@ pub fn WastContext::WastContext(
     jit_compiler,
     wasi_ctx,
   }
+}
+
+///|
+/// Release a script's resources after every command and invocation has ended.
+/// Repeated close is harmless; the context cannot execute further commands.
+pub fn WastContext::close(self : WastContext) -> Unit {
+  if self.closed {
+    return
+  }
+  self.closed = true
+  // Track compilation ownership separately from names: rebinding a name or
+  // replacing the current module must not orphan its executable mappings.
+  for context in self.compiled_modules {
+    context.close()
+  }
+  self.compiled_modules.clear()
+  self.current_jit = None
+  self.jit_modules.clear()
+  self.current_module = None
+  self.named_modules.clear()
+  self.registered_modules.clear()
+  self.module_definitions.clear()
+  self.current_definition = None
+  self.overridden_builtin_modules.clear()
+  // Store funcref leases keep code alive until the last callable is removed.
+  self.store.close()
+  for _, file in self.wasi_ctx.open_files {
+    @wasi.native_close(file.native_fd) |> ignore
+  }
+  self.wasi_ctx.open_files.clear()
 }
 
 ///|
@@ -198,7 +232,13 @@ fn WastContext::try_compile_jit(
     return Err("JIT is disabled")
   }
   match self.jit_compiler {
-    Some(compiler) => (compiler.compile_fn)(mod_, instance, self.store)
+    Some(compiler) => {
+      let result = (compiler.compile_fn)(mod_, instance, self.store)
+      if result is Ok(context) {
+        self.compiled_modules.push(context)
+      }
+      result
+    }
     None => Err("WAST JIT strict mode: JIT compiler callback is missing")
   }
 }
@@ -256,6 +296,7 @@ pub fn run_wast_commands(
     jit_compiler~,
     register_named_modules~,
   )
+  defer ctx.close()
   for item in script.commands {
     let (cmd, line) = item
     run_wast_command(ctx, cmd, line, result, base_dir, show_success)
@@ -273,6 +314,11 @@ pub fn run_wast_command(
   show_success : Bool,
 ) -> Unit {
   ignore(base_dir)
+  if ctx.closed {
+    result.failed += 1
+    result.failures.push("line \{line}: WAST context is closed")
+    return
+  }
   match cmd {
     Module(mod_, name) => {
       @validator.validate_module(mod_, bulk_memory=ctx.bulk_memory) catch {
