@@ -26,6 +26,10 @@ fn store_flat_component_value_to_memory(
   types : Array[TypeDef?],
   mem_is_64 : Bool,
 ) -> Unit raise ComponentRuntimeError {
+  let (_, alignment) = canonical_memory_layout(ty, types, mem_is_64)
+  if addr.reinterpret_as_uint() % alignment.reinterpret_as_uint() != 0U {
+    raise CanonCallError("unaligned pointer")
+  }
   let mut cursor = 0
   fn take() -> @types.Value raise ComponentRuntimeError {
     if cursor >= values.length() {
@@ -260,6 +264,10 @@ fn load_flat_component_value_from_memory(
   types : Array[TypeDef?],
   mem_is_64 : Bool,
 ) -> Array[@types.Value] raise ComponentRuntimeError {
+  let (_, alignment) = canonical_memory_layout(ty, types, mem_is_64)
+  if addr.reinterpret_as_uint() % alignment.reinterpret_as_uint() != 0U {
+    raise CanonCallError("unaligned pointer")
+  }
   fn load_simple(
     value_ty : ValType,
     value_addr : Int,

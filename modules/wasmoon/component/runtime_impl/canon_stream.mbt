@@ -13,10 +13,6 @@ fn instantiate_canon_stream_new(
     Some(Some(Stream(v))) => v
     _ => None
   }
-  let (elem_size, own_resource_type_id) = stream_payload_info(
-    payload_ty,
-    state.types,
-  )
   let allows_intra_component = payload_allows_intra_component_transfer(
     payload_ty.map(ty => resolve_valtype(ty, state.types)),
   )
@@ -34,8 +30,6 @@ fn instantiate_canon_stream_new(
     table.next_stream_id[0] = sid + 1
     table.streams.set(sid, {
       allows_intra_component,
-      elem_size,
-      own_resource_type_id,
       pending_read: None,
       pending_write: None,
       readable_dropped: false,
@@ -81,36 +75,17 @@ fn store_host_stream_value(
 ) -> Unit raise ComponentRuntimeError {
   let mem = require_memory(resources, store)
   let mem_is_64 = mem.is_memory64()
-  let storage = flat_storage_for_valtype(payload_ty, types, mem_is_64)
-  if storage.length() > 16 {
-    raise HostCallError(
-      "typed host stream payload exceeds the canonical flat-value limit",
-    )
-  }
-  let values = component_args_to_core(
-    [value],
-    {
-      is_async: false,
-      params: [{ label: "value", ty: payload_ty, }],
-      result: None,
-    },
+  let values = lower_component_value_to_flat(
+    value,
+    payload_ty,
     types,
     resources,
     store,
-    table,
-    table,
+    Some((table, table)),
   )
-  if values.length() != storage.length() {
-    raise HostCallError("typed host stream payload has an invalid shape")
-  }
-  let (offsets, _size, alignment) = layout_of_flat_storage_fields(storage)
-  if alignment > 1 &&
-    ptr.reinterpret_as_uint() % alignment.reinterpret_as_uint() != 0U {
-    raise CanonCallError("unaligned pointer")
-  }
-  for i in 0..<values.length() {
-    store_storage_value(mem, ptr + offsets[i], values[i], storage[i])
-  }
+  store_flat_component_value_to_memory(
+    mem, ptr, payload_ty, values, types, mem_is_64,
+  )
 }
 
 ///|
@@ -165,12 +140,11 @@ fn progress_host_stream_sources(
       Closed => {
         table.streams.set(stream_id, {
           allows_intra_component: state.allows_intra_component,
-          elem_size: state.elem_size,
-          own_resource_type_id: state.own_resource_type_id,
           pending_read: Some({
             mem_addr: read.mem_addr,
             realloc: read.realloc,
             encoding: read.encoding,
+            payload_type: read.payload_type,
             reader_table: read.reader_table,
             ptr: read.ptr,
             len: read.len,
@@ -209,18 +183,18 @@ fn progress_host_stream_sources(
             resources,
             store,
             read.reader_table,
-            read.ptr + (read.filled + i) * state.elem_size,
+            read.ptr +
+            (read.filled + i) * read.payload_type.layout(resources, store).0,
           )
         }
         let filled = read.filled + values.length()
         table.streams.set(stream_id, {
           allows_intra_component: state.allows_intra_component,
-          elem_size: state.elem_size,
-          own_resource_type_id: state.own_resource_type_id,
           pending_read: Some({
             mem_addr: read.mem_addr,
             realloc: read.realloc,
             encoding: read.encoding,
+            payload_type: read.payload_type,
             reader_table: read.reader_table,
             ptr: read.ptr,
             len: read.len,
@@ -262,6 +236,10 @@ fn instantiate_canon_stream_read(
     Some(Some(Stream(v))) => v
     _ => None
   }
+  let payload_type : CanonicalPayloadType = {
+    ty: payload_ty,
+    types: state.types,
+  }
   let is_async = canon_opt_is_async(opts)
   let reader_table = state.resource_table
   let table = state.stream_table
@@ -278,24 +256,11 @@ fn instantiate_canon_stream_read(
       [I32(code)]
     }
 
-    let mem_opt : @runtime.Memory? = match payload_ty {
-      Some(_) =>
-        match resources.mem_addr {
-          Some(addr) =>
-            Some(
-              store.get_mem(addr) catch {
-                e => {
-                  trap_canon(e.to_string())
-                  return ret_i32(0)
-                }
-              },
-            )
-          None => {
-            trap_canon("missing canon memory")
-            return ret_i32(0)
-          }
-        }
-      None => None
+    let (elem_size, _) = payload_type.layout(resources, store) catch {
+      error => {
+        trap_canon(canon_err_message(error))
+        return ret_i32(0)
+      }
     }
     match args {
       [I32(handle), I32(ptr), I32(len)] => {
@@ -405,8 +370,6 @@ fn instantiate_canon_stream_read(
                           read.event_enqueued {
                           table.streams.set(ep.stream_id, {
                             allows_intra_component: st0.allows_intra_component,
-                            elem_size: st0.elem_size,
-                            own_resource_type_id: st0.own_resource_type_id,
                             pending_read: None,
                             pending_write: st0.pending_write,
                             readable_dropped: st0.readable_dropped,
@@ -440,7 +403,7 @@ fn instantiate_canon_stream_read(
                             resources,
                             store,
                             reader_table,
-                            ptr + i * st0.elem_size,
+                            ptr + i * elem_size,
                           ) catch {
                             e => {
                               trap_canon(e.to_string())
@@ -454,8 +417,6 @@ fn instantiate_canon_stream_read(
                         ep.notified_peer_dropped[0] = true
                         table.streams.set(ep.stream_id, {
                           allows_intra_component: st0.allows_intra_component,
-                          elem_size: st0.elem_size,
-                          own_resource_type_id: st0.own_resource_type_id,
                           pending_read: None,
                           pending_write: st0.pending_write,
                           readable_dropped: st0.readable_dropped,
@@ -466,12 +427,11 @@ fn instantiate_canon_stream_read(
                       Pending => {
                         table.streams.set(ep.stream_id, {
                           allows_intra_component: st0.allows_intra_component,
-                          elem_size: st0.elem_size,
-                          own_resource_type_id: st0.own_resource_type_id,
                           pending_read: Some({
                             mem_addr: resources.mem_addr,
                             realloc: resources.realloc,
                             encoding: resources.encoding,
+                            payload_type,
                             reader_table,
                             ptr,
                             len,
@@ -512,8 +472,6 @@ fn instantiate_canon_stream_read(
                         }
                         table.streams.set(ep.stream_id, {
                           allows_intra_component: st0.allows_intra_component,
-                          elem_size: st0.elem_size,
-                          own_resource_type_id: st0.own_resource_type_id,
                           pending_read: None,
                           pending_write: st0.pending_write,
                           readable_dropped: st0.readable_dropped,
@@ -557,7 +515,7 @@ fn instantiate_canon_stream_read(
                         "cannot read from and write to intra-component future/stream with non-numeric payload",
                       )
                     }
-                    let elem_size = st0.elem_size
+
                     let total_elems = pw.count
                     let remain = total_elems - pw.sent
                     if remain <= 0 {
@@ -580,8 +538,6 @@ fn instantiate_canon_stream_read(
                       // no pending data for readers.
                       table.streams.set(ep.stream_id, {
                         allows_intra_component: st0.allows_intra_component,
-                        elem_size: st0.elem_size,
-                        own_resource_type_id: st0.own_resource_type_id,
                         pending_read: st0.pending_read,
                         pending_write: Some({
                           writer_table: pw.writer_table,
@@ -606,6 +562,7 @@ fn instantiate_canon_stream_read(
                         mem_addr: resources.mem_addr,
                         realloc: resources.realloc,
                         encoding: resources.encoding,
+                        payload_type,
                         reader_table,
                         ptr,
                         len,
@@ -615,8 +572,6 @@ fn instantiate_canon_stream_read(
                       }
                       table.streams.set(ep.stream_id, {
                         allows_intra_component: st0.allows_intra_component,
-                        elem_size: st0.elem_size,
-                        own_resource_type_id: st0.own_resource_type_id,
                         pending_read: Some(pr),
                         pending_write: Some({
                           writer_table: pw.writer_table,
@@ -650,63 +605,21 @@ fn instantiate_canon_stream_read(
                       }
                     }
                     let n = if len < remain { len } else { remain }
-                    let base = pw.sent * elem_size
-                    match (st0.own_resource_type_id, mem_opt) {
-                      (Some(expected_type_id), Some(mem)) =>
-                        for i in 0..<n {
-                          let off = base + i * elem_size
-                          // Handle indices are encoded as i32 per element.
-                          let writer_handle = read_i32_le_from_bytes(
-                            pw.buf,
-                            off,
-                          )
-                          let new_handle = if pw.writer_table.id ==
-                            reader_table.id {
-                            // Same component instance: no ownership transfer.
-                            writer_handle
-                          } else {
-                            let entry = match
-                              pw.writer_table.free(writer_handle) {
-                              Some(e) => e
-                              None => {
-                                trap_canon(
-                                  "unknown handle index \{writer_handle}",
-                                )
-                                return ret_i32(0)
-                              }
-                            }
-                            if entry.type_id != expected_type_id {
-                              trap_canon(
-                                "handle index \{writer_handle} used with the wrong type",
-                              )
-                              return ret_i32(0)
-                            }
-                            reader_table.alloc(entry)
-                          }
-                          mem.store_i32(ptr + i * elem_size, new_handle) catch {
-                            e => {
-                              trap_canon(e.to_string())
-                              return ret_i32(0)
-                            }
-                          }
-                        }
-                      (Some(_), None) => {
-                        trap_canon("missing canon memory")
+                    pw.buf.store(
+                      pw.sent,
+                      n,
+                      pw.writer_table,
+                      payload_type,
+                      resources,
+                      store,
+                      reader_table,
+                      async_state,
+                      ptr,
+                    ) catch {
+                      error => {
+                        trap_canon(canon_err_message(error))
                         return ret_i32(0)
                       }
-                      (None, Some(mem)) => {
-                        let bytes_n = n * elem_size
-                        for i in 0..<bytes_n {
-                          mem.store_byte(ptr + i, pw.buf[base + i]) catch {
-                            e => {
-                              trap_canon(e.to_string())
-                              return ret_i32(0)
-                            }
-                          }
-                        }
-                        ()
-                      }
-                      (None, None) => ()
                     }
                     let new_sent = pw.sent + n
                     // Publish cumulative progress. Further reads may extend
@@ -746,8 +659,6 @@ fn instantiate_canon_stream_read(
                     })
                     table.streams.set(ep.stream_id, {
                       allows_intra_component: st0.allows_intra_component,
-                      elem_size: st0.elem_size,
-                      own_resource_type_id: st0.own_resource_type_id,
                       pending_read: st0.pending_read,
                       pending_write: pw2,
                       readable_dropped: st0.readable_dropped,
@@ -773,6 +684,7 @@ fn instantiate_canon_stream_read(
                         mem_addr: resources.mem_addr,
                         realloc: resources.realloc,
                         encoding: resources.encoding,
+                        payload_type,
                         reader_table,
                         ptr,
                         len,
@@ -782,8 +694,6 @@ fn instantiate_canon_stream_read(
                       }
                       table.streams.set(ep.stream_id, {
                         allows_intra_component: st0.allows_intra_component,
-                        elem_size: st0.elem_size,
-                        own_resource_type_id: st0.own_resource_type_id,
                         pending_read: Some(pr),
                         pending_write: st0.pending_write,
                         readable_dropped: st0.readable_dropped,
@@ -842,6 +752,10 @@ fn instantiate_canon_stream_write(
     Some(Some(Stream(v))) => v
     _ => None
   }
+  let payload_type : CanonicalPayloadType = {
+    ty: payload_ty,
+    types: state.types,
+  }
   let is_async = canon_opt_is_async(opts)
   let writer_table = state.resource_table
   let table = state.stream_table
@@ -858,24 +772,11 @@ fn instantiate_canon_stream_write(
       [I32(code)]
     }
 
-    let mem_opt : @runtime.Memory? = match payload_ty {
-      Some(_) =>
-        match resources.mem_addr {
-          Some(addr) =>
-            Some(
-              store.get_mem(addr) catch {
-                e => {
-                  trap_canon(e.to_string())
-                  return ret_i32(0)
-                }
-              },
-            )
-          None => {
-            trap_canon("missing canon memory")
-            return ret_i32(0)
-          }
-        }
-      None => None
+    let _ = payload_type.layout(resources, store) catch {
+      error => {
+        trap_canon(canon_err_message(error))
+        return ret_i32(0)
+      }
     }
     match args {
       [I32(handle), I32(ptr), I32(len)] => {
@@ -945,8 +846,6 @@ fn instantiate_canon_stream_write(
                           !pw0.defer_complete {
                           table.streams.set(ep.stream_id, {
                             allows_intra_component: st0.allows_intra_component,
-                            elem_size: st0.elem_size,
-                            own_resource_type_id: st0.own_resource_type_id,
                             pending_read: st0.pending_read,
                             pending_write: Some({
                               writer_table: pw0.writer_table,
@@ -972,8 +871,6 @@ fn instantiate_canon_stream_write(
                         }
                         table.streams.set(ep.stream_id, {
                           allows_intra_component: st0.allows_intra_component,
-                          elem_size: st0.elem_size,
-                          own_resource_type_id: st0.own_resource_type_id,
                           pending_read: st0.pending_read,
                           pending_write: None,
                           readable_dropped: st0.readable_dropped,
@@ -1027,7 +924,7 @@ fn instantiate_canon_stream_write(
                     if len == 0 {
                       return ret_i32(0)
                     }
-                    let elem_size = st0.elem_size
+
                     let remain = pr0.len - pr0.filled
                     if remain <= 0 {
                       // A pending zero-length read completes when a nonempty write arrives.
@@ -1047,6 +944,7 @@ fn instantiate_canon_stream_write(
                           mem_addr: pr0.mem_addr,
                           realloc: pr0.realloc,
                           encoding: pr0.encoding,
+                          payload_type: pr0.payload_type,
                           reader_table: pr0.reader_table,
                           ptr: pr0.ptr,
                           len: pr0.len,
@@ -1057,25 +955,14 @@ fn instantiate_canon_stream_write(
                       } else {
                         st0.pending_read
                       }
-                      let buf : Array[Byte] = []
-                      let src_bytes = len * elem_size
-                      for i in 0..<src_bytes {
-                        let b = match mem_opt {
-                          Some(mem) =>
-                            mem.load_byte(ptr + i) catch {
-                              e => {
-                                trap_canon(e.to_string())
-                                return [I32(0)]
-                              }
-                            }
-                          None => b'\x00'
+                      let buf = payload_type.load(resources, store, ptr, len) catch {
+                        error => {
+                          trap_canon(canon_err_message(error))
+                          return ret_i32(0)
                         }
-                        buf.push(b)
                       }
                       table.streams.set(ep.stream_id, {
                         allows_intra_component: st0.allows_intra_component,
-                        elem_size: st0.elem_size,
-                        own_resource_type_id: st0.own_resource_type_id,
                         pending_read,
                         pending_write: Some({
                           writer_table,
@@ -1110,110 +997,41 @@ fn instantiate_canon_stream_write(
                     }
                     let n = if len < remain { len } else { remain }
                     // Snapshot src bytes first to preserve memmove semantics when regions overlap.
-                    let buf : Array[Byte] = []
-                    let src_bytes = len * elem_size
-                    for i in 0..<src_bytes {
-                      let b = match mem_opt {
-                        Some(mem) =>
-                          mem.load_byte(ptr + i) catch {
-                            e => {
-                              trap_canon(e.to_string())
-                              return [I32(0)]
-                            }
-                          }
-                        None => b'\x00'
+                    let buf = payload_type.load(resources, store, ptr, len) catch {
+                      error => {
+                        trap_canon(canon_err_message(error))
+                        return ret_i32(0)
                       }
-                      buf.push(b)
                     }
-                    // Copy into the *reader* memory/buffer, not the writer memory.
-                    // For empty streams (no canon memory), `mem_opt` is None and we
-                    // must not touch either pointer/memory.
-                    match (st0.own_resource_type_id, mem_opt) {
-                      (Some(expected_type_id), Some(src_mem)) => {
-                        let dst_mem = match pr0.mem_addr {
-                          Some(addr) =>
-                            store.get_mem(addr) catch {
-                              e => {
-                                trap_canon(e.to_string())
-                                return [I32(0)]
-                              }
-                            }
-                          None => {
-                            trap_canon("missing canon memory")
-                            return [I32(0)]
-                          }
-                        }
-                        for i in 0..<n {
-                          let writer_handle = src_mem.load_i32(
-                            ptr + i * elem_size,
-                          ) catch {
-                            e => {
-                              trap_canon(e.to_string())
-                              return [I32(0)]
-                            }
-                          }
-                          let new_handle = if writer_table.id ==
-                            pr0.reader_table.id {
-                            writer_handle
-                          } else {
-                            let entry = match writer_table.free(writer_handle) {
-                              Some(e) => e
-                              None => {
-                                trap_canon(
-                                  "unknown handle index \{writer_handle}",
-                                )
-                                return [I32(0)]
-                              }
-                            }
-                            if entry.type_id != expected_type_id {
-                              trap_canon(
-                                "handle index \{writer_handle} used with the wrong type",
-                              )
-                              return [I32(0)]
-                            }
-                            pr0.reader_table.alloc(entry)
-                          }
-                          dst_mem.store_i32(
-                            pr0.ptr + (pr0.filled + i) * elem_size,
-                            new_handle,
-                          ) catch {
-                            e => {
-                              trap_canon(e.to_string())
-                              return [I32(0)]
-                            }
-                          }
-                        }
+                    let reader_resources : CanonResources = {
+                      mem_addr: pr0.mem_addr,
+                      realloc: pr0.realloc,
+                      encoding: pr0.encoding,
+                      post_return: None,
+                    }
+                    let (reader_size, _) = pr0.payload_type.layout(
+                      reader_resources, store,
+                    ) catch {
+                      error => {
+                        trap_canon(canon_err_message(error))
+                        return ret_i32(0)
                       }
-                      (Some(_), None) => {
-                        trap_canon("missing canon memory")
-                        return [I32(0)]
+                    }
+                    buf.store(
+                      0,
+                      n,
+                      writer_table,
+                      pr0.payload_type,
+                      reader_resources,
+                      store,
+                      pr0.reader_table,
+                      async_state,
+                      pr0.ptr + pr0.filled * reader_size,
+                    ) catch {
+                      error => {
+                        trap_canon(canon_err_message(error))
+                        return ret_i32(0)
                       }
-                      (None, Some(_src_mem)) => {
-                        let dst_mem = match pr0.mem_addr {
-                          Some(addr) =>
-                            store.get_mem(addr) catch {
-                              e => {
-                                trap_canon(e.to_string())
-                                return [I32(0)]
-                              }
-                            }
-                          None => {
-                            trap_canon("missing canon memory")
-                            return [I32(0)]
-                          }
-                        }
-                        let bytes_n = n * elem_size
-                        let dst_base = pr0.ptr + pr0.filled * elem_size
-                        for i in 0..<bytes_n {
-                          dst_mem.store_byte(dst_base + i, buf[i]) catch {
-                            e => {
-                              trap_canon(e.to_string())
-                              return [I32(0)]
-                            }
-                          }
-                        }
-                      }
-                      (None, None) => ()
                     }
                     let filled1 = pr0.filled + n
                     let mut event_enqueued = pr0.event_enqueued
@@ -1245,6 +1063,7 @@ fn instantiate_canon_stream_write(
                       mem_addr: pr0.mem_addr,
                       realloc: pr0.realloc,
                       encoding: pr0.encoding,
+                      payload_type: pr0.payload_type,
                       reader_table: pr0.reader_table,
                       ptr: pr0.ptr,
                       len: pr0.len,
@@ -1254,8 +1073,6 @@ fn instantiate_canon_stream_write(
                     }
                     table.streams.set(ep.stream_id, {
                       allows_intra_component: st0.allows_intra_component,
-                      elem_size: st0.elem_size,
-                      own_resource_type_id: st0.own_resource_type_id,
                       pending_read: Some(pr1),
                       pending_write: st0.pending_write,
                       readable_dropped: st0.readable_dropped,
@@ -1269,26 +1086,14 @@ fn instantiate_canon_stream_write(
                   }
                   None => {
                     // Register a pending write by copying bytes.
-                    let buf : Array[Byte] = []
-                    let elem_size = st0.elem_size
-                    let src_bytes = len * elem_size
-                    for i in 0..<src_bytes {
-                      let b = match mem_opt {
-                        Some(mem) =>
-                          mem.load_byte(ptr + i) catch {
-                            e => {
-                              trap_canon(e.to_string())
-                              return [I32(0)]
-                            }
-                          }
-                        None => b'\x00'
+                    let buf = payload_type.load(resources, store, ptr, len) catch {
+                      error => {
+                        trap_canon(canon_err_message(error))
+                        return ret_i32(0)
                       }
-                      buf.push(b)
                     }
                     table.streams.set(ep.stream_id, {
                       allows_intra_component: st0.allows_intra_component,
-                      elem_size: st0.elem_size,
-                      own_resource_type_id: st0.own_resource_type_id,
                       pending_read: st0.pending_read,
                       pending_write: Some({
                         writer_table,
@@ -1577,8 +1382,6 @@ fn instantiate_canon_stream_drop_readable(
                   )
                   table.streams.set(ep.stream_id, {
                     allows_intra_component: st0.allows_intra_component,
-                    elem_size: st0.elem_size,
-                    own_resource_type_id: st0.own_resource_type_id,
                     pending_read: st0.pending_read,
                     pending_write: Some({
                       writer_table: pw.writer_table,
@@ -1596,8 +1399,6 @@ fn instantiate_canon_stream_drop_readable(
                 None =>
                   table.streams.set(ep.stream_id, {
                     allows_intra_component: st0.allows_intra_component,
-                    elem_size: st0.elem_size,
-                    own_resource_type_id: st0.own_resource_type_id,
                     pending_read: st0.pending_read,
                     pending_write: st0.pending_write,
                     readable_dropped: true,
@@ -1697,12 +1498,11 @@ fn instantiate_canon_stream_drop_writable(
                   )
                   table.streams.set(ep.stream_id, {
                     allows_intra_component: st0.allows_intra_component,
-                    elem_size: st0.elem_size,
-                    own_resource_type_id: st0.own_resource_type_id,
                     pending_read: Some({
                       mem_addr: pr.mem_addr,
                       realloc: pr.realloc,
                       encoding: pr.encoding,
+                      payload_type: pr.payload_type,
                       reader_table: pr.reader_table,
                       ptr: pr.ptr,
                       len: pr.len,
@@ -1718,8 +1518,6 @@ fn instantiate_canon_stream_drop_writable(
                 None =>
                   table.streams.set(ep.stream_id, {
                     allows_intra_component: st0.allows_intra_component,
-                    elem_size: st0.elem_size,
-                    own_resource_type_id: st0.own_resource_type_id,
                     pending_read: st0.pending_read,
                     pending_write: st0.pending_write,
                     readable_dropped: st0.readable_dropped,

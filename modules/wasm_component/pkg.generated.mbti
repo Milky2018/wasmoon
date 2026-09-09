@@ -7,11 +7,19 @@ import {
 }
 
 // Values
+pub fn canonical_abi_plan(ValType, Array[TypeDef?], Bool, max_flat? : Int) -> CanonicalAbiPlan?
+
+pub fn canonical_discriminant_layout(Int) -> (Int, Int)
+
 pub fn canonical_flat_types(ValType, Array[TypeDef?], @types.ValueType, max_flat? : Int) -> Array[@types.ValueType]?
 
 pub fn canonical_lift_core_func_type(FuncType, Array[TypeDef?], @types.ValueType) -> @types.FuncType?
 
 pub fn canonical_lower_core_func_type(FuncType, Array[TypeDef?], @types.ValueType) -> @types.FuncType?
+
+pub fn canonical_memory_layout(ValType, Array[TypeDef?], Bool) -> (Int, Int)?
+
+pub fn canonical_value_contains_memory(ValType, Array[TypeDef?]) -> Bool
 
 pub fn parse_alias_section(Bytes) -> Array[Alias] raise ComponentParseError
 
@@ -154,6 +162,15 @@ pub(all) enum CanonOpt {
 pub fn CanonOpt::equal(Self, Self) -> Bool
 pub fn CanonOpt::not_equal(Self, Self) -> Bool
 pub fn CanonOpt::to_repr(Self) -> @debug.Repr
+
+pub(all) struct CanonicalAbiPlan {
+  value_type : ValType
+  types : Array[TypeDef?]
+  memory64 : Bool
+  flat : Array[@types.ValueType]
+  layout : (Int, Int)?
+  contains_memory : Bool
+}
 
 pub(all) struct Component {
   binary : ComponentBinary

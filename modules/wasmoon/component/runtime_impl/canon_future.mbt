@@ -93,6 +93,13 @@ fn instantiate_canon_future_read(
   let async_state = state.async_state
   let caller_component_id = state.resource_table.id
   let is_async = canon_opt_is_async(_opts)
+  let payload_type : CanonicalPayloadType = {
+    ty: match state.types.get(_tyidx) {
+      Some(Some(Future(ty))) => ty
+      _ => None
+    },
+    types: state.types,
+  }
   let host = fn(
     args : Array[@types.Value],
   ) -> Array[@types.Value] raise @runtime.RuntimeError {
@@ -240,6 +247,9 @@ fn instantiate_canon_future_read(
                   }
                   store_future_payload(
                     pw.payload,
+                    pw.writer_component_id,
+                    payload_type,
+                    async_state,
                     store,
                     resources,
                     state.resource_table,
@@ -310,6 +320,7 @@ fn instantiate_canon_future_read(
                         mem_addr: resources.mem_addr,
                         realloc: resources.realloc,
                         encoding: resources.encoding,
+                        payload_type,
                         reader_table: state.resource_table,
                         ptr,
                         reader_component_id: caller_component_id,
@@ -448,6 +459,13 @@ fn instantiate_canon_future_write(
   let async_state = state.async_state
   let caller_component_id = state.resource_table.id
   let is_async = canon_opt_is_async(_opts)
+  let payload_type : CanonicalPayloadType = {
+    ty: match state.types.get(_tyidx) {
+      Some(Some(Future(ty))) => ty
+      _ => None
+    },
+    types: state.types,
+  }
   let host = fn(
     args : Array[@types.Value],
   ) -> Array[@types.Value] raise @runtime.RuntimeError {
@@ -573,12 +591,7 @@ fn instantiate_canon_future_write(
                       "cannot read from and write to intra-component future/stream with non-numeric payload",
                     )
                   }
-                  let payload = load_future_payload(
-                    st0.payload_ty,
-                    store,
-                    resources,
-                    ptr,
-                  ) catch {
+                  let payload = payload_type.load(resources, store, ptr, 1) catch {
                     error => {
                       trap_canon(canon_err_message(error))
                       return [I32(0)]
@@ -586,6 +599,9 @@ fn instantiate_canon_future_write(
                   }
                   store_future_payload(
                     payload,
+                    caller_component_id,
+                    pr.payload_type,
+                    async_state,
                     store,
                     {
                       mem_addr: pr.mem_addr,
@@ -639,12 +655,7 @@ fn instantiate_canon_future_write(
                     )
                     return ret_i32(0)
                   }
-                  let payload = load_future_payload(
-                    st0.payload_ty,
-                    store,
-                    resources,
-                    ptr,
-                  ) catch {
+                  let payload = payload_type.load(resources, store, ptr, 1) catch {
                     error => {
                       trap_canon(canon_err_message(error))
                       return [I32(0)]

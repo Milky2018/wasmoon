@@ -119,6 +119,12 @@ pub fn CanonSuspend::equal(Self, Self) -> Bool
 pub fn CanonSuspend::not_equal(Self, Self) -> Bool
 pub fn CanonSuspend::to_repr(Self) -> @debug.Repr
 
+type CanonicalPayload derive(@debug.Debug)
+pub fn CanonicalPayload::to_repr(Self) -> @debug.Repr
+
+type CanonicalPayloadType derive(@debug.Debug)
+pub fn CanonicalPayloadType::to_repr(Self) -> @debug.Repr
+
 type CanonicalRealloc
 pub fn CanonicalRealloc::to_repr(Self) -> @debug.Repr
 
@@ -339,9 +345,6 @@ pub fn FlatStorageField::to_repr(Self) -> @debug.Repr
 
 type FutureEndpoint derive(@debug.Debug)
 pub fn FutureEndpoint::to_repr(Self) -> @debug.Repr
-
-type FuturePayload derive(@debug.Debug)
-pub fn FuturePayload::to_repr(Self) -> @debug.Repr
 
 type FutureState derive(@debug.Debug)
 pub fn FutureState::to_repr(Self) -> @debug.Repr
