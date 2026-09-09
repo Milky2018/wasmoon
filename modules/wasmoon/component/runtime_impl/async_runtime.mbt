@@ -200,18 +200,6 @@ fn await_component_func(
     raise CanonCallError("cannot block a synchronous task before returning")
   }
   let caller_task_id = current_task_id(async_state)
-  let callee_instance_id = match func {
-    Host(_, _, _) => -1
-    HostAsync(_, _, _) => -1
-    Lifted(_, _, _, _, callee_table, _, _, _) => callee_table.id
-  }
-  if callee_instance_id >= 0 &&
-    caller_task_id != 0L &&
-    !may_enter_instance_from_task(
-      async_state, caller_task_id, callee_instance_id,
-    ) {
-    raise CanonCallError("wasm trap: cannot enter component instance")
-  }
   start_component_invocation(
     func, args, store, caller_table, async_state, caller_task_id, can_block,
   ).wait_transport()
@@ -1001,8 +989,7 @@ fn call_component_func(
   // cancellation, and continuation ownership.
   if async_state.task_stack.length() == 1 && async_state.task_stack[0] == 0 {
     let task_id = alloc_task_id(async_state)
-    // A synthetic host-entry task does not belong to a component instance and
-    // therefore does not participate in async re-entrancy checks.
+    // A synthetic host-entry task has no guest component owner.
     init_task_meta(async_state, task_id, -1, 0L)
     // Preserve the host-provided `task_can_block` flag: exported async funcs must be allowed to block.
     let can_block = async_state.task_can_block[0]
@@ -1076,9 +1063,6 @@ fn call_component_func_in_task_impl(
       cb_opt,
       async_abi
     ) => {
-      if !entry.may_enter() {
-        raise CanonCallError("cannot enter component instance")
-      }
       if func_type.is_async {
         return await_component_func(
           func, args, store, resource_table, async_state,

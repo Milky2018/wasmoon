@@ -1,63 +1,48 @@
 ///|
-test "component instance entry state tracks activity and poison" {
+test "component entry tracks nested activity independently of poison" {
   let entry = ComponentInstanceEntryState::new()
-  debug_inspect(
-    entry,
-    content="{ active: <Ref: false>, poisoned: <Ref: false> }",
-  )
+  inspect(entry.may_start_async(), content="true")
   entry.enter()
-  debug_inspect(
-    entry,
-    content="{ active: <Ref: true>, poisoned: <Ref: false> }",
-  )
+  entry.enter()
+  inspect(entry.active_depth.val, content="2")
+  inspect(entry.may_start_async(), content="false")
   entry.leave()
-  debug_inspect(
-    entry,
-    content="{ active: <Ref: false>, poisoned: <Ref: false> }",
-  )
+  inspect(entry.active_depth.val, content="1")
+  inspect(entry.may_start_async(), content="false")
+  entry.leave()
+  inspect(entry.may_start_async(), content="true")
   entry.enter()
   entry.poison()
-  debug_inspect(
-    entry,
-    content="{ active: <Ref: false>, poisoned: <Ref: true> }",
-  )
-  let rejected = try {
-    entry.enter()
-    None
-  } catch {
-    error => Some(error)
-  } noraise {
-    result => result
-  }
-  debug_inspect(
-    rejected,
-    content="Some(CanonCallError(\"cannot enter component instance\"))",
-  )
+  entry.leave()
+  inspect(entry.active_depth.val, content="0")
+  inspect(entry.may_start_async(), content="true")
+  inspect(entry.poisoned.val, content="true")
+  entry.enter()
+  inspect(entry.active_depth.val, content="1")
+  entry.leave()
 }
 
 ///|
-test "component instance rejects re-entry and preserves poison" {
+test "cancelling a suspended call does not release a different activation" {
   let entry = ComponentInstanceEntryState::new()
   entry.enter()
-  let reentry : Array[ComponentRuntimeError?] = [None]
-  entry.enter() catch {
-    error => reentry[0] = Some(error)
-  }
-  entry.leave()
-  entry.enter()
-  entry.poison()
-  let poisoned_entry : Array[ComponentRuntimeError?] = [None]
-  entry.enter() catch {
-    error => poisoned_entry[0] = Some(error)
-  }
-  debug_inspect(
-    (reentry[0], poisoned_entry[0], entry),
-    content=(
-      #|(
-      #|  Some(CanonCallError("cannot enter component instance")),
-      #|  Some(CanonCallError("cannot enter component instance")),
-      #|  { active: <Ref: false>, poisoned: <Ref: true> },
-      #|)
+  let cancelled = Ref(false)
+  let suspended = guard_core_outcome(
+    Suspended(
+      Yield,
+      CoreContinuation(fn() { Returned([]) }, fn() { cancelled.val = true }),
     ),
+    entry,
   )
+  inspect(entry.active_depth.val, content="0")
+  entry.enter()
+  guard suspended is Suspended(_, continuation) else {
+    fail("expected suspension")
+  }
+  continuation.cancel()
+  inspect(cancelled.val, content="true")
+  inspect(entry.active_depth.val, content="1")
+  inspect(entry.may_start_async(), content="false")
+  entry.leave()
+  inspect(entry.may_start_async(), content="true")
 }

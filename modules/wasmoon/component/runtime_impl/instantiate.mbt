@@ -41,7 +41,9 @@ fn instantiate_component(
     state.resource_table.id,
     state.resource_table,
   )
-  let entry_state = ComponentInstanceEntryState::new()
+  let entry_state = ComponentInstanceEntryState::new(
+    poisoned=async_state.trapped,
+  )
   let store = linker.get_store()
   let frame : ComponentInstantiationFrame = {
     linker,

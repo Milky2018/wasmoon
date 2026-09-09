@@ -78,6 +78,7 @@ pub impl Show for ComponentRuntimeError
 
 // Types and methods
 pub(all) struct AsyncState {
+  trapped : @ref.Ref[Bool]
   core_engine : CoreExecutionEngine
   next_handle_by_component : Map[Int, Array[Int]]
   free_handles_by_component : Map[Int, Array[Int]]

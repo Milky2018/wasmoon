@@ -1,6 +1,6 @@
 ;; This test creates an asynchronous recursive call stack:
 ;;  $Parent --> $Child --> $Parent
-;; That should trap when $Child tries to call $Parent.
+;; Yielded callbacks release the entry lock, so the inner callee executes.
 (component $Parent
   (core module $CoreInner
     (memory (export "mem") 1)
@@ -62,7 +62,7 @@
     async (callback (core func $core_outer "c-cb"))
   ))
 )
-(assert_trap (invoke "c") "wasm trap: cannot enter component instance")
+(assert_trap (invoke "c") "unreachable")
 
 ;; Parent-to-child calls are allowed when the child is not already active.
 (component $Parent

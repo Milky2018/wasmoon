@@ -4,8 +4,8 @@
     {
       "path": "async/trap-on-reenter.wast",
       "upstream_sha256": "8c6f080b113256ec7a682ccea7591b245830b8722925c617b0cca5e48fd1fc92",
-      "sha256": "eaa45e51eda3b1d0382b6c7337e2383baf1ca25dd05c5238c06e53fa5a2856f0",
-      "reason": "Replace two temporary containment-based traps with successful calls, verified with Wasmtime 40.0.0. Preserve the active recursive callback trap."
+      "sha256": "ce2ba1d2abfa1c832648c9af37c0f6d17beacc80646f62e01fa1a86e78173f82",
+      "reason": "Permit parent/child reentry, including calls into yielded callbacks. The recursive callback fixture executes its unreachable callee. All three assertions pass Wasmtime 50.0.0-dev at the misc corpus revision 668016926adfd1b8a79dbce894f1e203d8892599. Independent entry and trap-state controls live in tests/component-runtime/callback-entry.wast."
     },
     {
       "path": "async/trap-if-block-and-sync.wast",

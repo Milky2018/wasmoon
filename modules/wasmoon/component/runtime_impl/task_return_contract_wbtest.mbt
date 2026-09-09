@@ -152,7 +152,10 @@ test "guest handle binding preserves stable child identities and cancellation" {
   state.tasks.write_main_thread_scheduled(-1L, true)
   state.tasks.bind_handle(-1L, 7L)
   inspect(thread.parent_task_id, content="-1")
-  debug_inspect(state.tasks.read_task_caller(-2L), content="Some(-1)")
+  inspect(
+    state.tasks.entries_task_caller().contains((-2L, -1L)),
+    content="true",
+  )
   debug_inspect(pop_runnable_explicit_thread(state, 0, 7L), content="Some(1)")
   inspect(consume_main_scheduled(state, 7L), content="true")
   inspect(cancelled[0], content="0")

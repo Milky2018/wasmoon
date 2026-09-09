@@ -1,5 +1,5 @@
 ///|
-test "component containment does not prohibit calls but active reentry does" {
+test "component parent-child calls permit synchronous reentry" {
   for native in [false, true] {
     for scenario in ["parent-to-child", "child-to-parent", "cycle"] {
       let source =
@@ -54,19 +54,7 @@ test "component containment does not prohibit calls but active reentry does" {
       )
       defer linker.close()
       let instance = linker.instantiate("root", validated)
-      if scenario == "cycle" {
-        for _ in 0..<2 {
-          let message = try {
-            instance.call_exported_func("run", []) |> ignore
-            "unexpected return"
-          } catch {
-            error => error.to_string()
-          }
-          guard message.contains("cannot enter component instance") else {
-            fail(message)
-          }
-        }
-      } else {
+      for _ in 0..<2 {
         debug_inspect(
           instance.call_exported_func("run", []),
           content="[U32(42)]",

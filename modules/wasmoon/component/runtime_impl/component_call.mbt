@@ -370,6 +370,7 @@ pub fn ComponentInstance::start_exported_func(
     Some(Func(func)) => func
     Some(_) | None => raise UnknownExport(name)
   }
+  self.async_state.check_host_entry()
   let (func_type, _, _) = component_invocation_contract(func)
   start_component_invocation(
     func,

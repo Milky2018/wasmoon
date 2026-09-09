@@ -26,3 +26,12 @@ built from the misc corpus revision 668016926adfd1b8a79dbce894f1e203d8892599.
 `synchronous-transmit-validation.wast` contrasts invalid buffers, invalid handles,
 valid blocking operations and immediate completion for both streams and futures.
 All 16 assertions pass the matching Wasmtime 50 oracle.
+
+`callback-entry.wast` covers yielded and synchronous parent reentry, core-trap
+poison shared across sibling instances, and result decoding errors that leave
+the runtime usable. `instance-store-isolation.wast` checks that a later WAST
+component receives a fresh store. Both pass the pinned Wasmtime 50 oracle.
+
+`resource-type-identity.wast` checks that resource aliases and re-exports retain
+the same nominal identity across independent script stores, while independently
+defined resources remain distinct. It passes the pinned Wasmtime oracle.

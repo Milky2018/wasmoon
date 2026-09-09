@@ -339,6 +339,8 @@ fn cleanup_closed_future(async_state : AsyncState, future_id : Int) -> Unit {
 /// Waitable/stream/future/subtask handle numbers are per component instance (resource_table.id).
 /// Internally we key maps by `handle_key(component_id, local_handle)` to avoid collisions.
 pub(all) struct AsyncState {
+  // A core trap rejects new host calls; admitted continuations may still resume.
+  trapped : Ref[Bool]
   core_engine : CoreExecutionEngine
   // Per-component handle allocator for waitables/streams/futures/subtasks/threads.
   // Handle 0 is invalid; allocation starts at 1 (matches component model ABI).
@@ -587,6 +589,7 @@ pub fn AsyncState::AsyncState(
     stream_table,
     resource_tables: Map([]),
     host_event_loop: Ref(None),
+    trapped: Ref(false),
     task_stack: [0L],
     // Use negative ids for internal tasks so they don't collide with the shared handle space.
     tasks: TaskRegistry::new(),
@@ -1554,7 +1557,7 @@ fn init_task_meta(
 fn async_call_can_enter(func : ComponentFunc, async_state : AsyncState) -> Bool {
   match func {
     Lifted(_, _, _, _, table, entry, _, _) =>
-      entry.may_enter() && !instance_has_sync_wait(async_state, table.id)
+      entry.may_start_async() && !instance_has_sync_wait(async_state, table.id)
     Host(_, _, _) | HostAsync(_, _, _) => true
   }
 }
@@ -1583,33 +1586,6 @@ fn sync_waitables_for_task(
     }
   }
   keys
-}
-
-///|
-/// Returns whether `callee_instance_id` may be entered when the call originates
-/// from `caller_task_id`.
-///
-/// This is an extra check (beyond per-instance `may_enter`) needed for
-/// callback-driven async tasks where there may be no activation record on the
-/// stack but the instance is still logically on the async call stack.
-fn may_enter_instance_from_task(
-  async_state : AsyncState,
-  caller_task_id : Int64,
-  callee_instance_id : Int,
-) -> Bool {
-  let mut t = caller_task_id
-  while t != 0L {
-    if async_state.tasks.read_task_instance(t) is Some(inst) &&
-      inst >= 0 &&
-      inst == callee_instance_id {
-      return false
-    }
-    t = match async_state.tasks.read_task_caller(t) {
-      Some(p) => p
-      None => 0L
-    }
-  }
-  true
 }
 
 ///|
@@ -1784,5 +1760,14 @@ pub extend TaskSuspension with Debug::{to_repr}
 fn TaskSuspension::is_cancellable(self : TaskSuspension) -> Bool {
   match self {
     Yield(cancellable) | Suspend(cancellable) | Wait(cancellable) => cancellable
+  }
+}
+
+///|
+fn AsyncState::check_host_entry(
+  self : AsyncState,
+) -> Unit raise ComponentRuntimeError {
+  if self.trapped.val {
+    raise CanonCallError("cannot enter component instance")
   }
 }

@@ -395,14 +395,6 @@ fn TaskRegistry::write_main_thread_scheduled(
 }
 
 ///|
-fn TaskRegistry::read_task_caller(self : TaskRegistry, key : Int64) -> Int64? {
-  match self.records.get(self.resolve(key)) {
-    Some(record) => record.task_caller
-    None => None
-  }
-}
-
-///|
 fn TaskRegistry::write_task_caller(
   self : TaskRegistry,
   key : Int64,

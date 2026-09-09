@@ -106,9 +106,6 @@ fn instantiate_canon_lower(
       if !canon_may_leave[0] {
         trap_canon("cannot leave component instance")
       }
-      if func is Lifted(_, _, _, _, _, entry, _, _) && !entry.may_queue() {
-        trap_canon("wasm trap: cannot enter component instance")
-      }
       let live_caller_table = registered_resource_table(
         async_state, caller_table,
       )
@@ -177,15 +174,6 @@ fn instantiate_canon_lower(
         Host(_, _, _) => -1
         HostAsync(_, _, _) => -1
         _ => inst_id
-      }
-      // Prevent stackless callback-driven tasks from re-entering their own
-      // (sub-)component instance. Synchronous calls are allowed to "barge in"
-      // while an async callee is blocked (component-spec/async/sync-barges-in.wast).
-      if meta_inst_id >= 0 &&
-        caller_task_id != 0L &&
-        async_state.in_async_callback[0] &&
-        !may_enter_instance_from_task(async_state, caller_task_id, inst_id) {
-        trap_canon("wasm trap: cannot enter component instance")
       }
       // Backpressure is per async-lowered core function (not per component instance).
       let bp_key = ((caller_table.id.reinterpret_as_uint() * 65537U) ^
@@ -550,9 +538,6 @@ fn instantiate_canon_lower(
     let host = fn(
       args : Array[@types.Value],
     ) -> Array[@types.Value] raise @runtime.RuntimeError {
-      if func is Lifted(_, _, _, _, _, entry, _, _) && !entry.may_enter() {
-        trap_canon("wasm trap: cannot enter component instance")
-      }
       if !canon_may_leave[0] {
         trap_canon("cannot leave component instance")
       }
@@ -613,18 +598,10 @@ fn instantiate_canon_lower(
         HostAsync(_, _, _) => owner_component_id
         Lifted(_, _, _, _, callee_table, _, _, _) => callee_table.id
       }
-      let caller_task_id = current_task_id(async_state)
       let meta_inst_id = match func {
         Host(_, _, _) => -1
         HostAsync(_, _, _) => -1
         _ => inst_id
-      }
-      if meta_inst_id >= 0 &&
-        caller_task_id != 0L &&
-        async_state.in_async_callback[0] &&
-        !may_enter_instance_from_task(async_state, caller_task_id, inst_id) {
-        trap_canon("wasm trap: cannot enter component instance")
-        return ([] : Array[@types.Value])
       }
       fn cleanup_sync_lower_task(task_id : Int64) -> Unit {
         retire_task(async_state, task_id)

@@ -11,16 +11,12 @@ Each entry pins both the original upstream hash and the corrected file under
 the original snapshot remains unchanged and is still verified in full. Running
 an explicit `--dir` executes the files in that directory without corrections.
 
-The reentry correction changes two containment-based traps in
-`async/trap-on-reenter.wast` into successful parent-to-child and child-to-parent
-calls, matching Wasmtime 40.0.0 and the imported Wasmtime misc suite. Its recursive
-callback trap remains intact. Direct probes of all three component forms used
-`wasmtime run --invoke 'g()'` for the successful calls and
-`wasmtime run -W component-model-async=y -W component-model-async-builtins=y
---invoke 'c()'` for the recursive trap.
-
-The matching Wasmtime 50 oracle also permits entry after a parent callback yields.
-ISS-490 tracks that remaining difference in the earlier reentry correction.
+The reentry correction allows parent/child calls, including synchronous reentry
+and calls into a yielded parent callback. The recursive callback fixture now
+executes its deliberately unreachable callee. All three assertions pass the
+Wasmtime 50.0.0-dev oracle built from the misc corpus revision. Independent
+controls in `tests/component-runtime/callback-entry.wast` cover nested entry,
+shared core-trap poisoning and non-poisoning result decoding errors.
 
 The synchronous-blocking correction updates eleven obsolete trap-precedence
 assertions in `async/trap-if-block-and-sync.wast`. Immediately trapping async

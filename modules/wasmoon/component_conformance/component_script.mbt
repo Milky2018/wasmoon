@@ -10,7 +10,6 @@ priv suberror ComponentTestError {
 ///|
 priv enum ComponentTestErrorCode {
   CompTestScriptError
-  CompTestRuntimeError
   CompTestAssertFailed
   CompTestUnsupportedCommand
 }
@@ -24,7 +23,6 @@ impl Show for ComponentTestError with fn output(self, logger) {
 fn component_test_error_code_string(code : ComponentTestErrorCode) -> String {
   match code {
     CompTestScriptError => "COMP_TEST_SCRIPT_ERROR"
-    CompTestRuntimeError => "COMP_TEST_RUNTIME_ERROR"
     CompTestAssertFailed => "COMP_TEST_ASSERT_FAILED"
     CompTestUnsupportedCommand => "COMP_TEST_UNSUPPORTED_COMMAND"
   }
@@ -969,358 +967,10 @@ fn run_component_script_impl(
     }
   }
   let result = ScriptResult::ScriptResult()
-  let linker = if use_jit {
-    @runtime_impl.ComponentLinker::with_core_execution_engine(
-      @component_native.open_native_component_session(opt_level=0),
-    )
-  } else {
-    ComponentLinker()
-  }
-  defer linker.close()
-  let store = linker.get_store()
-  let host_runtime = try! linker.host_runtime_state()
-  let host_yields : Array[SpectestYield] = []
-  try! host_runtime.set_event_loop(fn() { wake_spectest_yields(host_yields) }, poll=fn() {
-    wake_spectest_yields(host_yields)
-  })
-  let return_two = make_const_u32_func(2)
-  let return_three = make_const_u32_func(3)
-  let return_four = make_const_u32_func(4)
-  let echo_u32 = make_echo_u32_func()
-  try! linker.add_import("host-return-two", Func(return_two))
-  try! linker.add_import("host-echo-u32", Func(echo_u32))
-  let simple_module_wat = "(module (func (export \"f\") (result i32) i32.const 101) (global (export \"g\") i32 (i32.const 100)))"
-  let simple_module = @wat.parse(simple_module_wat) catch {
-    e => {
-      if print_output {
-        if error_format is Json {
-          println(
-            component_test_json(
-              false,
-              Some(CompTestRuntimeError),
-              "bootstrap",
-              e.to_string(),
-              None,
-            ),
-          )
-        } else {
-          println("component-test error: \{e}")
-        }
-      }
-      return 1
-    }
-  }
-  let nested_exports : Map[String, @runtime_impl.ComponentExtern] = Map([])
-  nested_exports.set("return-four", Func(return_four))
-  let nested_instance = make_instance(
-    "host::nested", store, nested_exports, host_runtime,
-  )
-  let host_exports : Map[String, @runtime_impl.ComponentExtern] = Map([])
-  host_exports.set("return-two", Func(return_two))
-  host_exports.set("return-three", Func(return_three))
-  host_exports.set("simple-module", CoreModule(simple_module))
-  host_exports.set("nested", Instance(nested_instance))
-  host_exports.set(
-    "return-two-slowly",
-    Func(make_spectest_slow_func(false, host_yields)),
-  )
-  host_exports.set(
-    "echo-slowly",
-    Func(make_spectest_slow_func(true, host_yields)),
-  )
-  host_exports.set(
-    "never-return",
-    Func(
-      HostAsync({ is_async: true, params: [], result: None, }, [], fn(_, _) {
-        HostFuture(fn() { Pending }, fn() { () })
-      }),
-    ),
-  )
-  host_exports.set(
-    "return-hi",
-    Func(
-      Host({ is_async: false, params: [], result: Some(Prim(String)), }, [], fn(
-        _,
-        _,
-      ) {
-        [String("hi")]
-      }),
-    ),
-  )
-
-  // Host instance used by component-spec/wasmtime suites.
-  let resource1_id = 100
-  let resource2_id = 101
-  let resource1_type : @component_types.TypeDef? = Some(
-    ResourceType(resource1_id, 0x7f, None, HostDefined),
-  )
-  let resource2_type : @component_types.TypeDef? = Some(
-    ResourceType(resource2_id, 0x7f, None, HostDefined),
-  )
-  host_exports.set("resource1", Type(resource1_type))
-  host_exports.set("resource2", Type(resource2_type))
-  host_exports.set("resource1-again", Type(resource1_type))
-  let resource1_drops : Array[Int] = [0]
-  let resource1_last_drop : Array[Int] = [0]
-  let dtor_core_type : @types.FuncType = { params: [I32], results: [], }
-  let resource1_dtor = @runtime_impl.alloc_host_core_func(
-    store,
-    dtor_core_type,
-    fn(
-      args : Array[@types.Value],
-    ) -> Array[@types.Value] raise @runtime.RuntimeError {
-      match args {
-        [I32(rep)] => {
-          resource1_drops[0] = resource1_drops[0] + 1
-          resource1_last_drop[0] = rep
-          []
-        }
-        _ => raise Unreachable
-      }
-    },
-  ) catch {
-    error => {
-      if print_output {
-        if error_format is Json {
-          println(
-            component_test_json(
-              false,
-              Some(CompTestRuntimeError),
-              "bootstrap",
-              error.to_string(),
-              None,
-            ),
-          )
-        } else {
-          println("component-test error: \{error}")
-        }
-      }
-      return 1
-    }
-  }
-  fn resource1_expect_handle(
-    table : @runtime_impl.ResourceTable,
-    handle : Int,
-  ) -> @runtime_impl.ResourceHandle raise @runtime_impl.ComponentRuntimeError {
-    match table.get(handle) {
-      Some(h) =>
-        if h.type_id != resource1_id {
-          raise CanonCallError(
-            "handle index \{handle} used with the wrong type",
-          )
-        } else {
-          h
-        }
-      None => raise CanonCallError("unknown handle index \{handle}")
-    }
-  }
-
-  let ctor_types : Array[@component_types.TypeDef?] = [
-    resource1_type,
-    Some(Own(0)),
-  ]
-  let ctor_func_type : @component_types.FuncType = {
-    is_async: false,
-    params: [{ label: "r", ty: Prim(U32), }],
-    result: Some(TypeIdx(1)),
-  }
-  let ctor = @runtime_impl.ComponentFunc::Host(ctor_func_type, ctor_types, fn(
-    args : Array[@runtime_impl.ComponentValue],
-    table : @runtime_impl.ResourceTable,
-  ) -> Array[@runtime_impl.ComponentValue] raise @runtime_impl.ComponentRuntimeError {
-    match args {
-      [U32(rep)] => {
-        let handle = table.alloc({
-          type_id: resource1_id,
-          rep,
-          dtor: Some(resource1_dtor),
-          host_dtor: None,
-          kind: HostDefined,
-          impl_component_id: table.id,
-          own: true,
-          borrow_scope: None,
-          num_lends: [0],
-        })
-        [U32(handle)]
-      }
-      _ => raise HostCallError("argument type mismatch")
-    }
-  })
-  host_exports.set("[constructor]resource1", Func(ctor))
-  let drops_func_type : @component_types.FuncType = {
-    is_async: false,
-    params: [],
-    result: Some(Prim(U32)),
-  }
-  let drops = @runtime_impl.ComponentFunc::Host(drops_func_type, [], fn(
-    args : Array[@runtime_impl.ComponentValue],
-    _table : @runtime_impl.ResourceTable,
-  ) -> Array[@runtime_impl.ComponentValue] raise @runtime_impl.ComponentRuntimeError {
-    if args.length() != 0 {
-      raise HostCallError("argument count mismatch")
-    }
-    [U32(resource1_drops[0])]
-  })
-  host_exports.set("[static]resource1.drops", Func(drops))
-  let last_drop = @runtime_impl.ComponentFunc::Host(drops_func_type, [], fn(
-    args : Array[@runtime_impl.ComponentValue],
-    _table : @runtime_impl.ResourceTable,
-  ) -> Array[@runtime_impl.ComponentValue] raise @runtime_impl.ComponentRuntimeError {
-    if args.length() != 0 {
-      raise HostCallError("argument count mismatch")
-    }
-    [U32(resource1_last_drop[0])]
-  })
-  host_exports.set("[static]resource1.last-drop", Func(last_drop))
-  let assert_types : Array[@component_types.TypeDef?] = [
-    resource1_type,
-    Some(Own(0)),
-  ]
-  let assert_func_type : @component_types.FuncType = {
-    is_async: false,
-    params: [{ label: "r", ty: TypeIdx(1), }, { label: "rep", ty: Prim(U32), }],
-    result: None,
-  }
-  let assert_func = @runtime_impl.ComponentFunc::Host(
-    assert_func_type,
-    assert_types,
-    fn(
-      args : Array[@runtime_impl.ComponentValue],
-      table : @runtime_impl.ResourceTable,
-    ) -> Array[@runtime_impl.ComponentValue] raise @runtime_impl.ComponentRuntimeError {
-      match args {
-        [U32(handle), U32(expected)] => {
-          let actual = resource1_expect_handle(table, handle)
-          // Consume the owned resource.
-          table.free(handle) |> ignore
-          if actual.rep != expected {
-            raise HostCallError("rep mismatch")
-          }
-          []
-        }
-        _ => raise HostCallError("argument type mismatch")
-      }
-    },
-  )
-  host_exports.set("[static]resource1.assert", Func(assert_func))
-  let borrow_ty = Some(@component_types.TypeDef::Borrow(0))
-  let simple_types : Array[@component_types.TypeDef?] = [
-    resource1_type, borrow_ty,
-  ]
-  let simple_func_type : @component_types.FuncType = {
-    is_async: false,
-    params: [
-      { label: "self", ty: TypeIdx(1), },
-      { label: "rep", ty: Prim(U32), },
-    ],
-    result: None,
-  }
-  let simple = @runtime_impl.ComponentFunc::Host(
-    simple_func_type,
-    simple_types,
-    fn(
-      args : Array[@runtime_impl.ComponentValue],
-      table : @runtime_impl.ResourceTable,
-    ) -> Array[@runtime_impl.ComponentValue] raise @runtime_impl.ComponentRuntimeError {
-      match args {
-        [U32(handle), U32(expected)] => {
-          let actual = resource1_expect_handle(table, handle)
-          if actual.rep != expected {
-            raise HostCallError("rep mismatch")
-          }
-          []
-        }
-        _ => raise HostCallError("argument type mismatch")
-      }
-    },
-  )
-  host_exports.set("[method]resource1.simple", Func(simple))
-  let take_borrow_func_type : @component_types.FuncType = {
-    is_async: false,
-    params: [
-      { label: "self", ty: TypeIdx(1), },
-      { label: "b", ty: TypeIdx(1), },
-    ],
-    result: None,
-  }
-  let take_borrow = @runtime_impl.ComponentFunc::Host(
-    take_borrow_func_type,
-    simple_types,
-    fn(
-      args : Array[@runtime_impl.ComponentValue],
-      table : @runtime_impl.ResourceTable,
-    ) -> Array[@runtime_impl.ComponentValue] raise @runtime_impl.ComponentRuntimeError {
-      match args {
-        [U32(a), U32(b)] => {
-          resource1_expect_handle(table, a) |> ignore
-          resource1_expect_handle(table, b) |> ignore
-          []
-        }
-        _ => raise HostCallError("argument type mismatch")
-      }
-    },
-  )
-  host_exports.set("[method]resource1.take-borrow", Func(take_borrow))
-  let own_ty = Some(@component_types.TypeDef::Own(0))
-  let take_own_types : Array[@component_types.TypeDef?] = [
-    resource1_type, borrow_ty, own_ty,
-  ]
-  let take_own_func_type : @component_types.FuncType = {
-    is_async: false,
-    params: [
-      { label: "self", ty: TypeIdx(1), },
-      { label: "b", ty: TypeIdx(2), },
-    ],
-    result: None,
-  }
-  let take_own = @runtime_impl.ComponentFunc::Host(
-    take_own_func_type,
-    take_own_types,
-    fn(
-      args : Array[@runtime_impl.ComponentValue],
-      table : @runtime_impl.ResourceTable,
-    ) -> Array[@runtime_impl.ComponentValue] raise @runtime_impl.ComponentRuntimeError {
-      match args {
-        [U32(self_handle), U32(b_handle)] => {
-          resource1_expect_handle(table, self_handle) |> ignore
-          if self_handle == b_handle {
-            raise CanonCallError("cannot remove owned resource while borrowed")
-          }
-          // Consume owned argument.
-          match table.free(b_handle) {
-            Some(_) => []
-            None => raise CanonCallError("unknown handle index \{b_handle}")
-          }
-        }
-        _ => raise HostCallError("argument type mismatch")
-      }
-    },
-  )
-  host_exports.set("[method]resource1.take-own", Func(take_own))
-  host_exports.set(
-    "[method]resource1.never-return",
-    Func(
-      HostAsync(
-        {
-          is_async: true,
-          params: [{ label: "self", ty: TypeIdx(1), }],
-          result: None,
-        },
-        [resource1_type, Some(Borrow(0))],
-        fn(args, table) raise @runtime_impl.ComponentRuntimeError {
-          match args {
-            [U32(handle)] => resource1_expect_handle(table, handle) |> ignore
-            _ => raise HostCallError("argument type mismatch")
-          }
-          HostFuture(fn() { Pending }, fn() { () })
-        },
-      ),
-    ),
-  )
-  let host_instance = make_instance("host", store, host_exports, host_runtime)
-  try! linker.add_instance("host", host_instance)
-  let components : Map[String, @component_types.Component] = Map([])
-  let instances : Map[String, @runtime_impl.ComponentInstance] = Map([])
+  let runtime = ComponentScriptRuntime::new(use_jit)
+  defer runtime.close()
+  let components = runtime.definitions
+  let instances = runtime.instances
   let mut last_component : @component_types.Component? = None
   let mut last_component_name : String? = None
   let mut last_instance : @runtime_impl.ComponentInstance? = None
@@ -1350,9 +1000,8 @@ fn run_component_script_impl(
           }
         }
         match component_import_evidence(component) {
-          Ok(validated) => {
+          Ok(_) => {
             components.set(name, component)
-            try! linker.add_component(strip_identifier(name), validated)
             result.add_passed()
           }
           Err(e) =>
@@ -1374,15 +1023,7 @@ fn run_component_script_impl(
           }
         }
         match cmd.name {
-          Some(n) => {
-            components.set(n, component)
-            // An invalid component is never registered as an import; the
-            // instantiation below reports its validation error through the
-            // existing path.
-            if component_import_evidence(component) is Ok(validated) {
-              try! linker.add_component(strip_identifier(n), validated)
-            }
-          }
+          Some(n) => components.set(n, component)
           None => ()
         }
         last_component = Some(component)
@@ -1399,14 +1040,11 @@ fn run_component_script_impl(
               "component-\{anon_count}"
             }
           }
-          match instantiate_component(linker, inst_name, component) {
+          match runtime.instantiate(inst_name, component) {
             Ok(instance) => {
               last_instance = Some(instance)
               match cmd.name {
-                Some(n) => {
-                  instances.set(n, instance)
-                  try! linker.add_instance(strip_identifier(n), instance)
-                }
+                Some(n) => instances.set(n, instance)
                 None => ()
               }
               result.add_passed()
@@ -1443,10 +1081,9 @@ fn run_component_script_impl(
             // creates fresh runtime state instead of resolving through the
             // previous `$i` binding.
             let inst_name = "\{strip_identifier(name)}-\{anon_count}"
-            match instantiate_component(linker, inst_name, component) {
+            match runtime.instantiate(inst_name, component) {
               Ok(instance) => {
                 instances.set(name, instance)
-                try! linker.add_instance(strip_identifier(name), instance)
                 last_instance = Some(instance)
                 result.add_passed()
               }
@@ -1475,7 +1112,7 @@ fn run_component_script_impl(
         }
         anon_count += 1
         let name = "assert-unlinkable-\{anon_count}"
-        match instantiate_component(linker, name, component) {
+        match runtime.instantiate(name, component) {
           Ok(_instance) =>
             result.add_failed("assert_unlinkable unexpectedly instantiated")
           Err(e) =>
@@ -1524,7 +1161,7 @@ fn run_component_script_impl(
                         "component-\{anon_count}"
                       }
                     }
-                    match instantiate_component(linker, inst_name, c) {
+                    match runtime.instantiate(inst_name, c) {
                       Ok(i) => {
                         last_instance = Some(i)
                         i

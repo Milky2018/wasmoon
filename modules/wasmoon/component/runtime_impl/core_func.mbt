@@ -191,7 +191,10 @@ fn call_core_func_guarded(
 ) -> Array[@types.Value] raise ComponentRuntimeError {
   entry.enter()
   let out = {
-    errdefer entry.poison()
+    errdefer {
+      entry.leave()
+      entry.poison()
+    }
     call_core_func(store, core_func, args, style~)
   }
   entry.leave()
@@ -210,8 +213,8 @@ fn guard_core_outcome(
     }
     Suspended(reason, continuation) => {
       // A captured continuation is not actively executing guest code. Release
-      // the dynamic entry guard while it waits; task ancestry still prevents
-      // prohibited async re-entry. Re-acquire it immediately before resuming.
+      // active-depth lease while it waits. Re-acquire it immediately before
+      // resuming so nested calls cannot release another activation.
       entry.leave()
       Suspended(
         reason,
@@ -219,15 +222,15 @@ fn guard_core_outcome(
           fn() raise ComponentRuntimeError {
             entry.enter()
             let resumed = {
-              errdefer entry.poison()
+              errdefer {
+                entry.leave()
+                entry.poison()
+              }
               continuation.continue_execution()
             }
             guard_core_outcome(resumed, entry)
           },
-          fn() {
-            continuation.cancel()
-            entry.leave()
-          },
+          fn() { continuation.cancel() },
         ),
       )
     }
@@ -244,7 +247,10 @@ fn call_core_func_guarded_outcome(
 ) -> CoreExecutionOutcome raise ComponentRuntimeError {
   entry.enter()
   let outcome = {
-    errdefer entry.poison()
+    errdefer {
+      entry.leave()
+      entry.poison()
+    }
     call_core_func_outcome(store, core_func, args, style)
   }
   guard_core_outcome(outcome, entry)

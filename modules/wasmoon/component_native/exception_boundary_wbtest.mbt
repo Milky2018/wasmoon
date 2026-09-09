@@ -96,7 +96,7 @@ test "uncaught exceptions become traps at component boundaries" {
 }
 
 ///|
-test "failed async subtasks do not contaminate later component invocations" {
+test "failed async subtasks retire while unrelated host calls remain cancellable" {
   let source =
     #|(component
     #|  (component $A
@@ -172,7 +172,12 @@ test "failed async subtasks do not contaminate later component invocations" {
         )
       }
       inspect(cancelled[0], content="0")
-      guard message.contains("thrown Wasm exception") else {
+      let expected = if name == "first" {
+        "thrown Wasm exception"
+      } else {
+        "cannot enter component instance"
+      }
+      guard message.contains(expected) else {
         fail("native=\{native}, instance=\{name}: \{message}")
       }
     }

@@ -32,54 +32,46 @@ pub fn HostFuture::HostFuture(
 ///
 /// Defined adapters can run during core module instantiation. Publication of
 /// the component graph is guarded separately by the linker's staging transaction.
-/// `active` is released while stackful execution is suspended; `poisoned` is
-/// permanent after a trap.
+/// Synchronous calls may nest. The active depth gates new async tasks and is
+/// released while stackful execution is suspended. Shared poison rejects new
+/// host calls without preventing admitted tasks from resuming.
 struct ComponentInstanceEntryState {
-  active : Ref[Bool]
+  active_depth : Ref[Int]
   poisoned : Ref[Bool]
 } derive(Debug)
 
 ///|
-fn ComponentInstanceEntryState::new() -> ComponentInstanceEntryState {
-  { active: Ref(false), poisoned: Ref(false), }
+fn ComponentInstanceEntryState::new(
+  poisoned? : Ref[Bool] = Ref(false),
+) -> ComponentInstanceEntryState {
+  { active_depth: Ref(0), poisoned, }
 }
 
 ///|
-fn ComponentInstanceEntryState::may_queue(
+fn ComponentInstanceEntryState::may_start_async(
   self : ComponentInstanceEntryState,
 ) -> Bool {
-  !self.poisoned.val
-}
-
-///|
-fn ComponentInstanceEntryState::may_enter(
-  self : ComponentInstanceEntryState,
-) -> Bool {
-  self.may_queue() && !self.active.val
+  self.active_depth.val == 0
 }
 
 ///|
 fn ComponentInstanceEntryState::enter(
   self : ComponentInstanceEntryState,
-) -> Unit raise ComponentRuntimeError {
-  if !self.may_enter() {
-    raise CanonCallError("cannot enter component instance")
-  }
-  self.active.val = true
+) -> Unit {
+  self.active_depth.val += 1
 }
 
 ///|
 fn ComponentInstanceEntryState::leave(
   self : ComponentInstanceEntryState,
 ) -> Unit {
-  self.active.val = false
+  self.active_depth.val -= 1
 }
 
 ///|
 fn ComponentInstanceEntryState::poison(
   self : ComponentInstanceEntryState,
 ) -> Unit {
-  self.active.val = false
   self.poisoned.val = true
 }
 
@@ -249,6 +241,7 @@ pub fn ComponentInstance::call_exported_func(
 ) -> Array[ComponentValue] raise ComponentRuntimeError {
   match self.exports.get(name) {
     Some(Func(func)) => {
+      self.async_state.check_host_entry()
       let func_type = match func {
         Host(ft, _, _) => ft
         HostAsync(ft, _, _) => ft
