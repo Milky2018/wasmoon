@@ -118,6 +118,9 @@ pub fn CanonSuspend::equal(Self, Self) -> Bool
 pub fn CanonSuspend::not_equal(Self, Self) -> Bool
 pub fn CanonSuspend::to_repr(Self) -> @debug.Repr
 
+type CanonicalGuestString derive(@debug.Debug)
+pub fn CanonicalGuestString::to_repr(Self) -> @debug.Repr
+
 type CanonicalPayload derive(@debug.Debug)
 pub fn CanonicalPayload::to_repr(Self) -> @debug.Repr
 
@@ -237,6 +240,7 @@ pub(all) enum ComponentValue {
   Char(Char)
   String(String)
   EncodedString(String, @wasm_component.StringEncoding, Int)
+  GuestString(CanonicalGuestString)
   ErrorContext(String)
   List(Array[ComponentValue])
   Tuple(Array[ComponentValue])

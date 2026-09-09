@@ -572,6 +572,11 @@ fn instantiate_canon_lower(
           caller_table,
           16,
           "sync lower argument",
+          borrow_strings=match func {
+            Lifted(core, ty, _, _, _, _, None, false) =>
+              !ty.is_async && !core.may_suspend
+            _ => false
+          },
         ) catch {
           e => {
             trap_canon(canon_err_message(e))

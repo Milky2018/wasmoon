@@ -6,40 +6,12 @@ fn read_string_from_memory_with_encoding(
   encoding : StringEncoding,
   budget? : CanonicalCopyBudget,
 ) -> String raise ComponentRuntimeError {
-  if ptr < 0 {
-    raise CanonCallError(
-      "string content out-of-bounds (string pointer/length out of bounds of memory)",
-    )
-  }
-  // The pinned ABI uses bit 31 as the encoding tag for both memory widths.
-  if len < 0L {
-    raise CanonCallError(
-      "string content out-of-bounds (string pointer/length out of bounds of memory)",
-    )
-  }
-  // Pointer alignment requirements:
-  // - utf16 and latin1+utf16 require 2-byte alignment.
-  if (encoding is Utf16 || encoding is Latin1Utf16) && (ptr & 1L) != 0L {
-    raise CanonCallError("unaligned pointer: string pointer not aligned to 2")
-  }
-  let mem_len = mem.byte_len()
-  let utf16 = encoding == Utf16 ||
-    (encoding == Latin1Utf16 && (len & 0x80000000L) != 0L)
-  let units = if encoding == Latin1Utf16 { len & -2147483649L } else { len }
-  let byte_len64 = units * (if utf16 { 2L } else { 1L })
-  if units > 2147483647L ||
-    byte_len64 < 0L ||
-    byte_len64 > 2147483647L ||
-    ptr > mem_len ||
-    byte_len64 > mem_len - ptr {
-    raise CanonCallError(
-      "string content out-of-bounds (string pointer/length out of bounds of memory)",
-    )
-  }
+  let (units, utf16, byte_len) = check_canonical_string_span(
+    mem, ptr, len, encoding,
+  )
   if budget is Some(budget) {
-    budget.consume(units.to_int(), if utf16 { 2 } else { 1 })
+    budget.consume(units, if utf16 { 2 } else { 1 })
   }
-  let byte_len = byte_len64.to_int()
   if encoding == Utf8 || !utf16 {
     let bytes : Array[Byte] = []
     for i in 0..<byte_len {
@@ -593,3 +565,43 @@ fn coerce_flat_value(
 }
 
 ///|
+
+///|
+fn check_canonical_string_span(
+  mem : @runtime.Memory,
+  ptr : Int64,
+  len : Int64,
+  encoding : StringEncoding,
+) -> (Int, Bool, Int) raise ComponentRuntimeError {
+  if ptr < 0 {
+    raise CanonCallError(
+      "string content out-of-bounds (string pointer/length out of bounds of memory)",
+    )
+  }
+  // The pinned ABI uses bit 31 as the encoding tag for both memory widths.
+  if len < 0L {
+    raise CanonCallError(
+      "string content out-of-bounds (string pointer/length out of bounds of memory)",
+    )
+  }
+  // Pointer alignment requirements:
+  // - utf16 and latin1+utf16 require 2-byte alignment.
+  if (encoding is Utf16 || encoding is Latin1Utf16) && (ptr & 1L) != 0L {
+    raise CanonCallError("unaligned pointer: string pointer not aligned to 2")
+  }
+  let mem_len = mem.byte_len()
+  let utf16 = encoding == Utf16 ||
+    (encoding == Latin1Utf16 && (len & 0x80000000L) != 0L)
+  let units = if encoding == Latin1Utf16 { len & -2147483649L } else { len }
+  let byte_len64 = units * (if utf16 { 2L } else { 1L })
+  if units > 2147483647L ||
+    byte_len64 < 0L ||
+    byte_len64 > 2147483647L ||
+    ptr > mem_len ||
+    byte_len64 > mem_len - ptr {
+    raise CanonCallError(
+      "string content out-of-bounds (string pointer/length out of bounds of memory)",
+    )
+  }
+  (units.to_int(), utf16, byte_len64.to_int())
+}

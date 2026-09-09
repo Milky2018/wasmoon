@@ -8,6 +8,7 @@ fn lift_component_value_from_flat(
   encoding : StringEncoding,
   resource_table : ResourceTable,
   budget? : CanonicalCopyBudget,
+  borrow_strings? : Bool = false,
 ) -> ComponentValue raise ComponentRuntimeError {
   let mut idx = 0
   fn take(
@@ -44,6 +45,10 @@ fn lift_component_value_from_flat(
                   (p.to_int64() & 0xffffffffL, l.to_int64() & 0xffffffffL)
                 _ => raise HostCallError("type mismatch")
               }
+            }
+            if borrow_strings {
+              check_canonical_string_span(m, ptr, len, encoding) |> ignore
+              return GuestString({ memory: m, ptr, len, encoding, })
             }
             let s = read_string_from_memory_with_encoding(
               m,
@@ -166,6 +171,7 @@ fn lift_component_value_from_flat(
                   encoding,
                   resource_table,
                   budget?,
+                  borrow_strings~,
                 ),
               )
             }
@@ -221,6 +227,7 @@ fn lift_component_value_from_flat(
                   encoding,
                   resource_table,
                   budget?,
+                  borrow_strings~,
                 )
                 Variant(tag, Some(payload))
               }
@@ -269,6 +276,7 @@ fn lift_component_value_from_flat(
                 encoding,
                 resource_table,
                 budget?,
+                borrow_strings~,
               )
               Variant(1, Some(payload))
             }
@@ -317,6 +325,7 @@ fn lift_component_value_from_flat(
                   encoding,
                   resource_table,
                   budget?,
+                  borrow_strings~,
                 )
                 Variant(tag, Some(payload))
               }
@@ -509,6 +518,7 @@ fn core_args_to_component(
   resource_table : ResourceTable,
   max_flat_params : Int,
   context : String,
+  borrow_strings? : Bool = false,
 ) -> Array[ComponentValue] raise ComponentRuntimeError {
   fn resource_type_info(
     tyidx : Int,
@@ -636,6 +646,7 @@ fn core_args_to_component(
       mem_is_64,
       resources.encoding,
       resource_table,
+      borrow_strings~,
     )
     map_canonical_handles(p.ty, v, types, (definition, value) => {
       match definition {
@@ -737,7 +748,7 @@ fn lower_component_value_to_flat(
           (Char, Char(c)) => [I32(c.to_int())]
           (ErrorContext, ErrorContext(message)) =>
             [I32(callee_table.alloc_error_context(message))]
-          (String, String(_) | EncodedString(_, _, _)) => {
+          (String, String(_) | EncodedString(_, _, _) | GuestString(_)) => {
             let m = match mem {
               Some(m) => m
               None => raise MissingCanonMemory

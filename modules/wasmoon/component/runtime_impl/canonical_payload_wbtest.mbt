@@ -287,3 +287,39 @@ test "memory64 string and list bounds reject high bits before narrowing" {
     }
   }
 }
+
+///|
+test "pending string payloads remain owned after the writer mutates memory" {
+  let store = @runtime.Store::Store()
+  defer store.close()
+  let state = AsyncState(StreamTable())
+  let table = ResourceTable()
+  let resources = payload_test_resources(store, state, table, false, Utf8)
+  let payload_type : CanonicalPayloadType = {
+    ty: Some(Prim(String)),
+    types: [],
+  }
+  store_host_stream_value(
+    String("before"),
+    Prim(String),
+    [],
+    resources,
+    store,
+    table,
+    64,
+  )
+  let payload = payload_type.load(resources, store, 64, 1, table)
+  let memory = require_memory(resources, store)
+  let ptr = memory.load_i32(64)
+  memory.store_byte(ptr, 0x58)
+  debug_inspect(
+    payload.values.map(ComponentValue::to_host_value),
+    content="[String(\"before\")]",
+  )
+  payload.store(0, 1, table, payload_type, resources, store, table, state, 128)
+  let result = payload_type.load(resources, store, 128, 1, table)
+  debug_inspect(
+    result.values.map(ComponentValue::to_host_value),
+    content="[String(\"before\")]",
+  )
+}

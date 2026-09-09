@@ -15,6 +15,8 @@ pub(all) enum ComponentValue {
   String(String)
   /// Internal canonical transport; embedding boundaries expose String instead.
   EncodedString(String, StringEncoding, Int)
+  /// Borrowed only while lowering an immediate synchronous guest call.
+  GuestString(CanonicalGuestString)
   ErrorContext(String)
   List(Array[ComponentValue])
   Tuple(Array[ComponentValue])
