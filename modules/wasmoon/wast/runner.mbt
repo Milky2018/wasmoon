@@ -953,10 +953,16 @@ pub fn values_match(
   match (actual, expected) {
     (I32(a), I32(e)) => a == e
     (I64(a), I64(e)) => a == e
-    (F32(a), F32(e)) => a == e || (a.is_nan() && e.is_nan())
-    (F64(a), F64(e)) => a == e || (a.is_nan() && e.is_nan())
-    (F32(a), F32CanonicalNan) | (F32(a), F32ArithmeticNan) => a.is_nan()
-    (F64(a), F64CanonicalNan) | (F64(a), F64ArithmeticNan) => a.is_nan()
+    (F32(a), F32(e)) => a.reinterpret_as_int() == e.reinterpret_as_int()
+    (F64(a), F64(e)) => a.reinterpret_as_int64() == e.reinterpret_as_int64()
+    (F32(a), F32CanonicalNan) =>
+      (a.reinterpret_as_int() & 0x7fffffff) == 0x7fc00000
+    (F32(a), F32ArithmeticNan) =>
+      (a.reinterpret_as_int() & 0x7fc00000) == 0x7fc00000
+    (F64(a), F64CanonicalNan) =>
+      (a.reinterpret_as_int64() & 0x7fffffffffffffffL) == 0x7ff8000000000000L
+    (F64(a), F64ArithmeticNan) =>
+      (a.reinterpret_as_int64() & 0x7ff8000000000000L) == 0x7ff8000000000000L
     (Null, RefNull(_)) => true
     (FuncRef(_), RefFunc) => true
     (FuncRef(addr), RefFuncIndex(idx)) =>
@@ -1016,14 +1022,14 @@ fn v128_pattern_match(
         (actual[offset + 1].to_int() << 8) |
         (actual[offset + 2].to_int() << 16) |
         (actual[offset + 3].to_int() << 24)
-      let actual_f = Float::reinterpret_from_int(lane_bits)
       match lanes[i] {
-        F32(e) =>
-          if !(actual_f == e || (actual_f.is_nan() && e.is_nan())) {
+        F32(e) => if lane_bits != e.reinterpret_as_int() { return false }
+        F32CanonicalNan =>
+          if (lane_bits & 0x7fffffff) != 0x7fc00000 {
             return false
           }
-        F32CanonicalNan | F32ArithmeticNan =>
-          if !actual_f.is_nan() {
+        F32ArithmeticNan =>
+          if (lane_bits & 0x7fc00000) != 0x7fc00000 {
             return false
           }
         _ => return false
@@ -1042,14 +1048,14 @@ fn v128_pattern_match(
         (actual[offset + 5].to_int().to_int64() << 40) |
         (actual[offset + 6].to_int().to_int64() << 48) |
         (actual[offset + 7].to_int().to_int64() << 56)
-      let actual_f = lane_bits.reinterpret_as_double()
       match lanes[i] {
-        F64(e) =>
-          if !(actual_f == e || (actual_f.is_nan() && e.is_nan())) {
+        F64(e) => if lane_bits != e.reinterpret_as_int64() { return false }
+        F64CanonicalNan =>
+          if (lane_bits & 0x7fffffffffffffffL) != 0x7ff8000000000000L {
             return false
           }
-        F64CanonicalNan | F64ArithmeticNan =>
-          if !actual_f.is_nan() {
+        F64ArithmeticNan =>
+          if (lane_bits & 0x7ff8000000000000L) != 0x7ff8000000000000L {
             return false
           }
         _ => return false

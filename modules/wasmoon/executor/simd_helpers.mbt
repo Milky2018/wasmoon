@@ -647,7 +647,7 @@ fn sat_i32_to_u16(v : Int) -> Int {
 fn f32_min(a : Float, b : Float) -> Float {
   // NaN handling: if either is NaN, return NaN
   if a.is_nan() || b.is_nan() {
-    return @float.not_a_number
+    return Float::reinterpret_from_int(0x7fc00000)
   }
   // +0 and -0 handling
   if a == 0.0 && b == 0.0 {
@@ -670,7 +670,7 @@ fn f32_min(a : Float, b : Float) -> Float {
 ///|
 fn f32_max(a : Float, b : Float) -> Float {
   if a.is_nan() || b.is_nan() {
-    return @float.not_a_number
+    return Float::reinterpret_from_int(0x7fc00000)
   }
   if a == 0.0 && b == 0.0 {
     let a_bits = a.reinterpret_as_uint()
@@ -691,7 +691,7 @@ fn f32_max(a : Float, b : Float) -> Float {
 ///|
 fn f64_min(a : Double, b : Double) -> Double {
   if a.is_nan() || b.is_nan() {
-    return @double.not_a_number
+    return 0x7ff8000000000000L.reinterpret_as_double()
   }
   if a == 0.0 && b == 0.0 {
     let a_bits = a.reinterpret_as_uint64()
@@ -712,7 +712,7 @@ fn f64_min(a : Double, b : Double) -> Double {
 ///|
 fn f64_max(a : Double, b : Double) -> Double {
   if a.is_nan() || b.is_nan() {
-    return @double.not_a_number
+    return 0x7ff8000000000000L.reinterpret_as_double()
   }
   if a == 0.0 && b == 0.0 {
     let a_bits = a.reinterpret_as_uint64()
@@ -789,6 +789,9 @@ fn trunc_sat_f64_to_u32(f : Double) -> UInt {
 ///|
 /// Round with sign preservation (for -0.0)
 fn f32_ceil_signed(a : Float) -> Float {
+  if a.is_nan() {
+    return Float::reinterpret_from_int(a.reinterpret_as_int() | 0x00400000)
+  }
   let result = a.ceil()
   // If result is 0 but input was negative, preserve -0.0
   if result == 0.0 && a.reinterpret_as_uint() >= 0x80000000U {
@@ -800,6 +803,9 @@ fn f32_ceil_signed(a : Float) -> Float {
 
 ///|
 fn f32_floor_signed(a : Float) -> Float {
+  if a.is_nan() {
+    return Float::reinterpret_from_int(a.reinterpret_as_int() | 0x00400000)
+  }
   let result = a.floor()
   if result == 0.0 && a.reinterpret_as_uint() >= 0x80000000U {
     Float::reinterpret_from_uint(0x80000000U)
@@ -810,6 +816,9 @@ fn f32_floor_signed(a : Float) -> Float {
 
 ///|
 fn f32_trunc_signed(a : Float) -> Float {
+  if a.is_nan() {
+    return Float::reinterpret_from_int(a.reinterpret_as_int() | 0x00400000)
+  }
   let result = a.trunc()
   if result == 0.0 && a.reinterpret_as_uint() >= 0x80000000U {
     Float::reinterpret_from_uint(0x80000000U)
@@ -820,6 +829,13 @@ fn f32_trunc_signed(a : Float) -> Float {
 
 ///|
 fn f32_nearest_signed(a : Float) -> Float {
+  if a.is_nan() {
+    return Float::reinterpret_from_int(a.reinterpret_as_int() | 0x00400000)
+  }
+  // Values at this magnitude are already integral, including infinity.
+  if a.abs() >= 8388608.0 {
+    return a
+  }
   // WebAssembly uses "round to nearest even" (banker's rounding)
   let d = a.to_double()
   let floor_val = d.floor()
@@ -849,6 +865,9 @@ fn f32_nearest_signed(a : Float) -> Float {
 
 ///|
 fn f64_ceil_signed(a : Double) -> Double {
+  if a.is_nan() {
+    return (a.reinterpret_as_int64() | 0x0008000000000000L).reinterpret_as_double()
+  }
   let result = a.ceil()
   if result == 0.0 && a.reinterpret_as_uint64() >= 0x8000000000000000UL {
     0x8000000000000000UL.reinterpret_as_double() // -0.0
@@ -859,6 +878,9 @@ fn f64_ceil_signed(a : Double) -> Double {
 
 ///|
 fn f64_floor_signed(a : Double) -> Double {
+  if a.is_nan() {
+    return (a.reinterpret_as_int64() | 0x0008000000000000L).reinterpret_as_double()
+  }
   let result = a.floor()
   if result == 0.0 && a.reinterpret_as_uint64() >= 0x8000000000000000UL {
     0x8000000000000000UL.reinterpret_as_double()
@@ -869,6 +891,9 @@ fn f64_floor_signed(a : Double) -> Double {
 
 ///|
 fn f64_trunc_signed(a : Double) -> Double {
+  if a.is_nan() {
+    return (a.reinterpret_as_int64() | 0x0008000000000000L).reinterpret_as_double()
+  }
   let result = a.trunc()
   if result == 0.0 && a.reinterpret_as_uint64() >= 0x8000000000000000UL {
     0x8000000000000000UL.reinterpret_as_double()
@@ -879,6 +904,13 @@ fn f64_trunc_signed(a : Double) -> Double {
 
 ///|
 fn f64_nearest_signed(a : Double) -> Double {
+  if a.is_nan() {
+    return (a.reinterpret_as_int64() | 0x0008000000000000L).reinterpret_as_double()
+  }
+  // Values at this magnitude are already integral, including infinity.
+  if a.abs() >= 4503599627370496.0 {
+    return a
+  }
   // WebAssembly uses "round to nearest even" (banker's rounding)
   let floor_val = a.floor()
   let ceil_val = a.ceil()

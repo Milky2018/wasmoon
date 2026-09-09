@@ -593,66 +593,19 @@ fn ExecContext::exec_f32_numeric(
     }
     F32Ceil => {
       let a = self.stack.pop_f32()
-      self.stack.push(F32(a.ceil()))
+      self.stack.push(F32(f32_ceil_signed(a)))
     }
     F32Floor => {
       let a = self.stack.pop_f32()
-      self.stack.push(F32(a.floor()))
+      self.stack.push(F32(f32_floor_signed(a)))
     }
     F32Trunc => {
       let a = self.stack.pop_f32()
-      // Preserve sign of zero: trunc(-0.0) = -0.0
-      let result = a.trunc()
-      // If result is zero but input was negative, preserve -0.0
-      let final_result : Float = if result == (0.0 : Float) &&
-        a.reinterpret_as_uint() >= 0x80000000U {
-        (-0.0 : Float)
-      } else {
-        result
-      }
-      self.stack.push(F32(final_result))
+      self.stack.push(F32(f32_trunc_signed(a)))
     }
     F32Nearest => {
       let a = self.stack.pop_f32()
-      // WASM spec: Round to nearest even (banker's rounding)
-      // - If the value is exactly halfway between two integers, round to the even one
-      // - Preserve sign of zero
-
-      // Check for special cases: NaN, infinity
-      if a.is_nan() || a.is_inf() {
-        self.stack.push(F32(a))
-        return
-      }
-
-      // Get the floor and ceiling
-      let floor_val = a.floor()
-      let ceil_val = a.ceil()
-
-      // Calculate distances
-      let diff_floor = a - floor_val
-      let diff_ceil = ceil_val - a
-      let result : Float = if diff_floor < diff_ceil {
-        floor_val
-      } else if diff_floor > diff_ceil {
-        ceil_val
-      } else {
-        // Exactly halfway - round to even
-        let floor_int = floor_val.to_int()
-        if floor_int % 2 == 0 {
-          floor_val
-        } else {
-          ceil_val
-        }
-      }
-
-      // If result is zero but input was negative, preserve -0.0
-      let final_result : Float = if result == (0.0 : Float) &&
-        a.reinterpret_as_uint() >= 0x80000000U {
-        (-0.0 : Float)
-      } else {
-        result
-      }
-      self.stack.push(F32(final_result))
+      self.stack.push(F32(f32_nearest_signed(a)))
     }
     F32Min => {
       let b = self.stack.pop_f32()
@@ -781,66 +734,19 @@ fn ExecContext::exec_f64_numeric(
     }
     F64Ceil => {
       let a = self.stack.pop_f64()
-      self.stack.push(F64(a.ceil()))
+      self.stack.push(F64(f64_ceil_signed(a)))
     }
     F64Floor => {
       let a = self.stack.pop_f64()
-      self.stack.push(F64(a.floor()))
+      self.stack.push(F64(f64_floor_signed(a)))
     }
     F64Trunc => {
       let a = self.stack.pop_f64()
-      // Preserve sign of zero: trunc(-0.0) = -0.0
-      let result = a.trunc()
-      // If result is zero but input was negative, preserve -0.0
-      let final_result = if result == 0.0 &&
-        a.reinterpret_as_uint64() >= 0x8000000000000000UL {
-        -0.0
-      } else {
-        result
-      }
-      self.stack.push(F64(final_result))
+      self.stack.push(F64(f64_trunc_signed(a)))
     }
     F64Nearest => {
       let a = self.stack.pop_f64()
-      // WASM spec: Round to nearest even (banker's rounding)
-      // - If the value is exactly halfway between two integers, round to the even one
-      // - Preserve sign of zero
-
-      // Check for special cases: NaN, infinity
-      if a.is_nan() || a.is_inf() {
-        self.stack.push(F64(a))
-        return
-      }
-
-      // Get the floor and ceiling
-      let floor_val = a.floor()
-      let ceil_val = a.ceil()
-
-      // Calculate distances
-      let diff_floor = a - floor_val
-      let diff_ceil = ceil_val - a
-      let result = if diff_floor < diff_ceil {
-        floor_val
-      } else if diff_floor > diff_ceil {
-        ceil_val
-      } else {
-        // Exactly halfway - round to even
-        let floor_int = floor_val.to_int64()
-        if floor_int % 2L == 0L {
-          floor_val
-        } else {
-          ceil_val
-        }
-      }
-
-      // If result is zero but input was negative, preserve -0.0
-      let final_result = if result == 0.0 &&
-        a.reinterpret_as_uint64() >= 0x8000000000000000UL {
-        -0.0
-      } else {
-        result
-      }
-      self.stack.push(F64(final_result))
+      self.stack.push(F64(f64_nearest_signed(a)))
     }
     F64Min => {
       let b = self.stack.pop_f64()
