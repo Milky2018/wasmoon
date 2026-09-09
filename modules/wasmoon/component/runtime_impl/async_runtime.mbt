@@ -694,6 +694,7 @@ fn progress_one_subtask_nonblocking(
   // Avoid re-entering tasks already on the call stack: sync lower wrappers may
   // "pump" the event loop while inside a task, but must never step that same task.
   fn task_on_stack(id : Int64) -> Bool {
+    let id = async_state.tasks.resolve(id)
     for t in async_state.task_stack {
       if t == id {
         return true
