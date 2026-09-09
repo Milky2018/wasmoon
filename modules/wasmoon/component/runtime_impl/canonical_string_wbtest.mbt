@@ -47,7 +47,10 @@ test "canonical string lowering preserves allocation sequence and encoded bytes"
     guard value.to_host_value() is String(text) else { fail("expected string") }
     let (expected, _, _) = encode_string_for_canon(text, encoding)
     for i in 0..<expected.length() {
-      inspect(memory.load_byte(ptr + i) == expected[i], content="true")
+      inspect(
+        memory.load_byte_at(ptr + i.to_int64()) == expected[i],
+        content="true",
+      )
     }
   }
 }

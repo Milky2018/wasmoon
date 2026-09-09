@@ -5,7 +5,7 @@
 ///|
 fn store_async_lower_result(
   mem : @runtime.Memory,
-  retptr : Int,
+  retptr : Int64,
   values : Array[@types.Value],
 ) -> Unit raise ComponentRuntimeError {
   match values {
@@ -115,7 +115,7 @@ fn instantiate_canon_lower(
       }
 
       // Split core args into component params and optional return pointer.
-      let mut retptr : Int? = None
+      let mut retptr : Int64? = None
       let param_args : Array[@types.Value] = []
       match func_type.result {
         Some(_) => {
@@ -127,8 +127,8 @@ fn instantiate_canon_lower(
             param_args.push(args[i])
           }
           retptr = match args[args.length() - 1] {
-            I32(n) => Some(n)
-            I64(n) => Some(n.to_int())
+            I32(n) => Some(n.to_int64() & 0xffffffffL)
+            I64(n) => Some(n)
             _ => None
           }
         }
@@ -724,7 +724,7 @@ fn instantiate_canon_lower(
           })
           async_state.tasks.clear_sync_lower_states(outer_task_id)
 
-          let mut out_ptr : Int? = None
+          let mut out_ptr : Int64? = None
           if func_type.result is Some(rty) {
             let flat = core_types_for_valtype(
               rty,
@@ -739,8 +739,8 @@ fn instantiate_canon_lower(
                 trap_canon("missing retptr")
               } else {
                 out_ptr = match args[args.length() - 1] {
-                  I32(n) => Some(n)
-                  I64(n) => Some(n.to_int())
+                  I32(n) => Some(n.to_int64() & 0xffffffffL)
+                  I64(n) => Some(n)
                   _ => None
                 }
               }
@@ -790,7 +790,7 @@ fn instantiate_canon_lower(
               }
             }
             cleanup_sync_lower_task(st.task_id)
-            let mut out_ptr : Int? = None
+            let mut out_ptr : Int64? = None
             match func_type.result {
               Some(rty) => {
                 let flat = core_types_for_valtype(
@@ -807,8 +807,8 @@ fn instantiate_canon_lower(
                     trap_canon("missing retptr")
                   } else {
                     out_ptr = match args[args.length() - 1] {
-                      I32(n) => Some(n)
-                      I64(n) => Some(n.to_int())
+                      I32(n) => Some(n.to_int64() & 0xffffffffL)
+                      I64(n) => Some(n)
                       _ => None
                     }
                   }
@@ -861,7 +861,7 @@ fn instantiate_canon_lower(
           }
         }
       }
-      let mut out_ptr : Int? = None
+      let mut out_ptr : Int64? = None
       if func_type.result is Some(rty) {
         let flat = core_types_for_valtype(
           rty,
@@ -877,8 +877,8 @@ fn instantiate_canon_lower(
             trap_canon("missing retptr")
           } else {
             out_ptr = match args[args.length() - 1] {
-              I32(n) => Some(n)
-              I64(n) => Some(n.to_int())
+              I32(n) => Some(n.to_int64() & 0xffffffffL)
+              I64(n) => Some(n)
               _ => None
             }
           }

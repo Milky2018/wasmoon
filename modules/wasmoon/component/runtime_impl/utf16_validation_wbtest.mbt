@@ -8,7 +8,12 @@ test "UTF-16 rejects unpaired surrogates and overflowing lengths" {
     for encoding in [StringEncoding::Utf16, Latin1Utf16] {
       let length = if encoding == Utf16 { 1 } else { -2147483647 }
       let error = try {
-        read_string_from_memory_with_encoding(memory, 0, length, encoding)
+        read_string_from_memory_with_encoding(
+          memory,
+          0,
+          length.to_int64() & 0xffffffffL,
+          encoding,
+        )
         |> ignore
         "missing error"
       } catch {
@@ -20,7 +25,12 @@ test "UTF-16 rejects unpaired surrogates and overflowing lengths" {
   for encoding in [StringEncoding::Utf16, Latin1Utf16] {
     let length = if encoding == Utf16 { 0x40000000 } else { -1073741824 }
     let error = try {
-      read_string_from_memory_with_encoding(memory, 0, length, encoding)
+      read_string_from_memory_with_encoding(
+        memory,
+        0,
+        length.to_int64() & 0xffffffffL,
+        encoding,
+      )
       |> ignore
       "missing error"
     } catch {

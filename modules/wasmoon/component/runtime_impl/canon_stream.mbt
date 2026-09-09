@@ -71,7 +71,7 @@ fn store_host_stream_value(
   resources : CanonResources,
   store : @runtime.Store,
   table : ResourceTable,
-  ptr : Int,
+  ptr : Int64,
 ) -> Unit raise ComponentRuntimeError {
   let mem = require_memory(resources, store)
   let mem_is_64 = mem.is_memory64()
@@ -184,7 +184,8 @@ fn progress_host_stream_sources(
             store,
             read.reader_table,
             read.ptr +
-            (read.filled + i) * read.payload_type.layout(resources, store).0,
+            (read.filled.to_int64() + i.to_int64()) *
+            read.payload_type.layout(resources, store).0.to_int64(),
           )
         }
         let filled = read.filled + values.length()
@@ -264,6 +265,7 @@ fn instantiate_canon_stream_read(
     }
     match args {
       [I32(handle), I32(ptr), I32(len)] => {
+        let ptr = ptr.to_int64() & 0xffffffffL
         payload_type.check_transmit_buffer(resources, store, ptr, len) catch {
           error => {
             trap_canon(canon_err_message(error))
@@ -359,7 +361,7 @@ fn instantiate_canon_stream_read(
                             resources,
                             store,
                             reader_table,
-                            ptr + i * elem_size,
+                            ptr + i.to_int64() * elem_size.to_int64(),
                           ) catch {
                             e => {
                               trap_canon(e.to_string())
@@ -736,6 +738,7 @@ fn instantiate_canon_stream_write(
     }
     match args {
       [I32(handle), I32(ptr), I32(len)] => {
+        let ptr = ptr.to_int64() & 0xffffffffL
         payload_type.check_transmit_buffer(resources, store, ptr, len) catch {
           error => {
             trap_canon(canon_err_message(error))
@@ -988,7 +991,7 @@ fn instantiate_canon_stream_write(
                       store,
                       pr0.reader_table,
                       async_state,
-                      pr0.ptr + pr0.filled * reader_size,
+                      pr0.ptr + pr0.filled.to_int64() * reader_size.to_int64(),
                     ) catch {
                       error => {
                         trap_canon(canon_err_message(error))

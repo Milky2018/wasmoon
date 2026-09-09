@@ -5,9 +5,11 @@ fn payload_test_resources(
   table : ResourceTable,
   memory64 : Bool,
   encoding : StringEncoding,
+  heap_base? : Int64 = 1024L,
 ) -> CanonResources raise {
-  let memory = store.alloc_mem(Memory(1, None, is_memory64=memory64))
-  let heap = Ref(1024)
+  let pages = (heap_base / 65536L + 1L).to_int()
+  let memory = store.alloc_mem(Memory(pages, None, is_memory64=memory64))
+  let heap = Ref(heap_base)
   let pointer_type : @types.ValueType = if memory64 { I64 } else { I32 }
   let realloc = alloc_host_core_func(
     store,
@@ -16,10 +18,10 @@ fn payload_test_resources(
       results: [pointer_type],
     },
     args => {
-      fn integer(value : @types.Value) -> Int {
+      fn integer(value : @types.Value) -> Int64 {
         match value {
-          I32(n) => n
-          I64(n) => n.to_int()
+          I32(n) => n.to_int64() & 0xffffffffL
+          I64(n) => n
           _ => 0
         }
       }
@@ -27,16 +29,18 @@ fn payload_test_resources(
       let old_size = integer(args[1])
       let alignment = integer(args[2])
       let size = integer(args[3])
-      let ptr = align_to(heap.val, alignment)
+      let ptr = (heap.val + alignment - 1L) / alignment * alignment
       heap.val = ptr + size
       let mem = store.get_mem(memory)
-      for i in 0..<(if old_size < size { old_size } else { size }) {
-        mem.store_byte(ptr + i, mem.load_byte(old_ptr + i))
+      for i = 0L
+          i < (if old_size < size { old_size } else { size })
+          i = i + 1L {
+        mem.store_byte_at(ptr + i, mem.load_byte_at(old_ptr + i))
       }
       if memory64 {
-        [I64(ptr.to_int64())]
+        [I64(ptr)]
       } else {
-        [I32(ptr)]
+        [I32(ptr.to_int())]
       }
     },
   )
@@ -165,4 +169,121 @@ test "nested resource results validate handles before returning to the host" {
     error => error.to_string()
   }
   inspect(error.contains("unknown handle index 123"), content="true")
+}
+
+///|
+test "asynchronous compound payload snapshots retain high memory64 addresses" {
+  let store = @runtime.Store::Store()
+  defer store.close()
+  let state = AsyncState(StreamTable())
+  let source = ResourceTable()
+  let target = ResourceTable()
+  state.resource_tables.set(source.id, source)
+  state.resource_tables.set(target.id, target)
+  let src_resources = payload_test_resources(store, state, source, false, Utf8)
+  let dst_resources = payload_test_resources(
+    store,
+    state,
+    target,
+    true,
+    Utf16,
+    heap_base=4295032832L,
+  )
+  let src_types : Array[TypeDef?] = [
+    Some(List(Prim(String))),
+    Some(
+      Record([
+        { label: "tag", ty: Prim(U8), },
+        { label: "names", ty: TypeIdx(0), },
+      ]),
+    ),
+  ]
+  let dst_types : Array[TypeDef?] = [
+    Some(DefValType(U64)),
+    Some(List(Prim(String))),
+    Some(
+      Record([
+        { label: "tag", ty: Prim(U8), },
+        { label: "names", ty: TypeIdx(1), },
+      ]),
+    ),
+  ]
+  let source_type : CanonicalPayloadType = {
+    ty: Some(TypeIdx(1)),
+    types: src_types,
+  }
+  let target_type : CanonicalPayloadType = {
+    ty: Some(TypeIdx(2)),
+    types: dst_types,
+  }
+  let value : ComponentValue = Tuple([
+    U8(7),
+    List([String("hello"), String("世界")]),
+  ])
+  store_host_stream_value(
+    value,
+    TypeIdx(1),
+    src_types,
+    src_resources,
+    store,
+    source,
+    64,
+  )
+  let pending = source_type.load(src_resources, store, 64, 1, source)
+  pending.store(
+    0, 1, source, target_type, dst_resources, store, target, state, 4295065600L,
+  )
+  let output = target_type.load(dst_resources, store, 4295065600L, 1, target)
+  debug_inspect(
+    output.values.map(ComponentValue::to_host_value),
+    content="[([U8(7), List([String(\"hello\"), String(\"世界\")])])]",
+  )
+  let mem = require_memory(dst_resources, store)
+  inspect(mem.load_i64_at(4295065616L), content="2")
+}
+
+///|
+test "memory64 string and list bounds reject high bits before narrowing" {
+  let store = @runtime.Store::Store()
+  defer store.close()
+  let memory = store.get_mem(store.alloc_mem(Memory(1, None, is_memory64=true)))
+  let types : Array[TypeDef?] = [Some(List(Prim(U32)))]
+  let table = ResourceTable()
+  for ty in [ValType::Prim(String), TypeIdx(0)] {
+    let value = lift_component_value_from_flat(
+      ty,
+      [I64(0L), I64(0L)],
+      types,
+      Some(memory),
+      true,
+      Utf8,
+      table,
+    )
+    inspect(value is String("") || value is List([]), content="true")
+    for
+      pair in [
+        (4294967296L, 0L),
+        (0L, 4294967296L),
+        (-1L, 0L),
+        (0L, -1L),
+        (65536L, 1L),
+      ] {
+      let error = try {
+        lift_component_value_from_flat(
+          ty,
+          [I64(pair.0), I64(pair.1)],
+          types,
+          Some(memory),
+          true,
+          Utf8,
+          table,
+        )
+        |> ignore
+        "missing error"
+      } catch {
+        error => error.to_string()
+      }
+      inspect(error.contains("bounds"), content="true")
+    }
+  }
 }

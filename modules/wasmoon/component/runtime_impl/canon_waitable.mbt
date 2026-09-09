@@ -108,8 +108,8 @@ fn instantiate_canon_waitable_set_wait(
           _e => return
         }
         match core_vals {
-          [I32(n)] => mem2.store_i32(st.retptr, n) catch { _ => () }
-          [I64(n)] => mem2.store_i64(st.retptr, n) catch { _ => () }
+          [I32(n)] => mem2.store_i32_at(st.retptr, n) catch { _ => () }
+          [I64(n)] => mem2.store_i64_at(st.retptr, n) catch { _ => () }
           _ => ()
         }
       }
@@ -126,7 +126,7 @@ fn instantiate_canon_waitable_set_wait(
             match st.mem_addr {
               Some(addr) => {
                 let mem2 = store.get_mem(addr) catch { _ => return "" }
-                let n = mem2.load_i32(st.retptr) catch { _ => return "" }
+                let n = mem2.load_i32_at(st.retptr) catch { _ => return "" }
                 " retptr=\{st.retptr} mem=\{n}"
               }
               None => ""

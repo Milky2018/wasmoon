@@ -19,7 +19,7 @@ fn lower_canonical_string(
   memory : @runtime.Memory,
   realloc : CanonicalRealloc,
   memory64 : Bool,
-) -> (Int, Int) raise ComponentRuntimeError {
+) -> (Int64, Int) raise ComponentRuntimeError {
   let (text, source, tagged_units) = match value {
     String(text) =>
       (text, StringEncoding::Utf8, encode_utf8_string(text).length())
@@ -36,50 +36,47 @@ fn lower_canonical_string(
     text, destination,
   )
   fn resize(
-    old_ptr : Int,
+    old_ptr : Int64,
     old_size : Int,
     size : Int,
     alignment : Int,
-  ) -> Int raise ComponentRuntimeError {
+  ) -> Int64 raise ComponentRuntimeError {
     if size < 0 {
       raise CanonCallError("string content out-of-bounds")
     }
     let args : Array[@types.Value] = if memory64 {
       [
-        I64(old_ptr.to_int64()),
+        I64(old_ptr),
         I64(old_size.to_int64()),
         I64(alignment.to_int64()),
         I64(size.to_int64()),
       ]
     } else {
-      [I32(old_ptr), I32(old_size), I32(alignment), I32(size)]
+      [I32(old_ptr.to_int()), I32(old_size), I32(alignment), I32(size)]
     }
     let ptr = match realloc.call(store, args) {
-      [I32(ptr)] => ptr
-      [I64(ptr)] => {
-        if ptr < 0L || ptr > 2147483647L {
-          raise CanonCallError("string content out-of-bounds")
-        }
-        ptr.to_int()
-      }
+      [I32(ptr)] => ptr.to_int64() & 0xffffffffL
+      [I64(ptr)] => ptr
       _ => raise CanonCallError("invalid realloc result")
     }
-    if ptr % alignment != 0 {
+    if ptr % alignment.to_int64() != 0L {
       raise CanonCallError("unaligned pointer")
     }
-    if ptr < 0 || ptr.to_int64() + size.to_int64() > memory.byte_len() {
+    if ptr < 0 ||
+      ptr > memory.byte_len() ||
+      size.to_int64() > memory.byte_len() - ptr {
       raise CanonCallError("string content out-of-bounds")
     }
     ptr
   }
   fn write(
-    ptr : Int,
+    ptr : Int64,
     bytes : Bytes,
     start : Int,
     end : Int,
   ) -> Unit raise ComponentRuntimeError {
     for i in start..<end {
-      memory.store_byte(ptr + i, bytes[i]) catch {
+      memory.store_byte_at(ptr + i.to_int64(), bytes[i]) catch {
         error => raise CanonCallError(error.to_string())
       }
     }
@@ -125,7 +122,7 @@ fn lower_canonical_string(
       if i == prefix {
         break
       }
-      memory.store_byte(ptr + i, c.to_int().to_byte()) catch {
+      memory.store_byte_at(ptr + i.to_int64(), c.to_int().to_byte()) catch {
         error => raise CanonCallError(error.to_string())
       }
       i += 1
@@ -135,13 +132,13 @@ fn lower_canonical_string(
   }
   if grow_size != 0 && destination == Latin1Utf16 {
     for i = prefix - 1; i >= 0; i = i - 1 {
-      let byte = memory.load_byte(ptr + i) catch {
+      let byte = memory.load_byte_at(ptr + i.to_int64()) catch {
         error => raise CanonCallError(error.to_string())
       }
-      memory.store_byte(ptr + 2 * i, byte) catch {
+      memory.store_byte_at(ptr + 2L * i.to_int64(), byte) catch {
         error => raise CanonCallError(error.to_string())
       }
-      memory.store_byte(ptr + 2 * i + 1, 0) catch {
+      memory.store_byte_at(ptr + 2L * i.to_int64() + 1, 0) catch {
         error => raise CanonCallError(error.to_string())
       }
     }
@@ -155,10 +152,10 @@ fn lower_canonical_string(
     write(ptr, utf16_bytes, 0, utf16_bytes.length())
     if result_units >= 0 {
       for i in 0..<bytes.length() {
-        let byte = memory.load_byte(ptr + 2 * i) catch {
+        let byte = memory.load_byte_at(ptr + 2L * i.to_int64()) catch {
           error => raise CanonCallError(error.to_string())
         }
-        memory.store_byte(ptr + i, byte) catch {
+        memory.store_byte_at(ptr + i.to_int64(), byte) catch {
           error => raise CanonCallError(error.to_string())
         }
       }

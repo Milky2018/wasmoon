@@ -139,7 +139,12 @@ test "canon convert: lower indirect list result stores compound elements" {
       mem.load_i32(list_ptr + 8) catch {
         _ => -1
       },
-      read_string_from_memory_with_encoding(mem, string_ptr, 8, Utf8) catch {
+      read_string_from_memory_with_encoding(
+        mem,
+        string_ptr.to_int64() & 0xffffffffL,
+        8,
+        Utf8,
+      ) catch {
         _ => "<invalid>"
       },
     ),

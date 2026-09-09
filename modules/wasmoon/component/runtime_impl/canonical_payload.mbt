@@ -27,7 +27,7 @@ fn CanonicalPayloadType::check_transmit_buffer(
   self : CanonicalPayloadType,
   resources : CanonResources,
   store : @runtime.Store,
-  ptr : Int,
+  ptr : Int64,
   count : Int,
 ) -> Unit raise ComponentRuntimeError {
   if count.reinterpret_as_uint() > 0x0fffffffU {
@@ -38,9 +38,11 @@ fn CanonicalPayloadType::check_transmit_buffer(
     return
   }
   let memory = require_memory(resources, store)
-  let offset = ptr.to_int64() & 0xffffffffL
+  let offset = ptr
   let length = size.to_int64() * count.to_int64()
-  if offset > memory.byte_len() || length > memory.byte_len() - offset {
+  if offset < 0L ||
+    offset > memory.byte_len() ||
+    length > memory.byte_len() - offset {
     raise CanonCallError("read pointer out of bounds of memory")
   }
 }
@@ -50,7 +52,7 @@ fn CanonicalPayloadType::load(
   self : CanonicalPayloadType,
   resources : CanonResources,
   store : @runtime.Store,
-  ptr : Int,
+  ptr : Int64,
   count : Int,
   resource_table : ResourceTable,
 ) -> CanonicalPayload raise ComponentRuntimeError {
@@ -60,12 +62,13 @@ fn CanonicalPayloadType::load(
     return { payload_type: self, values, }
   }
   let memory = require_memory(resources, store)
-  let offset = ptr.to_int64() & 0xffffffffL
+  let offset = ptr
   let length = size.to_int64() * count.to_int64()
   if offset % alignment.to_int64() != 0L {
     raise CanonCallError("unaligned pointer")
   }
   if count < 0 ||
+    offset < 0L ||
     offset > memory.byte_len() ||
     length > memory.byte_len() - offset {
     raise CanonCallError("out of bounds memory access")
@@ -75,7 +78,7 @@ fn CanonicalPayloadType::load(
   for i in 0..<count {
     let flat = load_flat_component_value_from_memory(
       memory,
-      ptr + i * size,
+      ptr + i.to_int64() * size.to_int64(),
       ty,
       self.types,
       memory.is_memory64(),
@@ -107,17 +110,18 @@ fn CanonicalPayload::store(
   store : @runtime.Store,
   table : ResourceTable,
   async_state : AsyncState,
-  ptr : Int,
+  ptr : Int64,
 ) -> Unit raise ComponentRuntimeError {
   let (size, alignment) = destination.layout(resources, store)
   guard destination.ty is Some(ty) && size != 0 && count != 0 else { return }
   let memory = require_memory(resources, store)
-  let offset = ptr.to_int64() & 0xffffffffL
+  let offset = ptr
   let length = size.to_int64() * count.to_int64()
   if offset % alignment.to_int64() != 0L {
     raise CanonCallError("unaligned pointer")
   }
   if count < 0 ||
+    offset < 0L ||
     offset > memory.byte_len() ||
     length > memory.byte_len() - offset {
     raise CanonCallError("out of bounds memory access")
@@ -148,7 +152,7 @@ fn CanonicalPayload::store(
     )
     store_flat_component_value_to_memory(
       memory,
-      ptr + i * size,
+      ptr + i.to_int64() * size.to_int64(),
       ty,
       flat,
       destination.types,

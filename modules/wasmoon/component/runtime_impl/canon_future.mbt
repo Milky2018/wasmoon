@@ -112,7 +112,12 @@ fn instantiate_canon_future_read(
     }
     match args {
       [I32(_), I32(ptr)] =>
-        payload_type.check_transmit_buffer(resources, store, ptr, 1) catch {
+        payload_type.check_transmit_buffer(
+          resources,
+          store,
+          ptr.to_int64() & 0xffffffffL,
+          1,
+        ) catch {
           error => {
             trap_canon(canon_err_message(error))
             return ret_i32(0)
@@ -185,7 +190,7 @@ fn instantiate_canon_future_read(
                         resources,
                         store,
                         state.resource_table,
-                        ptr,
+                        ptr.to_int64() & 0xffffffffL,
                       ) catch {
                         e => {
                           trap_canon(e.to_string())
@@ -255,7 +260,7 @@ fn instantiate_canon_future_read(
                     store,
                     resources,
                     state.resource_table,
-                    ptr,
+                    ptr.to_int64() & 0xffffffffL,
                   ) catch {
                     error => {
                       trap_canon(canon_err_message(error))
@@ -324,7 +329,7 @@ fn instantiate_canon_future_read(
                         encoding: resources.encoding,
                         payload_type,
                         reader_table: state.resource_table,
-                        ptr,
+                        ptr: ptr.to_int64() & 0xffffffffL,
                         reader_component_id: caller_component_id,
                         reader_handle: handle,
                       }),
@@ -481,7 +486,12 @@ fn instantiate_canon_future_write(
     }
     match args {
       [I32(_), I32(ptr)] =>
-        payload_type.check_transmit_buffer(resources, store, ptr, 1) catch {
+        payload_type.check_transmit_buffer(
+          resources,
+          store,
+          ptr.to_int64() & 0xffffffffL,
+          1,
+        ) catch {
           error => {
             trap_canon(canon_err_message(error))
             return ret_i32(0)
@@ -597,7 +607,11 @@ fn instantiate_canon_future_write(
                     )
                   }
                   let payload = payload_type.load(
-                    resources, store, ptr, 1, writer_table,
+                    resources,
+                    store,
+                    ptr.to_int64() & 0xffffffffL,
+                    1,
+                    writer_table,
                   ) catch {
                     error => {
                       trap_canon(canon_err_message(error))
@@ -663,7 +677,11 @@ fn instantiate_canon_future_write(
                     return ret_i32(0)
                   }
                   let payload = payload_type.load(
-                    resources, store, ptr, 1, writer_table,
+                    resources,
+                    store,
+                    ptr.to_int64() & 0xffffffffL,
+                    1,
+                    writer_table,
                   ) catch {
                     error => {
                       trap_canon(canon_err_message(error))

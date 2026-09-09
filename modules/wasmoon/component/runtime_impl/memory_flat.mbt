@@ -1,8 +1,8 @@
 ///|
 fn read_string_from_memory_with_encoding(
   mem : @runtime.Memory,
-  ptr : Int,
-  len : Int,
+  ptr : Int64,
+  len : Int64,
   encoding : StringEncoding,
   budget? : CanonicalCopyBudget,
 ) -> String raise ComponentRuntimeError {
@@ -11,36 +11,39 @@ fn read_string_from_memory_with_encoding(
       "string content out-of-bounds (string pointer/length out of bounds of memory)",
     )
   }
-  // latin1+utf16 uses the top bit of `len` as an encoding discriminator, so a
-  // valid encoded length may appear negative when represented as signed i32.
-  if encoding != Latin1Utf16 && len < 0 {
+  // The pinned ABI uses bit 31 as the encoding tag for both memory widths.
+  if len < 0L {
     raise CanonCallError(
       "string content out-of-bounds (string pointer/length out of bounds of memory)",
     )
   }
   // Pointer alignment requirements:
   // - utf16 and latin1+utf16 require 2-byte alignment.
-  if (encoding is Utf16 || encoding is Latin1Utf16) &&
-    (ptr.reinterpret_as_uint() & 1U) != 0U {
+  if (encoding is Utf16 || encoding is Latin1Utf16) && (ptr & 1L) != 0L {
     raise CanonCallError("unaligned pointer: string pointer not aligned to 2")
   }
   let mem_len = mem.byte_len()
-  let utf16 = encoding == Utf16 || (encoding == Latin1Utf16 && len < 0)
-  let units = if encoding == Latin1Utf16 { len & 0x7fffffff } else { len }
-  let byte_len64 = units.to_int64() * (if utf16 { 2L } else { 1L })
-  if byte_len64 > 2147483647L || ptr.to_int64() + byte_len64 > mem_len {
+  let utf16 = encoding == Utf16 ||
+    (encoding == Latin1Utf16 && (len & 0x80000000L) != 0L)
+  let units = if encoding == Latin1Utf16 { len & -2147483649L } else { len }
+  let byte_len64 = units * (if utf16 { 2L } else { 1L })
+  if units > 2147483647L ||
+    byte_len64 < 0L ||
+    byte_len64 > 2147483647L ||
+    ptr > mem_len ||
+    byte_len64 > mem_len - ptr {
     raise CanonCallError(
       "string content out-of-bounds (string pointer/length out of bounds of memory)",
     )
   }
   if budget is Some(budget) {
-    budget.consume(units, if utf16 { 2 } else { 1 })
+    budget.consume(units.to_int(), if utf16 { 2 } else { 1 })
   }
   let byte_len = byte_len64.to_int()
   if encoding == Utf8 || !utf16 {
     let bytes : Array[Byte] = []
     for i in 0..<byte_len {
-      let b = mem.load_byte(ptr + i) catch {
+      let b = mem.load_byte_at(ptr + i.to_int64()) catch {
         e => raise CanonCallError(e.to_string())
       }
       bytes.push(b)
@@ -60,18 +63,18 @@ fn read_string_from_memory_with_encoding(
     let buf = StringBuilder::StringBuilder()
     let mut i = 0
     while i < byte_len {
-      let b0 = mem.load_byte(ptr + i) catch {
+      let b0 = mem.load_byte_at(ptr + i.to_int64()) catch {
         e => raise CanonCallError(e.to_string())
       }
-      let b1 = mem.load_byte(ptr + i + 1) catch {
+      let b1 = mem.load_byte_at(ptr + i.to_int64() + 1) catch {
         e => raise CanonCallError(e.to_string())
       }
       let cu = b0.to_int() | (b1.to_int() << 8)
       if cu >= 0xD800 && cu <= 0xDBFF && i + 3 < byte_len {
-        let b2 = mem.load_byte(ptr + i + 2) catch {
+        let b2 = mem.load_byte_at(ptr + i.to_int64() + 2) catch {
           e => raise CanonCallError(e.to_string())
         }
-        let b3 = mem.load_byte(ptr + i + 3) catch {
+        let b3 = mem.load_byte_at(ptr + i.to_int64() + 3) catch {
           e => raise CanonCallError(e.to_string())
         }
         let cu2 = b2.to_int() | (b3.to_int() << 8)
@@ -102,17 +105,17 @@ fn write_bytes_to_memory_with_align(
   mem_is_64 : Bool,
   bytes : Bytes,
   align : Int,
-) -> Int raise ComponentRuntimeError {
+) -> Int64 raise ComponentRuntimeError {
   let ptr = alloc_realloc_area(
     store,
     mem,
     realloc,
     mem_is_64,
-    bytes.length(),
+    bytes.length().to_int64(),
     align,
   )
   for i in 0..<bytes.length() {
-    mem.store_byte(ptr + i, bytes[i]) catch {
+    mem.store_byte_at(ptr + i.to_int64(), bytes[i]) catch {
       e => raise CanonCallError(e.to_string())
     }
   }
@@ -281,24 +284,27 @@ fn alloc_realloc_area(
   mem : @runtime.Memory,
   realloc : CanonicalRealloc,
   mem_is_64 : Bool,
-  size : Int,
+  size : Int64,
   align : Int,
-) -> Int raise ComponentRuntimeError {
+) -> Int64 raise ComponentRuntimeError {
+  if size < 0L || (!mem_is_64 && size > 0xffffffffL) {
+    raise CanonCallError("realloc size exceeds addressable memory")
+  }
   let args : Array[@types.Value] = if mem_is_64 {
-    [I64(0L), I64(0L), I64(align.to_int64()), I64(size.to_int64())]
+    [I64(0L), I64(0L), I64(align.to_int64()), I64(size)]
   } else {
-    [I32(0), I32(0), I32(align), I32(size)]
+    [I32(0), I32(0), I32(align), I32(size.to_int())]
   }
   let results = realloc.call(store, args)
   let ptr = match results {
-    [I32(n)] => n
-    [I64(n)] => n.to_int()
+    [I32(n)] => n.to_int64() & 0xffffffffL
+    [I64(n)] => n
     _ => raise CanonCallError("invalid realloc result")
   }
-  if align > 1 && ptr % align != 0 {
+  if align > 1 && ptr % align.to_int64() != 0L {
     raise CanonCallError("realloc return: result not aligned")
   }
-  if ptr < 0 || size < 0 || ptr.to_int64() + size.to_int64() > mem.byte_len() {
+  if ptr < 0 || size < 0 || ptr > mem.byte_len() || size > mem.byte_len() - ptr {
     raise CanonCallError("realloc return: beyond end of memory")
   }
   ptr
@@ -307,26 +313,26 @@ fn alloc_realloc_area(
 ///|
 fn load_storage_value(
   mem : @runtime.Memory,
-  addr : Int,
+  addr : Int64,
   field : FlatStorageField,
 ) -> @types.Value raise ComponentRuntimeError {
   match field.vt {
     I32 =>
       if field.size == 1 {
         I32(
-          mem.load_i32_8u(addr) catch {
+          mem.load_i32_8u_at(addr) catch {
             e => raise CanonCallError(e.to_string())
           },
         )
       } else if field.size == 2 {
         I32(
-          mem.load_i32_16u(addr) catch {
+          mem.load_i32_16u_at(addr) catch {
             e => raise CanonCallError(e.to_string())
           },
         )
       } else {
         I32(
-          mem.load_i32(addr) catch {
+          mem.load_i32_at(addr) catch {
             e => raise CanonCallError(e.to_string())
           },
         )
@@ -334,21 +340,29 @@ fn load_storage_value(
     I64 =>
       if field.size == 4 {
         I64(
-          mem.load_i64_32u(addr) catch {
+          mem.load_i64_32u_at(addr) catch {
             e => raise CanonCallError(e.to_string())
           },
         )
       } else {
         I64(
-          mem.load_i64(addr) catch {
+          mem.load_i64_at(addr) catch {
             e => raise CanonCallError(e.to_string())
           },
         )
       }
     F32 =>
-      F32(mem.load_f32(addr) catch { e => raise CanonCallError(e.to_string()) })
+      F32(
+        mem.load_f32_at(addr) catch {
+          e => raise CanonCallError(e.to_string())
+        },
+      )
     F64 =>
-      F64(mem.load_f64(addr) catch { e => raise CanonCallError(e.to_string()) })
+      F64(
+        mem.load_f64_at(addr) catch {
+          e => raise CanonCallError(e.to_string())
+        },
+      )
     _ => load_flat_value(mem, addr, field.vt)
   }
 }
@@ -356,41 +370,41 @@ fn load_storage_value(
 ///|
 fn store_storage_value(
   mem : @runtime.Memory,
-  addr : Int,
+  addr : Int64,
   val : @types.Value,
   field : FlatStorageField,
 ) -> Unit raise ComponentRuntimeError {
   match (field.vt, val) {
     (I32, I32(n)) =>
       if field.size == 1 {
-        mem.store_i32_8(addr, n) catch {
+        mem.store_i32_8_at(addr, n) catch {
           e => raise CanonCallError(e.to_string())
         }
       } else if field.size == 2 {
-        mem.store_i32_16(addr, n) catch {
+        mem.store_i32_16_at(addr, n) catch {
           e => raise CanonCallError(e.to_string())
         }
       } else {
-        mem.store_i32(addr, n) catch {
+        mem.store_i32_at(addr, n) catch {
           e => raise CanonCallError(e.to_string())
         }
       }
     (I64, I64(n)) =>
       if field.size == 4 {
-        mem.store_i64_32(addr, n) catch {
+        mem.store_i64_32_at(addr, n) catch {
           e => raise CanonCallError(e.to_string())
         }
       } else {
-        mem.store_i64(addr, n) catch {
+        mem.store_i64_at(addr, n) catch {
           e => raise CanonCallError(e.to_string())
         }
       }
     (F32, F32(f)) =>
-      mem.store_f32(addr, f) catch {
+      mem.store_f32_at(addr, f) catch {
         e => raise CanonCallError(e.to_string())
       }
     (F64, F64(f)) =>
-      mem.store_f64(addr, f) catch {
+      mem.store_f64_at(addr, f) catch {
         e => raise CanonCallError(e.to_string())
       }
     _ => store_flat_value(mem, addr, val)
@@ -400,48 +414,68 @@ fn store_storage_value(
 ///|
 fn load_flat_value(
   mem : @runtime.Memory,
-  addr : Int,
+  addr : Int64,
   vt : @types.ValueType,
 ) -> @types.Value raise ComponentRuntimeError {
   match vt {
     I32 =>
-      I32(mem.load_i32(addr) catch { e => raise CanonCallError(e.to_string()) })
+      I32(
+        mem.load_i32_at(addr) catch {
+          e => raise CanonCallError(e.to_string())
+        },
+      )
     I64 =>
-      I64(mem.load_i64(addr) catch { e => raise CanonCallError(e.to_string()) })
+      I64(
+        mem.load_i64_at(addr) catch {
+          e => raise CanonCallError(e.to_string())
+        },
+      )
     F32 =>
-      F32(mem.load_f32(addr) catch { e => raise CanonCallError(e.to_string()) })
+      F32(
+        mem.load_f32_at(addr) catch {
+          e => raise CanonCallError(e.to_string())
+        },
+      )
     F64 =>
-      F64(mem.load_f64(addr) catch { e => raise CanonCallError(e.to_string()) })
+      F64(
+        mem.load_f64_at(addr) catch {
+          e => raise CanonCallError(e.to_string())
+        },
+      )
     _ =>
-      I32(mem.load_i32(addr) catch { e => raise CanonCallError(e.to_string()) })
+      I32(
+        mem.load_i32_at(addr) catch {
+          e => raise CanonCallError(e.to_string())
+        },
+      )
   }
 }
 
 ///|
 fn store_flat_value(
   mem : @runtime.Memory,
-  addr : Int,
+  addr : Int64,
   val : @types.Value,
 ) -> Unit raise ComponentRuntimeError {
   match val {
     I32(n) =>
-      mem.store_i32(addr, n) catch {
+      mem.store_i32_at(addr, n) catch {
         e => raise CanonCallError(e.to_string())
       }
     I64(n) =>
-      mem.store_i64(addr, n) catch {
+      mem.store_i64_at(addr, n) catch {
         e => raise CanonCallError(e.to_string())
       }
     F32(f) =>
-      mem.store_f32(addr, f) catch {
+      mem.store_f32_at(addr, f) catch {
         e => raise CanonCallError(e.to_string())
       }
     F64(f) =>
-      mem.store_f64(addr, f) catch {
+      mem.store_f64_at(addr, f) catch {
         e => raise CanonCallError(e.to_string())
       }
     _ =>
-      mem.store_i32(addr, 0) catch {
+      mem.store_i32_at(addr, 0) catch {
         e => raise CanonCallError(e.to_string())
       }
   }

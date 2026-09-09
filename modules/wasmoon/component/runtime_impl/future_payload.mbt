@@ -7,7 +7,7 @@ fn store_future_payload(
   store : @runtime.Store,
   resources : CanonResources,
   table : ResourceTable,
-  ptr : Int,
+  ptr : Int64,
 ) -> Unit raise ComponentRuntimeError {
   guard async_state.resource_tables.get(source_component_id)
     is Some(source_table) else {

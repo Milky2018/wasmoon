@@ -216,7 +216,7 @@ struct PendingStreamRead {
   encoding : StringEncoding
   // Resource table of the reader component instance (used to transfer `own` resources).
   reader_table : ResourceTable
-  ptr : Int
+  ptr : Int64
   // Element count requested by the read.
   len : Int
   // Number of elements already written into the buffer.
@@ -427,7 +427,7 @@ struct PendingFutureRead {
   // Resource table of the reader component instance.
   reader_table : ResourceTable
   // For typed futures, write the payload at `ptr`.
-  ptr : Int
+  ptr : Int64
   // The readable endpoint that initiated this pending read.
   reader_component_id : Int
   reader_handle : Int
@@ -569,7 +569,7 @@ struct Subtask {
   callee_instance_id : Int
   // Backpressure key: only one in-flight subtask per async-lowered core func.
   bp_key : Int
-  retptr : Int
+  retptr : Int64
   mem_addr : Int?
   result_ty : ValType?
   types : Array[TypeDef?]

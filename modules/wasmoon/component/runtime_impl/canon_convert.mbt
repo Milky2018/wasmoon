@@ -35,12 +35,13 @@ fn lift_component_value_from_flat(
             }
             let (ptr, len) = if mem_is_64 {
               match (take(vals), take(vals)) {
-                (I64(p), I64(l)) => (p.to_int(), l.to_int())
+                (I64(p), I64(l)) => (p, l)
                 _ => raise HostCallError("type mismatch")
               }
             } else {
               match (take(vals), take(vals)) {
-                (I32(p), I32(l)) => (p, l)
+                (I32(p), I32(l)) =>
+                  (p.to_int64() & 0xffffffffL, l.to_int64() & 0xffffffffL)
                 _ => raise HostCallError("type mismatch")
               }
             }
@@ -54,7 +55,7 @@ fn lift_component_value_from_flat(
             if encoding == Utf8 {
               String(s)
             } else {
-              EncodedString(s, encoding, len)
+              EncodedString(s, encoding, len.to_int())
             }
           }
           ErrorContext => {
@@ -116,12 +117,13 @@ fn lift_component_value_from_flat(
             }
             let (ptr, len) = if mem_is_64 {
               match (take(vals), take(vals)) {
-                (I64(p), I64(l)) => (p.to_int(), l.to_int())
+                (I64(p), I64(l)) => (p, l)
                 _ => raise HostCallError("type mismatch")
               }
             } else {
               match (take(vals), take(vals)) {
-                (I32(p), I32(l)) => (p, l)
+                (I32(p), I32(l)) =>
+                  (p.to_int64() & 0xffffffffL, l.to_int64() & 0xffffffffL)
                 _ => raise HostCallError("type mismatch")
               }
             }
@@ -129,19 +131,19 @@ fn lift_component_value_from_flat(
               elem_ty, types, mem_is_64,
             )
             let stride = align_to(elem_size, elem_align)
-            let offset = if mem_is_64 {
-              ptr.to_int64()
-            } else {
-              ptr.to_int64() & 0xffffffffL
-            }
-            let length = (len.to_int64() & 0xffffffffL) * stride.to_int64()
-            if offset < 0L ||
+            let offset = ptr
+            if len < 0L ||
+              offset < 0L ||
               offset > m.byte_len() ||
-              length > m.byte_len() - offset {
+              (stride != 0 && len > (m.byte_len() - offset) / stride.to_int64()) {
               raise CanonCallError(
                 "list pointer/length out of bounds of memory",
               )
             }
+            if len > 2147483647L {
+              raise CanonCallError("list length exceeds host allocation limit")
+            }
+            let len = len.to_int()
             if offset % elem_align.to_int64() != 0L {
               raise CanonCallError("unaligned pointer")
             }
@@ -150,7 +152,7 @@ fn lift_component_value_from_flat(
             }
             let items : Array[ComponentValue] = []
             for i in 0..<len {
-              let base = ptr + stride * i
+              let base = ptr + stride.to_int64() * i.to_int64()
               let elem_vals = load_flat_component_value_from_memory(
                 m, base, elem_ty, types, mem_is_64,
               )
@@ -440,14 +442,21 @@ fn component_args_to_core(
     types,
     mem_is_64,
   )
-  let ptr = alloc_realloc_area(store, m, realloc, mem_is_64, size, struct_align)
-  if ptr.reinterpret_as_uint() % struct_align.reinterpret_as_uint() != 0U {
+  let ptr = alloc_realloc_area(
+    store,
+    m,
+    realloc,
+    mem_is_64,
+    size.to_int64(),
+    struct_align,
+  )
+  if ptr % struct_align.to_int64() != 0L {
     raise CanonCallError("unaligned pointer")
   }
   for i, param in func_type.params {
     store_flat_component_value_to_memory(
       m,
-      ptr + offsets[i],
+      ptr + offsets[i].to_int64(),
       param.ty,
       param_values[i],
       types,
@@ -455,9 +464,9 @@ fn component_args_to_core(
     )
   }
   if mem_is_64 {
-    [I64(ptr.to_int64())]
+    [I64(ptr)]
   } else {
-    [I32(ptr)]
+    [I32(ptr.to_int())]
   }
 }
 
@@ -572,8 +581,8 @@ fn core_args_to_component(
       raise HostCallError("argument type mismatch")
     }
     let ptr = match args[0] {
-      I32(n) => n
-      I64(n) => n.to_int()
+      I32(n) => n.to_int64() & 0xffffffffL
+      I64(n) => n
       _ => raise HostCallError("argument type mismatch")
     }
     let m = match mem {
@@ -583,8 +592,7 @@ fn core_args_to_component(
     let (offsets, _, struct_align) = canonical_param_layout(
       params, types, mem_is_64,
     )
-    if struct_align > 1 &&
-      ptr.reinterpret_as_uint() % struct_align.reinterpret_as_uint() != 0U {
+    if struct_align > 1 && ptr % struct_align.to_int64() != 0L {
       raise CanonCallError("unaligned pointer")
     }
     let out : Array[@types.Value] = []
@@ -592,7 +600,7 @@ fn core_args_to_component(
       for
         value in load_flat_component_value_from_memory(
           m,
-          ptr + offsets[i],
+          ptr + offsets[i].to_int64(),
           param.ty,
           types,
           mem_is_64,
@@ -660,7 +668,7 @@ fn component_results_to_core(
   types : Array[TypeDef?],
   resources : CanonResources,
   store : @runtime.Store,
-  retptr : Int?,
+  retptr : Int64?,
   resource_table : ResourceTable,
 ) -> Array[@types.Value] raise ComponentRuntimeError {
   guard func_type.result is Some(ty) else { return [] }
@@ -747,9 +755,9 @@ fn lower_component_value_to_flat(
               mem_is_64,
             )
             if mem_is_64 {
-              [I64(ptr.to_int64()), I64(canon_len.to_int64())]
+              [I64(ptr), I64(canon_len.to_int64() & 0xffffffffL)]
             } else {
-              [I32(ptr), I32(canon_len)]
+              [I32(ptr.to_int()), I32(canon_len)]
             }
           }
           _ => raise HostCallError("argument type mismatch")
@@ -815,22 +823,22 @@ fn lower_component_value_to_flat(
                   elem_ty, types, mem_is_64,
                 )
                 let stride = align_to(elem_size, elem_align)
-                let total_size = stride * items.length()
+                let total_size = stride.to_int64() * items.length().to_int64()
                 let ptr = alloc_realloc_area(
                   store, m, realloc, mem_is_64, total_size, elem_align,
                 )
                 for i in 0..<items.length() {
                   let elem_vals = lower_value(items[i], elem_ty)
-                  let base = ptr + stride * i
+                  let base = ptr + stride.to_int64() * i.to_int64()
                   store_flat_component_value_to_memory(
                     m, base, elem_ty, elem_vals, types, mem_is_64,
                   )
                 }
                 let len = items.length()
                 if mem_is_64 {
-                  [I64(ptr.to_int64()), I64(len.to_int64())]
+                  [I64(ptr), I64(len.to_int64())]
                 } else {
-                  [I32(ptr), I32(len)]
+                  [I32(ptr.to_int()), I32(len)]
                 }
               }
               _ => raise HostCallError("argument type mismatch")

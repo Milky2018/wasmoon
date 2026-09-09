@@ -20,15 +20,21 @@ fn variant_payload_layout(
 ///|
 fn store_flat_component_value_to_memory(
   mem : @runtime.Memory,
-  addr : Int,
+  addr : Int64,
   ty : ValType,
   values : Array[@types.Value],
   types : Array[TypeDef?],
   mem_is_64 : Bool,
 ) -> Unit raise ComponentRuntimeError {
-  let (_, alignment) = canonical_memory_layout(ty, types, mem_is_64)
-  if addr.reinterpret_as_uint() % alignment.reinterpret_as_uint() != 0U {
+  let (size, alignment) = canonical_memory_layout(ty, types, mem_is_64)
+  if addr % alignment.to_int64() != 0L {
     raise CanonCallError("unaligned pointer")
+  }
+  if addr < 0L ||
+    size < 0 ||
+    addr > mem.byte_len() ||
+    size.to_int64() > mem.byte_len() - addr {
+    raise CanonCallError("out of bounds memory access")
   }
   let mut cursor = 0
   fn take() -> @types.Value raise ComponentRuntimeError {
@@ -42,18 +48,23 @@ fn store_flat_component_value_to_memory(
 
   fn store_simple(
     value_ty : ValType,
-    value_addr : Int,
+    value_addr : Int64,
   ) -> Unit raise ComponentRuntimeError {
     let storage = flat_storage_for_valtype(value_ty, types, mem_is_64)
     let (offsets, _, _) = layout_of_flat_storage_fields(storage)
     for i in 0..<storage.length() {
-      store_storage_value(mem, value_addr + offsets[i], take(), storage[i])
+      store_storage_value(
+        mem,
+        value_addr + offsets[i].to_int64(),
+        take(),
+        storage[i],
+      )
     }
   }
 
   fn store_inner(
     value_ty : ValType,
-    value_addr : Int,
+    value_addr : Int64,
   ) -> Unit raise ComponentRuntimeError {
     match resolve_valtype(value_ty, types) {
       Prim(_) => store_simple(value_ty, value_addr)
@@ -65,7 +76,10 @@ fn store_flat_component_value_to_memory(
             )
             let stride = align_to(size, alignment)
             for i in 0..<length {
-              store_inner(element, value_addr + i * stride)
+              store_inner(
+                element,
+                value_addr + i.to_int64() * stride.to_int64(),
+              )
             }
           }
           Some(Some(Tuple(items))) => {
@@ -75,7 +89,7 @@ fn store_flat_component_value_to_memory(
                 item, types, mem_is_64,
               )
               offset = align_to(offset, alignment)
-              store_inner(item, value_addr + offset)
+              store_inner(item, value_addr + offset.to_int64())
               offset += size
             }
           }
@@ -88,7 +102,7 @@ fn store_flat_component_value_to_memory(
                 mem_is_64,
               )
               offset = align_to(offset, alignment)
-              store_inner(field.ty, value_addr + offset)
+              store_inner(field.ty, value_addr + offset.to_int64())
               offset += size
             }
           }
@@ -136,7 +150,7 @@ fn store_flat_component_value_to_memory(
               )
               store_flat_component_value_to_memory(
                 mem,
-                value_addr + payload_offset,
+                value_addr + payload_offset.to_int64(),
                 payload_ty,
                 payload_values,
                 types,
@@ -170,7 +184,7 @@ fn store_flat_component_value_to_memory(
               )
               store_flat_component_value_to_memory(
                 mem,
-                value_addr + align_to(1, payload_alignment),
+                value_addr + align_to(1, payload_alignment).to_int64(),
                 payload_ty,
                 payload_values,
                 types,
@@ -228,7 +242,7 @@ fn store_flat_component_value_to_memory(
               }
               store_flat_component_value_to_memory(
                 mem,
-                value_addr + align_to(1, payload_alignment),
+                value_addr + align_to(1, payload_alignment).to_int64(),
                 payload,
                 payload_values,
                 types,
@@ -259,24 +273,32 @@ fn store_flat_component_value_to_memory(
 ///|
 fn load_flat_component_value_from_memory(
   mem : @runtime.Memory,
-  addr : Int,
+  addr : Int64,
   ty : ValType,
   types : Array[TypeDef?],
   mem_is_64 : Bool,
 ) -> Array[@types.Value] raise ComponentRuntimeError {
-  let (_, alignment) = canonical_memory_layout(ty, types, mem_is_64)
-  if addr.reinterpret_as_uint() % alignment.reinterpret_as_uint() != 0U {
+  let (size, alignment) = canonical_memory_layout(ty, types, mem_is_64)
+  if addr % alignment.to_int64() != 0L {
     raise CanonCallError("unaligned pointer")
+  }
+  if addr < 0L ||
+    size < 0 ||
+    addr > mem.byte_len() ||
+    size.to_int64() > mem.byte_len() - addr {
+    raise CanonCallError("out of bounds memory access")
   }
   fn load_simple(
     value_ty : ValType,
-    value_addr : Int,
+    value_addr : Int64,
   ) -> Array[@types.Value] raise ComponentRuntimeError {
     let storage = flat_storage_for_valtype(value_ty, types, mem_is_64)
     let (offsets, _, _) = layout_of_flat_storage_fields(storage)
     let out : Array[@types.Value] = []
     for i in 0..<storage.length() {
-      out.push(load_storage_value(mem, value_addr + offsets[i], storage[i]))
+      out.push(
+        load_storage_value(mem, value_addr + offsets[i].to_int64(), storage[i]),
+      )
     }
     out
   }
@@ -295,7 +317,7 @@ fn load_flat_component_value_from_memory(
             for
               value in load_flat_component_value_from_memory(
                 mem,
-                addr + i * stride,
+                addr + i.to_int64() * stride.to_int64(),
                 element,
                 types,
                 mem_is_64,
@@ -316,7 +338,7 @@ fn load_flat_component_value_from_memory(
             for
               value in load_flat_component_value_from_memory(
                 mem,
-                addr + offset,
+                addr + offset.to_int64(),
                 item,
                 types,
                 mem_is_64,
@@ -340,7 +362,7 @@ fn load_flat_component_value_from_memory(
             for
               value in load_flat_component_value_from_memory(
                 mem,
-                addr + offset,
+                addr + offset.to_int64(),
                 field.ty,
                 types,
                 mem_is_64,
@@ -382,7 +404,7 @@ fn load_flat_component_value_from_memory(
             )
             let payload_values = load_flat_component_value_from_memory(
               mem,
-              addr + payload_offset,
+              addr + payload_offset.to_int64(),
               payload_ty,
               types,
               mem_is_64,
@@ -424,7 +446,7 @@ fn load_flat_component_value_from_memory(
             for
               value in load_flat_component_value_from_memory(
                 mem,
-                addr + align_to(1, payload_alignment),
+                addr + align_to(1, payload_alignment).to_int64(),
                 payload_ty,
                 types,
                 mem_is_64,
@@ -467,7 +489,7 @@ fn load_flat_component_value_from_memory(
             }
             let payload_values = load_flat_component_value_from_memory(
               mem,
-              addr + align_to(1, payload_alignment),
+              addr + align_to(1, payload_alignment).to_int64(),
               payload,
               types,
               mem_is_64,
