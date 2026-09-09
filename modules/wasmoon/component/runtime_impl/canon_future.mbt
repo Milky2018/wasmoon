@@ -110,6 +110,16 @@ fn instantiate_canon_future_read(
     fn ret_i32(n : Int) -> Array[@types.Value] {
       [I32(n)]
     }
+    match args {
+      [I32(_), I32(ptr)] =>
+        payload_type.check_transmit_buffer(resources, store, ptr, 1) catch {
+          error => {
+            trap_canon(canon_err_message(error))
+            return ret_i32(0)
+          }
+        }
+      _ => ()
+    }
     let resumed_sync = match args {
       [I32(handle), _] => {
         let resumed = if !is_async {
@@ -137,20 +147,12 @@ fn instantiate_canon_future_read(
             handle_key(caller_component_id, handle),
           ) {
           None => {
-            if !is_async && !async_state.task_can_block[0] {
-              trap_canon("cannot block a synchronous task before returning")
-            } else {
-              trap_canon("unknown future handle index \{handle}")
-            }
+            trap_canon("unknown future handle index \{handle}")
             ret_i32(0)
           }
           Some(ep) =>
             if !ep.is_readable {
-              if !is_async && !async_state.task_can_block[0] {
-                trap_canon("cannot block a synchronous task before returning")
-              } else {
-                trap_canon("type mismatch")
-              }
+              trap_canon("type mismatch")
               ret_i32(0)
             } else {
               let st0 = match async_state.futures.get(ep.future_id) {
@@ -477,6 +479,16 @@ fn instantiate_canon_future_write(
     fn ret_i32(n : Int) -> Array[@types.Value] {
       [I32(n)]
     }
+    match args {
+      [I32(_), I32(ptr)] =>
+        payload_type.check_transmit_buffer(resources, store, ptr, 1) catch {
+          error => {
+            trap_canon(canon_err_message(error))
+            return ret_i32(0)
+          }
+        }
+      _ => ()
+    }
     let resumed_sync = match args {
       [I32(handle), _] => {
         let resumed = if !is_async {
@@ -504,20 +516,12 @@ fn instantiate_canon_future_write(
             handle_key(caller_component_id, handle),
           ) {
           None => {
-            if !is_async && !async_state.task_can_block[0] {
-              trap_canon("cannot block a synchronous task before returning")
-            } else {
-              trap_canon("unknown future handle index \{handle}")
-            }
+            trap_canon("unknown future handle index \{handle}")
             ret_i32(0)
           }
           Some(ep) =>
             if ep.is_readable {
-              if !is_async && !async_state.task_can_block[0] {
-                trap_canon("cannot block a synchronous task before returning")
-              } else {
-                trap_canon("type mismatch")
-              }
+              trap_canon("type mismatch")
               ret_i32(0)
             } else {
               let st0 = match async_state.futures.get(ep.future_id) {
@@ -744,20 +748,12 @@ fn instantiate_canon_future_cancel_read(
             handle_key(owner_component_id, handle),
           ) {
           None => {
-            if !is_async_cancel && !async_state.task_can_block[0] {
-              trap_canon("cannot block a synchronous task before returning")
-            } else {
-              trap_canon("unknown future handle index \{handle}")
-            }
+            trap_canon("unknown future handle index \{handle}")
             [I32(0)]
           }
           Some(ep) =>
             if !ep.is_readable {
-              if !is_async_cancel && !async_state.task_can_block[0] {
-                trap_canon("cannot block a synchronous task before returning")
-              } else {
-                trap_canon("type mismatch")
-              }
+              trap_canon("type mismatch")
               [I32(0)]
             } else {
               let st0 = match async_state.futures.get(ep.future_id) {
@@ -843,20 +839,12 @@ fn instantiate_canon_future_cancel_write(
             handle_key(owner_component_id, handle),
           ) {
           None => {
-            if !is_async_cancel && !async_state.task_can_block[0] {
-              trap_canon("cannot block a synchronous task before returning")
-            } else {
-              trap_canon("unknown future handle index \{handle}")
-            }
+            trap_canon("unknown future handle index \{handle}")
             [I32(0)]
           }
           Some(ep) =>
             if ep.is_readable {
-              if !is_async_cancel && !async_state.task_can_block[0] {
-                trap_canon("cannot block a synchronous task before returning")
-              } else {
-                trap_canon("type mismatch")
-              }
+              trap_canon("type mismatch")
               [I32(0)]
             } else {
               let st0 = match async_state.futures.get(ep.future_id) {

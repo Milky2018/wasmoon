@@ -728,7 +728,7 @@ fn run_assert_trap(
 }
 
 ///|
-// These spelling aliases match the pinned Wasmtime 40 WAST adapter. They
+// These spelling aliases match the pinned Wasmtime WAST adapter. They
 // preserve the trap category; unrelated trap messages must still fail.
 fn wast_trap_message_matches(actual : String, expected : String) -> Bool {
   let actual = actual.split(" (sig=").next().unwrap_or("").to_owned()

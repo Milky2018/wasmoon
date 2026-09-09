@@ -23,6 +23,29 @@ fn CanonicalPayloadType::layout(
 }
 
 ///|
+fn CanonicalPayloadType::check_transmit_buffer(
+  self : CanonicalPayloadType,
+  resources : CanonResources,
+  store : @runtime.Store,
+  ptr : Int,
+  count : Int,
+) -> Unit raise ComponentRuntimeError {
+  if count.reinterpret_as_uint() > 0x0fffffffU {
+    raise CanonCallError("stream read/write count too large")
+  }
+  let (size, _) = self.layout(resources, store)
+  if size == 0 || count == 0 {
+    return
+  }
+  let memory = require_memory(resources, store)
+  let offset = ptr.to_int64() & 0xffffffffL
+  let length = size.to_int64() * count.to_int64()
+  if offset > memory.byte_len() || length > memory.byte_len() - offset {
+    raise CanonCallError("read pointer out of bounds of memory")
+  }
+}
+
+///|
 fn CanonicalPayloadType::load(
   self : CanonicalPayloadType,
   resources : CanonResources,

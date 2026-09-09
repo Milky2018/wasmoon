@@ -264,6 +264,12 @@ fn instantiate_canon_stream_read(
     }
     match args {
       [I32(handle), I32(ptr), I32(len)] => {
+        payload_type.check_transmit_buffer(resources, store, ptr, len) catch {
+          error => {
+            trap_canon(canon_err_message(error))
+            return ret_i32(0)
+          }
+        }
         if table.endpoints.get(handle_key(owner_component_id, handle))
           is Some(ep) &&
           ep.notified_peer_dropped[0] {
@@ -282,10 +288,6 @@ fn instantiate_canon_stream_read(
           trap_canon(
             "waitable cannot be used synchronously while added to a waitable set",
           )
-          return ret_i32(0)
-        }
-        if !is_async && !async_state.task_can_block[0] {
-          trap_canon("cannot block a synchronous task before returning")
           return ret_i32(0)
         }
         // BLOCKED=-1, COMPLETED=0 | (n<<4), DROPPED=1 | (n<<4)
@@ -734,6 +736,12 @@ fn instantiate_canon_stream_write(
     }
     match args {
       [I32(handle), I32(ptr), I32(len)] => {
+        payload_type.check_transmit_buffer(resources, store, ptr, len) catch {
+          error => {
+            trap_canon(canon_err_message(error))
+            return ret_i32(0)
+          }
+        }
         if !is_async {
           resume_sync_waitable_use(
             async_state, owner_component_id, handle, task_id,
@@ -745,10 +753,6 @@ fn instantiate_canon_stream_write(
           trap_canon(
             "waitable cannot be used synchronously while added to a waitable set",
           )
-          return ret_i32(0)
-        }
-        if !is_async && !async_state.task_can_block[0] {
-          trap_canon("cannot block a synchronous task before returning")
           return ret_i32(0)
         }
         if len.reinterpret_as_uint() > 0x0fffffffU {
@@ -1135,10 +1139,6 @@ fn instantiate_canon_stream_cancel_read(
         }
       _ => ()
     }
-    if !is_async_cancel && !async_state.task_can_block[0] {
-      trap_canon("cannot block a synchronous task before returning")
-      return [I32(0)]
-    }
     match args {
       [I32(handle)] =>
         match table.endpoints.get(handle_key(owner_component_id, handle)) {
@@ -1219,10 +1219,6 @@ fn instantiate_canon_stream_cancel_write(
           return [I32(0)]
         }
       _ => ()
-    }
-    if !is_async_cancel && !async_state.task_can_block[0] {
-      trap_canon("cannot block a synchronous task before returning")
-      return [I32(0)]
     }
     match args {
       [I32(handle)] =>

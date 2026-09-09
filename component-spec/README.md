@@ -11,13 +11,29 @@ Each entry pins both the original upstream hash and the corrected file under
 the original snapshot remains unchanged and is still verified in full. Running
 an explicit `--dir` executes the files in that directory without corrections.
 
-The current correction changes two containment-based traps in
+The reentry correction changes two containment-based traps in
 `async/trap-on-reenter.wast` into successful parent-to-child and child-to-parent
 calls, matching Wasmtime 40.0.0 and the imported Wasmtime misc suite. Its recursive
 callback trap remains intact. Direct probes of all three component forms used
 `wasmtime run --invoke 'g()'` for the successful calls and
 `wasmtime run -W component-model-async=y -W component-model-async-builtins=y
 --invoke 'c()'` for the recursive trap.
+
+The matching Wasmtime 50 oracle also permits entry after a parent callback yields.
+ISS-490 tracks that remaining difference in the earlier reentry correction.
+
+The synchronous-blocking correction updates eleven obsolete trap-precedence
+assertions in `async/trap-if-block-and-sync.wast`. Immediately trapping async
+callees execute, and malformed buffers or handles are validated before blocking.
+Independent controls cover malformed inputs, valid blocking operations and
+immediately completed operations in `tests/component-runtime/`. The complete
+corrected script passes Wasmtime 50.0.0-dev, built from the exact misc corpus
+revision 668016926adfd1b8a79dbce894f1e203d8892599 (see ISS-488).
+
+The `async/sync-streams.wast` correction explicitly yields after the first stream
+transfer, allowing its producer to finish and release the instance lock before
+the next call. Every original assertion is preserved. This corrected script also
+passes the matching Wasmtime oracle.
 
 The `.wast` files are partitioned exactly once by the manifests in `suites/`:
 
