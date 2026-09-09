@@ -59,7 +59,7 @@ fn BuildState::BuildState(
   stream_table : StreamTable,
   async_state : AsyncState,
 ) -> BuildState {
-  let resource_table = ResourceTable()
+  let resource_table = ResourceTable(resources=async_state.concurrent_resources)
   async_state.resource_tables.set(resource_table.id, resource_table)
   {
     types: [],
@@ -288,7 +288,7 @@ fn synthesize_trivial_instance_import(
       values: [],
       components: [],
       instances: [],
-      resource_table: ResourceTable(),
+      resource_table: ResourceTable(resources=async_state.concurrent_resources),
       stream_table,
       async_state,
       core_modules: [],

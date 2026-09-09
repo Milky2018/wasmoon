@@ -59,8 +59,9 @@ configuration matrix. Explicit missing host contracts are listed per file in
 
 - The `wasmtime.gc` import performs a real collection on the active guest heap,
   retaining Store roots, interpreter host-call leases, active native invocation
-  chains and parked continuations. Resource-table-capacity imports remain
-  unavailable until their limits are implemented.
+  chains and parked continuations. `wasmtime.set-max-table-capacity` limits the
+  shared concurrent resource slot pool; cancellation and drop return slots,
+  and growth beyond the configured capacity traps.
 - `bulk_memory = false` is forwarded to `wasmoon test --no-bulk-memory` and
   enforced by core validation, including WAST assertion modules. Active table64
   elements and reference-types table operations remain enabled.

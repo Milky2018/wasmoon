@@ -22,9 +22,9 @@ pub fn HostRuntimeState::HostRuntimeState() -> HostRuntimeState {
 fn HostRuntimeState::with_core_execution_engine(
   core_engine : CoreExecutionEngine,
 ) -> HostRuntimeState {
-  let resource_table = ResourceTable()
   let stream_table = StreamTable()
   let async_state = AsyncState(stream_table, core_engine~)
+  let resource_table = ResourceTable(resources=async_state.concurrent_resources)
   async_state.resource_tables.set(resource_table.id, resource_table)
   { resource_table, stream_table, async_state, }
 }
@@ -119,6 +119,7 @@ fn cancel_async_state_continuations(async_state : AsyncState) -> Unit {
     return
   }
   async_state.tasks.closed.val = true
+  async_state.concurrent_resources.closed.val = true
   let records = async_state.tasks.records.values().to_array()
   // Mark the runtime terminal before calling any embedding cancellation hook.
   for record in records {
@@ -157,6 +158,40 @@ fn cancel_async_state_continuations(async_state : AsyncState) -> Unit {
   async_state.inflight_by_instance.clear()
   async_state.sync_waitable_users.clear()
   async_state.threads.clear()
+  let streams = async_state.stream_table.host_values.values().to_array()
+  let futures = async_state.host_future_values.values().to_array()
+  async_state.stream_table.host_values.clear()
+  async_state.host_future_values.clear()
+  for source in streams {
+    if !source.closed.val {
+      source.closed.val = true
+      if source.cancel is Some(cancel) {
+        cancel()
+      }
+    }
+  }
+  for source in futures {
+    if source.cancel is Some(cancel) {
+      cancel() catch {
+        _ => ()
+      }
+    }
+  }
+  async_state.stream_table.endpoints.clear()
+  async_state.stream_table.streams.clear()
+  async_state.future_endpoints.clear()
+  async_state.futures.clear()
+  async_state.waitable_sets.clear()
+  async_state.waitable_to_set.clear()
+  async_state.waitable_events.clear()
+  for _, table in async_state.resource_tables {
+    if physical_equal(
+        table.error_contexts.pool,
+        async_state.concurrent_resources,
+      ) {
+      table.error_contexts.clear()
+    }
+  }
 }
 
 ///|
@@ -404,4 +439,17 @@ pub fn HostInstanceBuilder::finish(
     exports: self.exports,
     store: self.store,
   }
+}
+
+///|
+/// Limit growth of the shared concurrent resource table. Existing entries and
+/// free slots are retained, even when the new capacity is smaller.
+pub fn HostRuntimeState::set_max_concurrent_resources(
+  self : HostRuntimeState,
+  maximum : UInt,
+) -> Unit raise ComponentRuntimeError {
+  if self.async_state.tasks.closed.val {
+    raise Cancelled
+  }
+  self.async_state.concurrent_resources.set_capacity(maximum)
 }

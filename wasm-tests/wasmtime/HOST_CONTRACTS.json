@@ -1,3 +1,1 @@
-{
-  "component-model/async/cancel-starting-subtask-does-not-leak.wast": "Requires Wasmtime-specific host imports (forced GC or resource-table capacity)."
-}
+{}

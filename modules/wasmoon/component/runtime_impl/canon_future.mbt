@@ -52,19 +52,32 @@ fn instantiate_canon_future_new(
       )
       (rh, wh)
     }
-    async_state.future_endpoints.set(handle_key(creator_component_id, rh), {
-      future_id,
-      is_readable: true,
-      creator_component_id,
-      in_waitable_set: Ref(false),
-    })
-    async_state.future_endpoints.set(handle_key(creator_component_id, wh), {
-      future_id,
-      is_readable: false,
-      creator_component_id,
-      in_waitable_set: Ref(false),
-    })
-    async_state.futures.set(future_id, {
+    errdefer {
+      async_state.future_endpoints.remove(handle_key(creator_component_id, rh))
+      async_state.future_endpoints.remove(handle_key(creator_component_id, wh))
+      async_state.futures.remove(future_id)
+      free_shared_handle(async_state, creator_component_id, rh)
+      free_shared_handle(async_state, creator_component_id, wh)
+    }
+    async_state.future_endpoints.set_core(
+      handle_key(creator_component_id, rh),
+      {
+        future_id,
+        is_readable: true,
+        creator_component_id,
+        in_waitable_set: Ref(false),
+      },
+    )
+    async_state.future_endpoints.set_core(
+      handle_key(creator_component_id, wh),
+      {
+        future_id,
+        is_readable: false,
+        creator_component_id,
+        in_waitable_set: Ref(false),
+      },
+    )
+    async_state.futures.set_core(future_id, {
       payload_ty,
       pending_read: None,
       pending_write: None,
@@ -198,7 +211,7 @@ fn instantiate_canon_future_read(
                         }
                       }
                       async_state.host_future_values.remove(ep.future_id)
-                      async_state.futures.set(ep.future_id, {
+                      async_state.futures.replace(ep.future_id, {
                         payload_ty: st0.payload_ty,
                         pending_read: None,
                         pending_write: None,
@@ -284,7 +297,7 @@ fn instantiate_canon_future_read(
                       },
                     )
                   }
-                  async_state.futures.set(ep.future_id, {
+                  async_state.futures.replace(ep.future_id, {
                     payload_ty: st0.payload_ty,
                     pending_read: None,
                     pending_write: None,
@@ -299,7 +312,7 @@ fn instantiate_canon_future_read(
                 }
                 None =>
                   if st0.writable_dropped {
-                    async_state.futures.set(ep.future_id, {
+                    async_state.futures.replace(ep.future_id, {
                       payload_ty: st0.payload_ty,
                       pending_read: None,
                       pending_write: None,
@@ -319,7 +332,7 @@ fn instantiate_canon_future_read(
                       )
                       return ret_i32(0)
                     }
-                    async_state.futures.set(ep.future_id, {
+                    async_state.futures.replace(ep.future_id, {
                       payload_ty: st0.payload_ty,
                       pending_read: Some({
                         // Remember the reader-side canon memory so a writer from a different
@@ -421,7 +434,7 @@ fn progress_host_future_sources(
           read.ptr,
         )
         async_state.host_future_values.remove(future_id)
-        async_state.futures.set(future_id, {
+        async_state.futures.replace(future_id, {
           payload_ty: state.payload_ty,
           pending_read: None,
           pending_write: None,
@@ -585,7 +598,7 @@ fn instantiate_canon_future_write(
 
               // If the readable end was dropped before any rendezvous, report DROPPED.
               if st0.readable_dropped {
-                async_state.futures.set(ep.future_id, {
+                async_state.futures.replace(ep.future_id, {
                   payload_ty: st0.payload_ty,
                   pending_read: None,
                   pending_write: None,
@@ -655,7 +668,7 @@ fn instantiate_canon_future_write(
                       },
                     )
                   }
-                  async_state.futures.set(ep.future_id, {
+                  async_state.futures.replace(ep.future_id, {
                     payload_ty: st0.payload_ty,
                     pending_read: None,
                     pending_write: None,
@@ -688,7 +701,7 @@ fn instantiate_canon_future_write(
                       return [I32(0)]
                     }
                   }
-                  async_state.futures.set(ep.future_id, {
+                  async_state.futures.replace(ep.future_id, {
                     payload_ty: st0.payload_ty,
                     pending_read: None,
                     pending_write: Some({
@@ -796,7 +809,7 @@ fn instantiate_canon_future_cancel_read(
                 }
                 [I32(code)]
               } else if st0.pending_read is Some(_) {
-                async_state.futures.set(ep.future_id, {
+                async_state.futures.replace(ep.future_id, {
                   payload_ty: st0.payload_ty,
                   pending_read: None,
                   pending_write: st0.pending_write,
@@ -890,7 +903,7 @@ fn instantiate_canon_future_cancel_write(
                   None => false
                 }
                 if had_pending {
-                  async_state.futures.set(ep.future_id, {
+                  async_state.futures.replace(ep.future_id, {
                     payload_ty: st0.payload_ty,
                     pending_read: st0.pending_read,
                     pending_write: None,
@@ -966,7 +979,7 @@ fn instantiate_canon_future_drop_readable(
                   }
                 None => ()
               }
-              async_state.futures.set(ep.future_id, {
+              async_state.futures.replace(ep.future_id, {
                 payload_ty: st0.payload_ty,
                 pending_read: None,
                 pending_write: None,
@@ -1072,7 +1085,7 @@ fn instantiate_canon_future_drop_writable(
                   }
                 None => ()
               }
-              async_state.futures.set(ep.future_id, {
+              async_state.futures.replace(ep.future_id, {
                 payload_ty: st0.payload_ty,
                 pending_read: None,
                 pending_write: st0.pending_write,

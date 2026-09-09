@@ -24,6 +24,28 @@ fn create_script_host(
       }),
     ),
   )
+  wasmtime_exports.set(
+    "set-max-table-capacity",
+    Func(
+      Host(
+        {
+          is_async: false,
+          params: [{ label: "max", ty: Prim(U32), }],
+          result: None,
+        },
+        [],
+        (args, _) => {
+          guard args is [U32(maximum)] else {
+            raise @runtime_impl.HostCallError("expected u32 capacity")
+          }
+          host_runtime.set_max_concurrent_resources(
+            maximum.reinterpret_as_uint(),
+          )
+          []
+        },
+      ),
+    ),
+  )
   linker.add_instance(
     "wasmtime",
     make_instance("wasmtime", store, wasmtime_exports, host_runtime),

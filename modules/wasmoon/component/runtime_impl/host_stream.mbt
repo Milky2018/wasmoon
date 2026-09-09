@@ -10,10 +10,16 @@ fn HostRuntimeState::new_closed_host_stream(
   self : HostRuntimeState,
   table : ResourceTable,
   bytes : Bytes,
-) -> Int {
+) -> Int raise ComponentRuntimeError {
   let stream_id = self.stream_table.next_stream_id[0]
   self.stream_table.next_stream_id[0] = stream_id + 1
   let readable = alloc_shared_handle(self.async_state, table.id)
+  errdefer {
+    self.stream_table.endpoints.remove(handle_key(table.id, readable))
+    self.stream_table.streams.remove(stream_id)
+    self.stream_table.host_values.remove(stream_id)
+    free_shared_handle(self.async_state, table.id, readable)
+  }
   let buffer : Array[ComponentValue] = []
   for byte in bytes {
     buffer.push(U8(byte.to_int()))
@@ -51,7 +57,7 @@ pub fn HostRuntimeState::new_host_byte_stream(
   self : HostRuntimeState,
   table : ResourceTable,
   bytes : Bytes,
-) -> Int {
+) -> Int raise ComponentRuntimeError {
   self.new_closed_host_stream(table, bytes)
 }
 
@@ -73,6 +79,12 @@ pub fn HostRuntimeState::new_host_value_stream(
   let stream_id = self.stream_table.next_stream_id[0]
   self.stream_table.next_stream_id[0] = stream_id + 1
   let readable = alloc_shared_handle(self.async_state, table.id)
+  errdefer {
+    self.stream_table.endpoints.remove(handle_key(table.id, readable))
+    self.stream_table.streams.remove(stream_id)
+    self.stream_table.host_values.remove(stream_id)
+    free_shared_handle(self.async_state, table.id, readable)
+  }
   self.stream_table.streams.set(stream_id, {
     allows_intra_component: payload_allows_intra_component_transfer(
       Some(resolve_valtype(payload_ty, types)),
@@ -116,9 +128,16 @@ pub fn HostRuntimeState::new_host_value_stream_source(
   cancel : () -> Unit,
 ) -> Int raise ComponentRuntimeError {
   stream_payload_info(Some(payload_ty), types) |> ignore
+  errdefer cancel()
   let stream_id = self.stream_table.next_stream_id[0]
   self.stream_table.next_stream_id[0] = stream_id + 1
   let readable = alloc_shared_handle(self.async_state, table.id)
+  errdefer {
+    self.stream_table.endpoints.remove(handle_key(table.id, readable))
+    self.stream_table.streams.remove(stream_id)
+    self.stream_table.host_values.remove(stream_id)
+    free_shared_handle(self.async_state, table.id, readable)
+  }
   self.stream_table.streams.set(stream_id, {
     allows_intra_component: payload_allows_intra_component_transfer(
       Some(resolve_valtype(payload_ty, types)),
@@ -159,6 +178,12 @@ pub fn HostRuntimeState::new_host_value_future(
   let future_id = self.async_state.next_future_id[0]
   self.async_state.next_future_id[0] = future_id + 1
   let readable = alloc_shared_handle(self.async_state, table.id)
+  errdefer {
+    self.async_state.future_endpoints.remove(handle_key(table.id, readable))
+    self.async_state.futures.remove(future_id)
+    self.async_state.host_future_values.remove(future_id)
+    free_shared_handle(self.async_state, table.id, readable)
+  }
   self.async_state.future_endpoints.set(handle_key(table.id, readable), {
     future_id,
     is_readable: true,
@@ -200,9 +225,16 @@ pub fn HostRuntimeState::new_host_value_future_source(
   cancel : () -> Unit raise ComponentRuntimeError,
 ) -> Int raise ComponentRuntimeError {
   stream_payload_info(Some(element_type), types) |> ignore
+  errdefer (cancel() catch { _ => () })
   let future_id = self.async_state.next_future_id[0]
   self.async_state.next_future_id[0] = future_id + 1
   let readable = alloc_shared_handle(self.async_state, table.id)
+  errdefer {
+    self.async_state.future_endpoints.remove(handle_key(table.id, readable))
+    self.async_state.futures.remove(future_id)
+    self.async_state.host_future_values.remove(future_id)
+    free_shared_handle(self.async_state, table.id, readable)
+  }
   self.async_state.future_endpoints.set(handle_key(table.id, readable), {
     future_id,
     is_readable: true,
@@ -330,7 +362,7 @@ pub fn HostRuntimeState::read_host_byte_stream(
             },
           )
         }
-        self.stream_table.streams.set(endpoint.stream_id, {
+        self.stream_table.streams.replace(endpoint.stream_id, {
           allows_intra_component: state.allows_intra_component,
           pending_read: state.pending_read,
           pending_write: Some({
@@ -404,7 +436,7 @@ pub fn HostRuntimeState::drop_host_readable_stream(
     }
     None => None
   }
-  self.stream_table.streams.set(endpoint.stream_id, {
+  self.stream_table.streams.replace(endpoint.stream_id, {
     allows_intra_component: state.allows_intra_component,
     pending_read: state.pending_read,
     pending_write,
@@ -454,7 +486,7 @@ pub fn HostRuntimeState::drop_host_readable_future(
     None => ()
   }
   self.async_state.host_future_values.remove(endpoint.future_id)
-  self.async_state.futures.set(endpoint.future_id, {
+  self.async_state.futures.replace(endpoint.future_id, {
     payload_ty: state.payload_ty,
     pending_read: None,
     pending_write: None,

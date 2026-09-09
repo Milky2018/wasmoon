@@ -512,7 +512,10 @@ fn instantiate_canon_lower(
           driver: CallbackLifted(task),
         }
         let sub_key = handle_key(caller_table.id, sub_id)
-        let task_id = alloc_canon_task_id(async_state)
+        let task_id = {
+          errdefer free_shared_handle(async_state, caller_table.id, sub_id)
+          alloc_canon_task_id(async_state)
+        }
         async_state.tasks.bind_handle(task_id, sub_key)
         init_task_meta(async_state, task_id, meta_inst_id, caller_task_id)
         async_state.tasks.write_subtasks(sub_key, st)

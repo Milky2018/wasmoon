@@ -1,6 +1,7 @@
 ///|
 /// Stable internal task identities are independent of reusable guest handles.
 pub struct TaskRegistry {
+  priv resources : ConcurrentResources
   priv records : Map[Int64, TaskRecord]
   priv aliases : Map[Int64, Int64]
   priv handles : Map[Int64, Int64]
@@ -13,6 +14,7 @@ pub extend TaskRegistry with @debug.Debug::{to_repr}
 
 ///|
 priv struct TaskRecord {
+  leases : Array[ConcurrentResourceLease]
   id : Int64
   mut root_task : CallbackTask?
   mut task_results : Array[ComponentValue]?
@@ -36,8 +38,9 @@ priv struct TaskRecord {
 } derive(Debug)
 
 ///|
-fn TaskRegistry::new() -> TaskRegistry {
+fn TaskRegistry::new(resources : ConcurrentResources) -> TaskRegistry {
   {
+    resources,
     records: Map([]),
     aliases: Map([]),
     handles: Map([]),
@@ -54,13 +57,26 @@ fn TaskRegistry::resolve(self : TaskRegistry, key : Int64) -> Int64 {
 ///|
 fn TaskRegistry::allocate(
   self : TaskRegistry,
+  thread_metadata? : Bool = false,
 ) -> Int64 raise ComponentRuntimeError {
   if self.closed.val {
     raise Cancelled
   }
+  // Explicit threads use a record for canonical task-local metadata, but
+  // their resource slot belongs to the owning GuestThread entry.
+  let leases = if thread_metadata {
+    []
+  } else {
+    let task = self.resources.allocate()
+    let thread = {
+      errdefer task.release()
+      self.resources.allocate()
+    }
+    [task, thread]
+  }
   let id = self.next_id.val
   self.next_id.val = id - 1L
-  self.records.set(id, TaskRecord::new(id))
+  self.records.set(id, TaskRecord::new(id, leases))
   id
 }
 
@@ -84,7 +100,12 @@ fn TaskRegistry::bind_handle(
 ///|
 fn TaskRegistry::retire(self : TaskRegistry, key : Int64) -> Unit {
   let id = self.resolve(key)
-  self.records.remove(id)
+  if self.records.get(id) is Some(record) {
+    for lease in record.leases {
+      lease.release()
+    }
+    self.records.remove(id)
+  }
   if self.handles.get(id) is Some(handle) {
     self.aliases.remove(handle)
     self.handles.remove(id)
@@ -573,8 +594,12 @@ pub fn TaskRegistry::subtask_count(self : TaskRegistry) -> Int {
 }
 
 ///|
-fn TaskRecord::new(id : Int64) -> TaskRecord {
+fn TaskRecord::new(
+  id : Int64,
+  leases : Array[ConcurrentResourceLease],
+) -> TaskRecord {
   {
+    leases,
     id,
     root_task: None,
     task_results: None,
@@ -610,8 +635,11 @@ fn retire_task(async_state : AsyncState, task_id : Int64) -> Unit {
 }
 
 ///|
-fn alloc_canon_task_id(state : AsyncState) -> Int64 raise @runtime.RuntimeError {
-  alloc_task_id(state) catch {
+fn alloc_canon_task_id(
+  state : AsyncState,
+  thread_metadata? : Bool = false,
+) -> Int64 raise @runtime.RuntimeError {
+  state.tasks.allocate(thread_metadata~) catch {
     error => {
       trap_canon(canon_err_message(error))
       raise Unreachable

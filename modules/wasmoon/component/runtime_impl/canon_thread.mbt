@@ -923,7 +923,11 @@ fn instantiate_canon_thread_new_indirect(
     }
 
     let id = alloc_shared_handle(async_state, owner_component_id)
-    let thread_task_id = alloc_canon_task_id(async_state)
+    let thread_task_id = {
+      errdefer free_shared_handle(async_state, owner_component_id, id)
+      alloc_canon_task_id(async_state, thread_metadata=true)
+    }
+    errdefer retire_task(async_state, thread_task_id)
     init_task_meta(
       async_state, thread_task_id, owner_component_id, root_task_id,
     )
@@ -931,7 +935,7 @@ fn instantiate_canon_thread_new_indirect(
     per_task.set(owner_component_id, id)
     async_state.tasks.write_task_thread(thread_task_id, per_task)
 
-    async_state.threads.set(handle_key(owner_component_id, id), {
+    async_state.threads.set_core(handle_key(owner_component_id, id), {
       owner_component_id,
       handle: id,
       parent_task_id: root_task_id,

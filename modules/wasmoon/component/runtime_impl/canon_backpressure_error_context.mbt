@@ -112,7 +112,12 @@ fn instantiate_canon_error_context_new(
         return []
       }
     }
-    let handle = resource_table.alloc_error_context(debug_message)
+    let handle = resource_table.alloc_error_context(debug_message) catch {
+      error => {
+        trap_canon(canon_err_message(error))
+        raise @runtime.Unreachable
+      }
+    }
     [I32(handle)]
   }
   state.core_funcs.push(alloc_component_host_core_func(store, core_type, host))

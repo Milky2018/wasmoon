@@ -28,7 +28,8 @@ fn instantiate_canon_stream_new(
 
     let sid = table.next_stream_id[0]
     table.next_stream_id[0] = sid + 1
-    table.streams.set(sid, {
+    errdefer table.streams.remove(sid)
+    table.streams.set_core(sid, {
       allows_intra_component,
       pending_read: None,
       pending_write: None,
@@ -42,13 +43,19 @@ fn instantiate_canon_stream_new(
     // which is the behavior tests rely on.
     let rh = alloc_shared_handle(async_state, owner_component_id)
     let wh = alloc_shared_handle(async_state, owner_component_id)
-    table.endpoints.set(handle_key(owner_component_id, rh), {
+    errdefer {
+      table.endpoints.remove(handle_key(owner_component_id, rh))
+      table.endpoints.remove(handle_key(owner_component_id, wh))
+      free_shared_handle(async_state, owner_component_id, rh)
+      free_shared_handle(async_state, owner_component_id, wh)
+    }
+    table.endpoints.set_core(handle_key(owner_component_id, rh), {
       stream_id: sid,
       is_readable: true,
       notified_peer_dropped: [false],
       in_waitable_set: Ref(false),
     })
-    table.endpoints.set(handle_key(owner_component_id, wh), {
+    table.endpoints.set_core(handle_key(owner_component_id, wh), {
       stream_id: sid,
       is_readable: false,
       notified_peer_dropped: [false],
@@ -138,7 +145,7 @@ fn progress_host_stream_sources(
     match poll_host_value_stream(source, read.len - read.filled) {
       Pending => ()
       Closed => {
-        table.streams.set(stream_id, {
+        table.streams.replace(stream_id, {
           allows_intra_component: state.allows_intra_component,
           pending_read: Some({
             mem_addr: read.mem_addr,
@@ -189,7 +196,7 @@ fn progress_host_stream_sources(
           )
         }
         let filled = read.filled + values.length()
-        table.streams.set(stream_id, {
+        table.streams.replace(stream_id, {
           allows_intra_component: state.allows_intra_component,
           pending_read: Some({
             mem_addr: read.mem_addr,
@@ -326,7 +333,7 @@ fn instantiate_canon_stream_read(
                           return ret_i32(0)
                         } else if read.reader_handle == handle &&
                           read.event_enqueued {
-                          table.streams.set(ep.stream_id, {
+                          table.streams.replace(ep.stream_id, {
                             allows_intra_component: st0.allows_intra_component,
                             pending_read: None,
                             pending_write: st0.pending_write,
@@ -373,7 +380,7 @@ fn instantiate_canon_stream_read(
                       }
                       Closed => {
                         ep.notified_peer_dropped[0] = true
-                        table.streams.set(ep.stream_id, {
+                        table.streams.replace(ep.stream_id, {
                           allows_intra_component: st0.allows_intra_component,
                           pending_read: None,
                           pending_write: st0.pending_write,
@@ -383,7 +390,7 @@ fn instantiate_canon_stream_read(
                         return ret_i32(1)
                       }
                       Pending => {
-                        table.streams.set(ep.stream_id, {
+                        table.streams.replace(ep.stream_id, {
                           allows_intra_component: st0.allows_intra_component,
                           pending_read: Some({
                             mem_addr: resources.mem_addr,
@@ -428,7 +435,7 @@ fn instantiate_canon_stream_read(
                         if dropped == 1 {
                           ep.notified_peer_dropped[0] = true
                         }
-                        table.streams.set(ep.stream_id, {
+                        table.streams.replace(ep.stream_id, {
                           allows_intra_component: st0.allows_intra_component,
                           pending_read: None,
                           pending_write: st0.pending_write,
@@ -494,7 +501,7 @@ fn instantiate_canon_stream_read(
                       }
                       // Persist the updated `event_enqueued` bit and then behave as if there is
                       // no pending data for readers.
-                      table.streams.set(ep.stream_id, {
+                      table.streams.replace(ep.stream_id, {
                         allows_intra_component: st0.allows_intra_component,
                         pending_read: st0.pending_read,
                         pending_write: Some({
@@ -528,7 +535,7 @@ fn instantiate_canon_stream_read(
                         reader_handle: handle,
                         event_enqueued: false,
                       }
-                      table.streams.set(ep.stream_id, {
+                      table.streams.replace(ep.stream_id, {
                         allows_intra_component: st0.allows_intra_component,
                         pending_read: Some(pr),
                         pending_write: Some({
@@ -615,7 +622,7 @@ fn instantiate_canon_stream_read(
                       event_enqueued,
                       defer_complete: pw.defer_complete,
                     })
-                    table.streams.set(ep.stream_id, {
+                    table.streams.replace(ep.stream_id, {
                       allows_intra_component: st0.allows_intra_component,
                       pending_read: st0.pending_read,
                       pending_write: pw2,
@@ -650,7 +657,7 @@ fn instantiate_canon_stream_read(
                         reader_handle: handle,
                         event_enqueued: false,
                       }
-                      table.streams.set(ep.stream_id, {
+                      table.streams.replace(ep.stream_id, {
                         allows_intra_component: st0.allows_intra_component,
                         pending_read: Some(pr),
                         pending_write: st0.pending_write,
@@ -805,7 +812,7 @@ fn instantiate_canon_stream_write(
                           !st0.readable_dropped &&
                           pw0.sent >= total_elems &&
                           !pw0.defer_complete {
-                          table.streams.set(ep.stream_id, {
+                          table.streams.replace(ep.stream_id, {
                             allows_intra_component: st0.allows_intra_component,
                             pending_read: st0.pending_read,
                             pending_write: Some({
@@ -830,7 +837,7 @@ fn instantiate_canon_stream_write(
                         if dropped == 1 {
                           ep.notified_peer_dropped[0] = true
                         }
-                        table.streams.set(ep.stream_id, {
+                        table.streams.replace(ep.stream_id, {
                           allows_intra_component: st0.allows_intra_component,
                           pending_read: st0.pending_read,
                           pending_write: None,
@@ -924,7 +931,7 @@ fn instantiate_canon_stream_write(
                           return ret_i32(0)
                         }
                       }
-                      table.streams.set(ep.stream_id, {
+                      table.streams.replace(ep.stream_id, {
                         allows_intra_component: st0.allows_intra_component,
                         pending_read,
                         pending_write: Some({
@@ -1036,7 +1043,7 @@ fn instantiate_canon_stream_write(
                       reader_handle: pr0.reader_handle,
                       event_enqueued,
                     }
-                    table.streams.set(ep.stream_id, {
+                    table.streams.replace(ep.stream_id, {
                       allows_intra_component: st0.allows_intra_component,
                       pending_read: Some(pr1),
                       pending_write: st0.pending_write,
@@ -1059,7 +1066,7 @@ fn instantiate_canon_stream_write(
                         return ret_i32(0)
                       }
                     }
-                    table.streams.set(ep.stream_id, {
+                    table.streams.replace(ep.stream_id, {
                       allows_intra_component: st0.allows_intra_component,
                       pending_read: st0.pending_read,
                       pending_write: Some({
@@ -1339,7 +1346,7 @@ fn instantiate_canon_stream_drop_readable(
                       payload,
                     },
                   )
-                  table.streams.set(ep.stream_id, {
+                  table.streams.replace(ep.stream_id, {
                     allows_intra_component: st0.allows_intra_component,
                     pending_read: st0.pending_read,
                     pending_write: Some({
@@ -1356,7 +1363,7 @@ fn instantiate_canon_stream_drop_readable(
                   })
                 }
                 None =>
-                  table.streams.set(ep.stream_id, {
+                  table.streams.replace(ep.stream_id, {
                     allows_intra_component: st0.allows_intra_component,
                     pending_read: st0.pending_read,
                     pending_write: st0.pending_write,
@@ -1455,7 +1462,7 @@ fn instantiate_canon_stream_drop_writable(
                       payload,
                     },
                   )
-                  table.streams.set(ep.stream_id, {
+                  table.streams.replace(ep.stream_id, {
                     allows_intra_component: st0.allows_intra_component,
                     pending_read: Some({
                       mem_addr: pr.mem_addr,
@@ -1475,7 +1482,7 @@ fn instantiate_canon_stream_drop_writable(
                   })
                 }
                 None =>
-                  table.streams.set(ep.stream_id, {
+                  table.streams.replace(ep.stream_id, {
                     allows_intra_component: st0.allows_intra_component,
                     pending_read: st0.pending_read,
                     pending_write: st0.pending_write,

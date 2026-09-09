@@ -32,7 +32,8 @@ fn instantiate_canon_waitable_set_new(
       trap_canon("cannot leave component instance")
     }
     let id = alloc_shared_handle(async_state, owner_component_id)
-    async_state.waitable_sets.set(handle_key(owner_component_id, id), {
+    errdefer free_shared_handle(async_state, owner_component_id, id)
+    async_state.waitable_sets.set_core(handle_key(owner_component_id, id), {
       id,
       members: Map([]),
       queue: [],

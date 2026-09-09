@@ -107,7 +107,7 @@ pub(all) struct ResourceTable {
   free_handles : Ref[Array[Int]]
   entries : Ref[Map[Int, ResourceHandle]]
   // Error contexts use a separate per-component handle namespace.
-  error_contexts : Map[Int, String]
+  error_contexts : ConcurrentMap[Int, String]
   next_error_context : Ref[Int]
 } derive(Debug)
 
@@ -115,7 +115,9 @@ pub(all) struct ResourceTable {
 let resource_table_id_counter : Array[Int] = [0]
 
 ///|
-pub fn ResourceTable::ResourceTable() -> ResourceTable {
+pub fn ResourceTable::ResourceTable(
+  resources? : ConcurrentResources = ConcurrentResources::new(),
+) -> ResourceTable {
   let id = resource_table_id_counter[0]
   resource_table_id_counter[0] = id + 1
   // Resource handle 0 is invalid; error-context handles start at 0.
@@ -124,7 +126,7 @@ pub fn ResourceTable::ResourceTable() -> ResourceTable {
     next_handle: Ref(1),
     free_handles: Ref([]),
     entries: Ref(Map([])),
-    error_contexts: Map([]),
+    error_contexts: ConcurrentMap::new(resources),
     next_error_context: Ref(0),
   }
 }
@@ -284,19 +286,22 @@ impl Debug for HostValueStream with fn to_repr(_self) {
 
 ///|
 pub(all) struct StreamTable {
+  concurrent_resources : ConcurrentResources
   next_stream_id : Array[Int]
   // Keyed by `handle_key(component_id, local_handle)`.
-  endpoints : Map[Int64, StreamEndpoint]
-  streams : Map[Int, StreamState]
+  endpoints : ConcurrentMap[Int64, StreamEndpoint]
+  streams : ConcurrentMap[Int, StreamState]
   host_values : Map[Int, HostValueStream]
 } derive(Debug)
 
 ///|
 pub fn StreamTable::StreamTable() -> StreamTable {
+  let concurrent_resources = ConcurrentResources::new()
   {
+    concurrent_resources,
     next_stream_id: [0],
-    endpoints: Map([]),
-    streams: Map([]),
+    endpoints: ConcurrentMap::new(concurrent_resources),
+    streams: ConcurrentMap::new(concurrent_resources),
     host_values: Map([]),
   }
 }
@@ -341,6 +346,7 @@ fn cleanup_closed_future(async_state : AsyncState, future_id : Int) -> Unit {
 /// Waitable/stream/future/subtask handle numbers are per component instance (resource_table.id).
 /// Internally we key maps by `handle_key(component_id, local_handle)` to avoid collisions.
 pub(all) struct AsyncState {
+  concurrent_resources : ConcurrentResources
   // A core trap rejects new host calls; admitted continuations may still resume.
   trapped : Ref[Bool]
   core_engine : CoreExecutionEngine
@@ -359,7 +365,7 @@ pub(all) struct AsyncState {
   task_stack : Array[Int64]
   tasks : TaskRegistry
   // Explicit guest threads keyed by `handle_key(owner_component_id, local_handle)`.
-  threads : Map[Int64, GuestThread]
+  threads : ConcurrentMap[Int64, GuestThread]
   // Whether the currently executing task is allowed to block.
   task_can_block : Array[Bool]
   can_block_stack : Array[Bool]
@@ -368,7 +374,7 @@ pub(all) struct AsyncState {
   in_async_callback : Array[Bool]
 
   // Waitable sets and event queues.
-  waitable_sets : Map[Int64, WaitableSet]
+  waitable_sets : ConcurrentMap[Int64, WaitableSet]
   waitable_to_set : Map[Int64, Int64]
   waitable_events : Map[Int64, Array[WaitEvent]]
   sync_waitable_users : Map[Int64, Int64]
@@ -381,8 +387,8 @@ pub(all) struct AsyncState {
 
   // Futures created by `canon future.new`.
   next_future_id : Array[Int]
-  futures : Map[Int, FutureState]
-  future_endpoints : Map[Int64, FutureEndpoint]
+  futures : ConcurrentMap[Int, FutureState]
+  future_endpoints : ConcurrentMap[Int64, FutureEndpoint]
   host_future_values : Map[Int, HostFutureValue]
 
   // Per-component backpressure counter used by `canon backpressure.*`.
@@ -584,7 +590,9 @@ pub fn AsyncState::AsyncState(
   stream_table : StreamTable,
   core_engine? : CoreExecutionEngine = interpreter_core_execution_engine(),
 ) -> AsyncState {
+  let concurrent_resources = stream_table.concurrent_resources
   {
+    concurrent_resources,
     core_engine,
     next_handle_by_component: Map([]),
     free_handles_by_component: Map([]),
@@ -594,12 +602,12 @@ pub fn AsyncState::AsyncState(
     trapped: Ref(false),
     task_stack: [0L],
     // Use negative ids for internal tasks so they don't collide with the shared handle space.
-    tasks: TaskRegistry::new(),
-    threads: Map([]),
+    tasks: TaskRegistry::new(concurrent_resources),
+    threads: ConcurrentMap::new(concurrent_resources),
     task_can_block: [false],
     can_block_stack: [false],
     in_async_callback: [false],
-    waitable_sets: Map([]),
+    waitable_sets: ConcurrentMap::new(concurrent_resources),
     waitable_to_set: Map([]),
     waitable_events: Map([]),
     sync_waitable_users: Map([]),
@@ -607,8 +615,8 @@ pub fn AsyncState::AsyncState(
     pending_by_instance: Map([]),
     scheduler_cursor: [None],
     next_future_id: [0],
-    futures: Map([]),
-    future_endpoints: Map([]),
+    futures: ConcurrentMap::new(concurrent_resources),
+    future_endpoints: ConcurrentMap::new(concurrent_resources),
     host_future_values: Map([]),
     backpressure_by_instance: Map([]),
   }
@@ -795,7 +803,7 @@ fn acknowledge_waitable_event(async_state : AsyncState, ev : WaitEvent) -> Unit 
       if async_state.stream_table.streams.get(ep.stream_id) is Some(st0) &&
         st0.pending_read is Some(pr) &&
         pr.reader_handle == ev.index {
-        async_state.stream_table.streams.set(ep.stream_id, {
+        async_state.stream_table.streams.replace(ep.stream_id, {
           allows_intra_component: st0.allows_intra_component,
           pending_read: None,
           pending_write: st0.pending_write,
@@ -813,7 +821,7 @@ fn acknowledge_waitable_event(async_state : AsyncState, ev : WaitEvent) -> Unit 
       if async_state.stream_table.streams.get(ep.stream_id) is Some(st0) &&
         st0.pending_write is Some(pw) &&
         pw.writer_handle == ev.index {
-        async_state.stream_table.streams.set(ep.stream_id, {
+        async_state.stream_table.streams.replace(ep.stream_id, {
           allows_intra_component: st0.allows_intra_component,
           pending_read: st0.pending_read,
           pending_write: None,
@@ -1060,6 +1068,7 @@ fn transfer_stream_readable_handle(
   async_state.stream_table.endpoints.remove(from_key)
   free_shared_handle(async_state, from_component_id, handle)
   let new_handle = alloc_shared_handle(async_state, to_component_id)
+  errdefer free_shared_handle(async_state, to_component_id, new_handle)
   async_state.stream_table.endpoints.set(
     handle_key(to_component_id, new_handle),
     {
@@ -1094,6 +1103,7 @@ fn clone_stream_readable_handle(
     None => raise CanonCallError("unknown stream handle index \{handle}")
   }
   let new_handle = alloc_shared_handle(async_state, to_component_id)
+  errdefer free_shared_handle(async_state, to_component_id, new_handle)
   async_state.stream_table.endpoints.set(
     handle_key(to_component_id, new_handle),
     {
@@ -1143,6 +1153,7 @@ fn transfer_future_readable_handle(
   async_state.future_endpoints.remove(from_key)
   free_shared_handle(async_state, from_component_id, handle)
   let new_handle = alloc_shared_handle(async_state, to_component_id)
+  errdefer free_shared_handle(async_state, to_component_id, new_handle)
   async_state.future_endpoints.set(handle_key(to_component_id, new_handle), ep)
   new_handle
 }
@@ -1164,6 +1175,7 @@ fn clone_future_readable_handle(
     None => raise CanonCallError("unknown future handle index \{handle}")
   }
   let new_handle = alloc_shared_handle(async_state, to_component_id)
+  errdefer free_shared_handle(async_state, to_component_id, new_handle)
   async_state.future_endpoints.set(handle_key(to_component_id, new_handle), ep)
   new_handle
 }
@@ -1483,10 +1495,10 @@ fn set_backpressure_value_for_instance(
 fn ResourceTable::alloc_error_context(
   self : ResourceTable,
   message : String,
-) -> Int {
+) -> Int raise ComponentRuntimeError {
   let handle = self.next_error_context.val
-  self.next_error_context.val += 1
   self.error_contexts.set(handle, message)
+  self.next_error_context.val += 1
   handle
 }
 
