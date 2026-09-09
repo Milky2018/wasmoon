@@ -19,6 +19,7 @@ fn run_wast(
   use_jit : Bool,
   show_success : Bool,
   bulk_memory : Bool,
+  nan_canonicalization : Bool,
 ) -> Int {
   wast_jit_compiled_modules.val = 0
   wast_jit_compiled_functions.val = 0
@@ -60,6 +61,7 @@ fn run_wast(
     use_jit,
     show_success,
     bulk_memory~,
+    nan_canonicalization~,
     jit_compiler~,
     register_named_modules=match
       @env.get_env_var("WASMOON_WAST_REGISTER_NAMED_MODULES") {
@@ -473,6 +475,7 @@ fn try_compile_jit_with_suspension(
     },
     local_compile_mask~,
     force_subtype_indirect_check=Some(true),
+    nan_canonicalization=store.nan_canonicalization,
   )
   match compiled {
     None =>
@@ -641,6 +644,7 @@ pub fn run_testsuite(
   use_jit : Bool,
   show_success : Bool,
   bulk_memory? : Bool = true,
+  nan_canonicalization? : Bool = false,
 ) -> Int {
-  run_wast(wast_path, use_jit, show_success, bulk_memory)
+  run_wast(wast_path, use_jit, show_success, bulk_memory, nan_canonicalization)
 }

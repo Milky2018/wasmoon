@@ -121,6 +121,8 @@ def run_case(case: dict, mode: str, binary: Path, output: Path, timeout: float,
     directory.mkdir(parents=True)
     if case["lane"] == "core":
         command = [str(binary), "test", case["path"]]
+        if case["config"].get("nan_canonicalization") is True:
+            command.append("--canonicalize-nans")
         if case["config"].get("bulk_memory") is False:
             command.append("--no-bulk-memory")
         if mode == "interp":

@@ -4,6 +4,7 @@ fn runtime_artifact_manifest() -> @artifact.CompatibilityManifest raise @wasmoon
     optimization_level: O2,
     code_model: Small,
     call_binding: DirectBody,
+    nan_canonicalization: false,
     cancellation_safepoints: false,
     debug_info: false,
   }

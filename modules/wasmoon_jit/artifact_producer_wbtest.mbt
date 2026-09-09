@@ -6,6 +6,7 @@ fn artifact_wbtest_manifest(
     optimization_level: O2,
     code_model: Small,
     call_binding: DirectBody,
+    nan_canonicalization: false,
     cancellation_safepoints: true,
     debug_info: false,
   }
@@ -125,7 +126,7 @@ test "artifact producer preserves symbolic imported and internal code targets" {
     content=(
       #|{
       #|  manifest: {
-      #|    format_version: 9,
+      #|    format_version: 10,
       #|    target: {
       #|      architecture: X64,
       #|      operating_system_abi: MacOS,
@@ -144,6 +145,7 @@ test "artifact producer preserves symbolic imported and internal code targets" {
       #|      optimization_level: O2,
       #|      code_model: Small,
       #|      call_binding: DirectBody,
+      #|      nan_canonicalization: false,
       #|      cancellation_safepoints: true,
       #|      debug_info: false,
       #|    },

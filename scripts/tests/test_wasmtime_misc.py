@@ -45,7 +45,9 @@ class MiscRunnerTests(unittest.TestCase):
     def test_exclusions_are_contracts_not_passes(self):
         _, cases = misc.validate_snapshot()
         indexed = {c['name']: c for c in cases}
-        self.assertEqual(misc.exclusion(indexed['canonicalize-nan-scalar.wast'], False)[0], 'unsupported')
+        self.assertIsNone(misc.exclusion(indexed['canonicalize-nan-scalar.wast'], False))
+        missing_host = indexed['add.wast'] | {'host_contract': 'Test-only missing host contract'}
+        self.assertEqual(misc.exclusion(missing_host, False)[0], 'unsupported')
         self.assertEqual(misc.exclusion(indexed['big-memory-behavior.wast'], False)[0], 'deferred')
         self.assertIsNone(misc.exclusion(indexed['big-memory-behavior.wast'], True))
         self.assertIsNone(misc.exclusion(indexed['add.wast'], False))
@@ -87,7 +89,8 @@ class MiscRunnerTests(unittest.TestCase):
 
     def test_excluded_cases_do_not_launch_an_engine(self):
         _, cases = misc.validate_snapshot()
-        case = next(c for c in cases if c['name'] == 'canonicalize-nan-scalar.wast')
+        case = next(c for c in cases if c['name'] == 'add.wast')
+        case = case | {'host_contract': 'Test-only missing host contract'}
         with tempfile.TemporaryDirectory() as tmp:
             result = misc.run_case(case, 'jit', Path('missing'), Path(tmp), 1, Path('missing'), Path('missing'))
             self.assertEqual(result['status'], 'unsupported')

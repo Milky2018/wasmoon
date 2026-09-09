@@ -502,6 +502,7 @@ pub fn Stack::size(Self) -> Int
 pub fn Stack::to_repr(Self) -> @debug.Repr
 
 pub struct Store {
+  nan_canonicalization : Bool
   funcs : Array[FuncInst]
   func_types : Array[@types.FuncType]
   func_type_indices : Array[Int]
@@ -525,7 +526,7 @@ pub struct Store {
   native_execution : @wasmoon_jit.NativeExecutionState
   // private fields
 } derive(@debug.Debug)
-pub fn Store::Store() -> Self
+pub fn Store::Store(nan_canonicalization? : Bool) -> Self
 pub fn Store::alloc_array(Self, Int, Array[@types.Value], instance? : ModuleInstance) -> Int raise RuntimeError
 pub fn Store::alloc_async_host_func(Self, async (Array[@types.Value]) -> Array[@types.Value], func_type? : @types.FuncType, type_idx? : Int) -> Int raise RuntimeError
 pub fn Store::alloc_async_host_func_with_caller(Self, async (Caller, Array[@types.Value]) -> Array[@types.Value], func_type? : @types.FuncType, type_idx? : Int) -> Int raise RuntimeError
@@ -593,7 +594,7 @@ pub fn Store::struct_get(Self, Int, Int) -> @types.Value raise RuntimeError
 pub fn Store::struct_set(Self, Int, Int, @types.Value) -> Unit raise RuntimeError
 pub fn Store::to_repr(Self) -> @debug.Repr
 pub fn Store::unwrap_extern(Self, @types.Value) -> @types.Value raise RuntimeError
-pub fn Store::with_c_heap() -> Self
+pub fn Store::with_c_heap(nan_canonicalization? : Bool) -> Self
 pub fn Store::wrap_as_extern(Self, @types.Value) -> @types.Value raise RuntimeError
 
 pub struct StoreFuncrefEntry {

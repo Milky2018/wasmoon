@@ -138,6 +138,7 @@ fn build_command() -> @argparse.Command {
         ],
         flags=[
           FlagArg("no-jit", about="Disable JIT compilation (use interpreter)"),
+          FlagArg("canonicalize-nans", about="Canonicalize arithmetic NaNs"),
           FlagArg(
             "no-bulk-memory",
             about="Disable bulk-memory instructions and passive segments",
@@ -322,6 +323,7 @@ fn main {
         !(sub.flags.get("no-jit") is Some(true)),
         sub.flags.get("show-success") is Some(true),
         bulk_memory=!(sub.flags.get("no-bulk-memory") is Some(true)),
+        nan_canonicalization=sub.flags.get("canonicalize-nans") is Some(true),
       )
     Some(("disasm", sub)) => @commands.run_disasm(sub.values["file"][0])
     Some(("component", sub)) => {

@@ -16,6 +16,7 @@ pub(all) enum FuncOwner {
 ///|
 /// The store contains all global runtime state
 pub struct Store {
+  nan_canonicalization : Bool
   funcs : Array[FuncInst]
   func_types : Array[@types.FuncType] // Type of each function
   func_type_indices : Array[Int] // Original type index for structural comparison
@@ -131,8 +132,9 @@ fn c_heap_initial_capacity() -> Int {
 }
 
 ///|
-pub fn Store::Store() -> Store {
+pub fn Store::Store(nan_canonicalization? : Bool = false) -> Store {
   {
+    nan_canonicalization,
     funcs: [],
     func_types: [],
     func_type_indices: [],
@@ -166,9 +168,10 @@ pub fn Store::Store() -> Store {
 
 ///|
 /// Create a store with C heap enabled (for JIT mode)
-pub fn Store::with_c_heap() -> Store {
+pub fn Store::with_c_heap(nan_canonicalization? : Bool = false) -> Store {
   let initial_capacity = c_heap_initial_capacity()
   {
+    nan_canonicalization,
     funcs: [],
     func_types: [],
     func_type_indices: [],

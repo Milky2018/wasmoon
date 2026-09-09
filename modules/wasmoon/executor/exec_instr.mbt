@@ -852,6 +852,9 @@ fn ExecContext::exec_instr(
     | I16x8RelaxedDotI8x16I7x16S
     | I32x4RelaxedDotI8x16I7x16AddS => self.exec_simd(instr)
   }
+  if self.store.nan_canonicalization {
+    self.canonicalize_nan_result(instr)
+  }
 }
 
 ///|

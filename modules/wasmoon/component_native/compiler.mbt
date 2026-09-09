@@ -297,6 +297,7 @@ fn compile_component_artifact(
     optimization_level: component_artifact_optimization_level(opt_level),
     code_model: Small,
     call_binding: DirectBody,
+    nan_canonicalization: false,
     cancellation_safepoints: false,
     debug_info: false,
   }

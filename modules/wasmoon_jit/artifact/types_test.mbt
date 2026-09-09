@@ -23,6 +23,7 @@ fn sample_artifact() -> Artifact {
         optimization_level: O2,
         code_model: Small,
         call_binding: DirectBody,
+        nan_canonicalization: false,
         cancellation_safepoints: true,
         debug_info: true,
       },
@@ -78,7 +79,7 @@ test "artifact preserves the complete unlinked function contract" {
     content=(
       #|{
       #|  manifest: {
-      #|    format_version: 9,
+      #|    format_version: 10,
       #|    target: {
       #|      architecture: AArch64,
       #|      operating_system_abi: MacOS,
@@ -97,6 +98,7 @@ test "artifact preserves the complete unlinked function contract" {
       #|      optimization_level: O2,
       #|      code_model: Small,
       #|      call_binding: DirectBody,
+      #|      nan_canonicalization: false,
       #|      cancellation_safepoints: true,
       #|      debug_info: true,
       #|    },

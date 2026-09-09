@@ -130,11 +130,16 @@ pub struct WastContext {
 pub fn WastContext::WastContext(
   use_jit : Bool,
   bulk_memory? : Bool = true,
+  nan_canonicalization? : Bool = false,
   jit_compiler? : JITCompiler? = None,
   register_named_modules? : Bool = false,
 ) -> WastContext {
   // Use c_heap when JIT is enabled for GC support
-  let store = if use_jit { @runtime.Store::with_c_heap() } else { Store() }
+  let store = if use_jit {
+    @runtime.Store::with_c_heap(nan_canonicalization~)
+  } else {
+    Store(nan_canonicalization~)
+  }
 
   // Create WASI context with default configuration for tests
   let wasi_builder = @wasi.WasiContextBuilder::WasiContextBuilder()
@@ -286,6 +291,7 @@ pub fn run_wast_commands(
   use_jit : Bool,
   show_success : Bool,
   bulk_memory? : Bool = true,
+  nan_canonicalization? : Bool = false,
   jit_compiler? : JITCompiler? = None,
   register_named_modules? : Bool = false,
 ) -> WastResult {
@@ -293,6 +299,7 @@ pub fn run_wast_commands(
   let ctx = WastContext::WastContext(
     use_jit,
     bulk_memory~,
+    nan_canonicalization~,
     jit_compiler~,
     register_named_modules~,
   )

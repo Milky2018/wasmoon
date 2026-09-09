@@ -4,7 +4,14 @@ fn prepare_async_jit_context(
   instance : @runtime.ModuleInstance,
   store : @runtime.Store,
 ) -> @wast.JITModuleContext raise {
-  guard @commands.compile_module_to_jit(mod_, false, false, 0, false)
+  guard @commands.compile_module_to_jit(
+      mod_,
+      false,
+      false,
+      0,
+      false,
+      nan_canonicalization=store.nan_canonicalization,
+    )
     is Some((artifact, debug_db)) else {
     fail("JIT compilation failed")
   }

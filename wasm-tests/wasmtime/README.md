@@ -66,7 +66,9 @@ configuration matrix. Explicit missing host contracts are listed per file in
   elements and reference-types table operations remain enabled.
 - `component_model_implements = false` is forwarded to the component validator
   and runtime through `--no-component-implements`.
-- Engine-wide NaN canonicalization remains unavailable.
+- `nan_canonicalization = true` enables `--canonicalize-nans`. Scalar and SIMD
+  arithmetic results are canonicalized before guest consumers observe their
+  bits; constants, loads, and sign-only operations retain their payloads.
 - Upstream `hogs_memory` tests are separately `deferred` by default. Use
   `--include-high-memory` on a suitable host to execute them. This is a resource
   policy, not a declaration that those tests pass or are unsupported.

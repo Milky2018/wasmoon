@@ -899,6 +899,7 @@ fn write_manifest(
   write_optimization_level(writer, manifest.policy.optimization_level)
   write_code_model(writer, manifest.policy.code_model)
   write_call_binding(writer, manifest.policy.call_binding)
+  writer.write_bool(manifest.policy.nan_canonicalization)
   writer.write_bool(manifest.policy.cancellation_safepoints)
   writer.write_bool(manifest.policy.debug_info)
 }
@@ -940,6 +941,9 @@ fn read_manifest(
     optimization_level: read_optimization_level(reader),
     code_model: read_code_model(reader),
     call_binding: read_call_binding(reader),
+    nan_canonicalization: reader.read_bool(
+      "manifest.policy.nan_canonicalization",
+    ),
     cancellation_safepoints: reader.read_bool(
       "manifest.policy.cancellation_safepoints",
     ),
@@ -1181,7 +1185,7 @@ fn read_function(
 }
 
 ///|
-/// Encode one v9 Cwasm artifact without resolving symbolic relocations.
+/// Encode one v10 Cwasm artifact without resolving symbolic relocations.
 pub fn encode(artifact : Artifact) -> Bytes raise ArtifactEncodeError {
   let writer = ByteWriter::new()
   writer.write_byte_array([b'c', b'w', b'a', b's'])
@@ -1198,7 +1202,7 @@ pub fn encode(artifact : Artifact) -> Bytes raise ArtifactEncodeError {
 }
 
 ///|
-/// Decode untrusted v9 Cwasm bytes into ordinary artifact data.
+/// Decode untrusted v10 Cwasm bytes into ordinary artifact data.
 ///
 /// This function performs bounded structural decoding only. The native
 /// `wasmoon_jit` facade performs compatibility and code-object verification

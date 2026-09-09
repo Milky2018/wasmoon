@@ -69,6 +69,7 @@ test "compile api: records cancellation safepoints" {
       #|  optimization_level: O2,
       #|  code_model: Small,
       #|  call_binding: DirectBody,
+      #|  nan_canonicalization: false,
       #|  cancellation_safepoints: true,
       #|  debug_info: false,
       #|}
@@ -93,7 +94,7 @@ test "compile api: parse failure emits failed stage" {
 
 ///|
 test "run JIT cache version tracks the artifact format" {
-  inspect(run_jit_cache_version, content="v9")
+  inspect(run_jit_cache_version, content="v10")
 }
 
 ///|
@@ -176,7 +177,7 @@ test "run JIT cache override is authoritative and missing user dirs disable cach
 
 ///|
 fn cache_test_file(label : String) -> String {
-  "/tmp/wasmoon-v9-cache-\{label}.cwasm"
+  "/tmp/wasmoon-v10-cache-\{label}.cwasm"
 }
 
 ///|
@@ -190,7 +191,7 @@ fn write_cache_test_bytes(path : String, bytes : Bytes) -> Unit {
 }
 
 ///|
-test "run JIT cache accepts an exactly compatible v9 artifact" {
+test "run JIT cache accepts an exactly compatible v10 artifact" {
   guard compile_module(minimal_i32_const_module_bytes()) is Some(artifact) else {
     fail("compile returned unsupported")
   }
@@ -204,7 +205,7 @@ test "run JIT cache accepts an exactly compatible v9 artifact" {
   }
   inspect(
     run_jit_cache_file("/tmp/cache", deterministic_manifest),
-    content="/tmp/cache/v9-aarch64-macos-o2-small-direct-no-cancel-no-debug-r006400690072006500630074002d00760063006f00640065002d0033-s32e9891ae7d3cedff10d21cea1ae3a989d4fb5424b89b9c2f93328535cf30af7-x67abdd721024f0ff4e0b3f4c2fc13bc5bad42d0b7851d456d88d203d15aaa450.cwasm",
+    content="/tmp/cache/v10-aarch64-macos-o2-small-direct-no-cancel-native-nan-no-debug-r006400690072006500630074002d00760063006f00640065002d0033-s32e9891ae7d3cedff10d21cea1ae3a989d4fb5424b89b9c2f93328535cf30af7-x67abdd721024f0ff4e0b3f4c2fc13bc5bad42d0b7851d456d88d203d15aaa450.cwasm",
   )
   let path = cache_test_file("compatible")
   save_run_jit_cache(path, artifact)
@@ -219,6 +220,7 @@ test "run JIT cache accepts an exactly compatible v9 artifact" {
       #|  optimization_level: O2,
       #|  code_model: Small,
       #|  call_binding: DirectBody,
+      #|  nan_canonicalization: false,
       #|  cancellation_safepoints: false,
       #|  debug_info: false,
       #|}
@@ -325,4 +327,38 @@ test "compile metrics bypass the run JIT cache" {
   inspect(should_use_run_jit_cache(true, false), content="false")
   inspect(should_use_run_jit_cache(false, true), content="false")
   inspect(should_use_run_jit_cache(true, true), content="false")
+}
+
+///|
+test "NaN policy survives serialization and separates JIT cache entries" {
+  guard compile_module(minimal_i32_const_module_bytes()) is Some(ordinary) else {
+    fail("ordinary compilation failed")
+  }
+  guard compile_module(
+      minimal_i32_const_module_bytes(),
+      nan_canonicalization=true,
+    )
+    is Some(canonical) else {
+    fail("canonical compilation failed")
+  }
+  let bytes = @artifact.encode(canonical)
+  inspect(
+    @artifact.decode(bytes).manifest.policy.nan_canonicalization,
+    content="true",
+  )
+  inspect(ordinary.manifest.policy.nan_canonicalization, content="false")
+  inspect(
+    run_jit_cache_file("/tmp/cache", ordinary.manifest) !=
+    run_jit_cache_file("/tmp/cache", canonical.manifest),
+    content="true",
+  )
+  let path = cache_test_file("nan-policy")
+  write_cache_test_bytes(path, bytes)
+  let rejected = load_run_jit_cache(
+      path,
+      jit_artifact_compatibility(ordinary.manifest),
+    )
+    is None
+  inspect(rejected, content="true")
+  inspect(@fs.path_exists(path), content="false")
 }

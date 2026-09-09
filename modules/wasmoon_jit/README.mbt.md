@@ -3,7 +3,7 @@
 JIT integration and native runtime support for Wasmoon.
 
 `wasmoon_jit` connects the compiler pipeline to Wasmoon's runtime. It provides
-VMContext layouts, native runtime helpers, v9 artifacts, trampolines, WASI
+VMContext layouts, native runtime helpers, v10 artifacts, trampolines, WASI
 bridge glue, and integration planning for loading generated code.
 
 ## Packages
@@ -17,7 +17,7 @@ bridge glue, and integration planning for loading generated code.
 ## When to use it
 
 Use `wasmoon_jit` when integrating generated code with the Wasmoon runtime,
-including VMContext layout, runtime helper symbols, trampolines, v9
+including VMContext layout, runtime helper symbols, trampolines, v10
 artifacts, and installed-code lifecycle management.
 
 `load_artifact` keeps loading separate from installation: it performs bounded
@@ -49,7 +49,7 @@ test "plan a small MilkIR function for x64 JIT integration" {
 
 ## Persisted artifacts
 
-`Milky2018/wasmoon_jit/artifact` defines the v9 ordinary-data format. The live
+`Milky2018/wasmoon_jit/artifact` defines the v10 ordinary-data format. The live
 compiler produces symbolic, unlinked function code; `load_artifact` performs
 bounded decoding and exact compatibility verification; and `JitCodeInstaller`
 owns relocation, executable-memory mutation, and publication. There is no

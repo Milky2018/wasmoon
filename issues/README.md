@@ -541,6 +541,7 @@ graph TD
   ISS_507["ISS-507: Compare WAST floating-point assertions by their required bit patterns"]
   ISS_508["ISS-508: Release WAST execution contexts deterministically"]
   ISS_509["ISS-509: Honor disabled bulk memory in core validation and misc execution"]
+  ISS_510["ISS-510: Canonicalize arithmetic NaNs consistently in both engines"]
   ISS_002 --> ISS_003
   ISS_002 --> ISS_004
   ISS_003 --> ISS_005
@@ -940,6 +941,7 @@ graph TD
   ISS_507 --> ISS_478
   ISS_508 --> ISS_478
   ISS_509 --> ISS_478
+  ISS_510 --> ISS_478
   ISS_483 --> ISS_482
   ISS_488 --> ISS_484
   ISS_489 --> ISS_484
@@ -952,6 +954,8 @@ graph TD
   ISS_494 --> ISS_496
   ISS_495 --> ISS_496
   ISS_500 --> ISS_505
+  ISS_507 --> ISS_510
+  ISS_508 --> ISS_510
 ```
 
 ## Warnings

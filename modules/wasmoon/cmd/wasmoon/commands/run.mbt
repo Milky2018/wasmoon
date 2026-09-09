@@ -912,7 +912,7 @@ fn run_jit_cache_location() -> RunJitCacheLocation? {
 }
 
 ///|
-let run_jit_cache_version = "v9"
+let run_jit_cache_version = "v10"
 
 ///|
 fn artifact_optimization_level(level : Int) -> @artifact.OptimizationLevel {
@@ -928,11 +928,13 @@ fn artifact_optimization_level(level : Int) -> @artifact.OptimizationLevel {
 fn jit_artifact_policy(
   opt_level : Int,
   enable_cancellation : Bool,
+  nan_canonicalization? : Bool = false,
 ) -> @artifact.CompilationPolicy {
   {
     optimization_level: artifact_optimization_level(opt_level),
     code_model: Small,
     call_binding: DirectBody,
+    nan_canonicalization,
     cancellation_safepoints: enable_cancellation,
     debug_info: false,
   }
@@ -982,6 +984,7 @@ fn build_jit_artifact_manifest(
   local_compile_mask? : Array[Bool]? = None,
   force_subtype_indirect_check? : Bool? = None,
   enable_cancellation? : Bool = false,
+  nan_canonicalization? : Bool = false,
 ) -> @artifact.CompatibilityManifest raise @wasmoon_jit.JitPipelineError {
   let use_subtype_indirect_check = force_subtype_indirect_check.unwrap_or(
     module_indirect_subtype_check_reason(mod_) is Some(_),
@@ -998,7 +1001,11 @@ fn build_jit_artifact_manifest(
   )
   @wasmoon_jit.build_host_artifact_manifest(
     module_identity=identity,
-    policy=jit_artifact_policy(opt_level, enable_cancellation),
+    policy=jit_artifact_policy(
+      opt_level,
+      enable_cancellation,
+      nan_canonicalization~,
+    ),
   )
 }
 
@@ -1015,7 +1022,7 @@ fn jit_artifact_compatibility(
 }
 
 ///|
-/// Verify a freshly compiled v9 artifact before executable installation.
+/// Verify a freshly compiled v10 artifact before executable installation.
 pub fn verify_compiled_jit_artifact(
   artifact : @artifact.Artifact,
 ) -> @wasmoon_jit.LoadedArtifact raise @wasmoon_jit.ArtifactLoadError {
@@ -1061,9 +1068,14 @@ fn run_jit_cache_file(
   } else {
     "no-cancel"
   }
+  let nan_tag = if manifest.policy.nan_canonicalization {
+    "canonical-nan"
+  } else {
+    "native-nan"
+  }
   let debug_tag = if manifest.policy.debug_info { "debug" } else { "no-debug" }
   let revision_tag = cache_revision_file_tag(manifest.codegen_revision)
-  let file_name = "\{run_jit_cache_version}-\{target_tag}-\{os_tag}-\{opt_tag}-\{code_model_tag}-\{call_binding_tag}-\{cancellation_tag}-\{debug_tag}-r\{revision_tag}-s\{digest_hex(source_digest)}-x\{digest_hex(semantic_digest)}.cwasm"
+  let file_name = "\{run_jit_cache_version}-\{target_tag}-\{os_tag}-\{opt_tag}-\{code_model_tag}-\{call_binding_tag}-\{cancellation_tag}-\{nan_tag}-\{debug_tag}-r\{revision_tag}-s\{digest_hex(source_digest)}-x\{digest_hex(semantic_digest)}.cwasm"
   if cache_dir.has_suffix("/") {
     "\{cache_dir}\{file_name}"
   } else {
@@ -1339,7 +1351,7 @@ fn run_with_jit(
       None => ()
     }
   }
-  // Compile and verify the same v9 artifact shape used by persisted cache hits.
+  // Compile and verify the same v10 artifact shape used by persisted cache hits.
   let compiled = match cached_artifact {
     Some(loaded) => Some((loaded, None, None))
     None => {
@@ -1619,13 +1631,14 @@ fn module_indirect_subtype_check_reason(mod_ : @types.Module) -> String? {
 }
 
 ///|
-/// Compile module bytes into a v9 JIT artifact and emit structured progress.
+/// Compile module bytes into a v10 JIT artifact and emit structured progress.
 pub fn compile_module(
   module_bytes : Bytes,
   opt_level? : Int = 2,
   enable_dwarf? : Bool = false,
   on_progress? : (CompileProgress) -> Unit? = fn(_event) { None },
   enable_cancellation? : Bool = false,
+  nan_canonicalization? : Bool = false,
 ) -> @artifact.Artifact? {
   let compile_start = @perf.tick_now()
   emit_compile_progress(on_progress, Parse, compile_start, 0, 0)
@@ -1678,6 +1691,7 @@ pub fn compile_module(
     on_progress~,
     compile_start=Some(compile_start),
     enable_cancellation~,
+    nan_canonicalization~,
   )
   match compiled {
     Some((artifact, _debug_db)) => Some(artifact)
@@ -1707,7 +1721,7 @@ fn normalize_opt_level(opt_level : Int) -> Int {
 }
 
 ///|
-/// Compile a WASM module to a v9 JIT artifact in memory.
+/// Compile a WASM module to a v10 JIT artifact in memory.
 ///
 /// Decoded modules are untrusted at this public seam and are fully validated
 /// before frontend translation. `actual_memory_max` overrides the memory limit
@@ -1725,6 +1739,7 @@ pub fn compile_module_to_jit(
   force_subtype_indirect_check? : Bool? = None,
   use_reusable_pipeline? : Bool = true,
   enable_cancellation? : Bool = false,
+  nan_canonicalization? : Bool = false,
 ) -> (@artifact.Artifact, @wasmoon_jit.JITDebugDB?)? {
   let progress_start = compile_start.unwrap_or(@perf.tick_now())
   @validator.validate_module(mod_) catch {
@@ -1757,6 +1772,7 @@ pub fn compile_module_to_jit(
     force_subtype_indirect_check~,
     use_reusable_pipeline~,
     enable_cancellation~,
+    nan_canonicalization~,
   )
 }
 
@@ -1775,6 +1791,7 @@ fn compile_validated_module_to_jit(
   force_subtype_indirect_check? : Bool? = None,
   use_reusable_pipeline? : Bool = true,
   enable_cancellation? : Bool = false,
+  nan_canonicalization? : Bool = false,
   source_module? : Bytes? = None,
 ) -> (@artifact.Artifact, @wasmoon_jit.JITDebugDB?)? {
   use_reusable_pipeline |> ignore
@@ -1881,6 +1898,7 @@ fn compile_validated_module_to_jit(
     local_compile_mask=compile_mask,
     force_subtype_indirect_check=Some(use_subtype_indirect_check),
     enable_cancellation~,
+    nan_canonicalization~,
   ) catch {
     err => {
       emit_compile_progress(
@@ -1967,6 +1985,9 @@ fn compile_validated_module_to_jit(
       code.locals,
       code.body,
     )
+    if nan_canonicalization {
+      @optimize.canonicalize_nans(ir_func)
+    }
     let translation_us = translation_tick.map(@perf.elapsed_us)
     emit_compile_progress(
       on_progress,

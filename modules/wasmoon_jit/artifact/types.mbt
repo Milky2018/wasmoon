@@ -1,6 +1,6 @@
 ///|
-/// The first breaking Cwasm format after the legacy v8 representation.
-pub const FORMAT_VERSION : Int = 9
+/// Cwasm format with an explicit arithmetic NaN compilation policy.
+pub const FORMAT_VERSION : Int = 10
 
 ///|
 /// Operating-system ABI assumed by generated code and unwind metadata.
@@ -94,6 +94,7 @@ pub(all) struct CompilationPolicy {
   optimization_level : OptimizationLevel
   code_model : CodeModel
   call_binding : CallBinding
+  nan_canonicalization : Bool
   cancellation_safepoints : Bool
   debug_info : Bool
 } derive(Eq, Debug)
