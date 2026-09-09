@@ -32,6 +32,10 @@ pub fn artifact_module_identity(String, Bytes, Bytes) -> @artifact.ModuleIdentit
 
 pub fn atomic_fence() -> Unit
 
+pub fn atomic_notify(Int64, Int64, Int) -> Int
+
+pub fn atomic_wait_begin(Int64, Int64, Int, Int64, Int64) -> NativeAtomicWait?
+
 pub fn build_artifact_manifest(NativeTarget, @artifact.OperatingSystemAbi, module_identity~ : @artifact.ModuleIdentity, policy~ : @artifact.CompilationPolicy, required_cpu_features? : Array[@artifact.CpuFeature]) -> @artifact.CompatibilityManifest
 
 pub fn build_entry_trampoline_for_target(Array[@types.ValueType], Array[@types.ValueType], NativeTarget) -> Array[Int] raise HostcallImportTrampolineError
@@ -653,6 +657,10 @@ pub struct MemoryInfo {
   max_pages : Int?
 }
 pub fn MemoryInfo::MemoryInfo(Int64, Int64, Int?) -> Self
+
+pub type NativeAtomicWait
+pub fn NativeAtomicWait::cancel(Self) -> Unit
+pub fn NativeAtomicWait::poll(Self) -> Int
 
 pub struct NativeCallable {
   context : NativeJITContext

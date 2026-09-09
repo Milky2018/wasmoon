@@ -8,6 +8,10 @@ pub fn atomic_counter_finish(Int64, Int) -> Unit
 
 pub fn atomic_counter_start(Int64, Int, Int) -> Int64
 
+pub fn atomic_notify_finish(Int64) -> Int
+
+pub fn atomic_notify_start(Int64, Int64) -> Int64
+
 pub fn callback_capture() -> CallbackCapture
 
 pub fn callback_capture_release_count() -> Int
@@ -23,6 +27,8 @@ pub fn hostcall_probe_trampoline() -> Int64
 pub fn memory_growth_finish(Int64, Int) -> Int64
 
 pub fn memory_growth_start(Int64, Int) -> Int64
+
+pub fn memory_owner_count(Int64) -> Int64
 
 pub fn mismatched_try_end_probe() -> Int64
 

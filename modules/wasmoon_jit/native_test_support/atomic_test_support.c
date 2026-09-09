@@ -2,6 +2,60 @@
 #include <pthread.h>
 #include <sched.h>
 
+extern int32_t wasmoon_atomic_notify(int64_t, int64_t, int32_t);
+extern void wasmoon_jit_retain_memory_desc(int64_t);
+extern void wasmoon_jit_free_memory_desc(int64_t);
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_test_memory_owner_count(int64_t descriptor) {
+    wasmoon_memory_t *memory = (void *)(uintptr_t)descriptor;
+    return (int64_t)atomic_load_explicit(&memory->owners, memory_order_relaxed);
+}
+
+typedef struct {
+    pthread_t thread;
+    int64_t descriptor;
+    int64_t offset;
+    int32_t result;
+} atomic_notify_worker;
+
+static void *run_atomic_notify(void *argument) {
+    atomic_notify_worker *worker = argument;
+    for (int attempt = 0; attempt < 1000000; attempt++) {
+        int32_t result = wasmoon_atomic_notify(worker->descriptor, worker->offset, 1);
+        if (result) {
+            worker->result = result;
+            return NULL;
+        }
+        sched_yield();
+    }
+    worker->result = -1;
+    return NULL;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_test_atomic_notify_start(int64_t descriptor, int64_t offset) {
+    atomic_notify_worker *worker = calloc(1, sizeof(*worker));
+    if (!worker) return 0;
+    worker->descriptor = descriptor;
+    worker->offset = offset;
+    wasmoon_jit_retain_memory_desc(descriptor);
+    if (pthread_create(&worker->thread, NULL, run_atomic_notify, worker)) {
+        wasmoon_jit_free_memory_desc(descriptor);
+        free(worker);
+        return 0;
+    }
+    return (int64_t)(uintptr_t)worker;
+}
+
+MOONBIT_FFI_EXPORT int32_t wasmoon_test_atomic_notify_finish(int64_t pointer) {
+    atomic_notify_worker *worker = (void *)(uintptr_t)pointer;
+    if (!worker) return -1;
+    pthread_join(worker->thread, NULL);
+    int32_t result = worker->result;
+    wasmoon_jit_free_memory_desc(worker->descriptor);
+    free(worker);
+    return result;
+}
+
 // This worker never enters MoonBit. The test owns the memory descriptor until
 // join/cancel completes, so concurrent work touches only native atomic storage.
 typedef struct {

@@ -99,3 +99,40 @@ pub fn Memory::atomic_compare_exchange(
 pub fn atomic_fence() -> Unit {
   @wasmoon_jit.atomic_fence()
 }
+
+///|
+/// Register a wait without blocking the embedding thread. The returned owner
+/// keeps the native shared memory live until cancellation or finalization.
+pub fn Memory::atomic_wait_begin(
+  self : Memory,
+  offset : Int64,
+  width : Int,
+  expected : Int64,
+  timeout : Int64,
+) -> @wasmoon_jit.NativeAtomicWait raise RuntimeError {
+  if width != 4 && width != 8 {
+    raise Unreachable
+  }
+  let descriptor = self.checked_atomic_descriptor(offset, width)
+  if !self.is_shared {
+    raise AtomicWaitNonSharedMemory
+  }
+  match
+    @wasmoon_jit.atomic_wait_begin(descriptor, offset, width, expected, timeout) {
+    Some(waiter) => waiter
+    None => raise OutOfMemory
+  }
+}
+
+///|
+pub fn Memory::atomic_notify(
+  self : Memory,
+  offset : Int64,
+  count : UInt,
+) -> UInt raise RuntimeError {
+  @wasmoon_jit.atomic_notify(
+    self.checked_atomic_descriptor(offset, 4),
+    offset,
+    count.reinterpret_as_int(),
+  ).reinterpret_as_uint()
+}

@@ -26,6 +26,7 @@ options(
   "native-stub": [
     "jit_ffi/jit.c",
     "jit_ffi/atomic.c",
+    "jit_ffi/atomic_wait.c",
     "jit_ffi/trap.c",
     "jit_ffi/exec_mem.c",
     "jit_ffi/jit_context.c",

@@ -313,8 +313,10 @@ type Memory derive(@debug.Debug)
 pub fn Memory::Memory(Int, Int?, is_memory64? : Bool, is_shared? : Bool, page_size_log2? : Int) -> Self
 pub fn Memory::atomic_compare_exchange(Self, Int64, Int, Int64, Int64) -> Int64 raise RuntimeError
 pub fn Memory::atomic_load(Self, Int64, Int) -> Int64 raise RuntimeError
+pub fn Memory::atomic_notify(Self, Int64, UInt) -> UInt raise RuntimeError
 pub fn Memory::atomic_rmw(Self, AtomicRmwOp, Int64, Int, Int64) -> Int64 raise RuntimeError
 pub fn Memory::atomic_store(Self, Int64, Int, Int64) -> Unit raise RuntimeError
+pub fn Memory::atomic_wait_begin(Self, Int64, Int, Int64, Int64) -> @wasmoon_jit.NativeAtomicWait raise RuntimeError
 pub fn Memory::byte_len(Self) -> Int64
 pub fn Memory::copy(Self, Int, Int, Int) -> Unit raise RuntimeError
 pub fn Memory::copy_at(Self, Int64, Int64, Int64) -> Unit raise RuntimeError
