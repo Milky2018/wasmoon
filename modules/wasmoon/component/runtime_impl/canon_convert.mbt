@@ -6,6 +6,7 @@ fn lift_component_value_from_flat(
   mem : @runtime.Memory?,
   mem_is_64 : Bool,
   encoding : StringEncoding,
+  resource_table : ResourceTable,
 ) -> ComponentValue raise ComponentRuntimeError {
   let mut idx = 0
   fn take(
@@ -26,7 +27,7 @@ fn lift_component_value_from_flat(
     match resolve_valtype(ty, types) {
       Prim(p) =>
         match p {
-          String | ErrorContext => {
+          String => {
             let m = match mem {
               Some(m) => m
               None => raise MissingCanonMemory
@@ -43,11 +44,16 @@ fn lift_component_value_from_flat(
               }
             }
             let s = read_string_from_memory_with_encoding(m, ptr, len, encoding)
-            if p == String {
-              String(s)
-            } else {
-              ErrorContext(s)
+            String(s)
+          }
+          ErrorContext => {
+            guard take(vals) is I32(handle) else {
+              raise HostCallError("type mismatch")
             }
+            guard resource_table.error_contexts.get(handle) is Some(message) else {
+              raise CanonCallError("unknown handle index \{handle}")
+            }
+            ErrorContext(message)
           }
           _ =>
             match (p, take(vals)) {
@@ -117,7 +123,7 @@ fn lift_component_value_from_flat(
               )
               items.push(
                 lift_component_value_from_flat(
-                  elem_ty, elem_vals, types, mem, mem_is_64, encoding,
+                  elem_ty, elem_vals, types, mem, mem_is_64, encoding, resource_table,
                 ),
               )
             }
@@ -165,7 +171,7 @@ fn lift_component_value_from_flat(
                   )
                 }
                 let payload = lift_component_value_from_flat(
-                  payload_ty, payload_vals, types, mem, mem_is_64, encoding,
+                  payload_ty, payload_vals, types, mem, mem_is_64, encoding, resource_table,
                 )
                 Variant(tag, Some(payload))
               }
@@ -206,7 +212,7 @@ fn lift_component_value_from_flat(
                 )
               }
               let payload = lift_component_value_from_flat(
-                payload_ty, payload_vals, types, mem, mem_is_64, encoding,
+                payload_ty, payload_vals, types, mem, mem_is_64, encoding, resource_table,
               )
               Variant(1, Some(payload))
             }
@@ -247,7 +253,7 @@ fn lift_component_value_from_flat(
                   )
                 }
                 let payload = lift_component_value_from_flat(
-                  pt, payload_vals, types, mem, mem_is_64, encoding,
+                  pt, payload_vals, types, mem, mem_is_64, encoding, resource_table,
                 )
                 Variant(tag, Some(payload))
               }
@@ -350,7 +356,7 @@ fn component_args_to_core(
       types,
       resources,
       store,
-      Some((caller_table, callee_table)),
+      (caller_table, callee_table),
     )
     param_values.push(values)
     for v in values {
@@ -560,6 +566,7 @@ fn core_args_to_component(
       mem,
       mem_is_64,
       resources.encoding,
+      resource_table,
     )
     map_canonical_handles(p.ty, v, types, (definition, value) => {
       match definition {
@@ -593,6 +600,7 @@ fn component_results_to_core(
   resources : CanonResources,
   store : @runtime.Store,
   retptr : Int?,
+  resource_table : ResourceTable,
 ) -> Array[@types.Value] raise ComponentRuntimeError {
   guard func_type.result is Some(ty) else { return [] }
   guard results is [value] else {
@@ -609,7 +617,7 @@ fn component_results_to_core(
     types,
     resources,
     store,
-    None,
+    (resource_table, resource_table),
   )
   if flat_types.length() <= 1 {
     return values
@@ -627,8 +635,9 @@ fn lower_component_value_to_flat(
   types : Array[TypeDef?],
   resources : CanonResources,
   store : @runtime.Store,
-  tables : (ResourceTable, ResourceTable)?,
+  tables : (ResourceTable, ResourceTable),
 ) -> Array[@types.Value] raise ComponentRuntimeError {
+  let (caller_table, callee_table) = tables
   // Cache memory/realloc handles (if provided) for canonical ABI operations.
   let mut mem : @runtime.Memory? = None
   let mut mem_is_64 = false
@@ -657,7 +666,9 @@ fn lower_component_value_to_flat(
           (F32, F32(f)) => [F32(f)]
           (F64, F64(f)) => [F64(f)]
           (Char, Char(c)) => [I32(c.to_int())]
-          (String, String(s)) | (ErrorContext, ErrorContext(s)) => {
+          (ErrorContext, ErrorContext(message)) =>
+            [I32(callee_table.alloc_error_context(message))]
+          (String, String(s)) => {
             let m = match mem {
               Some(m) => m
               None => raise MissingCanonMemory
@@ -941,9 +952,6 @@ fn lower_component_value_to_flat(
               ResourceValue(rep) => return [I32(rep)]
               _ => raise HostCallError("argument type mismatch")
             }
-            guard tables is Some((caller_table, callee_table)) else {
-              return [I32(handle)]
-            }
             match caller_table.get(handle) {
               Some(entry) =>
                 if entry.type_id != expected_type_id {
@@ -971,13 +979,10 @@ fn lower_component_value_to_flat(
               S32(h) => h
               _ => raise HostCallError("argument type mismatch")
             }
-            guard tables is Some((caller_table, callee_table)) else {
-              return [I32(handle)]
-            }
             if caller_table.id == callee_table.id {
               [I32(handle)]
             } else {
-              let entry = match caller_table.free(handle) {
+              let entry = match caller_table.get(handle) {
                 Some(e) => e
                 None =>
                   raise CanonCallError(
@@ -989,6 +994,7 @@ fn lower_component_value_to_flat(
                   "handle index \{resource_handle_index_text(handle)} used with the wrong type",
                 )
               }
+              caller_table.free(handle) |> ignore
               let new_handle = callee_table.alloc(entry)
               [I32(new_handle)]
             }

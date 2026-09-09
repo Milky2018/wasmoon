@@ -458,6 +458,7 @@ fn instantiate_canon_future_write(
   let resources = resolve_canon_resources(_opts, state)
   let async_state = state.async_state
   let caller_component_id = state.resource_table.id
+  let writer_table = state.resource_table
   let is_async = canon_opt_is_async(_opts)
   let payload_type : CanonicalPayloadType = {
     ty: match state.types.get(_tyidx) {
@@ -591,7 +592,9 @@ fn instantiate_canon_future_write(
                       "cannot read from and write to intra-component future/stream with non-numeric payload",
                     )
                   }
-                  let payload = payload_type.load(resources, store, ptr, 1) catch {
+                  let payload = payload_type.load(
+                    resources, store, ptr, 1, writer_table,
+                  ) catch {
                     error => {
                       trap_canon(canon_err_message(error))
                       return [I32(0)]
@@ -655,7 +658,9 @@ fn instantiate_canon_future_write(
                     )
                     return ret_i32(0)
                   }
-                  let payload = payload_type.load(resources, store, ptr, 1) catch {
+                  let payload = payload_type.load(
+                    resources, store, ptr, 1, writer_table,
+                  ) catch {
                     error => {
                       trap_canon(canon_err_message(error))
                       return [I32(0)]

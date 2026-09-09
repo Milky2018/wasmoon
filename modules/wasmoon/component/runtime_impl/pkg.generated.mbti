@@ -102,8 +102,6 @@ pub(all) struct AsyncState {
   future_endpoints : Map[Int64, FutureEndpoint]
   host_future_values : Map[Int, HostFutureValue]
   backpressure_by_instance : Map[Int, Int]
-  next_error_context_by_component : Map[Int, Array[Int]]
-  error_contexts : Map[Int64, String]
 } derive(@debug.Debug)
 pub fn AsyncState::AsyncState(StreamTable, core_engine? : CoreExecutionEngine) -> Self
 pub fn AsyncState::to_repr(Self) -> @debug.Repr
@@ -450,6 +448,8 @@ pub(all) struct ResourceTable {
   next_handle : @ref.Ref[Int]
   free_handles : @ref.Ref[Array[Int]]
   entries : @ref.Ref[Map[Int, ResourceHandle]]
+  error_contexts : Map[Int, String]
+  next_error_context : @ref.Ref[Int]
 } derive(@debug.Debug)
 pub fn ResourceTable::ResourceTable() -> Self
 pub fn ResourceTable::alloc(Self, ResourceHandle) -> Int

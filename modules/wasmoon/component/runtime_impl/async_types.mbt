@@ -102,6 +102,9 @@ pub(all) struct ResourceTable {
   next_handle : Ref[Int]
   free_handles : Ref[Array[Int]]
   entries : Ref[Map[Int, ResourceHandle]]
+  // Error contexts use a separate per-component handle namespace.
+  error_contexts : Map[Int, String]
+  next_error_context : Ref[Int]
 } derive(Debug)
 
 ///|
@@ -111,8 +114,15 @@ let resource_table_id_counter : Array[Int] = [0]
 pub fn ResourceTable::ResourceTable() -> ResourceTable {
   let id = resource_table_id_counter[0]
   resource_table_id_counter[0] = id + 1
-  // Handle 0 is always invalid; the first valid allocation is 1.
-  { id, next_handle: Ref(1), free_handles: Ref([]), entries: Ref(Map([])), }
+  // Resource handle 0 is invalid; error-context handles start at 0.
+  {
+    id,
+    next_handle: Ref(1),
+    free_handles: Ref([]),
+    entries: Ref(Map([])),
+    error_contexts: Map([]),
+    next_error_context: Ref(0),
+  }
 }
 
 ///|
@@ -372,10 +382,6 @@ pub(all) struct AsyncState {
   // Per-component backpressure counter used by `canon backpressure.*`.
   // Matches Wasmtime behavior: enabled when > 0; valid range is u16.
   backpressure_by_instance : Map[Int, Int]
-
-  // Per-component local error-context handles (`canon error-context.*`).
-  next_error_context_by_component : Map[Int, Array[Int]]
-  error_contexts : Map[Int64, String]
 } derive(Debug)
 
 ///|
@@ -598,8 +604,6 @@ pub fn AsyncState::AsyncState(
     future_endpoints: Map([]),
     host_future_values: Map([]),
     backpressure_by_instance: Map([]),
-    next_error_context_by_component: Map([]),
-    error_contexts: Map([]),
   }
 }
 
@@ -1512,47 +1516,23 @@ fn set_backpressure_value_for_instance(
 }
 
 ///|
-fn alloc_error_context_handle(
-  async_state : AsyncState,
-  component_id : Int,
-  debug_message : String,
+fn ResourceTable::alloc_error_context(
+  self : ResourceTable,
+  message : String,
 ) -> Int {
-  let next = match
-    async_state.next_error_context_by_component.get(component_id) {
-    Some(a) => a
-    None => {
-      let a = [0]
-      async_state.next_error_context_by_component.set(component_id, a)
-      a
-    }
-  }
-  let handle = next[0]
-  next[0] = handle + 1
-  async_state.error_contexts.set(
-    handle_key(component_id, handle),
-    debug_message,
-  )
+  let handle = self.next_error_context.val
+  self.next_error_context.val += 1
+  self.error_contexts.set(handle, message)
   handle
 }
 
 ///|
-fn get_error_context_message(
-  async_state : AsyncState,
-  component_id : Int,
-  handle : Int,
-) -> String? {
-  async_state.error_contexts.get(handle_key(component_id, handle))
-}
-
-///|
-fn drop_error_context_handle(
-  async_state : AsyncState,
-  component_id : Int,
+fn ResourceTable::drop_error_context(
+  self : ResourceTable,
   handle : Int,
 ) -> Bool {
-  let key = handle_key(component_id, handle)
-  if async_state.error_contexts.get(key) is Some(_) {
-    async_state.error_contexts.remove(key)
+  if self.error_contexts.get(handle) is Some(_) {
+    self.error_contexts.remove(handle)
     true
   } else {
     false

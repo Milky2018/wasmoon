@@ -50,7 +50,7 @@ pub fn canonical_value_contains_memory(
   let visited : Map[Int, Unit] = Map([])
   fn contains(ty : ValType) -> Bool {
     match ty {
-      Prim(String | ErrorContext) => true
+      Prim(String) => true
       Prim(_) => false
       TypeIdx(idx) => {
         if visited.get(idx) is Some(_) {

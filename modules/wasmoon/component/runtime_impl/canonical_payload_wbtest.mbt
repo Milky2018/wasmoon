@@ -97,11 +97,11 @@ test "payload transport converts nested values across type environments and memo
     source,
     64,
   )
-  let pending = source_type.load(src_resources, store, 64, 1)
+  let pending = source_type.load(src_resources, store, 64, 1, source)
   pending.store(
     0, 1, source, target_type, dst_resources, store, target, state, 128,
   )
-  let output = target_type.load(dst_resources, store, 128, 1)
+  let output = target_type.load(dst_resources, store, 128, 1, target)
   debug_inspect(
     output.values,
     content="[([U8(7), List([String(\"hello\"), String(\"世界\")])])]",

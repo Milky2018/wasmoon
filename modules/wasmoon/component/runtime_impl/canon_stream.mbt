@@ -81,7 +81,7 @@ fn store_host_stream_value(
     types,
     resources,
     store,
-    Some((table, table)),
+    (table, table),
   )
   store_flat_component_value_to_memory(
     mem, ptr, payload_ty, values, types, mem_is_64,
@@ -955,7 +955,9 @@ fn instantiate_canon_stream_write(
                       } else {
                         st0.pending_read
                       }
-                      let buf = payload_type.load(resources, store, ptr, len) catch {
+                      let buf = payload_type.load(
+                        resources, store, ptr, len, writer_table,
+                      ) catch {
                         error => {
                           trap_canon(canon_err_message(error))
                           return ret_i32(0)
@@ -997,7 +999,9 @@ fn instantiate_canon_stream_write(
                     }
                     let n = if len < remain { len } else { remain }
                     // Snapshot src bytes first to preserve memmove semantics when regions overlap.
-                    let buf = payload_type.load(resources, store, ptr, len) catch {
+                    let buf = payload_type.load(
+                      resources, store, ptr, len, writer_table,
+                    ) catch {
                       error => {
                         trap_canon(canon_err_message(error))
                         return ret_i32(0)
@@ -1086,7 +1090,9 @@ fn instantiate_canon_stream_write(
                   }
                   None => {
                     // Register a pending write by copying bytes.
-                    let buf = payload_type.load(resources, store, ptr, len) catch {
+                    let buf = payload_type.load(
+                      resources, store, ptr, len, writer_table,
+                    ) catch {
                       error => {
                         trap_canon(canon_err_message(error))
                         return ret_i32(0)

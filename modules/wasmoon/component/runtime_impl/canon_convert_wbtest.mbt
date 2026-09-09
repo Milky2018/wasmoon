@@ -120,6 +120,7 @@ test "canon convert: lower indirect list result stores compound elements" {
     resources,
     store,
     Some(0),
+    ResourceTable(),
   ) catch {
     e => return fail("lower compound list result failed: \{e}")
   }

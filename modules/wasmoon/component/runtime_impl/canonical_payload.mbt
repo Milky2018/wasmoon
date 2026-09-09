@@ -29,6 +29,7 @@ fn CanonicalPayloadType::load(
   store : @runtime.Store,
   ptr : Int,
   count : Int,
+  resource_table : ResourceTable,
 ) -> CanonicalPayload raise ComponentRuntimeError {
   let values : Array[ComponentValue] = []
   let (size, alignment) = self.layout(resources, store)
@@ -62,6 +63,7 @@ fn CanonicalPayloadType::load(
         Some(memory),
         memory.is_memory64(),
         resources.encoding,
+        resource_table,
       ),
     )
   }
@@ -116,7 +118,7 @@ fn CanonicalPayload::store(
       destination.types,
       resources,
       store,
-      Some((table, table)),
+      (table, table),
     )
     store_flat_component_value_to_memory(
       memory,

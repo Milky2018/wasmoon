@@ -68,6 +68,7 @@ fn complete_subtask(
             st.resources,
             store,
             Some(st.retptr),
+            st.caller_table,
           )
           store_async_lower_result(mem, st.retptr, core_vals)
         }

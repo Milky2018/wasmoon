@@ -103,6 +103,7 @@ fn instantiate_canon_waitable_set_wait(
           st.resources,
           store,
           Some(st.retptr),
+          st.caller_table,
         ) catch {
           _e => return
         }

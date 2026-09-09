@@ -33,11 +33,11 @@ pub fn canonical_flat_types(
 
   fn flat_primitive(p : PrimValType) -> Array[@types.ValueType] {
     match p {
-      Bool | S8 | U8 | S16 | U16 | S32 | U32 | Char => [I32]
+      Bool | S8 | U8 | S16 | U16 | S32 | U32 | Char | ErrorContext => [I32]
       S64 | U64 => [I64]
       F32 => [F32]
       F64 => [F64]
-      String | ErrorContext => [pointer_type, pointer_type]
+      String => [pointer_type, pointer_type]
     }
   }
 

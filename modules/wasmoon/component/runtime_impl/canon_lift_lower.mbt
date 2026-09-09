@@ -267,6 +267,7 @@ fn instantiate_canon_lower(
                 resources,
                 store,
                 Some(p),
+                live_caller_table,
               ) catch {
                 e => {
                   trap_canon(canon_err_message(e))
@@ -332,6 +333,7 @@ fn instantiate_canon_lower(
                 resources,
                 store,
                 Some(p),
+                live_caller_table,
               ) catch {
                 e => {
                   trap_canon(canon_err_message(e))
@@ -450,6 +452,7 @@ fn instantiate_canon_lower(
               resources,
               store,
               Some(p),
+              live_caller_table,
             ) catch {
               e => {
                 trap_canon(canon_err_message(e))
@@ -767,7 +770,7 @@ fn instantiate_canon_lower(
             }
           }
           let out = component_results_to_core(
-            vals0, func_type, func_types, resources, store, out_ptr,
+            vals0, func_type, func_types, resources, store, out_ptr, caller_table,
           ) catch {
             e => {
               trap_canon(canon_err_message(e))
@@ -837,7 +840,7 @@ fn instantiate_canon_lower(
               None => ()
             }
             let out = component_results_to_core(
-              vals0, func_type, func_types, resources, store, out_ptr,
+              vals0, func_type, func_types, resources, store, out_ptr, caller_table,
             ) catch {
               e => {
                 trap_canon(canon_err_message(e))
@@ -905,7 +908,7 @@ fn instantiate_canon_lower(
         }
       }
       let out = component_results_to_core(
-        results, func_type, func_types, resources, store, out_ptr,
+        results, func_type, func_types, resources, store, out_ptr, caller_table,
       ) catch {
         e => {
           trap_canon(canon_err_message(e))

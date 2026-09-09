@@ -191,11 +191,12 @@ fn append_flat_storage_for_valtype(
       match p {
         Bool | S8 | U8 => out.push({ vt: I32, size: 1, align: 1, })
         S16 | U16 => out.push({ vt: I32, size: 2, align: 2, })
-        S32 | U32 | Char => out.push({ vt: I32, size: 4, align: 4, })
+        S32 | U32 | Char | ErrorContext =>
+          out.push({ vt: I32, size: 4, align: 4, })
         S64 | U64 => out.push({ vt: I64, size: 8, align: 8, })
         F32 => out.push({ vt: F32, size: 4, align: 4, })
         F64 => out.push({ vt: F64, size: 8, align: 8, })
-        String | ErrorContext => {
+        String => {
           out.push({ vt: ptr_vt, size: ptr_size, align: ptr_size, })
           out.push({ vt: ptr_vt, size: ptr_size, align: ptr_size, })
         }
