@@ -31,6 +31,7 @@
 
 #include "moonbit.h"
 #include "jit_internal.h"
+#include "wasi_path_portability.h"
 
 // ============ WASI Error Codes ============
 #define WASI_ESUCCESS     0
@@ -2882,9 +2883,11 @@ static int32_t wasi_path_readlink_impl(
     free(path_tmp);
     if (path_errno != WASI_ESUCCESS) return path_errno;
 
-    ssize_t n = readlink(full_path, (char *)(mem + buf_ptr_u), buf_len_u);
+    ssize_t n = wasmoon_wasi_readlinkat_portable(
+        AT_FDCWD, full_path, (char *)(mem + buf_ptr_u), buf_len_u);
+    int saved_errno = errno;
     free(full_path);
-    if (n < 0) return errno_to_wasi(errno);
+    if (n < 0) return errno_to_wasi(saved_errno);
 
     *(uint32_t *)(mem + bufused_ptr_u) = (uint32_t)n;
     return WASI_ESUCCESS;
@@ -2952,11 +2955,12 @@ static int32_t wasi_path_symlink_impl(
         return path_errno;
     }
 
-    int result = symlink(old_path, full_new_path);
+    int result = wasmoon_wasi_symlinkat_portable(old_path, AT_FDCWD, full_new_path);
+    int saved_errno = errno;
     free(old_path);
     free(full_new_path);
     if (result != 0) {
-        return errno_to_wasi(errno);
+        return errno_to_wasi(saved_errno);
     }
     return WASI_ESUCCESS;
 #else

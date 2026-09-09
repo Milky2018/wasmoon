@@ -3250,3 +3250,70 @@ test "wasi jit: sock_send nonzero siflags still returns ENOTSOCK (57)" {
   inspect(wasi_errno_from_result(result.interp_result), content="57")
   inspect(wasi_errno_from_result(result.jit_result), content="57")
 }
+
+///|
+test "wasi imports preserve readlink and symlink semantics in both engines" {
+  let root = "/tmp/wasmoon-wasi-import-paths-\{@wasi.native_clock_gettime_monotonic()}"
+  guard @wasi.native_mkdir(root, 0o700) else {
+    fail("could not create fixture")
+  }
+  defer @wasi.native_unlinkat(0, root, @wasi.AT_REMOVEDIR) |> ignore
+  guard @wasi.native_open(root + "/file", [WriteOnly, Create], 0o600)
+    is Some(fd) else {
+    fail("could not create file")
+  }
+  @wasi.native_close(fd) |> ignore
+  defer @wasi.native_unlinkat(0, root + "/file", 0) |> ignore
+  guard @wasi.native_mkdir(root + "/directory", 0o700) else {
+    fail("could not create directory")
+  }
+  defer @wasi.native_unlinkat(0, root + "/directory", @wasi.AT_REMOVEDIR)
+    |> ignore
+  guard @wasi.native_symlinkat("file", 0, root + "/link") else {
+    fail("could not create link")
+  }
+  defer @wasi.native_unlinkat(0, root + "/link", 0) |> ignore
+  for
+    case in [
+      ("link", 0, 0, 0, 33),
+      ("file", 0, 28, -1, 33),
+      ("missing", 0, 44, -1, 33),
+      ("link", 1, 0, 1, 102),
+      ("link", 8, 0, 4, 102),
+    ] {
+    let (path, length, errno, count, first_byte) = case
+    let source = "(module (import \"wasi_snapshot_preview1\" \"path_readlink\" (func $readlink (param i32 i32 i32 i32 i32 i32) (result i32))) (memory (export \"memory\") 1) (data (i32.const 0) \"\{path}\") (func (export \"test\") (result i32 i32 i32) (i32.store8 (i32.const 100) (i32.const 33)) (i32.store (i32.const 200) (i32.const -1)) (call $readlink (i32.const 3) (i32.const 0) (i32.const \{path.length()}) (i32.const 100) (i32.const \{length}) (i32.const 200)) (i32.load (i32.const 200)) (i32.load8_u (i32.const 100))))"
+    let result = compare_wasi_with_options(source, "test", preopens=[
+      (root, "/"),
+    ])
+    let expected : Array[@types.Value] = [
+      I32(errno),
+      I32(count),
+      I32(first_byte),
+    ]
+    guard result.interp_result is Ok(interp) && result.jit_result is Ok(jit) else {
+      fail(result.to_string())
+    }
+    inspect(values_array_equal(interp, expected), content="true")
+    inspect(values_array_equal(jit, expected), content="true")
+  }
+  for
+    case in [
+      ("missing/", 44),
+      ("directory/", 20),
+      ("directory", 20),
+      ("file/", 54),
+      ("file", 20),
+    ] {
+    let (path, errno) = case
+    let source = "(module (import \"wasi_snapshot_preview1\" \"path_symlink\" (func $symlink (param i32 i32 i32 i32 i32) (result i32))) (memory (export \"memory\") 1) (data (i32.const 0) \"\{path}\") (data (i32.const 64) \"x\") (func (export \"test\") (result i32) (call $symlink (i32.const 64) (i32.const 1) (i32.const 3) (i32.const 0) (i32.const \{path.length()}))))"
+    let result = compare_wasi_with_options(source, "test", preopens=[
+      (root, "/"),
+    ])
+    guard result.interp_result is Ok(interp) && result.jit_result is Ok(jit) else {
+      fail(result.to_string())
+    }
+    inspect(values_array_equal(interp, [I32(errno)]), content="true")
+    inspect(values_array_equal(jit, [I32(errno)]), content="true")
+  }
+}
