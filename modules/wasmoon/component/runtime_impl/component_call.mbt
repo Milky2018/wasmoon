@@ -106,12 +106,14 @@ fn ComponentInvocation::finish_cancel(
   self.cancel_requested[0] = false
   let cancellation_error : ComponentRuntimeError? = match
     self.task.host_future[0] {
-    Some(future) =>
+    Some(future) => {
+      self.task.host_future[0] = None
       try (future.cancel)() catch {
         error => Some(error)
       } noraise {
         _ => None
       }
+    }
     None => None
   }
   match self.task.continuation[0] {
@@ -150,6 +152,10 @@ fn ComponentInvocation::drive_once(
     Failed(error) => raise error
     WasCancelled => raise Cancelled
     Running => ()
+  }
+  if self.async_state.tasks.closed.val {
+    self.finish_cancel_during_unwind()
+    raise Cancelled
   }
   if self.driving[0] {
     raise InvocationAlreadyDriving
@@ -192,7 +198,7 @@ fn ComponentInvocation::drive_once(
       raise error
     }
   }
-  if self.cancel_requested[0] {
+  if self.cancel_requested[0] || self.async_state.tasks.closed.val {
     self.finish_cancel()
     raise Cancelled
   }
@@ -384,12 +390,12 @@ fn start_component_invocation(
   async_state : AsyncState,
   caller_task_id : Int64,
   can_block : Bool,
-) -> ComponentInvocation {
+) -> ComponentInvocation raise ComponentRuntimeError {
   let (_, _, callee_instance_id) = component_invocation_contract(func)
   let task_id = alloc_task_id(async_state)
   init_task_meta(async_state, task_id, callee_instance_id, caller_task_id)
   take_task_result(async_state, task_id) |> ignore
-  {
+  let invocation : ComponentInvocation = {
     task_id,
     task: {
       func,
@@ -411,4 +417,8 @@ fn start_component_invocation(
     driving: [false],
     cancel_requested: [false],
   }
+  async_state.tasks.records.get(task_id).unwrap().root_task = Some(
+    invocation.task,
+  )
+  invocation
 }

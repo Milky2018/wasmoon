@@ -923,7 +923,7 @@ fn instantiate_canon_thread_new_indirect(
     }
 
     let id = alloc_shared_handle(async_state, owner_component_id)
-    let thread_task_id = alloc_task_id(async_state)
+    let thread_task_id = alloc_canon_task_id(async_state)
     init_task_meta(
       async_state, thread_task_id, owner_component_id, root_task_id,
     )

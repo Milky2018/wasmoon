@@ -1706,13 +1706,22 @@ fn drop_task_thread(async_state : AsyncState, task_id : Int64) -> Unit {
 }
 
 ///|
-fn alloc_task_id(async_state : AsyncState) -> Int64 {
+fn alloc_task_id(async_state : AsyncState) -> Int64 raise ComponentRuntimeError {
   async_state.tasks.allocate()
 }
 
 ///|
-fn push_task(async_state : AsyncState, id : Int64, can_block : Bool) -> Unit {
-  async_state.task_stack.push(async_state.tasks.ensure(id).id)
+fn push_task(
+  async_state : AsyncState,
+  id : Int64,
+  can_block : Bool,
+) -> Unit raise ComponentRuntimeError {
+  let id = async_state.tasks.resolve(id)
+  guard !async_state.tasks.closed.val &&
+    async_state.tasks.records.get(id) is Some(_) else {
+    raise Cancelled
+  }
+  async_state.task_stack.push(id)
   async_state.can_block_stack.push(can_block)
   async_state.task_can_block[0] = can_block
 }

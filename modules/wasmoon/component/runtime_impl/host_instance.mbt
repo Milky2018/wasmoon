@@ -115,27 +115,47 @@ fn cancel_callback_task(task : CallbackTask) -> Unit {
 
 ///|
 fn cancel_async_state_continuations(async_state : AsyncState) -> Unit {
-  for entry in async_state.tasks.entries_subtasks() {
-    let (_, subtask) = entry
-    match subtask.driver {
-      CallbackLifted(task) => cancel_callback_task(task)
-    }
+  if async_state.tasks.closed.val {
+    return
   }
-  for entry in async_state.tasks.entries_sync_lower_states() {
-    let (_, state) = entry
-    cancel_callback_task(state.task)
+  async_state.tasks.closed.val = true
+  let records = async_state.tasks.records.values().to_array()
+  // Mark the runtime terminal before calling any embedding cancellation hook.
+  for record in records {
+    if record.root_task is Some(task) {
+      abort_waiting_callback(async_state, task)
+    }
+    if record.subtasks is Some(subtask) {
+      let CallbackLifted(task) = subtask.driver
+      abort_waiting_callback(async_state, task)
+    }
+    if record.sync_lower_states is Some(lower) {
+      abort_waiting_callback(async_state, lower.task)
+    }
   }
   for _, thread in async_state.threads {
-    match thread.continuation[0] {
-      Some(continuation) => {
-        thread.continuation[0] = None
-        continuation.cancel()
-      }
-      None => ()
+    if thread.continuation[0] is Some(continuation) {
+      thread.continuation[0] = None
+      continuation.cancel()
     }
   }
-  async_state.tasks.clear_all_subtasks()
-  async_state.tasks.clear_all_sync_lower_states()
+  for record in records {
+    if record.subtasks is Some(subtask) && !subtask.detached {
+      remove_waitable_membership(
+        async_state,
+        subtask.caller_table.id,
+        subtask.id,
+      )
+      async_state.waitable_events.remove(
+        handle_key(subtask.caller_table.id, subtask.id),
+      )
+      free_shared_handle(async_state, subtask.caller_table.id, subtask.id)
+    }
+    retire_task(async_state, record.id)
+  }
+  async_state.pending_by_instance.clear()
+  async_state.inflight_by_instance.clear()
+  async_state.sync_waitable_users.clear()
   async_state.threads.clear()
 }
 

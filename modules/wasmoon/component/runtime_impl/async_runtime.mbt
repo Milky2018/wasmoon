@@ -366,6 +366,7 @@ fn step_task_once_impl(
         raise HostCallError("asynchronous host future was not initialized")
       }
       if task.cancelled[0] {
+        task.host_future[0] = None
         (future.cancel)()
         async_state.tasks.write_task_self_cancelled(
           current_task_id(async_state),

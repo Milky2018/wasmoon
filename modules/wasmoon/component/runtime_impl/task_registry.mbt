@@ -5,6 +5,7 @@ pub struct TaskRegistry {
   priv aliases : Map[Int64, Int64]
   priv handles : Map[Int64, Int64]
   priv next_id : Ref[Int64]
+  priv closed : Ref[Bool]
 } derive(Debug)
 
 ///|
@@ -13,6 +14,7 @@ pub extend TaskRegistry with @debug.Debug::{to_repr}
 ///|
 priv struct TaskRecord {
   id : Int64
+  mut root_task : CallbackTask?
   mut task_results : Array[ComponentValue]?
   mut task_result_owner : Int?
   mut task_return_contracts : TaskReturnContract?
@@ -35,7 +37,13 @@ priv struct TaskRecord {
 
 ///|
 fn TaskRegistry::new() -> TaskRegistry {
-  { records: Map([]), aliases: Map([]), handles: Map([]), next_id: Ref(-1L), }
+  {
+    records: Map([]),
+    aliases: Map([]),
+    handles: Map([]),
+    next_id: Ref(-1L),
+    closed: Ref(false),
+  }
 }
 
 ///|
@@ -44,30 +52,16 @@ fn TaskRegistry::resolve(self : TaskRegistry, key : Int64) -> Int64 {
 }
 
 ///|
-fn TaskRegistry::allocate(self : TaskRegistry) -> Int64 {
+fn TaskRegistry::allocate(
+  self : TaskRegistry,
+) -> Int64 raise ComponentRuntimeError {
+  if self.closed.val {
+    raise Cancelled
+  }
   let id = self.next_id.val
   self.next_id.val = id - 1L
   self.records.set(id, TaskRecord::new(id))
   id
-}
-
-///|
-fn TaskRegistry::ensure(self : TaskRegistry, key : Int64) -> TaskRecord {
-  let resolved = self.resolve(key)
-  if self.records.get(resolved) is Some(record) {
-    return record
-  }
-  if key >= 0L {
-    let id = self.allocate()
-    self.bind_handle(id, key)
-    return self.records.get(id).unwrap()
-  }
-  let record = TaskRecord::new(key)
-  self.records.set(key, record)
-  if key <= self.next_id.val {
-    self.next_id.val = key - 1L
-  }
-  record
 }
 
 ///|
@@ -77,6 +71,12 @@ fn TaskRegistry::bind_handle(
   handle : Int64,
 ) -> Unit {
   let id = self.resolve(task_id)
+  guard !self.closed.val &&
+    self.records.get(id) is Some(_) &&
+    self.aliases.get(handle) is None &&
+    self.handles.get(id) is None else {
+    return
+  }
   self.aliases.set(handle, id)
   self.handles.set(id, handle)
 }
@@ -115,7 +115,9 @@ fn TaskRegistry::write_task_results(
   key : Int64,
   value : Array[ComponentValue],
 ) -> Unit {
-  self.ensure(key).task_results = Some(value)
+  if !self.closed.val && self.records.get(self.resolve(key)) is Some(record) {
+    record.task_results = Some(value)
+  }
 }
 
 ///|
@@ -135,7 +137,9 @@ fn TaskRegistry::write_task_result_owner(
   key : Int64,
   value : Int,
 ) -> Unit {
-  self.ensure(key).task_result_owner = Some(value)
+  if !self.closed.val && self.records.get(self.resolve(key)) is Some(record) {
+    record.task_result_owner = Some(value)
+  }
 }
 
 ///|
@@ -155,7 +159,9 @@ fn TaskRegistry::write_task_return_contracts(
   key : Int64,
   value : TaskReturnContract,
 ) -> Unit {
-  self.ensure(key).task_return_contracts = Some(value)
+  if !self.closed.val && self.records.get(self.resolve(key)) is Some(record) {
+    record.task_return_contracts = Some(value)
+  }
 }
 
 ///|
@@ -175,7 +181,9 @@ fn TaskRegistry::write_core_start_tasks(
   key : Int64,
   value : Unit,
 ) -> Unit {
-  self.ensure(key).core_start_tasks = Some(value)
+  if !self.closed.val && self.records.get(self.resolve(key)) is Some(record) {
+    record.core_start_tasks = Some(value)
+  }
 }
 
 ///|
@@ -192,7 +200,9 @@ fn TaskRegistry::write_task_returned(
   key : Int64,
   value : Bool,
 ) -> Unit {
-  self.ensure(key).task_returned = Some(value)
+  if !self.closed.val && self.records.get(self.resolve(key)) is Some(record) {
+    record.task_returned = Some(value)
+  }
 }
 
 ///|
@@ -212,7 +222,9 @@ fn TaskRegistry::write_task_self_cancelled(
   key : Int64,
   value : Bool,
 ) -> Unit {
-  self.ensure(key).task_self_cancelled = Some(value)
+  if !self.closed.val && self.records.get(self.resolve(key)) is Some(record) {
+    record.task_self_cancelled = Some(value)
+  }
 }
 
 ///|
@@ -236,7 +248,9 @@ fn TaskRegistry::write_task_cancelled(
   key : Int64,
   value : Bool,
 ) -> Unit {
-  self.ensure(key).task_cancelled = Some(value)
+  if !self.closed.val && self.records.get(self.resolve(key)) is Some(record) {
+    record.task_cancelled = Some(value)
+  }
 }
 
 ///|
@@ -256,7 +270,9 @@ fn TaskRegistry::write_task_contexts(
   key : Int64,
   value : Map[Int, @types.Value],
 ) -> Unit {
-  self.ensure(key).task_contexts = Some(value)
+  if !self.closed.val && self.records.get(self.resolve(key)) is Some(record) {
+    record.task_contexts = Some(value)
+  }
 }
 
 ///|
@@ -280,7 +296,9 @@ fn TaskRegistry::write_task_borrows(
   key : Int64,
   value : Int,
 ) -> Unit {
-  self.ensure(key).task_borrows = Some(value)
+  if !self.closed.val && self.records.get(self.resolve(key)) is Some(record) {
+    record.task_borrows = Some(value)
+  }
 }
 
 ///|
@@ -307,7 +325,9 @@ fn TaskRegistry::write_task_thread(
   key : Int64,
   value : Map[Int, Int],
 ) -> Unit {
-  self.ensure(key).task_thread = Some(value)
+  if !self.closed.val && self.records.get(self.resolve(key)) is Some(record) {
+    record.task_thread = Some(value)
+  }
 }
 
 ///|
@@ -337,7 +357,9 @@ fn TaskRegistry::write_thread_runnable(
   key : Int64,
   value : Array[Int],
 ) -> Unit {
-  self.ensure(key).thread_runnable = Some(value)
+  if !self.closed.val && self.records.get(self.resolve(key)) is Some(record) {
+    record.thread_runnable = Some(value)
+  }
 }
 
 ///|
@@ -367,7 +389,9 @@ fn TaskRegistry::write_main_thread_scheduled(
   key : Int64,
   value : Bool,
 ) -> Unit {
-  self.ensure(key).main_thread_scheduled = Some(value)
+  if !self.closed.val && self.records.get(self.resolve(key)) is Some(record) {
+    record.main_thread_scheduled = Some(value)
+  }
 }
 
 ///|
@@ -384,7 +408,9 @@ fn TaskRegistry::write_task_caller(
   key : Int64,
   value : Int64,
 ) -> Unit {
-  self.ensure(key).task_caller = Some(self.resolve(value))
+  if !self.closed.val && self.records.get(self.resolve(key)) is Some(record) {
+    record.task_caller = Some(self.resolve(value))
+  }
 }
 
 ///|
@@ -414,7 +440,9 @@ fn TaskRegistry::write_task_instance(
   key : Int64,
   value : Int,
 ) -> Unit {
-  self.ensure(key).task_instance = Some(value)
+  if !self.closed.val && self.records.get(self.resolve(key)) is Some(record) {
+    record.task_instance = Some(value)
+  }
 }
 
 ///|
@@ -444,7 +472,9 @@ fn TaskRegistry::write_task_suspensions(
   key : Int64,
   value : TaskSuspension,
 ) -> Unit {
-  self.ensure(key).task_suspensions = Some(value)
+  if !self.closed.val && self.records.get(self.resolve(key)) is Some(record) {
+    record.task_suspensions = Some(value)
+  }
 }
 
 ///|
@@ -468,13 +498,8 @@ fn TaskRegistry::write_waiting_ws(
   key : Int64,
   value : Int64,
 ) -> Unit {
-  self.ensure(key).waiting_ws = Some(value)
-}
-
-///|
-fn TaskRegistry::clear_all_sync_lower_states(self : TaskRegistry) -> Unit {
-  for _, record in self.records {
-    record.sync_lower_states = None
+  if !self.closed.val && self.records.get(self.resolve(key)) is Some(record) {
+    record.waiting_ws = Some(value)
   }
 }
 
@@ -505,26 +530,8 @@ fn TaskRegistry::write_sync_lower_states(
   key : Int64,
   value : SyncLowerState,
 ) -> Unit {
-  self.ensure(key).sync_lower_states = Some(value)
-}
-
-///|
-fn TaskRegistry::entries_sync_lower_states(
-  self : TaskRegistry,
-) -> Array[(Int64, SyncLowerState)] {
-  let result : Array[(Int64, SyncLowerState)] = []
-  for id, record in self.records {
-    if record.sync_lower_states is Some(value) {
-      result.push((id, value))
-    }
-  }
-  result
-}
-
-///|
-fn TaskRegistry::clear_all_subtasks(self : TaskRegistry) -> Unit {
-  for _, record in self.records {
-    record.subtasks = None
+  if !self.closed.val && self.records.get(self.resolve(key)) is Some(record) {
+    record.sync_lower_states = Some(value)
   }
 }
 
@@ -549,7 +556,9 @@ fn TaskRegistry::write_subtasks(
   key : Int64,
   value : Subtask,
 ) -> Unit {
-  self.ensure(key).subtasks = Some(value)
+  if !self.closed.val && self.records.get(self.resolve(key)) is Some(record) {
+    record.subtasks = Some(value)
+  }
 }
 
 ///|
@@ -575,6 +584,7 @@ pub fn TaskRegistry::subtask_count(self : TaskRegistry) -> Int {
 fn TaskRecord::new(id : Int64) -> TaskRecord {
   {
     id,
+    root_task: None,
     task_results: None,
     task_result_owner: None,
     task_return_contracts: None,
@@ -605,4 +615,28 @@ fn retire_task(async_state : AsyncState, task_id : Int64) -> Unit {
   }
   drop_task_thread(async_state, task_id)
   async_state.tasks.retire(task_id)
+}
+
+///|
+fn alloc_canon_task_id(state : AsyncState) -> Int64 raise @runtime.RuntimeError {
+  alloc_task_id(state) catch {
+    error => {
+      trap_canon(canon_err_message(error))
+      raise Unreachable
+    }
+  }
+}
+
+///|
+fn push_canon_task(
+  state : AsyncState,
+  id : Int64,
+  can_block : Bool,
+) -> Unit raise @runtime.RuntimeError {
+  push_task(state, id, can_block) catch {
+    error => {
+      trap_canon(canon_err_message(error))
+      raise Unreachable
+    }
+  }
 }

@@ -144,6 +144,8 @@ test "guest handle binding preserves stable child identities and cancellation" {
     ],
   }
   state.threads.set(handle_key(0, 1), thread)
+  inspect(alloc_task_id(state), content="-1")
+  inspect(alloc_task_id(state), content="-2")
   init_task_meta(state, -1L, 0, 0L)
   init_task_meta(state, -2L, 0, -1L)
   state.tasks.write_thread_runnable(-1L, [1])

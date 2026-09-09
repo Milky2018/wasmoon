@@ -225,10 +225,10 @@ fn instantiate_canon_lower(
           // Try a handle-less initial step. If it exits immediately, we must return
           // RETURNED=2 without consuming the shared handle space (otherwise it would
           // perturb handle numbering observed by the core code; see empty-wait.wast).
-          let tmp_task_id = alloc_task_id(async_state)
+          let tmp_task_id = alloc_canon_task_id(async_state)
           canon_in_handleless_step[0] = true
           init_task_meta(async_state, tmp_task_id, meta_inst_id, caller_task_id)
-          push_task(async_state, tmp_task_id, true)
+          push_canon_task(async_state, tmp_task_id, true)
           let step = step_task_once(task, store, live_caller_table, async_state) catch {
             e => {
               pop_task(async_state)
@@ -408,10 +408,10 @@ fn instantiate_canon_lower(
         // Non-callback async lowering: do a handle-less initial step so the task can
         // register any pending waits (e.g. future.read/stream.read) before returning STARTED.
         // If it completes immediately, return RETURNED=2 without consuming the shared handle space.
-        let tmp_task_id = alloc_task_id(async_state)
+        let tmp_task_id = alloc_canon_task_id(async_state)
         canon_in_handleless_step[0] = true
         init_task_meta(async_state, tmp_task_id, meta_inst_id, caller_task_id)
-        push_task(async_state, tmp_task_id, true)
+        push_canon_task(async_state, tmp_task_id, true)
         let step = step_task_once(task, store, live_caller_table, async_state) catch {
           e => {
             pop_task(async_state)
@@ -521,7 +521,9 @@ fn instantiate_canon_lower(
           driver: CallbackLifted(task),
         }
         let sub_key = handle_key(caller_table.id, sub_id)
-        init_task_meta(async_state, sub_key, meta_inst_id, caller_task_id)
+        let task_id = alloc_canon_task_id(async_state)
+        async_state.tasks.bind_handle(task_id, sub_key)
+        init_task_meta(async_state, task_id, meta_inst_id, caller_task_id)
         async_state.tasks.write_subtasks(sub_key, st)
         let q = match async_state.pending_by_instance.get(bp_key) {
           Some(xs) => xs
@@ -634,7 +636,7 @@ fn instantiate_canon_lower(
             // Sync-lowering does not expose a guest-visible subtask handle, so do not
             // consume the shared handle space (which would perturb stream/future numbering
             // observed by component-spec/async tests).
-            let inner_task_id = alloc_task_id(async_state)
+            let inner_task_id = alloc_canon_task_id(async_state)
             let task : CallbackTask = {
               func,
               args: component_args,
@@ -663,7 +665,7 @@ fn instantiate_canon_lower(
           HostAsync(_, _, _) => state.resource_table.id
           Lifted(_, _, _, _, callee_table, _, _, _) => callee_table.id
         }
-        push_task(async_state, st.task_id, can_block)
+        push_canon_task(async_state, st.task_id, can_block)
         let step = step_task_once(
           st.task,
           store,

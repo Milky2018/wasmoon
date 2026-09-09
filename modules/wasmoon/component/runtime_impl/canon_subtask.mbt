@@ -94,7 +94,7 @@ fn instantiate_canon_subtask_cancel(
       return [I32(-1)]
     }
     let step = {
-      push_task(async_state, key, true)
+      push_canon_task(async_state, key, true)
       defer pop_task(async_state)
       step_task_once(task, store, subtask.caller_table, async_state) catch {
         error => {
