@@ -78,6 +78,7 @@ typedef struct native_fiber {
     int64_t return_value;
     jit_trap_activation_t *detached_activation;
     void *parked_gc_roots;
+    void *atomic_waiter;
     const void *caller_stack_bottom;
     size_t caller_stack_size;
 } native_fiber_t;
@@ -150,6 +151,10 @@ static void native_fiber_swap_stacks(
 }
 
 static void release_fiber_stack(native_fiber_t *fiber) {
+    if (fiber && fiber->atomic_waiter) {
+        wasmoon_atomic_wait_destroy(fiber->atomic_waiter);
+        fiber->atomic_waiter = NULL;
+    }
     if (!fiber || !fiber->mapping) return;
     munmap(fiber->mapping, fiber->mapping_size);
     fiber->mapping = NULL;
@@ -466,6 +471,21 @@ MOONBIT_FFI_EXPORT int wasmoon_native_fiber_cancel(void *managed) {
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_native_hostcall_suspend_event(void) {
     return WASMOON_FIBER_EVENT_HOSTCALL_SUSPENDED;
+}
+
+int wasmoon_native_fiber_own_waiter(void *waiter) {
+    native_fiber_t *fiber = current_native_fiber;
+    if (!fiber) return 0;
+    if (fiber->atomic_waiter) abort();
+    fiber->atomic_waiter = waiter;
+    return 1;
+}
+
+void wasmoon_native_fiber_release_waiter(void) {
+    native_fiber_t *fiber = current_native_fiber;
+    if (!fiber) return;
+    wasmoon_atomic_wait_destroy(fiber->atomic_waiter);
+    fiber->atomic_waiter = NULL;
 }
 
 MOONBIT_FFI_EXPORT int wasmoon_native_fiber_state(void *managed) {

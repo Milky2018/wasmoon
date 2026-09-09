@@ -192,6 +192,7 @@ typedef struct {
     // passes the context to a C helper; these fields stay outside the fixed ABI.
     void *cancellation_callback;
     void *cancellation_callback_data;
+    int32_t scheduling_budget;
 
     // ============ Bulk Memory/Table Segment State ============
     // Per-instance (per jit_context_t) storage for bulk memory/table operations:

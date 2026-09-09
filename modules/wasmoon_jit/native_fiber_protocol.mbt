@@ -37,7 +37,7 @@ priv enum NativeFiberCancelCode {
 
 ///|
 priv enum NativeJITAdvanceResult {
-  JITHostcallSuspended
+  JITSuspended(NativeSuspensionReason)
   JITCompleted
   JITTrapped(Int)
   JITAdvanceFailed(NativeFiberProtocolFailure)
@@ -134,7 +134,11 @@ fn native_jit_continuation_advance(
   match native_fiber_advance(raw, resume_value) {
     FiberSuspended(event) =>
       if event == c_native_hostcall_suspend_event() {
-        JITHostcallSuspended
+        JITSuspended(HostCall)
+      } else if event == 0x57534d5355535002L {
+        JITSuspended(CooperativeYield)
+      } else if event == 0x57534d5355535003L {
+        JITSuspended(AtomicWait)
       } else {
         JITAdvanceFailed(FiberUnexpectedYield(event))
       }

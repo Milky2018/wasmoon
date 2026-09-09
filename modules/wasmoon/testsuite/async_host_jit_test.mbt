@@ -3,6 +3,7 @@ fn prepare_async_jit_context(
   mod_ : @types.Module,
   instance : @runtime.ModuleInstance,
   store : @runtime.Store,
+  cooperative? : Bool = false,
 ) -> @wast.JITModuleContext raise {
   guard @commands.compile_module_to_jit(
       mod_,
@@ -11,6 +12,7 @@ fn prepare_async_jit_context(
       0,
       false,
       nan_canonicalization=store.nan_canonicalization,
+      enable_cancellation=cooperative,
     )
     is Some((artifact, debug_db)) else {
     fail("JIT compilation failed")
@@ -23,6 +25,7 @@ fn prepare_async_jit_context(
     function_names=@commands.build_jit_function_names(mod_),
     debug_db~,
   )
+  assert_true(jit_module.set_cooperative_scheduling(cooperative))
   @wast.register_instance_funcrefs_for_jit(jit_module, instance, store)
   jit_module.configure_native_fiber_stack_size(1048576L) |> ignore
   guard @wast.init_jit_memories_from_store(instance, store, jit_module)

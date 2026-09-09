@@ -383,7 +383,7 @@ priv struct JITContextContinuation {
 
 ///|
 priv enum JITContextContinuationEvent {
-  Suspended
+  Suspended(@wasmoon_jit.NativeSuspensionReason)
   Returned(Array[Int64])
 }
 
@@ -435,7 +435,7 @@ fn JITContextContinuation::advance(
     }
   }
   match event {
-    NativeHostcallSuspended => Suspended
+    NativeSuspended(reason) => Suspended(reason)
     NativeJITTrapped(trap_code) => {
       self.active[0] = false
       if @wasmoon_jit.is_wasi_exit_trap_code(trap_code) {
@@ -468,4 +468,12 @@ fn JITContextContinuation::cancel(
     error => raise JITNativeFiberFailure(error.to_string())
   }
   self.active[0] = false
+}
+
+///|
+fn JITContext::set_cooperative_scheduling(
+  self : JITContext,
+  enabled : Bool,
+) -> Unit {
+  self.ctx.set_cooperative_scheduling(enabled)
 }

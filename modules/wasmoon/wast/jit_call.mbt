@@ -168,7 +168,7 @@ fn JITModuleContext::clear_async_host_state(
 /// Result of entering or resuming a stackful native core call.
 pub(all) enum JITCoreCallOutcome {
   NativeCoreReturned(Array[@types.Value])
-  NativeCoreSuspended(JITCoreContinuation)
+  NativeCoreSuspended(@wasmoon_jit.NativeSuspensionReason, JITCoreContinuation)
 }
 
 ///|
@@ -189,7 +189,7 @@ fn JITCoreContinuation::finish(
   outcome : @jit.JITContinuationOutcome,
 ) -> JITCoreCallOutcome raise JITCoreCallError {
   match outcome {
-    JITSuspended(_) => {
+    JITSuspended(reason, _) => {
       self.invocation.park() catch {
         error => {
           self.context.clear_async_host_state(self.invocation.id())
@@ -198,7 +198,7 @@ fn JITCoreContinuation::finish(
           raise ExecutionStateFailure(error)
         }
       }
-      NativeCoreSuspended(self)
+      NativeCoreSuspended(reason, self)
     }
     JITReturned(raw_results) => {
       self.active[0] = false
@@ -313,7 +313,7 @@ fn JITModuleContext::start_core_func_resumable(
   }
   finish_jit_core_environment(self, store, gc_active)
   match outcome {
-    JITSuspended(call) => {
+    JITSuspended(_, call) => {
       let continuation : JITCoreContinuation = {
         context: self,
         store,
@@ -443,9 +443,13 @@ pub async fn JITModuleContext::call_core_func_async(
     for ;; {
       match outcome {
         NativeCoreReturned(values) => return values
-        NativeCoreSuspended(continuation) => {
+        NativeCoreSuspended(reason, continuation) => {
           errdefer continuation.cancel()
-          driver.wait_pending()
+          match reason {
+            HostCall => driver.wait_pending()
+            CooperativeYield => @async.sleep(0)
+            AtomicWait => @async.sleep(1)
+          }
           outcome = continuation.continue_execution()
         }
       }

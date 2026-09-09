@@ -279,6 +279,44 @@ static inline void fill_bytes_fast(uint8_t *dst, uint8_t val, size_t size) {
     memset(dst, val, size);
 }
 
+// The producer checked bounds and natural alignment before these calls. Pass
+// the full pointer through the helper ABI; never narrow a memory64 offset.
+static int32_t atomic_wait32_indexed(
+    jit_context_t *ctx, int32_t memidx, int64_t pointer, int32_t expected, int64_t timeout
+) {
+    wasmoon_memory_t *memory = get_memory(ctx, memidx);
+    return wasmoon_atomic_wait_guest(ctx, (int64_t)(uintptr_t)memory,
+        (int64_t)((uintptr_t)pointer - (uintptr_t)memory->base), 4, expected, timeout);
+}
+
+static int32_t atomic_wait64_indexed(
+    jit_context_t *ctx, int32_t memidx, int64_t pointer, int64_t expected, int64_t timeout
+) {
+    wasmoon_memory_t *memory = get_memory(ctx, memidx);
+    return wasmoon_atomic_wait_guest(ctx, (int64_t)(uintptr_t)memory,
+        (int64_t)((uintptr_t)pointer - (uintptr_t)memory->base), 8, expected, timeout);
+}
+
+static int32_t atomic_notify_indexed(
+    jit_context_t *ctx, int32_t memidx, int64_t pointer, int32_t count
+) {
+    wasmoon_memory_t *memory = get_memory(ctx, memidx);
+    return wasmoon_atomic_notify((int64_t)(uintptr_t)memory,
+        (int64_t)((uintptr_t)pointer - (uintptr_t)memory->base), count);
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_atomic_wait32_ptr(void) {
+    return (int64_t)(uintptr_t)atomic_wait32_indexed;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_atomic_wait64_ptr(void) {
+    return (int64_t)(uintptr_t)atomic_wait64_indexed;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_atomic_notify_ptr(void) {
+    return (int64_t)(uintptr_t)atomic_notify_indexed;
+}
+
 int64_t memory_grow_indexed_internal(jit_context_t *ctx, int32_t memidx, int64_t delta, int32_t max_pages) {
     if (!ctx || delta < 0) return -1;
     wasmoon_memory_t *mem = get_memory(ctx, memidx);

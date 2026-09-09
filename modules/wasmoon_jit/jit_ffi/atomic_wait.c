@@ -177,3 +177,46 @@ MOONBIT_FFI_EXPORT void wasmoon_atomic_wait_pause(void *object) {
 MOONBIT_FFI_EXPORT void wasmoon_atomic_wait_managed_cancel(void *object) {
     finalize_managed_waiter(object);
 }
+
+int32_t wasmoon_atomic_wait_guest(
+    jit_context_t *ctx, int64_t descriptor, int64_t offset,
+    int32_t width, int64_t expected, int64_t timeout
+) {
+    void *waiter = wasmoon_atomic_wait_begin(descriptor, offset, width, expected, timeout);
+    if (!waiter) {
+        g_trap_code = 9;
+        if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
+        return 9;
+    }
+    int fiber_owned = wasmoon_native_fiber_own_waiter(waiter);
+    int32_t result, trap = 0;
+    while ((result = wasmoon_atomic_wait_poll(waiter)) == -1) {
+        if (wasmoon_jit_cancellation_requested(ctx)) {
+            trap = 11;
+            break;
+        }
+        if (ctx->scheduling_budget > 0) {
+            if (!fiber_owned || wasmoon_native_fiber_yield(
+                    WASMOON_FIBER_EVENT_ATOMIC_WAIT
+                ) == INT64_MIN) {
+                trap = 8;
+                break;
+            }
+        } else {
+#ifdef _WIN32
+            Sleep(1);
+#else
+            struct timespec delay = {0, 1000000};
+            nanosleep(&delay, NULL);
+#endif
+        }
+    }
+    if (fiber_owned) wasmoon_native_fiber_release_waiter();
+    else wasmoon_atomic_wait_destroy(waiter);
+    if (trap) {
+        g_trap_code = trap;
+        if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
+        return trap;
+    }
+    return result;
+}

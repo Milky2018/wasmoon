@@ -65,12 +65,18 @@ fn component_native_outcome(
       context.pending_suspension[0] = None
       Returned(results)
     }
-    NativeCoreSuspended(native_continuation) => {
-      guard context.pending_suspension[0] is Some(reason) else {
-        native_continuation.cancel()
-        raise CanonCallError(
-          "native core execution suspended without a canonical reason",
-        )
+    NativeCoreSuspended(native_reason, native_continuation) => {
+      let reason : @runtime_impl.CoreSuspension = match native_reason {
+        HostCall => {
+          guard context.pending_suspension[0] is Some(reason) else {
+            native_continuation.cancel()
+            raise CanonCallError(
+              "native core execution suspended without a canonical reason",
+            )
+          }
+          reason
+        }
+        CooperativeYield | AtomicWait => Yield
       }
       context.pending_suspension[0] = None
       Suspended(
@@ -183,7 +189,7 @@ fn native_component_session_with_contexts(
         on_execution(RunToReturn)
         match outcome {
           NativeCoreReturned(results) => Returned(results)
-          NativeCoreSuspended(continuation) => {
+          NativeCoreSuspended(_, continuation) => {
             continuation.cancel()
             raise CanonCallError(
               "native run-to-return core execution unexpectedly suspended",

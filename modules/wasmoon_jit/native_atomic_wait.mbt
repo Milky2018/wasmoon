@@ -55,3 +55,12 @@ pub extern "c" fn atomic_notify(
   offset : Int64,
   count : Int,
 ) -> Int = "wasmoon_atomic_notify"
+
+///|
+extern "c" fn c_jit_get_atomic_wait32_ptr() -> Int64 = "wasmoon_jit_get_atomic_wait32_ptr"
+
+///|
+extern "c" fn c_jit_get_atomic_wait64_ptr() -> Int64 = "wasmoon_jit_get_atomic_wait64_ptr"
+
+///|
+extern "c" fn c_jit_get_atomic_notify_ptr() -> Int64 = "wasmoon_jit_get_atomic_notify_ptr"

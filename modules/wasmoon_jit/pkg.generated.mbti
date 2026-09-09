@@ -16,7 +16,7 @@ import {
 }
 
 // Values
-pub const WASMOON_CODEGEN_REVISION : String = "direct-vcode-3"
+pub const WASMOON_CODEGEN_REVISION : String = "direct-vcode-4"
 
 pub const WASMOON_JIT_ABI_VERSION : Int = 6
 
@@ -779,6 +779,7 @@ pub fn NativeJITContext::refresh_table_layout(Self, Int) -> Bool
 pub fn NativeJITContext::register_safepoints(Self, Int, Array[@code_object.SafepointSite]) -> Bool
 pub fn NativeJITContext::set_callable_types(Self, Array[Int], Array[Int], Array[(Int64, Int)], Array[Int]) -> Unit
 pub fn NativeJITContext::set_cancellation_callback(Self, () -> Bool) -> Unit
+pub fn NativeJITContext::set_cooperative_scheduling(Self, Bool) -> Unit
 pub fn NativeJITContext::set_func(Self, Int, Int64) -> Unit
 pub fn NativeJITContext::set_gc_heap(Self, CHeap) -> Unit
 pub fn NativeJITContext::set_gc_heap_ptr(Self, Int64) -> Unit
@@ -811,13 +812,22 @@ pub fn NativeJITContinuation::continue_with(Self, value? : Int64) -> NativeJITCo
 pub fn NativeJITContinuation::phase(Self) -> NativeFiberPhase
 
 pub(all) enum NativeJITContinuationEvent {
-  NativeHostcallSuspended
+  NativeSuspended(NativeSuspensionReason)
   NativeJITCompleted
   NativeJITTrapped(Int)
 } derive(Eq, @debug.Debug)
 pub fn NativeJITContinuationEvent::equal(Self, Self) -> Bool
 pub fn NativeJITContinuationEvent::not_equal(Self, Self) -> Bool
 pub fn NativeJITContinuationEvent::to_repr(Self) -> @debug.Repr
+
+pub(all) enum NativeSuspensionReason {
+  HostCall
+  CooperativeYield
+  AtomicWait
+} derive(Eq, @debug.Debug)
+pub fn NativeSuspensionReason::equal(Self, Self) -> Bool
+pub fn NativeSuspensionReason::not_equal(Self, Self) -> Bool
+pub fn NativeSuspensionReason::to_repr(Self) -> @debug.Repr
 
 pub(all) enum NativeTarget {
   X64

@@ -604,7 +604,7 @@ pub fn JITModule::call_with_context(
 /// Result of advancing a stackful native JIT call.
 pub(all) enum JITContinuationOutcome {
   JITReturned(Array[Int64])
-  JITSuspended(JITCallContinuation)
+  JITSuspended(@wasmoon_jit.NativeSuspensionReason, JITCallContinuation)
 }
 
 ///|
@@ -683,7 +683,7 @@ fn JITCallContinuation::advance(
   let event = self.call.advance(retry_hostcall) catch {
     error => {
       call_error = Some(error)
-      Suspended
+      Suspended(HostCall)
     }
   }
   self.jit_module.gc_use_func_safepoints(-1)
@@ -694,7 +694,7 @@ fn JITCallContinuation::advance(
       None => {
         match (call_error, event) {
           (Some(_), _) | (None, Returned(_)) => self.finish(AttachedFrame)
-          (None, Suspended) => {
+          (None, Suspended(_)) => {
             self.call.cancel()
             self.finish(DetachedFrameReleased)
           }
@@ -707,7 +707,7 @@ fn JITCallContinuation::advance(
     self.finish_error(error)
   }
   match event {
-    Suspended => JITSuspended(self)
+    Suspended(reason) => JITSuspended(reason, self)
     Returned(results) => {
       self.finish(AttachedFrame)
       JITReturned(results)
@@ -1479,4 +1479,18 @@ pub fn JITModule::has_callable_metadata(self : JITModule) -> Bool {
     Some(context) => context.ctx.has_callable_metadata()
     None => false
   }
+}
+
+///|
+/// Scheduling requires guest safepoints in the compiled artifact.
+pub fn JITModule::set_cooperative_scheduling(
+  self : JITModule,
+  enabled : Bool,
+) -> Bool {
+  if enabled && !self.cancellation_safepoints {
+    return false
+  }
+  guard self.context is Some(context) else { return false }
+  context.set_cooperative_scheduling(enabled)
+  true
 }

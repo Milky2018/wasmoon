@@ -286,18 +286,35 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_clear_cancellation_callback(int64_t ctx_ptr)
     clear_cancellation_callback((jit_context_t *)ctx_ptr);
 }
 
-MOONBIT_FFI_EXPORT int32_t wasmoon_jit_cancel_poll(jit_context_t *ctx) {
+int wasmoon_jit_cancellation_requested(jit_context_t *ctx) {
     if (!ctx || !ctx->cancellation_callback) return 0;
     cancellation_callback_fn cb =
         (cancellation_callback_fn)ctx->cancellation_callback;
-    if (call_cancellation_callback(
-        cb, ctx->cancellation_callback_data
-    ) != 0) {
+    return call_cancellation_callback(cb, ctx->cancellation_callback_data) != 0;
+}
+
+MOONBIT_FFI_EXPORT int32_t wasmoon_jit_cancel_poll(jit_context_t *ctx) {
+    if (wasmoon_jit_cancellation_requested(ctx)) {
         g_trap_code = 11;
         if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
         return 11;
     }
+    // A MoonBit cancellation callback has returned before the native stack is
+    // parked. Only compiled guest/C frames are retained by this suspension.
+    if (ctx && ctx->scheduling_budget > 0 && --ctx->scheduling_budget == 0) {
+        ctx->scheduling_budget = 1024;
+        if (wasmoon_native_fiber_yield(WASMOON_FIBER_EVENT_GUEST_YIELD) == INT64_MIN) {
+            g_trap_code = 8;
+            if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
+            return 8;
+        }
+    }
     return 0;
+}
+
+MOONBIT_FFI_EXPORT void wasmoon_jit_set_cooperative_scheduling(int64_t pointer, int32_t enabled) {
+    jit_context_t *ctx = (void *)(uintptr_t)pointer;
+    if (ctx) ctx->scheduling_budget = enabled ? 1024 : 0;
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_cancel_poll_ptr(void) {
@@ -2066,4 +2083,8 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_set_callable_types(
 MOONBIT_FFI_EXPORT int32_t wasmoon_jit_has_callable_metadata(void *managed_context) {
     jit_context_t *ctx = (jit_context_t *)(uintptr_t)wasmoon_jit_context_ptr(managed_context);
     return ctx && ctx->callable_local_types != NULL;
+}
+
+MOONBIT_FFI_EXPORT void wasmoon_jit_set_cooperative_scheduling_managed(void *context, int32_t enabled) {
+    wasmoon_jit_set_cooperative_scheduling(wasmoon_jit_context_ptr(context), enabled);
 }

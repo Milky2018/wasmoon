@@ -17,6 +17,9 @@ pub(all) enum WasmRuntimeHelper {
   TableInit
   ElemDrop
   CancelPoll
+  AtomicWait32
+  AtomicWait64
+  AtomicNotify
   GcRefTest
   GcRefCast
   GcStructGet
@@ -73,6 +76,9 @@ fn WasmRuntimeHelper::suffix(self : WasmRuntimeHelper) -> String {
     TableInit => "table_init"
     ElemDrop => "elem_drop"
     CancelPoll => "cancel_poll"
+    AtomicWait32 => "atomic_wait32"
+    AtomicWait64 => "atomic_wait64"
+    AtomicNotify => "atomic_notify"
     GcRefTest => "gc.ref_test"
     GcRefCast => "gc.ref_cast"
     GcStructGet => "gc.struct_get"

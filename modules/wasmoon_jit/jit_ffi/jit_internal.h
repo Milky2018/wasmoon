@@ -173,6 +173,17 @@ int64_t wasmoon_native_fiber_yield(int64_t value);
 
 #define WASMOON_HOSTCALL_SUSPEND_STATUS (-1)
 #define WASMOON_FIBER_EVENT_HOSTCALL_SUSPENDED INT64_C(0x57534d5355535001)
+#define WASMOON_FIBER_EVENT_GUEST_YIELD INT64_C(0x57534d5355535002)
+#define WASMOON_FIBER_EVENT_ATOMIC_WAIT INT64_C(0x57534d5355535003)
+
+int wasmoon_jit_cancellation_requested(jit_context_t *ctx);
+int wasmoon_native_fiber_own_waiter(void *waiter);
+void wasmoon_native_fiber_release_waiter(void);
+void *wasmoon_atomic_wait_begin(int64_t, int64_t, int32_t, int64_t, int64_t);
+int32_t wasmoon_atomic_wait_poll(void *);
+void wasmoon_atomic_wait_destroy(void *);
+int32_t wasmoon_atomic_notify(int64_t, int64_t, int32_t);
+int32_t wasmoon_atomic_wait_guest(jit_context_t *, int64_t, int64_t, int32_t, int64_t, int64_t);
 
 // ============ Executable Memory (exec_mem.c) ============
 

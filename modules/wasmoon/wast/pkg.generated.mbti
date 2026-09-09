@@ -118,7 +118,7 @@ pub fn JITCompiler::JITCompiler((@types.Module, @runtime.ModuleInstance, @runtim
 
 pub(all) enum JITCoreCallOutcome {
   NativeCoreReturned(Array[@types.Value])
-  NativeCoreSuspended(JITCoreContinuation)
+  NativeCoreSuspended(@wasmoon_jit.NativeSuspensionReason, JITCoreContinuation)
 }
 
 type JITCoreContinuation

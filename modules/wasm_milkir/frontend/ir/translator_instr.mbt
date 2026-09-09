@@ -1626,57 +1626,47 @@ fn Translator::translate_atomic(
 
   let op = if subopcode >= 0x10 { subopcode - 12 } else { subopcode }
   match op {
-    // memory.atomic.notify
+    // Runtime queues perform comparison/enqueue and notification atomically.
     0 => {
-      let _count = self.pop()
+      let count = self.pop()
       let addr = self.pop()
       align_check(addr, 4)
-      ignore(bounds_ptr(addr, 4))
-      self.push(self.builder.iconst_i32(0))
+      let pointer = bounds_ptr(addr, 4)
+      self.push(
+        @wasm_milkir.atomic_notify(
+          self.builder,
+          self.func_env.runtime_symbols,
+          self.vmctx,
+          memidx,
+          pointer,
+          count,
+        ),
+      )
     }
-
-    // memory.atomic.wait32
-    1 => {
-      let _timeout = self.pop()
+    1 | 2 => {
+      let timeout = self.pop()
       let expected = self.pop()
       let addr = self.pop()
-      align_check(addr, 4)
-      let ptr = bounds_ptr(addr, 4)
-      let zero = self.builder.iconst(I64, 0L)
+      let width = if op == 1 { 4 } else { 8 }
+      align_check(addr, width)
+      let pointer = bounds_ptr(addr, width)
       if memidx >= self.memory_is_shared.length() ||
         !self.memory_is_shared[memidx] {
         self.builder.trap("atomic wait on non-shared memory")
         self.is_unreachable = true
         return
       }
-      let actual = self.builder.atomic_load(I32, 32, ptr, zero)
-      let eq = self.builder.icmp(Eq, actual, expected)
-      let not_equal = self.builder.iconst_i32(1)
-      let timed_out = self.builder.iconst_i32(2)
-      let result = self.builder.select(eq, timed_out, not_equal)
-      self.push(result)
-    }
-
-    // memory.atomic.wait64
-    2 => {
-      let _timeout = self.pop()
-      let expected = self.pop()
-      let addr = self.pop()
-      align_check(addr, 8)
-      let ptr = bounds_ptr(addr, 8)
-      let zero = self.builder.iconst(I64, 0L)
-      if memidx >= self.memory_is_shared.length() ||
-        !self.memory_is_shared[memidx] {
-        self.builder.trap("atomic wait on non-shared memory")
-        self.is_unreachable = true
-        return
-      }
-      let actual = self.builder.atomic_load(I64, 64, ptr, zero)
-      let eq = self.builder.icmp(Eq, actual, expected)
-      let not_equal = self.builder.iconst_i32(1)
-      let timed_out = self.builder.iconst_i32(2)
-      let result = self.builder.select(eq, timed_out, not_equal)
-      self.push(result)
+      self.push(
+        @wasm_milkir.atomic_wait(
+          self.builder,
+          self.func_env.runtime_symbols,
+          self.vmctx,
+          memidx,
+          pointer,
+          expected,
+          timeout,
+        ),
+      )
     }
 
     // atomic.fence

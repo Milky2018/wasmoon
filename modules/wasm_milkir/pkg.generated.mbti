@@ -45,6 +45,10 @@ pub fn array_new_fixed(@milkir.FunctionBuilder, Int, Int, Array[@milkir.Value]) 
 
 pub fn array_set(@milkir.FunctionBuilder, Int, @milkir.Value, @milkir.Value, @milkir.Value) -> Unit
 
+pub fn atomic_notify(@milkir.FunctionBuilder, RuntimeSymbols, @milkir.Value, Int, @milkir.Value, @milkir.Value) -> @milkir.Value
+
+pub fn atomic_wait(@milkir.FunctionBuilder, RuntimeSymbols, @milkir.Value, Int, @milkir.Value, @milkir.Value, @milkir.Value) -> @milkir.Value
+
 pub fn call_indirect_multi(@milkir.FunctionBuilder, Int, Int, Array[@milkir.Type], @milkir.Value, Array[@milkir.Value]) -> Array[@milkir.Value]
 
 pub fn call_multi(@milkir.FunctionBuilder, Int, Array[@milkir.Type], Array[@milkir.Value]) -> Array[@milkir.Value]
@@ -259,6 +263,9 @@ pub(all) enum WasmRuntimeHelper {
   TableInit
   ElemDrop
   CancelPoll
+  AtomicWait32
+  AtomicWait64
+  AtomicNotify
   GcRefTest
   GcRefCast
   GcStructGet

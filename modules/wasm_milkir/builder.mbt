@@ -37,6 +37,44 @@ fn call_runtime(
 }
 
 ///|
+/// Atomic waits receive a pointer already checked for bounds and alignment.
+pub fn atomic_wait(
+  builder : @milkir.FunctionBuilder,
+  runtime_symbols : RuntimeSymbols,
+  vmctx : @milkir.Value,
+  memidx : Int,
+  pointer : @milkir.Value,
+  expected : @milkir.Value,
+  timeout : @milkir.Value,
+) -> @milkir.Value {
+  let helper = if expected.ty == I64 { AtomicWait64 } else { AtomicWait32 }
+  call_runtime(builder, runtime_symbols.symbol_name(helper), Some(I32), [
+    vmctx,
+    builder.iconst_i32(memidx),
+    pointer,
+    expected,
+    timeout,
+  ]).unwrap()
+}
+
+///|
+pub fn atomic_notify(
+  builder : @milkir.FunctionBuilder,
+  runtime_symbols : RuntimeSymbols,
+  vmctx : @milkir.Value,
+  memidx : Int,
+  pointer : @milkir.Value,
+  count : @milkir.Value,
+) -> @milkir.Value {
+  call_runtime(builder, runtime_symbols.symbol_name(AtomicNotify), Some(I32), [
+    vmctx,
+    builder.iconst_i32(memidx),
+    pointer,
+    count,
+  ]).unwrap()
+}
+
+///|
 fn emit_wasm_inst(
   builder : @milkir.FunctionBuilder,
   ty : @milkir.Type,

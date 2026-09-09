@@ -58,7 +58,7 @@ pub fn JITCallResult::to_repr(Self) -> @debug.Repr
 
 pub(all) enum JITContinuationOutcome {
   JITReturned(Array[Int64])
-  JITSuspended(JITCallContinuation)
+  JITSuspended(@wasmoon_jit.NativeSuspensionReason, JITCallContinuation)
 }
 
 pub struct JITFunction {
@@ -110,6 +110,7 @@ pub fn JITModule::refresh_table_layout(Self, Int) -> Bool
 pub fn JITModule::register_dwarf(Self, verbose? : Bool) -> @wasmoon_jit.DWARFBuilder
 pub fn JITModule::retain_callable_owner(Self) -> () -> Unit
 pub fn JITModule::set_callable_types(Self, Array[Int], Array[Int], Array[(Int64, Int)], Array[Int]) -> Unit
+pub fn JITModule::set_cooperative_scheduling(Self, Bool) -> Bool
 pub fn JITModule::set_gc_heap(Self, Int64) -> Unit
 pub fn JITModule::set_globals(Self, Int64) -> Unit
 pub fn JITModule::set_hostcall_callback(Self, () -> @wasmoon_jit.NativeHostcallOutcome) -> Unit
