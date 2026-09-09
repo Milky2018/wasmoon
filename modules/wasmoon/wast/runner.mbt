@@ -491,8 +491,8 @@ pub fn run_wast_command(
         }
       }
     AssertTrap(action, expected_msg) => {
-      let success = run_assert_trap(ctx, action, expected_msg)
-      if success {
+      let failure = run_assert_trap(ctx, action, expected_msg)
+      if failure is None {
         result.passed = result.passed + 1
         if show_success {
           let action_desc = format_action(action)
@@ -501,7 +501,7 @@ pub fn run_wast_command(
       } else {
         result.failed = result.failed + 1
         result.failures.push(
-          "line \{line}: assert_trap failed: expected '\{expected_msg}'",
+          "line \{line}: assert_trap failed: \{failure.unwrap()}",
         )
       }
     }
@@ -509,11 +509,17 @@ pub fn run_wast_command(
       // Invoke the action and expect an exception to be thrown
       let action_desc = format_action(action)
       try invoke_action(ctx, action) catch {
-        _ => {
+        GuestException => {
           result.passed = result.passed + 1
           if show_success {
             println("line \{line}: assert_exception \{action_desc}: PASSED")
           }
+        }
+        error => {
+          result.failed = result.failed + 1
+          result.failures.push(
+            "line \{line}: assert_exception \{action_desc}: expected Wasm exception, got \{error}",
+          )
         }
       } noraise {
         values => {
@@ -525,36 +531,39 @@ pub fn run_wast_command(
       }
     }
     AssertExhaustion(action, expected_msg) => {
-      // Try to invoke - should cause stack exhaustion with matching message
-      let action_desc = format_action(action)
-      try invoke_action(ctx, action) catch {
-        e => {
-          let err_str = e.to_string()
-          if err_str.contains(expected_msg) {
-            result.passed = result.passed + 1
-            if show_success {
-              println("line \{line}: assert_exhaustion \{action_desc}: PASSED")
-            }
+      let failure = try invoke_action(ctx, action) catch {
+        GuestExhaustion(message) =>
+          if wast_trap_message_matches(message, expected_msg) {
+            None
           } else {
-            result.failed = result.failed + 1
-            result.failures.push(
-              "line \{line}: assert_exhaustion \{action_desc}: expected '\{expected_msg}', got '\{err_str}'",
-            )
+            Some("expected '\{expected_msg}', got exhaustion '\{message}'")
           }
-        }
+        error => Some("expected exhaustion '\{expected_msg}', got \{error}")
       } noraise {
-        _ => {
+        _ =>
+          Some("expected exhaustion '\{expected_msg}', but the action returned")
+      }
+      match failure {
+        Some(message) => {
           result.failed = result.failed + 1
           result.failures.push(
-            "line \{line}: assert_exhaustion \{action_desc}: expected exhaustion but succeeded",
+            "line \{line}: assert_exhaustion \{format_action(action)}: \{message}",
           )
+        }
+        None => {
+          result.passed = result.passed + 1
+          if show_success {
+            println(
+              "line \{line}: assert_exhaustion \{format_action(action)}: PASSED",
+            )
+          }
         }
       }
     }
     AssertModuleTrap(source, msg) => {
       // Try to instantiate - should trap during instantiation (e.g., start function)
       // Unlike assert_unlinkable, this tests for runtime traps, not linking errors
-      let trapped = try_instantiate_source_traps(ctx, source)
+      let trapped = try_instantiate_source_traps(ctx, source, msg)
       if trapped {
         result.passed = result.passed + 1
         if show_success {
@@ -703,10 +712,61 @@ fn run_assert_return(
 fn run_assert_trap(
   ctx : WastContext,
   action : @wat.WastAction,
-  _expected_msg : String,
-) -> Bool {
-  // Should trap
-  !succeeds(() => invoke_action(ctx, action))
+  expected_msg : String,
+) -> String? {
+  try invoke_action(ctx, action) catch {
+    GuestTrap(message) =>
+      if wast_trap_message_matches(message, expected_msg) {
+        None
+      } else {
+        Some("expected '\{expected_msg}', got trap '\{message}'")
+      }
+    error => Some("expected trap '\{expected_msg}', got \{error}")
+  } noraise {
+    _ => Some("expected trap '\{expected_msg}', but the action returned")
+  }
+}
+
+///|
+// These spelling aliases match the pinned Wasmtime 40 WAST adapter. They
+// preserve the trap category; unrelated trap messages must still fail.
+fn wast_trap_message_matches(actual : String, expected : String) -> Bool {
+  actual.contains(expected) ||
+  (
+    expected == "uninitialized element 2" &&
+    actual.contains("uninitialized element")
+  ) ||
+  (
+    expected.contains("null function") &&
+    actual.contains("uninitialized element")
+  ) ||
+  (
+    expected.contains("null") &&
+    expected.contains("reference") &&
+    actual.contains("null reference")
+  )
+}
+
+///|
+fn classify_runtime_failure(error : @runtime.RuntimeError) -> WastRunnerError {
+  match error {
+    UncaughtException => GuestException
+    CallStackExhausted | StackOverflow => GuestExhaustion(error.to_string())
+    OutOfBoundsMemoryAccess
+    | OutOfBoundsTableAccess
+    | OutOfBoundsArrayAccess
+    | UndefinedElement
+    | UninitializedElement
+    | IndirectCallTypeMismatch
+    | DivisionByZero
+    | IntegerOverflow
+    | InvalidConversion
+    | Unreachable
+    | NullReference
+    | UnalignedAtomic
+    | OutOfMemory => GuestTrap(error.to_string())
+    _ => RuntimeError(error.to_string())
+  }
 }
 
 ///|
@@ -723,6 +783,9 @@ fn[T] succeeds(body : () -> T raise) -> Bool {
 pub(all) suberror WastRunnerError {
   ModuleNotFound(String)
   NoCurrentModule
+  GuestTrap(String)
+  GuestException
+  GuestExhaustion(String)
   RuntimeError(String)
 }
 
@@ -731,6 +794,9 @@ pub impl Show for WastRunnerError with fn output(self, logger) {
   match self {
     ModuleNotFound(name) => logger.write_string("module not found: \{name}")
     NoCurrentModule => logger.write_string("no current module")
+    GuestTrap(msg) => logger.write_string("wasm trap: \{msg}")
+    GuestException => logger.write_string("uncaught Wasm exception")
+    GuestExhaustion(msg) => logger.write_string("wasm exhaustion: \{msg}")
     RuntimeError(msg) => logger.write_string("runtime error: \{msg}")
   }
 }
@@ -770,12 +836,41 @@ pub fn invoke_action(
             func.func_idx,
             runtime_args,
           ) catch {
+            Trap(message) =>
+              if message.has_prefix("uncaught exception") {
+                raise GuestException
+              } else if message.has_prefix("call stack exhausted") ||
+                message.has_prefix("stack overflow") {
+                raise GuestExhaustion(message)
+              } else {
+                raise GuestTrap(message)
+              }
             error => raise RuntimeError(error.to_string())
           }
         }
       }
-      @executor.call_exported_func(ctx.store, instance, func_name, runtime_args) catch {
-        error => raise RuntimeError(error.to_string())
+      let mut func_idx = None
+      for export_ in instance.exports {
+        if export_.name == func_name && export_.desc is Func(index) {
+          func_idx = Some(index)
+          break
+        }
+      }
+      guard func_idx is Some(index) else {
+        raise RuntimeError("unknown exported function: \{func_name}")
+      }
+      let outcome = @executor.call_func_by_index_with_exception(
+        ctx.store,
+        instance,
+        index,
+        runtime_args,
+      ) catch {
+        error => raise classify_runtime_failure(error)
+      }
+      match outcome {
+        Returned(values) => values
+        Thrown(_, _) => raise GuestException
+        HostFailed(error) => raise RuntimeError(error.to_string())
       }
     }
     Get(module_name, global_name) => {
@@ -1152,6 +1247,7 @@ fn build_partial_instance_for_trapped_module(
 fn try_instantiate_source_traps(
   ctx : WastContext,
   source : @wat.WastModuleSource,
+  expected_msg : String,
 ) -> Bool {
   let imports = ctx.build_imports()
   match source {
@@ -1166,10 +1262,18 @@ fn try_instantiate_source_traps(
       let before_mems = ctx.store.mems.length()
       let before_globals = ctx.store.globals.length()
       let before_tags = ctx.store.tags.length()
-      let trapped = !succeeds(() => {
+      let trapped = try {
         @executor.instantiate_module_with_imports(ctx.store, mod_, imports)
         |> ignore
-      })
+        false
+      } catch {
+        error =>
+          match classify_runtime_failure(error) {
+            GuestTrap(message) =>
+              wast_trap_message_matches(message, expected_msg)
+            _ => false
+          }
+      }
       if trapped && ctx.use_jit && ctx.jit_compiler is Some(_) {
         if ctx.store.instances.length() > before_instances {
           let trapped_instance = ctx.store.instances[ctx.store.instances.length() -
@@ -1205,10 +1309,18 @@ fn try_instantiate_source_traps(
       let before_mems = ctx.store.mems.length()
       let before_globals = ctx.store.globals.length()
       let before_tags = ctx.store.tags.length()
-      let trapped = !succeeds(() => {
+      let trapped = try {
         @executor.instantiate_module_with_imports(ctx.store, mod_, imports)
         |> ignore
-      })
+        false
+      } catch {
+        error =>
+          match classify_runtime_failure(error) {
+            GuestTrap(message) =>
+              wast_trap_message_matches(message, expected_msg)
+            _ => false
+          }
+      }
       if trapped && ctx.use_jit && ctx.jit_compiler is Some(_) {
         if ctx.store.instances.length() > before_instances {
           let trapped_instance = ctx.store.instances[ctx.store.instances.length() -

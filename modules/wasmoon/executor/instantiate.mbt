@@ -1960,6 +1960,7 @@ pub fn call_func_by_index(
 pub(all) enum InvokeWithExceptionResult {
   Returned(Array[@types.Value])
   Thrown(Int, Array[@types.Value]) // (tag_addr, payload values)
+  HostFailed(@runtime.RuntimeError)
 }
 
 ///|
@@ -1973,6 +1974,8 @@ pub fn call_func_by_index_with_exception(
   let ctx = ExecContext::ExecContext(store, instance)
   let results = ctx.call_func(func_idx, args) catch {
     ThrowException(tag_addr, values) => return Thrown(tag_addr, values)
+    InvocationSignal::HostInvocation(error) =>
+      return HostFailed(normalize_runtime_error(error))
     BranchWith(_, _) | Return => raise Unreachable
     e => raise normalize_runtime_error(e)
   }

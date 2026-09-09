@@ -1452,6 +1452,7 @@ priv enum ImportedCallOutcome {
   ImportedReturned(Array[@types.Value])
   ImportedThrown(Int, Array[@types.Value])
   ImportedPending
+  ImportedHostFailed(@runtime.RuntimeError)
 }
 
 ///|
@@ -1478,7 +1479,9 @@ pub fn JITModuleContext::install_hostcall_dispatcher(
     match inst {
       HostFunc(f) => {
         let caller = @runtime.Caller::Caller(store, caller_instance)
-        ImportedReturned(f(caller, args))
+        ImportedReturned(f(caller, args)) catch {
+          error => ImportedHostFailed(error)
+        }
       }
       AsyncHostFunc(f) => {
         guard store.native_execution_state().current_invocation()
@@ -1554,6 +1557,7 @@ pub fn JITModuleContext::install_hostcall_dispatcher(
                   ) {
                   Returned(values) => ImportedReturned(values)
                   Thrown(tag_addr, values) => ImportedThrown(tag_addr, values)
+                  HostFailed(error) => ImportedHostFailed(error)
                 }
             }
           None =>
@@ -1563,6 +1567,7 @@ pub fn JITModuleContext::install_hostcall_dispatcher(
               ) {
               Returned(values) => ImportedReturned(values)
               Thrown(tag_addr, values) => ImportedThrown(tag_addr, values)
+              HostFailed(error) => ImportedHostFailed(error)
             }
         }
       }
@@ -1616,6 +1621,15 @@ pub fn JITModuleContext::install_hostcall_dispatcher(
       let results : Array[@types.Value] = match invoke_result {
         ImportedReturned(values) => values
         ImportedPending => return HostcallSuspended
+        ImportedHostFailed(error) => {
+          if classify_suspension(error) {
+            return HostcallSuspended
+          }
+          if store.native_execution_state().current_invocation() is Some(id) {
+            self.async_host_errors.set(id, error)
+          }
+          return HostcallTrap(runtime_error_to_trap_code(error))
+        }
         ImportedThrown(tag_addr, values) => {
           let local_tag_idx = find_local_tag_idx(instance, tag_addr).unwrap_or(
             -1,

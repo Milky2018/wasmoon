@@ -98,6 +98,9 @@ pub impl Show for JITCoreCallError
 pub(all) suberror WastRunnerError {
   ModuleNotFound(String)
   NoCurrentModule
+  GuestTrap(String)
+  GuestException
+  GuestExhaustion(String)
   RuntimeError(String)
 }
 pub fn WastRunnerError::output(Self, &Logger) -> Unit

@@ -124,6 +124,7 @@ pub(all) enum InstantiateWithImportDiagnosticsResult {
 pub(all) enum InvokeWithExceptionResult {
   Returned(Array[@types.Value])
   Thrown(Int, Array[@types.Value])
+  HostFailed(@runtime.RuntimeError)
 }
 
 pub(all) enum ResumableCallOutcome {

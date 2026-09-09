@@ -333,3 +333,53 @@ fn register_funcref_entries(
 ) -> FuncrefRegistration {
   { lease: store.register_jit_funcrefs(entries), }
 }
+
+///|
+test "WAST assertions reject wrong trap kinds and missing actions" {
+  let source =
+    #| (module (tag $e) (func (export "trap") unreachable)
+    #|   (func (export "throw") (throw $e)))
+    #| (assert_trap (invoke "trap") "integer divide by zero")
+    #| (assert_exception (invoke "trap"))
+    #| (assert_trap (invoke $missing "trap") "unreachable")
+    #| (assert_exception (invoke $missing "trap"))
+    #| (assert_trap (invoke "missing") "undefined element")
+    #| (assert_trap (invoke "throw") "uncaught exception")
+    #| (assert_trap (module (func $start unreachable) (start $start)) "integer divide by zero")
+    #| (assert_trap (module (import "missing" "f" (func))) "unknown import")
+    #| (assert_trap (invoke "trap") "unreachable")
+    #| (assert_exception (invoke "throw"))
+    #| (assert_trap (module (func $start unreachable) (start $start)) "unreachable")
+  let result = run_wast_commands(parse(source), ".", false, false)
+  inspect(result.passed, content="3")
+  inspect(result.failed, content="8")
+}
+
+///|
+test "WAST assertions do not accept host errors as guest failures" {
+  let ctx = WastContext(false)
+  let linker = @runtime.Linker::with_store(ctx.get_store())
+  linker.add_host_func("host", "trap", fn(_args) raise @runtime.RuntimeError {
+    raise @runtime.Unreachable
+  })
+  linker.add_host_func("host", "throw", fn(_args) raise @runtime.RuntimeError {
+    raise @runtime.UncaughtException
+  })
+  ctx.registered_modules.set("host", linker.get_module("host").unwrap())
+  let source =
+    #| (module (import "host" "trap" (func $trap))
+    #|   (import "host" "throw" (func $throw))
+    #|   (func (export "trap") (call $trap))
+    #|   (func (export "throw") (call $throw)))
+    #| (assert_trap (invoke "trap") "unreachable")
+    #| (assert_exception (invoke "trap"))
+    #| (assert_trap (invoke "throw") "uncaught exception")
+    #| (assert_exception (invoke "throw"))
+  let result = WastResult()
+  for item in parse(source).commands {
+    let (command, line) = item
+    run_wast_command(ctx, command, line, result, ".", false)
+  }
+  inspect(result.passed, content="0")
+  inspect(result.failed, content="4")
+}
