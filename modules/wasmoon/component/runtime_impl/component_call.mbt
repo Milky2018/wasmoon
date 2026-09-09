@@ -55,17 +55,7 @@ fn ComponentInvocation::cleanup_task(self : ComponentInvocation) -> Unit {
     None => ()
   }
   self.task.waiting_set[0] = None
-  self.async_state.task_results.remove(self.task_id)
-  self.async_state.task_result_owner.remove(self.task_id)
-  self.async_state.task_returned.remove(self.task_id)
-  self.async_state.task_self_cancelled.remove(self.task_id)
-  self.async_state.task_cancelled.remove(self.task_id)
-  self.async_state.task_contexts.remove(self.task_id)
-  self.async_state.task_suspensions.remove(self.task_id)
-  self.async_state.waiting_ws.remove(self.task_id)
-  self.async_state.sync_lower_states.remove(self.task_id)
-  drop_task_thread(self.async_state, self.task_id)
-  remove_task_meta(self.async_state, self.task_id)
+  retire_task(self.async_state, self.task_id)
 }
 
 ///|
@@ -76,8 +66,8 @@ fn ComponentInvocation::finish(
     self.task.func,
   )
   let values = take_task_result(self.async_state, self.task_id).unwrap_or([])
-  let owner = self.async_state.task_result_owner
-    .get(self.task_id)
+  let owner = self.async_state.tasks
+    .read_task_result_owner(self.task_id)
     .unwrap_or(
       if callee_instance_id >= 0 {
         callee_instance_id

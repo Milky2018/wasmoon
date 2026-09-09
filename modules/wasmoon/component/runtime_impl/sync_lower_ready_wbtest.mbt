@@ -107,7 +107,10 @@ test "sync lower polls a host result before rejecting a pending call and cancels
       inspect(cancelled[0], content="1")
     }
     inspect(polled[0], content="1")
-    inspect(instance.async_state.sync_lower_states.length(), content="0")
+    inspect(
+      instance.async_state.tasks.entries_sync_lower_states().length(),
+      content="0",
+    )
   }
 }
 

@@ -85,34 +85,15 @@ pub(all) struct AsyncState {
   resource_tables : Map[Int, ResourceTable]
   host_event_loop : @ref.Ref[HostEventLoop?]
   task_stack : Array[Int64]
-  next_task_id : Array[Int64]
-  task_results : Map[Int64, Array[ComponentValue]]
-  task_result_owner : Map[Int64, Int]
-  task_return_contracts : Map[Int64, TaskReturnContract]
-  core_start_tasks : Map[Int64, Unit]
-  task_returned : Map[Int64, Bool]
-  task_self_cancelled : Map[Int64, Bool]
-  task_cancelled : Map[Int64, Bool]
-  task_contexts : Map[Int64, Map[Int, @types.Value]]
-  task_borrows : Map[Int64, Int]
-  task_borrow_scopes : Map[Int64, Array[Array[Int64]]]
-  task_thread : Map[Int64, Map[Int, Int]]
+  tasks : TaskRegistry
   threads : Map[Int64, GuestThread]
-  thread_runnable : Map[Int64, Array[Int]]
-  main_thread_scheduled : Map[Int64, Bool]
   task_can_block : Array[Bool]
   can_block_stack : Array[Bool]
   in_async_callback : Array[Bool]
-  task_caller : Map[Int64, Int64]
-  task_instance : Map[Int64, Int]
-  task_suspensions : Map[Int64, TaskSuspension]
-  waiting_ws : Map[Int64, Int64]
-  sync_lower_states : Map[Int64, SyncLowerState]
   waitable_sets : Map[Int64, WaitableSet]
   waitable_to_set : Map[Int64, Int64]
   waitable_events : Map[Int64, Array[WaitEvent]]
   sync_waitable_users : Map[Int64, Int64]
-  subtasks : Map[Int64, Subtask]
   inflight_by_instance : Map[Int, Int]
   pending_by_instance : Map[Int, Array[Int64]]
   scheduler_cursor : Array[Int64?]
@@ -456,7 +437,7 @@ pub(all) struct ResourceHandle {
   kind : @wasm_component.ResourceKind
   impl_component_id : Int
   own : Bool
-  borrow_scope : Array[Int64]?
+  borrow_scope : Int64?
   num_lends : Array[Int]
 } derive(@debug.Debug)
 pub fn ResourceHandle::to_repr(Self) -> @debug.Repr
@@ -506,6 +487,12 @@ pub fn SubtaskPhase::to_repr(Self) -> @debug.Repr
 
 type SyncLowerState derive(@debug.Debug)
 pub fn SyncLowerState::to_repr(Self) -> @debug.Repr
+
+pub struct TaskRegistry {
+  // private fields
+} derive(@debug.Debug)
+pub fn TaskRegistry::subtask_count(Self) -> Int
+pub fn TaskRegistry::to_repr(Self) -> @debug.Repr
 
 type TaskReturnContract derive(@debug.Debug)
 pub fn TaskReturnContract::to_repr(Self) -> @debug.Repr

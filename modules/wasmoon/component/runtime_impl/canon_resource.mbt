@@ -217,16 +217,19 @@ fn instantiate_canon_resource_drop(
                     real.num_lends[0] -= 1
                     match real.borrow_scope {
                       Some(scope) => {
-                        let task_id = scope[0]
+                        let task_id = scope
                         let count = match
-                          state.async_state.task_borrows.get(task_id) {
+                          state.async_state.tasks.read_task_borrows(task_id) {
                           Some(n) => n
                           None => 0
                         }
                         if count <= 1 {
-                          state.async_state.task_borrows.remove(task_id)
+                          state.async_state.tasks.clear_task_borrows(task_id)
                         } else {
-                          state.async_state.task_borrows.set(task_id, count - 1)
+                          state.async_state.tasks.write_task_borrows(
+                            task_id,
+                            count - 1,
+                          )
                         }
                       }
                       None => ()

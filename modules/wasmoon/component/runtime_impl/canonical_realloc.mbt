@@ -30,9 +30,7 @@ fn CanonicalRealloc::call(
   defer {
     canon_may_leave[0] = previous_may_leave
     pop_task(state)
-    state.task_contexts.remove(task_id)
-    drop_task_thread(state, task_id)
-    remove_task_meta(state, task_id)
+    retire_task(state, task_id)
   }
   call_core_func(store, self.func, args)
 }

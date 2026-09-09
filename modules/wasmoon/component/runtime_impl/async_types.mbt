@@ -92,7 +92,7 @@ pub(all) struct ResourceHandle {
   kind : ResourceKind
   impl_component_id : Int
   own : Bool
-  borrow_scope : Array[Int64]?
+  borrow_scope : Int64?
   num_lends : Array[Int]
 } derive(Debug)
 
@@ -346,57 +346,15 @@ pub(all) struct AsyncState {
 
   // Task stack + per-task state (used by canon task.return/context.*).
   task_stack : Array[Int64]
-  next_task_id : Array[Int64]
-  task_results : Map[Int64, Array[ComponentValue]]
-  // Component instance id whose handle numbering is used by `task_results`.
-  // For `canon task.return`, this is the component instance where the intrinsic lives.
-  task_result_owner : Map[Int64, Int]
-  task_return_contracts : Map[Int64, TaskReturnContract]
-  core_start_tasks : Map[Int64, Unit]
-  task_returned : Map[Int64, Bool]
-  // Set only by `canon task.cancel` (distinct from external cancellation requests).
-  task_self_cancelled : Map[Int64, Bool]
-  task_cancelled : Map[Int64, Bool]
-  task_contexts : Map[Int64, Map[Int, @types.Value]]
-  // Outstanding task-scoped resource borrows. A task cannot return or cancel
-  // while this count is non-zero.
-  task_borrows : Map[Int64, Int]
-  // Mutable task ids referenced by borrowed resource handles. Subtask handle
-  // allocation can rename an internal task id after the borrow is created.
-  task_borrow_scopes : Map[Int64, Array[Array[Int64]]]
-  // Synthetic implicit thread handles for each running task, keyed by the
-  // component instance id where the thread handle lives.
-  //
-  // Wasmtime inserts the current guest thread into the callee instance's handle
-  // table. A single task can enter multiple component instances, so model this
-  // as a per-task map.
-  task_thread : Map[Int64, Map[Int, Int]]
+  tasks : TaskRegistry
   // Explicit guest threads keyed by `handle_key(owner_component_id, local_handle)`.
   threads : Map[Int64, GuestThread]
-  // Per-root-task runnable queue of explicit thread local handles.
-  thread_runnable : Map[Int64, Array[Int]]
-  // Whether the implicit/main thread is scheduled to resume for a root task.
-  main_thread_scheduled : Map[Int64, Bool]
-
   // Whether the currently executing task is allowed to block.
   task_can_block : Array[Bool]
   can_block_stack : Array[Bool]
 
   // True while executing an async callback (used to conservatively reject re-entrancy).
   in_async_callback : Array[Bool]
-
-  // Task tree metadata used to prevent async re-entrancy into the same component
-  // instance (mirrors Wasmtime's ConcurrentState::may_enter).
-  //
-  // For root (host) tasks, `task_caller[task_id] == 0`.
-  task_caller : Map[Int64, Int64]
-  // Component instance id (ResourceTable.id) associated with this task.
-  task_instance : Map[Int64, Int]
-  // Suspended canonical instructions are retried when their thread resumes.
-  task_suspensions : Map[Int64, TaskSuspension]
-  waiting_ws : Map[Int64, Int64]
-  // At most one sync-lowered call can be suspended in a task continuation.
-  sync_lower_states : Map[Int64, SyncLowerState]
 
   // Waitable sets and event queues.
   waitable_sets : Map[Int64, WaitableSet]
@@ -405,7 +363,6 @@ pub(all) struct AsyncState {
   sync_waitable_users : Map[Int64, Int64]
 
   // Subtasks created by `canon lower ... async`.
-  subtasks : Map[Int64, Subtask]
   inflight_by_instance : Map[Int, Int]
   pending_by_instance : Map[Int, Array[Int64]]
   // Round-robin cursor for the single-threaded host task scheduler.
@@ -529,7 +486,7 @@ struct GuestThread {
   // Guest-visible local thread handle.
   handle : Int
   // Root task that owns this thread.
-  mut parent_task_id : Int64
+  parent_task_id : Int64
   // Internal task id that owns the explicit thread continuation.
   task_id : Int64
   start_func : CoreFuncRef
@@ -628,34 +585,15 @@ pub fn AsyncState::AsyncState(
     host_event_loop: Ref(None),
     task_stack: [0L],
     // Use negative ids for internal tasks so they don't collide with the shared handle space.
-    next_task_id: [-1L],
-    task_results: Map([]),
-    task_result_owner: Map([]),
-    task_return_contracts: Map([]),
-    core_start_tasks: Map([]),
-    task_returned: Map([]),
-    task_self_cancelled: Map([]),
-    task_cancelled: Map([]),
-    task_contexts: Map([]),
-    task_borrows: Map([]),
-    task_borrow_scopes: Map([]),
-    task_thread: Map([]),
+    tasks: TaskRegistry::new(),
     threads: Map([]),
-    thread_runnable: Map([]),
-    main_thread_scheduled: Map([]),
     task_can_block: [false],
     can_block_stack: [false],
     in_async_callback: [false],
-    task_caller: Map([]),
-    task_instance: Map([]),
-    task_suspensions: Map([]),
-    waiting_ws: Map([]),
-    sync_lower_states: Map([]),
     waitable_sets: Map([]),
     waitable_to_set: Map([]),
     waitable_events: Map([]),
     sync_waitable_users: Map([]),
-    subtasks: Map([]),
     inflight_by_instance: Map([]),
     pending_by_instance: Map([]),
     scheduler_cursor: [None],
@@ -1448,21 +1386,11 @@ fn transfer_stream_future_value(
                 }
                 let task_id = current_task_id(async_state)
                 entry.num_lends[0] += 1
-                let count = match async_state.task_borrows.get(task_id) {
+                let count = match async_state.tasks.read_task_borrows(task_id) {
                   Some(n) => n
                   None => 0
                 }
-                async_state.task_borrows.set(task_id, count + 1)
-                let borrow_scope = [task_id]
-                let scopes = match async_state.task_borrow_scopes.get(task_id) {
-                  Some(existing) => existing
-                  None => {
-                    let created : Array[Array[Int64]] = []
-                    async_state.task_borrow_scopes.set(task_id, created)
-                    created
-                  }
-                }
-                scopes.push(borrow_scope)
+                async_state.tasks.write_task_borrows(task_id, count + 1)
                 let new_handle = to_table.alloc({
                   type_id: entry.type_id,
                   rep: entry.rep,
@@ -1471,7 +1399,7 @@ fn transfer_stream_future_value(
                   kind: entry.kind,
                   impl_component_id: entry.impl_component_id,
                   own: false,
-                  borrow_scope: Some(borrow_scope),
+                  borrow_scope: Some(task_id),
                   num_lends: entry.num_lends,
                 })
                 async_state.resource_tables.set(to_component_id, to_table)
@@ -2051,8 +1979,8 @@ fn init_task_meta(
   instance_id : Int,
   caller_task_id : Int64,
 ) -> Unit {
-  async_state.task_instance.set(task_id, instance_id)
-  async_state.task_caller.set(task_id, caller_task_id)
+  async_state.tasks.write_task_instance(task_id, instance_id)
+  async_state.tasks.write_task_caller(task_id, caller_task_id)
 }
 
 ///|
@@ -2068,7 +1996,7 @@ fn async_call_can_enter(func : ComponentFunc, async_state : AsyncState) -> Bool 
 fn instance_has_sync_wait(async_state : AsyncState, instance_id : Int) -> Bool {
   for entry in async_state.sync_waitable_users {
     let (_, task_id) = entry
-    if async_state.task_instance.get(task_id) == Some(instance_id) {
+    if async_state.tasks.read_task_instance(task_id) == Some(instance_id) {
       return true
     }
   }
@@ -2091,75 +2019,6 @@ fn sync_waitables_for_task(
 }
 
 ///|
-fn remove_task_meta(async_state : AsyncState, task_id : Int64) -> Unit {
-  discard_task_children(async_state, task_id)
-  for key in sync_waitables_for_task(async_state, task_id) {
-    async_state.sync_waitable_users.remove(key)
-  }
-  async_state.task_return_contracts.remove(task_id)
-  async_state.task_instance.remove(task_id)
-  async_state.task_caller.remove(task_id)
-  async_state.task_borrows.remove(task_id)
-  async_state.task_borrow_scopes.remove(task_id)
-}
-
-///|
-fn migrate_task_meta(
-  async_state : AsyncState,
-  from_id : Int64,
-  to_id : Int64,
-) -> Unit {
-  if async_state.thread_runnable.get(from_id) is Some(queue) {
-    async_state.thread_runnable.remove(from_id)
-    async_state.thread_runnable.set(to_id, queue)
-  }
-  if async_state.main_thread_scheduled.get(from_id) is Some(scheduled) {
-    async_state.main_thread_scheduled.remove(from_id)
-    async_state.main_thread_scheduled.set(to_id, scheduled)
-  }
-  for entry in async_state.threads {
-    let (_, thread) = entry
-    if thread.parent_task_id == from_id {
-      thread.parent_task_id = to_id
-    }
-  }
-  let children : Array[Int64] = []
-  for entry in async_state.task_caller {
-    let (child, parent) = entry
-    if parent == from_id {
-      children.push(child)
-    }
-  }
-  for child in children {
-    async_state.task_caller.set(child, to_id)
-  }
-  if async_state.task_return_contracts.get(from_id) is Some(contract) {
-    async_state.task_return_contracts.set(to_id, contract)
-  }
-  for key in sync_waitables_for_task(async_state, from_id) {
-    async_state.sync_waitable_users.set(key, to_id)
-  }
-  if async_state.task_instance.get(from_id) is Some(inst) {
-    async_state.task_instance.set(to_id, inst)
-  }
-  if async_state.task_caller.get(from_id) is Some(parent) {
-    async_state.task_caller.set(to_id, parent)
-  }
-  if async_state.task_borrows.get(from_id) is Some(count) {
-    async_state.task_borrows.remove(from_id)
-    async_state.task_borrows.set(to_id, count)
-  }
-  if async_state.task_borrow_scopes.get(from_id) is Some(scopes) {
-    async_state.task_borrow_scopes.remove(from_id)
-    for scope in scopes {
-      scope[0] = to_id
-    }
-    async_state.task_borrow_scopes.set(to_id, scopes)
-  }
-  remove_task_meta(async_state, from_id)
-}
-
-///|
 /// Returns whether `callee_instance_id` may be entered when the call originates
 /// from `caller_task_id`.
 ///
@@ -2173,12 +2032,12 @@ fn may_enter_instance_from_task(
 ) -> Bool {
   let mut t = caller_task_id
   while t != 0L {
-    if async_state.task_instance.get(t) is Some(inst) &&
+    if async_state.tasks.read_task_instance(t) is Some(inst) &&
       inst >= 0 &&
       inst == callee_instance_id {
       return false
     }
-    t = match async_state.task_caller.get(t) {
+    t = match async_state.tasks.read_task_caller(t) {
       Some(p) => p
       None => 0L
     }
@@ -2192,11 +2051,11 @@ fn ensure_task_thread(
   owner_component_id : Int,
   task_id : Int64,
 ) -> Unit {
-  let per_task = match async_state.task_thread.get(task_id) {
+  let per_task = match async_state.tasks.read_task_thread(task_id) {
     Some(m) => m
     None => {
       let m : Map[Int, Int] = Map([])
-      async_state.task_thread.set(task_id, m)
+      async_state.tasks.write_task_thread(task_id, m)
       m
     }
   }
@@ -2209,8 +2068,8 @@ fn ensure_task_thread(
 
 ///|
 fn drop_task_thread(async_state : AsyncState, task_id : Int64) -> Unit {
-  if async_state.task_thread.get(task_id) is Some(m) {
-    async_state.task_thread.remove(task_id)
+  if async_state.tasks.read_task_thread(task_id) is Some(m) {
+    async_state.tasks.clear_task_thread(task_id)
     for entry in m {
       let (owner_component_id, th) = entry
       free_shared_handle(async_state, owner_component_id, th)
@@ -2220,14 +2079,12 @@ fn drop_task_thread(async_state : AsyncState, task_id : Int64) -> Unit {
 
 ///|
 fn alloc_task_id(async_state : AsyncState) -> Int64 {
-  let id = async_state.next_task_id[0]
-  async_state.next_task_id[0] = id - 1L
-  id
+  async_state.tasks.allocate()
 }
 
 ///|
 fn push_task(async_state : AsyncState, id : Int64, can_block : Bool) -> Unit {
-  async_state.task_stack.push(id)
+  async_state.task_stack.push(async_state.tasks.ensure(id).id)
   async_state.can_block_stack.push(can_block)
   async_state.task_can_block[0] = can_block
 }
@@ -2256,8 +2113,8 @@ fn set_task_result(
   owner_component_id : Int,
   vals : Array[ComponentValue],
 ) -> Unit {
-  async_state.task_results.set(task_id, vals)
-  async_state.task_result_owner.set(task_id, owner_component_id)
+  async_state.tasks.write_task_results(task_id, vals)
+  async_state.tasks.write_task_result_owner(task_id, owner_component_id)
 }
 
 ///|
@@ -2265,9 +2122,9 @@ fn take_task_result(
   async_state : AsyncState,
   task_id : Int64,
 ) -> Array[ComponentValue]? {
-  let v = async_state.task_results.get(task_id)
+  let v = async_state.tasks.read_task_results(task_id)
   if v is Some(_) {
-    async_state.task_results.remove(task_id)
+    async_state.tasks.clear_task_results(task_id)
   }
   v
 }

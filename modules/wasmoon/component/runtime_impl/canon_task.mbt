@@ -97,7 +97,8 @@ fn instantiate_canon_task_return(
         return []
       }
     }
-    guard async_state.task_return_contracts.get(task_id) is Some(contract) &&
+    guard async_state.tasks.read_task_return_contracts(task_id)
+      is Some(contract) &&
       contract.owner_component_id == owner_component_id &&
       optional_val_types_match(
         contract.result,
@@ -116,15 +117,15 @@ fn instantiate_canon_task_return(
       )
       return []
     }
-    if async_state.task_borrows.get(task_id) is Some(count) && count > 0 {
+    if async_state.tasks.read_task_borrows(task_id) is Some(count) && count > 0 {
       trap_canon("borrow handles still remain at the end of the call")
       return []
     }
-    if async_state.task_returned.get(task_id) is Some(_) {
+    if async_state.tasks.read_task_returned(task_id) is Some(_) {
       trap_canon("task.return called more than once")
       return []
     }
-    async_state.task_returned.set(task_id, true)
+    async_state.tasks.write_task_returned(task_id, true)
     let vals : Array[ComponentValue] = match result {
       None => []
       Some(vt) => {
@@ -183,13 +184,13 @@ fn instantiate_canon_task_cancel(
         return []
       }
     }
-    if async_state.task_borrows.get(task_id) is Some(count) && count > 0 {
+    if async_state.tasks.read_task_borrows(task_id) is Some(count) && count > 0 {
       trap_canon("borrow handles still remain at the end of the call")
       return []
     }
-    async_state.task_self_cancelled.set(task_id, true)
-    async_state.task_cancelled.set(task_id, true)
-    async_state.task_returned.set(task_id, true)
+    async_state.tasks.write_task_self_cancelled(task_id, true)
+    async_state.tasks.write_task_cancelled(task_id, true)
+    async_state.tasks.write_task_returned(task_id, true)
     set_task_result(async_state, task_id, owner_component_id, [])
     []
   }

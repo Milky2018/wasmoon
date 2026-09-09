@@ -92,7 +92,7 @@ fn task_can_resume_without_external_progress(
   async_state : AsyncState,
   task_id : Int64,
 ) -> Bool {
-  if async_state.task_suspensions.get(task_id) is Some(Yield(_)) {
+  if async_state.tasks.read_task_suspensions(task_id) is Some(Yield(_)) {
     return true
   }
   for key in sync_waitables_for_task(async_state, task_id) {
@@ -101,7 +101,7 @@ fn task_can_resume_without_external_progress(
       return true
     }
   }
-  match async_state.sync_lower_states.get(task_id) {
+  match async_state.tasks.read_sync_lower_states(task_id) {
     Some(lower) => {
       if lower.task.continuation[0] is None &&
         lower.task.started[0] &&
@@ -178,7 +178,7 @@ fn drive_core_to_completion(
 ///|
 fn runnable_subtask_count(async_state : AsyncState) -> Int {
   let mut count = 0
-  for entry in async_state.subtasks {
+  for entry in async_state.tasks.entries_subtasks() {
     let (_task_id, subtask) = entry
     if subtask.phase[0] == Started {
       count = count + 1
@@ -262,7 +262,7 @@ fn step_task_once(
     if children != Done {
       return children
     }
-    if async_abi && async_state.task_returned.get(task_id) is None {
+    if async_abi && async_state.tasks.read_task_returned(task_id) is None {
       raise CanonCallError("async-lifted export failed to produce a result")
     }
   }
@@ -367,7 +367,10 @@ fn step_task_once_impl(
       }
       if task.cancelled[0] {
         (future.cancel)()
-        async_state.task_self_cancelled.set(current_task_id(async_state), true)
+        async_state.tasks.write_task_self_cancelled(
+          current_task_id(async_state),
+          true,
+        )
         Done
       } else {
         match (future.poll)() {
@@ -593,7 +596,9 @@ fn step_task_once_impl(
           Some(ws) =>
             if !waitable_set_has_event(async_state, ws) &&
               !task.cancelled[0] &&
-              !(async_state.task_cancelled.get(current_task_id(async_state))
+              !(async_state.tasks.read_task_cancelled(
+                current_task_id(async_state),
+              )
               is Some(true)) {
               return Blocked
             }
@@ -667,7 +672,7 @@ fn step_task_once_impl(
         }
         run_post_return(resources, core_results, entry, store)
         let task_id = current_task_id(async_state)
-        async_state.task_returned.set(task_id, true)
+        async_state.tasks.write_task_returned(task_id, true)
         set_task_result(async_state, task_id, callee_table.id, vals)
         Done
       }
@@ -770,7 +775,7 @@ fn progress_one_subtask_nonblocking(
     }
     if queue0.length() > 0 {
       let next_id = queue0[0]
-      let can_start = match async_state.subtasks.get(next_id) {
+      let can_start = match async_state.tasks.read_subtasks(next_id) {
         Some(st) => {
           let CallbackLifted(task) = st.driver
           backpressure_value_for_instance(async_state, st.callee_instance_id) ==
@@ -823,7 +828,8 @@ fn progress_one_subtask_nonblocking(
         async_state.pending_by_instance.set(key, queue0)
       }
     }
-    if async_state.subtasks.get(next_id) is Some(st) && !task_on_stack(next_id) {
+    if async_state.tasks.read_subtasks(next_id) is Some(st) &&
+      !task_on_stack(next_id) {
       st.phase[0] = Started
       async_state.inflight_by_instance.set(key, 1)
       // Transitioned from STARTING to STARTED: notify via event.
@@ -839,7 +845,7 @@ fn progress_one_subtask_nonblocking(
 
   // Advance one runnable STARTED subtask/background task.
   let started_ids : Array[Int64] = []
-  for kv in async_state.subtasks.iter() {
+  for kv in async_state.tasks.entries_subtasks().iter() {
     let (task_id, st0) = kv
     if st0.phase[0] == Started && !task_on_stack(task_id) {
       started_ids.push(task_id)
@@ -876,7 +882,7 @@ fn progress_one_subtask_nonblocking(
     }
   }
   for task_id in started_ids {
-    let st = match async_state.subtasks.get(task_id) {
+    let st = match async_state.tasks.read_subtasks(task_id) {
       Some(s) => s
       None => continue
     }
@@ -998,16 +1004,14 @@ fn call_component_func(
       errdefer {
         abort_task_children(async_state, task_id)
         pop_task(async_state)
-        drop_task_thread(async_state, task_id)
-        remove_task_meta(async_state, task_id)
+        retire_task(async_state, task_id)
       }
       call_component_func_in_task(
         func, args, store, resource_table, async_state,
       )
     }
     pop_task(async_state)
-    drop_task_thread(async_state, task_id)
-    remove_task_meta(async_state, task_id)
+    retire_task(async_state, task_id)
     return out
   }
   call_component_func_in_task(func, args, store, resource_table, async_state)
@@ -1103,7 +1107,7 @@ fn call_component_func_in_task_impl(
           let out = {
             errdefer {
               pop_task(async_state)
-              remove_task_meta(async_state, task_id)
+              retire_task(async_state, task_id)
             }
             let initial_results = drive_core_to_completion(
               async_state,
@@ -1184,7 +1188,7 @@ fn call_component_func_in_task_impl(
             )
           }
           pop_task(async_state)
-          remove_task_meta(async_state, task_id)
+          retire_task(async_state, task_id)
           return out
         }
         None => ()
@@ -1198,14 +1202,7 @@ fn call_component_func_in_task_impl(
       push_task(async_state, sync_task_id, false)
       defer {
         pop_task(async_state)
-        drop_task_thread(async_state, sync_task_id)
-        async_state.task_contexts.remove(sync_task_id)
-        async_state.task_results.remove(sync_task_id)
-        async_state.task_result_owner.remove(sync_task_id)
-        async_state.task_returned.remove(sync_task_id)
-        async_state.task_self_cancelled.remove(sync_task_id)
-        async_state.task_cancelled.remove(sync_task_id)
-        remove_task_meta(async_state, sync_task_id)
+        retire_task(async_state, sync_task_id)
       }
       errdefer abort_task_children(async_state, sync_task_id)
       if func_type_needs_memory(func_type, types) && resources.mem_addr is None {

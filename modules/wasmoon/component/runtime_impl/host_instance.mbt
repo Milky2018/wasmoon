@@ -35,7 +35,8 @@ fn HostRuntimeState::with_core_execution_engine(
 ///
 /// Host stream, future, and task handles must use the same async state as guest
 /// component instances. Embeddings should obtain their runtime through this
-/// method before building host instances.
+/// method at any point before linker closure. Guest instantiation establishes
+/// the same runtime automatically.
 pub fn ComponentLinker::host_runtime_state(
   self : ComponentLinker,
 ) -> HostRuntimeState raise ComponentRuntimeError {
@@ -114,12 +115,14 @@ fn cancel_callback_task(task : CallbackTask) -> Unit {
 
 ///|
 fn cancel_async_state_continuations(async_state : AsyncState) -> Unit {
-  for _, subtask in async_state.subtasks {
+  for entry in async_state.tasks.entries_subtasks() {
+    let (_, subtask) = entry
     match subtask.driver {
       CallbackLifted(task) => cancel_callback_task(task)
     }
   }
-  for _, state in async_state.sync_lower_states {
+  for entry in async_state.tasks.entries_sync_lower_states() {
+    let (_, state) = entry
     cancel_callback_task(state.task)
   }
   for _, thread in async_state.threads {
@@ -131,8 +134,8 @@ fn cancel_async_state_continuations(async_state : AsyncState) -> Unit {
       None => ()
     }
   }
-  async_state.subtasks.clear()
-  async_state.sync_lower_states.clear()
+  async_state.tasks.clear_all_subtasks()
+  async_state.tasks.clear_all_sync_lower_states()
   async_state.threads.clear()
 }
 

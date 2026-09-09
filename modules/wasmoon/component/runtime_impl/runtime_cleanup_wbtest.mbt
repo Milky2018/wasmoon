@@ -98,24 +98,16 @@ test "resource table recycles freed handles without retaining entries" {
 }
 
 ///|
-test "task metadata cleanup returns all ownership maps to baseline" {
+test "task retirement releases all records and handle bindings" {
   let async_state = AsyncState(StreamTable())
   for i in 0..<512 {
     let task_id = alloc_task_id(async_state)
     init_task_meta(async_state, task_id, i, 0L)
-    async_state.task_borrows.set(task_id, 1)
-    async_state.task_borrow_scopes.set(task_id, [[task_id]])
-    remove_task_meta(async_state, task_id)
+    async_state.tasks.write_task_borrows(task_id, 1)
+    retire_task(async_state, task_id)
   }
-  debug_inspect(
-    (
-      async_state.task_instance.length(),
-      async_state.task_caller.length(),
-      async_state.task_borrows.length(),
-      async_state.task_borrow_scopes.length(),
-    ),
-    content="(0, 0, 0, 0)",
-  )
+  inspect(async_state.tasks.records.length(), content="0")
+  inspect(async_state.tasks.aliases.length(), content="0")
 }
 
 ///|

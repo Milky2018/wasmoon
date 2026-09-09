@@ -13,24 +13,15 @@ fn complete_subtask(
     let wkey = handle_key(owner_component_id, st.id)
     remove_waitable_membership(async_state, owner_component_id, st.id)
     async_state.waitable_events.remove(wkey)
-    async_state.subtasks.remove(task_id)
-    async_state.task_results.remove(task_id)
-    async_state.task_result_owner.remove(task_id)
-    async_state.task_returned.remove(task_id)
-    async_state.task_self_cancelled.remove(task_id)
-    async_state.task_cancelled.remove(task_id)
-    async_state.task_contexts.remove(task_id)
-    remove_task_meta(async_state, task_id)
-    async_state.task_suspensions.remove(task_id)
-    async_state.waiting_ws.remove(task_id)
-    async_state.sync_lower_states.remove(task_id)
+    retire_task(async_state, task_id)
     free_shared_handle(async_state, owner_component_id, st.id)
     return ()
   }
   // Write subtask results into the return buffer (async-lower ABI).
   // component-spec expects the return value to be materialized in memory
   // before emitting the RETURNED event.
-  let cancelled = async_state.task_self_cancelled.get(task_id) is Some(true)
+  let cancelled = async_state.tasks.read_task_self_cancelled(task_id)
+    is Some(true)
   match st.result_ty {
     Some(_) =>
       if st.mem_addr is Some(mem_addr) {
@@ -42,7 +33,7 @@ fn complete_subtask(
           take_task_result(async_state, task_id) |> ignore
           ([] : Array[ComponentValue])
         } else {
-          match async_state.task_results.get(task_id) {
+          match async_state.tasks.read_task_results(task_id) {
             Some(v) => v
             None => []
           }

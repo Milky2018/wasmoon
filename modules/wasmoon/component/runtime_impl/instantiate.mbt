@@ -25,18 +25,12 @@ fn instantiate_component(
   let stream_table = if outer_stack.length() > 0 {
     outer_stack[outer_stack.length() - 1].stream_table
   } else {
-    match linker.host_runtime.val {
-      Some(runtime) => runtime.stream_table
-      None => StreamTable()
-    }
+    linker.host_runtime_state().stream_table
   }
   let async_state = if outer_stack.length() > 0 {
     outer_stack[outer_stack.length() - 1].async_state
   } else {
-    match linker.host_runtime.val {
-      Some(runtime) => runtime.async_state
-      None => AsyncState(stream_table, core_engine=linker.core_engine())
-    }
+    linker.host_runtime_state().async_state
   }
   let state = BuildState::BuildState(stream_table, async_state)
   state.async_state.resource_tables.set(
@@ -118,7 +112,7 @@ fn run_component_sections(
               // canonical host imports. Give start its own task-scoped borrow,
               // cancellation, and continuation state.
               let inst_task_id = alloc_task_id(async_state)
-              async_state.core_start_tasks.set(inst_task_id, ())
+              async_state.tasks.write_core_start_tasks(inst_task_id, ())
               // Core start runs during instantiation and must not block.
               push_task(async_state, inst_task_id, false)
               let instance = @executor.instantiate_module_with_imports(
@@ -126,8 +120,7 @@ fn run_component_sections(
               ) catch {
                 e => {
                   pop_task(async_state)
-                  async_state.core_start_tasks.remove(inst_task_id)
-                  drop_task_thread(async_state, inst_task_id)
+                  retire_task(async_state, inst_task_id)
                   match canon_trap_message[0] {
                     Some(msg) => raise CoreModuleInstantiateError(msg)
                     None => raise CoreModuleInstantiateError(e.to_string())
@@ -135,8 +128,7 @@ fn run_component_sections(
                 }
               }
               pop_task(async_state)
-              async_state.core_start_tasks.remove(inst_task_id)
-              drop_task_thread(async_state, inst_task_id)
+              retire_task(async_state, inst_task_id)
               linker.core_linker.register(module_name, instance) catch {
                 error => raise CoreModuleInstantiateError(error.to_string())
               }

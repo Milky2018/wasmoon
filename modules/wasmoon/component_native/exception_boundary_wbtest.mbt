@@ -166,9 +166,9 @@ test "failed async subtasks do not contaminate later component invocations" {
       } catch {
         error => error.to_string()
       }
-      guard instance.async_state.subtasks.is_empty() else {
+      guard instance.async_state.tasks.subtask_count() == 0 else {
         fail(
-          "remaining subtasks=\{instance.async_state.subtasks.length()}, stack=\{Repr(instance.async_state.task_stack)}",
+          "remaining subtasks=\{instance.async_state.tasks.subtask_count()}, stack=\{Repr(instance.async_state.task_stack)}",
         )
       }
       inspect(cancelled[0], content="0")

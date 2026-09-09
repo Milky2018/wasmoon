@@ -4,8 +4,9 @@ fn install_task_return_contract(
   task_id : Int64,
   func : ComponentFunc,
 ) -> Unit {
+  let task_id = async_state.tasks.resolve(task_id)
   if func is Lifted(_, ft, resources, types, table, _, _, true) {
-    async_state.task_return_contracts.set(task_id, {
+    async_state.tasks.write_task_return_contracts(task_id, {
       result: ft.result,
       types,
       resources,
@@ -21,8 +22,9 @@ fn finish_task_children(
   owner_component_id : Int,
   task_id : Int64,
 ) -> TaskStep raise ComponentRuntimeError {
-  if async_state.task_returned.get(task_id) is Some(true) ||
-    async_state.task_results.get(task_id) is Some(_) {
+  let task_id = async_state.tasks.resolve(task_id)
+  if async_state.tasks.read_task_returned(task_id) is Some(true) ||
+    async_state.tasks.read_task_results(task_id) is Some(_) {
     return Done
   }
   wake_ready_waiting_threads(async_state, owner_component_id, task_id)
@@ -55,8 +57,8 @@ fn discard_task_children(async_state : AsyncState, task_id : Int64) -> Unit {
       children.push((key, thread.task_id))
     }
   }
-  async_state.thread_runnable.remove(task_id)
-  async_state.main_thread_scheduled.remove(task_id)
+  async_state.tasks.clear_thread_runnable(task_id)
+  async_state.tasks.clear_main_thread_scheduled(task_id)
   for entry in children {
     let (key, child) = entry
     async_state.threads.remove(key)
@@ -71,6 +73,7 @@ fn take_required_task_result(
   owner_component_id : Int,
   task_id : Int64,
 ) -> Array[ComponentValue] raise ComponentRuntimeError {
+  let task_id = async_state.tasks.resolve(task_id)
   while true {
     match
       finish_task_children(async_state, store, owner_component_id, task_id) {

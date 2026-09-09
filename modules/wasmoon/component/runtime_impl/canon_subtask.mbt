@@ -55,7 +55,7 @@ fn instantiate_canon_subtask_cancel(
       trap_canon("waitable already in synchronous use")
     }
     let key = handle_key(owner_component_id, id)
-    guard async_state.subtasks.get(key) is Some(subtask) else {
+    guard async_state.tasks.read_subtasks(key) is Some(subtask) else {
       trap_canon("unknown subtask handle index \{id}")
       return []
     }
@@ -64,7 +64,7 @@ fn instantiate_canon_subtask_cancel(
         I32(take_subtask_terminal_status(async_state, owner_component_id, id)),
       ]
     }
-    async_state.task_cancelled.set(key, true)
+    async_state.tasks.write_task_cancelled(key, true)
     let CallbackLifted(task) = subtask.driver
     task.cancelled[0] = true
     if subtask.phase[0] == Starting {
@@ -87,7 +87,7 @@ fn instantiate_canon_subtask_cancel(
     }
     let can_cancel_now = task.continuation[0] is None ||
       (
-        async_state.task_suspensions.get(key) is Some(point) &&
+        async_state.tasks.read_task_suspensions(key) is Some(point) &&
         point.is_cancellable()
       )
     if is_async_cancel && !can_cancel_now {
@@ -158,14 +158,14 @@ fn instantiate_canon_subtask_drop(
       [I32(id)] => {
         let skey = handle_key(owner_component_id, id)
         // Ensure this is a known subtask and it has completed.
-        let st_opt = async_state.subtasks.get(skey)
+        let st_opt = async_state.tasks.read_subtasks(skey)
         match st_opt {
           Some(st) =>
             if st.phase[0] != Returned {
               trap_canon("cannot drop a subtask which has not yet resolved")
               return ret_void()
             } else {
-              async_state.subtasks.remove(skey)
+              async_state.tasks.clear_subtasks(skey)
             }
           None => {
             trap_canon("unknown subtask handle index \{id}")
@@ -198,17 +198,7 @@ fn instantiate_canon_subtask_drop(
         async_state.waitable_events.remove(skey)
 
         // Clear per-task bookkeeping so the handle id can be reused.
-        async_state.task_results.remove(skey)
-        async_state.task_result_owner.remove(skey)
-        async_state.task_returned.remove(skey)
-        async_state.task_self_cancelled.remove(skey)
-        async_state.task_cancelled.remove(skey)
-        async_state.task_contexts.remove(skey)
-        drop_task_thread(async_state, skey)
-        remove_task_meta(async_state, skey)
-        async_state.task_suspensions.remove(skey)
-        async_state.waiting_ws.remove(skey)
-        async_state.sync_lower_states.remove(skey)
+        retire_task(async_state, skey)
 
         // Remove from pending queues if it was still STARTING.
         let inst_ids : Array[Int] = []

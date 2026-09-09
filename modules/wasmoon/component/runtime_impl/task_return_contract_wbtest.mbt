@@ -119,7 +119,7 @@ test "async result can be returned by a child after the main thread exits" {
 }
 
 ///|
-test "task identity migration preserves child scheduling and cancels owned continuations" {
+test "guest handle binding preserves stable child identities and cancellation" {
   let linker = ComponentLinker::ComponentLinker()
   defer linker.close()
   let state = AsyncState(StreamTable())
@@ -146,21 +146,21 @@ test "task identity migration preserves child scheduling and cancels owned conti
   state.threads.set(handle_key(0, 1), thread)
   init_task_meta(state, -1L, 0, 0L)
   init_task_meta(state, -2L, 0, -1L)
-  state.thread_runnable.set(-1L, [1])
-  state.main_thread_scheduled.set(-1L, true)
-  migrate_task_meta(state, -1L, 7L)
-  inspect(thread.parent_task_id, content="7")
-  debug_inspect(state.task_caller.get(-2L), content="Some(7)")
+  state.tasks.write_thread_runnable(-1L, [1])
+  state.tasks.write_main_thread_scheduled(-1L, true)
+  state.tasks.bind_handle(-1L, 7L)
+  inspect(thread.parent_task_id, content="-1")
+  debug_inspect(state.tasks.read_task_caller(-2L), content="Some(-1)")
   debug_inspect(pop_runnable_explicit_thread(state, 0, 7L), content="Some(1)")
   inspect(consume_main_scheduled(state, 7L), content="true")
   inspect(cancelled[0], content="0")
-  remove_task_meta(state, 7L)
+  retire_task(state, 7L)
   inspect(cancelled[0], content="1")
   debug_inspect(
     (
       state.threads.length(),
-      state.task_caller.length(),
-      state.thread_runnable.length(),
+      state.tasks.entries_task_caller().length(),
+      state.tasks.entries_thread_runnable().length(),
     ),
     content="(0, 0, 0)",
   )
