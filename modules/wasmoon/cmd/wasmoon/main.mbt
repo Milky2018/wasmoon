@@ -188,6 +188,10 @@ fn build_command() -> @argparse.Command {
           ),
         ],
         flags=[
+          FlagArg(
+            "no-component-implements",
+            about="Disable the component implements proposal",
+          ),
           FlagArg("dump", about="Print the parsed component structure"),
           FlagArg("validate", about="Validate the component after parsing"),
           FlagArg(
@@ -231,6 +235,10 @@ fn build_command() -> @argparse.Command {
           FlagArg(
             "no-jit",
             about="Use the core interpreter for all component test calls",
+          ),
+          FlagArg(
+            "no-component-implements",
+            about="Disable the component implements proposal",
           ),
         ],
       ),
@@ -323,9 +331,16 @@ fn main {
       }
       let component_args = sub.values.get("arg").unwrap_or([])
       let wit_names = !(sub.flags.get("no-wit-names") is Some(true))
+      let component_implements = !(sub.flags.get("no-component-implements")
+        is Some(true))
       if sub.values.get("invoke") is Some([export_path]) {
         @commands.run_component_invoke_command(
-          file_path, export_path, component_args, wit_names, error_format,
+          file_path,
+          export_path,
+          component_args,
+          wit_names,
+          error_format,
+          component_implements~,
         )
       } else if sub.flags.get("run") is Some(true) {
         let network = match sub.values.get("network") {
@@ -342,6 +357,7 @@ fn main {
           network,
           wit_names,
           error_format,
+          component_implements~,
           use_jit=!(sub.flags.get("no-jit") is Some(true)),
         )
       } else {
@@ -351,6 +367,7 @@ fn main {
           sub.flags.get("validate") is Some(true),
           wit_names,
           error_format,
+          component_implements~,
         )
       }
     }
@@ -365,6 +382,8 @@ fn main {
           Text
         },
         use_jit=!(sub.flags.get("no-jit") is Some(true)),
+        component_implements=!(sub.flags.get("no-component-implements")
+          is Some(true)),
       )
     }
     Some(("explore", sub)) => {

@@ -363,3 +363,38 @@ test "component thread resumption opcodes round trip" {
   debug_inspect(component.canons[1], content="ThreadSuspendThenResume(false)")
   debug_inspect(component.canons[2], content="ThreadSuspendThenResume(true)")
 }
+
+///|
+test "implements feature configuration reaches nested name attributes" {
+  let cases = [
+    "(component (import \"a\" (implements \"a:b/c\") (instance)))", "(component (instance $i) (export \"a\" (implements \"a:b/c\") (instance $i)))",
+    "(component (component (import \"a\" (implements \"a:b/c\") (instance))))", "(component (type $I (instance)) (type (instance (export \"a\" (implements \"a:b/c\") (instance (type $I))))))",
+    "(component (type $I (instance)) (type (component (import \"a\" (implements \"a:b/c\") (instance (type $I))))))",
+  ]
+  for text in cases {
+    let component = @component.parse_component(parse_component_wat(text))
+    @component_model.validate_component_with_config(
+      component,
+      ComponentValidationConfig(true),
+    )
+    let error = try {
+      @component_model.validate_component_with_config(
+        component,
+        ComponentValidationConfig(true, component_implements=false),
+      )
+      "missing error"
+    } catch {
+      error => error.to_string()
+    }
+    inspect(
+      error.contains("the `cm-implements` feature is not active"),
+      content="true",
+    )
+  }
+  @component_model.validate_component_with_config(
+    @component.parse_component(
+      parse_component_wat("(component (import \"a\" (instance)))"),
+    ),
+    ComponentValidationConfig(true, component_implements=false),
+  )
+}

@@ -4,6 +4,7 @@ pub fn run_component_script(
   path : String,
   error_format : ComponentErrorFormat,
   use_jit? : Bool = true,
+  component_implements? : Bool = true,
 ) -> Int {
   @component_conformance.run_component_script(
     path,
@@ -12,6 +13,7 @@ pub fn run_component_script(
       Json => Json
     },
     use_jit~,
+    component_implements~,
   )
 }
 
@@ -21,6 +23,7 @@ pub fn run_component_script_cli(
   path : String,
   error_format : ComponentErrorFormat,
   use_jit? : Bool = true,
+  component_implements? : Bool = true,
 ) -> Int {
   @component_conformance.run_component_script_cli(
     path,
@@ -29,5 +32,6 @@ pub fn run_component_script_cli(
       Json => Json
     },
     use_jit~,
+    component_implements~,
   )
 }

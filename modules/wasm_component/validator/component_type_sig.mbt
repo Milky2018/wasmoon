@@ -1095,6 +1095,7 @@ fn validate_typedef(
               name,
               attributes,
               sort_of_externdesc(desc),
+              cfg,
             )
             let key = ascii_lower_key(name)
             match seen_imports.get(key) {
@@ -1193,6 +1194,7 @@ fn validate_typedef(
               name,
               attributes,
               sort_of_externdesc(desc),
+              cfg,
             )
             let key = ascii_lower_key(name)
             match seen_exports.get(key) {
@@ -1364,6 +1366,7 @@ fn validate_typedef(
               name,
               attributes,
               sort_of_externdesc(desc),
+              cfg,
             )
             let key = ascii_lower_key(name)
             match seen_exports.get(key) {

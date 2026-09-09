@@ -72,8 +72,9 @@ pub impl Show for ComponentValidationError
 // Types and methods
 pub struct ComponentValidationConfig {
   wit_names : Bool
+  component_implements : Bool
 }
-pub fn ComponentValidationConfig::ComponentValidationConfig(Bool) -> Self
+pub fn ComponentValidationConfig::ComponentValidationConfig(Bool, component_implements? : Bool) -> Self
 pub fn ComponentValidationConfig::default() -> Self
 
 type ValidatedComponent

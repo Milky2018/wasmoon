@@ -106,7 +106,8 @@ def component_worker(path: Path, binary: Path, moon_tools: Path, wasm_tools: Pat
     temporary = Path.cwd() / "work"
     temporary.mkdir()
     tempfile.tempdir = str(temporary)
-    result = run_file(path, binary, moon_tools, wasm_tools, no_jit=mode == "interp")
+    result = run_file(path, binary, moon_tools, wasm_tools, no_jit=mode == "interp",
+                      component_implements=test_config(path.read_text()).get("component_model_implements", True))
     print("MISC_COMPONENT_RESULT " + json.dumps(result), flush=True)
     return int(bool(result["failed"] or result["skipped"] or not result["passed"]))
 

@@ -6,9 +6,9 @@ import {
 }
 
 // Values
-pub fn run_component_script(String, ComponentTestOutputFormat, use_jit? : Bool) -> Int
+pub fn run_component_script(String, ComponentTestOutputFormat, use_jit? : Bool, component_implements? : Bool) -> Int
 
-pub fn run_component_script_cli(String, ComponentTestOutputFormat, use_jit? : Bool) -> Int
+pub fn run_component_script_cli(String, ComponentTestOutputFormat, use_jit? : Bool, component_implements? : Bool) -> Int
 
 // Errors
 

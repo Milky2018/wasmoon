@@ -730,11 +730,13 @@ def parse_component_json_result(out: str) -> Optional[dict]:
 
 
 def validate_component(
-    component_bin: Path, wasmoon: Path, *, wit_names: bool
+    component_bin: Path, wasmoon: Path, *, wit_names: bool, component_implements: bool = True
 ) -> Tuple[bool, str, Optional[str]]:
     cmd = [str(wasmoon), "component", "--error-format", "json"]
     if not wit_names:
         cmd.append("--no-wit-names")
+    if not component_implements:
+        cmd.append("--no-component-implements")
     cmd.extend(["--validate", str(component_bin)])
     returncode, stdout, stderr, timed_out = run_command(
         cmd,
@@ -767,7 +769,7 @@ def is_parse_rejection(msg: str, code: Optional[str]) -> bool:
 
 
 def run_component_script(
-    script: dict, wasmoon: Path, tmp: Path, *, no_jit: bool = False
+    script: dict, wasmoon: Path, tmp: Path, *, no_jit: bool = False, component_implements: bool = True
 ) -> Tuple[int, int, int, list[str], str, bool]:
     script_path = tmp / "component_script.json"
     script_path.write_text(
@@ -775,6 +777,8 @@ def run_component_script(
         encoding="utf-8",
     )
     command = [str(wasmoon), "component-test"]
+    if not component_implements:
+        command.append("--no-component-implements")
     if no_jit:
         command.append("--no-jit")
     command.append(str(script_path))
@@ -815,6 +819,7 @@ def run_file(
     *,
     keep_tmp_on_failure: bool = False,
     no_jit: bool = False,
+    component_implements: bool = True,
 ) -> dict:
     text = path.read_text(encoding="utf-8")
     passed = failed = 0
@@ -878,6 +883,7 @@ def run_file(
                     comp_bin,
                     wasmoon,
                     wit_names=wit_names,
+                    component_implements=component_implements,
                 )
                 if not ok:
                     fail(f"component validate failed: {msg}")
@@ -945,6 +951,7 @@ def run_file(
                     comp_bin,
                     wasmoon,
                     wit_names=wit_names,
+                    component_implements=component_implements,
                 )
                 if ok:
                     if expected_msg:
@@ -1010,6 +1017,7 @@ def run_file(
                         comp_bin,
                         wasmoon,
                         wit_names=wit_names,
+                        component_implements=component_implements,
                     )
                     if code == UNSUPPORTED_ERROR_CODE:
                         fail(f"assert_malformed failed due to unsupported feature: {msg}")
@@ -1045,6 +1053,7 @@ def run_file(
                     comp_bin,
                     wasmoon,
                     wit_names=wit_names,
+                    component_implements=component_implements,
                 )
                 if not ok:
                     fail(f"assert_unlinkable validate failed: {msg}")
@@ -1139,6 +1148,7 @@ def run_file(
                     comp_bin,
                     wasmoon,
                     wit_names=wit_names,
+                    component_implements=component_implements,
                 )
                 if not ok:
                     fail(f"assert_trap component validate failed: {vmsg}")
@@ -1184,6 +1194,7 @@ def run_file(
                 wasmoon,
                 tmp_path,
                 no_jit=no_jit,
+                component_implements=component_implements,
             )
             passed += spassed
             failed += sfailed

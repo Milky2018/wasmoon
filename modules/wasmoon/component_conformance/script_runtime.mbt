@@ -10,6 +10,7 @@ priv struct ScriptHost {
 ///|
 priv struct ComponentScriptRuntime {
   use_jit : Bool
+  component_implements : Bool
   linkers : Array[@runtime_impl.ComponentLinker]
   definitions : Map[String, @component_types.Component]
   instances : Map[String, @runtime_impl.ComponentInstance]
@@ -17,9 +18,13 @@ priv struct ComponentScriptRuntime {
 }
 
 ///|
-fn ComponentScriptRuntime::new(use_jit : Bool) -> ComponentScriptRuntime {
+fn ComponentScriptRuntime::new(
+  use_jit : Bool,
+  component_implements? : Bool = true,
+) -> ComponentScriptRuntime {
   {
     use_jit,
+    component_implements,
     linkers: [],
     definitions: Map([]),
     instances: Map([]),
@@ -81,7 +86,11 @@ fn ComponentScriptRuntime::instantiate(
   let linker = host.linker
   for definition_entry in self.definitions {
     let (definition_name, definition) = definition_entry
-    if component_import_evidence(definition) is Ok(validated) {
+    if component_import_evidence(
+        definition,
+        component_implements=self.component_implements,
+      )
+      is Ok(validated) {
       try! linker.add_component(strip_identifier(definition_name), validated)
     }
   }
@@ -91,7 +100,13 @@ fn ComponentScriptRuntime::instantiate(
     let reflected = self.reflect_instance(host, import_name, instance)
     try! linker.add_instance(import_name, reflected)
   }
-  match instantiate_component(linker, name, component) {
+  match
+    instantiate_component(
+      linker,
+      name,
+      component,
+      component_implements=self.component_implements,
+    ) {
     Ok(instance) => {
       self.linkers.push(linker)
       for resource_entry in host.resource_types {

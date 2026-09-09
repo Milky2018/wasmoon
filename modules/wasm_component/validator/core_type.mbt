@@ -314,6 +314,7 @@ fn validate_name_attributes(
   name : Bytes,
   attributes : Array[@component.NameAttribute],
   sort : @component.Sort,
+  cfg : ComponentValidationConfig,
 ) -> Unit raise ComponentValidationError {
   let mut has_implements = false
   let mut has_version = false
@@ -321,6 +322,11 @@ fn validate_name_attributes(
   for attribute in attributes {
     match attribute {
       Implements(interface_name) => {
+        if !cfg.component_implements {
+          raise SectionParseError(
+            section, "the `cm-implements` feature is not active",
+          )
+        }
         if has_implements {
           raise SectionParseError(section, "duplicate `implements` attribute")
         }
@@ -389,12 +395,14 @@ fn validate_name_attributes_string(
   name : String,
   attributes : Array[@component.NameAttribute],
   sort : @component.Sort,
+  cfg : ComponentValidationConfig,
 ) -> Unit raise ComponentValidationError {
   validate_name_attributes(
     section,
     utf8_bytes_of_string(name),
     attributes,
     sort,
+    cfg,
   )
 }
 

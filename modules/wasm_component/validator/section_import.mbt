@@ -80,6 +80,7 @@ fn validate_component_section_import(
       importname_to_bytes(i.name),
       i.attributes,
       sort_of_externdesc(i.desc),
+      cfg,
     )
     if is_root && i.desc is ComponentType(_) {
       raise SectionParseError(

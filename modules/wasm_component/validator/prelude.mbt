@@ -74,18 +74,20 @@ pub impl Show for ComponentValidationError with fn output(self, logger) {
 /// Keep this configurable so we can validate both suites.
 pub struct ComponentValidationConfig {
   wit_names : Bool
+  component_implements : Bool
 }
 
 ///|
 pub fn ComponentValidationConfig::ComponentValidationConfig(
   wit_names : Bool,
+  component_implements? : Bool = true,
 ) -> ComponentValidationConfig {
-  { wit_names, }
+  { wit_names, component_implements, }
 }
 
 ///|
 pub fn ComponentValidationConfig::default() -> ComponentValidationConfig {
-  { wit_names: true, }
+  ComponentValidationConfig(true)
 }
 
 ///|

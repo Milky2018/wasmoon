@@ -776,11 +776,12 @@ fn load_component(
 /// Produce the validation evidence `ComponentLinker::add_component` requires.
 fn component_import_evidence(
   component : @component_types.Component,
+  component_implements? : Bool = true,
 ) -> Result[@component_model.ValidatedComponent, String] {
   try
     @component_model.validate_component_for_instantiation_with_config(
       component,
-      ComponentValidationConfig(false),
+      ComponentValidationConfig(false, component_implements~),
     )
   catch {
     e => Err(e.to_string())
@@ -794,11 +795,12 @@ fn instantiate_component(
   linker : @runtime_impl.ComponentLinker,
   name : String,
   component : @component_types.Component,
+  component_implements? : Bool = true,
 ) -> Result[@runtime_impl.ComponentInstance, String] {
   let validated = try
     @component_model.validate_component_for_instantiation_with_config(
       component,
-      ComponentValidationConfig(false),
+      ComponentValidationConfig(false, component_implements~),
     )
   catch {
     e => return Err(e.to_string())
@@ -905,6 +907,7 @@ fn run_component_script_impl(
   error_format : ComponentTestOutputFormat,
   print_output : Bool,
   use_jit : Bool,
+  component_implements : Bool,
 ) -> Int {
   let contents = @fs.read_file_to_string(path) catch {
     IOError(e) => {
@@ -967,7 +970,7 @@ fn run_component_script_impl(
     }
   }
   let result = ScriptResult::ScriptResult()
-  let runtime = ComponentScriptRuntime::new(use_jit)
+  let runtime = ComponentScriptRuntime::new(use_jit, component_implements~)
   defer runtime.close()
   let components = runtime.definitions
   let instances = runtime.instances
@@ -999,7 +1002,7 @@ fn run_component_script_impl(
             continue
           }
         }
-        match component_import_evidence(component) {
+        match component_import_evidence(component, component_implements~) {
           Ok(_) => {
             components.set(name, component)
             result.add_passed()
@@ -1292,8 +1295,11 @@ pub fn run_component_script(
   path : String,
   error_format : ComponentTestOutputFormat,
   use_jit? : Bool = true,
+  component_implements? : Bool = true,
 ) -> Int {
-  run_component_script_impl(path, error_format, false, use_jit)
+  run_component_script_impl(
+    path, error_format, false, use_jit, component_implements,
+  )
 }
 
 ///|
@@ -1301,6 +1307,9 @@ pub fn run_component_script_cli(
   path : String,
   error_format : ComponentTestOutputFormat,
   use_jit? : Bool = true,
+  component_implements? : Bool = true,
 ) -> Int {
-  run_component_script_impl(path, error_format, true, use_jit)
+  run_component_script_impl(
+    path, error_format, true, use_jit, component_implements,
+  )
 }
