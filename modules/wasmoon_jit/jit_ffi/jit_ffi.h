@@ -226,6 +226,16 @@ typedef struct {
     uint8_t **gc_func_stackmap_blobs;
     uint32_t **gc_func_safepoint_offsets;
     int32_t gc_func_safepoint_table_count;
+    // Callable identity metadata persists across execution activations.
+    int32_t *callable_local_types;
+    int callable_local_type_count;
+    int32_t *callable_type_parents;
+    int callable_type_count;
+    int64_t *callable_entries;
+    int callable_entry_count;
+    int32_t *callable_tags;
+    int callable_tag_count;
+
 } jit_context_t;
 
 // ============ Executable Memory Functions ============

@@ -2039,7 +2039,7 @@ test "VMContext reusable ABI layout matches JIT fixed prefix" {
   inspect(layout.gc_heap_limit_offset, content="112")
   inspect(layout.gc_heap_offset, content="120")
   inspect(layout.pointer_stride, content="8")
-  inspect(layout.global_value_stride, content="16")
+  inspect(layout.global_value_stride, content="8")
   inspect(layout.table_entry_value_offset, content="0")
   inspect(layout.table_entry_stride, content="16")
   inspect(layout.func_table_entry_stride, content="8")

@@ -1,6 +1,6 @@
 ///|
 /// Version of the Wasmoon internal JIT calling and runtime contract.
-pub const WASMOON_JIT_ABI_VERSION : Int = 3
+pub const WASMOON_JIT_ABI_VERSION : Int = 4
 
 ///|
 /// Revision of the current direct native target code generator.
@@ -286,6 +286,7 @@ pub fn NativeCompiler::compile_wasm_body_artifact_function(
         use_subtype_indirect_check,
         canonical_type_indices,
         record_metrics=@perf.enabled(),
+        function_index~,
         compilation_session=self.aarch64.unwrap(),
       )
       let packaging_tick = detail_metrics_tick(@perf.enabled())
@@ -305,6 +306,7 @@ pub fn NativeCompiler::compile_wasm_body_artifact_function(
         use_subtype_indirect_check,
         canonical_type_indices,
         record_metrics=@perf.enabled(),
+        function_index~,
         compilation_session=self.x64.unwrap(),
       )
       let packaging_tick = detail_metrics_tick(@perf.enabled())

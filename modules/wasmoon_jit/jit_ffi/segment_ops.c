@@ -384,8 +384,9 @@ static void table_fill_impl(
 
     // Infer the type index for funcref values so call_indirect can type-check.
     // For non-funcref values, keep type_idx = -1.
-    int64_t type_idx = -1;
+    int64_t type_idx = callable_type_for_value(ctx, val);
     if (
+        type_idx < 0 &&
         val != 0 &&
         (val & FUNCREF_TAG) != 0 &&
         ctx->gc_func_table &&
@@ -402,7 +403,7 @@ static void table_fill_impl(
                 break;
             }
         }
-    } else if (val < 0 && ctx->gc_func_type_indices) {
+    } else if (type_idx < 0 && val < 0 && ctx->gc_func_type_indices) {
         // IR-encoded funcref index: -(func_idx + 1)
         int32_t func_idx = (int32_t)(-(val + 1));
         if (func_idx >= 0 && func_idx < ctx->gc_num_funcs) {

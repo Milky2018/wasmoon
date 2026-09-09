@@ -291,9 +291,9 @@ int32_t gc_collect_for_alloc_internal(
 
 // Type checking functions
 int is_subtype_cached(int type1, int type2);
-int32_t gc_ref_test_impl(int64_t value, int32_t type_idx, int32_t nullable);
-int64_t gc_ref_cast_impl(int64_t value, int32_t type_idx, int32_t nullable);
-void gc_type_check_subtype_impl(int32_t actual_type, int32_t expected_type);
+int32_t gc_ref_test_impl(jit_context_t *ctx, int64_t value, int32_t type_idx, int32_t nullable);
+int64_t gc_ref_cast_impl(jit_context_t *ctx, int64_t value, int32_t type_idx, int32_t nullable);
+void gc_type_check_subtype_impl(jit_context_t *ctx, int32_t actual_type, int32_t expected_type);
 
 // Type cache management
 void set_type_cache_internal(jit_context_t *ctx, int32_t *types_data, int num_types);
@@ -347,11 +347,11 @@ void gc_array_copy_impl(int64_t dst_ref, int32_t dst_offset,
 int64_t gc_register_struct_inline(jit_context_t *ctx, uint8_t *obj_ptr, int32_t total_size);
 int64_t gc_register_array_inline(jit_context_t *ctx, uint8_t *obj_ptr, int32_t total_size);
 int64_t gc_alloc_struct_slow(jit_context_t *ctx, int32_t type_idx,
-                              int64_t *fields, int32_t num_fields, int32_t safepoint_id);
+                              int64_t *fields, int32_t num_fields, int32_t safepoint_id, int32_t function_index);
 int64_t gc_alloc_array_slow(jit_context_t *ctx, int32_t type_idx,
-                             int32_t len, int64_t init_value, int32_t safepoint_id);
+                             int32_t len, int64_t init_value, int32_t safepoint_id, int32_t function_index);
 int64_t gc_alloc_array_from_values_slow(jit_context_t *ctx, int32_t type_idx,
-                                         int64_t *values, int32_t len, int32_t safepoint_id);
+                                         int64_t *values, int32_t len, int32_t safepoint_id, int32_t function_index);
 
 // v128 aggregate operations. A v128 does not fit a runtime word, so these
 // carry it through a caller-owned 16-byte GcSlot buffer passed by address.
@@ -373,3 +373,7 @@ int64_t gc_alloc_array_from_slots_slow_impl(int64_t ctx_ptr, int32_t type_idx,
                                              int64_t slots_ptr, int32_t len);
 
 #endif // JIT_INTERNAL_H
+
+int32_t callable_type_for_value(jit_context_t *ctx, int64_t value);
+
+void gc_record_runtime_type(jit_context_t *ctx, GcHeap *heap, int32_t ref, int32_t local_type);

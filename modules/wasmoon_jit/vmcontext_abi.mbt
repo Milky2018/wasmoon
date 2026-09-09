@@ -52,7 +52,7 @@ pub fn vmcontext_layout() -> VMContextLayout {
     gc_heap_limit_offset: 112,
     gc_heap_offset: 120,
     pointer_stride: 8,
-    global_value_stride: 16,
+    global_value_stride: 8,
     table_entry_value_offset: 0,
     table_entry_stride: 16,
     func_table_entry_stride: 8,

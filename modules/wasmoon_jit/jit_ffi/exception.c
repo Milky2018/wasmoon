@@ -12,9 +12,15 @@
 
 #include "jit_internal.h"
 
+static jit_context_t *exception_activation_context(jit_context_t *ctx) {
+    jit_context_t *active = get_current_jit_context();
+    return ctx && ctx->callable_local_types && active ? active : ctx;
+}
+
 // ============ Exception Handler Management ============
 
 sigjmp_buf* exception_try_begin_impl(jit_context_t *ctx, int32_t handler_id) {
+    ctx = exception_activation_context(ctx);
     // Allocate new handler node
     exception_handler_t *handler = (exception_handler_t *)malloc(sizeof(exception_handler_t));
     if (!handler) {
@@ -34,6 +40,7 @@ sigjmp_buf* exception_try_begin_impl(jit_context_t *ctx, int32_t handler_id) {
 }
 
 void exception_try_end_impl(jit_context_t *ctx, int32_t handler_id) {
+    ctx = exception_activation_context(ctx);
     exception_handler_t *handler = (exception_handler_t *)ctx->exception_handler;
 
     // A mismatch means generated control flow violated lexical handler order.
@@ -94,6 +101,8 @@ void exception_reset_context_state(jit_context_t *ctx) {
 
 void exception_throw_impl(jit_context_t *ctx, int32_t tag_addr,
                           int64_t *values, int32_t count) {
+    if (ctx && tag_addr >= 0 && tag_addr < ctx->callable_tag_count) tag_addr = ctx->callable_tags[tag_addr];
+    ctx = exception_activation_context(ctx);
     // Free any previous exception values
     if (ctx->exception_values) {
         free(ctx->exception_values);
@@ -132,6 +141,7 @@ void exception_throw_impl(jit_context_t *ctx, int32_t tag_addr,
 }
 
 void exception_throw_ref_impl(jit_context_t *ctx, int64_t exnref) {
+    ctx = exception_activation_context(ctx);
     // exnref encodes the exception reference from a catch_ref block.
     // The exception values are already stored in ctx from when it was caught,
     // so we just re-throw by jumping to the current handler.
@@ -152,6 +162,7 @@ void exception_throw_ref_impl(jit_context_t *ctx, int64_t exnref) {
 }
 
 void exception_delegate_impl(jit_context_t *ctx, int32_t depth) {
+    ctx = exception_activation_context(ctx);
     // Delegate skips 'depth' handlers and throws to the one at that level
     exception_handler_t *target = (exception_handler_t *)ctx->exception_handler;
 
@@ -182,6 +193,7 @@ void exception_delegate_impl(jit_context_t *ctx, int32_t depth) {
 // ============ Locals Spilling for Exception Handling ============
 
 void exception_spill_locals_impl(jit_context_t *ctx, int64_t *locals, int32_t count) {
+    ctx = exception_activation_context(ctx);
     // Free any previous spilled locals
     if (ctx->spilled_locals) {
         free(ctx->spilled_locals);
@@ -202,6 +214,7 @@ void exception_spill_locals_impl(jit_context_t *ctx, int64_t *locals, int32_t co
 }
 
 int64_t exception_get_spilled_local_impl(jit_context_t *ctx, int32_t idx) {
+    ctx = exception_activation_context(ctx);
     if (idx >= 0 && idx < ctx->spilled_locals_count && ctx->spilled_locals) {
         return ctx->spilled_locals[idx];
     }
@@ -211,10 +224,18 @@ int64_t exception_get_spilled_local_impl(jit_context_t *ctx, int32_t idx) {
 // ============ Exception Value Access ============
 
 int32_t exception_get_tag_impl(jit_context_t *ctx) {
-    return ctx->exception_tag;
+    int32_t tag = exception_activation_context(ctx)->exception_tag;
+    if (ctx->callable_local_types) {
+        for (int i = 0; i < ctx->callable_tag_count; ++i) {
+            if (ctx->callable_tags[i] == tag) return i;
+        }
+        return -1;
+    }
+    return tag;
 }
 
 int64_t exception_get_value_impl(jit_context_t *ctx, int32_t idx) {
+    ctx = exception_activation_context(ctx);
     if (idx >= 0 && idx < ctx->exception_value_count && ctx->exception_values) {
         return ctx->exception_values[idx];
     }
@@ -222,6 +243,7 @@ int64_t exception_get_value_impl(jit_context_t *ctx, int32_t idx) {
 }
 
 int32_t exception_get_value_count_impl(jit_context_t *ctx) {
+    ctx = exception_activation_context(ctx);
     return ctx->exception_value_count;
 }
 

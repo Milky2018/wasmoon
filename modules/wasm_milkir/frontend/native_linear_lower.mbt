@@ -619,7 +619,9 @@ fn push_global_get(
   let field_offset = builder.iconst_i64(
     (global_idx * layout.global_value_stride).to_int64(),
   )
-  stack.push(builder.load_ptr(ty, globals_ptr, field_offset))
+  let cell = builder.load_ptr(I64, globals_ptr, field_offset)
+  let zero = builder.iconst_i64(0L)
+  stack.push(builder.load_ptr(ty, cell, zero))
   true
 }
 
@@ -644,7 +646,9 @@ fn push_global_set(
   let field_offset = builder.iconst_i64(
     (global_idx * layout.global_value_stride).to_int64(),
   )
-  builder.store_ptr(ty, globals_ptr, value, field_offset)
+  let cell = builder.load_ptr(I64, globals_ptr, field_offset)
+  let zero = builder.iconst_i64(0L)
+  builder.store_ptr(ty, cell, value, zero)
   true
 }
 

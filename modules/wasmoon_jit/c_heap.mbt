@@ -570,3 +570,27 @@ pub fn CHeap::should_collect(self : CHeap, threshold? : Double = 0.75) -> Bool {
 pub fn gc_debug_set_fail_alloc(fail_at : Int, fail_every? : Int = 0) -> Unit {
   c_gc_heap_debug_set_fail_alloc(fail_at, fail_every)
 }
+
+///|
+extern "c" fn get_runtime_type(pointer : Int64, reference : Int) -> Int = "wasmoon_gc_heap_get_runtime_type"
+
+///|
+extern "c" fn set_runtime_type(
+  pointer : Int64,
+  reference : Int,
+  identity : Int,
+) -> Unit = "wasmoon_gc_heap_set_runtime_type"
+
+///|
+pub fn CHeap::runtime_type(self : CHeap, index : Int) -> Int {
+  get_runtime_type(self.ptr, index + 1)
+}
+
+///|
+pub fn CHeap::set_runtime_type(
+  self : CHeap,
+  index : Int,
+  identity : Int,
+) -> Unit {
+  set_runtime_type(self.ptr, index + 1, identity)
+}

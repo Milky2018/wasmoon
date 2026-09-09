@@ -87,14 +87,6 @@ pub fn FuncrefRegistration::release(self : FuncrefRegistration) -> Unit {
 }
 
 ///|
-fn register_funcref_entries(
-  store : @runtime.Store,
-  entries : Array[@runtime.StoreFuncrefEntry],
-) -> FuncrefRegistration {
-  { lease: store.register_jit_funcrefs(entries), }
-}
-
-///|
 fn registered_funcref_ptr(store : @runtime.Store, store_addr : Int) -> Int64? {
   store.lookup_jit_funcref_ptr(store_addr)
 }
@@ -130,60 +122,88 @@ pub fn init_jit_globals_from_store(
   store : @runtime.Store,
   jit_module : @jit.JITModule,
 ) -> Int64 raise @runtime.RuntimeError {
-  let num_globals = instance.global_addrs.length()
-  if num_globals == 0 {
+  if jit_module.has_callable_metadata() && store.c_heap is Some(heap) {
+    jit_module.setup_gc(
+      heap,
+      instance.types,
+      instance.canonical_type_indices,
+      instance.func_type_indices,
+    ) catch {
+      error => raise LinkErrorDetail("native GC metadata: \{error}")
+    }
+  }
+  let count = instance.global_addrs.length()
+  if count == 0 {
     return 0L
   }
-  let globals_ptr = @wasmoon_jit.alloc_memory((num_globals * 16).to_int64())
-  if globals_ptr == 0L {
+  let pointers = @wasmoon_jit.alloc_memory((count * 8).to_int64())
+  if pointers == 0L {
     return 0L
   }
-  for i in 0..<num_globals {
-    let global_addr = instance.global_addrs[i]
-    let global_inst = store.globals[global_addr]
-    let value = global_inst.get()
-    let raw_value = match value {
-      I32(n) => @types.ToInt64::to_int64_bits(n)
-      I64(n) => @types.ToInt64::to_int64_bits(n)
-      F32(f) => @types.ToInt64::to_int64_bits(f)
-      F64(n) => @types.ToInt64::to_int64_bits(n)
-      FuncRef(store_addr) =>
-        match
-          lookup_funcref_ptr_for_store_addr(
-            store, store_addr, jit_module, instance,
-          ) {
-          Some(ptr) => @wasmoon_jit.tag_funcref_ptr(ptr)
-          None =>
-            match store_addr_to_module_func_idx(store_addr, instance) {
-              Some(func_idx) => @wasmoon_jit.encode_funcref_idx(func_idx)
-              None => @wasm_milkir.NULL_REF
-            }
+  for i, global_addr in instance.global_addrs {
+    let global = store.globals[global_addr]
+    let cell = match global.native_binding() {
+      Some(binding) => binding.address
+      None => {
+        let cell = @wasmoon_jit.alloc_memory(16L)
+        if cell == 0L {
+          @wasmoon_jit.free_memory(pointers)
+          raise OutOfMemory
         }
-      ExternRef(idx) => encode_extern_value(idx, store)
-      ExnRef(idx) => idx.to_int64()
-      ArrayRef(gc_ref) => @wasmoon_jit.encode_heap_ref(gc_ref)
-      StructRef(gc_ref) => @wasmoon_jit.encode_heap_ref(gc_ref)
-      I31(n) => @wasmoon_jit.encode_i31(n)
-      Null => @wasm_milkir.NULL_REF
-      V128(bytes) => {
-        let offset = globals_ptr + (i * 16).to_int64()
-        @wasmoon_jit.native_value_slot_write(
-          offset,
-          0,
-          @types.bytes_to_int64_le(bytes, 0),
-        )
-        @wasmoon_jit.native_value_slot_write(
-          offset,
-          1,
-          @types.bytes_to_int64_le(bytes, 8),
-        )
-        continue
+        let value_type = global.get_type().value_type
+        let write = fn(value : @types.Value) raise @runtime.RuntimeError {
+          let (low, high) = encode_global_value_for_jit(
+            value,
+            store,
+            jit_module,
+            instance.func_addrs,
+          )
+          @wasmoon_jit.native_value_slot_write(cell, 0, low)
+          @wasmoon_jit.native_value_slot_write(cell, 1, high.unwrap_or(0L))
+        }
+        {
+          errdefer {
+            @wasmoon_jit.free_memory(cell)
+            @wasmoon_jit.free_memory(pointers)
+          }
+          write(global.get())
+        }
+        global.bind_native({
+          address: cell,
+          read: fn() raise @runtime.RuntimeError {
+            read_native_global(cell, value_type, instance.func_addrs, store)
+          },
+          write,
+          root: fn() {
+            match value_type {
+              I32
+              | I64
+              | F32
+              | F64
+              | V128
+              | FuncRef
+              | RefFunc
+              | RefFuncTyped(_)
+              | RefNullFuncTyped(_)
+              | NullFuncRef
+              | ExnRef
+              | NullExnRef => Null
+              _ =>
+                decode_gc_value(
+                  @wasmoon_jit.native_value_slot_read(cell, 0),
+                  store,
+                )
+            }
+          },
+          release: fn() { @wasmoon_jit.free_memory(cell) },
+        })
+        cell
       }
     }
-    @wasmoon_jit.native_value_slot_write(globals_ptr, i * 2, raw_value)
+    @wasmoon_jit.native_value_slot_write(pointers, i, cell)
   }
-  jit_module.set_globals(globals_ptr)
-  globals_ptr
+  jit_module.set_globals(pointers)
+  pointers
 }
 
 ///|
@@ -211,7 +231,20 @@ pub fn register_owned_instance_funcrefs_for_jit(
       entries.push(StoreFuncrefEntry(store_addr~, func_ptr~))
     }
   }
-  register_funcref_entries(store, entries)
+  let lease = store.register_jit_funcrefs(
+    entries,
+    release_owner=jit_module.retain_callable_owner(),
+  )
+  let local_types = store.native_type_indices(instance)
+  store.bind_native_callable_view(fn(parents, entries) {
+    jit_module.set_callable_types(
+      local_types,
+      parents,
+      entries,
+      instance.tag_addrs,
+    )
+  })
+  { lease, }
 }
 
 ///|
@@ -327,111 +360,79 @@ pub fn get_func_name(mod_ : @types.Module, func_idx : Int) -> String {
 }
 
 ///|
-/// Sync JIT globals back to the store after a JIT function call
-/// This ensures that global changes made by JIT are visible to the interpreter
-pub fn sync_jit_globals_to_store(
-  jit_ctx : JITModuleContext,
+fn read_native_global(
+  offset : Int64,
+  value_type : @types.ValueType,
+  func_addrs : Array[Int],
   store : @runtime.Store,
-) -> Unit raise @runtime.RuntimeError {
-  if jit_ctx.globals_ptr == 0L || jit_ctx.global_addrs.is_empty() {
-    return
-  }
-  // Read each global from JIT memory and write to store
-  for i, global_addr in jit_ctx.global_addrs {
-    let global_inst = store.globals[global_addr]
-    // Only sync mutable globals (immutable globals don't change)
-    if global_inst.get_type().mutable {
-      // Read raw value from JIT memory (16 bytes per global: 8 value + 8 tag)
-      let offset = jit_ctx.globals_ptr + (i * 16).to_int64()
-      let raw_value = @wasmoon_jit.native_value_slot_read(offset, 0)
-      // Convert based on global's type
-      // Note: For FuncRef, JIT stores module function index, we need to convert
-      // it back to store address for the interpreter
-      let new_value : @types.Value = match global_inst.get_type().value_type {
-        I32 => I32(@types.FromInt64::from_int64_bits(raw_value))
-        I64 => I64(@types.FromInt64::from_int64_bits(raw_value))
-        F32 => F32(@types.FromInt64::from_int64_bits(raw_value))
-        F64 => F64(@types.FromInt64::from_int64_bits(raw_value))
-        FuncRef
-        | RefFunc
-        | RefFuncTyped(_)
-        | RefNullFuncTyped(_)
-        | NullFuncRef =>
-          if raw_value == 0L {
-            Null
-          } else if raw_value < 0L {
-            // IR-encoded funcref: value = -(func_idx + 1)
-            let mod_func_idx = (-(raw_value + 1L)).to_int()
-            if mod_func_idx >= 0 && mod_func_idx < jit_ctx.func_addrs.length() {
-              FuncRef(jit_ctx.func_addrs[mod_func_idx])
-            } else {
-              Null
-            }
-          } else if @wasmoon_jit.is_funcref_ptr(raw_value) {
-            let ptr = @wasmoon_jit.untag_funcref_ptr(raw_value)
-            let store_addr = match registered_funcref_store_addr(store, ptr) {
-              Some(addr) => Some(addr)
-              None => {
-                let mut found : Int? = None
-                for idx, addr in jit_ctx.func_addrs {
-                  if jit_ctx.jit_module.get_func_ptr(idx) == ptr {
-                    found = Some(addr)
-                    break
-                  }
-                }
-                found
-              }
-            }
-            match store_addr {
-              Some(addr) => FuncRef(addr)
-              None => Null
-            }
-          } else {
-            FuncRef(raw_value.to_int())
-          }
-        ExternRef | RefExtern | NullExternRef =>
-          decode_extern_value(raw_value, store)
-        // GC reference types - decode using JIT encoding:
-        // null = 0, i31 = (value << 1) | 1, struct/array = gc_ref << 1
-        AnyRef | NullRef | RefAny | RefEq | RefNullEq =>
-          decode_gc_value(raw_value, store)
-        ExnRef | NullExnRef =>
-          if raw_value == 0L {
-            Null
-          } else {
-            ExnRef(raw_value.to_int())
-          }
-        RefStruct(_) | RefNullStruct(_) | StructRef | RefStructAbs =>
-          if raw_value == 0L {
-            Null
-          } else {
-            StructRef(@wasmoon_jit.decode_heap_ref(raw_value))
-          }
-        RefArray(_) | RefNullArray(_) | ArrayRef | RefArrayAbs =>
-          if raw_value == 0L {
-            Null
-          } else {
-            ArrayRef(@wasmoon_jit.decode_heap_ref(raw_value))
-          }
-        RefI31 | RefNullI31 =>
-          if raw_value == 0L {
-            Null
-          } else if (raw_value & 1L) == 1L {
-            I31((raw_value >> 1).to_int())
-          } else {
-            Null
-          }
-        RefNone => Null
-        V128 => {
-          // Read both 64-bit halves and construct V128
-          let high_value = @wasmoon_jit.native_value_slot_read(offset, 1)
-          V128(@types.int64_pair_to_v128_le(raw_value, high_value))
+) -> @types.Value raise @runtime.RuntimeError {
+  let raw_value = @wasmoon_jit.native_value_slot_read(offset, 0)
+  match value_type {
+    I32 => I32(@types.FromInt64::from_int64_bits(raw_value))
+    I64 => I64(@types.FromInt64::from_int64_bits(raw_value))
+    F32 => F32(@types.FromInt64::from_int64_bits(raw_value))
+    F64 => F64(@types.FromInt64::from_int64_bits(raw_value))
+    FuncRef | RefFunc | RefFuncTyped(_) | RefNullFuncTyped(_) | NullFuncRef =>
+      if raw_value == 0L {
+        Null
+      } else if raw_value < 0L {
+        // IR-encoded funcref: value = -(func_idx + 1)
+        let mod_func_idx = (-(raw_value + 1L)).to_int()
+        if mod_func_idx >= 0 && mod_func_idx < func_addrs.length() {
+          FuncRef(func_addrs[mod_func_idx])
+        } else {
+          Null
         }
+      } else if @wasmoon_jit.is_funcref_ptr(raw_value) {
+        let ptr = @wasmoon_jit.untag_funcref_ptr(raw_value)
+        let store_addr = match registered_funcref_store_addr(store, ptr) {
+          Some(addr) => Some(addr)
+          None => None
+        }
+        match store_addr {
+          Some(addr) => FuncRef(addr)
+          None => Null
+        }
+      } else {
+        FuncRef(raw_value.to_int())
       }
-      // We already checked mutability, so set should succeed
-      global_inst.set(new_value) catch {
-        _ => () // Should not happen since we checked mutability
+    ExternRef | RefExtern | NullExternRef =>
+      decode_extern_value(raw_value, store)
+    // GC reference types - decode using JIT encoding:
+    // null = 0, i31 = (value << 1) | 1, struct/array = gc_ref << 1
+    AnyRef | NullRef | RefAny | RefEq | RefNullEq =>
+      decode_gc_value(raw_value, store)
+    ExnRef | NullExnRef =>
+      if raw_value == 0L {
+        Null
+      } else {
+        ExnRef(raw_value.to_int())
       }
+    RefStruct(_) | RefNullStruct(_) | StructRef | RefStructAbs =>
+      if raw_value == 0L {
+        Null
+      } else {
+        StructRef(@wasmoon_jit.decode_heap_ref(raw_value))
+      }
+    RefArray(_) | RefNullArray(_) | ArrayRef | RefArrayAbs =>
+      if raw_value == 0L {
+        Null
+      } else {
+        ArrayRef(@wasmoon_jit.decode_heap_ref(raw_value))
+      }
+    RefI31 | RefNullI31 =>
+      if raw_value == 0L {
+        Null
+      } else if (raw_value & 1L) == 1L {
+        I31((raw_value >> 1).to_int())
+      } else {
+        Null
+      }
+    RefNone => Null
+    V128 => {
+      // Read both 64-bit halves and construct V128
+      let high_value = @wasmoon_jit.native_value_slot_read(offset, 1)
+      V128(@types.int64_pair_to_v128_le(raw_value, high_value))
     }
   }
 }
@@ -465,7 +466,11 @@ fn encode_global_value_for_jit(
             (@wasmoon_jit.tag_funcref_ptr(func_ptr), None)
           }
         }
-        None => (NULL_REF, None)
+        None =>
+          match store.lookup_jit_funcref_ptr(store_addr) {
+            Some(pointer) => (@wasmoon_jit.tag_funcref_ptr(pointer), None)
+            None => (NULL_REF, None)
+          }
       }
     }
     ExternRef(idx) => (encode_extern_value(idx, store), None)
@@ -483,33 +488,6 @@ fn encode_global_value_for_jit(
       } else {
         (0L, Some(0L))
       }
-  }
-}
-
-///|
-pub fn sync_store_globals_to_jit(
-  jit_ctx : JITModuleContext,
-  store : @runtime.Store,
-) -> Unit raise @runtime.RuntimeError {
-  if jit_ctx.globals_ptr == 0L || jit_ctx.global_addrs.is_empty() {
-    return
-  }
-  for i, global_addr in jit_ctx.global_addrs {
-    if global_addr < 0 || global_addr >= store.globals.length() {
-      continue
-    }
-    let global_inst = store.globals[global_addr]
-    let (low, high) = encode_global_value_for_jit(
-      global_inst.get(),
-      store,
-      jit_ctx.jit_module,
-      jit_ctx.func_addrs,
-    )
-    let offset = jit_ctx.globals_ptr + (i * 16).to_int64()
-    @wasmoon_jit.native_value_slot_write(offset, 0, low)
-    if high is Some(hi) {
-      @wasmoon_jit.native_value_slot_write(offset, 1, hi)
-    }
   }
 }
 
@@ -680,7 +658,7 @@ pub fn sync_tables_to_jit(
 pub fn eval_elem_offset_expr(
   instrs : Array[@types.Instruction],
   globals : Array[@runtime.GlobalInstance],
-) -> Int {
+) -> Int raise @runtime.RuntimeError {
   let stack : Array[Int] = []
   for instr in instrs {
     match instr {
@@ -1035,6 +1013,7 @@ pub fn sync_table_to_jit(
   store : @runtime.Store,
   use_subtype_indirect_check? : Bool = false,
 ) -> Unit raise @runtime.RuntimeError {
+  use_subtype_indirect_check |> ignore
   let runtime_size = table.size()
   let jit_size = jit_table.get_size()
   let size = if runtime_size < jit_size { runtime_size } else { jit_size }
@@ -1050,39 +1029,13 @@ pub fn sync_table_to_jit(
       I31(n) => encoded = @wasmoon_jit.encode_i31(n)
       StructRef(idx) | ArrayRef(idx) =>
         // gc_ref is 1-based for the JIT/C heap: (idx + 1) << 1
-        encoded = (idx + 1).to_int64() << 1
+        encoded = @wasmoon_jit.encode_heap_ref(idx)
       ExternRef(host_idx) => encoded = encode_extern_value(host_idx, store)
       FuncRef(store_addr) => {
         encoded = encode_store_funcref_for_jit(
           value, store, jit_module, instance,
         )
-        let mut resolved_type_idx = -1
-        match store_addr_to_module_func_idx(store_addr, instance) {
-          Some(func_idx) =>
-            if func_idx >= 0 && func_idx < instance.func_type_indices.length() {
-              let raw_type_idx = instance.func_type_indices[func_idx]
-              resolved_type_idx = if use_subtype_indirect_check {
-                raw_type_idx
-              } else if raw_type_idx >= 0 &&
-                raw_type_idx < instance.canonical_type_indices.length() {
-                instance.canonical_type_indices[raw_type_idx]
-              } else {
-                raw_type_idx
-              }
-            }
-          None => ()
-        }
-        if resolved_type_idx < 0 &&
-          store_addr >= 0 &&
-          store_addr < store.func_type_indices.length() {
-          let raw_type_idx = store.func_type_indices[store_addr]
-          resolved_type_idx = if use_subtype_indirect_check {
-            raw_type_idx
-          } else {
-            store.get_func_canonical_type_idx(store_addr)
-          }
-        }
-        type_idx = resolved_type_idx
+        type_idx = store.get_func_canonical_type_idx(store_addr)
       }
       // Numeric types shouldn't be present in reference tables.
       _ => encoded = NULL_REF

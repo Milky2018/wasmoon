@@ -31,7 +31,7 @@ pub fn count_func_imports(Array[@types.Import]) -> Int
 
 pub fn create_spectest_module(@runtime.Store) -> @runtime.ModuleInstance raise @runtime.RuntimeError
 
-pub fn eval_elem_offset_expr(Array[@types.Instruction], Array[@runtime.GlobalInstance]) -> Int
+pub fn eval_elem_offset_expr(Array[@types.Instruction], Array[@runtime.GlobalInstance]) -> Int raise @runtime.RuntimeError
 
 pub fn exports_shared_resources(@types.Module) -> Bool
 
@@ -63,13 +63,9 @@ pub fn run_wast_command(WastContext, @wat.WastCommand, Int, WastResult, String, 
 
 pub fn run_wast_commands(@wat.WastScript, String, Bool, Bool, jit_compiler? : JITCompiler?, register_named_modules? : Bool) -> WastResult
 
-pub fn sync_jit_globals_to_store(JITModuleContext, @runtime.Store) -> Unit raise @runtime.RuntimeError
-
 pub fn sync_jit_memories_to_store(@runtime.ModuleInstance, @runtime.Store, @jit.JITModule) -> Unit
 
 pub fn sync_jit_tables_to_store(JITModuleContext, @runtime.Store) -> Unit raise @runtime.RuntimeError
-
-pub fn sync_store_globals_to_jit(JITModuleContext, @runtime.Store) -> Unit raise @runtime.RuntimeError
 
 pub fn sync_table_to_jit(@runtime.Table, @wasmoon_jit.JITTable, @jit.JITModule, @runtime.ModuleInstance, @runtime.Store, use_subtype_indirect_check? : Bool) -> Unit raise @runtime.RuntimeError
 

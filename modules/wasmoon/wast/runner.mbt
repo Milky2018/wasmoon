@@ -934,9 +934,7 @@ pub fn invoke_action(
               // Keep JIT shared tables coherent with interpreter-visible table state
               // before each call. This is required for mixed interpreter/JIT flows
               // (e.g. assertions that instantiate/trap between JIT invocations).
-              sync_store_globals_to_jit(jit, ctx.store) catch {
-                error => raise RuntimeError(error.to_string())
-              }
+
               sync_tables_to_jit(
                 instance,
                 ctx.store,
@@ -954,9 +952,7 @@ pub fn invoke_action(
                     temp_gc_func_table_ptr = 0L
                   }
                   // Sync globals even on exit
-                  sync_jit_globals_to_store(jit, ctx.store) catch {
-                    error => raise RuntimeError(error.to_string())
-                  }
+
                   sync_jit_tables_to_store(jit, ctx.store) catch {
                     error => raise RuntimeError(error.to_string())
                   }
@@ -970,9 +966,7 @@ pub fn invoke_action(
                     temp_gc_func_table_ptr = 0L
                   }
                   // Sync globals even on trap (in case globals were modified before trap)
-                  sync_jit_globals_to_store(jit, ctx.store) catch {
-                    error => raise RuntimeError(error.to_string())
-                  }
+
                   sync_jit_tables_to_store(jit, ctx.store) catch {
                     error => raise RuntimeError(error.to_string())
                   }
@@ -984,9 +978,7 @@ pub fn invoke_action(
                     @wasmoon_jit.free_memory(temp_gc_func_table_ptr)
                     temp_gc_func_table_ptr = 0L
                   }
-                  sync_jit_globals_to_store(jit, ctx.store) catch {
-                    error => raise RuntimeError(error.to_string())
-                  }
+
                   sync_jit_tables_to_store(jit, ctx.store) catch {
                     error => raise RuntimeError(error.to_string())
                   }
@@ -998,9 +990,7 @@ pub fn invoke_action(
                     @wasmoon_jit.free_memory(temp_gc_func_table_ptr)
                     temp_gc_func_table_ptr = 0L
                   }
-                  sync_jit_globals_to_store(jit, ctx.store) catch {
-                    error => raise RuntimeError(error.to_string())
-                  }
+
                   sync_jit_tables_to_store(jit, ctx.store) catch {
                     error => raise RuntimeError(error.to_string())
                   }
@@ -1013,9 +1003,7 @@ pub fn invoke_action(
                 @wasmoon_jit.free_memory(temp_gc_func_table_ptr)
               }
               // Sync JIT globals back to store after successful call
-              sync_jit_globals_to_store(jit, ctx.store) catch {
-                error => raise RuntimeError(error.to_string())
-              }
+
               sync_jit_tables_to_store(jit, ctx.store) catch {
                 error => raise RuntimeError(error.to_string())
               }

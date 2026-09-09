@@ -601,12 +601,8 @@ fn try_compile_jit_with_suspension(
           jit_ctx.install_hostcall_dispatcher(
             store,
             instance,
-            before_dispatch=() => {
-              @wast.sync_jit_globals_to_store(jit_ctx, store)
-              @wast.sync_jit_tables_to_store(jit_ctx, store)
-            },
+            before_dispatch=() => @wast.sync_jit_tables_to_store(jit_ctx, store),
             after_dispatch=() => {
-              @wast.sync_store_globals_to_jit(jit_ctx, store)
               @wast.sync_tables_to_jit(
                 instance,
                 store,

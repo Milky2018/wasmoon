@@ -10,14 +10,16 @@ pub(all) enum StackMapArgumentRoots {
 pub struct HiddenSafepointAbi {
   priv symbol : @native.ExternalSymbol
   priv argument_roots : StackMapArgumentRoots
+  priv owner : Int?
 }
 
 ///|
 pub fn HiddenSafepointAbi::new(
   symbol : @native.ExternalSymbol,
   argument_roots : StackMapArgumentRoots,
+  owner? : Int,
 ) -> HiddenSafepointAbi {
-  { symbol, argument_roots, }
+  { symbol, argument_roots, owner, }
 }
 
 ///|

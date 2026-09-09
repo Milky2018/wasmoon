@@ -132,6 +132,14 @@ jit_context_t *alloc_context_internal(int func_count) {
     if (!ctx) return NULL;
 
     // Initialize all fields to match VMContext v3 layout
+    ctx->callable_local_types = NULL;
+    ctx->callable_local_type_count = 0;
+    ctx->callable_type_parents = NULL;
+    ctx->callable_type_count = 0;
+    ctx->callable_entries = NULL;
+    ctx->callable_entry_count = 0;
+    ctx->callable_tags = NULL;
+    ctx->callable_tag_count = 0;
     // High frequency fields
     ctx->memory0 = NULL;
     ctx->memory0_base = NULL;
@@ -319,6 +327,11 @@ void free_context_internal(jit_context_t *ctx) {
     // Do not free memories here: memories are owned by the runtime Store and
     // can be shared across multiple instances/contexts.
     if (ctx->globals) free(ctx->globals);
+    free(ctx->callable_local_types);
+    free(ctx->callable_type_parents);
+    free(ctx->callable_entries);
+    free(ctx->callable_tags);
+    free(ctx->gc_func_table);
 
     // Free multi-memory arrays (but not the memory data itself - managed by runtime)
     if (ctx->memories) free(ctx->memories);
@@ -845,6 +858,8 @@ int32_t gc_collect_for_alloc_internal(
     const int64_t *roots,
     int32_t root_count
 ) {
+    jit_context_t *activation = get_current_jit_context();
+    if (activation && ctx && activation->gc_heap == ctx->gc_heap) ctx = activation;
     if (!ctx || !ctx->gc_heap) {
         return -1;
     }

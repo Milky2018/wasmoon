@@ -325,3 +325,11 @@ test "shared memory flags participate in import compatibility" {
   inspect(result.failed, content="0")
   inspect(result.passed, content="2")
 }
+
+///|
+fn register_funcref_entries(
+  store : @runtime.Store,
+  entries : Array[@runtime.StoreFuncrefEntry],
+) -> FuncrefRegistration {
+  { lease: store.register_jit_funcrefs(entries), }
+}

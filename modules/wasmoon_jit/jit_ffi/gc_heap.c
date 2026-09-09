@@ -170,20 +170,26 @@ static int ensure_heap_capacity(GcHeap* heap, size_t needed) {
     return 1;
 }
 
-static int ensure_object_table_capacity(GcHeap* heap) {
+int gc_heap_ensure_object_capacity(GcHeap* heap) {
     if (heap->object_count < heap->object_capacity) {
         return 1;  // Enough space
     }
 
-    // Grow object table
+    if (heap->object_capacity > INT32_MAX / 2) return 0;
     int32_t new_capacity = heap->object_capacity * 2;
-    int32_t* new_table = (int32_t*)realloc(heap->object_table,
-                                            new_capacity * sizeof(int32_t));
-    if (!new_table) {
-        return 0;  // Allocation failed
+    size_t bytes = (size_t)new_capacity * sizeof(int32_t);
+    int32_t *new_table = malloc(bytes);
+    int32_t *new_types = malloc(bytes);
+    if (!new_table || !new_types) {
+        free(new_table); free(new_types);
+        return 0;
     }
-
+    memcpy(new_table, heap->object_table, (size_t)heap->object_count * sizeof(int32_t));
+    memcpy(new_types, heap->runtime_types, (size_t)heap->object_count * sizeof(int32_t));
+    free(heap->object_table);
+    free(heap->runtime_types);
     heap->object_table = new_table;
+    heap->runtime_types = new_types;
     heap->object_capacity = new_capacity;
     return 1;
 }
@@ -232,8 +238,14 @@ GcHeap* gc_heap_new(size_t initial_capacity) {
         return NULL;
     }
 
+    heap->runtime_types = malloc(DEFAULT_OBJECT_CAPACITY * sizeof(int32_t));
+    if (!heap->runtime_types) {
+        free(heap->object_table); free(heap->data); free(heap);
+        return NULL;
+    }
     heap->free_list = (int32_t*)malloc(DEFAULT_FREE_CAPACITY * sizeof(int32_t));
     if (!heap->free_list) {
+        free(heap->runtime_types);
         free(heap->object_table);
         free(heap->data);
         free(heap);
@@ -262,6 +274,7 @@ void gc_heap_free(GcHeap* heap) {
         abort();
     }
     free(heap->free_list);
+    free(heap->runtime_types);
     free(heap->object_table);
     free(heap->data);
     free(heap);
@@ -346,7 +359,7 @@ static int32_t alloc_struct_slots(GcHeap* heap, int32_t type_idx,
     if (!ensure_heap_capacity(heap, total_size)) {
         return 0;
     }
-    if (!ensure_object_table_capacity(heap)) {
+    if (!gc_heap_ensure_object_capacity(heap)) {
         return 0;
     }
 
@@ -373,6 +386,7 @@ static int32_t alloc_struct_slots(GcHeap* heap, int32_t type_idx,
     heap->size += total_size;
     int32_t gc_ref = heap->object_count + 1;  // 1-based
     heap->object_table[heap->object_count] = offset;
+    heap->runtime_types[heap->object_count] = -1;
     heap->object_count++;
     heap->total_allocations++;
 
@@ -458,7 +472,7 @@ int32_t gc_heap_alloc_array_wide(GcHeap* heap, int32_t type_idx,
     if (!ensure_heap_capacity(heap, total_size)) {
         return 0;
     }
-    if (!ensure_object_table_capacity(heap)) {
+    if (!gc_heap_ensure_object_capacity(heap)) {
         return 0;
     }
 
@@ -490,6 +504,7 @@ int32_t gc_heap_alloc_array_wide(GcHeap* heap, int32_t type_idx,
     heap->size += total_size;
     int32_t gc_ref = heap->object_count + 1;  // 1-based
     heap->object_table[heap->object_count] = offset;
+    heap->runtime_types[heap->object_count] = -1;
     heap->object_count++;
     heap->total_allocations++;
 
@@ -672,7 +687,7 @@ int32_t gc_heap_alloc_array_from_slots(GcHeap* heap, int32_t type_idx,
     if (!ensure_heap_capacity(heap, total_size)) {
         return 0;
     }
-    if (!ensure_object_table_capacity(heap)) {
+    if (!gc_heap_ensure_object_capacity(heap)) {
         return 0;
     }
 
@@ -704,6 +719,7 @@ int32_t gc_heap_alloc_array_from_slots(GcHeap* heap, int32_t type_idx,
     heap->size += total_size;
     int32_t gc_ref = heap->object_count + 1;  // 1-based
     heap->object_table[heap->object_count] = offset;
+    heap->runtime_types[heap->object_count] = -1;
     heap->object_count++;
     heap->total_allocations++;
 
@@ -1332,4 +1348,16 @@ int32_t wasmoon_gc_heap_verify(int64_t heap_ptr, int32_t verbose) {
 
 void wasmoon_gc_heap_debug_set_fail_alloc(int32_t fail_at, int32_t fail_every) {
     gc_set_fail_alloc_config(fail_at, fail_every);
+}
+
+int32_t wasmoon_gc_heap_get_runtime_type(int64_t pointer, int32_t ref) {
+    GcHeap *heap = (GcHeap *)(uintptr_t)pointer;
+    if (!heap || ref <= 0 || ref > heap->object_count || heap->object_table[ref - 1] < 0) return -1;
+    return heap->runtime_types[ref - 1];
+}
+
+void wasmoon_gc_heap_set_runtime_type(int64_t pointer, int32_t ref, int32_t identity) {
+    GcHeap *heap = (GcHeap *)(uintptr_t)pointer;
+    if (!heap || ref <= 0 || ref > heap->object_count || heap->object_table[ref - 1] < 0) return;
+    heap->runtime_types[ref - 1] = identity;
 }

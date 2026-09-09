@@ -50,6 +50,7 @@ int32_t gc_alloc_struct_with_retry(
         if (result) {
             result->gc_ref = gc_ref;
         }
+        gc_record_runtime_type(ctx, heap, gc_ref, type_idx);
         return gc_ref;
     }
 
@@ -62,7 +63,8 @@ int32_t gc_alloc_struct_with_retry(
             if (result) {
                 result->gc_ref = gc_ref;
             }
-            return gc_ref;
+            gc_record_runtime_type(ctx, heap, gc_ref, type_idx);
+        return gc_ref;
         }
     }
 
@@ -73,7 +75,8 @@ int32_t gc_alloc_struct_with_retry(
     if (gc_ref != 0 && result) {
         result->gc_ref = gc_ref;
     }
-    return gc_ref;
+    gc_record_runtime_type(ctx, heap, gc_ref, type_idx);
+        return gc_ref;
 }
 
 int32_t gc_alloc_array_with_retry(
@@ -96,6 +99,7 @@ int32_t gc_alloc_array_with_retry(
         if (result) {
             result->gc_ref = gc_ref;
         }
+        gc_record_runtime_type(ctx, heap, gc_ref, type_idx);
         return gc_ref;
     }
 
@@ -108,7 +112,8 @@ int32_t gc_alloc_array_with_retry(
             if (result) {
                 result->gc_ref = gc_ref;
             }
-            return gc_ref;
+            gc_record_runtime_type(ctx, heap, gc_ref, type_idx);
+        return gc_ref;
         }
     }
 
@@ -119,7 +124,8 @@ int32_t gc_alloc_array_with_retry(
     if (gc_ref != 0 && result) {
         result->gc_ref = gc_ref;
     }
-    return gc_ref;
+    gc_record_runtime_type(ctx, heap, gc_ref, type_idx);
+        return gc_ref;
 }
 
 int32_t gc_alloc_array_from_values_with_retry(
@@ -142,6 +148,7 @@ int32_t gc_alloc_array_from_values_with_retry(
         if (result) {
             result->gc_ref = gc_ref;
         }
+        gc_record_runtime_type(ctx, heap, gc_ref, type_idx);
         return gc_ref;
     }
 
@@ -154,7 +161,8 @@ int32_t gc_alloc_array_from_values_with_retry(
             if (result) {
                 result->gc_ref = gc_ref;
             }
-            return gc_ref;
+            gc_record_runtime_type(ctx, heap, gc_ref, type_idx);
+        return gc_ref;
         }
     }
 
@@ -165,5 +173,13 @@ int32_t gc_alloc_array_from_values_with_retry(
     if (gc_ref != 0 && result) {
         result->gc_ref = gc_ref;
     }
-    return gc_ref;
+    gc_record_runtime_type(ctx, heap, gc_ref, type_idx);
+        return gc_ref;
+}
+
+void gc_record_runtime_type(jit_context_t *ctx, GcHeap *heap, int32_t ref, int32_t local_type) {
+    if (!ctx || !heap || ref <= 0 || ref > heap->object_count) return;
+    if (local_type >= 0 && local_type < ctx->callable_local_type_count) {
+        heap->runtime_types[ref - 1] = ctx->callable_local_types[local_type];
+    }
 }

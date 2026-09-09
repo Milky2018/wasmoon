@@ -97,7 +97,8 @@ fn FuncEnvironment::emit_cancellation_safepoint(
 ///|
 /// Translate global.get to IR primitives:
 /// 1. Load globals_ptr from vmctx
-/// 2. Load value from globals_ptr + (global_idx * 16)
+/// 2. Load the shared cell pointer for this module global
+/// 3. Load the value from the cell
 fn FuncEnvironment::translate_global_get(
   self : FuncEnvironment,
   builder : FunctionBuilder,
@@ -112,18 +113,21 @@ fn FuncEnvironment::translate_global_get(
   let globals_offset = builder.iconst(I64, layout.globals_offset.to_int64())
   let globals_ptr = builder.load_ptr(I64, vmctx, globals_offset)
 
-  // Load value from globals_ptr + field_offset
+  // Resolve the shared global cell.
   let field_offset = builder.iconst(
     I64,
     (global_idx * layout.global_value_stride).to_int64(),
   )
-  builder.load_ptr(ty, globals_ptr, field_offset)
+  let cell = builder.load_ptr(I64, globals_ptr, field_offset)
+  let zero = builder.iconst(I64, 0L)
+  builder.load_ptr(ty, cell, zero)
 }
 
 ///|
 /// Translate global.set to IR primitives:
 /// 1. Load globals_ptr from vmctx
-/// 2. Store value to globals_ptr + (global_idx * 16)
+/// 2. Load the shared cell pointer for this module global
+/// 3. Store the value in the cell
 fn FuncEnvironment::translate_global_set(
   self : FuncEnvironment,
   builder : FunctionBuilder,
@@ -139,12 +143,14 @@ fn FuncEnvironment::translate_global_set(
   let globals_offset = builder.iconst(I64, layout.globals_offset.to_int64())
   let globals_ptr = builder.load_ptr(I64, vmctx, globals_offset)
 
-  // Store value to globals_ptr + field_offset
+  // Resolve the shared global cell.
   let field_offset = builder.iconst(
     I64,
     (global_idx * layout.global_value_stride).to_int64(),
   )
-  builder.store_ptr(ty, globals_ptr, value, field_offset)
+  let cell = builder.load_ptr(I64, globals_ptr, field_offset)
+  let zero = builder.iconst(I64, 0L)
+  builder.store_ptr(ty, cell, value, zero)
 }
 
 // ============ Table Operations ============

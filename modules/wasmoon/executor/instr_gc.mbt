@@ -21,7 +21,11 @@ fn ExecContext::exec_struct_new(
   }
 
   // Allocate struct in the store
-  let ref_idx = self.store.alloc_struct(type_idx, fields)
+  let ref_idx = self.store.alloc_struct(
+    type_idx,
+    fields,
+    instance=self.instance,
+  )
   self.stack.push(StructRef(ref_idx))
   self.maybe_collect_gc_stress()
 }
@@ -44,7 +48,11 @@ fn ExecContext::exec_struct_new_default(
   }
 
   // Allocate struct in the store
-  let ref_idx = self.store.alloc_struct(type_idx, fields)
+  let ref_idx = self.store.alloc_struct(
+    type_idx,
+    fields,
+    instance=self.instance,
+  )
   self.stack.push(StructRef(ref_idx))
   self.maybe_collect_gc_stress()
 }
@@ -192,7 +200,11 @@ fn ExecContext::exec_array_new(
   let elements : Array[@types.Value] = Array::make(len, fill_val)
 
   // Allocate array in the store
-  let ref_idx = self.store.alloc_array(type_idx, elements)
+  let ref_idx = self.store.alloc_array(
+    type_idx,
+    elements,
+    instance=self.instance,
+  )
   self.stack.push(ArrayRef(ref_idx))
   self.maybe_collect_gc_stress()
 }
@@ -218,7 +230,11 @@ fn ExecContext::exec_array_new_default(
   let elements : Array[@types.Value] = Array::make(len, default_val)
 
   // Allocate array in the store
-  let ref_idx = self.store.alloc_array(type_idx, elements)
+  let ref_idx = self.store.alloc_array(
+    type_idx,
+    elements,
+    instance=self.instance,
+  )
   self.stack.push(ArrayRef(ref_idx))
   self.maybe_collect_gc_stress()
 }
@@ -238,7 +254,11 @@ fn ExecContext::exec_array_new_fixed(
   }
 
   // Allocate array in the store
-  let ref_idx = self.store.alloc_array(type_idx, elements)
+  let ref_idx = self.store.alloc_array(
+    type_idx,
+    elements,
+    instance=self.instance,
+  )
   self.stack.push(ArrayRef(ref_idx))
   self.maybe_collect_gc_stress()
 }
@@ -479,7 +499,7 @@ fn ExecContext::exec_array_new_data(
       raise @runtime.RuntimeError::OutOfBoundsMemoryAccess
     }
     // Create empty array
-    let ref_idx = self.store.alloc_array(type_idx, [])
+    let ref_idx = self.store.alloc_array(type_idx, [], instance=self.instance)
     self.stack.push(ArrayRef(ref_idx))
     self.maybe_collect_gc_stress()
     return
@@ -509,7 +529,11 @@ fn ExecContext::exec_array_new_data(
   }
 
   // Allocate array in the store
-  let ref_idx = self.store.alloc_array(type_idx, elements)
+  let ref_idx = self.store.alloc_array(
+    type_idx,
+    elements,
+    instance=self.instance,
+  )
   self.stack.push(ArrayRef(ref_idx))
   self.maybe_collect_gc_stress()
 }
@@ -540,7 +564,7 @@ fn ExecContext::exec_array_new_elem(
     raise @runtime.RuntimeError::OutOfBoundsTableAccess
   }
   if is_dropped || is_declarative {
-    let ref_idx = self.store.alloc_array(type_idx, [])
+    let ref_idx = self.store.alloc_array(type_idx, [], instance=self.instance)
     self.stack.push(ArrayRef(ref_idx))
     self.maybe_collect_gc_stress()
     return
@@ -560,7 +584,11 @@ fn ExecContext::exec_array_new_elem(
   }
 
   // Allocate array in the store
-  let ref_idx = self.store.alloc_array(type_idx, elements)
+  let ref_idx = self.store.alloc_array(
+    type_idx,
+    elements,
+    instance=self.instance,
+  )
   self.stack.push(ArrayRef(ref_idx))
   self.maybe_collect_gc_stress()
 }
@@ -885,22 +913,14 @@ fn value_matches_type(
         true
       } else {
         // Check if runtime type matches expected type
-        try store.get_gc_type_idx(idx) catch {
-          _ => false
-        } noraise {
-          runtime_type_idx => is_subtype(runtime_type_idx, type_idx, instance)
-        }
+        store.gc_type_is_subtype(idx, instance, type_idx)
       }
     (StructRef(idx), RefNullStruct(type_idx)) =>
       // type_idx == -1 means abstract struct type (any struct)
       if type_idx == -1 {
         true
       } else {
-        try store.get_gc_type_idx(idx) catch {
-          _ => false
-        } noraise {
-          runtime_type_idx => is_subtype(runtime_type_idx, type_idx, instance)
-        }
+        store.gc_type_is_subtype(idx, instance, type_idx)
       }
     (StructRef(_), RefEq) => true
     (StructRef(_), RefNullEq) => true
@@ -913,22 +933,14 @@ fn value_matches_type(
       if type_idx == -1 {
         true
       } else {
-        try store.get_gc_type_idx(idx) catch {
-          _ => false
-        } noraise {
-          runtime_type_idx => is_subtype(runtime_type_idx, type_idx, instance)
-        }
+        store.gc_type_is_subtype(idx, instance, type_idx)
       }
     (ArrayRef(idx), RefNullArray(type_idx)) =>
       // type_idx == -1 means abstract array type (any array)
       if type_idx == -1 {
         true
       } else {
-        try store.get_gc_type_idx(idx) catch {
-          _ => false
-        } noraise {
-          runtime_type_idx => is_subtype(runtime_type_idx, type_idx, instance)
-        }
+        store.gc_type_is_subtype(idx, instance, type_idx)
       }
     (ArrayRef(_), RefEq) => true
     (ArrayRef(_), RefNullEq) => true

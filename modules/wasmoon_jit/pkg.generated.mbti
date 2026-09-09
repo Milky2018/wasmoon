@@ -18,7 +18,7 @@ import {
 // Values
 pub const WASMOON_CODEGEN_REVISION : String = "direct-vcode-1"
 
-pub const WASMOON_JIT_ABI_VERSION : Int = 3
+pub const WASMOON_JIT_ABI_VERSION : Int = 4
 
 pub fn alloc_guarded_memory_desc(Int, Int?, is_shared? : Bool) -> Int64
 
@@ -374,6 +374,8 @@ pub fn CHeap::is_array(Self, Int) -> Bool
 pub fn CHeap::is_struct(Self, Int) -> Bool
 pub fn CHeap::is_valid(Self, Int) -> Bool
 pub fn CHeap::make_allocation_rollback(Self, () -> Array[@types.Value]) -> () -> Unit
+pub fn CHeap::runtime_type(Self, Int) -> Int
+pub fn CHeap::set_runtime_type(Self, Int, Int) -> Unit
 pub fn CHeap::should_collect(Self, threshold? : Double) -> Bool
 pub fn CHeap::struct_get(Self, Int, Int, @types.ValueType) -> @types.Value
 pub fn CHeap::struct_set(Self, Int, Int, @types.Value) -> Unit
@@ -634,6 +636,13 @@ pub struct MemoryInfo {
 }
 pub fn MemoryInfo::MemoryInfo(Int64, Int64, Int?) -> Self
 
+pub struct NativeCallable {
+  context : NativeJITContext
+  entry : InstalledTrampoline
+}
+pub fn NativeCallable::entry_address(Self) -> Int64
+pub fn NativeCallable::release(Self) -> Unit
+
 pub struct NativeCompiler {
   // private fields
 }
@@ -714,6 +723,7 @@ pub fn NativeInvocationPhase::to_repr(Self) -> @debug.Repr
 type NativeJITContext
 pub fn NativeJITContext::alloc_guarded_memory(Self, Int, Int?) -> Int64
 pub fn NativeJITContext::alloc_indirect_table(Self, Int) -> Bool
+pub fn NativeJITContext::bind_callable(Self, Int64) -> NativeCallable raise JitInstallError
 pub fn NativeJITContext::call_trampoline(Self, Int64, Int64, FixedArray[Int64], Int, Bool) -> Int raise NativeFiberError
 pub fn NativeJITContext::clear_cancellation_callback(Self) -> Unit
 pub fn NativeJITContext::clear_gc_heap(Self) -> Unit
@@ -732,6 +742,7 @@ pub fn NativeJITContext::gc_environment_is_clear(Self) -> Bool
 pub fn NativeJITContext::gc_set_root_scratch(Self, Array[Int64]) -> Bool
 pub fn NativeJITContext::gc_set_safepoint_table(Self, Int64) -> Unit
 pub fn NativeJITContext::gc_use_func_safepoints(Self, Int) -> Unit
+pub fn NativeJITContext::has_callable_metadata(Self) -> Bool
 #alias(has_wasm_stack, deprecated)
 pub fn NativeJITContext::has_configured_native_fiber_stack_size(Self) -> Bool
 pub fn NativeJITContext::init_wasi(Self, Array[String], Array[String], Array[(String, String)], quiet? : Bool, readonly_preopens? : Array[(String, String)]) -> Unit
@@ -739,6 +750,7 @@ pub fn NativeJITContext::memory_ptr(Self, Int) -> Int64
 pub fn NativeJITContext::memory_size(Self, Int) -> Int64
 pub fn NativeJITContext::refresh_table_layout(Self, Int) -> Bool
 pub fn NativeJITContext::register_safepoints(Self, Int, Array[@code_object.SafepointSite]) -> Bool
+pub fn NativeJITContext::set_callable_types(Self, Array[Int], Array[Int], Array[(Int64, Int)], Array[Int]) -> Unit
 pub fn NativeJITContext::set_cancellation_callback(Self, () -> Bool) -> Unit
 pub fn NativeJITContext::set_func(Self, Int, Int64) -> Unit
 pub fn NativeJITContext::set_gc_heap(Self, CHeap) -> Unit

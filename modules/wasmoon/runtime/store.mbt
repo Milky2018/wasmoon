@@ -55,6 +55,7 @@ pub struct Store {
   // Native invocation/fiber lifetimes belong to the Store, not a JIT module.
   native_execution : @wasmoon_jit.NativeExecutionState
   priv funcref_registry : StoreFuncrefRegistry
+  priv native_types : StoreTypeRegistry
   priv pinned_gc_roots : Array[(Int64, Array[@types.Value], Ref[Bool])]
   priv mut next_pinned_gc_roots_id : Int64
   priv mut instantiation : RollbackRegistrar?
@@ -155,6 +156,7 @@ pub fn Store::Store() -> Store {
     wasi_ctx_handle: 0,
     native_execution: NativeExecutionState(),
     funcref_registry: StoreFuncrefRegistry::new(),
+    native_types: StoreTypeRegistry::new(),
     pinned_gc_roots: [],
     next_pinned_gc_roots_id: 0L,
     instantiation: None,
@@ -190,6 +192,7 @@ pub fn Store::with_c_heap() -> Store {
     wasi_ctx_handle: 0,
     native_execution: NativeExecutionState(),
     funcref_registry: StoreFuncrefRegistry::new(),
+    native_types: StoreTypeRegistry::new(),
     pinned_gc_roots: [],
     next_pinned_gc_roots_id: 0L,
     instantiation: None,
@@ -214,6 +217,12 @@ pub fn Store::close(self : Store) -> Unit {
   }
   self.pinned_gc_roots.clear()
   self.funcref_registry.clear()
+  self.native_types.representatives.clear()
+  self.native_types.mappings.clear()
+  self.native_types.parents.clear()
+  self.native_types.views.clear()
+  self.native_types.entries.clear()
+  self.native_types.heap_types.clear()
   self.funcs.clear()
   self.func_types.clear()
   self.func_type_indices.clear()
@@ -224,6 +233,9 @@ pub fn Store::close(self : Store) -> Unit {
     memory.close()
   }
   self.mems.clear()
+  for global in self.globals {
+    global.close()
+  }
   self.globals.clear()
   self.tags.clear()
   self.tag_type_indices.clear()
@@ -618,11 +630,12 @@ fn Store::get_struct_field_type(
   self : Store,
   type_idx : Int,
   field_idx : Int,
+  reference : Int,
 ) -> @types.ValueType {
-  if type_idx < 0 || type_idx >= self.module_types.length() {
-    return I64 // Fallback
+  guard self.gc_type_definition(reference, type_idx) is Some(definition) else {
+    return I64
   }
-  match self.module_types[type_idx].composite {
+  match definition.composite {
     Struct(st) =>
       if field_idx >= 0 && field_idx < st.fields.length() {
         match st.fields[field_idx].storage_type {
@@ -638,11 +651,15 @@ fn Store::get_struct_field_type(
 
 ///|
 /// Get the element type of an array from module_types
-fn Store::get_array_elem_type(self : Store, type_idx : Int) -> @types.ValueType {
-  if type_idx < 0 || type_idx >= self.module_types.length() {
+fn Store::get_array_elem_type(
+  self : Store,
+  type_idx : Int,
+  reference : Int,
+) -> @types.ValueType {
+  guard self.gc_type_definition(reference, type_idx) is Some(definition) else {
     return I64
   }
-  match self.module_types[type_idx].composite {
+  match definition.composite {
     Array(at) =>
       match at.element.storage_type {
         Val(vt) => vt
@@ -658,9 +675,10 @@ pub fn Store::alloc_struct(
   self : Store,
   type_idx : Int,
   fields : Array[@types.Value],
+  instance? : ModuleInstance,
 ) -> Int raise RuntimeError {
   self.ensure_open()
-  match self.c_heap {
+  let reference = match self.c_heap {
     Some(heap) =>
       heap.alloc_struct(type_idx, fields) catch {
         OutOfBoundsArrayAccess => raise OutOfBoundsArrayAccess
@@ -669,6 +687,8 @@ pub fn Store::alloc_struct(
       }
     None => self.heap.alloc_struct(type_idx, fields)
   }
+  self.record_gc_type(reference, instance, type_idx)
+  reference
 }
 
 ///|
@@ -677,9 +697,10 @@ pub fn Store::alloc_array(
   self : Store,
   type_idx : Int,
   elements : Array[@types.Value],
+  instance? : ModuleInstance,
 ) -> Int raise RuntimeError {
   self.ensure_open()
-  match self.c_heap {
+  let reference = match self.c_heap {
     Some(heap) =>
       heap.alloc_array_from_values(type_idx, elements) catch {
         OutOfBoundsArrayAccess => raise OutOfBoundsArrayAccess
@@ -688,6 +709,8 @@ pub fn Store::alloc_array(
       }
     None => self.heap.alloc_array(type_idx, elements)
   }
+  self.record_gc_type(reference, instance, type_idx)
+  reference
 }
 
 ///|
@@ -700,7 +723,9 @@ pub fn Store::struct_get(
   match self.c_heap {
     Some(heap) => {
       let type_idx = heap.get_type_idx(struct_idx)
-      let field_type = self.get_struct_field_type(type_idx, field_idx)
+      let field_type = self.get_struct_field_type(
+        type_idx, field_idx, struct_idx,
+      )
       heap.struct_get(struct_idx, field_idx, field_type)
     }
     None => self.heap.struct_get(struct_idx, field_idx)
@@ -744,7 +769,7 @@ pub fn Store::array_get(
   match self.c_heap {
     Some(heap) => {
       let type_idx = heap.get_type_idx(array_idx)
-      let elem_type = self.get_array_elem_type(type_idx)
+      let elem_type = self.get_array_elem_type(type_idx, array_idx)
       heap.array_get(array_idx, elem_idx, elem_type) catch {
         OutOfBoundsArrayAccess => raise OutOfBoundsArrayAccess
         NullReference => raise NullReference
@@ -907,7 +932,19 @@ pub fn Store::get_func_canonical_type_idx(self : Store, func_addr : Int) -> Int 
   }
   let owner_idx = match self.func_owners[func_addr] {
     Module(idx) => idx
-    _ => return -1
+    HostFunc => {
+      // Host function types are declared in the importing module's type graph.
+      for instance in self.instances {
+        for index, address in instance.func_addrs {
+          if address == func_addr && index < instance.func_type_indices.length() {
+            let type_index = instance.func_type_indices[index]
+            return self.native_types.register(instance)[type_index]
+          }
+        }
+      }
+      return -1
+    }
+    Unowned => return -1
   }
   if owner_idx >= self.instances.length() {
     return -1
@@ -917,7 +954,7 @@ pub fn Store::get_func_canonical_type_idx(self : Store, func_addr : Int) -> Int 
   if type_idx < 0 || type_idx >= instance.canonical_type_indices.length() {
     return -1
   }
-  instance.canonical_type_indices[type_idx]
+  self.native_types.register(instance)[type_idx]
 }
 
 ///|
@@ -1123,8 +1160,9 @@ pub fn Store::collect_roots(
 
   // Collect from globals
   for global in self.globals {
-    if is_gc_ref(global.value) {
-      roots.push(global.value)
+    let value = global.root()
+    if is_gc_ref(value) {
+      roots.push(value)
     }
   }
 

@@ -1523,23 +1523,13 @@ fn run_with_jit(
               let results = jm.call_with_context(f, i64_args) catch {
                 JITExit(code) => {
                   jm.teardown_gc()
-                  @wast.sync_jit_globals_to_store(jit_ctx, store) catch {
-                    error => {
-                      @logger.error("JIT reference transfer failed: \{error}")
-                      raise CommandFailure(1)
-                    }
-                  }
+
                   raise CommandFailure(code)
                 }
                 JITTrap(msg) => {
                   jm.teardown_gc()
                   // Sync globals back to interpreter store even on trap.
-                  @wast.sync_jit_globals_to_store(jit_ctx, store) catch {
-                    error => {
-                      @logger.error("JIT reference transfer failed: \{error}")
-                      raise CommandFailure(1)
-                    }
-                  }
+
                   // Capture and display backtrace if DWARF is enabled
                   match dwarf_builder {
                     Some(dwarf) => {
@@ -1565,23 +1555,13 @@ fn run_with_jit(
                 }
                 JITNativeFiberFailure(message) => {
                   jm.teardown_gc()
-                  @wast.sync_jit_globals_to_store(jit_ctx, store) catch {
-                    error => {
-                      @logger.error("JIT reference transfer failed: \{error}")
-                      raise CommandFailure(1)
-                    }
-                  }
+
                   @logger.error("JIT native-fiber failure: \{message}")
                   raise CommandFailure(1)
                 }
                 JITCancelled => {
                   jm.teardown_gc()
-                  @wast.sync_jit_globals_to_store(jit_ctx, store) catch {
-                    error => {
-                      @logger.error("JIT reference transfer failed: \{error}")
-                      raise CommandFailure(1)
-                    }
-                  }
+
                   @logger.error("JIT invocation cancelled")
                   raise CommandFailure(1)
                 }
@@ -1589,12 +1569,7 @@ fn run_with_jit(
               // Tear down GC context after JIT call
               jm.teardown_gc()
               // Sync JIT globals back to interpreter store for consistency.
-              @wast.sync_jit_globals_to_store(jit_ctx, store) catch {
-                error => {
-                  @logger.error("JIT reference transfer failed: \{error}")
-                  raise CommandFailure(1)
-                }
-              }
+
               // Convert Int64 results to Value using shared helper
               let values = convert_jit_results(results, f.result_types)
               // NOTE: Memory and globals are freed automatically by JITContext finalizer (GC-managed)

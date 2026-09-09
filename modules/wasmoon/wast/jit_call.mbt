@@ -87,9 +87,6 @@ fn prepare_jit_core_environment(
   store : @runtime.Store,
   instance : @runtime.ModuleInstance,
 ) -> Bool raise JITCoreCallError {
-  sync_store_globals_to_jit(context, store) catch {
-    error => raise HostInvocation(error)
-  }
   sync_tables_to_jit(
     instance,
     store,
@@ -124,9 +121,7 @@ fn finish_jit_core_environment(
   if gc_active {
     context.jit_module.teardown_gc()
   }
-  sync_jit_globals_to_store(context, store) catch {
-    error => raise HostInvocation(error)
-  }
+
   sync_jit_tables_to_store(context, store) catch {
     error => raise HostInvocation(error)
   }

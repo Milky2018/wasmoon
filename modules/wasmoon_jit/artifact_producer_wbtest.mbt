@@ -133,7 +133,7 @@ test "artifact producer preserves symbolic imported and internal code targets" {
       #|      pointer_width: Bits64,
       #|    },
       #|    required_cpu_features: [],
-      #|    jit_abi_version: 3,
+      #|    jit_abi_version: 4,
       #|    codegen_revision: "direct-vcode-1",
       #|    module_identity: {
       #|      name: "artifact-producer",

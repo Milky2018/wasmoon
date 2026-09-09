@@ -518,7 +518,7 @@ pub fn eval_const_expr(
 fn eval_extended_const_expr(
   instrs : Array[@types.Instruction],
   globals : Array[@runtime.GlobalInstance],
-) -> Int {
+) -> Int raise @runtime.RuntimeError {
   // Use a simple stack-based evaluator with Int64 to handle both i32 and i64
   let stack : Array[Int64] = []
   for instr in instrs {
@@ -1632,6 +1632,30 @@ fn instantiate_module_with_imports_unstarted(
   // modifications to shared tables are already visible.
 
   // Initialize active element segments (populate tables with function references)
+  // canonical_type_indices was computed at the start of the function (for import type checking)
+  let instance : @runtime.ModuleInstance = {
+    types: mod.types,
+    type_rec_groups: mod.type_rec_groups,
+    canonical_type_indices,
+    store_idx: -1,
+    func_addrs,
+    func_type_indices,
+    table_addrs,
+    mem_addrs,
+    global_addrs,
+    tag_addrs,
+    exports: mod.exports,
+    elem_values,
+    elem_segments: mod.elems,
+    data_segments: mod.datas,
+    dropped_elems,
+    dropped_datas,
+  }
+
+  // Register instance with store for cross-module call resolution
+  // This also sets the store_idx field
+  store.register_instance(instance) |> ignore
+
   for elem_idx, elem in mod.elems {
     // Only process active element segments
     if elem.mode is Active(table_idx, offset_expr) {
@@ -1672,29 +1696,6 @@ fn instantiate_module_with_imports_unstarted(
       dropped_datas[data_idx] = true
     }
   }
-  // canonical_type_indices was computed at the start of the function (for import type checking)
-  let instance : @runtime.ModuleInstance = {
-    types: mod.types,
-    type_rec_groups: mod.type_rec_groups,
-    canonical_type_indices,
-    store_idx: -1,
-    func_addrs,
-    func_type_indices,
-    table_addrs,
-    mem_addrs,
-    global_addrs,
-    tag_addrs,
-    exports: mod.exports,
-    elem_values,
-    elem_segments: mod.elems,
-    data_segments: mod.datas,
-    dropped_elems,
-    dropped_datas,
-  }
-
-  // Register instance with store for cross-module call resolution
-  // This also sets the store_idx field
-  store.register_instance(instance) |> ignore
 
   instance
 }
