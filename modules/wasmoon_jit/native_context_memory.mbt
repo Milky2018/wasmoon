@@ -382,7 +382,7 @@ pub fn JITTable::get_entry_value(self : JITTable, table_idx : Int) -> Int64 {
   if table_idx < 0 || table_idx >= self.size {
     return 0L
   }
-  c_jit_read_i64(self.table_ptr + (table_idx * 16).to_int64())
+  c_jit_read_i64(self.table_ptr + table_idx.to_int64() * 16L)
 }
 
 ///|
@@ -391,7 +391,7 @@ pub fn JITTable::get_entry_type(self : JITTable, table_idx : Int) -> Int {
   if table_idx < 0 || table_idx >= self.size {
     return -1
   }
-  c_jit_read_i64(self.table_ptr + (table_idx * 16 + 8).to_int64()).to_int()
+  c_jit_read_i64(self.table_ptr + (table_idx.to_int64() * 16L + 8L)).to_int()
 }
 
 ///|

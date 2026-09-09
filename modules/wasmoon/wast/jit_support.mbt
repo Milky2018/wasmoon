@@ -136,7 +136,7 @@ pub fn init_jit_globals_from_store(
   if count == 0 {
     return 0L
   }
-  let pointers = @wasmoon_jit.alloc_memory((count * 8).to_int64())
+  let pointers = @wasmoon_jit.alloc_memory(count.to_int64() * 8L)
   if pointers == 0L {
     return 0L
   }

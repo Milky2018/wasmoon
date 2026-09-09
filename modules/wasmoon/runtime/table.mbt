@@ -66,10 +66,28 @@ pub fn Table::from_type(
 
 ///|
 pub fn Table::get(self : Table, idx : Int) -> @types.Value raise RuntimeError {
-  if idx < 0 || idx >= self.size {
+  self.get_at(idx.to_int64() & 0xFFFF_FFFFL)
+}
+
+///|
+fn Table::check_range(
+  self : Table,
+  offset : Int64,
+  count : Int64,
+) -> Unit raise RuntimeError {
+  let size = self.size.to_int64()
+  if offset < 0L || count < 0L || count > size || offset > size - count {
     raise OutOfBoundsTableAccess
   }
-  self.elements[idx]
+}
+
+///|
+pub fn Table::get_at(
+  self : Table,
+  idx : Int64,
+) -> @types.Value raise RuntimeError {
+  self.check_range(idx, 1L)
+  self.elements[idx.to_int()]
 }
 
 ///|
@@ -78,10 +96,17 @@ pub fn Table::set(
   idx : Int,
   value : @types.Value,
 ) -> Unit raise RuntimeError {
-  if idx < 0 || idx >= self.size {
-    raise OutOfBoundsTableAccess
-  }
-  self.elements[idx] = value
+  self.set_at(idx.to_int64() & 0xFFFF_FFFFL, value)
+}
+
+///|
+pub fn Table::set_at(
+  self : Table,
+  idx : Int64,
+  value : @types.Value,
+) -> Unit raise RuntimeError {
+  self.check_range(idx, 1L)
+  self.elements[idx.to_int()] = value
 }
 
 ///|
@@ -135,17 +160,28 @@ pub fn Table::fill(
   value : @types.Value,
   n : Int,
 ) -> Unit raise RuntimeError {
-  if dest < 0 || n < 0 || dest + n > self.size {
-    raise OutOfBoundsTableAccess
-  }
-  for i in 0..<n {
+  self.fill_at(
+    dest.to_int64() & 0xFFFF_FFFFL,
+    value,
+    n.to_int64() & 0xFFFF_FFFFL,
+  )
+}
+
+///|
+pub fn Table::fill_at(
+  self : Table,
+  dest : Int64,
+  value : @types.Value,
+  n : Int64,
+) -> Unit raise RuntimeError {
+  self.check_range(dest, n)
+  let dest = dest.to_int()
+  for i in 0..<n.to_int() {
     self.elements[dest + i] = value
   }
 }
 
 ///|
-/// Copy elements from source table to this table
-/// table.copy: copy src_table[s..s+n] to this_table[d..d+n]
 pub fn Table::copy_from(
   self : Table,
   dest : Int,
@@ -153,21 +189,33 @@ pub fn Table::copy_from(
   src : Int,
   n : Int,
 ) -> Unit raise RuntimeError {
-  if dest < 0 ||
-    src < 0 ||
-    n < 0 ||
-    dest + n > self.size ||
-    src + n > src_table.size {
-    raise OutOfBoundsTableAccess
-  }
-  // Handle overlapping regions correctly
+  self.copy_from_at(
+    dest.to_int64() & 0xFFFF_FFFFL,
+    src_table,
+    src.to_int64() & 0xFFFF_FFFFL,
+    n.to_int64() & 0xFFFF_FFFFL,
+  )
+}
+
+///|
+pub fn Table::copy_from_at(
+  self : Table,
+  dest : Int64,
+  src_table : Table,
+  src : Int64,
+  n : Int64,
+) -> Unit raise RuntimeError {
+  self.check_range(dest, n)
+  src_table.check_range(src, n)
+  let dest = dest.to_int()
+  let src = src.to_int()
+  let n = n.to_int()
+  // Preserve memmove semantics when both handles refer to the same table.
   if dest <= src {
-    // Copy forward
     for i in 0..<n {
       self.elements[dest + i] = src_table.elements[src + i]
     }
   } else {
-    // Copy backward to handle overlap
     for i = n - 1; i >= 0; i = i - 1 {
       self.elements[dest + i] = src_table.elements[src + i]
     }

@@ -82,11 +82,11 @@ fn ExecContext::exec_instr(
       let table_addr = self.instance.table_addrs[table_idx]
       let table = self.store.get_table(table_addr)
       let elem_idx = if table.is_table64() {
-        self.stack.pop_i64().to_int()
+        self.stack.pop_i64()
       } else {
-        self.stack.pop_i32()
+        self.stack.pop_i32().to_int64() & 0xFFFF_FFFFL
       }
-      let value = table.get(elem_idx)
+      let value = table.get_at(elem_idx)
       self.stack.push(value)
     }
     TableSet(table_idx) => {
@@ -94,11 +94,11 @@ fn ExecContext::exec_instr(
       let table_addr = self.instance.table_addrs[table_idx]
       let table = self.store.get_table(table_addr)
       let elem_idx = if table.is_table64() {
-        self.stack.pop_i64().to_int()
+        self.stack.pop_i64()
       } else {
-        self.stack.pop_i32()
+        self.stack.pop_i32().to_int64() & 0xFFFF_FFFFL
       }
-      table.set(elem_idx, value)
+      table.set_at(elem_idx, value)
     }
     TableSize(table_idx) => {
       let table_addr = self.instance.table_addrs[table_idx]
@@ -129,17 +129,17 @@ fn ExecContext::exec_instr(
       let table_addr = self.instance.table_addrs[table_idx]
       let table = self.store.get_table(table_addr)
       let (n, value, dest) = if table.is_table64() {
-        let n = self.stack.pop_i64().to_int()
+        let n = self.stack.pop_i64()
         let value = self.stack.pop()
-        let dest = self.stack.pop_i64().to_int()
+        let dest = self.stack.pop_i64()
         (n, value, dest)
       } else {
-        let n = self.stack.pop_i32()
+        let n = self.stack.pop_i32().to_int64() & 0xFFFF_FFFFL
         let value = self.stack.pop()
-        let dest = self.stack.pop_i32()
+        let dest = self.stack.pop_i32().to_int64() & 0xFFFF_FFFFL
         (n, value, dest)
       }
-      table.fill(dest, value, n)
+      table.fill_at(dest, value, n)
     }
     TableCopy(dest_table_idx, src_table_idx) => {
       let dest_table_addr = self.instance.table_addrs[dest_table_idx]
@@ -148,23 +148,23 @@ fn ExecContext::exec_instr(
       let src_table = self.store.get_table(src_table_addr)
       // Length uses i64 only if BOTH tables are table64 (minimum of both types)
       let n = if dest_table.is_table64() && src_table.is_table64() {
-        self.stack.pop_i64().to_int()
+        self.stack.pop_i64()
       } else {
-        self.stack.pop_i32()
+        self.stack.pop_i32().to_int64() & 0xFFFF_FFFFL
       }
       // Source index uses source table's index type
       let src = if src_table.is_table64() {
-        self.stack.pop_i64().to_int()
+        self.stack.pop_i64()
       } else {
-        self.stack.pop_i32()
+        self.stack.pop_i32().to_int64() & 0xFFFF_FFFFL
       }
       // Dest index uses dest table's index type
       let dest = if dest_table.is_table64() {
-        self.stack.pop_i64().to_int()
+        self.stack.pop_i64()
       } else {
-        self.stack.pop_i32()
+        self.stack.pop_i32().to_int64() & 0xFFFF_FFFFL
       }
-      dest_table.copy_from(dest, src_table, src, n)
+      dest_table.copy_from_at(dest, src_table, src, n)
     }
     TableInit(table_idx, elem_idx) => {
       // table.init copies elements from elem segment to table

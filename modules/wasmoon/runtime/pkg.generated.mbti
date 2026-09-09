@@ -620,9 +620,12 @@ pub impl Show for StructInstance
 type Table derive(@debug.Debug)
 pub fn Table::Table(@types.ValueType, Int, Int?, init_value? : @types.Value, is_table64? : Bool) -> Self raise RuntimeError
 pub fn Table::copy_from(Self, Int, Self, Int, Int) -> Unit raise RuntimeError
+pub fn Table::copy_from_at(Self, Int64, Self, Int64, Int64) -> Unit raise RuntimeError
 pub fn Table::fill(Self, Int, @types.Value, Int) -> Unit raise RuntimeError
+pub fn Table::fill_at(Self, Int64, @types.Value, Int64) -> Unit raise RuntimeError
 pub fn Table::from_type(@types.TableType, init_value? : @types.Value) -> Self raise RuntimeError
 pub fn Table::get(Self, Int) -> @types.Value raise RuntimeError
+pub fn Table::get_at(Self, Int64) -> @types.Value raise RuntimeError
 pub fn Table::get_elem_type(Self) -> @types.ValueType
 pub fn Table::get_limits(Self) -> (Int, Int?)
 pub fn Table::get_limits64(Self) -> (Int64, Int64?)
@@ -630,6 +633,7 @@ pub fn Table::grow(Self, Int, @types.Value) -> Int
 pub fn Table::grow64(Self, Int64, @types.Value) -> Int64 raise RuntimeError
 pub fn Table::is_table64(Self) -> Bool
 pub fn Table::set(Self, Int, @types.Value) -> Unit raise RuntimeError
+pub fn Table::set_at(Self, Int64, @types.Value) -> Unit raise RuntimeError
 pub fn Table::size(Self) -> Int
 pub fn Table::to_repr(Self) -> @debug.Repr
 

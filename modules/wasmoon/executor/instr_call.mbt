@@ -39,13 +39,13 @@ fn ExecContext::exec_call_indirect(
 
   // Pop the function index from the stack (i64 for table64, i32 otherwise)
   let func_ref_idx = if table.is_table64() {
-    self.stack.pop_i64().to_int()
+    self.stack.pop_i64()
   } else {
-    self.stack.pop_i32()
+    self.stack.pop_i32().to_int64() & 0xFFFF_FFFFL
   }
 
   // Look up the function reference
-  let elem = table.get(func_ref_idx) catch {
+  let elem = table.get_at(func_ref_idx) catch {
     OutOfBoundsTableAccess => raise @runtime.UndefinedElement
     error => raise error
   }
@@ -538,13 +538,13 @@ pub fn ExecContext::exec_tail_call_indirect(
 
   // Pop the function reference index from stack (i64 for table64, i32 otherwise)
   let func_ref_idx = if table.is_table64() {
-    self.stack.pop_i64().to_int()
+    self.stack.pop_i64()
   } else {
-    self.stack.pop_i32()
+    self.stack.pop_i32().to_int64() & 0xFFFF_FFFFL
   }
 
   // Look up the element
-  let elem = table.get(func_ref_idx) catch {
+  let elem = table.get_at(func_ref_idx) catch {
     OutOfBoundsTableAccess => raise @runtime.UndefinedElement
     error => raise error
   }

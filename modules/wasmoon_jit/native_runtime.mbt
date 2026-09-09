@@ -5,13 +5,13 @@
 ///|
 /// Read an i64-sized slot from a JIT-owned native value area.
 pub fn native_value_slot_read(base : Int64, slot : Int) -> Int64 {
-  c_jit_read_i64(base + (slot * 8).to_int64())
+  c_jit_read_i64(base + slot.to_int64() * 8L)
 }
 
 ///|
 /// Write an i64-sized slot in a JIT-owned native value area.
 pub fn native_value_slot_write(base : Int64, slot : Int, value : Int64) -> Unit {
-  c_jit_write_i64(base + (slot * 8).to_int64(), value)
+  c_jit_write_i64(base + slot.to_int64() * 8L, value)
 }
 
 ///|
