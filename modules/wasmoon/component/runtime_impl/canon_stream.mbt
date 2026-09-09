@@ -294,53 +294,7 @@ fn instantiate_canon_stream_read(
           ret_i32(0)
         } else {
           let key = handle_key(owner_component_id, handle)
-          let mut ep_opt = table.endpoints.get(key)
-          if ep_opt is None {
-            // Cross-component handle transfer bug workaround:
-            // If a readable stream endpoint exists under a different component instance id but
-            // with the same local handle number, opportunistically "adopt" it into the current
-            // component instance. This preserves the numeric handle expected by the core code.
-            //
-            // This is only attempted when a single readable endpoint match exists globally.
-            let mut found_owner : Int? = None
-            let mut found_count = 0
-            for kv in async_state.stream_table.endpoints.iter() {
-              let (k, ep0) = kv
-              if (k & 0xFFFFFFFFL).to_int() == handle && ep0.is_readable {
-                found_owner = Some((k >> 32).to_int())
-                found_count = found_count + 1
-              }
-            }
-            if found_count == 1 {
-              match found_owner {
-                Some(o) =>
-                  if o != owner_component_id &&
-                    table.endpoints.get(handle_key(o, handle)) is Some(_) {
-                    let from_key = handle_key(o, handle)
-                    match table.endpoints.get(from_key) {
-                      Some(ep0) =>
-                        if ep0.is_readable {
-                          remove_waitable_membership(async_state, o, handle)
-                          table.endpoints.remove(from_key)
-                          table.endpoints.set(key, {
-                            stream_id: ep0.stream_id,
-                            is_readable: ep0.is_readable,
-                            notified_peer_dropped: ep0.notified_peer_dropped,
-                            in_waitable_set: ep0.in_waitable_set,
-                          })
-                          reserve_shared_handle(
-                            async_state, owner_component_id, handle,
-                          )
-                        }
-                      None => ()
-                    }
-                  }
-                None => ()
-              }
-            }
-            ep_opt = table.endpoints.get(key)
-          }
-          match ep_opt {
+          match table.endpoints.get(key) {
             None => {
               trap_canon("unknown stream handle index \{handle}")
               ret_i32(0)

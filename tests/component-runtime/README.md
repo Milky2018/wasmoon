@@ -10,3 +10,8 @@ python3 scripts/run_component_wast.py --dir tests/component-runtime
 python3 scripts/run_component_wast.py --dir tests/component-runtime --no-jit
 wasmtime wast -W component-model-async=y -C parallel-compilation=n tests/component-runtime/canonical-payloads.wast
 ```
+
+`stream-handle-isolation.wast` contrasts a raw integer from another component
+with a canonically transferred stream value. Only the stream value grants access
+to the readable endpoint. Both controls pass Wasmtime 40 after binary encoding
+with the pinned wasm-tools parser.

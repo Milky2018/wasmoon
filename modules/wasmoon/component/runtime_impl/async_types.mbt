@@ -1451,49 +1451,6 @@ fn alloc_shared_handle_with_source(
 }
 
 ///|
-fn reserve_shared_handle(
-  async_state : AsyncState,
-  component_id : Int,
-  handle : Int,
-) -> Unit {
-  if async_state.resource_tables.get(component_id) is Some(table) {
-    if table.next_handle.val <= handle {
-      table.next_handle.val = handle + 1
-    }
-    let mut i = 0
-    while i < table.free_handles.val.length() {
-      if table.free_handles.val[i] == handle {
-        table.free_handles.val.remove(i) |> ignore
-      } else {
-        i = i + 1
-      }
-    }
-    return
-  }
-  let next = match async_state.next_handle_by_component.get(component_id) {
-    Some(existing) => existing
-    None => {
-      let created = [1]
-      async_state.next_handle_by_component.set(component_id, created)
-      created
-    }
-  }
-  if next[0] <= handle {
-    next[0] = handle + 1
-  }
-  if async_state.free_handles_by_component.get(component_id) is Some(free) {
-    let mut i = 0
-    while i < free.length() {
-      if free[i] == handle {
-        free.remove(i) |> ignore
-      } else {
-        i = i + 1
-      }
-    }
-  }
-}
-
-///|
 fn backpressure_value_for_instance(
   async_state : AsyncState,
   component_id : Int,
