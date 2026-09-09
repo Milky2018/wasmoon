@@ -107,7 +107,7 @@ fn instantiate_canon_error_context_new(
       }
     }
     let debug_message = match lifted {
-      String(s) => s
+      String(s) | EncodedString(s, _, _) => s
       _ => {
         trap_canon("type mismatch")
         return []

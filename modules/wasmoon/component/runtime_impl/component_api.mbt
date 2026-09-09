@@ -288,7 +288,7 @@ pub fn ComponentInstance::call_exported_func(
         self.async_state.can_block_stack[self.async_state.can_block_stack.length() -
         1] = prev_can_block_stack
       }
-      res
+      res.map(ComponentValue::to_host_value)
     }
     Some(_) => raise UnknownExport(name)
     None => raise UnknownExport(name)

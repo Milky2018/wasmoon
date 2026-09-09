@@ -280,13 +280,14 @@ pub fn ComponentInvocation::poll(
   self : ComponentInvocation,
 ) -> ComponentInvocationPoll raise ComponentRuntimeError {
   match self.drive_once() {
-    DriveReady(values) => InvocationReady(values)
+    DriveReady(values) =>
+      InvocationReady(values.map(ComponentValue::to_host_value))
     DriveProgressed | DriveBlocked => InvocationPending
   }
 }
 
 ///|
-pub fn ComponentInvocation::wait(
+fn ComponentInvocation::wait_transport(
   self : ComponentInvocation,
 ) -> Array[ComponentValue] raise ComponentRuntimeError {
   while true {
@@ -421,4 +422,11 @@ fn start_component_invocation(
     invocation.task,
   )
   invocation
+}
+
+///|
+pub fn ComponentInvocation::wait(
+  self : ComponentInvocation,
+) -> Array[ComponentValue] raise ComponentRuntimeError {
+  self.wait_transport().map(ComponentValue::to_host_value)
 }

@@ -44,7 +44,11 @@ fn lift_component_value_from_flat(
               }
             }
             let s = read_string_from_memory_with_encoding(m, ptr, len, encoding)
-            String(s)
+            if encoding == Utf8 {
+              String(s)
+            } else {
+              EncodedString(s, encoding, len)
+            }
           }
           ErrorContext => {
             guard take(vals) is I32(handle) else {
@@ -668,7 +672,7 @@ fn lower_component_value_to_flat(
           (Char, Char(c)) => [I32(c.to_int())]
           (ErrorContext, ErrorContext(message)) =>
             [I32(callee_table.alloc_error_context(message))]
-          (String, String(s)) => {
+          (String, String(_) | EncodedString(_, _, _)) => {
             let m = match mem {
               Some(m) => m
               None => raise MissingCanonMemory
@@ -677,12 +681,13 @@ fn lower_component_value_to_flat(
               Some(r) => r
               None => raise MissingCanonRealloc
             }
-            let (bytes, canon_len, align) = encode_string_for_canon(
-              s,
+            let (ptr, canon_len) = lower_canonical_string(
+              val,
               resources.encoding,
-            )
-            let ptr = write_bytes_to_memory_with_align(
-              store, m, realloc, mem_is_64, bytes, align,
+              store,
+              m,
+              realloc,
+              mem_is_64,
             )
             if mem_is_64 {
               [I64(ptr.to_int64()), I64(canon_len.to_int64())]

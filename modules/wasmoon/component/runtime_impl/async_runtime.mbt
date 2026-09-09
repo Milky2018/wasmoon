@@ -214,7 +214,7 @@ fn await_component_func(
   }
   start_component_invocation(
     func, args, store, caller_table, async_state, caller_task_id, can_block,
-  ).wait()
+  ).wait_transport()
 }
 
 ///|
@@ -349,7 +349,10 @@ fn step_task_once_impl(
 
   match task.func {
     Host(_ft, _types, host) => {
-      let values = host(task.args, caller_table)
+      let values = host(
+        task.args.map(ComponentValue::to_host_value),
+        caller_table,
+      )
       set_task_result(
         async_state,
         current_task_id(async_state),
@@ -360,7 +363,9 @@ fn step_task_once_impl(
     }
     HostAsync(_ft, _types, start) => {
       if task.host_future[0] is None {
-        task.host_future[0] = Some(start(task.args, caller_table))
+        task.host_future[0] = Some(
+          start(task.args.map(ComponentValue::to_host_value), caller_table),
+        )
       }
       guard task.host_future[0] is Some(future) else {
         raise HostCallError("asynchronous host future was not initialized")
@@ -1052,7 +1057,7 @@ fn call_component_func_in_task_impl(
       if func_type.is_async {
         await_component_func(func, args, store, resource_table, async_state)
       } else {
-        host(args, resource_table)
+        host(args.map(ComponentValue::to_host_value), resource_table)
       }
     HostAsync(func_type, _types, _) =>
       if func_type.is_async {

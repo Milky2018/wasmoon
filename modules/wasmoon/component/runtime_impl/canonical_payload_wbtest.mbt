@@ -23,10 +23,16 @@ fn payload_test_resources(
           _ => 0
         }
       }
+      let old_ptr = integer(args[0])
+      let old_size = integer(args[1])
       let alignment = integer(args[2])
       let size = integer(args[3])
       let ptr = align_to(heap.val, alignment)
       heap.val = ptr + size
+      let mem = store.get_mem(memory)
+      for i in 0..<(if old_size < size { old_size } else { size }) {
+        mem.store_byte(ptr + i, mem.load_byte(old_ptr + i))
+      }
       if memory64 {
         [I64(ptr.to_int64())]
       } else {
@@ -103,7 +109,7 @@ test "payload transport converts nested values across type environments and memo
   )
   let output = target_type.load(dst_resources, store, 128, 1, target)
   debug_inspect(
-    output.values,
+    output.values.map(ComponentValue::to_host_value),
     content="[([U8(7), List([String(\"hello\"), String(\"世界\")])])]",
   )
   let mem = require_memory(dst_resources, store)

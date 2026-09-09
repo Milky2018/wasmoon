@@ -13,6 +13,8 @@ pub(all) enum ComponentValue {
   F64(Double)
   Char(Char)
   String(String)
+  /// Internal canonical transport; embedding boundaries expose String instead.
+  EncodedString(String, StringEncoding, Int)
   ErrorContext(String)
   List(Array[ComponentValue])
   Tuple(Array[ComponentValue])

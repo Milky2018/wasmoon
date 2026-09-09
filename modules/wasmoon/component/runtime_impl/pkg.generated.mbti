@@ -235,6 +235,7 @@ pub(all) enum ComponentValue {
   F64(Double)
   Char(Char)
   String(String)
+  EncodedString(String, @wasm_component.StringEncoding, Int)
   ErrorContext(String)
   List(Array[ComponentValue])
   Tuple(Array[ComponentValue])
