@@ -93,7 +93,7 @@ fn generate_gc_fuzz_case(seed : Int) -> String {
   }
 
   lines.push(
-    "    (i32.add (i32.add (struct.get $node 0 (local.get $node)) (array.len $arr (local.get $array))) (local.get $sum))",
+    "    (i32.add (i32.add (struct.get $node 0 (local.get $node)) (array.len (local.get $array))) (local.get $sum))",
   )
   lines.push("  )")
   lines.push(")")
@@ -199,10 +199,10 @@ fn generate_gc_cycle_mix_case(seed : Int) -> String {
   let (seed1, table_idx_raw) = fuzz_next_in_range(seed, 16)
   let (_, array_idx_raw) = fuzz_next_in_range(seed1, 8)
   lines.push(
-    "    (local.set $sum (i32.add (local.get $sum) (struct.get $node 0 (table.get $nodes (i32.const \{table_idx_raw}))))))",
+    "    (local.set $sum (i32.add (local.get $sum) (struct.get $node 0 (table.get $nodes (i32.const \{table_idx_raw})))))",
   )
   lines.push(
-    "    (local.set $sum (i32.add (local.get $sum) (struct.get $node 0 (array.get $arr (local.get $array) (i32.const \{array_idx_raw}))))))",
+    "    (local.set $sum (i32.add (local.get $sum) (struct.get $node 0 (array.get $arr (local.get $array) (i32.const \{array_idx_raw})))))",
   )
   lines.push("    (local.set $sum")
   lines.push("      (i32.add")

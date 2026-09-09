@@ -176,7 +176,13 @@ test "bulk memory: memory64 addresses and lengths are not truncated" {
     ] {
     let source = "(module (memory i64 1) (func (export \"test\") \{operation}))"
     @validator.validate_module(@wat.parse(source))
-    inspect(compare_jit_interp(source, "test", []), content="matched")
+    inspect(
+      compare_result_errors_contain(
+        compare_jit_interp(source, "test", []),
+        "out of bounds memory access",
+      ),
+      content="true",
+    )
   }
 }
 
@@ -186,6 +192,14 @@ test "bulk memory: dropped data still checks both zero-length offsets" {
     let (dst, src) = offsets
     let source = "(module (memory 1) (data $d \"x\") (func (export \"test\") data.drop $d i32.const \{dst} i32.const \{src} i32.const 0 memory.init $d))"
     @validator.validate_module(@wat.parse(source))
-    inspect(compare_jit_interp(source, "test", []), content="matched")
+    let result = compare_jit_interp(source, "test", [])
+    if dst > 65536 || src > 0 {
+      inspect(
+        compare_result_errors_contain(result, "out of bounds memory access"),
+        content="true",
+      )
+    } else {
+      inspect(result, content="matched")
+    }
   }
 }

@@ -296,15 +296,22 @@ pub fn compare_jit_interp_with_opt_level(
   let mod_ = @wat.parse(source) catch {
     e => {
       let err = "Failed to parse WAT: \{e}"
-      return { jit_result: Err(err), interp_result: Err(err), match_: true, }
+      return { jit_result: Err(err), interp_result: Err(err), match_: false, }
     }
-  } // Both failed with same error
+  }
+
+  @validator.validate_module(mod_) catch {
+    e => {
+      let err = "Failed to validate WAT: \{e}"
+      return { jit_result: Err(err), interp_result: Err(err), match_: false, }
+    }
+  }
 
   // Find the function index by name
   let func_idx = find_func_index_by_name(mod_, func_name)
   guard func_idx is Some(idx) else {
     let err = "Function '\{func_name}' not found"
-    return { jit_result: Err(err), interp_result: Err(err), match_: true, }
+    return { jit_result: Err(err), interp_result: Err(err), match_: false, }
   }
 
   // Get function type
@@ -319,7 +326,7 @@ pub fn compare_jit_interp_with_opt_level(
   let interp_mod = @wat.parse(source) catch {
     e => {
       let err = "Failed to parse interpreter WAT: \{e}"
-      return { jit_result: Err(err), interp_result: Err(err), match_: true, }
+      return { jit_result: Err(err), interp_result: Err(err), match_: false, }
     }
   }
   let interp_result = run_interp(interp_mod, func_name, args)
@@ -332,8 +339,7 @@ pub fn compare_jit_interp_with_opt_level(
   // Compare results
   let match_ = match (jit_result, interp_result) {
     (Ok(jit_vals), Ok(interp_vals)) => values_array_equal(jit_vals, interp_vals)
-    (Err(_), Err(_)) => true // Both errored (may or may not be same error)
-    _ => false // One succeeded, one failed
+    _ => false // Success parity never accepts an error from either engine.
   }
   { jit_result, interp_result, match_, }
 }
