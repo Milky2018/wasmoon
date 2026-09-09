@@ -493,6 +493,18 @@ pub fn Store::alloc_table(
   use_jit? : Bool = true,
 ) -> Int raise RuntimeError {
   self.ensure_open()
+  let owner = if use_jit {
+    match
+      @wasmoon_jit.JITTableOwner::try_alloc(
+        table.size(),
+        table.get_limits64().1,
+      ) {
+      Some(owner) => Some(owner)
+      None => raise TableAllocationFailed
+    }
+  } else {
+    None
+  }
   let idx = self.tables.length()
   self.on_instantiation_rollback(fn() {
     if idx < self.jit_table_owners.length() {
@@ -507,23 +519,8 @@ pub fn Store::alloc_table(
   })
   self.tables.push(table)
 
-  // Create corresponding JIT table (always enabled for cross-module sharing)
-  if use_jit {
-    let (min, max) = table.get_limits()
-    match @wasmoon_jit.JITTableOwner::try_alloc(min, max) {
-      Some(owner) => {
-        self.jit_tables.push(Some(owner.table()))
-        self.jit_table_owners.push(Some(owner))
-      }
-      None => {
-        self.jit_tables.push(None)
-        self.jit_table_owners.push(None)
-      }
-    }
-  } else {
-    self.jit_tables.push(None)
-    self.jit_table_owners.push(None)
-  }
+  self.jit_tables.push(owner.map(fn(owner) { owner.table() }))
+  self.jit_table_owners.push(owner)
   idx
 }
 

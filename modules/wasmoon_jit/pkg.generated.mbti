@@ -595,7 +595,7 @@ pub fn JITFunctionDebug::JITFunctionDebug(String, String, String, String) -> Sel
 type JITTable derive(@debug.Debug)
 pub fn JITTable::get_entry_type(Self, Int) -> Int
 pub fn JITTable::get_entry_value(Self, Int) -> Int64
-pub fn JITTable::get_max(Self) -> Int?
+pub fn JITTable::get_max(Self) -> Int64?
 pub fn JITTable::get_size(Self) -> Int
 pub fn JITTable::raw_ptr(Self) -> Int64
 pub fn JITTable::set(Self, Int, Int64, Int) -> Unit
@@ -605,7 +605,7 @@ type JITTableOwner derive(@debug.Debug)
 pub fn JITTableOwner::close(Self) -> Unit
 pub fn JITTableOwner::table(Self) -> JITTable
 pub fn JITTableOwner::to_repr(Self) -> @debug.Repr
-pub fn JITTableOwner::try_alloc(Int, Int?) -> Self?
+pub fn JITTableOwner::try_alloc(Int, Int64?) -> Self?
 
 pub struct JitCodeInstaller {
   // private fields

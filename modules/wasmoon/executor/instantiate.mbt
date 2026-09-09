@@ -79,13 +79,7 @@ pub fn instantiate_module(
     } else {
       Null
     }
-    let table = @runtime.Table::Table(
-      table_def.type_.elem_type,
-      table_def.type_.limits.min.to_int(),
-      table_def.type_.limits.max.map(fn(m) { m.to_int() }),
-      init_value~,
-      is_table64=table_def.type_.is_table64,
-    )
+    let table = try! @runtime.Table::from_type(table_def.type_, init_value~)
     let addr = try! store.alloc_table(table)
     table_addrs.push(addr)
   }
@@ -944,7 +938,7 @@ pub fn validate_imports_with_diagnostics(
             } noraise {
               table => table
             }
-            let actual_limits = actual_table.get_limits()
+            let actual_limits = actual_table.get_limits64()
             if actual_table.get_elem_type() != expected_table_type.elem_type {
               push_import_diagnostic(
                 result,
@@ -975,7 +969,8 @@ pub fn validate_imports_with_diagnostics(
               )
               continue
             }
-            if actual_limits.0 < expected_table_type.limits.min.to_int() {
+            if actual_limits.0.reinterpret_as_uint64() <
+              expected_table_type.limits.min.reinterpret_as_uint64() {
               push_import_diagnostic(
                 result,
                 import_index,
@@ -993,7 +988,8 @@ pub fn validate_imports_with_diagnostics(
             if expected_table_type.limits.max is Some(expected_max) {
               match actual_limits.1 {
                 Some(actual_max) =>
-                  if actual_max > expected_max.to_int() {
+                  if actual_max.reinterpret_as_uint64() >
+                    expected_max.reinterpret_as_uint64() {
                     push_import_diagnostic(
                       result,
                       import_index,
@@ -1347,7 +1343,7 @@ fn instantiate_module_with_imports_unstarted(
             // Check table type compatibility
             let actual_table = store.get_table(addr)
             let actual_elem_type = actual_table.get_elem_type()
-            let actual_limits = actual_table.get_limits()
+            let actual_limits = actual_table.get_limits64()
             // Element types must match
             if actual_elem_type != expected_table_type.elem_type {
               raise LinkError
@@ -1359,13 +1355,15 @@ fn instantiate_module_with_imports_unstarted(
             // Limits must be compatible:
             // - actual min >= expected min
             // - if expected has max, actual must have max <= expected max
-            if actual_limits.0 < expected_table_type.limits.min.to_int() {
+            if actual_limits.0.reinterpret_as_uint64() <
+              expected_table_type.limits.min.reinterpret_as_uint64() {
               raise LinkError
             }
             if expected_table_type.limits.max is Some(expected_max) {
               match actual_limits.1 {
                 Some(actual_max) =>
-                  if actual_max > expected_max.to_int() {
+                  if actual_max.reinterpret_as_uint64() >
+                    expected_max.reinterpret_as_uint64() {
                     raise LinkError
                   }
                 None => raise LinkError
@@ -1521,14 +1519,7 @@ fn instantiate_module_with_imports_unstarted(
         )
       None => Null
     }
-    let min_elems = table_def.type_.limits.min.to_int()
-    let table = @runtime.Table::Table(
-      table_def.type_.elem_type,
-      min_elems,
-      table_def.type_.limits.max.map(fn(m) { m.to_int() }),
-      init_value~,
-      is_table64=table_def.type_.is_table64,
-    )
+    let table = @runtime.Table::from_type(table_def.type_, init_value~)
     let addr = store.alloc_table(table)
     table_addrs.push(addr)
   }

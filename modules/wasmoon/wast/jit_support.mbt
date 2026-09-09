@@ -1393,6 +1393,7 @@ fn runtime_error_to_trap_code(err : @runtime.RuntimeError) -> Int {
     InvalidConversion => 5
     DivisionByZero => 6
     IntegerOverflow => 7
+    TableAllocationOverflow | TableAllocationFailed => 22
     OutOfMemory => 9
     AllocationTooLarge => 20
     AtomicWaitNonSharedMemory => 21

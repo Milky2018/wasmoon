@@ -4,7 +4,7 @@ struct Table {
   elem_type : @types.ValueType
   elements : Array[@types.Value]
   mut size : Int
-  max : Int?
+  max : Int64?
   is_table64 : Bool // true for table64 (i64-indexed table)
 } derive(Debug)
 
@@ -15,12 +15,53 @@ pub fn Table::Table(
   max : Int?,
   init_value? : @types.Value = Null,
   is_table64? : Bool = false,
-) -> Table {
+) -> Table raise RuntimeError {
+  Table::allocate(
+    elem_type,
+    min.to_int64() & 0xFFFF_FFFFL,
+    max.map(fn(value) { value.to_int64() & 0xFFFF_FFFFL }),
+    init_value,
+    is_table64,
+  )
+}
+
+///|
+fn Table::allocate(
+  elem_type : @types.ValueType,
+  min : Int64,
+  max : Int64?,
+  init_value : @types.Value,
+  is_table64 : Bool,
+) -> Table raise RuntimeError {
+  // A native reference occupies one pointer-sized slot. Check multiplication
+  // before narrowing to the backing MoonBit array's supported element count.
+  if min.reinterpret_as_uint64() > 0x1FFF_FFFF_FFFF_FFFFUL {
+    raise TableAllocationOverflow
+  }
+  if min > 0x7FFF_FFFFL {
+    raise TableAllocationFailed
+  }
+  let size = min.to_int()
   let elements : Array[@types.Value] = []
-  for _ in 0..<min {
+  for _ in 0..<size {
     elements.push(init_value)
   }
-  { elem_type, elements, size: min, max, is_table64, }
+  { elem_type, elements, size, max, is_table64, }
+}
+
+///|
+/// Allocate a module table without narrowing its declared limits.
+pub fn Table::from_type(
+  ty : @types.TableType,
+  init_value? : @types.Value = Null,
+) -> Table raise RuntimeError {
+  Table::allocate(
+    ty.elem_type,
+    ty.limits.min,
+    ty.limits.max,
+    init_value,
+    ty.is_table64,
+  )
 }
 
 ///|
@@ -50,28 +91,39 @@ pub fn Table::size(self : Table) -> Int {
 
 ///|
 pub fn Table::grow(self : Table, delta : Int, init : @types.Value) -> Int {
-  let old_size = self.size
-  // Use unsigned arithmetic to check for overflow (i32 range)
-  let old_size_u = old_size.reinterpret_as_uint()
-  let delta_u = delta.reinterpret_as_uint()
-  let new_size_u = old_size_u + delta_u
-  // If overflow occurred, the result will be less than old_size
-  if new_size_u < old_size_u {
-    return -1
+  let result = self.grow64(delta.to_int64() & 0xFFFF_FFFFL, init) catch {
+    _ => -1L
   }
-  let new_size = new_size_u.reinterpret_as_int()
+  result.to_int()
+}
 
-  // Check max limit
-  if self.max is Some(max) && new_size > max {
-    return -1
+///|
+/// Grow using an unsigned table64 count, preserving allocation failures.
+pub fn Table::grow64(
+  self : Table,
+  delta : Int64,
+  init : @types.Value,
+) -> Int64 raise RuntimeError {
+  let old_size = self.size.to_uint64()
+  let new_size = old_size + delta.reinterpret_as_uint64()
+  if new_size < old_size {
+    return -1L
   }
-
-  // Grow the table
-  for _ in 0..<delta {
+  if self.max is Some(max) && new_size > max.reinterpret_as_uint64() {
+    return -1L
+  }
+  if new_size > 0x1FFF_FFFF_FFFF_FFFFUL {
+    raise TableAllocationFailed
+  }
+  // Actual tables use MoonBit arrays and signed 32-bit native size metadata.
+  if new_size > 0x7FFF_FFFFUL {
+    return -1L
+  }
+  for _ in self.size..<new_size.to_int() {
     self.elements.push(init)
   }
-  self.size = new_size
-  old_size
+  self.size = new_size.to_int()
+  old_size.reinterpret_as_int64()
 }
 
 ///|
@@ -131,11 +183,24 @@ pub fn Table::get_elem_type(self : Table) -> @types.ValueType {
 ///|
 /// Get table limits (min, max) for type checking
 pub fn Table::get_limits(self : Table) -> (Int, Int?) {
-  (self.size, self.max)
+  (
+    self.size,
+    match self.max {
+      Some(max) if max.reinterpret_as_uint64() <= 0xFFFF_FFFFUL =>
+        Some(max.to_int())
+      _ => None
+    },
+  )
 }
 
 ///|
 /// Check if this is a table64 (i64-indexed table)
 pub fn Table::is_table64(self : Table) -> Bool {
   self.is_table64
+}
+
+///|
+/// Full declared limits for import compatibility and native growth checks.
+pub fn Table::get_limits64(self : Table) -> (Int64, Int64?) {
+  (self.size.to_int64(), self.max)
 }

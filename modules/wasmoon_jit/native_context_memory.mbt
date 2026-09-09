@@ -136,13 +136,13 @@ pub fn NativeJITContext::set_table_pointers(
   }
   let table_ptrs = FixedArray::make(jit_tables.length(), 0L)
   let table_sizes = FixedArray::make(jit_tables.length(), 0)
-  let table_max_sizes = FixedArray::make(jit_tables.length(), -1)
+  let table_max_sizes = FixedArray::make(jit_tables.length(), -1L)
   for i, jit_table_opt in jit_tables {
     match jit_table_opt {
       Some(jit_table) => {
         table_ptrs[i] = jit_table.raw_ptr()
         table_sizes[i] = jit_table.get_size()
-        table_max_sizes[i] = jit_table.get_max().unwrap_or(-1)
+        table_max_sizes[i] = jit_table.get_max().unwrap_or(-1L)
       }
       None => ()
     }
@@ -322,7 +322,7 @@ pub fn memory_read(mem_ptr : Int64, offset : Int64, size : Int) -> Bytes {
 struct JITTable {
   mut table_ptr : Int64 // Pointer to the shared C-side table
   mut size : Int
-  max : Int?
+  max : Int64?
 } derive(Debug)
 
 ///|
@@ -334,7 +334,7 @@ struct JITTableOwner {
 ///|
 /// Create a new owned shared JIT table.
 /// Note: size 0 is valid (empty table that can grow later).
-pub fn JITTableOwner::try_alloc(size : Int, max : Int?) -> JITTableOwner? {
+pub fn JITTableOwner::try_alloc(size : Int, max : Int64?) -> JITTableOwner? {
   if size < 0 {
     return None
   }
@@ -422,7 +422,7 @@ fn JITTable::refresh_layout(
 
 ///|
 /// Get the table max size.
-pub fn JITTable::get_max(self : JITTable) -> Int? {
+pub fn JITTable::get_max(self : JITTable) -> Int64? {
   self.max
 }
 

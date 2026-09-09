@@ -498,7 +498,7 @@ void ctx_set_table_pointers_internal(
     jit_context_t *ctx,
     int64_t *table_ptrs,
     int32_t *table_sizes,
-    int32_t *table_max_sizes,
+    int64_t *table_max_sizes,
     int table_count
 ) {
     if (!ctx || table_count <= 0 || !table_ptrs) return;
@@ -548,7 +548,7 @@ void ctx_set_table_pointers_internal(
         }
         if (table_max_sizes) {
             // -1 means unlimited, store as SIZE_MAX
-            ctx->table_max_sizes[i] = (table_max_sizes[i] < 0) ? SIZE_MAX : (size_t)table_max_sizes[i];
+            ctx->table_max_sizes[i] = (size_t)(uint64_t)table_max_sizes[i];
         } else {
             ctx->table_max_sizes[i] = SIZE_MAX;  // Default: unlimited
         }

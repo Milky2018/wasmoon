@@ -391,26 +391,31 @@ int64_t table_grow_ctx_internal(
     int64_t delta,
     int64_t init_value
 ) {
-    if (!ctx || table_idx < 0 || delta < 0) return -1;
+    if (!ctx || table_idx < 0) return -1;
     if (table_idx >= ctx->table_count) return -1;
     if (!ctx->tables || !ctx->table_sizes) return -1;
 
     size_t old_size = ctx->table_sizes[table_idx];
+    if (delta == 0) return (int64_t)old_size;
     size_t new_size = old_size + (size_t)delta;
 
     // Check for overflow
     if (new_size < old_size) return -1;
-
-    // The current host table metadata interchange is bounded to UINT32_MAX.
-    // table64 keeps its 64-bit Wasm ABI, but larger growth is an implementation
-    // resource limit and must fail before allocation.
-    if (new_size > UINT32_MAX) return -1;
 
     // Check against max size limit
     if (ctx->table_max_sizes) {
         size_t max_size = ctx->table_max_sizes[table_idx];
         if (new_size > max_size) return -1;
     }
+
+    // Check reference-array allocation overflow before the implementation's
+    // element-count limit, after checking the module's declared maximum.
+    if (new_size > SIZE_MAX / sizeof(void *)) {
+        g_trap_code = 22; // failed to allocate
+        if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
+        return -1;
+    }
+    if (new_size > INT32_MAX) return -1;
 
     // Get the old table pointer
     void **old_table = ctx->tables[table_idx];

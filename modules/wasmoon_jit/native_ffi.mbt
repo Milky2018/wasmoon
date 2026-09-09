@@ -1150,7 +1150,7 @@ extern "c" fn c_jit_ctx_set_table_pointers_managed(
   jit_context : JITContext,
   table_ptrs : FixedArray[Int64],
   table_sizes : FixedArray[Int],
-  table_max_sizes : FixedArray[Int],
+  table_max_sizes : FixedArray[Int64],
   table_count : Int,
 ) -> Unit = "wasmoon_jit_ctx_set_table_pointers_managed"
 

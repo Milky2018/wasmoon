@@ -115,18 +115,14 @@ fn ExecContext::exec_instr(
       let delta = if table.is_table64() {
         self.stack.pop_i64()
       } else {
-        self.stack.pop_i32().to_int64()
+        self.stack.pop_i32().to_int64() & 0xFFFF_FFFFL
       }
       let init_val = self.stack.pop()
-      let old_size = if delta < 0L || delta > 0x7FFFFFFFL {
-        -1
-      } else {
-        table.grow(delta.to_int(), init_val)
-      }
+      let old_size = table.grow64(delta, init_val)
       if table.is_table64() {
-        self.stack.push(I64(old_size.to_int64()))
+        self.stack.push(I64(old_size))
       } else {
-        self.stack.push(I32(old_size))
+        self.stack.push(I32(old_size.to_int()))
       }
     }
     TableFill(table_idx) => {

@@ -527,10 +527,10 @@ static _Atomic int64_t g_shared_indirect_table_live_count = 0;
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_alloc_shared_indirect_table(int count) {
     if (count <= 0) return 0;
 
-    void **table = (void **)calloc(count * 2, sizeof(void *));
+    void **table = (void **)calloc((size_t)count * 2, sizeof(void *));
     if (!table) return 0;
 
-    for (int i = 0; i < count; i++) {
+    for (size_t i = 0; i < (size_t)count; i++) {
         table[i * 2] = (void*)(intptr_t)(0);
         table[i * 2 + 1] = (void*)(intptr_t)(-1);
     }
@@ -555,8 +555,8 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_debug_shared_indirect_table_live_count(vo
 MOONBIT_FFI_EXPORT void wasmoon_jit_shared_table_set(int64_t table_ptr, int table_idx, int64_t func_ptr, int type_idx) {
     void **table = (void **)table_ptr;
     if (table && table_idx >= 0) {
-        table[table_idx * 2] = (void *)func_ptr;
-        table[table_idx * 2 + 1] = (void*)(intptr_t)type_idx;
+        table[(size_t)table_idx * 2] = (void *)func_ptr;
+        table[(size_t)table_idx * 2 + 1] = (void*)(intptr_t)type_idx;
     }
 }
 
@@ -768,7 +768,7 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_set_table_pointers(
     int64_t ctx_ptr,
     int64_t *table_ptrs,
     int32_t *table_sizes,
-    int32_t *table_max_sizes,
+    int64_t *table_max_sizes,
     int table_count
 ) {
     jit_context_t *ctx = (jit_context_t *)ctx_ptr;
@@ -816,7 +816,7 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_set_table_pointers(
             ctx->table_sizes[i] = (size_t)table_sizes[i];
         }
         if (table_max_sizes) {
-            ctx->table_max_sizes[i] = (table_max_sizes[i] < 0) ? SIZE_MAX : (size_t)table_max_sizes[i];
+            ctx->table_max_sizes[i] = (size_t)(uint64_t)table_max_sizes[i];
         } else {
             ctx->table_max_sizes[i] = SIZE_MAX;
         }
@@ -1801,7 +1801,7 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_set_table_pointers_managed(
     void *jit_context,
     int64_t *table_ptrs,
     int32_t *table_sizes,
-    int32_t *table_max_sizes,
+    int64_t *table_max_sizes,
     int table_count
 ) {
     wasmoon_jit_ctx_set_table_pointers(

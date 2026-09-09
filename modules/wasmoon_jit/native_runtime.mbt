@@ -125,6 +125,7 @@ pub fn jit_trap_message(code : Int) -> String {
     19 => "undefined element: out of bounds table access"
     20 => "allocation size too large"
     21 => "atomic wait on non-shared memory"
+    22 => "failed to allocate"
     _ => "unknown trap"
   }
 }

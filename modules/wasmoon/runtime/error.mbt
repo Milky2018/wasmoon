@@ -15,6 +15,8 @@ pub(all) suberror RuntimeError {
   IntegerOverflow
   InvalidConversion
   OutOfMemory
+  TableAllocationOverflow
+  TableAllocationFailed
   MemoryMinimumExceedsLimits(Int64)
   AllocationTooLarge
   AtomicWaitNonSharedMemory
@@ -61,6 +63,8 @@ pub fn RuntimeError::from_error(error : Error) -> RuntimeError? {
     IntegerOverflow => Some(IntegerOverflow)
     InvalidConversion => Some(InvalidConversion)
     MemoryMinimumExceedsLimits(_) as error => Some(error)
+    TableAllocationOverflow => Some(TableAllocationOverflow)
+    TableAllocationFailed => Some(TableAllocationFailed)
     OutOfMemory => Some(OutOfMemory)
     AllocationTooLarge => Some(AllocationTooLarge)
     AtomicWaitNonSharedMemory => Some(AtomicWaitNonSharedMemory)
@@ -102,6 +106,8 @@ pub impl Show for RuntimeError with fn output(self, logger) {
     InvalidConversion => "invalid conversion to integer"
     MemoryMinimumExceedsLimits(pages) =>
       "memory minimum size of \{pages.reinterpret_as_uint64()} pages exceeds memory limits"
+    TableAllocationOverflow => "overflow calculating table allocation size"
+    TableAllocationFailed => "failed to allocate"
     OutOfMemory => "out of memory"
     AllocationTooLarge => "allocation size too large"
     AtomicWaitNonSharedMemory => "atomic wait on non-shared memory"
