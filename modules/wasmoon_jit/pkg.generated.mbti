@@ -660,6 +660,7 @@ pub fn MemoryInfo::MemoryInfo(Int64, Int64, Int?) -> Self
 
 pub type NativeAtomicWait
 pub fn NativeAtomicWait::cancel(Self) -> Unit
+pub fn NativeAtomicWait::pause(Self) -> Unit
 pub fn NativeAtomicWait::poll(Self) -> Int
 
 pub struct NativeCallable {

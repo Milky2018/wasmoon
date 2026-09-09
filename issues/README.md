@@ -544,6 +544,7 @@ graph TD
   ISS_510["ISS-510: Canonicalize arithmetic NaNs consistently in both engines"]
   ISS_511["ISS-511: Bound actual component concurrent resources and reclaim their slots"]
   ISS_512["ISS-512: Own shared-memory atomic wait queues independently of execution stacks"]
+  ISS_513["ISS-513: Suspend interpreter execution at guest waits and instruction quanta"]
   ISS_002 --> ISS_003
   ISS_002 --> ISS_004
   ISS_003 --> ISS_005
@@ -932,6 +933,7 @@ graph TD
   ISS_495 --> ISS_476
   ISS_496 --> ISS_476
   ISS_512 --> ISS_476
+  ISS_513 --> ISS_476
   ISS_497 --> ISS_478
   ISS_498 --> ISS_478
   ISS_499 --> ISS_478
@@ -966,6 +968,7 @@ graph TD
   ISS_495 --> ISS_512
   ISS_496 --> ISS_512
   ISS_511 --> ISS_512
+  ISS_512 --> ISS_513
 ```
 
 ## Warnings

@@ -526,12 +526,15 @@ fn interpreter_outcome(
 ) -> CoreExecutionOutcome {
   match outcome {
     Returned(results) => Returned(results)
-    Suspended(token, continuation) => {
+    Suspended(reason, continuation) => {
       // The typed outcome now owns the suspension reason. Do not let the
       // process-local canonical marker classify a later, unrelated trap.
       canon_suspend[0] = None
       Suspended(
-        core_suspension_from_token(token),
+        match reason {
+          HostCall(token) => core_suspension_from_token(token)
+          CooperativeYield | AtomicWait => Yield
+        },
         CoreContinuation(
           fn() raise ComponentRuntimeError {
             resume_interpreter_continuation(continuation)

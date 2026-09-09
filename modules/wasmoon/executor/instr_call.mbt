@@ -283,7 +283,7 @@ fn ExecContext::invoke_async_host_func(
       }
     AsyncHostPending => {
       self.suspension_roots = args.copy()
-      self.set_base_resume_action(0L, fn() raise {
+      self.set_base_resume_action(HostCall(0L), fn() raise {
         self.invoke_async_host_func(store_addr, host_fn, caller_instance, args)
       })
       raise ExecutionSuspended

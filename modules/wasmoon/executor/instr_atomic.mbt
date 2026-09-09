@@ -1,19 +1,6 @@
 // Atomic (0xFE) instruction execution for WebAssembly interpreter
 
 ///|
-fn atomic_check_alignment(
-  effective_addr : Int64,
-  access_size : Int64,
-) -> Unit raise @runtime.RuntimeError {
-  if access_size <= 0L {
-    raise Unreachable
-  }
-  if effective_addr % access_size != 0L {
-    raise UnalignedAtomic
-  }
-}
-
-///|
 fn ExecContext::exec_atomic(
   self : ExecContext,
   subopcode : Int,
@@ -40,55 +27,43 @@ fn ExecContext::exec_atomic(
   // The interpreter's atomic table is indexed starting at 0x04, so shift accordingly.
   let op = if subopcode >= 0x10 { subopcode - 12 } else { subopcode }
   match op {
-    // memory.atomic.notify
+    // Notify and both wait widths share the checked native queue.
     0 => {
-      let _count = self.stack.pop_i32()
+      let count = self.stack.pop_i32().reinterpret_as_uint()
       let effective_addr = pop_effective_addr()
-      atomic_check_alignment(effective_addr, 4L)
-      if is_mem_oob(effective_addr, 4L, mem) {
-        raise @runtime.OutOfBoundsMemoryAccess
-      }
-      // return 0 (no waiters in single-threaded runtime)
-      self.stack.push(I32(0))
+      let notified = mem.atomic_notify(effective_addr, count)
+      self.stack.push(I32(notified.reinterpret_as_int()))
     }
-
-    // memory.atomic.wait32
-    1 => {
-      self.stack.pop_i64() |> ignore // timeout
-      let expected = self.stack.pop_i32()
-      let effective_addr = pop_effective_addr()
-      atomic_check_alignment(effective_addr, 4L)
-      if is_mem_oob(effective_addr, 4L, mem) {
-        raise @runtime.OutOfBoundsMemoryAccess
-      }
-      if !mem.is_shared() {
-        raise @runtime.AtomicWaitNonSharedMemory
-      }
-      let actual = mem.atomic_load(effective_addr, 4).to_int()
-      if actual != expected {
-        self.stack.push(I32(1)) // not-equal
+    1 | 2 => {
+      let timeout = self.stack.pop_i64()
+      let width = if op == 1 { 4 } else { 8 }
+      let expected = if op == 1 {
+        self.stack.pop_i32().to_int64()
       } else {
-        self.stack.push(I32(2)) // timed-out
+        self.stack.pop_i64()
       }
-    }
-
-    // memory.atomic.wait64
-    2 => {
-      self.stack.pop_i64() |> ignore // timeout
-      let expected = self.stack.pop_i64()
       let effective_addr = pop_effective_addr()
-      atomic_check_alignment(effective_addr, 8L)
-      if is_mem_oob(effective_addr, 8L, mem) {
-        raise @runtime.OutOfBoundsMemoryAccess
+      let waiter = mem.atomic_wait_begin(
+        effective_addr, width, expected, timeout,
+      )
+      fn finish_wait() -> Unit raise {
+        let result = waiter.poll()
+        if result == -1 {
+          self.set_base_resume_action(AtomicWait, finish_wait)
+          raise ExecutionSuspended
+        }
+        waiter.cancel()
+        self.stack.push(I32(result))
       }
-      if !mem.is_shared() {
-        raise @runtime.AtomicWaitNonSharedMemory
-      }
-      let actual = mem.atomic_load(effective_addr, 8)
-      if actual != expected {
-        self.stack.push(I32(1))
+      if self.cooperative {
+        finish_wait()
       } else {
-        self.stack.push(I32(2))
+        defer waiter.cancel()
+        while waiter.poll() == -1 {
+          self.check_cancellation()
+          waiter.pause()
+        }
+        self.stack.push(I32(waiter.poll()))
       }
     }
     4..=66 => {

@@ -120,7 +120,9 @@ struct ExecContext {
   suspension_classifier : SuspensionClassifier?
   async_host_driver : @runtime.AsyncHostCallDriver?
   mut resume_action : ResumeAction?
-  mut suspension_token : Int64?
+  mut suspension_reason : SuspensionReason?
+  cooperative : Bool
+  mut instructions_left : Int
   mut suspension_roots : Array[@types.Value]
 } derive(Debug)
 
@@ -131,6 +133,7 @@ fn ExecContext::ExecContext(
   cancel? : (() -> Bool)? = None,
   classify_suspension? : (@runtime.RuntimeError) -> Int64? = fn(_) { None },
   async_host_driver? : @runtime.AsyncHostCallDriver? = None,
+  cooperative? : Bool = false,
 ) -> ExecContext {
   {
     stack: Stack(),
@@ -146,7 +149,9 @@ fn ExecContext::ExecContext(
     suspension_classifier: Some({ classify: classify_suspension, }),
     async_host_driver,
     resume_action: None,
-    suspension_token: None,
+    suspension_reason: None,
+    cooperative,
+    instructions_left: 1024,
     suspension_roots: [],
   }
 }

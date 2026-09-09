@@ -429,7 +429,7 @@ test "executor continuation resumes after the suspended instruction" {
     [],
     fn(_error) { if attempts[0] == 1 { Some(7L) } else { None } },
   )
-  guard initial is Suspended(7L, continuation) else {
+  guard initial is Suspended(HostCall(7L), continuation) else {
     return fail("expected suspended interpreter invocation")
   }
   let resumed = continuation.continue_execution()
@@ -481,7 +481,7 @@ test "executor continuation preserves nested calls and control frames" {
     [],
     fn(_error) { if attempts[0] == 1 { Some(11L) } else { None } },
   )
-  guard initial is Suspended(11L, continuation) else {
+  guard initial is Suspended(HostCall(11L), continuation) else {
     return fail("expected nested interpreter invocation to suspend")
   }
   let resumed = continuation.continue_execution()
@@ -534,7 +534,7 @@ test "executor continuation resumes repeated loop suspensions" {
   let suspensions = [0]
   while outcome is Suspended(_, _) {
     match outcome {
-      Suspended(13L, continuation) => {
+      Suspended(HostCall(13L), continuation) => {
         suspensions[0] = suspensions[0] + 1
         outcome = continuation.continue_execution()
       }

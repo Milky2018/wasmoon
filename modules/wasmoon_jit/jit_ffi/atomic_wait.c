@@ -163,6 +163,17 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_atomic_wait_managed_allocated(void *object) {
     return *(atomic_waiter **)object != NULL;
 }
 
+MOONBIT_FFI_EXPORT void wasmoon_atomic_wait_pause(void *object) {
+    atomic_waiter *waiter = *(atomic_waiter **)object;
+    if (!waiter || wasmoon_atomic_wait_poll(waiter) != -1) return;
+#ifdef _WIN32
+    Sleep(1);
+#else
+    struct timespec delay = {0, 1000000};
+    nanosleep(&delay, NULL);
+#endif
+}
+
 MOONBIT_FFI_EXPORT void wasmoon_atomic_wait_managed_cancel(void *object) {
     finalize_managed_waiter(object);
 }

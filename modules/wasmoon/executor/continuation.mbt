@@ -1,8 +1,18 @@
 ///|
 /// Result of entering or resuming a suspendable interpreter invocation.
+pub(all) enum SuspensionReason {
+  HostCall(Int64)
+  CooperativeYield
+  AtomicWait
+} derive(Debug)
+
+///|
+pub extend SuspensionReason with @debug.Debug::{to_repr}
+
+///|
 pub(all) enum ResumableCallOutcome {
   Returned(Array[@types.Value])
-  Suspended(Int64, ExecutionContinuation)
+  Suspended(SuspensionReason, ExecutionContinuation)
 } derive(Debug)
 
 ///|
@@ -36,10 +46,10 @@ pub impl Debug for ExecutionContinuation with fn to_repr(_self) {
 ///|
 fn ExecContext::set_base_resume_action(
   self : ExecContext,
-  token : Int64,
+  reason : SuspensionReason,
   action : () -> Unit raise,
 ) -> Unit {
-  self.suspension_token = Some(token)
+  self.suspension_reason = Some(reason)
   self.resume_action = Some({ run: action, })
 }
 
@@ -107,7 +117,7 @@ fn ExecContext::suspend_host_call(
       match (classifier.classify)(error) {
         Some(token) => {
           self.suspension_roots = roots.copy()
-          self.set_base_resume_action(token, retry)
+          self.set_base_resume_action(HostCall(token), retry)
           raise ExecutionSuspended
         }
         None => raise InvocationSignal::HostInvocation(error)
@@ -135,17 +145,17 @@ fn suspended_outcome(
   return_arity : Int,
   active : Array[Bool],
 ) -> ResumableCallOutcome {
-  guard context.suspension_token is Some(token) else {
+  guard context.suspension_reason is Some(reason) else {
     abort("missing interpreter suspension token")
   }
-  context.suspension_token = None
+  context.suspension_reason = None
   let roots = context.collect_gc_additional_roots()
   for value in context.suspension_roots {
     roots.push(value)
   }
   context.suspension_roots.clear()
   let root_lease = context.store.pin_gc_roots(roots)
-  Suspended(token, { context, return_arity, active, root_lease, })
+  Suspended(reason, { context, return_arity, active, root_lease, })
 }
 
 ///|
@@ -161,11 +171,14 @@ fn ExecutionContinuation::continue_unchecked(
     self.root_lease.release()
     raise @runtime.Unreachable
   }
+  // Consume this handle before running it. A subsequent suspension receives a
+  // fresh owner; aliases of the old handle cannot resume or cancel that owner.
+  self.active[0] = false
   self.root_lease.release()
   self.context.resume_action = None
   (action.run)() catch {
     ExecutionSuspended =>
-      return suspended_outcome(self.context, self.return_arity, self.active)
+      return suspended_outcome(self.context, self.return_arity, [true])
     error => {
       self.active[0] = false
       raise error
@@ -224,8 +237,9 @@ pub fn call_func_by_index_resumable(
   func_idx : Int,
   args : Array[@types.Value],
   classify_suspension : (@runtime.RuntimeError) -> Int64?,
+  cooperative? : Bool = false,
 ) -> ResumableCallOutcome raise @runtime.RuntimeError {
-  let context = ExecContext(store, instance, classify_suspension~)
+  let context = ExecContext(store, instance, classify_suspension~, cooperative~)
   let store_addr = instance.func_addrs[func_idx]
   let func_inst = store.get_func_inst(store_addr)
   let type_idx = instance.func_type_indices[func_idx]

@@ -28,6 +28,12 @@ pub extern "c" fn NativeAtomicWait::poll(self : NativeAtomicWait) -> Int = "wasm
 pub extern "c" fn NativeAtomicWait::cancel(self : NativeAtomicWait) -> Unit = "wasmoon_atomic_wait_managed_cancel"
 
 ///|
+/// Request a one-millisecond sleep when the registration is still pending.
+/// Cooperative schedulers use poll instead.
+#borrow(self)
+pub extern "c" fn NativeAtomicWait::pause(self : NativeAtomicWait) -> Unit = "wasmoon_atomic_wait_pause"
+
+///|
 pub fn atomic_wait_begin(
   descriptor : Int64,
   offset : Int64,
