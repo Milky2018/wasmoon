@@ -11,7 +11,7 @@ pub fn memory_descriptor_grow(
   delta_pages : Int,
   max_pages : Int,
 ) -> Int {
-  c_mem_desc_grow(mem_desc_ptr, delta_pages, max_pages)
+  c_mem_desc_grow(mem_desc_ptr, delta_pages.to_int64(), max_pages).to_int()
 }
 
 ///|
@@ -235,7 +235,7 @@ pub fn alloc_memory(size : Int64) -> Int64 {
 /// Allocate a `wasmoon_memory_t` descriptor with owned backing memory.
 pub fn alloc_memory_desc(
   size_bytes : Int64,
-  max_pages : Int?,
+  max_pages : Int64?,
   is_memory64? : Bool = false,
   page_size_log2? : Int = 16,
   is_shared? : Bool = false,
@@ -243,7 +243,7 @@ pub fn alloc_memory_desc(
   c_jit_alloc_memory_desc(
     size_bytes,
     match max_pages {
-      Some(max) => max.to_int64() & 0xFFFF_FFFFL
+      Some(max) => max
       None => -1L
     },
     if is_memory64 {
@@ -450,3 +450,11 @@ pub extern "c" fn memory_descriptor_fill64(
   value : Int,
   length : Int64,
 ) -> Int = "wasmoon_mem_desc_memset64"
+
+///|
+pub fn memory_descriptor_grow64(
+  mem_desc_ptr : Int64,
+  delta_pages : Int64,
+) -> Int64 {
+  c_mem_desc_grow(mem_desc_ptr, delta_pages, -1)
+}

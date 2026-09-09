@@ -140,9 +140,9 @@ extern "c" fn c_mem_desc_get_len(mem_desc_ptr : Int64) -> Int64 = "wasmoon_mem_d
 /// Returns old size in pages on success, or -1 on failure.
 extern "c" fn c_mem_desc_grow(
   mem_desc_ptr : Int64,
-  delta_pages : Int,
+  delta_pages : Int64,
   max_pages : Int,
-) -> Int = "wasmoon_mem_desc_grow"
+) -> Int64 = "wasmoon_mem_desc_grow"
 
 ///|
 /// Copy bytes from memory descriptor at offset into `out`.
@@ -214,12 +214,12 @@ extern "c" fn c_jit_get_table_grow_ptr() -> Int64 = "wasmoon_jit_get_table_grow_
 
 ///|
 /// Get memory_grow function pointer for JIT (multi-memory)
-/// Signature: memory_grow(ctx: *jit_context_t, memidx: i32, delta: i64, max_pages: i32) -> i32
+/// Signature: memory_grow(ctx: *jit_context_t, memidx: i32, delta: i64, max_pages: i32) -> i64
 extern "c" fn c_jit_get_memory_grow_ptr() -> Int64 = "wasmoon_jit_get_memory_grow_ptr"
 
 ///|
 /// Get memory_size function pointer for JIT (multi-memory)
-/// Signature: memory_size(ctx: *jit_context_t, memidx: i32) -> i32
+/// Signature: memory_size(ctx: *jit_context_t, memidx: i32) -> i64
 extern "c" fn c_jit_get_memory_size_ptr() -> Int64 = "wasmoon_jit_get_memory_size_ptr"
 
 ///|

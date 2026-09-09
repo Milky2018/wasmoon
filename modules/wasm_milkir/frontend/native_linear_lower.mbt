@@ -1021,28 +1021,34 @@ fn push_memory_grow(
     extended
   }
   let max_pages = memory_types[memidx].limits.max
-    .map(fn(max) { max.to_int() })
+    .map(fn(max) {
+      if max >= 0L && max <= 0x7FFF_FFFFL {
+        max.to_int()
+      } else {
+        -1
+      }
+    })
     .unwrap_or(-1)
   let symbol = builder
     .get_function()
     .declare_external_symbol(runtime_symbols.symbol_name(MemoryGrow))
-  guard builder.call_symbol(symbol, Some(I32), [
+  guard builder.call_symbol(symbol, Some(I64), [
       context,
       builder.iconst_i32(memidx),
       delta_i64,
       builder.iconst_i32(max_pages),
     ])
-    is Some(call_result_i32) else {
+    is Some(call_result_i64) else {
     return false
   }
   let result = if result_ty == I64 {
-    guard emit_op(builder, I64, Scalar(Convert(SignedExtend)), [call_result_i32])
-      is Some(extended) else {
+    call_result_i64
+  } else {
+    guard emit_op(builder, I32, Scalar(Convert(IntReduce)), [call_result_i64])
+      is Some(reduced) else {
       return false
     }
-    extended
-  } else {
-    call_result_i32
+    reduced
   }
   stack.push(result)
   true

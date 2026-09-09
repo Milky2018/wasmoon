@@ -16,15 +16,15 @@ import {
 }
 
 // Values
-pub const WASMOON_CODEGEN_REVISION : String = "direct-vcode-2"
+pub const WASMOON_CODEGEN_REVISION : String = "direct-vcode-3"
 
-pub const WASMOON_JIT_ABI_VERSION : Int = 5
+pub const WASMOON_JIT_ABI_VERSION : Int = 6
 
 pub fn alloc_guarded_memory_desc(Int, Int?, is_shared? : Bool) -> Int64
 
 pub fn alloc_memory(Int64) -> Int64
 
-pub fn alloc_memory_desc(Int64, Int?, is_memory64? : Bool, page_size_log2? : Int, is_shared? : Bool) -> Int64
+pub fn alloc_memory_desc(Int64, Int64?, is_memory64? : Bool, page_size_log2? : Int, is_shared? : Bool) -> Int64
 
 pub fn artifact_compatibility(@artifact.CompatibilityManifest, available_cpu_features~ : Array[@artifact.CpuFeature], runtime_symbols~ : Array[@native_types.ExternalSymbol], data_symbols~ : Array[@native_types.DataSymbol]) -> ArtifactCompatibility
 
@@ -153,6 +153,8 @@ pub fn memory_descriptor_fill(Int64, Int64, Int, Int) -> Int
 pub fn memory_descriptor_fill64(Int64, Int64, Int, Int64) -> Int
 
 pub fn memory_descriptor_grow(Int64, Int, Int) -> Int
+
+pub fn memory_descriptor_grow64(Int64, Int64) -> Int64
 
 pub fn memory_descriptor_layout() -> MemoryDescriptorLayout
 

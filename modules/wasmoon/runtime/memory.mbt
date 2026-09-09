@@ -11,7 +11,7 @@ priv enum MemoryDescriptorState {
 ///|
 struct Memory {
   descriptor_state : Ref[MemoryDescriptorState]
-  max : Int? // max size in logical pages
+  max : Int64? // max size in logical pages
   is_memory64 : Bool // true for memory64 (i64-indexed)
   is_shared : Bool
   page_size_log2 : Int
@@ -89,18 +89,46 @@ pub fn Memory::Memory(
   is_shared? : Bool = false,
   page_size_log2? : Int = 16,
 ) -> Memory {
+  Memory::allocate(
+    min.to_int64() & 0xFFFF_FFFFL,
+    max.map(fn(value) { value.to_int64() & 0xFFFF_FFFFL }),
+    is_memory64~,
+    is_shared~,
+    page_size_log2~,
+  )
+}
+
+///|
+fn Memory::allocate(
+  min : Int64,
+  max : Int64?,
+  is_memory64~ : Bool,
+  is_shared~ : Bool,
+  page_size_log2~ : Int,
+) -> Memory {
   let l2 = page_size_log2
   if l2 < 0 || l2 > 30 {
     abort("invalid memory page size")
   }
-  let page_size_bytes : Int64 = 1L << l2
-  let size_bytes = min.to_int64() * page_size_bytes
-  let mem_desc_ptr = if !is_memory64 && l2 == 16 {
-    // Guard pages are required for JIT memory0 correctness.
-    @wasmoon_jit.alloc_guarded_memory_desc(min, max, is_shared~)
+  let page_size_bytes = 1L << l2
+  let valid_size = min >= 0L &&
+    min <= 0x7FFF_FFFF_FFFF_FFFFL / page_size_bytes &&
+    (
+      is_memory64 ||
+      min <=
+      (if l2 == 0 { 0xFFFF_FFFEL } else { 0x1_0000_0000L / page_size_bytes })
+    )
+  let mem_desc_ptr = if !valid_size {
+    0L
+  } else if !is_memory64 && l2 == 16 {
+    @wasmoon_jit.alloc_guarded_memory_desc(
+      min.to_int(),
+      max.map(fn(value) { value.to_int() }),
+      is_shared~,
+    )
   } else {
     @wasmoon_jit.alloc_memory_desc(
-      size_bytes,
+      min * page_size_bytes,
       max,
       is_memory64~,
       page_size_log2=l2,
@@ -118,27 +146,41 @@ pub fn Memory::Memory(
 }
 
 ///|
-/// Allocate a guarded (reserved) memory for memory32 memory0.
-/// This is required for JIT guard-page-based trapping.
+/// Allocate a validated module memory without narrowing its page limits.
+pub fn Memory::from_type(ty : @types.MemoryType) -> Memory raise RuntimeError {
+  let min = ty.limits.min
+  let page_size_bytes = 1L << ty.page_size_log2
+  if min < 0L ||
+    min > 0x7FFF_FFFF_FFFF_FFFFL / page_size_bytes ||
+    (
+      !ty.is_memory64 &&
+      min >
+      (if ty.page_size_log2 == 0 {
+        0xFFFF_FFFEL
+      } else {
+        0x1_0000_0000L / page_size_bytes
+      })
+    ) {
+    raise MemoryMinimumExceedsLimits(min)
+  }
+  let memory = Memory::allocate(
+    min,
+    ty.limits.max,
+    is_memory64=ty.is_memory64,
+    is_shared=ty.is_shared,
+    page_size_log2=ty.page_size_log2,
+  )
+  memory.require_desc_ptr() |> ignore
+  memory
+}
+
+///|
 pub fn Memory::new_guarded_memory0(
   min : Int,
   max : Int?,
   is_shared? : Bool = false,
 ) -> Memory {
-  let initial_pages = min
-  let mem_desc_ptr = @wasmoon_jit.alloc_guarded_memory_desc(
-    initial_pages,
-    max,
-    is_shared~,
-  )
-  {
-    descriptor_state: Ref(Open(mem_desc_ptr)),
-    max,
-    is_memory64: false,
-    is_shared,
-    page_size_log2: 16,
-    page_size_bytes: @types.WASM_PAGE_SIZE_BYTES,
-  }
+  Memory(min, max, is_shared~)
 }
 
 // Compatibility entry points for callers that hold 32-bit addresses.
@@ -350,15 +392,17 @@ pub fn Memory::is_memory64(self : Memory) -> Bool {
 
 ///|
 pub fn Memory::grow(self : Memory, delta : Int) -> Int {
-  if delta < 0 {
-    return -1
-  }
-  let max_pages = self.max.unwrap_or(-1)
+  self.grow64(delta.to_int64() & 0xFFFF_FFFFL).to_int()
+}
+
+///|
+/// Grow by an unsigned memory64 page count; negative bit patterns cannot fit.
+pub fn Memory::grow64(self : Memory, delta : Int64) -> Int64 {
   let pointer = self.desc_ptr()
-  if pointer == 0L {
-    return -1
+  if pointer == 0L || delta < 0L {
+    return -1L
   }
-  @wasmoon_jit.memory_descriptor_grow(pointer, delta, max_pages)
+  @wasmoon_jit.memory_descriptor_grow64(pointer, delta)
 }
 
 ///|
@@ -487,9 +531,17 @@ pub fn Memory::read_bytes(self : Memory, addr : Int, len : Int) -> Bytes {
 }
 
 ///|
-/// Get memory limits (min(current), max) for type checking
+/// Legacy 32-bit page counts. Maxima wider than 32 bits are omitted.
+/// Use get_limits64 for module type compatibility.
 pub fn Memory::get_limits(self : Memory) -> (Int, Int?) {
-  (self.size_pages(), self.max)
+  (
+    self.size_pages(),
+    match self.max {
+      Some(value) if value >= 0L && value <= 0xFFFF_FFFFL =>
+        Some(value.to_int())
+      _ => None
+    },
+  )
 }
 
 ///|
@@ -512,4 +564,10 @@ fn Memory::share(self : Memory) -> Memory raise RuntimeError {
     page_size_log2: self.page_size_log2,
     page_size_bytes: self.page_size_bytes,
   }
+}
+
+///|
+/// Return the full logical page limits for module import compatibility.
+pub fn Memory::get_limits64(self : Memory) -> (Int64, Int64?) {
+  (self.byte_len() / self.page_size_bytes, self.max)
 }

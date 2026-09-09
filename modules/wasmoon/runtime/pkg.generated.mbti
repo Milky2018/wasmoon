@@ -67,6 +67,7 @@ pub(all) suberror RuntimeError {
   IntegerOverflow
   InvalidConversion
   OutOfMemory
+  MemoryMinimumExceedsLimits(Int64)
   AllocationTooLarge
   AtomicWaitNonSharedMemory
   Unreachable
@@ -319,8 +320,11 @@ pub fn Memory::copy_from(Self, Int64, Self, Int64, Int64) -> Unit raise RuntimeE
 pub fn Memory::desc_ptr(Self) -> Int64
 pub fn Memory::fill(Self, Int, Byte, Int) -> Unit raise RuntimeError
 pub fn Memory::fill_at(Self, Int64, Byte, Int64) -> Unit raise RuntimeError
+pub fn Memory::from_type(@types.MemoryType) -> Self raise RuntimeError
 pub fn Memory::get_limits(Self) -> (Int, Int?)
+pub fn Memory::get_limits64(Self) -> (Int64, Int64?)
 pub fn Memory::grow(Self, Int) -> Int
+pub fn Memory::grow64(Self, Int64) -> Int64
 pub fn Memory::init_data(Self, Int, Bytes) -> Unit raise RuntimeError
 pub fn Memory::init_data_at(Self, Int64, Bytes) -> Unit raise RuntimeError
 pub fn Memory::is_memory64(Self) -> Bool

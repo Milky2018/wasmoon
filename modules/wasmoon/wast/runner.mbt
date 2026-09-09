@@ -772,6 +772,7 @@ fn classify_runtime_failure(error : @runtime.RuntimeError) -> WastRunnerError {
     | NullReference
     | UnalignedAtomic
     | OutOfMemory
+    | MemoryMinimumExceedsLimits(_)
     | AllocationTooLarge
     | AtomicWaitNonSharedMemory => GuestTrap(error.to_string())
     _ => RuntimeError(error.to_string())

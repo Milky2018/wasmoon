@@ -7,7 +7,6 @@
 #include <sched.h>
 #endif
 
-#define WASM_MEMORY64_MAX_PAGES ((int64_t)INT32_MAX)
 #define WASM_MEMORY32_MAX_BYTES (((int64_t)UINT32_MAX) + 1LL)
 
 // ============ Guard Page Memory Allocation ============
@@ -148,7 +147,7 @@ uint8_t *memory_base_desc_internal(wasmoon_memory_t *mem) {
     return mem ? mem->base : NULL;
 }
 
-static int32_t memory_grow_desc_locked(wasmoon_memory_t *mem, int32_t delta, int32_t max_pages) {
+static int64_t memory_grow_desc_locked(wasmoon_memory_t *mem, int64_t delta, int32_t max_pages) {
     if (!mem) return -1;
     if (delta < 0) return -1;
 
@@ -158,14 +157,15 @@ static int32_t memory_grow_desc_locked(wasmoon_memory_t *mem, int32_t delta, int
     size_t current_size = atomic_load_explicit(&mem->current_length, memory_order_acquire);
     int64_t current_pages = (int64_t)(current_size / page_size);
 
-    int64_t new_pages = current_pages + (int64_t)delta;
+    if (delta > INT64_MAX - current_pages) return -1;
+    int64_t new_pages = current_pages + delta;
 
     int64_t arch_max_pages;
     if (mem->is_memory64) {
-        arch_max_pages = WASM_MEMORY64_MAX_PAGES;
+        arch_max_pages = INT64_MAX / (int64_t)page_size;
     } else {
         const int64_t max_bytes = WASM_MEMORY32_MAX_BYTES;
-        arch_max_pages = max_bytes / (int64_t)page_size;
+        arch_max_pages = mem->page_size_log2 == 0 ? INT64_C(0xfffffffe) : max_bytes / (int64_t)page_size;
     }
     if (new_pages > arch_max_pages) return -1;
 
@@ -179,15 +179,16 @@ static int32_t memory_grow_desc_locked(wasmoon_memory_t *mem, int32_t delta, int
 
     if ((uint64_t)new_pages > effective_max) return -1;
 
-    if (delta == 0) return (int32_t)current_pages;
+    if (delta == 0) return current_pages;
 
+    if ((uint64_t)new_pages > (uint64_t)INT64_MAX / page_size) return -1;
     size_t new_size = (size_t)new_pages * page_size;
 
     if (mem->is_guarded) {
         if (grow_guarded_memory(mem, current_size, new_size) != 0) {
             return -1;
         }
-        return (int32_t)current_pages;
+        return current_pages;
     }
 
     uint8_t *new_base = (uint8_t *)realloc(mem->base, new_size);
@@ -198,12 +199,12 @@ static int32_t memory_grow_desc_locked(wasmoon_memory_t *mem, int32_t delta, int
     mem->base = new_base;
     atomic_store_explicit(&mem->current_length, new_size, memory_order_relaxed);
 
-    return (int32_t)current_pages;
+    return current_pages;
 }
 
 // Serialize all growth entry points on the shared descriptor. No MoonBit code
 // or guest callback runs while the lock is held.
-int32_t memory_grow_desc_internal(wasmoon_memory_t *mem, int32_t delta, int32_t max_pages) {
+int64_t memory_grow_desc_internal(wasmoon_memory_t *mem, int64_t delta, int32_t max_pages) {
     if (!mem) return -1;
     if (mem->is_shared) {
         while (atomic_exchange_explicit(&mem->growth_lock, 1, memory_order_acquire)) {
@@ -214,7 +215,7 @@ int32_t memory_grow_desc_internal(wasmoon_memory_t *mem, int32_t delta, int32_t 
 #endif
         }
     }
-    int32_t result = memory_grow_desc_locked(mem, delta, max_pages);
+    int64_t result = memory_grow_desc_locked(mem, delta, max_pages);
     if (mem->is_shared) atomic_store_explicit(&mem->growth_lock, 0, memory_order_release);
     return result;
 }
@@ -278,15 +279,15 @@ static inline void fill_bytes_fast(uint8_t *dst, uint8_t val, size_t size) {
     memset(dst, val, size);
 }
 
-int32_t memory_grow_indexed_internal(jit_context_t *ctx, int32_t memidx, int64_t delta, int32_t max_pages) {
-    if (!ctx || delta < 0 || delta > INT32_MAX) return -1;
+int64_t memory_grow_indexed_internal(jit_context_t *ctx, int32_t memidx, int64_t delta, int32_t max_pages) {
+    if (!ctx || delta < 0) return -1;
     wasmoon_memory_t *mem = get_memory(ctx, memidx);
-    int32_t result = memory_grow_desc_internal(mem, (int32_t)delta, max_pages);
+    int64_t result = memory_grow_desc_internal(mem, delta, max_pages);
     if (result != -1 && memidx == 0) ctx_refresh_memory0_fast_fields(ctx);
     return result;
 }
 
-int32_t memory_size_indexed_internal(jit_context_t *ctx, int32_t memidx) {
+int64_t memory_size_indexed_internal(jit_context_t *ctx, int32_t memidx) {
     if (!ctx) return 0;
     if (memidx < 0) return 0;
     if (memidx > 0 && (!ctx->memories || memidx >= ctx->memory_count)) return 0;
@@ -297,7 +298,7 @@ int32_t memory_size_indexed_internal(jit_context_t *ctx, int32_t memidx) {
     if (page_size == 0) return 0;
 
     size_t size = atomic_load_explicit(&mem->current_length, memory_order_acquire);
-    return (int32_t)(size / page_size);
+    return (int64_t)(size / page_size);
 }
 
 void memory_fill_indexed_internal(jit_context_t *ctx, int32_t memidx, int64_t dst, int32_t val, int64_t size) {

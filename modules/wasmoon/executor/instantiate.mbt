@@ -52,26 +52,8 @@ pub fn instantiate_module(
 
   // Allocate memories
   let mem_addrs : Array[Int] = []
-  for i, mem_type in mod.memories {
-    let min = mem_type.limits.min.to_int()
-    let max = mem_type.limits.max.map(fn(m) { m.to_int() })
-    let mem = if i == 0 &&
-      !mem_type.is_memory64 &&
-      mem_type.page_size_log2 == 16 {
-      @runtime.Memory::new_guarded_memory0(
-        min,
-        max,
-        is_shared=mem_type.is_shared,
-      )
-    } else {
-      Memory(
-        min,
-        max,
-        is_memory64=mem_type.is_memory64,
-        is_shared=mem_type.is_shared,
-        page_size_log2=mem_type.page_size_log2,
-      )
-    }
+  for mem_type in mod.memories {
+    let mem = try! @runtime.Memory::from_type(mem_type)
     let addr = try! store.alloc_mem(mem)
     mem_addrs.push(addr)
   }
@@ -715,7 +697,7 @@ fn extern_val_kind(v : @runtime.ExternVal) -> String {
 }
 
 ///|
-fn format_limits_pair(limits : (Int, Int?)) -> String {
+fn[T : Show] format_limits_pair(limits : (T, T?)) -> String {
   let max_text = match limits.1 {
     Some(max) => max.to_string()
     None => "none"
@@ -871,7 +853,7 @@ pub fn validate_imports_with_diagnostics(
             } noraise {
               mem => mem
             }
-            let actual_limits = actual_mem.get_limits()
+            let actual_limits = actual_mem.get_limits64()
             if actual_mem.is_memory64() != expected_mem_type.is_memory64 ||
               actual_mem.is_shared() != expected_mem_type.is_shared ||
               actual_mem.page_size_bytes() !=
@@ -890,7 +872,8 @@ pub fn validate_imports_with_diagnostics(
               )
               continue
             }
-            if actual_limits.0 < expected_mem_type.limits.min.to_int() {
+            if actual_limits.0.reinterpret_as_uint64() <
+              expected_mem_type.limits.min.reinterpret_as_uint64() {
               push_import_diagnostic(
                 result,
                 import_index,
@@ -908,7 +891,8 @@ pub fn validate_imports_with_diagnostics(
             if expected_mem_type.limits.max is Some(expected_max) {
               match actual_limits.1 {
                 Some(actual_max) =>
-                  if actual_max > expected_max.to_int() {
+                  if actual_max.reinterpret_as_uint64() >
+                    expected_max.reinterpret_as_uint64() {
                     push_import_diagnostic(
                       result,
                       import_index,
@@ -1328,7 +1312,7 @@ fn instantiate_module_with_imports_unstarted(
           Some(Memory(addr)) => {
             // Check memory type compatibility
             let actual_mem = store.get_mem(addr)
-            let actual_limits = actual_mem.get_limits()
+            let actual_limits = actual_mem.get_limits64()
             // Memory64 status must match
             if actual_mem.is_memory64() != expected_mem_type.is_memory64 ||
               actual_mem.is_shared() != expected_mem_type.is_shared ||
@@ -1339,13 +1323,15 @@ fn instantiate_module_with_imports_unstarted(
             // Import memory limits must be compatible:
             // - actual min >= expected min
             // - if expected has max, actual must have max <= expected max
-            if actual_limits.0 < expected_mem_type.limits.min.to_int() {
+            if actual_limits.0.reinterpret_as_uint64() <
+              expected_mem_type.limits.min.reinterpret_as_uint64() {
               raise LinkError
             }
             if expected_mem_type.limits.max is Some(expected_max) {
               match actual_limits.1 {
                 Some(actual_max) =>
-                  if actual_max > expected_max.to_int() {
+                  if actual_max.reinterpret_as_uint64() >
+                    expected_max.reinterpret_as_uint64() {
                     raise LinkError
                   }
                 None => raise LinkError
@@ -1498,14 +1484,7 @@ fn instantiate_module_with_imports_unstarted(
 
   // Allocate memories (after imported memories)
   for mem_type in mod.memories {
-    let min_pages = mem_type.limits.min.to_int()
-    let mem = @runtime.Memory::Memory(
-      min_pages,
-      mem_type.limits.max.map(fn(m) { m.to_int() }),
-      is_memory64=mem_type.is_memory64,
-      is_shared=mem_type.is_shared,
-      page_size_log2=mem_type.page_size_log2,
-    )
+    let mem = @runtime.Memory::from_type(mem_type)
     let addr = store.alloc_mem(mem)
     mem_addrs.push(addr)
   }

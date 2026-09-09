@@ -1,6 +1,6 @@
 ///|
 /// Version of the Wasmoon internal JIT calling and runtime contract.
-pub const WASMOON_JIT_ABI_VERSION : Int = 5
+pub const WASMOON_JIT_ABI_VERSION : Int = 6
 
 ///|
 /// Revision of the current direct native target code generator.
@@ -8,7 +8,7 @@ pub const WASMOON_JIT_ABI_VERSION : Int = 5
 /// Advance this value whenever compiler changes can alter emitted code while
 /// preserving the artifact format and JIT ABI. Persistent caches use it as part
 /// of their compatibility identity.
-pub const WASMOON_CODEGEN_REVISION : String = "direct-vcode-2"
+pub const WASMOON_CODEGEN_REVISION : String = "direct-vcode-3"
 
 ///|
 extern "c" fn host_operating_system_abi_tag() -> Int = "wasmoon_jit_host_operating_system_abi"

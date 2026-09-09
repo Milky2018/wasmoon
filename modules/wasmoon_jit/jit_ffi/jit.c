@@ -577,7 +577,7 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_table_grow_ptr(void) {
 
 // ============ Multi-Memory Operations (with memidx) ============
 
-MOONBIT_FFI_EXPORT int32_t wasmoon_jit_memory_grow(
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_memory_grow(
     jit_context_t *ctx,
     int32_t memidx,
     int64_t delta,
@@ -586,7 +586,7 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_jit_memory_grow(
     return memory_grow_indexed_internal(ctx, memidx, delta, max_pages);
 }
 
-MOONBIT_FFI_EXPORT int32_t wasmoon_jit_memory_size(jit_context_t *ctx, int32_t memidx) {
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_memory_size(jit_context_t *ctx, int32_t memidx) {
     return memory_size_indexed_internal(ctx, memidx);
 }
 
@@ -1216,7 +1216,7 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_mem_desc_get_len(int64_t mem_desc_ptr) {
     return memory_len_desc_internal(mem);
 }
 
-MOONBIT_FFI_EXPORT int32_t wasmoon_mem_desc_grow(int64_t mem_desc_ptr, int32_t delta, int32_t max_pages) {
+MOONBIT_FFI_EXPORT int64_t wasmoon_mem_desc_grow(int64_t mem_desc_ptr, int64_t delta, int32_t max_pages) {
     wasmoon_memory_t *mem = (wasmoon_memory_t *)mem_desc_ptr;
     return memory_grow_desc_internal(mem, delta, max_pages);
 }

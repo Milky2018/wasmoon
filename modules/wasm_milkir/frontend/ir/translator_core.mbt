@@ -145,7 +145,13 @@ pub fn TranslationContext::from_module(
     Some(_) => memory_max_override
     None =>
       if memories.length() > 0 {
-        memories[0].limits.max.map(fn(m) { m.to_int() })
+        memories[0].limits.max.map(fn(m) {
+          if m >= 0L && m <= 0x7FFF_FFFFL {
+            m.to_int()
+          } else {
+            -1
+          }
+        })
       } else {
         None
       }

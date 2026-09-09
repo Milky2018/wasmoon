@@ -102,18 +102,22 @@ pub fn memory_grow(
   let call_result = call_runtime(
     builder,
     runtime_symbols.symbol_name(MemoryGrow),
-    Some(I32),
+    Some(I64),
     [
       vmctx,
       builder.iconst_i32(memidx),
-      delta,
+      if delta.ty == I64 {
+        delta
+      } else {
+        builder.uextend(I64, delta)
+      },
       builder.iconst_i32(max_pages_value),
     ],
   ).unwrap()
   if is_memory64 {
-    builder.sextend(I64, call_result)
-  } else {
     call_result
+  } else {
+    builder.ireduce(I32, call_result)
   }
 }
 
@@ -128,13 +132,13 @@ pub fn memory_size(
   let call_result = call_runtime(
     builder,
     runtime_symbols.symbol_name(MemorySize),
-    Some(I32),
+    Some(I64),
     [vmctx, builder.iconst_i32(memidx)],
   ).unwrap()
   if is_memory64 {
-    builder.uextend(I64, call_result)
-  } else {
     call_result
+  } else {
+    builder.ireduce(I32, call_result)
   }
 }
 

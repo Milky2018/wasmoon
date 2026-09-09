@@ -530,6 +530,7 @@ pub fn Store::alloc_table(
 ///|
 pub fn Store::alloc_mem(self : Store, mem : Memory) -> Int raise RuntimeError {
   self.ensure_open()
+  mem.require_desc_ptr() |> ignore
   let idx = self.mems.length()
   self.on_instantiation_rollback(fn() {
     if idx < self.mems.length() {

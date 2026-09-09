@@ -202,14 +202,14 @@ uint8_t *alloc_guarded_memory_external(wasmoon_memory_t *memory, size_t initial_
 int is_memory_guard_page_access(jit_context_t *ctx, void *addr);
 
 // Multi-memory variants (with memidx parameter)
-int32_t memory_grow_indexed_internal(jit_context_t *ctx, int32_t memidx, int64_t delta, int32_t max_pages);
-int32_t memory_size_indexed_internal(jit_context_t *ctx, int32_t memidx);
+int64_t memory_grow_indexed_internal(jit_context_t *ctx, int32_t memidx, int64_t delta, int32_t max_pages);
+int64_t memory_size_indexed_internal(jit_context_t *ctx, int32_t memidx);
 void memory_fill_indexed_internal(jit_context_t *ctx, int32_t memidx, int64_t dst, int32_t val, int64_t size);
 void memory_copy_indexed_internal(jit_context_t *ctx, int32_t dst_memidx, int32_t src_memidx,
                                    int64_t dst, int64_t src, int64_t size);
 
 // Descriptor-only variants (no ctx)
-int32_t memory_grow_desc_internal(wasmoon_memory_t *mem, int32_t delta, int32_t max_pages);
+int64_t memory_grow_desc_internal(wasmoon_memory_t *mem, int64_t delta, int32_t max_pages);
 int64_t memory_len_desc_internal(wasmoon_memory_t *mem);
 uint8_t *memory_base_desc_internal(wasmoon_memory_t *mem);
 

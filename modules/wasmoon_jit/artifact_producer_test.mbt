@@ -131,8 +131,8 @@ test "live artifact and encoded artifact share verification" {
       #|      pointer_width: Bits64,
       #|    },
       #|    required_cpu_features: [],
-      #|    jit_abi_version: 5,
-      #|    codegen_revision: "direct-vcode-2",
+      #|    jit_abi_version: 6,
+      #|    codegen_revision: "direct-vcode-3",
       #|    module_identity: {
       #|      name: "artifact-producer",
       #|      source_digest: sha256:211dcf04280f2ac1d686baab63a361ea45dd13543dac493b14e3af963860a86c,
