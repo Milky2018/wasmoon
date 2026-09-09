@@ -61,8 +61,12 @@ configuration matrix. Explicit missing host contracts are listed per file in
   retaining Store roots, interpreter host-call leases, active native invocation
   chains and parked continuations. Resource-table-capacity imports remain
   unavailable until their limits are implemented.
-- Engine-wide NaN canonicalization and tests requiring disabled proposals
-  cannot be expressed by the Wasmoon WAST CLI.
+- `bulk_memory = false` is forwarded to `wasmoon test --no-bulk-memory` and
+  enforced by core validation, including WAST assertion modules. Active table64
+  elements and reference-types table operations remain enabled.
+- `component_model_implements = false` is forwarded to the component validator
+  and runtime through `--no-component-implements`.
+- Engine-wide NaN canonicalization remains unavailable.
 - Upstream `hogs_memory` tests are separately `deferred` by default. Use
   `--include-high-memory` on a suitable host to execute them. This is a resource
   policy, not a declaration that those tests pass or are unsupported.

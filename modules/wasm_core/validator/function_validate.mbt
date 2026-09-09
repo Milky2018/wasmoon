@@ -30,6 +30,7 @@ fn validate_function_with_offset(
 
   // Create validation context for this function
   let func_ctx : ValidationContext = {
+    bulk_memory: ctx.bulk_memory,
     types: ctx.types,
     funcs: ctx.funcs,
     tables: ctx.tables,
@@ -124,6 +125,7 @@ fn validate_function(
 
   // Create validation context for this function
   let func_ctx : ValidationContext = {
+    bulk_memory: ctx.bulk_memory,
     types: ctx.types,
     funcs: ctx.funcs,
     tables: ctx.tables,

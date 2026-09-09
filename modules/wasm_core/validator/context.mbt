@@ -15,6 +15,7 @@ priv enum LabelKind {
 ///|
 /// Validation context for a module
 priv struct ValidationContext {
+  bulk_memory : Bool
   types : Array[@types.SubType] // GC: now stores SubType
   funcs : Array[Int] // type indices
   tables : Array[@types.TableType]
@@ -148,6 +149,7 @@ fn collect_declared_funcs(
 ///|
 fn ValidationContext::ValidationContext(
   mod : @types.Module,
+  bulk_memory? : Bool = true,
 ) -> ValidationContext raise ValidationError {
   // Collect function types (imports + defined functions)
   let funcs : Array[Int] = []
@@ -245,6 +247,7 @@ fn ValidationContext::ValidationContext(
     globals,
     tags,
     elems,
+    bulk_memory,
     data_count: mod.datas.length(),
     locals: [],
     labels: [],

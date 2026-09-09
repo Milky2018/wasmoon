@@ -61,7 +61,7 @@ pub fn register_owned_instance_funcrefs_for_jit(@jit.JITModule, @runtime.ModuleI
 
 pub fn run_wast_command(WastContext, @wat.WastCommand, Int, WastResult, String, Bool) -> Unit
 
-pub fn run_wast_commands(@wat.WastScript, String, Bool, Bool, jit_compiler? : JITCompiler?, register_named_modules? : Bool) -> WastResult
+pub fn run_wast_commands(@wat.WastScript, String, Bool, Bool, bulk_memory? : Bool, jit_compiler? : JITCompiler?, register_named_modules? : Bool) -> WastResult
 
 pub fn sync_jit_memories_to_store(@runtime.ModuleInstance, @runtime.Store, @jit.JITModule) -> Unit
 
@@ -156,11 +156,12 @@ pub struct WastContext {
   jit_modules : Map[String, JITModuleContext]
   mut current_jit : JITModuleContext?
   use_jit : Bool
+  bulk_memory : Bool
   register_named_modules : Bool
   jit_compiler : JITCompiler?
   wasi_ctx : @wasi.WasiContext
 }
-pub fn WastContext::WastContext(Bool, jit_compiler? : JITCompiler?, register_named_modules? : Bool) -> Self
+pub fn WastContext::WastContext(Bool, bulk_memory? : Bool, jit_compiler? : JITCompiler?, register_named_modules? : Bool) -> Self
 pub fn WastContext::build_imports(Self) -> @runtime.Imports
 pub fn WastContext::get_store(Self) -> @runtime.Store
 

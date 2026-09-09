@@ -1,7 +1,11 @@
 ///|
 /// Validate a complete module
-pub fn validate_module(mod : @types.Module) -> Unit raise ValidationError {
-  let ctx = ValidationContext::ValidationContext(mod)
+pub fn validate_module(
+  mod : @types.Module,
+  bulk_memory? : Bool = true,
+) -> Unit raise ValidationError {
+  let ctx = ValidationContext::ValidationContext(mod, bulk_memory~)
+  validate_segment_features(mod, bulk_memory)
   let num_types = ctx.types.length()
 
   // Validate that all function type indices are valid
@@ -248,8 +252,10 @@ pub fn validate_module(mod : @types.Module) -> Unit raise ValidationError {
 /// Validate a complete module and return detailed error context on failure
 pub fn validate_module_with_context(
   mod : @types.Module,
+  bulk_memory? : Bool = true,
 ) -> Unit raise ValidationError {
-  let ctx = ValidationContext::ValidationContext(mod)
+  let ctx = ValidationContext::ValidationContext(mod, bulk_memory~)
+  validate_segment_features(mod, bulk_memory)
 
   // Validate that all function type indices are valid
   for i, type_idx in ctx.funcs {
@@ -447,5 +453,26 @@ pub fn validate_module_with_context(
     }
     let func_type = ctx.get_func_type(type_idx)
     validate_function_with_offset(ctx, func_type, code, func_idx)
+  }
+}
+
+///|
+fn validate_segment_features(
+  mod : @types.Module,
+  bulk_memory : Bool,
+) -> Unit raise ValidationError {
+  if bulk_memory {
+    return
+  }
+  for data in mod.datas {
+    if data.memory_idx < 0 {
+      raise TypeMismatch("bulk memory support is not enabled")
+    }
+  }
+  for elem in mod.elems {
+    match elem.mode {
+      Active(_, _) => ()
+      _ => raise TypeMismatch("bulk memory support is not enabled")
+    }
   }
 }

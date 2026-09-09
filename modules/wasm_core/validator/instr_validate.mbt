@@ -5,6 +5,19 @@ fn validate_instr(
   stack : OperandStack,
   instr : @types.Instruction,
 ) -> Unit raise ValidationError {
+  if !ctx.bulk_memory {
+    match instr {
+      MemoryInit(_, _)
+      | DataDrop(_)
+      | MemoryCopy(_, _)
+      | MemoryFill(_)
+      | TableInit(_, _)
+      | ElemDrop(_)
+      | TableCopy(_, _) =>
+        raise TypeMismatch("bulk memory support is not enabled")
+      _ => ()
+    }
+  }
   match instr {
     // Constants
     I32Const(_) => stack.push(I32)

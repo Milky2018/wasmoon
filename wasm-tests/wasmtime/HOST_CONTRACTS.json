@@ -1,6 +1,5 @@
 {
   "canonicalize-nan-scalar.wast": "Requires engine-wide NaN canonicalization configuration, absent from the Wasmoon test CLI.",
   "component-model/async/cancel-starting-subtask-does-not-leak.wast": "Requires Wasmtime-specific host imports (forced GC or resource-table capacity).",
-  "memory64/tables-without-bulk-memory.wast": "Requires disabling a proposal in validation; Wasmoon test CLI does not expose per-test feature switches.",
   "simd/canonicalize-nan.wast": "Requires engine-wide NaN canonicalization configuration, absent from the Wasmoon test CLI."
 }

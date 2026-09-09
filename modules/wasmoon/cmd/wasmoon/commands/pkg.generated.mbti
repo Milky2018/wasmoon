@@ -32,7 +32,7 @@ pub fn run_explore(String, Int?, Int, Array[String], Bool, Bool, target_name? : 
 
 pub fn run_settings() -> Int
 
-pub fn run_testsuite(String, Bool, Bool) -> Int
+pub fn run_testsuite(String, Bool, Bool, bulk_memory? : Bool) -> Int
 
 pub fn run_wasi_component_command(String, Array[String], Array[String], Array[String], String, Bool, ComponentErrorFormat, use_jit? : Bool, component_implements? : Bool) -> Int
 

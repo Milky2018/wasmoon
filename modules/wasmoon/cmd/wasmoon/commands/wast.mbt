@@ -14,7 +14,12 @@ fn is_truthy_env(v : String) -> Bool {
 
 ///|
 /// Run a WAST test script
-fn run_wast(wast_path : String, use_jit : Bool, show_success : Bool) -> Int {
+fn run_wast(
+  wast_path : String,
+  use_jit : Bool,
+  show_success : Bool,
+  bulk_memory : Bool,
+) -> Int {
   wast_jit_compiled_modules.val = 0
   wast_jit_compiled_functions.val = 0
   wast_jit_attempts.val = 0
@@ -54,6 +59,7 @@ fn run_wast(wast_path : String, use_jit : Bool, show_success : Bool) -> Int {
     base_dir,
     use_jit,
     show_success,
+    bulk_memory~,
     jit_compiler~,
     register_named_modules=match
       @env.get_env_var("WASMOON_WAST_REGISTER_NAMED_MODULES") {
@@ -634,6 +640,7 @@ pub fn run_testsuite(
   wast_path : String,
   use_jit : Bool,
   show_success : Bool,
+  bulk_memory? : Bool = true,
 ) -> Int {
-  run_wast(wast_path, use_jit, show_success)
+  run_wast(wast_path, use_jit, show_success, bulk_memory)
 }

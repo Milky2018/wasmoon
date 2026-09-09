@@ -139,6 +139,10 @@ fn build_command() -> @argparse.Command {
         flags=[
           FlagArg("no-jit", about="Disable JIT compilation (use interpreter)"),
           FlagArg(
+            "no-bulk-memory",
+            about="Disable bulk-memory instructions and passive segments",
+          ),
+          FlagArg(
             "show-success",
             about="Print successful assertions (default: only print failures)",
           ),
@@ -317,6 +321,7 @@ fn main {
         sub.values["file"][0],
         !(sub.flags.get("no-jit") is Some(true)),
         sub.flags.get("show-success") is Some(true),
+        bulk_memory=!(sub.flags.get("no-bulk-memory") is Some(true)),
       )
     Some(("disasm", sub)) => @commands.run_disasm(sub.values["file"][0])
     Some(("component", sub)) => {

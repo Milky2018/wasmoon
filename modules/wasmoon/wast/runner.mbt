@@ -116,6 +116,7 @@ pub struct WastContext {
   jit_modules : Map[String, JITModuleContext]
   mut current_jit : JITModuleContext?
   use_jit : Bool
+  bulk_memory : Bool
   register_named_modules : Bool
   // JIT compiler callback (provided by main package)
   jit_compiler : JITCompiler?
@@ -126,6 +127,7 @@ pub struct WastContext {
 ///|
 pub fn WastContext::WastContext(
   use_jit : Bool,
+  bulk_memory? : Bool = true,
   jit_compiler? : JITCompiler? = None,
   register_named_modules? : Bool = false,
 ) -> WastContext {
@@ -172,6 +174,7 @@ pub fn WastContext::WastContext(
     jit_modules: Map([]),
     current_jit: None,
     use_jit,
+    bulk_memory,
     register_named_modules,
     jit_compiler,
     wasi_ctx,
@@ -242,12 +245,14 @@ pub fn run_wast_commands(
   base_dir : String,
   use_jit : Bool,
   show_success : Bool,
+  bulk_memory? : Bool = true,
   jit_compiler? : JITCompiler? = None,
   register_named_modules? : Bool = false,
 ) -> WastResult {
   let result = WastResult::WastResult()
   let ctx = WastContext::WastContext(
     use_jit,
+    bulk_memory~,
     jit_compiler~,
     register_named_modules~,
   )
@@ -270,7 +275,7 @@ pub fn run_wast_command(
   ignore(base_dir)
   match cmd {
     Module(mod_, name) => {
-      @validator.validate_module(mod_) catch {
+      @validator.validate_module(mod_, bulk_memory=ctx.bulk_memory) catch {
         e => {
           result.failed = result.failed + 1
           result.failures.push("line \{line}: module validation failed: \{e}")
@@ -341,7 +346,7 @@ pub fn run_wast_command(
           return
         }
       }
-      @validator.validate_module(mod_) catch {
+      @validator.validate_module(mod_, bulk_memory=ctx.bulk_memory) catch {
         e => {
           result.failed = result.failed + 1
           result.failures.push(
@@ -391,7 +396,7 @@ pub fn run_wast_command(
     ModuleDefinition(mod_, name) => {
       // Module definition - validates and stores for later instantiation
       // Used with (module instance ...) to create multiple instances
-      @validator.validate_module(mod_) catch {
+      @validator.validate_module(mod_, bulk_memory=ctx.bulk_memory) catch {
         e => {
           result.failed = result.failed + 1
           result.failures.push(
@@ -420,7 +425,7 @@ pub fn run_wast_command(
         )
         return
       }
-      @validator.validate_module(mod_) catch {
+      @validator.validate_module(mod_, bulk_memory=ctx.bulk_memory) catch {
         e => {
           result.failed = result.failed + 1
           result.failures.push(
@@ -582,7 +587,7 @@ pub fn run_wast_command(
       }
     }
     AssertInvalid(source, msg) => {
-      let valid = validate_module_source(source)
+      let valid = validate_module_source(ctx, source)
       if valid {
         result.failed = result.failed + 1
         result.failures.push(
@@ -1068,12 +1073,15 @@ fn v128_pattern_match(
 }
 
 ///|
-fn validate_module_source(source : @wat.WastModuleSource) -> Bool {
+fn validate_module_source(
+  ctx : WastContext,
+  source : @wat.WastModuleSource,
+) -> Bool {
   match source {
     Binary(bytes) =>
       succeeds(() => {
         let mod_ = @parser.parse_module(bytes)
-        @validator.validate_module(mod_)
+        @validator.validate_module(mod_, bulk_memory=ctx.bulk_memory)
       })
     Quote(parts) => {
       // Join quoted parts and parse as WAT
@@ -1082,10 +1090,13 @@ fn validate_module_source(source : @wat.WastModuleSource) -> Bool {
         ")"
       succeeds(() => {
         let mod_ = @wat.parse(wat_source)
-        @validator.validate_module(mod_)
+        @validator.validate_module(mod_, bulk_memory=ctx.bulk_memory)
       })
     }
-    Inline(mod_) => succeeds(() => @validator.validate_module(mod_))
+    Inline(mod_) =>
+      succeeds(() => {
+        @validator.validate_module(mod_, bulk_memory=ctx.bulk_memory)
+      })
     FailedToParse(_) => false // Module failed to parse, so it's invalid
   }
 }
@@ -1110,7 +1121,7 @@ fn try_instantiate_source(
     Binary(bytes) =>
       succeeds(() => {
         let mod_ = @parser.parse_module(bytes)
-        @validator.validate_module(mod_)
+        @validator.validate_module(mod_, bulk_memory=ctx.bulk_memory)
         let instance = @executor.instantiate_module_with_imports(
           ctx.store,
           mod_,
@@ -1120,7 +1131,7 @@ fn try_instantiate_source(
       })
     Inline(mod_) =>
       succeeds(() => {
-        @validator.validate_module(mod_)
+        @validator.validate_module(mod_, bulk_memory=ctx.bulk_memory)
         let instance = @executor.instantiate_module_with_imports(
           ctx.store,
           mod_,
@@ -1271,7 +1282,7 @@ fn try_instantiate_source_traps(
   match source {
     Binary(bytes) => {
       let mod_ = @parser.parse_module(bytes) catch { _ => return false }
-      @validator.validate_module(mod_) catch {
+      @validator.validate_module(mod_, bulk_memory=ctx.bulk_memory) catch {
         _ => return false
       }
       let before_instances = ctx.store.instances.length()
@@ -1318,7 +1329,7 @@ fn try_instantiate_source_traps(
       trapped
     }
     Inline(mod_) => {
-      @validator.validate_module(mod_) catch {
+      @validator.validate_module(mod_, bulk_memory=ctx.bulk_memory) catch {
         _ => return false
       }
       let before_instances = ctx.store.instances.length()
