@@ -82,75 +82,6 @@ fn Memory::addr_to_offset(self : Memory, addr : Int) -> Int64 {
 }
 
 ///|
-fn Memory::check_bounds(
-  self : Memory,
-  addr : Int,
-  len : Int,
-) -> Unit raise RuntimeError {
-  self.require_desc_ptr() |> ignore
-  if len < 0 {
-    raise OutOfBoundsMemoryAccess
-  }
-  // For memory64, keep the existing conservative check for negative Int.
-  // For memory32, negative Int is a valid u32 address (handled in addr_to_offset).
-  if self.is_memory64 && addr < 0 {
-    raise OutOfBoundsMemoryAccess
-  }
-  let base = self.addr_to_offset(addr)
-  let end = base + len.to_int64()
-  if end > self.byte_len() {
-    raise OutOfBoundsMemoryAccess
-  }
-}
-
-///|
-fn Memory::read_fixed(self : Memory, addr : Int, len : Int) -> FixedArray[Byte] {
-  let pointer = self.desc_ptr()
-  if pointer == 0L || len <= 0 {
-    return FixedArray::make(0, b'\x00')
-  }
-  let out = FixedArray::make(len, b'\x00')
-  let offset = self.addr_to_offset(addr)
-  @wasmoon_jit.memory_descriptor_read(pointer, offset, out, len) |> ignore
-  out
-}
-
-///|
-fn Memory::write_fixed(
-  self : Memory,
-  addr : Int,
-  data : FixedArray[Byte],
-  len : Int,
-) -> Unit {
-  let pointer = self.desc_ptr()
-  if pointer == 0L || len <= 0 {
-    return
-  }
-  let offset = self.addr_to_offset(addr)
-  @wasmoon_jit.memory_descriptor_write(pointer, offset, data, len) |> ignore
-}
-
-///|
-fn Memory::load_byte_unchecked(self : Memory, addr : Int) -> Byte {
-  let bytes = self.read_fixed(addr, 1)
-  if bytes.length() == 1 {
-    bytes[0]
-  } else {
-    b'\x00'
-  }
-}
-
-///|
-fn Memory::store_byte_unchecked(
-  self : Memory,
-  addr : Int,
-  value : Byte,
-) -> Unit {
-  let data = FixedArray::make(1, value)
-  self.write_fixed(addr, data, 1)
-}
-
-///|
 pub fn Memory::Memory(
   min : Int,
   max : Int?,
@@ -210,10 +141,12 @@ pub fn Memory::new_guarded_memory0(
   }
 }
 
+// Compatibility entry points for callers that hold 32-bit addresses.
+// All typed accesses use the checked 64-bit byte-offset implementation.
+
 ///|
 pub fn Memory::load_byte(self : Memory, addr : Int) -> Byte raise RuntimeError {
-  self.check_bounds(addr, 1)
-  self.load_byte_unchecked(addr)
+  self.load_byte_at(self.addr_to_offset(addr))
 }
 
 ///|
@@ -222,19 +155,12 @@ pub fn Memory::store_byte(
   addr : Int,
   value : Byte,
 ) -> Unit raise RuntimeError {
-  self.check_bounds(addr, 1)
-  self.store_byte_unchecked(addr, value)
+  self.store_byte_at(self.addr_to_offset(addr), value)
 }
 
 ///|
 pub fn Memory::load_i32(self : Memory, addr : Int) -> Int raise RuntimeError {
-  self.check_bounds(addr, 4)
-  let b = self.read_fixed(addr, 4)
-  let b0 = b[0].to_int()
-  let b1 = b[1].to_int()
-  let b2 = b[2].to_int()
-  let b3 = b[3].to_int()
-  b0 | (b1 << 8) | (b2 << 16) | (b3 << 24)
+  self.load_i32_at(self.addr_to_offset(addr))
 }
 
 ///|
@@ -243,24 +169,12 @@ pub fn Memory::store_i32(
   addr : Int,
   value : Int,
 ) -> Unit raise RuntimeError {
-  self.check_bounds(addr, 4)
-  let data = FixedArray::make(4, b'\x00')
-  data[0] = value.land(0xFF).to_byte()
-  data[1] = (value >> 8).land(0xFF).to_byte()
-  data[2] = (value >> 16).land(0xFF).to_byte()
-  data[3] = (value >> 24).land(0xFF).to_byte()
-  self.write_fixed(addr, data, 4)
+  self.store_i32_at(self.addr_to_offset(addr), value)
 }
 
 ///|
 pub fn Memory::load_i64(self : Memory, addr : Int) -> Int64 raise RuntimeError {
-  self.check_bounds(addr, 8)
-  let b = self.read_fixed(addr, 8)
-  let mut result = 0L
-  for i in 0..<8 {
-    result = result | (b[i].to_int64() << (i * 8))
-  }
-  result
+  self.load_i64_at(self.addr_to_offset(addr))
 }
 
 ///|
@@ -269,18 +183,12 @@ pub fn Memory::store_i64(
   addr : Int,
   value : Int64,
 ) -> Unit raise RuntimeError {
-  self.check_bounds(addr, 8)
-  let data = FixedArray::make(8, b'\x00')
-  for i in 0..<8 {
-    data[i] = (value >> (i * 8)).land(0xFFL).to_int().to_byte()
-  }
-  self.write_fixed(addr, data, 8)
+  self.store_i64_at(self.addr_to_offset(addr), value)
 }
 
 ///|
 pub fn Memory::load_f32(self : Memory, addr : Int) -> Float raise RuntimeError {
-  let bits = self.load_i32(addr)
-  Float::reinterpret_from_int(bits)
+  self.load_f32_at(self.addr_to_offset(addr))
 }
 
 ///|
@@ -289,14 +197,12 @@ pub fn Memory::store_f32(
   addr : Int,
   value : Float,
 ) -> Unit raise RuntimeError {
-  let bits = value.reinterpret_as_int()
-  self.store_i32(addr, bits)
+  self.store_f32_at(self.addr_to_offset(addr), value)
 }
 
 ///|
 pub fn Memory::load_f64(self : Memory, addr : Int) -> Double raise RuntimeError {
-  let bits = self.load_i64(addr)
-  bits.reinterpret_as_double()
+  self.load_f64_at(self.addr_to_offset(addr))
 }
 
 ///|
@@ -305,176 +211,126 @@ pub fn Memory::store_f64(
   addr : Int,
   value : Double,
 ) -> Unit raise RuntimeError {
-  let bits = value.reinterpret_as_int64()
-  self.store_i64(addr, bits)
+  self.store_f64_at(self.addr_to_offset(addr), value)
 }
 
 ///|
-/// Load 8-bit signed integer, sign-extend to i32
 pub fn Memory::load_i32_8s(self : Memory, addr : Int) -> Int raise RuntimeError {
-  let byte = self.load_byte(addr).to_int()
-  if byte >= 128 {
-    byte - 256
-  } else {
-    byte
-  }
+  self.load_i32_8s_at(self.addr_to_offset(addr))
 }
 
 ///|
-/// Load 8-bit unsigned integer, zero-extend to i32
 pub fn Memory::load_i32_8u(self : Memory, addr : Int) -> Int raise RuntimeError {
-  self.load_byte(addr).to_int()
+  self.load_i32_8u_at(self.addr_to_offset(addr))
 }
 
 ///|
-/// Load 16-bit signed integer, sign-extend to i32
 pub fn Memory::load_i32_16s(
   self : Memory,
   addr : Int,
 ) -> Int raise RuntimeError {
-  self.check_bounds(addr, 2)
-  let b = self.read_fixed(addr, 2)
-  let b0 = b[0].to_int()
-  let b1 = b[1].to_int()
-  let value = b0 | (b1 << 8)
-  if value >= 32768 {
-    value - 65536
-  } else {
-    value
-  }
+  self.load_i32_16s_at(self.addr_to_offset(addr))
 }
 
 ///|
-/// Load 16-bit unsigned integer, zero-extend to i32
 pub fn Memory::load_i32_16u(
   self : Memory,
   addr : Int,
 ) -> Int raise RuntimeError {
-  self.check_bounds(addr, 2)
-  let b = self.read_fixed(addr, 2)
-  let b0 = b[0].to_int()
-  let b1 = b[1].to_int()
-  b0 | (b1 << 8)
+  self.load_i32_16u_at(self.addr_to_offset(addr))
 }
 
 ///|
-/// Load 8-bit signed integer, sign-extend to i64
 pub fn Memory::load_i64_8s(
   self : Memory,
   addr : Int,
 ) -> Int64 raise RuntimeError {
-  let byte = self.load_byte(addr).to_int64()
-  if byte >= 128L {
-    byte - 256L
-  } else {
-    byte
-  }
+  self.load_i64_8s_at(self.addr_to_offset(addr))
 }
 
 ///|
-/// Load 8-bit unsigned integer, zero-extend to i64
 pub fn Memory::load_i64_8u(
   self : Memory,
   addr : Int,
 ) -> Int64 raise RuntimeError {
-  self.load_byte(addr).to_int64()
+  self.load_i64_8u_at(self.addr_to_offset(addr))
 }
 
 ///|
-/// Load 16-bit signed integer, sign-extend to i64
 pub fn Memory::load_i64_16s(
   self : Memory,
   addr : Int,
 ) -> Int64 raise RuntimeError {
-  let v = self.load_i32_16s(addr)
-  v.to_int64()
+  self.load_i64_16s_at(self.addr_to_offset(addr))
 }
 
 ///|
-/// Load 16-bit unsigned integer, zero-extend to i64
 pub fn Memory::load_i64_16u(
   self : Memory,
   addr : Int,
 ) -> Int64 raise RuntimeError {
-  let v = self.load_i32_16u(addr)
-  v.to_int64()
+  self.load_i64_16u_at(self.addr_to_offset(addr))
 }
 
 ///|
-/// Load 32-bit signed integer, sign-extend to i64
 pub fn Memory::load_i64_32s(
   self : Memory,
   addr : Int,
 ) -> Int64 raise RuntimeError {
-  self.load_i32(addr).to_int64()
+  self.load_i64_32s_at(self.addr_to_offset(addr))
 }
 
 ///|
-/// Load 32-bit unsigned integer, zero-extend to i64
 pub fn Memory::load_i64_32u(
   self : Memory,
   addr : Int,
 ) -> Int64 raise RuntimeError {
-  let value = self.load_i32(addr)
-  value.reinterpret_as_uint().to_uint64().reinterpret_as_int64()
+  self.load_i64_32u_at(self.addr_to_offset(addr))
 }
 
 ///|
-/// Store low 8 bits of i32
 pub fn Memory::store_i32_8(
   self : Memory,
   addr : Int,
   value : Int,
 ) -> Unit raise RuntimeError {
-  self.store_byte(addr, value.land(0xFF).to_byte())
+  self.store_i32_8_at(self.addr_to_offset(addr), value)
 }
 
 ///|
-/// Store low 16 bits of i32
 pub fn Memory::store_i32_16(
   self : Memory,
   addr : Int,
   value : Int,
 ) -> Unit raise RuntimeError {
-  self.check_bounds(addr, 2)
-  let data = FixedArray::make(2, b'\x00')
-  data[0] = value.land(0xFF).to_byte()
-  data[1] = (value >> 8).land(0xFF).to_byte()
-  self.write_fixed(addr, data, 2)
+  self.store_i32_16_at(self.addr_to_offset(addr), value)
 }
 
 ///|
-/// Store low 8 bits of i64
 pub fn Memory::store_i64_8(
   self : Memory,
   addr : Int,
   value : Int64,
 ) -> Unit raise RuntimeError {
-  self.store_byte(addr, value.land(0xFFL).to_int().to_byte())
+  self.store_i64_8_at(self.addr_to_offset(addr), value)
 }
 
 ///|
-/// Store low 16 bits of i64
 pub fn Memory::store_i64_16(
   self : Memory,
   addr : Int,
   value : Int64,
 ) -> Unit raise RuntimeError {
-  self.check_bounds(addr, 2)
-  let data = FixedArray::make(2, b'\x00')
-  data[0] = value.land(0xFFL).to_int().to_byte()
-  data[1] = (value >> 8).land(0xFFL).to_int().to_byte()
-  self.write_fixed(addr, data, 2)
+  self.store_i64_16_at(self.addr_to_offset(addr), value)
 }
 
 ///|
-/// Store low 32 bits of i64
 pub fn Memory::store_i64_32(
   self : Memory,
   addr : Int,
   value : Int64,
 ) -> Unit raise RuntimeError {
-  self.store_i32(addr, value.to_int())
+  self.store_i64_32_at(self.addr_to_offset(addr), value)
 }
 
 ///|
@@ -512,23 +368,7 @@ pub fn Memory::init_data(
   dest : Int,
   data : Bytes,
 ) -> Unit raise RuntimeError {
-  let len = data.length()
-  // Per the spec, bounds checks must still happen even when `len == 0`.
-  // For example, an active data segment `(data (i32.const 1))` must trap at
-  // instantiation time if the offset is out of bounds, even though it writes 0
-  // bytes.
-  self.check_bounds(dest, len)
-  if len == 0 {
-    return
-  }
-  let offset = self.addr_to_offset(dest)
-  @wasmoon_jit.memory_descriptor_write_bytes(
-    self.require_desc_ptr(),
-    offset,
-    data,
-    len,
-  )
-  |> ignore
+  self.init_data_at(self.addr_to_offset(dest), data)
 }
 
 ///|
@@ -540,21 +380,11 @@ pub fn Memory::copy(
   src : Int,
   len : Int,
 ) -> Unit raise RuntimeError {
-  // Per the spec, bounds checks must still happen even when `len == 0`.
-  self.check_bounds(dest, len)
-  self.check_bounds(src, len)
-  if len == 0 {
-    return
-  }
-  let dest_off = self.addr_to_offset(dest)
-  let src_off = self.addr_to_offset(src)
-  @wasmoon_jit.memory_descriptor_move(
-    self.require_desc_ptr(),
-    dest_off,
-    src_off,
-    len,
+  self.copy_at(
+    self.addr_to_offset(dest),
+    self.addr_to_offset(src),
+    len.to_int64(),
   )
-  |> ignore
 }
 
 ///|
@@ -565,19 +395,7 @@ pub fn Memory::fill(
   value : Byte,
   len : Int,
 ) -> Unit raise RuntimeError {
-  // Per the spec, bounds checks must still happen even when `len == 0`.
-  self.check_bounds(dest, len)
-  if len == 0 {
-    return
-  }
-  let offset = self.addr_to_offset(dest)
-  @wasmoon_jit.memory_descriptor_fill(
-    self.require_desc_ptr(),
-    offset,
-    value.to_int(),
-    len,
-  )
-  |> ignore
+  self.fill_at(self.addr_to_offset(dest), value, len.to_int64())
 }
 
 ///|
@@ -630,7 +448,7 @@ pub fn Memory::read_byte(self : Memory, addr : Int) -> Byte {
   if addr < 0 || addr.to_int64() >= self.byte_len() {
     return b'\x00'
   }
-  self.load_byte_unchecked(addr)
+  self.load_byte_unchecked_at(self.addr_to_offset(addr))
 }
 
 ///|
@@ -639,7 +457,7 @@ pub fn Memory::write_byte(self : Memory, addr : Int, value : Byte) -> Unit {
   if addr < 0 || addr.to_int64() >= self.byte_len() {
     return
   }
-  self.store_byte_unchecked(addr, value)
+  self.store_byte_unchecked_at(self.addr_to_offset(addr), value)
 }
 
 ///|

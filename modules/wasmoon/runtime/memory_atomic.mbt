@@ -21,9 +21,7 @@ fn Memory::checked_atomic_descriptor(
   if offset % width.to_int64() != 0L {
     raise UnalignedAtomic
   }
-  if offset < 0L || offset > self.byte_len() - width.to_int64() {
-    raise OutOfBoundsMemoryAccess
-  }
+  self.check_bounds_at(offset, width.to_int64())
   descriptor
 }
 

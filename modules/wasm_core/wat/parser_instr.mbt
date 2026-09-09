@@ -1448,7 +1448,6 @@ fn parse_mem_arg_tuple(parser : Parser) -> (Int, Int, Int64) raise WatError {
         parser.advance()
         let is_memidx = match parser.current.token {
           Keyword(k) => k.has_prefix("offset=") || k.has_prefix("align=")
-          RParen => true
           Number(_) => true // Could be lane index after memarg
           _ => false
         }
@@ -1512,32 +1511,11 @@ fn parse_mem_arg(
       memidx = parser.resolve_memory(name)
       parser.advance()
     }
-    Number(s) =>
-      // Could be memory index or offset without = prefix
-      // Check if it looks like a plain number (no = prefix) and next token is offset= or align=
-      if !s.has_prefix("offset=") && !s.has_prefix("align=") {
-        // Check if there's a following offset= or align= keyword
-        // If so, this is a memory index; otherwise it's not a memory argument
-        let saved_pos = parser.lexer.pos
-        let saved_line = parser.lexer.line
-        let saved_column = parser.lexer.column
-        let saved_token = parser.current
-        parser.advance()
-        let is_memidx = match parser.current.token {
-          Keyword(k) => k.has_prefix("offset=") || k.has_prefix("align=")
-          RParen => true // Could be memory index followed by closing paren
-          _ => false
-        }
-        if is_memidx {
-          memidx = parse_int(s)
-        } else {
-          // Restore position - this wasn't a memory index
-          parser.lexer.pos = saved_pos
-          parser.lexer.line = saved_line
-          parser.lexer.column = saved_column
-          parser.current = saved_token
-        }
-      }
+    Number(s) => {
+      // Non-lane memory instructions have no other numeric immediate here.
+      memidx = parse_int(s)
+      parser.advance()
+    }
     _ => ()
   }
   // Parse optional offset=N and align=N

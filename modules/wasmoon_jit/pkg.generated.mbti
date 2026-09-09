@@ -146,7 +146,11 @@ pub fn memory_atomic_rmw(Int64, Int64, Int, Int, Int64) -> Int64
 
 pub fn memory_atomic_store(Int64, Int64, Int, Int64) -> Unit
 
+pub fn memory_descriptor_copy(Int64, Int64, Int64, Int64, Int64) -> Int
+
 pub fn memory_descriptor_fill(Int64, Int64, Int, Int) -> Int
+
+pub fn memory_descriptor_fill64(Int64, Int64, Int, Int64) -> Int
 
 pub fn memory_descriptor_grow(Int64, Int, Int) -> Int
 

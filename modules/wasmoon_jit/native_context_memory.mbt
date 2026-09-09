@@ -431,3 +431,22 @@ pub fn JITTable::get_max(self : JITTable) -> Int? {
 pub fn retain_memory_desc(mem_desc_ptr : Int64) -> Unit {
   c_jit_retain_memory_desc(mem_desc_ptr)
 }
+
+///|
+/// Copy checked byte ranges between live memory descriptors.
+pub extern "c" fn memory_descriptor_copy(
+  destination_memory : Int64,
+  destination : Int64,
+  source_memory : Int64,
+  source : Int64,
+  length : Int64,
+) -> Int = "wasmoon_mem_desc_copy64"
+
+///|
+/// Fill a checked byte range of a live memory descriptor.
+pub extern "c" fn memory_descriptor_fill64(
+  memory : Int64,
+  destination : Int64,
+  value : Int,
+  length : Int64,
+) -> Int = "wasmoon_mem_desc_memset64"

@@ -314,28 +314,47 @@ pub fn Memory::atomic_rmw(Self, AtomicRmwOp, Int64, Int, Int64) -> Int64 raise R
 pub fn Memory::atomic_store(Self, Int64, Int, Int64) -> Unit raise RuntimeError
 pub fn Memory::byte_len(Self) -> Int64
 pub fn Memory::copy(Self, Int, Int, Int) -> Unit raise RuntimeError
+pub fn Memory::copy_at(Self, Int64, Int64, Int64) -> Unit raise RuntimeError
+pub fn Memory::copy_from(Self, Int64, Self, Int64, Int64) -> Unit raise RuntimeError
 pub fn Memory::desc_ptr(Self) -> Int64
 pub fn Memory::fill(Self, Int, Byte, Int) -> Unit raise RuntimeError
+pub fn Memory::fill_at(Self, Int64, Byte, Int64) -> Unit raise RuntimeError
 pub fn Memory::get_limits(Self) -> (Int, Int?)
 pub fn Memory::grow(Self, Int) -> Int
 pub fn Memory::init_data(Self, Int, Bytes) -> Unit raise RuntimeError
+pub fn Memory::init_data_at(Self, Int64, Bytes) -> Unit raise RuntimeError
 pub fn Memory::is_memory64(Self) -> Bool
 pub fn Memory::is_shared(Self) -> Bool
 pub fn Memory::load_byte(Self, Int) -> Byte raise RuntimeError
+pub fn Memory::load_byte_at(Self, Int64) -> Byte raise RuntimeError
 pub fn Memory::load_f32(Self, Int) -> Float raise RuntimeError
+pub fn Memory::load_f32_at(Self, Int64) -> Float raise RuntimeError
 pub fn Memory::load_f64(Self, Int) -> Double raise RuntimeError
+pub fn Memory::load_f64_at(Self, Int64) -> Double raise RuntimeError
 pub fn Memory::load_i32(Self, Int) -> Int raise RuntimeError
 pub fn Memory::load_i32_16s(Self, Int) -> Int raise RuntimeError
+pub fn Memory::load_i32_16s_at(Self, Int64) -> Int raise RuntimeError
 pub fn Memory::load_i32_16u(Self, Int) -> Int raise RuntimeError
+pub fn Memory::load_i32_16u_at(Self, Int64) -> Int raise RuntimeError
 pub fn Memory::load_i32_8s(Self, Int) -> Int raise RuntimeError
+pub fn Memory::load_i32_8s_at(Self, Int64) -> Int raise RuntimeError
 pub fn Memory::load_i32_8u(Self, Int) -> Int raise RuntimeError
+pub fn Memory::load_i32_8u_at(Self, Int64) -> Int raise RuntimeError
+pub fn Memory::load_i32_at(Self, Int64) -> Int raise RuntimeError
 pub fn Memory::load_i64(Self, Int) -> Int64 raise RuntimeError
 pub fn Memory::load_i64_16s(Self, Int) -> Int64 raise RuntimeError
+pub fn Memory::load_i64_16s_at(Self, Int64) -> Int64 raise RuntimeError
 pub fn Memory::load_i64_16u(Self, Int) -> Int64 raise RuntimeError
+pub fn Memory::load_i64_16u_at(Self, Int64) -> Int64 raise RuntimeError
 pub fn Memory::load_i64_32s(Self, Int) -> Int64 raise RuntimeError
+pub fn Memory::load_i64_32s_at(Self, Int64) -> Int64 raise RuntimeError
 pub fn Memory::load_i64_32u(Self, Int) -> Int64 raise RuntimeError
+pub fn Memory::load_i64_32u_at(Self, Int64) -> Int64 raise RuntimeError
 pub fn Memory::load_i64_8s(Self, Int) -> Int64 raise RuntimeError
+pub fn Memory::load_i64_8s_at(Self, Int64) -> Int64 raise RuntimeError
 pub fn Memory::load_i64_8u(Self, Int) -> Int64 raise RuntimeError
+pub fn Memory::load_i64_8u_at(Self, Int64) -> Int64 raise RuntimeError
+pub fn Memory::load_i64_at(Self, Int64) -> Int64 raise RuntimeError
 pub fn Memory::new_guarded_memory0(Int, Int?, is_shared? : Bool) -> Self
 pub fn Memory::page_size_bytes(Self) -> Int64
 pub fn Memory::read_byte(Self, Int) -> Byte
@@ -344,15 +363,25 @@ pub fn Memory::read_i32(Self, Int) -> Int
 pub fn Memory::read_i64(Self, Int) -> Int64
 pub fn Memory::size_pages(Self) -> Int
 pub fn Memory::store_byte(Self, Int, Byte) -> Unit raise RuntimeError
+pub fn Memory::store_byte_at(Self, Int64, Byte) -> Unit raise RuntimeError
 pub fn Memory::store_f32(Self, Int, Float) -> Unit raise RuntimeError
+pub fn Memory::store_f32_at(Self, Int64, Float) -> Unit raise RuntimeError
 pub fn Memory::store_f64(Self, Int, Double) -> Unit raise RuntimeError
+pub fn Memory::store_f64_at(Self, Int64, Double) -> Unit raise RuntimeError
 pub fn Memory::store_i32(Self, Int, Int) -> Unit raise RuntimeError
 pub fn Memory::store_i32_16(Self, Int, Int) -> Unit raise RuntimeError
+pub fn Memory::store_i32_16_at(Self, Int64, Int) -> Unit raise RuntimeError
 pub fn Memory::store_i32_8(Self, Int, Int) -> Unit raise RuntimeError
+pub fn Memory::store_i32_8_at(Self, Int64, Int) -> Unit raise RuntimeError
+pub fn Memory::store_i32_at(Self, Int64, Int) -> Unit raise RuntimeError
 pub fn Memory::store_i64(Self, Int, Int64) -> Unit raise RuntimeError
 pub fn Memory::store_i64_16(Self, Int, Int64) -> Unit raise RuntimeError
+pub fn Memory::store_i64_16_at(Self, Int64, Int64) -> Unit raise RuntimeError
 pub fn Memory::store_i64_32(Self, Int, Int64) -> Unit raise RuntimeError
+pub fn Memory::store_i64_32_at(Self, Int64, Int64) -> Unit raise RuntimeError
 pub fn Memory::store_i64_8(Self, Int, Int64) -> Unit raise RuntimeError
+pub fn Memory::store_i64_8_at(Self, Int64, Int64) -> Unit raise RuntimeError
+pub fn Memory::store_i64_at(Self, Int64, Int64) -> Unit raise RuntimeError
 pub fn Memory::to_repr(Self) -> @debug.Repr
 pub fn Memory::write_byte(Self, Int, Byte) -> Unit
 pub fn Memory::write_i32(Self, Int, Int) -> Unit

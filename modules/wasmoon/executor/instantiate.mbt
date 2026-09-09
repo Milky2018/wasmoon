@@ -518,46 +518,11 @@ pub fn eval_const_expr(
 fn eval_extended_const_expr(
   instrs : Array[@types.Instruction],
   globals : Array[@runtime.GlobalInstance],
-) -> Int raise @runtime.RuntimeError {
-  // Use a simple stack-based evaluator with Int64 to handle both i32 and i64
-  let stack : Array[Int64] = []
-  for instr in instrs {
-    match instr {
-      I32Const(n) => stack.push(n.to_int64())
-      I64Const(n) => stack.push(n)
-      GlobalGet(idx) =>
-        if idx < globals.length() {
-          match globals[idx].get() {
-            I32(n) => stack.push(n.to_int64())
-            I64(n) => stack.push(n)
-            _ => ()
-          }
-        }
-      I32Add | I64Add =>
-        if stack.length() >= 2 {
-          let b = stack.pop()
-          let a = stack.pop()
-          stack.push(a.unwrap() + b.unwrap())
-        }
-      I32Sub | I64Sub =>
-        if stack.length() >= 2 {
-          let b = stack.pop()
-          let a = stack.pop()
-          stack.push(a.unwrap() - b.unwrap())
-        }
-      I32Mul | I64Mul =>
-        if stack.length() >= 2 {
-          let b = stack.pop()
-          let a = stack.pop()
-          stack.push(a.unwrap() * b.unwrap())
-        }
-      _ => ()
-    }
-  }
-  if stack.length() > 0 {
-    stack[stack.length() - 1].to_int()
-  } else {
-    0
+) -> Int64 raise @runtime.RuntimeError {
+  match eval_const_expr(instrs, globals~) {
+    I32(value) => value.to_int64() & 0xFFFF_FFFFL
+    I64(value) => value
+    _ => raise InvalidConstantExpression("expected an integer offset")
   }
 }
 
@@ -627,13 +592,14 @@ pub fn instantiate_module_with_init(
 
         // Check bounds before initializing
         // offset + num_elements must not exceed table size
-        if offset < 0 || offset + elem.init.length() > table.size() {
+        if offset < 0L ||
+          offset > table.size().to_int64() - elem.init.length().to_int64() {
           raise OutOfBoundsTableAccess
         }
 
         // Set table entries - evaluate init expression to get value
         for i in 0..<elem.init.length() {
-          table.set(offset + i, instance.elem_values[elem_idx][i])
+          table.set(offset.to_int() + i, instance.elem_values[elem_idx][i])
         }
       }
       // Active elem segments are implicitly dropped after initialization
@@ -654,7 +620,7 @@ pub fn instantiate_module_with_init(
       let offset = eval_extended_const_expr(data.offset, globals_for_data)
 
       // Copy data to memory
-      mem.init_data(offset, data.init)
+      mem.init_data_at(offset, data.init)
       instance.dropped_datas[data_idx] = true
     }
   }
@@ -1667,13 +1633,14 @@ fn instantiate_module_with_imports_unstarted(
 
         // Check bounds before initializing
         // offset + num_elements must not exceed table size
-        if offset < 0 || offset + elem.init.length() > table.size() {
+        if offset < 0L ||
+          offset > table.size().to_int64() - elem.init.length().to_int64() {
           raise OutOfBoundsTableAccess
         }
 
         // Set table entries - evaluate init expression to get value
         for i in 0..<elem.init.length() {
-          table.set(offset + i, elem_values[elem_idx][i])
+          table.set(offset.to_int() + i, elem_values[elem_idx][i])
         }
       }
       // Active elem segments are implicitly dropped after initialization
@@ -1692,7 +1659,7 @@ fn instantiate_module_with_imports_unstarted(
       // Evaluate offset expression using extended const expr evaluator
       let offset = eval_extended_const_expr(data.offset, globals_for_data_init)
       // Copy data to memory
-      mem.init_data(offset, data.init)
+      mem.init_data_at(offset, data.init)
       dropped_datas[data_idx] = true
     }
   }
