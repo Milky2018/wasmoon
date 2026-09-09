@@ -30,6 +30,8 @@ pub fn artifact_compatibility(@artifact.CompatibilityManifest, available_cpu_fea
 
 pub fn artifact_module_identity(String, Bytes, Bytes) -> @artifact.ModuleIdentity
 
+pub fn atomic_fence() -> Unit
+
 pub fn build_artifact_manifest(NativeTarget, @artifact.OperatingSystemAbi, module_identity~ : @artifact.ModuleIdentity, policy~ : @artifact.CompilationPolicy, required_cpu_features? : Array[@artifact.CpuFeature]) -> @artifact.CompatibilityManifest
 
 pub fn build_entry_trampoline_for_target(Array[@types.ValueType], Array[@types.ValueType], NativeTarget) -> Array[Int] raise HostcallImportTrampolineError
@@ -135,6 +137,14 @@ pub fn jit_trap_message(Int) -> String
 pub fn load_artifact(Bytes, ArtifactCompatibility, limits? : @artifact.DecodeLimits) -> LoadedArtifact raise ArtifactLoadError
 
 pub fn make_cstring(String) -> FixedArray[Byte]
+
+pub fn memory_atomic_compare_exchange(Int64, Int64, Int, Int64, Int64) -> Int64
+
+pub fn memory_atomic_load(Int64, Int64, Int) -> Int64
+
+pub fn memory_atomic_rmw(Int64, Int64, Int, Int, Int64) -> Int64
+
+pub fn memory_atomic_store(Int64, Int64, Int, Int64) -> Unit
 
 pub fn memory_descriptor_fill(Int64, Int64, Int, Int) -> Int
 

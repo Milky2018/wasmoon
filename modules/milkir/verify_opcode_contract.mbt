@@ -608,6 +608,7 @@ fn verify_opcode_contract(
       }
     Memory(memory_op) =>
       match memory_op {
+        Atomic(op) => verify_atomic_memory_contract(inst, op)
         Load(result_type) => {
           require_arity(inst.args.length(), 2, "memory load")
           require_pointer_value(inst.args[0].ty, "memory load")
@@ -666,4 +667,48 @@ fn verify_opcode_contract(
     Scalar(scalar_op) => verify_scalar_contract(inst, scalar_op)
     Vector(vector_op) => verify_vector_contract(inst, vector_op)
   }
+}
+
+///|
+fn verify_atomic_memory_contract(
+  inst : Inst,
+  op : AtomicMemoryOp,
+) -> Unit raise VerifyError {
+  if op is Fence {
+    require_arity(inst.args.length(), 0, "atomic fence")
+    require_no_results(inst, "atomic fence")
+    return
+  }
+  let (ty, bits, count, returns) = match op {
+    Load(ty, bits) => (ty, bits, 2, true)
+    Store(ty, bits) => (ty, bits, 3, false)
+    Rmw(ty, bits, _) => (ty, bits, 3, true)
+    CompareExchange(ty, bits) => (ty, bits, 4, true)
+    Fence => abort("handled above")
+  }
+  let max_bits = match ty {
+    I32 => 32
+    I64 => 64
+    _ => 0
+  }
+  if max_bits == 0 ||
+    (bits != 8 && bits != 16 && bits != 32 && bits != 64) ||
+    bits > max_bits {
+    raise TypeMismatch(message="invalid atomic access width \{bits} for \{ty}")
+  }
+  require_arity(inst.args.length(), count, "atomic memory access")
+  require_pointer_value(inst.args[0].ty, "atomic memory address")
+  require_operand_type(inst, count - 1, I64, "atomic memory offset")
+  for i in 1..<(count - 1) {
+    require_operand_type(inst, i, ty, "atomic memory value")
+  }
+  require_result_types(
+    inst,
+    if returns {
+      [ty]
+    } else {
+      []
+    },
+    "atomic memory access",
+  )
 }

@@ -23,6 +23,7 @@ fn ExecContext::exec_atomic(
 ) -> Unit raise {
   // atomic.fence has no memarg and no stack operands.
   if subopcode == 3 {
+    @runtime.atomic_fence()
     return
   }
   if memidx < 0 || memidx >= self.instance.mem_addrs.length() {
@@ -33,49 +34,6 @@ fn ExecContext::exec_atomic(
   fn pop_effective_addr() -> Int64 raise {
     let base_addr = self.pop_mem_addr(mem)
     compute_effective_addr(base_addr, offset, mem.is_memory64())
-  }
-
-  fn load_u8(addr : Int64) -> Int raise @runtime.RuntimeError {
-    mem.load_i32_8u(addr.to_int())
-  }
-
-  fn load_u16(addr : Int64) -> Int raise @runtime.RuntimeError {
-    mem.load_i32_16u(addr.to_int())
-  }
-
-  fn load_i32(addr : Int64) -> Int raise @runtime.RuntimeError {
-    mem.load_i32(addr.to_int())
-  }
-
-  fn load_i64(addr : Int64) -> Int64 raise @runtime.RuntimeError {
-    mem.load_i64(addr.to_int())
-  }
-
-  fn load_u32_to_i64(addr : Int64) -> Int64 raise @runtime.RuntimeError {
-    mem.load_i64_32u(addr.to_int())
-  }
-
-  fn store_u8(addr : Int64, v : Int) -> Unit raise @runtime.RuntimeError {
-    mem.store_i32_8(addr.to_int(), v)
-  }
-
-  fn store_u16(addr : Int64, v : Int) -> Unit raise @runtime.RuntimeError {
-    mem.store_i32_16(addr.to_int(), v)
-  }
-
-  fn store_i32(addr : Int64, v : Int) -> Unit raise @runtime.RuntimeError {
-    mem.store_i32(addr.to_int(), v)
-  }
-
-  fn store_i64(addr : Int64, v : Int64) -> Unit raise @runtime.RuntimeError {
-    mem.store_i64(addr.to_int(), v)
-  }
-
-  fn store_u32_from_i64(
-    addr : Int64,
-    v : Int64,
-  ) -> Unit raise @runtime.RuntimeError {
-    mem.store_i64_32(addr.to_int(), v)
   }
 
   // NOTE: wasm-tools/wasmparser encodes most atomic subopcodes starting at 0x10.
@@ -106,7 +64,7 @@ fn ExecContext::exec_atomic(
       if !mem.is_shared() {
         raise @runtime.AtomicWaitNonSharedMemory
       }
-      let actual = load_i32(effective_addr)
+      let actual = mem.atomic_load(effective_addr, 4).to_int()
       if actual != expected {
         self.stack.push(I32(1)) // not-equal
       } else {
@@ -126,376 +84,67 @@ fn ExecContext::exec_atomic(
       if !mem.is_shared() {
         raise @runtime.AtomicWaitNonSharedMemory
       }
-      let actual = load_i64(effective_addr)
+      let actual = mem.atomic_load(effective_addr, 8)
       if actual != expected {
         self.stack.push(I32(1))
       } else {
         self.stack.push(I32(2))
       }
     }
-
-    // Loads
-    4 => {
-      let effective_addr = pop_effective_addr()
-      atomic_check_alignment(effective_addr, 4L)
-      if is_mem_oob(effective_addr, 4L, mem) {
-        raise @runtime.OutOfBoundsMemoryAccess
-      }
-      self.stack.push(I32(load_i32(effective_addr)))
-    }
-    5 => {
-      let effective_addr = pop_effective_addr()
-      atomic_check_alignment(effective_addr, 8L)
-      if is_mem_oob(effective_addr, 8L, mem) {
-        raise @runtime.OutOfBoundsMemoryAccess
-      }
-      self.stack.push(I64(load_i64(effective_addr)))
-    }
-    6 => {
-      let effective_addr = pop_effective_addr()
-      atomic_check_alignment(effective_addr, 1L)
-      if is_mem_oob(effective_addr, 1L, mem) {
-        raise @runtime.OutOfBoundsMemoryAccess
-      }
-      self.stack.push(I32(load_u8(effective_addr)))
-    }
-    7 => {
-      let effective_addr = pop_effective_addr()
-      atomic_check_alignment(effective_addr, 2L)
-      if is_mem_oob(effective_addr, 2L, mem) {
-        raise @runtime.OutOfBoundsMemoryAccess
-      }
-      self.stack.push(I32(load_u16(effective_addr)))
-    }
-    8 => {
-      let effective_addr = pop_effective_addr()
-      atomic_check_alignment(effective_addr, 1L)
-      if is_mem_oob(effective_addr, 1L, mem) {
-        raise @runtime.OutOfBoundsMemoryAccess
-      }
-      self.stack.push(I64(load_u8(effective_addr).to_int64()))
-    }
-    9 => {
-      let effective_addr = pop_effective_addr()
-      atomic_check_alignment(effective_addr, 2L)
-      if is_mem_oob(effective_addr, 2L, mem) {
-        raise @runtime.OutOfBoundsMemoryAccess
-      }
-      self.stack.push(I64(load_u16(effective_addr).to_int64()))
-    }
-    10 => {
-      let effective_addr = pop_effective_addr()
-      atomic_check_alignment(effective_addr, 4L)
-      if is_mem_oob(effective_addr, 4L, mem) {
-        raise @runtime.OutOfBoundsMemoryAccess
-      }
-      self.stack.push(I64(load_u32_to_i64(effective_addr)))
-    }
-
-    // Stores
-    11 => {
-      let v = self.stack.pop_i32()
-      let effective_addr = pop_effective_addr()
-      atomic_check_alignment(effective_addr, 4L)
-      if is_mem_oob(effective_addr, 4L, mem) {
-        raise @runtime.OutOfBoundsMemoryAccess
-      }
-      store_i32(effective_addr, v)
-    }
-    12 => {
-      let v = self.stack.pop_i64()
-      let effective_addr = pop_effective_addr()
-      atomic_check_alignment(effective_addr, 8L)
-      if is_mem_oob(effective_addr, 8L, mem) {
-        raise @runtime.OutOfBoundsMemoryAccess
-      }
-      store_i64(effective_addr, v)
-    }
-    13 => {
-      let v = self.stack.pop_i32() & 0xFF
-      let effective_addr = pop_effective_addr()
-      atomic_check_alignment(effective_addr, 1L)
-      if is_mem_oob(effective_addr, 1L, mem) {
-        raise @runtime.OutOfBoundsMemoryAccess
-      }
-      store_u8(effective_addr, v)
-    }
-    14 => {
-      let v = self.stack.pop_i32() & 0xFFFF
-      let effective_addr = pop_effective_addr()
-      atomic_check_alignment(effective_addr, 2L)
-      if is_mem_oob(effective_addr, 2L, mem) {
-        raise @runtime.OutOfBoundsMemoryAccess
-      }
-      store_u16(effective_addr, v)
-    }
-    15 => {
-      let v = self.stack.pop_i64().to_int() & 0xFF
-      let effective_addr = pop_effective_addr()
-      atomic_check_alignment(effective_addr, 1L)
-      if is_mem_oob(effective_addr, 1L, mem) {
-        raise @runtime.OutOfBoundsMemoryAccess
-      }
-      store_u8(effective_addr, v)
-    }
-    16 => {
-      let v = self.stack.pop_i64().to_int() & 0xFFFF
-      let effective_addr = pop_effective_addr()
-      atomic_check_alignment(effective_addr, 2L)
-      if is_mem_oob(effective_addr, 2L, mem) {
-        raise @runtime.OutOfBoundsMemoryAccess
-      }
-      store_u16(effective_addr, v)
-    }
-    17 => {
-      let v = self.stack.pop_i64()
-      let effective_addr = pop_effective_addr()
-      atomic_check_alignment(effective_addr, 4L)
-      if is_mem_oob(effective_addr, 4L, mem) {
-        raise @runtime.OutOfBoundsMemoryAccess
-      }
-      store_u32_from_i64(effective_addr, v)
-    }
-
-    // RMW operations (i32)
-    18
-    | 20
-    | 21
-    | 25
-    | 27
-    | 28
-    | 32
-    | 34
-    | 35
-    | 39
-    | 41
-    | 42
-    | 46
-    | 48
-    | 49
-    | 53
-    | 55
-    | 56 => {
-      let v = self.stack.pop_i32()
-      let effective_addr = pop_effective_addr()
-      let access_size = if op == 18 ||
-        op == 25 ||
-        op == 32 ||
-        op == 39 ||
-        op == 46 ||
-        op == 53 {
-        4L
-      } else if op == 20 ||
-        op == 27 ||
-        op == 34 ||
-        op == 41 ||
-        op == 48 ||
-        op == 55 {
-        1L
+    4..=66 => {
+      let shape = if op <= 10 {
+        op - 4
+      } else if op <= 17 {
+        op - 11
       } else {
-        2L
+        (op - 18) % 7
       }
-      atomic_check_alignment(effective_addr, access_size)
-      if is_mem_oob(effective_addr, access_size, mem) {
-        raise @runtime.OutOfBoundsMemoryAccess
+      let (is_i64, width) = match shape {
+        0 => (false, 4)
+        1 => (true, 8)
+        2 => (false, 1)
+        3 => (false, 2)
+        4 => (true, 1)
+        5 => (true, 2)
+        _ => (true, 4)
       }
-      let old = if access_size == 4L {
-        load_i32(effective_addr)
-      } else if access_size == 1L {
-        load_u8(effective_addr)
-      } else {
-        load_u16(effective_addr)
-      }
-      let mask = if access_size == 4L {
-        -1
-      } else if access_size == 1L {
-        0xFF
-      } else {
-        0xFFFF
-      }
-      let v_masked = v & mask
-      let new = match op {
-        18 | 20 | 21 => (old + v_masked) & mask
-        25 | 27 | 28 => (old - v_masked) & mask
-        32 | 34 | 35 => old & v_masked
-        39 | 41 | 42 => old | v_masked
-        46 | 48 | 49 => old ^ v_masked
-        53 | 55 | 56 => v_masked
-        _ => old
-      }
-      if access_size == 4L {
-        store_i32(effective_addr, new)
-      } else if access_size == 1L {
-        store_u8(effective_addr, new)
-      } else {
-        store_u16(effective_addr, new)
-      }
-      self.stack.push(I32(old))
-    }
-
-    // RMW operations (i64)
-    19
-    | 22
-    | 23
-    | 24
-    | 26
-    | 29
-    | 30
-    | 31
-    | 33
-    | 36
-    | 37
-    | 38
-    | 40
-    | 43
-    | 44
-    | 45
-    | 47
-    | 50
-    | 51
-    | 52
-    | 54
-    | 57
-    | 58
-    | 59 => {
-      let v = self.stack.pop_i64()
-      let effective_addr = pop_effective_addr()
-      let access_size = if op == 19 ||
-        op == 26 ||
-        op == 33 ||
-        op == 40 ||
-        op == 47 ||
-        op == 54 {
-        8L
-      } else if op == 22 ||
-        op == 29 ||
-        op == 36 ||
-        op == 43 ||
-        op == 50 ||
-        op == 57 {
-        1L
-      } else if op == 23 ||
-        op == 30 ||
-        op == 37 ||
-        op == 44 ||
-        op == 51 ||
-        op == 58 {
-        2L
-      } else {
-        4L
-      }
-      atomic_check_alignment(effective_addr, access_size)
-      if is_mem_oob(effective_addr, access_size, mem) {
-        raise @runtime.OutOfBoundsMemoryAccess
-      }
-      let (old, mask) : (Int64, Int64) = if access_size == 8L {
-        (load_i64(effective_addr), -1L)
-      } else if access_size == 4L {
-        (load_u32_to_i64(effective_addr), 0xFFFF_FFFFL)
-      } else if access_size == 2L {
-        (load_u16(effective_addr).to_int64(), 0xFFFFL)
-      } else {
-        (load_u8(effective_addr).to_int64(), 0xFFL)
-      }
-      let v_masked = v & mask
-      let new = match op {
-        19 | 22 | 23 | 24 => (old + v_masked) & mask
-        26 | 29 | 30 | 31 => (old - v_masked) & mask
-        33 | 36 | 37 | 38 => old & v_masked
-        40 | 43 | 44 | 45 => old | v_masked
-        47 | 50 | 51 | 52 => old ^ v_masked
-        54 | 57 | 58 | 59 => v_masked
-        _ => old
-      }
-      if access_size == 8L {
-        store_i64(effective_addr, new)
-      } else if access_size == 4L {
-        store_u32_from_i64(effective_addr, new)
-      } else if access_size == 2L {
-        store_u16(effective_addr, new.to_int())
-      } else {
-        store_u8(effective_addr, new.to_int())
-      }
-      self.stack.push(I64(old))
-    }
-
-    // cmpxchg (i32)
-    60 | 62 | 63 => {
-      let replacement = self.stack.pop_i32()
-      let expected = self.stack.pop_i32()
-      let effective_addr = pop_effective_addr()
-      let access_size = if op == 60 { 4L } else if op == 62 { 1L } else { 2L }
-      atomic_check_alignment(effective_addr, access_size)
-      if is_mem_oob(effective_addr, access_size, mem) {
-        raise @runtime.OutOfBoundsMemoryAccess
-      }
-      let old = if access_size == 4L {
-        load_i32(effective_addr)
-      } else if access_size == 1L {
-        load_u8(effective_addr)
-      } else {
-        load_u16(effective_addr)
-      }
-      let mask = if access_size == 4L {
-        -1
-      } else if access_size == 1L {
-        0xFF
-      } else {
-        0xFFFF
-      }
-      if old == (expected & mask) {
-        let new = replacement & mask
-        if access_size == 4L {
-          store_i32(effective_addr, new)
-        } else if access_size == 1L {
-          store_u8(effective_addr, new)
+      fn pop_value() -> Int64 raise @runtime.RuntimeError {
+        if is_i64 {
+          self.stack.pop_i64()
         } else {
-          store_u16(effective_addr, new)
+          self.stack.pop_i32().to_int64()
         }
       }
-      self.stack.push(I32(old))
-    }
-
-    // cmpxchg (i64)
-    61 | 64 | 65 | 66 => {
-      let replacement = self.stack.pop_i64()
-      let expected = self.stack.pop_i64()
-      let effective_addr = pop_effective_addr()
-      let access_size = if op == 61 {
-        8L
-      } else if op == 64 {
-        1L
-      } else if op == 65 {
-        2L
-      } else {
-        4L
+      fn push_value(value : Int64) -> Unit raise @runtime.RuntimeError {
+        self.stack.push(if is_i64 { I64(value) } else { I32(value.to_int()) })
       }
-      atomic_check_alignment(effective_addr, access_size)
-      if is_mem_oob(effective_addr, access_size, mem) {
-        raise @runtime.OutOfBoundsMemoryAccess
-      }
-      let (old, mask) : (Int64, Int64) = if access_size == 8L {
-        (load_i64(effective_addr), -1L)
-      } else if access_size == 4L {
-        (load_u32_to_i64(effective_addr), 0xFFFF_FFFFL)
-      } else if access_size == 2L {
-        (load_u16(effective_addr).to_int64(), 0xFFFFL)
-      } else {
-        (load_u8(effective_addr).to_int64(), 0xFFL)
-      }
-      if old == (expected & mask) {
-        let new = replacement & mask
-        if access_size == 8L {
-          store_i64(effective_addr, new)
-        } else if access_size == 4L {
-          store_u32_from_i64(effective_addr, new)
-        } else if access_size == 2L {
-          store_u16(effective_addr, new.to_int())
-        } else {
-          store_u8(effective_addr, new.to_int())
+      if op <= 10 {
+        let address = pop_effective_addr()
+        push_value(mem.atomic_load(address, width))
+      } else if op <= 17 {
+        let value = pop_value()
+        let address = pop_effective_addr()
+        mem.atomic_store(address, width, value)
+      } else if op <= 59 {
+        let value = pop_value()
+        let address = pop_effective_addr()
+        let operation : @runtime.AtomicRmwOp = match (op - 18) / 7 {
+          0 => Add
+          1 => Sub
+          2 => And
+          3 => Or
+          4 => Xor
+          _ => Exchange
         }
+        push_value(mem.atomic_rmw(operation, address, width, value))
+      } else {
+        let replacement = pop_value()
+        let expected = pop_value()
+        let address = pop_effective_addr()
+        push_value(
+          mem.atomic_compare_exchange(address, width, expected, replacement),
+        )
       }
-      self.stack.push(I64(old))
     }
     _ => raise @runtime.Unreachable
   }

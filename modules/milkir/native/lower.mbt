@@ -504,6 +504,80 @@ fn lower_memory_instruction(
     }
   }
   let results = match memory {
+    Atomic(Fence) =>
+      builder.emit_with_metadata(
+        AtomicFence,
+        [],
+        [],
+        instruction_metadata(instruction, []),
+      )
+    Atomic(op) => {
+      let (ty, bits) = match op {
+        Load(ty, bits)
+        | Store(ty, bits)
+        | Rmw(ty, bits, _)
+        | CompareExchange(ty, bits) => (ty, bits)
+        Fence => abort("handled above")
+      }
+      let width = match lower_width(bits) {
+        Some(width) => width
+        None =>
+          raise InvalidMilkIR(message="invalid verified atomic width \{bits}")
+      }
+      let value_type = lower_type(ty)
+      let last = instruction.args.length() - 1
+      let address = lower_address(
+        builder,
+        values,
+        value_types,
+        facts,
+        instruction.args[0],
+        instruction.args[last],
+        source,
+        instruction.id,
+      )
+      let operands = [address]
+      for index in 1..<last {
+        operands.push(
+          demand_value(
+            builder,
+            values,
+            value_types,
+            facts,
+            instruction.args[index],
+          ),
+        )
+      }
+      let spec = @lowering.AtomicSpec::new(width, value_type, 0UL, Little, None)
+      let operation : @lowering.Operation = match op {
+        Load(_, _) => AtomicLoad(spec)
+        Store(_, _) => AtomicStore(spec)
+        Rmw(_, _, operation) =>
+          AtomicRmw(
+            spec,
+            match operation {
+              Add => Add
+              Sub => Sub
+              And => And
+              Or => Or
+              Xor => Xor
+              Exchange => Exchange
+            },
+          )
+        CompareExchange(_, _) => AtomicCompareExchange(spec)
+        Fence => abort("handled above")
+      }
+      builder.emit_with_metadata(
+        operation,
+        operands,
+        if op is Store(_, _) {
+          []
+        } else {
+          [value_type]
+        },
+        instruction_metadata(instruction, []),
+      )
+    }
     Load(result_type) => {
       let lowered_type = lower_type(result_type)
       let (address, offset, shift) = selected_address(

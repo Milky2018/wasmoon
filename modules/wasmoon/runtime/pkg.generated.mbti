@@ -8,6 +8,8 @@ import {
 }
 
 // Values
+pub fn atomic_fence() -> Unit
+
 pub fn format_runtime_error(RuntimeError) -> String
 
 pub fn normalize_async_host_error(Error) -> RuntimeError
@@ -114,6 +116,15 @@ pub(all) enum AsyncHostPoll {
   AsyncHostReady(Array[@types.Value])
 } derive(@debug.Debug)
 pub fn AsyncHostPoll::to_repr(Self) -> @debug.Repr
+
+pub(all) enum AtomicRmwOp {
+  Add
+  Sub
+  And
+  Or
+  Xor
+  Exchange
+}
 
 pub(all) struct CallStackEntry {
   func_idx : Int
@@ -297,6 +308,10 @@ pub impl GcRuntime for MarkSweepHeap
 
 type Memory derive(@debug.Debug)
 pub fn Memory::Memory(Int, Int?, is_memory64? : Bool, is_shared? : Bool, page_size_log2? : Int) -> Self
+pub fn Memory::atomic_compare_exchange(Self, Int64, Int, Int64, Int64) -> Int64 raise RuntimeError
+pub fn Memory::atomic_load(Self, Int64, Int) -> Int64 raise RuntimeError
+pub fn Memory::atomic_rmw(Self, AtomicRmwOp, Int64, Int, Int64) -> Int64 raise RuntimeError
+pub fn Memory::atomic_store(Self, Int64, Int, Int64) -> Unit raise RuntimeError
 pub fn Memory::byte_len(Self) -> Int64
 pub fn Memory::copy(Self, Int, Int, Int) -> Unit raise RuntimeError
 pub fn Memory::desc_ptr(Self) -> Int64

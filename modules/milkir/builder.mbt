@@ -1476,3 +1476,62 @@ pub fn FunctionBuilder::v128_store_lane_with_addr(
 ) -> Unit {
   self.emit_void_inst(Memory(Vector(opcode)), [effective_addr, vec])
 }
+
+///|
+pub fn FunctionBuilder::atomic_load(
+  self : FunctionBuilder,
+  ty : Type,
+  bits : Int,
+  base : Value,
+  offset : Value,
+) -> Value {
+  self.emit_inst(ty, Memory(Atomic(Load(ty, bits))), [base, offset])
+}
+
+///|
+pub fn FunctionBuilder::atomic_store(
+  self : FunctionBuilder,
+  bits : Int,
+  base : Value,
+  value : Value,
+  offset : Value,
+) -> Unit {
+  self.emit_void_inst(Memory(Atomic(Store(value.ty, bits))), [
+    base, value, offset,
+  ])
+}
+
+///|
+pub fn FunctionBuilder::atomic_rmw(
+  self : FunctionBuilder,
+  op : AtomicRmwOp,
+  bits : Int,
+  base : Value,
+  value : Value,
+  offset : Value,
+) -> Value {
+  self.emit_inst(value.ty, Memory(Atomic(Rmw(value.ty, bits, op))), [
+    base, value, offset,
+  ])
+}
+
+///|
+pub fn FunctionBuilder::atomic_compare_exchange(
+  self : FunctionBuilder,
+  bits : Int,
+  base : Value,
+  expected : Value,
+  replacement : Value,
+  offset : Value,
+) -> Value {
+  self.emit_inst(
+    expected.ty,
+    Memory(Atomic(CompareExchange(expected.ty, bits))),
+    [base, expected, replacement, offset],
+  )
+}
+
+///|
+pub fn FunctionBuilder::atomic_fence(self : FunctionBuilder) -> Unit {
+  self.emit_void_inst(Memory(Atomic(Fence)), [])
+}

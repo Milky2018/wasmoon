@@ -1624,36 +1624,6 @@ fn Translator::translate_atomic(
     )
   }
 
-  fn load_u32(bits : Int, addr : Value) -> Value {
-    align_check(addr, bits / 8)
-    let ptr = bounds_ptr(addr, bits / 8)
-    let zero = self.builder.iconst(I64, 0L)
-    self.builder.load_ptr_narrow(I32, bits, false, ptr, zero)
-  }
-
-  fn store_u32(bits : Int, addr : Value, value : Value) -> Unit {
-    align_check(addr, bits / 8)
-    let ptr = bounds_ptr(addr, bits / 8)
-    let zero = self.builder.iconst(I64, 0L)
-    self.builder.store_ptr_narrow(bits, ptr, value, zero)
-  }
-
-  fn load_u64(bits : Int, addr : Value) -> Value {
-    align_check(addr, bits / 8)
-    let ptr = bounds_ptr(addr, bits / 8)
-    let zero = self.builder.iconst(I64, 0L)
-    self.builder.load_ptr_narrow(I64, bits, false, ptr, zero)
-  }
-
-  fn store_u64(bits : Int, addr : Value, value : Value) -> Unit {
-    align_check(addr, bits / 8)
-    let ptr = bounds_ptr(addr, bits / 8)
-    let zero = self.builder.iconst(I64, 0L)
-    self.builder.store_ptr_narrow(bits, ptr, value, zero)
-  }
-
-  // NOTE: wasm-tools/wasmparser encodes most atomic subopcodes starting at 0x10.
-  // The IR lowering table is indexed starting at 0x04, so shift accordingly.
   let op = if subopcode >= 0x10 { subopcode - 12 } else { subopcode }
   match op {
     // memory.atomic.notify
@@ -1679,7 +1649,7 @@ fn Translator::translate_atomic(
         self.is_unreachable = true
         return
       }
-      let actual = self.builder.load_ptr(I32, ptr, zero)
+      let actual = self.builder.atomic_load(I32, 32, ptr, zero)
       let eq = self.builder.icmp(Eq, actual, expected)
       let not_equal = self.builder.iconst_i32(1)
       let timed_out = self.builder.iconst_i32(2)
@@ -1701,7 +1671,7 @@ fn Translator::translate_atomic(
         self.is_unreachable = true
         return
       }
-      let actual = self.builder.load_ptr(I64, ptr, zero)
+      let actual = self.builder.atomic_load(I64, 64, ptr, zero)
       let eq = self.builder.icmp(Eq, actual, expected)
       let not_equal = self.builder.iconst_i32(1)
       let timed_out = self.builder.iconst_i32(2)
@@ -1710,366 +1680,64 @@ fn Translator::translate_atomic(
     }
 
     // atomic.fence
-    3 => ()
-
-    // Loads
-    4 => {
-      let addr = self.pop()
-      align_check(addr, 4)
-      let ptr = bounds_ptr(addr, 4)
-      let zero = self.builder.iconst(I64, 0L)
-      self.push(self.builder.load_ptr(I32, ptr, zero))
-    }
-    5 => {
-      let addr = self.pop()
-      align_check(addr, 8)
-      let ptr = bounds_ptr(addr, 8)
-      let zero = self.builder.iconst(I64, 0L)
-      self.push(self.builder.load_ptr(I64, ptr, zero))
-    }
-    6 => {
-      let addr = self.pop()
-      self.push(load_u32(8, addr))
-    }
-    7 => {
-      let addr = self.pop()
-      self.push(load_u32(16, addr))
-    }
-    8 => {
-      let addr = self.pop()
-      self.push(load_u64(8, addr))
-    }
-    9 => {
-      let addr = self.pop()
-      self.push(load_u64(16, addr))
-    }
-    10 => {
-      let addr = self.pop()
-      self.push(load_u64(32, addr))
-    }
-
-    // Stores
-    11 => {
-      let value = self.pop()
-      let addr = self.pop()
-      align_check(addr, 4)
-      let ptr = bounds_ptr(addr, 4)
-      let zero = self.builder.iconst(I64, 0L)
-      self.builder.store_ptr(I32, ptr, value, zero)
-    }
-    12 => {
-      let value = self.pop()
-      let addr = self.pop()
-      align_check(addr, 8)
-      let ptr = bounds_ptr(addr, 8)
-      let zero = self.builder.iconst(I64, 0L)
-      self.builder.store_ptr(I64, ptr, value, zero)
-    }
-    13 => {
-      let value = self.pop()
-      let addr = self.pop()
-      store_u32(8, addr, value)
-    }
-    14 => {
-      let value = self.pop()
-      let addr = self.pop()
-      store_u32(16, addr, value)
-    }
-    15 => {
-      let value = self.pop()
-      let addr = self.pop()
-      store_u64(8, addr, value)
-    }
-    16 => {
-      let value = self.pop()
-      let addr = self.pop()
-      store_u64(16, addr, value)
-    }
-    17 => {
-      let value = self.pop()
-      let addr = self.pop()
-      store_u64(32, addr, value)
-    }
-
-    // i32 RMW operations
-    18
-    | 20
-    | 21
-    | 25
-    | 27
-    | 28
-    | 32
-    | 34
-    | 35
-    | 39
-    | 41
-    | 42
-    | 46
-    | 48
-    | 49
-    | 53
-    | 55
-    | 56 => {
-      let value = self.pop()
-      let addr = self.pop()
-      let bits = if op == 18 ||
-        op == 25 ||
-        op == 32 ||
-        op == 39 ||
-        op == 46 ||
-        op == 53 {
-        32
-      } else if op == 20 ||
-        op == 27 ||
-        op == 34 ||
-        op == 41 ||
-        op == 48 ||
-        op == 55 {
-        8
+    3 => self.builder.atomic_fence()
+    4..=66 => {
+      let shape = if op <= 10 {
+        op - 4
+      } else if op <= 17 {
+        op - 11
       } else {
-        16
+        (op - 18) % 7
       }
-      let access_size = bits / 8
-      align_check(addr, access_size)
-      let ptr = bounds_ptr(addr, access_size)
-      let zero = self.builder.iconst(I64, 0L)
-      let old = if bits == 32 {
-        self.builder.load_ptr(I32, ptr, zero)
+      let (ty, bits) : (Type, Int) = match shape {
+        0 => (I32, 32)
+        1 => (I64, 64)
+        2 => (I32, 8)
+        3 => (I32, 16)
+        4 => (I64, 8)
+        5 => (I64, 16)
+        _ => (I64, 32)
+      }
+      let zero = self.builder.iconst_i64(0L)
+      if op <= 10 {
+        let address = self.pop()
+        align_check(address, bits / 8)
+        let pointer = bounds_ptr(address, bits / 8)
+        self.push(self.builder.atomic_load(ty, bits, pointer, zero))
+      } else if op <= 17 {
+        let value = self.pop()
+        let address = self.pop()
+        align_check(address, bits / 8)
+        let pointer = bounds_ptr(address, bits / 8)
+        self.builder.atomic_store(bits, pointer, value, zero)
+      } else if op <= 59 {
+        let value = self.pop()
+        let address = self.pop()
+        align_check(address, bits / 8)
+        let pointer = bounds_ptr(address, bits / 8)
+        let operation : @milkir.AtomicRmwOp = match (op - 18) / 7 {
+          0 => Add
+          1 => Sub
+          2 => And
+          3 => Or
+          4 => Xor
+          _ => Exchange
+        }
+        self.push(
+          self.builder.atomic_rmw(operation, bits, pointer, value, zero),
+        )
       } else {
-        self.builder.load_ptr_narrow(I32, bits, false, ptr, zero)
+        let replacement = self.pop()
+        let expected = self.pop()
+        let address = self.pop()
+        align_check(address, bits / 8)
+        let pointer = bounds_ptr(address, bits / 8)
+        self.push(
+          self.builder.atomic_compare_exchange(
+            bits, pointer, expected, replacement, zero,
+          ),
+        )
       }
-      let mask = if bits == 32 {
-        self.builder.iconst_i32(-1)
-      } else if bits == 16 {
-        self.builder.iconst_i32(0xFFFF)
-      } else {
-        self.builder.iconst_i32(0xFF)
-      }
-      let v_masked = if bits == 32 {
-        value
-      } else {
-        self.builder.band(value, mask)
-      }
-      let computed = match op {
-        18 | 20 | 21 => self.builder.iadd(old, v_masked)
-        25 | 27 | 28 => self.builder.isub(old, v_masked)
-        32 | 34 | 35 => self.builder.band(old, v_masked)
-        39 | 41 | 42 => self.builder.bor(old, v_masked)
-        46 | 48 | 49 => self.builder.bxor(old, v_masked)
-        53 | 55 | 56 => v_masked
-        _ => old
-      }
-      let new = if bits == 32 {
-        computed
-      } else {
-        self.builder.band(computed, mask)
-      }
-      if bits == 32 {
-        self.builder.store_ptr(I32, ptr, new, zero)
-      } else {
-        self.builder.store_ptr_narrow(bits, ptr, new, zero)
-      }
-      self.push(old)
-    }
-
-    // i64 RMW operations
-    19
-    | 22
-    | 23
-    | 24
-    | 26
-    | 29
-    | 30
-    | 31
-    | 33
-    | 36
-    | 37
-    | 38
-    | 40
-    | 43
-    | 44
-    | 45
-    | 47
-    | 50
-    | 51
-    | 52
-    | 54
-    | 57
-    | 58
-    | 59 => {
-      let value = self.pop()
-      let addr = self.pop()
-      let bits = if op == 19 ||
-        op == 26 ||
-        op == 33 ||
-        op == 40 ||
-        op == 47 ||
-        op == 54 {
-        64
-      } else if op == 22 ||
-        op == 29 ||
-        op == 36 ||
-        op == 43 ||
-        op == 50 ||
-        op == 57 {
-        8
-      } else if op == 23 ||
-        op == 30 ||
-        op == 37 ||
-        op == 44 ||
-        op == 51 ||
-        op == 58 {
-        16
-      } else {
-        32
-      }
-      let access_size = bits / 8
-      align_check(addr, access_size)
-      let ptr = bounds_ptr(addr, access_size)
-      let zero = self.builder.iconst(I64, 0L)
-      let old = if bits == 64 {
-        self.builder.load_ptr(I64, ptr, zero)
-      } else {
-        self.builder.load_ptr_narrow(I64, bits, false, ptr, zero)
-      }
-      let mask = if bits == 64 {
-        self.builder.iconst_i64(-1L)
-      } else if bits == 32 {
-        self.builder.iconst_i64(0xFFFF_FFFFL)
-      } else if bits == 16 {
-        self.builder.iconst_i64(0xFFFFL)
-      } else {
-        self.builder.iconst_i64(0xFFL)
-      }
-      let v_masked = if bits == 64 {
-        value
-      } else {
-        self.builder.band(value, mask)
-      }
-      let computed = match op {
-        19 | 22 | 23 | 24 => self.builder.iadd(old, v_masked)
-        26 | 29 | 30 | 31 => self.builder.isub(old, v_masked)
-        33 | 36 | 37 | 38 => self.builder.band(old, v_masked)
-        40 | 43 | 44 | 45 => self.builder.bor(old, v_masked)
-        47 | 50 | 51 | 52 => self.builder.bxor(old, v_masked)
-        54 | 57 | 58 | 59 => v_masked
-        _ => old
-      }
-      let new = if bits == 64 {
-        computed
-      } else {
-        self.builder.band(computed, mask)
-      }
-      if bits == 64 {
-        self.builder.store_ptr(I64, ptr, new, zero)
-      } else {
-        self.builder.store_ptr_narrow(bits, ptr, new, zero)
-      }
-      self.push(old)
-    }
-
-    // i32 cmpxchg
-    60 | 62 | 63 => {
-      let replacement = self.pop()
-      let expected = self.pop()
-      let addr = self.pop()
-      let bits = if op == 60 { 32 } else if op == 62 { 8 } else { 16 }
-      let access_size = bits / 8
-      align_check(addr, access_size)
-      let ptr = bounds_ptr(addr, access_size)
-      let zero = self.builder.iconst(I64, 0L)
-      let old = if bits == 32 {
-        self.builder.load_ptr(I32, ptr, zero)
-      } else {
-        self.builder.load_ptr_narrow(I32, bits, false, ptr, zero)
-      }
-      let mask = if bits == 32 {
-        self.builder.iconst_i32(-1)
-      } else if bits == 16 {
-        self.builder.iconst_i32(0xFFFF)
-      } else {
-        self.builder.iconst_i32(0xFF)
-      }
-      let expected_m = if bits == 32 {
-        expected
-      } else {
-        self.builder.band(expected, mask)
-      }
-      let replacement_m = if bits == 32 {
-        replacement
-      } else {
-        self.builder.band(replacement, mask)
-      }
-      let eq = self.builder.icmp(Eq, old, expected_m)
-      let store_block = self.builder.create_block()
-      let cont_block = self.builder.create_block()
-      self.builder.brnz(eq, store_block, cont_block)
-      self.builder.switch_to_block(store_block)
-      if bits == 32 {
-        self.builder.store_ptr(I32, ptr, replacement_m, zero)
-      } else {
-        self.builder.store_ptr_narrow(bits, ptr, replacement_m, zero)
-      }
-      self.builder.jump(cont_block, [])
-      self.builder.switch_to_block(cont_block)
-      self.push(old)
-    }
-
-    // i64 cmpxchg
-    61 | 64 | 65 | 66 => {
-      let replacement = self.pop()
-      let expected = self.pop()
-      let addr = self.pop()
-      let bits = if op == 61 {
-        64
-      } else if op == 64 {
-        8
-      } else if op == 65 {
-        16
-      } else {
-        32
-      }
-      let access_size = bits / 8
-      align_check(addr, access_size)
-      let ptr = bounds_ptr(addr, access_size)
-      let zero = self.builder.iconst(I64, 0L)
-      let old = if bits == 64 {
-        self.builder.load_ptr(I64, ptr, zero)
-      } else {
-        self.builder.load_ptr_narrow(I64, bits, false, ptr, zero)
-      }
-      let mask = if bits == 64 {
-        self.builder.iconst_i64(-1L)
-      } else if bits == 32 {
-        self.builder.iconst_i64(0xFFFF_FFFFL)
-      } else if bits == 16 {
-        self.builder.iconst_i64(0xFFFFL)
-      } else {
-        self.builder.iconst_i64(0xFFL)
-      }
-      let expected_m = if bits == 64 {
-        expected
-      } else {
-        self.builder.band(expected, mask)
-      }
-      let replacement_m = if bits == 64 {
-        replacement
-      } else {
-        self.builder.band(replacement, mask)
-      }
-      let eq = self.builder.icmp(Eq, old, expected_m)
-      let store_block = self.builder.create_block()
-      let cont_block = self.builder.create_block()
-      self.builder.brnz(eq, store_block, cont_block)
-      self.builder.switch_to_block(store_block)
-      if bits == 64 {
-        self.builder.store_ptr(I64, ptr, replacement_m, zero)
-      } else {
-        self.builder.store_ptr_narrow(bits, ptr, replacement_m, zero)
-      }
-      self.builder.jump(cont_block, [])
-      self.builder.switch_to_block(cont_block)
-      self.push(old)
     }
     _ => {
       self.builder.trap("unsupported atomic")

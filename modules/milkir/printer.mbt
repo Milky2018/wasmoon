@@ -451,6 +451,24 @@ fn format_opcode(opcode : Opcode, operands : Array[Value]) -> String {
       }
     Memory(memory_op) =>
       match memory_op {
+        Atomic(op) =>
+          match op {
+            Load(ty, bits) => "atomic.load\{bits}.\{ty} \{ops}"
+            Store(ty, bits) => "atomic.store\{bits}.\{ty} \{ops}"
+            Rmw(ty, bits, operation) => {
+              let name = match operation {
+                Add => "add"
+                Sub => "sub"
+                And => "and"
+                Or => "or"
+                Xor => "xor"
+                Exchange => "xchg"
+              }
+              "atomic.rmw.\{name}\{bits}.\{ty} \{ops}"
+            }
+            CompareExchange(ty, bits) => "atomic.cmpxchg\{bits}.\{ty} \{ops}"
+            Fence => "atomic.fence"
+          }
         Load(ty) => "load.\{ty} \{ops}"
         Store(ty) => "store.\{ty} \{ops}"
         LoadNarrow(result_ty, bits, signed) => {

@@ -526,6 +526,7 @@ graph TD
   ISS_491["ISS-491: Isolate WAST component instances in separate runtime stores"]
   ISS_492["ISS-492: Collect guest heaps safely from test host callbacks"]
   ISS_493["ISS-493: Isolate resource destructor contexts and honor the execution engine"]
+  ISS_494["ISS-494: Preserve atomic memory semantics across interpreter and compiler"]
   ISS_002 --> ISS_003
   ISS_002 --> ISS_004
   ISS_003 --> ISS_005
@@ -910,6 +911,7 @@ graph TD
   ISS_449 --> ISS_455
   ISS_470 --> ISS_471
   ISS_471 --> ISS_472
+  ISS_494 --> ISS_476
   ISS_483 --> ISS_482
   ISS_488 --> ISS_484
   ISS_489 --> ISS_484
