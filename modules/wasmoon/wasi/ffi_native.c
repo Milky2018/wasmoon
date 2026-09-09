@@ -1172,7 +1172,21 @@ MOONBIT_FFI_EXPORT int wasmoon_wasi_symlinkat(moonbit_bytes_t target, int dirfd,
   (void)linkpath;
   return -1;  // Symlinks require admin on Windows
 #else
-  return symlinkat((const char *)target, dirfd, (const char *)linkpath);
+  int result = symlinkat((const char *)target, dirfd, (const char *)linkpath);
+  if (result < 0 && errno == EEXIST) {
+    size_t length = strlen((const char *)linkpath);
+    if (length > 0 && linkpath[length - 1] == '/') {
+      // Linux reports EEXIST for a regular file followed by a slash. Preview 1
+      // requires ENOTDIR, while an existing directory must retain EEXIST.
+      struct stat st;
+      int saved_errno = errno;
+      if (fstatat(dirfd, (const char *)linkpath, &st, 0) < 0 && errno == ENOTDIR) {
+        saved_errno = ENOTDIR;
+      }
+      errno = saved_errno;
+    }
+  }
+  return result;
 #endif
 }
 
@@ -1186,6 +1200,12 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_wasi_readlinkat(int dirfd, moonbit_bytes_t pa
   (void)bufsize;
   return -1;
 #else
+  if (bufsize == 0) {
+    // Linux rejects a zero-sized buffer. Still validate the link and preserve
+    // path errors without writing to the caller's empty buffer.
+    char scratch;
+    return readlinkat(dirfd, (const char *)path, &scratch, 1) < 0 ? -1 : 0;
+  }
   return readlinkat(dirfd, (const char *)path, (char *)buf, bufsize);
 #endif
 }
