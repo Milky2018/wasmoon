@@ -24,24 +24,15 @@ fn read_string_from_memory_with_encoding(
     raise CanonCallError("unaligned pointer: string pointer not aligned to 2")
   }
   let mem_len = mem.byte_len()
-  let mut byte_len = len
-  let mut utf16 = encoding == Utf16
-  if encoding == Utf16 {
-    byte_len = len * 2
-  } else if encoding == Latin1Utf16 {
-    // In the canonical ABI, latin1+utf16 uses the high bit of the length to
-    // indicate UTF-16; an untagged length selects Latin-1.
-    let ulen = len.reinterpret_as_uint()
-    if (ulen & 0x8000_0000U) != 0U {
-      utf16 = true
-      byte_len = (ulen & 0x7FFF_FFFFU).reinterpret_as_int() * 2
-    }
-  }
-  if ptr.to_int64() + byte_len.to_int64() > mem_len {
+  let utf16 = encoding == Utf16 || (encoding == Latin1Utf16 && len < 0)
+  let units = if encoding == Latin1Utf16 { len & 0x7fffffff } else { len }
+  let byte_len64 = units.to_int64() * (if utf16 { 2L } else { 1L })
+  if byte_len64 > 2147483647L || ptr.to_int64() + byte_len64 > mem_len {
     raise CanonCallError(
       "string content out-of-bounds (string pointer/length out of bounds of memory)",
     )
   }
+  let byte_len = byte_len64.to_int()
   if encoding == Utf8 || !utf16 {
     let bytes : Array[Byte] = []
     for i in 0..<byte_len {
@@ -72,7 +63,6 @@ fn read_string_from_memory_with_encoding(
         e => raise CanonCallError(e.to_string())
       }
       let cu = b0.to_int() | (b1.to_int() << 8)
-      // Surrogates: minimal handling sufficient for current tests.
       if cu >= 0xD800 && cu <= 0xDBFF && i + 3 < byte_len {
         let b2 = mem.load_byte(ptr + i + 2) catch {
           e => raise CanonCallError(e.to_string())
@@ -89,6 +79,9 @@ fn read_string_from_memory_with_encoding(
           i = i + 4
           continue
         }
+      }
+      if cu >= 0xD800 && cu <= 0xDFFF {
+        raise CanonCallError("unpaired surrogate found")
       }
       buf.write_char(cu.unsafe_to_char())
       i = i + 2
