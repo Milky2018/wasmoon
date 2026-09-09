@@ -47,6 +47,8 @@ fn CanonicalPayloadType::load(
     length > memory.byte_len() - offset {
     raise CanonCallError("out of bounds memory access")
   }
+  let budget = CanonicalCopyBudget::new()
+  budget.consume(count, 32)
   for i in 0..<count {
     let flat = load_flat_component_value_from_memory(
       memory,
@@ -64,6 +66,7 @@ fn CanonicalPayloadType::load(
         memory.is_memory64(),
         resources.encoding,
         resource_table,
+        budget~,
       ),
     )
   }

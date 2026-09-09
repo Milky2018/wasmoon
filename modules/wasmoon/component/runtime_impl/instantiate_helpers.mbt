@@ -191,7 +191,7 @@ fn append_alias(
   match (sort, ext) {
     (Func, Func(f)) => state.funcs.push(f)
     (Value, Value(v)) => state.values.push(v)
-    (Type, Type(t)) => state.types.push(t)
+    (Type, Type(t)) => state.append_declared_type(t)
     (Component, Component(c)) => state.components.push(c)
     (Instance, Instance(i)) => state.instances.push(i)
     (Core(core_sort), CoreFunc(f)) =>

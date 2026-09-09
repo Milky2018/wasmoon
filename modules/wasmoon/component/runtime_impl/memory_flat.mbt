@@ -4,6 +4,7 @@ fn read_string_from_memory_with_encoding(
   ptr : Int,
   len : Int,
   encoding : StringEncoding,
+  budget? : CanonicalCopyBudget,
 ) -> String raise ComponentRuntimeError {
   if ptr < 0 {
     raise CanonCallError(
@@ -31,6 +32,9 @@ fn read_string_from_memory_with_encoding(
     raise CanonCallError(
       "string content out-of-bounds (string pointer/length out of bounds of memory)",
     )
+  }
+  if budget is Some(budget) {
+    budget.consume(units, if utf16 { 2 } else { 1 })
   }
   let byte_len = byte_len64.to_int()
   if encoding == Utf8 || !utf16 {

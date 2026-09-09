@@ -1,6 +1,7 @@
 ///|
 priv struct BuildState {
   types : Array[TypeDef?]
+  next_declared_type : Ref[Int]
   funcs : Array[ComponentFunc]
   values : Array[ComponentValue]
   components : Array[ComponentClosure]
@@ -62,6 +63,7 @@ fn BuildState::BuildState(
   async_state.resource_tables.set(resource_table.id, resource_table)
   {
     types: [],
+    next_declared_type: Ref(0),
     funcs: [],
     values: [],
     components: [],

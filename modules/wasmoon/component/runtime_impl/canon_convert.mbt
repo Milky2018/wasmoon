@@ -7,6 +7,7 @@ fn lift_component_value_from_flat(
   mem_is_64 : Bool,
   encoding : StringEncoding,
   resource_table : ResourceTable,
+  budget? : CanonicalCopyBudget,
 ) -> ComponentValue raise ComponentRuntimeError {
   let mut idx = 0
   fn take(
@@ -43,7 +44,13 @@ fn lift_component_value_from_flat(
                 _ => raise HostCallError("type mismatch")
               }
             }
-            let s = read_string_from_memory_with_encoding(m, ptr, len, encoding)
+            let s = read_string_from_memory_with_encoding(
+              m,
+              ptr,
+              len,
+              encoding,
+              budget?,
+            )
             if encoding == Utf8 {
               String(s)
             } else {
@@ -79,6 +86,9 @@ fn lift_component_value_from_flat(
       TypeIdx(ti) =>
         match types.get(ti) {
           Some(Some(FixedList(element, length))) => {
+            if budget is Some(budget) {
+              budget.consume(length, 32)
+            }
             let items : Array[ComponentValue] = []
             for _ in 0..<length {
               items.push(lift_inner(element, vals))
@@ -119,6 +129,25 @@ fn lift_component_value_from_flat(
               elem_ty, types, mem_is_64,
             )
             let stride = align_to(elem_size, elem_align)
+            let offset = if mem_is_64 {
+              ptr.to_int64()
+            } else {
+              ptr.to_int64() & 0xffffffffL
+            }
+            let length = (len.to_int64() & 0xffffffffL) * stride.to_int64()
+            if offset < 0L ||
+              offset > m.byte_len() ||
+              length > m.byte_len() - offset {
+              raise CanonCallError(
+                "list pointer/length out of bounds of memory",
+              )
+            }
+            if offset % elem_align.to_int64() != 0L {
+              raise CanonCallError("unaligned pointer")
+            }
+            if budget is Some(budget) {
+              budget.consume(len, 32)
+            }
             let items : Array[ComponentValue] = []
             for i in 0..<len {
               let base = ptr + stride * i
@@ -127,7 +156,14 @@ fn lift_component_value_from_flat(
               )
               items.push(
                 lift_component_value_from_flat(
-                  elem_ty, elem_vals, types, mem, mem_is_64, encoding, resource_table,
+                  elem_ty,
+                  elem_vals,
+                  types,
+                  mem,
+                  mem_is_64,
+                  encoding,
+                  resource_table,
+                  budget?,
                 ),
               )
             }
@@ -175,7 +211,14 @@ fn lift_component_value_from_flat(
                   )
                 }
                 let payload = lift_component_value_from_flat(
-                  payload_ty, payload_vals, types, mem, mem_is_64, encoding, resource_table,
+                  payload_ty,
+                  payload_vals,
+                  types,
+                  mem,
+                  mem_is_64,
+                  encoding,
+                  resource_table,
+                  budget?,
                 )
                 Variant(tag, Some(payload))
               }
@@ -216,7 +259,14 @@ fn lift_component_value_from_flat(
                 )
               }
               let payload = lift_component_value_from_flat(
-                payload_ty, payload_vals, types, mem, mem_is_64, encoding, resource_table,
+                payload_ty,
+                payload_vals,
+                types,
+                mem,
+                mem_is_64,
+                encoding,
+                resource_table,
+                budget?,
               )
               Variant(1, Some(payload))
             }
@@ -257,7 +307,14 @@ fn lift_component_value_from_flat(
                   )
                 }
                 let payload = lift_component_value_from_flat(
-                  pt, payload_vals, types, mem, mem_is_64, encoding, resource_table,
+                  pt,
+                  payload_vals,
+                  types,
+                  mem,
+                  mem_is_64,
+                  encoding,
+                  resource_table,
+                  budget?,
                 )
                 Variant(tag, Some(payload))
               }

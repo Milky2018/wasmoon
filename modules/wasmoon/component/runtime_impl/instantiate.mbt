@@ -33,6 +33,10 @@ fn instantiate_component(
     linker.host_runtime_state().async_state
   }
   let state = BuildState::BuildState(stream_table, async_state)
+  let declared_types = count_component_type_slots(component)
+  for _ in 0..<declared_types {
+    state.types.push(None)
+  }
   state.async_state.resource_tables.set(
     state.resource_table.id,
     state.resource_table,
@@ -248,6 +252,14 @@ fn run_component_sections(
                 raise InvalidInstanceIndex(instance_idx)
               }
               match state.instances[instance_idx].exports.get(name) {
+                Some(Type(type_def)) =>
+                  Type(
+                    clone_materialized_optional_type(
+                      type_def,
+                      state.instances[instance_idx].types,
+                      state.types,
+                    ),
+                  )
                 Some(v) => v
                 None => raise UnknownExport(name)
               }
@@ -287,16 +299,24 @@ fn run_component_sections(
                 _ => raise AliasTargetMismatch("core export sort")
               }
             }
-            Outer(ct, idx) =>
-              resolve_outer_alias(
-                extend_outer_stack(
-                  outer_stack,
-                  env_instance_from_state("\{name}::env", state, store),
-                ),
-                ct,
-                alias_decl.sort,
-                idx,
+            Outer(ct, idx) => {
+              let stack = extend_outer_stack(
+                outer_stack,
+                env_instance_from_state("\{name}::env", state, store),
               )
+              let ext = resolve_outer_alias(stack, ct, alias_decl.sort, idx)
+              match ext {
+                Type(type_def) =>
+                  Type(
+                    clone_materialized_optional_type(
+                      type_def,
+                      stack[stack.length() - 1 - ct].types,
+                      state.types,
+                    ),
+                  )
+                _ => ext
+              }
+            }
           }
           append_alias(alias_decl.sort, ext, state)
         }
@@ -320,7 +340,7 @@ fn run_component_sections(
               }
             _ => t
           }
-          state.types.push(Some(t2))
+          state.append_declared_type(Some(t2))
         }
       }
       8 => process_canon_section(section.payload, state, store, entry_state)
@@ -389,7 +409,7 @@ fn run_component_sections(
               }
             Type(_) =>
               match ext {
-                Type(t) => state.types.push(t)
+                Type(t) => state.append_declared_type(t)
                 _ => raise UnknownImport(decode_import_name(imp.name))
               }
             ComponentType(_) =>

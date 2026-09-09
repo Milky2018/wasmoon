@@ -100,8 +100,8 @@ test "outer type aliases preserve referenced type context" {
     Some(Tuple([Prim(U32), Prim(U64)])),
     Some(FuncType({ is_async: false, params: [], result: Some(TypeIdx(0)), })),
   ]
-  let local_types : Array[TypeDef?] = []
-  materialize_outer_type(1, source_types, local_types)
+  let local_types : Array[TypeDef?] = [None]
+  materialize_outer_type(1, source_types, local_types, 0)
   debug_inspect(
     local_types,
     content=(
