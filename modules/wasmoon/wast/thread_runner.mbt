@@ -29,6 +29,10 @@ fn interpreter_thread_result(
 ) -> ThreadCallResult {
   match outcome {
     Returned(values) => Completed(Ok(values))
+    Suspended(GuestEffect(_), continuation) => {
+      continuation.cancel()
+      Completed(Err(GuestSuspension))
+    }
     Suspended(HostCall(_), continuation) => {
       continuation.cancel()
       Completed(
@@ -304,6 +308,7 @@ fn shared_thread_context(
   let child = WastContext::WastContext(
     parent.use_jit,
     bulk_memory=parent.bulk_memory,
+    stack_switching=parent.stack_switching,
     nan_canonicalization=parent.store.nan_canonicalization,
     jit_compiler=parent.jit_compiler,
     register_named_modules=parent.register_named_modules,
@@ -410,6 +415,7 @@ fn WastThread::step(
       }
     AssertReturn(action, _)
     | AssertTrap(action, _)
+    | AssertSuspension(action, _)
     | AssertException(action)
     | AssertExhaustion(action, _)
     | Action(action) =>

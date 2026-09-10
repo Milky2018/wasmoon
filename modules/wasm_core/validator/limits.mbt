@@ -90,7 +90,12 @@ fn validate_mem_offset(
 /// Check if a reference type is non-nullable
 fn is_non_nullable_ref_type(ty : @types.ValueType) -> Bool {
   match ty {
-    RefFunc | RefExtern | RefFuncTyped(_) => true
+    RefFunc
+    | RefExtern
+    | RefFuncTyped(_)
+    | RefCont
+    | RefContTyped(_)
+    | RefNoCont => true
     _ => false
   }
 }
@@ -114,6 +119,7 @@ fn validate_table_type(
       funcs=func_addrs,
       types=ctx.types,
       subtyping_ctx=Some(ctx.subtyping_ctx),
+      stack_switching=ctx.stack_switching,
     )
   } else if is_non_nullable_ref_type(table.type_.elem_type) {
     // If no init expression and element type is non-nullable, this is always an error

@@ -19,6 +19,8 @@ pub fn ValueType::from_abstract_heap_type(
       -14 => NullExternRef
       -13 => NullFuncRef
       -12 => NullExnRef
+      -24 => if nullable { ContRef } else { RefCont }
+      -11 => if nullable { NullContRef } else { RefNoCont }
       _ => return None
     },
   )

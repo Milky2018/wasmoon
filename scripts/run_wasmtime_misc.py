@@ -138,6 +138,8 @@ def run_case(case: dict, mode: str, binary: Path, output: Path, timeout: float,
             command.append("--canonicalize-nans")
         if case["config"].get("bulk_memory") is False:
             command.append("--no-bulk-memory")
+        if case["config"].get("stack_switching") is True:
+            command.append("--stack-switching")
         if mode == "interp":
             command.append("--no-jit")
         result = parse_core_result(execute(command, directory, timeout), case["commands"])

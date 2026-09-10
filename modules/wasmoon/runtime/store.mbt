@@ -57,6 +57,7 @@ pub struct Store {
   native_execution : @wasmoon_jit.NativeExecutionState
   priv funcref_registry : StoreFuncrefRegistry
   priv native_types : StoreTypeRegistry
+  priv guest_continuations : Array[GuestContinuationBody?]
   priv pinned_gc_roots : Array[(Int64, Array[@types.Value], Ref[Bool])]
   priv mut next_pinned_gc_roots_id : Int64
   priv mut instantiation : RollbackRegistrar?
@@ -159,6 +160,7 @@ pub fn Store::Store(nan_canonicalization? : Bool = false) -> Store {
     native_execution: NativeExecutionState(),
     funcref_registry: StoreFuncrefRegistry::new(),
     native_types: StoreTypeRegistry::new(),
+    guest_continuations: [],
     pinned_gc_roots: [],
     next_pinned_gc_roots_id: 0L,
     instantiation: None,
@@ -196,6 +198,7 @@ pub fn Store::with_c_heap(nan_canonicalization? : Bool = false) -> Store {
     native_execution: NativeExecutionState(),
     funcref_registry: StoreFuncrefRegistry::new(),
     native_types: StoreTypeRegistry::new(),
+    guest_continuations: [],
     pinned_gc_roots: [],
     next_pinned_gc_roots_id: 0L,
     instantiation: None,
@@ -214,6 +217,12 @@ pub fn Store::close(self : Store) -> Unit {
     return
   }
   self.closed.val = true
+  for entry in self.guest_continuations {
+    if entry is Some(body) {
+      (body.cancel)()
+    }
+  }
+  self.guest_continuations.clear()
   self.native_execution.seal()
   for roots in self.pinned_gc_roots {
     roots.2.val = false

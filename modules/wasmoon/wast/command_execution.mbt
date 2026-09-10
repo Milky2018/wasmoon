@@ -13,7 +13,7 @@ fn prepare_wast_module(
   name : String?,
   cooperative? : Bool = false,
 ) -> PreparedWastModule raise WastRunnerError {
-  @validator.validate_module(module_, bulk_memory=ctx.bulk_memory) catch {
+  ctx.validate_core_module(module_) catch {
     error => raise RuntimeError("module validation failed: \{error}")
   }
   let instance = @executor.instantiate_module_with_imports_unstarted(
@@ -185,6 +185,15 @@ fn finish_wast_action(
             }
           Err(error) => Some("expected trap '\{expected}', got \{error}")
           Ok(_) => Some("expected trap '\{expected}', but the action returned")
+        },
+      )
+    AssertSuspension(_, _) =>
+      (
+        "assert_suspension \{description}",
+        match outcome {
+          Err(GuestSuspension) => None
+          Err(error) => Some("expected suspension, got \{error}")
+          Ok(_) => Some("expected suspension, but the action returned")
         },
       )
     AssertException(_) =>

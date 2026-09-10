@@ -19,6 +19,12 @@ pub(all) enum ValueType {
   // Typed function references
   RefFuncTyped(Int) // non-null typed function reference (ref $t)
   RefNullFuncTyped(Int) // nullable typed function reference (ref null $t)
+  ContRef // nullable abstract continuation reference
+  RefCont // non-null abstract continuation reference
+  RefContTyped(Int)
+  RefNullContTyped(Int)
+  NullContRef // nullable bottom of the continuation hierarchy
+  RefNoCont // non-null bottom of the continuation hierarchy
   // GC reference types
   AnyRef // nullable any reference (ref null any)
   ExnRef // nullable exception reference (ref null exn)
@@ -50,10 +56,14 @@ pub(all) enum ValueType {
 pub fn ValueType::is_nullable(self : ValueType) -> Bool {
   match self {
     // Nullable reference types
-    FuncRef | ExternRef | AnyRef | ExnRef | StructRef | ArrayRef => true
-    RefNullFuncTyped(_) | RefNullStruct(_) | RefNullArray(_) => true
+    FuncRef | ExternRef | AnyRef | ExnRef | StructRef | ArrayRef | ContRef =>
+      true
+    RefNullFuncTyped(_)
+    | RefNullStruct(_)
+    | RefNullArray(_)
+    | RefNullContTyped(_) => true
     RefNullEq | RefNullI31 => true
-    NullRef | NullFuncRef | NullExnRef | NullExternRef => true
+    NullRef | NullFuncRef | NullExnRef | NullExternRef | NullContRef => true
     // Non-nullable reference types
     RefFunc
     | RefExtern
@@ -62,8 +72,10 @@ pub fn ValueType::is_nullable(self : ValueType) -> Bool {
     | RefI31
     | RefStructAbs
     | RefArrayAbs
-    | RefNone => false
-    RefFuncTyped(_) | RefStruct(_) | RefArray(_) => false
+    | RefNone
+    | RefCont
+    | RefNoCont => false
+    RefFuncTyped(_) | RefStruct(_) | RefArray(_) | RefContTyped(_) => false
     // Value types (not references)
     I32 | I64 | F32 | F64 | V128 => false
   }
@@ -107,11 +119,12 @@ pub(all) struct ArrayType {
 } derive(Eq, Debug)
 
 ///|
-/// Composite type (func, struct, or array)
+/// Composite type, including a continuation's underlying function type index.
 pub(all) enum CompositeType {
   Func(FuncType)
   Struct(StructType)
   Array(ArrayType)
+  Cont(Int)
 } derive(Eq, Debug)
 
 ///|
@@ -164,6 +177,7 @@ pub(all) enum Value {
   FuncRef(Int) // function index
   ExternRef(Int) // external reference
   ExnRef(Int) // exception reference (index into exception store)
+  ContRef(Int64) // Store-owned one-shot continuation handle
   // GC values
   StructRef(Int) // struct reference (index into GC heap)
   ArrayRef(Int) // array reference (index into GC heap)
@@ -199,6 +213,13 @@ pub(all) enum Instruction {
   Throw(Int) // tag index - throw exception with tag
   ThrowRef // throw exception from exnref on stack
   TryTable(BlockType, Array[CatchHandler], Array[Instruction]) // block type, handlers, body
+  ContNew(Int)
+  ContBind(Int, Int)
+  Suspend(Int)
+  Resume(Int, Array[ResumeHandler])
+  ResumeThrow(Int, Int, Array[ResumeHandler])
+  ResumeThrowRef(Int, Array[ResumeHandler])
+  Switch(Int, Int)
 
   // Parametric instructions
   Drop
@@ -793,6 +814,12 @@ pub(all) enum CatchHandler {
   CatchAllRef(Int) // (label_idx) - catch any exception with exnref
 } derive(Eq, Debug)
 
+///|
+pub(all) enum ResumeHandler {
+  OnLabel(Int, Int) // tag index and branch label
+  OnSwitch(Int) // switch tag index
+} derive(Eq, Debug)
+
 // ============================================================
 // Module Structures
 // ============================================================
@@ -863,6 +890,12 @@ fn ValueType::type_code(self : ValueType) -> Int {
     ArrayRef => 22
     RefStructAbs => 23
     RefArrayAbs => 24
+    ContRef => 25
+    RefCont => 26
+    NullContRef => 27
+    RefNoCont => 28
+    RefContTyped(idx) => 700 + idx
+    RefNullContTyped(idx) => 800 + idx
   }
 }
 
@@ -1484,4 +1517,18 @@ test "parse empty module" {
   inspect(mod.types.length(), content="0")
   inspect(mod.funcs.length(), content="0")
   inspect(@debug.to_string(mod.start), content="None")
+}
+
+///|
+/// Continuation references form a separate hierarchy from GC, func and extern references.
+pub fn ValueType::is_continuation_ref(self : ValueType) -> Bool {
+  match self {
+    ContRef
+    | RefCont
+    | NullContRef
+    | RefNoCont
+    | RefContTyped(_)
+    | RefNullContTyped(_) => true
+    _ => false
+  }
 }

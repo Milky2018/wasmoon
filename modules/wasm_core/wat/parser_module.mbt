@@ -478,6 +478,24 @@ fn Parser::parse_value_type(self : Parser) -> @types.ValueType raise WatError {
           self.expect_rparen()
           NullFuncRef // bottom type for func
         }
+        Keyword("cont") => {
+          self.advance()
+          self.expect_rparen()
+          if is_nullable {
+            ContRef
+          } else {
+            RefCont
+          }
+        }
+        Keyword("nocont") => {
+          self.advance()
+          self.expect_rparen()
+          if is_nullable {
+            NullContRef
+          } else {
+            RefNoCont
+          }
+        }
         Keyword("noexn") => {
           self.advance()
           self.expect_rparen()
@@ -562,6 +580,8 @@ fn Parser::parse_value_type(self : Parser) -> @types.ValueType raise WatError {
         "f64" => F64
         "v128" => V128
         "funcref" => FuncRef
+        "contref" => ContRef
+        "nullcontref" => NullContRef
         "externref" => ExternRef
         "anyref" => AnyRef
         "exnref" => ExnRef

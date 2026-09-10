@@ -3,9 +3,15 @@
 pub fn validate_module(
   mod : @types.Module,
   bulk_memory? : Bool = true,
+  stack_switching? : Bool = false,
 ) -> Unit raise ValidationError {
-  let ctx = ValidationContext::ValidationContext(mod, bulk_memory~)
+  let ctx = ValidationContext::ValidationContext(
+    mod,
+    bulk_memory~,
+    stack_switching~,
+  )
   validate_segment_features(mod, bulk_memory)
+  validate_continuation_types(mod, stack_switching)
   let num_types = ctx.types.length()
 
   // Validate that all function type indices are valid
@@ -19,7 +25,7 @@ pub fn validate_module(
   // Validate type indices in function types (parameters and results)
   for subtype in mod.types {
     for vt in collect_value_types_from_subtype(subtype) {
-      validate_value_type(vt, num_types)
+      validate_value_type(vt, num_types, stack_switching~)
     }
   }
 
@@ -57,6 +63,7 @@ pub fn validate_module(
         (Func(_), Func(_)) => true
         (Struct(_), Struct(_)) => true
         (Array(_), Array(_)) => true
+        (Cont(_), Cont(_)) => true
         _ => false
       }
       if !valid_kind {
@@ -76,17 +83,17 @@ pub fn validate_module(
 
   // Validate type indices in global types
   for global in mod.globals {
-    validate_value_type(global.type_.value_type, num_types)
+    validate_value_type(global.type_.value_type, num_types, stack_switching~)
   }
 
   // Validate type indices in table element types
   for table in mod.tables {
-    validate_value_type(table.type_.elem_type, num_types)
+    validate_value_type(table.type_.elem_type, num_types, stack_switching~)
   }
 
   // Validate type indices in elem segment types
   for elem in mod.elems {
-    validate_value_type(elem.type_, num_types)
+    validate_value_type(elem.type_, num_types, stack_switching~)
   }
 
   // Multi-memory support is now enabled
@@ -118,6 +125,7 @@ pub fn validate_module(
       funcs=ctx.funcs,
       types=ctx.types,
       subtyping_ctx=Some(ctx.subtyping_ctx),
+      stack_switching=ctx.stack_switching,
     )
   }
 
@@ -138,6 +146,7 @@ pub fn validate_module(
       offset_type,
       types=ctx.types,
       subtyping_ctx=Some(ctx.subtyping_ctx),
+      stack_switching=ctx.stack_switching,
     )
   }
 
@@ -168,6 +177,7 @@ pub fn validate_module(
         offset_type,
         types=ctx.types,
         subtyping_ctx=Some(ctx.subtyping_ctx),
+        stack_switching=ctx.stack_switching,
       )
     }
     // Validate each init expression is a constant expression producing the element type
@@ -179,6 +189,7 @@ pub fn validate_module(
         funcs=ctx.funcs,
         types=ctx.types,
         subtyping_ctx=Some(ctx.subtyping_ctx),
+        stack_switching=ctx.stack_switching,
       )
     }
   }
@@ -253,9 +264,15 @@ pub fn validate_module(
 pub fn validate_module_with_context(
   mod : @types.Module,
   bulk_memory? : Bool = true,
+  stack_switching? : Bool = false,
 ) -> Unit raise ValidationError {
-  let ctx = ValidationContext::ValidationContext(mod, bulk_memory~)
+  let ctx = ValidationContext::ValidationContext(
+    mod,
+    bulk_memory~,
+    stack_switching~,
+  )
   validate_segment_features(mod, bulk_memory)
+  validate_continuation_types(mod, stack_switching)
 
   // Validate that all function type indices are valid
   for i, type_idx in ctx.funcs {
@@ -301,6 +318,7 @@ pub fn validate_module_with_context(
         (Func(_), Func(_)) => true
         (Struct(_), Struct(_)) => true
         (Array(_), Array(_)) => true
+        (Cont(_), Cont(_)) => true
         _ => false
       }
       if !valid_kind {
@@ -361,6 +379,7 @@ pub fn validate_module_with_context(
       offset_type,
       types=ctx.types,
       subtyping_ctx=Some(ctx.subtyping_ctx),
+      stack_switching=ctx.stack_switching,
     ) catch {
       e => raise WithContext(ValidationErrorContext::from_error(e))
     }
@@ -399,6 +418,7 @@ pub fn validate_module_with_context(
         offset_type,
         types=ctx.types,
         subtyping_ctx=Some(ctx.subtyping_ctx),
+        stack_switching=ctx.stack_switching,
       ) catch {
         e => raise WithContext(ValidationErrorContext::from_error(e))
       }
@@ -412,6 +432,7 @@ pub fn validate_module_with_context(
         funcs=ctx.funcs,
         types=ctx.types,
         subtyping_ctx=Some(ctx.subtyping_ctx),
+        stack_switching=ctx.stack_switching,
       ) catch {
         e => raise WithContext(ValidationErrorContext::from_error(e))
       }

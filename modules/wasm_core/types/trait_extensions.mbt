@@ -204,3 +204,9 @@ pub extend ValueType with Eq::{not_equal, equal}
 
 ///|
 pub extend ValueType with Show::{to_string, output}
+
+///|
+pub extend ResumeHandler with Debug::{to_repr}
+
+///|
+pub extend ResumeHandler with Eq::{not_equal, equal}

@@ -173,6 +173,7 @@ pub fn RuntimeSymbols::with_runtime_prefix(String) -> Self
 
 pub(all) enum WasmDefinedTypeContract {
   Function(WasmFunctionContract)
+  Continuation(Int)
   Struct(Array[WasmFieldContract])
   Array(WasmFieldContract)
 } derive(Eq, @debug.Debug)

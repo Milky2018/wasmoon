@@ -12,6 +12,7 @@ pub enum WastCommand {
   ModuleBinaryFailed(String)
   AssertReturn(WastAction, Array[WastValue])
   AssertTrap(WastAction, String)
+  AssertSuspension(WastAction, String)
   AssertException(WastAction) // Exception should be thrown
   AssertModuleTrap(WastModuleSource, String)
   AssertExhaustion(WastAction, String)

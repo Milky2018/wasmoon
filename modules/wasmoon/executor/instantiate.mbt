@@ -14,6 +14,11 @@ fn normalize_runtime_error(e : Error) -> @runtime.RuntimeError {
       match e {
         InvocationSignal::HostInvocation(err) => normalize_runtime_error(err)
         ThrowException(_, _) => UncaughtException
+        ExecutionSuspended => UnhandledSuspension
+        @runtime.GuestContinuationYield(_, body) => {
+          (body.cancel)()
+          UnhandledSuspension
+        }
         _ => Unreachable
       }
   }
@@ -549,6 +554,7 @@ fn evaluate_element_segments(
 pub fn instantiate_module_with_init(
   mod : @types.Module,
 ) -> (@runtime.Store, @runtime.ModuleInstance) raise @runtime.RuntimeError {
+  validate_continuation_gc_storage(mod)
   let (store, instance) = instantiate_module(mod)
 
   // Per WebAssembly spec: element segments are initialized BEFORE data segments
@@ -1219,6 +1225,7 @@ pub fn instantiate_module_with_imports_unstarted(
   mod : @types.Module,
   imports : @runtime.Imports,
 ) -> @runtime.ModuleInstance raise @runtime.RuntimeError {
+  validate_continuation_gc_storage(mod)
   // Set module types for GC support
   store.set_module_types(mod.types, rec_groups=mod.type_rec_groups)
 

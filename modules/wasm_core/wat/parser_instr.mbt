@@ -313,6 +313,19 @@ fn Parser::parse_plain_instruction(
     // Exception handling instructions
     "throw" => Throw(self.parse_tag_idx())
     "throw_ref" => ThrowRef
+    "cont.new" => ContNew(self.parse_type_idx())
+    "cont.bind" => ContBind(self.parse_type_idx(), self.parse_type_idx())
+    "suspend" => Suspend(self.parse_tag_idx())
+    "resume" => Resume(self.parse_type_idx(), self.parse_resume_handlers())
+    "resume_throw" =>
+      ResumeThrow(
+        self.parse_type_idx(),
+        self.parse_tag_idx(),
+        self.parse_resume_handlers(),
+      )
+    "resume_throw_ref" =>
+      ResumeThrowRef(self.parse_type_idx(), self.parse_resume_handlers())
+    "switch" => Switch(self.parse_type_idx(), self.parse_tag_idx())
     "try_table" => {
       // try_table has a block type followed by catch handlers and a body
       // (try_table (result i32) (catch $tag $label) ... instructions end)
@@ -1677,4 +1690,40 @@ fn Parser::find_or_create_func_type(
   // Implicit type is its own rec group
   self.type_rec_groups.push(idx)
   idx
+}
+
+///|
+fn Parser::parse_resume_handlers(
+  self : Parser,
+) -> Array[@types.ResumeHandler] raise WatError {
+  let handlers : Array[@types.ResumeHandler] = []
+  while self.current.token == LParen {
+    let saved = (
+      self.lexer.pos,
+      self.lexer.line,
+      self.lexer.column,
+      self.lexer.token_start_line,
+      self.lexer.token_start_column,
+    )
+    let next = self.lexer.next_token()
+    self.lexer.pos = saved.0
+    self.lexer.line = saved.1
+    self.lexer.column = saved.2
+    self.lexer.token_start_line = saved.3
+    self.lexer.token_start_column = saved.4
+    if next.token != Keyword("on") {
+      break
+    }
+    self.advance()
+    self.advance()
+    let tag = self.parse_tag_idx()
+    if self.current.token == Keyword("switch") {
+      self.advance()
+      handlers.push(OnSwitch(tag))
+    } else {
+      handlers.push(OnLabel(tag, self.parse_label_idx()))
+    }
+    self.expect_rparen()
+  }
+  handlers
 }

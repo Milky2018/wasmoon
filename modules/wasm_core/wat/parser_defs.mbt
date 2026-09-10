@@ -1393,10 +1393,6 @@ fn Parser::parse_import_def(
           self.lexer.token_start_column = saved_token_start_column
           self.current = LocatedToken::synthetic(LParen)
           let func_type = self.parse_func_type()
-          // Tags must have no results
-          if func_type.results.length() > 0 {
-            raise UnexpectedToken("tags cannot have results", self.loc())
-          }
           // Add this type to the module and get its index
           let idx = mod_.types.length()
           mod_.types.push(@types.SubType::from_func(func_type))
@@ -1883,10 +1879,6 @@ fn Parser::parse_tag_type_spec(
       self.lexer.token_start_column = saved_token_start_column
       self.current = LocatedToken::synthetic(LParen)
       let func_type = self.parse_func_type()
-      // Tags must have no results
-      if func_type.results.length() > 0 {
-        raise UnexpectedToken("tags cannot have results", self.loc())
-      }
       // Add this type to the module and get its index
       let idx = mod_.types.length()
       mod_.types.push(@types.SubType::from_func(func_type))

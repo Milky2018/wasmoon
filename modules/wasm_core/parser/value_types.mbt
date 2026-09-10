@@ -16,6 +16,12 @@ fn Parser::resolve_heap_type_as_ref_value_type(
       raise ParseError("invalid heap type")
     }
     match self.types[type_idx].composite {
+      Cont(_) =>
+        if nullable {
+          RefNullContTyped(type_idx)
+        } else {
+          RefContTyped(type_idx)
+        }
       Func(_) =>
         if nullable {
           RefNullFuncTyped(type_idx)
@@ -80,6 +86,8 @@ fn Parser::read_value_type(self : Parser) -> @types.ValueType raise ParserError 
     0x6B => StructRef
     0x6A => ArrayRef
     0x69 => ExnRef
+    0x68 => ContRef
+    0x75 => NullContRef
     0x71 => NullRef
     0x72 => NullExternRef
     0x73 => NullFuncRef

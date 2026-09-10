@@ -100,6 +100,16 @@ pub fn jit_results_to_values(
   let mut slot_idx = 0
   for ty in result_types {
     let value : @types.Value = match ty {
+      ContRef
+      | RefCont
+      | RefContTyped(_)
+      | RefNullContTyped(_)
+      | NullContRef
+      | RefNoCont => {
+        let raw = results[slot_idx]
+        slot_idx += 1
+        @wasmoon_jit.i64_to_value(raw, ty)
+      }
       I32 => {
         let raw = results[slot_idx]
         slot_idx += 1
@@ -202,6 +212,7 @@ pub fn value_to_jit_arg_typed(
   ty : @types.ValueType,
 ) -> Int64 {
   match value {
+    ContRef(_) => @wasmoon_jit.value_to_i64(value)
     I32(n) => @types.ToInt64::to_int64_bits(n)
     I64(n) => @types.ToInt64::to_int64_bits(n)
     F32(f) => @types.ToInt64::to_int64_bits(f)

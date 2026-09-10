@@ -176,6 +176,12 @@ pub fn init_jit_globals_from_store(
           write,
           root: fn() {
             match value_type {
+              ContRef
+              | RefCont
+              | RefContTyped(_)
+              | RefNullContTyped(_)
+              | NullContRef
+              | RefNoCont => Null
               I32
               | I64
               | F32
@@ -368,6 +374,12 @@ fn read_native_global(
 ) -> @types.Value raise @runtime.RuntimeError {
   let raw_value = @wasmoon_jit.native_value_slot_read(offset, 0)
   match value_type {
+    ContRef
+    | RefCont
+    | RefContTyped(_)
+    | RefNullContTyped(_)
+    | NullContRef
+    | RefNoCont => @wasmoon_jit.i64_to_value(raw_value, value_type)
     I32 => I32(@types.FromInt64::from_int64_bits(raw_value))
     I64 => I64(@types.FromInt64::from_int64_bits(raw_value))
     F32 => F32(@types.FromInt64::from_int64_bits(raw_value))
@@ -445,6 +457,7 @@ fn encode_global_value_for_jit(
   func_addrs : Array[Int],
 ) -> (Int64, Int64?) raise @runtime.RuntimeError {
   match value {
+    ContRef(_) => (@wasmoon_jit.value_to_i64(value), None)
     I32(n) => (@types.ToInt64::to_int64_bits(n), None)
     I64(n) => (@types.ToInt64::to_int64_bits(n), None)
     F32(f) => (@types.ToInt64::to_int64_bits(f), None)
@@ -1185,6 +1198,7 @@ fn encode_exception_value_for_jit(
   instance : @runtime.ModuleInstance,
 ) -> Int64? raise @runtime.RuntimeError {
   match value {
+    ContRef(_) => Some(@wasmoon_jit.value_to_i64(value))
     I32(n) => Some(@types.ToInt64::to_int64_bits(n))
     I64(n) => Some(@types.ToInt64::to_int64_bits(n))
     F32(n) => Some(@types.ToInt64::to_int64_bits(n))
@@ -1210,6 +1224,12 @@ fn decode_ref_value(
   instance : @runtime.ModuleInstance,
 ) -> @types.Value raise @runtime.RuntimeError {
   match ty {
+    ContRef
+    | RefCont
+    | RefContTyped(_)
+    | RefNullContTyped(_)
+    | NullContRef
+    | RefNoCont => @wasmoon_jit.i64_to_value(raw, ty)
     FuncRef | RefFunc | RefFuncTyped(_) | RefNullFuncTyped(_) | NullFuncRef =>
       decode_funcref_to_store_addr(raw, store, jit_module, instance)
     ExternRef | RefExtern | NullExternRef => decode_extern_value(raw, store)
@@ -1295,6 +1315,16 @@ fn encode_value(
   instance : @runtime.ModuleInstance,
 ) -> Array[Int64]? raise @runtime.RuntimeError {
   match ty {
+    ContRef
+    | RefCont
+    | RefContTyped(_)
+    | RefNullContTyped(_)
+    | NullContRef
+    | RefNoCont =>
+      match value {
+        Null | ContRef(_) => Some([@wasmoon_jit.value_to_i64(value)])
+        _ => None
+      }
     I32 =>
       match value {
         I32(n) => Some([n.to_int64() & 0xFFFFFFFFL])

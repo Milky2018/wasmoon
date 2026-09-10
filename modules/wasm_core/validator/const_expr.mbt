@@ -9,6 +9,7 @@ fn validate_const_expr(
   funcs? : Array[Int] = [],
   types? : Array[@types.SubType] = [],
   subtyping_ctx? : @types.SubtypingContext? = None,
+  stack_switching? : Bool = false,
 ) -> Unit raise ValidationError {
   if expr.is_empty() {
     raise TypeMismatch("empty constant expression")
@@ -35,7 +36,10 @@ fn validate_const_expr(
       F32Const(_) => type_stack.push(F32)
       F64Const(_) => type_stack.push(F64)
       V128Const(_) => type_stack.push(V128)
-      RefNull(t) => type_stack.push(t)
+      RefNull(t) => {
+        validate_value_type(t, types.length(), stack_switching~)
+        type_stack.push(t)
+      }
       RefFunc(func_idx) => {
         if func_idx >= funcs.length() {
           raise InvalidFunctionIndex(func_idx)

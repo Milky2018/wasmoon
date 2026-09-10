@@ -4,6 +4,7 @@ pub(all) enum SuspensionReason {
   HostCall(Int64)
   CooperativeYield
   AtomicWait
+  GuestEffect(@runtime.GuestContinuationEffect)
 } derive(Debug)
 
 ///|
@@ -169,11 +170,13 @@ fn ExecutionContinuation::continue_unchecked(
   guard self.context.resume_action is Some(action) else {
     self.active[0] = false
     self.root_lease.release()
+    self.context.discard_captured_execution()
     raise @runtime.Unreachable
   }
   // Consume this handle before running it. A subsequent suspension receives a
   // fresh owner; aliases of the old handle cannot resume or cancel that owner.
   self.active[0] = false
+  errdefer self.context.discard_captured_execution()
   self.root_lease.release()
   self.context.resume_action = None
   (action.run)() catch {
@@ -185,7 +188,9 @@ fn ExecutionContinuation::continue_unchecked(
     }
   }
   self.active[0] = false
-  Returned(self.context.collect_call_results(self.return_arity))
+  let results = self.context.collect_call_results(self.return_arity)
+  self.context.discard_captured_execution()
+  Returned(results)
 }
 
 ///|
@@ -212,6 +217,10 @@ pub fn ExecutionContinuation::continue_execution_with_exception(
   }
   match outcome {
     Returned(values) => ResumableReturned(values)
+    Suspended(GuestEffect(_), continuation) => {
+      continuation.cancel()
+      raise @runtime.UnhandledSuspension
+    }
     Suspended(_, continuation) => ResumableSuspended(continuation)
   }
 }
@@ -222,10 +231,7 @@ pub fn ExecutionContinuation::cancel(self : ExecutionContinuation) -> Unit {
   if self.active[0] {
     self.active[0] = false
     self.root_lease.release()
-    self.context.resume_action = None
-    self.context.frames.clear()
-    self.context.labels.clear()
-    self.context.stack.clear()
+    self.context.discard_captured_execution()
   }
 }
 
@@ -308,6 +314,10 @@ pub fn call_func_by_index_resumable_async_with_exception(
   }
   match outcome {
     Returned(values) => ResumableReturned(values)
+    Suspended(GuestEffect(_), continuation) => {
+      continuation.cancel()
+      raise @runtime.UnhandledSuspension
+    }
     Suspended(_, continuation) => ResumableSuspended(continuation)
   }
 }
@@ -330,6 +340,10 @@ pub async fn call_func_by_index_async(
     for ;; {
       match outcome {
         Returned(values) => return values
+        Suspended(GuestEffect(_), continuation) => {
+          continuation.cancel()
+          raise @runtime.UnhandledSuspension
+        }
         Suspended(_, continuation) => {
           errdefer continuation.cancel()
           driver.wait_pending()

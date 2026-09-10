@@ -41,6 +41,13 @@ fn ExecContext::exec_instr(
   instr : @types.Instruction,
 ) -> Unit raise {
   match instr {
+    ContNew(_)
+    | ContBind(_, _)
+    | Suspend(_)
+    | Resume(_, _)
+    | ResumeThrow(_, _, _)
+    | ResumeThrowRef(_, _)
+    | Switch(_, _) => self.exec_guest_continuation(instr)
     // Constants
     I32Const(n) => self.stack.push(I32(n))
     I64Const(n) => self.stack.push(I64(n))
@@ -230,6 +237,12 @@ fn ExecContext::exec_instr(
         | RefExtern
         | RefFuncTyped(_)
         | RefNullFuncTyped(_)
+        | ContRef
+        | RefCont
+        | RefContTyped(_)
+        | RefNullContTyped(_)
+        | NullContRef
+        | RefNoCont
         // GC reference types
         | RefNullEq
         | RefEq
@@ -931,6 +944,7 @@ pub fn ExecContext::call_func(
   func_idx : Int,
   args : Array[@types.Value],
 ) -> Array[@types.Value] raise {
+  errdefer self.discard_captured_execution()
   // Get the store address from instance
   let store_addr = self.instance.func_addrs[func_idx]
   let func_inst = self.store.get_func_inst(store_addr)

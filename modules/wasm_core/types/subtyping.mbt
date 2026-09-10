@@ -143,6 +143,7 @@ fn SubtypingContext::composite_subtype(
     (Func(f1), Func(f2)) => self.func_subtype(f1, f2, idx1, idx2)
     (Struct(s1), Struct(s2)) => self.struct_subtype(s1, s2, idx1, idx2)
     (Array(a1), Array(a2)) => self.array_subtype(a1, a2, idx1, idx2)
+    (Cont(f1), Cont(f2)) => self.is_subtype(f1, f2)
     _ => false // Different composite types are never subtypes
   }
 }
@@ -285,6 +286,24 @@ pub fn SubtypingContext::value_type_subtype(
   _idx1? : Int = 0,
   _idx2? : Int = 0,
 ) -> Bool {
+  match (v1, v2) {
+    (RefContTyped(a), RefContTyped(b))
+    | (RefContTyped(a), RefNullContTyped(b))
+    | (RefNullContTyped(a), RefNullContTyped(b)) => return self.is_subtype(a, b)
+    (RefContTyped(_), RefCont | ContRef) | (RefNullContTyped(_), ContRef) =>
+      return true
+    (RefCont, ContRef) => return true
+    (NullContRef, ContRef | RefNullContTyped(_)) => return true
+    (
+      RefNoCont,
+      ContRef
+      | RefCont
+      | NullContRef
+      | RefContTyped(_)
+      | RefNullContTyped(_),
+    ) => return true
+    _ => ()
+  }
   if v1 == v2 {
     return true
   }
@@ -368,6 +387,9 @@ fn SubtypingContext::value_types_equal(
     (RefStruct(t1), RefStruct(t2)) => self.types_equivalent(t1, t2)
     (RefNullStruct(t1), RefNullStruct(t2)) => self.types_equivalent(t1, t2)
     (RefArray(t1), RefArray(t2)) => self.types_equivalent(t1, t2)
+    (RefContTyped(t1), RefContTyped(t2))
+    | (RefNullContTyped(t1), RefNullContTyped(t2)) =>
+      self.types_equivalent(t1, t2)
     (RefNullArray(t1), RefNullArray(t2)) => self.types_equivalent(t1, t2)
     _ => false
   }
@@ -430,6 +452,7 @@ pub fn SubtypingContext::validate_declared_subtype(
     (Func(_), Func(_)) => true
     (Struct(_), Struct(_)) => true
     (Array(_), Array(_)) => true
+    (Cont(_), Cont(_)) => true
     _ => false
   }
   if !kind_matches {

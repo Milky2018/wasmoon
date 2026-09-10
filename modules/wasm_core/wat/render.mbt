@@ -537,6 +537,7 @@ fn memory_page_size_to_wat(memory : @types.MemoryType) -> String {
 fn composite_type_to_wat(composite : @types.CompositeType) -> String {
   let sb = StringBuilder::StringBuilder()
   match composite {
+    Cont(index) => sb.write_string("(cont \{index})")
     Func(func_type) => {
       sb.write_string("(func")
       for param in func_type.params {
@@ -628,6 +629,12 @@ fn value_type_to_wat(t : @types.ValueType) -> String {
     F64 => "f64"
     V128 => "v128"
     FuncRef => "funcref"
+    ContRef => "contref"
+    RefCont => "(ref cont)"
+    NullContRef => "nullcontref"
+    RefNoCont => "(ref nocont)"
+    RefContTyped(idx) => "(ref \{idx})"
+    RefNullContTyped(idx) => "(ref null \{idx})"
     ExternRef => "externref"
     RefFunc => "(ref func)"
     RefExtern => "(ref extern)"
@@ -698,6 +705,12 @@ fn catch_handler_to_wat(handler : @types.CatchHandler) -> String {
 fn ref_type_to_wat(t : @types.ValueType) -> String {
   match t {
     FuncRef => "funcref"
+    ContRef => "contref"
+    RefCont => "(ref cont)"
+    NullContRef => "nullcontref"
+    RefNoCont => "(ref nocont)"
+    RefContTyped(idx) => "(ref \{idx})"
+    RefNullContTyped(idx) => "(ref null \{idx})"
     ExternRef => "externref"
     AnyRef => "anyref"
     ExnRef => "exnref"
@@ -719,6 +732,15 @@ fn ref_type_to_wat(t : @types.ValueType) -> String {
 ///|
 fn heap_type_to_wat(t : @types.ValueType) -> String {
   match t {
+    ContRef | RefCont => "cont"
+    NullContRef | RefNoCont => "nocont"
+    RefContTyped(idx) | RefNullContTyped(idx) => idx.to_string()
+    NullRef | RefNone => "none"
+    NullFuncRef => "nofunc"
+    NullExternRef => "noextern"
+    NullExnRef => "noexn"
+    StructRef | RefStructAbs => "struct"
+    ArrayRef | RefArrayAbs => "array"
     FuncRef | RefFunc => "func"
     ExternRef | RefExtern => "extern"
     AnyRef | RefAny => "any"
@@ -957,6 +979,16 @@ fn instr_to_wat(instr : @types.Instruction) -> String {
     ReturnCallRef(type_idx) => "return_call_ref \{type_idx}"
     Throw(idx) => "throw \{idx}"
     ThrowRef => "throw_ref"
+    ContNew(index) => "cont.new \{index}"
+    ContBind(input, output) => "cont.bind \{input} \{output}"
+    Suspend(tag) => "suspend \{tag}"
+    Resume(index, handlers) =>
+      "resume \{index}\{resume_handlers_to_wat(handlers)}"
+    ResumeThrow(index, tag, handlers) =>
+      "resume_throw \{index} \{tag}\{resume_handlers_to_wat(handlers)}"
+    ResumeThrowRef(index, handlers) =>
+      "resume_throw_ref \{index}\{resume_handlers_to_wat(handlers)}"
+    Switch(index, tag) => "switch \{index} \{tag}"
     TryTable(bt, handlers, _) => {
       let sb = StringBuilder::StringBuilder()
       sb.write_string("try_table\{block_type_to_wat(bt)}")
@@ -1048,7 +1080,7 @@ fn instr_to_wat(instr : @types.Instruction) -> String {
       }
     ElemDrop(idx) => "elem.drop \{idx}"
     Atomic(subop, mem, align, offset) => atomic_instr(subop, mem, align, offset)
-    RefNull(t) => "ref.null \{ref_type_to_wat(t)}"
+    RefNull(t) => "ref.null \{heap_type_to_wat(t)}"
     RefIsNull => "ref.is_null"
     RefFunc(idx) => "ref.func \{idx}"
     RefAsNonNull => "ref.as_non_null"
@@ -1536,4 +1568,16 @@ fn instr_to_wat(instr : @types.Instruction) -> String {
     I16x8RelaxedDotI8x16I7x16S => "i16x8.relaxed_dot_i8x16_i7x16_s"
     I32x4RelaxedDotI8x16I7x16AddS => "i32x4.relaxed_dot_i8x16_i7x16_add_s"
   }
+}
+
+///|
+fn resume_handlers_to_wat(handlers : Array[@types.ResumeHandler]) -> String {
+  handlers
+  .map(handler => {
+    match handler {
+      OnLabel(tag, label) => " (on \{tag} \{label})"
+      OnSwitch(tag) => " (on \{tag} switch)"
+    }
+  })
+  .join("")
 }

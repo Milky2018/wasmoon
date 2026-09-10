@@ -61,7 +61,7 @@ pub fn register_owned_instance_funcrefs_for_jit(@jit.JITModule, @runtime.ModuleI
 
 pub fn run_wast_command(WastContext, @wat.WastCommand, Int, WastResult, String, Bool) -> Unit
 
-pub fn run_wast_commands(@wat.WastScript, String, Bool, Bool, bulk_memory? : Bool, nan_canonicalization? : Bool, jit_compiler? : JITCompiler?, register_named_modules? : Bool) -> WastResult
+pub fn run_wast_commands(@wat.WastScript, String, Bool, Bool, bulk_memory? : Bool, stack_switching? : Bool, nan_canonicalization? : Bool, jit_compiler? : JITCompiler?, register_named_modules? : Bool) -> WastResult
 
 pub fn sync_jit_memories_to_store(@runtime.ModuleInstance, @runtime.Store, @jit.JITModule) -> Unit
 
@@ -100,6 +100,7 @@ pub(all) suberror WastRunnerError {
   NoCurrentModule
   GuestTrap(String)
   GuestException
+  GuestSuspension
   GuestExhaustion(String)
   RuntimeError(String)
 }
@@ -157,12 +158,13 @@ pub struct WastContext {
   mut current_jit : JITModuleContext?
   use_jit : Bool
   bulk_memory : Bool
+  stack_switching : Bool
   register_named_modules : Bool
   jit_compiler : JITCompiler?
   wasi_ctx : @wasi.WasiContext
   // private fields
 }
-pub fn WastContext::WastContext(Bool, bulk_memory? : Bool, nan_canonicalization? : Bool, jit_compiler? : JITCompiler?, register_named_modules? : Bool) -> Self
+pub fn WastContext::WastContext(Bool, bulk_memory? : Bool, stack_switching? : Bool, nan_canonicalization? : Bool, jit_compiler? : JITCompiler?, register_named_modules? : Bool) -> Self
 pub fn WastContext::build_imports(Self) -> @runtime.Imports
 pub fn WastContext::close(Self) -> Unit
 pub fn WastContext::get_store(Self) -> @runtime.Store

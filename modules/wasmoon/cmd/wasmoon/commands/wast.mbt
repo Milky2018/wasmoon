@@ -19,6 +19,7 @@ fn run_wast(
   use_jit : Bool,
   show_success : Bool,
   bulk_memory : Bool,
+  stack_switching : Bool,
   nan_canonicalization : Bool,
 ) -> Int {
   wast_jit_compiled_modules.val = 0
@@ -61,6 +62,7 @@ fn run_wast(
     use_jit,
     show_success,
     bulk_memory~,
+    stack_switching~,
     nan_canonicalization~,
     jit_compiler~,
     register_named_modules=match
@@ -645,7 +647,10 @@ pub fn run_testsuite(
   use_jit : Bool,
   show_success : Bool,
   bulk_memory? : Bool = true,
+  stack_switching? : Bool = false,
   nan_canonicalization? : Bool = false,
 ) -> Int {
-  run_wast(wast_path, use_jit, show_success, bulk_memory, nan_canonicalization)
+  run_wast(
+    wast_path, use_jit, show_success, bulk_memory, stack_switching, nan_canonicalization,
+  )
 }

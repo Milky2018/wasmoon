@@ -44,6 +44,8 @@ pub fn instantiate_with_linker(@runtime.Linker, String, @types.Module) -> @runti
 
 pub async fn instantiate_with_linker_async(@runtime.Linker, String, @types.Module) -> @runtime.ModuleInstance raise @runtime.RuntimeError
 
+pub fn validate_continuation_gc_storage(@types.Module) -> Unit raise @runtime.RuntimeError
+
 pub fn validate_imports_with_diagnostics(@runtime.Store, @types.Module, @runtime.Imports) -> ImportDiagnosticsResult raise @runtime.RuntimeError
 
 // Errors
@@ -146,6 +148,7 @@ pub(all) enum SuspensionReason {
   HostCall(Int64)
   CooperativeYield
   AtomicWait
+  GuestEffect(@runtime.GuestContinuationEffect)
 } derive(@debug.Debug)
 pub fn SuspensionReason::to_repr(Self) -> @debug.Repr
 

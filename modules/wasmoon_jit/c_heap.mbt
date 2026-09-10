@@ -129,6 +129,8 @@ pub fn value_to_slot(value : @types.Value) -> GcSlot {
     FuncRef(idx) => { lo: (idx + 1).to_int64(), hi: 0L, }
     ExternRef(idx) => { lo: (idx + 1).to_int64(), hi: 0L, }
     ExnRef(idx) => { lo: (idx + 1).to_int64(), hi: 0L, }
+    // Store-owned continuation handles use an odd word, outside GC object indices.
+    ContRef(handle) => { lo: (handle << 1) | 1L, hi: 0L, }
     I31(n) => { lo: (n.to_int64() << 1) | 1L, hi: 0L, }
     Null => { lo: @wasm_milkir.NULL_REF, hi: 0L, }
   }
@@ -190,6 +192,17 @@ pub fn slot_to_value(slot : GcSlot, ty : @types.ValueType) -> @types.Value {
         Null
       } else {
         ExternRef((raw - 1L).to_int())
+      }
+    ContRef
+    | RefCont
+    | RefContTyped(_)
+    | RefNullContTyped(_)
+    | NullContRef
+    | RefNoCont =>
+      if raw == @wasm_milkir.NULL_REF {
+        Null
+      } else {
+        ContRef(raw >> 1)
       }
     ExnRef =>
       if raw == @wasm_milkir.NULL_REF {

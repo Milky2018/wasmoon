@@ -523,7 +523,7 @@ fn resume_interpreter_continuation(
 ///|
 fn interpreter_outcome(
   outcome : @executor.ResumableCallOutcome,
-) -> CoreExecutionOutcome {
+) -> CoreExecutionOutcome raise ComponentRuntimeError {
   match outcome {
     Returned(results) => Returned(results)
     Suspended(reason, continuation) => {
@@ -532,6 +532,10 @@ fn interpreter_outcome(
       canon_suspend[0] = None
       Suspended(
         match reason {
+          GuestEffect(_) => {
+            continuation.cancel()
+            raise CanonCallError("unhandled suspension")
+          }
           HostCall(token) => core_suspension_from_token(token)
           CooperativeYield | AtomicWait => Yield
         },

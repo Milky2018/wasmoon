@@ -138,6 +138,12 @@ fn wasm_value_type(ty : @types.ValueType) -> @native.ValueType {
     | RefExtern
     | RefFuncTyped(_)
     | RefNullFuncTyped(_)
+    | ContRef
+    | RefCont
+    | RefContTyped(_)
+    | RefNullContTyped(_)
+    | NullContRef
+    | RefNoCont
     | AnyRef
     | ExnRef
     | StructRef

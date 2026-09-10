@@ -10,7 +10,11 @@ fn validate_function_with_offset(
 
   // Validate type indices in local types
   for local_type in code.locals {
-    validate_value_type(local_type, num_types)
+    validate_value_type(
+      local_type,
+      num_types,
+      stack_switching=ctx.stack_switching,
+    )
   }
 
   // Set up locals: params + declared locals
@@ -31,6 +35,7 @@ fn validate_function_with_offset(
   // Create validation context for this function
   let func_ctx : ValidationContext = {
     bulk_memory: ctx.bulk_memory,
+    stack_switching: ctx.stack_switching,
     types: ctx.types,
     funcs: ctx.funcs,
     tables: ctx.tables,
@@ -105,7 +110,11 @@ fn validate_function(
 
   // Validate type indices in local types
   for local_type in code.locals {
-    validate_value_type(local_type, num_types)
+    validate_value_type(
+      local_type,
+      num_types,
+      stack_switching=ctx.stack_switching,
+    )
   }
 
   // Set up locals: params + declared locals
@@ -126,6 +135,7 @@ fn validate_function(
   // Create validation context for this function
   let func_ctx : ValidationContext = {
     bulk_memory: ctx.bulk_memory,
+    stack_switching: ctx.stack_switching,
     types: ctx.types,
     funcs: ctx.funcs,
     tables: ctx.tables,

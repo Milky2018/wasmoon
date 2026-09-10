@@ -34,6 +34,9 @@ pub(all) suberror RuntimeError {
   // Used when evaluating init expressions during instantiation; this should
   // never be reached for validated modules, but helps diagnose engine gaps.
   InvalidConstantExpression(String)
+  ContinuationAlreadyConsumed
+  UnhandledSuspension
+  UnsupportedGcContinuationStorage
   AsyncHostRequiresAsyncCall
   AsyncHostCallInProgress
   AsyncHostCallCancelled
@@ -48,6 +51,9 @@ pub(all) suberror RuntimeError {
 /// flattened to a string here.
 pub fn RuntimeError::from_error(error : Error) -> RuntimeError? {
   match error {
+    ContinuationAlreadyConsumed => Some(ContinuationAlreadyConsumed)
+    UnhandledSuspension => Some(UnhandledSuspension)
+    UnsupportedGcContinuationStorage => Some(UnsupportedGcContinuationStorage)
     StackUnderflow => Some(StackUnderflow)
     StackOverflow => Some(StackOverflow)
     TypeMismatch => Some(TypeMismatch)
@@ -90,6 +96,10 @@ pub fn RuntimeError::from_error(error : Error) -> RuntimeError? {
 /// Custom Show implementation for WebAssembly-spec-compliant error messages
 pub impl Show for RuntimeError with fn output(self, logger) {
   let msg = match self {
+    ContinuationAlreadyConsumed => "continuation already consumed"
+    UnhandledSuspension => "unhandled suspension"
+    UnsupportedGcContinuationStorage =>
+      "Stack switching feature not compatible with GC storage"
     StackUnderflow => "stack underflow"
     StackOverflow => "stack overflow"
     TypeMismatch => "type mismatch"

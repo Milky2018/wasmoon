@@ -195,6 +195,16 @@ fn encode_valtype(w : BinaryWriter, vt : @types.ValueType) -> Unit {
     F64 => w.write_byte(0x7C)
     V128 => w.write_byte(0x7B)
     FuncRef => w.write_byte(0x70)
+    ContRef => w.write_byte(0x68)
+    NullContRef => w.write_byte(0x75)
+    RefCont => {
+      w.write_byte(0x64)
+      w.write_byte(0x68)
+    }
+    RefNoCont => {
+      w.write_byte(0x64)
+      w.write_byte(0x75)
+    }
     ExternRef => w.write_byte(0x6F)
     // GC types
     AnyRef => {
@@ -264,11 +274,11 @@ fn encode_valtype(w : BinaryWriter, vt : @types.ValueType) -> Unit {
       w.write_byte(0x71) // none
     }
     // Typed references
-    RefFuncTyped(idx) => {
+    RefFuncTyped(idx) | RefContTyped(idx) => {
       w.write_byte(0x64) // ref
       w.write_s32(idx)
     }
-    RefNullFuncTyped(idx) => {
+    RefNullFuncTyped(idx) | RefNullContTyped(idx) => {
       w.write_byte(0x63) // ref null
       w.write_s32(idx)
     }
@@ -351,6 +361,10 @@ fn encode_composite_type(w : BinaryWriter, ct : @types.CompositeType) -> Unit {
     Func(ft) => encode_func_type(w, ft)
     Struct(st) => encode_struct_type(w, st)
     Array(at) => encode_array_type(w, at)
+    Cont(index) => {
+      w.write_byte(0x5d)
+      w.write_u32(index)
+    }
   }
 }
 
@@ -473,9 +487,7 @@ fn encode_block_type(w : BinaryWriter, bt : @types.BlockType) -> Unit {
     Empty => w.write_byte(0x40) // empty block type
     Value(vt) => encode_valtype(w, vt)
     TypeIndex(idx) => w.write_s32(idx)
-    MultiValue(_) | InlineType(_, _) =>
-      // These should be resolved to TypeIndex before encoding
-      w.write_byte(0x40)
+    MultiValue(_) | InlineType(_, _) => abort("unresolved block signature")
   }
 }
 
@@ -581,6 +593,40 @@ fn encode_instruction(w : BinaryWriter, instr : @types.Instruction) -> Unit {
       w.write_u32(tag_idx)
     }
     ThrowRef => w.write_byte(0x0A)
+    ContNew(index) => {
+      w.write_byte(0xE0)
+      w.write_u32(index)
+    }
+    ContBind(input, output) => {
+      w.write_byte(0xE1)
+      w.write_u32(input)
+      w.write_u32(output)
+    }
+    Suspend(tag) => {
+      w.write_byte(0xE2)
+      w.write_u32(tag)
+    }
+    Resume(index, handlers) => {
+      w.write_byte(0xE3)
+      w.write_u32(index)
+      encode_resume_handlers(w, handlers)
+    }
+    ResumeThrow(index, tag, handlers) => {
+      w.write_byte(0xE4)
+      w.write_u32(index)
+      w.write_u32(tag)
+      encode_resume_handlers(w, handlers)
+    }
+    ResumeThrowRef(index, handlers) => {
+      w.write_byte(0xE5)
+      w.write_u32(index)
+      encode_resume_handlers(w, handlers)
+    }
+    Switch(index, tag) => {
+      w.write_byte(0xE6)
+      w.write_u32(index)
+      w.write_u32(tag)
+    }
     TryTable(bt, handlers, body) => {
       w.write_byte(0x1F)
       encode_block_type(w, bt)
@@ -803,7 +849,7 @@ fn encode_instruction(w : BinaryWriter, instr : @types.Instruction) -> Unit {
     // Reference instructions
     RefNull(vt) => {
       w.write_byte(0xD0)
-      encode_valtype(w, vt)
+      encode_heaptype(w, vt)
     }
     RefIsNull => w.write_byte(0xD1)
     RefFunc(idx) => {
@@ -1135,22 +1181,22 @@ fn encode_instruction(w : BinaryWriter, instr : @types.Instruction) -> Unit {
     RefTest(vt) => {
       w.write_byte(0xFB)
       w.write_u32(20)
-      encode_valtype(w, vt)
+      encode_heaptype(w, vt)
     }
     RefTestNull(vt) => {
       w.write_byte(0xFB)
       w.write_u32(21)
-      encode_valtype(w, vt)
+      encode_heaptype(w, vt)
     }
     RefCast(vt) => {
       w.write_byte(0xFB)
       w.write_u32(22)
-      encode_valtype(w, vt)
+      encode_heaptype(w, vt)
     }
     RefCastNull(vt) => {
       w.write_byte(0xFB)
       w.write_u32(23)
-      encode_valtype(w, vt)
+      encode_heaptype(w, vt)
     }
     BrOnCast(label, from_type, to_type) => {
       w.write_byte(0xFB)
@@ -1160,8 +1206,8 @@ fn encode_instruction(w : BinaryWriter, instr : @types.Instruction) -> Unit {
       let to_null = if to_type.is_nullable() { 2 } else { 0 }
       w.write_byte(from_null | to_null)
       w.write_u32(label)
-      encode_valtype(w, from_type)
-      encode_valtype(w, to_type)
+      encode_heaptype(w, from_type)
+      encode_heaptype(w, to_type)
     }
     BrOnCastFail(label, from_type, to_type) => {
       w.write_byte(0xFB)
@@ -1170,8 +1216,8 @@ fn encode_instruction(w : BinaryWriter, instr : @types.Instruction) -> Unit {
       let to_null = if to_type.is_nullable() { 2 } else { 0 }
       w.write_byte(from_null | to_null)
       w.write_u32(label)
-      encode_valtype(w, from_type)
-      encode_valtype(w, to_type)
+      encode_heaptype(w, from_type)
+      encode_heaptype(w, to_type)
     }
     RefI31 => {
       w.write_byte(0xFB)
@@ -1267,9 +1313,28 @@ fn encode_type_section(mod : @types.Module) -> Array[Int] {
     return []
   }
   let w = BinaryWriter::BinaryWriter()
-  w.write_u32(mod.types.length())
-  for subtype in mod.types {
-    encode_subtype(w, subtype)
+  let groups : Array[(Int, Int)] = []
+  let mut start = 0
+  while start < mod.types.length() {
+    let mut end = start + 1
+    while end < mod.types.length() &&
+          mod.type_rec_groups.get(start) is Some(group) &&
+          mod.type_rec_groups.get(end) == Some(group) {
+      end = end + 1
+    }
+    groups.push((start, end))
+    start = end
+  }
+  w.write_u32(groups.length())
+  for group in groups {
+    let (start, end) = group
+    // Preserve even singleton recursive groups: their self references require
+    // the parser to reserve the group before decoding the composite type.
+    w.write_byte(0x4E)
+    w.write_u32(end - start)
+    for index in start..<end {
+      encode_subtype(w, mod.types[index])
+    }
   }
   w.to_bytes()
 }
@@ -1599,6 +1664,7 @@ fn encode_tag_section(mod : @types.Module) -> Array[Int] {
 ///|
 /// Encode a Module to WebAssembly binary format
 pub fn encode(mod : @types.Module) -> Array[Int] {
+  let mod = resolve_block_types(mod)
   let w = BinaryWriter::BinaryWriter()
 
   // Write magic number: \0asm
@@ -1691,4 +1757,54 @@ pub fn encode(mod : @types.Module) -> Array[Int] {
     write_section(w, 11, data_section)
   }
   w.to_bytes()
+}
+
+///|
+fn encode_resume_handlers(
+  w : BinaryWriter,
+  handlers : Array[@types.ResumeHandler],
+) -> Unit {
+  w.write_u32(handlers.length())
+  for handler in handlers {
+    match handler {
+      OnLabel(tag, label) => {
+        w.write_byte(0)
+        w.write_u32(tag)
+        w.write_u32(label)
+      }
+      OnSwitch(tag) => {
+        w.write_byte(1)
+        w.write_u32(tag)
+      }
+    }
+  }
+}
+
+///|
+/// Heap immediates omit the value type's nullability prefix.
+fn encode_heaptype(w : BinaryWriter, ty : @types.ValueType) -> Unit {
+  let index = match ty {
+    RefFuncTyped(i)
+    | RefNullFuncTyped(i)
+    | RefContTyped(i)
+    | RefNullContTyped(i) => i
+    RefStruct(i) | RefNullStruct(i) => if i < 0 { -21 } else { i }
+    RefArray(i) | RefNullArray(i) => if i < 0 { -22 } else { i }
+    FuncRef | RefFunc => -16
+    ExternRef | RefExtern => -17
+    AnyRef | RefAny => -18
+    RefEq | RefNullEq => -19
+    RefI31 | RefNullI31 => -20
+    StructRef | RefStructAbs => -21
+    ArrayRef | RefArrayAbs => -22
+    ExnRef => -23
+    ContRef | RefCont => -24
+    NullRef | RefNone => -15
+    NullExternRef => -14
+    NullFuncRef => -13
+    NullExnRef => -12
+    NullContRef | RefNoCont => -11
+    I32 | I64 | F32 | F64 | V128 => abort("expected a reference heap type")
+  }
+  w.write_s32(index)
 }

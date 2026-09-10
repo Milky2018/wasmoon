@@ -103,6 +103,7 @@ pub(all) enum CompositeType {
   Func(FuncType)
   Struct(StructType)
   Array(ArrayType)
+  Cont(Int)
 } derive(Eq, @debug.Debug)
 pub fn CompositeType::equal(Self, Self) -> Bool
 pub fn CompositeType::not_equal(Self, Self) -> Bool
@@ -247,6 +248,13 @@ pub(all) enum Instruction {
   Throw(Int)
   ThrowRef
   TryTable(BlockType, Array[CatchHandler], Array[Instruction])
+  ContNew(Int)
+  ContBind(Int, Int)
+  Suspend(Int)
+  Resume(Int, Array[ResumeHandler])
+  ResumeThrow(Int, Int, Array[ResumeHandler])
+  ResumeThrowRef(Int, Array[ResumeHandler])
+  Switch(Int, Int)
   Drop
   Select
   SelectTyped(Array[ValueType])
@@ -802,6 +810,14 @@ pub fn PackedType::equal(Self, Self) -> Bool
 pub fn PackedType::not_equal(Self, Self) -> Bool
 pub fn PackedType::to_repr(Self) -> @debug.Repr
 
+pub(all) enum ResumeHandler {
+  OnLabel(Int, Int)
+  OnSwitch(Int)
+} derive(Eq, @debug.Debug)
+pub fn ResumeHandler::equal(Self, Self) -> Bool
+pub fn ResumeHandler::not_equal(Self, Self) -> Bool
+pub fn ResumeHandler::to_repr(Self) -> @debug.Repr
+
 pub(all) enum StorageType {
   Val(ValueType)
   Packed(PackedType)
@@ -892,6 +908,7 @@ pub(all) enum Value {
   FuncRef(Int)
   ExternRef(Int)
   ExnRef(Int)
+  ContRef(Int64)
   StructRef(Int)
   ArrayRef(Int)
   I31(Int)
@@ -916,6 +933,12 @@ pub(all) enum ValueType {
   RefExtern
   RefFuncTyped(Int)
   RefNullFuncTyped(Int)
+  ContRef
+  RefCont
+  RefContTyped(Int)
+  RefNullContTyped(Int)
+  NullContRef
+  RefNoCont
   AnyRef
   ExnRef
   StructRef
@@ -939,6 +962,7 @@ pub(all) enum ValueType {
 } derive(Eq, @debug.Debug)
 pub fn ValueType::equal(Self, Self) -> Bool
 pub fn ValueType::from_abstract_heap_type(Int, Bool) -> Self?
+pub fn ValueType::is_continuation_ref(Self) -> Bool
 pub fn ValueType::is_nullable(Self) -> Bool
 pub fn ValueType::not_equal(Self, Self) -> Bool
 pub fn ValueType::output(Self, &Logger) -> Unit

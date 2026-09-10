@@ -37,6 +37,7 @@ fn format_value(v : @types.Value) -> String {
     I64(n) => n.to_string()
     F32(f) => f.to_string()
     F64(d) => d.to_string()
+    ContRef(handle) => "contref:\{handle}"
     FuncRef(idx) => "funcref:\{idx}"
     ExternRef(idx) => "externref:\{idx}"
     V128(bytes) => {
@@ -65,6 +66,7 @@ fn convert_args_to_jit(
       I64(n) => n
       F32(f) => f.reinterpret_as_int().to_int64()
       F64(d) => d.reinterpret_as_int64()
+      ContRef(_) => @wasmoon_jit.value_to_i64(v)
       FuncRef(idx) => idx.to_int64()
       ExternRef(idx) => @wasmoon_jit.encode_externref(idx)
       Null => @wasm_milkir.NULL_REF
@@ -90,6 +92,16 @@ fn convert_jit_results(
   let mut slot_idx = 0
   for ty in result_types {
     let value : @types.Value = match ty {
+      ContRef
+      | RefCont
+      | RefContTyped(_)
+      | RefNullContTyped(_)
+      | NullContRef
+      | RefNoCont => {
+        let raw = results[slot_idx]
+        slot_idx += 1
+        @wasmoon_jit.i64_to_value(raw, ty)
+      }
       I32 => {
         let raw = results[slot_idx]
         slot_idx += 1

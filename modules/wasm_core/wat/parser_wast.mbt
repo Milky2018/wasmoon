@@ -502,6 +502,7 @@ fn Parser::parse_wast_command_body(self : Parser) -> WastCommand raise WatError 
     Keyword("module") => self.parse_wast_module_command()
     Keyword("assert_return") => self.parse_wast_assert_return()
     Keyword("assert_trap") => self.parse_wast_assert_trap()
+    Keyword("assert_suspension") => self.parse_wast_assert_suspension()
     Keyword("assert_exception") => self.parse_wast_assert_exception()
     Keyword("assert_exhaustion") => self.parse_wast_assert_exhaustion()
     Keyword("assert_invalid") => self.parse_wast_assert_invalid()
@@ -1448,4 +1449,17 @@ fn parse_wast_hex_int64(s : String, start : Int) -> Int64 raise WatError {
     result = result * 16L + digit.to_int64()
   }
   result
+}
+
+///|
+fn Parser::parse_wast_assert_suspension(
+  self : Parser,
+) -> WastCommand raise WatError {
+  self.advance()
+  self.expect_lparen()
+  let action = self.parse_wast_action()
+  self.expect_rparen()
+  let message = self.parse_wast_string()
+  self.expect_rparen()
+  AssertSuspension(action, message)
 }

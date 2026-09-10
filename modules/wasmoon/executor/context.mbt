@@ -123,6 +123,8 @@ struct ExecContext {
   mut suspension_reason : SuspensionReason?
   cooperative : Bool
   mut instructions_left : Int
+  mut guest_input : @runtime.GuestContinuationInput?
+  mut guest_pending : @runtime.GuestContinuationBody?
   mut suspension_roots : Array[@types.Value]
 } derive(Debug)
 
@@ -152,6 +154,8 @@ fn ExecContext::ExecContext(
     suspension_reason: None,
     cooperative,
     instructions_left: 1024,
+    guest_input: None,
+    guest_pending: None,
     suspension_roots: [],
   }
 }

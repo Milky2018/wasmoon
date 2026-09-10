@@ -51,6 +51,11 @@ pub fn supports_wasi_preview1() -> Bool
 pub async fn[X] with_async_host_call_driver(async (AsyncHostCallDriver) -> X) -> X
 
 // Errors
+pub(all) suberror GuestContinuationSignal {
+  GuestContinuationYield(GuestContinuationEffect, GuestContinuationBody)
+} derive(@debug.Debug)
+pub fn GuestContinuationSignal::to_repr(Self) -> @debug.Repr
+
 pub(all) suberror RuntimeError {
   StackUnderflow
   StackOverflow
@@ -82,6 +87,9 @@ pub(all) suberror RuntimeError {
   NullReference
   UnalignedAtomic
   InvalidConstantExpression(String)
+  ContinuationAlreadyConsumed
+  UnhandledSuspension
+  UnsupportedGcContinuationStorage
   AsyncHostRequiresAsyncCall
   AsyncHostCallInProgress
   AsyncHostCallCancelled
@@ -229,6 +237,25 @@ pub fn GlobalInstance::get_type(Self) -> @types.GlobalType
 pub fn GlobalInstance::native_binding(Self) -> NativeGlobalBinding?
 pub fn GlobalInstance::set(Self, @types.Value) -> Unit raise RuntimeError
 pub fn GlobalInstance::to_repr(Self) -> @debug.Repr
+
+pub(all) struct GuestContinuationBody {
+  run : (GuestContinuationInput) -> Array[@types.Value] raise
+  cancel : () -> Unit
+}
+pub fn GuestContinuationBody::to_repr(Self) -> @debug.Repr
+pub impl @debug.Debug for GuestContinuationBody
+
+pub(all) enum GuestContinuationEffect {
+  Suspend(Int, Array[@types.Value])
+  Switch(Int, GuestContinuationBody, Array[@types.Value])
+} derive(@debug.Debug)
+pub fn GuestContinuationEffect::to_repr(Self) -> @debug.Repr
+
+pub(all) enum GuestContinuationInput {
+  Values(Array[@types.Value])
+  Exception(Int, Array[@types.Value])
+} derive(@debug.Debug)
+pub fn GuestContinuationInput::to_repr(Self) -> @debug.Repr
 
 type Imports
 pub fn Imports::Imports() -> Self
@@ -586,6 +613,7 @@ pub fn Store::native_execution_state(Self) -> @wasmoon_jit.NativeExecutionState
 pub fn Store::native_type_indices(Self, ModuleInstance) -> Array[Int]
 pub fn Store::native_type_parents(Self) -> Array[Int]
 pub fn Store::pin_gc_roots(Self, Array[@types.Value]) -> GcRootLease
+pub fn Store::put_guest_continuation(Self, GuestContinuationBody) -> Int64 raise RuntimeError
 pub fn Store::register_instance(Self, ModuleInstance) -> Int raise RuntimeError
 pub fn Store::register_jit_funcrefs(Self, Array[StoreFuncrefEntry], release_owner? : () -> Unit) -> StoreFuncrefRegistration
 pub fn Store::set_module_types(Self, Array[@types.SubType], rec_groups? : Array[Int]) -> Unit raise RuntimeError
@@ -594,6 +622,7 @@ pub fn Store::set_wasi_mem_addr(Self, Int) -> Unit raise RuntimeError
 pub fn Store::should_collect(Self, threshold? : Double) -> Bool
 pub fn Store::struct_get(Self, Int, Int) -> @types.Value raise RuntimeError
 pub fn Store::struct_set(Self, Int, Int, @types.Value) -> Unit raise RuntimeError
+pub fn Store::take_guest_continuation(Self, Int64) -> GuestContinuationBody raise RuntimeError
 pub fn Store::to_repr(Self) -> @debug.Repr
 pub fn Store::unwrap_extern(Self, @types.Value) -> @types.Value raise RuntimeError
 pub fn Store::with_c_heap(nan_canonicalization? : Bool) -> Self

@@ -17,6 +17,12 @@ fn entry_trampoline_type(
     | RefExtern
     | RefFuncTyped(_)
     | RefNullFuncTyped(_)
+    | ContRef
+    | RefCont
+    | RefContTyped(_)
+    | RefNullContTyped(_)
+    | NullContRef
+    | RefNoCont
     | AnyRef
     | ExnRef
     | NullRef
@@ -110,6 +116,12 @@ pub fn entry_trampoline_value_type_code(ty : @types.ValueType) -> Int {
     | RefExtern
     | RefFuncTyped(_)
     | RefNullFuncTyped(_)
+    | ContRef
+    | RefCont
+    | RefContTyped(_)
+    | RefNullContTyped(_)
+    | NullContRef
+    | RefNoCont
     | AnyRef
     | ExnRef
     | NullRef

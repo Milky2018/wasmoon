@@ -40,6 +40,7 @@ fn validation_defined_type_contract(
 ) -> @wasm_milkir.WasmDefinedTypeContract {
   match subtype.composite {
     Func(func_type) => Function(validation_function_contract(func_type))
+    Cont(index) => Continuation(index)
     Struct(struct_type) =>
       Struct(struct_type.fields.map(validation_field_contract))
     Array(array_type) => Array(validation_field_contract(array_type.element))

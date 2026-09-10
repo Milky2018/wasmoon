@@ -142,13 +142,20 @@ fn setup_type_cache_from_types(
     let base = i * type_stride
     types_data[base + 0] = super_idx
 
-    // kind: 0=func, 1=struct, 2=array
+    // kind: 0=func, 1=struct, 2=array, 3=continuation
     // array_elem_tag: 0=none/unknown, 1=i8, 2=i16, 3=i32, 4=i64, 5=f32, 6=f64, 7=ref/other
     // array_elem_bytes: byte width of element data in segments (0 for ref/unknown)
     // array_elem_flags: reserved for future (0 for now)
     match subtype.composite {
       Func(_) => {
         types_data[base + 1] = 0
+        types_data[base + 2] = 0
+        types_data[base + 3] = 0
+        types_data[base + 4] = 0
+        types_data[base + 5] = 0
+      }
+      Cont(_) => {
+        types_data[base + 1] = 3
         types_data[base + 2] = 0
         types_data[base + 3] = 0
         types_data[base + 4] = 0

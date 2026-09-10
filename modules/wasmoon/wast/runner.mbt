@@ -119,6 +119,7 @@ pub struct WastContext {
   mut current_jit : JITModuleContext?
   use_jit : Bool
   bulk_memory : Bool
+  stack_switching : Bool
   register_named_modules : Bool
   // JIT compiler callback (provided by main package)
   jit_compiler : JITCompiler?
@@ -130,6 +131,7 @@ pub struct WastContext {
 pub fn WastContext::WastContext(
   use_jit : Bool,
   bulk_memory? : Bool = true,
+  stack_switching? : Bool = false,
   nan_canonicalization? : Bool = false,
   jit_compiler? : JITCompiler? = None,
   register_named_modules? : Bool = false,
@@ -184,6 +186,7 @@ pub fn WastContext::WastContext(
     current_jit: None,
     use_jit,
     bulk_memory,
+    stack_switching,
     register_named_modules,
     jit_compiler,
     wasi_ctx,
@@ -291,6 +294,7 @@ pub fn run_wast_commands(
   use_jit : Bool,
   show_success : Bool,
   bulk_memory? : Bool = true,
+  stack_switching? : Bool = false,
   nan_canonicalization? : Bool = false,
   jit_compiler? : JITCompiler? = None,
   register_named_modules? : Bool = false,
@@ -299,6 +303,7 @@ pub fn run_wast_commands(
   let ctx = WastContext::WastContext(
     use_jit,
     bulk_memory~,
+    stack_switching~,
     nan_canonicalization~,
     jit_compiler~,
     register_named_modules~,
@@ -354,7 +359,7 @@ pub fn run_wast_command(
     ModuleDefinition(mod_, name) => {
       // Module definition - validates and stores for later instantiation
       // Used with (module instance ...) to create multiple instances
-      @validator.validate_module(mod_, bulk_memory=ctx.bulk_memory) catch {
+      ctx.validate_core_module(mod_) catch {
         e => {
           result.failed = result.failed + 1
           result.failures.push(
@@ -387,6 +392,7 @@ pub fn run_wast_command(
     }
     AssertReturn(action, _)
     | AssertTrap(action, _)
+    | AssertSuspension(action, _)
     | AssertException(action)
     | AssertExhaustion(action, _)
     | Action(action) => {
@@ -571,6 +577,7 @@ fn wast_trap_message_matches(actual : String, expected : String) -> Bool {
 fn classify_runtime_failure(error : @runtime.RuntimeError) -> WastRunnerError {
   match error {
     UncaughtException => GuestException
+    UnhandledSuspension => GuestSuspension
     CallStackExhausted | StackOverflow => GuestExhaustion(error.to_string())
     OutOfBoundsMemoryAccess
     | OutOfBoundsTableAccess
@@ -590,6 +597,7 @@ fn classify_runtime_failure(error : @runtime.RuntimeError) -> WastRunnerError {
     | TableAllocationFailed
     | MemoryMinimumExceedsLimits(_)
     | AllocationTooLarge
+    | ContinuationAlreadyConsumed
     | AtomicWaitNonSharedMemory => GuestTrap(error.to_string())
     _ => RuntimeError(error.to_string())
   }
@@ -611,6 +619,7 @@ pub(all) suberror WastRunnerError {
   NoCurrentModule
   GuestTrap(String)
   GuestException
+  GuestSuspension
   GuestExhaustion(String)
   RuntimeError(String)
 }
@@ -622,6 +631,7 @@ pub impl Show for WastRunnerError with fn output(self, logger) {
     NoCurrentModule => logger.write_string("no current module")
     GuestTrap(msg) => logger.write_string("wasm trap: \{msg}")
     GuestException => logger.write_string("uncaught Wasm exception")
+    GuestSuspension => logger.write_string("unhandled suspension")
     GuestExhaustion(msg) => logger.write_string("wasm exhaustion: \{msg}")
     RuntimeError(msg) => logger.write_string("runtime error: \{msg}")
   }
@@ -881,17 +891,14 @@ fn validate_module_source(
     Binary(bytes) =>
       succeeds(() => {
         let mod_ = @parser.parse_module(bytes)
-        @validator.validate_module(mod_, bulk_memory=ctx.bulk_memory)
+        ctx.validate_core_module(mod_)
       })
     Quote(parts) =>
       succeeds(() => {
         let mod_ = @wat.parse(parts.join(""), implicit_module=true)
-        @validator.validate_module(mod_, bulk_memory=ctx.bulk_memory)
+        ctx.validate_core_module(mod_)
       })
-    Inline(mod_) =>
-      succeeds(() => {
-        @validator.validate_module(mod_, bulk_memory=ctx.bulk_memory)
-      })
+    Inline(mod_) => succeeds(() => ctx.validate_core_module(mod_))
     FailedToParse(_) => false // Module failed to parse, so it's invalid
   }
 }
@@ -923,7 +930,7 @@ fn try_instantiate_source(
   } catch {
     error => raise RuntimeError("module parsing failed: \{error}")
   }
-  @validator.validate_module(mod_, bulk_memory=ctx.bulk_memory) catch {
+  ctx.validate_core_module(mod_) catch {
     error => raise RuntimeError("module validation failed: \{error}")
   }
   let imports = ctx.build_imports()
@@ -1071,7 +1078,7 @@ fn try_instantiate_source_traps(
   match source {
     Binary(bytes) => {
       let mod_ = @parser.parse_module(bytes) catch { _ => return false }
-      @validator.validate_module(mod_, bulk_memory=ctx.bulk_memory) catch {
+      ctx.validate_core_module(mod_) catch {
         _ => return false
       }
       let before_instances = ctx.store.instances.length()
@@ -1118,7 +1125,7 @@ fn try_instantiate_source_traps(
       trapped
     }
     Inline(mod_) => {
-      @validator.validate_module(mod_, bulk_memory=ctx.bulk_memory) catch {
+      ctx.validate_core_module(mod_) catch {
         _ => return false
       }
       let before_instances = ctx.store.instances.length()
@@ -1167,4 +1174,17 @@ fn try_instantiate_source_traps(
     Quote(_) => false // Quoted source - can't test
     FailedToParse(_) => false // Module failed to parse, doesn't count as trap
   }
+}
+
+///|
+fn WastContext::validate_core_module(
+  self : WastContext,
+  module_ : @types.Module,
+) -> Unit raise {
+  @validator.validate_module(
+    module_,
+    bulk_memory=self.bulk_memory,
+    stack_switching=self.stack_switching,
+  )
+  @executor.validate_continuation_gc_storage(module_)
 }
