@@ -101,10 +101,11 @@ int is_subtype_cached(int type1, int type2) {
     return is_subtype_cached_ctx(current_ctx(), type1, type2);
 }
 
+static int callable_subtype(jit_context_t *ctx, int32_t actual, int32_t local_expected);
+
 // ============ ref.test Implementation ============
 
-int32_t gc_ref_test_impl(int64_t value, int32_t type_idx, int32_t nullable) {
-    jit_context_t *ctx = current_ctx();
+int32_t gc_ref_test_impl(jit_context_t *ctx, int64_t value, int32_t type_idx, int32_t nullable) {
 
     // Handle null
     if (is_null_value(value)) {
@@ -138,6 +139,9 @@ int32_t gc_ref_test_impl(int64_t value, int32_t type_idx, int32_t nullable) {
             case ABSTRACT_TYPE_NOEXTERN:
                 return 0;
             default: {
+                if (ctx && ctx->callable_local_types) {
+                    return callable_subtype(ctx, callable_type_for_value(ctx, value), type_idx);
+                }
                 // For concrete type indices, check if the function's type is a subtype
                 if (!ctx || !ctx->gc_func_type_indices || !ctx->gc_type_cache) {
                     return 0;
@@ -215,15 +219,18 @@ int32_t gc_ref_test_impl(int64_t value, int32_t type_idx, int32_t nullable) {
         }
     }
 
+    if (gc_ref <= heap->object_count && heap->runtime_types[gc_ref - 1] >= 0) {
+        return callable_subtype(ctx, heap->runtime_types[gc_ref - 1], type_idx);
+    }
     return is_concrete_subtype(ctx, obj_type_idx, type_idx);
 }
 
 // ============ ref.cast Implementation ============
 
-int64_t gc_ref_cast_impl(int64_t value, int32_t type_idx, int32_t nullable) {
-    int result = gc_ref_test_impl(value, type_idx, nullable);
+int64_t gc_ref_cast_impl(jit_context_t *ctx, int64_t value, int32_t type_idx, int32_t nullable) {
+    int result = gc_ref_test_impl(ctx, value, type_idx, nullable);
     if (!result) {
-        g_trap_code = 4;  // Type mismatch
+        g_trap_code = WASMOON_TRAP_CAST_FAILURE;
         if (g_trap_active) {
             siglongjmp(g_trap_jmp_buf, 1);
         }
@@ -233,22 +240,39 @@ int64_t gc_ref_cast_impl(int64_t value, int32_t type_idx, int32_t nullable) {
 
 // ============ Type Check for call_indirect ============
 
-void gc_type_check_subtype_impl(int32_t actual_type, int32_t expected_type) {
-    // Fast path: exact type match
-    if (actual_type == expected_type) {
-        return;
+static int callable_subtype(jit_context_t *ctx, int32_t actual, int32_t local_expected) {
+    if (!ctx || !ctx->callable_local_types) return is_subtype_cached_ctx(ctx, actual, local_expected);
+    if (local_expected < 0 || local_expected >= ctx->callable_local_type_count) return 0;
+    int32_t expected = ctx->callable_local_types[local_expected];
+    while (actual >= 0 && actual < ctx->callable_type_count) {
+        if (actual == expected) return 1;
+        int32_t parent = ctx->callable_type_parents[actual];
+        if (parent == actual) return 0;
+        actual = parent;
     }
+    return 0;
+}
 
-    // Subtype check using type cache
-    if (is_subtype_cached_ctx(current_ctx(), actual_type, expected_type)) {
-        return;
+int32_t callable_type_for_value(jit_context_t *ctx, int64_t value) {
+    if (!ctx || !value) return -1;
+    uint64_t pointer;
+    if (value < 0) {
+        int64_t index = -(value + 1);
+        if (index < 0 || index >= ctx->func_count) return -1;
+        pointer = (uint64_t)(uintptr_t)ctx->func_table[index];
+    } else {
+        pointer = (uint64_t)value & ~FUNCREF_TAG;
     }
+    for (int i = 0; i < ctx->callable_entry_count; ++i) {
+        if ((uint64_t)ctx->callable_entries[i * 2] == pointer) return (int32_t)ctx->callable_entries[i * 2 + 1];
+    }
+    return -1;
+}
 
-    // Types don't match - trap
-    g_trap_code = 4;  // Indirect call type mismatch
-    if (g_trap_active) {
-        siglongjmp(g_trap_jmp_buf, 1);
-    }
+void gc_type_check_subtype_impl(jit_context_t *ctx, int32_t actual_type, int32_t expected_type) {
+    if (callable_subtype(ctx, actual_type, expected_type)) return;
+    g_trap_code = 4;
+    if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
 }
 
 // ============ Type Cache Management ============
@@ -306,7 +330,11 @@ void set_func_type_indices_internal(jit_context_t *ctx, int32_t *indices, int nu
 
 void set_func_table_internal(jit_context_t *ctx, void **func_table_ptr, int num_funcs) {
     if (!ctx) return;
-    ctx->gc_func_table = func_table_ptr;
+    void **copy = num_funcs ? malloc((size_t)num_funcs * sizeof(void *)) : NULL;
+    if (num_funcs && !copy) return;
+    if (num_funcs) memcpy(copy, func_table_ptr, (size_t)num_funcs * sizeof(void *));
+    free(ctx->gc_func_table);
+    ctx->gc_func_table = copy;
     ctx->gc_func_table_size = num_funcs;
 }
 
@@ -331,6 +359,7 @@ void clear_type_cache_internal(jit_context_t *ctx) {
     }
     ctx->gc_num_funcs = 0;
 
+    free(ctx->gc_func_table);
     ctx->gc_func_table = NULL;
     ctx->gc_func_table_size = 0;
 }

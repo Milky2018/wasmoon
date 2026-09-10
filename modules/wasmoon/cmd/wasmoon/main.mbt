@@ -3,7 +3,7 @@
 /// by `scripts/tests/test_cli_version.py`. MoonBit gives the program no way
 /// to read its own module manifest, so the manifest stays the single source
 /// of truth and the test is what keeps this copy from drifting.
-const WASMOON_VERSION : String = "0.14.0"
+const WASMOON_VERSION : String = "0.15.0"
 
 ///|
 /// Print usage text as a diagnostic.
@@ -100,6 +100,11 @@ fn build_command() -> @argparse.Command {
             about="Grant access to directory (HOST_DIR or HOST_DIR::GUEST_DIR)",
           ),
           OptionArg(
+            "dir-ro",
+            action=Append,
+            about="Grant read-only access (HOST_DIR or HOST_DIR::GUEST_DIR)",
+          ),
+          OptionArg(
             "env",
             action=Append,
             about="Pass environment variable to WASM module (NAME=VALUE)",
@@ -133,6 +138,12 @@ fn build_command() -> @argparse.Command {
         ],
         flags=[
           FlagArg("no-jit", about="Disable JIT compilation (use interpreter)"),
+          FlagArg("canonicalize-nans", about="Canonicalize arithmetic NaNs"),
+          FlagArg("stack-switching", about="Enable typed continuations"),
+          FlagArg(
+            "no-bulk-memory",
+            about="Disable bulk-memory instructions and passive segments",
+          ),
           FlagArg(
             "show-success",
             about="Print successful assertions (default: only print failures)",
@@ -183,6 +194,10 @@ fn build_command() -> @argparse.Command {
           ),
         ],
         flags=[
+          FlagArg(
+            "no-component-implements",
+            about="Disable the component implements proposal",
+          ),
           FlagArg("dump", about="Print the parsed component structure"),
           FlagArg("validate", about="Validate the component after parsing"),
           FlagArg(
@@ -226,6 +241,10 @@ fn build_command() -> @argparse.Command {
           FlagArg(
             "no-jit",
             about="Use the core interpreter for all component test calls",
+          ),
+          FlagArg(
+            "no-component-implements",
+            about="Disable the component implements proposal",
           ),
         ],
       ),
@@ -297,12 +316,16 @@ fn main {
         !(sub.flags.get("no-jit") is Some(true)),
         2,
         sub.flags.get("dwarf") is Some(true),
+        readonly_dirs=sub.values.get("dir-ro").unwrap_or([]),
       )
     Some(("test", sub)) =>
       @commands.run_testsuite(
         sub.values["file"][0],
         !(sub.flags.get("no-jit") is Some(true)),
         sub.flags.get("show-success") is Some(true),
+        bulk_memory=!(sub.flags.get("no-bulk-memory") is Some(true)),
+        stack_switching=sub.flags.get("stack-switching") is Some(true),
+        nan_canonicalization=sub.flags.get("canonicalize-nans") is Some(true),
       )
     Some(("disasm", sub)) => @commands.run_disasm(sub.values["file"][0])
     Some(("component", sub)) => {
@@ -317,9 +340,16 @@ fn main {
       }
       let component_args = sub.values.get("arg").unwrap_or([])
       let wit_names = !(sub.flags.get("no-wit-names") is Some(true))
+      let component_implements = !(sub.flags.get("no-component-implements")
+        is Some(true))
       if sub.values.get("invoke") is Some([export_path]) {
         @commands.run_component_invoke_command(
-          file_path, export_path, component_args, wit_names, error_format,
+          file_path,
+          export_path,
+          component_args,
+          wit_names,
+          error_format,
+          component_implements~,
         )
       } else if sub.flags.get("run") is Some(true) {
         let network = match sub.values.get("network") {
@@ -336,6 +366,7 @@ fn main {
           network,
           wit_names,
           error_format,
+          component_implements~,
           use_jit=!(sub.flags.get("no-jit") is Some(true)),
         )
       } else {
@@ -345,6 +376,7 @@ fn main {
           sub.flags.get("validate") is Some(true),
           wit_names,
           error_format,
+          component_implements~,
         )
       }
     }
@@ -359,6 +391,8 @@ fn main {
           Text
         },
         use_jit=!(sub.flags.get("no-jit") is Some(true)),
+        component_implements=!(sub.flags.get("no-component-implements")
+          is Some(true)),
       )
     }
     Some(("explore", sub)) => {

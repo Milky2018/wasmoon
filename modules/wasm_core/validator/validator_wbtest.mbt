@@ -785,6 +785,7 @@ test "validator: data segment with i64 offset should fail" {
       {
         limits: { min: 1, max: None, },
         is_memory64: false,
+        is_shared: false,
         page_size_log2: 16,
       },
     ],
@@ -817,6 +818,7 @@ test "validator: data segment with ref.null offset should fail" {
       {
         limits: { min: 1, max: None, },
         is_memory64: false,
+        is_shared: false,
         page_size_log2: 16,
       },
     ],
@@ -849,6 +851,7 @@ test "validator: data segment with empty offset should fail" {
       {
         limits: { min: 1, max: None, },
         is_memory64: false,
+        is_shared: false,
         page_size_log2: 16,
       },
     ],
@@ -881,6 +884,7 @@ test "validator: data segment with non-constant instruction should fail" {
       {
         limits: { min: 1, max: None, },
         is_memory64: false,
+        is_shared: false,
         page_size_log2: 16,
       },
     ],
@@ -911,6 +915,7 @@ test "validator: data segment with nop offset should fail" {
       {
         limits: { min: 1, max: None, },
         is_memory64: false,
+        is_shared: false,
         page_size_log2: 16,
       },
     ],
@@ -941,6 +946,7 @@ test "validator: data segment with unknown global should fail" {
       {
         limits: { min: 1, max: None, },
         is_memory64: false,
+        is_shared: false,
         page_size_log2: 16,
       },
     ],
@@ -971,6 +977,7 @@ test "validator: data segment with mutable global offset should fail" {
       {
         limits: { min: 1, max: None, },
         is_memory64: false,
+        is_shared: false,
         page_size_log2: 16,
       },
     ],
@@ -1003,6 +1010,7 @@ test "validator: data segment with valid i32 const offset should pass" {
       {
         limits: { min: 1, max: None, },
         is_memory64: false,
+        is_shared: false,
         page_size_log2: 16,
       },
     ],
@@ -1031,6 +1039,7 @@ test "validator: data segment with immutable global offset should pass" {
       {
         limits: { min: 1, max: None, },
         is_memory64: false,
+        is_shared: false,
         page_size_log2: 16,
       },
     ],
@@ -1689,6 +1698,7 @@ fn module_with_memory(
   let mem_type : @types.MemoryType = {
     limits: { min: 1L, max: None, },
     is_memory64,
+    is_shared: false,
     page_size_log2: 16,
   }
   {

@@ -115,6 +115,7 @@ pub(all) struct WasiContextBuilder {
   mut args : Array[String]
   env : Array[String]
   preopens : Array[(String, String)]
+  readonly_preopens : Array[(String, String)]
   mut stdout_callback : ((Bytes) -> Unit)?
   mut stderr_callback : ((Bytes) -> Unit)?
   mut stdin_callback : (() -> Bytes)?
@@ -129,6 +130,7 @@ pub fn WasiContextBuilder::WasiContextBuilder() -> WasiContextBuilder {
     args: [],
     env: [],
     preopens: [],
+    readonly_preopens: [],
     stdout_callback: None,
     stderr_callback: None,
     stdin_callback: None,
@@ -167,6 +169,17 @@ pub fn WasiContextBuilder::preopen_dir(
   guest_path : String,
 ) -> WasiContextBuilder {
   self.preopens.push((host_path, guest_path))
+  self
+}
+
+///|
+/// Add a directory whose descendants cannot acquire filesystem mutation rights.
+pub fn WasiContextBuilder::preopen_dir_readonly(
+  self : WasiContextBuilder,
+  host_path : String,
+  guest_path : String,
+) -> WasiContextBuilder {
+  self.readonly_preopens.push((host_path, guest_path))
   self
 }
 
@@ -281,7 +294,8 @@ pub fn WasiContextBuilder::build(self : WasiContextBuilder) -> WasiContext {
   let preopens : Array[(Fd, String, String)] = []
   let open_files : @hashmap.HashMap[Int, OpenFile] = HashMap([])
   let mut fd = 3
-  for preopen in self.preopens {
+  for i, preopen in self.preopens + self.readonly_preopens {
+    let read_only = i >= self.preopens.length()
     let (host, guest) = preopen
     preopens.push((Fd(fd), host, guest))
     // Open the preopen directory with native open
@@ -293,8 +307,16 @@ pub fn WasiContextBuilder::build(self : WasiContextBuilder) -> WasiContext {
         host_path: host,
         position: 0L,
         flags: 0, // Read-only
-        rights_base: fd_rights_for_preopen_directory_base(),
-        rights_inheriting: fd_rights_for_preopen_directory_inheriting(),
+        rights_base: if read_only {
+          readonly_directory_base_rights()
+        } else {
+          fd_rights_for_preopen_directory_base()
+        },
+        rights_inheriting: if read_only {
+          readonly_directory_inheriting_rights()
+        } else {
+          fd_rights_for_preopen_directory_inheriting()
+        },
       })
     }
     fd = fd + 1

@@ -64,9 +64,9 @@ fn Parser::read_table_limits(
     let max = if has_max { Some(self.read_leb128_u64()) } else { None }
     (min, max)
   } else {
-    let min = self.read_leb128_u32().to_int64()
+    let min = self.read_leb128_u32().to_int64() & 0xFFFF_FFFFL
     let max = if has_max {
-      Some(self.read_leb128_u32().to_int64())
+      Some(self.read_leb128_u32().to_int64() & 0xFFFF_FFFFL)
     } else {
       None
     }
@@ -115,10 +115,16 @@ fn Parser::read_memory_type(
   let min = if is_memory64 {
     self.read_u64()
   } else {
-    self.read_u32().to_int64()
+    self.read_u32().to_int64() & 0xFFFF_FFFFL
   }
   let max = if has_max {
-    Some(if is_memory64 { self.read_u64() } else { self.read_u32().to_int64() })
+    Some(
+      if is_memory64 {
+        self.read_u64()
+      } else {
+        self.read_u32().to_int64() & 0xFFFF_FFFFL
+      },
+    )
   } else {
     None
   }
@@ -132,7 +138,12 @@ fn Parser::read_memory_type(
   } else {
     16
   }
-  { limits: { min, max, }, is_memory64, page_size_log2, }
+  {
+    limits: { min, max, },
+    is_memory64,
+    is_shared: (flags & 0x02) != 0,
+    page_size_log2,
+  }
 }
 
 ///|

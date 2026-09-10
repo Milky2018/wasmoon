@@ -69,6 +69,9 @@ struct AddressRange {
 /// Loaded precompiled module with executable functions
 struct JITModule {
   functions : Map[Int, JITFunction]
+  callables : Map[Int, @wasmoon_jit.NativeCallable]
+  mut callable_owners : Int
+  mut close_requested : Bool
   by_name : Map[String, Int]
   address_ranges : Array[AddressRange] // Sorted by start address for binary search
   mut context : JITContext?
@@ -87,6 +90,9 @@ struct JITModule {
 pub fn JITModule::JITModule() -> JITModule {
   {
     functions: Map([]),
+    callables: Map([]),
+    callable_owners: 0,
+    close_requested: false,
     by_name: Map([]),
     address_ranges: [],
     context: None,
@@ -262,6 +268,7 @@ fn load_artifact_with_imports_using_registrar(
   guard JITContext::try_alloc(total_funcs) is Some(ctx) else {
     raise ContextAllocationFailed(total_funcs~)
   }
+  errdefer ctx.close()
   for function in artifact.functions {
     let identity = function.identity
     if !register_safepoints(ctx, identity.function_index, function.safepoints) {
@@ -272,6 +279,7 @@ fn load_artifact_with_imports_using_registrar(
     }
   }
   let jit_module = JITModule::JITModule()
+  errdefer jit_module.close()
   let import_targets = stage_artifact_imports(
     artifact,
     func_signatures,
@@ -292,6 +300,7 @@ fn load_artifact_with_imports_using_registrar(
   let installed = installer.install(loaded) catch {
     error => raise ArtifactInstallationFailed(cause=error)
   }
+  errdefer installed.release()
   for import_ in installed.imports() {
     ctx.set_func(import_.identity().function_index, import_.address())
   }
@@ -325,6 +334,17 @@ fn load_artifact_with_imports_using_registrar(
     })
   }
   jit_module.address_ranges.sort_by(fn(a, b) { a.start.compare(b.start) })
+  for index in 0..<ctx.ctx.func_count() {
+    let target = ctx.ctx.func_ptr(index)
+    if target == 0L {
+      continue
+    }
+    let callable = ctx.ctx.bind_callable(target) catch {
+      cause => raise ArtifactInstallationFailed(cause~)
+    }
+    jit_module.callables.set(index, callable)
+    ctx.ctx.set_func(index, callable.entry_address())
+  }
   jit_module.context = Some(ctx)
   jit_module.debug_db = debug_db
   jit_module.installed_code = Some(installed)
@@ -338,10 +358,39 @@ fn load_artifact_with_imports_using_registrar(
 /// The module is terminal after this call. The caller must first finish or
 /// cancel every invocation and continuation that can enter its code.
 pub fn JITModule::close(self : JITModule) -> Unit {
+  self.close_requested = true
+  if self.callable_owners == 0 {
+    self.release_code()
+  }
+}
+
+///|
+/// Retain executable state until the Store containing its references closes.
+/// Releasing the capability twice is harmless.
+pub fn JITModule::retain_callable_owner(self : JITModule) -> () -> Unit {
+  self.callable_owners += 1
+  let active = Ref(true)
+  fn() {
+    if active.val {
+      active.val = false
+      self.callable_owners -= 1
+      if self.callable_owners == 0 && self.close_requested {
+        self.release_code()
+      }
+    }
+  }
+}
+
+///|
+fn JITModule::release_code(self : JITModule) -> Unit {
   if self.context is Some(context) {
     context.close()
   }
   self.context = None
+  for _, callable in self.callables {
+    callable.release()
+  }
+  self.callables.clear()
   for trampoline in self.owned_trampolines {
     trampoline.release()
   }
@@ -399,6 +448,9 @@ pub fn JITModule::get_func_by_name(
 /// Get function pointer by function index (for indirect table initialization)
 /// Returns the executable code pointer for the function, or 0 if not found
 pub fn JITModule::get_func_ptr(self : JITModule, func_idx : Int) -> Int64 {
+  if self.callables.get(func_idx) is Some(callable) {
+    return callable.entry_address()
+  }
   // Keep transaction-owned mappings reachable while returning their address.
   self.installed_code |> ignore
   match self.functions.get(func_idx) {
@@ -552,7 +604,7 @@ pub fn JITModule::call_with_context(
 /// Result of advancing a stackful native JIT call.
 pub(all) enum JITContinuationOutcome {
   JITReturned(Array[Int64])
-  JITSuspended(JITCallContinuation)
+  JITSuspended(@wasmoon_jit.NativeSuspensionReason, JITCallContinuation)
 }
 
 ///|
@@ -631,7 +683,7 @@ fn JITCallContinuation::advance(
   let event = self.call.advance(retry_hostcall) catch {
     error => {
       call_error = Some(error)
-      Suspended
+      Suspended(HostCall)
     }
   }
   self.jit_module.gc_use_func_safepoints(-1)
@@ -642,7 +694,7 @@ fn JITCallContinuation::advance(
       None => {
         match (call_error, event) {
           (Some(_), _) | (None, Returned(_)) => self.finish(AttachedFrame)
-          (None, Suspended) => {
+          (None, Suspended(_)) => {
             self.call.cancel()
             self.finish(DetachedFrameReleased)
           }
@@ -655,7 +707,7 @@ fn JITCallContinuation::advance(
     self.finish_error(error)
   }
   match event {
-    Suspended => JITSuspended(self)
+    Suspended(reason) => JITSuspended(reason, self)
     Returned(results) => {
       self.finish(AttachedFrame)
       JITReturned(results)
@@ -1229,11 +1281,12 @@ pub fn JITModule::init_wasi(
   args : Array[String],
   env : Array[String],
   preopens : Array[(String, String)],
+  readonly_preopens? : Array[(String, String)] = [],
 ) -> Unit {
   if self.context is Some(ctx) {
     self.wasi_stdout_callback = None
     self.wasi_stderr_callback = None
-    ctx.init_wasi(args, env, preopens)
+    ctx.init_wasi(args, env, preopens, readonly_preopens~)
   }
 }
 
@@ -1248,8 +1301,9 @@ pub fn JITModule::init_wasi_with_stdio(
   stderr : ((Bytes) -> Unit)?,
   stdin_data : Bytes?,
   stdin_callback? : (() -> Bytes)? = None,
+  readonly_preopens? : Array[(String, String)] = [],
 ) -> Unit {
-  self.init_wasi(args, env, preopens)
+  self.init_wasi(args, env, preopens, readonly_preopens~)
   if self.context is Some(ctx) {
     match stdout {
       Some(cb) => {
@@ -1285,11 +1339,12 @@ pub fn JITModule::init_wasi_quiet(
   args : Array[String],
   env : Array[String],
   preopens : Array[(String, String)],
+  readonly_preopens? : Array[(String, String)] = [],
 ) -> Unit {
   if self.context is Some(ctx) {
     self.wasi_stdout_callback = None
     self.wasi_stderr_callback = None
-    ctx.init_wasi_quiet(args, env, preopens)
+    ctx.init_wasi_quiet(args, env, preopens, readonly_preopens~)
   }
 }
 
@@ -1403,4 +1458,79 @@ pub fn JITModule::register_dwarf(
   }
   dwarf.register(verbose~)
   dwarf
+}
+
+///|
+pub fn JITModule::set_callable_types(
+  self : JITModule,
+  local_types : Array[Int],
+  parents : Array[Int],
+  entries : Array[(Int64, Int)],
+  tags : Array[Int],
+) -> Unit {
+  if self.context is Some(context) {
+    context.ctx.set_callable_types(local_types, parents, entries, tags)
+  }
+}
+
+///|
+pub fn JITModule::has_callable_metadata(self : JITModule) -> Bool {
+  match self.context {
+    Some(context) => context.ctx.has_callable_metadata()
+    None => false
+  }
+}
+
+///|
+/// Scheduling requires guest safepoints in the compiled artifact.
+pub fn JITModule::set_cooperative_scheduling(
+  self : JITModule,
+  enabled : Bool,
+) -> Bool {
+  if enabled && !self.cancellation_safepoints {
+    return false
+  }
+  guard self.context is Some(context) else { return false }
+  context.set_cooperative_scheduling(enabled)
+  true
+}
+
+///|
+pub fn JITModule::set_exception_arena(
+  self : JITModule,
+  arena : @wasmoon_jit.NativeExceptionArena,
+) -> Unit {
+  if self.context is Some(context) {
+    context.ctx.set_exception_arena(arena)
+  }
+}
+
+///|
+pub fn JITModule::prepare_continuations(
+  self : JITModule,
+  types : Array[@types.SubType],
+  state : @wasmoon_jit.NativeExecutionState,
+) -> Unit raise JITTrap {
+  if self.context is Some(context) {
+    context.ctx.set_continuation_arena(state.continuations())
+    for index, type_ in types {
+      if type_.composite is Cont(function_index) {
+        guard types[function_index].composite is Func(signature) else {
+          raise JITTrap("invalid continuation signature")
+        }
+        let trampoline = context.entry_trampoline(
+          signature.params,
+          signature.results,
+        )
+        if !context.ctx.define_continuation_type(
+            index,
+            trampoline,
+            signature.params,
+            signature.results,
+          ) {
+          raise JITTrap("continuation signature allocation failed")
+        }
+      }
+    }
+  }
 }

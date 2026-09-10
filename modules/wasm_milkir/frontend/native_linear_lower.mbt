@@ -100,6 +100,42 @@ fn push_unary_opcode_as(
 }
 
 ///|
+fn push_wide_arithmetic(
+  builder : @milkir.FunctionBuilder,
+  stack : Array[@milkir.Value],
+  instr : @types.Instruction,
+) -> Bool {
+  if instr is I64MulWideS || instr is I64MulWideU {
+    guard pop_value(stack) is Some(b) else { return false }
+    guard pop_value(stack) is Some(a) else { return false }
+    stack.push(builder.imul(a, b))
+    stack.push(
+      if instr is I64MulWideS {
+        builder.smulh(a, b)
+      } else {
+        builder.umulh(a, b)
+      },
+    )
+  } else {
+    guard pop_value(stack) is Some(b_hi) else { return false }
+    guard pop_value(stack) is Some(b_lo) else { return false }
+    guard pop_value(stack) is Some(a_hi) else { return false }
+    guard pop_value(stack) is Some(a_lo) else { return false }
+    let (lo, hi) = if instr is I64Add128 {
+      let lo = builder.iadd(a_lo, b_lo)
+      let carry = builder.uextend(I64, builder.icmp_ult(lo, a_lo))
+      (lo, builder.iadd(builder.iadd(a_hi, b_hi), carry))
+    } else {
+      let borrow = builder.uextend(I64, builder.icmp_ult(a_lo, b_lo))
+      (builder.isub(a_lo, b_lo), builder.isub(builder.isub(a_hi, b_hi), borrow))
+    }
+    stack.push(lo)
+    stack.push(hi)
+  }
+  true
+}
+
+///|
 fn push_binary_opcode(
   builder : @milkir.FunctionBuilder,
   stack : Array[@milkir.Value],
@@ -583,7 +619,9 @@ fn push_global_get(
   let field_offset = builder.iconst_i64(
     (global_idx * layout.global_value_stride).to_int64(),
   )
-  stack.push(builder.load_ptr(ty, globals_ptr, field_offset))
+  let cell = builder.load_ptr(I64, globals_ptr, field_offset)
+  let zero = builder.iconst_i64(0L)
+  stack.push(builder.load_ptr(ty, cell, zero))
   true
 }
 
@@ -608,7 +646,9 @@ fn push_global_set(
   let field_offset = builder.iconst_i64(
     (global_idx * layout.global_value_stride).to_int64(),
   )
-  builder.store_ptr(ty, globals_ptr, value, field_offset)
+  let cell = builder.load_ptr(I64, globals_ptr, field_offset)
+  let zero = builder.iconst_i64(0L)
+  builder.store_ptr(ty, cell, value, zero)
   true
 }
 
@@ -981,28 +1021,34 @@ fn push_memory_grow(
     extended
   }
   let max_pages = memory_types[memidx].limits.max
-    .map(fn(max) { max.to_int() })
+    .map(fn(max) {
+      if max >= 0L && max <= 0x7FFF_FFFFL {
+        max.to_int()
+      } else {
+        -1
+      }
+    })
     .unwrap_or(-1)
   let symbol = builder
     .get_function()
     .declare_external_symbol(runtime_symbols.symbol_name(MemoryGrow))
-  guard builder.call_symbol(symbol, Some(I32), [
+  guard builder.call_symbol(symbol, Some(I64), [
       context,
       builder.iconst_i32(memidx),
       delta_i64,
       builder.iconst_i32(max_pages),
     ])
-    is Some(call_result_i32) else {
+    is Some(call_result_i64) else {
     return false
   }
   let result = if result_ty == I64 {
-    guard emit_op(builder, I64, Scalar(Convert(SignedExtend)), [call_result_i32])
-      is Some(extended) else {
+    call_result_i64
+  } else {
+    guard emit_op(builder, I32, Scalar(Convert(IntReduce)), [call_result_i64])
+      is Some(reduced) else {
       return false
     }
-    extended
-  } else {
-    call_result_i32
+    reduced
   }
   stack.push(result)
   true
@@ -1028,23 +1074,11 @@ fn push_memory_fill(
   memidx : Int,
 ) -> Bool {
   guard vmctx is Some(context) else { return false }
-  guard memory_index_type(memory_types, memidx) is Some(I32) else {
-    // TODO(wasm_frontend): add memory64-capable runtime helper ABI before enabling
-    // this reusable call path for memory64 memory.fill.
-    return false
-  }
+  guard memory_index_type(memory_types, memidx) is Some(_) else { return false }
   guard pop3(stack) is Some((dst, value, size)) else { return false }
-  let symbol = builder
-    .get_function()
-    .declare_external_symbol(runtime_symbols.symbol_name(MemoryFill))
-  builder.call_symbol(symbol, None, [
-    context,
-    builder.iconst_i32(memidx),
-    dst,
-    value,
-    size,
-  ])
-  |> ignore
+  @wasm_milkir.memory_fill(
+    builder, runtime_symbols, context, memidx, dst, value, size,
+  )
   true
 }
 
@@ -1059,29 +1093,16 @@ fn push_memory_copy(
   src_memidx : Int,
 ) -> Bool {
   guard vmctx is Some(context) else { return false }
-  guard memory_index_type(memory_types, dst_memidx) is Some(I32) else {
-    // TODO(wasm_frontend): add memory64-capable runtime helper ABI before enabling
-    // this reusable call path for memory64 destination memories.
+  guard memory_index_type(memory_types, dst_memidx) is Some(_) else {
     return false
   }
-  guard memory_index_type(memory_types, src_memidx) is Some(I32) else {
-    // TODO(wasm_frontend): add memory64-capable runtime helper ABI before enabling
-    // this reusable call path for memory64 source memories.
+  guard memory_index_type(memory_types, src_memidx) is Some(_) else {
     return false
   }
   guard pop3(stack) is Some((dst, src, size)) else { return false }
-  let symbol = builder
-    .get_function()
-    .declare_external_symbol(runtime_symbols.symbol_name(MemoryCopy))
-  builder.call_symbol(symbol, None, [
-    context,
-    builder.iconst_i32(dst_memidx),
-    builder.iconst_i32(src_memidx),
-    dst,
-    src,
-    size,
-  ])
-  |> ignore
+  @wasm_milkir.memory_copy(
+    builder, runtime_symbols, context, dst_memidx, src_memidx, dst, src, size,
+  )
   true
 }
 
@@ -1096,51 +1117,11 @@ fn push_memory_init(
   data_idx : Int,
 ) -> Bool {
   guard vmctx is Some(context) else { return false }
-  guard memory_index_type(memory_types, memidx) is Some(I32) else {
-    // TODO(wasm_frontend): add memory64-capable runtime helper ABI before enabling
-    // this reusable call path for memory64 memory.init.
-    return false
-  }
+  guard memory_index_type(memory_types, memidx) is Some(_) else { return false }
   guard pop3(stack) is Some((dst, src, size)) else { return false }
-  let dst_i64 = if dst.ty == I64 {
-    dst
-  } else {
-    guard emit_op(builder, I64, Scalar(Convert(UnsignedExtend)), [dst])
-      is Some(extended) else {
-      return false
-    }
-    extended
-  }
-  let src_i64 = if src.ty == I64 {
-    src
-  } else {
-    guard emit_op(builder, I64, Scalar(Convert(UnsignedExtend)), [src])
-      is Some(extended) else {
-      return false
-    }
-    extended
-  }
-  let size_i64 = if size.ty == I64 {
-    size
-  } else {
-    guard emit_op(builder, I64, Scalar(Convert(UnsignedExtend)), [size])
-      is Some(extended) else {
-      return false
-    }
-    extended
-  }
-  let symbol = builder
-    .get_function()
-    .declare_external_symbol(runtime_symbols.symbol_name(MemoryInit))
-  builder.call_symbol(symbol, None, [
-    context,
-    builder.iconst_i32(memidx),
-    builder.iconst_i32(data_idx),
-    dst_i64,
-    src_i64,
-    size_i64,
-  ])
-  |> ignore
+  @wasm_milkir.memory_init(
+    builder, runtime_symbols, context, memidx, data_idx, dst, src, size,
+  )
   true
 }
 
@@ -1462,14 +1443,8 @@ fn push_simple_expr_instr(
     I32Mul =>
       push_i32_binary_opcode(builder, expr_stack, Scalar(IntBinary(Mul)))
     I64Mul => push_binary(expr_stack, fn(lhs, rhs) { builder.imul(lhs, rhs) })
-    I64MulWideU =>
-      push_binary_opcode(
-        builder,
-        expr_stack,
-        Scalar(IntBinary(UnsignedMulHigh)),
-      )
-    I64MulWideS =>
-      push_binary_opcode(builder, expr_stack, Scalar(IntBinary(SignedMulHigh)))
+    I64Add128 | I64Sub128 | I64MulWideU | I64MulWideS =>
+      push_wide_arithmetic(builder, expr_stack, instr)
     I32And =>
       push_i32_binary_opcode(builder, expr_stack, Scalar(IntBinary(And)))
     I64And => push_binary_opcode(builder, expr_stack, Scalar(IntBinary(And)))
@@ -2221,16 +2196,8 @@ fn try_lower_linear_function(
         if !push_binary(stack, fn(lhs, rhs) { builder.imul(lhs, rhs) }) {
           return None
         }
-      I64MulWideU =>
-        if !push_binary_opcode(
-            builder,
-            stack,
-            Scalar(IntBinary(UnsignedMulHigh)),
-          ) {
-          return None
-        }
-      I64MulWideS =>
-        if !push_binary_opcode(builder, stack, Scalar(IntBinary(SignedMulHigh))) {
+      I64Add128 | I64Sub128 | I64MulWideU | I64MulWideS =>
+        if !push_wide_arithmetic(builder, stack, instr) {
           return None
         }
       I32DivS | I64DivS =>

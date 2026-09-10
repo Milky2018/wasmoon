@@ -18,7 +18,7 @@ pub fn call_func_by_index(@runtime.Store, @runtime.ModuleInstance, Int, Array[@t
 
 pub async fn call_func_by_index_async(@runtime.Store, @runtime.ModuleInstance, Int, Array[@types.Value]) -> Array[@types.Value] raise @runtime.RuntimeError
 
-pub fn call_func_by_index_resumable(@runtime.Store, @runtime.ModuleInstance, Int, Array[@types.Value], (@runtime.RuntimeError) -> Int64?) -> ResumableCallOutcome raise @runtime.RuntimeError
+pub fn call_func_by_index_resumable(@runtime.Store, @runtime.ModuleInstance, Int, Array[@types.Value], (@runtime.RuntimeError) -> Int64?, cooperative? : Bool) -> ResumableCallOutcome raise @runtime.RuntimeError
 
 pub fn call_func_by_index_resumable_async_with_exception(@runtime.Store, @runtime.ModuleInstance, Int, Array[@types.Value], @runtime.AsyncHostCallDriver) -> ResumableCallWithExceptionOutcome raise @runtime.RuntimeError
 
@@ -36,11 +36,15 @@ pub fn instantiate_module_with_imports(@runtime.Store, @types.Module, @runtime.I
 
 pub async fn instantiate_module_with_imports_async(@runtime.Store, @types.Module, @runtime.Imports) -> @runtime.ModuleInstance raise @runtime.RuntimeError
 
+pub fn instantiate_module_with_imports_unstarted(@runtime.Store, @types.Module, @runtime.Imports) -> @runtime.ModuleInstance raise @runtime.RuntimeError
+
 pub fn instantiate_module_with_init(@types.Module) -> (@runtime.Store, @runtime.ModuleInstance) raise @runtime.RuntimeError
 
 pub fn instantiate_with_linker(@runtime.Linker, String, @types.Module) -> @runtime.ModuleInstance raise @runtime.RuntimeError
 
 pub async fn instantiate_with_linker_async(@runtime.Linker, String, @types.Module) -> @runtime.ModuleInstance raise @runtime.RuntimeError
+
+pub fn validate_continuation_gc_storage(@types.Module) -> Unit raise @runtime.RuntimeError
 
 pub fn validate_imports_with_diagnostics(@runtime.Store, @types.Module, @runtime.Imports) -> ImportDiagnosticsResult raise @runtime.RuntimeError
 
@@ -124,11 +128,12 @@ pub(all) enum InstantiateWithImportDiagnosticsResult {
 pub(all) enum InvokeWithExceptionResult {
   Returned(Array[@types.Value])
   Thrown(Int, Array[@types.Value])
+  HostFailed(@runtime.RuntimeError)
 }
 
 pub(all) enum ResumableCallOutcome {
   Returned(Array[@types.Value])
-  Suspended(Int64, ExecutionContinuation)
+  Suspended(SuspensionReason, ExecutionContinuation)
 } derive(@debug.Debug)
 pub fn ResumableCallOutcome::to_repr(Self) -> @debug.Repr
 
@@ -138,6 +143,14 @@ pub(all) enum ResumableCallWithExceptionOutcome {
   ResumableThrown(Int, Array[@types.Value])
   ResumableHostFailed(@runtime.RuntimeError)
 }
+
+pub(all) enum SuspensionReason {
+  HostCall(Int64)
+  CooperativeYield
+  AtomicWait
+  GuestEffect(@runtime.GuestContinuationEffect)
+} derive(@debug.Debug)
+pub fn SuspensionReason::to_repr(Self) -> @debug.Repr
 
 // Type aliases
 

@@ -1,6 +1,7 @@
 import {
   "Milky2018/wasm_core/types",
   "Milky2018/wasmoon/runtime",
+  "Milky2018/wasmoon_jit",
   "Milky2018/wasmoon/logger",
   "moonbitlang/core/env",
   "moonbitlang/core/buffer",

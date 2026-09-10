@@ -31,7 +31,10 @@ fn encode_jit_entry_args(
   }
   let slots : Array[Int64] = []
   for i, ty in param_types {
-    match encode_value(ty, args[i], store, jit_module, instance) {
+    let encoded = encode_value(ty, args[i], store, jit_module, instance) catch {
+      error => raise HostInvocation(error)
+    }
+    match encoded {
       Some(encoded) =>
         for raw in encoded {
           slots.push(raw)
@@ -64,7 +67,10 @@ fn decode_jit_entry_results(
       F64 => F64(@types.FromInt64::from_int64_bits(results[slot]))
       V128 =>
         V128(@types.int64_pair_to_v128_le(results[slot], results[slot + 1]))
-      _ => decode_ref_value(ty, results[slot], store, jit_module, instance)
+      _ =>
+        decode_ref_value(ty, results[slot], store, jit_module, instance) catch {
+          error => raise HostInvocation(error)
+        }
     }
     values.push(value)
     slot = slot + needed
@@ -81,13 +87,14 @@ fn prepare_jit_core_environment(
   store : @runtime.Store,
   instance : @runtime.ModuleInstance,
 ) -> Bool raise JITCoreCallError {
-  sync_store_globals_to_jit(context, store)
   sync_tables_to_jit(
     instance,
     store,
     context.jit_module,
     use_subtype_indirect_check=context.use_subtype_indirect_check,
-  )
+  ) catch {
+    error => raise HostInvocation(error)
+  }
   match store.c_heap {
     Some(heap) => {
       context.jit_module.setup_gc(
@@ -110,12 +117,14 @@ fn finish_jit_core_environment(
   context : JITModuleContext,
   store : @runtime.Store,
   gc_active : Bool,
-) -> Unit {
+) -> Unit raise JITCoreCallError {
   if gc_active {
     context.jit_module.teardown_gc()
   }
-  sync_jit_globals_to_store(context, store)
-  sync_jit_tables_to_store(context, store)
+
+  sync_jit_tables_to_store(context, store) catch {
+    error => raise HostInvocation(error)
+  }
 }
 
 ///|
@@ -159,7 +168,7 @@ fn JITModuleContext::clear_async_host_state(
 /// Result of entering or resuming a stackful native core call.
 pub(all) enum JITCoreCallOutcome {
   NativeCoreReturned(Array[@types.Value])
-  NativeCoreSuspended(JITCoreContinuation)
+  NativeCoreSuspended(@wasmoon_jit.NativeSuspensionReason, JITCoreContinuation)
 }
 
 ///|
@@ -180,7 +189,7 @@ fn JITCoreContinuation::finish(
   outcome : @jit.JITContinuationOutcome,
 ) -> JITCoreCallOutcome raise JITCoreCallError {
   match outcome {
-    JITSuspended(_) => {
+    JITSuspended(reason, _) => {
       self.invocation.park() catch {
         error => {
           self.context.clear_async_host_state(self.invocation.id())
@@ -189,7 +198,7 @@ fn JITCoreContinuation::finish(
           raise ExecutionStateFailure(error)
         }
       }
-      NativeCoreSuspended(self)
+      NativeCoreSuspended(reason, self)
     }
     JITReturned(raw_results) => {
       self.active[0] = false
@@ -304,7 +313,7 @@ fn JITModuleContext::start_core_func_resumable(
   }
   finish_jit_core_environment(self, store, gc_active)
   match outcome {
-    JITSuspended(call) => {
+    JITSuspended(_, call) => {
       let continuation : JITCoreContinuation = {
         context: self,
         store,
@@ -434,9 +443,13 @@ pub async fn JITModuleContext::call_core_func_async(
     for ;; {
       match outcome {
         NativeCoreReturned(values) => return values
-        NativeCoreSuspended(continuation) => {
+        NativeCoreSuspended(reason, continuation) => {
           errdefer continuation.cancel()
-          driver.wait_pending()
+          match reason {
+            HostCall => driver.wait_pending()
+            CooperativeYield => @async.sleep(0)
+            AtomicWait => @async.sleep(1)
+          }
           outcome = continuation.continue_execution()
         }
       }

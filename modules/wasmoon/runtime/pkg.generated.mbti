@@ -8,6 +8,8 @@ import {
 }
 
 // Values
+pub fn atomic_fence() -> Unit
+
 pub fn format_runtime_error(RuntimeError) -> String
 
 pub fn normalize_async_host_error(Error) -> RuntimeError
@@ -49,6 +51,11 @@ pub fn supports_wasi_preview1() -> Bool
 pub async fn[X] with_async_host_call_driver(async (AsyncHostCallDriver) -> X) -> X
 
 // Errors
+pub(all) suberror GuestContinuationSignal {
+  GuestContinuationYield(GuestContinuationEffect, GuestContinuationBody)
+} derive(@debug.Debug)
+pub fn GuestContinuationSignal::to_repr(Self) -> @debug.Repr
+
 pub(all) suberror RuntimeError {
   StackUnderflow
   StackOverflow
@@ -65,14 +72,24 @@ pub(all) suberror RuntimeError {
   IntegerOverflow
   InvalidConversion
   OutOfMemory
+  TableAllocationOverflow
+  TableAllocationFailed
+  MemoryMinimumExceedsLimits(Int64)
+  AllocationTooLarge
+  AtomicWaitNonSharedMemory
   Unreachable
+  UncaughtException
   CallStackExhausted
   UnknownImport(String, String)
   LinkError
   LinkErrorDetail(String)
+  CastFailure
   NullReference
   UnalignedAtomic
   InvalidConstantExpression(String)
+  ContinuationAlreadyConsumed
+  UnhandledSuspension
+  UnsupportedGcContinuationStorage
   AsyncHostRequiresAsyncCall
   AsyncHostCallInProgress
   AsyncHostCallCancelled
@@ -110,6 +127,15 @@ pub(all) enum AsyncHostPoll {
   AsyncHostReady(Array[@types.Value])
 } derive(@debug.Debug)
 pub fn AsyncHostPoll::to_repr(Self) -> @debug.Repr
+
+pub(all) enum AtomicRmwOp {
+  Add
+  Sub
+  And
+  Or
+  Xor
+  Exchange
+}
 
 pub(all) struct CallStackEntry {
   func_idx : Int
@@ -205,10 +231,31 @@ pub fn GcStats::to_repr(Self) -> @debug.Repr
 
 type GlobalInstance derive(@debug.Debug)
 pub fn GlobalInstance::GlobalInstance(@types.GlobalType, @types.Value) -> Self
-pub fn GlobalInstance::get(Self) -> @types.Value
+pub fn GlobalInstance::bind_native(Self, NativeGlobalBinding) -> Unit
+pub fn GlobalInstance::get(Self) -> @types.Value raise RuntimeError
 pub fn GlobalInstance::get_type(Self) -> @types.GlobalType
+pub fn GlobalInstance::native_binding(Self) -> NativeGlobalBinding?
 pub fn GlobalInstance::set(Self, @types.Value) -> Unit raise RuntimeError
 pub fn GlobalInstance::to_repr(Self) -> @debug.Repr
+
+pub(all) struct GuestContinuationBody {
+  run : (GuestContinuationInput) -> Array[@types.Value] raise
+  cancel : () -> Unit
+}
+pub fn GuestContinuationBody::to_repr(Self) -> @debug.Repr
+pub impl @debug.Debug for GuestContinuationBody
+
+pub(all) enum GuestContinuationEffect {
+  Suspend(Int, Array[@types.Value])
+  Switch(Int, GuestContinuationBody, Array[@types.Value])
+} derive(@debug.Debug)
+pub fn GuestContinuationEffect::to_repr(Self) -> @debug.Repr
+
+pub(all) enum GuestContinuationInput {
+  Values(Array[@types.Value])
+  Exception(Int, Array[@types.Value])
+} derive(@debug.Debug)
+pub fn GuestContinuationInput::to_repr(Self) -> @debug.Repr
 
 type Imports
 pub fn Imports::Imports() -> Self
@@ -290,31 +337,60 @@ pub impl GcManager for MarkSweepHeap
 pub impl GcRuntime for MarkSweepHeap
 
 type Memory derive(@debug.Debug)
-pub fn Memory::Memory(Int, Int?, is_memory64? : Bool, page_size_log2? : Int) -> Self
+pub fn Memory::Memory(Int, Int?, is_memory64? : Bool, is_shared? : Bool, page_size_log2? : Int) -> Self
+pub fn Memory::atomic_compare_exchange(Self, Int64, Int, Int64, Int64) -> Int64 raise RuntimeError
+pub fn Memory::atomic_load(Self, Int64, Int) -> Int64 raise RuntimeError
+pub fn Memory::atomic_notify(Self, Int64, UInt) -> UInt raise RuntimeError
+pub fn Memory::atomic_rmw(Self, AtomicRmwOp, Int64, Int, Int64) -> Int64 raise RuntimeError
+pub fn Memory::atomic_store(Self, Int64, Int, Int64) -> Unit raise RuntimeError
+pub fn Memory::atomic_wait_begin(Self, Int64, Int, Int64, Int64) -> @wasmoon_jit.NativeAtomicWait raise RuntimeError
 pub fn Memory::byte_len(Self) -> Int64
 pub fn Memory::copy(Self, Int, Int, Int) -> Unit raise RuntimeError
+pub fn Memory::copy_at(Self, Int64, Int64, Int64) -> Unit raise RuntimeError
+pub fn Memory::copy_from(Self, Int64, Self, Int64, Int64) -> Unit raise RuntimeError
 pub fn Memory::desc_ptr(Self) -> Int64
 pub fn Memory::fill(Self, Int, Byte, Int) -> Unit raise RuntimeError
+pub fn Memory::fill_at(Self, Int64, Byte, Int64) -> Unit raise RuntimeError
+pub fn Memory::from_type(@types.MemoryType) -> Self raise RuntimeError
 pub fn Memory::get_limits(Self) -> (Int, Int?)
+pub fn Memory::get_limits64(Self) -> (Int64, Int64?)
 pub fn Memory::grow(Self, Int) -> Int
+pub fn Memory::grow64(Self, Int64) -> Int64
 pub fn Memory::init_data(Self, Int, Bytes) -> Unit raise RuntimeError
+pub fn Memory::init_data_at(Self, Int64, Bytes) -> Unit raise RuntimeError
 pub fn Memory::is_memory64(Self) -> Bool
+pub fn Memory::is_shared(Self) -> Bool
 pub fn Memory::load_byte(Self, Int) -> Byte raise RuntimeError
+pub fn Memory::load_byte_at(Self, Int64) -> Byte raise RuntimeError
 pub fn Memory::load_f32(Self, Int) -> Float raise RuntimeError
+pub fn Memory::load_f32_at(Self, Int64) -> Float raise RuntimeError
 pub fn Memory::load_f64(Self, Int) -> Double raise RuntimeError
+pub fn Memory::load_f64_at(Self, Int64) -> Double raise RuntimeError
 pub fn Memory::load_i32(Self, Int) -> Int raise RuntimeError
 pub fn Memory::load_i32_16s(Self, Int) -> Int raise RuntimeError
+pub fn Memory::load_i32_16s_at(Self, Int64) -> Int raise RuntimeError
 pub fn Memory::load_i32_16u(Self, Int) -> Int raise RuntimeError
+pub fn Memory::load_i32_16u_at(Self, Int64) -> Int raise RuntimeError
 pub fn Memory::load_i32_8s(Self, Int) -> Int raise RuntimeError
+pub fn Memory::load_i32_8s_at(Self, Int64) -> Int raise RuntimeError
 pub fn Memory::load_i32_8u(Self, Int) -> Int raise RuntimeError
+pub fn Memory::load_i32_8u_at(Self, Int64) -> Int raise RuntimeError
+pub fn Memory::load_i32_at(Self, Int64) -> Int raise RuntimeError
 pub fn Memory::load_i64(Self, Int) -> Int64 raise RuntimeError
 pub fn Memory::load_i64_16s(Self, Int) -> Int64 raise RuntimeError
+pub fn Memory::load_i64_16s_at(Self, Int64) -> Int64 raise RuntimeError
 pub fn Memory::load_i64_16u(Self, Int) -> Int64 raise RuntimeError
+pub fn Memory::load_i64_16u_at(Self, Int64) -> Int64 raise RuntimeError
 pub fn Memory::load_i64_32s(Self, Int) -> Int64 raise RuntimeError
+pub fn Memory::load_i64_32s_at(Self, Int64) -> Int64 raise RuntimeError
 pub fn Memory::load_i64_32u(Self, Int) -> Int64 raise RuntimeError
+pub fn Memory::load_i64_32u_at(Self, Int64) -> Int64 raise RuntimeError
 pub fn Memory::load_i64_8s(Self, Int) -> Int64 raise RuntimeError
+pub fn Memory::load_i64_8s_at(Self, Int64) -> Int64 raise RuntimeError
 pub fn Memory::load_i64_8u(Self, Int) -> Int64 raise RuntimeError
-pub fn Memory::new_guarded_memory0(Int, Int?) -> Self
+pub fn Memory::load_i64_8u_at(Self, Int64) -> Int64 raise RuntimeError
+pub fn Memory::load_i64_at(Self, Int64) -> Int64 raise RuntimeError
+pub fn Memory::new_guarded_memory0(Int, Int?, is_shared? : Bool) -> Self
 pub fn Memory::page_size_bytes(Self) -> Int64
 pub fn Memory::read_byte(Self, Int) -> Byte
 pub fn Memory::read_bytes(Self, Int, Int) -> Bytes
@@ -322,15 +398,25 @@ pub fn Memory::read_i32(Self, Int) -> Int
 pub fn Memory::read_i64(Self, Int) -> Int64
 pub fn Memory::size_pages(Self) -> Int
 pub fn Memory::store_byte(Self, Int, Byte) -> Unit raise RuntimeError
+pub fn Memory::store_byte_at(Self, Int64, Byte) -> Unit raise RuntimeError
 pub fn Memory::store_f32(Self, Int, Float) -> Unit raise RuntimeError
+pub fn Memory::store_f32_at(Self, Int64, Float) -> Unit raise RuntimeError
 pub fn Memory::store_f64(Self, Int, Double) -> Unit raise RuntimeError
+pub fn Memory::store_f64_at(Self, Int64, Double) -> Unit raise RuntimeError
 pub fn Memory::store_i32(Self, Int, Int) -> Unit raise RuntimeError
 pub fn Memory::store_i32_16(Self, Int, Int) -> Unit raise RuntimeError
+pub fn Memory::store_i32_16_at(Self, Int64, Int) -> Unit raise RuntimeError
 pub fn Memory::store_i32_8(Self, Int, Int) -> Unit raise RuntimeError
+pub fn Memory::store_i32_8_at(Self, Int64, Int) -> Unit raise RuntimeError
+pub fn Memory::store_i32_at(Self, Int64, Int) -> Unit raise RuntimeError
 pub fn Memory::store_i64(Self, Int, Int64) -> Unit raise RuntimeError
 pub fn Memory::store_i64_16(Self, Int, Int64) -> Unit raise RuntimeError
+pub fn Memory::store_i64_16_at(Self, Int64, Int64) -> Unit raise RuntimeError
 pub fn Memory::store_i64_32(Self, Int, Int64) -> Unit raise RuntimeError
+pub fn Memory::store_i64_32_at(Self, Int64, Int64) -> Unit raise RuntimeError
 pub fn Memory::store_i64_8(Self, Int, Int64) -> Unit raise RuntimeError
+pub fn Memory::store_i64_8_at(Self, Int64, Int64) -> Unit raise RuntimeError
+pub fn Memory::store_i64_at(Self, Int64, Int64) -> Unit raise RuntimeError
 pub fn Memory::to_repr(Self) -> @debug.Repr
 pub fn Memory::write_byte(Self, Int, Byte) -> Unit
 pub fn Memory::write_i32(Self, Int, Int) -> Unit
@@ -348,6 +434,7 @@ pub(all) struct ModuleInstance {
   global_addrs : Array[Int]
   tag_addrs : Array[Int]
   exports : Array[@types.Export]
+  elem_values : Array[Array[@types.Value]]
   elem_segments : Array[@types.Element]
   data_segments : Array[@types.Data]
   dropped_elems : Array[Bool]
@@ -361,6 +448,16 @@ pub fn ModuleInstance::validated_array_type_at(Self, Int) -> @types.ArrayType
 pub fn ModuleInstance::validated_func_type_at(Self, Int) -> @types.FuncType
 pub fn ModuleInstance::validated_struct_type_at(Self, Int) -> @types.StructType
 pub impl Show for ModuleInstance
+
+pub(all) struct NativeGlobalBinding {
+  address : Int64
+  root : () -> @types.Value
+  read : () -> @types.Value raise RuntimeError
+  write : (@types.Value) -> Unit raise RuntimeError
+  release : () -> Unit
+}
+pub fn NativeGlobalBinding::to_repr(Self) -> @debug.Repr
+pub impl @debug.Debug for NativeGlobalBinding
 
 type RollbackRegistrar
 pub fn RollbackRegistrar::on_finish(Self, () -> Unit) -> Unit
@@ -434,6 +531,7 @@ pub fn Stack::size(Self) -> Int
 pub fn Stack::to_repr(Self) -> @debug.Repr
 
 pub struct Store {
+  nan_canonicalization : Bool
   funcs : Array[FuncInst]
   func_types : Array[@types.FuncType]
   func_type_indices : Array[Int]
@@ -457,8 +555,8 @@ pub struct Store {
   native_execution : @wasmoon_jit.NativeExecutionState
   // private fields
 } derive(@debug.Debug)
-pub fn Store::Store() -> Self
-pub fn Store::alloc_array(Self, Int, Array[@types.Value]) -> Int raise RuntimeError
+pub fn Store::Store(nan_canonicalization? : Bool) -> Self
+pub fn Store::alloc_array(Self, Int, Array[@types.Value], instance? : ModuleInstance) -> Int raise RuntimeError
 pub fn Store::alloc_async_host_func(Self, async (Array[@types.Value]) -> Array[@types.Value], func_type? : @types.FuncType, type_idx? : Int) -> Int raise RuntimeError
 pub fn Store::alloc_async_host_func_with_caller(Self, async (Caller, Array[@types.Value]) -> Array[@types.Value], func_type? : @types.FuncType, type_idx? : Int) -> Int raise RuntimeError
 pub fn Store::alloc_exn(Self, Int, Array[@types.Value]) -> Int raise RuntimeError
@@ -467,7 +565,8 @@ pub fn Store::alloc_global(Self, GlobalInstance) -> Int raise RuntimeError
 pub fn Store::alloc_host_func(Self, (Array[@types.Value]) -> Array[@types.Value] raise RuntimeError, func_type? : @types.FuncType, type_idx? : Int) -> Int raise RuntimeError
 pub fn Store::alloc_host_func_with_caller(Self, (Caller, Array[@types.Value]) -> Array[@types.Value] raise RuntimeError, func_type? : @types.FuncType, type_idx? : Int) -> Int raise RuntimeError
 pub fn Store::alloc_mem(Self, Memory) -> Int raise RuntimeError
-pub fn Store::alloc_struct(Self, Int, Array[@types.Value]) -> Int raise RuntimeError
+pub fn Store::alloc_shared_mem(Self, Memory) -> Int raise RuntimeError
+pub fn Store::alloc_struct(Self, Int, Array[@types.Value], instance? : ModuleInstance) -> Int raise RuntimeError
 pub fn Store::alloc_table(Self, Table, use_jit? : Bool) -> Int raise RuntimeError
 pub fn Store::alloc_tag(Self, @types.FuncType, type_idx? : Int) -> Int raise RuntimeError
 pub fn Store::array_copy(Self, Int, Int, Int, Int, Int) -> Unit raise RuntimeError
@@ -475,10 +574,14 @@ pub fn Store::array_fill(Self, Int, Int, @types.Value, Int) -> Unit raise Runtim
 pub fn Store::array_get(Self, Int, Int) -> @types.Value raise RuntimeError
 pub fn Store::array_len(Self, Int) -> Int raise RuntimeError
 pub fn Store::array_set(Self, Int, Int, @types.Value) -> Unit raise RuntimeError
+pub fn Store::bind_native_callable_view(Self, (Array[Int], Array[(Int64, Int)]) -> Unit) -> Unit
 pub fn Store::close(Self) -> Unit
 pub fn Store::collect_garbage(Self, additional_roots? : Array[@types.Value]) -> Int
 pub fn Store::collect_roots(Self, Array[@types.Value]) -> Array[@types.Value]
+pub fn Store::decode_native_exception(Self, Int64) -> @types.Value raise RuntimeError
 pub fn Store::enable_c_heap(Self) -> Unit raise RuntimeError
+pub fn Store::encode_native_exception(Self, Int) -> Int64 raise RuntimeError
+pub fn Store::gc_type_is_subtype(Self, Int, ModuleInstance, Int) -> Bool
 pub fn Store::get_c_heap_ptr(Self) -> Int64
 pub fn Store::get_exn(Self, Int) -> ExnInstance raise RuntimeError
 pub fn Store::get_func(Self, Int) -> @types.FunctionCode raise RuntimeError
@@ -509,18 +612,22 @@ pub fn Store::lookup_jit_funcref_ptr(Self, Int) -> Int64?
 pub fn Store::lookup_jit_funcref_store_addr(Self, Int64) -> Int?
 pub fn Store::maybe_collect(Self, additional_roots? : Array[@types.Value], threshold? : Double) -> Int
 pub fn Store::native_execution_state(Self) -> @wasmoon_jit.NativeExecutionState
+pub fn Store::native_type_indices(Self, ModuleInstance) -> Array[Int]
+pub fn Store::native_type_parents(Self) -> Array[Int]
 pub fn Store::pin_gc_roots(Self, Array[@types.Value]) -> GcRootLease
+pub fn Store::put_guest_continuation(Self, GuestContinuationBody) -> Int64 raise RuntimeError
 pub fn Store::register_instance(Self, ModuleInstance) -> Int raise RuntimeError
-pub fn Store::register_jit_funcrefs(Self, Array[StoreFuncrefEntry]) -> StoreFuncrefRegistration
+pub fn Store::register_jit_funcrefs(Self, Array[StoreFuncrefEntry], release_owner? : () -> Unit) -> StoreFuncrefRegistration
 pub fn Store::set_module_types(Self, Array[@types.SubType], rec_groups? : Array[Int]) -> Unit raise RuntimeError
 pub fn Store::set_wasi_ctx_handle(Self, Int) -> Unit raise RuntimeError
 pub fn Store::set_wasi_mem_addr(Self, Int) -> Unit raise RuntimeError
 pub fn Store::should_collect(Self, threshold? : Double) -> Bool
 pub fn Store::struct_get(Self, Int, Int) -> @types.Value raise RuntimeError
 pub fn Store::struct_set(Self, Int, Int, @types.Value) -> Unit raise RuntimeError
+pub fn Store::take_guest_continuation(Self, Int64) -> GuestContinuationBody raise RuntimeError
 pub fn Store::to_repr(Self) -> @debug.Repr
 pub fn Store::unwrap_extern(Self, @types.Value) -> @types.Value raise RuntimeError
-pub fn Store::with_c_heap() -> Self
+pub fn Store::with_c_heap(nan_canonicalization? : Bool) -> Self
 pub fn Store::wrap_as_extern(Self, @types.Value) -> @types.Value raise RuntimeError
 
 pub struct StoreFuncrefEntry {
@@ -545,15 +652,22 @@ pub fn StructInstance::to_string(Self) -> String
 pub impl Show for StructInstance
 
 type Table derive(@debug.Debug)
-pub fn Table::Table(@types.ValueType, Int, Int?, init_value? : @types.Value, is_table64? : Bool) -> Self
+pub fn Table::Table(@types.ValueType, Int, Int?, init_value? : @types.Value, is_table64? : Bool) -> Self raise RuntimeError
 pub fn Table::copy_from(Self, Int, Self, Int, Int) -> Unit raise RuntimeError
+pub fn Table::copy_from_at(Self, Int64, Self, Int64, Int64) -> Unit raise RuntimeError
 pub fn Table::fill(Self, Int, @types.Value, Int) -> Unit raise RuntimeError
+pub fn Table::fill_at(Self, Int64, @types.Value, Int64) -> Unit raise RuntimeError
+pub fn Table::from_type(@types.TableType, init_value? : @types.Value) -> Self raise RuntimeError
 pub fn Table::get(Self, Int) -> @types.Value raise RuntimeError
+pub fn Table::get_at(Self, Int64) -> @types.Value raise RuntimeError
 pub fn Table::get_elem_type(Self) -> @types.ValueType
 pub fn Table::get_limits(Self) -> (Int, Int?)
+pub fn Table::get_limits64(Self) -> (Int64, Int64?)
 pub fn Table::grow(Self, Int, @types.Value) -> Int
+pub fn Table::grow64(Self, Int64, @types.Value) -> Int64 raise RuntimeError
 pub fn Table::is_table64(Self) -> Bool
 pub fn Table::set(Self, Int, @types.Value) -> Unit raise RuntimeError
+pub fn Table::set_at(Self, Int64, @types.Value) -> Unit raise RuntimeError
 pub fn Table::size(Self) -> Int
 pub fn Table::to_repr(Self) -> @debug.Repr
 

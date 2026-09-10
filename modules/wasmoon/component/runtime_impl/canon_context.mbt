@@ -15,7 +15,7 @@ fn instantiate_canon_context_get(
     _args : Array[@types.Value],
   ) -> Array[@types.Value] raise @runtime.RuntimeError {
     let task_id = current_task_id(async_state)
-    match async_state.task_contexts.get(task_id) {
+    match async_state.tasks.read_task_contexts(task_id) {
       Some(m) =>
         match m.get(_idx) {
           Some(v) => [v]
@@ -65,11 +65,11 @@ fn instantiate_canon_context_set(
       return []
     }
     let task_id = current_task_id(async_state)
-    let m = match async_state.task_contexts.get(task_id) {
+    let m = match async_state.tasks.read_task_contexts(task_id) {
       Some(m) => m
       None => {
         let m : Map[Int, @types.Value] = Map([])
-        async_state.task_contexts.set(task_id, m)
+        async_state.tasks.write_task_contexts(task_id, m)
         m
       }
     }

@@ -221,6 +221,7 @@ pub impl Show for ComponentRuntimeError with fn output(self, logger) {
 priv struct ComponentRuntimeState {
   linker : @runtime_impl.ComponentLinker
   wit_names : Bool
+  component_implements : Bool
   closed : Ref[Bool]
   execution_depth : Ref[Int]
   teardown_complete : Ref[Bool]
@@ -267,6 +268,7 @@ pub(all) enum ComponentCallPoll {
 pub fn ComponentRuntime::ComponentRuntime(
   engine? : ComponentEngine = native_component_engine(),
   wit_names? : Bool = true,
+  component_implements? : Bool = true,
 ) -> ComponentRuntime {
   {
     state: {
@@ -274,6 +276,7 @@ pub fn ComponentRuntime::ComponentRuntime(
         engine.open_session(),
       ),
       wit_names,
+      component_implements,
       closed: Ref(false),
       execution_depth: Ref(0),
       teardown_complete: Ref(false),
@@ -406,7 +409,10 @@ pub fn ComponentRuntime::instantiate_component(
   self.state.ensure_open()
   let validated = @component_model.validate_component_for_instantiation_with_config(
     component,
-    ComponentValidationConfig(self.state.wit_names),
+    ComponentValidationConfig(
+      self.state.wit_names,
+      component_implements=self.state.component_implements,
+    ),
   ) catch {
     error => raise ValidationFailed(error.to_string())
   }

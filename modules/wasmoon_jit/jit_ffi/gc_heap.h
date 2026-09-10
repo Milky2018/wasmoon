@@ -117,6 +117,7 @@ typedef struct GcHeap {
     // Runtime-owned registrations for precise roots held by parked native JIT
     // continuations that share this Store heap.
     void *parked_jit_roots_head;
+    int32_t* runtime_types;     // Store type identity, -1 for unbound objects
 } GcHeap;
 
 // ============ Heap Lifecycle ============
@@ -437,3 +438,5 @@ void gc_heap_get_stats(GcHeap* heap, int32_t* out_total_allocations, int32_t* ou
 #endif
 
 #endif // GC_HEAP_H
+
+int gc_heap_ensure_object_capacity(GcHeap *heap);

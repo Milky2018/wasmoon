@@ -9,7 +9,7 @@ import {
 // Values
 pub fn format_wat_error(WatError, String) -> String
 
-pub fn parse(String) -> @types.Module raise WatError
+pub fn parse(String, implicit_module? : Bool) -> @types.Module raise WatError
 
 pub fn parse_wast(String) -> WastScript raise WatError
 
@@ -65,11 +65,12 @@ pub fn WastAction::to_repr(Self) -> @debug.Repr
 pub enum WastCommand {
   Module(@types.Module, String?)
   ModuleDefinition(@types.Module, String?)
-  ModuleInstance(String?, String)
+  ModuleInstance(String?, String?)
   ModuleQuote(Array[String])
   ModuleBinaryFailed(String)
   AssertReturn(WastAction, Array[WastValue])
   AssertTrap(WastAction, String)
+  AssertSuspension(WastAction, String)
   AssertException(WastAction)
   AssertModuleTrap(WastModuleSource, String)
   AssertExhaustion(WastAction, String)
@@ -78,6 +79,8 @@ pub enum WastCommand {
   AssertUnlinkable(WastModuleSource, String)
   Register(String, String?)
   Action(WastAction)
+  Thread(String, String?, Array[(WastCommand, Int)])
+  Wait(String)
 } derive(@debug.Debug)
 pub fn WastCommand::to_repr(Self) -> @debug.Repr
 
@@ -119,6 +122,7 @@ pub enum WastValue {
   RefExternAny
   RefHost(Int)
   RefFunc
+  RefFuncIndex(Int)
   RefArray
   RefStruct
   RefEq

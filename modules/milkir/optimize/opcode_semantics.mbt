@@ -128,6 +128,8 @@ fn @milkir.ScalarOp::semantics(self : @milkir.ScalarOp) -> OpcodeSemantics {
 ///|
 fn @milkir.MemoryOp::semantics(self : @milkir.MemoryOp) -> OpcodeSemantics {
   match self {
+    // Every atomic is an ordering boundary, including unused loads and fences.
+    Atomic(_) => unknown_opcode_semantics()
     Load(_) | LoadNarrow(_, _, _) => memory_read_opcode_semantics()
     Store(_) | StoreNarrow(_) => memory_write_opcode_semantics()
     Vector(LoadExtend(_, _) | LoadSplat(_) | LoadZero(_) | LoadLane(_, _)) =>

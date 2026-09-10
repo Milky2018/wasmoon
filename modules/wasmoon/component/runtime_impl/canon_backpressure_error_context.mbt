@@ -6,7 +6,6 @@
 fn parse_i32_like_arg(v : @types.Value) -> Int? {
   match v {
     I32(n) => Some(n)
-    I64(n) => Some(n.to_int())
     _ => None
   }
 }
@@ -71,8 +70,7 @@ fn instantiate_canon_error_context_new(
 ) -> Unit raise ComponentRuntimeError {
   let resources = resolve_canon_resources(opts, state)
   let core_type : @types.FuncType = { params: [I32, I32], results: [I32], }
-  let async_state = state.async_state
-  let owner_component_id = state.resource_table.id
+  let resource_table = state.resource_table
   let types = state.types
   let host = fn(
     args : Array[@types.Value],
@@ -100,6 +98,7 @@ fn instantiate_canon_error_context_new(
       Some(mem),
       mem.is_memory64(),
       resources.encoding,
+      resource_table,
     ) catch {
       e => {
         trap_canon(canon_err_message(e))
@@ -107,15 +106,18 @@ fn instantiate_canon_error_context_new(
       }
     }
     let debug_message = match lifted {
-      String(s) => s
+      String(s) | EncodedString(s, _, _) => s
       _ => {
         trap_canon("type mismatch")
         return []
       }
     }
-    let handle = alloc_error_context_handle(
-      async_state, owner_component_id, debug_message,
-    )
+    let handle = resource_table.alloc_error_context(debug_message) catch {
+      error => {
+        trap_canon(canon_err_message(error))
+        raise @runtime.Unreachable
+      }
+    }
     [I32(handle)]
   }
   state.core_funcs.push(alloc_component_host_core_func(store, core_type, host))
@@ -129,8 +131,7 @@ fn instantiate_canon_error_context_debug_message(
 ) -> Unit raise ComponentRuntimeError {
   let resources = resolve_canon_resources(opts, state)
   let core_type : @types.FuncType = { params: [I32, I32], results: [], }
-  let async_state = state.async_state
-  let owner_component_id = state.resource_table.id
+  let resource_table = state.resource_table
   let host = fn(
     args : Array[@types.Value],
   ) -> Array[@types.Value] raise @runtime.RuntimeError {
@@ -149,14 +150,13 @@ fn instantiate_canon_error_context_debug_message(
       }
     }
     let retptr = match parse_i32_like_arg(args[1]) {
-      Some(p) => p
+      Some(p) => p.to_int64() & 0xffffffffL
       None => {
         trap_canon("type mismatch")
         return []
       }
     }
-    let debug_message = match
-      get_error_context_message(async_state, owner_component_id, handle) {
+    let debug_message = match resource_table.error_contexts.get(handle) {
       Some(s) => s
       None => {
         trap_canon("unknown handle index \{handle}")
@@ -196,27 +196,37 @@ fn instantiate_canon_error_context_debug_message(
         return []
       }
     }
+    // Allocation precedes descriptor validation, but no descriptor field may be
+    // stored until the entire return area fits in memory.
+    let descriptor_size = if mem_is_64 { 16L } else { 8L }
+    let descriptor_base = retptr
+    if descriptor_base < 0L ||
+      descriptor_base > mem.byte_len() ||
+      descriptor_size > mem.byte_len() - descriptor_base {
+      trap_canon("invalid debug message pointer")
+      return []
+    }
     if mem_is_64 {
-      mem.store_i64(retptr, ptr.to_int64()) catch {
+      mem.store_i64_at(retptr, ptr) catch {
         e => {
           trap_canon(e.to_string())
           return []
         }
       }
-      mem.store_i64(retptr + 8, canon_len.to_int64()) catch {
+      mem.store_i64_at(retptr + 8, canon_len.to_int64() & 0xffffffffL) catch {
         e => {
           trap_canon(e.to_string())
           return []
         }
       }
     } else {
-      mem.store_i32(retptr, ptr) catch {
+      mem.store_i32_at(retptr, ptr.to_int()) catch {
         e => {
           trap_canon(e.to_string())
           return []
         }
       }
-      mem.store_i32(retptr + 4, canon_len) catch {
+      mem.store_i32_at(retptr + 4, canon_len) catch {
         e => {
           trap_canon(e.to_string())
           return []
@@ -234,8 +244,7 @@ fn instantiate_canon_error_context_drop(
   store : @runtime.Store,
 ) -> Unit raise ComponentRuntimeError {
   let core_type : @types.FuncType = { params: [I32], results: [], }
-  let async_state = state.async_state
-  let owner_component_id = state.resource_table.id
+  let resource_table = state.resource_table
   let host = fn(
     args : Array[@types.Value],
   ) -> Array[@types.Value] raise @runtime.RuntimeError {
@@ -253,7 +262,7 @@ fn instantiate_canon_error_context_drop(
         return []
       }
     }
-    if !drop_error_context_handle(async_state, owner_component_id, handle) {
+    if !resource_table.drop_error_context(handle) {
       trap_canon("unknown handle index \{handle}")
       return []
     }

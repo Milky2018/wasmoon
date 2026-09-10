@@ -819,7 +819,7 @@ test "exception: uncaught exception propagates out" {
   inspect(
     exception_runtime_has_error(
       () => @executor.call_exported_func(store, instance, "uncaught", []),
-      _ => true,
+      error => error is UncaughtException,
     ),
     content="true",
   )

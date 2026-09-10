@@ -30,63 +30,48 @@ pub fn HostFuture::HostFuture(
 ///|
 /// Entry state for one component instance.
 ///
-/// `ready` prevents lowered imports from entering a partially-instantiated
-/// instance. `active` is a dynamic execution guard and is released while a
-/// stackful invocation is suspended. `poisoned` is permanent after a trap.
+/// Defined adapters can run during core module instantiation. Publication of
+/// the component graph is guarded separately by the linker's staging transaction.
+/// Synchronous calls may nest. The active depth gates new async tasks and is
+/// released while stackful execution is suspended. Shared poison rejects new
+/// host calls without preventing admitted tasks from resuming.
 struct ComponentInstanceEntryState {
-  ready : Ref[Bool]
-  active : Ref[Bool]
+  active_depth : Ref[Int]
   poisoned : Ref[Bool]
 } derive(Debug)
 
 ///|
-fn ComponentInstanceEntryState::new() -> ComponentInstanceEntryState {
-  { ready: Ref(false), active: Ref(false), poisoned: Ref(false), }
+fn ComponentInstanceEntryState::new(
+  poisoned? : Ref[Bool] = Ref(false),
+) -> ComponentInstanceEntryState {
+  { active_depth: Ref(0), poisoned, }
 }
 
 ///|
-fn ComponentInstanceEntryState::enable(
-  self : ComponentInstanceEntryState,
-) -> Unit {
-  self.ready.val = true
-}
-
-///|
-fn ComponentInstanceEntryState::may_queue(
+fn ComponentInstanceEntryState::may_start_async(
   self : ComponentInstanceEntryState,
 ) -> Bool {
-  self.ready.val && !self.poisoned.val
-}
-
-///|
-fn ComponentInstanceEntryState::may_enter(
-  self : ComponentInstanceEntryState,
-) -> Bool {
-  self.may_queue() && !self.active.val
+  self.active_depth.val == 0
 }
 
 ///|
 fn ComponentInstanceEntryState::enter(
   self : ComponentInstanceEntryState,
-) -> Unit raise ComponentRuntimeError {
-  if !self.may_enter() {
-    raise CanonCallError("cannot enter component instance")
-  }
-  self.active.val = true
+) -> Unit {
+  self.active_depth.val += 1
 }
 
 ///|
 fn ComponentInstanceEntryState::leave(
   self : ComponentInstanceEntryState,
 ) -> Unit {
-  self.active.val = false
+  self.active_depth.val -= 1
 }
 
 ///|
 fn ComponentInstanceEntryState::poison(
   self : ComponentInstanceEntryState,
 ) -> Unit {
-  self.active.val = false
   self.poisoned.val = true
 }
 
@@ -103,8 +88,7 @@ impl Debug for HostEventLoop with fn to_repr(_self) {
 
 ///|
 pub(all) enum ComponentFunc {
-  // The entry state separates partial instantiation, active execution, and
-  // permanent poisoning.
+  // Entry state tracks active execution and permanent poisoning.
   Lifted(
     CoreFuncRef,
     FuncType,
@@ -257,6 +241,7 @@ pub fn ComponentInstance::call_exported_func(
 ) -> Array[ComponentValue] raise ComponentRuntimeError {
   match self.exports.get(name) {
     Some(Func(func)) => {
+      self.async_state.check_host_entry()
       let func_type = match func {
         Host(ft, _, _) => ft
         HostAsync(ft, _, _) => ft
@@ -296,7 +281,7 @@ pub fn ComponentInstance::call_exported_func(
         self.async_state.can_block_stack[self.async_state.can_block_stack.length() -
         1] = prev_can_block_stack
       }
-      res
+      res.map(ComponentValue::to_host_value)
     }
     Some(_) => raise UnknownExport(name)
     None => raise UnknownExport(name)

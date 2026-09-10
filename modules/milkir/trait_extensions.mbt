@@ -423,3 +423,21 @@ pub extend VerifyError with Eq::{not_equal, equal}
 
 ///|
 pub extend VerifyError with Show::{to_string, output}
+
+///|
+pub extend AtomicMemoryOp with Debug::{to_repr}
+
+///|
+pub extend AtomicMemoryOp with Eq::{not_equal, equal}
+
+///|
+pub extend AtomicMemoryOp with Hash::{hash, hash_combine}
+
+///|
+pub extend AtomicRmwOp with Debug::{to_repr}
+
+///|
+pub extend AtomicRmwOp with Eq::{not_equal, equal}
+
+///|
+pub extend AtomicRmwOp with Hash::{hash, hash_combine}

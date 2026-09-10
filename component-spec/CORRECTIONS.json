@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "files": [
+    {
+      "path": "async/trap-on-reenter.wast",
+      "upstream_sha256": "8c6f080b113256ec7a682ccea7591b245830b8722925c617b0cca5e48fd1fc92",
+      "sha256": "ce2ba1d2abfa1c832648c9af37c0f6d17beacc80646f62e01fa1a86e78173f82",
+      "reason": "Permit parent/child reentry, including calls into yielded callbacks. The recursive callback fixture executes its unreachable callee. All three assertions pass Wasmtime 50.0.0-dev at the misc corpus revision 668016926adfd1b8a79dbce894f1e203d8892599. Independent entry and trap-state controls live in tests/component-runtime/callback-entry.wast."
+    },
+    {
+      "path": "async/trap-if-block-and-sync.wast",
+      "upstream_sha256": "1285ae51f57649b42ae7d73f12ab75f1d31e4f655f0c9a8f11b94bea3d2af685",
+      "sha256": "c39307acf2be4e4fa462cfcce7d9fdc1a56b23fd057776fc9cd4f9123ff3cb1b",
+      "reason": "Correct obsolete trap precedence: immediately trapping callees execute, and malformed buffers or handles are checked before blocking. All directives pass Wasmtime 50.0.0-dev at the misc corpus revision 668016926adfd1b8a79dbce894f1e203d8892599. Independent controls live in tests/component-runtime/synchronous-trap-order.wast and synchronous-transmit-validation.wast."
+    },
+    {
+      "path": "async/sync-streams.wast",
+      "upstream_sha256": "53b7cc563a410dcaa545844fd9ab0d5704e53092ad136dc1ee16d44ff89360a6",
+      "sha256": "1d471a92a0cbdd81dc0ca9d61ad97b40ea4eeaad5d8adc1973653d123bee51c4",
+      "reason": "Yield explicitly after completing the producer stream operation so the producer releases its instance lock before the next call. Preserve every original assertion. Verified with Wasmtime 50.0.0-dev at the misc corpus revision 668016926adfd1b8a79dbce894f1e203d8892599."
+    }
+  ]
+}

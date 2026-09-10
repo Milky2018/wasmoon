@@ -250,6 +250,7 @@ fn TypeEquivalenceContext::composite_types_equal(
     (Func(f1), Func(f2)) => self.func_types_equal(f1, f2, idx1, idx2)
     (Struct(s1), Struct(s2)) => self.struct_types_equal(s1, s2, idx1, idx2)
     (Array(a1), Array(a2)) => self.array_types_equal(a1, a2, idx1, idx2)
+    (Cont(f1), Cont(f2)) => self.type_refs_equal(f1, f2, idx1, idx2)
     _ => false // Different composite types are never equivalent
   }
 }
@@ -374,6 +375,10 @@ fn TypeEquivalenceContext::value_types_equal(
     | (ExnRef, ExnRef)
     | (NullRef, NullRef)
     | (NullFuncRef, NullFuncRef)
+    | (ContRef, ContRef)
+    | (RefCont, RefCont)
+    | (NullContRef, NullContRef)
+    | (RefNoCont, RefNoCont)
     | (NullExnRef, NullExnRef)
     | (NullExternRef, NullExternRef)
     | (RefAny, RefAny)
@@ -384,7 +389,9 @@ fn TypeEquivalenceContext::value_types_equal(
     | (RefNone, RefNone) => true
     // Typed references
     (RefFuncTyped(ref1), RefFuncTyped(ref2))
-    | (RefNullFuncTyped(ref1), RefNullFuncTyped(ref2)) =>
+    | (RefNullFuncTyped(ref1), RefNullFuncTyped(ref2))
+    | (RefContTyped(ref1), RefContTyped(ref2))
+    | (RefNullContTyped(ref1), RefNullContTyped(ref2)) =>
       self.type_refs_equal(ref1, ref2, self_idx, other_idx)
     (RefStruct(ref1), RefStruct(ref2))
     | (RefNullStruct(ref1), RefNullStruct(ref2)) =>
@@ -567,6 +574,10 @@ fn value_types_simple_equal(v1 : ValueType, v2 : ValueType) -> Bool {
     | (ExnRef, ExnRef)
     | (NullRef, NullRef)
     | (NullFuncRef, NullFuncRef)
+    | (ContRef, ContRef)
+    | (RefCont, RefCont)
+    | (NullContRef, NullContRef)
+    | (RefNoCont, RefNoCont)
     | (NullExnRef, NullExnRef)
     | (NullExternRef, NullExternRef)
     // GC types
@@ -578,6 +589,8 @@ fn value_types_simple_equal(v1 : ValueType, v2 : ValueType) -> Bool {
     | (RefNone, RefNone) => true
     (RefFuncTyped(ref1), RefFuncTyped(ref2)) => ref1 == ref2
     (RefNullFuncTyped(ref1), RefNullFuncTyped(ref2)) => ref1 == ref2
+    (RefContTyped(ref1), RefContTyped(ref2)) => ref1 == ref2
+    (RefNullContTyped(ref1), RefNullContTyped(ref2)) => ref1 == ref2
     (RefStruct(ref1), RefStruct(ref2)) => ref1 == ref2
     (RefNullStruct(ref1), RefNullStruct(ref2)) => ref1 == ref2
     (RefArray(ref1), RefArray(ref2)) => ref1 == ref2

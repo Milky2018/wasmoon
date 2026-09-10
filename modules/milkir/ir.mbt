@@ -716,11 +716,33 @@ pub fn Inst::all_results(self : Inst) -> Array[Value] {
 ///|
 /// Generic memory semantics over an explicit address and offset operand.
 pub(all) enum MemoryOp {
+  Atomic(AtomicMemoryOp)
   Load(Type)
   Store(Type)
   LoadNarrow(Type, Int, Bool)
   StoreNarrow(Int)
   Vector(VectorMemoryOp)
+} derive(Debug, Eq, Hash)
+
+///|
+/// Sequentially consistent accesses; operands use the same base/offset layout
+/// as ordinary memory operations, with compare-exchange taking two values.
+pub(all) enum AtomicMemoryOp {
+  Load(Type, Int)
+  Store(Type, Int)
+  Rmw(Type, Int, AtomicRmwOp)
+  CompareExchange(Type, Int)
+  Fence
+} derive(Debug, Eq, Hash)
+
+///|
+pub(all) enum AtomicRmwOp {
+  Add
+  Sub
+  And
+  Or
+  Xor
+  Exchange
 } derive(Debug, Eq, Hash)
 
 ///|

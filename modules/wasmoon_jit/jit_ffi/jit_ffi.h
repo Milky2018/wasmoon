@@ -29,9 +29,11 @@ typedef struct {
     // Guarded allocation info (memory32, reserved mapping)
     void *alloc_base;
     size_t alloc_size;
-    size_t guard_start;      // start of PROT_NONE region in bytes
+    _Atomic size_t guard_start;      // start of PROT_NONE region in bytes
     int is_guarded;
     int is_shared;
+    _Atomic int growth_lock;
+    _Atomic size_t owners;   // Independent Store/context ownership leases.
 } wasmoon_memory_t;
 
 // GC safepoint metadata table (owned by compiler/runtime, borrowed by context).
@@ -128,6 +130,10 @@ typedef struct {
 
     // Exception handling state
     void *exception_handler;  // Current exception handler (exception_handler_t*)
+    struct native_continuation_arena *continuation_arena;
+    struct native_continuation_type *continuation_types;
+    struct native_exception_arena *exception_arena;
+    int64_t exception_ref;
     int32_t exception_tag;    // Tag of in-flight exception
     int64_t *exception_values; // Exception payload values
     int32_t exception_value_count; // Number of exception values
@@ -190,6 +196,7 @@ typedef struct {
     // passes the context to a C helper; these fields stay outside the fixed ABI.
     void *cancellation_callback;
     void *cancellation_callback_data;
+    int32_t scheduling_budget;
 
     // ============ Bulk Memory/Table Segment State ============
     // Per-instance (per jit_context_t) storage for bulk memory/table operations:
@@ -226,6 +233,16 @@ typedef struct {
     uint8_t **gc_func_stackmap_blobs;
     uint32_t **gc_func_safepoint_offsets;
     int32_t gc_func_safepoint_table_count;
+    // Callable identity metadata persists across execution activations.
+    int32_t *callable_local_types;
+    int callable_local_type_count;
+    int32_t *callable_type_parents;
+    int callable_type_count;
+    int64_t *callable_entries;
+    int callable_entry_count;
+    int32_t *callable_tags;
+    int callable_tag_count;
+
 } jit_context_t;
 
 // ============ Executable Memory Functions ============

@@ -510,6 +510,16 @@ fn DirectBuilder::emit_call_with_abi(
           lowered_operands.push(id)
           let parameters = call.signature.params.copy()
           parameters.push(I32)
+          if hidden.owner is Some(owner) {
+            let owner_value = self.emit_raw(
+                I32Const(owner.reinterpret_as_uint()),
+                [],
+                [I32],
+                InstructionMetadata::empty(),
+              )[0]
+            lowered_operands.push(owner_value)
+            parameters.push(I32)
+          }
           lowered_call = @native.NativeCall::new(
             call.callee,
             @native.Signature::new(parameters, call.signature.results),

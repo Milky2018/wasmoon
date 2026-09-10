@@ -16,7 +16,6 @@ struct Environment {
   function_table_field : @native_types.EnvironmentField
   table_base_field : (Int) -> @native_types.EnvironmentField
   table_size_field : (Int) -> @native_types.EnvironmentField
-  canonical_type_index : (Int) -> Int
   runtime_symbol : (@wasm_milkir.WasmRuntimeHelper) -> @native_types.ExternalSymbol
 }
 
@@ -27,7 +26,6 @@ pub fn Environment::new(
   function_table_field : @native_types.EnvironmentField,
   table_base_field : (Int) -> @native_types.EnvironmentField,
   table_size_field : (Int) -> @native_types.EnvironmentField,
-  canonical_type_index : (Int) -> Int,
   runtime_symbol : (@wasm_milkir.WasmRuntimeHelper) -> @native_types.ExternalSymbol,
 ) -> Environment {
   {
@@ -36,7 +34,6 @@ pub fn Environment::new(
     function_table_field,
     table_base_field,
     table_size_field,
-    canonical_type_index,
     runtime_symbol,
   }
 }
@@ -264,7 +261,7 @@ fn table_entry_address(
   let trap = context.create_block([])
   context.branch(in_bounds, continuation, [], trap, [])
   context.switch_to_block(trap)
-  context.set_trap_terminator(TableOutOfBounds)
+  context.set_trap_terminator(UndefinedElement)
   context.switch_to_block(continuation)
   guarded
 }
@@ -281,31 +278,18 @@ fn check_indirect_type(
       [entry],
       [I32],
     )[0]
-  let expected = context.emit(
-      I32Const(
-        (environment.canonical_type_index)(type_index).reinterpret_as_uint(),
-      ),
-      [],
-      [I32],
-    )[0]
-  let exact = context.emit(IntCompare(Equal), [actual, expected], [I32])[0]
-  let subtype_block = context.create_block([])
-  let continuation = context.create_block([])
-  context.branch(exact, continuation, [], subtype_block, [])
-  context.switch_to_block(subtype_block)
+  let expected = i32_immediate(context, type_index)
   context.emit_call_without_roots(
     @native_types.NativeCall::new(
       External((environment.runtime_symbol)(GcTypeCheckSubtype)),
-      @native_types.Signature::new([I32, I32], []),
+      @native_types.Signature::new([Ptr64, I32, I32], []),
       Platform,
       @native_types.CallBehavior::new(Read, true, false, false, false),
     ),
-    [actual, expected],
+    [context.environment()[0], actual, expected],
     [],
   )
   |> ignore
-  context.jump(continuation, [])
-  context.switch_to_block(continuation)
 }
 
 ///|
@@ -322,6 +306,14 @@ fn lower_indirect_call(
       [entry],
       [Ptr64],
     )[0]
+  let null = context.emit(NullPtr, [], [Ptr64])[0]
+  let is_null = context.emit(ReferenceCompare(Equal), [raw_pointer, null], [I32])[0]
+  let trap = context.create_block([])
+  let continuation = context.create_block([])
+  context.branch(is_null, trap, [], continuation, [])
+  context.switch_to_block(trap)
+  context.set_trap_terminator(UninitializedElement)
+  context.switch_to_block(continuation)
   check_indirect_type(context, entry, type_index, environment)
   let bits = context.emit(Convert(Bitcast(Ptr64, I64)), [raw_pointer], [I64])[0]
   let mask = context.emit(I64Const(0xDFFFFFFFFFFFFFFFUL), [], [I64])[0]
@@ -403,7 +395,10 @@ fn lower_ref_test(
   type_index : Int,
   nullable : Bool,
 ) -> Unit {
-  let operands = context.operands()
+  let operands = context.environment()
+  for operand in context.operands() {
+    operands.push(operand)
+  }
   operands.push(i32_immediate(context, type_index))
   operands.push(bool_immediate(context, nullable))
   finish_runtime_call(
@@ -411,7 +406,7 @@ fn lower_ref_test(
     environment,
     GcRefTest,
     operands,
-    [GcRef64, I32, I32],
+    [Ptr64, GcRef64, I32, I32],
     @native_types.CallBehavior::new(Read, false, false, false, false),
   )
 }
@@ -423,7 +418,10 @@ fn lower_ref_cast(
   type_index : Int,
   nullable : Bool,
 ) -> Unit {
-  let operands = context.operands()
+  let operands = context.environment()
+  for operand in context.operands() {
+    operands.push(operand)
+  }
   operands.push(i32_immediate(context, type_index))
   operands.push(bool_immediate(context, nullable))
   finish_runtime_call(
@@ -431,7 +429,7 @@ fn lower_ref_cast(
     environment,
     GcRefCast,
     operands,
-    [GcRef64, I32, I32],
+    [Ptr64, GcRef64, I32, I32],
     @native_types.CallBehavior::new(Read, true, false, false, false),
   )
 }
@@ -1540,6 +1538,37 @@ fn lower_extension(
     }
     TryTableEnd(handler_id) => {
       lower_try_table_end(context, environment, handler_id)
+      None
+    }
+    ContNew(index) => {
+      lower_cont_new(context, environment, index)
+      None
+    }
+    ContBind(input, _) => {
+      lower_cont_bind(context, environment, input)
+      None
+    }
+    ContSuspend(tag) => {
+      lower_cont_effect(context, environment, tag, false)
+      None
+    }
+    ContSwitch(_, tag) => {
+      lower_cont_effect(context, environment, tag, true)
+      None
+    }
+    ContResume(_, inputs, handlers, exception_tag) => {
+      lower_cont_resume(context, environment, inputs, handlers, exception_tag)
+      None
+    }
+    GetExceptionRef => {
+      finish_runtime_call(
+        context,
+        environment,
+        ExceptionGetRef,
+        context.environment(),
+        [Ptr64],
+        @native_types.CallBehavior::new(ReadWrite, true, false, false, false),
+      )
       None
     }
     GetExceptionTag => {

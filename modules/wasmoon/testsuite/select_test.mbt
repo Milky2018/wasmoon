@@ -97,5 +97,5 @@ test "select_unreachable" {
     #|)
   let result = compare_jit_interp(source, "select-unreached", [])
   // Both should trap, so they match
-  inspect(result, content="matched")
+  inspect(compare_result_errors_contain(result, "unreachable"), content="true")
 }

@@ -1,0 +1,525 @@
+--- a/upstream/crates/test-programs/src/preview1.rs
++++ b/upstream/crates/test-programs/src/preview1.rs
+@@ -29,8 +29,11 @@
+             }
+             dst.set_len(stat.u.dir.pr_name_len);
+             if dst == path.as_bytes() {
++                let rights = wasip1::fd_fdstat_get(i).expect("preopen rights");
+                 return Ok(
+-                    wasip1::path_open(i, 0, ".", wasip1::OFLAGS_DIRECTORY, 0, 0, 0)
++                    wasip1::path_open(i, 0, ".", wasip1::OFLAGS_DIRECTORY,
++                        rights.fs_rights_base & rights.fs_rights_inheriting,
++                        rights.fs_rights_inheriting, 0)
+                         .expect("failed to open dir"),
+                 );
+             }
+--- a/upstream/crates/test-programs/src/bin/p1_fd_advise.rs
++++ b/upstream/crates/test-programs/src/bin/p1_fd_advise.rs
+@@ -10,7 +10,7 @@
+         0,
+         "file",
+         wasip1::OFLAGS_CREAT,
+-        wasip1::RIGHTS_FD_READ | wasip1::RIGHTS_FD_WRITE,
++        wasip1::RIGHTS_FD_READ | wasip1::RIGHTS_FD_WRITE | wasip1::RIGHTS_FD_FILESTAT_GET | wasip1::RIGHTS_FD_FILESTAT_SET_SIZE | wasip1::RIGHTS_FD_ADVISE,
+         0,
+         0,
+     )
+--- a/upstream/crates/test-programs/src/bin/p1_fd_filestat_set.rs
++++ b/upstream/crates/test-programs/src/bin/p1_fd_filestat_set.rs
+@@ -12,7 +12,7 @@
+         0,
+         "file",
+         wasip1::OFLAGS_CREAT,
+-        wasip1::RIGHTS_FD_READ | wasip1::RIGHTS_FD_WRITE,
++        wasip1::RIGHTS_FD_READ | wasip1::RIGHTS_FD_WRITE | wasip1::RIGHTS_FD_FILESTAT_GET | wasip1::RIGHTS_FD_FILESTAT_SET_SIZE | wasip1::RIGHTS_FD_FILESTAT_SET_TIMES,
+         0,
+         0,
+     )
+@@ -39,12 +39,12 @@
+ unsafe fn test_fd_filestat_set_size_ro(dir_fd: wasip1::Fd) {
+     // Create a file in the scratch directory. Creating a file implies opening it for writing, so
+     // we have to close and re-open read-only to observe read-only behavior.
+-    let file_fd = wasip1::path_open(dir_fd, 0, "file", wasip1::OFLAGS_CREAT, 0, 0, 0)
++    let file_fd = wasip1::path_open(dir_fd, 0, "file", wasip1::OFLAGS_CREAT, 0 | wasip1::RIGHTS_FD_FILESTAT_GET | wasip1::RIGHTS_FD_FILESTAT_SET_SIZE | wasip1::RIGHTS_FD_FILESTAT_SET_TIMES, 0, 0)
+         .expect("failed to create file");
+     wasip1::fd_close(file_fd).expect("failed to close fd");
+ 
+     // Open the created file read-only
+-    let file_fd = wasip1::path_open(dir_fd, 0, "file", 0, wasip1::RIGHTS_FD_READ, 0, 0)
++    let file_fd = wasip1::path_open(dir_fd, 0, "file", 0, wasip1::RIGHTS_FD_READ | wasip1::RIGHTS_FD_FILESTAT_GET | wasip1::RIGHTS_FD_FILESTAT_SET_SIZE | wasip1::RIGHTS_FD_FILESTAT_SET_TIMES, 0, 0)
+         .expect("failed to create file");
+ 
+     // Check file size
+@@ -72,13 +72,13 @@
+     // Create a file in the scratch directory. OFLAGS_CREAT implies opening for writing, so we will
+     // close it and re-open with the desired rights (FD_READ for read only, FD_READ | FD_WRITE for
+     // readwrite)
+-    let file_fd = wasip1::path_open(dir_fd, 0, "file", wasip1::OFLAGS_CREAT, 0, 0, 0)
++    let file_fd = wasip1::path_open(dir_fd, 0, "file", wasip1::OFLAGS_CREAT, 0 | wasip1::RIGHTS_FD_FILESTAT_GET | wasip1::RIGHTS_FD_FILESTAT_SET_SIZE | wasip1::RIGHTS_FD_FILESTAT_SET_TIMES, 0, 0)
+         .expect("failed to create file");
+     wasip1::fd_close(file_fd).expect("failed to close fd");
+ 
+     // Open the file with the rights given.
+     let file_fd =
+-        wasip1::path_open(dir_fd, 0, "file", 0, rights, 0, 0).expect("failed to create file");
++        wasip1::path_open(dir_fd, 0, "file", 0, rights | wasip1::RIGHTS_FD_FILESTAT_GET | wasip1::RIGHTS_FD_FILESTAT_SET_SIZE | wasip1::RIGHTS_FD_FILESTAT_SET_TIMES, 0, 0).expect("failed to create file");
+ 
+     let stat = wasip1::fd_filestat_get(file_fd).expect("failed filestat 2");
+ 
+--- a/upstream/crates/test-programs/src/bin/p1_fd_flags_set.rs
++++ b/upstream/crates/test-programs/src/bin/p1_fd_flags_set.rs
+@@ -12,7 +12,7 @@
+         0,
+         FILE_NAME,
+         wasip1::OFLAGS_CREAT,
+-        wasip1::RIGHTS_FD_READ | wasip1::RIGHTS_FD_WRITE,
++        wasip1::RIGHTS_FD_READ | wasip1::RIGHTS_FD_WRITE | wasip1::RIGHTS_FD_SEEK | wasip1::RIGHTS_FD_FDSTAT_SET_FLAGS,
+         0,
+         blocking_mode.fd_flags() | wasip1::FDFLAGS_APPEND,
+     )
+--- a/upstream/crates/test-programs/src/bin/p1_fd_readdir.rs
++++ b/upstream/crates/test-programs/src/bin/p1_fd_readdir.rs
+@@ -104,7 +104,7 @@
+         0,
+         "file",
+         wasip1::OFLAGS_CREAT,
+-        wasip1::RIGHTS_FD_READ | wasip1::RIGHTS_FD_WRITE,
++        wasip1::RIGHTS_FD_READ | wasip1::RIGHTS_FD_WRITE | wasip1::RIGHTS_FD_FILESTAT_GET,
+         0,
+         0,
+     )
+@@ -118,7 +118,7 @@
+     wasip1::fd_close(file_fd).expect("closing a file");
+ 
+     wasip1::path_create_directory(dir_fd, "nested").expect("create a directory");
+-    let nested_fd = wasip1::path_open(dir_fd, 0, "nested", 0, 0, 0, 0)
++    let nested_fd = wasip1::path_open(dir_fd, 0, "nested", 0, wasip1::RIGHTS_FD_READDIR | wasip1::RIGHTS_FD_FILESTAT_GET, 0, 0)
+         .expect("failed to open nested directory");
+     let nested_stat = wasip1::fd_filestat_get(nested_fd).expect("failed filestat");
+ 
+@@ -177,7 +177,7 @@
+             0,
+             &format!("file.{count}"),
+             wasip1::OFLAGS_CREAT,
+-            wasip1::RIGHTS_FD_READ | wasip1::RIGHTS_FD_WRITE,
++            wasip1::RIGHTS_FD_READ | wasip1::RIGHTS_FD_WRITE | wasip1::RIGHTS_FD_FILESTAT_GET,
+             0,
+             0,
+         )
+@@ -214,7 +214,7 @@
+         0,
+         filename,
+         wasip1::OFLAGS_CREAT,
+-        wasip1::RIGHTS_FD_READ | wasip1::RIGHTS_FD_WRITE,
++        wasip1::RIGHTS_FD_READ | wasip1::RIGHTS_FD_WRITE | wasip1::RIGHTS_FD_FILESTAT_GET,
+         0,
+         0,
+     )
+@@ -247,7 +247,7 @@
+         0,
+         "a",
+         wasip1::OFLAGS_CREAT,
+-        wasip1::RIGHTS_FD_READ | wasip1::RIGHTS_FD_WRITE,
++        wasip1::RIGHTS_FD_READ | wasip1::RIGHTS_FD_WRITE | wasip1::RIGHTS_FD_FILESTAT_GET,
+         0,
+         0,
+     )
+--- a/upstream/crates/test-programs/src/bin/p1_file_allocate.rs
++++ b/upstream/crates/test-programs/src/bin/p1_file_allocate.rs
+@@ -10,7 +10,7 @@
+         0,
+         "file",
+         wasip1::OFLAGS_CREAT,
+-        wasip1::RIGHTS_FD_READ | wasip1::RIGHTS_FD_WRITE,
++        wasip1::RIGHTS_FD_READ | wasip1::RIGHTS_FD_WRITE | wasip1::RIGHTS_FD_FILESTAT_GET | wasip1::RIGHTS_FD_ALLOCATE,
+         0,
+         0,
+     )
+--- a/upstream/crates/test-programs/src/bin/p1_file_pread_pwrite.rs
++++ b/upstream/crates/test-programs/src/bin/p1_file_pread_pwrite.rs
+@@ -10,7 +10,7 @@
+         0,
+         "file",
+         wasip1::OFLAGS_CREAT,
+-        wasip1::RIGHTS_FD_READ | wasip1::RIGHTS_FD_WRITE,
++        wasip1::RIGHTS_FD_READ | wasip1::RIGHTS_FD_WRITE | wasip1::RIGHTS_FD_SEEK | wasip1::RIGHTS_FD_TELL | wasip1::RIGHTS_FD_FILESTAT_GET,
+         0,
+         0,
+     )
+@@ -135,7 +135,7 @@
+         0,
+         path,
+         wasip1::OFLAGS_CREAT,
+-        wasip1::RIGHTS_FD_READ | wasip1::RIGHTS_FD_WRITE,
++        wasip1::RIGHTS_FD_READ | wasip1::RIGHTS_FD_WRITE | wasip1::RIGHTS_FD_SEEK | wasip1::RIGHTS_FD_TELL | wasip1::RIGHTS_FD_FILESTAT_GET,
+         0,
+         0,
+     )
+@@ -184,7 +184,7 @@
+         0,
+         path,
+         wasip1::OFLAGS_CREAT,
+-        wasip1::RIGHTS_FD_READ | wasip1::RIGHTS_FD_WRITE,
++        wasip1::RIGHTS_FD_READ | wasip1::RIGHTS_FD_WRITE | wasip1::RIGHTS_FD_SEEK | wasip1::RIGHTS_FD_TELL | wasip1::RIGHTS_FD_FILESTAT_GET,
+         0,
+         wasip1::FDFLAGS_APPEND,
+     )
+--- a/upstream/crates/test-programs/src/bin/p1_file_read_write.rs
++++ b/upstream/crates/test-programs/src/bin/p1_file_read_write.rs
+@@ -10,7 +10,7 @@
+         0,
+         "file",
+         wasip1::OFLAGS_CREAT,
+-        wasip1::RIGHTS_FD_READ | wasip1::RIGHTS_FD_WRITE,
++        wasip1::RIGHTS_FD_READ | wasip1::RIGHTS_FD_WRITE | wasip1::RIGHTS_FD_SEEK | wasip1::RIGHTS_FD_TELL | wasip1::RIGHTS_FD_FILESTAT_GET,
+         0,
+         blocking_mode.fd_flags(),
+     )
+@@ -154,7 +154,7 @@
+         0,
+         path,
+         wasip1::OFLAGS_CREAT,
+-        wasip1::RIGHTS_FD_READ | wasip1::RIGHTS_FD_WRITE,
++        wasip1::RIGHTS_FD_READ | wasip1::RIGHTS_FD_WRITE | wasip1::RIGHTS_FD_SEEK | wasip1::RIGHTS_FD_TELL | wasip1::RIGHTS_FD_FILESTAT_GET,
+         0,
+         0,
+     )
+--- a/upstream/crates/test-programs/src/bin/p1_file_seek_tell.rs
++++ b/upstream/crates/test-programs/src/bin/p1_file_seek_tell.rs
+@@ -10,7 +10,7 @@
+         0,
+         "file",
+         wasip1::OFLAGS_CREAT,
+-        wasip1::RIGHTS_FD_READ | wasip1::RIGHTS_FD_WRITE,
++        wasip1::RIGHTS_FD_READ | wasip1::RIGHTS_FD_WRITE | wasip1::RIGHTS_FD_SEEK | wasip1::RIGHTS_FD_TELL,
+         0,
+         blocking_mode.fd_flags(),
+     )
+@@ -93,7 +93,7 @@
+         0,
+         path,
+         wasip1::OFLAGS_CREAT,
+-        wasip1::RIGHTS_FD_READ | wasip1::RIGHTS_FD_WRITE,
++        wasip1::RIGHTS_FD_READ | wasip1::RIGHTS_FD_WRITE | wasip1::RIGHTS_FD_SEEK | wasip1::RIGHTS_FD_TELL,
+         0,
+         blocking_mode.fd_flags() | wasip1::FDFLAGS_APPEND,
+     )
+--- a/upstream/crates/test-programs/src/bin/p1_file_write.rs
++++ b/upstream/crates/test-programs/src/bin/p1_file_write.rs
+@@ -10,7 +10,7 @@
+         0,
+         filename,
+         wasip1::OFLAGS_CREAT,
+-        wasip1::RIGHTS_FD_WRITE,
++        wasip1::RIGHTS_FD_WRITE | wasip1::RIGHTS_FD_SEEK | wasip1::RIGHTS_FD_FILESTAT_GET,
+         0,
+         blocking_mode.fd_flags(),
+     )
+@@ -50,7 +50,7 @@
+         0,
+         filename,
+         0,
+-        wasip1::RIGHTS_FD_READ,
++        wasip1::RIGHTS_FD_READ | wasip1::RIGHTS_FD_SEEK | wasip1::RIGHTS_FD_FILESTAT_GET,
+         0,
+         blocking_mode.fd_flags(),
+     )
+@@ -101,7 +101,7 @@
+         0,
+         filename,
+         wasip1::OFLAGS_CREAT,
+-        wasip1::RIGHTS_FD_WRITE,
++        wasip1::RIGHTS_FD_WRITE | wasip1::RIGHTS_FD_SEEK | wasip1::RIGHTS_FD_FILESTAT_GET,
+         0,
+         blocking_mode.fd_flags(),
+     )
+@@ -112,7 +112,7 @@
+         0,
+         filename,
+         0,
+-        wasip1::RIGHTS_FD_READ,
++        wasip1::RIGHTS_FD_READ | wasip1::RIGHTS_FD_TELL | wasip1::RIGHTS_FD_SEEK | wasip1::RIGHTS_FD_FILESTAT_GET,
+         0,
+         blocking_mode.fd_flags(),
+     )
+@@ -124,12 +124,15 @@
+             buf_len: 0,
+         }],
+     );
+-    assert!(
+-        res == Err(wasip1::ERRNO_BADF)
+-            || res == Err(wasip1::ERRNO_PERM)
+-            || res == Err(wasip1::ERRNO_ACCES),
+-        "bad result {res:?}"
+-    )
++    assert_eq!(res, Err(wasip1::ERRNO_NOTCAPABLE));
++    assert_eq!(wasip1::fd_tell(file_fd).unwrap(), 0, "denied zero write preserves cursor");
++    assert_eq!(wasip1::fd_filestat_get(file_fd).unwrap().size, 0, "denied zero write preserves size");
++    let buffer = &mut [0xA5u8; 1];
++    let iovec = wasip1::Iovec { buf: buffer.as_mut_ptr(), buf_len: buffer.len() };
++    assert_eq!(blocking_mode.read(file_fd, &[iovec]).unwrap(), 0, "denied zero write leaves file empty");
++    assert_eq!(*buffer, [0xA5], "EOF read preserves guest buffer");
++    wasip1::fd_close(file_fd).expect("close readonly file");
++    wasip1::path_unlink_file(dir_fd, filename).expect("remove readonly fixture");
+ }
+ 
+ fn main() {
+--- a/upstream/crates/test-programs/src/bin/p1_path_open_lots.rs
++++ b/upstream/crates/test-programs/src/bin/p1_path_open_lots.rs
+@@ -12,7 +12,7 @@
+             0,
+             "file",
+             0,
+-            wasip1::RIGHTS_FD_READ,
++            wasip1::RIGHTS_FD_READ | wasip1::RIGHTS_FD_SEEK,
+             0,
+             blocking_mode.fd_flags(),
+         )
+@@ -37,7 +37,7 @@
+             0,
+             "file",
+             0,
+-            wasip1::RIGHTS_FD_READ,
++            wasip1::RIGHTS_FD_READ | wasip1::RIGHTS_FD_SEEK,
+             0,
+             blocking_mode.fd_flags(),
+         )
+@@ -60,7 +60,7 @@
+             0,
+             "file",
+             0,
+-            wasip1::RIGHTS_FD_READ | wasip1::RIGHTS_FD_WRITE,
++            wasip1::RIGHTS_FD_READ | wasip1::RIGHTS_FD_WRITE | wasip1::RIGHTS_FD_SEEK,
+             0,
+             blocking_mode.fd_flags(),
+         )
+@@ -83,7 +83,7 @@
+             0,
+             "file",
+             0,
+-            wasip1::RIGHTS_FD_READ | wasip1::RIGHTS_FD_WRITE,
++            wasip1::RIGHTS_FD_READ | wasip1::RIGHTS_FD_WRITE | wasip1::RIGHTS_FD_SEEK,
+             0,
+             blocking_mode.fd_flags(),
+         )
+--- a/upstream/crates/test-programs/src/bin/p1_poll_oneoff_files.rs
++++ b/upstream/crates/test-programs/src/bin/p1_poll_oneoff_files.rs
+@@ -196,7 +196,7 @@
+         0,
+         "readable_file",
+         wasip1::OFLAGS_CREAT,
+-        wasip1::RIGHTS_FD_WRITE,
++        wasip1::RIGHTS_FD_WRITE | wasip1::RIGHTS_POLL_FD_READWRITE,
+         0,
+         blocking_mode.fd_flags(),
+     )
+@@ -214,7 +214,7 @@
+ 
+     // Now open the file for reading
+     let readable_fd =
+-        wasip1::path_open(dir_fd, 0, "readable_file", 0, wasip1::RIGHTS_FD_READ, 0, 0)
++        wasip1::path_open(dir_fd, 0, "readable_file", 0, wasip1::RIGHTS_FD_READ | wasip1::RIGHTS_POLL_FD_READWRITE, 0, 0)
+             .expect("opening a readable file");
+ 
+     assert!(
+@@ -227,7 +227,7 @@
+         0,
+         "writable_file",
+         wasip1::OFLAGS_CREAT,
+-        wasip1::RIGHTS_FD_WRITE,
++        wasip1::RIGHTS_FD_WRITE | wasip1::RIGHTS_POLL_FD_READWRITE,
+         0,
+         0,
+     )
+--- a/upstream/crates/test-programs/src/bin/p1_sleep_quickly_but_lots.rs
++++ b/upstream/crates/test-programs/src/bin/p1_sleep_quickly_but_lots.rs
+@@ -35,7 +35,7 @@
+             0,
+             "hello.txt",
+             wasip1::OFLAGS_CREAT,
+-            wasip1::RIGHTS_FD_WRITE | wasip1::RIGHTS_FD_READ,
++            wasip1::RIGHTS_FD_WRITE | wasip1::RIGHTS_FD_READ | wasip1::RIGHTS_POLL_FD_READWRITE,
+             0,
+             0,
+         )
+--- a/upstream/crates/test-programs/src/bin/p1_path_link.rs
++++ b/upstream/crates/test-programs/src/bin/p1_path_link.rs
+@@ -56,18 +56,18 @@
+ unsafe fn test_path_link(dir_fd: wasip1::Fd) {
+     // Create a file
+     let create_fd =
+-        wasip1::path_open(dir_fd, 0, "file", wasip1::OFLAGS_CREAT, 0, 0, 0).expect("create file");
++        wasip1::path_open(dir_fd, 0, "file", wasip1::OFLAGS_CREAT, 0 | wasip1::RIGHTS_FD_FILESTAT_GET, 0, 0).expect("create file");
+     wasip1::fd_close(create_fd).unwrap();
+ 
+     // Open a fresh descriptor to the file. We won't have a write right that was implied by OFLAGS_CREAT
+     // above.
+-    let file_fd = wasip1::path_open(dir_fd, 0, "file", 0, 0, 0, 0).expect("open file");
++    let file_fd = wasip1::path_open(dir_fd, 0, "file", 0, 0 | wasip1::RIGHTS_FD_FILESTAT_GET, 0, 0).expect("open file");
+ 
+     // Create a link in the same directory and compare rights
+     wasip1::path_link(dir_fd, 0, "file", dir_fd, "link")
+         .expect("creating a link in the same directory");
+ 
+-    let link_fd = wasip1::path_open(dir_fd, 0, "link", 0, 0, 0, 0).expect("open link");
++    let link_fd = wasip1::path_open(dir_fd, 0, "link", 0, 0 | wasip1::RIGHTS_FD_FILESTAT_GET, 0, 0).expect("open link");
+ 
+     check_rights!(file_fd, link_fd);
+     wasip1::fd_close(link_fd).expect("Closing link_fd"); // needed for Windows
+@@ -75,11 +75,11 @@
+ 
+     // Create a link in a different directory and compare rights
+     wasip1::path_create_directory(dir_fd, "subdir").expect("creating a subdirectory");
+-    let subdir_fd = wasip1::path_open(dir_fd, 0, "subdir", wasip1::OFLAGS_DIRECTORY, 0, 0, 0)
++    let subdir_fd = wasip1::path_open(dir_fd, 0, "subdir", wasip1::OFLAGS_DIRECTORY, wasip1::RIGHTS_PATH_OPEN | wasip1::RIGHTS_PATH_LINK_TARGET | wasip1::RIGHTS_PATH_UNLINK_FILE, wasip1::RIGHTS_FD_FILESTAT_GET, 0)
+         .expect("open subdir directory");
+     wasip1::path_link(dir_fd, 0, "file", subdir_fd, "link")
+         .expect("creating a link in subdirectory");
+-    let link_fd = wasip1::path_open(subdir_fd, 0, "link", 0, 0, 0, 0).expect("open link in subdir");
++    let link_fd = wasip1::path_open(subdir_fd, 0, "link", 0, 0 | wasip1::RIGHTS_FD_FILESTAT_GET, 0, 0).expect("open link in subdir");
+     check_rights!(file_fd, link_fd);
+     wasip1::fd_close(link_fd).expect("Closing link_fd"); // needed for Windows
+     wasip1::path_unlink_file(subdir_fd, "link").expect("removing a link");
+@@ -115,7 +115,7 @@
+ 
+     // Create a link to a directory
+     wasip1::path_create_directory(dir_fd, "subdir").expect("creating a subdirectory");
+-    let subdir_fd = wasip1::path_open(dir_fd, 0, "subdir", wasip1::OFLAGS_DIRECTORY, 0, 0, 0)
++    let subdir_fd = wasip1::path_open(dir_fd, 0, "subdir", wasip1::OFLAGS_DIRECTORY, wasip1::RIGHTS_PATH_OPEN | wasip1::RIGHTS_PATH_LINK_TARGET | wasip1::RIGHTS_PATH_UNLINK_FILE, wasip1::RIGHTS_FD_FILESTAT_GET, 0)
+         .expect("open new descriptor to subdir");
+ 
+     assert_errno!(
+--- a/upstream/crates/test-programs/src/bin/p1_path_open_read_write.rs
++++ b/upstream/crates/test-programs/src/bin/p1_path_open_read_write.rs
+@@ -11,7 +11,7 @@
+         0,
+         "file",
+         0,
+-        wasip1::RIGHTS_FD_READ,
++        wasip1::RIGHTS_FD_READ | wasip1::RIGHTS_FD_TELL | wasip1::RIGHTS_FD_FILESTAT_GET,
+         0,
+         blocking_mode.fd_flags(),
+     )
+@@ -27,7 +27,7 @@
+         "readonly does not have write right"
+     );
+ 
+-    let buffer = &mut [0u8; 100];
++    let buffer = &mut [0xA5u8; 100];
+     let iovec = wasip1::Iovec {
+         buf: buffer.as_mut_ptr(),
+         buf_len: buffer.len(),
+@@ -42,18 +42,18 @@
+         buf: write_buffer.as_ptr(),
+         buf_len: write_buffer.len(),
+     };
+-    // PERM is only the failure on windows under wasmtime-wasi. wasi-common
+-    // fails on windows with BADF, so we can't use the `windows =>` syntax
+-    // because that doesn't support alternatives like the agnostic syntax does.
++    // Legacy P1 rejects I/O before touching the file when rights are absent.
+     assert_errno!(
+         blocking_mode
+             .write(f_readonly, &[ciovec])
+             .err()
+-            .expect("read of writeonly fails"),
+-        wasip1::ERRNO_PERM,
+-        wasip1::ERRNO_BADF,
+-        wasip1::ERRNO_ACCES
++            .expect("I/O without its requested right must fail"),
++        wasip1::ERRNO_NOTCAPABLE
+     );
++
++    assert_eq!(wasip1::fd_tell(f_readonly).unwrap(), 0, "denied write preserves cursor");
++    assert_eq!(wasip1::fd_filestat_get(f_readonly).unwrap().size, 0, "denied write preserves size");
++    assert_eq!(blocking_mode.read(f_readonly, &[iovec]).unwrap(), 0, "denied write leaves file empty");
+ 
+     wasip1::fd_close(f_readonly).expect("close readonly");
+ 
+@@ -63,7 +63,7 @@
+         0,
+         "file",
+         0,
+-        wasip1::RIGHTS_FD_WRITE,
++        wasip1::RIGHTS_FD_WRITE | wasip1::RIGHTS_FD_TELL,
+         0,
+         blocking_mode.fd_flags(),
+     )
+@@ -83,16 +83,16 @@
+         "writeonly has write right"
+     );
+ 
+-    // See above for description of PERM
++    // Denied reads preserve both the guest buffer and the file cursor.
+     assert_errno!(
+         blocking_mode
+             .read(f_writeonly, &[iovec])
+             .err()
+-            .expect("read of writeonly fails"),
+-        wasip1::ERRNO_PERM,
+-        wasip1::ERRNO_BADF,
+-        wasip1::ERRNO_ACCES
++            .expect("I/O without its requested right must fail"),
++        wasip1::ERRNO_NOTCAPABLE
+     );
++    assert_eq!(wasip1::fd_tell(f_writeonly).unwrap(), 0, "denied read preserves cursor");
++    assert_eq!(*buffer, [0xA5; 100], "denied read preserves guest buffer");
+     let bytes_written = blocking_mode
+         .write(f_writeonly, &[ciovec])
+         .expect("write to writeonly");
+@@ -107,7 +107,7 @@
+         0,
+         "file",
+         0,
+-        wasip1::RIGHTS_FD_READ | wasip1::RIGHTS_FD_WRITE,
++        wasip1::RIGHTS_FD_READ | wasip1::RIGHTS_FD_WRITE | wasip1::RIGHTS_FD_TELL | wasip1::RIGHTS_FD_FILESTAT_GET,
+         0,
+         blocking_mode.fd_flags(),
+     )
+--- a/upstream/crates/test-programs/src/bin/p1_file_hardlink_across_perms.rs
++++ b/upstream/crates/test-programs/src/bin/p1_file_hardlink_across_perms.rs
+@@ -41,7 +41,7 @@
+ 
+     // Creating a hard link of the read-only file into a Descriptor under
+     // which files are read-writable would allow the read-only file to be
+-    // written to. So, this must fail with perm:
++    // written to. So, this must fail with NOTCAPABLE:
+     let err = wasip1::path_link(ro_dir_fd, 0, RO_TEST_FILENAME, rw_dir_fd, RW_ALIAS_FILENAME);
+     assert!(
+         err.is_err(),
+@@ -49,8 +49,8 @@
+     );
+     assert_eq!(
+         err.err().unwrap(),
+-        wasip1::ERRNO_PERM,
+-        "path_link should fail with ERRNO_PERM"
++        wasip1::ERRNO_NOTCAPABLE,
++        "path_link should fail with ERRNO_NOTCAPABLE"
+     );
+ 
+     // Check that contents of link dest did not change
+--- a/upstream/crates/test-programs/src/bin/p1_file_rename_across_perms.rs
++++ b/upstream/crates/test-programs/src/bin/p1_file_rename_across_perms.rs
+@@ -46,8 +46,8 @@
+     );
+     assert_eq!(
+         err.err().unwrap(),
+-        wasip1::ERRNO_PERM,
+-        "path_rename should fail with ERRNO_PERM"
++        wasip1::ERRNO_NOTCAPABLE,
++        "path_rename should fail with ERRNO_NOTCAPABLE"
+     );
+ 
+     // Check that contents of link dest did not change
+--- a/upstream/crates/test-programs/src/bin/p1_file_truncation_readonly.rs
++++ b/upstream/crates/test-programs/src/bin/p1_file_truncation_readonly.rs
+@@ -58,8 +58,8 @@
+     assert!(err.is_err(), "opening file for truncation should fail");
+     assert_eq!(
+         err.err().unwrap(),
+-        wasip1::ERRNO_PERM,
+-        "opening file for truncation should fail with PERM"
++        wasip1::ERRNO_NOTCAPABLE,
++        "opening file for truncation should fail with NOTCAPABLE"
+     );
+ 
+     // Check that truncation did not occur.

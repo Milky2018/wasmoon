@@ -54,6 +54,7 @@ pub(all) suberror ComponentRuntimeError {
   MissingCanonRealloc
   UnsupportedStringEncoding
   CanonCallError(String)
+  UncaughtWasmException
   HostCallError(String)
   NativeEngineUnavailable(String)
   NativeCompilationFailed(String)
@@ -77,6 +78,8 @@ pub impl Show for ComponentRuntimeError
 
 // Types and methods
 pub(all) struct AsyncState {
+  concurrent_resources : ConcurrentResources
+  trapped : @ref.Ref[Bool]
   core_engine : CoreExecutionEngine
   next_handle_by_component : Map[Int, Array[Int]]
   free_handles_by_component : Map[Int, Array[Int]]
@@ -84,42 +87,23 @@ pub(all) struct AsyncState {
   resource_tables : Map[Int, ResourceTable]
   host_event_loop : @ref.Ref[HostEventLoop?]
   task_stack : Array[Int64]
-  next_task_id : Array[Int64]
-  task_results : Map[Int64, Array[ComponentValue]]
-  task_result_owner : Map[Int64, Int]
-  task_returned : Map[Int64, Bool]
-  task_self_cancelled : Map[Int64, Bool]
-  task_cancelled : Map[Int64, Bool]
-  task_contexts : Map[Int64, Map[Int, @types.Value]]
-  task_borrows : Map[Int64, Int]
-  task_borrow_scopes : Map[Int64, Array[Array[Int64]]]
-  task_thread : Map[Int64, Map[Int, Int]]
-  threads : Map[Int64, GuestThread]
-  thread_runnable : Map[Int64, Array[Int]]
-  main_thread_scheduled : Map[Int64, Bool]
+  tasks : TaskRegistry
+  threads : ConcurrentMap[Int64, GuestThread]
   task_can_block : Array[Bool]
   can_block_stack : Array[Bool]
   in_async_callback : Array[Bool]
-  task_caller : Map[Int64, Int64]
-  task_instance : Map[Int64, Int]
-  yield_suspended : Map[Int64, Bool]
-  waiting_ws : Map[Int64, Int64]
-  sync_lower_states : Map[Int64, SyncLowerState]
-  waitable_sets : Map[Int64, WaitableSet]
+  waitable_sets : ConcurrentMap[Int64, WaitableSet]
   waitable_to_set : Map[Int64, Int64]
   waitable_events : Map[Int64, Array[WaitEvent]]
   sync_waitable_users : Map[Int64, Int64]
-  subtasks : Map[Int64, Subtask]
   inflight_by_instance : Map[Int, Int]
   pending_by_instance : Map[Int, Array[Int64]]
   scheduler_cursor : Array[Int64?]
   next_future_id : Array[Int]
-  futures : Map[Int, FutureState]
-  future_endpoints : Map[Int64, FutureEndpoint]
+  futures : ConcurrentMap[Int, FutureState]
+  future_endpoints : ConcurrentMap[Int64, FutureEndpoint]
   host_future_values : Map[Int, HostFutureValue]
   backpressure_by_instance : Map[Int, Int]
-  next_error_context_by_component : Map[Int, Array[Int]]
-  error_contexts : Map[Int64, String]
 } derive(@debug.Debug)
 pub fn AsyncState::AsyncState(StreamTable, core_engine? : CoreExecutionEngine) -> Self
 pub fn AsyncState::to_repr(Self) -> @debug.Repr
@@ -134,6 +118,18 @@ type CanonSuspend derive(Eq, @debug.Debug)
 pub fn CanonSuspend::equal(Self, Self) -> Bool
 pub fn CanonSuspend::not_equal(Self, Self) -> Bool
 pub fn CanonSuspend::to_repr(Self) -> @debug.Repr
+
+type CanonicalGuestString derive(@debug.Debug)
+pub fn CanonicalGuestString::to_repr(Self) -> @debug.Repr
+
+type CanonicalPayload derive(@debug.Debug)
+pub fn CanonicalPayload::to_repr(Self) -> @debug.Repr
+
+type CanonicalPayloadType derive(@debug.Debug)
+pub fn CanonicalPayloadType::to_repr(Self) -> @debug.Repr
+
+type CanonicalRealloc
+pub fn CanonicalRealloc::to_repr(Self) -> @debug.Repr
 
 type ComponentClosure
 pub fn ComponentClosure::output(Self, &Logger) -> Unit
@@ -244,6 +240,8 @@ pub(all) enum ComponentValue {
   F64(Double)
   Char(Char)
   String(String)
+  EncodedString(String, @wasm_component.StringEncoding, Int)
+  GuestString(CanonicalGuestString)
   ErrorContext(String)
   List(Array[ComponentValue])
   Tuple(Array[ComponentValue])
@@ -256,6 +254,19 @@ pub fn ComponentValue::output(Self, &Logger) -> Unit
 pub fn ComponentValue::to_repr(Self) -> @debug.Repr
 pub fn ComponentValue::to_string(Self) -> String
 pub impl Show for ComponentValue
+
+pub struct ConcurrentMap[K, V] {
+  // private fields
+}
+pub fn[K, V] ConcurrentMap::length(Self[K, V]) -> Int
+
+type ConcurrentResourceLease derive(@debug.Debug)
+pub fn ConcurrentResourceLease::to_repr(Self) -> @debug.Repr
+
+pub struct ConcurrentResources {
+  // private fields
+} derive(@debug.Debug)
+pub fn ConcurrentResources::to_repr(Self) -> @debug.Repr
 
 pub(all) enum CoreBackendPolicy {
   PreferNative
@@ -406,7 +417,7 @@ pub fn HostRuntimeState::HostRuntimeState() -> Self
 pub fn HostRuntimeState::async_state(Self) -> AsyncState
 pub fn HostRuntimeState::drop_host_readable_future(Self, ResourceTable, Int) -> Unit raise ComponentRuntimeError
 pub fn HostRuntimeState::drop_host_readable_stream(Self, ResourceTable, Int) -> Unit raise ComponentRuntimeError
-pub fn HostRuntimeState::new_host_byte_stream(Self, ResourceTable, Bytes) -> Int
+pub fn HostRuntimeState::new_host_byte_stream(Self, ResourceTable, Bytes) -> Int raise ComponentRuntimeError
 pub fn HostRuntimeState::new_host_call_future(Self, ResourceTable, @wasm_component.ValType, Array[@wasm_component.TypeDef?], HostFuture) -> Int raise ComponentRuntimeError
 pub fn HostRuntimeState::new_host_unit_result_future(Self, ResourceTable, @wasm_component.ValType, Array[@wasm_component.TypeDef?], error_case? : Int) -> Int raise ComponentRuntimeError
 pub fn HostRuntimeState::new_host_value_future(Self, ResourceTable, @wasm_component.ValType, Array[@wasm_component.TypeDef?], ComponentValue) -> Int raise ComponentRuntimeError
@@ -416,6 +427,7 @@ pub fn HostRuntimeState::new_host_value_stream_source(Self, ResourceTable, @wasm
 pub fn HostRuntimeState::read_host_byte_stream(Self, ResourceTable, Int) -> HostByteStreamRead raise ComponentRuntimeError
 pub fn HostRuntimeState::resource_table(Self) -> ResourceTable
 pub fn HostRuntimeState::set_event_loop(Self, () -> Bool raise ComponentRuntimeError, poll? : () -> Bool raise ComponentRuntimeError) -> Unit raise ComponentRuntimeError
+pub fn HostRuntimeState::set_max_concurrent_resources(Self, UInt) -> Unit raise ComponentRuntimeError
 pub fn HostRuntimeState::stream_table(Self) -> StreamTable
 
 type HostValueStream
@@ -447,19 +459,20 @@ pub(all) struct ResourceHandle {
   kind : @wasm_component.ResourceKind
   impl_component_id : Int
   own : Bool
-  borrow_scope : Array[Int64]?
+  borrow_scope : Int64?
   num_lends : Array[Int]
 } derive(@debug.Debug)
 pub fn ResourceHandle::to_repr(Self) -> @debug.Repr
 
 pub(all) struct ResourceTable {
   id : Int
-  ancestors : @ref.Ref[Array[Int]]
   next_handle : @ref.Ref[Int]
   free_handles : @ref.Ref[Array[Int]]
   entries : @ref.Ref[Map[Int, ResourceHandle]]
+  error_contexts : ConcurrentMap[Int, String]
+  next_error_context : @ref.Ref[Int]
 } derive(@debug.Debug)
-pub fn ResourceTable::ResourceTable() -> Self
+pub fn ResourceTable::ResourceTable(resources? : ConcurrentResources) -> Self
 pub fn ResourceTable::alloc(Self, ResourceHandle) -> Int
 pub fn ResourceTable::free(Self, Int) -> ResourceHandle?
 pub fn ResourceTable::get(Self, Int) -> ResourceHandle?
@@ -477,9 +490,10 @@ type StreamState derive(@debug.Debug)
 pub fn StreamState::to_repr(Self) -> @debug.Repr
 
 pub(all) struct StreamTable {
+  concurrent_resources : ConcurrentResources
   next_stream_id : Array[Int]
-  endpoints : Map[Int64, StreamEndpoint]
-  streams : Map[Int, StreamState]
+  endpoints : ConcurrentMap[Int64, StreamEndpoint]
+  streams : ConcurrentMap[Int, StreamState]
   host_values : Map[Int, HostValueStream]
 } derive(@debug.Debug)
 pub fn StreamTable::StreamTable() -> Self
@@ -499,10 +513,22 @@ pub fn SubtaskPhase::to_repr(Self) -> @debug.Repr
 type SyncLowerState derive(@debug.Debug)
 pub fn SyncLowerState::to_repr(Self) -> @debug.Repr
 
+pub struct TaskRegistry {
+  // private fields
+} derive(@debug.Debug)
+pub fn TaskRegistry::subtask_count(Self) -> Int
+pub fn TaskRegistry::to_repr(Self) -> @debug.Repr
+
+type TaskReturnContract derive(@debug.Debug)
+pub fn TaskReturnContract::to_repr(Self) -> @debug.Repr
+
 type TaskStep derive(Eq, @debug.Debug)
 pub fn TaskStep::equal(Self, Self) -> Bool
 pub fn TaskStep::not_equal(Self, Self) -> Bool
 pub fn TaskStep::to_repr(Self) -> @debug.Repr
+
+type TaskSuspension derive(@debug.Debug)
+pub fn TaskSuspension::to_repr(Self) -> @debug.Repr
 
 type WaitEvent derive(@debug.Debug)
 pub fn WaitEvent::to_repr(Self) -> @debug.Repr

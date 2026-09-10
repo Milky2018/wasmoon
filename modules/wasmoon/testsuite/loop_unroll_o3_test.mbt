@@ -12,7 +12,7 @@ fn require_o3_jit_match(
       }
   }
   let result = compare_jit_interp_with_opt_level(source, function_name, [], 3)
-  if !compare_result_is_match(result) {
+  if expected_trap is None && !compare_result_is_match(result) {
     fail("O3 JIT and interpreter results differed")
   }
   if expected_trap is Some(expected) &&

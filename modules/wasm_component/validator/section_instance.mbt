@@ -528,6 +528,7 @@ fn validate_component_section_instance(
             ex.name,
             ex.attributes,
             ex.sortidx.sort,
+            cfg,
           )
           if cfg.wit_names && parse_bracket_resource_name(ex.name) is Some(_) {
             raise SectionParseError(

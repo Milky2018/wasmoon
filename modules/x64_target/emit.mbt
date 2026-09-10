@@ -8,20 +8,6 @@ const X64_INTEGER_OVERFLOW_BRK : UInt = 5U
 const X64_INVALID_CONVERSION_BRK : UInt = 3U
 
 ///|
-fn trap_brk_payload(reason : @native.TrapReason) -> UInt {
-  match reason {
-    Unreachable => 0U
-    MemoryOutOfBounds | TableOutOfBounds => 1U
-    IndirectCallTypeMismatch => 2U
-    InvalidConversionToInteger => 3U
-    IntegerDivisionByZero => 4U
-    IntegerOverflow => 5U
-    NullReference | UnalignedAtomic | UnsupportedOperation | StackOverflow => 6U
-    User(payload) => payload.reinterpret_as_uint() & 0xFFFFU
-  }
-}
-
-///|
 priv struct X64RelativeFixup {
   displacement_offset : Int
   next_instruction_offset : Int
@@ -365,6 +351,22 @@ fn emit_atomic_rmw(
       buffer.patch_local_rel32(retry, loop_offset)
       offset
     }
+  }
+}
+
+///|
+fn emit_atomic_result(
+  buffer : CodeBuffer,
+  width : @native.AccessWidth,
+  result : @vcode.PhysicalReg,
+) -> Unit {
+  match width {
+    W8 => buffer.x86_emit_movzx_r32_r8(result.id, result.id)
+    W16 => buffer.x86_emit_movzx_r32_r16(result.id, result.id)
+    // A successful CMPXCHG does not necessarily write EAX. Emit the
+    // zero-extension even when the input and output use the same register.
+    W32 => buffer.x86_emit_mov_rr32(result.id, result.id)
+    W64 | W128 => ()
   }
 }
 
@@ -2468,7 +2470,12 @@ fn emit_float_trap(
     },
   )
   let trap_offset = buffer.position()
-  buffer.x86_emit_trap_imm16(X64_INVALID_CONVERSION_BRK.reinterpret_as_int())
+  let payload = if condition == Unordered {
+    X64_INVALID_CONVERSION_BRK
+  } else {
+    X64_INTEGER_OVERFLOW_BRK
+  }
+  buffer.x86_emit_trap_imm16(payload.reinterpret_as_int())
   buffer.patch_local_rel32(skip, buffer.position())
   trap_offset
 }
@@ -3194,10 +3201,11 @@ fn emit_incoming_call_results(
           result_area_base + offset,
         )
       Stack(slot) => {
-        let scratch = @vcode.PhysicalReg::new(
-          16,
-          @vcode.reg_class_for_value_type(ty),
-        )
+        let scratch = if @vcode.reg_class_for_value_type(ty) == Int {
+          int_transfer_scratch()
+        } else {
+          fp_transfer_scratch()
+        }
         emit_stack_access(buffer, true, ty, scratch, result_area_base + offset)
         emit_stack_access(
           buffer,
@@ -3433,8 +3441,17 @@ fn emit_instruction(
     VectorExtractLane(lane, index, extension) =>
       emit_vector_extract_lane(buffer, lane, index, extension, reg(0), reg(1))
     VectorReplaceLane(lane, index) => {
+      let scalar = if reg(1) == reg(2) && reg(0) != reg(2) {
+        // A floating-point input may share the result's SIMD register. Save it
+        // before the base-vector copy overwrites that register.
+        let saved = @vcode.PhysicalReg::new(15, FpVector)
+        emit_move(buffer, V128, saved, reg(1))
+        saved
+      } else {
+        reg(1)
+      }
       emit_move(buffer, V128, reg(2), reg(0))
-      emit_vector_replace_lane(buffer, lane, index, reg(1), reg(2))
+      emit_vector_replace_lane(buffer, lane, index, scalar, reg(2))
     }
     VectorShuffle(mask) =>
       emit_vector_shuffle(buffer, mask, reg(0), reg(1), reg(2))
@@ -3849,7 +3866,7 @@ fn emit_instruction(
       metadata_offset = buffer.position()
       buffer.x86_emit_xchg_memory(width, reg(0).id, reg(1).id)
     }
-    AtomicRmw(width, _, operation) =>
+    AtomicRmw(width, _, operation) => {
       metadata_offset = emit_atomic_rmw(
         buffer,
         width,
@@ -3858,7 +3875,9 @@ fn emit_instruction(
         reg(1),
         reg(2),
       )
-    AtomicCompareExchange(width, _) =>
+      emit_atomic_result(buffer, width, reg(2))
+    }
+    AtomicCompareExchange(width, _) => {
       metadata_offset = emit_atomic_compare_exchange(
         buffer,
         width,
@@ -3867,6 +3886,8 @@ fn emit_instruction(
         reg(2),
         reg(3),
       )
+      emit_atomic_result(buffer, width, reg(3))
+    }
     AtomicFence => buffer.x86_emit_mfence()
     SafepointMarker => {
       metadata_offset = buffer.position()
@@ -4038,7 +4059,7 @@ fn emit_instruction(
       )
     Trap(reason) => {
       metadata_offset = buffer.position()
-      buffer.x86_emit_trap_imm16(trap_brk_payload(reason).reinterpret_as_int())
+      buffer.x86_emit_trap_imm16(reason.native_payload().reinterpret_as_int())
     }
     Return => {
       emit_epilogue(buffer, frame)

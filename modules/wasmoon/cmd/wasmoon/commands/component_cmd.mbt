@@ -144,6 +144,7 @@ fn run_component_command_eval(
   file_path : String,
   validate : Bool,
   wit_names : Bool,
+  component_implements? : Bool = true,
 ) -> ComponentCommandEvalResult {
   let bytes = @fs.read_file_to_bytes(file_path) catch {
     IOError(_e) =>
@@ -170,7 +171,7 @@ fn run_component_command_eval(
   if validate {
     @component_model.validate_component_with_config(
       parsed,
-      ComponentValidationConfig(wit_names),
+      ComponentValidationConfig(wit_names, component_implements~),
     ) catch {
       e =>
         return {
@@ -214,8 +215,14 @@ pub fn run_component_command(
   validate : Bool,
   wit_names : Bool,
   error_format : ComponentErrorFormat,
+  component_implements? : Bool = true,
 ) -> Int {
-  let result = run_component_command_eval(file_path, validate, wit_names)
+  let result = run_component_command_eval(
+    file_path,
+    validate,
+    wit_names,
+    component_implements~,
+  )
   if result.ok {
     if error_format is Json {
       println(
@@ -293,12 +300,13 @@ fn run_component_invoke_eval(
   export_path : String,
   args : Array[String],
   wit_names : Bool,
+  component_implements? : Bool = true,
 ) -> ComponentInvokeEvalResult {
   let bytes = @fs.read_file_to_bytes(file_path) catch {
     IOError(error) =>
       return { ok: false, phase: "read", detail: error, values: [], }
   }
-  let runtime = @component.ComponentRuntime(wit_names~)
+  let runtime = @component.ComponentRuntime(wit_names~, component_implements~)
   defer runtime.close()
   let instance = runtime.instantiate("invoke", bytes) catch {
     error =>
@@ -362,9 +370,14 @@ pub fn run_component_invoke_command(
   args : Array[String],
   wit_names : Bool,
   error_format : ComponentErrorFormat,
+  component_implements? : Bool = true,
 ) -> Int {
   let result = run_component_invoke_eval(
-    file_path, export_path, args, wit_names,
+    file_path,
+    export_path,
+    args,
+    wit_names,
+    component_implements~,
   )
   if !result.ok {
     return report_component_run_error(error_format, result.phase, result.detail)
@@ -493,8 +506,14 @@ fn run_wasi_component_command_with_evidence(
   error_format : ComponentErrorFormat,
   use_jit : Bool,
   on_execution : ((@component.NativeComponentExecutionEvent) -> Unit)?,
+  component_implements? : Bool = true,
 ) -> Int {
-  let parsed = run_component_command_eval(file_path, true, wit_names)
+  let parsed = run_component_command_eval(
+    file_path,
+    true,
+    wit_names,
+    component_implements~,
+  )
   guard parsed.parsed is Some(component) else {
     return report_component_run_error(error_format, parsed.phase, parsed.detail)
   }
@@ -509,6 +528,7 @@ fn run_wasi_component_command_with_evidence(
   let runtime = @component.ComponentRuntime(
     engine=component_execution_engine(use_jit, on_execution),
     wit_names~,
+    component_implements~,
   )
   defer runtime.close()
   runtime.install(@component.wasi_command_component_host(ctx)) catch {
@@ -553,6 +573,7 @@ pub fn run_wasi_component_command(
   wit_names : Bool,
   error_format : ComponentErrorFormat,
   use_jit? : Bool = true,
+  component_implements? : Bool = true,
 ) -> Int {
   run_wasi_component_command_with_evidence(
     file_path,
@@ -564,5 +585,6 @@ pub fn run_wasi_component_command(
     error_format,
     use_jit,
     None,
+    component_implements~,
   )
 }

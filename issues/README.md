@@ -487,6 +487,68 @@ graph TD
   ISS_460["ISS-460: Preserve shared zero-extended indices in native address selection"]
   ISS_461["ISS-461: Migrate profitable MilkIR acyclic rewrite coverage"]
   ISS_462["ISS-462: Separate the MilkIR optimizer package"]
+  ISS_463["ISS-463: Integrate upstream Wasmtime WASIp1 guest programs"]
+  ISS_464["ISS-464: Resolve the upstream P1 zero-rights directory compatibility boundary"]
+  ISS_465["ISS-465: Investigate BADF from P1 polling of valid inherited standard streams"]
+  ISS_466["ISS-466: Fix filesystem defects exposed by explicit-rights P1 guests"]
+  ISS_467["ISS-467: Expose read-only WASIp1 preopens and complete applicable P1 coverage"]
+  ISS_468["ISS-468: Integrate the complete pinned Wasmtime misc_testsuite"]
+  ISS_469["ISS-469: Resolve failures exposed by Wasmtime misc_testsuite"]
+  ISS_470["ISS-470: Bind callable identity to its execution context"]
+  ISS_471["ISS-471: Centralize stable task identity and lifecycle"]
+  ISS_472["ISS-472: Unify canonical ABI plans and value conversion"]
+  ISS_473["ISS-473: Preserve resource handles when lowering rejects their type"]
+  ISS_474["ISS-474: Correct component string transcoding allocation and validation"]
+  ISS_475["ISS-475: Preserve outer type environments and bound canonical payload expansion"]
+  ISS_476["ISS-476: Execute WAST threads with shared runtime synchronization"]
+  ISS_477["ISS-477: Implement typed continuation stack switching across execution engines"]
+  ISS_478["ISS-478: Complete external test host contracts and full-suite acceptance"]
+  ISS_479["ISS-479: Reject malformed UTF-16 and overflowing canonical string lengths"]
+  ISS_480["ISS-480: Correct atomic RMW opcode normalization"]
+  ISS_481["ISS-481: Route WAST calls through the shared JIT invocation boundary"]
+  ISS_482["ISS-482: Reject incorrect failures in WAST trap and exception assertions"]
+  ISS_483["ISS-483: Preserve distinct trap reasons through native lowering and runtime helpers"]
+  ISS_484["ISS-484: Fix future-gated component synchronization regressions"]
+  ISS_485["ISS-485: Audit source-phase classification in WAST assertions"]
+  ISS_486["ISS-486: Enforce stream handle ownership without numeric guessing"]
+  ISS_487["ISS-487: Compare canonical task identities when avoiding scheduler reentry"]
+  ISS_488["ISS-488: Use a Wasmtime oracle matching the imported conformance revision"]
+  ISS_489["ISS-489: Validate stream and future operands before synchronous blocking checks"]
+  ISS_490["ISS-490: Model component entry using nested activity and shared trap state"]
+  ISS_491["ISS-491: Isolate WAST component instances in separate runtime stores"]
+  ISS_492["ISS-492: Collect guest heaps safely from test host callbacks"]
+  ISS_493["ISS-493: Isolate resource destructor contexts and honor the execution engine"]
+  ISS_494["ISS-494: Preserve atomic memory semantics across interpreter and compiler"]
+  ISS_495["ISS-495: Retain shared linear memory across independent Stores"]
+  ISS_496["ISS-496: Preserve shared-memory addresses and serialize growth"]
+  ISS_497["ISS-497: Preserve full memory64 offsets in initialization and interpreter accesses"]
+  ISS_498["ISS-498: Preserve canonical ABI memory64 addresses"]
+  ISS_499["ISS-499: Validate and preserve large logical memory page counts"]
+  ISS_500["ISS-500: Trap table64 allocation overflow before narrowing"]
+  ISS_501["ISS-501: Bound large-string transcoding work before host materialization"]
+  ISS_502["ISS-502: Parse numeric memory indices independently of following instructions"]
+  ISS_503["ISS-503: Match Preview 1 readlink and trailing-slash errors on Linux"]
+  ISS_504["ISS-504: Reject accidental double failures in engine parity checks"]
+  ISS_505["ISS-505: Preserve table64 indices and lengths through bounds checks"]
+  ISS_506["ISS-506: Honor the component implements feature switch"]
+  ISS_507["ISS-507: Compare WAST floating-point assertions by their required bit patterns"]
+  ISS_508["ISS-508: Release WAST execution contexts deterministically"]
+  ISS_509["ISS-509: Honor disabled bulk memory in core validation and misc execution"]
+  ISS_510["ISS-510: Canonicalize arithmetic NaNs consistently in both engines"]
+  ISS_511["ISS-511: Bound actual component concurrent resources and reclaim their slots"]
+  ISS_512["ISS-512: Own shared-memory atomic wait queues independently of execution stacks"]
+  ISS_513["ISS-513: Suspend interpreter execution at guest waits and instruction quanta"]
+  ISS_514["ISS-514: Preserve native guest stacks across atomic waits and scheduling yields"]
+  ISS_515["ISS-515: Schedule WAST threads over independent shared-memory Stores"]
+  ISS_516["ISS-516: Repair the instrumented x64 SIMD lane regression"]
+  ISS_517["ISS-517: Parse and validate typed continuation modules"]
+  ISS_518["ISS-518: Execute one-shot typed continuations in the interpreter"]
+  ISS_519["ISS-519: Lower typed continuations to native stack switching"]
+  ISS_520["ISS-520: Complete typed continuation and external-suite acceptance"]
+  ISS_521["ISS-521: Preserve native exception reference identity and payload ownership"]
+  ISS_522["ISS-522: Resolve the Linux call_ref conformance failure"]
+  ISS_523["ISS-523: Zero-extend narrow x64 atomic results"]
+  ISS_524["ISS-524: Diagnose x64 multi-result misc process aborts"]
   ISS_002 --> ISS_003
   ISS_002 --> ISS_004
   ISS_003 --> ISS_005
@@ -869,6 +931,71 @@ graph TD
   ISS_449 --> ISS_452
   ISS_453 --> ISS_454
   ISS_449 --> ISS_455
+  ISS_470 --> ISS_471
+  ISS_471 --> ISS_472
+  ISS_494 --> ISS_476
+  ISS_495 --> ISS_476
+  ISS_496 --> ISS_476
+  ISS_512 --> ISS_476
+  ISS_513 --> ISS_476
+  ISS_514 --> ISS_476
+  ISS_517 --> ISS_477
+  ISS_518 --> ISS_477
+  ISS_519 --> ISS_477
+  ISS_520 --> ISS_477
+  ISS_497 --> ISS_478
+  ISS_498 --> ISS_478
+  ISS_499 --> ISS_478
+  ISS_500 --> ISS_478
+  ISS_501 --> ISS_478
+  ISS_502 --> ISS_478
+  ISS_503 --> ISS_478
+  ISS_505 --> ISS_478
+  ISS_506 --> ISS_478
+  ISS_507 --> ISS_478
+  ISS_508 --> ISS_478
+  ISS_509 --> ISS_478
+  ISS_510 --> ISS_478
+  ISS_511 --> ISS_478
+  ISS_476 --> ISS_478
+  ISS_477 --> ISS_478
+  ISS_485 --> ISS_478
+  ISS_516 --> ISS_478
+  ISS_483 --> ISS_482
+  ISS_488 --> ISS_484
+  ISS_489 --> ISS_484
+  ISS_490 --> ISS_484
+  ISS_488 --> ISS_489
+  ISS_488 --> ISS_490
+  ISS_491 --> ISS_490
+  ISS_492 --> ISS_493
+  ISS_494 --> ISS_495
+  ISS_494 --> ISS_496
+  ISS_495 --> ISS_496
+  ISS_500 --> ISS_505
+  ISS_507 --> ISS_510
+  ISS_508 --> ISS_510
+  ISS_508 --> ISS_511
+  ISS_510 --> ISS_511
+  ISS_494 --> ISS_512
+  ISS_495 --> ISS_512
+  ISS_496 --> ISS_512
+  ISS_511 --> ISS_512
+  ISS_512 --> ISS_513
+  ISS_512 --> ISS_514
+  ISS_513 --> ISS_514
+  ISS_512 --> ISS_515
+  ISS_513 --> ISS_515
+  ISS_514 --> ISS_515
+  ISS_517 --> ISS_518
+  ISS_517 --> ISS_519
+  ISS_518 --> ISS_519
+  ISS_521 --> ISS_519
+  ISS_518 --> ISS_520
+  ISS_519 --> ISS_520
+  ISS_522 --> ISS_520
+  ISS_523 --> ISS_520
+  ISS_524 --> ISS_520
 ```
 
 ## Warnings

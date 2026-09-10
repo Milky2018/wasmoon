@@ -3,204 +3,10 @@ fn core_valtypes_for_component_valtype(
   ty : @component.ValType,
   type_table : Array[@component.TypeDef?],
 ) -> Array[@types.ValueType]? {
-  // For now, we only model the "flat" ABI for scalar/composite values that can
-  // be represented without linear memory. Types that require memory (strings,
-  // lists, etc) return `None` and skip signature checks; those are still
-  // validated structurally by canonical option checks.
-  let visiting : Map[Int, Unit] = Map([])
-  fn scalar_prim(p : @component.PrimValType) -> Array[@types.ValueType]? {
-    match p {
-      Bool | S8 | U8 | S16 | U16 | S32 | U32 | Char => Some([I32])
-      S64 | U64 => Some([I64])
-      F32 => Some([F32])
-      F64 => Some([F64])
-      // Strings/results need canonical ABI memory rules.
-      String | ErrorContext => None
-    }
+  match @component.canonical_abi_plan(ty, type_table, false, max_flat=17) {
+    Some(plan) => if plan.contains_memory { None } else { Some(plan.flat) }
+    None => None
   }
-
-  fn join_flat(a : @types.ValueType, b : @types.ValueType) -> @types.ValueType {
-    if a == b {
-      return a
-    }
-    // The canonical ABI uses "join" to unify variant payloads with differing
-    // shapes. Mixed integer/float representations fall back to integer bit
-    // patterns (I32/I64) to preserve bits and allow masking.
-    match (a, b) {
-      (I64, _) | (_, I64) | (F64, _) | (_, F64) => I64
-      (F32, I32) | (I32, F32) => I32
-      (I32, _) | (_, I32) => I32
-      // Default to I64 for any other mixed case (conservative).
-      _ => I64
-    }
-  }
-
-  fn scalar_flat_valtype(vt : @component.ValType) -> Array[@types.ValueType]? {
-    match vt {
-      Prim(p) => scalar_prim(p)
-      TypeIdx(idx) => {
-        if idx < 0 || idx >= type_table.length() {
-          return None
-        }
-        match visiting.get(idx) {
-          Some(_) => None
-          None => {
-            visiting.set(idx, ())
-            let res = match type_table[idx] {
-              None => None
-              Some(td) =>
-                match td {
-                  DefValType(p) => scalar_prim(p)
-                  Tuple(tys) => {
-                    let out : Array[@types.ValueType] = []
-                    for t in tys {
-                      match scalar_flat_valtype(t) {
-                        Some(ts) =>
-                          for x in ts {
-                            out.push(x)
-                            if out.length() > 16 {
-                              return None
-                            }
-                          }
-                        None => return None
-                      }
-                    }
-                    Some(out)
-                  }
-                  Record(fields) => {
-                    let out : Array[@types.ValueType] = []
-                    for f in fields {
-                      match scalar_flat_valtype(f.ty) {
-                        Some(ts) =>
-                          for x in ts {
-                            out.push(x)
-                            if out.length() > 16 {
-                              return None
-                            }
-                          }
-                        None => return None
-                      }
-                    }
-                    Some(out)
-                  }
-                  Variant(cases) => {
-                    let payloads : Array[Array[@types.ValueType]] = []
-                    let mut max_len = 0
-                    for c in cases {
-                      let flat = match c.ty {
-                        None => []
-                        Some(t) =>
-                          match scalar_flat_valtype(t) {
-                            Some(ts) => ts
-                            None => return None
-                          }
-                      }
-                      if flat.length() > max_len {
-                        max_len = flat.length()
-                      }
-                      payloads.push(flat)
-                    }
-                    let joined : Array[@types.ValueType] = []
-                    for i in 0..<max_len {
-                      let mut cur : @types.ValueType? = None
-                      for p in payloads {
-                        if i < p.length() {
-                          cur = match cur {
-                            None => Some(p[i])
-                            Some(prev) => Some(join_flat(prev, p[i]))
-                          }
-                        }
-                      }
-                      match cur {
-                        None => ()
-                        Some(t) => joined.push(t)
-                      }
-                    }
-                    if 1 + joined.length() > 16 {
-                      None
-                    } else {
-                      Some([I32] + joined)
-                    }
-                  }
-                  Option(v) =>
-                    match scalar_flat_valtype(v) {
-                      Some(payload) =>
-                        if 1 + payload.length() > 16 {
-                          None
-                        } else {
-                          Some([I32] + payload)
-                        }
-                      None => None
-                    }
-                  Result(ok, err) => {
-                    let ok_flat = match ok {
-                      None => []
-                      Some(v) =>
-                        match scalar_flat_valtype(v) {
-                          Some(ts) => ts
-                          None => return None
-                        }
-                    }
-                    let err_flat = match err {
-                      None => []
-                      Some(v) =>
-                        match scalar_flat_valtype(v) {
-                          Some(ts) => ts
-                          None => return None
-                        }
-                    }
-                    let mut max_len = ok_flat.length()
-                    if err_flat.length() > max_len {
-                      max_len = err_flat.length()
-                    }
-                    let joined : Array[@types.ValueType] = []
-                    for i in 0..<max_len {
-                      let mut cur : @types.ValueType? = None
-                      if i < ok_flat.length() {
-                        cur = Some(ok_flat[i])
-                      }
-                      if i < err_flat.length() {
-                        cur = match cur {
-                          None => Some(err_flat[i])
-                          Some(prev) => Some(join_flat(prev, err_flat[i]))
-                        }
-                      }
-                      match cur {
-                        None => ()
-                        Some(t) => joined.push(t)
-                      }
-                    }
-                    if 1 + joined.length() > 16 {
-                      None
-                    } else {
-                      Some([I32] + joined)
-                    }
-                  }
-                  Flags(labels) =>
-                    if labels.length() <= 32 {
-                      Some([I32])
-                    } else if labels.length() <= 64 {
-                      Some([I64])
-                    } else {
-                      None
-                    }
-                  Enum(_labels) => Some([I32])
-                  Own(_) | Borrow(_) => Some([I32])
-                  ResourceType(_, _, _, _) => Some([I32])
-                  Future(_) | Stream(_) => Some([I32])
-                  // Lists/strings/resources with non-scalar reps require memory.
-                  _ => None
-                }
-            }
-            visiting.remove(idx) |> ignore
-            res
-          }
-        }
-      }
-    }
-  }
-
-  scalar_flat_valtype(ty)
 }
 
 ///|
@@ -216,21 +22,28 @@ fn core_functype_for_component_functype(
 fn core_functype_for_task_return(
   result : @component.ValType?,
   type_table : Array[@component.TypeDef?],
+  pointer_type : @types.ValueType,
 ) -> @types.FuncType? {
   let params : Array[@types.ValueType] = []
   match result {
     None => ()
     Some(vt) =>
-      match core_valtypes_for_component_valtype(vt, type_table) {
+      match
+        @component.canonical_flat_types(
+          vt,
+          type_table,
+          pointer_type,
+          max_flat=17,
+        ) {
         Some(ts) =>
           if ts.length() > 16 {
-            params.push(I32)
+            params.push(pointer_type)
           } else {
             for t in ts {
               params.push(t)
             }
           }
-        None => params.push(I32)
+        None => return None
       }
   }
   Some({ params, results: [], })
@@ -240,11 +53,17 @@ fn core_functype_for_task_return(
 fn core_functype_for_canon(
   c : @component.Canon,
   type_table : Array[@component.TypeDef?],
+  core_memory_types : Array[@types.MemoryType?],
 ) -> @types.FuncType? {
   match c {
     BackpressureInc | BackpressureDec | TaskCancel =>
       Some({ params: [], results: [], })
-    TaskReturn(result, _) => core_functype_for_task_return(result, type_table)
+    TaskReturn(result, opts) =>
+      core_functype_for_task_return(
+        result,
+        type_table,
+        canon_address_type(opts, core_memory_types),
+      )
     WaitableSetNew => Some({ params: [], results: [I32], })
     WaitableSetWait(_, _) | WaitableSetPoll(_, _) =>
       Some({ params: [I32, I32], results: [I32], })
@@ -512,8 +331,21 @@ fn validate_canon(
         Some(_) => raise SectionParseError(8, "not a resource type")
       }
     }
-    TaskReturn(_, opts) => {
+    TaskReturn(result, opts) => {
       validate_canon_opts(opts)
+      if result is Some(ty) {
+        validate_valtype(ty, type_table)
+      }
+      if canon_memory_idx(opts) is Some(memory) {
+        if memory < 0 || memory >= core_memory_types.length() {
+          raise InvalidCoreMemoryIndex(memory)
+        }
+      } else if functype_async_lift_needs_memory(
+          { is_async: true, params: [], result, },
+          type_table,
+        ) {
+        raise MissingCanonOption("memory")
+      }
       for opt in opts {
         match opt {
           Async => raise CanonOptionNotAllowed("async")
@@ -712,7 +544,8 @@ fn typedef_refers_to_resource(
       }
       ok_any || err_any
     }
-    List(v) => valtype_refers_to_resource(v, type_table, visiting)
+    List(v) | FixedList(v, _) =>
+      valtype_refers_to_resource(v, type_table, visiting)
     Stream(v) | Future(v) =>
       match v {
         None => false

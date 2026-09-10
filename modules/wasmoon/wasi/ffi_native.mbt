@@ -914,19 +914,26 @@ pub fn native_symlinkat(
 ///|
 /// Read symbolic link
 pub fn native_readlinkat(dirfd : Int, path : String, bufsize : Int) -> String? {
+  guard native_readlinkat_bytes(dirfd, path, bufsize) is Some(bytes) else {
+    return None
+  }
+  try @utf8.decode(bytes) catch {
+    _ => None
+  } noraise {
+    target => Some(target)
+  }
+}
+
+///|
+// WASI readlink returns bytes and may truncate inside a UTF-8 sequence.
+fn native_readlinkat_bytes(dirfd : Int, path : String, bufsize : Int) -> Bytes? {
   guard string_to_cstring(path) is Some(path_bytes) else { return None }
   let buf = FixedArray::make(bufsize, b'\x00')
   let result = c_readlinkat(dirfd, path_bytes, buf, bufsize.to_int64())
   if result < 0L {
     None
   } else {
-    let len = result.to_int()
-    let bytes = Bytes::makei(len, fn(i) { buf[i] })
-    try @utf8.decode(bytes) catch {
-      _ => None
-    } noraise {
-      target => Some(target)
-    }
+    Some(Bytes::makei(result.to_int(), fn(i) { buf[i] }))
   }
 }
 

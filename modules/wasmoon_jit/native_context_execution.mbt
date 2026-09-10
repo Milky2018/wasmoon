@@ -228,6 +228,23 @@ pub fn NativeJITContext::clear_cancellation_callback(
 }
 
 ///|
+#borrow(context)
+extern "c" fn c_set_cooperative_scheduling(
+  context : JITContext,
+  enabled : Bool,
+) -> Unit = "wasmoon_jit_set_cooperative_scheduling_managed"
+
+///|
+/// Enable native scheduling at instrumented guest safepoints. The embedding
+/// must enter this context through a resumable native invocation.
+pub fn NativeJITContext::set_cooperative_scheduling(
+  self : NativeJITContext,
+  enabled : Bool,
+) -> Unit {
+  c_set_cooperative_scheduling(self.handle, enabled)
+}
+
+///|
 pub fn NativeJITContext::call_trampoline(
   self : NativeJITContext,
   trampoline_ptr : Int64,
@@ -247,7 +264,7 @@ pub fn NativeJITContext::call_trampoline(
     match event {
       NativeJITCompleted => 0
       NativeJITTrapped(code) => code
-      NativeHostcallSuspended => {
+      NativeSuspended(_) => {
         continuation.cancel()
         raise UnexpectedYield(-1L)
       }

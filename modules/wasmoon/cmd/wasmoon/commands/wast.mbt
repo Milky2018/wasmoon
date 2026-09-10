@@ -14,7 +14,14 @@ fn is_truthy_env(v : String) -> Bool {
 
 ///|
 /// Run a WAST test script
-fn run_wast(wast_path : String, use_jit : Bool, show_success : Bool) -> Int {
+fn run_wast(
+  wast_path : String,
+  use_jit : Bool,
+  show_success : Bool,
+  bulk_memory : Bool,
+  stack_switching : Bool,
+  nan_canonicalization : Bool,
+) -> Int {
   wast_jit_compiled_modules.val = 0
   wast_jit_compiled_functions.val = 0
   wast_jit_attempts.val = 0
@@ -54,7 +61,15 @@ fn run_wast(wast_path : String, use_jit : Bool, show_success : Bool) -> Int {
     base_dir,
     use_jit,
     show_success,
+    bulk_memory~,
+    stack_switching~,
+    nan_canonicalization~,
     jit_compiler~,
+    register_named_modules=match
+      @env.get_env_var("WASMOON_WAST_REGISTER_NAMED_MODULES") {
+      Some(value) => is_truthy_env(value)
+      None => false
+    },
   )
 
   // Print results
@@ -462,6 +477,9 @@ fn try_compile_jit_with_suspension(
     },
     local_compile_mask~,
     force_subtype_indirect_check=Some(true),
+    nan_canonicalization=store.nan_canonicalization,
+    enable_cancellation=true,
+    stack_switching=true,
   )
   match compiled {
     None =>
@@ -521,7 +539,9 @@ fn try_compile_jit_with_suspension(
           // Initialize globals (pass jm for tagged funcref pointers)
           let globals_ptr = @wast.init_jit_globals_from_store(
             instance, store, jm,
-          )
+          ) catch {
+            error => return Err("WAST JIT reference transfer failed: \{error}")
+          }
           // WAST drives heavy cross-module table/linking flows where table
           // entries can carry function refs from different type-index spaces.
           // Always use subtype-aware indirect checks to keep semantics correct.
@@ -542,10 +562,7 @@ fn try_compile_jit_with_suspension(
             store,
             use_subtype_indirect_check~,
           ) catch {
-            err =>
-              return Err(
-                "WAST JIT strict mode: failed to initialize JIT bulk segments: \{err}",
-              )
+            error => return Err("WAST JIT reference transfer failed: \{error}")
           }
           // One-time sync: copy interpreter table contents (including active elem init)
           // into the shared JIT table memory before any JIT execution.
@@ -554,7 +571,9 @@ fn try_compile_jit_with_suspension(
             store,
             jm,
             use_subtype_indirect_check~,
-          )
+          ) catch {
+            error => return Err("WAST JIT reference transfer failed: \{error}")
+          }
           // NOTE: Memory and globals are owned by JITContext, GC handles cleanup
           // Store global_addrs and func_addrs for syncing after JIT calls
           let global_addrs_copy : Array[Int] = []
@@ -595,12 +614,8 @@ fn try_compile_jit_with_suspension(
           jit_ctx.install_hostcall_dispatcher(
             store,
             instance,
-            before_dispatch=fn() {
-              @wast.sync_jit_globals_to_store(jit_ctx, store)
-              @wast.sync_jit_tables_to_store(jit_ctx, store)
-            },
-            after_dispatch=fn() {
-              @wast.sync_store_globals_to_jit(jit_ctx, store)
+            before_dispatch=() => @wast.sync_jit_tables_to_store(jit_ctx, store),
+            after_dispatch=() => {
               @wast.sync_tables_to_jit(
                 instance,
                 store,
@@ -632,6 +647,11 @@ pub fn run_testsuite(
   wast_path : String,
   use_jit : Bool,
   show_success : Bool,
+  bulk_memory? : Bool = true,
+  stack_switching? : Bool = false,
+  nan_canonicalization? : Bool = false,
 ) -> Int {
-  run_wast(wast_path, use_jit, show_success)
+  run_wast(
+    wast_path, use_jit, show_success, bulk_memory, stack_switching, nan_canonicalization,
+  )
 }

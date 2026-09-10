@@ -83,6 +83,7 @@ void jit_trap_activation_init(
     activation->brk_imm = -1;
     activation->func_idx = -1;
     activation->context = context;
+    activation->control_context = context;
     uintptr_t stack_base = 0;
     uintptr_t stack_top = 0;
     uintptr_t guard_base = 0;
@@ -104,6 +105,7 @@ static void save_activation_context(jit_trap_activation_t *activation) {
     jit_context_t *context = activation->context;
     if (!context || activation->context_detached) return;
     activation->exception_handler = context->exception_handler;
+    activation->exception_ref = context->exception_ref;
     activation->exception_tag = context->exception_tag;
     activation->exception_values = context->exception_values;
     activation->exception_value_count = context->exception_value_count;
@@ -114,6 +116,7 @@ static void save_activation_context(jit_trap_activation_t *activation) {
     activation->debug_current_func_idx = context->debug_current_func_idx;
     activation->context_detached = 1;
     context->exception_handler = NULL;
+    context->exception_ref = 0;
     context->exception_tag = 0;
     context->exception_values = NULL;
     context->exception_value_count = 0;
@@ -135,6 +138,7 @@ static void restore_activation_context(jit_trap_activation_t *activation) {
         abort();
     }
     context->exception_handler = activation->exception_handler;
+    context->exception_ref = activation->exception_ref;
     context->exception_tag = activation->exception_tag;
     context->exception_values = activation->exception_values;
     context->exception_value_count = activation->exception_value_count;
@@ -213,6 +217,28 @@ static int32_t copy_activation_roots(
     return at;
 }
 
+// Reentrant native calls may collect an outer Store, or share its heap while
+// its activation is detached from a reused context. Both remain live roots.
+void jit_mark_active_gc_roots(GcHeap *heap) {
+    for (jit_trap_activation_t *activation = current_activation;
+         activation; activation = activation->previous) {
+        jit_context_t *context = activation->context;
+        if (!activation->active || !context || context->gc_heap != heap) continue;
+        const wasmoon_gc_root_scope_t *scope = activation->context_detached
+            ? activation->gc_root_scope_head : context->gc_root_scope_head;
+        for (; scope; scope = scope->prev) {
+            gc_heap_mark_roots(heap, scope->roots, scope->root_count);
+        }
+        gc_heap_mark_roots(heap,
+            activation->context_detached ? activation->exception_values : context->exception_values,
+            activation->context_detached ? activation->exception_value_count : context->exception_value_count);
+        gc_heap_mark_roots(heap,
+            activation->context_detached ? activation->spilled_locals : context->spilled_locals,
+            activation->context_detached ? activation->spilled_locals_count : context->spilled_locals_count);
+        gc_heap_mark_roots(heap, context->gc_root_scratch, context->gc_root_scratch_len);
+    }
+}
+
 int jit_parked_gc_roots_register(
     jit_trap_activation_t *activation,
     void **registration
@@ -246,11 +272,24 @@ void jit_parked_gc_roots_unregister(void *registration) {
     gc_heap_unregister_parked_roots(registration);
 }
 
+// Module environments can recur through another module's native activation.
+// Save and restore the nearest owner of the same context, even across an
+// intervening activation, so parked stacks never borrow another stack's roots.
+static jit_trap_activation_t *matching_context_activation(jit_context_t *context) {
+    for (jit_trap_activation_t *a = current_activation; a; a = a->previous) {
+        if (a->context == context) return a;
+    }
+    return NULL;
+}
+
 void jit_trap_activation_push(jit_trap_activation_t *activation) {
     activation->previous = current_activation;
-    if (current_activation &&
-        current_activation->context == activation->context) {
-        save_activation_context(current_activation);
+    if (activation->inherit_controls && current_activation) {
+        activation->control_context = current_activation->control_context;
+    }
+    jit_trap_activation_t *owner = matching_context_activation(activation->context);
+    if (owner) {
+        save_activation_context(owner);
     } else if (activation->context) {
         exception_reset_context_state(activation->context);
     }
@@ -297,9 +336,9 @@ void jit_trap_activation_publish(jit_trap_activation_t *activation) {
 void jit_trap_activation_pop(jit_trap_activation_t *activation) {
     if (current_activation != activation) abort();
     current_activation = activation->previous;
-    if (current_activation &&
-        current_activation->context == activation->context) {
-        restore_activation_context(current_activation);
+    jit_trap_activation_t *owner = matching_context_activation(activation->context);
+    if (owner) {
+        restore_activation_context(owner);
     }
     activation->active = 0;
 }
@@ -309,9 +348,9 @@ jit_trap_activation_t *jit_trap_activation_detach(void) {
     if (!activation) return NULL;
     save_activation_context(activation);
     current_activation = activation->previous;
-    if (current_activation &&
-        current_activation->context == activation->context) {
-        restore_activation_context(current_activation);
+    jit_trap_activation_t *owner = matching_context_activation(activation->context);
+    if (owner) {
+        restore_activation_context(owner);
     }
     return activation;
 }
@@ -321,12 +360,15 @@ void jit_trap_activation_attach(jit_trap_activation_t *activation) {
     // A parked continuation may be resumed after its original dynamic caller
     // has returned or parked. Preserve the activation current at the actual
     // resume point before rebinding the continuation to it.
-    if (current_activation &&
-        current_activation->context == activation->context) {
-        save_activation_context(current_activation);
+    jit_trap_activation_t *owner = matching_context_activation(activation->context);
+    if (owner) {
+        save_activation_context(owner);
     }
     activation->previous = current_activation;
     restore_activation_context(activation);
+    if (activation->inherit_controls && current_activation) {
+        activation->control_context = current_activation->control_context;
+    }
     current_activation = activation;
 }
 
@@ -339,6 +381,7 @@ void jit_trap_activation_abandon(jit_trap_activation_t *activation) {
     jit_context_t *context = activation->context;
     if (context && activation->context_detached) {
         void *saved_handler = context->exception_handler;
+        int64_t saved_ref = context->exception_ref;
         int32_t saved_tag = context->exception_tag;
         int64_t *saved_values = context->exception_values;
         int32_t saved_value_count = context->exception_value_count;
@@ -347,6 +390,7 @@ void jit_trap_activation_abandon(jit_trap_activation_t *activation) {
         wasmoon_gc_frame_t *saved_frames = context->gc_frame_chain_head;
         wasmoon_gc_root_scope_t *saved_scopes = context->gc_root_scope_head;
         context->exception_handler = activation->exception_handler;
+        context->exception_ref = activation->exception_ref;
         context->exception_tag = activation->exception_tag;
         context->exception_values = activation->exception_values;
         context->exception_value_count = activation->exception_value_count;
@@ -357,6 +401,7 @@ void jit_trap_activation_abandon(jit_trap_activation_t *activation) {
         exception_reset_context_state(context);
         ctx_gc_clear_frames_internal(context);
         context->exception_handler = saved_handler;
+        context->exception_ref = saved_ref;
         context->exception_tag = saved_tag;
         context->exception_values = saved_values;
         context->exception_value_count = saved_value_count;
@@ -648,16 +693,7 @@ static void trap_signal_handler(int sig, siginfo_t *info, void *ucontext) {
         }
 
         // Map BRK immediate to trap code
-        switch (brk_imm) {
-            case 0: trap_code = 3; break;   // unreachable
-            case 1: trap_code = 1; break;   // out of bounds (memory/table access)
-            case 2: trap_code = 4; break;   // indirect call type mismatch
-            case 3: trap_code = 5; break;   // invalid conversion to integer
-            case 4: trap_code = 6; break;   // integer divide by zero
-            case 5: trap_code = 7; break;   // integer overflow
-            case 6: trap_code = 8; break;   // backend/unknown JIT trap
-            default: trap_code = 99; break; // unknown
-        }
+        trap_code = wasmoon_decode_native_trap(brk_imm);
 #elif defined(__linux__) && defined(__aarch64__)
         // On Linux ARM64
         ucontext_t *uc = (ucontext_t *)ucontext;
@@ -669,16 +705,7 @@ static void trap_signal_handler(int sig, siginfo_t *info, void *ucontext) {
             trap_pc = (uintptr_t)pc;
         }
 
-        switch (brk_imm) {
-            case 0: trap_code = 3; break;   // unreachable
-            case 1: trap_code = 1; break;   // out of bounds (memory/table access)
-            case 2: trap_code = 4; break;   // indirect call type mismatch
-            case 3: trap_code = 5; break;   // invalid conversion to integer
-            case 4: trap_code = 6; break;   // integer divide by zero
-            case 5: trap_code = 7; break;   // integer overflow
-            case 6: trap_code = 8; break;   // backend/unknown JIT trap
-            default: trap_code = 99; break; // unknown
-        }
+        trap_code = wasmoon_decode_native_trap(brk_imm);
 #elif defined(__APPLE__) && defined(__x86_64__)
         // macOS x86_64: INT3 payload.
         ucontext_t *uc = (ucontext_t *)ucontext;
@@ -700,16 +727,7 @@ static void trap_signal_handler(int sig, siginfo_t *info, void *ucontext) {
         if (!decode_trap_imm(pc, &trap_pc, &brk_imm)) {
             trap_pc = pc;
         }
-        switch (brk_imm) {
-            case 0: trap_code = 3; break;   // unreachable
-            case 1: trap_code = 1; break;   // out of bounds (memory/table access)
-            case 2: trap_code = 4; break;   // indirect call type mismatch
-            case 3: trap_code = 5; break;   // invalid conversion to integer
-            case 4: trap_code = 6; break;   // integer divide by zero
-            case 5: trap_code = 7; break;   // integer overflow
-            case 6: trap_code = 8; break;   // backend/unknown JIT trap
-            default: trap_code = 99; break; // unknown
-        }
+        trap_code = wasmoon_decode_native_trap(brk_imm);
 #elif defined(__linux__) && defined(__x86_64__)
         // Linux x86_64: INT3 payload.
         ucontext_t *uc = (ucontext_t *)ucontext;
@@ -731,16 +749,7 @@ static void trap_signal_handler(int sig, siginfo_t *info, void *ucontext) {
         if (!decode_trap_imm(pc, &trap_pc, &brk_imm)) {
             trap_pc = pc;
         }
-        switch (brk_imm) {
-            case 0: trap_code = 3; break;   // unreachable
-            case 1: trap_code = 1; break;   // out of bounds (memory/table access)
-            case 2: trap_code = 4; break;   // indirect call type mismatch
-            case 3: trap_code = 5; break;   // invalid conversion to integer
-            case 4: trap_code = 6; break;   // integer divide by zero
-            case 5: trap_code = 7; break;   // integer overflow
-            case 6: trap_code = 8; break;   // backend/unknown JIT trap
-            default: trap_code = 99; break; // unknown
-        }
+        trap_code = wasmoon_decode_native_trap(brk_imm);
 #else
         (void)ucontext;
         trap_code = 99;  // Unknown on unsupported platforms

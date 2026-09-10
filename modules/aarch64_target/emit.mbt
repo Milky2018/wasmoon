@@ -8,20 +8,6 @@ const AARCH64_INTEGER_OVERFLOW_BRK : UInt = 5U
 const AARCH64_INVALID_CONVERSION_BRK : UInt = 3U
 
 ///|
-fn trap_brk_payload(reason : @native.TrapReason) -> UInt {
-  match reason {
-    Unreachable => 0U
-    MemoryOutOfBounds | TableOutOfBounds => 1U
-    IndirectCallTypeMismatch => 2U
-    InvalidConversionToInteger => 3U
-    IntegerDivisionByZero => 4U
-    IntegerOverflow => 5U
-    NullReference | UnalignedAtomic | UnsupportedOperation | StackOverflow => 6U
-    User(payload) => payload.reinterpret_as_uint() & 0xFFFFU
-  }
-}
-
-///|
 /// Where a branch lands.
 ///
 /// Blocks resolve through `block_offsets` once the whole function is laid out.
@@ -3321,7 +3307,12 @@ fn emit_instruction(
       let skip = float_trap_condition_code(condition) ^ 1U
       buffer.emit_word(0x54000000U | (2U << 5) | skip)
       metadata_offset = buffer.position()
-      buffer.emit_word(0xD4200000U | (AARCH64_INVALID_CONVERSION_BRK << 5))
+      let payload = if condition == Unordered {
+        AARCH64_INVALID_CONVERSION_BRK
+      } else {
+        AARCH64_INTEGER_OVERFLOW_BRK
+      }
+      buffer.emit_word(0xD4200000U | (payload << 5))
     }
     Convert(conversion) => emit_conversion(buffer, conversion, reg(0), reg(1))
     AddAddress =>
@@ -3708,7 +3699,7 @@ fn emit_instruction(
       )
     Trap(reason) => {
       metadata_offset = buffer.position()
-      buffer.emit_word(0xD4200000U | (trap_brk_payload(reason) << 5))
+      buffer.emit_word(0xD4200000U | (reason.native_payload() << 5))
     }
     Return => {
       emit_epilogue(buffer, frame)

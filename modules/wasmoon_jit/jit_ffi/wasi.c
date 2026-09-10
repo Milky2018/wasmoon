@@ -31,6 +31,7 @@
 
 #include "moonbit.h"
 #include "jit_internal.h"
+#include "wasi_path_portability.h"
 
 // ============ WASI Error Codes ============
 #define WASI_ESUCCESS     0
@@ -1197,6 +1198,17 @@ static uint8_t mode_to_filetype(mode_t mode) {
 }
 #endif
 
+static uint64_t readonly_directory_base_rights(void) {
+    return WASI_RIGHT_PATH_OPEN | WASI_RIGHT_FD_READDIR | WASI_RIGHT_PATH_READLINK |
+        WASI_RIGHT_PATH_FILESTAT_GET | WASI_RIGHT_FD_FILESTAT_GET;
+}
+
+static uint64_t readonly_directory_inheriting_rights(void) {
+    return readonly_directory_base_rights() | WASI_RIGHT_FD_READ | WASI_RIGHT_FD_SEEK |
+        WASI_RIGHT_FD_TELL | WASI_RIGHT_FD_ADVISE | WASI_RIGHT_FD_FDSTAT_SET_FLAGS |
+        WASI_RIGHT_POLL_FD_READWRITE;
+}
+
 static uint64_t preopen_directory_base_rights(void) {
     return WASI_RIGHT_PATH_CREATE_DIRECTORY |
         WASI_RIGHT_PATH_CREATE_FILE |
@@ -1926,6 +1938,20 @@ static int64_t wasi_path_open_impl(
 #endif
 }
 
+// Resolution normalizes separators; preserve the guest's directory requirement
+// at native calls that otherwise could create or remove a non-directory leaf.
+static int preserve_trailing_slash(char **resolved, const char *guest) {
+    size_t guest_len = strlen(guest);
+    if (!guest_len || guest[guest_len - 1] != '/') return WASI_ESUCCESS;
+    size_t len = strlen(*resolved);
+    char *path = realloc(*resolved, len + 2);
+    if (!path) return WASI_ENOMEM;
+    path[len] = '/';
+    path[len + 1] = '\0';
+    *resolved = path;
+    return WASI_ESUCCESS;
+}
+
 // path_unlink_file: (fd, path, path_len) -> errno
 static int64_t wasi_path_unlink_file_impl(
     jit_context_t *ctx,
@@ -1955,8 +1981,13 @@ static int64_t wasi_path_unlink_file_impl(
 
     char *full_path = NULL;
     int path_errno = resolve_path_with_errno(ctx, (int)dir_fd, path, 0, &full_path);
+    if (path_errno == WASI_ESUCCESS)
+        path_errno = preserve_trailing_slash(&full_path, path);
     free(path);
-    if (path_errno != WASI_ESUCCESS) return path_errno;
+    if (path_errno != WASI_ESUCCESS) {
+        free(full_path);
+        return path_errno;
+    }
 
 #ifndef _WIN32
     int ret = unlink(full_path);
@@ -2546,7 +2577,25 @@ static int32_t wasi_fd_pwrite_impl(
         *(uint32_t *)(mem + nwritten_ptr_u) = 0;
         return WASI_ESUCCESS;
     }
-    ssize_t n = pwrite(native_fd, mem + buf_ptr, buf_len, offset);
+    ssize_t n;
+#if defined(__APPLE__)
+    // Darwin pwrite ignores O_APPEND. Match the Preview 1 append behavior
+    // already used by the interpreter, preserving the descriptor's cursor.
+    int open_flags = fcntl(native_fd, F_GETFL);
+    if (open_flags < 0) return errno_to_wasi(errno);
+    if (open_flags & O_APPEND) {
+        off_t saved = lseek(native_fd, 0, SEEK_CUR);
+        if (saved < 0) return errno_to_wasi(errno);
+        n = write(native_fd, mem + buf_ptr, buf_len);
+        int write_errno = errno;
+        off_t restored = lseek(native_fd, saved, SEEK_SET);
+        if (n < 0) return errno_to_wasi(write_errno);
+        if (restored < 0) return errno_to_wasi(errno);
+    } else
+#endif
+    {
+        n = pwrite(native_fd, mem + buf_ptr, buf_len, offset);
+    }
     if (n < 0) return errno_to_wasi(errno);
     *(uint32_t *)(mem + nwritten_ptr_u) = (uint32_t)n;
     return WASI_ESUCCESS;
@@ -2617,7 +2666,7 @@ static int32_t wasi_fd_readdir_impl(
 
     int native_fd = get_native_fd(ctx, fd);
     if (native_fd < 0) return WASI_EBADF;
-    int dir_fd = dup(native_fd);
+    int dir_fd = openat(native_fd, ".", O_RDONLY | O_DIRECTORY | O_CLOEXEC);
     if (dir_fd < 0) return errno_to_wasi(errno);
     dir = fdopendir(dir_fd);
     if (!dir) {
@@ -2834,9 +2883,11 @@ static int32_t wasi_path_readlink_impl(
     free(path_tmp);
     if (path_errno != WASI_ESUCCESS) return path_errno;
 
-    ssize_t n = readlink(full_path, (char *)(mem + buf_ptr_u), buf_len_u);
+    ssize_t n = wasmoon_wasi_readlinkat_portable(
+        AT_FDCWD, full_path, (char *)(mem + buf_ptr_u), buf_len_u);
+    int saved_errno = errno;
     free(full_path);
-    if (n < 0) return errno_to_wasi(errno);
+    if (n < 0) return errno_to_wasi(saved_errno);
 
     *(uint32_t *)(mem + bufused_ptr_u) = (uint32_t)n;
     return WASI_ESUCCESS;
@@ -2895,17 +2946,21 @@ static int32_t wasi_path_symlink_impl(
 
     char *full_new_path = NULL;
     int path_errno = resolve_path_with_errno(ctx, dir_fd, new_path_tmp, 0, &full_new_path);
+    if (path_errno == WASI_ESUCCESS)
+        path_errno = preserve_trailing_slash(&full_new_path, new_path_tmp);
     free(new_path_tmp);
     if (path_errno != WASI_ESUCCESS) {
+        free(full_new_path);
         free(old_path);
         return path_errno;
     }
 
-    int result = symlink(old_path, full_new_path);
+    int result = wasmoon_wasi_symlinkat_portable(old_path, AT_FDCWD, full_new_path);
+    int saved_errno = errno;
     free(old_path);
     free(full_new_path);
     if (result != 0) {
-        return errno_to_wasi(errno);
+        return errno_to_wasi(saved_errno);
     }
     return WASI_ESUCCESS;
 #else
@@ -2963,16 +3018,22 @@ static int32_t wasi_path_link_impl(
 
     char *full_old_path = NULL;
     int old_errno = resolve_path_with_errno(ctx, old_fd, old_path_tmp, 0, &full_old_path);
+    if (old_errno == WASI_ESUCCESS)
+        old_errno = preserve_trailing_slash(&full_old_path, old_path_tmp);
     free(old_path_tmp);
     if (old_errno != WASI_ESUCCESS) {
+        free(full_old_path);
         free(new_path_tmp);
         return old_errno;
     }
 
     char *full_new_path = NULL;
     int new_errno = resolve_path_with_errno(ctx, new_fd, new_path_tmp, 0, &full_new_path);
+    if (new_errno == WASI_ESUCCESS)
+        new_errno = preserve_trailing_slash(&full_new_path, new_path_tmp);
     free(new_path_tmp);
     if (new_errno != WASI_ESUCCESS) {
+        free(full_new_path);
         free(full_old_path);
         return new_errno;
     }
@@ -3722,7 +3783,7 @@ MOONBIT_FFI_EXPORT moonbit_bytes_t wasmoon_jit_take_wasi_stderr(int64_t ctx_ptr)
     return bytes;
 }
 
-MOONBIT_FFI_EXPORT void wasmoon_jit_add_preopen(int64_t ctx_ptr, int idx, const char *host_path, const char *guest_path) {
+static void add_preopen_with_mode(int64_t ctx_ptr, int idx, const char *host_path, const char *guest_path, int read_only) {
     jit_context_t *ctx = (jit_context_t *)ctx_ptr;
     if (!ctx || !ctx->preopen_paths || !ctx->preopen_fds || idx < 0 || idx >= ctx->preopen_count) return;
 
@@ -3739,13 +3800,17 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_add_preopen(int64_t ctx_ptr, int idx, const 
                 set_fd_rights(
                     ctx,
                     wasi_fd,
-                    preopen_directory_base_rights(),
-                    preopen_directory_inheriting_rights()
+                    read_only ? readonly_directory_base_rights() : preopen_directory_base_rights(),
+                    read_only ? readonly_directory_inheriting_rights() : preopen_directory_inheriting_rights()
                 );
             }
         }
     }
 #endif
+}
+
+MOONBIT_FFI_EXPORT void wasmoon_jit_add_preopen(int64_t ctx_ptr, int idx, const char *host_path, const char *guest_path) {
+    add_preopen_with_mode(ctx_ptr, idx, host_path, guest_path, 0);
 }
 
 MOONBIT_FFI_EXPORT void wasmoon_jit_set_wasi_args(int64_t ctx_ptr, int argc) {
@@ -3962,10 +4027,11 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_add_preopen_managed(
     void *jit_context,
     int idx,
     const char *host_path,
-    const char *guest_path
+    const char *guest_path,
+    int read_only
 ) {
-    wasmoon_jit_add_preopen(
-        MANAGED_CTX(jit_context), idx, host_path, guest_path
+    add_preopen_with_mode(
+        MANAGED_CTX(jit_context), idx, host_path, guest_path, read_only
     );
 }
 

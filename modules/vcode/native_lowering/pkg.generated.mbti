@@ -171,7 +171,7 @@ pub fn FloatUnaryOp::to_repr(Self) -> @debug.Repr
 pub struct HiddenSafepointAbi {
   // private fields
 }
-pub fn HiddenSafepointAbi::new(@native_types.ExternalSymbol, StackMapArgumentRoots) -> Self
+pub fn HiddenSafepointAbi::new(@native_types.ExternalSymbol, StackMapArgumentRoots, owner? : Int) -> Self
 
 pub(all) struct InstructionMetadata {
   source : @native_types.SourceLocation?

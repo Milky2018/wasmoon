@@ -674,7 +674,7 @@ test "lower pure if expression bodies into native MilkIR select" {
 }
 
 ///|
-test "lower pure if copysign and wide multiply expression bodies" {
+test "lower pure if copysign expression bodies" {
   let float_mod = @types.Module::simple(
     [I32, F32, F32],
     [F32],
@@ -688,31 +688,12 @@ test "lower pure if copysign and wide multiply expression bodies" {
     ],
     "select_copysign_body",
   )
-  let wide_mod = @types.Module::simple(
-    [I32, I64, I64],
-    [I64],
-    [
-      LocalGet(0),
-      If(Value(I64), [LocalGet(1), LocalGet(2), I64MulWideU], [
-        LocalGet(1),
-        LocalGet(2),
-        I64MulWideS,
-      ]),
-    ],
-    "select_wide_mul_body",
-  )
   let env = frontend_test_env()
   let float_func = lower_function(env, float_mod, 0)
-  let wide_func = lower_function(env, wide_mod, 0)
   inspect(float_func.print().contains("bor"), content="true")
   inspect(float_func.print().contains("select"), content="true")
   inspect(float_func.print().contains("TODO(wasm_frontend)"), content="false")
-  inspect(wide_func.print().contains("umulh"), content="true")
-  inspect(wide_func.print().contains("smulh"), content="true")
-  inspect(wide_func.print().contains("select"), content="true")
-  inspect(wide_func.print().contains("TODO(wasm_frontend)"), content="false")
   @wasm_milkir.verify_function(float_func)
-  @wasm_milkir.verify_function(wide_func)
 }
 
 ///|
@@ -784,6 +765,7 @@ test "lower memory operations through native MilkIR memory ops" {
       {
         limits: { min: 1, max: None, },
         is_memory64: false,
+        is_shared: false,
         page_size_log2: 16,
       },
     ],
@@ -828,7 +810,7 @@ test "lower copysign through native MilkIR bit operations" {
 test "lower wide i64 multiply through native MilkIR high-half ops" {
   let mod_ = @types.Module::simple(
     [I64, I64],
-    [I64, I64],
+    [I64, I64, I64, I64],
     [
       LocalGet(0),
       LocalGet(1),
@@ -842,6 +824,7 @@ test "lower wide i64 multiply through native MilkIR high-half ops" {
   let env = frontend_test_env()
   let func = lower_function(env, mod_, 0)
   let text = func.print()
+  inspect(text.contains("imul"), content="true")
   inspect(text.contains("umulh"), content="true")
   inspect(text.contains("smulh"), content="true")
   inspect(text.contains("TODO(wasm_frontend)"), content="false")
@@ -867,6 +850,7 @@ test "lower narrow memory operations through native MilkIR memory ops" {
       {
         limits: { min: 1, max: None, },
         is_memory64: false,
+        is_shared: false,
         page_size_log2: 16,
       },
     ],
@@ -912,6 +896,7 @@ test "lower memory grow size and bulk helpers as native helper calls" {
       {
         limits: { min: 1, max: None, },
         is_memory64: false,
+        is_shared: false,
         page_size_log2: 16,
       },
     ],
@@ -944,11 +929,13 @@ test "lower non-zero memory.size through native descriptor loads" {
       {
         limits: { min: 1, max: None, },
         is_memory64: false,
+        is_shared: false,
         page_size_log2: 16,
       },
       {
         limits: { min: 2, max: None, },
         is_memory64: false,
+        is_shared: false,
         page_size_log2: 16,
       },
     ],
@@ -982,11 +969,13 @@ test "lower non-zero memory load store with explicit bounds check" {
       {
         limits: { min: 1, max: None, },
         is_memory64: false,
+        is_shared: false,
         page_size_log2: 16,
       },
       {
         limits: { min: 1, max: None, },
         is_memory64: false,
+        is_shared: false,
         page_size_log2: 16,
       },
     ],
@@ -1012,7 +1001,12 @@ test "lower memory64 load with overflow-safe bounds check" {
       "memory64_load",
     ),
     memories: [
-      { limits: { min: 1, max: None, }, is_memory64: true, page_size_log2: 16, },
+      {
+        limits: { min: 1, max: None, },
+        is_memory64: true,
+        is_shared: false,
+        page_size_log2: 16,
+      },
     ],
   }
   let env = native_test_env()
@@ -1045,7 +1039,12 @@ test "lower memory64 narrow load store with overflow-safe bounds check" {
       "memory64_narrow_roundtrip",
     ),
     memories: [
-      { limits: { min: 1, max: None, }, is_memory64: true, page_size_log2: 16, },
+      {
+        limits: { min: 1, max: None, },
+        is_memory64: true,
+        is_shared: false,
+        page_size_log2: 16,
+      },
     ],
   }
   let env = native_test_env()
@@ -1077,6 +1076,7 @@ test "lower v128 load store through native memory path" {
       {
         limits: { min: 1, max: None, },
         is_memory64: false,
+        is_shared: false,
         page_size_log2: 16,
       },
     ],
@@ -1252,7 +1252,7 @@ test "unsupported structured branch reports label-stack capability" {
 }
 
 ///|
-test "unsupported memory64 bulk helper reports runtime ABI capability" {
+test "memory64 bulk helper uses the reusable runtime ABI" {
   let mod_ = {
     ..@types.Module::simple(
       [],
@@ -1261,23 +1261,20 @@ test "unsupported memory64 bulk helper reports runtime ABI capability" {
       "memory64_fill",
     ),
     memories: [
-      { limits: { min: 1, max: None, }, is_memory64: true, page_size_log2: 16, },
+      {
+        limits: { min: 1, max: None, },
+        is_memory64: true,
+        is_shared: false,
+        page_size_log2: 16,
+      },
     ],
   }
   let env = native_test_env()
-  try lower_function(env, mod_, 0) catch {
-    err => {
-      let msg = Repr(err).to_string()
-      inspect(
-        msg.contains(
-          "memory64 memory.fill requires a reusable runtime helper ABI",
-        ),
-        content="true",
-      )
-    }
-  } noraise {
-    _ => fail("expected unsupported native lowering")
-  }
+  let func = lower_function(env, mod_, 0)
+  inspect(
+    func.print().contains("call test.runtime.memory_fill"),
+    content="true",
+  )
 }
 
 ///|

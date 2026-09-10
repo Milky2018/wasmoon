@@ -16,6 +16,7 @@ pub(all) enum FuncOwner {
 ///|
 /// The store contains all global runtime state
 pub struct Store {
+  nan_canonicalization : Bool
   funcs : Array[FuncInst]
   func_types : Array[@types.FuncType] // Type of each function
   func_type_indices : Array[Int] // Original type index for structural comparison
@@ -55,6 +56,10 @@ pub struct Store {
   // Native invocation/fiber lifetimes belong to the Store, not a JIT module.
   native_execution : @wasmoon_jit.NativeExecutionState
   priv funcref_registry : StoreFuncrefRegistry
+  priv native_types : StoreTypeRegistry
+  priv native_exception_to_store : Map[Int64, Int]
+  priv store_exception_to_native : Map[Int, Int64]
+  priv guest_continuations : Array[GuestContinuationBody?]
   priv pinned_gc_roots : Array[(Int64, Array[@types.Value], Ref[Bool])]
   priv mut next_pinned_gc_roots_id : Int64
   priv mut instantiation : RollbackRegistrar?
@@ -130,8 +135,9 @@ fn c_heap_initial_capacity() -> Int {
 }
 
 ///|
-pub fn Store::Store() -> Store {
+pub fn Store::Store(nan_canonicalization? : Bool = false) -> Store {
   {
+    nan_canonicalization,
     funcs: [],
     func_types: [],
     func_type_indices: [],
@@ -155,6 +161,10 @@ pub fn Store::Store() -> Store {
     wasi_ctx_handle: 0,
     native_execution: NativeExecutionState(),
     funcref_registry: StoreFuncrefRegistry::new(),
+    native_types: StoreTypeRegistry::new(),
+    native_exception_to_store: Map([]),
+    store_exception_to_native: Map([]),
+    guest_continuations: [],
     pinned_gc_roots: [],
     next_pinned_gc_roots_id: 0L,
     instantiation: None,
@@ -164,9 +174,10 @@ pub fn Store::Store() -> Store {
 
 ///|
 /// Create a store with C heap enabled (for JIT mode)
-pub fn Store::with_c_heap() -> Store {
+pub fn Store::with_c_heap(nan_canonicalization? : Bool = false) -> Store {
   let initial_capacity = c_heap_initial_capacity()
   {
+    nan_canonicalization,
     funcs: [],
     func_types: [],
     func_type_indices: [],
@@ -190,6 +201,10 @@ pub fn Store::with_c_heap() -> Store {
     wasi_ctx_handle: 0,
     native_execution: NativeExecutionState(),
     funcref_registry: StoreFuncrefRegistry::new(),
+    native_types: StoreTypeRegistry::new(),
+    native_exception_to_store: Map([]),
+    store_exception_to_native: Map([]),
+    guest_continuations: [],
     pinned_gc_roots: [],
     next_pinned_gc_roots_id: 0L,
     instantiation: None,
@@ -208,12 +223,24 @@ pub fn Store::close(self : Store) -> Unit {
     return
   }
   self.closed.val = true
+  for entry in self.guest_continuations {
+    if entry is Some(body) {
+      (body.cancel)()
+    }
+  }
+  self.guest_continuations.clear()
   self.native_execution.seal()
   for roots in self.pinned_gc_roots {
     roots.2.val = false
   }
   self.pinned_gc_roots.clear()
   self.funcref_registry.clear()
+  self.native_types.representatives.clear()
+  self.native_types.mappings.clear()
+  self.native_types.parents.clear()
+  self.native_types.views.clear()
+  self.native_types.entries.clear()
+  self.native_types.heap_types.clear()
   self.funcs.clear()
   self.func_types.clear()
   self.func_type_indices.clear()
@@ -224,18 +251,25 @@ pub fn Store::close(self : Store) -> Unit {
     memory.close()
   }
   self.mems.clear()
+  for global in self.globals {
+    global.close()
+  }
   self.globals.clear()
   self.tags.clear()
   self.tag_type_indices.clear()
   self.tag_owners.clear()
+  self.native_exception_to_store.clear()
+  self.store_exception_to_native.clear()
   self.exns.clear()
   self.heap.clear()
   if self.c_heap is Some(heap) {
     heap.free()
     self.c_heap = None
   }
-  self.module_types.clear()
-  self.module_rec_groups.clear()
+  // These arrays are borrowed from the parsed module and may be reused by
+  // other stores. Closing a store must only drop its own references.
+  self.module_types = []
+  self.module_rec_groups = []
   self.wrapped_externs.clear()
   for owner in self.jit_table_owners {
     match owner {
@@ -481,6 +515,18 @@ pub fn Store::alloc_table(
   use_jit? : Bool = true,
 ) -> Int raise RuntimeError {
   self.ensure_open()
+  let owner = if use_jit {
+    match
+      @wasmoon_jit.JITTableOwner::try_alloc(
+        table.size(),
+        table.get_limits64().1,
+      ) {
+      Some(owner) => Some(owner)
+      None => raise TableAllocationFailed
+    }
+  } else {
+    None
+  }
   let idx = self.tables.length()
   self.on_instantiation_rollback(fn() {
     if idx < self.jit_table_owners.length() {
@@ -495,29 +541,15 @@ pub fn Store::alloc_table(
   })
   self.tables.push(table)
 
-  // Create corresponding JIT table (always enabled for cross-module sharing)
-  if use_jit {
-    let (min, max) = table.get_limits()
-    match @wasmoon_jit.JITTableOwner::try_alloc(min, max) {
-      Some(owner) => {
-        self.jit_tables.push(Some(owner.table()))
-        self.jit_table_owners.push(Some(owner))
-      }
-      None => {
-        self.jit_tables.push(None)
-        self.jit_table_owners.push(None)
-      }
-    }
-  } else {
-    self.jit_tables.push(None)
-    self.jit_table_owners.push(None)
-  }
+  self.jit_tables.push(owner.map(fn(owner) { owner.table() }))
+  self.jit_table_owners.push(owner)
   idx
 }
 
 ///|
 pub fn Store::alloc_mem(self : Store, mem : Memory) -> Int raise RuntimeError {
   self.ensure_open()
+  mem.require_desc_ptr() |> ignore
   let idx = self.mems.length()
   self.on_instantiation_rollback(fn() {
     if idx < self.mems.length() {
@@ -618,11 +650,12 @@ fn Store::get_struct_field_type(
   self : Store,
   type_idx : Int,
   field_idx : Int,
+  reference : Int,
 ) -> @types.ValueType {
-  if type_idx < 0 || type_idx >= self.module_types.length() {
-    return I64 // Fallback
+  guard self.gc_type_definition(reference, type_idx) is Some(definition) else {
+    return I64
   }
-  match self.module_types[type_idx].composite {
+  match definition.composite {
     Struct(st) =>
       if field_idx >= 0 && field_idx < st.fields.length() {
         match st.fields[field_idx].storage_type {
@@ -638,11 +671,15 @@ fn Store::get_struct_field_type(
 
 ///|
 /// Get the element type of an array from module_types
-fn Store::get_array_elem_type(self : Store, type_idx : Int) -> @types.ValueType {
-  if type_idx < 0 || type_idx >= self.module_types.length() {
+fn Store::get_array_elem_type(
+  self : Store,
+  type_idx : Int,
+  reference : Int,
+) -> @types.ValueType {
+  guard self.gc_type_definition(reference, type_idx) is Some(definition) else {
     return I64
   }
-  match self.module_types[type_idx].composite {
+  match definition.composite {
     Array(at) =>
       match at.element.storage_type {
         Val(vt) => vt
@@ -658,17 +695,22 @@ pub fn Store::alloc_struct(
   self : Store,
   type_idx : Int,
   fields : Array[@types.Value],
+  instance? : ModuleInstance,
 ) -> Int raise RuntimeError {
   self.ensure_open()
-  match self.c_heap {
-    Some(heap) =>
-      heap.alloc_struct(type_idx, fields) catch {
+  let reference = match self.c_heap {
+    Some(heap) => {
+      let encoded = fields.map(value => self.encode_heap_exception(value))
+      heap.alloc_struct(type_idx, encoded) catch {
         OutOfBoundsArrayAccess => raise OutOfBoundsArrayAccess
         NullReference => raise NullReference
         OutOfMemory => raise OutOfMemory
       }
+    }
     None => self.heap.alloc_struct(type_idx, fields)
   }
+  self.record_gc_type(reference, instance, type_idx)
+  reference
 }
 
 ///|
@@ -677,17 +719,22 @@ pub fn Store::alloc_array(
   self : Store,
   type_idx : Int,
   elements : Array[@types.Value],
+  instance? : ModuleInstance,
 ) -> Int raise RuntimeError {
   self.ensure_open()
-  match self.c_heap {
-    Some(heap) =>
-      heap.alloc_array_from_values(type_idx, elements) catch {
+  let reference = match self.c_heap {
+    Some(heap) => {
+      let encoded = elements.map(value => self.encode_heap_exception(value))
+      heap.alloc_array_from_values(type_idx, encoded) catch {
         OutOfBoundsArrayAccess => raise OutOfBoundsArrayAccess
         NullReference => raise NullReference
         OutOfMemory => raise OutOfMemory
       }
+    }
     None => self.heap.alloc_array(type_idx, elements)
   }
+  self.record_gc_type(reference, instance, type_idx)
+  reference
 }
 
 ///|
@@ -700,8 +747,12 @@ pub fn Store::struct_get(
   match self.c_heap {
     Some(heap) => {
       let type_idx = heap.get_type_idx(struct_idx)
-      let field_type = self.get_struct_field_type(type_idx, field_idx)
-      heap.struct_get(struct_idx, field_idx, field_type)
+      let field_type = self.get_struct_field_type(
+        type_idx, field_idx, struct_idx,
+      )
+      self.decode_heap_exception(
+        heap.struct_get(struct_idx, field_idx, field_type),
+      )
     }
     None => self.heap.struct_get(struct_idx, field_idx)
   }
@@ -717,7 +768,8 @@ pub fn Store::struct_set(
 ) -> Unit raise RuntimeError {
   self.ensure_open()
   match self.c_heap {
-    Some(heap) => heap.struct_set(struct_idx, field_idx, value)
+    Some(heap) =>
+      heap.struct_set(struct_idx, field_idx, self.encode_heap_exception(value))
     None => self.heap.struct_set(struct_idx, field_idx, value)
   }
 }
@@ -744,12 +796,13 @@ pub fn Store::array_get(
   match self.c_heap {
     Some(heap) => {
       let type_idx = heap.get_type_idx(array_idx)
-      let elem_type = self.get_array_elem_type(type_idx)
-      heap.array_get(array_idx, elem_idx, elem_type) catch {
+      let elem_type = self.get_array_elem_type(type_idx, array_idx)
+      let value = heap.array_get(array_idx, elem_idx, elem_type) catch {
         OutOfBoundsArrayAccess => raise OutOfBoundsArrayAccess
         NullReference => raise NullReference
         OutOfMemory => raise OutOfMemory
       }
+      self.decode_heap_exception(value)
     }
     None => self.heap.array_get(array_idx, elem_idx)
   }
@@ -765,12 +818,14 @@ pub fn Store::array_set(
 ) -> Unit raise RuntimeError {
   self.ensure_open()
   match self.c_heap {
-    Some(heap) =>
-      heap.array_set(array_idx, elem_idx, value) catch {
+    Some(heap) => {
+      let encoded = self.encode_heap_exception(value)
+      heap.array_set(array_idx, elem_idx, encoded) catch {
         OutOfBoundsArrayAccess => raise OutOfBoundsArrayAccess
         NullReference => raise NullReference
         OutOfMemory => raise OutOfMemory
       }
+    }
     None => self.heap.array_set(array_idx, elem_idx, value)
   }
 }
@@ -786,12 +841,14 @@ pub fn Store::array_fill(
 ) -> Unit raise RuntimeError {
   self.ensure_open()
   match self.c_heap {
-    Some(heap) =>
-      heap.array_fill(array_idx, offset, value, count) catch {
+    Some(heap) => {
+      let encoded = self.encode_heap_exception(value)
+      heap.array_fill(array_idx, offset, encoded, count) catch {
         OutOfBoundsArrayAccess => raise OutOfBoundsArrayAccess
         NullReference => raise NullReference
         OutOfMemory => raise OutOfMemory
       }
+    }
     None => self.heap.array_fill(array_idx, offset, value, count)
   }
 }
@@ -907,7 +964,19 @@ pub fn Store::get_func_canonical_type_idx(self : Store, func_addr : Int) -> Int 
   }
   let owner_idx = match self.func_owners[func_addr] {
     Module(idx) => idx
-    _ => return -1
+    HostFunc => {
+      // Host function types are declared in the importing module's type graph.
+      for instance in self.instances {
+        for index, address in instance.func_addrs {
+          if address == func_addr && index < instance.func_type_indices.length() {
+            let type_index = instance.func_type_indices[index]
+            return self.native_types.register(instance)[type_index]
+          }
+        }
+      }
+      return -1
+    }
+    Unowned => return -1
   }
   if owner_idx >= self.instances.length() {
     return -1
@@ -917,7 +986,7 @@ pub fn Store::get_func_canonical_type_idx(self : Store, func_addr : Int) -> Int 
   if type_idx < 0 || type_idx >= instance.canonical_type_indices.length() {
     return -1
   }
-  instance.canonical_type_indices[type_idx]
+  self.native_types.register(instance)[type_idx]
 }
 
 ///|
@@ -1123,8 +1192,9 @@ pub fn Store::collect_roots(
 
   // Collect from globals
   for global in self.globals {
-    if is_gc_ref(global.value) {
-      roots.push(global.value)
+    let value = global.root()
+    if is_gc_ref(value) {
+      roots.push(value)
     }
   }
 
@@ -1134,6 +1204,17 @@ pub fn Store::collect_roots(
       let value = table.elements[i]
       if is_gc_ref(value) {
         roots.push(value)
+      }
+    }
+  }
+
+  // Passive element values retain their identity until the segment is dropped.
+  for instance in self.instances {
+    for i, values in instance.elem_values {
+      if !instance.dropped_elems[i] {
+        for value in values {
+          roots.push(value)
+        }
       }
     }
   }
@@ -1176,19 +1257,16 @@ pub fn Store::collect_roots(
 }
 
 ///|
-/// Perform garbage collection on the C heap
-/// Returns the number of objects collected, or 0 if no C heap is enabled
-/// The additional_roots parameter allows passing in roots from the interpreter stack
+/// Perform garbage collection using all Store roots and caller-provided roots.
+/// Returns the number of objects collected on either heap representation.
 pub fn Store::collect_garbage(
   self : Store,
   additional_roots? : Array[@types.Value] = [],
 ) -> Int {
+  let roots = self.collect_roots(additional_roots)
   match self.c_heap {
-    Some(heap) => {
-      let roots = self.collect_roots(additional_roots)
-      heap.collect(roots)
-    }
-    None => 0 // No C heap, nothing to collect
+    Some(heap) => heap.collect(roots)
+    None => self.heap.collect(roots)
   }
 }
 
@@ -1233,4 +1311,17 @@ pub fn Store::get_gc_stats(self : Store) -> (Int64, Int64, Int, Int, Int) {
       )
     None => (0L, 0L, 0, 0, 0)
   }
+}
+
+///|
+/// Import shared memory with ownership independent of the source Store.
+/// Closing either Store invalidates only its own Memory handle.
+pub fn Store::alloc_shared_mem(
+  self : Store,
+  memory : Memory,
+) -> Int raise RuntimeError {
+  self.ensure_open()
+  let owned = memory.share()
+  errdefer owned.close()
+  self.alloc_mem(owned)
 }

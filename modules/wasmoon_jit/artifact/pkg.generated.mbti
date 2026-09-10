@@ -8,7 +8,7 @@ import {
 }
 
 // Values
-pub const FORMAT_VERSION : Int = 9
+pub const FORMAT_VERSION : Int = 10
 
 pub fn decode(Bytes, limits? : DecodeLimits) -> Artifact raise ArtifactDecodeError
 
@@ -80,6 +80,7 @@ pub(all) struct CompilationPolicy {
   optimization_level : OptimizationLevel
   code_model : CodeModel
   call_binding : CallBinding
+  nan_canonicalization : Bool
   cancellation_safepoints : Bool
   debug_info : Bool
 } derive(Eq, @debug.Debug)

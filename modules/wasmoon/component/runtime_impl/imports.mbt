@@ -317,12 +317,17 @@ fn materialize_outer_type(
   source_index : Int,
   source_types : Array[TypeDef?],
   dest_types : Array[TypeDef?],
+  declared_slot : Int,
 ) -> Unit raise ComponentRuntimeError {
-  let remapped : Map[Int, Int] = Map([])
-  clone_materialized_type_index(
-    source_index, source_types, dest_types, remapped,
-  )
-  |> ignore
+  if source_index < 0 || source_index >= source_types.length() {
+    raise InvalidTypeIndex(source_index)
+  }
+  let remapped : Map[Int, Int] = Map([(source_index, declared_slot)])
+  if source_types[source_index] is Some(type_def) {
+    dest_types[declared_slot] = Some(
+      clone_materialized_type_def(type_def, source_types, dest_types, remapped),
+    )
+  }
 }
 
 ///|
@@ -594,9 +599,23 @@ fn validate_instance_import_type(
   match types[tyidx] {
     Some(InstanceTypeEmpty) => ()
     Some(InstanceType(decls)) => {
-      // Instance type decls have their own local type space; we interpret a
-      // minimal subset needed for resource type bounds and (alias outer ...).
-      let local_types : Array[TypeDef?] = []
+      // Reserve binary-declared slots before importing dependency graphs.
+      let mut declared_count = 0
+      for decl in decls {
+        match decl {
+          Type(_)
+          | AliasOuter(0x03, _, _)
+          | AliasInstanceExport(0x03, _, _)
+          | Export(_, _, Type(_)) => declared_count += 1
+          _ => ()
+        }
+      }
+      let local_types : Array[TypeDef?] = Array::make(declared_count, None)
+      let next_declared = Ref(0)
+      fn append_local(type_def : TypeDef?) -> Unit {
+        local_types[next_declared.val] = type_def
+        next_declared.val += 1
+      }
       let local_core_types : Array[Bytes] = []
       for d in decls {
         match d {
@@ -615,7 +634,13 @@ fn validate_instance_import_type(
               if idx < 0 || idx >= outer.types.length() {
                 raise InvalidTypeIndex(idx)
               }
-              materialize_outer_type(idx, outer.types, local_types)
+              materialize_outer_type(
+                idx,
+                outer.types,
+                local_types,
+                next_declared.val,
+              )
+              next_declared.val += 1
             } else if (kind & 0x100) != 0 {
               if idx < 0 || idx >= outer.core_types.length() {
                 raise InvalidCoreTypeIndex(idx)
@@ -629,21 +654,21 @@ fn validate_instance_import_type(
             if kind == 0x03 {
               // Not needed for current component-spec coverage; keep the local
               // type space aligned for later indices.
-              local_types.push(None)
+              append_local(None)
             }
-          Type(t) => local_types.push(Some(t))
+          Type(t) => append_local(Some(t))
           Export(name, _attributes, desc) => {
             // Instance type exports of `type` also declare a slot in the local
             // type index space, which later decls can reference (e.g. `own 0`).
             let type_slot : Int? = match desc {
-              Type(_) => Some(local_types.length())
+              Type(_) => Some(next_declared.val)
               _ => None
             }
             match desc {
               Type(bound) =>
                 match bound {
                   SubResource =>
-                    local_types.push(
+                    append_local(
                       Some(ResourceType(-1, 0x7f, None, HostDefined)),
                     )
                   Eq(ti) => {
@@ -654,7 +679,7 @@ fn validate_instance_import_type(
                     } else {
                       None
                     }
-                    local_types.push(aliased)
+                    append_local(aliased)
                   }
                 }
               _ => ()

@@ -1215,7 +1215,7 @@ fn ExecContext::exec_simd(
       }
       let buf : @buffer.Buffer = Buffer(size_hint=16)
       for i in 0..<16 {
-        buf.write_byte(mem.load_byte(effective_addr.to_int() + i))
+        buf.write_byte(mem.load_byte_at(effective_addr + i.to_int64()))
       }
       self.stack.push(V128(buf.contents()))
     }
@@ -1233,7 +1233,7 @@ fn ExecContext::exec_simd(
         raise @runtime.OutOfBoundsMemoryAccess
       }
       for i in 0..<16 {
-        mem.store_byte(effective_addr.to_int() + i, v[i])
+        mem.store_byte_at(effective_addr + i.to_int64(), v[i])
       }
     }
     V128Load8Splat(memidx, _align, offset) => {
@@ -1248,7 +1248,7 @@ fn ExecContext::exec_simd(
       if is_mem_oob(effective_addr, 1L, mem) {
         raise @runtime.OutOfBoundsMemoryAccess
       }
-      let b = mem.load_byte(effective_addr.to_int())
+      let b = mem.load_byte_at(effective_addr)
       let buf : @buffer.Buffer = Buffer(size_hint=16)
       for _ in 0..<16 {
         buf.write_byte(b)
@@ -1267,7 +1267,7 @@ fn ExecContext::exec_simd(
       if is_mem_oob(effective_addr, 2L, mem) {
         raise @runtime.OutOfBoundsMemoryAccess
       }
-      let v = mem.load_i32_16u(effective_addr.to_int())
+      let v = mem.load_i32_16u_at(effective_addr)
       let buf : @buffer.Buffer = Buffer(size_hint=16)
       for _ in 0..<8 {
         buf.write_byte(v.to_byte())
@@ -1287,7 +1287,7 @@ fn ExecContext::exec_simd(
       if is_mem_oob(effective_addr, 4L, mem) {
         raise @runtime.OutOfBoundsMemoryAccess
       }
-      let v = mem.load_i32(effective_addr.to_int())
+      let v = mem.load_i32_at(effective_addr)
       let buf : @buffer.Buffer = Buffer(size_hint=16)
       for _ in 0..<4 {
         write_i32_lane(buf, v)
@@ -1306,7 +1306,7 @@ fn ExecContext::exec_simd(
       if is_mem_oob(effective_addr, 8L, mem) {
         raise @runtime.OutOfBoundsMemoryAccess
       }
-      let v = mem.load_i64(effective_addr.to_int())
+      let v = mem.load_i64_at(effective_addr)
       let buf : @buffer.Buffer = Buffer(size_hint=16)
       for _ in 0..<2 {
         write_i64_lane(buf, v)
@@ -1325,7 +1325,7 @@ fn ExecContext::exec_simd(
       if is_mem_oob(effective_addr, 4L, mem) {
         raise @runtime.OutOfBoundsMemoryAccess
       }
-      let v = mem.load_i32(effective_addr.to_int())
+      let v = mem.load_i32_at(effective_addr)
       let buf : @buffer.Buffer = Buffer(size_hint=16)
       write_i32_lane(buf, v)
       for _ in 0..<12 {
@@ -1345,7 +1345,7 @@ fn ExecContext::exec_simd(
       if is_mem_oob(effective_addr, 8L, mem) {
         raise @runtime.OutOfBoundsMemoryAccess
       }
-      let v = mem.load_i64(effective_addr.to_int())
+      let v = mem.load_i64_at(effective_addr)
       let buf : @buffer.Buffer = Buffer(size_hint=16)
       write_i64_lane(buf, v)
       for _ in 0..<8 {
@@ -1367,7 +1367,7 @@ fn ExecContext::exec_simd(
       }
       let buf : @buffer.Buffer = Buffer(size_hint=16)
       for i in 0..<8 {
-        let b = mem.load_byte(effective_addr.to_int() + i)
+        let b = mem.load_byte_at(effective_addr + i.to_int64())
         let v = sign_i8(b.to_int())
         buf.write_byte((v & 0xFF).to_byte())
         buf.write_byte(((v >> 8) & 0xFF).to_byte())
@@ -1388,7 +1388,7 @@ fn ExecContext::exec_simd(
       }
       let buf : @buffer.Buffer = Buffer(size_hint=16)
       for i in 0..<8 {
-        let b = mem.load_byte(effective_addr.to_int() + i)
+        let b = mem.load_byte_at(effective_addr + i.to_int64())
         buf.write_byte(b)
         buf.write_byte(b'\x00')
       }
@@ -1408,7 +1408,7 @@ fn ExecContext::exec_simd(
       }
       let buf : @buffer.Buffer = Buffer(size_hint=16)
       for i in 0..<4 {
-        let h = mem.load_i32_16s(effective_addr.to_int() + i * 2)
+        let h = mem.load_i32_16s_at(effective_addr + i.to_int64() * 2L)
         write_i32_lane(buf, h)
       }
       self.stack.push(V128(buf.contents()))
@@ -1427,7 +1427,7 @@ fn ExecContext::exec_simd(
       }
       let buf : @buffer.Buffer = Buffer(size_hint=16)
       for i in 0..<4 {
-        let h = mem.load_i32_16u(effective_addr.to_int() + i * 2)
+        let h = mem.load_i32_16u_at(effective_addr + i.to_int64() * 2L)
         write_i32_lane(buf, h)
       }
       self.stack.push(V128(buf.contents()))
@@ -1446,7 +1446,7 @@ fn ExecContext::exec_simd(
       }
       let buf : @buffer.Buffer = Buffer(size_hint=16)
       for i in 0..<2 {
-        let w = mem.load_i32(effective_addr.to_int() + i * 4)
+        let w = mem.load_i32_at(effective_addr + i.to_int64() * 4L)
         write_i64_lane(buf, w.to_int64())
       }
       self.stack.push(V128(buf.contents()))
@@ -1465,7 +1465,7 @@ fn ExecContext::exec_simd(
       }
       let buf : @buffer.Buffer = Buffer(size_hint=16)
       for i in 0..<2 {
-        let w = mem.load_i32(effective_addr.to_int() + i * 4)
+        let w = mem.load_i32_at(effective_addr + i.to_int64() * 4L)
         write_i64_lane(buf, w.reinterpret_as_uint().to_int64())
       }
       self.stack.push(V128(buf.contents()))
@@ -1483,7 +1483,7 @@ fn ExecContext::exec_simd(
       if is_mem_oob(effective_addr, 1L, mem) {
         raise @runtime.OutOfBoundsMemoryAccess
       }
-      let b = mem.load_byte(effective_addr.to_int())
+      let b = mem.load_byte_at(effective_addr)
       let result = v128_replace_i8(v128, lane, b)
       self.stack.push(V128(result))
     }
@@ -1500,7 +1500,7 @@ fn ExecContext::exec_simd(
       if is_mem_oob(effective_addr, 2L, mem) {
         raise @runtime.OutOfBoundsMemoryAccess
       }
-      let h = mem.load_i32_16u(effective_addr.to_int())
+      let h = mem.load_i32_16u_at(effective_addr)
       let result = v128_replace_i16(v128, lane, h)
       self.stack.push(V128(result))
     }
@@ -1517,7 +1517,7 @@ fn ExecContext::exec_simd(
       if is_mem_oob(effective_addr, 4L, mem) {
         raise @runtime.OutOfBoundsMemoryAccess
       }
-      let w = mem.load_i32(effective_addr.to_int())
+      let w = mem.load_i32_at(effective_addr)
       let result = v128_replace_i32(v128, lane, w)
       self.stack.push(V128(result))
     }
@@ -1534,7 +1534,7 @@ fn ExecContext::exec_simd(
       if is_mem_oob(effective_addr, 8L, mem) {
         raise @runtime.OutOfBoundsMemoryAccess
       }
-      let d = mem.load_i64(effective_addr.to_int())
+      let d = mem.load_i64_at(effective_addr)
       let result = v128_replace_i64(v128, lane, d)
       self.stack.push(V128(result))
     }
@@ -1551,7 +1551,7 @@ fn ExecContext::exec_simd(
       if is_mem_oob(effective_addr, 1L, mem) {
         raise @runtime.OutOfBoundsMemoryAccess
       }
-      mem.store_byte(effective_addr.to_int(), v128[lane])
+      mem.store_byte_at(effective_addr, v128[lane])
     }
     V128Store16Lane(memidx, _align, offset, lane) => {
       let v128 = self.stack.pop_v128()
@@ -1567,7 +1567,7 @@ fn ExecContext::exec_simd(
         raise @runtime.OutOfBoundsMemoryAccess
       }
       let v = get_i16_lane(v128, lane)
-      mem.store_i32_16(effective_addr.to_int(), v)
+      mem.store_i32_16_at(effective_addr, v)
     }
     V128Store32Lane(memidx, _align, offset, lane) => {
       let v128 = self.stack.pop_v128()
@@ -1583,7 +1583,7 @@ fn ExecContext::exec_simd(
         raise @runtime.OutOfBoundsMemoryAccess
       }
       let v = get_i32_lane(v128, lane)
-      mem.store_i32(effective_addr.to_int(), v)
+      mem.store_i32_at(effective_addr, v)
     }
     V128Store64Lane(memidx, _align, offset, lane) => {
       let v128 = self.stack.pop_v128()
@@ -1599,7 +1599,7 @@ fn ExecContext::exec_simd(
         raise @runtime.OutOfBoundsMemoryAccess
       }
       let v = get_i64_lane(v128, lane)
-      mem.store_i64(effective_addr.to_int(), v)
+      mem.store_i64_at(effective_addr, v)
     }
 
     // =========================================

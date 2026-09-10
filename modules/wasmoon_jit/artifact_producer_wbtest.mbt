@@ -6,6 +6,7 @@ fn artifact_wbtest_manifest(
     optimization_level: O2,
     code_model: Small,
     call_binding: DirectBody,
+    nan_canonicalization: false,
     cancellation_safepoints: true,
     debug_info: false,
   }
@@ -125,7 +126,7 @@ test "artifact producer preserves symbolic imported and internal code targets" {
     content=(
       #|{
       #|  manifest: {
-      #|    format_version: 9,
+      #|    format_version: 10,
       #|    target: {
       #|      architecture: X64,
       #|      operating_system_abi: MacOS,
@@ -133,8 +134,8 @@ test "artifact producer preserves symbolic imported and internal code targets" {
       #|      pointer_width: Bits64,
       #|    },
       #|    required_cpu_features: [],
-      #|    jit_abi_version: 3,
-      #|    codegen_revision: "direct-vcode-1",
+      #|    jit_abi_version: 6,
+      #|    codegen_revision: "direct-vcode-8",
       #|    module_identity: {
       #|      name: "artifact-producer",
       #|      source_digest: sha256:211dcf04280f2ac1d686baab63a361ea45dd13543dac493b14e3af963860a86c,
@@ -144,6 +145,7 @@ test "artifact producer preserves symbolic imported and internal code targets" {
       #|      optimization_level: O2,
       #|      code_model: Small,
       #|      call_binding: DirectBody,
+      #|      nan_canonicalization: false,
       #|      cancellation_safepoints: true,
       #|      debug_info: false,
       #|    },

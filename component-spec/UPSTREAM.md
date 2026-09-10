@@ -10,6 +10,9 @@ Notes:
 - `upstream/` is imported byte-for-byte for Wasmoon validation and runtime
   coverage. `SNAPSHOT.json` pins every imported path and SHA-256.
 - `suites/` is local metadata and is not part of the upstream tree.
+- `corrections/` and `CORRECTIONS.json` are local, explicitly documented test
+  corrections. They do not modify the imported tree. Their source hashes must
+  still match after a sync; review them when updating the upstream snapshot.
 - The upstream repository licenses files under Apache-2.0 unless a subdirectory
   has its own LICENSE. The Apache-2.0 text is copied to `LICENSE-APACHE`.
 - Upstream folded the former tool-specific test directories into the functional

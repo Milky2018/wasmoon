@@ -40,7 +40,7 @@ fn Parser::parse_type_def(
   } else {
     (true, [], false) // Default: final type without supertypes
   }
-  // Handle different type definition kinds: func, struct, array
+  // Parse the composite type after its optional subtype header.
   let composite = match self.current.token {
     Keyword("func") => {
       self.advance() // skip "func"
@@ -53,6 +53,12 @@ fn Parser::parse_type_def(
       let st = self.parse_struct_type(type_idx)
       self.expect_rparen() // close struct
       Struct(st)
+    }
+    Keyword("cont") => {
+      self.advance()
+      let function_type = self.parse_type_idx()
+      self.expect_rparen()
+      Cont(function_type)
     }
     Keyword("array") => {
       self.advance() // skip "array"
@@ -224,6 +230,22 @@ fn Parser::parse_heap_type(
         RefArray(-1)
       }
     }
+    Keyword("cont") => {
+      self.advance()
+      if is_nullable {
+        ContRef
+      } else {
+        RefCont
+      }
+    }
+    Keyword("nocont") => {
+      self.advance()
+      if is_nullable {
+        NullContRef
+      } else {
+        RefNoCont
+      }
+    }
     Keyword("exn") => {
       self.advance()
       ExnRef
@@ -305,29 +327,6 @@ fn Parser::parse_field_types(
         self.field_names.get(type_idx) is Some(names) {
         names.set(name, fields.length())
       }
-      // Check for (mut ...) first - this only applies to single field
-      if self.current.token == LParen {
-        self.advance()
-        if self.current.token == Keyword("mut") {
-          self.advance()
-          let storage_type = self.parse_storage_type()
-          self.expect_rparen() // close mut
-          fields.push({ storage_type, mutable: true, })
-          self.expect_rparen() // close field
-          return
-        } else {
-          // Not mut, it's a storage type like (ref ...), parse it but continue for more
-          let storage_type = self.parse_storage_type_after_lparen()
-          fields.push({ storage_type, mutable: false, })
-          // Continue parsing more types if any
-          while self.current.token != RParen {
-            let storage_type = self.parse_storage_type()
-            fields.push({ storage_type, mutable: false, })
-          }
-          self.expect_rparen() // close field
-          return
-        }
-      }
       // Parse one or more storage types (abbreviated form)
       // Can include (mut <valtype>) for mutable fields
       while self.current.token != RParen {
@@ -385,6 +384,7 @@ fn placeholder_subtype_for_rec_kind(kind : Int) -> @types.SubType {
       @types.SubType::simple(
         Array({ element: { storage_type: Val(I32), mutable: false, }, }),
       )
+    3 => @types.SubType::simple(Cont(0))
     // func (default)
     _ => @types.SubType::simple(Func({ params: [], results: [], }))
   }
@@ -392,7 +392,7 @@ fn placeholder_subtype_for_rec_kind(kind : Int) -> @types.SubType {
 
 ///|
 /// Peek the composite kind for a single `(type ...)` body.
-/// Returns: 0=func, 1=struct, 2=array.
+/// Returns: 0=func, 1=struct, 2=array, 3=cont.
 fn Parser::peek_rec_type_kind(self : Parser) -> Int raise WatError {
   // Save lexer state
   let saved_pos = self.lexer.pos
@@ -409,6 +409,7 @@ fn Parser::peek_rec_type_kind(self : Parser) -> Int raise WatError {
       Keyword("func") => kind = 0
       Keyword("struct") => kind = 1
       Keyword("array") => kind = 2
+      Keyword("cont") => kind = 3
       Keyword("sub") => {
         self.advance()
         if self.current.token == Keyword("final") {
@@ -426,6 +427,7 @@ fn Parser::peek_rec_type_kind(self : Parser) -> Int raise WatError {
             Keyword("func") => kind = 0
             Keyword("struct") => kind = 1
             Keyword("array") => kind = 2
+            Keyword("cont") => kind = 3
             _ => ()
           }
         }
@@ -1081,6 +1083,12 @@ fn Parser::get_typed_ref(
   // Check if we have type info for this index
   if type_idx >= 0 && type_idx < self.types.length() {
     match self.types[type_idx].composite {
+      Cont(_) =>
+        if is_nullable {
+          RefNullContTyped(type_idx)
+        } else {
+          RefContTyped(type_idx)
+        }
       Struct(_) =>
         if is_nullable {
           RefNullStruct(type_idx)
@@ -1179,6 +1187,22 @@ fn Parser::parse_ref_type(self : Parser) -> @types.ValueType raise WatError {
             RefArray(-1)
           }
         }
+        Keyword("cont") => {
+          self.advance()
+          if is_nullable {
+            ContRef
+          } else {
+            RefCont
+          }
+        }
+        Keyword("nocont") => {
+          self.advance()
+          if is_nullable {
+            NullContRef
+          } else {
+            RefNoCont
+          }
+        }
         Keyword("none") => {
           self.advance()
           RefNone // bottom type (always non-null when specified as ref none)
@@ -1214,6 +1238,14 @@ fn Parser::parse_ref_type(self : Parser) -> @types.ValueType raise WatError {
     Keyword("any") | Keyword("anyref") => {
       self.advance()
       AnyRef
+    }
+    Keyword("cont") | Keyword("contref") => {
+      self.advance()
+      ContRef
+    }
+    Keyword("nocont") | Keyword("nullcontref") => {
+      self.advance()
+      NullContRef
     }
     Keyword("exn") | Keyword("exnref") => {
       self.advance()
@@ -1252,6 +1284,10 @@ fn Parser::parse_ref_type(self : Parser) -> @types.ValueType raise WatError {
       self.advance()
       RefNullEq
     }
+    Number(_) => {
+      let type_idx = self.parse_u32()
+      self.get_typed_ref(type_idx, true)
+    }
     Id(name) => {
       // Type index like $t - resolve to typed reference
       let type_idx = match self.type_names.get(name) {
@@ -1285,5 +1321,27 @@ fn Parser::parse_label_idx(self : Parser) -> Int raise WatError {
         None => raise UndefinedIdentifier("label $\{name}", self.loc())
       }
     _ => raise UnexpectedToken("expected label index", self.loc())
+  }
+}
+
+///|
+/// Preserve explicit nullability even for bottom heap types whose compact
+/// ValueType representation is shared by nullable and non-nullable targets.
+fn Parser::parse_cast_type(
+  self : Parser,
+) -> (@types.ValueType, Bool) raise WatError {
+  if self.current.token == LParen {
+    self.advance()
+    self.expect_keyword("ref")
+    let nullable = self.current.token == Keyword("null")
+    if nullable {
+      self.advance()
+    }
+    let type_ = self.parse_heap_type(nullable)
+    self.expect_rparen()
+    (type_, nullable)
+  } else {
+    let type_ = self.parse_value_type()
+    (type_, type_.is_nullable())
   }
 }

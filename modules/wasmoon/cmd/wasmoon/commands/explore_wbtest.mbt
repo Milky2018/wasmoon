@@ -40,3 +40,28 @@ test "explore keeps an earlier compile failure after a later success" {
   debug_inspect(events, content="[\"failed\", \"succeeded\"]")
   inspect(status, content="1")
 }
+
+///|
+test "x64 exploration compiles spilled multi-result transfers" {
+  for ty in ["i32", "f64", "v128"] {
+    let results = Array::make(20, ty).join(" ")
+    let constant = if ty == "v128" {
+      "v128.const i32x4 0 1 2 3"
+    } else {
+      "\{ty}.const 0"
+    }
+    let values = Array::make(20, constant).join(" ")
+    let path = "/tmp/wasmoon-x64-result-spills-\{ty}-\{@env.now()}.wat"
+    let html = path[:path.length() - 4].to_owned() + ".html"
+    @fs.write_string_to_file(
+      path,
+      "(module (func $callee (result \{results}) \{values}) (func (export \"run\") (result \{results}) call $callee))",
+    )
+    defer (@fs.remove_file(path) catch { _ => () })
+    defer (@fs.remove_file(html) catch { _ => () })
+    inspect(
+      run_explore(path, None, 2, [], true, false, target_name="x64"),
+      content="0",
+    )
+  }
+}

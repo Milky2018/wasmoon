@@ -100,6 +100,16 @@ pub fn jit_results_to_values(
   let mut slot_idx = 0
   for ty in result_types {
     let value : @types.Value = match ty {
+      ContRef
+      | RefCont
+      | RefContTyped(_)
+      | RefNullContTyped(_)
+      | NullContRef
+      | RefNoCont => {
+        let raw = results[slot_idx]
+        slot_idx += 1
+        @wasmoon_jit.i64_to_value(raw, ty)
+      }
       I32 => {
         let raw = results[slot_idx]
         slot_idx += 1
@@ -202,6 +212,7 @@ pub fn value_to_jit_arg_typed(
   ty : @types.ValueType,
 ) -> Int64 {
   match value {
+    ContRef(_) => @wasmoon_jit.value_to_i64(value)
     I32(n) => @types.ToInt64::to_int64_bits(n)
     I64(n) => @types.ToInt64::to_int64_bits(n)
     F32(f) => @types.ToInt64::to_int64_bits(f)
@@ -296,15 +307,22 @@ pub fn compare_jit_interp_with_opt_level(
   let mod_ = @wat.parse(source) catch {
     e => {
       let err = "Failed to parse WAT: \{e}"
-      return { jit_result: Err(err), interp_result: Err(err), match_: true, }
+      return { jit_result: Err(err), interp_result: Err(err), match_: false, }
     }
-  } // Both failed with same error
+  }
+
+  @validator.validate_module(mod_) catch {
+    e => {
+      let err = "Failed to validate WAT: \{e}"
+      return { jit_result: Err(err), interp_result: Err(err), match_: false, }
+    }
+  }
 
   // Find the function index by name
   let func_idx = find_func_index_by_name(mod_, func_name)
   guard func_idx is Some(idx) else {
     let err = "Function '\{func_name}' not found"
-    return { jit_result: Err(err), interp_result: Err(err), match_: true, }
+    return { jit_result: Err(err), interp_result: Err(err), match_: false, }
   }
 
   // Get function type
@@ -319,7 +337,7 @@ pub fn compare_jit_interp_with_opt_level(
   let interp_mod = @wat.parse(source) catch {
     e => {
       let err = "Failed to parse interpreter WAT: \{e}"
-      return { jit_result: Err(err), interp_result: Err(err), match_: true, }
+      return { jit_result: Err(err), interp_result: Err(err), match_: false, }
     }
   }
   let interp_result = run_interp(interp_mod, func_name, args)
@@ -332,8 +350,7 @@ pub fn compare_jit_interp_with_opt_level(
   // Compare results
   let match_ = match (jit_result, interp_result) {
     (Ok(jit_vals), Ok(interp_vals)) => values_array_equal(jit_vals, interp_vals)
-    (Err(_), Err(_)) => true // Both errored (may or may not be same error)
-    _ => false // One succeeded, one failed
+    _ => false // Success parity never accepts an error from either engine.
   }
   { jit_result, interp_result, match_, }
 }

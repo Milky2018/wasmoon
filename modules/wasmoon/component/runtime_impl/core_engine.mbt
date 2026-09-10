@@ -80,7 +80,16 @@ pub fn CoreContinuation::CoreContinuation(
 pub fn CoreContinuation::continue_execution(
   self : CoreContinuation,
 ) -> CoreExecutionOutcome raise ComponentRuntimeError {
-  (self.resume_fn)()
+  // Resumption is a new execution boundary, just like the initial core call.
+  // Preserve canonical host errors independently of the engine's trap encoding.
+  clear_canon_trap_message()
+  (self.resume_fn)() catch {
+    error =>
+      match canon_trap_message[0] {
+        Some(message) => raise CanonCallError(message)
+        None => raise error
+      }
+  }
 }
 
 ///|
@@ -494,6 +503,9 @@ fn resume_interpreter_continuation(
 ) -> CoreExecutionOutcome raise ComponentRuntimeError {
   let outcome = continuation.continue_execution() catch {
     error => {
+      if error is UncaughtException {
+        raise UncaughtWasmException
+      }
       let message = match canon_trap_message[0] {
         Some(message) => message
         None => error.to_string()
@@ -511,15 +523,22 @@ fn resume_interpreter_continuation(
 ///|
 fn interpreter_outcome(
   outcome : @executor.ResumableCallOutcome,
-) -> CoreExecutionOutcome {
+) -> CoreExecutionOutcome raise ComponentRuntimeError {
   match outcome {
     Returned(results) => Returned(results)
-    Suspended(token, continuation) => {
+    Suspended(reason, continuation) => {
       // The typed outcome now owns the suspension reason. Do not let the
       // process-local canonical marker classify a later, unrelated trap.
       canon_suspend[0] = None
       Suspended(
-        core_suspension_from_token(token),
+        match reason {
+          GuestEffect(_) => {
+            continuation.cancel()
+            raise CanonCallError("unhandled suspension")
+          }
+          HostCall(token) => core_suspension_from_token(token)
+          CooperativeYield | AtomicWait => Yield
+        },
         CoreContinuation(
           fn() raise ComponentRuntimeError {
             resume_interpreter_continuation(continuation)
@@ -546,7 +565,7 @@ pub fn interpreter_core_execution_engine() -> CoreExecutionEngine {
         let results = @executor.call_func_by_index(
           store, instance, func_idx, args,
         ) catch {
-          error => raise CanonCallError(error.to_string())
+          error => raise component_core_error(error)
         }
         Returned(results)
       }
@@ -564,7 +583,7 @@ pub fn interpreter_core_execution_engine() -> CoreExecutionEngine {
             }
           },
         ) catch {
-          error => raise CanonCallError(error.to_string())
+          error => raise component_core_error(error)
         }
         interpreter_outcome(outcome)
       }

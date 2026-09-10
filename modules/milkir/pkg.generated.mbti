@@ -53,6 +53,33 @@ pub fn AliasRegion::hash_combine(Self, Hasher) -> Unit
 pub fn AliasRegion::not_equal(Self, Self) -> Bool
 pub fn AliasRegion::to_repr(Self) -> @debug.Repr
 
+pub(all) enum AtomicMemoryOp {
+  Load(Type, Int)
+  Store(Type, Int)
+  Rmw(Type, Int, AtomicRmwOp)
+  CompareExchange(Type, Int)
+  Fence
+} derive(Eq, Hash, @debug.Debug)
+pub fn AtomicMemoryOp::equal(Self, Self) -> Bool
+pub fn AtomicMemoryOp::hash(Self) -> Int
+pub fn AtomicMemoryOp::hash_combine(Self, Hasher) -> Unit
+pub fn AtomicMemoryOp::not_equal(Self, Self) -> Bool
+pub fn AtomicMemoryOp::to_repr(Self) -> @debug.Repr
+
+pub(all) enum AtomicRmwOp {
+  Add
+  Sub
+  And
+  Or
+  Xor
+  Exchange
+} derive(Eq, Hash, @debug.Debug)
+pub fn AtomicRmwOp::equal(Self, Self) -> Bool
+pub fn AtomicRmwOp::hash(Self) -> Int
+pub fn AtomicRmwOp::hash_combine(Self, Hasher) -> Unit
+pub fn AtomicRmwOp::not_equal(Self, Self) -> Bool
+pub fn AtomicRmwOp::to_repr(Self) -> @debug.Repr
+
 pub struct Block {
   id : Int
   params : Array[(Value, Type)]
@@ -283,6 +310,11 @@ pub fn FunctionBuilder::add_param(Self, Type) -> Value
 pub fn FunctionBuilder::add_result(Self, Type) -> Unit
 pub fn FunctionBuilder::append_block_params_for_function_params(Self, Block) -> Unit
 pub fn FunctionBuilder::append_block_params_for_function_returns(Self, Block) -> Unit
+pub fn FunctionBuilder::atomic_compare_exchange(Self, Int, Value, Value, Value, Value) -> Value
+pub fn FunctionBuilder::atomic_fence(Self) -> Unit
+pub fn FunctionBuilder::atomic_load(Self, Type, Int, Value, Value) -> Value
+pub fn FunctionBuilder::atomic_rmw(Self, AtomicRmwOp, Int, Value, Value, Value) -> Value
+pub fn FunctionBuilder::atomic_store(Self, Int, Value, Value, Value) -> Unit
 pub fn FunctionBuilder::band(Self, Value, Value) -> Value
 pub fn FunctionBuilder::bitcast(Self, Type, Value) -> Value
 pub fn FunctionBuilder::block_params(Self, Block) -> Array[Value]
@@ -533,6 +565,7 @@ pub fn Loop::contains(Self, Int) -> Bool
 pub fn Loop::to_repr(Self) -> @debug.Repr
 
 pub(all) enum MemoryOp {
+  Atomic(AtomicMemoryOp)
   Load(Type)
   Store(Type)
   LoadNarrow(Type, Int, Bool)

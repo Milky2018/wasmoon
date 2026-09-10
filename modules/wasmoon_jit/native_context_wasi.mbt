@@ -134,11 +134,18 @@ fn init_wasi_context(
   env : Array[String],
   preopens : Array[(String, String)],
   quiet? : Bool = false,
+  readonly_preopens? : Array[(String, String)] = [],
 ) -> Unit {
   if quiet {
-    c_jit_init_wasi_fds_quiet_managed(context, preopens.length())
+    c_jit_init_wasi_fds_quiet_managed(
+      context,
+      preopens.length() + readonly_preopens.length(),
+    )
   } else {
-    c_jit_init_wasi_fds_managed(context, preopens.length())
+    c_jit_init_wasi_fds_managed(
+      context,
+      preopens.length() + readonly_preopens.length(),
+    )
   }
   set_wasi_stdout_capture(context, false)
   set_wasi_stderr_capture(context, false)
@@ -152,13 +159,18 @@ fn init_wasi_context(
   for i, e in env {
     c_jit_set_wasi_env_managed(context, i, make_cstring(e))
   }
-  for i, entry in preopens {
+  for i, entry in preopens + readonly_preopens {
     let (host, guest) = entry
     c_jit_add_preopen_managed(
       context,
       i,
       make_cstring(host),
       make_cstring(guest),
+      if i >= preopens.length() {
+        1
+      } else {
+        0
+      },
     )
   }
 }
@@ -170,8 +182,16 @@ pub fn NativeJITContext::init_wasi(
   env : Array[String],
   preopens : Array[(String, String)],
   quiet? : Bool = false,
+  readonly_preopens? : Array[(String, String)] = [],
 ) -> Unit {
-  init_wasi_context(self.handle, args, env, preopens, quiet~)
+  init_wasi_context(
+    self.handle,
+    args,
+    env,
+    preopens,
+    quiet~,
+    readonly_preopens~,
+  )
 }
 
 ///|

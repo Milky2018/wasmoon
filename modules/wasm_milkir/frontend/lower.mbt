@@ -43,45 +43,12 @@ fn get_code(
 }
 
 ///|
-fn module_memory_is_64(mod_ : @types.Module, memidx : Int) -> Bool? {
-  if memidx < 0 || memidx >= mod_.memories.length() {
-    None
-  } else {
-    Some(mod_.memories[memidx].is_memory64)
-  }
-}
-
-///|
 fn first_native_capability_gap(
   mod_ : @types.Module,
   body : Array[@types.Instruction],
 ) -> String? {
   for instr in body {
     match instr {
-      MemoryFill(memidx) =>
-        if module_memory_is_64(mod_, memidx) == Some(true) {
-          return Some(
-            "memory64 memory.fill requires a reusable runtime helper ABI",
-          )
-        }
-      MemoryCopy(dst_memidx, src_memidx) => {
-        if module_memory_is_64(mod_, dst_memidx) == Some(true) {
-          return Some(
-            "memory64 memory.copy destination requires a reusable runtime helper ABI",
-          )
-        }
-        if module_memory_is_64(mod_, src_memidx) == Some(true) {
-          return Some(
-            "memory64 memory.copy source requires a reusable runtime helper ABI",
-          )
-        }
-      }
-      MemoryInit(memidx, _) =>
-        if module_memory_is_64(mod_, memidx) == Some(true) {
-          return Some(
-            "memory64 memory.init requires a reusable runtime helper ABI",
-          )
-        }
       Block(_, nested) | Loop(_, nested) =>
         if first_native_capability_gap(mod_, nested) is Some(reason) {
           return Some(reason)

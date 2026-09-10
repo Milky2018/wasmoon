@@ -17,6 +17,9 @@ pub(all) enum WasmRuntimeHelper {
   TableInit
   ElemDrop
   CancelPoll
+  AtomicWait32
+  AtomicWait64
+  AtomicNotify
   GcRefTest
   GcRefCast
   GcStructGet
@@ -51,6 +54,12 @@ pub(all) enum WasmRuntimeHelper {
   ExceptionThrowRef
   ExceptionDelegate
   ExceptionGetTag
+  ExceptionGetRef
+  ContNew
+  ContBind
+  ContSuspend
+  ContResume
+  ContSwitch
   ExceptionGetValue
   ExceptionGetValueCount
   ExceptionSigsetjmp
@@ -73,6 +82,9 @@ fn WasmRuntimeHelper::suffix(self : WasmRuntimeHelper) -> String {
     TableInit => "table_init"
     ElemDrop => "elem_drop"
     CancelPoll => "cancel_poll"
+    AtomicWait32 => "atomic_wait32"
+    AtomicWait64 => "atomic_wait64"
+    AtomicNotify => "atomic_notify"
     GcRefTest => "gc.ref_test"
     GcRefCast => "gc.ref_cast"
     GcStructGet => "gc.struct_get"
@@ -106,6 +118,12 @@ fn WasmRuntimeHelper::suffix(self : WasmRuntimeHelper) -> String {
     ExceptionThrowTag => "exception.throw_tag"
     ExceptionThrowRef => "exception.throw_ref"
     ExceptionDelegate => "exception.delegate"
+    ContNew => "continuation.new"
+    ContBind => "continuation.bind"
+    ContSuspend => "continuation.suspend"
+    ContResume => "continuation.resume"
+    ContSwitch => "continuation.switch"
+    ExceptionGetRef => "exception.get_ref"
     ExceptionGetTag => "exception.get_tag"
     ExceptionGetValue => "exception.get_value"
     ExceptionGetValueCount => "exception.get_value_count"

@@ -80,7 +80,9 @@ def run_command(
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
-            start_new_session=True,
+            # An outer corpus worker owns the process group so its timeout also
+            # terminates this tool and its descendants.
+            start_new_session=os.getenv("WASMOON_COMPONENT_SHARED_PROCESS_GROUP") != "1",
         )
     except OSError as err:
         return 127, "", str(err), False
@@ -728,11 +730,13 @@ def parse_component_json_result(out: str) -> Optional[dict]:
 
 
 def validate_component(
-    component_bin: Path, wasmoon: Path, *, wit_names: bool
+    component_bin: Path, wasmoon: Path, *, wit_names: bool, component_implements: bool = True
 ) -> Tuple[bool, str, Optional[str]]:
     cmd = [str(wasmoon), "component", "--error-format", "json"]
     if not wit_names:
         cmd.append("--no-wit-names")
+    if not component_implements:
+        cmd.append("--no-component-implements")
     cmd.extend(["--validate", str(component_bin)])
     returncode, stdout, stderr, timed_out = run_command(
         cmd,
@@ -765,7 +769,7 @@ def is_parse_rejection(msg: str, code: Optional[str]) -> bool:
 
 
 def run_component_script(
-    script: dict, wasmoon: Path, tmp: Path, *, no_jit: bool = False
+    script: dict, wasmoon: Path, tmp: Path, *, no_jit: bool = False, component_implements: bool = True
 ) -> Tuple[int, int, int, list[str], str, bool]:
     script_path = tmp / "component_script.json"
     script_path.write_text(
@@ -773,6 +777,8 @@ def run_component_script(
         encoding="utf-8",
     )
     command = [str(wasmoon), "component-test"]
+    if not component_implements:
+        command.append("--no-component-implements")
     if no_jit:
         command.append("--no-jit")
     command.append(str(script_path))
@@ -813,6 +819,7 @@ def run_file(
     *,
     keep_tmp_on_failure: bool = False,
     no_jit: bool = False,
+    component_implements: bool = True,
 ) -> dict:
     text = path.read_text(encoding="utf-8")
     passed = failed = 0
@@ -876,6 +883,7 @@ def run_file(
                     comp_bin,
                     wasmoon,
                     wit_names=wit_names,
+                    component_implements=component_implements,
                 )
                 if not ok:
                     fail(f"component validate failed: {msg}")
@@ -943,6 +951,7 @@ def run_file(
                     comp_bin,
                     wasmoon,
                     wit_names=wit_names,
+                    component_implements=component_implements,
                 )
                 if ok:
                     if expected_msg:
@@ -1008,6 +1017,7 @@ def run_file(
                         comp_bin,
                         wasmoon,
                         wit_names=wit_names,
+                        component_implements=component_implements,
                     )
                     if code == UNSUPPORTED_ERROR_CODE:
                         fail(f"assert_malformed failed due to unsupported feature: {msg}")
@@ -1043,6 +1053,7 @@ def run_file(
                     comp_bin,
                     wasmoon,
                     wit_names=wit_names,
+                    component_implements=component_implements,
                 )
                 if not ok:
                     fail(f"assert_unlinkable validate failed: {msg}")
@@ -1137,6 +1148,7 @@ def run_file(
                     comp_bin,
                     wasmoon,
                     wit_names=wit_names,
+                    component_implements=component_implements,
                 )
                 if not ok:
                     fail(f"assert_trap component validate failed: {vmsg}")
@@ -1182,6 +1194,7 @@ def run_file(
                 wasmoon,
                 tmp_path,
                 no_jit=no_jit,
+                component_implements=component_implements,
             )
             passed += spassed
             failed += sfailed
@@ -1242,6 +1255,7 @@ def main() -> int:
     args = parser.parse_args()
 
     repo_root = Path(__file__).resolve().parent.parent
+    corrections: dict[Path, Path] = {}
     if args.suite is not None:
         if args.dir is not None or args.rec:
             print("Error: --suite cannot be combined with --dir or --rec")
@@ -1253,6 +1267,7 @@ def main() -> int:
             return 1
         test_dir = snapshot.root
         wast_files = [test_dir / path for path in snapshot.suites[args.suite]]
+        corrections = snapshot.corrections
         required_wasm_tools_version = snapshot.wasm_tools_version
         print(
             f"Using suite {args.suite!r} from "
@@ -1326,9 +1341,13 @@ def main() -> int:
     total_passed = total_failed = total_skipped = 0
     files_ok = files_failed = 0
     for wast_file in wast_files:
-        name = str(wast_file.relative_to(test_dir))
+        relative = wast_file.relative_to(test_dir)
+        name = str(relative)
+        source = corrections.get(relative, wast_file)
+        if source != wast_file:
+            print(f"Applying documented correction: {name} ({source})")
         result = run_file(
-            wast_file,
+            source,
             wasmoon,
             wasmoon_tools,
             wasm_tools,

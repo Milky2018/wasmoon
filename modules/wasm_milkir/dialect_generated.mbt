@@ -48,6 +48,12 @@ pub(all) enum WasmOpcode {
   Delegate(Int)
   SpillLocalsForThrow(Int)
   GetSpilledLocal(Int)
+  GetExceptionRef
+  ContNew(Int)
+  ContBind(Int, Int)
+  ContSuspend(Int)
+  ContResume(Int, Int, Int, Int)
+  ContSwitch(Int, Int)
 } derive(Debug, Eq, Hash)
 
 ///|
@@ -502,6 +508,66 @@ let wasm_opcode_specs : Array[WasmOpcodeSpec] = [
     variadic_operands: false,
     variadic_results: false,
   },
+  {
+    id: 45,
+    typed_constructor: "GetExceptionRef",
+    wire_name: "get_exception_ref",
+    immediate_kinds: [],
+    operand_types: [],
+    result_types: [ExactType(Ref)],
+    variadic_operands: false,
+    variadic_results: false,
+  },
+  {
+    id: 46,
+    typed_constructor: "ContNew",
+    wire_name: "cont_new",
+    immediate_kinds: [IntegerImmediate],
+    operand_types: [ExactType(CallableRef)],
+    result_types: [ExactType(Ref)],
+    variadic_operands: false,
+    variadic_results: false,
+  },
+  {
+    id: 47,
+    typed_constructor: "ContBind",
+    wire_name: "cont_bind",
+    immediate_kinds: [IntegerImmediate, IntegerImmediate],
+    operand_types: [ExactType(Ref)],
+    result_types: [ExactType(Ref)],
+    variadic_operands: true,
+    variadic_results: false,
+  },
+  {
+    id: 48,
+    typed_constructor: "ContSuspend",
+    wire_name: "cont_suspend",
+    immediate_kinds: [IntegerImmediate],
+    operand_types: [],
+    result_types: [],
+    variadic_operands: true,
+    variadic_results: true,
+  },
+  {
+    id: 49,
+    typed_constructor: "ContResume",
+    wire_name: "cont_resume",
+    immediate_kinds: [IntegerImmediate, IntegerImmediate, IntegerImmediate, IntegerImmediate],
+    operand_types: [ExactType(Ref)],
+    result_types: [ExactType(I32)],
+    variadic_operands: true,
+    variadic_results: true,
+  },
+  {
+    id: 50,
+    typed_constructor: "ContSwitch",
+    wire_name: "cont_switch",
+    immediate_kinds: [IntegerImmediate, IntegerImmediate],
+    operand_types: [ExactType(Ref)],
+    result_types: [],
+    variadic_operands: true,
+    variadic_results: true,
+  },
 ]
 
 ///|
@@ -552,6 +618,12 @@ fn opcode_payload(opcode : WasmOpcode) -> (Int, FixedArray[Int]) {
     Delegate(imm0) => (42, imm([imm0]))
     SpillLocalsForThrow(imm0) => (43, imm([imm0]))
     GetSpilledLocal(imm0) => (44, imm([imm0]))
+    GetExceptionRef => (45, imm([]))
+    ContNew(imm0) => (46, imm([imm0]))
+    ContBind(imm0, imm1) => (47, imm([imm0, imm1]))
+    ContSuspend(imm0) => (48, imm([imm0]))
+    ContResume(imm0, imm1, imm2, imm3) => (49, imm([imm0, imm1, imm2, imm3]))
+    ContSwitch(imm0, imm1) => (50, imm([imm0, imm1]))
   }
 }
 
@@ -606,6 +678,12 @@ fn opcode_from_payload(
     42 => Some(Delegate(imms[0]))
     43 => Some(SpillLocalsForThrow(imms[0]))
     44 => Some(GetSpilledLocal(imms[0]))
+    45 => Some(GetExceptionRef)
+    46 => Some(ContNew(imms[0]))
+    47 => Some(ContBind(imms[0], imms[1]))
+    48 => Some(ContSuspend(imms[0]))
+    49 => Some(ContResume(imms[0], imms[1], imms[2], imms[3]))
+    50 => Some(ContSwitch(imms[0], imms[1]))
     _ => None
   }
 }

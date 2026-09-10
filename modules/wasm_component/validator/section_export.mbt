@@ -81,6 +81,7 @@ fn validate_component_section_export(
       exportname_to_bytes(e.name),
       e.attributes,
       e.sortidx.sort,
+      cfg,
     )
     if is_root && e.sortidx.sort is Component {
       raise SectionParseError(

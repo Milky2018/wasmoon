@@ -199,7 +199,7 @@ fn parse_canon(reader : Reader) -> Canon raise ComponentParseError {
     0x0a => {
       let vt = parse_context_core_valtype(reader)
       let idx = reader.read_leb_u32()
-      if idx != 0 {
+      if idx < 0 || idx >= 2 {
         raise InvalidCanonSection
       }
       ContextGet(vt, idx)
@@ -207,7 +207,7 @@ fn parse_canon(reader : Reader) -> Canon raise ComponentParseError {
     0x0b => {
       let vt = parse_context_core_valtype(reader)
       let idx = reader.read_leb_u32()
-      if idx != 0 {
+      if idx < 0 || idx >= 2 {
         raise InvalidCanonSection
       }
       ContextSet(vt, idx)

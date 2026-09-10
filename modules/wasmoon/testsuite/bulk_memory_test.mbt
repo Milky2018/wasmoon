@@ -165,3 +165,41 @@ test "JIT: data.drop and init with zero length" {
   let result = compare_jit_interp(source, "test", [])
   inspect(compare_result_is_match(result), content="true")
 }
+
+///|
+test "bulk memory: memory64 addresses and lengths are not truncated" {
+  for
+    operation in [
+      "i64.const 4294967296 i32.const 0 i64.const 0 memory.fill", "i64.const 0 i32.const 0 i64.const 4294967296 memory.fill",
+      "i64.const 4294967296 i64.const 0 i64.const 0 memory.copy", "i64.const 0 i64.const 4294967296 i64.const 0 memory.copy",
+      "i64.const 0 i64.const 0 i64.const 4294967296 memory.copy",
+    ] {
+    let source = "(module (memory i64 1) (func (export \"test\") \{operation}))"
+    @validator.validate_module(@wat.parse(source))
+    inspect(
+      compare_result_errors_contain(
+        compare_jit_interp(source, "test", []),
+        "out of bounds memory access",
+      ),
+      content="true",
+    )
+  }
+}
+
+///|
+test "bulk memory: dropped data still checks both zero-length offsets" {
+  for offsets in [(0, 0), (65536, 0), (65537, 0), (0, 1)] {
+    let (dst, src) = offsets
+    let source = "(module (memory 1) (data $d \"x\") (func (export \"test\") data.drop $d i32.const \{dst} i32.const \{src} i32.const 0 memory.init $d))"
+    @validator.validate_module(@wat.parse(source))
+    let result = compare_jit_interp(source, "test", [])
+    if dst > 65536 || src > 0 {
+      inspect(
+        compare_result_errors_contain(result, "out of bounds memory access"),
+        content="true",
+      )
+    } else {
+      inspect(result, content="matched")
+    }
+  }
+}

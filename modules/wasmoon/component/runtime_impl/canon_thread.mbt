@@ -8,7 +8,7 @@ fn current_thread_handle_opt(
   owner_component_id : Int,
   task_id : Int64,
 ) -> Int? {
-  match async_state.task_thread.get(task_id) {
+  match async_state.tasks.read_task_thread(task_id) {
     Some(m) => m.get(owner_component_id)
     None => None
   }
@@ -40,7 +40,7 @@ fn current_thread_info(
 
 ///|
 fn mark_main_scheduled(async_state : AsyncState, root_task_id : Int64) -> Unit {
-  async_state.main_thread_scheduled.set(root_task_id, true)
+  async_state.tasks.write_main_thread_scheduled(root_task_id, true)
 }
 
 ///|
@@ -48,10 +48,11 @@ fn consume_main_scheduled(
   async_state : AsyncState,
   root_task_id : Int64,
 ) -> Bool {
-  let scheduled = async_state.main_thread_scheduled.get(root_task_id)
+  let root_task_id = async_state.tasks.resolve(root_task_id)
+  let scheduled = async_state.tasks.read_main_thread_scheduled(root_task_id)
     is Some(true)
   if scheduled {
-    async_state.main_thread_scheduled.remove(root_task_id)
+    async_state.tasks.clear_main_thread_scheduled(root_task_id)
   }
   scheduled
 }
@@ -62,7 +63,8 @@ fn remove_from_runnable_queue(
   root_task_id : Int64,
   handle : Int,
 ) -> Unit {
-  match async_state.thread_runnable.get(root_task_id) {
+  let root_task_id = async_state.tasks.resolve(root_task_id)
+  match async_state.tasks.read_thread_runnable(root_task_id) {
     Some(q) => {
       let mut i = 0
       while i < q.length() {
@@ -84,6 +86,7 @@ fn schedule_explicit_thread(
   root_task_id : Int64,
   handle : Int,
 ) -> Bool {
+  let root_task_id = async_state.tasks.resolve(root_task_id)
   let key = handle_key(owner_component_id, handle)
   match async_state.threads.get(key) {
     Some(t) => {
@@ -93,11 +96,11 @@ fn schedule_explicit_thread(
       if t.scheduled[0] {
         return true
       }
-      let q = match async_state.thread_runnable.get(root_task_id) {
+      let q = match async_state.tasks.read_thread_runnable(root_task_id) {
         Some(xs) => xs
         None => {
           let xs : Array[Int] = []
-          async_state.thread_runnable.set(root_task_id, xs)
+          async_state.tasks.write_thread_runnable(root_task_id, xs)
           xs
         }
       }
@@ -115,7 +118,8 @@ fn pop_runnable_explicit_thread(
   owner_component_id : Int,
   root_task_id : Int64,
 ) -> Int? {
-  let q = match async_state.thread_runnable.get(root_task_id) {
+  let root_task_id = async_state.tasks.resolve(root_task_id)
+  let q = match async_state.tasks.read_thread_runnable(root_task_id) {
     Some(xs) => xs
     None => return None
   }
@@ -142,6 +146,7 @@ fn wake_ready_waiting_threads(
   owner_component_id : Int,
   root_task_id : Int64,
 ) -> Unit {
+  let root_task_id = async_state.tasks.resolve(root_task_id)
   let to_wake : Array[Int] = []
   for kv in async_state.threads.iter() {
     let (_k, t) = kv
@@ -155,7 +160,14 @@ fn wake_ready_waiting_threads(
           t.waiting_ws[0] = None
           to_wake.push(t.handle)
         }
-      None => ()
+      None =>
+        for key in sync_waitables_for_task(async_state, t.task_id) {
+          if async_state.waitable_events.get(key) is Some(events) &&
+            !events.is_empty() {
+            to_wake.push(t.handle)
+            break
+          }
+        }
     }
   }
   for h in to_wake {
@@ -166,17 +178,7 @@ fn wake_ready_waiting_threads(
 
 ///|
 fn cleanup_thread_task(async_state : AsyncState, task_id : Int64) -> Unit {
-  async_state.task_results.remove(task_id)
-  async_state.task_result_owner.remove(task_id)
-  async_state.task_returned.remove(task_id)
-  async_state.task_self_cancelled.remove(task_id)
-  async_state.task_cancelled.remove(task_id)
-  async_state.task_contexts.remove(task_id)
-  drop_task_thread(async_state, task_id)
-  remove_task_meta(async_state, task_id)
-  async_state.yield_suspended.remove(task_id)
-  async_state.waiting_ws.remove(task_id)
-  async_state.sync_lower_states.remove(task_id)
+  retire_task(async_state, task_id)
 }
 
 ///|
@@ -187,6 +189,7 @@ fn run_explicit_thread_once(
   root_task_id : Int64,
   handle : Int,
 ) -> Unit raise ComponentRuntimeError {
+  let root_task_id = async_state.tasks.resolve(root_task_id)
   let key = handle_key(owner_component_id, handle)
   let t = match async_state.threads.get(key) {
     Some(t) => t
@@ -250,6 +253,7 @@ fn dispatch_until_main_scheduled(
   owner_component_id : Int,
   root_task_id : Int64,
 ) -> Bool raise ComponentRuntimeError {
+  let root_task_id = async_state.tasks.resolve(root_task_id)
   let mut fuel = 100000
   while fuel > 0 {
     wake_ready_waiting_threads(async_state, owner_component_id, root_task_id)
@@ -274,12 +278,45 @@ fn dispatch_until_main_scheduled(
 }
 
 ///|
+fn require_suspended_thread(
+  async_state : AsyncState,
+  owner_component_id : Int,
+  root_task_id : Int64,
+  target : Int,
+) -> Unit raise ComponentRuntimeError {
+  let root_task_id = async_state.tasks.resolve(root_task_id)
+  let main = current_thread_handle_opt(
+    async_state, owner_component_id, root_task_id,
+  )
+  let runnable = if main == Some(target) {
+    current_task_id(async_state) == root_task_id ||
+    async_state.tasks.read_main_thread_scheduled(root_task_id) == Some(true)
+  } else {
+    match async_state.threads.get(handle_key(owner_component_id, target)) {
+      Some(thread) =>
+        thread.parent_task_id == root_task_id &&
+        (
+          thread.scheduled[0] ||
+          thread.task_id == current_task_id(async_state) ||
+          thread.phase[0] == Completed ||
+          thread.waiting_ws[0] is Some(_)
+        )
+      None => false
+    }
+  }
+  if runnable {
+    raise CanonCallError("cannot resume thread which is not suspended")
+  }
+}
+
+///|
 fn schedule_thread_or_main(
   async_state : AsyncState,
   owner_component_id : Int,
   root_task_id : Int64,
   handle : Int,
 ) -> Bool {
+  let root_task_id = async_state.tasks.resolve(root_task_id)
   ensure_task_thread(async_state, owner_component_id, root_task_id)
   let main_handle = current_thread_handle_opt(
     async_state, owner_component_id, root_task_id,
@@ -310,8 +347,8 @@ fn maybe_consume_cancelled(
   if !cancellable {
     return false
   }
-  if async_state.task_cancelled.get(task_id) is Some(true) {
-    async_state.task_cancelled.remove(task_id)
+  if async_state.tasks.read_task_cancelled(task_id) is Some(true) {
+    async_state.tasks.clear_task_cancelled(task_id)
     return true
   }
   false
@@ -325,6 +362,7 @@ fn run_main_target_once(
   root_task_id : Int64,
   target : Int,
 ) -> Unit raise ComponentRuntimeError {
+  let root_task_id = async_state.tasks.resolve(root_task_id)
   if !schedule_thread_or_main(
       async_state, owner_component_id, root_task_id, target,
     ) {
@@ -356,16 +394,28 @@ fn execute_thread_suspension_intrinsic(
     }
   }
 
-  let resuming = async_state.yield_suspended.get(task_id) is Some(true)
+  let suspension = async_state.tasks.read_task_suspensions(task_id)
+  let resuming = suspension is Some(_)
+
+  if maybe_consume_cancelled(async_state, root_task_id, cancellable) {
+    async_state.tasks.clear_task_suspensions(task_id)
+    return [I32(1)]
+  }
+
+  if !resuming && target is Some(handle) {
+    require_suspended_thread(
+      async_state, owner_component_id, root_task_id, handle,
+    ) catch {
+      error => {
+        trap_canon(canon_err_message(error))
+        return [I32(0)]
+      }
+    }
+  }
 
   if is_explicit {
-    if maybe_consume_cancelled(async_state, task_id, cancellable) {
-      async_state.yield_suspended.remove(task_id)
-      return [I32(1)]
-    }
-
     if resuming {
-      async_state.yield_suspended.remove(task_id)
+      async_state.tasks.clear_task_suspensions(task_id)
       return [I32(0)]
     }
 
@@ -387,20 +437,36 @@ fn execute_thread_suspension_intrinsic(
       |> ignore
     }
 
-    async_state.yield_suspended.set(task_id, true)
+    async_state.tasks.write_task_suspensions(
+      task_id,
+      if schedule_current {
+        Yield(cancellable)
+      } else {
+        Suspend(cancellable)
+      },
+    )
     canon_suspend[0] = Some(Yield)
     raise Unreachable
   }
 
   // Implicit `thread.yield` is modeled as cooperative suspension. Resuming
   // retries this host instruction once and then continues at its successor.
-  if maybe_consume_cancelled(async_state, task_id, cancellable) {
-    async_state.yield_suspended.remove(task_id)
-    return [I32(1)]
-  }
-
   if resuming {
-    async_state.yield_suspended.remove(task_id)
+    if suspension is Some(Suspend(_)) {
+      let resumed = dispatch_until_main_scheduled(
+        async_state, store, owner_component_id, root_task_id,
+      ) catch {
+        error => {
+          trap_canon(canon_err_message(error))
+          return [I32(0)]
+        }
+      }
+      if !resumed {
+        canon_suspend[0] = Some(Yield)
+        raise Unreachable
+      }
+    }
+    async_state.tasks.clear_task_suspensions(task_id)
     return [I32(0)]
   }
 
@@ -434,9 +500,12 @@ fn execute_thread_suspension_intrinsic(
         if !async_state.task_can_block[0] {
           trap_canon("cannot block a synchronous task before returning")
         } else {
-          trap_canon(
-            "wasm trap: deadlock detected: event loop cannot make further progress",
+          async_state.tasks.write_task_suspensions(
+            task_id,
+            Suspend(cancellable),
           )
+          canon_suspend[0] = Some(Yield)
+          raise Unreachable
         }
         return [I32(0)]
       }
@@ -472,7 +541,14 @@ fn execute_thread_suspension_intrinsic(
         if !async_state.task_can_block[0] {
           return [I32(0)]
         }
-        async_state.yield_suspended.set(task_id, true)
+        async_state.tasks.write_task_suspensions(
+          task_id,
+          if schedule_current {
+            Yield(cancellable)
+          } else {
+            Suspend(cancellable)
+          },
+        )
         canon_suspend[0] = Some(Yield)
         raise Unreachable
       }
@@ -488,9 +564,12 @@ fn execute_thread_suspension_intrinsic(
         if !async_state.task_can_block[0] {
           trap_canon("cannot block a synchronous task before returning")
         } else {
-          trap_canon(
-            "wasm trap: deadlock detected: event loop cannot make further progress",
+          async_state.tasks.write_task_suspensions(
+            task_id,
+            Suspend(cancellable),
           )
+          canon_suspend[0] = Some(Yield)
+          raise Unreachable
         }
         return [I32(0)]
       }
@@ -514,6 +593,7 @@ fn resolve_start_core_func(
   }
   let func_addr = match v {
     FuncRef(addr) => addr
+    Null => raise CanonCallError("uninitialized element")
     _ => raise CanonCallError("thread start function is not a funcref")
   }
   let owner = match store.get_func_owner(func_addr) {
@@ -678,6 +758,9 @@ fn instantiate_unsupported_thread_promotion(
   let host = fn(
     _args : Array[@types.Value],
   ) -> Array[@types.Value] raise @runtime.RuntimeError {
+    if !canon_may_leave[0] {
+      trap_canon("cannot leave component instance")
+    }
     trap_canon("\{operation} is not implemented")
     [I32(0)]
   }
@@ -732,6 +815,14 @@ fn instantiate_canon_thread_resume_later(
     ) catch {
       e => {
         trap_canon(canon_err_message(e))
+        return []
+      }
+    }
+    require_suspended_thread(
+      async_state, owner_component_id, root_task_id, target,
+    ) catch {
+      error => {
+        trap_canon(canon_err_message(error))
         return []
       }
     }
@@ -832,15 +923,19 @@ fn instantiate_canon_thread_new_indirect(
     }
 
     let id = alloc_shared_handle(async_state, owner_component_id)
-    let thread_task_id = alloc_task_id(async_state)
+    let thread_task_id = {
+      errdefer free_shared_handle(async_state, owner_component_id, id)
+      alloc_canon_task_id(async_state, thread_metadata=true)
+    }
+    errdefer retire_task(async_state, thread_task_id)
     init_task_meta(
       async_state, thread_task_id, owner_component_id, root_task_id,
     )
     let per_task : Map[Int, Int] = Map([])
     per_task.set(owner_component_id, id)
-    async_state.task_thread.set(thread_task_id, per_task)
+    async_state.tasks.write_task_thread(thread_task_id, per_task)
 
-    async_state.threads.set(handle_key(owner_component_id, id), {
+    async_state.threads.set_core(handle_key(owner_component_id, id), {
       owner_component_id,
       handle: id,
       parent_task_id: root_task_id,

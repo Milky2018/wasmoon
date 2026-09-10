@@ -89,10 +89,13 @@ fn component_runtime_yielding_background_timer_fixture() -> Bytes raise @compone
       #|  (component $starter
       #|    (import "spin" (func $spin async))
       #|    (core func $spin-lowered (canon lower (func $spin)))
+      #|    (core func $return (canon task.return))
       #|    (core module $m
       #|      (import "" "spin" (func $spin))
-      #|      (func (export "start-spinner") (call $spin)))
+      #|      (import "" "return" (func $return))
+      #|      (func (export "start-spinner") (call $spin) (call $return)))
       #|    (core instance $i (instantiate $m (with "" (instance
+      #|      (export "return" (func $return))
       #|      (export "spin" (func $spin-lowered))))))
       #|    (func (export "start-spinner") async
       #|      (canon lift (core func $i "start-spinner") async)))

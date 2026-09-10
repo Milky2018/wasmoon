@@ -141,6 +141,11 @@ wasmoon run examples/hello_wasi.wat \
   -S inherit-env
 ```
 
+Use `--dir-ro HOST_DIR::GUEST_DIR` for a read-only WASIp1 preopen; it can be
+repeated and combined with `--dir`. Descendant descriptors cannot acquire
+filesystem mutation rights. See [the rights contract](https://github.com/Milky2018/wasmoon/blob/dev/docs/wasip1-rights.md)
+for the permission boundary and embedding APIs.
+
 For detailed flags, run:
 
 ```bash
@@ -270,6 +275,32 @@ python3 scripts/run_component_wast.py --suite async-0.3 --no-jit
 python3 scripts/run_component_wast.py --suite future-gated
 python3 scripts/run_component_wast.py --suite future-gated --no-jit
 ```
+
+For additional runtime testing, the
+[upstream WASIp1 guest suite](../../wasi-tests/wasmtime/README.md) runs unchanged
+Wasmtime P1 programs in interpreter and JIT modes:
+
+```bash
+rustup target add wasm32-wasip1
+python3 scripts/run_wasmtime_p1.py
+```
+
+It reports current rights-model differences and polling failures explicitly;
+it is not yet a passing conformance gate. The separate `Upstream WASIp1 programs`
+workflow runs it on demand.
+
+The pinned [Wasmtime misc_testsuite](https://github.com/Milky2018/wasmoon/blob/dev/wasm-tests/wasmtime/README.md)
+adds core Wasm and Component Model regression scripts:
+
+```bash
+python3 scripts/run_wasmtime_misc.py --check
+python3 scripts/run_wasmtime_misc.py
+```
+
+The full diagnostic currently reports failures; it preserves them without an
+expected-failure mask. Script-only completions, missing host contracts and
+high-memory deferrals are reported separately. Regular CI runs six explicit
+smoke scripts; the full cross-platform scan has its own manual workflow.
 
 ## Library Usage
 

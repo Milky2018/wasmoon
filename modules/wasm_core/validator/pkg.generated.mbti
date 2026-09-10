@@ -9,9 +9,9 @@ import {
 // Values
 pub fn format_validation_error(ValidationError) -> String
 
-pub fn validate_module(@types.Module) -> Unit raise ValidationError
+pub fn validate_module(@types.Module, bulk_memory? : Bool, stack_switching? : Bool) -> Unit raise ValidationError
 
-pub fn validate_module_with_context(@types.Module) -> Unit raise ValidationError
+pub fn validate_module_with_context(@types.Module, bulk_memory? : Bool, stack_switching? : Bool) -> Unit raise ValidationError
 
 // Errors
 pub(all) suberror ValidationError {

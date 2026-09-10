@@ -11,7 +11,7 @@ pub fn memory_descriptor_grow(
   delta_pages : Int,
   max_pages : Int,
 ) -> Int {
-  c_mem_desc_grow(mem_desc_ptr, delta_pages, max_pages)
+  c_mem_desc_grow(mem_desc_ptr, delta_pages.to_int64(), max_pages).to_int()
 }
 
 ///|
@@ -136,13 +136,13 @@ pub fn NativeJITContext::set_table_pointers(
   }
   let table_ptrs = FixedArray::make(jit_tables.length(), 0L)
   let table_sizes = FixedArray::make(jit_tables.length(), 0)
-  let table_max_sizes = FixedArray::make(jit_tables.length(), -1)
+  let table_max_sizes = FixedArray::make(jit_tables.length(), -1L)
   for i, jit_table_opt in jit_tables {
     match jit_table_opt {
       Some(jit_table) => {
         table_ptrs[i] = jit_table.raw_ptr()
         table_sizes[i] = jit_table.get_size()
-        table_max_sizes[i] = jit_table.get_max().unwrap_or(-1)
+        table_max_sizes[i] = jit_table.get_max().unwrap_or(-1L)
       }
       None => ()
     }
@@ -235,14 +235,17 @@ pub fn alloc_memory(size : Int64) -> Int64 {
 /// Allocate a `wasmoon_memory_t` descriptor with owned backing memory.
 pub fn alloc_memory_desc(
   size_bytes : Int64,
-  max_pages : Int?,
+  max_pages : Int64?,
   is_memory64? : Bool = false,
   page_size_log2? : Int = 16,
   is_shared? : Bool = false,
 ) -> Int64 {
   c_jit_alloc_memory_desc(
     size_bytes,
-    max_pages.unwrap_or(-1),
+    match max_pages {
+      Some(max) => max
+      None => -1L
+    },
     if is_memory64 {
       1
     } else {
@@ -263,10 +266,16 @@ pub fn alloc_memory_desc(
 pub fn alloc_guarded_memory_desc(
   initial_pages : Int,
   max_pages : Int?,
+  is_shared? : Bool = false,
 ) -> Int64 {
   c_jit_alloc_guarded_memory_desc(
     initial_pages.to_int64(),
     max_pages.unwrap_or(-1).to_int64(),
+    if is_shared {
+      1
+    } else {
+      0
+    },
   )
 }
 
@@ -313,7 +322,7 @@ pub fn memory_read(mem_ptr : Int64, offset : Int64, size : Int) -> Bytes {
 struct JITTable {
   mut table_ptr : Int64 // Pointer to the shared C-side table
   mut size : Int
-  max : Int?
+  max : Int64?
 } derive(Debug)
 
 ///|
@@ -325,7 +334,7 @@ struct JITTableOwner {
 ///|
 /// Create a new owned shared JIT table.
 /// Note: size 0 is valid (empty table that can grow later).
-pub fn JITTableOwner::try_alloc(size : Int, max : Int?) -> JITTableOwner? {
+pub fn JITTableOwner::try_alloc(size : Int, max : Int64?) -> JITTableOwner? {
   if size < 0 {
     return None
   }
@@ -373,7 +382,7 @@ pub fn JITTable::get_entry_value(self : JITTable, table_idx : Int) -> Int64 {
   if table_idx < 0 || table_idx >= self.size {
     return 0L
   }
-  c_jit_read_i64(self.table_ptr + (table_idx * 16).to_int64())
+  c_jit_read_i64(self.table_ptr + table_idx.to_int64() * 16L)
 }
 
 ///|
@@ -382,7 +391,7 @@ pub fn JITTable::get_entry_type(self : JITTable, table_idx : Int) -> Int {
   if table_idx < 0 || table_idx >= self.size {
     return -1
   }
-  c_jit_read_i64(self.table_ptr + (table_idx * 16 + 8).to_int64()).to_int()
+  c_jit_read_i64(self.table_ptr + (table_idx.to_int64() * 16L + 8L)).to_int()
 }
 
 ///|
@@ -413,6 +422,39 @@ fn JITTable::refresh_layout(
 
 ///|
 /// Get the table max size.
-pub fn JITTable::get_max(self : JITTable) -> Int? {
+pub fn JITTable::get_max(self : JITTable) -> Int64? {
   self.max
+}
+
+///|
+/// Acquire a descriptor owner while the caller holds an existing live owner.
+pub fn retain_memory_desc(mem_desc_ptr : Int64) -> Unit {
+  c_jit_retain_memory_desc(mem_desc_ptr)
+}
+
+///|
+/// Copy checked byte ranges between live memory descriptors.
+pub extern "c" fn memory_descriptor_copy(
+  destination_memory : Int64,
+  destination : Int64,
+  source_memory : Int64,
+  source : Int64,
+  length : Int64,
+) -> Int = "wasmoon_mem_desc_copy64"
+
+///|
+/// Fill a checked byte range of a live memory descriptor.
+pub extern "c" fn memory_descriptor_fill64(
+  memory : Int64,
+  destination : Int64,
+  value : Int,
+  length : Int64,
+) -> Int = "wasmoon_mem_desc_memset64"
+
+///|
+pub fn memory_descriptor_grow64(
+  mem_desc_ptr : Int64,
+  delta_pages : Int64,
+) -> Int64 {
+  c_mem_desc_grow(mem_desc_ptr, delta_pages, -1)
 }

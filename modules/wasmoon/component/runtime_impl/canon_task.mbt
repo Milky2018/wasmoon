@@ -12,14 +12,16 @@ fn lift_task_return_value(
   store : @runtime.Store,
 ) -> ComponentValue raise ComponentRuntimeError {
   let result_param : @component.Param = { label: "", ty: result, }
-  let result_func : FuncType = {
-    is_async: false,
-    params: [result_param],
-    result: None,
-  }
   match
     core_args_to_component(
-      args, result_func, types, resources, store, resource_table, 16, "task.return result",
+      args,
+      [result_param],
+      types,
+      resources,
+      store,
+      resource_table,
+      16,
+      "task.return result",
     ) {
     [value] => value
     _ => raise HostCallError("task.return argument type mismatch")
@@ -53,13 +55,24 @@ fn instantiate_canon_task_return(
     }
   }
   let resources = resolve_canon_resources(opts, state)
+  let mem_is_64 = match resources.mem_addr {
+    Some(addr) => {
+      let mem = store.get_mem(addr) catch {
+        error => raise CanonCallError(error.to_string())
+      }
+      mem.is_memory64()
+    }
+    None => false
+  }
   let core_params : Array[@types.ValueType] = match result {
     Some(vt) => {
-      let flat = core_types_for_valtype(vt, state.types, false) catch {
-        _ => []
-      }
+      let flat = core_types_for_valtype(vt, state.types, mem_is_64)
       if flat.length() > 16 {
-        [I32]
+        if mem_is_64 {
+          [I64]
+        } else {
+          [I32]
+        }
       } else {
         flat
       }
@@ -76,16 +89,43 @@ fn instantiate_canon_task_return(
     if !canon_may_leave[0] {
       trap_canon("cannot leave component instance")
     }
-    let task_id = current_task_id(async_state)
-    if async_state.task_borrows.get(task_id) is Some(count) && count > 0 {
+    let (_, _, task_id, _) = current_thread_info(
+      async_state, owner_component_id,
+    ) catch {
+      e => {
+        trap_canon(canon_err_message(e))
+        return []
+      }
+    }
+    guard async_state.tasks.read_task_return_contracts(task_id)
+      is Some(contract) &&
+      contract.owner_component_id == owner_component_id &&
+      optional_val_types_match(
+        contract.result,
+        contract.types,
+        result,
+        types,
+        0,
+      ) &&
+      (
+        resources.mem_addr is None ||
+        contract.resources.mem_addr == resources.mem_addr
+      ) &&
+      contract.resources.encoding == resources.encoding else {
+      trap_canon(
+        "invalid `task.return` signature and/or options for current task",
+      )
+      return []
+    }
+    if async_state.tasks.read_task_borrows(task_id) is Some(count) && count > 0 {
       trap_canon("borrow handles still remain at the end of the call")
       return []
     }
-    if async_state.task_returned.get(task_id) is Some(_) {
+    if async_state.tasks.read_task_returned(task_id) is Some(_) {
       trap_canon("task.return called more than once")
       return []
     }
-    async_state.task_returned.set(task_id, true)
+    async_state.tasks.write_task_returned(task_id, true)
     let vals : Array[ComponentValue] = match result {
       None => []
       Some(vt) => {
@@ -136,14 +176,21 @@ fn instantiate_canon_task_cancel(
     if !canon_may_leave[0] {
       trap_canon("cannot leave component instance")
     }
-    let task_id = current_task_id(async_state)
-    if async_state.task_borrows.get(task_id) is Some(count) && count > 0 {
+    let (_, _, task_id, _) = current_thread_info(
+      async_state, owner_component_id,
+    ) catch {
+      e => {
+        trap_canon(canon_err_message(e))
+        return []
+      }
+    }
+    if async_state.tasks.read_task_borrows(task_id) is Some(count) && count > 0 {
       trap_canon("borrow handles still remain at the end of the call")
       return []
     }
-    async_state.task_self_cancelled.set(task_id, true)
-    async_state.task_cancelled.set(task_id, true)
-    async_state.task_returned.set(task_id, true)
+    async_state.tasks.write_task_self_cancelled(task_id, true)
+    async_state.tasks.write_task_cancelled(task_id, true)
+    async_state.tasks.write_task_returned(task_id, true)
     set_task_result(async_state, task_id, owner_component_id, [])
     []
   }

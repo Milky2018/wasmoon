@@ -97,6 +97,23 @@ pub fn validate_extension(view : @milkir.ExtensionInstView) -> String? {
     return Some(message)
   }
   match opcode {
+    ContResume(_, inputs, handlers, _) => {
+      let tail = view.operand_types.length() - 1 - inputs
+      if inputs < 0 ||
+        handlers < 0 ||
+        tail < 0 ||
+        tail / 3 != handlers ||
+        tail % 3 != 0 {
+        Some("malformed Wasm continuation resume operands")
+      } else {
+        for i in (inputs + 1)..<view.operand_types.length() {
+          if view.operand_types[i] != I32 {
+            return Some("Wasm continuation handler descriptors must be i32")
+          }
+        }
+        None
+      }
+    }
     ArrayNewFixed(_, count) if view.operand_types.length() != count =>
       Some(
         "malformed Wasm MilkIR extension 'array_new_fixed': expected \{count} operands, got \{view.operand_types.length()}",

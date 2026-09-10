@@ -5,6 +5,8 @@
 #ifndef JIT_INTERNAL_H
 #define JIT_INTERNAL_H
 
+#include "trap_codes.h"
+
 #include <stdint.h>
 #include <stdbool.h>
 #include <stddef.h>
@@ -97,9 +99,12 @@ typedef struct jit_trap_activation {
     volatile uintptr_t frames_fp[MAX_TRAP_FRAMES];
     volatile int frame_count;
     jit_context_t *context;
+    jit_context_t *control_context;
+    int inherit_controls;
     struct jit_trap_activation *previous;
     void *exception_handler;
     int32_t exception_tag;
+    int64_t exception_ref;
     int64_t *exception_values;
     int32_t exception_value_count;
     int64_t *spilled_locals;
@@ -123,6 +128,8 @@ void jit_trap_activation_pop(jit_trap_activation_t *activation);
 jit_trap_activation_t *jit_trap_activation_detach(void);
 void jit_trap_activation_attach(jit_trap_activation_t *activation);
 void jit_trap_activation_abandon(jit_trap_activation_t *activation);
+void jit_mark_active_gc_roots(GcHeap *heap);
+
 int jit_parked_gc_roots_register(
     jit_trap_activation_t *activation,
     void **registration
@@ -169,6 +176,18 @@ int64_t wasmoon_native_fiber_yield(int64_t value);
 
 #define WASMOON_HOSTCALL_SUSPEND_STATUS (-1)
 #define WASMOON_FIBER_EVENT_HOSTCALL_SUSPENDED INT64_C(0x57534d5355535001)
+#define WASMOON_FIBER_EVENT_GUEST_YIELD INT64_C(0x57534d5355535002)
+#define WASMOON_FIBER_EVENT_ATOMIC_WAIT INT64_C(0x57534d5355535003)
+
+int wasmoon_jit_cancellation_requested(jit_context_t *ctx);
+jit_context_t *jit_execution_control_context(jit_context_t *ctx);
+int wasmoon_native_fiber_own_waiter(void *waiter);
+void wasmoon_native_fiber_release_waiter(void);
+void *wasmoon_atomic_wait_begin(int64_t, int64_t, int32_t, int64_t, int64_t);
+int32_t wasmoon_atomic_wait_poll(void *);
+void wasmoon_atomic_wait_destroy(void *);
+int32_t wasmoon_atomic_notify(int64_t, int64_t, int32_t);
+int32_t wasmoon_atomic_wait_guest(jit_context_t *, int64_t, int64_t, int32_t, int64_t, int64_t);
 
 // ============ Executable Memory (exec_mem.c) ============
 
@@ -193,18 +212,19 @@ void wasmoon_jit_free_memory_desc(int64_t mem_ptr);
 #define WASM_PAGE_SIZE 65536
 
 // Guard page memory allocation (for bounds check elimination)
+uint8_t *alloc_shared_memory_external(wasmoon_memory_t *memory, size_t initial_size, size_t max_size);
 uint8_t *alloc_guarded_memory_external(wasmoon_memory_t *memory, size_t initial_size, size_t max_size);
 int is_memory_guard_page_access(jit_context_t *ctx, void *addr);
 
 // Multi-memory variants (with memidx parameter)
-int32_t memory_grow_indexed_internal(jit_context_t *ctx, int32_t memidx, int64_t delta, int32_t max_pages);
-int32_t memory_size_indexed_internal(jit_context_t *ctx, int32_t memidx);
-void memory_fill_indexed_internal(jit_context_t *ctx, int32_t memidx, int32_t dst, int32_t val, int32_t size);
+int64_t memory_grow_indexed_internal(jit_context_t *ctx, int32_t memidx, int64_t delta, int32_t max_pages);
+int64_t memory_size_indexed_internal(jit_context_t *ctx, int32_t memidx);
+void memory_fill_indexed_internal(jit_context_t *ctx, int32_t memidx, int64_t dst, int32_t val, int64_t size);
 void memory_copy_indexed_internal(jit_context_t *ctx, int32_t dst_memidx, int32_t src_memidx,
-                                   int32_t dst, int32_t src, int32_t size);
+                                   int64_t dst, int64_t src, int64_t size);
 
 // Descriptor-only variants (no ctx)
-int32_t memory_grow_desc_internal(wasmoon_memory_t *mem, int32_t delta, int32_t max_pages);
+int64_t memory_grow_desc_internal(wasmoon_memory_t *mem, int64_t delta, int32_t max_pages);
 int64_t memory_len_desc_internal(wasmoon_memory_t *mem);
 uint8_t *memory_base_desc_internal(wasmoon_memory_t *mem);
 
@@ -291,9 +311,9 @@ int32_t gc_collect_for_alloc_internal(
 
 // Type checking functions
 int is_subtype_cached(int type1, int type2);
-int32_t gc_ref_test_impl(int64_t value, int32_t type_idx, int32_t nullable);
-int64_t gc_ref_cast_impl(int64_t value, int32_t type_idx, int32_t nullable);
-void gc_type_check_subtype_impl(int32_t actual_type, int32_t expected_type);
+int32_t gc_ref_test_impl(jit_context_t *ctx, int64_t value, int32_t type_idx, int32_t nullable);
+int64_t gc_ref_cast_impl(jit_context_t *ctx, int64_t value, int32_t type_idx, int32_t nullable);
+void gc_type_check_subtype_impl(jit_context_t *ctx, int32_t actual_type, int32_t expected_type);
 
 // Type cache management
 void set_type_cache_internal(jit_context_t *ctx, int32_t *types_data, int num_types);
@@ -347,11 +367,11 @@ void gc_array_copy_impl(int64_t dst_ref, int32_t dst_offset,
 int64_t gc_register_struct_inline(jit_context_t *ctx, uint8_t *obj_ptr, int32_t total_size);
 int64_t gc_register_array_inline(jit_context_t *ctx, uint8_t *obj_ptr, int32_t total_size);
 int64_t gc_alloc_struct_slow(jit_context_t *ctx, int32_t type_idx,
-                              int64_t *fields, int32_t num_fields, int32_t safepoint_id);
+                              int64_t *fields, int32_t num_fields, int32_t safepoint_id, int32_t function_index);
 int64_t gc_alloc_array_slow(jit_context_t *ctx, int32_t type_idx,
-                             int32_t len, int64_t init_value, int32_t safepoint_id);
+                             int32_t len, int64_t init_value, int32_t safepoint_id, int32_t function_index);
 int64_t gc_alloc_array_from_values_slow(jit_context_t *ctx, int32_t type_idx,
-                                         int64_t *values, int32_t len, int32_t safepoint_id);
+                                         int64_t *values, int32_t len, int32_t safepoint_id, int32_t function_index);
 
 // v128 aggregate operations. A v128 does not fit a runtime word, so these
 // carry it through a caller-owned 16-byte GcSlot buffer passed by address.
@@ -371,5 +391,31 @@ int64_t gc_alloc_array_wide_slow_impl(int64_t ctx_ptr, int32_t type_idx,
                                        int32_t len, int64_t init_ptr);
 int64_t gc_alloc_array_from_slots_slow_impl(int64_t ctx_ptr, int32_t type_idx,
                                              int64_t slots_ptr, int32_t len);
+
+int32_t callable_type_for_value(jit_context_t *ctx, int64_t value);
+
+void gc_record_runtime_type(jit_context_t *ctx, GcHeap *heap, int32_t ref, int32_t local_type);
+
+struct native_exception_arena *exception_arena_new(void);
+void exception_arena_release(struct native_exception_arena *arena);
+
+void *native_fiber_alloc_c(int64_t (*entry)(void *), void *closure, int64_t stack_size);
+int native_fiber_continue_c(void *fiber, int64_t value);
+void native_fiber_destroy_c(void *fiber);
+int64_t native_fiber_result_c(void *fiber);
+int64_t native_fiber_event_c(void *fiber);
+struct native_continuation_arena *continuation_arena_new(void);
+void continuation_arena_release(struct native_continuation_arena *arena);
+void continuation_types_free(jit_context_t *ctx);
+int64_t exception_capture_payload(jit_context_t *ctx, int32_t tag, const int64_t *values, int32_t count);
+int64_t exception_capture_current(jit_context_t *ctx);
+int wasmoon_jit_call_trampoline_caught(int64_t trampoline_ptr, int64_t ctx_ptr,
+    int64_t func_ptr, int64_t *values, int values_len, int64_t *exception);
+
+void *native_fiber_own_resource(void *resource, void (*release)(void *));
+void native_fiber_replace_resource(void *scope, void *resource);
+void native_fiber_disown_resource(void *scope);
+
+int64_t native_fiber_stack_size_c(void);
 
 #endif // JIT_INTERNAL_H

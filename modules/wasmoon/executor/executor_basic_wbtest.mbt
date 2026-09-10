@@ -244,6 +244,7 @@ test "memory: i32.store and i32.load" {
       {
         limits: { min: 1, max: None, },
         is_memory64: false,
+        is_shared: false,
         page_size_log2: 16,
       },
     ],
@@ -275,6 +276,7 @@ test "memory: i64.store and i64.load" {
       {
         limits: { min: 1, max: None, },
         is_memory64: false,
+        is_shared: false,
         page_size_log2: 16,
       },
     ],
@@ -306,6 +308,7 @@ test "memory: f32.store and f32.load" {
       {
         limits: { min: 1, max: None, },
         is_memory64: false,
+        is_shared: false,
         page_size_log2: 16,
       },
     ],
@@ -340,6 +343,7 @@ test "memory: load with offset" {
       {
         limits: { min: 1, max: None, },
         is_memory64: false,
+        is_shared: false,
         page_size_log2: 16,
       },
     ],
@@ -371,6 +375,7 @@ test "memory: i32.load8_s sign extension" {
       {
         limits: { min: 1, max: None, },
         is_memory64: false,
+        is_shared: false,
         page_size_log2: 16,
       },
     ],
@@ -402,6 +407,7 @@ test "memory: i32.load8_u zero extension" {
       {
         limits: { min: 1, max: None, },
         is_memory64: false,
+        is_shared: false,
         page_size_log2: 16,
       },
     ],
@@ -427,6 +433,7 @@ test "memory: memory.size and memory.grow" {
       {
         limits: { min: 1, max: None, },
         is_memory64: false,
+        is_shared: false,
         page_size_log2: 16,
       },
     ],
@@ -877,6 +884,7 @@ test "host function: caller can access exported memory" {
       {
         limits: { min: 1, max: None, },
         is_memory64: false,
+        is_shared: false,
         page_size_log2: 16,
       },
     ],
@@ -931,6 +939,7 @@ test "memory import: shared memory between modules" {
         desc: Memory({
           limits: { min: 1, max: None, },
           is_memory64: false,
+          is_shared: false,
           page_size_log2: 16,
         }),
       },
@@ -985,6 +994,7 @@ test "memory import: write to imported memory" {
         desc: Memory({
           limits: { min: 1, max: None, },
           is_memory64: false,
+          is_shared: false,
           page_size_log2: 16,
         }),
       },

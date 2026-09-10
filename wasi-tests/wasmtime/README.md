@@ -1,0 +1,149 @@
+# Wasmtime WASIp1 guest programs
+
+This snapshot imports all 58 `p1_*.rs` guest programs from Wasmtime commit
+[`668016926adfd1b8a79dbce894f1e203d8892599`](https://github.com/bytecodealliance/wasmtime/tree/668016926adfd1b8a79dbce894f1e203d8892599/crates/test-programs/src/bin).
+The guest sources and `preview1.rs` support module are unchanged. The small
+local Cargo manifest builds just these programs, with the upstream snapshot's
+`wasip1` and `libc` versions pinned in `Cargo.lock`. Other Wasmtime dependencies
+and the Wasmtime runtime itself are not required.
+
+## Run
+
+From the Wasmoon repository root, with Python 3.11+ and Rust 1.85+ installed:
+
+```sh
+rustup target add wasm32-wasip1
+./install.sh
+python3 scripts/run_wasmtime_p1.py
+```
+
+The default runs both interpreter and JIT. Each invocation has a 30-second
+timeout. Filter individual programs or run an independent Wasmtime CLI:
+
+```sh
+python3 scripts/run_wasmtime_p1.py --list
+python3 scripts/run_wasmtime_p1.py --check
+python3 scripts/run_wasmtime_p1.py --filter 'p1_poll*' --mode interp
+python3 scripts/run_wasmtime_p1.py --mode wasmtime --wasmtime /path/to/wasmtime
+python3 scripts/run_wasmtime_p1.py --output tmp/p1-results --timeout 60
+python3 scripts/run_wasmtime_p1.py --profile explicit-rights
+```
+
+The default profile uses the unchanged sources. The `explicit-rights` profile
+applies `explicit-rights.patch` to a temporary copy, uses a separate build
+directory and records the patch hash and profile in each report.
+
+The runner verifies the complete upstream file inventory and hashes before
+building with `cargo build --locked`. No source downloads are needed; Cargo
+fetches the two locked dependencies on the first build. Build products go under
+`target/wasmtime-p1-build`. Results go to a unique directory under
+`target/wasmtime-p1-results`, unless `--output` specifies a new or empty directory.
+Existing evidence is never overwritten. Use the same Rust toolchain to reproduce
+guest binaries; CI pins Rust 1.97.0. Reports include the compiler version, host,
+engine path/version/hash, upstream commit, Cargo lock hash, commands and per-guest
+Wasm hashes. The engine must be freshly built separately after runtime changes.
+
+## Host contracts and verdicts
+
+The upstream host references are retained under `upstream/crates/wasi/tests/all`
+and `upstream/crates/test-programs/artifacts/src/lib.rs`.
+
+- Every program gets a fresh read-write scratch directory preopened as `.` and
+  receives `.` as its first argument. Scratch contents are removed after each
+  invocation; logs remain. Re-run by program name to recreate its fixture.
+- `ERRNO_MODE_MACOS=1` or `ERRNO_MODE_UNIX=1` follows the upstream host platform.
+  The runner does not force permissive errno matching or disable guest checks.
+- Standard streams are captured to files, with EOF stdin, except the terminal
+  case, which receives a real PTY for all three descriptors. PTY output merges
+  stdout and stderr into `stdout.txt`.
+- `p1_poll_oneoff_stdio` runs twice: EOF stdin and an open, unreadable pipe.
+  Thus 58 programs produce 59 reported scenarios per engine/mode.
+- `p1_stat_extreme_host_mtime` gets the upstream `extreme.dat` contents and a
+  best-effort extreme negative timestamp. As upstream, a host filesystem may
+  reject or clamp the timestamp.
+- `p1_cli_much_stdout` receives `hello, world!` and `10000`; its complete output
+  must equal the expected 130,000 bytes. Other guests carry their own assertions.
+- Nonzero exits (including guest assertion traps or host crashes), timeouts and
+  harness errors remain failures. There is no expected-failure list. Exit status
+  is 0 when all executed tests pass, 1 for guest failures/timeouts or no executed
+  successes, and 2 for harness/setup errors. Unsupported cases are counted
+  separately, as are not-applicable cases; neither counts as a pass. A successful exit does not imply full
+  suite coverage; inspect both exclusion counts.
+
+`p1_cli_hostcall_fuel` is **not applicable**: it tests Wasmtime's hostcall fuel
+policy, which Wasmoon does not implement and which is outside the WASIp1
+contract. It is counted as `not_applicable`, never as a pass or a missing P1
+capability.
+
+The three read-only guests (`p1_file_truncation_readonly`,
+`p1_file_hardlink_across_perms`, `p1_file_rename_across_perms`) receive a separate
+sibling directory mapped as `readonly` through Wasmoon's `--dir-ro` option.
+It contains the upstream `test.txt` fixture. The runner also verifies unchanged
+source bytes and directory entries and an empty writable destination after
+execution. The read-only tree is outside the writable preopen.
+
+Only `--mode wasmtime` still reports these three guests as `unsupported`:
+the reference CLI cannot configure permissions for individual preopens.
+Its coverage therefore differs from the Wasmoon run. Host `chmod` is not a
+substitute for a read-only WASI preopen. The runner does not reproduce
+Wasmtime's host API or table-capacity limits. It targets macOS and Linux,
+not Windows.
+
+## Initial results and interpretation
+
+On macOS ARM64, with Rust 1.97.0 and Wasmoon `1a33cb08` rebuilt from source:
+
+| Engine/mode | Pass | Fail | Unsupported | Timeout |
+| --- | ---: | ---: | ---: | ---: |
+| Wasmoon interpreter | 11 | 44 | 4 | 0 |
+| Wasmoon JIT | 11 | 44 | 4 | 0 |
+| Wasmtime 40.0.0 | 54 | 1 | 4 | 0 |
+
+The Wasmtime reference is older than the source snapshot. Its one failure is a
+host panic on the extreme timestamp fixture; this is not an expected guest
+failure and remains red in the report.
+
+After the P1 fixes, the unchanged profile has 13 passes, 42 failures and four
+unsupported scenarios per engine. Both stdio polling variants now pass.
+
+The separate `explicit-rights` profile requests missing operation rights in a
+temporary source copy and adapts three access-denial assertions in
+`p1_file_write` and `p1_path_open_read_write` to require exactly `NOTCAPABLE`.
+It also checks that denied I/O leaves file contents, size, cursor and guest read
+buffers unchanged. The three read-only guests likewise require exactly
+`NOTCAPABLE` instead of upstream's `PERM`, retaining their content checks and
+adding host-side source/destination checks. The original snapshot is untouched. See the
+[rights decision](../../docs/wasip1-rights.md) for the complete adaptation policy.
+
+With read-only preopens integrated, on macOS ARM64 this profile has 58 passes,
+no failures, timeouts or unsupported scenarios, and one not-applicable scenario
+in each engine. These are adapted legacy-rights results,
+not unchanged upstream conformance. Wasmtime's P2-backed implementation uses
+different access-denial errors; the historical reference table above applies
+to `upstream`, not the adapted legacy-rights gate.
+
+The recovered coverage exposed and now guards polling ABI alignment, Darwin
+device readiness, directory cursor isolation and heap safety, byte-oriented
+UTF-8 readlink/readdir output, trailing-slash constraints and positioned append
+behavior. Independent ABI probes and a retained native AddressSanitizer test
+cover the fixes. Linux results must be verified by the platform workflow;
+macOS results are not evidence of Linux execution.
+
+The regular CI checks the snapshot, Python runner and native ASan tests, and
+runs the unchanged EOF/pending-stdin polling guests and the full explicit-rights
+profile in both engines. The separate
+`Upstream WASIp1 programs` workflow is manually dispatched and runs both host
+platforms, uploading logs even when tests fail. The original profile retains its compatibility failures; the adapted profile
+is a strict regression gate. Neither uses an expected-failure mask.
+
+## Updating the snapshot
+
+Select an exact upstream commit. Copy every `crates/test-programs/src/bin/p1_*.rs`,
+`crates/test-programs/src/preview1.rs`, the three host reference files listed in
+`SNAPSHOT.json`, and `LICENSE` without modifying them. Refresh their SHA-256
+entries and the Cargo binary inventory. Re-audit host fixtures and exclusions,
+pin dependencies against the upstream Cargo lock, regenerate the local lock,
+then run the snapshot check, runner tests and all guest scenarios. Do not update
+hashes simply to accept a local assertion change.
+
+License: [Apache-2.0 WITH LLVM-exception](upstream/LICENSE).

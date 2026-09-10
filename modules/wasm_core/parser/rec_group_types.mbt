@@ -49,6 +49,7 @@ fn Parser::read_composite_type(
     }
     0x5f => Struct(self.read_struct_type())
     0x5e => Array(self.read_array_type())
+    0x5d => Cont(self.read_u32())
     _ => raise ParseError("unknown composite type tag: \{tag}")
   }
 }
@@ -109,6 +110,7 @@ fn Parser::read_rec_group(
   ) -> @types.SubType raise ParserError {
     let composite : @types.CompositeType = match composite_tag {
       0x60 => Func({ params: [], results: [], })
+      0x5d => Cont(0)
       0x5f => Struct({ fields: [], })
       0x5e => {
         let element : @types.FieldType = {
@@ -139,7 +141,9 @@ fn Parser::read_rec_group(
       | 0x71
       | 0x72
       | 0x73
-      | 0x74 => ()
+      | 0x74
+      | 0x68
+      | 0x75 => ()
 
       // ref heaptype / ref null heaptype
       0x64 | 0x63 => self.read_heap_type() |> ignore
@@ -185,6 +189,10 @@ fn Parser::read_rec_group(
         for _ in 0..<nfields {
           skip_field_type_no_resolve(self)
         }
+        tag
+      }
+      0x5d => {
+        self.read_u32() |> ignore
         tag
       }
       0x5e => {

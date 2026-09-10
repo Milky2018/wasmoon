@@ -51,3 +51,65 @@ test "canonical core signatures model indirect parameters and results" {
     ),
   )
 }
+
+///|
+test "large fixed lists have bounded canonical signature expansion" {
+  let types : Array[TypeDef?] = [Some(FixedList(Prim(U32), 2147483647))]
+  let ft : FuncType = {
+    is_async: false,
+    params: [{ label: "x", ty: TypeIdx(0), }],
+    result: Some(TypeIdx(0)),
+  }
+  debug_inspect(
+    canonical_lift_core_func_type(ft, types, I32),
+    content="Some({ params: [I32], results: [I32] })",
+  )
+  debug_inspect(
+    canonical_lower_core_func_type(ft, types, I64),
+    content="Some({ params: [I64, I64], results: [] })",
+  )
+  debug_inspect(
+    canonical_flat_types(TypeIdx(0), types, I32, max_flat=2),
+    content="Some([I32, I32])",
+  )
+}
+
+///|
+test "canonical plans bind representation to memory width and type environment" {
+  let fields : Array[TypeDef?] = [
+    Some(
+      Record([
+        { label: "flag", ty: Prim(U8), },
+        { label: "text", ty: Prim(String), },
+      ]),
+    ),
+  ]
+  let other : Array[TypeDef?] = [Some(DefValType(U64))]
+  let p32 = canonical_abi_plan(TypeIdx(0), fields, false).unwrap()
+  let p64 = canonical_abi_plan(TypeIdx(0), fields, true).unwrap()
+  let scalar = canonical_abi_plan(TypeIdx(0), other, false).unwrap()
+  debug_inspect(
+    (p32.flat, p32.layout, p32.contains_memory),
+    content="([I32, I32, I32], Some((12, 4)), true)",
+  )
+  debug_inspect(
+    (p64.flat, p64.layout),
+    content="([I32, I64, I64], Some((24, 8)))",
+  )
+  debug_inspect(
+    (scalar.flat, scalar.layout, scalar.contains_memory),
+    content="([I64], Some((8, 8)), false)",
+  )
+}
+
+///|
+test "canonical plans reject recursive layouts and detect aggregate overflow" {
+  debug_inspect(
+    canonical_memory_layout(TypeIdx(0), [Some(Tuple([TypeIdx(0)]))], false),
+    content="None",
+  )
+  let types : Array[TypeDef?] = [Some(FixedList(Prim(U64), 2147483647))]
+  let plan = canonical_abi_plan(TypeIdx(0), types, false, max_flat=17).unwrap()
+  inspect(plan.flat.length(), content="17")
+  debug_inspect(plan.layout, content="None")
+}

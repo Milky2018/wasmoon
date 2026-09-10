@@ -286,18 +286,42 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_clear_cancellation_callback(int64_t ctx_ptr)
     clear_cancellation_callback((jit_context_t *)ctx_ptr);
 }
 
-MOONBIT_FFI_EXPORT int32_t wasmoon_jit_cancel_poll(jit_context_t *ctx) {
+jit_context_t *jit_execution_control_context(jit_context_t *ctx) {
+    jit_trap_activation_t *activation = jit_current_trap_activation();
+    return activation->active ? activation->control_context : ctx;
+}
+
+int wasmoon_jit_cancellation_requested(jit_context_t *ctx) {
+    ctx = jit_execution_control_context(ctx);
     if (!ctx || !ctx->cancellation_callback) return 0;
     cancellation_callback_fn cb =
         (cancellation_callback_fn)ctx->cancellation_callback;
-    if (call_cancellation_callback(
-        cb, ctx->cancellation_callback_data
-    ) != 0) {
+    return call_cancellation_callback(cb, ctx->cancellation_callback_data) != 0;
+}
+
+MOONBIT_FFI_EXPORT int32_t wasmoon_jit_cancel_poll(jit_context_t *ctx) {
+    ctx = jit_execution_control_context(ctx);
+    if (wasmoon_jit_cancellation_requested(ctx)) {
         g_trap_code = 11;
         if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
         return 11;
     }
+    // A MoonBit cancellation callback has returned before the native stack is
+    // parked. Only compiled guest/C frames are retained by this suspension.
+    if (ctx && ctx->scheduling_budget > 0 && --ctx->scheduling_budget == 0) {
+        ctx->scheduling_budget = 1024;
+        if (wasmoon_native_fiber_yield(WASMOON_FIBER_EVENT_GUEST_YIELD) == INT64_MIN) {
+            g_trap_code = 8;
+            if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
+            return 8;
+        }
+    }
     return 0;
+}
+
+MOONBIT_FFI_EXPORT void wasmoon_jit_set_cooperative_scheduling(int64_t pointer, int32_t enabled) {
+    jit_context_t *ctx = (void *)(uintptr_t)pointer;
+    if (ctx) ctx->scheduling_budget = enabled ? 1024 : 0;
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_cancel_poll_ptr(void) {
@@ -527,10 +551,10 @@ static _Atomic int64_t g_shared_indirect_table_live_count = 0;
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_alloc_shared_indirect_table(int count) {
     if (count <= 0) return 0;
 
-    void **table = (void **)calloc(count * 2, sizeof(void *));
+    void **table = (void **)calloc((size_t)count * 2, sizeof(void *));
     if (!table) return 0;
 
-    for (int i = 0; i < count; i++) {
+    for (size_t i = 0; i < (size_t)count; i++) {
         table[i * 2] = (void*)(intptr_t)(0);
         table[i * 2 + 1] = (void*)(intptr_t)(-1);
     }
@@ -555,8 +579,8 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_debug_shared_indirect_table_live_count(vo
 MOONBIT_FFI_EXPORT void wasmoon_jit_shared_table_set(int64_t table_ptr, int table_idx, int64_t func_ptr, int type_idx) {
     void **table = (void **)table_ptr;
     if (table && table_idx >= 0) {
-        table[table_idx * 2] = (void *)func_ptr;
-        table[table_idx * 2 + 1] = (void*)(intptr_t)type_idx;
+        table[(size_t)table_idx * 2] = (void *)func_ptr;
+        table[(size_t)table_idx * 2 + 1] = (void*)(intptr_t)type_idx;
     }
 }
 
@@ -577,7 +601,7 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_table_grow_ptr(void) {
 
 // ============ Multi-Memory Operations (with memidx) ============
 
-MOONBIT_FFI_EXPORT int32_t wasmoon_jit_memory_grow(
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_memory_grow(
     jit_context_t *ctx,
     int32_t memidx,
     int64_t delta,
@@ -586,16 +610,16 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_jit_memory_grow(
     return memory_grow_indexed_internal(ctx, memidx, delta, max_pages);
 }
 
-MOONBIT_FFI_EXPORT int32_t wasmoon_jit_memory_size(jit_context_t *ctx, int32_t memidx) {
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_memory_size(jit_context_t *ctx, int32_t memidx) {
     return memory_size_indexed_internal(ctx, memidx);
 }
 
 MOONBIT_FFI_EXPORT void wasmoon_jit_memory_fill(
     jit_context_t *ctx,
     int32_t memidx,
-    int32_t dst,
+    int64_t dst,
     int32_t val,
-    int32_t size
+    int64_t size
 ) {
     memory_fill_indexed_internal(ctx, memidx, dst, val, size);
 }
@@ -604,9 +628,9 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_memory_copy(
     jit_context_t *ctx,
     int32_t dst_memidx,
     int32_t src_memidx,
-    int32_t dst,
-    int32_t src,
-    int32_t size
+    int64_t dst,
+    int64_t src,
+    int64_t size
 ) {
     memory_copy_indexed_internal(ctx, dst_memidx, src_memidx, dst, src, size);
 }
@@ -768,7 +792,7 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_set_table_pointers(
     int64_t ctx_ptr,
     int64_t *table_ptrs,
     int32_t *table_sizes,
-    int32_t *table_max_sizes,
+    int64_t *table_max_sizes,
     int table_count
 ) {
     jit_context_t *ctx = (jit_context_t *)ctx_ptr;
@@ -816,7 +840,7 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_set_table_pointers(
             ctx->table_sizes[i] = (size_t)table_sizes[i];
         }
         if (table_max_sizes) {
-            ctx->table_max_sizes[i] = (table_max_sizes[i] < 0) ? SIZE_MAX : (size_t)table_max_sizes[i];
+            ctx->table_max_sizes[i] = (size_t)(uint64_t)table_max_sizes[i];
         } else {
             ctx->table_max_sizes[i] = SIZE_MAX;
         }
@@ -856,12 +880,13 @@ jit_context_t *get_current_jit_context(void) {
     return activation->active ? activation->context : NULL;
 }
 
-MOONBIT_FFI_EXPORT int wasmoon_jit_call_trampoline(
+int wasmoon_jit_call_trampoline_caught(
     int64_t trampoline_ptr,
     int64_t ctx_ptr,
     int64_t func_ptr,
     int64_t *values_vec,
-    int values_len
+    int values_len,
+    int64_t *exception
 ) {
     (void)values_len;
 
@@ -872,10 +897,14 @@ MOONBIT_FFI_EXPORT int wasmoon_jit_call_trampoline(
     ctx_refresh_memory0_fast_fields(ctx);
     jit_trap_activation_t activation;
     jit_trap_activation_init(&activation, ctx);
+    // Guest continuations retain their defining module, but scheduling and
+    // cancellation belong to the invocation that is currently resuming them.
+    activation.inherit_controls = exception != NULL;
     jit_trap_activation_push(&activation);
 
     if (sigsetjmp(activation.jmp_buf, 1) != 0) {
         int trap_code = (int)activation.code;
+        if (exception && trap_code == 12) *exception = exception_capture_current(ctx);
         jit_trap_activation_finalize(&activation);
         jit_trap_activation_publish(&activation);
         exception_reset_context_state(ctx);
@@ -907,6 +936,12 @@ MOONBIT_FFI_EXPORT int wasmoon_jit_call_trampoline(
     }
 
     return result;
+}
+
+MOONBIT_FFI_EXPORT int wasmoon_jit_call_trampoline(int64_t trampoline_ptr,
+    int64_t ctx_ptr, int64_t func_ptr, int64_t *values_vec, int values_len) {
+    return wasmoon_jit_call_trampoline_caught(trampoline_ptr, ctx_ptr,
+        func_ptr, values_vec, values_len, NULL);
 }
 
 MOONBIT_FFI_EXPORT int wasmoon_jit_call_trampoline_managed(
@@ -1015,7 +1050,7 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_alloc_memory(int64_t size) {
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_alloc_memory_desc(
     int64_t size_bytes,
-    int32_t max_pages,
+    int64_t max_pages,
     int32_t is_memory64,
     int32_t page_size_log2,
     int32_t is_shared
@@ -1023,31 +1058,44 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_alloc_memory_desc(
     if (size_bytes < 0) return 0;
     wasmoon_memory_t *mem = (wasmoon_memory_t *)calloc(1, sizeof(wasmoon_memory_t));
     if (!mem) return 0;
-
-    if (size_bytes > 0) {
-        uint8_t *base = (uint8_t *)calloc(1, (size_t)size_bytes);
-        if (!base) {
-            free(mem);
-            return 0;
-        }
-        mem->base = base;
-        atomic_store_explicit(&mem->current_length, (size_t)size_bytes, memory_order_relaxed);
-    } else {
-        mem->base = NULL;
-        atomic_store_explicit(&mem->current_length, 0, memory_order_relaxed);
-    }
+    atomic_init(&mem->owners, 1);
+    atomic_init(&mem->growth_lock, 0);
 
     mem->max_pages = (max_pages < 0) ? SIZE_MAX : (size_t)max_pages;
     mem->is_memory64 = (is_memory64 != 0);
     mem->page_size_log2 = page_size_log2;
     mem->is_shared = (is_shared != 0);
-    mem->is_guarded = 0;
+    if (mem->is_shared) {
+        if (max_pages < 0 || page_size_log2 < 0 || page_size_log2 > 30 ||
+            (uint64_t)max_pages > SIZE_MAX >> page_size_log2 ||
+            !alloc_shared_memory_external(mem, (size_t)size_bytes,
+                (size_t)max_pages << page_size_log2)) {
+            free(mem);
+            return 0;
+        }
+    } else {
+        if (size_bytes > 0) {
+            mem->base = (uint8_t *)calloc(1, (size_t)size_bytes);
+            if (!mem->base) {
+                free(mem);
+                return 0;
+            }
+        }
+        atomic_store_explicit(&mem->current_length, (size_t)size_bytes, memory_order_relaxed);
+    }
     return (int64_t)mem;
+}
+
+// The caller must already hold a live reference while acquiring another.
+MOONBIT_FFI_EXPORT void wasmoon_jit_retain_memory_desc(int64_t mem_ptr) {
+    wasmoon_memory_t *mem = (wasmoon_memory_t *)mem_ptr;
+    if (mem) atomic_fetch_add_explicit(&mem->owners, 1, memory_order_relaxed);
 }
 
 MOONBIT_FFI_EXPORT void wasmoon_jit_free_memory_desc(int64_t mem_ptr) {
     wasmoon_memory_t *mem = (wasmoon_memory_t *)mem_ptr;
     if (!mem) return;
+    if (atomic_fetch_sub_explicit(&mem->owners, 1, memory_order_acq_rel) != 1) return;
 
     if (mem->is_guarded) {
         if (mem->alloc_base) {
@@ -1070,7 +1118,7 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_free_memory_desc(int64_t mem_ptr) {
 // Returns `wasmoon_memory_t*` on success, 0 on failure.
 extern uint8_t *alloc_guarded_memory_external(wasmoon_memory_t *memory, size_t initial_size, size_t max_size);
 
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_alloc_guarded_memory_desc(int64_t initial_pages, int64_t max_pages) {
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_alloc_guarded_memory_desc(int64_t initial_pages, int64_t max_pages, int32_t is_shared) {
     // Guarded memory is used for memory32 bounds-check elimination.
     // Only supported for 64KiB pages.
     if (initial_pages < 0 || initial_pages > 65536) {
@@ -1088,10 +1136,12 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_alloc_guarded_memory_desc(int64_t initial
         return 0;
     }
 
+    atomic_init(&memory->owners, 1);
+    atomic_init(&memory->growth_lock, 0);
     memory->max_pages = (max_pages < 0) ? SIZE_MAX : (size_t)max_pages;
     memory->is_memory64 = 0;
     memory->page_size_log2 = 16;
-    memory->is_shared = 0;
+    memory->is_shared = (is_shared != 0);
 
     uint8_t *base = alloc_guarded_memory_external(memory, initial_size, max_size);
     if (!base && initial_size > 0) {
@@ -1143,6 +1193,8 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_ctx_alloc_guarded_memory(
     if (!memory) {
         return 0;
     }
+    atomic_init(&memory->owners, 1);
+    atomic_init(&memory->growth_lock, 0);
     memory->max_pages = (max_pages < 0) ? SIZE_MAX : (size_t)max_pages;
     memory->is_memory64 = 0;
     memory->page_size_log2 = 16;
@@ -1199,7 +1251,7 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_mem_desc_get_len(int64_t mem_desc_ptr) {
     return memory_len_desc_internal(mem);
 }
 
-MOONBIT_FFI_EXPORT int32_t wasmoon_mem_desc_grow(int64_t mem_desc_ptr, int32_t delta, int32_t max_pages) {
+MOONBIT_FFI_EXPORT int64_t wasmoon_mem_desc_grow(int64_t mem_desc_ptr, int64_t delta, int32_t max_pages) {
     wasmoon_memory_t *mem = (wasmoon_memory_t *)mem_desc_ptr;
     return memory_grow_desc_internal(mem, delta, max_pages);
 }
@@ -1229,11 +1281,23 @@ MOONBIT_FFI_EXPORT int wasmoon_mem_desc_memmove(int64_t mem_desc_ptr, int64_t ds
     return 0;
 }
 
-MOONBIT_FFI_EXPORT int wasmoon_mem_desc_memset(int64_t mem_desc_ptr, int64_t dst, int32_t val, int size) {
+MOONBIT_FFI_EXPORT int wasmoon_mem_desc_copy64(int64_t dst_desc, int64_t dst, int64_t src_desc, int64_t src, int64_t size) {
+    wasmoon_memory_t *destination = (wasmoon_memory_t *)dst_desc;
+    wasmoon_memory_t *source = (wasmoon_memory_t *)src_desc;
+    if (!destination || !source || !destination->base || !source->base || size <= 0) return -1;
+    memmove(destination->base + dst, source->base + src, (size_t)size);
+    return 0;
+}
+
+MOONBIT_FFI_EXPORT int wasmoon_mem_desc_memset64(int64_t mem_desc_ptr, int64_t dst, int32_t val, int64_t size) {
     wasmoon_memory_t *mem = (wasmoon_memory_t *)mem_desc_ptr;
     if (!mem || !mem->base || size <= 0) return -1;
     memset(mem->base + dst, val & 0xFF, (size_t)size);
     return 0;
+}
+
+MOONBIT_FFI_EXPORT int wasmoon_mem_desc_memset(int64_t mem_desc_ptr, int64_t dst, int32_t val, int size) {
+    return wasmoon_mem_desc_memset64(mem_desc_ptr, dst, val, size);
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_ctx_get_memory_ptr(int64_t ctx_ptr, int memidx) {
@@ -1505,6 +1569,8 @@ static void wasmoon_jit_gc_push_root_scope_or_trap(
     const int64_t *roots,
     int32_t root_count
 ) {
+    jit_context_t *activation = get_current_jit_context();
+    if (activation) ctx = activation;
     if (ctx_gc_push_root_scope_internal(ctx, roots, root_count) == 1) {
         return;
     }
@@ -1513,6 +1579,8 @@ static void wasmoon_jit_gc_push_root_scope_or_trap(
 }
 
 static void wasmoon_jit_gc_pop_root_scope_or_trap(jit_context_t *ctx) {
+    jit_context_t *activation = get_current_jit_context();
+    if (activation) ctx = activation;
     if (ctx && ctx->gc_root_scope_head) {
         ctx_gc_pop_root_scope_internal(ctx);
         return;
@@ -1627,6 +1695,22 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_jit_gc_collect_for_alloc(
 ) {
     jit_context_t *ctx = (jit_context_t *)(uintptr_t)ctx_ptr;
     return gc_collect_for_alloc_internal(ctx, roots, root_count);
+}
+
+// Host-triggered collection must include the dynamically active guest roots.
+// Raw heap collection also retains registered parked continuations.
+MOONBIT_FFI_EXPORT int32_t wasmoon_jit_collect_heap(
+    int64_t heap_ptr,
+    int64_t *roots,
+    int32_t root_count
+) {
+    GcHeap *heap = (GcHeap *)(uintptr_t)heap_ptr;
+    jit_context_t *active = get_current_jit_context();
+    if (active && active->gc_heap == heap) {
+        return gc_collect_for_alloc_internal(active, roots, root_count);
+    }
+    jit_mark_active_gc_roots(heap);
+    return gc_heap_collect(heap, roots, root_count);
 }
 
 MOONBIT_FFI_EXPORT int32_t wasmoon_jit_gc_set_root_scratch(
@@ -1752,7 +1836,7 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_set_table_pointers_managed(
     void *jit_context,
     int64_t *table_ptrs,
     int32_t *table_sizes,
-    int32_t *table_max_sizes,
+    int64_t *table_max_sizes,
     int table_count
 ) {
     wasmoon_jit_ctx_set_table_pointers(
@@ -1943,3 +2027,82 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_clear_cancellation_callback_managed(
 }
 
 #undef MANAGED_CTX
+
+// Generate a leaf context-binding entry. No guest argument, result-area register,
+// return address or stack slot is modified except the explicit VMContext argument.
+MOONBIT_FFI_EXPORT int wasmoon_jit_write_bound_entry_code(
+    void *managed_context, int64_t target, uint8_t *output
+) {
+    uint64_t context = (uint64_t)wasmoon_jit_context_ptr(managed_context);
+    if (!context || !target) return 0;
+#if defined(__aarch64__)
+    uint64_t values[2] = {context, (uint64_t)target};
+    unsigned registers[2] = {0, 16};
+    int offset = 0;
+    for (int value = 0; value < 2; value++) {
+        for (unsigned half = 0; half < 4; half++) {
+            uint32_t instruction = (half == 0 ? 0xd2800000u : 0xf2800000u)
+                | (half << 21)
+                | ((uint32_t)((values[value] >> (half * 16)) & 0xffffu) << 5)
+                | registers[value];
+            memcpy(output + offset, &instruction, 4);
+            offset += 4;
+        }
+    }
+    uint32_t branch = 0xd61f0200u; // br x16
+    memcpy(output + offset, &branch, 4);
+    return offset + 4;
+#elif defined(__x86_64__)
+    output[0] = 0x48; output[1] = 0xbf; // movabs rdi, context
+    memcpy(output + 2, &context, 8);
+    output[10] = 0x49; output[11] = 0xbb; // movabs r11, target
+    memcpy(output + 12, &target, 8);
+    output[20] = 0x41; output[21] = 0xff; output[22] = 0xe3; // jmp r11
+    return 23;
+#else
+    return 0;
+#endif
+}
+
+MOONBIT_FFI_EXPORT void wasmoon_jit_set_callable_types(
+    void *managed_context, const int32_t *local_types, int32_t local_count,
+    const int32_t *parents, int32_t type_count,
+    const int64_t *entries, int32_t entry_count,
+    const int32_t *tags, int32_t tag_count
+) {
+    jit_context_t *ctx = (jit_context_t *)(uintptr_t)wasmoon_jit_context_ptr(managed_context);
+    if (!ctx) return;
+    int32_t *local_copy = local_count ? malloc((size_t)local_count * sizeof(int32_t)) : NULL;
+    int32_t *parent_copy = type_count ? malloc((size_t)type_count * sizeof(int32_t)) : NULL;
+    int64_t *entry_copy = entry_count ? malloc((size_t)entry_count * 2 * sizeof(int64_t)) : NULL;
+    int32_t *tag_copy = tag_count ? malloc((size_t)tag_count * sizeof(int32_t)) : NULL;
+    if ((tag_count && !tag_copy) || (local_count && !local_copy) || (type_count && !parent_copy) || (entry_count && !entry_copy)) {
+        free(local_copy); free(parent_copy); free(entry_copy); free(tag_copy);
+        return;
+    }
+    if (local_count) memcpy(local_copy, local_types, (size_t)local_count * sizeof(int32_t));
+    if (type_count) memcpy(parent_copy, parents, (size_t)type_count * sizeof(int32_t));
+    if (entry_count) memcpy(entry_copy, entries, (size_t)entry_count * 2 * sizeof(int64_t));
+    if (tag_count) memcpy(tag_copy, tags, (size_t)tag_count * sizeof(int32_t));
+    free(ctx->callable_tags);
+    ctx->callable_tags = tag_copy;
+    ctx->callable_tag_count = tag_count;
+    free(ctx->callable_local_types);
+    free(ctx->callable_type_parents);
+    free(ctx->callable_entries);
+    ctx->callable_local_types = local_copy;
+    ctx->callable_local_type_count = local_count;
+    ctx->callable_type_parents = parent_copy;
+    ctx->callable_type_count = type_count;
+    ctx->callable_entries = entry_copy;
+    ctx->callable_entry_count = entry_count;
+}
+
+MOONBIT_FFI_EXPORT int32_t wasmoon_jit_has_callable_metadata(void *managed_context) {
+    jit_context_t *ctx = (jit_context_t *)(uintptr_t)wasmoon_jit_context_ptr(managed_context);
+    return ctx && ctx->callable_local_types != NULL;
+}
+
+MOONBIT_FFI_EXPORT void wasmoon_jit_set_cooperative_scheduling_managed(void *context, int32_t enabled) {
+    wasmoon_jit_set_cooperative_scheduling(wasmoon_jit_context_ptr(context), enabled);
+}

@@ -2,3 +2,9 @@ import {
   "Milky2018/wasm_core/types",
   "moonbitlang/core/hashset",
 }
+
+import {
+  "Milky2018/wasm_core/wat",
+  "Milky2018/wasm_core/encoder",
+  "Milky2018/wasm_core/parser",
+} for "test"

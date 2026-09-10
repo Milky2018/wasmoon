@@ -5,6 +5,22 @@ fn validate_instr(
   stack : OperandStack,
   instr : @types.Instruction,
 ) -> Unit raise ValidationError {
+  if validate_continuation_instruction(ctx, stack, instr) {
+    return
+  }
+  if !ctx.bulk_memory {
+    match instr {
+      MemoryInit(_, _)
+      | DataDrop(_)
+      | MemoryCopy(_, _)
+      | MemoryFill(_)
+      | TableInit(_, _)
+      | ElemDrop(_)
+      | TableCopy(_, _) =>
+        raise TypeMismatch("bulk memory support is not enabled")
+      _ => ()
+    }
+  }
   match instr {
     // Constants
     I32Const(_) => stack.push(I32)
@@ -116,6 +132,14 @@ fn validate_instr(
     }
 
     // i64 binary operations
+    I64Add128 | I64Sub128 => {
+      stack.pop(I64)
+      stack.pop(I64)
+      stack.pop(I64)
+      stack.pop(I64)
+      stack.push(I64)
+      stack.push(I64)
+    }
     I64MulWideS | I64MulWideU => {
       stack.pop(I64)
       stack.pop(I64)
@@ -552,8 +576,8 @@ fn validate_instr(
       }
       let dst_addr_type = ctx.mems[dst].addr_type()
       let src_addr_type = ctx.mems[src].addr_type()
-      // n uses the larger of the two address types
-      let n_type = if dst_addr_type == I64 || src_addr_type == I64 {
+      // The length uses the smaller of the two address types.
+      let n_type = if dst_addr_type == I64 && src_addr_type == I64 {
         @types.ValueType::I64
       } else {
         I32
@@ -588,9 +612,9 @@ fn validate_instr(
         natural : Int,
         name : String,
       ) -> Unit raise ValidationError {
-        if align > natural {
+        if align != natural {
           raise InvalidAlignment(
-            "\{name} alignment \{align} exceeds natural alignment \{natural}",
+            "\{name} alignment \{align} must equal natural alignment \{natural}",
           )
         }
       }
@@ -904,7 +928,14 @@ fn validate_instr(
       }
 
     // Reference instructions
-    RefNull(ref_type) => stack.push(ref_type)
+    RefNull(ref_type) => {
+      validate_value_type(
+        ref_type,
+        ctx.types.length(),
+        stack_switching=ctx.stack_switching,
+      )
+      stack.push(ref_type)
+    }
     RefIsNull => {
       stack.pop_any() |> ignore // any ref type
       stack.push(I32)
@@ -1033,7 +1064,7 @@ fn validate_instr(
       // Validate type indices
       let num_types = ctx.types.length()
       for ty in types {
-        validate_value_type(ty, num_types)
+        validate_value_type(ty, num_types, stack_switching=ctx.stack_switching)
       }
       stack.pop(I32) // condition
       // Pop operands matching result types in reverse
@@ -1422,7 +1453,7 @@ fn validate_instr(
         raise UnknownTag(tag_idx)
       }
       // Get the tag type and pop its parameters from the stack
-      let tag_type = ctx.tags[tag_idx]
+      let tag_type = ctx.exception_tag_type(tag_idx)
       for i = tag_type.params.length() - 1; i >= 0; i = i - 1 {
         stack.pop(tag_type.params[i])
       }
@@ -1465,7 +1496,7 @@ fn validate_instr(
               get_label_types(ctx, target_label)
             }
             // Catch provides tag params
-            let tag_type = ctx.tags[tag_idx]
+            let tag_type = ctx.exception_tag_type(tag_idx)
             if tag_type.params.length() != expected_types.length() {
               raise TypeMismatch(
                 "catch handler arity mismatch: tag has \{tag_type.params.length()} params, label expects \{expected_types.length()}",
@@ -1500,7 +1531,7 @@ fn validate_instr(
               get_label_types(ctx, target_label)
             }
             // CatchRef provides tag params + exnref
-            let tag_type = ctx.tags[tag_idx]
+            let tag_type = ctx.exception_tag_type(tag_idx)
             let expected_arity = tag_type.params.length() + 1
             if expected_arity != expected_types.length() {
               raise TypeMismatch(
@@ -1965,6 +1996,9 @@ fn to_non_nullable_ref_type(
     ExternRef => RefExtern
 
     // Typed refs
+    ContRef => RefCont
+    NullContRef => RefNoCont
+    RefNullContTyped(idx) => RefContTyped(idx)
     RefNullFuncTyped(idx) => RefFuncTyped(idx)
     RefNullStruct(idx) => RefStruct(idx)
     RefNullArray(idx) => RefArray(idx)
@@ -1984,6 +2018,9 @@ fn to_non_nullable_ref_type(
     RefFunc
     | RefExtern
     | RefFuncTyped(_)
+    | RefCont
+    | RefNoCont
+    | RefContTyped(_)
     | RefStruct(_)
     | RefArray(_)
     | RefAny
@@ -2002,6 +2039,9 @@ fn to_nullable_ref_type(
 ) -> @types.ValueType raise ValidationError {
   match ty {
     // Non-null to nullable
+    RefCont => ContRef
+    RefNoCont => NullContRef
+    RefContTyped(idx) => RefNullContTyped(idx)
     RefFunc => FuncRef
     RefExtern => ExternRef
     RefFuncTyped(idx) => RefNullFuncTyped(idx)
@@ -2022,6 +2062,9 @@ fn to_nullable_ref_type(
     | StructRef
     | ArrayRef
     | RefNullFuncTyped(_)
+    | ContRef
+    | NullContRef
+    | RefNullContTyped(_)
     | RefNullStruct(_)
     | RefNullArray(_)
     | RefNullEq
@@ -2042,18 +2085,30 @@ fn get_block_results(
   match bt {
     Empty => []
     Value(t) => {
-      validate_value_type(t, ctx.types.length())
+      validate_value_type(
+        t,
+        ctx.types.length(),
+        stack_switching=ctx.stack_switching,
+      )
       [t]
     }
     MultiValue(types) => {
       for t in types {
-        validate_value_type(t, ctx.types.length())
+        validate_value_type(
+          t,
+          ctx.types.length(),
+          stack_switching=ctx.stack_switching,
+        )
       }
       types
     }
     InlineType(_, results) => {
       for t in results {
-        validate_value_type(t, ctx.types.length())
+        validate_value_type(
+          t,
+          ctx.types.length(),
+          stack_switching=ctx.stack_switching,
+        )
       }
       results
     }
@@ -2077,7 +2132,11 @@ fn get_block_params(
     MultiValue(_) => [] // MultiValue blocks have no params (result-only)
     InlineType(params, _) => {
       for t in params {
-        validate_value_type(t, ctx.types.length())
+        validate_value_type(
+          t,
+          ctx.types.length(),
+          stack_switching=ctx.stack_switching,
+        )
       }
       params
     }

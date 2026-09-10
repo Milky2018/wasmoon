@@ -16,9 +16,22 @@ pub(all) enum NativeFiberEvent {
 } derive(Debug, Eq)
 
 ///|
+pub(all) enum NativeSuspensionReason {
+  HostCall
+  CooperativeYield
+  AtomicWait
+} derive(Debug, Eq)
+
+///|
+pub extend NativeSuspensionReason with Debug::{to_repr}
+
+///|
+pub extend NativeSuspensionReason with Eq::{equal, not_equal}
+
+///|
 /// Result of advancing a stackful JIT invocation.
 pub(all) enum NativeJITContinuationEvent {
-  NativeHostcallSuspended
+  NativeSuspended(NativeSuspensionReason)
   NativeJITCompleted
   NativeJITTrapped(Int)
 } derive(Debug, Eq)
@@ -121,7 +134,7 @@ pub fn NativeJITContinuation::continue_with(
   value? : Int64 = 0L,
 ) -> NativeJITContinuationEvent raise NativeFiberError {
   match native_jit_continuation_advance(self.raw, value) {
-    JITHostcallSuspended => NativeHostcallSuspended
+    JITSuspended(reason) => NativeSuspended(reason)
     JITCompleted => NativeJITCompleted
     JITTrapped(code) => NativeJITTrapped(code)
     JITAdvanceFailed(failure) => raise failure.to_error()

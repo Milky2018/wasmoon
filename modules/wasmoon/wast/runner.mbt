@@ -101,11 +101,14 @@ pub fn builtin_jit_modules() -> Array[String] {
 ///|
 /// WAST execution context
 pub struct WastContext {
+  priv mut closed : Bool
+  priv compiled_modules : Array[JITModuleContext]
   store : @runtime.Store
   mut current_module : @runtime.ModuleInstance?
   named_modules : Map[String, @runtime.ModuleInstance]
   // Module definitions for (module instance ...) command
   module_definitions : Map[String, @types.Module]
+  mut current_definition : @types.Module?
   // Registered modules for imports (module_name -> exports)
   registered_modules : Map[String, @runtime.ModuleInstance]
   // Built-in modules that have been overridden by Register command
@@ -115,6 +118,9 @@ pub struct WastContext {
   jit_modules : Map[String, JITModuleContext]
   mut current_jit : JITModuleContext?
   use_jit : Bool
+  bulk_memory : Bool
+  stack_switching : Bool
+  register_named_modules : Bool
   // JIT compiler callback (provided by main package)
   jit_compiler : JITCompiler?
   // WASI context (for WASI function support in tests)
@@ -124,10 +130,18 @@ pub struct WastContext {
 ///|
 pub fn WastContext::WastContext(
   use_jit : Bool,
+  bulk_memory? : Bool = true,
+  stack_switching? : Bool = false,
+  nan_canonicalization? : Bool = false,
   jit_compiler? : JITCompiler? = None,
+  register_named_modules? : Bool = false,
 ) -> WastContext {
   // Use c_heap when JIT is enabled for GC support
-  let store = if use_jit { @runtime.Store::with_c_heap() } else { Store() }
+  let store = if use_jit {
+    @runtime.Store::with_c_heap(nan_canonicalization~)
+  } else {
+    Store(nan_canonicalization~)
+  }
 
   // Create WASI context with default configuration for tests
   let wasi_builder = @wasi.WasiContextBuilder::WasiContextBuilder()
@@ -150,22 +164,64 @@ pub fn WastContext::WastContext(
     Some(instance) => instance
     None => ModuleInstance() // Fallback: shouldn't happen
   }
+  try! linker.add_host_func("wasmtime", "gc", fn(_args) {
+    store.collect_garbage() |> ignore
+    []
+  })
   let registered_modules : Map[String, @runtime.ModuleInstance] = Map([])
+  registered_modules.set("wasmtime", linker.get_module("wasmtime").unwrap())
   registered_modules.set("spectest", spectest_instance)
   registered_modules.set("wasi_snapshot_preview1", wasi_instance)
   {
+    closed: false,
+    compiled_modules: [],
     store,
     current_module: None,
     named_modules: Map([]),
     module_definitions: Map([]),
+    current_definition: None,
     registered_modules,
     overridden_builtin_modules: HashSet([]),
     jit_modules: Map([]),
     current_jit: None,
     use_jit,
+    bulk_memory,
+    stack_switching,
+    register_named_modules,
     jit_compiler,
     wasi_ctx,
   }
+}
+
+///|
+/// Release a script's resources after every command and invocation has ended.
+/// Repeated close is harmless; the context cannot execute further commands.
+pub fn WastContext::close(self : WastContext) -> Unit {
+  if self.closed {
+    return
+  }
+  self.closed = true
+  self.store.native_execution_state().retire_continuations()
+  // Track compilation ownership separately from names: rebinding a name or
+  // replacing the current module must not orphan its executable mappings.
+  for context in self.compiled_modules {
+    context.close()
+  }
+  self.compiled_modules.clear()
+  self.current_jit = None
+  self.jit_modules.clear()
+  self.current_module = None
+  self.named_modules.clear()
+  self.registered_modules.clear()
+  self.module_definitions.clear()
+  self.current_definition = None
+  self.overridden_builtin_modules.clear()
+  // Store funcref leases keep code alive until the last callable is removed.
+  self.store.close()
+  for _, file in self.wasi_ctx.open_files {
+    @wasi.native_close(file.native_fd) |> ignore
+  }
+  self.wasi_ctx.open_files.clear()
 }
 
 ///|
@@ -185,7 +241,13 @@ fn WastContext::try_compile_jit(
     return Err("JIT is disabled")
   }
   match self.jit_compiler {
-    Some(compiler) => (compiler.compile_fn)(mod_, instance, self.store)
+    Some(compiler) => {
+      let result = (compiler.compile_fn)(mod_, instance, self.store)
+      if result is Ok(context) {
+        self.compiled_modules.push(context)
+      }
+      result
+    }
     None => Err("WAST JIT strict mode: JIT compiler callback is missing")
   }
 }
@@ -232,10 +294,31 @@ pub fn run_wast_commands(
   base_dir : String,
   use_jit : Bool,
   show_success : Bool,
+  bulk_memory? : Bool = true,
+  stack_switching? : Bool = false,
+  nan_canonicalization? : Bool = false,
   jit_compiler? : JITCompiler? = None,
+  register_named_modules? : Bool = false,
 ) -> WastResult {
   let result = WastResult::WastResult()
-  let ctx = WastContext::WastContext(use_jit, jit_compiler~)
+  let ctx = WastContext::WastContext(
+    use_jit,
+    bulk_memory~,
+    stack_switching~,
+    nan_canonicalization~,
+    jit_compiler~,
+    register_named_modules~,
+  )
+  defer ctx.close()
+  if script.commands.any(item => {
+      match item.0 {
+        Thread(_, _, _) | Wait(_) => true
+        _ => false
+      }
+    }) {
+    run_threaded_wast(ctx, script, result, base_dir, show_success)
+    return result
+  }
   for item in script.commands {
     let (cmd, line) = item
     run_wast_command(ctx, cmd, line, result, base_dir, show_success)
@@ -253,115 +336,22 @@ pub fn run_wast_command(
   show_success : Bool,
 ) -> Unit {
   ignore(base_dir)
+  if ctx.closed {
+    result.failed += 1
+    result.failures.push("line \{line}: WAST context is closed")
+    return
+  }
   match cmd {
-    Module(mod_, name) => {
-      @validator.validate_module(mod_) catch {
-        e => {
-          result.failed = result.failed + 1
-          result.failures.push("line \{line}: module validation failed: \{e}")
-          return
-        }
-      }
-      // Build imports from registered modules
-      let imports = ctx.build_imports()
-      // Instantiate the module with imports using shared store
-      let instance = @executor.instantiate_module_with_imports(
-        ctx.store,
-        mod_,
-        imports,
-      ) catch {
-        e => {
-          result.failed = result.failed + 1
-          result.failures.push("line \{line}: instantiation failed: \{e}")
-          return
-        }
-      }
-      ctx.current_module = Some(instance)
-      if name is Some(n) {
-        ctx.named_modules.set(n, instance)
-      }
-      // Try to compile JIT version (only if JIT is enabled)
-      if ctx.use_jit {
-        match ctx.try_compile_jit(mod_, instance) {
-          Ok(jit_ctx) => {
-            ctx.current_jit = Some(jit_ctx)
-            if name is Some(n) {
-              ctx.jit_modules.set(n, jit_ctx)
-            }
-          }
-          Err(err) => {
-            ctx.current_jit = None
-            if name is Some(n) {
-              ctx.jit_modules.remove(n) |> ignore
-            }
-            result.failed = result.failed + 1
-            result.failures.push(
-              "line \{line}: JIT module compile failed: \{err}",
-            )
-            return
-          }
-        }
-      } else {
-        ctx.current_jit = None
-      }
-    }
+    Module(mod_, name) => run_wast_module(ctx, mod_, name, line, result)
     ModuleQuote(parts) => {
-      // Concatenate quoted strings and parse as WAT module
-      let wat_text = StringBuilder::StringBuilder()
-      wat_text.write_string("(module ")
-      for part in parts {
-        wat_text.write_string(part)
-      }
-      wat_text.write_string(")")
-      let mod_ = @wat.parse(wat_text.to_string()) catch {
+      let mod_ = @wat.parse(parts.join(""), implicit_module=true) catch {
         e => {
           result.failed = result.failed + 1
           result.failures.push("line \{line}: quoted module parse failed: \{e}")
           return
         }
       }
-      @validator.validate_module(mod_) catch {
-        e => {
-          result.failed = result.failed + 1
-          result.failures.push(
-            "line \{line}: quoted module validation failed: \{e}",
-          )
-          return
-        }
-      }
-      // Build imports from registered modules
-      let imports = ctx.build_imports()
-      // Instantiate the module with imports using shared store
-      let instance = @executor.instantiate_module_with_imports(
-        ctx.store,
-        mod_,
-        imports,
-      ) catch {
-        e => {
-          result.failed = result.failed + 1
-          result.failures.push(
-            "line \{line}: quoted module instantiation failed: \{e}",
-          )
-          return
-        }
-      }
-      ctx.current_module = Some(instance)
-      // Try to compile JIT version (only if JIT is enabled)
-      if ctx.use_jit {
-        match ctx.try_compile_jit(mod_, instance) {
-          Ok(jit_ctx) => ctx.current_jit = Some(jit_ctx)
-          Err(err) => {
-            ctx.current_jit = None
-            result.failed = result.failed + 1
-            result.failures.push(
-              "line \{line}: JIT quoted module compile failed: \{err}",
-            )
-            return
-          }
-        }
-      } else {
-        ctx.current_jit = None
-      }
+      run_wast_module(ctx, mod_, None, line, result)
     }
     ModuleBinaryFailed(err) => {
       result.failed = result.failed + 1
@@ -370,7 +360,7 @@ pub fn run_wast_command(
     ModuleDefinition(mod_, name) => {
       // Module definition - validates and stores for later instantiation
       // Used with (module instance ...) to create multiple instances
-      @validator.validate_module(mod_) catch {
+      ctx.validate_core_module(mod_) catch {
         e => {
           result.failed = result.failed + 1
           result.failures.push(
@@ -379,6 +369,7 @@ pub fn run_wast_command(
           return
         }
       }
+      ctx.current_definition = Some(mod_)
       // Store the module definition for later instantiation via (module instance ...)
       if name is Some(n) {
         ctx.module_definitions.set(n, mod_)
@@ -387,147 +378,36 @@ pub fn run_wast_command(
     }
     ModuleInstance(instance_name, def_name) => {
       // Instantiate a previously defined module
-      guard ctx.module_definitions.get(def_name) is Some(mod_) else {
+      let definition = match def_name {
+        Some(name) => ctx.module_definitions.get(name)
+        None => ctx.current_definition
+      }
+      guard definition is Some(mod_) else {
         result.failed = result.failed + 1
         result.failures.push(
-          "line \{line}: module definition '\{def_name}' not found",
+          "line \{line}: module definition '\{def_name.unwrap_or("<latest>")}' not found",
         )
         return
       }
-      @validator.validate_module(mod_) catch {
-        e => {
-          result.failed = result.failed + 1
-          result.failures.push(
-            "line \{line}: module instance validation failed: \{e}",
-          )
-          return
-        }
-      }
-      // Build imports from registered modules
-      let imports = ctx.build_imports()
-      // Instantiate the module with imports using shared store
-      let instance = @executor.instantiate_module_with_imports(
-        ctx.store,
-        mod_,
-        imports,
-      ) catch {
-        e => {
-          result.failed = result.failed + 1
-          result.failures.push("line \{line}: module instance failed: \{e}")
-          return
-        }
-      }
-      ctx.current_module = Some(instance)
-      if instance_name is Some(n) {
-        ctx.named_modules.set(n, instance)
-      }
-      // Try to compile JIT version (only if JIT is enabled)
-      if ctx.use_jit {
-        match ctx.try_compile_jit(mod_, instance) {
-          Ok(jit_ctx) => {
-            ctx.current_jit = Some(jit_ctx)
-            if instance_name is Some(n) {
-              ctx.jit_modules.set(n, jit_ctx)
-            }
-          }
-          Err(err) => {
-            ctx.current_jit = None
-            if instance_name is Some(n) {
-              ctx.jit_modules.remove(n) |> ignore
-            }
-            result.failed = result.failed + 1
-            result.failures.push(
-              "line \{line}: JIT module instance compile failed: \{err}",
-            )
-            return
-          }
-        }
-      } else {
-        ctx.current_jit = None
-      }
+      run_wast_module(ctx, mod_, instance_name, line, result)
     }
-    AssertReturn(action, expected) =>
-      match run_assert_return(ctx, action, expected) {
-        None => {
-          result.passed = result.passed + 1
-          if show_success {
-            let action_desc = format_action(action)
-            println("line \{line}: assert_return \{action_desc}: PASSED")
-          }
-        }
-        Some(err) => {
-          result.failed = result.failed + 1
-          let action_desc = format_action(action)
-          result.failures.push(
-            "line \{line}: assert_return \{action_desc}: \{err}",
-          )
-        }
-      }
-    AssertTrap(action, expected_msg) => {
-      let success = run_assert_trap(ctx, action, expected_msg)
-      if success {
-        result.passed = result.passed + 1
-        if show_success {
-          let action_desc = format_action(action)
-          println("line \{line}: assert_trap \{action_desc}: PASSED")
-        }
-      } else {
-        result.failed = result.failed + 1
-        result.failures.push(
-          "line \{line}: assert_trap failed: expected '\{expected_msg}'",
-        )
-      }
-    }
-    AssertException(action) => {
-      // Invoke the action and expect an exception to be thrown
-      let action_desc = format_action(action)
-      try invoke_action(ctx, action) catch {
-        _ => {
-          result.passed = result.passed + 1
-          if show_success {
-            println("line \{line}: assert_exception \{action_desc}: PASSED")
-          }
-        }
+    AssertReturn(action, _)
+    | AssertTrap(action, _)
+    | AssertSuspension(action, _)
+    | AssertException(action)
+    | AssertExhaustion(action, _)
+    | Action(action) => {
+      let outcome = try invoke_action(ctx, action) catch {
+        error => Err(error)
       } noraise {
-        values => {
-          result.failed = result.failed + 1
-          result.failures.push(
-            "line \{line}: assert_exception \{action_desc}: expected exception but none thrown (returned \{Repr(values)})",
-          )
-        }
+        values => Ok(values)
       }
-    }
-    AssertExhaustion(action, expected_msg) => {
-      // Try to invoke - should cause stack exhaustion with matching message
-      let action_desc = format_action(action)
-      try invoke_action(ctx, action) catch {
-        e => {
-          let err_str = e.to_string()
-          if err_str.contains(expected_msg) {
-            result.passed = result.passed + 1
-            if show_success {
-              println("line \{line}: assert_exhaustion \{action_desc}: PASSED")
-            }
-          } else {
-            result.failed = result.failed + 1
-            result.failures.push(
-              "line \{line}: assert_exhaustion \{action_desc}: expected '\{expected_msg}', got '\{err_str}'",
-            )
-          }
-        }
-      } noraise {
-        _ => {
-          result.failed = result.failed + 1
-          result.failures.push(
-            "line \{line}: assert_exhaustion \{action_desc}: expected exhaustion but succeeded",
-          )
-        }
-      }
+      finish_wast_action(ctx, cmd, action, line, result, show_success, outcome)
     }
     AssertModuleTrap(source, msg) => {
       // Try to instantiate - should trap during instantiation (e.g., start function)
       // Unlike assert_unlinkable, this tests for runtime traps, not linking errors
-      let trapped = try_instantiate_source_traps(ctx, source)
+      let trapped = try_instantiate_source_traps(ctx, source, msg)
       if trapped {
         result.passed = result.passed + 1
         if show_success {
@@ -541,7 +421,7 @@ pub fn run_wast_command(
       }
     }
     AssertInvalid(source, msg) => {
-      let valid = validate_module_source(source)
+      let valid = validate_module_source(ctx, source)
       if valid {
         result.failed = result.failed + 1
         result.failures.push(
@@ -571,8 +451,15 @@ pub fn run_wast_command(
       }
     }
     AssertUnlinkable(source, msg) => {
-      // Try to instantiate - should fail during linking
-      let linked = try_instantiate_source(ctx, source)
+      let linked = try_instantiate_source(ctx, source) catch {
+        error => {
+          result.failed += 1
+          result.failures.push(
+            "line \{line}: assert_unlinkable: module must build before linking: \{error}",
+          )
+          return
+        }
+      }
       if linked {
         result.failed = result.failed + 1
         result.failures.push(
@@ -608,11 +495,12 @@ pub fn run_wast_command(
         }
       }
     }
-    Action(action) =>
-      // Just invoke the action, ignore result
-      try invoke_action(ctx, action) |> ignore catch {
-        _ => ()
-      }
+    Thread(_, _, _) | Wait(_) => {
+      result.failed += 1
+      result.failures.push(
+        "line \{line}: thread directives require a complete WAST script",
+      )
+    }
   }
 }
 
@@ -633,21 +521,30 @@ fn format_action(action : @wat.WastAction) -> String {
 }
 
 ///|
-fn run_assert_return(
+fn check_assert_return(
   ctx : WastContext,
   action : @wat.WastAction,
   expected : Array[@wat.WastValue],
+  results : Array[@types.Value],
 ) -> String? {
-  let results = invoke_action(ctx, action) catch {
-    e => return Some("invoke failed: \{e}")
-  }
   if results.length() != expected.length() {
     return Some(
       "result count mismatch: expected \{expected.length()}, got \{results.length()}",
     )
   }
+  let module_name = match action {
+    Invoke(name, _, _) | Get(name, _) => name
+  }
+  let instance = match module_name {
+    Some(name) => ctx.named_modules.get(name)
+    None => ctx.current_module
+  }
+  let func_addrs = match instance {
+    Some(instance) => instance.func_addrs
+    None => []
+  }
   for i in 0..<results.length() {
-    if !values_match(results[i], expected[i]) {
+    if !values_match(results[i], expected[i], func_addrs~) {
       return Some(
         "result[\{i}] mismatch: expected \{expected[i]}, got \{results[i]}",
       )
@@ -657,13 +554,54 @@ fn run_assert_return(
 }
 
 ///|
-fn run_assert_trap(
-  ctx : WastContext,
-  action : @wat.WastAction,
-  _expected_msg : String,
-) -> Bool {
-  // Should trap
-  !succeeds(() => invoke_action(ctx, action))
+// These spelling aliases match the pinned Wasmtime WAST adapter. They
+// preserve the trap category; unrelated trap messages must still fail.
+fn wast_trap_message_matches(actual : String, expected : String) -> Bool {
+  let actual = actual.split(" (sig=").next().unwrap_or("").to_owned()
+  actual.contains(expected) ||
+  (
+    expected == "uninitialized element 2" &&
+    actual.contains("uninitialized element")
+  ) ||
+  (
+    expected.contains("null function") &&
+    actual.contains("uninitialized element")
+  ) ||
+  (
+    expected.contains("null") &&
+    expected.contains("reference") &&
+    actual.contains("null reference")
+  )
+}
+
+///|
+fn classify_runtime_failure(error : @runtime.RuntimeError) -> WastRunnerError {
+  match error {
+    UncaughtException => GuestException
+    UnhandledSuspension => GuestSuspension
+    CallStackExhausted | StackOverflow => GuestExhaustion(error.to_string())
+    OutOfBoundsMemoryAccess
+    | OutOfBoundsTableAccess
+    | OutOfBoundsArrayAccess
+    | UndefinedElement
+    | UninitializedElement
+    | IndirectCallTypeMismatch
+    | DivisionByZero
+    | IntegerOverflow
+    | InvalidConversion
+    | Unreachable
+    | CastFailure
+    | NullReference
+    | UnalignedAtomic
+    | OutOfMemory
+    | TableAllocationOverflow
+    | TableAllocationFailed
+    | MemoryMinimumExceedsLimits(_)
+    | AllocationTooLarge
+    | ContinuationAlreadyConsumed
+    | AtomicWaitNonSharedMemory => GuestTrap(error.to_string())
+    _ => RuntimeError(error.to_string())
+  }
 }
 
 ///|
@@ -680,6 +618,10 @@ fn[T] succeeds(body : () -> T raise) -> Bool {
 pub(all) suberror WastRunnerError {
   ModuleNotFound(String)
   NoCurrentModule
+  GuestTrap(String)
+  GuestException
+  GuestSuspension
+  GuestExhaustion(String)
   RuntimeError(String)
 }
 
@@ -688,6 +630,10 @@ pub impl Show for WastRunnerError with fn output(self, logger) {
   match self {
     ModuleNotFound(name) => logger.write_string("module not found: \{name}")
     NoCurrentModule => logger.write_string("no current module")
+    GuestTrap(msg) => logger.write_string("wasm trap: \{msg}")
+    GuestException => logger.write_string("uncaught Wasm exception")
+    GuestSuspension => logger.write_string("unhandled suspension")
+    GuestExhaustion(msg) => logger.write_string("wasm exhaustion: \{msg}")
     RuntimeError(msg) => logger.write_string("runtime error: \{msg}")
   }
 }
@@ -712,292 +658,47 @@ pub fn invoke_action(
             None => raise NoCurrentModule
           }
       }
-      // Try JIT execution first
-      let jit_ctx : JITModuleContext? = match module_name {
+      let runtime_args = args.map(value => {
+        wast_value_to_runtime(value, func_addrs=instance.func_addrs)
+      })
+      let jit_ctx = match module_name {
         Some(name) => ctx.jit_modules.get(name)
         None => ctx.current_jit
       }
-      match jit_ctx {
-        Some(jit) =>
-          // Find and call JIT function
-          match jit.jit_module.get_func_by_name(func_name) {
-            Some(f) => {
-              // Convert args to Int64.
-              // V128 uses two slots: low 8 bytes, then high 8 bytes.
-              let i64_args : Array[Int64] = []
-              for arg in args {
-                match arg {
-                  I32(n) => i64_args.push(@types.ToInt64::to_int64_bits(n))
-                  I64(n) => i64_args.push(@types.ToInt64::to_int64_bits(n))
-                  F32(n) => i64_args.push(@types.ToInt64::to_int64_bits(n))
-                  F64(n) => i64_args.push(@types.ToInt64::to_int64_bits(n))
-                  F32CanonicalNan | F32ArithmeticNan =>
-                    i64_args.push(
-                      @types.ToInt64::to_int64_bits(@float.not_a_number),
-                    )
-                  F64CanonicalNan | F64ArithmeticNan =>
-                    i64_args.push(
-                      @types.ToInt64::to_int64_bits(@double.not_a_number),
-                    )
-                  RefNull(_) => i64_args.push(NULL_REF)
-                  // Externref uses special encoding: EXTERNREF_TAG | (host_idx << 1)
-                  RefExtern(n) =>
-                    i64_args.push(@wasmoon_jit.encode_externref(n))
-                  RefHost(n) => i64_args.push(@wasmoon_jit.encode_externref(n))
-                  RefFunc => i64_args.push(NULL_REF) // placeholder
-                  RefExternAny => i64_args.push(NULL_REF) // placeholder
-                  // GC reference types - these shouldn't appear as args but handle them
-                  RefArray | RefStruct | RefEq | RefI31 | RefAny =>
-                    i64_args.push(NULL_REF)
-                  // V128: push 16 bytes as two Int64 (low then high) in little-endian
-                  V128(bytes) => {
-                    let low = @types.bytes_to_int64_le(bytes, 0)
-                    i64_args.push(low)
-                    let high = @types.bytes_to_int64_le(bytes, 8)
-                    i64_args.push(high)
-                  }
-                  V128Pattern(_) =>
-                    abort("V128Pattern not valid as JIT argument")
-                  Either(_) => abort("Either not valid as JIT argument")
-                }
-              }
-              // Set up GC heap for JIT execution if c_heap is available
-              let mut temp_gc_func_table_ptr = 0L
-              match ctx.store.c_heap {
-                Some(heap) => {
-                  // Compute canonical type indices for proper type equivalence checking
-                  let canonical = @types.compute_canonical_type_indices(
-                    jit.module_types,
-                    type_rec_groups=jit.module_rec_groups,
-                  )
-                  let jit_func_type_indices : Array[Int] = []
-                  for i, func_addr in jit.func_addrs {
-                    if i >= 0 && i < jit.func_type_indices.length() {
-                      let raw_type_idx = jit.func_type_indices[i]
-                      if raw_type_idx >= 0 &&
-                        raw_type_idx < jit.canonical_type_indices.length() {
-                        jit_func_type_indices.push(
-                          jit.canonical_type_indices[raw_type_idx],
-                        )
-                      } else {
-                        jit_func_type_indices.push(raw_type_idx)
-                      }
-                    } else if func_addr >= 0 &&
-                      func_addr < ctx.store.func_type_indices.length() {
-                      let fallback_canonical = ctx.store.get_func_canonical_type_idx(
-                        func_addr,
-                      )
-                      if fallback_canonical >= 0 {
-                        jit_func_type_indices.push(fallback_canonical)
-                      } else {
-                        jit_func_type_indices.push(
-                          ctx.store.func_type_indices[func_addr],
-                        )
-                      }
-                    } else {
-                      jit_func_type_indices.push(-1) // Invalid/unknown type
-                    }
-                  }
-                  let gc_func_type_indices : Array[Int] = []
-                  for type_idx in jit_func_type_indices {
-                    gc_func_type_indices.push(type_idx)
-                  }
-                  let merged_funcref_types : Map[Int64, Int] = Map([])
-                  for func_idx, _func_addr in jit.func_addrs {
-                    let func_ptr = jit.jit_module.get_func_ptr(func_idx)
-                    if func_ptr == 0L {
-                      continue
-                    }
-                    if func_idx >= 0 && func_idx < gc_func_type_indices.length() {
-                      merged_funcref_types.set(
-                        func_ptr,
-                        gc_func_type_indices[func_idx],
-                      )
-                    }
-                  }
-                  let registered_funcref_entries = collect_registered_funcref_entries(
-                    ctx.store,
-                  )
-                  for entry in registered_funcref_entries {
-                    let (func_ptr, type_idx) = entry
-                    if merged_funcref_types.get(func_ptr) is None {
-                      merged_funcref_types.set(func_ptr, type_idx)
-                    }
-                  }
-                  let gc_funcref_entries : Array[(Int64, Int)] = []
-                  for func_ptr, type_idx in merged_funcref_types {
-                    gc_funcref_entries.push((func_ptr, type_idx))
-                  }
-                  if gc_funcref_entries.length() > 0 {
-                    let table_size = (gc_funcref_entries.length() * 8).to_int64()
-                    let table_ptr = @wasmoon_jit.alloc_memory(table_size)
-                    if table_ptr != 0L {
-                      temp_gc_func_table_ptr = table_ptr
-                      gc_func_type_indices.clear()
-                      for i, entry in gc_funcref_entries {
-                        let (func_ptr, type_idx) = entry
-                        @wasmoon_jit.native_value_slot_write(
-                          table_ptr, i, func_ptr,
-                        )
-                        gc_func_type_indices.push(type_idx)
-                      }
-                    }
-                  }
-                  try {
-                    if temp_gc_func_table_ptr != 0L {
-                      jit.jit_module.setup_gc_with_func_table(
-                        heap,
-                        jit.module_types,
-                        canonical,
-                        gc_func_type_indices,
-                        temp_gc_func_table_ptr,
-                        gc_func_type_indices.length(),
-                      )
-                    } else {
-                      jit.jit_module.setup_gc(
-                        heap,
-                        jit.module_types,
-                        canonical,
-                        gc_func_type_indices,
-                      )
-                    }
-                  } catch {
-                    err => {
-                      if temp_gc_func_table_ptr != 0L {
-                        @wasmoon_jit.free_memory(temp_gc_func_table_ptr)
-                        temp_gc_func_table_ptr = 0L
-                      }
-                      raise RuntimeError("JIT GC setup failed: \{err}")
-                    }
-                  }
-                  // Set GC heap in VMContext for inline allocation
-                  jit.jit_module.set_gc_heap(heap.get_ptr())
-                }
-                None => ()
-              }
-              // Keep JIT shared tables coherent with interpreter-visible table state
-              // before each call. This is required for mixed interpreter/JIT flows
-              // (e.g. assertions that instantiate/trap between JIT invocations).
-              sync_store_globals_to_jit(jit, ctx.store)
-              sync_tables_to_jit(
-                instance,
-                ctx.store,
-                jit.jit_module,
-                use_subtype_indirect_check=jit.use_subtype_indirect_check,
-              )
-              let results = jit.jit_module.call_with_context(f, i64_args) catch {
-                JITExit(code) => {
-                  // Tear down GC context on exit
-                  jit.jit_module.teardown_gc()
-                  if temp_gc_func_table_ptr != 0L {
-                    @wasmoon_jit.free_memory(temp_gc_func_table_ptr)
-                    temp_gc_func_table_ptr = 0L
-                  }
-                  // Sync globals even on exit
-                  sync_jit_globals_to_store(jit, ctx.store)
-                  sync_jit_tables_to_store(jit, ctx.store)
-                  raise RuntimeError("WASI exit: \{code}")
-                }
-                JITTrap(msg) => {
-                  // Tear down GC context on trap
-                  jit.jit_module.teardown_gc()
-                  if temp_gc_func_table_ptr != 0L {
-                    @wasmoon_jit.free_memory(temp_gc_func_table_ptr)
-                    temp_gc_func_table_ptr = 0L
-                  }
-                  // Sync globals even on trap (in case globals were modified before trap)
-                  sync_jit_globals_to_store(jit, ctx.store)
-                  sync_jit_tables_to_store(jit, ctx.store)
-                  raise RuntimeError(msg)
-                }
-                JITNativeFiberFailure(message) => {
-                  jit.jit_module.teardown_gc()
-                  if temp_gc_func_table_ptr != 0L {
-                    @wasmoon_jit.free_memory(temp_gc_func_table_ptr)
-                    temp_gc_func_table_ptr = 0L
-                  }
-                  sync_jit_globals_to_store(jit, ctx.store)
-                  sync_jit_tables_to_store(jit, ctx.store)
-                  raise RuntimeError("JIT native-fiber failure: \{message}")
-                }
-                JITCancelled => {
-                  jit.jit_module.teardown_gc()
-                  if temp_gc_func_table_ptr != 0L {
-                    @wasmoon_jit.free_memory(temp_gc_func_table_ptr)
-                    temp_gc_func_table_ptr = 0L
-                  }
-                  sync_jit_globals_to_store(jit, ctx.store)
-                  sync_jit_tables_to_store(jit, ctx.store)
-                  raise RuntimeError("invocation cancelled")
-                }
-              }
-              // Tear down GC context after JIT call
-              jit.jit_module.teardown_gc()
-              if temp_gc_func_table_ptr != 0L {
-                @wasmoon_jit.free_memory(temp_gc_func_table_ptr)
-              }
-              // Sync JIT globals back to store after successful call
-              sync_jit_globals_to_store(jit, ctx.store)
-              sync_jit_tables_to_store(jit, ctx.store)
-              // Convert results back to Values based on function return types
-              // V128 results take two slots (low then high 8 bytes)
-              let values : Array[@types.Value] = []
-              let mut result_idx = 0
-              for result_type in f.result_types {
-                if result_idx >= results.length() {
-                  break
-                }
-                match result_type {
-                  V128 => {
-                    // V128 uses two slots: low (first) and high (second)
-                    if result_idx + 1 >= results.length() {
-                      break
-                    }
-                    let low = results[result_idx]
-                    let high = results[result_idx + 1]
-                    let bytes = @types.int64_pair_to_v128_le(low, high)
-                    values.push(V128(bytes))
-                    result_idx = result_idx + 2
-                  }
-                  _ => {
-                    values.push(
-                      convert_jit_result(
-                        results[result_idx],
-                        result_type,
-                        ctx.store.c_heap,
-                      ),
-                    )
-                    result_idx = result_idx + 1
-                  }
-                }
-              }
-              values
-            }
-            None => {
-              // Function not found in JIT, fall back to interpreter
-              let runtime_args = args.map(wast_value_to_runtime)
-              @executor.call_exported_func(
-                ctx.store,
-                instance,
-                func_name,
-                runtime_args,
-              ) catch {
-                e => raise RuntimeError(e.to_string())
-              }
-            }
-          }
-        None => {
-          // No JIT available, use interpreter
-          let runtime_args = args.map(wast_value_to_runtime)
-          @executor.call_exported_func(
+      if jit_ctx is Some(jit) {
+        if jit.jit_module.get_func_by_name(func_name) is Some(func) {
+          return jit.call_core_func(
             ctx.store,
             instance,
-            func_name,
+            func.func_idx,
             runtime_args,
           ) catch {
-            e => raise RuntimeError(e.to_string())
+            error => raise classify_jit_failure(error)
           }
         }
+      }
+      let mut func_idx = None
+      for export_ in instance.exports {
+        if export_.name == func_name && export_.desc is Func(index) {
+          func_idx = Some(index)
+          break
+        }
+      }
+      guard func_idx is Some(index) else {
+        raise RuntimeError("unknown exported function: \{func_name}")
+      }
+      let outcome = @executor.call_func_by_index_with_exception(
+        ctx.store,
+        instance,
+        index,
+        runtime_args,
+      ) catch {
+        error => raise classify_runtime_failure(error)
+      }
+      match outcome {
+        Returned(values) => values
+        Thrown(_, _) => raise GuestException
+        HostFailed(error) => raise RuntimeError(error.to_string())
       }
     }
     Get(module_name, global_name) => {
@@ -1026,100 +727,10 @@ pub fn invoke_action(
 }
 
 ///|
-/// Convert JIT result (Int64) to Value based on the given return type
-fn convert_jit_result(
-  v : Int64,
-  ty : @types.ValueType,
-  c_heap : @wasmoon_jit.CHeap?,
-) -> @types.Value {
-  match ty {
-    I32 => I32(@types.FromInt64::from_int64_bits(v))
-    I64 => I64(@types.FromInt64::from_int64_bits(v))
-    F32 => F32(@types.FromInt64::from_int64_bits(v))
-    F64 => F64(@types.FromInt64::from_int64_bits(v))
-    // Reference types: JIT null is 0.
-    // Funcref may be IR-encoded as negative: value = -(func_idx + 1).
-    FuncRef | RefFunc | RefFuncTyped(_) | RefNullFuncTyped(_) | NullFuncRef =>
-      if v == NULL_REF {
-        Null
-      } else if v < 0L {
-        let func_idx = (-(v + 1L)).to_int()
-        FuncRef(func_idx)
-      } else {
-        // Tagged pointer funcref (bit 61 set) - keep previous decoding fallback.
-        let func_idx = (v & 0x1FFFFFFFFFFFFFFFL).to_int()
-        FuncRef(func_idx)
-      }
-    ExternRef | RefExtern | NullExternRef =>
-      // Externref encoding: null=0, non-null=EXTERNREF_TAG | (host_idx << 1)
-      if v == NULL_REF {
-        Null
-      } else {
-        match @wasmoon_jit.decode_externref(v) {
-          Some(idx) => ExternRef(idx)
-          None => ExternRef(v.to_int())
-        }
-      }
-    // GC reference types - decode using c_heap encoding
-    // Encoding: StructRef/ArrayRef = (gc_ref - 1) << 1 (even), i31 = (value << 1) | 1 (odd), null = NULL_REF
-    // Note: ExternRef can also appear here after any.convert_extern, tagged with EXTERNREF_TAG
-    AnyRef | RefAny | RefEq | RefNullEq =>
-      if v == NULL_REF {
-        Null
-      } else if (v & EXTERNREF_TAG) != 0L {
-        // Host externref that was converted to anyref via any.convert_extern
-        match @wasmoon_jit.decode_externref(v) {
-          Some(idx) => ExternRef(idx)
-          None => ExternRef(v.to_int())
-        }
-      } else if (v & 1L) == 1L {
-        // i31 (odd)
-        I31((v >> 1).to_int())
-      } else {
-        // Struct/array ref (even, non-zero) - query heap for the actual kind
-        // JIT encodes as gc_ref << 1 where gc_ref is 1-based
-        // CHeap::is_array expects 0-based index, so subtract 1
-        let gc_ref = (v >> 1).to_int()
-        let heap_idx = gc_ref - 1
-        match c_heap {
-          Some(heap) =>
-            if heap.is_array(heap_idx) {
-              ArrayRef(heap_idx)
-            } else {
-              StructRef(heap_idx)
-            }
-          None =>
-            // No heap available, default to StructRef
-            StructRef(heap_idx)
-        }
-      }
-    StructRef | RefStructAbs | RefStruct(_) | RefNullStruct(_) =>
-      if v == NULL_REF {
-        Null
-      } else {
-        let gc_ref = (v >> 1).to_int()
-        StructRef(gc_ref - 1)
-      }
-    ArrayRef | RefArrayAbs | RefArray(_) | RefNullArray(_) =>
-      if v == NULL_REF {
-        Null
-      } else {
-        let gc_ref = (v >> 1).to_int()
-        ArrayRef(gc_ref - 1)
-      }
-    RefI31 | RefNullI31 =>
-      if v == NULL_REF {
-        Null
-      } else {
-        I31((v >> 1).to_int())
-      }
-    NullRef | ExnRef | NullExnRef | RefNone => Null
-    V128 => abort("V128 not supported in JIT")
-  }
-}
-
-///|
-pub fn wast_value_to_runtime(v : @wat.WastValue) -> @types.Value {
+pub fn wast_value_to_runtime(
+  v : @wat.WastValue,
+  func_addrs? : Array[Int] = [],
+) -> @types.Value raise WastRunnerError {
   match v {
     I32(n) => I32(n)
     I64(n) => I64(n)
@@ -1134,6 +745,12 @@ pub fn wast_value_to_runtime(v : @wat.WastValue) -> @types.Value {
     RefNull(_) => Null
     RefExtern(n) => ExternRef(n)
     RefHost(n) => ExternRef(n) // ref.host is like ref.extern for testing
+    RefFuncIndex(idx) => {
+      if idx < 0 || idx >= func_addrs.length() {
+        raise RuntimeError("invalid ref.func argument index")
+      }
+      FuncRef(func_addrs[idx])
+    }
     RefFunc => FuncRef(0) // Placeholder
     RefExternAny => ExternRef(0) // Placeholder for matching
     // GC reference types - these are abstract type matchers, not concrete values
@@ -1144,16 +761,28 @@ pub fn wast_value_to_runtime(v : @wat.WastValue) -> @types.Value {
 }
 
 ///|
-pub fn values_match(actual : @types.Value, expected : @wat.WastValue) -> Bool {
+pub fn values_match(
+  actual : @types.Value,
+  expected : @wat.WastValue,
+  func_addrs? : Array[Int] = [],
+) -> Bool {
   match (actual, expected) {
     (I32(a), I32(e)) => a == e
     (I64(a), I64(e)) => a == e
-    (F32(a), F32(e)) => a == e || (a.is_nan() && e.is_nan())
-    (F64(a), F64(e)) => a == e || (a.is_nan() && e.is_nan())
-    (F32(a), F32CanonicalNan) | (F32(a), F32ArithmeticNan) => a.is_nan()
-    (F64(a), F64CanonicalNan) | (F64(a), F64ArithmeticNan) => a.is_nan()
+    (F32(a), F32(e)) => a.reinterpret_as_int() == e.reinterpret_as_int()
+    (F64(a), F64(e)) => a.reinterpret_as_int64() == e.reinterpret_as_int64()
+    (F32(a), F32CanonicalNan) =>
+      (a.reinterpret_as_int() & 0x7fffffff) == 0x7fc00000
+    (F32(a), F32ArithmeticNan) =>
+      (a.reinterpret_as_int() & 0x7fc00000) == 0x7fc00000
+    (F64(a), F64CanonicalNan) =>
+      (a.reinterpret_as_int64() & 0x7fffffffffffffffL) == 0x7ff8000000000000L
+    (F64(a), F64ArithmeticNan) =>
+      (a.reinterpret_as_int64() & 0x7ff8000000000000L) == 0x7ff8000000000000L
     (Null, RefNull(_)) => true
     (FuncRef(_), RefFunc) => true
+    (FuncRef(addr), RefFuncIndex(idx)) =>
+      idx >= 0 && idx < func_addrs.length() && addr == func_addrs[idx]
     (ExternRef(a), RefExtern(e)) => a == e
     (ExternRef(_), RefExternAny) => true // any non-null externref
     (ExternRef(a), RefHost(e)) => a == e // ref.host is like ref.extern
@@ -1175,7 +804,9 @@ pub fn values_match(actual : @types.Value, expected : @wat.WastValue) -> Bool {
     (V128(a), V128Pattern(lanes)) => v128_pattern_match(a, lanes)
     // Relaxed SIMD: Either matches if any alternative matches
     (_, Either(alternatives)) =>
-      alternatives.iter().any(fn(alt) { values_match(actual, alt) })
+      alternatives
+      .iter()
+      .any(fn(alt) { values_match(actual, alt, func_addrs~) })
     _ => false
   }
 }
@@ -1207,14 +838,14 @@ fn v128_pattern_match(
         (actual[offset + 1].to_int() << 8) |
         (actual[offset + 2].to_int() << 16) |
         (actual[offset + 3].to_int() << 24)
-      let actual_f = Float::reinterpret_from_int(lane_bits)
       match lanes[i] {
-        F32(e) =>
-          if !(actual_f == e || (actual_f.is_nan() && e.is_nan())) {
+        F32(e) => if lane_bits != e.reinterpret_as_int() { return false }
+        F32CanonicalNan =>
+          if (lane_bits & 0x7fffffff) != 0x7fc00000 {
             return false
           }
-        F32CanonicalNan | F32ArithmeticNan =>
-          if !actual_f.is_nan() {
+        F32ArithmeticNan =>
+          if (lane_bits & 0x7fc00000) != 0x7fc00000 {
             return false
           }
         _ => return false
@@ -1233,14 +864,14 @@ fn v128_pattern_match(
         (actual[offset + 5].to_int().to_int64() << 40) |
         (actual[offset + 6].to_int().to_int64() << 48) |
         (actual[offset + 7].to_int().to_int64() << 56)
-      let actual_f = lane_bits.reinterpret_as_double()
       match lanes[i] {
-        F64(e) =>
-          if !(actual_f == e || (actual_f.is_nan() && e.is_nan())) {
+        F64(e) => if lane_bits != e.reinterpret_as_int64() { return false }
+        F64CanonicalNan =>
+          if (lane_bits & 0x7fffffffffffffffL) != 0x7ff8000000000000L {
             return false
           }
-        F64CanonicalNan | F64ArithmeticNan =>
-          if !actual_f.is_nan() {
+        F64ArithmeticNan =>
+          if (lane_bits & 0x7ff8000000000000L) != 0x7ff8000000000000L {
             return false
           }
         _ => return false
@@ -1253,24 +884,22 @@ fn v128_pattern_match(
 }
 
 ///|
-fn validate_module_source(source : @wat.WastModuleSource) -> Bool {
+fn validate_module_source(
+  ctx : WastContext,
+  source : @wat.WastModuleSource,
+) -> Bool {
   match source {
     Binary(bytes) =>
       succeeds(() => {
         let mod_ = @parser.parse_module(bytes)
-        @validator.validate_module(mod_)
+        ctx.validate_core_module(mod_)
       })
-    Quote(parts) => {
-      // Join quoted parts and parse as WAT
-      let wat_source = "(module " +
-        parts.iter().fold(init="", fn(acc, s) { acc + s }) +
-        ")"
+    Quote(parts) =>
       succeeds(() => {
-        let mod_ = @wat.parse(wat_source)
-        @validator.validate_module(mod_)
+        let mod_ = @wat.parse(parts.join(""), implicit_module=true)
+        ctx.validate_core_module(mod_)
       })
-    }
-    Inline(mod_) => succeeds(() => @validator.validate_module(mod_))
+    Inline(mod_) => succeeds(() => ctx.validate_core_module(mod_))
     FailedToParse(_) => false // Module failed to parse, so it's invalid
   }
 }
@@ -1289,33 +918,27 @@ fn parse_module_source(source : @wat.WastModuleSource) -> Bool {
 fn try_instantiate_source(
   ctx : WastContext,
   source : @wat.WastModuleSource,
-) -> Bool {
-  let imports = ctx.build_imports()
-  match source {
-    Binary(bytes) =>
-      succeeds(() => {
-        let mod_ = @parser.parse_module(bytes)
-        @validator.validate_module(mod_)
-        let instance = @executor.instantiate_module_with_imports(
-          ctx.store,
-          mod_,
-          imports,
-        )
-        ctx.current_module = Some(instance)
-      })
-    Inline(mod_) =>
-      succeeds(() => {
-        @validator.validate_module(mod_)
-        let instance = @executor.instantiate_module_with_imports(
-          ctx.store,
-          mod_,
-          imports,
-        )
-        ctx.current_module = Some(instance)
-      })
-    Quote(_) => false
-    FailedToParse(_) => false // Module failed to parse, can't instantiate
+) -> Bool raise WastRunnerError {
+  // A build failure cannot satisfy an assertion about instantiation. The
+  // pinned adapter does include start-function traps in instantiation errors.
+  let mod_ = try {
+    match source {
+      Binary(bytes) => @parser.parse_module(bytes)
+      Quote(parts) => @wat.parse(parts.join(""), implicit_module=true)
+      Inline(mod_) => mod_
+      FailedToParse(message) => raise RuntimeError(message)
+    }
+  } catch {
+    error => raise RuntimeError("module parsing failed: \{error}")
   }
+  ctx.validate_core_module(mod_) catch {
+    error => raise RuntimeError("module validation failed: \{error}")
+  }
+  let imports = ctx.build_imports()
+  succeeds(() => {
+    @executor.instantiate_module_with_imports(ctx.store, mod_, imports)
+    |> ignore
+  })
 }
 
 ///|
@@ -1436,6 +1059,7 @@ fn build_partial_instance_for_trapped_module(
     global_addrs,
     tag_addrs,
     exports: mod_.exports,
+    elem_values: [],
     elem_segments: mod_.elems,
     data_segments: mod_.datas,
     dropped_elems,
@@ -1449,12 +1073,13 @@ fn build_partial_instance_for_trapped_module(
 fn try_instantiate_source_traps(
   ctx : WastContext,
   source : @wat.WastModuleSource,
+  expected_msg : String,
 ) -> Bool {
   let imports = ctx.build_imports()
   match source {
     Binary(bytes) => {
       let mod_ = @parser.parse_module(bytes) catch { _ => return false }
-      @validator.validate_module(mod_) catch {
+      ctx.validate_core_module(mod_) catch {
         _ => return false
       }
       let before_instances = ctx.store.instances.length()
@@ -1463,10 +1088,18 @@ fn try_instantiate_source_traps(
       let before_mems = ctx.store.mems.length()
       let before_globals = ctx.store.globals.length()
       let before_tags = ctx.store.tags.length()
-      let trapped = !succeeds(() => {
+      let trapped = try {
         @executor.instantiate_module_with_imports(ctx.store, mod_, imports)
         |> ignore
-      })
+        false
+      } catch {
+        error =>
+          match classify_runtime_failure(error) {
+            GuestTrap(message) =>
+              wast_trap_message_matches(message, expected_msg)
+            _ => false
+          }
+      }
       if trapped && ctx.use_jit && ctx.jit_compiler is Some(_) {
         if ctx.store.instances.length() > before_instances {
           let trapped_instance = ctx.store.instances[ctx.store.instances.length() -
@@ -1493,7 +1126,7 @@ fn try_instantiate_source_traps(
       trapped
     }
     Inline(mod_) => {
-      @validator.validate_module(mod_) catch {
+      ctx.validate_core_module(mod_) catch {
         _ => return false
       }
       let before_instances = ctx.store.instances.length()
@@ -1502,10 +1135,18 @@ fn try_instantiate_source_traps(
       let before_mems = ctx.store.mems.length()
       let before_globals = ctx.store.globals.length()
       let before_tags = ctx.store.tags.length()
-      let trapped = !succeeds(() => {
+      let trapped = try {
         @executor.instantiate_module_with_imports(ctx.store, mod_, imports)
         |> ignore
-      })
+        false
+      } catch {
+        error =>
+          match classify_runtime_failure(error) {
+            GuestTrap(message) =>
+              wast_trap_message_matches(message, expected_msg)
+            _ => false
+          }
+      }
       if trapped && ctx.use_jit && ctx.jit_compiler is Some(_) {
         if ctx.store.instances.length() > before_instances {
           let trapped_instance = ctx.store.instances[ctx.store.instances.length() -
@@ -1534,4 +1175,17 @@ fn try_instantiate_source_traps(
     Quote(_) => false // Quoted source - can't test
     FailedToParse(_) => false // Module failed to parse, doesn't count as trap
   }
+}
+
+///|
+fn WastContext::validate_core_module(
+  self : WastContext,
+  module_ : @types.Module,
+) -> Unit raise {
+  @validator.validate_module(
+    module_,
+    bulk_memory=self.bulk_memory,
+    stack_switching=self.stack_switching,
+  )
+  @executor.validate_continuation_gc_storage(module_)
 }

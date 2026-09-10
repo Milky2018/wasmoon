@@ -37,6 +37,7 @@ fn format_value(v : @types.Value) -> String {
     I64(n) => n.to_string()
     F32(f) => f.to_string()
     F64(d) => d.to_string()
+    ContRef(handle) => "contref:\{handle}"
     FuncRef(idx) => "funcref:\{idx}"
     ExternRef(idx) => "externref:\{idx}"
     V128(bytes) => {
@@ -65,6 +66,7 @@ fn convert_args_to_jit(
       I64(n) => n
       F32(f) => f.reinterpret_as_int().to_int64()
       F64(d) => d.reinterpret_as_int64()
+      ContRef(_) => @wasmoon_jit.value_to_i64(v)
       FuncRef(idx) => idx.to_int64()
       ExternRef(idx) => @wasmoon_jit.encode_externref(idx)
       Null => @wasm_milkir.NULL_REF
@@ -90,6 +92,16 @@ fn convert_jit_results(
   let mut slot_idx = 0
   for ty in result_types {
     let value : @types.Value = match ty {
+      ContRef
+      | RefCont
+      | RefContTyped(_)
+      | RefNullContTyped(_)
+      | NullContRef
+      | RefNoCont => {
+        let raw = results[slot_idx]
+        slot_idx += 1
+        @wasmoon_jit.i64_to_value(raw, ty)
+      }
       I32 => {
         let raw = results[slot_idx]
         slot_idx += 1
@@ -310,6 +322,7 @@ pub fn run_wasm(
   use_jit : Bool,
   opt_level : Int,
   enable_dwarf : Bool,
+  readonly_dirs? : Array[String] = [],
 ) -> Int {
   if debug {
     @logger.enable_debug()
@@ -353,6 +366,7 @@ pub fn run_wasm(
   let wasi_args = [program_name] + wasm_args
   wasi_builder.args(wasi_args) |> ignore
   let jit_preopens : Array[(String, String)] = []
+  let jit_readonly_preopens : Array[(String, String)] = []
   let jit_envs : Array[String] = []
   let explicit_env_keys : Map[String, Bool] = Map([])
   for dir in dirs {
@@ -370,6 +384,16 @@ pub fn run_wasm(
         return 1
       }
     }
+  }
+  for dir in readonly_dirs {
+    guard parse_dir_mapping(dir) is Some((host, guest)) else {
+      @logger.error(
+        "invalid --dir-ro format '\{dir}', expected HOST_DIR or HOST_DIR::GUEST_DIR",
+      )
+      return 1
+    }
+    wasi_builder.preopen_dir_readonly(host, guest) |> ignore
+    jit_readonly_preopens.push((host, guest))
   }
   for env_var in envs {
     let parsed = parse_env_var(env_var)
@@ -552,8 +576,21 @@ pub fn run_wasm(
       let jit_args : Array[String] = wasi_args
       let jit_stdin_data = if inherit_stdin { None } else { Some(b"") }
       let jit_results = run_with_jit(
-        mod_, instance, store, func_name, args, debug, dump_on_trap, jit_args, jit_envs,
-        jit_preopens, jit_stdin_data, wasm_binary, opt_level, enable_dwarf,
+        mod_,
+        instance,
+        store,
+        func_name,
+        args,
+        debug,
+        dump_on_trap,
+        jit_args,
+        jit_envs,
+        jit_preopens,
+        jit_stdin_data,
+        wasm_binary,
+        opt_level,
+        enable_dwarf,
+        readonly_preopens=jit_readonly_preopens,
       ) catch {
         CommandFailure(status) => return status
       }
@@ -887,7 +924,7 @@ fn run_jit_cache_location() -> RunJitCacheLocation? {
 }
 
 ///|
-let run_jit_cache_version = "v9"
+let run_jit_cache_version = "v10"
 
 ///|
 fn artifact_optimization_level(level : Int) -> @artifact.OptimizationLevel {
@@ -903,11 +940,13 @@ fn artifact_optimization_level(level : Int) -> @artifact.OptimizationLevel {
 fn jit_artifact_policy(
   opt_level : Int,
   enable_cancellation : Bool,
+  nan_canonicalization? : Bool = false,
 ) -> @artifact.CompilationPolicy {
   {
     optimization_level: artifact_optimization_level(opt_level),
     code_model: Small,
     call_binding: DirectBody,
+    nan_canonicalization,
     cancellation_safepoints: enable_cancellation,
     debug_info: false,
   }
@@ -957,6 +996,7 @@ fn build_jit_artifact_manifest(
   local_compile_mask? : Array[Bool]? = None,
   force_subtype_indirect_check? : Bool? = None,
   enable_cancellation? : Bool = false,
+  nan_canonicalization? : Bool = false,
 ) -> @artifact.CompatibilityManifest raise @wasmoon_jit.JitPipelineError {
   let use_subtype_indirect_check = force_subtype_indirect_check.unwrap_or(
     module_indirect_subtype_check_reason(mod_) is Some(_),
@@ -973,7 +1013,11 @@ fn build_jit_artifact_manifest(
   )
   @wasmoon_jit.build_host_artifact_manifest(
     module_identity=identity,
-    policy=jit_artifact_policy(opt_level, enable_cancellation),
+    policy=jit_artifact_policy(
+      opt_level,
+      enable_cancellation,
+      nan_canonicalization~,
+    ),
   )
 }
 
@@ -990,7 +1034,7 @@ fn jit_artifact_compatibility(
 }
 
 ///|
-/// Verify a freshly compiled v9 artifact before executable installation.
+/// Verify a freshly compiled v10 artifact before executable installation.
 pub fn verify_compiled_jit_artifact(
   artifact : @artifact.Artifact,
 ) -> @wasmoon_jit.LoadedArtifact raise @wasmoon_jit.ArtifactLoadError {
@@ -1036,9 +1080,14 @@ fn run_jit_cache_file(
   } else {
     "no-cancel"
   }
+  let nan_tag = if manifest.policy.nan_canonicalization {
+    "canonical-nan"
+  } else {
+    "native-nan"
+  }
   let debug_tag = if manifest.policy.debug_info { "debug" } else { "no-debug" }
   let revision_tag = cache_revision_file_tag(manifest.codegen_revision)
-  let file_name = "\{run_jit_cache_version}-\{target_tag}-\{os_tag}-\{opt_tag}-\{code_model_tag}-\{call_binding_tag}-\{cancellation_tag}-\{debug_tag}-r\{revision_tag}-s\{digest_hex(source_digest)}-x\{digest_hex(semantic_digest)}.cwasm"
+  let file_name = "\{run_jit_cache_version}-\{target_tag}-\{os_tag}-\{opt_tag}-\{code_model_tag}-\{call_binding_tag}-\{cancellation_tag}-\{nan_tag}-\{debug_tag}-r\{revision_tag}-s\{digest_hex(source_digest)}-x\{digest_hex(semantic_digest)}.cwasm"
   if cache_dir.has_suffix("/") {
     "\{cache_dir}\{file_name}"
   } else {
@@ -1261,6 +1310,7 @@ fn run_with_jit(
   wasm_binary : Bytes?,
   opt_level : Int,
   enable_dwarf : Bool,
+  readonly_preopens? : Array[(String, String)] = [],
 ) -> Array[@types.Value] raise CommandFailure {
   @logger.debug("JIT: Compiling module...")
   // Get actual memory max from the store (for imported memories)
@@ -1313,7 +1363,7 @@ fn run_with_jit(
       None => ()
     }
   }
-  // Compile and verify the same v9 artifact shape used by persisted cache hits.
+  // Compile and verify the same v10 artifact shape used by persisted cache hits.
   let compiled = match cached_artifact {
     Some(loaded) => Some((loaded, None, None))
     None => {
@@ -1418,6 +1468,7 @@ fn run_with_jit(
             None,
             None,
             wasi_stdin_data,
+            readonly_preopens~,
           )
           // Initialize all memories (multi-memory support)
           guard @wast.init_jit_memories_from_store(instance, store, jm)
@@ -1428,7 +1479,12 @@ fn run_with_jit(
           // Initialize globals (pass jm for tagged funcref pointers)
           let globals_ptr = @wast.init_jit_globals_from_store(
             instance, store, jm,
-          )
+          ) catch {
+            error => {
+              @logger.error("JIT reference transfer failed: \{error}")
+              raise CommandFailure(1)
+            }
+          }
           // Initialize tables for call_indirect and table operations
           let use_subtype_indirect_check = module_indirect_subtype_check_reason(
               mod_,
@@ -1437,8 +1493,8 @@ fn run_with_jit(
           init_jit_tables(instance, store, jm, use_subtype_indirect_check)
           // Initialize per-context data/elem segments for bulk ops (memory.init/table.init/etc).
           @wast.init_bulk_segments(mod_, jm, instance, store) catch {
-            err => {
-              @logger.error("Failed to initialize JIT bulk segments: \{err}")
+            error => {
+              @logger.error("JIT reference transfer failed: \{error}")
               raise CommandFailure(1)
             }
           }
@@ -1491,13 +1547,13 @@ fn run_with_jit(
               let results = jm.call_with_context(f, i64_args) catch {
                 JITExit(code) => {
                   jm.teardown_gc()
-                  @wast.sync_jit_globals_to_store(jit_ctx, store)
+
                   raise CommandFailure(code)
                 }
                 JITTrap(msg) => {
                   jm.teardown_gc()
                   // Sync globals back to interpreter store even on trap.
-                  @wast.sync_jit_globals_to_store(jit_ctx, store)
+
                   // Capture and display backtrace if DWARF is enabled
                   match dwarf_builder {
                     Some(dwarf) => {
@@ -1523,13 +1579,13 @@ fn run_with_jit(
                 }
                 JITNativeFiberFailure(message) => {
                   jm.teardown_gc()
-                  @wast.sync_jit_globals_to_store(jit_ctx, store)
+
                   @logger.error("JIT native-fiber failure: \{message}")
                   raise CommandFailure(1)
                 }
                 JITCancelled => {
                   jm.teardown_gc()
-                  @wast.sync_jit_globals_to_store(jit_ctx, store)
+
                   @logger.error("JIT invocation cancelled")
                   raise CommandFailure(1)
                 }
@@ -1537,7 +1593,7 @@ fn run_with_jit(
               // Tear down GC context after JIT call
               jm.teardown_gc()
               // Sync JIT globals back to interpreter store for consistency.
-              @wast.sync_jit_globals_to_store(jit_ctx, store)
+
               // Convert Int64 results to Value using shared helper
               let values = convert_jit_results(results, f.result_types)
               // NOTE: Memory and globals are freed automatically by JITContext finalizer (GC-managed)
@@ -1587,13 +1643,14 @@ fn module_indirect_subtype_check_reason(mod_ : @types.Module) -> String? {
 }
 
 ///|
-/// Compile module bytes into a v9 JIT artifact and emit structured progress.
+/// Compile module bytes into a v10 JIT artifact and emit structured progress.
 pub fn compile_module(
   module_bytes : Bytes,
   opt_level? : Int = 2,
   enable_dwarf? : Bool = false,
   on_progress? : (CompileProgress) -> Unit? = fn(_event) { None },
   enable_cancellation? : Bool = false,
+  nan_canonicalization? : Bool = false,
 ) -> @artifact.Artifact? {
   let compile_start = @perf.tick_now()
   emit_compile_progress(on_progress, Parse, compile_start, 0, 0)
@@ -1646,6 +1703,7 @@ pub fn compile_module(
     on_progress~,
     compile_start=Some(compile_start),
     enable_cancellation~,
+    nan_canonicalization~,
   )
   match compiled {
     Some((artifact, _debug_db)) => Some(artifact)
@@ -1675,7 +1733,7 @@ fn normalize_opt_level(opt_level : Int) -> Int {
 }
 
 ///|
-/// Compile a WASM module to a v9 JIT artifact in memory.
+/// Compile a WASM module to a v10 JIT artifact in memory.
 ///
 /// Decoded modules are untrusted at this public seam and are fully validated
 /// before frontend translation. `actual_memory_max` overrides the memory limit
@@ -1693,9 +1751,11 @@ pub fn compile_module_to_jit(
   force_subtype_indirect_check? : Bool? = None,
   use_reusable_pipeline? : Bool = true,
   enable_cancellation? : Bool = false,
+  nan_canonicalization? : Bool = false,
+  stack_switching? : Bool = false,
 ) -> (@artifact.Artifact, @wasmoon_jit.JITDebugDB?)? {
   let progress_start = compile_start.unwrap_or(@perf.tick_now())
-  @validator.validate_module(mod_) catch {
+  @validator.validate_module(mod_, stack_switching~) catch {
     error => {
       let message = match error {
         WithContext(context) => context.format()
@@ -1725,6 +1785,7 @@ pub fn compile_module_to_jit(
     force_subtype_indirect_check~,
     use_reusable_pipeline~,
     enable_cancellation~,
+    nan_canonicalization~,
   )
 }
 
@@ -1743,6 +1804,7 @@ fn compile_validated_module_to_jit(
   force_subtype_indirect_check? : Bool? = None,
   use_reusable_pipeline? : Bool = true,
   enable_cancellation? : Bool = false,
+  nan_canonicalization? : Bool = false,
   source_module? : Bytes? = None,
 ) -> (@artifact.Artifact, @wasmoon_jit.JITDebugDB?)? {
   use_reusable_pipeline |> ignore
@@ -1849,6 +1911,7 @@ fn compile_validated_module_to_jit(
     local_compile_mask=compile_mask,
     force_subtype_indirect_check=Some(use_subtype_indirect_check),
     enable_cancellation~,
+    nan_canonicalization~,
   ) catch {
     err => {
       emit_compile_progress(
@@ -1935,6 +1998,9 @@ fn compile_validated_module_to_jit(
       code.locals,
       code.body,
     )
+    if nan_canonicalization {
+      @optimize.canonicalize_nans(ir_func)
+    }
     let translation_us = translation_tick.map(@perf.elapsed_us)
     emit_compile_progress(
       on_progress,

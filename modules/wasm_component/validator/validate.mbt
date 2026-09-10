@@ -853,7 +853,10 @@ fn validate_component_inner(
             // All non-lift canonical items append a core function to the core-func
             // index space. Model known intrinsic signatures so core module
             // instantiation validates imports against canonical builtins.
-            _ => core_func_types.push(core_functype_for_canon(c, type_table))
+            _ =>
+              core_func_types.push(
+                core_functype_for_canon(c, type_table, core_memory_types),
+              )
           }
         }
       }

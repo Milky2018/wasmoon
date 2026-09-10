@@ -1108,6 +1108,26 @@ fn fd_rights_for_stdio_slot(slot : Int) -> Int64 {
 }
 
 ///|
+fn readonly_directory_base_rights() -> Int64 {
+  right_path_open |
+  right_fd_readdir |
+  right_path_readlink |
+  right_path_filestat_get |
+  right_fd_filestat_get
+}
+
+///|
+fn readonly_directory_inheriting_rights() -> Int64 {
+  readonly_directory_base_rights() |
+  right_fd_read |
+  right_fd_seek |
+  right_fd_tell |
+  right_fd_advise |
+  right_fd_fdstat_set_flags |
+  right_poll_fd_readwrite
+}
+
+///|
 fn fd_rights_for_preopen_directory_base() -> Int64 {
   right_path_create_directory |
   right_path_create_file |
@@ -1402,6 +1422,7 @@ fn emit_readdir_entry(
   if offset >= buf_len {
     return (offset, false)
   }
+  let name_bytes = @utf8.encode(name)
   let d_next = entry_idx + 1L
   let header_written = write_readdir_header(
     mem,
@@ -1409,7 +1430,7 @@ fn emit_readdir_entry(
     buf_len - offset,
     d_next,
     d_ino,
-    name.length(),
+    name_bytes.length(),
     native_file_type_to_preview1(file_type),
   )
   let mut new_offset = offset + header_written
@@ -1419,12 +1440,12 @@ fn emit_readdir_entry(
   if new_offset >= buf_len {
     return (new_offset, false)
   }
-  let name_to_write = @cmp.minimum(buf_len - new_offset, name.length())
+  let name_to_write = @cmp.minimum(buf_len - new_offset, name_bytes.length())
   for i in 0..<name_to_write {
-    mem.write_byte(buf_ptr + new_offset + i, name.code_unit_at(i).to_byte())
+    mem.write_byte(buf_ptr + new_offset + i, name_bytes[i])
   }
   new_offset = new_offset + name_to_write
-  (new_offset, name_to_write == name.length())
+  (new_offset, name_to_write == name_bytes.length())
 }
 
 ///|
@@ -1669,6 +1690,15 @@ fn validate_proc_raise_signal(signal : Int) -> Int {
 }
 
 ///|
+fn preserve_trailing_slash(resolved : String, guest : String) -> String {
+  if guest.has_suffix("/") {
+    resolved + "/"
+  } else {
+    resolved
+  }
+}
+
+///|
 fn resolve_host_path(
   ctx : WasiContext,
   dir_fd : Int,
@@ -1856,7 +1886,7 @@ pub fn path_unlink_file_impl(
     Ok(resolved) => resolved
     Err(errno) => return errno
   }
-  if native_unlinkat(0, resolved_path, 0) {
+  if native_unlinkat(0, preserve_trailing_slash(resolved_path, path), 0) {
     Errno::Success.to_i32()
   } else {
     native_last_errno_to_wasi()
@@ -2475,7 +2505,11 @@ pub fn path_symlink_impl(
     Ok(resolved) => resolved
     Err(errno) => return errno
   }
-  if native_symlinkat(old_path, 0, resolved_path) {
+  if native_symlinkat(
+      old_path,
+      0,
+      preserve_trailing_slash(resolved_path, new_path),
+    ) {
     Errno::Success.to_i32()
   } else {
     native_last_errno_to_wasi()
@@ -2510,12 +2544,12 @@ pub fn path_readlink_impl(
     Ok(resolved) => resolved
     Err(errno) => return errno
   }
-  let result = native_readlinkat(0, resolved_path, buf_len)
+  let result = native_readlinkat_bytes(0, resolved_path, buf_len)
   match result {
     Some(link_target) => {
       let to_write = @cmp.minimum(link_target.length(), buf_len)
       for i in 0..<to_write {
-        mem.write_byte(buf_ptr + i, link_target.code_unit_at(i).to_byte())
+        mem.write_byte(buf_ptr + i, link_target[i])
       }
       mem.write_i32(bufused_ptr, to_write)
       Errno::Success.to_i32()
@@ -2571,7 +2605,13 @@ pub fn path_link_impl(
     Err(errno) => return errno
   }
   let flags = 0
-  if native_linkat(0, old_resolved, 0, new_resolved, flags) {
+  if native_linkat(
+      0,
+      preserve_trailing_slash(old_resolved, old_path),
+      0,
+      preserve_trailing_slash(new_resolved, new_path),
+      flags,
+    ) {
     Errno::Success.to_i32()
   } else {
     native_last_errno_to_wasi()

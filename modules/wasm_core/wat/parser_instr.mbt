@@ -208,13 +208,7 @@ fn Parser::parse_folded_instructions(
         Block(_, _) | Loop(_, _) | If(_, _, _) | TryTable(_, _, _) => [instr]
         _ => {
           // Parse nested folded instructions (operands)
-          let result : Array[@types.Instruction] = []
-          while self.current.token == LParen {
-            self.advance()
-            for i in self.parse_folded_instructions() {
-              result.push(i)
-            }
-          }
+          let result = self.parse_instructions()
           self.expect_rparen()
           result.push(instr)
           result
@@ -319,6 +313,19 @@ fn Parser::parse_plain_instruction(
     // Exception handling instructions
     "throw" => Throw(self.parse_tag_idx())
     "throw_ref" => ThrowRef
+    "cont.new" => ContNew(self.parse_type_idx())
+    "cont.bind" => ContBind(self.parse_type_idx(), self.parse_type_idx())
+    "suspend" => Suspend(self.parse_tag_idx())
+    "resume" => Resume(self.parse_type_idx(), self.parse_resume_handlers())
+    "resume_throw" =>
+      ResumeThrow(
+        self.parse_type_idx(),
+        self.parse_tag_idx(),
+        self.parse_resume_handlers(),
+      )
+    "resume_throw_ref" =>
+      ResumeThrowRef(self.parse_type_idx(), self.parse_resume_handlers())
+    "switch" => Switch(self.parse_type_idx(), self.parse_tag_idx())
     "try_table" => {
       // try_table has a block type followed by catch handlers and a body
       // (try_table (result i32) (catch $tag $label) ... instructions end)
@@ -789,6 +796,8 @@ fn Parser::parse_plain_instruction(
     "i64.clz" => I64Clz
     "i64.ctz" => I64Ctz
     "i64.popcnt" => I64Popcnt
+    "i64.add128" => I64Add128
+    "i64.sub128" => I64Sub128
     "i64.add" => I64Add
     "i64.sub" => I64Sub
     "i64.mul" => I64Mul
@@ -969,8 +978,8 @@ fn Parser::parse_plain_instruction(
     "ref.test" => {
       // ref.test <heaptype> or ref.test (ref <heaptype>)
       // Uses RefTestNull if the type is nullable, otherwise RefTest
-      let vt = self.parse_value_type()
-      if vt.is_nullable() {
+      let (vt, nullable) = self.parse_cast_type()
+      if nullable {
         RefTestNull(vt)
       } else {
         RefTest(vt)
@@ -979,8 +988,8 @@ fn Parser::parse_plain_instruction(
     "ref.cast" => {
       // ref.cast <heaptype> or ref.cast (ref <heaptype>)
       // Uses RefCastNull if the type is nullable, otherwise RefCast
-      let vt = self.parse_value_type()
-      if vt.is_nullable() {
+      let (vt, nullable) = self.parse_cast_type()
+      if nullable {
         RefCastNull(vt)
       } else {
         RefCast(vt)
@@ -1339,9 +1348,19 @@ fn Parser::parse_plain_instruction(
       match atomic_subopcode(kw) {
         Some(3) => Atomic(3, 0, 0, 0L)
         Some(subopcode) =>
-          parse_mem_arg(self, fn(memory, align, offset) {
-            Atomic(subopcode, memory, align, offset)
-          })
+          parse_mem_arg(
+            self,
+            fn(memory, align, offset) {
+              Atomic(subopcode, memory, align, offset)
+            },
+            default_align=if subopcode == 2 {
+              3
+            } else if subopcode < 3 {
+              2
+            } else {
+              [2, 3, 0, 1, 0, 1, 2][(subopcode - 0x10) % 7]
+            },
+          )
         None => raise InvalidInstruction(kw, self.loc())
       }
   }
@@ -1354,69 +1373,69 @@ fn atomic_subopcode(keyword : String) -> Int? {
     "memory.atomic.wait32" => Some(1)
     "memory.atomic.wait64" => Some(2)
     "atomic.fence" => Some(3)
-    "i32.atomic.load" => Some(4)
-    "i64.atomic.load" => Some(5)
-    "i32.atomic.load8_u" => Some(6)
-    "i32.atomic.load16_u" => Some(7)
-    "i64.atomic.load8_u" => Some(8)
-    "i64.atomic.load16_u" => Some(9)
-    "i64.atomic.load32_u" => Some(10)
-    "i32.atomic.store" => Some(11)
-    "i64.atomic.store" => Some(12)
-    "i32.atomic.store8" => Some(13)
-    "i32.atomic.store16" => Some(14)
-    "i64.atomic.store8" => Some(15)
-    "i64.atomic.store16" => Some(16)
-    "i64.atomic.store32" => Some(17)
-    "i32.atomic.rmw.add" => Some(18)
-    "i64.atomic.rmw.add" => Some(19)
-    "i32.atomic.rmw8.add_u" => Some(20)
-    "i32.atomic.rmw16.add_u" => Some(21)
-    "i64.atomic.rmw8.add_u" => Some(22)
-    "i64.atomic.rmw16.add_u" => Some(23)
-    "i64.atomic.rmw32.add_u" => Some(24)
-    "i32.atomic.rmw.sub" => Some(25)
-    "i64.atomic.rmw.sub" => Some(26)
-    "i32.atomic.rmw8.sub_u" => Some(27)
-    "i32.atomic.rmw16.sub_u" => Some(28)
-    "i64.atomic.rmw8.sub_u" => Some(29)
-    "i64.atomic.rmw16.sub_u" => Some(30)
-    "i64.atomic.rmw32.sub_u" => Some(31)
-    "i32.atomic.rmw.and" => Some(32)
-    "i64.atomic.rmw.and" => Some(33)
-    "i32.atomic.rmw8.and_u" => Some(34)
-    "i32.atomic.rmw16.and_u" => Some(35)
-    "i64.atomic.rmw8.and_u" => Some(36)
-    "i64.atomic.rmw16.and_u" => Some(37)
-    "i64.atomic.rmw32.and_u" => Some(38)
-    "i32.atomic.rmw.or" => Some(39)
-    "i64.atomic.rmw.or" => Some(40)
-    "i32.atomic.rmw8.or_u" => Some(41)
-    "i32.atomic.rmw16.or_u" => Some(42)
-    "i64.atomic.rmw8.or_u" => Some(43)
-    "i64.atomic.rmw16.or_u" => Some(44)
-    "i64.atomic.rmw32.or_u" => Some(45)
-    "i32.atomic.rmw.xor" => Some(46)
-    "i64.atomic.rmw.xor" => Some(47)
-    "i32.atomic.rmw8.xor_u" => Some(48)
-    "i32.atomic.rmw16.xor_u" => Some(49)
-    "i64.atomic.rmw8.xor_u" => Some(50)
-    "i64.atomic.rmw16.xor_u" => Some(51)
-    "i64.atomic.rmw32.xor_u" => Some(52)
-    "i32.atomic.rmw.xchg" => Some(53)
-    "i64.atomic.rmw.xchg" => Some(54)
-    "i32.atomic.rmw8.xchg_u" => Some(55)
-    "i32.atomic.rmw16.xchg_u" => Some(56)
-    "i64.atomic.rmw8.xchg_u" => Some(57)
-    "i64.atomic.rmw16.xchg_u" => Some(58)
-    "i64.atomic.rmw32.xchg_u" => Some(59)
-    "i32.atomic.rmw.cmpxchg" => Some(60)
-    "i64.atomic.rmw.cmpxchg" => Some(61)
-    "i32.atomic.rmw8.cmpxchg_u" => Some(62)
-    "i32.atomic.rmw16.cmpxchg_u" => Some(63)
-    "i64.atomic.rmw8.cmpxchg_u" => Some(64)
-    "i64.atomic.rmw16.cmpxchg_u" => Some(65)
-    "i64.atomic.rmw32.cmpxchg_u" => Some(66)
+    "i32.atomic.load" => Some(16)
+    "i64.atomic.load" => Some(17)
+    "i32.atomic.load8_u" => Some(18)
+    "i32.atomic.load16_u" => Some(19)
+    "i64.atomic.load8_u" => Some(20)
+    "i64.atomic.load16_u" => Some(21)
+    "i64.atomic.load32_u" => Some(22)
+    "i32.atomic.store" => Some(23)
+    "i64.atomic.store" => Some(24)
+    "i32.atomic.store8" => Some(25)
+    "i32.atomic.store16" => Some(26)
+    "i64.atomic.store8" => Some(27)
+    "i64.atomic.store16" => Some(28)
+    "i64.atomic.store32" => Some(29)
+    "i32.atomic.rmw.add" => Some(30)
+    "i64.atomic.rmw.add" => Some(31)
+    "i32.atomic.rmw8.add_u" => Some(32)
+    "i32.atomic.rmw16.add_u" => Some(33)
+    "i64.atomic.rmw8.add_u" => Some(34)
+    "i64.atomic.rmw16.add_u" => Some(35)
+    "i64.atomic.rmw32.add_u" => Some(36)
+    "i32.atomic.rmw.sub" => Some(37)
+    "i64.atomic.rmw.sub" => Some(38)
+    "i32.atomic.rmw8.sub_u" => Some(39)
+    "i32.atomic.rmw16.sub_u" => Some(40)
+    "i64.atomic.rmw8.sub_u" => Some(41)
+    "i64.atomic.rmw16.sub_u" => Some(42)
+    "i64.atomic.rmw32.sub_u" => Some(43)
+    "i32.atomic.rmw.and" => Some(44)
+    "i64.atomic.rmw.and" => Some(45)
+    "i32.atomic.rmw8.and_u" => Some(46)
+    "i32.atomic.rmw16.and_u" => Some(47)
+    "i64.atomic.rmw8.and_u" => Some(48)
+    "i64.atomic.rmw16.and_u" => Some(49)
+    "i64.atomic.rmw32.and_u" => Some(50)
+    "i32.atomic.rmw.or" => Some(51)
+    "i64.atomic.rmw.or" => Some(52)
+    "i32.atomic.rmw8.or_u" => Some(53)
+    "i32.atomic.rmw16.or_u" => Some(54)
+    "i64.atomic.rmw8.or_u" => Some(55)
+    "i64.atomic.rmw16.or_u" => Some(56)
+    "i64.atomic.rmw32.or_u" => Some(57)
+    "i32.atomic.rmw.xor" => Some(58)
+    "i64.atomic.rmw.xor" => Some(59)
+    "i32.atomic.rmw8.xor_u" => Some(60)
+    "i32.atomic.rmw16.xor_u" => Some(61)
+    "i64.atomic.rmw8.xor_u" => Some(62)
+    "i64.atomic.rmw16.xor_u" => Some(63)
+    "i64.atomic.rmw32.xor_u" => Some(64)
+    "i32.atomic.rmw.xchg" => Some(65)
+    "i64.atomic.rmw.xchg" => Some(66)
+    "i32.atomic.rmw8.xchg_u" => Some(67)
+    "i32.atomic.rmw16.xchg_u" => Some(68)
+    "i64.atomic.rmw8.xchg_u" => Some(69)
+    "i64.atomic.rmw16.xchg_u" => Some(70)
+    "i64.atomic.rmw32.xchg_u" => Some(71)
+    "i32.atomic.rmw.cmpxchg" => Some(72)
+    "i64.atomic.rmw.cmpxchg" => Some(73)
+    "i32.atomic.rmw8.cmpxchg_u" => Some(74)
+    "i32.atomic.rmw16.cmpxchg_u" => Some(75)
+    "i64.atomic.rmw8.cmpxchg_u" => Some(76)
+    "i64.atomic.rmw16.cmpxchg_u" => Some(77)
+    "i64.atomic.rmw32.cmpxchg_u" => Some(78)
     _ => None
   }
 }
@@ -1442,7 +1461,6 @@ fn parse_mem_arg_tuple(parser : Parser) -> (Int, Int, Int64) raise WatError {
         parser.advance()
         let is_memidx = match parser.current.token {
           Keyword(k) => k.has_prefix("offset=") || k.has_prefix("align=")
-          RParen => true
           Number(_) => true // Could be lane index after memarg
           _ => false
         }
@@ -1473,6 +1491,12 @@ fn parse_mem_arg_tuple(parser : Parser) -> (Int, Int, Int64) raise WatError {
             align_str.write_char(s.code_unit_at(i).unsafe_to_char())
           }
           let a = parse_u32(align_str.to_string())
+          if a == 0 || (a & (a - 1)) != 0 {
+            raise UnexpectedToken(
+              "alignment must be a nonzero power of two",
+              parser.loc(),
+            )
+          }
           align = log2(a)
           parser.advance()
         } else {
@@ -1488,10 +1512,11 @@ fn parse_mem_arg_tuple(parser : Parser) -> (Int, Int, Int64) raise WatError {
 fn parse_mem_arg(
   parser : Parser,
   instr : (Int, Int, Int64) -> @types.Instruction,
+  default_align? : Int = 0,
 ) -> @types.Instruction raise WatError {
   let mut memidx = 0
   let mut offset = 0L
-  let mut align = 0
+  let mut align = default_align
   // Multi-memory: Parse optional memory index (e.g., $mem1 or 0)
   match parser.current.token {
     Id(name) => {
@@ -1499,32 +1524,11 @@ fn parse_mem_arg(
       memidx = parser.resolve_memory(name)
       parser.advance()
     }
-    Number(s) =>
-      // Could be memory index or offset without = prefix
-      // Check if it looks like a plain number (no = prefix) and next token is offset= or align=
-      if !s.has_prefix("offset=") && !s.has_prefix("align=") {
-        // Check if there's a following offset= or align= keyword
-        // If so, this is a memory index; otherwise it's not a memory argument
-        let saved_pos = parser.lexer.pos
-        let saved_line = parser.lexer.line
-        let saved_column = parser.lexer.column
-        let saved_token = parser.current
-        parser.advance()
-        let is_memidx = match parser.current.token {
-          Keyword(k) => k.has_prefix("offset=") || k.has_prefix("align=")
-          RParen => true // Could be memory index followed by closing paren
-          _ => false
-        }
-        if is_memidx {
-          memidx = parse_int(s)
-        } else {
-          // Restore position - this wasn't a memory index
-          parser.lexer.pos = saved_pos
-          parser.lexer.line = saved_line
-          parser.lexer.column = saved_column
-          parser.current = saved_token
-        }
-      }
+    Number(s) => {
+      // Non-lane memory instructions have no other numeric immediate here.
+      memidx = parse_int(s)
+      parser.advance()
+    }
     _ => ()
   }
   // Parse optional offset=N and align=N
@@ -1545,6 +1549,12 @@ fn parse_mem_arg(
             align_str.write_char(s.code_unit_at(i).unsafe_to_char())
           }
           let a = parse_u32(align_str.to_string())
+          if a == 0 || (a & (a - 1)) != 0 {
+            raise UnexpectedToken(
+              "alignment must be a nonzero power of two",
+              parser.loc(),
+            )
+          }
           // Convert alignment to log2
           align = log2(a)
           parser.advance()
@@ -1559,10 +1569,10 @@ fn parse_mem_arg(
 
 ///|
 fn log2(n : Int) -> Int {
-  let mut v = n
+  let mut v = n.reinterpret_as_uint()
   let mut r = 0
-  while v > 1 {
-    v = v / 2
+  while v > 1U {
+    v = v / 2U
     r += 1
   }
   r
@@ -1680,4 +1690,40 @@ fn Parser::find_or_create_func_type(
   // Implicit type is its own rec group
   self.type_rec_groups.push(idx)
   idx
+}
+
+///|
+fn Parser::parse_resume_handlers(
+  self : Parser,
+) -> Array[@types.ResumeHandler] raise WatError {
+  let handlers : Array[@types.ResumeHandler] = []
+  while self.current.token == LParen {
+    let saved = (
+      self.lexer.pos,
+      self.lexer.line,
+      self.lexer.column,
+      self.lexer.token_start_line,
+      self.lexer.token_start_column,
+    )
+    let next = self.lexer.next_token()
+    self.lexer.pos = saved.0
+    self.lexer.line = saved.1
+    self.lexer.column = saved.2
+    self.lexer.token_start_line = saved.3
+    self.lexer.token_start_column = saved.4
+    if next.token != Keyword("on") {
+      break
+    }
+    self.advance()
+    self.advance()
+    let tag = self.parse_tag_idx()
+    if self.current.token == Keyword("switch") {
+      self.advance()
+      handlers.push(OnSwitch(tag))
+    } else {
+      handlers.push(OnLabel(tag, self.parse_label_idx()))
+    }
+    self.expect_rparen()
+  }
+  handlers
 }

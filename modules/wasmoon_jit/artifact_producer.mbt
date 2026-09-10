@@ -1,6 +1,6 @@
 ///|
 /// Version of the Wasmoon internal JIT calling and runtime contract.
-pub const WASMOON_JIT_ABI_VERSION : Int = 3
+pub const WASMOON_JIT_ABI_VERSION : Int = 6
 
 ///|
 /// Revision of the current direct native target code generator.
@@ -8,7 +8,7 @@ pub const WASMOON_JIT_ABI_VERSION : Int = 3
 /// Advance this value whenever compiler changes can alter emitted code while
 /// preserving the artifact format and JIT ABI. Persistent caches use it as part
 /// of their compatibility identity.
-pub const WASMOON_CODEGEN_REVISION : String = "direct-vcode-1"
+pub const WASMOON_CODEGEN_REVISION : String = "direct-vcode-8"
 
 ///|
 extern "c" fn host_operating_system_abi_tag() -> Int = "wasmoon_jit_host_operating_system_abi"
@@ -138,6 +138,12 @@ fn wasm_value_type(ty : @types.ValueType) -> @native.ValueType {
     | RefExtern
     | RefFuncTyped(_)
     | RefNullFuncTyped(_)
+    | ContRef
+    | RefCont
+    | RefContTyped(_)
+    | RefNullContTyped(_)
+    | NullContRef
+    | RefNoCont
     | AnyRef
     | ExnRef
     | StructRef
@@ -286,6 +292,7 @@ pub fn NativeCompiler::compile_wasm_body_artifact_function(
         use_subtype_indirect_check,
         canonical_type_indices,
         record_metrics=@perf.enabled(),
+        function_index~,
         compilation_session=self.aarch64.unwrap(),
       )
       let packaging_tick = detail_metrics_tick(@perf.enabled())
@@ -305,6 +312,7 @@ pub fn NativeCompiler::compile_wasm_body_artifact_function(
         use_subtype_indirect_check,
         canonical_type_indices,
         record_metrics=@perf.enabled(),
+        function_index~,
         compilation_session=self.x64.unwrap(),
       )
       let packaging_tick = detail_metrics_tick(@perf.enabled())

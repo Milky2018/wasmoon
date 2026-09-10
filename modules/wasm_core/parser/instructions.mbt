@@ -1,3 +1,16 @@
+///|
+fn Parser::read_resume_handlers(
+  self : Parser,
+) -> Array[@types.ResumeHandler] raise ParserError {
+  self.read_vec(() => {
+    match self.read_byte() {
+      0 => OnLabel(self.read_u32(), self.read_u32())
+      1 => OnSwitch(self.read_u32())
+      byte => raise ParseError("invalid continuation handler: \{byte}")
+    }
+  })
+}
+
 // ============================================================
 // Instruction Parsing
 // ============================================================
@@ -414,6 +427,8 @@ fn Parser::read_instruction(
           -14 => NullExternRef
           -13 => NullFuncRef
           -12 => NullExnRef
+          -24 => ContRef
+          -11 => NullContRef
           _ => raise ParseError("invalid heap type")
         }
         RefNull(nullable_ref_ty)
@@ -425,6 +440,7 @@ fn Parser::read_instruction(
           Func(_) => @types.ValueType::RefNullFuncTyped(heap_type)
           Struct(_) => RefNullStruct(heap_type)
           Array(_) => RefNullArray(heap_type)
+          Cont(_) => RefNullContTyped(heap_type)
         }
         RefNull(nullable_ref_ty)
       }
@@ -439,6 +455,14 @@ fn Parser::read_instruction(
     0xD4 => RefAsNonNull
     0xD5 => BrOnNull(self.read_u32())
     0xD6 => BrOnNonNull(self.read_u32())
+    0xE0 => ContNew(self.read_u32())
+    0xE1 => ContBind(self.read_u32(), self.read_u32())
+    0xE2 => Suspend(self.read_u32())
+    0xE3 => Resume(self.read_u32(), self.read_resume_handlers())
+    0xE4 =>
+      ResumeThrow(self.read_u32(), self.read_u32(), self.read_resume_handlers())
+    0xE5 => ResumeThrowRef(self.read_u32(), self.read_resume_handlers())
+    0xE6 => Switch(self.read_u32(), self.read_u32())
     // Saturating truncation instructions (0xFC prefix)
     0xFC => {
       let subopcode = self.read_u32()
@@ -514,6 +538,8 @@ fn Parser::read_instruction(
           let table_idx = self.read_u32()
           TableFill(table_idx)
         }
+        19 => I64Add128
+        20 => I64Sub128
         21 => I64MulWideS
         22 => I64MulWideU
         _ => raise UnknownOpcode(0xFC00 + subopcode)

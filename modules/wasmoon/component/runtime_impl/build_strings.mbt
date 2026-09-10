@@ -1,6 +1,7 @@
 ///|
 priv struct BuildState {
   types : Array[TypeDef?]
+  next_declared_type : Ref[Int]
   funcs : Array[ComponentFunc]
   values : Array[ComponentValue]
   components : Array[ComponentClosure]
@@ -58,10 +59,11 @@ fn BuildState::BuildState(
   stream_table : StreamTable,
   async_state : AsyncState,
 ) -> BuildState {
-  let resource_table = ResourceTable()
+  let resource_table = ResourceTable(resources=async_state.concurrent_resources)
   async_state.resource_tables.set(resource_table.id, resource_table)
   {
     types: [],
+    next_declared_type: Ref(0),
     funcs: [],
     values: [],
     components: [],
@@ -286,7 +288,7 @@ fn synthesize_trivial_instance_import(
       values: [],
       components: [],
       instances: [],
-      resource_table: ResourceTable(),
+      resource_table: ResourceTable(resources=async_state.concurrent_resources),
       stream_table,
       async_state,
       core_modules: [],

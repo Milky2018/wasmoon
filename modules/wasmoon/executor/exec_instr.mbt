@@ -41,6 +41,13 @@ fn ExecContext::exec_instr(
   instr : @types.Instruction,
 ) -> Unit raise {
   match instr {
+    ContNew(_)
+    | ContBind(_, _)
+    | Suspend(_)
+    | Resume(_, _)
+    | ResumeThrow(_, _, _)
+    | ResumeThrowRef(_, _)
+    | Switch(_, _) => self.exec_guest_continuation(instr)
     // Constants
     I32Const(n) => self.stack.push(I32(n))
     I64Const(n) => self.stack.push(I64(n))
@@ -82,11 +89,11 @@ fn ExecContext::exec_instr(
       let table_addr = self.instance.table_addrs[table_idx]
       let table = self.store.get_table(table_addr)
       let elem_idx = if table.is_table64() {
-        self.stack.pop_i64().to_int()
+        self.stack.pop_i64()
       } else {
-        self.stack.pop_i32()
+        self.stack.pop_i32().to_int64() & 0xFFFF_FFFFL
       }
-      let value = table.get(elem_idx)
+      let value = table.get_at(elem_idx)
       self.stack.push(value)
     }
     TableSet(table_idx) => {
@@ -94,11 +101,11 @@ fn ExecContext::exec_instr(
       let table_addr = self.instance.table_addrs[table_idx]
       let table = self.store.get_table(table_addr)
       let elem_idx = if table.is_table64() {
-        self.stack.pop_i64().to_int()
+        self.stack.pop_i64()
       } else {
-        self.stack.pop_i32()
+        self.stack.pop_i32().to_int64() & 0xFFFF_FFFFL
       }
-      table.set(elem_idx, value)
+      table.set_at(elem_idx, value)
     }
     TableSize(table_idx) => {
       let table_addr = self.instance.table_addrs[table_idx]
@@ -113,33 +120,33 @@ fn ExecContext::exec_instr(
       let table_addr = self.instance.table_addrs[table_idx]
       let table = self.store.get_table(table_addr)
       let delta = if table.is_table64() {
-        self.stack.pop_i64().to_int()
+        self.stack.pop_i64()
       } else {
-        self.stack.pop_i32()
+        self.stack.pop_i32().to_int64() & 0xFFFF_FFFFL
       }
       let init_val = self.stack.pop()
-      let old_size = table.grow(delta, init_val)
+      let old_size = table.grow64(delta, init_val)
       if table.is_table64() {
-        self.stack.push(I64(old_size.to_int64()))
+        self.stack.push(I64(old_size))
       } else {
-        self.stack.push(I32(old_size))
+        self.stack.push(I32(old_size.to_int()))
       }
     }
     TableFill(table_idx) => {
       let table_addr = self.instance.table_addrs[table_idx]
       let table = self.store.get_table(table_addr)
       let (n, value, dest) = if table.is_table64() {
-        let n = self.stack.pop_i64().to_int()
+        let n = self.stack.pop_i64()
         let value = self.stack.pop()
-        let dest = self.stack.pop_i64().to_int()
+        let dest = self.stack.pop_i64()
         (n, value, dest)
       } else {
-        let n = self.stack.pop_i32()
+        let n = self.stack.pop_i32().to_int64() & 0xFFFF_FFFFL
         let value = self.stack.pop()
-        let dest = self.stack.pop_i32()
+        let dest = self.stack.pop_i32().to_int64() & 0xFFFF_FFFFL
         (n, value, dest)
       }
-      table.fill(dest, value, n)
+      table.fill_at(dest, value, n)
     }
     TableCopy(dest_table_idx, src_table_idx) => {
       let dest_table_addr = self.instance.table_addrs[dest_table_idx]
@@ -148,23 +155,23 @@ fn ExecContext::exec_instr(
       let src_table = self.store.get_table(src_table_addr)
       // Length uses i64 only if BOTH tables are table64 (minimum of both types)
       let n = if dest_table.is_table64() && src_table.is_table64() {
-        self.stack.pop_i64().to_int()
+        self.stack.pop_i64()
       } else {
-        self.stack.pop_i32()
+        self.stack.pop_i32().to_int64() & 0xFFFF_FFFFL
       }
       // Source index uses source table's index type
       let src = if src_table.is_table64() {
-        self.stack.pop_i64().to_int()
+        self.stack.pop_i64()
       } else {
-        self.stack.pop_i32()
+        self.stack.pop_i32().to_int64() & 0xFFFF_FFFFL
       }
       // Dest index uses dest table's index type
       let dest = if dest_table.is_table64() {
-        self.stack.pop_i64().to_int()
+        self.stack.pop_i64()
       } else {
-        self.stack.pop_i32()
+        self.stack.pop_i32().to_int64() & 0xFFFF_FFFFL
       }
-      dest_table.copy_from(dest, src_table, src, n)
+      dest_table.copy_from_at(dest, src_table, src, n)
     }
     TableInit(table_idx, elem_idx) => {
       // table.init copies elements from elem segment to table
@@ -176,9 +183,9 @@ fn ExecContext::exec_instr(
       let n = self.stack.pop_i32()
       let s = self.stack.pop_i32()
       let d = if table.is_table64() {
-        self.stack.pop_i64().to_int()
+        self.stack.pop_i64()
       } else {
-        self.stack.pop_i32()
+        self.stack.pop_i32().to_int64() & 0xFFFFFFFFL
       }
 
       // Get elem segment
@@ -188,63 +195,26 @@ fn ExecContext::exec_instr(
       // Declarative elem segments behave as if they have been dropped
       let is_dropped = self.instance.dropped_elems[elem_idx]
       let is_declarative = elem_segment.mode is Declarative
-      if (is_dropped || is_declarative) && n != 0 {
-        // Dropped/declarative segments behave as if they have zero length
-        raise @runtime.RuntimeError::OutOfBoundsTableAccess
-      }
-      if is_dropped || is_declarative {
-        return
-      }
-
       // Check bounds
-      let elem_len = elem_segment.init.length()
-      let table_addr = self.instance.table_addrs[table_idx]
-      let table = self.store.get_table(table_addr)
+      let elem_len = if is_dropped || is_declarative {
+        0
+      } else {
+        elem_segment.init.length()
+      }
       let table_size = table.size()
-      if s < 0 || n < 0 || s + n > elem_len || d < 0 || d + n > table_size {
+      if s < 0 ||
+        n < 0 ||
+        s.to_int64() + n.to_int64() > elem_len.to_int64() ||
+        d < 0L ||
+        d > table_size.to_int64() ||
+        n.to_int64() > table_size.to_int64() - d {
         raise @runtime.RuntimeError::OutOfBoundsTableAccess
       }
 
       // Copy elements from elem segment to table
       for i in 0..<n {
-        let init_expr = elem_segment.init[s + i]
-        // Evaluate the init expression to get the value
-        let value = match init_expr {
-          [RefFunc(func_idx)] => {
-            // Convert module function index to store address
-            let store_addr = self.instance.func_addrs[func_idx]
-            @types.Value::FuncRef(store_addr)
-          }
-          [RefNull(ref_type)] =>
-            match ref_type {
-              FuncRef | ExternRef => Null
-              _ => Null
-            }
-          // GC: handle ref.i31 expressions
-          [I32Const(n), RefI31] => {
-            let i31_val = n & 0x7FFFFFFF
-            I31(i31_val)
-          }
-          [GlobalGet(idx), RefI31] => {
-            let globals = get_global_instances(
-              self.store,
-              self.instance.global_addrs,
-            )
-            if idx < globals.length() {
-              match globals[idx].get() {
-                I32(n) => {
-                  let i31_val = n & 0x7FFFFFFF
-                  I31(i31_val)
-                }
-                _ => Null
-              }
-            } else {
-              Null
-            }
-          }
-          _ => Null
-        }
-        table.set(d + i, value)
+        let value = self.instance.elem_values[elem_idx][s + i]
+        table.set(d.to_int() + i, value)
       }
     }
 
@@ -267,6 +237,12 @@ fn ExecContext::exec_instr(
         | RefExtern
         | RefFuncTyped(_)
         | RefNullFuncTyped(_)
+        | ContRef
+        | RefCont
+        | RefContTyped(_)
+        | RefNullContTyped(_)
+        | NullContRef
+        | RefNoCont
         // GC reference types
         | RefNullEq
         | RefEq
@@ -297,7 +273,7 @@ fn ExecContext::exec_instr(
       // ref.as_non_null: traps if reference is null
       let value = self.stack.pop()
       match value {
-        Null => raise @runtime.RuntimeError::Unreachable
+        Null => raise @runtime.RuntimeError::NullReference
         _ => self.stack.push(value)
       }
     }
@@ -358,6 +334,8 @@ fn ExecContext::exec_instr(
     I64Add
     | I64Sub
     | I64Mul
+    | I64Add128
+    | I64Sub128
     | I64MulWideS
     | I64MulWideU
     | I64DivS
@@ -887,6 +865,9 @@ fn ExecContext::exec_instr(
     | I16x8RelaxedDotI8x16I7x16S
     | I32x4RelaxedDotI8x16I7x16AddS => self.exec_simd(instr)
   }
+  if self.store.nan_canonicalization {
+    self.canonicalize_nan_result(instr)
+  }
 }
 
 ///|
@@ -963,6 +944,7 @@ pub fn ExecContext::call_func(
   func_idx : Int,
   args : Array[@types.Value],
 ) -> Array[@types.Value] raise {
+  errdefer self.discard_captured_execution()
   // Get the store address from instance
   let store_addr = self.instance.func_addrs[func_idx]
   let func_inst = self.store.get_func_inst(store_addr)

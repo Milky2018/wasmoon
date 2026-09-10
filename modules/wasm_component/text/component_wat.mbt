@@ -1827,8 +1827,8 @@ fn parse_inline_type_decl(
       return (name_opt, payload.to_bytes(), next_type_count, decl_count)
     }
     if items[0] is Atom("list") {
-      if items.length() != 2 {
-        raise Unsupported("list type must be `(list <valtype>)`")
+      if items.length() != 2 && items.length() != 3 {
+        raise Unsupported("list type must be `(list <valtype> [length])`")
       }
       let (elem, next_next_type_count, elem_decl_count) = parse_inline_valtype_encoding(
         items[1],
@@ -1840,8 +1840,11 @@ fn parse_inline_type_decl(
       next_type_count = next_next_type_count
       decl_count += elem_decl_count
       let payload = ByteBuf::ByteBuf()
-      payload.push_u8(0x70)
+      payload.push_u8(if items.length() == 3 { 0x67 } else { 0x70 })
       push_valtype_encoding(payload, elem)
+      if items.length() == 3 {
+        payload.push_uleb_u32(parse_u32_literal(items[2], "fixed-list length"))
+      }
       return (name_opt, payload.to_bytes(), next_type_count, decl_count)
     }
     if items[0] is Atom("option") {
@@ -3622,12 +3625,15 @@ fn parse_type_field(
       return
     }
     if head == "list" {
-      if items.length() != 2 {
-        raise Unsupported("list type must be `(list <valtype>)`")
+      if items.length() != 2 && items.length() != 3 {
+        raise Unsupported("list type must be `(list <valtype> [length])`")
       }
       let payload = ByteBuf::ByteBuf()
-      payload.push_u8(0x70)
+      payload.push_u8(if items.length() == 3 { 0x67 } else { 0x70 })
       push_valtype_encoding(payload, parse_valtype(items[1], state))
+      if items.length() == 3 {
+        payload.push_uleb_u32(parse_u32_literal(items[2], "fixed-list length"))
+      }
       let type_idx = add_type_entry(state, payload.to_bytes(), None, name_opt)
       push_type_exports(type_idx)
       return
@@ -4437,6 +4443,27 @@ fn parse_canon_decl(
     decl.push_uleb_u32(parse_u32_literal(canon_items[3], "context index"))
     return (decl.to_bytes(), true, target_name_opt)
   }
+  if op_name == "error-context.new" || op_name == "error-context.debug-message" {
+    let (count, payload) = parse_canon_options(canon_items, 2, decl_end, state)
+    let decl = ByteBuf::ByteBuf()
+    decl.push_u8(if op_name == "error-context.new" { 0x1c } else { 0x1d })
+    decl.push_uleb_u32(count)
+    decl.push_bytes(payload)
+    return (decl.to_bytes(), true, target_name_opt)
+  }
+  if op_name == "error-context.drop" {
+    if decl_end != 2 {
+      raise Unsupported("error-context.drop does not accept arguments")
+    }
+    return (Bytes::from_array([0x1e]), true, target_name_opt)
+  }
+  if op_name == "backpressure.inc" || op_name == "backpressure.dec" {
+    if decl_end != 2 {
+      raise Unsupported("\{op_name} does not accept arguments")
+    }
+    let opcode : Byte = if op_name == "backpressure.inc" { 0x24 } else { 0x25 }
+    return (Bytes::from_array([opcode]), true, target_name_opt)
+  }
   if op_name == "thread.index" {
     if decl_end != 2 {
       raise Unsupported("thread.index does not accept arguments")
@@ -4447,7 +4474,7 @@ fn parse_canon_decl(
     if decl_end != 2 {
       raise Unsupported("thread.resume-later does not accept arguments")
     }
-    return (Bytes::from_array([0x2a]), true, target_name_opt)
+    return (Bytes::from_array([0x28]), true, target_name_opt)
   }
   if op_name == "thread.new-indirect" {
     if decl_end != 4 {
@@ -4463,7 +4490,11 @@ fn parse_canon_decl(
   }
   if op_name == "thread.yield" ||
     op_name == "thread.yield-to" ||
+    op_name == "thread.yield-then-resume" ||
     op_name == "thread.switch-to" ||
+    op_name == "thread.suspend-then-resume" ||
+    op_name == "thread.suspend-then-promote" ||
+    op_name == "thread.yield-then-promote" ||
     op_name == "thread.suspend" {
     let mut flag = false
     if decl_end == 3 {
@@ -4475,10 +4506,16 @@ fn parse_canon_decl(
     decl.push_u8(
       if op_name == "thread.yield" {
         0x0c
-      } else if op_name == "thread.yield-to" {
+      } else if op_name == "thread.yield-to" ||
+        op_name == "thread.yield-then-resume" {
         0x2b
-      } else if op_name == "thread.switch-to" {
-        0x28
+      } else if op_name == "thread.switch-to" ||
+        op_name == "thread.suspend-then-resume" {
+        0x2a
+      } else if op_name == "thread.suspend-then-promote" {
+        0x2c
+      } else if op_name == "thread.yield-then-promote" {
+        0x2d
       } else {
         0x29
       },

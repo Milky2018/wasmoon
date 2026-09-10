@@ -5,6 +5,32 @@ tree at the commit recorded in `SNAPSHOT.json`. The manifest pins the upstream
 commit, Git tree, parser version, complete path set, and SHA-256 of every file.
 Do not edit files under `upstream/` directly.
 
+`CORRECTIONS.json` records reviewed corrections to obsolete temporary assertions.
+Each entry pins both the original upstream hash and the corrected file under
+`corrections/`, and states its reason. Suite runs announce and use those files;
+the original snapshot remains unchanged and is still verified in full. Running
+an explicit `--dir` executes the files in that directory without corrections.
+
+The reentry correction allows parent/child calls, including synchronous reentry
+and calls into a yielded parent callback. The recursive callback fixture now
+executes its deliberately unreachable callee. All three assertions pass the
+Wasmtime 50.0.0-dev oracle built from the misc corpus revision. Independent
+controls in `tests/component-runtime/callback-entry.wast` cover nested entry,
+shared core-trap poisoning and non-poisoning result decoding errors.
+
+The synchronous-blocking correction updates eleven obsolete trap-precedence
+assertions in `async/trap-if-block-and-sync.wast`. Immediately trapping async
+callees execute, and malformed buffers or handles are validated before blocking.
+Independent controls cover malformed inputs, valid blocking operations and
+immediately completed operations in `tests/component-runtime/`. The complete
+corrected script passes Wasmtime 50.0.0-dev, built from the exact misc corpus
+revision 668016926adfd1b8a79dbce894f1e203d8892599 (see ISS-488).
+
+The `async/sync-streams.wast` correction explicitly yields after the first stream
+transfer, allowing its producer to finish and release the instance lock before
+the next call. Every original assertion is preserved. This corrected script also
+passes the matching Wasmtime oracle.
+
 The `.wast` files are partitioned exactly once by the manifests in `suites/`:
 
 - `stable-0.2`: files whose valid component forms require no post-0.2

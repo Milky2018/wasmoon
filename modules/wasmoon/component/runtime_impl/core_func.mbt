@@ -19,6 +19,7 @@ pub fn alloc_host_core_func(
     global_addrs: [],
     tag_addrs: [],
     exports: [],
+    elem_values: [],
     elem_segments: [],
     data_segments: [],
     dropped_elems: [],
@@ -126,6 +127,9 @@ fn call_core_func_outcome(
     ),
   ) catch {
     e => {
+      if e is UncaughtWasmException {
+        raise e
+      }
       match canon_suspend[0] {
         Some(_) => {
           canon_suspend[0] = None
@@ -187,7 +191,10 @@ fn call_core_func_guarded(
 ) -> Array[@types.Value] raise ComponentRuntimeError {
   entry.enter()
   let out = {
-    errdefer entry.poison()
+    errdefer {
+      entry.leave()
+      entry.poison()
+    }
     call_core_func(store, core_func, args, style~)
   }
   entry.leave()
@@ -206,8 +213,8 @@ fn guard_core_outcome(
     }
     Suspended(reason, continuation) => {
       // A captured continuation is not actively executing guest code. Release
-      // the dynamic entry guard while it waits; task ancestry still prevents
-      // prohibited async re-entry. Re-acquire it immediately before resuming.
+      // active-depth lease while it waits. Re-acquire it immediately before
+      // resuming so nested calls cannot release another activation.
       entry.leave()
       Suspended(
         reason,
@@ -215,15 +222,15 @@ fn guard_core_outcome(
           fn() raise ComponentRuntimeError {
             entry.enter()
             let resumed = {
-              errdefer entry.poison()
+              errdefer {
+                entry.leave()
+                entry.poison()
+              }
               continuation.continue_execution()
             }
             guard_core_outcome(resumed, entry)
           },
-          fn() {
-            continuation.cancel()
-            entry.leave()
-          },
+          fn() { continuation.cancel() },
         ),
       )
     }
@@ -240,10 +247,38 @@ fn call_core_func_guarded_outcome(
 ) -> CoreExecutionOutcome raise ComponentRuntimeError {
   entry.enter()
   let outcome = {
-    errdefer entry.poison()
+    errdefer {
+      entry.leave()
+      entry.poison()
+    }
     call_core_func_outcome(store, core_func, args, style)
   }
   guard_core_outcome(outcome, entry)
 }
 
 ///|
+
+///|
+fn component_core_error(error : @runtime.RuntimeError) -> ComponentRuntimeError {
+  match error {
+    UncaughtException => UncaughtWasmException
+    _ => CanonCallError(error.to_string())
+  }
+}
+
+///|
+fn run_post_return(
+  resources : CanonResources,
+  core_results : Array[@types.Value],
+  entry : ComponentInstanceEntryState,
+  store : @runtime.Store,
+) -> Unit raise ComponentRuntimeError {
+  if resources.post_return is Some(post_return) {
+    let previous = canon_may_leave[0]
+    canon_may_leave[0] = false
+    defer {
+      canon_may_leave[0] = previous
+    }
+    call_core_func_guarded(store, entry, post_return, core_results) |> ignore
+  }
+}

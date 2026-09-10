@@ -46,19 +46,26 @@ fn compare_wasi_with_options(
   source : String,
   func_name : String,
   preopens? : Array[(String, String)] = [],
+  readonly_preopens? : Array[(String, String)] = [],
   stdin_data? : Bytes,
-  stdin_callback? : (() -> Bytes)? = None,
+  stdin_factory? : () -> () -> Bytes,
 ) -> WasiCompareResult {
   // Parse the WAT source
-  let mod_ = @wat.parse(source) catch {
+  let (mod_, interp_mod) = try {
+    let jit_mod = @wat.parse(source)
+    @validator.validate_module(jit_mod)
+    let interp_mod = @wat.parse(source)
+    @validator.validate_module(interp_mod)
+    (jit_mod, interp_mod)
+  } catch {
     e => {
-      let err = "Failed to parse WAT: \{e}"
+      let err = "Failed to prepare WAT: \{e}"
       return {
         jit_result: Err(err),
         interp_result: Err(err),
         jit_stdout: b"",
         interp_stdout: b"",
-        match_: true,
+        match_: false,
       }
     }
   }
@@ -72,7 +79,7 @@ fn compare_wasi_with_options(
       interp_result: Err(err),
       jit_stdout: b"",
       interp_stdout: b"",
-      match_: true,
+      match_: false,
     }
   }
 
@@ -85,11 +92,12 @@ fn compare_wasi_with_options(
 
   // Run interpreter with WASI (stdout suppressed)
   let (interp_result, interp_stdout) = run_wasi_interp_quiet(
-    mod_,
+    interp_mod,
     func_name,
     preopens,
     stdin_data,
-    stdin_callback~,
+    stdin_callback=stdin_factory.map(fn(make) { make() }),
+    readonly_preopens~,
   )
 
   // Run JIT with WASI (stdout suppressed)
@@ -100,13 +108,13 @@ fn compare_wasi_with_options(
     result_types,
     preopens,
     stdin_data,
-    stdin_callback~,
+    stdin_callback=stdin_factory.map(fn(make) { make() }),
+    readonly_preopens~,
   )
 
   // Compare results (return values must match)
   let results_match = match (jit_result, interp_result) {
     (Ok(jit_vals), Ok(interp_vals)) => values_array_equal(jit_vals, interp_vals)
-    (Err(_), Err(_)) => true
     _ => false
   }
   let match_ = results_match && jit_stdout == interp_stdout
@@ -114,83 +122,27 @@ fn compare_wasi_with_options(
 }
 
 ///|
-fn compare_wasi_with_callback(
-  source : String,
-  func_name : String,
-  preopens? : Array[(String, String)] = [],
-  stdin_factory : () -> () -> Bytes,
-) -> WasiCompareResult {
-  // Parse the WAT source
-  let mod_ = @wat.parse(source) catch {
-    e => {
-      let err = "Failed to parse WAT: \{e}"
-      return {
-        jit_result: Err(err),
-        interp_result: Err(err),
-        jit_stdout: b"",
-        interp_stdout: b"",
-        match_: true,
-      }
-    }
-  }
-
-  // Find the function index by name
-  let func_idx = find_wasi_func_index(mod_, func_name)
-  guard func_idx is Some(idx) else {
-    let err = "Function '\{func_name}' not found"
-    return {
-      jit_result: Err(err),
-      interp_result: Err(err),
-      jit_stdout: b"",
-      interp_stdout: b"",
-      match_: true,
-    }
-  }
-
-  // Get function type
-  let num_imports = @wast.count_func_imports(mod_.imports)
-  let local_idx = idx - num_imports
-  let func_type_idx = mod_.funcs[local_idx]
-  let func_type = mod_.validated_func_type_at(func_type_idx)
-  let result_types = func_type.results
-  let (interp_result, interp_stdout) = run_wasi_interp_quiet(
-    mod_,
-    func_name,
-    preopens,
-    None,
-    stdin_callback=Some(stdin_factory()),
-  )
-  let (jit_result, jit_stdout) = run_wasi_jit_quiet(
-    mod_,
-    func_name,
-    idx,
-    result_types,
-    preopens,
-    None,
-    stdin_callback=Some(stdin_factory()),
-  )
-  let results_match = match (jit_result, interp_result) {
-    (Ok(jit_vals), Ok(interp_vals)) => values_array_equal(jit_vals, interp_vals)
-    (Err(_), Err(_)) => true
-    _ => false
-  }
-  let match_ = results_match && jit_stdout == interp_stdout
-  { jit_result, interp_result, jit_stdout, interp_stdout, match_, }
-}
-
-///|
-fn wasi_errno_from_result(result : Result[Array[@types.Value], String]) -> Int {
+fn wasi_errno_from_result(
+  result : Result[Array[@types.Value], String],
+) -> Int raise {
   match result {
-    Ok(values) =>
-      if values.length() == 1 {
-        match values[0] {
-          I32(errno) => errno
-          _ => -2
-        }
-      } else {
-        -3
-      }
-    Err(_) => -1
+    Ok([I32(errno)]) => errno
+    _ =>
+      fail(
+        "expected one successful WASI errno result: \{@debug.to_string(result)}",
+      )
+  }
+}
+
+///|
+fn wasi_results_trap(result : WasiCompareResult, expected : String) -> Bool {
+  match (result.jit_result, result.interp_result) {
+    (Err(jit), Err(interp)) =>
+      jit.has_prefix("JIT error:") &&
+      interp.has_prefix("Interpreter error:") &&
+      jit.contains(expected) &&
+      interp.contains(expected)
+    _ => false
   }
 }
 
@@ -226,12 +178,14 @@ fn run_wasi_interp_quiet(
   func_name : String,
   preopens : Array[(String, String)],
   stdin_data : Bytes?,
+  readonly_preopens? : Array[(String, String)] = [],
   stdin_callback? : (() -> Bytes)? = None,
 ) -> (Result[Array[@types.Value], String], Bytes) {
   try {
     let stdout_buf : Array[Byte] = []
     let _stderr_buf : Array[Byte] = []
     let linker = @runtime.Linker::Linker()
+    defer linker.close()
     let store = linker.get_store()
     // Register WASI with suppressed stdout/stderr
     let wasi_builder = @wasi.WasiContextBuilder::WasiContextBuilder()
@@ -249,6 +203,10 @@ fn run_wasi_interp_quiet(
       let (host, guest) = entry
       wasi_builder.preopen_dir(host, guest) |> ignore
     }
+    for entry in readonly_preopens {
+      let (host, guest) = entry
+      wasi_builder.preopen_dir_readonly(host, guest) |> ignore
+    }
     match stdin_callback {
       Some(cb) => wasi_builder.stdin(cb) |> ignore
       None =>
@@ -269,6 +227,12 @@ fn run_wasi_interp_quiet(
         }
     }
     let wasi_ctx = wasi_builder.build()
+    defer {
+      for _, file in wasi_ctx.open_files {
+        @wasi.native_close(file.native_fd) |> ignore
+      }
+      wasi_ctx.open_files.clear()
+    }
     @wasi.register_wasi(linker, wasi_ctx)
     let instance = @executor.instantiate_with_linker(linker, "test", mod_)
     let result = @executor.call_exported_func(store, instance, func_name, [])
@@ -286,6 +250,7 @@ fn run_wasi_jit_quiet(
   result_types : Array[@types.ValueType],
   preopens : Array[(String, String)],
   stdin_data : Bytes?,
+  readonly_preopens? : Array[(String, String)] = [],
   stdin_callback? : (() -> Bytes)? = None,
 ) -> (Result[Array[@types.Value], String], Bytes) {
   func_name |> ignore
@@ -293,6 +258,7 @@ fn run_wasi_jit_quiet(
     let stdout_buf : Array[Byte] = []
     let stderr_buf : Array[Byte] = []
     let linker = @runtime.Linker::Linker()
+    defer linker.close()
     let store = linker.get_store()
     let wasi_builder = @wasi.WasiContextBuilder::WasiContextBuilder()
       .stdout(fn(bytes) {
@@ -308,6 +274,10 @@ fn run_wasi_jit_quiet(
     for entry in preopens {
       let (host, guest) = entry
       wasi_builder.preopen_dir(host, guest) |> ignore
+    }
+    for entry in readonly_preopens {
+      let (host, guest) = entry
+      wasi_builder.preopen_dir_readonly(host, guest) |> ignore
     }
     match stdin_callback {
       Some(cb) => wasi_builder.stdin(cb) |> ignore
@@ -329,6 +299,12 @@ fn run_wasi_jit_quiet(
         }
     }
     let wasi_ctx = wasi_builder.build()
+    defer {
+      for _, file in wasi_ctx.open_files {
+        @wasi.native_close(file.native_fd) |> ignore
+      }
+      wasi_ctx.open_files.clear()
+    }
     @wasi.register_wasi(linker, wasi_ctx)
     let instance = @executor.instantiate_with_linker(linker, "test", mod_)
     guard @commands.compile_module_to_jit(mod_, false, false, 0, false)
@@ -347,6 +323,13 @@ fn run_wasi_jit_quiet(
       function_names=@commands.build_jit_function_names(mod_),
       debug_db~,
     )
+    defer {
+      for table_idx in 0..<instance.table_addrs.length() {
+        jm.refresh_table_layout(table_idx) |> ignore
+      }
+      jm.clear_segments()
+      jm.close()
+    }
     @wast.register_instance_funcrefs_for_jit(jm, instance, store)
     jm.configure_native_fiber_stack_size(1048576L) |> ignore
     jm.init_wasi_with_stdio(
@@ -365,6 +348,7 @@ fn run_wasi_jit_quiet(
       }),
       stdin_data,
       stdin_callback~,
+      readonly_preopens~,
     )
     guard @wast.init_jit_memories_from_store(instance, store, jm) is Some(_) else {
       return (Err("JIT memory initialization failed"), Bytes::from_array([]))
@@ -695,7 +679,7 @@ test "wasi jit: poll_oneoff fd_read reports remaining file bytes" {
     #|    ;; fd_read subscription
     #|    (i64.store (i32.const 0) (i64.const 555))
     #|    (i32.store8 (i32.const 8) (i32.const 1))
-    #|    (i32.store (i32.const 12) (local.get $read_fd))
+    #|    (i32.store (i32.const 16) (local.get $read_fd))
     #|    (local.set $errno
     #|      (call $poll_oneoff
     #|        (i32.const 0) (i32.const 256) (i32.const 1) (i32.const 240)))
@@ -761,10 +745,10 @@ test "wasi jit: poll_oneoff fans out mixed subscriptions for one native fd" {
     #|    ;; sub[0] = fd_read, sub[1] = fd_write for the same native fd
     #|    (i64.store (i32.const 0) (i64.const 111))
     #|    (i32.store8 (i32.const 8) (i32.const 1))
-    #|    (i32.store (i32.const 12) (local.get $fd))
+    #|    (i32.store (i32.const 16) (local.get $fd))
     #|    (i64.store (i32.const 48) (i64.const 222))
     #|    (i32.store8 (i32.const 56) (i32.const 2))
-    #|    (i32.store (i32.const 60) (local.get $fd))
+    #|    (i32.store (i32.const 64) (local.get $fd))
     #|    (local.set $errno
     #|      (call $poll_oneoff
     #|        (i32.const 0) (i32.const 256) (i32.const 2) (i32.const 240)))
@@ -831,7 +815,7 @@ test "wasi jit: poll_oneoff requires poll and direction rights" {
     #|          (then (return (local.get $errno))))))
     #|    (i64.store (i32.const 0) (i64.const 111))
     #|    (i32.store8 (i32.const 8) (i32.const 1))
-    #|    (i32.store (i32.const 12) (local.get $fd))
+    #|    (i32.store (i32.const 16) (local.get $fd))
     #|    (local.set $errno
     #|      (call $poll_oneoff
     #|        (i32.const 0) (i32.const 256) (i32.const 1) (i32.const 240)))
@@ -893,7 +877,7 @@ test "wasi jit: poll_oneoff keeps expired realtime clock when fd is ready" {
     #|    ;; sub[1] = fd_write(stdout)
     #|    (i64.store (i32.const 48) (i64.const 222))
     #|    (i32.store8 (i32.const 56) (i32.const 2))
-    #|    (i32.store (i32.const 60) (i32.const 1))
+    #|    (i32.store (i32.const 64) (i32.const 1))
     #|    (drop (call $poll_oneoff (i32.const 0) (i32.const 96) (i32.const 2)
     #|      (i32.const 80)))
     #|    (i32.load (i32.const 80))))
@@ -935,7 +919,7 @@ test "wasi jit: stdin callback supplies multiple reads" {
     }
   }
   inspect(
-    compare_wasi_with_callback(source, "test", stdin_factory),
+    compare_wasi_with_options(source, "test", stdin_factory~),
     content="matched",
   )
 }
@@ -1281,9 +1265,7 @@ test "wasi jit: path_open traps on unknown dirflags bits" {
   let result = compare_wasi_with_options(source, "test", preopens=[
     ("/tmp", "/"),
   ])
-  inspect(result.match_, content="true")
-  inspect(wasi_errno_from_result(result.interp_result), content="-1")
-  inspect(wasi_errno_from_result(result.jit_result), content="-1")
+  inspect(wasi_results_trap(result, "unreachable"), content="true")
 }
 
 ///|
@@ -1309,9 +1291,7 @@ test "wasi jit: path_open traps on unknown oflags bits" {
   let result = compare_wasi_with_options(source, "test", preopens=[
     ("/tmp", "/"),
   ])
-  inspect(result.match_, content="true")
-  inspect(wasi_errno_from_result(result.interp_result), content="-1")
-  inspect(wasi_errno_from_result(result.jit_result), content="-1")
+  inspect(wasi_results_trap(result, "unreachable"), content="true")
 }
 
 ///|
@@ -1337,9 +1317,7 @@ test "wasi jit: path_open traps on unknown fdflags bits" {
   let result = compare_wasi_with_options(source, "test", preopens=[
     ("/tmp", "/"),
   ])
-  inspect(result.match_, content="true")
-  inspect(wasi_errno_from_result(result.interp_result), content="-1")
-  inspect(wasi_errno_from_result(result.jit_result), content="-1")
+  inspect(wasi_results_trap(result, "unreachable"), content="true")
 }
 
 ///|
@@ -1695,9 +1673,7 @@ test "wasi jit: path_filestat_get traps on unknown lookupflags bits" {
   let result = compare_wasi_with_options(source, "test", preopens=[
     ("/tmp", "/"),
   ])
-  inspect(result.match_, content="true")
-  inspect(wasi_errno_from_result(result.interp_result), content="-1")
-  inspect(wasi_errno_from_result(result.jit_result), content="-1")
+  inspect(wasi_results_trap(result, "unreachable"), content="true")
 }
 
 ///|
@@ -1836,9 +1812,7 @@ test "wasi jit: path_filestat_set_times traps on unknown lookupflags bits" {
   let result = compare_wasi_with_options(source, "test", preopens=[
     ("/tmp", "/"),
   ])
-  inspect(result.match_, content="true")
-  inspect(wasi_errno_from_result(result.interp_result), content="-1")
-  inspect(wasi_errno_from_result(result.jit_result), content="-1")
+  inspect(wasi_results_trap(result, "unreachable"), content="true")
 }
 
 ///|
@@ -2161,9 +2135,7 @@ test "wasi jit: path_link traps on unknown lookupflags bits" {
   let result = compare_wasi_with_options(source, "test", preopens=[
     ("/tmp", "/"),
   ])
-  inspect(result.match_, content="true")
-  inspect(wasi_errno_from_result(result.interp_result), content="-1")
-  inspect(wasi_errno_from_result(result.jit_result), content="-1")
+  inspect(wasi_results_trap(result, "unreachable"), content="true")
 }
 
 ///|
@@ -2358,9 +2330,7 @@ test "wasi jit: clock_time_get traps on invalid clock id enum" {
     #|  (func (export "test") (result i32)
     #|    (call $clock_time_get (i32.const 999) (i64.const 0) (i32.const 0))))
   let result = compare_wasi(source, "test")
-  inspect(result.match_, content="true")
-  inspect(wasi_errno_from_result(result.interp_result), content="-1")
-  inspect(wasi_errno_from_result(result.jit_result), content="-1")
+  inspect(wasi_results_trap(result, "unreachable"), content="true")
 }
 
 ///|
@@ -2394,9 +2364,7 @@ test "wasi jit: clock_res_get traps on invalid clock id enum" {
     #|  (func (export "test") (result i32)
     #|    (call $clock_res_get (i32.const 999) (i32.const 0))))
   let result = compare_wasi(source, "test")
-  inspect(result.match_, content="true")
-  inspect(wasi_errno_from_result(result.interp_result), content="-1")
-  inspect(wasi_errno_from_result(result.jit_result), content="-1")
+  inspect(wasi_results_trap(result, "unreachable"), content="true")
 }
 
 ///|
@@ -2502,9 +2470,7 @@ test "wasi jit: proc_raise traps on invalid signal enum" {
     #|  (func (export "test") (result i32)
     #|    (call $proc_raise (i32.const 255))))
   let result = compare_wasi(source, "test")
-  inspect(result.match_, content="true")
-  inspect(wasi_errno_from_result(result.interp_result), content="-1")
-  inspect(wasi_errno_from_result(result.jit_result), content="-1")
+  inspect(wasi_results_trap(result, "unreachable"), content="true")
 }
 
 ///|
@@ -2529,9 +2495,7 @@ test "wasi jit: fd_seek traps on invalid whence enum" {
     #|  (func (export "test") (result i32)
     #|    (call $fd_seek (i32.const 0) (i64.const 0) (i32.const 3) (i32.const 200))))
   let result = compare_wasi(source, "test")
-  inspect(result.match_, content="true")
-  inspect(wasi_errno_from_result(result.interp_result), content="-1")
-  inspect(wasi_errno_from_result(result.jit_result), content="-1")
+  inspect(wasi_results_trap(result, "unreachable"), content="true")
 }
 
 ///|
@@ -2750,9 +2714,7 @@ test "wasi jit: fd_advise traps on invalid advice enum" {
   let result = compare_wasi_with_options(source, "test", preopens=[
     ("/tmp", "/"),
   ])
-  inspect(result.match_, content="true")
-  inspect(wasi_errno_from_result(result.interp_result), content="-1")
-  inspect(wasi_errno_from_result(result.jit_result), content="-1")
+  inspect(wasi_results_trap(result, "unreachable"), content="true")
 }
 
 ///|
@@ -2943,9 +2905,7 @@ test "wasi jit: fd_fdstat_set_flags traps on unknown bits" {
   let result = compare_wasi_with_options(source, "test", preopens=[
     ("/tmp", "/"),
   ])
-  inspect(result.match_, content="true")
-  inspect(wasi_errno_from_result(result.interp_result), content="-1")
-  inspect(wasi_errno_from_result(result.jit_result), content="-1")
+  inspect(wasi_results_trap(result, "unreachable"), content="true")
 }
 
 ///|
@@ -3185,9 +3145,7 @@ test "wasi jit: sock_accept traps on unknown fdflags bits" {
     #|  (func (export "test") (result i32)
     #|    (call $sock_accept (i32.const 0) (i32.const 0x20) (i32.const 0))))
   let result = compare_wasi(source, "test")
-  inspect(result.match_, content="true")
-  inspect(wasi_errno_from_result(result.interp_result), content="-1")
-  inspect(wasi_errno_from_result(result.jit_result), content="-1")
+  inspect(wasi_results_trap(result, "unreachable"), content="true")
 }
 
 ///|
@@ -3201,9 +3159,7 @@ test "wasi jit: sock_recv traps on unknown riflags bits" {
     #|  (func (export "test") (result i32)
     #|    (call $sock_recv (i32.const 0) (i32.const 0) (i32.const 1) (i32.const 0x04) (i32.const 16) (i32.const 20))))
   let result = compare_wasi(source, "test")
-  inspect(result.match_, content="true")
-  inspect(wasi_errno_from_result(result.interp_result), content="-1")
-  inspect(wasi_errno_from_result(result.jit_result), content="-1")
+  inspect(wasi_results_trap(result, "unreachable"), content="true")
 }
 
 ///|
@@ -3216,9 +3172,7 @@ test "wasi jit: sock_shutdown traps on unknown sdflags bits" {
     #|  (func (export "test") (result i32)
     #|    (call $sock_shutdown (i32.const 0) (i32.const 0x04))))
   let result = compare_wasi(source, "test")
-  inspect(result.match_, content="true")
-  inspect(wasi_errno_from_result(result.interp_result), content="-1")
-  inspect(wasi_errno_from_result(result.jit_result), content="-1")
+  inspect(wasi_results_trap(result, "unreachable"), content="true")
 }
 
 ///|
@@ -3235,4 +3189,109 @@ test "wasi jit: sock_send nonzero siflags still returns ENOTSOCK (57)" {
   inspect(result.match_, content="true")
   inspect(wasi_errno_from_result(result.interp_result), content="57")
   inspect(wasi_errno_from_result(result.jit_result), content="57")
+}
+
+///|
+test "wasi imports preserve readlink and symlink semantics in both engines" {
+  let root = "/tmp/wasmoon-wasi-import-paths-\{@wasi.native_clock_gettime_monotonic()}"
+  guard @wasi.native_mkdir(root, 0o700) else {
+    fail("could not create fixture")
+  }
+  defer @wasi.native_unlinkat(0, root, @wasi.AT_REMOVEDIR) |> ignore
+  guard @wasi.native_open(root + "/file", [WriteOnly, Create], 0o600)
+    is Some(fd) else {
+    fail("could not create file")
+  }
+  @wasi.native_close(fd) |> ignore
+  defer @wasi.native_unlinkat(0, root + "/file", 0) |> ignore
+  guard @wasi.native_mkdir(root + "/directory", 0o700) else {
+    fail("could not create directory")
+  }
+  defer @wasi.native_unlinkat(0, root + "/directory", @wasi.AT_REMOVEDIR)
+    |> ignore
+  guard @wasi.native_symlinkat("file", 0, root + "/link") else {
+    fail("could not create link")
+  }
+  defer @wasi.native_unlinkat(0, root + "/link", 0) |> ignore
+  for
+    case in [
+      ("link", 0, 0, 0, 33),
+      ("file", 0, 28, -1, 33),
+      ("missing", 0, 44, -1, 33),
+      ("link", 1, 0, 1, 102),
+      ("link", 8, 0, 4, 102),
+    ] {
+    let (path, length, errno, count, first_byte) = case
+    let source = "(module (import \"wasi_snapshot_preview1\" \"path_readlink\" (func $readlink (param i32 i32 i32 i32 i32 i32) (result i32))) (memory (export \"memory\") 1) (data (i32.const 0) \"\{path}\") (func (export \"test\") (result i32 i32 i32) (i32.store8 (i32.const 100) (i32.const 33)) (i32.store (i32.const 200) (i32.const -1)) (call $readlink (i32.const 3) (i32.const 0) (i32.const \{path.length()}) (i32.const 100) (i32.const \{length}) (i32.const 200)) (i32.load (i32.const 200)) (i32.load8_u (i32.const 100))))"
+    let result = compare_wasi_with_options(source, "test", preopens=[
+      (root, "/"),
+    ])
+    let expected : Array[@types.Value] = [
+      I32(errno),
+      I32(count),
+      I32(first_byte),
+    ]
+    guard result.interp_result is Ok(interp) && result.jit_result is Ok(jit) else {
+      fail(result.to_string())
+    }
+    inspect(values_array_equal(interp, expected), content="true")
+    inspect(values_array_equal(jit, expected), content="true")
+  }
+  for
+    case in [
+      ("missing/", 44),
+      ("directory/", 20),
+      ("directory", 20),
+      ("file/", 54),
+      ("file", 20),
+    ] {
+    let (path, errno) = case
+    let source = "(module (import \"wasi_snapshot_preview1\" \"path_symlink\" (func $symlink (param i32 i32 i32 i32 i32) (result i32))) (memory (export \"memory\") 1) (data (i32.const 0) \"\{path}\") (data (i32.const 64) \"x\") (func (export \"test\") (result i32) (call $symlink (i32.const 64) (i32.const 1) (i32.const 3) (i32.const 0) (i32.const \{path.length()}))))"
+    let result = compare_wasi_with_options(source, "test", preopens=[
+      (root, "/"),
+    ])
+    guard result.interp_result is Ok(interp) && result.jit_result is Ok(jit) else {
+      fail(result.to_string())
+    }
+    inspect(values_array_equal(interp, [I32(errno)]), content="true")
+    inspect(values_array_equal(jit, [I32(errno)]), content="true")
+  }
+}
+
+///|
+test "WASI success parity rejects preparation errors and unexpected traps" {
+  for
+    source in [
+      "(module (func (export \"test\") i32.not))", "(module (func (export \"test\") (result i32) f64.const 0))",
+      "(module (func (export \"other\")))",
+    ] {
+    let result = compare_wasi(source, "test")
+    inspect(result.match_, content="false")
+    inspect(wasi_results_trap(result, "unreachable"), content="false")
+  }
+  let result = compare_wasi(
+    "(module (func (export \"test\") unreachable))", "test",
+  )
+  inspect(result.match_, content="false")
+  inspect(wasi_results_trap(result, "unreachable"), content="true")
+  inspect(wasi_results_trap(result, "out of bounds"), content="false")
+}
+
+///|
+test "WASI comparisons release Store and JIT table owners" {
+  let baseline = @native_test_support.shared_indirect_table_live_count()
+  let source =
+    #|(module
+    #|  (table 1 4 funcref)
+    #|  (func (export "test") (result i32)
+    #|    ref.null func i32.const 2 table.grow 0))
+  for _ in 0..<2 {
+    let result = compare_wasi(source, "test")
+    inspect(wasi_errno_from_result(result.interp_result), content="1")
+    inspect(wasi_errno_from_result(result.jit_result), content="1")
+    inspect(
+      @native_test_support.shared_indirect_table_live_count() == baseline,
+      content="true",
+    )
+  }
 }

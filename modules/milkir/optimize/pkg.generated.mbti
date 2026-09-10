@@ -6,6 +6,8 @@ import {
 }
 
 // Values
+pub fn canonicalize_nans(@milkir.Function) -> Unit
+
 pub fn clear_optimization_metrics_sink() -> Unit
 
 pub fn install_optimization_metrics_sink(OptimizationMetricsSink) -> Unit

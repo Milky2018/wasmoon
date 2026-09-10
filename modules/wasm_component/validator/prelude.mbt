@@ -74,18 +74,20 @@ pub impl Show for ComponentValidationError with fn output(self, logger) {
 /// Keep this configurable so we can validate both suites.
 pub struct ComponentValidationConfig {
   wit_names : Bool
+  component_implements : Bool
 }
 
 ///|
 pub fn ComponentValidationConfig::ComponentValidationConfig(
   wit_names : Bool,
+  component_implements? : Bool = true,
 ) -> ComponentValidationConfig {
-  { wit_names, }
+  { wit_names, component_implements, }
 }
 
 ///|
 pub fn ComponentValidationConfig::default() -> ComponentValidationConfig {
-  { wit_names: true, }
+  ComponentValidationConfig(true)
 }
 
 ///|
@@ -129,6 +131,7 @@ priv enum CoreExternType {
   Table(@types.TableType)
   Memory(@types.MemoryType)
   Global(@types.GlobalType)
+  Tag(@types.FuncType)
 }
 
 ///|
@@ -540,6 +543,24 @@ fn core_global_type_of_idx(
 }
 
 ///|
+fn core_tag_type_of_idx(m : @types.Module, tag_idx : Int) -> @types.FuncType? {
+  let mut imported = 0
+  for imp in m.imports {
+    if imp.desc is Tag(type_idx) {
+      if imported == tag_idx {
+        return m.func_type_at(type_idx)
+      }
+      imported += 1
+    }
+  }
+  let local_idx = tag_idx - imported
+  if local_idx < 0 || local_idx >= m.tags.length() {
+    return None
+  }
+  m.func_type_at(m.tags[local_idx].type_idx)
+}
+
+///|
 fn core_export_type_of_module(
   m : @types.Module,
   ex : @types.Export,
@@ -556,7 +577,7 @@ fn core_export_type_of_module(
       core_memory_type_of_idx(m, mem_idx).map(fn(mt) { Memory(mt) })
     Global(global_idx) =>
       core_global_type_of_idx(m, global_idx).map(fn(gt) { Global(gt) })
-    _ => None
+    Tag(tag_idx) => core_tag_type_of_idx(m, tag_idx).map(ft => Tag(ft))
   }
 }
 
@@ -574,7 +595,7 @@ fn core_import_type_of_module(
     Table(tt) => Some(Table(tt))
     Memory(mt) => Some(Memory(mt))
     Global(gt) => Some(Global(gt))
-    _ => None
+    Tag(type_idx) => m.func_type_at(type_idx).map(ft => Tag(ft))
   }
 }
 
@@ -602,7 +623,7 @@ fn core_import_compatible(
   provided : CoreExternType,
 ) -> Bool {
   match (expected, provided) {
-    (Func(a), Func(b)) => a == b
+    (Func(a), Func(b)) | (Tag(a), Tag(b)) => a == b
     (Global(a), Global(b)) => a == b
     (Table(a), Table(b)) =>
       a.elem_type == b.elem_type &&
@@ -610,6 +631,7 @@ fn core_import_compatible(
       limits_import_compatible(a.limits, b.limits)
     (Memory(a), Memory(b)) =>
       a.is_memory64 == b.is_memory64 &&
+      a.is_shared == b.is_shared &&
       a.page_size_log2 == b.page_size_log2 &&
       limits_import_compatible(a.limits, b.limits)
     _ => false
@@ -623,6 +645,7 @@ fn core_kind_of_extern_type(ty : CoreExternType) -> Int {
     Table(_) => 0x01
     Memory(_) => 0x02
     Global(_) => 0x03
+    Tag(_) => 0x04
   }
 }
 
@@ -1590,11 +1613,11 @@ fn CoreTypeReader::skip_func_type_body(
 ) -> Unit raise ComponentValidationError {
   let nparams = self.read_leb_u32()
   for _i in 0..<nparams {
-    self.read_u8() |> ignore
+    self.read_core_valtype() |> ignore
   }
   let nresults = self.read_leb_u32()
   for _i in 0..<nresults {
-    self.read_u8() |> ignore
+    self.read_core_valtype() |> ignore
   }
 }
 
@@ -1612,7 +1635,7 @@ fn CoreTypeReader::validate_extern_type(
       }
     }
     0x01 => {
-      self.read_u8() |> ignore // elem/ref type
+      self.read_core_valtype() |> ignore
       self.skip_limits()
     }
     0x02 => {
@@ -1631,10 +1654,13 @@ fn CoreTypeReader::validate_extern_type(
       }
     }
     0x03 => {
-      self.read_u8() |> ignore // valtype
+      self.read_core_valtype() |> ignore
       self.read_u8() |> ignore // mut
     }
     0x04 => {
+      if self.read_u8() != 0x00 {
+        raise SectionParseError(3, "invalid tag attribute")
+      }
       let idx = self.read_leb_u32()
       if idx < 0 || idx >= func_type_bound {
         raise SectionParseError(3, "type index out of bounds")
@@ -1649,15 +1675,49 @@ fn CoreTypeReader::read_core_valtype(
   self : CoreTypeReader,
 ) -> @types.ValueType raise ComponentValidationError {
   let op = self.read_u8()
+  fn abstract_ref(
+    heap : Int,
+    nullable : Bool,
+  ) -> @types.ValueType raise ComponentValidationError {
+    match @types.ValueType::from_abstract_heap_type(heap, nullable) {
+      Some(value) => value
+      None => raise SectionParseError(3, "unsupported core heap type: \{heap}")
+    }
+  }
   match op {
     0x7f => I32
     0x7e => I64
     0x7d => F32
     0x7c => F64
     0x7b => V128
-    0x70 => FuncRef
-    0x6f => ExternRef
-    _ => raise SectionParseError(3, "unsupported core valtype: \{op}")
+    0x63 | 0x64 => {
+      let mut heap = 0L
+      let mut shift = 0
+      while true {
+        let byte = self.read_u8()
+        let payload = byte & 0x7f
+        if shift == 28 &&
+          ((byte & 0x80) != 0 || (payload > 0x0f && payload < 0x70)) {
+          raise SectionParseError(3, "heap type LEB128 out of range")
+        }
+        heap = heap | (payload.to_int64() << shift)
+        shift += 7
+        if (byte & 0x80) == 0 {
+          if (byte & 0x40) != 0 {
+            heap = heap | (-1L << shift)
+          }
+          break
+        }
+      }
+      if heap >= 0L || heap < -64L {
+        raise SectionParseError(
+          3,
+          "unsupported concrete core heap type: \{heap}",
+        )
+      }
+      abstract_ref(heap.to_int(), op == 0x63)
+    }
+    _ => abstract_ref(op - 128, true)
   }
 }
 
@@ -1706,12 +1766,11 @@ fn CoreTypeReader::read_extern_type_sig(
     }
     0x01 => {
       // tabletype: elemtype + limits
-      let elem = self.read_u8()
-      let elem_ty = match elem {
-        0x70 => @types.ValueType::FuncRef
-        0x6f => ExternRef
-        _ =>
-          raise SectionParseError(3, "unsupported core table elemtype: \{elem}")
+      let elem_ty = self.read_core_valtype()
+      match elem_ty {
+        I32 | I64 | F32 | F64 | V128 =>
+          raise SectionParseError(3, "table element type must be a reference")
+        _ => ()
       }
       let flags = self.read_u8()
       let min = self.read_leb_u32()
@@ -1753,7 +1812,14 @@ fn CoreTypeReader::read_extern_type_sig(
         },
       }
       let is_memory64 = (flags & 0x04) != 0
-      Some(Memory({ limits, is_memory64, page_size_log2: 16, }))
+      Some(
+        Memory({
+          limits,
+          is_memory64,
+          is_shared: (flags & 0x02) != 0,
+          page_size_log2: 16,
+        }),
+      )
     }
     0x03 => {
       // globaltype: valtype + mut
@@ -1761,6 +1827,24 @@ fn CoreTypeReader::read_extern_type_sig(
       let mut_ = self.read_u8()
       let mutable = mut_ != 0
       Some(Global({ value_type: vt, mutable, }))
+    }
+    0x04 => {
+      if self.read_u8() != 0 {
+        raise SectionParseError(3, "invalid tag attribute")
+      }
+      let idx = self.read_leb_u32()
+      if idx < 0 || idx >= func_type_bound {
+        raise SectionParseError(3, "type index out of bounds")
+      }
+      match func_types.get(idx) {
+        Some(Some(ft)) => {
+          if !ft.results.is_empty() {
+            raise SectionParseError(3, "tag type must not return values")
+          }
+          Some(Tag(ft))
+        }
+        _ => None
+      }
     }
     _ => {
       self.validate_extern_type(kind, func_type_bound)

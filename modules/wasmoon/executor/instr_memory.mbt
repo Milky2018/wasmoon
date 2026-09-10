@@ -9,7 +9,7 @@ fn compute_effective_addr(
   base_addr : Int64,
   offset : Int64,
   is_memory64 : Bool,
-) -> Int64 {
+) -> Int64 raise @runtime.RuntimeError {
   let base_u64 = if is_memory64 {
     base_addr
   } else {
@@ -17,7 +17,12 @@ fn compute_effective_addr(
     base_addr & 0xFFFFFFFFL
   }
   // offset is Int64 (supports memory64 64-bit offsets)
-  base_u64 + offset
+  let address = base_u64 + offset
+  if address.reinterpret_as_uint64() < base_u64.reinterpret_as_uint64() {
+    raise OutOfBoundsMemoryAccess
+  } else {
+    address
+  }
 }
 
 ///|
@@ -73,7 +78,7 @@ fn ExecContext::exec_memory_load(
       if is_mem_oob(effective_addr, 4L, mem) {
         raise @runtime.OutOfBoundsMemoryAccess
       }
-      let value = mem.load_i32(effective_addr.to_int())
+      let value = mem.load_i32_at(effective_addr)
       self.stack.push(I32(value))
     }
     // i64.load: load 8 bytes as i64
@@ -89,7 +94,7 @@ fn ExecContext::exec_memory_load(
       if is_mem_oob(effective_addr, 8L, mem) {
         raise @runtime.OutOfBoundsMemoryAccess
       }
-      let value = mem.load_i64(effective_addr.to_int())
+      let value = mem.load_i64_at(effective_addr)
       self.stack.push(I64(value))
     }
     // f32.load: load 4 bytes as f32
@@ -105,7 +110,7 @@ fn ExecContext::exec_memory_load(
       if is_mem_oob(effective_addr, 4L, mem) {
         raise @runtime.OutOfBoundsMemoryAccess
       }
-      let value = mem.load_f32(effective_addr.to_int())
+      let value = mem.load_f32_at(effective_addr)
       self.stack.push(F32(value))
     }
     // f64.load: load 8 bytes as f64
@@ -121,7 +126,7 @@ fn ExecContext::exec_memory_load(
       if is_mem_oob(effective_addr, 8L, mem) {
         raise @runtime.OutOfBoundsMemoryAccess
       }
-      let value = mem.load_f64(effective_addr.to_int())
+      let value = mem.load_f64_at(effective_addr)
       self.stack.push(F64(value))
     }
     // i32.load8_s: load 1 byte, sign-extend to i32
@@ -137,7 +142,7 @@ fn ExecContext::exec_memory_load(
       if is_mem_oob(effective_addr, 1L, mem) {
         raise @runtime.OutOfBoundsMemoryAccess
       }
-      let value = mem.load_i32_8s(effective_addr.to_int())
+      let value = mem.load_i32_8s_at(effective_addr)
       self.stack.push(I32(value))
     }
     // i32.load8_u: load 1 byte, zero-extend to i32
@@ -153,7 +158,7 @@ fn ExecContext::exec_memory_load(
       if is_mem_oob(effective_addr, 1L, mem) {
         raise @runtime.OutOfBoundsMemoryAccess
       }
-      let value = mem.load_i32_8u(effective_addr.to_int())
+      let value = mem.load_i32_8u_at(effective_addr)
       self.stack.push(I32(value))
     }
     // i32.load16_s: load 2 bytes, sign-extend to i32
@@ -169,7 +174,7 @@ fn ExecContext::exec_memory_load(
       if is_mem_oob(effective_addr, 2L, mem) {
         raise @runtime.OutOfBoundsMemoryAccess
       }
-      let value = mem.load_i32_16s(effective_addr.to_int())
+      let value = mem.load_i32_16s_at(effective_addr)
       self.stack.push(I32(value))
     }
     // i32.load16_u: load 2 bytes, zero-extend to i32
@@ -185,7 +190,7 @@ fn ExecContext::exec_memory_load(
       if is_mem_oob(effective_addr, 2L, mem) {
         raise @runtime.OutOfBoundsMemoryAccess
       }
-      let value = mem.load_i32_16u(effective_addr.to_int())
+      let value = mem.load_i32_16u_at(effective_addr)
       self.stack.push(I32(value))
     }
     // i64.load8_s: load 1 byte, sign-extend to i64
@@ -201,7 +206,7 @@ fn ExecContext::exec_memory_load(
       if is_mem_oob(effective_addr, 1L, mem) {
         raise @runtime.OutOfBoundsMemoryAccess
       }
-      let value = mem.load_i64_8s(effective_addr.to_int())
+      let value = mem.load_i64_8s_at(effective_addr)
       self.stack.push(I64(value))
     }
     // i64.load8_u: load 1 byte, zero-extend to i64
@@ -217,7 +222,7 @@ fn ExecContext::exec_memory_load(
       if is_mem_oob(effective_addr, 1L, mem) {
         raise @runtime.OutOfBoundsMemoryAccess
       }
-      let value = mem.load_i64_8u(effective_addr.to_int())
+      let value = mem.load_i64_8u_at(effective_addr)
       self.stack.push(I64(value))
     }
     // i64.load16_s: load 2 bytes, sign-extend to i64
@@ -233,7 +238,7 @@ fn ExecContext::exec_memory_load(
       if is_mem_oob(effective_addr, 2L, mem) {
         raise @runtime.OutOfBoundsMemoryAccess
       }
-      let value = mem.load_i64_16s(effective_addr.to_int())
+      let value = mem.load_i64_16s_at(effective_addr)
       self.stack.push(I64(value))
     }
     // i64.load16_u: load 2 bytes, zero-extend to i64
@@ -249,7 +254,7 @@ fn ExecContext::exec_memory_load(
       if is_mem_oob(effective_addr, 2L, mem) {
         raise @runtime.OutOfBoundsMemoryAccess
       }
-      let value = mem.load_i64_16u(effective_addr.to_int())
+      let value = mem.load_i64_16u_at(effective_addr)
       self.stack.push(I64(value))
     }
     // i64.load32_s: load 4 bytes, sign-extend to i64
@@ -265,7 +270,7 @@ fn ExecContext::exec_memory_load(
       if is_mem_oob(effective_addr, 4L, mem) {
         raise @runtime.OutOfBoundsMemoryAccess
       }
-      let value = mem.load_i64_32s(effective_addr.to_int())
+      let value = mem.load_i64_32s_at(effective_addr)
       self.stack.push(I64(value))
     }
     // i64.load32_u: load 4 bytes, zero-extend to i64
@@ -281,7 +286,7 @@ fn ExecContext::exec_memory_load(
       if is_mem_oob(effective_addr, 4L, mem) {
         raise @runtime.OutOfBoundsMemoryAccess
       }
-      let value = mem.load_i64_32u(effective_addr.to_int())
+      let value = mem.load_i64_32u_at(effective_addr)
       self.stack.push(I64(value))
     }
     _ => raise @runtime.RuntimeError::Unreachable
@@ -309,7 +314,7 @@ fn ExecContext::exec_memory_store(
       if is_mem_oob(effective_addr, 4L, mem) {
         raise @runtime.OutOfBoundsMemoryAccess
       }
-      mem.store_i32(effective_addr.to_int(), value)
+      mem.store_i32_at(effective_addr, value)
     }
     // i64.store: store i64 as 8 bytes
     I64Store(memidx, _align, offset) => {
@@ -325,7 +330,7 @@ fn ExecContext::exec_memory_store(
       if is_mem_oob(effective_addr, 8L, mem) {
         raise @runtime.OutOfBoundsMemoryAccess
       }
-      mem.store_i64(effective_addr.to_int(), value)
+      mem.store_i64_at(effective_addr, value)
     }
     // f32.store: store f32 as 4 bytes
     F32Store(memidx, _align, offset) => {
@@ -341,7 +346,7 @@ fn ExecContext::exec_memory_store(
       if is_mem_oob(effective_addr, 4L, mem) {
         raise @runtime.OutOfBoundsMemoryAccess
       }
-      mem.store_f32(effective_addr.to_int(), value)
+      mem.store_f32_at(effective_addr, value)
     }
     // f64.store: store f64 as 8 bytes
     F64Store(memidx, _align, offset) => {
@@ -357,7 +362,7 @@ fn ExecContext::exec_memory_store(
       if is_mem_oob(effective_addr, 8L, mem) {
         raise @runtime.OutOfBoundsMemoryAccess
       }
-      mem.store_f64(effective_addr.to_int(), value)
+      mem.store_f64_at(effective_addr, value)
     }
     // i32.store8: store low 8 bits of i32
     I32Store8(memidx, _align, offset) => {
@@ -373,7 +378,7 @@ fn ExecContext::exec_memory_store(
       if is_mem_oob(effective_addr, 1L, mem) {
         raise @runtime.OutOfBoundsMemoryAccess
       }
-      mem.store_i32_8(effective_addr.to_int(), value)
+      mem.store_i32_8_at(effective_addr, value)
     }
     // i32.store16: store low 16 bits of i32
     I32Store16(memidx, _align, offset) => {
@@ -389,7 +394,7 @@ fn ExecContext::exec_memory_store(
       if is_mem_oob(effective_addr, 2L, mem) {
         raise @runtime.OutOfBoundsMemoryAccess
       }
-      mem.store_i32_16(effective_addr.to_int(), value)
+      mem.store_i32_16_at(effective_addr, value)
     }
     // i64.store8: store low 8 bits of i64
     I64Store8(memidx, _align, offset) => {
@@ -405,7 +410,7 @@ fn ExecContext::exec_memory_store(
       if is_mem_oob(effective_addr, 1L, mem) {
         raise @runtime.OutOfBoundsMemoryAccess
       }
-      mem.store_i64_8(effective_addr.to_int(), value)
+      mem.store_i64_8_at(effective_addr, value)
     }
     // i64.store16: store low 16 bits of i64
     I64Store16(memidx, _align, offset) => {
@@ -421,7 +426,7 @@ fn ExecContext::exec_memory_store(
       if is_mem_oob(effective_addr, 2L, mem) {
         raise @runtime.OutOfBoundsMemoryAccess
       }
-      mem.store_i64_16(effective_addr.to_int(), value)
+      mem.store_i64_16_at(effective_addr, value)
     }
     // i64.store32: store low 32 bits of i64
     I64Store32(memidx, _align, offset) => {
@@ -437,7 +442,7 @@ fn ExecContext::exec_memory_store(
       if is_mem_oob(effective_addr, 4L, mem) {
         raise @runtime.OutOfBoundsMemoryAccess
       }
-      mem.store_i64_32(effective_addr.to_int(), value)
+      mem.store_i64_32_at(effective_addr, value)
     }
     _ => raise @runtime.RuntimeError::Unreachable
   }
@@ -455,7 +460,7 @@ fn ExecContext::exec_memory_misc(
       let mem_addr = self.instance.mem_addrs[memidx]
       let mem = self.store.get_mem(mem_addr)
       if mem.is_memory64() {
-        self.stack.push(I64(mem.size_pages().to_int64()))
+        self.stack.push(I64(mem.byte_len() / mem.page_size_bytes()))
       } else {
         self.stack.push(I32(mem.size_pages()))
       }
@@ -466,14 +471,7 @@ fn ExecContext::exec_memory_misc(
       let mem = self.store.get_mem(mem_addr)
       if mem.is_memory64() {
         let delta = self.stack.pop_i64()
-        // Runtime memory grow ABI accepts at most i32 page counts today.
-        // For memory64, reject values that cannot be represented losslessly.
-        if delta < 0L || delta > 0x7FFF_FFFFL {
-          self.stack.push(I64(-1L))
-        } else {
-          let result = mem.grow(delta.to_int())
-          self.stack.push(I64(result.to_int64()))
-        }
+        self.stack.push(I64(mem.grow64(delta)))
       } else {
         let delta = self.stack.pop_i32()
         let result = mem.grow(delta)
@@ -517,10 +515,7 @@ fn ExecContext::exec_memory_misc(
       // Copy bytes directly to memory
       let data_segment = self.instance.data_segments[data_idx]
       for i in 0L..<n64 {
-        mem.store_byte(
-          (d64 + i).to_int(),
-          data_segment.init[(s64 + i).to_int()],
-        )
+        mem.store_byte_at(d64 + i, data_segment.init[(s64 + i).to_int()])
       }
     }
     // data.drop: mark data segment as dropped
@@ -532,8 +527,8 @@ fn ExecContext::exec_memory_misc(
       let dst_mem_addr = self.instance.mem_addrs[dst_memidx]
       let src_mem = self.store.get_mem(src_mem_addr)
       let dst_mem = self.store.get_mem(dst_mem_addr)
-      // Per spec: n and d depend on dst type, s depends on src type
-      let n64 = if dst_mem.is_memory64() {
+      // The length is i64 only when both memories use i64 addresses.
+      let n64 = if dst_mem.is_memory64() && src_mem.is_memory64() {
         self.stack.pop_i64()
       } else {
         self.stack.pop_i32().to_int64() & 0xFFFF_FFFFL
@@ -555,16 +550,7 @@ fn ExecContext::exec_memory_misc(
       if n64 == 0L {
         return
       }
-      if dst_memidx == src_memidx {
-        // Same memory - use optimized copy
-        src_mem.copy(d64.to_int(), s64.to_int(), n64.to_int())
-      } else {
-        // Different memories - copy byte by byte
-        for i in 0L..<n64 {
-          let byte = src_mem.load_byte((s64 + i).to_int())
-          dst_mem.store_byte((d64 + i).to_int(), byte)
-        }
-      }
+      dst_mem.copy_from(d64, src_mem, s64, n64)
     }
     // memory.fill: fill memory region with a value
     MemoryFill(memidx) => {
@@ -584,7 +570,7 @@ fn ExecContext::exec_memory_misc(
       if n64 == 0L {
         return
       }
-      mem.fill(effective_dst.to_int(), val.to_byte(), n64.to_int())
+      mem.fill_at(effective_dst, val.to_byte(), n64)
     }
     // elem.drop: mark element segment as dropped
     ElemDrop(elem_idx) => self.instance.dropped_elems[elem_idx] = true

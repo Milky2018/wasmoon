@@ -8,9 +8,9 @@ fn release_waiter(
   task_id : Int64,
   ws_key : Int64,
 ) -> Unit {
-  if async_state.waiting_ws.get(task_id) is Some(active_ws) &&
+  if async_state.tasks.read_waiting_ws(task_id) is Some(active_ws) &&
     active_ws == ws_key {
-    async_state.waiting_ws.remove(task_id)
+    async_state.tasks.clear_waiting_ws(task_id)
     if async_state.waitable_sets.get(ws_key) is Some(set) {
       set.waiters[0] = set.waiters[0] - 1
     }
@@ -32,7 +32,8 @@ fn instantiate_canon_waitable_set_new(
       trap_canon("cannot leave component instance")
     }
     let id = alloc_shared_handle(async_state, owner_component_id)
-    async_state.waitable_sets.set(handle_key(owner_component_id, id), {
+    errdefer free_shared_handle(async_state, owner_component_id, id)
+    async_state.waitable_sets.set_core(handle_key(owner_component_id, id), {
       id,
       members: Map([]),
       queue: [],
@@ -75,15 +76,15 @@ fn instantiate_canon_waitable_set_wait(
         return
       }
       let sub_key = handle_key(ev.owner_component_id, ev.index)
-      if async_state.subtasks.get(sub_key) is Some(st) &&
+      if async_state.tasks.read_subtasks(sub_key) is Some(st) &&
         st.result_ty is Some(_) &&
         st.mem_addr is Some(mem_addr2) {
-        let cancelled = async_state.task_self_cancelled.get(sub_key)
+        let cancelled = async_state.tasks.read_task_self_cancelled(sub_key)
           is Some(true)
         if cancelled {
           return
         }
-        let vals = match async_state.task_results.get(sub_key) {
+        let vals = match async_state.tasks.read_task_results(sub_key) {
           Some(v) => v
           None => []
         }
@@ -103,12 +104,13 @@ fn instantiate_canon_waitable_set_wait(
           st.resources,
           store,
           Some(st.retptr),
+          st.caller_table,
         ) catch {
           _e => return
         }
         match core_vals {
-          [I32(n)] => mem2.store_i32(st.retptr, n) catch { _ => () }
-          [I64(n)] => mem2.store_i64(st.retptr, n) catch { _ => () }
+          [I32(n)] => mem2.store_i32_at(st.retptr, n) catch { _ => () }
+          [I64(n)] => mem2.store_i64_at(st.retptr, n) catch { _ => () }
           _ => ()
         }
       }
@@ -120,12 +122,12 @@ fn instantiate_canon_waitable_set_wait(
       }
       let sub_key = handle_key(ev.owner_component_id, ev.index)
       fn mem_dbg() -> String {
-        match async_state.subtasks.get(sub_key) {
+        match async_state.tasks.read_subtasks(sub_key) {
           Some(st) =>
             match st.mem_addr {
               Some(addr) => {
                 let mem2 = store.get_mem(addr) catch { _ => return "" }
-                let n = mem2.load_i32(st.retptr) catch { _ => return "" }
+                let n = mem2.load_i32_at(st.retptr) catch { _ => return "" }
                 " retptr=\{st.retptr} mem=\{n}"
               }
               None => ""
@@ -134,7 +136,7 @@ fn instantiate_canon_waitable_set_wait(
         }
       }
 
-      match async_state.task_results.get(sub_key) {
+      match async_state.tasks.read_task_results(sub_key) {
         Some(vals) =>
           if vals.length() > 0 {
             " result=\{vals[0]}\{mem_dbg()}"
@@ -186,27 +188,34 @@ fn instantiate_canon_waitable_set_wait(
           return [I32(0)]
         }
         let task_id = current_task_id(async_state)
-        if _cancellable && async_state.task_cancelled.get(task_id) is Some(true) {
-          async_state.task_cancelled.remove(task_id)
+        async_state.tasks.clear_task_suspensions(task_id)
+        if _cancellable &&
+          async_state.tasks.read_task_cancelled(task_id) is Some(true) {
+          async_state.tasks.clear_task_cancelled(task_id)
           release_waiter(async_state, task_id, ws_key)
           return [I32(6)]
         }
         if !waitable_set_has_event(async_state, ws_key) {
           // Track the dormant continuation so `waitable-set.drop` can reject
           // a set with an active waiter.
-          if async_state.waiting_ws.get(task_id) is None {
+          if async_state.tasks.read_waiting_ws(task_id) is None {
             match async_state.waitable_sets.get(ws_key) {
               Some(set) => set.waiters[0] = set.waiters[0] + 1
               None => ()
             }
-            async_state.waiting_ws.set(task_id, ws_key)
+            async_state.tasks.write_waiting_ws(task_id, ws_key)
           }
+          async_state.tasks.write_task_suspensions(task_id, Wait(_cancellable))
           canon_suspend[0] = Some(Wait(ws_key))
           raise Unreachable
         }
         let ev = match pop_waitable_event(async_state, ws_key) {
           Some(ev) => ev
           None => {
+            async_state.tasks.write_task_suspensions(
+              task_id,
+              Wait(_cancellable),
+            )
             canon_suspend[0] = Some(Wait(ws_key))
             raise Unreachable
           }
@@ -265,8 +274,9 @@ fn instantiate_canon_waitable_set_poll(
     match args {
       [I32(ws), I32(ptr)] => {
         let task_id = current_task_id(async_state)
-        if _cancellable && async_state.task_cancelled.get(task_id) is Some(true) {
-          async_state.task_cancelled.remove(task_id)
+        if _cancellable &&
+          async_state.tasks.read_task_cancelled(task_id) is Some(true) {
+          async_state.tasks.clear_task_cancelled(task_id)
           return [I32(6)]
         }
         if (ptr.reinterpret_as_uint() & 3U) != 0U {

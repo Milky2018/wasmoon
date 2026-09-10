@@ -25,34 +25,25 @@ fn instantiate_component(
   let stream_table = if outer_stack.length() > 0 {
     outer_stack[outer_stack.length() - 1].stream_table
   } else {
-    match linker.host_runtime.val {
-      Some(runtime) => runtime.stream_table
-      None => StreamTable()
-    }
+    linker.host_runtime_state().stream_table
   }
   let async_state = if outer_stack.length() > 0 {
     outer_stack[outer_stack.length() - 1].async_state
   } else {
-    match linker.host_runtime.val {
-      Some(runtime) => runtime.async_state
-      None => AsyncState(stream_table, core_engine=linker.core_engine())
-    }
+    linker.host_runtime_state().async_state
   }
   let state = BuildState::BuildState(stream_table, async_state)
-  if outer_stack.length() > 0 {
-    let parent_table = outer_stack[outer_stack.length() - 1].resource_table
-    let ancestors : Array[Int] = []
-    for ancestor in parent_table.ancestors.val {
-      ancestors.push(ancestor)
-    }
-    ancestors.push(parent_table.id)
-    state.resource_table.ancestors.val = ancestors
+  let declared_types = count_component_type_slots(component)
+  for _ in 0..<declared_types {
+    state.types.push(None)
   }
   state.async_state.resource_tables.set(
     state.resource_table.id,
     state.resource_table,
   )
-  let entry_state = ComponentInstanceEntryState::new()
+  let entry_state = ComponentInstanceEntryState::new(
+    poisoned=async_state.trapped,
+  )
   let store = linker.get_store()
   let frame : ComponentInstantiationFrame = {
     linker,
@@ -70,7 +61,6 @@ fn instantiate_component(
     errdefer state.release_aborted()
     run_component_sections(frame)
   }
-  entry_state.enable()
   let instance = env_instance_from_state(name, state, store)
   // Registration is transactional: the frame stages its instance, nested
   // frames included, and only the root commits the whole tree into the
@@ -128,6 +118,7 @@ fn run_component_sections(
               // canonical host imports. Give start its own task-scoped borrow,
               // cancellation, and continuation state.
               let inst_task_id = alloc_task_id(async_state)
+              async_state.tasks.write_core_start_tasks(inst_task_id, ())
               // Core start runs during instantiation and must not block.
               push_task(async_state, inst_task_id, false)
               let instance = @executor.instantiate_module_with_imports(
@@ -135,7 +126,7 @@ fn run_component_sections(
               ) catch {
                 e => {
                   pop_task(async_state)
-                  drop_task_thread(async_state, inst_task_id)
+                  retire_task(async_state, inst_task_id)
                   match canon_trap_message[0] {
                     Some(msg) => raise CoreModuleInstantiateError(msg)
                     None => raise CoreModuleInstantiateError(e.to_string())
@@ -143,7 +134,7 @@ fn run_component_sections(
                 }
               }
               pop_task(async_state)
-              drop_task_thread(async_state, inst_task_id)
+              retire_task(async_state, inst_task_id)
               linker.core_linker.register(module_name, instance) catch {
                 error => raise CoreModuleInstantiateError(error.to_string())
               }
@@ -263,6 +254,14 @@ fn run_component_sections(
                 raise InvalidInstanceIndex(instance_idx)
               }
               match state.instances[instance_idx].exports.get(name) {
+                Some(Type(type_def)) =>
+                  Type(
+                    clone_materialized_optional_type(
+                      type_def,
+                      state.instances[instance_idx].types,
+                      state.types,
+                    ),
+                  )
                 Some(v) => v
                 None => raise UnknownExport(name)
               }
@@ -302,16 +301,24 @@ fn run_component_sections(
                 _ => raise AliasTargetMismatch("core export sort")
               }
             }
-            Outer(ct, idx) =>
-              resolve_outer_alias(
-                extend_outer_stack(
-                  outer_stack,
-                  env_instance_from_state("\{name}::env", state, store),
-                ),
-                ct,
-                alias_decl.sort,
-                idx,
+            Outer(ct, idx) => {
+              let stack = extend_outer_stack(
+                outer_stack,
+                env_instance_from_state("\{name}::env", state, store),
               )
+              let ext = resolve_outer_alias(stack, ct, alias_decl.sort, idx)
+              match ext {
+                Type(type_def) =>
+                  Type(
+                    clone_materialized_optional_type(
+                      type_def,
+                      stack[stack.length() - 1 - ct].types,
+                      state.types,
+                    ),
+                  )
+                _ => ext
+              }
+            }
           }
           append_alias(alias_decl.sort, ext, state)
         }
@@ -335,7 +342,7 @@ fn run_component_sections(
               }
             _ => t
           }
-          state.types.push(Some(t2))
+          state.append_declared_type(Some(t2))
         }
       }
       8 => process_canon_section(section.payload, state, store, entry_state)
@@ -404,7 +411,7 @@ fn run_component_sections(
               }
             Type(_) =>
               match ext {
-                Type(t) => state.types.push(t)
+                Type(t) => state.append_declared_type(t)
                 _ => raise UnknownImport(decode_import_name(imp.name))
               }
             ComponentType(_) =>

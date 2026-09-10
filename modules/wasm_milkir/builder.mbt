@@ -37,6 +37,44 @@ fn call_runtime(
 }
 
 ///|
+/// Atomic waits receive a pointer already checked for bounds and alignment.
+pub fn atomic_wait(
+  builder : @milkir.FunctionBuilder,
+  runtime_symbols : RuntimeSymbols,
+  vmctx : @milkir.Value,
+  memidx : Int,
+  pointer : @milkir.Value,
+  expected : @milkir.Value,
+  timeout : @milkir.Value,
+) -> @milkir.Value {
+  let helper = if expected.ty == I64 { AtomicWait64 } else { AtomicWait32 }
+  call_runtime(builder, runtime_symbols.symbol_name(helper), Some(I32), [
+    vmctx,
+    builder.iconst_i32(memidx),
+    pointer,
+    expected,
+    timeout,
+  ]).unwrap()
+}
+
+///|
+pub fn atomic_notify(
+  builder : @milkir.FunctionBuilder,
+  runtime_symbols : RuntimeSymbols,
+  vmctx : @milkir.Value,
+  memidx : Int,
+  pointer : @milkir.Value,
+  count : @milkir.Value,
+) -> @milkir.Value {
+  call_runtime(builder, runtime_symbols.symbol_name(AtomicNotify), Some(I32), [
+    vmctx,
+    builder.iconst_i32(memidx),
+    pointer,
+    count,
+  ]).unwrap()
+}
+
+///|
 fn emit_wasm_inst(
   builder : @milkir.FunctionBuilder,
   ty : @milkir.Type,
@@ -102,18 +140,22 @@ pub fn memory_grow(
   let call_result = call_runtime(
     builder,
     runtime_symbols.symbol_name(MemoryGrow),
-    Some(I32),
+    Some(I64),
     [
       vmctx,
       builder.iconst_i32(memidx),
-      delta,
+      if delta.ty == I64 {
+        delta
+      } else {
+        builder.uextend(I64, delta)
+      },
       builder.iconst_i32(max_pages_value),
     ],
   ).unwrap()
   if is_memory64 {
-    builder.sextend(I64, call_result)
-  } else {
     call_result
+  } else {
+    builder.ireduce(I32, call_result)
   }
 }
 
@@ -128,13 +170,13 @@ pub fn memory_size(
   let call_result = call_runtime(
     builder,
     runtime_symbols.symbol_name(MemorySize),
-    Some(I32),
+    Some(I64),
     [vmctx, builder.iconst_i32(memidx)],
   ).unwrap()
   if is_memory64 {
-    builder.uextend(I64, call_result)
-  } else {
     call_result
+  } else {
+    builder.ireduce(I32, call_result)
   }
 }
 
@@ -151,9 +193,17 @@ pub fn memory_fill(
   call_runtime(builder, runtime_symbols.symbol_name(MemoryFill), None, [
     vmctx,
     builder.iconst_i32(memidx),
-    dst,
+    if dst.ty == I64 {
+      dst
+    } else {
+      builder.uextend(I64, dst)
+    },
     val,
-    size,
+    if size.ty == I64 {
+      size
+    } else {
+      builder.uextend(I64, size)
+    },
   ])
   |> ignore
 }
@@ -173,9 +223,21 @@ pub fn memory_copy(
     vmctx,
     builder.iconst_i32(dst_memidx),
     builder.iconst_i32(src_memidx),
-    dst,
-    src,
-    size,
+    if dst.ty == I64 {
+      dst
+    } else {
+      builder.uextend(I64, dst)
+    },
+    if src.ty == I64 {
+      src
+    } else {
+      builder.uextend(I64, src)
+    },
+    if size.ty == I64 {
+      size
+    } else {
+      builder.uextend(I64, size)
+    },
   ])
   |> ignore
 }
@@ -195,9 +257,21 @@ pub fn memory_init(
     vmctx,
     builder.iconst_i32(memidx),
     builder.iconst_i32(data_idx),
-    dst,
-    src,
-    size,
+    if dst.ty == I64 {
+      dst
+    } else {
+      builder.uextend(I64, dst)
+    },
+    if src.ty == I64 {
+      src
+    } else {
+      builder.uextend(I64, src)
+    },
+    if size.ty == I64 {
+      size
+    } else {
+      builder.uextend(I64, size)
+    },
   ])
   |> ignore
 }
@@ -800,4 +874,20 @@ pub fn get_spilled_local(
   idx : Int,
 ) -> @milkir.Value {
   emit_wasm_inst(builder, i64_type(), GetSpilledLocal(idx), [])
+}
+
+///|
+pub fn get_exception_ref(builder : @milkir.FunctionBuilder) -> @milkir.Value {
+  emit_wasm_inst(builder, @milkir.Type::Ref, GetExceptionRef, [])
+}
+
+///|
+/// Emit the validated typed-continuation operation and its SSA results.
+pub fn continuation_operation(
+  builder : @milkir.FunctionBuilder,
+  opcode : WasmOpcode,
+  result_types : Array[@milkir.Type],
+  operands : Array[@milkir.Value],
+) -> Array[@milkir.Value] {
+  append_multi_result_inst(builder, opcode, result_types, operands)
 }

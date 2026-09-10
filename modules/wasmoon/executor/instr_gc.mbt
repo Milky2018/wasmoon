@@ -21,7 +21,11 @@ fn ExecContext::exec_struct_new(
   }
 
   // Allocate struct in the store
-  let ref_idx = self.store.alloc_struct(type_idx, fields)
+  let ref_idx = self.store.alloc_struct(
+    type_idx,
+    fields,
+    instance=self.instance,
+  )
   self.stack.push(StructRef(ref_idx))
   self.maybe_collect_gc_stress()
 }
@@ -44,7 +48,11 @@ fn ExecContext::exec_struct_new_default(
   }
 
   // Allocate struct in the store
-  let ref_idx = self.store.alloc_struct(type_idx, fields)
+  let ref_idx = self.store.alloc_struct(
+    type_idx,
+    fields,
+    instance=self.instance,
+  )
   self.stack.push(StructRef(ref_idx))
   self.maybe_collect_gc_stress()
 }
@@ -165,6 +173,16 @@ fn ExecContext::exec_struct_set(
 // ============================================================
 
 ///|
+/// Native GC objects use signed 32-bit offsets and 16-byte value slots.
+/// Check before constructing the temporary MoonBit array as well as allocating
+/// the GC object, so a guest length never reaches a host allocation assertion.
+fn check_gc_array_length(len : Int) -> Unit raise @runtime.RuntimeError {
+  if len < 0 || len > (0x7FFFFFFF - 32) / 16 {
+    raise AllocationTooLarge
+  }
+}
+
+///|
 /// array.new: Create a new array with a fill value and length
 fn ExecContext::exec_array_new(
   self : ExecContext,
@@ -178,10 +196,15 @@ fn ExecContext::exec_array_new(
   }
 
   // Create array with fill value
+  check_gc_array_length(len)
   let elements : Array[@types.Value] = Array::make(len, fill_val)
 
   // Allocate array in the store
-  let ref_idx = self.store.alloc_array(type_idx, elements)
+  let ref_idx = self.store.alloc_array(
+    type_idx,
+    elements,
+    instance=self.instance,
+  )
   self.stack.push(ArrayRef(ref_idx))
   self.maybe_collect_gc_stress()
 }
@@ -203,10 +226,15 @@ fn ExecContext::exec_array_new_default(
   )
 
   // Create array with default values
+  check_gc_array_length(len)
   let elements : Array[@types.Value] = Array::make(len, default_val)
 
   // Allocate array in the store
-  let ref_idx = self.store.alloc_array(type_idx, elements)
+  let ref_idx = self.store.alloc_array(
+    type_idx,
+    elements,
+    instance=self.instance,
+  )
   self.stack.push(ArrayRef(ref_idx))
   self.maybe_collect_gc_stress()
 }
@@ -219,13 +247,18 @@ fn ExecContext::exec_array_new_fixed(
   len : Int,
 ) -> Unit raise {
   // Pop elements from stack (in reverse order)
+  check_gc_array_length(len)
   let elements : Array[@types.Value] = Array::make(len, I32(0))
   for i = len - 1; i >= 0; i = i - 1 {
     elements[i] = self.stack.pop()
   }
 
   // Allocate array in the store
-  let ref_idx = self.store.alloc_array(type_idx, elements)
+  let ref_idx = self.store.alloc_array(
+    type_idx,
+    elements,
+    instance=self.instance,
+  )
   self.stack.push(ArrayRef(ref_idx))
   self.maybe_collect_gc_stress()
 }
@@ -460,17 +493,6 @@ fn ExecContext::exec_array_new_data(
     _ => raise @runtime.RuntimeError::TypeMismatch
   }
 
-  // Check if data segment has been dropped
-  if self.instance.dropped_datas[data_idx] {
-    if len != 0 {
-      raise @runtime.RuntimeError::OutOfBoundsMemoryAccess
-    }
-    // Create empty array
-    let ref_idx = self.store.alloc_array(type_idx, [])
-    self.stack.push(ArrayRef(ref_idx))
-    self.maybe_collect_gc_stress()
-    return
-  }
   let data_segment = self.instance.data_segments[data_idx]
   let array_type = self.instance.validated_array_type_at(type_idx)
 
@@ -478,8 +500,15 @@ fn ExecContext::exec_array_new_data(
   let bytes_per_elem = storage_type_byte_size(array_type.element.storage_type)
 
   // Check bounds
-  let total_bytes = len * bytes_per_elem
-  if offset < 0 || len < 0 || offset + total_bytes > data_segment.init.length() {
+  let source_len = if self.instance.dropped_datas[data_idx] {
+    0
+  } else {
+    data_segment.init.length()
+  }
+  let total_bytes = len.to_int64() * bytes_per_elem.to_int64()
+  if offset < 0 ||
+    len < 0 ||
+    offset.to_int64() + total_bytes > source_len.to_int64() {
     raise @runtime.RuntimeError::OutOfBoundsMemoryAccess
   }
 
@@ -496,7 +525,11 @@ fn ExecContext::exec_array_new_data(
   }
 
   // Allocate array in the store
-  let ref_idx = self.store.alloc_array(type_idx, elements)
+  let ref_idx = self.store.alloc_array(
+    type_idx,
+    elements,
+    instance=self.instance,
+  )
   self.stack.push(ArrayRef(ref_idx))
   self.maybe_collect_gc_stress()
 }
@@ -523,32 +556,30 @@ fn ExecContext::exec_array_new_elem(
   let elem_segment = self.instance.elem_segments[elem_idx]
   let is_dropped = self.instance.dropped_elems[elem_idx]
   let is_declarative = elem_segment.mode is Declarative
-  if (is_dropped || is_declarative) && len != 0 {
-    raise @runtime.RuntimeError::OutOfBoundsTableAccess
+  let elem_len = if is_dropped || is_declarative {
+    0
+  } else {
+    elem_segment.init.length()
   }
-  if is_dropped || is_declarative {
-    let ref_idx = self.store.alloc_array(type_idx, [])
-    self.stack.push(ArrayRef(ref_idx))
-    self.maybe_collect_gc_stress()
-    return
-  }
-
-  // Check bounds
-  let elem_len = elem_segment.init.length()
-  if offset < 0 || len < 0 || offset + len > elem_len {
+  if offset < 0 ||
+    len < 0 ||
+    offset.to_int64() + len.to_int64() > elem_len.to_int64() {
     raise @runtime.RuntimeError::OutOfBoundsTableAccess
   }
 
   // Read elements from elem segment
   let elements : Array[@types.Value] = []
   for i in 0..<len {
-    let init_expr = elem_segment.init[offset + i]
-    let value = self.eval_elem_init_expr(init_expr)
+    let value = self.instance.elem_values[elem_idx][offset + i]
     elements.push(value)
   }
 
   // Allocate array in the store
-  let ref_idx = self.store.alloc_array(type_idx, elements)
+  let ref_idx = self.store.alloc_array(
+    type_idx,
+    elements,
+    instance=self.instance,
+  )
   self.stack.push(ArrayRef(ref_idx))
   self.maybe_collect_gc_stress()
 }
@@ -582,26 +613,23 @@ fn ExecContext::exec_array_init_data(
     _ => raise @runtime.RuntimeError::TypeMismatch
   }
 
-  // Check if data segment has been dropped
-  if self.instance.dropped_datas[data_idx] {
-    if len != 0 {
-      raise @runtime.RuntimeError::OutOfBoundsMemoryAccess
-    }
-    return
+  let arr_len = self.store.array_len(arr_idx)
+  if dst_offset < 0 ||
+    len < 0 ||
+    dst_offset.to_int64() + len.to_int64() > arr_len.to_int64() {
+    raise @runtime.RuntimeError::OutOfBoundsArrayAccess
   }
   let data_segment = self.instance.data_segments[data_idx]
   let array_type = self.instance.validated_array_type_at(type_idx)
   let bytes_per_elem = storage_type_byte_size(array_type.element.storage_type)
-
-  // Check bounds
-  let total_bytes = len * bytes_per_elem
-  if src_offset < 0 ||
-    len < 0 ||
-    src_offset + total_bytes > data_segment.init.length() {
-    raise @runtime.RuntimeError::OutOfBoundsMemoryAccess
+  let source_len = if self.instance.dropped_datas[data_idx] {
+    0
+  } else {
+    data_segment.init.length()
   }
-  let arr_len = self.store.array_len(arr_idx)
-  if dst_offset < 0 || dst_offset + len > arr_len {
+  let total_bytes = len.to_int64() * bytes_per_elem.to_int64()
+  if src_offset < 0 ||
+    src_offset.to_int64() + total_bytes > source_len.to_int64() {
     raise @runtime.RuntimeError::OutOfBoundsMemoryAccess
   }
 
@@ -646,31 +674,27 @@ fn ExecContext::exec_array_init_elem(
     _ => raise @runtime.RuntimeError::TypeMismatch
   }
 
-  // Check if elem segment has been dropped or is declarative
-  let elem_segment = self.instance.elem_segments[elem_idx]
-  let is_dropped = self.instance.dropped_elems[elem_idx]
-  let is_declarative = elem_segment.mode is Declarative
-  if (is_dropped || is_declarative) && len != 0 {
-    raise @runtime.RuntimeError::OutOfBoundsTableAccess
-  }
-  if is_dropped || is_declarative {
-    return
-  }
-
-  // Check bounds
-  let elem_len = elem_segment.init.length()
-  if src_offset < 0 || len < 0 || src_offset + len > elem_len {
-    raise @runtime.RuntimeError::OutOfBoundsTableAccess
-  }
   let arr_len = self.store.array_len(arr_idx)
-  if dst_offset < 0 || dst_offset + len > arr_len {
+  if dst_offset < 0 ||
+    len < 0 ||
+    dst_offset.to_int64() + len.to_int64() > arr_len.to_int64() {
+    raise @runtime.RuntimeError::OutOfBoundsArrayAccess
+  }
+  let elem_segment = self.instance.elem_segments[elem_idx]
+  let elem_len = if self.instance.dropped_elems[elem_idx] ||
+    elem_segment.mode is Declarative {
+    0
+  } else {
+    elem_segment.init.length()
+  }
+  if src_offset < 0 ||
+    src_offset.to_int64() + len.to_int64() > elem_len.to_int64() {
     raise @runtime.RuntimeError::OutOfBoundsTableAccess
   }
 
   // Copy elements from elem segment to array
   for i in 0..<len {
-    let init_expr = elem_segment.init[src_offset + i]
-    let value = self.eval_elem_init_expr(init_expr)
+    let value = self.instance.elem_values[elem_idx][src_offset + i]
     self.store.array_set(arr_idx, dst_offset + i, value)
   }
 }
@@ -744,37 +768,6 @@ fn read_value_from_bytes(
     Val(_) =>
       // Reference types are not valid for data segments
       Null
-  }
-}
-
-///|
-/// Helper: Evaluate an element init expression to get a value
-/// For complex expressions (like array.new), execute them through the interpreter
-fn ExecContext::eval_elem_init_expr(
-  self : ExecContext,
-  init_expr : Array[@types.Instruction],
-) -> @types.Value raise {
-  match init_expr {
-    [RefFunc(func_idx)] => {
-      let store_addr = self.instance.func_addrs[func_idx]
-      FuncRef(store_addr)
-    }
-    [RefNull(_)] => Null
-    _ => {
-      // For complex expressions, execute them through the interpreter
-      // Save the current stack state
-      let saved_stack_len = self.stack.size()
-      // Execute all instructions
-      for instr in init_expr {
-        self.exec_instr(instr)
-      }
-      // Pop the result
-      if self.stack.size() > saved_stack_len {
-        self.stack.pop()
-      } else {
-        Null
-      }
-    }
   }
 }
 
@@ -905,22 +898,14 @@ fn value_matches_type(
         true
       } else {
         // Check if runtime type matches expected type
-        try store.get_gc_type_idx(idx) catch {
-          _ => false
-        } noraise {
-          runtime_type_idx => is_subtype(runtime_type_idx, type_idx, instance)
-        }
+        store.gc_type_is_subtype(idx, instance, type_idx)
       }
     (StructRef(idx), RefNullStruct(type_idx)) =>
       // type_idx == -1 means abstract struct type (any struct)
       if type_idx == -1 {
         true
       } else {
-        try store.get_gc_type_idx(idx) catch {
-          _ => false
-        } noraise {
-          runtime_type_idx => is_subtype(runtime_type_idx, type_idx, instance)
-        }
+        store.gc_type_is_subtype(idx, instance, type_idx)
       }
     (StructRef(_), RefEq) => true
     (StructRef(_), RefNullEq) => true
@@ -933,22 +918,14 @@ fn value_matches_type(
       if type_idx == -1 {
         true
       } else {
-        try store.get_gc_type_idx(idx) catch {
-          _ => false
-        } noraise {
-          runtime_type_idx => is_subtype(runtime_type_idx, type_idx, instance)
-        }
+        store.gc_type_is_subtype(idx, instance, type_idx)
       }
     (ArrayRef(idx), RefNullArray(type_idx)) =>
       // type_idx == -1 means abstract array type (any array)
       if type_idx == -1 {
         true
       } else {
-        try store.get_gc_type_idx(idx) catch {
-          _ => false
-        } noraise {
-          runtime_type_idx => is_subtype(runtime_type_idx, type_idx, instance)
-        }
+        store.gc_type_is_subtype(idx, instance, type_idx)
       }
     (ArrayRef(_), RefEq) => true
     (ArrayRef(_), RefNullEq) => true
@@ -1046,11 +1023,11 @@ fn ExecContext::exec_ref_cast(
   let val = self.stack.pop()
   // ref.cast traps on null
   if val is Null {
-    raise @runtime.RuntimeError::NullReference
+    raise @runtime.RuntimeError::CastFailure
   }
   let matches = value_matches_type(val, target_type, self.store, self.instance)
   if !matches {
-    raise @runtime.RuntimeError::TypeMismatch
+    raise @runtime.RuntimeError::CastFailure
   }
   self.stack.push(val)
 }
@@ -1069,7 +1046,7 @@ fn ExecContext::exec_ref_cast_null(
   }
   let matches = value_matches_type(val, target_type, self.store, self.instance)
   if !matches {
-    raise @runtime.RuntimeError::TypeMismatch
+    raise @runtime.RuntimeError::CastFailure
   }
   self.stack.push(val)
 }

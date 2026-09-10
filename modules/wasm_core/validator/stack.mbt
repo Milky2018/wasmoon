@@ -67,6 +67,9 @@ fn OperandStack::pop(
 ///|
 fn to_non_nullable_cast_diff_type(ty : @types.ValueType) -> @types.ValueType {
   match ty {
+    ContRef => RefCont
+    NullContRef => RefNoCont
+    RefNullContTyped(idx) => RefContTyped(idx)
     FuncRef => RefFunc
     ExternRef => RefExtern
     AnyRef => RefAny
@@ -112,6 +115,17 @@ fn is_type_subtype(
 ) -> Bool {
   if actual == expected {
     return true
+  }
+  if actual.is_continuation_ref() || expected.is_continuation_ref() {
+    return match (actual, expected) {
+      (RefNoCont, _) => expected.is_continuation_ref()
+      (NullContRef, _) =>
+        expected.is_continuation_ref() && expected.is_nullable()
+      (RefCont | RefContTyped(_) | RefNullContTyped(_), ContRef) => true
+      (RefContTyped(_), RefCont) => true
+      (RefContTyped(a), RefNullContTyped(b)) => a == b
+      _ => false
+    }
   }
   // Bottom types for reference hierarchies.
   if actual == RefNone && is_reference_type(expected) {
@@ -243,6 +257,12 @@ fn is_reference_type(ty : @types.ValueType) -> Bool {
     | RefExtern
     | RefFuncTyped(_)
     | RefNullFuncTyped(_)
+    | ContRef
+    | RefCont
+    | RefContTyped(_)
+    | RefNullContTyped(_)
+    | NullContRef
+    | RefNoCont
     | AnyRef
     | ExnRef
     | StructRef

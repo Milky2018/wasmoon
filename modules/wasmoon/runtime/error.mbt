@@ -15,18 +15,28 @@ pub(all) suberror RuntimeError {
   IntegerOverflow
   InvalidConversion
   OutOfMemory
+  TableAllocationOverflow
+  TableAllocationFailed
+  MemoryMinimumExceedsLimits(Int64)
+  AllocationTooLarge
+  AtomicWaitNonSharedMemory
   Unreachable
+  UncaughtException
   CallStackExhausted
   UnknownImport(String, String) // Import not found: (module_name, field_name)
   LinkError // Import type mismatch during linking
   // Link error with extra context (e.g. which import mismatched).
   // The `Show` output still begins with "link error" for compatibility.
   LinkErrorDetail(String)
+  CastFailure
   NullReference // Null exception reference (null exnref thrown)
   UnalignedAtomic
   // Used when evaluating init expressions during instantiation; this should
   // never be reached for validated modules, but helps diagnose engine gaps.
   InvalidConstantExpression(String)
+  ContinuationAlreadyConsumed
+  UnhandledSuspension
+  UnsupportedGcContinuationStorage
   AsyncHostRequiresAsyncCall
   AsyncHostCallInProgress
   AsyncHostCallCancelled
@@ -41,6 +51,9 @@ pub(all) suberror RuntimeError {
 /// flattened to a string here.
 pub fn RuntimeError::from_error(error : Error) -> RuntimeError? {
   match error {
+    ContinuationAlreadyConsumed => Some(ContinuationAlreadyConsumed)
+    UnhandledSuspension => Some(UnhandledSuspension)
+    UnsupportedGcContinuationStorage => Some(UnsupportedGcContinuationStorage)
     StackUnderflow => Some(StackUnderflow)
     StackOverflow => Some(StackOverflow)
     TypeMismatch => Some(TypeMismatch)
@@ -55,12 +68,19 @@ pub fn RuntimeError::from_error(error : Error) -> RuntimeError? {
     DivisionByZero => Some(DivisionByZero)
     IntegerOverflow => Some(IntegerOverflow)
     InvalidConversion => Some(InvalidConversion)
+    MemoryMinimumExceedsLimits(_) as error => Some(error)
+    TableAllocationOverflow => Some(TableAllocationOverflow)
+    TableAllocationFailed => Some(TableAllocationFailed)
     OutOfMemory => Some(OutOfMemory)
+    AllocationTooLarge => Some(AllocationTooLarge)
+    AtomicWaitNonSharedMemory => Some(AtomicWaitNonSharedMemory)
     Unreachable => Some(Unreachable)
+    UncaughtException => Some(UncaughtException)
     CallStackExhausted => Some(CallStackExhausted)
     UnknownImport(_, _) as runtime_error => Some(runtime_error)
     LinkError => Some(LinkError)
     LinkErrorDetail(_) as runtime_error => Some(runtime_error)
+    CastFailure => Some(CastFailure)
     NullReference => Some(NullReference)
     UnalignedAtomic => Some(UnalignedAtomic)
     InvalidConstantExpression(_) as runtime_error => Some(runtime_error)
@@ -76,22 +96,33 @@ pub fn RuntimeError::from_error(error : Error) -> RuntimeError? {
 /// Custom Show implementation for WebAssembly-spec-compliant error messages
 pub impl Show for RuntimeError with fn output(self, logger) {
   let msg = match self {
+    ContinuationAlreadyConsumed => "continuation already consumed"
+    UnhandledSuspension => "unhandled suspension"
+    UnsupportedGcContinuationStorage =>
+      "Stack switching feature not compatible with GC storage"
     StackUnderflow => "stack underflow"
     StackOverflow => "stack overflow"
     TypeMismatch => "type mismatch"
     StoreClosed => "store is closed"
     MemoryClosed => "memory is closed"
     OutOfBoundsMemoryAccess => "out of bounds memory access"
-    OutOfBoundsTableAccess => "out of bounds table access"
+    OutOfBoundsTableAccess => "undefined element: out of bounds table access"
     OutOfBoundsArrayAccess => "out of bounds array access"
-    UndefinedElement => "undefined element"
+    UndefinedElement => "undefined element: out of bounds table access"
     UninitializedElement => "uninitialized element"
     IndirectCallTypeMismatch => "indirect call type mismatch"
     DivisionByZero => "integer divide by zero"
     IntegerOverflow => "integer overflow"
     InvalidConversion => "invalid conversion to integer"
+    MemoryMinimumExceedsLimits(pages) =>
+      "memory minimum size of \{pages.reinterpret_as_uint64()} pages exceeds memory limits"
+    TableAllocationOverflow => "overflow calculating table allocation size"
+    TableAllocationFailed => "failed to allocate"
     OutOfMemory => "out of memory"
+    AllocationTooLarge => "allocation size too large"
+    AtomicWaitNonSharedMemory => "atomic wait on non-shared memory"
     Unreachable => "unreachable"
+    UncaughtException => "uncaught exception"
     CallStackExhausted => "call stack exhausted"
     UnknownImport(mod_name, field_name) =>
       "unknown import: \{mod_name}.\{field_name}"
@@ -102,6 +133,7 @@ pub impl Show for RuntimeError with fn output(self, logger) {
       } else {
         "link error: \{detail}"
       }
+    CastFailure => "cast failure"
     NullReference => "null reference"
     UnalignedAtomic => "unaligned atomic"
     InvalidConstantExpression(detail) =>

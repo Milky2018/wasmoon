@@ -12,7 +12,7 @@ fn instantiate_canon_future_new(
   let async_state = state.async_state
   let creator_component_id = state.resource_table.id
   let payload_ty : ValType? = match state.types.get(_tyidx) {
-    Some(Some(Future(v))) => v
+    Some(Some(Future(v))) => v.map(ty => resolve_valtype(ty, state.types))
     _ => None
   }
   let host = fn(
@@ -52,19 +52,32 @@ fn instantiate_canon_future_new(
       )
       (rh, wh)
     }
-    async_state.future_endpoints.set(handle_key(creator_component_id, rh), {
-      future_id,
-      is_readable: true,
-      creator_component_id,
-      in_waitable_set: Ref(false),
-    })
-    async_state.future_endpoints.set(handle_key(creator_component_id, wh), {
-      future_id,
-      is_readable: false,
-      creator_component_id,
-      in_waitable_set: Ref(false),
-    })
-    async_state.futures.set(future_id, {
+    errdefer {
+      async_state.future_endpoints.remove(handle_key(creator_component_id, rh))
+      async_state.future_endpoints.remove(handle_key(creator_component_id, wh))
+      async_state.futures.remove(future_id)
+      free_shared_handle(async_state, creator_component_id, rh)
+      free_shared_handle(async_state, creator_component_id, wh)
+    }
+    async_state.future_endpoints.set_core(
+      handle_key(creator_component_id, rh),
+      {
+        future_id,
+        is_readable: true,
+        creator_component_id,
+        in_waitable_set: Ref(false),
+      },
+    )
+    async_state.future_endpoints.set_core(
+      handle_key(creator_component_id, wh),
+      {
+        future_id,
+        is_readable: false,
+        creator_component_id,
+        in_waitable_set: Ref(false),
+      },
+    )
+    async_state.futures.set_core(future_id, {
       payload_ty,
       pending_read: None,
       pending_write: None,
@@ -93,6 +106,13 @@ fn instantiate_canon_future_read(
   let async_state = state.async_state
   let caller_component_id = state.resource_table.id
   let is_async = canon_opt_is_async(_opts)
+  let payload_type : CanonicalPayloadType = {
+    ty: match state.types.get(_tyidx) {
+      Some(Some(Future(ty))) => ty
+      _ => None
+    },
+    types: state.types,
+  }
   let host = fn(
     args : Array[@types.Value],
   ) -> Array[@types.Value] raise @runtime.RuntimeError {
@@ -102,6 +122,21 @@ fn instantiate_canon_future_read(
     let task_id = current_task_id(async_state)
     fn ret_i32(n : Int) -> Array[@types.Value] {
       [I32(n)]
+    }
+    match args {
+      [I32(_), I32(ptr)] =>
+        payload_type.check_transmit_buffer(
+          resources,
+          store,
+          ptr.to_int64() & 0xffffffffL,
+          1,
+        ) catch {
+          error => {
+            trap_canon(canon_err_message(error))
+            return ret_i32(0)
+          }
+        }
+      _ => ()
     }
     let resumed_sync = match args {
       [I32(handle), _] => {
@@ -130,20 +165,12 @@ fn instantiate_canon_future_read(
             handle_key(caller_component_id, handle),
           ) {
           None => {
-            if !is_async && !async_state.task_can_block[0] {
-              trap_canon("cannot block a synchronous task before returning")
-            } else {
-              trap_canon("unknown future handle index \{handle}")
-            }
+            trap_canon("unknown future handle index \{handle}")
             ret_i32(0)
           }
           Some(ep) =>
             if !ep.is_readable {
-              if !is_async && !async_state.task_can_block[0] {
-                trap_canon("cannot block a synchronous task before returning")
-              } else {
-                trap_canon("type mismatch")
-              }
+              trap_canon("type mismatch")
               ret_i32(0)
             } else {
               let st0 = match async_state.futures.get(ep.future_id) {
@@ -176,7 +203,7 @@ fn instantiate_canon_future_read(
                         resources,
                         store,
                         state.resource_table,
-                        ptr,
+                        ptr.to_int64() & 0xffffffffL,
                       ) catch {
                         e => {
                           trap_canon(e.to_string())
@@ -184,7 +211,7 @@ fn instantiate_canon_future_read(
                         }
                       }
                       async_state.host_future_values.remove(ep.future_id)
-                      async_state.futures.set(ep.future_id, {
+                      async_state.futures.replace(ep.future_id, {
                         payload_ty: st0.payload_ty,
                         pending_read: None,
                         pending_write: None,
@@ -232,69 +259,24 @@ fn instantiate_canon_future_read(
               }
               match st0.pending_write {
                 Some(pw) => {
-                  // Intra-component char futures cannot rendezvous.
-                  match st0.payload_ty {
-                    Some(Prim(Char)) =>
-                      if ep.creator_component_id == caller_component_id {
-                        trap_canon(
-                          "cannot read from and write to intra-component future",
-                        )
-                        return [I32(0)]
-                      }
-                    _ => ()
+                  if pw.writer_component_id == caller_component_id &&
+                    !payload_allows_intra_component_transfer(st0.payload_ty) {
+                    trap_canon(
+                      "cannot read from and write to intra-component future/stream with non-numeric payload",
+                    )
                   }
-
-                  // Write payload (if any) to memory at `ptr`.
-                  match st0.payload_ty {
-                    None => ()
-                    Some(Prim(U8)) => {
-                      let mem = match resources.mem_addr {
-                        Some(addr) =>
-                          store.get_mem(addr) catch {
-                            e => {
-                              trap_canon(e.to_string())
-                              return [I32(0)]
-                            }
-                          }
-                        None => {
-                          trap_canon("missing canon memory")
-                          return [I32(0)]
-                        }
-                      }
-                      mem.store_byte(ptr, trunc_u8(pw.val).to_byte()) catch {
-                        e => {
-                          trap_canon(e.to_string())
-                          return [I32(0)]
-                        }
-                      }
-                    }
-                    Some(Prim(Char)) => {
-                      if ptr % 4 != 0 {
-                        trap_canon("unaligned pointer")
-                        return [I32(0)]
-                      }
-                      let mem = match resources.mem_addr {
-                        Some(addr) =>
-                          store.get_mem(addr) catch {
-                            e => {
-                              trap_canon(e.to_string())
-                              return [I32(0)]
-                            }
-                          }
-                        None => {
-                          trap_canon("missing canon memory")
-                          return [I32(0)]
-                        }
-                      }
-                      mem.store_i32(ptr, pw.val) catch {
-                        e => {
-                          trap_canon(e.to_string())
-                          return [I32(0)]
-                        }
-                      }
-                    }
-                    _ => {
-                      trap_canon("unsupported future type")
+                  store_future_payload(
+                    pw.payload,
+                    pw.writer_component_id,
+                    payload_type,
+                    async_state,
+                    store,
+                    resources,
+                    state.resource_table,
+                    ptr.to_int64() & 0xffffffffL,
+                  ) catch {
+                    error => {
+                      trap_canon(canon_err_message(error))
                       return [I32(0)]
                     }
                   }
@@ -315,7 +297,7 @@ fn instantiate_canon_future_read(
                       },
                     )
                   }
-                  async_state.futures.set(ep.future_id, {
+                  async_state.futures.replace(ep.future_id, {
                     payload_ty: st0.payload_ty,
                     pending_read: None,
                     pending_write: None,
@@ -330,7 +312,7 @@ fn instantiate_canon_future_read(
                 }
                 None =>
                   if st0.writable_dropped {
-                    async_state.futures.set(ep.future_id, {
+                    async_state.futures.replace(ep.future_id, {
                       payload_ty: st0.payload_ty,
                       pending_read: None,
                       pending_write: None,
@@ -344,7 +326,13 @@ fn instantiate_canon_future_read(
                     ret_i32(1)
                   } else {
                     // Register a pending read and report BLOCKED=-1.
-                    async_state.futures.set(ep.future_id, {
+                    if !is_async && !async_state.task_can_block[0] {
+                      trap_canon(
+                        "cannot block a synchronous task before returning",
+                      )
+                      return ret_i32(0)
+                    }
+                    async_state.futures.replace(ep.future_id, {
                       payload_ty: st0.payload_ty,
                       pending_read: Some({
                         // Remember the reader-side canon memory so a writer from a different
@@ -352,8 +340,9 @@ fn instantiate_canon_future_read(
                         mem_addr: resources.mem_addr,
                         realloc: resources.realloc,
                         encoding: resources.encoding,
+                        payload_type,
                         reader_table: state.resource_table,
-                        ptr,
+                        ptr: ptr.to_int64() & 0xffffffffL,
                         reader_component_id: caller_component_id,
                         reader_handle: handle,
                       }),
@@ -445,7 +434,7 @@ fn progress_host_future_sources(
           read.ptr,
         )
         async_state.host_future_values.remove(future_id)
-        async_state.futures.set(future_id, {
+        async_state.futures.replace(future_id, {
           payload_ty: state.payload_ty,
           pending_read: None,
           pending_write: None,
@@ -489,7 +478,15 @@ fn instantiate_canon_future_write(
   let resources = resolve_canon_resources(_opts, state)
   let async_state = state.async_state
   let caller_component_id = state.resource_table.id
+  let writer_table = state.resource_table
   let is_async = canon_opt_is_async(_opts)
+  let payload_type : CanonicalPayloadType = {
+    ty: match state.types.get(_tyidx) {
+      Some(Some(Future(ty))) => ty
+      _ => None
+    },
+    types: state.types,
+  }
   let host = fn(
     args : Array[@types.Value],
   ) -> Array[@types.Value] raise @runtime.RuntimeError {
@@ -501,12 +498,28 @@ fn instantiate_canon_future_write(
       [I32(n)]
     }
     match args {
+      [I32(_), I32(ptr)] =>
+        payload_type.check_transmit_buffer(
+          resources,
+          store,
+          ptr.to_int64() & 0xffffffffL,
+          1,
+        ) catch {
+          error => {
+            trap_canon(canon_err_message(error))
+            return ret_i32(0)
+          }
+        }
+      _ => ()
+    }
+    let resumed_sync = match args {
       [I32(handle), _] => {
-        if !is_async {
+        let resumed = if !is_async {
           resume_sync_waitable_use(
             async_state, caller_component_id, handle, task_id,
           )
-          |> ignore
+        } else {
+          false
         }
         if !is_async &&
           waitable_is_in_set(async_state, caller_component_id, handle) {
@@ -515,8 +528,9 @@ fn instantiate_canon_future_write(
           )
           return ret_i32(0)
         }
+        resumed
       }
-      _ => ()
+      _ => false
     }
     match args {
       [I32(handle), I32(ptr)] =>
@@ -525,20 +539,12 @@ fn instantiate_canon_future_write(
             handle_key(caller_component_id, handle),
           ) {
           None => {
-            if !is_async && !async_state.task_can_block[0] {
-              trap_canon("cannot block a synchronous task before returning")
-            } else {
-              trap_canon("unknown future handle index \{handle}")
-            }
+            trap_canon("unknown future handle index \{handle}")
             ret_i32(0)
           }
           Some(ep) =>
             if ep.is_readable {
-              if !is_async && !async_state.task_can_block[0] {
-                trap_canon("cannot block a synchronous task before returning")
-              } else {
-                trap_canon("type mismatch")
-              }
+              trap_canon("type mismatch")
               ret_i32(0)
             } else {
               let st0 = match async_state.futures.get(ep.future_id) {
@@ -549,14 +555,26 @@ fn instantiate_canon_future_write(
                 }
               }
               if st0.write_succeeded {
+                if resumed_sync {
+                  remove_waitable_events_for(
+                    async_state, caller_component_id, handle, 5,
+                  )
+                  return ret_i32(0)
+                }
                 trap_canon(
-                  "cannot write to future after previous write succeeded",
+                  "cannot write to future after previous write succeeded or readable end dropped",
                 )
                 return ret_i32(0)
               }
               if st0.write_observed_readable_drop {
+                if resumed_sync {
+                  remove_waitable_events_for(
+                    async_state, caller_component_id, handle, 5,
+                  )
+                  return ret_i32(1)
+                }
                 trap_canon(
-                  "cannot write to future after previous write succeeded or readable end dropped",
+                  "cannot write after being notified that the readable end dropped",
                 )
                 return ret_i32(0)
               }
@@ -580,7 +598,7 @@ fn instantiate_canon_future_write(
 
               // If the readable end was dropped before any rendezvous, report DROPPED.
               if st0.readable_dropped {
-                async_state.futures.set(ep.future_id, {
+                async_state.futures.replace(ep.future_id, {
                   payload_ty: st0.payload_ty,
                   pending_read: None,
                   pending_write: None,
@@ -595,116 +613,41 @@ fn instantiate_canon_future_write(
               }
               match st0.pending_read {
                 Some(pr) => {
-                  // Intra-component char futures cannot rendezvous.
-                  match st0.payload_ty {
-                    Some(Prim(Char)) =>
-                      if ep.creator_component_id == caller_component_id {
-                        trap_canon(
-                          "cannot read from and write to intra-component future",
-                        )
-                        return [I32(0)]
-                      }
-                    _ => ()
+                  if pr.reader_component_id == caller_component_id &&
+                    !payload_allows_intra_component_transfer(st0.payload_ty) {
+                    trap_canon(
+                      "cannot read from and write to intra-component future/stream with non-numeric payload",
+                    )
                   }
-
-                  // Load payload (if any) from writer memory at `ptr` and write to the
-                  // reader memory at `pr.ptr`.
-                  match st0.payload_ty {
-                    None => ()
-                    Some(Prim(U8)) => {
-                      let src_mem = match resources.mem_addr {
-                        Some(addr) =>
-                          store.get_mem(addr) catch {
-                            e => {
-                              trap_canon(e.to_string())
-                              return [I32(0)]
-                            }
-                          }
-                        None => {
-                          trap_canon("missing canon memory")
-                          return [I32(0)]
-                        }
-                      }
-                      let dst_mem = match pr.mem_addr {
-                        Some(addr) =>
-                          store.get_mem(addr) catch {
-                            e => {
-                              trap_canon(e.to_string())
-                              return [I32(0)]
-                            }
-                          }
-                        None => {
-                          trap_canon("missing canon memory")
-                          return [I32(0)]
-                        }
-                      }
-                      let b = src_mem.load_byte(ptr) catch {
-                        e => {
-                          trap_canon(e.to_string())
-                          return [I32(0)]
-                        }
-                      }
-                      dst_mem.store_byte(pr.ptr, b) catch {
-                        e => {
-                          trap_canon(e.to_string())
-                          return [I32(0)]
-                        }
-                      }
+                  let payload = payload_type.load(
+                    resources,
+                    store,
+                    ptr.to_int64() & 0xffffffffL,
+                    1,
+                    writer_table,
+                  ) catch {
+                    error => {
+                      trap_canon(canon_err_message(error))
+                      return [I32(0)]
                     }
-                    Some(Prim(Char)) => {
-                      if ptr % 4 != 0 || pr.ptr % 4 != 0 {
-                        trap_canon("unaligned pointer")
-                        return [I32(0)]
-                      }
-                      let src_mem = match resources.mem_addr {
-                        Some(addr) =>
-                          store.get_mem(addr) catch {
-                            e => {
-                              trap_canon(e.to_string())
-                              return [I32(0)]
-                            }
-                          }
-                        None => {
-                          trap_canon("missing canon memory")
-                          return [I32(0)]
-                        }
-                      }
-                      let dst_mem = match pr.mem_addr {
-                        Some(addr) =>
-                          store.get_mem(addr) catch {
-                            e => {
-                              trap_canon(e.to_string())
-                              return [I32(0)]
-                            }
-                          }
-                        None => {
-                          trap_canon("missing canon memory")
-                          return [I32(0)]
-                        }
-                      }
-                      let n = src_mem.load_i32(ptr) catch {
-                        e => {
-                          trap_canon(e.to_string())
-                          return [I32(0)]
-                        }
-                      }
-                      // Validate scalar value.
-                      (char_from_canon_i32(n) catch {
-                        e => {
-                          trap_canon(canon_err_message(e))
-                          return [I32(0)]
-                        }
-                      })
-                      |> ignore
-                      dst_mem.store_i32(pr.ptr, n) catch {
-                        e => {
-                          trap_canon(e.to_string())
-                          return [I32(0)]
-                        }
-                      }
-                    }
-                    _ => {
-                      trap_canon("unsupported future type")
+                  }
+                  store_future_payload(
+                    payload,
+                    caller_component_id,
+                    pr.payload_type,
+                    async_state,
+                    store,
+                    {
+                      mem_addr: pr.mem_addr,
+                      realloc: pr.realloc,
+                      encoding: pr.encoding,
+                      post_return: None,
+                    },
+                    pr.reader_table,
+                    pr.ptr,
+                  ) catch {
+                    error => {
+                      trap_canon(canon_err_message(error))
                       return [I32(0)]
                     }
                   }
@@ -725,7 +668,7 @@ fn instantiate_canon_future_write(
                       },
                     )
                   }
-                  async_state.futures.set(ep.future_id, {
+                  async_state.futures.replace(ep.future_id, {
                     payload_ty: st0.payload_ty,
                     pending_read: None,
                     pending_write: None,
@@ -740,75 +683,31 @@ fn instantiate_canon_future_write(
                 }
                 None => {
                   // Register a pending write by reading the payload once.
-                  let write_val : Int = match st0.payload_ty {
-                    None => 0
-                    Some(Prim(U8)) => {
-                      let mem = match resources.mem_addr {
-                        Some(addr) =>
-                          store.get_mem(addr) catch {
-                            e => {
-                              trap_canon(e.to_string())
-                              return [I32(0)]
-                            }
-                          }
-                        None => {
-                          trap_canon("missing canon memory")
-                          return [I32(0)]
-                        }
-                      }
-                      let b = mem.load_byte(ptr) catch {
-                        e => {
-                          trap_canon(e.to_string())
-                          return [I32(0)]
-                        }
-                      }
-                      b.to_int()
-                    }
-                    Some(Prim(Char)) => {
-                      if ptr % 4 != 0 {
-                        trap_canon("unaligned pointer")
-                        return [I32(0)]
-                      }
-                      let mem = match resources.mem_addr {
-                        Some(addr) =>
-                          store.get_mem(addr) catch {
-                            e => {
-                              trap_canon(e.to_string())
-                              return [I32(0)]
-                            }
-                          }
-                        None => {
-                          trap_canon("missing canon memory")
-                          return [I32(0)]
-                        }
-                      }
-                      let n = mem.load_i32(ptr) catch {
-                        e => {
-                          trap_canon(e.to_string())
-                          return [I32(0)]
-                        }
-                      }
-                      (char_from_canon_i32(n) catch {
-                        e => {
-                          trap_canon(canon_err_message(e))
-                          return [I32(0)]
-                        }
-                      })
-                      |> ignore
-                      n
-                    }
-                    _ => {
-                      trap_canon("unsupported future type")
+                  if !is_async && !async_state.task_can_block[0] {
+                    trap_canon(
+                      "cannot block a synchronous task before returning",
+                    )
+                    return ret_i32(0)
+                  }
+                  let payload = payload_type.load(
+                    resources,
+                    store,
+                    ptr.to_int64() & 0xffffffffL,
+                    1,
+                    writer_table,
+                  ) catch {
+                    error => {
+                      trap_canon(canon_err_message(error))
                       return [I32(0)]
                     }
                   }
-                  async_state.futures.set(ep.future_id, {
+                  async_state.futures.replace(ep.future_id, {
                     payload_ty: st0.payload_ty,
                     pending_read: None,
                     pending_write: Some({
                       writer_component_id: caller_component_id,
                       writer_handle: handle,
-                      val: write_val,
+                      payload,
                     }),
                     readable_dropped: st0.readable_dropped,
                     writable_dropped: st0.writable_dropped,
@@ -880,20 +779,12 @@ fn instantiate_canon_future_cancel_read(
             handle_key(owner_component_id, handle),
           ) {
           None => {
-            if !is_async_cancel && !async_state.task_can_block[0] {
-              trap_canon("cannot block a synchronous task before returning")
-            } else {
-              trap_canon("unknown future handle index \{handle}")
-            }
+            trap_canon("unknown future handle index \{handle}")
             [I32(0)]
           }
           Some(ep) =>
             if !ep.is_readable {
-              if !is_async_cancel && !async_state.task_can_block[0] {
-                trap_canon("cannot block a synchronous task before returning")
-              } else {
-                trap_canon("type mismatch")
-              }
+              trap_canon("type mismatch")
               [I32(0)]
             } else {
               let st0 = match async_state.futures.get(ep.future_id) {
@@ -918,7 +809,7 @@ fn instantiate_canon_future_cancel_read(
                 }
                 [I32(code)]
               } else if st0.pending_read is Some(_) {
-                async_state.futures.set(ep.future_id, {
+                async_state.futures.replace(ep.future_id, {
                   payload_ty: st0.payload_ty,
                   pending_read: None,
                   pending_write: st0.pending_write,
@@ -979,20 +870,12 @@ fn instantiate_canon_future_cancel_write(
             handle_key(owner_component_id, handle),
           ) {
           None => {
-            if !is_async_cancel && !async_state.task_can_block[0] {
-              trap_canon("cannot block a synchronous task before returning")
-            } else {
-              trap_canon("unknown future handle index \{handle}")
-            }
+            trap_canon("unknown future handle index \{handle}")
             [I32(0)]
           }
           Some(ep) =>
             if ep.is_readable {
-              if !is_async_cancel && !async_state.task_can_block[0] {
-                trap_canon("cannot block a synchronous task before returning")
-              } else {
-                trap_canon("type mismatch")
-              }
+              trap_canon("type mismatch")
               [I32(0)]
             } else {
               let st0 = match async_state.futures.get(ep.future_id) {
@@ -1020,7 +903,7 @@ fn instantiate_canon_future_cancel_write(
                   None => false
                 }
                 if had_pending {
-                  async_state.futures.set(ep.future_id, {
+                  async_state.futures.replace(ep.future_id, {
                     payload_ty: st0.payload_ty,
                     pending_read: st0.pending_read,
                     pending_write: None,
@@ -1069,6 +952,7 @@ fn instantiate_canon_future_drop_readable(
           ) {
           Some(ep) =>
             if !ep.is_readable {
+              trap_canon("type mismatch")
               []
             } else {
               let st0 = match async_state.futures.get(ep.future_id) {
@@ -1095,7 +979,7 @@ fn instantiate_canon_future_drop_readable(
                   }
                 None => ()
               }
-              async_state.futures.set(ep.future_id, {
+              async_state.futures.replace(ep.future_id, {
                 payload_ty: st0.payload_ty,
                 pending_read: None,
                 pending_write: None,
@@ -1134,7 +1018,10 @@ fn instantiate_canon_future_drop_readable(
               cleanup_closed_future(async_state, ep.future_id)
               []
             }
-          None => []
+          None => {
+            trap_canon("unknown future handle index \{handle}")
+            []
+          }
         }
       _ => []
     }
@@ -1165,6 +1052,7 @@ fn instantiate_canon_future_drop_writable(
           ) {
           Some(ep) =>
             if ep.is_readable {
+              trap_canon("type mismatch")
               []
             } else {
               let st0 = match async_state.futures.get(ep.future_id) {
@@ -1197,7 +1085,7 @@ fn instantiate_canon_future_drop_writable(
                   }
                 None => ()
               }
-              async_state.futures.set(ep.future_id, {
+              async_state.futures.replace(ep.future_id, {
                 payload_ty: st0.payload_ty,
                 pending_read: None,
                 pending_write: st0.pending_write,
@@ -1218,7 +1106,10 @@ fn instantiate_canon_future_drop_writable(
               cleanup_closed_future(async_state, ep.future_id)
               []
             }
-          None => []
+          None => {
+            trap_canon("unknown future handle index \{handle}")
+            []
+          }
         }
       _ => []
     }

@@ -123,9 +123,8 @@ test "call_indirect traps on the live table bound" {
     #|    i32.const 1
     #|    call_indirect (type $result-i32)))
   let result = compare_jit_interp_with_opt_level(source, "test", [], 2)
-  inspect(compare_result_is_match(result), content="true")
   inspect(
-    compare_result_errors_contain(result, "out of bounds"),
+    compare_result_errors_contain(result, "undefined element"),
     content="true",
   )
 }

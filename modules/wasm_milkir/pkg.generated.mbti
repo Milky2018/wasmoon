@@ -45,11 +45,17 @@ pub fn array_new_fixed(@milkir.FunctionBuilder, Int, Int, Array[@milkir.Value]) 
 
 pub fn array_set(@milkir.FunctionBuilder, Int, @milkir.Value, @milkir.Value, @milkir.Value) -> Unit
 
+pub fn atomic_notify(@milkir.FunctionBuilder, RuntimeSymbols, @milkir.Value, Int, @milkir.Value, @milkir.Value) -> @milkir.Value
+
+pub fn atomic_wait(@milkir.FunctionBuilder, RuntimeSymbols, @milkir.Value, Int, @milkir.Value, @milkir.Value, @milkir.Value) -> @milkir.Value
+
 pub fn call_indirect_multi(@milkir.FunctionBuilder, Int, Int, Array[@milkir.Type], @milkir.Value, Array[@milkir.Value]) -> Array[@milkir.Value]
 
 pub fn call_multi(@milkir.FunctionBuilder, Int, Array[@milkir.Type], Array[@milkir.Value]) -> Array[@milkir.Value]
 
 pub fn call_ref_multi(@milkir.FunctionBuilder, Int, Array[@milkir.Type], @milkir.Value, Array[@milkir.Value]) -> Array[@milkir.Value]
+
+pub fn continuation_operation(@milkir.FunctionBuilder, WasmOpcode, Array[@milkir.Type], Array[@milkir.Value]) -> Array[@milkir.Value]
 
 pub fn data_drop(@milkir.FunctionBuilder, RuntimeSymbols, @milkir.Value, Int) -> Unit
 
@@ -76,6 +82,8 @@ pub fn emit_throw_ref(@milkir.FunctionBuilder, @milkir.Value) -> Unit
 pub fn encode(WasmOpcode) -> @milkir.ExtOp
 
 pub fn extern_convert_any(@milkir.FunctionBuilder, @milkir.Value) -> @milkir.Value
+
+pub fn get_exception_ref(@milkir.FunctionBuilder) -> @milkir.Value
 
 pub fn get_exception_tag(@milkir.FunctionBuilder) -> @milkir.Value
 
@@ -169,6 +177,7 @@ pub fn RuntimeSymbols::with_runtime_prefix(String) -> Self
 
 pub(all) enum WasmDefinedTypeContract {
   Function(WasmFunctionContract)
+  Continuation(Int)
   Struct(Array[WasmFieldContract])
   Array(WasmFieldContract)
 } derive(Eq, @debug.Debug)
@@ -239,6 +248,12 @@ pub(all) enum WasmOpcode {
   Delegate(Int)
   SpillLocalsForThrow(Int)
   GetSpilledLocal(Int)
+  GetExceptionRef
+  ContNew(Int)
+  ContBind(Int, Int)
+  ContSuspend(Int)
+  ContResume(Int, Int, Int, Int)
+  ContSwitch(Int, Int)
 } derive(Eq, Hash, @debug.Debug)
 pub fn WasmOpcode::equal(Self, Self) -> Bool
 pub fn WasmOpcode::hash(Self) -> Int
@@ -259,6 +274,9 @@ pub(all) enum WasmRuntimeHelper {
   TableInit
   ElemDrop
   CancelPoll
+  AtomicWait32
+  AtomicWait64
+  AtomicNotify
   GcRefTest
   GcRefCast
   GcStructGet
@@ -293,6 +311,12 @@ pub(all) enum WasmRuntimeHelper {
   ExceptionThrowRef
   ExceptionDelegate
   ExceptionGetTag
+  ExceptionGetRef
+  ContNew
+  ContBind
+  ContSuspend
+  ContResume
+  ContSwitch
   ExceptionGetValue
   ExceptionGetValueCount
   ExceptionSigsetjmp

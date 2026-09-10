@@ -16,19 +16,25 @@ import {
 }
 
 // Values
-pub const WASMOON_CODEGEN_REVISION : String = "direct-vcode-1"
+pub const WASMOON_CODEGEN_REVISION : String = "direct-vcode-8"
 
-pub const WASMOON_JIT_ABI_VERSION : Int = 3
+pub const WASMOON_JIT_ABI_VERSION : Int = 6
 
-pub fn alloc_guarded_memory_desc(Int, Int?) -> Int64
+pub fn alloc_guarded_memory_desc(Int, Int?, is_shared? : Bool) -> Int64
 
 pub fn alloc_memory(Int64) -> Int64
 
-pub fn alloc_memory_desc(Int64, Int?, is_memory64? : Bool, page_size_log2? : Int, is_shared? : Bool) -> Int64
+pub fn alloc_memory_desc(Int64, Int64?, is_memory64? : Bool, page_size_log2? : Int, is_shared? : Bool) -> Int64
 
 pub fn artifact_compatibility(@artifact.CompatibilityManifest, available_cpu_features~ : Array[@artifact.CpuFeature], runtime_symbols~ : Array[@native_types.ExternalSymbol], data_symbols~ : Array[@native_types.DataSymbol]) -> ArtifactCompatibility
 
 pub fn artifact_module_identity(String, Bytes, Bytes) -> @artifact.ModuleIdentity
+
+pub fn atomic_fence() -> Unit
+
+pub fn atomic_notify(Int64, Int64, Int) -> Int
+
+pub fn atomic_wait_begin(Int64, Int64, Int, Int64, Int64) -> NativeAtomicWait?
 
 pub fn build_artifact_manifest(NativeTarget, @artifact.OperatingSystemAbi, module_identity~ : @artifact.ModuleIdentity, policy~ : @artifact.CompilationPolicy, required_cpu_features? : Array[@artifact.CpuFeature]) -> @artifact.CompatibilityManifest
 
@@ -47,6 +53,8 @@ pub fn collect_gc_root_args(Array[Int64], Array[@types.ValueType]) -> Array[Int6
 pub fn compile_wasm_body_artifact_function(@milkir.Function, @wasm_milkir.WasmValidationContext, NativeTarget, function_index~ : Int, signature~ : @native_types.Signature, use_subtype_indirect_check? : Bool, canonical_type_indices? : Array[Int]) -> @artifact.FunctionCode raise JitPipelineError
 
 pub fn compile_wasm_body_diagnostics_for_target(@milkir.Function, @wasm_milkir.WasmValidationContext, NativeTarget, use_subtype_indirect_check? : Bool, canonical_type_indices? : Array[Int]) -> JitPipelineDiagnostics raise JitPipelineError
+
+pub fn cooperative_idle() -> Unit
 
 pub fn count_entry_trampoline_slots(Array[@types.ValueType]) -> Int
 
@@ -136,9 +144,23 @@ pub fn load_artifact(Bytes, ArtifactCompatibility, limits? : @artifact.DecodeLim
 
 pub fn make_cstring(String) -> FixedArray[Byte]
 
+pub fn memory_atomic_compare_exchange(Int64, Int64, Int, Int64, Int64) -> Int64
+
+pub fn memory_atomic_load(Int64, Int64, Int) -> Int64
+
+pub fn memory_atomic_rmw(Int64, Int64, Int, Int, Int64) -> Int64
+
+pub fn memory_atomic_store(Int64, Int64, Int, Int64) -> Unit
+
+pub fn memory_descriptor_copy(Int64, Int64, Int64, Int64, Int64) -> Int
+
 pub fn memory_descriptor_fill(Int64, Int64, Int, Int) -> Int
 
+pub fn memory_descriptor_fill64(Int64, Int64, Int, Int64) -> Int
+
 pub fn memory_descriptor_grow(Int64, Int, Int) -> Int
+
+pub fn memory_descriptor_grow64(Int64, Int64) -> Int64
 
 pub fn memory_descriptor_layout() -> MemoryDescriptorLayout
 
@@ -175,6 +197,8 @@ pub fn plan_wasm_body_x64_code_object(@milkir.Function, @wasm_milkir.WasmValidat
 pub fn resolve_import_function(Map[String, Map[String, Int64]], String, String) -> ImportFunctionResolution
 
 pub fn resolve_import_function_ptr(Map[String, Map[String, Int64]], String, String) -> Int64?
+
+pub fn retain_memory_desc(Int64) -> Unit
 
 pub fn sanitize_debug_filename(String) -> String
 
@@ -374,6 +398,8 @@ pub fn CHeap::is_array(Self, Int) -> Bool
 pub fn CHeap::is_struct(Self, Int) -> Bool
 pub fn CHeap::is_valid(Self, Int) -> Bool
 pub fn CHeap::make_allocation_rollback(Self, () -> Array[@types.Value]) -> () -> Unit
+pub fn CHeap::runtime_type(Self, Int) -> Int
+pub fn CHeap::set_runtime_type(Self, Int, Int) -> Unit
 pub fn CHeap::should_collect(Self, threshold? : Double) -> Bool
 pub fn CHeap::struct_get(Self, Int, Int, @types.ValueType) -> @types.Value
 pub fn CHeap::struct_set(Self, Int, Int, @types.Value) -> Unit
@@ -575,7 +601,7 @@ pub fn JITFunctionDebug::JITFunctionDebug(String, String, String, String) -> Sel
 type JITTable derive(@debug.Debug)
 pub fn JITTable::get_entry_type(Self, Int) -> Int
 pub fn JITTable::get_entry_value(Self, Int) -> Int64
-pub fn JITTable::get_max(Self) -> Int?
+pub fn JITTable::get_max(Self) -> Int64?
 pub fn JITTable::get_size(Self) -> Int
 pub fn JITTable::raw_ptr(Self) -> Int64
 pub fn JITTable::set(Self, Int, Int64, Int) -> Unit
@@ -585,7 +611,7 @@ type JITTableOwner derive(@debug.Debug)
 pub fn JITTableOwner::close(Self) -> Unit
 pub fn JITTableOwner::table(Self) -> JITTable
 pub fn JITTableOwner::to_repr(Self) -> @debug.Repr
-pub fn JITTableOwner::try_alloc(Int, Int?) -> Self?
+pub fn JITTableOwner::try_alloc(Int, Int64?) -> Self?
 
 pub struct JitCodeInstaller {
   // private fields
@@ -634,20 +660,42 @@ pub struct MemoryInfo {
 }
 pub fn MemoryInfo::MemoryInfo(Int64, Int64, Int?) -> Self
 
+pub type NativeAtomicWait
+pub fn NativeAtomicWait::cancel(Self) -> Unit
+pub fn NativeAtomicWait::pause(Self) -> Unit
+pub fn NativeAtomicWait::poll(Self) -> Int
+
+pub struct NativeCallable {
+  context : NativeJITContext
+  entry : InstalledTrampoline
+}
+pub fn NativeCallable::entry_address(Self) -> Int64
+pub fn NativeCallable::release(Self) -> Unit
+
 pub struct NativeCompiler {
   // private fields
 }
 pub fn NativeCompiler::compile_wasm_body_artifact_function(Self, @milkir.Function, @wasm_milkir.WasmValidationContext, function_index~ : Int, signature~ : @native_types.Signature, use_subtype_indirect_check? : Bool, canonical_type_indices? : Array[Int]) -> @artifact.FunctionCode raise JitPipelineError
 pub fn NativeCompiler::new(NativeTarget) -> Self
 
+type NativeContinuationArena
+
+type NativeExceptionArena
+pub fn NativeExceptionArena::define_tag(Self, Int, Array[@types.ValueType]) -> Bool
+pub fn NativeExceptionArena::insert(Self, Int64, Int, Array[Int64]) -> Int64
+pub fn NativeExceptionArena::snapshot(Self, Int64) -> (Int, Array[Int64])?
+
 type NativeExecutionState
 pub fn NativeExecutionState::NativeExecutionState() -> Self
 pub fn NativeExecutionState::active_depth(Self) -> Int
 pub fn NativeExecutionState::begin(Self, release? : () -> Unit) -> NativeInvocationHandle raise NativeExecutionStateError
+pub fn NativeExecutionState::continuations(Self) -> NativeContinuationArena
 pub fn NativeExecutionState::current_invocation(Self) -> Int64?
+pub fn NativeExecutionState::exceptions(Self) -> NativeExceptionArena
 pub fn NativeExecutionState::live_count(Self) -> Int
 pub fn NativeExecutionState::parked_count(Self) -> Int
 pub fn NativeExecutionState::release_if_live(Self, Int64) -> Unit
+pub fn NativeExecutionState::retire_continuations(Self) -> Unit
 pub fn NativeExecutionState::seal(Self) -> Unit
 pub fn NativeExecutionState::to_repr(Self) -> @debug.Repr
 pub impl @debug.Debug for NativeExecutionState
@@ -714,6 +762,7 @@ pub fn NativeInvocationPhase::to_repr(Self) -> @debug.Repr
 type NativeJITContext
 pub fn NativeJITContext::alloc_guarded_memory(Self, Int, Int?) -> Int64
 pub fn NativeJITContext::alloc_indirect_table(Self, Int) -> Bool
+pub fn NativeJITContext::bind_callable(Self, Int64) -> NativeCallable raise JitInstallError
 pub fn NativeJITContext::call_trampoline(Self, Int64, Int64, FixedArray[Int64], Int, Bool) -> Int raise NativeFiberError
 pub fn NativeJITContext::clear_cancellation_callback(Self) -> Unit
 pub fn NativeJITContext::clear_gc_heap(Self) -> Unit
@@ -723,6 +772,7 @@ pub fn NativeJITContext::clear_wasi_stdin_buffer(Self) -> Unit
 pub fn NativeJITContext::clear_wasi_stdin_callback(Self) -> Unit
 #alias(alloc_wasm_stack, deprecated)
 pub fn NativeJITContext::configure_native_fiber_stack_size(Self, Int64) -> Bool
+pub fn NativeJITContext::define_continuation_type(Self, Int, Int64, Array[@types.ValueType], Array[@types.ValueType]) -> Bool
 pub fn NativeJITContext::func_count(Self) -> Int
 pub fn NativeJITContext::func_ptr(Self, Int) -> Int64
 pub fn NativeJITContext::gc_begin_frame(Self, Int64) -> Unit
@@ -732,14 +782,19 @@ pub fn NativeJITContext::gc_environment_is_clear(Self) -> Bool
 pub fn NativeJITContext::gc_set_root_scratch(Self, Array[Int64]) -> Bool
 pub fn NativeJITContext::gc_set_safepoint_table(Self, Int64) -> Unit
 pub fn NativeJITContext::gc_use_func_safepoints(Self, Int) -> Unit
+pub fn NativeJITContext::has_callable_metadata(Self) -> Bool
 #alias(has_wasm_stack, deprecated)
 pub fn NativeJITContext::has_configured_native_fiber_stack_size(Self) -> Bool
-pub fn NativeJITContext::init_wasi(Self, Array[String], Array[String], Array[(String, String)], quiet? : Bool) -> Unit
+pub fn NativeJITContext::init_wasi(Self, Array[String], Array[String], Array[(String, String)], quiet? : Bool, readonly_preopens? : Array[(String, String)]) -> Unit
 pub fn NativeJITContext::memory_ptr(Self, Int) -> Int64
 pub fn NativeJITContext::memory_size(Self, Int) -> Int64
 pub fn NativeJITContext::refresh_table_layout(Self, Int) -> Bool
 pub fn NativeJITContext::register_safepoints(Self, Int, Array[@code_object.SafepointSite]) -> Bool
+pub fn NativeJITContext::set_callable_types(Self, Array[Int], Array[Int], Array[(Int64, Int)], Array[Int]) -> Unit
 pub fn NativeJITContext::set_cancellation_callback(Self, () -> Bool) -> Unit
+pub fn NativeJITContext::set_continuation_arena(Self, NativeContinuationArena) -> Unit
+pub fn NativeJITContext::set_cooperative_scheduling(Self, Bool) -> Unit
+pub fn NativeJITContext::set_exception_arena(Self, NativeExceptionArena) -> Unit
 pub fn NativeJITContext::set_func(Self, Int, Int64) -> Unit
 pub fn NativeJITContext::set_gc_heap(Self, CHeap) -> Unit
 pub fn NativeJITContext::set_gc_heap_ptr(Self, Int64) -> Unit
@@ -772,13 +827,22 @@ pub fn NativeJITContinuation::continue_with(Self, value? : Int64) -> NativeJITCo
 pub fn NativeJITContinuation::phase(Self) -> NativeFiberPhase
 
 pub(all) enum NativeJITContinuationEvent {
-  NativeHostcallSuspended
+  NativeSuspended(NativeSuspensionReason)
   NativeJITCompleted
   NativeJITTrapped(Int)
 } derive(Eq, @debug.Debug)
 pub fn NativeJITContinuationEvent::equal(Self, Self) -> Bool
 pub fn NativeJITContinuationEvent::not_equal(Self, Self) -> Bool
 pub fn NativeJITContinuationEvent::to_repr(Self) -> @debug.Repr
+
+pub(all) enum NativeSuspensionReason {
+  HostCall
+  CooperativeYield
+  AtomicWait
+} derive(Eq, @debug.Debug)
+pub fn NativeSuspensionReason::equal(Self, Self) -> Bool
+pub fn NativeSuspensionReason::not_equal(Self, Self) -> Bool
+pub fn NativeSuspensionReason::to_repr(Self) -> @debug.Repr
 
 pub(all) enum NativeTarget {
   X64

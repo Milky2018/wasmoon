@@ -1,0 +1,178 @@
+from __future__ import annotations
+
+from pathlib import Path
+import shutil
+import sys
+import tempfile
+import unittest
+from unittest.mock import patch
+
+ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "scripts"))
+
+import run_wasmtime_p1 as p1
+
+
+class P1RunnerTests(unittest.TestCase):
+    def test_source_snapshot_is_complete_and_unchanged(self):
+        _, names = p1.validate_snapshot()
+        self.assertEqual(len(names), 58)
+
+    def test_modified_or_unlisted_upstream_file_is_rejected(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            corpus = Path(tmp) / "corpus"
+            shutil.copytree(p1.CORPUS, corpus)
+            path = corpus / "upstream/crates/test-programs/src/bin/p1_stdio.rs"
+            original = path.read_bytes()
+            path.write_bytes(original + b"\n")
+            with self.assertRaisesRegex(ValueError, "hash mismatch"):
+                p1.validate_snapshot(corpus)
+            path.write_bytes(original)
+            (path.parent / "p1_new.rs").write_text("fn main() {}")
+            with self.assertRaisesRegex(ValueError, "inventory"):
+                p1.validate_snapshot(corpus)
+
+    def test_rights_profile_is_separate_and_preserves_upstream(self):
+        with tempfile.TemporaryDirectory() as temporary, patch.object(p1, "ROOT", Path(temporary)):
+            with p1.prepare_build("explicit-rights") as (source, build):
+                support = source / "upstream/crates/test-programs/src/preview1.rs"
+                self.assertIn("rights.fs_rights_inheriting", support.read_text())
+                self.assertNotEqual(build, p1.BUILD)
+                for guest in (p1.CORPUS / "upstream/crates/test-programs/src/bin").glob("*.rs"):
+                    # Only the documented access-denial tests change errno
+                    # expectations. All other assertion-bearing lines stay verbatim.
+                    adapted = (source / guest.relative_to(p1.CORPUS)).read_text()
+                    if guest.stem in {"p1_file_write", "p1_path_open_read_write"}:
+                        expected = 1 if guest.stem == "p1_file_write" else 2
+                        self.assertEqual(adapted.count("wasip1::ERRNO_NOTCAPABLE"), expected)
+                        self.assertNotIn("wasip1::ERRNO_BADF", adapted)
+                        self.assertNotIn("wasip1::ERRNO_PERM", adapted)
+                        self.assertNotIn("wasip1::ERRNO_ACCES", adapted)
+                        for effect in ["preserves cursor", "preserves size", "leaves file empty"]:
+                            self.assertIn(effect, adapted)
+                        if guest.stem == "p1_path_open_read_write":
+                            self.assertIn("denied read preserves guest buffer", adapted)
+                    if guest.stem in p1.READONLY_CASES:
+                        self.assertEqual(adapted.count("wasip1::ERRNO_NOTCAPABLE"), 1)
+                        self.assertNotIn("wasip1::ERRNO_PERM", adapted)
+                    for line in guest.read_text().splitlines():
+                        if guest.stem == "p1_file_write" and line == "    assert!(":
+                            # This single disjunction is replaced by exact assert_eq!.
+                            continue
+                        if "assert" in line:
+                            self.assertIn(line, adapted)
+            self.assertFalse(source.exists())
+        p1.validate_snapshot()
+
+    def test_rights_patch_applies_inside_the_repository_build_directory(self):
+        with p1.prepare_build("explicit-rights") as (source, _):
+            for name in p1.READONLY_CASES:
+                text = (source / f"upstream/crates/test-programs/src/bin/{name}.rs").read_text()
+                self.assertIn("wasip1::ERRNO_NOTCAPABLE", text)
+                self.assertNotIn("wasip1::ERRNO_PERM", text)
+
+    def test_process_failure_and_full_output_are_preserved(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            result = p1.execute(
+                [sys.executable, "-c", "import sys; print('guest assertion', file=sys.stderr); sys.exit(7)"],
+                Path(tmp), 5,
+            )
+            self.assertEqual((result["status"], result["returncode"]), ("fail", 7))
+            self.assertEqual(Path(result["stderr"]).read_text(), "guest assertion\n")
+            self.assertEqual(p1.verdict([result]), 1)
+
+    def test_timeout_is_not_success(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            result = p1.execute([sys.executable, "-c", "import time; time.sleep(60)"], Path(tmp), 0.1)
+            self.assertEqual(result["status"], "timeout")
+            self.assertLess(result["seconds"], 5)
+            self.assertEqual(p1.verdict([result]), 1)
+
+    def test_missing_engine_is_a_harness_error(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            result = p1.execute([str(Path(tmp) / "missing")], Path(tmp), 1)
+            self.assertEqual(result["status"], "harness_error")
+            self.assertEqual(p1.verdict([result]), 2)
+
+    def test_stdin_eof_and_pending_are_distinct(self):
+        code = "import select; print(bool(select.select([0], [], [], 0.05)[0]))"
+        for pending, expected in [(False, "True\n"), (True, "False\n")]:
+            with self.subTest(pending=pending), tempfile.TemporaryDirectory() as tmp:
+                result = p1.execute([sys.executable, "-c", code], Path(tmp), 5, pending_stdin=pending)
+                self.assertEqual(result["status"], "pass")
+                self.assertEqual(Path(result["stdout"]).read_text(), expected)
+
+    def test_terminal_fixture_really_has_three_terminal_descriptors(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            code = "import os; assert all(os.isatty(fd) for fd in (0,1,2)); print('terminal')"
+            result = p1.execute([sys.executable, "-c", code], Path(tmp), 5, terminal=True)
+            self.assertEqual(result["status"], "pass")
+            self.assertEqual(Path(result["stdout"]).read_text(), "terminal\n")
+
+    def test_each_case_has_fresh_scratch_and_short_output_fails(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            output = Path(tmp)
+            engine = output / "engine"
+            engine.write_text(
+                f"#!{sys.executable}\n"
+                "from pathlib import Path\n"
+                "assert not list(Path('scratch').iterdir())\n"
+                "Path('scratch/artifact').write_text('guest output')\n"
+                "print('hello, world!', end='')\n"
+            )
+            engine.chmod(0o755)
+            for mode in ("interp", "jit"):
+                result = p1.run_case(engine, mode, Path("p1_cli_much_stdout.wasm"), output, 5)
+                self.assertEqual(result["status"], "fail")
+                self.assertIn("complete expected", result["detail"])
+                self.assertFalse((output / mode / "p1_cli_much_stdout/scratch").exists())
+
+    def test_unsupported_and_empty_runs_never_count_as_passes(self):
+        self.assertEqual(p1.verdict([]), 1)
+        self.assertEqual(p1.verdict([{"status": "unsupported"}]), 1)
+        self.assertEqual(p1.verdict([{"status": "pass"}, {"status": "unsupported"}]), 0)
+
+    def test_hostcall_fuel_is_not_applicable_and_never_executed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            for mode in ("interp", "jit", "wasmtime"):
+                result = p1.run_case(Path("missing-engine"), mode,
+                                     Path("p1_cli_hostcall_fuel.wasm"), Path(tmp), 1)
+                self.assertEqual(result["status"], "not_applicable")
+                self.assertEqual(p1.verdict([result]), 1)
+                self.assertEqual(p1.verdict([result, {"status": "pass"}]), 0)
+            self.assertEqual(list(Path(tmp).iterdir()), [])
+
+    def test_readonly_fixture_is_separate_and_host_checks_mutations(self):
+        for name in sorted(p1.READONLY_CASES):
+            for mutation in ("", "Path('readonly/test.txt').write_bytes(b'changed')",
+                             "Path('scratch/alias.txt').hardlink_to(Path('readonly/test.txt'))"):
+                with self.subTest(name=name, mutation=mutation), tempfile.TemporaryDirectory() as tmp:
+                    output = Path(tmp)
+                    engine = output / "engine"
+                    engine.write_text(
+                        f"#!{sys.executable}\n"
+                        "from pathlib import Path\n"
+                        "import sys\n"
+                        "ro = Path(sys.argv[sys.argv.index('--dir-ro') + 1].split('::')[0])\n"
+                        "assert ro.resolve() == Path('readonly').resolve()\n"
+                        "assert ro.parent.resolve() == Path.cwd()\n"
+                        f"assert (ro / 'test.txt').read_bytes() == {p1.READONLY_CONTENTS!r}\n"
+                        "assert not list(Path('scratch').iterdir())\n"
+                        + mutation + "\n"
+                    )
+                    engine.chmod(0o755)
+                    result = p1.run_case(engine, "interp", Path(name + ".wasm"), output, 5)
+                    self.assertEqual(result["status"], "fail" if mutation else "pass")
+                    directory = output / "interp" / name
+                    self.assertFalse((directory / "scratch").exists())
+                    self.assertFalse((directory / "readonly").exists())
+                    excluded = p1.run_case(engine, "wasmtime", Path(name + ".wasm"), output, 5)
+                    self.assertEqual(excluded["status"], "unsupported")
+
+    def test_oracle_does_not_pass_separator_to_guest(self):
+        command = p1.command_for(Path("wasmtime"), "wasmtime", Path("guest.wasm"), Path("scratch"), "p1_stdio")
+        self.assertEqual(command[command.index("guest.wasm") + 1:], ["."])
+
+
+if __name__ == "__main__":
+    unittest.main()

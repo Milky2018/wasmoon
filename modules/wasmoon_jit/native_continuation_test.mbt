@@ -86,7 +86,7 @@ test "native continuation cancellation has explicit phase boundaries" {
     ),
     content=(
       #|(
-      #|  NativeHostcallSuspended,
+      #|  NativeSuspended(HostCall),
       #|  Some(Running),
       #|  Suspended,
       #|  Cancelled,
@@ -117,7 +117,7 @@ test "interleaved native continuations complete and cancel exactly" {
         stack_size=64L * 1024L,
       )
       let event = continuation.continue_with()
-      guard event is NativeHostcallSuspended else {
+      guard event is NativeSuspended(HostCall) else {
         return fail("continuation \{index} did not suspend: \{Repr(event)}")
       }
       parked.push(continuation)
@@ -161,7 +161,7 @@ test "native hostcall suspension continues after the call without replay" {
       callback_count[0],
       continuation.phase(),
     ),
-    content="(NativeHostcallSuspended, 10, 1, Suspended)",
+    content="(NativeSuspended(HostCall), 10, 1, Suspended)",
   )
   debug_inspect(
     (
@@ -196,7 +196,7 @@ test "native hostcall suspension can retry only the suspended hostcall" {
   )
   debug_inspect(
     (continuation.continue_with(), callback_count[0]),
-    content="(NativeHostcallSuspended, 1)",
+    content="(NativeSuspended(HostCall), 1)",
   )
   debug_inspect(
     (
@@ -384,7 +384,7 @@ test "suspended nested hostcall restores the outer hostcall slots" {
         let event = continuation.continue_with() catch {
           _ => return HostcallTrap(8)
         }
-        guard event is NativeHostcallSuspended else { return HostcallTrap(8) }
+        guard event is NativeSuspended(HostCall) else { return HostcallTrap(8) }
         nested[0] = Some(continuation)
         hostcall_value_slot_write(0, 77L)
         HostcallCompleted
@@ -428,7 +428,7 @@ test "suspended nested continuation restores the outer exception handler" {
         let event = continuation.continue_with() catch {
           _ => return HostcallTrap(8)
         }
-        guard event is NativeHostcallSuspended else { return HostcallTrap(8) }
+        guard event is NativeSuspended(HostCall) else { return HostcallTrap(8) }
         nested[0] = Some(continuation)
         HostcallCompleted
       }
@@ -480,7 +480,7 @@ test "suspended nested continuation restores the outer precise GC roots" {
         let event = continuation.continue_with() catch {
           _ => return HostcallTrap(8)
         }
-        guard event is NativeHostcallSuspended else { return HostcallTrap(8) }
+        guard event is NativeSuspended(HostCall) else { return HostcallTrap(8) }
         nested[0] = Some(continuation)
         HostcallCompleted
       }
@@ -522,7 +522,10 @@ test "trap activation survives a native hostcall suspension" {
     values,
     values.length(),
   )
-  debug_inspect(continuation.continue_with(), content="NativeHostcallSuspended")
+  debug_inspect(
+    continuation.continue_with(),
+    content="NativeSuspended(HostCall)",
+  )
   debug_inspect(continuation.continue_with(), content="NativeJITTrapped(6)")
   let details = get_last_trap_details()
   debug_inspect((details.func_idx, details.pc != 0L), content="(73, true)")
@@ -539,7 +542,10 @@ test "fiber guard fault after resume becomes a structured stack trap" {
     FixedArray::from_array([0L]),
     1,
   )
-  debug_inspect(continuation.continue_with(), content="NativeHostcallSuspended")
+  debug_inspect(
+    continuation.continue_with(),
+    content="NativeSuspended(HostCall)",
+  )
   debug_inspect(continuation.continue_with(), content="NativeJITTrapped(2)")
   let details = get_last_trap_details()
   let dwarf = DWARFBuilder::DWARFBuilder()
@@ -586,7 +592,7 @@ test "nested same-context activation preserves its suspended caller" {
   )
   debug_inspect(
     (continuation.continue_with(), nested_function[0]),
-    content="(NativeHostcallSuspended, 321)",
+    content="(NativeSuspended(HostCall), 321)",
   )
   debug_inspect(continuation.continue_with(), content="NativeJITTrapped(6)")
   debug_inspect(get_last_trap_details().func_idx, content="73")
@@ -611,7 +617,7 @@ test "parked native trap activations do not overwrite each other" {
   )
   debug_inspect(
     (first.continue_with(), second.continue_with()),
-    content="(NativeHostcallSuspended, NativeHostcallSuspended)",
+    content="(NativeSuspended(HostCall), NativeSuspended(HostCall))",
   )
   debug_inspect(second.continue_with(), content="NativeJITTrapped(6)")
   debug_inspect(get_last_trap_details().func_idx, content="222")
@@ -636,7 +642,10 @@ test "parked native continuation keeps its precise GC root alive" {
     values.length(),
   )
 
-  debug_inspect(continuation.continue_with(), content="NativeHostcallSuspended")
+  debug_inspect(
+    continuation.continue_with(),
+    content="NativeSuspended(HostCall)",
+  )
   inspect(heap.get_offset(rooted) > 0, content="true")
   inspect(heap.collect([]), content="1")
   inspect(heap.is_valid(rooted), content="true")
@@ -677,7 +686,7 @@ test "multiple parked continuations unregister GC roots independently" {
 
   debug_inspect(
     (first.continue_with(), second.continue_with()),
-    content="(NativeHostcallSuspended, NativeHostcallSuspended)",
+    content="(NativeSuspended(HostCall), NativeSuspended(HostCall))",
   )
   inspect(heap.collect([]), content="0")
   first.cancel()
@@ -694,4 +703,9 @@ test "multiple parked continuations unregister GC roots independently" {
   first_context.clear_hostcall_callback()
   second_context.clear_hostcall_callback()
   heap.free()
+}
+
+///|
+test "fresh native contexts disable cooperative scheduling" {
+  inspect(@native_test_support.fresh_context_scheduling_budget(), content="0")
 }

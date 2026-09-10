@@ -16,6 +16,7 @@ fn transaction_test_artifact() -> @artifact.Artifact raise @wasmoon_jit.JitPipel
         optimization_level: O2,
         code_model: Small,
         call_binding: DirectBody,
+        nan_canonicalization: false,
         cancellation_safepoints: false,
         debug_info: false,
       },

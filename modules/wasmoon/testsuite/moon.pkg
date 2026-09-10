@@ -38,4 +38,5 @@ import {
 
 import {
   "Milky2018/wasmoon/wasi",
+  "Milky2018/wasmoon_jit/native_test_support",
 } for "wbtest"

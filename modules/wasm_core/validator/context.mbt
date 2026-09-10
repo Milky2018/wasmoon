@@ -15,12 +15,14 @@ priv enum LabelKind {
 ///|
 /// Validation context for a module
 priv struct ValidationContext {
+  bulk_memory : Bool
+  stack_switching : Bool
   types : Array[@types.SubType] // GC: now stores SubType
   funcs : Array[Int] // type indices
   tables : Array[@types.TableType]
   mems : Array[@types.MemoryType]
   globals : Array[@types.GlobalType]
-  tags : Array[@types.FuncType] // tag types (params only, results always empty)
+  tags : Array[@types.FuncType] // Control tags may also return values when stack switching is enabled.
   elems : Array[@types.ValueType] // element segment types
   data_count : Int // number of data segments
   locals : Array[@types.ValueType] // current function's locals
@@ -108,6 +110,7 @@ fn collect_value_types_from_subtype(
 ) -> Array[@types.ValueType] {
   let result : Array[@types.ValueType] = []
   match subtype.composite {
+    Cont(index) => result.push(RefFuncTyped(index))
     Func(ft) => {
       for p in ft.params {
         result.push(p)
@@ -148,6 +151,8 @@ fn collect_declared_funcs(
 ///|
 fn ValidationContext::ValidationContext(
   mod : @types.Module,
+  bulk_memory? : Bool = true,
+  stack_switching? : Bool = false,
 ) -> ValidationContext raise ValidationError {
   // Collect function types (imports + defined functions)
   let funcs : Array[Int] = []
@@ -203,6 +208,9 @@ fn ValidationContext::ValidationContext(
     guard mod.func_type_at(type_idx) is Some(ft) else {
       raise TypeMismatch("tag type at index \{type_idx} is not a function type")
     }
+    if !stack_switching && !ft.results.is_empty() {
+      raise TypeMismatch("tag results require stack switching")
+    }
     ft
   }
 
@@ -245,6 +253,8 @@ fn ValidationContext::ValidationContext(
     globals,
     tags,
     elems,
+    bulk_memory,
+    stack_switching,
     data_count: mod.datas.length(),
     locals: [],
     labels: [],
@@ -263,7 +273,12 @@ fn ValidationContext::ValidationContext(
 /// Check if a value type is a non-nullable reference type
 fn is_non_nullable_ref(ty : @types.ValueType) -> Bool {
   match ty {
-    RefFunc | RefExtern | RefFuncTyped(_) => true
+    RefFunc
+    | RefExtern
+    | RefFuncTyped(_)
+    | RefCont
+    | RefNoCont
+    | RefContTyped(_) => true
     _ => false
   }
 }
@@ -277,7 +292,13 @@ fn is_ref_type(ty : @types.ValueType) -> Bool {
     | RefFunc
     | RefExtern
     | RefFuncTyped(_)
-    | RefNullFuncTyped(_) => true
+    | RefNullFuncTyped(_)
+    | ContRef
+    | RefCont
+    | RefNoCont
+    | NullContRef
+    | RefContTyped(_)
+    | RefNullContTyped(_) => true
     _ => false
   }
 }
@@ -287,9 +308,16 @@ fn is_ref_type(ty : @types.ValueType) -> Bool {
 fn validate_value_type(
   ty : @types.ValueType,
   num_types : Int,
+  stack_switching? : Bool = false,
 ) -> Unit raise ValidationError {
+  if ty.is_continuation_ref() && !stack_switching {
+    raise TypeMismatch("stack switching is not enabled")
+  }
   let idx : Int? = match ty {
-    RefFuncTyped(i) | RefNullFuncTyped(i) => Some(i)
+    RefFuncTyped(i)
+    | RefNullFuncTyped(i)
+    | RefContTyped(i)
+    | RefNullContTyped(i) => Some(i)
     // Ref(Null)Struct/Array(-1) encode abstract heap types (struct/array),
     // which do not refer to a concrete type index.
     RefStruct(i) | RefNullStruct(i) => if i < 0 { None } else { Some(i) }
@@ -311,7 +339,10 @@ fn validate_type_forward_refs(
   type_rec_groups : Array[Int],
 ) -> Unit raise ValidationError {
   let ref_idx : Int? = match ty {
-    RefFuncTyped(i) | RefNullFuncTyped(i) => Some(i)
+    RefFuncTyped(i)
+    | RefNullFuncTyped(i)
+    | RefContTyped(i)
+    | RefNullContTyped(i) => Some(i)
     // Ref(Null)Struct/Array(-1) are abstract heap types, not forward refs.
     RefStruct(i) | RefNullStruct(i) => if i < 0 { None } else { Some(i) }
     RefArray(i) | RefNullArray(i) => if i < 0 { None } else { Some(i) }

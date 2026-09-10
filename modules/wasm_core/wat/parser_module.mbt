@@ -467,12 +467,34 @@ fn Parser::parse_value_type(self : Parser) -> @types.ValueType raise WatError {
         Keyword("none") => {
           self.advance()
           self.expect_rparen()
-          NullRef // bottom type for any
+          if is_nullable {
+            NullRef
+          } else {
+            RefNone
+          } // bottom type for any
         }
         Keyword("nofunc") => {
           self.advance()
           self.expect_rparen()
           NullFuncRef // bottom type for func
+        }
+        Keyword("cont") => {
+          self.advance()
+          self.expect_rparen()
+          if is_nullable {
+            ContRef
+          } else {
+            RefCont
+          }
+        }
+        Keyword("nocont") => {
+          self.advance()
+          self.expect_rparen()
+          if is_nullable {
+            NullContRef
+          } else {
+            RefNoCont
+          }
         }
         Keyword("noexn") => {
           self.advance()
@@ -558,6 +580,8 @@ fn Parser::parse_value_type(self : Parser) -> @types.ValueType raise WatError {
         "f64" => F64
         "v128" => V128
         "funcref" => FuncRef
+        "contref" => ContRef
+        "nullcontref" => NullContRef
         "externref" => ExternRef
         "anyref" => AnyRef
         "exnref" => ExnRef
@@ -640,7 +664,22 @@ fn count_tag_imports(imports : Array[@types.Import]) -> Int {
 
 ///|
 /// Parse a WAT module from string
-pub fn parse(input : String) -> @types.Module raise WatError {
+pub fn parse(
+  input : String,
+  implicit_module? : Bool = false,
+) -> @types.Module raise WatError {
+  let input = if implicit_module {
+    let probe = Lexer::Lexer(input)
+    if probe.next_token().token == LParen &&
+      probe.next_token().token == Keyword("module") {
+      input
+    } else {
+      // A trailing line comment must not consume the synthetic closing token.
+      "(module " + input + "\n)"
+    }
+  } else {
+    input
+  }
   let parser = Parser::Parser(input)
   let mod_ = parser.parse_module()
   if parser.current.token != Eof {
@@ -1071,16 +1110,23 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
             mod_.imports.push(imp)
           }
           Keyword("table") => {
-            let (table, export_name, inline_elem, tbl_name) = self.parse_table_def(
+            let (table, export_names, inline_elem, tbl_name) = self.parse_table_def(
               mod_,
             )
-            let table_idx = mod_.tables.length()
-            mod_.tables.push(table)
+            let table_idx = match table {
+              Some(table) => {
+                let idx = count_table_imports(mod_.imports) +
+                  mod_.tables.length()
+                mod_.tables.push(table)
+                idx
+              }
+              None => count_table_imports(mod_.imports) - 1
+            }
             // Register table name with correct index
             if tbl_name is Some(name) {
               self.table_names.set(name, table_idx)
             }
-            if export_name is Some(name) {
+            for name in export_names {
               mod_.exports.push({ name, desc: Table(table_idx), })
             }
             if inline_elem is Some(elem) {

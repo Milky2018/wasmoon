@@ -128,7 +128,9 @@ pub fn value_to_slot(value : @types.Value) -> GcSlot {
     ArrayRef(idx) => { lo: (idx + 1).to_int64() << 1, hi: 0L, }
     FuncRef(idx) => { lo: (idx + 1).to_int64(), hi: 0L, }
     ExternRef(idx) => { lo: (idx + 1).to_int64(), hi: 0L, }
-    ExnRef(idx) => { lo: (idx + 1).to_int64(), hi: 0L, }
+    ExnRef(idx) => { lo: (idx.to_int64() << 1) | 1L, hi: 0L, }
+    // Store-owned continuation handles use an odd word, outside GC object indices.
+    ContRef(handle) => { lo: (handle << 1) | 1L, hi: 0L, }
     I31(n) => { lo: (n.to_int64() << 1) | 1L, hi: 0L, }
     Null => { lo: @wasm_milkir.NULL_REF, hi: 0L, }
   }
@@ -191,11 +193,22 @@ pub fn slot_to_value(slot : GcSlot, ty : @types.ValueType) -> @types.Value {
       } else {
         ExternRef((raw - 1L).to_int())
       }
+    ContRef
+    | RefCont
+    | RefContTyped(_)
+    | RefNullContTyped(_)
+    | NullContRef
+    | RefNoCont =>
+      if raw == @wasm_milkir.NULL_REF {
+        Null
+      } else {
+        ContRef(raw >> 1)
+      }
     ExnRef =>
       if raw == @wasm_milkir.NULL_REF {
         Null
       } else {
-        ExnRef((raw - 1L).to_int())
+        ExnRef((raw >> 1).to_int())
       }
     RefI31 | RefNullI31 =>
       if raw == @wasm_milkir.NULL_REF {
@@ -569,4 +582,28 @@ pub fn CHeap::should_collect(self : CHeap, threshold? : Double = 0.75) -> Bool {
 /// Configure allocation fault injection for debugging
 pub fn gc_debug_set_fail_alloc(fail_at : Int, fail_every? : Int = 0) -> Unit {
   c_gc_heap_debug_set_fail_alloc(fail_at, fail_every)
+}
+
+///|
+extern "c" fn get_runtime_type(pointer : Int64, reference : Int) -> Int = "wasmoon_gc_heap_get_runtime_type"
+
+///|
+extern "c" fn set_runtime_type(
+  pointer : Int64,
+  reference : Int,
+  identity : Int,
+) -> Unit = "wasmoon_gc_heap_set_runtime_type"
+
+///|
+pub fn CHeap::runtime_type(self : CHeap, index : Int) -> Int {
+  get_runtime_type(self.ptr, index + 1)
+}
+
+///|
+pub fn CHeap::set_runtime_type(
+  self : CHeap,
+  index : Int,
+  identity : Int,
+) -> Unit {
+  set_runtime_type(self.ptr, index + 1, identity)
 }

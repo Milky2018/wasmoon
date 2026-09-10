@@ -13,6 +13,12 @@ fn normalize_runtime_error(e : Error) -> @runtime.RuntimeError {
     None =>
       match e {
         InvocationSignal::HostInvocation(err) => normalize_runtime_error(err)
+        ThrowException(_, _) => UncaughtException
+        ExecutionSuspended => UnhandledSuspension
+        @runtime.GuestContinuationYield(_, body) => {
+          (body.cancel)()
+          UnhandledSuspension
+        }
         _ => Unreachable
       }
   }
@@ -51,21 +57,8 @@ pub fn instantiate_module(
 
   // Allocate memories
   let mem_addrs : Array[Int] = []
-  for i, mem_type in mod.memories {
-    let min = mem_type.limits.min.to_int()
-    let max = mem_type.limits.max.map(fn(m) { m.to_int() })
-    let mem = if i == 0 &&
-      !mem_type.is_memory64 &&
-      mem_type.page_size_log2 == 16 {
-      @runtime.Memory::new_guarded_memory0(min, max)
-    } else {
-      Memory(
-        min,
-        max,
-        is_memory64=mem_type.is_memory64,
-        page_size_log2=mem_type.page_size_log2,
-      )
-    }
+  for mem_type in mod.memories {
+    let mem = try! @runtime.Memory::from_type(mem_type)
     let addr = try! store.alloc_mem(mem)
     mem_addrs.push(addr)
   }
@@ -91,13 +84,7 @@ pub fn instantiate_module(
     } else {
       Null
     }
-    let table = @runtime.Table::Table(
-      table_def.type_.elem_type,
-      table_def.type_.limits.min.to_int(),
-      table_def.type_.limits.max.map(fn(m) { m.to_int() }),
-      init_value~,
-      is_table64=table_def.type_.is_table64,
-    )
+    let table = try! @runtime.Table::from_type(table_def.type_, init_value~)
     let addr = try! store.alloc_table(table)
     table_addrs.push(addr)
   }
@@ -138,8 +125,8 @@ pub fn instantiate_module(
   // func_type_indices: type index for each function (from mod.funcs)
   // Initialize dropped arrays with false values
   let dropped_elems : Array[Bool] = []
-  for _ in 0..<mod.elems.length() {
-    dropped_elems.push(false)
+  for elem in mod.elems {
+    dropped_elems.push(elem.mode is Declarative)
   }
   let dropped_datas : Array[Bool] = []
   for _ in 0..<mod.datas.length() {
@@ -149,6 +136,9 @@ pub fn instantiate_module(
   let canonical_type_indices = @types.compute_canonical_type_indices(
     mod.types,
     type_rec_groups=mod.type_rec_groups,
+  )
+  let elem_values = try! evaluate_element_segments(
+    mod, store, func_addrs, global_addrs,
   )
   let instance : @runtime.ModuleInstance = {
     types: mod.types,
@@ -162,11 +152,13 @@ pub fn instantiate_module(
     global_addrs,
     tag_addrs,
     exports: mod.exports,
+    elem_values,
     elem_segments: mod.elems,
     data_segments: mod.datas,
     dropped_elems,
     dropped_datas,
   }
+  try! (store.register_instance(instance) |> ignore)
   (store, instance)
 }
 
@@ -248,6 +240,7 @@ pub fn eval_const_expr(
             let default_val = default_value_for_storage_type(
               array_type.element.storage_type,
             )
+            check_gc_array_length(len)
             let elements : Array[@types.Value] = Array::make(len, default_val)
             let ref_idx = store.unwrap().alloc_array(type_idx, elements)
             stack.push(ArrayRef(ref_idx))
@@ -269,6 +262,7 @@ pub fn eval_const_expr(
           let len_val = stack.pop().unwrap()
           let init_val = stack.pop().unwrap()
           if len_val is I32(len) {
+            check_gc_array_length(len)
             let elements : Array[@types.Value] = Array::make(len, init_val)
             let ref_idx = store.unwrap().alloc_array(type_idx, elements)
             stack.push(ArrayRef(ref_idx))
@@ -299,6 +293,7 @@ pub fn eval_const_expr(
             stack.push(ArrayRef(ref_idx))
           } else if stack.length() >= len {
             // Pop elements in reverse order (last element pushed first).
+            check_gc_array_length(len)
             let elements : Array[@types.Value] = Array::make(len, Null)
             for i = len - 1; i >= 0; i = i - 1 {
               elements[i] = stack.pop().unwrap()
@@ -504,46 +499,11 @@ pub fn eval_const_expr(
 fn eval_extended_const_expr(
   instrs : Array[@types.Instruction],
   globals : Array[@runtime.GlobalInstance],
-) -> Int {
-  // Use a simple stack-based evaluator with Int64 to handle both i32 and i64
-  let stack : Array[Int64] = []
-  for instr in instrs {
-    match instr {
-      I32Const(n) => stack.push(n.to_int64())
-      I64Const(n) => stack.push(n)
-      GlobalGet(idx) =>
-        if idx < globals.length() {
-          match globals[idx].get() {
-            I32(n) => stack.push(n.to_int64())
-            I64(n) => stack.push(n)
-            _ => ()
-          }
-        }
-      I32Add | I64Add =>
-        if stack.length() >= 2 {
-          let b = stack.pop()
-          let a = stack.pop()
-          stack.push(a.unwrap() + b.unwrap())
-        }
-      I32Sub | I64Sub =>
-        if stack.length() >= 2 {
-          let b = stack.pop()
-          let a = stack.pop()
-          stack.push(a.unwrap() - b.unwrap())
-        }
-      I32Mul | I64Mul =>
-        if stack.length() >= 2 {
-          let b = stack.pop()
-          let a = stack.pop()
-          stack.push(a.unwrap() * b.unwrap())
-        }
-      _ => ()
-    }
-  }
-  if stack.length() > 0 {
-    stack[stack.length() - 1].to_int()
-  } else {
-    0
+) -> Int64 raise @runtime.RuntimeError {
+  match eval_const_expr(instrs, globals~) {
+    I32(value) => value.to_int64() & 0xFFFF_FFFFL
+    I64(value) => value
+    _ => raise InvalidConstantExpression("expected an integer offset")
   }
 }
 
@@ -563,52 +523,30 @@ fn get_global_instances(
 }
 
 ///|
-/// Evaluate an elem segment init expression to get a Value
-/// Returns None for unsupported expressions that should be skipped
-fn eval_elem_init_expr(
-  init_expr : Array[@types.Instruction],
+fn evaluate_element_segments(
+  mod : @types.Module,
+  store : @runtime.Store,
   func_addrs : Array[Int],
-  globals : Array[@runtime.GlobalInstance],
-) -> @types.Value? {
-  match init_expr {
-    [RefFunc(idx)] => {
-      // Convert module function index to store address
-      let store_addr = if idx < func_addrs.length() {
-        func_addrs[idx]
-      } else {
-        idx // fallback, should not happen for valid modules
-      }
-      Some(FuncRef(store_addr))
+  global_addrs : Array[Int],
+) -> Array[Array[@types.Value]] raise @runtime.RuntimeError {
+  let globals = get_global_instances(store, global_addrs)
+  let segments : Array[Array[@types.Value]] = []
+  for elem in mod.elems {
+    let values : Array[@types.Value] = []
+    for expr in elem.init {
+      values.push(
+        eval_const_expr(
+          expr,
+          func_addrs~,
+          globals~,
+          store=Some(store),
+          types=mod.types,
+        ),
+      )
     }
-    [RefNull(_)] => Some(Null)
-    [GlobalGet(idx)] =>
-      // Get funcref from global
-      if idx < globals.length() {
-        Some(globals[idx].get())
-      } else {
-        None
-      }
-    // GC: handle ref.i31 expressions for i31ref element segments
-    [I32Const(n), RefI31] => {
-      // i31 stores only the lower 31 bits
-      let i31_val = n & 0x7FFFFFFF
-      Some(I31(i31_val))
-    }
-    [GlobalGet(idx), RefI31] =>
-      // ref.i31 with global value
-      if idx < globals.length() {
-        match globals[idx].get() {
-          I32(n) => {
-            let i31_val = n & 0x7FFFFFFF
-            Some(I31(i31_val))
-          }
-          _ => None
-        }
-      } else {
-        None
-      }
-    _ => None
+    segments.push(values)
   }
+  segments
 }
 
 ///|
@@ -616,6 +554,7 @@ fn eval_elem_init_expr(
 pub fn instantiate_module_with_init(
   mod : @types.Module,
 ) -> (@runtime.Store, @runtime.ModuleInstance) raise @runtime.RuntimeError {
+  validate_continuation_gc_storage(mod)
   let (store, instance) = instantiate_module(mod)
 
   // Per WebAssembly spec: element segments are initialized BEFORE data segments
@@ -635,16 +574,14 @@ pub fn instantiate_module_with_init(
 
         // Check bounds before initializing
         // offset + num_elements must not exceed table size
-        if offset < 0 || offset + elem.init.length() > table.size() {
+        if offset < 0L ||
+          offset > table.size().to_int64() - elem.init.length().to_int64() {
           raise OutOfBoundsTableAccess
         }
 
         // Set table entries - evaluate init expression to get value
-        for i, init_expr in elem.init {
-          match eval_elem_init_expr(init_expr, instance.func_addrs, globals) {
-            Some(value) => table.set(offset + i, value)
-            None => continue
-          }
+        for i in 0..<elem.init.length() {
+          table.set(offset.to_int() + i, instance.elem_values[elem_idx][i])
         }
       }
       // Active elem segments are implicitly dropped after initialization
@@ -655,7 +592,7 @@ pub fn instantiate_module_with_init(
   // Initialize data segments (copy data to memory)
   // Get global instances for evaluating offset expressions
   let globals_for_data = get_global_instances(store, instance.global_addrs)
-  for data in mod.datas {
+  for data_idx, data in mod.datas {
     if data.memory_idx >= 0 &&
       data.offset.length() > 0 &&
       instance.mem_addrs.length() > data.memory_idx {
@@ -665,7 +602,8 @@ pub fn instantiate_module_with_init(
       let offset = eval_extended_const_expr(data.offset, globals_for_data)
 
       // Copy data to memory
-      mem.init_data(offset, data.init)
+      mem.init_data_at(offset, data.init)
+      instance.dropped_datas[data_idx] = true
     }
   }
 
@@ -759,7 +697,7 @@ fn extern_val_kind(v : @runtime.ExternVal) -> String {
 }
 
 ///|
-fn format_limits_pair(limits : (Int, Int?)) -> String {
+fn[T : Show] format_limits_pair(limits : (T, T?)) -> String {
   let max_text = match limits.1 {
     Some(max) => max.to_string()
     None => "none"
@@ -915,8 +853,11 @@ pub fn validate_imports_with_diagnostics(
             } noraise {
               mem => mem
             }
-            let actual_limits = actual_mem.get_limits()
-            if actual_mem.is_memory64() != expected_mem_type.is_memory64 {
+            let actual_limits = actual_mem.get_limits64()
+            if actual_mem.is_memory64() != expected_mem_type.is_memory64 ||
+              actual_mem.is_shared() != expected_mem_type.is_shared ||
+              actual_mem.page_size_bytes() !=
+              1L << expected_mem_type.page_size_log2 {
               push_import_diagnostic(
                 result,
                 import_index,
@@ -931,7 +872,8 @@ pub fn validate_imports_with_diagnostics(
               )
               continue
             }
-            if actual_limits.0 < expected_mem_type.limits.min.to_int() {
+            if actual_limits.0.reinterpret_as_uint64() <
+              expected_mem_type.limits.min.reinterpret_as_uint64() {
               push_import_diagnostic(
                 result,
                 import_index,
@@ -949,7 +891,8 @@ pub fn validate_imports_with_diagnostics(
             if expected_mem_type.limits.max is Some(expected_max) {
               match actual_limits.1 {
                 Some(actual_max) =>
-                  if actual_max > expected_max.to_int() {
+                  if actual_max.reinterpret_as_uint64() >
+                    expected_max.reinterpret_as_uint64() {
                     push_import_diagnostic(
                       result,
                       import_index,
@@ -1001,7 +944,7 @@ pub fn validate_imports_with_diagnostics(
             } noraise {
               table => table
             }
-            let actual_limits = actual_table.get_limits()
+            let actual_limits = actual_table.get_limits64()
             if actual_table.get_elem_type() != expected_table_type.elem_type {
               push_import_diagnostic(
                 result,
@@ -1032,7 +975,8 @@ pub fn validate_imports_with_diagnostics(
               )
               continue
             }
-            if actual_limits.0 < expected_table_type.limits.min.to_int() {
+            if actual_limits.0.reinterpret_as_uint64() <
+              expected_table_type.limits.min.reinterpret_as_uint64() {
               push_import_diagnostic(
                 result,
                 import_index,
@@ -1050,7 +994,8 @@ pub fn validate_imports_with_diagnostics(
             if expected_table_type.limits.max is Some(expected_max) {
               match actual_limits.1 {
                 Some(actual_max) =>
-                  if actual_max > expected_max.to_int() {
+                  if actual_max.reinterpret_as_uint64() >
+                    expected_max.reinterpret_as_uint64() {
                     push_import_diagnostic(
                       result,
                       import_index,
@@ -1275,11 +1220,12 @@ pub fn instantiate_module_with_import_diagnostics(
 ///|
 /// Create a module instance with imports using an existing store
 /// Raises UnknownImport if any required import is not provided
-fn instantiate_module_with_imports_unstarted(
+pub fn instantiate_module_with_imports_unstarted(
   store : @runtime.Store,
   mod : @types.Module,
   imports : @runtime.Imports,
 ) -> @runtime.ModuleInstance raise @runtime.RuntimeError {
+  validate_continuation_gc_storage(mod)
   // Set module types for GC support
   store.set_module_types(mod.types, rec_groups=mod.type_rec_groups)
 
@@ -1369,21 +1315,26 @@ fn instantiate_module_with_imports_unstarted(
           Some(Memory(addr)) => {
             // Check memory type compatibility
             let actual_mem = store.get_mem(addr)
-            let actual_limits = actual_mem.get_limits()
+            let actual_limits = actual_mem.get_limits64()
             // Memory64 status must match
-            if actual_mem.is_memory64() != expected_mem_type.is_memory64 {
+            if actual_mem.is_memory64() != expected_mem_type.is_memory64 ||
+              actual_mem.is_shared() != expected_mem_type.is_shared ||
+              actual_mem.page_size_bytes() !=
+              1L << expected_mem_type.page_size_log2 {
               raise LinkError
             }
             // Import memory limits must be compatible:
             // - actual min >= expected min
             // - if expected has max, actual must have max <= expected max
-            if actual_limits.0 < expected_mem_type.limits.min.to_int() {
+            if actual_limits.0.reinterpret_as_uint64() <
+              expected_mem_type.limits.min.reinterpret_as_uint64() {
               raise LinkError
             }
             if expected_mem_type.limits.max is Some(expected_max) {
               match actual_limits.1 {
                 Some(actual_max) =>
-                  if actual_max > expected_max.to_int() {
+                  if actual_max.reinterpret_as_uint64() >
+                    expected_max.reinterpret_as_uint64() {
                     raise LinkError
                   }
                 None => raise LinkError
@@ -1399,7 +1350,7 @@ fn instantiate_module_with_imports_unstarted(
             // Check table type compatibility
             let actual_table = store.get_table(addr)
             let actual_elem_type = actual_table.get_elem_type()
-            let actual_limits = actual_table.get_limits()
+            let actual_limits = actual_table.get_limits64()
             // Element types must match
             if actual_elem_type != expected_table_type.elem_type {
               raise LinkError
@@ -1411,13 +1362,15 @@ fn instantiate_module_with_imports_unstarted(
             // Limits must be compatible:
             // - actual min >= expected min
             // - if expected has max, actual must have max <= expected max
-            if actual_limits.0 < expected_table_type.limits.min.to_int() {
+            if actual_limits.0.reinterpret_as_uint64() <
+              expected_table_type.limits.min.reinterpret_as_uint64() {
               raise LinkError
             }
             if expected_table_type.limits.max is Some(expected_max) {
               match actual_limits.1 {
                 Some(actual_max) =>
-                  if actual_max > expected_max.to_int() {
+                  if actual_max.reinterpret_as_uint64() >
+                    expected_max.reinterpret_as_uint64() {
                     raise LinkError
                   }
                 None => raise LinkError
@@ -1536,13 +1489,7 @@ fn instantiate_module_with_imports_unstarted(
 
   // Allocate memories (after imported memories)
   for mem_type in mod.memories {
-    let min_pages = mem_type.limits.min.to_int()
-    let mem = @runtime.Memory::Memory(
-      min_pages,
-      mem_type.limits.max.map(fn(m) { m.to_int() }),
-      is_memory64=mem_type.is_memory64,
-      page_size_log2=mem_type.page_size_log2,
-    )
+    let mem = @runtime.Memory::from_type(mem_type)
     let addr = store.alloc_mem(mem)
     mem_addrs.push(addr)
   }
@@ -1579,14 +1526,7 @@ fn instantiate_module_with_imports_unstarted(
         )
       None => Null
     }
-    let min_elems = table_def.type_.limits.min.to_int()
-    let table = @runtime.Table::Table(
-      table_def.type_.elem_type,
-      min_elems,
-      table_def.type_.limits.max.map(fn(m) { m.to_int() }),
-      init_value~,
-      is_table64=table_def.type_.is_table64,
-    )
+    let table = @runtime.Table::from_type(table_def.type_, init_value~)
     let addr = store.alloc_table(table)
     table_addrs.push(addr)
   }
@@ -1618,61 +1558,23 @@ fn instantiate_module_with_imports_unstarted(
 
   // Initialize dropped arrays with false values
   let dropped_elems : Array[Bool] = []
-  for _ in 0..<mod.elems.length() {
-    dropped_elems.push(false)
+  for elem in mod.elems {
+    dropped_elems.push(elem.mode is Declarative)
   }
   let dropped_datas : Array[Bool] = []
   for _ in 0..<mod.datas.length() {
     dropped_datas.push(false)
   }
 
+  let elem_values = evaluate_element_segments(
+    mod, store, func_addrs, global_addrs,
+  )
+
   // Per WebAssembly spec: element segments are initialized BEFORE data segments
   // This ensures that if data segment initialization traps, the element segment
   // modifications to shared tables are already visible.
 
   // Initialize active element segments (populate tables with function references)
-  for elem_idx, elem in mod.elems {
-    // Only process active element segments
-    if elem.mode is Active(table_idx, offset_expr) {
-      if table_addrs.length() > table_idx {
-        let table = store.get_table(table_addrs[table_idx])
-        // Evaluate offset expression using extended const expr evaluator
-        let globals = get_global_instances(store, global_addrs)
-        let offset = eval_extended_const_expr(offset_expr, globals)
-
-        // Check bounds before initializing
-        // offset + num_elements must not exceed table size
-        if offset < 0 || offset + elem.init.length() > table.size() {
-          raise OutOfBoundsTableAccess
-        }
-
-        // Set table entries - evaluate init expression to get value
-        for i, init_expr in elem.init {
-          match eval_elem_init_expr(init_expr, func_addrs, globals) {
-            Some(value) => table.set(offset + i, value)
-            None => continue
-          }
-        }
-      }
-      // Active elem segments are implicitly dropped after initialization
-      dropped_elems[elem_idx] = true
-    }
-  }
-
-  // Initialize active data segments (copy data to memory)
-  let globals_for_data_init = get_global_instances(store, global_addrs)
-  for data in mod.datas {
-    // Active data segments have a non-empty offset expression
-    if data.memory_idx >= 0 &&
-      data.offset.length() > 0 &&
-      mem_addrs.length() > data.memory_idx {
-      let mem = store.get_mem(mem_addrs[data.memory_idx])
-      // Evaluate offset expression using extended const expr evaluator
-      let offset = eval_extended_const_expr(data.offset, globals_for_data_init)
-      // Copy data to memory
-      mem.init_data(offset, data.init)
-    }
-  }
   // canonical_type_indices was computed at the start of the function (for import type checking)
   let instance : @runtime.ModuleInstance = {
     types: mod.types,
@@ -1686,6 +1588,7 @@ fn instantiate_module_with_imports_unstarted(
     global_addrs,
     tag_addrs,
     exports: mod.exports,
+    elem_values,
     elem_segments: mod.elems,
     data_segments: mod.datas,
     dropped_elems,
@@ -1695,6 +1598,48 @@ fn instantiate_module_with_imports_unstarted(
   // Register instance with store for cross-module call resolution
   // This also sets the store_idx field
   store.register_instance(instance) |> ignore
+
+  for elem_idx, elem in mod.elems {
+    // Only process active element segments
+    if elem.mode is Active(table_idx, offset_expr) {
+      if table_addrs.length() > table_idx {
+        let table = store.get_table(table_addrs[table_idx])
+        // Evaluate offset expression using extended const expr evaluator
+        let globals = get_global_instances(store, global_addrs)
+        let offset = eval_extended_const_expr(offset_expr, globals)
+
+        // Check bounds before initializing
+        // offset + num_elements must not exceed table size
+        if offset < 0L ||
+          offset > table.size().to_int64() - elem.init.length().to_int64() {
+          raise OutOfBoundsTableAccess
+        }
+
+        // Set table entries - evaluate init expression to get value
+        for i in 0..<elem.init.length() {
+          table.set(offset.to_int() + i, elem_values[elem_idx][i])
+        }
+      }
+      // Active elem segments are implicitly dropped after initialization
+      dropped_elems[elem_idx] = true
+    }
+  }
+
+  // Initialize active data segments (copy data to memory)
+  let globals_for_data_init = get_global_instances(store, global_addrs)
+  for data_idx, data in mod.datas {
+    // Active data segments have a non-empty offset expression
+    if data.memory_idx >= 0 &&
+      data.offset.length() > 0 &&
+      mem_addrs.length() > data.memory_idx {
+      let mem = store.get_mem(mem_addrs[data.memory_idx])
+      // Evaluate offset expression using extended const expr evaluator
+      let offset = eval_extended_const_expr(data.offset, globals_for_data_init)
+      // Copy data to memory
+      mem.init_data_at(offset, data.init)
+      dropped_datas[data_idx] = true
+    }
+  }
 
   instance
 }
@@ -1959,6 +1904,7 @@ pub fn call_func_by_index(
 pub(all) enum InvokeWithExceptionResult {
   Returned(Array[@types.Value])
   Thrown(Int, Array[@types.Value]) // (tag_addr, payload values)
+  HostFailed(@runtime.RuntimeError)
 }
 
 ///|
@@ -1972,6 +1918,8 @@ pub fn call_func_by_index_with_exception(
   let ctx = ExecContext::ExecContext(store, instance)
   let results = ctx.call_func(func_idx, args) catch {
     ThrowException(tag_addr, values) => return Thrown(tag_addr, values)
+    InvocationSignal::HostInvocation(error) =>
+      return HostFailed(normalize_runtime_error(error))
     BranchWith(_, _) | Return => raise Unreachable
     e => raise normalize_runtime_error(e)
   }

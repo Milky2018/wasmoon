@@ -71,11 +71,13 @@ test "canonical memory address type follows the selected memory" {
   let memory32 : @types.MemoryType = {
     limits: { min: 1L, max: None, },
     is_memory64: false,
+    is_shared: false,
     page_size_log2: 16,
   }
   let memory64 : @types.MemoryType = {
     limits: { min: 1L, max: None, },
     is_memory64: true,
+    is_shared: false,
     page_size_log2: 16,
   }
   debug_inspect(
@@ -92,6 +94,7 @@ test "memory64 canonical realloc requires an i64 address signature" {
   let memory64 : @types.MemoryType = {
     limits: { min: 1L, max: None, },
     is_memory64: true,
+    is_shared: false,
     page_size_log2: 16,
   }
   let func_type : @component.FuncType = {
@@ -123,4 +126,29 @@ test "memory64 canonical realloc requires an i64 address signature" {
       #|CanonCoreFuncTypeMismatch("canonical option `realloc` uses a core function with an incorrect signature")
     ),
   )
+}
+
+///|
+test "task return validates descriptor memory and result type" {
+  let cases : Array[@component.Canon] = [
+    TaskReturn(Some(Prim(String)), []),
+    TaskReturn(None, [Memory(0)]),
+    TaskReturn(Some(TypeIdx(0)), []),
+  ]
+  for canon in cases {
+    let error = try {
+      validate_canon(canon, [], [], 0, [], [], [])
+      "accepted"
+    } catch {
+      error => error.to_string()
+    }
+    inspect(
+      error,
+      content=match canon {
+        TaskReturn(Some(Prim(String)), _) => "MissingCanonOption(\"memory\")"
+        TaskReturn(None, _) => "InvalidCoreMemoryIndex(0)"
+        _ => "InvalidTypeIndex(0)"
+      },
+    )
+  }
 }

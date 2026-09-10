@@ -65,6 +65,7 @@ test "module initialization: data segment" {
       {
         limits: { min: 1, max: None, },
         is_memory64: false,
+        is_shared: false,
         page_size_log2: 16,
       },
     ],
@@ -94,6 +95,7 @@ test "module initialization: data segment with offset" {
       {
         limits: { min: 1, max: None, },
         is_memory64: false,
+        is_shared: false,
         page_size_log2: 16,
       },
     ],
@@ -192,6 +194,7 @@ test "bulk memory: memory.fill" {
       {
         limits: { min: 1, max: None, },
         is_memory64: false,
+        is_shared: false,
         page_size_log2: 16,
       },
     ],
@@ -227,6 +230,7 @@ test "bulk memory: memory.copy non-overlapping" {
       {
         limits: { min: 1, max: None, },
         is_memory64: false,
+        is_shared: false,
         page_size_log2: 16,
       },
     ],
@@ -262,6 +266,7 @@ test "bulk memory: memory.copy overlapping backward" {
       {
         limits: { min: 1, max: None, },
         is_memory64: false,
+        is_shared: false,
         page_size_log2: 16,
       },
     ],
@@ -293,10 +298,11 @@ test "bulk memory: memory.init from data segment" {
       {
         limits: { min: 1, max: None, },
         is_memory64: false,
+        is_shared: false,
         page_size_log2: 16,
       },
     ],
-    datas: [{ memory_idx: 0, offset: [I32Const(0)], init: data_bytes, }],
+    datas: [{ memory_idx: -1, offset: [], init: data_bytes, }],
   }
   let (store, instance) = instantiate_module_with_init(mod) catch {
     _ => fail("instantiate_module_with_init failed")
@@ -327,10 +333,11 @@ test "bulk memory: memory.init with offset" {
       {
         limits: { min: 1, max: None, },
         is_memory64: false,
+        is_shared: false,
         page_size_log2: 16,
       },
     ],
-    datas: [{ memory_idx: 0, offset: [I32Const(0)], init: data_bytes, }],
+    datas: [{ memory_idx: -1, offset: [], init: data_bytes, }],
   }
   let (store, instance) = instantiate_module_with_init(mod) catch {
     _ => fail("instantiate_module_with_init failed")
@@ -386,6 +393,7 @@ test "bulk memory: data.drop" {
       {
         limits: { min: 1, max: None, },
         is_memory64: false,
+        is_shared: false,
         page_size_log2: 16,
       },
     ],
@@ -398,7 +406,7 @@ test "bulk memory: data.drop" {
     start: None,
     elems: [],
     codes: [drop_func, init_zero_func, init_nonzero_func],
-    datas: [{ memory_idx: 0, offset: [I32Const(0)], init: data_bytes, }],
+    datas: [{ memory_idx: -1, offset: [], init: data_bytes, }],
     tags: [],
     func_names: Map([]),
   }
@@ -503,6 +511,7 @@ test "bulk memory: data.drop is idempotent" {
       {
         limits: { min: 1, max: None, },
         is_memory64: false,
+        is_shared: false,
         page_size_log2: 16,
       },
     ],

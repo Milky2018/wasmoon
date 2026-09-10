@@ -55,17 +55,7 @@ fn ComponentInvocation::cleanup_task(self : ComponentInvocation) -> Unit {
     None => ()
   }
   self.task.waiting_set[0] = None
-  self.async_state.task_results.remove(self.task_id)
-  self.async_state.task_result_owner.remove(self.task_id)
-  self.async_state.task_returned.remove(self.task_id)
-  self.async_state.task_self_cancelled.remove(self.task_id)
-  self.async_state.task_cancelled.remove(self.task_id)
-  self.async_state.task_contexts.remove(self.task_id)
-  self.async_state.yield_suspended.remove(self.task_id)
-  self.async_state.waiting_ws.remove(self.task_id)
-  self.async_state.sync_lower_states.remove(self.task_id)
-  drop_task_thread(self.async_state, self.task_id)
-  remove_task_meta(self.async_state, self.task_id)
+  retire_task(self.async_state, self.task_id)
 }
 
 ///|
@@ -76,8 +66,8 @@ fn ComponentInvocation::finish(
     self.task.func,
   )
   let values = take_task_result(self.async_state, self.task_id).unwrap_or([])
-  let owner = self.async_state.task_result_owner
-    .get(self.task_id)
+  let owner = self.async_state.tasks
+    .read_task_result_owner(self.task_id)
     .unwrap_or(
       if callee_instance_id >= 0 {
         callee_instance_id
@@ -103,13 +93,8 @@ fn ComponentInvocation::fail(
   self : ComponentInvocation,
   error : ComponentRuntimeError,
 ) -> Unit {
-  match self.task.continuation[0] {
-    Some(continuation) => {
-      self.task.continuation[0] = None
-      continuation.cancel()
-    }
-    None => ()
-  }
+  abort_task_children(self.async_state, self.task_id)
+  cancel_callback_task(self.task)
   self.cleanup_task()
   self.phase[0] = Failed(error)
 }
@@ -121,12 +106,14 @@ fn ComponentInvocation::finish_cancel(
   self.cancel_requested[0] = false
   let cancellation_error : ComponentRuntimeError? = match
     self.task.host_future[0] {
-    Some(future) =>
+    Some(future) => {
+      self.task.host_future[0] = None
       try (future.cancel)() catch {
         error => Some(error)
       } noraise {
         _ => None
       }
+    }
     None => None
   }
   match self.task.continuation[0] {
@@ -136,6 +123,7 @@ fn ComponentInvocation::finish_cancel(
     }
     None => ()
   }
+  abort_task_children(self.async_state, self.task_id)
   self.cleanup_task()
   self.phase[0] = WasCancelled
   match cancellation_error {
@@ -165,6 +153,10 @@ fn ComponentInvocation::drive_once(
     WasCancelled => raise Cancelled
     Running => ()
   }
+  if self.async_state.tasks.closed.val {
+    self.finish_cancel_during_unwind()
+    raise Cancelled
+  }
   if self.driving[0] {
     raise InvocationAlreadyDriving
   }
@@ -178,9 +170,17 @@ fn ComponentInvocation::drive_once(
     pop_task(self.async_state)
     self.finish_cancel_during_unwind()
   })
-  let step_result : Result[TaskStep, ComponentRuntimeError] = try
-    step_task_once(self.task, self.store, self.caller_table, self.async_state)
-  catch {
+  let step_result : Result[TaskStep, ComponentRuntimeError] = try {
+    if !self.task.started[0] &&
+      self.task.continuation[0] is None &&
+      self.task.func is Lifted(_, ty, _, _, table, _, _, _) &&
+      ty.is_async &&
+      backpressure_value_for_instance(self.async_state, table.id) > 0 {
+      Blocked
+    } else {
+      step_task_once(self.task, self.store, self.caller_table, self.async_state)
+    }
+  } catch {
     error => Err(error)
   } noraise {
     step => Ok(step)
@@ -198,7 +198,7 @@ fn ComponentInvocation::drive_once(
       raise error
     }
   }
-  if self.cancel_requested[0] {
+  if self.cancel_requested[0] || self.async_state.tasks.closed.val {
     self.finish_cancel()
     raise Cancelled
   }
@@ -224,8 +224,7 @@ fn ComponentInvocation::drive_once(
         }
       }
     }
-    Progressed => DriveProgressed
-    Blocked => {
+    Progressed | Blocked => {
       let progress_cleanup_armed = [true]
       errdefer (if progress_cleanup_armed[0] {
         self.finish_cancel_during_unwind()
@@ -244,7 +243,7 @@ fn ComponentInvocation::drive_once(
           let host_progressed = poll_host_event(self.async_state, self.store)
           if self.cancel_requested[0] {
             DriveBlocked
-          } else if subtask_progressed || host_progressed {
+          } else if step == Progressed || subtask_progressed || host_progressed {
             DriveProgressed
           } else {
             DriveBlocked
@@ -281,13 +280,14 @@ pub fn ComponentInvocation::poll(
   self : ComponentInvocation,
 ) -> ComponentInvocationPoll raise ComponentRuntimeError {
   match self.drive_once() {
-    DriveReady(values) => InvocationReady(values)
+    DriveReady(values) =>
+      InvocationReady(values.map(ComponentValue::to_host_value))
     DriveProgressed | DriveBlocked => InvocationPending
   }
 }
 
 ///|
-pub fn ComponentInvocation::wait(
+fn ComponentInvocation::wait_transport(
   self : ComponentInvocation,
 ) -> Array[ComponentValue] raise ComponentRuntimeError {
   while true {
@@ -370,31 +370,64 @@ pub fn ComponentInstance::start_exported_func(
     Some(Func(func)) => func
     Some(_) | None => raise UnknownExport(name)
   }
-  let (func_type, _types, callee_instance_id) = component_invocation_contract(
+  self.async_state.check_host_entry()
+  let (func_type, _, _) = component_invocation_contract(func)
+  start_component_invocation(
     func,
+    args,
+    self.store,
+    self.resource_table,
+    self.async_state,
+    0L,
+    func_type.is_async,
   )
-  let task_id = alloc_task_id(self.async_state)
-  init_task_meta(self.async_state, task_id, callee_instance_id, 0L)
-  take_task_result(self.async_state, task_id) |> ignore
-  {
+}
+
+///|
+fn start_component_invocation(
+  func : ComponentFunc,
+  args : Array[ComponentValue],
+  store : @runtime.Store,
+  caller_table : ResourceTable,
+  async_state : AsyncState,
+  caller_task_id : Int64,
+  can_block : Bool,
+) -> ComponentInvocation raise ComponentRuntimeError {
+  let (_, _, callee_instance_id) = component_invocation_contract(func)
+  let task_id = alloc_task_id(async_state)
+  init_task_meta(async_state, task_id, callee_instance_id, caller_task_id)
+  take_task_result(async_state, task_id) |> ignore
+  let invocation : ComponentInvocation = {
     task_id,
     task: {
       func,
       args: args.copy(),
-      args_owner_component_id: [self.resource_table.id],
+      args_owner_component_id: [caller_table.id],
       started: [false],
+      main_finished: [false],
       code: [0],
       waiting_set: [None],
       host_future: [None],
       cancelled: [false],
       continuation: [None],
     },
-    store: self.store,
-    caller_table: self.resource_table,
-    async_state: self.async_state,
-    can_block: func_type.is_async,
+    store,
+    caller_table,
+    async_state,
+    can_block,
     phase: [Running],
     driving: [false],
     cancel_requested: [false],
   }
+  async_state.tasks.records.get(task_id).unwrap().root_task = Some(
+    invocation.task,
+  )
+  invocation
+}
+
+///|
+pub fn ComponentInvocation::wait(
+  self : ComponentInvocation,
+) -> Array[ComponentValue] raise ComponentRuntimeError {
+  self.wait_transport().map(ComponentValue::to_host_value)
 }

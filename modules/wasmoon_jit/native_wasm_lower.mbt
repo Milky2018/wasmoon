@@ -18,7 +18,8 @@ fn wasmoon_native_environment(
     Ptr64,
   )
   field_paths.set(function_table_field.name, [layout.func_table_offset])
-  let canonical_type_indices = canonical_type_indices.copy()
+  use_subtype_indirect_check |> ignore
+  canonical_type_indices |> ignore
   let wasm = @wasm_native.Environment::new(
     fn(index) {
       let name = "wasm.func.\{index}"
@@ -64,16 +65,6 @@ fn wasmoon_native_environment(
       field_paths.set(field.name, path)
       field
     },
-    fn(raw_type_index) {
-      if use_subtype_indirect_check {
-        return raw_type_index
-      }
-      if raw_type_index >= 0 && raw_type_index < canonical_type_indices.length() {
-        canonical_type_indices[raw_type_index]
-      } else {
-        raw_type_index
-      }
-    },
     fn(helper) {
       @native.ExternalSymbol::new(runtime_symbols.symbol_name(helper))
     },
@@ -101,11 +92,16 @@ fn wasmoon_allocation_symbols(
 ///|
 fn wasmoon_call_abi(
   environment : WasmoonNativeEnvironment,
+  function_index : Int,
 ) -> @native_lowering.CallAbiElaboration {
   let hidden_safepoints : Array[@native_lowering.HiddenSafepointAbi] = []
   for symbol in wasmoon_allocation_symbols(environment) {
     hidden_safepoints.push(
-      @native_lowering.HiddenSafepointAbi::new(symbol, AllocationOperands),
+      @native_lowering.HiddenSafepointAbi::new(
+        symbol,
+        AllocationOperands,
+        owner=function_index,
+      ),
     )
   }
   @native_lowering.CallAbiElaboration::new(
@@ -161,6 +157,7 @@ fn compile_wasm_body_x64_target(
   validation_context : @wasm_milkir.WasmValidationContext,
   use_subtype_indirect_check : Bool,
   canonical_type_indices : Array[Int],
+  function_index? : Int = -1,
   record_metrics? : Bool = false,
   compilation_session? : @x64_target.CompilationSession = @x64_target.CompilationSession::new(),
 ) -> X64TargetCompilation raise JitPipelineError {
@@ -208,7 +205,7 @@ fn compile_wasm_body_x64_target(
     validation_context,
     environment.wasm,
     session.sink(),
-    call_abi=wasmoon_call_abi(environment),
+    call_abi=wasmoon_call_abi(environment, function_index),
     verify_input=compiler_validation(),
     on_event=if record_metrics && @perf.detail_enabled() {
       native_lower_metrics_observer()
@@ -250,6 +247,7 @@ fn compile_wasm_body_aarch64_target(
   validation_context : @wasm_milkir.WasmValidationContext,
   use_subtype_indirect_check : Bool,
   canonical_type_indices : Array[Int],
+  function_index? : Int = -1,
   record_metrics? : Bool = false,
   compilation_session? : @aarch64_target.CompilationSession = @aarch64_target.CompilationSession::new(),
 ) -> AArch64TargetCompilation raise JitPipelineError {
@@ -297,7 +295,7 @@ fn compile_wasm_body_aarch64_target(
     validation_context,
     environment.wasm,
     session.sink(),
-    call_abi=wasmoon_call_abi(environment),
+    call_abi=wasmoon_call_abi(environment, function_index),
     verify_input=compiler_validation(),
     on_event=if record_metrics && @perf.detail_enabled() {
       native_lower_metrics_observer()
@@ -363,7 +361,7 @@ pub fn compile_wasm_body_diagnostics_for_target(
       validation_context,
       environment.wasm,
       session.sink(),
-      call_abi=wasmoon_call_abi(environment),
+      call_abi=wasmoon_call_abi(environment, -1),
     ) catch {
       error => raise NativeLoweringFailed(cause=error)
     }
@@ -398,7 +396,7 @@ pub fn compile_wasm_body_diagnostics_for_target(
     validation_context,
     environment.wasm,
     session.sink(),
-    call_abi=wasmoon_call_abi(environment),
+    call_abi=wasmoon_call_abi(environment, -1),
   ) catch {
     error => raise NativeLoweringFailed(cause=error)
   }

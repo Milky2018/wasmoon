@@ -25,6 +25,7 @@ priv struct StoreFuncrefRegistry {
   store_to_ptr : Map[Int, Array[StoreFuncrefMappingOwner]]
   ptr_to_store : Map[Int64, Array[StoreFuncrefMappingOwner]]
   next_registration : Ref[Int]
+  owners : Array[NativeCallableOwner]
 } derive(Debug)
 
 ///|
@@ -37,7 +38,12 @@ struct StoreFuncrefRegistration {
 
 ///|
 fn StoreFuncrefRegistry::new() -> StoreFuncrefRegistry {
-  { store_to_ptr: Map([]), ptr_to_store: Map([]), next_registration: Ref(0), }
+  {
+    store_to_ptr: Map([]),
+    ptr_to_store: Map([]),
+    next_registration: Ref(0),
+    owners: [],
+  }
 }
 
 ///|
@@ -147,13 +153,20 @@ fn StoreFuncrefRegistry::entries(
 fn StoreFuncrefRegistry::clear(self : StoreFuncrefRegistry) -> Unit {
   self.store_to_ptr.clear()
   self.ptr_to_store.clear()
+  let owners = self.owners.copy()
+  self.owners.clear()
+  for owner in owners {
+    (owner.release)()
+  }
 }
 
 ///|
 pub fn Store::register_jit_funcrefs(
   self : Store,
   entries : Array[StoreFuncrefEntry],
+  release_owner? : () -> Unit = fn() {  },
 ) -> StoreFuncrefRegistration {
+  self.funcref_registry.owners.push({ release: release_owner, })
   self.funcref_registry.register(entries)
 }
 
@@ -173,4 +186,14 @@ pub fn Store::lookup_jit_funcref_store_addr(
 ///|
 pub fn Store::jit_funcref_entries(self : Store) -> Array[StoreFuncrefEntry] {
   self.funcref_registry.entries()
+}
+
+///|
+priv struct NativeCallableOwner {
+  release : () -> Unit
+}
+
+///|
+impl Debug for NativeCallableOwner with fn to_repr(_self) {
+  Repr::literal("NativeCallableOwner")
 }

@@ -58,7 +58,7 @@ pub fn JITCallResult::to_repr(Self) -> @debug.Repr
 
 pub(all) enum JITContinuationOutcome {
   JITReturned(Array[Int64])
-  JITSuspended(JITCallContinuation)
+  JITSuspended(@wasmoon_jit.NativeSuspensionReason, JITCallContinuation)
 }
 
 pub struct JITFunction {
@@ -96,17 +96,23 @@ pub fn JITModule::get_func_ptr_by_name(Self, String) -> Int64
 pub fn JITModule::get_last_trap_report(Self) -> @wasmoon_jit.TrapReport?
 pub fn JITModule::get_memory_ptr(Self, Int) -> Int64
 pub fn JITModule::get_memory_size(Self, Int) -> Int64
+pub fn JITModule::has_callable_metadata(Self) -> Bool
 #alias(has_wasm_stack, deprecated)
 pub fn JITModule::has_configured_native_fiber_stack_size(Self) -> Bool
 pub fn JITModule::init_indirect_table(Self, Int, Array[(Int, Int, Int)]) -> Unit
 pub fn JITModule::init_shared_tables(Self, Array[@wasmoon_jit.JITTable?], Array[(Int, Int, Int?, Int)]) -> Unit
-pub fn JITModule::init_wasi(Self, Array[String], Array[String], Array[(String, String)]) -> Unit
-pub fn JITModule::init_wasi_quiet(Self, Array[String], Array[String], Array[(String, String)]) -> Unit
-pub fn JITModule::init_wasi_with_stdio(Self, Array[String], Array[String], Array[(String, String)], ((Bytes) -> Unit)?, ((Bytes) -> Unit)?, Bytes?, stdin_callback? : (() -> Bytes)?) -> Unit
+pub fn JITModule::init_wasi(Self, Array[String], Array[String], Array[(String, String)], readonly_preopens? : Array[(String, String)]) -> Unit
+pub fn JITModule::init_wasi_quiet(Self, Array[String], Array[String], Array[(String, String)], readonly_preopens? : Array[(String, String)]) -> Unit
+pub fn JITModule::init_wasi_with_stdio(Self, Array[String], Array[String], Array[(String, String)], ((Bytes) -> Unit)?, ((Bytes) -> Unit)?, Bytes?, stdin_callback? : (() -> Bytes)?, readonly_preopens? : Array[(String, String)]) -> Unit
 pub fn JITModule::load_artifact(@wasmoon_jit.LoadedArtifact, Array[(Array[@types.ValueType], Array[@types.ValueType])], function_names? : Array[String], debug_db? : @wasmoon_jit.JITDebugDB?) -> Self raise JITModuleLoadError
 pub fn JITModule::load_artifact_with_imports(@wasmoon_jit.LoadedArtifact, Array[(Array[@types.ValueType], Array[@types.ValueType])], Map[String, Map[String, Int64]], function_names? : Array[String], debug_db? : @wasmoon_jit.JITDebugDB?) -> Self raise JITModuleLoadError
+pub fn JITModule::prepare_continuations(Self, Array[@types.SubType], @wasmoon_jit.NativeExecutionState) -> Unit raise JITTrap
 pub fn JITModule::refresh_table_layout(Self, Int) -> Bool
 pub fn JITModule::register_dwarf(Self, verbose? : Bool) -> @wasmoon_jit.DWARFBuilder
+pub fn JITModule::retain_callable_owner(Self) -> () -> Unit
+pub fn JITModule::set_callable_types(Self, Array[Int], Array[Int], Array[(Int64, Int)], Array[Int]) -> Unit
+pub fn JITModule::set_cooperative_scheduling(Self, Bool) -> Bool
+pub fn JITModule::set_exception_arena(Self, @wasmoon_jit.NativeExceptionArena) -> Unit
 pub fn JITModule::set_gc_heap(Self, Int64) -> Unit
 pub fn JITModule::set_globals(Self, Int64) -> Unit
 pub fn JITModule::set_hostcall_callback(Self, () -> @wasmoon_jit.NativeHostcallOutcome) -> Unit

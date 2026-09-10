@@ -1013,10 +1013,10 @@ test "parse WAST: module definition and instance" {
     fail("Expected ModuleDefinition command with name M")
   }
   inspect(mod_.globals.length(), content="1")
-  guard script.commands[1].0 is ModuleInstance(Some("I1"), "M") else {
+  guard script.commands[1].0 is ModuleInstance(Some("I1"), Some("M")) else {
     fail("Expected ModuleInstance I1 from M")
   }
-  guard script.commands[2].0 is ModuleInstance(Some("I2"), "M") else {
+  guard script.commands[2].0 is ModuleInstance(Some("I2"), Some("M")) else {
     fail("Expected ModuleInstance I2 from M")
   }
 }

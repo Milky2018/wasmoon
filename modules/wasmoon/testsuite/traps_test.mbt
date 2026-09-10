@@ -10,7 +10,10 @@ test "JIT: dropped i32.load still traps" {
     #|    (drop (i32.load (local.get 0))))
     #|)
   let result = compare_jit_interp(source, "f", [I32(65536)])
-  inspect(result, content="matched")
+  inspect(
+    compare_result_errors_contain(result, "out of bounds memory access"),
+    content="true",
+  )
 }
 
 ///|
@@ -22,5 +25,8 @@ test "JIT: dropped i32.load8_u still traps" {
     #|    (drop (i32.load8_u (local.get 0))))
     #|)
   let result = compare_jit_interp(source, "f", [I32(65536)])
-  inspect(result, content="matched")
+  inspect(
+    compare_result_errors_contain(result, "out of bounds memory access"),
+    content="true",
+  )
 }

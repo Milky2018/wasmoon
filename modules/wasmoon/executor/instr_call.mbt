@@ -39,13 +39,16 @@ fn ExecContext::exec_call_indirect(
 
   // Pop the function index from the stack (i64 for table64, i32 otherwise)
   let func_ref_idx = if table.is_table64() {
-    self.stack.pop_i64().to_int()
+    self.stack.pop_i64()
   } else {
-    self.stack.pop_i32()
+    self.stack.pop_i32().to_int64() & 0xFFFF_FFFFL
   }
 
   // Look up the function reference
-  let elem = table.get(func_ref_idx)
+  let elem = table.get_at(func_ref_idx) catch {
+    OutOfBoundsTableAccess => raise @runtime.UndefinedElement
+    error => raise error
+  }
 
   // The element should be a function reference
   let store_addr = match elem {
@@ -127,7 +130,7 @@ fn ExecContext::exec_call_ref(self : ExecContext, type_idx : Int) -> Unit raise 
   // The function reference should be a FuncRef value, or Null
   let store_addr = match func_ref {
     FuncRef(addr) => addr
-    Null => raise @runtime.RuntimeError::Unreachable // Null function reference traps
+    Null => raise @runtime.RuntimeError::NullReference // Null function reference traps
     _ => raise @runtime.IndirectCallTypeMismatch
   }
 
@@ -228,6 +231,13 @@ fn ExecContext::invoke_host_func(
   caller_instance : @runtime.ModuleInstance,
   args : Array[@types.Value],
 ) -> Unit raise {
+  // Host code can collect or reenter the Store after arguments leave the stack.
+  let roots = self.collect_gc_additional_roots()
+  for value in args {
+    roots.push(value)
+  }
+  let lease = self.store.pin_gc_roots(roots)
+  defer lease.release()
   let caller = @runtime.Caller::Caller(self.store, caller_instance)
   let results = host_fn(caller, args) catch {
     error => {
@@ -255,6 +265,13 @@ fn ExecContext::invoke_async_host_func(
   guard self.async_host_driver is Some(driver) else {
     raise InvocationSignal::HostInvocation(@runtime.AsyncHostRequiresAsyncCall)
   }
+  // Host code can collect or reenter the Store after arguments leave the stack.
+  let roots = self.collect_gc_additional_roots()
+  for value in args {
+    roots.push(value)
+  }
+  let lease = self.store.pin_gc_roots(roots)
+  defer lease.release()
   let caller = @runtime.Caller::Caller(self.store, caller_instance)
   let poll = driver.poll(store_addr, host_fn, caller, args) catch {
     error => raise InvocationSignal::HostInvocation(error)
@@ -266,7 +283,7 @@ fn ExecContext::invoke_async_host_func(
       }
     AsyncHostPending => {
       self.suspension_roots = args.copy()
-      self.set_base_resume_action(0L, fn() raise {
+      self.set_base_resume_action(HostCall(0L), fn() raise {
         self.invoke_async_host_func(store_addr, host_fn, caller_instance, args)
       })
       raise ExecutionSuspended
@@ -521,13 +538,16 @@ pub fn ExecContext::exec_tail_call_indirect(
 
   // Pop the function reference index from stack (i64 for table64, i32 otherwise)
   let func_ref_idx = if table.is_table64() {
-    self.stack.pop_i64().to_int()
+    self.stack.pop_i64()
   } else {
-    self.stack.pop_i32()
+    self.stack.pop_i32().to_int64() & 0xFFFF_FFFFL
   }
 
   // Look up the element
-  let elem = table.get(func_ref_idx)
+  let elem = table.get_at(func_ref_idx) catch {
+    OutOfBoundsTableAccess => raise @runtime.UndefinedElement
+    error => raise error
+  }
 
   // The element should be a function reference
   let store_addr = match elem {
@@ -610,7 +630,7 @@ pub fn ExecContext::exec_tail_call_ref(
   // The function reference should be a FuncRef value, or Null
   let store_addr = match func_ref {
     FuncRef(addr) => addr
-    Null => raise @runtime.RuntimeError::Unreachable
+    Null => raise @runtime.RuntimeError::NullReference
     _ => raise @runtime.IndirectCallTypeMismatch
   }
 

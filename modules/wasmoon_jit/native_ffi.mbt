@@ -121,14 +121,14 @@ extern "c" fn c_jit_alloc_memory(size : Int64) -> Int64 = "wasmoon_jit_alloc_mem
 /// max_pages is interpreted by the runtime; -1 means "unknown/unlimited".
 extern "c" fn c_jit_alloc_memory_desc(
   size_bytes : Int64,
-  max_pages : Int,
+  max_pages : Int64,
   is_memory64 : Int,
   page_size_log2 : Int,
   is_shared : Int,
 ) -> Int64 = "wasmoon_jit_alloc_memory_desc"
 
 ///|
-/// Free a `wasmoon_memory_t` descriptor and its owned backing.
+/// Release one descriptor owner; free its backing after the final release.
 extern "c" fn c_jit_free_memory_desc(mem_ptr : Int64) -> Unit = "wasmoon_jit_free_memory_desc"
 
 ///|
@@ -140,9 +140,9 @@ extern "c" fn c_mem_desc_get_len(mem_desc_ptr : Int64) -> Int64 = "wasmoon_mem_d
 /// Returns old size in pages on success, or -1 on failure.
 extern "c" fn c_mem_desc_grow(
   mem_desc_ptr : Int64,
-  delta_pages : Int,
+  delta_pages : Int64,
   max_pages : Int,
-) -> Int = "wasmoon_mem_desc_grow"
+) -> Int64 = "wasmoon_mem_desc_grow"
 
 ///|
 /// Copy bytes from memory descriptor at offset into `out`.
@@ -198,6 +198,7 @@ extern "c" fn c_mem_desc_memset(
 extern "c" fn c_jit_alloc_guarded_memory_desc(
   initial_pages : Int64,
   max_pages : Int64,
+  is_shared : Int,
 ) -> Int64 = "wasmoon_jit_alloc_guarded_memory_desc"
 
 ///|
@@ -213,22 +214,22 @@ extern "c" fn c_jit_get_table_grow_ptr() -> Int64 = "wasmoon_jit_get_table_grow_
 
 ///|
 /// Get memory_grow function pointer for JIT (multi-memory)
-/// Signature: memory_grow(ctx: *jit_context_t, memidx: i32, delta: i64, max_pages: i32) -> i32
+/// Signature: memory_grow(ctx: *jit_context_t, memidx: i32, delta: i64, max_pages: i32) -> i64
 extern "c" fn c_jit_get_memory_grow_ptr() -> Int64 = "wasmoon_jit_get_memory_grow_ptr"
 
 ///|
 /// Get memory_size function pointer for JIT (multi-memory)
-/// Signature: memory_size(ctx: *jit_context_t, memidx: i32) -> i32
+/// Signature: memory_size(ctx: *jit_context_t, memidx: i32) -> i64
 extern "c" fn c_jit_get_memory_size_ptr() -> Int64 = "wasmoon_jit_get_memory_size_ptr"
 
 ///|
 /// Get memory_fill function pointer for JIT (multi-memory)
-/// Signature: memory_fill(ctx: *jit_context_t, memidx: i32, dst: i32, val: i32, size: i32) -> void
+/// Signature: memory_fill(ctx: *jit_context_t, memidx: i32, dst: i64, val: i32, size: i64) -> void
 extern "c" fn c_jit_get_memory_fill_ptr() -> Int64 = "wasmoon_jit_get_memory_fill_ptr"
 
 ///|
 /// Get memory_copy function pointer for JIT (multi-memory)
-/// Signature: memory_copy(ctx: *jit_context_t, dst_memidx: i32, src_memidx: i32, dst: i32, src: i32, size: i32) -> void
+/// Signature: memory_copy(ctx: *jit_context_t, dst_memidx: i32, src_memidx: i32, dst: i64, src: i64, size: i64) -> void
 extern "c" fn c_jit_get_memory_copy_ptr() -> Int64 = "wasmoon_jit_get_memory_copy_ptr"
 
 // ============ Integer div/rem helpers (x86_64 bootstrap) ============
@@ -871,7 +872,7 @@ extern "c" fn c_gc_heap_collect(
   heap : Int64,
   roots : FixedArray[Int64],
   num_roots : Int,
-) -> Int = "wasmoon_gc_heap_collect"
+) -> Int = "wasmoon_jit_collect_heap"
 
 ///|
 /// Discard unreachable objects allocated after the supplied object-table boundary.
@@ -1149,7 +1150,7 @@ extern "c" fn c_jit_ctx_set_table_pointers_managed(
   jit_context : JITContext,
   table_ptrs : FixedArray[Int64],
   table_sizes : FixedArray[Int],
-  table_max_sizes : FixedArray[Int],
+  table_max_sizes : FixedArray[Int64],
   table_count : Int,
 ) -> Unit = "wasmoon_jit_ctx_set_table_pointers_managed"
 
@@ -1390,6 +1391,7 @@ extern "c" fn c_jit_add_preopen_managed(
   idx : Int,
   host_path : FixedArray[Byte],
   guest_path : FixedArray[Byte],
+  read_only : Int,
 ) -> Unit = "wasmoon_jit_add_preopen_managed"
 
 ///|
@@ -1480,3 +1482,9 @@ extern "c" fn c_jit_get_wasi_exit_code_managed(jit_context : JITContext) -> Int 
 ///|
 #borrow(jit_context)
 extern "c" fn c_jit_clear_wasi_exit_managed(jit_context : JITContext) -> Unit = "wasmoon_jit_clear_wasi_exit_managed"
+
+///|
+extern "c" fn c_jit_retain_memory_desc(mem_ptr : Int64) -> Unit = "wasmoon_jit_retain_memory_desc"
+
+///|
+extern "c" fn c_jit_get_exception_get_ref_ptr() -> Int64 = "wasmoon_jit_get_exception_get_ref_ptr"

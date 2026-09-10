@@ -25,6 +25,7 @@ pub(all) struct WasmFieldContract {
 /// The contextual contract for a WebAssembly indexed type.
 pub(all) enum WasmDefinedTypeContract {
   Function(WasmFunctionContract)
+  Continuation(Int)
   Struct(Array[WasmFieldContract])
   Array(WasmFieldContract)
 } derive(Eq, Debug)
@@ -120,7 +121,7 @@ fn WasmDefinedTypeContract::reference_carrier(
 ) -> @milkir.Type {
   match self {
     Function(_) => CallableRef
-    Struct(_) | Array(_) => Ref
+    Struct(_) | Array(_) | Continuation(_) => Ref
   }
 }
 

@@ -310,6 +310,16 @@ fn ExecContext::exec_block_from(
   start : Int,
 ) -> Unit raise {
   for i in start..<instrs.length() {
+    if self.cooperative {
+      if self.instructions_left == 0 {
+        self.instructions_left = 1024
+        self.set_base_resume_action(CooperativeYield, fn() raise {
+          self.exec_block_from(instrs, i)
+        })
+        raise ExecutionSuspended
+      }
+      self.instructions_left -= 1
+    }
     let instr = instrs[i]
     self.exec_instr(instr) catch {
       ExecutionSuspended => {

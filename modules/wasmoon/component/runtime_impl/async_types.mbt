@@ -13,6 +13,10 @@ pub(all) enum ComponentValue {
   F64(Double)
   Char(Char)
   String(String)
+  /// Internal canonical transport; embedding boundaries expose String instead.
+  EncodedString(String, StringEncoding, Int)
+  /// Borrowed only while lowering an immediate synchronous guest call.
+  GuestString(CanonicalGuestString)
   ErrorContext(String)
   List(Array[ComponentValue])
   Tuple(Array[ComponentValue])
@@ -68,9 +72,17 @@ pub fn HostResourceDestructor::destroy(
 }
 
 ///|
+struct TaskReturnContract {
+  result : ValType?
+  types : Array[TypeDef?]
+  resources : CanonResources
+  owner_component_id : Int
+} derive(Debug)
+
+///|
 struct CanonResources {
   mem_addr : Int?
-  realloc : CoreFuncRef?
+  realloc : CanonicalRealloc?
   post_return : CoreFuncRef?
   encoding : StringEncoding
 } derive(Debug)
@@ -84,33 +96,38 @@ pub(all) struct ResourceHandle {
   kind : ResourceKind
   impl_component_id : Int
   own : Bool
-  borrow_scope : Array[Int64]?
+  borrow_scope : Int64?
   num_lends : Array[Int]
 } derive(Debug)
 
 ///|
 pub(all) struct ResourceTable {
   id : Int
-  ancestors : Ref[Array[Int]]
   next_handle : Ref[Int]
   free_handles : Ref[Array[Int]]
   entries : Ref[Map[Int, ResourceHandle]]
+  // Error contexts use a separate per-component handle namespace.
+  error_contexts : ConcurrentMap[Int, String]
+  next_error_context : Ref[Int]
 } derive(Debug)
 
 ///|
 let resource_table_id_counter : Array[Int] = [0]
 
 ///|
-pub fn ResourceTable::ResourceTable() -> ResourceTable {
+pub fn ResourceTable::ResourceTable(
+  resources? : ConcurrentResources = ConcurrentResources::new(),
+) -> ResourceTable {
   let id = resource_table_id_counter[0]
   resource_table_id_counter[0] = id + 1
-  // Handle 0 is always invalid; the first valid allocation is 1.
+  // Resource handle 0 is invalid; error-context handles start at 0.
   {
     id,
-    ancestors: Ref([]),
     next_handle: Ref(1),
     free_handles: Ref([]),
     entries: Ref(Map([])),
+    error_contexts: ConcurrentMap::new(resources),
+    next_error_context: Ref(0),
   }
 }
 
@@ -197,12 +214,13 @@ struct PendingStreamRead {
   // Memory where the read buffer lives (from the canonical options of stream.read).
   // Writes can come from a different component instance/memory, so we must keep
   // enough info to write into the *reader* memory.
+  payload_type : CanonicalPayloadType
   mem_addr : Int?
-  realloc : CoreFuncRef?
+  realloc : CanonicalRealloc?
   encoding : StringEncoding
   // Resource table of the reader component instance (used to transfer `own` resources).
   reader_table : ResourceTable
-  ptr : Int
+  ptr : Int64
   // Element count requested by the read.
   len : Int
   // Number of elements already written into the buffer.
@@ -217,9 +235,10 @@ struct PendingStreamRead {
 struct PendingStreamWrite {
   // Resource table of the writer component instance (used to transfer `own` resources).
   writer_table : ResourceTable
-  // Canonical payload bytes. For streams of `own` resources this encodes the original
-  // writer-side handle indices (i32 little-endian per element).
-  buf : Array[Byte]
+  // Lifted values retain the writer type environment until rendezvous.
+  buf : CanonicalPayload
+  // Element count is independent of byte length for zero-sized payloads.
+  count : Int
   // Number of elements already consumed by a read.
   sent : Int
   // Writable endpoint handle (waitable index) that initiated this pending write.
@@ -234,11 +253,8 @@ struct PendingStreamWrite {
 
 ///|
 struct StreamState {
-  // Size in bytes of one element in the canonical stream read/write buffers.
-  elem_size : Int
-  // If `Some`, the stream payload is an `own` resource of this type id and reads
-  // must transfer ownership between resource tables.
-  own_resource_type_id : Int?
+  // Whether guest endpoints in the same component may copy this payload.
+  allows_intra_component : Bool
   pending_read : PendingStreamRead?
   pending_write : PendingStreamWrite?
   readable_dropped : Bool
@@ -270,19 +286,22 @@ impl Debug for HostValueStream with fn to_repr(_self) {
 
 ///|
 pub(all) struct StreamTable {
+  concurrent_resources : ConcurrentResources
   next_stream_id : Array[Int]
   // Keyed by `handle_key(component_id, local_handle)`.
-  endpoints : Map[Int64, StreamEndpoint]
-  streams : Map[Int, StreamState]
+  endpoints : ConcurrentMap[Int64, StreamEndpoint]
+  streams : ConcurrentMap[Int, StreamState]
   host_values : Map[Int, HostValueStream]
 } derive(Debug)
 
 ///|
 pub fn StreamTable::StreamTable() -> StreamTable {
+  let concurrent_resources = ConcurrentResources::new()
   {
+    concurrent_resources,
     next_stream_id: [0],
-    endpoints: Map([]),
-    streams: Map([]),
+    endpoints: ConcurrentMap::new(concurrent_resources),
+    streams: ConcurrentMap::new(concurrent_resources),
     host_values: Map([]),
   }
 }
@@ -327,6 +346,9 @@ fn cleanup_closed_future(async_state : AsyncState, future_id : Int) -> Unit {
 /// Waitable/stream/future/subtask handle numbers are per component instance (resource_table.id).
 /// Internally we key maps by `handle_key(component_id, local_handle)` to avoid collisions.
 pub(all) struct AsyncState {
+  concurrent_resources : ConcurrentResources
+  // A core trap rejects new host calls; admitted continuations may still resume.
+  trapped : Ref[Bool]
   core_engine : CoreExecutionEngine
   // Per-component handle allocator for waitables/streams/futures/subtasks/threads.
   // Handle 0 is invalid; allocation starts at 1 (matches component model ABI).
@@ -341,36 +363,9 @@ pub(all) struct AsyncState {
 
   // Task stack + per-task state (used by canon task.return/context.*).
   task_stack : Array[Int64]
-  next_task_id : Array[Int64]
-  task_results : Map[Int64, Array[ComponentValue]]
-  // Component instance id whose handle numbering is used by `task_results`.
-  // For `canon task.return`, this is the component instance where the intrinsic lives.
-  task_result_owner : Map[Int64, Int]
-  task_returned : Map[Int64, Bool]
-  // Set only by `canon task.cancel` (distinct from external cancellation requests).
-  task_self_cancelled : Map[Int64, Bool]
-  task_cancelled : Map[Int64, Bool]
-  task_contexts : Map[Int64, Map[Int, @types.Value]]
-  // Outstanding task-scoped resource borrows. A task cannot return or cancel
-  // while this count is non-zero.
-  task_borrows : Map[Int64, Int]
-  // Mutable task ids referenced by borrowed resource handles. Subtask handle
-  // allocation can rename an internal task id after the borrow is created.
-  task_borrow_scopes : Map[Int64, Array[Array[Int64]]]
-  // Synthetic implicit thread handles for each running task, keyed by the
-  // component instance id where the thread handle lives.
-  //
-  // Wasmtime inserts the current guest thread into the callee instance's handle
-  // table. A single task can enter multiple component instances, so model this
-  // as a per-task map.
-  task_thread : Map[Int64, Map[Int, Int]]
+  tasks : TaskRegistry
   // Explicit guest threads keyed by `handle_key(owner_component_id, local_handle)`.
-  threads : Map[Int64, GuestThread]
-  // Per-root-task runnable queue of explicit thread local handles.
-  thread_runnable : Map[Int64, Array[Int]]
-  // Whether the implicit/main thread is scheduled to resume for a root task.
-  main_thread_scheduled : Map[Int64, Bool]
-
+  threads : ConcurrentMap[Int64, GuestThread]
   // Whether the currently executing task is allowed to block.
   task_can_block : Array[Bool]
   can_block_stack : Array[Bool]
@@ -378,27 +373,13 @@ pub(all) struct AsyncState {
   // True while executing an async callback (used to conservatively reject re-entrancy).
   in_async_callback : Array[Bool]
 
-  // Task tree metadata used to prevent async re-entrancy into the same component
-  // instance (mirrors Wasmtime's ConcurrentState::may_enter).
-  //
-  // For root (host) tasks, `task_caller[task_id] == 0`.
-  task_caller : Map[Int64, Int64]
-  // Component instance id (ResourceTable.id) associated with this task.
-  task_instance : Map[Int64, Int]
-  // A resumed yield retries the suspended host instruction exactly once.
-  yield_suspended : Map[Int64, Bool]
-  waiting_ws : Map[Int64, Int64]
-  // At most one sync-lowered call can be suspended in a task continuation.
-  sync_lower_states : Map[Int64, SyncLowerState]
-
   // Waitable sets and event queues.
-  waitable_sets : Map[Int64, WaitableSet]
+  waitable_sets : ConcurrentMap[Int64, WaitableSet]
   waitable_to_set : Map[Int64, Int64]
   waitable_events : Map[Int64, Array[WaitEvent]]
   sync_waitable_users : Map[Int64, Int64]
 
   // Subtasks created by `canon lower ... async`.
-  subtasks : Map[Int64, Subtask]
   inflight_by_instance : Map[Int, Int]
   pending_by_instance : Map[Int, Array[Int64]]
   // Round-robin cursor for the single-threaded host task scheduler.
@@ -406,17 +387,13 @@ pub(all) struct AsyncState {
 
   // Futures created by `canon future.new`.
   next_future_id : Array[Int]
-  futures : Map[Int, FutureState]
-  future_endpoints : Map[Int64, FutureEndpoint]
+  futures : ConcurrentMap[Int, FutureState]
+  future_endpoints : ConcurrentMap[Int64, FutureEndpoint]
   host_future_values : Map[Int, HostFutureValue]
 
   // Per-component backpressure counter used by `canon backpressure.*`.
   // Matches Wasmtime behavior: enabled when > 0; valid range is u16.
   backpressure_by_instance : Map[Int, Int]
-
-  // Per-component local error-context handles (`canon error-context.*`).
-  next_error_context_by_component : Map[Int, Array[Int]]
-  error_contexts : Map[Int64, String]
 } derive(Debug)
 
 ///|
@@ -451,13 +428,14 @@ struct FutureEndpoint {
 struct PendingFutureRead {
   // Memory where the read pointer lives (from the canonical options of future.read).
   // Writes can come from a different component instance/memory.
+  payload_type : CanonicalPayloadType
   mem_addr : Int?
-  realloc : CoreFuncRef?
+  realloc : CanonicalRealloc?
   encoding : StringEncoding
   // Resource table of the reader component instance.
   reader_table : ResourceTable
   // For typed futures, write the payload at `ptr`.
-  ptr : Int
+  ptr : Int64
   // The readable endpoint that initiated this pending read.
   reader_component_id : Int
   reader_handle : Int
@@ -469,7 +447,7 @@ struct PendingFutureWrite {
   writer_component_id : Int
   writer_handle : Int
   // Pending write value (already loaded from memory if needed).
-  val : Int
+  payload : CanonicalPayload
 } derive(Debug)
 
 ///|
@@ -482,9 +460,7 @@ struct FutureState {
   writable_dropped : Bool
   // Set once a read has completed (COMPLETED or DROPPED).
   read_done : Bool
-  // Tracks writer state for trap-if-done:
-  // - `write_succeeded` => "cannot write to future after previous write succeeded"
-  // - `write_observed_readable_drop` => "cannot write to future after previous write succeeded or readable end dropped"
+  // Distinguish successful completion from notification that the reader dropped.
   write_succeeded : Bool
   write_observed_readable_drop : Bool
   // True once a value has been provided via `future.write` (even if it blocked).
@@ -571,6 +547,8 @@ struct CallbackTask {
   args_owner_component_id : Array[Int]
   // Whether the initial call has been made (for callback-style tasks).
   started : Array[Bool]
+  // The entry function or final callback has exited; guest threads may remain.
+  main_finished : Array[Bool]
   // Latest callback code from the core task or callback.
   code : Array[Int]
   // Waitable-set key (handle_key(owner_component_id, local_index)).
@@ -599,7 +577,7 @@ struct Subtask {
   callee_instance_id : Int
   // Backpressure key: only one in-flight subtask per async-lowered core func.
   bp_key : Int
-  retptr : Int
+  retptr : Int64
   mem_addr : Int?
   result_ty : ValType?
   types : Array[TypeDef?]
@@ -612,70 +590,36 @@ pub fn AsyncState::AsyncState(
   stream_table : StreamTable,
   core_engine? : CoreExecutionEngine = interpreter_core_execution_engine(),
 ) -> AsyncState {
+  let concurrent_resources = stream_table.concurrent_resources
   {
+    concurrent_resources,
     core_engine,
     next_handle_by_component: Map([]),
     free_handles_by_component: Map([]),
     stream_table,
     resource_tables: Map([]),
     host_event_loop: Ref(None),
+    trapped: Ref(false),
     task_stack: [0L],
     // Use negative ids for internal tasks so they don't collide with the shared handle space.
-    next_task_id: [-1L],
-    task_results: Map([]),
-    task_result_owner: Map([]),
-    task_returned: Map([]),
-    task_self_cancelled: Map([]),
-    task_cancelled: Map([]),
-    task_contexts: Map([]),
-    task_borrows: Map([]),
-    task_borrow_scopes: Map([]),
-    task_thread: Map([]),
-    threads: Map([]),
-    thread_runnable: Map([]),
-    main_thread_scheduled: Map([]),
+    tasks: TaskRegistry::new(concurrent_resources),
+    threads: ConcurrentMap::new(concurrent_resources),
     task_can_block: [false],
     can_block_stack: [false],
     in_async_callback: [false],
-    task_caller: Map([]),
-    task_instance: Map([]),
-    yield_suspended: Map([]),
-    waiting_ws: Map([]),
-    sync_lower_states: Map([]),
-    waitable_sets: Map([]),
+    waitable_sets: ConcurrentMap::new(concurrent_resources),
     waitable_to_set: Map([]),
     waitable_events: Map([]),
     sync_waitable_users: Map([]),
-    subtasks: Map([]),
     inflight_by_instance: Map([]),
     pending_by_instance: Map([]),
     scheduler_cursor: [None],
     next_future_id: [0],
-    futures: Map([]),
-    future_endpoints: Map([]),
+    futures: ConcurrentMap::new(concurrent_resources),
+    future_endpoints: ConcurrentMap::new(concurrent_resources),
     host_future_values: Map([]),
     backpressure_by_instance: Map([]),
-    next_error_context_by_component: Map([]),
-    error_contexts: Map([]),
   }
-}
-
-///|
-fn resource_tables_are_nested(
-  first : ResourceTable,
-  second : ResourceTable,
-) -> Bool {
-  for ancestor in first.ancestors.val {
-    if ancestor == second.id {
-      return true
-    }
-  }
-  for ancestor in second.ancestors.val {
-    if ancestor == first.id {
-      return true
-    }
-  }
-  false
 }
 
 ///|
@@ -859,9 +803,8 @@ fn acknowledge_waitable_event(async_state : AsyncState, ev : WaitEvent) -> Unit 
       if async_state.stream_table.streams.get(ep.stream_id) is Some(st0) &&
         st0.pending_read is Some(pr) &&
         pr.reader_handle == ev.index {
-        async_state.stream_table.streams.set(ep.stream_id, {
-          elem_size: st0.elem_size,
-          own_resource_type_id: st0.own_resource_type_id,
+        async_state.stream_table.streams.replace(ep.stream_id, {
+          allows_intra_component: st0.allows_intra_component,
           pending_read: None,
           pending_write: st0.pending_write,
           readable_dropped: st0.readable_dropped,
@@ -878,9 +821,8 @@ fn acknowledge_waitable_event(async_state : AsyncState, ev : WaitEvent) -> Unit 
       if async_state.stream_table.streams.get(ep.stream_id) is Some(st0) &&
         st0.pending_write is Some(pw) &&
         pw.writer_handle == ev.index {
-        async_state.stream_table.streams.set(ep.stream_id, {
-          elem_size: st0.elem_size,
-          own_resource_type_id: st0.own_resource_type_id,
+        async_state.stream_table.streams.replace(ep.stream_id, {
+          allows_intra_component: st0.allows_intra_component,
           pending_read: st0.pending_read,
           pending_write: None,
           readable_dropped: st0.readable_dropped,
@@ -888,6 +830,25 @@ fn acknowledge_waitable_event(async_state : AsyncState, ev : WaitEvent) -> Unit 
         })
       }
     }
+  }
+}
+
+///|
+fn validate_lifted_arguments(
+  func_type : FuncType,
+  args : Array[ComponentValue],
+  types : Array[TypeDef?],
+  async_state : AsyncState,
+  owner_component_id : Int,
+) -> Unit raise ComponentRuntimeError {
+  for i, param in func_type.params {
+    validate_lifted_stream_future(
+      param.ty,
+      args[i],
+      types,
+      async_state,
+      owner_component_id,
+    )
   }
 }
 
@@ -943,7 +904,7 @@ fn validate_lifted_stream_future(
               }
             _ => ()
           }
-        Some(Some(List(elem_ty))) =>
+        Some(Some(List(elem_ty))) | Some(Some(FixedList(elem_ty, _))) =>
           match v {
             List(items) =>
               for it in items {
@@ -1107,6 +1068,7 @@ fn transfer_stream_readable_handle(
   async_state.stream_table.endpoints.remove(from_key)
   free_shared_handle(async_state, from_component_id, handle)
   let new_handle = alloc_shared_handle(async_state, to_component_id)
+  errdefer free_shared_handle(async_state, to_component_id, new_handle)
   async_state.stream_table.endpoints.set(
     handle_key(to_component_id, new_handle),
     {
@@ -1141,6 +1103,7 @@ fn clone_stream_readable_handle(
     None => raise CanonCallError("unknown stream handle index \{handle}")
   }
   let new_handle = alloc_shared_handle(async_state, to_component_id)
+  errdefer free_shared_handle(async_state, to_component_id, new_handle)
   async_state.stream_table.endpoints.set(
     handle_key(to_component_id, new_handle),
     {
@@ -1190,6 +1153,7 @@ fn transfer_future_readable_handle(
   async_state.future_endpoints.remove(from_key)
   free_shared_handle(async_state, from_component_id, handle)
   let new_handle = alloc_shared_handle(async_state, to_component_id)
+  errdefer free_shared_handle(async_state, to_component_id, new_handle)
   async_state.future_endpoints.set(handle_key(to_component_id, new_handle), ep)
   new_handle
 }
@@ -1211,6 +1175,7 @@ fn clone_future_readable_handle(
     None => raise CanonCallError("unknown future handle index \{handle}")
   }
   let new_handle = alloc_shared_handle(async_state, to_component_id)
+  errdefer free_shared_handle(async_state, to_component_id, new_handle)
   async_state.future_endpoints.set(handle_key(to_component_id, new_handle), ep)
   new_handle
 }
@@ -1224,285 +1189,143 @@ fn transfer_stream_future_value(
   from_component_id : Int,
   to_component_id : Int,
 ) -> ComponentValue raise ComponentRuntimeError {
-  match resolve_valtype(ty, types) {
-    Prim(_) => v
-    TypeIdx(ti) =>
-      match types.get(ti) {
-        Some(Some(Tuple(tys))) =>
-          match v {
-            Tuple(items) => {
-              let out : Array[ComponentValue] = []
-              for i in 0..<items.length() {
-                let ty0 = if i < tys.length() {
-                  tys[i]
-                } else {
-                  tys[tys.length() - 1]
-                }
-                out.push(
-                  transfer_stream_future_value(
-                    ty0,
-                    items[i],
-                    types,
-                    async_state,
-                    from_component_id,
-                    to_component_id,
-                  ),
-                )
-              }
-              Tuple(out)
-            }
-            _ => v
-          }
-        Some(Some(Record(fields))) =>
-          match v {
-            Tuple(items) => {
-              let out : Array[ComponentValue] = []
-              for i in 0..<items.length() {
-                let ty0 = if i < fields.length() {
-                  fields[i].ty
-                } else {
-                  fields[fields.length() - 1].ty
-                }
-                out.push(
-                  transfer_stream_future_value(
-                    ty0,
-                    items[i],
-                    types,
-                    async_state,
-                    from_component_id,
-                    to_component_id,
-                  ),
-                )
-              }
-              Tuple(out)
-            }
-            _ => v
-          }
-        Some(Some(List(elem_ty))) =>
-          match v {
-            List(items) => {
-              let out : Array[ComponentValue] = []
-              for it in items {
-                out.push(
-                  transfer_stream_future_value(
-                    elem_ty, it, types, async_state, from_component_id, to_component_id,
-                  ),
-                )
-              }
-              List(out)
-            }
-            _ => v
-          }
-        Some(Some(Variant(cases))) =>
-          match v {
-            Variant(tag, payload) =>
-              if tag >= 0 && tag < cases.length() {
-                match (cases[tag].ty, payload) {
-                  (Some(t), Some(p)) =>
-                    Variant(
-                      tag,
-                      Some(
-                        transfer_stream_future_value(
-                          t, p, types, async_state, from_component_id, to_component_id,
-                        ),
-                      ),
-                    )
-                  _ => v
-                }
-              } else {
-                v
-              }
-            _ => v
-          }
-        Some(Some(Option(elem_ty))) =>
-          match v {
-            Variant(tag, payload) =>
-              if tag == 1 {
-                match payload {
-                  Some(p) =>
-                    Variant(
-                      1,
-                      Some(
-                        transfer_stream_future_value(
-                          elem_ty, p, types, async_state, from_component_id, to_component_id,
-                        ),
-                      ),
-                    )
-                  None => v
-                }
-              } else {
-                v
-              }
-            _ => v
-          }
-        Some(Some(Result(ok_ty, err_ty))) =>
-          match v {
-            Variant(tag, payload) =>
-              if tag == 0 {
-                match (ok_ty, payload) {
-                  (Some(t), Some(p)) =>
-                    Variant(
-                      0,
-                      Some(
-                        transfer_stream_future_value(
-                          t, p, types, async_state, from_component_id, to_component_id,
-                        ),
-                      ),
-                    )
-                  _ => v
-                }
-              } else if tag == 1 {
-                match (err_ty, payload) {
-                  (Some(t), Some(p)) =>
-                    Variant(
-                      1,
-                      Some(
-                        transfer_stream_future_value(
-                          t, p, types, async_state, from_component_id, to_component_id,
-                        ),
-                      ),
-                    )
-                  _ => v
-                }
-              } else {
-                v
-              }
-            _ => v
-          }
-        Some(Some(Own(resource_tyidx))) =>
-          match v {
-            U32(handle) | S32(handle) =>
-              if from_component_id == to_component_id {
-                v
-              } else {
-                let from_table = match
-                  async_state.resource_tables.get(from_component_id) {
-                  Some(table) => table
-                  None =>
-                    raise CanonCallError("unknown resource owner instance")
-                }
-                let to_table = match
-                  async_state.resource_tables.get(to_component_id) {
-                  Some(table) => table
-                  None =>
-                    raise CanonCallError("unknown resource target instance")
-                }
-                let entry = match from_table.get(handle) {
-                  Some(entry) => entry
-                  None =>
-                    raise CanonCallError(
-                      "transfer own type \{ti}/\{resource_tyidx}: unknown handle index \{handle} in resource table \{from_component_id} -> \{to_component_id}",
-                    )
-                }
-                if !entry.own || entry.num_lends[0] > 0 {
-                  raise CanonCallError(
-                    "cannot remove owned resource while borrowed",
-                  )
-                }
-                from_table.free(handle) |> ignore
-                async_state.resource_tables.set(from_component_id, from_table)
-                let new_handle = to_table.alloc(entry)
-                async_state.resource_tables.set(to_component_id, to_table)
-                U32(new_handle)
-              }
-            _ => v
-          }
-        Some(Some(Borrow(_resource_tyidx))) =>
-          match v {
-            ResourceValue(_) => v
-            U32(handle) | S32(handle) => {
+  map_canonical_handles(ty, v, types, (definition, v) => {
+    match definition {
+      Own(resource_tyidx) =>
+        match v {
+          U32(handle) | S32(handle) =>
+            if from_component_id == to_component_id {
+              v
+            } else {
               let from_table = match
                 async_state.resource_tables.get(from_component_id) {
                 Some(table) => table
                 None => raise CanonCallError("unknown resource owner instance")
               }
+              let to_table = match
+                async_state.resource_tables.get(to_component_id) {
+                Some(table) => table
+                None => raise CanonCallError("unknown resource target instance")
+              }
               let entry = match from_table.get(handle) {
                 Some(entry) => entry
                 None =>
                   raise CanonCallError(
-                    "transfer borrow: unknown handle index \{handle} in resource table \{from_component_id}",
+                    "transfer own type \{resource_tyidx}: unknown handle index \{handle} in resource table \{from_component_id} -> \{to_component_id}",
                   )
               }
-              if to_component_id == entry.impl_component_id {
-                ResourceValue(entry.rep)
-              } else if from_component_id == to_component_id {
-                v
-              } else {
-                let to_table = match
-                  async_state.resource_tables.get(to_component_id) {
-                  Some(table) => table
-                  None =>
-                    raise CanonCallError("unknown resource target instance")
-                }
-                let task_id = current_task_id(async_state)
-                entry.num_lends[0] += 1
-                let count = match async_state.task_borrows.get(task_id) {
-                  Some(n) => n
-                  None => 0
-                }
-                async_state.task_borrows.set(task_id, count + 1)
-                let borrow_scope = [task_id]
-                let scopes = match async_state.task_borrow_scopes.get(task_id) {
-                  Some(existing) => existing
-                  None => {
-                    let created : Array[Array[Int64]] = []
-                    async_state.task_borrow_scopes.set(task_id, created)
-                    created
-                  }
-                }
-                scopes.push(borrow_scope)
-                let new_handle = to_table.alloc({
-                  type_id: entry.type_id,
-                  rep: entry.rep,
-                  dtor: entry.dtor,
-                  host_dtor: entry.host_dtor,
-                  kind: entry.kind,
-                  impl_component_id: entry.impl_component_id,
-                  own: false,
-                  borrow_scope: Some(borrow_scope),
-                  num_lends: entry.num_lends,
-                })
-                async_state.resource_tables.set(to_component_id, to_table)
-                U32(new_handle)
+              guard types.get(resource_tyidx)
+                is Some(Some(ResourceType(expected, _, _, _))) &&
+                entry.type_id == expected else {
+                raise CanonCallError(
+                  "handle index \{handle} used with the wrong type",
+                )
               }
+              if !entry.own || entry.num_lends[0] > 0 {
+                raise CanonCallError(
+                  "cannot remove owned resource while borrowed",
+                )
+              }
+              from_table.free(handle) |> ignore
+              async_state.resource_tables.set(from_component_id, from_table)
+              let new_handle = to_table.alloc(entry)
+              async_state.resource_tables.set(to_component_id, to_table)
+              U32(new_handle)
             }
-            _ => v
+          _ => v
+        }
+      Borrow(resource_tyidx) =>
+        match v {
+          ResourceValue(_) => v
+          U32(handle) | S32(handle) => {
+            let from_table = match
+              async_state.resource_tables.get(from_component_id) {
+              Some(table) => table
+              None => raise CanonCallError("unknown resource owner instance")
+            }
+            let entry = match from_table.get(handle) {
+              Some(entry) => entry
+              None =>
+                raise CanonCallError(
+                  "transfer borrow: unknown handle index \{handle} in resource table \{from_component_id}",
+                )
+            }
+            guard types.get(resource_tyidx)
+              is Some(Some(ResourceType(expected, _, _, _))) &&
+              entry.type_id == expected else {
+              raise CanonCallError(
+                "handle index \{handle} used with the wrong type",
+              )
+            }
+            if to_component_id == entry.impl_component_id {
+              ResourceValue(entry.rep)
+            } else if from_component_id == to_component_id {
+              v
+            } else {
+              let to_table = match
+                async_state.resource_tables.get(to_component_id) {
+                Some(table) => table
+                None => raise CanonCallError("unknown resource target instance")
+              }
+              let task_id = current_task_id(async_state)
+              entry.num_lends[0] += 1
+              let count = match async_state.tasks.read_task_borrows(task_id) {
+                Some(n) => n
+                None => 0
+              }
+              async_state.tasks.write_task_borrows(task_id, count + 1)
+              let new_handle = to_table.alloc({
+                type_id: entry.type_id,
+                rep: entry.rep,
+                dtor: entry.dtor,
+                host_dtor: entry.host_dtor,
+                kind: entry.kind,
+                impl_component_id: entry.impl_component_id,
+                own: false,
+                borrow_scope: Some(task_id),
+                num_lends: entry.num_lends,
+              })
+              async_state.resource_tables.set(to_component_id, to_table)
+              U32(new_handle)
+            }
           }
-        Some(Some(Stream(_))) =>
-          match v {
-            U32(h) =>
-              U32(
-                transfer_stream_readable_handle(
-                  async_state, from_component_id, to_component_id, h,
-                ),
-              )
-            S32(h) =>
-              S32(
-                transfer_stream_readable_handle(
-                  async_state, from_component_id, to_component_id, h,
-                ),
-              )
-            _ => v
-          }
-        Some(Some(Future(_))) =>
-          match v {
-            U32(h) =>
-              U32(
-                transfer_future_readable_handle(
-                  async_state, from_component_id, to_component_id, h,
-                ),
-              )
-            S32(h) =>
-              S32(
-                transfer_future_readable_handle(
-                  async_state, from_component_id, to_component_id, h,
-                ),
-              )
-            _ => v
-          }
-        _ => v
-      }
-  }
+          _ => v
+        }
+      Stream(_) =>
+        match v {
+          U32(h) =>
+            U32(
+              transfer_stream_readable_handle(
+                async_state, from_component_id, to_component_id, h,
+              ),
+            )
+          S32(h) =>
+            S32(
+              transfer_stream_readable_handle(
+                async_state, from_component_id, to_component_id, h,
+              ),
+            )
+          _ => v
+        }
+      Future(_) =>
+        match v {
+          U32(h) =>
+            U32(
+              transfer_future_readable_handle(
+                async_state, from_component_id, to_component_id, h,
+              ),
+            )
+          S32(h) =>
+            S32(
+              transfer_future_readable_handle(
+                async_state, from_component_id, to_component_id, h,
+              ),
+            )
+          _ => v
+        }
+      _ => v
+    }
+  })
 }
 
 ///|
@@ -1515,124 +1338,35 @@ fn collect_direct_borrow_lends(
   to_component_id : Int,
   lends : Array[Array[Int]],
 ) -> Unit raise ComponentRuntimeError {
-  match resolve_valtype(ty, types) {
-    Prim(_) => ()
-    TypeIdx(ti) =>
-      match types.get(ti) {
-        Some(Some(Tuple(tys))) =>
-          if v is Tuple(items) {
-            for i in 0..<items.length() {
-              if i < tys.length() {
-                collect_direct_borrow_lends(
-                  tys[i],
-                  items[i],
-                  types,
-                  async_state,
-                  from_component_id,
-                  to_component_id,
-                  lends,
+  map_canonical_handles(ty, v, types, (definition, v) => {
+    match definition {
+      Borrow(_) =>
+        match v {
+          U32(handle) | S32(handle) => {
+            let from_table = match
+              async_state.resource_tables.get(from_component_id) {
+              Some(table) => table
+              None => raise CanonCallError("unknown resource owner instance")
+            }
+            let entry = match from_table.get(handle) {
+              Some(entry) => entry
+              None =>
+                raise CanonCallError(
+                  "transfer borrow: unknown handle index \{handle} in resource table \{from_component_id}",
                 )
-              }
+            }
+            if to_component_id == entry.impl_component_id {
+              entry.num_lends[0] += 1
+              lends.push(entry.num_lends)
             }
           }
-        Some(Some(Record(fields))) =>
-          if v is Tuple(items) {
-            for i in 0..<items.length() {
-              if i < fields.length() {
-                collect_direct_borrow_lends(
-                  fields[i].ty,
-                  items[i],
-                  types,
-                  async_state,
-                  from_component_id,
-                  to_component_id,
-                  lends,
-                )
-              }
-            }
-          }
-        Some(Some(List(element))) | Some(Some(FixedList(element, _))) =>
-          if v is List(items) {
-            for item in items {
-              collect_direct_borrow_lends(
-                element, item, types, async_state, from_component_id, to_component_id,
-                lends,
-              )
-            }
-          }
-        Some(Some(MapType(key, value))) =>
-          if v is List(entries) {
-            for entry in entries {
-              if entry is Tuple([key_value, value_value]) {
-                collect_direct_borrow_lends(
-                  key, key_value, types, async_state, from_component_id, to_component_id,
-                  lends,
-                )
-                collect_direct_borrow_lends(
-                  value, value_value, types, async_state, from_component_id, to_component_id,
-                  lends,
-                )
-              }
-            }
-          }
-        Some(Some(Variant(cases))) =>
-          if v is Variant(tag, Some(payload)) &&
-            tag >= 0 &&
-            tag < cases.length() &&
-            cases[tag].ty is Some(payload_type) {
-            collect_direct_borrow_lends(
-              payload_type, payload, types, async_state, from_component_id, to_component_id,
-              lends,
-            )
-          }
-        Some(Some(Option(element))) =>
-          if v is Variant(1, Some(payload)) {
-            collect_direct_borrow_lends(
-              element, payload, types, async_state, from_component_id, to_component_id,
-              lends,
-            )
-          }
-        Some(Some(Result(ok, err))) =>
-          if v is Variant(tag, Some(payload)) {
-            let payload_type = if tag == 0 {
-              ok
-            } else if tag == 1 {
-              err
-            } else {
-              None
-            }
-            if payload_type is Some(payload_type) {
-              collect_direct_borrow_lends(
-                payload_type, payload, types, async_state, from_component_id, to_component_id,
-                lends,
-              )
-            }
-          }
-        Some(Some(Borrow(_))) =>
-          match v {
-            U32(handle) | S32(handle) => {
-              let from_table = match
-                async_state.resource_tables.get(from_component_id) {
-                Some(table) => table
-                None => raise CanonCallError("unknown resource owner instance")
-              }
-              let entry = match from_table.get(handle) {
-                Some(entry) => entry
-                None =>
-                  raise CanonCallError(
-                    "transfer borrow: unknown handle index \{handle} in resource table \{from_component_id}",
-                  )
-              }
-              if to_component_id == entry.impl_component_id {
-                entry.num_lends[0] += 1
-                lends.push(entry.num_lends)
-              }
-            }
-            _ => ()
-          }
-        _ => ()
-      }
-  }
+          _ => ()
+        }
+      _ => ()
+    }
+    v
+  })
+  |> ignore
 }
 
 ///|
@@ -1649,186 +1383,43 @@ fn clone_stream_future_value(
   if from_component_id == to_component_id {
     return v
   }
-  match resolve_valtype(ty, types) {
-    Prim(_) => v
-    TypeIdx(ti) =>
-      match types.get(ti) {
-        Some(Some(Tuple(tys))) =>
-          match v {
-            Tuple(items) => {
-              let out : Array[ComponentValue] = []
-              for i in 0..<items.length() {
-                let ty0 = if i < tys.length() {
-                  tys[i]
-                } else {
-                  tys[tys.length() - 1]
-                }
-                out.push(
-                  clone_stream_future_value(
-                    ty0,
-                    items[i],
-                    types,
-                    async_state,
-                    from_component_id,
-                    to_component_id,
-                  ),
-                )
-              }
-              Tuple(out)
-            }
-            _ => v
-          }
-        Some(Some(Record(fields))) =>
-          match v {
-            Tuple(items) => {
-              let out : Array[ComponentValue] = []
-              for i in 0..<items.length() {
-                let ty0 = if i < fields.length() {
-                  fields[i].ty
-                } else {
-                  fields[fields.length() - 1].ty
-                }
-                out.push(
-                  clone_stream_future_value(
-                    ty0,
-                    items[i],
-                    types,
-                    async_state,
-                    from_component_id,
-                    to_component_id,
-                  ),
-                )
-              }
-              Tuple(out)
-            }
-            _ => v
-          }
-        Some(Some(List(elem_ty))) =>
-          match v {
-            List(items) => {
-              let out : Array[ComponentValue] = []
-              for it in items {
-                out.push(
-                  clone_stream_future_value(
-                    elem_ty, it, types, async_state, from_component_id, to_component_id,
-                  ),
-                )
-              }
-              List(out)
-            }
-            _ => v
-          }
-        Some(Some(Variant(cases))) =>
-          match v {
-            Variant(tag, payload) =>
-              if tag < 0 || tag >= cases.length() {
-                v
-              } else {
-                match (cases[tag].ty, payload) {
-                  (Some(payload_ty), Some(p)) =>
-                    Variant(
-                      tag,
-                      Some(
-                        clone_stream_future_value(
-                          payload_ty, p, types, async_state, from_component_id, to_component_id,
-                        ),
-                      ),
-                    )
-                  _ => v
-                }
-              }
-            _ => v
-          }
-        Some(Some(Option(elem_ty))) =>
-          match v {
-            Variant(tag, payload) =>
-              if tag == 1 {
-                match payload {
-                  Some(p) =>
-                    Variant(
-                      1,
-                      Some(
-                        clone_stream_future_value(
-                          elem_ty, p, types, async_state, from_component_id, to_component_id,
-                        ),
-                      ),
-                    )
-                  None => v
-                }
-              } else {
-                v
-              }
-            _ => v
-          }
-        Some(Some(Result(ok_ty, err_ty))) =>
-          match v {
-            Variant(tag, payload) =>
-              if tag == 0 {
-                match (ok_ty, payload) {
-                  (Some(t), Some(p)) =>
-                    Variant(
-                      0,
-                      Some(
-                        clone_stream_future_value(
-                          t, p, types, async_state, from_component_id, to_component_id,
-                        ),
-                      ),
-                    )
-                  _ => v
-                }
-              } else if tag == 1 {
-                match (err_ty, payload) {
-                  (Some(t), Some(p)) =>
-                    Variant(
-                      1,
-                      Some(
-                        clone_stream_future_value(
-                          t, p, types, async_state, from_component_id, to_component_id,
-                        ),
-                      ),
-                    )
-                  _ => v
-                }
-              } else {
-                v
-              }
-            _ => v
-          }
-        Some(Some(Stream(_))) =>
-          match v {
-            U32(h) =>
-              U32(
-                clone_stream_readable_handle(
-                  async_state, from_component_id, to_component_id, h,
-                ),
-              )
-            S32(h) =>
-              S32(
-                clone_stream_readable_handle(
-                  async_state, from_component_id, to_component_id, h,
-                ),
-              )
-            _ => v
-          }
-        Some(Some(Future(_))) =>
-          match v {
-            U32(h) =>
-              U32(
-                clone_future_readable_handle(
-                  async_state, from_component_id, to_component_id, h,
-                ),
-              )
-            S32(h) =>
-              S32(
-                clone_future_readable_handle(
-                  async_state, from_component_id, to_component_id, h,
-                ),
-              )
-            _ => v
-          }
-        _ => v
-      }
-  }
+  map_canonical_handles(ty, v, types, (definition, v) => {
+    match definition {
+      Stream(_) =>
+        match v {
+          U32(h) =>
+            U32(
+              clone_stream_readable_handle(
+                async_state, from_component_id, to_component_id, h,
+              ),
+            )
+          S32(h) =>
+            S32(
+              clone_stream_readable_handle(
+                async_state, from_component_id, to_component_id, h,
+              ),
+            )
+          _ => v
+        }
+      Future(_) =>
+        match v {
+          U32(h) =>
+            U32(
+              clone_future_readable_handle(
+                async_state, from_component_id, to_component_id, h,
+              ),
+            )
+          S32(h) =>
+            S32(
+              clone_future_readable_handle(
+                async_state, from_component_id, to_component_id, h,
+              ),
+            )
+          _ => v
+        }
+      _ => v
+    }
+  })
 }
 
 ///|
@@ -1877,49 +1468,6 @@ fn alloc_shared_handle_with_source(
 }
 
 ///|
-fn reserve_shared_handle(
-  async_state : AsyncState,
-  component_id : Int,
-  handle : Int,
-) -> Unit {
-  if async_state.resource_tables.get(component_id) is Some(table) {
-    if table.next_handle.val <= handle {
-      table.next_handle.val = handle + 1
-    }
-    let mut i = 0
-    while i < table.free_handles.val.length() {
-      if table.free_handles.val[i] == handle {
-        table.free_handles.val.remove(i) |> ignore
-      } else {
-        i = i + 1
-      }
-    }
-    return
-  }
-  let next = match async_state.next_handle_by_component.get(component_id) {
-    Some(existing) => existing
-    None => {
-      let created = [1]
-      async_state.next_handle_by_component.set(component_id, created)
-      created
-    }
-  }
-  if next[0] <= handle {
-    next[0] = handle + 1
-  }
-  if async_state.free_handles_by_component.get(component_id) is Some(free) {
-    let mut i = 0
-    while i < free.length() {
-      if free[i] == handle {
-        free.remove(i) |> ignore
-      } else {
-        i = i + 1
-      }
-    }
-  }
-}
-
-///|
 fn backpressure_value_for_instance(
   async_state : AsyncState,
   component_id : Int,
@@ -1944,47 +1492,23 @@ fn set_backpressure_value_for_instance(
 }
 
 ///|
-fn alloc_error_context_handle(
-  async_state : AsyncState,
-  component_id : Int,
-  debug_message : String,
-) -> Int {
-  let next = match
-    async_state.next_error_context_by_component.get(component_id) {
-    Some(a) => a
-    None => {
-      let a = [0]
-      async_state.next_error_context_by_component.set(component_id, a)
-      a
-    }
-  }
-  let handle = next[0]
-  next[0] = handle + 1
-  async_state.error_contexts.set(
-    handle_key(component_id, handle),
-    debug_message,
-  )
+fn ResourceTable::alloc_error_context(
+  self : ResourceTable,
+  message : String,
+) -> Int raise ComponentRuntimeError {
+  let handle = self.next_error_context.val
+  self.error_contexts.set(handle, message)
+  self.next_error_context.val += 1
   handle
 }
 
 ///|
-fn get_error_context_message(
-  async_state : AsyncState,
-  component_id : Int,
-  handle : Int,
-) -> String? {
-  async_state.error_contexts.get(handle_key(component_id, handle))
-}
-
-///|
-fn drop_error_context_handle(
-  async_state : AsyncState,
-  component_id : Int,
+fn ResourceTable::drop_error_context(
+  self : ResourceTable,
   handle : Int,
 ) -> Bool {
-  let key = handle_key(component_id, handle)
-  if async_state.error_contexts.get(key) is Some(_) {
-    async_state.error_contexts.remove(key)
+  if self.error_contexts.get(handle) is Some(_) {
+    self.error_contexts.remove(handle)
     true
   } else {
     false
@@ -2039,69 +1563,43 @@ fn init_task_meta(
   instance_id : Int,
   caller_task_id : Int64,
 ) -> Unit {
-  async_state.task_instance.set(task_id, instance_id)
-  async_state.task_caller.set(task_id, caller_task_id)
+  async_state.tasks.write_task_instance(task_id, instance_id)
+  async_state.tasks.write_task_caller(task_id, caller_task_id)
 }
 
 ///|
-fn remove_task_meta(async_state : AsyncState, task_id : Int64) -> Unit {
-  async_state.task_instance.remove(task_id)
-  async_state.task_caller.remove(task_id)
-  async_state.task_borrows.remove(task_id)
-  async_state.task_borrow_scopes.remove(task_id)
+fn async_call_can_enter(func : ComponentFunc, async_state : AsyncState) -> Bool {
+  match func {
+    Lifted(_, _, _, _, table, entry, _, _) =>
+      entry.may_start_async() && !instance_has_sync_wait(async_state, table.id)
+    Host(_, _, _) | HostAsync(_, _, _) => true
+  }
 }
 
 ///|
-fn migrate_task_meta(
+fn instance_has_sync_wait(async_state : AsyncState, instance_id : Int) -> Bool {
+  for entry in async_state.sync_waitable_users {
+    let (_, task_id) = entry
+    if async_state.tasks.read_task_instance(task_id) == Some(instance_id) {
+      return true
+    }
+  }
+  false
+}
+
+///|
+fn sync_waitables_for_task(
   async_state : AsyncState,
-  from_id : Int64,
-  to_id : Int64,
-) -> Unit {
-  if async_state.task_instance.get(from_id) is Some(inst) {
-    async_state.task_instance.set(to_id, inst)
-  }
-  if async_state.task_caller.get(from_id) is Some(parent) {
-    async_state.task_caller.set(to_id, parent)
-  }
-  if async_state.task_borrows.get(from_id) is Some(count) {
-    async_state.task_borrows.remove(from_id)
-    async_state.task_borrows.set(to_id, count)
-  }
-  if async_state.task_borrow_scopes.get(from_id) is Some(scopes) {
-    async_state.task_borrow_scopes.remove(from_id)
-    for scope in scopes {
-      scope[0] = to_id
-    }
-    async_state.task_borrow_scopes.set(to_id, scopes)
-  }
-  remove_task_meta(async_state, from_id)
-}
-
-///|
-/// Returns whether `callee_instance_id` may be entered when the call originates
-/// from `caller_task_id`.
-///
-/// This is an extra check (beyond per-instance `may_enter`) needed for
-/// callback-driven async tasks where there may be no activation record on the
-/// stack but the instance is still logically on the async call stack.
-fn may_enter_instance_from_task(
-  async_state : AsyncState,
-  caller_task_id : Int64,
-  callee_instance_id : Int,
-) -> Bool {
-  let mut t = caller_task_id
-  while t != 0L {
-    if async_state.task_instance.get(t) is Some(inst) &&
-      inst >= 0 &&
-      inst == callee_instance_id {
-      return false
-    }
-    t = match async_state.task_caller.get(t) {
-      Some(p) => p
-      None => 0L
+  task_id : Int64,
+) -> Array[Int64] {
+  let keys : Array[Int64] = []
+  for entry in async_state.sync_waitable_users {
+    let (key, owner) = entry
+    if owner == task_id {
+      keys.push(key)
     }
   }
-  true
+  keys
 }
 
 ///|
@@ -2110,11 +1608,11 @@ fn ensure_task_thread(
   owner_component_id : Int,
   task_id : Int64,
 ) -> Unit {
-  let per_task = match async_state.task_thread.get(task_id) {
+  let per_task = match async_state.tasks.read_task_thread(task_id) {
     Some(m) => m
     None => {
       let m : Map[Int, Int] = Map([])
-      async_state.task_thread.set(task_id, m)
+      async_state.tasks.write_task_thread(task_id, m)
       m
     }
   }
@@ -2127,8 +1625,8 @@ fn ensure_task_thread(
 
 ///|
 fn drop_task_thread(async_state : AsyncState, task_id : Int64) -> Unit {
-  if async_state.task_thread.get(task_id) is Some(m) {
-    async_state.task_thread.remove(task_id)
+  if async_state.tasks.read_task_thread(task_id) is Some(m) {
+    async_state.tasks.clear_task_thread(task_id)
     for entry in m {
       let (owner_component_id, th) = entry
       free_shared_handle(async_state, owner_component_id, th)
@@ -2137,14 +1635,21 @@ fn drop_task_thread(async_state : AsyncState, task_id : Int64) -> Unit {
 }
 
 ///|
-fn alloc_task_id(async_state : AsyncState) -> Int64 {
-  let id = async_state.next_task_id[0]
-  async_state.next_task_id[0] = id - 1L
-  id
+fn alloc_task_id(async_state : AsyncState) -> Int64 raise ComponentRuntimeError {
+  async_state.tasks.allocate()
 }
 
 ///|
-fn push_task(async_state : AsyncState, id : Int64, can_block : Bool) -> Unit {
+fn push_task(
+  async_state : AsyncState,
+  id : Int64,
+  can_block : Bool,
+) -> Unit raise ComponentRuntimeError {
+  let id = async_state.tasks.resolve(id)
+  guard !async_state.tasks.closed.val &&
+    async_state.tasks.records.get(id) is Some(_) else {
+    raise Cancelled
+  }
   async_state.task_stack.push(id)
   async_state.can_block_stack.push(can_block)
   async_state.task_can_block[0] = can_block
@@ -2174,8 +1679,8 @@ fn set_task_result(
   owner_component_id : Int,
   vals : Array[ComponentValue],
 ) -> Unit {
-  async_state.task_results.set(task_id, vals)
-  async_state.task_result_owner.set(task_id, owner_component_id)
+  async_state.tasks.write_task_results(task_id, vals)
+  async_state.tasks.write_task_result_owner(task_id, owner_component_id)
 }
 
 ///|
@@ -2183,9 +1688,9 @@ fn take_task_result(
   async_state : AsyncState,
   task_id : Int64,
 ) -> Array[ComponentValue]? {
-  let v = async_state.task_results.get(task_id)
+  let v = async_state.tasks.read_task_results(task_id)
   if v is Some(_) {
-    async_state.task_results.remove(task_id)
+    async_state.tasks.clear_task_results(task_id)
   }
   v
 }
@@ -2199,6 +1704,26 @@ fn enqueue_waitable_event(
   let list = match async_state.waitable_events.get(waitable_key) {
     Some(xs) => xs
     None => []
+  }
+  // A subtask exposes its latest unconsumed status, not a history of states.
+  if ev.code == 1 {
+    for i in 0..<list.length() {
+      if list[i].code == 1 {
+        list[i] = ev
+        if async_state.waitable_to_set.get(waitable_key) is Some(ws_key) &&
+          async_state.waitable_sets.get(ws_key) is Some(set) {
+          for j in 0..<set.queue.length() {
+            let previous = set.queue[j]
+            if previous.code == 1 &&
+              previous.owner_component_id == ev.owner_component_id &&
+              previous.index == ev.index {
+              set.queue[j] = ev
+            }
+          }
+        }
+        return
+      }
+    }
   }
   list.push(ev)
   async_state.waitable_events.set(waitable_key, list)
@@ -2234,3 +1759,29 @@ fn pop_waitable_event(async_state : AsyncState, ws_key : Int64) -> WaitEvent? {
 }
 
 ///|
+
+///|
+enum TaskSuspension {
+  Yield(Bool)
+  Suspend(Bool)
+  Wait(Bool)
+} derive(Debug)
+
+///|
+pub extend TaskSuspension with Debug::{to_repr}
+
+///|
+fn TaskSuspension::is_cancellable(self : TaskSuspension) -> Bool {
+  match self {
+    Yield(cancellable) | Suspend(cancellable) | Wait(cancellable) => cancellable
+  }
+}
+
+///|
+fn AsyncState::check_host_entry(
+  self : AsyncState,
+) -> Unit raise ComponentRuntimeError {
+  if self.trapped.val {
+    raise CanonCallError("cannot enter component instance")
+  }
+}

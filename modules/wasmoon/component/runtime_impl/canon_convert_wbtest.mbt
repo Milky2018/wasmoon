@@ -33,7 +33,11 @@ test "canon convert: lower non-empty list stores elements" {
   )
   let resources : CanonResources = {
     mem_addr: Some(mem_addr),
-    realloc: Some(realloc),
+    realloc: Some({
+      func: realloc,
+      async_state: AsyncState(StreamTable()),
+      owner_component_id: 0,
+    }),
     post_return: None,
     encoding: Utf8,
   }
@@ -92,7 +96,11 @@ test "canon convert: lower indirect list result stores compound elements" {
   )
   let resources : CanonResources = {
     mem_addr: Some(mem_addr),
-    realloc: Some(realloc),
+    realloc: Some({
+      func: realloc,
+      async_state: AsyncState(StreamTable()),
+      owner_component_id: 0,
+    }),
     post_return: None,
     encoding: Utf8,
   }
@@ -112,6 +120,7 @@ test "canon convert: lower indirect list result stores compound elements" {
     resources,
     store,
     Some(0),
+    ResourceTable(),
   ) catch {
     e => return fail("lower compound list result failed: \{e}")
   }
@@ -130,7 +139,12 @@ test "canon convert: lower indirect list result stores compound elements" {
       mem.load_i32(list_ptr + 8) catch {
         _ => -1
       },
-      read_string_from_memory_with_encoding(mem, string_ptr, 8, Utf8) catch {
+      read_string_from_memory_with_encoding(
+        mem,
+        string_ptr.to_int64() & 0xffffffffL,
+        8,
+        Utf8,
+      ) catch {
         _ => "<invalid>"
       },
     ),
@@ -165,7 +179,11 @@ test "typed host stream values lower strings into reader memory" {
   )
   let resources : CanonResources = {
     mem_addr: Some(mem_addr),
-    realloc: Some(realloc),
+    realloc: Some({
+      func: realloc,
+      async_state: AsyncState(StreamTable()),
+      owner_component_id: 0,
+    }),
     post_return: None,
     encoding: Utf8,
   }

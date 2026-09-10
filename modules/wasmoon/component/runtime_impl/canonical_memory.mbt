@@ -20,12 +20,22 @@ fn variant_payload_layout(
 ///|
 fn store_flat_component_value_to_memory(
   mem : @runtime.Memory,
-  addr : Int,
+  addr : Int64,
   ty : ValType,
   values : Array[@types.Value],
   types : Array[TypeDef?],
   mem_is_64 : Bool,
 ) -> Unit raise ComponentRuntimeError {
+  let (size, alignment) = canonical_memory_layout(ty, types, mem_is_64)
+  if addr % alignment.to_int64() != 0L {
+    raise CanonCallError("unaligned pointer")
+  }
+  if addr < 0L ||
+    size < 0 ||
+    addr > mem.byte_len() ||
+    size.to_int64() > mem.byte_len() - addr {
+    raise CanonCallError("out of bounds memory access")
+  }
   let mut cursor = 0
   fn take() -> @types.Value raise ComponentRuntimeError {
     if cursor >= values.length() {
@@ -38,23 +48,40 @@ fn store_flat_component_value_to_memory(
 
   fn store_simple(
     value_ty : ValType,
-    value_addr : Int,
+    value_addr : Int64,
   ) -> Unit raise ComponentRuntimeError {
     let storage = flat_storage_for_valtype(value_ty, types, mem_is_64)
     let (offsets, _, _) = layout_of_flat_storage_fields(storage)
     for i in 0..<storage.length() {
-      store_storage_value(mem, value_addr + offsets[i], take(), storage[i])
+      store_storage_value(
+        mem,
+        value_addr + offsets[i].to_int64(),
+        take(),
+        storage[i],
+      )
     }
   }
 
   fn store_inner(
     value_ty : ValType,
-    value_addr : Int,
+    value_addr : Int64,
   ) -> Unit raise ComponentRuntimeError {
     match resolve_valtype(value_ty, types) {
       Prim(_) => store_simple(value_ty, value_addr)
       TypeIdx(type_idx) =>
         match types.get(type_idx) {
+          Some(Some(FixedList(element, length))) => {
+            let (size, alignment) = canonical_memory_layout(
+              element, types, mem_is_64,
+            )
+            let stride = align_to(size, alignment)
+            for i in 0..<length {
+              store_inner(
+                element,
+                value_addr + i.to_int64() * stride.to_int64(),
+              )
+            }
+          }
           Some(Some(Tuple(items))) => {
             let mut offset = 0
             for item in items {
@@ -62,7 +89,7 @@ fn store_flat_component_value_to_memory(
                 item, types, mem_is_64,
               )
               offset = align_to(offset, alignment)
-              store_inner(item, value_addr + offset)
+              store_inner(item, value_addr + offset.to_int64())
               offset += size
             }
           }
@@ -75,7 +102,7 @@ fn store_flat_component_value_to_memory(
                 mem_is_64,
               )
               offset = align_to(offset, alignment)
-              store_inner(field.ty, value_addr + offset)
+              store_inner(field.ty, value_addr + offset.to_int64())
               offset += size
             }
           }
@@ -85,7 +112,9 @@ fn store_flat_component_value_to_memory(
               _ => raise HostCallError("type mismatch")
             }
             if tag < 0 || tag >= cases.length() {
-              raise CanonCallError("invalid variant discriminant")
+              raise CanonCallError(
+                "invalid variant discriminant: discriminant \{tag.reinterpret_as_uint()} out of range [0..\{cases.length()})",
+              )
             }
             let (tag_size, tag_alignment) = discriminant_layout(cases.length())
             store_storage_value(mem, value_addr, I32(tag), {
@@ -121,7 +150,7 @@ fn store_flat_component_value_to_memory(
               )
               store_flat_component_value_to_memory(
                 mem,
-                value_addr + payload_offset,
+                value_addr + payload_offset.to_int64(),
                 payload_ty,
                 payload_values,
                 types,
@@ -155,7 +184,7 @@ fn store_flat_component_value_to_memory(
               )
               store_flat_component_value_to_memory(
                 mem,
-                value_addr + align_to(1, payload_alignment),
+                value_addr + align_to(1, payload_alignment).to_int64(),
                 payload_ty,
                 payload_values,
                 types,
@@ -213,7 +242,7 @@ fn store_flat_component_value_to_memory(
               }
               store_flat_component_value_to_memory(
                 mem,
-                value_addr + align_to(1, payload_alignment),
+                value_addr + align_to(1, payload_alignment).to_int64(),
                 payload,
                 payload_values,
                 types,
@@ -244,20 +273,32 @@ fn store_flat_component_value_to_memory(
 ///|
 fn load_flat_component_value_from_memory(
   mem : @runtime.Memory,
-  addr : Int,
+  addr : Int64,
   ty : ValType,
   types : Array[TypeDef?],
   mem_is_64 : Bool,
 ) -> Array[@types.Value] raise ComponentRuntimeError {
+  let (size, alignment) = canonical_memory_layout(ty, types, mem_is_64)
+  if addr % alignment.to_int64() != 0L {
+    raise CanonCallError("unaligned pointer")
+  }
+  if addr < 0L ||
+    size < 0 ||
+    addr > mem.byte_len() ||
+    size.to_int64() > mem.byte_len() - addr {
+    raise CanonCallError("out of bounds memory access")
+  }
   fn load_simple(
     value_ty : ValType,
-    value_addr : Int,
+    value_addr : Int64,
   ) -> Array[@types.Value] raise ComponentRuntimeError {
     let storage = flat_storage_for_valtype(value_ty, types, mem_is_64)
     let (offsets, _, _) = layout_of_flat_storage_fields(storage)
     let out : Array[@types.Value] = []
     for i in 0..<storage.length() {
-      out.push(load_storage_value(mem, value_addr + offsets[i], storage[i]))
+      out.push(
+        load_storage_value(mem, value_addr + offsets[i].to_int64(), storage[i]),
+      )
     }
     out
   }
@@ -266,6 +307,26 @@ fn load_flat_component_value_from_memory(
     Prim(_) => load_simple(ty, addr)
     TypeIdx(type_idx) =>
       match types.get(type_idx) {
+        Some(Some(FixedList(element, length))) => {
+          let (size, alignment) = canonical_memory_layout(
+            element, types, mem_is_64,
+          )
+          let stride = align_to(size, alignment)
+          let out : Array[@types.Value] = []
+          for i in 0..<length {
+            for
+              value in load_flat_component_value_from_memory(
+                mem,
+                addr + i.to_int64() * stride.to_int64(),
+                element,
+                types,
+                mem_is_64,
+              ) {
+              out.push(value)
+            }
+          }
+          out
+        }
         Some(Some(Tuple(items))) => {
           let out : Array[@types.Value] = []
           let mut offset = 0
@@ -277,7 +338,7 @@ fn load_flat_component_value_from_memory(
             for
               value in load_flat_component_value_from_memory(
                 mem,
-                addr + offset,
+                addr + offset.to_int64(),
                 item,
                 types,
                 mem_is_64,
@@ -301,7 +362,7 @@ fn load_flat_component_value_from_memory(
             for
               value in load_flat_component_value_from_memory(
                 mem,
-                addr + offset,
+                addr + offset.to_int64(),
                 field.ty,
                 types,
                 mem_is_64,
@@ -324,7 +385,9 @@ fn load_flat_component_value_from_memory(
             _ => raise HostCallError("type mismatch")
           }
           if tag < 0 || tag >= cases.length() {
-            raise CanonCallError("invalid variant discriminant")
+            raise CanonCallError(
+              "invalid variant discriminant: discriminant \{tag.reinterpret_as_uint()} out of range [0..\{cases.length()})",
+            )
           }
           let all_flat = core_types_for_valtype(
             TypeIdx(type_idx),
@@ -341,7 +404,7 @@ fn load_flat_component_value_from_memory(
             )
             let payload_values = load_flat_component_value_from_memory(
               mem,
-              addr + payload_offset,
+              addr + payload_offset.to_int64(),
               payload_ty,
               types,
               mem_is_64,
@@ -383,7 +446,7 @@ fn load_flat_component_value_from_memory(
             for
               value in load_flat_component_value_from_memory(
                 mem,
-                addr + align_to(1, payload_alignment),
+                addr + align_to(1, payload_alignment).to_int64(),
                 payload_ty,
                 types,
                 mem_is_64,
@@ -426,7 +489,7 @@ fn load_flat_component_value_from_memory(
             }
             let payload_values = load_flat_component_value_from_memory(
               mem,
-              addr + align_to(1, payload_alignment),
+              addr + align_to(1, payload_alignment).to_int64(),
               payload,
               types,
               mem_is_64,
@@ -456,4 +519,38 @@ fn load_flat_component_value_from_memory(
         _ => raise HostCallError("unsupported memory value type")
       }
   }
+}
+
+///|
+fn canonical_param_layout(
+  params : Array[@component.Param],
+  types : Array[TypeDef?],
+  mem_is_64 : Bool,
+) -> (Array[Int], Int, Int) raise ComponentRuntimeError {
+  let offsets : Array[Int] = []
+  let mut size = 0
+  let mut alignment = 1
+  for param in params {
+    let (field_size, field_alignment) = canonical_memory_layout(
+      param.ty,
+      types,
+      mem_is_64,
+    )
+    size = align_to(size, field_alignment)
+    if size < 0 || field_size > 2147483647 - size {
+      raise CanonCallError(
+        "canonical parameter area exceeds addressable memory",
+      )
+    }
+    offsets.push(size)
+    size += field_size
+    if field_alignment > alignment {
+      alignment = field_alignment
+    }
+  }
+  let aligned = align_to(size, alignment)
+  if aligned < 0 {
+    raise CanonCallError("canonical parameter area exceeds addressable memory")
+  }
+  (offsets, aligned, alignment)
 }
