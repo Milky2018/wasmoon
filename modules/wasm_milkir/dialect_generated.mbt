@@ -48,6 +48,7 @@ pub(all) enum WasmOpcode {
   Delegate(Int)
   SpillLocalsForThrow(Int)
   GetSpilledLocal(Int)
+  GetExceptionRef
 } derive(Debug, Eq, Hash)
 
 ///|
@@ -502,6 +503,16 @@ let wasm_opcode_specs : Array[WasmOpcodeSpec] = [
     variadic_operands: false,
     variadic_results: false,
   },
+  {
+    id: 45,
+    typed_constructor: "GetExceptionRef",
+    wire_name: "get_exception_ref",
+    immediate_kinds: [],
+    operand_types: [],
+    result_types: [ExactType(Ref)],
+    variadic_operands: false,
+    variadic_results: false,
+  },
 ]
 
 ///|
@@ -552,6 +563,7 @@ fn opcode_payload(opcode : WasmOpcode) -> (Int, FixedArray[Int]) {
     Delegate(imm0) => (42, imm([imm0]))
     SpillLocalsForThrow(imm0) => (43, imm([imm0]))
     GetSpilledLocal(imm0) => (44, imm([imm0]))
+    GetExceptionRef => (45, imm([]))
   }
 }
 
@@ -606,6 +618,7 @@ fn opcode_from_payload(
     42 => Some(Delegate(imms[0]))
     43 => Some(SpillLocalsForThrow(imms[0]))
     44 => Some(GetSpilledLocal(imms[0]))
+    45 => Some(GetExceptionRef)
     _ => None
   }
 }

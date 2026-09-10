@@ -81,6 +81,8 @@ pub fn encode(WasmOpcode) -> @milkir.ExtOp
 
 pub fn extern_convert_any(@milkir.FunctionBuilder, @milkir.Value) -> @milkir.Value
 
+pub fn get_exception_ref(@milkir.FunctionBuilder) -> @milkir.Value
+
 pub fn get_exception_tag(@milkir.FunctionBuilder) -> @milkir.Value
 
 pub fn get_exception_value(@milkir.FunctionBuilder, Int) -> @milkir.Value
@@ -244,6 +246,7 @@ pub(all) enum WasmOpcode {
   Delegate(Int)
   SpillLocalsForThrow(Int)
   GetSpilledLocal(Int)
+  GetExceptionRef
 } derive(Eq, Hash, @debug.Debug)
 pub fn WasmOpcode::equal(Self, Self) -> Bool
 pub fn WasmOpcode::hash(Self) -> Int
@@ -301,6 +304,7 @@ pub(all) enum WasmRuntimeHelper {
   ExceptionThrowRef
   ExceptionDelegate
   ExceptionGetTag
+  ExceptionGetRef
   ExceptionGetValue
   ExceptionGetValueCount
   ExceptionSigsetjmp

@@ -1485,3 +1485,6 @@ extern "c" fn c_jit_clear_wasi_exit_managed(jit_context : JITContext) -> Unit = 
 
 ///|
 extern "c" fn c_jit_retain_memory_desc(mem_ptr : Int64) -> Unit = "wasmoon_jit_retain_memory_desc"
+
+///|
+extern "c" fn c_jit_get_exception_get_ref_ptr() -> Int64 = "wasmoon_jit_get_exception_get_ref_ptr"

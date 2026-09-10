@@ -46,3 +46,4 @@ GetExceptionValueCount|get_exception_value_count|-|-|i32
 Delegate|delegate|int|-|-
 SpillLocalsForThrow|spill_locals_for_throw|int|...|-
 GetSpilledLocal|get_spilled_local|int|-|i64
+GetExceptionRef|get_exception_ref|-|-|ref

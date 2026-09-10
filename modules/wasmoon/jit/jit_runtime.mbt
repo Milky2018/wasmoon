@@ -1494,3 +1494,13 @@ pub fn JITModule::set_cooperative_scheduling(
   context.set_cooperative_scheduling(enabled)
   true
 }
+
+///|
+pub fn JITModule::set_exception_arena(
+  self : JITModule,
+  arena : @wasmoon_jit.NativeExceptionArena,
+) -> Unit {
+  if self.context is Some(context) {
+    context.ctx.set_exception_arena(arena)
+  }
+}

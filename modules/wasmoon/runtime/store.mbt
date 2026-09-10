@@ -57,6 +57,8 @@ pub struct Store {
   native_execution : @wasmoon_jit.NativeExecutionState
   priv funcref_registry : StoreFuncrefRegistry
   priv native_types : StoreTypeRegistry
+  priv native_exception_to_store : Map[Int64, Int]
+  priv store_exception_to_native : Map[Int, Int64]
   priv guest_continuations : Array[GuestContinuationBody?]
   priv pinned_gc_roots : Array[(Int64, Array[@types.Value], Ref[Bool])]
   priv mut next_pinned_gc_roots_id : Int64
@@ -160,6 +162,8 @@ pub fn Store::Store(nan_canonicalization? : Bool = false) -> Store {
     native_execution: NativeExecutionState(),
     funcref_registry: StoreFuncrefRegistry::new(),
     native_types: StoreTypeRegistry::new(),
+    native_exception_to_store: Map([]),
+    store_exception_to_native: Map([]),
     guest_continuations: [],
     pinned_gc_roots: [],
     next_pinned_gc_roots_id: 0L,
@@ -198,6 +202,8 @@ pub fn Store::with_c_heap(nan_canonicalization? : Bool = false) -> Store {
     native_execution: NativeExecutionState(),
     funcref_registry: StoreFuncrefRegistry::new(),
     native_types: StoreTypeRegistry::new(),
+    native_exception_to_store: Map([]),
+    store_exception_to_native: Map([]),
     guest_continuations: [],
     pinned_gc_roots: [],
     next_pinned_gc_roots_id: 0L,
@@ -252,6 +258,8 @@ pub fn Store::close(self : Store) -> Unit {
   self.tags.clear()
   self.tag_type_indices.clear()
   self.tag_owners.clear()
+  self.native_exception_to_store.clear()
+  self.store_exception_to_native.clear()
   self.exns.clear()
   self.heap.clear()
   if self.c_heap is Some(heap) {
@@ -691,12 +699,14 @@ pub fn Store::alloc_struct(
 ) -> Int raise RuntimeError {
   self.ensure_open()
   let reference = match self.c_heap {
-    Some(heap) =>
-      heap.alloc_struct(type_idx, fields) catch {
+    Some(heap) => {
+      let encoded = fields.map(value => self.encode_heap_exception(value))
+      heap.alloc_struct(type_idx, encoded) catch {
         OutOfBoundsArrayAccess => raise OutOfBoundsArrayAccess
         NullReference => raise NullReference
         OutOfMemory => raise OutOfMemory
       }
+    }
     None => self.heap.alloc_struct(type_idx, fields)
   }
   self.record_gc_type(reference, instance, type_idx)
@@ -713,12 +723,14 @@ pub fn Store::alloc_array(
 ) -> Int raise RuntimeError {
   self.ensure_open()
   let reference = match self.c_heap {
-    Some(heap) =>
-      heap.alloc_array_from_values(type_idx, elements) catch {
+    Some(heap) => {
+      let encoded = elements.map(value => self.encode_heap_exception(value))
+      heap.alloc_array_from_values(type_idx, encoded) catch {
         OutOfBoundsArrayAccess => raise OutOfBoundsArrayAccess
         NullReference => raise NullReference
         OutOfMemory => raise OutOfMemory
       }
+    }
     None => self.heap.alloc_array(type_idx, elements)
   }
   self.record_gc_type(reference, instance, type_idx)
@@ -738,7 +750,9 @@ pub fn Store::struct_get(
       let field_type = self.get_struct_field_type(
         type_idx, field_idx, struct_idx,
       )
-      heap.struct_get(struct_idx, field_idx, field_type)
+      self.decode_heap_exception(
+        heap.struct_get(struct_idx, field_idx, field_type),
+      )
     }
     None => self.heap.struct_get(struct_idx, field_idx)
   }
@@ -754,7 +768,8 @@ pub fn Store::struct_set(
 ) -> Unit raise RuntimeError {
   self.ensure_open()
   match self.c_heap {
-    Some(heap) => heap.struct_set(struct_idx, field_idx, value)
+    Some(heap) =>
+      heap.struct_set(struct_idx, field_idx, self.encode_heap_exception(value))
     None => self.heap.struct_set(struct_idx, field_idx, value)
   }
 }
@@ -782,11 +797,12 @@ pub fn Store::array_get(
     Some(heap) => {
       let type_idx = heap.get_type_idx(array_idx)
       let elem_type = self.get_array_elem_type(type_idx, array_idx)
-      heap.array_get(array_idx, elem_idx, elem_type) catch {
+      let value = heap.array_get(array_idx, elem_idx, elem_type) catch {
         OutOfBoundsArrayAccess => raise OutOfBoundsArrayAccess
         NullReference => raise NullReference
         OutOfMemory => raise OutOfMemory
       }
+      self.decode_heap_exception(value)
     }
     None => self.heap.array_get(array_idx, elem_idx)
   }
@@ -802,12 +818,14 @@ pub fn Store::array_set(
 ) -> Unit raise RuntimeError {
   self.ensure_open()
   match self.c_heap {
-    Some(heap) =>
-      heap.array_set(array_idx, elem_idx, value) catch {
+    Some(heap) => {
+      let encoded = self.encode_heap_exception(value)
+      heap.array_set(array_idx, elem_idx, encoded) catch {
         OutOfBoundsArrayAccess => raise OutOfBoundsArrayAccess
         NullReference => raise NullReference
         OutOfMemory => raise OutOfMemory
       }
+    }
     None => self.heap.array_set(array_idx, elem_idx, value)
   }
 }
@@ -823,12 +841,14 @@ pub fn Store::array_fill(
 ) -> Unit raise RuntimeError {
   self.ensure_open()
   match self.c_heap {
-    Some(heap) =>
-      heap.array_fill(array_idx, offset, value, count) catch {
+    Some(heap) => {
+      let encoded = self.encode_heap_exception(value)
+      heap.array_fill(array_idx, offset, encoded, count) catch {
         OutOfBoundsArrayAccess => raise OutOfBoundsArrayAccess
         NullReference => raise NullReference
         OutOfMemory => raise OutOfMemory
       }
+    }
     None => self.heap.array_fill(array_idx, offset, value, count)
   }
 }

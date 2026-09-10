@@ -205,6 +205,8 @@ jit_context_t *alloc_context_internal(int func_count) {
     // Exception handling state
     ctx->exception_handler = NULL;
     ctx->exception_tag = 0;
+    ctx->exception_arena = exception_arena_new();
+    ctx->exception_ref = 0;
     ctx->exception_values = NULL;
     ctx->exception_value_count = 0;
 
@@ -268,6 +270,7 @@ jit_context_t *alloc_context_internal(int func_count) {
 
 void free_context_internal(jit_context_t *ctx) {
     if (!ctx) return;
+    exception_arena_release(ctx->exception_arena);
 
     // Free per-context segment storage (malloc-owned copies).
     if (ctx->data_segments) {

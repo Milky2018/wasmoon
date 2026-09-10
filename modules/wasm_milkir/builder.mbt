@@ -875,3 +875,8 @@ pub fn get_spilled_local(
 ) -> @milkir.Value {
   emit_wasm_inst(builder, i64_type(), GetSpilledLocal(idx), [])
 }
+
+///|
+pub fn get_exception_ref(builder : @milkir.FunctionBuilder) -> @milkir.Value {
+  emit_wasm_inst(builder, @milkir.Type::Ref, GetExceptionRef, [])
+}

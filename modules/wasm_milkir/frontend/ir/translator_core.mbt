@@ -922,10 +922,7 @@ fn Translator::emit_catch_ref_branch(
   // Get exception values BEFORE calling try_table_end (which frees them)
   let args = self.read_exception_payload(tag_types)
 
-  // Add exnref (placeholder - use exception tag as simple exnref)
-  let exnref = @wasm_milkir.get_exception_tag(self.builder)
-  let exnref_i64 = self.builder.sextend(I64, exnref)
-  args.push(self.builder.bitcast(Ref, exnref_i64))
+  args.push(@wasm_milkir.get_exception_ref(self.builder))
 
   // Branch to the handler label
   let idx = self.block_stack.length() - 1 - label_depth
@@ -974,10 +971,7 @@ fn Translator::emit_catch_all_ref_branch(
 ) -> Unit {
   let args : Array[Value] = []
 
-  // Add exnref (placeholder)
-  let exnref = @wasm_milkir.get_exception_tag(self.builder)
-  let exnref_i64 = self.builder.sextend(I64, exnref)
-  args.push(self.builder.bitcast(Ref, exnref_i64))
+  args.push(@wasm_milkir.get_exception_ref(self.builder))
 
   // Branch to the handler label
   let idx = self.block_stack.length() - 1 - label_depth

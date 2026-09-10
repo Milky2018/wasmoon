@@ -551,6 +551,7 @@ graph TD
   ISS_518["ISS-518: Execute one-shot typed continuations in the interpreter"]
   ISS_519["ISS-519: Lower typed continuations to native stack switching"]
   ISS_520["ISS-520: Complete typed continuation and external-suite acceptance"]
+  ISS_521["ISS-521: Preserve native exception reference identity and payload ownership"]
   ISS_002 --> ISS_003
   ISS_002 --> ISS_004
   ISS_003 --> ISS_005
@@ -992,6 +993,7 @@ graph TD
   ISS_517 --> ISS_518
   ISS_517 --> ISS_519
   ISS_518 --> ISS_519
+  ISS_521 --> ISS_519
   ISS_518 --> ISS_520
   ISS_519 --> ISS_520
 ```

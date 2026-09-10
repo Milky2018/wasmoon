@@ -241,6 +241,14 @@ pub fn register_owned_instance_funcrefs_for_jit(
     entries,
     release_owner=jit_module.retain_callable_owner(),
   )
+  jit_module.set_exception_arena(store.native_execution_state().exceptions())
+  for tag, signature in store.tags {
+    store
+    .native_execution_state()
+    .exceptions()
+    .define_tag(tag, signature.params)
+    |> ignore
+  }
   let local_types = store.native_type_indices(instance)
   store.bind_native_callable_view(fn(parents, entries) {
     jit_module.set_callable_types(
@@ -418,7 +426,7 @@ fn read_native_global(
       if raw_value == 0L {
         Null
       } else {
-        ExnRef(raw_value.to_int())
+        store.decode_native_exception(raw_value)
       }
     RefStruct(_) | RefNullStruct(_) | StructRef | RefStructAbs =>
       if raw_value == 0L {
@@ -487,7 +495,7 @@ fn encode_global_value_for_jit(
       }
     }
     ExternRef(idx) => (encode_extern_value(idx, store), None)
-    ExnRef(idx) => (idx.to_int64(), None)
+    ExnRef(idx) => (store.encode_native_exception(idx), None)
     ArrayRef(gc_ref) => (@wasmoon_jit.encode_heap_ref(gc_ref), None)
     StructRef(gc_ref) => (@wasmoon_jit.encode_heap_ref(gc_ref), None)
     I31(n) => (@wasmoon_jit.encode_i31(n), None)
@@ -1210,7 +1218,7 @@ fn encode_exception_value_for_jit(
     StructRef(idx) => Some(@wasmoon_jit.encode_heap_ref(idx))
     ArrayRef(idx) => Some(@wasmoon_jit.encode_heap_ref(idx))
     I31(n) => Some(@wasmoon_jit.encode_i31(n))
-    ExnRef(idx) => Some(idx.to_int64())
+    ExnRef(idx) => Some(store.encode_native_exception(idx))
     V128(_) => None
   }
 }
@@ -1237,7 +1245,7 @@ fn decode_ref_value(
       if raw == NULL_REF {
         Null
       } else {
-        ExnRef(raw.to_int())
+        store.decode_native_exception(raw)
       }
     StructRef | RefStruct(_) | RefNullStruct(_) | RefStructAbs =>
       if raw == NULL_REF {
@@ -1369,7 +1377,7 @@ fn encode_value(
     ExnRef | NullExnRef =>
       match value {
         Null => Some([NULL_REF])
-        ExnRef(idx) => Some([idx.to_int64()])
+        ExnRef(idx) => Some([store.encode_native_exception(idx)])
         _ => None
       }
     StructRef | RefStruct(_) | RefNullStruct(_) | RefStructAbs =>

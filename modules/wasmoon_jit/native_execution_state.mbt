@@ -39,6 +39,7 @@ priv struct NativeInvocation {
 /// `invocations` but are absent from `active`, so any number of component tasks
 /// can retain distinct native resources without sharing an execution stack.
 struct NativeExecutionState {
+  exception_arena : NativeExceptionArena
   mut accepting_new_invocations : Bool
   mut next_invocation_id : Int64
   mut next_resource_id : Int64
@@ -50,6 +51,7 @@ struct NativeExecutionState {
 ///|
 pub fn NativeExecutionState::NativeExecutionState() -> NativeExecutionState {
   {
+    exception_arena: NativeExceptionArena::new(),
     accepting_new_invocations: true,
     next_invocation_id: 0L,
     next_resource_id: 0L,
@@ -64,6 +66,7 @@ pub fn NativeExecutionState::NativeExecutionState() -> NativeExecutionState {
 /// existing handles.
 pub fn NativeExecutionState::seal(self : NativeExecutionState) -> Unit {
   self.accepting_new_invocations = false
+  self.exception_arena.clear()
 }
 
 ///|
@@ -307,4 +310,11 @@ pub fn NativeInvocationHandle::release_if_live(
 ///|
 pub impl Debug for NativeInvocationHandle with fn to_repr(self) {
   Repr::ctor("NativeInvocationHandle", [(Some("id"), Repr(self.1))])
+}
+
+///|
+pub fn NativeExecutionState::exceptions(
+  self : NativeExecutionState,
+) -> NativeExceptionArena {
+  self.exception_arena
 }

@@ -11,7 +11,7 @@ fn valid_immediates(spec : WasmOpcodeSpec) -> FixedArray[Int] {
 
 ///|
 test "generated Wasm opcode codec round-trips every schema row" {
-  inspect(wasm_opcode_specs.length(), content="45")
+  inspect(wasm_opcode_specs.length(), content="46")
   let observed_wire_names : Map[String, Unit] = Map([])
   for spec in wasm_opcode_specs {
     let opcode = match opcode_from_payload(spec.id, valid_immediates(spec)) {
@@ -137,6 +137,7 @@ test "every schema row enforces its non-contextual minimum shape" {
       #|  "get_exception_value_count",
       #|  "spill_locals_for_throw",
       #|  "get_spilled_local",
+      #|  "get_exception_ref",
       #|]
     ),
   )

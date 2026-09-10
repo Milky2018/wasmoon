@@ -130,6 +130,8 @@ typedef struct {
 
     // Exception handling state
     void *exception_handler;  // Current exception handler (exception_handler_t*)
+    struct native_exception_arena *exception_arena;
+    int64_t exception_ref;
     int32_t exception_tag;    // Tag of in-flight exception
     int64_t *exception_values; // Exception payload values
     int32_t exception_value_count; // Number of exception values

@@ -1540,6 +1540,17 @@ fn lower_extension(
       lower_try_table_end(context, environment, handler_id)
       None
     }
+    GetExceptionRef => {
+      finish_runtime_call(
+        context,
+        environment,
+        ExceptionGetRef,
+        context.environment(),
+        [Ptr64],
+        @native_types.CallBehavior::new(ReadWrite, true, false, false, false),
+      )
+      None
+    }
     GetExceptionTag => {
       lower_exception_query(context, environment, ExceptionGetTag, None)
       None

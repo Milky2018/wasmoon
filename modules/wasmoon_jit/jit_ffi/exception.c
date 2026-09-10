@@ -12,9 +12,197 @@
 
 #include "jit_internal.h"
 
+extern int64_t wasmoon_jit_context_ptr(void *jit_context);
+
 static jit_context_t *exception_activation_context(jit_context_t *ctx) {
     jit_context_t *active = get_current_jit_context();
     return ctx && ctx->callable_local_types && active ? active : ctx;
+}
+
+// Stable exception objects belong to the Store, independently of handler frames.
+typedef struct native_exception {
+    int32_t tag;
+    int32_t count;
+    int64_t *values;
+    void *root_registration;
+} native_exception_t;
+
+typedef struct native_exception_layout {
+    int32_t *roots;
+    int32_t count;
+    int32_t tag;
+    struct native_exception_layout *next;
+} native_exception_layout_t;
+
+typedef struct native_exception_arena {
+    size_t references;
+    size_t count;
+    size_t capacity;
+    native_exception_t *entries;
+    int sealed;
+    native_exception_layout_t *layouts;
+} native_exception_arena_t;
+
+struct native_exception_arena *exception_arena_new(void) {
+    native_exception_arena_t *arena = calloc(1, sizeof(*arena));
+    if (arena) arena->references = 1;
+    return arena;
+}
+
+static void exception_arena_clear(native_exception_arena_t *arena) {
+    if (!arena) return;
+    for (size_t i = 0; i < arena->count; ++i) {
+        native_exception_t *entry = &arena->entries[i];
+        if (entry->root_registration)
+            gc_heap_unregister_parked_roots(entry->root_registration);
+        free(entry->values);
+    }
+    while (arena->layouts) {
+        native_exception_layout_t *next = arena->layouts->next;
+        free(arena->layouts->roots);
+        free(arena->layouts);
+        arena->layouts = next;
+    }
+    free(arena->entries);
+    arena->entries = NULL;
+    arena->count = arena->capacity = 0;
+    arena->sealed = 1;
+}
+
+void exception_arena_release(native_exception_arena_t *arena) {
+    if (arena && --arena->references == 0) {
+        exception_arena_clear(arena);
+        free(arena);
+    }
+}
+
+static int64_t exception_arena_insert(native_exception_arena_t *arena,
+    GcHeap *heap, int32_t tag, const int64_t *values, int32_t count) {
+    if (!arena || arena->sealed || count < 0 || (count && !values)) return 0;
+    if (arena->count == arena->capacity) {
+        size_t capacity = arena->capacity ? arena->capacity * 2 : 16;
+        if (capacity > INT32_MAX) return 0;
+        void *entries = realloc(arena->entries, capacity * sizeof(native_exception_t));
+        if (!entries) return 0;
+        arena->entries = entries;
+        arena->capacity = capacity;
+    }
+    native_exception_t entry = { .tag = tag, .count = count };
+    if (count) {
+        entry.values = malloc((size_t)count * sizeof(int64_t));
+        if (!entry.values) return 0;
+        memcpy(entry.values, values, (size_t)count * sizeof(int64_t));
+        if (heap) {
+            native_exception_layout_t *layout = arena->layouts;
+            while (layout && layout->tag != tag) layout = layout->next;
+            if (layout && layout->count != count) {
+                free(entry.values);
+                return 0;
+            }
+            int64_t *roots = NULL;
+            if (!gc_heap_register_parked_roots(heap, count,
+                    &entry.root_registration, &roots)) {
+                free(entry.values);
+                return 0;
+            }
+            for (int32_t i = 0; i < count; ++i)
+                roots[i] = !layout || layout->roots[i] ? values[i] : 0;
+        }
+    }
+    arena->entries[arena->count] = entry;
+    // Odd references cannot be mistaken for movable GC heap objects.
+    return ((int64_t)arena->count++ << 1) | 1;
+}
+
+static native_exception_t *exception_arena_lookup(native_exception_arena_t *arena,
+    int64_t reference) {
+    if (!arena || reference <= 0 || !(reference & 1) ||
+        (uint64_t)(reference >> 1) >= arena->count) return NULL;
+    return &arena->entries[reference >> 1];
+}
+
+static void finalize_exception_arena(void *owner) {
+    exception_arena_release(*(native_exception_arena_t **)owner);
+}
+
+MOONBIT_FFI_EXPORT void *wasmoon_exception_arena_new(void) {
+    native_exception_arena_t **owner = moonbit_make_external_object(
+        finalize_exception_arena, sizeof(*owner));
+    *owner = exception_arena_new();
+    return owner;
+}
+
+MOONBIT_FFI_EXPORT void wasmoon_exception_arena_clear(void *owner) {
+    exception_arena_clear(*(native_exception_arena_t **)owner);
+}
+
+MOONBIT_FFI_EXPORT void wasmoon_exception_arena_bind(void *context, void *owner) {
+    jit_context_t *ctx = (jit_context_t *)wasmoon_jit_context_ptr(context);
+    native_exception_arena_t *arena = *(native_exception_arena_t **)owner;
+    if (ctx && arena != ctx->exception_arena) {
+        if (arena) ++arena->references;
+        exception_arena_release(ctx->exception_arena);
+        ctx->exception_arena = arena;
+    }
+}
+
+MOONBIT_FFI_EXPORT int32_t wasmoon_exception_arena_define_tag(void *owner,
+    int32_t tag, const int32_t *roots, int32_t count) {
+    native_exception_arena_t *arena = *(native_exception_arena_t **)owner;
+    if (!arena || arena->sealed || count < 0) return 0;
+    for (native_exception_layout_t *entry = arena->layouts; entry; entry = entry->next)
+        if (entry->tag == tag) return 1;
+    native_exception_layout_t *layout = calloc(1, sizeof(*layout));
+    if (!layout) return 0;
+    if (count) {
+        layout->roots = malloc((size_t)count * sizeof(int32_t));
+        if (!layout->roots) { free(layout); return 0; }
+        memcpy(layout->roots, roots, (size_t)count * sizeof(int32_t));
+    }
+    layout->count = count;
+    layout->tag = tag;
+    layout->next = arena->layouts;
+    arena->layouts = layout;
+    return 1;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_exception_arena_insert(void *owner,
+    int64_t heap, int32_t tag, const int64_t *values, int32_t count) {
+    return exception_arena_insert(*(native_exception_arena_t **)owner,
+        (GcHeap *)heap, tag, values, count);
+}
+
+MOONBIT_FFI_EXPORT int32_t wasmoon_exception_arena_tag(void *owner, int64_t ref) {
+    native_exception_t *entry = exception_arena_lookup(*(native_exception_arena_t **)owner, ref);
+    return entry ? entry->tag : -1;
+}
+
+MOONBIT_FFI_EXPORT int32_t wasmoon_exception_arena_count(void *owner, int64_t ref) {
+    native_exception_t *entry = exception_arena_lookup(*(native_exception_arena_t **)owner, ref);
+    return entry ? entry->count : -1;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_exception_arena_value(void *owner, int64_t ref, int32_t index) {
+    native_exception_t *entry = exception_arena_lookup(*(native_exception_arena_t **)owner, ref);
+    return entry && index >= 0 && index < entry->count ? entry->values[index] : 0;
+}
+
+static int64_t exception_get_ref_impl(jit_context_t *ctx) {
+    ctx = exception_activation_context(ctx);
+    if (!ctx->exception_ref) {
+        ctx->exception_ref = exception_arena_insert(ctx->exception_arena,
+            ctx->gc_heap, ctx->exception_tag, ctx->exception_values,
+            ctx->exception_value_count);
+        if (!ctx->exception_ref) {
+            g_trap_code = 9;
+            siglongjmp(g_trap_jmp_buf, 1);
+        }
+    }
+    return ctx->exception_ref;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_exception_get_ref_ptr(void) {
+    return (int64_t)exception_get_ref_impl;
 }
 
 // ============ Exception Handler Management ============
@@ -57,6 +245,7 @@ void exception_try_end_impl(jit_context_t *ctx, int32_t handler_id) {
         free(ctx->exception_values);
         ctx->exception_values = NULL;
     }
+    ctx->exception_ref = 0;
     ctx->exception_value_count = 0;
 
     // Clear any spilled locals
@@ -87,6 +276,7 @@ void exception_reset_context_state(jit_context_t *ctx) {
         free(ctx->exception_values);
         ctx->exception_values = NULL;
     }
+    ctx->exception_ref = 0;
     ctx->exception_value_count = 0;
     ctx->exception_tag = 0;
 
@@ -99,66 +289,55 @@ void exception_reset_context_state(jit_context_t *ctx) {
 
 // ============ Exception Throwing ============
 
-void exception_throw_impl(jit_context_t *ctx, int32_t tag_addr,
-                          int64_t *values, int32_t count) {
-    if (ctx && tag_addr >= 0 && tag_addr < ctx->callable_tag_count) tag_addr = ctx->callable_tags[tag_addr];
-    ctx = exception_activation_context(ctx);
-    // Free any previous exception values
-    if (ctx->exception_values) {
-        free(ctx->exception_values);
-        ctx->exception_values = NULL;
-    }
-
-    // Store exception info
-    ctx->exception_tag = tag_addr;
-    ctx->exception_value_count = count;
-
-    if (count > 0 && values) {
-        // Copy exception values to heap
-        ctx->exception_values = (int64_t *)malloc(count * sizeof(int64_t));
-        if (ctx->exception_values) {
-            memcpy(ctx->exception_values, values, count * sizeof(int64_t));
-        }
-    } else {
-        ctx->exception_values = NULL;
-    }
-
-    // Find handler and longjmp
+static void exception_raise_current(jit_context_t *ctx) __attribute__((noreturn));
+static void exception_raise_current(jit_context_t *ctx) {
     exception_handler_t *handler = (exception_handler_t *)ctx->exception_handler;
     if (handler) {
-        ctx_gc_restore_root_scopes_internal(
-            ctx,
-            handler->gc_root_scope_marker
-        );
+        ctx_gc_restore_root_scopes_internal(ctx, handler->gc_root_scope_marker);
         siglongjmp(handler->jmp_buf, handler->handler_id);
     }
-
-    // No handler - propagate as trap (uncaught exception)
-    // Keep uncaught exceptions distinct from malformed handler state.
     g_trap_code = 12;
     ctx_gc_clear_root_scopes_internal(ctx);
     siglongjmp(g_trap_jmp_buf, 1);
 }
 
+static void exception_set_payload(jit_context_t *ctx, int32_t tag,
+    const int64_t *values, int32_t count, int64_t reference) {
+    int64_t *copy = NULL;
+    if (count > 0) {
+        copy = malloc((size_t)count * sizeof(int64_t));
+        if (!copy) {
+            g_trap_code = 9;
+            siglongjmp(g_trap_jmp_buf, 1);
+        }
+        memcpy(copy, values, (size_t)count * sizeof(int64_t));
+    }
+    free(ctx->exception_values);
+    ctx->exception_values = copy;
+    ctx->exception_value_count = count;
+    ctx->exception_tag = tag;
+    ctx->exception_ref = reference;
+}
+
+void exception_throw_impl(jit_context_t *ctx, int32_t tag_addr,
+                          int64_t *values, int32_t count) {
+    if (ctx && tag_addr >= 0 && tag_addr < ctx->callable_tag_count)
+        tag_addr = ctx->callable_tags[tag_addr];
+    ctx = exception_activation_context(ctx);
+    exception_set_payload(ctx, tag_addr, values, count, 0);
+    exception_raise_current(ctx);
+}
+
 void exception_throw_ref_impl(jit_context_t *ctx, int64_t exnref) {
     ctx = exception_activation_context(ctx);
-    // exnref encodes the exception reference from a catch_ref block.
-    // The exception values are already stored in ctx from when it was caught,
-    // so we just re-throw by jumping to the current handler.
-    (void)exnref; // exnref is implicit in ctx's exception state
-    exception_handler_t *handler = (exception_handler_t *)ctx->exception_handler;
-    if (handler) {
-        ctx_gc_restore_root_scopes_internal(
-            ctx,
-            handler->gc_root_scope_marker
-        );
-        siglongjmp(handler->jmp_buf, handler->handler_id);
+    native_exception_t *entry = exception_arena_lookup(ctx->exception_arena, exnref);
+    if (!entry) {
+        g_trap_code = exnref == 0 ? 14 : 8;
+        siglongjmp(g_trap_jmp_buf, 1);
     }
-
-    // No handler - uncaught exception trap
-    g_trap_code = 12;
-    ctx_gc_clear_root_scopes_internal(ctx);
-    siglongjmp(g_trap_jmp_buf, 1);
+    // The snapshot already stores a Store tag, never a module-local index.
+    exception_set_payload(ctx, entry->tag, entry->values, entry->count, exnref);
+    exception_raise_current(ctx);
 }
 
 void exception_delegate_impl(jit_context_t *ctx, int32_t depth) {

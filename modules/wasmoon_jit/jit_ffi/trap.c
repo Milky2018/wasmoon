@@ -104,6 +104,7 @@ static void save_activation_context(jit_trap_activation_t *activation) {
     jit_context_t *context = activation->context;
     if (!context || activation->context_detached) return;
     activation->exception_handler = context->exception_handler;
+    activation->exception_ref = context->exception_ref;
     activation->exception_tag = context->exception_tag;
     activation->exception_values = context->exception_values;
     activation->exception_value_count = context->exception_value_count;
@@ -114,6 +115,7 @@ static void save_activation_context(jit_trap_activation_t *activation) {
     activation->debug_current_func_idx = context->debug_current_func_idx;
     activation->context_detached = 1;
     context->exception_handler = NULL;
+    context->exception_ref = 0;
     context->exception_tag = 0;
     context->exception_values = NULL;
     context->exception_value_count = 0;
@@ -135,6 +137,7 @@ static void restore_activation_context(jit_trap_activation_t *activation) {
         abort();
     }
     context->exception_handler = activation->exception_handler;
+    context->exception_ref = activation->exception_ref;
     context->exception_tag = activation->exception_tag;
     context->exception_values = activation->exception_values;
     context->exception_value_count = activation->exception_value_count;
@@ -361,6 +364,7 @@ void jit_trap_activation_abandon(jit_trap_activation_t *activation) {
     jit_context_t *context = activation->context;
     if (context && activation->context_detached) {
         void *saved_handler = context->exception_handler;
+        int64_t saved_ref = context->exception_ref;
         int32_t saved_tag = context->exception_tag;
         int64_t *saved_values = context->exception_values;
         int32_t saved_value_count = context->exception_value_count;
@@ -369,6 +373,7 @@ void jit_trap_activation_abandon(jit_trap_activation_t *activation) {
         wasmoon_gc_frame_t *saved_frames = context->gc_frame_chain_head;
         wasmoon_gc_root_scope_t *saved_scopes = context->gc_root_scope_head;
         context->exception_handler = activation->exception_handler;
+        context->exception_ref = activation->exception_ref;
         context->exception_tag = activation->exception_tag;
         context->exception_values = activation->exception_values;
         context->exception_value_count = activation->exception_value_count;
@@ -379,6 +384,7 @@ void jit_trap_activation_abandon(jit_trap_activation_t *activation) {
         exception_reset_context_state(context);
         ctx_gc_clear_frames_internal(context);
         context->exception_handler = saved_handler;
+        context->exception_ref = saved_ref;
         context->exception_tag = saved_tag;
         context->exception_values = saved_values;
         context->exception_value_count = saved_value_count;

@@ -94,6 +94,7 @@ pub fn RuntimeSymbolResolver::with_wasmoon_runtime_symbols() -> RuntimeSymbolRes
   add(ExceptionThrowTag, c_jit_get_exception_throw_tag_ptr())
   add(ExceptionThrowRef, c_jit_get_exception_throw_ref_ptr())
   add(ExceptionDelegate, c_jit_get_exception_delegate_ptr())
+  add(ExceptionGetRef, c_jit_get_exception_get_ref_ptr())
   add(ExceptionGetTag, c_jit_get_exception_get_tag_ptr())
   add(ExceptionGetValue, c_jit_get_exception_get_value_ptr())
   add(ExceptionGetValueCount, c_jit_get_exception_get_value_count_ptr())
