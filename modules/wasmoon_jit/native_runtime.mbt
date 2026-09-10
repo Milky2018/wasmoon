@@ -126,6 +126,8 @@ pub fn jit_trap_message(code : Int) -> String {
     20 => "allocation size too large"
     21 => "atomic wait on non-shared memory"
     22 => "failed to allocate"
+    23 => "continuation already consumed"
+    24 => "unhandled suspension"
     _ => "unknown trap"
   }
 }

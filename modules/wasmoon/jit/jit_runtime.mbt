@@ -1504,3 +1504,33 @@ pub fn JITModule::set_exception_arena(
     context.ctx.set_exception_arena(arena)
   }
 }
+
+///|
+pub fn JITModule::prepare_continuations(
+  self : JITModule,
+  types : Array[@types.SubType],
+  state : @wasmoon_jit.NativeExecutionState,
+) -> Unit raise JITTrap {
+  if self.context is Some(context) {
+    context.ctx.set_continuation_arena(state.continuations())
+    for index, type_ in types {
+      if type_.composite is Cont(function_index) {
+        guard types[function_index].composite is Func(signature) else {
+          raise JITTrap("invalid continuation signature")
+        }
+        let trampoline = context.entry_trampoline(
+          signature.params,
+          signature.results,
+        )
+        if !context.ctx.define_continuation_type(
+            index,
+            trampoline,
+            signature.params,
+            signature.results,
+          ) {
+          raise JITTrap("continuation signature allocation failed")
+        }
+      }
+    }
+  }
+}

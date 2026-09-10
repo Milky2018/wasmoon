@@ -13,6 +13,7 @@ fn prepare_async_jit_context(
       false,
       nan_canonicalization=store.nan_canonicalization,
       enable_cancellation=cooperative,
+      stack_switching=true,
     )
     is Some((artifact, debug_db)) else {
     fail("JIT compilation failed")

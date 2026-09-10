@@ -1752,9 +1752,10 @@ pub fn compile_module_to_jit(
   use_reusable_pipeline? : Bool = true,
   enable_cancellation? : Bool = false,
   nan_canonicalization? : Bool = false,
+  stack_switching? : Bool = false,
 ) -> (@artifact.Artifact, @wasmoon_jit.JITDebugDB?)? {
   let progress_start = compile_start.unwrap_or(@perf.tick_now())
-  @validator.validate_module(mod_) catch {
+  @validator.validate_module(mod_, stack_switching~) catch {
     error => {
       let message = match error {
         WithContext(context) => context.format()

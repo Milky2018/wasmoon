@@ -39,6 +39,7 @@ options(
     "jit_ffi/exception.c",
     "jit_ffi/wasi.c",
     "jit_ffi/fiber.c",
+    "jit_ffi/guest_continuation.c",
     "jit_ffi/trampoline_call_x86_64.S",
     "jit_ffi/stack_switch_aarch64.S",
     "jit_ffi/stack_switch_x86_64.S",

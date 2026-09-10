@@ -100,21 +100,18 @@ jobs:
           fi
           ./install.sh
 
-      - name: run Wasmtime misc smoke tests
+      - name: run complete Wasmtime misc suite
         run: |
           python3 scripts/run_wasmtime_misc.py \
-            --filter add.wast --filter div-rem.wast \
-            --filter function-references/call_indirect.wast \
-            --filter gc/array-copy-inline.wast --filter elem_drop.wast \
-            --filter component-model/aliasing.wast \
-            --output target/wasmtime-misc-smoke
+            --include-high-memory --timeout 120 \
+            --output target/wasmtime-misc
 
-      - name: upload Wasmtime misc smoke results
+      - name: upload Wasmtime misc results
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: wasmtime-misc-smoke-${{ matrix.os }}
-          path: target/wasmtime-misc-smoke
+          name: wasmtime-misc-${{ matrix.os }}
+          path: target/wasmtime-misc
           if-no-files-found: warn
 
       - name: run upstream WASIp1 polling regressions

@@ -201,6 +201,7 @@ pub fn WastContext::close(self : WastContext) -> Unit {
     return
   }
   self.closed = true
+  self.store.native_execution_state().retire_continuations()
   // Track compilation ownership separately from names: rebinding a name or
   // replacing the current module must not orphan its executable mappings.
   for context in self.compiled_modules {

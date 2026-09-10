@@ -55,6 +55,8 @@ pub fn call_multi(@milkir.FunctionBuilder, Int, Array[@milkir.Type], Array[@milk
 
 pub fn call_ref_multi(@milkir.FunctionBuilder, Int, Array[@milkir.Type], @milkir.Value, Array[@milkir.Value]) -> Array[@milkir.Value]
 
+pub fn continuation_operation(@milkir.FunctionBuilder, WasmOpcode, Array[@milkir.Type], Array[@milkir.Value]) -> Array[@milkir.Value]
+
 pub fn data_drop(@milkir.FunctionBuilder, RuntimeSymbols, @milkir.Value, Int) -> Unit
 
 pub fn decode(@milkir.ExtOp) -> WasmOpcode?
@@ -247,6 +249,11 @@ pub(all) enum WasmOpcode {
   SpillLocalsForThrow(Int)
   GetSpilledLocal(Int)
   GetExceptionRef
+  ContNew(Int)
+  ContBind(Int, Int)
+  ContSuspend(Int)
+  ContResume(Int, Int, Int, Int)
+  ContSwitch(Int, Int)
 } derive(Eq, Hash, @debug.Debug)
 pub fn WasmOpcode::equal(Self, Self) -> Bool
 pub fn WasmOpcode::hash(Self) -> Int
@@ -305,6 +312,11 @@ pub(all) enum WasmRuntimeHelper {
   ExceptionDelegate
   ExceptionGetTag
   ExceptionGetRef
+  ContNew
+  ContBind
+  ContSuspend
+  ContResume
+  ContSwitch
   ExceptionGetValue
   ExceptionGetValueCount
   ExceptionSigsetjmp

@@ -142,6 +142,8 @@ fn classify_jit_failure(error : JITCoreCallError) -> WastRunnerError {
     Trap(message) =>
       if message.has_prefix("uncaught exception") {
         GuestException
+      } else if message.has_prefix("unhandled suspension") {
+        GuestSuspension
       } else if message.has_prefix("call stack exhausted") ||
         message.has_prefix("stack overflow") {
         GuestExhaustion(message)

@@ -582,3 +582,14 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_sigsetjmp_ptr(void) {
     return (int64_t)sigsetjmp;
 #endif
 }
+
+int64_t exception_capture_current(jit_context_t *ctx) {
+    return exception_get_ref_impl(ctx);
+}
+int64_t exception_capture_payload(jit_context_t *ctx, int32_t tag, const int64_t *values, int32_t count) {
+    if (tag >= 0 && tag < ctx->callable_tag_count) tag = ctx->callable_tags[tag];
+    jit_context_t *active = exception_activation_context(ctx);
+    int64_t reference = exception_arena_insert(active->exception_arena, active->gc_heap, tag, values, count);
+    if (!reference) { g_trap_code = 9; siglongjmp(g_trap_jmp_buf, 1); }
+    return reference;
+}

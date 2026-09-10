@@ -204,7 +204,8 @@ int32_t wasmoon_atomic_wait_guest(
             trap = 11;
             break;
         }
-        if (ctx->scheduling_budget > 0) {
+        jit_context_t *controls = jit_execution_control_context(ctx);
+        if (controls && controls->scheduling_budget > 0) {
             if (!fiber_owned || wasmoon_native_fiber_yield(
                     WASMOON_FIBER_EVENT_ATOMIC_WAIT
                 ) == INT64_MIN) {

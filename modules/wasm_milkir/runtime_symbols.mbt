@@ -55,6 +55,11 @@ pub(all) enum WasmRuntimeHelper {
   ExceptionDelegate
   ExceptionGetTag
   ExceptionGetRef
+  ContNew
+  ContBind
+  ContSuspend
+  ContResume
+  ContSwitch
   ExceptionGetValue
   ExceptionGetValueCount
   ExceptionSigsetjmp
@@ -113,6 +118,11 @@ fn WasmRuntimeHelper::suffix(self : WasmRuntimeHelper) -> String {
     ExceptionThrowTag => "exception.throw_tag"
     ExceptionThrowRef => "exception.throw_ref"
     ExceptionDelegate => "exception.delegate"
+    ContNew => "continuation.new"
+    ContBind => "continuation.bind"
+    ContSuspend => "continuation.suspend"
+    ContResume => "continuation.resume"
+    ContSwitch => "continuation.switch"
     ExceptionGetRef => "exception.get_ref"
     ExceptionGetTag => "exception.get_tag"
     ExceptionGetValue => "exception.get_value"

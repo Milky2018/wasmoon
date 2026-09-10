@@ -83,6 +83,7 @@ void jit_trap_activation_init(
     activation->brk_imm = -1;
     activation->func_idx = -1;
     activation->context = context;
+    activation->control_context = context;
     uintptr_t stack_base = 0;
     uintptr_t stack_top = 0;
     uintptr_t guard_base = 0;
@@ -271,11 +272,24 @@ void jit_parked_gc_roots_unregister(void *registration) {
     gc_heap_unregister_parked_roots(registration);
 }
 
+// Module environments can recur through another module's native activation.
+// Save and restore the nearest owner of the same context, even across an
+// intervening activation, so parked stacks never borrow another stack's roots.
+static jit_trap_activation_t *matching_context_activation(jit_context_t *context) {
+    for (jit_trap_activation_t *a = current_activation; a; a = a->previous) {
+        if (a->context == context) return a;
+    }
+    return NULL;
+}
+
 void jit_trap_activation_push(jit_trap_activation_t *activation) {
     activation->previous = current_activation;
-    if (current_activation &&
-        current_activation->context == activation->context) {
-        save_activation_context(current_activation);
+    if (activation->inherit_controls && current_activation) {
+        activation->control_context = current_activation->control_context;
+    }
+    jit_trap_activation_t *owner = matching_context_activation(activation->context);
+    if (owner) {
+        save_activation_context(owner);
     } else if (activation->context) {
         exception_reset_context_state(activation->context);
     }
@@ -322,9 +336,9 @@ void jit_trap_activation_publish(jit_trap_activation_t *activation) {
 void jit_trap_activation_pop(jit_trap_activation_t *activation) {
     if (current_activation != activation) abort();
     current_activation = activation->previous;
-    if (current_activation &&
-        current_activation->context == activation->context) {
-        restore_activation_context(current_activation);
+    jit_trap_activation_t *owner = matching_context_activation(activation->context);
+    if (owner) {
+        restore_activation_context(owner);
     }
     activation->active = 0;
 }
@@ -334,9 +348,9 @@ jit_trap_activation_t *jit_trap_activation_detach(void) {
     if (!activation) return NULL;
     save_activation_context(activation);
     current_activation = activation->previous;
-    if (current_activation &&
-        current_activation->context == activation->context) {
-        restore_activation_context(current_activation);
+    jit_trap_activation_t *owner = matching_context_activation(activation->context);
+    if (owner) {
+        restore_activation_context(owner);
     }
     return activation;
 }
@@ -346,12 +360,15 @@ void jit_trap_activation_attach(jit_trap_activation_t *activation) {
     // A parked continuation may be resumed after its original dynamic caller
     // has returned or parked. Preserve the activation current at the actual
     // resume point before rebinding the continuation to it.
-    if (current_activation &&
-        current_activation->context == activation->context) {
-        save_activation_context(current_activation);
+    jit_trap_activation_t *owner = matching_context_activation(activation->context);
+    if (owner) {
+        save_activation_context(owner);
     }
     activation->previous = current_activation;
     restore_activation_context(activation);
+    if (activation->inherit_controls && current_activation) {
+        activation->control_context = current_activation->control_context;
+    }
     current_activation = activation;
 }
 

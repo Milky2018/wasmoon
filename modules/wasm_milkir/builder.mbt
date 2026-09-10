@@ -880,3 +880,14 @@ pub fn get_spilled_local(
 pub fn get_exception_ref(builder : @milkir.FunctionBuilder) -> @milkir.Value {
   emit_wasm_inst(builder, @milkir.Type::Ref, GetExceptionRef, [])
 }
+
+///|
+/// Emit the validated typed-continuation operation and its SSA results.
+pub fn continuation_operation(
+  builder : @milkir.FunctionBuilder,
+  opcode : WasmOpcode,
+  result_types : Array[@milkir.Type],
+  operands : Array[@milkir.Value],
+) -> Array[@milkir.Value] {
+  append_multi_result_inst(builder, opcode, result_types, operands)
+}

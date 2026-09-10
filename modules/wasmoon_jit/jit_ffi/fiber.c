@@ -79,6 +79,7 @@ typedef struct native_fiber {
     jit_trap_activation_t *detached_activation;
     void *parked_gc_roots;
     void *atomic_waiter;
+    struct native_fiber_resource *resources;
     const void *caller_stack_bottom;
     size_t caller_stack_size;
 } native_fiber_t;
@@ -150,7 +151,50 @@ static void native_fiber_swap_stacks(
 #endif
 }
 
+typedef struct native_fiber_resource {
+    native_fiber_t *owner;
+    struct native_fiber_resource *next;
+    void *resource;
+    void (*release)(void *);
+} native_fiber_resource_t;
+
+static void release_fiber_resources(native_fiber_t *fiber) {
+    while (fiber && fiber->resources) {
+        native_fiber_resource_t *scope = fiber->resources;
+        fiber->resources = scope->next;
+        scope->release(scope->resource);
+        free(scope);
+    }
+}
+
+void *native_fiber_own_resource(void *resource, void (*release)(void *)) {
+    if (!current_native_fiber) return NULL;
+    native_fiber_resource_t *scope = malloc(sizeof(*scope));
+    if (!scope) {
+        g_trap_code = WASMOON_TRAP_OUT_OF_MEMORY;
+        siglongjmp(g_trap_jmp_buf, 1);
+    }
+    *scope = (native_fiber_resource_t){current_native_fiber, current_native_fiber->resources, resource, release};
+    current_native_fiber->resources = scope;
+    return scope;
+}
+
+void native_fiber_replace_resource(void *opaque, void *resource) {
+    if (opaque) ((native_fiber_resource_t *)opaque)->resource = resource;
+}
+
+void native_fiber_disown_resource(void *opaque) {
+    native_fiber_resource_t *scope = opaque;
+    if (!scope) return;
+    native_fiber_resource_t **link = &scope->owner->resources;
+    while (*link && *link != scope) link = &(*link)->next;
+    if (*link != scope) abort();
+    *link = scope->next;
+    free(scope);
+}
+
 static void release_fiber_stack(native_fiber_t *fiber) {
+    release_fiber_resources(fiber);
     if (fiber && fiber->atomic_waiter) {
         wasmoon_atomic_wait_destroy(fiber->atomic_waiter);
         fiber->atomic_waiter = NULL;
@@ -193,6 +237,7 @@ static WASMOON_NO_ADDRESS_SANITIZE void fiber_bootstrap(void) {
     fiber->return_value = call_native_fiber_entry(
         fiber->entry, fiber->closure
     );
+    release_fiber_resources(fiber);
     fiber->state = WASMOON_FIBER_STATE_RETURNED;
     native_fiber_swap_stacks(
         &fiber->context,
@@ -530,4 +575,20 @@ int wasmoon_native_fiber_stack_bounds(
     if (guard_base) *guard_base = (uintptr_t)fiber->mapping;
     if (guard_size) *guard_size = fiber->guard_size;
     return 1;
+}
+
+// Native guest continuations use the same stack, trap and GC ownership
+// machinery without constructing a MoonBit closure on a suspendable stack.
+void *native_fiber_alloc_c(int64_t (*entry)(void *), void *closure, int64_t stack_size) {
+    return allocate_fiber(entry, closure, 0, stack_size);
+}
+int native_fiber_continue_c(void *fiber, int64_t value) {
+    return wasmoon_native_fiber_continue(&fiber, value);
+}
+void native_fiber_destroy_c(void *fiber) { destroy_fiber(fiber); }
+int64_t native_fiber_result_c(void *fiber) { return ((native_fiber_t *)fiber)->return_value; }
+int64_t native_fiber_event_c(void *fiber) { return ((native_fiber_t *)fiber)->yielded_value; }
+
+int64_t native_fiber_stack_size_c(void) {
+    return current_native_fiber ? (int64_t)current_native_fiber->usable_size : 1048576;
 }

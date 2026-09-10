@@ -1540,6 +1540,26 @@ fn lower_extension(
       lower_try_table_end(context, environment, handler_id)
       None
     }
+    ContNew(index) => {
+      lower_cont_new(context, environment, index)
+      None
+    }
+    ContBind(input, _) => {
+      lower_cont_bind(context, environment, input)
+      None
+    }
+    ContSuspend(tag) => {
+      lower_cont_effect(context, environment, tag, false)
+      None
+    }
+    ContSwitch(_, tag) => {
+      lower_cont_effect(context, environment, tag, true)
+      None
+    }
+    ContResume(_, inputs, handlers, exception_tag) => {
+      lower_cont_resume(context, environment, inputs, handlers, exception_tag)
+      None
+    }
     GetExceptionRef => {
       finish_runtime_call(
         context,

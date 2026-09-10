@@ -39,6 +39,7 @@ priv struct NativeInvocation {
 /// `invocations` but are absent from `active`, so any number of component tasks
 /// can retain distinct native resources without sharing an execution stack.
 struct NativeExecutionState {
+  continuation_arena : NativeContinuationArena
   exception_arena : NativeExceptionArena
   mut accepting_new_invocations : Bool
   mut next_invocation_id : Int64
@@ -51,6 +52,7 @@ struct NativeExecutionState {
 ///|
 pub fn NativeExecutionState::NativeExecutionState() -> NativeExecutionState {
   {
+    continuation_arena: NativeContinuationArena::new(),
     exception_arena: NativeExceptionArena::new(),
     accepting_new_invocations: true,
     next_invocation_id: 0L,
@@ -66,6 +68,7 @@ pub fn NativeExecutionState::NativeExecutionState() -> NativeExecutionState {
 /// existing handles.
 pub fn NativeExecutionState::seal(self : NativeExecutionState) -> Unit {
   self.accepting_new_invocations = false
+  self.continuation_arena.clear()
   self.exception_arena.clear()
 }
 
@@ -317,4 +320,19 @@ pub fn NativeExecutionState::exceptions(
   self : NativeExecutionState,
 ) -> NativeExceptionArena {
   self.exception_arena
+}
+
+///|
+pub fn NativeExecutionState::continuations(
+  self : NativeExecutionState,
+) -> NativeContinuationArena {
+  self.continuation_arena
+}
+
+///|
+/// Retire parked guest stacks before their modules release entry trampolines.
+pub fn NativeExecutionState::retire_continuations(
+  self : NativeExecutionState,
+) -> Unit {
+  self.continuation_arena.clear()
 }

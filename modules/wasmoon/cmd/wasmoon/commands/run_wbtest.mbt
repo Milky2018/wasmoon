@@ -205,7 +205,7 @@ test "run JIT cache accepts an exactly compatible v10 artifact" {
   }
   inspect(
     run_jit_cache_file("/tmp/cache", deterministic_manifest),
-    content="/tmp/cache/v10-aarch64-macos-o2-small-direct-no-cancel-native-nan-no-debug-r006400690072006500630074002d00760063006f00640065002d0036-s32e9891ae7d3cedff10d21cea1ae3a989d4fb5424b89b9c2f93328535cf30af7-x67abdd721024f0ff4e0b3f4c2fc13bc5bad42d0b7851d456d88d203d15aaa450.cwasm",
+    content="/tmp/cache/v10-aarch64-macos-o2-small-direct-no-cancel-native-nan-no-debug-r006400690072006500630074002d00760063006f00640065002d0037-s32e9891ae7d3cedff10d21cea1ae3a989d4fb5424b89b9c2f93328535cf30af7-x67abdd721024f0ff4e0b3f4c2fc13bc5bad42d0b7851d456d88d203d15aaa450.cwasm",
   )
   let path = cache_test_file("compatible")
   save_run_jit_cache(path, artifact)
@@ -316,7 +316,7 @@ test "run JIT cache rejects an artifact from the previous codegen revision" {
       @fs.path_exists(path),
     ),
     content=(
-      #|("direct-vcode-6", "direct-vcode-4", true, false)
+      #|("direct-vcode-7", "direct-vcode-4", true, false)
     ),
   )
 }

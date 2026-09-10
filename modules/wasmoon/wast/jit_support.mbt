@@ -562,6 +562,13 @@ fn decode_table_entry_value(
   jit_ctx : JITModuleContext,
 ) -> @types.Value raise @runtime.RuntimeError {
   match elem_type {
+    ContRef
+    | RefCont
+    | RefContTyped(_)
+    | RefNullContTyped(_)
+    | NullContRef
+    | RefNoCont => @wasmoon_jit.i64_to_value(raw_value, elem_type)
+    ExnRef | NullExnRef => store.decode_native_exception(raw_value)
     FuncRef | RefFunc | RefFuncTyped(_) | RefNullFuncTyped(_) | NullFuncRef =>
       decode_funcref_from_jit_ctx(raw_value, jit_ctx, store)
     ExternRef | RefExtern | NullExternRef =>
@@ -861,6 +868,10 @@ pub fn init_bulk_segments(
   store : @runtime.Store,
   use_subtype_indirect_check? : Bool = false,
 ) -> Unit raise @runtime.RuntimeError {
+  jm.prepare_continuations(mod_.types, store.native_execution_state()) catch {
+    error =>
+      raise LinkErrorDetail("native continuation preparation failed: \{error}")
+  }
   // Precompute canonical indices for type equivalence.
   let canonical = @types.compute_canonical_type_indices(
     mod_.types,
@@ -1043,6 +1054,8 @@ pub fn sync_table_to_jit(
     let mut encoded : Int64 = NULL_REF
     let mut type_idx : Int = -1
     match value {
+      ContRef(_) => encoded = @wasmoon_jit.value_to_i64(value)
+      ExnRef(index) => encoded = store.encode_native_exception(index)
       Null => {
         encoded = NULL_REF
         type_idx = -1
@@ -1470,7 +1483,13 @@ pub fn build_external_imports_for_jit(
       if store.get_func_inst_opt(func_addr) is None {
         continue
       }
-      let encoded = -(func_addr.to_int64() + 1L)
+      let encoded = match store.get_func_inst_opt(func_addr) {
+        Some(WasmFunc(_)) =>
+          store
+          .lookup_jit_funcref_ptr(func_addr)
+          .unwrap_or(-(func_addr.to_int64() + 1L))
+        _ => -(func_addr.to_int64() + 1L)
+      }
       let m = match external.get(imp.mod_name) {
         Some(mm) => mm
         None => Map([])

@@ -16,7 +16,7 @@ import {
 }
 
 // Values
-pub const WASMOON_CODEGEN_REVISION : String = "direct-vcode-6"
+pub const WASMOON_CODEGEN_REVISION : String = "direct-vcode-7"
 
 pub const WASMOON_JIT_ABI_VERSION : Int = 6
 
@@ -678,6 +678,8 @@ pub struct NativeCompiler {
 pub fn NativeCompiler::compile_wasm_body_artifact_function(Self, @milkir.Function, @wasm_milkir.WasmValidationContext, function_index~ : Int, signature~ : @native_types.Signature, use_subtype_indirect_check? : Bool, canonical_type_indices? : Array[Int]) -> @artifact.FunctionCode raise JitPipelineError
 pub fn NativeCompiler::new(NativeTarget) -> Self
 
+type NativeContinuationArena
+
 type NativeExceptionArena
 pub fn NativeExceptionArena::define_tag(Self, Int, Array[@types.ValueType]) -> Bool
 pub fn NativeExceptionArena::insert(Self, Int64, Int, Array[Int64]) -> Int64
@@ -687,11 +689,13 @@ type NativeExecutionState
 pub fn NativeExecutionState::NativeExecutionState() -> Self
 pub fn NativeExecutionState::active_depth(Self) -> Int
 pub fn NativeExecutionState::begin(Self, release? : () -> Unit) -> NativeInvocationHandle raise NativeExecutionStateError
+pub fn NativeExecutionState::continuations(Self) -> NativeContinuationArena
 pub fn NativeExecutionState::current_invocation(Self) -> Int64?
 pub fn NativeExecutionState::exceptions(Self) -> NativeExceptionArena
 pub fn NativeExecutionState::live_count(Self) -> Int
 pub fn NativeExecutionState::parked_count(Self) -> Int
 pub fn NativeExecutionState::release_if_live(Self, Int64) -> Unit
+pub fn NativeExecutionState::retire_continuations(Self) -> Unit
 pub fn NativeExecutionState::seal(Self) -> Unit
 pub fn NativeExecutionState::to_repr(Self) -> @debug.Repr
 pub impl @debug.Debug for NativeExecutionState
@@ -768,6 +772,7 @@ pub fn NativeJITContext::clear_wasi_stdin_buffer(Self) -> Unit
 pub fn NativeJITContext::clear_wasi_stdin_callback(Self) -> Unit
 #alias(alloc_wasm_stack, deprecated)
 pub fn NativeJITContext::configure_native_fiber_stack_size(Self, Int64) -> Bool
+pub fn NativeJITContext::define_continuation_type(Self, Int, Int64, Array[@types.ValueType], Array[@types.ValueType]) -> Bool
 pub fn NativeJITContext::func_count(Self) -> Int
 pub fn NativeJITContext::func_ptr(Self, Int) -> Int64
 pub fn NativeJITContext::gc_begin_frame(Self, Int64) -> Unit
@@ -787,6 +792,7 @@ pub fn NativeJITContext::refresh_table_layout(Self, Int) -> Bool
 pub fn NativeJITContext::register_safepoints(Self, Int, Array[@code_object.SafepointSite]) -> Bool
 pub fn NativeJITContext::set_callable_types(Self, Array[Int], Array[Int], Array[(Int64, Int)], Array[Int]) -> Unit
 pub fn NativeJITContext::set_cancellation_callback(Self, () -> Bool) -> Unit
+pub fn NativeJITContext::set_continuation_arena(Self, NativeContinuationArena) -> Unit
 pub fn NativeJITContext::set_cooperative_scheduling(Self, Bool) -> Unit
 pub fn NativeJITContext::set_exception_arena(Self, NativeExceptionArena) -> Unit
 pub fn NativeJITContext::set_func(Self, Int, Int64) -> Unit

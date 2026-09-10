@@ -106,6 +106,7 @@ pub fn JITModule::init_wasi_quiet(Self, Array[String], Array[String], Array[(Str
 pub fn JITModule::init_wasi_with_stdio(Self, Array[String], Array[String], Array[(String, String)], ((Bytes) -> Unit)?, ((Bytes) -> Unit)?, Bytes?, stdin_callback? : (() -> Bytes)?, readonly_preopens? : Array[(String, String)]) -> Unit
 pub fn JITModule::load_artifact(@wasmoon_jit.LoadedArtifact, Array[(Array[@types.ValueType], Array[@types.ValueType])], function_names? : Array[String], debug_db? : @wasmoon_jit.JITDebugDB?) -> Self raise JITModuleLoadError
 pub fn JITModule::load_artifact_with_imports(@wasmoon_jit.LoadedArtifact, Array[(Array[@types.ValueType], Array[@types.ValueType])], Map[String, Map[String, Int64]], function_names? : Array[String], debug_db? : @wasmoon_jit.JITDebugDB?) -> Self raise JITModuleLoadError
+pub fn JITModule::prepare_continuations(Self, Array[@types.SubType], @wasmoon_jit.NativeExecutionState) -> Unit raise JITTrap
 pub fn JITModule::refresh_table_layout(Self, Int) -> Bool
 pub fn JITModule::register_dwarf(Self, verbose? : Bool) -> @wasmoon_jit.DWARFBuilder
 pub fn JITModule::retain_callable_owner(Self) -> () -> Unit

@@ -1590,6 +1590,15 @@ fn Translator::translate_instruction(
       }
       self.is_unreachable = !normal_falls_through
     }
+    ContNew(index) => self.translate_cont_new(index)
+    ContBind(input, output) => self.translate_cont_bind(input, output)
+    Suspend(tag) => self.translate_cont_suspend(tag)
+    Resume(index, handlers) => self.translate_cont_resume(index, -2, handlers)
+    ResumeThrow(index, tag, handlers) =>
+      self.translate_cont_resume(index, tag, handlers)
+    ResumeThrowRef(index, handlers) =>
+      self.translate_cont_resume(index, -1, handlers)
+    Switch(index, tag) => self.translate_cont_switch(index, tag)
     // ============ SIMD Instructions ============
     _ => self.translate_instruction_simd(instr)
   }

@@ -99,6 +99,8 @@ typedef struct jit_trap_activation {
     volatile uintptr_t frames_fp[MAX_TRAP_FRAMES];
     volatile int frame_count;
     jit_context_t *context;
+    jit_context_t *control_context;
+    int inherit_controls;
     struct jit_trap_activation *previous;
     void *exception_handler;
     int32_t exception_tag;
@@ -178,6 +180,7 @@ int64_t wasmoon_native_fiber_yield(int64_t value);
 #define WASMOON_FIBER_EVENT_ATOMIC_WAIT INT64_C(0x57534d5355535003)
 
 int wasmoon_jit_cancellation_requested(jit_context_t *ctx);
+jit_context_t *jit_execution_control_context(jit_context_t *ctx);
 int wasmoon_native_fiber_own_waiter(void *waiter);
 void wasmoon_native_fiber_release_waiter(void);
 void *wasmoon_atomic_wait_begin(int64_t, int64_t, int32_t, int64_t, int64_t);
@@ -389,11 +392,30 @@ int64_t gc_alloc_array_wide_slow_impl(int64_t ctx_ptr, int32_t type_idx,
 int64_t gc_alloc_array_from_slots_slow_impl(int64_t ctx_ptr, int32_t type_idx,
                                              int64_t slots_ptr, int32_t len);
 
-#endif // JIT_INTERNAL_H
-
 int32_t callable_type_for_value(jit_context_t *ctx, int64_t value);
 
 void gc_record_runtime_type(jit_context_t *ctx, GcHeap *heap, int32_t ref, int32_t local_type);
 
 struct native_exception_arena *exception_arena_new(void);
 void exception_arena_release(struct native_exception_arena *arena);
+
+void *native_fiber_alloc_c(int64_t (*entry)(void *), void *closure, int64_t stack_size);
+int native_fiber_continue_c(void *fiber, int64_t value);
+void native_fiber_destroy_c(void *fiber);
+int64_t native_fiber_result_c(void *fiber);
+int64_t native_fiber_event_c(void *fiber);
+struct native_continuation_arena *continuation_arena_new(void);
+void continuation_arena_release(struct native_continuation_arena *arena);
+void continuation_types_free(jit_context_t *ctx);
+int64_t exception_capture_payload(jit_context_t *ctx, int32_t tag, const int64_t *values, int32_t count);
+int64_t exception_capture_current(jit_context_t *ctx);
+int wasmoon_jit_call_trampoline_caught(int64_t trampoline_ptr, int64_t ctx_ptr,
+    int64_t func_ptr, int64_t *values, int values_len, int64_t *exception);
+
+void *native_fiber_own_resource(void *resource, void (*release)(void *));
+void native_fiber_replace_resource(void *scope, void *resource);
+void native_fiber_disown_resource(void *scope);
+
+int64_t native_fiber_stack_size_c(void);
+
+#endif // JIT_INTERNAL_H

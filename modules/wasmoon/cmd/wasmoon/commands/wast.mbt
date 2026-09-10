@@ -479,6 +479,7 @@ fn try_compile_jit_with_suspension(
     force_subtype_indirect_check=Some(true),
     nan_canonicalization=store.nan_canonicalization,
     enable_cancellation=true,
+    stack_switching=true,
   )
   match compiled {
     None =>

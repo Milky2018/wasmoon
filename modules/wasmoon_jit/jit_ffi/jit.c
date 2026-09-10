@@ -286,7 +286,13 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_clear_cancellation_callback(int64_t ctx_ptr)
     clear_cancellation_callback((jit_context_t *)ctx_ptr);
 }
 
+jit_context_t *jit_execution_control_context(jit_context_t *ctx) {
+    jit_trap_activation_t *activation = jit_current_trap_activation();
+    return activation->active ? activation->control_context : ctx;
+}
+
 int wasmoon_jit_cancellation_requested(jit_context_t *ctx) {
+    ctx = jit_execution_control_context(ctx);
     if (!ctx || !ctx->cancellation_callback) return 0;
     cancellation_callback_fn cb =
         (cancellation_callback_fn)ctx->cancellation_callback;
@@ -294,6 +300,7 @@ int wasmoon_jit_cancellation_requested(jit_context_t *ctx) {
 }
 
 MOONBIT_FFI_EXPORT int32_t wasmoon_jit_cancel_poll(jit_context_t *ctx) {
+    ctx = jit_execution_control_context(ctx);
     if (wasmoon_jit_cancellation_requested(ctx)) {
         g_trap_code = 11;
         if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
@@ -873,12 +880,13 @@ jit_context_t *get_current_jit_context(void) {
     return activation->active ? activation->context : NULL;
 }
 
-MOONBIT_FFI_EXPORT int wasmoon_jit_call_trampoline(
+int wasmoon_jit_call_trampoline_caught(
     int64_t trampoline_ptr,
     int64_t ctx_ptr,
     int64_t func_ptr,
     int64_t *values_vec,
-    int values_len
+    int values_len,
+    int64_t *exception
 ) {
     (void)values_len;
 
@@ -889,10 +897,14 @@ MOONBIT_FFI_EXPORT int wasmoon_jit_call_trampoline(
     ctx_refresh_memory0_fast_fields(ctx);
     jit_trap_activation_t activation;
     jit_trap_activation_init(&activation, ctx);
+    // Guest continuations retain their defining module, but scheduling and
+    // cancellation belong to the invocation that is currently resuming them.
+    activation.inherit_controls = exception != NULL;
     jit_trap_activation_push(&activation);
 
     if (sigsetjmp(activation.jmp_buf, 1) != 0) {
         int trap_code = (int)activation.code;
+        if (exception && trap_code == 12) *exception = exception_capture_current(ctx);
         jit_trap_activation_finalize(&activation);
         jit_trap_activation_publish(&activation);
         exception_reset_context_state(ctx);
@@ -924,6 +936,12 @@ MOONBIT_FFI_EXPORT int wasmoon_jit_call_trampoline(
     }
 
     return result;
+}
+
+MOONBIT_FFI_EXPORT int wasmoon_jit_call_trampoline(int64_t trampoline_ptr,
+    int64_t ctx_ptr, int64_t func_ptr, int64_t *values_vec, int values_len) {
+    return wasmoon_jit_call_trampoline_caught(trampoline_ptr, ctx_ptr,
+        func_ptr, values_vec, values_len, NULL);
 }
 
 MOONBIT_FFI_EXPORT int wasmoon_jit_call_trampoline_managed(

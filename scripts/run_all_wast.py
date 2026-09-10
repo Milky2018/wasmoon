@@ -79,6 +79,10 @@ def run_test(
                 f"Exited {proc.returncode} with no failed assertion"
             )
 
+        if failed:
+            detail = output.partition("Failures:")[2].partition("WAST JIT trace:")[0].strip()
+            if detail:
+                print(f"{wast_file}:\n{detail}", file=sys.stderr, flush=True)
         return passed, failed, None
     except Exception as e:
         return None, None, str(e)
