@@ -338,14 +338,7 @@ pub fn run_wast_command(
   match cmd {
     Module(mod_, name) => run_wast_module(ctx, mod_, name, line, result)
     ModuleQuote(parts) => {
-      // Concatenate quoted strings and parse as WAT module
-      let wat_text = StringBuilder::StringBuilder()
-      wat_text.write_string("(module ")
-      for part in parts {
-        wat_text.write_string(part)
-      }
-      wat_text.write_string(")")
-      let mod_ = @wat.parse(wat_text.to_string()) catch {
+      let mod_ = @wat.parse(parts.join(""), implicit_module=true) catch {
         e => {
           result.failed = result.failed + 1
           result.failures.push("line \{line}: quoted module parse failed: \{e}")
@@ -451,8 +444,15 @@ pub fn run_wast_command(
       }
     }
     AssertUnlinkable(source, msg) => {
-      // Try to instantiate - should fail during linking
-      let linked = try_instantiate_source(ctx, source)
+      let linked = try_instantiate_source(ctx, source) catch {
+        error => {
+          result.failed += 1
+          result.failures.push(
+            "line \{line}: assert_unlinkable: module must build before linking: \{error}",
+          )
+          return
+        }
+      }
       if linked {
         result.failed = result.failed + 1
         result.failures.push(
@@ -883,16 +883,11 @@ fn validate_module_source(
         let mod_ = @parser.parse_module(bytes)
         @validator.validate_module(mod_, bulk_memory=ctx.bulk_memory)
       })
-    Quote(parts) => {
-      // Join quoted parts and parse as WAT
-      let wat_source = "(module " +
-        parts.iter().fold(init="", fn(acc, s) { acc + s }) +
-        ")"
+    Quote(parts) =>
       succeeds(() => {
-        let mod_ = @wat.parse(wat_source)
+        let mod_ = @wat.parse(parts.join(""), implicit_module=true)
         @validator.validate_module(mod_, bulk_memory=ctx.bulk_memory)
       })
-    }
     Inline(mod_) =>
       succeeds(() => {
         @validator.validate_module(mod_, bulk_memory=ctx.bulk_memory)
@@ -915,33 +910,27 @@ fn parse_module_source(source : @wat.WastModuleSource) -> Bool {
 fn try_instantiate_source(
   ctx : WastContext,
   source : @wat.WastModuleSource,
-) -> Bool {
-  let imports = ctx.build_imports()
-  match source {
-    Binary(bytes) =>
-      succeeds(() => {
-        let mod_ = @parser.parse_module(bytes)
-        @validator.validate_module(mod_, bulk_memory=ctx.bulk_memory)
-        let instance = @executor.instantiate_module_with_imports(
-          ctx.store,
-          mod_,
-          imports,
-        )
-        ctx.current_module = Some(instance)
-      })
-    Inline(mod_) =>
-      succeeds(() => {
-        @validator.validate_module(mod_, bulk_memory=ctx.bulk_memory)
-        let instance = @executor.instantiate_module_with_imports(
-          ctx.store,
-          mod_,
-          imports,
-        )
-        ctx.current_module = Some(instance)
-      })
-    Quote(_) => false
-    FailedToParse(_) => false // Module failed to parse, can't instantiate
+) -> Bool raise WastRunnerError {
+  // A build failure cannot satisfy an assertion about instantiation. The
+  // pinned adapter does include start-function traps in instantiation errors.
+  let mod_ = try {
+    match source {
+      Binary(bytes) => @parser.parse_module(bytes)
+      Quote(parts) => @wat.parse(parts.join(""), implicit_module=true)
+      Inline(mod_) => mod_
+      FailedToParse(message) => raise RuntimeError(message)
+    }
+  } catch {
+    error => raise RuntimeError("module parsing failed: \{error}")
   }
+  @validator.validate_module(mod_, bulk_memory=ctx.bulk_memory) catch {
+    error => raise RuntimeError("module validation failed: \{error}")
+  }
+  let imports = ctx.build_imports()
+  succeeds(() => {
+    @executor.instantiate_module_with_imports(ctx.store, mod_, imports)
+    |> ignore
+  })
 }
 
 ///|

@@ -644,7 +644,22 @@ fn count_tag_imports(imports : Array[@types.Import]) -> Int {
 
 ///|
 /// Parse a WAT module from string
-pub fn parse(input : String) -> @types.Module raise WatError {
+pub fn parse(
+  input : String,
+  implicit_module? : Bool = false,
+) -> @types.Module raise WatError {
+  let input = if implicit_module {
+    let probe = Lexer::Lexer(input)
+    if probe.next_token().token == LParen &&
+      probe.next_token().token == Keyword("module") {
+      input
+    } else {
+      // A trailing line comment must not consume the synthetic closing token.
+      "(module " + input + "\n)"
+    }
+  } else {
+    input
+  }
   let parser = Parser::Parser(input)
   let mod_ = parser.parse_module()
   if parser.current.token != Eof {

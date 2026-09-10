@@ -9,7 +9,7 @@ import {
 // Values
 pub fn format_wat_error(WatError, String) -> String
 
-pub fn parse(String) -> @types.Module raise WatError
+pub fn parse(String, implicit_module? : Bool) -> @types.Module raise WatError
 
 pub fn parse_wast(String) -> WastScript raise WatError
 

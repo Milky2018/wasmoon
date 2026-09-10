@@ -436,7 +436,7 @@ fn WastThread::step(
       }
     }
     ModuleQuote(parts) => {
-      let module_ = @wat.parse("(module " + parts.join("") + ")") catch {
+      let module_ = @wat.parse(parts.join(""), implicit_module=true) catch {
         error => {
           result.failed += 1
           result.failures.push(
