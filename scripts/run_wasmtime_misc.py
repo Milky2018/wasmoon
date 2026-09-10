@@ -24,6 +24,19 @@ SUITE = "tests/misc_testsuite"
 WASM_TOOLS_VERSION = "1.254.0"
 
 
+def command_symbols(text: str) -> list[str]:
+    """Inventory script directives, including assertions in nested threads."""
+    commands = []
+    for form in iter_forms(text):
+        symbol = first_symbol(form)
+        commands.append(symbol)
+        if symbol == "thread":
+            for child in iter_forms(form[1:-1]):
+                if first_symbol(child) != "shared":
+                    commands.extend(command_symbols(child))
+    return commands
+
+
 def test_config(text: str) -> dict:
     lines = []
     for line in text.splitlines():
@@ -57,7 +70,7 @@ def validate_snapshot(corpus: Path = CORPUS) -> tuple[dict, list[dict]]:
         name = path.relative_to(corpus / "upstream" / SUITE).as_posix()
         # Include components nested in assertion forms, not only standalone definitions.
         component = bool(re.search(r"\(component(?:\s|\))", text))
-        forms = [first_symbol(form) for form in iter_forms(text)]
+        forms = command_symbols(text)
         cases.append({"commands": forms, "name": name, "path": str(path.resolve()), "sha256": entry["sha256"],
                       "lane": "component" if component else "core", "config": test_config(text)})
     contracts = json.loads((corpus / "HOST_CONTRACTS.json").read_text())
@@ -90,7 +103,7 @@ def parse_core_result(result: dict, commands: list[str] | None = None) -> dict:
     if result["returncode"] or failed or skipped:
         result.update(status="fail", detail=f"exit={result['returncode']}, passed={passed}, failed={failed}, skipped={skipped}")
     elif not passed:
-        if commands and set(commands).issubset({"module", "register", "invoke"}):
+        if commands and set(commands).issubset({"module", "register", "invoke", "get", "thread", "wait"}):
             result.update(status="script_only", detail="Completed module/action script with no assertion commands")
         else:
             result.update(status="fail", detail="Zero passing assertions without a module/action-only script")

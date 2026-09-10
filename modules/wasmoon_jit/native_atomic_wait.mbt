@@ -64,3 +64,7 @@ extern "c" fn c_jit_get_atomic_wait64_ptr() -> Int64 = "wasmoon_jit_get_atomic_w
 
 ///|
 extern "c" fn c_jit_get_atomic_notify_ptr() -> Int64 = "wasmoon_jit_get_atomic_notify_ptr"
+
+///|
+/// Briefly sleep an idle cooperative scheduler while only waits remain.
+pub extern "c" fn cooperative_idle() -> Unit = "wasmoon_cooperative_idle"

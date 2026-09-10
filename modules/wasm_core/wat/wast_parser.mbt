@@ -20,6 +20,8 @@ pub enum WastCommand {
   AssertUnlinkable(WastModuleSource, String)
   Register(String, String?)
   Action(WastAction)
+  Thread(String, String?, Array[(WastCommand, Int)])
+  Wait(String)
 } derive(Debug)
 
 ///|

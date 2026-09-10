@@ -66,6 +66,8 @@ class MiscRunnerTests(unittest.TestCase):
             (0, 0, 0, 0, ['assert_return'], 'fail'),
             (0, 0, 0, 0, [], 'fail'),
             (0, 0, 0, 0, ['module', 'invoke'], 'script_only'),
+            (0, 0, 0, 0, ['thread', 'module', 'wait', 'invoke'], 'script_only'),
+            (0, 0, 0, 0, ['thread', 'thread', 'assert_return', 'wait'], 'fail'),
         ]
         with tempfile.TemporaryDirectory() as tmp:
             stdout = Path(tmp) / 'stdout.txt'
@@ -86,6 +88,19 @@ class MiscRunnerTests(unittest.TestCase):
         for status in ('timeout', 'harness_error'):
             result = {'status': status}
             self.assertEqual(misc.parse_core_result(result), result)
+
+    def test_thread_inventory_does_not_hide_nested_assertions(self):
+        source = '''
+            (module (export "(assert_return fake)" (func 0)))
+            (thread $outer (shared (module $memory))
+              (; (assert_trap ignored) ;)
+              (thread $inner
+                (assert_return (invoke "run") (i32.const 1)))
+              (wait $inner))
+            (wait $outer)
+        '''
+        self.assertEqual(misc.command_symbols(source),
+                         ['module', 'thread', 'thread', 'assert_return', 'wait', 'wait'])
 
     def test_excluded_cases_do_not_launch_an_engine(self):
         _, cases = misc.validate_snapshot()

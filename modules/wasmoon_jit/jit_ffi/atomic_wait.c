@@ -178,6 +178,15 @@ MOONBIT_FFI_EXPORT void wasmoon_atomic_wait_managed_cancel(void *object) {
     finalize_managed_waiter(object);
 }
 
+MOONBIT_FFI_EXPORT void wasmoon_cooperative_idle(void) {
+#ifdef _WIN32
+    Sleep(1);
+#else
+    struct timespec delay = {0, 1000000};
+    nanosleep(&delay, NULL);
+#endif
+}
+
 int32_t wasmoon_atomic_wait_guest(
     jit_context_t *ctx, int64_t descriptor, int64_t offset,
     int32_t width, int64_t expected, int64_t timeout

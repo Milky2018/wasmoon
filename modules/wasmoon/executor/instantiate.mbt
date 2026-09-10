@@ -1214,7 +1214,7 @@ pub fn instantiate_module_with_import_diagnostics(
 ///|
 /// Create a module instance with imports using an existing store
 /// Raises UnknownImport if any required import is not provided
-fn instantiate_module_with_imports_unstarted(
+pub fn instantiate_module_with_imports_unstarted(
   store : @runtime.Store,
   mod : @types.Module,
   imports : @runtime.Imports,

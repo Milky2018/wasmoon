@@ -486,7 +486,19 @@ fn Parser::parse_module_field_inner(
 ///|
 fn Parser::parse_wast_command(self : Parser) -> WastCommand raise WatError {
   self.expect_lparen()
+  self.parse_wast_command_body()
+}
+
+///|
+fn Parser::parse_wast_command_body(self : Parser) -> WastCommand raise WatError {
   match self.current.token {
+    Keyword("thread") => self.parse_wast_thread()
+    Keyword("wait") => {
+      self.advance()
+      let name = self.parse_wast_required_id()
+      self.expect_rparen()
+      Wait(name)
+    }
     Keyword("module") => self.parse_wast_module_command()
     Keyword("assert_return") => self.parse_wast_assert_return()
     Keyword("assert_trap") => self.parse_wast_assert_trap()
@@ -507,6 +519,44 @@ fn Parser::parse_wast_command(self : Parser) -> WastCommand raise WatError {
         self.loc(),
       )
   }
+}
+
+///|
+fn Parser::parse_wast_required_id(self : Parser) -> String raise WatError {
+  match self.parse_wast_optional_id() {
+    Some(name) => name
+    None => raise UnexpectedToken("expected identifier", self.loc())
+  }
+}
+
+///|
+fn Parser::parse_wast_thread(self : Parser) -> WastCommand raise WatError {
+  self.advance()
+  let name = self.parse_wast_required_id()
+  let mut shared = None
+  let commands : Array[(WastCommand, Int)] = []
+  while self.current.token != RParen {
+    let line = self.lexer.line
+    self.expect_lparen()
+    if self.current.token == Keyword("shared") {
+      if shared is Some(_) || !commands.is_empty() {
+        raise UnexpectedToken(
+          "shared module must precede thread commands",
+          self.loc(),
+        )
+      }
+      self.advance()
+      self.expect_lparen()
+      self.expect_keyword("module")
+      shared = Some(self.parse_wast_required_id())
+      self.expect_rparen()
+      self.expect_rparen()
+    } else {
+      commands.push((self.parse_wast_command_body(), line))
+    }
+  }
+  self.expect_rparen()
+  Thread(name, shared, commands)
 }
 
 ///|

@@ -304,6 +304,15 @@ pub fn run_wast_commands(
     register_named_modules~,
   )
   defer ctx.close()
+  if script.commands.any(item => {
+      match item.0 {
+        Thread(_, _, _) | Wait(_) => true
+        _ => false
+      }
+    }) {
+    run_threaded_wast(ctx, script, result, base_dir, show_success)
+    return result
+  }
   for item in script.commands {
     let (cmd, line) = item
     run_wast_command(ctx, cmd, line, result, base_dir, show_success)
@@ -327,63 +336,7 @@ pub fn run_wast_command(
     return
   }
   match cmd {
-    Module(mod_, name) => {
-      @validator.validate_module(mod_, bulk_memory=ctx.bulk_memory) catch {
-        e => {
-          result.failed = result.failed + 1
-          result.failures.push("line \{line}: module validation failed: \{e}")
-          return
-        }
-      }
-      // Build imports from registered modules
-      let imports = ctx.build_imports()
-      // Instantiate the module with imports using shared store
-      let instance = @executor.instantiate_module_with_imports(
-        ctx.store,
-        mod_,
-        imports,
-      ) catch {
-        e => {
-          result.failed = result.failed + 1
-          result.failures.push("line \{line}: instantiation failed: \{e}")
-          return
-        }
-      }
-      ctx.current_module = Some(instance)
-      if name is Some(n) {
-        ctx.named_modules.set(n, instance)
-        if ctx.register_named_modules {
-          ctx.registered_modules.set(n, instance)
-          if n == "spectest" || n == "wasi_snapshot_preview1" {
-            ctx.overridden_builtin_modules.add(n) |> ignore
-          }
-        }
-      }
-      // Try to compile JIT version (only if JIT is enabled)
-      if ctx.use_jit {
-        match ctx.try_compile_jit(mod_, instance) {
-          Ok(jit_ctx) => {
-            ctx.current_jit = Some(jit_ctx)
-            if name is Some(n) {
-              ctx.jit_modules.set(n, jit_ctx)
-            }
-          }
-          Err(err) => {
-            ctx.current_jit = None
-            if name is Some(n) {
-              ctx.jit_modules.remove(n) |> ignore
-            }
-            result.failed = result.failed + 1
-            result.failures.push(
-              "line \{line}: JIT module compile failed: \{err}",
-            )
-            return
-          }
-        }
-      } else {
-        ctx.current_jit = None
-      }
-    }
+    Module(mod_, name) => run_wast_module(ctx, mod_, name, line, result)
     ModuleQuote(parts) => {
       // Concatenate quoted strings and parse as WAT module
       let wat_text = StringBuilder::StringBuilder()
@@ -399,48 +352,7 @@ pub fn run_wast_command(
           return
         }
       }
-      @validator.validate_module(mod_, bulk_memory=ctx.bulk_memory) catch {
-        e => {
-          result.failed = result.failed + 1
-          result.failures.push(
-            "line \{line}: quoted module validation failed: \{e}",
-          )
-          return
-        }
-      }
-      // Build imports from registered modules
-      let imports = ctx.build_imports()
-      // Instantiate the module with imports using shared store
-      let instance = @executor.instantiate_module_with_imports(
-        ctx.store,
-        mod_,
-        imports,
-      ) catch {
-        e => {
-          result.failed = result.failed + 1
-          result.failures.push(
-            "line \{line}: quoted module instantiation failed: \{e}",
-          )
-          return
-        }
-      }
-      ctx.current_module = Some(instance)
-      // Try to compile JIT version (only if JIT is enabled)
-      if ctx.use_jit {
-        match ctx.try_compile_jit(mod_, instance) {
-          Ok(jit_ctx) => ctx.current_jit = Some(jit_ctx)
-          Err(err) => {
-            ctx.current_jit = None
-            result.failed = result.failed + 1
-            result.failures.push(
-              "line \{line}: JIT quoted module compile failed: \{err}",
-            )
-            return
-          }
-        }
-      } else {
-        ctx.current_jit = None
-      }
+      run_wast_module(ctx, mod_, None, line, result)
     }
     ModuleBinaryFailed(err) => {
       result.failed = result.failed + 1
@@ -478,150 +390,19 @@ pub fn run_wast_command(
         )
         return
       }
-      @validator.validate_module(mod_, bulk_memory=ctx.bulk_memory) catch {
-        e => {
-          result.failed = result.failed + 1
-          result.failures.push(
-            "line \{line}: module instance validation failed: \{e}",
-          )
-          return
-        }
-      }
-      // Build imports from registered modules
-      let imports = ctx.build_imports()
-      // Instantiate the module with imports using shared store
-      let instance = @executor.instantiate_module_with_imports(
-        ctx.store,
-        mod_,
-        imports,
-      ) catch {
-        e => {
-          result.failed = result.failed + 1
-          result.failures.push("line \{line}: module instance failed: \{e}")
-          return
-        }
-      }
-      ctx.current_module = Some(instance)
-      if instance_name is Some(n) {
-        ctx.named_modules.set(n, instance)
-        if ctx.register_named_modules {
-          ctx.registered_modules.set(n, instance)
-          if n == "spectest" || n == "wasi_snapshot_preview1" {
-            ctx.overridden_builtin_modules.add(n) |> ignore
-          }
-        }
-      }
-      // Try to compile JIT version (only if JIT is enabled)
-      if ctx.use_jit {
-        match ctx.try_compile_jit(mod_, instance) {
-          Ok(jit_ctx) => {
-            ctx.current_jit = Some(jit_ctx)
-            if instance_name is Some(n) {
-              ctx.jit_modules.set(n, jit_ctx)
-            }
-          }
-          Err(err) => {
-            ctx.current_jit = None
-            if instance_name is Some(n) {
-              ctx.jit_modules.remove(n) |> ignore
-            }
-            result.failed = result.failed + 1
-            result.failures.push(
-              "line \{line}: JIT module instance compile failed: \{err}",
-            )
-            return
-          }
-        }
-      } else {
-        ctx.current_jit = None
-      }
+      run_wast_module(ctx, mod_, instance_name, line, result)
     }
-    AssertReturn(action, expected) =>
-      match run_assert_return(ctx, action, expected) {
-        None => {
-          result.passed = result.passed + 1
-          if show_success {
-            let action_desc = format_action(action)
-            println("line \{line}: assert_return \{action_desc}: PASSED")
-          }
-        }
-        Some(err) => {
-          result.failed = result.failed + 1
-          let action_desc = format_action(action)
-          result.failures.push(
-            "line \{line}: assert_return \{action_desc}: \{err}",
-          )
-        }
-      }
-    AssertTrap(action, expected_msg) => {
-      let failure = run_assert_trap(ctx, action, expected_msg)
-      if failure is None {
-        result.passed = result.passed + 1
-        if show_success {
-          let action_desc = format_action(action)
-          println("line \{line}: assert_trap \{action_desc}: PASSED")
-        }
-      } else {
-        result.failed = result.failed + 1
-        result.failures.push(
-          "line \{line}: assert_trap failed: \{failure.unwrap()}",
-        )
-      }
-    }
-    AssertException(action) => {
-      // Invoke the action and expect an exception to be thrown
-      let action_desc = format_action(action)
-      try invoke_action(ctx, action) catch {
-        GuestException => {
-          result.passed = result.passed + 1
-          if show_success {
-            println("line \{line}: assert_exception \{action_desc}: PASSED")
-          }
-        }
-        error => {
-          result.failed = result.failed + 1
-          result.failures.push(
-            "line \{line}: assert_exception \{action_desc}: expected Wasm exception, got \{error}",
-          )
-        }
+    AssertReturn(action, _)
+    | AssertTrap(action, _)
+    | AssertException(action)
+    | AssertExhaustion(action, _)
+    | Action(action) => {
+      let outcome = try invoke_action(ctx, action) catch {
+        error => Err(error)
       } noraise {
-        values => {
-          result.failed = result.failed + 1
-          result.failures.push(
-            "line \{line}: assert_exception \{action_desc}: expected exception but none thrown (returned \{Repr(values)})",
-          )
-        }
+        values => Ok(values)
       }
-    }
-    AssertExhaustion(action, expected_msg) => {
-      let failure = try invoke_action(ctx, action) catch {
-        GuestExhaustion(message) =>
-          if wast_trap_message_matches(message, expected_msg) {
-            None
-          } else {
-            Some("expected '\{expected_msg}', got exhaustion '\{message}'")
-          }
-        error => Some("expected exhaustion '\{expected_msg}', got \{error}")
-      } noraise {
-        _ =>
-          Some("expected exhaustion '\{expected_msg}', but the action returned")
-      }
-      match failure {
-        Some(message) => {
-          result.failed = result.failed + 1
-          result.failures.push(
-            "line \{line}: assert_exhaustion \{format_action(action)}: \{message}",
-          )
-        }
-        None => {
-          result.passed = result.passed + 1
-          if show_success {
-            println(
-              "line \{line}: assert_exhaustion \{format_action(action)}: PASSED",
-            )
-          }
-        }
-      }
+      finish_wast_action(ctx, cmd, action, line, result, show_success, outcome)
     }
     AssertModuleTrap(source, msg) => {
       // Try to instantiate - should trap during instantiation (e.g., start function)
@@ -707,16 +488,12 @@ pub fn run_wast_command(
         }
       }
     }
-    Action(action) =>
-      // A bare action asserts successful execution even without result values.
-      try invoke_action(ctx, action) |> ignore catch {
-        error => {
-          result.failed = result.failed + 1
-          result.failures.push(
-            "line \{line}: action \{format_action(action)} failed: \{error}",
-          )
-        }
-      }
+    Thread(_, _, _) | Wait(_) => {
+      result.failed += 1
+      result.failures.push(
+        "line \{line}: thread directives require a complete WAST script",
+      )
+    }
   }
 }
 
@@ -737,14 +514,12 @@ fn format_action(action : @wat.WastAction) -> String {
 }
 
 ///|
-fn run_assert_return(
+fn check_assert_return(
   ctx : WastContext,
   action : @wat.WastAction,
   expected : Array[@wat.WastValue],
+  results : Array[@types.Value],
 ) -> String? {
-  let results = invoke_action(ctx, action) catch {
-    e => return Some("invoke failed: \{e}")
-  }
   if results.length() != expected.length() {
     return Some(
       "result count mismatch: expected \{expected.length()}, got \{results.length()}",
@@ -769,25 +544,6 @@ fn run_assert_return(
     }
   }
   None // success
-}
-
-///|
-fn run_assert_trap(
-  ctx : WastContext,
-  action : @wat.WastAction,
-  expected_msg : String,
-) -> String? {
-  try invoke_action(ctx, action) catch {
-    GuestTrap(message) | GuestExhaustion(message) =>
-      if wast_trap_message_matches(message, expected_msg) {
-        None
-      } else {
-        Some("expected '\{expected_msg}', got trap '\{message}'")
-      }
-    error => Some("expected trap '\{expected_msg}', got \{error}")
-  } noraise {
-    _ => Some("expected trap '\{expected_msg}', but the action returned")
-  }
 }
 
 ///|
@@ -906,16 +662,7 @@ pub fn invoke_action(
             func.func_idx,
             runtime_args,
           ) catch {
-            Trap(message) =>
-              if message.has_prefix("uncaught exception") {
-                raise GuestException
-              } else if message.has_prefix("call stack exhausted") ||
-                message.has_prefix("stack overflow") {
-                raise GuestExhaustion(message)
-              } else {
-                raise GuestTrap(message)
-              }
-            error => raise RuntimeError(error.to_string())
+            error => raise classify_jit_failure(error)
           }
         }
       }

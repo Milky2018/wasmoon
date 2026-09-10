@@ -54,6 +54,8 @@ pub fn compile_wasm_body_artifact_function(@milkir.Function, @wasm_milkir.WasmVa
 
 pub fn compile_wasm_body_diagnostics_for_target(@milkir.Function, @wasm_milkir.WasmValidationContext, NativeTarget, use_subtype_indirect_check? : Bool, canonical_type_indices? : Array[Int]) -> JitPipelineDiagnostics raise JitPipelineError
 
+pub fn cooperative_idle() -> Unit
+
 pub fn count_entry_trampoline_slots(Array[@types.ValueType]) -> Int
 
 pub fn decode_externref(Int64) -> Int?
