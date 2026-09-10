@@ -186,8 +186,8 @@
 
 (component
   (component $Lib
-    
-    (core module $L 
+
+    (core module $L
       (func (export "id") (param i32) (result i32) local.get 0))
     (core instance $l (instantiate $L ))
     (func (export "id") (param "x" error-context) (result error-context)
@@ -322,4 +322,3 @@
   (func (export "run") (result u32) (canon lift (core func $m "run"))))
 
 (assert_return (invoke "run") (u32.const 42))
-
