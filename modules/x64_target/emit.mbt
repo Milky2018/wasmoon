@@ -355,6 +355,22 @@ fn emit_atomic_rmw(
 }
 
 ///|
+fn emit_atomic_result(
+  buffer : CodeBuffer,
+  width : @native.AccessWidth,
+  result : @vcode.PhysicalReg,
+) -> Unit {
+  match width {
+    W8 => buffer.x86_emit_movzx_r32_r8(result.id, result.id)
+    W16 => buffer.x86_emit_movzx_r32_r16(result.id, result.id)
+    // A successful CMPXCHG does not necessarily write EAX. Emit the
+    // zero-extension even when the input and output use the same register.
+    W32 => buffer.x86_emit_mov_rr32(result.id, result.id)
+    W64 | W128 => ()
+  }
+}
+
+///|
 fn emit_atomic_compare_exchange(
   buffer : CodeBuffer,
   width : @native.AccessWidth,
@@ -3185,10 +3201,11 @@ fn emit_incoming_call_results(
           result_area_base + offset,
         )
       Stack(slot) => {
-        let scratch = @vcode.PhysicalReg::new(
-          16,
-          @vcode.reg_class_for_value_type(ty),
-        )
+        let scratch = if @vcode.reg_class_for_value_type(ty) == Int {
+          int_transfer_scratch()
+        } else {
+          fp_transfer_scratch()
+        }
         emit_stack_access(buffer, true, ty, scratch, result_area_base + offset)
         emit_stack_access(
           buffer,
@@ -3849,7 +3866,7 @@ fn emit_instruction(
       metadata_offset = buffer.position()
       buffer.x86_emit_xchg_memory(width, reg(0).id, reg(1).id)
     }
-    AtomicRmw(width, _, operation) =>
+    AtomicRmw(width, _, operation) => {
       metadata_offset = emit_atomic_rmw(
         buffer,
         width,
@@ -3858,7 +3875,9 @@ fn emit_instruction(
         reg(1),
         reg(2),
       )
-    AtomicCompareExchange(width, _) =>
+      emit_atomic_result(buffer, width, reg(2))
+    }
+    AtomicCompareExchange(width, _) => {
       metadata_offset = emit_atomic_compare_exchange(
         buffer,
         width,
@@ -3867,6 +3886,8 @@ fn emit_instruction(
         reg(2),
         reg(3),
       )
+      emit_atomic_result(buffer, width, reg(3))
+    }
     AtomicFence => buffer.x86_emit_mfence()
     SafepointMarker => {
       metadata_offset = buffer.position()

@@ -3780,6 +3780,22 @@ fn CodeBuffer::x86_emit_movzx_r32_r8(
 }
 
 ///|
+fn CodeBuffer::x86_emit_movzx_r32_r16(
+  self : CodeBuffer,
+  dst : Int,
+  src : Int,
+) -> Unit {
+  let r = (dst >> 3) & 1
+  let b = (src >> 3) & 1
+  if r != 0 || b != 0 {
+    emit_rex(self, r, b)
+  }
+  self.emit_byte(0x0F)
+  self.emit_byte(0xB7)
+  emit_modrm(self, 3, dst, src)
+}
+
+///|
 fn CodeBuffer::x86_emit_cqo(self : CodeBuffer) -> Unit {
   // cqo: sign-extend rax into rdx:rax (64-bit)
   self.emit_byte(0x48)

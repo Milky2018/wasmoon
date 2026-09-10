@@ -90,6 +90,7 @@ jobs:
             moon test --target native ${{ matrix.native_test_args }}
 
       - name: build Wasmoon
+        id: build
         run: |
           moon build --target native --release
           if nm \
@@ -143,9 +144,21 @@ jobs:
         run: python3 scripts/cli_behavior_test.py
 
       - name: run core WAST tests
+        # Preserve independent core diagnostics after a misc failure.
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         timeout-minutes: 10
         run: |
           python3 scripts/run_all_wast.py --dir spec --rec
+          # Exercise the previously reported Linux call_ref failure with
+          # fresh process state, retaining the first complete failure report.
+          for attempt in $(seq 1 32); do
+            if ! ./wasmoon test spec/call_ref.wast > /tmp/call-ref-repeat.log 2>&1; then
+              echo "call_ref failed on repeat $attempt"
+              cat /tmp/call-ref-repeat.log
+              exit 1
+            fi
+          done
+          echo "call_ref passed in 32 fresh processes"
           python3 scripts/find_gc_bugs.py --dir spec/gc --timeout 30
           python3 scripts/find_gc_bugs.py \
             --dir spec/gc --timeout 30 --max-files 64 --fault-alloc-every 7
