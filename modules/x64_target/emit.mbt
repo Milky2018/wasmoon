@@ -3424,8 +3424,17 @@ fn emit_instruction(
     VectorExtractLane(lane, index, extension) =>
       emit_vector_extract_lane(buffer, lane, index, extension, reg(0), reg(1))
     VectorReplaceLane(lane, index) => {
+      let scalar = if reg(1) == reg(2) && reg(0) != reg(2) {
+        // A floating-point input may share the result's SIMD register. Save it
+        // before the base-vector copy overwrites that register.
+        let saved = @vcode.PhysicalReg::new(15, FpVector)
+        emit_move(buffer, V128, saved, reg(1))
+        saved
+      } else {
+        reg(1)
+      }
       emit_move(buffer, V128, reg(2), reg(0))
-      emit_vector_replace_lane(buffer, lane, index, reg(1), reg(2))
+      emit_vector_replace_lane(buffer, lane, index, scalar, reg(2))
     }
     VectorShuffle(mask) =>
       emit_vector_shuffle(buffer, mask, reg(0), reg(1), reg(2))
