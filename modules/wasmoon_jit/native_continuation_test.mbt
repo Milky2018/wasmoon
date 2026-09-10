@@ -704,3 +704,8 @@ test "multiple parked continuations unregister GC roots independently" {
   second_context.clear_hostcall_callback()
   heap.free()
 }
+
+///|
+test "fresh native contexts disable cooperative scheduling" {
+  inspect(@native_test_support.fresh_context_scheduling_budget(), content="0")
+}

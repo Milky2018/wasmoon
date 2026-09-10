@@ -169,3 +169,6 @@ pub fn fiber_preserves_registers() -> Bool {
 pub fn x64_stack_alignment_probe_ptr() -> Int64 {
   c_x64_stack_alignment_probe_ptr()
 }
+
+///|
+pub extern "c" fn fresh_context_scheduling_budget() -> Int = "wasmoon_test_fresh_context_scheduling_budget"

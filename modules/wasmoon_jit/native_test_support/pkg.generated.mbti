@@ -22,6 +22,8 @@ pub fn fiber_preserves_registers() -> Bool
 
 pub fn fiber_stack_hostcall_probe_trampoline() -> Int64
 
+pub fn fresh_context_scheduling_budget() -> Int
+
 pub fn hostcall_probe_trampoline() -> Int64
 
 pub fn memory_growth_finish(Int64, Int) -> Int64

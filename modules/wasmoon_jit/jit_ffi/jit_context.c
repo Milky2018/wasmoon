@@ -128,142 +128,23 @@ static int32_t gc_copy_table_roots(const jit_context_t *ctx, int64_t *dst) {
 // ============ Context Allocation ============
 
 jit_context_t *alloc_context_internal(int func_count) {
-    jit_context_t *ctx = (jit_context_t *)malloc(sizeof(jit_context_t));
+    // Optional callbacks, scheduling and GC state must start disabled, even
+    // when the allocator returns storage previously used by another context.
+    jit_context_t *ctx = calloc(1, sizeof(*ctx));
     if (!ctx) return NULL;
-
-    // Initialize all fields to match VMContext v3 layout
-    ctx->callable_local_types = NULL;
-    ctx->callable_local_type_count = 0;
-    ctx->callable_type_parents = NULL;
-    ctx->callable_type_count = 0;
-    ctx->callable_entries = NULL;
-    ctx->callable_entry_count = 0;
-    ctx->callable_tags = NULL;
-    ctx->callable_tag_count = 0;
-    // High frequency fields
-    ctx->memory0 = NULL;
-    ctx->memory0_base = NULL;
-    atomic_store_explicit(&ctx->memory0_size, 0, memory_order_relaxed);
+    atomic_init(&ctx->memory0_size, 0);
     ctx->func_table = (void **)calloc(func_count, sizeof(void *));
     if (!ctx->func_table) {
         free(ctx);
         return NULL;
     }
-    ctx->table0_base = NULL;      // Table 0 base (fast path for call_indirect)
-
-    // Medium frequency fields
-    ctx->table0_elements = 0;     // Table 0 element count
-    ctx->globals = NULL;
-
-    // Low frequency fields (multi-table support)
-    ctx->tables = NULL;           // Array of table pointers (for table_idx != 0)
-    ctx->table_count = 0;
     ctx->func_count = func_count;
-    ctx->table_sizes = NULL;      // Array of table sizes
-    ctx->table_max_sizes = NULL;  // Array of table max sizes
-
-    // Multi-memory support
-    ctx->memories = NULL;         // Array of memory definition pointers
-    ctx->memory_count = 0;
     ctx->debug_current_func_idx = -1;
-
-    // GC heap for inline allocation
-    ctx->gc_heap_ptr = NULL;      // Current allocation pointer
-    ctx->gc_heap_limit = NULL;    // Allocation limit
-    ctx->gc_heap = NULL;          // GcHeap* pointer
-    ctx->gc_type_cache = NULL;
-    ctx->gc_num_types = 0;
-    ctx->gc_canonical_indices = NULL;
-    ctx->gc_num_canonical = 0;
-    ctx->gc_func_type_indices = NULL;
-    ctx->gc_num_funcs = 0;
-    ctx->gc_func_table = NULL;
-    ctx->gc_func_table_size = 0;
-    ctx->gc_collect_requested = 0;
-    ctx->gc_in_collect = 0;
-    ctx->gc_root_scratch = NULL;
-    ctx->gc_root_scratch_len = 0;
-    ctx->gc_root_scratch_cap = 0;
-    ctx->gc_safepoint_table = NULL;
-    ctx->gc_frame_chain_head = NULL;
-    ctx->gc_root_scope_head = NULL;
-    ctx->gc_func_safepoint_tables = NULL;
-    ctx->gc_func_stackmap_blobs = NULL;
-    ctx->gc_func_safepoint_offsets = NULL;
-    ctx->gc_func_safepoint_table_count = 0;
-
-    // Additional fields (not accessed by JIT code directly)
-    ctx->owns_memory0 = 0;        // Default: does not own memory0
-    ctx->owns_indirect_table = 0; // Default: does not own table0_base
-    ctx->args = NULL;
-    ctx->argc = 0;
-    ctx->envp = NULL;
-    ctx->envc = 0;
-    ctx->wasi_exited = 0;
-    ctx->wasi_exit_code = 0;
-
-    // Exception handling state
-    ctx->exception_handler = NULL;
-    ctx->exception_tag = 0;
     ctx->continuation_arena = continuation_arena_new();
-    ctx->continuation_types = NULL;
     ctx->exception_arena = exception_arena_new();
-    ctx->exception_ref = 0;
-    ctx->exception_values = NULL;
-    ctx->exception_value_count = 0;
-
-    // Spilled locals for exception handling
-    ctx->spilled_locals = NULL;
-    ctx->spilled_locals_count = 0;
-
-    // WASI fd/preopen state (init_wasi_* may not be called for some contexts)
-    ctx->fd_table = NULL;
-    ctx->fd_table_size = 0;
-    ctx->fd_next = 0;
     ctx->stdin_fd = -1;
     ctx->stdout_fd = -1;
     ctx->stderr_fd = -1;
-    ctx->fd_host_paths = NULL;
-    ctx->fd_is_dir = NULL;
-    ctx->fd_rights_base = NULL;
-    ctx->fd_rights_inheriting = NULL;
-    ctx->preopen_paths = NULL;
-    ctx->preopen_guest_paths = NULL;
-    ctx->preopen_fds = NULL;
-    ctx->preopen_count = 0;
-    ctx->preopen_base_fd = 0;
-
-    // WASI stdio buffers (disabled by default)
-    ctx->wasi_stdin_use_buffer = 0;
-    ctx->wasi_stdin_buf = NULL;
-    ctx->wasi_stdin_len = 0;
-    ctx->wasi_stdin_offset = 0;
-    ctx->wasi_stdin_callback = NULL;
-    ctx->wasi_stdin_callback_data = NULL;
-    ctx->hostcall_callback = NULL;
-    ctx->hostcall_callback_data = NULL;
-    ctx->cancellation_callback = NULL;
-    ctx->cancellation_callback_data = NULL;
-    ctx->wasi_stdout_capture = 0;
-    ctx->wasi_stdout_buf = NULL;
-    ctx->wasi_stdout_len = 0;
-    ctx->wasi_stdout_cap = 0;
-    ctx->wasi_stderr_capture = 0;
-    ctx->wasi_stderr_buf = NULL;
-    ctx->wasi_stderr_len = 0;
-    ctx->wasi_stderr_cap = 0;
-
-    // Bulk segment state (per-context; initialized on demand).
-    ctx->data_segments = NULL;
-    ctx->data_segment_sizes = NULL;
-    ctx->data_dropped = NULL;
-    ctx->data_segment_count = 0;
-
-    ctx->elem_segments = NULL;
-    ctx->elem_segment_sizes = NULL;
-    ctx->elem_dropped = NULL;
-    ctx->elem_segment_count = 0;
-
     return ctx;
 }
 
