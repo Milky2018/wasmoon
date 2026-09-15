@@ -184,7 +184,19 @@ class WindowsPollTests(unittest.TestCase):
         enqueue("\r", True)
         if exclusive:
             self.assertEqual(self.readiness([fd], [1], 1000), (1, [1]))
-            self.assertEqual(self.read_bytes(fd, 32), b"x\r\n")
+            actual = self.read_bytes(fd, 32)
+            self.release(fd)
+            # Compare against the native console in exactly the same mode;
+            # ENABLE_LINE_INPUT alone does not promise CRLF translation.
+            enqueue("x", True)
+            enqueue("\r", True)
+            expected = ctypes.create_string_buffer(32)
+            transferred = wintypes.DWORD()
+            kernel.ReadFile.argtypes = [wintypes.HANDLE, ctypes.c_void_p, wintypes.DWORD,
+                                        ctypes.POINTER(wintypes.DWORD), ctypes.c_void_p]
+            self.assertTrue(kernel.ReadFile(handle, expected, 32, ctypes.byref(transferred), None))
+            self.assertEqual(actual, expected.raw[:transferred.value])
+            self.assertTrue(actual.startswith(b"x"))
             return
         before = wintypes.DWORD()
         after = wintypes.DWORD()
