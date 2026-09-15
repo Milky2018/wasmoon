@@ -10,12 +10,12 @@ pub(all) suberror WasiExit {
 
 ///|
 fn check_mem_range(mem : @runtime.Memory, ptr : Int, len : Int) -> Bool {
-  if ptr < 0 || len < 0 {
+  if len < 0 {
     return false
   }
-  let start = ptr.to_int64()
+  let start = ptr.reinterpret_as_uint().to_int64()
   let end = start + len.to_int64()
-  end >= start && end <= mem.byte_len()
+  end <= 0x100000000L && end <= mem.byte_len()
 }
 
 ///|

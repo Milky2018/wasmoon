@@ -193,3 +193,8 @@ CPU clock reads are supported. Polling CPU-clock deadlines retains the existing
 Wasmtime compatibility contract: a single relative subscription is a duration
 sleep; absolute or mixed CPU-clock subscriptions return `INVAL`. It does not
 claim a native per-thread CPU timer facility.
+
+P1 addresses are unsigned wasm32 offsets, including addresses at or above 2 GiB.
+Range checks reject wraparound across the 4 GiB boundary. MoonBit host buffers
+still have signed-Int lengths; individual materialized buffers are limited to
+less than 2 GiB, independent of where their guest data resides.

@@ -57,13 +57,12 @@ fn check_poll_array_range(
   count : UInt,
   element_size : UInt64,
 ) -> Bool {
-  if ptr < 0 {
-    return false
-  }
-  let start = ptr.to_int64().reinterpret_as_uint64()
+  let start = ptr.reinterpret_as_uint().to_uint64()
   let bytes = count.to_uint64() * element_size
   let end = start + bytes
-  end >= start && end <= mem.byte_len().reinterpret_as_uint64()
+  end >= start &&
+  end <= 0x100000000UL &&
+  end <= mem.byte_len().reinterpret_as_uint64()
 }
 
 ///|

@@ -3520,3 +3520,25 @@ test "wasi jit: UTF-8 argument, environment and preopen byte contracts" {
   inspect(result.match_, content="true")
   inspect(wasi_errno_from_result(result.interp_result), content="0")
 }
+
+///|
+test "wasi jit: P1 output pointers above two GiB remain unsigned" {
+  let source =
+    #|(module
+    #| (import "wasi_snapshot_preview1" "args_sizes_get" (func $sizes (param i32 i32) (result i32)))
+    #| (import "wasi_snapshot_preview1" "args_get" (func $args (param i32 i32) (result i32)))
+    #| (memory (export "memory") 32769)
+    #| (func (export "test") (result i32)
+    #|  (if (call $sizes (i32.const 0x80000000) (i32.const 0x80000004)) (then unreachable))
+    #|  (if (i32.ne (i32.load (i32.const 0x80000004)) (i32.const 8)) (then unreachable))
+    #|  (if (call $args (i32.const 0x80000010) (i32.const 0x80000020)) (then unreachable))
+    #|  (if (i64.ne (i64.load (i32.const 0x80000020)) (i64.const 0x0080989ff0ab8ce7)) (then unreachable))
+    #|  (i32.const 0)))
+  let result = compare_wasi_with_options(
+    source,
+    "test",
+    configure_wasi=Some(ctx => ctx.args.push("猫😀")),
+  )
+  inspect(result.match_, content="true")
+  inspect(wasi_errno_from_result(result.interp_result), content="0")
+}
