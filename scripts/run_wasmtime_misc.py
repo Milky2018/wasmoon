@@ -218,7 +218,7 @@ def main() -> int:
         if component:
             moon_tools, wasm_tools = resolve_executable(moon_tools), resolve_executable(wasm_tools)
             version = subprocess.check_output([str(wasm_tools), "--version"], text=True).strip()
-            if version != f"wasm-tools {WASM_TOOLS_VERSION}":
+            if version.split()[:2] != ["wasm-tools", WASM_TOOLS_VERSION]:
                 raise ValueError(f"component adapter requires wasm-tools {WASM_TOOLS_VERSION}, found {version}")
             tool_versions = {"wasm_tools": version, "wasmoon_tools_sha256": digest(moon_tools)}
         if args.output:

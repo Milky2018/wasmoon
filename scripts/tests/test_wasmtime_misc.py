@@ -6,6 +6,7 @@ import sys
 import subprocess
 import tempfile
 import unittest
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'scripts'))
@@ -13,6 +14,20 @@ import run_wasmtime_misc as misc
 
 
 class MiscRunnerTests(unittest.TestCase):
+    def test_component_tool_version_accepts_official_build_metadata(self):
+        case = dict(name="component.wast", lane="component", host_contract=None, config={})
+        for version, expected in [("1.254.0 (bb58fdf91 2026-07-20)", 0), ("1.253.0 (old)", 2)]:
+            with self.subTest(version=version), tempfile.TemporaryDirectory() as directory:
+                with patch.dict(os.environ), patch.object(misc.platform, "platform", return_value="test host"), \
+                     patch.object(sys, "argv", ["misc", "--mode", "interp", "--output", directory]), \
+                     patch.object(misc, "validate_snapshot", return_value=({"commit": "pinned"}, [case])), \
+                     patch.object(misc, "resolve_executable", side_effect=lambda path: path), \
+                     patch.object(misc, "digest", return_value="digest"), \
+                     patch.object(misc.subprocess, "check_output", return_value="wasm-tools " + version), \
+                     patch.object(misc, "run_case", return_value={"status": "pass"}) as run_case:
+                    self.assertEqual(misc.main(), expected)
+                    self.assertEqual(run_case.call_count, int(expected == 0))
+
     def test_cli_check_with_non_utf8_host_locale(self):
         environment = os.environ | {"LC_ALL": "C", "PYTHONCOERCECLOCALE": "0"}
         result = subprocess.run(

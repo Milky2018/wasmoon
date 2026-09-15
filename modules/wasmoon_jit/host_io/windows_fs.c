@@ -524,7 +524,13 @@ int wasmoon_windows_renameat(int old_fd, const char *old_path, int new_fd, const
   wchar_t *name = wasmoon_windows_utf16(new_path);
   if (!name) { CloseHandle(source); return -1; }
   HANDLE root = NULL;
-  if (!absolute_path(new_path)) {
+  if (absolute_path(new_path)) {
+    // FILE_RENAME_INFO does not normalize dot components like CreateFileW.
+    // WASI directory handles may retain a host path ending in "/.".
+    wchar_t *full = _wfullpath(NULL, name, 0);
+    free(name); name = full;
+    if (!name) { CloseHandle(source); return -1; }
+  } else {
     if (strchr(new_path, '/') || strchr(new_path, '\\') || strchr(new_path, ':') ||
         !strcmp(new_path, ".") || !strcmp(new_path, "..")) {
       free(name); CloseHandle(source); errno = EPERM; return -1;

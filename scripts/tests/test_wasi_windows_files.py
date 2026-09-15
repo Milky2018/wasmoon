@@ -205,7 +205,7 @@ class WindowsFileTests(unittest.TestCase):
         source = self.root / "source"
         source.mkdir()
         target = self.root / "target"
-        self.assertEqual(self.rename(0, source.as_posix().encode(), 0, target.as_posix().encode()), 0)
+        self.assertEqual(self.rename(0, (self.root.as_posix() + "/./source").encode(), 0, (self.root.as_posix() + "/./target").encode()), 0)
         self.assertFalse(source.exists())
         self.assertTrue(target.is_dir())
 
