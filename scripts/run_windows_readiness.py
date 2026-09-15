@@ -17,7 +17,24 @@ ROOT = Path(__file__).resolve().parents[1]
 PAYLOAD = b"x\r\n\x1a"
 
 
-def guest(clock: bool) -> str:
+def guest(scenario: str) -> str:
+    clock = scenario == "pending-clock"
+    invalid = scenario == "invalid-fd"
+    eof = scenario == "pipe-eof"
+    duplicate = scenario == "duplicate-read"
+    read_assertions = "" if clock or invalid else f'''
+        (i32.store (i32.const 320) (i32.const 384))
+        (i32.store (i32.const 324) (i32.const 4))
+        (call $assert (i32.eqz (call $read (i32.const 0) (i32.const 320) (i32.const 1) (i32.const 328))))
+        (call $assert (i32.eq (i32.load (i32.const 328)) (i32.const {0 if eof else 4})))
+        {"" if eof else "(call $assert (i32.eq (i32.load (i32.const 384)) (i32.const 0x1a0a0d78)))"}'''
+    extra_subscription = "" if not duplicate else '''
+        (i64.store (i32.const 96) (i64.const 3))
+        (i32.store8 (i32.const 104) (i32.const 1))'''
+    extra_assertions = "" if not duplicate else '''
+        (call $assert (i64.eq (i64.load (i32.const 160)) (i64.const 3)))
+        (call $assert (i32.eqz (i32.load16_u (i32.const 168))))
+        (call $assert (i32.eq (i32.load8_u (i32.const 170)) (i32.const 1)))'''
     return f'''(module
       (import "wasi_snapshot_preview1" "poll_oneoff" (func $poll (param i32 i32 i32 i32) (result i32)))
       (import "wasi_snapshot_preview1" "fd_read" (func $read (param i32 i32 i32 i32) (result i32)))
@@ -31,17 +48,17 @@ def guest(clock: bool) -> str:
         (i64.store (i32.const 24) (i64.const {20_000_000 if clock else 5_000_000_000}))
         (i64.store (i32.const 48) (i64.const 2))
         (i32.store8 (i32.const 56) (i32.const 1))
-        (call $assert (i32.eqz (call $poll (i32.const 0) (i32.const 128) (i32.const 2) (i32.const 256))))
-        (call $assert (i32.eq (i32.load (i32.const 256)) (i32.const 1)))
+        (i32.store (i32.const 64) (i32.const {123456 if invalid else 0}))
+        {extra_subscription}
+        (call $assert (i32.eq (call $poll (i32.const 0) (i32.const 128) (i32.const {3 if duplicate else 2}) (i32.const 256)) (i32.const {8 if invalid else 0})))
+        {"return" if invalid else ""}
+        (call $assert (i32.eq (i32.load (i32.const 256)) (i32.const {2 if duplicate else 1})))
         (call $assert (i64.eq (i64.load (i32.const 128)) (i64.const {1 if clock else 2})))
-        (call $assert (i32.eqz (i32.load16_u (i32.const 136))))
+        (call $assert (i32.eq (i32.load16_u (i32.const 136)) (i32.const {8 if invalid else 0})))
         (call $assert (i32.eq (i32.load8_u (i32.const 138)) (i32.const {0 if clock else 1})))
-        {'' if clock else '''
-        (i32.store (i32.const 320) (i32.const 384))
-        (i32.store (i32.const 324) (i32.const 4))
-        (call $assert (i32.eqz (call $read (i32.const 0) (i32.const 320) (i32.const 1) (i32.const 328))))
-        (call $assert (i32.eq (i32.load (i32.const 328)) (i32.const 4)))
-        (call $assert (i32.eq (i32.load (i32.const 384)) (i32.const 0x1a0a0d78)))'''}
+        {"(call $assert (i32.eq (i32.load16_u (i32.const 152)) (i32.const 1)))" if eof else ""}
+        {extra_assertions}
+        {read_assertions}
         (call $exit (i32.const 0))))'''
 
 
@@ -53,13 +70,14 @@ def main() -> int:
     results = []
     with tempfile.TemporaryDirectory() as directory:
         root = Path(directory)
-        for clock in (False, True):
-            source = root / ("clock.wat" if clock else "read.wat")
-            source.write_text(guest(clock))
+        scenarios = ("pending-clock", "delayed-pipe", "regular-file", "pipe-eof", "invalid-fd", "duplicate-read")
+        for scenario in scenarios:
+            source = root / f"{scenario}.wat"
+            source.write_text(guest(scenario))
             subprocess.run(["wasm-tools", "parse", str(source), "-o", str(source.with_suffix(".wasm"))], check=True)
         for mode in ("jit", "interp"):
-            for scenario in ("pending-clock", "delayed-pipe", "regular-file"):
-                wasm = root / ("clock.wasm" if scenario == "pending-clock" else "read.wasm")
+            for scenario in scenarios:
+                wasm = root / f"{scenario}.wasm"
                 command = [str(args.wasmoon.resolve()), "run", str(wasm)]
                 if mode == "interp": command.append("--no-jit")
                 input_file = None
@@ -73,7 +91,7 @@ def main() -> int:
                     start_new_session=True)
                 started = time.monotonic()
                 timer = None
-                if scenario == "delayed-pipe":
+                if scenario in ("delayed-pipe", "duplicate-read"):
                     def deliver():
                         try:
                             process.stdin.write(PAYLOAD)
@@ -82,6 +100,8 @@ def main() -> int:
                             pass
                     timer = threading.Timer(0.05, deliver)
                     timer.start()
+                if scenario == "pipe-eof":
+                    process.stdin.close()
                 try:
                     # Keep the pipe open during poll: communicate() would close
                     # stdin and turn the pending-clock case into an EOF event.
