@@ -66,14 +66,17 @@ int wasmoon_windows_open(const char *path, int flags, int mode) {
 typedef NTSTATUS (NTAPI *create_file_fn)(PHANDLE, ACCESS_MASK, POBJECT_ATTRIBUTES,
     PIO_STATUS_BLOCK, PLARGE_INTEGER, ULONG, ULONG, ULONG, ULONG, PVOID, ULONG);
 typedef ULONG (WINAPI *status_error_fn)(NTSTATUS);
+typedef NTSTATUS (NTAPI *set_information_fn)(HANDLE, PIO_STATUS_BLOCK, PVOID, ULONG, FILE_INFORMATION_CLASS);
 static create_file_fn create_file;
 static status_error_fn status_error;
+static set_information_fn set_information;
 static INIT_ONCE file_once = INIT_ONCE_STATIC_INIT;
 static BOOL CALLBACK initialize_file_api(PINIT_ONCE once, PVOID parameter, PVOID *context) {
   (void)once; (void)parameter; (void)context;
   HMODULE module = GetModuleHandleW(L"ntdll.dll");
   create_file = (create_file_fn)GetProcAddress(module, "NtCreateFile");
   status_error = (status_error_fn)GetProcAddress(module, "RtlNtStatusToDosError");
+  set_information = (set_information_fn)GetProcAddress(module, "NtSetInformationFile");
   return TRUE;
 }
 // Only one guest component may reach this primitive. Directory traversal and
@@ -378,6 +381,55 @@ int wasmoon_windows_renameat(int old_fd, const char *old_path, int new_fd, const
   DWORD error = GetLastError();
   free(name); free(info); CloseHandle(source);
   return result ? 0 : wasmoon_windows_error(error);
+}
+int wasmoon_windows_linkat(int old_fd, const char *old_path, int new_fd, const char *new_path, int follow) {
+  HANDLE source = open_path_or_relative(old_fd, old_path, FILE_READ_ATTRIBUTES, 1,
+                                        follow ? 0 : 0x00200000);
+  if (source == INVALID_HANDLE_VALUE) return -1;
+  wasmoon_windows_stat stat = {0};
+  if (stat_handle(source, &stat) < 0 || stat.filetype == 3) {
+    int error = stat.filetype == 3 ? EPERM : errno;
+    CloseHandle(source); errno = error; return -1;
+  }
+  HANDLE root = NULL;
+  wchar_t *name = wasmoon_windows_utf16(new_path);
+  if (!name) { CloseHandle(source); return -1; }
+  if (absolute_path(new_path)) {
+    wchar_t *full = _wfullpath(NULL, name, 0);
+    free(name);
+    if (!full) { CloseHandle(source); return -1; }
+    // NtSetInformationFile requires an NT namespace path for an absolute name.
+    int unc = full[0] == L'\\' && full[1] == L'\\';
+    const wchar_t *suffix = unc ? full + 2 : full;
+    const wchar_t *prefix = unc ? L"\\??\\UNC\\" : L"\\??\\";
+    size_t length = wcslen(prefix) + wcslen(suffix) + 1;
+    name = malloc(length * sizeof(*name));
+    if (name) { wcscpy(name, prefix); wcscat(name, suffix); }
+    free(full);
+    if (!name) { CloseHandle(source); errno = ENOMEM; return -1; }
+  } else {
+    if (!*new_path || strchr(new_path, '/') || strchr(new_path, '\\') || strchr(new_path, ':') ||
+        !strcmp(new_path, ".") || !strcmp(new_path, "..")) {
+      free(name); CloseHandle(source); errno = EPERM; return -1;
+    }
+    root = wasmoon_windows_fd_handle(new_fd);
+    if (root == INVALID_HANDLE_VALUE) { free(name); CloseHandle(source); return -1; }
+  }
+  // FILE_LINK_INFORMATION shares the documented layout of FILE_RENAME_INFO.
+  size_t bytes = wcslen(name) * sizeof(*name);
+  size_t size = sizeof(FILE_RENAME_INFO) + bytes;
+  FILE_RENAME_INFO *info = calloc(1, size);
+  if (!info) { free(name); CloseHandle(source); errno = ENOMEM; return -1; }
+  info->RootDirectory = root;
+  info->FileNameLength = (DWORD)bytes;
+  memcpy(info->FileName, name, bytes);
+  InitOnceExecuteOnce(&file_once, initialize_file_api, NULL, NULL);
+  IO_STATUS_BLOCK io;
+  NTSTATUS result = set_information ? set_information(source, &io, info, (ULONG)size,
+      (FILE_INFORMATION_CLASS)11 /* FileLinkInformation */) : (NTSTATUS)0xC00000BB;
+  free(info); free(name); CloseHandle(source);
+  if (result >= 0) return 0;
+  return wasmoon_windows_error(status_error ? status_error(result) : ERROR_NOT_SUPPORTED);
 }
 static int set_times(HANDLE handle, int64_t atim, int64_t mtim, int flags) {
   FILETIME access, modified, now;

@@ -14,6 +14,14 @@ import run_wasmtime_p1 as p1
 
 
 class P1RunnerTests(unittest.TestCase):
+    def test_windows_guest_environment_matches_upstream_contract(self):
+        with patch.object(p1.sys, "platform", "win32"):
+            environment = p1.guest_environment()
+        source = (p1.CORPUS / "upstream/crates/test-programs/artifacts/src/lib.rs").read_text()
+        windows = source.split("#[cfg(windows)]", 1)[1].split("#[cfg(all(unix", 1)[0]
+        import re
+        self.assertEqual(environment, dict(re.findall(r'\("([A-Z_]+)", "([^"]+)"\)', windows)))
+
     def test_source_snapshot_is_complete_and_unchanged(self):
         _, names = p1.validate_snapshot()
         self.assertEqual(len(names), 58)

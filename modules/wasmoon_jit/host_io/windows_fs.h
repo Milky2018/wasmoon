@@ -20,6 +20,7 @@ int wasmoon_windows_fstatat(int fd, const char *path, int follow, wasmoon_window
 int wasmoon_windows_mkdirat(int fd, const char *path);
 int wasmoon_windows_unlinkat(int fd, const char *path, int directory);
 int wasmoon_windows_renameat(int old_fd, const char *old_path, int new_fd, const char *new_path);
+int wasmoon_windows_linkat(int old_fd, const char *old_path, int new_fd, const char *new_path, int follow);
 int wasmoon_windows_futimens(int fd, int64_t atim, int64_t mtim, int flags);
 int wasmoon_windows_utimensat(int fd, const char *path, int64_t atim, int64_t mtim, int flags, int follow);
 int wasmoon_windows_path_within_base(const char *base, const char *target);

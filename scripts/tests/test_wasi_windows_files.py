@@ -23,7 +23,7 @@ class WindowsFileTests(unittest.TestCase):
         directory = Path(cls.directory.name)
         (directory / "moonbit.h").write_text('#define MOONBIT_FFI_EXPORT __declspec(dllexport)\n')
         library = directory / "files.dll"
-        names = ["open", "openat", "close", "path_within_base", "is_symlink_at", "readlinkat"]
+        names = ["open", "openat", "close", "path_within_base", "is_symlink_at", "readlinkat", "linkat"]
         subprocess.run([
             "clang-cl", "/LD", "/MD", "/I" + str(directory),
             str(ROOT / "modules/wasmoon_jit/host_io/windows_io.c"),
@@ -46,6 +46,8 @@ class WindowsFileTests(unittest.TestCase):
         cls.readlink = cls.library.wasmoon_windows_readlinkat
         cls.readlink.argtypes = [ctypes.c_int, ctypes.c_char_p, ctypes.c_void_p, ctypes.c_size_t]
         cls.readlink.restype = ctypes.c_int64
+        cls.link = cls.library.wasmoon_windows_linkat
+        cls.link.argtypes = [ctypes.c_int, ctypes.c_char_p, ctypes.c_int, ctypes.c_char_p, ctypes.c_int]
 
     def setUp(self):
         self.scratch = tempfile.TemporaryDirectory()
@@ -78,6 +80,24 @@ class WindowsFileTests(unittest.TestCase):
             self.assertEqual(os.read(fd, 20), b"original")
         finally:
             self.close(fd)
+
+    def test_hard_link_uses_held_parent_and_does_not_replace(self):
+        source = self.root / "source"
+        source.write_bytes(b"shared")
+        self.assertEqual(self.link(self.fd, b"source", self.fd, b"link", 0), 0)
+        self.assertTrue(os.path.samefile(source, self.root / "link"))
+        self.assertEqual(self.link(self.fd, b"source", self.fd, b"link", 0), -1)
+        renamed = self.root.with_name("renamed")
+        self.root.rename(renamed)
+        self.assertEqual(self.link(self.fd, b"source", self.fd, b"after-rename", 0), 0)
+        self.assertTrue(os.path.samefile(renamed / "source", renamed / "after-rename"))
+
+    def test_hard_link_absolute_host_path(self):
+        source = self.root / "source"
+        source.write_bytes(b"shared")
+        target = self.root / "target"
+        self.assertEqual(self.link(0, os.fsencode(source), 0, os.fsencode(target), 0), 0)
+        self.assertTrue(os.path.samefile(source, target))
 
     def test_relative_primitive_rejects_traversal_and_stream_names(self):
         for name in [b"..", b"../outside", b"sub/file", b"sub\\file", b"file:stream"]:

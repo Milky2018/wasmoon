@@ -263,10 +263,24 @@ jobs:
           }
           if ($failed) { exit 1 }
       - name: run Windows native tests
-        if: ${{ success() && steps.windows_build.outcome == 'success' }}
+        if: ${{ !cancelled() && steps.windows_build.outcome == 'success' }}
         env:
           VCODE_REGALLOC_VALIDATION: "1"
         run: python scripts/run_native_packages.py --output target/windows-native-tests
+      - name: run Windows Wasmtime misc suite
+        if: ${{ !cancelled() && steps.windows_build.outcome == 'success' }}
+        run: python scripts/run_wasmtime_misc.py --include-high-memory --timeout 120 --output target/windows-misc
+      - name: run Windows WASIp1 suites
+        if: ${{ !cancelled() && steps.windows_build.outcome == 'success' }}
+        env:
+          RUSTUP_TOOLCHAIN: "1.97.0"
+        run: |
+          rustup toolchain install 1.97.0 --profile minimal --target wasm32-wasip1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python scripts/run_wasmtime_p1.py --filter p1_poll_oneoff_stdio --output target/windows-p1-smoke
+          $smoke = $LASTEXITCODE
+          python scripts/run_wasmtime_p1.py --profile explicit-rights --output target/windows-p1-rights
+          if ($LASTEXITCODE -ne 0 -or $smoke -ne 0) { exit 1 }
       - name: upload Windows test evidence
         uses: actions/upload-artifact@v4
         if: always()
@@ -276,4 +290,7 @@ jobs:
             target/windows-native-tests
             target/windows-readiness.json
             target/windows-components
+            target/windows-misc
+            target/windows-p1-smoke
+            target/windows-p1-rights
           if-no-files-found: warn

@@ -1212,11 +1212,8 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_wasi_readlinkat(int dirfd, moonbit_bytes_t pa
 MOONBIT_FFI_EXPORT int wasmoon_wasi_linkat(int olddirfd, moonbit_bytes_t oldpath,
     int newdirfd, moonbit_bytes_t newpath, int flags) {
 #ifdef _WIN32
-  (void)olddirfd;
-  (void)newdirfd;
-  (void)flags;
-  // Windows: CreateHardLink only works with absolute paths
-  return -1;
+  return wasmoon_windows_linkat(olddirfd, (const char *)oldpath, newdirfd,
+                               (const char *)newpath, (flags & 0x400) != 0);
 #else
   return linkat(olddirfd, (const char *)oldpath, newdirfd, (const char *)newpath, flags);
 #endif

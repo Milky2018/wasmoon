@@ -95,6 +95,9 @@ def prepare_build(profile: str):
 
 def guest_environment() -> dict[str, str]:
     # Mirrors upstream crates/test-programs/artifacts/src/lib.rs.
+    if sys.platform == "win32":
+        return {"ERRNO_MODE_WINDOWS": "1", "NO_DANGLING_FILESYSTEM": "1",
+                "NO_RENAME_DIR_TO_EMPTY_DIR": "1", "RENAME_DIR_ONTO_FILE": "1"}
     return {"ERRNO_MODE_MACOS" if sys.platform == "darwin" else "ERRNO_MODE_UNIX": "1"}
 
 
