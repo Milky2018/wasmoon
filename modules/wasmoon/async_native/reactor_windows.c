@@ -175,7 +175,8 @@ MOONBIT_FFI_EXPORT int wasmoon_async_reactor_wake(void *object) {
   return 0;
 }
 MOONBIT_FFI_EXPORT int wasmoon_async_test_pipe(int *fds) {
-  return wasmoon_windows_notification_pipe(fds);
+  // Other test packages also redirect these descriptors onto CRT stdin.
+  return _pipe(fds, 4096, _O_BINARY | _O_NOINHERIT);
 }
 MOONBIT_FFI_EXPORT int wasmoon_async_test_write(int fd) {
   return wasmoon_windows_write(fd, "x", 1);
