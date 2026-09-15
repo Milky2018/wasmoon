@@ -161,7 +161,10 @@ uses the host absolute-path adapter, which calls the Windows symbolic-link API
 with its unprivileged-creation option. Its JIT/interpreter CI guests inherit a
 process token with the symlink privilege removed and verify success with
 Developer Mode enabled, or EPERM with it disabled. A nonexistent link target
-must not overwrite that privilege error with ENOENT. Symlink targets can be read
+must not overwrite that privilege error with ENOENT.
+[Acceptance CI 34956755258](https://github.com/Milky2018/wasmoon/actions/runs/34956755258)
+passed these checks under both MSVC and Clang, together with all native and
+external conformance gates. Symlink targets can be read
 back; following an absolute target through a capability remains forbidden.
 
 The native reactor owns duplicate handles until completion or cancellation.
