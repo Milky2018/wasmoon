@@ -18,6 +18,8 @@
 #ifdef __APPLE__
 #include <mach-o/loader.h>
 #include <mach-o/nlist.h>
+#elif defined(_WIN32)
+#include <windows.h>
 #else
 #include <elf.h>
 #endif
@@ -496,6 +498,45 @@ static void generate_macho_object(dwarf_builder_t *builder, buffer_t *output) {
     buffer_free(&info_buf);
 }
 
+#elif defined(_WIN32)
+// COFF carries absolute-address DWARF sections for the GDB JIT interface.
+static void generate_coff_object(dwarf_builder_t *builder, buffer_t *output) {
+    buffer_t abbrev, info, strings;
+    buffer_init(&abbrev, 256);
+    buffer_init(&info, 4096);
+    buffer_init(&strings, 64);
+    generate_debug_abbrev(&abbrev);
+    generate_debug_info(&info, builder, 0);
+    buffer_write_u32(&strings, 0);
+    uint32_t abbrev_name = (uint32_t)strings.size;
+    buffer_write_string(&strings, ".debug_abbrev");
+    uint32_t info_name = (uint32_t)strings.size;
+    buffer_write_string(&strings, ".debug_info");
+    uint32_t strings_size = (uint32_t)strings.size;
+    memcpy(strings.data, &strings_size, sizeof(strings_size));
+    IMAGE_FILE_HEADER header = {0};
+    header.Machine = IMAGE_FILE_MACHINE_AMD64;
+    header.NumberOfSections = 2;
+    IMAGE_SECTION_HEADER sections[2] = {{0}};
+    snprintf((char *)sections[0].Name, 8, "/%u", abbrev_name);
+    snprintf((char *)sections[1].Name, 8, "/%u", info_name);
+    sections[0].PointerToRawData = sizeof(header) + sizeof(sections);
+    sections[0].SizeOfRawData = (DWORD)abbrev.size;
+    sections[1].PointerToRawData = sections[0].PointerToRawData + sections[0].SizeOfRawData;
+    sections[1].SizeOfRawData = (DWORD)info.size;
+    for (int i = 0; i < 2; i++)
+        sections[i].Characteristics = IMAGE_SCN_CNT_INITIALIZED_DATA |
+            IMAGE_SCN_MEM_READ | IMAGE_SCN_MEM_DISCARDABLE | IMAGE_SCN_ALIGN_1BYTES;
+    header.PointerToSymbolTable = sections[1].PointerToRawData + sections[1].SizeOfRawData;
+    buffer_write_bytes(output, &header, sizeof(header));
+    buffer_write_bytes(output, sections, sizeof(sections));
+    buffer_write_bytes(output, abbrev.data, abbrev.size);
+    buffer_write_bytes(output, info.data, info.size);
+    buffer_write_bytes(output, strings.data, strings.size);
+    buffer_free(&abbrev);
+    buffer_free(&info);
+    buffer_free(&strings);
+}
 #else
 // Linux/other platforms - generate ELF object with DWARF + symbol table
 static void generate_elf_object(dwarf_builder_t *builder, buffer_t *output) {
@@ -737,6 +778,8 @@ MOONBIT_FFI_EXPORT void wasmoon_dwarf_register(void *dwarf, int verbose) {
 
 #ifdef __APPLE__
     generate_macho_object(builder, &object);
+#elif defined(_WIN32)
+    generate_coff_object(builder, &object);
 #else
     generate_elf_object(builder, &object);
 #endif

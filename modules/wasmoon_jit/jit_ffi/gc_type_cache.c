@@ -105,7 +105,7 @@ static int callable_subtype(jit_context_t *ctx, int32_t actual, int32_t local_ex
 
 // ============ ref.test Implementation ============
 
-int32_t gc_ref_test_impl(jit_context_t *ctx, int64_t value, int32_t type_idx, int32_t nullable) {
+int32_t WASMOON_GUEST_ABI gc_ref_test_impl(jit_context_t *ctx, int64_t value, int32_t type_idx, int32_t nullable) {
 
     // Handle null
     if (is_null_value(value)) {
@@ -227,7 +227,7 @@ int32_t gc_ref_test_impl(jit_context_t *ctx, int64_t value, int32_t type_idx, in
 
 // ============ ref.cast Implementation ============
 
-int64_t gc_ref_cast_impl(jit_context_t *ctx, int64_t value, int32_t type_idx, int32_t nullable) {
+int64_t WASMOON_GUEST_ABI gc_ref_cast_impl(jit_context_t *ctx, int64_t value, int32_t type_idx, int32_t nullable) {
     int result = gc_ref_test_impl(ctx, value, type_idx, nullable);
     if (!result) {
         g_trap_code = WASMOON_TRAP_CAST_FAILURE;
@@ -269,7 +269,7 @@ int32_t callable_type_for_value(jit_context_t *ctx, int64_t value) {
     return -1;
 }
 
-void gc_type_check_subtype_impl(jit_context_t *ctx, int32_t actual_type, int32_t expected_type) {
+void WASMOON_GUEST_ABI gc_type_check_subtype_impl(jit_context_t *ctx, int32_t actual_type, int32_t expected_type) {
     if (callable_subtype(ctx, actual_type, expected_type)) return;
     g_trap_code = 4;
     if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);

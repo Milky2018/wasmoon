@@ -3,6 +3,9 @@
 // This file only contains MOONBIT_FFI_EXPORT functions that wrap internal implementations
 
 #include "jit_internal.h"
+#ifdef _WIN32
+#include <malloc.h>
+#endif
 
 // ============ Hostcall Bridge (JIT -> Host) ============
 // Thread-local scratch for the currently executing hostcall.
@@ -149,7 +152,7 @@ static int hostcall_slots_in_range(
     return bytes <= top - ptr;
 }
 
-MOONBIT_FFI_EXPORT int32_t wasmoon_jit_hostcall(
+MOONBIT_FFI_EXPORT int32_t WASMOON_GUEST_ABI wasmoon_jit_hostcall(
     jit_context_t *ctx,
     int32_t func_idx,
     int64_t values_ptr,
@@ -299,7 +302,7 @@ int wasmoon_jit_cancellation_requested(jit_context_t *ctx) {
     return call_cancellation_callback(cb, ctx->cancellation_callback_data) != 0;
 }
 
-MOONBIT_FFI_EXPORT int32_t wasmoon_jit_cancel_poll(jit_context_t *ctx) {
+MOONBIT_FFI_EXPORT int32_t WASMOON_GUEST_ABI wasmoon_jit_cancel_poll(jit_context_t *ctx) {
     ctx = jit_execution_control_context(ctx);
     if (wasmoon_jit_cancellation_requested(ctx)) {
         g_trap_code = 11;
@@ -586,7 +589,7 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_shared_table_set(int64_t table_ptr, int tabl
 
 // ============ Table Operations ============
 
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_table_grow(
+MOONBIT_FFI_EXPORT int64_t WASMOON_GUEST_ABI wasmoon_jit_table_grow(
     jit_context_t *ctx,
     int32_t table_idx,
     int64_t delta,
@@ -659,37 +662,37 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_memory_copy_ptr(void) {
 // NOTE: For signed remainder, INT_MIN % -1 is undefined behavior in C, but is
 // well-defined in WebAssembly (result 0). We special-case b == -1 to avoid UB.
 
-MOONBIT_FFI_EXPORT int32_t wasmoon_jit_i32_sdiv(int32_t a, int32_t b) {
+MOONBIT_FFI_EXPORT int32_t WASMOON_GUEST_ABI wasmoon_jit_i32_sdiv(int32_t a, int32_t b) {
     return a / b;
 }
 
-MOONBIT_FFI_EXPORT uint32_t wasmoon_jit_i32_udiv(uint32_t a, uint32_t b) {
+MOONBIT_FFI_EXPORT uint32_t WASMOON_GUEST_ABI wasmoon_jit_i32_udiv(uint32_t a, uint32_t b) {
     return a / b;
 }
 
-MOONBIT_FFI_EXPORT int32_t wasmoon_jit_i32_srem(int32_t a, int32_t b) {
+MOONBIT_FFI_EXPORT int32_t WASMOON_GUEST_ABI wasmoon_jit_i32_srem(int32_t a, int32_t b) {
     if (b == -1) return 0;
     return a % b;
 }
 
-MOONBIT_FFI_EXPORT uint32_t wasmoon_jit_i32_urem(uint32_t a, uint32_t b) {
+MOONBIT_FFI_EXPORT uint32_t WASMOON_GUEST_ABI wasmoon_jit_i32_urem(uint32_t a, uint32_t b) {
     return a % b;
 }
 
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_i64_sdiv(int64_t a, int64_t b) {
+MOONBIT_FFI_EXPORT int64_t WASMOON_GUEST_ABI wasmoon_jit_i64_sdiv(int64_t a, int64_t b) {
     return a / b;
 }
 
-MOONBIT_FFI_EXPORT uint64_t wasmoon_jit_i64_udiv(uint64_t a, uint64_t b) {
+MOONBIT_FFI_EXPORT uint64_t WASMOON_GUEST_ABI wasmoon_jit_i64_udiv(uint64_t a, uint64_t b) {
     return a / b;
 }
 
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_i64_srem(int64_t a, int64_t b) {
+MOONBIT_FFI_EXPORT int64_t WASMOON_GUEST_ABI wasmoon_jit_i64_srem(int64_t a, int64_t b) {
     if (b == -1) return 0;
     return a % b;
 }
 
-MOONBIT_FFI_EXPORT uint64_t wasmoon_jit_i64_urem(uint64_t a, uint64_t b) {
+MOONBIT_FFI_EXPORT uint64_t WASMOON_GUEST_ABI wasmoon_jit_i64_urem(uint64_t a, uint64_t b) {
     return a % b;
 }
 
@@ -903,6 +906,9 @@ int wasmoon_jit_call_trampoline_caught(
     jit_trap_activation_push(&activation);
 
     if (sigsetjmp(activation.jmp_buf, 1) != 0) {
+#ifdef _WIN32
+        if ((DWORD)activation.signal == EXCEPTION_STACK_OVERFLOW && !_resetstkoflw()) abort();
+#endif
         int trap_code = (int)activation.code;
         if (exception && trap_code == 12) *exception = exception_capture_current(ctx);
         jit_trap_activation_finalize(&activation);
@@ -958,50 +964,50 @@ MOONBIT_FFI_EXPORT int wasmoon_jit_call_trampoline_managed(
 
 // ============ Spectest Trampolines ============
 
-static void spectest_print_impl(int64_t func_table, int64_t mem_base) {
+static void WASMOON_GUEST_ABI spectest_print_impl(int64_t func_table, int64_t mem_base) {
     (void)func_table;
     (void)mem_base;
 }
 
-static void spectest_print_i32_impl(int64_t func_table, int64_t mem_base, int64_t arg0) {
-    (void)func_table;
-    (void)mem_base;
-    (void)arg0;
-}
-
-static void spectest_print_i64_impl(int64_t func_table, int64_t mem_base, int64_t arg0) {
+static void WASMOON_GUEST_ABI spectest_print_i32_impl(int64_t func_table, int64_t mem_base, int64_t arg0) {
     (void)func_table;
     (void)mem_base;
     (void)arg0;
 }
 
-static void spectest_print_f32_impl(int64_t func_table, int64_t mem_base, int64_t arg0) {
+static void WASMOON_GUEST_ABI spectest_print_i64_impl(int64_t func_table, int64_t mem_base, int64_t arg0) {
     (void)func_table;
     (void)mem_base;
     (void)arg0;
 }
 
-static void spectest_print_f64_impl(int64_t func_table, int64_t mem_base, int64_t arg0) {
+static void WASMOON_GUEST_ABI spectest_print_f32_impl(int64_t func_table, int64_t mem_base, int64_t arg0) {
     (void)func_table;
     (void)mem_base;
     (void)arg0;
 }
 
-static void spectest_print_i32_f32_impl(int64_t func_table, int64_t mem_base, int64_t arg0, int64_t arg1) {
+static void WASMOON_GUEST_ABI spectest_print_f64_impl(int64_t func_table, int64_t mem_base, int64_t arg0) {
     (void)func_table;
     (void)mem_base;
     (void)arg0;
-    (void)arg1;
 }
 
-static void spectest_print_f64_f64_impl(int64_t func_table, int64_t mem_base, int64_t arg0, int64_t arg1) {
+static void WASMOON_GUEST_ABI spectest_print_i32_f32_impl(int64_t func_table, int64_t mem_base, int64_t arg0, int64_t arg1) {
     (void)func_table;
     (void)mem_base;
     (void)arg0;
     (void)arg1;
 }
 
-static void spectest_print_char_impl(int64_t func_table, int64_t mem_base, int64_t arg0) {
+static void WASMOON_GUEST_ABI spectest_print_f64_f64_impl(int64_t func_table, int64_t mem_base, int64_t arg0, int64_t arg1) {
+    (void)func_table;
+    (void)mem_base;
+    (void)arg0;
+    (void)arg1;
+}
+
+static void WASMOON_GUEST_ABI spectest_print_char_impl(int64_t func_table, int64_t mem_base, int64_t arg0) {
     (void)func_table;
     (void)mem_base;
     putchar((int)arg0);
@@ -1564,7 +1570,7 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_gc_alloc_array_from_values_slow_ptr(v
     return (int64_t)gc_alloc_array_from_values_slow;
 }
 
-static void wasmoon_jit_gc_push_root_scope_or_trap(
+static void WASMOON_GUEST_ABI wasmoon_jit_gc_push_root_scope_or_trap(
     jit_context_t *ctx,
     const int64_t *roots,
     int32_t root_count
@@ -1578,7 +1584,7 @@ static void wasmoon_jit_gc_push_root_scope_or_trap(
     siglongjmp(g_trap_jmp_buf, 1);
 }
 
-static void wasmoon_jit_gc_pop_root_scope_or_trap(jit_context_t *ctx) {
+static void WASMOON_GUEST_ABI wasmoon_jit_gc_pop_root_scope_or_trap(jit_context_t *ctx) {
     jit_context_t *activation = get_current_jit_context();
     if (activation) ctx = activation;
     if (ctx && ctx->gc_root_scope_head) {

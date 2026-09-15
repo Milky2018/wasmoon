@@ -317,7 +317,7 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_atomic_notify_ptr(void) {
     return (int64_t)(uintptr_t)atomic_notify_indexed;
 }
 
-int64_t memory_grow_indexed_internal(jit_context_t *ctx, int32_t memidx, int64_t delta, int32_t max_pages) {
+int64_t WASMOON_GUEST_ABI memory_grow_indexed_internal(jit_context_t *ctx, int32_t memidx, int64_t delta, int32_t max_pages) {
     if (!ctx || delta < 0) return -1;
     wasmoon_memory_t *mem = get_memory(ctx, memidx);
     int64_t result = memory_grow_desc_internal(mem, delta, max_pages);
@@ -325,7 +325,7 @@ int64_t memory_grow_indexed_internal(jit_context_t *ctx, int32_t memidx, int64_t
     return result;
 }
 
-int64_t memory_size_indexed_internal(jit_context_t *ctx, int32_t memidx) {
+int64_t WASMOON_GUEST_ABI memory_size_indexed_internal(jit_context_t *ctx, int32_t memidx) {
     if (!ctx) return 0;
     if (memidx < 0) return 0;
     if (memidx > 0 && (!ctx->memories || memidx >= ctx->memory_count)) return 0;
@@ -339,7 +339,7 @@ int64_t memory_size_indexed_internal(jit_context_t *ctx, int32_t memidx) {
     return (int64_t)(size / page_size);
 }
 
-void memory_fill_indexed_internal(jit_context_t *ctx, int32_t memidx, int64_t dst, int32_t val, int64_t size) {
+void WASMOON_GUEST_ABI memory_fill_indexed_internal(jit_context_t *ctx, int32_t memidx, int64_t dst, int32_t val, int64_t size) {
     if (!ctx) {
         g_trap_code = 1;
         if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
@@ -373,7 +373,7 @@ void memory_fill_indexed_internal(jit_context_t *ctx, int32_t memidx, int64_t ds
     }
 }
 
-void memory_copy_indexed_internal(jit_context_t *ctx, int32_t dst_memidx, int32_t src_memidx,
+void WASMOON_GUEST_ABI memory_copy_indexed_internal(jit_context_t *ctx, int32_t dst_memidx, int32_t src_memidx,
                                    int64_t dst, int64_t src, int64_t size) {
     if (!ctx) {
         g_trap_code = 1;

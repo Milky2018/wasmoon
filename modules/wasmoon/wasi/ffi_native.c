@@ -13,6 +13,9 @@ extern "C" {
 #include <sys/stat.h>
 
 #ifdef _WIN32
+#include <winsock2.h>
+#include <windows.h>
+typedef int socklen_t;
 #include <io.h>
 #include <fcntl.h>
 #include <direct.h>

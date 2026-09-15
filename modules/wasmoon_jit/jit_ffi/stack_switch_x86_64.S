@@ -1,3 +1,4 @@
+#ifndef _WIN32
 // Copyright 2026
 // x86_64 assembly context switch for native fibers.
 
@@ -40,3 +41,5 @@ SYMBOL(wasmoon_native_fiber_swap):
 #endif
 
 #endif // __x86_64__ || _M_X64
+
+#endif

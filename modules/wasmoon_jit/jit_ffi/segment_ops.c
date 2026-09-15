@@ -228,7 +228,7 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_clear_segments_managed(
 
 // memory.init - Initialize memory region from data segment
 // Returns 0 on success, traps on out-of-bounds
-static void memory_init_impl(
+static void WASMOON_GUEST_ABI memory_init_impl(
     jit_context_t *ctx,
     int32_t memidx,
     int32_t data_idx,
@@ -318,7 +318,7 @@ static void memory_init_impl(
 }
 
 // data.drop - Mark data segment as dropped
-static void data_drop_impl(
+static void WASMOON_GUEST_ABI data_drop_impl(
     jit_context_t *ctx,
     int32_t data_idx
 ) {
@@ -333,7 +333,7 @@ static void data_drop_impl(
 // ============ Table Segment Libcalls ============
 
 // table.fill - Fill table region with a value
-static void table_fill_impl(
+static void WASMOON_GUEST_ABI table_fill_impl(
     jit_context_t *ctx,
     int32_t table_idx,
     int64_t dst,
@@ -442,7 +442,7 @@ static void table_fill_impl(
 }
 
 // table.copy - Copy table region
-static void table_copy_impl(
+static void WASMOON_GUEST_ABI table_copy_impl(
     jit_context_t *ctx,
     int32_t dst_table_idx,
     int32_t src_table_idx,
@@ -505,7 +505,7 @@ static void table_copy_impl(
 }
 
 // table.init - Initialize table from element segment
-static void table_init_impl(
+static void WASMOON_GUEST_ABI table_init_impl(
     jit_context_t *ctx,
     int32_t table_idx,
     int32_t elem_idx,
@@ -577,7 +577,7 @@ static void table_init_impl(
 }
 
 // elem.drop - Mark element segment as dropped
-static void elem_drop_impl(
+static void WASMOON_GUEST_ABI elem_drop_impl(
     jit_context_t *ctx,
     int32_t elem_idx
 ) {
@@ -684,7 +684,7 @@ static int64_t decode_array_elem_from_bytes(const uint8_t *p, int tag) {
 
 // array.new_data - Create array from data segment
 // Returns: encoded GC reference (gc_ref << 1)
-static int64_t gc_array_new_data_impl(
+static int64_t WASMOON_GUEST_ABI gc_array_new_data_impl(
     jit_context_t *ctx,
     int32_t type_idx,
     int32_t data_idx,
@@ -756,7 +756,7 @@ static int64_t gc_array_new_data_impl(
 
 // array.new_elem - Create array from element segment
 // Returns: encoded GC reference (gc_ref << 1)
-static int64_t gc_array_new_elem_impl(
+static int64_t WASMOON_GUEST_ABI gc_array_new_elem_impl(
     jit_context_t *ctx,
     int32_t type_idx,
     int32_t elem_idx,
@@ -816,7 +816,7 @@ static int64_t gc_array_new_elem_impl(
 }
 
 // array.init_data - Initialize array region from data segment
-static void gc_array_init_data_impl(
+static void WASMOON_GUEST_ABI gc_array_init_data_impl(
     jit_context_t *ctx,
     int32_t type_idx,
     int32_t data_idx,
@@ -885,7 +885,7 @@ static void gc_array_init_data_impl(
 }
 
 // array.init_elem - Initialize array region from element segment
-static void gc_array_init_elem_impl(
+static void WASMOON_GUEST_ABI gc_array_init_elem_impl(
     jit_context_t *ctx,
     int32_t type_idx,
     int32_t elem_idx,

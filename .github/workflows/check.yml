@@ -2,6 +2,11 @@ name: Check and Test
 
 on:
   workflow_dispatch:
+    inputs:
+      windows_only:
+        description: Run only the Windows port diagnostic gate
+        type: boolean
+        default: false
   pull_request:
   push:
     branches:
@@ -20,6 +25,7 @@ env:
 
 jobs:
   native-platform:
+    if: ${{ inputs.windows_only != true }}
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45

@@ -1,3 +1,4 @@
+#ifndef _WIN32
 // Copyright 2025
 // AArch64 assembly context switch for native fibers.
 
@@ -48,3 +49,5 @@ SYMBOL(wasmoon_native_fiber_swap):
     ret
 
 #endif // __aarch64__ || _M_ARM64
+
+#endif

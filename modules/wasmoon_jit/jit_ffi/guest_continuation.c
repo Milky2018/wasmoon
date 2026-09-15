@@ -175,7 +175,7 @@ static int64_t continuation_entry(void *closure) {
         (int64_t)body->context, body->function, body->values, slots, &body->thrown_exception);
 }
 
-static int64_t continuation_new(jit_context_t *ctx, int32_t index, int64_t function) {
+static int64_t WASMOON_GUEST_ABI continuation_new(jit_context_t *ctx, int32_t index, int64_t function) {
     if (!function) continuation_trap(14);
     native_continuation_type_t *type = ctx->continuation_types;
     while (type && type->index != index) type = type->next;
@@ -200,7 +200,7 @@ static int64_t continuation_new(jit_context_t *ctx, int32_t index, int64_t funct
     return publish_continuation(ctx->continuation_arena, body);
 }
 
-static int64_t continuation_bind(jit_context_t *ctx, int32_t input_type, int64_t reference,
+static int64_t WASMOON_GUEST_ABI continuation_bind(jit_context_t *ctx, int32_t input_type, int64_t reference,
     const int64_t *values, int32_t count) {
     native_continuation_body_t *body = take_continuation(ctx, reference);
     if (body->started) {
@@ -247,7 +247,7 @@ static void deliver_input(native_continuation_body_t *body, int64_t *outputs, in
     if (exception) exception_throw_ref_impl(body->context, exception);
 }
 
-static void continuation_suspend(jit_context_t *ctx, int32_t tag,
+static void WASMOON_GUEST_ABI continuation_suspend(jit_context_t *ctx, int32_t tag,
     const int64_t *values, int32_t count, int64_t *outputs, int32_t output_count) {
     if (!current_guest) continuation_trap(CONT_UNHANDLED);
     current_guest->effect = (continuation_effect_t){0, global_tag(ctx, tag), values, count, NULL};
@@ -255,7 +255,7 @@ static void continuation_suspend(jit_context_t *ctx, int32_t tag,
     deliver_input(current_guest, outputs, output_count);
 }
 
-static void continuation_switch(jit_context_t *ctx, int32_t tag, int64_t reference,
+static void WASMOON_GUEST_ABI continuation_switch(jit_context_t *ctx, int32_t tag, int64_t reference,
     const int64_t *values, int32_t count, int64_t *outputs, int32_t output_count) {
     native_continuation_body_t *target = take_continuation(ctx, reference);
     if (!current_guest) continuation_trap(CONT_UNHANDLED);
@@ -285,7 +285,7 @@ static void prepare_resume(native_continuation_body_t *body,
     body->input_exception = exception;
 }
 
-static int32_t continuation_resume(jit_context_t *ctx, int64_t reference,
+static int32_t WASMOON_GUEST_ABI continuation_resume(jit_context_t *ctx, int64_t reference,
     const int64_t *values, int32_t count, const int64_t *handlers, int32_t handler_count,
     int64_t *outputs, int32_t exception_tag) {
     native_continuation_body_t *body = take_continuation(ctx, reference);

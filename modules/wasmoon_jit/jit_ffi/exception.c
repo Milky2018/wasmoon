@@ -187,7 +187,7 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_exception_arena_value(void *owner, int64_t re
     return entry && index >= 0 && index < entry->count ? entry->values[index] : 0;
 }
 
-static int64_t exception_get_ref_impl(jit_context_t *ctx) {
+static int64_t WASMOON_GUEST_ABI exception_get_ref_impl(jit_context_t *ctx) {
     ctx = exception_activation_context(ctx);
     if (!ctx->exception_ref) {
         ctx->exception_ref = exception_arena_insert(ctx->exception_arena,
@@ -428,24 +428,24 @@ int32_t exception_get_value_count_impl(jit_context_t *ctx) {
 
 // ============ FFI Exports ============
 
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_exception_try_begin(int64_t ctx_ptr, int32_t handler_id) {
+MOONBIT_FFI_EXPORT int64_t WASMOON_GUEST_ABI wasmoon_jit_exception_try_begin(int64_t ctx_ptr, int32_t handler_id) {
     jit_context_t *ctx = (jit_context_t *)ctx_ptr;
     return (int64_t)exception_try_begin_impl(ctx, handler_id);
 }
 
-MOONBIT_FFI_EXPORT void wasmoon_jit_exception_try_end(int64_t ctx_ptr, int32_t handler_id) {
+MOONBIT_FFI_EXPORT void WASMOON_GUEST_ABI wasmoon_jit_exception_try_end(int64_t ctx_ptr, int32_t handler_id) {
     jit_context_t *ctx = (jit_context_t *)ctx_ptr;
     exception_try_end_impl(ctx, handler_id);
 }
 
-MOONBIT_FFI_EXPORT void wasmoon_jit_exception_throw(int64_t ctx_ptr, int32_t tag_addr,
+MOONBIT_FFI_EXPORT void WASMOON_GUEST_ABI wasmoon_jit_exception_throw(int64_t ctx_ptr, int32_t tag_addr,
                                                      int64_t values_ptr, int32_t count) {
     jit_context_t *ctx = (jit_context_t *)ctx_ptr;
     int64_t *values = (int64_t *)values_ptr;
     exception_throw_impl(ctx, tag_addr, values, count);
 }
 
-MOONBIT_FFI_EXPORT void wasmoon_jit_exception_throw_tag(int64_t ctx_ptr, int32_t tag_addr) {
+MOONBIT_FFI_EXPORT void WASMOON_GUEST_ABI wasmoon_jit_exception_throw_tag(int64_t ctx_ptr, int32_t tag_addr) {
     jit_context_t *ctx = (jit_context_t *)ctx_ptr;
     exception_throw_impl(ctx, tag_addr, NULL, 0);
 }
@@ -481,27 +481,27 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_exception_throw_values_managed(
     );
 }
 
-MOONBIT_FFI_EXPORT void wasmoon_jit_exception_throw_ref(int64_t ctx_ptr, int64_t exnref) {
+MOONBIT_FFI_EXPORT void WASMOON_GUEST_ABI wasmoon_jit_exception_throw_ref(int64_t ctx_ptr, int64_t exnref) {
     jit_context_t *ctx = (jit_context_t *)ctx_ptr;
     exception_throw_ref_impl(ctx, exnref);
 }
 
-MOONBIT_FFI_EXPORT void wasmoon_jit_exception_delegate(int64_t ctx_ptr, int32_t depth) {
+MOONBIT_FFI_EXPORT void WASMOON_GUEST_ABI wasmoon_jit_exception_delegate(int64_t ctx_ptr, int32_t depth) {
     jit_context_t *ctx = (jit_context_t *)ctx_ptr;
     exception_delegate_impl(ctx, depth);
 }
 
-MOONBIT_FFI_EXPORT int32_t wasmoon_jit_exception_get_tag(int64_t ctx_ptr) {
+MOONBIT_FFI_EXPORT int32_t WASMOON_GUEST_ABI wasmoon_jit_exception_get_tag(int64_t ctx_ptr) {
     jit_context_t *ctx = (jit_context_t *)ctx_ptr;
     return exception_get_tag_impl(ctx);
 }
 
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_exception_get_value(int64_t ctx_ptr, int32_t idx) {
+MOONBIT_FFI_EXPORT int64_t WASMOON_GUEST_ABI wasmoon_jit_exception_get_value(int64_t ctx_ptr, int32_t idx) {
     jit_context_t *ctx = (jit_context_t *)ctx_ptr;
     return exception_get_value_impl(ctx, idx);
 }
 
-MOONBIT_FFI_EXPORT int32_t wasmoon_jit_exception_get_value_count(int64_t ctx_ptr) {
+MOONBIT_FFI_EXPORT int32_t WASMOON_GUEST_ABI wasmoon_jit_exception_get_value_count(int64_t ctx_ptr) {
     jit_context_t *ctx = (jit_context_t *)ctx_ptr;
     return exception_get_value_count_impl(ctx);
 }
@@ -544,14 +544,14 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_exception_get_value_count_ptr(void) {
 }
 
 // Spill/restore locals for exception handling
-MOONBIT_FFI_EXPORT void wasmoon_jit_exception_spill_locals(int64_t ctx_ptr,
+MOONBIT_FFI_EXPORT void WASMOON_GUEST_ABI wasmoon_jit_exception_spill_locals(int64_t ctx_ptr,
                                                             int64_t locals_ptr, int32_t count) {
     jit_context_t *ctx = (jit_context_t *)ctx_ptr;
     int64_t *locals = (int64_t *)locals_ptr;
     exception_spill_locals_impl(ctx, locals, count);
 }
 
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_exception_get_spilled_local(int64_t ctx_ptr, int32_t idx) {
+MOONBIT_FFI_EXPORT int64_t WASMOON_GUEST_ABI wasmoon_jit_exception_get_spilled_local(int64_t ctx_ptr, int32_t idx) {
     jit_context_t *ctx = (jit_context_t *)ctx_ptr;
     return exception_get_spilled_local_impl(ctx, idx);
 }
@@ -574,7 +574,9 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_exception_get_spilled_local_ptr(void)
 // On glibc, `sigsetjmp` may be a macro, so taking its address can be brittle.
 // We return the address of the underlying implementation when available.
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_sigsetjmp_ptr(void) {
-#if defined(__GLIBC__)
+#if defined(_WIN32)
+    return (int64_t)wasmoon_windows_guest_setjmp;
+#elif defined(__GLIBC__)
     // glibc exposes the underlying implementation as __sigsetjmp.
     extern int __sigsetjmp(sigjmp_buf env, int savemask);
     return (int64_t)__sigsetjmp;

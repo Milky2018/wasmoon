@@ -29,6 +29,7 @@
 
 #include "moonbit.h"
 #include "jit_ffi.h"
+#include "windows_context.h"
 #include "fiber_protocol.h"
 #include "gc_heap.h"
 
@@ -217,10 +218,10 @@ uint8_t *alloc_guarded_memory_external(wasmoon_memory_t *memory, size_t initial_
 int is_memory_guard_page_access(jit_context_t *ctx, void *addr);
 
 // Multi-memory variants (with memidx parameter)
-int64_t memory_grow_indexed_internal(jit_context_t *ctx, int32_t memidx, int64_t delta, int32_t max_pages);
-int64_t memory_size_indexed_internal(jit_context_t *ctx, int32_t memidx);
-void memory_fill_indexed_internal(jit_context_t *ctx, int32_t memidx, int64_t dst, int32_t val, int64_t size);
-void memory_copy_indexed_internal(jit_context_t *ctx, int32_t dst_memidx, int32_t src_memidx,
+int64_t WASMOON_GUEST_ABI memory_grow_indexed_internal(jit_context_t *ctx, int32_t memidx, int64_t delta, int32_t max_pages);
+int64_t WASMOON_GUEST_ABI memory_size_indexed_internal(jit_context_t *ctx, int32_t memidx);
+void WASMOON_GUEST_ABI memory_fill_indexed_internal(jit_context_t *ctx, int32_t memidx, int64_t dst, int32_t val, int64_t size);
+void WASMOON_GUEST_ABI memory_copy_indexed_internal(jit_context_t *ctx, int32_t dst_memidx, int32_t src_memidx,
                                    int64_t dst, int64_t src, int64_t size);
 
 // Descriptor-only variants (no ctx)
@@ -311,9 +312,9 @@ int32_t gc_collect_for_alloc_internal(
 
 // Type checking functions
 int is_subtype_cached(int type1, int type2);
-int32_t gc_ref_test_impl(jit_context_t *ctx, int64_t value, int32_t type_idx, int32_t nullable);
-int64_t gc_ref_cast_impl(jit_context_t *ctx, int64_t value, int32_t type_idx, int32_t nullable);
-void gc_type_check_subtype_impl(jit_context_t *ctx, int32_t actual_type, int32_t expected_type);
+int32_t WASMOON_GUEST_ABI gc_ref_test_impl(jit_context_t *ctx, int64_t value, int32_t type_idx, int32_t nullable);
+int64_t WASMOON_GUEST_ABI gc_ref_cast_impl(jit_context_t *ctx, int64_t value, int32_t type_idx, int32_t nullable);
+void WASMOON_GUEST_ABI gc_type_check_subtype_impl(jit_context_t *ctx, int32_t actual_type, int32_t expected_type);
 
 // Type cache management
 void set_type_cache_internal(jit_context_t *ctx, int32_t *types_data, int num_types);
@@ -352,44 +353,44 @@ jit_context_t *get_current_jit_context(void);
 // ============ GC Operations (gc_ops.c) ============
 
 // GC operation implementations
-int64_t gc_struct_new_impl(int32_t type_idx, int64_t *fields, int32_t num_fields);
-int64_t gc_struct_get_impl(int64_t ref, int32_t type_idx, int32_t field_idx);
-void gc_struct_set_impl(int64_t ref, int32_t type_idx, int32_t field_idx, int64_t value);
-int64_t gc_array_new_impl(int32_t type_idx, int32_t len, int64_t fill);
-int64_t gc_array_get_impl(int64_t ref, int32_t type_idx, int32_t idx);
-void gc_array_set_impl(int64_t ref, int32_t type_idx, int32_t idx, int64_t value);
-int32_t gc_array_len_impl(int64_t ref);
-void gc_array_fill_impl(int64_t ref, int32_t offset, int64_t value, int32_t count);
-void gc_array_copy_impl(int64_t dst_ref, int32_t dst_offset,
+int64_t WASMOON_GUEST_ABI gc_struct_new_impl(int32_t type_idx, int64_t *fields, int32_t num_fields);
+int64_t WASMOON_GUEST_ABI gc_struct_get_impl(int64_t ref, int32_t type_idx, int32_t field_idx);
+void WASMOON_GUEST_ABI gc_struct_set_impl(int64_t ref, int32_t type_idx, int32_t field_idx, int64_t value);
+int64_t WASMOON_GUEST_ABI gc_array_new_impl(int32_t type_idx, int32_t len, int64_t fill);
+int64_t WASMOON_GUEST_ABI gc_array_get_impl(int64_t ref, int32_t type_idx, int32_t idx);
+void WASMOON_GUEST_ABI gc_array_set_impl(int64_t ref, int32_t type_idx, int32_t idx, int64_t value);
+int32_t WASMOON_GUEST_ABI gc_array_len_impl(int64_t ref);
+void WASMOON_GUEST_ABI gc_array_fill_impl(int64_t ref, int32_t offset, int64_t value, int32_t count);
+void WASMOON_GUEST_ABI gc_array_copy_impl(int64_t dst_ref, int32_t dst_offset,
                         int64_t src_ref, int32_t src_offset, int32_t count);
 
 // Inline allocation support (for JIT fast path)
-int64_t gc_register_struct_inline(jit_context_t *ctx, uint8_t *obj_ptr, int32_t total_size);
-int64_t gc_register_array_inline(jit_context_t *ctx, uint8_t *obj_ptr, int32_t total_size);
-int64_t gc_alloc_struct_slow(jit_context_t *ctx, int32_t type_idx,
+int64_t WASMOON_GUEST_ABI gc_register_struct_inline(jit_context_t *ctx, uint8_t *obj_ptr, int32_t total_size);
+int64_t WASMOON_GUEST_ABI gc_register_array_inline(jit_context_t *ctx, uint8_t *obj_ptr, int32_t total_size);
+int64_t WASMOON_GUEST_ABI gc_alloc_struct_slow(jit_context_t *ctx, int32_t type_idx,
                               int64_t *fields, int32_t num_fields, int32_t safepoint_id, int32_t function_index);
-int64_t gc_alloc_array_slow(jit_context_t *ctx, int32_t type_idx,
+int64_t WASMOON_GUEST_ABI gc_alloc_array_slow(jit_context_t *ctx, int32_t type_idx,
                              int32_t len, int64_t init_value, int32_t safepoint_id, int32_t function_index);
-int64_t gc_alloc_array_from_values_slow(jit_context_t *ctx, int32_t type_idx,
+int64_t WASMOON_GUEST_ABI gc_alloc_array_from_values_slow(jit_context_t *ctx, int32_t type_idx,
                                          int64_t *values, int32_t len, int32_t safepoint_id, int32_t function_index);
 
 // v128 aggregate operations. A v128 does not fit a runtime word, so these
 // carry it through a caller-owned 16-byte GcSlot buffer passed by address.
-void gc_struct_get_v128_impl(int64_t ref, int32_t type_idx, int32_t field_idx,
+void WASMOON_GUEST_ABI gc_struct_get_v128_impl(int64_t ref, int32_t type_idx, int32_t field_idx,
                              int64_t out_ptr);
-void gc_struct_set_v128_impl(int64_t ref, int32_t type_idx, int32_t field_idx,
+void WASMOON_GUEST_ABI gc_struct_set_v128_impl(int64_t ref, int32_t type_idx, int32_t field_idx,
                              int64_t value_ptr);
-void gc_array_get_v128_impl(int64_t ref, int32_t type_idx, int32_t idx,
+void WASMOON_GUEST_ABI gc_array_get_v128_impl(int64_t ref, int32_t type_idx, int32_t idx,
                             int64_t out_ptr);
-void gc_array_set_v128_impl(int64_t ref, int32_t type_idx, int32_t idx,
+void WASMOON_GUEST_ABI gc_array_set_v128_impl(int64_t ref, int32_t type_idx, int32_t idx,
                             int64_t value_ptr);
-void gc_array_fill_v128_impl(int64_t ref, int32_t offset, int64_t value_ptr,
+void WASMOON_GUEST_ABI gc_array_fill_v128_impl(int64_t ref, int32_t offset, int64_t value_ptr,
                              int32_t count);
-int64_t gc_alloc_struct_wide_slow_impl(int64_t ctx_ptr, int32_t type_idx,
+int64_t WASMOON_GUEST_ABI gc_alloc_struct_wide_slow_impl(int64_t ctx_ptr, int32_t type_idx,
                                         int64_t slots_ptr, int32_t num_fields);
-int64_t gc_alloc_array_wide_slow_impl(int64_t ctx_ptr, int32_t type_idx,
+int64_t WASMOON_GUEST_ABI gc_alloc_array_wide_slow_impl(int64_t ctx_ptr, int32_t type_idx,
                                        int32_t len, int64_t init_ptr);
-int64_t gc_alloc_array_from_slots_slow_impl(int64_t ctx_ptr, int32_t type_idx,
+int64_t WASMOON_GUEST_ABI gc_alloc_array_from_slots_slow_impl(int64_t ctx_ptr, int32_t type_idx,
                                              int64_t slots_ptr, int32_t len);
 
 int32_t callable_type_for_value(jit_context_t *ctx, int64_t value);

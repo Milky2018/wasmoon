@@ -7,6 +7,14 @@
 #include <stddef.h>
 #include <stdatomic.h>
 
+// Guest machine code uses the private SysV helper ABI on x64. C callers use
+// their host ABI; Clang emits the crossing when calling these declarations.
+#if defined(_WIN32) && (defined(__x86_64__) || defined(_M_X64))
+#define WASMOON_GUEST_ABI __attribute__((sysv_abi))
+#else
+#define WASMOON_GUEST_ABI
+#endif
+
 // ============ JIT Context v3 ============
 // New ABI passes vmctx via X0 (callee_vmctx) and X1 (caller_vmctx)
 // User integer params in X2-X7 (up to 6 in registers)

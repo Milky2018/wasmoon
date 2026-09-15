@@ -1364,7 +1364,7 @@ static int32_t trap_invalid_wasi_abi_arg(void) {
 // JIT ABI: X0 = vmctx, X1.. = WASM arguments.
 
 // fd_write: (fd, iovs, iovs_len, nwritten) -> errno
-static int64_t wasi_fd_write_impl(
+static int64_t WASMOON_GUEST_ABI wasi_fd_write_impl(
     jit_context_t *ctx,
     int64_t fd, int64_t iovs, int64_t iovs_len, int64_t nwritten_ptr
 ) {
@@ -1444,7 +1444,7 @@ static int64_t wasi_fd_write_impl(
 }
 
 // fd_read: (fd, iovs, iovs_len, nread) -> errno
-static int64_t wasi_fd_read_impl(
+static int64_t WASMOON_GUEST_ABI wasi_fd_read_impl(
     jit_context_t *ctx,
     int64_t fd, int64_t iovs, int64_t iovs_len, int64_t nread_ptr
 ) {
@@ -1534,7 +1534,7 @@ static int64_t wasi_fd_read_impl(
 }
 
 // fd_close: (fd) -> errno
-static int64_t wasi_fd_close_impl(
+static int64_t WASMOON_GUEST_ABI wasi_fd_close_impl(
     jit_context_t *ctx, int64_t fd
 ) {
     if (!ctx) return WASI_EBADF;
@@ -1611,7 +1611,7 @@ static int64_t wasi_fd_seek_with_right(
     return WASI_ESUCCESS;
 }
 
-static int64_t wasi_fd_seek_impl(
+static int64_t WASMOON_GUEST_ABI wasi_fd_seek_impl(
     jit_context_t *ctx,
     int64_t fd, int64_t offset, int64_t whence, int64_t newoffset_ptr
 ) {
@@ -1621,7 +1621,7 @@ static int64_t wasi_fd_seek_impl(
 }
 
 // fd_tell: (fd, offset) -> errno
-static int64_t wasi_fd_tell_impl(
+static int64_t WASMOON_GUEST_ABI wasi_fd_tell_impl(
     jit_context_t *ctx,
     int64_t fd, int64_t offset_ptr
 ) {
@@ -1631,7 +1631,7 @@ static int64_t wasi_fd_tell_impl(
 }
 
 // fd_sync: (fd) -> errno
-static int64_t wasi_fd_sync_impl(
+static int64_t WASMOON_GUEST_ABI wasi_fd_sync_impl(
     jit_context_t *ctx, int64_t fd
 ) {
     if (!ctx) return WASI_EBADF;
@@ -1650,7 +1650,7 @@ static int64_t wasi_fd_sync_impl(
 }
 
 // fd_datasync: (fd) -> errno
-static int64_t wasi_fd_datasync_impl(
+static int64_t WASMOON_GUEST_ABI wasi_fd_datasync_impl(
     jit_context_t *ctx, int64_t fd
 ) {
     if (!ctx) return WASI_EBADF;
@@ -1672,7 +1672,7 @@ static int64_t wasi_fd_datasync_impl(
 }
 
 // fd_fdstat_get: (fd, fdstat) -> errno
-static int64_t wasi_fd_fdstat_get_impl(
+static int64_t WASMOON_GUEST_ABI wasi_fd_fdstat_get_impl(
     jit_context_t *ctx,
     int64_t fd, int64_t fdstat_ptr
 ) {
@@ -1729,7 +1729,7 @@ static int64_t wasi_fd_fdstat_get_impl(
 }
 
 // fd_prestat_get: (fd, prestat) -> errno
-static int64_t wasi_fd_prestat_get_impl(
+static int64_t WASMOON_GUEST_ABI wasi_fd_prestat_get_impl(
     jit_context_t *ctx,
     int64_t fd, int64_t prestat_ptr
 ) {
@@ -1755,7 +1755,7 @@ static int64_t wasi_fd_prestat_get_impl(
 }
 
 // fd_prestat_dir_name: (fd, path, path_len) -> errno
-static int64_t wasi_fd_prestat_dir_name_impl(
+static int64_t WASMOON_GUEST_ABI wasi_fd_prestat_dir_name_impl(
     jit_context_t *ctx,
     int64_t fd, int64_t path_ptr, int64_t path_len
 ) {
@@ -1780,7 +1780,7 @@ static int64_t wasi_fd_prestat_dir_name_impl(
 }
 
 // path_open: (fd, dirflags, path, path_len, oflags, rights_base, rights_inh, fdflags, opened_fd) -> errno
-static int64_t wasi_path_open_impl(
+static int64_t WASMOON_GUEST_ABI wasi_path_open_impl(
     jit_context_t *ctx,
     int64_t dir_fd, int64_t dirflags,
     int64_t path_ptr, int64_t path_len,
@@ -1953,7 +1953,7 @@ static int preserve_trailing_slash(char **resolved, const char *guest) {
 }
 
 // path_unlink_file: (fd, path, path_len) -> errno
-static int64_t wasi_path_unlink_file_impl(
+static int64_t WASMOON_GUEST_ABI wasi_path_unlink_file_impl(
     jit_context_t *ctx,
     int64_t dir_fd, int64_t path_ptr, int64_t path_len
 ) {
@@ -2001,7 +2001,7 @@ static int64_t wasi_path_unlink_file_impl(
 }
 
 // path_remove_directory: (fd, path, path_len) -> errno
-static int64_t wasi_path_remove_directory_impl(
+static int64_t WASMOON_GUEST_ABI wasi_path_remove_directory_impl(
     jit_context_t *ctx,
     int64_t dir_fd, int64_t path_ptr, int64_t path_len
 ) {
@@ -2044,7 +2044,7 @@ static int64_t wasi_path_remove_directory_impl(
 }
 
 // path_create_directory: (fd, path, path_len) -> errno
-static int64_t wasi_path_create_directory_impl(
+static int64_t WASMOON_GUEST_ABI wasi_path_create_directory_impl(
     jit_context_t *ctx,
     int64_t dir_fd, int64_t path_ptr, int64_t path_len
 ) {
@@ -2087,7 +2087,7 @@ static int64_t wasi_path_create_directory_impl(
 }
 
 // path_rename: (old_fd, old_path, old_path_len, new_fd, new_path, new_path_len) -> errno
-static int64_t wasi_path_rename_impl(
+static int64_t WASMOON_GUEST_ABI wasi_path_rename_impl(
     jit_context_t *ctx,
     int64_t old_fd, int64_t old_path_ptr, int64_t old_path_len,
     int64_t new_fd, int64_t new_path_ptr, int64_t new_path_len
@@ -2161,7 +2161,7 @@ static int64_t wasi_path_rename_impl(
 }
 
 // fd_filestat_get: (fd, buf) -> errno
-static int64_t wasi_fd_filestat_get_impl(
+static int64_t WASMOON_GUEST_ABI wasi_fd_filestat_get_impl(
     jit_context_t *ctx,
     int64_t fd, int64_t buf_ptr
 ) {
@@ -2225,7 +2225,7 @@ static int64_t wasi_fd_filestat_get_impl(
 }
 
 // fd_filestat_set_size: (fd, size) -> errno
-static int64_t wasi_fd_filestat_set_size_impl(
+static int64_t WASMOON_GUEST_ABI wasi_fd_filestat_set_size_impl(
     jit_context_t *ctx,
     int64_t fd, int64_t size
 ) {
@@ -2245,7 +2245,7 @@ static int64_t wasi_fd_filestat_set_size_impl(
 }
 
 // args_sizes_get: (argc, argv_buf_size) -> errno
-static int64_t wasi_args_sizes_get_impl(
+static int64_t WASMOON_GUEST_ABI wasi_args_sizes_get_impl(
     jit_context_t *ctx,
     int64_t argc_ptr, int64_t argv_buf_size_ptr
 ) {
@@ -2270,7 +2270,7 @@ static int64_t wasi_args_sizes_get_impl(
 }
 
 // args_get: (argv, argv_buf) -> errno
-static int64_t wasi_args_get_impl(
+static int64_t WASMOON_GUEST_ABI wasi_args_get_impl(
     jit_context_t *ctx,
     int64_t argv_ptr, int64_t argv_buf_ptr
 ) {
@@ -2303,7 +2303,7 @@ static int64_t wasi_args_get_impl(
 }
 
 // environ_sizes_get: (environc, environ_buf_size) -> errno
-static int64_t wasi_environ_sizes_get_impl(
+static int64_t WASMOON_GUEST_ABI wasi_environ_sizes_get_impl(
     jit_context_t *ctx,
     int64_t environc_ptr, int64_t environ_buf_size_ptr
 ) {
@@ -2328,7 +2328,7 @@ static int64_t wasi_environ_sizes_get_impl(
 }
 
 // environ_get: (environ, environ_buf) -> errno
-static int64_t wasi_environ_get_impl(
+static int64_t WASMOON_GUEST_ABI wasi_environ_get_impl(
     jit_context_t *ctx,
     int64_t environ_ptr, int64_t environ_buf_ptr
 ) {
@@ -2361,7 +2361,7 @@ static int64_t wasi_environ_get_impl(
 }
 
 // clock_time_get: (clock_id, precision, time) -> errno
-static int64_t wasi_clock_time_get_impl(
+static int64_t WASMOON_GUEST_ABI wasi_clock_time_get_impl(
     jit_context_t *ctx,
     int64_t clock_id, int64_t precision, int64_t time_ptr
 ) {
@@ -2395,7 +2395,7 @@ static int64_t wasi_clock_time_get_impl(
 }
 
 // clock_res_get: (clock_id, resolution) -> errno
-static int64_t wasi_clock_res_get_impl(
+static int64_t WASMOON_GUEST_ABI wasi_clock_res_get_impl(
     jit_context_t *ctx,
     int64_t clock_id, int64_t resolution_ptr
 ) {
@@ -2427,7 +2427,7 @@ static int64_t wasi_clock_res_get_impl(
 }
 
 // random_get: (buf, buf_len) -> errno
-static int64_t wasi_random_get_impl(
+static int64_t WASMOON_GUEST_ABI wasi_random_get_impl(
     jit_context_t *ctx,
     int64_t buf_ptr, int64_t buf_len
 ) {
@@ -2445,7 +2445,7 @@ static int64_t wasi_random_get_impl(
 }
 
 // proc_exit: (exit_code) -> noreturn
-static int64_t wasi_proc_exit_impl(
+static int64_t WASMOON_GUEST_ABI wasi_proc_exit_impl(
     jit_context_t *ctx, int64_t exit_code
 ) {
     if (!ctx) return 0;
@@ -2459,7 +2459,7 @@ static int64_t wasi_proc_exit_impl(
 }
 
 // proc_raise: (signal) -> errno
-static int64_t wasi_proc_raise_impl(
+static int64_t WASMOON_GUEST_ABI wasi_proc_raise_impl(
     jit_context_t *ctx, int64_t sig
 ) {
     (void)ctx;
@@ -2468,7 +2468,7 @@ static int64_t wasi_proc_raise_impl(
 }
 
 // sched_yield: () -> errno
-static int64_t wasi_sched_yield_impl(
+static int64_t WASMOON_GUEST_ABI wasi_sched_yield_impl(
     jit_context_t *ctx
 ) {
     (void)ctx;
@@ -2481,7 +2481,7 @@ static int64_t wasi_sched_yield_impl(
 // ============ Additional File Operations ============
 
 // fd_pread: Read from fd at offset without changing position
-static int32_t wasi_fd_pread_impl(
+static int32_t WASMOON_GUEST_ABI wasi_fd_pread_impl(
     jit_context_t *ctx,
     int32_t fd, int32_t iovs_ptr, int32_t iovs_len, int64_t offset, int32_t nread_ptr
 ) {
@@ -2534,7 +2534,7 @@ static int32_t wasi_fd_pread_impl(
 }
 
 // fd_pwrite: Write to fd at offset without changing position
-static int32_t wasi_fd_pwrite_impl(
+static int32_t WASMOON_GUEST_ABI wasi_fd_pwrite_impl(
     jit_context_t *ctx,
     int32_t fd, int32_t iovs_ptr, int32_t iovs_len, int64_t offset, int32_t nwritten_ptr
 ) {
@@ -2644,7 +2644,7 @@ static uint32_t write_readdir_entry_with_truncation(
 }
 
 // fd_readdir: Read directory entries
-static int32_t wasi_fd_readdir_impl(
+static int32_t WASMOON_GUEST_ABI wasi_fd_readdir_impl(
     jit_context_t *ctx,
     int32_t fd, int32_t buf_ptr, int32_t buf_len, int64_t cookie, int32_t bufused_ptr
 ) {
@@ -2761,7 +2761,7 @@ static int32_t wasi_fd_readdir_impl(
 }
 
 // path_filestat_get: Get file stats by path
-static int32_t wasi_path_filestat_get_impl(
+static int32_t WASMOON_GUEST_ABI wasi_path_filestat_get_impl(
     jit_context_t *ctx,
     int32_t dir_fd, int32_t flags, int32_t path_ptr, int32_t path_len, int32_t buf_ptr
 ) {
@@ -2850,7 +2850,7 @@ static int32_t wasi_path_filestat_get_impl(
 }
 
 // path_readlink: Read symbolic link
-static int32_t wasi_path_readlink_impl(
+static int32_t WASMOON_GUEST_ABI wasi_path_readlink_impl(
     jit_context_t *ctx,
     int32_t dir_fd, int32_t path_ptr, int32_t path_len,
     int32_t buf_ptr, int32_t buf_len, int32_t bufused_ptr
@@ -2897,7 +2897,7 @@ static int32_t wasi_path_readlink_impl(
 }
 
 // path_symlink: Create symbolic link
-static int32_t wasi_path_symlink_impl(
+static int32_t WASMOON_GUEST_ABI wasi_path_symlink_impl(
     jit_context_t *ctx,
     int32_t old_path_ptr, int32_t old_path_len,
     int32_t dir_fd, int32_t new_path_ptr, int32_t new_path_len
@@ -2969,7 +2969,7 @@ static int32_t wasi_path_symlink_impl(
 }
 
 // path_link: Create hard link
-static int32_t wasi_path_link_impl(
+static int32_t WASMOON_GUEST_ABI wasi_path_link_impl(
     jit_context_t *ctx,
     int32_t old_fd, int32_t old_flags,
     int32_t old_path_ptr, int32_t old_path_len,
@@ -3062,7 +3062,7 @@ static int conflicting_fst_flags_for_set_times(int32_t fst_flags) {
     return 0;
 }
 
-static int32_t wasi_fd_filestat_set_times_impl(
+static int32_t WASMOON_GUEST_ABI wasi_fd_filestat_set_times_impl(
     jit_context_t *ctx,
     int32_t fd, int64_t atim, int64_t mtim, int32_t fst_flags
 ) {
@@ -3111,7 +3111,7 @@ static int32_t wasi_fd_filestat_set_times_impl(
 }
 
 // path_filestat_set_times: Set file timestamps by path
-static int32_t wasi_path_filestat_set_times_impl(
+static int32_t WASMOON_GUEST_ABI wasi_path_filestat_set_times_impl(
     jit_context_t *ctx,
     int32_t dir_fd, int32_t flags, int32_t path_ptr, int32_t path_len,
     int64_t atim, int64_t mtim, int32_t fst_flags
@@ -3220,7 +3220,7 @@ static int32_t wasi_path_filestat_set_times_impl(
 }
 
 // fd_advise: No-op (advice is optional)
-static int32_t wasi_fd_advise_impl(
+static int32_t WASMOON_GUEST_ABI wasi_fd_advise_impl(
     jit_context_t *ctx,
     int32_t fd, int64_t offset, int64_t len, int32_t advice
 ) {
@@ -3238,7 +3238,7 @@ static int32_t wasi_fd_advise_impl(
 }
 
 // fd_fdstat_set_rights: irrevocably reduce descriptor rights
-static int32_t wasi_fd_fdstat_set_rights_impl(
+static int32_t WASMOON_GUEST_ABI wasi_fd_fdstat_set_rights_impl(
     jit_context_t *ctx,
     int32_t fd, int64_t rights_base, int64_t rights_inheriting
 ) {
@@ -3264,7 +3264,7 @@ static int32_t wasi_fd_fdstat_set_rights_impl(
 }
 
 // fd_allocate: Allocate space for a file
-static int32_t wasi_fd_allocate_impl(
+static int32_t WASMOON_GUEST_ABI wasi_fd_allocate_impl(
     jit_context_t *ctx,
     int32_t fd, int64_t offset, int64_t len
 ) {
@@ -3304,7 +3304,7 @@ static void close_replaced_native_fd(int native_fd) {
 }
 
 // fd_renumber: Renumber a file descriptor
-static int32_t wasi_fd_renumber_impl(
+static int32_t WASMOON_GUEST_ABI wasi_fd_renumber_impl(
     jit_context_t *ctx,
     int32_t fd, int32_t to_fd
 ) {
@@ -3369,7 +3369,7 @@ static int32_t wasi_fd_renumber_impl(
 }
 
 // fd_fdstat_set_flags: Set file descriptor flags
-static int32_t wasi_fd_fdstat_set_flags_impl(
+static int32_t WASMOON_GUEST_ABI wasi_fd_fdstat_set_flags_impl(
     jit_context_t *ctx,
     int32_t fd, int32_t flags
 ) {
@@ -3462,7 +3462,7 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_fd_fdstat_set_flags_ptr(void) { retur
 // fd: The listening socket
 // flags: Desired flags for the accepted socket (currently unused)
 // result_fd_ptr: Where to store the new socket fd
-static int32_t wasi_sock_accept_impl(
+static int32_t WASMOON_GUEST_ABI wasi_sock_accept_impl(
     jit_context_t *ctx,
     int32_t fd, int32_t flags, int32_t result_fd_ptr
 ) {
@@ -3485,7 +3485,7 @@ static int32_t wasi_sock_accept_impl(
 // ri_flags: Message flags (PEEK=1, WAITALL=2)
 // ro_datalen_ptr: Where to store bytes received
 // ro_flags_ptr: Where to store output flags
-static int32_t wasi_sock_recv_impl(
+static int32_t WASMOON_GUEST_ABI wasi_sock_recv_impl(
     jit_context_t *ctx,
     int32_t fd, int32_t ri_data, int32_t ri_data_len, int32_t ri_flags,
     int32_t ro_datalen_ptr, int32_t ro_flags_ptr
@@ -3516,7 +3516,7 @@ static int32_t wasi_sock_recv_impl(
 // si_data_len: Number of iovecs
 // si_flags: Message flags (currently unused in WASI)
 // so_datalen_ptr: Where to store bytes sent
-static int32_t wasi_sock_send_impl(
+static int32_t WASMOON_GUEST_ABI wasi_sock_send_impl(
     jit_context_t *ctx,
     int32_t fd, int32_t si_data, int32_t si_data_len, int32_t si_flags,
     int32_t so_datalen_ptr
@@ -3541,7 +3541,7 @@ static int32_t wasi_sock_send_impl(
 // sock_shutdown: Shut down a socket
 // fd: Socket to shut down
 // how: 0=RD, 1=WR, 2=RDWR
-static int32_t wasi_sock_shutdown_impl(
+static int32_t WASMOON_GUEST_ABI wasi_sock_shutdown_impl(
     jit_context_t *ctx,
     int32_t fd, int32_t how
 ) {

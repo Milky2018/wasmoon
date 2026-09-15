@@ -1,11 +1,13 @@
 #include "jit_internal.h"
 
+#ifndef _WIN32
 #include <pthread.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/mman.h>
 #include <unistd.h>
+#endif
 
 #if defined(WASMOON_ADDRESS_SANITIZER)
 #include <sanitizer/common_interface_defs.h>
@@ -23,7 +25,9 @@ static WASMOON_NO_FUNCTION_SANITIZE int64_t call_native_fiber_entry(
     return entry(closure);
 }
 
-#if defined(__x86_64__) || defined(_M_X64)
+#if defined(_WIN32)
+typedef struct { void *handle; } native_fiber_context_t;
+#elif defined(__x86_64__) || defined(_M_X64)
 typedef struct {
     uintptr_t sp;
     uintptr_t rbx;
@@ -71,7 +75,11 @@ typedef struct native_fiber {
     native_fiber_entry_fn entry;
     void *closure;
     int owns_closure;
+#ifdef _WIN32
+    DWORD owner_thread;
+#else
     pthread_t owner_thread;
+#endif
     wasmoon_fiber_state_code_t state;
     int64_t resume_value;
     int64_t yielded_value;
@@ -93,10 +101,22 @@ typedef struct {
     int values_len;
 } native_jit_continuation_t;
 
+#ifndef _WIN32
 extern void wasmoon_native_fiber_swap(
     native_fiber_context_t *from,
     const native_fiber_context_t *to
 );
+#else
+static void wasmoon_native_fiber_swap(
+    native_fiber_context_t *from, const native_fiber_context_t *to
+) {
+    int converted = !IsThreadAFiber();
+    if (converted && !ConvertThreadToFiberEx(NULL, FIBER_FLAG_FLOAT_SWITCH)) abort();
+    from->handle = GetCurrentFiber();
+    SwitchToFiber(to->handle);
+    if (converted && !ConvertFiberToThread()) abort();
+}
+#endif
 extern int64_t wasmoon_jit_context_ptr(void *managed);
 extern int wasmoon_jit_call_trampoline(
     int64_t trampoline_ptr,
@@ -116,7 +136,11 @@ extern int32_t wasmoon_jit_hostcall(
 static __thread native_fiber_t *current_native_fiber = NULL;
 
 static int fiber_on_owner_thread(const native_fiber_t *fiber) {
+#ifdef _WIN32
+    return fiber && fiber->owner_thread == GetCurrentThreadId();
+#else
     return fiber && pthread_equal(fiber->owner_thread, pthread_self());
+#endif
 }
 
 static void native_fiber_swap_stacks(
@@ -199,8 +223,13 @@ static void release_fiber_stack(native_fiber_t *fiber) {
         wasmoon_atomic_wait_destroy(fiber->atomic_waiter);
         fiber->atomic_waiter = NULL;
     }
+#ifdef _WIN32
+    if (!fiber || !fiber->context.handle) return;
+    DeleteFiber(fiber->context.handle);
+#else
     if (!fiber || !fiber->mapping) return;
     munmap(fiber->mapping, fiber->mapping_size);
+#endif
     fiber->mapping = NULL;
     fiber->mapping_size = 0;
     fiber->guard_size = 0;
@@ -214,7 +243,20 @@ static void unregister_fiber_parked_roots(native_fiber_t *fiber) {
     fiber->parked_gc_roots = NULL;
 }
 
+#ifdef _WIN32
+static VOID WINAPI fiber_bootstrap(void *unused) {
+    (void)unused;
+    native_fiber_t *active = current_native_fiber;
+    NT_TIB *tib = (NT_TIB *)NtCurrentTeb();
+    active->mapping = tib->StackLimit;
+    active->mapping_size = (uintptr_t)tib->StackBase - (uintptr_t)tib->StackLimit;
+    active->guard_size = 0;
+    active->usable_size = active->mapping_size;
+    ULONG guarantee = 32768;
+    if (!SetThreadStackGuarantee(&guarantee)) abort();
+#else
 static WASMOON_NO_ADDRESS_SANITIZE void fiber_bootstrap(void) {
+#endif
 #if defined(WASMOON_ADDRESS_SANITIZER)
     const void *caller_stack_bottom = NULL;
     size_t caller_stack_size = 0;
@@ -258,6 +300,22 @@ static native_fiber_t *allocate_fiber(
     int64_t requested_stack_size
 ) {
     if (!entry || requested_stack_size <= 0) return NULL;
+#ifdef _WIN32
+    native_fiber_t *fiber = calloc(1, sizeof(*fiber));
+    if (!fiber) return NULL;
+    size_t size = (size_t)requested_stack_size;
+    if (size < 65536) size = 65536;
+    fiber->entry = entry;
+    fiber->closure = closure;
+    fiber->owns_closure = owns_closure;
+    fiber->owner_thread = GetCurrentThreadId();
+    fiber->state = WASMOON_FIBER_STATE_READY;
+    fiber->usable_size = size;
+    fiber->context.handle = CreateFiberEx(size, size, FIBER_FLAG_FLOAT_SWITCH,
+                                         fiber_bootstrap, NULL);
+    if (!fiber->context.handle) { free(fiber); return NULL; }
+    return fiber;
+#else
     long page_value = sysconf(_SC_PAGESIZE);
     if (page_value <= 0) return NULL;
     size_t page_size = (size_t)page_value;
@@ -309,6 +367,7 @@ static native_fiber_t *allocate_fiber(
     fiber->context.x30 = (uintptr_t)fiber_bootstrap;
 #endif
     return fiber;
+#endif
 }
 
 static void destroy_fiber(native_fiber_t *fiber) {
@@ -443,7 +502,7 @@ MOONBIT_FFI_EXPORT int wasmoon_native_fiber_continue(
     native_fiber_swap_stacks(
         &fiber->caller,
         &fiber->context,
-        (const unsigned char *)fiber->mapping + fiber->guard_size,
+        fiber->mapping ? (const unsigned char *)fiber->mapping + fiber->guard_size : NULL,
         fiber->usable_size,
         0,
         NULL,

@@ -886,10 +886,70 @@ static void segv_signal_handler(int sig, siginfo_t *info, void *ucontext) {
 
 #endif // !_WIN32
 
+#ifdef _WIN32
+// Only recognized guest traps and owned memory guards are recovered. Unrelated
+// host faults continue through normal Windows exception handling.
+static LONG CALLBACK windows_trap_handler(EXCEPTION_POINTERS *exception) {
+    jit_trap_activation_t *activation = jit_current_trap_activation();
+    if (!activation || !activation->active) return EXCEPTION_CONTINUE_SEARCH;
+    DWORD code = exception->ExceptionRecord->ExceptionCode;
+    CONTEXT *registers = exception->ContextRecord;
+    int trap = 0;
+    uintptr_t pc = (uintptr_t)exception->ExceptionRecord->ExceptionAddress;
+    uintptr_t fault = 0;
+    if (code == EXCEPTION_BREAKPOINT) {
+        const unsigned char *instruction = (const unsigned char *)pc;
+        MEMORY_BASIC_INFORMATION region;
+        if (!VirtualQuery(instruction, &region, sizeof(region)) ||
+            region.State != MEM_COMMIT ||
+            pc + 3 > (uintptr_t)region.BaseAddress + region.RegionSize ||
+            instruction[0] != 0xcc) return EXCEPTION_CONTINUE_SEARCH;
+        int payload = instruction[1] | (instruction[2] << 8);
+        trap = wasmoon_decode_native_trap(payload);
+        if (trap == WASMOON_TRAP_UNKNOWN) return EXCEPTION_CONTINUE_SEARCH;
+        activation->brk_imm = payload;
+    } else if (code == EXCEPTION_STACK_OVERFLOW) {
+        trap = WASMOON_TRAP_STACK_EXHAUSTED;
+    } else if (code == EXCEPTION_ACCESS_VIOLATION &&
+               exception->ExceptionRecord->NumberParameters >= 2) {
+        fault = exception->ExceptionRecord->ExceptionInformation[1];
+        if (activation->context &&
+            is_memory_guard_page_access(activation->context, (void *)fault))
+            trap = WASMOON_TRAP_MEMORY_BOUNDS;
+        else return EXCEPTION_CONTINUE_SEARCH;
+    } else return EXCEPTION_CONTINUE_SEARCH;
+    activation->code = trap;
+    activation->signal = (sig_atomic_t)code;
+    activation->pc = pc;
+    activation->fault_addr = fault;
+    activation->fp = registers->Rbp;
+    activation->x0 = registers->Rax;
+    activation->x1 = registers->Rcx;
+    activation->x2 = registers->Rdx;
+    activation->x3 = registers->Rbx;
+    activation->x6 = registers->Rsi;
+    activation->x7 = registers->Rdi;
+    activation->x8 = registers->R8;
+    activation->x9 = registers->R9;
+    activation->x10 = registers->R10;
+    activation->x11 = registers->R11;
+    activation->x15 = registers->R15;
+    siglongjmp(activation->jmp_buf, 1);
+}
+
+static BOOL CALLBACK install_windows_traps(PINIT_ONCE once, PVOID parameter, PVOID *context) {
+    (void)once; (void)parameter; (void)context;
+    return AddVectoredExceptionHandler(1, windows_trap_handler) != NULL;
+}
+#endif
+
 // ============ Handler Installation ============
 
 void install_trap_handler(void) {
-#ifndef _WIN32
+#ifdef _WIN32
+    static INIT_ONCE once = INIT_ONCE_STATIC_INIT;
+    if (!InitOnceExecuteOnce(&once, install_windows_traps, NULL, NULL)) abort();
+#else
     // Signal handlers are process-wide; install them once.
     // (Multiple installations are harmless, but keep this race-free.)
     static atomic_int installed_handlers = 0;
