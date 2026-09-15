@@ -237,6 +237,9 @@ MOONBIT_FFI_EXPORT int wasmoon_host_claim_input(int fd) {
     HANDLE handle = wasmoon_windows_fd_handle(fd);
     DWORD kind = GetFileType(handle), mode;
     if (kind != FILE_TYPE_PIPE && !(kind == FILE_TYPE_CHAR && GetConsoleMode(handle, &mode))) return 0;
+    // A synchronous duplex pipe shares its host blocking mode between reads
+    // and writes. Do not change write semantics to support a private reader.
+    if (kind == FILE_TYPE_PIPE && (flags & _O_RDWR)) return ENOTSUP;
     AcquireSRWLockExclusive(&flags_lock);
     descriptor_flags *entry = find_flags(fd);
     if (!entry) {
@@ -564,6 +567,12 @@ int64_t wasmoon_windows_bytes_available(int fd) {
     errno = ENOTSUP;
     return -1;
 }
+uint64_t wasmoon_windows_monotonic_ns(void) {
+    LARGE_INTEGER counter, frequency;
+    if (!QueryPerformanceCounter(&counter) || !QueryPerformanceFrequency(&frequency)) abort();
+    uint64_t ticks = counter.QuadPart, hz = frequency.QuadPart;
+    return ticks / hz * 1000000000ULL + ticks % hz * 1000000000ULL / hz;
+}
 #ifdef WASMOON_POLL_TESTING
 static volatile LONG poll_scans;
 MOONBIT_FFI_EXPORT int wasmoon_windows_poll_scan_count(void) {
@@ -577,7 +586,7 @@ int wasmoon_windows_poll_interruptible(const int *fds, const int *events, int *r
     int *indices = malloc(((size_t)count + 1) * sizeof(*indices));
     if (!sockets || !indices) { free(sockets); free(indices); errno = ENOMEM; return -1; }
     *woken = 0;
-    ULONGLONG start = GetTickCount64();
+    uint64_t start = wasmoon_windows_monotonic_ns();
     int result;
     for (;;) {
 #ifdef WASMOON_POLL_TESTING
@@ -621,9 +630,10 @@ int wasmoon_windows_poll_interruptible(const int *fds, const int *events, int *r
             sockets[socket_count] = (WSAPOLLFD){wake, POLLRDNORM, 0};
             indices[socket_count++] = -1;
         }
-        ULONGLONG elapsed = GetTickCount64() - start;
-        int remaining = timeout_ms < 0 ? -1 : elapsed >= (ULONGLONG)timeout_ms
-            ? 0 : timeout_ms - (int)elapsed;
+        uint64_t elapsed = wasmoon_windows_monotonic_ns() - start;
+        uint64_t duration = timeout_ms < 0 ? 0 : (uint64_t)timeout_ms * 1000000ULL;
+        uint64_t left = elapsed < duration ? duration - elapsed : 0;
+        int remaining = timeout_ms < 0 ? -1 : (int)(left / 1000000ULL + (left % 1000000ULL != 0));
         // Synchronous pipes and console handles have no non-consuming uniform
         // readiness wait. Recheck them after bounded sleeps, while WSAPoll owns
         // socket waits. This never spins or reads ahead from a guest descriptor.

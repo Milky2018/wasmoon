@@ -23,12 +23,6 @@ typedef struct {
   registration *registrations;
 } windows_reactor;
 
-static uint64_t now_ns(void) {
-  LARGE_INTEGER counter, frequency;
-  if (!QueryPerformanceCounter(&counter) || !QueryPerformanceFrequency(&frequency)) abort();
-  uint64_t ticks = counter.QuadPart, hz = frequency.QuadPart;
-  return ticks / hz * 1000000000ULL + ticks % hz * 1000000000ULL / hz;
-}
 static uint64_t after_ns(uint64_t now, uint64_t delay) {
   return delay > UINT64_MAX - now ? UINT64_MAX : now + delay;
 }
@@ -89,7 +83,7 @@ MOONBIT_FFI_EXPORT int wasmoon_async_reactor_register_timer(void *object,
                                                            int64_t delay, int64_t token) {
   windows_reactor *reactor = object;
   if (!reactor || !reactor->open || delay <= 0 || token <= 0) return EINVAL;
-  return register_event(reactor, -1, 0, after_ns(now_ns(), delay), token);
+  return register_event(reactor, -1, 0, after_ns(wasmoon_windows_monotonic_ns(), delay), token);
 }
 MOONBIT_FFI_EXPORT int wasmoon_async_reactor_cancel(void *object, int64_t token) {
   windows_reactor *reactor = object;
@@ -113,7 +107,7 @@ MOONBIT_FFI_EXPORT int wasmoon_async_reactor_wait(void *object, int64_t timeout,
     if (reactor) reactor->last_errno = EINVAL;
     return -1;
   }
-  uint64_t deadline = timeout < 0 ? UINT64_MAX : after_ns(now_ns(), timeout);
+  uint64_t deadline = timeout < 0 ? UINT64_MAX : after_ns(wasmoon_windows_monotonic_ns(), timeout);
   for (;;) {
     int count = 0;
     WSAPOLLFD wake = {reactor->wake.reader, POLLRDNORM, 0};
@@ -121,7 +115,7 @@ MOONBIT_FFI_EXPORT int wasmoon_async_reactor_wait(void *object, int64_t timeout,
       wasmoon_notification_clear(&reactor->wake);
       tokens[count++] = 0;
     }
-    uint64_t now = now_ns(), next = deadline;
+    uint64_t now = wasmoon_windows_monotonic_ns(), next = deadline;
     int descriptor_count = 0;
     registration **link = &reactor->registrations;
     while (*link && count < capacity) {

@@ -350,3 +350,20 @@ class WindowsPollTests(unittest.TestCase):
             os.write(writer, b"x")
             self.assertEqual(os.read(reader, 1), b"x")
             self.assertEqual(self.claim(reader), 0)
+
+    def test_duplex_pipe_claim_preserves_shared_write_semantics(self):
+        import msvcrt
+        from ctypes import wintypes
+        kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel.CreateNamedPipeW.argtypes = [wintypes.LPCWSTR, wintypes.DWORD,
+            wintypes.DWORD, wintypes.DWORD, wintypes.DWORD, wintypes.DWORD,
+            wintypes.DWORD, ctypes.c_void_p]
+        kernel.CreateNamedPipeW.restype = wintypes.HANDLE
+        name = rf"\\.\pipe\wasmoon-input-{os.getpid()}-{id(self)}"
+        handle = kernel.CreateNamedPipeW(name, 3 | 0x80000, 0, 1, 4096, 4096, 0, None)
+        self.assertNotEqual(handle, ctypes.c_void_p(-1).value)
+        fd = msvcrt.open_osfhandle(handle, os.O_RDWR | os.O_BINARY)
+        self.addCleanup(self.close, fd)
+        self.assertEqual(self.getfl(fd) & 3, os.O_RDWR)
+        self.assertEqual(self.claim(fd), errno.ENOTSUP)
+        self.assertEqual(self.getfl(fd) & 3, os.O_RDWR)

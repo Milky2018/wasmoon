@@ -94,7 +94,7 @@ rights checks, and event encoding remain shared.
 | Other character device | An explicit host error, rather than invented readiness. |
 
 The CLI explicitly claims exclusive stdin consumption during guest execution.
-For synchronous pipes and console input, the Windows adapter starts a dedicated
+For read-only synchronous pipes and console input, the Windows adapter starts a dedicated
 reader on demand. Its 4096-byte buffer, EOF and error state are shared by runtime
 descriptor duplicates. Readiness observes this state, and reads consume the
 same bytes in order. A completion notification participates in `WSAPoll` alongside
@@ -104,7 +104,8 @@ internal DNS completion channels also use socket notifications.
 
 Embedding defaults remain shared and non-consuming. Embedders may explicitly
 call `host_io.claim_exclusive_input(fd)` if no other code reads that input,
-including through OS-level duplicates. The return value is zero or a host errno.
+including through OS-level duplicates. The return value is zero or a host errno. Synchronous duplex pipes return
+`ENOTSUP`, because their read/write blocking mode cannot be changed independently.
 After all readers and waiters have stopped, `release_exclusive_input(fd)` cancels
 and joins pending work and discards unread prefetched bytes without closing the
 descriptor. Releasing is an end-of-session operation, not a lossless transfer

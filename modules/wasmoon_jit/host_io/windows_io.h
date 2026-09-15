@@ -12,6 +12,7 @@ MOONBIT_FFI_EXPORT void wasmoon_host_release_input(int fd);
 #include <windows.h>
 #include <stdint.h>
 #define WASMOON_O_NONBLOCK 0x04000000
+uint64_t wasmoon_windows_monotonic_ns(void);
 int wasmoon_windows_notification_pipe(int *fds);
 int wasmoon_windows_track_file(int fd, int flags);
 int wasmoon_windows_getfl(int fd);

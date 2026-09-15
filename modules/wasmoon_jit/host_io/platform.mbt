@@ -13,6 +13,7 @@ pub fn is_windows() -> Bool {
 /// readers through OS-level aliases) until release. Runtime descriptor
 /// duplicates share buffered input. Unix keeps its native readiness path;
 /// Windows may prefetch up to 4096 bytes after a read/readiness request.
+/// Synchronous duplex Windows pipes return ENOTSUP and retain shared behavior.
 pub extern "c" fn claim_exclusive_input(fd : Int) -> Int = "wasmoon_host_claim_input"
 
 ///|
