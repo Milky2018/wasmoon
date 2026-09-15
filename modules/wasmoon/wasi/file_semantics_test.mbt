@@ -10,6 +10,7 @@ test "Preview 1 allocation and positioned append preserve the logical cursor" {
     file_type: RegularFile,
     host_path: path,
     position: 0L,
+    socket_input: b"",
     flags: 0,
     rights_base: 0x1FFFFFFFL,
     rights_inheriting: 0L,

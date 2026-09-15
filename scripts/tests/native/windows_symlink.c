@@ -5,7 +5,7 @@
 #include <string.h>
 static HANDLE previous;
 static BOOL had_previous;
-__declspec(dllexport) int wasmoon_test_remove_symlink_privilege(void) {
+static int set_test_symlink_privilege(DWORD attributes) {
   HANDLE source = NULL, token = NULL;
   had_previous = OpenThreadToken(GetCurrentThread(), TOKEN_QUERY | TOKEN_DUPLICATE | TOKEN_IMPERSONATE,
       TRUE, &previous);
@@ -18,7 +18,7 @@ __declspec(dllexport) int wasmoon_test_remove_symlink_privilege(void) {
   if (ok) {
     TOKEN_PRIVILEGES privileges = {0};
     privileges.PrivilegeCount = 1;
-    privileges.Privileges[0].Attributes = SE_PRIVILEGE_REMOVED;
+    privileges.Privileges[0].Attributes = attributes;
     ok = LookupPrivilegeValueW(NULL, L"SeCreateSymbolicLinkPrivilege", &privileges.Privileges[0].Luid);
     if (ok) ok = AdjustTokenPrivileges(token, FALSE, &privileges, 0, NULL, NULL);
     if (ok) ok = SetThreadToken(NULL, token);
@@ -26,6 +26,12 @@ __declspec(dllexport) int wasmoon_test_remove_symlink_privilege(void) {
   if (token) CloseHandle(token);
   if (!ok && had_previous) CloseHandle(previous);
   return ok;
+}
+__declspec(dllexport) int wasmoon_test_remove_symlink_privilege(void) {
+  return set_test_symlink_privilege(SE_PRIVILEGE_REMOVED);
+}
+__declspec(dllexport) int wasmoon_test_disable_symlink_privilege(void) {
+  return set_test_symlink_privilege(0);
 }
 __declspec(dllexport) int wasmoon_test_restore_token(void) {
   BOOL ok = SetThreadToken(NULL, had_previous ? previous : NULL);

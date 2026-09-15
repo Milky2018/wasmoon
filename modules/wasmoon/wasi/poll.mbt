@@ -104,6 +104,9 @@ fn resolve_poll_fd_source(
     Ok(file) => file
     Err(errno) => return Err(errno)
   }
+  if event_type == 1 && file.socket_input.length() > 0 {
+    return Ok(Immediate)
+  }
   match file.file_type {
     RegularFile | CharacterDevice | SocketStream | SocketDatagram =>
       Ok(Native(file.native_fd))
@@ -282,7 +285,11 @@ fn poll_fd_read_nbytes_and_flags(ctx : WasiContext, fd : Int) -> (Int64, Int) {
     None => return (0L, 0)
   }
   if file.file_type is (SocketStream | SocketDatagram) {
-    return (native_socket_bytes_available(file.native_fd).unwrap_or(1L), 0)
+    return (
+      file.socket_input.length().to_int64() +
+      native_socket_bytes_available(file.native_fd).unwrap_or(0L),
+      0,
+    )
   }
   if !(file.file_type is RegularFile) {
     return (1L, 0)

@@ -6,7 +6,6 @@
 #include <io.h>
 #include <stdlib.h>
 #include <string.h>
-#include <stdio.h>
 #pragma comment(lib, "advapi32.lib")
 
 wchar_t *wasmoon_windows_utf16(const char *text) {
@@ -239,51 +238,46 @@ int64_t wasmoon_windows_readlinkat(int fd, const char *name, char *buffer, size_
   return (int64_t)copied;
 }
 
-static BOOL set_symlink_reparse(HANDLE file, void *data, DWORD size) {
-  DWORD returned;
-  if (DeviceIoControl(file, FSCTL_SET_REPARSE_POINT, data, size, NULL, 0, &returned, NULL)) return TRUE;
-  if (GetLastError() != ERROR_PRIVILEGE_NOT_HELD) return FALSE;
-  // Enable an already-granted privilege only on a private impersonation token.
-  // Other host threads and the caller's token retain their original privileges.
-  HANDLE previous = NULL, source = NULL, token = NULL;
+typedef struct {
+  HANDLE previous;
+  BOOL active;
+} symlink_privilege_scope;
+
+static symlink_privilege_scope begin_symlink_privilege(void) {
+  symlink_privilege_scope scope = {NULL, FALSE};
+  HANDLE source = NULL, token = NULL;
   BOOL had_thread_token = OpenThreadToken(GetCurrentThread(),
-      TOKEN_QUERY | TOKEN_DUPLICATE | TOKEN_IMPERSONATE, TRUE, &previous);
-  if (had_thread_token) source = previous;
+      TOKEN_QUERY | TOKEN_DUPLICATE | TOKEN_IMPERSONATE, TRUE, &scope.previous);
+  if (had_thread_token) source = scope.previous;
   else if (GetLastError() != ERROR_NO_TOKEN ||
-           !OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY | TOKEN_DUPLICATE, &source)) return FALSE;
+           !OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY | TOKEN_DUPLICATE, &source)) return scope;
   BOOL ok = DuplicateTokenEx(source, TOKEN_QUERY | TOKEN_ADJUST_PRIVILEGES | TOKEN_IMPERSONATE,
       NULL, SecurityImpersonation, TokenImpersonation, &token);
-  DWORD error = GetLastError();
   if (!had_thread_token) CloseHandle(source);
-  const char *stage = "duplicate";
   if (ok) {
-    stage = "lookup";
     TOKEN_PRIVILEGES privilege = {0};
     privilege.PrivilegeCount = 1;
     privilege.Privileges[0].Attributes = SE_PRIVILEGE_ENABLED;
     ok = LookupPrivilegeValueW(NULL, L"SeCreateSymbolicLinkPrivilege", &privilege.Privileges[0].Luid);
     if (ok) {
-      stage = "adjust";
       SetLastError(ERROR_SUCCESS);
       ok = AdjustTokenPrivileges(token, FALSE, &privilege, 0, NULL, NULL);
-      if (GetLastError() == ERROR_NOT_ALL_ASSIGNED) { ok = FALSE; SetLastError(ERROR_PRIVILEGE_NOT_HELD); }
+      if (GetLastError() == ERROR_NOT_ALL_ASSIGNED) ok = FALSE;
     }
-    if (ok) { stage = "impersonate"; ok = SetThreadToken(NULL, token); }
-    error = GetLastError();
-    if (ok) {
-      stage = "reparse";
-      ok = DeviceIoControl(file, FSCTL_SET_REPARSE_POINT, data, size, NULL, 0, &returned, NULL);
-      error = GetLastError();
-      // Continuing under the temporary identity after a failed restoration is unsafe.
-      if (!SetThreadToken(NULL, previous)) RaiseFailFastException(NULL, NULL, 0);
-    }
+    if (ok) scope.active = SetThreadToken(NULL, token);
   }
   if (token) CloseHandle(token);
-  if (previous) CloseHandle(previous);
-  if (!ok && getenv("WASMOON_TRACE_SYMLINK")) fprintf(stderr, "symlink privilege retry: stage=%s error=%lu thread_token=%d\n", stage, (unsigned long)error, (int)had_thread_token);
-  SetLastError(error);
-  return ok;
+  if (!scope.active && scope.previous) { CloseHandle(scope.previous); scope.previous = NULL; }
+  return scope;
 }
+
+static void end_symlink_privilege(symlink_privilege_scope scope) {
+  DWORD error = GetLastError();
+  if (scope.active && !SetThreadToken(NULL, scope.previous)) RaiseFailFastException(NULL, NULL, 0);
+  if (scope.previous) CloseHandle(scope.previous);
+  SetLastError(error);
+}
+
 int wasmoon_windows_symlinkat(const char *target, int fd, const char *name) {
   if (!*target) { errno = ENOENT; return -1; }
   wchar_t *wide_target = wasmoon_windows_utf16(target);
@@ -370,9 +364,14 @@ int wasmoon_windows_symlinkat(const char *target, int fd, const char *name) {
   memcpy(data + 20, substitute, substitute_bytes);
   memcpy(data + 20 + substitute_bytes, wide_target, print_bytes);
   free(substitute); free(wide_target);
+  // The filesystem can capture the security context when the destination is
+  // opened. Enabling the privilege only for the later FSCTL is too late.
+  // Never modify the process token or add a privilege the caller was not granted.
+  symlink_privilege_scope privilege_scope = begin_symlink_privilege();
   HANDLE handle = open_relative(fd, name, GENERIC_WRITE | DELETE, 2,
       0x00200000 | (directory ? 1 : 0x40));
   if (handle == INVALID_HANDLE_VALUE) {
+    end_symlink_privilege(privilege_scope);
     free(data);
     size_t length = strlen(name);
     int trailing_slash = length && name[length - 1] == '/';
@@ -380,9 +379,11 @@ int wasmoon_windows_symlinkat(const char *target, int fd, const char *name) {
         (errno == EEXIST || trailing_slash)) return wasmoon_windows_error(target_error);
     return -1;
   }
-  BOOL ok = set_symlink_reparse(handle, data, (DWORD)(20 + bytes));
+  DWORD returned;
+  BOOL ok = DeviceIoControl(handle, FSCTL_SET_REPARSE_POINT, data, (DWORD)(20 + bytes),
+      NULL, 0, &returned, NULL);
   DWORD error = GetLastError(); free(data);
-  if (!ok && getenv("WASMOON_TRACE_SYMLINK")) fprintf(stderr, "symlink reparse: error=%lu directory=%d\n", (unsigned long)error, directory);
+
   if (!ok) {
     FILE_DISPOSITION_INFO discard = {TRUE};
     if (!SetFileInformationByHandle(handle, FileDispositionInfo, &discard, sizeof(discard))) {
@@ -390,6 +391,7 @@ int wasmoon_windows_symlinkat(const char *target, int fd, const char *name) {
     }
   }
   CloseHandle(handle);
+  end_symlink_privilege(privilege_scope);
   return ok ? 0 : wasmoon_windows_error(error);
 }
 

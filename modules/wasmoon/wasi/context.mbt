@@ -22,6 +22,8 @@ pub(all) struct OpenFile {
   file_type : FileType
   /// Host path (for debugging)
   host_path : String
+  /// Stream bytes retained by P1 peek, shared across descriptor renumbering.
+  mut socket_input : Bytes
   /// P1 cursor, shared when the same OpenFile is aliased or renumbered.
   /// Positioned I/O and host append operations never implicitly move it.
   mut position : Int64
@@ -314,6 +316,7 @@ pub fn WasiContextBuilder::build(self : WasiContextBuilder) -> WasiContext {
         file_type: Directory,
         host_path: host,
         position: 0L,
+        socket_input: b"",
         flags: 0, // Read-only
         rights_base: if read_only {
           readonly_directory_base_rights()

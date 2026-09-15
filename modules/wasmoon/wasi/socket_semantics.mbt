@@ -61,6 +61,7 @@ pub fn WasiContext::take_socket(
       },
       host_path: "",
       position: 0L,
+      socket_input: b"",
       flags,
       rights_base,
       rights_inheriting,
@@ -105,10 +106,19 @@ fn socket_receive(
   }
   let buffer = FixedArray::make(length, b'\x00')
   let truncated = FixedArray::make(1, 0)
-  let received = if length == 0 && file.file_type is SocketStream {
-    0
+  let native_flags = if (file.flags & 4) != 0 ||
+    file.file_type is SocketDatagram {
+    ri_flags & 1
   } else {
-    c_p1_recv(file.native_fd, buffer, length, ri_flags, truncated)
+    ri_flags
+  }
+  let received = if file.file_type is SocketStream {
+    match receive_stream(file, buffer, length, native_flags) {
+      Ok(count) => count
+      Err(errno) => return Err(errno)
+    }
+  } else {
+    c_p1_recv(file.native_fd, buffer, length, native_flags, truncated)
   }
   if received < 0 {
     return Err(native_last_errno_to_wasi())
@@ -123,4 +133,55 @@ fn socket_receive(
     offset += copied
   }
   Ok((received, truncated[0]))
+}
+
+///|
+/// P1 owns the socket after injection, so peeked bytes can remain in its queue.
+/// This also supports PEEK|WAITALL on hosts that reject that native flag pair.
+fn receive_stream(
+  file : OpenFile,
+  output : FixedArray[Byte],
+  length : Int,
+  flags : Int,
+) -> Result[Int, Int] {
+  if length == 0 {
+    return Ok(0)
+  }
+  let cached = file.socket_input
+  let copied = @cmp.minimum(cached.length(), length)
+  for i in 0..<copied {
+    output[i] = cached[i]
+  }
+  let mut received = copied
+  if copied < length && (copied == 0 || (flags & 2) != 0) {
+    let tail = FixedArray::make(length - copied, b'\x00')
+    let ignored = FixedArray::make(1, 0)
+    let count = c_p1_recv(
+      file.native_fd,
+      tail,
+      tail.length(),
+      flags & 2,
+      ignored,
+    )
+    if count < 0 {
+      if received == 0 {
+        return Err(native_last_errno_to_wasi())
+      }
+    } else {
+      for i in 0..<count {
+        output[copied + i] = tail[i]
+      }
+      received += count
+    }
+  }
+  if (flags & 1) != 0 {
+    if received > cached.length() {
+      file.socket_input = Bytes::makei(received, i => output[i])
+    }
+  } else {
+    file.socket_input = Bytes::makei(cached.length() - copied, i => {
+      cached[copied + i]
+    })
+  }
+  Ok(received)
 }

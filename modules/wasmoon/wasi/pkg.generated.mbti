@@ -493,6 +493,7 @@ pub(all) struct OpenFile {
   native_fd : Int
   file_type : FileType
   host_path : String
+  mut socket_input : Bytes
   mut position : Int64
   mut flags : Int
   mut rights_base : Int64

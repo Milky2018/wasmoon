@@ -123,7 +123,7 @@ test "Preview 1 accepts streams with independent flags, waitall, EOF and rights"
   )
   let ctx = @wasi.WasiContextBuilder::WasiContextBuilder().build()
   let listening_fd = ctx
-    .take_socket(listener, rights_inheriting=0x10000042L)
+    .take_socket(listener, rights_inheriting=0x18000042L)
     .unwrap()
   let sending_fd = ctx.take_socket(client).unwrap()
   defer ctx.close_fd(listening_fd) |> ignore
@@ -138,7 +138,7 @@ test "Preview 1 accepts streams with independent flags, waitall, EOF and rights"
   let accepted = mem.read_i32(100)
   defer ctx.close_fd(accepted) |> ignore
   inspect(ctx.get_file(accepted).unwrap().flags, content="0")
-  inspect(ctx.get_file(accepted).unwrap().rights_base, content="268435522")
+  inspect(ctx.get_file(accepted).unwrap().rights_base, content="402653250")
   inspect(@wasi.fd_fdstat_set_flags_impl(ctx, accepted, 4), content="76")
   mem.write_i32(0, 200)
   mem.write_i32(4, 5)
@@ -155,11 +155,29 @@ test "Preview 1 accepts streams with independent flags, waitall, EOF and rights"
     content="0",
   )
   inspect(mem.read_i32(100), content="5")
+  mem.write_byte(408, b'\x01')
+  mem.write_i32(416, accepted)
+  inspect(@wasi.poll_oneoff_impl(ctx, mem, 400, 500, 1, 600), content="0")
+  inspect(mem.read_i32(600), content="1")
+  inspect(mem.read_i64(516), content="5")
+  // Renumbering transfers buffered bytes with the descriptor.
+  inspect(@wasi.fd_renumber_impl(ctx, accepted, listening_fd), content="0")
+  let accepted = listening_fd
+  mem.write_i32(4, 2)
+  inspect(
+    @wasi.sock_recv_impl(ctx, mem, accepted, 0, 1, 0, 100, 104),
+    content="0",
+  )
+  assert_eq(mem.read_bytes(200, 2), b"he")
+  mem.write_byte(200, b'!')
+  mem.write_byte(201, b'!')
+  inspect(@wasi.sock_send_impl(ctx, mem, sending_fd, 0, 1, 0, 100), content="0")
+  mem.write_i32(4, 5)
   inspect(
     @wasi.sock_recv_impl(ctx, mem, accepted, 0, 1, 2, 100, 104),
     content="0",
   )
-  inspect(mem.read_bytes(200, 5), content="b\"hello\"")
+  assert_eq(mem.read_bytes(200, 5), b"llo!!")
   inspect(@wasi.sock_shutdown_impl(ctx, sending_fd, 2), content="0")
   inspect(
     @wasi.sock_recv_impl(ctx, mem, accepted, 0, 1, 0, 100, 104),

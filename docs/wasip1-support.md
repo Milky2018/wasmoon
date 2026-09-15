@@ -161,7 +161,9 @@ an explicit rights subset; accepting a connection derives its rights from the
 listener's inheriting rights. Windows callers use adapter descriptors, not raw
 Winsock handles. Datagram sends gather all iovecs into one message; receives
 scatter one message and report truncation, including with PEEK. Stream WAITALL,
-EOF, half-close and nonblocking status are delegated to the native socket backend.
+EOF, half-close and nonblocking status use the native socket backend. Stream peek
+bytes are retained in the owned descriptor so PEEK|WAITALL works on Windows too;
+readiness and renumbering preserve this queued input.
 Readiness uses the same descriptors. Local TCP/UDP guest tests run through both
 engines; Windows acceptance remains pending.
 

@@ -706,6 +706,7 @@ test "wasi: fd_fdstat_get" {
     file_type: SocketStream,
     host_path: "<socket>",
     position: 0L,
+    socket_input: b"",
     flags: 0,
     rights_base: right_fd_fdstat_set_flags |
     right_sock_shutdown |
@@ -3243,6 +3244,7 @@ test "wasi: poll resolver accepts character devices" {
     file_type: CharacterDevice,
     host_path: "<character-device>",
     position: 0L,
+    socket_input: b"",
     flags: 0,
     rights_base: right_fd_read | right_poll_fd_readwrite,
     rights_inheriting: 0L,
@@ -3398,6 +3400,7 @@ test "wasi: poll_oneoff fd_read reports remaining file bytes" {
     file_type: RegularFile,
     host_path: @test_fs.temp_dir() + "/" + test_path,
     position: 0L,
+    socket_input: b"",
     flags: native_o_rdonly(),
     rights_base: right_fd_read | right_poll_fd_readwrite,
     rights_inheriting: 0L,
@@ -3492,6 +3495,7 @@ test "wasi: successful fd flag changes are observable through fdstat" {
     file_type: RegularFile,
     host_path: path,
     position: 0L,
+    socket_input: b"",
     flags: 0,
     rights_base: right_fd_write | right_fd_fdstat_set_flags,
     rights_inheriting: 0L,

@@ -94,6 +94,26 @@ class WindowsFileTests(unittest.TestCase):
                          os.strerror(ctypes.get_errno()))
         self.assertTrue((self.root / "link").is_symlink())
 
+    def test_workspace_and_temp_volume_symlinks_with_disabled_privilege(self):
+        self.assertEqual(self.library.wasmoon_test_disable_symlink_privilege(), 1)
+        try:
+            self.assertEqual(self.library.wasmoon_test_has_symlink_privilege(), 1)
+            # CI checkout and temporary directory can reside on different volumes.
+            for parent in (None, ROOT):
+                with self.subTest(parent=parent), tempfile.TemporaryDirectory(dir=parent) as directory:
+                    root = Path(directory)
+                    (root / "target").write_bytes(b"target")
+                    fd = self.open(os.fsencode(root), DIRECTORY, 0)
+                    self.assertGreaterEqual(fd, 0)
+                    try:
+                        self.assertEqual(self.symlink(b"target", fd, b"link"), 0,
+                                         f"root={root}, errno={ctypes.get_errno()}")
+                        self.assertEqual((root / "link").read_bytes(), b"target")
+                    finally:
+                        self.close(fd)
+        finally:
+            self.assertEqual(self.library.wasmoon_test_restore_token(), 1)
+
     def test_unprivileged_symlink(self):
         mode = os.environ.get("WASMOON_TEST_DEVELOPER_MODE")
         if mode not in ("0", "1"):
