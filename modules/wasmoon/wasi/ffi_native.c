@@ -596,7 +596,9 @@ MOONBIT_FFI_EXPORT void wasmoon_wasi_set_errno_illegal_byte_sequence(void) {
 
 MOONBIT_FFI_EXPORT int wasmoon_wasi_isatty(int fd) {
 #ifdef _WIN32
-  return _isatty(fd);
+  DWORD mode;
+  HANDLE handle = wasmoon_windows_fd_handle(fd);
+  return handle != INVALID_HANDLE_VALUE && GetConsoleMode(handle, &mode);
 #else
   return isatty(fd);
 #endif

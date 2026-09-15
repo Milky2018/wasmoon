@@ -39,6 +39,9 @@ static int adopt_file(HANDLE handle, int flags) {
   if ((flags & WASMOON_O_DIRECTORY) && !(attributes.FileAttributes & FILE_ATTRIBUTE_DIRECTORY)) {
     CloseHandle(handle); errno = ENOTDIR; return -1;
   }
+  if ((attributes.FileAttributes & FILE_ATTRIBUTE_DIRECTORY) && (flags & (_O_WRONLY | _O_RDWR))) {
+    CloseHandle(handle); errno = EISDIR; return -1;
+  }
   int fd = _open_osfhandle((intptr_t)handle,
       (flags & (_O_RDONLY | _O_WRONLY | _O_RDWR | _O_APPEND)) | _O_BINARY | _O_NOINHERIT);
   if (fd < 0) CloseHandle(handle);
@@ -272,11 +275,16 @@ int wasmoon_windows_symlinkat(const char *target, int fd, const char *name) {
   // that attribute; the destination mutation below uses the held parent.
   DWORD attributes = GetFileAttributesW(query);
   int directory = attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_DIRECTORY);
+  DWORD target_error = GetLastError();
   free(query); free(parent);
   if (absolute_path(name)) {
+    for (wchar_t *p = wide_target; *p; p++) if (*p == L'/') *p = L'\\';
     BOOL ok = CreateSymbolicLinkW(wide_name, wide_target,
         SYMBOLIC_LINK_FLAG_ALLOW_UNPRIVILEGED_CREATE | (directory ? SYMBOLIC_LINK_FLAG_DIRECTORY : 0));
     DWORD error = GetLastError(); free(wide_target); free(wide_name);
+    // Report the missing target before a conflicting destination when its
+    // Windows directory attribute could not be determined.
+    if (!ok && attributes == INVALID_FILE_ATTRIBUTES) error = target_error;
     return ok ? 0 : wasmoon_windows_error(error);
   }
   free(wide_name);
@@ -497,8 +505,12 @@ int wasmoon_windows_unlinkat(int fd, const char *path, int directory) {
   }
   int is_directory = (attributes.FileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
   int is_link = (attributes.FileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0;
+  size_t path_length = strlen(path);
+  if (path_length && (path[path_length - 1] == '/' || path[path_length - 1] == '\\') && !is_directory) {
+    CloseHandle(handle); errno = ENOTDIR; return -1;
+  }
   if ((directory && (!is_directory || is_link)) || (!directory && is_directory && !is_link)) {
-    CloseHandle(handle); errno = directory ? ENOTDIR : EISDIR; return -1;
+    CloseHandle(handle); errno = directory ? ENOTDIR : EACCES; return -1;
   }
   FILE_DISPOSITION_INFO_EX info = {FILE_DISPOSITION_FLAG_DELETE | FILE_DISPOSITION_FLAG_POSIX_SEMANTICS |
                                   FILE_DISPOSITION_FLAG_IGNORE_READONLY_ATTRIBUTE};
@@ -520,6 +532,7 @@ int wasmoon_windows_renameat(int old_fd, const char *old_path, int new_fd, const
     root = wasmoon_windows_fd_handle(new_fd);
     if (root == INVALID_HANDLE_VALUE) { free(name); CloseHandle(source); return -1; }
   }
+  for (wchar_t *p = name; *p; p++) if (*p == L'/') *p = L'\\';
   size_t bytes = wcslen(name) * sizeof(*name);
   size_t size = offsetof(FILE_RENAME_INFO, FileName) + bytes;
   FILE_RENAME_INFO *info = calloc(1, size);
@@ -534,6 +547,10 @@ int wasmoon_windows_renameat(int old_fd, const char *old_path, int new_fd, const
   return result ? 0 : wasmoon_windows_error(error);
 }
 int wasmoon_windows_linkat(int old_fd, const char *old_path, int new_fd, const char *new_path, int follow) {
+  size_t new_length = strlen(new_path);
+  if (new_length && (new_path[new_length - 1] == '/' || new_path[new_length - 1] == '\\')) {
+    errno = ENOENT; return -1;
+  }
   HANDLE source = open_path_or_relative(old_fd, old_path, FILE_READ_ATTRIBUTES, 1,
                                         follow ? 0 : 0x00200000);
   if (source == INVALID_HANDLE_VALUE) return -1;

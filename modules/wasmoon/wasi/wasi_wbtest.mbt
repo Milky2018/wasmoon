@@ -1600,7 +1600,7 @@ test "wasi: path_open trailing slash can open symlinked directory with nofollow"
 }
 
 ///|
-test "wasi: path_open with embedded NUL returns EINVAL" {
+test "wasi: path_open with embedded NUL returns the platform path error" {
   let ctx = WasiContextBuilder::WasiContextBuilder()
     .preopen_dir(@test_fs.temp_dir(), "/")
     .build()
@@ -1645,8 +1645,9 @@ test "wasi: path_open with embedded NUL returns EINVAL" {
       0L,
       0,
       304,
-    ),
-    content="28",
+    ) ==
+    (if @host_io.is_windows() { 44 } else { 28 }),
+    content="true",
   )
   path_unlink_file_impl(ctx, mem, 3, 100, plain.length()) |> ignore
 }

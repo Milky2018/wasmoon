@@ -1630,7 +1630,9 @@ fn read_path_from_memory(
   let bytes = Bytes::makei(len, fn(i) { mem.read_byte(ptr + i) })
   for b in bytes {
     if b == b'\x00' {
-      return Err(Errno::Inval.to_i32())
+      return Err(
+        (if @host_io.is_windows() { Errno::NoEnt } else { Errno::Inval }).to_i32(),
+      )
     }
   }
   if !is_valid_utf8_bytes(bytes) {

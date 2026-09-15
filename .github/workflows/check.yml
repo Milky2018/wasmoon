@@ -16,7 +16,7 @@ on:
       - main
 
 concurrency:
-  group: check-${{ github.event.pull_request.number || github.ref }}
+  group: check-${{ github.event_name == 'workflow_dispatch' && github.run_id || (github.event.pull_request.number || github.ref) }}
   cancel-in-progress: true
 
 env:
@@ -264,7 +264,9 @@ jobs:
           if ($failed) { exit 1 }
       - name: run Windows Wasmtime misc suite
         if: ${{ !cancelled() && steps.windows_build.outcome == 'success' }}
-        run: python scripts/run_wasmtime_misc.py --include-high-memory --timeout 120 --output target/windows-misc
+        run: |
+          python scripts/run_wasmtime_misc.py --include-high-memory --timeout 120 --output target/windows-misc 2>&1 | Tee-Object -FilePath target/windows-misc-run.log
+          exit $LASTEXITCODE
       - name: run Windows WASIp1 suites
         if: ${{ !cancelled() && steps.windows_build.outcome == 'success' }}
         env:
@@ -285,6 +287,7 @@ jobs:
             target/windows-readiness.json
             target/windows-components
             target/windows-misc
+            target/windows-misc-run.log
             target/windows-p1-smoke
             target/windows-p1-rights
           if-no-files-found: warn
@@ -303,6 +306,7 @@ jobs:
             target/windows-readiness.json
             target/windows-components
             target/windows-misc
+            target/windows-misc-run.log
             target/windows-p1-smoke
             target/windows-p1-rights
           if-no-files-found: warn

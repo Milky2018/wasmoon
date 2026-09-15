@@ -24,7 +24,7 @@ class WindowsFileTests(unittest.TestCase):
         (directory / "moonbit.h").write_text('#define MOONBIT_FFI_EXPORT __declspec(dllexport)\n')
         library = directory / "files.dll"
         names = ["open", "openat", "close", "path_within_base", "is_symlink_at", "readlinkat", "linkat",
-                 "pread", "pwrite", "write", "getfl", "setfl", "dup", "dup2", "symlinkat", "ftruncate"]
+                 "pread", "pwrite", "write", "getfl", "setfl", "dup", "dup2", "symlinkat", "ftruncate", "renameat"]
         subprocess.run([
             "clang-cl", "/LD", "/MD", "/I" + str(directory),
             str(ROOT / "modules/wasmoon_jit/host_io/windows_io.c"),
@@ -65,6 +65,8 @@ class WindowsFileTests(unittest.TestCase):
         cls.dup2.argtypes = [ctypes.c_int, ctypes.c_int]
         cls.symlink = cls.library.wasmoon_windows_symlinkat
         cls.symlink.argtypes = [ctypes.c_char_p, ctypes.c_int, ctypes.c_char_p]
+        cls.rename = cls.library.wasmoon_windows_renameat
+        cls.rename.argtypes = [ctypes.c_int, ctypes.c_char_p, ctypes.c_int, ctypes.c_char_p]
         cls.truncate = cls.library.wasmoon_windows_ftruncate
         cls.truncate.argtypes = [ctypes.c_int, ctypes.c_int64]
 
@@ -198,6 +200,30 @@ class WindowsFileTests(unittest.TestCase):
         target = self.root / "target"
         self.assertEqual(self.link(0, os.fsencode(source), 0, os.fsencode(target), 0), 0)
         self.assertTrue(os.path.samefile(source, target))
+
+    def test_absolute_rename_normalizes_guest_separators(self):
+        source = self.root / "source"
+        source.mkdir()
+        target = self.root / "target"
+        self.assertEqual(self.rename(0, source.as_posix().encode(), 0, target.as_posix().encode()), 0)
+        self.assertFalse(source.exists())
+        self.assertTrue(target.is_dir())
+
+    def test_absolute_symlink_normalizes_nested_target(self):
+        nested = self.root / "nested"
+        nested.mkdir()
+        (nested / "file").write_bytes(b"target")
+        link = self.root / "link"
+        self.assertEqual(self.symlink(b"nested/file", 0, link.as_posix().encode()), 0)
+        self.assertEqual(link.read_bytes(), b"target")
+        self.assertEqual(self.within(os.fsencode(self.root), os.fsencode(link)), 1)
+
+    def test_directory_write_open_and_trailing_link_fail(self):
+        self.assertEqual(self.open(os.fsencode(self.root), DIRECTORY | os.O_RDWR, 0), -1)
+        source = self.root / "source"
+        source.write_bytes(b"keep")
+        self.assertEqual(self.link(0, os.fsencode(source), 0, (self.root.as_posix() + "/link/").encode(), 0), -1)
+        self.assertFalse((self.root / "link").exists())
 
     def test_relative_primitive_rejects_traversal_and_stream_names(self):
         for name in [b"..", b"../outside", b"sub/file", b"sub\\file", b"file:stream"]:
