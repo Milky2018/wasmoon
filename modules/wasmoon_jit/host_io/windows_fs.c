@@ -6,6 +6,7 @@
 #include <io.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
 #pragma comment(lib, "advapi32.lib")
 
 wchar_t *wasmoon_windows_utf16(const char *text) {
@@ -254,19 +255,23 @@ static BOOL set_symlink_reparse(HANDLE file, void *data, DWORD size) {
       NULL, SecurityImpersonation, TokenImpersonation, &token);
   DWORD error = GetLastError();
   if (!had_thread_token) CloseHandle(source);
+  const char *stage = "duplicate";
   if (ok) {
+    stage = "lookup";
     TOKEN_PRIVILEGES privilege = {0};
     privilege.PrivilegeCount = 1;
     privilege.Privileges[0].Attributes = SE_PRIVILEGE_ENABLED;
     ok = LookupPrivilegeValueW(NULL, L"SeCreateSymbolicLinkPrivilege", &privilege.Privileges[0].Luid);
     if (ok) {
+      stage = "adjust";
       SetLastError(ERROR_SUCCESS);
       ok = AdjustTokenPrivileges(token, FALSE, &privilege, 0, NULL, NULL);
       if (GetLastError() == ERROR_NOT_ALL_ASSIGNED) { ok = FALSE; SetLastError(ERROR_PRIVILEGE_NOT_HELD); }
     }
-    if (ok) ok = SetThreadToken(NULL, token);
+    if (ok) { stage = "impersonate"; ok = SetThreadToken(NULL, token); }
     error = GetLastError();
     if (ok) {
+      stage = "reparse";
       ok = DeviceIoControl(file, FSCTL_SET_REPARSE_POINT, data, size, NULL, 0, &returned, NULL);
       error = GetLastError();
       // Continuing under the temporary identity after a failed restoration is unsafe.
@@ -275,6 +280,7 @@ static BOOL set_symlink_reparse(HANDLE file, void *data, DWORD size) {
   }
   if (token) CloseHandle(token);
   if (previous) CloseHandle(previous);
+  if (!ok && getenv("WASMOON_TRACE_SYMLINK")) fprintf(stderr, "symlink privilege retry: stage=%s error=%lu thread_token=%d\n", stage, (unsigned long)error, (int)had_thread_token);
   SetLastError(error);
   return ok;
 }
@@ -376,6 +382,7 @@ int wasmoon_windows_symlinkat(const char *target, int fd, const char *name) {
   }
   BOOL ok = set_symlink_reparse(handle, data, (DWORD)(20 + bytes));
   DWORD error = GetLastError(); free(data);
+  if (!ok && getenv("WASMOON_TRACE_SYMLINK")) fprintf(stderr, "symlink reparse: error=%lu directory=%d\n", (unsigned long)error, directory);
   if (!ok) {
     FILE_DISPOSITION_INFO discard = {TRUE};
     if (!SetFileInformationByHandle(handle, FileDispositionInfo, &discard, sizeof(discard))) {

@@ -21,6 +21,7 @@ options(
     "ffi_native.c",
     "file_semantics_native.c",
     "socket_semantics_native.c",
+    "process_native.c",
     "poll_native.c",
     "directory_native.c",
   ],

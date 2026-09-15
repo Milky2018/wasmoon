@@ -556,8 +556,11 @@ pub fn clock_time_get(
   let time_ns = match clock.unwrap() {
     Realtime => native_clock_gettime_realtime()
     Monotonic => native_clock_gettime_monotonic()
-    // Match wasmtime p1: CPU-time clocks are unsupported in preview1.
-    ProcessCPUTimeId | ThreadCPUTimeId => return Errno::Badf.to_i32()
+    ProcessCPUTimeId => c_cpu_clock(false, false)
+    ThreadCPUTimeId => c_cpu_clock(true, false)
+  }
+  if time_ns < 0L {
+    return native_last_errno_to_wasi()
   }
   mem.write_i64(time_ptr, time_ns)
   Errno::Success.to_i32()
@@ -1318,7 +1321,14 @@ pub fn clock_res_get(
         }
         None => native_last_errno_to_wasi()
       }
-    ProcessCPUTimeId | ThreadCPUTimeId => Errno::Badf.to_i32()
+    ProcessCPUTimeId | ThreadCPUTimeId => {
+      let value = c_cpu_clock(clock_value is ThreadCPUTimeId, true)
+      if value < 0L {
+        return native_last_errno_to_wasi()
+      }
+      mem.write_i64(resolution_ptr, value)
+      0
+    }
   }
 }
 
@@ -1327,9 +1337,11 @@ pub fn clock_res_get(
 ///
 /// Returns: errno
 pub fn sched_yield() -> Int {
-  // In a single-threaded context, this is essentially a no-op
-  // Just return success
-  Errno::Success.to_i32()
+  if c_yield() == 0 {
+    0
+  } else {
+    native_last_errno_to_wasi()
+  }
 }
 
 ///|
@@ -2787,10 +2799,13 @@ pub fn sock_accept_impl(
 
 ///|
 /// proc_raise - Send a signal to the process
-pub fn proc_raise_impl(signal : Int) -> Int {
+pub fn proc_raise_impl(signal : Int, handler? : ((Int) -> Int)? = None) -> Int {
   let signal_check = validate_proc_raise_signal(signal)
   if signal_check != Errno::Success.to_i32() {
     return signal_check
   }
-  Errno::NotSup.to_i32()
+  match handler {
+    Some(handle) => handle(signal)
+    None => Errno::NotSup.to_i32()
+  }
 }

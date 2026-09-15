@@ -17,8 +17,8 @@ filesystem combinations. ISS-536 owns the final matrix and exclusion audit.
 | --- | --- | --- | --- |
 | `args_get` | Implemented; baseline coverage | ISS-536 | Audit bounds, errors, rights and applicable descriptor kinds; retain external regressions. |
 | `args_sizes_get` | Implemented; baseline coverage | ISS-536 | Audit bounds, errors, rights and applicable descriptor kinds; retain external regressions. |
-| `clock_res_get` | Policy/implementation review | ISS-535 | CPU clocks, host yield and opt-in signal delivery need explicit contracts. |
-| `clock_time_get` | Policy/implementation review | ISS-535 | CPU clocks, host yield and opt-in signal delivery need explicit contracts. |
+| `clock_res_get` | Implemented; CI pending | ISS-535 | Native CPU clocks and host yield; explicit host signal policy. |
+| `clock_time_get` | Implemented; CI pending | ISS-535 | Native CPU clocks and host yield; explicit host signal policy. |
 | `environ_get` | Implemented; baseline coverage | ISS-536 | Audit bounds, errors, rights and applicable descriptor kinds; retain external regressions. |
 | `environ_sizes_get` | Implemented; baseline coverage | ISS-536 | Audit bounds, errors, rights and applicable descriptor kinds; retain external regressions. |
 | `fd_advise` | Implemented; baseline coverage | ISS-536 | Audit bounds, errors, rights and applicable descriptor kinds; retain external regressions. |
@@ -54,9 +54,9 @@ filesystem combinations. ISS-536 owns the final matrix and exclusion audit.
 | `path_unlink_file` | Implemented; cross-platform acceptance pending | ISS-532 | Held-directory operations and shared engine dispatch; verify race and permission matrix. |
 | `poll_oneoff` | Implemented; baseline coverage | ISS-536 | Audit bounds, errors, rights and applicable descriptor kinds; retain external regressions. |
 | `proc_exit` | Implemented; baseline coverage | ISS-536 | Audit bounds, errors, rights and applicable descriptor kinds; retain external regressions. |
-| `proc_raise` | Policy/implementation review | ISS-535 | CPU clocks, host yield and opt-in signal delivery need explicit contracts. |
+| `proc_raise` | Implemented; CI pending | ISS-535 | Native CPU clocks and host yield; explicit host signal policy. |
 | `random_get` | Implemented; baseline coverage | ISS-536 | Audit bounds, errors, rights and applicable descriptor kinds; retain external regressions. |
-| `sched_yield` | Policy/implementation review | ISS-535 | CPU clocks, host yield and opt-in signal delivery need explicit contracts. |
+| `sched_yield` | Implemented; CI pending | ISS-535 | Native CPU clocks and host yield; explicit host signal policy. |
 | `sock_accept` | Implemented; CI pending | ISS-534 | Host-injected stream/datagram sockets, rights and P1 flags. |
 | `sock_recv` | Implemented; CI pending | ISS-534 | Host-injected stream/datagram sockets, rights and P1 flags. |
 | `sock_send` | Implemented; CI pending | ISS-534 | Host-injected stream/datagram sockets, rights and P1 flags. |
@@ -168,3 +168,14 @@ engines; Windows acceptance remains pending.
 Shared P1 `proc_exit` now unwinds guest execution via a typed host exit outcome.
 The CLI regression places `unreachable` after the exit call to detect accidental
 continuation as well as loss of the exit status.
+
+## Process policy and CPU clocks
+
+Process and thread CPU clocks return native CPU accounting and resolution, rather
+than wall-clock time. `sched_yield` invokes the OS scheduler. Signal delivery is
+disabled by default (`NOTSUP`). An embedder may install
+`WasiContextBuilder::signal_handler`; the handler receives validated P1 tags and
+may return a denial or explicitly call `raise_host_signal`. Native signal delivery
+can terminate the whole hosting process. The CLI does not opt in. Windows supports
+the CRT signal subset; unavailable signals return `NOTSUP`. Unix maps P1 tags to
+native constants rather than assuming signal numbers are portable.

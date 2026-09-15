@@ -1258,7 +1258,7 @@ pub fn register_wasi(
       if signal < 0 || signal > 30 {
         trap_invalid_wasi_abi_arg()
       }
-      let result = proc_raise_impl(signal)
+      let result = proc_raise_impl(signal, handler=ctx.signal_handler)
       [I32(result)]
     },
     func_type=make_func_type([i32], [i32]),

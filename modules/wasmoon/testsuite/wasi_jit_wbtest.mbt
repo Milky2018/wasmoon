@@ -50,6 +50,7 @@ fn compare_wasi_with_options(
   stdin_data? : Bytes,
   stdin_factory? : () -> () -> Bytes,
   configure_wasi? : ((@wasi.WasiContext) -> Unit raise Error)? = None,
+  signal_handler? : ((Int) -> Int)? = None,
 ) -> WasiCompareResult {
   // Parse the WAT source
   let (mod_, interp_mod) = try {
@@ -100,6 +101,7 @@ fn compare_wasi_with_options(
     stdin_callback=stdin_factory.map(fn(make) { make() }),
     readonly_preopens~,
     configure_wasi~,
+    signal_handler~,
   )
 
   // Run JIT with WASI (stdout suppressed)
@@ -113,6 +115,7 @@ fn compare_wasi_with_options(
     stdin_callback=stdin_factory.map(fn(make) { make() }),
     readonly_preopens~,
     configure_wasi~,
+    signal_handler~,
   )
 
   // Compare results (return values must match)
@@ -184,6 +187,7 @@ fn run_wasi_interp_quiet(
   readonly_preopens? : Array[(String, String)] = [],
   stdin_callback? : (() -> Bytes)? = None,
   configure_wasi? : ((@wasi.WasiContext) -> Unit raise Error)? = None,
+  signal_handler? : ((Int) -> Int)? = None,
 ) -> (Result[Array[@types.Value], String], Bytes) {
   try {
     let stdout_buf : Array[Byte] = []
@@ -230,6 +234,9 @@ fn run_wasi_interp_quiet(
           None => ()
         }
     }
+    if signal_handler is Some(handler) {
+      wasi_builder.signal_handler(handler) |> ignore
+    }
     let wasi_ctx = wasi_builder.build()
     defer {
       for _, file in wasi_ctx.open_files {
@@ -260,6 +267,7 @@ fn run_wasi_jit_quiet(
   readonly_preopens? : Array[(String, String)] = [],
   stdin_callback? : (() -> Bytes)? = None,
   configure_wasi? : ((@wasi.WasiContext) -> Unit raise Error)? = None,
+  signal_handler? : ((Int) -> Int)? = None,
 ) -> (Result[Array[@types.Value], String], Bytes) {
   func_name |> ignore
   try {
@@ -305,6 +313,9 @@ fn run_wasi_jit_quiet(
           }
           None => ()
         }
+    }
+    if signal_handler is Some(handler) {
+      wasi_builder.signal_handler(handler) |> ignore
     }
     let wasi_ctx = wasi_builder.build()
     defer {
@@ -2331,7 +2342,7 @@ test "wasi jit: clock_time_get writes a plausible realtime timestamp" {
 }
 
 ///|
-test "wasi jit: clock_time_get process/thread cpu clocks return EBADF (8)" {
+test "wasi jit: clock_time_get process/thread cpu clocks succeed" {
   let source =
     #|(module
     #|  (import "wasi_snapshot_preview1" "clock_time_get"
@@ -2343,12 +2354,12 @@ test "wasi jit: clock_time_get process/thread cpu clocks return EBADF (8)" {
     #|    (call $clock_time_get (i32.const 3) (i64.const 0) (i32.const 0))))
   let process_result = compare_wasi(source, "process_clock")
   inspect(process_result.match_, content="true")
-  inspect(wasi_errno_from_result(process_result.interp_result), content="8")
-  inspect(wasi_errno_from_result(process_result.jit_result), content="8")
+  inspect(wasi_errno_from_result(process_result.interp_result), content="0")
+  inspect(wasi_errno_from_result(process_result.jit_result), content="0")
   let thread_result = compare_wasi(source, "thread_clock")
   inspect(thread_result.match_, content="true")
-  inspect(wasi_errno_from_result(thread_result.interp_result), content="8")
-  inspect(wasi_errno_from_result(thread_result.jit_result), content="8")
+  inspect(wasi_errno_from_result(thread_result.interp_result), content="0")
+  inspect(wasi_errno_from_result(thread_result.jit_result), content="0")
 }
 
 ///|
@@ -2365,7 +2376,7 @@ test "wasi jit: clock_time_get traps on invalid clock id enum" {
 }
 
 ///|
-test "wasi jit: clock_res_get process/thread cpu clocks return EBADF (8)" {
+test "wasi jit: clock_res_get process/thread cpu clocks succeed" {
   let source =
     #|(module
     #|  (import "wasi_snapshot_preview1" "clock_res_get"
@@ -2377,12 +2388,12 @@ test "wasi jit: clock_res_get process/thread cpu clocks return EBADF (8)" {
     #|    (call $clock_res_get (i32.const 3) (i32.const 0))))
   let process_result = compare_wasi(source, "process_clock")
   inspect(process_result.match_, content="true")
-  inspect(wasi_errno_from_result(process_result.interp_result), content="8")
-  inspect(wasi_errno_from_result(process_result.jit_result), content="8")
+  inspect(wasi_errno_from_result(process_result.interp_result), content="0")
+  inspect(wasi_errno_from_result(process_result.jit_result), content="0")
   let thread_result = compare_wasi(source, "thread_clock")
   inspect(thread_result.match_, content="true")
-  inspect(wasi_errno_from_result(thread_result.interp_result), content="8")
-  inspect(wasi_errno_from_result(thread_result.jit_result), content="8")
+  inspect(wasi_errno_from_result(thread_result.interp_result), content="0")
+  inspect(wasi_errno_from_result(thread_result.jit_result), content="0")
 }
 
 ///|
@@ -3435,4 +3446,31 @@ test "wasi jit: injected listener supports accept waitall and shutdown" {
   )
   inspect(result.match_, content="true")
   inspect(wasi_errno_from_result(result.jit_result), content="0")
+}
+
+///|
+test "wasi jit: explicit signal policy validates, permits and denies" {
+  let source =
+    #|(module
+    #| (import "wasi_snapshot_preview1" "proc_raise" (func $raise (param i32) (result i32)))
+    #| (memory (export "memory") 1)
+    #| (func (export "test") (result i32)
+    #|   (if (i32.ne (call $raise (i32.const 0)) (i32.const 0)) (then unreachable))
+    #|   (call $raise (i32.const 15))))
+  let calls : Array[Int] = []
+  let result = compare_wasi_with_options(
+    source,
+    "test",
+    signal_handler=Some(signal => {
+      calls.push(signal)
+      if signal == 0 {
+        @wasi.raise_host_signal(signal)
+      } else {
+        63
+      }
+    }),
+  )
+  inspect(result.match_, content="true")
+  inspect(wasi_errno_from_result(result.interp_result), content="63")
+  inspect(calls.length(), content="4")
 }

@@ -53,6 +53,8 @@ pub(all) struct WasiContext {
   args : Array[String]
   /// Environment variables (key=value pairs)
   env : Array[String]
+  /// Explicit host signal policy; None denies process signals.
+  signal_handler : ((Int) -> Int)?
   /// Exit code (set by proc_exit)
   mut exit_code : Int?
   /// Preopen directories: (fd, host_path, guest_path)
@@ -94,6 +96,7 @@ pub fn WasiContext::WasiContext() -> WasiContext {
     args: [],
     env: [],
     exit_code: None,
+    signal_handler: None,
     preopens: [],
     next_fd: 3, // 0=stdin, 1=stdout, 2=stderr
     open_files: HashMap([]),
@@ -115,6 +118,7 @@ pub fn WasiContext::WasiContext() -> WasiContext {
 ///|
 /// Builder for WasiContext
 pub(all) struct WasiContextBuilder {
+  mut signal_handler : ((Int) -> Int)?
   mut args : Array[String]
   env : Array[String]
   preopens : Array[(String, String)]
@@ -130,6 +134,7 @@ pub(all) struct WasiContextBuilder {
 ///|
 pub fn WasiContextBuilder::WasiContextBuilder() -> WasiContextBuilder {
   {
+    signal_handler: None,
     args: [],
     env: [],
     preopens: [],
@@ -326,6 +331,7 @@ pub fn WasiContextBuilder::build(self : WasiContextBuilder) -> WasiContext {
   }
   {
     args: self.args,
+    signal_handler: self.signal_handler,
     env: self.env,
     exit_code: None,
     preopens,

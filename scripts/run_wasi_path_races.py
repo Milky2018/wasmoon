@@ -66,28 +66,43 @@ def run(engine: str, mutation: str, wasm: Path, root: Path) -> dict:
     counts = dict(replacements=0, denied_renames=0, contended_creates=0)
     errors = []
 
+    def retry_mutation(operation) -> bool:
+        while not stop.is_set():
+            try:
+                operation()
+                return True
+            except PermissionError:
+                # Windows may keep a file delete-pending while a guest holds it.
+                # This is contention, not a failed isolation assertion.
+                counts["denied_renames"] += 1
+                stop.wait(0.001)
+        return False
+
     def replace() -> None:
         try:
             while not stop.is_set():
-                try:
-                    slot.rename(parked)
-                except PermissionError:
-                    # Windows may lock a directory while descendants are open.
-                    counts["denied_renames"] += 1
-                    continue
+                if not retry_mutation(lambda: slot.rename(parked)):
+                    break
                 try:
                     try:
                         slot.symlink_to(replacement_target, target_is_directory=mutation == "ancestor")
                     except FileExistsError:
-                        # The guest may recreate a missing final file with O_CREAT.
+                        counts["contended_creates"] += 1
+                    except PermissionError:
+                        # O_CREAT can win the missing-leaf race with a live handle.
+                        if mutation != "leaf" or not slot.exists():
+                            raise
                         counts["contended_creates"] += 1
                     else:
                         counts["replacements"] += 1
-                        slot.unlink()
                 finally:
-                    if slot.is_symlink() or (mutation == "leaf" and slot.exists()):
-                        slot.unlink()
-                    parked.replace(slot)
+                    def restore():
+                        if slot.is_symlink() or (mutation == "leaf" and slot.exists()):
+                            slot.unlink()
+                        parked.replace(slot)
+                    restored = retry_mutation(restore)
+                if not restored:
+                    break
         except Exception as error:
             errors.append(repr(error))
 
@@ -112,7 +127,7 @@ def run(engine: str, mutation: str, wasm: Path, root: Path) -> dict:
     after = sentinel.stat()
     successful_opens = int.from_bytes(output, "little") if len(output) == 4 else 0
     passed = (process.returncode == 0 and successful_opens > 0 and not errors and
-              not thread.is_alive() and sum(counts.values()) > 0 and
+              not thread.is_alive() and counts["replacements"] > 0 and
               after.st_size == before.st_size and after.st_mtime_ns == before.st_mtime_ns and
               sentinel.read_bytes() == b"outside capability")
     return dict(engine=engine, mutation=mutation, passed=passed, successful_opens=successful_opens,

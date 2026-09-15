@@ -254,7 +254,7 @@ jobs:
           exit $LASTEXITCODE
 
       - name: test Windows file allocation
-        run: python -m unittest scripts.tests.test_wasi_file_semantics -v
+        run: python -m unittest scripts.tests.test_wasi_file_semantics scripts.tests.test_wasi_process -v
 
       - name: build Windows runtime
         id: windows_build
@@ -318,6 +318,7 @@ jobs:
         if: ${{ !cancelled() && steps.windows_build.outcome == 'success' }}
         env:
           RUSTUP_TOOLCHAIN: "1.97.0"
+          WASMOON_TRACE_SYMLINK: "1"
         run: |
           rustup toolchain install 1.97.0 --profile minimal --target wasm32-wasip1
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

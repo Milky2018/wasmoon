@@ -139,10 +139,10 @@ test "wasi: clock_time_get invalid clock" {
 }
 
 ///|
-test "wasi: clock_time_get cpu clocks return BADF" {
+test "wasi: clock_time_get supports CPU clocks" {
   let mem = @runtime.Memory::Memory(1, None)
-  inspect(clock_time_get(mem, 2, 0L, 0), content="8") // PROCESS_CPUTIME_ID
-  inspect(clock_time_get(mem, 3, 0L, 0), content="8") // THREAD_CPUTIME_ID
+  inspect(clock_time_get(mem, 2, 0L, 0), content="0") // PROCESS_CPUTIME_ID
+  inspect(clock_time_get(mem, 3, 0L, 0), content="0") // THREAD_CPUTIME_ID
 }
 
 ///|
@@ -730,9 +730,9 @@ test "wasi: clock_res_get" {
   // Test monotonic clock
   let result = clock_res_get(mem, 1, 0)
   inspect(result, content="0")
-  // CPU clocks are unsupported in preview1 and return BADF.
-  inspect(clock_res_get(mem, 2, 0), content="8")
-  inspect(clock_res_get(mem, 3, 0), content="8")
+  // CPU clocks expose native CPU accounting.
+  inspect(clock_res_get(mem, 2, 0), content="0")
+  inspect(clock_res_get(mem, 3, 0), content="0")
   // Test invalid clock
   let result = clock_res_get(mem, 999, 0)
   inspect(result, content="28") // Errno::Inval
