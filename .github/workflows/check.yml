@@ -222,6 +222,17 @@ jobs:
           moon version --all
           clang --version
           moon update
+      - name: install Windows wasm-tools
+        shell: pwsh
+        run: |
+          $version = $env:COMPONENT_WASM_TOOLS_VERSION
+          $archive = "wasm-tools-$version-x86_64-windows.zip"
+          New-Item -ItemType Directory -Force target/windows-tools | Out-Null
+          Invoke-WebRequest "https://github.com/bytecodealliance/wasm-tools/releases/download/v$version/$archive" -OutFile "target/$archive"
+          Expand-Archive "target/$archive" target/windows-tools
+          $tools = @(Get-ChildItem target/windows-tools -Recurse -Filter wasm-tools.exe)
+          if ($tools.Count -ne 1) { throw "Expected exactly one pinned wasm-tools binary" }
+          $tools[0].DirectoryName >> $env:GITHUB_PATH
       - name: test Windows descriptor readiness
         run: python -m unittest discover -s scripts/tests -p 'test_wasi_windows_*.py' -v
 
@@ -236,6 +247,31 @@ jobs:
       - name: run Windows core suites
         if: ${{ !cancelled() && steps.windows_build.outcome == 'success' }}
         run: python scripts/run_all_wast.py --rec --dump-failures
+      - name: run Windows readiness guests
+        if: ${{ !cancelled() && steps.windows_build.outcome == 'success' }}
+        run: python scripts/run_windows_readiness.py
+      - name: run Windows component suites
+        if: ${{ !cancelled() && steps.windows_build.outcome == 'success' }}
+        run: |
+          $failed = $false
+          foreach ($suite in @("stable-0.2", "async-0.3", "future-gated")) {
+            python scripts/run_component_wast.py --suite $suite --dump-failures
+            if ($LASTEXITCODE -ne 0) { $failed = $true }
+            python scripts/run_component_wast.py --suite $suite --dump-failures --no-jit
+            if ($LASTEXITCODE -ne 0) { $failed = $true }
+          }
+          if ($failed) { exit 1 }
       - name: run Windows native tests
         if: ${{ !cancelled() && steps.windows_build.outcome == 'success' }}
-        run: moon test --target native --no-parallelize
+        env:
+          VCODE_REGALLOC_VALIDATION: "1"
+        run: python scripts/run_native_packages.py --output target/windows-native-tests
+      - name: upload Windows test evidence
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: windows-native-evidence
+          path: |
+            target/windows-native-tests
+            target/windows-readiness.json
+          if-no-files-found: warn

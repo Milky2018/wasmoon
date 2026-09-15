@@ -554,7 +554,7 @@ MOONBIT_FFI_EXPORT int wasmoon_wasi_pwrite(
 // Read from file descriptor
 MOONBIT_FFI_EXPORT int wasmoon_wasi_read(int fd, moonbit_bytes_t buf, int count) {
 #ifdef _WIN32
-  return _read(fd, buf, count);
+  return wasmoon_windows_read(fd, buf, count);
 #else
   return read(fd, buf, count);
 #endif
@@ -563,7 +563,7 @@ MOONBIT_FFI_EXPORT int wasmoon_wasi_read(int fd, moonbit_bytes_t buf, int count)
 // Write to file descriptor
 MOONBIT_FFI_EXPORT int wasmoon_wasi_write(int fd, moonbit_bytes_t buf, int count) {
 #ifdef _WIN32
-  return _write(fd, buf, count);
+  return wasmoon_windows_write(fd, buf, count);
 #else
   return write(fd, buf, count);
 #endif

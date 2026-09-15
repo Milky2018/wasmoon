@@ -14,6 +14,28 @@ MOONBIT_FFI_EXPORT int wasmoon_host_is_windows(void) {
 #include <stdlib.h>
 #pragma comment(lib, "ws2_32.lib")
 
+int wasmoon_windows_error(DWORD error) {
+  switch (error) {
+    case ERROR_FILE_NOT_FOUND: case ERROR_PATH_NOT_FOUND: errno = ENOENT; break;
+    case ERROR_ACCESS_DENIED: case ERROR_SHARING_VIOLATION: errno = EACCES; break;
+    case ERROR_INVALID_HANDLE: errno = EBADF; break;
+    case ERROR_ALREADY_EXISTS: case ERROR_FILE_EXISTS: errno = EEXIST; break;
+    case ERROR_DIRECTORY: errno = ENOTDIR; break;
+    case ERROR_DIR_NOT_EMPTY: errno = ENOTEMPTY; break;
+    case ERROR_DISK_FULL: case ERROR_HANDLE_DISK_FULL: errno = ENOSPC; break;
+    case ERROR_NOT_ENOUGH_MEMORY: case ERROR_OUTOFMEMORY: errno = ENOMEM; break;
+    case ERROR_FILENAME_EXCED_RANGE: errno = ENAMETOOLONG; break;
+    case ERROR_INVALID_NAME: case ERROR_INVALID_PARAMETER: errno = EINVAL; break;
+    case ERROR_NOT_SAME_DEVICE: errno = EXDEV; break;
+    case ERROR_TOO_MANY_OPEN_FILES: errno = EMFILE; break;
+    case ERROR_NOT_SUPPORTED: case ERROR_INVALID_FUNCTION: errno = ENOTSUP; break;
+    case ERROR_CANT_RESOLVE_FILENAME: case ERROR_STOPPED_ON_SYMLINK: errno = ELOOP; break;
+    case ERROR_BROKEN_PIPE: case ERROR_NO_DATA: errno = EPIPE; break;
+    case ERROR_OPERATION_ABORTED: errno = EINTR; break;
+    default: errno = EIO; break;
+  }
+  return -1;
+}
 // CRT descriptors are int-sized; SOCKET is pointer-sized. Never truncate one
 // into the other. Reserved ids hold sockets until explicit close, with reuse
 // following ordinary descriptor semantics. Callers must not close a borrowed
@@ -86,6 +108,37 @@ HANDLE wasmoon_windows_fd_handle(int fd) {
     intptr_t handle = _get_osfhandle(fd);
     _set_thread_local_invalid_parameter_handler(old);
     return (HANDLE)handle;
+}
+int wasmoon_windows_read(int fd, void *buffer, int count) {
+    if (count < 0) { errno = EINVAL; return -1; }
+    if (wasmoon_windows_is_socket(fd)) {
+        SOCKET socket = wasmoon_windows_socket_get(fd);
+        if (socket == INVALID_SOCKET) return -1;
+        int result = recv(socket, buffer, count, 0);
+        return result == SOCKET_ERROR ? wasmoon_windows_socket_error(WSAGetLastError()) : result;
+    }
+    HANDLE handle = wasmoon_windows_fd_handle(fd);
+    if (handle == INVALID_HANDLE_VALUE) return -1;
+    DWORD read;
+    if (ReadFile(handle, buffer, (DWORD)count, &read, NULL)) return (int)read;
+    DWORD error = GetLastError();
+    if (error == ERROR_BROKEN_PIPE) return 0;
+    if (error == ERROR_NO_DATA) { errno = EAGAIN; return -1; }
+    return wasmoon_windows_error(error);
+}
+int wasmoon_windows_write(int fd, const void *buffer, int count) {
+    if (count < 0) { errno = EINVAL; return -1; }
+    if (wasmoon_windows_is_socket(fd)) {
+        SOCKET socket = wasmoon_windows_socket_get(fd);
+        if (socket == INVALID_SOCKET) return -1;
+        int result = send(socket, buffer, count, 0);
+        return result == SOCKET_ERROR ? wasmoon_windows_socket_error(WSAGetLastError()) : result;
+    }
+    HANDLE handle = wasmoon_windows_fd_handle(fd);
+    if (handle == INVALID_HANDLE_VALUE) return -1;
+    DWORD written;
+    if (WriteFile(handle, buffer, (DWORD)count, &written, NULL)) return (int)written;
+    return wasmoon_windows_error(GetLastError());
 }
 int wasmoon_windows_dup(int fd) {
     if (!wasmoon_windows_is_socket(fd)) {

@@ -152,15 +152,15 @@ def execute(command: list[str], directory: Path, timeout: float,
     proc = None
     with stdout_path.open("wb") as stdout, stderr_path.open("wb") as stderr:
         try:
-            if terminal:
-                if os.name == "nt":
-                    raise OSError("POSIX PTY cases require the native Windows console harness")
+            windows_console = terminal and os.name == "nt"
+            if terminal and not windows_console:
                 master, slave = pty.openpty()
             env = os.environ.copy()
             # A fresh per-case JIT cache avoids testing an unrelated old artifact.
             env["WASMOON_JIT_CACHE_DIR"] = str(directory / "jit-cache")
             proc = subprocess.Popen(
                 command, cwd=directory, env=env, start_new_session=True,
+                creationflags=subprocess.CREATE_NEW_CONSOLE if windows_console else 0,
                 stdin=slave if terminal else (subprocess.PIPE if pending_stdin else subprocess.DEVNULL),
                 stdout=slave if terminal else stdout,
                 stderr=slave if terminal else stderr,

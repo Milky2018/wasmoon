@@ -8,6 +8,9 @@
 #include <winsock2.h>
 #include <windows.h>
 #include <stdint.h>
+int wasmoon_windows_error(DWORD error);
+int wasmoon_windows_read(int fd, void *buffer, int count);
+int wasmoon_windows_write(int fd, const void *buffer, int count);
 int wasmoon_windows_winsock_init(void);
 int wasmoon_windows_socket_adopt(SOCKET socket);
 SOCKET wasmoon_windows_socket_get(int fd);
