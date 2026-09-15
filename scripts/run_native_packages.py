@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 import re
 import subprocess
+import sys
 import time
 
 from native_process import kill_process_tree
@@ -60,6 +61,8 @@ def run_logged(command: list[str], path: Path, timeout: float) -> dict:
 
 
 def main() -> int:
+    sys.stdout.reconfigure(encoding="utf-8")
+    sys.stderr.reconfigure(encoding="utf-8")
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--timeout", type=float, default=300)
     parser.add_argument("--output", type=Path, default=ROOT / "target/native-packages")
