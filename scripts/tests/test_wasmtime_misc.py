@@ -1,7 +1,9 @@
 from pathlib import Path
 import json
+import os
 import shutil
 import sys
+import subprocess
 import tempfile
 import unittest
 
@@ -11,6 +13,14 @@ import run_wasmtime_misc as misc
 
 
 class MiscRunnerTests(unittest.TestCase):
+    def test_cli_check_with_non_utf8_host_locale(self):
+        environment = os.environ | {"LC_ALL": "C", "PYTHONCOERCECLOCALE": "0"}
+        result = subprocess.run(
+            [sys.executable, "-X", "utf8=0", str(ROOT / "scripts/run_wasmtime_misc.py"), "--check"],
+            cwd=ROOT, env=environment, capture_output=True, text=True, encoding="utf-8", timeout=30)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("Verified 382 WAST scripts", result.stdout)
+
     def test_complete_unchanged_snapshot(self):
         snapshot, cases = misc.validate_snapshot()
         self.assertEqual(len(cases), 382)

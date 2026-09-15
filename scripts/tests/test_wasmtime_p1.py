@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from pathlib import Path
+from contextlib import redirect_stdout
+from io import StringIO
 import shutil
 import sys
 import tempfile
@@ -14,6 +16,14 @@ import run_wasmtime_p1 as p1
 
 
 class P1RunnerTests(unittest.TestCase):
+    def test_cli_snapshot_check_accepts_windows(self):
+        output = StringIO()
+        with patch.object(p1.sys, "platform", "win32"), \
+             patch.object(p1.sys, "argv", ["run_wasmtime_p1.py", "--check"]), \
+             redirect_stdout(output):
+            self.assertEqual(p1.main(), 0)
+        self.assertIn("Verified 58 P1 programs", output.getvalue())
+
     def test_windows_guest_environment_matches_upstream_contract(self):
         with patch.object(p1.sys, "platform", "win32"):
             environment = p1.guest_environment()

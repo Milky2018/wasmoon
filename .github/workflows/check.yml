@@ -205,7 +205,7 @@ jobs:
   windows-native:
     name: Windows AMD64
     runs-on: windows-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
     env:
       MOONBIT_INSTALL_VERSION: nightly
       MOON_CC: clang

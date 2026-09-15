@@ -51,7 +51,7 @@ def digest(path: Path) -> str:
 
 
 def validate_snapshot(corpus: Path = CORPUS) -> tuple[dict, list[str]]:
-    snapshot = json.loads((corpus / "SNAPSHOT.json").read_text())
+    snapshot = json.loads((corpus / "SNAPSHOT.json").read_text(encoding="utf-8"))
     commit = snapshot["commit"]
     if len(commit) != 40 or any(c not in "0123456789abcdef" for c in commit):
         raise ValueError("snapshot must pin a full upstream commit")
@@ -64,7 +64,7 @@ def validate_snapshot(corpus: Path = CORPUS) -> tuple[dict, list[str]]:
     for entry in entries:
         if digest(corpus / "upstream" / entry["path"]) != entry["sha256"]:
             raise ValueError(f"upstream hash mismatch: {entry['path']}")
-    manifest = tomllib.loads((corpus / "Cargo.toml").read_text())
+    manifest = tomllib.loads((corpus / "Cargo.toml").read_text(encoding="utf-8"))
     bins = manifest["bin"]
     guests = sorted(p for p in paths if p.startswith("crates/test-programs/src/bin/p1_")
                     and p.endswith(".rs"))
@@ -270,8 +270,8 @@ def main() -> int:
     parser.add_argument("--check", action="store_true", help="Only verify the source snapshot")
     parser.add_argument("--list", action="store_true", help="List selected programs without building")
     args = parser.parse_args()
-    if sys.platform not in {"darwin", "linux"}:
-        parser.error("this runner currently supports macOS and Linux")
+    if sys.platform not in {"darwin", "linux", "win32"}:
+        parser.error("this runner currently supports macOS, Linux, and Windows")
     if args.timeout <= 0:
         parser.error("--timeout must be positive")
     try:

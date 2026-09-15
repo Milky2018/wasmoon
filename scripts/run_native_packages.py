@@ -66,14 +66,14 @@ def main() -> int:
     args = parser.parse_args()
     args.output.mkdir(parents=True, exist_ok=True)
     print("Building complete native test inventory (two compiler workers)", flush=True)
-    build = run_logged(["moon", "test", "--target", "native", "--jobs", "2", "--build-only", "--verbose"],
-                       args.output / "build.log", 900)
+    build = run_logged(["moon", "test", "--target", "native", "--jobs", "2", "--build-only", "--strip", "--verbose"],
+                       args.output / "build.log", 1800)
     evidence = dict(build=build, inventory_count=0, packages=[])
     summary = args.output / "results.json"
     summary.write_text(json.dumps(evidence, indent=2) + "\n", encoding="utf-8")
     if build["returncode"] or build["timed_out"]:
         return 1
-    inventory = subprocess.run(["moon", "test", "--target", "native", "--outline"],
+    inventory = subprocess.run(["moon", "test", "--target", "native", "--strip", "--outline"],
                                cwd=ROOT, check=True, capture_output=True, text=True,
                                encoding="utf-8", timeout=60).stdout
     (args.output / "inventory.txt").write_text(inventory, encoding="utf-8")
@@ -86,7 +86,7 @@ def main() -> int:
         print(f"Running {package}", flush=True)
         log_path = args.output / (package.replace("/", "_") + ".log")
         result = run_logged(["moon", "test", "--target", "native", "--no-parallelize",
-                             "--jobs", "2", "--package", package], log_path, args.timeout)
+                             "--jobs", "2", "--strip", "--package", package], log_path, args.timeout)
         result["package"] = package
         result["expected_tests"] = sum(name == package for _, name in entries)
         counts = re.findall(r"Total tests: (\d+),", log_path.read_text(encoding="utf-8", errors="replace"))
