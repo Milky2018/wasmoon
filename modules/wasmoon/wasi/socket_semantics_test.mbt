@@ -90,8 +90,15 @@ test "Preview 1 datagrams preserve message boundaries, peek and truncation" {
   inspect(mem.read_byte(300).to_int(), content="5")
   inspect(@wasi.fd_filestat_get_impl(ctx, mem, receiver, 300), content="0")
   inspect(mem.read_byte(316).to_int(), content="5")
+  inspect(@wasi.fd_write(ctx, mem, sender, 0, 2, 200), content="0")
+  assert_true(@wasi.native_poll([right], [1], 1000).unwrap().ready_count > 0)
+  inspect(@wasi.fd_read(ctx, mem, receiver, 0, 2, 200), content="0")
+  inspect(mem.read_i32(200), content="5")
+  assert_eq(mem.read_bytes(100, 2), b"ab")
+  assert_eq(mem.read_bytes(120, 3), b"cde")
   inspect(@wasi.fd_fdstat_set_rights_impl(ctx, sender, 0L, 0L), content="0")
   inspect(@wasi.sock_send_impl(ctx, mem, sender, 0, 2, 0, 200), content="76")
+  inspect(@wasi.fd_write(ctx, mem, sender, 0, 2, 200), content="76")
 }
 
 ///|

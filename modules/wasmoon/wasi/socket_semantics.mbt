@@ -90,3 +90,37 @@ fn socket_iovecs(
   }
   Ok((entries, length.to_int()))
 }
+
+///|
+fn socket_receive(
+  mem : @runtime.Memory,
+  file : OpenFile,
+  ri_data_ptr : Int,
+  ri_data_len : Int,
+  ri_flags : Int,
+) -> Result[(Int, Int), Int] {
+  let (entries, length) = match socket_iovecs(mem, ri_data_ptr, ri_data_len) {
+    Ok(value) => value
+    Err(errno) => return Err(errno)
+  }
+  let buffer = FixedArray::make(length, b'\x00')
+  let truncated = FixedArray::make(1, 0)
+  let received = if length == 0 && file.file_type is SocketStream {
+    0
+  } else {
+    c_p1_recv(file.native_fd, buffer, length, ri_flags, truncated)
+  }
+  if received < 0 {
+    return Err(native_last_errno_to_wasi())
+  }
+  let mut offset = 0
+  for entry in entries {
+    let (start, size) = entry
+    let copied = @cmp.minimum(size, received - offset)
+    for i in 0..<copied {
+      mem.write_byte(start + i, buffer[offset + i])
+    }
+    offset += copied
+  }
+  Ok((received, truncated[0]))
+}

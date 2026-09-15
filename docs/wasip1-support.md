@@ -179,3 +179,15 @@ may return a denial or explicitly call `raise_host_signal`. Native signal delive
 can terminate the whole hosting process. The CLI does not opt in. Windows supports
 the CRT signal subset; unavailable signals return `NOTSUP`. Unix maps P1 tags to
 native constants rather than assuming signal numbers are portable.
+
+## Additional acceptance boundaries
+
+Argument/environment tables and preopen names use UTF-8 byte lengths. Buffer
+validation uses the same encoding as the write; embedded NUL is rejected.
+Injected sockets also support `fd_read` and `fd_write`, preserving datagram
+message boundaries and the same rights as `sock_recv`/`sock_send`.
+
+CPU clock reads are supported. Polling CPU-clock deadlines retains the existing
+Wasmtime compatibility contract: a single relative subscription is a duration
+sleep; absolute or mixed CPU-clock subscriptions return `INVAL`. It does not
+claim a native per-thread CPU timer facility.

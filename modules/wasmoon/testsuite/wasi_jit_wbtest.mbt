@@ -3388,6 +3388,8 @@ test "wasi jit: injected datagrams support scatter gather peek and truncation" {
     #|(module
     #|  (import "wasi_snapshot_preview1" "sock_send" (func $send (param i32 i32 i32 i32 i32) (result i32)))
     #|  (import "wasi_snapshot_preview1" "sock_recv" (func $recv (param i32 i32 i32 i32 i32 i32) (result i32)))
+    #|  (import "wasi_snapshot_preview1" "fd_write" (func $write (param i32 i32 i32 i32) (result i32)))
+    #|  (import "wasi_snapshot_preview1" "fd_read" (func $read (param i32 i32 i32 i32) (result i32)))
     #|  (memory (export "memory") 1)
     #|  (data (i32.const 100) "hello")
     #|  (func $assert (param i32) (if (i32.eqz (local.get 0)) (then unreachable)))
@@ -3406,6 +3408,9 @@ test "wasi jit: injected datagrams support scatter gather peek and truncation" {
     #|    (call $assert (i32.eq (i32.load (i32.const 40)) (i32.const 5)))
     #|    (call $assert (i32.eqz (i32.load16_u (i32.const 44))))
     #|    (call $assert (i32.eq (i32.load (i32.const 100)) (i32.const 0x6c6c6568)))
+    #|    (call $assert (i32.eqz (call $write (i32.const 3) (i32.const 0) (i32.const 2) (i32.const 40))))
+    #|    (call $assert (i32.eqz (call $read (i32.const 4) (i32.const 0) (i32.const 2) (i32.const 40))))
+    #|    (call $assert (i32.eq (i32.load (i32.const 40)) (i32.const 5)))
     #|    (i32.const 0)))
   let result = compare_wasi_with_options(
     source,
@@ -3473,4 +3478,45 @@ test "wasi jit: explicit signal policy validates, permits and denies" {
   inspect(result.match_, content="true")
   inspect(wasi_errno_from_result(result.interp_result), content="63")
   inspect(calls.length(), content="4")
+}
+
+///|
+test "wasi jit: UTF-8 argument, environment and preopen byte contracts" {
+  let source =
+    #|(module
+    #| (import "wasi_snapshot_preview1" "args_sizes_get" (func $as (param i32 i32) (result i32)))
+    #| (import "wasi_snapshot_preview1" "args_get" (func $ag (param i32 i32) (result i32)))
+    #| (import "wasi_snapshot_preview1" "environ_sizes_get" (func $es (param i32 i32) (result i32)))
+    #| (import "wasi_snapshot_preview1" "environ_get" (func $eg (param i32 i32) (result i32)))
+    #| (import "wasi_snapshot_preview1" "fd_prestat_get" (func $ps (param i32 i32) (result i32)))
+    #| (import "wasi_snapshot_preview1" "fd_prestat_dir_name" (func $pn (param i32 i32 i32) (result i32)))
+    #| (memory (export "memory") 1)
+    #| (func $check (param i32) (if (i32.eqz (local.get 0)) (then unreachable)))
+    #| (func (export "test") (result i32)
+    #|  (drop (call $as (i32.const 0) (i32.const 4)))
+    #|  (call $check (i32.eq (i32.load (i32.const 4)) (i32.const 11)))
+    #|  (call $check (i32.eqz (call $ag (i32.const 16) (i32.const 128))))
+    #|  (call $check (i64.eq (i64.load (i32.const 128)) (i64.const 0x0080989ff0ab8ce7)))
+    #|  (call $check (i32.eq (i32.load (i32.const 20)) (i32.const 136)))
+    #|  (drop (call $es (i32.const 0) (i32.const 4)))
+    #|  (call $check (i32.eq (i32.load (i32.const 4)) (i32.const 9)))
+    #|  (call $check (i32.eqz (call $eg (i32.const 16) (i32.const 128))))
+    #|  (call $check (i64.eq (i64.load (i32.const 128)) (i64.const 0x80989ff03d8d90e5)))
+    #|  (call $check (i32.eqz (call $ps (i32.const 3) (i32.const 0))))
+    #|  (call $check (i32.eq (i32.load (i32.const 4)) (i32.const 7)))
+    #|  (call $check (i32.eqz (call $pn (i32.const 3) (i32.const 200) (i32.const 7))))
+    #|  (call $check (i64.eq (i64.load (i32.const 200)) (i64.const 0x0080989ff0ab8ce7)))
+    #|  (i32.const 0)))
+  let result = compare_wasi_with_options(
+    source,
+    "test",
+    preopens=[(".", "猫😀")],
+    configure_wasi=Some(ctx => {
+      ctx.args.push("猫😀")
+      ctx.args.push("é")
+      ctx.env.push("名=😀")
+    }),
+  )
+  inspect(result.match_, content="true")
+  inspect(wasi_errno_from_result(result.interp_result), content="0")
 }

@@ -228,6 +228,8 @@ pub fn fd_write(
   match ctx.open_files.get(fd) {
     Some(file_entry) => {
       match file_entry.file_type {
+        SocketStream | SocketDatagram =>
+          return sock_send_impl(ctx, mem, fd, iovs, iovs_len, 0, nwritten_ptr)
         RegularFile => ()
         _ => return Errno::Badf.to_i32()
       }
@@ -338,6 +340,18 @@ pub fn fd_read(
   match ctx.open_files.get(fd) {
     Some(file_entry) => {
       match file_entry.file_type {
+        SocketStream | SocketDatagram => {
+          if file_entry.require_base_rights(right_fd_read) is Err(errno) {
+            return errno.to_i32()
+          }
+          let (received, _) = match
+            socket_receive(mem, file_entry, iovs, iovs_len, 0) {
+            Ok(result) => result
+            Err(errno) => return errno
+          }
+          mem.write_i32(nread_ptr, received)
+          return 0
+        }
         RegularFile => ()
         _ => return Errno::Badf.to_i32()
       }
@@ -396,18 +410,7 @@ pub fn args_sizes_get(
   argc_ptr : Int,
   argv_buf_size_ptr : Int,
 ) -> Int {
-  if !check_mem_range(mem, argc_ptr, 4) ||
-    !check_mem_range(mem, argv_buf_size_ptr, 4) {
-    return Errno::Fault.to_i32()
-  }
-  let argc = ctx.args.length()
-  let mut buf_size = 0
-  for arg in ctx.args {
-    buf_size = buf_size + arg.length() + 1 // +1 for null terminator
-  }
-  mem.write_i32(argc_ptr, argc)
-  mem.write_i32(argv_buf_size_ptr, buf_size)
-  Errno::Success.to_i32()
+  string_table_sizes(mem, ctx.args, argc_ptr, argv_buf_size_ptr)
 }
 
 ///|
@@ -424,30 +427,7 @@ pub fn args_get(
   argv_ptr : Int,
   argv_buf_ptr : Int,
 ) -> Int {
-  let argc = ctx.args.length()
-  if !check_mem_range(mem, argv_ptr, argc * 4) {
-    return Errno::Fault.to_i32()
-  }
-  let mut buf_size = 0
-  for arg in ctx.args {
-    buf_size = buf_size + arg.length() + 1
-  }
-  if !check_mem_range(mem, argv_buf_ptr, buf_size) {
-    return Errno::Fault.to_i32()
-  }
-  let mut buf_offset = 0
-  for i, arg in ctx.args {
-    // Write pointer to this argument
-    mem.write_i32(argv_ptr + i * 4, argv_buf_ptr + buf_offset)
-    // Write argument string (null-terminated)
-    for j in 0..<arg.length() {
-      let c = arg.code_unit_at(j) // String[Int] returns Int (char code)
-      mem.write_byte(argv_buf_ptr + buf_offset + j, c.to_byte())
-    }
-    mem.write_byte(argv_buf_ptr + buf_offset + arg.length(), b'\x00')
-    buf_offset = buf_offset + arg.length() + 1
-  }
-  Errno::Success.to_i32()
+  write_string_table(mem, ctx.args, argv_ptr, argv_buf_ptr)
 }
 
 ///|
@@ -464,18 +444,7 @@ pub fn environ_sizes_get(
   environc_ptr : Int,
   environ_buf_size_ptr : Int,
 ) -> Int {
-  if !check_mem_range(mem, environc_ptr, 4) ||
-    !check_mem_range(mem, environ_buf_size_ptr, 4) {
-    return Errno::Fault.to_i32()
-  }
-  let environc = ctx.env.length()
-  let mut buf_size = 0
-  for env in ctx.env {
-    buf_size = buf_size + env.length() + 1 // +1 for null terminator
-  }
-  mem.write_i32(environc_ptr, environc)
-  mem.write_i32(environ_buf_size_ptr, buf_size)
-  Errno::Success.to_i32()
+  string_table_sizes(mem, ctx.env, environc_ptr, environ_buf_size_ptr)
 }
 
 ///|
@@ -492,30 +461,7 @@ pub fn environ_get(
   environ_ptr : Int,
   environ_buf_ptr : Int,
 ) -> Int {
-  let environc = ctx.env.length()
-  if !check_mem_range(mem, environ_ptr, environc * 4) {
-    return Errno::Fault.to_i32()
-  }
-  let mut buf_size = 0
-  for env in ctx.env {
-    buf_size = buf_size + env.length() + 1
-  }
-  if !check_mem_range(mem, environ_buf_ptr, buf_size) {
-    return Errno::Fault.to_i32()
-  }
-  let mut buf_offset = 0
-  for i, env in ctx.env {
-    // Write pointer to this environment variable
-    mem.write_i32(environ_ptr + i * 4, environ_buf_ptr + buf_offset)
-    // Write environment string (null-terminated)
-    for j in 0..<env.length() {
-      let c = env.code_unit_at(j) // String[Int] returns Int (char code)
-      mem.write_byte(environ_buf_ptr + buf_offset + j, c.to_byte())
-    }
-    mem.write_byte(environ_buf_ptr + buf_offset + env.length(), b'\x00')
-    buf_offset = buf_offset + env.length() + 1
-  }
-  Errno::Success.to_i32()
+  write_string_table(mem, ctx.env, environ_ptr, environ_buf_ptr)
 }
 
 ///|
@@ -586,12 +532,16 @@ pub fn fd_prestat_get(
   for preopen in ctx.preopens {
     let (preopen_fd, _, guest_path) = preopen
     if preopen_fd.to_int() == fd && ctx.open_files.contains(fd) {
+      let name = match string_to_cstring(guest_path) {
+        Some(name) => name
+        None => return native_last_errno_to_wasi()
+      }
       // Write prestat struct: tag (1 byte) + padding (3 bytes) + pr_name_len (4 bytes)
       mem.write_byte(prestat_ptr, b'\x00') // tag = dir
       mem.write_byte(prestat_ptr + 1, b'\x00')
       mem.write_byte(prestat_ptr + 2, b'\x00')
       mem.write_byte(prestat_ptr + 3, b'\x00')
-      mem.write_i32(prestat_ptr + 4, guest_path.length())
+      mem.write_i32(prestat_ptr + 4, name.length() - 1)
       return Errno::Success.to_i32()
     }
   }
@@ -619,12 +569,16 @@ pub fn fd_prestat_dir_name(
   for preopen in ctx.preopens {
     let (preopen_fd, _, guest_path) = preopen
     if preopen_fd.to_int() == fd && ctx.open_files.contains(fd) {
-      if path_len < guest_path.length() {
+      let name = match string_to_cstring(guest_path) {
+        Some(name) => name
+        None => return native_last_errno_to_wasi()
+      }
+      let length = name.length() - 1
+      if path_len < length {
         return Errno::NameTooLong.to_i32()
       }
-      let to_copy = @cmp.minimum(path_len, guest_path.length())
-      for i in 0..<to_copy {
-        mem.write_byte(path_ptr + i, guest_path.code_unit_at(i).to_byte())
+      for i in 0..<length {
+        mem.write_byte(path_ptr + i, name[i])
       }
       return Errno::Success.to_i32()
     }
@@ -2638,31 +2592,13 @@ pub fn sock_recv_impl(
     Ok(file) => file
     Err(errno) => return errno.to_i32()
   }
-  let (entries, length) = match socket_iovecs(mem, ri_data_ptr, ri_data_len) {
-    Ok(value) => value
+  let (received, truncated) = match
+    socket_receive(mem, file, ri_data_ptr, ri_data_len, ri_flags) {
+    Ok(result) => result
     Err(errno) => return errno
   }
-  let buffer = FixedArray::make(length, b'\x00')
-  let truncated = FixedArray::make(1, 0)
-  let received = if length == 0 && file.file_type is SocketStream {
-    0
-  } else {
-    c_p1_recv(file.native_fd, buffer, length, ri_flags, truncated)
-  }
-  if received < 0 {
-    return native_last_errno_to_wasi()
-  }
-  let mut offset = 0
-  for entry in entries {
-    let (start, size) = entry
-    let copied = @cmp.minimum(size, received - offset)
-    for i in 0..<copied {
-      mem.write_byte(start + i, buffer[offset + i])
-    }
-    offset += copied
-  }
   mem.write_i32(ro_datalen_ptr, received)
-  mem.write_byte(ro_flags_ptr, truncated[0].to_byte())
+  mem.write_byte(ro_flags_ptr, truncated.to_byte())
   mem.write_byte(ro_flags_ptr + 1, b'\x00')
   Errno::Success.to_i32()
 }
