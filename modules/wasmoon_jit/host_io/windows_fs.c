@@ -43,8 +43,9 @@ static int adopt_file(HANDLE handle, int flags) {
       (flags & (_O_RDONLY | _O_WRONLY | _O_RDWR | _O_APPEND)) | _O_BINARY | _O_NOINHERIT);
   if (fd < 0) CloseHandle(handle);
   else if (flags & _O_TRUNC) {
-    int error = _chsize_s(fd, 0);
-    if (error) { _close(fd); errno = error; return -1; }
+    if (wasmoon_windows_ftruncate(fd, 0) < 0) {
+      int error = errno; _close(fd); errno = error; return -1;
+    }
   }
   if (fd >= 0 && wasmoon_windows_track_file(fd, flags) < 0) {
     _close(fd); errno = ENOMEM; return -1;
@@ -455,6 +456,17 @@ int wasmoon_windows_fstat(int fd, wasmoon_windows_stat *stat) {
   HANDLE handle = wasmoon_windows_fd_handle(fd);
   if (handle == INVALID_HANDLE_VALUE) return -1;
   return stat_handle(handle, stat);
+}
+int wasmoon_windows_ftruncate(int fd, int64_t size) {
+  HANDLE handle = wasmoon_windows_fd_handle(fd);
+  if (handle == INVALID_HANDLE_VALUE) return -1;
+  if (size < 0 || wasmoon_windows_is_socket(fd) || GetFileType(handle) != FILE_TYPE_DISK) {
+    errno = EINVAL; return -1;
+  }
+  FILE_END_OF_FILE_INFO information;
+  information.EndOfFile.QuadPart = size;
+  if (SetFileInformationByHandle(handle, FileEndOfFileInfo, &information, sizeof(information))) return 0;
+  return wasmoon_windows_error(GetLastError());
 }
 int wasmoon_windows_fstatat(int fd, const char *path, int follow, wasmoon_windows_stat *stat) {
   HANDLE handle = open_path_or_relative(fd, path, FILE_READ_ATTRIBUTES, 1, follow ? 0 : 0x00200000);

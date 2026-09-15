@@ -15,6 +15,7 @@ typedef struct {
   uint8_t filetype;
 } wasmoon_windows_stat;
 int wasmoon_windows_fstat(int fd, wasmoon_windows_stat *stat);
+int wasmoon_windows_ftruncate(int fd, int64_t size);
 int wasmoon_windows_fstatat(int fd, const char *path, int follow, wasmoon_windows_stat *stat);
 int wasmoon_windows_mkdirat(int fd, const char *path);
 int wasmoon_windows_unlinkat(int fd, const char *path, int directory);

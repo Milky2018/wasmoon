@@ -24,7 +24,7 @@ class WindowsFileTests(unittest.TestCase):
         (directory / "moonbit.h").write_text('#define MOONBIT_FFI_EXPORT __declspec(dllexport)\n')
         library = directory / "files.dll"
         names = ["open", "openat", "close", "path_within_base", "is_symlink_at", "readlinkat", "linkat",
-                 "pread", "pwrite", "write", "getfl", "setfl", "dup", "dup2", "symlinkat"]
+                 "pread", "pwrite", "write", "getfl", "setfl", "dup", "dup2", "symlinkat", "ftruncate"]
         subprocess.run([
             "clang-cl", "/LD", "/MD", "/I" + str(directory),
             str(ROOT / "modules/wasmoon_jit/host_io/windows_io.c"),
@@ -65,6 +65,8 @@ class WindowsFileTests(unittest.TestCase):
         cls.dup2.argtypes = [ctypes.c_int, ctypes.c_int]
         cls.symlink = cls.library.wasmoon_windows_symlinkat
         cls.symlink.argtypes = [ctypes.c_char_p, ctypes.c_int, ctypes.c_char_p]
+        cls.truncate = cls.library.wasmoon_windows_ftruncate
+        cls.truncate.argtypes = [ctypes.c_int, ctypes.c_int64]
 
     def setUp(self):
         self.scratch = tempfile.TemporaryDirectory()
@@ -111,6 +113,20 @@ class WindowsFileTests(unittest.TestCase):
         self.addCleanup(self.close, fd)
         self.assertEqual(self.pwrite(fd, b"bad", 3, 0), -1)
         self.assertEqual(path.read_bytes(), b"keep")
+
+    def test_truncate_preserves_cursor_and_rejects_negative_size(self):
+        path = self.root / "file"
+        path.write_bytes(b"0123456789")
+        fd = self.openat(self.fd, b"file", os.O_RDWR, 0)
+        self.assertGreaterEqual(fd, 0)
+        self.addCleanup(self.close, fd)
+        os.lseek(fd, 7, os.SEEK_SET)
+        self.assertEqual(self.truncate(fd, -1), -1)
+        self.assertEqual(path.read_bytes(), b"0123456789")
+        self.assertEqual(self.truncate(fd, 3), 0)
+        self.assertEqual(os.lseek(fd, 0, os.SEEK_CUR), 7)
+        self.assertEqual(path.read_bytes(), b"012")
+        self.assertEqual(self.truncate(1234567, 0), -1)
 
     def test_append_flags_are_shared_by_duplicates_and_can_be_cleared(self):
         path = self.root / "file"

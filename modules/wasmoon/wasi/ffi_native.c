@@ -76,9 +76,7 @@ static int wasmoon_wasi_path_is_within_base(
 #define strdup _strdup
 #define readlinkat wasmoon_windows_readlinkat
 static int truncate_open_file(int fd, int64_t size) {
-  int error = _chsize_s(fd, size);
-  if (error) { errno = error; return -1; }
-  return 0;
+  return wasmoon_windows_ftruncate(fd, size);
 }
 #define ftruncate truncate_open_file
 #endif
@@ -1047,7 +1045,7 @@ MOONBIT_FFI_EXPORT int wasmoon_wasi_fstatat(int dirfd, moonbit_bytes_t path, int
 // Truncate file to specified size
 MOONBIT_FFI_EXPORT int wasmoon_wasi_ftruncate(int fd, int64_t size) {
 #ifdef _WIN32
-  return _chsize_s(fd, size);
+  return wasmoon_windows_ftruncate(fd, size);
 #else
   return ftruncate(fd, size);
 #endif
