@@ -45,6 +45,9 @@ static int adopt_file(HANDLE handle, int flags) {
     int error = _chsize_s(fd, 0);
     if (error) { _close(fd); errno = error; return -1; }
   }
+  if (fd >= 0 && wasmoon_windows_track_file(fd, flags) < 0) {
+    _close(fd); errno = ENOMEM; return -1;
+  }
   return fd;
 }
 int wasmoon_windows_open(const char *path, int flags, int mode) {

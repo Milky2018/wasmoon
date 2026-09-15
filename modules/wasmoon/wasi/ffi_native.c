@@ -528,13 +528,7 @@ MOONBIT_FFI_EXPORT int wasmoon_wasi_pread(
   int64_t offset
 ) {
 #ifdef _WIN32
-  int64_t saved = _lseeki64(fd, 0, SEEK_CUR);
-  if (saved < 0 || _lseeki64(fd, offset, SEEK_SET) < 0) return -1;
-  int result = _read(fd, buf, count);
-  int saved_errno = errno;
-  _lseeki64(fd, saved, SEEK_SET);
-  errno = saved_errno;
-  return result;
+  return wasmoon_windows_pread(fd, buf, count, offset);
 #else
   return pread(fd, buf, count, (off_t)offset);
 #endif
@@ -547,13 +541,7 @@ MOONBIT_FFI_EXPORT int wasmoon_wasi_pwrite(
   int64_t offset
 ) {
 #ifdef _WIN32
-  int64_t saved = _lseeki64(fd, 0, SEEK_CUR);
-  if (saved < 0 || _lseeki64(fd, offset, SEEK_SET) < 0) return -1;
-  int result = _write(fd, buf, count);
-  int saved_errno = errno;
-  _lseeki64(fd, saved, SEEK_SET);
-  errno = saved_errno;
-  return result;
+  return wasmoon_windows_pwrite(fd, buf, count, offset);
 #else
   return pwrite(fd, buf, count, (off_t)offset);
 #endif
@@ -1153,9 +1141,7 @@ MOONBIT_FFI_EXPORT int wasmoon_wasi_utimensat(int dirfd, moonbit_bytes_t path,
 // Set fd flags
 MOONBIT_FFI_EXPORT int wasmoon_wasi_fcntl_setfl(int fd, int flags) {
 #ifdef _WIN32
-  (void)fd;
-  (void)flags;
-  return -1;  // Not supported on Windows
+  return wasmoon_windows_setfl(fd, flags);
 #else
   return fcntl(fd, F_SETFL, flags);
 #endif
@@ -1164,8 +1150,7 @@ MOONBIT_FFI_EXPORT int wasmoon_wasi_fcntl_setfl(int fd, int flags) {
 // Get fd flags
 MOONBIT_FFI_EXPORT int wasmoon_wasi_fcntl_getfl(int fd) {
 #ifdef _WIN32
-  (void)fd;
-  return -1;  // Not supported on Windows
+  return wasmoon_windows_getfl(fd);
 #else
   return fcntl(fd, F_GETFL);
 #endif
@@ -1174,7 +1159,7 @@ MOONBIT_FFI_EXPORT int wasmoon_wasi_fcntl_getfl(int fd) {
 // Duplicate fd to specific number
 MOONBIT_FFI_EXPORT int wasmoon_wasi_dup2(int oldfd, int newfd) {
 #ifdef _WIN32
-  return _dup2(oldfd, newfd);
+  return wasmoon_windows_dup2(oldfd, newfd);
 #else
   return dup2(oldfd, newfd);
 #endif
@@ -1573,7 +1558,7 @@ MOONBIT_FFI_EXPORT int wasmoon_wasi_socket_create(int family, int kind) {
     closesocket(socket);
     return wasmoon_windows_socket_error(error);
   }
-  return wasmoon_windows_socket_adopt(socket);
+  return wasmoon_windows_socket_adopt(socket, O_RDWR | O_NONBLOCK);
 #else
   int native_family = wasmoon_wasi_socket_family(family);
   if (native_family < 0 || (kind != 1 && kind != 2)) {
@@ -2198,7 +2183,7 @@ MOONBIT_FFI_EXPORT int wasmoon_wasi_accept(int sockfd) {
     closesocket(socket);
     return wasmoon_windows_socket_error(error);
   }
-  return wasmoon_windows_socket_adopt(socket);
+  return wasmoon_windows_socket_adopt(socket, O_RDWR | O_NONBLOCK);
 #else
   int fd = accept(sockfd, NULL, NULL);
   if (fd < 0) return -1;

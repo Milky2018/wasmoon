@@ -2345,6 +2345,7 @@ pub fn fd_fdstat_set_flags_impl(
         new_flags = new_flags & nonblock_mask.lnot()
       }
       if native_fcntl_setfl(native_fd, new_flags) {
+        file.flags = flags
         Errno::Success.to_i32()
       } else {
         native_last_errno_to_wasi()

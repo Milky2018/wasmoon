@@ -31,6 +31,8 @@ class WindowsPollTests(unittest.TestCase):
             "/link", "/EXPORT:wasmoon_windows_socket_adopt",
             "/EXPORT:wasmoon_windows_close",
             "/EXPORT:wasmoon_windows_bytes_available",
+            "/EXPORT:wasmoon_windows_setfl", "/EXPORT:wasmoon_windows_getfl",
+            "/EXPORT:wasmoon_windows_read",
             "/OUT:" + str(library),
         ], check=True)
         cls.library = ctypes.CDLL(str(library), use_errno=True)
@@ -42,13 +44,19 @@ class WindowsPollTests(unittest.TestCase):
         cls.poll.argtypes = [pointer, pointer, pointer, ctypes.c_int, ctypes.c_int]
         cls.poll.restype = ctypes.c_int
         cls.adopt = cls.library.wasmoon_windows_socket_adopt
-        cls.adopt.argtypes = [ctypes.c_size_t]
+        cls.adopt.argtypes = [ctypes.c_size_t, ctypes.c_int]
         cls.adopt.restype = ctypes.c_int
         cls.close = cls.library.wasmoon_windows_close
         cls.close.argtypes = [ctypes.c_int]
         cls.available = cls.library.wasmoon_windows_bytes_available
         cls.available.argtypes = [ctypes.c_int]
         cls.available.restype = ctypes.c_int64
+        cls.setfl = cls.library.wasmoon_windows_setfl
+        cls.setfl.argtypes = [ctypes.c_int, ctypes.c_int]
+        cls.getfl = cls.library.wasmoon_windows_getfl
+        cls.getfl.argtypes = [ctypes.c_int]
+        cls.read = cls.library.wasmoon_windows_read
+        cls.read.argtypes = [ctypes.c_int, ctypes.c_void_p, ctypes.c_int]
 
     def readiness(self, fds, events, timeout=0):
         array = ctypes.c_int * len(fds)
@@ -71,6 +79,24 @@ class WindowsPollTests(unittest.TestCase):
             self.assertEqual(self.readiness([reader], [1]), (1, [1]))
             self.assertEqual(self.available(reader), 3)
             self.assertEqual(os.read(reader, 3), b"abc")
+
+    def test_socket_nonblocking_flag_controls_actual_reads(self):
+        reader, writer = socket.socketpair()
+        self.addCleanup(writer.close)
+        fd = self.adopt(reader.detach(), os.O_RDWR)
+        self.assertGreaterEqual(fd, 0)
+        self.addCleanup(self.close, fd)
+        nonblocking = 0x04000000
+        self.assertEqual(self.setfl(fd, os.O_RDWR | nonblocking), 0)
+        self.assertTrue(self.getfl(fd) & nonblocking)
+        buffer = ctypes.create_string_buffer(1)
+        self.assertEqual(self.read(fd, buffer, 1), -1)
+        self.assertEqual(ctypes.get_errno(), errno.EAGAIN)
+        writer.sendall(b"x")
+        self.assertEqual(self.read(fd, buffer, 1), 1)
+        self.assertEqual(buffer.raw, b"x")
+        self.assertEqual(self.setfl(fd, os.O_RDWR), 0)
+        self.assertFalse(self.getfl(fd) & nonblocking)
 
     def test_alertable_wait_reports_interruption(self):
         reader, _ = self.pipe()
@@ -188,7 +214,7 @@ class WindowsPollTests(unittest.TestCase):
     def test_socket_data_hangup_and_duplicate_subscriptions(self):
         reader, writer = socket.socketpair()
         self.addCleanup(writer.close)
-        fd = self.adopt(reader.detach())
+        fd = self.adopt(reader.detach(), 0)
         self.assertGreaterEqual(fd, 0)
         self.addCleanup(self.close, fd)
         self.assertEqual(self.readiness([fd], [1], 20), (0, [0]))
@@ -202,7 +228,7 @@ class WindowsPollTests(unittest.TestCase):
         pipe_reader, _ = self.pipe()
         reader, writer = socket.socketpair()
         self.addCleanup(writer.close)
-        fd = self.adopt(reader.detach())
+        fd = self.adopt(reader.detach(), 0)
         self.addCleanup(self.close, fd)
         writer.sendall(b"x")
         self.assertEqual(self.readiness([pipe_reader, fd], [1, 1], 1000), (1, [0, 1]))
@@ -210,6 +236,6 @@ class WindowsPollTests(unittest.TestCase):
     def test_closed_socket_is_invalid(self):
         reader, writer = socket.socketpair()
         self.addCleanup(writer.close)
-        fd = self.adopt(reader.detach())
+        fd = self.adopt(reader.detach(), 0)
         self.assertEqual(self.close(fd), 0)
         self.assertEqual(self.readiness([fd], [1]), (1, [32]))

@@ -23,7 +23,8 @@ class WindowsFileTests(unittest.TestCase):
         directory = Path(cls.directory.name)
         (directory / "moonbit.h").write_text('#define MOONBIT_FFI_EXPORT __declspec(dllexport)\n')
         library = directory / "files.dll"
-        names = ["open", "openat", "close", "path_within_base", "is_symlink_at", "readlinkat", "linkat"]
+        names = ["open", "openat", "close", "path_within_base", "is_symlink_at", "readlinkat", "linkat",
+                 "pread", "pwrite", "write", "getfl", "setfl", "dup", "dup2"]
         subprocess.run([
             "clang-cl", "/LD", "/MD", "/I" + str(directory),
             str(ROOT / "modules/wasmoon_jit/host_io/windows_io.c"),
@@ -48,6 +49,20 @@ class WindowsFileTests(unittest.TestCase):
         cls.readlink.restype = ctypes.c_int64
         cls.link = cls.library.wasmoon_windows_linkat
         cls.link.argtypes = [ctypes.c_int, ctypes.c_char_p, ctypes.c_int, ctypes.c_char_p, ctypes.c_int]
+        cls.pread = cls.library.wasmoon_windows_pread
+        cls.pwrite = cls.library.wasmoon_windows_pwrite
+        for function in [cls.pread, cls.pwrite]:
+            function.argtypes = [ctypes.c_int, ctypes.c_void_p, ctypes.c_int, ctypes.c_int64]
+        cls.write = cls.library.wasmoon_windows_write
+        cls.write.argtypes = [ctypes.c_int, ctypes.c_void_p, ctypes.c_int]
+        cls.getfl = cls.library.wasmoon_windows_getfl
+        cls.getfl.argtypes = [ctypes.c_int]
+        cls.setfl = cls.library.wasmoon_windows_setfl
+        cls.setfl.argtypes = [ctypes.c_int, ctypes.c_int]
+        cls.dup = cls.library.wasmoon_windows_dup
+        cls.dup.argtypes = [ctypes.c_int]
+        cls.dup2 = cls.library.wasmoon_windows_dup2
+        cls.dup2.argtypes = [ctypes.c_int, ctypes.c_int]
 
     def setUp(self):
         self.scratch = tempfile.TemporaryDirectory()
@@ -67,6 +82,73 @@ class WindowsFileTests(unittest.TestCase):
             self.assertEqual(os.read(fd, 20), b"a\r\nb\x1ac")
         finally:
             self.close(fd)
+
+    def test_positioned_io_keeps_shared_cursor_after_rename(self):
+        path = self.root / "file"
+        path.write_bytes(b"0123456789")
+        fd = self.openat(self.fd, b"file", os.O_RDWR, 0)
+        self.assertGreaterEqual(fd, 0)
+        self.addCleanup(self.close, fd)
+        os.lseek(fd, 5, os.SEEK_SET)
+        path.rename(path.with_name("renamed"))
+        path.write_bytes(b"replacement")
+        buffer = ctypes.create_string_buffer(4)
+        self.assertEqual(self.pread(fd, buffer, 3, 1), 3)
+        self.assertEqual(buffer.raw[:3], b"123")
+        self.assertEqual(self.pwrite(fd, b"\r\n\x1a", 3, 2), 3)
+        self.assertEqual(os.lseek(fd, 0, os.SEEK_CUR), 5)
+        self.assertEqual(self.pread(fd, buffer, 4, 100), 0)
+        self.assertEqual(path.with_name("renamed").read_bytes(), b"01\r\n\x1a56789")
+        self.assertEqual(path.read_bytes(), b"replacement")
+
+    def test_positioned_write_does_not_upgrade_read_only_handle(self):
+        path = self.root / "file"
+        path.write_bytes(b"keep")
+        fd = self.openat(self.fd, b"file", os.O_RDONLY, 0)
+        self.assertGreaterEqual(fd, 0)
+        self.addCleanup(self.close, fd)
+        self.assertEqual(self.pwrite(fd, b"bad", 3, 0), -1)
+        self.assertEqual(path.read_bytes(), b"keep")
+
+    def test_append_flags_are_shared_by_duplicates_and_can_be_cleared(self):
+        path = self.root / "file"
+        path.write_bytes(b"start")
+        fd = self.openat(self.fd, b"file", os.O_RDWR, 0)
+        self.assertGreaterEqual(fd, 0)
+        duplicate = self.dup(fd)
+        self.assertGreaterEqual(duplicate, 0)
+        self.addCleanup(self.close, duplicate)
+        try:
+            self.assertEqual(self.setfl(duplicate, os.O_RDWR | os.O_APPEND), 0)
+            self.assertTrue(self.getfl(fd) & os.O_APPEND)
+            self.assertEqual(self.write(fd, b"\r\n\x1a", 3), 3)
+            self.assertEqual(path.read_bytes(), b"start\r\n\x1a")
+            self.assertEqual(self.setfl(fd, os.O_RDWR), 0)
+            self.assertFalse(self.getfl(duplicate) & os.O_APPEND)
+            os.lseek(duplicate, 0, os.SEEK_SET)
+            self.assertEqual(self.write(duplicate, b"X", 1), 1)
+        finally:
+            self.close(fd)
+        self.assertEqual(self.getfl(duplicate) & (os.O_WRONLY | os.O_RDWR), os.O_RDWR)
+        self.assertEqual(path.read_bytes(), b"Xtart\r\n\x1a")
+
+    def test_close_invalid_descriptor_returns_error_without_crt_abort(self):
+        self.assertEqual(self.close(1234567), -1)
+
+    def test_dup2_replaces_destination_flags_and_retains_source(self):
+        first = self.openat(self.fd, b"first", os.O_RDWR | os.O_CREAT | os.O_APPEND, 0o600)
+        second = self.openat(self.fd, b"second", os.O_RDWR | os.O_CREAT, 0o600)
+        self.assertGreaterEqual(first, 0)
+        self.assertGreaterEqual(second, 0)
+        self.addCleanup(self.close, first)
+        self.addCleanup(self.close, second)
+        self.assertEqual(self.dup2(first, second), second)
+        self.assertTrue(self.getfl(second) & os.O_APPEND)
+        self.assertEqual(self.setfl(second, os.O_RDWR), 0)
+        self.assertFalse(self.getfl(first) & os.O_APPEND)
+        self.assertEqual(self.write(second, b"same", 4), 4)
+        self.assertEqual((self.root / "first").read_bytes(), b"same")
+        self.assertEqual((self.root / "second").read_bytes(), b"")
 
     def test_held_directory_survives_rename(self):
         (self.root / "file").write_bytes(b"original")

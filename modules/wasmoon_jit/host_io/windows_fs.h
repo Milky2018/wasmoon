@@ -6,7 +6,6 @@
 // Internal open tokens beyond the CRT flag range.
 #define WASMOON_O_DIRECTORY 0x10000000
 #define WASMOON_O_NOFOLLOW 0x20000000
-#define WASMOON_O_NONBLOCK 0x04000000
 wchar_t *wasmoon_windows_utf16(const char *text);
 int wasmoon_windows_open(const char *path, int flags, int mode);
 int wasmoon_windows_openat(int fd, const char *name, int flags, int mode);

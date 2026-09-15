@@ -487,7 +487,7 @@ pub(all) struct OpenFile {
   file_type : FileType
   host_path : String
   mut position : Int64
-  flags : Int
+  mut flags : Int
   mut rights_base : Int64
   mut rights_inheriting : Int64
 }

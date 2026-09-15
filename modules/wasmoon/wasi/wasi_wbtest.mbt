@@ -3473,3 +3473,35 @@ test "wasi: fd_prestat_get is exported" {
   }
   inspect(found, content="true")
 }
+
+///|
+test "wasi: successful fd flag changes are observable through fdstat" {
+  guard native_open(".", [ReadOnly, Directory], 0) is Some(parent) else {
+    fail("could not open fixture directory")
+  }
+  defer native_close(parent) |> ignore
+  let path = "wasmoon_fdflags_regression.tmp"
+  guard native_open(path, [ReadWrite, Create, Truncate], 0o600)
+    is Some(native_fd) else {
+    fail("could not create flag fixture")
+  }
+  defer native_unlinkat(parent, path, 0) |> ignore
+  let ctx = WasiContext::WasiContext()
+  let fd = ctx.alloc_fd({
+    native_fd,
+    file_type: RegularFile,
+    host_path: path,
+    position: 0L,
+    flags: 0,
+    rights_base: right_fd_write | right_fd_fdstat_set_flags,
+    rights_inheriting: 0L,
+  })
+  defer fd_close(ctx, fd) |> ignore
+  let mem = @runtime.Memory::Memory(1, None)
+  inspect(fd_fdstat_set_flags_impl(ctx, fd, 1), content="0")
+  inspect(fd_fdstat_get(ctx, mem, fd, 128), content="0")
+  inspect((mem.read_i32(128) >> 16) & 0xFFFF, content="1")
+  inspect(fd_fdstat_set_flags_impl(ctx, fd, 0), content="0")
+  inspect(fd_fdstat_get(ctx, mem, fd, 128), content="0")
+  inspect((mem.read_i32(128) >> 16) & 0xFFFF, content="0")
+}

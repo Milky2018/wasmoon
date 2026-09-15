@@ -23,7 +23,7 @@ pub(all) struct OpenFile {
   /// Current position (tracked separately for virtual files)
   mut position : Int64
   /// File access flags
-  flags : Int
+  mut flags : Int
   /// Effective WASIp1 base rights granted to this descriptor
   mut rights_base : Int64
   /// Effective WASIp1 inheriting rights granted to this descriptor
