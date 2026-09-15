@@ -125,11 +125,21 @@ class WindowsFileTests(unittest.TestCase):
             self.skipTest("requires Developer Mode CI configuration")
         ancestor = self.root.parent
         moved = ancestor.with_name(ancestor.name + "-moved")
-        ancestor.rename(moved)
-        ancestor.mkdir()
-        self.root.mkdir()
-        # Redirect the old ancestor path to an unrelated tree before creation.
-        self.addCleanup(lambda: shutil.rmtree(moved))
+        try:
+            ancestor.rename(moved)
+        except OSError as error:
+            # Windows can forbid moving a directory with open descendants.
+            # In that case, exercise replacement of the held parent itself.
+            self.assertIn(error.winerror, (5, 32))
+            moved = self.root.with_name("moved")
+            self.root.rename(moved)
+            expected = moved
+            self.root.mkdir()
+        else:
+            ancestor.mkdir()
+            self.root.mkdir()
+            expected = moved / "root"
+            self.addCleanup(lambda: shutil.rmtree(moved))
         self.assertEqual(self.library.wasmoon_test_remove_symlink_privilege(), 1)
         try:
             self.assertEqual(self.library.wasmoon_test_has_symlink_privilege(), 0)
@@ -138,7 +148,7 @@ class WindowsFileTests(unittest.TestCase):
             self.assertEqual(self.library.wasmoon_test_has_symlink_privilege(), 0)
         finally:
             self.assertEqual(self.library.wasmoon_test_restore_token(), 1)
-        self.assertTrue((moved / "root" / "link").is_symlink())
+        self.assertTrue((expected / "link").is_symlink())
         self.assertFalse(os.path.lexists(self.root / "link"))
 
     def test_unprivileged_symlink_during_parent_renames(self):
@@ -150,16 +160,24 @@ class WindowsFileTests(unittest.TestCase):
         failures = []
 
         def rename_loop():
+            current, destination = self.root, alternate
             try:
                 while not stop.is_set():
-                    self.root.rename(alternate)
+                    try:
+                        current.rename(destination)
+                    except OSError as error:
+                        # Creation temporarily holds an open child, which Windows
+                        # may use to deny the concurrent parent rename.
+                        if error.winerror not in (5, 32):
+                            raise
+                        continue
+                    current, destination = destination, current
                     started.set()
-                    alternate.rename(self.root)
             except OSError as error:
                 failures.append(error)
                 started.set()
             finally:
-                if alternate.exists():
+                if current == alternate:
                     alternate.rename(self.root)
 
         worker = threading.Thread(target=rename_loop)

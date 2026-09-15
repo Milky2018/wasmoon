@@ -249,6 +249,14 @@ jobs:
           python -m unittest discover -s scripts/tests -p 'test_wasi_windows_*.py' -v 2>&1 | Tee-Object -FilePath target/windows-native-probes.log
           exit $LASTEXITCODE
 
+      - name: build Windows runtime
+        id: windows_build
+        if: ${{ !cancelled() }}
+        run: |
+          moon build --target native --release --jobs 2 --target-dir target/windows-build
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Copy-Item target/windows-build/native/release/build/Milky2018/wasmoon/cmd/wasmoon/wasmoon.exe wasmoon.exe
+          Copy-Item target/windows-build/native/release/build/Milky2018/wasmoon/cmd/wasmoon-tools/wasmoon-tools.exe wasmoon-tools.exe
       - name: test Windows symlink permission environments
         run: |
           $key = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\AppModelUnlock"
@@ -261,6 +269,8 @@ jobs:
               $env:WASMOON_TEST_DEVELOPER_MODE = "$mode"
               python -m unittest scripts.tests.test_wasi_windows_files.WindowsFileTests.test_unprivileged_symlink scripts.tests.test_wasi_windows_files.WindowsFileTests.test_unprivileged_symlink_after_ancestor_replacement scripts.tests.test_wasi_windows_files.WindowsFileTests.test_unprivileged_symlink_during_parent_renames -v
               if ($LASTEXITCODE -ne 0) { throw "Symlink permission matrix failed in Developer Mode $mode" }
+              python scripts/run_windows_symlinks.py
+              if ($LASTEXITCODE -ne 0) { throw "Symlink guest matrix failed in Developer Mode $mode" }
             }
           } finally {
             Remove-Item Env:WASMOON_TEST_DEVELOPER_MODE -ErrorAction SilentlyContinue
@@ -271,14 +281,6 @@ jobs:
             }
           }
 
-      - name: build Windows runtime
-        id: windows_build
-        if: ${{ !cancelled() }}
-        run: |
-          moon build --target native --release --jobs 2 --target-dir target/windows-build
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          Copy-Item target/windows-build/native/release/build/Milky2018/wasmoon/cmd/wasmoon/wasmoon.exe wasmoon.exe
-          Copy-Item target/windows-build/native/release/build/Milky2018/wasmoon/cmd/wasmoon-tools/wasmoon-tools.exe wasmoon-tools.exe
       - name: run Windows core suites
         if: ${{ !cancelled() && steps.windows_build.outcome == 'success' }}
         run: python scripts/run_all_wast.py --rec --dump-failures
@@ -320,6 +322,7 @@ jobs:
           name: windows-${{ matrix.compiler }}-corpus-evidence
           path: |
             target/windows-native-probes.log
+            target/windows-symlinks-*.json
             target/windows-readiness.json
             target/windows-components
             target/windows-misc
@@ -340,6 +343,7 @@ jobs:
           path: |
             target/windows-native-tests
             target/windows-native-probes.log
+            target/windows-symlinks-*.json
             target/windows-readiness.json
             target/windows-components
             target/windows-misc
