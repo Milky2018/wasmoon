@@ -24,7 +24,7 @@ class WindowsPollTests(unittest.TestCase):
         (directory / "moonbit.h").write_text('#define MOONBIT_FFI_EXPORT __declspec(dllexport)\n')
         library = directory / "poll.dll"
         subprocess.run([
-            "clang", "-shared", "-I", str(directory),
+            "clang", "-shared", "-fms-runtime-lib=dll", "-I", str(directory),
             str(ROOT / "modules/wasmoon/wasi/poll_native.c"),
             str(ROOT / "modules/wasmoon_jit/jit_ffi/windows_io.c"),
             "-Wl,/export:wasmoon_windows_socket_adopt",
@@ -33,6 +33,9 @@ class WindowsPollTests(unittest.TestCase):
             "-o", str(library),
         ], check=True)
         cls.library = ctypes.CDLL(str(library), use_errno=True)
+        # Unload before TemporaryDirectory cleanup: Windows locks loaded DLLs.
+        import _ctypes
+        cls.addClassCleanup(_ctypes.FreeLibrary, cls.library._handle)
         cls.poll = cls.library.wasmoon_wasi_poll
         pointer = ctypes.POINTER(ctypes.c_int)
         cls.poll.argtypes = [pointer, pointer, pointer, ctypes.c_int, ctypes.c_int]

@@ -226,6 +226,9 @@ jobs:
         run: python -m unittest discover -s scripts/tests -p 'test_wasi_windows_poll.py' -v
 
       - name: build Windows runtime
+        id: windows_build
+        if: ${{ !cancelled() }}
         run: moon build modules/wasmoon/cmd/wasmoon --target native --release
       - name: run Windows native tests
+        if: ${{ !cancelled() && steps.windows_build.outcome == 'success' }}
         run: moon test --target native --no-parallelize
