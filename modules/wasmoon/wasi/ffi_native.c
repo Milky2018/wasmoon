@@ -1172,10 +1172,7 @@ MOONBIT_FFI_EXPORT int wasmoon_wasi_dup2(int oldfd, int newfd) {
 // Create symbolic link
 MOONBIT_FFI_EXPORT int wasmoon_wasi_symlinkat(moonbit_bytes_t target, int dirfd, moonbit_bytes_t linkpath) {
 #ifdef _WIN32
-  (void)target;
-  (void)dirfd;
-  (void)linkpath;
-  return -1;  // Symlinks require admin on Windows
+  return wasmoon_windows_symlinkat((const char *)target, dirfd, (const char *)linkpath);
 #else
   return wasmoon_wasi_symlinkat_portable(
       (const char *)target, dirfd, (const char *)linkpath);

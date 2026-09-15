@@ -24,7 +24,7 @@ class WindowsFileTests(unittest.TestCase):
         (directory / "moonbit.h").write_text('#define MOONBIT_FFI_EXPORT __declspec(dllexport)\n')
         library = directory / "files.dll"
         names = ["open", "openat", "close", "path_within_base", "is_symlink_at", "readlinkat", "linkat",
-                 "pread", "pwrite", "write", "getfl", "setfl", "dup", "dup2"]
+                 "pread", "pwrite", "write", "getfl", "setfl", "dup", "dup2", "symlinkat"]
         subprocess.run([
             "clang-cl", "/LD", "/MD", "/I" + str(directory),
             str(ROOT / "modules/wasmoon_jit/host_io/windows_io.c"),
@@ -63,6 +63,8 @@ class WindowsFileTests(unittest.TestCase):
         cls.dup.argtypes = [ctypes.c_int]
         cls.dup2 = cls.library.wasmoon_windows_dup2
         cls.dup2.argtypes = [ctypes.c_int, ctypes.c_int]
+        cls.symlink = cls.library.wasmoon_windows_symlinkat
+        cls.symlink.argtypes = [ctypes.c_char_p, ctypes.c_int, ctypes.c_char_p]
 
     def setUp(self):
         self.scratch = tempfile.TemporaryDirectory()
@@ -202,6 +204,38 @@ class WindowsFileTests(unittest.TestCase):
         length = self.readlink(self.fd, b"link", buffer, 256)
         self.assertEqual(buffer.raw[:length], b"../outside")
         self.assertEqual(self.within(os.fsencode(self.root), os.fsencode(self.root / "link")), 0)
+
+    def test_create_symlink_through_held_parent_after_rename(self):
+        nested = self.root / "inside" / "deep"
+        nested.mkdir(parents=True)
+        (nested / "file").write_bytes(b"target")
+        renamed = self.root.with_name("renamed")
+        self.root.rename(renamed)
+        self.root.mkdir()
+        self.assertEqual(self.symlink(b"inside/deep", self.fd, b"link"), 0,
+                         os.strerror(ctypes.get_errno()))
+        self.assertEqual((renamed / "link" / "file").read_bytes(), b"target")
+        self.assertFalse((self.root / "link").exists())
+        self.assertEqual(self.symlink(b"other", self.fd, b"link"), -1)
+        buffer = ctypes.create_string_buffer(256)
+        length = self.readlink(self.fd, b"link", buffer, 256)
+        self.assertEqual(buffer.raw[:length], b"inside/deep")
+
+    def test_absolute_symlink_is_readable_but_cannot_escape(self):
+        target = self.root.parent / "outside"
+        target.write_bytes(b"outside")
+        self.assertEqual(self.symlink(os.fsencode(target), self.fd, b"link"), 0)
+        buffer = ctypes.create_string_buffer(2048)
+        length = self.readlink(self.fd, b"link", buffer, 2048)
+        self.assertEqual(buffer.raw[:length], str(target).replace("\\", "/").encode())
+        self.assertEqual(self.within(os.fsencode(self.root), os.fsencode(self.root / "link")), 0)
+
+    def test_host_absolute_symlink_creation(self):
+        target = self.root / "target"
+        target.write_bytes(b"target")
+        link = self.root / "link"
+        self.assertEqual(self.symlink(b"target", 0, os.fsencode(link)), 0)
+        self.assertEqual(link.read_bytes(), b"target")
 
     def test_nonexistent_target_checks_existing_parent(self):
         self.assertEqual(self.within(os.fsencode(self.root), os.fsencode(self.root / "new")), 1)

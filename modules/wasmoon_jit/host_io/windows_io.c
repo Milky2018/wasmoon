@@ -19,6 +19,7 @@ int wasmoon_windows_error(DWORD error) {
   switch (error) {
     case ERROR_FILE_NOT_FOUND: case ERROR_PATH_NOT_FOUND: errno = ENOENT; break;
     case ERROR_ACCESS_DENIED: case ERROR_SHARING_VIOLATION: errno = EACCES; break;
+    case ERROR_PRIVILEGE_NOT_HELD: errno = EPERM; break;
     case ERROR_INVALID_HANDLE: errno = EBADF; break;
     case ERROR_ALREADY_EXISTS: case ERROR_FILE_EXISTS: errno = EEXIST; break;
     case ERROR_DIRECTORY: errno = ENOTDIR; break;
@@ -27,6 +28,7 @@ int wasmoon_windows_error(DWORD error) {
     case ERROR_NOT_ENOUGH_MEMORY: case ERROR_OUTOFMEMORY: errno = ENOMEM; break;
     case ERROR_FILENAME_EXCED_RANGE: errno = ENAMETOOLONG; break;
     case ERROR_INVALID_NAME: case ERROR_INVALID_PARAMETER: errno = EINVAL; break;
+    case ERROR_NOT_A_REPARSE_POINT: errno = EINVAL; break;
     case ERROR_NOT_SAME_DEVICE: errno = EXDEV; break;
     case ERROR_TOO_MANY_OPEN_FILES: errno = EMFILE; break;
     case ERROR_NOT_SUPPORTED: case ERROR_INVALID_FUNCTION: errno = ENOTSUP; break;

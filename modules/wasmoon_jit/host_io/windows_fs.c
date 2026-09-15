@@ -6,6 +6,7 @@
 #include <io.h>
 #include <stdlib.h>
 #include <string.h>
+#pragma comment(lib, "advapi32.lib")
 
 wchar_t *wasmoon_windows_utf16(const char *text) {
   int length = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, text, -1, NULL, 0);
@@ -112,6 +113,19 @@ static HANDLE open_relative(int fd, const char *name, ACCESS_MASK access,
 static int absolute_path(const char *path) {
   return path[0] == '/' || path[0] == '\\' || (path[0] && path[1] == ':');
 }
+static wchar_t *nt_absolute_name(const wchar_t *path) {
+  wchar_t *full = _wfullpath(NULL, path, 0);
+  if (!full) return NULL;
+  int unc = full[0] == L'\\' && full[1] == L'\\';
+  const wchar_t *suffix = unc ? full + 2 : full;
+  const wchar_t *prefix = unc ? L"\\??\\UNC\\" : L"\\??\\";
+  size_t length = wcslen(prefix) + wcslen(suffix) + 1;
+  wchar_t *name = malloc(length * sizeof(*name));
+  if (name) { wcscpy(name, prefix); wcscat(name, suffix); }
+  else errno = ENOMEM;
+  free(full);
+  return name;
+}
 static HANDLE open_path_or_relative(int fd, const char *path, ACCESS_MASK access,
                                     ULONG disposition, ULONG options) {
   if (!absolute_path(path)) return open_relative(fd, path, access, disposition, options);
@@ -161,7 +175,13 @@ int64_t wasmoon_windows_readlinkat(int fd, const char *name, char *buffer, size_
   USHORT offset, bytes; DWORD flags;
   memcpy(&offset, data.bytes + 8, 2); memcpy(&bytes, data.bytes + 10, 2);
   memcpy(&flags, data.bytes + 16, 4);
-  if (!(flags & 1)) { errno = EPERM; return -1; }
+  if (!(flags & 1)) {
+    // Preserve the caller-visible spelling of absolute links. The capability
+    // walker rejects absolute targets; readlink itself must still return them.
+    USHORT print_offset, print_bytes;
+    memcpy(&print_offset, data.bytes + 12, 2); memcpy(&print_bytes, data.bytes + 14, 2);
+    if (print_bytes) { offset = print_offset; bytes = print_bytes; }
+  }
   if ((offset | bytes) & 1 || (size_t)offset + bytes > length - 20) { errno = EIO; return -1; }
   wchar_t *target = (wchar_t *)(data.bytes + 20 + offset);
   int required = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, target, bytes / 2,
@@ -177,6 +197,122 @@ int64_t wasmoon_windows_readlinkat(int fd, const char *name, char *buffer, size_
   size_t copied = (size_t)required < capacity ? (size_t)required : capacity;
   memcpy(buffer, utf8, copied); free(utf8);
   return (int64_t)copied;
+}
+
+static BOOL set_symlink_reparse(HANDLE file, void *data, DWORD size) {
+  DWORD returned;
+  if (DeviceIoControl(file, FSCTL_SET_REPARSE_POINT, data, size, NULL, 0, &returned, NULL)) return TRUE;
+  if (GetLastError() != ERROR_PRIVILEGE_NOT_HELD) return FALSE;
+  // Enable an already-granted privilege only on a private impersonation token.
+  // Other host threads and the caller's token retain their original privileges.
+  HANDLE previous = NULL, source = NULL, token = NULL;
+  BOOL had_thread_token = OpenThreadToken(GetCurrentThread(),
+      TOKEN_QUERY | TOKEN_DUPLICATE | TOKEN_IMPERSONATE, TRUE, &previous);
+  if (had_thread_token) source = previous;
+  else if (GetLastError() != ERROR_NO_TOKEN ||
+           !OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY | TOKEN_DUPLICATE, &source)) return FALSE;
+  BOOL ok = DuplicateTokenEx(source, TOKEN_QUERY | TOKEN_ADJUST_PRIVILEGES | TOKEN_IMPERSONATE,
+      NULL, SecurityImpersonation, TokenImpersonation, &token);
+  DWORD error = GetLastError();
+  if (!had_thread_token) CloseHandle(source);
+  if (ok) {
+    TOKEN_PRIVILEGES privilege = {0};
+    privilege.PrivilegeCount = 1;
+    privilege.Privileges[0].Attributes = SE_PRIVILEGE_ENABLED;
+    ok = LookupPrivilegeValueW(NULL, L"SeCreateSymbolicLinkPrivilege", &privilege.Privileges[0].Luid);
+    if (ok) {
+      SetLastError(ERROR_SUCCESS);
+      ok = AdjustTokenPrivileges(token, FALSE, &privilege, 0, NULL, NULL);
+      if (GetLastError() == ERROR_NOT_ALL_ASSIGNED) { ok = FALSE; SetLastError(ERROR_PRIVILEGE_NOT_HELD); }
+    }
+    if (ok) ok = SetThreadToken(NULL, token);
+    error = GetLastError();
+    if (ok) {
+      ok = DeviceIoControl(file, FSCTL_SET_REPARSE_POINT, data, size, NULL, 0, &returned, NULL);
+      error = GetLastError();
+      // Continuing under the temporary identity after a failed restoration is unsafe.
+      if (!SetThreadToken(NULL, previous)) RaiseFailFastException(NULL, NULL, 0);
+    }
+  }
+  if (token) CloseHandle(token);
+  if (previous) CloseHandle(previous);
+  SetLastError(error);
+  return ok;
+}
+int wasmoon_windows_symlinkat(const char *target, int fd, const char *name) {
+  if (!*target) { errno = ENOENT; return -1; }
+  wchar_t *wide_target = wasmoon_windows_utf16(target);
+  wchar_t *wide_name = wasmoon_windows_utf16(name);
+  if (!wide_target || !wide_name) { free(wide_target); free(wide_name); return -1; }
+  wchar_t *parent;
+  if (absolute_path(name)) {
+    parent = _wfullpath(NULL, wide_name, 0);
+    if (parent) {
+      wchar_t *last = wcsrchr(parent, L'\\');
+      if (last) last[1] = 0;
+    }
+  } else {
+    HANDLE root = wasmoon_windows_fd_handle(fd);
+    DWORD length = GetFinalPathNameByHandleW(root, NULL, 0, FILE_NAME_NORMALIZED);
+    parent = length ? malloc(((size_t)length + 2) * sizeof(*parent)) : NULL;
+    if (parent && !GetFinalPathNameByHandleW(root, parent, length + 1, FILE_NAME_NORMALIZED)) {
+      free(parent); parent = NULL;
+    }
+    if (parent) wcscat(parent, L"\\");
+  }
+  if (!parent) { free(wide_target); free(wide_name); errno = EBADF; return -1; }
+  size_t query_length = wcslen(parent) + wcslen(wide_target) + 1;
+  wchar_t *query = malloc(query_length * sizeof(*query));
+  if (!query) { free(parent); free(wide_target); free(wide_name); errno = ENOMEM; return -1; }
+  wcscpy(query, absolute_path(target) ? L"" : parent);
+  wcscat(query, wide_target);
+  for (wchar_t *p = query; *p; p++) if (*p == L'/') *p = L'\\';
+  // Windows encodes whether a link names a directory. This query only selects
+  // that attribute; the destination mutation below uses the held parent.
+  DWORD attributes = GetFileAttributesW(query);
+  int directory = attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_DIRECTORY);
+  free(query); free(parent);
+  if (absolute_path(name)) {
+    BOOL ok = CreateSymbolicLinkW(wide_name, wide_target,
+        SYMBOLIC_LINK_FLAG_ALLOW_UNPRIVILEGED_CREATE | (directory ? SYMBOLIC_LINK_FLAG_DIRECTORY : 0));
+    DWORD error = GetLastError(); free(wide_target); free(wide_name);
+    return ok ? 0 : wasmoon_windows_error(error);
+  }
+  free(wide_name);
+  // Keep the guest spelling in PrintName, while the NT substitute name uses
+  // native separators and an NT namespace prefix for absolute paths.
+  int absolute = absolute_path(target);
+  wchar_t *substitute = absolute ? nt_absolute_name(wide_target) : _wcsdup(wide_target);
+  if (!substitute) { free(wide_target); return -1; }
+  for (wchar_t *p = substitute; *p; p++) if (*p == L'/') *p = L'\\';
+  size_t substitute_bytes = wcslen(substitute) * sizeof(*substitute);
+  size_t print_bytes = wcslen(wide_target) * sizeof(*wide_target);
+  size_t bytes = substitute_bytes + print_bytes;
+  if (bytes > MAXIMUM_REPARSE_DATA_BUFFER_SIZE - 20) {
+    free(substitute); free(wide_target); errno = ENAMETOOLONG; return -1;
+  }
+  unsigned char *data = calloc(1, 20 + bytes);
+  if (!data) { free(substitute); free(wide_target); errno = ENOMEM; return -1; }
+  DWORD tag = IO_REPARSE_TAG_SYMLINK, flags = absolute ? 0 : 1;
+  USHORT data_length = (USHORT)(12 + bytes), substitute_length = (USHORT)substitute_bytes;
+  USHORT print_length = (USHORT)print_bytes;
+  memcpy(data, &tag, 4); memcpy(data + 4, &data_length, 2);
+  memcpy(data + 10, &substitute_length, 2); memcpy(data + 12, &substitute_length, 2);
+  memcpy(data + 14, &print_length, 2); memcpy(data + 16, &flags, 4);
+  memcpy(data + 20, substitute, substitute_bytes);
+  memcpy(data + 20 + substitute_bytes, wide_target, print_bytes);
+  free(substitute); free(wide_target);
+  HANDLE handle = open_relative(fd, name, GENERIC_WRITE | DELETE, 2,
+      0x00200000 | (directory ? 1 : 0x40));
+  if (handle == INVALID_HANDLE_VALUE) { free(data); return -1; }
+  BOOL ok = set_symlink_reparse(handle, data, (DWORD)(20 + bytes));
+  DWORD error = GetLastError(); free(data);
+  if (!ok) {
+    FILE_DISPOSITION_INFO discard = {TRUE};
+    SetFileInformationByHandle(handle, FileDispositionInfo, &discard, sizeof(discard));
+  }
+  CloseHandle(handle);
+  return ok ? 0 : wasmoon_windows_error(error);
 }
 
 static wchar_t *canonical_existing_path(const wchar_t *path) {
@@ -398,18 +534,9 @@ int wasmoon_windows_linkat(int old_fd, const char *old_path, int new_fd, const c
   wchar_t *name = wasmoon_windows_utf16(new_path);
   if (!name) { CloseHandle(source); return -1; }
   if (absolute_path(new_path)) {
-    wchar_t *full = _wfullpath(NULL, name, 0);
-    free(name);
-    if (!full) { CloseHandle(source); return -1; }
-    // NtSetInformationFile requires an NT namespace path for an absolute name.
-    int unc = full[0] == L'\\' && full[1] == L'\\';
-    const wchar_t *suffix = unc ? full + 2 : full;
-    const wchar_t *prefix = unc ? L"\\??\\UNC\\" : L"\\??\\";
-    size_t length = wcslen(prefix) + wcslen(suffix) + 1;
-    name = malloc(length * sizeof(*name));
-    if (name) { wcscpy(name, prefix); wcscat(name, suffix); }
-    free(full);
-    if (!name) { CloseHandle(source); errno = ENOMEM; return -1; }
+    wchar_t *full = nt_absolute_name(name);
+    free(name); name = full;
+    if (!name) { CloseHandle(source); return -1; }
   } else {
     if (!*new_path || strchr(new_path, '/') || strchr(new_path, '\\') || strchr(new_path, ':') ||
         !strcmp(new_path, ".") || !strcmp(new_path, "..")) {
