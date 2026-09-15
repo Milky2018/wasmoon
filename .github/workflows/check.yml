@@ -195,3 +195,28 @@ jobs:
           python3 scripts/run_component_wast.py \
             --suite future-gated --dump-failures --no-jit || status=$?
           exit "$status"
+
+  windows-native:
+    name: Windows AMD64
+    runs-on: windows-latest
+    timeout-minutes: 45
+    env:
+      MOONBIT_INSTALL_VERSION: nightly
+      MOON_CC: clang
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ilammy/msvc-dev-cmd@v1
+      - name: install MoonBit
+        shell: pwsh
+        run: |
+          irm https://cli.moonbitlang.com/install/powershell.ps1 | iex
+          "$HOME/.moon/bin" >> $env:GITHUB_PATH
+      - name: report toolchain
+        run: |
+          moon version --all
+          clang --version
+          moon update
+      - name: build Windows runtime
+        run: moon build modules/wasmoon/cmd/wasmoon --target native --release
+      - name: run Windows native tests
+        run: moon test --target native --no-parallelize
