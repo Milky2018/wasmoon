@@ -13,7 +13,10 @@ class CorpusCheckoutTests(unittest.TestCase):
             text=True, encoding="utf-8").splitlines()
         misc = next(path for path in files if path.endswith(".wast"))
         for path in ["component-spec/upstream/README.md",
-                     "wasi-tests/wasmtime/upstream/LICENSE", misc]:
+                     "wasi-tests/wasmtime/upstream/LICENSE", misc,
+                     *subprocess.check_output(
+                         ["git", "ls-files", "component-spec/corrections"], cwd=ROOT,
+                         text=True, encoding="utf-8").splitlines()]:
             with self.subTest(path=path):
                 original = subprocess.check_output(["git", "show", f"HEAD:{path}"], cwd=ROOT)
                 self.assertIn(b"\n", original)
