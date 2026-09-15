@@ -22,7 +22,7 @@ test "wasi jit: readlink preserves UTF-8 bytes when truncated inside a character
     #|      (then (return (i32.const 3))))
     #|    (i32.load8_u (i32.const 100))))
   let result = compare_wasi_with_options(source, "test", preopens=[
-    ("/tmp", "/"),
+    (@test_fs.temp_dir(), "/"),
   ])
   inspect(wasi_i32_from_result(result.interp_result), content="208")
   inspect(wasi_i32_from_result(result.jit_result), content="208")
@@ -50,7 +50,7 @@ test "wasi jit: trailing slash cannot create or unlink a symlink leaf" {
     #|    (drop (call $unlink (i32.const 3) (i32.const 32) (i32.const 16)))
     #|    (i32.and (i32.ne (local.get $create) (i32.const 0)) (i32.ne (local.get $unlink_result) (i32.const 0)))))
   let result = compare_wasi_with_options(source, "test", preopens=[
-    ("/tmp", "/"),
+    (@test_fs.temp_dir(), "/"),
   ])
   inspect(wasi_i32_from_result(result.interp_result), content="1")
   inspect(wasi_i32_from_result(result.jit_result), content="1")

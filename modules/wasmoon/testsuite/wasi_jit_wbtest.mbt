@@ -690,7 +690,7 @@ test "wasi jit: poll_oneoff fd_read reports remaining file bytes" {
     #|    (drop (call $path_unlink_file (i32.const 3) (i32.const 64) (i32.const 23)))
     #|    (local.get $nbytes)))
   let result = compare_wasi_with_options(source, "test", preopens=[
-    ("/tmp", "/"),
+    (@test_fs.temp_dir(), "/"),
   ])
   inspect(result.match_, content="true")
   inspect(wasi_i32_from_result(result.interp_result), content="3")
@@ -758,7 +758,7 @@ test "wasi jit: poll_oneoff fans out mixed subscriptions for one native fd" {
     #|    (drop (call $path_unlink_file (i32.const 3) (i32.const 64) (i32.const 23)))
     #|    (i32.load (i32.const 240))))
   let result = compare_wasi_with_options(source, "test", preopens=[
-    ("/tmp", "/"),
+    (@test_fs.temp_dir(), "/"),
   ])
   debug_inspect(
     (
@@ -834,16 +834,16 @@ test "wasi jit: poll_oneoff requires poll and direction rights" {
     #|      (i32.const 0) (i64.const 268435456) (i64.const 0) (i32.const 0)
     #|      (i32.const 204))))
   let missing_poll = compare_wasi_with_options(source, "missing_poll_right", preopens=[
-    ("/tmp", "/"),
+    (@test_fs.temp_dir(), "/"),
   ])
   let missing_read = compare_wasi_with_options(source, "missing_read_right", preopens=[
-    ("/tmp", "/"),
+    (@test_fs.temp_dir(), "/"),
   ])
   let attenuated = compare_wasi_with_options(source, "attenuated_poll_right", preopens=[
-    ("/tmp", "/"),
+    (@test_fs.temp_dir(), "/"),
   ])
   let escalated = compare_wasi_with_options(source, "escalated_parent_right", preopens=[
-    ("/tmp", "/"),
+    (@test_fs.temp_dir(), "/"),
   ])
   debug_inspect(
     (
@@ -942,7 +942,7 @@ test "wasi jit: rights ABI rejects unknown bits" {
     #|    (call $set_rights
     #|      (i32.const 3) (i64.const 1073741824) (i64.const 0))))
   let path_result = compare_wasi_with_options(source, "path_open", preopens=[
-    ("/tmp", "/"),
+    (@test_fs.temp_dir(), "/"),
   ])
   debug_inspect(
     (
@@ -953,7 +953,7 @@ test "wasi jit: rights ABI rejects unknown bits" {
     content="(true, 28, 28)",
   )
   let set_result = compare_wasi_with_options(source, "set_rights", preopens=[
-    ("/tmp", "/"),
+    (@test_fs.temp_dir(), "/"),
   ])
   debug_inspect(
     (
@@ -1038,7 +1038,7 @@ test "wasi jit: descriptor operations honor rights attenuation" {
   let results : Array[(Int, Int)] = []
   for name in ["write", "read", "seek", "filestat", "set_flags"] {
     let result = compare_wasi_with_options(source, name, preopens=[
-      ("/tmp", "/"),
+      (@test_fs.temp_dir(), "/"),
     ])
     results.push(
       (
@@ -1057,7 +1057,7 @@ test "wasi jit: descriptor operations honor rights attenuation" {
       "write_allowed", "write_missing", "write_unrelated", "write_attenuated",
     ] {
     let result = compare_wasi_with_options(source, name, preopens=[
-      ("/tmp", "/"),
+      (@test_fs.temp_dir(), "/"),
     ])
     matrix.push(
       (
@@ -1126,7 +1126,7 @@ test "wasi jit: path_open checks truncate rights before host effects" {
     #|    (drop (call $unlink (i32.const 3) (i32.const 1024) (i32.const 27)))
     #|    (local.get $result)))
   let result = compare_wasi_with_options(source, "test", preopens=[
-    ("/tmp", "/"),
+    (@test_fs.temp_dir(), "/"),
   ])
   debug_inspect(
     (
@@ -1172,7 +1172,7 @@ test "wasi jit: path rights differential matrix" {
   let matrix : Array[(Int, Int)] = []
   for name in ["allowed", "missing", "unrelated", "attenuated"] {
     let result = compare_wasi_with_options(source, name, preopens=[
-      ("/tmp", "/"),
+      (@test_fs.temp_dir(), "/"),
     ])
     matrix.push(
       (
@@ -1220,7 +1220,7 @@ test "wasi jit: path_open rejects sync fdflags with ENOTSUP" {
     #|    (drop (call $path_unlink_file (i32.const 3) (i32.const 0) (i32.const 22)))
     #|    (local.get $errno)))
   let result = compare_wasi_with_options(source, "test", preopens=[
-    ("/tmp", "/"),
+    (@test_fs.temp_dir(), "/"),
   ])
   inspect(result.match_, content="true")
   inspect(wasi_errno_from_result(result.interp_result), content="58")
@@ -1263,7 +1263,7 @@ test "wasi jit: path_open traps on unknown dirflags bits" {
     #|    (drop (call $path_unlink_file (i32.const 3) (i32.const 0) (i32.const 30)))
     #|    (local.get $errno)))
   let result = compare_wasi_with_options(source, "test", preopens=[
-    ("/tmp", "/"),
+    (@test_fs.temp_dir(), "/"),
   ])
   inspect(wasi_results_trap(result, "unreachable"), content="true")
 }
@@ -1289,7 +1289,7 @@ test "wasi jit: path_open traps on unknown oflags bits" {
     #|    (drop (call $path_unlink_file (i32.const 3) (i32.const 0) (i32.const 26)))
     #|    (local.get $errno)))
   let result = compare_wasi_with_options(source, "test", preopens=[
-    ("/tmp", "/"),
+    (@test_fs.temp_dir(), "/"),
   ])
   inspect(wasi_results_trap(result, "unreachable"), content="true")
 }
@@ -1315,7 +1315,7 @@ test "wasi jit: path_open traps on unknown fdflags bits" {
     #|    (drop (call $path_unlink_file (i32.const 3) (i32.const 0) (i32.const 27)))
     #|    (local.get $errno)))
   let result = compare_wasi_with_options(source, "test", preopens=[
-    ("/tmp", "/"),
+    (@test_fs.temp_dir(), "/"),
   ])
   inspect(wasi_results_trap(result, "unreachable"), content="true")
 }
@@ -1354,7 +1354,7 @@ test "wasi jit: path_open with non-directory dirfd returns NOTDIR" {
     #|    (drop (call $path_unlink_file (i32.const 3) (i32.const 0) (i32.const 27)))
     #|    (local.get $errno)))
   let result = compare_wasi_with_options(source, "test", preopens=[
-    ("/tmp", "/"),
+    (@test_fs.temp_dir(), "/"),
   ])
   inspect(result.match_, content="true")
   inspect(wasi_errno_from_result(result.interp_result), content="54")
@@ -1393,7 +1393,7 @@ test "wasi jit: fd_prestat_dir_name returns NOTDIR for regular file fd" {
     #|    (drop (call $path_unlink_file (i32.const 3) (i32.const 0) (i32.const 29)))
     #|    (local.get $errno)))
   let result = compare_wasi_with_options(source, "test", preopens=[
-    ("/tmp", "/"),
+    (@test_fs.temp_dir(), "/"),
   ])
   inspect(result.match_, content="true")
   inspect(wasi_errno_from_result(result.interp_result), content="54")
@@ -1439,7 +1439,9 @@ test "wasi jit: path_open write-only rights without create is writable" {
     #|    (drop (call $path_unlink_file (i32.const 3) (i32.const 0) (i32.const 27)))
     #|    (local.get $errno)))
   inspect(
-    compare_wasi_with_options(source, "test", preopens=[("/tmp", "/")]),
+    compare_wasi_with_options(source, "test", preopens=[
+      (@test_fs.temp_dir(), "/"),
+    ]),
     content="matched",
   )
 }
@@ -1475,7 +1477,7 @@ test "wasi jit: path_open rejects symlink escape outside preopen" {
     #|    (drop (call $path_remove_directory (i32.const 3) (i32.const 16) (i32.const 12)))
     #|    (local.get $errno)))
   let result = compare_wasi_with_options(source, "test", preopens=[
-    ("/tmp", "/"),
+    (@test_fs.temp_dir(), "/"),
   ])
   inspect(result.match_, content="true")
   inspect(wasi_errno_from_result(result.interp_result), content="63")
@@ -1499,7 +1501,7 @@ test "wasi jit: path_unlink_file can remove escaped symlink entry" {
     #|      (i32.const 64) (i32.const 3) (i32.const 3) (i32.const 0) (i32.const 23)))
     #|    (call $path_unlink_file (i32.const 3) (i32.const 0) (i32.const 23))))
   let result = compare_wasi_with_options(source, "test", preopens=[
-    ("/tmp", "/"),
+    (@test_fs.temp_dir(), "/"),
   ])
   inspect(result.match_, content="true")
   inspect(wasi_errno_from_result(result.interp_result), content="0")
@@ -1526,14 +1528,14 @@ test "wasi jit: path_open lexical escapes return EPERM" {
     #|      (i32.const 0) (i64.const 2) (i64.const 0) (i32.const 0)
     #|      (i32.const 204))))
   let abs_result = compare_wasi_with_options(source, "test_abs", preopens=[
-    ("/tmp", "/"),
+    (@test_fs.temp_dir(), "/"),
   ])
   inspect(abs_result.match_, content="true")
   inspect(wasi_errno_from_result(abs_result.interp_result), content="63")
   inspect(wasi_errno_from_result(abs_result.jit_result), content="63")
 
   let dotdot_result = compare_wasi_with_options(source, "test_dotdot", preopens=[
-    ("/tmp", "/"),
+    (@test_fs.temp_dir(), "/"),
   ])
   inspect(dotdot_result.match_, content="true")
   inspect(wasi_errno_from_result(dotdot_result.interp_result), content="63")
@@ -1553,7 +1555,7 @@ test "wasi jit: path_open empty path returns ENOENT" {
     #|      (i32.const 0) (i64.const 2) (i64.const 0) (i32.const 0)
     #|      (i32.const 200))))
   let result = compare_wasi_with_options(source, "test", preopens=[
-    ("/tmp", "/"),
+    (@test_fs.temp_dir(), "/"),
   ])
   inspect(result.match_, content="true")
   inspect(wasi_errno_from_result(result.interp_result), content="44")
@@ -1592,7 +1594,7 @@ test "wasi jit: path_open trailing slash on regular file returns ENOENT" {
     #|    (drop (call $path_unlink_file (i32.const 3) (i32.const 0) (i32.const 29)))
     #|    (local.get $errno)))
   let result = compare_wasi_with_options(source, "test", preopens=[
-    ("/tmp", "/"),
+    (@test_fs.temp_dir(), "/"),
   ])
   inspect(result.match_, content="true")
   inspect(wasi_errno_from_result(result.interp_result), content="44")
@@ -1632,7 +1634,7 @@ test "wasi jit: path_filestat_get trailing slash on regular file returns ENOENT"
     #|    (drop (call $path_unlink_file (i32.const 3) (i32.const 0) (i32.const 29)))
     #|    (local.get $errno)))
   let result = compare_wasi_with_options(source, "test", preopens=[
-    ("/tmp", "/"),
+    (@test_fs.temp_dir(), "/"),
   ])
   inspect(result.match_, content="true")
   inspect(wasi_errno_from_result(result.interp_result), content="44")
@@ -1671,7 +1673,7 @@ test "wasi jit: path_filestat_get traps on unknown lookupflags bits" {
     #|    (drop (call $path_unlink_file (i32.const 3) (i32.const 0) (i32.const 34)))
     #|    (local.get $errno)))
   let result = compare_wasi_with_options(source, "test", preopens=[
-    ("/tmp", "/"),
+    (@test_fs.temp_dir(), "/"),
   ])
   inspect(wasi_results_trap(result, "unreachable"), content="true")
 }
@@ -1709,7 +1711,7 @@ test "wasi jit: path_filestat_set_times trailing slash on regular file returns E
     #|    (drop (call $path_unlink_file (i32.const 3) (i32.const 0) (i32.const 29)))
     #|    (local.get $errno)))
   let result = compare_wasi_with_options(source, "test", preopens=[
-    ("/tmp", "/"),
+    (@test_fs.temp_dir(), "/"),
   ])
   inspect(result.match_, content="true")
   inspect(wasi_errno_from_result(result.interp_result), content="44")
@@ -1765,13 +1767,13 @@ test "wasi jit: path_filestat_set_times rejects conflicting fst_flags with EINVA
     #|    (drop (call $path_unlink_file (i32.const 3) (i32.const 0) (i32.const 35)))
     #|    (local.get $errno)))
   let atim_result = compare_wasi_with_options(source, "test_atim", preopens=[
-    ("/tmp", "/"),
+    (@test_fs.temp_dir(), "/"),
   ])
   inspect(atim_result.match_, content="true")
   inspect(wasi_errno_from_result(atim_result.interp_result), content="28")
   inspect(wasi_errno_from_result(atim_result.jit_result), content="28")
   let mtim_result = compare_wasi_with_options(source, "test_mtim", preopens=[
-    ("/tmp", "/"),
+    (@test_fs.temp_dir(), "/"),
   ])
   inspect(mtim_result.match_, content="true")
   inspect(wasi_errno_from_result(mtim_result.interp_result), content="28")
@@ -1810,7 +1812,7 @@ test "wasi jit: path_filestat_set_times traps on unknown lookupflags bits" {
     #|    (drop (call $path_unlink_file (i32.const 3) (i32.const 0) (i32.const 34)))
     #|    (local.get $errno)))
   let result = compare_wasi_with_options(source, "test", preopens=[
-    ("/tmp", "/"),
+    (@test_fs.temp_dir(), "/"),
   ])
   inspect(wasi_results_trap(result, "unreachable"), content="true")
 }
@@ -1849,7 +1851,7 @@ test "wasi jit: path_open trailing slash can open symlinked directory with nofol
     #|    (drop (call $path_unlink_file (i32.const 3) (i32.const 0) (i32.const 29)))
     #|    (local.get $errno)))
   let result = compare_wasi_with_options(source, "test", preopens=[
-    ("/tmp", "/"),
+    (@test_fs.temp_dir(), "/"),
   ])
   inspect(result.match_, content="true")
   inspect(wasi_errno_from_result(result.interp_result), content="0")
@@ -1888,7 +1890,7 @@ test "wasi jit: path_open with embedded NUL returns EINVAL" {
     #|    (drop (call $path_unlink_file (i32.const 3) (i32.const 0) (i32.const 24)))
     #|    (local.get $errno)))
   let result = compare_wasi_with_options(source, "test", preopens=[
-    ("/tmp", "/"),
+    (@test_fs.temp_dir(), "/"),
   ])
   inspect(result.match_, content="true")
   inspect(wasi_errno_from_result(result.interp_result), content="28")
@@ -1909,7 +1911,7 @@ test "wasi jit: path_open with invalid UTF-8 returns EILSEQ" {
     #|      (i32.const 0) (i64.const 2) (i64.const 0) (i32.const 0)
     #|      (i32.const 200))))
   let result = compare_wasi_with_options(source, "test", preopens=[
-    ("/tmp", "/"),
+    (@test_fs.temp_dir(), "/"),
   ])
   inspect(result.match_, content="true")
   inspect(wasi_errno_from_result(result.interp_result), content="25")
@@ -1929,7 +1931,7 @@ test "wasi jit: path_symlink rejects absolute old_path with EPERM" {
     #|    (call $path_symlink
     #|      (i32.const 0) (i32.const 1) (i32.const 3) (i32.const 16) (i32.const 18))))
   let result = compare_wasi_with_options(source, "test", preopens=[
-    ("/tmp", "/"),
+    (@test_fs.temp_dir(), "/"),
   ])
   inspect(result.match_, content="true")
   inspect(wasi_errno_from_result(result.interp_result), content="63")
@@ -1958,7 +1960,9 @@ test "wasi jit: fd_readdir works on path_open directory" {
     #|      (i32.load (i32.const 100))
     #|      (i32.const 200) (i32.const 256) (i64.const 0) (i32.const 300))))
   inspect(
-    compare_wasi_with_options(source, "test", preopens=[("/tmp", "/")]),
+    compare_wasi_with_options(source, "test", preopens=[
+      (@test_fs.temp_dir(), "/"),
+    ]),
     content="matched",
   )
 }
@@ -1994,7 +1998,7 @@ test "wasi jit: fd_readdir writes truncated dirent header" {
     #|    (drop (call $path_remove_directory (i32.const 3) (i32.const 0) (i32.const 24)))
     #|    (i32.load (i32.const 400))))
   let result = compare_wasi_with_options(source, "test", preopens=[
-    ("/tmp", "/"),
+    (@test_fs.temp_dir(), "/"),
   ])
   inspect(result.match_, content="true")
   inspect(wasi_errno_from_result(result.interp_result), content="10")
@@ -2035,7 +2039,7 @@ test "wasi jit: fd_readdir on regular file returns EBADF (8)" {
     #|    (drop (call $path_unlink_file (i32.const 3) (i32.const 0) (i32.const 27)))
     #|    (local.get $errno)))
   let result = compare_wasi_with_options(source, "test", preopens=[
-    ("/tmp", "/"),
+    (@test_fs.temp_dir(), "/"),
   ])
   inspect(result.match_, content="true")
   inspect(wasi_errno_from_result(result.interp_result), content="8")
@@ -2059,7 +2063,9 @@ test "wasi jit: path ops accept opened dir fd" {
     #|      (i32.const 2) (i64.const 0) (i64.const 0) (i32.const 0)
     #|      (i32.const 120))))
   inspect(
-    compare_wasi_with_options(source, "test", preopens=[("/tmp", "/")]),
+    compare_wasi_with_options(source, "test", preopens=[
+      (@test_fs.temp_dir(), "/"),
+    ]),
     content="matched",
   )
 }
@@ -2095,7 +2101,7 @@ test "wasi jit: path_link rejects LOOKUPFLAGS_SYMLINK_FOLLOW" {
     #|      (i32.const 3) (i32.const 1) (i32.const 0) (i32.const 19)
     #|      (i32.const 3) (i32.const 32) (i32.const 17))))
   let result = compare_wasi_with_options(source, "test", preopens=[
-    ("/tmp", "/"),
+    (@test_fs.temp_dir(), "/"),
   ])
   inspect(result.match_, content="true")
   inspect(wasi_errno_from_result(result.interp_result), content="28")
@@ -2133,7 +2139,7 @@ test "wasi jit: path_link traps on unknown lookupflags bits" {
     #|      (i32.const 3) (i32.const 2) (i32.const 0) (i32.const 19)
     #|      (i32.const 3) (i32.const 32) (i32.const 17))))
   let result = compare_wasi_with_options(source, "test", preopens=[
-    ("/tmp", "/"),
+    (@test_fs.temp_dir(), "/"),
   ])
   inspect(wasi_results_trap(result, "unreachable"), content="true")
 }
@@ -2196,58 +2202,68 @@ test "wasi jit: preopen fd rejects non-dir ops" {
     #|  (func (export "set_rights_preopen") (result i32)
     #|    (call $fd_fdstat_set_rights (i32.const 3) (i64.const 0) (i64.const 0))))
   inspect(
-    compare_wasi_with_options(source, "sync_preopen", preopens=[("/tmp", "/")]),
-    content="matched",
-  )
-  inspect(
-    compare_wasi_with_options(source, "datasync_preopen", preopens=[
-      ("/tmp", "/"),
+    compare_wasi_with_options(source, "sync_preopen", preopens=[
+      (@test_fs.temp_dir(), "/"),
     ]),
     content="matched",
   )
   inspect(
-    compare_wasi_with_options(source, "seek_preopen", preopens=[("/tmp", "/")]),
+    compare_wasi_with_options(source, "datasync_preopen", preopens=[
+      (@test_fs.temp_dir(), "/"),
+    ]),
     content="matched",
   )
   inspect(
-    compare_wasi_with_options(source, "pread_preopen", preopens=[("/tmp", "/")]),
+    compare_wasi_with_options(source, "seek_preopen", preopens=[
+      (@test_fs.temp_dir(), "/"),
+    ]),
     content="matched",
   )
   inspect(
-    compare_wasi_with_options(source, "pwrite_preopen", preopens=[("/tmp", "/")]),
+    compare_wasi_with_options(source, "pread_preopen", preopens=[
+      (@test_fs.temp_dir(), "/"),
+    ]),
+    content="matched",
+  )
+  inspect(
+    compare_wasi_with_options(source, "pwrite_preopen", preopens=[
+      (@test_fs.temp_dir(), "/"),
+    ]),
     content="matched",
   )
   inspect(
     compare_wasi_with_options(source, "set_size_preopen", preopens=[
-      ("/tmp", "/"),
+      (@test_fs.temp_dir(), "/"),
     ]),
     content="matched",
   )
   inspect(
     compare_wasi_with_options(source, "set_times_preopen", preopens=[
-      ("/tmp", "/"),
+      (@test_fs.temp_dir(), "/"),
     ]),
     content="matched",
   )
   inspect(
-    compare_wasi_with_options(source, "advise_preopen", preopens=[("/tmp", "/")]),
+    compare_wasi_with_options(source, "advise_preopen", preopens=[
+      (@test_fs.temp_dir(), "/"),
+    ]),
     content="matched",
   )
   inspect(
     compare_wasi_with_options(source, "allocate_preopen", preopens=[
-      ("/tmp", "/"),
+      (@test_fs.temp_dir(), "/"),
     ]),
     content="matched",
   )
   inspect(
     compare_wasi_with_options(source, "set_flags_preopen", preopens=[
-      ("/tmp", "/"),
+      (@test_fs.temp_dir(), "/"),
     ]),
     content="matched",
   )
   inspect(
     compare_wasi_with_options(source, "set_rights_preopen", preopens=[
-      ("/tmp", "/"),
+      (@test_fs.temp_dir(), "/"),
     ]),
     content="matched",
   )
@@ -2627,13 +2643,13 @@ test "wasi jit: fd_filestat_set_times rejects conflicting fst_flags with EINVAL"
     #|    (drop (call $path_unlink_file (i32.const 3) (i32.const 0) (i32.const 33)))
     #|    (local.get $errno)))
   let atim_result = compare_wasi_with_options(source, "test_atim", preopens=[
-    ("/tmp", "/"),
+    (@test_fs.temp_dir(), "/"),
   ])
   inspect(atim_result.match_, content="true")
   inspect(wasi_errno_from_result(atim_result.interp_result), content="28")
   inspect(wasi_errno_from_result(atim_result.jit_result), content="28")
   let mtim_result = compare_wasi_with_options(source, "test_mtim", preopens=[
-    ("/tmp", "/"),
+    (@test_fs.temp_dir(), "/"),
   ])
   inspect(mtim_result.match_, content="true")
   inspect(wasi_errno_from_result(mtim_result.interp_result), content="28")
@@ -2687,7 +2703,7 @@ test "wasi jit: fd_allocate regular file returns ENOTSUP (58)" {
     #|      (i32.const 100)))
     #|    (call $fd_allocate (i32.load (i32.const 100)) (i64.const 0) (i64.const 32))))
   let result = compare_wasi_with_options(source, "test", preopens=[
-    ("/tmp", "/"),
+    (@test_fs.temp_dir(), "/"),
   ])
   inspect(result.match_, content="true")
   inspect(wasi_errno_from_result(result.interp_result), content="58")
@@ -2712,7 +2728,7 @@ test "wasi jit: fd_advise traps on invalid advice enum" {
     #|    (call $fd_advise
     #|      (i32.load (i32.const 100)) (i64.const 0) (i64.const 16) (i32.const 123))))
   let result = compare_wasi_with_options(source, "test", preopens=[
-    ("/tmp", "/"),
+    (@test_fs.temp_dir(), "/"),
   ])
   inspect(wasi_results_trap(result, "unreachable"), content="true")
 }
@@ -2757,7 +2773,7 @@ test "wasi jit: fd_renumber allows stdio to preopen target (0)" {
     #|  (func (export "test") (result i32)
     #|    (call $fd_renumber (i32.const 1) (i32.const 3))))
   let result = compare_wasi_with_options(source, "test", preopens=[
-    ("/tmp", "/"),
+    (@test_fs.temp_dir(), "/"),
   ])
   inspect(result.match_, content="true")
   inspect(wasi_errno_from_result(result.interp_result), content="0")
@@ -2809,7 +2825,7 @@ test "wasi jit: fd_renumber remaps stdio routing semantics" {
     #|      (then (return (i32.const 107))))
     #|    (i32.const 0)))
   let result = compare_wasi_with_options(source, "test", preopens=[
-    ("/tmp", "/"),
+    (@test_fs.temp_dir(), "/"),
   ])
   inspect(result.match_, content="true")
   inspect(wasi_errno_from_result(result.interp_result), content="0")
@@ -2833,7 +2849,7 @@ test "wasi jit: fd_renumber rejects unused target with EBADF (8)" {
     #|      (i32.const 100)))
     #|    (call $fd_renumber (i32.load (i32.const 100)) (i32.const 10))))
   let result = compare_wasi_with_options(source, "test", preopens=[
-    ("/tmp", "/"),
+    (@test_fs.temp_dir(), "/"),
   ])
   inspect(result.match_, content="true")
   inspect(wasi_errno_from_result(result.interp_result), content="8")
@@ -2857,7 +2873,7 @@ test "wasi jit: fd_fdstat_set_flags rejects DSYNC with EINVAL (28)" {
     #|      (i32.const 100)))
     #|    (call $fd_fdstat_set_flags (i32.load (i32.const 100)) (i32.const 2))))
   let result = compare_wasi_with_options(source, "test", preopens=[
-    ("/tmp", "/"),
+    (@test_fs.temp_dir(), "/"),
   ])
   inspect(result.match_, content="true")
   inspect(wasi_errno_from_result(result.interp_result), content="28")
@@ -2879,7 +2895,7 @@ test "wasi jit: fd_fdstat_set_flags returns EBADF for non-file fd before DSYNC c
     #|      (then (return (i32.const 101))))
     #|    (call $fd_fdstat_set_flags (i32.const 3) (i32.const 2))))
   let result = compare_wasi_with_options(source, "test", preopens=[
-    ("/tmp", "/"),
+    (@test_fs.temp_dir(), "/"),
   ])
   inspect(result.match_, content="true")
   inspect(wasi_errno_from_result(result.interp_result), content="8")
@@ -2903,7 +2919,7 @@ test "wasi jit: fd_fdstat_set_flags traps on unknown bits" {
     #|      (i32.const 100)))
     #|    (call $fd_fdstat_set_flags (i32.load (i32.const 100)) (i32.const 32))))
   let result = compare_wasi_with_options(source, "test", preopens=[
-    ("/tmp", "/"),
+    (@test_fs.temp_dir(), "/"),
   ])
   inspect(wasi_results_trap(result, "unreachable"), content="true")
 }
@@ -2928,7 +2944,7 @@ test "wasi jit: fd_fdstat_set_rights attenuates valid fd" {
     #|      (i64.const 0)
     #|      (i64.const 0))))
   let result = compare_wasi_with_options(source, "test", preopens=[
-    ("/tmp", "/"),
+    (@test_fs.temp_dir(), "/"),
   ])
   inspect(result, content="matched")
   debug_inspect(
@@ -2976,7 +2992,7 @@ test "wasi jit: fd_fdstat_set_rights attenuates preopen rights" {
     #|      (then (return (local.get $errno))))
     #|    (i32.wrap_i64 (i64.load (i32.const 8)))))
   let result = compare_wasi_with_options(source, "test", preopens=[
-    ("/tmp", "/"),
+    (@test_fs.temp_dir(), "/"),
   ])
   inspect(result, content="matched")
   debug_inspect(
@@ -3054,7 +3070,9 @@ test "wasi jit: fd_fdstat_get preopen base rights match interpreter" {
     #|    (drop (call $fd_fdstat_get (i32.const 3) (i32.const 0)))
     #|    (i64.load (i32.const 8))))
   inspect(
-    compare_wasi_with_options(source, "test", preopens=[("/tmp", "/")]),
+    compare_wasi_with_options(source, "test", preopens=[
+      (@test_fs.temp_dir(), "/"),
+    ]),
     content="matched",
   )
 }
@@ -3070,7 +3088,9 @@ test "wasi jit: fd_fdstat_get preopen inheriting rights match interpreter" {
     #|    (drop (call $fd_fdstat_get (i32.const 3) (i32.const 0)))
     #|    (i64.load (i32.const 16))))
   inspect(
-    compare_wasi_with_options(source, "test", preopens=[("/tmp", "/")]),
+    compare_wasi_with_options(source, "test", preopens=[
+      (@test_fs.temp_dir(), "/"),
+    ]),
     content="matched",
   )
 }
@@ -3193,7 +3213,8 @@ test "wasi jit: sock_send nonzero siflags still returns ENOTSOCK (57)" {
 
 ///|
 test "wasi imports preserve readlink and symlink semantics in both engines" {
-  let root = "/tmp/wasmoon-wasi-import-paths-\{@wasi.native_clock_gettime_monotonic()}"
+  let root = @test_fs.temp_dir() +
+    "/wasmoon-wasi-import-paths-\{@wasi.native_clock_gettime_monotonic()}"
   guard @wasi.native_mkdir(root, 0o700) else {
     fail("could not create fixture")
   }

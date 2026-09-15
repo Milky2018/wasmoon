@@ -1,6 +1,6 @@
 ///|
 test "native poll: null device is readable and invalid fd stays invalid" {
-  guard @wasi.native_open_read("/dev/null") is Some(fd) else {
+  guard @wasi.native_open_read(@test_fs.null_device()) is Some(fd) else {
     fail("could not open /dev/null")
   }
   defer @wasi.native_close(fd) |> ignore

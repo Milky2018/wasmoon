@@ -1,6 +1,6 @@
 ///|
 test "Preview 3 inherited regular-file stdin remains synchronous" {
-  let path = "/tmp/wasmoon-preview3-inherited-stdin"
+  let path = @test_fs.temp_dir() + "/wasmoon-preview3-inherited-stdin"
   guard @wasi.native_open(path, [WriteOnly, Create, Truncate], 0o600)
     is Some(output_fd) else {
     return fail("could not create inherited stdin fixture")

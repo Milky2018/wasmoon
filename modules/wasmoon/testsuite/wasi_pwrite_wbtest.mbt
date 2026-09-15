@@ -37,7 +37,7 @@ test "wasi jit: positioned append ignores offset and preserves cursor" {
     #|    (drop (call $unlink (i32.const 3) (i32.const 0) (i32.const 16)))
     #|    (i32.wrap_i64 (i64.load (i32.const 160)))))
   let result = compare_wasi_with_options(source, "test", preopens=[
-    ("/tmp", "/"),
+    (@test_fs.temp_dir(), "/"),
   ])
   inspect(wasi_i32_from_result(result.interp_result), content="1")
   inspect(wasi_i32_from_result(result.jit_result), content="1")

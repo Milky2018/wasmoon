@@ -72,7 +72,11 @@ test "invalid UTF-8 directory entries set EILSEQ" {
   wire.push(4)
   append_u32_le(wire, 1)
   wire.push(b'\xff')
-  native_open("/tmp/wasmoon-stale-errno-must-not-exist", [ReadOnly], 0)
+  native_open(
+    @test_fs.temp_dir() + "/wasmoon-stale-errno-must-not-exist",
+    [ReadOnly],
+    0,
+  )
   |> ignore
   debug_inspect(
     parse_native_readdir(Some(Bytes::from_array(wire))),

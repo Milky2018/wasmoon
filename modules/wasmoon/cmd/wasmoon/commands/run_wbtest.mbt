@@ -177,7 +177,7 @@ test "run JIT cache override is authoritative and missing user dirs disable cach
 
 ///|
 fn cache_test_file(label : String) -> String {
-  "/tmp/wasmoon-v10-cache-\{label}.cwasm"
+  @test_fs.temp_dir() + "/wasmoon-v10-cache-\{label}.cwasm"
 }
 
 ///|

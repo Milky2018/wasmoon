@@ -8,6 +8,14 @@ import {
   "moonbitlang/core/hashmap",
 }
 
+import {
+  "Milky2018/wasmoon_jit/native_test_support/fs" @test_fs,
+} for "test"
+
+import {
+  "Milky2018/wasmoon_jit/native_test_support/fs" @test_fs,
+} for "wbtest"
+
 options(
   "native-stub": [ "ffi_native.c", "poll_native.c", "directory_native.c" ],
   targets: { "ffi_native.mbt": [ "native" ] },

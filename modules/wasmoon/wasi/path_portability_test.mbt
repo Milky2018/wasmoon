@@ -1,6 +1,7 @@
 ///|
 test "Preview 1 readlink and symlink preserve portable path semantics" {
-  let root = "/tmp/wasmoon-path-portability-\{@wasi.native_clock_gettime_monotonic()}"
+  let root = @test_fs.temp_dir() +
+    "/wasmoon-path-portability-\{@wasi.native_clock_gettime_monotonic()}"
   guard @wasi.native_mkdir(root, 0o700) else {
     fail("could not create path portability fixture")
   }

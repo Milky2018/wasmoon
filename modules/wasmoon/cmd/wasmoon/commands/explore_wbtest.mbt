@@ -4,8 +4,8 @@ suberror ExpectedExploreCompileFailure
 ///|
 test "explore keeps an earlier compile failure after a later success" {
   let stamp = @env.now()
-  let wat_path = "/tmp/wasmoon-explore-status-\{stamp}.wat"
-  let html_path = "/tmp/wasmoon-explore-status-\{stamp}.html"
+  let wat_path = @test_fs.temp_dir() + "/wasmoon-explore-status-\{stamp}.wat"
+  let html_path = @test_fs.temp_dir() + "/wasmoon-explore-status-\{stamp}.html"
   @fs.write_string_to_file(
     wat_path,
     (
@@ -51,7 +51,8 @@ test "x64 exploration compiles spilled multi-result transfers" {
       "\{ty}.const 0"
     }
     let values = Array::make(20, constant).join(" ")
-    let path = "/tmp/wasmoon-x64-result-spills-\{ty}-\{@env.now()}.wat"
+    let path = @test_fs.temp_dir() +
+      "/wasmoon-x64-result-spills-\{ty}-\{@env.now()}.wat"
     let html = path[:path.length() - 4].to_owned() + ".html"
     @fs.write_string_to_file(
       path,
