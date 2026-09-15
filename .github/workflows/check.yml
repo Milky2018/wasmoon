@@ -262,11 +262,6 @@ jobs:
             if ($LASTEXITCODE -ne 0) { $failed = $true }
           }
           if ($failed) { exit 1 }
-      - name: run Windows native tests
-        if: ${{ !cancelled() && steps.windows_build.outcome == 'success' }}
-        env:
-          VCODE_REGALLOC_VALIDATION: "1"
-        run: python scripts/run_native_packages.py --output target/windows-native-tests
       - name: run Windows Wasmtime misc suite
         if: ${{ !cancelled() && steps.windows_build.outcome == 'success' }}
         run: python scripts/run_wasmtime_misc.py --include-high-memory --timeout 120 --output target/windows-misc
@@ -281,6 +276,23 @@ jobs:
           $smoke = $LASTEXITCODE
           python scripts/run_wasmtime_p1.py --profile explicit-rights --output target/windows-p1-rights
           if ($LASTEXITCODE -ne 0 -or $smoke -ne 0) { exit 1 }
+      - name: upload Windows corpus evidence
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: windows-corpus-evidence
+          path: |
+            target/windows-readiness.json
+            target/windows-components
+            target/windows-misc
+            target/windows-p1-smoke
+            target/windows-p1-rights
+          if-no-files-found: warn
+      - name: run Windows native tests
+        if: ${{ !cancelled() && steps.windows_build.outcome == 'success' }}
+        env:
+          VCODE_REGALLOC_VALIDATION: "1"
+        run: python scripts/run_native_packages.py --output target/windows-native-tests
       - name: upload Windows test evidence
         uses: actions/upload-artifact@v4
         if: always()
