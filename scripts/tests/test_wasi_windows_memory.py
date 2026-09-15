@@ -29,7 +29,7 @@ class WindowsMemoryTests(unittest.TestCase):
                 str(compiler), "/std:c11", "/D_CRT_SECURE_NO_WARNINGS", "/MD", "/Zi", "/fsanitize=address",
                 "/I" + str(root), "/I" + str(source),
                 str(ROOT / "scripts/tests/native/windows_memory.c"),
-                str(source / "windows_io.c"), str(source / "windows_fs.c"),
+                str(source / "windows_io.c"), str(source / "windows_input.c"), str(source / "windows_fs.c"),
                 "/Fe:" + str(program),
             ], check=True, cwd=root, timeout=120)
             fixture = root / "fixture"

@@ -28,6 +28,7 @@ class WindowsFileTests(unittest.TestCase):
         subprocess.run([
             os.environ.get("WASMOON_MSVC_CL", "clang-cl"), "/std:c11", "/D_CRT_SECURE_NO_WARNINGS", "/LD", "/MD", "/I" + str(directory),
             str(ROOT / "modules/wasmoon_jit/host_io/windows_io.c"),
+            str(ROOT / "modules/wasmoon_jit/host_io/windows_input.c"),
             str(ROOT / "modules/wasmoon_jit/host_io/windows_fs.c"),
             "/link", "/OUT:" + str(library),
             *["/EXPORT:wasmoon_windows_" + name for name in names],

@@ -1429,8 +1429,7 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_wasi_resolver_start(
 ) {
   int pipe_fds[2];
 #ifdef _WIN32
-  if (wasmoon_windows_winsock_init() != 0 ||
-      _pipe(pipe_fds, 256, _O_BINARY | _O_NOINHERIT) != 0) return 0;
+  if (wasmoon_windows_notification_pipe(pipe_fds) != 0) return 0;
 #else
   if (pipe(pipe_fds) != 0) return 0;
   int flags = fcntl(pipe_fds[0], F_GETFL, 0);

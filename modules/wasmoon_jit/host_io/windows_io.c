@@ -9,6 +9,7 @@ MOONBIT_FFI_EXPORT int wasmoon_host_is_windows(void) {
 
 #ifdef _WIN32
 #include "windows_io.h"
+#include "windows_input.h"
 #include <errno.h>
 #include <io.h>
 #include <fcntl.h>
@@ -58,6 +59,16 @@ static BOOL CALLBACK initialize_winsock(PINIT_ONCE once, PVOID arg, PVOID *conte
 int wasmoon_windows_winsock_init(void) {
     InitOnceExecuteOnce(&winsock_once, initialize_winsock, NULL, NULL);
     if (winsock_error) { errno = EIO; return -1; }
+    return 0;
+}
+int wasmoon_windows_notification_pipe(int *fds) {
+    wasmoon_notification notification;
+    if (wasmoon_notification_init(&notification)) return -1;
+    int reader = wasmoon_windows_socket_adopt(notification.reader, _O_RDONLY);
+    if (reader < 0) { closesocket(notification.writer); return -1; }
+    int writer = wasmoon_windows_socket_adopt(notification.writer, _O_WRONLY);
+    if (writer < 0) { wasmoon_windows_close(reader); return -1; }
+    fds[0] = reader; fds[1] = writer;
     return 0;
 }
 int wasmoon_windows_socket_adopt(SOCKET socket, int flags) {
@@ -116,7 +127,7 @@ HANDLE wasmoon_windows_fd_handle(int fd) {
     _set_thread_local_invalid_parameter_handler(old);
     return (HANDLE)handle;
 }
-typedef struct { int flags; unsigned references; } file_description;
+typedef struct { int flags; unsigned references; wasmoon_input *input; } file_description;
 typedef struct descriptor_flags {
     int fd;
     file_description *description;
@@ -136,7 +147,10 @@ static void forget_flags(int fd) {
     if (*link) {
         descriptor_flags *entry = *link;
         *link = entry->next;
-        if (--entry->description->references == 0) free(entry->description);
+        if (--entry->description->references == 0) {
+            wasmoon_input_destroy(entry->description->input);
+            free(entry->description);
+        }
         free(entry);
     }
     ReleaseSRWLockExclusive(&flags_lock);
@@ -145,6 +159,7 @@ int wasmoon_windows_track_file(int fd, int flags) {
     descriptor_flags *entry = malloc(sizeof(*entry));
     file_description *description = malloc(sizeof(*description));
     if (!entry || !description) { free(entry); free(description); errno = ENOMEM; return -1; }
+    description->input = NULL;
     description->flags = flags;
     description->references = 1;
     entry->fd = fd; entry->description = description;
@@ -193,7 +208,7 @@ int wasmoon_windows_setfl(int fd, int flags) {
         }
     } else {
         HANDLE handle = wasmoon_windows_fd_handle(fd);
-        if (GetFileType(handle) == FILE_TYPE_PIPE) {
+        if (!entry->description->input && GetFileType(handle) == FILE_TYPE_PIPE) {
             DWORD mode = (flags & WASMOON_O_NONBLOCK) ? PIPE_NOWAIT : PIPE_WAIT;
             if (!SetNamedPipeHandleState(handle, &mode, NULL, NULL)) {
                 DWORD error = GetLastError(); ReleaseSRWLockExclusive(&flags_lock);
@@ -205,6 +220,62 @@ int wasmoon_windows_setfl(int fd, int flags) {
     ReleaseSRWLockExclusive(&flags_lock);
     return 0;
 }
+// Borrowed for the duration of an operation. As with descriptors, callers
+// synchronize release/close with outstanding poll/read calls.
+static wasmoon_input *descriptor_input(int fd) {
+    AcquireSRWLockShared(&flags_lock);
+    descriptor_flags *entry = find_flags(fd);
+    wasmoon_input *input = entry ? entry->description->input : NULL;
+    ReleaseSRWLockShared(&flags_lock);
+    return input;
+}
+MOONBIT_FFI_EXPORT int wasmoon_host_claim_input(int fd) {
+    int flags = wasmoon_windows_getfl(fd);
+    if (flags < 0) return errno;
+    if ((flags & (_O_WRONLY | _O_RDWR)) == _O_WRONLY) return EBADF;
+    if (wasmoon_windows_is_socket(fd)) return 0;
+    HANDLE handle = wasmoon_windows_fd_handle(fd);
+    DWORD kind = GetFileType(handle), mode;
+    if (kind != FILE_TYPE_PIPE && !(kind == FILE_TYPE_CHAR && GetConsoleMode(handle, &mode))) return 0;
+    AcquireSRWLockExclusive(&flags_lock);
+    descriptor_flags *entry = find_flags(fd);
+    if (!entry) {
+        ReleaseSRWLockExclusive(&flags_lock);
+        if (wasmoon_windows_track_file(fd, flags)) return errno;
+        AcquireSRWLockExclusive(&flags_lock);
+        entry = find_flags(fd);
+    }
+    if (entry->description->input) { ReleaseSRWLockExclusive(&flags_lock); return EBUSY; }
+    if (kind == FILE_TYPE_PIPE) {
+        mode = PIPE_WAIT;
+        if (!SetNamedPipeHandleState(handle, &mode, NULL, NULL)) {
+            DWORD error = GetLastError(); ReleaseSRWLockExclusive(&flags_lock);
+            wasmoon_windows_error(error); return errno;
+        }
+    }
+    entry->description->input = wasmoon_input_create(handle);
+    int error = entry->description->input ? 0 : errno;
+    if (error && kind == FILE_TYPE_PIPE && (flags & WASMOON_O_NONBLOCK)) {
+        mode = PIPE_NOWAIT;
+        SetNamedPipeHandleState(handle, &mode, NULL, NULL);
+    }
+    ReleaseSRWLockExclusive(&flags_lock);
+    return error;
+}
+MOONBIT_FFI_EXPORT void wasmoon_host_release_input(int fd) {
+    AcquireSRWLockExclusive(&flags_lock);
+    descriptor_flags *entry = find_flags(fd);
+    if (entry && entry->description->input) {
+        wasmoon_input_destroy(entry->description->input);
+        entry->description->input = NULL;
+        HANDLE handle = wasmoon_windows_fd_handle(fd);
+        if (GetFileType(handle) == FILE_TYPE_PIPE) {
+            DWORD mode = entry->description->flags & WASMOON_O_NONBLOCK ? PIPE_NOWAIT : PIPE_WAIT;
+            SetNamedPipeHandleState(handle, &mode, NULL, NULL);
+        }
+    }
+    ReleaseSRWLockExclusive(&flags_lock);
+}
 int wasmoon_windows_read(int fd, void *buffer, int count) {
     if (count < 0) { errno = EINVAL; return -1; }
     if (wasmoon_windows_is_socket(fd)) {
@@ -215,6 +286,9 @@ int wasmoon_windows_read(int fd, void *buffer, int count) {
     }
     HANDLE handle = wasmoon_windows_fd_handle(fd);
     if (handle == INVALID_HANDLE_VALUE) return -1;
+    wasmoon_input *input = descriptor_input(fd);
+    if (input) return wasmoon_input_read(input, buffer, count,
+        (wasmoon_windows_getfl(fd) & WASMOON_O_NONBLOCK) != 0);
     DWORD read;
     if (ReadFile(handle, buffer, (DWORD)count, &read, NULL)) return (int)read;
     DWORD error = GetLastError();
@@ -473,6 +547,8 @@ static int handle_readiness(HANDLE handle, int events) {
     return 8;
 }
 int64_t wasmoon_windows_bytes_available(int fd) {
+    wasmoon_input *input = descriptor_input(fd);
+    if (input) return wasmoon_input_available(input);
     if (wasmoon_windows_is_socket(fd)) {
         SOCKET socket = wasmoon_windows_socket_get(fd);
         if (socket == INVALID_SOCKET) return -1;
@@ -488,15 +564,25 @@ int64_t wasmoon_windows_bytes_available(int fd) {
     errno = ENOTSUP;
     return -1;
 }
-int wasmoon_windows_poll(const int *fds, const int *events, int *revents,
-                         int count, int timeout_ms) {
-    if (count <= 0 || timeout_ms < -1) { errno = EINVAL; return -1; }
-    WSAPOLLFD *sockets = calloc((size_t)count, sizeof(*sockets));
-    int *indices = malloc((size_t)count * sizeof(*indices));
+#ifdef WASMOON_POLL_TESTING
+static volatile LONG poll_scans;
+MOONBIT_FFI_EXPORT int wasmoon_windows_poll_scan_count(void) {
+    return (int)InterlockedCompareExchange(&poll_scans, 0, 0);
+}
+#endif
+int wasmoon_windows_poll_interruptible(const int *fds, const int *events, int *revents,
+                         int count, int timeout_ms, SOCKET wake, int *woken) {
+    if (count < 0 || (count == 0 && wake == INVALID_SOCKET) || timeout_ms < -1) { errno = EINVAL; return -1; }
+    WSAPOLLFD *sockets = calloc((size_t)count + 1, sizeof(*sockets));
+    int *indices = malloc(((size_t)count + 1) * sizeof(*indices));
     if (!sockets || !indices) { free(sockets); free(indices); errno = ENOMEM; return -1; }
+    *woken = 0;
     ULONGLONG start = GetTickCount64();
     int result;
     for (;;) {
+#ifdef WASMOON_POLL_TESTING
+        InterlockedIncrement(&poll_scans);
+#endif
         int socket_count = 0, observe_handles = 0;
         result = 0;
         for (int i = 0; i < count; i++) {
@@ -515,10 +601,25 @@ int wasmoon_windows_poll(const int *fds, const int *events, int *revents,
                 }
             } else {
                 HANDLE handle = wasmoon_windows_fd_handle(fds[i]);
-                revents[i] = handle == INVALID_HANDLE_VALUE ? 32 : handle_readiness(handle, events[i]);
-                observe_handles = 1;
+                wasmoon_input *input = descriptor_input(fds[i]);
+                if (input && (events[i] & 1)) {
+                    revents[i] = wasmoon_input_ready(input);
+                    sockets[socket_count] = (WSAPOLLFD){wasmoon_input_notification(input), POLLRDNORM, 0};
+                    indices[socket_count++] = i;
+                    if (events[i] & 4) {
+                        revents[i] |= handle_readiness(handle, 4);
+                        observe_handles = 1;
+                    }
+                } else {
+                    revents[i] = handle == INVALID_HANDLE_VALUE ? 32 : handle_readiness(handle, events[i]);
+                    observe_handles = 1;
+                }
             }
             if (revents[i]) result++;
+        }
+        if (wake != INVALID_SOCKET) {
+            sockets[socket_count] = (WSAPOLLFD){wake, POLLRDNORM, 0};
+            indices[socket_count++] = -1;
         }
         ULONGLONG elapsed = GetTickCount64() - start;
         int remaining = timeout_ms < 0 ? -1 : elapsed >= (ULONGLONG)timeout_ms
@@ -537,6 +638,14 @@ int wasmoon_windows_poll(const int *fds, const int *events, int *revents,
             for (int j = 0; j < socket_count; j++) {
                 int flags = sockets[j].revents;
                 int i = indices[j];
+                if (i < 0) { if (flags) *woken = 1; continue; }
+                wasmoon_input *input = descriptor_input(fds[i]);
+                if (input && (events[i] & 1)) {
+                    int previous = revents[i];
+                    revents[i] |= wasmoon_input_ready(input);
+                    if (revents[i] && !previous) result++;
+                    continue;
+                }
                 revents[i] = ((flags & (POLLRDNORM | POLLRDBAND)) ? 1 : 0) |
                     ((flags & POLLWRNORM) ? 4 : 0) | ((flags & POLLERR) ? 8 : 0) |
                     ((flags & POLLHUP) ? 16 : 0) | ((flags & POLLNVAL) ? 32 : 0);
@@ -547,7 +656,7 @@ int wasmoon_windows_poll(const int *fds, const int *events, int *revents,
                 errno = EINTR; result = -1; break;
             }
         }
-        if (result || remaining == 0) break;
+        if (result || *woken || remaining == 0) break;
         // Rescan handles before returning a timeout: readiness may have arrived
         // in the last bounded wait interval.
     }
@@ -556,4 +665,21 @@ int wasmoon_windows_poll(const int *fds, const int *events, int *revents,
     errno = saved_errno;
     return result;
 }
+#endif
+
+#ifdef _WIN32
+int wasmoon_windows_poll(const int *fds, const int *events, int *revents,
+                         int count, int timeout_ms) {
+    int woken;
+    return wasmoon_windows_poll_interruptible(fds, events, revents, count, timeout_ms,
+                                              INVALID_SOCKET, &woken);
+}
+#else
+#include <fcntl.h>
+#include <errno.h>
+MOONBIT_FFI_EXPORT int wasmoon_host_claim_input(int fd) {
+    int flags = fcntl(fd, F_GETFL);
+    return flags < 0 ? errno : (flags & O_ACCMODE) == O_WRONLY ? EBADF : 0;
+}
+MOONBIT_FFI_EXPORT void wasmoon_host_release_input(int fd) { (void)fd; }
 #endif

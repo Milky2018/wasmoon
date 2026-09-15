@@ -25,14 +25,15 @@ class WindowsPollTests(unittest.TestCase):
         (directory / "moonbit.h").write_text('#define MOONBIT_FFI_EXPORT __declspec(dllexport)\n')
         library = directory / "poll.dll"
         subprocess.run([
-            os.environ.get("WASMOON_MSVC_CL", "clang-cl"), "/std:c11", "/D_CRT_SECURE_NO_WARNINGS", "/LD", "/MD", "/I" + str(directory),
+            os.environ.get("WASMOON_MSVC_CL", "clang-cl"), "/std:c11", "/D_CRT_SECURE_NO_WARNINGS", "/LD", "/MD", "/DWASMOON_POLL_TESTING", "/I" + str(directory),
             str(ROOT / "modules/wasmoon/wasi/poll_native.c"),
             str(ROOT / "modules/wasmoon_jit/host_io/windows_io.c"),
+            str(ROOT / "modules/wasmoon_jit/host_io/windows_input.c"),
             "/link", "/EXPORT:wasmoon_windows_socket_adopt",
             "/EXPORT:wasmoon_windows_close",
             "/EXPORT:wasmoon_windows_bytes_available",
             "/EXPORT:wasmoon_windows_setfl", "/EXPORT:wasmoon_windows_getfl",
-            "/EXPORT:wasmoon_windows_read",
+            "/EXPORT:wasmoon_windows_read", "/EXPORT:wasmoon_windows_dup",
             "/OUT:" + str(library),
         ], check=True)
         cls.library = ctypes.CDLL(str(library), use_errno=True)
@@ -57,6 +58,16 @@ class WindowsPollTests(unittest.TestCase):
         cls.getfl.argtypes = [ctypes.c_int]
         cls.read = cls.library.wasmoon_windows_read
         cls.read.argtypes = [ctypes.c_int, ctypes.c_void_p, ctypes.c_int]
+        cls.claim = cls.library.wasmoon_host_claim_input
+        cls.claim.argtypes = [ctypes.c_int]
+        cls.release = cls.library.wasmoon_host_release_input
+        cls.release.argtypes = [ctypes.c_int]
+        cls.release.restype = None
+        cls.duplicate = cls.library.wasmoon_windows_dup
+        cls.duplicate.argtypes = [ctypes.c_int]
+        cls.scans = cls.library.wasmoon_windows_poll_scan_count
+        cls.scans.restype = ctypes.c_int
+
 
     def readiness(self, fds, events, timeout=0):
         array = ctypes.c_int * len(fds)
@@ -113,6 +124,12 @@ class WindowsPollTests(unittest.TestCase):
         self.assertEqual(called, [7])
 
     def test_console_line_input_is_not_consumed(self):
+        self.console_line_input(False)
+
+    def test_exclusive_console_waits_for_completed_line(self):
+        self.console_line_input(True)
+
+    def console_line_input(self, exclusive):
         import msvcrt
         from ctypes import wintypes
 
@@ -144,7 +161,9 @@ class WindowsPollTests(unittest.TestCase):
         handle = kernel.CreateFileW("CONIN$", 0xC0000000, 3, None, 3, 0, None)
         self.assertNotEqual(handle, ctypes.c_void_p(-1).value)
         fd = msvcrt.open_osfhandle(handle, os.O_BINARY)
-        self.addCleanup(os.close, fd)
+        self.addCleanup(self.close if exclusive else os.close, fd)
+        if exclusive:
+            self.assertEqual(self.claim(fd), 0)
         self.assertTrue(kernel.SetConsoleMode(handle, 2))  # ENABLE_LINE_INPUT
 
         def enqueue(char, down):
@@ -158,8 +177,15 @@ class WindowsPollTests(unittest.TestCase):
 
         enqueue("\r", False)
         enqueue("x", True)
-        self.assertEqual(self.readiness([fd], [1]), (0, [0]))
+        before_scans = self.scans()
+        self.assertEqual(self.readiness([fd], [1], 80 if exclusive else 0), (0, [0]))
+        if exclusive:
+            self.assertLessEqual(self.scans() - before_scans, 3)
         enqueue("\r", True)
+        if exclusive:
+            self.assertEqual(self.readiness([fd], [1], 1000), (1, [1]))
+            self.assertEqual(self.read_bytes(fd, 32), b"x\r\n")
+            return
         before = wintypes.DWORD()
         after = wintypes.DWORD()
         self.assertTrue(kernel.GetNumberOfConsoleInputEvents(handle, ctypes.byref(before)))
@@ -239,3 +265,76 @@ class WindowsPollTests(unittest.TestCase):
         fd = self.adopt(reader.detach(), 0)
         self.assertEqual(self.close(fd), 0)
         self.assertEqual(self.readiness([fd], [1]), (1, [32]))
+
+    def exclusive_pipe(self):
+        reader, writer = os.pipe()
+        self.addCleanup(os.close, writer)
+        self.addCleanup(self.close, reader)
+        self.assertEqual(self.claim(reader), 0)
+        return reader, writer
+
+    def read_bytes(self, fd, count):
+        buffer = ctypes.create_string_buffer(count)
+        received = self.read(fd, buffer, count)
+        self.assertGreaterEqual(received, 0)
+        return buffer.raw[:received]
+
+    def test_exclusive_idle_wait_does_not_rescan_periodically(self):
+        reader, _ = self.exclusive_pipe()
+        before = self.scans()
+        self.assertEqual(self.readiness([reader], [1], 120), (0, [0]))
+        self.assertLessEqual(self.scans() - before, 3)
+
+    def test_exclusive_input_wakes_mixed_socket_wait(self):
+        reader, writer = self.exclusive_pipe()
+        socket_reader, socket_writer = socket.socketpair()
+        self.addCleanup(socket_writer.close)
+        fd = self.adopt(socket_reader.detach(), 0)
+        self.addCleanup(self.close, fd)
+        before = self.scans()
+        timer = threading.Timer(0.08, os.write, args=(writer, b"abc"))
+        timer.start()
+        try:
+            self.assertEqual(self.readiness([reader, fd], [1, 1], 1000), (1, [1, 0]))
+            self.assertLessEqual(self.scans() - before, 3)
+            self.assertEqual(self.read_bytes(reader, 3), b"abc")
+        finally:
+            timer.join()
+
+    def test_exclusive_aliases_share_partial_reads_and_eof(self):
+        reader, writer = os.pipe()
+        self.assertEqual(self.claim(reader), 0)
+        duplicate = self.duplicate(reader)
+        self.assertGreaterEqual(duplicate, 0)
+        self.addCleanup(self.close, duplicate)
+        os.write(writer, b"abcdef")
+        os.close(writer)
+        self.assertEqual(self.readiness([reader, duplicate], [1, 1], 1000)[0], 2)
+        self.assertEqual(self.read_bytes(reader, 2), b"ab")
+        self.assertEqual(self.close(reader), 0)
+        self.assertEqual(self.available(duplicate), 4)
+        self.assertEqual(self.read_bytes(duplicate, 10), b"cdef")
+        self.assertEqual(self.readiness([duplicate], [1], 1000), (1, [17]))
+        self.assertEqual(self.read_bytes(duplicate, 10), b"")
+
+    def test_exclusive_nonblocking_reads_preserve_pending_operation(self):
+        reader, writer = self.exclusive_pipe()
+        self.assertEqual(self.setfl(reader, os.O_RDONLY | 0x04000000), 0)
+        buffer = ctypes.create_string_buffer(1)
+        self.assertEqual(self.read(reader, buffer, 0), 0)
+        self.assertEqual(self.read(reader, buffer, 1), -1)
+        self.assertEqual(ctypes.get_errno(), errno.EAGAIN)
+        os.write(writer, b"x")
+        self.assertEqual(self.readiness([reader], [1], 1000), (1, [1]))
+        self.assertEqual(self.read_bytes(reader, 1), b"x")
+
+    def test_exclusive_release_cancels_idle_read_and_restores_shared_input(self):
+        reader, writer = self.exclusive_pipe()
+        for _ in range(20):
+            self.assertEqual(self.readiness([reader], [1], 0), (0, [0]))
+            start = time.monotonic()
+            self.release(reader)
+            self.assertLess(time.monotonic() - start, 1)
+            os.write(writer, b"x")
+            self.assertEqual(os.read(reader, 1), b"x")
+            self.assertEqual(self.claim(reader), 0)

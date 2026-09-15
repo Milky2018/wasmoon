@@ -93,19 +93,40 @@ rights checks, and event encoding remain shared.
 | Invalid descriptor | Rejected or reported as an invalid event at the corresponding WASIp1/native boundary. |
 | Other character device | An explicit host error, rather than invented readiness. |
 
-Synchronous pipes and consoles do not provide a uniform non-consuming wait.
-The adapter rechecks these handles after sleeps of at most 10 milliseconds;
-mixed waits use the same monotonic deadline and check handles again before
-returning a timeout. This adds polling latency and does not guarantee immediate
-notification. Socket-only waits use `WSAPoll`. Alertable handle waits report
-APC interruption as `EINTR`; the shared WASIp1 loop retries as appropriate.
+The CLI explicitly claims exclusive stdin consumption during guest execution.
+For synchronous pipes and console input, the Windows adapter starts a dedicated
+reader on demand. Its 4096-byte buffer, EOF and error state are shared by runtime
+descriptor duplicates. Readiness observes this state, and reads consume the
+same bytes in order. A completion notification participates in `WSAPoll` alongside
+ordinary sockets, so exclusive input and mixed socket waits do not periodically
+rescan handles. The asynchronous reactor uses this same interruptible wait;
+internal DNS completion channels also use socket notifications.
+
+Embedding defaults remain shared and non-consuming. Embedders may explicitly
+call `host_io.claim_exclusive_input(fd)` if no other code reads that input,
+including through OS-level duplicates. The return value is zero or a host errno.
+After all readers and waiters have stopped, `release_exclusive_input(fd)` cancels
+and joins pending work and discards unread prefetched bytes without closing the
+descriptor. Releasing is an end-of-session operation, not a lossless transfer
+back to an external reader. Closing the last tracked alias also releases the
+worker. Nonblocking mode applies to the guest read; the dedicated worker retains
+a blocking host read. A poll timeout does not discard a pending read or its data.
+
+On Linux and macOS, the same exclusive-input interface keeps kernel-backed
+readiness and does not add a worker or prefetch buffer. Shared Windows pipes and
+consoles, and synchronous pipe output, still require compatibility observation
+at intervals of at most 10 milliseconds. Output completion and error semantics
+remain unchanged. These compatibility subscriptions are the only reason to
+bound a mixed wait to that interval.
 
 The readiness guest runner checks pending clocks, delayed binary pipe input,
 regular-file input, pipe EOF, invalid guest descriptors, and duplicate
 subscriptions in both engines. Native Windows tests additionally exercise
 console input, APC interruption, socket readiness, pipe backpressure, and
 handle ownership. A separate executable exercises descriptor ownership and
-file buffers with Windows AddressSanitizer. No readiness probe consumes guest input.
+file buffers with Windows AddressSanitizer. Shared-descriptor readiness probes do not consume host input. Exclusive input
+probes additionally verify buffered reads, partial consumption, alias lifetime,
+EOF, cancellation, console line completion, and absence of periodic rescanning.
 
 ## Files, sockets, and native execution
 
@@ -126,7 +147,7 @@ API, including its unprivileged-creation option. Symlink targets can be read
 back; following an absolute target through a capability remains forbidden.
 
 The native reactor owns duplicate handles until completion or cancellation.
-DNS resolution runs in a CRT worker thread and signals a pipe; workers do not
+DNS resolution runs in a CRT worker thread and signals a socket notification; workers do not
 enter MoonBit. Windows fibers own guest stacks. The private x64 guest calling
 convention is bridged explicitly to Win64 host calls, and trap recovery uses
 non-unwinding register restoration rather than unwinding through generated
