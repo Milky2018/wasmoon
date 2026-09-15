@@ -259,7 +259,7 @@ jobs:
             foreach ($mode in @(0, 1)) {
               Set-ItemProperty -Path $key -Name $property -Type DWord -Value $mode
               $env:WASMOON_TEST_DEVELOPER_MODE = "$mode"
-              python -m unittest scripts.tests.test_wasi_windows_files.WindowsFileTests.test_unprivileged_symlink scripts.tests.test_wasi_windows_files.WindowsFileTests.test_unprivileged_symlink_locks_ancestors -v
+              python -m unittest scripts.tests.test_wasi_windows_files.WindowsFileTests.test_unprivileged_symlink scripts.tests.test_wasi_windows_files.WindowsFileTests.test_unprivileged_symlink_after_ancestor_replacement scripts.tests.test_wasi_windows_files.WindowsFileTests.test_unprivileged_symlink_during_parent_renames -v
               if ($LASTEXITCODE -ne 0) { throw "Symlink permission matrix failed in Developer Mode $mode" }
             }
           } finally {

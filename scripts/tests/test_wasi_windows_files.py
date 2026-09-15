@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import ctypes
 import os
+import shutil
+import threading
 from pathlib import Path
 import subprocess
 import tempfile
@@ -26,7 +28,7 @@ class WindowsFileTests(unittest.TestCase):
         names = ["open", "openat", "close", "path_within_base", "is_symlink_at", "readlinkat", "linkat",
                  "pread", "pwrite", "write", "getfl", "setfl", "dup", "dup2", "symlinkat", "ftruncate", "renameat"]
         subprocess.run([
-            os.environ.get("WASMOON_MSVC_CL", "clang-cl"), "/std:c11", "/D_CRT_SECURE_NO_WARNINGS", "/LD", "/MD", "/DWASMOON_SYMLINK_TESTING", "/I" + str(directory),
+            os.environ.get("WASMOON_MSVC_CL", "clang-cl"), "/std:c11", "/D_CRT_SECURE_NO_WARNINGS", "/LD", "/MD", "/I" + str(directory),
             str(ROOT / "modules/wasmoon_jit/host_io/windows_io.c"),
             str(ROOT / "modules/wasmoon_jit/host_io/windows_input.c"),
             str(ROOT / "modules/wasmoon_jit/host_io/windows_fs.c"),
@@ -87,6 +89,12 @@ class WindowsFileTests(unittest.TestCase):
             self.skipTest("requires explicit Developer Mode CI configuration")
         self.assertEqual(self.library.wasmoon_test_remove_symlink_privilege(), 1)
         try:
+            self.assertEqual(self.library.wasmoon_test_has_symlink_privilege(), 0)
+            raw = self.library.wasmoon_test_raw_symlink
+            raw.argtypes = [ctypes.c_wchar_p]
+            raw.restype = ctypes.c_ulong
+            self.assertEqual(raw(str(self.root / "raw-control")), 0 if mode == "1" else 1314)
+            self.assertFalse(os.path.lexists(self.root / "raw-control"))
             target = self.root / "target"
             target.write_bytes(b"target")
             result = self.symlink(b"target", self.fd, b"link")
@@ -100,6 +108,7 @@ class WindowsFileTests(unittest.TestCase):
                 self.assertEqual(result, -1)
                 self.assertEqual(ctypes.get_errno(), 1)  # EPERM
                 self.assertFalse(os.path.lexists(self.root / "link"))
+            self.assertEqual(self.library.wasmoon_test_has_symlink_privilege(), 0)
             # Success and failure must preserve the caller's restricted token.
             control = self.root / "control"
             try:
@@ -111,44 +120,65 @@ class WindowsFileTests(unittest.TestCase):
         finally:
             self.assertEqual(self.library.wasmoon_test_restore_token(), 1)
 
-    def test_unprivileged_symlink_locks_ancestors(self):
+    def test_unprivileged_symlink_after_ancestor_replacement(self):
         if os.environ.get("WASMOON_TEST_DEVELOPER_MODE") != "1":
             self.skipTest("requires Developer Mode CI configuration")
-        observations = []
-        callback_type = ctypes.CFUNCTYPE(None)
-
-        @callback_type
-        def locked():
-            # This callback runs at the mutation boundary, while all locks are held.
-            for path in (self.root, self.root.parent):
-                try:
-                    path.rename(path.with_name(path.name + "-moved"))
-                    observations.append("renamed")
-                except OSError as error:
-                    observations.append(error.winerror)
-
-        register = self.library.wasmoon_test_symlink_hook
-        register.argtypes = [ctypes.c_void_p]
-        register(ctypes.cast(locked, ctypes.c_void_p))
+        ancestor = self.root.parent
+        moved = ancestor.with_name(ancestor.name + "-moved")
+        ancestor.rename(moved)
+        ancestor.mkdir()
+        self.root.mkdir()
+        # Redirect the old ancestor path to an unrelated tree before creation.
+        self.addCleanup(lambda: shutil.rmtree(moved))
         self.assertEqual(self.library.wasmoon_test_remove_symlink_privilege(), 1)
         try:
+            self.assertEqual(self.library.wasmoon_test_has_symlink_privilege(), 0)
             self.assertEqual(self.symlink(b"missing", self.fd, b"link"), 0,
                              os.strerror(ctypes.get_errno()))
-            self.assertEqual(observations, [32, 32])  # ERROR_SHARING_VIOLATION
+            self.assertEqual(self.library.wasmoon_test_has_symlink_privilege(), 0)
         finally:
-            register(None)
             self.assertEqual(self.library.wasmoon_test_restore_token(), 1)
-        # Locks are operation-scoped; the ordinary descriptor still permits rename.
-        renamed = self.root.with_name("renamed")
-        self.root.rename(renamed)
-        self.root.mkdir()
-        self.assertEqual(self.library.wasmoon_test_remove_symlink_privilege(), 1)
+        self.assertTrue((moved / "root" / "link").is_symlink())
+        self.assertFalse(os.path.lexists(self.root / "link"))
+
+    def test_unprivileged_symlink_during_parent_renames(self):
+        if os.environ.get("WASMOON_TEST_DEVELOPER_MODE") != "1":
+            self.skipTest("requires Developer Mode CI configuration")
+        alternate = self.root.with_name("swap")
+        stop = threading.Event()
+        started = threading.Event()
+        failures = []
+
+        def rename_loop():
+            try:
+                while not stop.is_set():
+                    self.root.rename(alternate)
+                    started.set()
+                    alternate.rename(self.root)
+            except OSError as error:
+                failures.append(error)
+                started.set()
+            finally:
+                if alternate.exists():
+                    alternate.rename(self.root)
+
+        worker = threading.Thread(target=rename_loop)
+        worker.start()
         try:
-            self.assertEqual(self.symlink(b"missing", self.fd, b"after-rename"), 0)
+            self.assertTrue(started.wait(10))
+            self.assertEqual(self.library.wasmoon_test_remove_symlink_privilege(), 1)
+            try:
+                for index in range(100):
+                    self.assertEqual(self.symlink(b"missing", self.fd, f"link-{index}".encode()), 0,
+                                     os.strerror(ctypes.get_errno()))
+            finally:
+                self.assertEqual(self.library.wasmoon_test_restore_token(), 1)
         finally:
-            self.assertEqual(self.library.wasmoon_test_restore_token(), 1)
-        self.assertTrue((renamed / "after-rename").is_symlink())
-        self.assertFalse(os.path.lexists(self.root / "after-rename"))
+            stop.set()
+            worker.join(10)
+        self.assertFalse(worker.is_alive())
+        self.assertEqual(failures, [])
+        self.assertEqual(sum(path.is_symlink() for path in self.root.iterdir()), 100)
 
     def test_unicode_open_and_binary_contents(self):
         fd = self.openat(self.fd, "中文😀.txt".encode(), os.O_RDWR | os.O_CREAT | NOFOLLOW, 0o600)
