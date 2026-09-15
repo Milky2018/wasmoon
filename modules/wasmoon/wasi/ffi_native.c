@@ -9,12 +9,12 @@ extern "C" {
 #include <limits.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <signal.h>
 #include <string.h>
 #include <sys/stat.h>
 
 #ifdef _WIN32
-#include <winsock2.h>
-#include <windows.h>
+#include "../../wasmoon_jit/jit_ffi/windows_io.h"
 typedef int socklen_t;
 #include <io.h>
 #include <fcntl.h>
@@ -482,7 +482,7 @@ MOONBIT_FFI_EXPORT int wasmoon_wasi_dup(int fd) {
 // Close a file descriptor
 MOONBIT_FFI_EXPORT int wasmoon_wasi_close(int fd) {
 #ifdef _WIN32
-  return _close(fd);
+  return wasmoon_windows_close(fd);
 #else
   return close(fd);
 #endif

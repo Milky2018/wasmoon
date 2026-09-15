@@ -913,7 +913,12 @@ static LONG CALLBACK windows_trap_handler(EXCEPTION_POINTERS *exception) {
     } else if (code == EXCEPTION_ACCESS_VIOLATION &&
                exception->ExceptionRecord->NumberParameters >= 2) {
         fault = exception->ExceptionRecord->ExceptionInformation[1];
-        if (activation->context &&
+        uintptr_t guard_base = 0;
+        size_t guard_size = 0;
+        if (wasmoon_native_fiber_stack_bounds(NULL, NULL, &guard_base, &guard_size) &&
+            fault >= guard_base && fault - guard_base < guard_size)
+            trap = WASMOON_TRAP_STACK_EXHAUSTED;
+        else if (activation->context &&
             is_memory_guard_page_access(activation->context, (void *)fault))
             trap = WASMOON_TRAP_MEMORY_BOUNDS;
         else return EXCEPTION_CONTINUE_SEARCH;

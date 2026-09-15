@@ -247,13 +247,15 @@ static void unregister_fiber_parked_roots(native_fiber_t *fiber) {
 static VOID WINAPI fiber_bootstrap(void *unused) {
     (void)unused;
     native_fiber_t *active = current_native_fiber;
-    NT_TIB *tib = (NT_TIB *)NtCurrentTeb();
-    active->mapping = tib->StackLimit;
-    active->mapping_size = (uintptr_t)tib->StackBase - (uintptr_t)tib->StackLimit;
-    active->guard_size = 0;
-    active->usable_size = active->mapping_size;
     ULONG guarantee = 32768;
     if (!SetThreadStackGuarantee(&guarantee)) abort();
+    NT_TIB *tib = (NT_TIB *)NtCurrentTeb();
+    MEMORY_BASIC_INFORMATION region;
+    if (!VirtualQuery(tib->StackLimit, &region, sizeof(region))) abort();
+    active->mapping = region.AllocationBase;
+    active->mapping_size = (uintptr_t)tib->StackBase - (uintptr_t)active->mapping;
+    active->guard_size = (uintptr_t)tib->StackLimit - (uintptr_t)active->mapping;
+    active->usable_size = (uintptr_t)tib->StackBase - (uintptr_t)tib->StackLimit;
 #else
 static WASMOON_NO_ADDRESS_SANITIZE void fiber_bootstrap(void) {
 #endif

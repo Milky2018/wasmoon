@@ -9,6 +9,16 @@
 
 #define WASM_MEMORY32_MAX_BYTES (((int64_t)UINT32_MAX) + 1LL)
 
+static size_t host_page_size(void) {
+#ifdef _WIN32
+    SYSTEM_INFO info;
+    GetSystemInfo(&info);
+    return (size_t)info.dwPageSize;
+#else
+    return (size_t)getpagesize();
+#endif
+}
+
 // ============ Guard Page Memory Allocation ============
 // Uses mmap to allocate memory with guard pages for bounds check elimination.
 // Strategy: allocate max_pages worth of virtual address space, but only make
@@ -28,7 +38,7 @@
 static uint8_t *alloc_reserved_memory(wasmoon_memory_t *memory, size_t initial_size, size_t reserve_size) {
     if (!memory || initial_size > reserve_size) return NULL;
     size_t logical_size = initial_size;
-    size_t page_size = (size_t)getpagesize();
+    size_t page_size = host_page_size();
     if (reserve_size > SIZE_MAX - (page_size - 1)) return NULL;
     reserve_size = (reserve_size + page_size - 1) & ~(page_size - 1);
     if (reserve_size == 0) reserve_size = page_size;
@@ -76,7 +86,7 @@ static uint8_t *alloc_reserved_memory(wasmoon_memory_t *memory, size_t initial_s
 static int grow_guarded_memory(wasmoon_memory_t *memory, size_t old_size, size_t new_size) {
     if (!memory || !memory->alloc_base || new_size > memory->alloc_size) return -1;
     size_t logical_size = new_size;
-    size_t page_size = (size_t)getpagesize();
+    size_t page_size = host_page_size();
     old_size = (old_size + page_size - 1) & ~(page_size - 1);
     new_size = (new_size + page_size - 1) & ~(page_size - 1);
     if (new_size > old_size) {

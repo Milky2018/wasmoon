@@ -17,7 +17,7 @@
 #include <setjmp.h>
 
 #ifdef _WIN32
-#include <windows.h>
+#include "windows_io.h"
 #else
 #include <sys/mman.h>
 #include <unistd.h>
@@ -208,7 +208,7 @@ void ctx_refresh_memory0_fast_fields(jit_context_t *ctx);
 // ============ Memory Operations (memory_ops.c) ============
 
 // Free a `wasmoon_memory_t` descriptor (jit.c)
-void wasmoon_jit_free_memory_desc(int64_t mem_ptr);
+MOONBIT_FFI_EXPORT void wasmoon_jit_free_memory_desc(int64_t mem_ptr);
 
 #define WASM_PAGE_SIZE 65536
 
