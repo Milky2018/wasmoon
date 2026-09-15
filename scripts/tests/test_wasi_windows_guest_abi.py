@@ -14,10 +14,12 @@ FFI = ROOT / 'modules/wasmoon_jit/jit_ffi'
 class WindowsGuestAbiTests(unittest.TestCase):
     def test_all_guest_helpers_preserve_argument_positions(self):
         signatures = {}
-        for path in FFI.glob('*.c'):
+        directories = [FFI, FFI.parent / 'native_test_support']
+        for path in [p for directory in directories for p in directory.glob('*.c')]:
             for match in re.finditer(r'\bWASMOON_GUEST_ABI\s+(\w+)\s*\(([^)]*)\)\s*\{', path.read_text()):
                 signatures[match[1]] = len(match[2].split(','))
-        names = re.findall(r'PUBLIC (\w+)_msvc_guest', (FFI / 'msvc_guest_bridges.asm').read_text())
+        names = [name for directory in directories for name in re.findall(
+            r'PUBLIC (\w+)_msvc_guest', (directory / 'msvc_guest_bridges.asm').read_text())]
         self.assertGreater(len(names), 100)
         c = ['#include <stdint.h>', '#include <stdio.h>']
         asm = ['option casemap:none', '.code']
@@ -53,8 +55,10 @@ class WindowsGuestAbiTests(unittest.TestCase):
             (path / 'probe.asm').write_text('\n'.join(asm))
             ml64 = os.environ.get('WASMOON_MSVC_ML64', 'ml64.exe')
             cl = os.environ.get('WASMOON_MSVC_CL', 'cl.exe')
-            for source, output in [(FFI / 'msvc_guest_bridges.asm', 'bridges.obj'), (path / 'probe.asm', 'probe.obj')]:
+            for source, output in [(FFI / 'msvc_guest_bridges.asm', 'bridges.obj'),
+                                   (directories[1] / 'msvc_guest_bridges.asm', 'test_bridges.obj'),
+                                   (path / 'probe.asm', 'probe.obj')]:
                 subprocess.run([ml64, '/nologo', '/c', '/Fo' + output, str(source)], cwd=path, check=True, timeout=60)
-            subprocess.run([cl, '/nologo', '/std:c11', '/O2', '/MT', 'host.c', 'bridges.obj', 'probe.obj', '/Feprobe.exe'],
+            subprocess.run([cl, '/nologo', '/std:c11', '/O2', '/MT', 'host.c', 'bridges.obj', 'test_bridges.obj', 'probe.obj', '/Feprobe.exe'],
                            cwd=path, check=True, timeout=60)
             subprocess.run([str(path / 'probe.exe')], check=True, timeout=30)
