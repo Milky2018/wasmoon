@@ -2041,7 +2041,7 @@ MOONBIT_FFI_EXPORT int wasmoon_jit_write_bound_entry_code(
 ) {
     uint64_t context = (uint64_t)wasmoon_jit_context_ptr(managed_context);
     if (!context || !target) return 0;
-#if defined(__aarch64__)
+#if defined(__aarch64__) || defined(_M_ARM64)
     uint64_t values[2] = {context, (uint64_t)target};
     unsigned registers[2] = {0, 16};
     int offset = 0;
@@ -2058,7 +2058,7 @@ MOONBIT_FFI_EXPORT int wasmoon_jit_write_bound_entry_code(
     uint32_t branch = 0xd61f0200u; // br x16
     memcpy(output + offset, &branch, 4);
     return offset + 4;
-#elif defined(__x86_64__)
+#elif defined(__x86_64__) || defined(_M_X64)
     output[0] = 0x48; output[1] = 0xbf; // movabs rdi, context
     memcpy(output + 2, &context, 8);
     output[10] = 0x49; output[11] = 0xbb; // movabs r11, target
