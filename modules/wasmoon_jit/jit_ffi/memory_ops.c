@@ -316,15 +316,15 @@ static int32_t WASMOON_GUEST_ABI atomic_notify_indexed(
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_atomic_wait32_ptr(void) {
-    return (int64_t)(uintptr_t)atomic_wait32_indexed;
+    return WASMOON_GUEST_ADDRESS(atomic_wait32_indexed);
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_atomic_wait64_ptr(void) {
-    return (int64_t)(uintptr_t)atomic_wait64_indexed;
+    return WASMOON_GUEST_ADDRESS(atomic_wait64_indexed);
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_atomic_notify_ptr(void) {
-    return (int64_t)(uintptr_t)atomic_notify_indexed;
+    return WASMOON_GUEST_ADDRESS(atomic_notify_indexed);
 }
 
 int64_t WASMOON_GUEST_ABI memory_grow_indexed_internal(jit_context_t *ctx, int32_t memidx, int64_t delta, int32_t max_pages) {
@@ -500,3 +500,13 @@ int64_t table_grow_ctx_internal(
 
     return (int64_t)old_size;
 }
+
+#if defined(_MSC_VER) && !defined(__clang__)
+WASMOON_DEFINE_GUEST_TARGET(atomic_notify_indexed);
+WASMOON_DEFINE_GUEST_TARGET(atomic_wait32_indexed);
+WASMOON_DEFINE_GUEST_TARGET(atomic_wait64_indexed);
+WASMOON_DEFINE_GUEST_TARGET(memory_copy_indexed_internal);
+WASMOON_DEFINE_GUEST_TARGET(memory_fill_indexed_internal);
+WASMOON_DEFINE_GUEST_TARGET(memory_grow_indexed_internal);
+WASMOON_DEFINE_GUEST_TARGET(memory_size_indexed_internal);
+#endif

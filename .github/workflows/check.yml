@@ -203,7 +203,11 @@ jobs:
           exit "$status"
 
   windows-native:
-    name: Windows AMD64
+    name: Windows AMD64 (${{ matrix.compiler }})
+    strategy:
+      fail-fast: false
+      matrix:
+        compiler: [clang, msvc]
     runs-on: windows-latest
     timeout-minutes: 60
     env:
@@ -217,10 +221,15 @@ jobs:
         run: |
           irm https://cli.moonbitlang.com/install/powershell.ps1 | iex
           "$HOME/.moon/bin" >> $env:GITHUB_PATH
+      - name: configure Microsoft C and MASM
+        if: matrix.compiler == 'msvc'
+        shell: pwsh
+        run: . ./scripts/msvc/setup.ps1
       - name: report toolchain
         run: |
           moon version --all
           clang --version
+          python scripts/msvc/generate_guest_bridges.py --check
           moon update
       - name: install Windows wasm-tools
         shell: pwsh
@@ -285,7 +294,7 @@ jobs:
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: windows-corpus-evidence
+          name: windows-${{ matrix.compiler }}-corpus-evidence
           path: |
             target/windows-native-probes.log
             target/windows-readiness.json
@@ -304,7 +313,7 @@ jobs:
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: windows-native-evidence
+          name: windows-${{ matrix.compiler }}-native-evidence
           path: |
             target/windows-native-tests
             target/windows-native-probes.log

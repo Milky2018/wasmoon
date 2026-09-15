@@ -334,12 +334,17 @@ typedef struct exception_handler {
 } exception_handler_t;
 
 // Exception handling functions
+#if defined(_MSC_VER) && !defined(__clang__)
+#define WASMOON_NORETURN __declspec(noreturn)
+#else
+#define WASMOON_NORETURN __attribute__((noreturn))
+#endif
 sigjmp_buf* exception_try_begin_impl(jit_context_t *ctx, int32_t handler_id);
 void exception_try_end_impl(jit_context_t *ctx, int32_t handler_id);
-void exception_throw_impl(jit_context_t *ctx, int32_t tag_addr,
-                          int64_t *values, int32_t count) __attribute__((noreturn));
-void exception_throw_ref_impl(jit_context_t *ctx, int64_t exnref) __attribute__((noreturn));
-void exception_delegate_impl(jit_context_t *ctx, int32_t depth) __attribute__((noreturn));
+WASMOON_NORETURN void exception_throw_impl(jit_context_t *ctx, int32_t tag_addr,
+                          int64_t *values, int32_t count);
+WASMOON_NORETURN void exception_throw_ref_impl(jit_context_t *ctx, int64_t exnref);
+WASMOON_NORETURN void exception_delegate_impl(jit_context_t *ctx, int32_t depth);
 int32_t exception_get_tag_impl(jit_context_t *ctx);
 int64_t exception_get_value_impl(jit_context_t *ctx, int32_t idx);
 int32_t exception_get_value_count_impl(jit_context_t *ctx);

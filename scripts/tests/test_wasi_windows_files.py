@@ -26,7 +26,7 @@ class WindowsFileTests(unittest.TestCase):
         names = ["open", "openat", "close", "path_within_base", "is_symlink_at", "readlinkat", "linkat",
                  "pread", "pwrite", "write", "getfl", "setfl", "dup", "dup2", "symlinkat", "ftruncate", "renameat"]
         subprocess.run([
-            "clang-cl", "/LD", "/MD", "/I" + str(directory),
+            os.environ.get("WASMOON_MSVC_CL", "clang-cl"), "/std:c11", "/D_CRT_SECURE_NO_WARNINGS", "/LD", "/MD", "/I" + str(directory),
             str(ROOT / "modules/wasmoon_jit/host_io/windows_io.c"),
             str(ROOT / "modules/wasmoon_jit/host_io/windows_fs.c"),
             "/link", "/OUT:" + str(library),

@@ -59,7 +59,11 @@ static _Thread_local native_continuation_body_t *current_guest;
 extern int64_t wasmoon_native_fiber_yield(int64_t value);
 extern int64_t wasmoon_jit_context_ptr(void *context);
 
+#if defined(_MSC_VER) && !defined(__clang__)
+__declspec(noreturn) static void continuation_trap(int code);
+#else
 static void continuation_trap(int code) __attribute__((noreturn));
+#endif
 static void continuation_trap(int code) {
     g_trap_code = code;
     siglongjmp(g_trap_jmp_buf, 1);
@@ -406,8 +410,16 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_continuation_define_type(void *context, int32
     ctx->continuation_types = type;
     return 1;
 }
-MOONBIT_FFI_EXPORT int64_t wasmoon_cont_new_ptr(void) { return (int64_t)continuation_new; }
-MOONBIT_FFI_EXPORT int64_t wasmoon_cont_bind_ptr(void) { return (int64_t)continuation_bind; }
-MOONBIT_FFI_EXPORT int64_t wasmoon_cont_suspend_ptr(void) { return (int64_t)continuation_suspend; }
-MOONBIT_FFI_EXPORT int64_t wasmoon_cont_resume_ptr(void) { return (int64_t)continuation_resume; }
-MOONBIT_FFI_EXPORT int64_t wasmoon_cont_switch_ptr(void) { return (int64_t)continuation_switch; }
+MOONBIT_FFI_EXPORT int64_t wasmoon_cont_new_ptr(void) { return WASMOON_GUEST_ADDRESS(continuation_new); }
+MOONBIT_FFI_EXPORT int64_t wasmoon_cont_bind_ptr(void) { return WASMOON_GUEST_ADDRESS(continuation_bind); }
+MOONBIT_FFI_EXPORT int64_t wasmoon_cont_suspend_ptr(void) { return WASMOON_GUEST_ADDRESS(continuation_suspend); }
+MOONBIT_FFI_EXPORT int64_t wasmoon_cont_resume_ptr(void) { return WASMOON_GUEST_ADDRESS(continuation_resume); }
+MOONBIT_FFI_EXPORT int64_t wasmoon_cont_switch_ptr(void) { return WASMOON_GUEST_ADDRESS(continuation_switch); }
+
+#if defined(_MSC_VER) && !defined(__clang__)
+WASMOON_DEFINE_GUEST_TARGET(continuation_bind);
+WASMOON_DEFINE_GUEST_TARGET(continuation_new);
+WASMOON_DEFINE_GUEST_TARGET(continuation_resume);
+WASMOON_DEFINE_GUEST_TARGET(continuation_suspend);
+WASMOON_DEFINE_GUEST_TARGET(continuation_switch);
+#endif

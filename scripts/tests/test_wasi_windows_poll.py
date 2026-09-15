@@ -25,7 +25,7 @@ class WindowsPollTests(unittest.TestCase):
         (directory / "moonbit.h").write_text('#define MOONBIT_FFI_EXPORT __declspec(dllexport)\n')
         library = directory / "poll.dll"
         subprocess.run([
-            "clang-cl", "/LD", "/MD", "/I" + str(directory),
+            os.environ.get("WASMOON_MSVC_CL", "clang-cl"), "/std:c11", "/D_CRT_SECURE_NO_WARNINGS", "/LD", "/MD", "/I" + str(directory),
             str(ROOT / "modules/wasmoon/wasi/poll_native.c"),
             str(ROOT / "modules/wasmoon_jit/host_io/windows_io.c"),
             "/link", "/EXPORT:wasmoon_windows_socket_adopt",

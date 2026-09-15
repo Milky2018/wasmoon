@@ -3413,49 +3413,49 @@ static int32_t WASMOON_GUEST_ABI wasi_fd_fdstat_set_flags_impl(
 
 // ============ FFI Export Functions ============
 
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_fd_write_ptr(void) { return (int64_t)wasi_fd_write_impl; }
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_fd_read_ptr(void) { return (int64_t)wasi_fd_read_impl; }
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_fd_close_ptr(void) { return (int64_t)wasi_fd_close_impl; }
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_fd_seek_ptr(void) { return (int64_t)wasi_fd_seek_impl; }
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_fd_tell_ptr(void) { return (int64_t)wasi_fd_tell_impl; }
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_fd_sync_ptr(void) { return (int64_t)wasi_fd_sync_impl; }
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_fd_datasync_ptr(void) { return (int64_t)wasi_fd_datasync_impl; }
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_fd_fdstat_get_ptr(void) { return (int64_t)wasi_fd_fdstat_get_impl; }
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_fd_prestat_get_ptr(void) { return (int64_t)wasi_fd_prestat_get_impl; }
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_fd_prestat_dir_name_ptr(void) { return (int64_t)wasi_fd_prestat_dir_name_impl; }
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_fd_filestat_get_ptr(void) { return (int64_t)wasi_fd_filestat_get_impl; }
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_fd_filestat_set_size_ptr(void) { return (int64_t)wasi_fd_filestat_set_size_impl; }
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_path_open_ptr(void) { return (int64_t)wasi_path_open_impl; }
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_path_unlink_file_ptr(void) { return (int64_t)wasi_path_unlink_file_impl; }
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_path_remove_directory_ptr(void) { return (int64_t)wasi_path_remove_directory_impl; }
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_path_create_directory_ptr(void) { return (int64_t)wasi_path_create_directory_impl; }
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_path_rename_ptr(void) { return (int64_t)wasi_path_rename_impl; }
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_args_sizes_get_ptr(void) { return (int64_t)wasi_args_sizes_get_impl; }
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_args_get_ptr(void) { return (int64_t)wasi_args_get_impl; }
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_environ_sizes_get_ptr(void) { return (int64_t)wasi_environ_sizes_get_impl; }
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_environ_get_ptr(void) { return (int64_t)wasi_environ_get_impl; }
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_clock_time_get_ptr(void) { return (int64_t)wasi_clock_time_get_impl; }
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_clock_res_get_ptr(void) { return (int64_t)wasi_clock_res_get_impl; }
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_random_get_ptr(void) { return (int64_t)wasi_random_get_impl; }
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_proc_exit_ptr(void) { return (int64_t)wasi_proc_exit_impl; }
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_proc_raise_ptr(void) { return (int64_t)wasi_proc_raise_impl; }
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_sched_yield_ptr(void) { return (int64_t)wasi_sched_yield_impl; }
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_fd_write_ptr(void) { return WASMOON_GUEST_ADDRESS(wasi_fd_write_impl); }
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_fd_read_ptr(void) { return WASMOON_GUEST_ADDRESS(wasi_fd_read_impl); }
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_fd_close_ptr(void) { return WASMOON_GUEST_ADDRESS(wasi_fd_close_impl); }
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_fd_seek_ptr(void) { return WASMOON_GUEST_ADDRESS(wasi_fd_seek_impl); }
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_fd_tell_ptr(void) { return WASMOON_GUEST_ADDRESS(wasi_fd_tell_impl); }
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_fd_sync_ptr(void) { return WASMOON_GUEST_ADDRESS(wasi_fd_sync_impl); }
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_fd_datasync_ptr(void) { return WASMOON_GUEST_ADDRESS(wasi_fd_datasync_impl); }
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_fd_fdstat_get_ptr(void) { return WASMOON_GUEST_ADDRESS(wasi_fd_fdstat_get_impl); }
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_fd_prestat_get_ptr(void) { return WASMOON_GUEST_ADDRESS(wasi_fd_prestat_get_impl); }
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_fd_prestat_dir_name_ptr(void) { return WASMOON_GUEST_ADDRESS(wasi_fd_prestat_dir_name_impl); }
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_fd_filestat_get_ptr(void) { return WASMOON_GUEST_ADDRESS(wasi_fd_filestat_get_impl); }
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_fd_filestat_set_size_ptr(void) { return WASMOON_GUEST_ADDRESS(wasi_fd_filestat_set_size_impl); }
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_path_open_ptr(void) { return WASMOON_GUEST_ADDRESS(wasi_path_open_impl); }
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_path_unlink_file_ptr(void) { return WASMOON_GUEST_ADDRESS(wasi_path_unlink_file_impl); }
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_path_remove_directory_ptr(void) { return WASMOON_GUEST_ADDRESS(wasi_path_remove_directory_impl); }
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_path_create_directory_ptr(void) { return WASMOON_GUEST_ADDRESS(wasi_path_create_directory_impl); }
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_path_rename_ptr(void) { return WASMOON_GUEST_ADDRESS(wasi_path_rename_impl); }
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_args_sizes_get_ptr(void) { return WASMOON_GUEST_ADDRESS(wasi_args_sizes_get_impl); }
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_args_get_ptr(void) { return WASMOON_GUEST_ADDRESS(wasi_args_get_impl); }
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_environ_sizes_get_ptr(void) { return WASMOON_GUEST_ADDRESS(wasi_environ_sizes_get_impl); }
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_environ_get_ptr(void) { return WASMOON_GUEST_ADDRESS(wasi_environ_get_impl); }
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_clock_time_get_ptr(void) { return WASMOON_GUEST_ADDRESS(wasi_clock_time_get_impl); }
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_clock_res_get_ptr(void) { return WASMOON_GUEST_ADDRESS(wasi_clock_res_get_impl); }
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_random_get_ptr(void) { return WASMOON_GUEST_ADDRESS(wasi_random_get_impl); }
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_proc_exit_ptr(void) { return WASMOON_GUEST_ADDRESS(wasi_proc_exit_impl); }
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_proc_raise_ptr(void) { return WASMOON_GUEST_ADDRESS(wasi_proc_raise_impl); }
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_sched_yield_ptr(void) { return WASMOON_GUEST_ADDRESS(wasi_sched_yield_impl); }
 
 // Implemented functions
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_fd_advise_ptr(void) { return (int64_t)wasi_fd_advise_impl; }
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_fd_pread_ptr(void) { return (int64_t)wasi_fd_pread_impl; }
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_fd_pwrite_ptr(void) { return (int64_t)wasi_fd_pwrite_impl; }
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_fd_readdir_ptr(void) { return (int64_t)wasi_fd_readdir_impl; }
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_fd_fdstat_set_rights_ptr(void) { return (int64_t)wasi_fd_fdstat_set_rights_impl; }
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_fd_filestat_set_times_ptr(void) { return (int64_t)wasi_fd_filestat_set_times_impl; }
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_path_filestat_get_ptr(void) { return (int64_t)wasi_path_filestat_get_impl; }
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_path_filestat_set_times_ptr(void) { return (int64_t)wasi_path_filestat_set_times_impl; }
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_path_link_ptr(void) { return (int64_t)wasi_path_link_impl; }
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_path_readlink_ptr(void) { return (int64_t)wasi_path_readlink_impl; }
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_path_symlink_ptr(void) { return (int64_t)wasi_path_symlink_impl; }
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_fd_allocate_ptr(void) { return (int64_t)wasi_fd_allocate_impl; }
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_fd_renumber_ptr(void) { return (int64_t)wasi_fd_renumber_impl; }
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_fd_fdstat_set_flags_ptr(void) { return (int64_t)wasi_fd_fdstat_set_flags_impl; }
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_fd_advise_ptr(void) { return WASMOON_GUEST_ADDRESS(wasi_fd_advise_impl); }
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_fd_pread_ptr(void) { return WASMOON_GUEST_ADDRESS(wasi_fd_pread_impl); }
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_fd_pwrite_ptr(void) { return WASMOON_GUEST_ADDRESS(wasi_fd_pwrite_impl); }
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_fd_readdir_ptr(void) { return WASMOON_GUEST_ADDRESS(wasi_fd_readdir_impl); }
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_fd_fdstat_set_rights_ptr(void) { return WASMOON_GUEST_ADDRESS(wasi_fd_fdstat_set_rights_impl); }
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_fd_filestat_set_times_ptr(void) { return WASMOON_GUEST_ADDRESS(wasi_fd_filestat_set_times_impl); }
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_path_filestat_get_ptr(void) { return WASMOON_GUEST_ADDRESS(wasi_path_filestat_get_impl); }
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_path_filestat_set_times_ptr(void) { return WASMOON_GUEST_ADDRESS(wasi_path_filestat_set_times_impl); }
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_path_link_ptr(void) { return WASMOON_GUEST_ADDRESS(wasi_path_link_impl); }
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_path_readlink_ptr(void) { return WASMOON_GUEST_ADDRESS(wasi_path_readlink_impl); }
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_path_symlink_ptr(void) { return WASMOON_GUEST_ADDRESS(wasi_path_symlink_impl); }
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_fd_allocate_ptr(void) { return WASMOON_GUEST_ADDRESS(wasi_fd_allocate_impl); }
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_fd_renumber_ptr(void) { return WASMOON_GUEST_ADDRESS(wasi_fd_renumber_impl); }
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_fd_fdstat_set_flags_ptr(void) { return WASMOON_GUEST_ADDRESS(wasi_fd_fdstat_set_flags_impl); }
 
 // ============ Socket Operations ============
 
@@ -3555,10 +3555,10 @@ static int32_t WASMOON_GUEST_ABI wasi_sock_shutdown_impl(
     return WASI_ENOTSUP;
 }
 
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_sock_accept_ptr(void) { return (int64_t)wasi_sock_accept_impl; }
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_sock_recv_ptr(void) { return (int64_t)wasi_sock_recv_impl; }
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_sock_send_ptr(void) { return (int64_t)wasi_sock_send_impl; }
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_sock_shutdown_ptr(void) { return (int64_t)wasi_sock_shutdown_impl; }
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_sock_accept_ptr(void) { return WASMOON_GUEST_ADDRESS(wasi_sock_accept_impl); }
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_sock_recv_ptr(void) { return WASMOON_GUEST_ADDRESS(wasi_sock_recv_impl); }
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_sock_send_ptr(void) { return WASMOON_GUEST_ADDRESS(wasi_sock_send_impl); }
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_sock_shutdown_ptr(void) { return WASMOON_GUEST_ADDRESS(wasi_sock_shutdown_impl); }
 
 // ============ Context Initialization ============
 
@@ -4127,3 +4127,51 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_clear_wasi_exit_managed(
 }
 
 #undef MANAGED_CTX
+
+#if defined(_MSC_VER) && !defined(__clang__)
+WASMOON_DEFINE_GUEST_TARGET(wasi_args_get_impl);
+WASMOON_DEFINE_GUEST_TARGET(wasi_args_sizes_get_impl);
+WASMOON_DEFINE_GUEST_TARGET(wasi_clock_res_get_impl);
+WASMOON_DEFINE_GUEST_TARGET(wasi_clock_time_get_impl);
+WASMOON_DEFINE_GUEST_TARGET(wasi_environ_get_impl);
+WASMOON_DEFINE_GUEST_TARGET(wasi_environ_sizes_get_impl);
+WASMOON_DEFINE_GUEST_TARGET(wasi_fd_advise_impl);
+WASMOON_DEFINE_GUEST_TARGET(wasi_fd_allocate_impl);
+WASMOON_DEFINE_GUEST_TARGET(wasi_fd_close_impl);
+WASMOON_DEFINE_GUEST_TARGET(wasi_fd_datasync_impl);
+WASMOON_DEFINE_GUEST_TARGET(wasi_fd_fdstat_get_impl);
+WASMOON_DEFINE_GUEST_TARGET(wasi_fd_fdstat_set_flags_impl);
+WASMOON_DEFINE_GUEST_TARGET(wasi_fd_fdstat_set_rights_impl);
+WASMOON_DEFINE_GUEST_TARGET(wasi_fd_filestat_get_impl);
+WASMOON_DEFINE_GUEST_TARGET(wasi_fd_filestat_set_size_impl);
+WASMOON_DEFINE_GUEST_TARGET(wasi_fd_filestat_set_times_impl);
+WASMOON_DEFINE_GUEST_TARGET(wasi_fd_pread_impl);
+WASMOON_DEFINE_GUEST_TARGET(wasi_fd_prestat_dir_name_impl);
+WASMOON_DEFINE_GUEST_TARGET(wasi_fd_prestat_get_impl);
+WASMOON_DEFINE_GUEST_TARGET(wasi_fd_pwrite_impl);
+WASMOON_DEFINE_GUEST_TARGET(wasi_fd_read_impl);
+WASMOON_DEFINE_GUEST_TARGET(wasi_fd_readdir_impl);
+WASMOON_DEFINE_GUEST_TARGET(wasi_fd_renumber_impl);
+WASMOON_DEFINE_GUEST_TARGET(wasi_fd_seek_impl);
+WASMOON_DEFINE_GUEST_TARGET(wasi_fd_sync_impl);
+WASMOON_DEFINE_GUEST_TARGET(wasi_fd_tell_impl);
+WASMOON_DEFINE_GUEST_TARGET(wasi_fd_write_impl);
+WASMOON_DEFINE_GUEST_TARGET(wasi_path_create_directory_impl);
+WASMOON_DEFINE_GUEST_TARGET(wasi_path_filestat_get_impl);
+WASMOON_DEFINE_GUEST_TARGET(wasi_path_filestat_set_times_impl);
+WASMOON_DEFINE_GUEST_TARGET(wasi_path_link_impl);
+WASMOON_DEFINE_GUEST_TARGET(wasi_path_open_impl);
+WASMOON_DEFINE_GUEST_TARGET(wasi_path_readlink_impl);
+WASMOON_DEFINE_GUEST_TARGET(wasi_path_remove_directory_impl);
+WASMOON_DEFINE_GUEST_TARGET(wasi_path_rename_impl);
+WASMOON_DEFINE_GUEST_TARGET(wasi_path_symlink_impl);
+WASMOON_DEFINE_GUEST_TARGET(wasi_path_unlink_file_impl);
+WASMOON_DEFINE_GUEST_TARGET(wasi_proc_exit_impl);
+WASMOON_DEFINE_GUEST_TARGET(wasi_proc_raise_impl);
+WASMOON_DEFINE_GUEST_TARGET(wasi_random_get_impl);
+WASMOON_DEFINE_GUEST_TARGET(wasi_sched_yield_impl);
+WASMOON_DEFINE_GUEST_TARGET(wasi_sock_accept_impl);
+WASMOON_DEFINE_GUEST_TARGET(wasi_sock_recv_impl);
+WASMOON_DEFINE_GUEST_TARGET(wasi_sock_send_impl);
+WASMOON_DEFINE_GUEST_TARGET(wasi_sock_shutdown_impl);
+#endif

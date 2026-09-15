@@ -9,10 +9,20 @@
 
 // Guest machine code uses the private SysV helper ABI on x64. C callers use
 // their host ABI; Clang emits the crossing when calling these declarations.
-#if defined(_WIN32) && (defined(__x86_64__) || defined(_M_X64))
+#if defined(_MSC_VER) && !defined(__clang__)
+#define WASMOON_GUEST_ABI
+#include "msvc_guest_bridges.h"
+#define WASMOON_GUEST_ADDRESS(name) ((int64_t)(uintptr_t)name##_msvc_guest)
+#define WASMOON_DEFINE_GUEST_TARGET(name) \
+    void (*const name##_msvc_target)(void) = (void (*)(void))name
+#elif defined(_WIN32) && (defined(__x86_64__) || defined(_M_X64))
 #define WASMOON_GUEST_ABI __attribute__((sysv_abi))
 #else
 #define WASMOON_GUEST_ABI
+#endif
+
+#ifndef WASMOON_GUEST_ADDRESS
+#define WASMOON_GUEST_ADDRESS(name) ((int64_t)(uintptr_t)(name))
 #endif
 
 // ============ JIT Context v3 ============

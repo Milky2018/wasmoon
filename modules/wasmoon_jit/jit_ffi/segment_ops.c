@@ -592,27 +592,27 @@ static void WASMOON_GUEST_ABI elem_drop_impl(
 // ============ Function Pointer Getters ============
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_memory_init_ptr(void) {
-    return (int64_t)memory_init_impl;
+    return WASMOON_GUEST_ADDRESS(memory_init_impl);
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_data_drop_ptr(void) {
-    return (int64_t)data_drop_impl;
+    return WASMOON_GUEST_ADDRESS(data_drop_impl);
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_table_fill_ptr(void) {
-    return (int64_t)table_fill_impl;
+    return WASMOON_GUEST_ADDRESS(table_fill_impl);
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_table_copy_ptr(void) {
-    return (int64_t)table_copy_impl;
+    return WASMOON_GUEST_ADDRESS(table_copy_impl);
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_table_init_ptr(void) {
-    return (int64_t)table_init_impl;
+    return WASMOON_GUEST_ADDRESS(table_init_impl);
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_elem_drop_ptr(void) {
-    return (int64_t)elem_drop_impl;
+    return WASMOON_GUEST_ADDRESS(elem_drop_impl);
 }
 
 // ============ GC Array Segment Operations ============
@@ -948,17 +948,30 @@ static void WASMOON_GUEST_ABI gc_array_init_elem_impl(
 
 // GC array segment function pointer getters
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_gc_array_new_data_ptr(void) {
-    return (int64_t)gc_array_new_data_impl;
+    return WASMOON_GUEST_ADDRESS(gc_array_new_data_impl);
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_gc_array_new_elem_ptr(void) {
-    return (int64_t)gc_array_new_elem_impl;
+    return WASMOON_GUEST_ADDRESS(gc_array_new_elem_impl);
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_gc_array_init_data_ptr(void) {
-    return (int64_t)gc_array_init_data_impl;
+    return WASMOON_GUEST_ADDRESS(gc_array_init_data_impl);
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_gc_array_init_elem_ptr(void) {
-    return (int64_t)gc_array_init_elem_impl;
+    return WASMOON_GUEST_ADDRESS(gc_array_init_elem_impl);
 }
+
+#if defined(_MSC_VER) && !defined(__clang__)
+WASMOON_DEFINE_GUEST_TARGET(data_drop_impl);
+WASMOON_DEFINE_GUEST_TARGET(elem_drop_impl);
+WASMOON_DEFINE_GUEST_TARGET(gc_array_init_data_impl);
+WASMOON_DEFINE_GUEST_TARGET(gc_array_init_elem_impl);
+WASMOON_DEFINE_GUEST_TARGET(gc_array_new_data_impl);
+WASMOON_DEFINE_GUEST_TARGET(gc_array_new_elem_impl);
+WASMOON_DEFINE_GUEST_TARGET(memory_init_impl);
+WASMOON_DEFINE_GUEST_TARGET(table_copy_impl);
+WASMOON_DEFINE_GUEST_TARGET(table_fill_impl);
+WASMOON_DEFINE_GUEST_TARGET(table_init_impl);
+#endif

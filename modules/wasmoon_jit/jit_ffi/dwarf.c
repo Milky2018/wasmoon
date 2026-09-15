@@ -14,6 +14,14 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#if defined(_MSC_VER) && !defined(__clang__)
+#include <intrin.h>
+#define WASMOON_DEBUG_EXPORT __declspec(dllexport)
+#define WASMOON_DEBUG_NOINLINE __declspec(noinline)
+#else
+#define WASMOON_DEBUG_EXPORT __attribute__((used, visibility("default")))
+#define WASMOON_DEBUG_NOINLINE __attribute__((noinline))
+#endif
 
 #ifdef __APPLE__
 #include <mach-o/loader.h>
@@ -50,16 +58,20 @@ struct jit_descriptor {
 
 // These symbols must be exactly named for LLDB to find them
 // Use 'used' to prevent optimization, 'visibility' for external access
-__attribute__((used, visibility("default")))
+WASMOON_DEBUG_EXPORT
 struct jit_descriptor __jit_debug_descriptor = { 1, JIT_NOACTION, NULL, NULL };
 
 // LLDB sets a breakpoint on this function
 // Must be noinline and have a real instruction for the breakpoint
-__attribute__((noinline, used, visibility("default")))
+WASMOON_DEBUG_EXPORT WASMOON_DEBUG_NOINLINE
 void __jit_debug_register_code(void) {
     // Empty - LLDB breaks here and reads __jit_debug_descriptor
     // The volatile asm ensures this isn't optimized away
+#if defined(_MSC_VER) && !defined(__clang__)
+    __nop();
+#else
     __asm__ volatile("nop" ::: "memory");
+#endif
 }
 
 // ============================================================================
@@ -723,7 +735,9 @@ static void generate_elf_object(dwarf_builder_t *builder, buffer_t *output) {
 // Public API
 // ============================================================================
 
-#ifdef __APPLE__
+#if defined(_MSC_VER) && !defined(__clang__)
+#define MOONBIT_FFI_EXPORT __declspec(dllexport)
+#elif defined(__APPLE__)
 #define MOONBIT_FFI_EXPORT __attribute__((visibility("default")))
 #else
 #define MOONBIT_FFI_EXPORT __attribute__((visibility("default")))

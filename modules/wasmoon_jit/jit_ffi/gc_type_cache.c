@@ -363,3 +363,9 @@ void clear_type_cache_internal(jit_context_t *ctx) {
     ctx->gc_func_table = NULL;
     ctx->gc_func_table_size = 0;
 }
+
+#if defined(_MSC_VER) && !defined(__clang__)
+WASMOON_DEFINE_GUEST_TARGET(gc_ref_cast_impl);
+WASMOON_DEFINE_GUEST_TARGET(gc_ref_test_impl);
+WASMOON_DEFINE_GUEST_TARGET(gc_type_check_subtype_impl);
+#endif

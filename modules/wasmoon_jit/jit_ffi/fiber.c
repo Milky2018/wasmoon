@@ -133,7 +133,7 @@ extern int32_t wasmoon_jit_hostcall(
     int32_t num_results
 );
 
-static __thread native_fiber_t *current_native_fiber = NULL;
+static _Thread_local native_fiber_t *current_native_fiber = NULL;
 
 static int fiber_on_owner_thread(const native_fiber_t *fiber) {
 #ifdef _WIN32

@@ -43,6 +43,7 @@ options(
     "jit_ffi/guest_continuation.c",
     "jit_ffi/trampoline_call_x86_64.S",
     "jit_ffi/windows_context_x86_64.S",
+    "jit_ffi/msvc_guest_bridges.S",
     "jit_ffi/stack_switch_aarch64.S",
     "jit_ffi/stack_switch_x86_64.S",
     "jit_ffi/dwarf.c",

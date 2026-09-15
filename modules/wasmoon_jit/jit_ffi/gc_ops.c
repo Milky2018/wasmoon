@@ -1083,3 +1083,28 @@ int64_t WASMOON_GUEST_ABI gc_alloc_array_from_slots_slow_impl(int64_t ctx_ptr, i
     gc_record_runtime_type(ctx, heap, gc_ref, type_idx);
     return ((int64_t)gc_ref) << 1;
 }
+
+#if defined(_MSC_VER) && !defined(__clang__)
+WASMOON_DEFINE_GUEST_TARGET(gc_alloc_array_from_slots_slow_impl);
+WASMOON_DEFINE_GUEST_TARGET(gc_alloc_array_from_values_slow);
+WASMOON_DEFINE_GUEST_TARGET(gc_alloc_array_slow);
+WASMOON_DEFINE_GUEST_TARGET(gc_alloc_array_wide_slow_impl);
+WASMOON_DEFINE_GUEST_TARGET(gc_alloc_struct_slow);
+WASMOON_DEFINE_GUEST_TARGET(gc_alloc_struct_wide_slow_impl);
+WASMOON_DEFINE_GUEST_TARGET(gc_array_copy_impl);
+WASMOON_DEFINE_GUEST_TARGET(gc_array_fill_impl);
+WASMOON_DEFINE_GUEST_TARGET(gc_array_fill_v128_impl);
+WASMOON_DEFINE_GUEST_TARGET(gc_array_get_impl);
+WASMOON_DEFINE_GUEST_TARGET(gc_array_get_v128_impl);
+WASMOON_DEFINE_GUEST_TARGET(gc_array_len_impl);
+WASMOON_DEFINE_GUEST_TARGET(gc_array_new_impl);
+WASMOON_DEFINE_GUEST_TARGET(gc_array_set_impl);
+WASMOON_DEFINE_GUEST_TARGET(gc_array_set_v128_impl);
+WASMOON_DEFINE_GUEST_TARGET(gc_register_array_inline);
+WASMOON_DEFINE_GUEST_TARGET(gc_register_struct_inline);
+WASMOON_DEFINE_GUEST_TARGET(gc_struct_get_impl);
+WASMOON_DEFINE_GUEST_TARGET(gc_struct_get_v128_impl);
+WASMOON_DEFINE_GUEST_TARGET(gc_struct_new_impl);
+WASMOON_DEFINE_GUEST_TARGET(gc_struct_set_impl);
+WASMOON_DEFINE_GUEST_TARGET(gc_struct_set_v128_impl);
+#endif

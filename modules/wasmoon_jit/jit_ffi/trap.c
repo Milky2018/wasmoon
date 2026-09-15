@@ -59,10 +59,10 @@
 
 // ============ Trap Activations (Thread-Local) ============
 
-static __thread jit_trap_activation_t fallback_activation;
-static __thread jit_trap_activation_t observed_activation;
-static __thread jit_trap_activation_t *current_activation = NULL;
-static __thread int observed_activation_valid = 0;
+static _Thread_local jit_trap_activation_t fallback_activation;
+static _Thread_local jit_trap_activation_t observed_activation;
+static _Thread_local jit_trap_activation_t *current_activation = NULL;
+static _Thread_local int observed_activation_valid = 0;
 
 jit_trap_activation_t *jit_current_trap_activation(void) {
     return current_activation ? current_activation : &fallback_activation;
@@ -422,12 +422,12 @@ void jit_trap_activation_abandon(jit_trap_activation_t *activation) {
 
 // Alternate signal stack for handling stack overflow (per-thread; sigaltstack is per-thread)
 #define SIGSTACK_SIZE (64 * 1024)  // 64KB alternate stack
-static __thread char g_sigstack[SIGSTACK_SIZE];
-static __thread int g_sigstack_installed = 0;
+static _Thread_local char g_sigstack[SIGSTACK_SIZE];
+static _Thread_local int g_sigstack_installed = 0;
 
 // Stack bounds for overflow detection (per-thread)
-static __thread void *g_stack_base = NULL;
-static __thread size_t g_stack_size = 0;
+static _Thread_local void *g_stack_base = NULL;
+static _Thread_local size_t g_stack_size = 0;
 
 // ============ Stack Bounds Detection ============
 
