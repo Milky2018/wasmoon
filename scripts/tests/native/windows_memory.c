@@ -7,6 +7,25 @@
 
 int main(int argc, char **argv) {
   assert(argc == 2);
+  // Exercise worker-owned buffers and last-alias cancellation under ASan.
+  for (int i = 0; i < 32; i++) {
+    int fds[2];
+    assert(_pipe(fds, 4096, _O_BINARY | _O_NOINHERIT) == 0);
+    assert(wasmoon_host_claim_input(fds[0]) == 0);
+    int alias = wasmoon_windows_dup(fds[0]);
+    assert(alias >= 0);
+    assert(wasmoon_windows_write(fds[1], "x\r\n\x1a", 4) == 4);
+    int events = 1, ready;
+    assert(wasmoon_windows_poll(&alias, &events, &ready, 1, 1000) == 1);
+    char bytes[4];
+    assert(wasmoon_windows_read(fds[0], bytes, 2) == 2);
+    assert(wasmoon_windows_close(fds[0]) == 0);
+    assert(wasmoon_windows_read(alias, bytes + 2, 2) == 2);
+    assert(!memcmp(bytes, "x\r\n\x1a", 4));
+    assert(wasmoon_windows_poll(&alias, &events, &ready, 1, 0) == 0);
+    assert(wasmoon_windows_close(alias) == 0);
+    assert(wasmoon_windows_close(fds[1]) == 0);
+  }
   int root = wasmoon_windows_open(argv[1], WASMOON_O_DIRECTORY, 0);
   assert(root >= 0);
   for (int i = 0; i < 128; i++) {
