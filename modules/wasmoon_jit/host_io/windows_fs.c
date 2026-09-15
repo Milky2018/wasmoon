@@ -310,7 +310,8 @@ int wasmoon_windows_symlinkat(const char *target, int fd, const char *name) {
     DWORD error = GetLastError(); free(wide_target); free(wide_name);
     // Report the missing target before a conflicting destination when its
     // Windows directory attribute could not be determined.
-    if (!ok && attributes == INVALID_FILE_ATTRIBUTES) error = target_error;
+    if (!ok && attributes == INVALID_FILE_ATTRIBUTES &&
+        (error == ERROR_ALREADY_EXISTS || error == ERROR_FILE_EXISTS)) error = target_error;
     return ok ? 0 : wasmoon_windows_error(error);
   }
   free(wide_name);

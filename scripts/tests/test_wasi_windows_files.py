@@ -95,6 +95,15 @@ class WindowsFileTests(unittest.TestCase):
             raw.restype = ctypes.c_ulong
             self.assertEqual(raw(str(self.root / "raw-control")), 0 if mode == "1" else 1314)
             self.assertFalse(os.path.lexists(self.root / "raw-control"))
+            absolute = self.root / "absolute-dangling"
+            absolute_result = self.symlink(b"missing", 0, os.fsencode(absolute))
+            if mode == "1":
+                self.assertEqual(absolute_result, 0, os.strerror(ctypes.get_errno()))
+                self.assertTrue(absolute.is_symlink())
+            else:
+                self.assertEqual(absolute_result, -1)
+                self.assertEqual(ctypes.get_errno(), 1)  # Preserve EPERM despite a missing target.
+                self.assertFalse(os.path.lexists(absolute))
             target = self.root / "target"
             target.write_bytes(b"target")
             result = self.symlink(b"target", self.fd, b"link")

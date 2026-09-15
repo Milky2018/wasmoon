@@ -50,14 +50,15 @@ def guest(expected: int) -> str:
     return f'''(module
       (import "wasi_snapshot_preview1" "path_symlink" (func $symlink (param i32 i32 i32 i32 i32) (result i32)))
       (import "wasi_snapshot_preview1" "path_readlink" (func $readlink (param i32 i32 i32 i32 i32 i32) (result i32)))
+      (import "wasi_snapshot_preview1" "proc_exit" (func $exit (param i32)))
       (memory (export "memory") 1)
       (data (i32.const 0) "missing")
       (data (i32.const 16) "link")
       (func $assert (param i32) (if (i32.eqz (local.get 0)) (then unreachable)))
-      (func (export "_start")
-        (call $assert (i32.eq
-          (call $symlink (i32.const 0) (i32.const 7) (i32.const 3) (i32.const 16) (i32.const 4))
-          (i32.const {expected})))
+      (func (export "_start") (local $errno i32)
+        (local.set $errno (call $symlink (i32.const 0) (i32.const 7) (i32.const 3) (i32.const 16) (i32.const 4)))
+        (if (i32.ne (local.get $errno) (i32.const {expected}))
+          (then (call $exit (i32.add (i32.const 100) (local.get $errno))) unreachable))
         {'return' if expected else ''}
         (call $assert (i32.eqz (call $readlink (i32.const 3) (i32.const 16) (i32.const 4)
           (i32.const 32) (i32.const 16) (i32.const 64))))
@@ -89,7 +90,8 @@ def main() -> None:
             exists = os.path.lexists(scratch / "link")
             passed = completed.returncode == 0 and exists == (mode == "1")
             result = dict(engine=engine, developer_mode=mode, passed=passed,
-                          returncode=completed.returncode, stderr=completed.stderr)
+                          returncode=completed.returncode, stderr=completed.stderr,
+                          unexpected_errno=completed.returncode - 100 if completed.returncode >= 100 else None)
             results.append(result)
             print(json.dumps(result), flush=True)
     output = ROOT / f"target/windows-symlinks-{mode}.json"
