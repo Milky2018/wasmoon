@@ -14,6 +14,8 @@ class CorpusCheckoutTests(unittest.TestCase):
         misc = next(path for path in files if path.endswith(".wast"))
         for path in ["component-spec/upstream/README.md",
                      "wasi-tests/wasmtime/upstream/LICENSE", misc,
+                     "modules/wasmoon/wasi_component/wit/preview2/deps/filesystem/types.wit",
+                     "modules/wasmoon/wasi_component/wit/preview3/deps/cli/stdio.wit",
                      *subprocess.check_output(
                          ["git", "ls-files", "component-spec/corrections"], cwd=ROOT,
                          text=True, encoding="utf-8").splitlines()]:

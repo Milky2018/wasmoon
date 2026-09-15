@@ -134,6 +134,31 @@ static wchar_t *nt_absolute_name(const wchar_t *path) {
   free(full);
   return name;
 }
+// Win32 reports PATH_NOT_FOUND for both a missing parent and a file used as
+// a directory. Preserve the latter distinction at the portable WASI boundary.
+static void path_open_error(const wchar_t *path, DWORD error) {
+  if (error == ERROR_PATH_NOT_FOUND) {
+    wchar_t *parent = _wfullpath(NULL, path, 0);
+    if (parent) {
+      for (;;) {
+        wchar_t *last = wcsrchr(parent, L'\\');
+        if (!last || last <= parent + 2) break;
+        *last = 0;
+        DWORD attributes = GetFileAttributesW(parent);
+        if (attributes != INVALID_FILE_ATTRIBUTES) {
+          if (!(attributes & FILE_ATTRIBUTE_DIRECTORY)) {
+            free(parent); errno = ENOTDIR; return;
+          }
+          break;
+        }
+        DWORD parent_error = GetLastError();
+        if (parent_error != ERROR_FILE_NOT_FOUND && parent_error != ERROR_PATH_NOT_FOUND) break;
+      }
+      free(parent);
+    }
+  }
+  wasmoon_windows_error(error);
+}
 static HANDLE open_path_or_relative(int fd, const char *path, ACCESS_MASK access,
                                     ULONG disposition, ULONG options) {
   if (!absolute_path(path)) return open_relative(fd, path, access, disposition, options);
@@ -142,8 +167,9 @@ static HANDLE open_path_or_relative(int fd, const char *path, ACCESS_MASK access
   HANDLE handle = CreateFileW(wide, access, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
       NULL, disposition == 2 ? CREATE_NEW : OPEN_EXISTING,
       FILE_FLAG_BACKUP_SEMANTICS | ((options & 0x00200000) ? FILE_FLAG_OPEN_REPARSE_POINT : 0), NULL);
-  DWORD error = GetLastError(); free(wide);
-  if (handle == INVALID_HANDLE_VALUE) wasmoon_windows_error(error);
+  DWORD error = GetLastError();
+  if (handle == INVALID_HANDLE_VALUE) path_open_error(wide, error);
+  free(wide);
   return handle;
 }
 int wasmoon_windows_openat(int fd, const char *name, int flags, int mode) {
@@ -544,7 +570,9 @@ int wasmoon_windows_renameat(int old_fd, const char *old_path, int new_fd, const
   }
   for (wchar_t *p = name; *p; p++) if (*p == L'/') *p = L'\\';
   size_t bytes = wcslen(name) * sizeof(*name);
-  size_t size = offsetof(FILE_RENAME_INFO, FileName) + bytes;
+  // The Win32 entry point consumes a NUL-terminated DOS path even though
+  // FileNameLength excludes that terminator. Keep the flexible tail zeroed.
+  size_t size = sizeof(FILE_RENAME_INFO) + bytes;
   FILE_RENAME_INFO *info = calloc(1, size);
   if (!info) { free(name); CloseHandle(source); errno = ENOMEM; return -1; }
   info->ReplaceIfExists = TRUE;

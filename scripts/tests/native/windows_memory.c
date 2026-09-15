@@ -27,6 +27,16 @@ int main(int argc, char **argv) {
     assert(wasmoon_windows_read(copy, buffer, sizeof(buffer)) == 0);
     assert(wasmoon_windows_close(copy) == 0);
   }
+  char *renamed = malloc(strlen(argv[1]) + sizeof("/renamed"));
+  assert(renamed);
+  strcpy(renamed, argv[1]);
+  strcat(renamed, "/renamed");
+  assert(wasmoon_windows_renameat(root, "buffer", 0, renamed) == 0);
+  int renamed_file = wasmoon_windows_open(renamed, _O_RDONLY, 0);
+  assert(renamed_file >= 0);
+  assert(wasmoon_windows_close(renamed_file) == 0);
+  assert(wasmoon_windows_renameat(0, renamed, root, "buffer") == 0);
+  free(renamed);
   assert(wasmoon_windows_symlinkat("buffer", root, "link") == 0);
   char byte = 0;
   assert(wasmoon_windows_readlinkat(root, "link", &byte, 1) == 1);

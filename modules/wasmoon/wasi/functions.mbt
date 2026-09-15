@@ -721,7 +721,7 @@ pub fn path_open(
     effective_rights_inheriting {
     return Errno::NotCapable.to_i32()
   }
-  let follow_symlink = (dirflags & 0x01) != 0
+  let follow_symlink = (dirflags & 0x01) != 0 || has_trailing_slash
   let resolved_path_result = if follow_symlink {
     resolve_host_path(ctx, dir_fd, path)
   } else {
@@ -2092,7 +2092,7 @@ pub fn path_filestat_get_impl(
   }
   let has_trailing_slash = path.length() > 0 &&
     path.code_unit_at(path.length() - 1) == '/'
-  let follow_symlink = (flags & 0x01) != 0
+  let follow_symlink = (flags & 0x01) != 0 || has_trailing_slash
   let resolved_path_result = if follow_symlink {
     resolve_host_path(ctx, dir_fd, path)
   } else {
@@ -2218,7 +2218,7 @@ pub fn path_filestat_set_times_impl(
   }
   let has_trailing_slash = path.length() > 0 &&
     path.code_unit_at(path.length() - 1) == '/'
-  let follow_symlink = (flags & 0x01) != 0
+  let follow_symlink = (flags & 0x01) != 0 || has_trailing_slash
   let resolved_path_result = if follow_symlink {
     resolve_host_path(ctx, dir_fd, path)
   } else {

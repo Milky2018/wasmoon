@@ -1564,7 +1564,7 @@ test "wasi: path_open trailing slash can open symlinked directory with nofollow"
   let mem = @runtime.Memory::Memory(1, None)
   let link = "wasmoon_trailing_link_dir"
   let link_slash = "wasmoon_trailing_link_dir/"
-  let target = "../tmp"
+  let target = "."
   for i, c in link {
     mem.write_byte(100 + i, c.to_int().to_byte())
   }
@@ -1711,6 +1711,30 @@ test "wasi: path_open rejects symlink escape outside preopen" {
     900,
   )
   inspect(open_result, content="63")
+  let trailing_escape = link_name + "/"
+  for i, c in trailing_escape {
+    mem.write_byte(200 + i, c.to_int().to_byte())
+  }
+  inspect(
+    path_open(
+      ctx,
+      mem,
+      3,
+      0,
+      200,
+      trailing_escape.length(),
+      0,
+      right_fd_read,
+      0L,
+      0,
+      900,
+    ),
+    content="63",
+  )
+  inspect(
+    path_filestat_get_impl(ctx, mem, 3, 0, 200, trailing_escape.length(), 1000),
+    content="63",
+  )
   path_unlink_file_impl(ctx, mem, 3, 100, link_name.length()) |> ignore
   path_remove_directory_impl(ctx, mem, 3, 100, link_name.length()) |> ignore
 }
