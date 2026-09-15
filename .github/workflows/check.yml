@@ -249,6 +249,28 @@ jobs:
           python -m unittest discover -s scripts/tests -p 'test_wasi_windows_*.py' -v 2>&1 | Tee-Object -FilePath target/windows-native-probes.log
           exit $LASTEXITCODE
 
+      - name: test Windows symlink permission environments
+        run: |
+          $key = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\AppModelUnlock"
+          $property = "AllowDevelopmentWithoutDevLicense"
+          New-Item -Path $key -Force | Out-Null
+          $old = Get-ItemProperty -Path $key -Name $property -ErrorAction SilentlyContinue
+          try {
+            foreach ($mode in @(0, 1)) {
+              Set-ItemProperty -Path $key -Name $property -Type DWord -Value $mode
+              $env:WASMOON_TEST_DEVELOPER_MODE = "$mode"
+              python -m unittest scripts.tests.test_wasi_windows_files.WindowsFileTests.test_unprivileged_symlink scripts.tests.test_wasi_windows_files.WindowsFileTests.test_unprivileged_symlink_locks_ancestors -v
+              if ($LASTEXITCODE -ne 0) { throw "Symlink permission matrix failed in Developer Mode $mode" }
+            }
+          } finally {
+            Remove-Item Env:WASMOON_TEST_DEVELOPER_MODE -ErrorAction SilentlyContinue
+            if ($null -eq $old) {
+              Remove-ItemProperty -Path $key -Name $property -ErrorAction SilentlyContinue
+            } else {
+              Set-ItemProperty -Path $key -Name $property -Type DWord -Value $old.$property
+            }
+          }
+
       - name: build Windows runtime
         id: windows_build
         if: ${{ !cancelled() }}

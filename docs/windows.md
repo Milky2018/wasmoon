@@ -146,8 +146,16 @@ Capability-relative opens and mutations use held directory handles. Symlink
 creation through a held parent installs a reparse point on the newly created
 object. If the OS requires the symlink privilege, the adapter enables an
 already-granted privilege on a private thread token for that operation and
-restores the caller's token. An account without that privilege can receive a
-permission error. Host absolute-path creation uses the Windows symbolic-link
+restores the caller's token. If the privilege is unavailable, the adapter retries with the Windows
+unprivileged-creation API after removing the failed placeholder. This fallback
+pins every directory in the normalized volume-GUID path with handles that deny
+write/delete sharing, rejects reparse points, and checks the final directory
+identity against the held capability before creating the link. The temporary
+locks are released after the operation; ordinary directory handles remain
+renameable. Developer Mode is required when the token lacks the symlink
+privilege. Network paths without volume GUIDs, conflicting directory handles,
+and paths whose identity changes while acquiring locks fail safely. Neither
+Developer Mode nor a symlink privilege bypasses filesystem ACLs. Host absolute-path creation uses the Windows symbolic-link
 API, including its unprivileged-creation option. Symlink targets can be read
 back; following an absolute target through a capability remains forbidden.
 

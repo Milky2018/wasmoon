@@ -26,10 +26,11 @@ class WindowsFileTests(unittest.TestCase):
         names = ["open", "openat", "close", "path_within_base", "is_symlink_at", "readlinkat", "linkat",
                  "pread", "pwrite", "write", "getfl", "setfl", "dup", "dup2", "symlinkat", "ftruncate", "renameat"]
         subprocess.run([
-            os.environ.get("WASMOON_MSVC_CL", "clang-cl"), "/std:c11", "/D_CRT_SECURE_NO_WARNINGS", "/LD", "/MD", "/I" + str(directory),
+            os.environ.get("WASMOON_MSVC_CL", "clang-cl"), "/std:c11", "/D_CRT_SECURE_NO_WARNINGS", "/LD", "/MD", "/DWASMOON_SYMLINK_TESTING", "/I" + str(directory),
             str(ROOT / "modules/wasmoon_jit/host_io/windows_io.c"),
             str(ROOT / "modules/wasmoon_jit/host_io/windows_input.c"),
             str(ROOT / "modules/wasmoon_jit/host_io/windows_fs.c"),
+            str(ROOT / "scripts/tests/native/windows_symlink.c"),
             "/link", "/OUT:" + str(library),
             *["/EXPORT:wasmoon_windows_" + name for name in names],
         ], check=True, cwd=directory)
@@ -79,6 +80,75 @@ class WindowsFileTests(unittest.TestCase):
         self.fd = self.open(os.fsencode(self.root), DIRECTORY, 0)
         self.assertGreaterEqual(self.fd, 0)
         self.addCleanup(self.close, self.fd)
+
+    def test_unprivileged_symlink(self):
+        mode = os.environ.get("WASMOON_TEST_DEVELOPER_MODE")
+        if mode not in ("0", "1"):
+            self.skipTest("requires explicit Developer Mode CI configuration")
+        self.assertEqual(self.library.wasmoon_test_remove_symlink_privilege(), 1)
+        try:
+            target = self.root / "target"
+            target.write_bytes(b"target")
+            result = self.symlink(b"target", self.fd, b"link")
+            if mode == "1":
+                self.assertEqual(result, 0, os.strerror(ctypes.get_errno()))
+                self.assertEqual((self.root / "link").read_bytes(), b"target")
+                self.assertEqual(self.symlink(b"missing", self.fd, b"dangling"), 0)
+                self.assertTrue((self.root / "dangling").is_symlink())
+                self.assertEqual(self.symlink(b"target", self.fd, b"link"), -1)
+            else:
+                self.assertEqual(result, -1)
+                self.assertEqual(ctypes.get_errno(), 1)  # EPERM
+                self.assertFalse(os.path.lexists(self.root / "link"))
+            # Success and failure must preserve the caller's restricted token.
+            control = self.root / "control"
+            try:
+                os.symlink("target", control)
+                self.assertEqual(mode, "1")
+            except OSError as error:
+                self.assertEqual(mode, "0")
+                self.assertEqual(error.winerror, 1314)
+        finally:
+            self.assertEqual(self.library.wasmoon_test_restore_token(), 1)
+
+    def test_unprivileged_symlink_locks_ancestors(self):
+        if os.environ.get("WASMOON_TEST_DEVELOPER_MODE") != "1":
+            self.skipTest("requires Developer Mode CI configuration")
+        observations = []
+        callback_type = ctypes.CFUNCTYPE(None)
+
+        @callback_type
+        def locked():
+            # This callback runs at the mutation boundary, while all locks are held.
+            for path in (self.root, self.root.parent):
+                try:
+                    path.rename(path.with_name(path.name + "-moved"))
+                    observations.append("renamed")
+                except OSError as error:
+                    observations.append(error.winerror)
+
+        register = self.library.wasmoon_test_symlink_hook
+        register.argtypes = [ctypes.c_void_p]
+        register(ctypes.cast(locked, ctypes.c_void_p))
+        self.assertEqual(self.library.wasmoon_test_remove_symlink_privilege(), 1)
+        try:
+            self.assertEqual(self.symlink(b"missing", self.fd, b"link"), 0,
+                             os.strerror(ctypes.get_errno()))
+            self.assertEqual(observations, [32, 32])  # ERROR_SHARING_VIOLATION
+        finally:
+            register(None)
+            self.assertEqual(self.library.wasmoon_test_restore_token(), 1)
+        # Locks are operation-scoped; the ordinary descriptor still permits rename.
+        renamed = self.root.with_name("renamed")
+        self.root.rename(renamed)
+        self.root.mkdir()
+        self.assertEqual(self.library.wasmoon_test_remove_symlink_privilege(), 1)
+        try:
+            self.assertEqual(self.symlink(b"missing", self.fd, b"after-rename"), 0)
+        finally:
+            self.assertEqual(self.library.wasmoon_test_restore_token(), 1)
+        self.assertTrue((renamed / "after-rename").is_symlink())
+        self.assertFalse(os.path.lexists(self.root / "after-rename"))
 
     def test_unicode_open_and_binary_contents(self):
         fd = self.openat(self.fd, "中文😀.txt".encode(), os.O_RDWR | os.O_CREAT | NOFOLLOW, 0o600)

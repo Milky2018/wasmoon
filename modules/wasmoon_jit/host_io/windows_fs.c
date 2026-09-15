@@ -269,6 +269,68 @@ static BOOL set_symlink_reparse(HANDLE file, void *data, DWORD size) {
   SetLastError(error);
   return ok;
 }
+// CreateSymbolicLinkW needs a path. Pin every component from the volume root
+// without write/delete sharing, reject reparse points, and verify the final
+// directory against the capability before performing any path-based mutation.
+// Use a volume GUID so a drive-letter remapping cannot redirect the operation.
+static int symlink_unprivileged_at(const char *target, int fd, const char *name,
+                                  int directory) {
+  HANDLE root = wasmoon_windows_fd_handle(fd);
+  BY_HANDLE_FILE_INFORMATION expected, actual;
+  if (!GetFileInformationByHandle(root, &expected)) return wasmoon_windows_error(GetLastError());
+  DWORD capacity = GetFinalPathNameByHandleW(root, NULL, 0, VOLUME_NAME_GUID);
+  if (!capacity) return wasmoon_windows_error(GetLastError());
+  wchar_t *path = malloc(((size_t)capacity + strlen(name) + 2) * sizeof(*path));
+  HANDLE *locks = calloc(capacity, sizeof(*locks));
+  wchar_t *wide_name = wasmoon_windows_utf16(name);
+  wchar_t *wide_target = wasmoon_windows_utf16(target);
+  DWORD error = ERROR_NOT_ENOUGH_MEMORY;
+  size_t count = 0;
+  BOOL ok = FALSE;
+  if (!path || !locks || !wide_name || !wide_target) goto done;
+  DWORD length = GetFinalPathNameByHandleW(root, path, capacity, VOLUME_NAME_GUID);
+  if (!length) { error = GetLastError(); goto done; }
+  if (length >= capacity) { error = ERROR_RETRY; goto done; }
+  wchar_t *volume_end = wcschr(path, L'}');
+  if (wcsncmp(path, L"\\\\?\\Volume{", 11) || !volume_end || volume_end[1] != L'\\') {
+    error = ERROR_NOT_SUPPORTED; goto done;
+  }
+  size_t first = (size_t)(volume_end - path) + 2;
+  for (size_t end = first; end <= length; end++) {
+    if (end != first && end != length && path[end] != L'\\') continue;
+    wchar_t saved = path[end];
+    path[end] = 0;
+    HANDLE lock = CreateFileW(path, FILE_READ_ATTRIBUTES, FILE_SHARE_READ, NULL,
+        OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT, NULL);
+    path[end] = saved;
+    if (lock == INVALID_HANDLE_VALUE) { error = GetLastError(); goto done; }
+    locks[count++] = lock;
+    if (!GetFileInformationByHandle(lock, &actual)) { error = GetLastError(); goto done; }
+    if (!(actual.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) ||
+        (actual.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT)) {
+      error = ERROR_ACCESS_DENIED; goto done;
+    }
+  }
+  if (actual.dwVolumeSerialNumber != expected.dwVolumeSerialNumber ||
+      actual.nFileIndexHigh != expected.nFileIndexHigh || actual.nFileIndexLow != expected.nFileIndexLow) {
+    error = ERROR_ACCESS_DENIED; goto done;
+  }
+#ifdef WASMOON_SYMLINK_TESTING
+  extern void wasmoon_symlink_locked_hook(void);
+  wasmoon_symlink_locked_hook();
+#endif
+  if (length && path[length - 1] != L'\\') path[length++] = L'\\';
+  wcscpy(path + length, wide_name);
+  for (wchar_t *p = wide_target; *p; p++) if (*p == L'/') *p = L'\\';
+  ok = CreateSymbolicLinkW(path, wide_target, SYMBOLIC_LINK_FLAG_ALLOW_UNPRIVILEGED_CREATE |
+      (directory ? SYMBOLIC_LINK_FLAG_DIRECTORY : 0));
+  error = GetLastError();
+done:
+  while (count) CloseHandle(locks[--count]);
+  free(locks); free(path); free(wide_name); free(wide_target);
+  return ok ? 0 : wasmoon_windows_error(error);
+}
+
 int wasmoon_windows_symlinkat(const char *target, int fd, const char *name) {
   if (!*target) { errno = ENOENT; return -1; }
   wchar_t *wide_target = wasmoon_windows_utf16(target);
@@ -344,9 +406,14 @@ int wasmoon_windows_symlinkat(const char *target, int fd, const char *name) {
   DWORD error = GetLastError(); free(data);
   if (!ok) {
     FILE_DISPOSITION_INFO discard = {TRUE};
-    SetFileInformationByHandle(handle, FileDispositionInfo, &discard, sizeof(discard));
+    if (!SetFileInformationByHandle(handle, FileDispositionInfo, &discard, sizeof(discard))) {
+      error = GetLastError();
+    }
   }
   CloseHandle(handle);
+  if (!ok && error == ERROR_PRIVILEGE_NOT_HELD) {
+    return symlink_unprivileged_at(target, fd, name, directory);
+  }
   return ok ? 0 : wasmoon_windows_error(error);
 }
 
