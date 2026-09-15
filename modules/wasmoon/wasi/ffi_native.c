@@ -15,6 +15,7 @@ extern "C" {
 
 #ifdef _WIN32
 #include "../../wasmoon_jit/host_io/windows_io.h"
+#include "../../wasmoon_jit/host_io/windows_fs.h"
 #include <bcrypt.h>
 #pragma comment(lib, "bcrypt.lib")
 #include <ws2tcpip.h>
@@ -30,6 +31,13 @@ typedef int socklen_t;
 #define O_TRUNC _O_TRUNC
 #define O_APPEND _O_APPEND
 #define O_EXCL _O_EXCL
+#define O_DIRECTORY WASMOON_O_DIRECTORY
+#define O_NOFOLLOW WASMOON_O_NOFOLLOW
+#define O_NONBLOCK WASMOON_O_NONBLOCK
+#define O_CLOEXEC _O_NOINHERIT
+#ifndef PATH_MAX
+#define PATH_MAX 32768
+#endif
 #else
 #include <fcntl.h>
 #include <unistd.h>
@@ -55,6 +63,23 @@ static int wasmoon_wasi_path_is_within_base(
   const char *base_real,
   const char *target_real
 );
+#endif
+
+#ifdef _WIN32
+// These aliases are limited to the shared capability walker. They preserve
+// directory handles and prevent ambient traversal during symlink expansion.
+#define openat wasmoon_windows_openat
+#define close wasmoon_windows_close
+#define dup wasmoon_windows_dup
+#define strdup _strdup
+#define readlinkat wasmoon_windows_readlinkat
+static int truncate_open_file(int fd, int64_t size) {
+  int error = _chsize_s(fd, size);
+  if (error) { errno = error; return -1; }
+  return 0;
+}
+#define ftruncate truncate_open_file
+#endif
 
 static void wasmoon_wasi_close_fd_stack(int *fds, size_t length) {
   for (size_t i = 0; i < length; i++) close(fds[i]);
@@ -91,9 +116,13 @@ static int wasmoon_wasi_path_requires_directory(const char *path) {
 }
 
 static int wasmoon_wasi_is_symlink_at(int dir_fd, const char *name) {
+#ifdef _WIN32
+  return wasmoon_windows_is_symlink_at(dir_fd, name);
+#else
   struct stat stat_buffer;
   return fstatat(dir_fd, name, &stat_buffer, AT_SYMLINK_NOFOLLOW) == 0 &&
          S_ISLNK(stat_buffer.st_mode);
+#endif
 }
 
 static char *wasmoon_wasi_prepend_symlink_target(
@@ -269,7 +298,7 @@ static int wasmoon_wasi_open_beneath_impl(
       goto fail;
     }
     char target[PATH_MAX + 1];
-    ssize_t target_length = readlinkat(
+    int64_t target_length = readlinkat(
       fds[fd_length - 1],
       component,
       target,
@@ -319,6 +348,16 @@ static int wasmoon_wasi_open_parent_beneath_impl(int root_fd, const char *path) 
   );
 }
 
+#ifdef _WIN32
+#undef openat
+#undef close
+#undef dup
+#undef strdup
+#undef readlinkat
+#undef ftruncate
+#endif
+
+#ifndef _WIN32
 static int wasmoon_wasi_path_is_within_base(const char *base_real, const char *target_real) {
   if (!base_real || !target_real) return 0;
   if (strcmp(base_real, "/") == 0) {
@@ -389,7 +428,7 @@ static int wasmoon_wasi_path_within_base_impl(const char *base_path, const char 
 // Open a file and return file descriptor
 MOONBIT_FFI_EXPORT int wasmoon_wasi_open(moonbit_bytes_t path, int flags, int mode) {
 #ifdef _WIN32
-  return _open((const char *)path, flags, mode);
+  return wasmoon_windows_open((const char *)path, flags, mode);
 #else
   return open((const char *)path, flags, mode);
 #endif
@@ -399,14 +438,7 @@ MOONBIT_FFI_EXPORT int wasmoon_wasi_open_parent_beneath(
   int root_fd,
   moonbit_bytes_t path
 ) {
-#ifdef _WIN32
-  (void)root_fd;
-  (void)path;
-  errno = ENOTSUP;
-  return -1;
-#else
   return wasmoon_wasi_open_parent_beneath_impl(root_fd, (const char *)path);
-#endif
 }
 
 MOONBIT_FFI_EXPORT int wasmoon_wasi_openat_beneath(
@@ -417,16 +449,6 @@ MOONBIT_FFI_EXPORT int wasmoon_wasi_openat_beneath(
   int mode,
   int follow_final
 ) {
-#ifdef _WIN32
-  (void)root_fd;
-  (void)parent_path;
-  (void)leaf;
-  (void)flags;
-  (void)mode;
-  (void)follow_final;
-  errno = ENOTSUP;
-  return -1;
-#else
   const char *parent = (const char *)parent_path;
   const char *name = (const char *)leaf;
   if (name[0] == '\0' || name[0] == '/') {
@@ -472,12 +494,11 @@ MOONBIT_FFI_EXPORT int wasmoon_wasi_openat_beneath(
   );
   free(path);
   return result;
-#endif
 }
 
 MOONBIT_FFI_EXPORT int wasmoon_wasi_dup(int fd) {
 #ifdef _WIN32
-  return _dup(fd);
+  return wasmoon_windows_dup(fd);
 #else
   return dup(fd);
 #endif

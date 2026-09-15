@@ -1,4 +1,4 @@
 options(
-  "native-stub": [ "windows_io.c" ],
+  "native-stub": [ "windows_io.c", "windows_fs.c" ],
   targets: { "platform.mbt": [ "native" ] },
 )
