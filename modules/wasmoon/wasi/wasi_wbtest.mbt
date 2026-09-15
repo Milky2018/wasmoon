@@ -2496,27 +2496,11 @@ test "wasi: socket operations enforce their base rights" {
   let mem = @runtime.Memory::Memory(1, None)
   mem.write_i32(0, 100)
   mem.write_i32(4, 1)
-  let denied_fd = ctx.alloc_fd({
-    native_fd: 0,
-    file_type: SocketStream,
-    host_path: "<socket-denied>",
-    position: 0L,
-    flags: 0,
-    rights_base: 0L,
-    rights_inheriting: 0L,
-  })
-  let allowed_fd = ctx.alloc_fd({
-    native_fd: 0,
-    file_type: SocketStream,
-    host_path: "<socket-allowed>",
-    position: 0L,
-    flags: 0,
-    rights_base: right_fd_read |
-    right_fd_write |
-    right_sock_shutdown |
-    right_sock_accept,
-    rights_inheriting: 0L,
-  })
+  let native = native_socket_create(4, 2).unwrap()
+  let denied_fd = ctx
+    .take_socket(native, rights_base=0L, rights_inheriting=0L)
+    .unwrap()
+  defer ctx.close_fd(denied_fd) |> ignore
   debug_inspect(
     [
       sock_recv_impl(ctx, mem, denied_fd, 0, 1, 0, 204, 208),
@@ -2525,15 +2509,6 @@ test "wasi: socket operations enforce their base rights" {
       sock_accept_impl(ctx, mem, denied_fd, 0, 216),
     ],
     content="[76, 76, 76, 76]",
-  )
-  debug_inspect(
-    [
-      sock_recv_impl(ctx, mem, allowed_fd, 0, 1, 0, 204, 208),
-      sock_send_impl(ctx, mem, allowed_fd, 0, 1, 0, 212),
-      sock_shutdown_impl(ctx, allowed_fd, 0),
-      sock_accept_impl(ctx, mem, allowed_fd, 0, 216),
-    ],
-    content="[58, 58, 58, 58]",
   )
 }
 

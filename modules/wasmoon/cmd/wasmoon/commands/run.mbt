@@ -507,6 +507,7 @@ pub fn run_wasm(
   }
   let imports = linker.build_imports()
   let instance = @executor.instantiate_module_with_imports(store, mod_, imports) catch {
+    HostExit(code) => return code
     e => {
       @logger.error("instantiating module: \{e}")
       return 1
@@ -604,6 +605,7 @@ pub fn run_wasm(
       let results = @executor.call_exported_func(
         store, instance, func_name, args,
       ) catch {
+        HostExit(code) => return code
         e => {
           @logger.error("\{e}")
           return 1

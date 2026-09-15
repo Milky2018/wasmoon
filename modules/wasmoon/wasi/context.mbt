@@ -9,6 +9,8 @@ pub(all) enum FileType {
   CharacterDevice
   /// Stream socket
   SocketStream
+  /// Datagram socket
+  SocketDatagram
 }
 
 ///|

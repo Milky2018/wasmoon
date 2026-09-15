@@ -20,6 +20,7 @@ options(
   "native-stub": [
     "ffi_native.c",
     "file_semantics_native.c",
+    "socket_semantics_native.c",
     "poll_native.c",
     "directory_native.c",
   ],

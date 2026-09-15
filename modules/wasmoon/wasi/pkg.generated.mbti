@@ -453,6 +453,7 @@ pub(all) enum FileType {
   Directory
   CharacterDevice
   SocketStream
+  SocketDatagram
 }
 
 pub(all) struct IoVec {
@@ -561,6 +562,7 @@ pub fn WasiContext::has_exited(Self) -> Bool
 pub fn WasiContext::is_valid_fd(Self, Int) -> Bool
 pub fn WasiContext::resolve_path(Self, Int, String) -> Result[String, ResolvePathError]
 pub fn WasiContext::resolve_path_nofollow_leaf(Self, Int, String) -> Result[String, ResolvePathError]
+pub fn WasiContext::take_socket(Self, Int, rights_base? : Int64, rights_inheriting? : Int64) -> Result[Int, Int]
 
 pub(all) struct WasiContextBuilder {
   mut args : Array[String]

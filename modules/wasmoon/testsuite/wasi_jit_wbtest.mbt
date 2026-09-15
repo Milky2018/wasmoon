@@ -49,6 +49,7 @@ fn compare_wasi_with_options(
   readonly_preopens? : Array[(String, String)] = [],
   stdin_data? : Bytes,
   stdin_factory? : () -> () -> Bytes,
+  configure_wasi? : ((@wasi.WasiContext) -> Unit raise Error)? = None,
 ) -> WasiCompareResult {
   // Parse the WAT source
   let (mod_, interp_mod) = try {
@@ -98,6 +99,7 @@ fn compare_wasi_with_options(
     stdin_data,
     stdin_callback=stdin_factory.map(fn(make) { make() }),
     readonly_preopens~,
+    configure_wasi~,
   )
 
   // Run JIT with WASI (stdout suppressed)
@@ -110,6 +112,7 @@ fn compare_wasi_with_options(
     stdin_data,
     stdin_callback=stdin_factory.map(fn(make) { make() }),
     readonly_preopens~,
+    configure_wasi~,
   )
 
   // Compare results (return values must match)
@@ -180,6 +183,7 @@ fn run_wasi_interp_quiet(
   stdin_data : Bytes?,
   readonly_preopens? : Array[(String, String)] = [],
   stdin_callback? : (() -> Bytes)? = None,
+  configure_wasi? : ((@wasi.WasiContext) -> Unit raise Error)? = None,
 ) -> (Result[Array[@types.Value], String], Bytes) {
   try {
     let stdout_buf : Array[Byte] = []
@@ -233,6 +237,9 @@ fn run_wasi_interp_quiet(
       }
       wasi_ctx.open_files.clear()
     }
+    if configure_wasi is Some(configure) {
+      configure(wasi_ctx)
+    }
     @wasi.register_wasi(linker, wasi_ctx)
     let instance = @executor.instantiate_with_linker(linker, "test", mod_)
     let result = @executor.call_exported_func(store, instance, func_name, [])
@@ -252,6 +259,7 @@ fn run_wasi_jit_quiet(
   stdin_data : Bytes?,
   readonly_preopens? : Array[(String, String)] = [],
   stdin_callback? : (() -> Bytes)? = None,
+  configure_wasi? : ((@wasi.WasiContext) -> Unit raise Error)? = None,
 ) -> (Result[Array[@types.Value], String], Bytes) {
   func_name |> ignore
   try {
@@ -304,6 +312,9 @@ fn run_wasi_jit_quiet(
         @wasi.native_close(file.native_fd) |> ignore
       }
       wasi_ctx.open_files.clear()
+    }
+    if configure_wasi is Some(configure) {
+      configure(wasi_ctx)
     }
     @wasi.register_wasi(linker, wasi_ctx)
     let instance = @executor.instantiate_with_linker(linker, "test", mod_)
@@ -3320,4 +3331,108 @@ test "WASI comparisons release Store and JIT table owners" {
       content="true",
     )
   }
+}
+
+///|
+fn prepare_p1_socket_pair(ctx : @wasi.WasiContext, stream : Bool) -> Unit raise {
+  let kind = if stream { 1 } else { 2 }
+  let left = @wasi.native_socket_create(4, kind).unwrap()
+  inspect(ctx.take_socket(left).unwrap(), content="3")
+  let right = @wasi.native_socket_create(4, kind).unwrap()
+  inspect(ctx.take_socket(right).unwrap(), content="4")
+  let address : @wasi.NativeSocketAddress = {
+    family: 4,
+    address: [b'\x7f', b'\x00', b'\x00', b'\x01'],
+    port: 0,
+    scope_id: 0,
+  }
+  assert_true(@wasi.native_socket_bind(left, address))
+  assert_true(@wasi.native_socket_bind(right, address))
+  inspect(@wasi.fd_fdstat_set_flags_impl(ctx, 3, 0), content="0")
+  inspect(@wasi.fd_fdstat_set_flags_impl(ctx, 4, 0), content="0")
+  if stream {
+    assert_true(@wasi.native_socket_listen(left, 1))
+  }
+  inspect(
+    @wasi.native_socket_connect(
+      right,
+      @wasi.native_socket_address(left, false).unwrap(),
+    ),
+    content="0",
+  )
+  if !stream {
+    inspect(
+      @wasi.native_socket_connect(
+        left,
+        @wasi.native_socket_address(right, false).unwrap(),
+      ),
+      content="0",
+    )
+  }
+}
+
+///|
+test "wasi jit: injected datagrams support scatter gather peek and truncation" {
+  let source =
+    #|(module
+    #|  (import "wasi_snapshot_preview1" "sock_send" (func $send (param i32 i32 i32 i32 i32) (result i32)))
+    #|  (import "wasi_snapshot_preview1" "sock_recv" (func $recv (param i32 i32 i32 i32 i32 i32) (result i32)))
+    #|  (memory (export "memory") 1)
+    #|  (data (i32.const 100) "hello")
+    #|  (func $assert (param i32) (if (i32.eqz (local.get 0)) (then unreachable)))
+    #|  (func (export "test") (result i32)
+    #|    (i32.store (i32.const 0) (i32.const 100))
+    #|    (i32.store (i32.const 4) (i32.const 2))
+    #|    (i32.store (i32.const 8) (i32.const 102))
+    #|    (i32.store (i32.const 12) (i32.const 3))
+    #|    (call $assert (i32.eqz (call $send (i32.const 3) (i32.const 0) (i32.const 2) (i32.const 0) (i32.const 40))))
+    #|    (i32.store (i32.const 12) (i32.const 1))
+    #|    (call $assert (i32.eqz (call $recv (i32.const 4) (i32.const 0) (i32.const 2) (i32.const 1) (i32.const 40) (i32.const 44))))
+    #|    (call $assert (i32.eq (i32.load (i32.const 40)) (i32.const 3)))
+    #|    (call $assert (i32.eq (i32.load16_u (i32.const 44)) (i32.const 1)))
+    #|    (i32.store (i32.const 12) (i32.const 3))
+    #|    (call $assert (i32.eqz (call $recv (i32.const 4) (i32.const 0) (i32.const 2) (i32.const 0) (i32.const 40) (i32.const 44))))
+    #|    (call $assert (i32.eq (i32.load (i32.const 40)) (i32.const 5)))
+    #|    (call $assert (i32.eqz (i32.load16_u (i32.const 44))))
+    #|    (call $assert (i32.eq (i32.load (i32.const 100)) (i32.const 0x6c6c6568)))
+    #|    (i32.const 0)))
+  let result = compare_wasi_with_options(
+    source,
+    "test",
+    configure_wasi=Some(ctx => prepare_p1_socket_pair(ctx, false)),
+  )
+  inspect(result.match_, content="true")
+  inspect(wasi_errno_from_result(result.jit_result), content="0")
+}
+
+///|
+test "wasi jit: injected listener supports accept waitall and shutdown" {
+  let source =
+    #|(module
+    #|  (import "wasi_snapshot_preview1" "sock_accept" (func $accept (param i32 i32 i32) (result i32)))
+    #|  (import "wasi_snapshot_preview1" "sock_send" (func $send (param i32 i32 i32 i32 i32) (result i32)))
+    #|  (import "wasi_snapshot_preview1" "sock_recv" (func $recv (param i32 i32 i32 i32 i32 i32) (result i32)))
+    #|  (import "wasi_snapshot_preview1" "sock_shutdown" (func $shutdown (param i32 i32) (result i32)))
+    #|  (memory (export "memory") 1)
+    #|  (data (i32.const 100) "hello")
+    #|  (func $assert (param i32) (if (i32.eqz (local.get 0)) (then unreachable)))
+    #|  (func (export "test") (result i32) (local $fd i32)
+    #|    (call $assert (i32.eqz (call $accept (i32.const 3) (i32.const 0) (i32.const 40))))
+    #|    (local.set $fd (i32.load (i32.const 40)))
+    #|    (i32.store (i32.const 0) (i32.const 100))
+    #|    (i32.store (i32.const 4) (i32.const 5))
+    #|    (call $assert (i32.eqz (call $send (i32.const 4) (i32.const 0) (i32.const 1) (i32.const 0) (i32.const 40))))
+    #|    (call $assert (i32.eqz (call $recv (local.get $fd) (i32.const 0) (i32.const 1) (i32.const 2) (i32.const 40) (i32.const 44))))
+    #|    (call $assert (i32.eq (i32.load (i32.const 40)) (i32.const 5)))
+    #|    (call $assert (i32.eqz (call $shutdown (i32.const 4) (i32.const 2))))
+    #|    (call $assert (i32.eqz (call $recv (local.get $fd) (i32.const 0) (i32.const 1) (i32.const 0) (i32.const 40) (i32.const 44))))
+    #|    (call $assert (i32.eqz (i32.load (i32.const 40))))
+    #|    (i32.const 0)))
+  let result = compare_wasi_with_options(
+    source,
+    "test",
+    configure_wasi=Some(ctx => prepare_p1_socket_pair(ctx, true)),
+  )
+  inspect(result.match_, content="true")
+  inspect(wasi_errno_from_result(result.jit_result), content="0")
 }

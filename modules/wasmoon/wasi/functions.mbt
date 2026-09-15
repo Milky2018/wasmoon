@@ -141,6 +141,7 @@ fn open_file_type_from_native(stat_filetype : Int) -> FileType {
   match stat_filetype {
     3 => Directory
     2 => CharacterDevice
+    5 => SocketDatagram
     6 => SocketStream
     _ => RegularFile
   }
@@ -1261,6 +1262,7 @@ pub fn fd_fdstat_get(
           Directory => 3 // directory
           CharacterDevice => 2 // character_device
           SocketStream => 6 // socket_stream
+          SocketDatagram => 5 // socket_dgram
         }
         (ft, file.flags & 0x1F, file.rights_base, file.rights_inheriting)
       }
@@ -1851,7 +1853,7 @@ fn socket_with_base_rights(
   match ctx.get_file(fd) {
     Some(file) => {
       match file.file_type {
-        SocketStream => ()
+        SocketStream | SocketDatagram => ()
         _ => return Err(NotSock)
       }
       match file.require_base_rights(required) {
@@ -2031,6 +2033,9 @@ pub fn fd_filestat_get_impl(
       match stat {
         Some(s) => {
           write_filestat(mem, buf_ptr, s)
+          if file.file_type is SocketDatagram {
+            mem.write_byte(buf_ptr + 16, b'\x05')
+          }
           Errno::Success.to_i32()
         }
         None => native_last_errno_to_wasi()
@@ -2315,6 +2320,9 @@ pub fn fd_fdstat_set_flags_impl(
   }
   if file.require_base_rights(right_fd_fdstat_set_flags) is Err(errno) {
     return errno.to_i32()
+  }
+  if file.file_type is (SocketStream | SocketDatagram) && (flags & 0x1B) != 0 {
+    return Errno::Inval.to_i32()
   }
   // Convert WASI fdflags to native flags
   // WASI: 0x01 = APPEND, 0x02 = DSYNC, 0x04 = NONBLOCK, 0x08 = RSYNC, 0x10 = SYNC
@@ -2614,10 +2622,37 @@ pub fn sock_recv_impl(
   if riflags_check != Errno::Success.to_i32() {
     return riflags_check
   }
-  match socket_with_base_rights(ctx, fd, right_fd_read) {
-    Ok(_) => Errno::NotSup.to_i32()
-    Err(errno) => errno.to_i32()
+  let file = match socket_with_base_rights(ctx, fd, right_fd_read) {
+    Ok(file) => file
+    Err(errno) => return errno.to_i32()
   }
+  let (entries, length) = match socket_iovecs(mem, ri_data_ptr, ri_data_len) {
+    Ok(value) => value
+    Err(errno) => return errno
+  }
+  let buffer = FixedArray::make(length, b'\x00')
+  let truncated = FixedArray::make(1, 0)
+  let received = if length == 0 && file.file_type is SocketStream {
+    0
+  } else {
+    c_p1_recv(file.native_fd, buffer, length, ri_flags, truncated)
+  }
+  if received < 0 {
+    return native_last_errno_to_wasi()
+  }
+  let mut offset = 0
+  for entry in entries {
+    let (start, size) = entry
+    let copied = @cmp.minimum(size, received - offset)
+    for i in 0..<copied {
+      mem.write_byte(start + i, buffer[offset + i])
+    }
+    offset += copied
+  }
+  mem.write_i32(ro_datalen_ptr, received)
+  mem.write_byte(ro_flags_ptr, truncated[0].to_byte())
+  mem.write_byte(ro_flags_ptr + 1, b'\x00')
+  Errno::Success.to_i32()
 }
 
 ///|
@@ -2628,7 +2663,7 @@ pub fn sock_send_impl(
   fd : Int,
   si_data_ptr : Int,
   si_data_len : Int,
-  _si_flags : Int,
+  si_flags : Int,
   so_datalen_ptr : Int,
 ) -> Int {
   if !check_mem_range(mem, so_datalen_ptr, 4) {
@@ -2637,10 +2672,32 @@ pub fn sock_send_impl(
   if !check_iovecs_mem_range(mem, si_data_ptr, si_data_len) {
     return Errno::Fault.to_i32()
   }
-  match socket_with_base_rights(ctx, fd, right_fd_write) {
-    Ok(_) => Errno::NotSup.to_i32()
-    Err(errno) => errno.to_i32()
+  let file = match socket_with_base_rights(ctx, fd, right_fd_write) {
+    Ok(file) => file
+    Err(errno) => return errno.to_i32()
   }
+  if si_flags != 0 {
+    return Errno::Inval.to_i32()
+  }
+  let (entries, length) = match socket_iovecs(mem, si_data_ptr, si_data_len) {
+    Ok(value) => value
+    Err(errno) => return errno
+  }
+  let buffer = FixedArray::make(length, b'\x00')
+  let mut offset = 0
+  for entry in entries {
+    let (start, size) = entry
+    for i in 0..<size {
+      buffer[offset + i] = mem.read_byte(start + i)
+    }
+    offset += size
+  }
+  let sent = c_p1_send(file.native_fd, buffer, length)
+  if sent < 0 {
+    return native_last_errno_to_wasi()
+  }
+  mem.write_i32(so_datalen_ptr, sent)
+  Errno::Success.to_i32()
 }
 
 ///|
@@ -2650,9 +2707,20 @@ pub fn sock_shutdown_impl(ctx : WasiContext, fd : Int, how : Int) -> Int {
   if sdflags_check != Errno::Success.to_i32() {
     return sdflags_check
   }
-  match socket_with_base_rights(ctx, fd, right_sock_shutdown) {
-    Ok(_) => Errno::NotSup.to_i32()
-    Err(errno) => errno.to_i32()
+  let file = match socket_with_base_rights(ctx, fd, right_sock_shutdown) {
+    Ok(file) => file
+    Err(errno) => return errno.to_i32()
+  }
+  let direction = match how {
+    1 => 0
+    2 => 1
+    3 => 2
+    _ => return Errno::Inval.to_i32()
+  }
+  if native_shutdown(file.native_fd, direction) {
+    0
+  } else {
+    native_last_errno_to_wasi()
   }
 }
 
@@ -2672,10 +2740,49 @@ pub fn sock_accept_impl(
   if fdflags_check != Errno::Success.to_i32() {
     return fdflags_check
   }
-  match socket_with_base_rights(ctx, fd, right_sock_accept) {
-    Ok(_) => Errno::NotSup.to_i32()
-    Err(errno) => errno.to_i32()
+  let file = match socket_with_base_rights(ctx, fd, right_sock_accept) {
+    Ok(file) => file
+    Err(errno) => return errno.to_i32()
   }
+  if file.file_type is SocketDatagram {
+    return Errno::NotSup.to_i32()
+  }
+  if (flags & 0x1B) != 0 {
+    return Errno::Inval.to_i32()
+  }
+  let accepted = native_accept(file.native_fd)
+  if accepted < 0 {
+    return native_last_errno_to_wasi()
+  }
+  let native_flags = match native_fcntl_getfl(accepted) {
+    Some(value) => value
+    None => {
+      let errno = native_last_errno_to_wasi()
+      native_close(accepted) |> ignore
+      return errno
+    }
+  }
+  let native_flags = if (flags & 4) != 0 {
+    native_flags | native_o_nonblock()
+  } else {
+    native_flags & native_o_nonblock().lnot()
+  }
+  if !native_fcntl_setfl(accepted, native_flags) {
+    let errno = native_last_errno_to_wasi()
+    native_close(accepted) |> ignore
+    return errno
+  }
+  let guest_fd = ctx.alloc_fd({
+    native_fd: accepted,
+    file_type: SocketStream,
+    host_path: "",
+    position: 0L,
+    flags,
+    rights_base: file.rights_inheriting,
+    rights_inheriting: file.rights_inheriting,
+  })
+  mem.write_i32(result_fd_ptr, guest_fd)
+  0
 }
 
 ///|

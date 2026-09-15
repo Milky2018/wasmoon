@@ -3,7 +3,7 @@
 @@ -24,17 +24,10 @@
      let mut stat = wasip1::fd_filestat_get(file_fd).expect("reading file stats");
      assert_eq!(stat.size, 0, "file size should be 0");
- 
+
 -    let err = wasip1::fd_allocate(file_fd, 0, 100)
 -        .err()
 -        .expect("fd_allocate must fail");
@@ -13,11 +13,11 @@
 -        "fd_allocate should fail with NOTSUP"
 -    );
 +    wasip1::fd_allocate(file_fd, 0, 100).expect("allocating file storage");
- 
+
      stat = wasip1::fd_filestat_get(file_fd).expect("reading file stats");
 -    assert_eq!(stat.size, 0, "file size should still be 0");
 +    assert_eq!(stat.size, 100, "allocation extends the file");
- 
+
      wasip1::fd_close(file_fd).expect("closing a file");
      wasip1::path_unlink_file(dir_fd, "file").expect("removing a file");
 --- a/upstream/crates/test-programs/src/bin/p1_path_filestat.rs
@@ -47,6 +47,6 @@
 +    let sync_stat = wasip1::fd_fdstat_get(sync_fd).expect("reading sync flags");
 +    assert_eq!(sync_stat.fs_flags & wasip1::FDFLAGS_SYNC, wasip1::FDFLAGS_SYNC);
 +    wasip1::fd_close(sync_fd).expect("closing synchronous descriptor");
- 
+
      // Check file size
      let file_stat = wasip1::path_filestat_get(dir_fd, 0, "file").expect("reading file stats");

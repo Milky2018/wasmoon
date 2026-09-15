@@ -175,17 +175,13 @@ pub fn register_wasi(
   linker.add_host_func(
     "wasi_snapshot_preview1",
     "proc_exit",
-    fn(args) {
+    fn(args) raise @runtime.RuntimeError {
       let exit_code = match args[0] {
         I32(v) => v
         _ => 1
       }
-      // This will raise WasiExit
-      proc_exit(ctx, exit_code) catch {
-        _ => ()
-      }
-      // This line is never reached in normal execution
-      []
+      ctx.exit_code = Some(exit_code)
+      raise @runtime.HostExit(exit_code)
     },
     func_type=make_func_type([i32], []),
   )

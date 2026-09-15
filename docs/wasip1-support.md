@@ -57,10 +57,10 @@ filesystem combinations. ISS-536 owns the final matrix and exclusion audit.
 | `proc_raise` | Policy/implementation review | ISS-535 | CPU clocks, host yield and opt-in signal delivery need explicit contracts. |
 | `random_get` | Implemented; baseline coverage | ISS-536 | Audit bounds, errors, rights and applicable descriptor kinds; retain external regressions. |
 | `sched_yield` | Policy/implementation review | ISS-535 | CPU clocks, host yield and opt-in signal delivery need explicit contracts. |
-| `sock_accept` | Missing operation | ISS-534 | Currently returns NotSup after validation; add host-provided sockets and complete flags. |
-| `sock_recv` | Missing operation | ISS-534 | Currently returns NotSup after validation; add host-provided sockets and complete flags. |
-| `sock_send` | Missing operation | ISS-534 | Currently returns NotSup after validation; add host-provided sockets and complete flags. |
-| `sock_shutdown` | Missing operation | ISS-534 | Currently returns NotSup after validation; add host-provided sockets and complete flags. |
+| `sock_accept` | Implemented; CI pending | ISS-534 | Host-injected stream/datagram sockets, rights and P1 flags. |
+| `sock_recv` | Implemented; CI pending | ISS-534 | Host-injected stream/datagram sockets, rights and P1 flags. |
+| `sock_send` | Implemented; CI pending | ISS-534 | Host-injected stream/datagram sockets, rights and P1 flags. |
+| `sock_shutdown` | Implemented; CI pending | ISS-534 | Host-injected stream/datagram sockets, rights and P1 flags. |
 
 ## Cross-cutting contract
 
@@ -153,3 +153,18 @@ The capabilities external profile changes only the upstream NOTSUP expectations
 for allocation and SYNC. The unchanged upstream and explicit-rights profiles
 remain available; their failures on those two programs are intentional behavior
 differences. See `wasi-tests/wasmtime/implemented-capabilities.patch`.
+
+## Socket ownership and transfers
+
+`WasiContext::take_socket` transfers ownership only on success. The guest receives
+an explicit rights subset; accepting a connection derives its rights from the
+listener's inheriting rights. Windows callers use adapter descriptors, not raw
+Winsock handles. Datagram sends gather all iovecs into one message; receives
+scatter one message and report truncation, including with PEEK. Stream WAITALL,
+EOF, half-close and nonblocking status are delegated to the native socket backend.
+Readiness uses the same descriptors. Local TCP/UDP guest tests run through both
+engines; Windows acceptance remains pending.
+
+Shared P1 `proc_exit` now unwinds guest execution via a typed host exit outcome.
+The CLI regression places `unreachable` after the exit call to detect accidental
+continuation as well as loss of the exit status.

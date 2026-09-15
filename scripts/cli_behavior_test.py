@@ -79,7 +79,7 @@ EXPLORABLE_WAT = """(module
   (func (export "one") (result i32) (i32.const 1)))
 """
 
-WASI_EXIT_WAT = '(module (import "wasi_snapshot_preview1" "proc_exit" (func $exit (param i32))) (func (export "_start") (call $exit (i32.const 7))))'
+WASI_EXIT_WAT = '(module (import "wasi_snapshot_preview1" "proc_exit" (func $exit (param i32))) (func (export "_start") (call $exit (i32.const 7)) unreachable))'
 
 
 class Failure(Exception):

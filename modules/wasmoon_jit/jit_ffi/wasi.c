@@ -4126,6 +4126,12 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_clear_wasi_exit_managed(
     wasmoon_jit_clear_wasi_exit(MANAGED_CTX(jit_context));
 }
 
+MOONBIT_FFI_EXPORT void wasmoon_jit_set_wasi_exit_code_managed(void *jit_context, int code) {
+    jit_context_t *ctx = (jit_context_t *)(uintptr_t)MANAGED_CTX(jit_context);
+    ctx->wasi_exited = 1;
+    ctx->wasi_exit_code = code;
+}
+
 #undef MANAGED_CTX
 
 #if defined(_MSC_VER) && !defined(__clang__)
