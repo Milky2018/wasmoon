@@ -316,7 +316,11 @@ static native_fiber_t *allocate_fiber(
     SYSTEM_INFO info;
     GetSystemInfo(&info);
     fiber->guard_size = info.dwPageSize;
-    fiber->context.handle = CreateFiberEx(size, size, FIBER_FLAG_FLOAT_SWITCH,
+    // Keep uncommitted space below the stack, including at exact MiB sizes.
+    // Equal commit/reserve sizes can otherwise leave the allocation base writable.
+    if (size > SIZE_MAX - info.dwAllocationGranularity) { free(fiber); return NULL; }
+    size_t reserve = size + info.dwAllocationGranularity;
+    fiber->context.handle = CreateFiberEx(size, reserve, FIBER_FLAG_FLOAT_SWITCH,
                                          fiber_bootstrap, NULL);
     if (!fiber->context.handle) { free(fiber); return NULL; }
     return fiber;

@@ -48,8 +48,14 @@ test "import trampolines: external imports override builtin fallback" {
     content="Some(1234)",
   )
   assert_true(
-    resolve_import_function_ptr(external, "wasi_snapshot_preview1", "fd_write")
-    is Some(_),
+    (resolve_import_function_ptr(external, "wasi_snapshot_preview1", "fd_write")
+    is Some(_)) ==
+    !@host_io.is_windows(),
+  )
+  external.set("wasi_snapshot_preview1", { "fd_write": 5678L })
+  debug_inspect(
+    resolve_import_function_ptr(external, "wasi_snapshot_preview1", "fd_write"),
+    content="Some(5678)",
   )
   debug_inspect(
     resolve_import_function_ptr(external, "env", "memory"),

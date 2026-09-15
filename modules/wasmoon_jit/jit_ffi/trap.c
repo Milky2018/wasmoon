@@ -931,6 +931,8 @@ static LONG CALLBACK windows_trap_handler(EXCEPTION_POINTERS *exception) {
             trap = WASMOON_TRAP_MEMORY_BOUNDS;
         else return EXCEPTION_CONTINUE_SEARCH;
     } else return EXCEPTION_CONTINUE_SEARCH;
+    activation->func_idx = activation->context
+        ? (sig_atomic_t)activation->context->debug_current_func_idx : -1;
     activation->code = trap;
     activation->signal = (sig_atomic_t)code;
     activation->pc = pc;

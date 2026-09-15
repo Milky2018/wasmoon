@@ -159,8 +159,6 @@ def execute(command: list[str], directory: Path, timeout: float,
             if terminal and not windows_console:
                 master, slave = pty.openpty()
             env = os.environ.copy()
-            if directory.name == "p1_path_rename":
-                env["WASMOON_WINDOWS_FS_TRACE"] = "1"
             # A fresh per-case JIT cache avoids testing an unrelated old artifact.
             env["WASMOON_JIT_CACHE_DIR"] = str(directory / "jit-cache")
             proc = subprocess.Popen(

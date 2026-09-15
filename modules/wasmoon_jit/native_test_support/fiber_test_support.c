@@ -396,11 +396,11 @@ static int64_t guard_access_probe(void *closure) {
     return 0;
 }
 
-MOONBIT_FFI_EXPORT int wasmoon_test_fiber_guard_rejects_access(void) {
+MOONBIT_FFI_EXPORT int wasmoon_test_fiber_guard_rejects_access(int64_t stack_size) {
     void *fiber = wasmoon_native_fiber_alloc(
         guard_access_probe,
         NULL,
-        64 * 1024
+        stack_size
     );
     if (!fiber) return 0;
 #ifdef _WIN32

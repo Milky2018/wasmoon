@@ -26,7 +26,7 @@ extern "c" fn c_nested_trap_probe() -> Int64 = "wasmoon_test_nested_trap_probe"
 extern "c" fn c_parked_gc_root_probe() -> Int64 = "wasmoon_test_parked_gc_root_probe"
 
 ///|
-extern "c" fn c_fiber_guard_rejects_access() -> Int = "wasmoon_test_fiber_guard_rejects_access"
+extern "c" fn c_fiber_guard_rejects_access(stack_size : Int64) -> Int = "wasmoon_test_fiber_guard_rejects_access"
 
 ///|
 extern "c" fn c_fiber_preserves_registers() -> Int = "wasmoon_test_fiber_preserves_registers"
@@ -156,8 +156,8 @@ pub fn parked_gc_root_probe() -> Int64 {
 }
 
 ///|
-pub fn fiber_guard_rejects_access() -> Bool {
-  c_fiber_guard_rejects_access() == 1
+pub fn fiber_guard_rejects_access(stack_size : Int64) -> Bool {
+  c_fiber_guard_rejects_access(stack_size) == 1
 }
 
 ///|
