@@ -1,10 +1,12 @@
 # Windows native runtime
 
-The Windows port targets AMD64, using the native MoonBit toolchain and LLVM
-Clang from an x64 Visual Studio developer environment. Interpreter and JIT
-execution are both implemented and verified. [Acceptance CI 34936397161](https://github.com/Milky2018/wasmoon/actions/runs/34936397161)
-at `4840bc78` passed Windows AMD64, Linux AMD64 and macOS ARM64; ISS-525,
-ISS-177 and the discovered trailing-slash capability issue ISS-526 are closed.
+The Windows port targets AMD64, using the native MoonBit toolchain with either
+Microsoft C/MASM or LLVM Clang from an x64 Visual Studio developer environment.
+Interpreter and JIT execution are both implemented and verified.
+[Acceptance CI 34943251256](https://github.com/Milky2018/wasmoon/actions/runs/34943251256)
+at `c88857e4` passed independent Windows MSVC and Clang jobs, Linux AMD64 and
+macOS ARM64. Windows readiness and runtime issues ISS-525, ISS-177 and ISS-526,
+and Microsoft compiler support issue ISS-527, are closed.
 
 ## Build and validation
 
@@ -28,9 +30,10 @@ Guest helper addresses use generated SysV-to-Win64 assembly bridges with MSVC;
 Clang uses its calling-convention attribute. Run
 `python scripts/msvc/generate_guest_bridges.py --check` to verify generated
 bridges. `scripts/tests/test_wasi_windows_guest_abi.py` executes every bridge
-against Microsoft-compiled host functions, including stack arguments.
+against Microsoft-compiled host functions, including stack arguments. The probe
+covers 125 runtime helpers and nine native test entries.
 
-MSVC acceptance is tracked in ISS-527. The Windows CI matrix runs both compiler
+MSVC acceptance is recorded in ISS-527. The Windows CI matrix runs both compiler
 configurations independently and retains separate evidence artifacts.
 
 For the Clang configuration, use the commands below. After an MSVC build, skip
@@ -59,14 +62,14 @@ must also pass Linux AMD64 and macOS ARM64. Evidence is uploaded even when a
 Windows test step fails. Native compilation and individual package execution
 have explicit deadlines; a timeout fails the job and is not a skipped test.
 
-The Windows acceptance run executed all 2452 native tests across 44 packages,
-including 167 JIT tests. Both engines passed 258 core WAST files (62563 assertions
+Each Windows compiler configuration executed all 2452 native tests across 44
+packages, including 167 JIT tests. Both engines passed 258 core WAST files (62563 assertions
 per engine), all three component suites (845/153/387 commands per engine), and
 12 readiness guest executions in total. The full misc corpus produced 692
 assertion-bearing passes and 72 script-only passes. WASIp1 produced 116
 explicit-rights passes plus four stdio smoke passes; the intentionally
-out-of-scope hostcall-fuel test is excluded in each engine. All 38 native
-Windows C/AddressSanitizer probes passed.
+out-of-scope hostcall-fuel test is excluded in each engine. All 39 native
+Windows C/AddressSanitizer/ABI probes passed in each compiler configuration.
 
 The pinned upstream corpora and component corrections use Git `-text`
 attributes. Their exact bytes must survive `core.autocrlf`; do not change
