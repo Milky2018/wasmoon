@@ -11,6 +11,8 @@ int wasmoon_windows_error(DWORD error);
 wchar_t *wasmoon_windows_utf16(const char *text);
 int wasmoon_windows_open(const char *path, int flags, int mode);
 int wasmoon_windows_openat(int fd, const char *name, int flags, int mode);
+int wasmoon_windows_path_within_base(const char *base, const char *target);
+unsigned char *wasmoon_windows_directory_entries(int fd, int *length);
 int wasmoon_windows_is_symlink_at(int fd, const char *name);
 int64_t wasmoon_windows_readlinkat(int fd, const char *name, char *buffer, size_t capacity);
 #endif

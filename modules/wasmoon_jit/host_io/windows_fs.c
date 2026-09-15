@@ -63,14 +63,18 @@ static int adopt_file(HANDLE handle, int flags) {
   int fd = _open_osfhandle((intptr_t)handle,
       (flags & (_O_RDONLY | _O_WRONLY | _O_RDWR | _O_APPEND)) | _O_BINARY | _O_NOINHERIT);
   if (fd < 0) CloseHandle(handle);
+  else if (flags & _O_TRUNC) {
+    int error = _chsize_s(fd, 0);
+    if (error) { _close(fd); errno = error; return -1; }
+  }
   return fd;
 }
 int wasmoon_windows_open(const char *path, int flags, int mode) {
   (void)mode;
   wchar_t *name = wasmoon_windows_utf16(path);
   if (!name) return -1;
-  DWORD disposition = flags & _O_CREAT ? (flags & _O_EXCL ? CREATE_NEW :
-      flags & _O_TRUNC ? CREATE_ALWAYS : OPEN_ALWAYS) : flags & _O_TRUNC ? TRUNCATE_EXISTING : OPEN_EXISTING;
+  // Truncate only after verifying no-follow and directory constraints.
+  DWORD disposition = flags & _O_CREAT ? (flags & _O_EXCL ? CREATE_NEW : OPEN_ALWAYS) : OPEN_EXISTING;
   DWORD attributes = FILE_FLAG_BACKUP_SEMANTICS;
   if (flags & WASMOON_O_NOFOLLOW) attributes |= FILE_FLAG_OPEN_REPARSE_POINT;
   HANDLE handle = CreateFileW(name, open_access(flags), FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
@@ -123,8 +127,7 @@ static HANDLE open_relative(int fd, const char *name, ACCESS_MASK access,
 }
 int wasmoon_windows_openat(int fd, const char *name, int flags, int mode) {
   (void)mode;
-  ULONG disposition = flags & _O_CREAT ? (flags & _O_EXCL ? 2 : flags & _O_TRUNC ? 5 : 3)
-                                       : flags & _O_TRUNC ? 4 : 1;
+  ULONG disposition = flags & _O_CREAT ? (flags & _O_EXCL ? 2 : 3) : 1;
   ULONG options = (flags & WASMOON_O_NOFOLLOW) ? 0x00200000 : 0;
   // Open reparse points themselves before checking directory-ness: otherwise
   // a directory symlink can be mistaken for an ordinary non-directory error.
@@ -175,5 +178,109 @@ int64_t wasmoon_windows_readlinkat(int fd, const char *name, char *buffer, size_
   size_t copied = (size_t)required < capacity ? (size_t)required : capacity;
   memcpy(buffer, utf8, copied); free(utf8);
   return (int64_t)copied;
+}
+
+static wchar_t *canonical_existing_path(const wchar_t *path) {
+  HANDLE handle = CreateFileW(path, FILE_READ_ATTRIBUTES, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                              NULL, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, NULL);
+  if (handle == INVALID_HANDLE_VALUE) return NULL;
+  DWORD length = GetFinalPathNameByHandleW(handle, NULL, 0, FILE_NAME_NORMALIZED);
+  wchar_t *result = length ? malloc(((size_t)length + 1) * sizeof(*result)) : NULL;
+  if (!result || !GetFinalPathNameByHandleW(handle, result, length + 1, FILE_NAME_NORMALIZED)) {
+    free(result); result = NULL;
+  }
+  DWORD error = GetLastError();
+  CloseHandle(handle); SetLastError(error);
+  return result;
+}
+int wasmoon_windows_path_within_base(const char *base, const char *target) {
+  wchar_t *base_wide = wasmoon_windows_utf16(base);
+  wchar_t *target_wide = wasmoon_windows_utf16(target);
+  if (!base_wide || !target_wide) { free(base_wide); free(target_wide); return 0; }
+  wchar_t *base_final = canonical_existing_path(base_wide);
+  free(base_wide);
+  if (!base_final) { free(target_wide); return 0; }
+  wchar_t *absolute = _wfullpath(NULL, target_wide, 0);
+  free(target_wide);
+  if (!absolute) { free(base_final); return 0; }
+  wchar_t *target_final = NULL;
+  for (;;) {
+    target_final = canonical_existing_path(absolute);
+    if (target_final) break;
+    DWORD error = GetLastError();
+    if (error != ERROR_FILE_NOT_FOUND && error != ERROR_PATH_NOT_FOUND) break;
+    wchar_t *last = wcsrchr(absolute, L'\\');
+    if (!last || last <= absolute + 2) break;
+    *last = L'\0';
+  }
+  free(absolute);
+  size_t length = wcslen(base_final);
+  while (length && base_final[length - 1] == L'\\') length--;
+  int within = target_final && wcslen(target_final) >= length &&
+      CompareStringOrdinal(base_final, (int)length, target_final, (int)length, TRUE) == CSTR_EQUAL &&
+      (target_final[length] == 0 || target_final[length] == L'\\');
+  free(base_final); free(target_final);
+  return within;
+}
+unsigned char *wasmoon_windows_directory_entries(int fd, int *length) {
+  HANDLE handle = open_relative(fd, ".", FILE_LIST_DIRECTORY | FILE_READ_ATTRIBUTES, 1, 1);
+  if (handle == INVALID_HANDLE_VALUE) return NULL;
+  union { uint64_t align; unsigned char bytes[65536]; } entries;
+  size_t capacity = 256, used = 4;
+  uint32_t count = 0;
+  unsigned char *result = malloc(capacity);
+  if (!result) { CloseHandle(handle); errno = ENOMEM; return NULL; }
+  FILE_INFO_BY_HANDLE_CLASS query = FileIdBothDirectoryRestartInfo;
+  for (;;) {
+    if (!GetFileInformationByHandleEx(handle, query, entries.bytes, sizeof(entries.bytes))) {
+      DWORD error = GetLastError();
+      if (error == ERROR_NO_MORE_FILES) break;
+      wasmoon_windows_error(error); goto fail;
+    }
+    query = FileIdBothDirectoryInfo;
+    size_t offset = 0;
+    for (;;) {
+      FILE_ID_BOTH_DIR_INFO *entry = (FILE_ID_BOTH_DIR_INFO *)(entries.bytes + offset);
+      size_t header = offsetof(FILE_ID_BOTH_DIR_INFO, FileName);
+      if (offset > sizeof(entries.bytes) - header || entry->FileNameLength & 1 ||
+          entry->FileNameLength > sizeof(entries.bytes) - offset - header) { errno = EIO; goto fail; }
+      int characters = (int)(entry->FileNameLength / sizeof(wchar_t));
+      if (!((characters == 1 && entry->FileName[0] == L'.') ||
+            (characters == 2 && entry->FileName[0] == L'.' && entry->FileName[1] == L'.'))) {
+        int bytes = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, entry->FileName, characters,
+                                       NULL, 0, NULL, NULL);
+        if (!bytes) { errno = EILSEQ; goto fail; }
+        size_t required = used + 5 + (size_t)bytes;
+        if (required > INT32_MAX) { errno = EOVERFLOW; goto fail; }
+        if (required > capacity) {
+          size_t next = capacity * 2;
+          if (next < required) next = required;
+          unsigned char *grown = realloc(result, next);
+          if (!grown) { errno = ENOMEM; goto fail; }
+          result = grown; capacity = next;
+        }
+        result[used++] = entry->FileAttributes & FILE_ATTRIBUTE_REPARSE_POINT ? 7 :
+                        entry->FileAttributes & FILE_ATTRIBUTE_DIRECTORY ? 3 : 4;
+        for (int i = 0; i < 4; i++) result[used++] = (bytes >> (8 * i)) & 0xff;
+        if (!WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, entry->FileName, characters,
+                                (char *)result + used, bytes, NULL, NULL)) { errno = EILSEQ; goto fail; }
+        used += bytes; count++;
+      }
+      if (!entry->NextEntryOffset) break;
+      if (entry->NextEntryOffset < header || entry->NextEntryOffset > sizeof(entries.bytes) - offset - header) {
+        errno = EIO; goto fail;
+      }
+      offset += entry->NextEntryOffset;
+    }
+  }
+  CloseHandle(handle);
+  for (int i = 0; i < 4; i++) result[i] = (count >> (8 * i)) & 0xff;
+  *length = (int)used;
+  return result;
+fail: {
+  int error = errno;
+  CloseHandle(handle); free(result); errno = error;
+  return NULL;
+}
 }
 #endif

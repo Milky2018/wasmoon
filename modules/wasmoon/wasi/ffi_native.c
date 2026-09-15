@@ -615,9 +615,7 @@ MOONBIT_FFI_EXPORT int wasmoon_wasi_path_within_base(
   moonbit_bytes_t target_path
 ) {
 #ifdef _WIN32
-  (void)base_path;
-  (void)target_path;
-  return 1;
+  return wasmoon_windows_path_within_base((const char *)base_path, (const char *)target_path);
 #else
   return wasmoon_wasi_path_within_base_impl(
     (const char *)base_path,
