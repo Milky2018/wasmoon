@@ -8,6 +8,34 @@ ISS-177 and the discovered trailing-slash capability issue ISS-526 are closed.
 
 ## Build and validation
 
+The Microsoft compiler path uses `cl.exe` for C and `ml64.exe` for assembly.
+Install Visual Studio C++ Build Tools with the Windows SDK and AddressSanitizer
+component for the native sanitizer tests. From an x64 developer PowerShell:
+
+```powershell
+. ./scripts/msvc/setup.ps1
+moon update
+moon build --target native --release --jobs 2 --target-dir target/windows-build
+```
+
+The setup script builds a compiler driver because Moon passes all native stubs,
+including assembly, to its C compiler. The driver forwards C compilation and
+linking to the actual Microsoft tools and assembles `.S` stubs using their
+checked-in MASM counterparts. No C compilation falls back to Clang. Re-run setup
+in each new shell. MSVC C11 atomics are enabled explicitly by the driver.
+
+Guest helper addresses use generated SysV-to-Win64 assembly bridges with MSVC;
+Clang uses its calling-convention attribute. Run
+`python scripts/msvc/generate_guest_bridges.py --check` to verify generated
+bridges. `scripts/tests/test_wasi_windows_guest_abi.py` executes every bridge
+against Microsoft-compiled host functions, including stack arguments.
+
+MSVC acceptance is tracked in ISS-527. The Windows CI matrix runs both compiler
+configurations independently and retains separate evidence artifacts.
+
+For the Clang configuration, use the commands below. After an MSVC build, skip
+the `MOON_CC` assignment and use the same executable-copy and test commands.
+
 Use PowerShell in the x64 developer environment, with `moon`, `clang`, Python
 3.12 or later, and `wasm-tools` 1.254.0 on `PATH`:
 

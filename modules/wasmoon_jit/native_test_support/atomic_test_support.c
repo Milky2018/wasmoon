@@ -87,23 +87,23 @@ typedef struct {
     uint8_t *base;
     int32_t width;
     int32_t iterations;
-    int32_t cancelled;
+    _Atomic int32_t cancelled;
 } atomic_counter_worker;
 
 static WORKER_RESULT run_atomic_counter(void *argument) {
     atomic_counter_worker *worker = argument;
-    uint32_t *start = (uint32_t *)(worker->base + 16);
-    while (!__atomic_load_n(start, __ATOMIC_SEQ_CST)) {
-        if (__atomic_load_n(&worker->cancelled, __ATOMIC_SEQ_CST)) return WORKER_DONE;
+    _Atomic uint32_t *start = (_Atomic uint32_t *)(worker->base + 16);
+    while (!atomic_load_explicit(start, memory_order_seq_cst)) {
+        if (atomic_load_explicit(&worker->cancelled, memory_order_seq_cst)) return WORKER_DONE;
         yield_worker();
     }
-    __atomic_store_n((uint32_t *)(worker->base + 20), 1, __ATOMIC_SEQ_CST);
+    atomic_store_explicit((_Atomic uint32_t *)(worker->base + 20), 1, memory_order_seq_cst);
     for (int32_t i = 0; i < worker->iterations; i++) {
-        if (__atomic_load_n(&worker->cancelled, __ATOMIC_SEQ_CST)) break;
+        if (atomic_load_explicit(&worker->cancelled, memory_order_seq_cst)) break;
         if (worker->width == 4) {
-            __atomic_fetch_add((uint32_t *)worker->base, 1, __ATOMIC_SEQ_CST);
+            atomic_fetch_add_explicit((_Atomic uint32_t *)worker->base, 1, memory_order_seq_cst);
         } else {
-            __atomic_fetch_add((uint64_t *)worker->base, 1, __ATOMIC_SEQ_CST);
+            atomic_fetch_add_explicit((_Atomic uint64_t *)worker->base, 1, memory_order_seq_cst);
         }
     }
     return WORKER_DONE;
@@ -129,7 +129,7 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_test_atomic_counter_start(
 MOONBIT_FFI_EXPORT void wasmoon_test_atomic_counter_finish(int64_t pointer, int32_t cancel) {
     atomic_counter_worker *worker = (atomic_counter_worker *)(uintptr_t)pointer;
     if (!worker) return;
-    if (cancel) __atomic_store_n(&worker->cancelled, 1, __ATOMIC_SEQ_CST);
+    if (cancel) atomic_store_explicit(&worker->cancelled, 1, memory_order_seq_cst);
     join_worker(worker->thread);
     free(worker);
 }
@@ -140,13 +140,13 @@ typedef struct {
     test_thread thread;
     wasmoon_memory_t *memory;
     int32_t iterations;
-    int32_t cancelled;
+    _Atomic int32_t cancelled;
     int64_t sum;
 } memory_growth_worker;
 
 static int growth_wait(memory_growth_worker *worker, size_t offset) {
-    while (!__atomic_load_n((uint32_t *)(worker->memory->base + offset), __ATOMIC_SEQ_CST)) {
-        if (__atomic_load_n(&worker->cancelled, __ATOMIC_SEQ_CST)) return 0;
+    while (!atomic_load_explicit((_Atomic uint32_t *)(worker->memory->base + offset), memory_order_seq_cst)) {
+        if (atomic_load_explicit(&worker->cancelled, memory_order_seq_cst)) return 0;
         yield_worker();
     }
     return 1;
@@ -156,19 +156,19 @@ static WORKER_RESULT run_memory_growth(void *argument) {
     memory_growth_worker *worker = argument;
     uint8_t *original_base = worker->memory->base;
     if (!growth_wait(worker, 16)) return WORKER_DONE;
-    __atomic_store_n((uint32_t *)(original_base + 20), 1, __ATOMIC_SEQ_CST);
+    atomic_store_explicit((_Atomic uint32_t *)(original_base + 20), 1, memory_order_seq_cst);
     for (int32_t i = 0; i <= worker->iterations; i++) {
-        if (__atomic_load_n(&worker->cancelled, __ATOMIC_SEQ_CST)) return WORKER_DONE;
+        if (atomic_load_explicit(&worker->cancelled, memory_order_seq_cst)) return WORKER_DONE;
         if (i == worker->iterations && !growth_wait(worker, 24)) return WORKER_DONE;
         int32_t old = memory_grow_desc_internal(worker->memory, 1, -1);
         if (old < 0 || worker->memory->base != original_base) {
             worker->sum = -1;
-            __atomic_store_n((uint32_t *)(worker->memory->base + 28), 1, __ATOMIC_SEQ_CST);
+            atomic_store_explicit((_Atomic uint32_t *)(worker->memory->base + 28), 1, memory_order_seq_cst);
             return WORKER_DONE;
         }
         worker->sum += old;
     }
-    __atomic_store_n((uint32_t *)(original_base + 28), 1, __ATOMIC_SEQ_CST);
+    atomic_store_explicit((_Atomic uint32_t *)(original_base + 28), 1, memory_order_seq_cst);
     return WORKER_DONE;
 }
 
@@ -189,7 +189,7 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_test_memory_growth_start(int64_t descriptor, 
 MOONBIT_FFI_EXPORT int64_t wasmoon_test_memory_growth_finish(int64_t pointer, int32_t cancel) {
     memory_growth_worker *worker = (memory_growth_worker *)(uintptr_t)pointer;
     if (!worker) return 0;
-    if (cancel) __atomic_store_n(&worker->cancelled, 1, __ATOMIC_SEQ_CST);
+    if (cancel) atomic_store_explicit(&worker->cancelled, 1, memory_order_seq_cst);
     join_worker(worker->thread);
     int64_t result = worker->sum;
     free(worker);

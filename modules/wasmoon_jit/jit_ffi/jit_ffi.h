@@ -3,6 +3,7 @@
 #ifndef JIT_FFI_H
 #define JIT_FFI_H
 
+#include "moonbit.h"
 #include <stdint.h>
 #include <stddef.h>
 #include <stdatomic.h>
@@ -266,12 +267,12 @@ typedef struct {
 // ============ Executable Memory Functions ============
 // Forward declarations for GC-managed ExecCode
 
-int64_t wasmoon_jit_alloc_exec(int size);
-int wasmoon_jit_copy_code(int64_t dest, uint8_t *src, int size);
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_alloc_exec(int size);
+MOONBIT_FFI_EXPORT int wasmoon_jit_copy_code(int64_t dest, uint8_t *src, int size);
 static int wasmoon_jit_free_exec(int64_t ptr);
-void *wasmoon_jit_stage_exec_managed(int size);
-int wasmoon_jit_finalize_exec_managed(void *exec_code, uint8_t *code, int size);
-int wasmoon_jit_release_exec_managed(void *exec_code);
-int wasmoon_jit_exec_mapping_count(void);
+MOONBIT_FFI_EXPORT void *wasmoon_jit_stage_exec_managed(int size);
+MOONBIT_FFI_EXPORT int wasmoon_jit_finalize_exec_managed(void *exec_code, uint8_t *code, int size);
+MOONBIT_FFI_EXPORT int wasmoon_jit_release_exec_managed(void *exec_code);
+MOONBIT_FFI_EXPORT int wasmoon_jit_exec_mapping_count(void);
 
 #endif // JIT_FFI_H

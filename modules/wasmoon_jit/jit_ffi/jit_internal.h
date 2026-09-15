@@ -173,7 +173,7 @@ int wasmoon_native_fiber_stack_bounds(
     uintptr_t *guard_base,
     size_t *guard_size
 );
-int64_t wasmoon_native_fiber_yield(int64_t value);
+MOONBIT_FFI_EXPORT int64_t wasmoon_native_fiber_yield(int64_t value);
 
 #define WASMOON_HOSTCALL_SUSPEND_STATUS (-1)
 #define WASMOON_FIBER_EVENT_HOSTCALL_SUSPENDED INT64_C(0x57534d5355535001)
@@ -184,10 +184,10 @@ int wasmoon_jit_cancellation_requested(jit_context_t *ctx);
 jit_context_t *jit_execution_control_context(jit_context_t *ctx);
 int wasmoon_native_fiber_own_waiter(void *waiter);
 void wasmoon_native_fiber_release_waiter(void);
-void *wasmoon_atomic_wait_begin(int64_t, int64_t, int32_t, int64_t, int64_t);
-int32_t wasmoon_atomic_wait_poll(void *);
-void wasmoon_atomic_wait_destroy(void *);
-int32_t wasmoon_atomic_notify(int64_t, int64_t, int32_t);
+MOONBIT_FFI_EXPORT void *wasmoon_atomic_wait_begin(int64_t, int64_t, int32_t, int64_t, int64_t);
+MOONBIT_FFI_EXPORT int32_t wasmoon_atomic_wait_poll(void *);
+MOONBIT_FFI_EXPORT void wasmoon_atomic_wait_destroy(void *);
+MOONBIT_FFI_EXPORT int32_t wasmoon_atomic_notify(int64_t, int64_t, int32_t);
 int32_t wasmoon_atomic_wait_guest(jit_context_t *, int64_t, int64_t, int32_t, int64_t, int64_t);
 
 // ============ Executable Memory (exec_mem.c) ============
@@ -202,7 +202,7 @@ int exec_block_count_internal(void);
 // Context allocation/free (internal implementations)
 jit_context_t *alloc_context_internal(int func_count);
 void free_context_internal(jit_context_t *ctx);
-void wasmoon_jit_free_wasi_fds(int64_t ctx_ptr);
+MOONBIT_FFI_EXPORT void wasmoon_jit_free_wasi_fds(int64_t ctx_ptr);
 void ctx_refresh_memory0_fast_fields(jit_context_t *ctx);
 
 // ============ Memory Operations (memory_ops.c) ============

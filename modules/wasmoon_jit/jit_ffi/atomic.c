@@ -10,7 +10,7 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_memory_atomic_load(
     int64_t descriptor, int64_t offset, int32_t width
 ) {
     void *address = atomic_address(descriptor, offset);
-#define LOAD_CASE(WIDTH, TYPE) case WIDTH: return (int64_t)__atomic_load_n((TYPE *)address, __ATOMIC_SEQ_CST)
+#define LOAD_CASE(WIDTH, TYPE) case WIDTH: return (int64_t)atomic_load_explicit((_Atomic(TYPE) *)address, memory_order_seq_cst)
     switch (width) {
         LOAD_CASE(1, uint8_t);
         LOAD_CASE(2, uint16_t);
@@ -25,7 +25,7 @@ MOONBIT_FFI_EXPORT void wasmoon_memory_atomic_store(
     int64_t descriptor, int64_t offset, int32_t width, int64_t value
 ) {
     void *address = atomic_address(descriptor, offset);
-#define STORE_CASE(WIDTH, TYPE) case WIDTH: __atomic_store_n((TYPE *)address, (TYPE)value, __ATOMIC_SEQ_CST); return
+#define STORE_CASE(WIDTH, TYPE) case WIDTH: atomic_store_explicit((_Atomic(TYPE) *)address, (TYPE)value, memory_order_seq_cst); return
     switch (width) {
         STORE_CASE(1, uint8_t);
         STORE_CASE(2, uint16_t);
@@ -41,15 +41,15 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_memory_atomic_rmw(
 ) {
     void *address = atomic_address(descriptor, offset);
 #define RMW_CASE(WIDTH, TYPE) case WIDTH: { \
-    TYPE *pointer = (TYPE *)address; \
+    _Atomic(TYPE) *pointer = (_Atomic(TYPE) *)address; \
     TYPE operand = (TYPE)value; \
     switch (operation) { \
-        case 0: return (int64_t)__atomic_fetch_add(pointer, operand, __ATOMIC_SEQ_CST); \
-        case 1: return (int64_t)__atomic_fetch_sub(pointer, operand, __ATOMIC_SEQ_CST); \
-        case 2: return (int64_t)__atomic_fetch_and(pointer, operand, __ATOMIC_SEQ_CST); \
-        case 3: return (int64_t)__atomic_fetch_or(pointer, operand, __ATOMIC_SEQ_CST); \
-        case 4: return (int64_t)__atomic_fetch_xor(pointer, operand, __ATOMIC_SEQ_CST); \
-        case 5: return (int64_t)__atomic_exchange_n(pointer, operand, __ATOMIC_SEQ_CST); \
+        case 0: return (int64_t)atomic_fetch_add_explicit(pointer, operand, memory_order_seq_cst); \
+        case 1: return (int64_t)atomic_fetch_sub_explicit(pointer, operand, memory_order_seq_cst); \
+        case 2: return (int64_t)atomic_fetch_and_explicit(pointer, operand, memory_order_seq_cst); \
+        case 3: return (int64_t)atomic_fetch_or_explicit(pointer, operand, memory_order_seq_cst); \
+        case 4: return (int64_t)atomic_fetch_xor_explicit(pointer, operand, memory_order_seq_cst); \
+        case 5: return (int64_t)atomic_exchange_explicit(pointer, operand, memory_order_seq_cst); \
         default: abort(); \
     } \
 }
@@ -69,7 +69,7 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_memory_atomic_compare_exchange(
     void *address = atomic_address(descriptor, offset);
 #define CAS_CASE(WIDTH, TYPE) case WIDTH: { \
     TYPE old = (TYPE)expected; \
-    __atomic_compare_exchange_n((TYPE *)address, &old, (TYPE)replacement, 0, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST); \
+    atomic_compare_exchange_strong_explicit((_Atomic(TYPE) *)address, &old, (TYPE)replacement, memory_order_seq_cst, memory_order_seq_cst); \
     return (int64_t)old; \
 }
     switch (width) {
@@ -83,5 +83,5 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_memory_atomic_compare_exchange(
 }
 
 MOONBIT_FFI_EXPORT void wasmoon_atomic_fence(void) {
-    __atomic_thread_fence(__ATOMIC_SEQ_CST);
+    atomic_thread_fence(memory_order_seq_cst);
 }
