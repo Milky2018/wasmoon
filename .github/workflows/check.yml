@@ -234,7 +234,10 @@ jobs:
           if ($tools.Count -ne 1) { throw "Expected exactly one pinned wasm-tools binary" }
           $tools[0].DirectoryName >> $env:GITHUB_PATH
       - name: test Windows descriptor readiness
-        run: python -m unittest discover -s scripts/tests -p 'test_wasi_windows_*.py' -v
+        run: |
+          New-Item -ItemType Directory -Force target | Out-Null
+          python -m unittest discover -s scripts/tests -p 'test_wasi_windows_*.py' -v 2>&1 | Tee-Object -FilePath target/windows-native-probes.log
+          exit $LASTEXITCODE
 
       - name: build Windows runtime
         id: windows_build
@@ -284,6 +287,7 @@ jobs:
         with:
           name: windows-corpus-evidence
           path: |
+            target/windows-native-probes.log
             target/windows-readiness.json
             target/windows-components
             target/windows-misc
@@ -303,6 +307,7 @@ jobs:
           name: windows-native-evidence
           path: |
             target/windows-native-tests
+            target/windows-native-probes.log
             target/windows-readiness.json
             target/windows-components
             target/windows-misc

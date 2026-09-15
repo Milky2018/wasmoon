@@ -1832,13 +1832,13 @@ test "wasi jit: path_open trailing slash can open symlinked directory with nofol
     #|  (memory (export "memory") 1)
     #|  (data (i32.const 0) "wasmoon_jit_trailing_link_dir")
     #|  (data (i32.const 64) "wasmoon_jit_trailing_link_dir/")
-    #|  (data (i32.const 128) "../tmp")
+    #|  (data (i32.const 128) ".")
     #|  (func (export "test") (result i32)
     #|    (local $errno i32)
     #|    (drop (call $path_unlink_file (i32.const 3) (i32.const 0) (i32.const 29)))
     #|    (local.set $errno
     #|      (call $path_symlink
-    #|        (i32.const 128) (i32.const 6) (i32.const 3) (i32.const 0) (i32.const 29)))
+    #|        (i32.const 128) (i32.const 1) (i32.const 3) (i32.const 0) (i32.const 29)))
     #|    (if (i32.ne (local.get $errno) (i32.const 0))
     #|      (then (return (local.get $errno))))
     #|    (local.set $errno
@@ -1859,7 +1859,7 @@ test "wasi jit: path_open trailing slash can open symlinked directory with nofol
 }
 
 ///|
-test "wasi jit: path_open with embedded NUL returns EINVAL" {
+test "wasi jit: path_open with embedded NUL returns the platform path error" {
   let source =
     #|(module
     #|  (import "wasi_snapshot_preview1" "path_open"
@@ -1893,8 +1893,12 @@ test "wasi jit: path_open with embedded NUL returns EINVAL" {
     (@test_fs.temp_dir(), "/"),
   ])
   inspect(result.match_, content="true")
-  inspect(wasi_errno_from_result(result.interp_result), content="28")
-  inspect(wasi_errno_from_result(result.jit_result), content="28")
+  let expected = if @host_io.is_windows() { 44 } else { 28 }
+  inspect(
+    wasi_errno_from_result(result.interp_result) == expected,
+    content="true",
+  )
+  inspect(wasi_errno_from_result(result.jit_result) == expected, content="true")
 }
 
 ///|
@@ -3266,7 +3270,8 @@ test "wasi imports preserve readlink and symlink semantics in both engines" {
       ("file/", 54),
       ("file", 20),
     ] {
-    let (path, errno) = case
+    let (path, portable_errno) = case
+    let errno = if @host_io.is_windows() { 44 } else { portable_errno }
     let source = "(module (import \"wasi_snapshot_preview1\" \"path_symlink\" (func $symlink (param i32 i32 i32 i32 i32) (result i32))) (memory (export \"memory\") 1) (data (i32.const 0) \"\{path}\") (data (i32.const 64) \"x\") (func (export \"test\") (result i32) (call $symlink (i32.const 64) (i32.const 1) (i32.const 3) (i32.const 0) (i32.const \{path.length()}))))"
     let result = compare_wasi_with_options(source, "test", preopens=[
       (root, "/"),

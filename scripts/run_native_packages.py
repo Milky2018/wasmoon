@@ -60,6 +60,31 @@ def run_logged(command: list[str], path: Path, timeout: float) -> dict:
     return result
 
 
+def diagnose_crash(package: str, package_log: Path, output: Path) -> None:
+    """Isolate tests in a crashed binary without rebuilding or changing its verdict."""
+    build = ROOT / "_build/native/debug/test" / package
+    log = package_log.read_text(encoding="utf-8", errors="replace")
+    deadline = time.monotonic() + 300
+    results = []
+    output.mkdir(parents=True, exist_ok=True)
+    for kind in ("blackbox", "whitebox", "internal"):
+        binary = build / (package.rsplit("/", 1)[-1] + f".{kind}_test.exe")
+        metadata = build / f"__{kind}_test_info.json"
+        if binary.name not in log or not binary.is_file() or not metadata.is_file():
+            continue
+        for filename, tests in json.loads(metadata.read_text(encoding="utf-8"))["tests"].items():
+            for test in tests:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    return
+                index = test["index"]
+                result = run_logged([str(binary), f"{filename}:{index}-{index + 1}"],
+                                    output / f"{kind}-{filename}-{index}.log", min(30, remaining))
+                result.update(file=filename, index=index, name=test["name"])
+                results.append(result)
+                (output / "results.json").write_text(json.dumps(results, indent=2) + "\n", encoding="utf-8")
+
+
 def main() -> int:
     sys.stdout.reconfigure(encoding="utf-8")
     sys.stderr.reconfigure(encoding="utf-8")
@@ -98,6 +123,8 @@ def main() -> int:
             result["returncode"] = result["returncode"] or 1
         evidence["packages"].append(result)
         summary.write_text(json.dumps(evidence, indent=2) + "\n", encoding="utf-8")
+        if result["returncode"] and result["executed_tests"] != result["expected_tests"]:
+            diagnose_crash(package, log_path, args.output / (package.replace("/", "_") + "-isolated"))
     return int(any(result["returncode"] or result["timed_out"] for result in evidence["packages"]))
 
 

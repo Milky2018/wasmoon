@@ -230,6 +230,28 @@ class WindowsFileTests(unittest.TestCase):
             finally:
                 os.chdir(previous)
 
+    def test_rename_replaces_empty_directory_and_preserves_nonempty_target(self):
+        source = self.root / "source"
+        target = self.root / "target"
+        source.mkdir()
+        target.mkdir()
+        self.assertEqual(self.rename(self.fd, b"source", self.fd, b"target"), 0)
+        self.assertFalse(source.exists())
+        self.assertTrue(target.is_dir())
+        source.mkdir()
+        (target / "keep").write_bytes(b"retained")
+        self.assertEqual(self.rename(self.fd, b"source", self.fd, b"target"), -1)
+        self.assertTrue(source.is_dir())
+        self.assertEqual((target / "keep").read_bytes(), b"retained")
+
+    def test_rename_relative_target_uses_held_parent(self):
+        (self.root / "source").write_bytes(b"retained")
+        moved = self.root.with_name("moved")
+        self.root.rename(moved)
+        self.assertEqual(self.rename(self.fd, b"source", self.fd, b"target"), 0)
+        self.assertFalse((moved / "source").exists())
+        self.assertEqual((moved / "target").read_bytes(), b"retained")
+
     def test_absolute_symlink_normalizes_nested_target(self):
         nested = self.root / "nested"
         nested.mkdir()

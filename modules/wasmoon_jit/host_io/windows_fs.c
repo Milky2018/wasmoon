@@ -555,13 +555,11 @@ int wasmoon_windows_renameat(int old_fd, const char *old_path, int new_fd, const
   if (!name) { CloseHandle(source); return -1; }
   HANDLE root = NULL;
   if (absolute_path(new_path)) {
-    // FILE_RENAME_INFO does not normalize dot components like CreateFileW.
-    // WASI directory handles may retain a host path ending in "/.".
-    wchar_t *full = _wfullpath(NULL, name, 0);
+    wchar_t *full = nt_absolute_name(name);
     free(name); name = full;
     if (!name) { CloseHandle(source); return -1; }
   } else {
-    if (strchr(new_path, '/') || strchr(new_path, '\\') || strchr(new_path, ':') ||
+    if (!*new_path || strchr(new_path, '/') || strchr(new_path, '\\') || strchr(new_path, ':') ||
         !strcmp(new_path, ".") || !strcmp(new_path, "..")) {
       free(name); CloseHandle(source); errno = EPERM; return -1;
     }
@@ -570,17 +568,21 @@ int wasmoon_windows_renameat(int old_fd, const char *old_path, int new_fd, const
   }
   for (wchar_t *p = name; *p; p++) if (*p == L'/') *p = L'\\';
   size_t bytes = wcslen(name) * sizeof(*name);
-  // The Win32 entry point consumes a NUL-terminated DOS path even though
-  // FileNameLength excludes that terminator. Keep the flexible tail zeroed.
+  // Use the NT operation so relative targets stay anchored to the held parent.
+  // POSIX replacement permits replacing an existing empty directory atomically.
   size_t size = sizeof(FILE_RENAME_INFO) + bytes;
   FILE_RENAME_INFO *info = calloc(1, size);
   if (!info) { free(name); CloseHandle(source); errno = ENOMEM; return -1; }
-  info->ReplaceIfExists = TRUE;
+  info->Flags = FILE_RENAME_FLAG_REPLACE_IF_EXISTS | FILE_RENAME_FLAG_POSIX_SEMANTICS;
   info->RootDirectory = root;
   info->FileNameLength = (DWORD)bytes;
   memcpy(info->FileName, name, bytes);
-  BOOL result = SetFileInformationByHandle(source, FileRenameInfo, info, (DWORD)size);
-  DWORD error = GetLastError();
+  InitOnceExecuteOnce(&file_once, initialize_file_api, NULL, NULL);
+  IO_STATUS_BLOCK io;
+  NTSTATUS status = set_information ? set_information(source, &io, info, (ULONG)size,
+      (FILE_INFORMATION_CLASS)65 /* FileRenameInformationEx */) : (NTSTATUS)0xC00000BB;
+  BOOL result = status >= 0;
+  DWORD error = result ? ERROR_SUCCESS : (status_error ? status_error(status) : ERROR_NOT_SUPPORTED);
   if (getenv("WASMOON_WINDOWS_FS_TRACE")) {
     wchar_t final[4096] = {0};
     GetFinalPathNameByHandleW(source, final, 4096, FILE_NAME_NORMALIZED);
