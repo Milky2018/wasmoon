@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import ctypes
+import errno
 import os
 import shutil
 import threading
@@ -93,6 +94,24 @@ class WindowsFileTests(unittest.TestCase):
         self.assertEqual(self.symlink(b"writeonly", parent, b"link"), 0,
                          os.strerror(ctypes.get_errno()))
         self.assertTrue((self.root / "link").is_symlink())
+
+    def test_missing_symlink_target_precedes_existing_destination_error(self):
+        for directory in (False, True):
+            target = self.root / "target"
+            if directory:
+                target.mkdir()
+            else:
+                target.write_bytes(b"preserved")
+            for name in (b"target", b"target/"):
+                with self.subTest(directory=directory, name=name):
+                    self.assertEqual(self.symlink(b"missing", self.fd, name), -1)
+                    self.assertEqual(ctypes.get_errno(), errno.ENOENT)
+            if directory:
+                self.assertTrue(target.is_dir())
+                target.rmdir()
+            else:
+                self.assertEqual(target.read_bytes(), b"preserved")
+                target.unlink()
 
     def test_workspace_and_temp_volume_symlinks_with_disabled_privilege(self):
         self.assertEqual(self.library.wasmoon_test_disable_symlink_privilege(), 1)

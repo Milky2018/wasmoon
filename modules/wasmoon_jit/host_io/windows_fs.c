@@ -375,8 +375,17 @@ int wasmoon_windows_symlinkat(const char *target, int fd, const char *name) {
     free(data);
     size_t length = strlen(name);
     int trailing_slash = length && name[length - 1] == '/';
-    if (attributes == INVALID_FILE_ATTRIBUTES && errno != EPERM &&
-        (errno == EEXIST || trailing_slash)) return wasmoon_windows_error(target_error);
+    int saved_errno = errno;
+    int collision = saved_errno == EEXIST;
+    if (attributes == INVALID_FILE_ATTRIBUTES && saved_errno == EACCES) {
+      // Creating a non-directory over an existing directory can report ACCESS_DENIED
+      // before name collision. Check that entry through the held parent.
+      HANDLE existing = open_relative(fd, name, FILE_READ_ATTRIBUTES, 1, 0x00200000);
+      if (existing != INVALID_HANDLE_VALUE) { CloseHandle(existing); collision = 1; }
+    }
+    if (attributes == INVALID_FILE_ATTRIBUTES && saved_errno != EPERM &&
+        (collision || trailing_slash)) return wasmoon_windows_error(target_error);
+    errno = saved_errno;
     return -1;
   }
   DWORD returned;
