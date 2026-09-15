@@ -82,6 +82,18 @@ class P1RunnerTests(unittest.TestCase):
             self.assertFalse(source.exists())
         p1.validate_snapshot()
 
+    def test_capability_profile_changes_only_two_documented_programs(self):
+        with p1.prepare_build("explicit-rights") as (rights, _):
+            with p1.prepare_build("capabilities") as (capabilities, build):
+                changed = []
+                for original in (rights / "upstream").rglob("*.rs"):
+                    relative = original.relative_to(rights)
+                    if original.read_bytes() != (capabilities / relative).read_bytes():
+                        changed.append(original.name)
+                self.assertEqual(sorted(changed), ["p1_file_allocate.rs", "p1_path_filestat.rs"])
+                self.assertIn("capabilities", build.name)
+        p1.validate_snapshot()
+
     def test_rights_patch_applies_inside_the_repository_build_directory(self):
         with p1.prepare_build("explicit-rights") as (source, _):
             for name in p1.READONLY_CASES:

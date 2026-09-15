@@ -290,11 +290,7 @@ fn poll_fd_read_nbytes_and_flags(ctx : WasiContext, fd : Int) -> (Int64, Int) {
     Some(stat) => stat
     None => return (1L, 0)
   }
-  let position = match native_tell(file.native_fd) {
-    Some(position) => position
-    None => return (1L, 0)
-  }
-  let position_u = position.reinterpret_as_uint64()
+  let position_u = file.position.reinterpret_as_uint64()
   if stat.size <= position_u {
     (0L, 0x01)
   } else {

@@ -20,7 +20,8 @@ pub(all) struct OpenFile {
   file_type : FileType
   /// Host path (for debugging)
   host_path : String
-  /// Current position (tracked separately for virtual files)
+  /// P1 cursor, shared when the same OpenFile is aliased or renumbered.
+  /// Positioned I/O and host append operations never implicitly move it.
   mut position : Int64
   /// File access flags
   mut flags : Int

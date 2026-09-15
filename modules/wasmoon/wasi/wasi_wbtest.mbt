@@ -866,7 +866,7 @@ test "wasi: path_open honors write-only rights without create flags" {
 }
 
 ///|
-test "wasi: path_open rejects sync fdflags with ENOTSUP" {
+test "wasi: path_open supports synchronous fdflags" {
   let ctx = WasiContextBuilder::WasiContextBuilder()
     .preopen_dir(@test_fs.temp_dir(), "/")
     .build()
@@ -910,7 +910,7 @@ test "wasi: path_open rejects sync fdflags with ENOTSUP" {
     0x10,
     2004,
   )
-  inspect(reopen_result, content="58")
+  inspect(reopen_result, content="0")
   if reopen_result == 0 {
     fd_close(ctx, mem.read_i32(2004)) |> ignore
   }
@@ -2312,7 +2312,7 @@ test "wasi: fd_advise is file-only" {
 }
 
 ///|
-test "wasi: fd_allocate returns ENOTSUP for files and BADF otherwise" {
+test "wasi: fd_allocate allocates files and rejects non-files" {
   let ctx = WasiContextBuilder::WasiContextBuilder()
     .preopen_dir(@test_fs.temp_dir(), "/")
     .build()
@@ -2342,7 +2342,7 @@ test "wasi: fd_allocate returns ENOTSUP for files and BADF otherwise" {
     return
   }
   let fd = mem.read_i32(200)
-  inspect(fd_allocate_impl(ctx, fd, 0L, 100L), content="58")
+  inspect(fd_allocate_impl(ctx, fd, 0L, 100L), content="0")
   fd_close(ctx, fd) |> ignore
   path_unlink_file_impl(ctx, mem, 3, 100, test_path.length()) |> ignore
 }
@@ -2953,7 +2953,7 @@ test "wasi: fd_fdstat_set_flags rejects unknown fdflags bits with EINVAL" {
 }
 
 ///|
-test "wasi: fd_fdstat_set_flags checks descriptor before DSYNC rejection" {
+test "wasi: fd_fdstat_set_flags checks descriptor before setting DSYNC" {
   let ctx = WasiContextBuilder::WasiContextBuilder()
     .preopen_dir(@test_fs.temp_dir(), "/")
     .build()

@@ -87,7 +87,7 @@ def run(engine: str, mutation: str, wasm: Path, root: Path) -> dict:
                 finally:
                     if slot.is_symlink() or (mutation == "leaf" and slot.exists()):
                         slot.unlink()
-                    parked.rename(slot)
+                    parked.replace(slot)
         except Exception as error:
             errors.append(repr(error))
 
@@ -118,7 +118,7 @@ def run(engine: str, mutation: str, wasm: Path, root: Path) -> dict:
     return dict(engine=engine, mutation=mutation, passed=passed, successful_opens=successful_opens,
                 **counts, errors=errors, outside_size=after.st_size,
                 outside_mtime_ns=after.st_mtime_ns, returncode=process.returncode,
-                stderr=stderr.decode(errors="replace"))
+                stdout_hex=output.hex(), stderr=stderr.decode(errors="replace"))
 
 
 def main() -> None:

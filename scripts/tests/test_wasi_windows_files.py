@@ -83,6 +83,17 @@ class WindowsFileTests(unittest.TestCase):
         self.assertGreaterEqual(self.fd, 0)
         self.addCleanup(self.close, self.fd)
 
+    def test_reopened_parent_can_create_writeonly_files_and_symlinks(self):
+        parent = self.openat(self.fd, b".", DIRECTORY, 0)
+        self.assertGreaterEqual(parent, 0, os.strerror(ctypes.get_errno()))
+        self.addCleanup(self.close, parent)
+        file = self.openat(parent, b"writeonly", os.O_WRONLY | os.O_CREAT, 0o600)
+        self.assertGreaterEqual(file, 0, os.strerror(ctypes.get_errno()))
+        self.assertEqual(self.close(file), 0)
+        self.assertEqual(self.symlink(b"writeonly", parent, b"link"), 0,
+                         os.strerror(ctypes.get_errno()))
+        self.assertTrue((self.root / "link").is_symlink())
+
     def test_unprivileged_symlink(self):
         mode = os.environ.get("WASMOON_TEST_DEVELOPER_MODE")
         if mode not in ("0", "1"):

@@ -24,7 +24,7 @@ fn check_iovecs_mem_range(
   iovs : Int,
   iovs_len : Int,
 ) -> Bool {
-  if iovs_len < 0 {
+  if iovs_len < 0 || iovs_len > 0x0FFFFFFF {
     return false
   }
   let iovs_bytes = iovs_len * 8
@@ -245,9 +245,31 @@ pub fn fd_write(
         for j in 0..<buf_len {
           buf[j] = mem.read_byte(buf_ptr + j)
         }
-        let written = native_write(file_entry.native_fd, buf, buf_len)
+        let append = (file_entry.flags & 1) != 0
+        let written = if append {
+          native_write(file_entry.native_fd, buf, buf_len)
+        } else {
+          native_pwrite(file_entry.native_fd, buf, buf_len, file_entry.position)
+        }
         match written {
-          Some(n) => total_written = total_written + n
+          Some(n) => {
+            total_written = total_written + n
+            if append {
+              file_entry.position = match native_tell(file_entry.native_fd) {
+                Some(position) => position
+                None => return native_last_errno_to_wasi()
+              }
+            } else {
+              file_entry.position += n.to_int64()
+            }
+            let sync_error = file_entry.synchronize(false)
+            if sync_error != 0 {
+              return sync_error
+            }
+            if n < buf_len {
+              break
+            }
+          }
           None => {
             mem.write_i32(nwritten_ptr, total_written)
             return native_last_errno_to_wasi()
@@ -282,7 +304,9 @@ pub fn fd_read(
   if !check_mem_range(mem, nread_ptr, 4) {
     return Errno::Fault.to_i32()
   }
-  if iovs_len < 0 || !check_mem_range(mem, iovs, iovs_len * 8) {
+  if iovs_len < 0 ||
+    iovs_len > 0x0FFFFFFF ||
+    !check_mem_range(mem, iovs, iovs_len * 8) {
     return Errno::Fault.to_i32()
   }
   // Handle stdio streams
@@ -325,14 +349,25 @@ pub fn fd_read(
         if !check_mem_range(mem, buf_ptr, buf_len) {
           return Errno::Fault.to_i32()
         }
-        let read_result = native_read_to_memory(
+        let sync_error = file_entry.synchronize(true)
+        if sync_error != 0 {
+          return sync_error
+        }
+        let buf = FixedArray::make(buf_len, b'\x00')
+        let read_result = native_pread(
           file_entry.native_fd,
-          mem,
-          buf_ptr,
+          buf,
           buf_len,
+          file_entry.position,
         )
         match read_result {
-          Some(n) => total_read = n
+          Some(n) => {
+            for j in 0..<n {
+              mem.write_byte(buf_ptr + j, buf[j])
+            }
+            total_read = n
+            file_entry.position += n.to_int64()
+          }
           None => {
             mem.write_i32(nread_ptr, total_read)
             return native_last_errno_to_wasi()
@@ -733,12 +768,8 @@ pub fn path_open(
   let has_exclusive = (oflags & 0x04) != 0
   let has_truncate = (oflags & 0x08) != 0
   let has_append = (fdflags & 0x01) != 0
-  let has_sync = (fdflags & 0x1A) != 0 // 0x02 DSYNC, 0x08 RSYNC, 0x10 SYNC
   if has_directory && (has_create || has_exclusive || has_truncate) {
     return Errno::Inval.to_i32()
-  }
-  if has_sync {
-    return Errno::NotSup.to_i32()
   }
   // WASI oflags:
   // 0x01 = O_CREAT, 0x02 = O_DIRECTORY, 0x04 = O_EXCL, 0x08 = O_TRUNC
@@ -792,6 +823,15 @@ pub fn path_open(
     return errno
   }
   let nfd = native_fd.unwrap()
+  if (fdflags & 0x04) != 0 {
+    let flags = native_fcntl_getfl(nfd)
+    if flags is None ||
+      !native_fcntl_setfl(nfd, flags.unwrap() | native_o_nonblock()) {
+      let errno = native_last_errno_to_wasi()
+      native_close(nfd) |> ignore
+      return errno
+    }
+  }
   let stat = native_fstat(nfd)
   if stat is None {
     let errno = native_last_errno_to_wasi()
@@ -862,18 +902,23 @@ pub fn fd_seek(
   if f.require_base_rights(right_fd_seek) is Err(errno) {
     return errno.to_i32()
   }
-  // Convert WASI whence to native
-  let native_whence : Whence = match whence {
-    0 => Set
-    1 => Cur
-    2 => End
+  let base = match whence {
+    0 => 0L
+    1 => f.position
+    2 =>
+      match native_fstat(f.native_fd) {
+        Some(stat) => stat.size.reinterpret_as_int64()
+        None => return native_last_errno_to_wasi()
+      }
     _ => return Errno::Inval.to_i32()
   }
-  let new_pos = native_seek(f.native_fd, offset, native_whence)
-  if new_pos is None {
-    return native_last_errno_to_wasi()
+  if base < 0 || (offset > 0 && base > 0x7FFFFFFFFFFFFFFFL - offset) {
+    return Errno::Overflow.to_i32()
   }
-  let pos = new_pos.unwrap()
+  if offset < 0 && offset < -base {
+    return Errno::Inval.to_i32()
+  }
+  let pos = base + offset
   f.position = pos
   mem.write_i64(newoffset_ptr, pos)
   Errno::Success.to_i32()
@@ -914,13 +959,7 @@ pub fn fd_tell(
   if f.require_base_rights(right_fd_tell) is Err(errno) {
     return errno.to_i32()
   }
-  let pos = native_tell(f.native_fd)
-  if pos is None {
-    return native_last_errno_to_wasi()
-  }
-  let p = pos.unwrap()
-  f.position = p
-  mem.write_i64(offset_ptr, p)
+  mem.write_i64(offset_ptr, f.position)
   Errno::Success.to_i32()
 }
 
@@ -947,7 +986,9 @@ pub fn fd_pread(
   if !check_mem_range(mem, nread_ptr, 4) {
     return Errno::Fault.to_i32()
   }
-  if iovs_len < 0 || !check_mem_range(mem, iovs, iovs_len * 8) {
+  if iovs_len < 0 ||
+    iovs_len > 0x0FFFFFFF ||
+    !check_mem_range(mem, iovs, iovs_len * 8) {
     return Errno::Fault.to_i32()
   }
   if stdio_slot_for_fd(ctx, fd) is Some(slot) {
@@ -970,30 +1011,24 @@ pub fn fd_pread(
   if f.require_base_rights(right_fd_read | right_fd_seek) is Err(errno) {
     return errno.to_i32()
   }
-  // Save current position
-  let saved_pos = native_tell(f.native_fd)
-  if saved_pos is None {
-    return native_last_errno_to_wasi()
-  }
-  // Seek to offset
-  let seek_result = native_seek(f.native_fd, offset, Set)
-  if seek_result is None {
-    return native_last_errno_to_wasi()
+  if offset < 0 {
+    return Errno::Inval.to_i32()
   }
   // Read data from the first non-empty iovec only (wasmtime parity).
   let mut total_read = 0
   if first_non_empty_iov(mem, iovs, iovs_len) is Some(entry) {
     let (buf_ptr, buf_len) = entry
     if !check_mem_range(mem, buf_ptr, buf_len) {
-      native_seek(f.native_fd, saved_pos.unwrap(), Set) |> ignore
       return Errno::Fault.to_i32()
     }
+    let sync_error = f.synchronize(true)
+    if sync_error != 0 {
+      return sync_error
+    }
     let buf = FixedArray::make(buf_len, b'\x00')
-    let n = native_read(f.native_fd, buf, buf_len)
+    let n = native_pread(f.native_fd, buf, buf_len, offset)
     if n is None {
       let errno = native_last_errno_to_wasi()
-      // Restore position and return error
-      native_seek(f.native_fd, saved_pos.unwrap(), Set) |> ignore
       return errno
     }
     let bytes_read = n.unwrap()
@@ -1003,8 +1038,6 @@ pub fn fd_pread(
     }
     total_read = bytes_read
   }
-  // Restore position
-  native_seek(f.native_fd, saved_pos.unwrap(), Set) |> ignore
   mem.write_i32(nread_ptr, total_read)
   Errno::Success.to_i32()
 }
@@ -1032,7 +1065,9 @@ pub fn fd_pwrite(
   if !check_mem_range(mem, nwritten_ptr, 4) {
     return Errno::Fault.to_i32()
   }
-  if iovs_len < 0 || !check_mem_range(mem, iovs, iovs_len * 8) {
+  if iovs_len < 0 ||
+    iovs_len > 0x0FFFFFFF ||
+    !check_mem_range(mem, iovs, iovs_len * 8) {
     return Errno::Fault.to_i32()
   }
   if stdio_slot_for_fd(ctx, fd) is Some(slot) {
@@ -1055,22 +1090,14 @@ pub fn fd_pwrite(
   if f.require_base_rights(right_fd_write | right_fd_seek) is Err(errno) {
     return errno.to_i32()
   }
-  // Save current position
-  let saved_pos = native_tell(f.native_fd)
-  if saved_pos is None {
-    return native_last_errno_to_wasi()
-  }
-  // Seek to offset
-  let seek_result = native_seek(f.native_fd, offset, Set)
-  if seek_result is None {
-    return native_last_errno_to_wasi()
+  if offset < 0 {
+    return Errno::Inval.to_i32()
   }
   // Write data from the first non-empty iovec only (wasmtime parity).
   let mut total_written = 0
   if first_non_empty_iov(mem, iovs, iovs_len) is Some(entry) {
     let (buf_ptr, buf_len) = entry
     if !check_mem_range(mem, buf_ptr, buf_len) {
-      native_seek(f.native_fd, saved_pos.unwrap(), Set) |> ignore
       return Errno::Fault.to_i32()
     }
     let buf = FixedArray::make(buf_len, b'\x00')
@@ -1078,17 +1105,23 @@ pub fn fd_pwrite(
     for j in 0..<buf_len {
       buf[j] = mem.read_byte(buf_ptr + j)
     }
-    let n = native_write(f.native_fd, buf, buf_len)
+    let n = if (f.flags & 1) != 0 {
+      // P1 inherits Linux append semantics even on hosts whose pwrite ignores
+      // O_APPEND. The logical guest cursor remains unchanged.
+      native_write(f.native_fd, buf, buf_len)
+    } else {
+      native_pwrite(f.native_fd, buf, buf_len, offset)
+    }
     if n is None {
       let errno = native_last_errno_to_wasi()
-      // Restore position and return error
-      native_seek(f.native_fd, saved_pos.unwrap(), Set) |> ignore
       return errno
     }
     total_written = n.unwrap()
+    let sync_error = f.synchronize(false)
+    if sync_error != 0 {
+      return sync_error
+    }
   }
-  // Restore position
-  native_seek(f.native_fd, saved_pos.unwrap(), Set) |> ignore
   mem.write_i32(nwritten_ptr, total_written)
   Errno::Success.to_i32()
 }
@@ -2246,14 +2279,15 @@ pub fn fd_advise_impl(
 pub fn fd_allocate_impl(
   ctx : WasiContext,
   fd : Int,
-  _offset : Int64,
-  _len : Int64,
+  offset : Int64,
+  len : Int64,
 ) -> Int {
-  match regular_file_native_fd_with_rights(ctx, fd, right_fd_allocate) {
-    Ok(_) => ()
+  let native_fd = match
+    regular_file_native_fd_with_rights(ctx, fd, right_fd_allocate) {
+    Ok(fd) => fd
     Err(errno) => return errno.to_i32()
   }
-  Errno::NotSup.to_i32()
+  native_errno_to_wasi(c_allocate(native_fd, offset, len))
 }
 
 ///|
@@ -2281,12 +2315,6 @@ pub fn fd_fdstat_set_flags_impl(
   }
   if file.require_base_rights(right_fd_fdstat_set_flags) is Err(errno) {
     return errno.to_i32()
-  }
-  // Match wasmtime behavior:
-  // - unknown fdflags bits are rejected before descriptor lookup
-  // - DSYNC/RSYNC/SYNC are rejected with EINVAL only for valid file descriptors
-  if (flags & 0x02) != 0 || (flags & 0x08) != 0 || (flags & 0x10) != 0 {
-    return Errno::Inval.to_i32()
   }
   // Convert WASI fdflags to native flags
   // WASI: 0x01 = APPEND, 0x02 = DSYNC, 0x04 = NONBLOCK, 0x08 = RSYNC, 0x10 = SYNC

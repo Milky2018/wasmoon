@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run pinned Wasmtime WASIp1 guests with original or explicit legacy-rights expectations."""
+"""Run pinned Wasmtime WASIp1 guests with recorded upstream, rights, or implemented-capability expectations."""
 
 from __future__ import annotations
 
@@ -90,7 +90,10 @@ def prepare_build(profile: str):
         shutil.copytree(CORPUS, source, dirs_exist_ok=True)
         subprocess.run(["git", "apply", str(CORPUS / "explicit-rights.patch")],
                        cwd=source, check=True)
-        yield source, ROOT / "target/wasmtime-p1-explicit-rights-build"
+        if profile == "capabilities":
+            subprocess.run(["git", "apply", str(CORPUS / "implemented-capabilities.patch")],
+                           cwd=source, check=True)
+        yield source, ROOT / ("target/wasmtime-p1-" + profile + "-build")
 
 
 def guest_environment() -> dict[str, str]:
@@ -260,7 +263,7 @@ def verdict(results: list[dict]) -> int:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--profile", choices=["upstream", "explicit-rights"], default="upstream")
+    parser.add_argument("--profile", choices=["upstream", "explicit-rights", "capabilities"], default="upstream")
     parser.add_argument("--mode", choices=["both", "jit", "interp", "wasmtime"], default="both")
     parser.add_argument("--wasmoon", type=Path, default=executable(ROOT, "wasmoon"))
     parser.add_argument("--wasmtime", default="wasmtime")
@@ -308,6 +311,9 @@ def main() -> int:
         report = {
             "profile": args.profile,
             "adaptation_sha256": digest(CORPUS / "explicit-rights.patch") if args.profile != "upstream" else None,
+            "adaptations": [{"patch": name, "sha256": digest(CORPUS / name)} for name in
+                            ([] if args.profile == "upstream" else ["explicit-rights.patch"] +
+                             (["implemented-capabilities.patch"] if args.profile == "capabilities" else []))],
             "upstream_commit": snapshot["commit"], "host": platform.platform(),
             "engine": str(binary), "engine_sha256": digest(binary),
             "engine_version": subprocess.check_output([str(binary), "--version"], text=True).strip(),

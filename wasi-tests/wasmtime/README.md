@@ -147,3 +147,21 @@ then run the snapshot check, runner tests and all guest scenarios. Do not update
 hashes simply to accept a local assertion change.
 
 License: [Apache-2.0 WITH LLVM-exception](upstream/LICENSE).
+
+## Implemented-capability profile
+
+`--profile capabilities` applies the rights patch and then
+`implemented-capabilities.patch` to a disposable copy. This profile is the CI
+acceptance gate for Wasmoon. The original snapshot and `explicit-rights` profile
+remain reproducible and unchanged.
+
+Only two Wasmtime-specific unsupported-operation assertions change:
+
+- `p1_file_allocate`: allocation succeeds and extends the file to 100 bytes.
+- `p1_path_filestat`: synchronous open succeeds, reports SYNC, and closes normally.
+
+All other assertions remain intact. Reports record both patch hashes and the
+compiled guest hashes. A failure of the original unsupported-operation assertions
+is an intentional behavior difference, not a pass of the original programs.
+Native and JIT/interpreter tests additionally exercise data preservation, offsets,
+append behavior, synchronization, overflow, and capability rights.

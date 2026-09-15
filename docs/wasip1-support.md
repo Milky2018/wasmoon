@@ -22,19 +22,19 @@ filesystem combinations. ISS-536 owns the final matrix and exclusion audit.
 | `environ_get` | Implemented; baseline coverage | ISS-536 | Audit bounds, errors, rights and applicable descriptor kinds; retain external regressions. |
 | `environ_sizes_get` | Implemented; baseline coverage | ISS-536 | Audit bounds, errors, rights and applicable descriptor kinds; retain external regressions. |
 | `fd_advise` | Implemented; baseline coverage | ISS-536 | Audit bounds, errors, rights and applicable descriptor kinds; retain external regressions. |
-| `fd_allocate` | Incomplete | ISS-533 | Allocation, sync flags or shared-offset semantics require implementation. |
+| `fd_allocate` | Implemented; cross-platform acceptance pending | ISS-533 | Allocation, logical cursors, append and synchronization have local coverage. |
 | `fd_close` | Implemented; baseline coverage | ISS-536 | Audit bounds, errors, rights and applicable descriptor kinds; retain external regressions. |
 | `fd_datasync` | Implemented; baseline coverage | ISS-536 | Audit bounds, errors, rights and applicable descriptor kinds; retain external regressions. |
 | `fd_fdstat_get` | Implemented; baseline coverage | ISS-536 | Audit bounds, errors, rights and applicable descriptor kinds; retain external regressions. |
-| `fd_fdstat_set_flags` | Incomplete | ISS-533 | Allocation, sync flags or shared-offset semantics require implementation. |
+| `fd_fdstat_set_flags` | Implemented; cross-platform acceptance pending | ISS-533 | Allocation, logical cursors, append and synchronization have local coverage. |
 | `fd_fdstat_set_rights` | Implemented; baseline coverage | ISS-536 | Audit bounds, errors, rights and applicable descriptor kinds; retain external regressions. |
 | `fd_filestat_get` | Implemented; baseline coverage | ISS-536 | Audit bounds, errors, rights and applicable descriptor kinds; retain external regressions. |
 | `fd_filestat_set_size` | Implemented; baseline coverage | ISS-536 | Audit bounds, errors, rights and applicable descriptor kinds; retain external regressions. |
 | `fd_filestat_set_times` | Implemented; baseline coverage | ISS-536 | Audit bounds, errors, rights and applicable descriptor kinds; retain external regressions. |
-| `fd_pread` | Incomplete | ISS-533 | Allocation, sync flags or shared-offset semantics require implementation. |
+| `fd_pread` | Implemented; cross-platform acceptance pending | ISS-533 | Allocation, logical cursors, append and synchronization have local coverage. |
 | `fd_prestat_dir_name` | Implemented; baseline coverage | ISS-536 | Audit bounds, errors, rights and applicable descriptor kinds; retain external regressions. |
 | `fd_prestat_get` | Implemented; baseline coverage | ISS-536 | Audit bounds, errors, rights and applicable descriptor kinds; retain external regressions. |
-| `fd_pwrite` | Incomplete | ISS-533 | Allocation, sync flags or shared-offset semantics require implementation. |
+| `fd_pwrite` | Implemented; cross-platform acceptance pending | ISS-533 | Allocation, logical cursors, append and synchronization have local coverage. |
 | `fd_read` | Implemented; baseline coverage | ISS-536 | Audit bounds, errors, rights and applicable descriptor kinds; retain external regressions. |
 | `fd_readdir` | Implemented; baseline coverage | ISS-536 | Audit bounds, errors, rights and applicable descriptor kinds; retain external regressions. |
 | `fd_renumber` | Implemented; baseline coverage | ISS-536 | Audit bounds, errors, rights and applicable descriptor kinds; retain external regressions. |
@@ -123,3 +123,33 @@ Diagnostic `resolve_path` strings are no longer used to authorize P1 I/O.
 Local macOS acceptance: 116 upstream explicit-rights cases passed across both
 engines; four race scenarios covered ancestor and final-leaf replacement without
 changing the outside file. Cross-platform CI acceptance remains pending.
+
+## File semantics
+
+P1 owns its logical cursor in `OpenFile`. Ordinary positioned reads/writes use
+native pread/pwrite; APPEND uses the host atomic append operation. `fd_pwrite`
+never changes the logical cursor, including APPEND on macOS and Windows.
+Renumbering transfers the same descriptor state. Host descriptor cursor movement
+is not the P1 cursor contract.
+
+DSYNC, SYNC and RSYNC are stored in descriptor state. Writes flush before success;
+RSYNC reads flush first. Platforms may implement data-only flushing with the
+stronger full flush. This supports changing flags without reopening by a path or
+pretending that F_SETFL can change immutable kernel open flags. Host flush errors
+are returned. In particular, host ACLs can prevent flushing a read-only handle.
+
+Allocation uses Linux fallocate, macOS F_PREALLOCATE, or Windows FileAllocationInfo,
+then extends logical size where necessary. Unsupported filesystems return their
+native error; a truncate-only fallback is not presented as physical allocation.
+The macOS and Windows allocation/extension sequence is not atomic against an
+independent host process concurrently changing file length. The runtime does not
+promise serializability against unrelated host processes.
+
+API references: [Apple fcntl](https://developer.apple.com/library/archive/documentation/System/Conceptual/ManPages_iPhoneOS/man2/fcntl.2.html),
+[Windows allocation](https://learn.microsoft.com/en-us/windows/win32/api/winbase/ns-winbase-file_allocation_info),
+[Windows flushing](https://learn.microsoft.com/en-us/windows/win32/fileio/file-caching).
+
+The capabilities external profile changes only the upstream NOTSUP expectations
+for allocation and SYNC. The unchanged upstream and explicit-rights profiles
+remain available; their failures on those two programs are intentional behavior
+differences. See `wasi-tests/wasmtime/implemented-capabilities.patch`.

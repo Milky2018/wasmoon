@@ -20,7 +20,7 @@ wchar_t *wasmoon_windows_utf16(const char *text) {
 }
 static DWORD open_access(int flags) {
   if (flags & _O_RDWR) return GENERIC_READ | GENERIC_WRITE;
-  if (flags & _O_WRONLY) return GENERIC_WRITE;
+  if (flags & _O_WRONLY) return GENERIC_WRITE | FILE_READ_ATTRIBUTES;
   return GENERIC_READ;
 }
 static int adopt_file(HANDLE handle, int flags) {
@@ -91,12 +91,21 @@ static BOOL CALLBACK initialize_file_api(PINIT_ONCE once, PVOID parameter, PVOID
 // symlink expansion are performed by the shared capability walker above it.
 static HANDLE open_relative(int fd, const char *name, ACCESS_MASK access,
                              ULONG disposition, ULONG options) {
-  if (!name || !*name || strchr(name, '/') || strchr(name, '\\') || strchr(name, ':') ||
+  if (!name || !*name || strchr(name, '\\') || strchr(name, ':') ||
       !strcmp(name, "..")) { errno = EPERM; return INVALID_HANDLE_VALUE; }
+  const char *slash = strchr(name, '/');
+  if (slash && strspn(slash, "/") != strlen(slash)) {
+    errno = EPERM; return INVALID_HANDLE_VALUE;
+  }
   HANDLE root = wasmoon_windows_fd_handle(fd);
   if (root == INVALID_HANDLE_VALUE) return root;
   wchar_t *wide = wasmoon_windows_utf16(!strcmp(name, ".") ? "" : name);
   if (!wide) return INVALID_HANDLE_VALUE;
+  if (slash) {
+    size_t length = wcslen(wide);
+    while (length && wide[length - 1] == L'/') wide[--length] = 0;
+    options |= 1; // A trailing separator requires a directory, not traversal.
+  }
   size_t bytes = wcslen(wide) * sizeof(*wide);
   if (bytes > UINT16_MAX - sizeof(wchar_t)) {
     free(wide); errno = ENAMETOOLONG; return INVALID_HANDLE_VALUE;
@@ -303,6 +312,14 @@ int wasmoon_windows_symlinkat(const char *target, int fd, const char *name) {
   int directory = attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_DIRECTORY);
   DWORD target_error = GetLastError();
   free(query); free(parent);
+  size_t name_length = strlen(name);
+  if (!absolute_path(name) && name_length && name[name_length - 1] == '/') {
+    free(wide_target); free(wide_name);
+    if (attributes == INVALID_FILE_ATTRIBUTES) return wasmoon_windows_error(target_error);
+    HANDLE existing = open_relative(fd, name, FILE_READ_ATTRIBUTES, 1, 0x00200000);
+    if (existing != INVALID_HANDLE_VALUE) { CloseHandle(existing); errno = EEXIST; }
+    return -1;
+  }
   if (absolute_path(name)) {
     for (wchar_t *p = wide_target; *p; p++) if (*p == L'/') *p = L'\\';
     BOOL ok = CreateSymbolicLinkW(wide_name, wide_target,
@@ -564,7 +581,7 @@ int wasmoon_windows_unlinkat(int fd, const char *path, int directory) {
   return result ? 0 : wasmoon_windows_error(error);
 }
 int wasmoon_windows_renameat(int old_fd, const char *old_path, int new_fd, const char *new_path) {
-  HANDLE source = open_path_or_relative(old_fd, old_path, DELETE, 1, 0x00200000);
+  HANDLE source = open_path_or_relative(old_fd, old_path, DELETE | FILE_READ_ATTRIBUTES, 1, 0x00200000);
   if (source == INVALID_HANDLE_VALUE) return -1;
   wchar_t *name = wasmoon_windows_utf16(new_path);
   if (!name) { CloseHandle(source); return -1; }
@@ -574,9 +591,20 @@ int wasmoon_windows_renameat(int old_fd, const char *old_path, int new_fd, const
     free(name); name = full;
     if (!name) { CloseHandle(source); return -1; }
   } else {
-    if (!*new_path || strchr(new_path, '/') || strchr(new_path, '\\') || strchr(new_path, ':') ||
+    const char *slash = strchr(new_path, '/');
+    if (!*new_path || (slash && strspn(slash, "/") != strlen(slash)) || strchr(new_path, '\\') || strchr(new_path, ':') ||
         !strcmp(new_path, ".") || !strcmp(new_path, "..")) {
       free(name); CloseHandle(source); errno = EPERM; return -1;
+    }
+    if (slash) {
+      wasmoon_windows_stat stat;
+      int result = stat_handle(source, &stat);
+      if (result != 0 || stat.filetype != 3) {
+        int error = result != 0 ? errno : ENOTDIR;
+        free(name); CloseHandle(source); errno = error; return -1;
+      }
+      size_t length = wcslen(name);
+      while (length && name[length - 1] == L'/') name[--length] = 0;
     }
     root = wasmoon_windows_fd_handle(new_fd);
     if (root == INVALID_HANDLE_VALUE) { free(name); CloseHandle(source); return -1; }

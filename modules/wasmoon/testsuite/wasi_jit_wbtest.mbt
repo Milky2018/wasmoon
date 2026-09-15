@@ -1185,7 +1185,7 @@ test "wasi jit: path rights differential matrix" {
 }
 
 ///|
-test "wasi jit: path_open rejects sync fdflags with ENOTSUP" {
+test "wasi jit: path_open supports synchronous fdflags" {
   let source =
     #|(module
     #|  (import "wasi_snapshot_preview1" "path_open"
@@ -1223,8 +1223,8 @@ test "wasi jit: path_open rejects sync fdflags with ENOTSUP" {
     (@test_fs.temp_dir(), "/"),
   ])
   inspect(result.match_, content="true")
-  inspect(wasi_errno_from_result(result.interp_result), content="58")
-  inspect(wasi_errno_from_result(result.jit_result), content="58")
+  inspect(wasi_errno_from_result(result.interp_result), content="0")
+  inspect(wasi_errno_from_result(result.jit_result), content="0")
 }
 
 ///|
@@ -2691,7 +2691,7 @@ test "wasi jit: fd_allocate stdout returns EBADF (8)" {
 }
 
 ///|
-test "wasi jit: fd_allocate regular file returns ENOTSUP (58)" {
+test "wasi jit: fd_allocate regular file reserves storage" {
   let source =
     #|(module
     #|  (import "wasi_snapshot_preview1" "path_open"
@@ -2710,8 +2710,8 @@ test "wasi jit: fd_allocate regular file returns ENOTSUP (58)" {
     (@test_fs.temp_dir(), "/"),
   ])
   inspect(result.match_, content="true")
-  inspect(wasi_errno_from_result(result.interp_result), content="58")
-  inspect(wasi_errno_from_result(result.jit_result), content="58")
+  inspect(wasi_errno_from_result(result.interp_result), content="0")
+  inspect(wasi_errno_from_result(result.jit_result), content="0")
 }
 
 ///|
@@ -2861,7 +2861,7 @@ test "wasi jit: fd_renumber rejects unused target with EBADF (8)" {
 }
 
 ///|
-test "wasi jit: fd_fdstat_set_flags rejects DSYNC with EINVAL (28)" {
+test "wasi jit: fd_fdstat_set_flags enables DSYNC" {
   let source =
     #|(module
     #|  (import "wasi_snapshot_preview1" "path_open"
@@ -2880,8 +2880,8 @@ test "wasi jit: fd_fdstat_set_flags rejects DSYNC with EINVAL (28)" {
     (@test_fs.temp_dir(), "/"),
   ])
   inspect(result.match_, content="true")
-  inspect(wasi_errno_from_result(result.interp_result), content="28")
-  inspect(wasi_errno_from_result(result.jit_result), content="28")
+  inspect(wasi_errno_from_result(result.interp_result), content="0")
+  inspect(wasi_errno_from_result(result.jit_result), content="0")
 }
 
 ///|

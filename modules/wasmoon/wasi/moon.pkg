@@ -17,6 +17,11 @@ import {
 } for "wbtest"
 
 options(
-  "native-stub": [ "ffi_native.c", "poll_native.c", "directory_native.c" ],
+  "native-stub": [
+    "ffi_native.c",
+    "file_semantics_native.c",
+    "poll_native.c",
+    "directory_native.c",
+  ],
   targets: { "ffi_native.mbt": [ "native" ] },
 )
