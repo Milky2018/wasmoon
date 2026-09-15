@@ -193,3 +193,18 @@ test "Preview 1 accepts streams with independent flags, waitall, EOF and rights"
     content="8",
   )
 }
+
+///|
+test "Preview 1 unconnected datagram send reports the native destination error" {
+  let socket = @wasi.native_socket_create(4, 2).unwrap()
+  let context = @wasi.WasiContextBuilder::WasiContextBuilder().build()
+  let fd = context.take_socket(socket).unwrap()
+  defer context.close_fd(fd) |> ignore
+  let memory = @runtime.Memory::Memory(1, None)
+  memory.write_i32(0, 32)
+  memory.write_i32(4, 1)
+  // POSIX reports EDESTADDRREQ; Winsock can report ENOTCONN for send().
+  assert_true(
+    [17, 53].contains(@wasi.sock_send_impl(context, memory, fd, 0, 1, 0, 16)),
+  )
+}

@@ -434,8 +434,22 @@ int wasmoon_windows_socket_error(int error) {
     switch (error) {
         case WSAEWOULDBLOCK: errno = EAGAIN; break;
         case WSAEINTR: errno = EINTR; break;
-        case WSAEBADF: case WSAENOTSOCK: errno = EBADF; break;
+        case WSAEBADF: errno = EBADF; break;
+        case WSAENOTSOCK: errno = ENOTSOCK; break;
         case WSAEACCES: errno = EACCES; break;
+        case WSAEFAULT: errno = EFAULT; break;
+        case WSAEMFILE: errno = EMFILE; break;
+        case WSAEALREADY: errno = EALREADY; break;
+        case WSAEDESTADDRREQ: errno = EDESTADDRREQ; break;
+        case WSAEISCONN: errno = EISCONN; break;
+        case WSAENETDOWN: errno = ENETDOWN; break;
+        case WSAENETRESET: errno = ENETRESET; break;
+        case WSAENETUNREACH: errno = ENETUNREACH; break;
+        case WSAEHOSTUNREACH: errno = EHOSTUNREACH; break;
+        case WSAENOPROTOOPT: errno = ENOPROTOOPT; break;
+        case WSAEPROTONOSUPPORT: errno = EPROTONOSUPPORT; break;
+        case WSAEPROTOTYPE: errno = EPROTOTYPE; break;
+        case WSAEOPNOTSUPP: case WSAESOCKTNOSUPPORT: errno = ENOTSUP; break;
         case WSAEINVAL: errno = EINVAL; break;
         case WSAEADDRINUSE: errno = EADDRINUSE; break;
         case WSAEADDRNOTAVAIL: errno = EADDRNOTAVAIL; break;
@@ -445,7 +459,7 @@ int wasmoon_windows_socket_error(int error) {
         case WSAENOTCONN: errno = ENOTCONN; break;
         case WSAETIMEDOUT: errno = ETIMEDOUT; break;
         case WSAEINPROGRESS: errno = EINPROGRESS; break;
-        case WSAENOBUFS: errno = ENOMEM; break;
+        case WSAENOBUFS: errno = ENOBUFS; break;
         case WSAEAFNOSUPPORT: errno = EAFNOSUPPORT; break;
         case WSAEMSGSIZE: errno = EMSGSIZE; break;
         case WSAESHUTDOWN: errno = EPIPE; break;
