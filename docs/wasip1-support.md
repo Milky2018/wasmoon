@@ -42,16 +42,16 @@ filesystem combinations. ISS-536 owns the final matrix and exclusion audit.
 | `fd_sync` | Implemented; baseline coverage | ISS-536 | Audit bounds, errors, rights and applicable descriptor kinds; retain external regressions. |
 | `fd_tell` | Implemented; baseline coverage | ISS-536 | Audit bounds, errors, rights and applicable descriptor kinds; retain external regressions. |
 | `fd_write` | Implemented; baseline coverage | ISS-536 | Audit bounds, errors, rights and applicable descriptor kinds; retain external regressions. |
-| `path_create_directory` | Migration required | ISS-532 | Replace ambient path use; preserve lookup flags, rights and leaf semantics. |
-| `path_filestat_get` | Migration required | ISS-532 | Replace ambient path use; preserve lookup flags, rights and leaf semantics. |
-| `path_filestat_set_times` | Migration required | ISS-532 | Replace ambient path use; preserve lookup flags, rights and leaf semantics. |
-| `path_link` | Migration required | ISS-532 | Replace ambient path use; preserve lookup flags, rights and leaf semantics. |
-| `path_open` | Migration required | ISS-532 | Replace ambient path use; preserve lookup flags, rights and leaf semantics. |
-| `path_readlink` | Migration required | ISS-532 | Replace ambient path use; preserve lookup flags, rights and leaf semantics. |
-| `path_remove_directory` | Migration required | ISS-532 | Replace ambient path use; preserve lookup flags, rights and leaf semantics. |
-| `path_rename` | Migration required | ISS-532 | Replace ambient path use; preserve lookup flags, rights and leaf semantics. |
-| `path_symlink` | Migration required | ISS-532 | Replace ambient path use; preserve lookup flags, rights and leaf semantics. |
-| `path_unlink_file` | Migration required | ISS-532 | Replace ambient path use; preserve lookup flags, rights and leaf semantics. |
+| `path_create_directory` | Implemented; cross-platform acceptance pending | ISS-532 | Held-directory operations and shared engine dispatch; verify race and permission matrix. |
+| `path_filestat_get` | Implemented; cross-platform acceptance pending | ISS-532 | Held-directory operations and shared engine dispatch; verify race and permission matrix. |
+| `path_filestat_set_times` | Implemented; cross-platform acceptance pending | ISS-532 | Held-directory operations and shared engine dispatch; verify race and permission matrix. |
+| `path_link` | Implemented; cross-platform acceptance pending | ISS-532 | Held-directory operations and shared engine dispatch; verify race and permission matrix. |
+| `path_open` | Implemented; cross-platform acceptance pending | ISS-532 | Held-directory operations and shared engine dispatch; verify race and permission matrix. |
+| `path_readlink` | Implemented; cross-platform acceptance pending | ISS-532 | Held-directory operations and shared engine dispatch; verify race and permission matrix. |
+| `path_remove_directory` | Implemented; cross-platform acceptance pending | ISS-532 | Held-directory operations and shared engine dispatch; verify race and permission matrix. |
+| `path_rename` | Implemented; cross-platform acceptance pending | ISS-532 | Held-directory operations and shared engine dispatch; verify race and permission matrix. |
+| `path_symlink` | Implemented; cross-platform acceptance pending | ISS-532 | Held-directory operations and shared engine dispatch; verify race and permission matrix. |
+| `path_unlink_file` | Implemented; cross-platform acceptance pending | ISS-532 | Held-directory operations and shared engine dispatch; verify race and permission matrix. |
 | `poll_oneoff` | Implemented; baseline coverage | ISS-536 | Audit bounds, errors, rights and applicable descriptor kinds; retain external regressions. |
 | `proc_exit` | Implemented; baseline coverage | ISS-536 | Audit bounds, errors, rights and applicable descriptor kinds; retain external regressions. |
 | `proc_raise` | Policy/implementation review | ISS-535 | CPU clocks, host yield and opt-in signal delivery need explicit contracts. |
@@ -107,3 +107,19 @@ filesystem combinations. ISS-536 owns the final matrix and exclusion audit.
 ISS-530 is complete only when its children have evidence-backed close notes,
 all supported behaviors pass the platform matrix, and each remaining limitation
 is classified and documented. Full corpus success alone is not completion.
+
+## Capability migration evidence
+
+The Unix JIT previously selected a separate native C P1 implementation. A new
+black-box guest reproduced mutation of a file outside the preopen while a host
+thread replaced an ancestor with a symlink. P1 now uses the existing hostcall
+bridge on every platform, including descriptor lookup for `poll_oneoff`.
+
+Path entry operations hold the resolved parent directory. Open and metadata
+operations share the beneath walker, including final symlink expansion. The
+metadata mutation itself remains nofollow if the leaf changes concurrently.
+Diagnostic `resolve_path` strings are no longer used to authorize P1 I/O.
+
+Local macOS acceptance: 116 upstream explicit-rights cases passed across both
+engines; four race scenarios covered ancestor and final-leaf replacement without
+changing the outside file. Cross-platform CI acceptance remains pending.

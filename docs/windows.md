@@ -156,9 +156,8 @@ creation returns a permission error and removes the failed placeholder. These
 checks cover the CI Windows version; other Windows versions and filesystems can
 impose additional restrictions.
 
-Component filesystem adapters use the held-parent primitive. Preview 1 currently
-uses the host absolute-path adapter, which calls the Windows symbolic-link API
-with its unprivileged-creation option. Its JIT/interpreter CI guests inherit a
+Component and Preview 1 filesystem adapters now use the held-parent primitive.
+Preview 1 JIT/interpreter CI guests inherit a
 process token with the symlink privilege removed and verify success with
 Developer Mode enabled, or EPERM with it disabled. A nonexistent link target
 must not overwrite that privilege error with ENOENT.

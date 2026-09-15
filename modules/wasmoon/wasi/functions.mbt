@@ -722,13 +722,8 @@ pub fn path_open(
     return Errno::NotCapable.to_i32()
   }
   let follow_symlink = (dirflags & 0x01) != 0 || has_trailing_slash
-  let resolved_path_result = if follow_symlink {
-    resolve_host_path(ctx, dir_fd, path)
-  } else {
-    resolve_host_path_nofollow_leaf(ctx, dir_fd, path)
-  }
-  let resolved_path = match resolved_path_result {
-    Ok(resolved) => resolved
+  let (parent_path, leaf) = match capability_path_parts(path) {
+    Ok(parts) => parts
     Err(errno) => return errno
   }
   // Determine open flags
@@ -781,13 +776,14 @@ pub fn path_open(
   } else {
     open_flags.push(ReadOnly)
   }
-  // Open the file
-  let open_path = if has_trailing_slash {
-    resolved_path + "/"
-  } else {
-    resolved_path
-  }
-  let native_fd = native_open(open_path, open_flags, 0o644)
+  let native_fd = native_openat_beneath(
+    parent_file.native_fd,
+    parent_path,
+    leaf,
+    open_flags,
+    0o644,
+    follow_symlink,
+  )
   if native_fd is None {
     let errno = native_last_errno_to_wasi()
     if has_trailing_slash && errno == Errno::NotDir.to_i32() {
@@ -798,8 +794,9 @@ pub fn path_open(
   let nfd = native_fd.unwrap()
   let stat = native_fstat(nfd)
   if stat is None {
+    let errno = native_last_errno_to_wasi()
     native_close(nfd) |> ignore
-    return native_last_errno_to_wasi()
+    return errno
   }
   let file_type = open_file_type_from_native(stat.unwrap().filetype)
   if has_directory {
@@ -815,7 +812,7 @@ pub fn path_open(
   let wasi_fd = ctx.alloc_fd({
     native_fd: nfd,
     file_type,
-    host_path: resolved_path,
+    host_path: parent_file.host_path + "/" + path,
     position: 0L,
     flags: fdflags,
     rights_base: effective_rights_base,
@@ -1324,15 +1321,13 @@ pub fn path_create_directory(
     Ok(_) => ()
     Err(errno) => return errno.to_i32()
   }
-  let resolved_path = match resolve_host_path_nofollow_leaf(ctx, dir_fd, path) {
-    Ok(resolved) => resolved
-    Err(errno) => return errno
-  }
-  if native_mkdir(resolved_path, 0o755) {
-    Errno::Success.to_i32()
-  } else {
-    native_last_errno_to_wasi()
-  }
+  with_capability_parent(ctx, dir_fd, path, fn(parent, leaf) {
+    if native_mkdirat(parent, leaf, 0o755) {
+      Errno::Success.to_i32()
+    } else {
+      native_last_errno_to_wasi()
+    }
+  })
 }
 
 ///|
@@ -1692,46 +1687,48 @@ fn validate_proc_raise_signal(signal : Int) -> Int {
 }
 
 ///|
-fn preserve_trailing_slash(resolved : String, guest : String) -> String {
-  if guest.has_suffix("/") {
-    resolved + "/"
-  } else {
-    resolved
+// Preserve dot components for the native capability walker: lexical normalization
+// would incorrectly erase symlink traversal and directory-type checks.
+fn capability_path_parts(path : String) -> Result[(String, String), Int] {
+  if path == "" {
+    return Err(Errno::NoEnt.to_i32())
   }
+  if path.has_prefix("/") {
+    return Err(Errno::Perm.to_i32())
+  }
+  let parts : Array[String] = []
+  for part in path.split("/") {
+    if part != "" {
+      parts.push(part.to_owned())
+    }
+  }
+  let leaf = parts.pop().unwrap()
+  Ok((parts.join("/"), if path.has_suffix("/") { leaf + "/" } else { leaf }))
 }
 
 ///|
-fn resolve_host_path(
+fn with_capability_parent(
   ctx : WasiContext,
   dir_fd : Int,
   path : String,
-) -> Result[String, Int] {
-  if path.length() == 0 {
-    return Err(Errno::NoEnt.to_i32())
+  operation : (Int, String) -> Int,
+) -> Int {
+  let (parent_path, leaf) = match capability_path_parts(path) {
+    Ok(parts) => parts
+    Err(errno) => return errno
   }
-  match ctx.resolve_path(dir_fd, path) {
-    Ok(resolved) => Ok(resolved)
-    Err(BadFd) => Err(Errno::Badf.to_i32())
-    Err(Perm) => Err(Errno::Perm.to_i32())
-    Err(NotCapable) => Err(Errno::Perm.to_i32())
+  let root = match ctx.get_file(dir_fd) {
+    Some(file) => file.native_fd
+    None => return Errno::Badf.to_i32()
   }
-}
-
-///|
-fn resolve_host_path_nofollow_leaf(
-  ctx : WasiContext,
-  dir_fd : Int,
-  path : String,
-) -> Result[String, Int] {
-  if path.length() == 0 {
-    return Err(Errno::NoEnt.to_i32())
+  let dot_leaf = leaf == "." || leaf == ".." || leaf == "./" || leaf == "../"
+  let parent = match
+    native_open_parent_beneath(root, if dot_leaf { path } else { parent_path }) {
+    Some(fd) => fd
+    None => return native_last_errno_to_wasi()
   }
-  match ctx.resolve_path_nofollow_leaf(dir_fd, path) {
-    Ok(resolved) => Ok(resolved)
-    Err(BadFd) => Err(Errno::Badf.to_i32())
-    Err(Perm) => Err(Errno::Perm.to_i32())
-    Err(NotCapable) => Err(Errno::Perm.to_i32())
-  }
+  defer native_close(parent) |> ignore
+  operation(parent, if dot_leaf { "." } else { leaf })
 }
 
 ///|
@@ -1884,15 +1881,13 @@ pub fn path_unlink_file_impl(
     Ok(_) => ()
     Err(errno) => return errno.to_i32()
   }
-  let resolved_path = match resolve_host_path_nofollow_leaf(ctx, dir_fd, path) {
-    Ok(resolved) => resolved
-    Err(errno) => return errno
-  }
-  if native_unlinkat(0, preserve_trailing_slash(resolved_path, path), 0) {
-    Errno::Success.to_i32()
-  } else {
-    native_last_errno_to_wasi()
-  }
+  with_capability_parent(ctx, dir_fd, path, fn(parent, leaf) {
+    if native_unlinkat(parent, leaf, 0) {
+      Errno::Success.to_i32()
+    } else {
+      native_last_errno_to_wasi()
+    }
+  })
 }
 
 ///|
@@ -1912,15 +1907,13 @@ pub fn path_remove_directory_impl(
     Ok(_) => ()
     Err(errno) => return errno.to_i32()
   }
-  let resolved_path = match resolve_host_path_nofollow_leaf(ctx, dir_fd, path) {
-    Ok(resolved) => resolved
-    Err(errno) => return errno
-  }
-  if native_unlinkat(0, resolved_path, AT_REMOVEDIR) {
-    Errno::Success.to_i32()
-  } else {
-    native_last_errno_to_wasi()
-  }
+  with_capability_parent(ctx, dir_fd, path, fn(parent, leaf) {
+    if native_unlinkat(parent, leaf, AT_REMOVEDIR) {
+      Errno::Success.to_i32()
+    } else {
+      native_last_errno_to_wasi()
+    }
+  })
 }
 
 ///|
@@ -1951,21 +1944,15 @@ pub fn path_rename_impl(
     Ok(_) => ()
     Err(errno) => return errno.to_i32()
   }
-  let old_resolved = match
-    resolve_host_path_nofollow_leaf(ctx, old_fd, old_path) {
-    Ok(resolved) => resolved
-    Err(errno) => return errno
-  }
-  let new_resolved = match
-    resolve_host_path_nofollow_leaf(ctx, new_fd, new_path) {
-    Ok(resolved) => resolved
-    Err(errno) => return errno
-  }
-  if native_renameat(0, old_resolved, 0, new_resolved) {
-    Errno::Success.to_i32()
-  } else {
-    native_last_errno_to_wasi()
-  }
+  with_capability_parent(ctx, old_fd, old_path, fn(old_parent, old_leaf) {
+    with_capability_parent(ctx, new_fd, new_path, fn(new_parent, new_leaf) {
+      if native_renameat(old_parent, old_leaf, new_parent, new_leaf) {
+        Errno::Success.to_i32()
+      } else {
+        native_last_errno_to_wasi()
+      }
+    })
+  })
 }
 
 // ============================================================================
@@ -2093,23 +2080,19 @@ pub fn path_filestat_get_impl(
   let has_trailing_slash = path.length() > 0 &&
     path.code_unit_at(path.length() - 1) == '/'
   let follow_symlink = (flags & 0x01) != 0 || has_trailing_slash
-  let resolved_path_result = if follow_symlink {
-    resolve_host_path(ctx, dir_fd, path)
-  } else {
-    resolve_host_path_nofollow_leaf(ctx, dir_fd, path)
+  if capability_path_parts(path) is Err(errno) {
+    return errno
   }
-  let resolved_path = match resolved_path_result {
-    Ok(resolved) => resolved
-    Err(errno) => return errno
-  }
-  let stat_path = if has_trailing_slash {
-    resolved_path + "/"
-  } else {
-    resolved_path
-  }
-  // Convert WASI flags to native flags
-  let native_flags = if follow_symlink { 0 } else { AT_SYMLINK_NOFOLLOW }
-  let stat = native_fstatat(0, stat_path, native_flags)
+  let root = ctx.get_file(dir_fd).unwrap().native_fd
+  let stat = native_fstat_beneath(
+    root,
+    path,
+    if follow_symlink {
+      1
+    } else {
+      0
+    },
+  )
   match stat {
     Some(s) => {
       write_filestat(mem, buf_ptr, s)
@@ -2219,34 +2202,11 @@ pub fn path_filestat_set_times_impl(
   let has_trailing_slash = path.length() > 0 &&
     path.code_unit_at(path.length() - 1) == '/'
   let follow_symlink = (flags & 0x01) != 0 || has_trailing_slash
-  let resolved_path_result = if follow_symlink {
-    resolve_host_path(ctx, dir_fd, path)
-  } else {
-    resolve_host_path_nofollow_leaf(ctx, dir_fd, path)
+  if capability_path_parts(path) is Err(errno) {
+    return errno
   }
-  let resolved_path = match resolved_path_result {
-    Ok(resolved) => resolved
-    Err(errno) => return errno
-  }
-  let stat_path = if has_trailing_slash {
-    resolved_path + "/"
-  } else {
-    resolved_path
-  }
-  let lookup_flags = if follow_symlink { 0 } else { AT_SYMLINK_NOFOLLOW }
-  if has_trailing_slash {
-    match native_fstatat(0, resolved_path, lookup_flags) {
-      Some(stat) => if stat.filetype != 3 { return Errno::NoEnt.to_i32() }
-      None => {
-        let errno = native_last_errno_to_wasi()
-        if errno == Errno::NotDir.to_i32() {
-          return Errno::NoEnt.to_i32()
-        }
-        return errno
-      }
-    }
-  }
-  if native_utimensat(0, stat_path, atim, mtim, fst_flags, lookup_flags) {
+  let root = ctx.get_file(dir_fd).unwrap().native_fd
+  if native_utimens_beneath(root, path, follow_symlink, atim, mtim, fst_flags) {
     Errno::Success.to_i32()
   } else {
     let errno = native_last_errno_to_wasi()
@@ -2503,20 +2463,13 @@ pub fn path_symlink_impl(
     Ok(_) => ()
     Err(errno) => return errno.to_i32()
   }
-  let resolved_path = match
-    resolve_host_path_nofollow_leaf(ctx, dir_fd, new_path) {
-    Ok(resolved) => resolved
-    Err(errno) => return errno
-  }
-  if native_symlinkat(
-      old_path,
-      0,
-      preserve_trailing_slash(resolved_path, new_path),
-    ) {
-    Errno::Success.to_i32()
-  } else {
-    native_last_errno_to_wasi()
-  }
+  with_capability_parent(ctx, dir_fd, new_path, fn(parent, leaf) {
+    if native_symlinkat(old_path, parent, leaf) {
+      Errno::Success.to_i32()
+    } else {
+      native_last_errno_to_wasi()
+    }
+  })
 }
 
 ///|
@@ -2543,22 +2496,20 @@ pub fn path_readlink_impl(
     Ok(_) => ()
     Err(errno) => return errno.to_i32()
   }
-  let resolved_path = match resolve_host_path_nofollow_leaf(ctx, dir_fd, path) {
-    Ok(resolved) => resolved
-    Err(errno) => return errno
-  }
-  let result = native_readlinkat_bytes(0, resolved_path, buf_len)
-  match result {
-    Some(link_target) => {
-      let to_write = @cmp.minimum(link_target.length(), buf_len)
-      for i in 0..<to_write {
-        mem.write_byte(buf_ptr + i, link_target[i])
+  with_capability_parent(ctx, dir_fd, path, fn(parent, leaf) {
+    let result = native_readlinkat_bytes(parent, leaf, buf_len)
+    match result {
+      Some(link_target) => {
+        let to_write = @cmp.minimum(link_target.length(), buf_len)
+        for i in 0..<to_write {
+          mem.write_byte(buf_ptr + i, link_target[i])
+        }
+        mem.write_i32(bufused_ptr, to_write)
+        Errno::Success.to_i32()
       }
-      mem.write_i32(bufused_ptr, to_write)
-      Errno::Success.to_i32()
+      None => native_last_errno_to_wasi()
     }
-    None => native_last_errno_to_wasi()
-  }
+  })
 }
 
 ///|
@@ -2597,28 +2548,15 @@ pub fn path_link_impl(
     Ok(_) => ()
     Err(errno) => return errno.to_i32()
   }
-  let old_resolved = match
-    resolve_host_path_nofollow_leaf(ctx, old_fd, old_path) {
-    Ok(resolved) => resolved
-    Err(errno) => return errno
-  }
-  let new_resolved = match
-    resolve_host_path_nofollow_leaf(ctx, new_fd, new_path) {
-    Ok(resolved) => resolved
-    Err(errno) => return errno
-  }
-  let flags = 0
-  if native_linkat(
-      0,
-      preserve_trailing_slash(old_resolved, old_path),
-      0,
-      preserve_trailing_slash(new_resolved, new_path),
-      flags,
-    ) {
-    Errno::Success.to_i32()
-  } else {
-    native_last_errno_to_wasi()
-  }
+  with_capability_parent(ctx, old_fd, old_path, fn(old_parent, old_leaf) {
+    with_capability_parent(ctx, new_fd, new_path, fn(new_parent, new_leaf) {
+      if native_linkat(old_parent, old_leaf, new_parent, new_leaf, 0) {
+        Errno::Success.to_i32()
+      } else {
+        native_last_errno_to_wasi()
+      }
+    })
+  })
 }
 
 // ============================================================================

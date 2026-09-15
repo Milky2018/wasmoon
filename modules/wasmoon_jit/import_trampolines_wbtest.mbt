@@ -5,10 +5,7 @@ test "import trampolines: known wasi functions" {
     "proc_exit",
   ]
   for name in names {
-    assert_true(
-      (get_import_trampoline("wasi_snapshot_preview1", name) is Some(_)) ==
-      !@host_io.is_windows(),
-    )
+    assert_true(get_import_trampoline("wasi_snapshot_preview1", name) is None)
   }
 }
 
@@ -48,9 +45,8 @@ test "import trampolines: external imports override builtin fallback" {
     content="Some(1234)",
   )
   assert_true(
-    (resolve_import_function_ptr(external, "wasi_snapshot_preview1", "fd_write")
-    is Some(_)) ==
-    !@host_io.is_windows(),
+    resolve_import_function_ptr(external, "wasi_snapshot_preview1", "fd_write")
+    is None,
   )
   external.set("wasi_snapshot_preview1", { "fd_write": 5678L })
   debug_inspect(

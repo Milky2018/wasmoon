@@ -159,15 +159,21 @@ static char *wasmoon_wasi_prepend_symlink_target(
   return result;
 }
 
+// A final operation always receives a held parent and a single component.
+// It must never follow a symlink itself; ELOOP asks the walker to expand it.
+typedef int (*wasmoon_wasi_beneath_operation)(int, const char *, int, int, void *);
+
 // Resolve from the capability root one component at a time. Keeping every
 // descended directory open makes ".." a stack operation and prevents rename
 // races from turning it into ambient parent traversal.
-static int wasmoon_wasi_open_beneath_impl(
+static int wasmoon_wasi_walk_beneath(
   int root_fd,
   const char *path,
   int flags,
   int mode,
-  int follow_final
+  int follow_final,
+  wasmoon_wasi_beneath_operation operation,
+  void *operation_data
 ) {
   if (!path || path[0] == '/') {
     errno = EPERM;
@@ -212,8 +218,10 @@ static int wasmoon_wasi_open_beneath_impl(
       if (requires_directory) open_flags |= O_DIRECTORY;
       int wants_truncate = (open_flags & O_TRUNC) != 0;
       open_flags &= ~O_TRUNC;
-      int result = openat(fds[fd_length - 1], ".", open_flags, mode);
-      if (result >= 0 && wants_truncate && ftruncate(result, 0) != 0) {
+      int result = operation
+        ? operation(fds[fd_length - 1], ".", requires_directory, follow_final, operation_data)
+        : openat(fds[fd_length - 1], ".", open_flags, mode);
+      if (!operation && result >= 0 && wants_truncate && ftruncate(result, 0) != 0) {
         int saved_errno = errno;
         close(result);
         errno = saved_errno;
@@ -264,10 +272,12 @@ static int wasmoon_wasi_open_beneath_impl(
     } else {
       open_flags = O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW;
     }
-    int opened = openat(fds[fd_length - 1], component, open_flags, mode);
+    int opened = is_final && operation
+      ? operation(fds[fd_length - 1], component, requires_directory, follow_final, operation_data)
+      : openat(fds[fd_length - 1], component, open_flags, mode);
     if (opened >= 0) {
       if (is_final) {
-        if (wants_truncate && ftruncate(opened, 0) != 0) {
+        if (!operation && wants_truncate && ftruncate(opened, 0) != 0) {
           int saved_errno = errno;
           close(opened);
           errno = saved_errno;
@@ -342,6 +352,12 @@ fail: {
     return -1;
   }
 #endif
+}
+
+static int wasmoon_wasi_open_beneath_impl(
+  int root_fd, const char *path, int flags, int mode, int follow_final
+) {
+  return wasmoon_wasi_walk_beneath(root_fd, path, flags, mode, follow_final, NULL, NULL);
 }
 
 static int wasmoon_wasi_open_parent_beneath_impl(int root_fd, const char *path) {
@@ -1139,6 +1155,58 @@ MOONBIT_FFI_EXPORT int wasmoon_wasi_utimensat(int dirfd, moonbit_bytes_t path,
 // ============================================================================
 
 // Set fd flags
+// The same walker serves metadata and open, so follow-final resolution keeps
+// its directory stack and cannot acquire ambient authority through "..".
+typedef struct {
+  uint64_t *dev, *ino, *nlink, *size, *atim, *mtim, *ctim;
+  uint8_t *filetype;
+} wasmoon_wasi_stat_result;
+
+static int wasmoon_wasi_stat_beneath_operation(
+  int parent, const char *leaf, int directory, int follow, void *data
+) {
+  wasmoon_wasi_stat_result *out = (wasmoon_wasi_stat_result *)data;
+  int result = wasmoon_wasi_fstatat(parent, (moonbit_bytes_t)leaf,
+    WASMOON_AT_SYMLINK_NOFOLLOW_TOKEN, out->dev, out->ino, out->filetype,
+    out->nlink, out->size, out->atim, out->mtim, out->ctim);
+  if (result != 0) return result;
+  if (*out->filetype == 7 && follow) { errno = ELOOP; return -1; }
+  if (directory && *out->filetype != 3) { errno = ENOTDIR; return -1; }
+  return 0;
+}
+
+MOONBIT_FFI_EXPORT int wasmoon_wasi_fstat_beneath(int root, moonbit_bytes_t path,
+    int follow, uint64_t *dev, uint64_t *ino, uint8_t *filetype,
+    uint64_t *nlink, uint64_t *size, uint64_t *atim, uint64_t *mtim, uint64_t *ctim) {
+  wasmoon_wasi_stat_result out = {dev, ino, nlink, size, atim, mtim, ctim, filetype};
+  return wasmoon_wasi_walk_beneath(root, (const char *)path, 0, 0, follow,
+    wasmoon_wasi_stat_beneath_operation, &out);
+}
+
+typedef struct { int64_t atim, mtim; int flags; } wasmoon_wasi_times;
+
+static int wasmoon_wasi_times_beneath_operation(
+  int parent, const char *leaf, int directory, int follow, void *data
+) {
+  wasmoon_wasi_times *times = (wasmoon_wasi_times *)data;
+  uint64_t dev, ino, nlink, size, atim, mtim, ctim;
+  uint8_t type;
+  wasmoon_wasi_stat_result out = {&dev, &ino, &nlink, &size, &atim, &mtim, &ctim, &type};
+  if (wasmoon_wasi_stat_beneath_operation(parent, leaf, directory, follow, &out) != 0)
+    return -1;
+  // Keep NOFOLLOW at the mutation boundary as well: replacement of the leaf
+  // after inspection may change the object, but cannot mutate an outside target.
+  return wasmoon_wasi_utimensat(parent, (moonbit_bytes_t)leaf,
+    times->atim, times->mtim, times->flags, WASMOON_AT_SYMLINK_NOFOLLOW_TOKEN);
+}
+
+MOONBIT_FFI_EXPORT int wasmoon_wasi_utimens_beneath(int root, moonbit_bytes_t path,
+    int follow, int64_t atim, int64_t mtim, int flags) {
+  wasmoon_wasi_times times = {atim, mtim, flags};
+  return wasmoon_wasi_walk_beneath(root, (const char *)path, 0, 0, follow,
+    wasmoon_wasi_times_beneath_operation, &times);
+}
+
 MOONBIT_FFI_EXPORT int wasmoon_wasi_fcntl_setfl(int fd, int flags) {
 #ifdef _WIN32
   return wasmoon_windows_setfl(fd, flags);

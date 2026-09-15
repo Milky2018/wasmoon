@@ -349,7 +349,14 @@ int wasmoon_windows_symlinkat(const char *target, int fd, const char *name) {
   free(substitute); free(wide_target);
   HANDLE handle = open_relative(fd, name, GENERIC_WRITE | DELETE, 2,
       0x00200000 | (directory ? 1 : 0x40));
-  if (handle == INVALID_HANDLE_VALUE) { free(data); return -1; }
+  if (handle == INVALID_HANDLE_VALUE) {
+    free(data);
+    size_t length = strlen(name);
+    int trailing_slash = length && name[length - 1] == '/';
+    if (attributes == INVALID_FILE_ATTRIBUTES && errno != EPERM &&
+        (errno == EEXIST || trailing_slash)) return wasmoon_windows_error(target_error);
+    return -1;
+  }
   BOOL ok = set_symlink_reparse(handle, data, (DWORD)(20 + bytes));
   DWORD error = GetLastError(); free(data);
   if (!ok) {

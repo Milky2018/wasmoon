@@ -541,7 +541,8 @@ fn WasiContext::resolve_path_internal(
 }
 
 ///|
-/// Resolve a path relative to a directory fd
+/// Return a diagnostic host path. This string is not a filesystem capability;
+/// production path operations must use the held directory descriptor.
 pub fn WasiContext::resolve_path(
   self : WasiContext,
   dir_fd : Int,
@@ -552,7 +553,7 @@ pub fn WasiContext::resolve_path(
 
 ///|
 /// Resolve a path while avoiding final-component symlink traversal in the
-/// containment check. Used by path operations that act on directory entries.
+/// containment check. This diagnostic result must not authorize host I/O.
 pub fn WasiContext::resolve_path_nofollow_leaf(
   self : WasiContext,
   dir_fd : Int,

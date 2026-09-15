@@ -3272,8 +3272,7 @@ test "wasi: poll resolver accepts character devices" {
     rights_base: right_fd_read | right_poll_fd_readwrite,
     rights_inheriting: 0L,
   })
-  let native_fd = match
-    resolve_poll_fd_source(InterpreterDescriptors(ctx), fd, 1) {
+  let native_fd = match resolve_poll_fd_source(ctx, fd, 1) {
     Ok(Native(native_fd)) => native_fd
     Ok(Immediate) => -2
     Err(errno) => -errno.to_i32()

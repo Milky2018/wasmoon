@@ -94,6 +94,8 @@ pub fn native_fdatasync(Int) -> Bool
 
 pub fn native_fstat(Int) -> FileStat?
 
+pub fn native_fstat_beneath(Int, String, Int) -> FileStat?
+
 pub fn native_fstatat(Int, String, Int) -> FileStat?
 
 pub fn native_fsync(Int) -> Bool
@@ -203,6 +205,8 @@ pub fn native_symlinkat(String, Int, String) -> Bool
 pub fn native_tell(Int) -> Int64?
 
 pub fn native_unlinkat(Int, String, Int) -> Bool
+
+pub fn native_utimens_beneath(Int, String, Bool, Int64, Int64, Int) -> Bool
 
 pub fn native_utimensat(Int, String, Int64, Int64, Int, Int) -> Bool
 

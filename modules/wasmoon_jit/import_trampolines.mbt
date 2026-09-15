@@ -72,9 +72,9 @@ pub fn get_import_trampoline(
   module_name : String,
   field_name : String,
 ) -> Int64? {
-  // Windows shares the portable WASI host implementation across engines.
+  // All platforms share the portable WASI host implementation across engines.
   // Returning None selects the existing hostcall bridge, not interpretation.
-  if module_name == "wasi_snapshot_preview1" && @host_io.is_windows() {
+  if module_name == "wasi_snapshot_preview1" {
     return None
   }
   import_trampolines

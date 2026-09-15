@@ -1088,22 +1088,6 @@ extern "c" fn c_resolver_next(
 extern "c" fn c_resolver_drop(resolver : Int64) = "wasmoon_wasi_resolver_drop"
 
 ///|
-extern "c" fn c_active_jit_context_ptr() -> Int64 = "wasmoon_jit_active_context_ptr"
-
-///|
-extern "c" fn c_jit_poll_resolve_fd(
-  context : Int64,
-  fd : Int,
-  event_type : Int,
-) -> Int = "wasmoon_jit_poll_resolve_fd"
-
-///|
-extern "c" fn c_jit_poll_fd_read_nbytes(context : Int64, fd : Int) -> Int64 = "wasmoon_jit_poll_fd_read_nbytes"
-
-///|
-extern "c" fn c_jit_poll_fd_read_flags(context : Int64, fd : Int) -> Int = "wasmoon_jit_poll_fd_read_flags"
-
-///|
 /// Socket recv
 #borrow(buf)
 extern "c" fn c_recv(
@@ -1461,26 +1445,6 @@ pub fn native_resolver_drop(resolver : Int64) -> Unit {
 }
 
 ///|
-fn active_jit_context_ptr() -> Int64 {
-  c_active_jit_context_ptr()
-}
-
-///|
-fn jit_poll_resolve_fd(context : Int64, fd : Int, event_type : Int) -> Int {
-  c_jit_poll_resolve_fd(context, fd, event_type)
-}
-
-///|
-fn jit_poll_fd_read_nbytes(context : Int64, fd : Int) -> Int64 {
-  c_jit_poll_fd_read_nbytes(context, fd)
-}
-
-///|
-fn jit_poll_fd_read_flags(context : Int64, fd : Int) -> Int {
-  c_jit_poll_fd_read_flags(context, fd)
-}
-
-///|
 /// Socket recv
 pub fn native_recv(sockfd : Int, buf : FixedArray[Byte], flags : Int) -> Int64 {
   c_recv(sockfd, buf, buf.length().to_int64(), flags)
@@ -1529,4 +1493,79 @@ extern "c" fn c_getrandom(buf : FixedArray[Byte], len : Int) -> Int = "wasmoon_w
 /// Returns true on success
 pub fn native_getrandom(buf : FixedArray[Byte], len : Int) -> Bool {
   c_getrandom(buf, len) == 0
+}
+
+///|
+#borrow(path, dev, ino, filetype, nlink, size, atim, mtim, ctim)
+extern "c" fn c_fstat_beneath(
+  dirfd : Int,
+  path : FixedArray[Byte],
+  flags : Int,
+  dev : FixedArray[UInt64],
+  ino : FixedArray[UInt64],
+  filetype : FixedArray[Byte],
+  nlink : FixedArray[UInt64],
+  size : FixedArray[UInt64],
+  atim : FixedArray[UInt64],
+  mtim : FixedArray[UInt64],
+  ctim : FixedArray[UInt64],
+) -> Int = "wasmoon_wasi_fstat_beneath"
+
+///|
+pub fn native_fstat_beneath(
+  dirfd : Int,
+  path : String,
+  flags : Int,
+) -> FileStat? {
+  guard string_to_cstring(path) is Some(path_bytes) else { return None }
+  let dev = FixedArray::make(1, 0UL)
+  let ino = FixedArray::make(1, 0UL)
+  let filetype = FixedArray::make(1, b'\x00')
+  let nlink = FixedArray::make(1, 0UL)
+  let size = FixedArray::make(1, 0UL)
+  let atim = FixedArray::make(1, 0UL)
+  let mtim = FixedArray::make(1, 0UL)
+  let ctim = FixedArray::make(1, 0UL)
+  if c_fstat_beneath(
+      dirfd, path_bytes, flags, dev, ino, filetype, nlink, size, atim, mtim, ctim,
+    ) ==
+    0 {
+    Some({
+      dev: dev[0],
+      ino: ino[0],
+      filetype: filetype[0].to_int(),
+      nlink: nlink[0],
+      size: size[0],
+      atim: atim[0],
+      mtim: mtim[0],
+      ctim: ctim[0],
+    })
+  } else {
+    None
+  }
+}
+
+///|
+#borrow(path)
+extern "c" fn c_utimens_beneath(
+  root : Int,
+  path : FixedArray[Byte],
+  follow : Int,
+  atim : Int64,
+  mtim : Int64,
+  flags : Int,
+) -> Int = "wasmoon_wasi_utimens_beneath"
+
+///|
+pub fn native_utimens_beneath(
+  root : Int,
+  path : String,
+  follow : Bool,
+  atim : Int64,
+  mtim : Int64,
+  flags : Int,
+) -> Bool {
+  guard string_to_cstring(path) is Some(bytes) else { return false }
+  c_utimens_beneath(root, bytes, if follow { 1 } else { 0 }, atim, mtim, flags) ==
+  0
 }
