@@ -240,7 +240,7 @@ jobs:
         id: windows_build
         if: ${{ !cancelled() }}
         run: |
-          moon build --target native --release --target-dir target/windows-build
+          moon build --target native --release --jobs 2 --target-dir target/windows-build
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Copy-Item target/windows-build/native/release/build/Milky2018/wasmoon/cmd/wasmoon/wasmoon.exe wasmoon.exe
           Copy-Item target/windows-build/native/release/build/Milky2018/wasmoon/cmd/wasmoon-tools/wasmoon-tools.exe wasmoon-tools.exe
@@ -254,15 +254,16 @@ jobs:
         if: ${{ !cancelled() && steps.windows_build.outcome == 'success' }}
         run: |
           $failed = $false
+          New-Item -ItemType Directory -Force target/windows-components | Out-Null
           foreach ($suite in @("stable-0.2", "async-0.3", "future-gated")) {
-            python scripts/run_component_wast.py --suite $suite --dump-failures
+            python scripts/run_component_wast.py --suite $suite --dump-failures 2>&1 | Tee-Object -FilePath "target/windows-components/$suite-jit.log"
             if ($LASTEXITCODE -ne 0) { $failed = $true }
-            python scripts/run_component_wast.py --suite $suite --dump-failures --no-jit
+            python scripts/run_component_wast.py --suite $suite --dump-failures --no-jit 2>&1 | Tee-Object -FilePath "target/windows-components/$suite-interp.log"
             if ($LASTEXITCODE -ne 0) { $failed = $true }
           }
           if ($failed) { exit 1 }
       - name: run Windows native tests
-        if: ${{ !cancelled() && steps.windows_build.outcome == 'success' }}
+        if: ${{ success() && steps.windows_build.outcome == 'success' }}
         env:
           VCODE_REGALLOC_VALIDATION: "1"
         run: python scripts/run_native_packages.py --output target/windows-native-tests
@@ -274,4 +275,5 @@ jobs:
           path: |
             target/windows-native-tests
             target/windows-readiness.json
+            target/windows-components
           if-no-files-found: warn

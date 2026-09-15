@@ -103,6 +103,21 @@ static HANDLE open_relative(int fd, const char *name, ACCESS_MASK access,
   if (result < 0) { wasmoon_windows_error(status_error(result)); return INVALID_HANDLE_VALUE; }
   return handle;
 }
+static int absolute_path(const char *path) {
+  return path[0] == '/' || path[0] == '\\' || (path[0] && path[1] == ':');
+}
+static HANDLE open_path_or_relative(int fd, const char *path, ACCESS_MASK access,
+                                    ULONG disposition, ULONG options) {
+  if (!absolute_path(path)) return open_relative(fd, path, access, disposition, options);
+  wchar_t *wide = wasmoon_windows_utf16(path);
+  if (!wide) return INVALID_HANDLE_VALUE;
+  HANDLE handle = CreateFileW(wide, access, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+      NULL, disposition == 2 ? CREATE_NEW : OPEN_EXISTING,
+      FILE_FLAG_BACKUP_SEMANTICS | ((options & 0x00200000) ? FILE_FLAG_OPEN_REPARSE_POINT : 0), NULL);
+  DWORD error = GetLastError(); free(wide);
+  if (handle == INVALID_HANDLE_VALUE) wasmoon_windows_error(error);
+  return handle;
+}
 int wasmoon_windows_openat(int fd, const char *name, int flags, int mode) {
   (void)mode;
   ULONG disposition = flags & _O_CREAT ? (flags & _O_EXCL ? 2 : 3) : 1;
@@ -123,7 +138,7 @@ int wasmoon_windows_is_symlink_at(int fd, const char *name) {
   return result;
 }
 int64_t wasmoon_windows_readlinkat(int fd, const char *name, char *buffer, size_t capacity) {
-  HANDLE handle = open_relative(fd, name, FILE_READ_ATTRIBUTES, 1, 0x00200000);
+  HANDLE handle = open_path_or_relative(fd, name, FILE_READ_ATTRIBUTES, 1, 0x00200000);
   if (handle == INVALID_HANDLE_VALUE) return -1;
   union { uint64_t align; unsigned char bytes[MAXIMUM_REPARSE_DATA_BUFFER_SIZE]; } data;
   DWORD length;
@@ -260,5 +275,137 @@ fail: {
   CloseHandle(handle); free(result); errno = error;
   return NULL;
 }
+}
+
+static uint64_t filetime_ns(int64_t value) {
+  return ((uint64_t)value - 116444736000000000ULL) * 100ULL;
+}
+static int stat_handle(HANDLE handle, wasmoon_windows_stat *stat) {
+  memset(stat, 0, sizeof(*stat));
+  stat->st_nlink = 1;
+  SetLastError(NO_ERROR);
+  DWORD kind = GetFileType(handle);
+  if (kind == FILE_TYPE_UNKNOWN && GetLastError() != NO_ERROR) return wasmoon_windows_error(GetLastError());
+  if (kind == FILE_TYPE_PIPE) { stat->filetype = 8; return 0; }
+  if (kind == FILE_TYPE_CHAR) { stat->filetype = 2; return 0; }
+  BY_HANDLE_FILE_INFORMATION info;
+  FILE_BASIC_INFO times;
+  if (!GetFileInformationByHandle(handle, &info) ||
+      !GetFileInformationByHandleEx(handle, FileBasicInfo, &times, sizeof(times)))
+    return wasmoon_windows_error(GetLastError());
+  stat->st_dev = info.dwVolumeSerialNumber;
+  stat->st_ino = ((uint64_t)info.nFileIndexHigh << 32) | info.nFileIndexLow;
+  stat->st_nlink = info.nNumberOfLinks;
+  stat->st_size = ((uint64_t)info.nFileSizeHigh << 32) | info.nFileSizeLow;
+  stat->filetype = info.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT ? 7 :
+                   info.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY ? 3 : 4;
+  stat->atim_ns = filetime_ns(times.LastAccessTime.QuadPart);
+  stat->mtim_ns = filetime_ns(times.LastWriteTime.QuadPart);
+  stat->ctim_ns = filetime_ns(times.ChangeTime.QuadPart);
+  return 0;
+}
+int wasmoon_windows_fstat(int fd, wasmoon_windows_stat *stat) {
+  if (wasmoon_windows_is_socket(fd)) {
+    if (wasmoon_windows_socket_get(fd) == INVALID_SOCKET) { errno = EBADF; return -1; }
+    memset(stat, 0, sizeof(*stat)); stat->st_nlink = 1; stat->filetype = 6;
+    return 0;
+  }
+  HANDLE handle = wasmoon_windows_fd_handle(fd);
+  if (handle == INVALID_HANDLE_VALUE) return -1;
+  return stat_handle(handle, stat);
+}
+int wasmoon_windows_fstatat(int fd, const char *path, int follow, wasmoon_windows_stat *stat) {
+  HANDLE handle = open_path_or_relative(fd, path, FILE_READ_ATTRIBUTES, 1, follow ? 0 : 0x00200000);
+  if (handle == INVALID_HANDLE_VALUE) return -1;
+  int result = stat_handle(handle, stat), error = errno;
+  CloseHandle(handle); errno = error;
+  return result;
+}
+int wasmoon_windows_mkdirat(int fd, const char *path) {
+  if (absolute_path(path)) {
+    wchar_t *wide = wasmoon_windows_utf16(path);
+    if (!wide) return -1;
+    BOOL result = CreateDirectoryW(wide, NULL);
+    DWORD error = GetLastError(); free(wide);
+    return result ? 0 : wasmoon_windows_error(error);
+  }
+  HANDLE handle = open_relative(fd, path, FILE_READ_ATTRIBUTES, 2, 1 | 0x00200000);
+  if (handle == INVALID_HANDLE_VALUE) return -1;
+  CloseHandle(handle);
+  return 0;
+}
+int wasmoon_windows_unlinkat(int fd, const char *path, int directory) {
+  HANDLE handle = open_path_or_relative(fd, path, DELETE | FILE_READ_ATTRIBUTES, 1, 0x00200000);
+  if (handle == INVALID_HANDLE_VALUE) return -1;
+  FILE_ATTRIBUTE_TAG_INFO attributes;
+  if (!GetFileInformationByHandleEx(handle, FileAttributeTagInfo, &attributes, sizeof(attributes))) {
+    DWORD error = GetLastError(); CloseHandle(handle); return wasmoon_windows_error(error);
+  }
+  int is_directory = (attributes.FileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
+  int is_link = (attributes.FileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0;
+  if ((directory && (!is_directory || is_link)) || (!directory && is_directory && !is_link)) {
+    CloseHandle(handle); errno = directory ? ENOTDIR : EISDIR; return -1;
+  }
+  FILE_DISPOSITION_INFO_EX info = {FILE_DISPOSITION_FLAG_DELETE | FILE_DISPOSITION_FLAG_POSIX_SEMANTICS |
+                                  FILE_DISPOSITION_FLAG_IGNORE_READONLY_ATTRIBUTE};
+  BOOL result = SetFileInformationByHandle(handle, FileDispositionInfoEx, &info, sizeof(info));
+  DWORD error = GetLastError(); CloseHandle(handle);
+  return result ? 0 : wasmoon_windows_error(error);
+}
+int wasmoon_windows_renameat(int old_fd, const char *old_path, int new_fd, const char *new_path) {
+  HANDLE source = open_path_or_relative(old_fd, old_path, DELETE, 1, 0x00200000);
+  if (source == INVALID_HANDLE_VALUE) return -1;
+  wchar_t *name = wasmoon_windows_utf16(new_path);
+  if (!name) { CloseHandle(source); return -1; }
+  HANDLE root = NULL;
+  if (!absolute_path(new_path)) {
+    if (strchr(new_path, '/') || strchr(new_path, '\\') || strchr(new_path, ':') ||
+        !strcmp(new_path, ".") || !strcmp(new_path, "..")) {
+      free(name); CloseHandle(source); errno = EPERM; return -1;
+    }
+    root = wasmoon_windows_fd_handle(new_fd);
+    if (root == INVALID_HANDLE_VALUE) { free(name); CloseHandle(source); return -1; }
+  }
+  size_t bytes = wcslen(name) * sizeof(*name);
+  size_t size = offsetof(FILE_RENAME_INFO, FileName) + bytes;
+  FILE_RENAME_INFO *info = calloc(1, size);
+  if (!info) { free(name); CloseHandle(source); errno = ENOMEM; return -1; }
+  info->ReplaceIfExists = TRUE;
+  info->RootDirectory = root;
+  info->FileNameLength = (DWORD)bytes;
+  memcpy(info->FileName, name, bytes);
+  BOOL result = SetFileInformationByHandle(source, FileRenameInfo, info, (DWORD)size);
+  DWORD error = GetLastError();
+  free(name); free(info); CloseHandle(source);
+  return result ? 0 : wasmoon_windows_error(error);
+}
+static int set_times(HANDLE handle, int64_t atim, int64_t mtim, int flags) {
+  FILETIME access, modified, now;
+  FILETIME *access_ptr = NULL, *modified_ptr = NULL;
+  GetSystemTimePreciseAsFileTime(&now);
+  if (flags & 1) {
+    ULARGE_INTEGER ticks; ticks.QuadPart = (uint64_t)atim / 100 + 116444736000000000ULL;
+    access.dwLowDateTime = ticks.LowPart; access.dwHighDateTime = ticks.HighPart;
+    access_ptr = &access;
+  } else if (flags & 2) access_ptr = &now;
+  if (flags & 4) {
+    ULARGE_INTEGER ticks; ticks.QuadPart = (uint64_t)mtim / 100 + 116444736000000000ULL;
+    modified.dwLowDateTime = ticks.LowPart; modified.dwHighDateTime = ticks.HighPart;
+    modified_ptr = &modified;
+  } else if (flags & 8) modified_ptr = &now;
+  if (SetFileTime(handle, NULL, access_ptr, modified_ptr)) return 0;
+  return wasmoon_windows_error(GetLastError());
+}
+int wasmoon_windows_futimens(int fd, int64_t atim, int64_t mtim, int flags) {
+  HANDLE handle = wasmoon_windows_fd_handle(fd);
+  if (handle == INVALID_HANDLE_VALUE) return -1;
+  return set_times(handle, atim, mtim, flags);
+}
+int wasmoon_windows_utimensat(int fd, const char *path, int64_t atim, int64_t mtim, int flags, int follow) {
+  HANDLE handle = open_path_or_relative(fd, path, FILE_WRITE_ATTRIBUTES, 1, follow ? 0 : 0x00200000);
+  if (handle == INVALID_HANDLE_VALUE) return -1;
+  int result = set_times(handle, atim, mtim, flags), error = errno;
+  CloseHandle(handle); errno = error;
+  return result;
 }
 #endif

@@ -136,6 +136,7 @@ int wasmoon_windows_write(int fd, const void *buffer, int count) {
     }
     HANDLE handle = wasmoon_windows_fd_handle(fd);
     if (handle == INVALID_HANDLE_VALUE) return -1;
+    if (fd > 2) return _write(fd, buffer, (unsigned)count);
     DWORD written;
     if (WriteFile(handle, buffer, (DWORD)count, &written, NULL)) return (int)written;
     return wasmoon_windows_error(GetLastError());

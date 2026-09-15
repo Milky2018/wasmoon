@@ -231,6 +231,12 @@ static int wasmoon_wasi_open_beneath_impl(
     char *remaining = separator ? separator + 1 : cursor + strlen(cursor);
     if (separator) *separator = '\0';
     const char *component = cursor;
+#ifdef _WIN32
+    if (strchr(component, ':') || strchr(component, '\\')) {
+      errno = EPERM;
+      goto fail;
+    }
+#endif
     int is_final = !wasmoon_wasi_path_has_component(remaining);
 
     if (strcmp(component, ".") == 0) {
@@ -871,8 +877,12 @@ MOONBIT_FFI_EXPORT int wasmoon_wasi_o_nofollow(void) {
 // Create a directory
 MOONBIT_FFI_EXPORT int wasmoon_wasi_mkdir(moonbit_bytes_t path, int mode) {
 #ifdef _WIN32
-  (void)mode;  // Windows mkdir doesn't use mode
-  return _mkdir((const char *)path);
+  (void)mode;
+  wchar_t *wide = wasmoon_windows_utf16((const char *)path);
+  if (!wide) return -1;
+  BOOL result = CreateDirectoryW(wide, NULL);
+  DWORD error = GetLastError(); free(wide);
+  return result ? 0 : wasmoon_windows_error(error);
 #else
   return mkdir((const char *)path, mode);
 #endif
@@ -884,9 +894,8 @@ MOONBIT_FFI_EXPORT int wasmoon_wasi_mkdirat(
   int mode
 ) {
 #ifdef _WIN32
-  (void)dirfd;
   (void)mode;
-  return _mkdir((const char *)path);
+  return wasmoon_windows_mkdirat(dirfd, (const char *)path);
 #else
   return mkdirat(dirfd, (const char *)path, mode);
 #endif
@@ -932,13 +941,8 @@ MOONBIT_FFI_EXPORT int wasmoon_wasi_fdatasync(int fd) {
 // Unlink file or directory (with AT_REMOVEDIR flag)
 MOONBIT_FFI_EXPORT int wasmoon_wasi_unlinkat(int dirfd, moonbit_bytes_t path, int flags) {
 #ifdef _WIN32
-  (void)dirfd;
-  // Windows: simple unlink for files, rmdir for directories
-  if (flags & WASMOON_AT_REMOVEDIR_TOKEN) {
-    return _rmdir((const char *)path);
-  } else {
-    return _unlink((const char *)path);
-  }
+  return wasmoon_windows_unlinkat(dirfd, (const char *)path,
+      (flags & WASMOON_AT_REMOVEDIR_TOKEN) != 0);
 #else
   int native_flags = flags;
 #ifdef AT_REMOVEDIR
@@ -954,9 +958,7 @@ MOONBIT_FFI_EXPORT int wasmoon_wasi_unlinkat(int dirfd, moonbit_bytes_t path, in
 MOONBIT_FFI_EXPORT int wasmoon_wasi_renameat(int old_dirfd, moonbit_bytes_t old_path,
                                               int new_dirfd, moonbit_bytes_t new_path) {
 #ifdef _WIN32
-  (void)old_dirfd;
-  (void)new_dirfd;
-  return rename((const char *)old_path, (const char *)new_path);
+  return wasmoon_windows_renameat(old_dirfd, (const char *)old_path, new_dirfd, (const char *)new_path);
 #else
   return renameat(old_dirfd, (const char *)old_path, new_dirfd, (const char *)new_path);
 #endif
@@ -972,10 +974,8 @@ MOONBIT_FFI_EXPORT int wasmoon_wasi_fstat(int fd,
     uint64_t *nlink, uint64_t *size,
     uint64_t *atim, uint64_t *mtim, uint64_t *ctim) {
 #ifdef _WIN32
-  struct __stat64 st;
-  if (_fstat64(fd, &st) != 0) {
-    return -1;
-  }
+  wasmoon_windows_stat st;
+  if (wasmoon_windows_fstat(fd, &st) != 0) return -1;
 #else
   struct stat st;
   if (fstat(fd, &st) != 0) {
@@ -987,14 +987,14 @@ MOONBIT_FFI_EXPORT int wasmoon_wasi_fstat(int fd,
   *nlink = st.st_nlink;
   *size = st.st_size;
 
-  *filetype = wasmoon_wasi_filetype_from_mode(st.st_mode);
-
-  // Convert timespec to nanoseconds
 #ifdef _WIN32
-  *atim = (uint64_t)st.st_atime * 1000000000ULL;
-  *mtim = (uint64_t)st.st_mtime * 1000000000ULL;
-  *ctim = (uint64_t)st.st_ctime * 1000000000ULL;
-#elif defined(__APPLE__)
+  *filetype = st.filetype;
+  *atim = st.atim_ns;
+  *mtim = st.mtim_ns;
+  *ctim = st.ctim_ns;
+#else
+  *filetype = wasmoon_wasi_filetype_from_mode(st.st_mode);
+#if defined(__APPLE__)
   *atim = (uint64_t)st.st_atimespec.tv_sec * 1000000000ULL + st.st_atimespec.tv_nsec;
   *mtim = (uint64_t)st.st_mtimespec.tv_sec * 1000000000ULL + st.st_mtimespec.tv_nsec;
   *ctim = (uint64_t)st.st_ctimespec.tv_sec * 1000000000ULL + st.st_ctimespec.tv_nsec;
@@ -1002,6 +1002,7 @@ MOONBIT_FFI_EXPORT int wasmoon_wasi_fstat(int fd,
   *atim = (uint64_t)st.st_atim.tv_sec * 1000000000ULL + st.st_atim.tv_nsec;
   *mtim = (uint64_t)st.st_mtim.tv_sec * 1000000000ULL + st.st_mtim.tv_nsec;
   *ctim = (uint64_t)st.st_ctim.tv_sec * 1000000000ULL + st.st_ctim.tv_nsec;
+#endif
 #endif
   return 0;
 }
@@ -1012,12 +1013,9 @@ MOONBIT_FFI_EXPORT int wasmoon_wasi_fstatat(int dirfd, moonbit_bytes_t path, int
     uint64_t *nlink, uint64_t *size,
     uint64_t *atim, uint64_t *mtim, uint64_t *ctim) {
 #ifdef _WIN32
-  struct __stat64 st;
-  (void)dirfd;
-  (void)flags;
-  if (_stat64((const char *)path, &st) != 0) {
-    return -1;
-  }
+  wasmoon_windows_stat st;
+  if (wasmoon_windows_fstatat(dirfd, (const char *)path,
+      (flags & WASMOON_AT_SYMLINK_NOFOLLOW_TOKEN) == 0, &st) != 0) return -1;
 #else
   struct stat st;
   int native_flags = flags;
@@ -1036,14 +1034,14 @@ MOONBIT_FFI_EXPORT int wasmoon_wasi_fstatat(int dirfd, moonbit_bytes_t path, int
   *nlink = st.st_nlink;
   *size = st.st_size;
 
-  *filetype = wasmoon_wasi_filetype_from_mode(st.st_mode);
-
-  // Convert timespec to nanoseconds
 #ifdef _WIN32
-  *atim = (uint64_t)st.st_atime * 1000000000ULL;
-  *mtim = (uint64_t)st.st_mtime * 1000000000ULL;
-  *ctim = (uint64_t)st.st_ctime * 1000000000ULL;
-#elif defined(__APPLE__)
+  *filetype = st.filetype;
+  *atim = st.atim_ns;
+  *mtim = st.mtim_ns;
+  *ctim = st.ctim_ns;
+#else
+  *filetype = wasmoon_wasi_filetype_from_mode(st.st_mode);
+#if defined(__APPLE__)
   *atim = (uint64_t)st.st_atimespec.tv_sec * 1000000000ULL + st.st_atimespec.tv_nsec;
   *mtim = (uint64_t)st.st_mtimespec.tv_sec * 1000000000ULL + st.st_mtimespec.tv_nsec;
   *ctim = (uint64_t)st.st_ctimespec.tv_sec * 1000000000ULL + st.st_ctimespec.tv_nsec;
@@ -1051,6 +1049,7 @@ MOONBIT_FFI_EXPORT int wasmoon_wasi_fstatat(int dirfd, moonbit_bytes_t path, int
   *atim = (uint64_t)st.st_atim.tv_sec * 1000000000ULL + st.st_atim.tv_nsec;
   *mtim = (uint64_t)st.st_mtim.tv_sec * 1000000000ULL + st.st_mtim.tv_nsec;
   *ctim = (uint64_t)st.st_ctim.tv_sec * 1000000000ULL + st.st_ctim.tv_nsec;
+#endif
 #endif
   return 0;
 }
@@ -1067,12 +1066,7 @@ MOONBIT_FFI_EXPORT int wasmoon_wasi_ftruncate(int fd, int64_t size) {
 // Set file times
 MOONBIT_FFI_EXPORT int wasmoon_wasi_futimens(int fd, int64_t atim, int64_t mtim, int fst_flags) {
 #ifdef _WIN32
-  (void)fd;
-  (void)atim;
-  (void)mtim;
-  (void)fst_flags;
-  // Not easily supported on Windows
-  return -1;
+  return wasmoon_windows_futimens(fd, atim, mtim, fst_flags);
 #else
   struct timespec times[2];
 
@@ -1112,13 +1106,8 @@ MOONBIT_FFI_EXPORT int wasmoon_wasi_futimens(int fd, int64_t atim, int64_t mtim,
 MOONBIT_FFI_EXPORT int wasmoon_wasi_utimensat(int dirfd, moonbit_bytes_t path,
     int64_t atim, int64_t mtim, int fst_flags, int lookup_flags) {
 #ifdef _WIN32
-  (void)dirfd;
-  (void)path;
-  (void)atim;
-  (void)mtim;
-  (void)fst_flags;
-  (void)lookup_flags;
-  return -1;
+  return wasmoon_windows_utimensat(dirfd, (const char *)path, atim, mtim, fst_flags,
+      (lookup_flags & WASMOON_AT_SYMLINK_NOFOLLOW_TOKEN) == 0);
 #else
   struct timespec times[2];
 
@@ -1210,11 +1199,7 @@ MOONBIT_FFI_EXPORT int wasmoon_wasi_symlinkat(moonbit_bytes_t target, int dirfd,
 MOONBIT_FFI_EXPORT int64_t wasmoon_wasi_readlinkat(int dirfd, moonbit_bytes_t path,
     moonbit_bytes_t buf, int64_t bufsize) {
 #ifdef _WIN32
-  (void)dirfd;
-  (void)path;
-  (void)buf;
-  (void)bufsize;
-  return -1;
+  return wasmoon_windows_readlinkat(dirfd, (const char *)path, (char *)buf, (size_t)bufsize);
 #else
   return wasmoon_wasi_readlinkat_portable(
       dirfd, (const char *)path, (char *)buf, (size_t)bufsize);
