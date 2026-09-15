@@ -63,7 +63,8 @@ The readiness guest runner checks pending clocks, delayed binary pipe input,
 regular-file input, pipe EOF, invalid guest descriptors, and duplicate
 subscriptions in both engines. Native Windows tests additionally exercise
 console input, APC interruption, socket readiness, pipe backpressure, and
-handle ownership. No readiness probe consumes guest input.
+handle ownership. A separate executable exercises descriptor ownership and
+file buffers with Windows AddressSanitizer. No readiness probe consumes guest input.
 
 ## Files, sockets, and native execution
 
