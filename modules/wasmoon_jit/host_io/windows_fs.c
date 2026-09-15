@@ -308,15 +308,16 @@ int wasmoon_windows_symlinkat(const char *target, int fd, const char *name) {
     BOOL ok = CreateSymbolicLinkW(wide_name, wide_target,
         SYMBOLIC_LINK_FLAG_ALLOW_UNPRIVILEGED_CREATE | (directory ? SYMBOLIC_LINK_FLAG_DIRECTORY : 0));
     DWORD error = GetLastError();
-    // Windows can report ACCESS_DENIED for an existing directory, or for an
-    // existing file with a trailing slash. Preserve target-before-collision
-    // precedence only for an actual conflicting name, never a privilege error.
+    // Preserve the upstream target-error precedence for existing destinations
+    // and trailing-slash destinations (which cannot create a dangling link).
+    // A missing target must never hide a symlink privilege error.
     if (!ok && attributes == INVALID_FILE_ATTRIBUTES && error != ERROR_PRIVILEGE_NOT_HELD) {
       size_t length = wcslen(wide_name);
+      int trailing_slash = length && (wide_name[length - 1] == L'/' || wide_name[length - 1] == L'\\');
       while (length > 3 && (wide_name[length - 1] == L'/' || wide_name[length - 1] == L'\\')) {
         wide_name[--length] = 0;
       }
-      if (error == ERROR_ALREADY_EXISTS || error == ERROR_FILE_EXISTS ||
+      if (trailing_slash || error == ERROR_ALREADY_EXISTS || error == ERROR_FILE_EXISTS ||
           GetFileAttributesW(wide_name) != INVALID_FILE_ATTRIBUTES) error = target_error;
     }
     free(wide_target); free(wide_name);

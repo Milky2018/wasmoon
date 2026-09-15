@@ -146,15 +146,22 @@ Capability-relative opens and mutations use held directory handles. Symlink
 creation through a held parent installs a reparse point on the newly created
 object. If the OS requires the symlink privilege, the adapter enables an
 already-granted privilege on a private thread token for that operation and
-restores the caller's token. Windows CI exercises this handle-based path with the symlink privilege removed
-from the effective token, with Developer Mode both disabled and enabled. The
-Windows runner permits direct reparse creation in Developer Mode; an independent
+restores the caller's token. Windows Server 2025 (10.0.26100) CI exercises this
+handle-based path with the symlink privilege removed from the effective token,
+with Developer Mode both disabled and enabled. The runner permits direct
+reparse creation in Developer Mode; an independent
 FSCTL_SET_REPARSE_POINT control verifies that this does not depend on Wasmoon
 privilege adjustment or a path-based fallback. Without either permission route,
 creation returns a permission error and removes the failed placeholder. These
 checks cover the CI Windows version; other Windows versions and filesystems can
-impose additional restrictions. Host absolute-path creation uses the Windows symbolic-link
-API, including its unprivileged-creation option. Symlink targets can be read
+impose additional restrictions.
+
+Component filesystem adapters use the held-parent primitive. Preview 1 currently
+uses the host absolute-path adapter, which calls the Windows symbolic-link API
+with its unprivileged-creation option. Its JIT/interpreter CI guests inherit a
+process token with the symlink privilege removed and verify success with
+Developer Mode enabled, or EPERM with it disabled. A nonexistent link target
+must not overwrite that privilege error with ENOENT. Symlink targets can be read
 back; following an absolute target through a capability remains forbidden.
 
 The native reactor owns duplicate handles until completion or cancellation.
