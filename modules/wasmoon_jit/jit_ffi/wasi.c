@@ -24,8 +24,9 @@
 #include <sys/random.h>
 #endif
 #else
-#include <windows.h>
+#include "windows_io.h"
 #include <bcrypt.h>
+#pragma comment(lib, "bcrypt.lib")
 #include <io.h>
 #endif
 

@@ -222,6 +222,9 @@ jobs:
           moon version --all
           clang --version
           moon update
+      - name: test Windows descriptor readiness
+        run: python -m unittest discover -s scripts/tests -p 'test_wasi_windows_poll.py' -v
+
       - name: build Windows runtime
         run: moon build modules/wasmoon/cmd/wasmoon --target native --release
       - name: run Windows native tests
