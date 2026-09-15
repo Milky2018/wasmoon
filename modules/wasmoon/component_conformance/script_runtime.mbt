@@ -11,7 +11,7 @@ priv struct ScriptHost {
 priv struct ComponentScriptRuntime {
   use_jit : Bool
   component_implements : Bool
-  linkers : Array[@runtime_impl.ComponentLinker]
+  linkers : Map[Int, @runtime_impl.ComponentLinker]
   definitions : Map[String, @component_types.Component]
   instances : Map[String, @runtime_impl.ComponentInstance]
   resource_origins : Map[(Int, Int), (Int, Int)]
@@ -25,7 +25,7 @@ fn ComponentScriptRuntime::new(
   {
     use_jit,
     component_implements,
-    linkers: [],
+    linkers: Map([]),
     definitions: Map([]),
     instances: Map([]),
     resource_origins: Map([]),
@@ -34,13 +34,43 @@ fn ComponentScriptRuntime::new(
 
 ///|
 fn ComponentScriptRuntime::close(self : ComponentScriptRuntime) -> Unit {
-  for linker in self.linkers {
+  for entry in self.linkers {
+    let (_, linker) = entry
     linker.close()
   }
   self.linkers.clear()
   self.instances.clear()
   self.definitions.clear()
   self.resource_origins.clear()
+}
+
+///|
+/// Each top-level component owns its Store, as in the upstream WAST host.
+/// Reflected imports contain only store-independent modules and resource types.
+/// Keep named aliases and the current instance alive; release superseded Stores.
+fn ComponentScriptRuntime::release_unreferenced(
+  self : ComponentScriptRuntime,
+  current : @runtime_impl.ComponentInstance?,
+) -> Unit {
+  let live : Map[Int, Bool] = Map([])
+  for entry in self.instances {
+    let (_, instance) = entry
+    live.set(instance.resource_table.id, true)
+  }
+  if current is Some(instance) {
+    live.set(instance.resource_table.id, true)
+  }
+  let retired : Array[Int] = []
+  for entry in self.linkers {
+    let (id, linker) = entry
+    if !live.contains(id) {
+      linker.close()
+      retired.push(id)
+    }
+  }
+  for id in retired {
+    self.linkers.remove(id)
+  }
 }
 
 ///|
@@ -108,7 +138,7 @@ fn ComponentScriptRuntime::instantiate(
       component_implements=self.component_implements,
     ) {
     Ok(instance) => {
-      self.linkers.push(linker)
+      self.linkers.set(instance.resource_table.id, linker)
       for resource_entry in host.resource_types {
         let (origin, ty) = resource_entry
         if ty is Some(ResourceType(id, _, _, _)) {

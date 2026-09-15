@@ -6,6 +6,7 @@
 #include <io.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
 #pragma comment(lib, "advapi32.lib")
 
 wchar_t *wasmoon_windows_utf16(const char *text) {
@@ -67,6 +68,9 @@ int wasmoon_windows_open(const char *path, int flags, int mode) {
                               NULL, disposition, attributes, NULL);
   DWORD error = GetLastError();
   free(name);
+  if (getenv("WASMOON_WINDOWS_FS_TRACE")) {
+    fprintf(stderr, "[DEBUG-windows-rename] open path=%s flags=%x handle=%p error=%lu\n", path, flags, handle, error);
+  }
   if (handle == INVALID_HANDLE_VALUE) return wasmoon_windows_error(error);
   return adopt_file(handle, flags);
 }
@@ -549,6 +553,11 @@ int wasmoon_windows_renameat(int old_fd, const char *old_path, int new_fd, const
   memcpy(info->FileName, name, bytes);
   BOOL result = SetFileInformationByHandle(source, FileRenameInfo, info, (DWORD)size);
   DWORD error = GetLastError();
+  if (getenv("WASMOON_WINDOWS_FS_TRACE")) {
+    wchar_t final[4096] = {0};
+    GetFinalPathNameByHandleW(source, final, 4096, FILE_NAME_NORMALIZED);
+    fprintf(stderr, "[DEBUG-windows-rename] rename old=%s new=%s native=%ls result=%d error=%lu final=%ls\n", old_path, new_path, name, result, error, final);
+  }
   free(name); free(info); CloseHandle(source);
   return result ? 0 : wasmoon_windows_error(error);
 }

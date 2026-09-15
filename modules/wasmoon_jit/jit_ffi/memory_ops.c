@@ -291,7 +291,7 @@ static inline void fill_bytes_fast(uint8_t *dst, uint8_t val, size_t size) {
 
 // The producer checked bounds and natural alignment before these calls. Pass
 // the full pointer through the helper ABI; never narrow a memory64 offset.
-static int32_t atomic_wait32_indexed(
+static int32_t WASMOON_GUEST_ABI atomic_wait32_indexed(
     jit_context_t *ctx, int32_t memidx, int64_t pointer, int32_t expected, int64_t timeout
 ) {
     wasmoon_memory_t *memory = get_memory(ctx, memidx);
@@ -299,7 +299,7 @@ static int32_t atomic_wait32_indexed(
         (int64_t)((uintptr_t)pointer - (uintptr_t)memory->base), 4, expected, timeout);
 }
 
-static int32_t atomic_wait64_indexed(
+static int32_t WASMOON_GUEST_ABI atomic_wait64_indexed(
     jit_context_t *ctx, int32_t memidx, int64_t pointer, int64_t expected, int64_t timeout
 ) {
     wasmoon_memory_t *memory = get_memory(ctx, memidx);
@@ -307,7 +307,7 @@ static int32_t atomic_wait64_indexed(
         (int64_t)((uintptr_t)pointer - (uintptr_t)memory->base), 8, expected, timeout);
 }
 
-static int32_t atomic_notify_indexed(
+static int32_t WASMOON_GUEST_ABI atomic_notify_indexed(
     jit_context_t *ctx, int32_t memidx, int64_t pointer, int32_t count
 ) {
     wasmoon_memory_t *memory = get_memory(ctx, memidx);

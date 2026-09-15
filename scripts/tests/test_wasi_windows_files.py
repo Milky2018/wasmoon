@@ -209,6 +209,27 @@ class WindowsFileTests(unittest.TestCase):
         self.assertFalse(source.exists())
         self.assertTrue(target.is_dir())
 
+    def test_rename_in_workspace_after_missing_source_probe(self):
+        parent = ROOT / "target"
+        parent.mkdir(exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=parent) as directory:
+            base = Path(directory) / "scratch"
+            base.mkdir()
+            (base / "source").mkdir()
+            source = (base.as_posix() + "/./source").encode()
+            target = (base.as_posix() + "/./target").encode()
+            previous = Path.cwd()
+            try:
+                os.chdir(directory)
+                self.assertEqual(self.rename(0, source, 0, target), 0)
+                self.assertEqual(self.open(source, DIRECTORY | NOFOLLOW, 0), -1)
+                opened = self.open(target, DIRECTORY | NOFOLLOW, 0)
+                self.assertGreaterEqual(opened, 0)
+                self.close(opened)
+                self.assertTrue((base / "target").is_dir())
+            finally:
+                os.chdir(previous)
+
     def test_absolute_symlink_normalizes_nested_target(self):
         nested = self.root / "nested"
         nested.mkdir()
