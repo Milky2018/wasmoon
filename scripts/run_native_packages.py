@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from pathlib import Path
 import re
 import subprocess
@@ -14,18 +15,43 @@ from native_process import kill_process_tree
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def windows_process_snapshot(path: Path) -> None:
+    if os.name != "nt":
+        return
+    command = ("Get-CimInstance Win32_Process | Where-Object { "
+               "$_.Name -match '^(moon|moonc|clang|clang-cl|lld-link|link)\\.exe$' } | "
+               "Select-Object Name,ProcessId,ParentProcessId,CommandLine,"
+               "KernelModeTime,UserModeTime,WorkingSetSize | ConvertTo-Json -Depth 2")
+    try:
+        result = subprocess.run(["powershell.exe", "-NoProfile", "-Command", command],
+                                capture_output=True, text=True, encoding="utf-8",
+                                errors="replace", timeout=20)
+        with path.open("a", encoding="utf-8") as output:
+            output.write(json.dumps(dict(time=time.time(), returncode=result.returncode,
+                                         stdout=result.stdout, stderr=result.stderr)) + "\n")
+    except subprocess.TimeoutExpired:
+        with path.open("a", encoding="utf-8") as output:
+            output.write(json.dumps(dict(time=time.time(), snapshot_timeout=True)) + "\n")
+
+
 def run_logged(command: list[str], path: Path, timeout: float) -> dict:
     started = time.monotonic()
     with path.open("w", encoding="utf-8") as log:
         process = subprocess.Popen(command, cwd=ROOT, stdout=log, stderr=log,
                                    start_new_session=True)
         timed_out = False
-        try:
-            code = process.wait(timeout=timeout)
-        except subprocess.TimeoutExpired:
-            timed_out = True
-            kill_process_tree(process)
-            code = process.wait()
+        while True:
+            remaining = timeout - (time.monotonic() - started)
+            try:
+                code = process.wait(timeout=max(0, min(60, remaining)))
+                break
+            except subprocess.TimeoutExpired:
+                windows_process_snapshot(path.with_suffix(".processes.jsonl"))
+                if time.monotonic() - started >= timeout:
+                    timed_out = True
+                    kill_process_tree(process)
+                    code = process.wait()
+                    break
     result = dict(returncode=code, timed_out=timed_out,
                   seconds=round(time.monotonic() - started, 3), log=str(path))
     print(json.dumps(result), flush=True)
@@ -40,7 +66,7 @@ def main() -> int:
     args = parser.parse_args()
     args.output.mkdir(parents=True, exist_ok=True)
     print("Building complete native test inventory (two compiler workers)", flush=True)
-    build = run_logged(["moon", "test", "--target", "native", "--jobs", "2", "--build-only"],
+    build = run_logged(["moon", "test", "--target", "native", "--jobs", "2", "--build-only", "--verbose"],
                        args.output / "build.log", 900)
     evidence = dict(build=build, inventory_count=0, packages=[])
     summary = args.output / "results.json"
