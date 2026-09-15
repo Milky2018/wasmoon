@@ -24,13 +24,13 @@ class WindowsPollTests(unittest.TestCase):
         (directory / "moonbit.h").write_text('#define MOONBIT_FFI_EXPORT __declspec(dllexport)\n')
         library = directory / "poll.dll"
         subprocess.run([
-            "clang", "-shared", "-fms-runtime-lib=dll", "-I", str(directory),
+            "clang-cl", "/LD", "/MD", "/I" + str(directory),
             str(ROOT / "modules/wasmoon/wasi/poll_native.c"),
-            str(ROOT / "modules/wasmoon_jit/jit_ffi/windows_io.c"),
-            "-Wl,/export:wasmoon_windows_socket_adopt",
-            "-Wl,/export:wasmoon_windows_close",
-            "-Wl,/export:wasmoon_windows_bytes_available",
-            "-o", str(library),
+            str(ROOT / "modules/wasmoon_jit/host_io/windows_io.c"),
+            "/link", "/EXPORT:wasmoon_windows_socket_adopt",
+            "/EXPORT:wasmoon_windows_close",
+            "/EXPORT:wasmoon_windows_bytes_available",
+            "/OUT:" + str(library),
         ], check=True)
         cls.library = ctypes.CDLL(str(library), use_errno=True)
         # Unload before TemporaryDirectory cleanup: Windows locks loaded DLLs.

@@ -7,6 +7,7 @@ import fnmatch
 import json
 import os
 from pathlib import Path
+from native_process import executable, kill_process_tree
 import platform
 import re
 import shutil
@@ -181,8 +182,8 @@ def main() -> int:
     parser.add_argument("--mode", choices=["both", "interp", "jit"], default="both")
     parser.add_argument("--lane", choices=["all", "core", "component"], default="all")
     parser.add_argument("--filter", action="append", help="Repeatable glob over suite-relative WAST paths (default: *)")
-    parser.add_argument("--wasmoon", type=Path, default=ROOT / "wasmoon")
-    parser.add_argument("--wasmoon-tools", type=Path, default=ROOT / "wasmoon-tools")
+    parser.add_argument("--wasmoon", type=Path, default=executable(ROOT, "wasmoon"))
+    parser.add_argument("--wasmoon-tools", type=Path, default=executable(ROOT, "wasmoon-tools"))
     parser.add_argument("--wasm-tools", type=Path, default=Path("wasm-tools"))
     parser.add_argument("--timeout", type=float, default=30, help="Seconds per file and engine")
     parser.add_argument("--output", type=Path, help="New or empty evidence directory")

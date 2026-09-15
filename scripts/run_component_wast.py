@@ -6,13 +6,13 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import signal
 import shutil
 import subprocess
 import sys
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
+from native_process import executable, kill_process_tree
 from typing import Optional, Tuple
 
 from component_snapshot import (
@@ -91,7 +91,7 @@ def run_command(
         stdout, stderr = proc.communicate(timeout=timeout_sec)
     except subprocess.TimeoutExpired:
         try:
-            os.killpg(proc.pid, signal.SIGKILL)
+            kill_process_tree(proc)
         except OSError:
             try:
                 proc.kill()
@@ -1249,7 +1249,7 @@ def main() -> int:
     parser.add_argument(
         "--wasmoon-tools",
         type=str,
-        default="./wasmoon-tools",
+        default=str(executable(Path("."), "wasmoon-tools")),
         help="Path to wasmoon-tools binary (default: ./wasmoon-tools)",
     )
     args = parser.parse_args()
@@ -1288,7 +1288,7 @@ def main() -> int:
         print(f"No .wast files found in '{test_dir}'")
         return 1
 
-    wasmoon = repo_root / "wasmoon"
+    wasmoon = executable(repo_root, "wasmoon")
     if not wasmoon.exists():
         print(
             "Error: wasmoon binary not found. "

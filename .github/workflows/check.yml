@@ -228,7 +228,14 @@ jobs:
       - name: build Windows runtime
         id: windows_build
         if: ${{ !cancelled() }}
-        run: moon build modules/wasmoon/cmd/wasmoon --target native --release
+        run: |
+          moon build --target native --release
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Copy-Item target/native/release/build/Milky2018/wasmoon/cmd/wasmoon/wasmoon.exe wasmoon.exe
+          Copy-Item target/native/release/build/Milky2018/wasmoon/cmd/wasmoon-tools/wasmoon-tools.exe wasmoon-tools.exe
+      - name: run Windows core suites
+        if: ${{ !cancelled() && steps.windows_build.outcome == 'success' }}
+        run: python scripts/run_all_wast.py --rec --dump-failures
       - name: run Windows native tests
         if: ${{ !cancelled() && steps.windows_build.outcome == 'success' }}
         run: moon test --target native --no-parallelize

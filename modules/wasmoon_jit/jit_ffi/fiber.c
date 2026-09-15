@@ -313,6 +313,9 @@ static native_fiber_t *allocate_fiber(
     fiber->owner_thread = GetCurrentThreadId();
     fiber->state = WASMOON_FIBER_STATE_READY;
     fiber->usable_size = size;
+    SYSTEM_INFO info;
+    GetSystemInfo(&info);
+    fiber->guard_size = info.dwPageSize;
     fiber->context.handle = CreateFiberEx(size, size, FIBER_FLAG_FLOAT_SWITCH,
                                          fiber_bootstrap, NULL);
     if (!fiber->context.handle) { free(fiber); return NULL; }

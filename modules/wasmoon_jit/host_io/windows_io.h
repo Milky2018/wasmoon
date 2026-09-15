@@ -14,6 +14,7 @@ SOCKET wasmoon_windows_socket_get(int fd);
 int wasmoon_windows_is_socket(int fd);
 HANDLE wasmoon_windows_fd_handle(int fd);
 int wasmoon_windows_close(int fd);
+int wasmoon_windows_dup(int fd);
 int wasmoon_windows_socket_error(int error);
 int64_t wasmoon_windows_bytes_available(int fd);
 int wasmoon_windows_poll(const int *fds, const int *events, int *revents,

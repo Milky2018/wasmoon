@@ -1,3 +1,12 @@
+#include "moonbit.h"
+MOONBIT_FFI_EXPORT int wasmoon_host_is_windows(void) {
+#ifdef _WIN32
+    return 1;
+#else
+    return 0;
+#endif
+}
+
 #ifdef _WIN32
 #include "windows_io.h"
 #include <errno.h>
@@ -77,6 +86,21 @@ HANDLE wasmoon_windows_fd_handle(int fd) {
     intptr_t handle = _get_osfhandle(fd);
     _set_thread_local_invalid_parameter_handler(old);
     return (HANDLE)handle;
+}
+int wasmoon_windows_dup(int fd) {
+    if (!wasmoon_windows_is_socket(fd)) {
+        if (wasmoon_windows_fd_handle(fd) == INVALID_HANDLE_VALUE) return -1;
+        return _dup(fd);
+    }
+    SOCKET socket = wasmoon_windows_socket_get(fd);
+    if (socket == INVALID_SOCKET) return -1;
+    WSAPROTOCOL_INFOW protocol;
+    if (WSADuplicateSocketW(socket, GetCurrentProcessId(), &protocol))
+        return wasmoon_windows_socket_error(WSAGetLastError());
+    SOCKET duplicate = WSASocketW(FROM_PROTOCOL_INFO, FROM_PROTOCOL_INFO,
+        FROM_PROTOCOL_INFO, &protocol, 0, WSA_FLAG_NO_HANDLE_INHERIT);
+    if (duplicate == INVALID_SOCKET) return wasmoon_windows_socket_error(WSAGetLastError());
+    return wasmoon_windows_socket_adopt(duplicate);
 }
 int wasmoon_windows_close(int fd) {
     if (!wasmoon_windows_is_socket(fd)) return _close(fd);

@@ -17,7 +17,7 @@
 #include <setjmp.h>
 
 #ifdef _WIN32
-#include "windows_io.h"
+#include "../host_io/windows_io.h"
 #else
 #include <sys/mman.h>
 #include <unistd.h>

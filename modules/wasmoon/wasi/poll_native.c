@@ -8,7 +8,7 @@
 #include <stdlib.h>
 #include "moonbit.h"
 #ifdef _WIN32
-#include "../../wasmoon_jit/jit_ffi/windows_io.h"
+#include "../../wasmoon_jit/host_io/windows_io.h"
 #else
 #include <poll.h>
 #if defined(__APPLE__)

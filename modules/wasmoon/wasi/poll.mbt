@@ -85,7 +85,7 @@ fn poll_stdio_is_native(ctx : WasiContext, slot : Int) -> Bool {
 ///|
 fn poll_descriptor_context(ctx : WasiContext) -> PollDescriptorContext {
   let jit_context = active_jit_context_ptr()
-  if jit_context == 0L {
+  if jit_context == 0L || @host_io.is_windows() {
     InterpreterDescriptors(ctx)
   } else {
     JitDescriptors(jit_context)

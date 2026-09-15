@@ -6,7 +6,8 @@ test "import trampolines: known wasi functions" {
   ]
   for name in names {
     assert_true(
-      get_import_trampoline("wasi_snapshot_preview1", name) is Some(_),
+      (get_import_trampoline("wasi_snapshot_preview1", name) is Some(_)) ==
+      !@host_io.is_windows(),
     )
   }
 }

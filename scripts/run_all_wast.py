@@ -3,10 +3,10 @@
 
 import argparse
 import os
-import signal
 import subprocess
 import sys
 from pathlib import Path
+from native_process import executable, kill_process_tree
 from typing import Optional, Tuple
 
 DEFAULT_TEST_TIMEOUT_SECONDS = int(os.environ.get("WASMOON_WAST_TIMEOUT", "20"))
@@ -37,7 +37,7 @@ def run_test(
             stdout, stderr = proc.communicate(timeout=timeout_sec)
         except subprocess.TimeoutExpired:
             try:
-                os.killpg(proc.pid, signal.SIGKILL)
+                kill_process_tree(proc)
             except OSError:
                 pass
             try:
@@ -241,7 +241,7 @@ def main() -> None:
         parser.error("--only-jit and --only-interp are mutually exclusive")
 
     repo_root = Path(__file__).resolve().parent.parent
-    wasmoon_bin = repo_root / "wasmoon"
+    wasmoon_bin = executable(repo_root, "wasmoon")
     if not wasmoon_bin.exists():
         print(
             "Error: wasmoon binary not found. "

@@ -1,4 +1,5 @@
 import {
+  "Milky2018/wasmoon_jit/host_io",
   "Milky2018/milkir/native" @milkir_native,
   "Milky2018/vcode/native_types" @native,
   "Milky2018/vcode/native_lowering",
@@ -42,7 +43,6 @@ options(
     "jit_ffi/guest_continuation.c",
     "jit_ffi/trampoline_call_x86_64.S",
     "jit_ffi/windows_context_x86_64.S",
-    "jit_ffi/windows_io.c",
     "jit_ffi/stack_switch_aarch64.S",
     "jit_ffi/stack_switch_x86_64.S",
     "jit_ffi/dwarf.c",

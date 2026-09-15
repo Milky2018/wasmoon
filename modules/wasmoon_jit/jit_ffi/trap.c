@@ -451,6 +451,11 @@ static void init_stack_bounds(void) {
     g_stack_base = (char*)stack_addr + stack_size;
     g_stack_size = stack_size;
     pthread_attr_destroy(&attr);
+#elif defined(_WIN32)
+    ULONG_PTR low, high;
+    GetCurrentThreadStackLimits(&low, &high);
+    g_stack_base = (void *)high;
+    g_stack_size = high - low;
 #else
     // Fallback: estimate from current stack pointer
     volatile int dummy;
@@ -561,6 +566,8 @@ static int decode_trap_imm(uintptr_t pc, uintptr_t *out_trap_pc, int *out_imm) {
 }
 #endif
 
+#endif // !_WIN32
+
 // External functions to get JIT code range (from dwarf.c)
 extern uint64_t wasmoon_dwarf_get_low_pc(void);
 extern uint64_t wasmoon_dwarf_get_high_pc(void);
@@ -646,6 +653,7 @@ void jit_trap_activation_finalize(jit_trap_activation_t *activation) {
     }
 }
 
+#ifndef _WIN32
 // Signal handler for SIGTRAP (triggered by BRK instruction)
 // Uses SA_SIGINFO to get ucontext and extract BRK immediate
 static void trap_signal_handler(int sig, siginfo_t *info, void *ucontext) {

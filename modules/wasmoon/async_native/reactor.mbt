@@ -96,7 +96,7 @@ struct NativeReactor {
 
 ///|
 pub fn NativeReactor::supported() -> Bool {
-  c_reactor_supported() == 1
+  @host_io.is_windows() || c_reactor_supported() == 1
 }
 
 ///|

@@ -14,7 +14,9 @@ extern "C" {
 #include <sys/stat.h>
 
 #ifdef _WIN32
-#include "../../wasmoon_jit/jit_ffi/windows_io.h"
+#include "../../wasmoon_jit/host_io/windows_io.h"
+#include <bcrypt.h>
+#pragma comment(lib, "bcrypt.lib")
 #include <ws2tcpip.h>
 #include <mstcpip.h>
 typedef int socklen_t;
@@ -2181,13 +2183,16 @@ MOONBIT_FFI_EXPORT int wasmoon_wasi_raise(int sig) {
 // Returns 0 on success, -1 on error
 MOONBIT_FFI_EXPORT int wasmoon_wasi_getrandom(uint8_t* buf, size_t len) {
 #ifdef _WIN32
-  // Windows: use RtlGenRandom (SystemFunction036)
-  // Available on Windows XP and later
-  extern BOOLEAN NTAPI SystemFunction036(PVOID, ULONG);
-  if (SystemFunction036(buf, (ULONG)len)) {
-    return 0;
+  while (len) {
+    ULONG chunk = len > ULONG_MAX ? ULONG_MAX : (ULONG)len;
+    if (BCryptGenRandom(NULL, buf, chunk, BCRYPT_USE_SYSTEM_PREFERRED_RNG) < 0) {
+      errno = EIO;
+      return -1;
+    }
+    buf += chunk;
+    len -= chunk;
   }
-  return -1;
+  return 0;
 #elif defined(__APPLE__)
   // macOS: use arc4random_buf (always available, never fails)
   arc4random_buf(buf, len);

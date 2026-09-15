@@ -1,3 +1,4 @@
+#ifndef _WIN32
 #define _GNU_SOURCE
 
 #include <errno.h>
@@ -529,3 +530,5 @@ MOONBIT_FFI_EXPORT void wasmoon_async_test_close(int fd) {
   (void)fd;
 #endif
 }
+
+#endif

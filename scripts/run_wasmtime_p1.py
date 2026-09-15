@@ -11,11 +11,12 @@ import hashlib
 import json
 import os
 from pathlib import Path
+from native_process import executable, kill_process_tree
 import platform
-import pty
+if os.name != "nt":
+    import pty
 import select
 import shutil
-import signal
 import subprocess
 import sys
 import tempfile
@@ -152,6 +153,8 @@ def execute(command: list[str], directory: Path, timeout: float,
     with stdout_path.open("wb") as stdout, stderr_path.open("wb") as stderr:
         try:
             if terminal:
+                if os.name == "nt":
+                    raise OSError("POSIX PTY cases require the native Windows console harness")
                 master, slave = pty.openpty()
             env = os.environ.copy()
             # A fresh per-case JIT cache avoids testing an unrelated old artifact.
@@ -195,7 +198,7 @@ def execute(command: list[str], directory: Path, timeout: float,
         finally:
             if proc is not None:
                 if proc.poll() is None:
-                    os.killpg(proc.pid, signal.SIGKILL)
+                    kill_process_tree(proc)
                 returncode = proc.wait()
                 if proc.stdin is not None:
                     proc.stdin.close()
@@ -256,7 +259,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--profile", choices=["upstream", "explicit-rights"], default="upstream")
     parser.add_argument("--mode", choices=["both", "jit", "interp", "wasmtime"], default="both")
-    parser.add_argument("--wasmoon", type=Path, default=ROOT / "wasmoon")
+    parser.add_argument("--wasmoon", type=Path, default=executable(ROOT, "wasmoon"))
     parser.add_argument("--wasmtime", default="wasmtime")
     parser.add_argument("--filter", default="*", help="Shell glob over guest program names")
     parser.add_argument("--timeout", type=float, default=30.0, help="Seconds per invocation")
