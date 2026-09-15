@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import ctypes
+import errno
 import os
 from pathlib import Path
 import socket
@@ -70,6 +71,75 @@ class WindowsPollTests(unittest.TestCase):
             self.assertEqual(self.readiness([reader], [1]), (1, [1]))
             self.assertEqual(self.available(reader), 3)
             self.assertEqual(os.read(reader, 3), b"abc")
+
+    def test_alertable_wait_reports_interruption(self):
+        reader, _ = self.pipe()
+        kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+        callback_type = ctypes.WINFUNCTYPE(None, ctypes.c_size_t)
+        called = []
+        callback = callback_type(lambda value: called.append(value))
+        kernel.GetCurrentThread.restype = ctypes.c_void_p
+        kernel.QueueUserAPC.argtypes = [callback_type, ctypes.c_void_p, ctypes.c_size_t]
+        self.assertNotEqual(kernel.QueueUserAPC(callback, kernel.GetCurrentThread(), 7), 0)
+        array = ctypes.c_int * 1
+        self.assertEqual(self.poll(array(reader), array(1), array(), 1, 1000), -1)
+        self.assertEqual(ctypes.get_errno(), errno.EINTR)
+        self.assertEqual(called, [7])
+
+    def test_console_line_input_is_not_consumed(self):
+        import msvcrt
+        from ctypes import wintypes
+
+        class KeyEvent(ctypes.Structure):
+            _fields_ = [("down", wintypes.BOOL), ("repeat", wintypes.WORD),
+                        ("key", wintypes.WORD), ("scan", wintypes.WORD),
+                        ("char", wintypes.WCHAR), ("control", wintypes.DWORD)]
+
+        class Event(ctypes.Union):
+            _fields_ = [("key", KeyEvent), ("storage", ctypes.c_byte * 16)]
+
+        class InputRecord(ctypes.Structure):
+            _fields_ = [("kind", wintypes.WORD), ("event", Event)]
+
+        self.assertEqual(ctypes.sizeof(InputRecord), 20)
+        kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel.FreeConsole()
+        self.assertTrue(kernel.AllocConsole())
+        self.addCleanup(kernel.FreeConsole)
+        kernel.CreateFileW.argtypes = [wintypes.LPCWSTR, wintypes.DWORD, wintypes.DWORD,
+                                      ctypes.c_void_p, wintypes.DWORD, wintypes.DWORD,
+                                      wintypes.HANDLE]
+        kernel.CreateFileW.restype = wintypes.HANDLE
+        kernel.SetConsoleMode.argtypes = [wintypes.HANDLE, wintypes.DWORD]
+        kernel.WriteConsoleInputW.argtypes = [wintypes.HANDLE, ctypes.POINTER(InputRecord),
+                                            wintypes.DWORD, ctypes.POINTER(wintypes.DWORD)]
+        kernel.GetNumberOfConsoleInputEvents.argtypes = [wintypes.HANDLE,
+                                                        ctypes.POINTER(wintypes.DWORD)]
+        handle = kernel.CreateFileW("CONIN$", 0xC0000000, 3, None, 3, 0, None)
+        self.assertNotEqual(handle, ctypes.c_void_p(-1).value)
+        fd = msvcrt.open_osfhandle(handle, os.O_BINARY)
+        self.addCleanup(os.close, fd)
+        self.assertTrue(kernel.SetConsoleMode(handle, 2))  # ENABLE_LINE_INPUT
+
+        def enqueue(char, down):
+            record = InputRecord()
+            record.kind = 1  # KEY_EVENT
+            record.event.key = KeyEvent(down, 1, 0, 0, char, 0)
+            written = wintypes.DWORD()
+            self.assertTrue(kernel.WriteConsoleInputW(handle, ctypes.byref(record), 1,
+                                                      ctypes.byref(written)))
+            self.assertEqual(written.value, 1)
+
+        enqueue("\r", False)
+        enqueue("x", True)
+        self.assertEqual(self.readiness([fd], [1]), (0, [0]))
+        enqueue("\r", True)
+        before = wintypes.DWORD()
+        after = wintypes.DWORD()
+        self.assertTrue(kernel.GetNumberOfConsoleInputEvents(handle, ctypes.byref(before)))
+        self.assertEqual(self.readiness([fd], [1]), (1, [1]))
+        self.assertTrue(kernel.GetNumberOfConsoleInputEvents(handle, ctypes.byref(after)))
+        self.assertEqual(after.value, before.value)
 
     def test_pipe_timeout_and_delayed_input(self):
         reader, writer = self.pipe()

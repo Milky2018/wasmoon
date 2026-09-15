@@ -210,7 +210,7 @@ int wasmoon_windows_path_within_base(const char *base, const char *target) {
   size_t length = wcslen(base_final);
   while (length && base_final[length - 1] == L'\\') length--;
   int within = target_final && wcslen(target_final) >= length &&
-      CompareStringOrdinal(base_final, (int)length, target_final, (int)length, TRUE) == CSTR_EQUAL &&
+      CompareStringOrdinal(base_final, (int)length, target_final, (int)length, FALSE) == CSTR_EQUAL &&
       (target_final[length] == 0 || target_final[length] == L'\\');
   free(base_final); free(target_final);
   return within;

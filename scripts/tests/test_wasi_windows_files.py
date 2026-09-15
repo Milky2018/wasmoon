@@ -104,3 +104,19 @@ class WindowsFileTests(unittest.TestCase):
     def test_nonexistent_target_checks_existing_parent(self):
         self.assertEqual(self.within(os.fsencode(self.root), os.fsencode(self.root / "new")), 1)
         self.assertEqual(self.within(os.fsencode(self.root), os.fsencode(self.root.parent / "outside")), 0)
+
+    def test_containment_respects_case_sensitive_directories(self):
+        parent = self.root / "sensitive"
+        parent.mkdir()
+        subprocess.run(["fsutil.exe", "file", "setCaseSensitiveInfo", str(parent), "enable"],
+                       check=True, capture_output=True, text=True)
+        base = parent / "base"
+        outside = parent / "BASE"
+        base.mkdir()
+        outside.mkdir()
+        self.assertEqual(self.within(os.fsencode(base), os.fsencode(outside / "new")), 0)
+        self.assertEqual(self.within(os.fsencode(base), os.fsencode(base / "new")), 1)
+
+    def test_normalized_path_accepts_case_insensitive_spelling(self):
+        self.assertEqual(self.within(os.fsencode(self.root),
+                                     os.fsencode(self.root.with_name("ROOT") / "new")), 1)
