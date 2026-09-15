@@ -367,6 +367,14 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_test_nested_trap_probe(void) {
     return (int64_t)nested_trap_probe;
 }
 
+#ifdef _WIN32
+// Clang only preserves SEH for a fault reached through a call from __try.
+// A volatile store in the catching frame does not retain the handler.
+__declspec(noinline) static void write_guard(volatile unsigned char *guard) {
+    *guard = 1;
+}
+#endif
+
 static int64_t guard_access_probe(void *closure) {
     (void)closure;
     uintptr_t guard_base = 0;
@@ -377,7 +385,7 @@ static int64_t guard_access_probe(void *closure) {
     }
     volatile unsigned char *guard = (volatile unsigned char *)guard_base;
 #ifdef _WIN32
-    __try { *guard = 1; }
+    __try { write_guard(guard); }
     __except (GetExceptionCode() == EXCEPTION_ACCESS_VIOLATION
               ? EXCEPTION_EXECUTE_HANDLER : EXCEPTION_CONTINUE_SEARCH) {
         return 1;

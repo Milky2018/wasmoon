@@ -252,6 +252,16 @@ class WindowsFileTests(unittest.TestCase):
         self.assertFalse((moved / "source").exists())
         self.assertEqual((moved / "target").read_bytes(), b"retained")
 
+    def test_rename_directory_over_file_matches_windows_contract(self):
+        (self.root / "source").mkdir()
+        (self.root / "target").write_bytes(b"replace")
+        self.assertEqual(self.rename(self.fd, b"source", self.fd, b"target"), 0)
+        self.assertTrue((self.root / "target").is_dir())
+        (self.root / "source").write_bytes(b"retain")
+        self.assertEqual(self.rename(self.fd, b"source", self.fd, b"target"), -1)
+        self.assertTrue((self.root / "target").is_dir())
+        self.assertEqual((self.root / "source").read_bytes(), b"retain")
+
     def test_absolute_symlink_normalizes_nested_target(self):
         nested = self.root / "nested"
         nested.mkdir()

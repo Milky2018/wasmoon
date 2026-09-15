@@ -569,20 +569,29 @@ int wasmoon_windows_renameat(int old_fd, const char *old_path, int new_fd, const
   for (wchar_t *p = name; *p; p++) if (*p == L'/') *p = L'\\';
   size_t bytes = wcslen(name) * sizeof(*name);
   // Use the NT operation so relative targets stay anchored to the held parent.
-  // POSIX replacement permits replacing an existing empty directory atomically.
   size_t size = sizeof(FILE_RENAME_INFO) + bytes;
   FILE_RENAME_INFO *info = calloc(1, size);
   if (!info) { free(name); CloseHandle(source); errno = ENOMEM; return -1; }
-  info->Flags = FILE_RENAME_FLAG_REPLACE_IF_EXISTS | FILE_RENAME_FLAG_POSIX_SEMANTICS;
+  info->ReplaceIfExists = TRUE;
   info->RootDirectory = root;
   info->FileNameLength = (DWORD)bytes;
   memcpy(info->FileName, name, bytes);
   InitOnceExecuteOnce(&file_once, initialize_file_api, NULL, NULL);
   IO_STATUS_BLOCK io;
   NTSTATUS status = set_information ? set_information(source, &io, info, (ULONG)size,
-      (FILE_INFORMATION_CLASS)65 /* FileRenameInformationEx */) : (NTSTATUS)0xC00000BB;
+      (FILE_INFORMATION_CLASS)10 /* FileRenameInformation */) : (NTSTATUS)0xC00000BB;
   BOOL result = status >= 0;
   DWORD error = result ? ERROR_SUCCESS : (status_error ? status_error(status) : ERROR_NOT_SUPPORTED);
+  // Match Rust/Wasmtime's Windows rename contract: ordinary Windows rename
+  // permits directory-over-file, while POSIX replacement handles empty dirs.
+  // A failed POSIX retry retains the original error except for nonempty dirs.
+  if (!result && error == ERROR_ACCESS_DENIED) {
+    info->Flags = FILE_RENAME_FLAG_REPLACE_IF_EXISTS | FILE_RENAME_FLAG_POSIX_SEMANTICS;
+    status = set_information(source, &io, info, (ULONG)size,
+                             (FILE_INFORMATION_CLASS)65 /* FileRenameInformationEx */);
+    result = status >= 0;
+    if (!result && status_error(status) == ERROR_DIR_NOT_EMPTY) error = ERROR_DIR_NOT_EMPTY;
+  }
   if (getenv("WASMOON_WINDOWS_FS_TRACE")) {
     wchar_t final[4096] = {0};
     GetFinalPathNameByHandleW(source, final, 4096, FILE_NAME_NORMALIZED);
