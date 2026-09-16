@@ -1,3 +1,4 @@
+#ifndef _WIN32
 #define _GNU_SOURCE
 
 #include <errno.h>
@@ -5,7 +6,12 @@
 #include <limits.h>
 #include <stdint.h>
 #include <stdlib.h>
+#ifndef _WIN32
 #include <unistd.h>
+#else
+#include <io.h>
+#define close _close
+#endif
 
 #include "moonbit.h"
 
@@ -524,3 +530,5 @@ MOONBIT_FFI_EXPORT void wasmoon_async_test_close(int fd) {
   (void)fd;
 #endif
 }
+
+#endif

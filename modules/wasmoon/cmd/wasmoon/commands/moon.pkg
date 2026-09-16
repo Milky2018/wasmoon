@@ -36,4 +36,5 @@ import {
 
 import {
   "Milky2018/wasm_component/text" @component_text,
+  "Milky2018/wasmoon_jit/native_test_support/fs" @test_fs,
 } for "wbtest"

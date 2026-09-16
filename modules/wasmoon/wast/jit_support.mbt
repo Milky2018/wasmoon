@@ -1681,7 +1681,7 @@ pub fn JITModuleContext::install_hostcall_dispatcher(
           if classify_suspension(e) {
             return HostcallSuspended
           }
-          return HostcallTrap(runtime_error_to_trap_code(e))
+          return host_error_outcome(e)
         }
       }
       after_dispatch()
@@ -1695,7 +1695,7 @@ pub fn JITModuleContext::install_hostcall_dispatcher(
           if store.native_execution_state().current_invocation() is Some(id) {
             self.async_host_errors.set(id, error)
           }
-          return HostcallTrap(runtime_error_to_trap_code(error))
+          return host_error_outcome(error)
         }
         ImportedThrown(tag_addr, values) => {
           let local_tag_idx = find_local_tag_idx(instance, tag_addr).unwrap_or(
@@ -1742,7 +1742,17 @@ pub fn JITModuleContext::install_hostcall_dispatcher(
       }
       HostcallCompleted
     } catch {
-      error => HostcallTrap(runtime_error_to_trap_code(error))
+      error => host_error_outcome(error)
     }
   })
+}
+
+///|
+fn host_error_outcome(
+  error : @runtime.RuntimeError,
+) -> @wasmoon_jit.NativeHostcallOutcome {
+  match error {
+    HostExit(code) => HostcallExit(code)
+    _ => HostcallTrap(runtime_error_to_trap_code(error))
+  }
 }

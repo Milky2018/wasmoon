@@ -303,7 +303,7 @@ static int32_t gc_select_alloc_roots(
 
 // ============ Struct Operations ============
 
-int64_t gc_struct_new_impl(int32_t type_idx, int64_t *fields, int32_t num_fields) {
+int64_t WASMOON_GUEST_ABI gc_struct_new_impl(int32_t type_idx, int64_t *fields, int32_t num_fields) {
     jit_context_t *ctx = get_current_jit_context();
     GcHeap *heap = resolve_heap(ctx);
     if (!heap) {
@@ -368,7 +368,7 @@ int64_t gc_struct_new_impl(int32_t type_idx, int64_t *fields, int32_t num_fields
     return ((int64_t)gc_ref) << 1;
 }
 
-int64_t gc_struct_get_impl(int64_t ref, int32_t type_idx, int32_t field_idx) {
+int64_t WASMOON_GUEST_ABI gc_struct_get_impl(int64_t ref, int32_t type_idx, int32_t field_idx) {
     (void)type_idx;  // type_idx not needed for access, only for type checking
 
     GcHeap *heap = resolve_heap(NULL);
@@ -386,7 +386,7 @@ int64_t gc_struct_get_impl(int64_t ref, int32_t type_idx, int32_t field_idx) {
     return gc_heap_struct_get(heap, gc_ref, field_idx);
 }
 
-void gc_struct_set_impl(int64_t ref, int32_t type_idx, int32_t field_idx, int64_t value) {
+void WASMOON_GUEST_ABI gc_struct_set_impl(int64_t ref, int32_t type_idx, int32_t field_idx, int64_t value) {
     (void)type_idx;
 
     GcHeap *heap = resolve_heap(NULL);
@@ -408,7 +408,7 @@ void gc_struct_set_impl(int64_t ref, int32_t type_idx, int32_t field_idx, int64_
 
 // ============ Array Operations ============
 
-int64_t gc_array_new_impl(int32_t type_idx, int32_t len, int64_t fill) {
+int64_t WASMOON_GUEST_ABI gc_array_new_impl(int32_t type_idx, int32_t len, int64_t fill) {
     if (array_length_exceeds_layout(len)) return trap_allocation_too_large();
     jit_context_t *ctx = resolve_ctx(NULL);
     GcHeap *heap = resolve_heap(ctx);
@@ -443,7 +443,7 @@ int64_t gc_array_new_impl(int32_t type_idx, int32_t len, int64_t fill) {
     return ((int64_t)gc_ref) << 1;
 }
 
-int64_t gc_array_get_impl(int64_t ref, int32_t type_idx, int32_t idx) {
+int64_t WASMOON_GUEST_ABI gc_array_get_impl(int64_t ref, int32_t type_idx, int32_t idx) {
     (void)type_idx;
 
     GcHeap *heap = resolve_heap(NULL);
@@ -472,7 +472,7 @@ int64_t gc_array_get_impl(int64_t ref, int32_t type_idx, int32_t idx) {
     return gc_heap_array_get(heap, gc_ref, idx);
 }
 
-void gc_array_set_impl(int64_t ref, int32_t type_idx, int32_t idx, int64_t value) {
+void WASMOON_GUEST_ABI gc_array_set_impl(int64_t ref, int32_t type_idx, int32_t idx, int64_t value) {
     (void)type_idx;
 
     GcHeap *heap = resolve_heap(NULL);
@@ -503,7 +503,7 @@ void gc_array_set_impl(int64_t ref, int32_t type_idx, int32_t idx, int64_t value
     gc_heap_array_set(heap, gc_ref, idx, value);
 }
 
-int32_t gc_array_len_impl(int64_t ref) {
+int32_t WASMOON_GUEST_ABI gc_array_len_impl(int64_t ref) {
     GcHeap *heap = resolve_heap(NULL);
     if (!heap) {
         return trap_unreachable_i32();
@@ -519,7 +519,7 @@ int32_t gc_array_len_impl(int64_t ref) {
     return gc_heap_array_len(heap, gc_ref);
 }
 
-void gc_array_fill_impl(int64_t ref, int32_t offset, int64_t value, int32_t count) {
+void WASMOON_GUEST_ABI gc_array_fill_impl(int64_t ref, int32_t offset, int64_t value, int32_t count) {
     GcHeap *heap = resolve_heap(NULL);
     if (!heap) {
         trap_unreachable_void();
@@ -551,7 +551,7 @@ void gc_array_fill_impl(int64_t ref, int32_t offset, int64_t value, int32_t coun
     gc_heap_array_fill(heap, gc_ref, offset, value, count);
 }
 
-void gc_array_copy_impl(
+void WASMOON_GUEST_ABI gc_array_copy_impl(
     int64_t dst_ref,
     int32_t dst_offset,
     int64_t src_ref,
@@ -599,7 +599,7 @@ void gc_array_copy_impl(
 // Register a struct that was allocated inline by JIT code
 // obj_ptr points to the object in the heap (header already initialized)
 // Returns encoded gc_ref
-int64_t gc_register_struct_inline(jit_context_t *ctx, uint8_t *obj_ptr, int32_t total_size) {
+int64_t WASMOON_GUEST_ABI gc_register_struct_inline(jit_context_t *ctx, uint8_t *obj_ptr, int32_t total_size) {
     (void)total_size;
     jit_context_t *actual_ctx = resolve_ctx(ctx);
     if (!actual_ctx || !actual_ctx->gc_heap || !obj_ptr) {
@@ -627,7 +627,7 @@ int64_t gc_register_struct_inline(jit_context_t *ctx, uint8_t *obj_ptr, int32_t 
 
 // Slow path for struct allocation - called when inline check fails
 // Triggers GC if needed, grows heap, and allocates
-int64_t gc_alloc_struct_slow(
+int64_t WASMOON_GUEST_ABI gc_alloc_struct_slow(
     jit_context_t *ctx,
     int32_t type_idx,
     int64_t *fields,
@@ -726,13 +726,13 @@ int64_t gc_alloc_struct_slow(
 }
 
 // Register an array that was allocated inline by JIT code
-int64_t gc_register_array_inline(jit_context_t *ctx, uint8_t *obj_ptr, int32_t total_size) {
+int64_t WASMOON_GUEST_ABI gc_register_array_inline(jit_context_t *ctx, uint8_t *obj_ptr, int32_t total_size) {
     // Same as struct registration - just register in object table
     return gc_register_struct_inline(ctx, obj_ptr, total_size);
 }
 
 // Slow path for array allocation
-int64_t gc_alloc_array_slow(
+int64_t WASMOON_GUEST_ABI gc_alloc_array_slow(
     jit_context_t *ctx,
     int32_t type_idx,
     int32_t len,
@@ -817,7 +817,7 @@ int64_t gc_alloc_array_slow(
 }
 
 // Slow path for fixed array allocation from an explicit values buffer.
-int64_t gc_alloc_array_from_values_slow(
+int64_t WASMOON_GUEST_ABI gc_alloc_array_from_values_slow(
     jit_context_t *ctx,
     int32_t type_idx,
     int64_t *values,
@@ -889,7 +889,7 @@ int64_t gc_alloc_array_from_values_slow(
 //
 // Layout of the buffer is GcSlot: low 8 bytes then high 8 bytes, little-endian.
 
-void gc_struct_get_v128_impl(int64_t ref, int32_t type_idx, int32_t field_idx,
+void WASMOON_GUEST_ABI gc_struct_get_v128_impl(int64_t ref, int32_t type_idx, int32_t field_idx,
                              int64_t out_ptr) {
     (void)type_idx;
 
@@ -905,7 +905,7 @@ void gc_struct_get_v128_impl(int64_t ref, int32_t type_idx, int32_t field_idx,
     *out = gc_heap_struct_get_wide(heap, gc_ref, field_idx);
 }
 
-void gc_struct_set_v128_impl(int64_t ref, int32_t type_idx, int32_t field_idx,
+void WASMOON_GUEST_ABI gc_struct_set_v128_impl(int64_t ref, int32_t type_idx, int32_t field_idx,
                              int64_t value_ptr) {
     (void)type_idx;
 
@@ -921,7 +921,7 @@ void gc_struct_set_v128_impl(int64_t ref, int32_t type_idx, int32_t field_idx,
                             *(const GcSlot *)(uintptr_t)value_ptr);
 }
 
-void gc_array_get_v128_impl(int64_t ref, int32_t type_idx, int32_t idx,
+void WASMOON_GUEST_ABI gc_array_get_v128_impl(int64_t ref, int32_t type_idx, int32_t idx,
                             int64_t out_ptr) {
     (void)type_idx;
 
@@ -946,7 +946,7 @@ void gc_array_get_v128_impl(int64_t ref, int32_t type_idx, int32_t idx,
     *out = gc_heap_array_get_wide(heap, gc_ref, idx);
 }
 
-void gc_array_set_v128_impl(int64_t ref, int32_t type_idx, int32_t idx,
+void WASMOON_GUEST_ABI gc_array_set_v128_impl(int64_t ref, int32_t type_idx, int32_t idx,
                             int64_t value_ptr) {
     (void)type_idx;
 
@@ -971,7 +971,7 @@ void gc_array_set_v128_impl(int64_t ref, int32_t type_idx, int32_t idx,
                            *(const GcSlot *)(uintptr_t)value_ptr);
 }
 
-void gc_array_fill_v128_impl(int64_t ref, int32_t offset, int64_t value_ptr,
+void WASMOON_GUEST_ABI gc_array_fill_v128_impl(int64_t ref, int32_t offset, int64_t value_ptr,
                              int32_t count) {
     GcHeap *heap = resolve_heap(NULL);
     if (!heap) {
@@ -1000,7 +1000,7 @@ void gc_array_fill_v128_impl(int64_t ref, int32_t offset, int64_t value_ptr,
                             *(const GcSlot *)(uintptr_t)value_ptr, count);
 }
 
-int64_t gc_alloc_struct_wide_slow_impl(int64_t ctx_ptr, int32_t type_idx,
+int64_t WASMOON_GUEST_ABI gc_alloc_struct_wide_slow_impl(int64_t ctx_ptr, int32_t type_idx,
                                         int64_t slots_ptr, int32_t num_fields) {
     jit_context_t *ctx = resolve_ctx((jit_context_t *)(uintptr_t)ctx_ptr);
     GcHeap *heap = resolve_heap(ctx);
@@ -1028,7 +1028,7 @@ int64_t gc_alloc_struct_wide_slow_impl(int64_t ctx_ptr, int32_t type_idx,
     return ((int64_t)gc_ref) << 1;
 }
 
-int64_t gc_alloc_array_wide_slow_impl(int64_t ctx_ptr, int32_t type_idx,
+int64_t WASMOON_GUEST_ABI gc_alloc_array_wide_slow_impl(int64_t ctx_ptr, int32_t type_idx,
                                        int32_t len, int64_t init_ptr) {
     if (array_length_exceeds_layout(len)) return trap_allocation_too_large();
     jit_context_t *ctx = resolve_ctx((jit_context_t *)(uintptr_t)ctx_ptr);
@@ -1056,7 +1056,7 @@ int64_t gc_alloc_array_wide_slow_impl(int64_t ctx_ptr, int32_t type_idx,
     return ((int64_t)gc_ref) << 1;
 }
 
-int64_t gc_alloc_array_from_slots_slow_impl(int64_t ctx_ptr, int32_t type_idx,
+int64_t WASMOON_GUEST_ABI gc_alloc_array_from_slots_slow_impl(int64_t ctx_ptr, int32_t type_idx,
                                              int64_t slots_ptr, int32_t len) {
     if (array_length_exceeds_layout(len)) return trap_allocation_too_large();
     jit_context_t *ctx = resolve_ctx((jit_context_t *)(uintptr_t)ctx_ptr);
@@ -1083,3 +1083,28 @@ int64_t gc_alloc_array_from_slots_slow_impl(int64_t ctx_ptr, int32_t type_idx,
     gc_record_runtime_type(ctx, heap, gc_ref, type_idx);
     return ((int64_t)gc_ref) << 1;
 }
+
+#if defined(_MSC_VER) && !defined(__clang__)
+WASMOON_DEFINE_GUEST_TARGET(gc_alloc_array_from_slots_slow_impl);
+WASMOON_DEFINE_GUEST_TARGET(gc_alloc_array_from_values_slow);
+WASMOON_DEFINE_GUEST_TARGET(gc_alloc_array_slow);
+WASMOON_DEFINE_GUEST_TARGET(gc_alloc_array_wide_slow_impl);
+WASMOON_DEFINE_GUEST_TARGET(gc_alloc_struct_slow);
+WASMOON_DEFINE_GUEST_TARGET(gc_alloc_struct_wide_slow_impl);
+WASMOON_DEFINE_GUEST_TARGET(gc_array_copy_impl);
+WASMOON_DEFINE_GUEST_TARGET(gc_array_fill_impl);
+WASMOON_DEFINE_GUEST_TARGET(gc_array_fill_v128_impl);
+WASMOON_DEFINE_GUEST_TARGET(gc_array_get_impl);
+WASMOON_DEFINE_GUEST_TARGET(gc_array_get_v128_impl);
+WASMOON_DEFINE_GUEST_TARGET(gc_array_len_impl);
+WASMOON_DEFINE_GUEST_TARGET(gc_array_new_impl);
+WASMOON_DEFINE_GUEST_TARGET(gc_array_set_impl);
+WASMOON_DEFINE_GUEST_TARGET(gc_array_set_v128_impl);
+WASMOON_DEFINE_GUEST_TARGET(gc_register_array_inline);
+WASMOON_DEFINE_GUEST_TARGET(gc_register_struct_inline);
+WASMOON_DEFINE_GUEST_TARGET(gc_struct_get_impl);
+WASMOON_DEFINE_GUEST_TARGET(gc_struct_get_v128_impl);
+WASMOON_DEFINE_GUEST_TARGET(gc_struct_new_impl);
+WASMOON_DEFINE_GUEST_TARGET(gc_struct_set_impl);
+WASMOON_DEFINE_GUEST_TARGET(gc_struct_set_v128_impl);
+#endif

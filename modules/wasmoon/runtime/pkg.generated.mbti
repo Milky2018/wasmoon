@@ -57,6 +57,7 @@ pub(all) suberror GuestContinuationSignal {
 pub fn GuestContinuationSignal::to_repr(Self) -> @debug.Repr
 
 pub(all) suberror RuntimeError {
+  HostExit(Int)
   StackUnderflow
   StackOverflow
   TypeMismatch

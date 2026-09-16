@@ -1,5 +1,6 @@
 ///|
 pub(all) suberror RuntimeError {
+  HostExit(Int)
   StackUnderflow
   StackOverflow
   TypeMismatch
@@ -54,6 +55,7 @@ pub fn RuntimeError::from_error(error : Error) -> RuntimeError? {
     ContinuationAlreadyConsumed => Some(ContinuationAlreadyConsumed)
     UnhandledSuspension => Some(UnhandledSuspension)
     UnsupportedGcContinuationStorage => Some(UnsupportedGcContinuationStorage)
+    HostExit(_) as error => Some(error)
     StackUnderflow => Some(StackUnderflow)
     StackOverflow => Some(StackOverflow)
     TypeMismatch => Some(TypeMismatch)
@@ -100,6 +102,7 @@ pub impl Show for RuntimeError with fn output(self, logger) {
     UnhandledSuspension => "unhandled suspension"
     UnsupportedGcContinuationStorage =>
       "Stack switching feature not compatible with GC storage"
+    HostExit(code) => "host requested exit: \{code}"
     StackUnderflow => "stack underflow"
     StackOverflow => "stack overflow"
     TypeMismatch => "type mismatch"

@@ -68,16 +68,13 @@ test "native fiber cancellation is terminal and exact" {
 
 ///|
 test "native fiber allocates a guarded stack" {
-  let fiber = NativeFiber::new(fn() { 0L }, stack_size=64L * 1024L)
-  debug_inspect(
-    (
-      fiber.stack_size(),
-      fiber.guard_size() > 0L,
-      @native_test_support.fiber_guard_rejects_access(),
-    ),
-    content="(65536, true, true)",
-  )
-  fiber.cancel()
+  for size in [64L * 1024L, 128L * 1024L, 1024L * 1024L, 2L * 1024L * 1024L] {
+    let fiber = NativeFiber::new(fn() { 0L }, stack_size=size)
+    assert_eq(fiber.stack_size(), size)
+    assert_true(fiber.guard_size() > 0L)
+    assert_true(@native_test_support.fiber_guard_rejects_access(size))
+    fiber.cancel()
+  }
 }
 
 ///|

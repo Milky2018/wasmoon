@@ -709,3 +709,20 @@ test "multiple parked continuations unregister GC roots independently" {
 test "fresh native contexts disable cooperative scheduling" {
   inspect(@native_test_support.fresh_context_scheduling_budget(), content="0")
 }
+
+///|
+test "host exit transport preserves every status bit and terminates native execution" {
+  let context = native_continuation_test_context()
+  for code in [0, 7, 255, 0x80000000, -1] {
+    context.set_hostcall_callback(fn() { HostcallExit(code) })
+    let active = context.start_continuation(
+      @native_test_support.hostcall_probe_trampoline(),
+      1L,
+      FixedArray::from_array([0L]),
+      1,
+      stack_size=64L * 1024L,
+    )
+    debug_inspect(active.continue_with(), content="NativeJITTrapped(100)")
+    assert_eq(context.take_wasi_exit_code(), code)
+  }
+}

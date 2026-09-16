@@ -1,4 +1,5 @@
 import {
+  "Milky2018/wasmoon_jit/host_io",
   "Milky2018/wasm_core/types",
   "Milky2018/wasmoon/runtime",
   "moonbitlang/core/cmp",
@@ -7,7 +8,22 @@ import {
   "moonbitlang/core/hashmap",
 }
 
+import {
+  "Milky2018/wasmoon_jit/native_test_support/fs" @test_fs,
+} for "test"
+
+import {
+  "Milky2018/wasmoon_jit/native_test_support/fs" @test_fs,
+} for "wbtest"
+
 options(
-  "native-stub": [ "ffi_native.c", "poll_native.c", "directory_native.c" ],
+  "native-stub": [
+    "ffi_native.c",
+    "file_semantics_native.c",
+    "socket_semantics_native.c",
+    "process_native.c",
+    "poll_native.c",
+    "directory_native.c",
+  ],
   targets: { "ffi_native.mbt": [ "native" ] },
 )

@@ -156,9 +156,9 @@ test "WASI component close cancels pending native registrations" {
 ///|
 test "WASI component close sweeps resources and preopen roots" {
   let ctx = WasiComponentCtxBuilder()
-    .preopened_directory("/tmp", "/sandbox", false)
+    .preopened_directory(@test_fs.temp_dir(), "/sandbox", false)
     .build()
-  guard @wasi.native_open("/dev/null", [ReadOnly], 0) is Some(fd) else {
+  guard @wasi.native_open(@test_fs.null_device(), [ReadOnly], 0) is Some(fd) else {
     ctx.close()
     return fail("could not open lifecycle test descriptor")
   }

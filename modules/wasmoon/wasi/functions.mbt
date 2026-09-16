@@ -10,12 +10,12 @@ pub(all) suberror WasiExit {
 
 ///|
 fn check_mem_range(mem : @runtime.Memory, ptr : Int, len : Int) -> Bool {
-  if ptr < 0 || len < 0 {
+  if len < 0 {
     return false
   }
-  let start = ptr.to_int64()
+  let start = ptr.reinterpret_as_uint().to_int64()
   let end = start + len.to_int64()
-  end >= start && end <= mem.byte_len()
+  end <= 0x100000000L && end <= mem.byte_len()
 }
 
 ///|
@@ -24,7 +24,7 @@ fn check_iovecs_mem_range(
   iovs : Int,
   iovs_len : Int,
 ) -> Bool {
-  if iovs_len < 0 {
+  if iovs_len < 0 || iovs_len > 0x0FFFFFFF {
     return false
   }
   let iovs_bytes = iovs_len * 8
@@ -141,6 +141,7 @@ fn open_file_type_from_native(stat_filetype : Int) -> FileType {
   match stat_filetype {
     3 => Directory
     2 => CharacterDevice
+    5 => SocketDatagram
     6 => SocketStream
     _ => RegularFile
   }
@@ -227,6 +228,8 @@ pub fn fd_write(
   match ctx.open_files.get(fd) {
     Some(file_entry) => {
       match file_entry.file_type {
+        SocketStream | SocketDatagram =>
+          return sock_send_impl(ctx, mem, fd, iovs, iovs_len, 0, nwritten_ptr)
         RegularFile => ()
         _ => return Errno::Badf.to_i32()
       }
@@ -245,9 +248,31 @@ pub fn fd_write(
         for j in 0..<buf_len {
           buf[j] = mem.read_byte(buf_ptr + j)
         }
-        let written = native_write(file_entry.native_fd, buf, buf_len)
+        let append = (file_entry.flags & 1) != 0
+        let written = if append {
+          native_write(file_entry.native_fd, buf, buf_len)
+        } else {
+          native_pwrite(file_entry.native_fd, buf, buf_len, file_entry.position)
+        }
         match written {
-          Some(n) => total_written = total_written + n
+          Some(n) => {
+            total_written = total_written + n
+            if append {
+              file_entry.position = match native_tell(file_entry.native_fd) {
+                Some(position) => position
+                None => return native_last_errno_to_wasi()
+              }
+            } else {
+              file_entry.position += n.to_int64()
+            }
+            let sync_error = file_entry.synchronize(false)
+            if sync_error != 0 {
+              return sync_error
+            }
+            if n < buf_len {
+              break
+            }
+          }
           None => {
             mem.write_i32(nwritten_ptr, total_written)
             return native_last_errno_to_wasi()
@@ -282,7 +307,9 @@ pub fn fd_read(
   if !check_mem_range(mem, nread_ptr, 4) {
     return Errno::Fault.to_i32()
   }
-  if iovs_len < 0 || !check_mem_range(mem, iovs, iovs_len * 8) {
+  if iovs_len < 0 ||
+    iovs_len > 0x0FFFFFFF ||
+    !check_mem_range(mem, iovs, iovs_len * 8) {
     return Errno::Fault.to_i32()
   }
   // Handle stdio streams
@@ -313,6 +340,18 @@ pub fn fd_read(
   match ctx.open_files.get(fd) {
     Some(file_entry) => {
       match file_entry.file_type {
+        SocketStream | SocketDatagram => {
+          if file_entry.require_base_rights(right_fd_read) is Err(errno) {
+            return errno.to_i32()
+          }
+          let (received, _) = match
+            socket_receive(mem, file_entry, iovs, iovs_len, 0) {
+            Ok(result) => result
+            Err(errno) => return errno
+          }
+          mem.write_i32(nread_ptr, received)
+          return 0
+        }
         RegularFile => ()
         _ => return Errno::Badf.to_i32()
       }
@@ -325,14 +364,25 @@ pub fn fd_read(
         if !check_mem_range(mem, buf_ptr, buf_len) {
           return Errno::Fault.to_i32()
         }
-        let read_result = native_read_to_memory(
+        let sync_error = file_entry.synchronize(true)
+        if sync_error != 0 {
+          return sync_error
+        }
+        let buf = FixedArray::make(buf_len, b'\x00')
+        let read_result = native_pread(
           file_entry.native_fd,
-          mem,
-          buf_ptr,
+          buf,
           buf_len,
+          file_entry.position,
         )
         match read_result {
-          Some(n) => total_read = n
+          Some(n) => {
+            for j in 0..<n {
+              mem.write_byte(buf_ptr + j, buf[j])
+            }
+            total_read = n
+            file_entry.position += n.to_int64()
+          }
           None => {
             mem.write_i32(nread_ptr, total_read)
             return native_last_errno_to_wasi()
@@ -360,18 +410,7 @@ pub fn args_sizes_get(
   argc_ptr : Int,
   argv_buf_size_ptr : Int,
 ) -> Int {
-  if !check_mem_range(mem, argc_ptr, 4) ||
-    !check_mem_range(mem, argv_buf_size_ptr, 4) {
-    return Errno::Fault.to_i32()
-  }
-  let argc = ctx.args.length()
-  let mut buf_size = 0
-  for arg in ctx.args {
-    buf_size = buf_size + arg.length() + 1 // +1 for null terminator
-  }
-  mem.write_i32(argc_ptr, argc)
-  mem.write_i32(argv_buf_size_ptr, buf_size)
-  Errno::Success.to_i32()
+  string_table_sizes(mem, ctx.args, argc_ptr, argv_buf_size_ptr)
 }
 
 ///|
@@ -388,30 +427,7 @@ pub fn args_get(
   argv_ptr : Int,
   argv_buf_ptr : Int,
 ) -> Int {
-  let argc = ctx.args.length()
-  if !check_mem_range(mem, argv_ptr, argc * 4) {
-    return Errno::Fault.to_i32()
-  }
-  let mut buf_size = 0
-  for arg in ctx.args {
-    buf_size = buf_size + arg.length() + 1
-  }
-  if !check_mem_range(mem, argv_buf_ptr, buf_size) {
-    return Errno::Fault.to_i32()
-  }
-  let mut buf_offset = 0
-  for i, arg in ctx.args {
-    // Write pointer to this argument
-    mem.write_i32(argv_ptr + i * 4, argv_buf_ptr + buf_offset)
-    // Write argument string (null-terminated)
-    for j in 0..<arg.length() {
-      let c = arg.code_unit_at(j) // String[Int] returns Int (char code)
-      mem.write_byte(argv_buf_ptr + buf_offset + j, c.to_byte())
-    }
-    mem.write_byte(argv_buf_ptr + buf_offset + arg.length(), b'\x00')
-    buf_offset = buf_offset + arg.length() + 1
-  }
-  Errno::Success.to_i32()
+  write_string_table(mem, ctx.args, argv_ptr, argv_buf_ptr)
 }
 
 ///|
@@ -428,18 +444,7 @@ pub fn environ_sizes_get(
   environc_ptr : Int,
   environ_buf_size_ptr : Int,
 ) -> Int {
-  if !check_mem_range(mem, environc_ptr, 4) ||
-    !check_mem_range(mem, environ_buf_size_ptr, 4) {
-    return Errno::Fault.to_i32()
-  }
-  let environc = ctx.env.length()
-  let mut buf_size = 0
-  for env in ctx.env {
-    buf_size = buf_size + env.length() + 1 // +1 for null terminator
-  }
-  mem.write_i32(environc_ptr, environc)
-  mem.write_i32(environ_buf_size_ptr, buf_size)
-  Errno::Success.to_i32()
+  string_table_sizes(mem, ctx.env, environc_ptr, environ_buf_size_ptr)
 }
 
 ///|
@@ -456,30 +461,7 @@ pub fn environ_get(
   environ_ptr : Int,
   environ_buf_ptr : Int,
 ) -> Int {
-  let environc = ctx.env.length()
-  if !check_mem_range(mem, environ_ptr, environc * 4) {
-    return Errno::Fault.to_i32()
-  }
-  let mut buf_size = 0
-  for env in ctx.env {
-    buf_size = buf_size + env.length() + 1
-  }
-  if !check_mem_range(mem, environ_buf_ptr, buf_size) {
-    return Errno::Fault.to_i32()
-  }
-  let mut buf_offset = 0
-  for i, env in ctx.env {
-    // Write pointer to this environment variable
-    mem.write_i32(environ_ptr + i * 4, environ_buf_ptr + buf_offset)
-    // Write environment string (null-terminated)
-    for j in 0..<env.length() {
-      let c = env.code_unit_at(j) // String[Int] returns Int (char code)
-      mem.write_byte(environ_buf_ptr + buf_offset + j, c.to_byte())
-    }
-    mem.write_byte(environ_buf_ptr + buf_offset + env.length(), b'\x00')
-    buf_offset = buf_offset + env.length() + 1
-  }
-  Errno::Success.to_i32()
+  write_string_table(mem, ctx.env, environ_ptr, environ_buf_ptr)
 }
 
 ///|
@@ -520,8 +502,11 @@ pub fn clock_time_get(
   let time_ns = match clock.unwrap() {
     Realtime => native_clock_gettime_realtime()
     Monotonic => native_clock_gettime_monotonic()
-    // Match wasmtime p1: CPU-time clocks are unsupported in preview1.
-    ProcessCPUTimeId | ThreadCPUTimeId => return Errno::Badf.to_i32()
+    ProcessCPUTimeId => c_cpu_clock(false, false)
+    ThreadCPUTimeId => c_cpu_clock(true, false)
+  }
+  if time_ns < 0L {
+    return native_last_errno_to_wasi()
   }
   mem.write_i64(time_ptr, time_ns)
   Errno::Success.to_i32()
@@ -547,12 +532,16 @@ pub fn fd_prestat_get(
   for preopen in ctx.preopens {
     let (preopen_fd, _, guest_path) = preopen
     if preopen_fd.to_int() == fd && ctx.open_files.contains(fd) {
+      let name = match string_to_cstring(guest_path) {
+        Some(name) => name
+        None => return native_last_errno_to_wasi()
+      }
       // Write prestat struct: tag (1 byte) + padding (3 bytes) + pr_name_len (4 bytes)
       mem.write_byte(prestat_ptr, b'\x00') // tag = dir
       mem.write_byte(prestat_ptr + 1, b'\x00')
       mem.write_byte(prestat_ptr + 2, b'\x00')
       mem.write_byte(prestat_ptr + 3, b'\x00')
-      mem.write_i32(prestat_ptr + 4, guest_path.length())
+      mem.write_i32(prestat_ptr + 4, name.length() - 1)
       return Errno::Success.to_i32()
     }
   }
@@ -580,12 +569,16 @@ pub fn fd_prestat_dir_name(
   for preopen in ctx.preopens {
     let (preopen_fd, _, guest_path) = preopen
     if preopen_fd.to_int() == fd && ctx.open_files.contains(fd) {
-      if path_len < guest_path.length() {
+      let name = match string_to_cstring(guest_path) {
+        Some(name) => name
+        None => return native_last_errno_to_wasi()
+      }
+      let length = name.length() - 1
+      if path_len < length {
         return Errno::NameTooLong.to_i32()
       }
-      let to_copy = @cmp.minimum(path_len, guest_path.length())
-      for i in 0..<to_copy {
-        mem.write_byte(path_ptr + i, guest_path.code_unit_at(i).to_byte())
+      for i in 0..<length {
+        mem.write_byte(path_ptr + i, name[i])
       }
       return Errno::Success.to_i32()
     }
@@ -721,14 +714,9 @@ pub fn path_open(
     effective_rights_inheriting {
     return Errno::NotCapable.to_i32()
   }
-  let follow_symlink = (dirflags & 0x01) != 0
-  let resolved_path_result = if follow_symlink {
-    resolve_host_path(ctx, dir_fd, path)
-  } else {
-    resolve_host_path_nofollow_leaf(ctx, dir_fd, path)
-  }
-  let resolved_path = match resolved_path_result {
-    Ok(resolved) => resolved
+  let follow_symlink = (dirflags & 0x01) != 0 || has_trailing_slash
+  let (parent_path, leaf) = match capability_path_parts(path) {
+    Ok(parts) => parts
     Err(errno) => return errno
   }
   // Determine open flags
@@ -738,12 +726,8 @@ pub fn path_open(
   let has_exclusive = (oflags & 0x04) != 0
   let has_truncate = (oflags & 0x08) != 0
   let has_append = (fdflags & 0x01) != 0
-  let has_sync = (fdflags & 0x1A) != 0 // 0x02 DSYNC, 0x08 RSYNC, 0x10 SYNC
   if has_directory && (has_create || has_exclusive || has_truncate) {
     return Errno::Inval.to_i32()
-  }
-  if has_sync {
-    return Errno::NotSup.to_i32()
   }
   // WASI oflags:
   // 0x01 = O_CREAT, 0x02 = O_DIRECTORY, 0x04 = O_EXCL, 0x08 = O_TRUNC
@@ -781,13 +765,14 @@ pub fn path_open(
   } else {
     open_flags.push(ReadOnly)
   }
-  // Open the file
-  let open_path = if has_trailing_slash {
-    resolved_path + "/"
-  } else {
-    resolved_path
-  }
-  let native_fd = native_open(open_path, open_flags, 0o644)
+  let native_fd = native_openat_beneath(
+    parent_file.native_fd,
+    parent_path,
+    leaf,
+    open_flags,
+    0o644,
+    follow_symlink,
+  )
   if native_fd is None {
     let errno = native_last_errno_to_wasi()
     if has_trailing_slash && errno == Errno::NotDir.to_i32() {
@@ -796,10 +781,20 @@ pub fn path_open(
     return errno
   }
   let nfd = native_fd.unwrap()
+  if (fdflags & 0x04) != 0 {
+    let flags = native_fcntl_getfl(nfd)
+    if flags is None ||
+      !native_fcntl_setfl(nfd, flags.unwrap() | native_o_nonblock()) {
+      let errno = native_last_errno_to_wasi()
+      native_close(nfd) |> ignore
+      return errno
+    }
+  }
   let stat = native_fstat(nfd)
   if stat is None {
+    let errno = native_last_errno_to_wasi()
     native_close(nfd) |> ignore
-    return native_last_errno_to_wasi()
+    return errno
   }
   let file_type = open_file_type_from_native(stat.unwrap().filetype)
   if has_directory {
@@ -815,8 +810,9 @@ pub fn path_open(
   let wasi_fd = ctx.alloc_fd({
     native_fd: nfd,
     file_type,
-    host_path: resolved_path,
+    host_path: parent_file.host_path + "/" + path,
     position: 0L,
+    socket_input: b"",
     flags: fdflags,
     rights_base: effective_rights_base,
     rights_inheriting: effective_rights_inheriting,
@@ -865,18 +861,23 @@ pub fn fd_seek(
   if f.require_base_rights(right_fd_seek) is Err(errno) {
     return errno.to_i32()
   }
-  // Convert WASI whence to native
-  let native_whence : Whence = match whence {
-    0 => Set
-    1 => Cur
-    2 => End
+  let base = match whence {
+    0 => 0L
+    1 => f.position
+    2 =>
+      match native_fstat(f.native_fd) {
+        Some(stat) => stat.size.reinterpret_as_int64()
+        None => return native_last_errno_to_wasi()
+      }
     _ => return Errno::Inval.to_i32()
   }
-  let new_pos = native_seek(f.native_fd, offset, native_whence)
-  if new_pos is None {
-    return native_last_errno_to_wasi()
+  if base < 0 || (offset > 0 && base > 0x7FFFFFFFFFFFFFFFL - offset) {
+    return Errno::Overflow.to_i32()
   }
-  let pos = new_pos.unwrap()
+  if offset < 0 && offset < -base {
+    return Errno::Inval.to_i32()
+  }
+  let pos = base + offset
   f.position = pos
   mem.write_i64(newoffset_ptr, pos)
   Errno::Success.to_i32()
@@ -917,13 +918,7 @@ pub fn fd_tell(
   if f.require_base_rights(right_fd_tell) is Err(errno) {
     return errno.to_i32()
   }
-  let pos = native_tell(f.native_fd)
-  if pos is None {
-    return native_last_errno_to_wasi()
-  }
-  let p = pos.unwrap()
-  f.position = p
-  mem.write_i64(offset_ptr, p)
+  mem.write_i64(offset_ptr, f.position)
   Errno::Success.to_i32()
 }
 
@@ -950,7 +945,9 @@ pub fn fd_pread(
   if !check_mem_range(mem, nread_ptr, 4) {
     return Errno::Fault.to_i32()
   }
-  if iovs_len < 0 || !check_mem_range(mem, iovs, iovs_len * 8) {
+  if iovs_len < 0 ||
+    iovs_len > 0x0FFFFFFF ||
+    !check_mem_range(mem, iovs, iovs_len * 8) {
     return Errno::Fault.to_i32()
   }
   if stdio_slot_for_fd(ctx, fd) is Some(slot) {
@@ -973,30 +970,24 @@ pub fn fd_pread(
   if f.require_base_rights(right_fd_read | right_fd_seek) is Err(errno) {
     return errno.to_i32()
   }
-  // Save current position
-  let saved_pos = native_tell(f.native_fd)
-  if saved_pos is None {
-    return native_last_errno_to_wasi()
-  }
-  // Seek to offset
-  let seek_result = native_seek(f.native_fd, offset, Set)
-  if seek_result is None {
-    return native_last_errno_to_wasi()
+  if offset < 0 {
+    return Errno::Inval.to_i32()
   }
   // Read data from the first non-empty iovec only (wasmtime parity).
   let mut total_read = 0
   if first_non_empty_iov(mem, iovs, iovs_len) is Some(entry) {
     let (buf_ptr, buf_len) = entry
     if !check_mem_range(mem, buf_ptr, buf_len) {
-      native_seek(f.native_fd, saved_pos.unwrap(), Set) |> ignore
       return Errno::Fault.to_i32()
     }
+    let sync_error = f.synchronize(true)
+    if sync_error != 0 {
+      return sync_error
+    }
     let buf = FixedArray::make(buf_len, b'\x00')
-    let n = native_read(f.native_fd, buf, buf_len)
+    let n = native_pread(f.native_fd, buf, buf_len, offset)
     if n is None {
       let errno = native_last_errno_to_wasi()
-      // Restore position and return error
-      native_seek(f.native_fd, saved_pos.unwrap(), Set) |> ignore
       return errno
     }
     let bytes_read = n.unwrap()
@@ -1006,8 +997,6 @@ pub fn fd_pread(
     }
     total_read = bytes_read
   }
-  // Restore position
-  native_seek(f.native_fd, saved_pos.unwrap(), Set) |> ignore
   mem.write_i32(nread_ptr, total_read)
   Errno::Success.to_i32()
 }
@@ -1035,7 +1024,9 @@ pub fn fd_pwrite(
   if !check_mem_range(mem, nwritten_ptr, 4) {
     return Errno::Fault.to_i32()
   }
-  if iovs_len < 0 || !check_mem_range(mem, iovs, iovs_len * 8) {
+  if iovs_len < 0 ||
+    iovs_len > 0x0FFFFFFF ||
+    !check_mem_range(mem, iovs, iovs_len * 8) {
     return Errno::Fault.to_i32()
   }
   if stdio_slot_for_fd(ctx, fd) is Some(slot) {
@@ -1058,22 +1049,14 @@ pub fn fd_pwrite(
   if f.require_base_rights(right_fd_write | right_fd_seek) is Err(errno) {
     return errno.to_i32()
   }
-  // Save current position
-  let saved_pos = native_tell(f.native_fd)
-  if saved_pos is None {
-    return native_last_errno_to_wasi()
-  }
-  // Seek to offset
-  let seek_result = native_seek(f.native_fd, offset, Set)
-  if seek_result is None {
-    return native_last_errno_to_wasi()
+  if offset < 0 {
+    return Errno::Inval.to_i32()
   }
   // Write data from the first non-empty iovec only (wasmtime parity).
   let mut total_written = 0
   if first_non_empty_iov(mem, iovs, iovs_len) is Some(entry) {
     let (buf_ptr, buf_len) = entry
     if !check_mem_range(mem, buf_ptr, buf_len) {
-      native_seek(f.native_fd, saved_pos.unwrap(), Set) |> ignore
       return Errno::Fault.to_i32()
     }
     let buf = FixedArray::make(buf_len, b'\x00')
@@ -1081,17 +1064,23 @@ pub fn fd_pwrite(
     for j in 0..<buf_len {
       buf[j] = mem.read_byte(buf_ptr + j)
     }
-    let n = native_write(f.native_fd, buf, buf_len)
+    let n = if (f.flags & 1) != 0 {
+      // P1 inherits Linux append semantics even on hosts whose pwrite ignores
+      // O_APPEND. The logical guest cursor remains unchanged.
+      native_write(f.native_fd, buf, buf_len)
+    } else {
+      native_pwrite(f.native_fd, buf, buf_len, offset)
+    }
     if n is None {
       let errno = native_last_errno_to_wasi()
-      // Restore position and return error
-      native_seek(f.native_fd, saved_pos.unwrap(), Set) |> ignore
       return errno
     }
     total_written = n.unwrap()
+    let sync_error = f.synchronize(false)
+    if sync_error != 0 {
+      return sync_error
+    }
   }
-  // Restore position
-  native_seek(f.native_fd, saved_pos.unwrap(), Set) |> ignore
   mem.write_i32(nwritten_ptr, total_written)
   Errno::Success.to_i32()
 }
@@ -1231,6 +1220,7 @@ pub fn fd_fdstat_get(
           Directory => 3 // directory
           CharacterDevice => 2 // character_device
           SocketStream => 6 // socket_stream
+          SocketDatagram => 5 // socket_dgram
         }
         (ft, file.flags & 0x1F, file.rights_base, file.rights_inheriting)
       }
@@ -1286,7 +1276,14 @@ pub fn clock_res_get(
         }
         None => native_last_errno_to_wasi()
       }
-    ProcessCPUTimeId | ThreadCPUTimeId => Errno::Badf.to_i32()
+    ProcessCPUTimeId | ThreadCPUTimeId => {
+      let value = c_cpu_clock(clock_value is ThreadCPUTimeId, true)
+      if value < 0L {
+        return native_last_errno_to_wasi()
+      }
+      mem.write_i64(resolution_ptr, value)
+      0
+    }
   }
 }
 
@@ -1295,9 +1292,11 @@ pub fn clock_res_get(
 ///
 /// Returns: errno
 pub fn sched_yield() -> Int {
-  // In a single-threaded context, this is essentially a no-op
-  // Just return success
-  Errno::Success.to_i32()
+  if c_yield() == 0 {
+    0
+  } else {
+    native_last_errno_to_wasi()
+  }
 }
 
 ///|
@@ -1324,15 +1323,13 @@ pub fn path_create_directory(
     Ok(_) => ()
     Err(errno) => return errno.to_i32()
   }
-  let resolved_path = match resolve_host_path_nofollow_leaf(ctx, dir_fd, path) {
-    Ok(resolved) => resolved
-    Err(errno) => return errno
-  }
-  if native_mkdir(resolved_path, 0o755) {
-    Errno::Success.to_i32()
-  } else {
-    native_last_errno_to_wasi()
-  }
+  with_capability_parent(ctx, dir_fd, path, fn(parent, leaf) {
+    if native_mkdirat(parent, leaf, 0o755) {
+      Errno::Success.to_i32()
+    } else {
+      native_last_errno_to_wasi()
+    }
+  })
 }
 
 ///|
@@ -1630,7 +1627,9 @@ fn read_path_from_memory(
   let bytes = Bytes::makei(len, fn(i) { mem.read_byte(ptr + i) })
   for b in bytes {
     if b == b'\x00' {
-      return Err(Errno::Inval.to_i32())
+      return Err(
+        (if @host_io.is_windows() { Errno::NoEnt } else { Errno::Inval }).to_i32(),
+      )
     }
   }
   if !is_valid_utf8_bytes(bytes) {
@@ -1690,46 +1689,48 @@ fn validate_proc_raise_signal(signal : Int) -> Int {
 }
 
 ///|
-fn preserve_trailing_slash(resolved : String, guest : String) -> String {
-  if guest.has_suffix("/") {
-    resolved + "/"
-  } else {
-    resolved
+// Preserve dot components for the native capability walker: lexical normalization
+// would incorrectly erase symlink traversal and directory-type checks.
+fn capability_path_parts(path : String) -> Result[(String, String), Int] {
+  if path == "" {
+    return Err(Errno::NoEnt.to_i32())
   }
+  if path.has_prefix("/") {
+    return Err(Errno::Perm.to_i32())
+  }
+  let parts : Array[String] = []
+  for part in path.split("/") {
+    if part != "" {
+      parts.push(part.to_owned())
+    }
+  }
+  let leaf = parts.pop().unwrap()
+  Ok((parts.join("/"), if path.has_suffix("/") { leaf + "/" } else { leaf }))
 }
 
 ///|
-fn resolve_host_path(
+fn with_capability_parent(
   ctx : WasiContext,
   dir_fd : Int,
   path : String,
-) -> Result[String, Int] {
-  if path.length() == 0 {
-    return Err(Errno::NoEnt.to_i32())
+  operation : (Int, String) -> Int,
+) -> Int {
+  let (parent_path, leaf) = match capability_path_parts(path) {
+    Ok(parts) => parts
+    Err(errno) => return errno
   }
-  match ctx.resolve_path(dir_fd, path) {
-    Ok(resolved) => Ok(resolved)
-    Err(BadFd) => Err(Errno::Badf.to_i32())
-    Err(Perm) => Err(Errno::Perm.to_i32())
-    Err(NotCapable) => Err(Errno::Perm.to_i32())
+  let root = match ctx.get_file(dir_fd) {
+    Some(file) => file.native_fd
+    None => return Errno::Badf.to_i32()
   }
-}
-
-///|
-fn resolve_host_path_nofollow_leaf(
-  ctx : WasiContext,
-  dir_fd : Int,
-  path : String,
-) -> Result[String, Int] {
-  if path.length() == 0 {
-    return Err(Errno::NoEnt.to_i32())
+  let dot_leaf = leaf == "." || leaf == ".." || leaf == "./" || leaf == "../"
+  let parent = match
+    native_open_parent_beneath(root, if dot_leaf { path } else { parent_path }) {
+    Some(fd) => fd
+    None => return native_last_errno_to_wasi()
   }
-  match ctx.resolve_path_nofollow_leaf(dir_fd, path) {
-    Ok(resolved) => Ok(resolved)
-    Err(BadFd) => Err(Errno::Badf.to_i32())
-    Err(Perm) => Err(Errno::Perm.to_i32())
-    Err(NotCapable) => Err(Errno::Perm.to_i32())
-  }
+  defer native_close(parent) |> ignore
+  operation(parent, if dot_leaf { "." } else { leaf })
 }
 
 ///|
@@ -1819,7 +1820,7 @@ fn socket_with_base_rights(
   match ctx.get_file(fd) {
     Some(file) => {
       match file.file_type {
-        SocketStream => ()
+        SocketStream | SocketDatagram => ()
         _ => return Err(NotSock)
       }
       match file.require_base_rights(required) {
@@ -1882,15 +1883,13 @@ pub fn path_unlink_file_impl(
     Ok(_) => ()
     Err(errno) => return errno.to_i32()
   }
-  let resolved_path = match resolve_host_path_nofollow_leaf(ctx, dir_fd, path) {
-    Ok(resolved) => resolved
-    Err(errno) => return errno
-  }
-  if native_unlinkat(0, preserve_trailing_slash(resolved_path, path), 0) {
-    Errno::Success.to_i32()
-  } else {
-    native_last_errno_to_wasi()
-  }
+  with_capability_parent(ctx, dir_fd, path, fn(parent, leaf) {
+    if native_unlinkat(parent, leaf, 0) {
+      Errno::Success.to_i32()
+    } else {
+      native_last_errno_to_wasi()
+    }
+  })
 }
 
 ///|
@@ -1910,15 +1909,13 @@ pub fn path_remove_directory_impl(
     Ok(_) => ()
     Err(errno) => return errno.to_i32()
   }
-  let resolved_path = match resolve_host_path_nofollow_leaf(ctx, dir_fd, path) {
-    Ok(resolved) => resolved
-    Err(errno) => return errno
-  }
-  if native_unlinkat(0, resolved_path, AT_REMOVEDIR) {
-    Errno::Success.to_i32()
-  } else {
-    native_last_errno_to_wasi()
-  }
+  with_capability_parent(ctx, dir_fd, path, fn(parent, leaf) {
+    if native_unlinkat(parent, leaf, AT_REMOVEDIR) {
+      Errno::Success.to_i32()
+    } else {
+      native_last_errno_to_wasi()
+    }
+  })
 }
 
 ///|
@@ -1949,21 +1946,15 @@ pub fn path_rename_impl(
     Ok(_) => ()
     Err(errno) => return errno.to_i32()
   }
-  let old_resolved = match
-    resolve_host_path_nofollow_leaf(ctx, old_fd, old_path) {
-    Ok(resolved) => resolved
-    Err(errno) => return errno
-  }
-  let new_resolved = match
-    resolve_host_path_nofollow_leaf(ctx, new_fd, new_path) {
-    Ok(resolved) => resolved
-    Err(errno) => return errno
-  }
-  if native_renameat(0, old_resolved, 0, new_resolved) {
-    Errno::Success.to_i32()
-  } else {
-    native_last_errno_to_wasi()
-  }
+  with_capability_parent(ctx, old_fd, old_path, fn(old_parent, old_leaf) {
+    with_capability_parent(ctx, new_fd, new_path, fn(new_parent, new_leaf) {
+      if native_renameat(old_parent, old_leaf, new_parent, new_leaf) {
+        Errno::Success.to_i32()
+      } else {
+        native_last_errno_to_wasi()
+      }
+    })
+  })
 }
 
 // ============================================================================
@@ -2009,6 +2000,9 @@ pub fn fd_filestat_get_impl(
       match stat {
         Some(s) => {
           write_filestat(mem, buf_ptr, s)
+          if file.file_type is SocketDatagram {
+            mem.write_byte(buf_ptr + 16, b'\x05')
+          }
           Errno::Success.to_i32()
         }
         None => native_last_errno_to_wasi()
@@ -2090,24 +2084,20 @@ pub fn path_filestat_get_impl(
   }
   let has_trailing_slash = path.length() > 0 &&
     path.code_unit_at(path.length() - 1) == '/'
-  let follow_symlink = (flags & 0x01) != 0
-  let resolved_path_result = if follow_symlink {
-    resolve_host_path(ctx, dir_fd, path)
-  } else {
-    resolve_host_path_nofollow_leaf(ctx, dir_fd, path)
+  let follow_symlink = (flags & 0x01) != 0 || has_trailing_slash
+  if capability_path_parts(path) is Err(errno) {
+    return errno
   }
-  let resolved_path = match resolved_path_result {
-    Ok(resolved) => resolved
-    Err(errno) => return errno
-  }
-  let stat_path = if has_trailing_slash {
-    resolved_path + "/"
-  } else {
-    resolved_path
-  }
-  // Convert WASI flags to native flags
-  let native_flags = if follow_symlink { 0 } else { AT_SYMLINK_NOFOLLOW }
-  let stat = native_fstatat(0, stat_path, native_flags)
+  let root = ctx.get_file(dir_fd).unwrap().native_fd
+  let stat = native_fstat_beneath(
+    root,
+    path,
+    if follow_symlink {
+      1
+    } else {
+      0
+    },
+  )
   match stat {
     Some(s) => {
       write_filestat(mem, buf_ptr, s)
@@ -2216,35 +2206,12 @@ pub fn path_filestat_set_times_impl(
   }
   let has_trailing_slash = path.length() > 0 &&
     path.code_unit_at(path.length() - 1) == '/'
-  let follow_symlink = (flags & 0x01) != 0
-  let resolved_path_result = if follow_symlink {
-    resolve_host_path(ctx, dir_fd, path)
-  } else {
-    resolve_host_path_nofollow_leaf(ctx, dir_fd, path)
+  let follow_symlink = (flags & 0x01) != 0 || has_trailing_slash
+  if capability_path_parts(path) is Err(errno) {
+    return errno
   }
-  let resolved_path = match resolved_path_result {
-    Ok(resolved) => resolved
-    Err(errno) => return errno
-  }
-  let stat_path = if has_trailing_slash {
-    resolved_path + "/"
-  } else {
-    resolved_path
-  }
-  let lookup_flags = if follow_symlink { 0 } else { AT_SYMLINK_NOFOLLOW }
-  if has_trailing_slash {
-    match native_fstatat(0, resolved_path, lookup_flags) {
-      Some(stat) => if stat.filetype != 3 { return Errno::NoEnt.to_i32() }
-      None => {
-        let errno = native_last_errno_to_wasi()
-        if errno == Errno::NotDir.to_i32() {
-          return Errno::NoEnt.to_i32()
-        }
-        return errno
-      }
-    }
-  }
-  if native_utimensat(0, stat_path, atim, mtim, fst_flags, lookup_flags) {
+  let root = ctx.get_file(dir_fd).unwrap().native_fd
+  if native_utimens_beneath(root, path, follow_symlink, atim, mtim, fst_flags) {
     Errno::Success.to_i32()
   } else {
     let errno = native_last_errno_to_wasi()
@@ -2284,14 +2251,15 @@ pub fn fd_advise_impl(
 pub fn fd_allocate_impl(
   ctx : WasiContext,
   fd : Int,
-  _offset : Int64,
-  _len : Int64,
+  offset : Int64,
+  len : Int64,
 ) -> Int {
-  match regular_file_native_fd_with_rights(ctx, fd, right_fd_allocate) {
-    Ok(_) => ()
+  let native_fd = match
+    regular_file_native_fd_with_rights(ctx, fd, right_fd_allocate) {
+    Ok(fd) => fd
     Err(errno) => return errno.to_i32()
   }
-  Errno::NotSup.to_i32()
+  native_errno_to_wasi(c_allocate(native_fd, offset, len))
 }
 
 ///|
@@ -2320,10 +2288,7 @@ pub fn fd_fdstat_set_flags_impl(
   if file.require_base_rights(right_fd_fdstat_set_flags) is Err(errno) {
     return errno.to_i32()
   }
-  // Match wasmtime behavior:
-  // - unknown fdflags bits are rejected before descriptor lookup
-  // - DSYNC/RSYNC/SYNC are rejected with EINVAL only for valid file descriptors
-  if (flags & 0x02) != 0 || (flags & 0x08) != 0 || (flags & 0x10) != 0 {
+  if file.file_type is (SocketStream | SocketDatagram) && (flags & 0x1B) != 0 {
     return Errno::Inval.to_i32()
   }
   // Convert WASI fdflags to native flags
@@ -2345,6 +2310,7 @@ pub fn fd_fdstat_set_flags_impl(
         new_flags = new_flags & nonblock_mask.lnot()
       }
       if native_fcntl_setfl(native_fd, new_flags) {
+        file.flags = flags
         Errno::Success.to_i32()
       } else {
         native_last_errno_to_wasi()
@@ -2500,20 +2466,13 @@ pub fn path_symlink_impl(
     Ok(_) => ()
     Err(errno) => return errno.to_i32()
   }
-  let resolved_path = match
-    resolve_host_path_nofollow_leaf(ctx, dir_fd, new_path) {
-    Ok(resolved) => resolved
-    Err(errno) => return errno
-  }
-  if native_symlinkat(
-      old_path,
-      0,
-      preserve_trailing_slash(resolved_path, new_path),
-    ) {
-    Errno::Success.to_i32()
-  } else {
-    native_last_errno_to_wasi()
-  }
+  with_capability_parent(ctx, dir_fd, new_path, fn(parent, leaf) {
+    if native_symlinkat(old_path, parent, leaf) {
+      Errno::Success.to_i32()
+    } else {
+      native_last_errno_to_wasi()
+    }
+  })
 }
 
 ///|
@@ -2540,22 +2499,20 @@ pub fn path_readlink_impl(
     Ok(_) => ()
     Err(errno) => return errno.to_i32()
   }
-  let resolved_path = match resolve_host_path_nofollow_leaf(ctx, dir_fd, path) {
-    Ok(resolved) => resolved
-    Err(errno) => return errno
-  }
-  let result = native_readlinkat_bytes(0, resolved_path, buf_len)
-  match result {
-    Some(link_target) => {
-      let to_write = @cmp.minimum(link_target.length(), buf_len)
-      for i in 0..<to_write {
-        mem.write_byte(buf_ptr + i, link_target[i])
+  with_capability_parent(ctx, dir_fd, path, fn(parent, leaf) {
+    let result = native_readlinkat_bytes(parent, leaf, buf_len)
+    match result {
+      Some(link_target) => {
+        let to_write = @cmp.minimum(link_target.length(), buf_len)
+        for i in 0..<to_write {
+          mem.write_byte(buf_ptr + i, link_target[i])
+        }
+        mem.write_i32(bufused_ptr, to_write)
+        Errno::Success.to_i32()
       }
-      mem.write_i32(bufused_ptr, to_write)
-      Errno::Success.to_i32()
+      None => native_last_errno_to_wasi()
     }
-    None => native_last_errno_to_wasi()
-  }
+  })
 }
 
 ///|
@@ -2594,28 +2551,15 @@ pub fn path_link_impl(
     Ok(_) => ()
     Err(errno) => return errno.to_i32()
   }
-  let old_resolved = match
-    resolve_host_path_nofollow_leaf(ctx, old_fd, old_path) {
-    Ok(resolved) => resolved
-    Err(errno) => return errno
-  }
-  let new_resolved = match
-    resolve_host_path_nofollow_leaf(ctx, new_fd, new_path) {
-    Ok(resolved) => resolved
-    Err(errno) => return errno
-  }
-  let flags = 0
-  if native_linkat(
-      0,
-      preserve_trailing_slash(old_resolved, old_path),
-      0,
-      preserve_trailing_slash(new_resolved, new_path),
-      flags,
-    ) {
-    Errno::Success.to_i32()
-  } else {
-    native_last_errno_to_wasi()
-  }
+  with_capability_parent(ctx, old_fd, old_path, fn(old_parent, old_leaf) {
+    with_capability_parent(ctx, new_fd, new_path, fn(new_parent, new_leaf) {
+      if native_linkat(old_parent, old_leaf, new_parent, new_leaf, 0) {
+        Errno::Success.to_i32()
+      } else {
+        native_last_errno_to_wasi()
+      }
+    })
+  })
 }
 
 // ============================================================================
@@ -2645,10 +2589,19 @@ pub fn sock_recv_impl(
   if riflags_check != Errno::Success.to_i32() {
     return riflags_check
   }
-  match socket_with_base_rights(ctx, fd, right_fd_read) {
-    Ok(_) => Errno::NotSup.to_i32()
-    Err(errno) => errno.to_i32()
+  let file = match socket_with_base_rights(ctx, fd, right_fd_read) {
+    Ok(file) => file
+    Err(errno) => return errno.to_i32()
   }
+  let (received, truncated) = match
+    socket_receive(mem, file, ri_data_ptr, ri_data_len, ri_flags) {
+    Ok(result) => result
+    Err(errno) => return errno
+  }
+  mem.write_i32(ro_datalen_ptr, received)
+  mem.write_byte(ro_flags_ptr, truncated.to_byte())
+  mem.write_byte(ro_flags_ptr + 1, b'\x00')
+  Errno::Success.to_i32()
 }
 
 ///|
@@ -2659,7 +2612,7 @@ pub fn sock_send_impl(
   fd : Int,
   si_data_ptr : Int,
   si_data_len : Int,
-  _si_flags : Int,
+  si_flags : Int,
   so_datalen_ptr : Int,
 ) -> Int {
   if !check_mem_range(mem, so_datalen_ptr, 4) {
@@ -2668,10 +2621,32 @@ pub fn sock_send_impl(
   if !check_iovecs_mem_range(mem, si_data_ptr, si_data_len) {
     return Errno::Fault.to_i32()
   }
-  match socket_with_base_rights(ctx, fd, right_fd_write) {
-    Ok(_) => Errno::NotSup.to_i32()
-    Err(errno) => errno.to_i32()
+  let file = match socket_with_base_rights(ctx, fd, right_fd_write) {
+    Ok(file) => file
+    Err(errno) => return errno.to_i32()
   }
+  if si_flags != 0 {
+    return Errno::Inval.to_i32()
+  }
+  let (entries, length) = match socket_iovecs(mem, si_data_ptr, si_data_len) {
+    Ok(value) => value
+    Err(errno) => return errno
+  }
+  let buffer = FixedArray::make(length, b'\x00')
+  let mut offset = 0
+  for entry in entries {
+    let (start, size) = entry
+    for i in 0..<size {
+      buffer[offset + i] = mem.read_byte(start + i)
+    }
+    offset += size
+  }
+  let sent = c_p1_send(file.native_fd, buffer, length)
+  if sent < 0 {
+    return native_last_errno_to_wasi()
+  }
+  mem.write_i32(so_datalen_ptr, sent)
+  Errno::Success.to_i32()
 }
 
 ///|
@@ -2681,9 +2656,20 @@ pub fn sock_shutdown_impl(ctx : WasiContext, fd : Int, how : Int) -> Int {
   if sdflags_check != Errno::Success.to_i32() {
     return sdflags_check
   }
-  match socket_with_base_rights(ctx, fd, right_sock_shutdown) {
-    Ok(_) => Errno::NotSup.to_i32()
-    Err(errno) => errno.to_i32()
+  let file = match socket_with_base_rights(ctx, fd, right_sock_shutdown) {
+    Ok(file) => file
+    Err(errno) => return errno.to_i32()
+  }
+  let direction = match how {
+    1 => 0
+    2 => 1
+    3 => 2
+    _ => return Errno::Inval.to_i32()
+  }
+  if native_shutdown(file.native_fd, direction) {
+    0
+  } else {
+    native_last_errno_to_wasi()
   }
 }
 
@@ -2703,18 +2689,61 @@ pub fn sock_accept_impl(
   if fdflags_check != Errno::Success.to_i32() {
     return fdflags_check
   }
-  match socket_with_base_rights(ctx, fd, right_sock_accept) {
-    Ok(_) => Errno::NotSup.to_i32()
-    Err(errno) => errno.to_i32()
+  let file = match socket_with_base_rights(ctx, fd, right_sock_accept) {
+    Ok(file) => file
+    Err(errno) => return errno.to_i32()
   }
+  if file.file_type is SocketDatagram {
+    return Errno::NotSup.to_i32()
+  }
+  if (flags & 0x1B) != 0 {
+    return Errno::Inval.to_i32()
+  }
+  let accepted = native_accept(file.native_fd)
+  if accepted < 0 {
+    return native_last_errno_to_wasi()
+  }
+  let native_flags = match native_fcntl_getfl(accepted) {
+    Some(value) => value
+    None => {
+      let errno = native_last_errno_to_wasi()
+      native_close(accepted) |> ignore
+      return errno
+    }
+  }
+  let native_flags = if (flags & 4) != 0 {
+    native_flags | native_o_nonblock()
+  } else {
+    native_flags & native_o_nonblock().lnot()
+  }
+  if !native_fcntl_setfl(accepted, native_flags) {
+    let errno = native_last_errno_to_wasi()
+    native_close(accepted) |> ignore
+    return errno
+  }
+  let guest_fd = ctx.alloc_fd({
+    native_fd: accepted,
+    file_type: SocketStream,
+    host_path: "",
+    position: 0L,
+    socket_input: b"",
+    flags,
+    rights_base: file.rights_inheriting,
+    rights_inheriting: file.rights_inheriting,
+  })
+  mem.write_i32(result_fd_ptr, guest_fd)
+  0
 }
 
 ///|
 /// proc_raise - Send a signal to the process
-pub fn proc_raise_impl(signal : Int) -> Int {
+pub fn proc_raise_impl(signal : Int, handler? : ((Int) -> Int)? = None) -> Int {
   let signal_check = validate_proc_raise_signal(signal)
   if signal_check != Errno::Success.to_i32() {
     return signal_check
   }
-  Errno::NotSup.to_i32()
+  match handler {
+    Some(handle) => handle(signal)
+    None => Errno::NotSup.to_i32()
+  }
 }

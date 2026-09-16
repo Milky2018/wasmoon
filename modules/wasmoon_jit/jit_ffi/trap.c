@@ -59,10 +59,10 @@
 
 // ============ Trap Activations (Thread-Local) ============
 
-static __thread jit_trap_activation_t fallback_activation;
-static __thread jit_trap_activation_t observed_activation;
-static __thread jit_trap_activation_t *current_activation = NULL;
-static __thread int observed_activation_valid = 0;
+static _Thread_local jit_trap_activation_t fallback_activation;
+static _Thread_local jit_trap_activation_t observed_activation;
+static _Thread_local jit_trap_activation_t *current_activation = NULL;
+static _Thread_local int observed_activation_valid = 0;
 
 jit_trap_activation_t *jit_current_trap_activation(void) {
     return current_activation ? current_activation : &fallback_activation;
@@ -422,12 +422,12 @@ void jit_trap_activation_abandon(jit_trap_activation_t *activation) {
 
 // Alternate signal stack for handling stack overflow (per-thread; sigaltstack is per-thread)
 #define SIGSTACK_SIZE (64 * 1024)  // 64KB alternate stack
-static __thread char g_sigstack[SIGSTACK_SIZE];
-static __thread int g_sigstack_installed = 0;
+static _Thread_local char g_sigstack[SIGSTACK_SIZE];
+static _Thread_local int g_sigstack_installed = 0;
 
 // Stack bounds for overflow detection (per-thread)
-static __thread void *g_stack_base = NULL;
-static __thread size_t g_stack_size = 0;
+static _Thread_local void *g_stack_base = NULL;
+static _Thread_local size_t g_stack_size = 0;
 
 // ============ Stack Bounds Detection ============
 
@@ -451,6 +451,11 @@ static void init_stack_bounds(void) {
     g_stack_base = (char*)stack_addr + stack_size;
     g_stack_size = stack_size;
     pthread_attr_destroy(&attr);
+#elif defined(_WIN32)
+    ULONG_PTR low, high;
+    GetCurrentThreadStackLimits(&low, &high);
+    g_stack_base = (void *)high;
+    g_stack_size = high - low;
 #else
     // Fallback: estimate from current stack pointer
     volatile int dummy;
@@ -561,6 +566,8 @@ static int decode_trap_imm(uintptr_t pc, uintptr_t *out_trap_pc, int *out_imm) {
 }
 #endif
 
+#endif // !_WIN32
+
 // External functions to get JIT code range (from dwarf.c)
 extern uint64_t wasmoon_dwarf_get_low_pc(void);
 extern uint64_t wasmoon_dwarf_get_high_pc(void);
@@ -646,6 +653,7 @@ void jit_trap_activation_finalize(jit_trap_activation_t *activation) {
     }
 }
 
+#ifndef _WIN32
 // Signal handler for SIGTRAP (triggered by BRK instruction)
 // Uses SA_SIGINFO to get ucontext and extract BRK immediate
 static void trap_signal_handler(int sig, siginfo_t *info, void *ucontext) {
@@ -886,10 +894,77 @@ static void segv_signal_handler(int sig, siginfo_t *info, void *ucontext) {
 
 #endif // !_WIN32
 
+#ifdef _WIN32
+// Only recognized guest traps and owned memory guards are recovered. Unrelated
+// host faults continue through normal Windows exception handling.
+static LONG CALLBACK windows_trap_handler(EXCEPTION_POINTERS *exception) {
+    jit_trap_activation_t *activation = jit_current_trap_activation();
+    if (!activation || !activation->active) return EXCEPTION_CONTINUE_SEARCH;
+    DWORD code = exception->ExceptionRecord->ExceptionCode;
+    CONTEXT *registers = exception->ContextRecord;
+    int trap = 0;
+    uintptr_t pc = (uintptr_t)exception->ExceptionRecord->ExceptionAddress;
+    uintptr_t fault = 0;
+    if (code == EXCEPTION_BREAKPOINT) {
+        const unsigned char *instruction = (const unsigned char *)pc;
+        MEMORY_BASIC_INFORMATION region;
+        if (!VirtualQuery(instruction, &region, sizeof(region)) ||
+            region.State != MEM_COMMIT ||
+            pc + 3 > (uintptr_t)region.BaseAddress + region.RegionSize ||
+            instruction[0] != 0xcc) return EXCEPTION_CONTINUE_SEARCH;
+        int payload = instruction[1] | (instruction[2] << 8);
+        trap = wasmoon_decode_native_trap(payload);
+        if (trap == WASMOON_TRAP_UNKNOWN) return EXCEPTION_CONTINUE_SEARCH;
+        activation->brk_imm = payload;
+    } else if (code == EXCEPTION_STACK_OVERFLOW) {
+        trap = WASMOON_TRAP_STACK_EXHAUSTED;
+    } else if (code == EXCEPTION_ACCESS_VIOLATION &&
+               exception->ExceptionRecord->NumberParameters >= 2) {
+        fault = exception->ExceptionRecord->ExceptionInformation[1];
+        uintptr_t guard_base = 0;
+        size_t guard_size = 0;
+        if (wasmoon_native_fiber_stack_bounds(NULL, NULL, &guard_base, &guard_size) &&
+            fault >= guard_base && fault - guard_base < guard_size)
+            trap = WASMOON_TRAP_STACK_EXHAUSTED;
+        else if (activation->context &&
+            is_memory_guard_page_access(activation->context, (void *)fault))
+            trap = WASMOON_TRAP_MEMORY_BOUNDS;
+        else return EXCEPTION_CONTINUE_SEARCH;
+    } else return EXCEPTION_CONTINUE_SEARCH;
+    activation->func_idx = activation->context
+        ? (sig_atomic_t)activation->context->debug_current_func_idx : -1;
+    activation->code = trap;
+    activation->signal = (sig_atomic_t)code;
+    activation->pc = pc;
+    activation->fault_addr = fault;
+    activation->fp = registers->Rbp;
+    activation->x0 = registers->Rax;
+    activation->x1 = registers->Rcx;
+    activation->x2 = registers->Rdx;
+    activation->x3 = registers->Rbx;
+    activation->x6 = registers->Rsi;
+    activation->x7 = registers->Rdi;
+    activation->x8 = registers->R8;
+    activation->x9 = registers->R9;
+    activation->x10 = registers->R10;
+    activation->x11 = registers->R11;
+    activation->x15 = registers->R15;
+    siglongjmp(activation->jmp_buf, 1);
+}
+
+static BOOL CALLBACK install_windows_traps(PINIT_ONCE once, PVOID parameter, PVOID *context) {
+    (void)once; (void)parameter; (void)context;
+    return AddVectoredExceptionHandler(1, windows_trap_handler) != NULL;
+}
+#endif
+
 // ============ Handler Installation ============
 
 void install_trap_handler(void) {
-#ifndef _WIN32
+#ifdef _WIN32
+    static INIT_ONCE once = INIT_ONCE_STATIC_INIT;
+    if (!InitOnceExecuteOnce(&once, install_windows_traps, NULL, NULL)) abort();
+#else
     // Signal handlers are process-wide; install them once.
     // (Multiple installations are harmless, but keep this race-free.)
     static atomic_int installed_handlers = 0;

@@ -3,14 +3,17 @@
 // This file only contains MOONBIT_FFI_EXPORT functions that wrap internal implementations
 
 #include "jit_internal.h"
+#ifdef _WIN32
+#include <malloc.h>
+#endif
 
 // ============ Hostcall Bridge (JIT -> Host) ============
 // Thread-local scratch for the currently executing hostcall.
 // This is read by the MoonBit dispatcher via FFI getters.
-static __thread int32_t g_hostcall_func_idx = -1;
-static __thread int64_t g_hostcall_values_ptr = 0;
-static __thread int32_t g_hostcall_num_args = 0;
-static __thread int32_t g_hostcall_num_results = 0;
+static _Thread_local int32_t g_hostcall_func_idx = -1;
+static _Thread_local int64_t g_hostcall_values_ptr = 0;
+static _Thread_local int32_t g_hostcall_num_args = 0;
+static _Thread_local int32_t g_hostcall_num_results = 0;
 
 MOONBIT_FFI_EXPORT int32_t wasmoon_jit_host_target_arch(void) {
 #if defined(__x86_64__) || defined(_M_X64)
@@ -149,7 +152,7 @@ static int hostcall_slots_in_range(
     return bytes <= top - ptr;
 }
 
-MOONBIT_FFI_EXPORT int32_t wasmoon_jit_hostcall(
+MOONBIT_FFI_EXPORT int32_t WASMOON_GUEST_ABI wasmoon_jit_hostcall(
     jit_context_t *ctx,
     int32_t func_idx,
     int64_t values_ptr,
@@ -244,7 +247,7 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_jit_hostcall(
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_hostcall_ptr(void) {
-    return (int64_t)wasmoon_jit_hostcall;
+    return WASMOON_GUEST_ADDRESS(wasmoon_jit_hostcall);
 }
 
 // ============ Cooperative Cancellation ============
@@ -299,7 +302,7 @@ int wasmoon_jit_cancellation_requested(jit_context_t *ctx) {
     return call_cancellation_callback(cb, ctx->cancellation_callback_data) != 0;
 }
 
-MOONBIT_FFI_EXPORT int32_t wasmoon_jit_cancel_poll(jit_context_t *ctx) {
+MOONBIT_FFI_EXPORT int32_t WASMOON_GUEST_ABI wasmoon_jit_cancel_poll(jit_context_t *ctx) {
     ctx = jit_execution_control_context(ctx);
     if (wasmoon_jit_cancellation_requested(ctx)) {
         g_trap_code = 11;
@@ -325,7 +328,7 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_set_cooperative_scheduling(int64_t pointer, 
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_cancel_poll_ptr(void) {
-    return (int64_t)wasmoon_jit_cancel_poll;
+    return WASMOON_GUEST_ADDRESS(wasmoon_jit_cancel_poll);
 }
 
 MOONBIT_FFI_EXPORT int32_t wasmoon_jit_get_hostcall_func_idx(void) {
@@ -586,7 +589,7 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_shared_table_set(int64_t table_ptr, int tabl
 
 // ============ Table Operations ============
 
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_table_grow(
+MOONBIT_FFI_EXPORT int64_t WASMOON_GUEST_ABI wasmoon_jit_table_grow(
     jit_context_t *ctx,
     int32_t table_idx,
     int64_t delta,
@@ -596,7 +599,7 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_table_grow(
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_table_grow_ptr(void) {
-    return (int64_t)wasmoon_jit_table_grow;
+    return WASMOON_GUEST_ADDRESS(wasmoon_jit_table_grow);
 }
 
 // ============ Multi-Memory Operations (with memidx) ============
@@ -636,19 +639,19 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_memory_copy(
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_memory_grow_ptr(void) {
-    return (int64_t)memory_grow_indexed_internal;
+    return WASMOON_GUEST_ADDRESS(memory_grow_indexed_internal);
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_memory_size_ptr(void) {
-    return (int64_t)memory_size_indexed_internal;
+    return WASMOON_GUEST_ADDRESS(memory_size_indexed_internal);
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_memory_fill_ptr(void) {
-    return (int64_t)memory_fill_indexed_internal;
+    return WASMOON_GUEST_ADDRESS(memory_fill_indexed_internal);
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_memory_copy_ptr(void) {
-    return (int64_t)memory_copy_indexed_internal;
+    return WASMOON_GUEST_ADDRESS(memory_copy_indexed_internal);
 }
 
 // ============ Integer div/rem helpers ============
@@ -659,70 +662,70 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_memory_copy_ptr(void) {
 // NOTE: For signed remainder, INT_MIN % -1 is undefined behavior in C, but is
 // well-defined in WebAssembly (result 0). We special-case b == -1 to avoid UB.
 
-MOONBIT_FFI_EXPORT int32_t wasmoon_jit_i32_sdiv(int32_t a, int32_t b) {
+MOONBIT_FFI_EXPORT int32_t WASMOON_GUEST_ABI wasmoon_jit_i32_sdiv(int32_t a, int32_t b) {
     return a / b;
 }
 
-MOONBIT_FFI_EXPORT uint32_t wasmoon_jit_i32_udiv(uint32_t a, uint32_t b) {
+MOONBIT_FFI_EXPORT uint32_t WASMOON_GUEST_ABI wasmoon_jit_i32_udiv(uint32_t a, uint32_t b) {
     return a / b;
 }
 
-MOONBIT_FFI_EXPORT int32_t wasmoon_jit_i32_srem(int32_t a, int32_t b) {
+MOONBIT_FFI_EXPORT int32_t WASMOON_GUEST_ABI wasmoon_jit_i32_srem(int32_t a, int32_t b) {
     if (b == -1) return 0;
     return a % b;
 }
 
-MOONBIT_FFI_EXPORT uint32_t wasmoon_jit_i32_urem(uint32_t a, uint32_t b) {
+MOONBIT_FFI_EXPORT uint32_t WASMOON_GUEST_ABI wasmoon_jit_i32_urem(uint32_t a, uint32_t b) {
     return a % b;
 }
 
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_i64_sdiv(int64_t a, int64_t b) {
+MOONBIT_FFI_EXPORT int64_t WASMOON_GUEST_ABI wasmoon_jit_i64_sdiv(int64_t a, int64_t b) {
     return a / b;
 }
 
-MOONBIT_FFI_EXPORT uint64_t wasmoon_jit_i64_udiv(uint64_t a, uint64_t b) {
+MOONBIT_FFI_EXPORT uint64_t WASMOON_GUEST_ABI wasmoon_jit_i64_udiv(uint64_t a, uint64_t b) {
     return a / b;
 }
 
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_i64_srem(int64_t a, int64_t b) {
+MOONBIT_FFI_EXPORT int64_t WASMOON_GUEST_ABI wasmoon_jit_i64_srem(int64_t a, int64_t b) {
     if (b == -1) return 0;
     return a % b;
 }
 
-MOONBIT_FFI_EXPORT uint64_t wasmoon_jit_i64_urem(uint64_t a, uint64_t b) {
+MOONBIT_FFI_EXPORT uint64_t WASMOON_GUEST_ABI wasmoon_jit_i64_urem(uint64_t a, uint64_t b) {
     return a % b;
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_i32_sdiv_ptr(void) {
-    return (int64_t)wasmoon_jit_i32_sdiv;
+    return WASMOON_GUEST_ADDRESS(wasmoon_jit_i32_sdiv);
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_i32_udiv_ptr(void) {
-    return (int64_t)wasmoon_jit_i32_udiv;
+    return WASMOON_GUEST_ADDRESS(wasmoon_jit_i32_udiv);
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_i32_srem_ptr(void) {
-    return (int64_t)wasmoon_jit_i32_srem;
+    return WASMOON_GUEST_ADDRESS(wasmoon_jit_i32_srem);
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_i32_urem_ptr(void) {
-    return (int64_t)wasmoon_jit_i32_urem;
+    return WASMOON_GUEST_ADDRESS(wasmoon_jit_i32_urem);
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_i64_sdiv_ptr(void) {
-    return (int64_t)wasmoon_jit_i64_sdiv;
+    return WASMOON_GUEST_ADDRESS(wasmoon_jit_i64_sdiv);
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_i64_udiv_ptr(void) {
-    return (int64_t)wasmoon_jit_i64_udiv;
+    return WASMOON_GUEST_ADDRESS(wasmoon_jit_i64_udiv);
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_i64_srem_ptr(void) {
-    return (int64_t)wasmoon_jit_i64_srem;
+    return WASMOON_GUEST_ADDRESS(wasmoon_jit_i64_srem);
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_i64_urem_ptr(void) {
-    return (int64_t)wasmoon_jit_i64_urem;
+    return WASMOON_GUEST_ADDRESS(wasmoon_jit_i64_urem);
 }
 
 // ============ Multi-Memory Array Setup ============
@@ -903,6 +906,9 @@ int wasmoon_jit_call_trampoline_caught(
     jit_trap_activation_push(&activation);
 
     if (sigsetjmp(activation.jmp_buf, 1) != 0) {
+#ifdef _WIN32
+        if ((DWORD)activation.signal == EXCEPTION_STACK_OVERFLOW && !_resetstkoflw()) abort();
+#endif
         int trap_code = (int)activation.code;
         if (exception && trap_code == 12) *exception = exception_capture_current(ctx);
         jit_trap_activation_finalize(&activation);
@@ -958,50 +964,50 @@ MOONBIT_FFI_EXPORT int wasmoon_jit_call_trampoline_managed(
 
 // ============ Spectest Trampolines ============
 
-static void spectest_print_impl(int64_t func_table, int64_t mem_base) {
+static void WASMOON_GUEST_ABI spectest_print_impl(int64_t func_table, int64_t mem_base) {
     (void)func_table;
     (void)mem_base;
 }
 
-static void spectest_print_i32_impl(int64_t func_table, int64_t mem_base, int64_t arg0) {
-    (void)func_table;
-    (void)mem_base;
-    (void)arg0;
-}
-
-static void spectest_print_i64_impl(int64_t func_table, int64_t mem_base, int64_t arg0) {
+static void WASMOON_GUEST_ABI spectest_print_i32_impl(int64_t func_table, int64_t mem_base, int64_t arg0) {
     (void)func_table;
     (void)mem_base;
     (void)arg0;
 }
 
-static void spectest_print_f32_impl(int64_t func_table, int64_t mem_base, int64_t arg0) {
+static void WASMOON_GUEST_ABI spectest_print_i64_impl(int64_t func_table, int64_t mem_base, int64_t arg0) {
     (void)func_table;
     (void)mem_base;
     (void)arg0;
 }
 
-static void spectest_print_f64_impl(int64_t func_table, int64_t mem_base, int64_t arg0) {
+static void WASMOON_GUEST_ABI spectest_print_f32_impl(int64_t func_table, int64_t mem_base, int64_t arg0) {
     (void)func_table;
     (void)mem_base;
     (void)arg0;
 }
 
-static void spectest_print_i32_f32_impl(int64_t func_table, int64_t mem_base, int64_t arg0, int64_t arg1) {
+static void WASMOON_GUEST_ABI spectest_print_f64_impl(int64_t func_table, int64_t mem_base, int64_t arg0) {
     (void)func_table;
     (void)mem_base;
     (void)arg0;
-    (void)arg1;
 }
 
-static void spectest_print_f64_f64_impl(int64_t func_table, int64_t mem_base, int64_t arg0, int64_t arg1) {
+static void WASMOON_GUEST_ABI spectest_print_i32_f32_impl(int64_t func_table, int64_t mem_base, int64_t arg0, int64_t arg1) {
     (void)func_table;
     (void)mem_base;
     (void)arg0;
     (void)arg1;
 }
 
-static void spectest_print_char_impl(int64_t func_table, int64_t mem_base, int64_t arg0) {
+static void WASMOON_GUEST_ABI spectest_print_f64_f64_impl(int64_t func_table, int64_t mem_base, int64_t arg0, int64_t arg1) {
+    (void)func_table;
+    (void)mem_base;
+    (void)arg0;
+    (void)arg1;
+}
+
+static void WASMOON_GUEST_ABI spectest_print_char_impl(int64_t func_table, int64_t mem_base, int64_t arg0) {
     (void)func_table;
     (void)mem_base;
     putchar((int)arg0);
@@ -1009,35 +1015,35 @@ static void spectest_print_char_impl(int64_t func_table, int64_t mem_base, int64
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_spectest_print_ptr(void) {
-    return (int64_t)spectest_print_impl;
+    return WASMOON_GUEST_ADDRESS(spectest_print_impl);
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_spectest_print_i32_ptr(void) {
-    return (int64_t)spectest_print_i32_impl;
+    return WASMOON_GUEST_ADDRESS(spectest_print_i32_impl);
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_spectest_print_i64_ptr(void) {
-    return (int64_t)spectest_print_i64_impl;
+    return WASMOON_GUEST_ADDRESS(spectest_print_i64_impl);
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_spectest_print_f32_ptr(void) {
-    return (int64_t)spectest_print_f32_impl;
+    return WASMOON_GUEST_ADDRESS(spectest_print_f32_impl);
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_spectest_print_f64_ptr(void) {
-    return (int64_t)spectest_print_f64_impl;
+    return WASMOON_GUEST_ADDRESS(spectest_print_f64_impl);
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_spectest_print_i32_f32_ptr(void) {
-    return (int64_t)spectest_print_i32_f32_impl;
+    return WASMOON_GUEST_ADDRESS(spectest_print_i32_f32_impl);
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_spectest_print_f64_f64_ptr(void) {
-    return (int64_t)spectest_print_f64_f64_impl;
+    return WASMOON_GUEST_ADDRESS(spectest_print_f64_f64_impl);
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_spectest_print_char_ptr(void) {
-    return (int64_t)spectest_print_char_impl;
+    return WASMOON_GUEST_ADDRESS(spectest_print_char_impl);
 }
 
 // ============ Linear Memory Allocation FFI Exports ============
@@ -1464,107 +1470,107 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_read_i64(int64_t addr) {
 // ============ GC Runtime FFI Exports ============
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_gc_ref_test_ptr(void) {
-    return (int64_t)gc_ref_test_impl;
+    return WASMOON_GUEST_ADDRESS(gc_ref_test_impl);
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_gc_ref_cast_ptr(void) {
-    return (int64_t)gc_ref_cast_impl;
+    return WASMOON_GUEST_ADDRESS(gc_ref_cast_impl);
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_gc_struct_new_ptr(void) {
-    return (int64_t)gc_struct_new_impl;
+    return WASMOON_GUEST_ADDRESS(gc_struct_new_impl);
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_gc_struct_get_ptr(void) {
-    return (int64_t)gc_struct_get_impl;
+    return WASMOON_GUEST_ADDRESS(gc_struct_get_impl);
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_gc_struct_set_ptr(void) {
-    return (int64_t)gc_struct_set_impl;
+    return WASMOON_GUEST_ADDRESS(gc_struct_set_impl);
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_gc_struct_get_v128_ptr(void) {
-    return (int64_t)gc_struct_get_v128_impl;
+    return WASMOON_GUEST_ADDRESS(gc_struct_get_v128_impl);
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_gc_struct_set_v128_ptr(void) {
-    return (int64_t)gc_struct_set_v128_impl;
+    return WASMOON_GUEST_ADDRESS(gc_struct_set_v128_impl);
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_gc_array_get_v128_ptr(void) {
-    return (int64_t)gc_array_get_v128_impl;
+    return WASMOON_GUEST_ADDRESS(gc_array_get_v128_impl);
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_gc_array_set_v128_ptr(void) {
-    return (int64_t)gc_array_set_v128_impl;
+    return WASMOON_GUEST_ADDRESS(gc_array_set_v128_impl);
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_gc_array_fill_v128_ptr(void) {
-    return (int64_t)gc_array_fill_v128_impl;
+    return WASMOON_GUEST_ADDRESS(gc_array_fill_v128_impl);
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_gc_alloc_struct_wide_slow_ptr(void) {
-    return (int64_t)gc_alloc_struct_wide_slow_impl;
+    return WASMOON_GUEST_ADDRESS(gc_alloc_struct_wide_slow_impl);
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_gc_alloc_array_wide_slow_ptr(void) {
-    return (int64_t)gc_alloc_array_wide_slow_impl;
+    return WASMOON_GUEST_ADDRESS(gc_alloc_array_wide_slow_impl);
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_gc_alloc_array_from_slots_slow_ptr(void) {
-    return (int64_t)gc_alloc_array_from_slots_slow_impl;
+    return WASMOON_GUEST_ADDRESS(gc_alloc_array_from_slots_slow_impl);
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_gc_array_new_ptr(void) {
-    return (int64_t)gc_array_new_impl;
+    return WASMOON_GUEST_ADDRESS(gc_array_new_impl);
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_gc_array_get_ptr(void) {
-    return (int64_t)gc_array_get_impl;
+    return WASMOON_GUEST_ADDRESS(gc_array_get_impl);
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_gc_array_set_ptr(void) {
-    return (int64_t)gc_array_set_impl;
+    return WASMOON_GUEST_ADDRESS(gc_array_set_impl);
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_gc_array_len_ptr(void) {
-    return (int64_t)gc_array_len_impl;
+    return WASMOON_GUEST_ADDRESS(gc_array_len_impl);
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_gc_array_fill_ptr(void) {
-    return (int64_t)gc_array_fill_impl;
+    return WASMOON_GUEST_ADDRESS(gc_array_fill_impl);
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_gc_array_copy_ptr(void) {
-    return (int64_t)gc_array_copy_impl;
+    return WASMOON_GUEST_ADDRESS(gc_array_copy_impl);
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_gc_type_check_subtype_ptr(void) {
-    return (int64_t)gc_type_check_subtype_impl;
+    return WASMOON_GUEST_ADDRESS(gc_type_check_subtype_impl);
 }
 
 // Inline allocation support (ctx-passing)
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_gc_register_struct_inline_ptr(void) {
-    return (int64_t)gc_register_struct_inline;
+    return WASMOON_GUEST_ADDRESS(gc_register_struct_inline);
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_gc_register_array_inline_ptr(void) {
-    return (int64_t)gc_register_array_inline;
+    return WASMOON_GUEST_ADDRESS(gc_register_array_inline);
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_gc_alloc_struct_slow_ptr(void) {
-    return (int64_t)gc_alloc_struct_slow;
+    return WASMOON_GUEST_ADDRESS(gc_alloc_struct_slow);
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_gc_alloc_array_slow_ptr(void) {
-    return (int64_t)gc_alloc_array_slow;
+    return WASMOON_GUEST_ADDRESS(gc_alloc_array_slow);
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_gc_alloc_array_from_values_slow_ptr(void) {
-    return (int64_t)gc_alloc_array_from_values_slow;
+    return WASMOON_GUEST_ADDRESS(gc_alloc_array_from_values_slow);
 }
 
-static void wasmoon_jit_gc_push_root_scope_or_trap(
+static void WASMOON_GUEST_ABI wasmoon_jit_gc_push_root_scope_or_trap(
     jit_context_t *ctx,
     const int64_t *roots,
     int32_t root_count
@@ -1578,7 +1584,7 @@ static void wasmoon_jit_gc_push_root_scope_or_trap(
     siglongjmp(g_trap_jmp_buf, 1);
 }
 
-static void wasmoon_jit_gc_pop_root_scope_or_trap(jit_context_t *ctx) {
+static void WASMOON_GUEST_ABI wasmoon_jit_gc_pop_root_scope_or_trap(jit_context_t *ctx) {
     jit_context_t *activation = get_current_jit_context();
     if (activation) ctx = activation;
     if (ctx && ctx->gc_root_scope_head) {
@@ -1590,11 +1596,11 @@ static void wasmoon_jit_gc_pop_root_scope_or_trap(jit_context_t *ctx) {
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_gc_push_root_scope_ptr(void) {
-    return (int64_t)wasmoon_jit_gc_push_root_scope_or_trap;
+    return WASMOON_GUEST_ADDRESS(wasmoon_jit_gc_push_root_scope_or_trap);
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_gc_pop_root_scope_ptr(void) {
-    return (int64_t)wasmoon_jit_gc_pop_root_scope_or_trap;
+    return WASMOON_GUEST_ADDRESS(wasmoon_jit_gc_pop_root_scope_or_trap);
 }
 
 // ============ Type Cache Management FFI Exports ============
@@ -2035,7 +2041,7 @@ MOONBIT_FFI_EXPORT int wasmoon_jit_write_bound_entry_code(
 ) {
     uint64_t context = (uint64_t)wasmoon_jit_context_ptr(managed_context);
     if (!context || !target) return 0;
-#if defined(__aarch64__)
+#if defined(__aarch64__) || defined(_M_ARM64)
     uint64_t values[2] = {context, (uint64_t)target};
     unsigned registers[2] = {0, 16};
     int offset = 0;
@@ -2052,7 +2058,7 @@ MOONBIT_FFI_EXPORT int wasmoon_jit_write_bound_entry_code(
     uint32_t branch = 0xd61f0200u; // br x16
     memcpy(output + offset, &branch, 4);
     return offset + 4;
-#elif defined(__x86_64__)
+#elif defined(__x86_64__) || defined(_M_X64)
     output[0] = 0x48; output[1] = 0xbf; // movabs rdi, context
     memcpy(output + 2, &context, 8);
     output[10] = 0x49; output[11] = 0xbb; // movabs r11, target
@@ -2106,3 +2112,27 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_jit_has_callable_metadata(void *managed_conte
 MOONBIT_FFI_EXPORT void wasmoon_jit_set_cooperative_scheduling_managed(void *context, int32_t enabled) {
     wasmoon_jit_set_cooperative_scheduling(wasmoon_jit_context_ptr(context), enabled);
 }
+
+#if defined(_MSC_VER) && !defined(__clang__)
+WASMOON_DEFINE_GUEST_TARGET(spectest_print_char_impl);
+WASMOON_DEFINE_GUEST_TARGET(spectest_print_f32_impl);
+WASMOON_DEFINE_GUEST_TARGET(spectest_print_f64_f64_impl);
+WASMOON_DEFINE_GUEST_TARGET(spectest_print_f64_impl);
+WASMOON_DEFINE_GUEST_TARGET(spectest_print_i32_f32_impl);
+WASMOON_DEFINE_GUEST_TARGET(spectest_print_i32_impl);
+WASMOON_DEFINE_GUEST_TARGET(spectest_print_i64_impl);
+WASMOON_DEFINE_GUEST_TARGET(spectest_print_impl);
+WASMOON_DEFINE_GUEST_TARGET(wasmoon_jit_cancel_poll);
+WASMOON_DEFINE_GUEST_TARGET(wasmoon_jit_gc_pop_root_scope_or_trap);
+WASMOON_DEFINE_GUEST_TARGET(wasmoon_jit_gc_push_root_scope_or_trap);
+WASMOON_DEFINE_GUEST_TARGET(wasmoon_jit_hostcall);
+WASMOON_DEFINE_GUEST_TARGET(wasmoon_jit_i32_sdiv);
+WASMOON_DEFINE_GUEST_TARGET(wasmoon_jit_i32_srem);
+WASMOON_DEFINE_GUEST_TARGET(wasmoon_jit_i32_udiv);
+WASMOON_DEFINE_GUEST_TARGET(wasmoon_jit_i32_urem);
+WASMOON_DEFINE_GUEST_TARGET(wasmoon_jit_i64_sdiv);
+WASMOON_DEFINE_GUEST_TARGET(wasmoon_jit_i64_srem);
+WASMOON_DEFINE_GUEST_TARGET(wasmoon_jit_i64_udiv);
+WASMOON_DEFINE_GUEST_TARGET(wasmoon_jit_i64_urem);
+WASMOON_DEFINE_GUEST_TARGET(wasmoon_jit_table_grow);
+#endif

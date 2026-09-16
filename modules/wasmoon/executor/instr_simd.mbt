@@ -1033,8 +1033,8 @@ fn ExecContext::exec_simd(
       self.exec_v128_binop_f32(fn(a, b) { if b < a { b } else { a } })
     F32x4Pmax =>
       self.exec_v128_binop_f32(fn(a, b) { if a < b { b } else { a } })
-    F32x4Abs => self.exec_v128_unop_f32(fn(a) { a.abs() })
-    F32x4Neg => self.exec_v128_unop_f32(fn(a) { -a })
+    F32x4Abs => self.exec_v128_unop_f32(f32_abs_bits)
+    F32x4Neg => self.exec_v128_unop_f32(f32_neg_bits)
     F32x4Sqrt => self.exec_v128_unop_f32(fn(a) { a.sqrt() })
     F32x4Ceil => self.exec_v128_unop_f32(f32_ceil_signed)
     F32x4Floor => self.exec_v128_unop_f32(f32_floor_signed)
@@ -1060,8 +1060,8 @@ fn ExecContext::exec_simd(
       self.exec_v128_binop_f64(fn(a, b) { if b < a { b } else { a } })
     F64x2Pmax =>
       self.exec_v128_binop_f64(fn(a, b) { if a < b { b } else { a } })
-    F64x2Abs => self.exec_v128_unop_f64(fn(a) { a.abs() })
-    F64x2Neg => self.exec_v128_unop_f64(fn(a) { -a })
+    F64x2Abs => self.exec_v128_unop_f64(f64_abs_bits)
+    F64x2Neg => self.exec_v128_unop_f64(f64_neg_bits)
     F64x2Sqrt => self.exec_v128_unop_f64(fn(a) { a.sqrt() })
     F64x2Ceil => self.exec_v128_unop_f64(f64_ceil_signed)
     F64x2Floor => self.exec_v128_unop_f64(f64_floor_signed)

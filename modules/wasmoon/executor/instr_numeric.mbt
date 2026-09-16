@@ -581,11 +581,11 @@ fn ExecContext::exec_f32_numeric(
     }
     F32Abs => {
       let a = self.stack.pop_f32()
-      self.stack.push(F32(a.abs()))
+      self.stack.push(F32(f32_abs_bits(a)))
     }
     F32Neg => {
       let a = self.stack.pop_f32()
-      self.stack.push(F32(-a))
+      self.stack.push(F32(f32_neg_bits(a)))
     }
     F32Sqrt => {
       let a = self.stack.pop_f32()
@@ -722,11 +722,11 @@ fn ExecContext::exec_f64_numeric(
     }
     F64Abs => {
       let a = self.stack.pop_f64()
-      self.stack.push(F64(a.abs()))
+      self.stack.push(F64(f64_abs_bits(a)))
     }
     F64Neg => {
       let a = self.stack.pop_f64()
-      self.stack.push(F64(-a))
+      self.stack.push(F64(f64_neg_bits(a)))
     }
     F64Sqrt => {
       let a = self.stack.pop_f64()
@@ -832,4 +832,25 @@ fn ExecContext::exec_f64_numeric(
     }
     _ => raise @runtime.RuntimeError::Unreachable
   }
+}
+
+///|
+// Sign operations preserve signaling NaNs, including their payload bits.
+fn f32_abs_bits(value : Float) -> Float {
+  Float::reinterpret_from_uint(value.reinterpret_as_uint() & 0x7FFFFFFFU)
+}
+
+///|
+fn f32_neg_bits(value : Float) -> Float {
+  Float::reinterpret_from_uint(value.reinterpret_as_uint() ^ 0x80000000U)
+}
+
+///|
+fn f64_abs_bits(value : Double) -> Double {
+  (value.reinterpret_as_uint64() & 0x7FFFFFFFFFFFFFFFUL).reinterpret_as_double()
+}
+
+///|
+fn f64_neg_bits(value : Double) -> Double {
+  (value.reinterpret_as_uint64() ^ 0x8000000000000000UL).reinterpret_as_double()
 }

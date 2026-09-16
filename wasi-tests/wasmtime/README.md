@@ -86,8 +86,8 @@ Only `--mode wasmtime` still reports these three guests as `unsupported`:
 the reference CLI cannot configure permissions for individual preopens.
 Its coverage therefore differs from the Wasmoon run. Host `chmod` is not a
 substitute for a read-only WASI preopen. The runner does not reproduce
-Wasmtime's host API or table-capacity limits. It targets macOS and Linux,
-not Windows.
+Wasmtime's host API or table-capacity limits. The runner targets Linux, macOS and Windows; the Windows host contract and
+its assertion guards are documented in the [support ledger](../../docs/wasip1-support.md#platform-specific-fixture-coverage).
 
 ## Initial results and interpretation
 
@@ -130,8 +130,8 @@ cover the fixes. Linux results must be verified by the platform workflow;
 macOS results are not evidence of Linux execution.
 
 The regular CI checks the snapshot, Python runner and native ASan tests, and
-runs the unchanged EOF/pending-stdin polling guests and the full explicit-rights
-profile in both engines. The separate
+runs the unchanged EOF/pending-stdin polling guests and the full capabilities
+profile in both engines on Linux, macOS, Windows Clang and Windows MSVC. The separate
 `Upstream WASIp1 programs` workflow is manually dispatched and runs both host
 platforms, uploading logs even when tests fail. The original profile retains its compatibility failures; the adapted profile
 is a strict regression gate. Neither uses an expected-failure mask.
@@ -147,3 +147,21 @@ then run the snapshot check, runner tests and all guest scenarios. Do not update
 hashes simply to accept a local assertion change.
 
 License: [Apache-2.0 WITH LLVM-exception](upstream/LICENSE).
+
+## Implemented-capability profile
+
+`--profile capabilities` applies the rights patch and then
+`implemented-capabilities.patch` to a disposable copy. This profile is the CI
+acceptance gate for Wasmoon. The original snapshot and `explicit-rights` profile
+remain reproducible and unchanged.
+
+Only two Wasmtime-specific unsupported-operation assertions change:
+
+- `p1_file_allocate`: allocation succeeds and extends the file to 100 bytes.
+- `p1_path_filestat`: synchronous open succeeds, reports SYNC, and closes normally.
+
+All other assertions remain intact. Reports record both patch hashes and the
+compiled guest hashes. A failure of the original unsupported-operation assertions
+is an intentional behavior difference, not a pass of the original programs.
+Native and JIT/interpreter tests additionally exercise data preservation, offsets,
+append behavior, synchronization, overflow, and capability rights.

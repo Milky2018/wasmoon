@@ -1,6 +1,6 @@
 ///|
 test "wasi readdir writes UTF-8 byte lengths and truncated names" {
-  let root = "/tmp/wasmoon-p1-readdir"
+  let root = @test_fs.temp_dir() + "/wasmoon-p1-readdir"
   @wasi.native_unlinkat(0, root + "/Д", 0) |> ignore
   @wasi.native_unlinkat(0, root, @wasi.AT_REMOVEDIR) |> ignore
   assert_true(@wasi.native_mkdir(root, 0o700))

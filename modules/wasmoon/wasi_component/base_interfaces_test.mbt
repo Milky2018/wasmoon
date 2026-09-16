@@ -134,7 +134,8 @@ test "Preview 3 stdio uses canonical byte streams and result futures" {
 
 ///|
 test "Preview 3 filesystem reuses capability roots and canonical byte streams" {
-  let host_file = "/tmp/wasmoon-component-preview3-filesystem-test.txt"
+  let host_file = @test_fs.temp_dir() +
+    "/wasmoon-component-preview3-filesystem-test.txt"
   @wasi.native_unlinkat(0, host_file, 0) |> ignore
   guard @wasi.native_open(host_file, [WriteOnly, Create, Truncate], 0o600)
     is Some(fd) else {
@@ -150,7 +151,7 @@ test "Preview 3 filesystem reuses capability roots and canonical byte streams" {
 
   let linker = @runtime_impl.ComponentLinker()
   let ctx = @wasi_component.WasiComponentCtxBuilder()
-    .preopened_directory("/tmp", "/sandbox", false)
+    .preopened_directory(@test_fs.temp_dir(), "/sandbox", false)
     .build()
   defer ctx.close()
   let host = @wasi_component.WasiComponentHost(linker, ctx)
@@ -369,7 +370,7 @@ test "Preview 2 blocking writes reject payloads over 4096 bytes" {
 
 ///|
 test "Preview 2 filesystem remains rooted at configured preopens" {
-  let host_file = "/tmp/wasmoon-component-filesystem-test.txt"
+  let host_file = @test_fs.temp_dir() + "/wasmoon-component-filesystem-test.txt"
   @wasi.native_unlinkat(0, host_file, 0) |> ignore
   guard @wasi.native_open(host_file, [WriteOnly, Create, Truncate], 0o600)
     is Some(fd) else {
@@ -385,7 +386,7 @@ test "Preview 2 filesystem remains rooted at configured preopens" {
 
   let linker = @runtime_impl.ComponentLinker()
   let ctx = @wasi_component.WasiComponentCtxBuilder()
-    .preopened_directory("/tmp", "/sandbox", false)
+    .preopened_directory(@test_fs.temp_dir(), "/sandbox", false)
     .build()
   defer ctx.close()
   let host = @wasi_component.WasiComponentHost(linker, ctx)
@@ -465,7 +466,7 @@ test "Preview 2 filesystem remains rooted at configured preopens" {
 
 ///|
 test "Preview 2 filesystem rejects intermediate symlink escape" {
-  let root = "/tmp/wasmoon-component-filesystem-root"
+  let root = @test_fs.temp_dir() + "/wasmoon-component-filesystem-root"
   @wasi.native_unlinkat(0, root + "/escape", 0) |> ignore
   @wasi.native_unlinkat(0, root, @wasi.AT_REMOVEDIR) |> ignore
   guard @wasi.native_mkdir(root, 0o700) else {

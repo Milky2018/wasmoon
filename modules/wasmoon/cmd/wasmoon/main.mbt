@@ -300,6 +300,13 @@ fn main {
       return
     }
   }
+  // The CLI owns stdin for the duration of guest execution. Embedders retain
+  // shared-input behavior unless they explicitly claim exclusive consumption.
+  let exclusive_input = match matches.subcommand {
+    Some(("run", _)) | Some(("component", _)) =>
+      @host_io.claim_exclusive_input(0) == 0
+    _ => false
+  }
   let status = match matches.subcommand {
     Some(("run", sub)) =>
       @commands.run_wasm(
@@ -434,6 +441,9 @@ fn main {
     }
     Some((name, _)) => abort("invalid argparse matches for \{name}")
     None => abort("argparse omitted the required subcommand")
+  }
+  if exclusive_input {
+    @host_io.release_exclusive_input(0)
   }
   if status != 0 {
     @sys.exit(status)

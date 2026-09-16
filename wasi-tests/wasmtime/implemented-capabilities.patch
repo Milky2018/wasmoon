@@ -1,0 +1,52 @@
+--- a/upstream/crates/test-programs/src/bin/p1_file_allocate.rs
++++ b/upstream/crates/test-programs/src/bin/p1_file_allocate.rs
+@@ -24,17 +24,10 @@
+     let mut stat = wasip1::fd_filestat_get(file_fd).expect("reading file stats");
+     assert_eq!(stat.size, 0, "file size should be 0");
+
+-    let err = wasip1::fd_allocate(file_fd, 0, 100)
+-        .err()
+-        .expect("fd_allocate must fail");
+-    assert_eq!(
+-        err,
+-        wasip1::ERRNO_NOTSUP,
+-        "fd_allocate should fail with NOTSUP"
+-    );
++    wasip1::fd_allocate(file_fd, 0, 100).expect("allocating file storage");
+
+     stat = wasip1::fd_filestat_get(file_fd).expect("reading file stats");
+-    assert_eq!(stat.size, 0, "file size should still be 0");
++    assert_eq!(stat.size, 100, "allocation extends the file");
+
+     wasip1::fd_close(file_fd).expect("closing a file");
+     wasip1::path_unlink_file(dir_fd, "file").expect("removing a file");
+--- a/upstream/crates/test-programs/src/bin/p1_path_filestat.rs
++++ b/upstream/crates/test-programs/src/bin/p1_path_filestat.rs
+@@ -32,19 +32,14 @@
+         wasip1::FDFLAGS_APPEND,
+         "file should have the APPEND fdflag used to create the file"
+     );
+-    assert_errno!(
+-        wasip1::path_open(
+-            dir_fd,
+-            0,
+-            "file",
+-            0,
+-            wasip1::RIGHTS_FD_READ | wasip1::RIGHTS_FD_WRITE,
+-            0,
+-            wasip1::FDFLAGS_SYNC,
+-        )
+-        .expect_err("FDFLAGS_SYNC not supported by platform"),
+-        wasip1::ERRNO_NOTSUP
+-    );
++    let sync_fd = wasip1::path_open(
++        dir_fd, 0, "file", 0,
++        wasip1::RIGHTS_FD_READ | wasip1::RIGHTS_FD_WRITE,
++        0, wasip1::FDFLAGS_SYNC,
++    ).expect("opening with synchronous writes");
++    let sync_stat = wasip1::fd_fdstat_get(sync_fd).expect("reading sync flags");
++    assert_eq!(sync_stat.fs_flags & wasip1::FDFLAGS_SYNC, wasip1::FDFLAGS_SYNC);
++    wasip1::fd_close(sync_fd).expect("closing synchronous descriptor");
+
+     // Check file size
+     let file_stat = wasip1::path_filestat_get(dir_fd, 0, "file").expect("reading file stats");

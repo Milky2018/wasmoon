@@ -8,3 +8,12 @@ wasi-tests/wasmtime/explicit-rights.patch whitespace=-blank-at-eol
 
 # Preserve the pinned Wasmtime misc corpus, including original whitespace.
 wasm-tests/wasmtime/upstream/** whitespace=-blank-at-eol,-blank-at-eof
+
+# Pinned conformance inputs must retain exact upstream bytes on every host.
+# In particular, core.autocrlf must not rewrite snapshot hashes or patch context.
+component-spec/upstream/** -text
+component-spec/corrections/** -text
+wasi-tests/wasmtime/** -text
+wasm-tests/wasmtime/upstream/** -text
+spec/** -text
+modules/wasmoon/wasi_component/wit/** -text

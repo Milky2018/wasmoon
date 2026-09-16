@@ -980,6 +980,7 @@ fn run_component_script_impl(
   let mut anon_count = 0
   let mut has_unsupported_command = false
   for cmd in script.commands {
+    runtime.release_unreferenced(last_instance)
     match cmd.type_ {
       "component_definition" => {
         let name = match cmd.name {

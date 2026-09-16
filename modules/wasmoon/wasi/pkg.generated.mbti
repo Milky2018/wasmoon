@@ -94,6 +94,8 @@ pub fn native_fdatasync(Int) -> Bool
 
 pub fn native_fstat(Int) -> FileStat?
 
+pub fn native_fstat_beneath(Int, String, Int) -> FileStat?
+
 pub fn native_fstatat(Int, String, Int) -> FileStat?
 
 pub fn native_fsync(Int) -> Bool
@@ -204,6 +206,8 @@ pub fn native_tell(Int) -> Int64?
 
 pub fn native_unlinkat(Int, String, Int) -> Bool
 
+pub fn native_utimens_beneath(Int, String, Bool, Int64, Int64, Int) -> Bool
+
 pub fn native_utimensat(Int, String, Int64, Int64, Int, Int) -> Bool
 
 pub fn native_write(Int, FixedArray[Byte], Int) -> Int?
@@ -234,9 +238,11 @@ pub fn print_string(String) -> Unit
 
 pub fn proc_exit(WasiContext, Int) -> Unit raise WasiExit
 
-pub fn proc_raise_impl(Int) -> Int
+pub fn proc_raise_impl(Int, handler? : ((Int) -> Int)?) -> Int
 
 pub fn putchar(Int) -> Unit
+
+pub fn raise_host_signal(Int) -> Int
 
 pub fn random_get(@runtime.Memory, Int, Int) -> Int
 
@@ -449,6 +455,7 @@ pub(all) enum FileType {
   Directory
   CharacterDevice
   SocketStream
+  SocketDatagram
 }
 
 pub(all) struct IoVec {
@@ -486,8 +493,9 @@ pub(all) struct OpenFile {
   native_fd : Int
   file_type : FileType
   host_path : String
+  mut socket_input : Bytes
   mut position : Int64
-  flags : Int
+  mut flags : Int
   mut rights_base : Int64
   mut rights_inheriting : Int64
 }
@@ -530,6 +538,7 @@ pub fn Timestamp::to_repr(Self) -> @debug.Repr
 pub(all) struct WasiContext {
   args : Array[String]
   env : Array[String]
+  signal_handler : ((Int) -> Int)?
   mut exit_code : Int?
   preopens : Array[(Fd, String, String)]
   mut next_fd : Int
@@ -557,8 +566,10 @@ pub fn WasiContext::has_exited(Self) -> Bool
 pub fn WasiContext::is_valid_fd(Self, Int) -> Bool
 pub fn WasiContext::resolve_path(Self, Int, String) -> Result[String, ResolvePathError]
 pub fn WasiContext::resolve_path_nofollow_leaf(Self, Int, String) -> Result[String, ResolvePathError]
+pub fn WasiContext::take_socket(Self, Int, rights_base? : Int64, rights_inheriting? : Int64) -> Result[Int, Int]
 
 pub(all) struct WasiContextBuilder {
+  mut signal_handler : ((Int) -> Int)?
   mut args : Array[String]
   env : Array[String]
   preopens : Array[(String, String)]
@@ -580,6 +591,7 @@ pub fn WasiContextBuilder::inherit_stdio(Self) -> Self
 pub fn WasiContextBuilder::inherit_stdout(Self) -> Self
 pub fn WasiContextBuilder::preopen_dir(Self, String, String) -> Self
 pub fn WasiContextBuilder::preopen_dir_readonly(Self, String, String) -> Self
+pub fn WasiContextBuilder::signal_handler(Self, (Int) -> Int) -> Self
 pub fn WasiContextBuilder::stderr(Self, (Bytes) -> Unit) -> Self
 pub fn WasiContextBuilder::stdin(Self, () -> Bytes) -> Self
 pub fn WasiContextBuilder::stdout(Self, (Bytes) -> Unit) -> Self

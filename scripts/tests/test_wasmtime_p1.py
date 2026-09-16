@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from pathlib import Path
+from contextlib import redirect_stdout
+from io import StringIO
 import shutil
 import sys
 import tempfile
@@ -14,6 +16,22 @@ import run_wasmtime_p1 as p1
 
 
 class P1RunnerTests(unittest.TestCase):
+    def test_cli_snapshot_check_accepts_windows(self):
+        output = StringIO()
+        with patch.object(p1.sys, "platform", "win32"), \
+             patch.object(p1.sys, "argv", ["run_wasmtime_p1.py", "--check"]), \
+             redirect_stdout(output):
+            self.assertEqual(p1.main(), 0)
+        self.assertIn("Verified 58 P1 programs", output.getvalue())
+
+    def test_windows_guest_environment_matches_upstream_contract(self):
+        with patch.object(p1.sys, "platform", "win32"):
+            environment = p1.guest_environment()
+        source = (p1.CORPUS / "upstream/crates/test-programs/artifacts/src/lib.rs").read_text()
+        windows = source.split("#[cfg(windows)]", 1)[1].split("#[cfg(all(unix", 1)[0]
+        import re
+        self.assertEqual(environment, dict(re.findall(r'\("([A-Z_]+)", "([^"]+)"\)', windows)))
+
     def test_source_snapshot_is_complete_and_unchanged(self):
         _, names = p1.validate_snapshot()
         self.assertEqual(len(names), 58)
@@ -62,6 +80,18 @@ class P1RunnerTests(unittest.TestCase):
                         if "assert" in line:
                             self.assertIn(line, adapted)
             self.assertFalse(source.exists())
+        p1.validate_snapshot()
+
+    def test_capability_profile_changes_only_two_documented_programs(self):
+        with p1.prepare_build("explicit-rights") as (rights, _):
+            with p1.prepare_build("capabilities") as (capabilities, build):
+                changed = []
+                for original in (rights / "upstream").rglob("*.rs"):
+                    relative = original.relative_to(rights)
+                    if original.read_bytes() != (capabilities / relative).read_bytes():
+                        changed.append(original.name)
+                self.assertEqual(sorted(changed), ["p1_file_allocate.rs", "p1_path_filestat.rs"])
+                self.assertIn("capabilities", build.name)
         p1.validate_snapshot()
 
     def test_rights_patch_applies_inside_the_repository_build_directory(self):

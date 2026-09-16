@@ -2,6 +2,11 @@ name: Check and Test
 
 on:
   workflow_dispatch:
+    inputs:
+      windows_only:
+        description: Run only the Windows port diagnostic gate
+        type: boolean
+        default: false
   pull_request:
   push:
     branches:
@@ -11,7 +16,7 @@ on:
       - main
 
 concurrency:
-  group: check-${{ github.event.pull_request.number || github.ref }}
+  group: check-${{ github.event_name == 'workflow_dispatch' && github.run_id || (github.event.pull_request.number || github.ref) }}
   cancel-in-progress: true
 
 env:
@@ -20,6 +25,7 @@ env:
 
 jobs:
   native-platform:
+    if: ${{ inputs.windows_only != true }}
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
@@ -115,16 +121,19 @@ jobs:
           path: target/wasmtime-misc
           if-no-files-found: warn
 
+      - name: exercise WASIp1 capability path races
+        run: python3 scripts/run_wasi_path_races.py
+
       - name: run upstream WASIp1 polling regressions
         run: |
           rustup toolchain install 1.97.0 --profile minimal --target wasm32-wasip1
           RUSTUP_TOOLCHAIN=1.97.0 python3 scripts/run_wasmtime_p1.py \
             --filter p1_poll_oneoff_stdio --output target/wasmtime-p1-smoke
 
-      - name: run explicit-rights WASIp1 regression suite
+      - name: run WASIp1 rights and implemented-capability regressions
         run: |
           RUSTUP_TOOLCHAIN=1.97.0 python3 scripts/run_wasmtime_p1.py \
-            --profile explicit-rights --output target/wasmtime-p1-rights
+            --profile capabilities --output target/wasmtime-p1-rights
 
       - name: upload WASIp1 results
         uses: actions/upload-artifact@v4
@@ -132,6 +141,7 @@ jobs:
         with:
           name: wasip1-${{ matrix.os }}
           path: |
+            target/wasi-path-races.json
             target/wasmtime-p1-smoke
             target/wasmtime-p1-rights
           if-no-files-found: ignore
@@ -195,3 +205,171 @@ jobs:
           python3 scripts/run_component_wast.py \
             --suite future-gated --dump-failures --no-jit || status=$?
           exit "$status"
+
+  windows-native:
+    name: Windows AMD64 (${{ matrix.compiler }})
+    strategy:
+      fail-fast: false
+      matrix:
+        compiler: [clang, msvc]
+    runs-on: windows-latest
+    timeout-minutes: 60
+    env:
+      MOONBIT_INSTALL_VERSION: nightly
+      MOON_CC: clang
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ilammy/msvc-dev-cmd@v1
+      - name: install MoonBit
+        shell: pwsh
+        run: |
+          irm https://cli.moonbitlang.com/install/powershell.ps1 | iex
+          "$HOME/.moon/bin" >> $env:GITHUB_PATH
+      - name: configure Microsoft C and MASM
+        if: matrix.compiler == 'msvc'
+        shell: pwsh
+        run: . ./scripts/msvc/setup.ps1
+      - name: report toolchain
+        run: |
+          moon version --all
+          clang --version
+          python scripts/msvc/generate_guest_bridges.py --check
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          moon update
+      - name: install Windows wasm-tools
+        shell: pwsh
+        run: |
+          $version = $env:COMPONENT_WASM_TOOLS_VERSION
+          $archive = "wasm-tools-$version-x86_64-windows.zip"
+          New-Item -ItemType Directory -Force target/windows-tools | Out-Null
+          Invoke-WebRequest "https://github.com/bytecodealliance/wasm-tools/releases/download/v$version/$archive" -OutFile "target/$archive"
+          Expand-Archive "target/$archive" target/windows-tools
+          $tools = @(Get-ChildItem target/windows-tools -Recurse -Filter wasm-tools.exe)
+          if ($tools.Count -ne 1) { throw "Expected exactly one pinned wasm-tools binary" }
+          $tools[0].DirectoryName >> $env:GITHUB_PATH
+      - name: test Windows descriptor readiness
+        run: |
+          New-Item -ItemType Directory -Force target | Out-Null
+          python -m unittest discover -s scripts/tests -p 'test_wasi_windows_*.py' -v 2>&1 | Tee-Object -FilePath target/windows-native-probes.log
+          exit $LASTEXITCODE
+
+      - name: upload Windows native probe evidence
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: windows-${{ matrix.compiler }}-native-probes
+          path: target/windows-native-probes.log
+
+      - name: test Windows file allocation
+        run: python -m unittest scripts.tests.test_wasi_file_semantics scripts.tests.test_wasi_process -v
+
+      - name: build Windows runtime
+        id: windows_build
+        if: ${{ !cancelled() }}
+        run: |
+          moon build --target native --release --jobs 2 --target-dir target/windows-build
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Copy-Item target/windows-build/native/release/build/Milky2018/wasmoon/cmd/wasmoon/wasmoon.exe wasmoon.exe
+          Copy-Item target/windows-build/native/release/build/Milky2018/wasmoon/cmd/wasmoon-tools/wasmoon-tools.exe wasmoon-tools.exe
+      - name: verify Windows CLI behavior
+        if: ${{ !cancelled() && steps.windows_build.outcome == 'success' }}
+        run: python scripts/cli_behavior_test.py
+      - name: test Windows symlink permission environments
+        run: |
+          $key = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\AppModelUnlock"
+          $property = "AllowDevelopmentWithoutDevLicense"
+          New-Item -Path $key -Force | Out-Null
+          $old = Get-ItemProperty -Path $key -Name $property -ErrorAction SilentlyContinue
+          try {
+            foreach ($mode in @(0, 1)) {
+              Set-ItemProperty -Path $key -Name $property -Type DWord -Value $mode
+              $env:WASMOON_TEST_DEVELOPER_MODE = "$mode"
+              python -m unittest scripts.tests.test_wasi_windows_files.WindowsFileTests.test_unprivileged_symlink scripts.tests.test_wasi_windows_files.WindowsFileTests.test_unprivileged_symlink_after_ancestor_replacement scripts.tests.test_wasi_windows_files.WindowsFileTests.test_unprivileged_symlink_during_parent_renames scripts.tests.test_wasi_windows_files.WindowsFileTests.test_workspace_and_temp_volume_symlinks_with_disabled_privilege -v
+              if ($LASTEXITCODE -ne 0) { throw "Symlink permission matrix failed in Developer Mode $mode" }
+              python scripts/run_windows_symlinks.py
+              if ($LASTEXITCODE -ne 0) { throw "Symlink guest matrix failed in Developer Mode $mode" }
+            }
+          } finally {
+            Remove-Item Env:WASMOON_TEST_DEVELOPER_MODE -ErrorAction SilentlyContinue
+            if ($null -eq $old) {
+              Remove-ItemProperty -Path $key -Name $property -ErrorAction SilentlyContinue
+            } else {
+              Set-ItemProperty -Path $key -Name $property -Type DWord -Value $old.$property
+            }
+          }
+
+      - name: run Windows core suites
+        if: ${{ !cancelled() && steps.windows_build.outcome == 'success' }}
+        run: python scripts/run_all_wast.py --rec --dump-failures
+      - name: exercise Windows WASIp1 capability path races
+        if: ${{ !cancelled() && steps.windows_build.outcome == 'success' }}
+        run: python scripts/run_wasi_path_races.py
+      - name: run Windows readiness guests
+        if: ${{ !cancelled() && steps.windows_build.outcome == 'success' }}
+        run: python scripts/run_windows_readiness.py
+      - name: run Windows component suites
+        if: ${{ !cancelled() && steps.windows_build.outcome == 'success' }}
+        run: |
+          $failed = $false
+          New-Item -ItemType Directory -Force target/windows-components | Out-Null
+          foreach ($suite in @("stable-0.2", "async-0.3", "future-gated")) {
+            python scripts/run_component_wast.py --suite $suite --dump-failures 2>&1 | Tee-Object -FilePath "target/windows-components/$suite-jit.log"
+            if ($LASTEXITCODE -ne 0) { $failed = $true }
+            python scripts/run_component_wast.py --suite $suite --dump-failures --no-jit 2>&1 | Tee-Object -FilePath "target/windows-components/$suite-interp.log"
+            if ($LASTEXITCODE -ne 0) { $failed = $true }
+          }
+          if ($failed) { exit 1 }
+      - name: run Windows Wasmtime misc suite
+        if: ${{ !cancelled() && steps.windows_build.outcome == 'success' }}
+        run: |
+          python scripts/run_wasmtime_misc.py --include-high-memory --timeout 120 --output target/windows-misc 2>&1 | Tee-Object -FilePath target/windows-misc-run.log
+          exit $LASTEXITCODE
+      - name: run Windows WASIp1 suites
+        if: ${{ !cancelled() && steps.windows_build.outcome == 'success' }}
+        env:
+          RUSTUP_TOOLCHAIN: "1.97.0"
+        run: |
+          rustup toolchain install 1.97.0 --profile minimal --target wasm32-wasip1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python scripts/run_wasmtime_p1.py --filter p1_poll_oneoff_stdio --output target/windows-p1-smoke
+          $smoke = $LASTEXITCODE
+          python scripts/run_wasmtime_p1.py --profile capabilities --output target/windows-p1-rights
+          if ($LASTEXITCODE -ne 0 -or $smoke -ne 0) { exit 1 }
+      - name: upload Windows corpus evidence
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: windows-${{ matrix.compiler }}-corpus-evidence
+          path: |
+            target/windows-native-probes.log
+            target/windows-symlinks-*.json
+            target/wasi-path-races.json
+            target/windows-readiness.json
+            target/windows-components
+            target/windows-misc
+            target/windows-misc-run.log
+            target/windows-p1-smoke
+            target/windows-p1-rights
+          if-no-files-found: warn
+      - name: run Windows native tests
+        if: ${{ !cancelled() && steps.windows_build.outcome == 'success' }}
+        env:
+          VCODE_REGALLOC_VALIDATION: "1"
+        run: python scripts/run_native_packages.py --output target/windows-native-tests
+      - name: upload Windows test evidence
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: windows-${{ matrix.compiler }}-native-evidence
+          path: |
+            target/windows-native-tests
+            target/windows-native-probes.log
+            target/windows-symlinks-*.json
+            target/wasi-path-races.json
+            target/windows-readiness.json
+            target/windows-components
+            target/windows-misc
+            target/windows-misc-run.log
+            target/windows-p1-smoke
+            target/windows-p1-rights
+          if-no-files-found: warn

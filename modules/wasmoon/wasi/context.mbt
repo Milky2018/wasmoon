@@ -9,6 +9,8 @@ pub(all) enum FileType {
   CharacterDevice
   /// Stream socket
   SocketStream
+  /// Datagram socket
+  SocketDatagram
 }
 
 ///|
@@ -20,10 +22,13 @@ pub(all) struct OpenFile {
   file_type : FileType
   /// Host path (for debugging)
   host_path : String
-  /// Current position (tracked separately for virtual files)
+  /// Stream bytes retained by P1 peek, shared across descriptor renumbering.
+  mut socket_input : Bytes
+  /// P1 cursor, shared when the same OpenFile is aliased or renumbered.
+  /// Positioned I/O and host append operations never implicitly move it.
   mut position : Int64
   /// File access flags
-  flags : Int
+  mut flags : Int
   /// Effective WASIp1 base rights granted to this descriptor
   mut rights_base : Int64
   /// Effective WASIp1 inheriting rights granted to this descriptor
@@ -50,6 +55,8 @@ pub(all) struct WasiContext {
   args : Array[String]
   /// Environment variables (key=value pairs)
   env : Array[String]
+  /// Explicit host signal policy; None denies process signals.
+  signal_handler : ((Int) -> Int)?
   /// Exit code (set by proc_exit)
   mut exit_code : Int?
   /// Preopen directories: (fd, host_path, guest_path)
@@ -91,6 +98,7 @@ pub fn WasiContext::WasiContext() -> WasiContext {
     args: [],
     env: [],
     exit_code: None,
+    signal_handler: None,
     preopens: [],
     next_fd: 3, // 0=stdin, 1=stdout, 2=stderr
     open_files: HashMap([]),
@@ -112,6 +120,7 @@ pub fn WasiContext::WasiContext() -> WasiContext {
 ///|
 /// Builder for WasiContext
 pub(all) struct WasiContextBuilder {
+  mut signal_handler : ((Int) -> Int)?
   mut args : Array[String]
   env : Array[String]
   preopens : Array[(String, String)]
@@ -127,6 +136,7 @@ pub(all) struct WasiContextBuilder {
 ///|
 pub fn WasiContextBuilder::WasiContextBuilder() -> WasiContextBuilder {
   {
+    signal_handler: None,
     args: [],
     env: [],
     preopens: [],
@@ -306,6 +316,7 @@ pub fn WasiContextBuilder::build(self : WasiContextBuilder) -> WasiContext {
         file_type: Directory,
         host_path: host,
         position: 0L,
+        socket_input: b"",
         flags: 0, // Read-only
         rights_base: if read_only {
           readonly_directory_base_rights()
@@ -323,6 +334,7 @@ pub fn WasiContextBuilder::build(self : WasiContextBuilder) -> WasiContext {
   }
   {
     args: self.args,
+    signal_handler: self.signal_handler,
     env: self.env,
     exit_code: None,
     preopens,
@@ -541,7 +553,8 @@ fn WasiContext::resolve_path_internal(
 }
 
 ///|
-/// Resolve a path relative to a directory fd
+/// Return a diagnostic host path. This string is not a filesystem capability;
+/// production path operations must use the held directory descriptor.
 pub fn WasiContext::resolve_path(
   self : WasiContext,
   dir_fd : Int,
@@ -552,7 +565,7 @@ pub fn WasiContext::resolve_path(
 
 ///|
 /// Resolve a path while avoiding final-component symlink traversal in the
-/// containment check. Used by path operations that act on directory entries.
+/// containment check. This diagnostic result must not authorize host I/O.
 pub fn WasiContext::resolve_path_nofollow_leaf(
   self : WasiContext,
   dir_fd : Int,

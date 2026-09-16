@@ -9,6 +9,16 @@
 
 #define WASM_MEMORY32_MAX_BYTES (((int64_t)UINT32_MAX) + 1LL)
 
+static size_t host_page_size(void) {
+#ifdef _WIN32
+    SYSTEM_INFO info;
+    GetSystemInfo(&info);
+    return (size_t)info.dwPageSize;
+#else
+    return (size_t)getpagesize();
+#endif
+}
+
 // ============ Guard Page Memory Allocation ============
 // Uses mmap to allocate memory with guard pages for bounds check elimination.
 // Strategy: allocate max_pages worth of virtual address space, but only make
@@ -28,7 +38,7 @@
 static uint8_t *alloc_reserved_memory(wasmoon_memory_t *memory, size_t initial_size, size_t reserve_size) {
     if (!memory || initial_size > reserve_size) return NULL;
     size_t logical_size = initial_size;
-    size_t page_size = (size_t)getpagesize();
+    size_t page_size = host_page_size();
     if (reserve_size > SIZE_MAX - (page_size - 1)) return NULL;
     reserve_size = (reserve_size + page_size - 1) & ~(page_size - 1);
     if (reserve_size == 0) reserve_size = page_size;
@@ -76,7 +86,7 @@ static uint8_t *alloc_reserved_memory(wasmoon_memory_t *memory, size_t initial_s
 static int grow_guarded_memory(wasmoon_memory_t *memory, size_t old_size, size_t new_size) {
     if (!memory || !memory->alloc_base || new_size > memory->alloc_size) return -1;
     size_t logical_size = new_size;
-    size_t page_size = (size_t)getpagesize();
+    size_t page_size = host_page_size();
     old_size = (old_size + page_size - 1) & ~(page_size - 1);
     new_size = (new_size + page_size - 1) & ~(page_size - 1);
     if (new_size > old_size) {
@@ -281,7 +291,7 @@ static inline void fill_bytes_fast(uint8_t *dst, uint8_t val, size_t size) {
 
 // The producer checked bounds and natural alignment before these calls. Pass
 // the full pointer through the helper ABI; never narrow a memory64 offset.
-static int32_t atomic_wait32_indexed(
+static int32_t WASMOON_GUEST_ABI atomic_wait32_indexed(
     jit_context_t *ctx, int32_t memidx, int64_t pointer, int32_t expected, int64_t timeout
 ) {
     wasmoon_memory_t *memory = get_memory(ctx, memidx);
@@ -289,7 +299,7 @@ static int32_t atomic_wait32_indexed(
         (int64_t)((uintptr_t)pointer - (uintptr_t)memory->base), 4, expected, timeout);
 }
 
-static int32_t atomic_wait64_indexed(
+static int32_t WASMOON_GUEST_ABI atomic_wait64_indexed(
     jit_context_t *ctx, int32_t memidx, int64_t pointer, int64_t expected, int64_t timeout
 ) {
     wasmoon_memory_t *memory = get_memory(ctx, memidx);
@@ -297,7 +307,7 @@ static int32_t atomic_wait64_indexed(
         (int64_t)((uintptr_t)pointer - (uintptr_t)memory->base), 8, expected, timeout);
 }
 
-static int32_t atomic_notify_indexed(
+static int32_t WASMOON_GUEST_ABI atomic_notify_indexed(
     jit_context_t *ctx, int32_t memidx, int64_t pointer, int32_t count
 ) {
     wasmoon_memory_t *memory = get_memory(ctx, memidx);
@@ -306,18 +316,18 @@ static int32_t atomic_notify_indexed(
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_atomic_wait32_ptr(void) {
-    return (int64_t)(uintptr_t)atomic_wait32_indexed;
+    return WASMOON_GUEST_ADDRESS(atomic_wait32_indexed);
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_atomic_wait64_ptr(void) {
-    return (int64_t)(uintptr_t)atomic_wait64_indexed;
+    return WASMOON_GUEST_ADDRESS(atomic_wait64_indexed);
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_atomic_notify_ptr(void) {
-    return (int64_t)(uintptr_t)atomic_notify_indexed;
+    return WASMOON_GUEST_ADDRESS(atomic_notify_indexed);
 }
 
-int64_t memory_grow_indexed_internal(jit_context_t *ctx, int32_t memidx, int64_t delta, int32_t max_pages) {
+int64_t WASMOON_GUEST_ABI memory_grow_indexed_internal(jit_context_t *ctx, int32_t memidx, int64_t delta, int32_t max_pages) {
     if (!ctx || delta < 0) return -1;
     wasmoon_memory_t *mem = get_memory(ctx, memidx);
     int64_t result = memory_grow_desc_internal(mem, delta, max_pages);
@@ -325,7 +335,7 @@ int64_t memory_grow_indexed_internal(jit_context_t *ctx, int32_t memidx, int64_t
     return result;
 }
 
-int64_t memory_size_indexed_internal(jit_context_t *ctx, int32_t memidx) {
+int64_t WASMOON_GUEST_ABI memory_size_indexed_internal(jit_context_t *ctx, int32_t memidx) {
     if (!ctx) return 0;
     if (memidx < 0) return 0;
     if (memidx > 0 && (!ctx->memories || memidx >= ctx->memory_count)) return 0;
@@ -339,7 +349,7 @@ int64_t memory_size_indexed_internal(jit_context_t *ctx, int32_t memidx) {
     return (int64_t)(size / page_size);
 }
 
-void memory_fill_indexed_internal(jit_context_t *ctx, int32_t memidx, int64_t dst, int32_t val, int64_t size) {
+void WASMOON_GUEST_ABI memory_fill_indexed_internal(jit_context_t *ctx, int32_t memidx, int64_t dst, int32_t val, int64_t size) {
     if (!ctx) {
         g_trap_code = 1;
         if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
@@ -373,7 +383,7 @@ void memory_fill_indexed_internal(jit_context_t *ctx, int32_t memidx, int64_t ds
     }
 }
 
-void memory_copy_indexed_internal(jit_context_t *ctx, int32_t dst_memidx, int32_t src_memidx,
+void WASMOON_GUEST_ABI memory_copy_indexed_internal(jit_context_t *ctx, int32_t dst_memidx, int32_t src_memidx,
                                    int64_t dst, int64_t src, int64_t size) {
     if (!ctx) {
         g_trap_code = 1;
@@ -490,3 +500,13 @@ int64_t table_grow_ctx_internal(
 
     return (int64_t)old_size;
 }
+
+#if defined(_MSC_VER) && !defined(__clang__)
+WASMOON_DEFINE_GUEST_TARGET(atomic_notify_indexed);
+WASMOON_DEFINE_GUEST_TARGET(atomic_wait32_indexed);
+WASMOON_DEFINE_GUEST_TARGET(atomic_wait64_indexed);
+WASMOON_DEFINE_GUEST_TARGET(memory_copy_indexed_internal);
+WASMOON_DEFINE_GUEST_TARGET(memory_fill_indexed_internal);
+WASMOON_DEFINE_GUEST_TARGET(memory_grow_indexed_internal);
+WASMOON_DEFINE_GUEST_TARGET(memory_size_indexed_internal);
+#endif

@@ -4,11 +4,9 @@
 fn take_wasi_exit_code(context : JITContext) -> Int {
   let raw_code = c_jit_get_wasi_exit_code_managed(context)
   c_jit_clear_wasi_exit_managed(context)
-  if raw_code < 0 {
-    0
-  } else {
-    raw_code
-  }
+  // Exit codes are unsigned P1 bits transported in Int; negative values are
+  // valid payloads and must not be mistaken for a missing exit status.
+  raw_code
 }
 
 ///|

@@ -7,6 +7,7 @@ import fnmatch
 import json
 import os
 from pathlib import Path
+from native_process import executable, kill_process_tree
 import platform
 import re
 import shutil
@@ -50,7 +51,7 @@ def test_config(text: str) -> dict:
 
 
 def validate_snapshot(corpus: Path = CORPUS) -> tuple[dict, list[dict]]:
-    snapshot = json.loads((corpus / "SNAPSHOT.json").read_text())
+    snapshot = json.loads((corpus / "SNAPSHOT.json").read_text(encoding="utf-8"))
     if not re.fullmatch(r"[0-9a-f]{40}", snapshot["commit"]):
         raise ValueError("snapshot must pin a full upstream commit")
     entries = snapshot["files"]
@@ -66,14 +67,14 @@ def validate_snapshot(corpus: Path = CORPUS) -> tuple[dict, list[dict]]:
             raise ValueError(f"upstream hash mismatch: {entry['path']}")
         if not entry["path"].startswith(SUITE + "/") or path.suffix != ".wast":
             continue
-        text = path.read_text()
+        text = path.read_text(encoding="utf-8")
         name = path.relative_to(corpus / "upstream" / SUITE).as_posix()
         # Include components nested in assertion forms, not only standalone definitions.
         component = bool(re.search(r"\(component(?:\s|\))", text))
         forms = command_symbols(text)
         cases.append({"commands": forms, "name": name, "path": str(path.resolve()), "sha256": entry["sha256"],
                       "lane": "component" if component else "core", "config": test_config(text)})
-    contracts = json.loads((corpus / "HOST_CONTRACTS.json").read_text())
+    contracts = json.loads((corpus / "HOST_CONTRACTS.json").read_text(encoding="utf-8"))
     if not set(contracts).issubset(c["name"] for c in cases):
         raise ValueError("stale host-contract exclusion")
     for case in cases:
@@ -94,7 +95,7 @@ def exclusion(case: dict, include_high_memory: bool) -> tuple[str, str] | None:
 def parse_core_result(result: dict, commands: list[str] | None = None) -> dict:
     if result["status"] in {"timeout", "harness_error"}:
         return result
-    text = Path(result["stdout"]).read_text(errors="replace")
+    text = Path(result["stdout"]).read_text(encoding="utf-8", errors="replace")
     matches = re.findall(r"(?m)^Results:\s*\n\s*Passed:\s*(\d+)\s*\n\s*Failed:\s*(\d+)\s*\n\s*Skipped:\s*(\d+)\s*$", text)
     if len(matches) != 1:
         return result | {"status": "fail", "detail": "Missing or ambiguous complete WAST result block"}
@@ -120,7 +121,7 @@ def component_worker(path: Path, binary: Path, moon_tools: Path, wasm_tools: Pat
     temporary.mkdir()
     tempfile.tempdir = str(temporary)
     result = run_file(path, binary, moon_tools, wasm_tools, no_jit=mode == "interp",
-                      component_implements=test_config(path.read_text()).get("component_model_implements", True))
+                      component_implements=test_config(path.read_text(encoding="utf-8")).get("component_model_implements", True))
     print("MISC_COMPONENT_RESULT " + json.dumps(result), flush=True)
     return int(bool(result["failed"] or result["skipped"] or not result["passed"]))
 
@@ -149,7 +150,7 @@ def run_case(case: dict, mode: str, binary: Path, output: Path, timeout: float,
                    "--wasm-tools", str(wasm_tools), "--mode", mode]
         result = execute(command, directory, timeout)
         if result["status"] not in {"timeout", "harness_error"}:
-            text = Path(result["stdout"]).read_text(errors="replace")
+            text = Path(result["stdout"]).read_text(encoding="utf-8", errors="replace")
             lines = [l.removeprefix("MISC_COMPONENT_RESULT ") for l in text.splitlines()
                      if l.startswith("MISC_COMPONENT_RESULT ")]
             if len(lines) != 1:
@@ -169,7 +170,7 @@ def verdict(results: list[dict]) -> int:
                or not any(r["status"] in {"pass", "script_only"} for r in results))
 
 
-def executable(path: Path) -> Path:
+def resolve_executable(path: Path) -> Path:
     resolved = Path(shutil.which(str(path)) or path).resolve()
     if not resolved.is_file() or not os.access(resolved, os.X_OK):
         raise ValueError(f"missing executable: {path}")
@@ -181,8 +182,8 @@ def main() -> int:
     parser.add_argument("--mode", choices=["both", "interp", "jit"], default="both")
     parser.add_argument("--lane", choices=["all", "core", "component"], default="all")
     parser.add_argument("--filter", action="append", help="Repeatable glob over suite-relative WAST paths (default: *)")
-    parser.add_argument("--wasmoon", type=Path, default=ROOT / "wasmoon")
-    parser.add_argument("--wasmoon-tools", type=Path, default=ROOT / "wasmoon-tools")
+    parser.add_argument("--wasmoon", type=Path, default=executable(ROOT, "wasmoon"))
+    parser.add_argument("--wasmoon-tools", type=Path, default=executable(ROOT, "wasmoon-tools"))
     parser.add_argument("--wasm-tools", type=Path, default=Path("wasm-tools"))
     parser.add_argument("--timeout", type=float, default=30, help="Seconds per file and engine")
     parser.add_argument("--output", type=Path, help="New or empty evidence directory")
@@ -210,14 +211,14 @@ def main() -> int:
                 omitted = exclusion(case, args.include_high_memory)
                 print(f"{case['lane']:9} {case['name']}" + (f" [{omitted[0]}: {omitted[1]}]" if omitted else ""))
             return 0
-        binary = executable(args.wasmoon)
+        binary = resolve_executable(args.wasmoon)
         moon_tools, wasm_tools = args.wasmoon_tools, args.wasm_tools
         component = any(c["lane"] == "component" and not exclusion(c, args.include_high_memory) for c in cases)
         tool_versions = {}
         if component:
-            moon_tools, wasm_tools = executable(moon_tools), executable(wasm_tools)
+            moon_tools, wasm_tools = resolve_executable(moon_tools), resolve_executable(wasm_tools)
             version = subprocess.check_output([str(wasm_tools), "--version"], text=True).strip()
-            if version != f"wasm-tools {WASM_TOOLS_VERSION}":
+            if version.split()[:2] != ["wasm-tools", WASM_TOOLS_VERSION]:
                 raise ValueError(f"component adapter requires wasm-tools {WASM_TOOLS_VERSION}, found {version}")
             tool_versions = {"wasm_tools": version, "wasmoon_tools_sha256": digest(moon_tools)}
         if args.output:

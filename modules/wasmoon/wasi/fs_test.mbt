@@ -15,14 +15,12 @@ fn utf8_to_string(bytes : Bytes, len : Int) -> String {
 
 ///|
 test "native file operations: write and read" {
-  let test_file = "/tmp/wasmoon_test_file.txt"
+  let test_file = @test_fs.temp_dir() + "/wasmoon_test_file.txt"
   let content = "Hello, WASI!"
 
   // Open file for writing (use ReadWrite to set proper permissions)
   let fd = @wasi.native_open(test_file, [ReadWrite, Create, Truncate], 0o666)
-  guard fd is Some(fd) else { // Skip test if can't create file
-    return
-  }
+  guard fd is Some(fd) else { fail("could not create native file fixture") }
 
   // Write content as UTF-8
   let bytes = string_to_utf8(content)
@@ -35,9 +33,7 @@ test "native file operations: write and read" {
 
   // Open file for reading
   let fd = @wasi.native_open(test_file, [ReadOnly], 0)
-  guard fd is Some(fd) else { // Skip if can't open
-    return
-  }
+  guard fd is Some(fd) else { fail("could not reopen native file fixture") }
 
   // Read content
   let read_buf : FixedArray[Byte] = FixedArray::make(100, b'\x00')
@@ -54,7 +50,7 @@ test "native file operations: write and read" {
 
 ///|
 test "native paths reject embedded NUL before filesystem access" {
-  let prefix = "/tmp/wasmoon-native-embedded-nul"
+  let prefix = @test_fs.temp_dir() + "/wasmoon-native-embedded-nul"
   @wasi.native_unlinkat(0, prefix, 0) |> ignore
   guard @wasi.native_open(prefix, [WriteOnly, Create, Truncate], 0o600)
     is Some(fd) else {
@@ -80,7 +76,7 @@ test "native paths reject embedded NUL before filesystem access" {
 
 ///|
 test "native readdir preserves directory entry file types" {
-  let root = "/tmp/wasmoon-native-readdir-file-types"
+  let root = @test_fs.temp_dir() + "/wasmoon-native-readdir-file-types"
   let file = root + "/file"
   let directory = root + "/directory"
   let symlink = root + "/symlink"
@@ -130,7 +126,7 @@ test "native readdir preserves directory entry file types" {
 
 ///|
 test "native file names round-trip through UTF-8 directory entries" {
-  let root = "/tmp/wasmoon-native-readdir-utf8"
+  let root = @test_fs.temp_dir() + "/wasmoon-native-readdir-utf8"
   let expected = ["中文.txt", "e\u{0301}.txt", "😀.txt"]
   for name in expected {
     @wasi.native_unlinkat(0, root + "/" + name, 0) |> ignore
@@ -174,14 +170,12 @@ test "native file names round-trip through UTF-8 directory entries" {
 
 ///|
 test "native file operations: seek and tell" {
-  let test_file = "/tmp/wasmoon_test_seek.txt"
+  let test_file = @test_fs.temp_dir() + "/wasmoon_test_seek.txt"
   let content = "0123456789"
 
   // Create file with content (use ReadWrite for proper permissions)
   let fd = @wasi.native_open(test_file, [ReadWrite, Create, Truncate], 0o666)
-  guard fd is Some(fd) else { // Skip test if can't create file
-    return
-  }
+  guard fd is Some(fd) else { fail("could not create native file fixture") }
   let bytes = string_to_utf8(content)
   let buf = FixedArray::makei(bytes.length(), fn(i) { bytes[i] })
   @wasi.native_write(fd, buf, buf.length()) |> ignore
@@ -189,9 +183,7 @@ test "native file operations: seek and tell" {
 
   // Open for reading and test seek
   let fd = @wasi.native_open(test_file, [ReadOnly], 0)
-  guard fd is Some(fd) else { // Skip if can't open
-    return
-  }
+  guard fd is Some(fd) else { fail("could not reopen native file fixture") }
 
   // Initial position should be 0
   inspect(@debug.to_string(@wasi.native_tell(fd)), content="Some(0)")
@@ -222,7 +214,11 @@ test "native file operations: seek and tell" {
 
 ///|
 test "native file operations: open non-existent file" {
-  let fd = @wasi.native_open("/tmp/non_existent_file_12345.txt", [ReadOnly], 0)
+  let fd = @wasi.native_open(
+    @test_fs.temp_dir() + "/non_existent_file_12345.txt",
+    [ReadOnly],
+    0,
+  )
   guard fd is None else {
     @wasi.native_close(fd.unwrap()) |> ignore // File exists unexpectedly
     return

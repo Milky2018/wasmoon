@@ -56,8 +56,8 @@ fn create_capability_fixture(
 
 ///|
 test "Preview 2 capability paths resolve each filesystem step" {
-  let root = "/tmp/wasmoon-preview2-capability-path"
-  let outside = "/tmp/wasmoon-preview2-capability-outside"
+  let root = @test_fs.temp_dir() + "/wasmoon-preview2-capability-path"
+  let outside = @test_fs.temp_dir() + "/wasmoon-preview2-capability-outside"
   guard create_capability_fixture(
     root, outside, "../wasmoon-preview2-capability-outside/deep/../../wasmoon-preview2-capability-path",
   ) else {
@@ -197,8 +197,8 @@ test "Preview 2 capability paths resolve each filesystem step" {
 
 ///|
 test "Preview 3 capability paths resolve each filesystem step" {
-  let root = "/tmp/wasmoon-preview3-capability-path"
-  let outside = "/tmp/wasmoon-preview3-capability-outside"
+  let root = @test_fs.temp_dir() + "/wasmoon-preview3-capability-path"
+  let outside = @test_fs.temp_dir() + "/wasmoon-preview3-capability-outside"
   guard create_capability_fixture(
     root, outside, "../wasmoon-preview3-capability-outside/deep/../../wasmoon-preview3-capability-path",
   ) else {
@@ -361,7 +361,7 @@ fn create_utf8_filesystem_fixture(root : String) -> Bool {
 
 ///|
 test "Preview 2 directory names round-trip through UTF-8" {
-  let root = "/tmp/wasmoon-preview2-filesystem-utf8"
+  let root = @test_fs.temp_dir() + "/wasmoon-preview2-filesystem-utf8"
   guard create_utf8_filesystem_fixture(root) else {
     fail("could not create Preview 2 UTF-8 filesystem fixture")
   }
@@ -415,7 +415,7 @@ test "Preview 2 directory names round-trip through UTF-8" {
 
 ///|
 test "Preview 3 filesystem paths preserve UTF-8 names" {
-  let root = "/tmp/wasmoon-preview3-filesystem-utf8"
+  let root = @test_fs.temp_dir() + "/wasmoon-preview3-filesystem-utf8"
   guard create_utf8_filesystem_fixture(root) else {
     fail("could not create Preview 3 UTF-8 filesystem fixture")
   }

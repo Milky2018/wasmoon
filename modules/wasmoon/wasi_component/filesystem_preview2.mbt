@@ -627,7 +627,7 @@ fn stat_capability_path(
             stat
           }
         }
-      } else if follow_final {
+      } else if follow_final || path.has_suffix("/") {
         match
           @wasi.native_openat_beneath(
             state.fd,

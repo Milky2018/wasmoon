@@ -40,7 +40,7 @@ test "wasi jit: path_open preserves zero rights and irreversible inheritance bou
     #|      (then (return (i32.const 10))))
     #|    (i32.const 0)))
   let result = compare_wasi_with_options(source, "test", preopens=[
-    ("/tmp", "/"),
+    (@test_fs.temp_dir(), "/"),
   ])
   inspect(wasi_i32_from_result(result.interp_result), content="0")
   inspect(wasi_i32_from_result(result.jit_result), content="0")
@@ -164,8 +164,8 @@ test "wasi jit: readonly preopens reject mutation and inherited escalation" {
   let result = compare_wasi_with_options(
     source,
     "test",
-    preopens=[("/tmp", "writable")],
-    readonly_preopens=[("/tmp", "readonly")],
+    preopens=[(@test_fs.temp_dir(), "writable")],
+    readonly_preopens=[(@test_fs.temp_dir(), "readonly")],
   )
   inspect(wasi_i32_from_result(result.interp_result), content="0")
   inspect(wasi_i32_from_result(result.jit_result), content="0")

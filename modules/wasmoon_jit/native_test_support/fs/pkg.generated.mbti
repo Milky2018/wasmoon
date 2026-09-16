@@ -1,0 +1,15 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "Milky2018/wasmoon_jit/native_test_support/fs"
+
+// Values
+pub fn null_device() -> String
+
+pub fn temp_dir() -> String
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits

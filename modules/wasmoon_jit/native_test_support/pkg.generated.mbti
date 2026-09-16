@@ -16,7 +16,7 @@ pub fn callback_capture() -> CallbackCapture
 
 pub fn callback_capture_release_count() -> Int
 
-pub fn fiber_guard_rejects_access() -> Bool
+pub fn fiber_guard_rejects_access(Int64) -> Bool
 
 pub fn fiber_preserves_registers() -> Bool
 

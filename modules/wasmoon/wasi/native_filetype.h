@@ -6,6 +6,17 @@
 // Native file-type tokens shared with the MoonBit side. Values 0-7 match
 // WASI Preview 1 filetype; 8 extends the internal protocol for FIFO, which is
 // represented explicitly by the Component Model.
+#ifdef _WIN32
+static uint8_t wasmoon_wasi_filetype_from_mode(unsigned short mode) {
+  switch (mode & _S_IFMT) {
+    case _S_IFDIR: return 3;
+    case _S_IFREG: return 4;
+    case _S_IFCHR: return 2;
+    case _S_IFIFO: return 8;
+    default: return 0;
+  }
+}
+#else
 static uint8_t wasmoon_wasi_filetype_from_mode(mode_t mode) {
   if (S_ISDIR(mode)) return 3;
   if (S_ISREG(mode)) return 4;
@@ -21,4 +32,5 @@ static uint8_t wasmoon_wasi_filetype_from_mode(mode_t mode) {
   return 0;
 }
 
+#endif
 #endif

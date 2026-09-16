@@ -187,7 +187,7 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_exception_arena_value(void *owner, int64_t re
     return entry && index >= 0 && index < entry->count ? entry->values[index] : 0;
 }
 
-static int64_t exception_get_ref_impl(jit_context_t *ctx) {
+static int64_t WASMOON_GUEST_ABI exception_get_ref_impl(jit_context_t *ctx) {
     ctx = exception_activation_context(ctx);
     if (!ctx->exception_ref) {
         ctx->exception_ref = exception_arena_insert(ctx->exception_arena,
@@ -202,7 +202,7 @@ static int64_t exception_get_ref_impl(jit_context_t *ctx) {
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_exception_get_ref_ptr(void) {
-    return (int64_t)exception_get_ref_impl;
+    return WASMOON_GUEST_ADDRESS(exception_get_ref_impl);
 }
 
 // ============ Exception Handler Management ============
@@ -289,7 +289,11 @@ void exception_reset_context_state(jit_context_t *ctx) {
 
 // ============ Exception Throwing ============
 
+#if defined(_MSC_VER) && !defined(__clang__)
+__declspec(noreturn) static void exception_raise_current(jit_context_t *ctx);
+#else
 static void exception_raise_current(jit_context_t *ctx) __attribute__((noreturn));
+#endif
 static void exception_raise_current(jit_context_t *ctx) {
     exception_handler_t *handler = (exception_handler_t *)ctx->exception_handler;
     if (handler) {
@@ -428,24 +432,24 @@ int32_t exception_get_value_count_impl(jit_context_t *ctx) {
 
 // ============ FFI Exports ============
 
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_exception_try_begin(int64_t ctx_ptr, int32_t handler_id) {
+MOONBIT_FFI_EXPORT int64_t WASMOON_GUEST_ABI wasmoon_jit_exception_try_begin(int64_t ctx_ptr, int32_t handler_id) {
     jit_context_t *ctx = (jit_context_t *)ctx_ptr;
     return (int64_t)exception_try_begin_impl(ctx, handler_id);
 }
 
-MOONBIT_FFI_EXPORT void wasmoon_jit_exception_try_end(int64_t ctx_ptr, int32_t handler_id) {
+MOONBIT_FFI_EXPORT void WASMOON_GUEST_ABI wasmoon_jit_exception_try_end(int64_t ctx_ptr, int32_t handler_id) {
     jit_context_t *ctx = (jit_context_t *)ctx_ptr;
     exception_try_end_impl(ctx, handler_id);
 }
 
-MOONBIT_FFI_EXPORT void wasmoon_jit_exception_throw(int64_t ctx_ptr, int32_t tag_addr,
+MOONBIT_FFI_EXPORT void WASMOON_GUEST_ABI wasmoon_jit_exception_throw(int64_t ctx_ptr, int32_t tag_addr,
                                                      int64_t values_ptr, int32_t count) {
     jit_context_t *ctx = (jit_context_t *)ctx_ptr;
     int64_t *values = (int64_t *)values_ptr;
     exception_throw_impl(ctx, tag_addr, values, count);
 }
 
-MOONBIT_FFI_EXPORT void wasmoon_jit_exception_throw_tag(int64_t ctx_ptr, int32_t tag_addr) {
+MOONBIT_FFI_EXPORT void WASMOON_GUEST_ABI wasmoon_jit_exception_throw_tag(int64_t ctx_ptr, int32_t tag_addr) {
     jit_context_t *ctx = (jit_context_t *)ctx_ptr;
     exception_throw_impl(ctx, tag_addr, NULL, 0);
 }
@@ -481,87 +485,87 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_exception_throw_values_managed(
     );
 }
 
-MOONBIT_FFI_EXPORT void wasmoon_jit_exception_throw_ref(int64_t ctx_ptr, int64_t exnref) {
+MOONBIT_FFI_EXPORT void WASMOON_GUEST_ABI wasmoon_jit_exception_throw_ref(int64_t ctx_ptr, int64_t exnref) {
     jit_context_t *ctx = (jit_context_t *)ctx_ptr;
     exception_throw_ref_impl(ctx, exnref);
 }
 
-MOONBIT_FFI_EXPORT void wasmoon_jit_exception_delegate(int64_t ctx_ptr, int32_t depth) {
+MOONBIT_FFI_EXPORT void WASMOON_GUEST_ABI wasmoon_jit_exception_delegate(int64_t ctx_ptr, int32_t depth) {
     jit_context_t *ctx = (jit_context_t *)ctx_ptr;
     exception_delegate_impl(ctx, depth);
 }
 
-MOONBIT_FFI_EXPORT int32_t wasmoon_jit_exception_get_tag(int64_t ctx_ptr) {
+MOONBIT_FFI_EXPORT int32_t WASMOON_GUEST_ABI wasmoon_jit_exception_get_tag(int64_t ctx_ptr) {
     jit_context_t *ctx = (jit_context_t *)ctx_ptr;
     return exception_get_tag_impl(ctx);
 }
 
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_exception_get_value(int64_t ctx_ptr, int32_t idx) {
+MOONBIT_FFI_EXPORT int64_t WASMOON_GUEST_ABI wasmoon_jit_exception_get_value(int64_t ctx_ptr, int32_t idx) {
     jit_context_t *ctx = (jit_context_t *)ctx_ptr;
     return exception_get_value_impl(ctx, idx);
 }
 
-MOONBIT_FFI_EXPORT int32_t wasmoon_jit_exception_get_value_count(int64_t ctx_ptr) {
+MOONBIT_FFI_EXPORT int32_t WASMOON_GUEST_ABI wasmoon_jit_exception_get_value_count(int64_t ctx_ptr) {
     jit_context_t *ctx = (jit_context_t *)ctx_ptr;
     return exception_get_value_count_impl(ctx);
 }
 
 // Get function pointers for JIT codegen
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_exception_try_begin_ptr(void) {
-    return (int64_t)wasmoon_jit_exception_try_begin;
+    return WASMOON_GUEST_ADDRESS(wasmoon_jit_exception_try_begin);
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_exception_try_end_ptr(void) {
-    return (int64_t)wasmoon_jit_exception_try_end;
+    return WASMOON_GUEST_ADDRESS(wasmoon_jit_exception_try_end);
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_exception_throw_ptr(void) {
-    return (int64_t)wasmoon_jit_exception_throw;
+    return WASMOON_GUEST_ADDRESS(wasmoon_jit_exception_throw);
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_exception_throw_tag_ptr(void) {
-    return (int64_t)wasmoon_jit_exception_throw_tag;
+    return WASMOON_GUEST_ADDRESS(wasmoon_jit_exception_throw_tag);
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_exception_throw_ref_ptr(void) {
-    return (int64_t)wasmoon_jit_exception_throw_ref;
+    return WASMOON_GUEST_ADDRESS(wasmoon_jit_exception_throw_ref);
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_exception_delegate_ptr(void) {
-    return (int64_t)wasmoon_jit_exception_delegate;
+    return WASMOON_GUEST_ADDRESS(wasmoon_jit_exception_delegate);
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_exception_get_tag_ptr(void) {
-    return (int64_t)wasmoon_jit_exception_get_tag;
+    return WASMOON_GUEST_ADDRESS(wasmoon_jit_exception_get_tag);
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_exception_get_value_ptr(void) {
-    return (int64_t)wasmoon_jit_exception_get_value;
+    return WASMOON_GUEST_ADDRESS(wasmoon_jit_exception_get_value);
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_exception_get_value_count_ptr(void) {
-    return (int64_t)wasmoon_jit_exception_get_value_count;
+    return WASMOON_GUEST_ADDRESS(wasmoon_jit_exception_get_value_count);
 }
 
 // Spill/restore locals for exception handling
-MOONBIT_FFI_EXPORT void wasmoon_jit_exception_spill_locals(int64_t ctx_ptr,
+MOONBIT_FFI_EXPORT void WASMOON_GUEST_ABI wasmoon_jit_exception_spill_locals(int64_t ctx_ptr,
                                                             int64_t locals_ptr, int32_t count) {
     jit_context_t *ctx = (jit_context_t *)ctx_ptr;
     int64_t *locals = (int64_t *)locals_ptr;
     exception_spill_locals_impl(ctx, locals, count);
 }
 
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_exception_get_spilled_local(int64_t ctx_ptr, int32_t idx) {
+MOONBIT_FFI_EXPORT int64_t WASMOON_GUEST_ABI wasmoon_jit_exception_get_spilled_local(int64_t ctx_ptr, int32_t idx) {
     jit_context_t *ctx = (jit_context_t *)ctx_ptr;
     return exception_get_spilled_local_impl(ctx, idx);
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_exception_spill_locals_ptr(void) {
-    return (int64_t)wasmoon_jit_exception_spill_locals;
+    return WASMOON_GUEST_ADDRESS(wasmoon_jit_exception_spill_locals);
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_exception_get_spilled_local_ptr(void) {
-    return (int64_t)wasmoon_jit_exception_get_spilled_local;
+    return WASMOON_GUEST_ADDRESS(wasmoon_jit_exception_get_spilled_local);
 }
 
 // Get sigsetjmp function pointer for JIT to call directly.
@@ -574,7 +578,9 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_exception_get_spilled_local_ptr(void)
 // On glibc, `sigsetjmp` may be a macro, so taking its address can be brittle.
 // We return the address of the underlying implementation when available.
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_sigsetjmp_ptr(void) {
-#if defined(__GLIBC__)
+#if defined(_WIN32)
+    return (int64_t)wasmoon_windows_guest_setjmp;
+#elif defined(__GLIBC__)
     // glibc exposes the underlying implementation as __sigsetjmp.
     extern int __sigsetjmp(sigjmp_buf env, int savemask);
     return (int64_t)__sigsetjmp;
@@ -593,3 +599,18 @@ int64_t exception_capture_payload(jit_context_t *ctx, int32_t tag, const int64_t
     if (!reference) { g_trap_code = 9; siglongjmp(g_trap_jmp_buf, 1); }
     return reference;
 }
+
+#if defined(_MSC_VER) && !defined(__clang__)
+WASMOON_DEFINE_GUEST_TARGET(exception_get_ref_impl);
+WASMOON_DEFINE_GUEST_TARGET(wasmoon_jit_exception_delegate);
+WASMOON_DEFINE_GUEST_TARGET(wasmoon_jit_exception_get_spilled_local);
+WASMOON_DEFINE_GUEST_TARGET(wasmoon_jit_exception_get_tag);
+WASMOON_DEFINE_GUEST_TARGET(wasmoon_jit_exception_get_value);
+WASMOON_DEFINE_GUEST_TARGET(wasmoon_jit_exception_get_value_count);
+WASMOON_DEFINE_GUEST_TARGET(wasmoon_jit_exception_spill_locals);
+WASMOON_DEFINE_GUEST_TARGET(wasmoon_jit_exception_throw);
+WASMOON_DEFINE_GUEST_TARGET(wasmoon_jit_exception_throw_ref);
+WASMOON_DEFINE_GUEST_TARGET(wasmoon_jit_exception_throw_tag);
+WASMOON_DEFINE_GUEST_TARGET(wasmoon_jit_exception_try_begin);
+WASMOON_DEFINE_GUEST_TARGET(wasmoon_jit_exception_try_end);
+#endif

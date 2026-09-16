@@ -732,6 +732,7 @@ pub fn NativeFiberPhase::to_repr(Self) -> @debug.Repr
 
 pub(all) enum NativeHostcallOutcome {
   HostcallCompleted
+  HostcallExit(Int)
   HostcallTrap(Int)
   HostcallSuspended
 } derive(Eq, @debug.Debug)

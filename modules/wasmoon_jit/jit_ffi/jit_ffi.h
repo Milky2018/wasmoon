@@ -3,9 +3,28 @@
 #ifndef JIT_FFI_H
 #define JIT_FFI_H
 
+#include "moonbit.h"
 #include <stdint.h>
 #include <stddef.h>
 #include <stdatomic.h>
+
+// Guest machine code uses the private SysV helper ABI on x64. C callers use
+// their host ABI; Clang emits the crossing when calling these declarations.
+#if defined(_MSC_VER) && !defined(__clang__)
+#define WASMOON_GUEST_ABI
+#include "msvc_guest_bridges.h"
+#define WASMOON_GUEST_ADDRESS(name) ((int64_t)(uintptr_t)name##_msvc_guest)
+#define WASMOON_DEFINE_GUEST_TARGET(name) \
+    void (*const name##_msvc_target)(void) = (void (*)(void))name
+#elif defined(_WIN32) && (defined(__x86_64__) || defined(_M_X64))
+#define WASMOON_GUEST_ABI __attribute__((sysv_abi))
+#else
+#define WASMOON_GUEST_ABI
+#endif
+
+#ifndef WASMOON_GUEST_ADDRESS
+#define WASMOON_GUEST_ADDRESS(name) ((int64_t)(uintptr_t)(name))
+#endif
 
 // ============ JIT Context v3 ============
 // New ABI passes vmctx via X0 (callee_vmctx) and X1 (caller_vmctx)
@@ -248,12 +267,12 @@ typedef struct {
 // ============ Executable Memory Functions ============
 // Forward declarations for GC-managed ExecCode
 
-int64_t wasmoon_jit_alloc_exec(int size);
-int wasmoon_jit_copy_code(int64_t dest, uint8_t *src, int size);
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_alloc_exec(int size);
+MOONBIT_FFI_EXPORT int wasmoon_jit_copy_code(int64_t dest, uint8_t *src, int size);
 static int wasmoon_jit_free_exec(int64_t ptr);
-void *wasmoon_jit_stage_exec_managed(int size);
-int wasmoon_jit_finalize_exec_managed(void *exec_code, uint8_t *code, int size);
-int wasmoon_jit_release_exec_managed(void *exec_code);
-int wasmoon_jit_exec_mapping_count(void);
+MOONBIT_FFI_EXPORT void *wasmoon_jit_stage_exec_managed(int size);
+MOONBIT_FFI_EXPORT int wasmoon_jit_finalize_exec_managed(void *exec_code, uint8_t *code, int size);
+MOONBIT_FFI_EXPORT int wasmoon_jit_release_exec_managed(void *exec_code);
+MOONBIT_FFI_EXPORT int wasmoon_jit_exec_mapping_count(void);
 
 #endif // JIT_FFI_H

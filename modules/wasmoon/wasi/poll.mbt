@@ -16,12 +16,6 @@ priv enum PollFdSource {
 }
 
 ///|
-priv enum PollDescriptorContext {
-  InterpreterDescriptors(WasiContext)
-  JitDescriptors(Int64)
-}
-
-///|
 priv struct PollFdSubscription {
   userdata : Int64
   wasi_fd : Int
@@ -63,13 +57,12 @@ fn check_poll_array_range(
   count : UInt,
   element_size : UInt64,
 ) -> Bool {
-  if ptr < 0 {
-    return false
-  }
-  let start = ptr.to_int64().reinterpret_as_uint64()
+  let start = ptr.reinterpret_as_uint().to_uint64()
   let bytes = count.to_uint64() * element_size
   let end = start + bytes
-  end >= start && end <= mem.byte_len().reinterpret_as_uint64()
+  end >= start &&
+  end <= 0x100000000UL &&
+  end <= mem.byte_len().reinterpret_as_uint64()
 }
 
 ///|
@@ -83,72 +76,46 @@ fn poll_stdio_is_native(ctx : WasiContext, slot : Int) -> Bool {
 }
 
 ///|
-fn poll_descriptor_context(ctx : WasiContext) -> PollDescriptorContext {
-  let jit_context = active_jit_context_ptr()
-  if jit_context == 0L {
-    InterpreterDescriptors(ctx)
-  } else {
-    JitDescriptors(jit_context)
-  }
-}
-
-///|
 fn resolve_poll_fd_source(
-  descriptors : PollDescriptorContext,
+  ctx : WasiContext,
   fd : Int,
   event_type : Int,
 ) -> Result[PollFdSource, Errno] {
-  match descriptors {
-    JitDescriptors(jit_context) => {
-      let source = jit_poll_resolve_fd(jit_context, fd, event_type)
-      if source >= 0 {
-        Ok(Native(source))
-      } else if source == -2 {
-        Ok(Immediate)
-      } else if source == -3 {
-        Err(NotCapable)
-      } else {
-        Err(Badf)
-      }
+  if stdio_slot_for_fd(ctx, fd) is Some(slot) {
+    if !is_stdio_open(ctx, fd) {
+      return Err(Badf)
     }
-    InterpreterDescriptors(ctx) => {
-      if stdio_slot_for_fd(ctx, fd) is Some(slot) {
-        if !is_stdio_open(ctx, fd) {
-          return Err(Badf)
-        }
-        if (slot == 0 && event_type != 1) || (slot != 0 && event_type != 2) {
-          return Err(Badf)
-        }
-        if poll_stdio_is_native(ctx, slot) {
-          return Ok(Native(slot))
-        }
-        return Ok(Immediate)
-      }
-      let direction_right = if event_type == 1 {
-        right_fd_read
-      } else {
-        right_fd_write
-      }
-      let file = match
-        ctx.get_file_with_base_rights(
-          fd,
-          right_poll_fd_readwrite | direction_right,
-        ) {
-        Ok(file) => file
-        Err(errno) => return Err(errno)
-      }
-      match file.file_type {
-        RegularFile | CharacterDevice | SocketStream =>
-          Ok(Native(file.native_fd))
-        Directory => Err(Badf)
-      }
+    if (slot == 0 && event_type != 1) || (slot != 0 && event_type != 2) {
+      return Err(Badf)
     }
+    if poll_stdio_is_native(ctx, slot) {
+      return Ok(Native(slot))
+    }
+    return Ok(Immediate)
+  }
+  let direction_right = if event_type == 1 {
+    right_fd_read
+  } else {
+    right_fd_write
+  }
+  let file = match
+    ctx.get_file_with_base_rights(fd, right_poll_fd_readwrite | direction_right) {
+    Ok(file) => file
+    Err(errno) => return Err(errno)
+  }
+  if event_type == 1 && file.socket_input.length() > 0 {
+    return Ok(Immediate)
+  }
+  match file.file_type {
+    RegularFile | CharacterDevice | SocketStream | SocketDatagram =>
+      Ok(Native(file.native_fd))
+    Directory => Err(Badf)
   }
 }
 
 ///|
 fn decode_poll_subscriptions(
-  descriptors : PollDescriptorContext,
+  descriptors : WasiContext,
   mem : @runtime.Memory,
   in_ptr : Int,
   nsubscriptions : Int,
@@ -308,51 +275,39 @@ fn poll_native_once(
 }
 
 ///|
-fn poll_fd_read_nbytes_and_flags(
-  descriptors : PollDescriptorContext,
-  fd : Int,
-) -> (Int64, Int) {
-  match descriptors {
-    JitDescriptors(jit_context) =>
-      (
-        jit_poll_fd_read_nbytes(jit_context, fd),
-        jit_poll_fd_read_flags(jit_context, fd),
-      )
-    InterpreterDescriptors(ctx) => {
-      if stdio_slot_for_fd(ctx, fd) is Some(_) {
-        return (1L, 0)
-      }
-      let file = match ctx.get_file(fd) {
-        Some(file) => file
-        None => return (0L, 0)
-      }
-      if file.file_type is SocketStream {
-        return (native_socket_bytes_available(file.native_fd).unwrap_or(1L), 0)
-      }
-      if !(file.file_type is RegularFile) {
-        return (1L, 0)
-      }
-      let stat = match native_fstat(file.native_fd) {
-        Some(stat) => stat
-        None => return (1L, 0)
-      }
-      let position = match native_tell(file.native_fd) {
-        Some(position) => position
-        None => return (1L, 0)
-      }
-      let position_u = position.reinterpret_as_uint64()
-      if stat.size <= position_u {
-        (0L, 0x01)
-      } else {
-        ((stat.size - position_u).reinterpret_as_int64(), 0)
-      }
-    }
+fn poll_fd_read_nbytes_and_flags(ctx : WasiContext, fd : Int) -> (Int64, Int) {
+  if stdio_slot_for_fd(ctx, fd) is Some(_) {
+    return (1L, 0)
+  }
+  let file = match ctx.get_file(fd) {
+    Some(file) => file
+    None => return (0L, 0)
+  }
+  if file.file_type is (SocketStream | SocketDatagram) {
+    return (
+      file.socket_input.length().to_int64() +
+      native_socket_bytes_available(file.native_fd).unwrap_or(0L),
+      0,
+    )
+  }
+  if !(file.file_type is RegularFile) {
+    return (1L, 0)
+  }
+  let stat = match native_fstat(file.native_fd) {
+    Some(stat) => stat
+    None => return (1L, 0)
+  }
+  let position_u = file.position.reinterpret_as_uint64()
+  if stat.size <= position_u {
+    (0L, 0x01)
+  } else {
+    ((stat.size - position_u).reinterpret_as_int64(), 0)
   }
 }
 
 ///|
 fn poll_fd_event(
-  descriptors : PollDescriptorContext,
+  descriptors : WasiContext,
   sub : PollFdSubscription,
   revents : Int,
 ) -> PollEvent? {
@@ -401,7 +356,7 @@ fn poll_fd_event(
 
 ///|
 fn immediate_poll_fd_event(
-  descriptors : PollDescriptorContext,
+  descriptors : WasiContext,
   sub : PollFdSubscription,
 ) -> PollEvent {
   let (nbytes, flags) = if sub.event_type == 1 {
@@ -507,7 +462,7 @@ pub fn poll_oneoff_impl(
     return Errno::Fault.to_i32()
   }
   let count = subscription_count.reinterpret_as_int()
-  let descriptors = poll_descriptor_context(ctx)
+  let descriptors = ctx
   let subscriptions = match
     decode_poll_subscriptions(descriptors, mem, in_ptr, count) {
     Ok(subscriptions) => subscriptions

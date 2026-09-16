@@ -21,10 +21,11 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+from native_process import executable
 
 
 ROOT = Path(__file__).resolve().parents[1]
-WASMOON = ROOT / "wasmoon"
+WASMOON = executable(ROOT, "wasmoon")
 MANIFEST = ROOT / "modules/wasmoon/moon.mod"
 
 PASSING_WAST = """(module (func (export "one") (result i32) (i32.const 1)))
@@ -79,7 +80,7 @@ EXPLORABLE_WAT = """(module
   (func (export "one") (result i32) (i32.const 1)))
 """
 
-WASI_EXIT_WAT = '(module (import "wasi_snapshot_preview1" "proc_exit" (func $exit (param i32))) (func (export "_start") (call $exit (i32.const 7))))'
+WASI_EXIT_WAT = '(module (import "wasi_snapshot_preview1" "proc_exit" (func $exit (param i32))) (func (export "_start") (call $exit (i32.const 7)) unreachable))'
 
 
 class Failure(Exception):
@@ -248,6 +249,25 @@ def check_test_exit_codes(tmp: Path) -> None:
         )
 
 
+def check_unicode_wasi_arguments(tmp: Path) -> None:
+    wat = tmp / "unicode.wat"
+    wat.write_text("""(module
+      (import "wasi_snapshot_preview1" "args_sizes_get" (func $sizes (param i32 i32) (result i32)))
+      (import "wasi_snapshot_preview1" "args_get" (func $args (param i32 i32) (result i32)))
+      (memory (export "memory") 1)
+      (func (export "_start") (local $last i32)
+        (if (call $sizes (i32.const 0) (i32.const 4)) (then unreachable))
+        (if (call $args (i32.const 16) (i32.const 1024)) (then unreachable))
+        (local.set $last (i32.load (i32.add (i32.const 16)
+          (i32.mul (i32.sub (i32.load (i32.const 0)) (i32.const 1)) (i32.const 4)))))
+        (if (i64.ne (i64.load (local.get $last)) (i64.const 0x0080989ff0ab8ce7))
+          (then unreachable))))""")
+    for extra, label in (((), "JIT"), (("--no-jit",), "interpreter")):
+        proc = run("run", str(wat), *extra, "--", "猫😀")
+        expect(f"{label} preserves UTF-8 guest arguments", proc.returncode == 0,
+               f"exit={proc.returncode}, stderr={proc.stderr!r}")
+
+
 def check_invalid_modules(tmp: Path) -> None:
     for label, source in INVALID_MODULES.items():
         path = tmp / (label.replace(" ", "_").replace(".", "_") + ".wat")
@@ -368,6 +388,7 @@ def main() -> int:
             check_version_flags()
             check_argparse_contract()
             check_test_exit_codes(Path(directory))
+            check_unicode_wasi_arguments(Path(directory))
             check_invalid_modules(Path(directory))
             check_malformed_type_kind_across_commands(Path(directory))
             check_explore_selection(Path(directory))

@@ -1,9 +1,14 @@
 #include "../jit_ffi/jit_internal.h"
+#if defined(_MSC_VER) && !defined(__clang__)
+#include "msvc_guest_bridges.h"
+#endif
 
 #include <stdint.h>
 #include <stdatomic.h>
+#ifndef _WIN32
 #include <sys/wait.h>
 #include <unistd.h>
+#endif
 
 typedef int64_t (*native_fiber_entry_fn)(void *closure);
 typedef int32_t (*cancellation_callback_fn)(void *closure);
@@ -85,7 +90,7 @@ extern void *wasmoon_native_fiber_alloc(
 extern int wasmoon_native_fiber_continue(void *managed, int64_t resume_value);
 extern int64_t wasmoon_native_fiber_return_value(void *managed);
 extern int64_t wasmoon_test_native_fiber_register_probe(void *closure);
-extern int32_t wasmoon_jit_hostcall(
+extern WASMOON_GUEST_ABI int32_t wasmoon_jit_hostcall(
     jit_context_t *ctx,
     int32_t func_idx,
     int64_t values_ptr,
@@ -93,7 +98,7 @@ extern int32_t wasmoon_jit_hostcall(
     int32_t num_results
 );
 
-static int hostcall_probe_trampoline(
+static int WASMOON_GUEST_ABI hostcall_probe_trampoline(
     jit_context_t *ctx,
     int64_t *values,
     void *func_ptr
@@ -133,10 +138,10 @@ static int hostcall_probe_trampoline(
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_test_hostcall_probe_trampoline(void) {
-    return (int64_t)hostcall_probe_trampoline;
+    return WASMOON_GUEST_ADDRESS(hostcall_probe_trampoline);
 }
 
-static int fiber_stack_hostcall_probe(
+static int WASMOON_GUEST_ABI fiber_stack_hostcall_probe(
     jit_context_t *ctx,
     int64_t *values,
     void *func_ptr
@@ -166,10 +171,10 @@ static int fiber_stack_hostcall_probe(
 
 MOONBIT_FFI_EXPORT int64_t
 wasmoon_test_fiber_stack_hostcall_probe_trampoline(void) {
-    return (int64_t)fiber_stack_hostcall_probe;
+    return WASMOON_GUEST_ADDRESS(fiber_stack_hostcall_probe);
 }
 
-static int active_fiber_stack_probe(
+static int WASMOON_GUEST_ABI active_fiber_stack_probe(
     jit_context_t *ctx,
     int64_t *values,
     void *func_ptr
@@ -192,10 +197,10 @@ static int active_fiber_stack_probe(
 
 MOONBIT_FFI_EXPORT int64_t
 wasmoon_test_active_fiber_stack_probe_trampoline(void) {
-    return (int64_t)active_fiber_stack_probe;
+    return WASMOON_GUEST_ADDRESS(active_fiber_stack_probe);
 }
 
-static int nested_hostcall_tls_probe(
+static int WASMOON_GUEST_ABI nested_hostcall_tls_probe(
     jit_context_t *ctx,
     int64_t *values,
     void *func_ptr
@@ -215,10 +220,10 @@ static int nested_hostcall_tls_probe(
 
 MOONBIT_FFI_EXPORT int64_t
 wasmoon_test_nested_hostcall_tls_probe_trampoline(void) {
-    return (int64_t)nested_hostcall_tls_probe;
+    return WASMOON_GUEST_ADDRESS(nested_hostcall_tls_probe);
 }
 
-static int nested_activation_exception_probe(
+static int WASMOON_GUEST_ABI nested_activation_exception_probe(
     jit_context_t *ctx,
     int64_t *values,
     void *func_ptr
@@ -262,10 +267,10 @@ static int nested_activation_exception_probe(
 
 MOONBIT_FFI_EXPORT int64_t
 wasmoon_test_nested_activation_exception_probe(void) {
-    return (int64_t)nested_activation_exception_probe;
+    return WASMOON_GUEST_ADDRESS(nested_activation_exception_probe);
 }
 
-static int mismatched_try_end_probe(
+static int WASMOON_GUEST_ABI mismatched_try_end_probe(
     jit_context_t *ctx,
     int64_t *values,
     void *func_ptr
@@ -278,10 +283,10 @@ static int mismatched_try_end_probe(
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_test_mismatched_try_end_probe(void) {
-    return (int64_t)mismatched_try_end_probe;
+    return WASMOON_GUEST_ADDRESS(mismatched_try_end_probe);
 }
 
-static int nested_activation_gc_root_probe(
+static int WASMOON_GUEST_ABI nested_activation_gc_root_probe(
     jit_context_t *ctx,
     int64_t *values,
     void *func_ptr
@@ -316,10 +321,10 @@ static int nested_activation_gc_root_probe(
 
 MOONBIT_FFI_EXPORT int64_t
 wasmoon_test_nested_activation_gc_root_probe(void) {
-    return (int64_t)nested_activation_gc_root_probe;
+    return WASMOON_GUEST_ADDRESS(nested_activation_gc_root_probe);
 }
 
-static int parked_gc_root_probe(
+static int WASMOON_GUEST_ABI parked_gc_root_probe(
     jit_context_t *ctx,
     int64_t *values,
     void *func_ptr
@@ -345,10 +350,10 @@ static int parked_gc_root_probe(
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_test_parked_gc_root_probe(void) {
-    return (int64_t)parked_gc_root_probe;
+    return WASMOON_GUEST_ADDRESS(parked_gc_root_probe);
 }
 
-static int nested_trap_probe(
+static int WASMOON_GUEST_ABI nested_trap_probe(
     jit_context_t *ctx,
     int64_t *values,
     void *func_ptr
@@ -362,8 +367,16 @@ static int nested_trap_probe(
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_test_nested_trap_probe(void) {
-    return (int64_t)nested_trap_probe;
+    return WASMOON_GUEST_ADDRESS(nested_trap_probe);
 }
+
+#ifdef _WIN32
+// Clang only preserves SEH for a fault reached through a call from __try.
+// A volatile store in the catching frame does not retain the handler.
+__declspec(noinline) static void write_guard(volatile unsigned char *guard) {
+    *guard = 1;
+}
+#endif
 
 static int64_t guard_access_probe(void *closure) {
     (void)closure;
@@ -374,17 +387,32 @@ static int64_t guard_access_probe(void *closure) {
         return 0;
     }
     volatile unsigned char *guard = (volatile unsigned char *)guard_base;
+#ifdef _WIN32
+    __try { write_guard(guard); }
+    __except (GetExceptionCode() == EXCEPTION_ACCESS_VIOLATION
+              ? EXCEPTION_EXECUTE_HANDLER : EXCEPTION_CONTINUE_SEARCH) {
+        return 1;
+    }
+#else
     *guard = 1;
+#endif
     return 0;
 }
 
-MOONBIT_FFI_EXPORT int wasmoon_test_fiber_guard_rejects_access(void) {
+MOONBIT_FFI_EXPORT int wasmoon_test_fiber_guard_rejects_access(int64_t stack_size) {
     void *fiber = wasmoon_native_fiber_alloc(
         guard_access_probe,
         NULL,
-        64 * 1024
+        stack_size
     );
     if (!fiber) return 0;
+#ifdef _WIN32
+    int result = wasmoon_native_fiber_continue(fiber, 0);
+    int passed = result == WASMOON_FIBER_ADVANCE_RETURNED &&
+        wasmoon_native_fiber_return_value(fiber) == 1;
+    moonbit_decref(fiber);
+    return passed;
+#else
     pid_t child = fork();
     if (child < 0) {
         moonbit_decref(fiber);
@@ -398,6 +426,7 @@ MOONBIT_FFI_EXPORT int wasmoon_test_fiber_guard_rejects_access(void) {
     int waited = waitpid(child, &status, 0);
     moonbit_decref(fiber);
     return waited == child && WIFSIGNALED(status);
+#endif
 }
 
 MOONBIT_FFI_EXPORT int wasmoon_test_fiber_preserves_registers(void) {
@@ -429,3 +458,15 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_test_fresh_context_scheduling_budget(void) {
     }
     return 0;
 }
+
+#if defined(_MSC_VER) && !defined(__clang__)
+WASMOON_DEFINE_GUEST_TARGET(hostcall_probe_trampoline);
+WASMOON_DEFINE_GUEST_TARGET(fiber_stack_hostcall_probe);
+WASMOON_DEFINE_GUEST_TARGET(active_fiber_stack_probe);
+WASMOON_DEFINE_GUEST_TARGET(nested_hostcall_tls_probe);
+WASMOON_DEFINE_GUEST_TARGET(nested_activation_exception_probe);
+WASMOON_DEFINE_GUEST_TARGET(mismatched_try_end_probe);
+WASMOON_DEFINE_GUEST_TARGET(nested_activation_gc_root_probe);
+WASMOON_DEFINE_GUEST_TARGET(parked_gc_root_probe);
+WASMOON_DEFINE_GUEST_TARGET(nested_trap_probe);
+#endif

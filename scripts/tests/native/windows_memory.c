@@ -1,0 +1,74 @@
+#include "windows_fs.h"
+#include <assert.h>
+#include <io.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+int main(int argc, char **argv) {
+  assert(argc == 2);
+  // Exercise worker-owned buffers and last-alias cancellation under ASan.
+  for (int i = 0; i < 32; i++) {
+    int fds[2];
+    assert(_pipe(fds, 4096, _O_BINARY | _O_NOINHERIT) == 0);
+    assert(wasmoon_host_claim_input(fds[0]) == 0);
+    int alias = wasmoon_windows_dup(fds[0]);
+    assert(alias >= 0);
+    assert(wasmoon_windows_write(fds[1], "x\r\n\x1a", 4) == 4);
+    int events = 1, ready;
+    assert(wasmoon_windows_poll(&alias, &events, &ready, 1, 1000) == 1);
+    char bytes[4];
+    assert(wasmoon_windows_read(fds[0], bytes, 2) == 2);
+    assert(wasmoon_windows_close(fds[0]) == 0);
+    assert(wasmoon_windows_read(alias, bytes + 2, 2) == 2);
+    assert(!memcmp(bytes, "x\r\n\x1a", 4));
+    assert(wasmoon_windows_poll(&alias, &events, &ready, 1, 0) == 0);
+    assert(wasmoon_windows_close(alias) == 0);
+    assert(wasmoon_windows_close(fds[1]) == 0);
+  }
+  int root = wasmoon_windows_open(argv[1], WASMOON_O_DIRECTORY, 0);
+  assert(root >= 0);
+  for (int i = 0; i < 128; i++) {
+    int file = wasmoon_windows_openat(root, "buffer", _O_RDWR | _O_CREAT | _O_TRUNC, 0600);
+    assert(file >= 0);
+    int copy = wasmoon_windows_dup(file);
+    assert(copy >= 0);
+    assert(wasmoon_windows_setfl(copy, _O_RDWR | _O_APPEND) == 0);
+    assert(wasmoon_windows_write(file, "x\r\n\x1a", 4) == 4);
+    assert(wasmoon_windows_setfl(file, _O_RDWR) == 0);
+    assert(!(wasmoon_windows_getfl(copy) & _O_APPEND));
+    char buffer[4];
+    assert(wasmoon_windows_pread(copy, buffer, sizeof(buffer), 0) == 4);
+    assert(!memcmp(buffer, "x\r\n\x1a", 4));
+    assert(wasmoon_windows_pwrite(copy, "y", 1, 0) == 1);
+    assert(_lseeki64(file, 0, SEEK_CUR) == 4);
+    assert(wasmoon_windows_close(file) == 0);
+    assert(wasmoon_windows_read(copy, buffer, sizeof(buffer)) == 0);
+    assert(wasmoon_windows_close(copy) == 0);
+  }
+  char *renamed = malloc(strlen(argv[1]) + sizeof("/renamed"));
+  assert(renamed);
+  strcpy(renamed, argv[1]);
+  strcat(renamed, "/renamed");
+  assert(wasmoon_windows_renameat(root, "buffer", 0, renamed) == 0);
+  int renamed_file = wasmoon_windows_open(renamed, _O_RDONLY, 0);
+  assert(renamed_file >= 0);
+  assert(wasmoon_windows_close(renamed_file) == 0);
+  assert(wasmoon_windows_renameat(0, renamed, root, "buffer") == 0);
+  free(renamed);
+  assert(wasmoon_windows_symlinkat("buffer", root, "link") == 0);
+  char byte = 0;
+  assert(wasmoon_windows_readlinkat(root, "link", &byte, 1) == 1);
+  assert(byte == 'b');
+  assert(wasmoon_windows_readlinkat(root, "link", &byte, 0) == 0);
+  assert(wasmoon_windows_linkat(root, "buffer", root, "hard-link", 0) == 0);
+  int size;
+  unsigned char *entries = wasmoon_windows_directory_entries(root, &size);
+  assert(entries && size >= 4);
+  free(entries);
+  assert(wasmoon_windows_unlinkat(root, "link", 0) == 0);
+  assert(wasmoon_windows_unlinkat(root, "hard-link", 0) == 0);
+  assert(wasmoon_windows_unlinkat(root, "buffer", 0) == 0);
+  assert(wasmoon_windows_close(root) == 0);
+  return 0;
+}

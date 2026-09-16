@@ -7,7 +7,9 @@
 #include <errno.h>
 #include <stdlib.h>
 #include "moonbit.h"
-#ifndef _WIN32
+#ifdef _WIN32
+#include "../../wasmoon_jit/host_io/windows_io.h"
+#else
 #include <poll.h>
 #if defined(__APPLE__)
 #include <fcntl.h>
@@ -84,13 +86,7 @@ static int poll_darwin_devices(struct pollfd *pfds, int nfds, int timeout_ms) {
 MOONBIT_FFI_EXPORT int wasmoon_wasi_poll(int *fds_ptr, int *events_ptr,
     int *revents_ptr, int nfds, int timeout_ms) {
 #ifdef _WIN32
-  (void)fds_ptr;
-  (void)events_ptr;
-  (void)revents_ptr;
-  (void)nfds;
-  (void)timeout_ms;
-  errno = ENOSYS;
-  return -1;
+  return wasmoon_windows_poll(fds_ptr, events_ptr, revents_ptr, nfds, timeout_ms);
 #else
   if (nfds <= 0) {
     errno = EINVAL;

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run pinned Wasmtime WASIp1 guests with original or explicit legacy-rights expectations."""
+"""Run pinned Wasmtime WASIp1 guests with recorded upstream, rights, or implemented-capability expectations."""
 
 from __future__ import annotations
 
@@ -11,11 +11,12 @@ import hashlib
 import json
 import os
 from pathlib import Path
+from native_process import executable, kill_process_tree
 import platform
-import pty
+if os.name != "nt":
+    import pty
 import select
 import shutil
-import signal
 import subprocess
 import sys
 import tempfile
@@ -50,7 +51,7 @@ def digest(path: Path) -> str:
 
 
 def validate_snapshot(corpus: Path = CORPUS) -> tuple[dict, list[str]]:
-    snapshot = json.loads((corpus / "SNAPSHOT.json").read_text())
+    snapshot = json.loads((corpus / "SNAPSHOT.json").read_text(encoding="utf-8"))
     commit = snapshot["commit"]
     if len(commit) != 40 or any(c not in "0123456789abcdef" for c in commit):
         raise ValueError("snapshot must pin a full upstream commit")
@@ -63,7 +64,7 @@ def validate_snapshot(corpus: Path = CORPUS) -> tuple[dict, list[str]]:
     for entry in entries:
         if digest(corpus / "upstream" / entry["path"]) != entry["sha256"]:
             raise ValueError(f"upstream hash mismatch: {entry['path']}")
-    manifest = tomllib.loads((corpus / "Cargo.toml").read_text())
+    manifest = tomllib.loads((corpus / "Cargo.toml").read_text(encoding="utf-8"))
     bins = manifest["bin"]
     guests = sorted(p for p in paths if p.startswith("crates/test-programs/src/bin/p1_")
                     and p.endswith(".rs"))
@@ -89,11 +90,17 @@ def prepare_build(profile: str):
         shutil.copytree(CORPUS, source, dirs_exist_ok=True)
         subprocess.run(["git", "apply", str(CORPUS / "explicit-rights.patch")],
                        cwd=source, check=True)
-        yield source, ROOT / "target/wasmtime-p1-explicit-rights-build"
+        if profile == "capabilities":
+            subprocess.run(["git", "apply", str(CORPUS / "implemented-capabilities.patch")],
+                           cwd=source, check=True)
+        yield source, ROOT / ("target/wasmtime-p1-" + profile + "-build")
 
 
 def guest_environment() -> dict[str, str]:
     # Mirrors upstream crates/test-programs/artifacts/src/lib.rs.
+    if sys.platform == "win32":
+        return {"ERRNO_MODE_WINDOWS": "1", "NO_DANGLING_FILESYSTEM": "1",
+                "NO_RENAME_DIR_TO_EMPTY_DIR": "1", "RENAME_DIR_ONTO_FILE": "1"}
     return {"ERRNO_MODE_MACOS" if sys.platform == "darwin" else "ERRNO_MODE_UNIX": "1"}
 
 
@@ -151,13 +158,15 @@ def execute(command: list[str], directory: Path, timeout: float,
     proc = None
     with stdout_path.open("wb") as stdout, stderr_path.open("wb") as stderr:
         try:
-            if terminal:
+            windows_console = terminal and os.name == "nt"
+            if terminal and not windows_console:
                 master, slave = pty.openpty()
             env = os.environ.copy()
             # A fresh per-case JIT cache avoids testing an unrelated old artifact.
             env["WASMOON_JIT_CACHE_DIR"] = str(directory / "jit-cache")
             proc = subprocess.Popen(
                 command, cwd=directory, env=env, start_new_session=True,
+                creationflags=subprocess.CREATE_NEW_CONSOLE if windows_console else 0,
                 stdin=slave if terminal else (subprocess.PIPE if pending_stdin else subprocess.DEVNULL),
                 stdout=slave if terminal else stdout,
                 stderr=slave if terminal else stderr,
@@ -195,7 +204,7 @@ def execute(command: list[str], directory: Path, timeout: float,
         finally:
             if proc is not None:
                 if proc.poll() is None:
-                    os.killpg(proc.pid, signal.SIGKILL)
+                    kill_process_tree(proc)
                 returncode = proc.wait()
                 if proc.stdin is not None:
                     proc.stdin.close()
@@ -254,9 +263,9 @@ def verdict(results: list[dict]) -> int:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--profile", choices=["upstream", "explicit-rights"], default="upstream")
+    parser.add_argument("--profile", choices=["upstream", "explicit-rights", "capabilities"], default="upstream")
     parser.add_argument("--mode", choices=["both", "jit", "interp", "wasmtime"], default="both")
-    parser.add_argument("--wasmoon", type=Path, default=ROOT / "wasmoon")
+    parser.add_argument("--wasmoon", type=Path, default=executable(ROOT, "wasmoon"))
     parser.add_argument("--wasmtime", default="wasmtime")
     parser.add_argument("--filter", default="*", help="Shell glob over guest program names")
     parser.add_argument("--timeout", type=float, default=30.0, help="Seconds per invocation")
@@ -264,8 +273,8 @@ def main() -> int:
     parser.add_argument("--check", action="store_true", help="Only verify the source snapshot")
     parser.add_argument("--list", action="store_true", help="List selected programs without building")
     args = parser.parse_args()
-    if sys.platform not in {"darwin", "linux"}:
-        parser.error("this runner currently supports macOS and Linux")
+    if sys.platform not in {"darwin", "linux", "win32"}:
+        parser.error("this runner currently supports macOS, Linux, and Windows")
     if args.timeout <= 0:
         parser.error("--timeout must be positive")
     try:
@@ -302,6 +311,9 @@ def main() -> int:
         report = {
             "profile": args.profile,
             "adaptation_sha256": digest(CORPUS / "explicit-rights.patch") if args.profile != "upstream" else None,
+            "adaptations": [{"patch": name, "sha256": digest(CORPUS / name)} for name in
+                            ([] if args.profile == "upstream" else ["explicit-rights.patch"] +
+                             (["implemented-capabilities.patch"] if args.profile == "capabilities" else []))],
             "upstream_commit": snapshot["commit"], "host": platform.platform(),
             "engine": str(binary), "engine_sha256": digest(binary),
             "engine_version": subprocess.check_output([str(binary), "--version"], text=True).strip(),

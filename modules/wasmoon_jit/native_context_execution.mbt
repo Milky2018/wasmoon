@@ -178,6 +178,7 @@ pub fn NativeJITContext::has_configured_native_fiber_stack_size(
 /// Typed result returned by a JIT hostcall dispatcher.
 pub(all) enum NativeHostcallOutcome {
   HostcallCompleted
+  HostcallExit(Int)
   HostcallTrap(Int)
   HostcallSuspended
 } derive(Debug, Eq)
@@ -190,6 +191,10 @@ pub fn NativeJITContext::set_hostcall_callback(
   let encoded = fn() {
     match callback() {
       HostcallCompleted => 0
+      HostcallExit(code) => {
+        c_jit_set_wasi_exit_code_managed(self.handle, code)
+        100
+      }
       HostcallTrap(code) => if code > 0 { code } else { 8 }
       HostcallSuspended => -1
     }

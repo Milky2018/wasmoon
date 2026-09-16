@@ -445,10 +445,11 @@ pub fn Memory::fill(
 ///|
 /// Read i32 from memory (non-raising version for WASI)
 pub fn Memory::read_i32(self : Memory, addr : Int) -> Int {
-  if addr < 0 || addr.to_int64() + 4L > self.byte_len() {
+  let offset = addr.reinterpret_as_uint().to_int64()
+  if offset + 4L > self.byte_len() {
     return 0
   }
-  self.load_i32(addr) catch {
+  self.load_i32_at(offset) catch {
     _ => 0
   }
 }
@@ -456,10 +457,11 @@ pub fn Memory::read_i32(self : Memory, addr : Int) -> Int {
 ///|
 /// Write i32 to memory (non-raising version for WASI)
 pub fn Memory::write_i32(self : Memory, addr : Int, value : Int) -> Unit {
-  if addr < 0 || addr.to_int64() + 4L > self.byte_len() {
+  let offset = addr.reinterpret_as_uint().to_int64()
+  if offset + 4L > self.byte_len() {
     return
   }
-  try self.store_i32(addr, value) |> ignore catch {
+  try self.store_i32_at(offset, value) |> ignore catch {
     _ => ()
   }
 }
@@ -467,10 +469,11 @@ pub fn Memory::write_i32(self : Memory, addr : Int, value : Int) -> Unit {
 ///|
 /// Read i64 from memory (non-raising version for WASI)
 pub fn Memory::read_i64(self : Memory, addr : Int) -> Int64 {
-  if addr < 0 || addr.to_int64() + 8L > self.byte_len() {
+  let offset = addr.reinterpret_as_uint().to_int64()
+  if offset + 8L > self.byte_len() {
     return 0L
   }
-  self.load_i64(addr) catch {
+  self.load_i64_at(offset) catch {
     _ => 0L
   }
 }
@@ -478,10 +481,11 @@ pub fn Memory::read_i64(self : Memory, addr : Int) -> Int64 {
 ///|
 /// Write i64 to memory (non-raising version for WASI)
 pub fn Memory::write_i64(self : Memory, addr : Int, value : Int64) -> Unit {
-  if addr < 0 || addr.to_int64() + 8L > self.byte_len() {
+  let offset = addr.reinterpret_as_uint().to_int64()
+  if offset + 8L > self.byte_len() {
     return
   }
-  try self.store_i64(addr, value) |> ignore catch {
+  try self.store_i64_at(offset, value) |> ignore catch {
     _ => ()
   }
 }
@@ -489,25 +493,28 @@ pub fn Memory::write_i64(self : Memory, addr : Int, value : Int64) -> Unit {
 ///|
 /// Read a byte from memory (non-raising version for WASI)
 pub fn Memory::read_byte(self : Memory, addr : Int) -> Byte {
-  if addr < 0 || addr.to_int64() >= self.byte_len() {
+  let offset = addr.reinterpret_as_uint().to_int64()
+  if offset >= self.byte_len() {
     return b'\x00'
   }
-  self.load_byte_unchecked_at(self.addr_to_offset(addr))
+  self.load_byte_unchecked_at(offset)
 }
 
 ///|
 /// Write a byte to memory (non-raising version for WASI)
 pub fn Memory::write_byte(self : Memory, addr : Int, value : Byte) -> Unit {
-  if addr < 0 || addr.to_int64() >= self.byte_len() {
+  let offset = addr.reinterpret_as_uint().to_int64()
+  if offset >= self.byte_len() {
     return
   }
-  self.store_byte_unchecked_at(self.addr_to_offset(addr), value)
+  self.store_byte_unchecked_at(offset, value)
 }
 
 ///|
 /// Read bytes from memory (non-raising version for WASI)
 pub fn Memory::read_bytes(self : Memory, addr : Int, len : Int) -> Bytes {
-  if addr < 0 || len < 0 || addr.to_int64() + len.to_int64() > self.byte_len() {
+  let offset = addr.reinterpret_as_uint().to_int64()
+  if len < 0 || offset + len.to_int64() > self.byte_len() {
     return b""
   }
   if len == 0 {
@@ -516,7 +523,7 @@ pub fn Memory::read_bytes(self : Memory, addr : Int, len : Int) -> Bytes {
   let fixed = FixedArray::make(len, b'\x00')
   let rc = @wasmoon_jit.memory_descriptor_read(
     self.desc_ptr(),
-    addr.to_int64(),
+    offset,
     fixed,
     len,
   )
