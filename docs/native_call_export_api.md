@@ -77,3 +77,20 @@ reason is latched. Deadline checks do not call user cancellation callbacks when
 classifying results. Separate resumable/async invocation APIs do not implicitly
 inherit the controlled API options; their existing cancellation and lifetime
 contracts remain unchanged.
+
+## Suspendable interpreter lifetime
+
+`call_func_by_index_resumable` returns a one-shot `ExecutionContinuation` when
+execution suspends. Its Store owns cancellation of parked execution:
+`Store::close` cancels all registered suspended calls, releases captured frames
+and GC roots, and cancels pending atomic waits or asynchronous host calls.
+Embeddings must still close their Store when finished with it.
+
+Resuming detaches the old registration before guest or host code runs. If the
+call suspends again, the returned continuation owns a new registration; cancelling
+the consumed handle cannot cancel that new continuation. Explicit `cancel` and
+Store closure discard the captured state even when the embedding retains the
+handle. Reusing any consumed or cancelled handle reports
+`ContinuationAlreadyConsumed` rather than the former incidental `Unreachable`
+trap. Store closure before suspension publication rejects publication with
+`StoreClosed` and releases the unpublished state.
