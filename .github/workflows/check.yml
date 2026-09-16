@@ -393,7 +393,9 @@ jobs:
         # MoonBit runtime objects and dynamically emitted JIT code are excluded.
         # The runner also expects an actual ASan report from a deliberate unsafe
         # MoonBit access; compiler flags or symbols alone are not proof.
-        run: python3 scripts/run_sanitizers.py
+        run: |
+          moon update
+          python3 scripts/run_sanitizers.py
       - uses: actions/upload-artifact@v4
         if: always()
         with:
