@@ -3,6 +3,10 @@ name: Check and Test
 on:
   workflow_dispatch:
     inputs:
+      sanitizers_only:
+        description: Run only the sanitizer diagnostic gate
+        type: boolean
+        default: false
       windows_only:
         description: Run only the Windows port diagnostic gate
         type: boolean
@@ -25,7 +29,7 @@ env:
 
 jobs:
   native-platform:
-    if: ${{ inputs.windows_only != true }}
+    if: ${{ inputs.windows_only != true && inputs.sanitizers_only != true }}
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
@@ -207,6 +211,7 @@ jobs:
           exit "$status"
 
   windows-native:
+    if: ${{ inputs.sanitizers_only != true }}
     name: Windows AMD64 (${{ matrix.compiler }})
     strategy:
       fail-fast: false
@@ -405,4 +410,5 @@ jobs:
             target/sanitizers/probe.log
             target/sanitizers/symbols.log
             target/sanitizers/summary.json
+            target/sanitizers/isolated
           if-no-files-found: warn

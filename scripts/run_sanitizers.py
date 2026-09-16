@@ -48,8 +48,33 @@ def main():
     environment["MOON_WORK"] = str(PACKAGE / "moon.work")
     environment["MOONBIT_ALLOCATOR"] = "system"
     environment.pop("WASMOON_SANITIZER_PROBE", None)
-    run(["moon", "test", ".", "--target", "native", "--no-parallelize", "--target-dir", str(OUT / "build")],
-        log=OUT / "tests.log", env=environment)
+    try:
+        run(["moon", "test", ".", "--target", "native", "--no-parallelize", "--target-dir", str(OUT / "build")],
+            log=OUT / "tests.log", env=environment)
+    except RuntimeError:
+        # Preserve the failing gate while obtaining per-test leak roots.
+        for info in (OUT / "build").rglob("__blackbox_test_info.json"):
+            if "wasmoon_sanitizer" not in str(info):
+                continue
+            binary = info.parent / "wasmoon_sanitizer.blackbox_test.exe"
+            if not binary.exists():
+                continue
+            isolated = OUT / "isolated"
+            isolated.mkdir(exist_ok=True)
+            summary = []
+            for filename, tests in json.loads(info.read_text())["tests"].items():
+                for test in tests:
+                    index = test["index"]
+                    log = isolated / f"{filename}-{index}.log"
+                    with log.open("w") as output:
+                        result = subprocess.run([str(binary), f"{filename}:{index}-{index+1}"],
+                                                cwd=PACKAGE, env=environment,
+                                                stdout=output, stderr=subprocess.STDOUT, timeout=60)
+                    diagnostic = re.findall(r"SUMMARY:.*", log.read_text())
+                    summary.append({"file": filename, "index": index, "name": test["name"],
+                                    "exit": result.returncode, "diagnostic": diagnostic})
+            (isolated / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
+        raise
     executables = list((OUT / "build").rglob("*.blackbox_test.exe"))
     if not executables:
         raise RuntimeError("No instrumented test executable found")
