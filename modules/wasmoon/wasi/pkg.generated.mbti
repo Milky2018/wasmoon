@@ -543,6 +543,7 @@ pub(all) struct WasiContext {
   preopens : Array[(Fd, String, String)]
   mut next_fd : Int
   open_files : @hashmap.HashMap[Int, OpenFile]
+  stdio_rights : FixedArray[(Int64, Int64)]
   stdout_callback : (Bytes) -> Unit
   stderr_callback : (Bytes) -> Unit
   stdin_callback : () -> Bytes

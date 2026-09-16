@@ -101,3 +101,10 @@ and do not add rights to the returned descriptor. This follows the legacy
 [Wasmtime open-rights mapping](https://github.com/bytecodealliance/wasmtime/blob/v0.20.0/crates/wasi-common/src/old/snapshot_0/sys/unix/hostcalls_impl/fs_helpers.rs#L8)
 (the historical Preview 1 `FD_SYNC` prose repeats `DSYNC` where this mapping
 uses `SYNC`). `fd_fdstat_set_flags` remains governed by its own capability.
+
+Standard streams retain mutable base/inheriting masks by stream identity.
+Rights queries, reduction, I/O, metadata queries and polling use those masks;
+renumbering transfers the same identity and cannot restore removed rights.
+Initial streams advertise `FD_FILESTAT_GET` as well as their I/O and polling
+rights, matching the metadata operation they support. Descriptor-attribute
+queries and close remain available after all operation rights are removed.

@@ -681,7 +681,7 @@ test "wasi: fd_fdstat_get" {
   )
   debug_inspect(
     (mem.read_i64(8), mem.read_i64(16)),
-    content="(134217730, 134217730)",
+    content="(136314882, 136314882)",
   )
   // Test stdout
   let result = fd_fdstat_get(ctx, mem, 1, 0)
@@ -692,7 +692,7 @@ test "wasi: fd_fdstat_get" {
   )
   debug_inspect(
     (mem.read_i64(8), mem.read_i64(16)),
-    content="(134217792, 134217792)",
+    content="(136314944, 136314944)",
   )
   // Test preopen directory
   let result = fd_fdstat_get(ctx, mem, 3, 0)
@@ -2456,7 +2456,7 @@ test "wasi: fd_renumber updates stdio descriptor routing" {
   // Move stdout to the old preopen slot and verify fdstat/write rights move too.
   inspect(fd_renumber_impl(ctx, 1, 3), content="0")
   inspect(fd_fdstat_get(ctx, mem, 3, 300), content="0")
-  inspect(mem.read_i64(308), content="134217792")
+  inspect(mem.read_i64(308), content="136314944")
   inspect(fd_fdstat_get(ctx, mem, 1, 300), content="8")
 }
 
@@ -2514,10 +2514,17 @@ test "wasi: socket operations enforce their base rights" {
 }
 
 ///|
-test "wasi: fd_fdstat_set_rights returns EBADF for stdio" {
+test "wasi: fd_fdstat_set_rights attenuates stdio and rejects re-addition" {
   let ctx = WasiContextBuilder::WasiContextBuilder().build()
-  let result = fd_fdstat_set_rights_impl(ctx, 0, 0L, 0L)
-  inspect(result, content="8")
+  let mem = @runtime.Memory::Memory(1, None)
+  inspect(fd_fdstat_set_rights_impl(ctx, 0, 0L, 0L), content="0")
+  inspect(fd_fdstat_get(ctx, mem, 0, 0), content="0")
+  debug_inspect((mem.read_i64(8), mem.read_i64(16)), content="(0, 0)")
+  inspect(fd_fdstat_set_rights_impl(ctx, 0, right_fd_read, 0L), content="76")
+  inspect(fd_read(ctx, mem, 0, 0, 0, 24), content="76")
+  inspect(fd_close(ctx, 0), content="0")
+  inspect(fd_fdstat_set_rights_impl(ctx, 0, 0L, 0L), content="8")
+  inspect(fd_fdstat_set_rights_impl(ctx, -1, 0L, 0L), content="8")
 }
 
 ///|

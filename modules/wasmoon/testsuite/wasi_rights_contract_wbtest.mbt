@@ -255,3 +255,59 @@ test "wasi jit: synchronous opens require inherited rights before create or trun
   inspect(wasi_i32_from_result(result.interp_result), content="0")
   inspect(wasi_i32_from_result(result.jit_result), content="0")
 }
+
+///|
+test "wasi jit: standard stream rights stay reduced across renumbering" {
+  let source =
+    #|(module
+    #|(import "wasi_snapshot_preview1" "fd_fdstat_get" (func $stat (param i32 i32) (result i32)))
+    #|(import "wasi_snapshot_preview1" "fd_filestat_get" (func $filestat (param i32 i32) (result i32)))
+    #|(import "wasi_snapshot_preview1" "fd_fdstat_set_rights" (func $rights (param i32 i64 i64) (result i32)))
+    #|(import "wasi_snapshot_preview1" "fd_read" (func $read (param i32 i32 i32 i32) (result i32)))
+    #|(import "wasi_snapshot_preview1" "fd_write" (func $write (param i32 i32 i32 i32) (result i32)))
+    #|(import "wasi_snapshot_preview1" "fd_renumber" (func $move (param i32 i32) (result i32)))
+    #|(import "wasi_snapshot_preview1" "fd_close" (func $close (param i32) (result i32)))
+    #|(import "wasi_snapshot_preview1" "poll_oneoff" (func $poll (param i32 i32 i32 i32) (result i32)))
+    #|(memory (export "memory") 1) (global $target (mut i32) (i32.const 0))
+    #|(func $eq (param i32 i32) (if (i32.ne (local.get 0) (local.get 1)) (then unreachable)))
+    #|(func $denied (param $fd i32) (param $kind i32)
+    #| (i32.store (i32.const 16) (i32.const 48)) (i32.store (i32.const 20) (i32.const 1))
+    #| (i32.store8 (i32.const 48) (i32.const 165)) (i32.store (i32.const 24) (i32.const 123))
+    #| (if (i32.eq (local.get $kind) (i32.const 1))
+    #|  (then (call $eq (call $read (local.get $fd) (i32.const 16) (i32.const 1) (i32.const 24)) (i32.const 76)))
+    #|  (else (call $eq (call $write (local.get $fd) (i32.const 16) (i32.const 1) (i32.const 24)) (i32.const 76))))
+    #| (call $eq (i32.load8_u (i32.const 48)) (i32.const 165))
+    #| (call $eq (i32.load (i32.const 24)) (i32.const 123))
+    #| (call $eq (call $filestat (local.get $fd) (i32.const 320)) (i32.const 76))
+    #| (i32.store8 (i32.const 136) (local.get $kind)) (i32.store (i32.const 144) (local.get $fd))
+    #| (call $eq (call $poll (i32.const 128) (i32.const 192) (i32.const 1) (i32.const 240)) (i32.const 76)))
+    #|(func $case (param $fd i32) (param $kind i32) (local $base i64) (local $inherit i64)
+    #| (global.set $target (if (result i32) (i32.eqz (local.get $fd)) (then (i32.const 1)) (else (i32.const 0))))
+    #| (call $eq (call $stat (local.get $fd) (i32.const 64)) (i32.const 0))
+    #| (local.set $base (i64.load (i32.const 72))) (local.set $inherit (i64.load (i32.const 80)))
+    #| (call $eq (call $rights (local.get $fd) (local.get $base) (local.get $inherit)) (i32.const 0))
+    #| (call $eq (call $rights (local.get $fd) (i64.const 0) (i64.const 0)) (i32.const 0))
+    #| (call $eq (call $stat (local.get $fd) (i32.const 64)) (i32.const 0))
+    #| (if (i64.ne (i64.or (i64.load (i32.const 72)) (i64.load (i32.const 80))) (i64.const 0)) (then unreachable))
+    #| (call $eq (call $rights (local.get $fd) (local.get $base) (local.get $inherit)) (i32.const 76))
+    #| (call $denied (local.get $fd) (local.get $kind))
+    #| (call $eq (call $move (local.get $fd) (global.get $target)) (i32.const 0))
+    #| (call $eq (call $stat (local.get $fd) (i32.const 64)) (i32.const 8))
+    #| (call $denied (global.get $target) (local.get $kind))
+    #| (call $eq (call $rights (global.get $target) (local.get $base) (local.get $inherit)) (i32.const 76))
+    #| (call $eq (call $close (global.get $target)) (i32.const 0))
+    #| (call $eq (call $rights (global.get $target) (i64.const 0) (i64.const 0)) (i32.const 8)))
+    #|(func (export "stdin") (result i32) (call $case (i32.const 0) (i32.const 1)) (i32.const 0))
+    #|(func (export "stdout") (result i32) (call $case (i32.const 1) (i32.const 2)) (i32.const 0))
+    #|(func (export "stderr") (result i32) (call $case (i32.const 2) (i32.const 2)) (i32.const 0)))
+  for name in ["stdin", "stdout", "stderr"] {
+    let result = compare_wasi_with_options(source, name, stdin_data=b"secret")
+    if result.interp_result is Err(_) || result.jit_result is Err(_) {
+      fail(result.to_string())
+    }
+    inspect(wasi_i32_from_result(result.interp_result), content="0")
+    inspect(wasi_i32_from_result(result.jit_result), content="0")
+    inspect(result.interp_stdout, content="b\"\"")
+    inspect(result.jit_stdout, content="b\"\"")
+  }
+}

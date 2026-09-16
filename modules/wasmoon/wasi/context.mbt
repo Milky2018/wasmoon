@@ -40,11 +40,16 @@ fn OpenFile::require_base_rights(
   self : OpenFile,
   required : Int64,
 ) -> Result[Unit, Errno] {
+  require_rights(self.rights_base, required)
+}
+
+///|
+fn require_rights(granted : Int64, required : Int64) -> Result[Unit, Errno] {
   // SEEK authorizes TELL without changing the stored, attenuable mask.
-  let effective = if (self.rights_base & right_fd_seek) != 0L {
-    self.rights_base | right_fd_tell
+  let effective = if (granted & right_fd_seek) != 0L {
+    granted | right_fd_tell
   } else {
-    self.rights_base
+    granted
   }
   if (effective & required) == required {
     Ok(())
@@ -71,6 +76,8 @@ pub(all) struct WasiContext {
   mut next_fd : Int
   /// Open files: wasi_fd -> OpenFile
   open_files : @hashmap.HashMap[Int, OpenFile]
+  /// Rights follow each stream identity when its descriptor is renumbered.
+  stdio_rights : FixedArray[(Int64, Int64)]
   /// Output callback for stdout
   stdout_callback : (Bytes) -> Unit
   /// Output callback for stderr
@@ -117,6 +124,10 @@ pub fn WasiContext::WasiContext() -> WasiContext {
     stdin_open: true,
     stdout_open: true,
     stderr_open: true,
+    stdio_rights: FixedArray::makei(3, fn(slot) {
+      let rights = fd_rights_for_stdio_slot(slot)
+      (rights, rights)
+    }),
     stdin_fd: 0,
     stdout_fd: 1,
     stderr_fd: 2,
@@ -355,6 +366,10 @@ pub fn WasiContextBuilder::build(self : WasiContextBuilder) -> WasiContext {
     stdin_open: true,
     stdout_open: true,
     stderr_open: true,
+    stdio_rights: FixedArray::makei(3, fn(slot) {
+      let rights = fd_rights_for_stdio_slot(slot)
+      (rights, rights)
+    }),
     stdin_fd: 0,
     stdout_fd: 1,
     stderr_fd: 2,
