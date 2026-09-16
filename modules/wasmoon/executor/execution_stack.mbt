@@ -63,10 +63,14 @@ fn ExecContext::enter_function(
     raise @runtime.CallStackExhausted
   }
   // Reserve before allocating locals, including SIMD values.
-  self.stack.reserve(args.length())
+  self.stack.reserve(args.length()) catch {
+    _ => raise @runtime.CallStackExhausted
+  }
   {
     errdefer self.stack.release(args.length())
-    self.stack.reserve(code.locals.length())
+    self.stack.reserve(code.locals.length()) catch {
+      _ => raise @runtime.CallStackExhausted
+    }
   }
   let locals = args.copy()
   for typ in code.locals {
@@ -82,7 +86,7 @@ fn ExecContext::enter_function(
     )
   }
   let saved = self.instance
-  self.push_frame(@runtime.Frame::Frame(-1, locals, arity))
+  self.push_frame(Frame(-1, locals, arity))
   self.instance = instance
   self.push_label(false, arity)
   self.execution.push({

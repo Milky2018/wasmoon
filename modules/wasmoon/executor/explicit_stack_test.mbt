@@ -37,7 +37,7 @@ fn limited_count(
   let instance = @executor.instantiate_module_with_imports(
     store,
     deep_call_module(),
-    @runtime.Imports::Imports(),
+    Imports(),
   )
   (store, instance)
 }
@@ -55,7 +55,7 @@ test "explicit stack: exact frame budget and recovery" {
   let failure = try
     @executor.call_exported_func(store, instance, "count", [I32(8)])
   catch {
-    @runtime.CallStackExhausted => true
+    CallStackExhausted => true
     _ => false
   } noraise {
     _ => false
@@ -76,7 +76,7 @@ test "explicit stack: locals and operands share the value budget" {
   let failure = try
     @executor.call_exported_func(store, instance, "count", [I32(20)])
   catch {
-    @runtime.StackOverflow => true
+    StackOverflow => true
     _ => false
   } noraise {
     _ => false
@@ -112,7 +112,7 @@ test "explicit stack: tail calls replace the frame within a one-frame budget" {
   let instance = @executor.instantiate_module_with_imports(
     store,
     mod,
-    @runtime.Imports::Imports(),
+    Imports(),
   )
   assert_true(
     @executor.call_exported_func(store, instance, "tail", [I32(100000)])[0]
@@ -186,7 +186,7 @@ test "explicit stack: deep host suspension and single-use resume" {
   let host = store.alloc_host_func_with_caller(
     fn(_, _) raise @runtime.RuntimeError {
       if !ready.val {
-        raise @runtime.Unreachable
+        raise Unreachable
       }
       [I32(5)]
     },
@@ -228,7 +228,7 @@ test "explicit stack: host reentry is bounded and recovers" {
   let instance_ref : Ref[@runtime.ModuleInstance?] = Ref(None)
   let reenter = Ref(true)
   let store = @runtime.Store::Store(
-    interpreter_limits=@runtime.InterpreterLimits::new(max_host_calls=4),
+    interpreter_limits=@runtime.InterpreterLimits::new(max_reentry_depth=4),
   )
   defer store.close()
   let host = store.alloc_host_func_with_caller(
@@ -258,7 +258,7 @@ test "explicit stack: host reentry is bounded and recovers" {
   let failure = try
     @executor.call_exported_func(store, instance, "count", [I32(0)])
   catch {
-    @runtime.CallStackExhausted => true
+    CallStackExhausted => true
     _ => false
   } noraise {
     _ => false
@@ -291,12 +291,12 @@ test "explicit stack: deep structured control and control budget" {
   let instance = @executor.instantiate_module_with_imports(
     limited,
     mod,
-    @runtime.Imports::Imports(),
+    Imports(),
   )
   let exhausted = try
     @executor.call_exported_func(limited, instance, "nested", [])
   catch {
-    @runtime.StackOverflow => true
+    StackOverflow => true
     _ => false
   } noraise {
     _ => false
@@ -451,7 +451,63 @@ test "explicit stack: runaway ordinary recursion traps" {
   let exhausted = try
     @executor.call_exported_func(store, instance, "run", [])
   catch {
-    @runtime.CallStackExhausted => true
+    CallStackExhausted => true
+    _ => false
+  } noraise {
+    _ => false
+  }
+  assert_true(exhausted)
+}
+
+///|
+test "explicit stack: frame storage exhaustion preserves call-stack classification" {
+  let mod : @types.Module = {
+    ..@types.Module::simple([], [], [], "run"),
+    codes: [{ locals: Array::make(32, I64), body: [], }],
+  }
+  let store = @runtime.Store::Store(
+    interpreter_limits=@runtime.InterpreterLimits::new(max_values=16),
+  )
+  defer store.close()
+  let instance = @executor.instantiate_module_with_imports(
+    store,
+    mod,
+    Imports(),
+  )
+  let exhausted = try
+    @executor.call_exported_func(store, instance, "run", [])
+  catch {
+    CallStackExhausted => true
+    _ => false
+  } noraise {
+    _ => false
+  }
+  assert_true(exhausted)
+}
+
+///|
+test "explicit stack: nested guest continuation boundaries are bounded" {
+  let mod : @types.Module = {
+    ..@types.Module::empty(),
+    types: [@types.SubType::func([], []), @types.SubType::simple(Cont(0))],
+    type_rec_groups: [0, 1],
+    funcs: [0],
+    codes: [{ locals: [], body: [RefFunc(0), ContNew(1), Resume(1, [])], }],
+    exports: [{ name: "run", desc: Func(0), }],
+  }
+  let store = @runtime.Store::Store(
+    interpreter_limits=@runtime.InterpreterLimits::new(max_reentry_depth=4),
+  )
+  defer store.close()
+  let instance = @executor.instantiate_module_with_imports(
+    store,
+    mod,
+    Imports(),
+  )
+  let exhausted = try
+    @executor.call_exported_func(store, instance, "run", [])
+  catch {
+    CallStackExhausted => true
     _ => false
   } noraise {
     _ => false

@@ -21,9 +21,9 @@ Pass `interpreter_limits=InterpreterLimits::new(...)` to `Store::Store` or
 | Limit | Default | Exhaustion |
 | --- | ---: | --- |
 | `max_frames` | 16,384 | `CallStackExhausted` |
-| `max_values` | 1,048,576 | `StackOverflow` |
+| `max_values` | 1,048,576 | `CallStackExhausted` allocating locals; `StackOverflow` pushing operands |
 | `max_controls` | 65,536 | `StackOverflow` |
-| `max_host_calls` | 64 | `CallStackExhausted` |
+| `max_reentry_depth` | 64 | `CallStackExhausted` |
 
 Frame, control and value limits apply to each interpreter context. Value slots
 include both live operands and function locals. They bound logical storage, not
@@ -32,7 +32,8 @@ loop, if and try-table entries. Tail calls reuse the active-call budget.
 Configuration values must be positive. These settings also apply when a JIT
 import bridge explicitly executes an interpreted function.
 
-Host-call depth is tracked across nested interpreter contexts in the same Store.
+Native boundary depth counts host calls and guest-continuation body callbacks
+across nested interpreter contexts in the same Store.
 A host callback can still consume native stack or recurse through other Stores;
 this budget does not sandbox arbitrary host code. Raising it requires the
 embedder to account for its native thread stack. Suspended host calls release
@@ -56,7 +57,7 @@ as well as cross-platform native/external evidence and performance measurements.
 ## Local performance comparison
 
 On Darwin ARM64, nine alternating-order pairs after one warmup pair compared
-an archived pre-refactor release executable with the final refactored executable.
+an archived pre-refactor release executable with the refactored executable at `2ae1d052`.
 The loop workload's median CLI wall time changed from 22.53 ms to 23.31 ms
 (+3.5%); recursive Fibonacci(24) changed from 39.30 ms to 37.42 ms (-4.8%).
 Outputs matched. These short measurements include startup and WAT loading;

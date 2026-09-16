@@ -277,10 +277,10 @@ pub struct InterpreterLimits {
   max_frames : Int
   max_values : Int
   max_controls : Int
-  max_host_calls : Int
+  max_reentry_depth : Int
 } derive(@debug.Debug)
 pub fn InterpreterLimits::default() -> Self
-pub fn InterpreterLimits::new(max_frames? : Int, max_values? : Int, max_controls? : Int, max_host_calls? : Int) -> Self raise RuntimeError
+pub fn InterpreterLimits::new(max_frames? : Int, max_values? : Int, max_controls? : Int, max_reentry_depth? : Int) -> Self raise RuntimeError
 pub fn InterpreterLimits::to_repr(Self) -> @debug.Repr
 
 type Linker
@@ -595,7 +595,7 @@ pub fn Store::collect_roots(Self, Array[@types.Value]) -> Array[@types.Value]
 pub fn Store::decode_native_exception(Self, Int64) -> @types.Value raise RuntimeError
 pub fn Store::enable_c_heap(Self) -> Unit raise RuntimeError
 pub fn Store::encode_native_exception(Self, Int) -> Int64 raise RuntimeError
-pub fn Store::enter_interpreter_host_call(Self) -> Unit raise RuntimeError
+pub fn Store::enter_interpreter_boundary(Self) -> Unit raise RuntimeError
 pub fn Store::gc_type_is_subtype(Self, Int, ModuleInstance, Int) -> Bool
 pub fn Store::get_c_heap_ptr(Self) -> Int64
 pub fn Store::get_exn(Self, Int) -> ExnInstance raise RuntimeError
@@ -623,7 +623,7 @@ pub fn Store::get_wasi_memory(Self) -> Memory
 pub fn Store::has_c_heap(Self) -> Bool
 pub fn Store::is_gc_valid(Self, Int) -> Bool
 pub fn Store::jit_funcref_entries(Self) -> Array[StoreFuncrefEntry]
-pub fn Store::leave_interpreter_host_call(Self) -> Unit
+pub fn Store::leave_interpreter_boundary(Self) -> Unit
 pub fn Store::lookup_jit_funcref_ptr(Self, Int) -> Int64?
 pub fn Store::lookup_jit_funcref_store_addr(Self, Int64) -> Int?
 pub fn Store::maybe_collect(Self, additional_roots? : Array[@types.Value], threshold? : Double) -> Int

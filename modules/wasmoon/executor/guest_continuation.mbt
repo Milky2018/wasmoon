@@ -85,7 +85,7 @@ fn ExecContext::resume_guest_body(
   let mut body = initial_body
   let mut input = initial_input
   while true {
-    let values = (body.run)(input) catch {
+    let values = self.invoke_guest_body(body, input) catch {
       @runtime.GuestContinuationYield(effect, suspended) => {
         match effect {
           Suspend(tag, values) =>
@@ -302,4 +302,20 @@ fn ExecContext::discard_captured_execution(self : ExecContext) -> Unit {
   self.current_frame = -1
   self.labels.clear()
   self.stack.clear()
+}
+
+///|
+/// Guest continuation bodies cross an embedding callback boundary. Their
+/// native nesting is bounded independently of each body's explicit guest stack.
+fn ExecContext::invoke_guest_body(
+  self : ExecContext,
+  body : @runtime.GuestContinuationBody,
+  input : @runtime.GuestContinuationInput,
+) -> Array[@types.Value] raise {
+  {
+    errdefer (body.cancel)()
+    self.store.enter_interpreter_boundary()
+  }
+  defer self.store.leave_interpreter_boundary()
+  (body.run)(input)
 }

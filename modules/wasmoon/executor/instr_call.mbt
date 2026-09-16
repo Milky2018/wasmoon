@@ -231,8 +231,8 @@ fn ExecContext::invoke_host_func(
   caller_instance : @runtime.ModuleInstance,
   args : Array[@types.Value],
 ) -> Unit raise {
-  self.store.enter_interpreter_host_call()
-  defer self.store.leave_interpreter_host_call()
+  self.store.enter_interpreter_boundary()
+  defer self.store.leave_interpreter_boundary()
   // Host code can collect or reenter the Store after arguments leave the stack.
   let roots = self.collect_gc_additional_roots()
   for value in args {
@@ -267,8 +267,8 @@ fn ExecContext::invoke_async_host_func(
   guard self.async_host_driver is Some(driver) else {
     raise InvocationSignal::HostInvocation(@runtime.AsyncHostRequiresAsyncCall)
   }
-  self.store.enter_interpreter_host_call()
-  defer self.store.leave_interpreter_host_call()
+  self.store.enter_interpreter_boundary()
+  defer self.store.leave_interpreter_boundary()
   // Host code can collect or reenter the Store after arguments leave the stack.
   let roots = self.collect_gc_additional_roots()
   for value in args {

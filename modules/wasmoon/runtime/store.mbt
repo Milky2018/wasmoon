@@ -18,7 +18,7 @@ pub(all) enum FuncOwner {
 pub struct Store {
   nan_canonicalization : Bool
   interpreter_limits : InterpreterLimits
-  priv mut interpreter_host_calls : Int
+  priv mut interpreter_reentry_depth : Int
   funcs : Array[FuncInst]
   func_types : Array[@types.FuncType] // Type of each function
   func_type_indices : Array[Int] // Original type index for structural comparison
@@ -144,7 +144,7 @@ pub fn Store::Store(
   {
     nan_canonicalization,
     interpreter_limits,
-    interpreter_host_calls: 0,
+    interpreter_reentry_depth: 0,
     funcs: [],
     func_types: [],
     func_type_indices: [],
@@ -189,7 +189,7 @@ pub fn Store::with_c_heap(
   {
     nan_canonicalization,
     interpreter_limits,
-    interpreter_host_calls: 0,
+    interpreter_reentry_depth: 0,
     funcs: [],
     func_types: [],
     func_type_indices: [],
