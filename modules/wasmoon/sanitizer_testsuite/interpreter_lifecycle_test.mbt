@@ -156,18 +156,19 @@ async test "Store close cancels a pending asynchronous interpreter host call" {
   let store = @runtime.Store::Store()
   let linker = @runtime.Linker::with_store(store)
   defer linker.close()
-  let started = Ref(false)
+  let started = @async.Semaphore(1, initial_value=0)
+  let pending = @async.Semaphore(1, initial_value=0)
   let finished = Ref(false)
   linker.add_async_host_func(
     "host",
     "wait",
     async fn(_) {
-      started.val = true
+      started.release()
       defer {
         finished.val = true
         store.close()
       }
-      @async.sleep(60_000)
+      pending.acquire()
       []
     },
     func_type={ params: [], results: [], },
@@ -184,8 +185,7 @@ async test "Store close cancels a pending asynchronous interpreter host call" {
     let call = group.spawn(no_wait=true, allow_failure=true, () => {
       @executor.call_exported_func_async(store, instance, "run", [])
     })
-    @async.sleep(1)
-    inspect(started.val, content="true")
+    started.acquire()
     store.close()
     try call.wait() catch {
       _ => ()
