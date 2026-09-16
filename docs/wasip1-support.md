@@ -139,6 +139,14 @@ are returned. In particular, host ACLs can prevent flushing a read-only handle.
 Allocation uses Linux fallocate, macOS F_PREALLOCATE, or Windows FileAllocationInfo,
 then extends logical size where necessary. Unsupported filesystems return their
 native error; a truncate-only fallback is not presented as physical allocation.
+macOS rejects files with existing holes before mutation because F_PREALLOCATE
+allocates from physical EOF and cannot guarantee a requested hole is filled.
+Windows similarly rejects sparse or compressed files: FileAllocationInfo does
+not establish allocation of an arbitrary logical range. Both return NOTSUP;
+Linux keeps native range allocation via fallocate. A failed hole query also
+returns its native error. Ordinary dense-file allocation remains supported.
+The physical-allocation CI guest verifies content and cursor preservation,
+actual allocated storage, and the explicit unsupported cases in both engines.
 The macOS and Windows allocation/extension sequence is not atomic against an
 independent host process concurrently changing file length. The runtime does not
 promise serializability against unrelated host processes.

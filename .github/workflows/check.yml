@@ -128,6 +128,9 @@ jobs:
       - name: exercise WASIp1 capability path races
         run: python3 scripts/run_wasi_path_races.py
 
+      - name: verify WASIp1 physical allocation
+        run: python3 scripts/run_wasi_allocation.py
+
       - name: run upstream WASIp1 polling regressions
         run: |
           rustup toolchain install 1.97.0 --profile minimal --target wasm32-wasip1
@@ -146,6 +149,7 @@ jobs:
           name: wasip1-${{ matrix.os }}
           path: |
             target/wasi-path-races.json
+            target/wasi-allocation.json
             target/wasmtime-p1-smoke
             target/wasmtime-p1-rights
           if-no-files-found: ignore
@@ -309,6 +313,9 @@ jobs:
       - name: exercise Windows WASIp1 capability path races
         if: ${{ !cancelled() && steps.windows_build.outcome == 'success' }}
         run: python scripts/run_wasi_path_races.py
+      - name: verify Windows WASIp1 physical allocation
+        if: ${{ !cancelled() && steps.windows_build.outcome == 'success' }}
+        run: python scripts/run_wasi_allocation.py
       - name: run Windows readiness guests
         if: ${{ !cancelled() && steps.windows_build.outcome == 'success' }}
         run: python scripts/run_windows_readiness.py
@@ -349,6 +356,7 @@ jobs:
             target/windows-native-probes.log
             target/windows-symlinks-*.json
             target/wasi-path-races.json
+            target/wasi-allocation.json
             target/windows-readiness.json
             target/windows-components
             target/windows-misc
@@ -371,6 +379,7 @@ jobs:
             target/windows-native-probes.log
             target/windows-symlinks-*.json
             target/wasi-path-races.json
+            target/wasi-allocation.json
             target/windows-readiness.json
             target/windows-components
             target/windows-misc

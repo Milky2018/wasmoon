@@ -2843,7 +2843,7 @@ test "wasi jit: fd_renumber remaps stdio routing semantics" {
     #|      (call $fd_fdstat_get (i32.const 3) (i32.const 300)))
     #|    (if (i32.ne (local.get $errno) (i32.const 0))
     #|      (then (return (i32.const 105))))
-    #|    (if (i64.ne (i64.load (i32.const 308)) (i64.const 134217792))
+    #|    (if (i64.ne (i64.load (i32.const 308)) (i64.const 136314944))
     #|      (then (return (i32.const 106))))
     #|    (local.set $errno
     #|      (call $fd_fdstat_get (i32.const 1) (i32.const 300)))
@@ -2983,7 +2983,7 @@ test "wasi jit: fd_fdstat_set_rights attenuates valid fd" {
 }
 
 ///|
-test "wasi jit: fd_fdstat_set_rights stdio returns EBADF (8)" {
+test "wasi jit: fd_fdstat_set_rights stdio permits rights reduction" {
   let source =
     #|(module
     #|  (import "wasi_snapshot_preview1" "fd_fdstat_set_rights"
@@ -2993,8 +2993,8 @@ test "wasi jit: fd_fdstat_set_rights stdio returns EBADF (8)" {
     #|    (call $fd_fdstat_set_rights (i32.const 0) (i64.const 0) (i64.const 0))))
   let result = compare_wasi(source, "test")
   inspect(result.match_, content="true")
-  inspect(wasi_errno_from_result(result.interp_result), content="8")
-  inspect(wasi_errno_from_result(result.jit_result), content="8")
+  inspect(wasi_errno_from_result(result.interp_result), content="0")
+  inspect(wasi_errno_from_result(result.jit_result), content="0")
 }
 
 ///|
