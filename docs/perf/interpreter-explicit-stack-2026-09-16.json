@@ -1,0 +1,81 @@
+{
+  "host": "macOS-26.5.2-arm64-arm-64bit-Mach-O",
+  "engine_sha256": {
+    "before": "ea055c8ec7693b8948d7eae7c04f6b45a2e45f25c33733fc6b84efdc68d1cd78",
+    "after": "b643a5ab838b1400c5515f1922b82e9543f1e872eea130295a0db404155142f4"
+  },
+  "method": "One warmup pair then nine alternating-order pairs. CLI wall time includes startup and WAT loading; interpreter only.",
+  "workloads": {
+    "loop": {
+      "wat": "(module (func (export \"run\") (result i32) (local $n i32)\n i32.const 300000 local.set $n\n loop $again local.get $n i32.const 1 i32.sub local.tee $n br_if $again end\n local.get $n))\n",
+      "args": [],
+      "samples_seconds": {
+        "before": [
+          0.022666707984171808,
+          0.022553957998752594,
+          0.02205037500243634,
+          0.02195279096486047,
+          0.022212332987692207,
+          0.0226146659697406,
+          0.022527583001647145,
+          0.02219204098219052,
+          0.02373024995904416
+        ],
+        "after": [
+          0.023898375045973808,
+          0.02344333298970014,
+          0.023264291987288743,
+          0.022944499971345067,
+          0.02313466602936387,
+          0.02341708302265033,
+          0.02309937501559034,
+          0.02330529101891443,
+          0.023547332966700196
+        ]
+      },
+      "median_seconds": {
+        "before": 0.022527583001647145,
+        "after": 0.02330529101891443
+      },
+      "ratio_after_before": 1.0345224792739827,
+      "output": "0\n"
+    },
+    "calls": {
+      "wat": "(module\n (func $fib (export \"run\") (param $n i32) (result i32)\n  local.get $n i32.const 2 i32.lt_s\n  if (result i32) local.get $n\n  else local.get $n i32.const 1 i32.sub call $fib\n       local.get $n i32.const 2 i32.sub call $fib i32.add\n  end))\n",
+      "args": [
+        "--arg",
+        "24"
+      ],
+      "samples_seconds": {
+        "before": [
+          0.03929954097839072,
+          0.03922162496019155,
+          0.03855358297005296,
+          0.039038958959281445,
+          0.03899658296722919,
+          0.040203874988947064,
+          0.03931775002274662,
+          0.039653832965996116,
+          0.039421333000063896
+        ],
+        "after": [
+          0.037053416948765516,
+          0.037415708997286856,
+          0.037293249974027276,
+          0.037493334035389125,
+          0.03712233301484957,
+          0.040630250005051494,
+          0.037775208009406924,
+          0.03809266700409353,
+          0.03735566698014736
+        ]
+      },
+      "median_seconds": {
+        "before": 0.03929954097839072,
+        "after": 0.037415708997286856
+      },
+      "ratio_after_before": 0.9520647841118625,
+      "output": "46368\n"
+    }
+  }
+}

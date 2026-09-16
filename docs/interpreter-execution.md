@@ -52,3 +52,20 @@ implementation. This refactor addresses practical interpreter capacity.
 ISS-537 records deep recursion, exact budget boundaries and recovery, tail calls,
 structured control, exception unwinding, GC, host reentry and suspension tests,
 as well as cross-platform native/external evidence and performance measurements.
+
+## Local performance comparison
+
+On Darwin ARM64, nine alternating-order pairs after one warmup pair compared
+an archived pre-refactor release executable with the final refactored executable.
+The loop workload's median CLI wall time changed from 22.53 ms to 23.31 ms
+(+3.5%); recursive Fibonacci(24) changed from 39.30 ms to 37.42 ms (-4.8%).
+Outputs matched. These short measurements include startup and WAT loading;
+they are microbenchmarks, not evidence of a general performance improvement.
+The baseline is identified by executable hash, not claimed as a freshly rebuilt
+Git revision. [Raw samples, guest programs and binary hashes](perf/interpreter-explicit-stack-2026-09-16.json)
+permit the measurement inputs and interpretation to be audited.
+
+An initial implementation regressed the call workload by about 15% because
+normal function returns copied result arrays unnecessarily. Normal fallthrough
+now keeps values in place when the operand stack already has the exact result
+height; early returns still discard excess operands correctly.

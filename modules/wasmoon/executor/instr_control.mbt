@@ -137,13 +137,7 @@ fn ExecContext::finish_block_control(
 ) -> Unit raise {
   self.pop_label()
   match result {
-    ExecBlockCompleted => {
-      let results = self.stack.pop_n(arity)
-      self.restore_stack_to(stack_height)
-      for value in results {
-        self.stack.push(value)
-      }
-    }
+    ExecBlockCompleted => self.finish_result_stack(stack_height, arity)
     ExecBlockRaised(BranchWith(0, values)) => {
       self.restore_stack_to(stack_height)
       for value in values {

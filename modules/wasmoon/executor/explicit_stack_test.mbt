@@ -90,7 +90,7 @@ test "explicit stack: locals and operands share the value budget" {
 
 ///|
 test "explicit stack: tail calls replace the frame within a one-frame budget" {
-  let module = @types.Module::simple(
+  let mod = @types.Module::simple(
     [I32],
     [I32],
     [
@@ -111,7 +111,7 @@ test "explicit stack: tail calls replace the frame within a one-frame budget" {
   defer store.close()
   let instance = @executor.instantiate_module_with_imports(
     store,
-    module,
+    mod,
     @runtime.Imports::Imports(),
   )
   assert_true(
@@ -278,8 +278,8 @@ test "explicit stack: deep structured control and control budget" {
   for _ in 0..<2000 {
     body = [Block(Value(I32), body)]
   }
-  let module = @types.Module::simple([], [I32], body, "nested")
-  let (store, instance) = @executor.instantiate_module(module)
+  let mod = @types.Module::simple([], [I32], body, "nested")
+  let (store, instance) = @executor.instantiate_module(mod)
   defer store.close()
   assert_true(
     @executor.call_exported_func(store, instance, "nested", [])[0] is I32(42),
@@ -290,7 +290,7 @@ test "explicit stack: deep structured control and control budget" {
   defer limited.close()
   let instance = @executor.instantiate_module_with_imports(
     limited,
-    module,
+    mod,
     @runtime.Imports::Imports(),
   )
   let exhausted = try
@@ -306,7 +306,7 @@ test "explicit stack: deep structured control and control budget" {
 
 ///|
 test "explicit stack: exception unwinds ten thousand guest calls" {
-  let module : @types.Module = {
+  let mod : @types.Module = {
     ..@types.Module::empty(),
     types: [@types.SubType::func([I32], [I32]), @types.SubType::func([I32], [])],
     type_rec_groups: [0, 1],
@@ -340,7 +340,7 @@ test "explicit stack: exception unwinds ten thousand guest calls" {
     ],
     exports: [{ name: "catch", desc: Func(1), }],
   }
-  let (store, instance) = @executor.instantiate_module(module)
+  let (store, instance) = @executor.instantiate_module(mod)
   defer store.close()
   assert_true(
     @executor.call_exported_func(store, instance, "catch", [I32(10000)])[0]
@@ -350,7 +350,7 @@ test "explicit stack: exception unwinds ten thousand guest calls" {
 
 ///|
 test "explicit stack: deep frame roots survive host collection" {
-  let module : @types.Module = {
+  let mod : @types.Module = {
     ..@types.Module::empty(),
     types: [
       @types.SubType::simple(
@@ -400,9 +400,7 @@ test "explicit stack: deep frame roots survive host collection" {
   )
   let imports = @runtime.Imports::Imports()
   imports.add_func("host", "collect", host)
-  let instance = @executor.instantiate_module_with_imports(
-    store, module, imports,
-  )
+  let instance = @executor.instantiate_module_with_imports(store, mod, imports)
   assert_true(
     @executor.call_exported_func(store, instance, "run", [])[0] is I32(2001),
   )
@@ -447,8 +445,8 @@ async test "explicit stack: asynchronous host resumes deep guest frames" {
 
 ///|
 test "explicit stack: runaway ordinary recursion traps" {
-  let module = @types.Module::simple([], [], [Call(0)], "run")
-  let (store, instance) = @executor.instantiate_module(module)
+  let mod = @types.Module::simple([], [], [Call(0)], "run")
+  let (store, instance) = @executor.instantiate_module(mod)
   defer store.close()
   let exhausted = try
     @executor.call_exported_func(store, instance, "run", [])

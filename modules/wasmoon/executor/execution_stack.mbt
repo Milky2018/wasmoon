@@ -106,11 +106,7 @@ fn ExecContext::finish_execution_frame(
     TryControl(handlers) => {
       self.finish_try_table(result, handlers, frame.height)
       if result is ExecBlockCompleted {
-        let values = self.stack.pop_n(frame.arity)
-        self.restore_stack_to(frame.height)
-        for value in values {
-          self.stack.push(value)
-        }
+        self.finish_result_stack(frame.height, frame.arity)
       }
     }
     FunctionControl(saved, locals) => {
@@ -120,13 +116,8 @@ fn ExecContext::finish_execution_frame(
       self.stack.release(locals)
       self.instance = saved
       match result {
-        ExecBlockCompleted | ExecBlockRaised(Return) => {
-          let values = self.stack.pop_n(frame.arity)
-          self.restore_stack_to(frame.height)
-          for value in values {
-            self.stack.push(value)
-          }
-        }
+        ExecBlockCompleted | ExecBlockRaised(Return) =>
+          self.finish_result_stack(frame.height, frame.arity)
         ExecBlockRaised(BranchWith(0, values)) => {
           self.restore_stack_to(frame.height)
           for value in values {
@@ -229,4 +220,22 @@ fn ExecContext::resume_execution(
   }
   self.running = false
   self.run_execution(initial_error=error)
+}
+
+///|
+/// A validated fallthrough already has precisely its result slots. Only early
+/// returns or branches with discarded operands require moving the results.
+fn ExecContext::finish_result_stack(
+  self : ExecContext,
+  height : Int,
+  arity : Int,
+) -> Unit raise {
+  if self.stack.size() == height + arity {
+    return
+  }
+  let values = self.stack.pop_n(arity)
+  self.restore_stack_to(height)
+  for value in values {
+    self.stack.push(value)
+  }
 }
