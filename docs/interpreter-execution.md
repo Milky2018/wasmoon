@@ -54,6 +54,24 @@ ISS-537 records deep recursion, exact budget boundaries and recovery, tail calls
 structured control, exception unwinding, GC, host reentry and suspension tests,
 as well as cross-platform native/external evidence and performance measurements.
 
+The regression suite covers 10,000 ordinary call frames, 100,000 tail calls with
+one frame available, 2,000 nested controls, exact budget boundaries and recovery,
+deep exception unwinding, GC roots, host pauses and cooperative resumption.
+The nested-control regression also passes locally with a 512 KiB native stack;
+its instantiation capability scan uses an iterative worklist.
+
+The final runtime revision is `0f0e7b26bb5aa5aee24c29820b218f896e937324`.
+[CI run 35050956668](https://github.com/Milky2018/wasmoon/actions/runs/35050956668)
+records successful native and external validation on macOS ARM64, Linux AMD64,
+Windows AMD64 Clang and Windows AMD64 MSVC. Local native tests pass 2,483/2,483.
+Core WAST coverage is 258/258 files per engine. Component coverage per engine is
+23/23 stable, 24/24 async and 12/12 future-gated files.
+The misc corpus records 692 assertion-bearing passes and 72 `script_only`
+executions across both engines. The P1 capability profile records 116 passes
+and two `not_applicable` cases; its upstream stdio smoke records four passes.
+These classifications and existing platform adaptations remain explicit;
+non-applicable cases and scripts without assertions are not assertion passes.
+
 ## Local performance comparison
 
 On Darwin ARM64, nine alternating-order pairs after one warmup pair compared
