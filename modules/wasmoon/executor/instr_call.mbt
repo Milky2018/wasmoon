@@ -245,7 +245,9 @@ fn ExecContext::invoke_host_func(
     error => {
       self.suspend_host_call(
         error,
-        fn() raise { self.invoke_host_func(host_fn, caller_instance, args) },
+        fn(context) raise {
+          context.invoke_host_func(host_fn, caller_instance, args)
+        },
         roots=args,
       )
       return
@@ -287,9 +289,15 @@ fn ExecContext::invoke_async_host_func(
       }
     AsyncHostPending => {
       self.suspension_roots = args.copy()
-      self.set_base_resume_action(HostCall(0L), fn() raise {
-        self.invoke_async_host_func(store_addr, host_fn, caller_instance, args)
-      })
+      self.set_base_resume_action(
+        HostCall(0L),
+        fn(context) raise {
+          context.invoke_async_host_func(
+            store_addr, host_fn, caller_instance, args,
+          )
+        },
+        cancel=fn() { driver.cancel() },
+      )
       raise ExecutionSuspended
     }
   }

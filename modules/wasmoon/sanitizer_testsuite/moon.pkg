@@ -1,4 +1,4 @@
-// Shared component and JIT lifecycle blackbox fixtures.
+// Shared runtime and execution lifecycle blackbox fixtures.
 // Ordinary native tests run these here. scripts/run_sanitizers.py copies the
 // same files into one isolated package with declarative ASan/UBSan link flags;
 // the instrumentation configuration lives in tools/sanitizer/moon.pkg.

@@ -88,7 +88,8 @@ impl Debug for SuspensionClassifier with fn to_repr(_self) {
 
 ///|
 priv struct ResumeAction {
-  run : () -> Unit raise
+  run : (ExecContext) -> Unit raise
+  cancel : () -> Unit
 }
 
 ///|

@@ -183,7 +183,7 @@ fn ExecContext::run_execution(
         if self.cooperative {
           if self.instructions_left == 0 {
             self.instructions_left = 1024
-            self.set_base_resume_action(CooperativeYield, fn() { () })
+            self.set_base_resume_action(CooperativeYield, fn(_) { () })
             raise ExecutionSuspended
           }
           self.instructions_left -= 1
@@ -213,7 +213,7 @@ fn ExecContext::resume_execution(
   // A resumed operation may enqueue guest work or raise into an enclosing
   // exception handler. It must not recursively enter another dispatcher.
   self.running = true
-  let error = try (action.run)() catch {
+  let error = try (action.run)(self) catch {
     ExecutionSuspended => {
       self.running = false
       raise ExecutionSuspended
@@ -223,6 +223,7 @@ fn ExecContext::resume_execution(
     _ => None
   }
   self.running = false
+  (action.cancel)()
   self.run_execution(initial_error=error)
 }
 

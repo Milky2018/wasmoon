@@ -46,17 +46,19 @@ fn ExecContext::exec_atomic(
       let waiter = mem.atomic_wait_begin(
         effective_addr, width, expected, timeout,
       )
-      fn finish_wait() -> Unit raise {
+      fn finish_wait(context : ExecContext) -> Unit raise {
         let result = waiter.poll()
         if result == -1 {
-          self.set_base_resume_action(AtomicWait, finish_wait)
+          context.set_base_resume_action(AtomicWait, finish_wait, cancel=fn() {
+            waiter.cancel()
+          })
           raise ExecutionSuspended
         }
         waiter.cancel()
-        self.stack.push(I32(result))
+        context.stack.push(I32(result))
       }
       if self.cooperative {
-        finish_wait()
+        finish_wait(self)
       } else {
         defer waiter.cancel()
         while waiter.poll() == -1 {

@@ -150,7 +150,7 @@ test "a consumed interpreter continuation cannot cancel its resumed waiter" {
   defer second.cancel()
   first.cancel()
   try first.continue_execution() catch {
-    @runtime.Unreachable => ()
+    @runtime.ContinuationAlreadyConsumed => ()
     error => fail(error.to_string())
   } noraise {
     _ => fail("consumed continuation must reject a second resume")

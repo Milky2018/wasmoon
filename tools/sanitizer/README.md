@@ -2,7 +2,7 @@
 
 Run `python3 scripts/run_sanitizers.py` from the repository root. The runner
 creates an isolated workspace using the current source modules and this
-package's declarative `link.native` flags. It copies the existing component and
+package's declarative `link.native` flags. It copies the component, interpreter, transaction and
 JIT lifecycle blackbox fixtures from `modules/wasmoon/sanitizer_testsuite`;
 there is one fixture source and one instrumented dependency closure. Ordinary
 native and Windows builds do not inherit these flags.

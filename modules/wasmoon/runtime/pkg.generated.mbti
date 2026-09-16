@@ -634,6 +634,8 @@ pub fn Store::pin_gc_roots(Self, Array[@types.Value]) -> GcRootLease
 pub fn Store::put_guest_continuation(Self, GuestContinuationBody) -> Int64 raise RuntimeError
 pub fn Store::register_instance(Self, ModuleInstance) -> Int raise RuntimeError
 pub fn Store::register_jit_funcrefs(Self, Array[StoreFuncrefEntry], release_owner? : () -> Unit) -> StoreFuncrefRegistration
+pub fn Store::register_suspended_execution(Self, () -> Unit) -> Int64 raise RuntimeError
+pub fn Store::release_suspended_execution(Self, Int64) -> Unit
 pub fn Store::set_module_types(Self, Array[@types.SubType], rec_groups? : Array[Int]) -> Unit raise RuntimeError
 pub fn Store::set_wasi_ctx_handle(Self, Int) -> Unit raise RuntimeError
 pub fn Store::set_wasi_mem_addr(Self, Int) -> Unit raise RuntimeError

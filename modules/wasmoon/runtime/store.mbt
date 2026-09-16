@@ -61,6 +61,8 @@ pub struct Store {
   priv native_types : StoreTypeRegistry
   priv native_exception_to_store : Map[Int64, Int]
   priv store_exception_to_native : Map[Int, Int64]
+  priv suspended_executions : Map[Int64, SuspendedExecutionCleanup]
+  priv mut next_suspended_execution_id : Int64
   priv guest_continuations : Array[GuestContinuationBody?]
   priv pinned_gc_roots : Array[(Int64, Array[@types.Value], Ref[Bool])]
   priv mut next_pinned_gc_roots_id : Int64
@@ -171,6 +173,8 @@ pub fn Store::Store(
     native_types: StoreTypeRegistry::new(),
     native_exception_to_store: Map([]),
     store_exception_to_native: Map([]),
+    suspended_executions: Map([]),
+    next_suspended_execution_id: 0L,
     guest_continuations: [],
     pinned_gc_roots: [],
     next_pinned_gc_roots_id: 0L,
@@ -216,6 +220,8 @@ pub fn Store::with_c_heap(
     native_types: StoreTypeRegistry::new(),
     native_exception_to_store: Map([]),
     store_exception_to_native: Map([]),
+    suspended_executions: Map([]),
+    next_suspended_execution_id: 0L,
     guest_continuations: [],
     pinned_gc_roots: [],
     next_pinned_gc_roots_id: 0L,
@@ -235,6 +241,11 @@ pub fn Store::close(self : Store) -> Unit {
     return
   }
   self.closed.val = true
+  let suspended = self.suspended_executions.values().to_array()
+  self.suspended_executions.clear()
+  for cleanup in suspended {
+    (cleanup.run)()
+  }
   for entry in self.guest_continuations {
     if entry is Some(body) {
       (body.cancel)()

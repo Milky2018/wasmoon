@@ -26,7 +26,10 @@ fn guest_resumption_body(
 ) -> @runtime.GuestContinuationBody {
   {
     run: fn(input) raise {
-      continuation.context.guest_input = Some(input)
+      guard continuation.captured is Some(captured) else {
+        raise @runtime.ContinuationAlreadyConsumed
+      }
+      captured.context.guest_input = Some(input)
       guest_outcome_values(continuation.continue_unchecked())
     },
     cancel: fn() { continuation.cancel() },
@@ -116,17 +119,21 @@ fn ExecContext::resume_guest_body(
           }
         }
         self.guest_pending = Some(suspended)
-        self.set_base_resume_action(GuestEffect(effect), fn() raise {
-          self.guest_pending = None
-          self.resume_guest_body(suspended, self.guest_delivery(), handlers)
+        self.set_base_resume_action(GuestEffect(effect), fn(context) raise {
+          context.guest_pending = None
+          context.resume_guest_body(
+            suspended,
+            context.guest_delivery(),
+            handlers,
+          )
         })
         raise ExecutionSuspended
       }
       GuestEmbeddingPause(reason, suspended) => {
         self.guest_pending = Some(suspended)
-        self.set_base_resume_action(reason, fn() raise {
-          self.guest_pending = None
-          self.resume_guest_body(suspended, Values([]), handlers)
+        self.set_base_resume_action(reason, fn(context) raise {
+          context.guest_pending = None
+          context.resume_guest_body(suspended, Values([]), handlers)
         })
         raise ExecutionSuspended
       }
@@ -179,7 +186,7 @@ fn ExecContext::exec_guest_continuation(
           let outcome = try
             context.call_func_inst_with_context(address, function, args, arity)
           catch {
-            ExecutionSuspended => suspended_outcome(context, arity, [true])
+            ExecutionSuspended => suspended_outcome(context, arity)
             error => {
               context.discard_captured_execution()
               raise error
@@ -231,8 +238,10 @@ fn ExecContext::exec_guest_continuation(
         self.store.get_tag_type(tag).params.length(),
       )
       self.suspension_roots = values.copy()
-      self.set_base_resume_action(GuestEffect(Suspend(tag, values)), fn() raise {
-        self.accept_guest_delivery()
+      self.set_base_resume_action(GuestEffect(Suspend(tag, values)), fn(
+        context,
+      ) raise {
+        context.accept_guest_delivery()
       })
       raise ExecutionSuspended
     }
@@ -278,8 +287,10 @@ fn ExecContext::exec_guest_continuation(
       let tag = self.instance.tag_addrs[tag_index]
       self.suspension_roots = args.copy()
       self.guest_pending = Some(target)
-      self.set_base_resume_action(GuestEffect(Switch(tag, target, args)), fn() raise {
-        self.accept_guest_delivery()
+      self.set_base_resume_action(GuestEffect(Switch(tag, target, args)), fn(
+        context,
+      ) raise {
+        context.accept_guest_delivery()
       })
       raise ExecutionSuspended
     }
@@ -289,12 +300,17 @@ fn ExecContext::exec_guest_continuation(
 
 ///|
 fn ExecContext::discard_captured_execution(self : ExecContext) -> Unit {
-  if self.guest_pending is Some(body) {
+  let pending = self.guest_pending
+  self.guest_pending = None
+  let action = self.resume_action
+  self.resume_action = None
+  if action is Some(action) {
+    (action.cancel)()
+  }
+  if pending is Some(body) {
     (body.cancel)()
   }
-  self.guest_pending = None
   self.guest_input = None
-  self.resume_action = None
   self.suspension_reason = None
   self.suspension_roots.clear()
   self.suspension_roots.shrink_to_fit()
