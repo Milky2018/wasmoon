@@ -273,6 +273,16 @@ pub fn InstantiationTransaction::new() -> Self
 pub fn InstantiationTransaction::registrar(Self) -> RollbackRegistrar
 pub fn InstantiationTransaction::rollback(Self) -> Unit
 
+pub struct InterpreterLimits {
+  max_frames : Int
+  max_values : Int
+  max_controls : Int
+  max_host_calls : Int
+} derive(@debug.Debug)
+pub fn InterpreterLimits::default() -> Self
+pub fn InterpreterLimits::new(max_frames? : Int, max_values? : Int, max_controls? : Int, max_host_calls? : Int) -> Self raise RuntimeError
+pub fn InterpreterLimits::to_repr(Self) -> @debug.Repr
+
 type Linker
 pub fn Linker::Linker() -> Self
 pub fn Linker::add_async_host_func(Self, String, String, async (Array[@types.Value]) -> Array[@types.Value], func_type? : @types.FuncType) -> Unit raise RuntimeError
@@ -515,7 +525,7 @@ pub(all) enum RuntimeFeature {
 }
 
 type Stack derive(@debug.Debug)
-pub fn Stack::Stack() -> Self
+pub fn Stack::Stack(max_values? : Int) -> Self
 pub fn Stack::active_values(Self) -> Array[@types.Value]
 pub fn Stack::clear(Self) -> Unit
 pub fn Stack::peek(Self) -> @types.Value raise RuntimeError
@@ -528,11 +538,14 @@ pub fn Stack::pop_n(Self, Int) -> Array[@types.Value] raise RuntimeError
 pub fn Stack::pop_v128(Self) -> Bytes raise RuntimeError
 pub fn Stack::push(Self, @types.Value) -> Unit raise RuntimeError
 pub fn Stack::push_v128(Self, Bytes) -> Unit raise RuntimeError
+pub fn Stack::release(Self, Int) -> Unit
+pub fn Stack::reserve(Self, Int) -> Unit raise RuntimeError
 pub fn Stack::size(Self) -> Int
 pub fn Stack::to_repr(Self) -> @debug.Repr
 
 pub struct Store {
   nan_canonicalization : Bool
+  interpreter_limits : InterpreterLimits
   funcs : Array[FuncInst]
   func_types : Array[@types.FuncType]
   func_type_indices : Array[Int]
@@ -556,7 +569,7 @@ pub struct Store {
   native_execution : @wasmoon_jit.NativeExecutionState
   // private fields
 } derive(@debug.Debug)
-pub fn Store::Store(nan_canonicalization? : Bool) -> Self
+pub fn Store::Store(nan_canonicalization? : Bool, interpreter_limits? : InterpreterLimits) -> Self
 pub fn Store::alloc_array(Self, Int, Array[@types.Value], instance? : ModuleInstance) -> Int raise RuntimeError
 pub fn Store::alloc_async_host_func(Self, async (Array[@types.Value]) -> Array[@types.Value], func_type? : @types.FuncType, type_idx? : Int) -> Int raise RuntimeError
 pub fn Store::alloc_async_host_func_with_caller(Self, async (Caller, Array[@types.Value]) -> Array[@types.Value], func_type? : @types.FuncType, type_idx? : Int) -> Int raise RuntimeError
@@ -582,6 +595,7 @@ pub fn Store::collect_roots(Self, Array[@types.Value]) -> Array[@types.Value]
 pub fn Store::decode_native_exception(Self, Int64) -> @types.Value raise RuntimeError
 pub fn Store::enable_c_heap(Self) -> Unit raise RuntimeError
 pub fn Store::encode_native_exception(Self, Int) -> Int64 raise RuntimeError
+pub fn Store::enter_interpreter_host_call(Self) -> Unit raise RuntimeError
 pub fn Store::gc_type_is_subtype(Self, Int, ModuleInstance, Int) -> Bool
 pub fn Store::get_c_heap_ptr(Self) -> Int64
 pub fn Store::get_exn(Self, Int) -> ExnInstance raise RuntimeError
@@ -609,6 +623,7 @@ pub fn Store::get_wasi_memory(Self) -> Memory
 pub fn Store::has_c_heap(Self) -> Bool
 pub fn Store::is_gc_valid(Self, Int) -> Bool
 pub fn Store::jit_funcref_entries(Self) -> Array[StoreFuncrefEntry]
+pub fn Store::leave_interpreter_host_call(Self) -> Unit
 pub fn Store::lookup_jit_funcref_ptr(Self, Int) -> Int64?
 pub fn Store::lookup_jit_funcref_store_addr(Self, Int64) -> Int?
 pub fn Store::maybe_collect(Self, additional_roots? : Array[@types.Value], threshold? : Double) -> Int
@@ -628,7 +643,7 @@ pub fn Store::struct_set(Self, Int, Int, @types.Value) -> Unit raise RuntimeErro
 pub fn Store::take_guest_continuation(Self, Int64) -> GuestContinuationBody raise RuntimeError
 pub fn Store::to_repr(Self) -> @debug.Repr
 pub fn Store::unwrap_extern(Self, @types.Value) -> @types.Value raise RuntimeError
-pub fn Store::with_c_heap(nan_canonicalization? : Bool) -> Self
+pub fn Store::with_c_heap(nan_canonicalization? : Bool, interpreter_limits? : InterpreterLimits) -> Self
 pub fn Store::wrap_as_extern(Self, @types.Value) -> @types.Value raise RuntimeError
 
 pub struct StoreFuncrefEntry {

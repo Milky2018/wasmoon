@@ -231,6 +231,8 @@ fn ExecContext::invoke_host_func(
   caller_instance : @runtime.ModuleInstance,
   args : Array[@types.Value],
 ) -> Unit raise {
+  self.store.enter_interpreter_host_call()
+  defer self.store.leave_interpreter_host_call()
   // Host code can collect or reenter the Store after arguments leave the stack.
   let roots = self.collect_gc_additional_roots()
   for value in args {
@@ -265,6 +267,8 @@ fn ExecContext::invoke_async_host_func(
   guard self.async_host_driver is Some(driver) else {
     raise InvocationSignal::HostInvocation(@runtime.AsyncHostRequiresAsyncCall)
   }
+  self.store.enter_interpreter_host_call()
+  defer self.store.leave_interpreter_host_call()
   // Host code can collect or reenter the Store after arguments leave the stack.
   let roots = self.collect_gc_additional_roots()
   for value in args {
@@ -292,8 +296,6 @@ fn ExecContext::invoke_async_host_func(
 }
 
 ///|
-/// Call a WASM function with a specific module instance context
-/// Uses a loop to handle tail calls without growing the native stack (wasmtime style)
 fn ExecContext::call_wasm_func_with_instance(
   self : ExecContext,
   target_instance : @runtime.ModuleInstance,
@@ -301,191 +303,19 @@ fn ExecContext::call_wasm_func_with_instance(
   args : Array[@types.Value],
   num_results : Int,
 ) -> Unit raise {
-  // Save the current instance for restoration
-  let saved_instance = self.instance
-
-  // Tail call loop - wasmtime style
-  // Instead of recursively calling the target, we loop here
-  let mut current_instance = target_instance
-  let mut current_func = func
-  let mut current_args = args
-  let mut should_continue = true
-  while should_continue {
-    self.check_cancellation()
-    // Set the context to the target function's module
-    self.instance = current_instance
-
-    // Create locals array: params + local variables
-    let locals : Array[@types.Value] = []
-
-    // Add parameters first
-    for arg in current_args {
-      locals.push(arg)
-    }
-
-    // Add local variables (initialized to default values)
-    for local_type in current_func.locals {
-      locals.push(
-        match local_type {
-          I32 => I32(0)
-          I64 => I64(0L)
-          F32 => F32(0.0)
-          F64 => F64(0.0)
-          FuncRef => Null
-          ExternRef => Null
-          V128 => V128(Bytes::make(16, b'\x00'))
-          _ => Null
-        },
-      )
-    }
-
-    // Create and push frame
-    let frame = @runtime.Frame::Frame(-1, locals, num_results)
-    self.push_frame(frame)
-
-    // Execute function body, catching TailCall to loop instead of recurse
-    try {
-      self.exec_expr(current_func.body)
-      // Normal return: pop frame and exit loop
-      self.pop_frame()
-      should_continue = false
-    } catch {
-      ExecutionSuspended => {
-        self.append_resume_handler(fn(result) raise {
-          self.finish_suspended_wasm_frame(saved_instance, result)
-        })
-        raise ExecutionSuspended
-      }
-      ControlSignal::TailCall(store_addr, func_inst, tail_args, _) => {
-        // Tail call detected! Pop current frame and loop with new target
-        self.pop_frame()
-
-        // Get the new target function
-        match func_inst {
-          WasmFunc(code) => {
-            // Get the owner instance for the target function
-            match self.store.get_func_owner(store_addr) {
-              Some(owner) => current_instance = owner
-              None => current_instance = saved_instance
-            }
-            current_func = code
-            current_args = tail_args
-            // Continue loop
-            should_continue = true
-          }
-          HostFunc(host_fn) => {
-            self.invoke_host_func(host_fn, self.instance, tail_args) catch {
-              ExecutionSuspended => {
-                self.append_resume_suffix(fn() {
-                  self.instance = saved_instance
-                })
-                raise ExecutionSuspended
-              }
-              error => raise error
-            }
-            should_continue = false
-          }
-          AsyncHostFunc(host_fn) => {
-            self.invoke_async_host_func(
-              store_addr,
-              host_fn,
-              self.instance,
-              tail_args,
-            ) catch {
-              ExecutionSuspended => {
-                self.append_resume_suffix(fn() {
-                  self.instance = saved_instance
-                })
-                raise ExecutionSuspended
-              }
-              error => raise error
-            }
-            should_continue = false
-          }
-        }
-      }
-      e => {
-        // Other exceptions: pop frame then propagate
-        self.pop_frame()
-        self.instance = saved_instance
-        raise e
-      }
-    }
-  }
-
-  // Restore original instance
-  self.instance = saved_instance
-}
-
-///|
-fn ExecContext::finish_suspended_wasm_frame(
-  self : ExecContext,
-  saved_instance : @runtime.ModuleInstance,
-  result : ExecBlockResult,
-) -> Unit raise {
-  match result {
-    ExecBlockCompleted => {
-      self.pop_frame()
-      self.instance = saved_instance
-    }
-    ExecBlockRaised(
-      ControlSignal::TailCall(store_addr, func_inst, tail_args, num_results)
-    ) => {
-      let caller_instance = self.instance
-      self.pop_frame()
-      self.instance = saved_instance
-      match func_inst {
-        WasmFunc(code) => {
-          let target_instance = match self.store.get_func_owner(store_addr) {
-            Some(owner) => owner
-            None => saved_instance
-          }
-          self.call_wasm_func_with_instance(
-            target_instance, code, tail_args, num_results,
-          )
-        }
-        HostFunc(host_fn) => {
-          self.invoke_host_func(host_fn, caller_instance, tail_args) catch {
-            ExecutionSuspended => {
-              self.append_resume_suffix(fn() { self.instance = saved_instance })
-              raise ExecutionSuspended
-            }
-            error => raise error
-          }
-          self.instance = saved_instance
-        }
-        AsyncHostFunc(host_fn) => {
-          self.invoke_async_host_func(
-            store_addr, host_fn, caller_instance, tail_args,
-          ) catch {
-            ExecutionSuspended => {
-              self.append_resume_suffix(fn() { self.instance = saved_instance })
-              raise ExecutionSuspended
-            }
-            error => raise error
-          }
-          self.instance = saved_instance
-        }
-      }
-    }
-    ExecBlockRaised(error) => {
-      self.pop_frame()
-      self.instance = saved_instance
-      raise error
-    }
+  self.enter_function(target_instance, func, args, num_results)
+  if !self.running {
+    self.run_execution()
   }
 }
 
 ///|
-/// Call a WASM function
-/// Also uses a loop to handle tail calls
 fn ExecContext::call_wasm_func(
   self : ExecContext,
   func : @types.FunctionCode,
   args : Array[@types.Value],
   num_results : Int,
 ) -> Unit raise {
-  // Call with instance loop to handle tail calls
   self.call_wasm_func_with_instance(self.instance, func, args, num_results)
 }
 

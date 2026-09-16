@@ -297,7 +297,9 @@ fn ExecContext::discard_captured_execution(self : ExecContext) -> Unit {
   self.resume_action = None
   self.suspension_reason = None
   self.suspension_roots.clear()
+  self.execution.clear()
   self.frames.clear()
+  self.current_frame = -1
   self.labels.clear()
   self.stack.clear()
 }

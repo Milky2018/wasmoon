@@ -1,14 +1,6 @@
 // Execution Context - manages stack, store, and call frames
 
 ///|
-/// Maximum call stack depth to prevent stack overflow
-// The interpreter executes WASM calls via host recursion (not an explicit
-// instruction-pointer loop). Keep this limit conservative so runaway recursion
-// traps with `CallStackExhausted` instead of crashing the process with a native
-// stack overflow on typical 8MiB thread stacks (e.g. macOS).
-const MAX_CALL_STACK_DEPTH : Int = 256
-
-///|
 /// Enable forced GC after GC allocations in interpreter mode
 const GC_STRESS_ENV : String = "WASMOON_GC_STRESS"
 
@@ -110,6 +102,8 @@ struct ExecContext {
   stack : @runtime.Stack
   store : @runtime.Store
   mut instance : @runtime.ModuleInstance // mutable for cross-module call context switching
+  execution : Array[ExecutionFrame]
+  mut running : Bool
   frames : Array[@runtime.Frame]
   mut current_frame : Int
   labels : Array[LabelInfo] // Stack of labels for tracking branch arities
@@ -138,7 +132,9 @@ fn ExecContext::ExecContext(
   cooperative? : Bool = false,
 ) -> ExecContext {
   {
-    stack: Stack(),
+    stack: Stack(max_values=store.interpreter_limits.max_values),
+    execution: [],
+    running: false,
     store,
     instance,
     frames: [],
@@ -212,7 +208,7 @@ fn ExecContext::push_frame(
   self : ExecContext,
   frame : @runtime.Frame,
 ) -> Unit raise @runtime.RuntimeError {
-  if self.frames.length() >= MAX_CALL_STACK_DEPTH {
+  if self.frames.length() >= self.store.interpreter_limits.max_frames {
     raise CallStackExhausted
   }
   self.frames.push(frame)

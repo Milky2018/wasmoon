@@ -30,8 +30,8 @@ pub(all) enum ResumableCallWithExceptionOutcome {
 /// Explicit continuation for one interpreter invocation.
 ///
 /// The captured execution context owns the operand stack, Wasm frames, locals,
-/// labels, current module instance, and a composed closure for the remaining
-/// structured control flow.
+/// labels, current module instance, and explicit instruction/control positions.
+/// Only the suspended host/effect operation is retained as a resume action.
 struct ExecutionContinuation {
   context : ExecContext
   return_arity : Int
@@ -52,58 +52,6 @@ fn ExecContext::set_base_resume_action(
 ) -> Unit {
   self.suspension_reason = Some(reason)
   self.resume_action = Some({ run: action, })
-}
-
-///|
-/// Compose work that must run after the currently captured continuation
-/// completes normally. If the inner continuation suspends again, the same
-/// suffix is reattached to the newly captured base action.
-fn ExecContext::append_resume_suffix(
-  self : ExecContext,
-  suffix : () -> Unit raise,
-) -> Unit {
-  guard self.resume_action is Some(previous) else {
-    abort("missing interpreter resume action")
-  }
-  self.resume_action = Some({
-    run: fn() raise {
-      (previous.run)() catch {
-        ExecutionSuspended => {
-          self.append_resume_suffix(suffix)
-          raise ExecutionSuspended
-        }
-        error => raise error
-      }
-      suffix()
-    },
-  })
-}
-
-///|
-/// Compose a structured-control handler around the captured continuation.
-/// Unlike a plain suffix, the handler observes branch/return/exception signals
-/// produced after resumption.
-fn ExecContext::append_resume_handler(
-  self : ExecContext,
-  handler : (ExecBlockResult) -> Unit raise,
-) -> Unit {
-  guard self.resume_action is Some(previous) else {
-    abort("missing interpreter resume action")
-  }
-  self.resume_action = Some({
-    run: fn() raise {
-      let result = try (previous.run)() catch {
-        ExecutionSuspended => {
-          self.append_resume_handler(handler)
-          raise ExecutionSuspended
-        }
-        error => ExecBlockRaised(error)
-      } noraise {
-        _ => ExecBlockCompleted
-      }
-      handler(result)
-    },
-  })
 }
 
 ///|
@@ -179,7 +127,7 @@ fn ExecutionContinuation::continue_unchecked(
   errdefer self.context.discard_captured_execution()
   self.root_lease.release()
   self.context.resume_action = None
-  (action.run)() catch {
+  self.context.resume_execution(action) catch {
     ExecutionSuspended =>
       return suspended_outcome(self.context, self.return_arity, [true])
     error => {
@@ -254,9 +202,14 @@ pub fn call_func_by_index_resumable(
   context.call_func_inst_with_context(store_addr, func_inst, args, return_arity) catch {
     ExecutionSuspended =>
       return suspended_outcome(context, return_arity, [true])
-    error => raise normalize_runtime_error(error)
+    error => {
+      context.discard_captured_execution()
+      raise normalize_runtime_error(error)
+    }
   }
-  Returned(context.collect_call_results(return_arity))
+  let values = context.collect_call_results(return_arity)
+  context.discard_captured_execution()
+  Returned(values)
 }
 
 ///|
@@ -276,9 +229,14 @@ fn start_async_host_call_unchecked(
   context.call_func_inst_with_context(store_addr, func_inst, args, return_arity) catch {
     ExecutionSuspended =>
       return suspended_outcome(context, return_arity, [true])
-    error => raise error
+    error => {
+      context.discard_captured_execution()
+      raise error
+    }
   }
-  Returned(context.collect_call_results(return_arity))
+  let values = context.collect_call_results(return_arity)
+  context.discard_captured_execution()
+  Returned(values)
 }
 
 ///|

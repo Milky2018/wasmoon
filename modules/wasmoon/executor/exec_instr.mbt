@@ -538,23 +538,8 @@ fn ExecContext::exec_instr(
         _ => raise @runtime.RuntimeError::TypeMismatch
       }
     }
-    TryTable(bt, handlers, body) => {
-      let arity = self.block_arity(bt)
-      let stack_height = self.stack.size()
-      self.push_label(false, arity)
-      let result = try self.exec_block(body) catch {
-        ExecutionSuspended => {
-          self.append_resume_handler(fn(result) raise {
-            self.finish_try_table(result, handlers, stack_height)
-          })
-          raise ExecutionSuspended
-        }
-        e => ExecBlockRaised(e)
-      } noraise {
-        _ => ExecBlockCompleted
-      }
-      self.finish_try_table(result, handlers, stack_height)
-    }
+    TryTable(bt, handlers, body) =>
+      self.enter_control(bt, body, TryControl(handlers))
 
     // GC instructions - struct operations
     StructNew(type_idx) => self.exec_struct_new(type_idx)
