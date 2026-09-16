@@ -770,6 +770,8 @@ pub(all) enum JITCallResult {
   Cancelled
   Failed(JITTrap)
   UnsupportedCancellation
+  TimedOut
+  InvalidTimeout
 } derive(Debug)
 
 ///|
@@ -781,26 +783,31 @@ pub fn JITModule::call_with_context_controlled(
   func : JITFunction,
   args : Array[Int64],
   cancel? : (() -> Bool)? = None,
+  timeout_ms? : Int? = None,
 ) -> JITCallResult {
-  if cancel is Some(_) && !self.cancellation_safepoints {
+  guard @wasmoon_jit.InvocationControl::new(timeout_ms, cancel) is Some(control) else {
+    return InvalidTimeout
+  }
+  let controlled = cancel is Some(_) || timeout_ms is Some(_)
+  if controlled && !self.cancellation_safepoints {
     return UnsupportedCancellation
+  }
+  if control.poll() {
+    return if control.expired() { TimedOut } else { Cancelled }
   }
   match self.context {
     None => Completed([])
     Some(ctx) => {
-      if cancel is Some(callback) {
-        ctx.set_cancellation_callback(callback)
+      if controlled {
+        ctx.set_cancellation_callback(() => control.poll())
       }
-      let result = try self.call_with_context(func, args) catch {
-        JITCancelled => Cancelled
+      defer (if controlled { ctx.clear_cancellation_callback() })
+      try self.call_with_context(func, args) catch {
+        JITCancelled => if control.expired() { TimedOut } else { Cancelled }
         error => Failed(error)
       } noraise {
-        values => Completed(values)
+        values => if control.expired() { TimedOut } else { Completed(values) }
       }
-      if cancel is Some(_) {
-        ctx.clear_cancellation_callback()
-      }
-      result
     }
   }
 }
