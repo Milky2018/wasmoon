@@ -345,7 +345,7 @@ pub fn ExecContext::exec_tail_call(
   // Get function instance
   let func_inst = self.store.get_func_inst(store_addr)
 
-  // Raise TailCall signal - the loop in call_wasm_func_with_instance will handle it
+  // The iterative execution stack replaces the current function at its boundary.
   raise ControlSignal::TailCall(
     store_addr,
     func_inst,
