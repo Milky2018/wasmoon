@@ -86,3 +86,18 @@ path creation/deletion/link/rename operations through both engines.
 
 `p1_cli_hostcall_fuel` is deliberately not applicable. Wasmtime-specific fuel
 accounting is not part of this WASIp1 capability contract and is not implemented.
+
+## Operation-specific rights
+
+`FD_SEEK` authorizes `fd_tell` without expanding the stored rights mask.
+`FD_TELL` also authorizes `fd_seek(0, CUR)`, but no position-changing seek.
+Rights reduction still compares the original masks, so implied operation
+permission cannot be used to add a previously absent bit.
+
+Synchronous `path_open` flags consume the parent's inheriting rights:
+`DSYNC` requires `FD_DATASYNC`; `RSYNC` and `SYNC` require `FD_SYNC`.
+Combined flags require both. These checks happen before filesystem effects
+and do not add rights to the returned descriptor. This follows the legacy
+[Wasmtime open-rights mapping](https://github.com/bytecodealliance/wasmtime/blob/v0.20.0/crates/wasi-common/src/old/snapshot_0/sys/unix/hostcalls_impl/fs_helpers.rs#L8)
+(the historical Preview 1 `FD_SYNC` prose repeats `DSYNC` where this mapping
+uses `SYNC`). `fd_fdstat_set_flags` remains governed by its own capability.

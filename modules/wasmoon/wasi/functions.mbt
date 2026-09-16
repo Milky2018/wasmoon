@@ -707,6 +707,13 @@ pub fn path_open(
     return errno.to_i32()
   }
   let parent_rights_inheriting = parent_file.rights_inheriting
+  // Open-time synchronization consumes the parent's inheriting authority,
+  // independently of which rights the child retains after opening.
+  let sync_rights = (if (fdflags & 0x02) != 0 { right_fd_datasync } else { 0L }) |
+    (if (fdflags & 0x18) != 0 { right_fd_sync } else { 0L })
+  if (parent_rights_inheriting & sync_rights) != sync_rights {
+    return Errno::NotCapable.to_i32()
+  }
   let effective_rights_base = fs_rights_base
   let effective_rights_inheriting = fs_rights_inheriting
   if (effective_rights_base & parent_rights_inheriting) != effective_rights_base ||

@@ -201,3 +201,57 @@ test "wasi jit: SEEK implies TELL and TELL permits only nonmoving seek" {
   inspect(wasi_i32_from_result(result.interp_result), content="0")
   inspect(wasi_i32_from_result(result.jit_result), content="0")
 }
+
+///|
+test "wasi jit: synchronous opens require inherited rights before create or truncate" {
+  let path = @test_fs.temp_dir() + "/wasmoon_sync_rights"
+  @wasi.native_unlinkat(0, path, 0) |> ignore
+  defer @wasi.native_unlinkat(0, path, 0) |> ignore
+  let source =
+    #|(module
+    #|(import "wasi_snapshot_preview1" "path_open" (func $open (param i32 i32 i32 i32 i32 i64 i64 i32 i32) (result i32)))
+    #|(import "wasi_snapshot_preview1" "fd_close" (func $close (param i32) (result i32)))
+    #|(import "wasi_snapshot_preview1" "path_unlink_file" (func $unlink (param i32 i32 i32) (result i32)))
+    #|(import "wasi_snapshot_preview1" "fd_write" (func $write (param i32 i32 i32 i32) (result i32)))
+    #|(import "wasi_snapshot_preview1" "fd_filestat_get" (func $stat (param i32 i32) (result i32)))
+    #|(memory (export "memory") 1)
+    #|(data (i32.const 64) "wasmoon_sync_rights") (data (i32.const 90) ".") (data (i32.const 91) "x")
+    #|(func $eq (param i32 i32) (if (i32.ne (local.get 0) (local.get 1)) (then unreachable)))
+    #|(func $file (param $dir i32) (param $oflags i32) (param $flags i32) (result i32)
+    #| (call $open (local.get $dir) (i32.const 0) (i32.const 64) (i32.const 18) (local.get $oflags) (i64.const 64) (i64.const 0) (local.get $flags) (i32.const 0)))
+    #|(func $dir (param $rights i64) (result i32)
+    #| (call $eq (call $open (i32.const 3) (i32.const 0) (i32.const 90) (i32.const 1) (i32.const 2) (i64.const 533504) (local.get $rights) (i32.const 0) (i32.const 0)) (i32.const 0))
+    #| (i32.load (i32.const 0)))
+    #|(func $case (param $flags i32) (param $sync i64) (local $d i32) (local $f i32)
+    #| (local.set $d (call $dir (i64.const 64)))
+    #| (call $eq (call $file (local.get $d) (i32.const 1) (local.get $flags)) (i32.const 76))
+    #| (call $eq (call $unlink (i32.const 3) (i32.const 64) (i32.const 18)) (i32.const 44))
+    #| ;; Create data with a descriptor that can observe whether denied truncation mutated it.
+    #| (call $eq (call $open (i32.const 3) (i32.const 0) (i32.const 64) (i32.const 18) (i32.const 9) (i64.const 2097216) (i64.const 0) (i32.const 0) (i32.const 0)) (i32.const 0))
+    #| (local.set $f (i32.load (i32.const 0)))
+    #| (i32.store (i32.const 16) (i32.const 91)) (i32.store (i32.const 20) (i32.const 1))
+    #| (call $eq (call $write (local.get $f) (i32.const 16) (i32.const 1) (i32.const 24)) (i32.const 0))
+    #| (call $eq (call $file (local.get $d) (i32.const 8) (local.get $flags)) (i32.const 76))
+    #| (call $eq (call $stat (local.get $f) (i32.const 128)) (i32.const 0))
+    #| (if (i64.ne (i64.load (i32.const 160)) (i64.const 1)) (then unreachable))
+    #| (call $eq (call $close (local.get $f)) (i32.const 0))
+    #| (call $eq (call $close (local.get $d)) (i32.const 0))
+    #| (local.set $d (call $dir (i64.or (i64.const 64) (local.get $sync))))
+    #| (call $eq (call $file (local.get $d) (i32.const 0) (local.get $flags)) (i32.const 0))
+    #| (call $eq (call $close (i32.load (i32.const 0))) (i32.const 0))
+    #| (call $eq (call $close (local.get $d)) (i32.const 0))
+    #| (call $eq (call $unlink (i32.const 3) (i32.const 64) (i32.const 18)) (i32.const 0)))
+    #|(func (export "test") (result i32)
+    #| (call $case (i32.const 2) (i64.const 1))
+    #| (call $case (i32.const 8) (i64.const 16))
+    #| (call $case (i32.const 16) (i64.const 16))
+    #| (call $case (i32.const 26) (i64.const 17)) (i32.const 0)))
+  let result = compare_wasi_with_options(source, "test", preopens=[
+    (@test_fs.temp_dir(), "/"),
+  ])
+  if result.interp_result is Err(_) || result.jit_result is Err(_) {
+    fail(result.to_string())
+  }
+  inspect(wasi_i32_from_result(result.interp_result), content="0")
+  inspect(wasi_i32_from_result(result.jit_result), content="0")
+}
