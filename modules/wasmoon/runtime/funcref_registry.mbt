@@ -155,6 +155,7 @@ fn StoreFuncrefRegistry::clear(self : StoreFuncrefRegistry) -> Unit {
   self.ptr_to_store.clear()
   let owners = self.owners.copy()
   self.owners.clear()
+  self.owners.shrink_to_fit()
   for owner in owners {
     (owner.release)()
   }

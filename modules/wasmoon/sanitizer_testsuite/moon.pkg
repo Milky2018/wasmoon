@@ -1,11 +1,7 @@
-// Tests exercised by CI's native sanitizer gate.
-//
-// These live apart from `wasmoon/testsuite` for build cost, not for topic:
-// the gate rebuilds every covered package from scratch under ASan/UBSan, and
-// compiling the 17k-line testsuite package to run these two files dominated
-// the gate's wall time (ISS-368). The package holds only blackbox tests, so
-// every import belongs to the test scope. Keep it small — add a file here
-// only when the sanitizer gate covers it, and keep the imports minimal.
+// Shared runtime and execution lifecycle blackbox fixtures.
+// Ordinary native tests run these here. scripts/run_sanitizers.py copies the
+// same files into one isolated package with declarative ASan/UBSan link flags;
+// the instrumentation configuration lives in tools/sanitizer/moon.pkg.
 import {
   "Milky2018/wasm_component" @component_types,
   "Milky2018/wasm_core/types",

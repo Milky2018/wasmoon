@@ -152,27 +152,23 @@ static void native_fiber_swap_stacks(
     const void **old_stack_bottom,
     size_t *old_stack_size
 ) {
-#if defined(WASMOON_ADDRESS_SANITIZER)
-    void *fake_stack = NULL;
-    __sanitizer_start_switch_fiber(
-        is_finishing ? NULL : &fake_stack,
-        target_stack_bottom,
-        target_stack_size
-    );
-    wasmoon_native_fiber_swap(from, to);
-    __sanitizer_finish_switch_fiber(
-        fake_stack,
-        old_stack_bottom,
-        old_stack_size
-    );
-#else
+#if defined(WASMOON_SANITIZER_FIBER_HOOKS)
+    if (wasmoon_address_sanitizer_active()) {
+        void *fake_stack = NULL;
+        wasmoon_sanitizer_start_switch_fiber(
+            is_finishing ? NULL : &fake_stack, target_stack_bottom, target_stack_size
+        );
+        wasmoon_native_fiber_swap(from, to);
+        wasmoon_sanitizer_finish_switch_fiber(fake_stack, old_stack_bottom, old_stack_size);
+        return;
+    }
+#endif
     (void)target_stack_bottom;
     (void)target_stack_size;
     (void)is_finishing;
     (void)old_stack_bottom;
     (void)old_stack_size;
     wasmoon_native_fiber_swap(from, to);
-#endif
 }
 
 typedef struct native_fiber_resource {
@@ -259,14 +255,12 @@ static VOID WINAPI fiber_bootstrap(void *unused) {
 #else
 static WASMOON_NO_ADDRESS_SANITIZE void fiber_bootstrap(void) {
 #endif
-#if defined(WASMOON_ADDRESS_SANITIZER)
     const void *caller_stack_bottom = NULL;
     size_t caller_stack_size = 0;
-    __sanitizer_finish_switch_fiber(
-        NULL,
-        &caller_stack_bottom,
-        &caller_stack_size
-    );
+#if defined(WASMOON_SANITIZER_FIBER_HOOKS)
+    if (wasmoon_address_sanitizer_active()) {
+        wasmoon_sanitizer_finish_switch_fiber(NULL, &caller_stack_bottom, &caller_stack_size);
+    }
 #endif
     native_fiber_t *fiber = current_native_fiber;
     if (!fiber ||
@@ -274,10 +268,8 @@ static WASMOON_NO_ADDRESS_SANITIZE void fiber_bootstrap(void) {
         !fiber->entry) {
         abort();
     }
-#if defined(WASMOON_ADDRESS_SANITIZER)
     fiber->caller_stack_bottom = caller_stack_bottom;
     fiber->caller_stack_size = caller_stack_size;
-#endif
     fiber->return_value = call_native_fiber_entry(
         fiber->entry, fiber->closure
     );

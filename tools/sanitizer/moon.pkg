@@ -1,0 +1,29 @@
+import {
+  "Milky2018/wasm_component" @component_types,
+  "Milky2018/wasm_core/types",
+  "Milky2018/wasmoon/cmd/wasmoon/commands",
+  "Milky2018/wasmoon/component",
+  "Milky2018/wasm_component/text" @component_text,
+  "Milky2018/wasmoon/executor",
+  "Milky2018/wasmoon/jit",
+  "Milky2018/wasmoon/runtime",
+  "Milky2018/wasmoon/wasi_component",
+  "Milky2018/wasmoon/wast",
+  "Milky2018/wasm_core/wat",
+  "Milky2018/wasm_component/wit",
+  "Milky2018/wasmoon/wit_binding",
+  "Milky2018/wasmoon_jit",
+  "moonbitlang/async",
+  "moonbitlang/core/env",
+  "moonbitlang/x/fs",
+} for "test"
+
+options(
+  link: {
+    "native": {
+      "cc": "clang",
+      "cc-flags": "-fsanitize=address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer",
+      "cc-link-flags": "-fsanitize=address,undefined",
+    },
+  },
+)

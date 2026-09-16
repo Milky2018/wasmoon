@@ -65,6 +65,8 @@ pub(all) enum CallExportFailureKind {
   Trap
   HostInvocation
   Cancelled
+  TimedOut
+  InvalidOption
   UnsupportedOption
 } derive(@debug.Debug)
 pub fn CallExportFailureKind::to_repr(Self) -> @debug.Repr

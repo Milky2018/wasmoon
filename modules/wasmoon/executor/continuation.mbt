@@ -30,13 +30,20 @@ pub(all) enum ResumableCallWithExceptionOutcome {
 /// Explicit continuation for one interpreter invocation.
 ///
 /// The captured execution context owns the operand stack, Wasm frames, locals,
-/// labels, current module instance, and a composed closure for the remaining
-/// structured control flow.
+/// labels, current module instance, and explicit instruction/control positions.
+/// Only the suspended host/effect operation is retained as a resume action.
+/// The Store cancels parked execution on close. A consumed or cancelled handle
+/// releases its captured state and reports ContinuationAlreadyConsumed on reuse.
 struct ExecutionContinuation {
+  mut captured : CapturedExecution?
+}
+
+///|
+priv struct CapturedExecution {
   context : ExecContext
   return_arity : Int
-  active : Array[Bool]
   root_lease : @runtime.GcRootLease
+  registration : Int64
 }
 
 ///|
@@ -48,69 +55,18 @@ pub impl Debug for ExecutionContinuation with fn to_repr(_self) {
 fn ExecContext::set_base_resume_action(
   self : ExecContext,
   reason : SuspensionReason,
-  action : () -> Unit raise,
+  action : (ExecContext) -> Unit raise,
+  cancel? : () -> Unit = fn() { () },
 ) -> Unit {
   self.suspension_reason = Some(reason)
-  self.resume_action = Some({ run: action, })
-}
-
-///|
-/// Compose work that must run after the currently captured continuation
-/// completes normally. If the inner continuation suspends again, the same
-/// suffix is reattached to the newly captured base action.
-fn ExecContext::append_resume_suffix(
-  self : ExecContext,
-  suffix : () -> Unit raise,
-) -> Unit {
-  guard self.resume_action is Some(previous) else {
-    abort("missing interpreter resume action")
-  }
-  self.resume_action = Some({
-    run: fn() raise {
-      (previous.run)() catch {
-        ExecutionSuspended => {
-          self.append_resume_suffix(suffix)
-          raise ExecutionSuspended
-        }
-        error => raise error
-      }
-      suffix()
-    },
-  })
-}
-
-///|
-/// Compose a structured-control handler around the captured continuation.
-/// Unlike a plain suffix, the handler observes branch/return/exception signals
-/// produced after resumption.
-fn ExecContext::append_resume_handler(
-  self : ExecContext,
-  handler : (ExecBlockResult) -> Unit raise,
-) -> Unit {
-  guard self.resume_action is Some(previous) else {
-    abort("missing interpreter resume action")
-  }
-  self.resume_action = Some({
-    run: fn() raise {
-      let result = try (previous.run)() catch {
-        ExecutionSuspended => {
-          self.append_resume_handler(handler)
-          raise ExecutionSuspended
-        }
-        error => ExecBlockRaised(error)
-      } noraise {
-        _ => ExecBlockCompleted
-      }
-      handler(result)
-    },
-  })
+  self.resume_action = Some({ run: action, cancel, })
 }
 
 ///|
 fn ExecContext::suspend_host_call(
   self : ExecContext,
   error : @runtime.RuntimeError,
-  retry : () -> Unit raise,
+  retry : (ExecContext) -> Unit raise,
   roots? : Array[@types.Value] = [],
 ) -> Unit raise {
   match self.suspension_classifier {
@@ -144,8 +100,8 @@ fn ExecContext::collect_call_results(
 fn suspended_outcome(
   context : ExecContext,
   return_arity : Int,
-  active : Array[Bool],
-) -> ResumableCallOutcome {
+) -> ResumableCallOutcome raise @runtime.RuntimeError {
+  errdefer context.discard_captured_execution()
   guard context.suspension_reason is Some(reason) else {
     abort("missing interpreter suspension token")
   }
@@ -156,7 +112,18 @@ fn suspended_outcome(
   }
   context.suspension_roots.clear()
   let root_lease = context.store.pin_gc_roots(roots)
-  Suspended(reason, { context, return_arity, active, root_lease, })
+  errdefer root_lease.release()
+  let continuation : ExecutionContinuation = { captured: None, }
+  let registration = context.store.register_suspended_execution(fn() {
+    continuation.cancel()
+  })
+  continuation.captured = Some({
+    context,
+    return_arity,
+    root_lease,
+    registration,
+  })
+  Suspended(reason, continuation)
 }
 
 ///|
@@ -164,32 +131,25 @@ fn suspended_outcome(
 fn ExecutionContinuation::continue_unchecked(
   self : ExecutionContinuation,
 ) -> ResumableCallOutcome raise {
-  if !self.active[0] {
-    raise @runtime.Unreachable
+  guard self.captured is Some(captured) else {
+    raise @runtime.ContinuationAlreadyConsumed
   }
-  guard self.context.resume_action is Some(action) else {
-    self.active[0] = false
-    self.root_lease.release()
-    self.context.discard_captured_execution()
-    raise @runtime.Unreachable
+  self.captured = None
+  let context = captured.context
+  context.store.release_suspended_execution(captured.registration)
+  captured.root_lease.release()
+  errdefer context.discard_captured_execution()
+  guard context.resume_action is Some(action) else {
+    raise @runtime.ContinuationAlreadyConsumed
   }
-  // Consume this handle before running it. A subsequent suspension receives a
-  // fresh owner; aliases of the old handle cannot resume or cancel that owner.
-  self.active[0] = false
-  errdefer self.context.discard_captured_execution()
-  self.root_lease.release()
-  self.context.resume_action = None
-  (action.run)() catch {
+  context.resume_action = None
+  context.resume_execution(action) catch {
     ExecutionSuspended =>
-      return suspended_outcome(self.context, self.return_arity, [true])
-    error => {
-      self.active[0] = false
-      raise error
-    }
+      return suspended_outcome(context, captured.return_arity)
+    error => raise error
   }
-  self.active[0] = false
-  let results = self.context.collect_call_results(self.return_arity)
-  self.context.discard_captured_execution()
+  let results = context.collect_call_results(captured.return_arity)
+  context.discard_captured_execution()
   Returned(results)
 }
 
@@ -228,10 +188,11 @@ pub fn ExecutionContinuation::continue_execution_with_exception(
 ///|
 /// Drop the captured interpreter state without resuming it.
 pub fn ExecutionContinuation::cancel(self : ExecutionContinuation) -> Unit {
-  if self.active[0] {
-    self.active[0] = false
-    self.root_lease.release()
-    self.context.discard_captured_execution()
+  if self.captured is Some(captured) {
+    self.captured = None
+    captured.context.store.release_suspended_execution(captured.registration)
+    captured.root_lease.release()
+    captured.context.discard_captured_execution()
   }
 }
 
@@ -252,11 +213,15 @@ pub fn call_func_by_index_resumable(
   let func_type = instance.validated_func_type_at(type_idx)
   let return_arity = func_type.results.length()
   context.call_func_inst_with_context(store_addr, func_inst, args, return_arity) catch {
-    ExecutionSuspended =>
-      return suspended_outcome(context, return_arity, [true])
-    error => raise normalize_runtime_error(error)
+    ExecutionSuspended => return suspended_outcome(context, return_arity)
+    error => {
+      context.discard_captured_execution()
+      raise normalize_runtime_error(error)
+    }
   }
-  Returned(context.collect_call_results(return_arity))
+  let values = context.collect_call_results(return_arity)
+  context.discard_captured_execution()
+  Returned(values)
 }
 
 ///|
@@ -274,11 +239,15 @@ fn start_async_host_call_unchecked(
   let func_type = instance.validated_func_type_at(type_idx)
   let return_arity = func_type.results.length()
   context.call_func_inst_with_context(store_addr, func_inst, args, return_arity) catch {
-    ExecutionSuspended =>
-      return suspended_outcome(context, return_arity, [true])
-    error => raise error
+    ExecutionSuspended => return suspended_outcome(context, return_arity)
+    error => {
+      context.discard_captured_execution()
+      raise error
+    }
   }
-  Returned(context.collect_call_results(return_arity))
+  let values = context.collect_call_results(return_arity)
+  context.discard_captured_execution()
+  Returned(values)
 }
 
 ///|

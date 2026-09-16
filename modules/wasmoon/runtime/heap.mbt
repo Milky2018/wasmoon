@@ -162,8 +162,11 @@ fn MarkSweepHeap::make_allocation_rollback(
 ///|
 fn MarkSweepHeap::clear(self : MarkSweepHeap) -> Unit {
   self.objects.clear()
+  self.objects.shrink_to_fit()
   self.marks.clear()
+  self.marks.shrink_to_fit()
   self.free_list.clear()
+  self.free_list.shrink_to_fit()
   self.total_live = 0
 }
 

@@ -494,10 +494,8 @@ static void install_alt_stack(void) {
     if (g_sigstack_installed) return;
 
 #ifndef _WIN32
-#if defined(WASMOON_ADDRESS_SANITIZER)
-    // ASan owns and tracks the process alternate signal stack.
-    return;
-#else
+    // ASan owns the alternate signal stack even with uninstrumented stubs.
+    if (wasmoon_address_sanitizer_active()) return;
     stack_t ss;
     ss.ss_sp = g_sigstack;
     ss.ss_size = SIGSTACK_SIZE;
@@ -505,7 +503,6 @@ static void install_alt_stack(void) {
     if (sigaltstack(&ss, NULL) == 0) {
         g_sigstack_installed = 1;
     }
-#endif
 #endif
 }
 

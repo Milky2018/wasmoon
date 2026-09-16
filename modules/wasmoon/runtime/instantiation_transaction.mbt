@@ -59,10 +59,12 @@ pub fn InstantiationTransaction::commit(
   if self.active {
     self.active = false
     self.rollbacks.clear()
+    self.rollbacks.shrink_to_fit()
     for finalizer in self.finalizers {
       finalizer()
     }
     self.finalizers.clear()
+    self.finalizers.shrink_to_fit()
   }
 }
 
@@ -80,8 +82,10 @@ pub fn InstantiationTransaction::rollback(
     self.rollbacks[index]()
   }
   self.rollbacks.clear()
+  self.rollbacks.shrink_to_fit()
   for finalizer in self.finalizers {
     finalizer()
   }
   self.finalizers.clear()
+  self.finalizers.shrink_to_fit()
 }

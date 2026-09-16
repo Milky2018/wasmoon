@@ -3,6 +3,10 @@ name: Check and Test
 on:
   workflow_dispatch:
     inputs:
+      sanitizers_only:
+        description: Run only the sanitizer diagnostic gate
+        type: boolean
+        default: false
       windows_only:
         description: Run only the Windows port diagnostic gate
         type: boolean
@@ -25,7 +29,7 @@ env:
 
 jobs:
   native-platform:
-    if: ${{ inputs.windows_only != true }}
+    if: ${{ inputs.windows_only != true && inputs.sanitizers_only != true }}
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
@@ -207,6 +211,7 @@ jobs:
           exit "$status"
 
   windows-native:
+    if: ${{ inputs.sanitizers_only != true }}
     name: Windows AMD64 (${{ matrix.compiler }})
     strategy:
       fail-fast: false
@@ -372,4 +377,38 @@ jobs:
             target/windows-misc-run.log
             target/windows-p1-smoke
             target/windows-p1-rights
+          if-no-files-found: warn
+
+  sanitizers:
+    if: ${{ inputs.windows_only != true }}
+    name: Linux ASan and UBSan
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: install sanitizer toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh \
+            | bash -s "$MOONBIT_TOOLCHAIN_VERSION"
+          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
+      - name: instrument generated MoonBit code and prove detection
+        # Package link flags instrument generated MoonBit C. Native stubs,
+        # MoonBit runtime objects and dynamically emitted JIT code are excluded.
+        # The runner also expects an actual ASan report from a deliberate unsafe
+        # MoonBit access; compiler flags or symbols alone are not proof.
+        run: |
+          moon update
+          python3 scripts/run_sanitizers.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: sanitizer-evidence
+          path: |
+            target/sanitizers/tests.log
+            target/sanitizers/probe.log
+            target/sanitizers/symbols.log
+            target/sanitizers/summary.json
+            target/sanitizers/isolated
           if-no-files-found: warn

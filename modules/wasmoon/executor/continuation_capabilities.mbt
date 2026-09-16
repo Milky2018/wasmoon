@@ -21,36 +21,40 @@ pub fn validate_continuation_gc_storage(
   fn visit(
     body : Array[@types.Instruction],
   ) -> Unit raise @runtime.RuntimeError {
-    for instruction in body {
-      match instruction {
-        Block(_, body) | Loop(_, body) | TryTable(_, _, body) => visit(body)
-        If(_, yes, no) => {
-          visit(yes)
-          visit(no)
+    let pending = [body]
+    while pending.pop() is Some(instructions) {
+      for instruction in instructions {
+        match instruction {
+          Block(_, body) | Loop(_, body) | TryTable(_, _, body) =>
+            pending.push(body)
+          If(_, yes, no) => {
+            pending.push(no)
+            pending.push(yes)
+          }
+          StructNew(index)
+          | StructNewDefault(index)
+          | StructGet(index, _)
+          | StructGetS(index, _)
+          | StructGetU(index, _)
+          | StructSet(index, _)
+          | ArrayNew(index)
+          | ArrayNewDefault(index)
+          | ArrayNewFixed(index, _)
+          | ArrayNewData(index, _)
+          | ArrayNewElem(index, _)
+          | ArrayGet(index)
+          | ArrayGetS(index)
+          | ArrayGetU(index)
+          | ArraySet(index)
+          | ArrayFill(index)
+          | ArrayInitData(index, _)
+          | ArrayInitElem(index, _) => check(index)
+          ArrayCopy(destination, source) => {
+            check(destination)
+            check(source)
+          }
+          _ => ()
         }
-        StructNew(index)
-        | StructNewDefault(index)
-        | StructGet(index, _)
-        | StructGetS(index, _)
-        | StructGetU(index, _)
-        | StructSet(index, _)
-        | ArrayNew(index)
-        | ArrayNewDefault(index)
-        | ArrayNewFixed(index, _)
-        | ArrayNewData(index, _)
-        | ArrayNewElem(index, _)
-        | ArrayGet(index)
-        | ArrayGetS(index)
-        | ArrayGetU(index)
-        | ArraySet(index)
-        | ArrayFill(index)
-        | ArrayInitData(index, _)
-        | ArrayInitElem(index, _) => check(index)
-        ArrayCopy(destination, source) => {
-          check(destination)
-          check(source)
-        }
-        _ => ()
       }
     }
   }

@@ -421,9 +421,13 @@ pub fn ComponentLinker::close(self : ComponentLinker) -> Unit {
 /// instance's arrays only drops references to those, never their state.
 fn release_owned_instance(instance : ComponentInstance) -> Unit {
   instance.components.clear()
+  instance.components.shrink_to_fit()
   instance.instances.clear()
+  instance.instances.shrink_to_fit()
   instance.funcs.clear()
+  instance.funcs.shrink_to_fit()
   instance.values.clear()
+  instance.values.shrink_to_fit()
   instance.exports.clear()
 }
 
@@ -441,6 +445,7 @@ fn ComponentLinker::finish_close(self : ComponentLinker) -> Unit {
   // entire claim on them. Releasing their graphs here destroyed instances
   // shared from other linkers or built by the embedder.
   self.components.clear()
+  self.components.shrink_to_fit()
   self.imports.clear()
   self.host_runtime.val = None
   // Close the engine, then drop it. Holding it past terminal close would keep
@@ -474,6 +479,7 @@ fn rollback_staged_registrations(
     |> ignore
   }
   staged.clear()
+  staged.shrink_to_fit()
 }
 
 ///|

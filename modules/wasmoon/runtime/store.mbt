@@ -17,6 +17,8 @@ pub(all) enum FuncOwner {
 /// The store contains all global runtime state
 pub struct Store {
   nan_canonicalization : Bool
+  interpreter_limits : InterpreterLimits
+  priv mut interpreter_reentry_depth : Int
   funcs : Array[FuncInst]
   func_types : Array[@types.FuncType] // Type of each function
   func_type_indices : Array[Int] // Original type index for structural comparison
@@ -59,6 +61,8 @@ pub struct Store {
   priv native_types : StoreTypeRegistry
   priv native_exception_to_store : Map[Int64, Int]
   priv store_exception_to_native : Map[Int, Int64]
+  priv suspended_executions : Map[Int64, SuspendedExecutionCleanup]
+  priv mut next_suspended_execution_id : Int64
   priv guest_continuations : Array[GuestContinuationBody?]
   priv pinned_gc_roots : Array[(Int64, Array[@types.Value], Ref[Bool])]
   priv mut next_pinned_gc_roots_id : Int64
@@ -135,9 +139,14 @@ fn c_heap_initial_capacity() -> Int {
 }
 
 ///|
-pub fn Store::Store(nan_canonicalization? : Bool = false) -> Store {
+pub fn Store::Store(
+  nan_canonicalization? : Bool = false,
+  interpreter_limits? : InterpreterLimits = InterpreterLimits::default(),
+) -> Store {
   {
     nan_canonicalization,
+    interpreter_limits,
+    interpreter_reentry_depth: 0,
     funcs: [],
     func_types: [],
     func_type_indices: [],
@@ -164,6 +173,8 @@ pub fn Store::Store(nan_canonicalization? : Bool = false) -> Store {
     native_types: StoreTypeRegistry::new(),
     native_exception_to_store: Map([]),
     store_exception_to_native: Map([]),
+    suspended_executions: Map([]),
+    next_suspended_execution_id: 0L,
     guest_continuations: [],
     pinned_gc_roots: [],
     next_pinned_gc_roots_id: 0L,
@@ -174,10 +185,15 @@ pub fn Store::Store(nan_canonicalization? : Bool = false) -> Store {
 
 ///|
 /// Create a store with C heap enabled (for JIT mode)
-pub fn Store::with_c_heap(nan_canonicalization? : Bool = false) -> Store {
+pub fn Store::with_c_heap(
+  nan_canonicalization? : Bool = false,
+  interpreter_limits? : InterpreterLimits = InterpreterLimits::default(),
+) -> Store {
   let initial_capacity = c_heap_initial_capacity()
   {
     nan_canonicalization,
+    interpreter_limits,
+    interpreter_reentry_depth: 0,
     funcs: [],
     func_types: [],
     func_type_indices: [],
@@ -204,6 +220,8 @@ pub fn Store::with_c_heap(nan_canonicalization? : Bool = false) -> Store {
     native_types: StoreTypeRegistry::new(),
     native_exception_to_store: Map([]),
     store_exception_to_native: Map([]),
+    suspended_executions: Map([]),
+    next_suspended_execution_id: 0L,
     guest_continuations: [],
     pinned_gc_roots: [],
     next_pinned_gc_roots_id: 0L,
@@ -223,44 +241,68 @@ pub fn Store::close(self : Store) -> Unit {
     return
   }
   self.closed.val = true
+  let suspended = self.suspended_executions.values().to_array()
+  self.suspended_executions.clear()
+  for cleanup in suspended {
+    (cleanup.run)()
+  }
   for entry in self.guest_continuations {
     if entry is Some(body) {
       (body.cancel)()
     }
   }
+  // Clear logical contents and release retained backing slots to break cycles.
+  // Array.clear alone can retain references beyond the new length.
   self.guest_continuations.clear()
+  self.guest_continuations.shrink_to_fit()
   self.native_execution.seal()
   for roots in self.pinned_gc_roots {
     roots.2.val = false
   }
   self.pinned_gc_roots.clear()
+  self.pinned_gc_roots.shrink_to_fit()
   self.funcref_registry.clear()
   self.native_types.representatives.clear()
+  self.native_types.representatives.shrink_to_fit()
   self.native_types.mappings.clear()
   self.native_types.parents.clear()
+  self.native_types.parents.shrink_to_fit()
   self.native_types.views.clear()
+  self.native_types.views.shrink_to_fit()
   self.native_types.entries.clear()
   self.native_types.heap_types.clear()
   self.funcs.clear()
+  self.funcs.shrink_to_fit()
   self.func_types.clear()
+  self.func_types.shrink_to_fit()
   self.func_type_indices.clear()
+  self.func_type_indices.shrink_to_fit()
   self.func_owners.clear()
+  self.func_owners.shrink_to_fit()
   self.instances.clear()
+  self.instances.shrink_to_fit()
   self.tables.clear()
+  self.tables.shrink_to_fit()
   for memory in self.mems {
     memory.close()
   }
   self.mems.clear()
+  self.mems.shrink_to_fit()
   for global in self.globals {
     global.close()
   }
   self.globals.clear()
+  self.globals.shrink_to_fit()
   self.tags.clear()
+  self.tags.shrink_to_fit()
   self.tag_type_indices.clear()
+  self.tag_type_indices.shrink_to_fit()
   self.tag_owners.clear()
+  self.tag_owners.shrink_to_fit()
   self.native_exception_to_store.clear()
   self.store_exception_to_native.clear()
   self.exns.clear()
+  self.exns.shrink_to_fit()
   self.heap.clear()
   if self.c_heap is Some(heap) {
     heap.free()
@@ -271,6 +313,7 @@ pub fn Store::close(self : Store) -> Unit {
   self.module_types = []
   self.module_rec_groups = []
   self.wrapped_externs.clear()
+  self.wrapped_externs.shrink_to_fit()
   for owner in self.jit_table_owners {
     match owner {
       Some(owner) => owner.close()
@@ -278,7 +321,9 @@ pub fn Store::close(self : Store) -> Unit {
     }
   }
   self.jit_table_owners.clear()
+  self.jit_table_owners.shrink_to_fit()
   self.jit_tables.clear()
+  self.jit_tables.shrink_to_fit()
   self.wasi_mem_addr = None
   self.wasi_ctx_handle = 0
   self.instantiation = None

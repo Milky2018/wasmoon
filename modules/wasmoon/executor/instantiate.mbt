@@ -1684,6 +1684,8 @@ pub(all) enum CallExportFailureKind {
   Trap
   HostInvocation
   Cancelled
+  TimedOut
+  InvalidOption
   UnsupportedOption
 } derive(Debug)
 
@@ -1721,7 +1723,8 @@ pub(all) enum CallExportResult {
 /// Current engine support:
 /// - `cancel` is checked before invocation and at Wasm function and loop
 ///   safepoints. A blocking host function is not interrupted while it runs.
-/// - `timeout_ms`, `fuel`, and `budget` are parsed and surfaced as structured
+/// - `timeout_ms` bounds monotonic elapsed time, including host work.
+/// - `fuel` and `budget` are parsed and surfaced as structured
 ///   `UnsupportedOption` errors for integration-time capability probing.
 pub struct CallExportOptions {
   timeout_ms : Int?
@@ -1751,11 +1754,11 @@ fn call_export_failure(
 
 ///|
 fn check_call_export_options(options : CallExportOptions) -> CallExportFailure? {
-  if options.timeout_ms is Some(timeout_ms) {
+  if options.timeout_ms is Some(timeout_ms) && timeout_ms < 0 {
     return Some(
       call_export_failure(
-        UnsupportedOption,
-        "timeout_ms is not supported yet (requested: \{timeout_ms})",
+        InvalidOption,
+        "timeout_ms must be nonnegative (requested: \{timeout_ms})",
       ),
     )
   }
@@ -1775,11 +1778,6 @@ fn check_call_export_options(options : CallExportOptions) -> CallExportFailure? 
       ),
     )
   }
-  if options.cancel is Some(cancel_fn) && cancel_fn() {
-    return Some(
-      call_export_failure(Cancelled, "invocation cancelled before execution"),
-    )
-  }
   None
 }
 
@@ -1796,6 +1794,26 @@ pub fn call_exported_func_with_options(
     return Err(failure)
   }
 
+  guard @wasmoon_jit.InvocationControl::new(options.timeout_ms, options.cancel)
+    is Some(control) else {
+    return Err(call_export_failure(InvalidOption, "invalid timeout"))
+  }
+  if control.poll() {
+    return Err(
+      call_export_failure(
+        if control.expired() {
+          TimedOut
+        } else {
+          Cancelled
+        },
+        if control.expired() {
+          "invocation deadline exceeded before execution"
+        } else {
+          "invocation cancelled before execution"
+        },
+      ),
+    )
+  }
   match find_export_by_name(instance.exports, name) {
     Some(exp) =>
       match exp.desc {
@@ -1803,7 +1821,11 @@ pub fn call_exported_func_with_options(
           let ctx = ExecContext::ExecContext(
             store,
             instance,
-            cancel=options.cancel,
+            cancel=if options.timeout_ms is Some(_) || options.cancel is Some(_) {
+              Some(() => control.poll())
+            } else {
+              None
+            },
           )
           let results = ctx.call_func(func_idx, args) catch {
             BranchWith(_, _) | Return =>
@@ -1827,8 +1849,16 @@ pub fn call_exported_func_with_options(
             InvocationSignal::Cancelled =>
               return Err(
                 call_export_failure(
-                  Cancelled,
-                  "invocation cancelled at wasm safepoint",
+                  if control.expired() {
+                    TimedOut
+                  } else {
+                    Cancelled
+                  },
+                  if control.expired() {
+                    "invocation deadline exceeded at wasm safepoint"
+                  } else {
+                    "invocation cancelled at wasm safepoint"
+                  },
                 ),
               )
             e => {
@@ -1842,7 +1872,11 @@ pub fn call_exported_func_with_options(
               )
             }
           }
-          Ok(results)
+          if control.expired() {
+            Err(call_export_failure(TimedOut, "invocation deadline exceeded"))
+          } else {
+            Ok(results)
+          }
         }
         _ =>
           Err(

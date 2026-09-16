@@ -1,0 +1,1641 @@
+{
+  "host": "macOS-26.5.2-arm64-arm-64bit-Mach-O",
+  "baseline_revision": "471b24cc44fe95728d0f84c7a94b6dfc516b6d49",
+  "method": "Seven alternating-order pairs after one warmup pair per workload. Every process has an empty unique JIT cache. No concurrent compilation. Times include optional metrics instrumentation. Guest stdout reports timing and is not an equality oracle.",
+  "binaries": {
+    "before": "58e78a4653dfee93922fd608742e3d01aa3e93d83382f588119039049efe7edb",
+    "after": "8401db8eff809bee3be3bf95f7b638c350c70ddaa8c6e5ba8b09013424394007"
+  },
+  "workloads": [
+    {
+      "name": "aead_aegis128l",
+      "sha256": "eaa87f6e73636360bfb158126515b71dcc56bc8e63a3abd9b7b4d76240ce3bf4",
+      "summaries": {
+        "before": {
+          "module_compile_us": 66888,
+          "phases": {
+            "optimize_us": 17479,
+            "lower_us": 10405,
+            "target_lower_us": 67,
+            "regalloc_us": 23354,
+            "frame_plan_us": 3331,
+            "emit_us": 3910
+          }
+        },
+        "after": {
+          "module_compile_us": 65257,
+          "phases": {
+            "optimize_us": 17213,
+            "lower_us": 10314,
+            "target_lower_us": 63,
+            "regalloc_us": 22424,
+            "frame_plan_us": 3320,
+            "emit_us": 3942
+          }
+        }
+      },
+      "paired_change_percent": -1.1681846903077608,
+      "paired_changes_percent": [
+        -1.120315241464609,
+        -2.438404497069724,
+        3.091243220630191,
+        -1.7450004470539127,
+        -2.2259253030835757,
+        -0.2814388754748265,
+        -1.1681846903077608
+      ],
+      "invariants": [
+        {
+          "func_idx": 8,
+          "code_size": 4,
+          "spill_slots": 0,
+          "spills": 0,
+          "reloads": 0,
+          "reg_moves": 0,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 9,
+          "code_size": 9868,
+          "spill_slots": 24,
+          "spills": 40,
+          "reloads": 93,
+          "reg_moves": 22,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 10,
+          "code_size": 548,
+          "spill_slots": 0,
+          "spills": 0,
+          "reloads": 0,
+          "reg_moves": 0,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 11,
+          "code_size": 1508,
+          "spill_slots": 0,
+          "spills": 0,
+          "reloads": 0,
+          "reg_moves": 1,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 12,
+          "code_size": 184,
+          "spill_slots": 0,
+          "spills": 0,
+          "reloads": 0,
+          "reg_moves": 0,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 13,
+          "code_size": 168,
+          "spill_slots": 0,
+          "spills": 0,
+          "reloads": 0,
+          "reg_moves": 2,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 14,
+          "code_size": 8,
+          "spill_slots": 0,
+          "spills": 0,
+          "reloads": 0,
+          "reg_moves": 0,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 15,
+          "code_size": 96,
+          "spill_slots": 0,
+          "spills": 0,
+          "reloads": 0,
+          "reg_moves": 0,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 16,
+          "code_size": 1408,
+          "spill_slots": 4,
+          "spills": 3,
+          "reloads": 15,
+          "reg_moves": 0,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 17,
+          "code_size": 1264,
+          "spill_slots": 18,
+          "spills": 17,
+          "reloads": 50,
+          "reg_moves": 0,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 18,
+          "code_size": 12,
+          "spill_slots": 0,
+          "spills": 0,
+          "reloads": 0,
+          "reg_moves": 0,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 19,
+          "code_size": 104,
+          "spill_slots": 0,
+          "spills": 0,
+          "reloads": 0,
+          "reg_moves": 0,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 20,
+          "code_size": 24,
+          "spill_slots": 0,
+          "spills": 0,
+          "reloads": 0,
+          "reg_moves": 0,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 21,
+          "code_size": 216,
+          "spill_slots": 0,
+          "spills": 0,
+          "reloads": 0,
+          "reg_moves": 0,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 22,
+          "code_size": 344,
+          "spill_slots": 0,
+          "spills": 0,
+          "reloads": 0,
+          "reg_moves": 0,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 23,
+          "code_size": 1884,
+          "spill_slots": 31,
+          "spills": 35,
+          "reloads": 90,
+          "reg_moves": 0,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 24,
+          "code_size": 368,
+          "spill_slots": 0,
+          "spills": 0,
+          "reloads": 0,
+          "reg_moves": 0,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 25,
+          "code_size": 320,
+          "spill_slots": 0,
+          "spills": 0,
+          "reloads": 0,
+          "reg_moves": 0,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 26,
+          "code_size": 316,
+          "spill_slots": 0,
+          "spills": 0,
+          "reloads": 0,
+          "reg_moves": 0,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 27,
+          "code_size": 260,
+          "spill_slots": 0,
+          "spills": 0,
+          "reloads": 0,
+          "reg_moves": 0,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 28,
+          "code_size": 220,
+          "spill_slots": 0,
+          "spills": 0,
+          "reloads": 0,
+          "reg_moves": 0,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 29,
+          "code_size": 460,
+          "spill_slots": 0,
+          "spills": 0,
+          "reloads": 0,
+          "reg_moves": 0,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 30,
+          "code_size": 1328,
+          "spill_slots": 11,
+          "spills": 9,
+          "reloads": 17,
+          "reg_moves": 0,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 31,
+          "code_size": 688,
+          "spill_slots": 3,
+          "spills": 0,
+          "reloads": 4,
+          "reg_moves": 1,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 32,
+          "code_size": 2024,
+          "spill_slots": 19,
+          "spills": 19,
+          "reloads": 60,
+          "reg_moves": 0,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 33,
+          "code_size": 1452,
+          "spill_slots": 11,
+          "spills": 11,
+          "reloads": 14,
+          "reg_moves": 0,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 34,
+          "code_size": 1988,
+          "spill_slots": 26,
+          "spills": 27,
+          "reloads": 45,
+          "reg_moves": 0,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 35,
+          "code_size": 2052,
+          "spill_slots": 25,
+          "spills": 25,
+          "reloads": 55,
+          "reg_moves": 0,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 36,
+          "code_size": 1348,
+          "spill_slots": 1,
+          "spills": 0,
+          "reloads": 1,
+          "reg_moves": 4,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 37,
+          "code_size": 2028,
+          "spill_slots": 28,
+          "spills": 34,
+          "reloads": 48,
+          "reg_moves": 0,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 38,
+          "code_size": 352,
+          "spill_slots": 3,
+          "spills": 0,
+          "reloads": 3,
+          "reg_moves": 0,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 39,
+          "code_size": 248,
+          "spill_slots": 0,
+          "spills": 0,
+          "reloads": 0,
+          "reg_moves": 0,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 40,
+          "code_size": 208,
+          "spill_slots": 0,
+          "spills": 0,
+          "reloads": 0,
+          "reg_moves": 0,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 41,
+          "code_size": 12,
+          "spill_slots": 0,
+          "spills": 0,
+          "reloads": 0,
+          "reg_moves": 0,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 42,
+          "code_size": 508,
+          "spill_slots": 0,
+          "spills": 0,
+          "reloads": 0,
+          "reg_moves": 0,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 43,
+          "code_size": 372,
+          "spill_slots": 0,
+          "spills": 0,
+          "reloads": 0,
+          "reg_moves": 0,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 44,
+          "code_size": 428,
+          "spill_slots": 0,
+          "spills": 0,
+          "reloads": 0,
+          "reg_moves": 0,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 45,
+          "code_size": 60,
+          "spill_slots": 0,
+          "spills": 0,
+          "reloads": 0,
+          "reg_moves": 0,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 46,
+          "code_size": 76,
+          "spill_slots": 0,
+          "spills": 0,
+          "reloads": 0,
+          "reg_moves": 0,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 47,
+          "code_size": 180,
+          "spill_slots": 0,
+          "spills": 0,
+          "reloads": 0,
+          "reg_moves": 0,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 48,
+          "code_size": 516,
+          "spill_slots": 0,
+          "spills": 0,
+          "reloads": 0,
+          "reg_moves": 3,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 49,
+          "code_size": 268,
+          "spill_slots": 0,
+          "spills": 0,
+          "reloads": 0,
+          "reg_moves": 0,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 50,
+          "code_size": 180,
+          "spill_slots": 0,
+          "spills": 0,
+          "reloads": 0,
+          "reg_moves": 0,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 51,
+          "code_size": 148,
+          "spill_slots": 0,
+          "spills": 0,
+          "reloads": 0,
+          "reg_moves": 0,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 52,
+          "code_size": 596,
+          "spill_slots": 0,
+          "spills": 0,
+          "reloads": 0,
+          "reg_moves": 1,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 53,
+          "code_size": 364,
+          "spill_slots": 0,
+          "spills": 0,
+          "reloads": 0,
+          "reg_moves": 0,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 54,
+          "code_size": 336,
+          "spill_slots": 0,
+          "spills": 0,
+          "reloads": 0,
+          "reg_moves": 0,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 55,
+          "code_size": 640,
+          "spill_slots": 0,
+          "spills": 0,
+          "reloads": 0,
+          "reg_moves": 0,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 56,
+          "code_size": 14660,
+          "spill_slots": 48,
+          "spills": 78,
+          "reloads": 324,
+          "reg_moves": 40,
+          "spill_to_spill": 1
+        },
+        {
+          "func_idx": 57,
+          "code_size": 1200,
+          "spill_slots": 0,
+          "spills": 0,
+          "reloads": 0,
+          "reg_moves": 0,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 58,
+          "code_size": 244,
+          "spill_slots": 0,
+          "spills": 0,
+          "reloads": 0,
+          "reg_moves": 0,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 59,
+          "code_size": 200,
+          "spill_slots": 0,
+          "spills": 0,
+          "reloads": 0,
+          "reg_moves": 2,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 60,
+          "code_size": 320,
+          "spill_slots": 0,
+          "spills": 0,
+          "reloads": 0,
+          "reg_moves": 4,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 61,
+          "code_size": 64,
+          "spill_slots": 0,
+          "spills": 0,
+          "reloads": 0,
+          "reg_moves": 0,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 62,
+          "code_size": 172,
+          "spill_slots": 0,
+          "spills": 0,
+          "reloads": 0,
+          "reg_moves": 0,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 63,
+          "code_size": 1516,
+          "spill_slots": 3,
+          "spills": 1,
+          "reloads": 14,
+          "reg_moves": 3,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 64,
+          "code_size": 92,
+          "spill_slots": 0,
+          "spills": 0,
+          "reloads": 0,
+          "reg_moves": 0,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 65,
+          "code_size": 92,
+          "spill_slots": 0,
+          "spills": 0,
+          "reloads": 0,
+          "reg_moves": 0,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 66,
+          "code_size": 144,
+          "spill_slots": 0,
+          "spills": 0,
+          "reloads": 0,
+          "reg_moves": 0,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 67,
+          "code_size": 1732,
+          "spill_slots": 5,
+          "spills": 3,
+          "reloads": 28,
+          "reg_moves": 0,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 68,
+          "code_size": 104,
+          "spill_slots": 0,
+          "spills": 0,
+          "reloads": 0,
+          "reg_moves": 0,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 69,
+          "code_size": 288,
+          "spill_slots": 0,
+          "spills": 0,
+          "reloads": 0,
+          "reg_moves": 0,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 70,
+          "code_size": 92,
+          "spill_slots": 0,
+          "spills": 0,
+          "reloads": 0,
+          "reg_moves": 0,
+          "spill_to_spill": 0
+        }
+      ],
+      "records": [
+        {
+          "pair": 0,
+          "variant": "before",
+          "module_compile_us": 69534,
+          "wall_ms": 842.8815419902094,
+          "phases": {
+            "optimize_us": 17844,
+            "lower_us": 10817,
+            "target_lower_us": 71,
+            "regalloc_us": 24627,
+            "frame_plan_us": 3386,
+            "emit_us": 4083
+          },
+          "stdout": "3820775000"
+        },
+        {
+          "pair": 0,
+          "variant": "after",
+          "module_compile_us": 68755,
+          "wall_ms": 829.9153340049088,
+          "phases": {
+            "optimize_us": 18025,
+            "lower_us": 10936,
+            "target_lower_us": 77,
+            "regalloc_us": 23410,
+            "frame_plan_us": 3443,
+            "emit_us": 4109
+          },
+          "stdout": "3757825000"
+        },
+        {
+          "pair": 1,
+          "variant": "after",
+          "module_compile_us": 65257,
+          "wall_ms": 809.0186250046827,
+          "phases": {
+            "optimize_us": 16998,
+            "lower_us": 10482,
+            "target_lower_us": 60,
+            "regalloc_us": 22424,
+            "frame_plan_us": 3320,
+            "emit_us": 3870
+          },
+          "stdout": "3677525000"
+        },
+        {
+          "pair": 1,
+          "variant": "before",
+          "module_compile_us": 66888,
+          "wall_ms": 811.0906250076368,
+          "phases": {
+            "optimize_us": 17453,
+            "lower_us": 10405,
+            "target_lower_us": 66,
+            "regalloc_us": 23437,
+            "frame_plan_us": 3331,
+            "emit_us": 3957
+          },
+          "stdout": "3675335000"
+        },
+        {
+          "pair": 2,
+          "variant": "before",
+          "module_compile_us": 66931,
+          "wall_ms": 806.999791006092,
+          "phases": {
+            "optimize_us": 17517,
+            "lower_us": 10464,
+            "target_lower_us": 67,
+            "regalloc_us": 23354,
+            "frame_plan_us": 3349,
+            "emit_us": 3953
+          },
+          "stdout": "3656450000"
+        },
+        {
+          "pair": 2,
+          "variant": "after",
+          "module_compile_us": 69000,
+          "wall_ms": 816.7544999741949,
+          "phases": {
+            "optimize_us": 18003,
+            "lower_us": 11007,
+            "target_lower_us": 74,
+            "regalloc_us": 23805,
+            "frame_plan_us": 3422,
+            "emit_us": 4052
+          },
+          "stdout": "3692390000"
+        },
+        {
+          "pair": 3,
+          "variant": "after",
+          "module_compile_us": 65935,
+          "wall_ms": 815.929459000472,
+          "phases": {
+            "optimize_us": 17322,
+            "lower_us": 10259,
+            "target_lower_us": 64,
+            "regalloc_us": 22842,
+            "frame_plan_us": 3331,
+            "emit_us": 3961
+          },
+          "stdout": "3697170000"
+        },
+        {
+          "pair": 3,
+          "variant": "before",
+          "module_compile_us": 67106,
+          "wall_ms": 809.6036660135724,
+          "phases": {
+            "optimize_us": 17512,
+            "lower_us": 10509,
+            "target_lower_us": 70,
+            "regalloc_us": 23452,
+            "frame_plan_us": 3334,
+            "emit_us": 3910
+          },
+          "stdout": "3662200000"
+        },
+        {
+          "pair": 4,
+          "variant": "before",
+          "module_compile_us": 65411,
+          "wall_ms": 803.7973750033416,
+          "phases": {
+            "optimize_us": 17479,
+            "lower_us": 10165,
+            "target_lower_us": 66,
+            "regalloc_us": 22561,
+            "frame_plan_us": 3285,
+            "emit_us": 3866
+          },
+          "stdout": "3650905000"
+        },
+        {
+          "pair": 4,
+          "variant": "after",
+          "module_compile_us": 63955,
+          "wall_ms": 808.6282500298694,
+          "phases": {
+            "optimize_us": 16944,
+            "lower_us": 9973,
+            "target_lower_us": 63,
+            "regalloc_us": 21960,
+            "frame_plan_us": 3280,
+            "emit_us": 3835
+          },
+          "stdout": "3682255000"
+        },
+        {
+          "pair": 5,
+          "variant": "after",
+          "module_compile_us": 64840,
+          "wall_ms": 809.0030419989489,
+          "phases": {
+            "optimize_us": 17213,
+            "lower_us": 10150,
+            "target_lower_us": 63,
+            "regalloc_us": 22239,
+            "frame_plan_us": 3313,
+            "emit_us": 3942
+          },
+          "stdout": "3682410000"
+        },
+        {
+          "pair": 5,
+          "variant": "before",
+          "module_compile_us": 65023,
+          "wall_ms": 800.9733330109157,
+          "phases": {
+            "optimize_us": 17183,
+            "lower_us": 10370,
+            "target_lower_us": 67,
+            "regalloc_us": 22300,
+            "frame_plan_us": 3234,
+            "emit_us": 3896
+          },
+          "stdout": "3640090000"
+        },
+        {
+          "pair": 6,
+          "variant": "before",
+          "module_compile_us": 64887,
+          "wall_ms": 803.7927499972284,
+          "phases": {
+            "optimize_us": 17172,
+            "lower_us": 10139,
+            "target_lower_us": 59,
+            "regalloc_us": 22626,
+            "frame_plan_us": 3263,
+            "emit_us": 3842
+          },
+          "stdout": "3653310000"
+        },
+        {
+          "pair": 6,
+          "variant": "after",
+          "module_compile_us": 64129,
+          "wall_ms": 807.2025409783237,
+          "phases": {
+            "optimize_us": 17152,
+            "lower_us": 10314,
+            "target_lower_us": 61,
+            "regalloc_us": 21694,
+            "frame_plan_us": 3320,
+            "emit_us": 3837
+          },
+          "stdout": "3677035000"
+        }
+      ]
+    },
+    {
+      "name": "aead_aegis256",
+      "sha256": "7eea1434e12bd02afa73d25d6fba42db2e1f362149fc1e282cf0550a824e63bc",
+      "summaries": {
+        "before": {
+          "module_compile_us": 66858,
+          "phases": {
+            "optimize_us": 17621,
+            "lower_us": 10559,
+            "target_lower_us": 66,
+            "regalloc_us": 23067,
+            "frame_plan_us": 3367,
+            "emit_us": 3991
+          }
+        },
+        "after": {
+          "module_compile_us": 68950,
+          "phases": {
+            "optimize_us": 18340,
+            "lower_us": 11019,
+            "target_lower_us": 61,
+            "regalloc_us": 23596,
+            "frame_plan_us": 3474,
+            "emit_us": 4127
+          }
+        }
+      },
+      "paired_change_percent": 3.2006245120999255,
+      "paired_changes_percent": [
+        -2.6102432272098075,
+        3.2006245120999255,
+        -0.9176300578034646,
+        7.510949016496005,
+        6.3971402076041795,
+        0.012095737764394876,
+        7.569897926836999
+      ],
+      "invariants": [
+        {
+          "func_idx": 8,
+          "code_size": 4,
+          "spill_slots": 0,
+          "spills": 0,
+          "reloads": 0,
+          "reg_moves": 0,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 9,
+          "code_size": 9868,
+          "spill_slots": 24,
+          "spills": 40,
+          "reloads": 93,
+          "reg_moves": 22,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 10,
+          "code_size": 548,
+          "spill_slots": 0,
+          "spills": 0,
+          "reloads": 0,
+          "reg_moves": 0,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 11,
+          "code_size": 1508,
+          "spill_slots": 0,
+          "spills": 0,
+          "reloads": 0,
+          "reg_moves": 1,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 12,
+          "code_size": 184,
+          "spill_slots": 0,
+          "spills": 0,
+          "reloads": 0,
+          "reg_moves": 0,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 13,
+          "code_size": 168,
+          "spill_slots": 0,
+          "spills": 0,
+          "reloads": 0,
+          "reg_moves": 2,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 14,
+          "code_size": 8,
+          "spill_slots": 0,
+          "spills": 0,
+          "reloads": 0,
+          "reg_moves": 0,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 15,
+          "code_size": 96,
+          "spill_slots": 0,
+          "spills": 0,
+          "reloads": 0,
+          "reg_moves": 0,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 16,
+          "code_size": 1408,
+          "spill_slots": 4,
+          "spills": 3,
+          "reloads": 15,
+          "reg_moves": 0,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 17,
+          "code_size": 1264,
+          "spill_slots": 18,
+          "spills": 17,
+          "reloads": 50,
+          "reg_moves": 0,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 18,
+          "code_size": 12,
+          "spill_slots": 0,
+          "spills": 0,
+          "reloads": 0,
+          "reg_moves": 0,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 19,
+          "code_size": 104,
+          "spill_slots": 0,
+          "spills": 0,
+          "reloads": 0,
+          "reg_moves": 0,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 20,
+          "code_size": 24,
+          "spill_slots": 0,
+          "spills": 0,
+          "reloads": 0,
+          "reg_moves": 0,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 21,
+          "code_size": 216,
+          "spill_slots": 0,
+          "spills": 0,
+          "reloads": 0,
+          "reg_moves": 0,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 22,
+          "code_size": 344,
+          "spill_slots": 0,
+          "spills": 0,
+          "reloads": 0,
+          "reg_moves": 0,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 23,
+          "code_size": 1884,
+          "spill_slots": 31,
+          "spills": 35,
+          "reloads": 90,
+          "reg_moves": 0,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 24,
+          "code_size": 368,
+          "spill_slots": 0,
+          "spills": 0,
+          "reloads": 0,
+          "reg_moves": 0,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 25,
+          "code_size": 320,
+          "spill_slots": 0,
+          "spills": 0,
+          "reloads": 0,
+          "reg_moves": 0,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 26,
+          "code_size": 316,
+          "spill_slots": 0,
+          "spills": 0,
+          "reloads": 0,
+          "reg_moves": 0,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 27,
+          "code_size": 260,
+          "spill_slots": 0,
+          "spills": 0,
+          "reloads": 0,
+          "reg_moves": 0,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 28,
+          "code_size": 220,
+          "spill_slots": 0,
+          "spills": 0,
+          "reloads": 0,
+          "reg_moves": 0,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 29,
+          "code_size": 460,
+          "spill_slots": 0,
+          "spills": 0,
+          "reloads": 0,
+          "reg_moves": 0,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 30,
+          "code_size": 1328,
+          "spill_slots": 11,
+          "spills": 9,
+          "reloads": 17,
+          "reg_moves": 0,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 31,
+          "code_size": 2560,
+          "spill_slots": 24,
+          "spills": 17,
+          "reloads": 44,
+          "reg_moves": 0,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 32,
+          "code_size": 4356,
+          "spill_slots": 29,
+          "spills": 42,
+          "reloads": 147,
+          "reg_moves": 0,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 33,
+          "code_size": 1372,
+          "spill_slots": 17,
+          "spills": 20,
+          "reloads": 29,
+          "reg_moves": 0,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 34,
+          "code_size": 1508,
+          "spill_slots": 18,
+          "spills": 17,
+          "reloads": 35,
+          "reg_moves": 0,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 35,
+          "code_size": 3112,
+          "spill_slots": 23,
+          "spills": 17,
+          "reloads": 51,
+          "reg_moves": 0,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 36,
+          "code_size": 1384,
+          "spill_slots": 18,
+          "spills": 23,
+          "reloads": 29,
+          "reg_moves": 0,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 37,
+          "code_size": 352,
+          "spill_slots": 3,
+          "spills": 0,
+          "reloads": 3,
+          "reg_moves": 0,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 38,
+          "code_size": 248,
+          "spill_slots": 0,
+          "spills": 0,
+          "reloads": 0,
+          "reg_moves": 0,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 39,
+          "code_size": 208,
+          "spill_slots": 0,
+          "spills": 0,
+          "reloads": 0,
+          "reg_moves": 0,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 40,
+          "code_size": 12,
+          "spill_slots": 0,
+          "spills": 0,
+          "reloads": 0,
+          "reg_moves": 0,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 41,
+          "code_size": 508,
+          "spill_slots": 0,
+          "spills": 0,
+          "reloads": 0,
+          "reg_moves": 0,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 42,
+          "code_size": 372,
+          "spill_slots": 0,
+          "spills": 0,
+          "reloads": 0,
+          "reg_moves": 0,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 43,
+          "code_size": 428,
+          "spill_slots": 0,
+          "spills": 0,
+          "reloads": 0,
+          "reg_moves": 0,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 44,
+          "code_size": 60,
+          "spill_slots": 0,
+          "spills": 0,
+          "reloads": 0,
+          "reg_moves": 0,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 45,
+          "code_size": 76,
+          "spill_slots": 0,
+          "spills": 0,
+          "reloads": 0,
+          "reg_moves": 0,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 46,
+          "code_size": 180,
+          "spill_slots": 0,
+          "spills": 0,
+          "reloads": 0,
+          "reg_moves": 0,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 47,
+          "code_size": 516,
+          "spill_slots": 0,
+          "spills": 0,
+          "reloads": 0,
+          "reg_moves": 3,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 48,
+          "code_size": 268,
+          "spill_slots": 0,
+          "spills": 0,
+          "reloads": 0,
+          "reg_moves": 0,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 49,
+          "code_size": 180,
+          "spill_slots": 0,
+          "spills": 0,
+          "reloads": 0,
+          "reg_moves": 0,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 50,
+          "code_size": 148,
+          "spill_slots": 0,
+          "spills": 0,
+          "reloads": 0,
+          "reg_moves": 0,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 51,
+          "code_size": 592,
+          "spill_slots": 0,
+          "spills": 0,
+          "reloads": 0,
+          "reg_moves": 1,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 52,
+          "code_size": 364,
+          "spill_slots": 0,
+          "spills": 0,
+          "reloads": 0,
+          "reg_moves": 0,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 53,
+          "code_size": 336,
+          "spill_slots": 0,
+          "spills": 0,
+          "reloads": 0,
+          "reg_moves": 0,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 54,
+          "code_size": 640,
+          "spill_slots": 0,
+          "spills": 0,
+          "reloads": 0,
+          "reg_moves": 0,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 55,
+          "code_size": 14660,
+          "spill_slots": 48,
+          "spills": 78,
+          "reloads": 324,
+          "reg_moves": 40,
+          "spill_to_spill": 1
+        },
+        {
+          "func_idx": 56,
+          "code_size": 1200,
+          "spill_slots": 0,
+          "spills": 0,
+          "reloads": 0,
+          "reg_moves": 0,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 57,
+          "code_size": 244,
+          "spill_slots": 0,
+          "spills": 0,
+          "reloads": 0,
+          "reg_moves": 0,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 58,
+          "code_size": 200,
+          "spill_slots": 0,
+          "spills": 0,
+          "reloads": 0,
+          "reg_moves": 2,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 59,
+          "code_size": 320,
+          "spill_slots": 0,
+          "spills": 0,
+          "reloads": 0,
+          "reg_moves": 4,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 60,
+          "code_size": 64,
+          "spill_slots": 0,
+          "spills": 0,
+          "reloads": 0,
+          "reg_moves": 0,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 61,
+          "code_size": 172,
+          "spill_slots": 0,
+          "spills": 0,
+          "reloads": 0,
+          "reg_moves": 0,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 62,
+          "code_size": 1516,
+          "spill_slots": 3,
+          "spills": 1,
+          "reloads": 14,
+          "reg_moves": 3,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 63,
+          "code_size": 92,
+          "spill_slots": 0,
+          "spills": 0,
+          "reloads": 0,
+          "reg_moves": 0,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 64,
+          "code_size": 92,
+          "spill_slots": 0,
+          "spills": 0,
+          "reloads": 0,
+          "reg_moves": 0,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 65,
+          "code_size": 144,
+          "spill_slots": 0,
+          "spills": 0,
+          "reloads": 0,
+          "reg_moves": 0,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 66,
+          "code_size": 1732,
+          "spill_slots": 5,
+          "spills": 3,
+          "reloads": 28,
+          "reg_moves": 0,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 67,
+          "code_size": 104,
+          "spill_slots": 0,
+          "spills": 0,
+          "reloads": 0,
+          "reg_moves": 0,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 68,
+          "code_size": 288,
+          "spill_slots": 0,
+          "spills": 0,
+          "reloads": 0,
+          "reg_moves": 0,
+          "spill_to_spill": 0
+        },
+        {
+          "func_idx": 69,
+          "code_size": 92,
+          "spill_slots": 0,
+          "spills": 0,
+          "reloads": 0,
+          "reg_moves": 0,
+          "spill_to_spill": 0
+        }
+      ],
+      "records": [
+        {
+          "pair": 0,
+          "variant": "before",
+          "module_compile_us": 70798,
+          "wall_ms": 890.9331670147367,
+          "phases": {
+            "optimize_us": 18533,
+            "lower_us": 11590,
+            "target_lower_us": 68,
+            "regalloc_us": 24379,
+            "frame_plan_us": 3396,
+            "emit_us": 4053
+          },
+          "stdout": "4058200000"
+        },
+        {
+          "pair": 0,
+          "variant": "after",
+          "module_compile_us": 68950,
+          "wall_ms": 892.1313330065459,
+          "phases": {
+            "optimize_us": 18081,
+            "lower_us": 11019,
+            "target_lower_us": 61,
+            "regalloc_us": 23596,
+            "frame_plan_us": 3511,
+            "emit_us": 4175
+          },
+          "stdout": "4067920000"
+        },
+        {
+          "pair": 1,
+          "variant": "after",
+          "module_compile_us": 70066,
+          "wall_ms": 893.7471249955706,
+          "phases": {
+            "optimize_us": 18340,
+            "lower_us": 11074,
+            "target_lower_us": 70,
+            "regalloc_us": 23868,
+            "frame_plan_us": 3493,
+            "emit_us": 4341
+          },
+          "stdout": "4072550000"
+        },
+        {
+          "pair": 1,
+          "variant": "before",
+          "module_compile_us": 67893,
+          "wall_ms": 893.6337910126895,
+          "phases": {
+            "optimize_us": 17621,
+            "lower_us": 10838,
+            "target_lower_us": 77,
+            "regalloc_us": 23608,
+            "frame_plan_us": 3381,
+            "emit_us": 3991
+          },
+          "stdout": "4084930000"
+        },
+        {
+          "pair": 2,
+          "variant": "before",
+          "module_compile_us": 69200,
+          "wall_ms": 897.9604169726372,
+          "phases": {
+            "optimize_us": 17904,
+            "lower_us": 11110,
+            "target_lower_us": 66,
+            "regalloc_us": 23813,
+            "frame_plan_us": 3481,
+            "emit_us": 4145
+          },
+          "stdout": "4101230000"
+        },
+        {
+          "pair": 2,
+          "variant": "after",
+          "module_compile_us": 68565,
+          "wall_ms": 891.9062499771826,
+          "phases": {
+            "optimize_us": 18370,
+            "lower_us": 10656,
+            "target_lower_us": 57,
+            "regalloc_us": 23198,
+            "frame_plan_us": 3433,
+            "emit_us": 4102
+          },
+          "stdout": "4074730000"
+        },
+        {
+          "pair": 3,
+          "variant": "after",
+          "module_compile_us": 70453,
+          "wall_ms": 891.1530830082484,
+          "phases": {
+            "optimize_us": 18951,
+            "lower_us": 11595,
+            "target_lower_us": 73,
+            "regalloc_us": 23790,
+            "frame_plan_us": 3474,
+            "emit_us": 4127
+          },
+          "stdout": "4061175000"
+        },
+        {
+          "pair": 3,
+          "variant": "before",
+          "module_compile_us": 65531,
+          "wall_ms": 895.0741669978015,
+          "phases": {
+            "optimize_us": 17405,
+            "lower_us": 10436,
+            "target_lower_us": 60,
+            "regalloc_us": 22694,
+            "frame_plan_us": 3288,
+            "emit_us": 3815
+          },
+          "stdout": "4104505000"
+        },
+        {
+          "pair": 4,
+          "variant": "before",
+          "module_compile_us": 66858,
+          "wall_ms": 887.0563750388101,
+          "phases": {
+            "optimize_us": 17824,
+            "lower_us": 10559,
+            "target_lower_us": 66,
+            "regalloc_us": 23067,
+            "frame_plan_us": 3367,
+            "emit_us": 3994
+          },
+          "stdout": "4060840000"
+        },
+        {
+          "pair": 4,
+          "variant": "after",
+          "module_compile_us": 71135,
+          "wall_ms": 881.5510839922354,
+          "phases": {
+            "optimize_us": 18921,
+            "lower_us": 11224,
+            "target_lower_us": 67,
+            "regalloc_us": 23991,
+            "frame_plan_us": 3567,
+            "emit_us": 4254
+          },
+          "stdout": "4008620000"
+        },
+        {
+          "pair": 5,
+          "variant": "after",
+          "module_compile_us": 66147,
+          "wall_ms": 873.4200000180863,
+          "phases": {
+            "optimize_us": 17567,
+            "lower_us": 10683,
+            "target_lower_us": 54,
+            "regalloc_us": 22478,
+            "frame_plan_us": 3379,
+            "emit_us": 3967
+          },
+          "stdout": "3997515000"
+        },
+        {
+          "pair": 5,
+          "variant": "before",
+          "module_compile_us": 66139,
+          "wall_ms": 866.6936249937862,
+          "phases": {
+            "optimize_us": 17522,
+            "lower_us": 10448,
+            "target_lower_us": 55,
+            "regalloc_us": 22938,
+            "frame_plan_us": 3320,
+            "emit_us": 3928
+          },
+          "stdout": "3962785000"
+        },
+        {
+          "pair": 6,
+          "variant": "before",
+          "module_compile_us": 63092,
+          "wall_ms": 863.198833016213,
+          "phases": {
+            "optimize_us": 16804,
+            "lower_us": 9790,
+            "target_lower_us": 50,
+            "regalloc_us": 21846,
+            "frame_plan_us": 3250,
+            "emit_us": 3789
+          },
+          "stdout": "3962170000"
+        },
+        {
+          "pair": 6,
+          "variant": "after",
+          "module_compile_us": 67868,
+          "wall_ms": 872.0168329891749,
+          "phases": {
+            "optimize_us": 18063,
+            "lower_us": 10955,
+            "target_lower_us": 61,
+            "regalloc_us": 22809,
+            "frame_plan_us": 3422,
+            "emit_us": 4031
+          },
+          "stdout": "3982400000"
+        }
+      ]
+    }
+  ],
+  "measurement_script": "import hashlib,json,os,platform,statistics,subprocess,tempfile,time\nfrom pathlib import Path\nroot=Path('/Users/zhengyu/Documents/projects/wasmoon')\nbinaries={'before':Path('/tmp/wasmoon-perf-before-539'),'after':Path('/tmp/wasmoon-perf-after-539')}\nkeys=['optimize_us','lower_us','target_lower_us','regalloc_us','frame_plan_us','emit_us']\nreport={'host':platform.platform(),'baseline_revision':'471b24cc44fe95728d0f84c7a94b6dfc516b6d49','method':'Seven alternating-order pairs after one warmup pair per workload. Every process has an empty unique JIT cache. No concurrent compilation. Times include optional metrics instrumentation. Guest stdout reports timing and is not an equality oracle.','binaries':{k:hashlib.sha256(v.read_bytes()).hexdigest() for k,v in binaries.items()},'workloads':[]}\nfor workload in ['aead_aegis128l','aead_aegis256']:\n path=root/'examples/algorithms'/f'{workload}.wasm'\n records=[];expected=None\n for pair in range(-1,7):\n  for variant in (['before','after'] if pair%2==0 else ['after','before']):\n   with tempfile.TemporaryDirectory(prefix='iss539-') as d:\n    cache=Path(d)/'cache';metrics=Path(d)/'metrics.json'\n    env=dict(os.environ,WASMOON_JIT_CACHE_DIR=str(cache),WASMOON_PERF_METRICS='1',WASMOON_PERF_METRICS_FILE=str(metrics))\n    start=time.perf_counter()\n    result=subprocess.run([str(binaries[variant]),'run',str(path)],env=env,capture_output=True,text=True,timeout=120,check=True)\n    elapsed=time.perf_counter()-start\n    data=json.loads(metrics.read_text())\n    invariants=[{k:f[k] for k in ['func_idx','code_size','spill_slots','spills','reloads','reg_moves','spill_to_spill']} for f in data['functions']]\n    if expected is None:expected=invariants\n    assert invariants==expected,(workload,variant,'allocation/code-size drift')\n    assert data['functions'] and int(data['module_compile_us'])>0\n    if pair>=0:\n     records.append({'pair':pair,'variant':variant,'module_compile_us':int(data['module_compile_us']),'wall_ms':elapsed*1000,'phases':{k:sum(int(f[k]) for f in data['functions']) for k in keys},'stdout':result.stdout.strip()})\n summaries={v:{'module_compile_us':statistics.median(r['module_compile_us'] for r in records if r['variant']==v),'phases':{k:statistics.median(r['phases'][k] for r in records if r['variant']==v) for k in keys}} for v in binaries}\n ratios=[]\n for i in range(7):\n  pair={r['variant']:r['module_compile_us'] for r in records if r['pair']==i};ratios.append(pair['after']/pair['before']-1)\n entry={'name':workload,'sha256':hashlib.sha256(path.read_bytes()).hexdigest(),'summaries':summaries,'paired_change_percent':statistics.median(ratios)*100,'paired_changes_percent':[x*100 for x in ratios],'invariants':expected,'records':records}\n report['workloads'].append(entry)\n print(workload,summaries,'paired change',entry['paired_change_percent'],flush=True)\nreport['measurement_script']=Path(__file__).read_text()\n(root/'docs/perf/allocation-snapshots-2026-09-16.json').write_text(json.dumps(report,indent=2)+'\\n')\n"
+}
