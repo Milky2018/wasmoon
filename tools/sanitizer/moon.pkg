@@ -1,7 +1,3 @@
-// Shared component and JIT lifecycle blackbox fixtures.
-// Ordinary native tests run these here. scripts/run_sanitizers.py copies the
-// same files into one isolated package with declarative ASan/UBSan link flags;
-// the instrumentation configuration lives in tools/sanitizer/moon.pkg.
 import {
   "Milky2018/wasm_component" @component_types,
   "Milky2018/wasm_core/types",
@@ -18,5 +14,16 @@ import {
   "Milky2018/wasmoon/wit_binding",
   "Milky2018/wasmoon_jit",
   "moonbitlang/async",
+  "moonbitlang/core/env",
   "moonbitlang/x/fs",
 } for "test"
+
+options(
+  link: {
+    "native": {
+      "cc": "clang",
+      "cc-flags": "-fsanitize=address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer",
+      "cc-link-flags": "-fsanitize=address,undefined",
+    },
+  },
+)
