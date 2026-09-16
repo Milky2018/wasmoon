@@ -858,7 +858,12 @@ pub fn fd_seek(
     RegularFile => ()
     _ => return Errno::Badf.to_i32()
   }
-  if f.require_base_rights(right_fd_seek) is Err(errno) {
+  let required = if offset == 0L && whence == 1 {
+    right_fd_tell
+  } else {
+    right_fd_seek
+  }
+  if f.require_base_rights(required) is Err(errno) {
     return errno.to_i32()
   }
   let base = match whence {

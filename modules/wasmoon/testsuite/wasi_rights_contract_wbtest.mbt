@@ -170,3 +170,34 @@ test "wasi jit: readonly preopens reject mutation and inherited escalation" {
   inspect(wasi_i32_from_result(result.interp_result), content="0")
   inspect(wasi_i32_from_result(result.jit_result), content="0")
 }
+
+///|
+test "wasi jit: SEEK implies TELL and TELL permits only nonmoving seek" {
+  let source =
+    #|(module
+    #|(import "wasi_snapshot_preview1" "path_open" (func $open (param i32 i32 i32 i32 i32 i64 i64 i32 i32) (result i32)))
+    #|(import "wasi_snapshot_preview1" "fd_seek" (func $seek (param i32 i64 i32 i32) (result i32)))
+    #|(import "wasi_snapshot_preview1" "fd_tell" (func $tell (param i32 i32) (result i32)))
+    #|(import "wasi_snapshot_preview1" "fd_close" (func $close (param i32) (result i32)))
+    #|(import "wasi_snapshot_preview1" "path_unlink_file" (func $unlink (param i32 i32 i32) (result i32)))
+    #|(memory (export "memory") 1)
+    #|(data (i32.const 64) "wasmoon_seek_rights")
+    #|(func $eq (param i32 i32) (if (i32.ne (local.get 0) (local.get 1)) (then unreachable)))
+    #|(func $case (param $rights i64) (param $query i32) (param $move i32) (local $fd i32)
+    #| (call $eq (call $open (i32.const 3) (i32.const 0) (i32.const 64) (i32.const 18) (i32.const 9) (local.get $rights) (i64.const 0) (i32.const 0) (i32.const 0)) (i32.const 0))
+    #| (local.set $fd (i32.load (i32.const 0)))
+    #| (call $eq (call $tell (local.get $fd) (i32.const 16)) (local.get $query))
+    #| (call $eq (call $seek (local.get $fd) (i64.const 0) (i32.const 1) (i32.const 16)) (local.get $query))
+    #| (call $eq (call $seek (local.get $fd) (i64.const 1) (i32.const 1) (i32.const 16)) (local.get $move))
+    #| (call $eq (call $close (local.get $fd)) (i32.const 0)))
+    #|(func (export "test") (result i32)
+    #| (call $case (i64.const 4) (i32.const 0) (i32.const 0))
+    #| (call $case (i64.const 32) (i32.const 0) (i32.const 76))
+    #| (call $case (i64.const 0) (i32.const 76) (i32.const 76))
+    #| (call $unlink (i32.const 3) (i32.const 64) (i32.const 18))))
+  let result = compare_wasi_with_options(source, "test", preopens=[
+    (@test_fs.temp_dir(), "/"),
+  ])
+  inspect(wasi_i32_from_result(result.interp_result), content="0")
+  inspect(wasi_i32_from_result(result.jit_result), content="0")
+}

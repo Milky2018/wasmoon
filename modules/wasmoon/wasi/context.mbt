@@ -40,7 +40,13 @@ fn OpenFile::require_base_rights(
   self : OpenFile,
   required : Int64,
 ) -> Result[Unit, Errno] {
-  if (self.rights_base & required) == required {
+  // SEEK authorizes TELL without changing the stored, attenuable mask.
+  let effective = if (self.rights_base & right_fd_seek) != 0L {
+    self.rights_base | right_fd_tell
+  } else {
+    self.rights_base
+  }
+  if (effective & required) == required {
     Ok(())
   } else {
     Err(NotCapable)
