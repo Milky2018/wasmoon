@@ -338,6 +338,7 @@ fn ComponentRuntimeState::finish_close(self : ComponentRuntimeState) -> Unit {
     installer.close()
   }
   self.host_installers.clear()
+  self.host_installers.shrink_to_fit()
   self.linker.close()
 }
 

@@ -64,6 +64,7 @@ fn Linker::rollback_module_change(
 /// This operation is idempotent and terminal.
 pub fn Linker::close(self : Linker) -> Unit {
   self.modules.clear()
+  self.modules.shrink_to_fit()
   self.store.close()
 }
 

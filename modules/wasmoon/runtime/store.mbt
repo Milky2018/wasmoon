@@ -240,39 +240,58 @@ pub fn Store::close(self : Store) -> Unit {
       (body.cancel)()
     }
   }
+  // Clear logical contents and release retained backing slots to break cycles.
+  // Array.clear alone can retain references beyond the new length.
   self.guest_continuations.clear()
+  self.guest_continuations.shrink_to_fit()
   self.native_execution.seal()
   for roots in self.pinned_gc_roots {
     roots.2.val = false
   }
   self.pinned_gc_roots.clear()
+  self.pinned_gc_roots.shrink_to_fit()
   self.funcref_registry.clear()
   self.native_types.representatives.clear()
+  self.native_types.representatives.shrink_to_fit()
   self.native_types.mappings.clear()
   self.native_types.parents.clear()
+  self.native_types.parents.shrink_to_fit()
   self.native_types.views.clear()
+  self.native_types.views.shrink_to_fit()
   self.native_types.entries.clear()
   self.native_types.heap_types.clear()
   self.funcs.clear()
+  self.funcs.shrink_to_fit()
   self.func_types.clear()
+  self.func_types.shrink_to_fit()
   self.func_type_indices.clear()
+  self.func_type_indices.shrink_to_fit()
   self.func_owners.clear()
+  self.func_owners.shrink_to_fit()
   self.instances.clear()
+  self.instances.shrink_to_fit()
   self.tables.clear()
+  self.tables.shrink_to_fit()
   for memory in self.mems {
     memory.close()
   }
   self.mems.clear()
+  self.mems.shrink_to_fit()
   for global in self.globals {
     global.close()
   }
   self.globals.clear()
+  self.globals.shrink_to_fit()
   self.tags.clear()
+  self.tags.shrink_to_fit()
   self.tag_type_indices.clear()
+  self.tag_type_indices.shrink_to_fit()
   self.tag_owners.clear()
+  self.tag_owners.shrink_to_fit()
   self.native_exception_to_store.clear()
   self.store_exception_to_native.clear()
   self.exns.clear()
+  self.exns.shrink_to_fit()
   self.heap.clear()
   if self.c_heap is Some(heap) {
     heap.free()
@@ -283,6 +302,7 @@ pub fn Store::close(self : Store) -> Unit {
   self.module_types = []
   self.module_rec_groups = []
   self.wrapped_externs.clear()
+  self.wrapped_externs.shrink_to_fit()
   for owner in self.jit_table_owners {
     match owner {
       Some(owner) => owner.close()
@@ -290,7 +310,9 @@ pub fn Store::close(self : Store) -> Unit {
     }
   }
   self.jit_table_owners.clear()
+  self.jit_table_owners.shrink_to_fit()
   self.jit_tables.clear()
+  self.jit_tables.shrink_to_fit()
   self.wasi_mem_addr = None
   self.wasi_ctx_handle = 0
   self.instantiation = None

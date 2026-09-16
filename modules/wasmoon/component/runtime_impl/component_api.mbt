@@ -421,9 +421,13 @@ pub fn ComponentLinker::close(self : ComponentLinker) -> Unit {
 /// instance's arrays only drops references to those, never their state.
 fn release_owned_instance(instance : ComponentInstance) -> Unit {
   instance.components.clear()
+  instance.components.shrink_to_fit()
   instance.instances.clear()
+  instance.instances.shrink_to_fit()
   instance.funcs.clear()
+  instance.funcs.shrink_to_fit()
   instance.values.clear()
+  instance.values.shrink_to_fit()
   instance.exports.clear()
 }
 
