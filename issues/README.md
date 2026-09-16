@@ -564,6 +564,8 @@ graph TD
   ISS_544["ISS-544: Authorize synchronous path_open before filesystem side effects"]
   ISS_545["ISS-545: Support irreversible rights reduction on standard streams"]
   ISS_546["ISS-546: Reject unsupported sparse allocation instead of false success"]
+  ISS_547["ISS-547: Bound persistent JIT cache filenames"]
+  ISS_548["ISS-548: Report compilation independently from cache writes"]
   ISS_002 --> ISS_003
   ISS_002 --> ISS_004
   ISS_003 --> ISS_005

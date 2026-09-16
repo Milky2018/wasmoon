@@ -21,6 +21,8 @@ import {
   "Milky2018/wasmoon/wasi",
   "moonbitlang/core/env",
   "moonbitlang/x/fs",
+  "moonbitlang/x/crypto",
+  "moonbitlang/core/encoding/utf8",
   "Milky2018/wasmoon/executor",
   "Milky2018/wasmoon/runtime",
   "Milky2018/wasmoon/jit",
