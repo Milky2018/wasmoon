@@ -9,7 +9,7 @@ pub fn HttpHost::poll(
     if body.completion.val is Some(_) {
       continue
     }
-    if body.receipt is Some(receipt) {
+    if !body.cancelled.val && body.receipt is Some(receipt) {
       match self.runtime.read_host_value_future(body.table, receipt) {
         Pending => ()
         Ready(result) => {
