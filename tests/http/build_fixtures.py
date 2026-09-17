@@ -9,7 +9,7 @@ parser = argparse.ArgumentParser(__doc__)
 parser.add_argument("--output", type=Path, default=ROOT / "target/http-fixtures")
 args = parser.parse_args()
 args.output.mkdir(parents=True, exist_ok=True)
-for name in ["echo", "trap", "proxy", "inspect", "middleware", "outer", "inner"]:
+for name in ["echo", "trap", "uri", "proxy", "inspect", "middleware", "outer", "inner"]:
     source = ROOT / "tests/http" / f"{name}.wat"
     if name == "trap":
         source = args.output / "trap.wat"

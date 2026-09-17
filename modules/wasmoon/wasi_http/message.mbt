@@ -245,29 +245,19 @@ fn HttpHost::consume_body(
 }
 
 ///|
-fn uri_part_valid(text : String, authority : Bool) -> Bool {
-  for char in text {
-    if char <= ' ' || char >= '\u007f' || char == '#' || char == '\\' {
-      return false
-    }
-    if authority && (char == '/' || char == '?') {
-      return false
-    }
+fn path_query_valid(text : String) -> Bool {
+  let (path, query) = match text.find("?") {
+    Some(index) => (text[:index].to_owned(), text[index + 1:].to_owned())
+    None => (text, "")
   }
-  true
+  let path : @uri.EStr[@uri_enc.Path]? = @uri.EStr::new(path)
+  let query : @uri.EStr[@uri_enc.Query]? = @uri.EStr::new(query)
+  path is Some(_) && query is Some(_)
 }
 
 ///|
 fn scheme_valid(text : String) -> Bool {
-  if text.is_empty() || !(text[0] is ('a'..='z' | 'A'..='Z')) {
-    return false
-  }
-  for char in text {
-    if !(char is ('a'..='z' | 'A'..='Z' | '0'..='9' | '+' | '-' | '.')) {
-      return false
-    }
-  }
-  true
+  @uri.Scheme::new(text) is Some(_)
 }
 
 ///|
@@ -275,7 +265,7 @@ fn attribute_valid(name : String, value : @runtime_impl.ComponentValue) -> Bool 
   match (name, value) {
     ("method", Variant(9, Some(String(text)))) => field_token(text)
     ("path-with-query", Variant(1, Some(String(text)))) =>
-      uri_part_valid(text, false)
+      path_query_valid(text)
     ("authority", Variant(1, Some(String(text)))) =>
       try authority_host_port(text, false) catch {
         _ => false

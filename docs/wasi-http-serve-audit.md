@@ -71,6 +71,35 @@ Local verification also passed with the freshly installed release executable,
 along with CLI behavior regressions, strict MoonBit warning checks and all
 2,522 project-wide native tests. These counts do not represent HTTP-only coverage.
 
+## PR review follow-up
+
+PR #517 review found three additional contract failures despite the earlier green
+suite. Regression tests reproduced all three before the fixes:
+
+- Response-header arrival incorrectly switched first-body-byte timeout to the
+  between-byte timeout. A shared `moonbitlang/async.Timer` now preserves the
+  first-byte deadline across headers and chunk framing, until body data arrives.
+  Tests cover both timeout-budget orderings, partial/informational headers,
+  subsequent body stalls and empty responses.
+- Dropping a response body left a stalled network read active until scope exit
+  or timeout. `moonbitlang/async.any` now races transfer against cancellation and
+  cancels the blocked read. A real TCP regression requires peer EOF while the
+  host scope remains alive.
+- URI setters accepted invalid characters and percent escapes. The
+  `marianoguerra/uri` 0.1.2 dependency now validates URI components and parses
+  authorities and absolute targets. Host-interface tests verify rejected setters
+  preserve prior values; real canonical-ABI guests test both engines.
+
+A concurrent local run also exposed a test-client flaw: uploading an entire echo
+request before reading the response can deadlock under normal TCP backpressure.
+Both the previous and fixed executables reproduced this with small socket
+buffers. The 2 MiB case now uploads and receives concurrently with bounded socket
+buffers; it does not depend on the OS buffering the whole response.
+
+Cross-platform acceptance for these fixes is tracked by ISS-558, ISS-559 and
+ISS-560 and the PR checks. The earlier verified revision above does not include
+these fixes.
+
 ## Limits of this audit
 
 This is a stronger targeted functional regression suite, not exhaustive RFC/WIT

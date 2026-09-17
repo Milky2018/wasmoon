@@ -60,9 +60,17 @@ the bytes transmitted, and conflicting framing is rejected.
 The client supports HTTP and HTTPS with certificate verification against system
 trust roots by default. Embedders can choose custom trust roots through
 `add_network_client`. Connection, first-byte and between-byte timeouts follow
-request options; defaults are 30 seconds. TLS backend errors currently map to
+request options; defaults are 30 seconds. The first-byte deadline remains active
+through informational responses, headers and chunk framing until body data
+arrives. Cancelling a body interrupts the owning network read using async task
+cancellation, including when the host scope remains active. TLS backend errors currently map to
 `TLS-protocol-error` because moonbitlang/async exposes an unstructured TLS error;
 certificate verification failures still fail the request.
+
+URI syntax is validated with `marianoguerra/uri` 0.1.2 (RFC 3986). Paths,
+queries and authorities retain their original encoded spelling; validation does
+not normalize or decode them. The transport applies its own HTTP host and port
+policy after parsing. Timers and cancellation use `moonbitlang/async`.
 
 ## Transport scope
 

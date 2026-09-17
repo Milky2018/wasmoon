@@ -125,7 +125,17 @@ async fn HttpHost::receive_body(
   body : NetworkBody,
 ) -> Unit {
   try {
-    let trailers = input.body(framing, async fn(bytes) { body.put(bytes) })
+    // Race the transfer against cancellation in the async task scope. Cancelling
+    // the losing task interrupts socket reads as well as backpressure waits.
+    let trailers = @async.any([
+      async fn() { input.body(framing, async fn(bytes) { body.put(bytes) }) },
+      async fn() {
+        while !body.cancelled.val {
+          body.wake.wait()
+        }
+        raise @runtime_impl.Cancelled
+      },
+    ])
     if body.cancelled.val {
       return
     }
@@ -145,7 +155,10 @@ async fn HttpHost::receive_body(
     }
     body.trailers.val = Some(Variant(0, Some(value)))
   } catch {
-    error => body.trailers.val = Some(transport_error(error))
+    error =>
+      if !body.cancelled.val {
+        body.trailers.val = Some(transport_error(error))
+      }
   }
   body.eof.val = true
   body.wake.broadcast()
@@ -333,9 +346,8 @@ fn request_method(message : HttpMessage) -> String raise {
 ///|
 fn request_authority(message : HttpMessage) -> String raise {
   match message.attributes.get("authority") {
-    Some(Variant(1, Some(String(authority)))) if !authority.is_empty() &&
-      uri_part_valid(authority, true) &&
-      !authority.contains("@") => authority
+    Some(Variant(1, Some(String(authority)))) if !authority.is_empty() =>
+      authority
     _ => raise HttpTransportError(19, "missing or invalid authority")
   }
 }
@@ -345,47 +357,25 @@ fn authority_host_port(
   authority : String,
   secure : Bool,
 ) -> (String, Int) raise {
-  if authority.is_empty() ||
-    !uri_part_valid(authority, true) ||
-    authority.contains("@") {
+  let parsed = @uri.UriRef::parse("//" + authority) catch {
+    _ => raise HttpTransportError(19, "invalid authority")
+  }
+  guard parsed.authority is Some(auth) &&
+    !auth.host.is_empty() &&
+    !auth.has_userinfo() &&
+    parsed.path.is_empty() &&
+    parsed.query is None &&
+    parsed.fragment is None else {
     raise HttpTransportError(19, "invalid authority")
   }
-  let default_port = if secure { 443 } else { 80 }
-  if authority.has_prefix("[") {
-    guard authority.find("]") is Some(end) else {
-      raise HttpTransportError(19, "invalid IPv6 authority")
-    }
-    let host = authority[1:end].to_owned()
-    if !host.contains(":") {
-      raise HttpTransportError(19, "invalid IPv6 literal")
-    }
-    @socket.Addr::parse("[" + host + "]:0") |> ignore
-    let suffix = authority[end + 1:].to_owned()
-    if suffix.is_empty() {
-      return (host, default_port)
-    }
-    if !suffix.has_prefix(":") {
-      raise HttpTransportError(19, "invalid authority suffix")
-    }
-    let port = decimal_length(suffix[1:].to_owned())
-    if port < 0L || port > 65535L {
-      raise HttpTransportError(19, "invalid port")
-    }
-    return (host, port.to_int())
+  let port = auth.port_to_u16() catch {
+    _ => raise HttpTransportError(19, "invalid port")
   }
-  let parts = authority.split(":").to_array()
-  if parts.length() > 2 || parts[0].is_empty() {
-    raise HttpTransportError(19, "invalid authority")
+  let host = match auth.host_parsed {
+    Ipv6(address) => address.to_string()
+    _ => auth.host
   }
-  let port = if parts.length() == 2 {
-    decimal_length(parts[1].to_owned())
-  } else {
-    default_port.to_int64()
-  }
-  if port < 0L || port > 65535L {
-    raise HttpTransportError(19, "invalid port")
-  }
-  (parts[0].to_owned(), port.to_int())
+  (host, port.unwrap_or(if secure { 443 } else { 80 }))
 }
 
 ///|

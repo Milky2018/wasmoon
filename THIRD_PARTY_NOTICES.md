@@ -73,6 +73,8 @@ The repository does not vendor `.mooncakes/` in git. Declared package
 dependencies are:
 
 - `moonbitlang/x` - Apache-2.0
+- `marianoguerra/uri` - Apache-2.0; derived from MIT-licensed `fluent-uri`.
+  The dependency includes its upstream notice in `THIRD-PARTY-NOTICES.md`.
 
 ## WASI HTTP and Preview 3 WIT
 

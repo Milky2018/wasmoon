@@ -26,7 +26,7 @@ async fn HttpHost::serve_exchange(
     buffer: b"",
     offset: 0,
     timeout: Some(30000),
-    between_timeout: Some(30000),
+    first_byte: None,
   }
   let line = ascii_text(input.line())
   let parts = line.split(" ").to_array()
@@ -160,37 +160,40 @@ fn request_target(
   target : String,
   host : String,
 ) -> (String, String, @runtime_impl.ComponentValue) raise {
-  if target.is_empty() || !uri_part_valid(target, false) {
+  if target.is_empty() {
     raise HttpTransportError(19, "invalid request target")
   }
   if target.has_prefix("/") || (target == "*" && verb == "OPTIONS") {
+    if !path_query_valid(target) {
+      raise HttpTransportError(19, "invalid request target")
+    }
     authority_host_port(host, false) |> ignore
     return (target, host, Variant(0, None))
   }
-  guard target.find("://") is Some(separator) else {
+  let parsed = @uri.Uri::parse(target) catch {
+    _ => raise HttpTransportError(19, "invalid request target")
+  }
+  guard parsed.authority is Some(auth) && parsed.fragment is None else {
     raise HttpTransportError(19, "invalid request target")
   }
-  let scheme = target[:separator].to_owned().to_lower()
-  if !scheme_valid(scheme) {
-    raise HttpTransportError(19, "invalid request scheme")
-  }
-  let start = separator + 3
-  let mut end = start
-  while end < target.length() && target[end] != '/' && target[end] != '?' {
-    end += 1
-  }
-  let authority = target[start:end].to_owned()
+  let scheme = parsed.scheme.as_str().to_lower()
+  let authority = auth.as_str()
   authority_host_port(authority, scheme == "https") |> ignore
-  let path = if end == target.length() {
+  let suffix = parsed.path.as_str() +
+    (match parsed.query {
+      Some(query) => "?" + query.as_str()
+      None => ""
+    })
+  let path = if suffix.is_empty() {
     if verb == "OPTIONS" {
       "*"
     } else {
       "/"
     }
-  } else if target[end] == '?' {
-    "/" + target[end:].to_owned()
+  } else if suffix.has_prefix("?") {
+    "/" + suffix
   } else {
-    target[end:].to_owned()
+    suffix
   }
   let scheme = match scheme {
     "http" => @runtime_impl.ComponentValue::Variant(0, None)

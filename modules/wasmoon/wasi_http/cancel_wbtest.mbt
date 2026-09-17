@@ -1,6 +1,8 @@
 ///|
-async test "network client preserves duplicate fields, bytes and chunked trailers" {
+async test "dropping a response body interrupts a stalled network read" {
   @async.with_timeout(5000, async fn() {
+    let peer_closed = Ref(false)
+    let closed = @async.CondVar::Cond()
     let server = @socket.TcpServer(@socket.Addr::parse("127.0.0.1:0"))
     defer server.close()
     @async.with_task_group(async fn(group) {
@@ -17,9 +19,10 @@ async test "network client preserves duplicate fields, bytes and chunked trailer
         assert_eq(ascii_text(input.line()), "GET / HTTP/1.1")
         let headers = input.fields()
         input.body(message_framing(headers, false, false), fn(_) {  }) |> ignore
-        socket.write(
-          b"HTTP/1.1 200 OK\r\nX-Repeat: one\r\nx-repeat: two\r\nX-Raw: \xff\r\nTransfer-Encoding: chunked\r\n\r\n2\r\nhi\r\n0\r\nX-Trailer: done\r\n\r\n",
-        )
+        socket.write(b"HTTP/1.1 200 OK\r\nContent-Length: 100\r\n\r\n")
+        assert_eq(socket.read_some(max_len=1), None)
+        peer_closed.val = true
+        closed.broadcast()
       })
       let linker = @runtime_impl.ComponentLinker()
       defer linker.close()
@@ -65,8 +68,7 @@ async test "network client preserves duplicate fields, bytes and chunked trailer
         guard host.take(table, response, "response") is Message(message) else {
           return fail("missing response")
         }
-        assert_eq(message.headers.get("x-repeat"), [b"one", b"two"])
-        assert_eq(message.headers.get("x-raw"), [b"\xff"])
+
         let receipt = host.runtime.new_host_value_future(
           table,
           host.future_payload(0),
@@ -77,18 +79,14 @@ async test "network client preserves duplicate fields, bytes and chunked trailer
           is Tuple([U32(contents), U32(trailers)]) else {
           return fail("missing body")
         }
+        host.runtime.drop_host_readable_stream(table, contents)
+        host.runtime.drop_host_readable_future(table, trailers)
         host.wake.broadcast()
-        let received : Array[Byte] = []
-        while host.read_body(table, contents) is Some(bytes) {
-          received.append(bytes.to_array())
-        }
-        assert_eq(Bytes::from_array(received), b"hi")
-        guard host.read_future(table, trailers)
-          is Variant(0, Some(Variant(1, Some(handle)))) &&
-          host.take(table, handle, "fields") is Fields(fields) else {
-          return fail("missing trailers")
-        }
-        assert_eq(fields.get("x-trailer"), [b"done"])
+        @async.with_timeout(2000, async fn() {
+          while !peer_closed.val {
+            closed.wait()
+          }
+        })
       })
     })
   })

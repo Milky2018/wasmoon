@@ -8,23 +8,32 @@ priv struct HttpInput {
   reader : &@io.Reader
   mut buffer : Bytes
   mut offset : Int
-  mut timeout : Int?
-  between_timeout : Int?
+  timeout : Int?
+  mut first_byte : @async.Timer?
 }
 
 ///|
 async fn HttpInput::read(self : HttpInput, maximum : Int) -> Bytes? {
   if self.offset == self.buffer.length() {
-    let result = match self.timeout {
-      Some(millis) =>
-        @async.with_timeout(
-          millis,
-          async fn() { self.reader.read_some(max_len=65536) },
-          error=HttpTransportError(9, "HTTP read timeout"),
-        )
-      None => self.reader.read_some(max_len=65536)
+    let result = if self.first_byte is Some(timer) {
+      @async.with_task_group(async fn(group) {
+        group.spawn_bg(no_wait=true, async fn() {
+          timer.wait()
+          raise HttpTransportError(9, "HTTP first body byte timeout")
+        })
+        self.reader.read_some(max_len=65536)
+      })
+    } else {
+      match self.timeout {
+        Some(millis) =>
+          @async.with_timeout(
+            millis,
+            async fn() { self.reader.read_some(max_len=65536) },
+            error=HttpTransportError(9, "HTTP read timeout"),
+          )
+        None => self.reader.read_some(max_len=65536)
+      }
     }
-    self.timeout = self.between_timeout
     guard result is Some(bytes) else { return None }
     self.buffer = bytes
     self.offset = 0
@@ -314,6 +323,10 @@ async fn HttpInput::body(
         return HttpFields::from_list().unwrap()
       }
       raise HttpTransportError(25, "truncated HTTP body")
+    }
+    // Header bytes and chunk framing do not satisfy the first-body-byte deadline.
+    if !bytes.is_empty() {
+      self.first_byte = None
     }
     consume(bytes)
     if !(framing is UntilClose) {

@@ -61,6 +61,26 @@ def raw_exchange(port: int, request: bytes) -> bytes:
         return bytes(received)
 
 
+
+def duplex_echo(port: int, data: bytes) -> None:
+    # An echo client must drain its response during upload: otherwise two bounded
+    # TCP buffers can deadlock even when the server correctly applies backpressure.
+    with socket.create_connection(("127.0.0.1", port), timeout=15) as connection:
+        connection.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 65536)
+        connection.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 65536)
+        connection.sendall(f"POST /echo HTTP/1.1\r\nHost: localhost\r\nContent-Length: {len(data)}\r\n\r\n".encode())
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+            upload = pool.submit(connection.sendall, data)
+            response = http.client.HTTPResponse(connection)
+            try:
+                response.begin()
+                assert response.status == 200, response.status
+                assert response.read() == data
+                upload.result(timeout=15)
+            finally:
+                response.close()
+
+
 def protocol_cases(port: int) -> None:
     head = raw_exchange(port, b"HEAD / HTTP/1.1\r\nHost: localhost\r\n\r\n")
     headers, body = head.split(b"\r\n\r\n", 1)
@@ -125,6 +145,13 @@ def startup_cases(binary: Path, fixtures: Path, jit: bool) -> None:
 
 def run_engine(binary: Path, fixtures: Path, jit: bool) -> None:
     startup_cases(binary, fixtures, jit)
+    with serving(binary, fixtures / "uri.wasm", jit) as port:
+        response = raw_exchange(port, b"POST /valid%2fpath?q=%ff HTTP/1.1\r\nHost: localhost\r\nContent-Length: 2\r\n\r\nhi")
+        assert response.startswith(b"HTTP/1.1 200 "), response
+        assert response.endswith(b"2\r\nhi\r\n0\r\n\r\n"), response
+        for target in [b"/<bad>", b"/%GG", b"/%", b"http://localhost/<bad>", b"http://<bad>/"]:
+            response = raw_exchange(port, b"GET " + target + b" HTTP/1.1\r\nHost: localhost\r\n\r\n")
+            assert response.startswith(b"HTTP/1.1 400 "), (target, response)
     with serving(binary, fixtures / "trap.wasm", jit) as port:
         for _ in range(3):
             response = raw_exchange(port, b"GET / HTTP/1.1\r\nHost: localhost\r\n\r\n")
@@ -142,8 +169,9 @@ def run_engine(binary: Path, fixtures: Path, jit: bool) -> None:
                     connection.close()
 
             protocol_cases(port)
-            for data in [b"", b"hello HTTP", bytes(range(256)) * 8192]:
+            for data in [b"", b"hello HTTP"]:
                 echo(data)
+            duplex_echo(port, bytes(range(256)) * 8192)
             with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
                 list(pool.map(echo, [f"request-{n}".encode() * 1024 for n in range(16)]))
             with socket.create_connection(("127.0.0.1", port), timeout=15) as connection:
@@ -187,7 +215,7 @@ def run_engine(binary: Path, fixtures: Path, jit: bool) -> None:
                     assert response.read() == (b"forwarded body" if expected == 200 else b"")
                 finally:
                     connection.close()
-    print(f"WASI HTTP {'JIT' if jit else 'interpreter'}: startup rejection, guest traps, middleware order, metadata, proxy and capability denial passed")
+    print(f"WASI HTTP {'JIT' if jit else 'interpreter'}: URI setter validation, startup rejection, guest traps, middleware order, metadata, proxy and capability denial passed")
 
 
 def main() -> None:

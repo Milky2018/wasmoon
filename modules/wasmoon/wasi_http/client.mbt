@@ -35,7 +35,7 @@ async fn HttpHost::exchange(
     Some(Variant(1, Some(String(path)))) if !path.is_empty() => path
     _ => "/"
   }
-  if !uri_part_valid(path, false) ||
+  if !path_query_valid(path) ||
     (!path.has_prefix("/") && !(path == "*" && verb == "OPTIONS")) {
     raise HttpTransportError(19, "invalid request target")
   }
@@ -48,8 +48,8 @@ async fn HttpHost::exchange(
     reader,
     buffer: b"",
     offset: 0,
-    timeout: Some(request_timeout(message, 1)),
-    between_timeout: Some(request_timeout(message, 2)),
+    timeout: Some(request_timeout(message, 2)),
+    first_byte: Some(Timer(request_timeout(message, 1))),
   }
   @async.with_task_group(async fn(group) {
     let upload = group.spawn(async fn() {
