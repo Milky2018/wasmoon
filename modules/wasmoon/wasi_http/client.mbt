@@ -49,7 +49,7 @@ async fn HttpHost::exchange(
     buffer: b"",
     offset: 0,
     timeout: Some(request_timeout(message, 2)),
-    first_byte: Some(Timer(request_timeout(message, 1))),
+    body_deadline: Some(Timer(request_timeout(message, 1))),
   }
   @async.with_task_group(async fn(group) {
     let upload = group.spawn(async fn() {

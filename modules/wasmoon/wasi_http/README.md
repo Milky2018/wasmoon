@@ -62,8 +62,14 @@ trust roots by default. Embedders can choose custom trust roots through
 `add_network_client`. Connection, first-byte and between-byte timeouts follow
 request options; defaults are 30 seconds. The first-byte deadline remains active
 through informational responses, headers and chunk framing until body data
-arrives. Cancelling a body interrupts the owning network read using async task
-cancellation, including when the host scope remains active. TLS backend errors currently map to
+arrives. Subsequent deadlines advance only on body data, not partial chunk
+framing or trailers. The next read budget starts after delivery to the consumer,
+so time blocked on consumer backpressure is excluded. Cancelling a body
+interrupts the owning network read using async task cancellation, including when
+the host scope remains active. An early completed response or an abandoned
+response cancels any unfinished upload and resolves its transmission receipt
+with an error; an already completed upload retains its successful receipt.
+TLS backend errors currently map to
 `TLS-protocol-error` because moonbitlang/async exposes an unstructured TLS error;
 certificate verification failures still fail the request.
 

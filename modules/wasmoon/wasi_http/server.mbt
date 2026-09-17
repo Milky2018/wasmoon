@@ -26,7 +26,7 @@ async fn HttpHost::serve_exchange(
     buffer: b"",
     offset: 0,
     timeout: Some(30000),
-    first_byte: None,
+    body_deadline: None,
   }
   let line = ascii_text(input.line())
   let parts = line.split(" ").to_array()

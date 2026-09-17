@@ -18,7 +18,7 @@ async fn check_response_timeout(
           buffer: b"",
           offset: 0,
           timeout: Some(2000),
-          first_byte: None,
+          body_deadline: None,
         }
         assert_eq(ascii_text(input.line()), "GET / HTTP/1.1")
         let headers = input.fields()
@@ -194,4 +194,100 @@ async test "empty response does not wait for a first body byte" {
     b"",
     false,
   )
+}
+
+///|
+async test "chunk framing cannot refresh the between-byte deadline" {
+  check_response_timeout(
+    1000000000L,
+    80000000L,
+    async fn(socket) {
+      socket.write(
+        b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n1\r\nh\r\n1;slow=",
+      )
+      for _ in 0..<8 {
+        @async.sleep(30)
+        socket.write(b"x")
+      }
+      socket.write(b"\r\ni\r\n0\r\n\r\n")
+    },
+    b"h",
+    true,
+  )
+}
+
+///|
+async test "actual body data refreshes the between-byte deadline" {
+  check_response_timeout(
+    1000000000L,
+    200000000L,
+    async fn(socket) {
+      socket.write(b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n")
+      for _ in 0..<6 {
+        socket.write(b"1\r\nx\r\n")
+        @async.sleep(50)
+      }
+      socket.write(b"0\r\n\r\n")
+    },
+    b"xxxxxx",
+    false,
+  )
+}
+
+///|
+async test "partial trailers cannot refresh the body completion deadline" {
+  check_response_timeout(
+    1000000000L,
+    80000000L,
+    async fn(socket) {
+      socket.write(
+        b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n1\r\nh\r\n0\r\nX-Slow: ",
+      )
+      for _ in 0..<8 {
+        @async.sleep(30)
+        socket.write(b"x")
+      }
+      socket.write(b"\r\n\r\n")
+    },
+    b"h",
+    true,
+  )
+}
+
+///|
+async test "consumer backpressure does not consume the next body read budget" {
+  @async.with_timeout(3000, async fn() {
+    let ready = Ref(false)
+    let wake = @async.CondVar::Cond()
+    @async.with_task_group(async fn(group) {
+      let (reader, writer) = @io.pipe()
+      defer reader.close()
+      group.spawn_bg(async fn() {
+        defer writer.close()
+        writer.write(b"h")
+        while !ready.val {
+          wake.wait()
+        }
+        writer.write(b"i")
+      })
+      let input = HttpInput::{
+        reader,
+        buffer: b"",
+        offset: 0,
+        timeout: Some(50),
+        body_deadline: Some(Timer(1000)),
+      }
+      let received : Array[Byte] = []
+      input.body(Length(2L), async fn(bytes) {
+        received.append(bytes.to_array())
+        if !ready.val {
+          @async.sleep(150)
+          ready.val = true
+          wake.broadcast()
+        }
+      })
+      |> ignore
+      assert_eq(Bytes::from_array(received), b"hi")
+    })
+  })
 }

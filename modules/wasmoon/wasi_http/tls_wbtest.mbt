@@ -53,7 +53,7 @@ async test "HTTPS verifies custom trust roots and rejects untrusted certificates
               buffer: b"",
               offset: 0,
               timeout: Some(3000),
-              first_byte: None,
+              body_deadline: None,
             }
             input.line() |> ignore
             let headers = input.fields()

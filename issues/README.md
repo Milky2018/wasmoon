@@ -578,6 +578,8 @@ graph TD
   ISS_558["ISS-558: Respect the response-body first-byte timeout"]
   ISS_559["ISS-559: Cancel network reads when HTTP bodies are abandoned"]
   ISS_560["ISS-560: Validate HTTP URI components with an ecosystem parser"]
+  ISS_561["ISS-561: Tie HTTP response timeouts to body progress"]
+  ISS_562["ISS-562: Verify HTTP upload receipts on early responses and cancellation"]
   ISS_002 --> ISS_003
   ISS_002 --> ISS_004
   ISS_003 --> ISS_005

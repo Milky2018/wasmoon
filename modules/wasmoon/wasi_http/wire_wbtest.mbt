@@ -13,7 +13,7 @@ async test "HTTP framing rejects ambiguous lengths and invalid trailers" {
       buffer: b"",
       offset: 0,
       timeout: None,
-      first_byte: None,
+      body_deadline: None,
     }
     let headers = input.fields()
     try message_framing(headers, false, false) catch {
@@ -30,7 +30,7 @@ async test "HTTP framing rejects ambiguous lengths and invalid trailers" {
       buffer: b"",
       offset: 0,
       timeout: None,
-      first_byte: None,
+      body_deadline: None,
     }
     try input.body(Chunked, fn(_) {  }) catch {
       _ => ()
@@ -51,7 +51,7 @@ async test "HTTP framing accepts duplicate equal lengths and close-delimited res
     buffer: b"",
     offset: 0,
     timeout: None,
-    first_byte: None,
+    body_deadline: None,
   }
   let headers = input.fields()
   assert_true(message_framing(headers, false, false) is Length(3L))
@@ -84,7 +84,7 @@ async test "HTTP body read timeout wakes without readiness polling" {
     buffer: b"",
     offset: 0,
     timeout: Some(1),
-    first_byte: None,
+    body_deadline: None,
   }
   try input.read(1) catch {
     HttpTransportError(9, _) => ()

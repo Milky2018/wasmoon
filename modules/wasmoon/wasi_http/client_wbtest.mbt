@@ -12,7 +12,7 @@ async test "network client preserves duplicate fields, bytes and chunked trailer
           buffer: b"",
           offset: 0,
           timeout: Some(2000),
-          first_byte: None,
+          body_deadline: None,
         }
         assert_eq(ascii_text(input.line()), "GET / HTTP/1.1")
         let headers = input.fields()

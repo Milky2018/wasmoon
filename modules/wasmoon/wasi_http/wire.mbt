@@ -9,17 +9,17 @@ priv struct HttpInput {
   mut buffer : Bytes
   mut offset : Int
   timeout : Int?
-  mut first_byte : @async.Timer?
+  mut body_deadline : @async.Timer?
 }
 
 ///|
 async fn HttpInput::read(self : HttpInput, maximum : Int) -> Bytes? {
   if self.offset == self.buffer.length() {
-    let result = if self.first_byte is Some(timer) {
+    let result = if self.body_deadline is Some(timer) {
       @async.with_task_group(async fn(group) {
         group.spawn_bg(no_wait=true, async fn() {
           timer.wait()
-          raise HttpTransportError(9, "HTTP first body byte timeout")
+          raise HttpTransportError(9, "HTTP body progress timeout")
         })
         self.reader.read_some(max_len=65536)
       })
@@ -324,11 +324,12 @@ async fn HttpInput::body(
       }
       raise HttpTransportError(25, "truncated HTTP body")
     }
-    // Header bytes and chunk framing do not satisfy the first-body-byte deadline.
-    if !bytes.is_empty() {
-      self.first_byte = None
-    }
     consume(bytes)
+    // Only body data advances the response deadline, never chunk framing.
+    // Start the next budget after delivery so consumer backpressure is excluded.
+    if !bytes.is_empty() && self.body_deadline is Some(_) {
+      self.body_deadline = self.timeout.map(millis => Timer(millis))
+    }
     if !(framing is UntilClose) {
       remaining -= bytes.length().to_int64()
     }
