@@ -96,9 +96,18 @@ Both the previous and fixed executables reproduced this with small socket
 buffers. The 2 MiB case now uploads and receives concurrently with bounded socket
 buffers; it does not depend on the OS buffering the whole response.
 
-Cross-platform acceptance for these fixes is tracked by ISS-558, ISS-559 and
-ISS-560 and the PR checks. The earlier verified revision above does not include
-these fixes.
+Code commit `a528de66` passed [CI run 35206324220](https://github.com/Milky2018/wasmoon/actions/runs/35206324220)
+on 2026-09-17: Linux AMD64, macOS ARM64, Windows AMD64 MSVC/Clang and
+Linux ASan/UBSan all succeeded. Both-engine HTTP CLI tests passed in all four
+platform configurations. Local strict checks produced zero MoonBit warnings;
+all 2,529 native tests passed, including 21 HTTP package tests. ISS-558,
+ISS-559 and ISS-560 are closed with this evidence.
+
+The first CI attempt encountered an MSVC dependency-download connection reset
+and a macOS JIT timeout in `gc/array-new-data.wast` with empty output. Both jobs
+passed on a same-commit rerun without changing timeouts or skipping tests.
+The misc case also passed 50 local fresh-process repetitions with CI tracing
+settings; this does not establish the original timeout's root cause.
 
 ## Limits of this audit
 
