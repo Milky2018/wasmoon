@@ -22,7 +22,7 @@ test "interpreter timeout bounds loops and preserves subsequent calls" {
       instance,
       "run",
       [I32(arg)],
-      options=@executor.CallExportOptions(timeout_ms=Some(timeout)),
+      options=CallExportOptions(timeout_ms=Some(timeout)),
     )
     guard result is Err(failure) else { fail("expected timeout") }
     assert_true(failure.kind is TimedOut)
@@ -32,7 +32,7 @@ test "interpreter timeout bounds loops and preserves subsequent calls" {
     instance,
     "run",
     [I32(0)],
-    options=@executor.CallExportOptions(timeout_ms=Some(-1)),
+    options=CallExportOptions(timeout_ms=Some(-1)),
   )
   guard invalid is Err(failure) else { fail("expected invalid timeout") }
   assert_true(failure.kind is InvalidOption)
@@ -41,7 +41,7 @@ test "interpreter timeout bounds loops and preserves subsequent calls" {
     instance,
     "run",
     [I32(0)],
-    options=@executor.CallExportOptions(timeout_ms=Some(10000)),
+    options=CallExportOptions(timeout_ms=Some(10000)),
   )
   assert_true(result is Ok([I32(42)]))
 }
@@ -129,7 +129,7 @@ test "interpreter timeout includes a final blocking host call" {
   let addr = store.alloc_host_func_with_caller(
     (_caller, _args) => {
       guard @wasmoon_jit.InvocationControl::new(Some(5), None) is Some(wait) else {
-        raise @runtime.Unreachable
+        raise Unreachable
       }
       while !wait.expired() {
         ()
@@ -147,7 +147,7 @@ test "interpreter timeout includes a final blocking host call" {
     instance,
     "run",
     [],
-    options=@executor.CallExportOptions(timeout_ms=Some(1)),
+    options=CallExportOptions(timeout_ms=Some(1)),
   )
   guard result is Err(failure) else {
     fail("expected timeout after host return")

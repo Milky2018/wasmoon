@@ -17,7 +17,7 @@ test "cooperative interpreter preserves completed work across instruction quanta
   let instance = @executor.instantiate_module_with_imports(
     store,
     module_,
-    @runtime.Imports::Imports(),
+    Imports(),
   )
   let mut outcome = @executor.call_func_by_index_resumable(
     store,
@@ -150,7 +150,7 @@ test "a consumed interpreter continuation cannot cancel its resumed waiter" {
   defer second.cancel()
   first.cancel()
   try first.continue_execution() catch {
-    @runtime.ContinuationAlreadyConsumed => ()
+    ContinuationAlreadyConsumed => ()
     error => fail(error.to_string())
   } noraise {
     _ => fail("consumed continuation must reject a second resume")

@@ -127,16 +127,12 @@ pub async fn HttpHost::serve_connection(
 ) -> Unit {
   let started = Ref(false)
   let error_status = Ref(400)
-  self.serve_exchange(socket, instance, started, error_status) catch {
-    error => {
-      if !started.val {
-        socket.write(
-          "HTTP/1.1 \{error_status.val} Error\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
-        ) catch {
-          _ => ()
-        }
-      }
-      raise error
+  errdefer (if !started.val {
+    socket.write(
+      "HTTP/1.1 \{error_status.val} Error\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+    ) catch {
+      _ => ()
     }
-  }
+  })
+  self.serve_exchange(socket, instance, started, error_status)
 }

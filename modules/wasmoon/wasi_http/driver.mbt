@@ -19,15 +19,8 @@ async fn HttpHost::drive(self : HttpHost) -> Unit {
       if call.done {
         continue
       }
-      match (try? call.invocation.step()) {
-        Ok(StepReady(values)) => {
-          call.result.val = Some(Ok(values))
-          call.done = true
-          progressed = true
-        }
-        Ok(StepProgressed) => progressed = true
-        Ok(StepBlocked) => ()
-        Err(error) => {
+      try call.invocation.step() catch {
+        error => {
           if call.result.val is Some(Ok(_)) {
             raise error
           }
@@ -35,6 +28,14 @@ async fn HttpHost::drive(self : HttpHost) -> Unit {
           call.done = true
           progressed = true
         }
+      } noraise {
+        StepReady(values) => {
+          call.result.val = Some(Ok(values))
+          call.done = true
+          progressed = true
+        }
+        StepProgressed => progressed = true
+        StepBlocked => ()
       }
       if call.result.val is None &&
         call.invocation.published_result() is Some(values) {
@@ -162,10 +163,9 @@ pub fn HttpHost::add_service_base(
       ready.val = true
       wake.broadcast()
     })
-    @runtime_impl.HostFuture(
-      () => if ready.val { Ready([]) } else { Pending },
-      () => task.cancel(),
-    )
+    HostFuture(() => if ready.val { Ready([]) } else { Pending }, () => {
+      task.cancel()
+    })
   })
   self.add_service_stdio(stdout, stderr)
 }

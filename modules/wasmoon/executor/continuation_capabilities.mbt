@@ -14,7 +14,7 @@ pub fn validate_continuation_gc_storage(
     }
     for field in fields {
       if field.storage_type is Val(ty) && ty.is_continuation_ref() {
-        raise @runtime.UnsupportedGcContinuationStorage
+        raise UnsupportedGcContinuationStorage
       }
     }
   }

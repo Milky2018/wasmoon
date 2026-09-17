@@ -16,8 +16,10 @@ async test "HTTP framing rejects ambiguous lengths and invalid trailers" {
       between_timeout: None,
     }
     let headers = input.fields()
-    guard (try? message_framing(headers, false, false)) is Err(_) else {
-      fail("accepted ambiguous framing")
+    try message_framing(headers, false, false) catch {
+      _ => ()
+    } noraise {
+      _ => fail("accepted ambiguous framing")
     }
   }
   for wire in [b"1\r\na\r\n0\r\nContent-Length: 1\r\n\r\n", b"2\r\na", b"z\r\n"] {
@@ -30,8 +32,10 @@ async test "HTTP framing rejects ambiguous lengths and invalid trailers" {
       timeout: None,
       between_timeout: None,
     }
-    guard (try? input.body(Chunked, async fn(_) {  })) is Err(_) else {
-      fail("accepted malformed body")
+    try input.body(Chunked, fn(_) {  }) catch {
+      _ => ()
+    } noraise {
+      _ => fail("accepted malformed body")
     }
   }
 }
@@ -50,10 +54,9 @@ async test "HTTP framing accepts duplicate equal lengths and close-delimited res
     between_timeout: None,
   }
   let headers = input.fields()
-  assert_eq(message_framing(headers, false, false), Length(3L))
+  assert_true(message_framing(headers, false, false) is Length(3L))
   let data : Array[Byte] = []
-  input.body(UntilClose, async fn(bytes) { data.append(bytes.to_array()) })
-  |> ignore
+  input.body(UntilClose, fn(bytes) { data.append(bytes.to_array()) }) |> ignore
   assert_eq(Bytes::from_array(data), b"abc")
 }
 
@@ -83,7 +86,10 @@ async test "HTTP body read timeout wakes without readiness polling" {
     timeout: Some(1),
     between_timeout: Some(1),
   }
-  guard (try? input.read(1)) is Err(HttpTransportError(9, _)) else {
-    fail("missing read timeout")
+  try input.read(1) catch {
+    HttpTransportError(9, _) => ()
+    error => fail("unexpected timeout error: \{error}")
+  } noraise {
+    _ => fail("missing read timeout")
   }
 }

@@ -3,13 +3,13 @@ import {
   "Milky2018/wasm_core/types",
   "Milky2018/wasmoon/runtime",
   "moonbitlang/core/cmp",
-  "moonbitlang/core/debug",
   "moonbitlang/core/encoding/utf8",
   "moonbitlang/core/hashmap",
 }
 
 import {
   "Milky2018/wasmoon_jit/native_test_support/fs" @test_fs,
+  "moonbitlang/core/debug",
 } for "test"
 
 import {

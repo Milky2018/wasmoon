@@ -5,7 +5,6 @@ import {
   "Milky2018/wasmoon/wasi",
   "moonbitlang/async",
   "moonbitlang/async/io",
-  "moonbitlang/async/cond_var",
   "moonbitlang/async/stdio",
   "moonbitlang/async/socket",
   "moonbitlang/async/os_error",

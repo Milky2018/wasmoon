@@ -1249,6 +1249,12 @@ def main() -> int:
         help="Run component core functions with the interpreter instead of JIT",
     )
     parser.add_argument(
+        "--wasmoon",
+        type=Path,
+        default=executable(Path("."), "wasmoon"),
+        help="Path to the runtime binary (default: ./wasmoon)",
+    )
+    parser.add_argument(
         "--wasmoon-tools",
         type=str,
         default=str(executable(Path("."), "wasmoon-tools")),
@@ -1290,10 +1296,12 @@ def main() -> int:
         print(f"No .wast files found in '{test_dir}'")
         return 1
 
-    wasmoon = executable(repo_root, "wasmoon")
+    wasmoon = args.wasmoon
+    if not wasmoon.is_absolute():
+        wasmoon = (repo_root / wasmoon).resolve()
     if not wasmoon.exists():
         print(
-            "Error: wasmoon binary not found. "
+            f"Error: wasmoon binary not found at {wasmoon}. "
             "Run moon build --target native --release && ./install.sh first."
         )
         return 1

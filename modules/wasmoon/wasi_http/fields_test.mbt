@@ -5,9 +5,9 @@ test "fields retain repeated values, casing and order" {
     ("x-test", b"two"),
     ("Empty", b""),
   ]).unwrap()
-  inspect(fields.get("X-TEST"), content="[b\"one\", b\"two\"]")
+  assert_eq(fields.get("X-TEST"), [b"one", b"two"])
   inspect(fields.has("empty"), content="true")
-  inspect(fields.get("absent"), content="[]")
+  debug_inspect(fields.get("absent"), content="[]")
   assert_eq(fields.copy_all(), [
     ("X-Test", b"one"),
     ("x-test", b"two"),
@@ -22,7 +22,7 @@ test "failed field mutations are atomic" {
     fields.set("x", [b"valid", b"bad\r\ninjection"]),
     content="Err(InvalidSyntax)",
   )
-  inspect(fields.get("x"), content="[b\"original\"]")
+  assert_eq(fields.get("x"), [b"original"])
   debug_inspect(fields.append("Connection", b"close"), content="Err(Forbidden)")
   debug_inspect(
     fields.append("invalid name", b"value"),
@@ -31,5 +31,5 @@ test "failed field mutations are atomic" {
   inspect(fields.copy_all().length(), content="1")
   let copy = fields.clone()
   copy.set("x", [b"copy"]).unwrap()
-  inspect(fields.get("x"), content="[b\"original\"]")
+  assert_eq(fields.get("x"), [b"original"])
 }

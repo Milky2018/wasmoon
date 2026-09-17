@@ -181,7 +181,7 @@ pub fn register_wasi(
         _ => 1
       }
       ctx.exit_code = Some(exit_code)
-      raise @runtime.HostExit(exit_code)
+      raise HostExit(exit_code)
     },
     func_type=make_func_type([i32], []),
   )

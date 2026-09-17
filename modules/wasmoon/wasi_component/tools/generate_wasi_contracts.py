@@ -238,10 +238,14 @@ def emit_snapshot(
             '  match "\\{interface}#\\{function}" {',
         ]
     )
+    seen_interfaces: set[str] = set()
     for interface in resolution["interfaces"]:
         full_name = interface_name(resolution, interface)
-        if not full_name.startswith("wasi:"):
+        if not full_name.startswith("wasi:") or full_name in seen_interfaces:
             continue
+        # Import and export views may repeat one interface with distinct local
+        # type indices. Its first view supplies the shared host contract.
+        seen_interfaces.add(full_name)
         for name, function in interface["functions"].items():
             key = f"{full_name}#{name}"
             lines.append(f"    {moon_string(key)} => {func_type(function)}")
@@ -254,10 +258,14 @@ def emit_snapshot(
             "  match interface {",
         ]
     )
+    seen_interfaces: set[str] = set()
     for interface in resolution["interfaces"]:
         full_name = interface_name(resolution, interface)
-        if not full_name.startswith("wasi:"):
+        if not full_name.startswith("wasi:") or full_name in seen_interfaces:
             continue
+        # Import and export views may repeat one interface with distinct local
+        # type indices. Its first view supplies the shared host contract.
+        seen_interfaces.add(full_name)
         exports = ", ".join(
             f"({moon_string(name)}, {index})"
             for name, index in interface["types"].items()

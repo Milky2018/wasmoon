@@ -200,9 +200,13 @@ pub fn HttpHost::add_network_client(
         task.cancel()
         message.body.cancelled.val = true
         if result.val is Some([Variant(0, Some(handle))]) {
-          if (try? self.take(self.runtime.resource_table(), handle, "response"))
-            is Ok(Message(response)) {
-            response.body.cancelled.val = true
+          try
+            self.take(self.runtime.resource_table(), handle, "response")
+          catch {
+            _ => ()
+          } noraise {
+            Message(response) => response.body.cancelled.val = true
+            _ => ()
           }
         }
         result.val = None

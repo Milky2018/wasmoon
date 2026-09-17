@@ -195,11 +195,15 @@ test "embedding future reads are nonblocking and single use" {
     runtime.read_host_value_future(table, handle),
     content="Ready(U8(42))",
   )
-  let repeated = try? runtime.read_host_value_future(table, handle)
-  debug_inspect(
-    repeated,
-    content="Err(HostCallError(\"host future already read or busy\"))",
-  )
+  try runtime.read_host_value_future(table, handle) catch {
+    error =>
+      debug_inspect(
+        error,
+        content="HostCallError(\"host future already read or busy\")",
+      )
+  } noraise {
+    _ => fail("repeated future read must fail")
+  }
   runtime.drop_host_readable_future(table, handle)
 }
 

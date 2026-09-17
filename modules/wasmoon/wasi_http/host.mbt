@@ -43,7 +43,7 @@ pub fn HttpHost::HttpHost(
     runtime: linker.host_runtime_state(),
     resources: Map([]),
     bodies: [],
-    wake: @cond_var.Cond(),
+    wake: Cond(),
     pending: [],
     spawn: Ref(None),
     next_id: Ref(0),

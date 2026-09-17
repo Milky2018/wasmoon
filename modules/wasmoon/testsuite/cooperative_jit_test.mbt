@@ -19,7 +19,7 @@ test "cooperative JIT preserves guest work and parked GC references" {
   let instance = @executor.instantiate_module_with_imports(
     store,
     module_,
-    @runtime.Imports::Imports(),
+    Imports(),
   )
   let context = prepare_async_jit_context(
     module_,

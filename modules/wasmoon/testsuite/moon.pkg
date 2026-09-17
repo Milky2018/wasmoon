@@ -9,11 +9,8 @@ import {
   "Milky2018/wasmoon/cmd/wasmoon/commands",
   "Milky2018/wasmoon/jit",
   "Milky2018/wasmoon_jit",
-  "moonbitlang/core/buffer",
-  "moonbitlang/core/debug",
   "moonbitlang/core/json",
   "moonbitlang/core/string",
-  "moonbitlang/core/strconv",
 }
 
 import {
@@ -34,6 +31,7 @@ import {
   "moonbitlang/core/float",
   "moonbitlang/x/fs",
   "moonbitlang/async",
+  "moonbitlang/core/debug",
 } for "test"
 
 import {
@@ -41,4 +39,5 @@ import {
   "Milky2018/wasmoon_jit/native_test_support",
   "Milky2018/wasmoon_jit/native_test_support/fs" @test_fs,
   "Milky2018/wasmoon_jit/host_io",
+  "moonbitlang/core/debug",
 } for "wbtest"

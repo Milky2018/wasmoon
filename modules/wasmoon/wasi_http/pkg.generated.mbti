@@ -17,7 +17,6 @@ import {
 // Values
 
 // Errors
-type HttpTransportError derive(@debug.Debug)
 
 // Types and methods
 pub(all) enum HeaderError {
@@ -26,6 +25,9 @@ pub(all) enum HeaderError {
   Immutable
   SizeExceeded
 } derive(Eq, @debug.Debug)
+pub fn HeaderError::equal(Self, Self) -> Bool
+pub fn HeaderError::not_equal(Self, Self) -> Bool
+pub fn HeaderError::to_repr(Self) -> @debug.Repr
 
 type HttpBody
 
@@ -41,8 +43,6 @@ pub fn HttpFields::from_list(entries? : Array[(String, Bytes)]) -> Result[Self, 
 pub fn HttpFields::get(Self, String) -> Array[Bytes]
 pub fn HttpFields::has(Self, String) -> Bool
 pub fn HttpFields::set(Self, String, Array[Bytes]) -> Result[Unit, HeaderError]
-
-type HttpFraming derive(Eq, @debug.Debug)
 
 pub struct HttpHost {
   linker : @runtime_impl.ComponentLinker
@@ -68,13 +68,9 @@ pub fn HttpHost::poll(Self) -> Bool raise @runtime_impl.ComponentRuntimeError
 pub async fn[T] HttpHost::run(Self, async () -> T) -> T
 pub async fn HttpHost::serve_connection(Self, @socket.Tcp, @runtime_impl.ComponentInstance) -> Unit
 
-type HttpInput
-
 type HttpInvocation
 
 type HttpResource
-
-type NetworkBody
 
 // Type aliases
 

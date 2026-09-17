@@ -1,10 +1,10 @@
 ///|
-suberror HttpTransportError {
+priv suberror HttpTransportError {
   HttpTransportError(Int, String)
 } derive(Debug)
 
 ///|
-struct HttpInput {
+priv struct HttpInput {
   reader : &@io.Reader
   mut buffer : Bytes
   mut offset : Int
@@ -112,11 +112,11 @@ async fn HttpInput::fields(self : HttpInput) -> HttpFields {
 }
 
 ///|
-enum HttpFraming {
+priv enum HttpFraming {
   Length(Int64)
   Chunked
   UntilClose
-} derive(Eq, Debug)
+}
 
 ///|
 fn decimal_length(text : String) -> Int64 raise {

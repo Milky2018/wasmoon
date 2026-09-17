@@ -18,8 +18,8 @@ if ! git diff --quiet --; then
   exit 1
 fi
 
-echo "[pre-commit] moon check --target native"
-moon check --target native
+echo "[pre-commit] moon check --target native --warn-list +73 --deny-warn"
+moon check --target native --warn-list +73 --deny-warn
 
 # The script tests pin CI-facing manifests: the sanitizer gate's file list
 # and budget, module boundaries, and workflow structure. They cost a couple

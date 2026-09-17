@@ -37,12 +37,13 @@ test "component type arguments still reject a mismatched nested alias payload" {
       #|  (instance (instantiate $consumer (with "record" (type $record)))))
     ),
   )
-  let result = try? @component_model.validate_component(
-    @component_types.parse_component(bytes),
-  )
-  guard result
-    is Err(@component_model.ComponentImportTypeMismatch("type record")) else {
-    fail("unexpected validation result: \{result}")
+  try
+    @component_model.validate_component(@component_types.parse_component(bytes))
+  catch {
+    @component_model.ComponentImportTypeMismatch("type record") => ()
+    error => fail("unexpected validation error: \{error}")
+  } noraise {
+    _ => fail("invalid component was accepted")
   }
 }
 
@@ -88,4 +89,37 @@ test "nested component type imports rebase dependency indices before re-export" 
   }
   linker.add_instance("source", child)
   linker.instantiate("consumer", consumer) |> ignore
+}
+
+///|
+test "instantiated resource aliases preserve equality and distinct identities" {
+  for same_resource in [true, false] {
+    let second = if same_resource { "a" } else { "b" }
+    let source =
+      $|(component
+      $|  (component $producer
+      $|    (type $a (resource (rep i32)))
+      $|    (type $b (resource (rep i32)))
+      $|    (export "a" (type $a))
+      $|    (export "b" (type $b)))
+      $|  (instance $instance (instantiate $producer))
+      $|  (alias export $instance "a" (type $a))
+      $|  (alias export $instance "\{second}" (type $b))
+      $|  (component $consumer
+      $|    (import "a" (type $a (sub resource)))
+      $|    (import "b" (type (eq $a))))
+      $|  (instance (instantiate $consumer (with "a" (type $a)) (with "b" (type $b)))))
+    let bytes = @component_text.parse_component_wat(source)
+    try
+      @component_model.validate_component(
+        @component_types.parse_component(bytes),
+      )
+    catch {
+      @component_model.SectionParseError(5, "resource types are not the same") =>
+        assert_false(same_resource)
+      error => fail("unexpected resource alias error: \{error}")
+    } noraise {
+      _ => assert_true(same_resource)
+    }
+  }
 }

@@ -185,9 +185,7 @@ test "cancelling a body drops its producer and completes the transmission" {
     table,
     host.future_payload(0),
     host.types,
-    () => {
-      raise @runtime_impl.HostCallError("cancelled receipt must not be polled")
-    },
+    () => raise HostCallError("cancelled receipt must not be polled"),
     () => (),
   )
   guard host.consume_body(message, receipt, table) is Tuple([U32(stream), _]) else {

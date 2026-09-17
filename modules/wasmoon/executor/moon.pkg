@@ -6,11 +6,14 @@ import {
   "moonbitlang/core/env",
   "moonbitlang/core/buffer",
   "moonbitlang/core/debug",
-  "moonbitlang/core/double",
-  "moonbitlang/core/float",
   "moonbitlang/core/math",
 }
 
 import {
   "moonbitlang/async",
 } for "test"
+
+import {
+  "moonbitlang/core/double",
+  "moonbitlang/core/float",
+} for "wbtest"

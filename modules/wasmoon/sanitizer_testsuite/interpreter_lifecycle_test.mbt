@@ -46,7 +46,7 @@ fn require_consumed(
   continuation : @executor.ExecutionContinuation,
 ) -> Unit raise {
   try continuation.continue_execution() catch {
-    @runtime.ContinuationAlreadyConsumed => ()
+    ContinuationAlreadyConsumed => ()
     error => raise error
   } noraise {
     _ => fail("expected consumed continuation")
@@ -144,7 +144,7 @@ test "Store suspended cleanup detaches registrations before reentrant callbacks"
   store.close()
   inspect(calls.val, content="1")
   try store.register_suspended_execution(fn() { () }) catch {
-    @runtime.StoreClosed => ()
+    StoreClosed => ()
     error => raise error
   } noraise {
     _ => fail("expected terminal registration rejection")

@@ -36,7 +36,7 @@ fn create_script_host(
         [],
         (args, _) => {
           guard args is [U32(maximum)] else {
-            raise @runtime_impl.HostCallError("expected u32 capacity")
+            raise HostCallError("expected u32 capacity")
           }
           host_runtime.set_max_concurrent_resources(
             maximum.reinterpret_as_uint(),

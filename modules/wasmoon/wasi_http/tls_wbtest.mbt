@@ -14,6 +14,8 @@ fn test_key(name : String) -> String raise {
 
 ///|
 #cfg(not(platform="windows"))
+// The upstream server helper is intentionally test-only; production uses its client API.
+#warnings("-alert_internal")
 async fn test_tls_server(socket : @socket.Tcp) -> @tls.Tls {
   @tls.Tls::server_from_pair(
     socket,
@@ -27,6 +29,8 @@ async fn test_tls_server(socket : @socket.Tcp) -> @tls.Tls {
 
 ///|
 #cfg(platform="windows")
+// The upstream server helper is intentionally test-only; production uses its client API.
+#warnings("-alert_internal")
 async fn test_tls_server(socket : @socket.Tcp) -> @tls.Tls {
   @tls.Tls::server_from_pair(socket, socket, pfx_file=test_key("cert.pfx"))
 }
@@ -53,7 +57,7 @@ async test "HTTPS verifies custom trust roots and rejects untrusted certificates
             }
             input.line() |> ignore
             let headers = input.fields()
-            input.body(message_framing(headers, false, false), async fn(_) {  })
+            input.body(message_framing(headers, false, false), fn(_) {  })
             |> ignore
             tls.write("HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n")
           } catch {
@@ -109,11 +113,11 @@ async test "HTTPS verifies custom trust roots and rejects untrusted certificates
           let result = host.invoke(client, "send", [request])
           if trusted {
             guard result is [Variant(0, Some(_))] else {
-              fail("trusted HTTPS failed: \{result}")
+              fail("trusted HTTPS failed: \{repr(result)}")
             }
           } else {
             guard result is [Variant(1, Some(Variant(12, _)))] else {
-              fail("untrusted HTTPS was accepted: \{result}")
+              fail("untrusted HTTPS was accepted: \{repr(result)}")
             }
           }
         })

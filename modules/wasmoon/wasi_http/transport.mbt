@@ -1,5 +1,5 @@
 ///|
-struct NetworkBody {
+priv struct NetworkBody {
   bytes : Ref[Bytes?]
   offset : Ref[Int]
   eof : Ref[Bool]
@@ -96,11 +96,7 @@ fn HttpHost::incoming(
     },
   )
   let headers = self.allocate(table, "fields", Fields(fields))
-  let args = [
-    headers,
-    @runtime_impl.ComponentValue::Variant(1, Some(U32(stream))),
-    U32(trailers),
-  ]
+  let args = [headers, Variant(1, Some(U32(stream))), U32(trailers)]
   if !response {
     args.push(Variant(0, None))
   }
@@ -246,7 +242,14 @@ async fn HttpHost::write_body(
     self.wake.broadcast()
   }
   self.wake.broadcast()
-  try {
+  errdefer {
+    // Cancellation must also complete the consumer receipt.
+    if outcome.val is None {
+      outcome.val = Some(http_error(7))
+    }
+    self.wake.broadcast()
+  }
+  let result = try {
     let mut count = 0L
     while self.read_body(table, stream) is Some(bytes) {
       count += bytes.length().to_int64()
@@ -292,11 +295,13 @@ async fn HttpHost::write_body(
     outcome.val = Some(Variant(0, None))
     self.poll() |> ignore
   } catch {
-    error => {
-      outcome.val = Some(transport_error(error))
-      self.wake.broadcast()
-      raise error
-    }
+    error => Err(error)
+  } noraise {
+    _ => Ok(())
+  }
+  if result is Err(error) {
+    outcome.val = Some(transport_error(error))
+    raise error
   }
   self.wake.broadcast()
 }

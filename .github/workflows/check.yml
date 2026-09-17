@@ -71,7 +71,7 @@ jobs:
 
       - name: check source and generated interfaces
         run: |
-          moon check --target native --warn-list @73
+          moon check --target native --warn-list +73 --deny-warn
           moon fmt
           git diff --exit-code
           moon info
@@ -265,6 +265,9 @@ jobs:
           $tools = @(Get-ChildItem target/windows-tools -Recurse -Filter wasm-tools.exe)
           if ($tools.Count -ne 1) { throw "Expected exactly one pinned wasm-tools binary" }
           $tools[0].DirectoryName >> $env:GITHUB_PATH
+      - name: check Windows warnings
+        run: moon check --target native --warn-list +73 --deny-warn
+
       - name: test Windows descriptor readiness
         run: |
           New-Item -ItemType Directory -Force target | Out-Null

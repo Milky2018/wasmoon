@@ -16,8 +16,7 @@ async test "network client preserves duplicate fields, bytes and chunked trailer
         }
         assert_eq(ascii_text(input.line()), "GET / HTTP/1.1")
         let headers = input.fields()
-        input.body(message_framing(headers, false, false), async fn(_) {  })
-        |> ignore
+        input.body(message_framing(headers, false, false), fn(_) {  }) |> ignore
         socket.write(
           b"HTTP/1.1 200 OK\r\nX-Repeat: one\r\nx-repeat: two\r\nX-Raw: \xff\r\nTransfer-Encoding: chunked\r\n\r\n2\r\nhi\r\n0\r\nX-Trailer: done\r\n\r\n",
         )

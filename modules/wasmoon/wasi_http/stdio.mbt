@@ -1,15 +1,15 @@
 ///|
 fn HttpHost::prepare_interface(
   self : HttpHost,
-  package : String,
+  package_name : String,
   name : String,
 ) -> @runtime_impl.HostInstanceBuilder raise @runtime_impl.ComponentRuntimeError {
   let builder = self.linker.host_instance_builder(
-    "wasi:\{package}/\{name}@0.3.0",
+    "wasi:\{package_name}/\{name}@0.3.0",
     self.runtime,
   )
   builder.set_type_space(self.types)
-  for entry in wasi_http_exported_types("wasi:\{package}@0.3.0/\{name}") {
+  for entry in wasi_http_exported_types("wasi:\{package_name}@0.3.0/\{name}") {
     builder.add_type(entry.0, entry.1)
   }
   builder

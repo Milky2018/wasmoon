@@ -14,6 +14,12 @@ pub(all) enum HeaderError {
 } derive(Eq, Debug)
 
 ///|
+pub extend HeaderError with Eq::{not_equal, equal}
+
+///|
+pub extend HeaderError with Debug::{to_repr}
+
+///|
 fn field_token(text : String) -> Bool {
   if text.is_empty() {
     return false

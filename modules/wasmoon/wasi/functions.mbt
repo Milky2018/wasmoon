@@ -1649,7 +1649,7 @@ fn read_path_from_memory(
   for b in bytes {
     if b == b'\x00' {
       return Err(
-        (if @host_io.is_windows() { Errno::NoEnt } else { Errno::Inval }).to_i32(),
+        (if @host_io.is_windows() { Errno::NoEnt } else { Inval }).to_i32(),
       )
     }
   }

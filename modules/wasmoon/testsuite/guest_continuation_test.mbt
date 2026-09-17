@@ -95,13 +95,13 @@ test "guest continuation interpreter: parked locals root GC values until complet
     let store = if native_heap {
       @runtime.Store::with_c_heap()
     } else {
-      @runtime.Store()
+      Store()
     }
     defer store.close()
     let instance = @executor.instantiate_module_with_imports(
       store,
       module_,
-      @runtime.Imports(),
+      Imports(),
     )
     let rooted = store.alloc_struct(0, [I32(42)])
     @executor.call_exported_func(store, instance, "start", [StructRef(rooted)])

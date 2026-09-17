@@ -1,8 +1,7 @@
 import {
-  "moonbitlang/core/debug",
-  "moonbitlang/core/hashmap",
-}
-
-import {
   "Milky2018/milkir/optimize",
 } for "test"
+
+import {
+  "moonbitlang/core/hashmap",
+} for "wbtest"

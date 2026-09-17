@@ -113,7 +113,11 @@ fn HttpHost::discard_trailers(
   value : Ref[@runtime_impl.ComponentValue?],
 ) -> Unit {
   if value.val is Some(Variant(0, Some(Variant(1, Some(handle))))) {
-    (try? self.take(self.runtime.resource_table(), handle, "fields")) |> ignore
+    try
+      self.take(self.runtime.resource_table(), handle, "fields") |> ignore
+    catch {
+      _ => ()
+    }
   }
   value.val = None
 }
