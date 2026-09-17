@@ -1,6 +1,7 @@
 ///|
 priv struct HttpOptions {
   values : Array[@runtime_impl.ComponentValue]
+  mut parent : (Array[Int], Ref[Int])?
   immutable : Bool
 }
 
@@ -78,6 +79,9 @@ fn HttpHost::allocate(
           if resources.get(rep) is Some(Message(message)) {
             message.body.cancelled.val = true
             wake.broadcast()
+          }
+          if resources.get(rep) is Some(Options(options)) {
+            options.release_parent()
           }
           resources.remove(rep)
         }),
@@ -252,6 +256,7 @@ fn HttpHost::options_call(
       Options({
         values: [Variant(0, None), Variant(0, None), Variant(0, None)],
         immutable: false,
+        parent: None,
       }),
     )
   }
@@ -263,7 +268,7 @@ fn HttpHost::options_call(
     return self.allocate(
       table,
       "request-options",
-      Options({ values: options.values.copy(), immutable: false, }),
+      Options({ values: options.values.copy(), immutable: false, parent: None, }),
     )
   }
   let index = if name.has_suffix("connect-timeout") {
@@ -281,4 +286,13 @@ fn HttpHost::options_call(
   }
   options.values[index] = args[1]
   Variant(0, None)
+}
+
+///|
+fn HttpOptions::release_parent(self : HttpOptions) -> Unit {
+  if self.parent is Some((lends, children)) {
+    lends[0] -= 1
+    children.val -= 1
+    self.parent = None
+  }
 }

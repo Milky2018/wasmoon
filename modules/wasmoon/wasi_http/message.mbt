@@ -18,6 +18,7 @@ struct HttpBody {
 priv struct HttpMessage {
   headers : HttpFields
   options : HttpOptions?
+  option_children : Ref[Int]
   body : HttpBody
   attributes : Map[String, @runtime_impl.ComponentValue]
 }
@@ -57,15 +58,24 @@ fn HttpHost::take(
   table : @runtime_impl.ResourceTable,
   value : @runtime_impl.ComponentValue,
   name : String,
+  consume_body? : Bool = false,
 ) -> HttpResource raise @runtime_impl.ComponentRuntimeError {
   let resource = self.get(table, value, name)
   let handle = component_handle(value)
   let entry = table.get(handle).unwrap()
-  if !entry.own || entry.num_lends[0] != 0 {
+  let children = if consume_body && resource is Message(message) {
+    message.option_children.val
+  } else {
+    0
+  }
+  if !entry.own || entry.num_lends[0] != children {
     raise HostCallError("cannot consume borrowed HTTP resource")
   }
   table.free(handle) |> ignore
   self.resources.remove(entry.rep)
+  if resource is Options(options) {
+    options.release_parent()
+  }
   resource
 }
 
@@ -161,6 +171,7 @@ fn HttpHost::new_message(
   let message = HttpMessage::{
     headers: headers.freeze(),
     options,
+    option_children: Ref(0),
     body,
     attributes,
   }
@@ -296,7 +307,7 @@ fn HttpHost::message_call(
   }
   if name.has_suffix(".consume-body") {
     let result = self.consume_body(message, component_handle(args[1]), table)
-    self.take(table, args[0], kind) |> ignore
+    self.take(table, args[0], kind, consume_body=true) |> ignore
     return result
   }
   if name.has_suffix(".get-headers") {
@@ -304,17 +315,25 @@ fn HttpHost::message_call(
   }
   if name.has_suffix(".get-options") {
     return match message.options {
-      Some(options) =>
+      Some(options) => {
+        let parent = table.get(component_handle(args[0])).unwrap()
+        parent.num_lends[0] += 1
+        message.option_children.val += 1
         Variant(
           1,
           Some(
             self.allocate(
               table,
               "request-options",
-              Options({ values: options.values.copy(), immutable: true, }),
+              Options({
+                values: options.values.copy(),
+                immutable: true,
+                parent: Some((parent.num_lends, message.option_children)),
+              }),
             ),
           ),
         )
+      }
       None => Variant(0, None)
     }
   }

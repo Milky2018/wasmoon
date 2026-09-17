@@ -52,7 +52,9 @@ limited to 64 KiB and 1024 entries. Hop-by-hop fields are managed by the transpo
 Bodies are streams, with a bounded 64 KiB buffer per transfer. Reading and writing
 apply backpressure; trailers become available after stream EOF. Transmission
 completion waits for the consumer receipt. Dropping a body cancels its producer;
-undelivered trailer resources are reclaimed. Content-Length is checked against
+undelivered trailer resources are reclaimed. Immutable request-options children
+block parent destruction and ownership transfer; consuming the body keeps those
+children valid as required by WIT. Content-Length is checked against
 the bytes transmitted, and conflicting framing is rejected.
 
 The client supports HTTP and HTTPS with certificate verification against system

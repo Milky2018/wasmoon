@@ -199,3 +199,76 @@ test "cancelling a body drops its producer and completes the transmission" {
     fail("cancelled transmission did not fail")
   }
 }
+
+///|
+test "request options children prevent transfer but survive consume-body" {
+  let linker = @runtime_impl.ComponentLinker()
+  defer linker.close()
+  let host = HttpHost(linker)
+  host.add_types()
+  let table = host.runtime.resource_table()
+  guard linker.get_import("wasi:http/types@0.3.0") is Some(Instance(types)) else {
+    return fail("missing types")
+  }
+  let options = types.call_exported_func("[constructor]request-options", [])[0]
+  let headers = types.call_exported_func("[constructor]fields", [])[0]
+  let trailers = host.runtime.new_host_value_future(
+    table,
+    host.future_payload(1),
+    host.types,
+    Variant(0, Some(Variant(0, None))),
+  )
+  guard types.call_exported_func("[static]request.new", [
+      headers,
+      Variant(0, None),
+      U32(trailers),
+      Variant(1, Some(options)),
+    ])
+    is [Tuple([request, _])] else {
+    return fail("missing request")
+  }
+  guard types.call_exported_func("[method]request.get-options", [request])
+    is [Variant(1, Some(child))] else {
+    return fail("missing child")
+  }
+  try host.take(table, request, "request") catch {
+    HostCallError(_) => ()
+    error => raise error
+  } noraise {
+    _ => fail("request transferred with a live child")
+  }
+  assert_eq(
+    types.call_exported_func("[method]request-options.set-connect-timeout", [
+      child,
+      Variant(0, None),
+    ]),
+    [Variant(1, Some(Variant(1, None)))],
+  )
+  let cloned = types.call_exported_func("[method]request-options.clone", [child])[0]
+  assert_eq(
+    types.call_exported_func("[method]request-options.set-connect-timeout", [
+      cloned,
+      Variant(0, None),
+    ]),
+    [Variant(0, None)],
+  )
+  let receipt = host.runtime.new_host_value_future(
+    table,
+    host.future_payload(0),
+    host.types,
+    Variant(0, None),
+  )
+  types.call_exported_func("[static]request.consume-body", [
+    request,
+    U32(receipt),
+  ])
+  |> ignore
+  assert_eq(
+    types.call_exported_func("[method]request-options.get-connect-timeout", [
+      child,
+    ]),
+    [Variant(0, None)],
+  )
+  host.take(table, child, "request-options") |> ignore
+  host.take(table, cloned, "request-options") |> ignore
+}
