@@ -60,6 +60,17 @@ moon test --target native
 
 The same runner remains enabled in the four-platform CI workflow.
 
+## Verified revision
+
+Code commit `f6d86dc1` passed [CI run 35201844746](https://github.com/Milky2018/wasmoon/actions/runs/35201844746)
+on 2026-09-17. All five jobs succeeded: Linux AMD64, macOS ARM64,
+Windows AMD64 with MSVC and Clang, and Linux ASan/UBSan. The expanded
+HTTP CLI runner passed with both engines in all four platform configurations.
+
+Local verification also passed with the freshly installed release executable,
+along with CLI behavior regressions, strict MoonBit warning checks and all
+2,522 project-wide native tests. These counts do not represent HTTP-only coverage.
+
 ## Limits of this audit
 
 This is a stronger targeted functional regression suite, not exhaustive RFC/WIT
