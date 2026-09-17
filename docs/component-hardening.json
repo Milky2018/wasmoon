@@ -19,7 +19,8 @@
     ],
     "implementation_interface_allowlist": [
       "modules/wasmoon/component_native/pkg.generated.mbti",
-      "modules/wasmoon/wasi_component/pkg.generated.mbti"
+      "modules/wasmoon/wasi_component/pkg.generated.mbti",
+      "modules/wasmoon/wasi_http/pkg.generated.mbti"
     ],
     "forbidden_termination_roots": [
       "modules/wasm_component",

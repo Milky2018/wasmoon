@@ -66,6 +66,29 @@ fn build_command() -> @argparse.Command {
     subcommand_required=true,
     subcommands=[
       Command(
+        "serve",
+        about="Serve a WASI HTTP 0.3 component",
+        positionals=[
+          PositionArg("file", about="HTTP service component", num_args=required),
+        ],
+        options=[
+          OptionArg(
+            "middleware",
+            action=Append,
+            about="Middleware component, outermost first (repeatable)",
+          ),
+          OptionArg("addr", about="Listen address", default_values=[
+            "127.0.0.1:8080",
+          ]),
+          OptionArg(
+            "network",
+            about="Outgoing HTTP capability: deny, loopback, or all",
+            default_values=["deny"],
+          ),
+        ],
+        flags=[FlagArg("no-jit", about="Use the interpreter")],
+      ),
+      Command(
         "run",
         about="Run a WebAssembly module",
         positionals=[
@@ -292,7 +315,7 @@ fn build_command() -> @argparse.Command {
 }
 
 ///|
-fn main {
+async fn main {
   let matches = build_command().parse(argv=@env.args()[1:]) catch {
     err => {
       write_usage(err.to_string())
@@ -308,6 +331,22 @@ fn main {
     _ => false
   }
   let status = match matches.subcommand {
+    Some(("serve", sub)) => {
+      let network = sub.values["network"][0]
+      require_choice("--network", network, ["deny", "loopback", "all"])
+      @commands.serve_http(
+        sub.values["file"][0],
+        sub.values.get("middleware").unwrap_or([]),
+        sub.values["addr"][0],
+        network,
+        !(sub.flags.get("no-jit") is Some(true)),
+      ) catch {
+        error => {
+          @logger.error("HTTP server failed: \{error}")
+          1
+        }
+      }
+    }
     Some(("run", sub)) =>
       @commands.run_wasm(
         sub.values["file"][0],

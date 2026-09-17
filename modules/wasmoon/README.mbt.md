@@ -15,6 +15,8 @@ A WebAssembly runtime written in MoonBit with JIT compilation support.
 - **WASI Preview 1 Support**: File I/O, environment variables, command-line arguments
 - **GC Proposal Support**: i31/struct/array/ref operations in interpreter and JIT
 - **Component Model**: Component parser, validator, runtime, and stable WIT-shaped facade
+- **WASI HTTP 0.3**: Streaming HTTP/HTTPS client, service and middleware worlds; `wasmoon serve` with interpreter or JIT
+- **WASI HTTP 0.3**: Streaming HTTP/HTTPS client, service and middleware worlds; `wasmoon serve` with interpreter or JIT
 - **WASI Components**: Preview 2 and WASI 0.3 hosts with native Component Async JIT on macOS AArch64 and Linux AMD64
 
 ## Requirements

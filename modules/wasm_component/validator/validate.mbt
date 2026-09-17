@@ -121,6 +121,7 @@ fn validate_component_inner(
 ) -> ValidatedComponentInfo raise ComponentValidationError {
   let counts = Counts::Counts()
   let type_table : Array[@component.TypeDef?] = []
+  let known_type_sigs : Map[Int, TypeSig] = Map([])
   // Track which type indices correspond to resource types defined in the
   // current concrete component (as opposed to imported/aliased resource types).
   let local_resource_types : Array[Bool] = []
@@ -679,6 +680,7 @@ fn validate_component_inner(
           is_root,
           counts,
           type_table,
+          known_type_sigs,
           local_resource_types,
           resource_ids,
           type_sizes,
@@ -741,6 +743,7 @@ fn validate_component_inner(
           cfg,
           counts,
           type_table,
+          known_type_sigs,
           resource_ids,
           component_sizes,
           instance_sizes,
@@ -778,6 +781,7 @@ fn validate_component_inner(
           s.payload,
           counts,
           type_table,
+          known_type_sigs,
           local_resource_types,
           resource_ids,
           type_sizes,
@@ -842,7 +846,14 @@ fn validate_component_inner(
                 Some(FuncType(ft)) => {
                   func_types.push(Some(ft))
                   func_sig_shapes.push(
-                    Some(funcsig_of_functype(ft, type_table, resource_ids)),
+                    Some(
+                      funcsig_of_functype(
+                        ft,
+                        type_table,
+                        resource_ids,
+                        known_sigs=known_type_sigs,
+                      ),
+                    ),
                   )
                 }
                 _ => {

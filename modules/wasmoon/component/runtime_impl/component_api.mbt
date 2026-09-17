@@ -631,7 +631,7 @@ pub fn ComponentLinker::instantiate(
       let isolated = @component.parse_component(component.component_bytes()) catch {
         e => raise ComponentParseError(e.to_string())
       }
-      instantiate_component(self, name, isolated, Map([]), [], staged)
+      instantiate_component(self, name, isolated, Map([]), [], [], staged)
     },
     rollback=fn() { transaction.rollback() },
   )

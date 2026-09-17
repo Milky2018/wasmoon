@@ -30,6 +30,7 @@ struct ComponentInvocation {
   phase : Array[ComponentInvocationPhase]
   driving : Array[Bool]
   cancel_requested : Array[Bool]
+  published : Ref[Array[ComponentValue]?]
 }
 
 ///|
@@ -59,9 +60,12 @@ fn ComponentInvocation::cleanup_task(self : ComponentInvocation) -> Unit {
 }
 
 ///|
-fn ComponentInvocation::finish(
+fn ComponentInvocation::collect_result(
   self : ComponentInvocation,
 ) -> Array[ComponentValue] raise ComponentRuntimeError {
+  if self.published.val is Some(values) {
+    return values
+  }
   let (func_type, types, callee_instance_id) = component_invocation_contract(
     self.task.func,
   )
@@ -83,9 +87,32 @@ fn ComponentInvocation::finish(
     owner,
     self.caller_table.id,
   )
-  self.cleanup_task()
-  self.phase[0] = Completed(transferred)
+  self.published.val = Some(transferred)
   transferred
+}
+
+///|
+fn ComponentInvocation::finish(
+  self : ComponentInvocation,
+) -> Array[ComponentValue] raise ComponentRuntimeError {
+  let values = self.collect_result()
+  self.cleanup_task()
+  self.phase[0] = Completed(values)
+  values
+}
+
+///|
+/// Observe task.return before a streaming producer's callback exits. The
+/// invocation must still be driven (or cancelled) until its callback completes.
+pub fn ComponentInvocation::published_result(
+  self : ComponentInvocation,
+) -> Array[ComponentValue]? raise ComponentRuntimeError {
+  if self.published.val is Some(_) ||
+    self.async_state.tasks.read_task_returned(self.task_id) is Some(true) {
+    Some(self.collect_result().map(ComponentValue::to_host_value))
+  } else {
+    None
+  }
 }
 
 ///|
@@ -287,6 +314,26 @@ pub fn ComponentInvocation::poll(
 }
 
 ///|
+/// A cooperative step distinguishes runnable work from an external wait so an
+/// embedding can sleep on its reactor instead of repeatedly yielding.
+pub(all) enum ComponentInvocationProgress {
+  StepReady(Array[ComponentValue])
+  StepProgressed
+  StepBlocked
+}
+
+///|
+pub fn ComponentInvocation::step(
+  self : ComponentInvocation,
+) -> ComponentInvocationProgress raise ComponentRuntimeError {
+  match self.drive_once() {
+    DriveReady(values) => StepReady(values.map(ComponentValue::to_host_value))
+    DriveProgressed => StepProgressed
+    DriveBlocked => StepBlocked
+  }
+}
+
+///|
 fn ComponentInvocation::wait_transport(
   self : ComponentInvocation,
 ) -> Array[ComponentValue] raise ComponentRuntimeError {
@@ -365,18 +412,22 @@ pub fn ComponentInstance::start_exported_func(
   self : ComponentInstance,
   name : String,
   args : Array[ComponentValue],
+  caller_table? : ResourceTable = self.resource_table,
 ) -> ComponentInvocation raise ComponentRuntimeError {
   let func = match self.exports.get(name) {
     Some(Func(func)) => func
     Some(_) | None => raise UnknownExport(name)
   }
   self.async_state.check_host_entry()
+  if !self.async_state.resource_tables.contains(caller_table.id) {
+    raise HostCallError("caller table belongs to a different runtime")
+  }
   let (func_type, _, _) = component_invocation_contract(func)
   start_component_invocation(
     func,
     args,
     self.store,
-    self.resource_table,
+    caller_table,
     self.async_state,
     0L,
     func_type.is_async,
@@ -418,6 +469,7 @@ fn start_component_invocation(
     phase: [Running],
     driving: [false],
     cancel_requested: [false],
+    published: Ref(None),
   }
   async_state.tasks.records.get(task_id).unwrap().root_task = Some(
     invocation.task,

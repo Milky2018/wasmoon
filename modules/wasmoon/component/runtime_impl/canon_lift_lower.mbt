@@ -294,7 +294,7 @@ fn instantiate_canon_lower(
                   Some(rty) =>
                     if vals.length() > 0 {
                       [
-                        clone_stream_future_value(
+                        transfer_stream_future_value(
                           rty,
                           vals[0],
                           func_types,

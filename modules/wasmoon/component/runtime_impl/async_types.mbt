@@ -1083,40 +1083,6 @@ fn transfer_stream_readable_handle(
 }
 
 ///|
-/// Create a new readable stream handle in `to_component_id` that aliases the same stream as
-/// `handle` in `from_component_id`, without removing the original mapping.
-///
-/// This publishes a result early via `canon task.return` while retaining the
-/// callee's original handle for the still-running producer task.
-fn clone_stream_readable_handle(
-  async_state : AsyncState,
-  from_component_id : Int,
-  to_component_id : Int,
-  handle : Int,
-) -> Int raise ComponentRuntimeError {
-  if from_component_id == to_component_id {
-    return handle
-  }
-  let from_key = handle_key(from_component_id, handle)
-  let ep = match async_state.stream_table.endpoints.get(from_key) {
-    Some(e) => e
-    None => raise CanonCallError("unknown stream handle index \{handle}")
-  }
-  let new_handle = alloc_shared_handle(async_state, to_component_id)
-  errdefer free_shared_handle(async_state, to_component_id, new_handle)
-  async_state.stream_table.endpoints.set(
-    handle_key(to_component_id, new_handle),
-    {
-      stream_id: ep.stream_id,
-      is_readable: ep.is_readable,
-      notified_peer_dropped: ep.notified_peer_dropped,
-      in_waitable_set: ep.in_waitable_set,
-    },
-  )
-  new_handle
-}
-
-///|
 fn transfer_future_readable_handle(
   async_state : AsyncState,
   from_component_id : Int,
@@ -1152,28 +1118,6 @@ fn transfer_future_readable_handle(
   }
   async_state.future_endpoints.remove(from_key)
   free_shared_handle(async_state, from_component_id, handle)
-  let new_handle = alloc_shared_handle(async_state, to_component_id)
-  errdefer free_shared_handle(async_state, to_component_id, new_handle)
-  async_state.future_endpoints.set(handle_key(to_component_id, new_handle), ep)
-  new_handle
-}
-
-///|
-/// Like `clone_stream_readable_handle`, but for futures.
-fn clone_future_readable_handle(
-  async_state : AsyncState,
-  from_component_id : Int,
-  to_component_id : Int,
-  handle : Int,
-) -> Int raise ComponentRuntimeError {
-  if from_component_id == to_component_id {
-    return handle
-  }
-  let from_key = handle_key(from_component_id, handle)
-  let ep = match async_state.future_endpoints.get(from_key) {
-    Some(e) => e
-    None => raise CanonCallError("unknown future handle index \{handle}")
-  }
   let new_handle = alloc_shared_handle(async_state, to_component_id)
   errdefer free_shared_handle(async_state, to_component_id, new_handle)
   async_state.future_endpoints.set(handle_key(to_component_id, new_handle), ep)
@@ -1367,59 +1311,6 @@ fn collect_direct_borrow_lends(
     v
   })
   |> ignore
-}
-
-///|
-/// Clone any stream/future readable handles found in `v` from `from_component_id` into
-/// `to_component_id`, preserving the original handles in the source component.
-fn clone_stream_future_value(
-  ty : ValType,
-  v : ComponentValue,
-  types : Array[TypeDef?],
-  async_state : AsyncState,
-  from_component_id : Int,
-  to_component_id : Int,
-) -> ComponentValue raise ComponentRuntimeError {
-  if from_component_id == to_component_id {
-    return v
-  }
-  map_canonical_handles(ty, v, types, (definition, v) => {
-    match definition {
-      Stream(_) =>
-        match v {
-          U32(h) =>
-            U32(
-              clone_stream_readable_handle(
-                async_state, from_component_id, to_component_id, h,
-              ),
-            )
-          S32(h) =>
-            S32(
-              clone_stream_readable_handle(
-                async_state, from_component_id, to_component_id, h,
-              ),
-            )
-          _ => v
-        }
-      Future(_) =>
-        match v {
-          U32(h) =>
-            U32(
-              clone_future_readable_handle(
-                async_state, from_component_id, to_component_id, h,
-              ),
-            )
-          S32(h) =>
-            S32(
-              clone_future_readable_handle(
-                async_state, from_component_id, to_component_id, h,
-              ),
-            )
-          _ => v
-        }
-      _ => v
-    }
-  })
 }
 
 ///|

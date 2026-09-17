@@ -4,6 +4,7 @@ fn validate_component_section_alias(
   payload : Bytes,
   counts : Counts,
   type_table : Array[@component.TypeDef?],
+  known_type_sigs : Map[Int, TypeSig],
   local_resource_types : Array[Bool],
   resource_ids : Array[Int?],
   type_sizes : Array[Int],
@@ -313,6 +314,21 @@ fn validate_component_section_alias(
             None => ()
           }
         }
+        _ => ()
+      }
+      // Preserve the complete signature even when nested definitions have no
+      // index in this component's local type namespace.
+      match a.target {
+        Export(instance_idx, name) =>
+          if instance_export_type_sigs.get(instance_idx)
+            is Some(Some(signatures)) &&
+            signatures.get(name) is Some(signature) {
+            known_type_sigs.set(type_table.length(), signature)
+          }
+        Outer(0, idx) =>
+          if known_type_sigs.get(idx) is Some(signature) {
+            known_type_sigs.set(type_table.length(), signature)
+          }
         _ => ()
       }
       type_table.push(new_td)

@@ -1,4 +1,7 @@
 import {
+  "Milky2018/wasmoon/wasi_http",
+  "Milky2018/wasmoon/component_native",
+  "moonbitlang/async/socket",
   "Milky2018/milkir/optimize",
   "Milky2018/wasm_component" @component_types,
   "Milky2018/wasm_core/types",

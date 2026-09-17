@@ -5,6 +5,7 @@ fn validate_component_section_instance(
   cfg : ComponentValidationConfig,
   counts : Counts,
   type_table : Array[@component.TypeDef?],
+  known_type_sigs : Map[Int, TypeSig],
   resource_ids : Array[Int?],
   component_sizes : Array[Int],
   instance_sizes : Array[Int],
@@ -237,7 +238,10 @@ fn validate_component_section_instance(
                           Some(Existing(tidx)) =>
                             match
                               type_sig_of_typeidx(
-                                tidx, type_table, resource_ids,
+                                tidx,
+                                type_table,
+                                resource_ids,
+                                known_sigs=known_type_sigs,
                               ) {
                               Resource(actual_rid) =>
                                 rid_subst.set(expected_rid, actual_rid)
@@ -272,7 +276,10 @@ fn validate_component_section_instance(
                   match sigs.get(name) {
                     Some(Resource(expected_rid)) => {
                       let actual_sig = type_sig_of_typeidx(
-                        idx, type_table, resource_ids,
+                        idx,
+                        type_table,
+                        resource_ids,
+                        known_sigs=known_type_sigs,
                       )
                       match actual_sig {
                         Resource(actual_rid) =>
@@ -297,7 +304,10 @@ fn validate_component_section_instance(
                     Some(req0) => {
                       let req = type_sig_subst_resources(req0, rid_subst)
                       let actual = type_sig_of_typeidx(
-                        idx, type_table, resource_ids,
+                        idx,
+                        type_table,
+                        resource_ids,
+                        known_sigs=known_type_sigs,
                       )
                       if actual != req {
                         match (req, actual) {
@@ -354,7 +364,10 @@ fn validate_component_section_instance(
                           Some(actual) =>
                             Some(
                               funcsig_of_functype(
-                                actual, type_table, resource_ids,
+                                actual,
+                                type_table,
+                                resource_ids,
+                                known_sigs=known_type_sigs,
                               ),
                             )
                           None => None
@@ -420,7 +433,12 @@ fn validate_component_section_instance(
                       Some(actual_rid) => {
                         let mut found : Int? = None
                         for i in 0..<type_table.length() {
-                          if type_sig_of_typeidx(i, type_table, resource_ids) ==
+                          if type_sig_of_typeidx(
+                              i,
+                              type_table,
+                              resource_ids,
+                              known_sigs=known_type_sigs,
+                            ) ==
                             Resource(actual_rid) {
                             found = Some(i)
                             break
@@ -442,7 +460,13 @@ fn validate_component_section_instance(
                     let sig = type_sig_subst_resources(sig0, rid_subst)
                     let mut found : Int? = None
                     for i in 0..<type_table.length() {
-                      if type_sig_of_typeidx(i, type_table, resource_ids) == sig {
+                      if type_sig_of_typeidx(
+                          i,
+                          type_table,
+                          resource_ids,
+                          known_sigs=known_type_sigs,
+                        ) ==
+                        sig {
                         found = Some(i)
                         break
                       }
@@ -565,7 +589,12 @@ fn validate_component_section_instance(
                       Some(ft) =>
                         func_map.set(
                           ex.name,
-                          funcsig_of_functype(ft, type_table, resource_ids),
+                          funcsig_of_functype(
+                            ft,
+                            type_table,
+                            resource_ids,
+                            known_sigs=known_type_sigs,
+                          ),
                         )
                       None => ()
                     }

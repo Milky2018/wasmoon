@@ -6,6 +6,7 @@ fn validate_component_section_export(
   is_root : Bool,
   counts : Counts,
   type_table : Array[@component.TypeDef?],
+  known_type_sigs : Map[Int, TypeSig],
   local_resource_types : Array[Bool],
   resource_ids : Array[Int?],
   type_sizes : Array[Int],
@@ -156,7 +157,12 @@ fn validate_component_section_export(
         )
         my_export_func_sigs.set(
           name,
-          funcsig_of_functype(ft, type_table, resource_ids),
+          funcsig_of_functype(
+            ft,
+            type_table,
+            resource_ids,
+            known_sigs=known_type_sigs,
+          ),
         )
       }
     }
@@ -325,7 +331,12 @@ fn validate_component_section_export(
           let named_sigs : Array[TypeSig] = []
           for kv in inst_named.iter() {
             let (k, _v) = kv
-            let sig = type_sig_of_typeidx(k, type_table, resource_ids)
+            let sig = type_sig_of_typeidx(
+              k,
+              type_table,
+              resource_ids,
+              known_sigs=known_type_sigs,
+            )
             if sig != Other && !typesig_contains(sig, named_sigs) {
               named_sigs.push(sig)
             }
@@ -517,7 +528,13 @@ fn validate_component_section_export(
       let alias_idx = type_table.length() - 1
       named_types.set(alias_idx, 1)
       if exportname_to_string(e.name) is Some(name) &&
-        type_sig_of_typeidx(alias_idx, type_table, resource_ids) is Resource(_) {
+        type_sig_of_typeidx(
+          alias_idx,
+          type_table,
+          resource_ids,
+          known_sigs=known_type_sigs,
+        )
+        is Resource(_) {
         export_resource_names.set(name, alias_idx)
       }
     } else {

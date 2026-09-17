@@ -94,6 +94,9 @@ jobs:
             modules/wasmoon/wasi_component/wit_contracts_generated.mbt \
             --verify-wit --check
 
+      - name: verify HTTP WIT contracts
+        run: python3 modules/wasmoon/wasi_http/generate_contracts.py --verify-wit --check
+
       - name: run native tests
         run: |
           VCODE_REGALLOC_VALIDATION=1 \
@@ -110,6 +113,9 @@ jobs:
             exit 1
           fi
           ./install.sh
+
+      - name: test HTTP services, middleware and clients on both engines
+        run: python3 scripts/test_wasi_http.py --wasmoon ./wasmoon
 
       - name: run complete Wasmtime misc suite
         run: |
@@ -283,6 +289,10 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Copy-Item target/windows-build/native/release/build/Milky2018/wasmoon/cmd/wasmoon/wasmoon.exe wasmoon.exe
           Copy-Item target/windows-build/native/release/build/Milky2018/wasmoon/cmd/wasmoon-tools/wasmoon-tools.exe wasmoon-tools.exe
+      - name: test Windows HTTP services, middleware and clients on both engines
+        if: ${{ !cancelled() && steps.windows_build.outcome == 'success' }}
+        run: python scripts/test_wasi_http.py --wasmoon ./wasmoon.exe
+
       - name: verify Windows CLI behavior
         if: ${{ !cancelled() && steps.windows_build.outcome == 'success' }}
         run: python scripts/cli_behavior_test.py

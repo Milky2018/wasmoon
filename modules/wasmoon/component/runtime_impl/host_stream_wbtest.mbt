@@ -139,3 +139,108 @@ test "dropping a dynamic host stream cancels its reactor source" {
   }
   debug_inspect(events, content="[\"cancelled\"]")
 }
+
+///|
+test "embedding reads dynamic streams with pending and EOF" {
+  let runtime = HostRuntimeState()
+  let table = runtime.resource_table()
+  let step = Ref(0)
+  let handle = runtime.new_host_value_stream_source(
+    table,
+    Prim(U8),
+    [],
+    _ => {
+      step.val += 1
+      match step.val {
+        1 => Pending
+        2 => Values([U8(65), U8(66)])
+        _ => Closed
+      }
+    },
+    () => (),
+  )
+  debug_inspect(runtime.read_host_byte_stream(table, handle), content="Pending")
+  debug_inspect(
+    runtime.read_host_byte_stream(table, handle),
+    content="Data(<Bytes: [0x41, 0x42]>)",
+  )
+  debug_inspect(runtime.read_host_byte_stream(table, handle), content="Closed")
+  runtime.drop_host_readable_stream(table, handle)
+}
+
+///|
+test "embedding future reads are nonblocking and single use" {
+  let runtime = HostRuntimeState()
+  let table = runtime.resource_table()
+  let ready = Ref(false)
+  let handle = runtime.new_host_value_future_source(
+    table,
+    Prim(U8),
+    [],
+    () => {
+      if ready.val {
+        Ready(U8(42))
+      } else {
+        ready.val = true
+        Pending
+      }
+    },
+    () => (),
+  )
+  debug_inspect(
+    runtime.read_host_value_future(table, handle),
+    content="Pending",
+  )
+  debug_inspect(
+    runtime.read_host_value_future(table, handle),
+    content="Ready(U8(42))",
+  )
+  let repeated = try? runtime.read_host_value_future(table, handle)
+  debug_inspect(
+    repeated,
+    content="Err(HostCallError(\"host future already read or busy\"))",
+  )
+  runtime.drop_host_readable_future(table, handle)
+}
+
+///|
+test "embedding future read transfers owned resources from the producer table" {
+  let runtime = HostRuntimeState()
+  let source = runtime.resource_table()
+  let target = ResourceTable()
+  runtime.async_state.resource_tables.set(target.id, target)
+  let resource = source.alloc({
+    type_id: 71,
+    rep: 99,
+    dtor: None,
+    host_dtor: None,
+    kind: HostDefined,
+    impl_component_id: source.id,
+    own: true,
+    borrow_scope: None,
+    num_lends: [0],
+  })
+  let types : Array[TypeDef?] = [
+    Some(ResourceType(71, 0x7f, None, HostDefined)),
+    Some(Own(0)),
+  ]
+  let readable = runtime.new_host_value_future(
+    source,
+    TypeIdx(1),
+    types,
+    U32(resource),
+  )
+  let moved = transfer_future_readable_handle(
+    runtime.async_state,
+    source.id,
+    target.id,
+    readable,
+  )
+  guard runtime.read_host_value_future(target, moved) is Ready(U32(received)) else {
+    return fail("expected owned resource")
+  }
+  inspect(source.get(resource) is None, content="true")
+  inspect(target.get(received).unwrap().rep, content="99")
+  runtime.drop_host_readable_future(target, moved)
+  inspect(runtime.async_state.futures.length(), content="0")
+}

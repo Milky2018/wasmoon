@@ -5,6 +5,7 @@ priv struct ComponentInstantiationFrame {
   name : String
   component : Component
   overrides : Map[String, ComponentExtern]
+  override_types : Array[TypeDef?]
   outer_stack : Array[ComponentInstance]
   state : BuildState
   entry_state : ComponentInstanceEntryState
@@ -19,6 +20,7 @@ fn instantiate_component(
   name : String,
   component : Component,
   overrides : Map[String, ComponentExtern],
+  override_types : Array[TypeDef?],
   outer_stack : Array[ComponentInstance],
   staged : Array[(String, ComponentInstance)],
 ) -> ComponentInstance raise ComponentRuntimeError {
@@ -50,6 +52,7 @@ fn instantiate_component(
     name,
     component,
     overrides,
+    override_types,
     outer_stack,
     state,
     entry_state,
@@ -79,6 +82,7 @@ fn run_component_sections(
     name,
     component,
     overrides,
+    override_types,
     outer_stack,
     state,
     entry_state,
@@ -206,6 +210,7 @@ fn run_component_sections(
                 "\{name}::component\{component_idx}",
                 closure.component,
                 overrides_for_child,
+                state.types,
                 closure.outer_stack,
                 staged,
               )
@@ -411,7 +416,20 @@ fn run_component_sections(
               }
             Type(_) =>
               match ext {
-                Type(t) => state.append_declared_type(t)
+                Type(t) => {
+                  let imported = if overrides.contains(
+                      decode_import_name(imp.name),
+                    ) {
+                    clone_materialized_optional_type(
+                      t,
+                      override_types,
+                      state.types,
+                    )
+                  } else {
+                    t
+                  }
+                  state.append_declared_type(imported)
+                }
                 _ => raise UnknownImport(decode_import_name(imp.name))
               }
             ComponentType(_) =>

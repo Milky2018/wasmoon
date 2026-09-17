@@ -73,3 +73,13 @@ The repository does not vendor `.mooncakes/` in git. Declared package
 dependencies are:
 
 - `moonbitlang/x` - Apache-2.0
+
+## WASI HTTP and Preview 3 WIT
+
+- Path: `modules/wasmoon/wasi_http/wit/deps/`
+- Source: https://github.com/WebAssembly/WASI
+- Upstream tag: `v0.3.0`
+- Upstream commit: `3ee2a590c766594ae44a54730fc74fc27da5c609`
+- License notice: W3C Community Contributor License Agreement
+- Local notice: `modules/wasmoon/wasi_http/wit/LICENSE.md`
+- The WIT files are preserved unchanged. `host.wit` is a local aggregation world.

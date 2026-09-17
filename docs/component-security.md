@@ -85,3 +85,12 @@ required for resource cleanup. The logical tests currently cover host
 stream/future endpoints, task ownership metadata, destructor cardinality, and
 resource-handle recycling; future resource families must add equivalent
 exact-release assertions when introduced.
+
+## HTTP host adapter boundary
+
+`wasmoon/wasi_http`, like `wasmoon/wasi_component`, is a Wasmoon-owned low-level
+host adapter. Its embedding API intentionally accepts the implementation linker,
+resource tables and asynchronous host callbacks so middleware shares resource
+identities with the runtime. Its generated interface is explicitly reviewed in
+`component-hardening.json`; the portable `wasm_component` modules and stable
+`wasmoon/component` facade remain isolated from these implementation owners.

@@ -196,6 +196,19 @@ fn instantiate_canon_future_read(
                   }
                   match polled {
                     Ready(value) => {
+                      let value = transfer_stream_future_value(
+                        host_value.payload_ty,
+                        value,
+                        host_value.types,
+                        async_state,
+                        ep.creator_component_id,
+                        caller_component_id,
+                      ) catch {
+                        e => {
+                          trap_canon(e.to_string())
+                          return ret_i32(0)
+                        }
+                      }
                       store_host_stream_value(
                         value,
                         host_value.payload_ty,
@@ -419,6 +432,20 @@ fn progress_host_future_sources(
     match poll_host_future_value(source) {
       Pending => ()
       Ready(value) => {
+        guard async_state.future_endpoints.get(
+            handle_key(read.reader_component_id, read.reader_handle),
+          )
+          is Some(endpoint) else {
+          raise CanonCallError("pending future reader is not live")
+        }
+        let value = transfer_stream_future_value(
+          source.payload_ty,
+          value,
+          source.types,
+          async_state,
+          endpoint.creator_component_id,
+          read.reader_component_id,
+        )
         store_host_stream_value(
           value,
           source.payload_ty,
