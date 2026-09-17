@@ -89,9 +89,13 @@ python3 scripts/test_wasi_http.py --wasmoon ./wasmoon
 ```
 
 The real guests are encoded and validated by wasm-tools 1.254.0 from official
-WIT. The runner exercises both engines, two middleware layers, outgoing proxy
-requests, capability denial, large streaming bodies, duplicate trailers,
-concurrent requests, malformed framing and abandoned uploads. Unit tests cover
+WIT. The runner exercises both engines, observable middleware ordering, guest-visible
+request metadata, outgoing proxy requests, capability denial, large streaming
+bodies, duplicate trailers, concurrent requests, and 300 abandoned uploads per
+server configuration. Raw-socket cases verify incremental responses before
+upload EOF, case-insensitive Expect handling, absolute-form targets, valid and
+invalid chunk extensions, HEAD, OPTIONS, startup rejection of missing handler
+exports, occupied ports, and continued service after guest traps. Unit tests cover
 field/resource behavior, transmission receipts, cancellation, timeouts and TLS
 trust verification. CI runs native tests and the CLI suite on Linux, macOS,
 Windows Clang and Windows MSVC.

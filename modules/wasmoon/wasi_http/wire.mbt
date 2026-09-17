@@ -174,28 +174,107 @@ fn message_framing(
 
 ///|
 fn chunk_length(line : Bytes) -> Int64 raise {
-  let text = ascii_text(line)
-  let size = text.split(";").next().unwrap().to_owned()
-  if size.is_empty() {
-    raise HttpTransportError(35, "empty chunk size")
-  }
+  let mut index = 0
   let mut length = 0L
-  for char in size {
-    let digit = match char {
-      '0'..='9' => char.to_int() - 48
-      'a'..='f' => char.to_int() - 87
-      'A'..='F' => char.to_int() - 55
-      _ => raise HttpTransportError(35, "invalid chunk size")
+  while index < line.length() {
+    let digit = match line[index] {
+      b'0'..=b'9' => line[index].to_int() - 48
+      b'a'..=b'f' => line[index].to_int() - 87
+      b'A'..=b'F' => line[index].to_int() - 55
+      _ => break
     }
     if length > (0x7fffffffffffffffL - digit.to_int64()) / 16L {
       raise HttpTransportError(35, "chunk size overflow")
     }
     length = length * 16L + digit.to_int64()
+    index += 1
   }
-  if !field_valid(line) {
-    raise HttpTransportError(35, "invalid chunk extension")
+  if index == 0 {
+    raise HttpTransportError(35, "invalid chunk size")
+  }
+  while index < line.length() {
+    while index < line.length() && (line[index] == 32 || line[index] == 9) {
+      index += 1
+    }
+    if index >= line.length() || line[index] != 59 {
+      raise HttpTransportError(35, "invalid chunk extension")
+    }
+    index += 1
+    while index < line.length() && (line[index] == 32 || line[index] == 9) {
+      index += 1
+    }
+    let start = index
+    while index < line.length() && chunk_token_byte(line[index]) {
+      index += 1
+    }
+    if index == start {
+      raise HttpTransportError(35, "missing chunk extension name")
+    }
+    let after_name = index
+    while index < line.length() && (line[index] == 32 || line[index] == 9) {
+      index += 1
+    }
+    if index >= line.length() || line[index] != 61 {
+      // Whitespace belongs to the next extension's leading BWS.
+      index = after_name
+      continue
+    }
+    index += 1
+    while index < line.length() && (line[index] == 32 || line[index] == 9) {
+      index += 1
+    }
+    if index < line.length() && line[index] == 34 {
+      index += 1
+      while index < line.length() && line[index] != 34 {
+        if line[index] == 92 {
+          index += 1
+          if index >= line.length() {
+            raise HttpTransportError(35, "truncated quoted extension")
+          }
+        }
+        if (line[index] < 32 && line[index] != 9) || line[index] == 127 {
+          raise HttpTransportError(35, "invalid quoted extension")
+        }
+        index += 1
+      }
+      if index >= line.length() {
+        raise HttpTransportError(35, "unterminated quoted extension")
+      }
+      index += 1
+    } else {
+      let start = index
+      while index < line.length() && chunk_token_byte(line[index]) {
+        index += 1
+      }
+      if index == start {
+        raise HttpTransportError(35, "missing chunk extension value")
+      }
+    }
   }
   length
+}
+
+///|
+fn chunk_token_byte(byte : Byte) -> Bool {
+  byte
+  is (b'a'..=b'z'
+  | b'A'..=b'Z'
+  | b'0'..=b'9'
+  | b'!'
+  | b'#'
+  | b'$'
+  | b'%'
+  | b'&'
+  | b'\''
+  | b'*'
+  | b'+'
+  | b'-'
+  | b'.'
+  | b'^'
+  | b'_'
+  | b'`'
+  | b'|'
+  | b'~')
 }
 
 ///|

@@ -36,21 +36,20 @@ async fn HttpHost::serve_exchange(
     raise HttpTransportError(35, "invalid HTTP/1.1 request line")
   }
   let verb = parts[0].to_owned()
-  let path = parts[1].to_owned()
-  if !uri_part_valid(path, false) ||
-    (!path.has_prefix("/") && !(path == "*" && verb == "OPTIONS")) {
-    raise HttpTransportError(19, "invalid request target")
-  }
+  let target = parts[1].to_owned()
   let headers = input.fields()
   guard headers.get("host") is [authority_bytes] else {
     raise HttpTransportError(19, "HTTP/1.1 requires exactly one Host field")
   }
-  let authority = ascii_text(authority_bytes)
-  authority_host_port(authority, false) |> ignore
+  let (path, authority, scheme) = request_target(
+    verb,
+    target,
+    ascii_text(authority_bytes),
+  )
   let framing = message_framing(headers, false, false)
   let expectations = headers.get("expect")
   if !expectations.is_empty() {
-    if expectations != [b"100-continue"] {
+    if !continue_expected(expectations) {
       started.val = true
       socket.write(
         "HTTP/1.1 417 Expectation Failed\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
@@ -66,7 +65,7 @@ async fn HttpHost::serve_exchange(
     Map([
       ("method", method_value(verb)),
       ("path-with-query", Variant(1, Some(String(path)))),
-      ("scheme", Variant(1, Some(Variant(0, None)))),
+      ("scheme", Variant(1, Some(scheme))),
       ("authority", Variant(1, Some(String(authority)))),
     ]),
   )
@@ -135,4 +134,68 @@ pub async fn HttpHost::serve_connection(
     }
   })
   self.serve_exchange(socket, instance, started, error_status)
+}
+
+///|
+fn continue_expected(values : Array[Bytes]) -> Bool raise {
+  let mut found = false
+  for value in values {
+    for expectation in ascii_text(value).split(",") {
+      let expectation = expectation.trim().to_owned().to_lower()
+      if expectation.is_empty() {
+        continue
+      }
+      if expectation != "100-continue" {
+        return false
+      }
+      found = true
+    }
+  }
+  found
+}
+
+///|
+fn request_target(
+  verb : String,
+  target : String,
+  host : String,
+) -> (String, String, @runtime_impl.ComponentValue) raise {
+  if target.is_empty() || !uri_part_valid(target, false) {
+    raise HttpTransportError(19, "invalid request target")
+  }
+  if target.has_prefix("/") || (target == "*" && verb == "OPTIONS") {
+    authority_host_port(host, false) |> ignore
+    return (target, host, Variant(0, None))
+  }
+  guard target.find("://") is Some(separator) else {
+    raise HttpTransportError(19, "invalid request target")
+  }
+  let scheme = target[:separator].to_owned().to_lower()
+  if !scheme_valid(scheme) {
+    raise HttpTransportError(19, "invalid request scheme")
+  }
+  let start = separator + 3
+  let mut end = start
+  while end < target.length() && target[end] != '/' && target[end] != '?' {
+    end += 1
+  }
+  let authority = target[start:end].to_owned()
+  authority_host_port(authority, scheme == "https") |> ignore
+  let path = if end == target.length() {
+    if verb == "OPTIONS" {
+      "*"
+    } else {
+      "/"
+    }
+  } else if target[end] == '?' {
+    "/" + target[end:].to_owned()
+  } else {
+    target[end:].to_owned()
+  }
+  let scheme = match scheme {
+    "http" => @runtime_impl.ComponentValue::Variant(0, None)
+    "https" => Variant(1, None)
+    other => Variant(2, Some(String(other)))
+  }
+  (path, authority, scheme)
 }

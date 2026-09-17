@@ -8,16 +8,8 @@ pub async fn serve_http(
   use_jit : Bool,
 ) -> Int {
   try {
-    let bytes = @fs.read_file_to_bytes(file)
-    let parsed = @component_types.parse_component(bytes)
-    let component = @component_model.validate_component_for_instantiation(
-      parsed,
-    )
-    let layers = middleware.map(path => {
-      @component_model.validate_component_for_instantiation(
-        @component_types.parse_component(@fs.read_file_to_bytes(path)),
-      )
-    })
+    let component = load_http_service(file)
+    let layers = middleware.map(path => load_http_service(path))
     let server = @socket.TcpServer(
       @socket.Addr::parse(address),
       reuse_addr=true,
@@ -77,4 +69,24 @@ pub async fn serve_http(
       1
     }
   }
+}
+
+///|
+fn load_http_service(
+  path : String,
+) -> @component_model.ValidatedComponent raise {
+  let parsed = @component_types.parse_component(@fs.read_file_to_bytes(path))
+  let validated = @component_model.validate_component_for_instantiation(parsed)
+  if !parsed.exports.any(export_ => {
+      (
+        export_.name is Plain(b"wasi:http/handler@0.3.0") ||
+        export_.name is WithVersion(b"wasi:http/handler", b"0.3.0")
+      ) &&
+      export_.sortidx.sort is Instance
+    }) {
+    raise @runtime_impl.HostCallError(
+      "HTTP service must export wasi:http/handler@0.3.0: " + path,
+    )
+  }
+  validated
 }
