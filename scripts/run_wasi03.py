@@ -35,6 +35,14 @@ KNOWN_DIFFERENCES = {
 }
 
 
+def corpus_digest(name, data):
+    # Git checkouts may convert JSON line endings on Windows. Normalize only
+    # that text representation; guest binaries remain byte-exact.
+    if name.endswith(".json"):
+        data = data.replace(b"\r\n", b"\n")
+    return hashlib.sha256(data).hexdigest()
+
+
 def known_difference(result):
     markers = KNOWN_DIFFERENCES.get(result["name"])
     failures = result.get("failures", [])
@@ -79,7 +87,7 @@ def main():
             data = subprocess.check_output(["git", "-C", str(upstream), "show", f"{PIN}:tests/rust/testsuite/wasm32-wasip3/{name}"])
         else:
             data = (suite / name).read_bytes()
-        if hashlib.sha256(data).hexdigest() != digest:
+        if corpus_digest(name, data) != digest:
             p.error(f"upstream checksum mismatch: {name}")
     binary_digest = hashlib.sha256(args.wasmoon.read_bytes()).hexdigest()
     output = args.output.resolve()

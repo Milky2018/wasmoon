@@ -12,6 +12,13 @@ spec.loader.exec_module(runner)
 
 
 class GateTests(unittest.TestCase):
+    def test_checkout_line_endings_do_not_change_json_identity(self):
+        lf = b'{\n  "exit": 0\n}\n'
+        crlf = lf.replace(b"\n", b"\r\n")
+        self.assertEqual(runner.corpus_digest("case.json", lf), runner.corpus_digest("case.json", crlf))
+        self.assertNotEqual(runner.corpus_digest("case.wasm", lf), runner.corpus_digest("case.wasm", crlf))
+        self.assertNotEqual(runner.corpus_digest("case.json", lf), runner.corpus_digest("case.json", lf.replace(b"0", b"1")))
+
     def test_only_exact_reviewed_failure_is_acknowledged(self):
         for name, markers in runner.KNOWN_DIFFERENCES.items():
             result = {"name": name, "status": "fail", "failures": [
