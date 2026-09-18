@@ -235,38 +235,35 @@ fn Parser::read_rec_group(
     }
   }
 
-  let tag = self.peek_byte()
-  if tag == 0x4e {
+  let n = if self.peek_byte() == 0x4e {
     self.skip(1)
-    let n = self.read_u32()
-    let base_idx = self.types.length()
-
-    // WasmGC allows forward references within a `rec` group. Pre-scan the group
-    // to learn each entry's composite kind, then pre-allocate placeholders so
-    // typed refs can be resolved during the real parse.
-    let scan : Parser = {
-      data: self.data,
-      pos: self.pos,
-      has_data_count: self.has_data_count,
-      types: [],
-    }
-    let composite_tags : Array[Int] = []
-    for _ in 0..<n {
-      composite_tags.push(skip_subtype_and_get_composite_tag(scan))
-    }
-    for i in 0..<n {
-      self.types.push(placeholder_subtype_by_composite_tag(composite_tags[i]))
-    }
-    let defs : Array[@types.SubType] = []
-    for i in 0..<n {
-      let subtype = self.read_subtype()
-      defs.push(subtype)
-      self.types[base_idx + i] = subtype
-    }
-    defs
+    self.read_u32()
   } else {
-    let subtype = self.read_subtype()
-    self.types.push(subtype)
-    [subtype]
+    1
   }
+  let base_idx = self.types.length()
+
+  // Both explicit and implicit groups allow references to their own types.
+  // Pre-scan composite kinds and reserve placeholders before resolving typed
+  // references during the real parse.
+  let scan : Parser = {
+    data: self.data,
+    pos: self.pos,
+    has_data_count: self.has_data_count,
+    types: [],
+  }
+  let composite_tags : Array[Int] = []
+  for _ in 0..<n {
+    composite_tags.push(skip_subtype_and_get_composite_tag(scan))
+  }
+  for i in 0..<n {
+    self.types.push(placeholder_subtype_by_composite_tag(composite_tags[i]))
+  }
+  let defs : Array[@types.SubType] = []
+  for i in 0..<n {
+    let subtype = self.read_subtype()
+    defs.push(subtype)
+    self.types[base_idx + i] = subtype
+  }
+  defs
 }

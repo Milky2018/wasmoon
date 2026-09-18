@@ -599,6 +599,7 @@ graph TD
   ISS_570["ISS-570: Correct Preview 3 filesystem and socket contracts"]
   ISS_571["ISS-571: Resolve external HTTP expectations against the pinned WIT"]
   ISS_572["ISS-572: Integrate native WASI readiness with the asynchronous HTTP driver"]
+  ISS_573["ISS-573: Parse implicit recursive groups and compact singleton encoding"]
   ISS_002 --> ISS_003
   ISS_002 --> ISS_004
   ISS_003 --> ISS_005
