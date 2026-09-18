@@ -133,6 +133,8 @@ fn preview3_new_tcp_socket(
       family,
       phase: Ref(phase),
       backlog: Ref(128),
+      send_taken: Ref(false),
+      receive_taken: Ref(false),
       closed: Ref(false),
     }),
   )
@@ -168,6 +170,75 @@ fn preview3_new_udp_socket(
     host.resolve_resource_type("wasi:sockets@0.3.0/types.udp-socket"),
     rep,
   )
+}
+
+///|
+fn preview3_mapped_ipv6(address : @wasi.NativeSocketAddress) -> Bool {
+  if address.family != 6 {
+    return false
+  }
+  for i in 0..<10 {
+    if address.address[i] != 0 {
+      return false
+    }
+  }
+  address.address[10] == 255 && address.address[11] == 255
+}
+
+///|
+fn preview3_remote_address_valid(address : @wasi.NativeSocketAddress) -> Bool {
+  if preview3_mapped_ipv6(address) || address.port == 0 {
+    return false
+  }
+  for byte in address.address {
+    if byte != 0 {
+      return true
+    }
+  }
+  false
+}
+
+///|
+fn preview3_tcp_address_valid(
+  address : @wasi.NativeSocketAddress,
+  remote : Bool,
+) -> Bool {
+  let bytes = address.address
+  if preview3_mapped_ipv6(address) {
+    return false
+  }
+  if address.family == 4 {
+    if (bytes[0] >= 224 && bytes[0] <= 239) ||
+      (bytes[0] == 255 && bytes[1] == 255 && bytes[2] == 255 && bytes[3] == 255) {
+      return false
+    }
+  } else if bytes[0] == 255 {
+    return false
+  }
+  if remote {
+    if address.port == 0 {
+      return false
+    }
+    let mut unspecified = true
+    for byte in bytes {
+      if byte != 0 {
+        unspecified = false
+      }
+    }
+    if unspecified {
+      return false
+    }
+  }
+  true
+}
+
+///|
+fn preview3_positive_socket_size(value : Int64) -> Int {
+  if value < 0L || value > 0x7fffffffL {
+    0x7fffffff
+  } else {
+    value.to_int()
+  }
 }
 
 ///|
@@ -240,7 +311,8 @@ fn preview3_tcp_connect_future(
   if state.phase.val != Unbound && state.phase.val != Bound {
     return preview3_ready_future([preview3_socket_error_code(5)])
   }
-  if address.native.family != state.family {
+  if address.native.family != state.family ||
+    !preview3_tcp_address_valid(address.native, true) {
     return preview3_ready_future([preview3_socket_error_code(2)])
   }
   if !preview3_socket_address_allowed(host, address) {
@@ -373,12 +445,13 @@ fn preview3_tcp_send_future(
   state : TcpSocketState,
   readable : Int,
 ) -> @runtime_impl.HostFuture {
-  if state.phase.val != Connected {
+  if state.phase.val != Connected || state.send_taken.val {
     host.runtime.drop_host_readable_stream(table, readable) catch {
       _ => ()
     }
     return preview3_ready_future([preview3_socket_error_code(5)])
   }
+  state.send_taken.val = true
   let pending : Ref[(Bytes, Int)?] = Ref(None)
   let operation : Ref[WasiAsyncOperation?] = Ref(None)
   let done = Ref(false)
@@ -390,6 +463,7 @@ fn preview3_tcp_send_future(
     operation.val = None
     if !done.val {
       done.val = true
+      @wasi.native_shutdown(state.fd, 1) |> ignore
       host.runtime.drop_host_readable_stream(table, readable)
     }
   }
@@ -471,12 +545,14 @@ fn preview3_tcp_receive(
   let next = Ref(0)
   let operation : Ref[WasiAsyncOperation?] = Ref(None)
   let completion : Ref[@runtime_impl.ComponentValue?] = Ref(
-    if state.phase.val == Connected {
+    if state.phase.val == Connected && !state.receive_taken.val {
+      state.receive_taken.val = true
       None
     } else {
       Some(preview3_socket_error_code(5))
     },
   )
+  let owns_receive = completion.val is None
   let users = Ref(2)
   fn release() {
     if users.val > 0 {
@@ -491,7 +567,7 @@ fn preview3_tcp_receive(
     }
   }
   fn pump(capacity : Int) -> Unit raise @runtime_impl.ComponentRuntimeError {
-    if completion.val is Some(_) {
+    if completion.val is Some(_) || next.val < buffered.length() {
       return
     }
     match operation.val {
@@ -549,7 +625,18 @@ fn preview3_tcp_receive(
         Pending
       }
     },
-    () => release(),
+    () => {
+      if owns_receive {
+        @wasi.native_shutdown(state.fd, 0) |> ignore
+        completion.val = Some(preview3_socket_ok_void())
+        match operation.val {
+          Some(id) => host.ctx.cancel_async_operation(id)
+          None => ()
+        }
+        operation.val = None
+      }
+      release()
+    },
   )
   let future = host.runtime.new_host_value_future_source(
     table,
@@ -587,10 +674,20 @@ fn preview3_set_socket_option(
   option : Int,
   value : Int,
 ) -> @runtime_impl.ComponentValue {
-  if @wasi.native_socket_option_set(fd, family, option, value) {
-    preview3_socket_ok_void()
-  } else {
-    preview3_socket_error()
+  for clamped = value {
+    if @wasi.native_socket_option_set(fd, family, option, clamped) {
+      break preview3_socket_ok_void()
+    }
+    let error = @wasi.native_last_errno_to_wasi()
+    // The WIT accepts every positive value for these settings. Kernel limits
+    // vary by OS; reduce a rejected value while retaining genuine failures.
+    if option is (1 | 2 | 3 | 5 | 6) &&
+      clamped > 1 &&
+      (error == 28 || error == 42) {
+      continue clamped / 2
+    } else {
+      break preview3_socket_error_code(preview3_socket_error_case(error))
+    }
   }
 }
 
@@ -669,14 +766,14 @@ fn add_preview3_tcp_options(
         let value = socket_u64_arg(args, 1)
         let socket = state(args, table)
         [
-          if value <= 0L || value > 0x7fffffffL {
+          if value == 0L {
             preview3_socket_error_code(2)
           } else {
             preview3_set_socket_option(
               socket.fd,
               socket.family,
               option,
-              value.to_int(),
+              preview3_positive_socket_size(value),
             )
           },
         ]
@@ -716,7 +813,17 @@ fn add_preview3_tcp_options(
       preview3_func(preview3_sockets_interface, setter),
       (args, table) => {
         let socket = state(args, table)
-        match duration_seconds(socket_u64_arg(args, 1)) {
+        let duration = socket_u64_arg(args, 1)
+        let seconds = if duration == 0L {
+          None
+        } else if duration < 0L {
+          Some(0x7fffffff)
+        } else {
+          Some(
+            preview3_positive_socket_size((duration - 1L) / 1_000_000_000L + 1L),
+          )
+        }
+        match seconds {
           Some(value) =>
             [
               preview3_set_socket_option(
@@ -754,10 +861,19 @@ fn add_preview3_tcp_options(
         let value = socket_u32_arg(args, 1)
         let socket = state(args, table)
         [
-          if value <= 0 {
+          if value == 0 {
             preview3_socket_error_code(2)
           } else {
-            preview3_set_socket_option(socket.fd, socket.family, option, value)
+            preview3_set_socket_option(
+              socket.fd,
+              socket.family,
+              option,
+              if value < 0 {
+                0x7fffffff
+              } else {
+                value
+              },
+            )
           },
         ]
       },
@@ -837,7 +953,8 @@ fn add_preview3_tcp(
       if state.phase.val != Unbound {
         return [preview3_socket_error_code(5)]
       }
-      if address.native.family != state.family {
+      if address.native.family != state.family ||
+        !preview3_tcp_address_valid(address.native, false) {
         return [preview3_socket_error_code(2)]
       }
       if !preview3_socket_address_allowed(host, address) {
@@ -915,6 +1032,9 @@ fn add_preview3_tcp(
       table,
     ) => {
       let state = preview3_tcp_socket_state(host, table, args, 0)
+      if state.phase.val == Unbound {
+        return [preview3_socket_error_code(5)]
+      }
       [
         match @wasi.native_socket_address(state.fd, peer) {
           Some(address) => preview3_socket_ok(encode_socket_address(address))
@@ -963,14 +1083,18 @@ fn add_preview3_tcp(
     (args, table) => {
       let state = preview3_tcp_socket_state(host, table, args, 0)
       let value = socket_u64_arg(args, 1)
-      if value <= 0L || value > 0x7fffffffL {
+      if value == 0L {
         [preview3_socket_error_code(2)]
       } else if state.phase.val == Listening ||
         state.phase.val == Connected ||
         state.phase.val == ConnectStarted {
         [preview3_socket_error_code(5)]
       } else {
-        state.backlog.val = value.to_int()
+        state.backlog.val = if value < 0L || value > 0x7fffffffL {
+          0x7fffffff
+        } else {
+          value.to_int()
+        }
         [preview3_socket_ok_void()]
       }
     },
@@ -1017,14 +1141,14 @@ fn add_preview3_udp_options(
         let socket = preview3_udp_socket_state(host, table, args, 0)
         let value = socket_u64_arg(args, 1)
         [
-          if value <= 0L || value > 0x7fffffffL {
+          if value == 0L {
             preview3_socket_error_code(2)
           } else {
             preview3_set_socket_option(
               socket.fd,
               socket.family,
               option,
-              value.to_int(),
+              preview3_positive_socket_size(value),
             )
           },
         ]
@@ -1105,7 +1229,8 @@ fn add_preview3_udp(
       if state.phase.val != UdpUnbound {
         return [preview3_socket_error_code(5)]
       }
-      if address.native.family != state.family {
+      if address.native.family != state.family ||
+        preview3_mapped_ipv6(address.native) {
         return [preview3_socket_error_code(2)]
       }
       if !preview3_socket_address_allowed(host, address) {
@@ -1128,10 +1253,14 @@ fn add_preview3_udp(
         return [preview3_socket_error_code(2)]
       }
       if address.native.family != state.family ||
-        !preview3_socket_address_allowed(host, address) {
+        !preview3_remote_address_valid(address.native) {
+        return [preview3_socket_error_code(2)]
+      }
+      if !preview3_socket_address_allowed(host, address) {
         return [preview3_socket_error_code(0)]
       }
       if @wasi.native_socket_connect(state.fd, address.native) == 0 {
+        state.phase.val = UdpBound
         state.remote.val = Some(address.native)
         [preview3_socket_ok_void()]
       } else {
@@ -1144,6 +1273,9 @@ fn add_preview3_udp(
     preview3_func(preview3_sockets_interface, "[method]udp-socket.disconnect"),
     (args, table) => {
       let state = preview3_udp_socket_state(host, table, args, 0)
+      if state.remote.val is None {
+        return [preview3_socket_error_code(5)]
+      }
       if @wasi.native_socket_disconnect(state.fd) {
         state.remote.val = None
         [preview3_socket_ok_void()]
@@ -1169,19 +1301,24 @@ fn add_preview3_udp(
           } else {
             return preview3_ready_future([preview3_socket_error_code(2)])
           }
-        (None, Some(address)) =>
-          if address.native.family == state.family &&
-            network_allows(preview3_network_policy(host), address) {
+        (None, Some(address)) => {
+          if address.native.family != state.family ||
+            !preview3_remote_address_valid(address.native) {
+            return preview3_ready_future([preview3_socket_error_code(2)])
+          }
+          if network_allows(preview3_network_policy(host), address) {
             Some(address.native)
           } else {
             return preview3_ready_future([preview3_socket_error_code(0)])
           }
+        }
         (None, None) =>
-          return preview3_ready_future([preview3_socket_error_code(5)])
+          return preview3_ready_future([preview3_socket_error_code(2)])
       }
       preview3_udp_async_future(host, state, 0x04, () => {
         let sent = @wasi.native_socket_send_to(state.fd, data, destination)
         if sent == data.length().to_int64() {
+          state.phase.val = UdpBound
           Some(preview3_socket_ok_void())
         } else if sent < 0L && @wasi.native_last_errno_to_wasi() == 6 {
           None
@@ -1196,6 +1333,9 @@ fn add_preview3_udp(
     preview3_func(preview3_sockets_interface, "[method]udp-socket.receive"),
     (args, table) => {
       let state = preview3_udp_socket_state(host, table, args, 0)
+      if state.phase.val == UdpUnbound {
+        return preview3_ready_future([preview3_socket_error_code(5)])
+      }
       preview3_udp_async_future(host, state, 0x01, () => {
         match @wasi.native_socket_recv_from(state.fd, 65535) {
           Some(datagram) =>
@@ -1226,6 +1366,9 @@ fn add_preview3_udp(
       table,
     ) => {
       let state = preview3_udp_socket_state(host, table, args, 0)
+      if state.phase.val == UdpUnbound {
+        return [preview3_socket_error_code(5)]
+      }
       [
         match @wasi.native_socket_address(state.fd, peer) {
           Some(address) => preview3_socket_ok(encode_socket_address(address))

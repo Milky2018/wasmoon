@@ -94,6 +94,7 @@ pub(all) struct AsyncState {
   in_async_callback : Array[Bool]
   waitable_sets : ConcurrentMap[Int64, WaitableSet]
   waitable_to_set : Map[Int64, Int64]
+  event_revision : @ref.Ref[Int]
   waitable_events : Map[Int64, Array[WaitEvent]]
   sync_waitable_users : Map[Int64, Int64]
   inflight_by_instance : Map[Int, Int]

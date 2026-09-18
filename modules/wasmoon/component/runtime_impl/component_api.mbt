@@ -518,7 +518,7 @@ pub fn ComponentLinker::get_import(
   self : ComponentLinker,
   name : String,
 ) -> ComponentExtern? {
-  self.imports.get(name)
+  compatible_import(self.imports, name)
 }
 
 ///|

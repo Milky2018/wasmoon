@@ -253,6 +253,8 @@ fn new_tcp_socket_handle(
       family,
       phase: Ref(phase),
       backlog: Ref(128),
+      send_taken: Ref(false),
+      receive_taken: Ref(false),
       closed: Ref(false),
     }),
   )

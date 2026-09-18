@@ -274,7 +274,7 @@ fn attribute_valid(name : String, value : @runtime_impl.ComponentValue) -> Bool 
       }
     ("scheme", Variant(1, Some(Variant(2, Some(String(text)))))) =>
       scheme_valid(text)
-    ("status-code", U16(status)) => status >= 100 && status <= 999
+    ("status-code", U16(status)) => status >= 100 && status <= 599
     _ => true
   }
 }
@@ -336,7 +336,15 @@ fn HttpHost::message_call(
   if !attribute_valid(key, args[1]) {
     return Variant(1, None)
   }
-  message.attributes.set(key, args[1])
+  let value : @runtime_impl.ComponentValue = match (key, args[1]) {
+    ("method", Variant(9, Some(String(text)))) => method_value(text)
+    ("scheme", Variant(1, Some(Variant(2, Some(String("http")))))) =>
+      Variant(1, Some(Variant(0, None)))
+    ("scheme", Variant(1, Some(Variant(2, Some(String("https")))))) =>
+      Variant(1, Some(Variant(1, None)))
+    _ => args[1]
+  }
+  message.attributes.set(key, value)
   Variant(0, None)
 }
 

@@ -30,6 +30,8 @@ pub fn run_disasm(String) -> Int
 
 pub fn run_explore(String, Int?, Int, Array[String], Bool, Bool, target_name? : String) -> Int
 
+pub async fn run_http_component_command(String, Array[String], Array[String], Array[String], String, Bool, ComponentErrorFormat, Bool, Bool) -> Int
+
 pub fn run_settings() -> Int
 
 pub fn run_testsuite(String, Bool, Bool, bulk_memory? : Bool, stack_switching? : Bool, nan_canonicalization? : Bool) -> Int
@@ -38,7 +40,7 @@ pub fn run_wasi_component_command(String, Array[String], Array[String], Array[St
 
 pub fn run_wasm(String, String?, Array[String], Array[String], Array[String], Array[String], Array[String], Array[String], Bool, Bool, Bool, Int, Bool, readonly_dirs? : Array[String]) -> Int
 
-pub async fn serve_http(String, Array[String], String, String, Bool) -> Int
+pub async fn serve_http(String, Array[String], String, String, Bool, envs? : Array[String]) -> Int
 
 pub fn verify_compiled_jit_artifact(@artifact.Artifact) -> @wasmoon_jit.LoadedArtifact raise @wasmoon_jit.ArtifactLoadError
 

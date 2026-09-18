@@ -189,7 +189,7 @@ test "yielding background work cannot starve a WASI timer" {
     component_runtime_yielding_background_timer_fixture(),
   )
   instance.bind("start-spinner").call([]) |> ignore
-  let timer = instance.bind("wait-for").start([U64(0UL)])
+  let timer = instance.bind("wait-for").start([U64(10_000_000UL)])
   debug_inspect((timer.poll(), timer.wait()), content="(Pending, [])")
 }
 
@@ -207,7 +207,7 @@ test "component runtime rejects a second WASI readiness source" {
       component_runtime_yielding_background_timer_fixture(),
     )
     .bind("wait-for")
-    .start([U64(0UL)])
+    .start([U64(10_000_000UL)])
   debug_inspect(timer.poll(), content="Pending")
   let second_ctx = @wasi_component.WasiComponentCtxBuilder().build()
   let install_error = try

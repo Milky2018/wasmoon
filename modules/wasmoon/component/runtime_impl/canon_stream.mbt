@@ -139,7 +139,8 @@ fn progress_host_stream_sources(
   for item in table.host_values.iter() {
     let (stream_id, source) = item
     guard table.streams.get(stream_id) is Some(state) &&
-      state.pending_read is Some(read) else {
+      state.pending_read is Some(read) &&
+      !read.event_enqueued else {
       continue
     }
     match poll_host_value_stream(source, read.len - read.filled) {
@@ -629,7 +630,12 @@ fn instantiate_canon_stream_read(
                       readable_dropped: st0.readable_dropped,
                       writable_dropped: st0.writable_dropped,
                     })
-                    let dropped = if st0.writable_dropped { 1 } else { 0 }
+                    let dropped = if st0.writable_dropped &&
+                      new_sent == pw.count {
+                      1
+                    } else {
+                      0
+                    }
                     let out_code = dropped | (n << 4)
                     set_canon_debug_message(
                       "stream.read(handle=\{handle} len=\{len})-> \{out_code}",

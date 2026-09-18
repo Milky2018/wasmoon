@@ -145,6 +145,8 @@ pub fn HttpHost::add_service_base(
   stderr? : &@io.Writer = @stdio.stderr,
 ) -> Unit raise @runtime_impl.ComponentRuntimeError {
   let base = @wasi_component.WasiComponentHost(self.linker, ctx)
+  base.add_preview2_cli_clocks_random()
+  base.add_preview2_io()
   base.add_preview3_clocks_random(wait_until=deadline => {
     guard self.spawn.val is Some(spawn) else {
       raise HostCallError("HTTP host must be running before a clock wait")

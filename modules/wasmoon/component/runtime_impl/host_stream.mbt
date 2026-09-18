@@ -360,7 +360,7 @@ pub fn HostRuntimeState::read_host_byte_stream(
   match state.pending_write {
     Some(write) => {
       let remaining = write.buf.values.length() - write.sent
-      if remaining > 0 {
+      if remaining > 0 || (!write.event_enqueued && write.buf.values.is_empty()) {
         let bytes : Array[Byte] = []
         let sent = write.sent + Int::min(remaining, 65536)
         for i in write.sent..<sent {

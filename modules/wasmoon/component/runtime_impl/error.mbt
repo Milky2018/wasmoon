@@ -71,8 +71,12 @@ pub impl Show for ComponentRuntimeError with fn output(self, logger) {
 let canon_trap_message : Array[String?] = [None]
 
 ///|
+let canon_host_exit : Ref[Int?] = Ref(None)
+
+///|
 fn clear_canon_trap_message() -> Unit {
   canon_trap_message[0] = None
+  canon_host_exit.val = None
 }
 
 ///|
@@ -111,6 +115,10 @@ fn trap_canon(msg : String) -> Unit raise @runtime.RuntimeError {
 /// Convert a component runtime error into the canonical trap message string.
 fn canon_err_message(e : ComponentRuntimeError) -> String {
   match e {
+    HostExit(status) => {
+      canon_host_exit.val = Some(status)
+      e.to_string()
+    }
     CanonCallError(msg) => msg
     UncaughtWasmException => "thrown Wasm exception"
     HostCallError(msg) => msg

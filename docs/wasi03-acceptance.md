@@ -1,6 +1,57 @@
 # WASI 0.3 acceptance audit
 
-## Verdict
+## Follow-up implementation and verification
+
+The initial audit below is retained as historical evidence. The fixes following
+that audit allow all 55 unchanged guests to reach execution on both engines.
+On macOS ARM64 the complete isolated suite reports **53 pass, 2 fail per engine**:
+all CLI, clock, random, filesystem and socket cases, all 14 HTTP service cases,
+and two of the four HTTP type command cases pass. Full WASI acceptance is still
+not claimed. Raw release-binary results and validation metadata are retained in
+[the follow-up evidence](evidence/wasi03-2026-09-18-fixes/).
+
+The runtime fixes cover compatible import matching, typed host exits, host stream
+scheduling and EOF, elapsed clock deadlines, filesystem flags/errors and socket
+state/half-close/option behavior. A trailing-slash unlink regression additionally
+verifies that a directory symlink is not deleted.
+
+Reproduce with a freshly built binary and a Python environment containing the
+pinned upstream runner requirements:
+
+```sh
+python scripts/run_wasi03.py --upstream /path/to/wasi-testsuite \
+  --wasmoon ./wasmoon --output target/wasi03-results
+```
+
+The upstream checkout must be at `609c446139956ff30239f87cb18af1dc6128bed2`.
+`scripts/wasi03-corpus.json` pins every guest, expectation and fixture checksum.
+Each engine/case gets a new filesystem fixture; a process-tree watchdog bounds
+upstream blocking reads. Guest assertions and binaries are unchanged.
+
+The strict command returns failure for the two HTTP differences:
+
+- `http-fields.rs:309`: upstream expects lowercase names from `copy-all`; the
+  pinned HTTP WIT explicitly requires original casing. Wasmoon preserves it.
+- `http-request.rs:157`: upstream expects an empty path to become `/`; Wasmoon
+  preserves the setter value and emits `/` when constructing an HTTP request
+  target. Later URI assertions also require separate contract review (ISS-571).
+
+CI uses `--acknowledge-known-differences` as a regression gate. This keeps raw
+results marked **fail**, acknowledges only the exact reviewed panic/value
+fingerprints, and rejects new failures, timeouts, harness errors and unexpected
+passes. It is not a conformance pass. Reports are uploaded from Linux, macOS,
+Windows Clang and Windows MSVC; local evidence alone does not establish those
+platforms' results.
+
+Remaining boundaries:
+
+- ISS-568: async exposes only `TlsError(String)`; structured certificate/protocol/
+  alert categories depend on [async issue #620](https://github.com/moonbitlang/async/issues/620).
+- ISS-572: command HTTP composition with concurrent native WASI I/O needs reactor
+  integration. The current type-command guests and HTTP services do not prove it.
+- ISS-567: the intermittent macOS misc JIT timeout is outside this repair scope.
+
+## Original audit verdict
 
 **Full acceptance is not established.** The pinned WASI 0.3.0 host surface is
 present, and the existing targeted tests pass, but real upstream Preview 3 guests

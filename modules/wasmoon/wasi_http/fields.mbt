@@ -192,6 +192,12 @@ pub fn HttpFields::delete(
   if self.immutable {
     return Err(Immutable)
   }
+  if !field_token(name) {
+    return Err(InvalidSyntax)
+  }
+  if field_forbidden(name) {
+    return Err(Forbidden)
+  }
   let key = name.to_lower()
   let entries = self.entries.filter(fn(entry) { entry.0.to_lower() != key })
   self.entries.clear()

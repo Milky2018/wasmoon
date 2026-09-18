@@ -484,6 +484,8 @@ priv struct TcpSocketState {
   family : Int
   phase : Ref[TcpSocketPhase]
   backlog : Ref[Int]
+  send_taken : Ref[Bool]
+  receive_taken : Ref[Bool]
   closed : Ref[Bool]
 }
 

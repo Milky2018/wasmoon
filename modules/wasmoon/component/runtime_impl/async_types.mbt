@@ -376,6 +376,7 @@ pub(all) struct AsyncState {
   // Waitable sets and event queues.
   waitable_sets : ConcurrentMap[Int64, WaitableSet]
   waitable_to_set : Map[Int64, Int64]
+  event_revision : Ref[Int]
   waitable_events : Map[Int64, Array[WaitEvent]]
   sync_waitable_users : Map[Int64, Int64]
 
@@ -609,6 +610,7 @@ pub fn AsyncState::AsyncState(
     in_async_callback: [false],
     waitable_sets: ConcurrentMap::new(concurrent_resources),
     waitable_to_set: Map([]),
+    event_revision: Ref(0),
     waitable_events: Map([]),
     sync_waitable_users: Map([]),
     inflight_by_instance: Map([]),
@@ -1592,6 +1594,7 @@ fn enqueue_waitable_event(
   waitable_key : Int64,
   ev : WaitEvent,
 ) -> Unit {
+  async_state.event_revision.val += 1
   let list = match async_state.waitable_events.get(waitable_key) {
     Some(xs) => xs
     None => []

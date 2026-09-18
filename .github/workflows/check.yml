@@ -117,6 +117,27 @@ jobs:
       - name: test HTTP services, middleware and clients on both engines
         run: python3 scripts/test_wasi_http.py --wasmoon ./wasmoon
 
+      - name: check out pinned WASI Preview 3 guests
+        uses: actions/checkout@v4
+        with:
+          repository: WebAssembly/wasi-testsuite
+          ref: 609c446139956ff30239f87cb18af1dc6128bed2
+          path: target/wasi03-upstream
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: install upstream WASI runner dependencies
+        run: python -m pip install -r target/wasi03-upstream/test-runner/requirements.txt
+      - name: test external WASI Preview 3 guests on both engines
+        run: python scripts/run_wasi03.py --upstream target/wasi03-upstream --wasmoon ./wasmoon --output target/wasi03-results --timeout 120 --acknowledge-known-differences
+      - name: upload raw WASI Preview 3 acceptance results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wasi03-${{ matrix.os }}
+          path: target/wasi03-results
+          if-no-files-found: warn
+
       - name: run complete Wasmtime misc suite
         run: |
           python3 scripts/run_wasmtime_misc.py \
@@ -295,6 +316,31 @@ jobs:
       - name: test Windows HTTP services, middleware and clients on both engines
         if: ${{ !cancelled() && steps.windows_build.outcome == 'success' }}
         run: python scripts/test_wasi_http.py --wasmoon ./wasmoon.exe
+
+      - name: check out pinned WASI Preview 3 guests
+        if: ${{ !cancelled() && steps.windows_build.outcome == 'success' }}
+        uses: actions/checkout@v4
+        with:
+          repository: WebAssembly/wasi-testsuite
+          ref: 609c446139956ff30239f87cb18af1dc6128bed2
+          path: target/wasi03-upstream
+      - uses: actions/setup-python@v5
+        if: ${{ !cancelled() && steps.windows_build.outcome == 'success' }}
+        with:
+          python-version: '3.12'
+      - name: install upstream WASI runner dependencies
+        if: ${{ !cancelled() && steps.windows_build.outcome == 'success' }}
+        run: python -m pip install -r target/wasi03-upstream/test-runner/requirements.txt
+      - name: test external WASI Preview 3 guests on both engines
+        if: ${{ !cancelled() && steps.windows_build.outcome == 'success' }}
+        run: python scripts/run_wasi03.py --upstream target/wasi03-upstream --wasmoon ./wasmoon.exe --output target/wasi03-results --timeout 120 --acknowledge-known-differences
+      - name: upload raw WASI Preview 3 acceptance results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wasi03-windows-${{ matrix.compiler }}
+          path: target/wasi03-results
+          if-no-files-found: warn
 
       - name: verify Windows CLI behavior
         if: ${{ !cancelled() && steps.windows_build.outcome == 'success' }}

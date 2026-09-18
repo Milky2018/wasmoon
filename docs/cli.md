@@ -71,6 +71,30 @@ capabilities the command requires:
 `--network` accepts `deny`, `loopback`, or `all`. Standard input, output, and
 error are inherited by command execution.
 
+Commands that also import WASI HTTP can opt in with `--http`:
+
+```bash
+./wasmoon component command.component.wasm --run --http --network loopback
+```
+
+HTTP types and client imports share the command's resource tables. This path
+is experimental: concurrent HTTP and native WASI socket/stdin waits need the
+reactor integration tracked in [ISS-572](../issues/ISS-572.md). The HTTP service
+world uses its own integrated async driver.
+
+Stable import versions use semver-compatible tracks with structural validation;
+exact registrations win. Prerelease and build-metadata names require exact
+registration. This allows Preview 2 `0.2.4` dependencies to use the pinned
+`0.2.11` host without duplicating resource types.
+
+Guest exit codes are preserved. Component initialization and runtime errors use
+status 125 and a diagnostic (stderr for text, stdout for JSON), so a startup
+failure cannot masquerade as a guest's expected status 1. A guest may itself
+exit 125; the diagnostic distinguishes that case.
+
+`serve --env NAME=VALUE` supplies guest environment variables, including those
+used by external HTTP service tests. The listening address is reported on stderr.
+
 ### Run Component Model Tests
 
 ```bash

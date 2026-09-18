@@ -220,6 +220,18 @@ test "Preview 3 capability paths resolve each filesystem step" {
     is Some(Instance(filesystem)) else {
     fail("Preview 3 filesystem interfaces were not registered")
   }
+  // A trailing slash requires a directory; unlink must not delete its symlink.
+  assert_eq(
+    filesystem.call_exported_func("[method]descriptor.unlink-file-at", [
+      U32(directory),
+      String("link/"),
+    ]),
+    [Variant(1, Some(Variant(13, None)))],
+  )
+  assert_eq(
+    @wasi.native_readlinkat(0, root + "/link", 128),
+    Some("inside/deep"),
+  )
   debug_inspect(
     filesystem.call_exported_func("[method]descriptor.open-at", [
       U32(directory),

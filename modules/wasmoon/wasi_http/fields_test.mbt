@@ -33,3 +33,11 @@ test "failed field mutations are atomic" {
   copy.set("x", [b"copy"]).unwrap()
   assert_eq(fields.get("x"), [b"original"])
 }
+
+///|
+test "deleting a header validates the name without mutating the collection" {
+  let fields = HttpFields::from_list(entries=[("X-Test", b"kept")]).unwrap()
+  debug_inspect(fields.delete("invalid name"), content="Err(InvalidSyntax)")
+  debug_inspect(fields.delete("Connection"), content="Err(Forbidden)")
+  assert_eq(fields.copy_all(), [("X-Test", b"kept")])
+}

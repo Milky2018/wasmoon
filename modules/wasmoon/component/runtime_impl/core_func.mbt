@@ -139,6 +139,9 @@ fn call_core_func_outcome(
         }
         None => ()
       }
+      if canon_host_exit.val is Some(status) {
+        raise HostExit(status)
+      }
       match canon_trap_message[0] {
         Some(msg) => raise CanonCallError(msg)
         None => {

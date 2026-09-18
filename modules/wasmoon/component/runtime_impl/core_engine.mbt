@@ -84,11 +84,15 @@ pub fn CoreContinuation::continue_execution(
   // Preserve canonical host errors independently of the engine's trap encoding.
   clear_canon_trap_message()
   (self.resume_fn)() catch {
-    error =>
+    error => {
+      if canon_host_exit.val is Some(status) {
+        raise HostExit(status)
+      }
       match canon_trap_message[0] {
         Some(message) => raise CanonCallError(message)
         None => raise error
       }
+    }
   }
 }
 
@@ -505,6 +509,9 @@ fn resume_interpreter_continuation(
     error => {
       if error is UncaughtException {
         raise UncaughtWasmException
+      }
+      if canon_host_exit.val is Some(status) {
+        raise HostExit(status)
       }
       let message = match canon_trap_message[0] {
         Some(message) => message

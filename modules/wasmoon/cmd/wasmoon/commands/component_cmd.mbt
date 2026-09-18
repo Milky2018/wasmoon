@@ -444,9 +444,9 @@ fn report_component_run_error(
       ),
     )
   } else {
-    println("component \{phase} error: \{detail}")
+    @logger.plain_error("component \{phase} error: \{detail}")
   }
-  1
+  125
 }
 
 ///|
