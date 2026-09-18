@@ -115,7 +115,7 @@ fn instantiate_canon_error_context_new(
     let handle = resource_table.alloc_error_context(debug_message) catch {
       error => {
         trap_canon(canon_err_message(error))
-        raise @runtime.Unreachable
+        raise Unreachable
       }
     }
     [I32(handle)]

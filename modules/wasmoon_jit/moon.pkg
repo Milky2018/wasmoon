@@ -1,6 +1,5 @@
 import {
   // Native JIT context teardown also links the host descriptor backend.
-  "Milky2018/wasmoon_jit/host_io",
   "Milky2018/milkir/native" @milkir_native,
   "Milky2018/vcode/native_types" @native,
   "Milky2018/vcode/native_lowering",
@@ -16,7 +15,6 @@ import {
   "Milky2018/wasmoon_jit/perf",
   "moonbitlang/x/crypto",
   "moonbitlang/core/env",
-  "moonbitlang/core/cmp",
   "moonbitlang/core/hashset",
 }
 

@@ -830,17 +830,27 @@ fn funcsig_of_functype(
   ft : @component.FuncType,
   type_table : Array[@component.TypeDef?],
   resource_ids : Array[Int?],
+  known_sigs? : Map[Int, TypeSig] = Map([]),
 ) -> FuncSigShape {
   let visiting : Map[Int, Int] = Map([])
   let params : Array[ParamShape] = []
   for p in ft.params {
     params.push({
       name: p.label,
-      ty: type_sig_of_valtype(p.ty, type_table, resource_ids, visiting),
+      ty: type_sig_of_valtype(
+        p.ty,
+        type_table,
+        resource_ids,
+        visiting,
+        known_sigs~,
+      ),
     })
   }
   let result : TypeSig? = match ft.result {
-    Some(v) => Some(type_sig_of_valtype(v, type_table, resource_ids, visiting))
+    Some(v) =>
+      Some(
+        type_sig_of_valtype(v, type_table, resource_ids, visiting, known_sigs~),
+      )
     None => None
   }
   { params, result, }
@@ -1059,13 +1069,22 @@ fn type_sig_of_typedef(
   type_table : Array[@component.TypeDef?],
   resource_ids : Array[Int?],
   visiting : Map[Int, Int],
+  known_sigs? : Map[Int, TypeSig] = Map([]),
 ) -> TypeSig {
   match td {
     DefValType(p) => Prim(p)
     Tuple(tys) => {
       let out : Array[TypeSig] = []
       for t in tys {
-        out.push(type_sig_of_valtype(t, type_table, resource_ids, visiting))
+        out.push(
+          type_sig_of_valtype(
+            t,
+            type_table,
+            resource_ids,
+            visiting,
+            known_sigs~,
+          ),
+        )
       }
       Tuple(out)
     }
@@ -1074,7 +1093,13 @@ fn type_sig_of_typedef(
       for f in fields {
         out.push({
           name: f.label,
-          ty: type_sig_of_valtype(f.ty, type_table, resource_ids, visiting),
+          ty: type_sig_of_valtype(
+            f.ty,
+            type_table,
+            resource_ids,
+            visiting,
+            known_sigs~,
+          ),
         })
       }
       Record(out)
@@ -1085,24 +1110,37 @@ fn type_sig_of_typedef(
         let payload = match c.ty {
           None => None
           Some(t) =>
-            Some(type_sig_of_valtype(t, type_table, resource_ids, visiting))
+            Some(
+              type_sig_of_valtype(
+                t,
+                type_table,
+                resource_ids,
+                visiting,
+                known_sigs~,
+              ),
+            )
         }
         out.push({ name: c.label, ty: payload, })
       }
       Variant(out)
     }
     Option(v) =>
-      Option(type_sig_of_valtype(v, type_table, resource_ids, visiting))
+      Option(
+        type_sig_of_valtype(v, type_table, resource_ids, visiting, known_sigs~),
+      )
     Result(ok, err) => {
       let ok_sig = ok.map(fn(v) {
-        type_sig_of_valtype(v, type_table, resource_ids, visiting)
+        type_sig_of_valtype(v, type_table, resource_ids, visiting, known_sigs~)
       })
       let err_sig = err.map(fn(v) {
-        type_sig_of_valtype(v, type_table, resource_ids, visiting)
+        type_sig_of_valtype(v, type_table, resource_ids, visiting, known_sigs~)
       })
       Result(ok_sig, err_sig)
     }
-    List(v) => List(type_sig_of_valtype(v, type_table, resource_ids, visiting))
+    List(v) =>
+      List(
+        type_sig_of_valtype(v, type_table, resource_ids, visiting, known_sigs~),
+      )
     Flags(labels) => Flags(labels)
     Enum(labels) => Enum(labels)
     Own(idx) => {
@@ -1111,6 +1149,7 @@ fn type_sig_of_typedef(
         type_table,
         resource_ids,
         visiting,
+        known_sigs~,
       )
       match resource {
         Resource(rid) => Own(rid)
@@ -1123,6 +1162,7 @@ fn type_sig_of_typedef(
         type_table,
         resource_ids,
         visiting,
+        known_sigs~,
       )
       match resource {
         Resource(rid) => Borrow(rid)
@@ -1139,11 +1179,14 @@ fn type_sig_of_valtype(
   type_table : Array[@component.TypeDef?],
   resource_ids : Array[Int?],
   visiting : Map[Int, Int],
+  known_sigs? : Map[Int, TypeSig] = Map([]),
 ) -> TypeSig {
   match ty {
     Prim(p) => Prim(p)
     TypeIdx(idx) =>
-      if idx < 0 || idx >= type_table.length() {
+      if known_sigs.get(idx) is Some(signature) {
+        signature
+      } else if idx < 0 || idx >= type_table.length() {
         Other
       } else if visiting.get(idx) is Some(_) {
         Other
@@ -1156,7 +1199,13 @@ fn type_sig_of_valtype(
               _ => Resource(-1)
             }
           Some(td) =>
-            type_sig_of_typedef(td, type_table, resource_ids, visiting)
+            type_sig_of_typedef(
+              td,
+              type_table,
+              resource_ids,
+              visiting,
+              known_sigs~,
+            )
           None => Other
         }
         visiting.remove(idx) |> ignore
@@ -1170,8 +1219,15 @@ fn type_sig_of_typeidx(
   idx : Int,
   type_table : Array[@component.TypeDef?],
   resource_ids : Array[Int?],
+  known_sigs? : Map[Int, TypeSig] = Map([]),
 ) -> TypeSig {
-  type_sig_of_valtype(TypeIdx(idx), type_table, resource_ids, Map([]))
+  type_sig_of_valtype(
+    TypeIdx(idx),
+    type_table,
+    resource_ids,
+    Map([]),
+    known_sigs~,
+  )
 }
 
 ///|

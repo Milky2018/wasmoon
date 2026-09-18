@@ -560,6 +560,26 @@ graph TD
   ISS_540["ISS-540: Eliminate component lifecycle leaks exposed by the sanitizer gate"]
   ISS_541["ISS-541: Release terminal instantiation callback storage"]
   ISS_542["ISS-542: Release suspended interpreter execution on Store close"]
+  ISS_543["ISS-543: Honor the Preview 1 SEEK and TELL permission relationship"]
+  ISS_544["ISS-544: Authorize synchronous path_open before filesystem side effects"]
+  ISS_545["ISS-545: Support irreversible rights reduction on standard streams"]
+  ISS_546["ISS-546: Reject unsupported sparse allocation instead of false success"]
+  ISS_547["ISS-547: Bound persistent JIT cache filenames"]
+  ISS_548["ISS-548: Report compilation independently from cache writes"]
+  ISS_549["ISS-549: Implement the complete WASI HTTP 0.3 world"]
+  ISS_550["ISS-550: Pin WASI HTTP contracts and implement HTTP resources"]
+  ISS_551["ISS-551: Bridge HTTP bodies and completion futures with cancellation"]
+  ISS_552["ISS-552: Implement HTTP client and server transport"]
+  ISS_553["ISS-553: Expose HTTP service and middleware through CLI and embedding"]
+  ISS_554["ISS-554: Validate WASI HTTP across engines and platforms"]
+  ISS_555["ISS-555: Preserve component type provenance across HTTP middleware boundaries"]
+  ISS_556["ISS-556: Require warning-free native builds"]
+  ISS_557["ISS-557: Audit serve with independent black-box protocol cases"]
+  ISS_558["ISS-558: Respect the response-body first-byte timeout"]
+  ISS_559["ISS-559: Cancel network reads when HTTP bodies are abandoned"]
+  ISS_560["ISS-560: Validate HTTP URI components with an ecosystem parser"]
+  ISS_561["ISS-561: Tie HTTP response timeouts to body progress"]
+  ISS_562["ISS-562: Verify HTTP upload receipts on early responses and cancellation"]
   ISS_002 --> ISS_003
   ISS_002 --> ISS_004
   ISS_003 --> ISS_005
@@ -1016,6 +1036,11 @@ graph TD
   ISS_533 --> ISS_536
   ISS_534 --> ISS_536
   ISS_535 --> ISS_536
+  ISS_554 --> ISS_549
+  ISS_550 --> ISS_551
+  ISS_551 --> ISS_552
+  ISS_552 --> ISS_553
+  ISS_553 --> ISS_554
 ```
 
 ## Warnings

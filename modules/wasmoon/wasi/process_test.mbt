@@ -35,5 +35,5 @@ test "signal policy denies by default and never sees invalid tags" {
     @wasi.proc_raise_impl(31, handler=context.signal_handler),
     content="28",
   )
-  inspect(observed, content="[0, 15]")
+  assert_eq(observed, [0, 15])
 }

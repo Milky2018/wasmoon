@@ -17,3 +17,6 @@ wasi-tests/wasmtime/** -text
 wasm-tests/wasmtime/upstream/** -text
 spec/** -text
 modules/wasmoon/wasi_component/wit/** -text
+
+# Preserve the official HTTP WIT snapshot, including upstream whitespace.
+modules/wasmoon/wasi_http/wit/** -text whitespace=-blank-at-eol

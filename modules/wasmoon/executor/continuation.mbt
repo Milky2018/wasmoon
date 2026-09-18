@@ -179,7 +179,7 @@ pub fn ExecutionContinuation::continue_execution_with_exception(
     Returned(values) => ResumableReturned(values)
     Suspended(GuestEffect(_), continuation) => {
       continuation.cancel()
-      raise @runtime.UnhandledSuspension
+      raise UnhandledSuspension
     }
     Suspended(_, continuation) => ResumableSuspended(continuation)
   }
@@ -285,7 +285,7 @@ pub fn call_func_by_index_resumable_async_with_exception(
     Returned(values) => ResumableReturned(values)
     Suspended(GuestEffect(_), continuation) => {
       continuation.cancel()
-      raise @runtime.UnhandledSuspension
+      raise UnhandledSuspension
     }
     Suspended(_, continuation) => ResumableSuspended(continuation)
   }

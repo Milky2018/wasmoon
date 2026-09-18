@@ -203,12 +203,23 @@ test "run JIT cache accepts an exactly compatible v10 artifact" {
       operating_system_abi: MacOS,
     },
   }
-  inspect(
-    run_jit_cache_file("/tmp/cache", deterministic_manifest),
-    content="/tmp/cache/v10-aarch64-macos-o2-small-direct-no-cancel-native-nan-no-debug-r006400690072006500630074002d00760063006f00640065002d0038-s32e9891ae7d3cedff10d21cea1ae3a989d4fb5424b89b9c2f93328535cf30af7-x67abdd721024f0ff4e0b3f4c2fc13bc5bad42d0b7851d456d88d203d15aaa450.cwasm",
-  )
-  let path = cache_test_file("compatible")
-  save_run_jit_cache(path, artifact)
+  let filename = run_jit_cache_file("", deterministic_manifest)
+  inspect(filename.length() <= 255, content="true")
+  let long_revision = {
+    ..deterministic_manifest,
+    codegen_revision: "../".repeat(200),
+  }
+  let long_path = run_jit_cache_file("", long_revision)
+  inspect(long_path.length() <= 255, content="true")
+  inspect(long_path != filename, content="true")
+  inspect(long_path.contains(".."), content="false")
+  let different_policy = {
+    ..deterministic_manifest,
+    policy: { ..deterministic_manifest.policy, optimization_level: O3, },
+  }
+  inspect(run_jit_cache_file("", different_policy) != filename, content="true")
+  let path = run_jit_cache_file(@test_fs.temp_dir(), artifact.manifest)
+  inspect(save_run_jit_cache(path, artifact) is Ok(_), content="true")
   guard load_run_jit_cache(path, jit_artifact_compatibility(artifact.manifest))
     is Some(loaded) else {
     fail("compatible cache entry was rejected")
@@ -303,7 +314,7 @@ test "run JIT cache rejects an artifact from the previous codegen revision" {
     manifest: { ..current.manifest, codegen_revision: "direct-vcode-4", },
   }
   let path = cache_test_file("previous-codegen")
-  save_run_jit_cache(path, previous)
+  inspect(save_run_jit_cache(path, previous) is Ok(_), content="true")
   let loaded = load_run_jit_cache(
     path,
     jit_artifact_compatibility(current.manifest),

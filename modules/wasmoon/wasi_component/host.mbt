@@ -168,8 +168,18 @@ pub fn WasiComponentHost::add_preview2_cli_clocks_random(
 ///|
 pub fn WasiComponentHost::add_preview3_cli_clocks_random(
   self : WasiComponentHost,
+  wait_until? : (Int64) -> @runtime_impl.HostFuture raise @runtime_impl.ComponentRuntimeError,
+) -> Unit raise @runtime_impl.ComponentRuntimeError {
+  self.add_preview3_clocks_random(wait_until?)
+  add_preview3_stdio(self)
+}
+
+///|
+/// Install Preview 3 clocks and randomness without choosing a stdio transport.
+pub fn WasiComponentHost::add_preview3_clocks_random(
+  self : WasiComponentHost,
+  wait_until? : (Int64) -> @runtime_impl.HostFuture raise @runtime_impl.ComponentRuntimeError,
 ) -> Unit raise @runtime_impl.ComponentRuntimeError {
   add_preview3_base_interfaces(self)
-  add_preview3_monotonic_clock(self)
-  add_preview3_stdio(self)
+  add_preview3_monotonic_clock(self, wait_until)
 }

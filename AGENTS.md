@@ -36,7 +36,7 @@ Before pushing code changes:
 ```bash
 moon info
 moon fmt
-moon check --target native --warn-list +73
+moon check --target native --warn-list +73 --deny-warn
 moon test --target native
 git pull --rebase origin dev
 git push origin dev

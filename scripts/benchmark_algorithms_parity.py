@@ -28,6 +28,11 @@ class RunResult:
     parsed_value: Optional[float]
     timeout: bool
     freshly_compiled: Optional[bool] = None
+    cache_hit: Optional[bool] = None
+    cache_write_succeeded: Optional[bool] = None
+    cache_files_changed: bool = False
+    compilation_evidence: str = "unavailable"
+    evidence_error: Optional[str] = None
     cache_files_before: List[str] = field(default_factory=list)
     cache_files_after: List[str] = field(default_factory=list)
 
@@ -168,7 +173,7 @@ def record_cache_run(
     before = cache_snapshot(cache_dir)
     result = run_one(command, timeout_sec, extra_env=extra_env)
     after = cache_snapshot(cache_dir)
-    result.freshly_compiled = any(
+    result.cache_files_changed = any(
         name not in before or before[name] != metadata
         for name, metadata in after.items()
     )
@@ -187,12 +192,36 @@ def run_engine(
     caches: IsolatedCaches,
 ) -> RunResult:
     if engine == "wasmoon":
-        return record_cache_run(
+        report_path = caches.root / "wasmoon-jit-report.json"
+        report_path.unlink(missing_ok=True)
+        result = record_cache_run(
             [wasmoon_bin, "run", str(workload)],
             timeout_sec,
             caches.wasmoon,
-            extra_env={"WASMOON_JIT_CACHE_DIR": str(caches.wasmoon)},
+            extra_env={
+                "WASMOON_JIT_CACHE_DIR": str(caches.wasmoon),
+                "WASMOON_JIT_CACHE_REPORT": str(report_path),
+            },
         )
+        try:
+            report = json.loads(report_path.read_text(encoding="utf-8"))
+            if not isinstance(report, dict) or report.get("schema_version") != 1:
+                raise ValueError("unsupported JIT report schema")
+            fresh, hit, written = (report.get(key) for key in (
+                "freshly_compiled", "cache_hit", "cache_write_succeeded"
+            ))
+            if (type(fresh) is not bool or type(hit) is not bool or fresh == hit
+                    or "cache_write_succeeded" not in report
+                    or (written is not None and type(written) is not bool)
+                    or (hit and written is not None)):
+                raise ValueError("invalid JIT report outcomes")
+            result.freshly_compiled = fresh
+            result.cache_hit = hit
+            result.cache_write_succeeded = written
+            result.compilation_evidence = "runtime-report"
+        except (OSError, ValueError) as exc:
+            result.evidence_error = str(exc)
+        return result
     return record_cache_run(
         [
             wasmtime_bin,
@@ -210,6 +239,10 @@ def run_engine(
     )
 
 
+def format_outcome(value: Optional[bool]) -> str:
+    return "unknown / not attempted" if value is None else str(value)
+
+
 def run_payload(result: RunResult) -> Dict:
     return {
         "command": result.command,
@@ -220,6 +253,11 @@ def run_payload(result: RunResult) -> Dict:
         "stdout": result.stdout.strip(),
         "stderr": result.stderr.strip(),
         "freshly_compiled": result.freshly_compiled,
+        "cache_hit": result.cache_hit,
+        "cache_write_succeeded": result.cache_write_succeeded,
+        "cache_files_changed": result.cache_files_changed,
+        "compilation_evidence": result.compilation_evidence,
+        "evidence_error": result.evidence_error,
         "cache_files_before": result.cache_files_before,
         "cache_files_after": result.cache_files_after,
     }
@@ -331,6 +369,9 @@ def main() -> int:
         if pair["value_ratio"] is None or pair["wall_ratio"] is None:
             status = "runtime_error"
             failures.append(f"{workload_str}: paired run failed")
+        elif pair["wasmoon"]["freshly_compiled"] is not True:
+            status = "measurement_error"
+            failures.append(f"{workload_str}: missing fresh compilation evidence")
         elif pair["value_ratio"] > args.value_ratio_threshold:
             status = "perf_gap"
             perf_gaps.append(
@@ -369,7 +410,7 @@ def main() -> int:
         )
 
     summary_payload = {
-        "schema_version": 3,
+        "schema_version": 4,
         "generated_at_unix_sec": int(time.time()),
         "config": {
             "wasmoon": args.wasmoon,
@@ -411,13 +452,16 @@ def main() -> int:
         f"- Failures: `{summary_payload['stats']['failures']}`",
         f"- Perf gaps: `{summary_payload['stats']['perf_gaps']}`",
         "",
-        "| Workload | Status | Value Ratio | Wall Ratio | Wasmoon Fresh Compile | Wasmtime Fresh Compile |",
-        "|---|---|---:|---:|---:|---:|",
+        "Fresh compilation, cache hits, and writes are reported by Wasmoon itself.",
+        "Wasmtime compilation/hit/write outcomes are unknown; filesystem changes alone are not compilation evidence.",
+        "",
+        "| Workload | Status | Value Ratio | Wall Ratio | Wasmoon Fresh Compile | Wasmoon Cache Hit | Wasmoon Cache Write | Wasmoon Cache Files Changed | Wasmtime Cache Files Changed |",
+        "|---|---|---:|---:|---|---|---|---|---|",
     ]
     for row in rows:
         pair = row["pair"]
         md_lines.append(
-            "| `{}` | {} | {} | {} | {} | {} |".format(
+            "| `{}` | {} | {} | {} | {} | {} | {} | {} | {} |".format(
                 row["workload"],
                 row["status"],
                 (
@@ -430,8 +474,11 @@ def main() -> int:
                     if pair["wall_ratio"] is None
                     else f"{pair['wall_ratio']:.4f}"
                 ),
-                pair["wasmoon"]["freshly_compiled"],
-                pair["wasmtime"]["freshly_compiled"],
+                format_outcome(pair["wasmoon"]["freshly_compiled"]),
+                format_outcome(pair["wasmoon"]["cache_hit"]),
+                format_outcome(pair["wasmoon"]["cache_write_succeeded"]),
+                pair["wasmoon"]["cache_files_changed"],
+                pair["wasmtime"]["cache_files_changed"],
             )
         )
     if failures:

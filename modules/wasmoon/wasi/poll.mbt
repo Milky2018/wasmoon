@@ -88,6 +88,14 @@ fn resolve_poll_fd_source(
     if (slot == 0 && event_type != 1) || (slot != 0 && event_type != 2) {
       return Err(Badf)
     }
+    let direction = if event_type == 1 { right_fd_read } else { right_fd_write }
+    if require_rights(
+        ctx.stdio_rights[slot].0,
+        right_poll_fd_readwrite | direction,
+      )
+      is Err(errno) {
+      return Err(errno)
+    }
     if poll_stdio_is_native(ctx, slot) {
       return Ok(Native(slot))
     }

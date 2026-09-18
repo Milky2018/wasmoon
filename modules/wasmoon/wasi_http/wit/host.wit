@@ -1,0 +1,2 @@
+package wasmoon:http-host;
+world host { include wasi:http/middleware@0.3.0; }

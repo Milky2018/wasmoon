@@ -71,7 +71,7 @@ jobs:
 
       - name: check source and generated interfaces
         run: |
-          moon check --target native --warn-list @73
+          moon check --target native --warn-list +73 --deny-warn
           moon fmt
           git diff --exit-code
           moon info
@@ -94,6 +94,9 @@ jobs:
             modules/wasmoon/wasi_component/wit_contracts_generated.mbt \
             --verify-wit --check
 
+      - name: verify HTTP WIT contracts
+        run: python3 modules/wasmoon/wasi_http/generate_contracts.py --verify-wit --check
+
       - name: run native tests
         run: |
           VCODE_REGALLOC_VALIDATION=1 \
@@ -111,6 +114,9 @@ jobs:
           fi
           ./install.sh
 
+      - name: test HTTP services, middleware and clients on both engines
+        run: python3 scripts/test_wasi_http.py --wasmoon ./wasmoon
+
       - name: run complete Wasmtime misc suite
         run: |
           python3 scripts/run_wasmtime_misc.py \
@@ -127,6 +133,12 @@ jobs:
 
       - name: exercise WASIp1 capability path races
         run: python3 scripts/run_wasi_path_races.py
+
+      - name: verify JIT cache lifecycle
+        run: python3 scripts/run_jit_cache.py
+
+      - name: verify WASIp1 physical allocation
+        run: python3 scripts/run_wasi_allocation.py
 
       - name: run upstream WASIp1 polling regressions
         run: |
@@ -146,6 +158,7 @@ jobs:
           name: wasip1-${{ matrix.os }}
           path: |
             target/wasi-path-races.json
+            target/wasi-allocation.json
             target/wasmtime-p1-smoke
             target/wasmtime-p1-rights
           if-no-files-found: ignore
@@ -252,6 +265,9 @@ jobs:
           $tools = @(Get-ChildItem target/windows-tools -Recurse -Filter wasm-tools.exe)
           if ($tools.Count -ne 1) { throw "Expected exactly one pinned wasm-tools binary" }
           $tools[0].DirectoryName >> $env:GITHUB_PATH
+      - name: check Windows warnings
+        run: moon check --target native --warn-list +73 --deny-warn
+
       - name: test Windows descriptor readiness
         run: |
           New-Item -ItemType Directory -Force target | Out-Null
@@ -276,6 +292,10 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Copy-Item target/windows-build/native/release/build/Milky2018/wasmoon/cmd/wasmoon/wasmoon.exe wasmoon.exe
           Copy-Item target/windows-build/native/release/build/Milky2018/wasmoon/cmd/wasmoon-tools/wasmoon-tools.exe wasmoon-tools.exe
+      - name: test Windows HTTP services, middleware and clients on both engines
+        if: ${{ !cancelled() && steps.windows_build.outcome == 'success' }}
+        run: python scripts/test_wasi_http.py --wasmoon ./wasmoon.exe
+
       - name: verify Windows CLI behavior
         if: ${{ !cancelled() && steps.windows_build.outcome == 'success' }}
         run: python scripts/cli_behavior_test.py
@@ -309,6 +329,12 @@ jobs:
       - name: exercise Windows WASIp1 capability path races
         if: ${{ !cancelled() && steps.windows_build.outcome == 'success' }}
         run: python scripts/run_wasi_path_races.py
+      - name: verify Windows JIT cache lifecycle
+        if: ${{ !cancelled() && steps.windows_build.outcome == 'success' }}
+        run: python scripts/run_jit_cache.py
+      - name: verify Windows WASIp1 physical allocation
+        if: ${{ !cancelled() && steps.windows_build.outcome == 'success' }}
+        run: python scripts/run_wasi_allocation.py
       - name: run Windows readiness guests
         if: ${{ !cancelled() && steps.windows_build.outcome == 'success' }}
         run: python scripts/run_windows_readiness.py
@@ -349,6 +375,7 @@ jobs:
             target/windows-native-probes.log
             target/windows-symlinks-*.json
             target/wasi-path-races.json
+            target/wasi-allocation.json
             target/windows-readiness.json
             target/windows-components
             target/windows-misc
@@ -371,6 +398,7 @@ jobs:
             target/windows-native-probes.log
             target/windows-symlinks-*.json
             target/wasi-path-races.json
+            target/wasi-allocation.json
             target/windows-readiness.json
             target/windows-components
             target/windows-misc

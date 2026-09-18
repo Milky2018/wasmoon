@@ -1,0 +1,30 @@
+import {
+  "marianoguerra/uri",
+  "marianoguerra/uri/enc" @uri_enc,
+  "Milky2018/wasm_component" @component,
+  "Milky2018/wasmoon/component/runtime_impl",
+  "Milky2018/wasmoon/wasi_component",
+  "Milky2018/wasmoon/wasi",
+  "moonbitlang/async",
+  "moonbitlang/async/io",
+  "moonbitlang/async/stdio",
+  "moonbitlang/async/socket",
+  "moonbitlang/async/os_error",
+  "moonbitlang/async/tls",
+  "moonbitlang/core/encoding/utf8",
+}
+
+rule(
+  name: "generate_http_contracts",
+  command: "python3 wasi_http/generate_contracts.py",
+)
+
+dev_build(
+  rule: "generate_http_contracts",
+  input: "wit",
+  output: "contracts_generated.mbt",
+)
+
+import {
+  "moonbitlang/x/fs",
+} for "wbtest"

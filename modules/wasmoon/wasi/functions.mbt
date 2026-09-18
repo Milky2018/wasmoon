@@ -54,6 +54,9 @@ fn is_stdio_open(ctx : WasiContext, fd : Int) -> Bool {
 
 ///|
 fn stdio_slot_for_fd(ctx : WasiContext, fd : Int) -> Int? {
+  if fd < 0 {
+    return None
+  }
   if fd == ctx.stdin_fd {
     Some(0)
   } else if fd == ctx.stdout_fd {
@@ -205,6 +208,9 @@ pub fn fd_write(
     if slot == 0 {
       return Errno::Badf.to_i32()
     }
+    if require_rights(ctx.stdio_rights[slot].0, right_fd_write) is Err(errno) {
+      return errno.to_i32()
+    }
     let mut total_written = 0
     for i in 0..<iovs_len {
       let iov_offset = iovs + i * 8
@@ -319,6 +325,9 @@ pub fn fd_read(
     }
     if slot != 0 {
       return Errno::Badf.to_i32()
+    }
+    if require_rights(ctx.stdio_rights[slot].0, right_fd_read) is Err(errno) {
+      return errno.to_i32()
     }
     let input_data = (ctx.stdin_callback)()
     let mut total_read = 0
@@ -707,6 +716,13 @@ pub fn path_open(
     return errno.to_i32()
   }
   let parent_rights_inheriting = parent_file.rights_inheriting
+  // Open-time synchronization consumes the parent's inheriting authority,
+  // independently of which rights the child retains after opening.
+  let sync_rights = (if (fdflags & 0x02) != 0 { right_fd_datasync } else { 0L }) |
+    (if (fdflags & 0x18) != 0 { right_fd_sync } else { 0L })
+  if (parent_rights_inheriting & sync_rights) != sync_rights {
+    return Errno::NotCapable.to_i32()
+  }
   let effective_rights_base = fs_rights_base
   let effective_rights_inheriting = fs_rights_inheriting
   if (effective_rights_base & parent_rights_inheriting) != effective_rights_base ||
@@ -858,7 +874,12 @@ pub fn fd_seek(
     RegularFile => ()
     _ => return Errno::Badf.to_i32()
   }
-  if f.require_base_rights(right_fd_seek) is Err(errno) {
+  let required = if offset == 0L && whence == 1 {
+    right_fd_tell
+  } else {
+    right_fd_seek
+  }
+  if f.require_base_rights(required) is Err(errno) {
     return errno.to_i32()
   }
   let base = match whence {
@@ -1088,9 +1109,9 @@ pub fn fd_pwrite(
 ///|
 fn fd_rights_for_stdio_slot(slot : Int) -> Int64 {
   if slot == 0 {
-    right_fd_read | right_poll_fd_readwrite
+    right_fd_read | right_poll_fd_readwrite | right_fd_filestat_get
   } else if slot == 1 || slot == 2 {
-    right_fd_write | right_poll_fd_readwrite
+    right_fd_write | right_poll_fd_readwrite | right_fd_filestat_get
   } else {
     0L
   }
@@ -1192,8 +1213,8 @@ pub fn fd_fdstat_get(
     (
       stdio_filetype(ctx, fd),
       0,
-      fd_rights_for_stdio_slot(slot),
-      fd_rights_for_stdio_slot(slot),
+      ctx.stdio_rights[slot].0,
+      ctx.stdio_rights[slot].1,
     )
   } else {
     // Check preopen directories first: wasmtime reports a special base/inheriting set.
@@ -1628,7 +1649,7 @@ fn read_path_from_memory(
   for b in bytes {
     if b == b'\x00' {
       return Err(
-        (if @host_io.is_windows() { Errno::NoEnt } else { Errno::Inval }).to_i32(),
+        (if @host_io.is_windows() { Errno::NoEnt } else { Inval }).to_i32(),
       )
     }
   }
@@ -1973,9 +1994,13 @@ pub fn fd_filestat_get_impl(
     return Errno::Fault.to_i32()
   }
   // Handle stdio descriptors.
-  if is_stdio_descriptor(ctx, fd) {
+  if stdio_slot_for_fd(ctx, fd) is Some(slot) {
     if !is_stdio_open(ctx, fd) {
       return Errno::Badf.to_i32()
+    }
+    if require_rights(ctx.stdio_rights[slot].0, right_fd_filestat_get)
+      is Err(errno) {
+      return errno.to_i32()
     }
     // Match wasmtime stdio modeling: unknown or character_device, nlink=0.
     mem.write_i64(buf_ptr, 0L) // dev
@@ -2328,22 +2353,31 @@ pub fn fd_fdstat_set_rights_impl(
   fs_rights_base : Int64,
   fs_rights_inheriting : Int64,
 ) -> Int {
-  if is_stdio_descriptor(ctx, fd) {
-    return Errno::Badf.to_i32()
-  }
-  let file = match ctx.get_file(fd) {
-    Some(file) => file
-    None => return Errno::Badf.to_i32()
+  let stream = stdio_slot_for_fd(ctx, fd)
+  let (base, inheriting) = match stream {
+    Some(slot) => ctx.stdio_rights[slot]
+    None =>
+      match ctx.get_file(fd) {
+        Some(file) => (file.rights_base, file.rights_inheriting)
+        None => return Errno::Badf.to_i32()
+      }
   }
   if !is_valid_rights(fs_rights_base) || !is_valid_rights(fs_rights_inheriting) {
     return Errno::Inval.to_i32()
   }
-  if (fs_rights_base & file.rights_base) != fs_rights_base ||
-    (fs_rights_inheriting & file.rights_inheriting) != fs_rights_inheriting {
+  if (fs_rights_base & base) != fs_rights_base ||
+    (fs_rights_inheriting & inheriting) != fs_rights_inheriting {
     return Errno::NotCapable.to_i32()
   }
-  file.rights_base = fs_rights_base
-  file.rights_inheriting = fs_rights_inheriting
+  match stream {
+    Some(slot) =>
+      ctx.stdio_rights[slot] = (fs_rights_base, fs_rights_inheriting)
+    None => {
+      let file = ctx.get_file(fd).unwrap()
+      file.rights_base = fs_rights_base
+      file.rights_inheriting = fs_rights_inheriting
+    }
+  }
   Errno::Success.to_i32()
 }
 

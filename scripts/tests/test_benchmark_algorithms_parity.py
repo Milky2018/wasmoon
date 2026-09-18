@@ -76,9 +76,73 @@ class AlgorithmsParityTests(unittest.TestCase):
                     extra_env={"WASMOON_JIT_CACHE_DIR": str(cache)},
                 )
 
-            self.assertTrue(result.freshly_compiled)
+            self.assertIsNone(result.freshly_compiled)
+            self.assertTrue(result.cache_files_changed)
             self.assertEqual(result.cache_files_before, [])
             self.assertEqual(result.cache_files_after, ["current.cwasm"])
+
+    def test_runtime_evidence_is_independent_of_disk_changes(self) -> None:
+        reports = [
+            {"schema_version": 1, "freshly_compiled": True, "cache_hit": False,
+             "cache_write_succeeded": False},
+            {"schema_version": 1, "freshly_compiled": False, "cache_hit": True,
+             "cache_write_succeeded": None},
+            {"schema_version": 1, "freshly_compiled": True, "cache_hit": False,
+             "cache_write_succeeded": None},
+        ]
+        for report in reports:
+            with self.subTest(report=report), tempfile.TemporaryDirectory() as directory:
+                caches = PARITY.prepare_isolated_caches(Path(directory), Path("a.wasm"))
+                def fake_run(command, timeout_sec, *, extra_env=None):
+                    Path(extra_env["WASMOON_JIT_CACHE_REPORT"]).write_text(json.dumps(report))
+                    return PARITY.RunResult(command, 0, 1.0, "42", "", 42, False)
+                with mock.patch.object(PARITY, "run_one", side_effect=fake_run):
+                    result = PARITY.run_engine("wasmoon", Path("a.wasm"),
+                        wasmoon_bin="wasmoon", wasmtime_bin="wasmtime", timeout_sec=5,
+                        caches=caches)
+                self.assertEqual(result.freshly_compiled, report["freshly_compiled"])
+                self.assertEqual(result.cache_hit, report["cache_hit"])
+                self.assertEqual(result.cache_write_succeeded, report["cache_write_succeeded"])
+                self.assertFalse(result.cache_files_changed)
+                self.assertIsNone(result.evidence_error)
+
+    def test_missing_or_invalid_report_never_reuses_stale_evidence(self) -> None:
+        for report in [None, [], {"schema_version": 9},
+                       {"schema_version": 1, "freshly_compiled": True,
+                        "cache_hit": True, "cache_write_succeeded": True}]:
+            with self.subTest(report=report), tempfile.TemporaryDirectory() as directory:
+                caches = PARITY.prepare_isolated_caches(Path(directory), Path("a.wasm"))
+                (caches.root / "wasmoon-jit-report.json").write_text(json.dumps({
+                    "schema_version": 1, "freshly_compiled": True,
+                    "cache_hit": False, "cache_write_succeeded": True}))
+                def fake_run(command, timeout_sec, *, extra_env=None):
+                    if report is not None:
+                        Path(extra_env["WASMOON_JIT_CACHE_REPORT"]).write_text(json.dumps(report))
+                    return PARITY.RunResult(command, 0, 1.0, "42", "", 42, False)
+                with mock.patch.object(PARITY, "run_one", side_effect=fake_run):
+                    result = PARITY.run_engine("wasmoon", Path("a.wasm"),
+                        wasmoon_bin="wasmoon", wasmtime_bin="wasmtime", timeout_sec=5,
+                        caches=caches)
+                self.assertIsNone(result.freshly_compiled)
+                self.assertIsNone(result.cache_hit)
+                self.assertIsNotNone(result.evidence_error)
+
+    def test_main_rejects_missing_compilation_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "a.wasm").write_bytes(b"wasm")
+            summary = root / "out" / "summary.json"
+            def fake_run(command, timeout_sec, *, extra_env=None):
+                return PARITY.RunResult(command, 0, 1.0, "42", "", 42, False)
+            with mock.patch.object(PARITY, "run_one", side_effect=fake_run), mock.patch.object(
+                sys, "argv", ["benchmark", "--strict", "--workloads-dir", str(root),
+                              "--summary-file", str(summary)]
+            ):
+                self.assertEqual(PARITY.main(), 1)
+            payload = json.loads(summary.read_text())
+            self.assertEqual(payload["rows"][0]["status"], "measurement_error")
+            self.assertIsNone(payload["rows"][0]["pair"]["wasmoon"]["freshly_compiled"])
+            self.assertIn("unknown", summary.with_suffix(".md").read_text())
 
     def test_main_runs_each_engine_once_with_separate_cold_caches(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -98,6 +162,10 @@ class AlgorithmsParityTests(unittest.TestCase):
                 if engine == "wasmoon":
                     cache = Path(extra_env["WASMOON_JIT_CACHE_DIR"])
                     (cache / "current.cwasm").write_bytes(b"artifact")
+                    Path(extra_env["WASMOON_JIT_CACHE_REPORT"]).write_text(json.dumps({
+                        "schema_version": 1, "freshly_compiled": True,
+                        "cache_hit": False, "cache_write_succeeded": True,
+                    }))
                 else:
                     self.assertIn("cache=y", command)
                     self.assertIn("parallel-compilation=n", command)
@@ -148,7 +216,7 @@ class AlgorithmsParityTests(unittest.TestCase):
                 ],
             )
             payload = json.loads(summary.read_text(encoding="utf-8"))
-            self.assertEqual(payload["schema_version"], 3)
+            self.assertEqual(payload["schema_version"], 4)
             self.assertEqual(payload["config"]["runs_per_engine"], 1)
             self.assertEqual(
                 payload["config"]["cache_policy"],
@@ -159,7 +227,8 @@ class AlgorithmsParityTests(unittest.TestCase):
                 self.assertEqual(row["pair"]["value_ratio"], 2.0)
                 self.assertEqual(row["pair"]["wall_ratio"], 2.0)
                 self.assertTrue(row["pair"]["wasmoon"]["freshly_compiled"])
-                self.assertTrue(row["pair"]["wasmtime"]["freshly_compiled"])
+                self.assertIsNone(row["pair"]["wasmtime"]["freshly_compiled"])
+                self.assertTrue(row["pair"]["wasmtime"]["cache_files_changed"])
                 self.assertNotIn("pairs", row)
                 self.assertNotIn("paired_ratios", row)
 

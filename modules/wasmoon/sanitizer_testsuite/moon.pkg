@@ -16,7 +16,6 @@ import {
   "Milky2018/wasm_core/wat",
   "Milky2018/wasm_component/wit",
   "Milky2018/wasmoon/wit_binding",
-  "Milky2018/wasmoon_jit",
   "moonbitlang/async",
   "moonbitlang/x/fs",
 } for "test"

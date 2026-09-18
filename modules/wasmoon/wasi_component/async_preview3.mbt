@@ -45,6 +45,7 @@ fn preview3_clock_arg(
 ///|
 fn add_preview3_monotonic_clock(
   host : WasiComponentHost,
+  wait_until : ((Int64) -> @runtime_impl.HostFuture raise @runtime_impl.ComponentRuntimeError)?,
 ) -> Unit raise @runtime_impl.ComponentRuntimeError {
   let builder = host.linker.host_instance_builder(
     "wasi:clocks/monotonic-clock@\{preview3_version}",
@@ -76,14 +77,10 @@ fn add_preview3_monotonic_clock(
     _table,
   ) => {
     let deadline = preview3_clock_arg(args)
-    preview3_clock_future(
-      host.ctx,
-      if deadline < 0L {
-        0x7fffffffffffffffL
-      } else {
-        deadline
-      },
-    )
+    let wait = wait_until.unwrap_or(deadline => {
+      preview3_clock_future(host.ctx, deadline)
+    })
+    wait(if deadline < 0L { 0x7fffffffffffffffL } else { deadline })
   })
   builder.add_async_func("wait-for", preview3_func(interface, "wait-for"), (
     args,
@@ -94,7 +91,11 @@ fn add_preview3_monotonic_clock(
     if now < 0L {
       raise HostCallError("monotonic clock is unavailable")
     }
-    preview3_clock_future(host.ctx, preview3_deadline_after(now, duration))
+    match wait_until {
+      Some(wait) => wait(preview3_deadline_after(now, duration))
+      None =>
+        preview3_clock_future(host.ctx, preview3_deadline_after(now, duration))
+    }
   })
   host.linker.add_instance(
     "wasi:clocks/monotonic-clock@\{preview3_version}",

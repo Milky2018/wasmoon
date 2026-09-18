@@ -53,7 +53,8 @@ pub fn WasiComponentHost::add_preview2_cli_clocks_random(Self) -> Unit raise @ru
 pub fn WasiComponentHost::add_preview2_filesystem(Self) -> Unit raise @runtime_impl.ComponentRuntimeError
 pub fn WasiComponentHost::add_preview2_io(Self) -> Unit raise @runtime_impl.ComponentRuntimeError
 pub fn WasiComponentHost::add_preview2_sockets(Self) -> Unit raise @runtime_impl.ComponentRuntimeError
-pub fn WasiComponentHost::add_preview3_cli_clocks_random(Self) -> Unit raise @runtime_impl.ComponentRuntimeError
+pub fn WasiComponentHost::add_preview3_cli_clocks_random(Self, wait_until? : (Int64) -> @runtime_impl.HostFuture raise @runtime_impl.ComponentRuntimeError) -> Unit raise @runtime_impl.ComponentRuntimeError
+pub fn WasiComponentHost::add_preview3_clocks_random(Self, wait_until? : (Int64) -> @runtime_impl.HostFuture raise @runtime_impl.ComponentRuntimeError) -> Unit raise @runtime_impl.ComponentRuntimeError
 pub fn WasiComponentHost::add_preview3_filesystem(Self) -> Unit raise @runtime_impl.ComponentRuntimeError
 pub fn WasiComponentHost::add_preview3_sockets(Self) -> Unit raise @runtime_impl.ComponentRuntimeError
 pub fn WasiComponentHost::context(Self) -> WasiComponentCtx

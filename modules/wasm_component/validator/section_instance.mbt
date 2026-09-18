@@ -5,6 +5,7 @@ fn validate_component_section_instance(
   cfg : ComponentValidationConfig,
   counts : Counts,
   type_table : Array[@component.TypeDef?],
+  known_type_sigs : Map[Int, TypeSig],
   resource_ids : Array[Int?],
   component_sizes : Array[Int],
   instance_sizes : Array[Int],
@@ -237,7 +238,10 @@ fn validate_component_section_instance(
                           Some(Existing(tidx)) =>
                             match
                               type_sig_of_typeidx(
-                                tidx, type_table, resource_ids,
+                                tidx,
+                                type_table,
+                                resource_ids,
+                                known_sigs=known_type_sigs,
                               ) {
                               Resource(actual_rid) =>
                                 rid_subst.set(expected_rid, actual_rid)
@@ -272,7 +276,10 @@ fn validate_component_section_instance(
                   match sigs.get(name) {
                     Some(Resource(expected_rid)) => {
                       let actual_sig = type_sig_of_typeidx(
-                        idx, type_table, resource_ids,
+                        idx,
+                        type_table,
+                        resource_ids,
+                        known_sigs=known_type_sigs,
                       )
                       match actual_sig {
                         Resource(actual_rid) =>
@@ -297,7 +304,10 @@ fn validate_component_section_instance(
                     Some(req0) => {
                       let req = type_sig_subst_resources(req0, rid_subst)
                       let actual = type_sig_of_typeidx(
-                        idx, type_table, resource_ids,
+                        idx,
+                        type_table,
+                        resource_ids,
+                        known_sigs=known_type_sigs,
                       )
                       if actual != req {
                         match (req, actual) {
@@ -354,7 +364,10 @@ fn validate_component_section_instance(
                           Some(actual) =>
                             Some(
                               funcsig_of_functype(
-                                actual, type_table, resource_ids,
+                                actual,
+                                type_table,
+                                resource_ids,
+                                known_sigs=known_type_sigs,
                               ),
                             )
                           None => None
@@ -411,38 +424,50 @@ fn validate_component_section_instance(
             Some(sig_map) => {
               let out : Map[String, ExportedTypeInfo] = Map([])
               let sig_out : Map[String, TypeSig] = Map([])
+              // Allocate every fresh resource before translating signatures.
+              // Dependent types and aliases must see the same instance-local
+              // identity regardless of export iteration order.
+              for (_, sig) in sig_map.iter() {
+                if sig is Resource(rid) && rid_subst.get(rid) is None {
+                  rid_subst.set(rid, next_resource_id)
+                  next_resource_id += 1
+                }
+              }
               for kv in sig_map.iter() {
                 let (name, sig0) = kv
                 sig_out.set(name, type_sig_subst_resources(sig0, rid_subst))
                 match sig0 {
-                  Resource(rid0) =>
-                    match rid_subst.get(rid0) {
-                      Some(actual_rid) => {
-                        let mut found : Int? = None
-                        for i in 0..<type_table.length() {
-                          if type_sig_of_typeidx(i, type_table, resource_ids) ==
-                            Resource(actual_rid) {
-                            found = Some(i)
-                            break
-                          }
-                        }
-                        match found {
-                          Some(idx) => out.set(name, Existing(idx))
-                          None => out.set(name, Resource(actual_rid))
-                        }
-                      }
-                      None => {
-                        let rid = next_resource_id
-                        next_resource_id += 1
-                        rid_subst.set(rid0, rid)
-                        out.set(name, Resource(rid))
+                  Resource(rid0) => {
+                    let actual_rid = rid_subst.get(rid0).unwrap()
+                    let mut found : Int? = None
+                    for i in 0..<type_table.length() {
+                      if type_sig_of_typeidx(
+                          i,
+                          type_table,
+                          resource_ids,
+                          known_sigs=known_type_sigs,
+                        ) ==
+                        Resource(actual_rid) {
+                        found = Some(i)
+                        break
                       }
                     }
+                    match found {
+                      Some(idx) => out.set(name, Existing(idx))
+                      None => out.set(name, Resource(actual_rid))
+                    }
+                  }
                   _ => {
                     let sig = type_sig_subst_resources(sig0, rid_subst)
                     let mut found : Int? = None
                     for i in 0..<type_table.length() {
-                      if type_sig_of_typeidx(i, type_table, resource_ids) == sig {
+                      if type_sig_of_typeidx(
+                          i,
+                          type_table,
+                          resource_ids,
+                          known_sigs=known_type_sigs,
+                        ) ==
+                        sig {
                         found = Some(i)
                         break
                       }
@@ -546,7 +571,12 @@ fn validate_component_section_instance(
               type_map.set(ex.name, Existing(ex.sortidx.idx))
               type_sig_map.set(
                 ex.name,
-                type_sig_of_typeidx(ex.sortidx.idx, type_table, resource_ids),
+                type_sig_of_typeidx(
+                  ex.sortidx.idx,
+                  type_table,
+                  resource_ids,
+                  known_sigs=known_type_sigs,
+                ),
               )
             }
             Func => {
@@ -565,7 +595,12 @@ fn validate_component_section_instance(
                       Some(ft) =>
                         func_map.set(
                           ex.name,
-                          funcsig_of_functype(ft, type_table, resource_ids),
+                          funcsig_of_functype(
+                            ft,
+                            type_table,
+                            resource_ids,
+                            known_sigs=known_type_sigs,
+                          ),
                         )
                       None => ()
                     }

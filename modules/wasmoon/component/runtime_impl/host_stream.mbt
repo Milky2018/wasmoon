@@ -323,7 +323,7 @@ pub fn HostRuntimeState::new_host_unit_result_future(
 }
 
 ///|
-/// Consume bytes currently offered by a component-owned `stream<u8>`.
+/// Consume bytes currently offered by a component or host `stream<u8>`.
 ///
 /// This method never blocks. `Pending` means the embedding must drive the
 /// component task or its external reactor before polling again.
@@ -338,19 +338,39 @@ pub fn HostRuntimeState::read_host_byte_stream(
     self.stream_table.streams.get(endpoint.stream_id) is Some(state) else {
     raise HostCallError("host byte stream is not live")
   }
+  if state.pending_read is Some(_) {
+    raise HostCallError("cannot concurrently read a host byte stream")
+  }
+  if self.stream_table.host_values.get(endpoint.stream_id) is Some(source) {
+    return match poll_host_value_stream(source, 65536) {
+      Pending => Pending
+      Closed => Closed
+      Values(values) => {
+        let bytes : Array[Byte] = []
+        for value in values {
+          guard value is U8(byte) else {
+            raise HostCallError("host byte stream payload is not u8")
+          }
+          bytes.push(byte.to_byte())
+        }
+        Data(Bytes::from_array(bytes))
+      }
+    }
+  }
   match state.pending_write {
     Some(write) => {
       let remaining = write.buf.values.length() - write.sent
       if remaining > 0 {
         let bytes : Array[Byte] = []
-        for i in write.sent..<write.buf.values.length() {
+        let sent = write.sent + Int::min(remaining, 65536)
+        for i in write.sent..<sent {
           guard write.buf.values[i] is U8(byte) else {
             raise HostCallError("host byte stream payload is not u8")
           }
           bytes.push(byte.to_byte())
         }
-        let sent = write.buf.values.length()
-        if write.writer_handle > 0 && !write.event_enqueued {
+        let complete = sent == write.buf.values.length()
+        if complete && write.writer_handle > 0 && !write.event_enqueued {
           enqueue_waitable_event(
             self.async_state,
             handle_key(write.writer_table.id, write.writer_handle),
@@ -371,7 +391,7 @@ pub fn HostRuntimeState::read_host_byte_stream(
             count: write.count,
             sent,
             writer_handle: write.writer_handle,
-            event_enqueued: true,
+            event_enqueued: complete || write.event_enqueued,
             defer_complete: write.defer_complete,
           }),
           readable_dropped: state.readable_dropped,
@@ -461,8 +481,7 @@ pub fn HostRuntimeState::drop_host_readable_stream(
 ///|
 /// Drop an embedding-owned readable future endpoint.
 ///
-/// Host-created futures have no live writable endpoint. Busy component-owned
-/// futures must be dropped through their canonical ABI operation instead.
+/// A pending producer is notified that the reader was dropped.
 pub fn HostRuntimeState::drop_host_readable_future(
   self : HostRuntimeState,
   table : ResourceTable,
@@ -474,9 +493,26 @@ pub fn HostRuntimeState::drop_host_readable_future(
     self.async_state.futures.get(endpoint.future_id) is Some(state) else {
     raise HostCallError("host future is not live")
   }
-  if state.pending_read is Some(_) || state.pending_write is Some(_) {
+  if state.pending_read is Some(_) {
     raise HostCallError("cannot remove busy host future")
   }
+  if state.pending_write is Some(write) &&
+    self.async_state.future_endpoints.get(
+      handle_key(write.writer_component_id, write.writer_handle),
+    )
+    is Some(_) {
+    enqueue_waitable_event(
+      self.async_state,
+      handle_key(write.writer_component_id, write.writer_handle),
+      {
+        owner_component_id: write.writer_component_id,
+        code: 5,
+        index: write.writer_handle,
+        payload: 1,
+      },
+    )
+  }
+  let host_source = self.async_state.host_future_values.get(endpoint.future_id)
   match self.async_state.host_future_values.get(endpoint.future_id) {
     Some(source) =>
       match source.cancel {
@@ -491,14 +527,64 @@ pub fn HostRuntimeState::drop_host_readable_future(
     pending_read: None,
     pending_write: None,
     readable_dropped: true,
-    writable_dropped: true,
+    writable_dropped: host_source is Some(_) || state.writable_dropped,
     read_done: true,
     write_succeeded: state.write_succeeded,
-    write_observed_readable_drop: state.write_observed_readable_drop,
+    write_observed_readable_drop: state.pending_write is Some(_) ||
+    state.write_observed_readable_drop,
     wrote_value: state.wrote_value,
   })
   remove_waitable_membership(self.async_state, table.id, readable)
   self.async_state.future_endpoints.remove(key)
   free_shared_handle(self.async_state, table.id, readable)
   cleanup_closed_future(self.async_state, endpoint.future_id)
+}
+
+///|
+/// Transfer a readable endpoint between tables in this runtime. Embeddings that
+/// retain guest-provided streams must move them to their own resource table.
+pub fn HostRuntimeState::move_readable_stream(
+  self : HostRuntimeState,
+  source : ResourceTable,
+  destination : ResourceTable,
+  handle : Int,
+) -> Int raise ComponentRuntimeError {
+  guard self.async_state.resource_tables.contains(destination.id) &&
+    self.async_state.stream_table.endpoints.get(handle_key(source.id, handle))
+    is Some(endpoint) &&
+    endpoint.is_readable else {
+    raise HostCallError(
+      "stream transfer requires a live readable endpoint and destination",
+    )
+  }
+  transfer_stream_readable_handle(
+    self.async_state,
+    source.id,
+    destination.id,
+    handle,
+  )
+}
+
+///|
+/// Transfer a readable future while preserving its producer's payload owner.
+pub fn HostRuntimeState::move_readable_future(
+  self : HostRuntimeState,
+  source : ResourceTable,
+  destination : ResourceTable,
+  handle : Int,
+) -> Int raise ComponentRuntimeError {
+  guard self.async_state.resource_tables.contains(destination.id) &&
+    self.async_state.future_endpoints.get(handle_key(source.id, handle))
+    is Some(endpoint) &&
+    endpoint.is_readable else {
+    raise HostCallError(
+      "future transfer requires a live readable endpoint and destination",
+    )
+  }
+  transfer_future_readable_handle(
+    self.async_state,
+    source.id,
+    destination.id,
+    handle,
+  )
 }

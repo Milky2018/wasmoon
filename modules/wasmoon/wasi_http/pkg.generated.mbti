@@ -1,0 +1,77 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "Milky2018/wasmoon/wasi_http"
+
+import {
+  "Milky2018/wasm_component",
+  "Milky2018/wasmoon/component/runtime_impl",
+  "Milky2018/wasmoon/wasi_component",
+  "moonbitlang/async",
+  "moonbitlang/async/cond_var",
+  "moonbitlang/async/io",
+  "moonbitlang/async/socket",
+  "moonbitlang/async/tls",
+  "moonbitlang/core/debug",
+  "moonbitlang/core/ref",
+}
+
+// Values
+
+// Errors
+
+// Types and methods
+pub(all) enum HeaderError {
+  InvalidSyntax
+  Forbidden
+  Immutable
+  SizeExceeded
+} derive(Eq, @debug.Debug)
+pub fn HeaderError::equal(Self, Self) -> Bool
+pub fn HeaderError::not_equal(Self, Self) -> Bool
+pub fn HeaderError::to_repr(Self) -> @debug.Repr
+
+type HttpBody
+
+pub struct HttpFields {
+  entries : Array[(String, Bytes)]
+  immutable : Bool
+}
+pub fn HttpFields::append(Self, String, Bytes) -> Result[Unit, HeaderError]
+pub fn HttpFields::clone(Self) -> Self
+pub fn HttpFields::copy_all(Self) -> Array[(String, Bytes)]
+pub fn HttpFields::delete(Self, String) -> Result[Unit, HeaderError]
+pub fn HttpFields::from_list(entries? : Array[(String, Bytes)]) -> Result[Self, HeaderError]
+pub fn HttpFields::get(Self, String) -> Array[Bytes]
+pub fn HttpFields::has(Self, String) -> Bool
+pub fn HttpFields::set(Self, String, Array[Bytes]) -> Result[Unit, HeaderError]
+
+pub struct HttpHost {
+  linker : @runtime_impl.ComponentLinker
+  runtime : @runtime_impl.HostRuntimeState
+  resources : Map[Int, HttpResource]
+  bodies : Array[HttpBody]
+  wake : @cond_var.Cond
+  pending : Array[HttpInvocation]
+  spawn : @ref.Ref[((async () -> Unit) -> @async.Task[Unit])?]
+  next_id : @ref.Ref[Int]
+  types : Array[@wasm_component.TypeDef?]
+  resource_types : Map[String, @wasm_component.TypeDef?]
+}
+pub fn HttpHost::HttpHost(@runtime_impl.ComponentLinker) -> Self raise @runtime_impl.ComponentRuntimeError
+pub fn HttpHost::add_client(Self, (Array[@runtime_impl.ComponentValue], @runtime_impl.ResourceTable) -> @runtime_impl.HostFuture raise @runtime_impl.ComponentRuntimeError) -> Unit raise @runtime_impl.ComponentRuntimeError
+pub fn HttpHost::add_downstream(Self, @runtime_impl.ComponentInstance) -> Unit raise @runtime_impl.ComponentRuntimeError
+pub fn HttpHost::add_handler(Self, (Array[@runtime_impl.ComponentValue], @runtime_impl.ResourceTable) -> @runtime_impl.HostFuture raise @runtime_impl.ComponentRuntimeError) -> Unit raise @runtime_impl.ComponentRuntimeError
+pub fn HttpHost::add_network_client(Self, (String) -> Bool, allow_address? : (@socket.Addr) -> Bool, trust? : @tls.TrustedRoot) -> Unit raise @runtime_impl.ComponentRuntimeError
+pub fn HttpHost::add_service_base(Self, @wasi_component.WasiComponentCtx, stdout? : &@io.Writer, stderr? : &@io.Writer) -> Unit raise @runtime_impl.ComponentRuntimeError
+pub fn HttpHost::add_types(Self) -> Unit raise @runtime_impl.ComponentRuntimeError
+pub async fn HttpHost::invoke(Self, @runtime_impl.ComponentInstance, String, Array[@runtime_impl.ComponentValue]) -> Array[@runtime_impl.ComponentValue]
+pub fn HttpHost::poll(Self) -> Bool raise @runtime_impl.ComponentRuntimeError
+pub async fn[T] HttpHost::run(Self, async () -> T) -> T
+pub async fn HttpHost::serve_connection(Self, @socket.Tcp, @runtime_impl.ComponentInstance) -> Unit
+
+type HttpInvocation
+
+type HttpResource
+
+// Type aliases
+
+// Traits

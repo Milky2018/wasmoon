@@ -1089,7 +1089,13 @@ fn run_jit_cache_file(
   }
   let debug_tag = if manifest.policy.debug_info { "debug" } else { "no-debug" }
   let revision_tag = cache_revision_file_tag(manifest.codegen_revision)
-  let file_name = "\{run_jit_cache_version}-\{target_tag}-\{os_tag}-\{opt_tag}-\{code_model_tag}-\{call_binding_tag}-\{cancellation_tag}-\{nan_tag}-\{debug_tag}-r\{revision_tag}-s\{digest_hex(source_digest)}-x\{digest_hex(semantic_digest)}.cwasm"
+  let identity = "\{run_jit_cache_version}-\{target_tag}-\{os_tag}-\{opt_tag}-\{code_model_tag}-\{call_binding_tag}-\{cancellation_tag}-\{nan_tag}-\{debug_tag}-r\{revision_tag}-s\{digest_hex(source_digest)}-x\{digest_hex(semantic_digest)}.cwasm"
+  // Hash the complete existing identity, rather than truncating any digest or
+  // revision. Filenames stay bounded even as codegen revision strings grow.
+  let key = digest_hex(
+    Bytes::from_iter(@crypto.sha256(@utf8.encode(identity)).iter()),
+  )
+  let file_name = "\{run_jit_cache_version}-\{key}.cwasm"
   if cache_dir.has_suffix("/") {
     "\{cache_dir}\{file_name}"
   } else {
@@ -1176,10 +1182,34 @@ fn load_run_jit_cache(
 fn save_run_jit_cache(
   cache_file : String,
   artifact : @artifact.Artifact,
-) -> Unit {
-  let bytes = @artifact.encode(artifact) catch { _ => return }
+) -> Result[Unit, String] {
+  let bytes = @artifact.encode(artifact) catch {
+    err => return Err("\{Repr(err)}")
+  }
   @fs.write_bytes_to_file(cache_file, bytes) catch {
-    _ => ()
+    IOError(message) => return Err(message)
+  }
+  Ok(())
+}
+
+///|
+// Opt-in evidence for benchmarks, independent of cache filesystem changes.
+fn report_run_jit_cache(fresh : Bool, write_succeeded : Bool?) -> Unit {
+  guard @env.get_env_var("WASMOON_JIT_CACHE_REPORT") is Some(path) else {
+    return
+  }
+  let report : Json = {
+    "schema_version": 1,
+    "freshly_compiled": fresh,
+    "cache_hit": !fresh,
+    "cache_write_succeeded": match write_succeeded {
+      Some(value) => value.to_json()
+      None => null
+    },
+  }
+  @fs.write_string_to_file(path, report.stringify()) catch {
+    IOError(message) =>
+      @logger.warn("Failed to write JIT cache report: \{message}")
   }
 }
 
@@ -1416,12 +1446,22 @@ fn run_with_jit(
       raise CommandFailure(1)
     }
     Some((loaded, debug_db, fresh_artifact)) => {
+      let mut cache_write_succeeded : Bool? = None
       if fresh_artifact is Some(artifact) && cache_path is Some(path) {
-        if debug {
-          @logger.debug("JIT: cache write \{path}")
+        match save_run_jit_cache(path, artifact) {
+          Ok(_) => {
+            cache_write_succeeded = Some(true)
+            if debug {
+              @logger.debug("JIT: cache write \{path}")
+            }
+          }
+          Err(message) => {
+            cache_write_succeeded = Some(false)
+            @logger.warn("Failed to write JIT cache '\{path}': \{message}")
+          }
         }
-        save_run_jit_cache(path, artifact)
       }
+      report_run_jit_cache(fresh_artifact is Some(_), cache_write_succeeded)
       // Build func_signatures array for JITModule::load
       let func_signatures = build_jit_func_signatures(mod_)
       let external_imports = @wast.build_external_imports_for_jit(

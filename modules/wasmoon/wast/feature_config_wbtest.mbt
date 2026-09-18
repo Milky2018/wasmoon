@@ -26,7 +26,7 @@ test "bulk memory feature rejects instructions and passive segments" {
     } catch {
       _ => true
     }
-    inspect(basic_rejected && contextual_rejected, content="true")
+    debug_inspect(basic_rejected && contextual_rejected, content="true")
     let script = parse(
       "(assert_invalid " + source + " \"bulk memory support is not enabled\")",
     )
@@ -37,9 +37,9 @@ test "bulk memory feature rejects instructions and passive segments" {
       false,
       bulk_memory=false,
     )
-    inspect((disabled.passed, disabled.failed), content="(1, 0)")
+    assert_eq((disabled.passed, disabled.failed), (1, 0))
     let enabled = run_wast_commands(script, ".", false, false)
-    inspect((enabled.passed, enabled.failed), content="(0, 1)")
+    assert_eq((enabled.passed, enabled.failed), (0, 1))
   }
 }
 
@@ -62,5 +62,5 @@ test "disabled bulk memory retains active table64 elements and reference table o
     false,
     bulk_memory=false,
   )
-  inspect((result.passed, result.failed), content="(1, 0)")
+  assert_eq((result.passed, result.failed), (1, 0))
 }

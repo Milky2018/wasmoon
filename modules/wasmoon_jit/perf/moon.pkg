@@ -1,6 +1,5 @@
 import {
   "Milky2018/milkir/optimize",
-  "moonbitlang/core/json",
   "moonbitlang/core/env",
 }
 
