@@ -3,7 +3,7 @@ package "Milky2018/wasmoon/wast"
 
 import {
   "Milky2018/wasm_core/types",
-  "Milky2018/wasm_core/wat",
+  "Milky2018/wasm_core/wat/parser",
   "Milky2018/wasmoon/jit",
   "Milky2018/wasmoon/runtime",
   "Milky2018/wasmoon/wasi",
@@ -51,17 +51,17 @@ pub fn init_jit_globals_from_store(@runtime.ModuleInstance, @runtime.Store, @jit
 
 pub fn init_jit_memories_from_store(@runtime.ModuleInstance, @runtime.Store, @jit.JITModule) -> Array[@wasmoon_jit.MemoryInfo]?
 
-pub fn invoke_action(WastContext, @wat.WastAction) -> Array[@types.Value] raise WastRunnerError
+pub fn invoke_action(WastContext, @parser.WastAction) -> Array[@types.Value] raise WastRunnerError
 
-pub fn parse(String) -> @wat.WastScript raise @wat.WatError
+pub fn parse(String) -> @parser.WastScript raise @parser.WatError
 
 pub fn register_instance_funcrefs_for_jit(@jit.JITModule, @runtime.ModuleInstance, @runtime.Store) -> Unit
 
 pub fn register_owned_instance_funcrefs_for_jit(@jit.JITModule, @runtime.ModuleInstance, @runtime.Store) -> FuncrefRegistration
 
-pub fn run_wast_command(WastContext, @wat.WastCommand, Int, WastResult, String, Bool) -> Unit
+pub fn run_wast_command(WastContext, @parser.WastCommand, Int, WastResult, String, Bool) -> Unit
 
-pub fn run_wast_commands(@wat.WastScript, String, Bool, Bool, bulk_memory? : Bool, stack_switching? : Bool, nan_canonicalization? : Bool, jit_compiler? : JITCompiler?, register_named_modules? : Bool) -> WastResult
+pub fn run_wast_commands(@parser.WastScript, String, Bool, Bool, bulk_memory? : Bool, stack_switching? : Bool, nan_canonicalization? : Bool, jit_compiler? : JITCompiler?, register_named_modules? : Bool) -> WastResult
 
 pub fn sync_jit_memories_to_store(@runtime.ModuleInstance, @runtime.Store, @jit.JITModule) -> Unit
 
@@ -71,9 +71,9 @@ pub fn sync_table_to_jit(@runtime.Table, @wasmoon_jit.JITTable, @jit.JITModule, 
 
 pub fn sync_tables_to_jit(@runtime.ModuleInstance, @runtime.Store, @jit.JITModule, use_subtype_indirect_check? : Bool) -> Unit raise @runtime.RuntimeError
 
-pub fn values_match(@types.Value, @wat.WastValue, func_addrs? : Array[Int]) -> Bool
+pub fn values_match(@types.Value, @parser.WastValue, func_addrs? : Array[Int]) -> Bool
 
-pub fn wast_value_to_runtime(@wat.WastValue, func_addrs? : Array[Int]) -> @types.Value raise WastRunnerError
+pub fn wast_value_to_runtime(@parser.WastValue, func_addrs? : Array[Int]) -> @types.Value raise WastRunnerError
 
 // Errors
 pub(all) suberror JITCoreCallError {
@@ -178,16 +178,16 @@ pub struct WastResult {
 pub fn WastResult::WastResult() -> Self
 
 // Type aliases
-pub using @wat {type WastAction}
+pub using @parser {type WastAction}
 
-pub using @wat {type WastCommand}
+pub using @parser {type WastCommand}
 
-pub using @wat {type WastModuleSource}
+pub using @parser {type WastModuleSource}
 
-pub using @wat {type WastScript}
+pub using @parser {type WastScript}
 
-pub using @wat {type WastValue}
+pub using @parser {type WastValue}
 
-pub using @wat {type WatError}
+pub using @parser {type WatError}
 
 // Traits

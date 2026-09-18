@@ -281,9 +281,9 @@ pub fn run_component_command(
 ///|
 fn component_invoke_success_json(
   path : String,
-  values : Array[@component.ComponentValue],
+  values : Array[@component_runtime.ComponentValue],
 ) -> String {
-  "{\"ok\":true,\"phase\":\"invoke\",\"detail\":\"\{json_escape_string(path)}\",\"result\":\{@component.component_values_to_json(values).stringify()}}"
+  "{\"ok\":true,\"phase\":\"invoke\",\"detail\":\"\{json_escape_string(path)}\",\"result\":\{@component_runtime.component_values_to_json(values).stringify()}}"
 }
 
 ///|
@@ -291,7 +291,7 @@ priv struct ComponentInvokeEvalResult {
   ok : Bool
   phase : String
   detail : String
-  values : Array[@component.ComponentValue]
+  values : Array[@component_runtime.ComponentValue]
 }
 
 ///|
@@ -306,7 +306,10 @@ fn run_component_invoke_eval(
     IOError(error) =>
       return { ok: false, phase: "read", detail: error, values: [], }
   }
-  let runtime = @component.ComponentRuntime(wit_names~, component_implements~)
+  let runtime = @component_runtime.ComponentRuntime(
+    wit_names~,
+    component_implements~,
+  )
   defer runtime.close()
   let instance = runtime.instantiate("invoke", bytes) catch {
     error =>
@@ -337,7 +340,7 @@ fn run_component_invoke_eval(
   }
   let values = []
   for index in 0..<args.length() {
-    let value = @component.parse_component_value_json(
+    let value = @component_runtime.parse_component_value_json(
       args[index],
       function_type.params[index].ty,
     ) catch {
@@ -385,15 +388,17 @@ pub fn run_component_invoke_command(
   if error_format is Json {
     println(component_invoke_success_json(export_path, result.values))
   } else {
-    println(@component.component_values_to_json(result.values).stringify())
+    println(
+      @component_runtime.component_values_to_json(result.values).stringify(),
+    )
   }
   0
 }
 
 ///|
 fn component_command_run_function(
-  instance : @component.ComponentInstance,
-) -> @component.ComponentFunction? {
+  instance : @component_runtime.ComponentInstance,
+) -> @component_runtime.ComponentFunction? {
   for path in ["wasi:cli/run@0.2.11#run", "wasi:cli/run@0.3.0#run"] {
     let bound = try instance.bind(path) catch {
       _ => None
@@ -410,9 +415,9 @@ fn component_command_run_function(
 
 ///|
 fn component_command_status(
-  values : Array[@component.ComponentValue],
+  values : Array[@component_runtime.ComponentValue],
   requested_exit : Int?,
-) -> Int raise @component.ComponentRuntimeError {
+) -> Int raise @component_runtime.ComponentRuntimeError {
   match requested_exit {
     Some(status) => status
     None =>
@@ -505,7 +510,7 @@ fn run_wasi_component_command_with_evidence(
   wit_names : Bool,
   error_format : ComponentErrorFormat,
   use_jit : Bool,
-  on_execution : ((@component.NativeComponentExecutionEvent) -> Unit)?,
+  on_execution : ((@component_runtime.NativeComponentExecutionEvent) -> Unit)?,
   component_implements? : Bool = true,
 ) -> Int {
   let parsed = run_component_command_eval(
@@ -525,13 +530,13 @@ fn run_wasi_component_command_with_evidence(
         e.to_string(),
       )
   }
-  let runtime = @component.ComponentRuntime(
+  let runtime = @component_runtime.ComponentRuntime(
     engine=component_execution_engine(use_jit, on_execution),
     wit_names~,
     component_implements~,
   )
   defer runtime.close()
-  runtime.install(@component.wasi_command_component_host(ctx)) catch {
+  runtime.install(@component_runtime.wasi_command_component_host(ctx)) catch {
     e =>
       return report_component_run_error(
         error_format,

@@ -25,7 +25,7 @@ This document tracks `unsupported` paths in Wasmoon component-model code and cla
 | Validator unsupported core sort | `validator/component_model/component_type_sig.mbt:538` | Binary with unknown `core sort` tag | Reject | Reject (`UnsupportedCoreSort`) | Structured Reject ✅ |
 | Runtime stream payload narrowing | `component/runtime_impl/type_mapping.mbt:21` | stream payload as unsupported valtype | Reject/Trap | Reject (`HostCallError`) | Structured Reject ✅ |
 | Runtime unsupported param/result conversion | `component/runtime_impl/canon_convert.mbt:685` | canonical conversion with non-flattenable unsupported shape | Reject/Trap | Reject (`HostCallError`) | Structured Reject ✅ |
-| CLI component-test unknown command | `cmd/wasmoon/commands/component_script.mbt:1151` | `{ "type": "assert_magic_typo", ... }` | N/A | Fail with `COMP_TEST_UNSUPPORTED_COMMAND` | Structured Reject ✅ |
+| CLI component-test unknown command | `component_conformance/component_script.mbt` | `{ "type": "assert_magic_typo", ... }` | N/A | Fail with `COMP_TEST_UNSUPPORTED_COMMAND` | Structured Reject ✅ |
 | Runner unsupported masking guard | `scripts/run_component_wast.py:742` | `assert_invalid` / `assert_malformed` parse error with `unsupported` | N/A | Now hard-fail (no pass masking) | Structured Reject ✅ |
 
 ## Remaining sweep buckets

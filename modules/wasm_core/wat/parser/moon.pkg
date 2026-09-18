@@ -1,0 +1,10 @@
+import {
+  "Milky2018/wasm_core/types",
+  "Milky2018/wasm_core/parser" @binary_parser,
+  "moonbitlang/core/buffer",
+  "moonbitlang/core/string",
+}
+
+import {
+  "moonbitlang/core/debug",
+} for "wbtest"

@@ -6,7 +6,7 @@ import {
   "Milky2018/wasm_core/types",
   "Milky2018/wasm_milkir",
   "Milky2018/wasm_milkir/frontend/embedding",
-  "Milky2018/wasm_milkir/frontend/ir",
+  "Milky2018/wasm_milkir/frontend/ir/translator",
   "moonbitlang/core/debug",
 }
 
@@ -15,13 +15,13 @@ pub fn lower_function(@embedding.EmbeddingEnvironment, @types.Module, Int) -> @m
 
 pub fn translate_function(@embedding.EmbeddingEnvironment, @types.Module, Int, name? : String, memory_max_override? : Int?) -> @milkir.Function raise LowerError
 
-pub fn translate_function_body(@ir.TranslationContext, String, @types.FuncType, Array[@types.ValueType], Array[@types.Instruction]) -> @milkir.Function
+pub fn translate_function_body(@translator.TranslationContext, String, @types.FuncType, Array[@types.ValueType], Array[@types.Instruction]) -> @milkir.Function
 
-pub fn translation_context_from_module(@types.Module, @embedding.EmbeddingEnvironment, memory_max_override? : Int?, func_base? : Int, import_remap? : Array[Int]) -> @ir.TranslationContext
+pub fn translation_context_from_module(@types.Module, @embedding.EmbeddingEnvironment, memory_max_override? : Int?, func_base? : Int, import_remap? : Array[Int]) -> @translator.TranslationContext
 
 pub fn try_lower_native_function(@embedding.EmbeddingEnvironment, @types.Module, Int) -> @milkir.Function? raise LowerError
 
-pub fn wasm_validation_context(@ir.TranslationContext) -> @wasm_milkir.WasmValidationContext
+pub fn wasm_validation_context(@translator.TranslationContext) -> @wasm_milkir.WasmValidationContext
 
 // Errors
 pub suberror LowerError {
@@ -47,6 +47,6 @@ pub using @embedding {type MemoryDescriptorLayout}
 
 pub using @embedding {type RuntimeLayout}
 
-pub using @ir {type TranslationContext}
+pub using @translator {type TranslationContext}
 
 // Traits

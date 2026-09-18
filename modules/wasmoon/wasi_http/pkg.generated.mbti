@@ -2,7 +2,7 @@
 package "Milky2018/wasmoon/wasi_http"
 
 import {
-  "Milky2018/wasm_component",
+  "Milky2018/wasm_component/model",
   "Milky2018/wasmoon/component/runtime_impl",
   "Milky2018/wasmoon/wasi_component",
   "moonbitlang/async",
@@ -53,8 +53,8 @@ pub struct HttpHost {
   pending : Array[HttpInvocation]
   spawn : @ref.Ref[((async () -> Unit) -> @async.Task[Unit])?]
   next_id : @ref.Ref[Int]
-  types : Array[@wasm_component.TypeDef?]
-  resource_types : Map[String, @wasm_component.TypeDef?]
+  types : Array[@model.TypeDef?]
+  resource_types : Map[String, @model.TypeDef?]
 }
 pub fn HttpHost::HttpHost(@runtime_impl.ComponentLinker) -> Self raise @runtime_impl.ComponentRuntimeError
 pub fn HttpHost::add_client(Self, (Array[@runtime_impl.ComponentValue], @runtime_impl.ResourceTable) -> @runtime_impl.HostFuture raise @runtime_impl.ComponentRuntimeError) -> Unit raise @runtime_impl.ComponentRuntimeError

@@ -17,7 +17,7 @@ fn component_jit_evidence_for_test() -> ComponentJITExecutionEvidence {
 ///|
 fn ComponentJITExecutionEvidence::record(
   self : ComponentJITExecutionEvidence,
-  event : @component.NativeComponentExecutionEvent,
+  event : @component_runtime.NativeComponentExecutionEvent,
 ) -> Unit {
   match event {
     RunToReturn =>

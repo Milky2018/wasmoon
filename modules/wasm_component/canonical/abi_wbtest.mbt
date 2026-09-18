@@ -1,10 +1,10 @@
 ///|
 test "canonical core signatures model indirect parameters and results" {
-  let scalar_params : Array[Param] = []
+  let scalar_params : Array[@model.Param] = []
   for i in 0..<17 {
     scalar_params.push({ label: "p\{i}", ty: Prim(U32), })
   }
-  let record_type = Some(
+  let record_type : TypeDef? = Some(
     Record([
       { label: "x", ty: Prim(U32), },
       { label: "name", ty: Prim(String), },

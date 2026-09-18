@@ -1,15 +1,9 @@
 import {
   "Milky2018/wasm_core/types",
-  "Milky2018/wasm_core/parser",
-  "moonbitlang/core/buffer",
+  "Milky2018/wasm_core/wat/parser",
   "moonbitlang/core/encoding/utf8",
-  "moonbitlang/core/string",
 }
 
 import {
   "moonbitlang/core/debug",
 } for "test"
-
-import {
-  "moonbitlang/core/debug",
-} for "wbtest"

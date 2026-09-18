@@ -2,7 +2,7 @@
 package "Milky2018/wasmoon/component/runtime_impl"
 
 import {
-  "Milky2018/wasm_component",
+  "Milky2018/wasm_component/model",
   "Milky2018/wasm_component/validator",
   "Milky2018/wasm_core/types",
   "Milky2018/wasmoon/runtime",
@@ -140,7 +140,7 @@ pub impl Show for ComponentClosure
 pub(all) enum ComponentExtern {
   Func(ComponentFunc)
   Value(ComponentValue)
-  Type(@wasm_component.TypeDef?)
+  Type(@model.TypeDef?)
   Component(ComponentClosure)
   Instance(ComponentInstance)
   CoreModule(@types.Module)
@@ -157,9 +157,9 @@ pub fn ComponentExtern::to_string(Self) -> String
 pub impl Show for ComponentExtern
 
 pub(all) enum ComponentFunc {
-  Lifted(CoreFuncRef, @wasm_component.FuncType, CanonResources, Array[@wasm_component.TypeDef?], ResourceTable, ComponentInstanceEntryState, CoreFuncRef?, Bool)
-  Host(@wasm_component.FuncType, Array[@wasm_component.TypeDef?], (Array[ComponentValue], ResourceTable) -> Array[ComponentValue] raise ComponentRuntimeError)
-  HostAsync(@wasm_component.FuncType, Array[@wasm_component.TypeDef?], (Array[ComponentValue], ResourceTable) -> HostFuture raise ComponentRuntimeError)
+  Lifted(CoreFuncRef, @model.FuncType, CanonResources, Array[@model.TypeDef?], ResourceTable, ComponentInstanceEntryState, CoreFuncRef?, Bool)
+  Host(@model.FuncType, Array[@model.TypeDef?], (Array[ComponentValue], ResourceTable) -> Array[ComponentValue] raise ComponentRuntimeError)
+  HostAsync(@model.FuncType, Array[@model.TypeDef?], (Array[ComponentValue], ResourceTable) -> HostFuture raise ComponentRuntimeError)
 }
 pub fn ComponentFunc::output(Self, &Logger) -> Unit
 pub fn ComponentFunc::to_repr(Self) -> @debug.Repr
@@ -169,7 +169,7 @@ pub impl @debug.Debug for ComponentFunc
 
 pub(all) struct ComponentInstance {
   name : String
-  types : Array[@wasm_component.TypeDef?]
+  types : Array[@model.TypeDef?]
   funcs : Array[ComponentFunc]
   values : Array[ComponentValue]
   components : Array[ComponentClosure]
@@ -221,7 +221,7 @@ pub fn ComponentLinker::ComponentLinker() -> Self
 pub fn ComponentLinker::add_component(Self, String, @validator.ValidatedComponent) -> Unit raise ComponentRuntimeError
 pub fn ComponentLinker::add_core_instance(Self, String, CoreInstance) -> Unit raise ComponentRuntimeError
 pub fn ComponentLinker::add_core_module(Self, String, @types.Module) -> Unit raise ComponentRuntimeError
-pub fn ComponentLinker::add_func(Self, String, @wasm_component.FuncType, (Array[ComponentValue]) -> Array[ComponentValue] raise ComponentRuntimeError) -> Unit raise ComponentRuntimeError
+pub fn ComponentLinker::add_func(Self, String, @model.FuncType, (Array[ComponentValue]) -> Array[ComponentValue] raise ComponentRuntimeError) -> Unit raise ComponentRuntimeError
 pub fn ComponentLinker::add_import(Self, String, ComponentExtern) -> Unit raise ComponentRuntimeError
 pub fn ComponentLinker::add_instance(Self, String, ComponentInstance) -> Unit raise ComponentRuntimeError
 pub fn ComponentLinker::add_value(Self, String, ComponentValue) -> Unit raise ComponentRuntimeError
@@ -232,7 +232,7 @@ pub fn ComponentLinker::get_store(Self) -> @runtime.Store
 pub fn ComponentLinker::host_instance_builder(Self, String, HostRuntimeState) -> HostInstanceBuilder
 pub fn ComponentLinker::host_runtime_state(Self) -> HostRuntimeState raise ComponentRuntimeError
 pub fn ComponentLinker::instantiate(Self, String, @validator.ValidatedComponent) -> ComponentInstance raise ComponentRuntimeError
-pub fn ComponentLinker::new_host_resource_type(Self) -> @wasm_component.TypeDef?
+pub fn ComponentLinker::new_host_resource_type(Self) -> @model.TypeDef?
 pub fn ComponentLinker::with_core_execution_engine(CoreExecutionEngine) -> Self
 
 pub(all) enum ComponentValue {
@@ -249,7 +249,7 @@ pub(all) enum ComponentValue {
   F64(Double)
   Char(Char)
   String(String)
-  EncodedString(String, @wasm_component.StringEncoding, Int)
+  EncodedString(String, @model.StringEncoding, Int)
   GuestString(CanonicalGuestString)
   ErrorContext(String)
   List(Array[ComponentValue])
@@ -410,12 +410,12 @@ pub(all) enum HostFutureValuePoll {
 pub fn HostFutureValuePoll::to_repr(Self) -> @debug.Repr
 
 type HostInstanceBuilder
-pub fn HostInstanceBuilder::add_async_func(Self, String, @wasm_component.FuncType, (Array[ComponentValue], ResourceTable) -> HostFuture raise ComponentRuntimeError) -> Unit raise ComponentRuntimeError
-pub fn HostInstanceBuilder::add_func(Self, String, @wasm_component.FuncType, (Array[ComponentValue], ResourceTable) -> Array[ComponentValue] raise ComponentRuntimeError) -> Unit raise ComponentRuntimeError
+pub fn HostInstanceBuilder::add_async_func(Self, String, @model.FuncType, (Array[ComponentValue], ResourceTable) -> HostFuture raise ComponentRuntimeError) -> Unit raise ComponentRuntimeError
+pub fn HostInstanceBuilder::add_func(Self, String, @model.FuncType, (Array[ComponentValue], ResourceTable) -> Array[ComponentValue] raise ComponentRuntimeError) -> Unit raise ComponentRuntimeError
 pub fn HostInstanceBuilder::add_instance(Self, String, ComponentInstance) -> Unit raise ComponentRuntimeError
 pub fn HostInstanceBuilder::add_type(Self, String, Int) -> Unit raise ComponentRuntimeError
 pub fn HostInstanceBuilder::finish(Self) -> ComponentInstance
-pub fn HostInstanceBuilder::set_type_space(Self, Array[@wasm_component.TypeDef?]) -> Unit raise ComponentRuntimeError
+pub fn HostInstanceBuilder::set_type_space(Self, Array[@model.TypeDef?]) -> Unit raise ComponentRuntimeError
 
 type HostResourceDestructor
 pub fn HostResourceDestructor::HostResourceDestructor((Int) -> Unit) -> Self
@@ -429,12 +429,12 @@ pub fn HostRuntimeState::drop_host_readable_stream(Self, ResourceTable, Int) -> 
 pub fn HostRuntimeState::move_readable_future(Self, ResourceTable, ResourceTable, Int) -> Int raise ComponentRuntimeError
 pub fn HostRuntimeState::move_readable_stream(Self, ResourceTable, ResourceTable, Int) -> Int raise ComponentRuntimeError
 pub fn HostRuntimeState::new_host_byte_stream(Self, ResourceTable, Bytes) -> Int raise ComponentRuntimeError
-pub fn HostRuntimeState::new_host_call_future(Self, ResourceTable, @wasm_component.ValType, Array[@wasm_component.TypeDef?], HostFuture) -> Int raise ComponentRuntimeError
-pub fn HostRuntimeState::new_host_unit_result_future(Self, ResourceTable, @wasm_component.ValType, Array[@wasm_component.TypeDef?], error_case? : Int) -> Int raise ComponentRuntimeError
-pub fn HostRuntimeState::new_host_value_future(Self, ResourceTable, @wasm_component.ValType, Array[@wasm_component.TypeDef?], ComponentValue) -> Int raise ComponentRuntimeError
-pub fn HostRuntimeState::new_host_value_future_source(Self, ResourceTable, @wasm_component.ValType, Array[@wasm_component.TypeDef?], () -> HostFutureValuePoll raise ComponentRuntimeError, () -> Unit raise ComponentRuntimeError) -> Int raise ComponentRuntimeError
-pub fn HostRuntimeState::new_host_value_stream(Self, ResourceTable, @wasm_component.ValType, Array[@wasm_component.TypeDef?], Array[ComponentValue]) -> Int raise ComponentRuntimeError
-pub fn HostRuntimeState::new_host_value_stream_source(Self, ResourceTable, @wasm_component.ValType, Array[@wasm_component.TypeDef?], (Int) -> HostValueStreamPoll raise ComponentRuntimeError, () -> Unit) -> Int raise ComponentRuntimeError
+pub fn HostRuntimeState::new_host_call_future(Self, ResourceTable, @model.ValType, Array[@model.TypeDef?], HostFuture) -> Int raise ComponentRuntimeError
+pub fn HostRuntimeState::new_host_unit_result_future(Self, ResourceTable, @model.ValType, Array[@model.TypeDef?], error_case? : Int) -> Int raise ComponentRuntimeError
+pub fn HostRuntimeState::new_host_value_future(Self, ResourceTable, @model.ValType, Array[@model.TypeDef?], ComponentValue) -> Int raise ComponentRuntimeError
+pub fn HostRuntimeState::new_host_value_future_source(Self, ResourceTable, @model.ValType, Array[@model.TypeDef?], () -> HostFutureValuePoll raise ComponentRuntimeError, () -> Unit raise ComponentRuntimeError) -> Int raise ComponentRuntimeError
+pub fn HostRuntimeState::new_host_value_stream(Self, ResourceTable, @model.ValType, Array[@model.TypeDef?], Array[ComponentValue]) -> Int raise ComponentRuntimeError
+pub fn HostRuntimeState::new_host_value_stream_source(Self, ResourceTable, @model.ValType, Array[@model.TypeDef?], (Int) -> HostValueStreamPoll raise ComponentRuntimeError, () -> Unit) -> Int raise ComponentRuntimeError
 pub fn HostRuntimeState::read_host_byte_stream(Self, ResourceTable, Int) -> HostByteStreamRead raise ComponentRuntimeError
 pub fn HostRuntimeState::read_host_value_future(Self, ResourceTable, Int) -> HostFutureValuePoll raise ComponentRuntimeError
 pub fn HostRuntimeState::resource_table(Self) -> ResourceTable
@@ -468,7 +468,7 @@ pub(all) struct ResourceHandle {
   rep : Int
   dtor : CoreFuncRef?
   host_dtor : HostResourceDestructor?
-  kind : @wasm_component.ResourceKind
+  kind : @model.ResourceKind
   impl_component_id : Int
   own : Bool
   borrow_scope : Int64?

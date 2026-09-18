@@ -1,5 +1,5 @@
 // SIMD instruction translation (V128 / SIMD / relaxed SIMD)
-// Split from translator_instr.mbt for maintainability
+// SIMD instruction translation.
 
 ///|
 /// Translate SIMD instructions

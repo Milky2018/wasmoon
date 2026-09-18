@@ -571,7 +571,7 @@ fn Parser::parse_wast_module_command(
       self.advance()
       let bytes = self.parse_wast_binary_module()
       self.expect_rparen()
-      let mod_ = @parser.parse_module(bytes) catch {
+      let mod_ = @binary_parser.parse_module(bytes) catch {
         e => return ModuleBinaryFailed(e.to_string())
       }
       Module(mod_, name)
@@ -604,7 +604,7 @@ fn Parser::parse_wast_module_command(
           self.advance()
           let bytes = self.parse_wast_binary_module()
           self.expect_rparen()
-          let mod_ = @parser.parse_module(bytes) catch {
+          let mod_ = @binary_parser.parse_module(bytes) catch {
             e => return ModuleBinaryFailed(e.to_string())
           }
           ModuleDefinition(mod_, final_name)
