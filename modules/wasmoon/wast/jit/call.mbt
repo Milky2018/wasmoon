@@ -23,7 +23,7 @@ fn encode_jit_entry_args(
   args : Array[@types.Value],
   param_types : Array[@types.ValueType],
   store : @runtime.Store,
-  jit_module : @jit.JITModule,
+  jit_module : @compiled_jit.JITModule,
   instance : @runtime.ModuleInstance,
 ) -> Array[Int64] raise JITCoreCallError {
   if args.length() != param_types.length() {
@@ -50,7 +50,7 @@ fn decode_jit_entry_results(
   results : Array[Int64],
   result_types : Array[@types.ValueType],
   store : @runtime.Store,
-  jit_module : @jit.JITModule,
+  jit_module : @compiled_jit.JITModule,
   instance : @runtime.ModuleInstance,
 ) -> Array[@types.Value] raise JITCoreCallError {
   let values : Array[@types.Value] = []
@@ -130,7 +130,7 @@ fn finish_jit_core_environment(
 ///|
 fn JITModuleContext::map_jit_call_error(
   self : JITModuleContext,
-  error : @jit.JITTrap,
+  error : @compiled_jit.JITTrap,
   invocation_id : Int64,
 ) -> JITCoreCallError {
   match error {
@@ -178,7 +178,7 @@ struct JITCoreContinuation {
   store : @runtime.Store
   instance : @runtime.ModuleInstance
   result_types : Array[@types.ValueType]
-  call : @jit.JITCallContinuation
+  call : @compiled_jit.JITCallContinuation
   invocation : @wasmoon_jit.NativeInvocationHandle
   active : Array[Bool]
 }
@@ -186,7 +186,7 @@ struct JITCoreContinuation {
 ///|
 fn JITCoreContinuation::finish(
   self : JITCoreContinuation,
-  outcome : @jit.JITContinuationOutcome,
+  outcome : @compiled_jit.JITContinuationOutcome,
 ) -> JITCoreCallOutcome raise JITCoreCallError {
   match outcome {
     JITSuspended(reason, _) => {

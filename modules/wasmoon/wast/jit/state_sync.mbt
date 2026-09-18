@@ -12,7 +12,7 @@
 pub fn init_jit_memories_from_store(
   instance : @runtime.ModuleInstance,
   store : @runtime.Store,
-  jm : @jit.JITModule,
+  jm : @compiled_jit.JITModule,
 ) -> Array[@wasmoon_jit.MemoryInfo]? {
   if instance.mem_addrs.is_empty() {
     return Some([])
@@ -38,7 +38,7 @@ pub fn init_jit_memories_from_store(
 pub fn sync_jit_memories_to_store(
   _instance : @runtime.ModuleInstance,
   _store : @runtime.Store,
-  _jm : @jit.JITModule,
+  _jm : @compiled_jit.JITModule,
 ) -> Unit {
   ()
 }

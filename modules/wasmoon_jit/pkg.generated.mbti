@@ -10,6 +10,7 @@ import {
   "Milky2018/wasm_core/types",
   "Milky2018/wasm_milkir",
   "Milky2018/wasmoon_jit/artifact",
+  "Milky2018/wasmoon_jit/artifact/loader",
   "Milky2018/wasmoon_jit/perf",
   "Milky2018/x64_target",
   "moonbitlang/core/debug",
@@ -27,7 +28,7 @@ pub fn alloc_memory(Int64) -> Int64
 
 pub fn alloc_memory_desc(Int64, Int64?, is_memory64? : Bool, page_size_log2? : Int, is_shared? : Bool) -> Int64
 
-pub fn artifact_compatibility(@artifact.CompatibilityManifest, available_cpu_features~ : Array[@artifact.CpuFeature], runtime_symbols~ : Array[@native_types.ExternalSymbol], data_symbols~ : Array[@native_types.DataSymbol]) -> ArtifactCompatibility
+pub fn artifact_compatibility(@artifact.CompatibilityManifest, available_cpu_features~ : Array[@artifact.CpuFeature], runtime_symbols~ : Array[@native_types.ExternalSymbol], data_symbols~ : Array[@native_types.DataSymbol]) -> @loader.ArtifactCompatibility
 
 pub fn artifact_module_identity(String, Bytes, Bytes) -> @artifact.ModuleIdentity
 
@@ -141,7 +142,7 @@ pub fn is_wasi_exit_trap_code(Int) -> Bool
 
 pub fn jit_trap_message(Int) -> String
 
-pub fn load_artifact(Bytes, ArtifactCompatibility, limits? : @artifact.DecodeLimits) -> LoadedArtifact raise ArtifactLoadError
+pub fn load_artifact(Bytes, @loader.ArtifactCompatibility, limits? : @artifact.DecodeLimits) -> @loader.LoadedArtifact raise @loader.ArtifactLoadError
 
 pub fn make_cstring(String) -> FixedArray[Byte]
 
@@ -217,7 +218,7 @@ pub fn value_to_slot(@types.Value) -> GcSlot
 
 pub fn value_type_may_hold_gc_ref(@types.ValueType) -> Bool
 
-pub fn verify_artifact(@artifact.Artifact, ArtifactCompatibility) -> LoadedArtifact raise ArtifactLoadError
+pub fn verify_artifact(@artifact.Artifact, @loader.ArtifactCompatibility) -> @loader.LoadedArtifact raise @loader.ArtifactLoadError
 
 pub fn vmcontext_layout() -> VMContextLayout
 
@@ -232,31 +233,6 @@ pub fn wasm_trap_payload(String) -> Int
 pub fn wasmoon_runtime_external_symbols() -> Array[@native_types.ExternalSymbol]
 
 // Errors
-pub suberror ArtifactIncompatible {
-  TargetMismatch(expected~ : @artifact.TargetSpec, actual~ : @artifact.TargetSpec)
-  MissingCpuFeature(name~ : String)
-  DuplicateCpuFeature(name~ : String)
-  JitAbiVersionMismatch(expected~ : Int, actual~ : Int)
-  CodegenRevisionMismatch(expected~ : String, actual~ : String)
-  ModuleIdentityMismatch(expected~ : @artifact.ModuleIdentity, actual~ : @artifact.ModuleIdentity)
-  CompilationPolicyMismatch(expected~ : @artifact.CompilationPolicy, actual~ : @artifact.CompilationPolicy)
-  DuplicateFunctionIndex(index~ : Int)
-  DuplicateSymbol(name~ : String)
-  UnknownSymbol(kind~ : String, name~ : String)
-} derive(Eq, @debug.Debug)
-pub fn ArtifactIncompatible::equal(Self, Self) -> Bool
-pub fn ArtifactIncompatible::not_equal(Self, Self) -> Bool
-pub fn ArtifactIncompatible::to_repr(Self) -> @debug.Repr
-
-pub suberror ArtifactLoadError {
-  DecodeFailed(cause~ : @artifact.ArtifactDecodeError)
-  Incompatible(cause~ : ArtifactIncompatible)
-  CodeObjectInvalid(cause~ : @code_object.CodeObjectVerifyError)
-} derive(Eq, @debug.Debug)
-pub fn ArtifactLoadError::equal(Self, Self) -> Bool
-pub fn ArtifactLoadError::not_equal(Self, Self) -> Bool
-pub fn ArtifactLoadError::to_repr(Self) -> @debug.Repr
-
 pub(all) suberror CHeapError {
   OutOfBoundsArrayAccess
   NullReference
@@ -348,20 +324,6 @@ pub fn NativeFiberError::to_string(Self) -> String
 pub impl Show for NativeFiberError
 
 // Types and methods
-pub(all) struct ArtifactCompatibility {
-  target : @artifact.TargetSpec
-  available_cpu_features : Array[@artifact.CpuFeature]
-  jit_abi_version : Int
-  codegen_revision : String
-  module_identity : @artifact.ModuleIdentity
-  policy : @artifact.CompilationPolicy
-  runtime_symbols : Array[@native_types.ExternalSymbol]
-  data_symbols : Array[@native_types.DataSymbol]
-} derive(Eq, @debug.Debug)
-pub fn ArtifactCompatibility::equal(Self, Self) -> Bool
-pub fn ArtifactCompatibility::not_equal(Self, Self) -> Bool
-pub fn ArtifactCompatibility::to_repr(Self) -> @debug.Repr
-
 pub struct BacktraceFrame {
   pc : Int64
   name : String
@@ -628,7 +590,7 @@ pub struct JitCodeInstaller {
   // private fields
 }
 pub fn JitCodeInstaller::current(Self) -> InstalledCode?
-pub fn JitCodeInstaller::install(Self, LoadedArtifact) -> InstalledCode raise JitInstallError
+pub fn JitCodeInstaller::install(Self, @loader.LoadedArtifact) -> InstalledCode raise JitInstallError
 pub fn JitCodeInstaller::install_trampoline(Self, Array[Int]) -> InstalledTrampoline raise JitInstallError
 pub fn JitCodeInstaller::new((@code_object.RelocationTarget) -> Int64?) -> Self
 
@@ -651,13 +613,6 @@ pub struct JitPipelineDiagnostics {
   machine_code : String
 } derive(@debug.Debug)
 pub fn JitPipelineDiagnostics::to_repr(Self) -> @debug.Repr
-
-pub struct LoadedArtifact {
-  artifact : @artifact.Artifact
-  code_objects : Array[@code_object.UnlinkedCodeObject]
-}
-pub fn LoadedArtifact::artifact(Self) -> @artifact.Artifact
-pub fn LoadedArtifact::code_objects(Self) -> Array[@code_object.UnlinkedCodeObject]
 
 pub(all) struct MemoryDescriptorLayout {
   base_offset : Int
@@ -987,5 +942,12 @@ pub(all) struct WasmTrapFrame {
 }
 
 // Type aliases
+pub using @loader {type ArtifactCompatibility}
+
+pub using @loader {type ArtifactIncompatible}
+
+pub using @loader {type ArtifactLoadError}
+
+pub using @loader {type LoadedArtifact}
 
 // Traits

@@ -1,5 +1,5 @@
 ///|
-priv enum RawLaneSize {
+pub(all) enum RawLaneSize {
   B8
   H16
   S32
@@ -12,7 +12,7 @@ impl Show for RawLaneSize with fn output(self, logger) {
 }
 
 ///|
-priv enum RawCondition {
+pub(all) enum RawCondition {
   RawEq
   RawNe
   RawHs
@@ -29,3 +29,6 @@ priv enum RawCondition {
   RawLe
   RawAl
 }
+
+///|
+pub extend RawLaneSize with Debug::{to_repr}

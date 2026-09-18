@@ -1,4 +1,7 @@
 ///|
+using @artifact_test_support {loader_artifact, loader_compatibility}
+
+///|
 struct InstalledImportSnapshot {
   function_index : Int
   symbol : String

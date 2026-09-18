@@ -6,6 +6,7 @@ import {
   "Milky2018/wasmoon/cmd/wasmoon/commands/component",
   "Milky2018/wasmoon_jit",
   "Milky2018/wasmoon_jit/artifact",
+  "Milky2018/wasmoon_jit/artifact/loader",
   "Milky2018/wasmoon_jit/perf",
 }
 
@@ -42,7 +43,7 @@ pub fn run_wasm(String, String?, Array[String], Array[String], Array[String], Ar
 
 pub async fn serve_http(String, Array[String], String, String, Bool, envs? : Array[String]) -> Int
 
-pub fn verify_compiled_jit_artifact(@artifact.Artifact) -> @wasmoon_jit.LoadedArtifact raise @wasmoon_jit.ArtifactLoadError
+pub fn verify_compiled_jit_artifact(@artifact.Artifact) -> @loader.LoadedArtifact raise @loader.ArtifactLoadError
 
 // Errors
 

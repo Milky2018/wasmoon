@@ -10,10 +10,22 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts"))
 
-from audit_component_security import audit_repo
+from audit_component_security import analyze_interface_owners, audit_repo
 
 
 class ComponentSecurityAuditTests(unittest.TestCase):
+    def test_fully_qualified_interface_owners(self) -> None:
+        analysis = analyze_interface_owners(
+            "pub fn invoke(@Milky2018/wasmoon/jit.JITModule)"
+            " -> @Milky2018/wasmoon/component/runtime_impl.ComponentRuntime\n"
+            "pub fn unresolved(@missing.Value) -> Unit\n"
+        )
+        self.assertEqual(analysis.owners, (
+            "Milky2018/wasmoon/component/runtime_impl",
+            "Milky2018/wasmoon/jit",
+        ))
+        self.assertEqual(analysis.unresolved_aliases, ("missing",))
+
     def create_fixture(self, root: Path) -> None:
         manifest = {
             "schema_version": 1,

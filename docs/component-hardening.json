@@ -35,7 +35,7 @@
     "termination_allowlist": [],
     "unsafe_conversion_allowlist": [
       {
-        "path": "modules/wasm_component/binary.mbt",
+        "path": "modules/wasm_component/model/binary.mbt",
         "max_occurrences": 4,
         "rationale": "UTF-8 decoder validates byte and scalar ranges before conversion."
       },

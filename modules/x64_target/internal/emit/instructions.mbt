@@ -2,7 +2,7 @@
 /// x86_64 instruction encoding helpers used by the target emitter.
 
 ///|
-fn emit_u32_le(mc : CodeBuffer, v : Int) -> Unit {
+pub fn emit_u32_le(mc : CodeBuffer, v : Int) -> Unit {
   mc.emit_byte(v & 255)
   mc.emit_byte((v >> 8) & 255)
   mc.emit_byte((v >> 16) & 255)
@@ -20,7 +20,7 @@ fn emit_u64_le(mc : CodeBuffer, v : Int64) -> Unit {
 }
 
 ///|
-fn emit_rex_w(mc : CodeBuffer, r : Int, b : Int) -> Unit {
+pub fn emit_rex_w(mc : CodeBuffer, r : Int, b : Int) -> Unit {
   // REX prefix: 0100WRXB. We only need W=1 and R/B for now.
   let rex = 0x48 | ((r & 1) << 2) | (b & 1)
   mc.emit_byte(rex)
@@ -41,7 +41,7 @@ fn validate_reg_idx_0_15(kind : String, idx : Int) -> Unit {
 }
 
 ///|
-fn emit_modrm(mc : CodeBuffer, mod_ : Int, reg : Int, rm : Int) -> Unit {
+pub fn emit_modrm(mc : CodeBuffer, mod_ : Int, reg : Int, rm : Int) -> Unit {
   validate_reg_idx_0_15("modrm.reg", reg)
   validate_reg_idx_0_15("modrm.rm", rm)
   let b = ((mod_ & 3) << 6) | ((reg & 7) << 3) | (rm & 7)
@@ -62,7 +62,7 @@ fn emit_disp32(mc : CodeBuffer, disp : Int) -> Unit {
 }
 
 ///|
-fn CodeBuffer::x86_emit_mov_imm64(
+pub fn CodeBuffer::x86_emit_mov_imm64(
   self : CodeBuffer,
   dst : Int,
   imm : Int64,
@@ -75,7 +75,11 @@ fn CodeBuffer::x86_emit_mov_imm64(
 }
 
 ///|
-fn CodeBuffer::x86_emit_add_rr(self : CodeBuffer, dst : Int, src : Int) -> Unit {
+pub fn CodeBuffer::x86_emit_add_rr(
+  self : CodeBuffer,
+  dst : Int,
+  src : Int,
+) -> Unit {
   // add r/m64, r64: REX.W + 01 /r (dst += src)
   let r = (src >> 3) & 1
   let b = (dst >> 3) & 1
@@ -85,7 +89,7 @@ fn CodeBuffer::x86_emit_add_rr(self : CodeBuffer, dst : Int, src : Int) -> Unit 
 }
 
 ///|
-fn CodeBuffer::x86_emit_add_r_imm8(
+pub fn CodeBuffer::x86_emit_add_r_imm8(
   self : CodeBuffer,
   dst : Int,
   imm : Int,
@@ -100,7 +104,7 @@ fn CodeBuffer::x86_emit_add_r_imm8(
 }
 
 ///|
-fn CodeBuffer::x86_emit_add_r_imm32(
+pub fn CodeBuffer::x86_emit_add_r_imm32(
   self : CodeBuffer,
   dst : Int,
   imm : Int,
@@ -114,7 +118,7 @@ fn CodeBuffer::x86_emit_add_r_imm32(
 }
 
 ///|
-fn CodeBuffer::x86_emit_add_rr32(
+pub fn CodeBuffer::x86_emit_add_rr32(
   self : CodeBuffer,
   dst : Int,
   src : Int,
@@ -130,7 +134,11 @@ fn CodeBuffer::x86_emit_add_rr32(
 }
 
 ///|
-fn CodeBuffer::x86_emit_sub_rr(self : CodeBuffer, dst : Int, src : Int) -> Unit {
+pub fn CodeBuffer::x86_emit_sub_rr(
+  self : CodeBuffer,
+  dst : Int,
+  src : Int,
+) -> Unit {
   // sub r/m64, r64: REX.W + 29 /r (dst -= src)
   let r = (src >> 3) & 1
   let b = (dst >> 3) & 1
@@ -140,7 +148,7 @@ fn CodeBuffer::x86_emit_sub_rr(self : CodeBuffer, dst : Int, src : Int) -> Unit 
 }
 
 ///|
-fn CodeBuffer::x86_emit_sub_rr32(
+pub fn CodeBuffer::x86_emit_sub_rr32(
   self : CodeBuffer,
   dst : Int,
   src : Int,
@@ -156,7 +164,11 @@ fn CodeBuffer::x86_emit_sub_rr32(
 }
 
 ///|
-fn CodeBuffer::x86_emit_and_rr(self : CodeBuffer, dst : Int, src : Int) -> Unit {
+pub fn CodeBuffer::x86_emit_and_rr(
+  self : CodeBuffer,
+  dst : Int,
+  src : Int,
+) -> Unit {
   // and r/m64, r64: REX.W + 21 /r
   let r = (src >> 3) & 1
   let b = (dst >> 3) & 1
@@ -166,7 +178,7 @@ fn CodeBuffer::x86_emit_and_rr(self : CodeBuffer, dst : Int, src : Int) -> Unit 
 }
 
 ///|
-fn CodeBuffer::x86_emit_and_rr32(
+pub fn CodeBuffer::x86_emit_and_rr32(
   self : CodeBuffer,
   dst : Int,
   src : Int,
@@ -182,7 +194,11 @@ fn CodeBuffer::x86_emit_and_rr32(
 }
 
 ///|
-fn CodeBuffer::x86_emit_or_rr(self : CodeBuffer, dst : Int, src : Int) -> Unit {
+pub fn CodeBuffer::x86_emit_or_rr(
+  self : CodeBuffer,
+  dst : Int,
+  src : Int,
+) -> Unit {
   // or r/m64, r64: REX.W + 09 /r
   let r = (src >> 3) & 1
   let b = (dst >> 3) & 1
@@ -192,7 +208,7 @@ fn CodeBuffer::x86_emit_or_rr(self : CodeBuffer, dst : Int, src : Int) -> Unit {
 }
 
 ///|
-fn CodeBuffer::x86_emit_or_rr32(
+pub fn CodeBuffer::x86_emit_or_rr32(
   self : CodeBuffer,
   dst : Int,
   src : Int,
@@ -208,7 +224,11 @@ fn CodeBuffer::x86_emit_or_rr32(
 }
 
 ///|
-fn CodeBuffer::x86_emit_xor_rr(self : CodeBuffer, dst : Int, src : Int) -> Unit {
+pub fn CodeBuffer::x86_emit_xor_rr(
+  self : CodeBuffer,
+  dst : Int,
+  src : Int,
+) -> Unit {
   // xor r/m64, r64: REX.W + 31 /r
   let r = (src >> 3) & 1
   let b = (dst >> 3) & 1
@@ -218,7 +238,7 @@ fn CodeBuffer::x86_emit_xor_rr(self : CodeBuffer, dst : Int, src : Int) -> Unit 
 }
 
 ///|
-fn CodeBuffer::x86_emit_xor_rr32(
+pub fn CodeBuffer::x86_emit_xor_rr32(
   self : CodeBuffer,
   dst : Int,
   src : Int,
@@ -234,7 +254,7 @@ fn CodeBuffer::x86_emit_xor_rr32(
 }
 
 ///|
-fn CodeBuffer::x86_emit_imul_rr(
+pub fn CodeBuffer::x86_emit_imul_rr(
   self : CodeBuffer,
   dst : Int,
   src : Int,
@@ -249,7 +269,7 @@ fn CodeBuffer::x86_emit_imul_rr(
 }
 
 ///|
-fn CodeBuffer::x86_emit_imul_rr32(
+pub fn CodeBuffer::x86_emit_imul_rr32(
   self : CodeBuffer,
   dst : Int,
   src : Int,
@@ -266,7 +286,7 @@ fn CodeBuffer::x86_emit_imul_rr32(
 }
 
 ///|
-fn CodeBuffer::x86_emit_not_r64(self : CodeBuffer, reg : Int) -> Unit {
+pub fn CodeBuffer::x86_emit_not_r64(self : CodeBuffer, reg : Int) -> Unit {
   // not r/m64: REX.W + F7 /2
   let b = (reg >> 3) & 1
   emit_rex_w(self, 0, b)
@@ -275,7 +295,7 @@ fn CodeBuffer::x86_emit_not_r64(self : CodeBuffer, reg : Int) -> Unit {
 }
 
 ///|
-fn CodeBuffer::x86_emit_neg_r64(self : CodeBuffer, reg : Int) -> Unit {
+pub fn CodeBuffer::x86_emit_neg_r64(self : CodeBuffer, reg : Int) -> Unit {
   // neg r/m64: REX.W + F7 /3
   let b = (reg >> 3) & 1
   emit_rex_w(self, 0, b)
@@ -284,7 +304,7 @@ fn CodeBuffer::x86_emit_neg_r64(self : CodeBuffer, reg : Int) -> Unit {
 }
 
 ///|
-fn CodeBuffer::x86_emit_not_r32(self : CodeBuffer, reg : Int) -> Unit {
+pub fn CodeBuffer::x86_emit_not_r32(self : CodeBuffer, reg : Int) -> Unit {
   // not r/m32: F7 /2
   let b = (reg >> 3) & 1
   if b != 0 {
@@ -295,7 +315,7 @@ fn CodeBuffer::x86_emit_not_r32(self : CodeBuffer, reg : Int) -> Unit {
 }
 
 ///|
-fn CodeBuffer::x86_emit_neg_r32(self : CodeBuffer, reg : Int) -> Unit {
+pub fn CodeBuffer::x86_emit_neg_r32(self : CodeBuffer, reg : Int) -> Unit {
   // neg r/m32: F7 /3
   let b = (reg >> 3) & 1
   if b != 0 {
@@ -306,7 +326,7 @@ fn CodeBuffer::x86_emit_neg_r32(self : CodeBuffer, reg : Int) -> Unit {
 }
 
 ///|
-fn CodeBuffer::x86_emit_shl_r_cl(self : CodeBuffer, dst : Int) -> Unit {
+pub fn CodeBuffer::x86_emit_shl_r_cl(self : CodeBuffer, dst : Int) -> Unit {
   // shl r/m64, cl: REX.W + D3 /4
   let b = (dst >> 3) & 1
   emit_rex_w(self, 0, b)
@@ -315,7 +335,7 @@ fn CodeBuffer::x86_emit_shl_r_cl(self : CodeBuffer, dst : Int) -> Unit {
 }
 
 ///|
-fn CodeBuffer::x86_emit_shl_r32_cl(self : CodeBuffer, dst : Int) -> Unit {
+pub fn CodeBuffer::x86_emit_shl_r32_cl(self : CodeBuffer, dst : Int) -> Unit {
   // shl r/m32, cl: D3 /4
   let b = (dst >> 3) & 1
   if b != 0 {
@@ -326,7 +346,7 @@ fn CodeBuffer::x86_emit_shl_r32_cl(self : CodeBuffer, dst : Int) -> Unit {
 }
 
 ///|
-fn CodeBuffer::x86_emit_shr_r_cl(self : CodeBuffer, dst : Int) -> Unit {
+pub fn CodeBuffer::x86_emit_shr_r_cl(self : CodeBuffer, dst : Int) -> Unit {
   // shr r/m64, cl: REX.W + D3 /5
   let b = (dst >> 3) & 1
   emit_rex_w(self, 0, b)
@@ -335,7 +355,7 @@ fn CodeBuffer::x86_emit_shr_r_cl(self : CodeBuffer, dst : Int) -> Unit {
 }
 
 ///|
-fn CodeBuffer::x86_emit_shr_r32_cl(self : CodeBuffer, dst : Int) -> Unit {
+pub fn CodeBuffer::x86_emit_shr_r32_cl(self : CodeBuffer, dst : Int) -> Unit {
   // shr r/m32, cl: D3 /5
   let b = (dst >> 3) & 1
   if b != 0 {
@@ -346,7 +366,7 @@ fn CodeBuffer::x86_emit_shr_r32_cl(self : CodeBuffer, dst : Int) -> Unit {
 }
 
 ///|
-fn CodeBuffer::x86_emit_sar_r_cl(self : CodeBuffer, dst : Int) -> Unit {
+pub fn CodeBuffer::x86_emit_sar_r_cl(self : CodeBuffer, dst : Int) -> Unit {
   // sar r/m64, cl: REX.W + D3 /7
   let b = (dst >> 3) & 1
   emit_rex_w(self, 0, b)
@@ -355,7 +375,7 @@ fn CodeBuffer::x86_emit_sar_r_cl(self : CodeBuffer, dst : Int) -> Unit {
 }
 
 ///|
-fn CodeBuffer::x86_emit_sar_r32_cl(self : CodeBuffer, dst : Int) -> Unit {
+pub fn CodeBuffer::x86_emit_sar_r32_cl(self : CodeBuffer, dst : Int) -> Unit {
   // sar r/m32, cl: D3 /7
   let b = (dst >> 3) & 1
   if b != 0 {
@@ -366,7 +386,7 @@ fn CodeBuffer::x86_emit_sar_r32_cl(self : CodeBuffer, dst : Int) -> Unit {
 }
 
 ///|
-fn CodeBuffer::x86_emit_ror_r_cl(self : CodeBuffer, dst : Int) -> Unit {
+pub fn CodeBuffer::x86_emit_ror_r_cl(self : CodeBuffer, dst : Int) -> Unit {
   // ror r/m64, cl: REX.W + D3 /1
   let b = (dst >> 3) & 1
   emit_rex_w(self, 0, b)
@@ -375,7 +395,7 @@ fn CodeBuffer::x86_emit_ror_r_cl(self : CodeBuffer, dst : Int) -> Unit {
 }
 
 ///|
-fn CodeBuffer::x86_emit_ror_r32_cl(self : CodeBuffer, dst : Int) -> Unit {
+pub fn CodeBuffer::x86_emit_ror_r32_cl(self : CodeBuffer, dst : Int) -> Unit {
   // ror r/m32, cl: D3 /1
   let b = (dst >> 3) & 1
   if b != 0 {
@@ -386,7 +406,7 @@ fn CodeBuffer::x86_emit_ror_r32_cl(self : CodeBuffer, dst : Int) -> Unit {
 }
 
 ///|
-fn CodeBuffer::x86_emit_shl_r_imm8(
+pub fn CodeBuffer::x86_emit_shl_r_imm8(
   self : CodeBuffer,
   dst : Int,
   imm : Int,
@@ -400,7 +420,7 @@ fn CodeBuffer::x86_emit_shl_r_imm8(
 }
 
 ///|
-fn CodeBuffer::x86_emit_shl_r32_imm8(
+pub fn CodeBuffer::x86_emit_shl_r32_imm8(
   self : CodeBuffer,
   dst : Int,
   imm : Int,
@@ -416,7 +436,7 @@ fn CodeBuffer::x86_emit_shl_r32_imm8(
 }
 
 ///|
-fn CodeBuffer::x86_emit_shr_r_imm8(
+pub fn CodeBuffer::x86_emit_shr_r_imm8(
   self : CodeBuffer,
   dst : Int,
   imm : Int,
@@ -430,7 +450,7 @@ fn CodeBuffer::x86_emit_shr_r_imm8(
 }
 
 ///|
-fn CodeBuffer::x86_emit_shr_r32_imm8(
+pub fn CodeBuffer::x86_emit_shr_r32_imm8(
   self : CodeBuffer,
   dst : Int,
   imm : Int,
@@ -446,7 +466,11 @@ fn CodeBuffer::x86_emit_shr_r32_imm8(
 }
 
 ///|
-fn CodeBuffer::x86_emit_mov_rr(self : CodeBuffer, dst : Int, src : Int) -> Unit {
+pub fn CodeBuffer::x86_emit_mov_rr(
+  self : CodeBuffer,
+  dst : Int,
+  src : Int,
+) -> Unit {
   // mov r/m64, r64: REX.W + 89 /r
   let r = (src >> 3) & 1
   let b = (dst >> 3) & 1
@@ -456,7 +480,7 @@ fn CodeBuffer::x86_emit_mov_rr(self : CodeBuffer, dst : Int, src : Int) -> Unit 
 }
 
 ///|
-fn CodeBuffer::x86_emit_mov_rr32(
+pub fn CodeBuffer::x86_emit_mov_rr32(
   self : CodeBuffer,
   dst : Int,
   src : Int,
@@ -472,7 +496,7 @@ fn CodeBuffer::x86_emit_mov_rr32(
 }
 
 ///|
-fn CodeBuffer::x86_emit_movsxd_r64_r32(
+pub fn CodeBuffer::x86_emit_movsxd_r64_r32(
   self : CodeBuffer,
   dst : Int,
   src : Int,
@@ -486,7 +510,7 @@ fn CodeBuffer::x86_emit_movsxd_r64_r32(
 }
 
 ///|
-fn CodeBuffer::x86_emit_movsx_r32_r8(
+pub fn CodeBuffer::x86_emit_movsx_r32_r8(
   self : CodeBuffer,
   dst : Int,
   src : Int,
@@ -503,7 +527,7 @@ fn CodeBuffer::x86_emit_movsx_r32_r8(
 }
 
 ///|
-fn CodeBuffer::x86_emit_movsx_r64_r8(
+pub fn CodeBuffer::x86_emit_movsx_r64_r8(
   self : CodeBuffer,
   dst : Int,
   src : Int,
@@ -518,7 +542,7 @@ fn CodeBuffer::x86_emit_movsx_r64_r8(
 }
 
 ///|
-fn CodeBuffer::x86_emit_movsx_r32_r16(
+pub fn CodeBuffer::x86_emit_movsx_r32_r16(
   self : CodeBuffer,
   dst : Int,
   src : Int,
@@ -535,7 +559,7 @@ fn CodeBuffer::x86_emit_movsx_r32_r16(
 }
 
 ///|
-fn CodeBuffer::x86_emit_movsx_r64_r16(
+pub fn CodeBuffer::x86_emit_movsx_r64_r16(
   self : CodeBuffer,
   dst : Int,
   src : Int,
@@ -550,7 +574,7 @@ fn CodeBuffer::x86_emit_movsx_r64_r16(
 }
 
 ///|
-fn CodeBuffer::x86_emit_push_r64(self : CodeBuffer, reg : Int) -> Unit {
+pub fn CodeBuffer::x86_emit_push_r64(self : CodeBuffer, reg : Int) -> Unit {
   // push r64: 50+rd, with optional REX.B for r8-r15.
   let b = (reg >> 3) & 1
   if b != 0 {
@@ -560,7 +584,7 @@ fn CodeBuffer::x86_emit_push_r64(self : CodeBuffer, reg : Int) -> Unit {
 }
 
 ///|
-fn CodeBuffer::x86_emit_pop_r64(self : CodeBuffer, reg : Int) -> Unit {
+pub fn CodeBuffer::x86_emit_pop_r64(self : CodeBuffer, reg : Int) -> Unit {
   // pop r64: 58+rd, with optional REX.B for r8-r15.
   let b = (reg >> 3) & 1
   if b != 0 {
@@ -570,7 +594,7 @@ fn CodeBuffer::x86_emit_pop_r64(self : CodeBuffer, reg : Int) -> Unit {
 }
 
 ///|
-fn CodeBuffer::x86_emit_call_r64(self : CodeBuffer, reg : Int) -> Unit {
+pub fn CodeBuffer::x86_emit_call_r64(self : CodeBuffer, reg : Int) -> Unit {
   // call r/m64: FF /2
   let b = (reg >> 3) & 1
   if b != 0 {
@@ -582,7 +606,7 @@ fn CodeBuffer::x86_emit_call_r64(self : CodeBuffer, reg : Int) -> Unit {
 }
 
 ///|
-fn CodeBuffer::x86_emit_jmp_r64(self : CodeBuffer, reg : Int) -> Unit {
+pub fn CodeBuffer::x86_emit_jmp_r64(self : CodeBuffer, reg : Int) -> Unit {
   // jmp r/m64: FF /4
   let b = (reg >> 3) & 1
   if b != 0 {
@@ -594,7 +618,7 @@ fn CodeBuffer::x86_emit_jmp_r64(self : CodeBuffer, reg : Int) -> Unit {
 }
 
 ///|
-fn CodeBuffer::x86_emit_sub_rsp_imm32(self : CodeBuffer, imm : Int) -> Unit {
+pub fn CodeBuffer::x86_emit_sub_rsp_imm32(self : CodeBuffer, imm : Int) -> Unit {
   // sub rsp, imm32: 48 81 EC imm32
   self.emit_byte(0x48)
   self.emit_byte(0x81)
@@ -603,7 +627,7 @@ fn CodeBuffer::x86_emit_sub_rsp_imm32(self : CodeBuffer, imm : Int) -> Unit {
 }
 
 ///|
-fn CodeBuffer::x86_emit_add_rsp_imm32(self : CodeBuffer, imm : Int) -> Unit {
+pub fn CodeBuffer::x86_emit_add_rsp_imm32(self : CodeBuffer, imm : Int) -> Unit {
   // add rsp, imm32: 48 81 C4 imm32
   self.emit_byte(0x48)
   self.emit_byte(0x81)
@@ -612,7 +636,7 @@ fn CodeBuffer::x86_emit_add_rsp_imm32(self : CodeBuffer, imm : Int) -> Unit {
 }
 
 ///|
-fn CodeBuffer::x86_emit_mov_r64_m64(
+pub fn CodeBuffer::x86_emit_mov_r64_m64(
   self : CodeBuffer,
   dst : Int,
   base : Int,
@@ -632,7 +656,7 @@ fn CodeBuffer::x86_emit_mov_r64_m64(
 }
 
 ///|
-fn CodeBuffer::x86_emit_mov_r32_m32(
+pub fn CodeBuffer::x86_emit_mov_r32_m32(
   self : CodeBuffer,
   dst : Int,
   base : Int,
@@ -653,7 +677,7 @@ fn CodeBuffer::x86_emit_mov_r32_m32(
 }
 
 ///|
-fn CodeBuffer::x86_emit_mov_m64_r64(
+pub fn CodeBuffer::x86_emit_mov_m64_r64(
   self : CodeBuffer,
   base : Int,
   disp : Int,
@@ -672,7 +696,7 @@ fn CodeBuffer::x86_emit_mov_m64_r64(
 }
 
 ///|
-fn CodeBuffer::x86_emit_mov_m32_r32(
+pub fn CodeBuffer::x86_emit_mov_m32_r32(
   self : CodeBuffer,
   base : Int,
   disp : Int,
@@ -693,7 +717,7 @@ fn CodeBuffer::x86_emit_mov_m32_r32(
 }
 
 ///|
-fn CodeBuffer::x86_emit_mov_m8_r8(
+pub fn CodeBuffer::x86_emit_mov_m8_r8(
   self : CodeBuffer,
   base : Int,
   disp : Int,
@@ -717,7 +741,7 @@ fn CodeBuffer::x86_emit_mov_m8_r8(
 }
 
 ///|
-fn CodeBuffer::x86_emit_mov_m16_r16(
+pub fn CodeBuffer::x86_emit_mov_m16_r16(
   self : CodeBuffer,
   base : Int,
   disp : Int,
@@ -739,7 +763,7 @@ fn CodeBuffer::x86_emit_mov_m16_r16(
 }
 
 ///|
-fn CodeBuffer::x86_emit_movaps_xmm_xmm(
+pub fn CodeBuffer::x86_emit_movaps_xmm_xmm(
   self : CodeBuffer,
   dst : Int,
   src : Int,
@@ -756,7 +780,7 @@ fn CodeBuffer::x86_emit_movaps_xmm_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_minps_xmm_xmm(
+pub fn CodeBuffer::x86_emit_minps_xmm_xmm(
   self : CodeBuffer,
   dst_xmm : Int,
   src_xmm : Int,
@@ -773,7 +797,7 @@ fn CodeBuffer::x86_emit_minps_xmm_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_minpd_xmm_xmm(
+pub fn CodeBuffer::x86_emit_minpd_xmm_xmm(
   self : CodeBuffer,
   dst_xmm : Int,
   src_xmm : Int,
@@ -791,7 +815,7 @@ fn CodeBuffer::x86_emit_minpd_xmm_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_maxps_xmm_xmm(
+pub fn CodeBuffer::x86_emit_maxps_xmm_xmm(
   self : CodeBuffer,
   dst_xmm : Int,
   src_xmm : Int,
@@ -808,7 +832,7 @@ fn CodeBuffer::x86_emit_maxps_xmm_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_maxpd_xmm_xmm(
+pub fn CodeBuffer::x86_emit_maxpd_xmm_xmm(
   self : CodeBuffer,
   dst_xmm : Int,
   src_xmm : Int,
@@ -826,7 +850,7 @@ fn CodeBuffer::x86_emit_maxpd_xmm_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_subps_xmm_xmm(
+pub fn CodeBuffer::x86_emit_subps_xmm_xmm(
   self : CodeBuffer,
   dst_xmm : Int,
   src_xmm : Int,
@@ -843,7 +867,7 @@ fn CodeBuffer::x86_emit_subps_xmm_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_subpd_xmm_xmm(
+pub fn CodeBuffer::x86_emit_subpd_xmm_xmm(
   self : CodeBuffer,
   dst_xmm : Int,
   src_xmm : Int,
@@ -861,7 +885,7 @@ fn CodeBuffer::x86_emit_subpd_xmm_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_addps_xmm_xmm(
+pub fn CodeBuffer::x86_emit_addps_xmm_xmm(
   self : CodeBuffer,
   dst_xmm : Int,
   src_xmm : Int,
@@ -878,7 +902,7 @@ fn CodeBuffer::x86_emit_addps_xmm_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_addpd_xmm_xmm(
+pub fn CodeBuffer::x86_emit_addpd_xmm_xmm(
   self : CodeBuffer,
   dst_xmm : Int,
   src_xmm : Int,
@@ -896,7 +920,7 @@ fn CodeBuffer::x86_emit_addpd_xmm_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_mulps_xmm_xmm(
+pub fn CodeBuffer::x86_emit_mulps_xmm_xmm(
   self : CodeBuffer,
   dst_xmm : Int,
   src_xmm : Int,
@@ -913,7 +937,7 @@ fn CodeBuffer::x86_emit_mulps_xmm_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_mulpd_xmm_xmm(
+pub fn CodeBuffer::x86_emit_mulpd_xmm_xmm(
   self : CodeBuffer,
   dst_xmm : Int,
   src_xmm : Int,
@@ -931,7 +955,7 @@ fn CodeBuffer::x86_emit_mulpd_xmm_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_divps_xmm_xmm(
+pub fn CodeBuffer::x86_emit_divps_xmm_xmm(
   self : CodeBuffer,
   dst_xmm : Int,
   src_xmm : Int,
@@ -948,7 +972,7 @@ fn CodeBuffer::x86_emit_divps_xmm_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_divpd_xmm_xmm(
+pub fn CodeBuffer::x86_emit_divpd_xmm_xmm(
   self : CodeBuffer,
   dst_xmm : Int,
   src_xmm : Int,
@@ -966,7 +990,7 @@ fn CodeBuffer::x86_emit_divpd_xmm_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_sqrtps_xmm_xmm(
+pub fn CodeBuffer::x86_emit_sqrtps_xmm_xmm(
   self : CodeBuffer,
   dst_xmm : Int,
   src_xmm : Int,
@@ -983,7 +1007,7 @@ fn CodeBuffer::x86_emit_sqrtps_xmm_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_sqrtpd_xmm_xmm(
+pub fn CodeBuffer::x86_emit_sqrtpd_xmm_xmm(
   self : CodeBuffer,
   dst_xmm : Int,
   src_xmm : Int,
@@ -1001,7 +1025,7 @@ fn CodeBuffer::x86_emit_sqrtpd_xmm_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_pslld_xmm_imm8(
+pub fn CodeBuffer::x86_emit_pslld_xmm_imm8(
   self : CodeBuffer,
   dst_xmm : Int,
   imm8 : Int,
@@ -1019,7 +1043,7 @@ fn CodeBuffer::x86_emit_pslld_xmm_imm8(
 }
 
 ///|
-fn CodeBuffer::x86_emit_psllq_xmm_imm8(
+pub fn CodeBuffer::x86_emit_psllq_xmm_imm8(
   self : CodeBuffer,
   dst_xmm : Int,
   imm8 : Int,
@@ -1037,7 +1061,7 @@ fn CodeBuffer::x86_emit_psllq_xmm_imm8(
 }
 
 ///|
-fn CodeBuffer::x86_emit_psllw_xmm_imm8(
+pub fn CodeBuffer::x86_emit_psllw_xmm_imm8(
   self : CodeBuffer,
   dst_xmm : Int,
   imm8 : Int,
@@ -1055,7 +1079,7 @@ fn CodeBuffer::x86_emit_psllw_xmm_imm8(
 }
 
 ///|
-fn CodeBuffer::x86_emit_psll_xmm_xmm(
+pub fn CodeBuffer::x86_emit_psll_xmm_xmm(
   self : CodeBuffer,
   lane_size : RawLaneSize,
   dst_xmm : Int,
@@ -1079,7 +1103,7 @@ fn CodeBuffer::x86_emit_psll_xmm_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_psrl_xmm_xmm(
+pub fn CodeBuffer::x86_emit_psrl_xmm_xmm(
   self : CodeBuffer,
   lane_size : RawLaneSize,
   dst_xmm : Int,
@@ -1103,7 +1127,7 @@ fn CodeBuffer::x86_emit_psrl_xmm_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_psra_xmm_xmm(
+pub fn CodeBuffer::x86_emit_psra_xmm_xmm(
   self : CodeBuffer,
   lane_size : RawLaneSize,
   dst_xmm : Int,
@@ -1126,7 +1150,7 @@ fn CodeBuffer::x86_emit_psra_xmm_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_psrlw_xmm_imm8(
+pub fn CodeBuffer::x86_emit_psrlw_xmm_imm8(
   self : CodeBuffer,
   dst_xmm : Int,
   imm8 : Int,
@@ -1144,7 +1168,7 @@ fn CodeBuffer::x86_emit_psrlw_xmm_imm8(
 }
 
 ///|
-fn CodeBuffer::x86_emit_psrad_xmm_imm8(
+pub fn CodeBuffer::x86_emit_psrad_xmm_imm8(
   self : CodeBuffer,
   dst_xmm : Int,
   imm8 : Int,
@@ -1162,7 +1186,7 @@ fn CodeBuffer::x86_emit_psrad_xmm_imm8(
 }
 
 ///|
-fn CodeBuffer::x86_emit_cmpps_xmm_xmm_imm8(
+pub fn CodeBuffer::x86_emit_cmpps_xmm_xmm_imm8(
   self : CodeBuffer,
   dst_xmm : Int,
   src_xmm : Int,
@@ -1181,7 +1205,7 @@ fn CodeBuffer::x86_emit_cmpps_xmm_xmm_imm8(
 }
 
 ///|
-fn CodeBuffer::x86_emit_cmppd_xmm_xmm_imm8(
+pub fn CodeBuffer::x86_emit_cmppd_xmm_xmm_imm8(
   self : CodeBuffer,
   dst_xmm : Int,
   src_xmm : Int,
@@ -1201,7 +1225,7 @@ fn CodeBuffer::x86_emit_cmppd_xmm_xmm_imm8(
 }
 
 ///|
-fn CodeBuffer::x86_emit_roundps_xmm_xmm_imm8(
+pub fn CodeBuffer::x86_emit_roundps_xmm_xmm_imm8(
   self : CodeBuffer,
   dst_xmm : Int,
   src_xmm : Int,
@@ -1222,7 +1246,7 @@ fn CodeBuffer::x86_emit_roundps_xmm_xmm_imm8(
 }
 
 ///|
-fn CodeBuffer::x86_emit_roundpd_xmm_xmm_imm8(
+pub fn CodeBuffer::x86_emit_roundpd_xmm_xmm_imm8(
   self : CodeBuffer,
   dst_xmm : Int,
   src_xmm : Int,
@@ -1243,7 +1267,7 @@ fn CodeBuffer::x86_emit_roundpd_xmm_xmm_imm8(
 }
 
 ///|
-fn CodeBuffer::x86_emit_roundss_xmm_xmm_imm8(
+pub fn CodeBuffer::x86_emit_roundss_xmm_xmm_imm8(
   self : CodeBuffer,
   dst_xmm : Int,
   src_xmm : Int,
@@ -1264,7 +1288,7 @@ fn CodeBuffer::x86_emit_roundss_xmm_xmm_imm8(
 }
 
 ///|
-fn CodeBuffer::x86_emit_roundsd_xmm_xmm_imm8(
+pub fn CodeBuffer::x86_emit_roundsd_xmm_xmm_imm8(
   self : CodeBuffer,
   dst_xmm : Int,
   src_xmm : Int,
@@ -1285,7 +1309,7 @@ fn CodeBuffer::x86_emit_roundsd_xmm_xmm_imm8(
 }
 
 ///|
-fn CodeBuffer::x86_emit_psrld_xmm_imm8(
+pub fn CodeBuffer::x86_emit_psrld_xmm_imm8(
   self : CodeBuffer,
   dst_xmm : Int,
   imm8 : Int,
@@ -1303,7 +1327,7 @@ fn CodeBuffer::x86_emit_psrld_xmm_imm8(
 }
 
 ///|
-fn CodeBuffer::x86_emit_psrlq_xmm_imm8(
+pub fn CodeBuffer::x86_emit_psrlq_xmm_imm8(
   self : CodeBuffer,
   dst_xmm : Int,
   imm8 : Int,
@@ -1321,7 +1345,7 @@ fn CodeBuffer::x86_emit_psrlq_xmm_imm8(
 }
 
 ///|
-fn CodeBuffer::x86_emit_movss_xmm_m32(
+pub fn CodeBuffer::x86_emit_movss_xmm_m32(
   self : CodeBuffer,
   dst_xmm : Int,
   base : Int,
@@ -1344,7 +1368,7 @@ fn CodeBuffer::x86_emit_movss_xmm_m32(
 }
 
 ///|
-fn CodeBuffer::x86_emit_movss_xmm_xmm(
+pub fn CodeBuffer::x86_emit_movss_xmm_xmm(
   self : CodeBuffer,
   dst_xmm : Int,
   src_xmm : Int,
@@ -1362,7 +1386,7 @@ fn CodeBuffer::x86_emit_movss_xmm_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_movss_m32_xmm(
+pub fn CodeBuffer::x86_emit_movss_m32_xmm(
   self : CodeBuffer,
   base : Int,
   disp : Int,
@@ -1385,7 +1409,7 @@ fn CodeBuffer::x86_emit_movss_m32_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_movsd_m64_xmm(
+pub fn CodeBuffer::x86_emit_movsd_m64_xmm(
   self : CodeBuffer,
   base : Int,
   disp : Int,
@@ -1408,7 +1432,7 @@ fn CodeBuffer::x86_emit_movsd_m64_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_movsd_xmm_m64(
+pub fn CodeBuffer::x86_emit_movsd_xmm_m64(
   self : CodeBuffer,
   dst_xmm : Int,
   base : Int,
@@ -1431,7 +1455,7 @@ fn CodeBuffer::x86_emit_movsd_xmm_m64(
 }
 
 ///|
-fn CodeBuffer::x86_emit_movsd_xmm_xmm(
+pub fn CodeBuffer::x86_emit_movsd_xmm_xmm(
   self : CodeBuffer,
   dst_xmm : Int,
   src_xmm : Int,
@@ -1449,7 +1473,7 @@ fn CodeBuffer::x86_emit_movsd_xmm_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_movlhps_xmm_xmm(
+pub fn CodeBuffer::x86_emit_movlhps_xmm_xmm(
   self : CodeBuffer,
   dst_xmm : Int,
   src_xmm : Int,
@@ -1466,7 +1490,7 @@ fn CodeBuffer::x86_emit_movlhps_xmm_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_unpcklps_xmm_xmm(
+pub fn CodeBuffer::x86_emit_unpcklps_xmm_xmm(
   self : CodeBuffer,
   dst_xmm : Int,
   src_xmm : Int,
@@ -1483,7 +1507,7 @@ fn CodeBuffer::x86_emit_unpcklps_xmm_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_ucomiss_xmm_xmm(
+pub fn CodeBuffer::x86_emit_ucomiss_xmm_xmm(
   self : CodeBuffer,
   lhs_xmm : Int,
   rhs_xmm : Int,
@@ -1500,7 +1524,7 @@ fn CodeBuffer::x86_emit_ucomiss_xmm_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_ucomisd_xmm_xmm(
+pub fn CodeBuffer::x86_emit_ucomisd_xmm_xmm(
   self : CodeBuffer,
   lhs_xmm : Int,
   rhs_xmm : Int,
@@ -1518,7 +1542,7 @@ fn CodeBuffer::x86_emit_ucomisd_xmm_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_pcmpeqd_xmm_xmm(
+pub fn CodeBuffer::x86_emit_pcmpeqd_xmm_xmm(
   self : CodeBuffer,
   dst_xmm : Int,
   src_xmm : Int,
@@ -1536,7 +1560,7 @@ fn CodeBuffer::x86_emit_pcmpeqd_xmm_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_pand_xmm_xmm(
+pub fn CodeBuffer::x86_emit_pand_xmm_xmm(
   self : CodeBuffer,
   dst_xmm : Int,
   src_xmm : Int,
@@ -1554,7 +1578,7 @@ fn CodeBuffer::x86_emit_pand_xmm_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_por_xmm_xmm(
+pub fn CodeBuffer::x86_emit_por_xmm_xmm(
   self : CodeBuffer,
   dst_xmm : Int,
   src_xmm : Int,
@@ -1572,7 +1596,7 @@ fn CodeBuffer::x86_emit_por_xmm_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_pxor_xmm_xmm(
+pub fn CodeBuffer::x86_emit_pxor_xmm_xmm(
   self : CodeBuffer,
   dst_xmm : Int,
   src_xmm : Int,
@@ -1590,7 +1614,7 @@ fn CodeBuffer::x86_emit_pxor_xmm_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_pandn_xmm_xmm(
+pub fn CodeBuffer::x86_emit_pandn_xmm_xmm(
   self : CodeBuffer,
   dst_xmm : Int,
   src_xmm : Int,
@@ -1608,7 +1632,7 @@ fn CodeBuffer::x86_emit_pandn_xmm_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_pinsrq_xmm_r64_imm8(
+pub fn CodeBuffer::x86_emit_pinsrq_xmm_r64_imm8(
   self : CodeBuffer,
   dst_xmm : Int,
   src : Int,
@@ -1627,7 +1651,7 @@ fn CodeBuffer::x86_emit_pinsrq_xmm_r64_imm8(
 }
 
 ///|
-fn CodeBuffer::x86_emit_pinsrd_xmm_r32_imm8(
+pub fn CodeBuffer::x86_emit_pinsrd_xmm_r32_imm8(
   self : CodeBuffer,
   dst_xmm : Int,
   src : Int,
@@ -1648,7 +1672,7 @@ fn CodeBuffer::x86_emit_pinsrd_xmm_r32_imm8(
 }
 
 ///|
-fn CodeBuffer::x86_emit_pinsrw_xmm_r32_imm8(
+pub fn CodeBuffer::x86_emit_pinsrw_xmm_r32_imm8(
   self : CodeBuffer,
   dst_xmm : Int,
   src : Int,
@@ -1668,7 +1692,7 @@ fn CodeBuffer::x86_emit_pinsrw_xmm_r32_imm8(
 }
 
 ///|
-fn CodeBuffer::x86_emit_pinsrb_xmm_r32_imm8(
+pub fn CodeBuffer::x86_emit_pinsrb_xmm_r32_imm8(
   self : CodeBuffer,
   dst_xmm : Int,
   src : Int,
@@ -1690,7 +1714,7 @@ fn CodeBuffer::x86_emit_pinsrb_xmm_r32_imm8(
 }
 
 ///|
-fn CodeBuffer::x86_emit_insertps_xmm_xmm_imm8(
+pub fn CodeBuffer::x86_emit_insertps_xmm_xmm_imm8(
   self : CodeBuffer,
   dst_xmm : Int,
   src_xmm : Int,
@@ -1711,7 +1735,7 @@ fn CodeBuffer::x86_emit_insertps_xmm_xmm_imm8(
 }
 
 ///|
-fn CodeBuffer::x86_emit_padd_xmm_xmm(
+pub fn CodeBuffer::x86_emit_padd_xmm_xmm(
   self : CodeBuffer,
   lane_size : RawLaneSize,
   dst_xmm : Int,
@@ -1735,7 +1759,7 @@ fn CodeBuffer::x86_emit_padd_xmm_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_phaddw_xmm_xmm(
+pub fn CodeBuffer::x86_emit_phaddw_xmm_xmm(
   self : CodeBuffer,
   dst_xmm : Int,
   src_xmm : Int,
@@ -1754,7 +1778,7 @@ fn CodeBuffer::x86_emit_phaddw_xmm_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_psub_xmm_xmm(
+pub fn CodeBuffer::x86_emit_psub_xmm_xmm(
   self : CodeBuffer,
   lane_size : RawLaneSize,
   dst_xmm : Int,
@@ -1778,7 +1802,7 @@ fn CodeBuffer::x86_emit_psub_xmm_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_pmullw_xmm_xmm(
+pub fn CodeBuffer::x86_emit_pmullw_xmm_xmm(
   self : CodeBuffer,
   dst_xmm : Int,
   src_xmm : Int,
@@ -1796,7 +1820,7 @@ fn CodeBuffer::x86_emit_pmullw_xmm_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_pmulld_xmm_xmm(
+pub fn CodeBuffer::x86_emit_pmulld_xmm_xmm(
   self : CodeBuffer,
   dst_xmm : Int,
   src_xmm : Int,
@@ -1815,7 +1839,7 @@ fn CodeBuffer::x86_emit_pmulld_xmm_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_pcmpeq_xmm_xmm(
+pub fn CodeBuffer::x86_emit_pcmpeq_xmm_xmm(
   self : CodeBuffer,
   lane_size : RawLaneSize,
   dst_xmm : Int,
@@ -1849,7 +1873,7 @@ fn CodeBuffer::x86_emit_pcmpeq_xmm_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_pcmpgt_xmm_xmm(
+pub fn CodeBuffer::x86_emit_pcmpgt_xmm_xmm(
   self : CodeBuffer,
   lane_size : RawLaneSize,
   dst_xmm : Int,
@@ -1873,7 +1897,7 @@ fn CodeBuffer::x86_emit_pcmpgt_xmm_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_pshufd_xmm_xmm_imm8(
+pub fn CodeBuffer::x86_emit_pshufd_xmm_xmm_imm8(
   self : CodeBuffer,
   dst_xmm : Int,
   src_xmm : Int,
@@ -1893,7 +1917,7 @@ fn CodeBuffer::x86_emit_pshufd_xmm_xmm_imm8(
 }
 
 ///|
-fn CodeBuffer::x86_emit_pshuflw_xmm_xmm_imm8(
+pub fn CodeBuffer::x86_emit_pshuflw_xmm_xmm_imm8(
   self : CodeBuffer,
   dst_xmm : Int,
   src_xmm : Int,
@@ -1913,7 +1937,7 @@ fn CodeBuffer::x86_emit_pshuflw_xmm_xmm_imm8(
 }
 
 ///|
-fn CodeBuffer::x86_emit_shufps_xmm_xmm_imm8(
+pub fn CodeBuffer::x86_emit_shufps_xmm_xmm_imm8(
   self : CodeBuffer,
   dst_xmm : Int,
   src_xmm : Int,
@@ -1932,7 +1956,7 @@ fn CodeBuffer::x86_emit_shufps_xmm_xmm_imm8(
 }
 
 ///|
-fn CodeBuffer::x86_emit_shufpd_xmm_xmm_imm8(
+pub fn CodeBuffer::x86_emit_shufpd_xmm_xmm_imm8(
   self : CodeBuffer,
   dst_xmm : Int,
   src_xmm : Int,
@@ -1952,7 +1976,7 @@ fn CodeBuffer::x86_emit_shufpd_xmm_xmm_imm8(
 }
 
 ///|
-fn CodeBuffer::x86_emit_paddusb_xmm_xmm(
+pub fn CodeBuffer::x86_emit_paddusb_xmm_xmm(
   self : CodeBuffer,
   dst_xmm : Int,
   src_xmm : Int,
@@ -1970,7 +1994,7 @@ fn CodeBuffer::x86_emit_paddusb_xmm_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_paddsb_xmm_xmm(
+pub fn CodeBuffer::x86_emit_paddsb_xmm_xmm(
   self : CodeBuffer,
   dst_xmm : Int,
   src_xmm : Int,
@@ -1988,7 +2012,7 @@ fn CodeBuffer::x86_emit_paddsb_xmm_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_paddsw_xmm_xmm(
+pub fn CodeBuffer::x86_emit_paddsw_xmm_xmm(
   self : CodeBuffer,
   dst_xmm : Int,
   src_xmm : Int,
@@ -2006,7 +2030,7 @@ fn CodeBuffer::x86_emit_paddsw_xmm_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_paddusw_xmm_xmm(
+pub fn CodeBuffer::x86_emit_paddusw_xmm_xmm(
   self : CodeBuffer,
   dst_xmm : Int,
   src_xmm : Int,
@@ -2024,7 +2048,7 @@ fn CodeBuffer::x86_emit_paddusw_xmm_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_psubsb_xmm_xmm(
+pub fn CodeBuffer::x86_emit_psubsb_xmm_xmm(
   self : CodeBuffer,
   dst_xmm : Int,
   src_xmm : Int,
@@ -2042,7 +2066,7 @@ fn CodeBuffer::x86_emit_psubsb_xmm_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_psubsw_xmm_xmm(
+pub fn CodeBuffer::x86_emit_psubsw_xmm_xmm(
   self : CodeBuffer,
   dst_xmm : Int,
   src_xmm : Int,
@@ -2060,7 +2084,7 @@ fn CodeBuffer::x86_emit_psubsw_xmm_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_psubusb_xmm_xmm(
+pub fn CodeBuffer::x86_emit_psubusb_xmm_xmm(
   self : CodeBuffer,
   dst_xmm : Int,
   src_xmm : Int,
@@ -2078,7 +2102,7 @@ fn CodeBuffer::x86_emit_psubusb_xmm_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_psubusw_xmm_xmm(
+pub fn CodeBuffer::x86_emit_psubusw_xmm_xmm(
   self : CodeBuffer,
   dst_xmm : Int,
   src_xmm : Int,
@@ -2096,7 +2120,7 @@ fn CodeBuffer::x86_emit_psubusw_xmm_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_pavgb_xmm_xmm(
+pub fn CodeBuffer::x86_emit_pavgb_xmm_xmm(
   self : CodeBuffer,
   dst_xmm : Int,
   src_xmm : Int,
@@ -2114,7 +2138,7 @@ fn CodeBuffer::x86_emit_pavgb_xmm_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_pavgw_xmm_xmm(
+pub fn CodeBuffer::x86_emit_pavgw_xmm_xmm(
   self : CodeBuffer,
   dst_xmm : Int,
   src_xmm : Int,
@@ -2132,7 +2156,7 @@ fn CodeBuffer::x86_emit_pavgw_xmm_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_pminub_xmm_xmm(
+pub fn CodeBuffer::x86_emit_pminub_xmm_xmm(
   self : CodeBuffer,
   dst_xmm : Int,
   src_xmm : Int,
@@ -2150,7 +2174,7 @@ fn CodeBuffer::x86_emit_pminub_xmm_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_pmaxub_xmm_xmm(
+pub fn CodeBuffer::x86_emit_pmaxub_xmm_xmm(
   self : CodeBuffer,
   dst_xmm : Int,
   src_xmm : Int,
@@ -2168,7 +2192,7 @@ fn CodeBuffer::x86_emit_pmaxub_xmm_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_pminsw_xmm_xmm(
+pub fn CodeBuffer::x86_emit_pminsw_xmm_xmm(
   self : CodeBuffer,
   dst_xmm : Int,
   src_xmm : Int,
@@ -2186,7 +2210,7 @@ fn CodeBuffer::x86_emit_pminsw_xmm_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_pmaxsw_xmm_xmm(
+pub fn CodeBuffer::x86_emit_pmaxsw_xmm_xmm(
   self : CodeBuffer,
   dst_xmm : Int,
   src_xmm : Int,
@@ -2204,7 +2228,7 @@ fn CodeBuffer::x86_emit_pmaxsw_xmm_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_pminsb_xmm_xmm(
+pub fn CodeBuffer::x86_emit_pminsb_xmm_xmm(
   self : CodeBuffer,
   dst_xmm : Int,
   src_xmm : Int,
@@ -2223,7 +2247,7 @@ fn CodeBuffer::x86_emit_pminsb_xmm_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_pmaxsb_xmm_xmm(
+pub fn CodeBuffer::x86_emit_pmaxsb_xmm_xmm(
   self : CodeBuffer,
   dst_xmm : Int,
   src_xmm : Int,
@@ -2242,7 +2266,7 @@ fn CodeBuffer::x86_emit_pmaxsb_xmm_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_pminuw_xmm_xmm(
+pub fn CodeBuffer::x86_emit_pminuw_xmm_xmm(
   self : CodeBuffer,
   dst_xmm : Int,
   src_xmm : Int,
@@ -2261,7 +2285,7 @@ fn CodeBuffer::x86_emit_pminuw_xmm_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_pmaxuw_xmm_xmm(
+pub fn CodeBuffer::x86_emit_pmaxuw_xmm_xmm(
   self : CodeBuffer,
   dst_xmm : Int,
   src_xmm : Int,
@@ -2280,7 +2304,7 @@ fn CodeBuffer::x86_emit_pmaxuw_xmm_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_pminsd_xmm_xmm(
+pub fn CodeBuffer::x86_emit_pminsd_xmm_xmm(
   self : CodeBuffer,
   dst_xmm : Int,
   src_xmm : Int,
@@ -2299,7 +2323,7 @@ fn CodeBuffer::x86_emit_pminsd_xmm_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_pmaxsd_xmm_xmm(
+pub fn CodeBuffer::x86_emit_pmaxsd_xmm_xmm(
   self : CodeBuffer,
   dst_xmm : Int,
   src_xmm : Int,
@@ -2318,7 +2342,7 @@ fn CodeBuffer::x86_emit_pmaxsd_xmm_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_pminud_xmm_xmm(
+pub fn CodeBuffer::x86_emit_pminud_xmm_xmm(
   self : CodeBuffer,
   dst_xmm : Int,
   src_xmm : Int,
@@ -2337,7 +2361,7 @@ fn CodeBuffer::x86_emit_pminud_xmm_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_pmaxud_xmm_xmm(
+pub fn CodeBuffer::x86_emit_pmaxud_xmm_xmm(
   self : CodeBuffer,
   dst_xmm : Int,
   src_xmm : Int,
@@ -2356,7 +2380,7 @@ fn CodeBuffer::x86_emit_pmaxud_xmm_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_pabsb_xmm_xmm(
+pub fn CodeBuffer::x86_emit_pabsb_xmm_xmm(
   self : CodeBuffer,
   dst_xmm : Int,
   src_xmm : Int,
@@ -2375,7 +2399,7 @@ fn CodeBuffer::x86_emit_pabsb_xmm_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_pabsw_xmm_xmm(
+pub fn CodeBuffer::x86_emit_pabsw_xmm_xmm(
   self : CodeBuffer,
   dst_xmm : Int,
   src_xmm : Int,
@@ -2394,7 +2418,7 @@ fn CodeBuffer::x86_emit_pabsw_xmm_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_pabsd_xmm_xmm(
+pub fn CodeBuffer::x86_emit_pabsd_xmm_xmm(
   self : CodeBuffer,
   dst_xmm : Int,
   src_xmm : Int,
@@ -2413,7 +2437,7 @@ fn CodeBuffer::x86_emit_pabsd_xmm_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_pmovsxbw_xmm_xmm(
+pub fn CodeBuffer::x86_emit_pmovsxbw_xmm_xmm(
   self : CodeBuffer,
   dst_xmm : Int,
   src_xmm : Int,
@@ -2432,7 +2456,7 @@ fn CodeBuffer::x86_emit_pmovsxbw_xmm_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_pmovzxbw_xmm_xmm(
+pub fn CodeBuffer::x86_emit_pmovzxbw_xmm_xmm(
   self : CodeBuffer,
   dst_xmm : Int,
   src_xmm : Int,
@@ -2451,7 +2475,7 @@ fn CodeBuffer::x86_emit_pmovzxbw_xmm_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_pmovsxwd_xmm_xmm(
+pub fn CodeBuffer::x86_emit_pmovsxwd_xmm_xmm(
   self : CodeBuffer,
   dst_xmm : Int,
   src_xmm : Int,
@@ -2470,7 +2494,7 @@ fn CodeBuffer::x86_emit_pmovsxwd_xmm_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_pmovzxwd_xmm_xmm(
+pub fn CodeBuffer::x86_emit_pmovzxwd_xmm_xmm(
   self : CodeBuffer,
   dst_xmm : Int,
   src_xmm : Int,
@@ -2489,7 +2513,7 @@ fn CodeBuffer::x86_emit_pmovzxwd_xmm_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_pmovsxdq_xmm_xmm(
+pub fn CodeBuffer::x86_emit_pmovsxdq_xmm_xmm(
   self : CodeBuffer,
   dst_xmm : Int,
   src_xmm : Int,
@@ -2508,7 +2532,7 @@ fn CodeBuffer::x86_emit_pmovsxdq_xmm_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_pmovzxdq_xmm_xmm(
+pub fn CodeBuffer::x86_emit_pmovzxdq_xmm_xmm(
   self : CodeBuffer,
   dst_xmm : Int,
   src_xmm : Int,
@@ -2527,7 +2551,7 @@ fn CodeBuffer::x86_emit_pmovzxdq_xmm_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_pshufb_xmm_xmm(
+pub fn CodeBuffer::x86_emit_pshufb_xmm_xmm(
   self : CodeBuffer,
   dst_xmm : Int,
   mask_xmm : Int,
@@ -2546,7 +2570,7 @@ fn CodeBuffer::x86_emit_pshufb_xmm_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_punpcklbw_xmm_xmm(
+pub fn CodeBuffer::x86_emit_punpcklbw_xmm_xmm(
   self : CodeBuffer,
   dst_xmm : Int,
   src_xmm : Int,
@@ -2564,7 +2588,7 @@ fn CodeBuffer::x86_emit_punpcklbw_xmm_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_punpckhbw_xmm_xmm(
+pub fn CodeBuffer::x86_emit_punpckhbw_xmm_xmm(
   self : CodeBuffer,
   dst_xmm : Int,
   src_xmm : Int,
@@ -2582,7 +2606,7 @@ fn CodeBuffer::x86_emit_punpckhbw_xmm_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_packsswb_xmm_xmm(
+pub fn CodeBuffer::x86_emit_packsswb_xmm_xmm(
   self : CodeBuffer,
   dst_xmm : Int,
   src_xmm : Int,
@@ -2600,7 +2624,7 @@ fn CodeBuffer::x86_emit_packsswb_xmm_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_packuswb_xmm_xmm(
+pub fn CodeBuffer::x86_emit_packuswb_xmm_xmm(
   self : CodeBuffer,
   dst_xmm : Int,
   src_xmm : Int,
@@ -2618,7 +2642,7 @@ fn CodeBuffer::x86_emit_packuswb_xmm_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_packssdw_xmm_xmm(
+pub fn CodeBuffer::x86_emit_packssdw_xmm_xmm(
   self : CodeBuffer,
   dst_xmm : Int,
   src_xmm : Int,
@@ -2636,7 +2660,7 @@ fn CodeBuffer::x86_emit_packssdw_xmm_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_packusdw_xmm_xmm(
+pub fn CodeBuffer::x86_emit_packusdw_xmm_xmm(
   self : CodeBuffer,
   dst_xmm : Int,
   src_xmm : Int,
@@ -2655,7 +2679,7 @@ fn CodeBuffer::x86_emit_packusdw_xmm_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_palignr_xmm_xmm_imm8(
+pub fn CodeBuffer::x86_emit_palignr_xmm_xmm_imm8(
   self : CodeBuffer,
   dst_xmm : Int,
   src_xmm : Int,
@@ -2676,7 +2700,7 @@ fn CodeBuffer::x86_emit_palignr_xmm_xmm_imm8(
 }
 
 ///|
-fn CodeBuffer::x86_emit_pmaddwd_xmm_xmm(
+pub fn CodeBuffer::x86_emit_pmaddwd_xmm_xmm(
   self : CodeBuffer,
   dst_xmm : Int,
   src_xmm : Int,
@@ -2694,7 +2718,7 @@ fn CodeBuffer::x86_emit_pmaddwd_xmm_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_pmaddubsw_xmm_xmm(
+pub fn CodeBuffer::x86_emit_pmaddubsw_xmm_xmm(
   self : CodeBuffer,
   dst_xmm : Int,
   src_xmm : Int,
@@ -2713,7 +2737,7 @@ fn CodeBuffer::x86_emit_pmaddubsw_xmm_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_pmulhrsw_xmm_xmm(
+pub fn CodeBuffer::x86_emit_pmulhrsw_xmm_xmm(
   self : CodeBuffer,
   dst_xmm : Int,
   src_xmm : Int,
@@ -2732,7 +2756,7 @@ fn CodeBuffer::x86_emit_pmulhrsw_xmm_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_pextrb_r32_xmm_imm8(
+pub fn CodeBuffer::x86_emit_pextrb_r32_xmm_imm8(
   self : CodeBuffer,
   dst : Int,
   src_xmm : Int,
@@ -2754,7 +2778,7 @@ fn CodeBuffer::x86_emit_pextrb_r32_xmm_imm8(
 }
 
 ///|
-fn CodeBuffer::x86_emit_pextrd_r32_xmm_imm8(
+pub fn CodeBuffer::x86_emit_pextrd_r32_xmm_imm8(
   self : CodeBuffer,
   dst : Int,
   src_xmm : Int,
@@ -2776,7 +2800,7 @@ fn CodeBuffer::x86_emit_pextrd_r32_xmm_imm8(
 }
 
 ///|
-fn CodeBuffer::x86_emit_pextrq_r64_xmm_imm8(
+pub fn CodeBuffer::x86_emit_pextrq_r64_xmm_imm8(
   self : CodeBuffer,
   dst : Int,
   src_xmm : Int,
@@ -2796,7 +2820,7 @@ fn CodeBuffer::x86_emit_pextrq_r64_xmm_imm8(
 }
 
 ///|
-fn CodeBuffer::x86_emit_pextrw_r32_xmm_imm8(
+pub fn CodeBuffer::x86_emit_pextrw_r32_xmm_imm8(
   self : CodeBuffer,
   dst : Int,
   src_xmm : Int,
@@ -2816,7 +2840,7 @@ fn CodeBuffer::x86_emit_pextrw_r32_xmm_imm8(
 }
 
 ///|
-fn CodeBuffer::x86_emit_pmovmskb_r32_xmm(
+pub fn CodeBuffer::x86_emit_pmovmskb_r32_xmm(
   self : CodeBuffer,
   dst : Int,
   src_xmm : Int,
@@ -2837,7 +2861,7 @@ fn CodeBuffer::x86_emit_pmovmskb_r32_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_movmskps_r32_xmm(
+pub fn CodeBuffer::x86_emit_movmskps_r32_xmm(
   self : CodeBuffer,
   dst : Int,
   src_xmm : Int,
@@ -2854,7 +2878,7 @@ fn CodeBuffer::x86_emit_movmskps_r32_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_movmskpd_r32_xmm(
+pub fn CodeBuffer::x86_emit_movmskpd_r32_xmm(
   self : CodeBuffer,
   dst : Int,
   src_xmm : Int,
@@ -2872,7 +2896,7 @@ fn CodeBuffer::x86_emit_movmskpd_r32_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_xorpd_xmm_xmm(
+pub fn CodeBuffer::x86_emit_xorpd_xmm_xmm(
   self : CodeBuffer,
   dst_xmm : Int,
   src_xmm : Int,
@@ -2890,7 +2914,7 @@ fn CodeBuffer::x86_emit_xorpd_xmm_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_xorps_xmm_xmm(
+pub fn CodeBuffer::x86_emit_xorps_xmm_xmm(
   self : CodeBuffer,
   dst_xmm : Int,
   src_xmm : Int,
@@ -2907,7 +2931,7 @@ fn CodeBuffer::x86_emit_xorps_xmm_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_subss_xmm_xmm(
+pub fn CodeBuffer::x86_emit_subss_xmm_xmm(
   self : CodeBuffer,
   dst_xmm : Int,
   src_xmm : Int,
@@ -2925,7 +2949,7 @@ fn CodeBuffer::x86_emit_subss_xmm_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_subsd_xmm_xmm(
+pub fn CodeBuffer::x86_emit_subsd_xmm_xmm(
   self : CodeBuffer,
   dst_xmm : Int,
   src_xmm : Int,
@@ -2943,7 +2967,7 @@ fn CodeBuffer::x86_emit_subsd_xmm_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_addss_xmm_xmm(
+pub fn CodeBuffer::x86_emit_addss_xmm_xmm(
   self : CodeBuffer,
   dst_xmm : Int,
   src_xmm : Int,
@@ -2961,7 +2985,7 @@ fn CodeBuffer::x86_emit_addss_xmm_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_addsd_xmm_xmm(
+pub fn CodeBuffer::x86_emit_addsd_xmm_xmm(
   self : CodeBuffer,
   dst_xmm : Int,
   src_xmm : Int,
@@ -2979,7 +3003,7 @@ fn CodeBuffer::x86_emit_addsd_xmm_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_minss_xmm_xmm(
+pub fn CodeBuffer::x86_emit_minss_xmm_xmm(
   self : CodeBuffer,
   dst_xmm : Int,
   src_xmm : Int,
@@ -2997,7 +3021,7 @@ fn CodeBuffer::x86_emit_minss_xmm_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_minsd_xmm_xmm(
+pub fn CodeBuffer::x86_emit_minsd_xmm_xmm(
   self : CodeBuffer,
   dst_xmm : Int,
   src_xmm : Int,
@@ -3015,7 +3039,7 @@ fn CodeBuffer::x86_emit_minsd_xmm_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_maxss_xmm_xmm(
+pub fn CodeBuffer::x86_emit_maxss_xmm_xmm(
   self : CodeBuffer,
   dst_xmm : Int,
   src_xmm : Int,
@@ -3033,7 +3057,7 @@ fn CodeBuffer::x86_emit_maxss_xmm_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_maxsd_xmm_xmm(
+pub fn CodeBuffer::x86_emit_maxsd_xmm_xmm(
   self : CodeBuffer,
   dst_xmm : Int,
   src_xmm : Int,
@@ -3051,7 +3075,7 @@ fn CodeBuffer::x86_emit_maxsd_xmm_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_mulss_xmm_xmm(
+pub fn CodeBuffer::x86_emit_mulss_xmm_xmm(
   self : CodeBuffer,
   dst_xmm : Int,
   src_xmm : Int,
@@ -3069,7 +3093,7 @@ fn CodeBuffer::x86_emit_mulss_xmm_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_mulsd_xmm_xmm(
+pub fn CodeBuffer::x86_emit_mulsd_xmm_xmm(
   self : CodeBuffer,
   dst_xmm : Int,
   src_xmm : Int,
@@ -3087,7 +3111,7 @@ fn CodeBuffer::x86_emit_mulsd_xmm_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_divss_xmm_xmm(
+pub fn CodeBuffer::x86_emit_divss_xmm_xmm(
   self : CodeBuffer,
   dst_xmm : Int,
   src_xmm : Int,
@@ -3105,7 +3129,7 @@ fn CodeBuffer::x86_emit_divss_xmm_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_divsd_xmm_xmm(
+pub fn CodeBuffer::x86_emit_divsd_xmm_xmm(
   self : CodeBuffer,
   dst_xmm : Int,
   src_xmm : Int,
@@ -3123,7 +3147,7 @@ fn CodeBuffer::x86_emit_divsd_xmm_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_sqrtss_xmm_xmm(
+pub fn CodeBuffer::x86_emit_sqrtss_xmm_xmm(
   self : CodeBuffer,
   dst_xmm : Int,
   src_xmm : Int,
@@ -3141,7 +3165,7 @@ fn CodeBuffer::x86_emit_sqrtss_xmm_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_sqrtsd_xmm_xmm(
+pub fn CodeBuffer::x86_emit_sqrtsd_xmm_xmm(
   self : CodeBuffer,
   dst_xmm : Int,
   src_xmm : Int,
@@ -3159,7 +3183,7 @@ fn CodeBuffer::x86_emit_sqrtsd_xmm_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_andps_xmm_xmm(
+pub fn CodeBuffer::x86_emit_andps_xmm_xmm(
   self : CodeBuffer,
   dst_xmm : Int,
   src_xmm : Int,
@@ -3176,7 +3200,7 @@ fn CodeBuffer::x86_emit_andps_xmm_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_andpd_xmm_xmm(
+pub fn CodeBuffer::x86_emit_andpd_xmm_xmm(
   self : CodeBuffer,
   dst_xmm : Int,
   src_xmm : Int,
@@ -3194,7 +3218,7 @@ fn CodeBuffer::x86_emit_andpd_xmm_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_orps_xmm_xmm(
+pub fn CodeBuffer::x86_emit_orps_xmm_xmm(
   self : CodeBuffer,
   dst_xmm : Int,
   src_xmm : Int,
@@ -3211,7 +3235,7 @@ fn CodeBuffer::x86_emit_orps_xmm_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_orpd_xmm_xmm(
+pub fn CodeBuffer::x86_emit_orpd_xmm_xmm(
   self : CodeBuffer,
   dst_xmm : Int,
   src_xmm : Int,
@@ -3229,7 +3253,7 @@ fn CodeBuffer::x86_emit_orpd_xmm_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_cvttss2si_r32_xmm(
+pub fn CodeBuffer::x86_emit_cvttss2si_r32_xmm(
   self : CodeBuffer,
   dst : Int,
   src_xmm : Int,
@@ -3247,7 +3271,7 @@ fn CodeBuffer::x86_emit_cvttss2si_r32_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_cvttss2si_r64_xmm(
+pub fn CodeBuffer::x86_emit_cvttss2si_r64_xmm(
   self : CodeBuffer,
   dst : Int,
   src_xmm : Int,
@@ -3263,7 +3287,7 @@ fn CodeBuffer::x86_emit_cvttss2si_r64_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_cvttsd2si_r32_xmm(
+pub fn CodeBuffer::x86_emit_cvttsd2si_r32_xmm(
   self : CodeBuffer,
   dst : Int,
   src_xmm : Int,
@@ -3281,7 +3305,7 @@ fn CodeBuffer::x86_emit_cvttsd2si_r32_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_cvttsd2si_r64_xmm(
+pub fn CodeBuffer::x86_emit_cvttsd2si_r64_xmm(
   self : CodeBuffer,
   dst : Int,
   src_xmm : Int,
@@ -3297,7 +3321,7 @@ fn CodeBuffer::x86_emit_cvttsd2si_r64_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_cvtsi2ss_xmm_r32(
+pub fn CodeBuffer::x86_emit_cvtsi2ss_xmm_r32(
   self : CodeBuffer,
   dst_xmm : Int,
   src : Int,
@@ -3315,7 +3339,7 @@ fn CodeBuffer::x86_emit_cvtsi2ss_xmm_r32(
 }
 
 ///|
-fn CodeBuffer::x86_emit_cvtsi2ss_xmm_r64(
+pub fn CodeBuffer::x86_emit_cvtsi2ss_xmm_r64(
   self : CodeBuffer,
   dst_xmm : Int,
   src : Int,
@@ -3331,7 +3355,7 @@ fn CodeBuffer::x86_emit_cvtsi2ss_xmm_r64(
 }
 
 ///|
-fn CodeBuffer::x86_emit_cvtsi2sd_xmm_r32(
+pub fn CodeBuffer::x86_emit_cvtsi2sd_xmm_r32(
   self : CodeBuffer,
   dst_xmm : Int,
   src : Int,
@@ -3349,7 +3373,7 @@ fn CodeBuffer::x86_emit_cvtsi2sd_xmm_r32(
 }
 
 ///|
-fn CodeBuffer::x86_emit_cvtsi2sd_xmm_r64(
+pub fn CodeBuffer::x86_emit_cvtsi2sd_xmm_r64(
   self : CodeBuffer,
   dst_xmm : Int,
   src : Int,
@@ -3365,7 +3389,7 @@ fn CodeBuffer::x86_emit_cvtsi2sd_xmm_r64(
 }
 
 ///|
-fn CodeBuffer::x86_emit_cvtss2sd_xmm_xmm(
+pub fn CodeBuffer::x86_emit_cvtss2sd_xmm_xmm(
   self : CodeBuffer,
   dst_xmm : Int,
   src_xmm : Int,
@@ -3383,7 +3407,7 @@ fn CodeBuffer::x86_emit_cvtss2sd_xmm_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_cvtsd2ss_xmm_xmm(
+pub fn CodeBuffer::x86_emit_cvtsd2ss_xmm_xmm(
   self : CodeBuffer,
   dst_xmm : Int,
   src_xmm : Int,
@@ -3401,7 +3425,7 @@ fn CodeBuffer::x86_emit_cvtsd2ss_xmm_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_cvtdq2ps_xmm_xmm(
+pub fn CodeBuffer::x86_emit_cvtdq2ps_xmm_xmm(
   self : CodeBuffer,
   dst_xmm : Int,
   src_xmm : Int,
@@ -3418,7 +3442,7 @@ fn CodeBuffer::x86_emit_cvtdq2ps_xmm_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_cvttps2dq_xmm_xmm(
+pub fn CodeBuffer::x86_emit_cvttps2dq_xmm_xmm(
   self : CodeBuffer,
   dst_xmm : Int,
   src_xmm : Int,
@@ -3436,7 +3460,7 @@ fn CodeBuffer::x86_emit_cvttps2dq_xmm_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_cvttpd2dq_xmm_xmm(
+pub fn CodeBuffer::x86_emit_cvttpd2dq_xmm_xmm(
   self : CodeBuffer,
   dst_xmm : Int,
   src_xmm : Int,
@@ -3454,7 +3478,7 @@ fn CodeBuffer::x86_emit_cvttpd2dq_xmm_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_cvtdq2pd_xmm_xmm(
+pub fn CodeBuffer::x86_emit_cvtdq2pd_xmm_xmm(
   self : CodeBuffer,
   dst_xmm : Int,
   src_xmm : Int,
@@ -3472,7 +3496,7 @@ fn CodeBuffer::x86_emit_cvtdq2pd_xmm_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_cvtps2pd_xmm_xmm(
+pub fn CodeBuffer::x86_emit_cvtps2pd_xmm_xmm(
   self : CodeBuffer,
   dst_xmm : Int,
   src_xmm : Int,
@@ -3489,7 +3513,7 @@ fn CodeBuffer::x86_emit_cvtps2pd_xmm_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_cvtpd2ps_xmm_xmm(
+pub fn CodeBuffer::x86_emit_cvtpd2ps_xmm_xmm(
   self : CodeBuffer,
   dst_xmm : Int,
   src_xmm : Int,
@@ -3507,7 +3531,7 @@ fn CodeBuffer::x86_emit_cvtpd2ps_xmm_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_movdqu_m128_xmm(
+pub fn CodeBuffer::x86_emit_movdqu_m128_xmm(
   self : CodeBuffer,
   base : Int,
   disp : Int,
@@ -3530,7 +3554,7 @@ fn CodeBuffer::x86_emit_movdqu_m128_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_movdqu_xmm_m128(
+pub fn CodeBuffer::x86_emit_movdqu_xmm_m128(
   self : CodeBuffer,
   dst_xmm : Int,
   base : Int,
@@ -3553,7 +3577,7 @@ fn CodeBuffer::x86_emit_movdqu_xmm_m128(
 }
 
 ///|
-fn CodeBuffer::x86_emit_movsx_r64_m8(
+pub fn CodeBuffer::x86_emit_movsx_r64_m8(
   self : CodeBuffer,
   dst : Int,
   base : Int,
@@ -3573,7 +3597,7 @@ fn CodeBuffer::x86_emit_movsx_r64_m8(
 }
 
 ///|
-fn CodeBuffer::x86_emit_movzx_r32_m8(
+pub fn CodeBuffer::x86_emit_movzx_r32_m8(
   self : CodeBuffer,
   dst : Int,
   base : Int,
@@ -3595,7 +3619,7 @@ fn CodeBuffer::x86_emit_movzx_r32_m8(
 }
 
 ///|
-fn CodeBuffer::x86_emit_movsx_r64_m16(
+pub fn CodeBuffer::x86_emit_movsx_r64_m16(
   self : CodeBuffer,
   dst : Int,
   base : Int,
@@ -3615,7 +3639,7 @@ fn CodeBuffer::x86_emit_movsx_r64_m16(
 }
 
 ///|
-fn CodeBuffer::x86_emit_movzx_r32_m16(
+pub fn CodeBuffer::x86_emit_movzx_r32_m16(
   self : CodeBuffer,
   dst : Int,
   base : Int,
@@ -3637,7 +3661,7 @@ fn CodeBuffer::x86_emit_movzx_r32_m16(
 }
 
 ///|
-fn CodeBuffer::x86_emit_movsxd_r64_m32(
+pub fn CodeBuffer::x86_emit_movsxd_r64_m32(
   self : CodeBuffer,
   dst : Int,
   base : Int,
@@ -3656,56 +3680,12 @@ fn CodeBuffer::x86_emit_movsxd_r64_m32(
 }
 
 ///|
-fn CodeBuffer::x86_emit_ret(self : CodeBuffer) -> Unit {
+pub fn CodeBuffer::x86_emit_ret(self : CodeBuffer) -> Unit {
   self.emit_byte(0xC3)
 }
 
 ///|
-fn CodeBuffer::x86_emit_fma213(
-  self : CodeBuffer,
-  scalar : Bool,
-  f64 : Bool,
-  operation : X64FloatTernary,
-  destination : Int,
-  multiplier : Int,
-  addend : Int,
-) -> Unit {
-  let r = (destination >> 3) & 1
-  let b = (addend >> 3) & 1
-  self.emit_byte(0xC4)
-  self.emit_byte(((r ^ 1) << 7) | 0x40 | ((b ^ 1) << 5) | 0x02)
-  self.emit_byte(
-    (if f64 { 0x80 } else { 0 }) | (((multiplier & 15) ^ 15) << 3) | 0x01,
-  )
-  let opcode = match (operation, scalar) {
-    (Fmadd, true) => 0xA9
-    (Fmadd, false) => 0xA8
-    (Fmsub, true) => 0xAB
-    (Fmsub, false) => 0xAA
-    (Fnmadd, true) => 0xAD
-    (Fnmadd, false) => 0xAC
-    (Fnmsub, true) => 0xAF
-    (Fnmsub, false) => 0xAE
-  }
-  self.emit_byte(opcode)
-  emit_modrm(self, 3, destination, addend)
-}
-
-///|
-fn CodeBuffer::x86_emit_jmp_rel32(
-  self : CodeBuffer,
-  target_block : Int,
-) -> Unit {
-  // jmp rel32: E9 disp32
-  self.emit_byte(0xE9)
-  let disp_offset = self.current_pos()
-  emit_u32_le(self, 0)
-  let next_ip_offset = self.current_pos()
-  self.add_x86_rel32_fixup(target_block, disp_offset, next_ip_offset)
-}
-
-///|
-fn x86_cond_to_jcc_opcode(cond : RawCondition) -> Int {
+pub fn x86_cond_to_jcc_opcode(cond : RawCondition) -> Int {
   match cond {
     // Signed/unsigned conditions match the usual interpretation after CMP.
     RawEq => 0x84 // JE
@@ -3728,22 +3708,7 @@ fn x86_cond_to_jcc_opcode(cond : RawCondition) -> Int {
 }
 
 ///|
-fn CodeBuffer::x86_emit_jcc_rel32(
-  self : CodeBuffer,
-  cond : RawCondition,
-  target_block : Int,
-) -> Unit {
-  // jcc rel32: 0F 8? disp32
-  self.emit_byte(0x0F)
-  self.emit_byte(x86_cond_to_jcc_opcode(cond))
-  let disp_offset = self.current_pos()
-  emit_u32_le(self, 0)
-  let next_ip_offset = self.current_pos()
-  self.add_x86_rel32_fixup(target_block, disp_offset, next_ip_offset)
-}
-
-///|
-fn CodeBuffer::x86_emit_setcc_r8(
+pub fn CodeBuffer::x86_emit_setcc_r8(
   self : CodeBuffer,
   cond : RawCondition,
   dst : Int,
@@ -3763,7 +3728,7 @@ fn CodeBuffer::x86_emit_setcc_r8(
 }
 
 ///|
-fn CodeBuffer::x86_emit_movzx_r32_r8(
+pub fn CodeBuffer::x86_emit_movzx_r32_r8(
   self : CodeBuffer,
   dst : Int,
   src : Int,
@@ -3780,7 +3745,7 @@ fn CodeBuffer::x86_emit_movzx_r32_r8(
 }
 
 ///|
-fn CodeBuffer::x86_emit_movzx_r32_r16(
+pub fn CodeBuffer::x86_emit_movzx_r32_r16(
   self : CodeBuffer,
   dst : Int,
   src : Int,
@@ -3796,20 +3761,20 @@ fn CodeBuffer::x86_emit_movzx_r32_r16(
 }
 
 ///|
-fn CodeBuffer::x86_emit_cqo(self : CodeBuffer) -> Unit {
+pub fn CodeBuffer::x86_emit_cqo(self : CodeBuffer) -> Unit {
   // cqo: sign-extend rax into rdx:rax (64-bit)
   self.emit_byte(0x48)
   self.emit_byte(0x99)
 }
 
 ///|
-fn CodeBuffer::x86_emit_cdq(self : CodeBuffer) -> Unit {
+pub fn CodeBuffer::x86_emit_cdq(self : CodeBuffer) -> Unit {
   // cdq: sign-extend eax into edx:eax (32-bit)
   self.emit_byte(0x99)
 }
 
 ///|
-fn CodeBuffer::x86_emit_idiv_r64(self : CodeBuffer, divisor : Int) -> Unit {
+pub fn CodeBuffer::x86_emit_idiv_r64(self : CodeBuffer, divisor : Int) -> Unit {
   // idiv r/m64: REX.W + F7 /7
   let b = (divisor >> 3) & 1
   emit_rex_w(self, 0, b)
@@ -3818,7 +3783,7 @@ fn CodeBuffer::x86_emit_idiv_r64(self : CodeBuffer, divisor : Int) -> Unit {
 }
 
 ///|
-fn CodeBuffer::x86_emit_idiv_r32(self : CodeBuffer, divisor : Int) -> Unit {
+pub fn CodeBuffer::x86_emit_idiv_r32(self : CodeBuffer, divisor : Int) -> Unit {
   // idiv r/m32: F7 /7
   let b = (divisor >> 3) & 1
   if b != 0 {
@@ -3829,7 +3794,7 @@ fn CodeBuffer::x86_emit_idiv_r32(self : CodeBuffer, divisor : Int) -> Unit {
 }
 
 ///|
-fn CodeBuffer::x86_emit_div_r64(self : CodeBuffer, divisor : Int) -> Unit {
+pub fn CodeBuffer::x86_emit_div_r64(self : CodeBuffer, divisor : Int) -> Unit {
   // div r/m64: REX.W + F7 /6
   let b = (divisor >> 3) & 1
   emit_rex_w(self, 0, b)
@@ -3838,7 +3803,7 @@ fn CodeBuffer::x86_emit_div_r64(self : CodeBuffer, divisor : Int) -> Unit {
 }
 
 ///|
-fn CodeBuffer::x86_emit_div_r32(self : CodeBuffer, divisor : Int) -> Unit {
+pub fn CodeBuffer::x86_emit_div_r32(self : CodeBuffer, divisor : Int) -> Unit {
   // div r/m32: F7 /6
   let b = (divisor >> 3) & 1
   if b != 0 {
@@ -3849,7 +3814,7 @@ fn CodeBuffer::x86_emit_div_r32(self : CodeBuffer, divisor : Int) -> Unit {
 }
 
 ///|
-fn CodeBuffer::x86_emit_mul_r64(self : CodeBuffer, src : Int) -> Unit {
+pub fn CodeBuffer::x86_emit_mul_r64(self : CodeBuffer, src : Int) -> Unit {
   // mul r/m64: REX.W + F7 /4
   let b = (src >> 3) & 1
   emit_rex_w(self, 0, b)
@@ -3858,7 +3823,7 @@ fn CodeBuffer::x86_emit_mul_r64(self : CodeBuffer, src : Int) -> Unit {
 }
 
 ///|
-fn CodeBuffer::x86_emit_mul_r32(self : CodeBuffer, src : Int) -> Unit {
+pub fn CodeBuffer::x86_emit_mul_r32(self : CodeBuffer, src : Int) -> Unit {
   let b = (src >> 3) & 1
   if b != 0 {
     emit_rex(self, 0, b)
@@ -3868,7 +3833,7 @@ fn CodeBuffer::x86_emit_mul_r32(self : CodeBuffer, src : Int) -> Unit {
 }
 
 ///|
-fn CodeBuffer::x86_emit_imul1_r64(self : CodeBuffer, src : Int) -> Unit {
+pub fn CodeBuffer::x86_emit_imul1_r64(self : CodeBuffer, src : Int) -> Unit {
   // imul r/m64 (one-operand): REX.W + F7 /5
   let b = (src >> 3) & 1
   emit_rex_w(self, 0, b)
@@ -3877,7 +3842,7 @@ fn CodeBuffer::x86_emit_imul1_r64(self : CodeBuffer, src : Int) -> Unit {
 }
 
 ///|
-fn CodeBuffer::x86_emit_imul1_r32(self : CodeBuffer, src : Int) -> Unit {
+pub fn CodeBuffer::x86_emit_imul1_r32(self : CodeBuffer, src : Int) -> Unit {
   let b = (src >> 3) & 1
   if b != 0 {
     emit_rex(self, 0, b)
@@ -3887,7 +3852,7 @@ fn CodeBuffer::x86_emit_imul1_r32(self : CodeBuffer, src : Int) -> Unit {
 }
 
 ///|
-fn CodeBuffer::x86_emit_cmp_r_imm32(
+pub fn CodeBuffer::x86_emit_cmp_r_imm32(
   self : CodeBuffer,
   reg : Int,
   imm : Int,
@@ -3901,7 +3866,7 @@ fn CodeBuffer::x86_emit_cmp_r_imm32(
 }
 
 ///|
-fn CodeBuffer::x86_emit_cmp_r32_imm32(
+pub fn CodeBuffer::x86_emit_cmp_r32_imm32(
   self : CodeBuffer,
   reg : Int,
   imm : Int,
@@ -3917,7 +3882,7 @@ fn CodeBuffer::x86_emit_cmp_r32_imm32(
 }
 
 ///|
-fn CodeBuffer::x86_emit_and_r_imm8_sxb64(
+pub fn CodeBuffer::x86_emit_and_r_imm8_sxb64(
   self : CodeBuffer,
   reg : Int,
   imm8 : Int,
@@ -3931,7 +3896,7 @@ fn CodeBuffer::x86_emit_and_r_imm8_sxb64(
 }
 
 ///|
-fn CodeBuffer::x86_emit_cmovcc_rr(
+pub fn CodeBuffer::x86_emit_cmovcc_rr(
   self : CodeBuffer,
   cond : RawCondition,
   dst : Int,
@@ -3948,7 +3913,7 @@ fn CodeBuffer::x86_emit_cmovcc_rr(
 }
 
 ///|
-fn CodeBuffer::x86_emit_cmovcc_rr32(
+pub fn CodeBuffer::x86_emit_cmovcc_rr32(
   self : CodeBuffer,
   cond : RawCondition,
   dst : Int,
@@ -3967,7 +3932,7 @@ fn CodeBuffer::x86_emit_cmovcc_rr32(
 }
 
 ///|
-fn CodeBuffer::x86_emit_movd_r32_xmm(
+pub fn CodeBuffer::x86_emit_movd_r32_xmm(
   self : CodeBuffer,
   dst : Int,
   src_xmm : Int,
@@ -3985,7 +3950,7 @@ fn CodeBuffer::x86_emit_movd_r32_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_movd_xmm_r32(
+pub fn CodeBuffer::x86_emit_movd_xmm_r32(
   self : CodeBuffer,
   dst_xmm : Int,
   src : Int,
@@ -4003,7 +3968,7 @@ fn CodeBuffer::x86_emit_movd_xmm_r32(
 }
 
 ///|
-fn CodeBuffer::x86_emit_movq_r64_xmm(
+pub fn CodeBuffer::x86_emit_movq_r64_xmm(
   self : CodeBuffer,
   dst : Int,
   src_xmm : Int,
@@ -4019,7 +3984,7 @@ fn CodeBuffer::x86_emit_movq_r64_xmm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_movq_xmm_r64(
+pub fn CodeBuffer::x86_emit_movq_xmm_r64(
   self : CodeBuffer,
   dst_xmm : Int,
   src : Int,
@@ -4035,7 +4000,11 @@ fn CodeBuffer::x86_emit_movq_xmm_r64(
 }
 
 ///|
-fn CodeBuffer::x86_emit_cmp_rr(self : CodeBuffer, lhs : Int, rhs : Int) -> Unit {
+pub fn CodeBuffer::x86_emit_cmp_rr(
+  self : CodeBuffer,
+  lhs : Int,
+  rhs : Int,
+) -> Unit {
   // cmp r/m64, r64: REX.W + 39 /r (cmp lhs, rhs)
   let r = (rhs >> 3) & 1
   let b = (lhs >> 3) & 1
@@ -4045,7 +4014,7 @@ fn CodeBuffer::x86_emit_cmp_rr(self : CodeBuffer, lhs : Int, rhs : Int) -> Unit 
 }
 
 ///|
-fn CodeBuffer::x86_emit_cmp_rr32(
+pub fn CodeBuffer::x86_emit_cmp_rr32(
   self : CodeBuffer,
   lhs : Int,
   rhs : Int,
@@ -4061,7 +4030,7 @@ fn CodeBuffer::x86_emit_cmp_rr32(
 }
 
 ///|
-fn CodeBuffer::x86_emit_test_rr(
+pub fn CodeBuffer::x86_emit_test_rr(
   self : CodeBuffer,
   lhs : Int,
   rhs : Int,
@@ -4075,7 +4044,7 @@ fn CodeBuffer::x86_emit_test_rr(
 }
 
 ///|
-fn CodeBuffer::x86_emit_test_rr32(
+pub fn CodeBuffer::x86_emit_test_rr32(
   self : CodeBuffer,
   lhs : Int,
   rhs : Int,
@@ -4091,7 +4060,7 @@ fn CodeBuffer::x86_emit_test_rr32(
 }
 
 ///|
-fn CodeBuffer::x86_emit_bsr_r32_r32(
+pub fn CodeBuffer::x86_emit_bsr_r32_r32(
   self : CodeBuffer,
   dst : Int,
   src : Int,
@@ -4108,7 +4077,7 @@ fn CodeBuffer::x86_emit_bsr_r32_r32(
 }
 
 ///|
-fn CodeBuffer::x86_emit_bsr_r64_r64(
+pub fn CodeBuffer::x86_emit_bsr_r64_r64(
   self : CodeBuffer,
   dst : Int,
   src : Int,
@@ -4127,7 +4096,7 @@ fn CodeBuffer::x86_emit_bsr_r64_r64(
 ///
 /// Encoding: INT3 (0xCC) followed by imm16 (little-endian). The embedding trap
 /// handler owns the payload policy.
-fn CodeBuffer::x86_emit_trap_imm16(self : CodeBuffer, imm16 : Int) -> Unit {
+pub fn CodeBuffer::x86_emit_trap_imm16(self : CodeBuffer, imm16 : Int) -> Unit {
   self.emit_byte(0xCC)
   self.emit_byte(imm16 & 255)
   self.emit_byte((imm16 >> 8) & 255)
@@ -4166,7 +4135,7 @@ fn CodeBuffer::x86_emit_atomic_modrm(
 }
 
 ///|
-fn CodeBuffer::x86_emit_lock_xadd(
+pub fn CodeBuffer::x86_emit_lock_xadd(
   self : CodeBuffer,
   width : @native.AccessWidth,
   base : Int,
@@ -4180,7 +4149,7 @@ fn CodeBuffer::x86_emit_lock_xadd(
 }
 
 ///|
-fn CodeBuffer::x86_emit_xchg_memory(
+pub fn CodeBuffer::x86_emit_xchg_memory(
   self : CodeBuffer,
   width : @native.AccessWidth,
   base : Int,
@@ -4192,7 +4161,7 @@ fn CodeBuffer::x86_emit_xchg_memory(
 }
 
 ///|
-fn CodeBuffer::x86_emit_lock_cmpxchg(
+pub fn CodeBuffer::x86_emit_lock_cmpxchg(
   self : CodeBuffer,
   width : @native.AccessWidth,
   base : Int,
@@ -4206,7 +4175,7 @@ fn CodeBuffer::x86_emit_lock_cmpxchg(
 }
 
 ///|
-fn CodeBuffer::x86_emit_mfence(self : CodeBuffer) -> Unit {
+pub fn CodeBuffer::x86_emit_mfence(self : CodeBuffer) -> Unit {
   self.emit_byte(0x0F)
   self.emit_byte(0xAE)
   self.emit_byte(0xF0)

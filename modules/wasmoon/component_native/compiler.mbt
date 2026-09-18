@@ -322,7 +322,7 @@ fn load_component_jit_context(
   target : @wasmoon_jit.NativeTarget,
   opt_level : Int,
   classify_suspension : (@runtime.RuntimeError) -> Bool,
-) -> (@wast.JITModuleContext, @wast.FuncrefRegistration) raise @runtime_impl.ComponentRuntimeError {
+) -> (@core_jit.JITModuleContext, @core_jit.FuncrefRegistration) raise @runtime_impl.ComponentRuntimeError {
   let lowered_module = rewrite_component_alias_indices(module_, instance)
   let actual_memory_max = if instance.mem_addrs.length() > 0 {
     let memory = store.get_mem(instance.mem_addrs[0]) catch {
@@ -352,10 +352,10 @@ fn load_component_jit_context(
   }
   let jit_module = @jit.JITModule::load_artifact_with_imports(
     loaded,
-    @wast.build_func_signatures(lowered_module),
-    @wast.build_external_imports_for_jit(lowered_module, instance, store),
+    @core_jit.build_func_signatures(lowered_module),
+    @core_jit.build_external_imports_for_jit(lowered_module, instance, store),
     function_names=Array::makei(
-      @wast.count_func_imports(lowered_module.imports) +
+      @core_jit.count_func_imports(lowered_module.imports) +
       lowered_module.funcs.length(),
       fn(index) { component_function_name(lowered_module, index) },
     ),
@@ -363,11 +363,11 @@ fn load_component_jit_context(
     error =>
       raise NativeCompilationFailed("artifact installation failed: \{error}")
   }
-  let funcrefs = @wast.register_owned_instance_funcrefs_for_jit(
+  let funcrefs = @core_jit.register_owned_instance_funcrefs_for_jit(
     jit_module, instance, store,
   )
   jit_module.configure_native_fiber_stack_size(16L * 1024L * 1024L) |> ignore
-  guard @wast.init_jit_memories_from_store(instance, store, jit_module)
+  guard @core_jit.init_jit_memories_from_store(instance, store, jit_module)
     is Some(_) else {
     funcrefs.release()
     jit_module.close()
@@ -375,20 +375,20 @@ fn load_component_jit_context(
       "failed to initialize component core memories",
     )
   }
-  let globals_pointer = @wast.init_jit_globals_from_store(
+  let globals_pointer = @core_jit.init_jit_globals_from_store(
     instance, store, jit_module,
   ) catch {
     error =>
       raise NativeCompilationFailed("reference transfer failed: \{error}")
   }
-  @wast.init_elem_segments(
+  @core_jit.init_elem_segments(
     lowered_module,
     jit_module,
     instance,
     store,
     use_subtype_indirect_check=true,
   )
-  @wast.init_bulk_segments(
+  @core_jit.init_bulk_segments(
     lowered_module,
     jit_module,
     instance,
@@ -398,7 +398,7 @@ fn load_component_jit_context(
     error =>
       raise NativeCompilationFailed("reference transfer failed: \{error}")
   }
-  @wast.sync_tables_to_jit(
+  @core_jit.sync_tables_to_jit(
     instance,
     store,
     jit_module,
@@ -407,7 +407,7 @@ fn load_component_jit_context(
     error =>
       raise NativeCompilationFailed("reference transfer failed: \{error}")
   }
-  let context = @wast.JITModuleContext(
+  let context = @core_jit.JITModuleContext(
     jit_module,
     globals_pointer,
     instance.global_addrs.copy(),
@@ -422,9 +422,9 @@ fn load_component_jit_context(
   context.install_hostcall_dispatcher(
     store,
     instance,
-    before_dispatch=() => @wast.sync_jit_tables_to_store(context, store),
+    before_dispatch=() => @core_jit.sync_jit_tables_to_store(context, store),
     after_dispatch=() => {
-      @wast.sync_tables_to_jit(
+      @core_jit.sync_tables_to_jit(
         instance,
         store,
         jit_module,

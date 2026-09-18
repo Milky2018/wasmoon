@@ -120,7 +120,7 @@ fn store_addr_to_module_func_idx(
 pub fn init_jit_globals_from_store(
   instance : @runtime.ModuleInstance,
   store : @runtime.Store,
-  jit_module : @jit.JITModule,
+  jit_module : @compiled_jit.JITModule,
 ) -> Int64 raise @runtime.RuntimeError {
   if jit_module.has_callable_metadata() && store.c_heap is Some(heap) {
     jit_module.setup_gc(
@@ -214,7 +214,7 @@ pub fn init_jit_globals_from_store(
 
 ///|
 pub fn register_instance_funcrefs_for_jit(
-  jit_module : @jit.JITModule,
+  jit_module : @compiled_jit.JITModule,
   instance : @runtime.ModuleInstance,
   store : @runtime.Store,
 ) -> Unit {
@@ -226,7 +226,7 @@ pub fn register_instance_funcrefs_for_jit(
 /// Register one module's mappings and return the capability that withdraws
 /// exactly those mappings when the module is released.
 pub fn register_owned_instance_funcrefs_for_jit(
-  jit_module : @jit.JITModule,
+  jit_module : @compiled_jit.JITModule,
   instance : @runtime.ModuleInstance,
   store : @runtime.Store,
 ) -> FuncrefRegistration {
@@ -461,7 +461,7 @@ fn read_native_global(
 fn encode_global_value_for_jit(
   value : @types.Value,
   store : @runtime.Store,
-  jit_module : @jit.JITModule,
+  jit_module : @compiled_jit.JITModule,
   func_addrs : Array[Int],
 ) -> (Int64, Int64?) raise @runtime.RuntimeError {
   match value {
@@ -656,7 +656,7 @@ pub fn sync_jit_tables_to_store(
 pub fn sync_tables_to_jit(
   instance : @runtime.ModuleInstance,
   store : @runtime.Store,
-  jit_module : @jit.JITModule,
+  jit_module : @compiled_jit.JITModule,
   use_subtype_indirect_check? : Bool = false,
 ) -> Unit raise @runtime.RuntimeError {
   // Iterate over all tables in the instance
@@ -750,7 +750,7 @@ pub fn eval_elem_offset_expr(
 /// Initialize element segments for call_indirect support
 pub fn init_elem_segments(
   mod_ : @types.Module,
-  jm : @jit.JITModule,
+  jm : @compiled_jit.JITModule,
   instance : @runtime.ModuleInstance,
   store : @runtime.Store,
   use_subtype_indirect_check? : Bool = false,
@@ -863,7 +863,7 @@ pub fn init_elem_segments(
 /// type-check after table.init/table.fill.
 pub fn init_bulk_segments(
   mod_ : @types.Module,
-  jm : @jit.JITModule,
+  jm : @compiled_jit.JITModule,
   instance : @runtime.ModuleInstance,
   store : @runtime.Store,
   use_subtype_indirect_check? : Bool = false,
@@ -1040,7 +1040,7 @@ pub fn count_func_imports(imports : Array[@types.Import]) -> Int {
 pub fn sync_table_to_jit(
   table : @runtime.Table,
   jit_table : @wasmoon_jit.JITTable,
-  jit_module : @jit.JITModule,
+  jit_module : @compiled_jit.JITModule,
   instance : @runtime.ModuleInstance,
   store : @runtime.Store,
   use_subtype_indirect_check? : Bool = false,
@@ -1108,7 +1108,7 @@ fn low_u32_bits(raw : Int64) -> Int {
 fn lookup_funcref_ptr_for_store_addr(
   store : @runtime.Store,
   store_addr : Int,
-  jit_module : @jit.JITModule,
+  jit_module : @compiled_jit.JITModule,
   instance : @runtime.ModuleInstance,
 ) -> Int64? {
   match store_addr_to_module_func_idx(store_addr, instance) {
@@ -1127,7 +1127,7 @@ fn lookup_funcref_ptr_for_store_addr(
 fn lookup_store_addr_for_funcref_ptr(
   store : @runtime.Store,
   func_ptr : Int64,
-  jit_module : @jit.JITModule,
+  jit_module : @compiled_jit.JITModule,
   instance : @runtime.ModuleInstance,
 ) -> Int? {
   match registered_funcref_store_addr(store, func_ptr) {
@@ -1158,7 +1158,7 @@ fn lookup_store_addr_for_funcref_ptr(
 fn decode_funcref_to_store_addr(
   raw : Int64,
   store : @runtime.Store,
-  jit_module : @jit.JITModule,
+  jit_module : @compiled_jit.JITModule,
   instance : @runtime.ModuleInstance,
 ) -> @types.Value {
   if raw == NULL_REF {
@@ -1190,7 +1190,7 @@ fn decode_funcref_to_store_addr(
 fn encode_store_funcref_for_jit(
   value : @types.Value,
   store : @runtime.Store,
-  jit_module : @jit.JITModule,
+  jit_module : @compiled_jit.JITModule,
   instance : @runtime.ModuleInstance,
 ) -> Int64 {
   match value {
@@ -1215,7 +1215,7 @@ fn encode_store_funcref_for_jit(
 fn encode_exception_value_for_jit(
   value : @types.Value,
   store : @runtime.Store,
-  jit_module : @jit.JITModule,
+  jit_module : @compiled_jit.JITModule,
   instance : @runtime.ModuleInstance,
 ) -> Int64? raise @runtime.RuntimeError {
   match value {
@@ -1241,7 +1241,7 @@ fn decode_ref_value(
   ty : @types.ValueType,
   raw : Int64,
   store : @runtime.Store,
-  jit_module : @jit.JITModule,
+  jit_module : @compiled_jit.JITModule,
   instance : @runtime.ModuleInstance,
 ) -> @types.Value raise @runtime.RuntimeError {
   match ty {
@@ -1293,7 +1293,7 @@ fn decode_value(
   ty : @types.ValueType,
   slot_idx : Int,
   store : @runtime.Store,
-  jit_module : @jit.JITModule,
+  jit_module : @compiled_jit.JITModule,
   instance : @runtime.ModuleInstance,
 ) -> (@types.Value, Int) raise @runtime.RuntimeError {
   match ty {
@@ -1332,7 +1332,7 @@ fn encode_value(
   ty : @types.ValueType,
   value : @types.Value,
   store : @runtime.Store,
-  jit_module : @jit.JITModule,
+  jit_module : @compiled_jit.JITModule,
   instance : @runtime.ModuleInstance,
 ) -> Array[Int64]? raise @runtime.RuntimeError {
   match ty {
