@@ -163,14 +163,16 @@ async test "async host function suspends wasm without blocking the host task" {
     },
     func_type={ params: [I32], results: [I32], },
   )
-  let instance = instantiate_with_linker(
+  let instance = @executor.instantiate_with_linker(
     linker,
     "guest",
     async_host_test_module(),
   )
   let result = @async.with_task_group(group => {
     let call = group.spawn(no_wait=true, () => {
-      call_exported_func_async(linker.get_store(), instance, "run", [I32(20)])
+      @executor.call_exported_func_async(linker.get_store(), instance, "run", [
+        I32(20),
+      ])
     })
     host_started.acquire()
     group.spawn_bg() <| () => {
@@ -199,13 +201,13 @@ test "sync wasm call rejects an async host function" {
     },
     func_type={ params: [I32], results: [I32], },
   )
-  let instance = instantiate_with_linker(
+  let instance = @executor.instantiate_with_linker(
     linker,
     "guest",
     async_host_test_module(),
   )
   let error = try
-    call_exported_func(linker.get_store(), instance, "run", [I32(20)])
+    @executor.call_exported_func(linker.get_store(), instance, "run", [I32(20)])
   catch {
     error => error
   } noraise {
@@ -227,13 +229,15 @@ async test "async host function preserves its runtime error" {
     },
     func_type={ params: [I32], results: [I32], },
   )
-  let instance = instantiate_with_linker(
+  let instance = @executor.instantiate_with_linker(
     linker,
     "guest",
     async_host_test_module(),
   )
   let error = try
-    call_exported_func_async(linker.get_store(), instance, "run", [I32(20)])
+    @executor.call_exported_func_async(linker.get_store(), instance, "run", [
+      I32(20),
+    ])
   catch {
     error => error
   } noraise {
@@ -257,12 +261,12 @@ async test "parked interpreter continuation keeps frame GC roots alive" {
     },
     func_type={ params: [], results: [], },
   )
-  let instance = instantiate_with_linker(
+  let instance = @executor.instantiate_with_linker(
     linker,
     "guest",
     async_host_gc_test_module(),
   )
-  let result = call_exported_func_async(store, instance, "run", [])
+  let result = @executor.call_exported_func_async(store, instance, "run", [])
   debug_inspect(result, content="[I32(42)]")
 }
 
@@ -284,12 +288,12 @@ async test "parked async host-call arguments remain GC roots" {
     },
     func_type={ params: [RefNullStruct(0)], results: [I32], },
   )
-  let instance = instantiate_with_linker(
+  let instance = @executor.instantiate_with_linker(
     linker,
     "guest",
     async_host_argument_root_test_module(),
   )
-  let result = call_exported_func_async(store, instance, "run", [])
+  let result = @executor.call_exported_func_async(store, instance, "run", [])
   debug_inspect(result, content="[I32(42)]")
 }
 
@@ -310,13 +314,13 @@ async test "resumable async calls preserve wasm exceptions after suspension" {
     func_type={ params: [I32], results: [I32], },
   )
   let store = linker.get_store()
-  let instance = instantiate_with_linker(
+  let instance = @executor.instantiate_with_linker(
     linker,
     "guest",
     async_host_throw_after_wait_test_module(),
   )
   @runtime.with_async_host_call_driver(async fn(driver) {
-    guard call_func_by_index_resumable_async_with_exception(
+    guard @executor.call_func_by_index_resumable_async_with_exception(
         store,
         instance,
         1,
@@ -350,7 +354,11 @@ test "synchronous instantiation rejects an async start function" {
     func_type={ params: [], results: [], },
   )
   let error = try
-    instantiate_with_linker(linker, "guest", async_host_start_test_module())
+    @executor.instantiate_with_linker(
+      linker,
+      "guest",
+      async_host_start_test_module(),
+    )
   catch {
     error => error
   } noraise {
@@ -374,7 +382,11 @@ async test "asynchronous instantiation runs an async start exactly once" {
     },
     func_type={ params: [], results: [], },
   )
-  instantiate_with_linker_async(linker, "guest", async_host_start_test_module())
+  @executor.instantiate_with_linker_async(
+    linker,
+    "guest",
+    async_host_start_test_module(),
+  )
   |> ignore
   inspect(calls[0], content="1")
 }
@@ -393,7 +405,7 @@ async test "cancelling an interpreter continuation releases its GC roots" {
     },
     func_type={ params: [], results: [], },
   )
-  let instance = instantiate_with_linker(
+  let instance = @executor.instantiate_with_linker(
     linker,
     "guest",
     async_host_gc_cancel_test_module(),
@@ -401,7 +413,9 @@ async test "cancelling an interpreter continuation releases its GC roots" {
   let rooted = store.alloc_struct(1, [I32(42)])
   @async.with_task_group(group => {
     let call = group.spawn(no_wait=true, allow_failure=true, () => {
-      call_exported_func_async(store, instance, "run", [StructRef(rooted)])
+      @executor.call_exported_func_async(store, instance, "run", [
+        StructRef(rooted),
+      ])
     })
     @async.sleep(1)
     call.cancel()
@@ -429,14 +443,16 @@ async test "failed async host call releases interpreter GC roots" {
     },
     func_type={ params: [], results: [], },
   )
-  let instance = instantiate_with_linker(
+  let instance = @executor.instantiate_with_linker(
     linker,
     "guest",
     async_host_gc_cancel_test_module(),
   )
   let rooted = store.alloc_struct(1, [I32(42)])
   let error = try
-    call_exported_func_async(store, instance, "run", [StructRef(rooted)])
+    @executor.call_exported_func_async(store, instance, "run", [
+      StructRef(rooted),
+    ])
   catch {
     error => error
   } noraise {
@@ -463,14 +479,17 @@ async test "one interpreter invocation can await multiple host calls" {
     },
     func_type={ params: [I32], results: [I32], },
   )
-  let instance = instantiate_with_linker(
+  let instance = @executor.instantiate_with_linker(
     linker,
     "guest",
     async_host_twice_test_module(),
   )
-  let result = call_exported_func_async(linker.get_store(), instance, "run", [
-    I32(10),
-  ])
+  let result = @executor.call_exported_func_async(
+    linker.get_store(),
+    instance,
+    "run",
+    [I32(10)],
+  )
   debug_inspect(result, content="[I32(12)]")
 }
 
@@ -488,7 +507,11 @@ test "synchronous linker instantiation executes start exactly once" {
     },
     func_type={ params: [], results: [], },
   )
-  instantiate_with_linker(linker, "guest", async_host_start_test_module())
+  @executor.instantiate_with_linker(
+    linker,
+    "guest",
+    async_host_start_test_module(),
+  )
   |> ignore
   inspect(calls[0], content="1")
 }

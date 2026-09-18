@@ -14,7 +14,7 @@ test "memory64: i32.load with i64 address" {
     #|    i32.load
     #|  )
     #|)
-  inspect(compare_jit_interp(wat, "test", []), content="matched")
+  inspect(@testsuite.compare_jit_interp(wat, "test", []), content="matched")
 }
 
 ///|
@@ -30,7 +30,7 @@ test "memory64: i32.store and i32.load" {
     #|    i32.load
     #|  )
     #|)
-  inspect(compare_jit_interp(wat, "test", []), content="matched")
+  inspect(@testsuite.compare_jit_interp(wat, "test", []), content="matched")
 }
 
 ///|
@@ -46,7 +46,7 @@ test "memory64: i64.load and i64.store" {
     #|    i64.load
     #|  )
     #|)
-  inspect(compare_jit_interp(wat, "test", []), content="matched")
+  inspect(@testsuite.compare_jit_interp(wat, "test", []), content="matched")
 }
 
 ///|
@@ -59,7 +59,7 @@ test "memory64: memory.size returns i64" {
     #|    memory.size
     #|  )
     #|)
-  inspect(compare_jit_interp(wat, "test", []), content="matched")
+  inspect(@testsuite.compare_jit_interp(wat, "test", []), content="matched")
 }
 
 ///|
@@ -72,7 +72,7 @@ test "memory64: memory.grow takes and returns i64" {
     #|    memory.grow
     #|  )
     #|)
-  inspect(compare_jit_interp(wat, "test", []), content="matched")
+  inspect(@testsuite.compare_jit_interp(wat, "test", []), content="matched")
 }
 
 ///|
@@ -89,7 +89,7 @@ test "memory64: load with offset" {
     #|    i32.load
     #|  )
     #|)
-  inspect(compare_jit_interp(wat, "test", []), content="matched")
+  inspect(@testsuite.compare_jit_interp(wat, "test", []), content="matched")
 }
 
 // ============================================================
@@ -106,7 +106,7 @@ test "memory32: i32.load with i32 address" {
     #|    i32.load
     #|  )
     #|)
-  inspect(compare_jit_interp(wat, "test", []), content="matched")
+  inspect(@testsuite.compare_jit_interp(wat, "test", []), content="matched")
 }
 
 ///|
@@ -119,7 +119,7 @@ test "memory32: memory.size returns i32" {
     #|    memory.size
     #|  )
     #|)
-  inspect(compare_jit_interp(wat, "test", []), content="matched")
+  inspect(@testsuite.compare_jit_interp(wat, "test", []), content="matched")
 }
 
 ///|
@@ -132,7 +132,7 @@ test "memory32: memory.grow takes and returns i32" {
     #|    memory.grow
     #|  )
     #|)
-  inspect(compare_jit_interp(wat, "test", []), content="matched")
+  inspect(@testsuite.compare_jit_interp(wat, "test", []), content="matched")
 }
 
 // ============================================================
@@ -148,7 +148,7 @@ test "table64: table.size returns i64" {
     #|    table.size 0
     #|  )
     #|)
-  inspect(compare_jit_interp(wat, "test", []), content="matched")
+  inspect(@testsuite.compare_jit_interp(wat, "test", []), content="matched")
 }
 
 ///|
@@ -162,7 +162,7 @@ test "table64: table.grow takes and returns i64" {
     #|    table.grow 0
     #|  )
     #|)
-  inspect(compare_jit_interp(wat, "test", []), content="matched")
+  inspect(@testsuite.compare_jit_interp(wat, "test", []), content="matched")
 }
 
 // ============================================================
@@ -178,7 +178,7 @@ test "table32: table.size returns i32" {
     #|    table.size 0
     #|  )
     #|)
-  inspect(compare_jit_interp(wat, "test", []), content="matched")
+  inspect(@testsuite.compare_jit_interp(wat, "test", []), content="matched")
 }
 
 ///|
@@ -192,5 +192,5 @@ test "table32: table.grow takes and returns i32" {
     #|    table.grow 0
     #|  )
     #|)
-  inspect(compare_jit_interp(wat, "test", []), content="matched")
+  inspect(@testsuite.compare_jit_interp(wat, "test", []), content="matched")
 }

@@ -23,7 +23,7 @@ test "call_indirect_with_many_functions" {
     #|    )
     #|  )
     #|)
-  let result = compare_jit_interp(source, "test", [])
+  let result = @testsuite.compare_jit_interp(source, "test", [])
   inspect(result, content="matched")
 }
 
@@ -40,7 +40,7 @@ test "call_indirect_simple" {
     #|    (call_indirect (type $check) (i32.const 1) (i32.const 2) (i32.const 0))
     #|  )
     #|)
-  let result = compare_jit_interp(source, "test", [])
+  let result = @testsuite.compare_jit_interp(source, "test", [])
   inspect(result, content="matched")
 }
 
@@ -61,7 +61,7 @@ test "call_indirect_block_mid" {
     #|    )
     #|  )
     #|)
-  let result = compare_jit_interp(source, "test", [])
+  let result = @testsuite.compare_jit_interp(source, "test", [])
   inspect(result, content="matched")
 }
 
@@ -82,7 +82,7 @@ test "call_indirect_block_last" {
     #|    )
     #|  )
     #|)
-  let result = compare_jit_interp(source, "test", [])
+  let result = @testsuite.compare_jit_interp(source, "test", [])
   inspect(result, content="matched")
 }
 
@@ -108,7 +108,7 @@ test "call_indirect uses live table bounds after grow" {
     #|    i32.const 1
     #|    call_indirect (type $result-i32)))
   inspect(
-    compare_jit_interp_with_opt_level(source, "test", [], 2),
+    @testsuite.compare_jit_interp_with_opt_level(source, "test", [], 2),
     content="matched",
   )
 }
@@ -122,9 +122,14 @@ test "call_indirect traps on the live table bound" {
     #|  (func (export "test") (result i32)
     #|    i32.const 1
     #|    call_indirect (type $result-i32)))
-  let result = compare_jit_interp_with_opt_level(source, "test", [], 2)
+  let result = @testsuite.compare_jit_interp_with_opt_level(
+    source,
+    "test",
+    [],
+    2,
+  )
   inspect(
-    compare_result_errors_contain(result, "undefined element"),
+    @testsuite.compare_result_errors_contain(result, "undefined element"),
     content="true",
   )
 }

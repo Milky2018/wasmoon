@@ -16,11 +16,11 @@ fn assert_instruction_roundtrip(body : String) -> Unit raise {
     "  (elem funcref)\n" +
     "  (data)\n" +
     ")"
-  let expected = parse(source) catch {
+  let expected = @wat.parse(source) catch {
     error => fail("instruction fixture did not parse: \{error}\n\{source}")
   }
-  let rendered = render(expected)
-  let actual = parse(rendered) catch {
+  let rendered = @wat.render(expected)
+  let actual = @wat.parse(rendered) catch {
     error =>
       fail("rendered instruction fixture did not parse: \{error}\n\{rendered}")
   }

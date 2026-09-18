@@ -20,9 +20,9 @@ fn assert_module_shape_eq(
 
 ///|
 fn assert_render_roundtrip(source : String) -> Unit raise {
-  let expected = parse(source)
-  let rendered = render(expected)
-  let actual = parse(rendered) catch {
+  let expected = @wat.parse(source)
+  let rendered = @wat.render(expected)
+  let actual = @wat.parse(rendered) catch {
     error => fail("rendered WAT did not parse: \{error}\n\{rendered}")
   }
   assert_module_shape_eq(expected, actual)
@@ -104,8 +104,8 @@ test "canonical renderer preserves floating-point bits" {
     body.push(F64Const(bits.reinterpret_as_double()))
   }
   let expected = @types.Module::simple([], [], body, "float-bits")
-  let rendered = render(expected)
-  let actual = parse(rendered)
+  let rendered = @wat.render(expected)
+  let actual = @wat.parse(rendered)
   for i, bits in f32_bits {
     guard actual.codes[0].body[i] is F32Const(value) else {
       fail("expected f32.const at instruction \{i}")

@@ -1,15 +1,17 @@
 ///|
 async test "completed async host results remain GC roots until consumed" {
-  let store = Store::with_c_heap()
+  let store = @runtime.Store::with_c_heap()
   defer store.close()
   let struct_type : @types.StructType = {
     fields: [{ storage_type: Val(I32), mutable: false, }],
   }
   store.set_module_types([@types.SubType::simple(Struct(struct_type))])
   let reference = store.alloc_struct(0, [I32(42)])
-  let caller = Caller(store, ModuleInstance())
-  let returned_reference = with_async_host_call_driver(async fn(driver) {
-    let host : AsyncHostFunction = async fn(_caller, _args) {
+  let caller = @runtime.Caller(store, ModuleInstance())
+  let returned_reference = @runtime.with_async_host_call_driver(async fn(
+    driver,
+  ) {
+    let host : @runtime.AsyncHostFunction = async fn(_caller, _args) {
       @async.sleep(0)
       Ok([StructRef(reference)])
     }
@@ -33,16 +35,16 @@ async test "completed async host results remain GC roots until consumed" {
 
 ///|
 async test "cancelled async host results cannot retain GC roots" {
-  let store = Store::with_c_heap()
+  let store = @runtime.Store::with_c_heap()
   defer store.close()
   let struct_type : @types.StructType = {
     fields: [{ storage_type: Val(I32), mutable: false, }],
   }
   store.set_module_types([@types.SubType::simple(Struct(struct_type))])
   let reference = store.alloc_struct(0, [I32(42)])
-  let caller = Caller(store, ModuleInstance())
-  with_async_host_call_driver(async fn(driver) {
-    let host : AsyncHostFunction = async fn(_caller, _args) {
+  let caller = @runtime.Caller(store, ModuleInstance())
+  @runtime.with_async_host_call_driver(async fn(driver) {
+    let host : @runtime.AsyncHostFunction = async fn(_caller, _args) {
       @async.sleep(1000) catch {
         _ => ()
       }

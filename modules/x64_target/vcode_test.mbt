@@ -1,6 +1,6 @@
 ///|
 test "X64 owns a statically typed Target VCode checkpoint" {
-  let builder : @vcode.Builder[X64Inst] = @vcode.Builder::new_with_results(
+  let builder : @vcode.Builder[@x64_target.X64Inst] = @vcode.Builder::new_with_results(
     "x64_add",
     [I64, I64],
     [I64],
@@ -36,7 +36,7 @@ test "X64 owns a statically typed Target VCode checkpoint" {
   )
   |> ignore
   let function = builder.finish()
-  verify_vcode(function)
+  @x64_target.verify_vcode(function)
   inspect(
     function.summary(),
     content=(
@@ -52,7 +52,10 @@ test "X64 owns a statically typed Target VCode checkpoint" {
 
 ///|
 test "X64 verifier rejects an invalid 32-bit constant" {
-  let builder : @vcode.Builder[X64Inst] = @vcode.Builder::new("bad_const", [])
+  let builder : @vcode.Builder[@x64_target.X64Inst] = @vcode.Builder::new(
+    "bad_const",
+    [],
+  )
   let entry = builder.entry_block()
   builder.append_body(
     entry,
@@ -72,7 +75,7 @@ test "X64 verifier rejects an invalid 32-bit constant" {
     @vcode.InstructionMetadata::empty(),
   )
   |> ignore
-  verify_vcode(builder.finish()) catch {
+  @x64_target.verify_vcode(builder.finish()) catch {
     error =>
       inspect(
         error,
@@ -88,7 +91,7 @@ test "X64 verifier rejects an invalid 32-bit constant" {
 
 ///|
 test "X64 compile does not trust externally built VCode" {
-  let builder : @vcode.Builder[X64Inst] = @vcode.Builder::new(
+  let builder : @vcode.Builder[@x64_target.X64Inst] = @vcode.Builder::new(
     "external_bad_const",
     [],
   )
@@ -111,7 +114,7 @@ test "X64 compile does not trust externally built VCode" {
     @vcode.InstructionMetadata::empty(),
   )
   |> ignore
-  try compile(builder.finish()) |> ignore catch {
+  try @x64_target.compile(builder.finish()) |> ignore catch {
     error =>
       inspect(
         error,
@@ -131,9 +134,10 @@ test "X64 compile does not trust externally built VCode" {
 
 ///|
 test "X64 verifier rejects duplicate switch cases" {
-  let builder : @vcode.Builder[X64Inst] = @vcode.Builder::new("bad_switch", [
-    I32,
-  ])
+  let builder : @vcode.Builder[@x64_target.X64Inst] = @vcode.Builder::new(
+    "bad_switch",
+    [I32],
+  )
   let entry = builder.entry_block()
   let target = builder.create_block([])
   builder.set_terminator(
@@ -158,7 +162,7 @@ test "X64 verifier rejects duplicate switch cases" {
     @vcode.InstructionMetadata::empty(),
   )
   |> ignore
-  try verify_vcode(builder.finish()) catch {
+  try @x64_target.verify_vcode(builder.finish()) catch {
     error =>
       inspect(
         error,
@@ -176,7 +180,10 @@ test "X64 verifier rejects duplicate switch cases" {
 
 ///|
 test "X64 verifier requires typed trap metadata" {
-  let builder : @vcode.Builder[X64Inst] = @vcode.Builder::new("bad_trap", [])
+  let builder : @vcode.Builder[@x64_target.X64Inst] = @vcode.Builder::new(
+    "bad_trap",
+    [],
+  )
   builder.set_terminator(
     builder.entry_block(),
     Trap(Unreachable),
@@ -186,7 +193,7 @@ test "X64 verifier requires typed trap metadata" {
     @vcode.InstructionMetadata::empty(),
   )
   |> ignore
-  try verify_vcode(builder.finish()) catch {
+  try @x64_target.verify_vcode(builder.finish()) catch {
     error =>
       inspect(
         error,
@@ -204,7 +211,7 @@ test "X64 verifier requires typed trap metadata" {
 
 ///|
 test "X64 verifier rejects a vector splat with the wrong scalar bank" {
-  let builder : @vcode.Builder[X64Inst] = @vcode.Builder::new(
+  let builder : @vcode.Builder[@x64_target.X64Inst] = @vcode.Builder::new(
     "bad_vector_splat",
     [I64],
   )
@@ -227,7 +234,7 @@ test "X64 verifier rejects a vector splat with the wrong scalar bank" {
     @vcode.InstructionMetadata::empty(),
   )
   |> ignore
-  try verify_vcode(builder.finish()) catch {
+  try @x64_target.verify_vcode(builder.finish()) catch {
     error =>
       inspect(
         error,
@@ -240,7 +247,7 @@ test "X64 verifier rejects a vector splat with the wrong scalar bank" {
 
 ///|
 test "X64 verifier rejects an out-of-range vector shuffle lane" {
-  let builder : @vcode.Builder[X64Inst] = @vcode.Builder::new(
+  let builder : @vcode.Builder[@x64_target.X64Inst] = @vcode.Builder::new(
     "invalid_vector_shuffle",
     [V128, V128],
   )
@@ -269,7 +276,7 @@ test "X64 verifier rejects an out-of-range vector shuffle lane" {
     @vcode.InstructionMetadata::empty(),
   )
   |> ignore
-  try verify_vcode(builder.finish()) catch {
+  try @x64_target.verify_vcode(builder.finish()) catch {
     error =>
       inspect(
         error,
@@ -287,7 +294,7 @@ test "X64 verifier rejects an out-of-range vector shuffle lane" {
 
 ///|
 test "X64 verifier rejects floating lanes for vector integer operations" {
-  let builder : @vcode.Builder[X64Inst] = @vcode.Builder::new(
+  let builder : @vcode.Builder[@x64_target.X64Inst] = @vcode.Builder::new(
     "invalid_vector_integer_lane",
     [V128],
   )
@@ -310,7 +317,7 @@ test "X64 verifier rejects floating lanes for vector integer operations" {
     @vcode.InstructionMetadata::empty(),
   )
   |> ignore
-  try verify_vcode(builder.finish()) catch {
+  try @x64_target.verify_vcode(builder.finish()) catch {
     error =>
       inspect(
         error,
@@ -340,7 +347,7 @@ fn test_platform_call_clobbers() -> Array[@vcode.PhysicalReg] {
 
 ///|
 test "X64 verifier rejects a call with missing ABI results" {
-  let builder : @vcode.Builder[X64Inst] = @vcode.Builder::new(
+  let builder : @vcode.Builder[@x64_target.X64Inst] = @vcode.Builder::new(
     "missing_call_result",
     [],
   )
@@ -366,7 +373,7 @@ test "X64 verifier rejects a call with missing ABI results" {
     @vcode.InstructionMetadata::empty(),
   )
   |> ignore
-  verify_vcode(builder.finish()) catch {
+  @x64_target.verify_vcode(builder.finish()) catch {
     error =>
       inspect(
         error,
@@ -382,7 +389,7 @@ test "X64 verifier rejects a call with missing ABI results" {
 
 ///|
 test "X64 verifier rejects an incomplete call clobber set" {
-  let builder : @vcode.Builder[X64Inst] = @vcode.Builder::new(
+  let builder : @vcode.Builder[@x64_target.X64Inst] = @vcode.Builder::new(
     "bad_call_clobbers",
     [],
   )
@@ -408,7 +415,7 @@ test "X64 verifier rejects an incomplete call clobber set" {
     @vcode.InstructionMetadata::empty(),
   )
   |> ignore
-  verify_vcode(builder.finish()) catch {
+  @x64_target.verify_vcode(builder.finish()) catch {
     error =>
       inspect(
         error,
@@ -424,7 +431,7 @@ test "X64 verifier rejects an incomplete call clobber set" {
 
 ///|
 test "X64 verifier rejects non-byte vector population count" {
-  let builder : @vcode.Builder[X64Inst] = @vcode.Builder::new(
+  let builder : @vcode.Builder[@x64_target.X64Inst] = @vcode.Builder::new(
     "bad_vector_population_count",
     [V128],
   )
@@ -447,7 +454,7 @@ test "X64 verifier rejects non-byte vector population count" {
     @vcode.InstructionMetadata::empty(),
   )
   |> ignore
-  try verify_vcode(builder.finish()) catch {
+  try @x64_target.verify_vcode(builder.finish()) catch {
     error =>
       inspect(
         error,
@@ -465,15 +472,15 @@ test "X64 verifier rejects non-byte vector population count" {
 
 ///|
 test "X64 verifier rejects malformed widening vector operations" {
-  let operations : Array[X64Inst] = [
+  let operations : Array[@x64_target.X64Inst] = [
     VectorIntUnary(I8x16, ExtendAddPairwise(Signed)),
     VectorIntBinary(I8x16, ExtendMultiply(Low, Signed)),
     VectorIntBinary(I16x8, Dot16To32Signed),
     VectorIntBinary(I32x4, Q15MultiplyRoundedSaturating),
   ]
-  let errors : Array[TargetVCodeVerifyError] = []
+  let errors : Array[@x64_target.TargetVCodeVerifyError] = []
   for operation in operations {
-    let builder : @vcode.Builder[X64Inst] = @vcode.Builder::new(
+    let builder : @vcode.Builder[@x64_target.X64Inst] = @vcode.Builder::new(
       "bad_vector_widening",
       [V128, V128],
     )
@@ -504,7 +511,7 @@ test "X64 verifier rejects malformed widening vector operations" {
       @vcode.InstructionMetadata::empty(),
     )
     |> ignore
-    try verify_vcode(builder.finish()) catch {
+    try @x64_target.verify_vcode(builder.finish()) catch {
       error => errors.push(error)
     } noraise {
       _ => fail("expected malformed widening vector operation to be rejected")
@@ -537,7 +544,7 @@ test "X64 verifier rejects malformed widening vector operations" {
 
 ///|
 test "X64 verifier rejects a non-widened vector extension destination" {
-  let builder : @vcode.Builder[X64Inst] = @vcode.Builder::new(
+  let builder : @vcode.Builder[@x64_target.X64Inst] = @vcode.Builder::new(
     "bad_vector_extension",
     [V128],
   )
@@ -560,7 +567,7 @@ test "X64 verifier rejects a non-widened vector extension destination" {
     @vcode.InstructionMetadata::empty(),
   )
   |> ignore
-  try verify_vcode(builder.finish()) catch {
+  try @x64_target.verify_vcode(builder.finish()) catch {
     error =>
       inspect(
         error,
@@ -578,7 +585,7 @@ test "X64 verifier rejects a non-widened vector extension destination" {
 
 ///|
 test "X64 verifier rejects an invalid vector narrowing destination" {
-  let builder : @vcode.Builder[X64Inst] = @vcode.Builder::new(
+  let builder : @vcode.Builder[@x64_target.X64Inst] = @vcode.Builder::new(
     "bad_vector_narrowing",
     [V128, V128],
   )
@@ -604,7 +611,7 @@ test "X64 verifier rejects an invalid vector narrowing destination" {
     @vcode.InstructionMetadata::empty(),
   )
   |> ignore
-  try verify_vcode(builder.finish()) catch {
+  try @x64_target.verify_vcode(builder.finish()) catch {
     error =>
       inspect(
         error,
@@ -622,7 +629,7 @@ test "X64 verifier rejects an invalid vector narrowing destination" {
 
 ///|
 test "X64 verifier rejects floating lanes for all-true" {
-  let builder : @vcode.Builder[X64Inst] = @vcode.Builder::new(
+  let builder : @vcode.Builder[@x64_target.X64Inst] = @vcode.Builder::new(
     "bad_vector_all_true",
     [V128],
   )
@@ -645,7 +652,7 @@ test "X64 verifier rejects floating lanes for all-true" {
     @vcode.InstructionMetadata::empty(),
   )
   |> ignore
-  try verify_vcode(builder.finish()) catch {
+  try @x64_target.verify_vcode(builder.finish()) catch {
     error =>
       inspect(
         error,
@@ -663,7 +670,7 @@ test "X64 verifier rejects floating lanes for all-true" {
 
 ///|
 test "X64 verifier rejects floating lanes for bitmask" {
-  let builder : @vcode.Builder[X64Inst] = @vcode.Builder::new(
+  let builder : @vcode.Builder[@x64_target.X64Inst] = @vcode.Builder::new(
     "bad_vector_bitmask",
     [V128],
   )
@@ -686,7 +693,7 @@ test "X64 verifier rejects floating lanes for bitmask" {
     @vcode.InstructionMetadata::empty(),
   )
   |> ignore
-  try verify_vcode(builder.finish()) catch {
+  try @x64_target.verify_vcode(builder.finish()) catch {
     error =>
       inspect(
         error,
@@ -704,14 +711,14 @@ test "X64 verifier rejects floating lanes for bitmask" {
 
 ///|
 test "X64 verifier rejects integer lanes for vector float operations" {
-  let operations : Array[X64Inst] = [
+  let operations : Array[@x64_target.X64Inst] = [
     VectorFloatUnary(I32x4, Absolute),
     VectorFloatBinary(I64x2, Add),
     VectorFloatCompare(I16x8, Equal),
   ]
-  let errors : Array[TargetVCodeVerifyError] = []
+  let errors : Array[@x64_target.TargetVCodeVerifyError] = []
   for operation in operations {
-    let builder : @vcode.Builder[X64Inst] = @vcode.Builder::new(
+    let builder : @vcode.Builder[@x64_target.X64Inst] = @vcode.Builder::new(
       "bad_vector_float_lane",
       [V128, V128],
     )

@@ -11,8 +11,8 @@ test "JIT floating lane replacement preserves aliased scalar inputs" {
         let source = "(module (func (export \"run\") (param v128 v128) (result v128) " +
           "(\{lane_type}.replace_lane \{destination} (local.get 0) " +
           "(\{lane_type}.extract_lane \{source_lane} (local.get 1)))))"
-        let comparison = compare_jit_interp(source, "run", args)
-        assert_true(compare_result_is_match(comparison))
+        let comparison = @testsuite.compare_jit_interp(source, "run", args)
+        assert_true(@testsuite.compare_result_is_match(comparison))
         let module_ = @wat.parse(source)
         @validator.validate_module(module_)
         let store = @runtime.Store::with_c_heap()

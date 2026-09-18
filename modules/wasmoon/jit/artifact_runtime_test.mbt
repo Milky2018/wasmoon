@@ -110,7 +110,7 @@ test "JITModule publishes a complete installed artifact" {
       ),
     ],
   }
-  let jit_module = JITModule::load_artifact(
+  let jit_module = @jit.JITModule::load_artifact(
     load_runtime_artifact(artifact),
     [([], [I32])],
     function_names=["answer"],
@@ -137,7 +137,7 @@ test "JITModule preserves native fiber allocation failure" {
       ),
     ],
   }
-  let jit_module = JITModule::load_artifact(
+  let jit_module = @jit.JITModule::load_artifact(
     load_runtime_artifact(artifact),
     [([], [I32])],
     function_names=["answer"],
@@ -189,7 +189,7 @@ test "JITModule resolves imported Code symbols transactionally" {
       ("host", @wasmoon_jit.get_import_trampoline("spectest", "print").unwrap()),
     ]),
   )
-  let jit_module = JITModule::load_artifact_with_imports(
+  let jit_module = @jit.JITModule::load_artifact_with_imports(
     load_runtime_artifact(artifact),
     [([], []), ([], [])],
     imports,
@@ -221,7 +221,7 @@ test "JITModule resolves named Wasmoon runtime symbols" {
       ),
     ],
   }
-  let jit_module = JITModule::load_artifact(
+  let jit_module = @jit.JITModule::load_artifact(
     load_runtime_artifact(
       artifact,
       runtime_symbols=@wasmoon_jit.wasmoon_runtime_external_symbols(),
@@ -255,7 +255,7 @@ test "JITModule retains generated hostcall import trampolines" {
   }
   let imports : Map[String, Map[String, Int64]] = Map([])
   imports.set("env", Map([("hostcall", -1L)]))
-  let jit_module = JITModule::load_artifact_with_imports(
+  let jit_module = @jit.JITModule::load_artifact_with_imports(
     load_runtime_artifact(artifact),
     [([], [])],
     imports,
@@ -277,7 +277,7 @@ test "failed artifact replacement leaves the previous module executable" {
       ),
     ],
   }
-  let previous = JITModule::load_artifact(
+  let previous = @jit.JITModule::load_artifact(
     load_runtime_artifact(good_artifact),
     [([], [I32])],
     function_names=["answer"],
@@ -296,7 +296,7 @@ test "failed artifact replacement leaves the previous module executable" {
     ],
   }
   let failed = try
-    JITModule::load_artifact(
+    @jit.JITModule::load_artifact(
       load_runtime_artifact(bad_artifact, runtime_symbols=[missing]),
       [([], [])],
     )

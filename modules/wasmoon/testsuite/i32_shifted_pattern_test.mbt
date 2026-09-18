@@ -19,7 +19,7 @@ test "JIT: i32.add + i32.shl with shift=32 (must mask to 0)" {
     #|    (i32.add (i32.const 10) (i32.shl (i32.const 1) (i32.const 32)))
     #|  )
     #|)
-  let result = compare_jit_interp(source, "test", [])
+  let result = @testsuite.compare_jit_interp(source, "test", [])
   inspect(result, content="matched")
 }
 
@@ -32,7 +32,7 @@ test "JIT: i32.and + i32.shl with shift=32 (must mask to 0)" {
     #|    (i32.and (i32.const 255) (i32.shl (i32.const 1) (i32.const 32)))
     #|  )
     #|)
-  let result = compare_jit_interp(source, "test", [])
+  let result = @testsuite.compare_jit_interp(source, "test", [])
   inspect(result, content="matched")
 }
 
@@ -47,7 +47,7 @@ test "JIT: consecutive i32 shifts use the i32 width" {
     #|  )
     #|)
   inspect(
-    compare_jit_interp_with_opt_level(source, "test", [I32(1)], 2),
+    @testsuite.compare_jit_interp_with_opt_level(source, "test", [I32(1)], 2),
     content="matched",
   )
 }
@@ -63,7 +63,7 @@ test "JIT: consecutive i32 logical right shifts use the i32 width" {
     #|  )
     #|)
   inspect(
-    compare_jit_interp_with_opt_level(source, "test", [I32(-1)], 2),
+    @testsuite.compare_jit_interp_with_opt_level(source, "test", [I32(-1)], 2),
     content="matched",
   )
 }
@@ -79,7 +79,12 @@ test "JIT: consecutive i32 arithmetic right shifts use the i32 width" {
     #|  )
     #|)
   inspect(
-    compare_jit_interp_with_opt_level(source, "test", [I32(-2147483648)], 2),
+    @testsuite.compare_jit_interp_with_opt_level(
+      source,
+      "test",
+      [I32(-2147483648)],
+      2,
+    ),
     content="matched",
   )
 }
@@ -100,6 +105,6 @@ test "JIT: i32 boolean via br_if must use low 32 bits" {
     #|    )
     #|  )
     #|)
-  let result = compare_jit_interp(source, "test", [])
+  let result = @testsuite.compare_jit_interp(source, "test", [])
   inspect(result, content="matched")
 }

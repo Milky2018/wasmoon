@@ -885,6 +885,10 @@ fn preview3_filesystem_path_operation(
       match open_capability_parent(state, path) {
         None => [preview3_filesystem_error()]
         Some((parent, leaf)) => {
+          if name == "remove-directory-at" && leaf == "." {
+            @wasi.native_close(parent) |> ignore
+            return [preview3_filesystem_error_for(Inval)]
+          }
           let success = @wasi.native_unlinkat(
             parent,
             leaf,

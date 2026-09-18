@@ -9,7 +9,7 @@ test "compare releases temporary JIT table owners" {
     #|  (func $f (export "call") (type $t) (i32.const 7))
     #|)
   for _ in 0..<2 {
-    let result = compare_jit_interp(source, "call", [])
+    let result = @testsuite.compare_jit_interp(source, "call", [])
     inspect(result.matched(), content="true")
     inspect(
       @native_test_support.shared_indirect_table_live_count() == baseline,
@@ -21,7 +21,7 @@ test "compare releases temporary JIT table owners" {
 ///|
 test "compare refreshes grown JIT table before owner close" {
   let baseline = @native_test_support.shared_indirect_table_live_count()
-  let result = compare_jit_interp(
+  let result = @testsuite.compare_jit_interp(
     (
       #|(module
       #|  (table 1 4 funcref)

@@ -4,19 +4,24 @@ fn require_o3_jit_match(
   function_name : String,
   expected_trap? : String? = None,
 ) -> Unit raise {
-  match run_interp_only(source, function_name, []) {
+  match @testsuite.run_interp_only(source, function_name, []) {
     Ok(_) => if expected_trap is Some(_) { fail("expected interpreter trap") }
     Err(error) =>
       if expected_trap is None {
         fail("expected successful interpreter execution: \{error}")
       }
   }
-  let result = compare_jit_interp_with_opt_level(source, function_name, [], 3)
-  if expected_trap is None && !compare_result_is_match(result) {
+  let result = @testsuite.compare_jit_interp_with_opt_level(
+    source,
+    function_name,
+    [],
+    3,
+  )
+  if expected_trap is None && !@testsuite.compare_result_is_match(result) {
     fail("O3 JIT and interpreter results differed")
   }
   if expected_trap is Some(expected) &&
-    !compare_result_errors_contain(result, expected) {
+    !@testsuite.compare_result_errors_contain(result, expected) {
     fail("O3 JIT and interpreter did not report the expected trap: \{expected}")
   }
 }

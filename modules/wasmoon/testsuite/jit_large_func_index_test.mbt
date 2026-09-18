@@ -8,7 +8,7 @@ test "jit: large function index indirect call uses full offset" {
   lines.push("  (func (export \"test\") (result i32) call $f\{target_idx})")
   lines.push(")")
   let source = lines.join("\n")
-  let result = compare_jit_interp(source, "test", [])
+  let result = @testsuite.compare_jit_interp(source, "test", [])
   inspect(result, content="matched")
 }
 
@@ -26,6 +26,6 @@ test "jit: large function index ref.func uses full offset" {
   lines.push("  )")
   lines.push(")")
   let source = lines.join("\n")
-  let result = compare_jit_interp(source, "test", [])
+  let result = @testsuite.compare_jit_interp(source, "test", [])
   inspect(result, content="matched")
 }

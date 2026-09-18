@@ -25,7 +25,7 @@ test "memory64 data scalar SIMD and bulk accesses preserve high address bits" {
     #|  i64.const 8 i32.load i64.const 16 i32.load i32.or
     #|  i64.const 32 i32.load i32.or i64.const 36 i32.load i32.or
     #|  i64.const 40 i32.load i32.or))
-  let result = compare_jit_interp(source, "test", [])
+  let result = @testsuite.compare_jit_interp(source, "test", [])
   inspect(result, content="matched")
   inspect(
     result.to_string(),

@@ -10,7 +10,7 @@ test "f32_no_fma" {
     #|  (func (export "f32.no_fma") (param $x f32) (param $y f32) (param $z f32) (result f32)
     #|    (f32.add (f32.mul (local.get $x) (local.get $y)) (local.get $z)))
     #|)
-  let result = compare_jit_interp(source, "f32.no_fma", [
+  let result = @testsuite.compare_jit_interp(source, "f32.no_fma", [
     F32(0x1.a78402p+124),
     F32(0x1.cf8548p-23),
     F32(0x1.992adap+107),
@@ -31,7 +31,7 @@ test "f32_no_reassociate_mul" {
     #|    (f32.mul (f32.mul (f32.mul (local.get $x) (local.get $y)) (local.get $z)) (local.get $w)))
     #|)
   // Using first test case from line 360
-  let result = compare_jit_interp(source, "f32.no_reassociate_mul", [
+  let result = @testsuite.compare_jit_interp(source, "f32.no_reassociate_mul", [
     F32(0x1.950ba8p-116),
     F32(0x1.efdacep-33),
     F32(-0x1.5f9bcp+102),
@@ -50,7 +50,9 @@ test "i32_no_fold_f32_s" {
     #|  (func (export "i32.no_fold_f32_s") (param $x i32) (result i32)
     #|    (i32.trunc_f32_s (f32.convert_i32_s (local.get $x))))
     #|)
-  let result = compare_jit_interp(source, "i32.no_fold_f32_s", [I32(16777216)])
+  let result = @testsuite.compare_jit_interp(source, "i32.no_fold_f32_s", [
+    I32(16777216),
+  ])
   inspect(result, content="matched")
 }
 
@@ -63,7 +65,9 @@ test "i32_no_fold_f32_u" {
     #|  (func (export "i32.no_fold_f32_u") (param $x i32) (result i32)
     #|    (i32.trunc_f32_u (f32.convert_i32_s (local.get $x))))
     #|)
-  let result = compare_jit_interp(source, "i32.no_fold_f32_u", [I32(16777216)])
+  let result = @testsuite.compare_jit_interp(source, "i32.no_fold_f32_u", [
+    I32(16777216),
+  ])
   inspect(result, content="matched")
 }
 
@@ -76,7 +80,7 @@ test "i64_no_fold_f64_s" {
     #|  (func (export "i64.no_fold_f64_s") (param $x i64) (result i64)
     #|    (i64.trunc_f64_s (f64.convert_i64_s (local.get $x))))
     #|)
-  let result = compare_jit_interp(source, "i64.no_fold_f64_s", [
+  let result = @testsuite.compare_jit_interp(source, "i64.no_fold_f64_s", [
     I64(9007199254740992L),
   ])
   inspect(result, content="matched")
@@ -91,9 +95,11 @@ test "f32_i32_no_fold_trunc_s_convert_s" {
     #|  (func (export "f32.i32.no_fold_trunc_s_convert_s") (param $x f32) (result f32)
     #|    (f32.convert_i32_s (i32.trunc_f32_s (local.get $x))))
     #|)
-  let result = compare_jit_interp(source, "f32.i32.no_fold_trunc_s_convert_s", [
-    F32(1.5),
-  ])
+  let result = @testsuite.compare_jit_interp(
+    source,
+    "f32.i32.no_fold_trunc_s_convert_s",
+    [F32(1.5)],
+  )
   inspect(result, content="matched")
 }
 
@@ -106,9 +112,11 @@ test "f64_i32_no_fold_trunc_s_convert_s" {
     #|  (func (export "f64.i32.no_fold_trunc_s_convert_s") (param $x f64) (result f64)
     #|    (f64.convert_i32_s (i32.trunc_f64_s (local.get $x))))
     #|)
-  let result = compare_jit_interp(source, "f64.i32.no_fold_trunc_s_convert_s", [
-    F64(1.5),
-  ])
+  let result = @testsuite.compare_jit_interp(
+    source,
+    "f64.i32.no_fold_trunc_s_convert_s",
+    [F64(1.5)],
+  )
   inspect(result, content="matched")
 }
 
@@ -121,7 +129,7 @@ test "no_fold_demote_promote" {
     #|  (func (export "no_fold_demote_promote") (param $x f64) (result f64)
     #|    (f64.promote_f32 (f32.demote_f64 (local.get $x))))
     #|)
-  let result = compare_jit_interp(source, "no_fold_demote_promote", [
+  let result = @testsuite.compare_jit_interp(source, "no_fold_demote_promote", [
     F64(-1.7176275796615013e-40),
   ])
   inspect(result, content="matched")

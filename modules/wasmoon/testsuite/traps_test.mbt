@@ -9,9 +9,11 @@ test "JIT: dropped i32.load still traps" {
     #|  (func (export "f") (param i32)
     #|    (drop (i32.load (local.get 0))))
     #|)
-  let result = compare_jit_interp(source, "f", [I32(65536)])
+  let result = @testsuite.compare_jit_interp(source, "f", [I32(65536)])
   inspect(
-    compare_result_errors_contain(result, "out of bounds memory access"),
+    @testsuite.compare_result_errors_contain(
+      result, "out of bounds memory access",
+    ),
     content="true",
   )
 }
@@ -24,9 +26,11 @@ test "JIT: dropped i32.load8_u still traps" {
     #|  (func (export "f") (param i32)
     #|    (drop (i32.load8_u (local.get 0))))
     #|)
-  let result = compare_jit_interp(source, "f", [I32(65536)])
+  let result = @testsuite.compare_jit_interp(source, "f", [I32(65536)])
   inspect(
-    compare_result_errors_contain(result, "out of bounds memory access"),
+    @testsuite.compare_result_errors_contain(
+      result, "out of bounds memory access",
+    ),
     content="true",
   )
 }

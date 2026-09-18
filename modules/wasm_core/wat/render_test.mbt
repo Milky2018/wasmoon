@@ -1,6 +1,6 @@
 ///|
 test "render empty module" {
-  inspect(render(@types.Module::empty()), content="(module\n)\n")
+  inspect(@wat.render(@types.Module::empty()), content="(module\n)\n")
 }
 
 ///|
@@ -16,7 +16,7 @@ test "render f32 literals preserves IEEE sign and NaN payload" {
     ],
     "float32",
   )
-  let wat = render(module_)
+  let wat = @wat.render(module_)
   assert_true(wat.contains("f32.const 1.5"))
   assert_true(wat.contains("f32.const -0"))
   assert_true(wat.contains("f32.const inf"))
@@ -36,7 +36,7 @@ test "render f64 literals preserves IEEE sign and NaN payload" {
     ],
     "float64",
   )
-  let wat = render(module_)
+  let wat = @wat.render(module_)
   assert_true(wat.contains("f64.const 1.5"))
   assert_true(wat.contains("f64.const -0"))
   assert_true(wat.contains("f64.const inf"))
@@ -52,7 +52,7 @@ test "render one function uses the canonical module instruction spelling" {
     "increment",
   )
   inspect(
-    render_function(module_, 0),
+    @wat.render_function(module_, 0),
     content=(
       #|(func (;0;) (type 0) (param i32) (result i32)
       #|  local.get 0
@@ -68,7 +68,9 @@ test "render one function uses the canonical module instruction spelling" {
 test "render module names as escaped UTF-8 strings" {
   let module_ = @types.Module::empty()
   module_.exports.push({ name: "x\"\\\né", desc: Func(0), })
-  assert_true(render(module_).contains("(export \"x\\22\\5c\\0a\\c3\\a9\""))
+  assert_true(
+    @wat.render(module_).contains("(export \"x\\22\\5c\\0a\\c3\\a9\""),
+  )
 }
 
 ///|
@@ -79,8 +81,8 @@ test "reject malformed instruction immediates" {
     [V128Const(Bytes::from_array([0]))],
     "malformed-v128",
   )
-  let v128_error : WatPrintError? = try {
-    let _ = render(malformed_v128)
+  let v128_error : @wat.WatPrintError? = try {
+    let _ = @wat.render(malformed_v128)
     None
   } catch {
     error => Some(error)
@@ -95,8 +97,8 @@ test "reject malformed instruction immediates" {
     [I8x16Shuffle(FixedArray::make(15, 0))],
     "malformed-shuffle",
   )
-  let shuffle_error : WatPrintError? = try {
-    let _ = render(malformed_shuffle)
+  let shuffle_error : @wat.WatPrintError? = try {
+    let _ = @wat.render(malformed_shuffle)
     None
   } catch {
     error => Some(error)
@@ -111,8 +113,8 @@ test "reject malformed instruction immediates" {
     [Atomic(79, 0, 0, 0L)],
     "malformed-atomic",
   )
-  let atomic_error : WatPrintError? = try {
-    let _ = render(malformed_atomic)
+  let atomic_error : @wat.WatPrintError? = try {
+    let _ = @wat.render(malformed_atomic)
     None
   } catch {
     error => Some(error)
@@ -132,5 +134,7 @@ test "render custom memory page sizes" {
     is_shared: false,
     page_size_log2: 8,
   })
-  assert_true(render(module_).contains("(memory (;0;) i64 1 2 (pagesize 256))"))
+  assert_true(
+    @wat.render(module_).contains("(memory (;0;) i64 1 2 (pagesize 256))"),
+  )
 }

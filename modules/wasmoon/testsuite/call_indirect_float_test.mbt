@@ -29,15 +29,15 @@ test "call_indirect fac-f32 with recursion" {
     #|  (table funcref (elem $fac-f32))
     #|)
   // fac-f32(0.0) = 1.0 (base case, no recursion)
-  let result0 = compare_jit_interp(source, "fac-f32", [F32(0.0)])
+  let result0 = @testsuite.compare_jit_interp(source, "fac-f32", [F32(0.0)])
   inspect(result0, content="matched")
   // fac-f32(1.0) = 1.0 * fac-f32(0.0) = 1.0 * 1.0 = 1.0
   // This fails: returns 0.0 instead of 1.0
   // The bug: D8 (holding 1.0) is overwritten by recursive call
-  let result1 = compare_jit_interp(source, "fac-f32", [F32(1.0)])
+  let result1 = @testsuite.compare_jit_interp(source, "fac-f32", [F32(1.0)])
   inspect(result1, content="matched")
   // fac-f32(5.0) = 5.0 * 4.0 * 3.0 * 2.0 * 1.0 * 1.0 = 120.0
-  let result5 = compare_jit_interp(source, "fac-f32", [F32(5.0)])
+  let result5 = @testsuite.compare_jit_interp(source, "fac-f32", [F32(5.0)])
   inspect(result5, content="matched")
 }
 
@@ -65,11 +65,11 @@ test "call_indirect fac-f64 with recursion" {
     #|
     #|  (table funcref (elem $fac-f64))
     #|)
-  let result0 = compare_jit_interp(source, "fac-f64", [F64(0.0)])
+  let result0 = @testsuite.compare_jit_interp(source, "fac-f64", [F64(0.0)])
   inspect(result0, content="matched")
-  let result1 = compare_jit_interp(source, "fac-f64", [F64(1.0)])
+  let result1 = @testsuite.compare_jit_interp(source, "fac-f64", [F64(1.0)])
   inspect(result1, content="matched")
-  let result5 = compare_jit_interp(source, "fac-f64", [F64(5.0)])
+  let result5 = @testsuite.compare_jit_interp(source, "fac-f64", [F64(5.0)])
   inspect(result5, content="matched")
 }
 
@@ -92,10 +92,10 @@ test "direct call fac-f32 with recursion" {
     #|    )
     #|  )
     #|)
-  let result0 = compare_jit_interp(source, "fac-f32", [F32(0.0)])
+  let result0 = @testsuite.compare_jit_interp(source, "fac-f32", [F32(0.0)])
   inspect(result0, content="matched")
-  let result1 = compare_jit_interp(source, "fac-f32", [F32(1.0)])
+  let result1 = @testsuite.compare_jit_interp(source, "fac-f32", [F32(1.0)])
   inspect(result1, content="matched")
-  let result5 = compare_jit_interp(source, "fac-f32", [F32(5.0)])
+  let result5 = @testsuite.compare_jit_interp(source, "fac-f32", [F32(5.0)])
   inspect(result5, content="matched")
 }

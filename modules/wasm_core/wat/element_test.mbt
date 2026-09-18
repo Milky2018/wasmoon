@@ -12,7 +12,7 @@ test "render element segments" {
     init: [[RefFunc(0)], [RefFunc(1)]],
   })
   mod_.elems.push({ mode: Declarative, type_: FuncRef, init: [[RefFunc(0)]], })
-  let output = render(mod_)
+  let output = @wat.render(mod_)
   let expected =
     #|(module
     #|  (elem (;0;) funcref (ref.func 0) (ref.func 1))

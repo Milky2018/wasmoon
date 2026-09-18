@@ -45,7 +45,7 @@ test "tail call with stack overflow args (direct)" {
     #|    return_call $sum12
     #|  )
     #|)
-  inspect(compare_jit_interp(source, "main", []), content="matched")
+  inspect(@testsuite.compare_jit_interp(source, "main", []), content="matched")
 }
 
 ///|
@@ -100,7 +100,7 @@ test "tail call with stack overflow args (indirect)" {
     #|    return_call_indirect (type $t12)
     #|  )
     #|)
-  inspect(compare_jit_interp(source, "main", []), content="matched")
+  inspect(@testsuite.compare_jit_interp(source, "main", []), content="matched")
 }
 
 ///|

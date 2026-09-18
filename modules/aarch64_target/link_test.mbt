@@ -9,7 +9,7 @@ test "AArch64 link plans share veneers and preserve branch kinds" {
       @code_object.Relocation::new(4, AArch64Jump26, target),
     ],
   )
-  let plan = prepare_aarch64_link(object)
+  let plan = @aarch64_target.prepare_aarch64_link(object)
   debug_inspect(
     plan,
     content=(
@@ -138,7 +138,9 @@ test "AArch64 linker applies page and absolute relocations" {
     ],
   )
   debug_inspect(
-    prepare_aarch64_link(object).link(0x1000L, fn(_) { Some(0x2345L) }),
+    @aarch64_target.prepare_aarch64_link(object).link(0x1000L, fn(_) {
+      Some(0x2345L)
+    }),
     content=(
       #|[
       #|  0x00,

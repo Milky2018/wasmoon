@@ -9,7 +9,7 @@ test "simd: v128.const" {
     #|  (func (export "v128_const") (result v128)
     #|    (v128.const i32x4 1 2 3 4))
     #|)
-  let result = compare_jit_interp(source, "v128_const", [])
+  let result = @testsuite.compare_jit_interp(source, "v128_const", [])
   inspect(result, content="matched")
 }
 
@@ -20,7 +20,7 @@ test "simd: i32x4.splat" {
     #|  (func (export "i32x4_splat") (param i32) (result v128)
     #|    (i32x4.splat (local.get 0)))
     #|)
-  let result = compare_jit_interp(source, "i32x4_splat", [I32(42)])
+  let result = @testsuite.compare_jit_interp(source, "i32x4_splat", [I32(42)])
   inspect(result, content="matched")
 }
 
@@ -31,7 +31,7 @@ test "simd: i8x16.splat" {
     #|  (func (export "i8x16_splat") (param i32) (result v128)
     #|    (i8x16.splat (local.get 0)))
     #|)
-  let result = compare_jit_interp(source, "i8x16_splat", [I32(0xAB)])
+  let result = @testsuite.compare_jit_interp(source, "i8x16_splat", [I32(0xAB)])
   inspect(result, content="matched")
 }
 
@@ -44,7 +44,7 @@ test "simd: i32x4.add" {
     #|      (v128.const i32x4 1 2 3 4)
     #|      (v128.const i32x4 10 20 30 40)))
     #|)
-  let result = compare_jit_interp(source, "i32x4_add", [])
+  let result = @testsuite.compare_jit_interp(source, "i32x4_add", [])
   inspect(result, content="matched")
 }
 
@@ -57,7 +57,7 @@ test "simd: i32x4.sub" {
     #|      (v128.const i32x4 100 200 300 400)
     #|      (v128.const i32x4 10 20 30 40)))
     #|)
-  let result = compare_jit_interp(source, "i32x4_sub", [])
+  let result = @testsuite.compare_jit_interp(source, "i32x4_sub", [])
   inspect(result, content="matched")
 }
 
@@ -70,7 +70,7 @@ test "simd: i32x4.mul" {
     #|      (v128.const i32x4 2 3 4 5)
     #|      (v128.const i32x4 10 10 10 10)))
     #|)
-  let result = compare_jit_interp(source, "i32x4_mul", [])
+  let result = @testsuite.compare_jit_interp(source, "i32x4_mul", [])
   inspect(result, content="matched")
 }
 
@@ -82,7 +82,7 @@ test "simd: i8x16.extract_lane_s" {
     #|    (i8x16.extract_lane_s 1
     #|      (v128.const i8x16 0 0x80 0 0 0 0 0 0 0 0 0 0 0 0 0 0)))
     #|)
-  let result = compare_jit_interp(source, "extract_s", [])
+  let result = @testsuite.compare_jit_interp(source, "extract_s", [])
   inspect(result, content="matched")
 }
 
@@ -94,7 +94,7 @@ test "simd: i8x16.extract_lane_u" {
     #|    (i8x16.extract_lane_u 1
     #|      (v128.const i8x16 0 0x80 0 0 0 0 0 0 0 0 0 0 0 0 0 0)))
     #|)
-  let result = compare_jit_interp(source, "extract_u", [])
+  let result = @testsuite.compare_jit_interp(source, "extract_u", [])
   inspect(result, content="matched")
 }
 
@@ -106,7 +106,7 @@ test "simd: i32x4.extract_lane" {
     #|    (i32x4.extract_lane 2
     #|      (v128.const i32x4 10 20 30 40)))
     #|)
-  let result = compare_jit_interp(source, "extract", [])
+  let result = @testsuite.compare_jit_interp(source, "extract", [])
   inspect(result, content="matched")
 }
 
@@ -119,7 +119,7 @@ test "simd: i8x16.replace_lane" {
     #|      (v128.const i8x16 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0)
     #|      (local.get 0)))
     #|)
-  let result = compare_jit_interp(source, "replace", [I32(0xAB)])
+  let result = @testsuite.compare_jit_interp(source, "replace", [I32(0xAB)])
   inspect(result, content="matched")
 }
 
@@ -132,7 +132,7 @@ test "simd: v128.and" {
     #|      (v128.const i8x16 0xFF 0xFF 0xFF 0xFF 0xFF 0xFF 0xFF 0xFF 0xFF 0xFF 0xFF 0xFF 0xFF 0xFF 0xFF 0xFF)
     #|      (v128.const i8x16 0x0F 0x0F 0x0F 0x0F 0x0F 0x0F 0x0F 0x0F 0x0F 0x0F 0x0F 0x0F 0x0F 0x0F 0x0F 0x0F)))
     #|)
-  let result = compare_jit_interp(source, "and", [])
+  let result = @testsuite.compare_jit_interp(source, "and", [])
   inspect(result, content="matched")
 }
 
@@ -145,7 +145,7 @@ test "simd: v128.or" {
     #|      (v128.const i8x16 0xF0 0xF0 0xF0 0xF0 0xF0 0xF0 0xF0 0xF0 0xF0 0xF0 0xF0 0xF0 0xF0 0xF0 0xF0 0xF0)
     #|      (v128.const i8x16 0x0F 0x0F 0x0F 0x0F 0x0F 0x0F 0x0F 0x0F 0x0F 0x0F 0x0F 0x0F 0x0F 0x0F 0x0F 0x0F)))
     #|)
-  let result = compare_jit_interp(source, "or", [])
+  let result = @testsuite.compare_jit_interp(source, "or", [])
   inspect(result, content="matched")
 }
 
@@ -158,7 +158,7 @@ test "simd: v128.xor" {
     #|      (v128.const i8x16 0xFF 0xFF 0xFF 0xFF 0xFF 0xFF 0xFF 0xFF 0xFF 0xFF 0xFF 0xFF 0xFF 0xFF 0xFF 0xFF)
     #|      (v128.const i8x16 0xAA 0xAA 0xAA 0xAA 0xAA 0xAA 0xAA 0xAA 0xAA 0xAA 0xAA 0xAA 0xAA 0xAA 0xAA 0xAA)))
     #|)
-  let result = compare_jit_interp(source, "xor", [])
+  let result = @testsuite.compare_jit_interp(source, "xor", [])
   inspect(result, content="matched")
 }
 
@@ -170,7 +170,7 @@ test "simd: v128.not" {
     #|    (v128.not
     #|      (v128.const i8x16 0x00 0xFF 0x55 0xAA 0x00 0xFF 0x55 0xAA 0x00 0xFF 0x55 0xAA 0x00 0xFF 0x55 0xAA)))
     #|)
-  let result = compare_jit_interp(source, "not", [])
+  let result = @testsuite.compare_jit_interp(source, "not", [])
   inspect(result, content="matched")
 }
 
@@ -182,7 +182,7 @@ test "simd: v128.any_true with zeros" {
     #|    (v128.any_true
     #|      (v128.const i8x16 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0)))
     #|)
-  let result = compare_jit_interp(source, "any_true_zero", [])
+  let result = @testsuite.compare_jit_interp(source, "any_true_zero", [])
   inspect(result, content="matched")
 }
 
@@ -194,7 +194,7 @@ test "simd: v128.any_true with non-zero" {
     #|    (v128.any_true
     #|      (v128.const i8x16 0 0 0 0 0 0 0 1 0 0 0 0 0 0 0 0)))
     #|)
-  let result = compare_jit_interp(source, "any_true_one", [])
+  let result = @testsuite.compare_jit_interp(source, "any_true_one", [])
   inspect(result, content="matched")
 }
 
@@ -206,7 +206,7 @@ test "simd: i32x4.all_true" {
     #|    (i32x4.all_true
     #|      (v128.const i32x4 1 2 3 4)))
     #|)
-  let result = compare_jit_interp(source, "all_true", [])
+  let result = @testsuite.compare_jit_interp(source, "all_true", [])
   inspect(result, content="matched")
 }
 
@@ -218,7 +218,7 @@ test "simd: i32x4.all_true with zero" {
     #|    (i32x4.all_true
     #|      (v128.const i32x4 1 0 3 4)))
     #|)
-  let result = compare_jit_interp(source, "all_true_false", [])
+  let result = @testsuite.compare_jit_interp(source, "all_true_false", [])
   inspect(result, content="matched")
 }
 
@@ -231,7 +231,7 @@ test "simd: i8x16.eq" {
     #|      (v128.const i8x16 5 0x10 0 0 0 0 0 0 0 0 0 0 0 0 0 0)
     #|      (v128.const i8x16 5 0x20 0 0 0 0 0 0 0 0 0 0 0 0 0 0)))
     #|)
-  let result = compare_jit_interp(source, "eq", [])
+  let result = @testsuite.compare_jit_interp(source, "eq", [])
   inspect(result, content="matched")
 }
 
@@ -243,7 +243,7 @@ test "simd: i32x4.neg" {
     #|    (i32x4.neg
     #|      (v128.const i32x4 1 -2 3 -4)))
     #|)
-  let result = compare_jit_interp(source, "neg", [])
+  let result = @testsuite.compare_jit_interp(source, "neg", [])
   inspect(result, content="matched")
 }
 
@@ -256,7 +256,7 @@ test "simd: i8x16.shuffle" {
     #|      (v128.const i8x16 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15)
     #|      (v128.const i8x16 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31)))
     #|)
-  let result = compare_jit_interp(source, "shuffle", [])
+  let result = @testsuite.compare_jit_interp(source, "shuffle", [])
   inspect(result, content="matched")
 }
 
@@ -269,7 +269,7 @@ test "simd: i8x16.swizzle" {
     #|      (v128.const i8x16 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15)
     #|      (v128.const i8x16 15 14 13 12 11 10 9 8 7 6 5 4 3 2 1 0)))
     #|)
-  let result = compare_jit_interp(source, "swizzle", [])
+  let result = @testsuite.compare_jit_interp(source, "swizzle", [])
   inspect(result, content="matched")
 }
 
@@ -280,7 +280,7 @@ test "simd: i64x2.splat" {
     #|  (func (export "i64x2_splat") (param i64) (result v128)
     #|    (i64x2.splat (local.get 0)))
     #|)
-  let result = compare_jit_interp(source, "i64x2_splat", [
+  let result = @testsuite.compare_jit_interp(source, "i64x2_splat", [
     I64(0x123456789ABCDEF0L),
   ])
   inspect(result, content="matched")
@@ -295,7 +295,7 @@ test "simd: i64x2.add" {
     #|      (v128.const i64x2 100 200)
     #|      (v128.const i64x2 10 20)))
     #|)
-  let result = compare_jit_interp(source, "i64x2_add", [])
+  let result = @testsuite.compare_jit_interp(source, "i64x2_add", [])
   inspect(result, content="matched")
 }
 
@@ -308,7 +308,7 @@ test "simd: i16x8.add" {
     #|      (v128.const i16x8 1 2 3 4 5 6 7 8)
     #|      (v128.const i16x8 10 20 30 40 50 60 70 80)))
     #|)
-  let result = compare_jit_interp(source, "i16x8_add", [])
+  let result = @testsuite.compare_jit_interp(source, "i16x8_add", [])
   inspect(result, content="matched")
 }
 
@@ -321,7 +321,7 @@ test "simd: i8x16.add" {
     #|      (v128.const i8x16 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16)
     #|      (v128.const i8x16 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1)))
     #|)
-  let result = compare_jit_interp(source, "i8x16_add", [])
+  let result = @testsuite.compare_jit_interp(source, "i8x16_add", [])
   inspect(result, content="matched")
 }
 
@@ -334,7 +334,7 @@ test "simd: i8x16.add_sat_s" {
     #|      (v128.const i8x16 127 100 -128 -100 0 0 0 0 0 0 0 0 0 0 0 0)
     #|      (v128.const i8x16 1 100 -1 -100 0 0 0 0 0 0 0 0 0 0 0 0)))
     #|)
-  let result = compare_jit_interp(source, "add_sat_s", [])
+  let result = @testsuite.compare_jit_interp(source, "add_sat_s", [])
   inspect(result, content="matched")
 }
 
@@ -347,7 +347,7 @@ test "simd: i8x16.add_sat_u" {
     #|      (v128.const i8x16 255 200 100 0 0 0 0 0 0 0 0 0 0 0 0 0)
     #|      (v128.const i8x16 1 100 100 0 0 0 0 0 0 0 0 0 0 0 0 0)))
     #|)
-  let result = compare_jit_interp(source, "add_sat_u", [])
+  let result = @testsuite.compare_jit_interp(source, "add_sat_u", [])
   inspect(result, content="matched")
 }
 
@@ -360,7 +360,7 @@ test "simd: i32x4.lt_s" {
     #|      (v128.const i32x4 -1 0 1 2)
     #|      (v128.const i32x4 0 0 0 0)))
     #|)
-  let result = compare_jit_interp(source, "lt_s", [])
+  let result = @testsuite.compare_jit_interp(source, "lt_s", [])
   inspect(result, content="matched")
 }
 
@@ -373,7 +373,7 @@ test "simd: i32x4.gt_u" {
     #|      (v128.const i32x4 0xFFFFFFFF 0 1 2)
     #|      (v128.const i32x4 0 0 0 0)))
     #|)
-  let result = compare_jit_interp(source, "gt_u", [])
+  let result = @testsuite.compare_jit_interp(source, "gt_u", [])
   inspect(result, content="matched")
 }
 
@@ -386,7 +386,7 @@ test "simd: i32x4.shl" {
     #|      (v128.const i32x4 1 2 3 4)
     #|      (local.get 0)))
     #|)
-  let result = compare_jit_interp(source, "shl", [I32(2)])
+  let result = @testsuite.compare_jit_interp(source, "shl", [I32(2)])
   inspect(result, content="matched")
 }
 
@@ -399,7 +399,7 @@ test "simd: i32x4.shr_s" {
     #|      (v128.const i32x4 -8 8 -16 16)
     #|      (local.get 0)))
     #|)
-  let result = compare_jit_interp(source, "shr_s", [I32(2)])
+  let result = @testsuite.compare_jit_interp(source, "shr_s", [I32(2)])
   inspect(result, content="matched")
 }
 
@@ -415,8 +415,8 @@ test "simd: i8x16 shifts preserve all byte lanes" {
     #|    (i8x16.shr_u
     #|      (v128.const i8x16 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15)
     #|      (i32.const 1))))
-  inspect(compare_jit_interp(source, "shl", []), content="matched")
-  inspect(compare_jit_interp(source, "shr_u", []), content="matched")
+  inspect(@testsuite.compare_jit_interp(source, "shl", []), content="matched")
+  inspect(@testsuite.compare_jit_interp(source, "shr_u", []), content="matched")
 }
 
 ///|
@@ -428,7 +428,7 @@ test "simd: f32x4.add" {
     #|      (v128.const f32x4 1.0 2.0 3.0 4.0)
     #|      (v128.const f32x4 0.1 0.2 0.3 0.4)))
     #|)
-  let result = compare_jit_interp(source, "f32x4_add", [])
+  let result = @testsuite.compare_jit_interp(source, "f32x4_add", [])
   inspect(result, content="matched")
 }
 
@@ -441,7 +441,7 @@ test "simd: f64x2.add" {
     #|      (v128.const f64x2 1.0 2.0)
     #|      (v128.const f64x2 0.1 0.2)))
     #|)
-  let result = compare_jit_interp(source, "f64x2_add", [])
+  let result = @testsuite.compare_jit_interp(source, "f64x2_add", [])
   inspect(result, content="matched")
 }
 
@@ -454,7 +454,7 @@ test "simd: f32x4.mul" {
     #|      (v128.const f32x4 1.0 2.0 3.0 4.0)
     #|      (v128.const f32x4 2.0 2.0 2.0 2.0)))
     #|)
-  let result = compare_jit_interp(source, "f32x4_mul", [])
+  let result = @testsuite.compare_jit_interp(source, "f32x4_mul", [])
   inspect(result, content="matched")
 }
 
@@ -465,7 +465,7 @@ test "simd: f32x4.splat" {
     #|  (func (export "f32x4_splat") (param f32) (result v128)
     #|    (f32x4.splat (local.get 0)))
     #|)
-  let result = compare_jit_interp(source, "f32x4_splat", [F32(3.14)])
+  let result = @testsuite.compare_jit_interp(source, "f32x4_splat", [F32(3.14)])
   inspect(result, content="matched")
 }
 
@@ -476,7 +476,9 @@ test "simd: f64x2.splat" {
     #|  (func (export "f64x2_splat") (param f64) (result v128)
     #|    (f64x2.splat (local.get 0)))
     #|)
-  let result = compare_jit_interp(source, "f64x2_splat", [F64(3.14159)])
+  let result = @testsuite.compare_jit_interp(source, "f64x2_splat", [
+    F64(3.14159),
+  ])
   inspect(result, content="matched")
 }
 
@@ -488,7 +490,7 @@ test "simd: f32x4.extract_lane" {
     #|    (f32x4.extract_lane 2
     #|      (v128.const f32x4 1.0 2.0 3.0 4.0)))
     #|)
-  let result = compare_jit_interp(source, "extract", [])
+  let result = @testsuite.compare_jit_interp(source, "extract", [])
   inspect(result, content="matched")
 }
 
@@ -500,7 +502,7 @@ test "simd: f64x2.extract_lane" {
     #|    (f64x2.extract_lane 1
     #|      (v128.const f64x2 1.0 2.0)))
     #|)
-  let result = compare_jit_interp(source, "extract", [])
+  let result = @testsuite.compare_jit_interp(source, "extract", [])
   inspect(result, content="matched")
 }
 
@@ -514,7 +516,7 @@ test "simd: v128.bitselect" {
     #|      (v128.const i32x4 0x55555555 0x55555555 0x55555555 0x55555555)
     #|      (v128.const i32x4 0xF0F0F0F0 0xF0F0F0F0 0xF0F0F0F0 0xF0F0F0F0)))
     #|)
-  let result = compare_jit_interp(source, "bitselect", [])
+  let result = @testsuite.compare_jit_interp(source, "bitselect", [])
   inspect(result, content="matched")
 }
 
@@ -526,7 +528,7 @@ test "simd: i32x4.abs" {
     #|    (i32x4.abs
     #|      (v128.const i32x4 -1 0 1 -2147483648)))
     #|)
-  let result = compare_jit_interp(source, "abs", [])
+  let result = @testsuite.compare_jit_interp(source, "abs", [])
   inspect(result, content="matched")
 }
 
@@ -538,7 +540,7 @@ test "simd: i32x4.bitmask" {
     #|    (i32x4.bitmask
     #|      (v128.const i32x4 -1 0 -1 0)))
     #|)
-  let result = compare_jit_interp(source, "bitmask", [])
+  let result = @testsuite.compare_jit_interp(source, "bitmask", [])
   inspect(result, content="matched")
 }
 
@@ -552,6 +554,6 @@ test "simd: extending load consumes offset once" {
     #|  (func (export "load") (result v128)
     #|    (v128.load8x8_s offset=8 (i32.const 0)))
     #|)
-  let result = compare_jit_interp(source, "load", [])
+  let result = @testsuite.compare_jit_interp(source, "load", [])
   inspect(result, content="matched")
 }

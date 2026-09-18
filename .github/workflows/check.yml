@@ -331,6 +331,9 @@ jobs:
       - name: install upstream WASI runner dependencies
         if: ${{ !cancelled() && steps.windows_build.outcome == 'success' }}
         run: python -m pip install -r target/wasi03-upstream/test-runner/requirements.txt
+      - name: diagnose Windows HTTP process startup
+        if: ${{ !cancelled() && steps.windows_build.outcome == 'success' }}
+        run: python scripts/probe_wasi03_windows.py --wasmoon ./wasmoon.exe --upstream target/wasi03-upstream
       - name: test external WASI Preview 3 guests on both engines
         if: ${{ !cancelled() && steps.windows_build.outcome == 'success' }}
         run: python scripts/run_wasi03.py --upstream target/wasi03-upstream --wasmoon ./wasmoon.exe --output target/wasi03-results --timeout 120 --acknowledge-known-differences

@@ -15,7 +15,7 @@ test "gc v128: struct.new then struct.get returns the same vector" {
     #|    (struct.get $s 0 (struct.new $s (v128.const i32x4 1 2 3 4)))
     #|  )
     #|)
-  let result = compare_jit_interp(source, "test", [])
+  let result = @testsuite.compare_jit_interp(source, "test", [])
   inspect(result, content="matched")
 }
 
@@ -31,7 +31,7 @@ test "gc v128: struct.set overwrites a vector field" {
     #|    (struct.get $s 0 (local.get $r))
     #|  )
     #|)
-  let result = compare_jit_interp(source, "test", [])
+  let result = @testsuite.compare_jit_interp(source, "test", [])
   inspect(result, content="matched")
 }
 
@@ -46,7 +46,7 @@ test "gc v128: struct.new_default zeroes a vector field" {
     #|    (struct.get $s 0 (struct.new_default $s))
     #|  )
     #|)
-  let result = compare_jit_interp(source, "test", [])
+  let result = @testsuite.compare_jit_interp(source, "test", [])
   inspect(result, content="matched")
 }
 
@@ -65,7 +65,7 @@ test "gc v128: a vector field between an i32, a reference and an i64" {
     #|                       (i64.const 123)))
     #|  )
     #|)
-  let result = compare_jit_interp(source, "test", [])
+  let result = @testsuite.compare_jit_interp(source, "test", [])
   inspect(result, content="matched")
 }
 
@@ -84,7 +84,7 @@ test "gc v128: a reference field neighbouring vector payload" {
     #|                         (i64.const 123))))
     #|  )
     #|)
-  let result = compare_jit_interp(source, "test", [])
+  let result = @testsuite.compare_jit_interp(source, "test", [])
   inspect(result, content="matched")
 }
 
@@ -99,7 +99,7 @@ test "gc v128: the scalar fields around a vector keep their values" {
     #|                       (i64.const 123)))
     #|  )
     #|)
-  let result = compare_jit_interp(source, "test", [])
+  let result = @testsuite.compare_jit_interp(source, "test", [])
   inspect(result, content="matched")
 }
 
@@ -113,7 +113,7 @@ test "gc v128: array.new fills every element with the vector" {
     #|                  (i32.const 3))
     #|  )
     #|)
-  let result = compare_jit_interp(source, "test", [])
+  let result = @testsuite.compare_jit_interp(source, "test", [])
   inspect(result, content="matched")
 }
 
@@ -129,7 +129,7 @@ test "gc v128: array.set writes one element" {
     #|    (array.get $a (local.get $r) (i32.const 1))
     #|  )
     #|)
-  let result = compare_jit_interp(source, "test", [])
+  let result = @testsuite.compare_jit_interp(source, "test", [])
   inspect(result, content="matched")
 }
 
@@ -147,7 +147,7 @@ test "gc v128: array.set leaves the next element alone" {
     #|    (array.get $a (local.get $r) (i32.const 2))
     #|  )
     #|)
-  let result = compare_jit_interp(source, "test", [])
+  let result = @testsuite.compare_jit_interp(source, "test", [])
   inspect(result, content="matched")
 }
 
@@ -164,7 +164,7 @@ test "gc v128: array.fill writes a range of elements" {
     #|    (array.get $a (local.get $r) (i32.const 2))
     #|  )
     #|)
-  let result = compare_jit_interp(source, "test", [])
+  let result = @testsuite.compare_jit_interp(source, "test", [])
   inspect(result, content="matched")
 }
 
@@ -179,7 +179,7 @@ test "gc v128: array.new_fixed keeps its elements distinct" {
     #|                  (i32.const 1))
     #|  )
     #|)
-  let result = compare_jit_interp(source, "test", [])
+  let result = @testsuite.compare_jit_interp(source, "test", [])
   inspect(result, content="matched")
 }
 
@@ -199,7 +199,7 @@ test "gc v128: array.copy moves whole vectors" {
     #|    (array.get $a (local.get $dst) (i32.const 1))
     #|  )
     #|)
-  let result = compare_jit_interp(source, "test", [])
+  let result = @testsuite.compare_jit_interp(source, "test", [])
   inspect(result, content="matched")
 }
 
@@ -234,6 +234,6 @@ test "gc v128: references survive collection beside vector payload" {
     #|    (local.get $count)
     #|  )
     #|)
-  let result = compare_jit_interp(source, "test", [])
+  let result = @testsuite.compare_jit_interp(source, "test", [])
   inspect(result, content="matched")
 }

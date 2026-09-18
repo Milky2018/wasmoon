@@ -3,7 +3,7 @@
 ///|
 test "parse empty module" {
   let wat = "(module)"
-  let mod_ = parse(wat)
+  let mod_ = @wat.parse(wat)
   inspect(mod_.funcs.length(), content="0")
   inspect(mod_.types.length(), content="0")
 }
@@ -14,7 +14,7 @@ test "parse module with type" {
     #|(module
     #|  (type (func (param i32 i32) (result i32)))
     #|)
-  let mod_ = parse(wat)
+  let mod_ = @wat.parse(wat)
   inspect(mod_.types.length(), content="1")
   inspect(mod_.func_type_at(0).unwrap().params.length(), content="2")
   inspect(mod_.func_type_at(0).unwrap().results.length(), content="1")
@@ -30,7 +30,7 @@ test "parse simple function" {
     #|    i32.add
     #|  )
     #|)
-  let mod_ = parse(wat)
+  let mod_ = @wat.parse(wat)
   inspect(mod_.funcs.length(), content="1")
   inspect(mod_.codes.length(), content="1")
   inspect(mod_.codes[0].body.length(), content="3")
@@ -46,7 +46,7 @@ test "parse function with export" {
     #|    i32.add
     #|  )
     #|)
-  let mod_ = parse(wat)
+  let mod_ = @wat.parse(wat)
   inspect(mod_.exports.length(), content="1")
   inspect(mod_.exports[0].name, content="add")
 }
@@ -60,7 +60,7 @@ test "parse function with locals" {
     #|    local.get 0
     #|  )
     #|)
-  let mod_ = parse(wat)
+  let mod_ = @wat.parse(wat)
   inspect(mod_.codes[0].locals.length(), content="2")
 }
 
@@ -70,7 +70,7 @@ test "parse memory" {
     #|(module
     #|  (memory 1)
     #|)
-  let mod_ = parse(wat)
+  let mod_ = @wat.parse(wat)
   inspect(mod_.memories.length(), content="1")
   inspect(mod_.memories[0].limits.min, content="1")
 }
@@ -81,7 +81,7 @@ test "parse memory with max" {
     #|(module
     #|  (memory 1 16)
     #|)
-  let mod_ = parse(wat)
+  let mod_ = @wat.parse(wat)
   inspect(@debug.to_string(mod_.memories[0].limits.max), content="Some(16)")
 }
 
@@ -91,7 +91,7 @@ test "parse global" {
     #|(module
     #|  (global i32 (i32.const 42))
     #|)
-  let mod_ = parse(wat)
+  let mod_ = @wat.parse(wat)
   inspect(mod_.globals.length(), content="1")
   inspect(mod_.globals[0].type_.mutable, content="false")
 }
@@ -102,7 +102,7 @@ test "parse mutable global" {
     #|(module
     #|  (global (mut i32) (i32.const 0))
     #|)
-  let mod_ = parse(wat)
+  let mod_ = @wat.parse(wat)
   inspect(mod_.globals[0].type_.mutable, content="true")
 }
 
@@ -116,7 +116,7 @@ test "parse block instruction" {
     #|    end
     #|  )
     #|)
-  let mod_ = parse(wat)
+  let mod_ = @wat.parse(wat)
   inspect(mod_.codes[0].body.length(), content="1")
 }
 
@@ -133,7 +133,7 @@ test "parse if-else instruction" {
     #|    end
     #|  )
     #|)
-  let mod_ = parse(wat)
+  let mod_ = @wat.parse(wat)
   inspect(mod_.codes[0].body.length(), content="2")
 }
 
@@ -144,7 +144,7 @@ test "parse import" {
     #|  (type (func (param i32)))
     #|  (import "console" "log" (func (type 0)))
     #|)
-  let mod_ = parse(wat)
+  let mod_ = @wat.parse(wat)
   inspect(mod_.imports.length(), content="1")
   inspect(mod_.imports[0].mod_name, content="console")
   inspect(mod_.imports[0].name, content="log")
@@ -158,7 +158,7 @@ test "parse hex number" {
     #|    i32.const 0xFF
     #|  )
     #|)
-  let mod_ = parse(wat)
+  let mod_ = @wat.parse(wat)
   match mod_.codes[0].body[0] {
     I32Const(n) => inspect(n, content="255")
     _ => panic()
@@ -174,7 +174,7 @@ test "parse comment" {
     #|    i32.const 42 ;; inline comment
     #|  )
     #|)
-  let mod_ = parse(wat)
+  let mod_ = @wat.parse(wat)
   inspect(mod_.funcs.length(), content="1")
 }
 
@@ -184,7 +184,7 @@ test "parse import with inline signature" {
     #|(module
     #|  (import "wasi" "fd_write" (func $fd_write (param i32 i32 i32 i32) (result i32)))
     #|)
-  let mod_ = parse(wat)
+  let mod_ = @wat.parse(wat)
   inspect(mod_.imports.length(), content="1")
   inspect(mod_.imports[0].mod_name, content="wasi")
   inspect(mod_.imports[0].name, content="fd_write")
@@ -200,7 +200,7 @@ test "parse import with no params" {
     #|(module
     #|  (import "env" "exit" (func $exit (param i32)))
     #|)
-  let mod_ = parse(wat)
+  let mod_ = @wat.parse(wat)
   inspect(mod_.imports.length(), content="1")
   inspect(mod_.types.length(), content="1")
   inspect(mod_.func_type_at(0).unwrap().params.length(), content="1")
@@ -213,7 +213,7 @@ test "parse import with only result" {
     #|(module
     #|  (import "env" "get_time" (func $get_time (result i64)))
     #|)
-  let mod_ = parse(wat)
+  let mod_ = @wat.parse(wat)
   inspect(mod_.imports.length(), content="1")
   inspect(mod_.types.length(), content="1")
   inspect(mod_.func_type_at(0).unwrap().params.length(), content="0")
@@ -227,7 +227,7 @@ test "parse data segment" {
     #|  (memory 1)
     #|  (data (i32.const 8) "Hello, World!")
     #|)
-  let mod_ = parse(wat)
+  let mod_ = @wat.parse(wat)
   inspect(mod_.memories.length(), content="1")
   inspect(mod_.datas.length(), content="1")
   inspect(mod_.datas[0].memory_idx, content="0")
@@ -241,7 +241,7 @@ test "parse data segment with offset keyword" {
     #|  (memory 1)
     #|  (data (offset (i32.const 100)) "test")
     #|)
-  let mod_ = parse(wat)
+  let mod_ = @wat.parse(wat)
   inspect(mod_.datas.length(), content="1")
   inspect(mod_.datas[0].init.length(), content="4")
 }
@@ -249,7 +249,7 @@ test "parse data segment with offset keyword" {
 ///|
 test "reject trailing tokens after module" {
   let wat = "(module))"
-  try parse(wat) catch {
+  try @wat.parse(wat) catch {
     _ => ()
   } noraise {
     _ => fail("expected parse error but parsing succeeded")
@@ -268,11 +268,11 @@ test "format_wat_error shows source context" {
     #|    invalid.instruction
     #|  )
     #|)
-  let err = WatError::InvalidInstruction("invalid.instruction", {
+  let err = @wat.WatError::InvalidInstruction("invalid.instruction", {
     line: 3,
     column: 5,
   })
-  let formatted = format_wat_error(err, source)
+  let formatted = @wat.format_wat_error(err, source)
   inspect(
     formatted,
     content=(
@@ -294,11 +294,11 @@ test "format_wat_error with undefined identifier" {
     #|    call $undefined_func
     #|  )
     #|)
-  let err = WatError::UndefinedIdentifier("func $undefined_func", {
+  let err = @wat.WatError::UndefinedIdentifier("func $undefined_func", {
     line: 3,
     column: 10,
   })
-  let formatted = format_wat_error(err, source)
+  let formatted = @wat.format_wat_error(err, source)
   assert_true(formatted.contains("undefined identifier"))
   assert_true(formatted.contains("$undefined_func"))
 }
@@ -306,11 +306,11 @@ test "format_wat_error with undefined identifier" {
 ///|
 test "format_wat_error with unexpected token" {
   let source = "(module unexpected)"
-  let err = WatError::UnexpectedToken("expected ')', got 'unexpected'", {
+  let err = @wat.WatError::UnexpectedToken("expected ')', got 'unexpected'", {
     line: 1,
     column: 9,
   })
-  let formatted = format_wat_error(err, source)
+  let formatted = @wat.format_wat_error(err, source)
   assert_true(formatted.contains("unexpected token"))
   assert_true(formatted.contains("line 1"))
 }
@@ -321,7 +321,7 @@ test "parse inline table elem syntax" {
     #|(module
     #|  (table funcref (elem 0))
     #|)
-  let mod_ = parse(wat)
+  let mod_ = @wat.parse(wat)
   inspect(mod_.tables.length(), content="1")
   inspect(mod_.elems.length(), content="1")
 }
@@ -334,7 +334,7 @@ test "parse inline table elem with named function" {
     #|  (type $check (func (param i32 i32) (result i32)))
     #|  (table funcref (elem $func))
     #|)
-  let mod_ = parse(wat)
+  let mod_ = @wat.parse(wat)
   inspect(mod_.tables.length(), content="1")
   inspect(mod_.elems.length(), content="1")
   // The element should contain the function index for $func (which is 0)
@@ -352,7 +352,7 @@ test "parse inline table elem with named function - multiple funcs" {
     #|  (func $func (param i32 i32) (result i32) (local.get 0))
     #|  (table funcref (elem $func))
     #|)
-  let mod_ = parse(wat)
+  let mod_ = @wat.parse(wat)
   inspect(mod_.tables.length(), content="1")
   inspect(mod_.elems.length(), content="1")
   // $func is the 4th function (index 3)
@@ -375,7 +375,7 @@ test "parse type index in call_indirect" {
     #|    )
     #|  )
     #|)
-  let mod_ = parse(wat)
+  let mod_ = @wat.parse(wat)
   // With explicit types parsed first:
   // Type 0: $check (i32, i32) -> i32 (explicit)
   // Type 1: () -> () ($dummy's implicit type)
@@ -405,7 +405,7 @@ test "check type indices" {
     #|    )
     #|  )
     #|)
-  let mod_ = parse(wat)
+  let mod_ = @wat.parse(wat)
   // With explicit types parsed first:
   // Type 0: $check (i32, i32) -> i32 (explicit)
   // Type 1: () -> () ($dummy's implicit type)
@@ -440,7 +440,7 @@ test "parse inline table elem - func index with dummy" {
     #|    )
     #|  )
     #|)
-  let mod_ = parse(wat)
+  let mod_ = @wat.parse(wat)
   // $func is the 2nd function (index 1)
   debug_inspect(mod_.elems[0].init[0], content="[RefFunc(1)]")
   // With explicit types first, $check is type 0
@@ -465,7 +465,7 @@ test "check funcs type indices" {
     #|    )
     #|  )
     #|)
-  let mod_ = parse(wat)
+  let mod_ = @wat.parse(wat)
   // With explicit types parsed first:
   // Type 0: $check (i32, i32) -> i32 (explicit)
   // Type 1: () -> () ($dummy's implicit type)
@@ -502,7 +502,7 @@ test "f32 decimal literal rounding - case 551" {
     #|(module
     #|  (func (export "f") (result f32) (f32.const +8.8817847263968443574e-16))
     #|)
-  let mod_ = parse(wat)
+  let mod_ = @wat.parse(wat)
   if mod_.codes[0].body[0] is F32Const(f) {
     // Expected: 0x1.000002p-50 = 8.881785255792436e-16
     // Bits: 0x26800001 = 645922817
@@ -519,7 +519,7 @@ test "f32 decimal literal rounding - case 553" {
     #|(module
     #|  (func (export "f") (result f32) (f32.const -8.8817847263968443574e-16))
     #|)
-  let mod_ = parse(wat)
+  let mod_ = @wat.parse(wat)
   if mod_.codes[0].body[0] is F32Const(f) {
     // Expected: -0x1.000002p-50 = -8.881785255792436e-16
     // Bits: 0xa6800001 = -1501560831 as signed
@@ -536,7 +536,7 @@ test "f32 decimal literal rounding - case 555" {
     #|(module
     #|  (func (export "f") (result f32) (f32.const +8.8817857851880284252e-16))
     #|)
-  let mod_ = parse(wat)
+  let mod_ = @wat.parse(wat)
   if mod_.codes[0].body[0] is F32Const(f) {
     // Expected: 0x1.000002p-50 = 8.881785255792436e-16
     // Bits: 0x26800001 = 645922817
@@ -553,7 +553,7 @@ test "f32 decimal literal rounding - case 557" {
     #|(module
     #|  (func (export "f") (result f32) (f32.const -8.8817857851880284252e-16))
     #|)
-  let mod_ = parse(wat)
+  let mod_ = @wat.parse(wat)
   if mod_.codes[0].body[0] is F32Const(f) {
     // Expected: -0x1.000002p-50 = -8.881785255792436e-16
     // Bits: 0xa6800001 = -1501560831 as signed
@@ -576,7 +576,7 @@ test "f32 simple integer constant - regression" {
     #|(module
     #|  (func (export "f") (result f32) (f32.const 3))
     #|)
-  let mod_ = parse(wat)
+  let mod_ = @wat.parse(wat)
   match mod_.codes[0].body[0] {
     F32Const(f) => {
       // f32 3.0 should be 0x40400000 = 1077936128
@@ -595,7 +595,7 @@ test "type-rec parsing with struct" {
     #|  (func $f (type $ft))
     #|  (global (ref $ft) (ref.func $f))
     #|)
-  let mod_ = parse(wat)
+  let mod_ = @wat.parse(wat)
   // Should parse successfully:
   // - Type 0 ($ft): func type () -> ()
   // - Type 1: struct placeholder () -> ()
@@ -613,7 +613,7 @@ test "parse two simple rec groups" {
     #|  (rec (type $f1 (func)))
     #|  (rec (type $f2 (func)))
     #|)
-  let mod_ = try! parse(wat)
+  let mod_ = try! @wat.parse(wat)
   // Should have 2 types: $f1 at 0, $f2 at 1
   inspect(mod_.types.length(), content="2")
   debug_inspect(mod_.type_rec_groups, content="[0, 1]")
@@ -627,7 +627,7 @@ test "parse multiple rec groups with struct" {
     #|  (rec (type $f2 (func)) (type (struct)))
     #|  (func $f (type $f2))
     #|)
-  let mod_ = try! parse(wat)
+  let mod_ = try! @wat.parse(wat)
   // Should have 4 types total:
   // - rec group 0: $f1 (func), struct placeholder
   // - rec group 2: $f2 (func), struct placeholder
@@ -647,7 +647,7 @@ test "parse simple struct type" {
     #|(module
     #|  (type $point (struct (field i32) (field i32)))
     #|)
-  let mod_ = parse(wat)
+  let mod_ = @wat.parse(wat)
   inspect(mod_.types.length(), content="1")
   inspect(mod_.is_struct_type(0), content="true")
   let st = mod_.struct_type_at(0).unwrap()
@@ -662,7 +662,7 @@ test "parse struct type with named fields" {
     #|(module
     #|  (type $point (struct (field $x i32) (field $y i32)))
     #|)
-  let mod_ = parse(wat)
+  let mod_ = @wat.parse(wat)
   inspect(mod_.types.length(), content="1")
   let st = mod_.struct_type_at(0).unwrap()
   inspect(st.fields.length(), content="2")
@@ -674,7 +674,7 @@ test "parse struct type with mutable fields" {
     #|(module
     #|  (type $point (struct (field (mut i32)) (field (mut f64))))
     #|)
-  let mod_ = parse(wat)
+  let mod_ = @wat.parse(wat)
   let st = mod_.struct_type_at(0).unwrap()
   inspect(st.fields[0].mutable, content="true")
   inspect(st.fields[0].storage_type, content="Val(I32)")
@@ -688,7 +688,7 @@ test "parse struct type with packed fields" {
     #|(module
     #|  (type $bytes (struct (field i8) (field i16)))
     #|)
-  let mod_ = parse(wat)
+  let mod_ = @wat.parse(wat)
   let st = mod_.struct_type_at(0).unwrap()
   inspect(st.fields[0].storage_type, content="Packed(I8)")
   inspect(st.fields[1].storage_type, content="Packed(I16)")
@@ -700,7 +700,7 @@ test "parse struct type with mutable packed fields" {
     #|(module
     #|  (type $buf (struct (field (mut i8)) (field (mut i16))))
     #|)
-  let mod_ = parse(wat)
+  let mod_ = @wat.parse(wat)
   let st = mod_.struct_type_at(0).unwrap()
   inspect(st.fields[0].mutable, content="true")
   inspect(st.fields[0].storage_type, content="Packed(I8)")
@@ -714,7 +714,7 @@ test "parse simple array type" {
     #|(module
     #|  (type $vec (array f64))
     #|)
-  let mod_ = parse(wat)
+  let mod_ = @wat.parse(wat)
   inspect(mod_.types.length(), content="1")
   inspect(mod_.is_array_type(0), content="true")
   let at = mod_.array_type_at(0).unwrap()
@@ -728,7 +728,7 @@ test "parse mutable array type" {
     #|(module
     #|  (type $vec (array (mut f64)))
     #|)
-  let mod_ = parse(wat)
+  let mod_ = @wat.parse(wat)
   let at = mod_.array_type_at(0).unwrap()
   inspect(at.element.storage_type, content="Val(F64)")
   inspect(at.element.mutable, content="true")
@@ -740,7 +740,7 @@ test "parse array type with packed element" {
     #|(module
     #|  (type $bytes (array (mut i8)))
     #|)
-  let mod_ = parse(wat)
+  let mod_ = @wat.parse(wat)
   let at = mod_.array_type_at(0).unwrap()
   inspect(at.element.storage_type, content="Packed(I8)")
   inspect(at.element.mutable, content="true")
@@ -754,7 +754,7 @@ test "parse mixed func, struct, array types" {
     #|  (type $point (struct (field $x i32) (field $y i32)))
     #|  (type $vec (array (mut f64)))
     #|)
-  let mod_ = parse(wat)
+  let mod_ = @wat.parse(wat)
   inspect(mod_.types.length(), content="3")
   inspect(mod_.is_func_type(0), content="true")
   inspect(mod_.is_struct_type(1), content="true")
@@ -780,7 +780,7 @@ test "parse struct with reference field" {
     #|    (field $next (ref null $node))
     #|  ))
     #|)
-  let mod_ = parse(wat)
+  let mod_ = @wat.parse(wat)
   let st = mod_.struct_type_at(0).unwrap()
   inspect(st.fields.length(), content="2")
   inspect(st.fields[0].storage_type, content="Val(I32)")
@@ -795,7 +795,7 @@ test "parse array of references" {
     #|  (type $point (struct (field i32) (field i32)))
     #|  (type $points (array (mut (ref null $point))))
     #|)
-  let mod_ = parse(wat)
+  let mod_ = @wat.parse(wat)
   inspect(mod_.types.length(), content="2")
   let at = mod_.array_type_at(1).unwrap()
   inspect(at.element.mutable, content="true")
@@ -811,7 +811,7 @@ test "parse sub keyword for type inheritance" {
     #|  (type $t1 (sub $t0 (struct (field i32))))
     #|  (type $t2 (sub $t1 (struct (field i32) (field i32))))
     #|)
-  let mod_ = parse(wat)
+  let mod_ = @wat.parse(wat)
   inspect(mod_.types.length(), content="3")
   // t0: non-final type without parent
   inspect(mod_.types[0].final_, content="false")
@@ -833,7 +833,7 @@ test "parse sub final keyword" {
     #|  (type $t0 (sub (struct)))
     #|  (type $t1 (sub final $t0 (struct (field i32))))
     #|)
-  let mod_ = parse(wat)
+  let mod_ = @wat.parse(wat)
   inspect(mod_.types.length(), content="2")
   // t0: non-final
   inspect(mod_.types[0].final_, content="false")
@@ -849,7 +849,7 @@ test "parse empty struct type" {
     #|(module
     #|  (type $empty (struct))
     #|)
-  let mod_ = parse(wat)
+  let mod_ = @wat.parse(wat)
   inspect(mod_.types.length(), content="1")
   inspect(mod_.is_struct_type(0), content="true")
   let st = mod_.struct_type_at(0).unwrap()
@@ -862,7 +862,7 @@ test "parse abbreviated field syntax with multiple types" {
     #|(module
     #|  (type $t (struct (field i32 i32)))
     #|)
-  let mod_ = parse(wat)
+  let mod_ = @wat.parse(wat)
   inspect(mod_.types.length(), content="1")
   let st = mod_.struct_type_at(0).unwrap()
   inspect(st.fields.length(), content="2")
@@ -879,7 +879,7 @@ test "parse struct.get with field name" {
     #|    (struct.get $vec $y (local.get 0))
     #|  )
     #|)
-  let mod_ = parse(wat)
+  let mod_ = @wat.parse(wat)
   inspect(mod_.types.length(), content="2")
   // struct.get $vec $y should resolve $y to field index 1
   let body = mod_.codes[0].body
@@ -898,7 +898,7 @@ test "parse memory64 basic" {
     #|(module
     #|  (memory i64 1)
     #|)
-  let mod_ = parse(wat)
+  let mod_ = @wat.parse(wat)
   inspect(mod_.memories.length(), content="1")
   inspect(mod_.memories[0].limits.min, content="1")
   inspect(mod_.memories[0].is_memory64, content="true")
@@ -911,7 +911,7 @@ test "parse memory64 with max" {
     #|(module
     #|  (memory i64 1 16)
     #|)
-  let mod_ = parse(wat)
+  let mod_ = @wat.parse(wat)
   inspect(mod_.memories[0].limits.min, content="1")
   inspect(@debug.to_string(mod_.memories[0].limits.max), content="Some(16)")
   inspect(mod_.memories[0].is_memory64, content="true")
@@ -924,7 +924,7 @@ test "parse memory32 default" {
     #|(module
     #|  (memory 1)
     #|)
-  let mod_ = parse(wat)
+  let mod_ = @wat.parse(wat)
   inspect(mod_.memories[0].is_memory64, content="false")
 }
 
@@ -934,7 +934,7 @@ test "parse memory64 with export" {
     #|(module
     #|  (memory (export "mem64") i64 1)
     #|)
-  let mod_ = parse(wat)
+  let mod_ = @wat.parse(wat)
   inspect(mod_.memories[0].is_memory64, content="true")
   inspect(mod_.exports.length(), content="1")
   inspect(mod_.exports[0].name, content="mem64")
@@ -946,7 +946,7 @@ test "parse memory64 import" {
     #|(module
     #|  (import "env" "mem" (memory i64 1 2))
     #|)
-  let mod_ = parse(wat)
+  let mod_ = @wat.parse(wat)
   inspect(mod_.imports.length(), content="1")
   inspect(mod_.imports[0].mod_name, content="env")
   inspect(mod_.imports[0].name, content="mem")
@@ -966,7 +966,7 @@ test "parse memory64 data segment with i64 offset" {
     #|  (memory i64 1)
     #|  (data (i64.const 0x100) "test")
     #|)
-  let mod_ = parse(wat)
+  let mod_ = @wat.parse(wat)
   inspect(mod_.memories[0].is_memory64, content="true")
   inspect(mod_.datas.length(), content="1")
   // Offset should be i64.const
@@ -984,7 +984,7 @@ test "parse table64 basic" {
     #|(module
     #|  (table i64 1 funcref)
     #|)
-  let mod_ = parse(wat)
+  let mod_ = @wat.parse(wat)
   inspect(mod_.tables.length(), content="1")
   inspect(mod_.tables[0].type_.limits.min, content="1")
   inspect(mod_.tables[0].type_.is_table64, content="true")
@@ -997,7 +997,7 @@ test "parse table64 with max" {
     #|(module
     #|  (table i64 1 10 funcref)
     #|)
-  let mod_ = parse(wat)
+  let mod_ = @wat.parse(wat)
   inspect(mod_.tables[0].type_.limits.min, content="1")
   inspect(@debug.to_string(mod_.tables[0].type_.limits.max), content="Some(10)")
   inspect(mod_.tables[0].type_.is_table64, content="true")
@@ -1010,7 +1010,7 @@ test "parse table32 default" {
     #|(module
     #|  (table 1 funcref)
     #|)
-  let mod_ = parse(wat)
+  let mod_ = @wat.parse(wat)
   inspect(mod_.tables[0].type_.is_table64, content="false")
 }
 
@@ -1020,7 +1020,7 @@ test "parse table64 with export" {
     #|(module
     #|  (table (export "tbl64") i64 1 funcref)
     #|)
-  let mod_ = parse(wat)
+  let mod_ = @wat.parse(wat)
   inspect(mod_.tables[0].type_.is_table64, content="true")
   inspect(mod_.exports.length(), content="1")
   inspect(mod_.exports[0].name, content="tbl64")
@@ -1032,7 +1032,7 @@ test "parse table64 import" {
     #|(module
     #|  (import "env" "tbl" (table i64 1 10 funcref))
     #|)
-  let mod_ = parse(wat)
+  let mod_ = @wat.parse(wat)
   inspect(mod_.imports.length(), content="1")
   inspect(mod_.imports[0].mod_name, content="env")
   inspect(mod_.imports[0].name, content="tbl")
@@ -1053,7 +1053,7 @@ test "parse table64 elem segment with i64 offset" {
     #|  (func $f)
     #|  (elem (i64.const 0) $f)
     #|)
-  let mod_ = parse(wat)
+  let mod_ = @wat.parse(wat)
   inspect(mod_.tables[0].type_.is_table64, content="true")
   inspect(mod_.elems.length(), content="1")
   // Check elem mode offset expression
@@ -1070,7 +1070,7 @@ test "parse table64 externref" {
     #|(module
     #|  (table i64 5 externref)
     #|)
-  let mod_ = parse(wat)
+  let mod_ = @wat.parse(wat)
   inspect(mod_.tables[0].type_.is_table64, content="true")
   inspect(mod_.tables[0].type_.elem_type, content="ExternRef")
 }
@@ -1082,7 +1082,7 @@ test "parse multi-memory with memory64" {
     #|  (memory $m0 1)
     #|  (memory $m1 i64 2)
     #|)
-  let mod_ = parse(wat)
+  let mod_ = @wat.parse(wat)
   inspect(mod_.memories.length(), content="2")
   inspect(mod_.memories[0].is_memory64, content="false")
   inspect(mod_.memories[1].is_memory64, content="true")
@@ -1095,7 +1095,7 @@ test "parse multi-table with table64" {
     #|  (table $t0 1 funcref)
     #|  (table $t1 i64 2 funcref)
     #|)
-  let mod_ = parse(wat)
+  let mod_ = @wat.parse(wat)
   inspect(mod_.tables.length(), content="2")
   inspect(mod_.tables[0].type_.is_table64, content="false")
   inspect(mod_.tables[1].type_.is_table64, content="true")
@@ -1108,7 +1108,7 @@ test "parse table64 with large 64-bit limits" {
     #|(module
     #|  (table i64 0xffff_ffff_ffff funcref)
     #|)
-  let mod_ = parse(wat)
+  let mod_ = @wat.parse(wat)
   inspect(mod_.tables.length(), content="1")
   inspect(mod_.tables[0].type_.is_table64, content="true")
   // 0xffffffffffff = 281474976710655
@@ -1123,7 +1123,7 @@ test "parse table64 with large 64-bit min and max" {
     #|(module
     #|  (table i64 0x1_0000_0000 0x2_0000_0000 funcref)
     #|)
-  let mod_ = parse(wat)
+  let mod_ = @wat.parse(wat)
   inspect(mod_.tables[0].type_.is_table64, content="true")
   // 0x100000000 = 4294967296 (larger than u32 max)
   inspect(mod_.tables[0].type_.limits.min, content="4294967296")
@@ -1141,7 +1141,7 @@ test "parse table64 import with large 64-bit limits" {
     #|(module
     #|  (import "m" "t" (table i64 0xffff_ffff_ffff 0x1_0000_0000_0000 funcref))
     #|)
-  let mod_ = parse(wat)
+  let mod_ = @wat.parse(wat)
   guard mod_.imports[0].desc is Table(tbl_type) else { return }
   inspect(tbl_type.is_table64, content="true")
   // 0xffffffffffff = 281474976710655

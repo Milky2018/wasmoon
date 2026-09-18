@@ -26,7 +26,7 @@ register is reserved for embedding context data.
 ```moonbit check
 ///|
 test "validate the AArch64 internal ABI" {
-  InternalAbi::new(
+  @aarch64_target.InternalAbi::new(
     0,
     8,
     [1, 2, 3, 4, 5, 6, 7],

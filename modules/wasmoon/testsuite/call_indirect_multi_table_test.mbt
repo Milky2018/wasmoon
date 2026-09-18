@@ -20,13 +20,29 @@ test "call_indirect with multiple tables" {
     #|    (call_indirect $t2 (type $ii-i) (local.get 0) (local.get 1) (local.get 2))
     #|  )
     #|)
-  let result1 = compare_jit_interp(source, "call-1", [I32(2), I32(3), I32(0)])
+  let result1 = @testsuite.compare_jit_interp(source, "call-1", [
+    I32(2),
+    I32(3),
+    I32(0),
+  ])
   inspect(result1, content="matched")
-  let result2 = compare_jit_interp(source, "call-1", [I32(2), I32(3), I32(1)])
+  let result2 = @testsuite.compare_jit_interp(source, "call-1", [
+    I32(2),
+    I32(3),
+    I32(1),
+  ])
   inspect(result2, content="matched")
-  let result3 = compare_jit_interp(source, "call-2", [I32(2), I32(3), I32(0)])
+  let result3 = @testsuite.compare_jit_interp(source, "call-2", [
+    I32(2),
+    I32(3),
+    I32(0),
+  ])
   inspect(result3, content="matched")
-  let result4 = compare_jit_interp(source, "call-2", [I32(2), I32(3), I32(1)])
+  let result4 = @testsuite.compare_jit_interp(source, "call-2", [
+    I32(2),
+    I32(3),
+    I32(1),
+  ])
   inspect(result4, content="matched")
 }
 
@@ -53,7 +69,7 @@ test "call_indirect uses live bounds after growing a non-zero table" {
     #|    i32.const 1
     #|    call_indirect $target (type $result-i32)))
   inspect(
-    compare_jit_interp_with_opt_level(source, "test", [], 2),
+    @testsuite.compare_jit_interp_with_opt_level(source, "test", [], 2),
     content="matched",
   )
 }

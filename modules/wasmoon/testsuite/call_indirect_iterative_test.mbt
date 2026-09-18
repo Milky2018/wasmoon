@@ -76,7 +76,7 @@ test "call_indirect: iterative call with varying parameters" {
     #|    i32.eq
     #|  )
     #|)
-  inspect(compare_jit_interp(source, "test", []), content="matched")
+  inspect(@testsuite.compare_jit_interp(source, "test", []), content="matched")
 }
 
 ///|
@@ -130,5 +130,5 @@ test "call_indirect: type 11 (9 params, 3 stack args)" {
     #|    (i32.const 1)
     #|  )
     #|)
-  inspect(compare_jit_interp(source, "test", []), content="matched")
+  inspect(@testsuite.compare_jit_interp(source, "test", []), content="matched")
 }
