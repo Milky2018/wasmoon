@@ -11,7 +11,7 @@ test "gc jit: i31.new and i31.get_u" {
     #|    )
     #|  )
     #|)
-  let result = compare_jit_interp(source, "test", [])
+  let result = @testsuite.compare_jit_interp(source, "test", [])
   inspect(result, content="matched")
 }
 
@@ -25,7 +25,7 @@ test "gc jit: i31.new and i31.get_s" {
     #|    )
     #|  )
     #|)
-  let result = compare_jit_interp(source, "test", [])
+  let result = @testsuite.compare_jit_interp(source, "test", [])
   inspect(result, content="matched")
 }
 
@@ -40,7 +40,7 @@ test "gc jit: struct.new and struct.get" {
     #|    )
     #|  )
     #|)
-  let result = compare_jit_interp(source, "test", [])
+  let result = @testsuite.compare_jit_interp(source, "test", [])
   inspect(result, content="matched")
 }
 
@@ -55,7 +55,7 @@ test "gc jit: struct.new and struct.get second field" {
     #|    )
     #|  )
     #|)
-  let result = compare_jit_interp(source, "test", [])
+  let result = @testsuite.compare_jit_interp(source, "test", [])
   inspect(result, content="matched")
 }
 
@@ -70,7 +70,7 @@ test "gc jit: struct.new_default" {
     #|    )
     #|  )
     #|)
-  let result = compare_jit_interp(source, "test", [])
+  let result = @testsuite.compare_jit_interp(source, "test", [])
   inspect(result, content="matched")
 }
 
@@ -86,7 +86,7 @@ test "gc jit: struct.set" {
     #|    (struct.get $point 0 (local.get $p))
     #|  )
     #|)
-  let result = compare_jit_interp(source, "test", [])
+  let result = @testsuite.compare_jit_interp(source, "test", [])
   inspect(result, content="matched")
 }
 
@@ -101,7 +101,7 @@ test "gc jit: array.new and array.len" {
     #|    )
     #|  )
     #|)
-  let result = compare_jit_interp(source, "test", [])
+  let result = @testsuite.compare_jit_interp(source, "test", [])
   inspect(result, content="matched")
 }
 
@@ -117,7 +117,7 @@ test "gc jit: array.new and array.get" {
     #|    )
     #|  )
     #|)
-  let result = compare_jit_interp(source, "test", [])
+  let result = @testsuite.compare_jit_interp(source, "test", [])
   inspect(result, content="matched")
 }
 
@@ -133,7 +133,7 @@ test "gc jit: array.new_default" {
     #|    )
     #|  )
     #|)
-  let result = compare_jit_interp(source, "test", [])
+  let result = @testsuite.compare_jit_interp(source, "test", [])
   inspect(result, content="matched")
 }
 
@@ -149,7 +149,7 @@ test "gc jit: array.new_fixed" {
     #|    )
     #|  )
     #|)
-  let result = compare_jit_interp(source, "test", [])
+  let result = @testsuite.compare_jit_interp(source, "test", [])
   inspect(result, content="matched")
 }
 
@@ -165,7 +165,7 @@ test "gc jit: array.set" {
     #|    (array.get $arr (local.get $a) (i32.const 2))
     #|  )
     #|)
-  let result = compare_jit_interp(source, "test", [])
+  let result = @testsuite.compare_jit_interp(source, "test", [])
   inspect(result, content="matched")
 }
 
@@ -190,7 +190,7 @@ test "gc jit: array.fill" {
     #|    )
     #|  )
     #|)
-  let result = compare_jit_interp(source, "test", [])
+  let result = @testsuite.compare_jit_interp(source, "test", [])
   inspect(result, content="matched")
 }
 
@@ -205,7 +205,7 @@ test "gc jit: ref.eq same struct" {
     #|    (ref.eq (local.get $p) (local.get $p))
     #|  )
     #|)
-  let result = compare_jit_interp(source, "test", [])
+  let result = @testsuite.compare_jit_interp(source, "test", [])
   inspect(result, content="matched")
 }
 
@@ -221,7 +221,7 @@ test "gc jit: ref.eq different structs" {
     #|    )
     #|  )
     #|)
-  let result = compare_jit_interp(source, "test", [])
+  let result = @testsuite.compare_jit_interp(source, "test", [])
   inspect(result, content="matched")
 }
 
@@ -235,7 +235,7 @@ test "gc jit: null struct arg is_null" {
     #|    (ref.is_null (local.get 0))
     #|  )
     #|)
-  let result = compare_jit_interp(source, "test", [Null])
+  let result = @testsuite.compare_jit_interp(source, "test", [Null])
   inspect(result, content="matched")
 }
 
@@ -250,7 +250,7 @@ test "gc jit: ref.eq null refs" {
     #|    )
     #|  )
     #|)
-  let result = compare_jit_interp(source, "test", [])
+  let result = @testsuite.compare_jit_interp(source, "test", [])
   inspect(result, content="matched")
 }
 
@@ -304,7 +304,7 @@ test "gc jit: ref.func + struct.new with deep live stack values" {
   lines.push("  )")
   lines.push(")")
   let source = lines.join("\n")
-  let result = compare_jit_interp(source, "test", [])
+  let result = @testsuite.compare_jit_interp(source, "test", [])
   inspect(result, content="matched")
 }
 
@@ -326,6 +326,6 @@ test "gc jit: nested call restores caller safepoint table" {
     #|    )
     #|  )
     #|)
-  let result = compare_jit_interp(source, "test", [])
+  let result = @testsuite.compare_jit_interp(source, "test", [])
   inspect(result, content="matched")
 }

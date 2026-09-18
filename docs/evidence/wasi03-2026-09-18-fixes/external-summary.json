@@ -1,0 +1,789 @@
+{
+  "upstream": "609c446139956ff30239f87cb18af1dc6128bed2",
+  "binary_sha256": "9f0e477cec5e532fc43ad216ce2e55e92e99091f541780db3204291b9290e322",
+  "acknowledge_known_differences": true,
+  "counts": {
+    "fail": 4,
+    "pass": 106
+  },
+  "results": [
+    {
+      "name": "cli-env",
+      "engine": "jit",
+      "status": "pass",
+      "failures": [],
+      "known_difference": false
+    },
+    {
+      "name": "cli-env",
+      "engine": "interp",
+      "status": "pass",
+      "failures": [],
+      "known_difference": false
+    },
+    {
+      "name": "cli-exit",
+      "engine": "jit",
+      "status": "pass",
+      "failures": [],
+      "known_difference": false
+    },
+    {
+      "name": "cli-exit",
+      "engine": "interp",
+      "status": "pass",
+      "failures": [],
+      "known_difference": false
+    },
+    {
+      "name": "cli-stdio-roundtrip",
+      "engine": "jit",
+      "status": "pass",
+      "failures": [],
+      "known_difference": false
+    },
+    {
+      "name": "cli-stdio-roundtrip",
+      "engine": "interp",
+      "status": "pass",
+      "failures": [],
+      "known_difference": false
+    },
+    {
+      "name": "cli-stdio",
+      "engine": "jit",
+      "status": "pass",
+      "failures": [],
+      "known_difference": false
+    },
+    {
+      "name": "cli-stdio",
+      "engine": "interp",
+      "status": "pass",
+      "failures": [],
+      "known_difference": false
+    },
+    {
+      "name": "cli-stdout-flush",
+      "engine": "jit",
+      "status": "pass",
+      "failures": [],
+      "known_difference": false
+    },
+    {
+      "name": "cli-stdout-flush",
+      "engine": "interp",
+      "status": "pass",
+      "failures": [],
+      "known_difference": false
+    },
+    {
+      "name": "cli-terminal",
+      "engine": "jit",
+      "status": "pass",
+      "failures": [],
+      "known_difference": false
+    },
+    {
+      "name": "cli-terminal",
+      "engine": "interp",
+      "status": "pass",
+      "failures": [],
+      "known_difference": false
+    },
+    {
+      "name": "filesystem-advise",
+      "engine": "jit",
+      "status": "pass",
+      "failures": [],
+      "known_difference": false
+    },
+    {
+      "name": "filesystem-advise",
+      "engine": "interp",
+      "status": "pass",
+      "failures": [],
+      "known_difference": false
+    },
+    {
+      "name": "filesystem-dotdot",
+      "engine": "jit",
+      "status": "pass",
+      "failures": [],
+      "known_difference": false
+    },
+    {
+      "name": "filesystem-dotdot",
+      "engine": "interp",
+      "status": "pass",
+      "failures": [],
+      "known_difference": false
+    },
+    {
+      "name": "filesystem-flags-and-type",
+      "engine": "jit",
+      "status": "pass",
+      "failures": [],
+      "known_difference": false
+    },
+    {
+      "name": "filesystem-flags-and-type",
+      "engine": "interp",
+      "status": "pass",
+      "failures": [],
+      "known_difference": false
+    },
+    {
+      "name": "filesystem-hard-links",
+      "engine": "jit",
+      "status": "pass",
+      "failures": [],
+      "known_difference": false
+    },
+    {
+      "name": "filesystem-hard-links",
+      "engine": "interp",
+      "status": "pass",
+      "failures": [],
+      "known_difference": false
+    },
+    {
+      "name": "filesystem-io",
+      "engine": "jit",
+      "status": "pass",
+      "failures": [],
+      "known_difference": false
+    },
+    {
+      "name": "filesystem-io",
+      "engine": "interp",
+      "status": "pass",
+      "failures": [],
+      "known_difference": false
+    },
+    {
+      "name": "filesystem-is-same-object",
+      "engine": "jit",
+      "status": "pass",
+      "failures": [],
+      "known_difference": false
+    },
+    {
+      "name": "filesystem-is-same-object",
+      "engine": "interp",
+      "status": "pass",
+      "failures": [],
+      "known_difference": false
+    },
+    {
+      "name": "filesystem-metadata-hash",
+      "engine": "jit",
+      "status": "pass",
+      "failures": [],
+      "known_difference": false
+    },
+    {
+      "name": "filesystem-metadata-hash",
+      "engine": "interp",
+      "status": "pass",
+      "failures": [],
+      "known_difference": false
+    },
+    {
+      "name": "filesystem-mkdir-rmdir",
+      "engine": "jit",
+      "status": "pass",
+      "failures": [],
+      "known_difference": false
+    },
+    {
+      "name": "filesystem-mkdir-rmdir",
+      "engine": "interp",
+      "status": "pass",
+      "failures": [],
+      "known_difference": false
+    },
+    {
+      "name": "filesystem-open-errors",
+      "engine": "jit",
+      "status": "pass",
+      "failures": [],
+      "known_difference": false
+    },
+    {
+      "name": "filesystem-open-errors",
+      "engine": "interp",
+      "status": "pass",
+      "failures": [],
+      "known_difference": false
+    },
+    {
+      "name": "filesystem-read-directory",
+      "engine": "jit",
+      "status": "pass",
+      "failures": [],
+      "known_difference": false
+    },
+    {
+      "name": "filesystem-read-directory",
+      "engine": "interp",
+      "status": "pass",
+      "failures": [],
+      "known_difference": false
+    },
+    {
+      "name": "filesystem-rename",
+      "engine": "jit",
+      "status": "pass",
+      "failures": [],
+      "known_difference": false
+    },
+    {
+      "name": "filesystem-rename",
+      "engine": "interp",
+      "status": "pass",
+      "failures": [],
+      "known_difference": false
+    },
+    {
+      "name": "filesystem-set-size",
+      "engine": "jit",
+      "status": "pass",
+      "failures": [],
+      "known_difference": false
+    },
+    {
+      "name": "filesystem-set-size",
+      "engine": "interp",
+      "status": "pass",
+      "failures": [],
+      "known_difference": false
+    },
+    {
+      "name": "filesystem-stat",
+      "engine": "jit",
+      "status": "pass",
+      "failures": [],
+      "known_difference": false
+    },
+    {
+      "name": "filesystem-stat",
+      "engine": "interp",
+      "status": "pass",
+      "failures": [],
+      "known_difference": false
+    },
+    {
+      "name": "filesystem-unlink-errors",
+      "engine": "jit",
+      "status": "pass",
+      "failures": [],
+      "known_difference": false
+    },
+    {
+      "name": "filesystem-unlink-errors",
+      "engine": "interp",
+      "status": "pass",
+      "failures": [],
+      "known_difference": false
+    },
+    {
+      "name": "http-client-chunked",
+      "engine": "jit",
+      "status": "pass",
+      "failures": [],
+      "known_difference": false
+    },
+    {
+      "name": "http-client-chunked",
+      "engine": "interp",
+      "status": "pass",
+      "failures": [],
+      "known_difference": false
+    },
+    {
+      "name": "http-client-headers",
+      "engine": "jit",
+      "status": "pass",
+      "failures": [],
+      "known_difference": false
+    },
+    {
+      "name": "http-client-headers",
+      "engine": "interp",
+      "status": "pass",
+      "failures": [],
+      "known_difference": false
+    },
+    {
+      "name": "http-client-method",
+      "engine": "jit",
+      "status": "pass",
+      "failures": [],
+      "known_difference": false
+    },
+    {
+      "name": "http-client-method",
+      "engine": "interp",
+      "status": "pass",
+      "failures": [],
+      "known_difference": false
+    },
+    {
+      "name": "http-client-path-none",
+      "engine": "jit",
+      "status": "pass",
+      "failures": [],
+      "known_difference": false
+    },
+    {
+      "name": "http-client-path-none",
+      "engine": "interp",
+      "status": "pass",
+      "failures": [],
+      "known_difference": false
+    },
+    {
+      "name": "http-client-path",
+      "engine": "jit",
+      "status": "pass",
+      "failures": [],
+      "known_difference": false
+    },
+    {
+      "name": "http-client-path",
+      "engine": "interp",
+      "status": "pass",
+      "failures": [],
+      "known_difference": false
+    },
+    {
+      "name": "http-client-send-errors",
+      "engine": "jit",
+      "status": "pass",
+      "failures": [],
+      "known_difference": false
+    },
+    {
+      "name": "http-client-send-errors",
+      "engine": "interp",
+      "status": "pass",
+      "failures": [],
+      "known_difference": false
+    },
+    {
+      "name": "http-client-sent",
+      "engine": "jit",
+      "status": "pass",
+      "failures": [],
+      "known_difference": false
+    },
+    {
+      "name": "http-client-sent",
+      "engine": "interp",
+      "status": "pass",
+      "failures": [],
+      "known_difference": false
+    },
+    {
+      "name": "http-client-status",
+      "engine": "jit",
+      "status": "pass",
+      "failures": [],
+      "known_difference": false
+    },
+    {
+      "name": "http-client-status",
+      "engine": "interp",
+      "status": "pass",
+      "failures": [],
+      "known_difference": false
+    },
+    {
+      "name": "http-client-trailer-error",
+      "engine": "jit",
+      "status": "pass",
+      "failures": [],
+      "known_difference": false
+    },
+    {
+      "name": "http-client-trailer-error",
+      "engine": "interp",
+      "status": "pass",
+      "failures": [],
+      "known_difference": false
+    },
+    {
+      "name": "http-client-trailers",
+      "engine": "jit",
+      "status": "pass",
+      "failures": [],
+      "known_difference": false
+    },
+    {
+      "name": "http-client-trailers",
+      "engine": "interp",
+      "status": "pass",
+      "failures": [],
+      "known_difference": false
+    },
+    {
+      "name": "http-client",
+      "engine": "jit",
+      "status": "pass",
+      "failures": [],
+      "known_difference": false
+    },
+    {
+      "name": "http-client",
+      "engine": "interp",
+      "status": "pass",
+      "failures": [],
+      "known_difference": false
+    },
+    {
+      "name": "http-fields",
+      "engine": "jit",
+      "status": "fail",
+      "failures": [
+        "Wait(exit_code=0) failed: expected 0, got 125\n\n==STDERR==\n\nthread '<unnamed>' (1) panicked at tests/rust/wasm32-wasip3/src/bin/http-fields.rs:309:5:\nassertion `left == right` failed\n  left: [(\"foo\", [118, 97, 108, 49]), (\"FOO\", [118, 97, 108, 50])]\n right: [(\"foo\", [118, 97, 108, 49]), (\"foo\", [118, 97, 108, 50])]\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\ncomponent run error: CanonCallError(\"wasm trap: wasm `unreachable` instruction executed (core=http-command::coreinst18 func_idx=167)\")\n"
+      ],
+      "known_difference": true
+    },
+    {
+      "name": "http-fields",
+      "engine": "interp",
+      "status": "fail",
+      "failures": [
+        "Wait(exit_code=0) failed: expected 0, got 125\n\n==STDERR==\n\nthread '<unnamed>' (1) panicked at tests/rust/wasm32-wasip3/src/bin/http-fields.rs:309:5:\nassertion `left == right` failed\n  left: [(\"foo\", [118, 97, 108, 49]), (\"FOO\", [118, 97, 108, 50])]\n right: [(\"foo\", [118, 97, 108, 49]), (\"foo\", [118, 97, 108, 50])]\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\ncomponent run error: CanonCallError(\"wasm trap: wasm `unreachable` instruction executed (core=http-command::coreinst18 func_idx=167)\")\n"
+      ],
+      "known_difference": true
+    },
+    {
+      "name": "http-request-options",
+      "engine": "jit",
+      "status": "pass",
+      "failures": [],
+      "known_difference": false
+    },
+    {
+      "name": "http-request-options",
+      "engine": "interp",
+      "status": "pass",
+      "failures": [],
+      "known_difference": false
+    },
+    {
+      "name": "http-request",
+      "engine": "jit",
+      "status": "fail",
+      "failures": [
+        "Wait(exit_code=0) failed: expected 0, got 125\n\n==STDERR==\n\nthread '<unnamed>' (1) panicked at tests/rust/wasm32-wasip3/src/bin/http-request.rs:157:5:\nassertion `left == right` failed\n  left: Some(\"\")\n right: Some(\"/\")\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\ncomponent run error: CanonCallError(\"wasm trap: wasm `unreachable` instruction executed (core=http-command::coreinst18 func_idx=229)\")\n"
+      ],
+      "known_difference": true
+    },
+    {
+      "name": "http-request",
+      "engine": "interp",
+      "status": "fail",
+      "failures": [
+        "Wait(exit_code=0) failed: expected 0, got 125\n\n==STDERR==\n\nthread '<unnamed>' (1) panicked at tests/rust/wasm32-wasip3/src/bin/http-request.rs:157:5:\nassertion `left == right` failed\n  left: Some(\"\")\n right: Some(\"/\")\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\ncomponent run error: CanonCallError(\"wasm trap: wasm `unreachable` instruction executed (core=http-command::coreinst18 func_idx=229)\")\n"
+      ],
+      "known_difference": true
+    },
+    {
+      "name": "http-response",
+      "engine": "jit",
+      "status": "pass",
+      "failures": [],
+      "known_difference": false
+    },
+    {
+      "name": "http-response",
+      "engine": "interp",
+      "status": "pass",
+      "failures": [],
+      "known_difference": false
+    },
+    {
+      "name": "http-service-echo",
+      "engine": "jit",
+      "status": "pass",
+      "failures": [],
+      "known_difference": false
+    },
+    {
+      "name": "http-service-echo",
+      "engine": "interp",
+      "status": "pass",
+      "failures": [],
+      "known_difference": false
+    },
+    {
+      "name": "http-service-uri",
+      "engine": "jit",
+      "status": "pass",
+      "failures": [],
+      "known_difference": false
+    },
+    {
+      "name": "http-service-uri",
+      "engine": "interp",
+      "status": "pass",
+      "failures": [],
+      "known_difference": false
+    },
+    {
+      "name": "http-service",
+      "engine": "jit",
+      "status": "pass",
+      "failures": [],
+      "known_difference": false
+    },
+    {
+      "name": "http-service",
+      "engine": "interp",
+      "status": "pass",
+      "failures": [],
+      "known_difference": false
+    },
+    {
+      "name": "monotonic-clock",
+      "engine": "jit",
+      "status": "pass",
+      "failures": [],
+      "known_difference": false
+    },
+    {
+      "name": "monotonic-clock",
+      "engine": "interp",
+      "status": "pass",
+      "failures": [],
+      "known_difference": false
+    },
+    {
+      "name": "multi-clock-wait",
+      "engine": "jit",
+      "status": "pass",
+      "failures": [],
+      "known_difference": false
+    },
+    {
+      "name": "multi-clock-wait",
+      "engine": "interp",
+      "status": "pass",
+      "failures": [],
+      "known_difference": false
+    },
+    {
+      "name": "random",
+      "engine": "jit",
+      "status": "pass",
+      "failures": [],
+      "known_difference": false
+    },
+    {
+      "name": "random",
+      "engine": "interp",
+      "status": "pass",
+      "failures": [],
+      "known_difference": false
+    },
+    {
+      "name": "run-with-err",
+      "engine": "jit",
+      "status": "pass",
+      "failures": [],
+      "known_difference": false
+    },
+    {
+      "name": "run-with-err",
+      "engine": "interp",
+      "status": "pass",
+      "failures": [],
+      "known_difference": false
+    },
+    {
+      "name": "sockets-echo",
+      "engine": "jit",
+      "status": "pass",
+      "failures": [],
+      "known_difference": false
+    },
+    {
+      "name": "sockets-echo",
+      "engine": "interp",
+      "status": "pass",
+      "failures": [],
+      "known_difference": false
+    },
+    {
+      "name": "sockets-tcp-bind",
+      "engine": "jit",
+      "status": "pass",
+      "failures": [],
+      "known_difference": false
+    },
+    {
+      "name": "sockets-tcp-bind",
+      "engine": "interp",
+      "status": "pass",
+      "failures": [],
+      "known_difference": false
+    },
+    {
+      "name": "sockets-tcp-connect",
+      "engine": "jit",
+      "status": "pass",
+      "failures": [],
+      "known_difference": false
+    },
+    {
+      "name": "sockets-tcp-connect",
+      "engine": "interp",
+      "status": "pass",
+      "failures": [],
+      "known_difference": false
+    },
+    {
+      "name": "sockets-tcp-listen",
+      "engine": "jit",
+      "status": "pass",
+      "failures": [],
+      "known_difference": false
+    },
+    {
+      "name": "sockets-tcp-listen",
+      "engine": "interp",
+      "status": "pass",
+      "failures": [],
+      "known_difference": false
+    },
+    {
+      "name": "sockets-tcp-properties",
+      "engine": "jit",
+      "status": "pass",
+      "failures": [],
+      "known_difference": false
+    },
+    {
+      "name": "sockets-tcp-properties",
+      "engine": "interp",
+      "status": "pass",
+      "failures": [],
+      "known_difference": false
+    },
+    {
+      "name": "sockets-tcp-receive",
+      "engine": "jit",
+      "status": "pass",
+      "failures": [],
+      "known_difference": false
+    },
+    {
+      "name": "sockets-tcp-receive",
+      "engine": "interp",
+      "status": "pass",
+      "failures": [],
+      "known_difference": false
+    },
+    {
+      "name": "sockets-tcp-send",
+      "engine": "jit",
+      "status": "pass",
+      "failures": [],
+      "known_difference": false
+    },
+    {
+      "name": "sockets-tcp-send",
+      "engine": "interp",
+      "status": "pass",
+      "failures": [],
+      "known_difference": false
+    },
+    {
+      "name": "sockets-udp-bind",
+      "engine": "jit",
+      "status": "pass",
+      "failures": [],
+      "known_difference": false
+    },
+    {
+      "name": "sockets-udp-bind",
+      "engine": "interp",
+      "status": "pass",
+      "failures": [],
+      "known_difference": false
+    },
+    {
+      "name": "sockets-udp-connect",
+      "engine": "jit",
+      "status": "pass",
+      "failures": [],
+      "known_difference": false
+    },
+    {
+      "name": "sockets-udp-connect",
+      "engine": "interp",
+      "status": "pass",
+      "failures": [],
+      "known_difference": false
+    },
+    {
+      "name": "sockets-udp-properties",
+      "engine": "jit",
+      "status": "pass",
+      "failures": [],
+      "known_difference": false
+    },
+    {
+      "name": "sockets-udp-properties",
+      "engine": "interp",
+      "status": "pass",
+      "failures": [],
+      "known_difference": false
+    },
+    {
+      "name": "sockets-udp-receive",
+      "engine": "jit",
+      "status": "pass",
+      "failures": [],
+      "known_difference": false
+    },
+    {
+      "name": "sockets-udp-receive",
+      "engine": "interp",
+      "status": "pass",
+      "failures": [],
+      "known_difference": false
+    },
+    {
+      "name": "sockets-udp-send",
+      "engine": "jit",
+      "status": "pass",
+      "failures": [],
+      "known_difference": false
+    },
+    {
+      "name": "sockets-udp-send",
+      "engine": "interp",
+      "status": "pass",
+      "failures": [],
+      "known_difference": false
+    },
+    {
+      "name": "wall-clock",
+      "engine": "jit",
+      "status": "pass",
+      "failures": [],
+      "known_difference": false
+    },
+    {
+      "name": "wall-clock",
+      "engine": "interp",
+      "status": "pass",
+      "failures": [],
+      "known_difference": false
+    }
+  ]
+}

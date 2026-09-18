@@ -198,3 +198,22 @@ test "WASI component close rejects new async registrations" {
     _ => fail("closed context accepted a native registration")
   }
 }
+
+///|
+test "Preview 3 elapsed deadlines are immediately ready" {
+  let ctx = WasiComponentCtxBuilder().build()
+  defer ctx.close()
+  let linker = @runtime_impl.ComponentLinker()
+  defer linker.close()
+  let builder = linker.host_instance_builder(
+    "clock",
+    linker.host_runtime_state(),
+  )
+  builder.add_async_func(
+    "wait",
+    { is_async: true, params: [], result: None, },
+    (_, _) => preview3_clock_future(ctx, 0L),
+  )
+  let call = builder.finish().start_exported_func("wait", [])
+  assert_true(call.step() is StepReady([]))
+}

@@ -10,10 +10,22 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts"))
 
-from audit_component_security import audit_repo
+from audit_component_security import analyze_interface_owners, audit_repo
 
 
 class ComponentSecurityAuditTests(unittest.TestCase):
+    def test_fully_qualified_interface_owners(self) -> None:
+        analysis = analyze_interface_owners(
+            "pub fn invoke(@Milky2018/wasmoon/jit.JITModule)"
+            " -> @Milky2018/wasmoon/component/runtime_impl.ComponentRuntime\n"
+            "pub fn unresolved(@missing.Value) -> Unit\n"
+        )
+        self.assertEqual(analysis.owners, (
+            "Milky2018/wasmoon/component/runtime_impl",
+            "Milky2018/wasmoon/jit",
+        ))
+        self.assertEqual(analysis.unresolved_aliases, ("missing",))
+
     def create_fixture(self, root: Path) -> None:
         manifest = {
             "schema_version": 1,
@@ -324,6 +336,27 @@ class ComponentSecurityAuditTests(unittest.TestCase):
                 checks["validate-before-instantiate"].passed,
                 checks["validate-before-instantiate"].detail,
             )
+
+    def test_imported_runtime_error_preserves_validation_boundary(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.create_fixture(root)
+            interface = root / "runtime.mbti"
+            interface.write_text(
+                interface.read_text().replace(
+                    "raise ComponentRuntimeError", "raise @core.ComponentRuntimeError"
+                ),
+                encoding="utf-8",
+            )
+            checks = {check.name: check for check in audit_repo(root)}
+            self.assertTrue(checks["validate-before-instantiate"].passed)
+            interface.write_text(
+                interface.read_text().replace(
+                    "@component_model.ValidatedComponent", "@model.Component"
+                ),
+                encoding="utf-8",
+            )
+            self.assert_failed(root, "validate-before-instantiate")
 
     def test_public_register_fails(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

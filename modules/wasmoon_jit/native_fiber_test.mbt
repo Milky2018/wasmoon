@@ -1,11 +1,11 @@
 ///|
 test "native fiber starts, yields repeatedly, and returns" {
   let events : Array[Int64] = []
-  let fiber = NativeFiber::new(fn() {
+  let fiber = @wasmoon_jit.NativeFiber::new(fn() {
     events.push(1L)
-    let first = NativeFiber::suspend(10L)
+    let first = @wasmoon_jit.NativeFiber::suspend(10L)
     events.push(first)
-    let second = NativeFiber::suspend(20L)
+    let second = @wasmoon_jit.NativeFiber::suspend(20L)
     events.push(second)
     30L
   })
@@ -31,12 +31,12 @@ test "native fiber starts, yields repeatedly, and returns" {
 
 ///|
 test "two native fibers interleave without sharing state" {
-  let first = NativeFiber::new(fn() {
-    let value = NativeFiber::suspend(101L)
+  let first = @wasmoon_jit.NativeFiber::new(fn() {
+    let value = @wasmoon_jit.NativeFiber::suspend(101L)
     value + 1L
   })
-  let second = NativeFiber::new(fn() {
-    let value = NativeFiber::suspend(201L)
+  let second = @wasmoon_jit.NativeFiber::new(fn() {
+    let value = @wasmoon_jit.NativeFiber::suspend(201L)
     value + 2L
   })
   debug_inspect(
@@ -51,8 +51,8 @@ test "two native fibers interleave without sharing state" {
 
 ///|
 test "native fiber cancellation is terminal and exact" {
-  let fiber = NativeFiber::new(fn() {
-    NativeFiber::suspend(1L) |> ignore
+  let fiber = @wasmoon_jit.NativeFiber::new(fn() {
+    @wasmoon_jit.NativeFiber::suspend(1L) |> ignore
     2L
   })
   debug_inspect(fiber.continue_with(), content="Yielded(1)")
@@ -69,7 +69,7 @@ test "native fiber cancellation is terminal and exact" {
 ///|
 test "native fiber allocates a guarded stack" {
   for size in [64L * 1024L, 128L * 1024L, 1024L * 1024L, 2L * 1024L * 1024L] {
-    let fiber = NativeFiber::new(fn() { 0L }, stack_size=size)
+    let fiber = @wasmoon_jit.NativeFiber::new(fn() { 0L }, stack_size=size)
     assert_eq(fiber.stack_size(), size)
     assert_true(fiber.guard_size() > 0L)
     assert_true(@native_test_support.fiber_guard_rejects_access(size))

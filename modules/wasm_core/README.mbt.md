@@ -28,7 +28,7 @@ data model.
 ```moonbit check
 ///|
 test "build a module with one exported function" {
-  let mod_ = simple_module([I32], [I64], [I64Const(7L)], "answer")
+  let mod_ = @wasm_core.simple_module([I32], [I64], [I64Const(7L)], "answer")
   inspect(mod_.funcs.length(), content="1")
   inspect(mod_.exports.length(), content="1")
   debug_inspect(mod_.func_type_at(0).unwrap().params, content="[I32]")
@@ -67,9 +67,9 @@ functions are intentionally thin; use `SubType`, `FuncType`, `StructType`, and
 ```moonbit check
 ///|
 test "construct function subtypes for a module type section" {
-  let unary = func_subtype([I32], [I32])
-  let binary = func_subtype([I32, I32], [I32])
-  let mod_ = empty_module()
+  let unary = @wasm_core.func_subtype([I32], [I32])
+  let binary = @wasm_core.func_subtype([I32, I32], [I32])
+  let mod_ = @wasm_core.empty_module()
   mod_.types.push(unary)
   mod_.types.push(binary)
   inspect(mod_.is_func_type(0), content="true")

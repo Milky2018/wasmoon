@@ -77,6 +77,11 @@ fn build_command() -> @argparse.Command {
             action=Append,
             about="Middleware component, outermost first (repeatable)",
           ),
+          OptionArg(
+            "env",
+            action=Append,
+            about="Guest environment entry in NAME=VALUE form",
+          ),
           OptionArg("addr", about="Listen address", default_values=[
             "127.0.0.1:8080",
           ]),
@@ -223,6 +228,9 @@ fn build_command() -> @argparse.Command {
           ),
           FlagArg("dump", about="Print the parsed component structure"),
           FlagArg("validate", about="Validate the component after parsing"),
+          FlagArg("http", about="Enable WASI HTTP interfaces for the command", requires=[
+            "run",
+          ]),
           FlagArg(
             "run",
             about="Run a pinned WASI Preview 2 or Preview 3 command component",
@@ -340,6 +348,7 @@ async fn main {
         sub.values["addr"][0],
         network,
         !(sub.flags.get("no-jit") is Some(true)),
+        envs=sub.values.get("env").unwrap_or([]),
       ) catch {
         error => {
           @logger.error("HTTP server failed: \{error}")
@@ -404,17 +413,31 @@ async fn main {
           _ => abort("argparse returned multiple values for network")
         }
         require_choice("--network", network, ["deny", "loopback", "all"])
-        @commands.run_wasi_component_command(
-          file_path,
-          component_args,
-          sub.values.get("env").unwrap_or([]),
-          sub.values.get("dir").unwrap_or([]),
-          network,
-          wit_names,
-          error_format,
-          component_implements~,
-          use_jit=!(sub.flags.get("no-jit") is Some(true)),
-        )
+        if sub.flags.get("http") is Some(true) {
+          @commands.run_http_component_command(
+            file_path,
+            component_args,
+            sub.values.get("env").unwrap_or([]),
+            sub.values.get("dir").unwrap_or([]),
+            network,
+            !(sub.flags.get("no-jit") is Some(true)),
+            error_format,
+            wit_names,
+            component_implements,
+          )
+        } else {
+          @commands.run_wasi_component_command(
+            file_path,
+            component_args,
+            sub.values.get("env").unwrap_or([]),
+            sub.values.get("dir").unwrap_or([]),
+            network,
+            wit_names,
+            error_format,
+            component_implements~,
+            use_jit=!(sub.flags.get("no-jit") is Some(true)),
+          )
+        }
       } else {
         @commands.run_component_command(
           file_path,

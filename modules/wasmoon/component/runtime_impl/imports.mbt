@@ -12,7 +12,7 @@ fn resolve_import(
   let key = decode_import_name(name)
   let ext_opt = match overrides.get(key) {
     Some(v) => Some(v)
-    None => linker.imports.get(key)
+    None => compatible_import(linker.imports, key)
   }
   let expected = match desc {
     CoreModuleType(_) => "module"

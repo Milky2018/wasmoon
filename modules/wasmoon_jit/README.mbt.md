@@ -40,7 +40,7 @@ test "plan a small MilkIR function for x64 JIT integration" {
   let entry = milk.new_block([])
   entry.append_inst(milk.new_inst(Scalar(IntBinary(Add)), [lhs, rhs], [sum]))
   entry.set_terminator(Return([sum]))
-  let plan = plan_milkir_integration_for_target(milk, X64)
+  let plan = @wasmoon_jit.plan_milkir_integration_for_target(milk, X64)
   inspect(plan.entry_symbol, content="add64")
   debug_inspect(plan.target, content="X64")
   inspect(plan.object.get_bytes().length() > 0, content="true")

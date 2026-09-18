@@ -104,8 +104,8 @@ fn generate_gc_fuzz_case(seed : Int) -> String {
 test "gc fuzz: directed jit/interpreter comparison" {
   for seed in 1..<129 {
     let source = generate_gc_fuzz_case(seed)
-    let compared = compare_jit_interp(source, "test", [])
-    if !compare_result_is_match(compared) {
+    let compared = @testsuite.compare_jit_interp(source, "test", [])
+    if !@testsuite.compare_result_is_match(compared) {
       fail("gc fuzz mismatch (seed=\{seed}): \{compared}")
     }
   }
@@ -142,8 +142,8 @@ fn generate_gc_deep_live_case(depth : Int) -> String {
 test "gc fuzz: deep live chain jit/interpreter comparison" {
   for depth in [16, 32, 64, 96, 128, 160] {
     let source = generate_gc_deep_live_case(depth)
-    let compared = compare_jit_interp(source, "test", [])
-    if !compare_result_is_match(compared) {
+    let compared = @testsuite.compare_jit_interp(source, "test", [])
+    if !@testsuite.compare_result_is_match(compared) {
       fail("gc deep-live mismatch (depth=\{depth}): \{compared}")
     }
   }
@@ -226,8 +226,8 @@ fn generate_gc_cycle_mix_case(seed : Int) -> String {
 test "gc fuzz: cycle/table mix jit/interpreter comparison" {
   for seed in 1..<49 {
     let source = generate_gc_cycle_mix_case(seed)
-    let compared = compare_jit_interp(source, "test", [])
-    if !compare_result_is_match(compared) {
+    let compared = @testsuite.compare_jit_interp(source, "test", [])
+    if !@testsuite.compare_result_is_match(compared) {
       fail("gc cycle/table mismatch (seed=\{seed}): \{compared}")
     }
   }

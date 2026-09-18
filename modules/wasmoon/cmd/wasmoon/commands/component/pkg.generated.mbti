@@ -1,0 +1,53 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "Milky2018/wasmoon/cmd/wasmoon/commands/component"
+
+import {
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub fn run_component_command(String, Bool, Bool, Bool, ComponentErrorFormat, component_implements? : Bool) -> Int
+
+pub fn run_component_invoke_command(String, String, Array[String], Bool, ComponentErrorFormat, component_implements? : Bool) -> Int
+
+pub fn run_component_script(String, ComponentErrorFormat, use_jit? : Bool, component_implements? : Bool) -> Int
+
+pub fn run_component_script_cli(String, ComponentErrorFormat, use_jit? : Bool, component_implements? : Bool) -> Int
+
+pub async fn run_http_component_command(String, Array[String], Array[String], Array[String], String, Bool, ComponentErrorFormat, Bool, Bool) -> Int
+
+pub fn run_wasi_component_command(String, Array[String], Array[String], Array[String], String, Bool, ComponentErrorFormat, use_jit? : Bool, component_implements? : Bool) -> Int
+
+pub async fn serve_http(String, Array[String], String, String, Bool, envs? : Array[String]) -> Int
+
+// Errors
+
+// Types and methods
+pub(all) enum ComponentErrorCode {
+  CompFileNotFound
+  CompParseError
+  CompValidateError
+  CompUnsupported
+  CompRuntimeError
+} derive(Eq, @debug.Debug)
+pub fn ComponentErrorCode::equal(Self, Self) -> Bool
+pub fn ComponentErrorCode::not_equal(Self, Self) -> Bool
+pub fn ComponentErrorCode::output(Self, &Logger) -> Unit
+pub fn ComponentErrorCode::to_repr(Self) -> @debug.Repr
+pub fn ComponentErrorCode::to_string(Self) -> String
+pub impl Show for ComponentErrorCode
+
+pub(all) enum ComponentErrorFormat {
+  Text
+  Json
+} derive(Eq, @debug.Debug)
+pub fn ComponentErrorFormat::equal(Self, Self) -> Bool
+pub fn ComponentErrorFormat::not_equal(Self, Self) -> Bool
+pub fn ComponentErrorFormat::output(Self, &Logger) -> Unit
+pub fn ComponentErrorFormat::to_repr(Self) -> @debug.Repr
+pub fn ComponentErrorFormat::to_string(Self) -> String
+pub impl Show for ComponentErrorFormat
+
+// Type aliases
+
+// Traits

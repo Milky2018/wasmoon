@@ -17,7 +17,7 @@ fn artifact_test_function(name : String) -> @milkir.Function {
 
 ///|
 fn artifact_test_manifest(
-  target : NativeTarget,
+  target : @wasmoon_jit.NativeTarget,
 ) -> @artifact.CompatibilityManifest {
   let policy : @artifact.CompilationPolicy = {
     optimization_level: O2,
@@ -27,10 +27,10 @@ fn artifact_test_manifest(
     cancellation_safepoints: true,
     debug_info: false,
   }
-  build_artifact_manifest(
+  @wasmoon_jit.build_artifact_manifest(
     target,
     MacOS,
-    module_identity=artifact_module_identity(
+    module_identity=@wasmoon_jit.artifact_module_identity(
       "artifact-producer", b"source-module", b"gc,simd,reference-types",
     ),
     policy~,
@@ -42,14 +42,14 @@ test "live compiler produces complete x64 and AArch64 artifact functions" {
   let signature = @native.Signature::new([I64, I64], [I64])
   let function = artifact_test_function("artifact_add")
   let validation_context = @wasm_milkir.WasmValidationContext::empty()
-  let x64 = compile_wasm_body_artifact_function(
+  let x64 = @wasmoon_jit.compile_wasm_body_artifact_function(
     function,
     validation_context,
     X64,
     function_index=3,
     signature~,
   )
-  let aarch64 = compile_wasm_body_artifact_function(
+  let aarch64 = @wasmoon_jit.compile_wasm_body_artifact_function(
     function,
     validation_context,
     AArch64,
@@ -98,7 +98,7 @@ test "live compiler produces complete x64 and AArch64 artifact functions" {
 ///|
 test "live artifact and encoded artifact share verification" {
   let manifest = artifact_test_manifest(X64)
-  let function = compile_wasm_body_artifact_function(
+  let function = @wasmoon_jit.compile_wasm_body_artifact_function(
     artifact_test_function("artifact_roundtrip"),
     @wasm_milkir.WasmValidationContext::empty(),
     X64,
@@ -110,15 +110,15 @@ test "live artifact and encoded artifact share verification" {
     imports: [],
     functions: [function],
   }
-  let compatibility = artifact_compatibility(
+  let compatibility = @wasmoon_jit.artifact_compatibility(
     manifest,
     available_cpu_features=[],
     runtime_symbols=[],
     data_symbols=[],
   )
-  let live = verify_artifact(artifact, compatibility).artifact()
+  let live = @wasmoon_jit.verify_artifact(artifact, compatibility).artifact()
   let encoded = @artifact.encode(artifact)
-  let decoded = load_artifact(encoded, compatibility).artifact()
+  let decoded = @wasmoon_jit.load_artifact(encoded, compatibility).artifact()
   debug_inspect(
     artifact,
     content=(

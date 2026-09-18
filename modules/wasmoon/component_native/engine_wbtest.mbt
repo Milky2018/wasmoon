@@ -97,7 +97,7 @@ test "failed native registration cannot reappear at a reused Store index" {
   )
   linker.instantiate("new", provider) |> ignore
   inspect(
-    @wast.collect_registered_funcref_entries(linker.get_store()).length(),
+    @core_jit.collect_registered_funcref_entries(linker.get_store()).length(),
     content="1",
   )
   linker.close()
@@ -127,16 +127,16 @@ test "native funcref registrations are isolated between live Stores" {
   first.instantiate("first", provider) |> ignore
   second.instantiate("second", provider) |> ignore
   inspect(
-    @wast.collect_registered_funcref_entries(first.get_store()).length(),
+    @core_jit.collect_registered_funcref_entries(first.get_store()).length(),
     content="1",
   )
   inspect(
-    @wast.collect_registered_funcref_entries(second.get_store()).length(),
+    @core_jit.collect_registered_funcref_entries(second.get_store()).length(),
     content="1",
   )
   second.close()
   inspect(
-    @wast.collect_registered_funcref_entries(first.get_store()).length(),
+    @core_jit.collect_registered_funcref_entries(first.get_store()).length(),
     content="1",
   )
   first.close()

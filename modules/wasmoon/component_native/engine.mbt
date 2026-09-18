@@ -24,8 +24,8 @@ fn component_core_route(
 
 ///|
 priv struct ComponentJITContext {
-  core : @wast.JITModuleContext
-  funcrefs : @wast.FuncrefRegistration
+  core : @core_jit.JITModuleContext
+  funcrefs : @core_jit.FuncrefRegistration
   pending_suspension : Array[@runtime_impl.CoreSuspension?]
   suspension_enabled : Array[Bool]
 }
@@ -38,7 +38,7 @@ fn ComponentJITContext::close(self : ComponentJITContext) -> Unit {
 
 ///|
 fn component_jit_error(
-  error : @wast.JITCoreCallError,
+  error : @core_jit.JITCoreCallError,
 ) -> @runtime_impl.ComponentRuntimeError {
   match error {
     Exit(code) => HostExit(code)
@@ -58,7 +58,7 @@ fn component_jit_error(
 ///|
 fn component_native_outcome(
   context : ComponentJITContext,
-  outcome : @wast.JITCoreCallOutcome,
+  outcome : @core_jit.JITCoreCallOutcome,
 ) -> @runtime_impl.CoreExecutionOutcome raise @runtime_impl.ComponentRuntimeError {
   match outcome {
     NativeCoreReturned(results) => {

@@ -16,7 +16,7 @@ The implemented surface is intentionally versioned:
 - Preview 3 waits, TCP/UDP operations, streams, and completion futures are
   driven by the host reactor and do not block the cooperative component task.
 - Native Preview 3 command execution uses Component Async callbacks and
-  stackful JIT continuations on macOS AArch64 and Linux AMD64.
+  stackful JIT continuations on macOS AArch64, Linux AMD64 and Windows AMD64.
 
 The default `WasiComponentCtxBuilder` grants no filesystem or network
 authority. Standard input is closed and standard output/error are discarded
@@ -66,5 +66,9 @@ runtime and must be resumed or cancelled before `ComponentLinker::close`.
 native registrations before closing inherited streams, dynamic host resources,
 preopen roots, and the reactor itself. Embeddings should defer it immediately
 after a successful `build()`.
-Windows, multi-threaded Store access, and cross-thread continuation migration
-are not supported.
+Multi-threaded Store access and cross-thread continuation migration are not
+supported. Windows AMD64 is exercised with both Clang and MSVC in CI.
+
+Registration coverage and targeted tests are not full WASI conformance. See
+[the WASI 0.3 acceptance audit](../../../docs/wasi03-acceptance.md) for external
+guest compatibility failures and the exact evidence boundary.

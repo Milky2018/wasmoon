@@ -1,7 +1,7 @@
 ///|
 test "encode empty module" {
   debug_inspect(
-    encode(@types.Module::empty()),
+    @encoder.encode(@types.Module::empty()),
     content="[0, 97, 115, 109, 1, 0, 0, 0]",
   )
 }
@@ -11,7 +11,7 @@ test "encode UTF-8 export name" {
   let module_ = @types.Module::empty()
   module_.exports.push({ name: "é😀", desc: Func(0), })
   debug_inspect(
-    encode(module_),
+    @encoder.encode(module_),
     content=(
       #|[
       #|  0,

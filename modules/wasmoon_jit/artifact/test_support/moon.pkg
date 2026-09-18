@@ -1,0 +1,6 @@
+import {
+  "Milky2018/wasmoon_jit/artifact",
+  "Milky2018/wasmoon_jit/artifact/loader",
+  "Milky2018/vcode/native_types" @native,
+  "Milky2018/vcode/code_object",
+}

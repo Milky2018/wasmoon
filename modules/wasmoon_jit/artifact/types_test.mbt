@@ -1,10 +1,10 @@
 ///|
-fn sample_artifact() -> Artifact {
+fn sample_artifact() -> @artifact.Artifact {
   let source = @native.SourceLocation::new("answer.wasm", 12, 4)
   let function_signature = @native.Signature::new([I64], [I64])
   {
     manifest: {
-      format_version: FORMAT_VERSION,
+      format_version: @artifact.FORMAT_VERSION,
       target: {
         architecture: AArch64,
         operating_system_abi: MacOS,

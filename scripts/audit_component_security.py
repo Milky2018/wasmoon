@@ -29,7 +29,9 @@ MBTI_IMPORT_ENTRY = re.compile(
     r'^\s*"(?P<owner>[^"]+)"'
     r"(?:\s+@(?P<alias>[A-Za-z_][A-Za-z0-9_]*))?,?\s*$"
 )
-MBTI_ALIAS_REFERENCE = re.compile(r"@([A-Za-z_][A-Za-z0-9_]*)")
+MBTI_ALIAS_REFERENCE = re.compile(
+    r"@([A-Za-z_][A-Za-z0-9_]*(?:/[A-Za-z_][A-Za-z0-9_]*)*)"
+)
 
 
 def read_text(root: Path, relative: str) -> str:
@@ -65,14 +67,17 @@ def analyze_interface_owners(interface: str) -> InterfaceOwnerAnalysis:
         owners=tuple(
             sorted(
                 {
-                    aliases[alias]
+                    alias if "/" in alias else aliases[alias]
                     for alias in referenced_aliases
-                    if alias in aliases
+                    if "/" in alias or alias in aliases
                 }
             )
         ),
         unresolved_aliases=tuple(
-            sorted(alias for alias in referenced_aliases if alias not in aliases)
+            sorted(
+                alias for alias in referenced_aliases
+                if "/" not in alias and alias not in aliases
+            )
         ),
     )
 
@@ -105,7 +110,7 @@ def has_validated_instantiation_boundary(
     linker_requires_evidence = re.search(
         r"pub fn ComponentLinker::instantiate"
         r"\(Self, String, @[A-Za-z_][A-Za-z0-9_]*\.ValidatedComponent\)"
-        r" -> ComponentInstance raise ComponentRuntimeError",
+        r" -> ComponentInstance raise (?:@[A-Za-z_][A-Za-z0-9_]*\.)?ComponentRuntimeError",
         runtime,
     )
     # A component import is instantiated by whichever component imports it,

@@ -13,7 +13,7 @@ test "br_simple" {
     #|    )
     #|  )
     #|)
-  let result = compare_jit_interp(source, "simple", [])
+  let result = @testsuite.compare_jit_interp(source, "simple", [])
   inspect(result, content="matched")
 }
 
@@ -29,7 +29,7 @@ test "br_dead_code" {
     #|    )
     #|  )
     #|)
-  let result = compare_jit_interp(source, "dead-code", [])
+  let result = @testsuite.compare_jit_interp(source, "dead-code", [])
   inspect(result, content="matched")
 }
 
@@ -43,7 +43,7 @@ test "br_as_block_first" {
     #|    (block (br 0) (call $dummy))
     #|  )
     #|)
-  let result = compare_jit_interp(source, "as-block-first", [])
+  let result = @testsuite.compare_jit_interp(source, "as-block-first", [])
   inspect(result, content="matched")
 }
 
@@ -57,7 +57,7 @@ test "br_type_i32" {
     #|(module
     #|  (func (export "type-i32") (block (drop (i32.ctz (br 0)))))
     #|)
-  let result = compare_jit_interp(source, "type-i32", [])
+  let result = @testsuite.compare_jit_interp(source, "type-i32", [])
   inspect(result, content="matched")
 }
 
@@ -78,7 +78,7 @@ test "br_nested_block_value" {
     #|    )
     #|  )
     #|)
-  let result = compare_jit_interp(source, "nested-block-value", [])
+  let result = @testsuite.compare_jit_interp(source, "nested-block-value", [])
   inspect(result, content="matched")
 }
 
@@ -95,7 +95,7 @@ test "break_bare" {
     #|    (i32.const 19)
     #|  )
     #|)
-  let result = compare_jit_interp(source, "break-bare", [])
+  let result = @testsuite.compare_jit_interp(source, "break-bare", [])
   inspect(result, content="matched")
 }
 
@@ -109,6 +109,6 @@ test "as_call_value" {
     #|    (call $f (block (result i32) (i32.const 1)))
     #|  )
     #|)
-  let result = compare_jit_interp(source, "as-call-value", [])
+  let result = @testsuite.compare_jit_interp(source, "as-call-value", [])
   inspect(result, content="matched")
 }

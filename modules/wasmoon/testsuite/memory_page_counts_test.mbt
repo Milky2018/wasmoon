@@ -9,7 +9,7 @@ test "single-byte memory64 pages retain size growth and declared maximum" {
     #|    memory.size
     #|    i64.const 2 memory.grow))
   for opt_level in [0, 2] {
-    let result = compare_jit_interp_with_opt_level(
+    let result = @testsuite.compare_jit_interp_with_opt_level(
       source,
       "test",
       [],
@@ -32,7 +32,7 @@ test "single-byte memory32 caps growth below the failure sentinel" {
     #|    i32.const 0 memory.grow
     #|    i32.const 1 memory.grow
     #|    memory.size))
-  let result = compare_jit_interp(source, "test", [])
+  let result = @testsuite.compare_jit_interp(source, "test", [])
   inspect(
     result.to_string(),
     content="JIT: I32(-2), I32(-2), I32(-1), I32(-2)\nInterpreter: I32(-2), I32(-2), I32(-1), I32(-2)\nResult: MATCH",

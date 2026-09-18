@@ -248,3 +248,98 @@ test "embedding future read transfers owned resources from the producer table" {
   runtime.drop_host_readable_future(target, moved)
   inspect(runtime.async_state.futures.length(), content="0")
 }
+
+///|
+test "scheduler polls host streams without external I/O and delivers each read once" {
+  let linker = ComponentLinker()
+  defer linker.close()
+  let runtime = linker.host_runtime_state()
+  let parsed = @component.parse_component(
+    @component_text.parse_component_wat(
+      (
+        #|(component
+        #|  (type $stream (stream u8))
+        #|  (core module $Mem (memory (export "m") 1))
+        #|  (core instance $mem (instantiate $Mem))
+        #|  (core func $read (canon stream.read $stream async (memory (core memory $mem "m"))))
+        #|  (core module $M
+        #|    (import "" "read" (func $read (param i32 i32 i32) (result i32)))
+        #|    (func (export "read") (param i32) (result i32)
+        #|      local.get 0 i32.const 0 i32.const 1 call $read))
+        #|  (core instance $m (instantiate $M (with "" (instance (export "read" (func $read))))))
+        #|  (func (export "read") (param "s" $stream) (result s32) (canon lift (core func $m "read"))))
+      ),
+    ),
+  )
+  let instance = linker.instantiate(
+    "reader",
+    @component_validator.validate_component_for_instantiation(parsed),
+  )
+  let ready = Ref(false)
+  let reads = Ref(0)
+  let handle = runtime.new_host_value_stream_source(
+    runtime.resource_table(),
+    Prim(U8),
+    [],
+    _ => {
+      if ready.val {
+        reads.val += 1
+        Values([U8(42)])
+      } else {
+        Pending
+      }
+    },
+    () => (),
+  )
+  let handle = runtime.move_readable_stream(
+    runtime.resource_table(),
+    instance.resource_table,
+    handle,
+  )
+  assert_eq(instance.call_exported_func("read", [U32(handle)]), [S32(-1)])
+  ready.val = true
+  assert_true(
+    progress_one_subtask_intrinsic(runtime.async_state(), linker.get_store()),
+  )
+  assert_false(
+    progress_one_subtask_intrinsic(runtime.async_state(), linker.get_store()),
+  )
+  assert_eq(reads.val, 1)
+}
+
+///|
+test "finite host byte streams report EOF only after their final chunk" {
+  let linker = ComponentLinker()
+  defer linker.close()
+  let runtime = linker.host_runtime_state()
+  let parsed = @component.parse_component(
+    @component_text.parse_component_wat(
+      (
+        #|(component
+        #|  (type $stream (stream u8))
+        #|  (core module $Mem (memory (export "m") 1))
+        #|  (core instance $mem (instantiate $Mem))
+        #|  (core func $read (canon stream.read $stream async (memory (core memory $mem "m"))))
+        #|  (core module $M
+        #|    (import "" "read" (func $read (param i32 i32 i32) (result i32)))
+        #|    (func (export "read") (param i32) (result i32)
+        #|      local.get 0 i32.const 0 i32.const 1 call $read))
+        #|  (core instance $m (instantiate $M (with "" (instance (export "read" (func $read))))))
+        #|  (func (export "read") (param "s" $stream) (result s32) (canon lift (core func $m "read"))))
+      ),
+    ),
+  )
+  let instance = linker.instantiate(
+    "reader",
+    @component_validator.validate_component_for_instantiation(parsed),
+  )
+  let handle = runtime.new_host_byte_stream(runtime.resource_table(), b"abc")
+  let handle = runtime.move_readable_stream(
+    runtime.resource_table(),
+    instance.resource_table,
+    handle,
+  )
+  assert_eq(instance.call_exported_func("read", [U32(handle)]), [S32(16)])
+  assert_eq(instance.call_exported_func("read", [U32(handle)]), [S32(16)])
+  assert_eq(instance.call_exported_func("read", [U32(handle)]), [S32(17)])
+}

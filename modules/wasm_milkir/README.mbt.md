@@ -50,8 +50,8 @@ layouts configurable without making the reusable translator depend on Wasmoon.
 ```moonbit check
 ///|
 test "map Wasm reference spelling to generic MilkIR references" {
-  inspect(wasm_funcref_type().to_string(), content="callable_ref")
-  inspect(wasm_externref_type().to_string(), content="opaque_ref")
+  inspect(@wasm_milkir.wasm_funcref_type().to_string(), content="callable_ref")
+  inspect(@wasm_milkir.wasm_externref_type().to_string(), content="opaque_ref")
 }
 ```
 
@@ -61,14 +61,16 @@ test "map Wasm reference spelling to generic MilkIR references" {
 ///|
 test "build a Wasm memory.size extension instruction" {
   let builder = @milkir.FunctionBuilder::FunctionBuilder("memory_size")
-  let symbols = RuntimeSymbols::with_runtime_prefix("example.runtime")
+  let symbols = @wasm_milkir.RuntimeSymbols::with_runtime_prefix(
+    "example.runtime",
+  )
   let vmctx = builder.add_param(I64)
   builder.add_result(I32)
-  let size = memory_size(builder, symbols, vmctx, 0)
+  let size = @wasm_milkir.memory_size(builder, symbols, vmctx, 0)
   builder.return_([size])
   let func = builder.get_function()
   inspect(func.blocks.length(), content="1")
-  verify_function(func)
+  @wasm_milkir.verify_function(func)
   match func.block_instruction_at(func.blocks[0], 1).unwrap().opcode {
     Call(Direct(symbol, _)) =>
       inspect(symbol.name, content="example.runtime.memory_size")
@@ -82,18 +84,18 @@ test "build a Wasm memory.size extension instruction" {
 ```moonbit check
 ///|
 test "validate and decode a typed Wasm extension operation" {
-  let opcode = WasmOpcode::RefTest(3, true)
-  let ext = encode(opcode)
-  let desc = descriptor(opcode)
+  let opcode = @wasm_milkir.WasmOpcode::RefTest(3, true)
+  let ext = @wasm_milkir.encode(opcode)
+  let desc = @wasm_milkir.descriptor(opcode)
   inspect(ext.matches_descriptor(desc), content="true")
-  inspect(decode(ext) == Some(opcode), content="true")
+  inspect(@wasm_milkir.decode(ext) == Some(opcode), content="true")
   let malformed = @milkir.ExtOp(
     "wasm",
     "ref_test",
     FixedArray::makei(2, fn(i) { if i == 0 { 3 } else { 2 } }),
   )
   debug_inspect(
-    decode_error(malformed),
+    @wasm_milkir.decode_error(malformed),
     content=(
       #|Some("malformed Wasm MilkIR extension 'ref_test': immediate 1 is a bool flag encoded as 0 or 1, got 2")
     ),

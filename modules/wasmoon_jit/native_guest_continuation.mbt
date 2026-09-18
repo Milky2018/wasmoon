@@ -1,16 +1,4 @@
 ///|
-type NativeContinuationArena
-
-///|
-extern "c" fn NativeContinuationArena::new() -> NativeContinuationArena = "wasmoon_continuation_arena_new"
-
-///|
-#borrow(self)
-extern "c" fn NativeContinuationArena::clear(
-  self : NativeContinuationArena,
-) -> Unit = "wasmoon_continuation_arena_clear"
-
-///|
 #borrow(context, arena)
 extern "c" fn bind_continuation_arena(
   context : JITContext,

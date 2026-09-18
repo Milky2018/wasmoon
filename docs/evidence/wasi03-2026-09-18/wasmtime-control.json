@@ -1,0 +1,423 @@
+{
+  "execution": {
+    "start_timestamp": "2026-09-18T03:30:47.035Z",
+    "finish_timestamp": "2026-09-18T03:31:05.404Z"
+  },
+  "results": [
+    {
+      "name": "WASI Rust tests [wasm32-wasip3]",
+      "runtime": {
+        "name": "wasmtime",
+        "version": "48.0.2"
+      },
+      "duration_s": 18.332453,
+      "failed": 6,
+      "skipped": 0,
+      "passed": 49,
+      "xfailed": 0,
+      "xpassed": 0,
+      "tests": [
+        {
+          "name": "filesystem-open-errors",
+          "executed": true,
+          "outcome": "pass",
+          "duration_s": 0.03790998458862305,
+          "failures": []
+        },
+        {
+          "name": "http-request-options",
+          "executed": true,
+          "outcome": "pass",
+          "duration_s": 0.03805208206176758,
+          "failures": []
+        },
+        {
+          "name": "filesystem-metadata-hash",
+          "executed": true,
+          "outcome": "pass",
+          "duration_s": 0.04050803184509277,
+          "failures": []
+        },
+        {
+          "name": "filesystem-dotdot",
+          "executed": true,
+          "outcome": "pass",
+          "duration_s": 0.03535103797912598,
+          "failures": []
+        },
+        {
+          "name": "run-with-err",
+          "executed": true,
+          "outcome": "pass",
+          "duration_s": 0.02813887596130371,
+          "failures": []
+        },
+        {
+          "name": "sockets-tcp-properties",
+          "executed": true,
+          "outcome": "fail",
+          "duration_s": 0.03270983695983887,
+          "failures": [
+            "Wait(exit_code=0) failed: expected 0, got 134\n\n==STDERR==\n\nthread '<unnamed>' (1) panicked at tests/rust/wasm32-wasip3/src/bin/sockets-tcp-properties.rs:11:42:\ncalled `Result::unwrap()` on an `Err` value: ErrorCode::AccessDenied\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\nError: failed to run main module `/tmp/wasmoon-wasi03-accept-upstream/tests/rust/testsuite/wasm32-wasip3/sockets-tcp-properties.wasm`\n\nCaused by:\n    0: error while executing at wasm backtrace:\n    0:  0x1e870 - sockets_tcp_properties.wasm!abort\n    1:  0x1cc6b - sockets_tcp_properties.wasm!std[44084d1fa4ccf3f7]::sys::pal::wasi::abort_internal\n    2:  0x1bda0 - sockets_tcp_properties.wasm!std[44084d1fa4ccf3f7]::process::abort\n    3:  0x1c372 - sockets_tcp_properties.wasm!__rustc[8068f81614cfe5c]::__rust_abort\n    4:  0x1a874 - sockets_tcp_properties.wasm!__rustc[8068f81614cfe5c]::__rust_start_panic\n    5:  0x1c19f - sockets_tcp_properties.wasm!__rustc[8068f81614cfe5c]::rust_panic\n    6:  0x1b5cf - sockets_tcp_properties.wasm!std[44084d1fa4ccf3f7]::panicking::panic_with_hook\n    7:  0x1b1da - sockets_tcp_properties.wasm!std[44084d1fa4ccf3f7]::panicking::panic_handler::{closure#0}\n    8:  0x1b12c - sockets_tcp_properties.wasm!std[44084d1fa4ccf3f7]::sys::backtrace::__rust_end_short_backtrace::<std[44084d1fa4ccf3f7]::panicking::panic_handler::{closure#0}, !>\n    9:  0x1c455 - sockets_tcp_properties.wasm!__rustc[8068f81614cfe5c]::rust_begin_unwind\n   10:  0x2301d - sockets_tcp_properties.wasm!core[4268d4bc09ba5f28]::panicking::panic_fmt\n   11:  0x26478 - sockets_tcp_properties.wasm!core[4268d4bc09ba5f28]::result::unwrap_failed\n   12:   0x2103 - sockets_tcp_properties.wasm!sockets_tcp_properties[bd35946084adac35]::test_properties\n   13:   0x2027 - sockets_tcp_properties.wasm!<sockets_tcp_properties[bd35946084adac35]::Component as test_wasm32_wasip3[301388a0fc8da14e]::cli::exports::wasi::cli::run::Guest>::run::{closure#0}\n   14:   0x1ed0 - sockets_tcp_properties.wasm!test_wasm32_wasip3[301388a0fc8da14e]::cli::exports::wasi::cli::run::_export_run_cabi::<sockets_tcp_properties[bd35946084adac35]::Component>::{closure#0}\n   15:  0x18463 - sockets_tcp_properties.wasm!<core[4268d4bc09ba5f28]::pin::Pin<alloc[c5be2c7181692d28]::boxed::Box<dyn core[4268d4bc09ba5f28]::future::future::Future<Output = ()>>> as core[4268d4bc09ba5f28]::future::future::Future>::poll\n   16:  0x154c4 - sockets_tcp_properties.wasm!<futures_util[4958f95f85b67bf1]::stream::futures_unordered::FuturesUnordered<core[4268d4bc09ba5f28]::pin::Pin<alloc[c5be2c7181692d28]::boxed::Box<dyn core[4268d4bc09ba5f28]::future::future::Future<Output = ()>>>> as futures_core[2ca238ecf907b6e2]::stream::Stream>::poll_next\n   17:  0x12f80 - sockets_tcp_properties.wasm!<futures_util[4958f95f85b67bf1]::stream::futures_unordered::FuturesUnordered<core[4268d4bc09ba5f28]::pin::Pin<alloc[c5be2c7181692d28]::boxed::Box<dyn core[4268d4bc09ba5f28]::future::future::Future<Output = ()>>>> as futures_util[4958f95f85b67bf1]::stream::stream::StreamExt>::poll_next_unpin\n   18:  0x1229f - sockets_tcp_properties.wasm!<wit_bindgen[bcef0974d14e1fee]::rt::async_support::spawn::Tasks>::poll_next\n   19:  0x108cc - sockets_tcp_properties.wasm!<wit_bindgen[bcef0974d14e1fee]::rt::async_support::FutureState>::callback::{closure#0}\nnote: using the `WASMTIME_BACKTRACE_DETAILS=1` environment variable may show more debugging information\n    1: wasm trap: wasm `unreachable` instruction executed\n\n"
+          ]
+        },
+        {
+          "name": "filesystem-rename",
+          "executed": true,
+          "outcome": "pass",
+          "duration_s": 0.03588104248046875,
+          "failures": []
+        },
+        {
+          "name": "multi-clock-wait",
+          "executed": true,
+          "outcome": "pass",
+          "duration_s": 0.042196035385131836,
+          "failures": []
+        },
+        {
+          "name": "http-client-path-none",
+          "executed": true,
+          "outcome": "fail",
+          "duration_s": 0.5047061443328857,
+          "failures": [
+            "Request(method='GET', path='/', response=Response(status=200, headers={}, body=''), headers={}, body=''): Expected status 200, got 500",
+            "\n\n==STDERR==\nstderr [0] :: \nstderr [0] :: thread '<unnamed>' (1) panicked at tests/rust/wasm32-wasip3/src/http.rs:136:48:\nstderr [0] :: send should succeed: ErrorCode::HttpRequestUriInvalid\nstderr [0] :: note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\nworker failed: error while executing at wasm backtrace:\n    0:  0x41096 - http_client_path_none.wasm!abort\n    1:  0x3f2c8 - http_client_path_none.wasm!std[44084d1fa4ccf3f7]::sys::pal::wasi::abort_internal\n    2:  0x3e3fd - http_client_path_none.wasm!std[44084d1fa4ccf3f7]::process::abort\n    3:  0x3e9cf - http_client_path_none.wasm!__rustc[8068f81614cfe5c]::__rust_abort\n    4:  0x3ced1 - http_client_path_none.wasm!__rustc[8068f81614cfe5c]::__rust_start_panic\n    5:  0x3e7fc - http_client_path_none.wasm!__rustc[8068f81614cfe5c]::rust_panic\n    6:  0x3dc2c - http_client_path_none.wasm!std[44084d1fa4ccf3f7]::panicking::panic_with_hook\n    7:  0x3d837 - http_client_path_none.wasm!std[44084d1fa4ccf3f7]::panicking::panic_handler::{closure#0}\n    8:  0x3d789 - http_client_path_none.wasm!std[44084d1fa4ccf3f7]::sys::backtrace::__rust_end_short_backtrace::<std[44084d1fa4ccf3f7]::panicking::panic_handler::{closure#0}, !>\n    9:  0x3eab2 - http_client_path_none.wasm!__rustc[8068f81614cfe5c]::rust_begin_unwind\n   10:  0x4699d - http_client_path_none.wasm!core[4268d4bc09ba5f28]::panicking::panic_fmt\n   11:  0x49df8 - http_client_path_none.wasm!core[4268d4bc09ba5f28]::result::unwrap_failed\n   12:  0x274b6 - http_client_path_none.wasm!<core[4268d4bc09ba5f28]::result::Result<test_wasm32_wasip3[301388a0fc8da14e]::http::wasi::http::types::Response, test_wasm32_wasip3[301388a0fc8da14e]::http::wasi::http::types::ErrorCode>>::expect\n   13:  0x2110a - http_client_path_none.wasm!test_wasm32_wasip3[301388a0fc8da14e]::http::endpoint_request::{closure#0}\n   14:   0x469e - http_client_path_none.wasm!<http_client_path_none[b092bc058cfa5d27]::Component as test_wasm32_wasip3[301388a0fc8da14e]::http::exports::wasi::http::handler::Guest>::handle::{closure#0}\n   15:   0x2d3f - http_client_path_none.wasm!test_wasm32_wasip3[301388a0fc8da14e]::http::exports::wasi::http::handler::_export_handle_cabi::<http_client_path_none[b092bc058cfa5d27]::Component>::{closure#0}\n   16:  0x39c5c - http_client_path_none.wasm!<core[4268d4bc09ba5f28]::pin::Pin<alloc[c5be2c7181692d28]::boxed::Box<dyn core[4268d4bc09ba5f28]::future::future::Future<Output = ()>>> as core[4268d4bc09ba5f28]::future::future::Future>::poll\n   17:  0x368fc - http_client_path_none.wasm!<futures_util[4958f95f85b67bf1]::stream::futures_unordered::FuturesUnordered<core[4268d4bc09ba5f28]::pin::Pin<alloc[c5be2c7181692d28]::boxed::Box<dyn core[4268d4bc09ba5f28]::future::future::Future<Output = ()>>>> as futures_core[2ca238ecf907b6e2]::stream::Stream>::poll_next\n   18:  0x34262 - http_client_path_none.wasm!<futures_util[4958f95f85b67bf1]::stream::futures_unordered::FuturesUnordered<core[4268d4bc09ba5f28]::pin::Pin<alloc[c5be2c7181692d28]::boxed::Box<dyn core[4268d4bc09ba5f28]::future::future::Future<Output = ()>>>> as futures_util[4958f95f85b67bf1]::stream::stream::StreamExt>::poll_next_unpin\n   19:  0x33578 - http_client_path_none.wasm!<wit_bindgen[bcef0974d14e1fee]::rt::async_support::spawn::Tasks>::poll_next\nnote: using the `WASMTIME_BACKTRACE_DETAILS=1` environment variable may show more debugging information\n\nCaused by:\n    wasm trap: wasm `unreachable` instruction executed\n\nerror: worker trapped or panicked\n"
+          ]
+        },
+        {
+          "name": "http-client-trailer-error",
+          "executed": true,
+          "outcome": "pass",
+          "duration_s": 1.5681920051574707,
+          "failures": []
+        },
+        {
+          "name": "sockets-tcp-bind",
+          "executed": true,
+          "outcome": "pass",
+          "duration_s": 0.04122805595397949,
+          "failures": []
+        },
+        {
+          "name": "sockets-udp-send",
+          "executed": true,
+          "outcome": "pass",
+          "duration_s": 0.03320503234863281,
+          "failures": []
+        },
+        {
+          "name": "filesystem-hard-links",
+          "executed": true,
+          "outcome": "pass",
+          "duration_s": 0.037062883377075195,
+          "failures": []
+        },
+        {
+          "name": "filesystem-is-same-object",
+          "executed": true,
+          "outcome": "pass",
+          "duration_s": 0.034271955490112305,
+          "failures": []
+        },
+        {
+          "name": "cli-stdout-flush",
+          "executed": true,
+          "outcome": "pass",
+          "duration_s": 0.0340578556060791,
+          "failures": []
+        },
+        {
+          "name": "cli-terminal",
+          "executed": true,
+          "outcome": "pass",
+          "duration_s": 0.028026819229125977,
+          "failures": []
+        },
+        {
+          "name": "http-client-path",
+          "executed": true,
+          "outcome": "pass",
+          "duration_s": 1.5630390644073486,
+          "failures": []
+        },
+        {
+          "name": "filesystem-set-size",
+          "executed": true,
+          "outcome": "pass",
+          "duration_s": 0.03955721855163574,
+          "failures": []
+        },
+        {
+          "name": "http-service-echo",
+          "executed": true,
+          "outcome": "pass",
+          "duration_s": 1.0654149055480957,
+          "failures": []
+        },
+        {
+          "name": "http-fields",
+          "executed": true,
+          "outcome": "pass",
+          "duration_s": 0.04070091247558594,
+          "failures": []
+        },
+        {
+          "name": "sockets-tcp-listen",
+          "executed": true,
+          "outcome": "pass",
+          "duration_s": 0.035086870193481445,
+          "failures": []
+        },
+        {
+          "name": "http-client-headers",
+          "executed": true,
+          "outcome": "pass",
+          "duration_s": 1.5593390464782715,
+          "failures": []
+        },
+        {
+          "name": "http-client-sent",
+          "executed": true,
+          "outcome": "fail",
+          "duration_s": 0.11795997619628906,
+          "failures": [
+            "Request(method='GET', path='/', response=Response(status=200, headers={}, body=''), headers={}, body=''): Expected status 200, got 500",
+            "\n\n==STDERR==\nstderr [0] :: \nstderr [0] :: thread '<unnamed>' (1) panicked at tests/rust/wasm32-wasip3/src/bin/http-client-sent.rs:28:9:\nstderr [0] :: a request that was never transmitted must not report successful transmission\nstderr [0] :: note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\nworker failed: error while executing at wasm backtrace:\n    0:  0x35b2c - http_client_sent.wasm!abort\n    1:  0x33f27 - http_client_sent.wasm!std[44084d1fa4ccf3f7]::sys::pal::wasi::abort_internal\n    2:  0x3305c - http_client_sent.wasm!std[44084d1fa4ccf3f7]::process::abort\n    3:  0x3362e - http_client_sent.wasm!__rustc[8068f81614cfe5c]::__rust_abort\n    4:  0x31b30 - http_client_sent.wasm!__rustc[8068f81614cfe5c]::__rust_start_panic\n    5:  0x3345b - http_client_sent.wasm!__rustc[8068f81614cfe5c]::rust_panic\n    6:  0x3288b - http_client_sent.wasm!std[44084d1fa4ccf3f7]::panicking::panic_with_hook\n    7:  0x32455 - http_client_sent.wasm!std[44084d1fa4ccf3f7]::panicking::panic_handler::{closure#0}\n    8:  0x323e8 - http_client_sent.wasm!std[44084d1fa4ccf3f7]::sys::backtrace::__rust_end_short_backtrace::<std[44084d1fa4ccf3f7]::panicking::panic_handler::{closure#0}, !>\n    9:  0x33711 - http_client_sent.wasm!__rustc[8068f81614cfe5c]::rust_begin_unwind\n   10:  0x3a28b - http_client_sent.wasm!core[4268d4bc09ba5f28]::panicking::panic_fmt\n   11:   0x4830 - http_client_sent.wasm!<http_client_sent[1efaeb0c16def304]::Component as test_wasm32_wasip3[301388a0fc8da14e]::http::exports::wasi::http::handler::Guest>::handle::{closure#0}\n   12:   0x297a - http_client_sent.wasm!test_wasm32_wasip3[301388a0fc8da14e]::http::exports::wasi::http::handler::_export_handle_cabi::<http_client_sent[1efaeb0c16def304]::Component>::{closure#0}\n   13:  0x2f70a - http_client_sent.wasm!<core[4268d4bc09ba5f28]::pin::Pin<alloc[c5be2c7181692d28]::boxed::Box<dyn core[4268d4bc09ba5f28]::future::future::Future<Output = ()>>> as core[4268d4bc09ba5f28]::future::future::Future>::poll\n   14:  0x2c3aa - http_client_sent.wasm!<futures_util[4958f95f85b67bf1]::stream::futures_unordered::FuturesUnordered<core[4268d4bc09ba5f28]::pin::Pin<alloc[c5be2c7181692d28]::boxed::Box<dyn core[4268d4bc09ba5f28]::future::future::Future<Output = ()>>>> as futures_core[2ca238ecf907b6e2]::stream::Stream>::poll_next\n   15:  0x29d10 - http_client_sent.wasm!<futures_util[4958f95f85b67bf1]::stream::futures_unordered::FuturesUnordered<core[4268d4bc09ba5f28]::pin::Pin<alloc[c5be2c7181692d28]::boxed::Box<dyn core[4268d4bc09ba5f28]::future::future::Future<Output = ()>>>> as futures_util[4958f95f85b67bf1]::stream::stream::StreamExt>::poll_next_unpin\n   16:  0x29026 - http_client_sent.wasm!<wit_bindgen[bcef0974d14e1fee]::rt::async_support::spawn::Tasks>::poll_next\n   17:  0x27653 - http_client_sent.wasm!<wit_bindgen[bcef0974d14e1fee]::rt::async_support::FutureState>::callback::{closure#0}\n   18:  0x27580 - http_client_sent.wasm!<wit_bindgen[bcef0974d14e1fee]::rt::async_support::FutureState>::with_p3_task_set::<wit_bindgen[bcef0974d14e1fee]::rt::async_support::CallbackCode, <wit_bindgen[bcef0974d14e1fee]::rt::async_support::FutureState>::callback::{closure#0}>\n   19:  0x29c36 - http_client_sent.wasm!<wit_bindgen[bcef0974d14e1fee]::rt::async_support::FutureState>::callback\nnote: using the `WASMTIME_BACKTRACE_DETAILS=1` environment variable may show more debugging information\n\nCaused by:\n    wasm trap: wasm `unreachable` instruction executed\n\nerror: worker trapped or panicked\n"
+          ]
+        },
+        {
+          "name": "sockets-echo",
+          "executed": true,
+          "outcome": "pass",
+          "duration_s": 0.038401126861572266,
+          "failures": []
+        },
+        {
+          "name": "http-client-trailers",
+          "executed": true,
+          "outcome": "pass",
+          "duration_s": 1.5618059635162354,
+          "failures": []
+        },
+        {
+          "name": "http-client-send-errors",
+          "executed": true,
+          "outcome": "pass",
+          "duration_s": 1.5526840686798096,
+          "failures": []
+        },
+        {
+          "name": "http-request",
+          "executed": true,
+          "outcome": "pass",
+          "duration_s": 0.03959989547729492,
+          "failures": []
+        },
+        {
+          "name": "filesystem-mkdir-rmdir",
+          "executed": true,
+          "outcome": "pass",
+          "duration_s": 0.03517580032348633,
+          "failures": []
+        },
+        {
+          "name": "http-response",
+          "executed": true,
+          "outcome": "pass",
+          "duration_s": 0.03665590286254883,
+          "failures": []
+        },
+        {
+          "name": "filesystem-stat",
+          "executed": true,
+          "outcome": "pass",
+          "duration_s": 0.0378260612487793,
+          "failures": []
+        },
+        {
+          "name": "filesystem-unlink-errors",
+          "executed": true,
+          "outcome": "pass",
+          "duration_s": 0.03338980674743652,
+          "failures": []
+        },
+        {
+          "name": "sockets-udp-connect",
+          "executed": true,
+          "outcome": "pass",
+          "duration_s": 0.029937028884887695,
+          "failures": []
+        },
+        {
+          "name": "sockets-tcp-connect",
+          "executed": true,
+          "outcome": "pass",
+          "duration_s": 0.03617215156555176,
+          "failures": []
+        },
+        {
+          "name": "filesystem-io",
+          "executed": true,
+          "outcome": "pass",
+          "duration_s": 0.06404566764831543,
+          "failures": []
+        },
+        {
+          "name": "cli-env",
+          "executed": true,
+          "outcome": "pass",
+          "duration_s": 0.028640031814575195,
+          "failures": []
+        },
+        {
+          "name": "random",
+          "executed": true,
+          "outcome": "pass",
+          "duration_s": 0.013411998748779297,
+          "failures": []
+        },
+        {
+          "name": "http-client-chunked",
+          "executed": true,
+          "outcome": "pass",
+          "duration_s": 1.5577619075775146,
+          "failures": []
+        },
+        {
+          "name": "http-service",
+          "executed": true,
+          "outcome": "pass",
+          "duration_s": 1.0771629810333252,
+          "failures": []
+        },
+        {
+          "name": "wall-clock",
+          "executed": true,
+          "outcome": "pass",
+          "duration_s": 0.028198957443237305,
+          "failures": []
+        },
+        {
+          "name": "sockets-udp-properties",
+          "executed": true,
+          "outcome": "fail",
+          "duration_s": 0.031020164489746094,
+          "failures": [
+            "Wait(exit_code=0) failed: expected 0, got 134\n\n==STDERR==\n\nthread '<unnamed>' (1) panicked at tests/rust/wasm32-wasip3/src/bin/sockets-udp-properties.rs:8:42:\ncalled `Result::unwrap()` on an `Err` value: ErrorCode::AccessDenied\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\nError: failed to run main module `/tmp/wasmoon-wasi03-accept-upstream/tests/rust/testsuite/wasm32-wasip3/sockets-udp-properties.wasm`\n\nCaused by:\n    0: error while executing at wasm backtrace:\n    0:  0x19d01 - sockets_udp_properties.wasm!abort\n    1:  0x180fc - sockets_udp_properties.wasm!std[44084d1fa4ccf3f7]::sys::pal::wasi::abort_internal\n    2:  0x17231 - sockets_udp_properties.wasm!std[44084d1fa4ccf3f7]::process::abort\n    3:  0x17803 - sockets_udp_properties.wasm!__rustc[8068f81614cfe5c]::__rust_abort\n    4:  0x15d05 - sockets_udp_properties.wasm!__rustc[8068f81614cfe5c]::__rust_start_panic\n    5:  0x17630 - sockets_udp_properties.wasm!__rustc[8068f81614cfe5c]::rust_panic\n    6:  0x16a60 - sockets_udp_properties.wasm!std[44084d1fa4ccf3f7]::panicking::panic_with_hook\n    7:  0x1666b - sockets_udp_properties.wasm!std[44084d1fa4ccf3f7]::panicking::panic_handler::{closure#0}\n    8:  0x165bd - sockets_udp_properties.wasm!std[44084d1fa4ccf3f7]::sys::backtrace::__rust_end_short_backtrace::<std[44084d1fa4ccf3f7]::panicking::panic_handler::{closure#0}, !>\n    9:  0x178e6 - sockets_udp_properties.wasm!__rustc[8068f81614cfe5c]::rust_begin_unwind\n   10:  0x1e4ae - sockets_udp_properties.wasm!core[4268d4bc09ba5f28]::panicking::panic_fmt\n   11:  0x21909 - sockets_udp_properties.wasm!core[4268d4bc09ba5f28]::result::unwrap_failed\n   12:   0x1c64 - sockets_udp_properties.wasm!sockets_udp_properties[eaded272bbe2e723]::test_properties\n   13:   0x1ba0 - sockets_udp_properties.wasm!<sockets_udp_properties[eaded272bbe2e723]::Component as test_wasm32_wasip3[301388a0fc8da14e]::cli::exports::wasi::cli::run::Guest>::run::{closure#0}\n   14:   0x1a49 - sockets_udp_properties.wasm!test_wasm32_wasip3[301388a0fc8da14e]::cli::exports::wasi::cli::run::_export_run_cabi::<sockets_udp_properties[eaded272bbe2e723]::Component>::{closure#0}\n   15:  0x138f4 - sockets_udp_properties.wasm!<core[4268d4bc09ba5f28]::pin::Pin<alloc[c5be2c7181692d28]::boxed::Box<dyn core[4268d4bc09ba5f28]::future::future::Future<Output = ()>>> as core[4268d4bc09ba5f28]::future::future::Future>::poll\n   16:  0x10955 - sockets_udp_properties.wasm!<futures_util[4958f95f85b67bf1]::stream::futures_unordered::FuturesUnordered<core[4268d4bc09ba5f28]::pin::Pin<alloc[c5be2c7181692d28]::boxed::Box<dyn core[4268d4bc09ba5f28]::future::future::Future<Output = ()>>>> as futures_core[2ca238ecf907b6e2]::stream::Stream>::poll_next\n   17:   0xe411 - sockets_udp_properties.wasm!<futures_util[4958f95f85b67bf1]::stream::futures_unordered::FuturesUnordered<core[4268d4bc09ba5f28]::pin::Pin<alloc[c5be2c7181692d28]::boxed::Box<dyn core[4268d4bc09ba5f28]::future::future::Future<Output = ()>>>> as futures_util[4958f95f85b67bf1]::stream::stream::StreamExt>::poll_next_unpin\n   18:   0xd730 - sockets_udp_properties.wasm!<wit_bindgen[bcef0974d14e1fee]::rt::async_support::spawn::Tasks>::poll_next\n   19:   0xbd5d - sockets_udp_properties.wasm!<wit_bindgen[bcef0974d14e1fee]::rt::async_support::FutureState>::callback::{closure#0}\nnote: using the `WASMTIME_BACKTRACE_DETAILS=1` environment variable may show more debugging information\n    1: wasm trap: wasm `unreachable` instruction executed\n\n"
+          ]
+        },
+        {
+          "name": "http-client-method",
+          "executed": true,
+          "outcome": "pass",
+          "duration_s": 1.5608570575714111,
+          "failures": []
+        },
+        {
+          "name": "cli-stdio-roundtrip",
+          "executed": true,
+          "outcome": "pass",
+          "duration_s": 0.036889076232910156,
+          "failures": []
+        },
+        {
+          "name": "filesystem-advise",
+          "executed": true,
+          "outcome": "pass",
+          "duration_s": 0.03466677665710449,
+          "failures": []
+        },
+        {
+          "name": "cli-exit",
+          "executed": true,
+          "outcome": "pass",
+          "duration_s": 0.028177976608276367,
+          "failures": []
+        },
+        {
+          "name": "cli-stdio",
+          "executed": true,
+          "outcome": "pass",
+          "duration_s": 0.030328035354614258,
+          "failures": []
+        },
+        {
+          "name": "monotonic-clock",
+          "executed": true,
+          "outcome": "pass",
+          "duration_s": 0.034008026123046875,
+          "failures": []
+        },
+        {
+          "name": "http-client",
+          "executed": true,
+          "outcome": "pass",
+          "duration_s": 1.556447982788086,
+          "failures": []
+        },
+        {
+          "name": "http-client-status",
+          "executed": true,
+          "outcome": "pass",
+          "duration_s": 1.5778937339782715,
+          "failures": []
+        },
+        {
+          "name": "sockets-tcp-receive",
+          "executed": true,
+          "outcome": "pass",
+          "duration_s": 0.04875588417053223,
+          "failures": []
+        },
+        {
+          "name": "sockets-udp-bind",
+          "executed": true,
+          "outcome": "pass",
+          "duration_s": 0.03026103973388672,
+          "failures": []
+        },
+        {
+          "name": "sockets-udp-receive",
+          "executed": true,
+          "outcome": "pass",
+          "duration_s": 0.03171515464782715,
+          "failures": []
+        },
+        {
+          "name": "http-service-uri",
+          "executed": true,
+          "outcome": "fail",
+          "duration_s": 0.05258512496948242,
+          "failures": [
+            "Request(method='GET', path='/whoami', response=Response(status=200, headers={}, body=''), headers={}, body=''): Expected status 200, got 500",
+            "\n\n==STDERR==\nstderr [0] :: \nstderr [0] :: thread '<unnamed>' (1) panicked at tests/rust/wasm32-wasip3/src/bin/http-service-uri.rs:12:9:\nstderr [0] :: expected scheme to be set\nstderr [0] :: note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\nworker failed: error while executing at wasm backtrace:\n    0:  0x36994 - http_service_uri.wasm!abort\n    1:  0x34d75 - http_service_uri.wasm!std[44084d1fa4ccf3f7]::sys::pal::wasi::abort_internal\n    2:  0x33eaa - http_service_uri.wasm!std[44084d1fa4ccf3f7]::process::abort\n    3:  0x3447c - http_service_uri.wasm!__rustc[8068f81614cfe5c]::__rust_abort\n    4:  0x3297e - http_service_uri.wasm!__rustc[8068f81614cfe5c]::__rust_start_panic\n    5:  0x342a9 - http_service_uri.wasm!__rustc[8068f81614cfe5c]::rust_panic\n    6:  0x336d9 - http_service_uri.wasm!std[44084d1fa4ccf3f7]::panicking::panic_with_hook\n    7:  0x332a3 - http_service_uri.wasm!std[44084d1fa4ccf3f7]::panicking::panic_handler::{closure#0}\n    8:  0x33236 - http_service_uri.wasm!std[44084d1fa4ccf3f7]::sys::backtrace::__rust_end_short_backtrace::<std[44084d1fa4ccf3f7]::panicking::panic_handler::{closure#0}, !>\n    9:  0x3455f - http_service_uri.wasm!__rustc[8068f81614cfe5c]::rust_begin_unwind\n   10:  0x3b16f - http_service_uri.wasm!core[4268d4bc09ba5f28]::panicking::panic_fmt\n   11:   0x3f1f - http_service_uri.wasm!<http_service_uri[f9af63328b5b55f9]::Component as test_wasm32_wasip3[301388a0fc8da14e]::http::exports::wasi::http::handler::Guest>::handle::{closure#0}\n   12:   0x25ad - http_service_uri.wasm!test_wasm32_wasip3[301388a0fc8da14e]::http::exports::wasi::http::handler::_export_handle_cabi::<http_service_uri[f9af63328b5b55f9]::Component>::{closure#0}\n   13:  0x2f71e - http_service_uri.wasm!<core[4268d4bc09ba5f28]::pin::Pin<alloc[c5be2c7181692d28]::boxed::Box<dyn core[4268d4bc09ba5f28]::future::future::Future<Output = ()>>> as core[4268d4bc09ba5f28]::future::future::Future>::poll\n   14:  0x2c3be - http_service_uri.wasm!<futures_util[4958f95f85b67bf1]::stream::futures_unordered::FuturesUnordered<core[4268d4bc09ba5f28]::pin::Pin<alloc[c5be2c7181692d28]::boxed::Box<dyn core[4268d4bc09ba5f28]::future::future::Future<Output = ()>>>> as futures_core[2ca238ecf907b6e2]::stream::Stream>::poll_next\n   15:  0x29d24 - http_service_uri.wasm!<futures_util[4958f95f85b67bf1]::stream::futures_unordered::FuturesUnordered<core[4268d4bc09ba5f28]::pin::Pin<alloc[c5be2c7181692d28]::boxed::Box<dyn core[4268d4bc09ba5f28]::future::future::Future<Output = ()>>>> as futures_util[4958f95f85b67bf1]::stream::stream::StreamExt>::poll_next_unpin\n   16:  0x2903a - http_service_uri.wasm!<wit_bindgen[bcef0974d14e1fee]::rt::async_support::spawn::Tasks>::poll_next\n   17:  0x27667 - http_service_uri.wasm!<wit_bindgen[bcef0974d14e1fee]::rt::async_support::FutureState>::callback::{closure#0}\n   18:  0x27594 - http_service_uri.wasm!<wit_bindgen[bcef0974d14e1fee]::rt::async_support::FutureState>::with_p3_task_set::<wit_bindgen[bcef0974d14e1fee]::rt::async_support::CallbackCode, <wit_bindgen[bcef0974d14e1fee]::rt::async_support::FutureState>::callback::{closure#0}>\n   19:  0x29c4a - http_service_uri.wasm!<wit_bindgen[bcef0974d14e1fee]::rt::async_support::FutureState>::callback\nnote: using the `WASMTIME_BACKTRACE_DETAILS=1` environment variable may show more debugging information\n\nCaused by:\n    wasm trap: wasm `unreachable` instruction executed\n\nerror: worker trapped or panicked\n"
+          ]
+        },
+        {
+          "name": "filesystem-flags-and-type",
+          "executed": true,
+          "outcome": "pass",
+          "duration_s": 0.033479928970336914,
+          "failures": []
+        },
+        {
+          "name": "filesystem-read-directory",
+          "executed": true,
+          "outcome": "fail",
+          "duration_s": 0.034532785415649414,
+          "failures": [
+            "Wait(exit_code=0) failed: expected 0, got 134\n\n==STDERR==\n\nthread '<unnamed>' (1) panicked at tests/rust/wasm32-wasip3/src/bin/filesystem-read-directory.rs:50:5:\nassertion `left == right` failed\n  left: [DirectoryEntry { type: DescriptorType::RegularFile, name: \"a.txt\" }, DirectoryEntry { type: DescriptorType::RegularFile, name: \"b.txt\" }, DirectoryEntry { type: DescriptorType::SymbolicLink, name: \"parent.cleanup\" }]\n right: [DirectoryEntry { type: DescriptorType::RegularFile, name: \"a.txt\" }, DirectoryEntry { type: DescriptorType::RegularFile, name: \"b.txt\" }]\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\nError: failed to run main module `/tmp/wasmoon-wasi03-accept-upstream/tests/rust/testsuite/wasm32-wasip3/filesystem-read-directory.wasm`\n\nCaused by:\n    0: error while executing at wasm backtrace:\n    0:  0x2991c - filesystem_read_directory.wasm!abort\n    1:  0x27183 - filesystem_read_directory.wasm!std[44084d1fa4ccf3f7]::sys::pal::wasi::abort_internal\n    2:  0x260d3 - filesystem_read_directory.wasm!std[44084d1fa4ccf3f7]::process::abort\n    3:  0x266a5 - filesystem_read_directory.wasm!__rustc[8068f81614cfe5c]::__rust_abort\n    4:  0x24ba7 - filesystem_read_directory.wasm!__rustc[8068f81614cfe5c]::__rust_start_panic\n    5:  0x264d2 - filesystem_read_directory.wasm!__rustc[8068f81614cfe5c]::rust_panic\n    6:  0x25902 - filesystem_read_directory.wasm!std[44084d1fa4ccf3f7]::panicking::panic_with_hook\n    7:  0x2550d - filesystem_read_directory.wasm!std[44084d1fa4ccf3f7]::panicking::panic_handler::{closure#0}\n    8:  0x2545f - filesystem_read_directory.wasm!std[44084d1fa4ccf3f7]::sys::backtrace::__rust_end_short_backtrace::<std[44084d1fa4ccf3f7]::panicking::panic_handler::{closure#0}, !>\n    9:  0x26788 - filesystem_read_directory.wasm!__rustc[8068f81614cfe5c]::rust_begin_unwind\n   10:  0x2e22c - filesystem_read_directory.wasm!core[4268d4bc09ba5f28]::panicking::panic_fmt\n   11:  0x2e180 - filesystem_read_directory.wasm!core[4268d4bc09ba5f28]::panicking::assert_failed_inner\n   12:   0x99ac - filesystem_read_directory.wasm!core[4268d4bc09ba5f28]::panicking::assert_failed::<&alloc[c5be2c7181692d28]::vec::Vec<filesystem_read_directory[f2d3e77fa569dc8b]::wasi::filesystem::types::DirectoryEntry>, &alloc[c5be2c7181692d28]::vec::Vec<filesystem_read_directory[f2d3e77fa569dc8b]::wasi::filesystem::types::DirectoryEntry>>\n   13:   0x76ef - filesystem_read_directory.wasm!filesystem_read_directory[f2d3e77fa569dc8b]::test_read_directory::{closure#0}\n   14:   0x7899 - filesystem_read_directory.wasm!<filesystem_read_directory[f2d3e77fa569dc8b]::Component as filesystem_read_directory[f2d3e77fa569dc8b]::exports::wasi::cli::run::Guest>::run::{closure#0}\n   15:   0xa0b7 - filesystem_read_directory.wasm!filesystem_read_directory[f2d3e77fa569dc8b]::exports::wasi::cli::run::_export_run_cabi::<filesystem_read_directory[f2d3e77fa569dc8b]::Component>::{closure#0}\n   16:  0x21a14 - filesystem_read_directory.wasm!<core[4268d4bc09ba5f28]::pin::Pin<alloc[c5be2c7181692d28]::boxed::Box<dyn core[4268d4bc09ba5f28]::future::future::Future<Output = ()>>> as core[4268d4bc09ba5f28]::future::future::Future>::poll\n   17:  0x1e6b4 - filesystem_read_directory.wasm!<futures_util[4958f95f85b67bf1]::stream::futures_unordered::FuturesUnordered<core[4268d4bc09ba5f28]::pin::Pin<alloc[c5be2c7181692d28]::boxed::Box<dyn core[4268d4bc09ba5f28]::future::future::Future<Output = ()>>>> as futures_core[2ca238ecf907b6e2]::stream::Stream>::poll_next\n   18:  0x1c01a - filesystem_read_directory.wasm!<futures_util[4958f95f85b67bf1]::stream::futures_unordered::FuturesUnordered<core[4268d4bc09ba5f28]::pin::Pin<alloc[c5be2c7181692d28]::boxed::Box<dyn core[4268d4bc09ba5f28]::future::future::Future<Output = ()>>>> as futures_util[4958f95f85b67bf1]::stream::stream::StreamExt>::poll_next_unpin\n   19:  0x1b330 - filesystem_read_directory.wasm!<wit_bindgen[bcef0974d14e1fee]::rt::async_support::spawn::Tasks>::poll_next\nnote: using the `WASMTIME_BACKTRACE_DETAILS=1` environment variable may show more debugging information\n    1: wasm trap: wasm `unreachable` instruction executed\n\n"
+          ]
+        },
+        {
+          "name": "sockets-tcp-send",
+          "executed": true,
+          "outcome": "pass",
+          "duration_s": 0.03755307197570801,
+          "failures": []
+        }
+      ]
+    }
+  ]
+}

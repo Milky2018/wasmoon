@@ -23,7 +23,7 @@ test "fac_iter" {
     #|    (local.get 2)
     #|  )
     #|)
-  let result = compare_jit_interp(source, "fac-iter", [I64(5)])
+  let result = @testsuite.compare_jit_interp(source, "fac-iter", [I64(5)])
   inspect(result, content="matched")
 }
 
@@ -41,7 +41,7 @@ test "fac_rec" {
     #|    )
     #|  )
     #|)
-  let result = compare_jit_interp(source, "fac-rec", [I64(5)])
+  let result = @testsuite.compare_jit_interp(source, "fac-rec", [I64(5)])
   inspect(result, content="matched")
 }
 
@@ -67,7 +67,7 @@ test "fac_ssa" {
     #|    )
     #|  )
     #|)
-  let result = compare_jit_interp(source, "fac-ssa", [I64(5)])
+  let result = @testsuite.compare_jit_interp(source, "fac-ssa", [I64(5)])
   inspect(result, content="matched")
 }
 
@@ -87,7 +87,7 @@ test "fac_rec_named" {
     #|  )
     #|)
     #|)
-  let result = compare_jit_interp(source, "fac-rec-named", [I64(5)])
+  let result = @testsuite.compare_jit_interp(source, "fac-rec-named", [I64(5)])
   inspect(result, content="matched")
 }
 
@@ -116,7 +116,7 @@ test "fac_iter_named" {
     #|  (local.get $res)
     #|)
     #|)
-  let result = compare_jit_interp(source, "fac-iter-named", [I64(5)])
+  let result = @testsuite.compare_jit_interp(source, "fac-iter-named", [I64(5)])
   inspect(result, content="matched")
 }
 
@@ -138,6 +138,6 @@ test "fac_opt" {
     #|  (local.get 1)
     #|)
     #|)
-  let result = compare_jit_interp(source, "fac-opt", [I64(5)])
+  let result = @testsuite.compare_jit_interp(source, "fac-opt", [I64(5)])
   inspect(result, content="matched")
 }

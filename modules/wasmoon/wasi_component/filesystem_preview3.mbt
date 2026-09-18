@@ -261,7 +261,7 @@ fn preview3_read_file(state : DescriptorState, offset : Int64) -> (Bytes, Int?) 
   if offset < 0L {
     return (
       b"",
-      Some(preview3_filesystem_error_index(@wasi.Errno::Overflow.to_i32())),
+      Some(preview3_filesystem_error_index(@wasi.Errno::Inval.to_i32())),
     )
   }
   let bytes : Array[Byte] = []
@@ -440,7 +440,7 @@ fn add_preview3_filesystem_stream_methods(
             table,
             interface,
             "[method]descriptor.write-via-stream",
-            preview3_ready_future([preview3_filesystem_error_for(Overflow)]),
+            preview3_ready_future([preview3_filesystem_error_for(Inval)]),
           ),
         ]
       }
@@ -509,7 +509,13 @@ fn preview3_filesystem_basic_operation(
     "advise" => {
       filesystem_u64_arg(args, 1) |> ignore
       filesystem_u64_arg(args, 2) |> ignore
-      [preview3_filesystem_ok_void()]
+      [
+        if state.file_type == 3 {
+          preview3_filesystem_error_for(Badf)
+        } else {
+          preview3_filesystem_ok_void()
+        },
+      ]
     }
     "sync-data" =>
       [
@@ -519,7 +525,18 @@ fn preview3_filesystem_basic_operation(
           preview3_filesystem_error()
         },
       ]
-    "get-flags" => [preview3_filesystem_ok(U32(state.flags))]
+    "get-flags" =>
+      [
+        preview3_filesystem_ok(
+          U32(
+            if state.file_type == 3 {
+              (state.flags & descriptor_write.lnot()) | descriptor_read
+            } else {
+              state.flags
+            },
+          ),
+        ),
+      ]
     "get-type" =>
       [preview3_filesystem_ok(preview3_descriptor_type(state.file_type))]
     "set-size" => {
@@ -527,7 +544,7 @@ fn preview3_filesystem_basic_operation(
       if !descriptor_has(state, descriptor_write) {
         [preview3_filesystem_error_for(Acces)]
       } else if size < 0L {
-        [preview3_filesystem_error_for(Overflow)]
+        [preview3_filesystem_error_for(FBig)]
       } else {
         [
           if @wasi.native_ftruncate(state.fd, size) {
@@ -635,6 +652,13 @@ fn preview3_filesystem_path_operation(
   table : @runtime_impl.ResourceTable,
 ) -> Array[@runtime_impl.ComponentValue] raise @runtime_impl.ComponentRuntimeError {
   let state = preview3_descriptor_state(host, table, descriptor_type, args, 0)
+  fn rejected_path_error(path : String) -> @wasi.Errno {
+    if path.is_empty() {
+      NoEnt
+    } else {
+      Perm
+    }
+  }
   fn reject_path(path : String) -> Bool {
     capability_parent_and_leaf(path) is None
   }
@@ -646,7 +670,7 @@ fn preview3_filesystem_path_operation(
         return [preview3_filesystem_error_for(ROFS)]
       }
       if reject_path(path) {
-        return [preview3_filesystem_error_for(Perm)]
+        return [preview3_filesystem_error_for(rejected_path_error(path))]
       }
       match open_capability_parent(state, path) {
         None => [preview3_filesystem_error()]
@@ -667,7 +691,7 @@ fn preview3_filesystem_path_operation(
       let follow = (filesystem_flags_arg(args, 1) & 0x01) != 0
       let path = filesystem_string_arg(args, 2)
       if reject_path(path) {
-        return [preview3_filesystem_error_for(Perm)]
+        return [preview3_filesystem_error_for(rejected_path_error(path))]
       }
       match stat_capability_path(state, path, follow) {
         None => [preview3_filesystem_error()]
@@ -695,7 +719,7 @@ fn preview3_filesystem_path_operation(
       let follow = (filesystem_flags_arg(args, 1) & 0x01) != 0
       let path = filesystem_string_arg(args, 2)
       if reject_path(path) {
-        return [preview3_filesystem_error_for(Perm)]
+        return [preview3_filesystem_error_for(rejected_path_error(path))]
       }
       guard parse_preview3_new_timestamp(args[3], 0x01, 0x02)
         is Some((atim, af)) &&
@@ -704,7 +728,7 @@ fn preview3_filesystem_path_operation(
       }
       if follow {
         match capability_parent_and_leaf(path) {
-          None => [preview3_filesystem_error_for(Perm)]
+          None => [preview3_filesystem_error_for(rejected_path_error(path))]
           Some((parent, leaf)) =>
             match
               @wasi.native_openat_beneath(
@@ -758,6 +782,19 @@ fn preview3_filesystem_path_operation(
       let path = filesystem_string_arg(args, 2)
       let open_flags = filesystem_flags_arg(args, 3)
       let requested_flags = filesystem_flags_arg(args, 4)
+      let requested_flags = if (
+          requested_flags & (descriptor_read | descriptor_write)
+        ) ==
+        0 {
+        requested_flags | descriptor_read
+      } else {
+        requested_flags
+      }
+      let requested_flags = if (open_flags & (0x01 | 0x08)) != 0 {
+        requested_flags | descriptor_write
+      } else {
+        requested_flags
+      }
       let mutating = (
           requested_flags & (descriptor_write | descriptor_mutate_directory)
         ) !=
@@ -765,10 +802,6 @@ fn preview3_filesystem_path_operation(
         (open_flags & (0x01 | 0x08)) != 0
       if mutating && !descriptor_has(state, descriptor_mutate_directory) {
         return [preview3_filesystem_error_for(ROFS)]
-      }
-      if (requested_flags & descriptor_read) != 0 &&
-        !descriptor_has(state, descriptor_read) {
-        return [preview3_filesystem_error_for(Acces)]
       }
       let native_flags = descriptor_flags_to_open(requested_flags)
       if (open_flags & 0x01) != 0 {
@@ -784,7 +817,7 @@ fn preview3_filesystem_path_operation(
         native_flags.push(Truncate)
       }
       match capability_parent_and_leaf(path) {
-        None => [preview3_filesystem_error_for(Perm)]
+        None => [preview3_filesystem_error_for(rejected_path_error(path))]
         Some((parent, leaf)) =>
           match
             @wasi.native_openat_beneath(
@@ -808,7 +841,7 @@ fn preview3_filesystem_path_operation(
     "readlink-at" => {
       let path = filesystem_string_arg(args, 1)
       if reject_path(path) {
-        return [preview3_filesystem_error_for(Perm)]
+        return [preview3_filesystem_error_for(rejected_path_error(path))]
       }
       match open_capability_parent(state, path) {
         None => [preview3_filesystem_error()]
@@ -833,11 +866,29 @@ fn preview3_filesystem_path_operation(
       }
       let path = filesystem_string_arg(args, 1)
       if reject_path(path) {
-        return [preview3_filesystem_error_for(Perm)]
+        return [preview3_filesystem_error_for(rejected_path_error(path))]
+      }
+      // A trailing slash requires a directory, including when the last name
+      // is a symlink. Resolve beneath the capability before dropping the slash;
+      // unlinkat then refuses a symlink substituted after that check.
+      let path = if path.has_suffix("/") {
+        if stat_capability_path(state, path, true) is None {
+          return [preview3_filesystem_error()]
+        }
+        if name == "unlink-file-at" {
+          return [preview3_filesystem_error_for(IsDir)]
+        }
+        path.trim_end(chars="/").to_owned()
+      } else {
+        path
       }
       match open_capability_parent(state, path) {
         None => [preview3_filesystem_error()]
         Some((parent, leaf)) => {
+          if name == "remove-directory-at" && leaf == "." {
+            @wasi.native_close(parent) |> ignore
+            return [preview3_filesystem_error_for(Inval)]
+          }
           let success = @wasi.native_unlinkat(
             parent,
             leaf,
@@ -880,8 +931,11 @@ fn preview3_filesystem_path_operation(
       }
       let old_path = filesystem_string_arg(args, old_path_index)
       let new_path = filesystem_string_arg(args, new_path_index)
-      if reject_path(old_path) || reject_path(new_path) {
-        return [preview3_filesystem_error_for(Perm)]
+      if reject_path(old_path) {
+        return [preview3_filesystem_error_for(rejected_path_error(old_path))]
+      }
+      if reject_path(new_path) {
+        return [preview3_filesystem_error_for(rejected_path_error(new_path))]
       }
       match
         (

@@ -646,6 +646,15 @@ MOONBIT_FFI_EXPORT int wasmoon_wasi_errno_to_wasi(int err) {
 #ifdef EACCES
     case EACCES: return 2;
 #endif
+#ifdef EADDRINUSE
+    case EADDRINUSE: return 3;
+#endif
+#ifdef EADDRNOTAVAIL
+    case EADDRNOTAVAIL: return 4;
+#endif
+#ifdef EAFNOSUPPORT
+    case EAFNOSUPPORT: return 5;
+#endif
 #ifdef EAGAIN
     case EAGAIN: return 6;
 #endif
@@ -1649,6 +1658,15 @@ MOONBIT_FFI_EXPORT int wasmoon_wasi_socket_create(int family, int kind) {
       return -1;
     }
   }
+  if (kind == 1) {
+    int enabled = 1;
+    if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &enabled, sizeof(enabled)) != 0) {
+      int error = errno;
+      close(fd);
+      errno = error;
+      return -1;
+    }
+  }
   return fd;
 #endif
 }
@@ -1744,7 +1762,19 @@ MOONBIT_FFI_EXPORT int wasmoon_wasi_socket_disconnect(int fd) {
   struct sockaddr_storage storage;
   memset(&storage, 0, sizeof(storage));
   storage.ss_family = AF_UNSPEC;
-  return connect(fd, (struct sockaddr *)&storage, sizeof(storage));
+  int result = connect(fd, (struct sockaddr *)&storage, sizeof(storage));
+#ifdef __APPLE__
+  // Darwin disconnects the datagram socket before rejecting AF_UNSPEC.
+  // Confirm the resulting state instead of treating any EINVAL as success.
+  if (result < 0 && (errno == EAFNOSUPPORT || errno == EINVAL)) {
+    int saved = errno;
+    socklen_t length = sizeof(storage);
+    if (getpeername(fd, (struct sockaddr *)&storage, &length) < 0 &&
+        errno == ENOTCONN) return 0;
+    errno = saved;
+  }
+#endif
+  return result;
 #endif
 }
 
@@ -2041,6 +2071,11 @@ MOONBIT_FFI_EXPORT int wasmoon_wasi_socket_option_get(
   int value = 0;
   socklen_t length = sizeof(value);
   if (getsockopt(fd, level, native_option, &value, &length) != 0) return -1;
+#ifdef __linux__
+  // Linux includes doubled bookkeeping space in the returned buffer size.
+  // Expose the same application units accepted by setsockopt, as Wasmtime does.
+  if (option == 5 || option == 6) value /= 2;
+#endif
   return value;
 #endif
 }

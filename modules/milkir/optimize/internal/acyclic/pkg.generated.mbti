@@ -1,0 +1,28 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "Milky2018/milkir/optimize/internal/acyclic"
+
+import {
+  "Milky2018/milkir",
+  "Milky2018/milkir/optimize/internal/analysis",
+}
+
+// Values
+pub fn run_acyclic_optimization_with_budget_and_analysis(@milkir.Function, Int, @analysis.FunctionAnalysis) -> AcyclicOptimizeStats
+
+// Errors
+
+// Types and methods
+pub struct AcyclicOptimizeStats {
+  changed : Bool
+  work_done : Int
+  budget_exhausted : Bool
+  value_lookup_probes : Int
+  rewrite_changed : Bool
+  rewrite_attempts : Int
+  rewrite_applied : Int
+  rewrite_created_instructions : Int
+}
+
+// Type aliases
+
+// Traits

@@ -7,7 +7,7 @@ test "f32_min_basic" {
     #|  )
     #|)
   // min(1.0, 2.0) should return 1.0
-  let result = compare_jit_interp(source, "min", [F32(1.0), F32(2.0)])
+  let result = @testsuite.compare_jit_interp(source, "min", [F32(1.0), F32(2.0)])
   inspect(result, content="matched")
 }
 
@@ -20,7 +20,7 @@ test "f32_max_basic" {
     #|  )
     #|)
   // max(1.0, 2.0) should return 2.0
-  let result = compare_jit_interp(source, "max", [F32(1.0), F32(2.0)])
+  let result = @testsuite.compare_jit_interp(source, "max", [F32(1.0), F32(2.0)])
   inspect(result, content="matched")
 }
 
@@ -33,7 +33,10 @@ test "f32_min_negative" {
     #|  )
     #|)
   // min(-1.0, 1.0) should return -1.0
-  let result = compare_jit_interp(source, "min", [F32(-1.0), F32(1.0)])
+  let result = @testsuite.compare_jit_interp(source, "min", [
+    F32(-1.0),
+    F32(1.0),
+  ])
   inspect(result, content="matched")
 }
 
@@ -46,7 +49,10 @@ test "f32_max_negative" {
     #|  )
     #|)
   // max(-1.0, 1.0) should return 1.0
-  let result = compare_jit_interp(source, "max", [F32(-1.0), F32(1.0)])
+  let result = @testsuite.compare_jit_interp(source, "max", [
+    F32(-1.0),
+    F32(1.0),
+  ])
   inspect(result, content="matched")
 }
 
@@ -59,7 +65,7 @@ test "f64_min_basic" {
     #|  )
     #|)
   // min(1.0, 2.0) should return 1.0
-  let result = compare_jit_interp(source, "min", [F64(1.0), F64(2.0)])
+  let result = @testsuite.compare_jit_interp(source, "min", [F64(1.0), F64(2.0)])
   inspect(result, content="matched")
 }
 
@@ -72,6 +78,6 @@ test "f64_max_basic" {
     #|  )
     #|)
   // max(1.0, 2.0) should return 2.0
-  let result = compare_jit_interp(source, "max", [F64(1.0), F64(2.0)])
+  let result = @testsuite.compare_jit_interp(source, "max", [F64(1.0), F64(2.0)])
   inspect(result, content="matched")
 }

@@ -1,0 +1,66 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "Milky2018/wasmoon_jit/artifact/loader"
+
+import {
+  "Milky2018/vcode/code_object",
+  "Milky2018/vcode/native_types",
+  "Milky2018/wasmoon_jit/artifact",
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub fn load_artifact(Bytes, ArtifactCompatibility, limits? : @artifact.DecodeLimits) -> LoadedArtifact raise ArtifactLoadError
+
+pub fn verify_artifact(@artifact.Artifact, ArtifactCompatibility) -> LoadedArtifact raise ArtifactLoadError
+
+// Errors
+pub suberror ArtifactIncompatible {
+  TargetMismatch(expected~ : @artifact.TargetSpec, actual~ : @artifact.TargetSpec)
+  MissingCpuFeature(name~ : String)
+  DuplicateCpuFeature(name~ : String)
+  JitAbiVersionMismatch(expected~ : Int, actual~ : Int)
+  CodegenRevisionMismatch(expected~ : String, actual~ : String)
+  ModuleIdentityMismatch(expected~ : @artifact.ModuleIdentity, actual~ : @artifact.ModuleIdentity)
+  CompilationPolicyMismatch(expected~ : @artifact.CompilationPolicy, actual~ : @artifact.CompilationPolicy)
+  DuplicateFunctionIndex(index~ : Int)
+  DuplicateSymbol(name~ : String)
+  UnknownSymbol(kind~ : String, name~ : String)
+} derive(Eq, @debug.Debug)
+pub fn ArtifactIncompatible::equal(Self, Self) -> Bool
+pub fn ArtifactIncompatible::not_equal(Self, Self) -> Bool
+pub fn ArtifactIncompatible::to_repr(Self) -> @debug.Repr
+
+pub suberror ArtifactLoadError {
+  DecodeFailed(cause~ : @artifact.ArtifactDecodeError)
+  Incompatible(cause~ : ArtifactIncompatible)
+  CodeObjectInvalid(cause~ : @code_object.CodeObjectVerifyError)
+} derive(Eq, @debug.Debug)
+pub fn ArtifactLoadError::equal(Self, Self) -> Bool
+pub fn ArtifactLoadError::not_equal(Self, Self) -> Bool
+pub fn ArtifactLoadError::to_repr(Self) -> @debug.Repr
+
+// Types and methods
+pub(all) struct ArtifactCompatibility {
+  target : @artifact.TargetSpec
+  available_cpu_features : Array[@artifact.CpuFeature]
+  jit_abi_version : Int
+  codegen_revision : String
+  module_identity : @artifact.ModuleIdentity
+  policy : @artifact.CompilationPolicy
+  runtime_symbols : Array[@native_types.ExternalSymbol]
+  data_symbols : Array[@native_types.DataSymbol]
+} derive(Eq, @debug.Debug)
+pub fn ArtifactCompatibility::equal(Self, Self) -> Bool
+pub fn ArtifactCompatibility::not_equal(Self, Self) -> Bool
+pub fn ArtifactCompatibility::to_repr(Self) -> @debug.Repr
+
+pub struct LoadedArtifact {
+  artifact : @artifact.Artifact
+  code_objects : Array[@code_object.UnlinkedCodeObject]
+}
+pub fn LoadedArtifact::artifact(Self) -> @artifact.Artifact
+pub fn LoadedArtifact::code_objects(Self) -> Array[@code_object.UnlinkedCodeObject]
+
+// Type aliases
+
+// Traits

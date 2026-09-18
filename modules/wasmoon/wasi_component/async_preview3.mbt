@@ -12,6 +12,9 @@ fn preview3_clock_future(
   ctx : WasiComponentCtx,
   deadline : Int64,
 ) -> @runtime_impl.HostFuture raise @runtime_impl.ComponentRuntimeError {
+  if deadline <= @wasi.native_clock_gettime_monotonic() {
+    return HostFuture(() => Ready([]), () => ())
+  }
   let operation = ctx.register_deadline(deadline)
   let done = Ref(false)
   HostFuture(

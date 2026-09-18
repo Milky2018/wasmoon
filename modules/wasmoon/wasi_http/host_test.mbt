@@ -2,7 +2,7 @@
 test "HTTP fields are callable through the generated component interface" {
   let linker = @runtime_impl.ComponentLinker()
   defer linker.close()
-  let host = HttpHost(linker)
+  let host = @wasi_http.HttpHost(linker)
   host.add_types()
   guard linker.get_import("wasi:http/types@0.3.0") is Some(Instance(types)) else {
     return fail("HTTP types missing")
@@ -43,7 +43,7 @@ test "HTTP fields are callable through the generated component interface" {
 test "HTTP request options clone independently" {
   let linker = @runtime_impl.ComponentLinker()
   defer linker.close()
-  let host = HttpHost(linker)
+  let host = @wasi_http.HttpHost(linker)
   host.add_types()
   guard linker.get_import("wasi:http/types@0.3.0") is Some(Instance(types)) else {
     return fail("HTTP types missing")

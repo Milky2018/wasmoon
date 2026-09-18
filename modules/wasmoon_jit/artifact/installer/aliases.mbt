@@ -1,0 +1,2 @@
+///|
+using @loader {type LoadedArtifact}

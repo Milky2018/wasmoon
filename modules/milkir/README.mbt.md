@@ -27,7 +27,7 @@ The following test builds the same function in MilkIR:
 ```moonbit check
 ///|
 test "build add_one" {
-  let builder = FunctionBuilder::FunctionBuilder("add_one")
+  let builder = @milkir.FunctionBuilder::FunctionBuilder("add_one")
 
   let x = builder.add_param(I32)
   builder.add_result(I32)
@@ -173,7 +173,7 @@ Use `select` when both candidate values are already available. The next function
 ```moonbit check
 ///|
 test "build max_i32 with select" {
-  let builder = FunctionBuilder::FunctionBuilder("max_i32")
+  let builder = @milkir.FunctionBuilder::FunctionBuilder("max_i32")
   let lhs = builder.add_param(I32)
   let rhs = builder.add_param(I32)
   builder.add_result(I32)
@@ -238,7 +238,7 @@ The following function computes `input + 1` when `condition` is nonzero and retu
 ```moonbit check
 ///|
 test "pass a value into a join block" {
-  let builder = FunctionBuilder::FunctionBuilder("add_if")
+  let builder = @milkir.FunctionBuilder::FunctionBuilder("add_if")
   let input = builder.add_param(I32)
   let condition = builder.add_param(I32)
   builder.add_result(I32)
@@ -308,7 +308,7 @@ forward optimizer APIs. Optimization mutates a `Function` and returns an
 ```moonbit check
 ///|
 test "fold a constant expression" {
-  let builder = FunctionBuilder::FunctionBuilder("constant_answer")
+  let builder = @milkir.FunctionBuilder::FunctionBuilder("constant_answer")
   builder.add_result(I32)
   let ten = builder.iconst_i32(10)
   let twenty = builder.iconst_i32(20)
@@ -386,8 +386,14 @@ An embedding adapter may assign roles such as VMContext to those arguments when 
 ```moonbit check
 ///|
 test "validate a dialect opcode descriptor" {
-  let descriptor = ExtOpDescriptor::ExtOpDescriptor("demo", "checked_add", 1)
-  let opcode = ExtOp::ExtOp("demo", "checked_add", FixedArray::make(1, 32))
+  let descriptor = @milkir.ExtOpDescriptor::ExtOpDescriptor(
+    "demo", "checked_add", 1,
+  )
+  let opcode = @milkir.ExtOp::ExtOp(
+    "demo",
+    "checked_add",
+    FixedArray::make(1, 32),
+  )
 
   inspect(opcode.matches_descriptor(descriptor), content="true")
   inspect(descriptor.expected_immediate_count(), content="1")

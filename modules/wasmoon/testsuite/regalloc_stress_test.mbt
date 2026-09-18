@@ -13,7 +13,7 @@ test "regalloc: f32 f64 multi-return spill" {
     #|      (local.get 1) (local.get 0))
     #|    (func (export "test") (result f64 f32)
     #|      (call $swap (f32.const 1) (f64.const 2))))
-  let result = compare_jit_interp(source, "test", [])
+  let result = @testsuite.compare_jit_interp(source, "test", [])
   inspect(result, content="matched")
 }
 
@@ -24,7 +24,7 @@ test "regalloc: 3 float returns" {
     #|  (module
     #|    (func (export "test") (result f32 f64 f32)
     #|      (f32.const 1) (f64.const 2) (f32.const 3)))
-  let result = compare_jit_interp(source, "test", [])
+  let result = @testsuite.compare_jit_interp(source, "test", [])
   inspect(result, content="matched")
 }
 
@@ -35,7 +35,7 @@ test "regalloc: 4 mixed float returns" {
     #|  (module
     #|    (func (export "test") (result f32 f64 f64 f32)
     #|      (f32.const 1) (f64.const 2) (f64.const 3) (f32.const 4)))
-  let result = compare_jit_interp(source, "test", [])
+  let result = @testsuite.compare_jit_interp(source, "test", [])
   inspect(result, content="matched")
 }
 
@@ -49,7 +49,7 @@ test "regalloc: forwarding multi-value call results" {
     #|      (f64.const 1) (f32.const 2) (f64.const 3))
     #|    (func (export "test") (result f64 f32 f64)
     #|      (call $producer)))
-  let result = compare_jit_interp(source, "test", [])
+  let result = @testsuite.compare_jit_interp(source, "test", [])
   inspect(result, content="matched")
 }
 
@@ -64,7 +64,7 @@ test "regalloc: combining results from multiple calls" {
     #|    (func (export "test") (result f64 f32)
     #|      (call $get_f64)
     #|      (call $get_f32)))
-  let result = compare_jit_interp(source, "test", [])
+  let result = @testsuite.compare_jit_interp(source, "test", [])
   inspect(result, content="matched")
 }
 
@@ -90,7 +90,7 @@ test "regalloc: many float locals" {
     #|        (f64.add (local.get 3) (f64.add (local.get 4) (f64.add (local.get 5)
     #|          (f64.add (local.get 6) (f64.add (local.get 7) (f64.add (local.get 8)
     #|            (local.get 9))))))))))))
-  let result = compare_jit_interp(source, "test", [])
+  let result = @testsuite.compare_jit_interp(source, "test", [])
   inspect(result, content="matched")
 }
 
@@ -101,7 +101,7 @@ test "regalloc: mixed int float pressure" {
     #|  (module
     #|    (func (export "test") (param i32 f32 i64 f64) (result f64 i64 f32 i32)
     #|      (local.get 3) (local.get 2) (local.get 1) (local.get 0)))
-  let result = compare_jit_interp(source, "test", [
+  let result = @testsuite.compare_jit_interp(source, "test", [
     I32(1),
     F32(2.0),
     I64(3),
@@ -123,7 +123,7 @@ test "regalloc: many call arguments" {
     #|      (call $sum8
     #|        (f64.const 1) (f64.const 2) (f64.const 3) (f64.const 4)
     #|        (f64.const 5) (f64.const 6) (f64.const 7) (f64.const 8))))
-  let result = compare_jit_interp(source, "test", [])
+  let result = @testsuite.compare_jit_interp(source, "test", [])
   inspect(result, content="matched")
 }
 
@@ -137,7 +137,7 @@ test "regalloc: values live across nested calls" {
     #|    (func (export "test") (result f64 f32)
     #|      (call $id_f64 (f64.const 2.0))
     #|      (call $id_f32 (f32.const 1.0))))
-  let result = compare_jit_interp(source, "test", [])
+  let result = @testsuite.compare_jit_interp(source, "test", [])
   inspect(result, content="matched")
 }
 
@@ -152,7 +152,7 @@ test "regalloc: f32 live across call" {
     #|      (local.set 0 (f32.const 42.0))
     #|      (drop (call $consume (f64.const 3.14)))
     #|      (local.get 0)))
-  let result = compare_jit_interp(source, "test", [])
+  let result = @testsuite.compare_jit_interp(source, "test", [])
   inspect(result, content="matched")
 }
 
@@ -175,6 +175,6 @@ test "regalloc: spilled values in expression" {
     #|        (f64.add (local.get 1)
     #|          (f64.add (f64.promote_f32 (local.get 2))
     #|            (local.get 3))))))
-  let result = compare_jit_interp(source, "test", [])
+  let result = @testsuite.compare_jit_interp(source, "test", [])
   inspect(result, content="matched")
 }

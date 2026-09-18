@@ -21,7 +21,7 @@ test "f32.le with NaN - should return 0" {
     #|  )
     #|)
   // f32.le(2.0, nan) should return 0
-  let result = compare_jit_interp(source, "f32.le", [
+  let result = @testsuite.compare_jit_interp(source, "f32.le", [
     F32(2.0),
     F32(@float.not_a_number),
   ])
@@ -36,7 +36,7 @@ test "f32.lt with NaN - should return 0" {
     #|    (f32.lt (local.get 0) (local.get 1))
     #|  )
     #|)
-  let result = compare_jit_interp(source, "f32.lt", [
+  let result = @testsuite.compare_jit_interp(source, "f32.lt", [
     F32(2.0),
     F32(@float.not_a_number),
   ])
@@ -51,7 +51,7 @@ test "f32.gt with NaN - should return 0" {
     #|    (f32.gt (local.get 0) (local.get 1))
     #|  )
     #|)
-  let result = compare_jit_interp(source, "f32.gt", [
+  let result = @testsuite.compare_jit_interp(source, "f32.gt", [
     F32(2.0),
     F32(@float.not_a_number),
   ])
@@ -66,7 +66,7 @@ test "f32.ge with NaN - should return 0" {
     #|    (f32.ge (local.get 0) (local.get 1))
     #|  )
     #|)
-  let result = compare_jit_interp(source, "f32.ge", [
+  let result = @testsuite.compare_jit_interp(source, "f32.ge", [
     F32(2.0),
     F32(@float.not_a_number),
   ])
@@ -81,7 +81,7 @@ test "f64.le with NaN - should return 0" {
     #|    (f64.le (local.get 0) (local.get 1))
     #|  )
     #|)
-  let result = compare_jit_interp(source, "f64.le", [
+  let result = @testsuite.compare_jit_interp(source, "f64.le", [
     F64(2.0),
     F64(@double.not_a_number),
   ])
@@ -96,7 +96,7 @@ test "f64.lt with NaN - should return 0" {
     #|    (f64.lt (local.get 0) (local.get 1))
     #|  )
     #|)
-  let result = compare_jit_interp(source, "f64.lt", [
+  let result = @testsuite.compare_jit_interp(source, "f64.lt", [
     F64(2.0),
     F64(@double.not_a_number),
   ])
@@ -111,7 +111,7 @@ test "f64.gt with NaN - should return 0" {
     #|    (f64.gt (local.get 0) (local.get 1))
     #|  )
     #|)
-  let result = compare_jit_interp(source, "f64.gt", [
+  let result = @testsuite.compare_jit_interp(source, "f64.gt", [
     F64(2.0),
     F64(@double.not_a_number),
   ])
@@ -126,7 +126,7 @@ test "f64.ge with NaN - should return 0" {
     #|    (f64.ge (local.get 0) (local.get 1))
     #|  )
     #|)
-  let result = compare_jit_interp(source, "f64.ge", [
+  let result = @testsuite.compare_jit_interp(source, "f64.ge", [
     F64(2.0),
     F64(@double.not_a_number),
   ])
@@ -145,7 +145,7 @@ test "f32.ugt (unordered greater than)" {
     #|  )
     #|)
   // f32.ugt(2.0, nan) = eqz(le(2.0, nan)) = eqz(0) = 1
-  let result = compare_jit_interp(source, "f32.ugt", [
+  let result = @testsuite.compare_jit_interp(source, "f32.ugt", [
     F32(2.0),
     F32(@float.not_a_number),
   ])
@@ -162,12 +162,21 @@ test "f32.le normal comparison" {
     #|  )
     #|)
   // 2.0 <= 3.0 should be 1
-  let result1 = compare_jit_interp(source, "f32.le", [F32(2.0), F32(3.0)])
+  let result1 = @testsuite.compare_jit_interp(source, "f32.le", [
+    F32(2.0),
+    F32(3.0),
+  ])
   inspect(result1, content="matched")
   // 3.0 <= 2.0 should be 0
-  let result2 = compare_jit_interp(source, "f32.le", [F32(3.0), F32(2.0)])
+  let result2 = @testsuite.compare_jit_interp(source, "f32.le", [
+    F32(3.0),
+    F32(2.0),
+  ])
   inspect(result2, content="matched")
   // 2.0 <= 2.0 should be 1
-  let result3 = compare_jit_interp(source, "f32.le", [F32(2.0), F32(2.0)])
+  let result3 = @testsuite.compare_jit_interp(source, "f32.le", [
+    F32(2.0),
+    F32(2.0),
+  ])
   inspect(result3, content="matched")
 }

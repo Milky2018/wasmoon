@@ -10,6 +10,10 @@ import {
   "Milky2018/wasm_core/types",
   "Milky2018/wasm_milkir",
   "Milky2018/wasmoon_jit/artifact",
+  "Milky2018/wasmoon_jit/artifact/installer",
+  "Milky2018/wasmoon_jit/artifact/loader",
+  "Milky2018/wasmoon_jit/jit_ffi",
+  "Milky2018/wasmoon_jit/native/execution",
   "Milky2018/wasmoon_jit/perf",
   "Milky2018/x64_target",
   "moonbitlang/core/debug",
@@ -27,7 +31,7 @@ pub fn alloc_memory(Int64) -> Int64
 
 pub fn alloc_memory_desc(Int64, Int64?, is_memory64? : Bool, page_size_log2? : Int, is_shared? : Bool) -> Int64
 
-pub fn artifact_compatibility(@artifact.CompatibilityManifest, available_cpu_features~ : Array[@artifact.CpuFeature], runtime_symbols~ : Array[@native_types.ExternalSymbol], data_symbols~ : Array[@native_types.DataSymbol]) -> ArtifactCompatibility
+pub fn artifact_compatibility(@artifact.CompatibilityManifest, available_cpu_features~ : Array[@artifact.CpuFeature], runtime_symbols~ : Array[@native_types.ExternalSymbol], data_symbols~ : Array[@native_types.DataSymbol]) -> @loader.ArtifactCompatibility
 
 pub fn artifact_module_identity(String, Bytes, Bytes) -> @artifact.ModuleIdentity
 
@@ -141,7 +145,7 @@ pub fn is_wasi_exit_trap_code(Int) -> Bool
 
 pub fn jit_trap_message(Int) -> String
 
-pub fn load_artifact(Bytes, ArtifactCompatibility, limits? : @artifact.DecodeLimits) -> LoadedArtifact raise ArtifactLoadError
+pub fn load_artifact(Bytes, @loader.ArtifactCompatibility, limits? : @artifact.DecodeLimits) -> @loader.LoadedArtifact raise @loader.ArtifactLoadError
 
 pub fn make_cstring(String) -> FixedArray[Byte]
 
@@ -217,7 +221,7 @@ pub fn value_to_slot(@types.Value) -> GcSlot
 
 pub fn value_type_may_hold_gc_ref(@types.ValueType) -> Bool
 
-pub fn verify_artifact(@artifact.Artifact, ArtifactCompatibility) -> LoadedArtifact raise ArtifactLoadError
+pub fn verify_artifact(@artifact.Artifact, @loader.ArtifactCompatibility) -> @loader.LoadedArtifact raise @loader.ArtifactLoadError
 
 pub fn vmcontext_layout() -> VMContextLayout
 
@@ -232,31 +236,6 @@ pub fn wasm_trap_payload(String) -> Int
 pub fn wasmoon_runtime_external_symbols() -> Array[@native_types.ExternalSymbol]
 
 // Errors
-pub suberror ArtifactIncompatible {
-  TargetMismatch(expected~ : @artifact.TargetSpec, actual~ : @artifact.TargetSpec)
-  MissingCpuFeature(name~ : String)
-  DuplicateCpuFeature(name~ : String)
-  JitAbiVersionMismatch(expected~ : Int, actual~ : Int)
-  CodegenRevisionMismatch(expected~ : String, actual~ : String)
-  ModuleIdentityMismatch(expected~ : @artifact.ModuleIdentity, actual~ : @artifact.ModuleIdentity)
-  CompilationPolicyMismatch(expected~ : @artifact.CompilationPolicy, actual~ : @artifact.CompilationPolicy)
-  DuplicateFunctionIndex(index~ : Int)
-  DuplicateSymbol(name~ : String)
-  UnknownSymbol(kind~ : String, name~ : String)
-} derive(Eq, @debug.Debug)
-pub fn ArtifactIncompatible::equal(Self, Self) -> Bool
-pub fn ArtifactIncompatible::not_equal(Self, Self) -> Bool
-pub fn ArtifactIncompatible::to_repr(Self) -> @debug.Repr
-
-pub suberror ArtifactLoadError {
-  DecodeFailed(cause~ : @artifact.ArtifactDecodeError)
-  Incompatible(cause~ : ArtifactIncompatible)
-  CodeObjectInvalid(cause~ : @code_object.CodeObjectVerifyError)
-} derive(Eq, @debug.Debug)
-pub fn ArtifactLoadError::equal(Self, Self) -> Bool
-pub fn ArtifactLoadError::not_equal(Self, Self) -> Bool
-pub fn ArtifactLoadError::to_repr(Self) -> @debug.Repr
-
 pub(all) suberror CHeapError {
   OutOfBoundsArrayAccess
   NullReference
@@ -284,19 +263,6 @@ pub fn HostcallImportTrampolineError::to_repr(Self) -> @debug.Repr
 pub fn HostcallImportTrampolineError::to_string(Self) -> String
 pub impl Show for HostcallImportTrampolineError
 
-pub suberror JitInstallError {
-  ResolutionFailed(kind~ : String, name~ : String)
-  AllocationFailed(function_index~ : Int)
-  RelocationFailed(function_index~ : Int, message~ : String)
-  ProtectionFailed(function_index~ : Int)
-  RegistrationFailed(function_index~ : Int, message~ : String)
-  PublicationFailed(message~ : String)
-  TrampolineAllocationFailed(code_size~ : Int)
-} derive(Eq, @debug.Debug)
-pub fn JitInstallError::equal(Self, Self) -> Bool
-pub fn JitInstallError::not_equal(Self, Self) -> Bool
-pub fn JitInstallError::to_repr(Self) -> @debug.Repr
-
 pub suberror JitPipelineError {
   NativeLoweringFailed(cause~ : @native.NativeLowerError)
   AArch64AbiInvalid(cause~ : @aarch64_target.InternalAbiError)
@@ -318,20 +284,6 @@ pub fn JitPipelineError::to_repr(Self) -> @debug.Repr
 pub fn JitPipelineError::to_string(Self) -> String
 pub impl Show for JitPipelineError
 
-pub suberror NativeExecutionStateError {
-  ExecutionStateSealed
-  UnknownInvocation(Int64)
-  InvocationNotActive(Int64)
-  InvocationNotParked(Int64)
-  InvocationNotCurrent(Int64)
-} derive(Eq, @debug.Debug)
-pub fn NativeExecutionStateError::equal(Self, Self) -> Bool
-pub fn NativeExecutionStateError::not_equal(Self, Self) -> Bool
-pub fn NativeExecutionStateError::output(Self, &Logger) -> Unit
-pub fn NativeExecutionStateError::to_repr(Self) -> @debug.Repr
-pub fn NativeExecutionStateError::to_string(Self) -> String
-pub impl Show for NativeExecutionStateError
-
 pub suberror NativeFiberError {
   StackAllocationFailed(Int64)
   WrongThread
@@ -348,20 +300,6 @@ pub fn NativeFiberError::to_string(Self) -> String
 pub impl Show for NativeFiberError
 
 // Types and methods
-pub(all) struct ArtifactCompatibility {
-  target : @artifact.TargetSpec
-  available_cpu_features : Array[@artifact.CpuFeature]
-  jit_abi_version : Int
-  codegen_revision : String
-  module_identity : @artifact.ModuleIdentity
-  policy : @artifact.CompilationPolicy
-  runtime_symbols : Array[@native_types.ExternalSymbol]
-  data_symbols : Array[@native_types.DataSymbol]
-} derive(Eq, @debug.Debug)
-pub fn ArtifactCompatibility::equal(Self, Self) -> Bool
-pub fn ArtifactCompatibility::not_equal(Self, Self) -> Bool
-pub fn ArtifactCompatibility::to_repr(Self) -> @debug.Repr
-
 pub struct BacktraceFrame {
   pc : Int64
   name : String
@@ -488,8 +426,6 @@ pub fn DWARFBuilder::lookup_address(Self, Int64) -> FunctionInfo?
 pub fn DWARFBuilder::register(Self, verbose? : Bool) -> Unit
 pub fn DWARFBuilder::unregister(Self) -> Unit
 
-type ExecCode
-
 pub struct FunctionInfo {
   name : String
   func_idx : Int
@@ -550,40 +486,6 @@ pub fn ImportFunctionResolution::equal(Self, Self) -> Bool
 pub fn ImportFunctionResolution::not_equal(Self, Self) -> Bool
 pub fn ImportFunctionResolution::to_repr(Self) -> @debug.Repr
 
-pub struct InstalledCode {
-  // private fields
-}
-pub fn InstalledCode::entry_address(Self, Int) -> Int64?
-pub fn InstalledCode::functions(Self) -> Array[InstalledFunction]
-pub fn InstalledCode::imports(Self) -> Array[InstalledImport]
-pub fn InstalledCode::release(Self) -> Unit
-
-pub struct InstalledFunction {
-  // private fields
-}
-pub fn InstalledFunction::code_address(Self) -> Int64
-pub fn InstalledFunction::code_size(Self) -> Int
-pub fn InstalledFunction::entry_address(Self) -> Int64
-pub fn InstalledFunction::entry_offset(Self) -> Int
-pub fn InstalledFunction::frame_size(Self) -> Int
-pub fn InstalledFunction::identity(Self) -> @artifact.FunctionIdentity
-pub fn InstalledFunction::safepoints(Self) -> Array[@code_object.SafepointSite]
-pub fn InstalledFunction::sources(Self) -> Array[@code_object.SourceSite]
-pub fn InstalledFunction::traps(Self) -> Array[@code_object.TrapSite]
-pub fn InstalledFunction::unwind(Self) -> Array[@code_object.UnwindDirective]
-
-pub struct InstalledImport {
-  // private fields
-}
-pub fn InstalledImport::address(Self) -> Int64
-pub fn InstalledImport::identity(Self) -> @artifact.ImportIdentity
-
-pub struct InstalledTrampoline {
-  // private fields
-}
-pub fn InstalledTrampoline::entry_address(Self) -> Int64
-pub fn InstalledTrampoline::release(Self) -> Unit
-
 pub struct InvocationControl {
   deadline : (@perf.Instant, Double)?
   cancel : (() -> Bool)?
@@ -624,14 +526,6 @@ pub fn JITTableOwner::table(Self) -> JITTable
 pub fn JITTableOwner::to_repr(Self) -> @debug.Repr
 pub fn JITTableOwner::try_alloc(Int, Int64?) -> Self?
 
-pub struct JitCodeInstaller {
-  // private fields
-}
-pub fn JitCodeInstaller::current(Self) -> InstalledCode?
-pub fn JitCodeInstaller::install(Self, LoadedArtifact) -> InstalledCode raise JitInstallError
-pub fn JitCodeInstaller::install_trampoline(Self, Array[Int]) -> InstalledTrampoline raise JitInstallError
-pub fn JitCodeInstaller::new((@code_object.RelocationTarget) -> Int64?) -> Self
-
 pub struct JitCodeObject {
   // private fields
 } derive(@debug.Debug)
@@ -652,13 +546,6 @@ pub struct JitPipelineDiagnostics {
 } derive(@debug.Debug)
 pub fn JitPipelineDiagnostics::to_repr(Self) -> @debug.Repr
 
-pub struct LoadedArtifact {
-  artifact : @artifact.Artifact
-  code_objects : Array[@code_object.UnlinkedCodeObject]
-}
-pub fn LoadedArtifact::artifact(Self) -> @artifact.Artifact
-pub fn LoadedArtifact::code_objects(Self) -> Array[@code_object.UnlinkedCodeObject]
-
 pub(all) struct MemoryDescriptorLayout {
   base_offset : Int
   current_length_offset : Int
@@ -678,7 +565,7 @@ pub fn NativeAtomicWait::poll(Self) -> Int
 
 pub struct NativeCallable {
   context : NativeJITContext
-  entry : InstalledTrampoline
+  entry : @installer.InstalledTrampoline
 }
 pub fn NativeCallable::entry_address(Self) -> Int64
 pub fn NativeCallable::release(Self) -> Unit
@@ -688,28 +575,6 @@ pub struct NativeCompiler {
 }
 pub fn NativeCompiler::compile_wasm_body_artifact_function(Self, @milkir.Function, @wasm_milkir.WasmValidationContext, function_index~ : Int, signature~ : @native_types.Signature, use_subtype_indirect_check? : Bool, canonical_type_indices? : Array[Int]) -> @artifact.FunctionCode raise JitPipelineError
 pub fn NativeCompiler::new(NativeTarget) -> Self
-
-type NativeContinuationArena
-
-type NativeExceptionArena
-pub fn NativeExceptionArena::define_tag(Self, Int, Array[@types.ValueType]) -> Bool
-pub fn NativeExceptionArena::insert(Self, Int64, Int, Array[Int64]) -> Int64
-pub fn NativeExceptionArena::snapshot(Self, Int64) -> (Int, Array[Int64])?
-
-type NativeExecutionState
-pub fn NativeExecutionState::NativeExecutionState() -> Self
-pub fn NativeExecutionState::active_depth(Self) -> Int
-pub fn NativeExecutionState::begin(Self, release? : () -> Unit) -> NativeInvocationHandle raise NativeExecutionStateError
-pub fn NativeExecutionState::continuations(Self) -> NativeContinuationArena
-pub fn NativeExecutionState::current_invocation(Self) -> Int64?
-pub fn NativeExecutionState::exceptions(Self) -> NativeExceptionArena
-pub fn NativeExecutionState::live_count(Self) -> Int
-pub fn NativeExecutionState::parked_count(Self) -> Int
-pub fn NativeExecutionState::release_if_live(Self, Int64) -> Unit
-pub fn NativeExecutionState::retire_continuations(Self) -> Unit
-pub fn NativeExecutionState::seal(Self) -> Unit
-pub fn NativeExecutionState::to_repr(Self) -> @debug.Repr
-pub impl @debug.Debug for NativeExecutionState
 
 type NativeFiber
 pub fn NativeFiber::cancel(Self) -> Unit raise NativeFiberError
@@ -751,30 +616,10 @@ pub fn NativeHostcallOutcome::equal(Self, Self) -> Bool
 pub fn NativeHostcallOutcome::not_equal(Self, Self) -> Bool
 pub fn NativeHostcallOutcome::to_repr(Self) -> @debug.Repr
 
-type NativeInvocationHandle
-pub fn NativeInvocationHandle::cancel(Self) -> Unit raise NativeExecutionStateError
-pub fn NativeInvocationHandle::complete(Self) -> Unit raise NativeExecutionStateError
-pub fn NativeInvocationHandle::id(Self) -> Int64
-pub fn NativeInvocationHandle::park(Self) -> Unit raise NativeExecutionStateError
-pub fn NativeInvocationHandle::phase(Self) -> NativeInvocationPhase raise NativeExecutionStateError
-pub fn NativeInvocationHandle::reactivate(Self) -> Unit raise NativeExecutionStateError
-pub fn NativeInvocationHandle::release_if_live(Self) -> Unit
-pub fn NativeInvocationHandle::resource_id(Self) -> Int64 raise NativeExecutionStateError
-pub fn NativeInvocationHandle::to_repr(Self) -> @debug.Repr
-pub impl @debug.Debug for NativeInvocationHandle
-
-pub(all) enum NativeInvocationPhase {
-  Active
-  Parked
-} derive(Eq, @debug.Debug)
-pub fn NativeInvocationPhase::equal(Self, Self) -> Bool
-pub fn NativeInvocationPhase::not_equal(Self, Self) -> Bool
-pub fn NativeInvocationPhase::to_repr(Self) -> @debug.Repr
-
 type NativeJITContext
 pub fn NativeJITContext::alloc_guarded_memory(Self, Int, Int?) -> Int64
 pub fn NativeJITContext::alloc_indirect_table(Self, Int) -> Bool
-pub fn NativeJITContext::bind_callable(Self, Int64) -> NativeCallable raise JitInstallError
+pub fn NativeJITContext::bind_callable(Self, Int64) -> NativeCallable raise @installer.JitInstallError
 pub fn NativeJITContext::call_trampoline(Self, Int64, Int64, FixedArray[Int64], Int, Bool) -> Int raise NativeFiberError
 pub fn NativeJITContext::clear_cancellation_callback(Self) -> Unit
 pub fn NativeJITContext::clear_gc_heap(Self) -> Unit
@@ -804,9 +649,9 @@ pub fn NativeJITContext::refresh_table_layout(Self, Int) -> Bool
 pub fn NativeJITContext::register_safepoints(Self, Int, Array[@code_object.SafepointSite]) -> Bool
 pub fn NativeJITContext::set_callable_types(Self, Array[Int], Array[Int], Array[(Int64, Int)], Array[Int]) -> Unit
 pub fn NativeJITContext::set_cancellation_callback(Self, () -> Bool) -> Unit
-pub fn NativeJITContext::set_continuation_arena(Self, NativeContinuationArena) -> Unit
+pub fn NativeJITContext::set_continuation_arena(Self, @jit_ffi.NativeContinuationArena) -> Unit
 pub fn NativeJITContext::set_cooperative_scheduling(Self, Bool) -> Unit
-pub fn NativeJITContext::set_exception_arena(Self, NativeExceptionArena) -> Unit
+pub fn NativeJITContext::set_exception_arena(Self, @jit_ffi.NativeExceptionArena) -> Unit
 pub fn NativeJITContext::set_func(Self, Int, Int64) -> Unit
 pub fn NativeJITContext::set_gc_heap(Self, CHeap) -> Unit
 pub fn NativeJITContext::set_gc_heap_ptr(Self, Int64) -> Unit
@@ -987,5 +832,36 @@ pub(all) struct WasmTrapFrame {
 }
 
 // Type aliases
+pub using @loader {type ArtifactCompatibility}
+
+pub using @loader {type ArtifactIncompatible}
+
+pub using @loader {type ArtifactLoadError}
+
+pub using @installer {type InstalledCode}
+
+pub using @installer {type InstalledFunction}
+
+pub using @installer {type InstalledImport}
+
+pub using @installer {type InstalledTrampoline}
+
+pub using @installer {type JitCodeInstaller}
+
+pub using @installer {type JitInstallError}
+
+pub using @loader {type LoadedArtifact}
+
+pub using @jit_ffi {type NativeContinuationArena}
+
+pub using @jit_ffi {type NativeExceptionArena}
+
+pub using @execution {type NativeExecutionState}
+
+pub using @execution {type NativeExecutionStateError}
+
+pub using @execution {type NativeInvocationHandle}
+
+pub using @execution {type NativeInvocationPhase}
 
 // Traits

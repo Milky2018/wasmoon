@@ -1328,10 +1328,11 @@ fn encode_type_section(mod : @types.Module) -> Array[Int] {
   w.write_u32(groups.length())
   for group in groups {
     let (start, end) = group
-    // Preserve even singleton recursive groups: their self references require
-    // the parser to reserve the group before decoding the composite type.
-    w.write_byte(0x4E)
-    w.write_u32(end - start)
+    // A bare subtype is an implicit singleton group, even with self references.
+    if end - start != 1 {
+      w.write_byte(0x4E)
+      w.write_u32(end - start)
+    }
     for index in start..<end {
       encode_subtype(w, mod.types[index])
     }

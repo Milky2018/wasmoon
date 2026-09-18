@@ -1,7 +1,3 @@
 import {
-  "Milky2018/milkir",
-  "Milky2018/wasm_core/types",
-  "Milky2018/wasm_milkir",
-  "Milky2018/wasm_milkir/frontend/embedding",
-  "moonbitlang/core/hashmap",
+  "Milky2018/wasm_milkir/frontend/ir/translator",
 }

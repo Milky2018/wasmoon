@@ -1,0 +1,5 @@
+import {
+  "Milky2018/wasmoon/executor",
+  "Milky2018/wasmoon/runtime",
+  "Milky2018/wasm_core/types",
+}

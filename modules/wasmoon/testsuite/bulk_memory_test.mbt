@@ -20,7 +20,7 @@ test "memory.init: basic copy from data segment" {
     #|    (i32.load8_u (i32.const 0))
     #|  )
     #|)
-  let result = run_interp_only(source, "test", [])
+  let result = @testsuite.run_interp_only(source, "test", [])
   debug_inspect(result, content="Ok([I32(187)])") // 0xbb = 187
 }
 
@@ -39,7 +39,7 @@ test "memory.init: verify second byte" {
     #|    (i32.load8_u (i32.const 1))
     #|  )
     #|)
-  let result = run_interp_only(source, "test", [])
+  let result = @testsuite.run_interp_only(source, "test", [])
   debug_inspect(result, content="Ok([I32(204)])") // 0xcc = 204
 }
 
@@ -62,7 +62,7 @@ test "memory.init: zero length is valid" {
     #|    (i32.load8_u (i32.const 100))
     #|  )
     #|)
-  let result = run_interp_only(source, "test", [])
+  let result = @testsuite.run_interp_only(source, "test", [])
   debug_inspect(result, content="Ok([I32(42)])")
 }
 
@@ -84,7 +84,7 @@ test "data.drop: dropped segment init with zero length succeeds" {
     #|    (i32.const 1)  ;; Return success indicator
     #|  )
     #|)
-  let result = run_interp_only(source, "test", [])
+  let result = @testsuite.run_interp_only(source, "test", [])
   debug_inspect(result, content="Ok([I32(1)])")
 }
 
@@ -102,7 +102,7 @@ test "data.drop: can drop multiple times" {
     #|    (i32.const 42)
     #|  )
     #|)
-  let result = run_interp_only(source, "test", [])
+  let result = @testsuite.run_interp_only(source, "test", [])
   debug_inspect(result, content="Ok([I32(42)])")
 }
 
@@ -123,8 +123,8 @@ test "JIT: memory.init basic copy" {
     #|    (i32.load8_u (i32.const 0))
     #|  )
     #|)
-  let result = compare_jit_interp(source, "test", [])
-  inspect(compare_result_is_match(result), content="true")
+  let result = @testsuite.compare_jit_interp(source, "test", [])
+  inspect(@testsuite.compare_result_is_match(result), content="true")
 }
 
 ///|
@@ -142,8 +142,8 @@ test "JIT: memory.init second byte" {
     #|    (i32.load8_u (i32.const 1))
     #|  )
     #|)
-  let result = compare_jit_interp(source, "test", [])
-  inspect(compare_result_is_match(result), content="true")
+  let result = @testsuite.compare_jit_interp(source, "test", [])
+  inspect(@testsuite.compare_result_is_match(result), content="true")
 }
 
 ///|
@@ -162,8 +162,8 @@ test "JIT: data.drop and init with zero length" {
     #|    (i32.const 1)
     #|  )
     #|)
-  let result = compare_jit_interp(source, "test", [])
-  inspect(compare_result_is_match(result), content="true")
+  let result = @testsuite.compare_jit_interp(source, "test", [])
+  inspect(@testsuite.compare_result_is_match(result), content="true")
 }
 
 ///|
@@ -177,8 +177,8 @@ test "bulk memory: memory64 addresses and lengths are not truncated" {
     let source = "(module (memory i64 1) (func (export \"test\") \{operation}))"
     @validator.validate_module(@wat.parse(source))
     inspect(
-      compare_result_errors_contain(
-        compare_jit_interp(source, "test", []),
+      @testsuite.compare_result_errors_contain(
+        @testsuite.compare_jit_interp(source, "test", []),
         "out of bounds memory access",
       ),
       content="true",
@@ -192,10 +192,12 @@ test "bulk memory: dropped data still checks both zero-length offsets" {
     let (dst, src) = offsets
     let source = "(module (memory 1) (data $d \"x\") (func (export \"test\") data.drop $d i32.const \{dst} i32.const \{src} i32.const 0 memory.init $d))"
     @validator.validate_module(@wat.parse(source))
-    let result = compare_jit_interp(source, "test", [])
+    let result = @testsuite.compare_jit_interp(source, "test", [])
     if dst > 65536 || src > 0 {
       inspect(
-        compare_result_errors_contain(result, "out of bounds memory access"),
+        @testsuite.compare_result_errors_contain(
+          result, "out of bounds memory access",
+        ),
         content="true",
       )
     } else {

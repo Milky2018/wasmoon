@@ -208,3 +208,29 @@ test "Preview 1 unconnected datagram send reports the native destination error" 
     [17, 53].contains(@wasi.sock_send_impl(context, memory, fd, 0, 1, 0, 16)),
   )
 }
+
+///|
+test "UDP disconnect clears the peer and permits reconnect" {
+  for family in [4, 6] {
+    let socket = @wasi.native_socket_create(family, 2).unwrap()
+    let context = @wasi.WasiContextBuilder::WasiContextBuilder().build()
+    let fd = context.take_socket(socket).unwrap()
+    defer context.close_fd(fd) |> ignore
+    let address : @wasi.NativeSocketAddress = {
+      family,
+      address: if family == 4 {
+        [b'\x7f', b'\x00', b'\x00', b'\x01']
+      } else {
+        FixedArray::makei(16, i => if i == 15 { b'\x01' } else { b'\x00' })
+      },
+      port: 42,
+      scope_id: 0,
+    }
+    assert_eq(@wasi.native_socket_connect(socket, address), 0)
+    assert_true(@wasi.native_socket_address(socket, true) is Some(_))
+    assert_true(@wasi.native_socket_disconnect(socket))
+    assert_true(@wasi.native_socket_address(socket, true) is None)
+    assert_eq(@wasi.native_socket_connect(socket, { ..address, port: 43, }), 0)
+    assert_eq(@wasi.native_socket_address(socket, true).unwrap().port, 43)
+  }
+}

@@ -1,6 +1,6 @@
 ///|
-fn contextual_test_context() -> WasmValidationContext {
-  WasmValidationContext::new({
+fn contextual_test_context() -> @wasm_milkir.WasmValidationContext {
+  @wasm_milkir.WasmValidationContext::new({
     function_contract: fn(index) {
       if index == 7 {
         Some({ params: [I32], results: [I64], })
@@ -64,7 +64,7 @@ fn contextual_error_for(
   builder : @milkir.FunctionBuilder,
 ) -> @milkir.VerifyError {
   try
-    verify_function_with_context(
+    @wasm_milkir.verify_function_with_context(
       builder.get_function(),
       contextual_test_context(),
     )
@@ -79,20 +79,24 @@ fn contextual_error_for(
 test "contextual Wasm validation rejects forged call contracts" {
   let direct = @milkir.FunctionBuilder::FunctionBuilder("bad_direct_call")
   let direct_arg = direct.add_param(I32)
-  call_multi(direct, 7, [F64], [direct_arg]) |> ignore
+  @wasm_milkir.call_multi(direct, 7, [F64], [direct_arg]) |> ignore
   direct.return_([])
 
   let indirect = @milkir.FunctionBuilder::FunctionBuilder("bad_indirect_call")
   let table_index = indirect.add_param(I32)
   let indirect_arg = indirect.add_param(I64)
-  call_indirect_multi(indirect, 2, 1, [F32], table_index, [indirect_arg])
+  @wasm_milkir.call_indirect_multi(indirect, 2, 1, [F32], table_index, [
+    indirect_arg,
+  ])
   |> ignore
   indirect.return_([])
 
   let reference = @milkir.FunctionBuilder::FunctionBuilder("bad_call_ref")
   let function_reference = reference.add_param(CallableRef)
   let reference_arg = reference.add_param(I32)
-  call_ref_multi(reference, 2, [F32], function_reference, [reference_arg])
+  @wasm_milkir.call_ref_multi(reference, 2, [F32], function_reference, [
+    reference_arg,
+  ])
   |> ignore
   reference.return_([])
 
@@ -100,7 +104,7 @@ test "contextual Wasm validation rejects forged call contracts" {
   tail.add_result(F32)
   let tail_arg = tail.add_param(I32)
   let fallback_result = tail.add_param(F32)
-  return_call_multi(tail, 7, [tail_arg])
+  @wasm_milkir.return_call_multi(tail, 7, [tail_arg])
   tail.return_([fallback_result])
 
   debug_inspect(
@@ -125,19 +129,19 @@ test "contextual Wasm validation rejects forged call contracts" {
 test "contextual Wasm validation rejects forged aggregate contracts" {
   let get = @milkir.FunctionBuilder::FunctionBuilder("bad_struct_get")
   let struct_reference = get.add_param(Ref)
-  struct_get(get, 3, 0, struct_reference, F64) |> ignore
+  @wasm_milkir.struct_get(get, 3, 0, struct_reference, F64) |> ignore
   get.return_([])
 
   let packed = @milkir.FunctionBuilder::FunctionBuilder("bad_struct_packed_get")
   let packed_reference = packed.add_param(Ref)
-  struct_get_s(packed, 3, 1, packed_reference, 2) |> ignore
+  @wasm_milkir.struct_get_s(packed, 3, 1, packed_reference, 2) |> ignore
   packed.return_([])
 
   let set = @milkir.FunctionBuilder::FunctionBuilder("bad_array_set")
   let array_reference = set.add_param(Ref)
   let array_index = set.add_param(I32)
   let array_value = set.add_param(I32)
-  array_set(set, 4, array_reference, array_index, array_value)
+  @wasm_milkir.array_set(set, 4, array_reference, array_index, array_value)
   set.return_([])
 
   let copy = @milkir.FunctionBuilder::FunctionBuilder("bad_array_copy")
@@ -146,7 +150,7 @@ test "contextual Wasm validation rejects forged aggregate contracts" {
   let source = copy.add_param(Ref)
   let source_offset = copy.add_param(I32)
   let count = copy.add_param(I32)
-  array_copy(
+  @wasm_milkir.array_copy(
     copy, 4, 5, destination, destination_offset, source, source_offset, count,
   )
   copy.return_([])
@@ -173,37 +177,39 @@ test "contextual Wasm validation rejects forged aggregate contracts" {
 test "contextual Wasm validation rejects invalid indices and exception payloads" {
   let memory = @milkir.FunctionBuilder::FunctionBuilder("bad_memory")
   let vmctx = memory.add_param(I64)
-  load_mem_base(memory, vmctx, 4, Mutable) |> ignore
+  @wasm_milkir.load_mem_base(memory, vmctx, 4, Mutable) |> ignore
   memory.return_([])
 
   let function_reference = @milkir.FunctionBuilder::FunctionBuilder(
     "bad_function_reference",
   )
-  get_func_ref(function_reference, 99) |> ignore
+  @wasm_milkir.get_func_ref(function_reference, 99) |> ignore
   function_reference.return_([])
 
   let segment = @milkir.FunctionBuilder::FunctionBuilder("bad_segment")
   let offset = segment.add_param(I32)
   let length = segment.add_param(I32)
-  array_new_data(segment, 4, 8, offset, length) |> ignore
+  @wasm_milkir.array_new_data(segment, 4, 8, offset, length) |> ignore
   segment.return_([])
 
   let element = @milkir.FunctionBuilder::FunctionBuilder("bad_element_segment")
   let element_offset = element.add_param(I32)
   let element_length = element.add_param(I32)
-  array_new_elem(element, 4, 0, element_offset, element_length) |> ignore
+  @wasm_milkir.array_new_elem(element, 4, 0, element_offset, element_length)
+  |> ignore
   element.return_([])
 
   let thrown = @milkir.FunctionBuilder::FunctionBuilder("bad_throw")
   let payload = thrown.add_param(I64)
-  emit_throw(thrown, 0, [payload])
+  @wasm_milkir.emit_throw(thrown, 0, [payload])
   thrown.return_([])
 
   let reference_type = @milkir.FunctionBuilder::FunctionBuilder(
     "bad_reference_type",
   )
   let reference_value = reference_type.add_param(Ref)
-  ref_cast(reference_type, 99, false, reference_value, Ref) |> ignore
+  @wasm_milkir.ref_cast(reference_type, 99, false, reference_value, Ref)
+  |> ignore
   reference_type.return_([])
 
   debug_inspect(
@@ -233,10 +239,10 @@ test "contextual Wasm validation accepts built-in abstract heap types" {
   let builder = @milkir.FunctionBuilder::FunctionBuilder("abstract_ref_cast")
   let reference = builder.add_param(Ref)
   builder.add_result(Ref)
-  let cast = ref_cast(builder, -1, true, reference, Ref)
+  let cast = @wasm_milkir.ref_cast(builder, -1, true, reference, Ref)
   builder.return_([cast])
-  verify_function_with_context(
+  @wasm_milkir.verify_function_with_context(
     builder.get_function(),
-    WasmValidationContext::empty(),
+    @wasm_milkir.WasmValidationContext::empty(),
   )
 }

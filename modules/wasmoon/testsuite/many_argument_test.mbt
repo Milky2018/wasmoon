@@ -58,7 +58,7 @@ test "i64 64 params - indirect call via test function" {
     #|      (i64.const 61) (i64.const 62) (i64.const 63) (i64.const 64)))
     #|)
   // Call "test" function with no arguments - it internally calls sum64 with 64 args
-  let result = compare_jit_interp(source, "test", [])
+  let result = @testsuite.compare_jit_interp(source, "test", [])
   inspect(result, content="matched")
 }
 
@@ -96,7 +96,7 @@ test "i64 16 params - forward through test function" {
     #|      (local.get 12) (local.get 13) (local.get 14) (local.get 15)))
     #|)
   // 1+2+...+16 = 136
-  let result = compare_jit_interp(source, "test", [
+  let result = @testsuite.compare_jit_interp(source, "test", [
     I64(1L),
     I64(2L),
     I64(3L),
@@ -141,7 +141,7 @@ test "f64 10 params - forward through test function" {
     #|      (local.get 5) (local.get 6) (local.get 7) (local.get 8) (local.get 9)))
     #|)
   // 1.0+2.0+...+10.0 = 55.0
-  let result = compare_jit_interp(source, "test", [
+  let result = @testsuite.compare_jit_interp(source, "test", [
     F64(1.0),
     F64(2.0),
     F64(3.0),

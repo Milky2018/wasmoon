@@ -1,6 +1,6 @@
 ///|
 test "guest continuation ownership: stale cancellation cannot release a new owner" {
-  let store = Store()
+  let store = @runtime.Store()
   let releases = Ref(0)
   let successor = Ref(-1L)
   let handle = store.put_guest_continuation({
@@ -30,16 +30,17 @@ test "guest continuation ownership: stale cancellation cannot release a new owne
 
 ///|
 test "guest continuation ownership: terminal failure releases the consumed body" {
-  let store = Store()
+  let store = @runtime.Store()
   defer store.close()
   let releases = Ref(0)
   let handle = store.put_guest_continuation({
-    run: fn(_) raise { raise RuntimeError::Unreachable },
+    run: fn(_) raise { raise @runtime.RuntimeError::Unreachable },
     cancel: fn() { releases.val += 1 },
   })
   let body = store.take_guest_continuation(handle)
   try (body.run)(Values([])) catch {
-    error => assert_true(RuntimeError::from_error(error) is Some(Unreachable))
+    error =>
+      assert_true(@runtime.RuntimeError::from_error(error) is Some(Unreachable))
   } noraise {
     _ => fail("expected the continuation to trap")
   }

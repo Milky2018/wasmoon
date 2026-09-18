@@ -95,7 +95,8 @@ state machine, not separate execution implementations.
 
 ## Supported Native Contract
 
-The supported native WASI 0.3 targets are macOS AArch64 and Linux AMD64. The
+The supported native WASI 0.3 targets are macOS AArch64, Linux AMD64 and
+Windows AMD64 (Clang/MSVC). The
 stable `ComponentRuntime` owns every call and continuation created through it.
 Its terminal, idempotent `close` cancels outstanding calls and installed host
 operations before releasing native code, trampoline mappings, and Store

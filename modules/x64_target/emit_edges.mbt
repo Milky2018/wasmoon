@@ -180,7 +180,7 @@ fn emit_conditional_edges(
   let threaded_false = function
     .block_index(threaded_branch_target(function, allocation, when_false))
     .unwrap()
-  buffer.x86_emit_test_rr32(condition.id, condition.id)
+  buffer.encoder.x86_emit_test_rr32(condition.id, condition.id)
   if next_block == Some(when_false) {
     if true_moves.steps.is_empty() {
       buffer.x86_emit_jcc_rel32(RawNe, threaded_true)
@@ -189,7 +189,7 @@ fn emit_conditional_edges(
       buffer.emit_byte(0x0F)
       buffer.emit_byte(x86_cond_to_jcc_opcode(RawEq))
       let local_false_branch = buffer.position()
-      emit_u32_le(buffer, 0)
+      emit_u32_le(buffer.encoder, 0)
       emit_resolved_moves(buffer, frame, true_moves)
       buffer.x86_emit_jmp_rel32(threaded_true)
       patch_relative_branch(buffer, local_false_branch, buffer.position(), 32)
@@ -203,7 +203,7 @@ fn emit_conditional_edges(
       buffer.emit_byte(0x0F)
       buffer.emit_byte(x86_cond_to_jcc_opcode(RawNe))
       let local_true_branch = buffer.position()
-      emit_u32_le(buffer, 0)
+      emit_u32_le(buffer.encoder, 0)
       emit_resolved_moves(buffer, frame, false_moves)
       buffer.x86_emit_jmp_rel32(threaded_false)
       patch_relative_branch(buffer, local_true_branch, buffer.position(), 32)
@@ -221,7 +221,7 @@ fn emit_conditional_edges(
     buffer.emit_byte(0x0F)
     buffer.emit_byte(x86_cond_to_jcc_opcode(RawEq))
     let local_false_branch = buffer.position()
-    emit_u32_le(buffer, 0)
+    emit_u32_le(buffer.encoder, 0)
     emit_resolved_moves(buffer, frame, true_moves)
     buffer.x86_emit_jmp_rel32(threaded_true)
     patch_relative_branch(buffer, local_false_branch, buffer.position(), 32)
@@ -239,17 +239,17 @@ fn emit_switch_compare(
 ) -> Unit {
   if bits <= 0x7FFFFFFFUL {
     if width == W32 {
-      buffer.x86_emit_cmp_r32_imm32(index.id, bits.to_int())
+      buffer.encoder.x86_emit_cmp_r32_imm32(index.id, bits.to_int())
     } else {
-      buffer.x86_emit_cmp_r_imm32(index.id, bits.to_int())
+      buffer.encoder.x86_emit_cmp_r_imm32(index.id, bits.to_int())
     }
   } else {
     let scratch = @vcode.PhysicalReg::new(11, Int)
     emit_constant(buffer, width, scratch, bits)
     if width == W32 {
-      buffer.x86_emit_cmp_rr32(index.id, scratch.id)
+      buffer.encoder.x86_emit_cmp_rr32(index.id, scratch.id)
     } else {
-      buffer.x86_emit_cmp_rr(index.id, scratch.id)
+      buffer.encoder.x86_emit_cmp_rr(index.id, scratch.id)
     }
   }
 }
@@ -287,7 +287,7 @@ fn emit_switch_edges(
     buffer.emit_byte(0x0F)
     buffer.emit_byte(x86_cond_to_jcc_opcode(RawEq))
     case_branches.push((buffer.position(), successor_index))
-    emit_u32_le(buffer, 0)
+    emit_u32_le(buffer.encoder, 0)
   }
   emit_edge_moves(buffer, function, allocation, frame, block, cases.length())
   buffer.x86_emit_jmp_rel32(

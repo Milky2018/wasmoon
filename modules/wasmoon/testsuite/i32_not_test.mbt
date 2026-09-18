@@ -12,7 +12,7 @@ test "JIT: i32.not basic" {
     #|    (i32.xor (local.get 0) (i32.const -1))
     #|  )
     #|)
-  let result = compare_jit_interp(source, "test", [I32(-1)])
+  let result = @testsuite.compare_jit_interp(source, "test", [I32(-1)])
   inspect(result, content="matched")
 }
 
@@ -31,7 +31,7 @@ test "JIT: i32.not with br_if" {
     #|    )
     #|  )
     #|)
-  let result = compare_jit_interp(source, "test", [])
+  let result = @testsuite.compare_jit_interp(source, "test", [])
   inspect(result, content="matched")
 }
 
@@ -49,7 +49,7 @@ test "JIT: i32.not with br_if (should branch)" {
     #|    )
     #|  )
     #|)
-  let result = compare_jit_interp(source, "test", [])
+  let result = @testsuite.compare_jit_interp(source, "test", [])
   inspect(result, content="matched")
 }
 
@@ -65,7 +65,7 @@ test "JIT: i32.not preserves zero extension" {
     #|  )
     #|)
   // not(5) = -6, sub(0, -6) = 6
-  let result = compare_jit_interp(source, "test", [I32(5)])
+  let result = @testsuite.compare_jit_interp(source, "test", [I32(5)])
   inspect(result, content="matched")
 }
 
@@ -90,6 +90,6 @@ test "JIT: i32.not in loop condition" {
     #|    (local.get $i)
     #|  )
     #|)
-  let result = compare_jit_interp(source, "test", [])
+  let result = @testsuite.compare_jit_interp(source, "test", [])
   inspect(result, content="matched")
 }

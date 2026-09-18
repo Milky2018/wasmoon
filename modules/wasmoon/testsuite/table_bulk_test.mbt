@@ -23,7 +23,7 @@ test "table.init: basic initialization from element segment" {
     #|    (call_indirect (result i32) (i32.const 0))
     #|  )
     #|)
-  let result = run_interp_only(source, "test", [])
+  let result = @testsuite.run_interp_only(source, "test", [])
   debug_inspect(result, content="Ok([I32(0)])")
 }
 
@@ -46,7 +46,7 @@ test "table.init: verify second function" {
     #|    (call_indirect (result i32) (i32.const 1))
     #|  )
     #|)
-  let result = run_interp_only(source, "test", [])
+  let result = @testsuite.run_interp_only(source, "test", [])
   debug_inspect(result, content="Ok([I32(1)])")
 }
 
@@ -70,7 +70,7 @@ test "table.copy: non-overlapping copy" {
     #|    (call_indirect (result i32) (i32.const 3))
     #|  )
     #|)
-  let result = run_interp_only(source, "test", [])
+  let result = @testsuite.run_interp_only(source, "test", [])
   debug_inspect(result, content="Ok([I32(0)])")
 }
 
@@ -93,7 +93,7 @@ test "table.copy: verify copied function" {
     #|    (call_indirect (result i32) (i32.const 5))
     #|  )
     #|)
-  let result = run_interp_only(source, "test", [])
+  let result = @testsuite.run_interp_only(source, "test", [])
   debug_inspect(result, content="Ok([I32(2)])")
 }
 
@@ -115,7 +115,7 @@ test "table.fill: fill with null" {
     #|    (call_indirect (result i32) (i32.const 0))
     #|  )
     #|)
-  let result = run_interp_only(source, "test", [])
+  let result = @testsuite.run_interp_only(source, "test", [])
   debug_inspect(result, content="Ok([I32(42)])")
 }
 
@@ -138,7 +138,7 @@ test "elem.drop: dropped segment init with zero length succeeds" {
     #|    (i32.const 1)  ;; Return success indicator
     #|  )
     #|)
-  let result = run_interp_only(source, "test", [])
+  let result = @testsuite.run_interp_only(source, "test", [])
   debug_inspect(result, content="Ok([I32(1)])")
 }
 
@@ -157,6 +157,6 @@ test "elem.drop: can drop multiple times" {
     #|    (i32.const 42)
     #|  )
     #|)
-  let result = run_interp_only(source, "test", [])
+  let result = @testsuite.run_interp_only(source, "test", [])
   debug_inspect(result, content="Ok([I32(42)])")
 }

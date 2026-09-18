@@ -51,7 +51,7 @@ async fn NetworkBody::put(self : NetworkBody, bytes : Bytes) -> Unit {
     self.wake.wait()
   }
   if self.cancelled.val {
-    raise @runtime_impl.Cancelled
+    raise @runtime_impl.ComponentRuntimeError::Cancelled
   }
   self.bytes.val = Some(bytes)
   self.wake.broadcast()
@@ -133,7 +133,7 @@ async fn HttpHost::receive_body(
         while !body.cancelled.val {
           body.wake.wait()
         }
-        raise @runtime_impl.Cancelled
+        raise @runtime_impl.ComponentRuntimeError::Cancelled
       },
     ])
     if body.cancelled.val {
@@ -243,7 +243,9 @@ async fn HttpHost::write_body(
   )
   guard self.consume_body(message, receipt, table)
     is Tuple([U32(stream), U32(trailer_future)]) else {
-    raise @runtime_impl.HostCallError("missing body handles")
+    raise @runtime_impl.ComponentRuntimeError::HostCallError(
+      "missing body handles",
+    )
   }
   defer {
     self.runtime.drop_host_readable_stream(table, stream) catch {
@@ -280,11 +282,16 @@ async fn HttpHost::write_body(
       Variant(0, None) => HttpFields::from_list().unwrap()
       Variant(1, Some(handle)) => {
         guard self.take(table, handle, "fields") is Fields(fields) else {
-          raise @runtime_impl.HostCallError("invalid trailers")
+          raise @runtime_impl.ComponentRuntimeError::HostCallError(
+            "invalid trailers",
+          )
         }
         fields
       }
-      _ => raise @runtime_impl.HostCallError("invalid trailers result")
+      _ =>
+        raise @runtime_impl.ComponentRuntimeError::HostCallError(
+          "invalid trailers result",
+        )
     }
     if !no_body {
       let declared = message_framing(message.headers, false, false)

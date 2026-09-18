@@ -58,7 +58,9 @@ fn map_canonical_handles(
         List(
           entries.map(entry => {
             guard entry is Tuple([k, v]) else {
-              raise HostCallError("map entry type mismatch")
+              raise ComponentRuntimeError::HostCallError(
+                "map entry type mismatch",
+              )
             }
             Tuple([walk(key, k), walk(element, v)])
           }),

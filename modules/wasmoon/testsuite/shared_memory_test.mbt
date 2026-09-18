@@ -54,8 +54,11 @@ test "atomics: text and binary use the same standard opcode and alignment" {
       #|]
     ),
   )
-  debug_inspect(run_interp_only(source, "test", []), content="Ok([I32(42)])")
-  inspect(compare_jit_interp(source, "test", []), content="matched")
+  debug_inspect(
+    @testsuite.run_interp_only(source, "test", []),
+    content="Ok([I32(42)])",
+  )
+  inspect(@testsuite.compare_jit_interp(source, "test", []), content="matched")
 }
 
 ///|

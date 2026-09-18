@@ -1,20 +1,20 @@
 ///|
 priv struct TestFunction {
   value_count : Int
-  instructions : Array[Array[Operand]]
-  block_parameters : Array[VirtualReg]
+  instructions : Array[Array[@regalloc.Operand]]
+  block_parameters : Array[@regalloc.VirtualReg]
 }
 
 ///|
 priv struct CfgTestFunction {
   value_count : Int
   blocks : Array[Array[Int]]
-  instructions : Array[Array[Operand]]
-  clobbers : Array[Array[PhysicalReg]]
+  instructions : Array[Array[@regalloc.Operand]]
+  clobbers : Array[Array[@regalloc.PhysicalReg]]
   successors : Array[Array[Int]]
-  entry_values : Array[VirtualReg]
-  parameters : Array[Array[VirtualReg]]
-  edge_arguments : Array[Array[Array[VirtualReg]]]
+  entry_values : Array[@regalloc.VirtualReg]
+  parameters : Array[Array[@regalloc.VirtualReg]]
+  edge_arguments : Array[Array[Array[@regalloc.VirtualReg]]]
 }
 
 ///|
@@ -23,7 +23,7 @@ impl FunctionView for CfgTestFunction with fn value_count(self) -> Int {
 }
 
 ///|
-impl FunctionView for CfgTestFunction with fn value_class(_self, _value) -> RegClass {
+impl FunctionView for CfgTestFunction with fn value_class(_self, _value) -> @regalloc.RegClass {
   Int
 }
 
@@ -55,7 +55,7 @@ impl FunctionView for CfgTestFunction with fn entry_value_count(self) -> Int {
 }
 
 ///|
-impl FunctionView for CfgTestFunction with fn entry_value_at(self, parameter) -> VirtualReg {
+impl FunctionView for CfgTestFunction with fn entry_value_at(self, parameter) -> @regalloc.VirtualReg {
   self.entry_values[parameter]
 }
 
@@ -79,7 +79,7 @@ impl FunctionView for CfgTestFunction with fn block_parameter_at(
   self,
   block,
   parameter,
-) -> VirtualReg {
+) -> @regalloc.VirtualReg {
   self.parameters[block][parameter]
 }
 
@@ -129,7 +129,7 @@ impl FunctionView for CfgTestFunction with fn edge_argument_at(
   block,
   successor,
   argument,
-) -> VirtualReg {
+) -> @regalloc.VirtualReg {
   self.edge_arguments[block][successor][argument]
 }
 
@@ -137,7 +137,7 @@ impl FunctionView for CfgTestFunction with fn edge_argument_at(
 impl FunctionView for CfgTestFunction with fn instruction_operands(
   self,
   instruction,
-) -> ArrayView[Operand] {
+) -> ArrayView[@regalloc.Operand] {
   self.instructions[instruction][:]
 }
 
@@ -145,7 +145,7 @@ impl FunctionView for CfgTestFunction with fn instruction_operands(
 impl FunctionView for CfgTestFunction with fn instruction_clobbers(
   self,
   instruction,
-) -> ArrayView[PhysicalReg] {
+) -> ArrayView[@regalloc.PhysicalReg] {
   self.clobbers[instruction][:]
 }
 
@@ -155,7 +155,7 @@ impl FunctionView for TestFunction with fn value_count(self) -> Int {
 }
 
 ///|
-impl FunctionView for TestFunction with fn value_class(_self, _value) -> RegClass {
+impl FunctionView for TestFunction with fn value_class(_self, _value) -> @regalloc.RegClass {
   Int
 }
 
@@ -184,7 +184,7 @@ impl FunctionView for TestFunction with fn entry_value_count(self) -> Int {
 }
 
 ///|
-impl FunctionView for TestFunction with fn entry_value_at(self, parameter) -> VirtualReg {
+impl FunctionView for TestFunction with fn entry_value_at(self, parameter) -> @regalloc.VirtualReg {
   self.block_parameters[parameter]
 }
 
@@ -208,7 +208,7 @@ impl FunctionView for TestFunction with fn block_parameter_at(
   _self,
   _block,
   _parameter,
-) -> VirtualReg {
+) -> @regalloc.VirtualReg {
   abort("invalid block parameter index")
 }
 
@@ -255,7 +255,7 @@ impl FunctionView for TestFunction with fn edge_argument_at(
   _block,
   _successor,
   _argument,
-) -> VirtualReg {
+) -> @regalloc.VirtualReg {
   abort("invalid edge argument index")
 }
 
@@ -263,7 +263,7 @@ impl FunctionView for TestFunction with fn edge_argument_at(
 impl FunctionView for TestFunction with fn instruction_operands(
   self,
   instruction,
-) -> ArrayView[Operand] {
+) -> ArrayView[@regalloc.Operand] {
   self.instructions[instruction][:]
 }
 
@@ -271,18 +271,18 @@ impl FunctionView for TestFunction with fn instruction_operands(
 impl FunctionView for TestFunction with fn instruction_clobbers(
   _self,
   _instruction,
-) -> ArrayView[PhysicalReg] {
-  let empty : Array[PhysicalReg] = []
+) -> ArrayView[@regalloc.PhysicalReg] {
+  let empty : Array[@regalloc.PhysicalReg] = []
   empty[:]
 }
 
 ///|
-fn value(id : Int) -> VirtualReg {
+fn value(id : Int) -> @regalloc.VirtualReg {
   { id, class: Int, }
 }
 
 ///|
-fn int_reg(id : Int) -> PhysicalReg {
+fn int_reg(id : Int) -> @regalloc.PhysicalReg {
   { id, class: Int, }
 }
 
@@ -293,14 +293,17 @@ test "backtracking reuses a register across early use and late def" {
     block_parameters: [value(0)],
     instructions: [
       [
-        Operand::use_reg(value(0)).with_timing(Early),
-        Operand::def(value(1)).with_timing(Late),
+        @regalloc.Operand::use_reg(value(0)).with_timing(Early),
+        @regalloc.Operand::def(value(1)).with_timing(Late),
       ],
-      [Operand::use_reg(value(1))],
+      [@regalloc.Operand::use_reg(value(1))],
     ],
   }
   inspect(
-    allocate_function(function, MachineEnv::new([int_reg(0)], [int_reg(1)])),
+    @regalloc.allocate_function(
+      function,
+      @regalloc.MachineEnv::new([int_reg(0)], [int_reg(1)]),
+    ),
     content=(
       #|{
       #|  value_locations: [Some(Reg(p0:int)), Some(Reg(p0:int))],
@@ -322,15 +325,21 @@ test "backtracking reuses spill slots for disjoint values" {
     value_count: 4,
     block_parameters: [value(0), value(1)],
     instructions: [
-      [Operand::use_reg(value(0)), Operand::use_reg(value(1))],
-      [Operand::def(value(2)), Operand::def(value(3))],
-      [Operand::use_reg(value(2)), Operand::use_reg(value(3))],
+      [
+        @regalloc.Operand::use_reg(value(0)),
+        @regalloc.Operand::use_reg(value(1)),
+      ],
+      [@regalloc.Operand::def(value(2)), @regalloc.Operand::def(value(3))],
+      [
+        @regalloc.Operand::use_reg(value(2)),
+        @regalloc.Operand::use_reg(value(3)),
+      ],
     ],
   }
   inspect(
-    allocate_function(
+    @regalloc.allocate_function(
       function,
-      MachineEnv::new([int_reg(0)], [int_reg(1), int_reg(2)]),
+      @regalloc.MachineEnv::new([int_reg(0)], [int_reg(1), int_reg(2)]),
     ),
     content=(
       #|{
@@ -375,9 +384,15 @@ test "backtracking keeps spill homes distinct across CFG blocks" {
     value_count: 4,
     blocks: [[0], [1, 2]],
     instructions: [
-      [Operand::use_reg(value(0)), Operand::use_reg(value(1))],
-      [Operand::def(value(2)), Operand::def(value(3))],
-      [Operand::use_reg(value(2)), Operand::use_reg(value(3))],
+      [
+        @regalloc.Operand::use_reg(value(0)),
+        @regalloc.Operand::use_reg(value(1)),
+      ],
+      [@regalloc.Operand::def(value(2)), @regalloc.Operand::def(value(3))],
+      [
+        @regalloc.Operand::use_reg(value(2)),
+        @regalloc.Operand::use_reg(value(3)),
+      ],
     ],
     clobbers: [[], [], []],
     successors: [[1], []],
@@ -386,9 +401,9 @@ test "backtracking keeps spill homes distinct across CFG blocks" {
     edge_arguments: [[[]], []],
   }
   inspect(
-    allocate_function(
+    @regalloc.allocate_function(
       function,
-      MachineEnv::new([int_reg(0)], [int_reg(1), int_reg(2)]),
+      @regalloc.MachineEnv::new([int_reg(0)], [int_reg(1), int_reg(2)]),
     ),
     content=(
       #|{
@@ -433,15 +448,21 @@ test "backtracking keeps the dense live range resident" {
     value_count: 2,
     block_parameters: [value(0)],
     instructions: [
-      [Operand::def(value(1))],
-      [Operand::use_reg(value(1))],
-      [Operand::use_reg(value(1))],
-      [Operand::use_reg(value(0)), Operand::use_reg(value(1))],
+      [@regalloc.Operand::def(value(1))],
+      [@regalloc.Operand::use_reg(value(1))],
+      [@regalloc.Operand::use_reg(value(1))],
+      [
+        @regalloc.Operand::use_reg(value(0)),
+        @regalloc.Operand::use_reg(value(1)),
+      ],
     ],
   }
-  let environment = MachineEnv::new([int_reg(0)], [int_reg(1), int_reg(2)])
+  let environment = @regalloc.MachineEnv::new([int_reg(0)], [
+    int_reg(1),
+    int_reg(2),
+  ])
   inspect(
-    allocate_function(function, environment),
+    @regalloc.allocate_function(function, environment),
     content=(
       #|{
       #|  value_locations: [Some(Spill(0)), Some(Reg(p0:int))],
@@ -472,9 +493,9 @@ test "backtracking splits a live range around a clobbered CFG fragment" {
     value_count: 1,
     blocks: [[0], [1], [2]],
     instructions: [
-      [Operand::use_reg(value(0))],
+      [@regalloc.Operand::use_reg(value(0))],
       [],
-      [Operand::use_reg(value(0))],
+      [@regalloc.Operand::use_reg(value(0))],
     ],
     clobbers: [[], [int_reg(0)], []],
     successors: [[1], [2], []],
@@ -483,7 +504,10 @@ test "backtracking splits a live range around a clobbered CFG fragment" {
     edge_arguments: [[[]], [[]], []],
   }
   inspect(
-    allocate_function(function, MachineEnv::new([int_reg(0)], [int_reg(1)])),
+    @regalloc.allocate_function(
+      function,
+      @regalloc.MachineEnv::new([int_reg(0)], [int_reg(1)]),
+    ),
     content=(
       #|{
       #|  value_locations: [Some(Spill(0))],
@@ -516,16 +540,20 @@ test "backtracking spills a value defined before a same-block clobber" {
   let function : CfgTestFunction = {
     value_count: 1,
     blocks: [[0, 1, 2]],
-    instructions: [[Operand::def(value(0))], [], [Operand::use_reg(value(0))]],
+    instructions: [
+      [@regalloc.Operand::def(value(0))],
+      [],
+      [@regalloc.Operand::use_reg(value(0))],
+    ],
     clobbers: [[], [int_reg(0)], []],
     successors: [[]],
     entry_values: [],
     parameters: [[]],
     edge_arguments: [[]],
   }
-  let plan = allocate_function(
+  let plan = @regalloc.allocate_function(
     function,
-    MachineEnv::new([int_reg(0)], [int_reg(1)]),
+    @regalloc.MachineEnv::new([int_reg(0)], [int_reg(1)]),
   )
   debug_inspect(
     (plan.value_location(0), plan.edits()),
@@ -557,9 +585,9 @@ test "safepoint metadata keeps a live root at its value home" {
     value_count: 1,
     blocks: [[0, 1]],
     instructions: [
-      [Operand::def(value(0))],
+      [@regalloc.Operand::def(value(0))],
       [
-        Operand::use_reg(value(0))
+        @regalloc.Operand::use_reg(value(0))
         .with_constraint(PreservedHome)
         .with_timing(Late),
       ],
@@ -570,9 +598,9 @@ test "safepoint metadata keeps a live root at its value home" {
     parameters: [[]],
     edge_arguments: [[]],
   }
-  let plan = allocate_function(
+  let plan = @regalloc.allocate_function(
     function,
-    MachineEnv::new([int_reg(0)], [int_reg(1)]),
+    @regalloc.MachineEnv::new([int_reg(0)], [int_reg(1)]),
   )
   debug_inspect(
     (plan.value_location(0), plan.operand_location(1, 0), plan.edits()),
@@ -599,9 +627,9 @@ test "safepoint metadata may use an unclobbered register home" {
     value_count: 1,
     blocks: [[0, 1]],
     instructions: [
-      [Operand::def(value(0))],
+      [@regalloc.Operand::def(value(0))],
       [
-        Operand::use_reg(value(0))
+        @regalloc.Operand::use_reg(value(0))
         .with_constraint(PreservedHome)
         .with_timing(Late),
       ],
@@ -612,9 +640,9 @@ test "safepoint metadata may use an unclobbered register home" {
     parameters: [[]],
     edge_arguments: [[]],
   }
-  let plan = allocate_function(
+  let plan = @regalloc.allocate_function(
     function,
-    MachineEnv::new([int_reg(0), int_reg(1)], [int_reg(2)]),
+    @regalloc.MachineEnv::new([int_reg(0), int_reg(1)], [int_reg(2)]),
   )
   debug_inspect(
     (plan.value_location(0), plan.operand_location(1, 0), plan.edits()),
@@ -624,7 +652,7 @@ test "safepoint metadata may use an unclobbered register home" {
 
 ///|
 test "backtracking parks cold live-through values outside hot loops" {
-  let instructions : Array[Array[Operand]] = []
+  let instructions : Array[Array[@regalloc.Operand]] = []
   for _ in 0..<19 {
     instructions.push([])
   }
@@ -648,10 +676,10 @@ test "backtracking parks cold live-through values outside hot loops" {
   ])
   instructions.push([])
   instructions.push([
-    Operand::use_reg(value(0)),
-    Operand::use_reg(value(0)),
-    Operand::use_reg(value(0)),
-    Operand::use_reg(value(0)),
+    @regalloc.Operand::use_reg(value(0)),
+    @regalloc.Operand::use_reg(value(0)),
+    @regalloc.Operand::use_reg(value(0)),
+    @regalloc.Operand::use_reg(value(0)),
   ])
   let function : CfgTestFunction = {
     value_count: 5,
@@ -669,9 +697,9 @@ test "backtracking parks cold live-through values outside hot loops" {
     ],
   }
   inspect(
-    allocate_function(
+    @regalloc.allocate_function(
       function,
-      MachineEnv::new([int_reg(0), int_reg(1)], [int_reg(2)]),
+      @regalloc.MachineEnv::new([int_reg(0), int_reg(1)], [int_reg(2)]),
     ),
     content=(
       #|{
@@ -711,8 +739,8 @@ test "backtracking shares a spill home across a loop-carried SSA bundle" {
     blocks: [[], [0], []],
     instructions: [
       [
-        Operand::use_reg(value(0)).with_timing(Early),
-        Operand::def(value(1)).with_timing(Late),
+        @regalloc.Operand::use_reg(value(0)).with_timing(Early),
+        @regalloc.Operand::def(value(1)).with_timing(Late),
       ],
     ],
     clobbers: [[]],
@@ -722,7 +750,10 @@ test "backtracking shares a spill home across a loop-carried SSA bundle" {
     edge_arguments: [[[value(2)]], [[value(1)], []], []],
   }
   inspect(
-    allocate_function(function, MachineEnv::new([], [int_reg(0), int_reg(1)])),
+    @regalloc.allocate_function(
+      function,
+      @regalloc.MachineEnv::new([], [int_reg(0), int_reg(1)]),
+    ),
     content=(
       #|{
       #|  value_locations: [Some(Spill(0)), Some(Spill(0)), Some(Spill(0))],
@@ -756,11 +787,11 @@ test "backtracking reloads a resident segment only once" {
     value_count: 1,
     blocks: [[0, 1], [2], [3, 4]],
     instructions: [
-      [Operand::use_reg(value(0))],
-      [Operand::use_reg(value(0))],
+      [@regalloc.Operand::use_reg(value(0))],
+      [@regalloc.Operand::use_reg(value(0))],
       [],
-      [Operand::use_reg(value(0))],
-      [Operand::use_reg(value(0))],
+      [@regalloc.Operand::use_reg(value(0))],
+      [@regalloc.Operand::use_reg(value(0))],
     ],
     clobbers: [[], [], [int_reg(0)], [], []],
     successors: [[1], [2], []],
@@ -768,9 +799,9 @@ test "backtracking reloads a resident segment only once" {
     parameters: [[], [], []],
     edge_arguments: [[[]], [[]], []],
   }
-  let plan = allocate_function(
+  let plan = @regalloc.allocate_function(
     function,
-    MachineEnv::new([int_reg(0)], [int_reg(1)]),
+    @regalloc.MachineEnv::new([int_reg(0)], [int_reg(1)]),
   )
   debug_inspect(
     plan.edits(),
@@ -801,9 +832,9 @@ test "backtracking coalesces conflict-free edges and preserves loop transfers" {
     instructions: [
       [],
       [
-        Operand::use_reg(value(3)).with_timing(Early),
-        Operand::use_reg(value(4)).with_timing(Early),
-        Operand::def(value(6)).with_timing(Late),
+        @regalloc.Operand::use_reg(value(3)).with_timing(Early),
+        @regalloc.Operand::use_reg(value(4)).with_timing(Early),
+        @regalloc.Operand::def(value(6)).with_timing(Late),
       ],
       [],
     ],
@@ -817,11 +848,12 @@ test "backtracking coalesces conflict-free edges and preserves loop transfers" {
     ],
   }
   inspect(
-    allocate_function(
+    @regalloc.allocate_function(
       function,
-      MachineEnv::new([int_reg(0), int_reg(1), int_reg(2), int_reg(3)], [
-        int_reg(4),
-      ]),
+      @regalloc.MachineEnv::new(
+        [int_reg(0), int_reg(1), int_reg(2), int_reg(3)],
+        [int_reg(4)],
+      ),
     ),
     content=(
       #|{
@@ -865,9 +897,9 @@ test "backtracking coalesces the conflict-free side of a critical-edge parameter
     value_count: 3,
     blocks: [[0], [1], [2]],
     instructions: [
-      [Operand::use_reg(value(0))],
-      [Operand::def(value(1))],
-      [Operand::use_reg(value(2))],
+      [@regalloc.Operand::use_reg(value(0))],
+      [@regalloc.Operand::def(value(1))],
+      [@regalloc.Operand::use_reg(value(2))],
     ],
     clobbers: [[], [], []],
     successors: [[1, 2], [2], []],
@@ -876,9 +908,9 @@ test "backtracking coalesces the conflict-free side of a critical-edge parameter
     edge_arguments: [[[], [value(0)]], [[value(1)]], []],
   }
   inspect(
-    allocate_function(
+    @regalloc.allocate_function(
       function,
-      MachineEnv::new([int_reg(0), int_reg(1)], [int_reg(2)]),
+      @regalloc.MachineEnv::new([int_reg(0), int_reg(1)], [int_reg(2)]),
     ),
     content=(
       #|{
@@ -901,7 +933,7 @@ test "soft register preference chooses a legal home without an edit" {
     value_count: 1,
     instructions: [
       [
-        Operand::use_reg(value(0))
+        @regalloc.Operand::use_reg(value(0))
         .with_constraint(AnyLocation)
         .with_preference(int_reg(2)),
       ],
@@ -909,9 +941,11 @@ test "soft register preference chooses a legal home without an edit" {
     block_parameters: [value(0)],
   }
   inspect(
-    allocate_function(
+    @regalloc.allocate_function(
       function,
-      MachineEnv::new([int_reg(0), int_reg(1), int_reg(2)], [int_reg(3)]),
+      @regalloc.MachineEnv::new([int_reg(0), int_reg(1), int_reg(2)], [
+        int_reg(3),
+      ]),
     ),
     content=(
       #|{
@@ -930,7 +964,7 @@ test "non-allocatable register preference is rejected structurally" {
     value_count: 1,
     instructions: [
       [
-        Operand::use_reg(value(0))
+        @regalloc.Operand::use_reg(value(0))
         .with_constraint(AnyLocation)
         .with_preference(int_reg(9)),
       ],
@@ -938,7 +972,10 @@ test "non-allocatable register preference is rejected structurally" {
     block_parameters: [value(0)],
   }
   try
-    allocate_function(function, MachineEnv::new([int_reg(0)], [int_reg(1)]))
+    @regalloc.allocate_function(
+      function,
+      @regalloc.MachineEnv::new([int_reg(0)], [int_reg(1)]),
+    )
   catch {
     error =>
       debug_inspect(
@@ -958,13 +995,17 @@ test "backtracking honors a fixed-register operand" {
     value_count: 1,
     block_parameters: [value(0)],
     instructions: [
-      [Operand::use_reg(value(0)).with_constraint(FixedReg(int_reg(1)))],
+      [
+        @regalloc.Operand::use_reg(value(0)).with_constraint(
+          FixedReg(int_reg(1)),
+        ),
+      ],
     ],
   }
   inspect(
-    allocate_function(
+    @regalloc.allocate_function(
       function,
-      MachineEnv::new([int_reg(0), int_reg(1)], [int_reg(2)]),
+      @regalloc.MachineEnv::new([int_reg(0), int_reg(1)], [int_reg(2)]),
     ),
     content=(
       #|{
@@ -984,10 +1025,14 @@ test "backtracking preserves tied and fixed operands across a clobber" {
     blocks: [[0, 1]],
     instructions: [
       [
-        Operand::use_reg(value(0)).with_tie(0),
-        Operand::def(value(1)).with_tie(0),
+        @regalloc.Operand::use_reg(value(0)).with_tie(0),
+        @regalloc.Operand::def(value(1)).with_tie(0),
       ],
-      [Operand::use_reg(value(1)).with_constraint(FixedReg(int_reg(1)))],
+      [
+        @regalloc.Operand::use_reg(value(1)).with_constraint(
+          FixedReg(int_reg(1)),
+        ),
+      ],
     ],
     clobbers: [[], [int_reg(0)]],
     successors: [[]],
@@ -995,9 +1040,9 @@ test "backtracking preserves tied and fixed operands across a clobber" {
     parameters: [[]],
     edge_arguments: [[]],
   }
-  let plan = allocate_function(
+  let plan = @regalloc.allocate_function(
     function,
-    MachineEnv::new([int_reg(0), int_reg(1)], [int_reg(2)]),
+    @regalloc.MachineEnv::new([int_reg(0), int_reg(1)], [int_reg(2)]),
   )
   debug_inspect(
     (
@@ -1018,12 +1063,17 @@ test "backtracking applies AnyReg to a sparse tied group" {
     block_parameters: [value(0)],
     instructions: [
       [
-        Operand::use_reg(value(0)).with_constraint(AnyLocation).with_tie(7),
-        Operand::def(value(1)).with_constraint(AnyReg).with_tie(7),
+        @regalloc.Operand::use_reg(value(0))
+        .with_constraint(AnyLocation)
+        .with_tie(7),
+        @regalloc.Operand::def(value(1)).with_constraint(AnyReg).with_tie(7),
       ],
     ],
   }
-  let plan = allocate_function(function, MachineEnv::new([], [int_reg(0)]))
+  let plan = @regalloc.allocate_function(
+    function,
+    @regalloc.MachineEnv::new([], [int_reg(0)]),
+  )
   debug_inspect(
     (plan.operand_location(0, 0), plan.operand_location(0, 1)),
     content=(
@@ -1039,22 +1089,22 @@ test "backtracking borrows an allocatable register when spill temporaries are ex
     block_parameters: [value(0), value(1), value(2), value(3)],
     instructions: [
       [
-        Operand::use_reg(value(1)),
-        Operand::use_reg(value(2)),
-        Operand::use_reg(value(3)),
+        @regalloc.Operand::use_reg(value(1)),
+        @regalloc.Operand::use_reg(value(2)),
+        @regalloc.Operand::use_reg(value(3)),
       ],
       [
-        Operand::use_reg(value(0)),
-        Operand::use_reg(value(0)),
-        Operand::use_reg(value(0)),
-        Operand::use_reg(value(0)),
+        @regalloc.Operand::use_reg(value(0)),
+        @regalloc.Operand::use_reg(value(0)),
+        @regalloc.Operand::use_reg(value(0)),
+        @regalloc.Operand::use_reg(value(0)),
       ],
     ],
   }
   inspect(
-    allocate_function(
+    @regalloc.allocate_function(
       function,
-      MachineEnv::new([int_reg(0)], [int_reg(1), int_reg(2)]),
+      @regalloc.MachineEnv::new([int_reg(0)], [int_reg(1), int_reg(2)]),
     ),
     content=(
       #|{
@@ -1117,19 +1167,23 @@ test "backtracking keeps edit-only scratch registers out of instruction operands
     value_count: 3,
     block_parameters: [value(0), value(1), value(2)],
     instructions: [
-      [Operand::use_reg(value(1)), Operand::use_reg(value(2))],
       [
-        Operand::use_reg(value(0)),
-        Operand::use_reg(value(0)),
-        Operand::use_reg(value(0)),
-        Operand::use_reg(value(0)),
+        @regalloc.Operand::use_reg(value(1)),
+        @regalloc.Operand::use_reg(value(2)),
+      ],
+      [
+        @regalloc.Operand::use_reg(value(0)),
+        @regalloc.Operand::use_reg(value(0)),
+        @regalloc.Operand::use_reg(value(0)),
+        @regalloc.Operand::use_reg(value(0)),
       ],
     ],
   }
-  let environment = MachineEnv::new([int_reg(0), int_reg(1)], [int_reg(2)]).with_operand_scratch_regs([],
-  )
+  let environment = @regalloc.MachineEnv::new([int_reg(0), int_reg(1)], [
+    int_reg(2),
+  ]).with_operand_scratch_regs([])
   inspect(
-    allocate_function(function, environment),
+    @regalloc.allocate_function(function, environment),
     content=(
       #|{
       #|  value_locations: [Some(Reg(p0:int)), Some(Reg(p1:int)), Some(Spill(0))],
@@ -1179,7 +1233,7 @@ test "backtracking keeps edit-only scratch registers out of instruction operands
 /// this drives the real path rather than a contrived one.
 test "a failed allocation still ends the observer's phase sequence" {
   let events : Array[String] = []
-  let config = RegallocConfig::RegallocConfig(
+  let config = @regalloc.RegallocConfig::RegallocConfig(
     observer=Some(phase => {
       events.push(
         match phase {
@@ -1192,13 +1246,21 @@ test "a failed allocation still ends the observer's phase sequence" {
   let function : TestFunction = {
     value_count: 1,
     instructions: [
-      [Operand::use_reg(value(0)).with_constraint(FixedReg(int_reg(9)))],
+      [
+        @regalloc.Operand::use_reg(value(0)).with_constraint(
+          FixedReg(int_reg(9)),
+        ),
+      ],
     ],
     block_parameters: [value(0)],
   }
   let mut raised = false
   try
-    allocate_function(function, MachineEnv::new([int_reg(0)], []), config~)
+    @regalloc.allocate_function(
+      function,
+      @regalloc.MachineEnv::new([int_reg(0)], []),
+      config~,
+    )
     |> ignore
   catch {
     _ => raised = true
@@ -1218,7 +1280,7 @@ test "a failed allocation still ends the observer's phase sequence" {
 /// inside the preceding caller-owned phase.
 test "an input-validation rejection closes its attributed phase" {
   let events : Array[String] = []
-  let config = RegallocConfig::RegallocConfig(
+  let config = @regalloc.RegallocConfig::RegallocConfig(
     observer=Some(phase => {
       events.push(
         match phase {
@@ -1232,7 +1294,7 @@ test "an input-validation rejection closes its attributed phase" {
     value_count: 1,
     instructions: [
       [
-        Operand::use_reg(value(0))
+        @regalloc.Operand::use_reg(value(0))
         .with_constraint(AnyLocation)
         .with_preference(int_reg(9)),
       ],
@@ -1241,9 +1303,9 @@ test "an input-validation rejection closes its attributed phase" {
   }
   let mut raised = false
   try
-    allocate_function(
+    @regalloc.allocate_function(
       function,
-      MachineEnv::new([int_reg(0)], [int_reg(1)]),
+      @regalloc.MachineEnv::new([int_reg(0)], [int_reg(1)]),
       config~,
     )
     |> ignore
@@ -1256,24 +1318,32 @@ test "an input-validation rejection closes its attributed phase" {
 
 ///|
 test "allocation session resets scratch between serial functions" {
-  let environment = MachineEnv::new([int_reg(0), int_reg(1)], [int_reg(2)])
+  let environment = @regalloc.MachineEnv::new([int_reg(0), int_reg(1)], [
+    int_reg(2),
+  ])
   let larger : TestFunction = {
     value_count: 3,
     instructions: [
-      [Operand::def(value(0)), Operand::def(value(1))],
-      [Operand::use_reg(value(0)), Operand::def(value(2))],
-      [Operand::use_reg(value(1)), Operand::use_reg(value(2))],
+      [@regalloc.Operand::def(value(0)), @regalloc.Operand::def(value(1))],
+      [@regalloc.Operand::use_reg(value(0)), @regalloc.Operand::def(value(2))],
+      [
+        @regalloc.Operand::use_reg(value(1)),
+        @regalloc.Operand::use_reg(value(2)),
+      ],
     ],
     block_parameters: [],
   }
   let smaller : TestFunction = {
     value_count: 1,
-    instructions: [[Operand::def(value(0))], [Operand::use_reg(value(0))]],
+    instructions: [
+      [@regalloc.Operand::def(value(0))],
+      [@regalloc.Operand::use_reg(value(0))],
+    ],
     block_parameters: [],
   }
-  let expected_larger = allocate_function(larger, environment).to_string()
-  let expected_smaller = allocate_function(smaller, environment).to_string()
-  let session = AllocationSession::new()
+  let expected_larger = @regalloc.allocate_function(larger, environment).to_string()
+  let expected_smaller = @regalloc.allocate_function(smaller, environment).to_string()
+  let session = @regalloc.AllocationSession::new()
   inspect(
     session.allocate_function(larger, environment).to_string() ==
     expected_larger,

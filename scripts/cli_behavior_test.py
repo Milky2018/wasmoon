@@ -17,6 +17,7 @@ CI runs this as its own step after the build.
 from __future__ import annotations
 
 import re
+import os
 import subprocess
 import sys
 import tempfile
@@ -25,7 +26,7 @@ from native_process import executable
 
 
 ROOT = Path(__file__).resolve().parents[1]
-WASMOON = executable(ROOT, "wasmoon")
+WASMOON = Path(os.environ.get("WASMOON", str(executable(ROOT, "wasmoon")))).resolve()
 MANIFEST = ROOT / "modules/wasmoon/moon.mod"
 
 PASSING_WAST = """(module (func (export "one") (result i32) (i32.const 1)))
@@ -375,6 +376,27 @@ def check_explore_selection(tmp: Path) -> None:
         f"stdout={proc.stdout!r}, stderr={proc.stderr!r}",
     )
 
+def check_component_exit_status(tmp: Path) -> None:
+    template = '(component\n  (import "wasi:cli/exit@0.3.0" (instance $exit (export "exit-with-code" (func (param "status-code" u8)))))\n  (core func $exit (canon lower (func $exit "exit-with-code")))\n  (core module $M\n    (import "" "exit" (func $exit (param i32)))\n    (func (export "run") (result i32) i32.const 7 call $exit i32.const 0))\n  (core instance $m (instantiate $M (with "" (instance (export "exit" (func $exit))))))\n  (func $run (result (result)) (canon lift (core func $m "run")))\n  (instance $command (export "run" (func $run)))\n  (export "wasi:cli/run@0.2.11" (instance $command)))\n'
+    for status in [0, 1, 7, 125]:
+        source = tmp / "exit.wat"
+        binary = tmp / "exit.wasm"
+        source.write_text(template.replace("i32.const 7", f"i32.const {status}"))
+        subprocess.run(["wasm-tools", "parse", str(source), "-o", str(binary)], check=True, timeout=30)
+        for engine in [(), ("--no-jit",)]:
+            for http in [(), ("--http",)]:
+                proc = run("component", "--run", *engine, *http, str(binary))
+                expect(f"component exit({status}) {engine} {http}",
+                       proc.returncode == status and not proc.stdout and not proc.stderr,
+                       f"exit={proc.returncode} stderr={proc.stderr!r}")
+    source.write_text(template.replace("wasi:cli/exit@0.3.0", "test:missing/exit@0.3.0"))
+    subprocess.run(["wasm-tools", "parse", str(source), "-o", str(binary)], check=True, timeout=30)
+    proc = run("component", "--run", str(binary))
+    expect("component startup errors cannot impersonate guest exit(1)",
+           proc.returncode == 125 and not proc.stdout and "component instantiate error:" in proc.stderr,
+           f"exit={proc.returncode} stderr={proc.stderr!r}")
+
+
 def main() -> int:
     if not WASMOON.exists():
         print(
@@ -392,6 +414,7 @@ def main() -> int:
             check_invalid_modules(Path(directory))
             check_malformed_type_kind_across_commands(Path(directory))
             check_explore_selection(Path(directory))
+            check_component_exit_status(Path(directory))
     except Failure as failure:
         print(f"FAILED {failure}", file=sys.stderr)
         return 1

@@ -123,7 +123,7 @@ fn instantiate_canon_subtask_cancel(
     // STARTED is not a cancellation result and cannot wake this synchronous wait.
     remove_waitable_events_for(async_state, owner_component_id, id, 1)
     mark_sync_waitable_blocked(async_state, owner_component_id, id, caller_task)
-    canon_suspend[0] = Some(Yield)
+    @core.set_suspension(Some(Yield))
     raise Unreachable
   }
   state.core_funcs.push(

@@ -1,0 +1,32 @@
+{
+  "base_commit": "172b3978",
+  "platform": "macOS ARM64",
+  "runtime": "fresh release from ./install.sh",
+  "native_tests": {
+    "passed": 2547,
+    "failed": 0
+  },
+  "strict_check": "moon check --target native --warn-list +73 --deny-warn passed",
+  "python_tests": {
+    "total": 160,
+    "skipped": 52,
+    "failed": 0
+  },
+  "component_suites_each_engine": {
+    "stable-0.2": {
+      "files": 23,
+      "commands": 845
+    },
+    "async-0.3": {
+      "files": 24,
+      "commands": 153
+    },
+    "future-gated": {
+      "files": 12,
+      "commands": 387
+    }
+  },
+  "cli_exit_controls": "0, 1, 7, 125; JIT/interpreter; normal and HTTP composition; startup error 125 with diagnostic",
+  "http_cli": "both engines passed streaming, URI, trailers, middleware, concurrency, proxy, denial and disconnect recovery",
+  "cross_platform_ci": "pending"
+}

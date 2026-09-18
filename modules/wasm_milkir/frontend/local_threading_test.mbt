@@ -51,9 +51,13 @@ fn locals_by_merges(
 /// signature contributes nothing to the comparison.
 fn merge_params(num_locals : Int, num_merges : Int, written : Int) -> Int raise {
   let baseline = count_block_params(
-    translate_function(native_test_env(), locals_by_merges(num_locals, 0, 0), 0),
+    @frontend.translate_function(
+      native_test_env(),
+      locals_by_merges(num_locals, 0, 0),
+      0,
+    ),
   )
-  let func = translate_function(
+  let func = @frontend.translate_function(
     native_test_env(),
     locals_by_merges(num_locals, num_merges, written),
     0,
@@ -70,7 +74,7 @@ test "br_if passes block arguments without a taken trampoline" {
     [Block(Value(I32), [I32Const(7), LocalGet(0), BrIf(0), Drop, I32Const(9)])],
     "direct_br_if_args",
   )
-  let func = translate_function(native_test_env(), mod_, 0)
+  let func = @frontend.translate_function(native_test_env(), mod_, 0)
   @wasm_milkir.verify_function(func)
   let text = func.print()
   inspect(text.contains("branch "), content="true")
@@ -120,10 +124,10 @@ test "a nested write reaches every enclosing merge" {
     [Block(Empty, [Block(Empty, [Loop(Empty, inner)])])],
     "nested",
   )
-  let func = translate_function(native_test_env(), mod_, 0)
+  let func = @frontend.translate_function(native_test_env(), mod_, 0)
   @wasm_milkir.verify_function(func)
   let baseline = count_block_params(
-    translate_function(
+    @frontend.translate_function(
       native_test_env(),
       @types.Module::simple([I32, I32, I32, I32], [], [], "nested"),
       0,
@@ -147,10 +151,10 @@ test "an if carries what either arm writes" {
     ],
     "either_arm",
   )
-  let func = translate_function(native_test_env(), mod_, 0)
+  let func = @frontend.translate_function(native_test_env(), mod_, 0)
   @wasm_milkir.verify_function(func)
   let baseline = count_block_params(
-    translate_function(
+    @frontend.translate_function(
       native_test_env(),
       @types.Module::simple([I32, I32, I32], [], [], "either_arm"),
       0,

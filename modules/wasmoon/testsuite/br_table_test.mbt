@@ -11,9 +11,18 @@ test "br_table_empty" {
     #|    (i32.const 22)
     #|  )
     #|)
-  inspect(compare_jit_interp(source, "empty", [I32(0)]), content="matched")
-  inspect(compare_jit_interp(source, "empty", [I32(1)]), content="matched")
-  inspect(compare_jit_interp(source, "empty", [I32(-1)]), content="matched")
+  inspect(
+    @testsuite.compare_jit_interp(source, "empty", [I32(0)]),
+    content="matched",
+  )
+  inspect(
+    @testsuite.compare_jit_interp(source, "empty", [I32(1)]),
+    content="matched",
+  )
+  inspect(
+    @testsuite.compare_jit_interp(source, "empty", [I32(-1)]),
+    content="matched",
+  )
 }
 
 ///|
@@ -32,12 +41,24 @@ test "br_table_singleton" {
     #|  )
     #|)
   // index 0 -> branch to label 1 -> returns 22
-  inspect(compare_jit_interp(source, "singleton", [I32(0)]), content="matched")
+  inspect(
+    @testsuite.compare_jit_interp(source, "singleton", [I32(0)]),
+    content="matched",
+  )
   // index 1 -> branch to label 0 (default) -> returns 20
-  inspect(compare_jit_interp(source, "singleton", [I32(1)]), content="matched")
+  inspect(
+    @testsuite.compare_jit_interp(source, "singleton", [I32(1)]),
+    content="matched",
+  )
   // index >= table length -> use default (label 0) -> returns 20
-  inspect(compare_jit_interp(source, "singleton", [I32(11)]), content="matched")
-  inspect(compare_jit_interp(source, "singleton", [I32(-1)]), content="matched")
+  inspect(
+    @testsuite.compare_jit_interp(source, "singleton", [I32(11)]),
+    content="matched",
+  )
+  inspect(
+    @testsuite.compare_jit_interp(source, "singleton", [I32(-1)]),
+    content="matched",
+  )
 }
 
 ///|
@@ -58,17 +79,17 @@ test "br_table_singleton_value" {
     #|)
   // index 0 -> label 0 (inner block) with value 33, dropped, returns 32
   inspect(
-    compare_jit_interp(source, "singleton-value", [I32(0)]),
+    @testsuite.compare_jit_interp(source, "singleton-value", [I32(0)]),
     content="matched",
   )
   // index 1 -> label 1 (outer block, default) with value 33, returns 33
   inspect(
-    compare_jit_interp(source, "singleton-value", [I32(1)]),
+    @testsuite.compare_jit_interp(source, "singleton-value", [I32(1)]),
     content="matched",
   )
   // index >= 2 -> default (label 1) with value 33, returns 33
   inspect(
-    compare_jit_interp(source, "singleton-value", [I32(11)]),
+    @testsuite.compare_jit_interp(source, "singleton-value", [I32(11)]),
     content="matched",
   )
 }
@@ -98,18 +119,39 @@ test "br_table_multiple" {
     #|  )
     #|)
   // index 0 -> label 3 -> return 103
-  inspect(compare_jit_interp(source, "multiple", [I32(0)]), content="matched")
+  inspect(
+    @testsuite.compare_jit_interp(source, "multiple", [I32(0)]),
+    content="matched",
+  )
   // index 1 -> label 2 -> return 102
-  inspect(compare_jit_interp(source, "multiple", [I32(1)]), content="matched")
+  inspect(
+    @testsuite.compare_jit_interp(source, "multiple", [I32(1)]),
+    content="matched",
+  )
   // index 2 -> label 1 -> return 101
-  inspect(compare_jit_interp(source, "multiple", [I32(2)]), content="matched")
+  inspect(
+    @testsuite.compare_jit_interp(source, "multiple", [I32(2)]),
+    content="matched",
+  )
   // index 3 -> label 0 -> return 100
-  inspect(compare_jit_interp(source, "multiple", [I32(3)]), content="matched")
+  inspect(
+    @testsuite.compare_jit_interp(source, "multiple", [I32(3)]),
+    content="matched",
+  )
   // index 4 -> label 4 (default) -> return 104
-  inspect(compare_jit_interp(source, "multiple", [I32(4)]), content="matched")
+  inspect(
+    @testsuite.compare_jit_interp(source, "multiple", [I32(4)]),
+    content="matched",
+  )
   // index >= 5 -> default -> return 104
-  inspect(compare_jit_interp(source, "multiple", [I32(5)]), content="matched")
-  inspect(compare_jit_interp(source, "multiple", [I32(-1)]), content="matched")
+  inspect(
+    @testsuite.compare_jit_interp(source, "multiple", [I32(5)]),
+    content="matched",
+  )
+  inspect(
+    @testsuite.compare_jit_interp(source, "multiple", [I32(-1)]),
+    content="matched",
+  )
 }
 
 ///|
@@ -137,7 +179,7 @@ test "br_table_nested_br_table_loop_block" {
   // First loop: index=1 -> label 0 (block) -> continue to i32.const 0 -> local 0 = 0
   // Second loop: index=0 -> label 0 (block) -> continue to i32.const 3 -> return 3
   inspect(
-    compare_jit_interp(source, "nested-br_table-loop-block", [I32(1)]),
+    @testsuite.compare_jit_interp(source, "nested-br_table-loop-block", [I32(1)]),
     content="matched",
   )
 }
@@ -153,7 +195,10 @@ test "br_table_as_block_value" {
     #|    )
     #|  )
     #|)
-  inspect(compare_jit_interp(source, "as-block-value", []), content="matched")
+  inspect(
+    @testsuite.compare_jit_interp(source, "as-block-value", []),
+    content="matched",
+  )
 }
 
 ///|
@@ -164,5 +209,8 @@ test "br_table_as_loop_first" {
     #|    (loop (result i32) (br_table 1 1 (i32.const 3) (i32.const 0)) (i32.const 1))
     #|  )
     #|)
-  inspect(compare_jit_interp(source, "as-loop-first", []), content="matched")
+  inspect(
+    @testsuite.compare_jit_interp(source, "as-loop-first", []),
+    content="matched",
+  )
 }

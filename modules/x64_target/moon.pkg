@@ -1,4 +1,5 @@
 import {
+  "Milky2018/x64_target/internal/emit" @encoding,
   "Milky2018/vcode/native_types" @native,
   "Milky2018/vcode/native_lowering" @lowering,
   "Milky2018/vcode",

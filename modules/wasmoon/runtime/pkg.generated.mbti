@@ -4,6 +4,7 @@ package "Milky2018/wasmoon/runtime"
 import {
   "Milky2018/wasm_core/types",
   "Milky2018/wasmoon_jit",
+  "Milky2018/wasmoon_jit/native/execution",
   "moonbitlang/core/debug",
 }
 
@@ -566,7 +567,7 @@ pub struct Store {
   jit_tables : Array[@wasmoon_jit.JITTable?]
   mut wasi_mem_addr : Int?
   mut wasi_ctx_handle : Int
-  native_execution : @wasmoon_jit.NativeExecutionState
+  native_execution : @execution.NativeExecutionState
   // private fields
 } derive(@debug.Debug)
 pub fn Store::Store(nan_canonicalization? : Bool, interpreter_limits? : InterpreterLimits) -> Self
@@ -627,7 +628,7 @@ pub fn Store::leave_interpreter_boundary(Self) -> Unit
 pub fn Store::lookup_jit_funcref_ptr(Self, Int) -> Int64?
 pub fn Store::lookup_jit_funcref_store_addr(Self, Int64) -> Int?
 pub fn Store::maybe_collect(Self, additional_roots? : Array[@types.Value], threshold? : Double) -> Int
-pub fn Store::native_execution_state(Self) -> @wasmoon_jit.NativeExecutionState
+pub fn Store::native_execution_state(Self) -> @execution.NativeExecutionState
 pub fn Store::native_type_indices(Self, ModuleInstance) -> Array[Int]
 pub fn Store::native_type_parents(Self) -> Array[Int]
 pub fn Store::pin_gc_roots(Self, Array[@types.Value]) -> GcRootLease

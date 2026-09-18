@@ -7,7 +7,7 @@ test "memory.grow: basic grow returns old size" {
     #|    (memory.grow (i32.const 1))
     #|  )
     #|)
-  let result = compare_jit_interp(source, "test", [])
+  let result = @testsuite.compare_jit_interp(source, "test", [])
   inspect(result, content="matched")
 }
 
@@ -20,7 +20,7 @@ test "memory.grow: grow by 0 returns current size" {
     #|    (memory.grow (i32.const 0))
     #|  )
     #|)
-  let result = compare_jit_interp(source, "test", [])
+  let result = @testsuite.compare_jit_interp(source, "test", [])
   inspect(result, content="matched")
 }
 
@@ -34,7 +34,7 @@ test "memory.grow: grow with dynamic delta" {
     #|  )
     #|)
   // grow by 0 returns current size (1)
-  let result = compare_jit_interp(source, "test", [I32(0)])
+  let result = @testsuite.compare_jit_interp(source, "test", [I32(0)])
   inspect(result, content="matched")
 }
 
@@ -48,7 +48,7 @@ test "memory.grow: fails when exceeding max limit" {
     #|    (memory.grow (i32.const 2))
     #|  )
     #|)
-  let result = compare_jit_interp(source, "test", [])
+  let result = @testsuite.compare_jit_interp(source, "test", [])
   // Both JIT and interpreter should return -1 (failure)
   inspect(result, content="matched")
 }
@@ -63,7 +63,7 @@ test "memory.grow: succeeds when within max limit" {
     #|    (memory.grow (i32.const 1))
     #|  )
     #|)
-  let result = compare_jit_interp(source, "test", [])
+  let result = @testsuite.compare_jit_interp(source, "test", [])
   // Both should return 1 (old size before grow)
   inspect(result, content="matched")
 }
@@ -77,7 +77,7 @@ test "memory.size: returns initial size" {
     #|    (memory.size)
     #|  )
     #|)
-  let result = compare_jit_interp(source, "test", [])
+  let result = @testsuite.compare_jit_interp(source, "test", [])
   inspect(result, content="matched")
 }
 
@@ -91,7 +91,7 @@ test "memory: store and load i32" {
     #|    (i32.load (i32.const 100))
     #|  )
     #|)
-  let result = compare_jit_interp(source, "test", [])
+  let result = @testsuite.compare_jit_interp(source, "test", [])
   inspect(result, content="matched")
 }
 
@@ -112,6 +112,6 @@ test "memory: store and load at different offsets" {
     #|      (i32.load (i32.const 8)))
     #|  )
     #|)
-  let result = compare_jit_interp(source, "test", [])
+  let result = @testsuite.compare_jit_interp(source, "test", [])
   inspect(result, content="matched")
 }

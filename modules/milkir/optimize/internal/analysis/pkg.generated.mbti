@@ -1,0 +1,45 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "Milky2018/milkir/optimize/internal/analysis"
+
+import {
+  "Milky2018/milkir",
+}
+
+// Values
+pub fn compute_use_counts(@milkir.Function) -> Array[Int]
+
+pub fn is_cheap_rematerializable_constant(@milkir.Inst) -> Bool
+
+pub fn opcode_semantics(@milkir.Opcode) -> OpcodeSemantics
+
+// Errors
+
+// Types and methods
+pub struct FunctionAnalysis {
+  cfg : @milkir.CFG
+  dominance : @milkir.Dominance
+  domtree : Array[Array[Int]]
+  block_idx : Array[Int]
+}
+pub fn FunctionAnalysis::build(@milkir.Function) -> Self
+
+pub(all) enum MemoryEffect {
+  None
+  Read
+  Write
+  Unknown
+}
+pub fn MemoryEffect::may_write_memory(Self) -> Bool
+pub fn MemoryEffect::reads_memory(Self) -> Bool
+
+pub struct OpcodeSemantics {
+  memory : MemoryEffect
+  may_trap : Bool
+  other_observable_effect : Bool
+}
+pub fn OpcodeSemantics::can_stage_as_pure_candidate(Self) -> Bool
+pub fn OpcodeSemantics::must_preserve_if_unused(Self) -> Bool
+
+// Type aliases
+
+// Traits

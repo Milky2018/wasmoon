@@ -1,0 +1,37 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "Milky2018/wasmoon_jit/jit_ffi"
+
+import {
+  "Milky2018/wasm_core/types",
+}
+
+// Values
+pub fn alloc_exec_managed(FixedArray[Byte], Int) -> ExecCodeHandle
+
+pub fn exec_code_pointer(ExecCodeHandle) -> Int64
+
+pub fn finalize_exec_managed(ExecCodeHandle, FixedArray[Byte], Int) -> Int
+
+pub fn release_exec_managed(ExecCodeHandle) -> Int
+
+pub fn stage_exec_managed(Int) -> ExecCodeHandle
+
+// Errors
+
+// Types and methods
+type ExecCodeHandle
+
+type NativeContinuationArena
+pub fn NativeContinuationArena::clear(Self) -> Unit
+pub fn NativeContinuationArena::new() -> Self
+
+type NativeExceptionArena
+pub fn NativeExceptionArena::clear(Self) -> Unit
+pub fn NativeExceptionArena::define_tag(Self, Int, Array[@types.ValueType]) -> Bool
+pub fn NativeExceptionArena::insert(Self, Int64, Int, Array[Int64]) -> Int64
+pub fn NativeExceptionArena::new() -> Self
+pub fn NativeExceptionArena::snapshot(Self, Int64) -> (Int, Array[Int64])?
+
+// Type aliases
+
+// Traits

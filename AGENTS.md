@@ -19,6 +19,18 @@ adapters.
 
 ## Development
 
+Prefer semantic subpackages (`aaa/bbb.mbt`) over families of prefixed files
+(`aaa_bbb.mbt`, `aaa_ccc.mbt`) in one package. Keep dependencies acyclic and
+expose only the interface needed by callers. Preserve established public
+imports through reexports when moving their implementations. Keep a family in
+one package only for a concrete reason, such as target variants of one API or
+methods that require the same private state; record that reason when reviewing
+the boundary. A shared prefix alone is not a reason to expose private state.
+
+Review package organization and project style manually. Add automated style
+audits only with a mature audit framework and well-defined rules, rather than
+ad hoc filename or path matching.
+
 Make all ordinary changes directly on the long-lived `dev` branch. `main` is
 stable and receives periodic `dev` → `main` PRs; do not create topic branches
 unless explicitly requested.

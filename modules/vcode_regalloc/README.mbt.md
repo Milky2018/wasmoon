@@ -74,11 +74,12 @@ test "allocate Target VCode" {
   )
   |> ignore
   let function = builder.finish()
-  let allocation = allocate_vcode(
+  let allocation = @vcode_regalloc.allocate_vcode(
     function,
-    VCodeAllocationEnvironment::new([@vcode.PhysicalReg::new(0, Int)], [
-      @vcode.PhysicalReg::new(1, Int),
-    ]),
+    @vcode_regalloc.VCodeAllocationEnvironment::new(
+      [@vcode.PhysicalReg::new(0, Int)],
+      [@vcode.PhysicalReg::new(1, Int)],
+    ),
   )
   inspect(allocation.source_instruction_count(), content="2")
 }

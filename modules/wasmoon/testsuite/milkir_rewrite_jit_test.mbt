@@ -11,7 +11,9 @@ test "JIT: comparison rewrites preserve signed-extension semantics" {
     #|)
   for value in [-2147483648, -1, 0, 1, 2147483647] {
     assert_true(
-      compare_result_is_match(compare_jit_interp(source, "test", [I32(value)])),
+      @testsuite.compare_result_is_match(
+        @testsuite.compare_jit_interp(source, "test", [I32(value)]),
+      ),
     )
   }
 }
@@ -29,7 +31,9 @@ test "JIT: comparison rewrites preserve zero-extension sign facts" {
     #|)
   for value in [-2147483648, -1, 0, 1, 2147483647] {
     assert_true(
-      compare_result_is_match(compare_jit_interp(source, "test", [I32(value)])),
+      @testsuite.compare_result_is_match(
+        @testsuite.compare_jit_interp(source, "test", [I32(value)]),
+      ),
     )
   }
 }
@@ -48,7 +52,9 @@ test "JIT: shift-mask rewrite preserves edge values" {
     #|)
   for value in [-2147483648, -1, 0, 1, 2147483647] {
     assert_true(
-      compare_result_is_match(compare_jit_interp(source, "test", [I32(value)])),
+      @testsuite.compare_result_is_match(
+        @testsuite.compare_jit_interp(source, "test", [I32(value)]),
+      ),
     )
   }
 }
@@ -67,8 +73,11 @@ test "JIT: opposite-rotation cancellation preserves masked amounts" {
     #|)
   for amount in [0, 1, 31, 32, 63, -1] {
     assert_true(
-      compare_result_is_match(
-        compare_jit_interp(source, "test", [I32(0x87654321), I32(amount)]),
+      @testsuite.compare_result_is_match(
+        @testsuite.compare_jit_interp(source, "test", [
+          I32(0x87654321),
+          I32(amount),
+        ]),
       ),
     )
   }
@@ -94,8 +103,11 @@ test "JIT: migrated modular arithmetic and comparisons preserve edge inputs" {
         (2147483647, -2147483648),
       ] {
       assert_true(
-        compare_result_is_match(
-          compare_jit_interp(source, "test", [I32(pair.0), I32(pair.1)]),
+        @testsuite.compare_result_is_match(
+          @testsuite.compare_jit_interp(source, "test", [
+            I32(pair.0),
+            I32(pair.1),
+          ]),
         ),
       )
     }
@@ -107,7 +119,9 @@ test "JIT: narrow shifts retain wide count semantics" {
   for amount in [0, 31, 32, 63, 64, -1] {
     let source = "(module (func (export \"test\") (param i32) (result i32) (i32.wrap_i64 (i64.shl (i64.extend_i32_u (local.get 0)) (i64.const \{amount})))))"
     assert_true(
-      compare_result_is_match(compare_jit_interp(source, "test", [I32(-1)])),
+      @testsuite.compare_result_is_match(
+        @testsuite.compare_jit_interp(source, "test", [I32(-1)]),
+      ),
     )
   }
 }
@@ -120,7 +134,11 @@ test "JIT: float migration preserves signed zero and ties to even" {
       "(f64.max (f64.const -0) (f64.const 0))", "(f64.neg (f64.const nan:0x42))",
     ] {
     let source = "(module (func (export \"test\") (result i64) (i64.reinterpret_f64 \{expression})))"
-    assert_true(compare_result_is_match(compare_jit_interp(source, "test", [])))
+    assert_true(
+      @testsuite.compare_result_is_match(
+        @testsuite.compare_jit_interp(source, "test", []),
+      ),
+    )
   }
 }
 
@@ -130,8 +148,11 @@ test "JIT: vector splat lifting preserves narrow lane wrapping" {
     let source = "(module (func (export \"test\") (param i32 i32) (result i32) (i32x4.extract_lane 0 (\{lane}.add (\{lane}.splat (local.get 0)) (\{lane}.splat (local.get 1))))))"
     for pair in [(-1, 1), (255, 1), (65535, 1), (-2147483648, -1)] {
       assert_true(
-        compare_result_is_match(
-          compare_jit_interp(source, "test", [I32(pair.0), I32(pair.1)]),
+        @testsuite.compare_result_is_match(
+          @testsuite.compare_jit_interp(source, "test", [
+            I32(pair.0),
+            I32(pair.1),
+          ]),
         ),
       )
     }

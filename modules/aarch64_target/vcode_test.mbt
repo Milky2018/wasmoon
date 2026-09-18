@@ -1,6 +1,6 @@
 ///|
 test "AArch64 owns a statically typed Target VCode checkpoint" {
-  let builder : @vcode.Builder[AArch64Inst] = @vcode.Builder::new_with_results(
+  let builder : @vcode.Builder[@aarch64_target.AArch64Inst] = @vcode.Builder::new_with_results(
     "a64_add",
     [I64, I64],
     [I64],
@@ -36,7 +36,7 @@ test "AArch64 owns a statically typed Target VCode checkpoint" {
   )
   |> ignore
   let function = builder.finish()
-  verify_vcode(function)
+  @aarch64_target.verify_vcode(function)
   inspect(
     function.summary(),
     content=(
@@ -52,7 +52,10 @@ test "AArch64 owns a statically typed Target VCode checkpoint" {
 
 ///|
 test "AArch64 verifier rejects an invalid 32-bit constant" {
-  let builder : @vcode.Builder[AArch64Inst] = @vcode.Builder::new("bad_const", [])
+  let builder : @vcode.Builder[@aarch64_target.AArch64Inst] = @vcode.Builder::new(
+    "bad_const",
+    [],
+  )
   let entry = builder.entry_block()
   builder.append_body(
     entry,
@@ -72,7 +75,7 @@ test "AArch64 verifier rejects an invalid 32-bit constant" {
     @vcode.InstructionMetadata::empty(),
   )
   |> ignore
-  verify_vcode(builder.finish()) catch {
+  @aarch64_target.verify_vcode(builder.finish()) catch {
     error =>
       inspect(
         error,
@@ -88,7 +91,7 @@ test "AArch64 verifier rejects an invalid 32-bit constant" {
 
 ///|
 test "AArch64 compile does not trust externally built VCode" {
-  let builder : @vcode.Builder[AArch64Inst] = @vcode.Builder::new(
+  let builder : @vcode.Builder[@aarch64_target.AArch64Inst] = @vcode.Builder::new(
     "external_bad_const",
     [],
   )
@@ -111,7 +114,7 @@ test "AArch64 compile does not trust externally built VCode" {
     @vcode.InstructionMetadata::empty(),
   )
   |> ignore
-  try compile(builder.finish()) |> ignore catch {
+  try @aarch64_target.compile(builder.finish()) |> ignore catch {
     error =>
       inspect(
         error,
@@ -131,7 +134,7 @@ test "AArch64 compile does not trust externally built VCode" {
 
 ///|
 test "AArch64 verifier rejects an out-of-range immediate shift" {
-  let builder : @vcode.Builder[AArch64Inst] = @vcode.Builder::new(
+  let builder : @vcode.Builder[@aarch64_target.AArch64Inst] = @vcode.Builder::new(
     "bad_immediate_shift",
     [I32],
   )
@@ -154,7 +157,7 @@ test "AArch64 verifier rejects an out-of-range immediate shift" {
     @vcode.InstructionMetadata::empty(),
   )
   |> ignore
-  try verify_vcode(builder.finish()) catch {
+  try @aarch64_target.verify_vcode(builder.finish()) catch {
     error =>
       inspect(
         error,
@@ -172,7 +175,7 @@ test "AArch64 verifier rejects an out-of-range immediate shift" {
 
 ///|
 test "AArch64 verifier rejects an out-of-range shifted add" {
-  let builder : @vcode.Builder[AArch64Inst] = @vcode.Builder::new(
+  let builder : @vcode.Builder[@aarch64_target.AArch64Inst] = @vcode.Builder::new(
     "bad_shifted_add",
     [I64, I64],
   )
@@ -198,7 +201,7 @@ test "AArch64 verifier rejects an out-of-range shifted add" {
     @vcode.InstructionMetadata::empty(),
   )
   |> ignore
-  try verify_vcode(builder.finish()) catch {
+  try @aarch64_target.verify_vcode(builder.finish()) catch {
     error =>
       inspect(
         error,
@@ -216,7 +219,7 @@ test "AArch64 verifier rejects an out-of-range shifted add" {
 
 ///|
 test "AArch64 verifier rejects an unencodable address immediate" {
-  let builder : @vcode.Builder[AArch64Inst] = @vcode.Builder::new(
+  let builder : @vcode.Builder[@aarch64_target.AArch64Inst] = @vcode.Builder::new(
     "bad_address_immediate",
     [Ptr64],
   )
@@ -239,7 +242,7 @@ test "AArch64 verifier rejects an unencodable address immediate" {
     @vcode.InstructionMetadata::empty(),
   )
   |> ignore
-  try verify_vcode(builder.finish()) catch {
+  try @aarch64_target.verify_vcode(builder.finish()) catch {
     error =>
       inspect(
         error,
@@ -257,7 +260,7 @@ test "AArch64 verifier rejects an unencodable address immediate" {
 
 ///|
 test "AArch64 verifier rejects duplicate switch cases" {
-  let builder : @vcode.Builder[AArch64Inst] = @vcode.Builder::new(
+  let builder : @vcode.Builder[@aarch64_target.AArch64Inst] = @vcode.Builder::new(
     "bad_switch",
     [I32],
   )
@@ -285,7 +288,7 @@ test "AArch64 verifier rejects duplicate switch cases" {
     @vcode.InstructionMetadata::empty(),
   )
   |> ignore
-  try verify_vcode(builder.finish()) catch {
+  try @aarch64_target.verify_vcode(builder.finish()) catch {
     error =>
       inspect(
         error,
@@ -303,7 +306,10 @@ test "AArch64 verifier rejects duplicate switch cases" {
 
 ///|
 test "AArch64 verifier requires typed trap metadata" {
-  let builder : @vcode.Builder[AArch64Inst] = @vcode.Builder::new("bad_trap", [])
+  let builder : @vcode.Builder[@aarch64_target.AArch64Inst] = @vcode.Builder::new(
+    "bad_trap",
+    [],
+  )
   builder.set_terminator(
     builder.entry_block(),
     Trap(Unreachable),
@@ -313,7 +319,7 @@ test "AArch64 verifier requires typed trap metadata" {
     @vcode.InstructionMetadata::empty(),
   )
   |> ignore
-  try verify_vcode(builder.finish()) catch {
+  try @aarch64_target.verify_vcode(builder.finish()) catch {
     error =>
       inspect(
         error,
@@ -331,7 +337,7 @@ test "AArch64 verifier requires typed trap metadata" {
 
 ///|
 test "AArch64 verifier rejects a vector splat with the wrong scalar bank" {
-  let builder : @vcode.Builder[AArch64Inst] = @vcode.Builder::new(
+  let builder : @vcode.Builder[@aarch64_target.AArch64Inst] = @vcode.Builder::new(
     "bad_vector_splat",
     [I64],
   )
@@ -354,7 +360,7 @@ test "AArch64 verifier rejects a vector splat with the wrong scalar bank" {
     @vcode.InstructionMetadata::empty(),
   )
   |> ignore
-  try verify_vcode(builder.finish()) catch {
+  try @aarch64_target.verify_vcode(builder.finish()) catch {
     error =>
       inspect(
         error,
@@ -367,7 +373,7 @@ test "AArch64 verifier rejects a vector splat with the wrong scalar bank" {
 
 ///|
 test "AArch64 verifier rejects an untied vector lane replacement" {
-  let builder : @vcode.Builder[AArch64Inst] = @vcode.Builder::new(
+  let builder : @vcode.Builder[@aarch64_target.AArch64Inst] = @vcode.Builder::new(
     "untied_vector_lane_replacement",
     [V128, I32],
   )
@@ -393,7 +399,7 @@ test "AArch64 verifier rejects an untied vector lane replacement" {
     @vcode.InstructionMetadata::empty(),
   )
   |> ignore
-  try verify_vcode(builder.finish()) catch {
+  try @aarch64_target.verify_vcode(builder.finish()) catch {
     error =>
       inspect(
         error,
@@ -411,7 +417,7 @@ test "AArch64 verifier rejects an untied vector lane replacement" {
 
 ///|
 test "AArch64 verifier rejects an out-of-range vector shuffle lane" {
-  let builder : @vcode.Builder[AArch64Inst] = @vcode.Builder::new(
+  let builder : @vcode.Builder[@aarch64_target.AArch64Inst] = @vcode.Builder::new(
     "invalid_vector_shuffle",
     [V128, V128],
   )
@@ -440,7 +446,7 @@ test "AArch64 verifier rejects an out-of-range vector shuffle lane" {
     @vcode.InstructionMetadata::empty(),
   )
   |> ignore
-  try verify_vcode(builder.finish()) catch {
+  try @aarch64_target.verify_vcode(builder.finish()) catch {
     error =>
       inspect(
         error,
@@ -458,7 +464,7 @@ test "AArch64 verifier rejects an out-of-range vector shuffle lane" {
 
 ///|
 test "AArch64 verifier rejects floating lanes for vector integer operations" {
-  let builder : @vcode.Builder[AArch64Inst] = @vcode.Builder::new(
+  let builder : @vcode.Builder[@aarch64_target.AArch64Inst] = @vcode.Builder::new(
     "invalid_vector_integer_lane",
     [V128],
   )
@@ -481,7 +487,7 @@ test "AArch64 verifier rejects floating lanes for vector integer operations" {
     @vcode.InstructionMetadata::empty(),
   )
   |> ignore
-  try verify_vcode(builder.finish()) catch {
+  try @aarch64_target.verify_vcode(builder.finish()) catch {
     error =>
       inspect(
         error,
@@ -511,7 +517,7 @@ fn test_platform_call_clobbers() -> Array[@vcode.PhysicalReg] {
 
 ///|
 test "AArch64 verifier rejects a call with missing ABI results" {
-  let builder : @vcode.Builder[AArch64Inst] = @vcode.Builder::new(
+  let builder : @vcode.Builder[@aarch64_target.AArch64Inst] = @vcode.Builder::new(
     "missing_call_result",
     [],
   )
@@ -537,7 +543,7 @@ test "AArch64 verifier rejects a call with missing ABI results" {
     @vcode.InstructionMetadata::empty(),
   )
   |> ignore
-  verify_vcode(builder.finish()) catch {
+  @aarch64_target.verify_vcode(builder.finish()) catch {
     error =>
       inspect(
         error,
@@ -553,7 +559,7 @@ test "AArch64 verifier rejects a call with missing ABI results" {
 
 ///|
 test "AArch64 verifier rejects an incomplete call clobber set" {
-  let builder : @vcode.Builder[AArch64Inst] = @vcode.Builder::new(
+  let builder : @vcode.Builder[@aarch64_target.AArch64Inst] = @vcode.Builder::new(
     "bad_call_clobbers",
     [],
   )
@@ -579,7 +585,7 @@ test "AArch64 verifier rejects an incomplete call clobber set" {
     @vcode.InstructionMetadata::empty(),
   )
   |> ignore
-  verify_vcode(builder.finish()) catch {
+  @aarch64_target.verify_vcode(builder.finish()) catch {
     error =>
       inspect(
         error,
@@ -595,7 +601,7 @@ test "AArch64 verifier rejects an incomplete call clobber set" {
 
 ///|
 test "AArch64 verifier rejects non-byte vector population count" {
-  let builder : @vcode.Builder[AArch64Inst] = @vcode.Builder::new(
+  let builder : @vcode.Builder[@aarch64_target.AArch64Inst] = @vcode.Builder::new(
     "bad_vector_population_count",
     [V128],
   )
@@ -618,7 +624,7 @@ test "AArch64 verifier rejects non-byte vector population count" {
     @vcode.InstructionMetadata::empty(),
   )
   |> ignore
-  try verify_vcode(builder.finish()) catch {
+  try @aarch64_target.verify_vcode(builder.finish()) catch {
     error =>
       inspect(
         error,
@@ -636,15 +642,15 @@ test "AArch64 verifier rejects non-byte vector population count" {
 
 ///|
 test "AArch64 verifier rejects malformed widening vector operations" {
-  let operations : Array[AArch64Inst] = [
+  let operations : Array[@aarch64_target.AArch64Inst] = [
     VectorIntUnary(I8x16, ExtendAddPairwise(Signed)),
     VectorIntBinary(I8x16, ExtendMultiply(Low, Signed)),
     VectorIntBinary(I16x8, Dot16To32Signed),
     VectorIntBinary(I32x4, Q15MultiplyRoundedSaturating),
   ]
-  let errors : Array[TargetVCodeVerifyError] = []
+  let errors : Array[@aarch64_target.TargetVCodeVerifyError] = []
   for operation in operations {
-    let builder : @vcode.Builder[AArch64Inst] = @vcode.Builder::new(
+    let builder : @vcode.Builder[@aarch64_target.AArch64Inst] = @vcode.Builder::new(
       "bad_vector_widening",
       [V128, V128],
     )
@@ -675,7 +681,7 @@ test "AArch64 verifier rejects malformed widening vector operations" {
       @vcode.InstructionMetadata::empty(),
     )
     |> ignore
-    try verify_vcode(builder.finish()) catch {
+    try @aarch64_target.verify_vcode(builder.finish()) catch {
       error => errors.push(error)
     } noraise {
       _ => fail("expected malformed widening vector operation to be rejected")
@@ -708,7 +714,7 @@ test "AArch64 verifier rejects malformed widening vector operations" {
 
 ///|
 test "AArch64 verifier rejects a non-widened vector extension destination" {
-  let builder : @vcode.Builder[AArch64Inst] = @vcode.Builder::new(
+  let builder : @vcode.Builder[@aarch64_target.AArch64Inst] = @vcode.Builder::new(
     "bad_vector_extension",
     [V128],
   )
@@ -731,7 +737,7 @@ test "AArch64 verifier rejects a non-widened vector extension destination" {
     @vcode.InstructionMetadata::empty(),
   )
   |> ignore
-  try verify_vcode(builder.finish()) catch {
+  try @aarch64_target.verify_vcode(builder.finish()) catch {
     error =>
       inspect(
         error,
@@ -749,7 +755,7 @@ test "AArch64 verifier rejects a non-widened vector extension destination" {
 
 ///|
 test "AArch64 verifier rejects an invalid vector narrowing destination" {
-  let builder : @vcode.Builder[AArch64Inst] = @vcode.Builder::new(
+  let builder : @vcode.Builder[@aarch64_target.AArch64Inst] = @vcode.Builder::new(
     "bad_vector_narrowing",
     [V128, V128],
   )
@@ -775,7 +781,7 @@ test "AArch64 verifier rejects an invalid vector narrowing destination" {
     @vcode.InstructionMetadata::empty(),
   )
   |> ignore
-  try verify_vcode(builder.finish()) catch {
+  try @aarch64_target.verify_vcode(builder.finish()) catch {
     error =>
       inspect(
         error,
@@ -793,7 +799,7 @@ test "AArch64 verifier rejects an invalid vector narrowing destination" {
 
 ///|
 test "AArch64 verifier rejects floating lanes for all-true" {
-  let builder : @vcode.Builder[AArch64Inst] = @vcode.Builder::new(
+  let builder : @vcode.Builder[@aarch64_target.AArch64Inst] = @vcode.Builder::new(
     "bad_vector_all_true",
     [V128],
   )
@@ -816,7 +822,7 @@ test "AArch64 verifier rejects floating lanes for all-true" {
     @vcode.InstructionMetadata::empty(),
   )
   |> ignore
-  try verify_vcode(builder.finish()) catch {
+  try @aarch64_target.verify_vcode(builder.finish()) catch {
     error =>
       inspect(
         error,
@@ -834,7 +840,7 @@ test "AArch64 verifier rejects floating lanes for all-true" {
 
 ///|
 test "AArch64 verifier rejects floating lanes for bitmask" {
-  let builder : @vcode.Builder[AArch64Inst] = @vcode.Builder::new(
+  let builder : @vcode.Builder[@aarch64_target.AArch64Inst] = @vcode.Builder::new(
     "bad_vector_bitmask",
     [V128],
   )
@@ -857,7 +863,7 @@ test "AArch64 verifier rejects floating lanes for bitmask" {
     @vcode.InstructionMetadata::empty(),
   )
   |> ignore
-  try verify_vcode(builder.finish()) catch {
+  try @aarch64_target.verify_vcode(builder.finish()) catch {
     error =>
       inspect(
         error,
@@ -875,14 +881,14 @@ test "AArch64 verifier rejects floating lanes for bitmask" {
 
 ///|
 test "AArch64 verifier rejects integer lanes for vector float operations" {
-  let operations : Array[AArch64Inst] = [
+  let operations : Array[@aarch64_target.AArch64Inst] = [
     VectorFloatUnary(I32x4, Absolute),
     VectorFloatBinary(I64x2, Add),
     VectorFloatCompare(I16x8, Equal),
   ]
-  let errors : Array[TargetVCodeVerifyError] = []
+  let errors : Array[@aarch64_target.TargetVCodeVerifyError] = []
   for operation in operations {
-    let builder : @vcode.Builder[AArch64Inst] = @vcode.Builder::new(
+    let builder : @vcode.Builder[@aarch64_target.AArch64Inst] = @vcode.Builder::new(
       "bad_vector_float_lane",
       [V128, V128],
     )
@@ -913,7 +919,7 @@ test "AArch64 verifier rejects integer lanes for vector float operations" {
       @vcode.InstructionMetadata::empty(),
     )
     |> ignore
-    try verify_vcode(builder.finish()) catch {
+    try @aarch64_target.verify_vcode(builder.finish()) catch {
       error => errors.push(error)
     } noraise {
       _ => fail("expected integer vector float operation to be rejected")
@@ -942,7 +948,7 @@ test "AArch64 verifier rejects integer lanes for vector float operations" {
 
 ///|
 test "AArch64 verifier rejects integer lanes for vector float ternary" {
-  let builder : @vcode.Builder[AArch64Inst] = @vcode.Builder::new(
+  let builder : @vcode.Builder[@aarch64_target.AArch64Inst] = @vcode.Builder::new(
     "bad_vector_float_ternary_lane",
     [V128, V128, V128],
   )
@@ -969,7 +975,7 @@ test "AArch64 verifier rejects integer lanes for vector float ternary" {
     @vcode.InstructionMetadata::empty(),
   )
   |> ignore
-  try verify_vcode(builder.finish()) catch {
+  try @aarch64_target.verify_vcode(builder.finish()) catch {
     error =>
       inspect(
         error,
@@ -987,13 +993,13 @@ test "AArch64 verifier rejects integer lanes for vector float ternary" {
 
 ///|
 test "AArch64 verifier rejects malformed vector numeric conversions" {
-  let conversions : Array[AArch64VectorConversion] = [
+  let conversions : Array[@aarch64_target.AArch64VectorConversion] = [
     FloatToInt(I32x4, Signed),
     IntToFloat(I64x2, Unsigned),
   ]
-  let errors : Array[TargetVCodeVerifyError] = []
+  let errors : Array[@aarch64_target.TargetVCodeVerifyError] = []
   for conversion in conversions {
-    let builder : @vcode.Builder[AArch64Inst] = @vcode.Builder::new(
+    let builder : @vcode.Builder[@aarch64_target.AArch64Inst] = @vcode.Builder::new(
       "bad_vector_numeric_conversion",
       [V128],
     )
@@ -1016,7 +1022,7 @@ test "AArch64 verifier rejects malformed vector numeric conversions" {
       @vcode.InstructionMetadata::empty(),
     )
     |> ignore
-    try verify_vcode(builder.finish()) catch {
+    try @aarch64_target.verify_vcode(builder.finish()) catch {
       error => errors.push(error)
     } noraise {
       _ => fail("expected malformed vector numeric conversion to be rejected")
@@ -1041,15 +1047,15 @@ test "AArch64 verifier rejects malformed vector numeric conversions" {
 
 ///|
 test "AArch64 verifier rejects malformed vector memory operations" {
-  let operations : Array[AArch64Inst] = [
+  let operations : Array[@aarch64_target.AArch64Inst] = [
     VectorLoadZero(W16, 0UL),
     VectorLoadExtend(I8x16, Signed, 0UL),
     VectorLoadLane(I32x4, 4, 0UL),
     VectorStoreLane(I64x2, 2, 0UL),
   ]
-  let errors : Array[TargetVCodeVerifyError] = []
+  let errors : Array[@aarch64_target.TargetVCodeVerifyError] = []
   for operation in operations {
-    let builder : @vcode.Builder[AArch64Inst] = @vcode.Builder::new(
+    let builder : @vcode.Builder[@aarch64_target.AArch64Inst] = @vcode.Builder::new(
       "bad_vector_memory",
       [Ptr64, V128],
     )
@@ -1092,7 +1098,7 @@ test "AArch64 verifier rejects malformed vector memory operations" {
       @vcode.InstructionMetadata::empty(),
     )
     |> ignore
-    try verify_vcode(builder.finish()) catch {
+    try @aarch64_target.verify_vcode(builder.finish()) catch {
       error => errors.push(error)
     } noraise {
       _ => fail("expected malformed vector memory to be rejected")
@@ -1125,7 +1131,7 @@ test "AArch64 verifier rejects malformed vector memory operations" {
 
 ///|
 test "AArch64 verifier requires early-clobber atomic loop results" {
-  let builder : @vcode.Builder[AArch64Inst] = @vcode.Builder::new(
+  let builder : @vcode.Builder[@aarch64_target.AArch64Inst] = @vcode.Builder::new(
     "late_atomic_result",
     [Ptr64, I32],
   )
@@ -1151,7 +1157,7 @@ test "AArch64 verifier requires early-clobber atomic loop results" {
     @vcode.InstructionMetadata::empty(),
   )
   |> ignore
-  try verify_vcode(builder.finish()) catch {
+  try @aarch64_target.verify_vcode(builder.finish()) catch {
     error =>
       inspect(
         error,
@@ -1169,7 +1175,7 @@ test "AArch64 verifier requires early-clobber atomic loop results" {
 
 ///|
 test "AArch64 verifier rejects a safepoint marker without metadata" {
-  let builder : @vcode.Builder[AArch64Inst] = @vcode.Builder::new(
+  let builder : @vcode.Builder[@aarch64_target.AArch64Inst] = @vcode.Builder::new(
     "unmarked_safepoint",
     [],
   )
@@ -1192,7 +1198,7 @@ test "AArch64 verifier rejects a safepoint marker without metadata" {
     @vcode.InstructionMetadata::empty(),
   )
   |> ignore
-  try verify_vcode(builder.finish()) catch {
+  try @aarch64_target.verify_vcode(builder.finish()) catch {
     error =>
       inspect(
         error,

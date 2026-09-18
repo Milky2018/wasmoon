@@ -21,11 +21,12 @@ test "generic adapter allocates Target VCode without reading target instructions
   )
   |> ignore
   let function = builder.finish()
-  let allocation = allocate_vcode(
+  let allocation = @vcode_regalloc.allocate_vcode(
     function,
-    VCodeAllocationEnvironment::new([@vcode.PhysicalReg::new(0, Int)], [
-      @vcode.PhysicalReg::new(1, Int),
-    ]),
+    @vcode_regalloc.VCodeAllocationEnvironment::new(
+      [@vcode.PhysicalReg::new(0, Int)],
+      [@vcode.PhysicalReg::new(1, Int)],
+    ),
   )
   inspect(
     allocation.summary(),
@@ -60,9 +61,12 @@ test "location-aware inputs remain in spill slots without scratch reloads" {
     @vcode.InstructionMetadata::empty(),
   )
   |> ignore
-  let allocation = allocate_vcode(
+  let allocation = @vcode_regalloc.allocate_vcode(
     builder.finish(),
-    VCodeAllocationEnvironment::new([@vcode.PhysicalReg::new(0, Int)], []),
+    @vcode_regalloc.VCodeAllocationEnvironment::new(
+      [@vcode.PhysicalReg::new(0, Int)],
+      [],
+    ),
   )
   inspect(
     allocation.summary(),
@@ -105,9 +109,9 @@ test "floating-point and SIMD values share one physical register bank" {
     @vcode.InstructionMetadata::empty(),
   )
   |> ignore
-  let allocation = allocate_vcode(
+  let allocation = @vcode_regalloc.allocate_vcode(
     builder.finish(),
-    VCodeAllocationEnvironment::new(
+    @vcode_regalloc.VCodeAllocationEnvironment::new(
       [
         @vcode.PhysicalReg::new(0, FpVector),
         @vcode.PhysicalReg::new(1, FpVector),
@@ -155,9 +159,9 @@ test "fixed operands are instruction-point constraints rather than value homes" 
     @vcode.InstructionMetadata::empty(),
   )
   |> ignore
-  let allocation = allocate_vcode(
+  let allocation = @vcode_regalloc.allocate_vcode(
     builder.finish(),
-    VCodeAllocationEnvironment::new(
+    @vcode_regalloc.VCodeAllocationEnvironment::new(
       [@vcode.PhysicalReg::new(0, Int), @vcode.PhysicalReg::new(1, Int)],
       [@vcode.PhysicalReg::new(2, Int)],
     ),
@@ -198,11 +202,12 @@ test "fixed-only operands do not become allocator scratch registers" {
     @vcode.InstructionMetadata::empty(),
   )
   |> ignore
-  let allocation = allocate_vcode(
+  let allocation = @vcode_regalloc.allocate_vcode(
     builder.finish(),
-    VCodeAllocationEnvironment::new([home], []).with_fixed_operand_regs([
-      fixed_only,
-    ]),
+    @vcode_regalloc.VCodeAllocationEnvironment::new([home], []).with_fixed_operand_regs([
+        fixed_only,
+      ],
+    ),
   )
   inspect(
     allocation.summary(),
@@ -220,7 +225,10 @@ test "fixed-only operands do not become allocator scratch registers" {
 test "generic adapter validates selected VCode before allocation" {
   let builder : @vcode.Builder[Unit] = @vcode.Builder::new("invalid_selected", [])
   let error = try {
-    allocate_vcode(builder.finish(), VCodeAllocationEnvironment::new([], []))
+    @vcode_regalloc.allocate_vcode(
+      builder.finish(),
+      @vcode_regalloc.VCodeAllocationEnvironment::new([], []),
+    )
     |> ignore
     "accepted"
   } catch {

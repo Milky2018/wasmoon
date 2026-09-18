@@ -16,7 +16,7 @@ test "exception v128: a vector payload survives throw and catch" {
     #|      (try_table (result v128) (catch $t $b)
     #|        (throw $t (v128.const i32x4 1 2 3 4))
     #|        (v128.const i32x4 0 0 0 0)))))
-  let result = compare_jit_interp(source, "test", [])
+  let result = @testsuite.compare_jit_interp(source, "test", [])
   inspect(result, content="matched")
 }
 
@@ -35,7 +35,7 @@ test "exception v128: the scalar before a vector payload" {
     #|        (unreachable)))
     #|    (local.set $c) (local.set $v) (local.set $a)
     #|    (local.get $a)))
-  let result = compare_jit_interp(source, "test", [])
+  let result = @testsuite.compare_jit_interp(source, "test", [])
   inspect(result, content="matched")
 }
 
@@ -52,7 +52,7 @@ test "exception v128: a vector between two scalars" {
     #|        (unreachable)))
     #|    (local.set $c) (local.set $v) (local.set $a)
     #|    (local.get $v)))
-  let result = compare_jit_interp(source, "test", [])
+  let result = @testsuite.compare_jit_interp(source, "test", [])
   inspect(result, content="matched")
 }
 
@@ -71,7 +71,7 @@ test "exception v128: the scalar after a vector payload" {
     #|        (unreachable)))
     #|    (local.set $c) (local.set $v) (local.set $a)
     #|    (local.get $c)))
-  let result = compare_jit_interp(source, "test", [])
+  let result = @testsuite.compare_jit_interp(source, "test", [])
   inspect(result, content="matched")
 }
 
@@ -88,7 +88,7 @@ test "exception v128: two vector payloads stay distinct" {
     #|        (unreachable)))
     #|    (local.set $y) (local.set $x)
     #|    (local.get $y)))
-  let result = compare_jit_interp(source, "test", [])
+  let result = @testsuite.compare_jit_interp(source, "test", [])
   inspect(result, content="matched")
 }
 
@@ -105,7 +105,7 @@ test "exception v128: a scalar following a leading vector" {
     #|        (unreachable)))
     #|    (local.set $n) (local.set $v)
     #|    (local.get $n)))
-  let result = compare_jit_interp(source, "test", [])
+  let result = @testsuite.compare_jit_interp(source, "test", [])
   inspect(result, content="matched")
 }
 
@@ -123,6 +123,6 @@ test "exception v128: a vector local survives a caught throw" {
     #|    (block $b
     #|      (try_table (catch $t $b) (throw $t)))
     #|    (local.get $v)))
-  let result = compare_jit_interp(source, "test", [])
+  let result = @testsuite.compare_jit_interp(source, "test", [])
   inspect(result, content="matched")
 }

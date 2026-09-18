@@ -19,7 +19,7 @@ fn stdin_callback_with_capture() -> () -> Bytes {
 ///|
 test "owned callback setters release transferred captures exactly once" {
   @native_test_support.reset_callback_capture()
-  guard NativeJITContext::try_alloc(1) is Some(context) else {
+  guard @wasmoon_jit.NativeJITContext::try_alloc(1) is Some(context) else {
     fail("failed to allocate native JIT context")
   }
   let releases = []

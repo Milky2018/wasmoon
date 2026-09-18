@@ -10,10 +10,10 @@ test "JIT: i32.clz constant folding uses 32-bit width" {
     #|    (i32.clz (i32.const 1))
     #|  )
     #|)
-  let interp = run_interp_only(source, "run", [])
+  let interp = @testsuite.run_interp_only(source, "run", [])
   debug_inspect(interp, content="Ok([I32(31)])")
-  let result = compare_jit_interp(source, "run", [])
-  inspect(compare_result_is_match(result), content="true")
+  let result = @testsuite.compare_jit_interp(source, "run", [])
+  inspect(@testsuite.compare_result_is_match(result), content="true")
 }
 
 ///|
@@ -24,8 +24,8 @@ test "JIT: i32.ctz constant folding clamps ctz(0) to 32" {
     #|    (i32.ctz (i32.const 0))
     #|  )
     #|)
-  let interp = run_interp_only(source, "run", [])
+  let interp = @testsuite.run_interp_only(source, "run", [])
   debug_inspect(interp, content="Ok([I32(32)])")
-  let result = compare_jit_interp(source, "run", [])
-  inspect(compare_result_is_match(result), content="true")
+  let result = @testsuite.compare_jit_interp(source, "run", [])
+  inspect(@testsuite.compare_result_is_match(result), content="true")
 }

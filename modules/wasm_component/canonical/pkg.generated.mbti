@@ -1,0 +1,38 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "Milky2018/wasm_component/canonical"
+
+import {
+  "Milky2018/wasm_component/model",
+  "Milky2018/wasm_core/types",
+}
+
+// Values
+pub fn canonical_abi_plan(@model.ValType, Array[@model.TypeDef?], Bool, max_flat? : Int) -> CanonicalAbiPlan?
+
+pub fn canonical_discriminant_layout(Int) -> (Int, Int)
+
+pub fn canonical_flat_types(@model.ValType, Array[@model.TypeDef?], @types.ValueType, max_flat? : Int) -> Array[@types.ValueType]?
+
+pub fn canonical_lift_core_func_type(@model.FuncType, Array[@model.TypeDef?], @types.ValueType) -> @types.FuncType?
+
+pub fn canonical_lower_core_func_type(@model.FuncType, Array[@model.TypeDef?], @types.ValueType) -> @types.FuncType?
+
+pub fn canonical_memory_layout(@model.ValType, Array[@model.TypeDef?], Bool) -> (Int, Int)?
+
+pub fn canonical_value_contains_memory(@model.ValType, Array[@model.TypeDef?]) -> Bool
+
+// Errors
+
+// Types and methods
+pub(all) struct CanonicalAbiPlan {
+  value_type : @model.ValType
+  types : Array[@model.TypeDef?]
+  memory64 : Bool
+  flat : Array[@types.ValueType]
+  layout : (Int, Int)?
+  contains_memory : Bool
+}
+
+// Type aliases
+
+// Traits

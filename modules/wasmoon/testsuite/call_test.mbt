@@ -5,7 +5,7 @@ test "call: f32 identity via direct call" {
     #|  (func $id-f32 (param f32) (result f32) (local.get 0))
     #|  (func (export "type-first-f32") (result f32) (call $id-f32 (f32.const 1.32)))
     #|)
-  let result = compare_jit_interp(source, "type-first-f32", [])
+  let result = @testsuite.compare_jit_interp(source, "type-first-f32", [])
   inspect(result, content="matched")
 }
 
@@ -16,7 +16,7 @@ test "call: f64 identity via direct call" {
     #|  (func $id-f64 (param f64) (result f64) (local.get 0))
     #|  (func (export "type-first-f64") (result f64) (call $id-f64 (f64.const 1.64)))
     #|)
-  let result = compare_jit_interp(source, "type-first-f64", [])
+  let result = @testsuite.compare_jit_interp(source, "type-first-f64", [])
   inspect(result, content="matched")
 }
 
@@ -28,7 +28,7 @@ test "call: f32 second arg" {
     #|  (func (export "type-second-f32") (result f32)
     #|    (call $f64-f32 (f64.const 64) (f32.const 32)))
     #|)
-  let result = compare_jit_interp(source, "type-second-f32", [])
+  let result = @testsuite.compare_jit_interp(source, "type-second-f32", [])
   inspect(result, content="matched")
 }
 
@@ -40,7 +40,7 @@ test "call: f64 second arg" {
     #|  (func (export "type-second-f64") (result f64)
     #|    (call $i64-f64 (i64.const 64) (f64.const 64.1)))
     #|)
-  let result = compare_jit_interp(source, "type-second-f64", [])
+  let result = @testsuite.compare_jit_interp(source, "type-second-f64", [])
   inspect(result, content="matched")
 }
 
@@ -53,7 +53,7 @@ test "call: multi return i32 f64" {
     #|  (func (export "type-all-i32-f64") (result i32 f64)
     #|    (call $id-i32-f64 (i32.const 32) (f64.const 1.64)))
     #|)
-  let result = compare_jit_interp(source, "type-all-i32-f64", [])
+  let result = @testsuite.compare_jit_interp(source, "type-all-i32-f64", [])
   inspect(result, content="matched")
 }
 
@@ -76,7 +76,7 @@ test "call: internal call returns nine i32 values" {
     #|    (result i32 i32 i32 i32 i32 i32 i32 i32 i32)
     #|    (call $producer))
     #|)
-  inspect(compare_jit_interp(source, "test", []), content="matched")
+  inspect(@testsuite.compare_jit_interp(source, "test", []), content="matched")
 }
 
 ///|
@@ -100,7 +100,7 @@ test "call: indirect internal call returns nine i32 values" {
     #|  (func (export "test") (type $producer-type)
     #|    (call_indirect (type $producer-type) (i32.const 0)))
     #|)
-  inspect(compare_jit_interp(source, "test", []), content="matched")
+  inspect(@testsuite.compare_jit_interp(source, "test", []), content="matched")
 }
 
 ///|
@@ -111,7 +111,7 @@ test "call: simple f64 f32 return" {
     #|    (f64.const 2.0)
     #|    (f32.const 1.0))
     #|)
-  let result = compare_jit_interp(source, "test", [])
+  let result = @testsuite.compare_jit_interp(source, "test", [])
   inspect(result, content="matched")
 }
 
@@ -122,7 +122,10 @@ test "call: direct swap-f32-f64 host call" {
     #|  (func (export "swap") (param f32 f64) (result f64 f32)
     #|    (local.get 1) (local.get 0))
     #|)
-  let result = compare_jit_interp(source, "swap", [F32(1.0), F64(2.0)])
+  let result = @testsuite.compare_jit_interp(source, "swap", [
+    F32(1.0),
+    F64(2.0),
+  ])
   inspect(result, content="matched")
 }
 
@@ -135,7 +138,7 @@ test "call: swap f32 f64" {
     #|  (func (export "type-all-f32-f64") (result f64 f32)
     #|    (call $swap-f32-f64 (f32.const 1) (f64.const 2)))
     #|)
-  let result = compare_jit_interp(source, "type-all-f32-f64", [])
+  let result = @testsuite.compare_jit_interp(source, "type-all-f32-f64", [])
   inspect(result, content="matched")
 }
 
@@ -148,7 +151,7 @@ test "call: swap f64 i32" {
     #|  (func (export "type-all-f64-i32") (result i32 f64)
     #|    (call $swap-f64-i32 (f64.const 1) (i32.const 2)))
     #|)
-  let result = compare_jit_interp(source, "type-all-f64-i32", [])
+  let result = @testsuite.compare_jit_interp(source, "type-all-f64-i32", [])
   inspect(result, content="matched")
 }
 
@@ -160,7 +163,7 @@ test "call: direct call with table present" {
     #|  (table funcref (elem $const-i32))
     #|  (func (export "test") (result i32) (call $const-i32))
     #|)
-  let result = compare_jit_interp(source, "test", [])
+  let result = @testsuite.compare_jit_interp(source, "test", [])
   inspect(result, content="matched")
 }
 
@@ -172,7 +175,7 @@ test "call: f32 call with table present" {
     #|  (table funcref (elem $id-f32))
     #|  (func (export "test") (result f32) (call $id-f32 (f32.const 1.32)))
     #|)
-  let result = compare_jit_interp(source, "test", [])
+  let result = @testsuite.compare_jit_interp(source, "test", [])
   inspect(result, content="matched")
 }
 
@@ -188,7 +191,7 @@ test "call: recursive factorial" {
     #|          (local.get 0)
     #|          (call $fac (i64.sub (local.get 0) (i64.const 1)))))))
     #|)
-  let result = compare_jit_interp(source, "fac", [I64(5)])
+  let result = @testsuite.compare_jit_interp(source, "fac", [I64(5)])
   inspect(result, content="matched")
 }
 
@@ -205,13 +208,13 @@ test "call: mutually recursive even/odd" {
     #|      (then (i32.const 99))
     #|      (else (call $even (i64.sub (local.get 0) (i64.const 1))))))
     #|)
-  let result1 = compare_jit_interp(source, "even", [I64(0)])
+  let result1 = @testsuite.compare_jit_interp(source, "even", [I64(0)])
   inspect(result1, content="matched")
-  let result2 = compare_jit_interp(source, "even", [I64(1)])
+  let result2 = @testsuite.compare_jit_interp(source, "even", [I64(1)])
   inspect(result2, content="matched")
-  let result3 = compare_jit_interp(source, "odd", [I64(0)])
+  let result3 = @testsuite.compare_jit_interp(source, "odd", [I64(0)])
   inspect(result3, content="matched")
-  let result4 = compare_jit_interp(source, "odd", [I64(1)])
+  let result4 = @testsuite.compare_jit_interp(source, "odd", [I64(1)])
   inspect(result4, content="matched")
 }
 
@@ -224,7 +227,7 @@ test "call: as-convert-operand" {
     #|    (block (result i64) (i64.extend_i32_s (call $dummy (i32.const 1))))
     #|  )
     #|)
-  let result = compare_jit_interp(source, "as-convert-operand", [])
+  let result = @testsuite.compare_jit_interp(source, "as-convert-operand", [])
   inspect(result, content="matched")
 }
 
@@ -238,7 +241,7 @@ test "call: as-memory-grow-value" {
     #|    (memory.grow (call $const-i32))
     #|  )
     #|)
-  let result = compare_jit_interp(source, "as-memory.grow-value", [])
+  let result = @testsuite.compare_jit_interp(source, "as-memory.grow-value", [])
   inspect(result, content="matched")
 }
 
@@ -265,8 +268,10 @@ test "call: return-from-long-argument-list" {
     #|      (i64.const 0) (f32.const 0) (f64.const 0) (f32.const 0) (f32.const 0) (f32.const 0) (i32.const 0) (f32.const 0) (i64.const 0) (local.get 0))
     #|  )
     #|)
-  let result = compare_jit_interp(source, "return-from-long-argument-list", [
-    I32(42),
-  ])
+  let result = @testsuite.compare_jit_interp(
+    source,
+    "return-from-long-argument-list",
+    [I32(42)],
+  )
   inspect(result, content="matched")
 }

@@ -78,7 +78,7 @@ priv enum ExampleInst {
 
 ///|
 test "construct and verify target VCode" {
-  let builder : CheckedBuilder[ExampleInst] = CheckedBuilder::new_with_results(
+  let builder : @vcode.CheckedBuilder[ExampleInst] = @vcode.CheckedBuilder::new_with_results(
     "add_one",
     [I64],
     [I64],
@@ -88,23 +88,23 @@ test "construct and verify target VCode" {
   let (_, results) = builder.append_body(
     entry,
     AddOne,
-    [Input::any(input)],
-    [Output::any(I64)],
+    [@vcode.Input::any(input)],
+    [@vcode.Output::any(I64)],
     [],
-    InstructionMetadata::empty(),
+    @vcode.InstructionMetadata::empty(),
   )
   builder.set_terminator(
     entry,
     Return,
-    [Input::any(results[0])],
+    [@vcode.Input::any(results[0])],
     [],
     [],
-    InstructionMetadata::empty(),
+    @vcode.InstructionMetadata::empty(),
   )
   |> ignore
 
   let function = builder.finish()
-  verify_selected(function)
+  @vcode.verify_selected(function)
   inspect(function.parameter_count(), content="1")
   inspect(function.instruction_count(), content="2")
   inspect(function.summary().contains("AddOne"), content="true")

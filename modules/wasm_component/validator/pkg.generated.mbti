@@ -2,18 +2,18 @@
 package "Milky2018/wasm_component/validator"
 
 import {
-  "Milky2018/wasm_component",
+  "Milky2018/wasm_component/model",
   "moonbitlang/core/debug",
 }
 
 // Values
-pub fn validate_component(@wasm_component.Component) -> Unit raise ComponentValidationError
+pub fn validate_component(@model.Component) -> Unit raise ComponentValidationError
 
-pub fn validate_component_for_instantiation(@wasm_component.Component) -> ValidatedComponent raise ComponentValidationError
+pub fn validate_component_for_instantiation(@model.Component) -> ValidatedComponent raise ComponentValidationError
 
-pub fn validate_component_for_instantiation_with_config(@wasm_component.Component, ComponentValidationConfig) -> ValidatedComponent raise ComponentValidationError
+pub fn validate_component_for_instantiation_with_config(@model.Component, ComponentValidationConfig) -> ValidatedComponent raise ComponentValidationError
 
-pub fn validate_component_with_config(@wasm_component.Component, ComponentValidationConfig) -> Unit raise ComponentValidationError
+pub fn validate_component_with_config(@model.Component, ComponentValidationConfig) -> Unit raise ComponentValidationError
 
 // Errors
 pub(all) suberror ComponentValidationError {

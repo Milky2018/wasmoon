@@ -18,8 +18,8 @@ test "typed block params: do not leak to outer stack" {
     #|    )
     #|  )
     #|)
-  let interp = run_interp_only(source, "test", [])
+  let interp = @testsuite.run_interp_only(source, "test", [])
   debug_inspect(interp, content="Ok([I32(8)])")
-  let result = compare_jit_interp(source, "test", [])
+  let result = @testsuite.compare_jit_interp(source, "test", [])
   inspect(result, content="matched")
 }

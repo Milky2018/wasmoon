@@ -7,7 +7,7 @@ test "select_i32" {
     #|    (select (local.get 0) (local.get 1) (local.get 2))
     #|  )
     #|)
-  let result = compare_jit_interp(source, "select-i32", [
+  let result = @testsuite.compare_jit_interp(source, "select-i32", [
     I32(10),
     I32(20),
     I32(1),
@@ -23,7 +23,7 @@ test "select_i32_false" {
     #|    (select (local.get 0) (local.get 1) (local.get 2))
     #|  )
     #|)
-  let result = compare_jit_interp(source, "select-i32", [
+  let result = @testsuite.compare_jit_interp(source, "select-i32", [
     I32(10),
     I32(20),
     I32(0),
@@ -39,7 +39,7 @@ test "select_i64" {
     #|    (select (local.get 0) (local.get 1) (local.get 2))
     #|  )
     #|)
-  let result = compare_jit_interp(source, "select-i64", [
+  let result = @testsuite.compare_jit_interp(source, "select-i64", [
     I64(100L),
     I64(200L),
     I32(1),
@@ -55,7 +55,7 @@ test "select_f32" {
     #|    (select (local.get 0) (local.get 1) (local.get 2))
     #|  )
     #|)
-  let result = compare_jit_interp(source, "select-f32", [
+  let result = @testsuite.compare_jit_interp(source, "select-f32", [
     F32(1.5),
     F32(2.5),
     I32(1),
@@ -71,7 +71,7 @@ test "select_f64" {
     #|    (select (local.get 0) (local.get 1) (local.get 2))
     #|  )
     #|)
-  let result = compare_jit_interp(source, "select-f64", [
+  let result = @testsuite.compare_jit_interp(source, "select-f64", [
     F64(3.14),
     F64(2.71),
     I32(0),
@@ -95,7 +95,10 @@ test "select_unreachable" {
     #|    (unreachable)
     #|  )
     #|)
-  let result = compare_jit_interp(source, "select-unreached", [])
+  let result = @testsuite.compare_jit_interp(source, "select-unreached", [])
   // Both should trap, so they match
-  inspect(compare_result_errors_contain(result, "unreachable"), content="true")
+  inspect(
+    @testsuite.compare_result_errors_contain(result, "unreachable"),
+    content="true",
+  )
 }

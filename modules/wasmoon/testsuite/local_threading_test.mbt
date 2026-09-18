@@ -25,7 +25,7 @@ test "local_threading_if_then_only" {
     #|  )
     #|)
   for arg in [0, 1] {
-    let result = compare_jit_interp(source, "f", [I32(arg)])
+    let result = @testsuite.compare_jit_interp(source, "f", [I32(arg)])
     inspect(result, content="matched")
   }
 }
@@ -47,7 +47,7 @@ test "local_threading_if_either_arm" {
     #|  )
     #|)
   for arg in [0, 1] {
-    let result = compare_jit_interp(source, "f", [I32(arg)])
+    let result = @testsuite.compare_jit_interp(source, "f", [I32(arg)])
     inspect(result, content="matched")
   }
 }
@@ -68,7 +68,7 @@ test "local_threading_if_untouched_local_survives" {
     #|  )
     #|)
   for arg in [0, 1] {
-    let result = compare_jit_interp(source, "f", [I32(arg)])
+    let result = @testsuite.compare_jit_interp(source, "f", [I32(arg)])
     inspect(result, content="matched")
   }
 }
@@ -90,7 +90,7 @@ test "local_threading_nested_block_write_escapes" {
     #|  )
     #|)
   for arg in [0, 1] {
-    let result = compare_jit_interp(source, "f", [I32(arg)])
+    let result = @testsuite.compare_jit_interp(source, "f", [I32(arg)])
     inspect(result, content="matched")
   }
 }
@@ -117,7 +117,7 @@ test "local_threading_loop_carried_and_invariant" {
     #|  )
     #|)
   for arg in [0, 1, 5] {
-    let result = compare_jit_interp(source, "f", [I32(arg)])
+    let result = @testsuite.compare_jit_interp(source, "f", [I32(arg)])
     inspect(result, content="matched")
   }
 }
@@ -141,7 +141,7 @@ test "local_threading_br_out_of_nest" {
     #|  )
     #|)
   for arg in [0, 1] {
-    let result = compare_jit_interp(source, "f", [I32(arg)])
+    let result = @testsuite.compare_jit_interp(source, "f", [I32(arg)])
     inspect(result, content="matched")
   }
 }
@@ -169,7 +169,7 @@ test "local_threading_br_table_targets_differ" {
     #|  )
     #|)
   for arg in [0, 1, 2, 7] {
-    let result = compare_jit_interp(source, "f", [I32(arg)])
+    let result = @testsuite.compare_jit_interp(source, "f", [I32(arg)])
     inspect(result, content="matched")
   }
 }
@@ -194,7 +194,7 @@ test "local_threading_branch_to_function_level" {
     #|  )
     #|)
   for arg in [0, 1] {
-    let result = compare_jit_interp(source, "f", [I32(arg)])
+    let result = @testsuite.compare_jit_interp(source, "f", [I32(arg)])
     inspect(result, content="matched")
   }
 }
@@ -215,7 +215,7 @@ test "local_threading_br_table_to_function_level" {
     #|  )
     #|)
   for arg in [0, 1, 3] {
-    let result = compare_jit_interp(source, "f", [I32(arg)])
+    let result = @testsuite.compare_jit_interp(source, "f", [I32(arg)])
     inspect(result, content="matched")
   }
 }
@@ -241,7 +241,7 @@ test "local_threading_catch_branch_carries_locals" {
     #|  )
     #|)
   for arg in [0, 1] {
-    let result = compare_jit_interp(source, "f", [I32(arg)])
+    let result = @testsuite.compare_jit_interp(source, "f", [I32(arg)])
     inspect(result, content="matched")
   }
 }
@@ -273,7 +273,7 @@ test "local_threading_many_locals_sparse_writes" {
     #|  )
     #|)
   for arg in [0, 1] {
-    let result = compare_jit_interp(source, "f", [I32(arg)])
+    let result = @testsuite.compare_jit_interp(source, "f", [I32(arg)])
     inspect(result, content="matched")
   }
 }

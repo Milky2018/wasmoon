@@ -46,9 +46,9 @@ test "call_indirect: mixed i32/i64 overflow stack args" {
     #|    )
     #|  )
     #|)
-  inspect(compare_jit_interp(source, "test", []), content="matched")
+  inspect(@testsuite.compare_jit_interp(source, "test", []), content="matched")
   inspect(
-    compare_jit_interp(source, "pack", [
+    @testsuite.compare_jit_interp(source, "pack", [
       I32(1),
       I64(2),
       I32(3),
@@ -105,9 +105,9 @@ test "call_indirect: 10 integer args (4 stack args)" {
     #|    )
     #|  )
     #|)
-  inspect(compare_jit_interp(source, "test", []), content="matched")
+  inspect(@testsuite.compare_jit_interp(source, "test", []), content="matched")
   inspect(
-    compare_jit_interp(source, "pack", [
+    @testsuite.compare_jit_interp(source, "pack", [
       I32(1),
       I32(2),
       I32(3),

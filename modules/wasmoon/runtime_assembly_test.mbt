@@ -1,6 +1,6 @@
 ///|
 test "wasmoon remains the product runtime module" {
-  let assembly = runtime_assembly()
+  let assembly = @wasmoon.runtime_assembly()
   inspect(assembly.product_module, content="Milky2018/wasmoon")
   inspect(
     assembly.owned_components.contains(InterpreterExecutor),
@@ -31,7 +31,7 @@ test "wasmoon remains the product runtime module" {
 
 ///|
 test "wasmoon consumes reusable compiler infrastructure" {
-  let assembly = compiler_infrastructure_assembly()
+  let assembly = @wasmoon.compiler_infrastructure_assembly()
   inspect(assembly.signature.params.length(), content="0")
   inspect(assembly.milkir_function.blocks.length(), content="1")
   inspect(assembly.code_object.get_bytes().length() > 0, content="true")
@@ -45,8 +45,13 @@ test "wasmoon plans wasm function through reusable compiler infrastructure" {
     [LocalGet(0), LocalGet(1), I32Add],
     "add",
   )
-  let env = wasm_frontend_embedding_environment()
-  let plan = try! plan_wasm_function_with_compiler_infra(env, mod_, 0, X64)
+  let env = @wasmoon.wasm_frontend_embedding_environment()
+  let plan = try! @wasmoon.plan_wasm_function_with_compiler_infra(
+    env,
+    mod_,
+    0,
+    X64,
+  )
   inspect(plan.entry_symbol, content="wasm_func_0")
   debug_inspect(plan.target, content="X64")
   inspect(plan.object.get_bytes().length() > 0, content="true")
@@ -64,7 +69,12 @@ test "wasmoon planning restores hidden vmctx for wasm body ABI" {
     runtime_symbol_prefix="wasmoon",
     hidden_context_type=None,
   )
-  let plan = try! plan_wasm_function_with_compiler_infra(env, mod_, 0, X64)
+  let plan = try! @wasmoon.plan_wasm_function_with_compiler_infra(
+    env,
+    mod_,
+    0,
+    X64,
+  )
   inspect(plan.entry_symbol, content="wasm_func_0")
   inspect(plan.object.get_bytes().length() > 0, content="true")
 }

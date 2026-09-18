@@ -1,6 +1,6 @@
 ///|
 test "union find groups sets" {
-  let uf = UnionFind::UnionFind(5)
+  let uf = @unionfind.UnionFind::UnionFind(5)
   inspect(uf.length(), content="5")
   inspect(uf.num_sets(), content="5")
   inspect(uf.union(0, 1), content="true")

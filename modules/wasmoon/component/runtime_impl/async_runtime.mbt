@@ -679,6 +679,14 @@ fn progress_one_subtask_nonblocking(
   async_state : AsyncState,
   store : @runtime.Store,
 ) -> Bool raise ComponentRuntimeError {
+  // Guest writes can unblock host futures without an external I/O event.
+  // Poll these sources before deciding that the scheduler has no work.
+  let revision = async_state.event_revision.val
+  let streams_progressed = progress_host_stream_sources(async_state, store)
+  let futures_progressed = progress_host_future_sources(async_state, store)
+  let host_progressed = streams_progressed ||
+    futures_progressed ||
+    revision != async_state.event_revision.val
   // Avoid re-entering tasks already on the call stack: sync lower wrappers may
   // "pump" the event loop while inside a task, but must never step that same task.
   fn task_on_stack(id : Int64) -> Bool {
@@ -916,7 +924,7 @@ fn progress_one_subtask_nonblocking(
       }
     }
   }
-  admitted_task is Some(_)
+  admitted_task is Some(_) || host_progressed
 }
 
 ///|

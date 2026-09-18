@@ -90,4 +90,4 @@ Fields (exact layout TBD; must be C-ABI stable if read by JIT C/FFI):
 ## Notes / Links
 - `docs/jit-abi.md`
 - `docs/jit-trap-diagnostics-plan.md`
-- `wast/jit_support.mbt` (current gating rules)
+- `wast/jit/support.mbt` (current gating rules)

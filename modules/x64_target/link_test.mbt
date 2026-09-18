@@ -14,7 +14,7 @@ test "X64 linker applies relative and absolute relocations" {
     ],
   )
   debug_inspect(
-    prepare_x64_link(object).link(0x1000L, fn(target) {
+    @x64_target.prepare_x64_link(object).link(0x1000L, fn(target) {
       match target {
         External(_) => Some(0x2000L)
         Data(_) => Some(0x123456789ABCDEFL)
@@ -66,7 +66,7 @@ test "X64 linker routes out-of-range relative targets through a veneer" {
     relocations=[@code_object.Relocation::new(1, X64PcRelative32, target)],
   )
   debug_inspect(
-    prepare_x64_link(object).link(0L, fn(_) { Some(0x100000000L) }),
+    @x64_target.prepare_x64_link(object).link(0L, fn(_) { Some(0x100000000L) }),
     content=(
       #|[
       #|  0xe8,
@@ -107,7 +107,7 @@ test "X64 linker deduplicates call veneers by target and addend" {
       @code_object.Relocation::new(6, X64PcRelative32, target),
     ],
   )
-  let plan = prepare_x64_link(object)
+  let plan = @x64_target.prepare_x64_link(object)
   debug_inspect(
     (plan.code(), plan.veneer_offsets()),
     content=(

@@ -14,5 +14,5 @@ test "JIT preserves GC metadata for return_call_ref" {
     #|    return_call_ref $callee
     #|  )
     #|)
-  inspect(compare_jit_interp(source, "test", []), content="matched")
+  inspect(@testsuite.compare_jit_interp(source, "test", []), content="matched")
 }

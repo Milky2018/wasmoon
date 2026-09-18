@@ -12,7 +12,7 @@ test "f64 select with cond=0 should return false_val" {
     #|  (func (export "test") (result f64)
     #|    (select (f64.const 1.0) (f64.const 2.0) (i32.const 0)))
     #|)
-  let result = compare_jit_interp(source, "test", [])
+  let result = @testsuite.compare_jit_interp(source, "test", [])
   inspect(result, content="matched")
 }
 
@@ -23,7 +23,7 @@ test "f64 select with cond=1 should return true_val" {
     #|  (func (export "test") (result f64)
     #|    (select (f64.const 1.0) (f64.const 2.0) (i32.const 1)))
     #|)
-  let result = compare_jit_interp(source, "test", [])
+  let result = @testsuite.compare_jit_interp(source, "test", [])
   inspect(result, content="matched")
 }
 
@@ -35,7 +35,7 @@ test "f64.no_fold_lt_select with NaN - should return NaN (false_val)" {
     #|    (select (local.get 0) (local.get 1) (f64.lt (local.get 0) (local.get 1))))
     #|)
   // 0.0 < nan = false, so select returns false_val (nan)
-  let result = compare_jit_interp(source, "test", [
+  let result = @testsuite.compare_jit_interp(source, "test", [
     F64(0.0),
     F64(@double.not_a_number),
   ])
@@ -50,7 +50,7 @@ test "f64.no_fold_lt_select with NaN reversed - should return 0 (false_val)" {
     #|    (select (local.get 0) (local.get 1) (f64.lt (local.get 0) (local.get 1))))
     #|)
   // nan < 0.0 = false, so select returns false_val (0.0)
-  let result = compare_jit_interp(source, "test", [
+  let result = @testsuite.compare_jit_interp(source, "test", [
     F64(@double.not_a_number),
     F64(0.0),
   ])
@@ -64,7 +64,7 @@ test "i32 select with cond=0 should return false_val" {
     #|  (func (export "test") (result i32)
     #|    (select (i32.const 1) (i32.const 2) (i32.const 0)))
     #|)
-  let result = compare_jit_interp(source, "test", [])
+  let result = @testsuite.compare_jit_interp(source, "test", [])
   inspect(result, content="matched")
 }
 
@@ -75,7 +75,7 @@ test "i32 select with cond=1 should return true_val" {
     #|  (func (export "test") (result i32)
     #|    (select (i32.const 1) (i32.const 2) (i32.const 1)))
     #|)
-  let result = compare_jit_interp(source, "test", [])
+  let result = @testsuite.compare_jit_interp(source, "test", [])
   inspect(result, content="matched")
 }
 
@@ -87,7 +87,7 @@ test "f32 select with NaN" {
     #|    (select (local.get 0) (local.get 1) (f32.lt (local.get 0) (local.get 1))))
     #|)
   // 0.0 < nan = false, so select returns false_val (nan)
-  let result = compare_jit_interp(source, "test", [
+  let result = @testsuite.compare_jit_interp(source, "test", [
     F32(0.0),
     F32(@float.not_a_number),
   ])

@@ -5,8 +5,11 @@ test "GC transfer: externref global preserves wrapped i31" {
     #|  (global $g externref (extern.convert_any (ref.i31 (i32.const 55))))
     #|  (func (export "test") (result i32)
     #|    global.get $g any.convert_extern ref.cast (ref i31) i31.get_s))
-  debug_inspect(run_interp_only(source, "test", []), content="Ok([I32(55)])")
-  inspect(compare_jit_interp(source, "test", []), content="matched")
+  debug_inspect(
+    @testsuite.run_interp_only(source, "test", []),
+    content="Ok([I32(55)])",
+  )
+  inspect(@testsuite.compare_jit_interp(source, "test", []), content="matched")
 }
 
 ///|

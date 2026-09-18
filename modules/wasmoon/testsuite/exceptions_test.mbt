@@ -18,7 +18,7 @@ test "exception_throw_catch_simple" {
     #|    (i32.const 42)
     #|  )
     #|)
-  let result = compare_jit_interp(source, "test", [])
+  let result = @testsuite.compare_jit_interp(source, "test", [])
   inspect(result, content="matched")
 }
 
@@ -37,7 +37,7 @@ test "exception_catch_with_i32_value" {
     #|    )
     #|  )
     #|)
-  let result = compare_jit_interp(source, "test", [])
+  let result = @testsuite.compare_jit_interp(source, "test", [])
   inspect(result, content="matched")
 }
 
@@ -57,7 +57,7 @@ test "exception_catch_with_multiple_values" {
     #|    (i32.add)
     #|  )
     #|)
-  let result = compare_jit_interp(source, "test", [])
+  let result = @testsuite.compare_jit_interp(source, "test", [])
   inspect(result, content="matched")
 }
 
@@ -77,7 +77,7 @@ test "exception_try_table_no_throw" {
     #|    (i32.const 0)
     #|  )
     #|)
-  let result = compare_jit_interp(source, "test", [])
+  let result = @testsuite.compare_jit_interp(source, "test", [])
   inspect(result, content="matched")
 }
 
@@ -108,7 +108,7 @@ test "exception_return_unwinds_try_handler" {
     #|    (i32.const 1)
     #|  )
     #|)
-  let result = compare_jit_interp(source, "test", [])
+  let result = @testsuite.compare_jit_interp(source, "test", [])
   inspect(result, content="matched")
 }
 
@@ -139,7 +139,7 @@ test "exception_br_unwinds_try_handler" {
     #|    (i32.const 2)
     #|  )
     #|)
-  let result = compare_jit_interp(source, "test", [])
+  let result = @testsuite.compare_jit_interp(source, "test", [])
   inspect(result, content="matched")
 }
 
@@ -171,8 +171,14 @@ test "exception_br_if_unwinds_only_taken_edge" {
     #|    (i32.const 3)
     #|  )
     #|)
-  inspect(compare_jit_interp(source, "test", [I32(0)]), content="matched")
-  inspect(compare_jit_interp(source, "test", [I32(1)]), content="matched")
+  inspect(
+    @testsuite.compare_jit_interp(source, "test", [I32(0)]),
+    content="matched",
+  )
+  inspect(
+    @testsuite.compare_jit_interp(source, "test", [I32(1)]),
+    content="matched",
+  )
 }
 
 ///|
@@ -210,8 +216,14 @@ test "exception_br_table_unwinds_to_target_depth" {
     #|    (local.get $result)
     #|  )
     #|)
-  inspect(compare_jit_interp(source, "test", [I32(0)]), content="matched")
-  inspect(compare_jit_interp(source, "test", [I32(1)]), content="matched")
+  inspect(
+    @testsuite.compare_jit_interp(source, "test", [I32(0)]),
+    content="matched",
+  )
+  inspect(
+    @testsuite.compare_jit_interp(source, "test", [I32(1)]),
+    content="matched",
+  )
 }
 
 ///|
@@ -246,7 +258,7 @@ test "exception_catch_unwinds_to_target_depth" {
     #|    (i32.const 8)
     #|  )
     #|)
-  inspect(compare_jit_interp(source, "test", []), content="matched")
+  inspect(@testsuite.compare_jit_interp(source, "test", []), content="matched")
 }
 
 ///|
@@ -274,7 +286,7 @@ test "exception_br_on_null_unwinds_taken_edge" {
     #|    (i32.const 4)
     #|  )
     #|)
-  inspect(compare_jit_interp(source, "test", []), content="matched")
+  inspect(@testsuite.compare_jit_interp(source, "test", []), content="matched")
 }
 
 ///|
@@ -309,7 +321,7 @@ test "exception_br_on_non_null_unwinds_taken_edge" {
     #|    (i32.const 5)
     #|  )
     #|)
-  inspect(compare_jit_interp(source, "test", []), content="matched")
+  inspect(@testsuite.compare_jit_interp(source, "test", []), content="matched")
 }
 
 ///|
@@ -345,7 +357,7 @@ test "exception_br_on_cast_unwinds_taken_edge" {
     #|    (i32.const 6)
     #|  )
     #|)
-  inspect(compare_jit_interp(source, "test", []), content="matched")
+  inspect(@testsuite.compare_jit_interp(source, "test", []), content="matched")
 }
 
 ///|
@@ -381,7 +393,7 @@ test "exception_br_on_cast_fail_unwinds_taken_edge" {
     #|    (i32.const 7)
     #|  )
     #|)
-  inspect(compare_jit_interp(source, "test", []), content="matched")
+  inspect(@testsuite.compare_jit_interp(source, "test", []), content="matched")
 }
 
 ///|
@@ -401,7 +413,7 @@ test "exception_catch_all" {
     #|    (i32.const 1)
     #|  )
     #|)
-  let result = compare_jit_interp(source, "test", [])
+  let result = @testsuite.compare_jit_interp(source, "test", [])
   inspect(result, content="matched")
 }
 
@@ -422,7 +434,7 @@ test "exception_catch_ref" {
     #|    (i32.const 42)
     #|  )
     #|)
-  let result = compare_jit_interp(source, "test", [])
+  let result = @testsuite.compare_jit_interp(source, "test", [])
   inspect(result, content="matched")
 }
 
@@ -452,7 +464,7 @@ test "exception_throw_ref_rethrow" {
     #|    (i32.const 42)
     #|  )
     #|)
-  let result = compare_jit_interp(source, "test", [])
+  let result = @testsuite.compare_jit_interp(source, "test", [])
   inspect(result, content="matched")
 }
 
@@ -474,7 +486,7 @@ test "exception_locals_normal_path" {
     #|    (local.get $x)
     #|  )
     #|)
-  let result = compare_jit_interp(source, "test", [])
+  let result = @testsuite.compare_jit_interp(source, "test", [])
   inspect(result, content="matched")
 }
 
@@ -496,7 +508,7 @@ test "exception_locals_exception_path" {
     #|    (local.get $x)
     #|  )
     #|)
-  let result = compare_jit_interp(source, "test", [])
+  let result = @testsuite.compare_jit_interp(source, "test", [])
   inspect(result, content="matched")
 }
 
@@ -523,7 +535,7 @@ test "exception_nested_try" {
     #|    (i32.const 42)
     #|  )
     #|)
-  let result = compare_jit_interp(source, "test", [])
+  let result = @testsuite.compare_jit_interp(source, "test", [])
   inspect(result, content="matched")
 }
 
@@ -543,7 +555,7 @@ test "exception_cross_function" {
     #|    )
     #|  )
     #|)
-  let result = compare_jit_interp(source, "test", [])
+  let result = @testsuite.compare_jit_interp(source, "test", [])
   inspect(result, content="matched")
 }
 
@@ -564,7 +576,7 @@ test "exception_catch_all_ref" {
     #|    (i32.const 42)
     #|  )
     #|)
-  let result = compare_jit_interp(source, "test", [])
+  let result = @testsuite.compare_jit_interp(source, "test", [])
   inspect(result, content="matched")
 }
 
@@ -589,7 +601,7 @@ test "exception_conditional_throw_ref" {
     #|  )
     #|)
   // Test case where we don't re-throw (arg = 1)
-  let result1 = compare_jit_interp(source, "test", [I32(1)])
+  let result1 = @testsuite.compare_jit_interp(source, "test", [I32(1)])
   inspect(result1, content="matched")
 }
 
@@ -608,7 +620,7 @@ test "exception_f64_values" {
     #|    )
     #|  )
     #|)
-  let result = compare_jit_interp(source, "test", [])
+  let result = @testsuite.compare_jit_interp(source, "test", [])
   inspect(result, content="matched")
 }
 
@@ -628,7 +640,7 @@ test "exception_mixed_type_values" {
     #|    (drop)
     #|  )
     #|)
-  let result = compare_jit_interp(source, "test", [])
+  let result = @testsuite.compare_jit_interp(source, "test", [])
   inspect(result, content="matched")
 }
 
@@ -657,7 +669,7 @@ test "exception_multiple_catch_handlers" {
     #|    (i32.add)
     #|  )
     #|)
-  let result = compare_jit_interp(source, "test", [])
+  let result = @testsuite.compare_jit_interp(source, "test", [])
   inspect(result, content="matched")
 }
 
@@ -679,6 +691,6 @@ test "exception_try_table_with_params" {
     #|    (i32.const 0)
     #|  )
     #|)
-  let result = compare_jit_interp(source, "test", [])
+  let result = @testsuite.compare_jit_interp(source, "test", [])
   inspect(result, content="matched")
 }
