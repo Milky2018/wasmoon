@@ -1,9 +1,9 @@
 ///|
 fn decode_result(
   bytes : Bytes,
-  limits? : DecodeLimits = DecodeLimits::default(),
-) -> Result[Artifact, ArtifactDecodeError] {
-  Ok(decode(bytes, limits~)) catch {
+  limits? : @artifact.DecodeLimits = @artifact.DecodeLimits::default(),
+) -> Result[@artifact.Artifact, @artifact.ArtifactDecodeError] {
+  Ok(@artifact.decode(bytes, limits~)) catch {
     error => Err(error)
   }
 }
@@ -11,8 +11,8 @@ fn decode_result(
 ///|
 fn decode_error(
   bytes : Bytes,
-  limits? : DecodeLimits = DecodeLimits::default(),
-) -> ArtifactDecodeError {
+  limits? : @artifact.DecodeLimits = @artifact.DecodeLimits::default(),
+) -> @artifact.ArtifactDecodeError {
   match decode_result(bytes, limits~) {
     Err(error) => error
     Ok(_) => abort("expected artifact decoding to fail")
@@ -68,7 +68,7 @@ fn replace_i64_payload(
 }
 
 ///|
-fn artifact_with_signed_metadata_markers() -> Artifact {
+fn artifact_with_signed_metadata_markers() -> @artifact.Artifact {
   let artifact = sample_artifact()
   let function = artifact.functions[0]
   let source = @native.SourceLocation::new("signed-metadata.wasm", 1, 1)
@@ -104,14 +104,14 @@ fn artifact_with_signed_metadata_markers() -> Artifact {
 ///|
 test "codec round-trips every artifact field" {
   let artifact = sample_artifact()
-  let encoded = encode(artifact)
-  let decoded = decode(encoded)
+  let encoded = @artifact.encode(artifact)
+  let decoded = @artifact.decode(encoded)
   assert_eq(decoded, artifact)
 }
 
 ///|
 test "decoder returns structured format errors" {
-  let encoded = encode(sample_artifact())
+  let encoded = @artifact.encode(sample_artifact())
   let bad_magic = copy_bytes(encoded)
   bad_magic[0] = b'x'
   let old_version = copy_bytes(encoded)
@@ -128,7 +128,7 @@ test "decoder returns structured format errors" {
   trailing.push(b'\x00')
   let artifact = sample_artifact()
   let function = artifact.functions[0]
-  let invalid_entry : Artifact = {
+  let invalid_entry : @artifact.Artifact = {
     ..artifact,
     functions: [{ ..function, entry_offset: function.code.length(), }],
   }
@@ -140,7 +140,7 @@ test "decoder returns structured format errors" {
       decode_error(Bytes::from_array(excessive_feature_count)),
       decode_error(Bytes::from_array(invalid_utf8)),
       decode_error(Bytes::from_array(trailing)),
-      decode_error(encode(invalid_entry)),
+      decode_error(@artifact.encode(invalid_entry)),
     ],
     content=(
       #|[
@@ -164,7 +164,7 @@ test "decoder returns structured format errors" {
 
 ///|
 test "decoder rejects signed metadata outside the host Int range" {
-  let encoded = encode(artifact_with_signed_metadata_markers())
+  let encoded = @artifact.encode(artifact_with_signed_metadata_markers())
   debug_inspect(
     [
       decode_error(replace_i64_payload(encoded, 0x11111111L, 0x80000000L)),
@@ -202,12 +202,12 @@ test "decoder rejects signed metadata outside the host Int range" {
 
 ///|
 test "decoder preserves signed metadata at the host Int boundaries" {
-  let encoded = encode(artifact_with_signed_metadata_markers())
+  let encoded = @artifact.encode(artifact_with_signed_metadata_markers())
   let encoded = replace_i64_payload(encoded, 0x11111111L, -0x80000000L)
   let encoded = replace_i64_payload(encoded, 0x22222222L, 0x7FFFFFFFL)
   let encoded = replace_i64_payload(encoded, 0x33333333L, -0x80000000L)
   let encoded = replace_i64_payload(encoded, 0x44444444L, 0x7FFFFFFFL)
-  let decoded = decode(encoded)
+  let decoded = @artifact.decode(encoded)
   debug_inspect(
     (
       decoded.functions[0].traps[0].reason,
@@ -229,8 +229,8 @@ test "decoder preserves signed metadata at the host Int boundaries" {
 
 ///|
 test "decoder enforces every variable-length resource class" {
-  let encoded = encode(sample_artifact())
-  let defaults = DecodeLimits::default()
+  let encoded = @artifact.encode(sample_artifact())
+  let defaults = @artifact.DecodeLimits::default()
   debug_inspect(
     [
       decode_error(encoded, limits={
@@ -302,7 +302,7 @@ test "decoder enforces every variable-length resource class" {
 
 ///|
 test "every proper encoded prefix is rejected as truncated" {
-  let encoded = encode(sample_artifact())
+  let encoded = @artifact.encode(sample_artifact())
   for length in 0..<encoded.length() {
     assert_true(decode_result(prefix(encoded, length)) is Err(_))
   }
@@ -311,7 +311,7 @@ test "every proper encoded prefix is rejected as truncated" {
 ///|
 test "encoder rejects a non-SHA-256 digest width" {
   let artifact = sample_artifact()
-  let invalid : Artifact = {
+  let invalid : @artifact.Artifact = {
     ..artifact,
     manifest: {
       ..artifact.manifest,
@@ -321,7 +321,9 @@ test "encoder rejects a non-SHA-256 digest width" {
       },
     },
   }
-  let result : Result[Bytes, ArtifactEncodeError] = Ok(encode(invalid)) catch {
+  let result : Result[Bytes, @artifact.ArtifactEncodeError] = Ok(
+    @artifact.encode(invalid),
+  ) catch {
     error => Err(error)
   }
   debug_inspect(

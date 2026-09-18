@@ -1,6 +1,6 @@
 ///|
 test "x64 trusted direct selection skips redundant VCode validation" {
-  let abi = InternalAbi::new(
+  let abi = @x64_target.InternalAbi::new(
     7,
     12,
     [6, 2, 1, 8, 9],
@@ -9,12 +9,12 @@ test "x64 trusted direct selection skips redundant VCode validation" {
     [0, 1, 2, 3, 4, 5, 6, 7],
   )
   let saw_validation = Ref(false)
-  let session = DirectLoweringSession::new(
+  let session = @x64_target.DirectLoweringSession::new(
     "trusted",
     Internal,
     [Ptr64],
     [],
-    LoweringContext::new(abi),
+    @x64_target.LoweringContext::new(abi),
     on_event=fn(event) {
       if event is TargetValidationStarted {
         saw_validation.val = true
@@ -32,7 +32,7 @@ test "x64 trusted direct selection skips redundant VCode validation" {
 
 ///|
 test "x64 direct selection erases raw-word pointer bitcasts" {
-  let abi = InternalAbi::new(
+  let abi = @x64_target.InternalAbi::new(
     7,
     12,
     [6, 2, 1, 8, 9],
@@ -40,12 +40,12 @@ test "x64 direct selection erases raw-word pointer bitcasts" {
     [0, 2, 1, 8, 9, 6, 7, 10],
     [0, 1, 2, 3, 4, 5, 6, 7],
   )
-  let session = DirectLoweringSession::new(
+  let session = @x64_target.DirectLoweringSession::new(
     "raw_word_alias",
     Internal,
     [Ptr64, I64],
     [I64],
-    LoweringContext::new(abi),
+    @x64_target.LoweringContext::new(abi),
   )
   let builder = @lowering.DirectBuilder::new([Ptr64, I64], session.sink())
   let pointer = builder.emit_with_metadata(

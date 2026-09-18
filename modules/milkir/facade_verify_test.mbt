@@ -126,7 +126,7 @@ test "extension validators receive the complete read-only instruction shape" {
   let builder = @milkir.FunctionBuilder::FunctionBuilder("extension_view")
   let input = builder.add_param(I64)
   builder.add_result(I32)
-  let views : Array[ExtensionInstView] = []
+  let views : Array[@milkir.ExtensionInstView] = []
   let result = builder.emit_ext_inst(I32, ExtOp("demo", "shape", []), [input])
   builder.return_([result])
   let func = builder.finalize()

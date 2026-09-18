@@ -1,26 +1,26 @@
 ///|
 test "legacy parallel move resolver accepts empty inputs without scratch" {
-  debug_inspect(resolve_parallel_moves([], [], []), content="[]")
+  debug_inspect(@vcode.resolve_parallel_moves([], [], []), content="[]")
 }
 
 ///|
 test "parallel move resolver preserves cycles and stack transfers" {
-  let int0 = PhysicalReg::new(0, Int)
-  let int1 = PhysicalReg::new(1, Int)
-  let int16 = PhysicalReg::new(16, Int)
-  let function : Builder[TestInst] = Builder::new("move_slots", [])
-  let allocation = Allocation::for_function(function.finish())
+  let int0 = @vcode.PhysicalReg::new(0, Int)
+  let int1 = @vcode.PhysicalReg::new(1, Int)
+  let int16 = @vcode.PhysicalReg::new(16, Int)
+  let function : @vcode.Builder[TestInst] = @vcode.Builder::new("move_slots", [])
+  let allocation = @vcode.Allocation::for_function(function.finish())
   let stack0 = allocation.create_stack_slot(I64, 8, 8)
   let stack1 = allocation.create_stack_slot(I64, 8, 8)
   debug_inspect(
-    resolve_parallel_moves(
+    @vcode.resolve_parallel_moves(
       [
-        ParallelMove::new(I64, Register(int0), Register(int1)),
-        ParallelMove::new(I64, Register(int1), Register(int0)),
-        ParallelMove::new(I64, Stack(stack0), Stack(stack1)),
+        @vcode.ParallelMove::new(I64, Register(int0), Register(int1)),
+        @vcode.ParallelMove::new(I64, Register(int1), Register(int0)),
+        @vcode.ParallelMove::new(I64, Stack(stack0), Stack(stack1)),
       ],
       [int16],
-      [PhysicalReg::new(16, FpVector)],
+      [@vcode.PhysicalReg::new(16, FpVector)],
     ),
     content=(
       #|[
@@ -36,16 +36,16 @@ test "parallel move resolver preserves cycles and stack transfers" {
 
 ///|
 test "parallel move resolver shares the physical FP and SIMD bank" {
-  let fp0 = PhysicalReg::new(0, FpVector)
-  let fp1 = PhysicalReg::new(1, FpVector)
-  let fp16 = PhysicalReg::new(16, FpVector)
+  let fp0 = @vcode.PhysicalReg::new(0, FpVector)
+  let fp1 = @vcode.PhysicalReg::new(1, FpVector)
+  let fp16 = @vcode.PhysicalReg::new(16, FpVector)
   debug_inspect(
-    resolve_parallel_moves(
+    @vcode.resolve_parallel_moves(
       [
-        ParallelMove::new(F32, Register(fp0), Register(fp1)),
-        ParallelMove::new(V128, Register(fp1), Register(fp0)),
+        @vcode.ParallelMove::new(F32, Register(fp0), Register(fp1)),
+        @vcode.ParallelMove::new(V128, Register(fp1), Register(fp0)),
       ],
-      [PhysicalReg::new(16, Int)],
+      [@vcode.PhysicalReg::new(16, Int)],
       [fp16],
     ),
     content=(
@@ -60,20 +60,20 @@ test "parallel move resolver shares the physical FP and SIMD bank" {
 
 ///|
 test "parallel move resolver never reuses a final destination as scratch" {
-  let int0 = PhysicalReg::new(0, Int)
-  let int1 = PhysicalReg::new(1, Int)
-  let int2 = PhysicalReg::new(2, Int)
-  let int16 = PhysicalReg::new(16, Int)
-  let int17 = PhysicalReg::new(17, Int)
+  let int0 = @vcode.PhysicalReg::new(0, Int)
+  let int1 = @vcode.PhysicalReg::new(1, Int)
+  let int2 = @vcode.PhysicalReg::new(2, Int)
+  let int16 = @vcode.PhysicalReg::new(16, Int)
+  let int17 = @vcode.PhysicalReg::new(17, Int)
   debug_inspect(
-    resolve_parallel_moves(
+    @vcode.resolve_parallel_moves(
       [
-        ParallelMove::new(I64, Register(int0), Register(int1)),
-        ParallelMove::new(I64, Register(int1), Register(int0)),
-        ParallelMove::new(I64, Register(int2), Register(int16)),
+        @vcode.ParallelMove::new(I64, Register(int0), Register(int1)),
+        @vcode.ParallelMove::new(I64, Register(int1), Register(int0)),
+        @vcode.ParallelMove::new(I64, Register(int2), Register(int16)),
       ],
       [int16, int17],
-      [PhysicalReg::new(16, FpVector)],
+      [@vcode.PhysicalReg::new(16, FpVector)],
     ),
     content=(
       #|[
@@ -88,25 +88,28 @@ test "parallel move resolver never reuses a final destination as scratch" {
 
 ///|
 test "call transfer planner snapshots stack arguments before register cycles" {
-  let int0 = PhysicalReg::new(0, Int)
-  let int1 = PhysicalReg::new(1, Int)
-  let int16 = PhysicalReg::new(16, Int)
-  let function : Builder[TestInst] = Builder::new("call_transfer_slots", [])
-  let allocation = Allocation::for_function(function.finish())
+  let int0 = @vcode.PhysicalReg::new(0, Int)
+  let int1 = @vcode.PhysicalReg::new(1, Int)
+  let int16 = @vcode.PhysicalReg::new(16, Int)
+  let function : @vcode.Builder[TestInst] = @vcode.Builder::new(
+    "call_transfer_slots",
+    [],
+  )
+  let allocation = @vcode.Allocation::for_function(function.finish())
   let stack0 = allocation.create_stack_slot(I64, 8, 8)
   debug_inspect(
-    plan_call_transfers(
+    @vcode.plan_call_transfers(
       allocation,
       [
-        CallTransfer::to_stack(I64, Register(int0), 0),
-        CallTransfer::to_register(I64, Register(int1), int0),
-        CallTransfer::to_stack(I64, Stack(stack0), 8),
-        CallTransfer::to_register(I64, Register(int0), int1),
+        @vcode.CallTransfer::to_stack(I64, Register(int0), 0),
+        @vcode.CallTransfer::to_register(I64, Register(int1), int0),
+        @vcode.CallTransfer::to_stack(I64, Stack(stack0), 8),
+        @vcode.CallTransfer::to_register(I64, Register(int0), int1),
       ],
       0,
       16,
       [int16],
-      [PhysicalReg::new(16, FpVector)],
+      [@vcode.PhysicalReg::new(16, FpVector)],
       [],
     ),
     content=(
@@ -127,18 +130,21 @@ test "call transfer planner snapshots stack arguments before register cycles" {
 
 ///|
 test "call transfer planner protects safepoint root homes" {
-  let int0 = PhysicalReg::new(0, Int)
-  let int1 = PhysicalReg::new(1, Int)
-  let function : Builder[TestInst] = Builder::new("protected_call", [])
-  let allocation = Allocation::for_function(function.finish())
+  let int0 = @vcode.PhysicalReg::new(0, Int)
+  let int1 = @vcode.PhysicalReg::new(1, Int)
+  let function : @vcode.Builder[TestInst] = @vcode.Builder::new(
+    "protected_call",
+    [],
+  )
+  let allocation = @vcode.Allocation::for_function(function.finish())
   try
-    plan_call_transfers(
+    @vcode.plan_call_transfers(
       allocation,
-      [CallTransfer::to_register(I64, Register(int1), int0)],
+      [@vcode.CallTransfer::to_register(I64, Register(int1), int0)],
       0,
       0,
-      [PhysicalReg::new(16, Int)],
-      [PhysicalReg::new(16, FpVector)],
+      [@vcode.PhysicalReg::new(16, Int)],
+      [@vcode.PhysicalReg::new(16, FpVector)],
       [Register(int0)],
     )
   catch {
@@ -154,21 +160,24 @@ test "call transfer planner protects safepoint root homes" {
 
 ///|
 test "call transfer planner rejects overlapping outgoing slots" {
-  let int0 = PhysicalReg::new(0, Int)
-  let int1 = PhysicalReg::new(1, Int)
-  let function : Builder[TestInst] = Builder::new("overlapping_call", [])
-  let allocation = Allocation::for_function(function.finish())
+  let int0 = @vcode.PhysicalReg::new(0, Int)
+  let int1 = @vcode.PhysicalReg::new(1, Int)
+  let function : @vcode.Builder[TestInst] = @vcode.Builder::new(
+    "overlapping_call",
+    [],
+  )
+  let allocation = @vcode.Allocation::for_function(function.finish())
   try
-    plan_call_transfers(
+    @vcode.plan_call_transfers(
       allocation,
       [
-        CallTransfer::to_stack(I64, Register(int0), 0),
-        CallTransfer::to_stack(I32, Register(int1), 4),
+        @vcode.CallTransfer::to_stack(I64, Register(int0), 0),
+        @vcode.CallTransfer::to_stack(I32, Register(int1), 4),
       ],
       0,
       16,
-      [PhysicalReg::new(16, Int)],
-      [PhysicalReg::new(16, FpVector)],
+      [@vcode.PhysicalReg::new(16, Int)],
+      [@vcode.PhysicalReg::new(16, FpVector)],
       [],
     )
   catch {
@@ -184,29 +193,29 @@ test "call transfer planner rejects overlapping outgoing slots" {
 
 ///|
 test "call transfer planner covers duplicate sources mixed banks and call metadata" {
-  let int0 = PhysicalReg::new(0, Int)
-  let int1 = PhysicalReg::new(1, Int)
-  let callee = PhysicalReg::new(2, Int)
-  let result_area = PhysicalReg::new(3, Int)
-  let fp0 = PhysicalReg::new(0, FpVector)
-  let fp1 = PhysicalReg::new(1, FpVector)
-  let function : Builder[TestInst] = Builder::new("mixed_call", [])
-  let allocation = Allocation::for_function(function.finish())
+  let int0 = @vcode.PhysicalReg::new(0, Int)
+  let int1 = @vcode.PhysicalReg::new(1, Int)
+  let callee = @vcode.PhysicalReg::new(2, Int)
+  let result_area = @vcode.PhysicalReg::new(3, Int)
+  let fp0 = @vcode.PhysicalReg::new(0, FpVector)
+  let fp1 = @vcode.PhysicalReg::new(1, FpVector)
+  let function : @vcode.Builder[TestInst] = @vcode.Builder::new("mixed_call", [])
+  let allocation = @vcode.Allocation::for_function(function.finish())
   let float_slot = allocation.create_stack_slot(F64, 8, 8)
   debug_inspect(
-    plan_call_transfers(
+    @vcode.plan_call_transfers(
       allocation,
       [
-        CallTransfer::to_register(Ptr64, Register(callee), int0),
-        CallTransfer::to_register(Ptr64, Register(result_area), int1),
-        CallTransfer::to_register(F64, Stack(float_slot), fp0),
-        CallTransfer::to_stack(V128, Register(fp1), 16),
-        CallTransfer::to_stack(I64, Register(callee), 0),
+        @vcode.CallTransfer::to_register(Ptr64, Register(callee), int0),
+        @vcode.CallTransfer::to_register(Ptr64, Register(result_area), int1),
+        @vcode.CallTransfer::to_register(F64, Stack(float_slot), fp0),
+        @vcode.CallTransfer::to_stack(V128, Register(fp1), 16),
+        @vcode.CallTransfer::to_stack(I64, Register(callee), 0),
       ],
       0,
       32,
-      [PhysicalReg::new(16, Int)],
-      [PhysicalReg::new(16, FpVector)],
+      [@vcode.PhysicalReg::new(16, Int)],
+      [@vcode.PhysicalReg::new(16, FpVector)],
       [],
     ),
     content=(
@@ -227,19 +236,33 @@ test "call transfer planner covers duplicate sources mixed banks and call metada
 
 ///|
 test "call transfer planner validates source stack ownership type and layout" {
-  let function : Builder[TestInst] = Builder::new("source_contract", [])
-  let allocation = Allocation::for_function(function.finish())
-  let foreign_function : Builder[TestInst] = Builder::new("foreign", [])
-  let foreign_allocation = Allocation::for_function(foreign_function.finish())
+  let function : @vcode.Builder[TestInst] = @vcode.Builder::new(
+    "source_contract",
+    [],
+  )
+  let allocation = @vcode.Allocation::for_function(function.finish())
+  let foreign_function : @vcode.Builder[TestInst] = @vcode.Builder::new(
+    "foreign",
+    [],
+  )
+  let foreign_allocation = @vcode.Allocation::for_function(
+    foreign_function.finish(),
+  )
   let foreign = foreign_allocation.create_stack_slot(I64, 8, 8)
   try
-    plan_call_transfers(
+    @vcode.plan_call_transfers(
       allocation,
-      [CallTransfer::to_register(I64, Stack(foreign), PhysicalReg::new(0, Int))],
+      [
+        @vcode.CallTransfer::to_register(
+          I64,
+          Stack(foreign),
+          @vcode.PhysicalReg::new(0, Int),
+        ),
+      ],
       0,
       0,
-      [PhysicalReg::new(16, Int)],
-      [PhysicalReg::new(16, FpVector)],
+      [@vcode.PhysicalReg::new(16, Int)],
+      [@vcode.PhysicalReg::new(16, FpVector)],
       [],
     )
   catch {
@@ -249,19 +272,19 @@ test "call transfer planner validates source stack ownership type and layout" {
   }
   let wrong_type = allocation.create_stack_slot(F64, 8, 8)
   try
-    plan_call_transfers(
+    @vcode.plan_call_transfers(
       allocation,
       [
-        CallTransfer::to_register(
+        @vcode.CallTransfer::to_register(
           I64,
           Stack(wrong_type),
-          PhysicalReg::new(0, Int),
+          @vcode.PhysicalReg::new(0, Int),
         ),
       ],
       0,
       0,
-      [PhysicalReg::new(16, Int)],
-      [PhysicalReg::new(16, FpVector)],
+      [@vcode.PhysicalReg::new(16, Int)],
+      [@vcode.PhysicalReg::new(16, FpVector)],
       [],
     )
   catch {
@@ -275,19 +298,19 @@ test "call transfer planner validates source stack ownership type and layout" {
   }
   let invalid_layout = allocation.create_stack_slot(I64, 4, 4)
   try
-    plan_call_transfers(
+    @vcode.plan_call_transfers(
       allocation,
       [
-        CallTransfer::to_register(
+        @vcode.CallTransfer::to_register(
           I64,
           Stack(invalid_layout),
-          PhysicalReg::new(0, Int),
+          @vcode.PhysicalReg::new(0, Int),
         ),
       ],
       0,
       0,
-      [PhysicalReg::new(16, Int)],
-      [PhysicalReg::new(16, FpVector)],
+      [@vcode.PhysicalReg::new(16, Int)],
+      [@vcode.PhysicalReg::new(16, FpVector)],
       [],
     )
   catch {
@@ -299,16 +322,25 @@ test "call transfer planner validates source stack ownership type and layout" {
 
 ///|
 test "call transfer planner enforces the outgoing stack interval" {
-  let function : Builder[TestInst] = Builder::new("outgoing_range", [])
-  let allocation = Allocation::for_function(function.finish())
+  let function : @vcode.Builder[TestInst] = @vcode.Builder::new(
+    "outgoing_range",
+    [],
+  )
+  let allocation = @vcode.Allocation::for_function(function.finish())
   try
-    plan_call_transfers(
+    @vcode.plan_call_transfers(
       allocation,
-      [CallTransfer::to_stack(I64, Register(PhysicalReg::new(0, Int)), 8)],
+      [
+        @vcode.CallTransfer::to_stack(
+          I64,
+          Register(@vcode.PhysicalReg::new(0, Int)),
+          8,
+        ),
+      ],
       0,
       8,
-      [PhysicalReg::new(16, Int)],
-      [PhysicalReg::new(16, FpVector)],
+      [@vcode.PhysicalReg::new(16, Int)],
+      [@vcode.PhysicalReg::new(16, FpVector)],
       [],
     )
   catch {
@@ -324,23 +356,26 @@ test "call transfer planner enforces the outgoing stack interval" {
 
 ///|
 test "call transfer planner does not destroy protected or pending scratch sources" {
-  let function : Builder[TestInst] = Builder::new("scratch_contract", [])
-  let allocation = Allocation::for_function(function.finish())
+  let function : @vcode.Builder[TestInst] = @vcode.Builder::new(
+    "scratch_contract",
+    [],
+  )
+  let allocation = @vcode.Allocation::for_function(function.finish())
   let source_slot = allocation.create_stack_slot(I64, 8, 8)
-  let int0 = PhysicalReg::new(0, Int)
-  let int1 = PhysicalReg::new(1, Int)
-  let int2 = PhysicalReg::new(2, Int)
+  let int0 = @vcode.PhysicalReg::new(0, Int)
+  let int1 = @vcode.PhysicalReg::new(1, Int)
+  let int2 = @vcode.PhysicalReg::new(2, Int)
   debug_inspect(
-    plan_call_transfers(
+    @vcode.plan_call_transfers(
       allocation,
       [
-        CallTransfer::to_stack(I64, Stack(source_slot), 0),
-        CallTransfer::to_stack(I64, Register(int0), 8),
+        @vcode.CallTransfer::to_stack(I64, Stack(source_slot), 0),
+        @vcode.CallTransfer::to_stack(I64, Register(int0), 8),
       ],
       0,
       16,
       [int0, int1, int2],
-      [PhysicalReg::new(16, FpVector)],
+      [@vcode.PhysicalReg::new(16, FpVector)],
       [Register(int1)],
     ),
     content=(
@@ -357,19 +392,22 @@ test "call transfer planner does not destroy protected or pending scratch source
 
 ///|
 test "call transfer planner rejects invalid class destination and scratch contracts" {
-  let function : Builder[TestInst] = Builder::new("invalid_contracts", [])
-  let allocation = Allocation::for_function(function.finish())
-  let int0 = PhysicalReg::new(0, Int)
-  let int1 = PhysicalReg::new(1, Int)
-  let fp0 = PhysicalReg::new(0, FpVector)
+  let function : @vcode.Builder[TestInst] = @vcode.Builder::new(
+    "invalid_contracts",
+    [],
+  )
+  let allocation = @vcode.Allocation::for_function(function.finish())
+  let int0 = @vcode.PhysicalReg::new(0, Int)
+  let int1 = @vcode.PhysicalReg::new(1, Int)
+  let fp0 = @vcode.PhysicalReg::new(0, FpVector)
   try
-    plan_call_transfers(
+    @vcode.plan_call_transfers(
       allocation,
-      [CallTransfer::to_register(I64, Register(fp0), int0)],
+      [@vcode.CallTransfer::to_register(I64, Register(fp0), int0)],
       0,
       0,
-      [PhysicalReg::new(16, Int)],
-      [PhysicalReg::new(16, FpVector)],
+      [@vcode.PhysicalReg::new(16, Int)],
+      [@vcode.PhysicalReg::new(16, FpVector)],
       [],
     )
   catch {
@@ -378,13 +416,13 @@ test "call transfer planner rejects invalid class destination and scratch contra
     _ => fail("expected a source class error")
   }
   try
-    plan_call_transfers(
+    @vcode.plan_call_transfers(
       allocation,
-      [CallTransfer::to_register(I64, Register(int0), fp0)],
+      [@vcode.CallTransfer::to_register(I64, Register(int0), fp0)],
       0,
       0,
-      [PhysicalReg::new(16, Int)],
-      [PhysicalReg::new(16, FpVector)],
+      [@vcode.PhysicalReg::new(16, Int)],
+      [@vcode.PhysicalReg::new(16, FpVector)],
       [],
     )
   catch {
@@ -393,16 +431,16 @@ test "call transfer planner rejects invalid class destination and scratch contra
     _ => fail("expected a destination class error")
   }
   try
-    plan_call_transfers(
+    @vcode.plan_call_transfers(
       allocation,
       [
-        CallTransfer::to_register(I64, Register(int0), int1),
-        CallTransfer::to_register(I64, Register(int1), int1),
+        @vcode.CallTransfer::to_register(I64, Register(int0), int1),
+        @vcode.CallTransfer::to_register(I64, Register(int1), int1),
       ],
       0,
       0,
-      [PhysicalReg::new(16, Int)],
-      [PhysicalReg::new(16, FpVector)],
+      [@vcode.PhysicalReg::new(16, Int)],
+      [@vcode.PhysicalReg::new(16, FpVector)],
       [],
     )
   catch {
@@ -415,13 +453,13 @@ test "call transfer planner rejects invalid class destination and scratch contra
     _ => fail("expected a duplicate register destination error")
   }
   try
-    plan_call_transfers(
+    @vcode.plan_call_transfers(
       allocation,
-      [CallTransfer::to_stack(I32, Register(int0), 2)],
+      [@vcode.CallTransfer::to_stack(I32, Register(int0), 2)],
       0,
       8,
-      [PhysicalReg::new(16, Int)],
-      [PhysicalReg::new(16, FpVector)],
+      [@vcode.PhysicalReg::new(16, Int)],
+      [@vcode.PhysicalReg::new(16, FpVector)],
       [],
     )
   catch {
@@ -432,13 +470,13 @@ test "call transfer planner rejects invalid class destination and scratch contra
   }
   let source_slot = allocation.create_stack_slot(I64, 8, 8)
   try
-    plan_call_transfers(
+    @vcode.plan_call_transfers(
       allocation,
-      [CallTransfer::to_stack(I64, Stack(source_slot), 0)],
+      [@vcode.CallTransfer::to_stack(I64, Stack(source_slot), 0)],
       0,
       8,
       [],
-      [PhysicalReg::new(16, FpVector)],
+      [@vcode.PhysicalReg::new(16, FpVector)],
       [],
     )
   catch {
@@ -451,13 +489,13 @@ test "call transfer planner rejects invalid class destination and scratch contra
     _ => fail("expected a missing scratch error")
   }
   try
-    plan_call_transfers(
+    @vcode.plan_call_transfers(
       allocation,
-      [CallTransfer::to_stack(I64, Stack(source_slot), 0)],
+      [@vcode.CallTransfer::to_stack(I64, Stack(source_slot), 0)],
       0,
       8,
       [fp0],
-      [PhysicalReg::new(16, FpVector)],
+      [@vcode.PhysicalReg::new(16, FpVector)],
       [],
     )
   catch {

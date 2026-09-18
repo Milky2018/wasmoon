@@ -22,7 +22,7 @@ test "implicit singleton self references parse and retain composite kinds" {
     @validator.validate_module(module_)
     assert_eq(module_.types, control.types)
     assert_eq(module_.type_rec_groups, control.type_rec_groups)
-    assert_eq(encode(module_), encode(control))
+    assert_eq(@encoder.encode(module_), @encoder.encode(control))
   }
 }
 
@@ -41,7 +41,7 @@ test "singleton groups encode without rec wrappers" {
     let module_ = @parser.parse_module(type_module(explicit))
     let implicit = [1]
     implicit.append(subtype)
-    let encoded = encode(module_)
+    let encoded = @encoder.encode(module_)
     assert_eq(
       Bytes::makei(encoded.length(), i => encoded[i].to_byte()),
       type_module(implicit),
@@ -60,7 +60,7 @@ test "roundtrip preserves cycles and separate recursive group identities" {
   ])
   let original = @parser.parse_module(input)
   @validator.validate_module(original)
-  let bytes = encode(original)
+  let bytes = @encoder.encode(original)
   let roundtrip = @parser.parse_module(
     Bytes::makei(bytes.length(), i => bytes[i].to_byte()),
   )

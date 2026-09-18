@@ -1,28 +1,31 @@
 ///|
 test "verified code object snapshots complete typed metadata" {
-  let object = build(
+  let object = @code_object.build(
     AArch64,
     [b'\x00', b'\x00', b'\x00', b'\x94'],
     relocations=[
-      Relocation::new(
+      @code_object.Relocation::new(
         0,
         AArch64Call26,
         External(@native.ExternalSymbol::new("runtime.poll")),
       ),
     ],
     sources=[
-      SourceSite::new(0, @native.SourceLocation::new("fixture.wat", 8, 3)),
+      @code_object.SourceSite::new(
+        0,
+        @native.SourceLocation::new("fixture.wat", 8, 3),
+      ),
     ],
-    traps=[TrapSite::new(0, MemoryOutOfBounds)],
+    traps=[@code_object.TrapSite::new(0, MemoryOutOfBounds)],
     safepoints=[
-      SafepointSite::new(
+      @code_object.SafepointSite::new(
         0,
         Gc,
         [Register(Int, 0), Stack(offset=16, ty=GcRef64)],
         stack_map=@native.StackMapMetadata::new(0, argument_root_count=1),
       ),
     ],
-    unwind=[UnwindDirective::new(4, StackAlloc(size=16))],
+    unwind=[@code_object.UnwindDirective::new(4, StackAlloc(size=16))],
   )
   debug_inspect(
     object,
@@ -58,17 +61,17 @@ test "verified code object snapshots complete typed metadata" {
 ///|
 test "code object rejects duplicate or non-dense stack-map ids" {
   try
-    build(
+    @code_object.build(
       AArch64,
       [b'\x00', b'\x00', b'\x00', b'\x94', b'\x00', b'\x00', b'\x00', b'\x94'],
       safepoints=[
-        SafepointSite::new(
+        @code_object.SafepointSite::new(
           0,
           Gc,
           [],
           stack_map=@native.StackMapMetadata::new(0, argument_root_count=0),
         ),
-        SafepointSite::new(
+        @code_object.SafepointSite::new(
           4,
           Gc,
           [],
@@ -87,8 +90,8 @@ test "code object rejects duplicate or non-dense stack-map ids" {
 ///|
 test "code object rejects target-mismatched relocations before escape" {
   try
-    build(AArch64, [b'\x1f', b'\x20', b'\x03', b'\xd5'], relocations=[
-      Relocation::new(
+    @code_object.build(AArch64, [b'\x1f', b'\x20', b'\x03', b'\xd5'], relocations=[
+      @code_object.Relocation::new(
         0,
         X64PcRelative32,
         Code(@native.CodeSymbol::new("callee")),
@@ -114,8 +117,8 @@ test "code object rejects target-mismatched relocations before escape" {
 ///|
 test "code object rejects a call relocation on a non-call instruction" {
   try
-    build(AArch64, [b'\x1f', b'\x20', b'\x03', b'\xd5'], relocations=[
-      Relocation::new(
+    @code_object.build(AArch64, [b'\x1f', b'\x20', b'\x03', b'\xd5'], relocations=[
+      @code_object.Relocation::new(
         0,
         AArch64Call26,
         External(@native.ExternalSymbol::new("runtime.poll")),
@@ -141,8 +144,8 @@ test "code object rejects a call relocation on a non-call instruction" {
 ///|
 test "code object rejects malformed unwind directives" {
   try
-    build(AArch64, [b'\x1f', b'\x20', b'\x03', b'\xd5'], unwind=[
-      UnwindDirective::new(4, StackAlloc(size=3)),
+    @code_object.build(AArch64, [b'\x1f', b'\x20', b'\x03', b'\xd5'], unwind=[
+      @code_object.UnwindDirective::new(4, StackAlloc(size=3)),
     ])
     |> ignore
   catch {
@@ -164,12 +167,15 @@ test "code object rejects malformed unwind directives" {
 ///|
 test "code object rejects non-monotonic unwind offsets" {
   try
-    build(
+    @code_object.build(
       AArch64,
       [b'\x1f', b'\x20', b'\x03', b'\xd5', b'\x1f', b'\x20', b'\x03', b'\xd5'],
       unwind=[
-        UnwindDirective::new(8, StackAlloc(size=16)),
-        UnwindDirective::new(4, SaveRegister(Int, 19, cfa_offset=-8)),
+        @code_object.UnwindDirective::new(8, StackAlloc(size=16)),
+        @code_object.UnwindDirective::new(
+          4,
+          SaveRegister(Int, 19, cfa_offset=-8),
+        ),
       ],
     )
     |> ignore
@@ -192,9 +198,12 @@ test "code object rejects non-monotonic unwind offsets" {
 ///|
 test "code object rejects invalid unwind register locations" {
   try
-    build(X64, [b'\x50', b'\xc3'], unwind=[
-      UnwindDirective::new(1, StackAlloc(size=8)),
-      UnwindDirective::new(1, SaveRegister(Int, 16, cfa_offset=-16)),
+    @code_object.build(X64, [b'\x50', b'\xc3'], unwind=[
+      @code_object.UnwindDirective::new(1, StackAlloc(size=8)),
+      @code_object.UnwindDirective::new(
+        1,
+        SaveRegister(Int, 16, cfa_offset=-16),
+      ),
     ])
     |> ignore
   catch {
@@ -216,9 +225,12 @@ test "code object rejects invalid unwind register locations" {
 ///|
 test "code object rejects an inconsistent frame pointer" {
   try
-    build(X64, [b'\x50', b'\x48', b'\x89', b'\xe5', b'\xc3'], unwind=[
-      UnwindDirective::new(1, StackAlloc(size=8)),
-      UnwindDirective::new(4, SetFramePointer(Int, 5, cfa_offset=8)),
+    @code_object.build(X64, [b'\x50', b'\x48', b'\x89', b'\xe5', b'\xc3'], unwind=[
+      @code_object.UnwindDirective::new(1, StackAlloc(size=8)),
+      @code_object.UnwindDirective::new(
+        4,
+        SetFramePointer(Int, 5, cfa_offset=8),
+      ),
     ])
     |> ignore
   catch {

@@ -742,7 +742,7 @@ test "X64 verifier rejects integer lanes for vector float operations" {
       @vcode.InstructionMetadata::empty(),
     )
     |> ignore
-    try verify_vcode(builder.finish()) catch {
+    try @x64_target.verify_vcode(builder.finish()) catch {
       error => errors.push(error)
     } noraise {
       _ => fail("expected integer vector float operation to be rejected")
@@ -771,7 +771,7 @@ test "X64 verifier rejects integer lanes for vector float operations" {
 
 ///|
 test "X64 verifier rejects integer lanes for vector float ternary" {
-  let builder : @vcode.Builder[X64Inst] = @vcode.Builder::new(
+  let builder : @vcode.Builder[@x64_target.X64Inst] = @vcode.Builder::new(
     "bad_vector_float_ternary_lane",
     [V128, V128, V128],
   )
@@ -798,7 +798,7 @@ test "X64 verifier rejects integer lanes for vector float ternary" {
     @vcode.InstructionMetadata::empty(),
   )
   |> ignore
-  try verify_vcode(builder.finish()) catch {
+  try @x64_target.verify_vcode(builder.finish()) catch {
     error =>
       inspect(
         error,
@@ -816,13 +816,13 @@ test "X64 verifier rejects integer lanes for vector float ternary" {
 
 ///|
 test "X64 verifier rejects malformed vector numeric conversions" {
-  let conversions : Array[X64VectorConversion] = [
+  let conversions : Array[@x64_target.X64VectorConversion] = [
     FloatToInt(I32x4, Signed),
     IntToFloat(I64x2, Unsigned),
   ]
-  let errors : Array[TargetVCodeVerifyError] = []
+  let errors : Array[@x64_target.TargetVCodeVerifyError] = []
   for conversion in conversions {
-    let builder : @vcode.Builder[X64Inst] = @vcode.Builder::new(
+    let builder : @vcode.Builder[@x64_target.X64Inst] = @vcode.Builder::new(
       "bad_vector_numeric_conversion",
       [V128],
     )
@@ -845,7 +845,7 @@ test "X64 verifier rejects malformed vector numeric conversions" {
       @vcode.InstructionMetadata::empty(),
     )
     |> ignore
-    try verify_vcode(builder.finish()) catch {
+    try @x64_target.verify_vcode(builder.finish()) catch {
       error => errors.push(error)
     } noraise {
       _ => fail("expected malformed vector numeric conversion to be rejected")
@@ -870,15 +870,15 @@ test "X64 verifier rejects malformed vector numeric conversions" {
 
 ///|
 test "X64 verifier rejects malformed vector memory operations" {
-  let operations : Array[X64Inst] = [
+  let operations : Array[@x64_target.X64Inst] = [
     VectorLoadZero(W16, 0UL),
     VectorLoadExtend(I8x16, Signed, 0UL),
     VectorLoadLane(I32x4, 4, 0UL),
     VectorStoreLane(I64x2, 2, 0UL),
   ]
-  let errors : Array[TargetVCodeVerifyError] = []
+  let errors : Array[@x64_target.TargetVCodeVerifyError] = []
   for operation in operations {
-    let builder : @vcode.Builder[X64Inst] = @vcode.Builder::new(
+    let builder : @vcode.Builder[@x64_target.X64Inst] = @vcode.Builder::new(
       "bad_vector_memory",
       [Ptr64, V128],
     )
@@ -921,7 +921,7 @@ test "X64 verifier rejects malformed vector memory operations" {
       @vcode.InstructionMetadata::empty(),
     )
     |> ignore
-    try verify_vcode(builder.finish()) catch {
+    try @x64_target.verify_vcode(builder.finish()) catch {
       error => errors.push(error)
     } noraise {
       _ => fail("expected malformed vector memory to be rejected")
@@ -954,7 +954,7 @@ test "X64 verifier rejects malformed vector memory operations" {
 
 ///|
 test "X64 verifier requires early-clobber atomic loop results" {
-  let builder : @vcode.Builder[X64Inst] = @vcode.Builder::new(
+  let builder : @vcode.Builder[@x64_target.X64Inst] = @vcode.Builder::new(
     "late_atomic_result",
     [Ptr64, I32],
   )
@@ -982,7 +982,7 @@ test "X64 verifier requires early-clobber atomic loop results" {
     @vcode.InstructionMetadata::empty(),
   )
   |> ignore
-  try verify_vcode(builder.finish()) catch {
+  try @x64_target.verify_vcode(builder.finish()) catch {
     error =>
       inspect(
         error,
@@ -1000,7 +1000,7 @@ test "X64 verifier requires early-clobber atomic loop results" {
 
 ///|
 test "X64 verifier rejects a safepoint marker without metadata" {
-  let builder : @vcode.Builder[X64Inst] = @vcode.Builder::new(
+  let builder : @vcode.Builder[@x64_target.X64Inst] = @vcode.Builder::new(
     "unmarked_safepoint",
     [],
   )
@@ -1023,7 +1023,7 @@ test "X64 verifier rejects a safepoint marker without metadata" {
     @vcode.InstructionMetadata::empty(),
   )
   |> ignore
-  try verify_vcode(builder.finish()) catch {
+  try @x64_target.verify_vcode(builder.finish()) catch {
     error =>
       inspect(
         error,
@@ -1047,7 +1047,7 @@ test "X64 verifier rejects a safepoint marker without metadata" {
 /// register allocator would be free to keep a live value in `rcx` across the
 /// rotate. The verifier must reject it rather than let allocation proceed.
 test "X64 verifier rejects a rotate that omits its rcx clobber" {
-  let builder : @vcode.Builder[X64Inst] = @vcode.Builder::new(
+  let builder : @vcode.Builder[@x64_target.X64Inst] = @vcode.Builder::new(
     "rotate_without_clobber",
     [I32, I32],
   )
@@ -1073,7 +1073,7 @@ test "X64 verifier rejects a rotate that omits its rcx clobber" {
     @vcode.InstructionMetadata::empty(),
   )
   |> ignore
-  try verify_vcode(builder.finish()) catch {
+  try @x64_target.verify_vcode(builder.finish()) catch {
     error =>
       inspect(
         error,

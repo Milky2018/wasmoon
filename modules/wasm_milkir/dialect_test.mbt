@@ -1,10 +1,13 @@
 ///|
 test "Wasm extension descriptors validate immediate layout" {
-  let desc = descriptor(RefTest(3, true))
+  let desc = @wasm_milkir.descriptor(RefTest(3, true))
   inspect(desc.dialect, content="wasm")
   inspect(desc.opcode, content="ref_test")
   inspect(desc.expected_immediate_count(), content="2")
-  inspect(encode(RefTest(3, true)).matches_descriptor(desc), content="true")
+  inspect(
+    @wasm_milkir.encode(RefTest(3, true)).matches_descriptor(desc),
+    content="true",
+  )
 }
 
 ///|
@@ -15,7 +18,7 @@ test "Wasm extension decode reports malformed immediates" {
     FixedArray::makei(1, fn(_) { 0 }),
   )
   debug_inspect(
-    decode_error(ext),
+    @wasm_milkir.decode_error(ext),
     content=(
       #|Some("malformed Wasm MilkIR extension 'struct_get': expected 2 immediates, got 1")
     ),
@@ -30,7 +33,7 @@ test "Wasm extension decode reports unknown opcodes" {
     FixedArray::makei(1, fn(_) { 0 }),
   )
   debug_inspect(
-    decode_error(ext),
+    @wasm_milkir.decode_error(ext),
     content=(
       #|Some("unknown Wasm MilkIR extension opcode 'memroy_size'")
     ),
@@ -42,7 +45,7 @@ test "Wasm adapter validation rejects unknown opcodes" {
   let builder = @milkir.FunctionBuilder::FunctionBuilder("unknown_wasm_opcode")
   builder.emit_void_ext_inst(ExtOp("wasm", "typo", []), [])
   builder.return_([])
-  try verify_function(builder.get_function()) catch {
+  try @wasm_milkir.verify_function(builder.get_function()) catch {
     err =>
       inspect(
         err,
@@ -58,9 +61,9 @@ test "Wasm adapter validation rejects unknown opcodes" {
 ///|
 test "Wasm adapter validation accepts legal IR without producer metadata" {
   let builder = @milkir.FunctionBuilder::FunctionBuilder("legal_wasm_opcode")
-  builder.emit_ext_inst(I32, encode(GetExceptionTag), []) |> ignore
+  builder.emit_ext_inst(I32, @wasm_milkir.encode(GetExceptionTag), []) |> ignore
   builder.return_([])
-  verify_function(builder.get_function())
+  @wasm_milkir.verify_function(builder.get_function())
 }
 
 ///|
@@ -71,7 +74,7 @@ test "Wasm extension decode validates bool immediates" {
     FixedArray::makei(2, fn(i) { if i == 0 { 3 } else { 2 } }),
   )
   debug_inspect(
-    decode_error(ext),
+    @wasm_milkir.decode_error(ext),
     content=(
       #|Some("malformed Wasm MilkIR extension 'ref_test': immediate 1 is a bool flag encoded as 0 or 1, got 2")
     ),
@@ -92,7 +95,7 @@ test "Wasm adapter validation rejects malformed immediates" {
     [],
   )
   builder.return_([])
-  try verify_function(builder.get_function()) catch {
+  try @wasm_milkir.verify_function(builder.get_function()) catch {
     err =>
       inspect(
         err,
@@ -110,9 +113,9 @@ test "Wasm dialect validation rejects missing fixed results" {
   let builder = @milkir.FunctionBuilder::FunctionBuilder(
     "missing_wasm_extension_result",
   )
-  builder.emit_void_ext_inst(encode(GetExceptionTag), [])
+  builder.emit_void_ext_inst(@wasm_milkir.encode(GetExceptionTag), [])
   builder.return_([])
-  try verify_function(builder.get_function()) catch {
+  try @wasm_milkir.verify_function(builder.get_function()) catch {
     err =>
       inspect(
         err,
@@ -130,9 +133,9 @@ test "Wasm dialect validation rejects invalid fixed operand shapes" {
   let builder = @milkir.FunctionBuilder::FunctionBuilder(
     "invalid_wasm_extension_operands",
   )
-  builder.emit_ext_inst(I32, encode(RefEq), []) |> ignore
+  builder.emit_ext_inst(I32, @wasm_milkir.encode(RefEq), []) |> ignore
   builder.return_([])
-  try verify_function(builder.get_function()) catch {
+  try @wasm_milkir.verify_function(builder.get_function()) catch {
     err =>
       inspect(
         err,
@@ -151,9 +154,10 @@ test "Wasm dialect validation rejects fixed operand and result types" {
   let bad_result = @milkir.FunctionBuilder::FunctionBuilder(
     "invalid_wasm_extension_result_type",
   )
-  bad_result.emit_ext_inst(F64, encode(GetExceptionTag), []) |> ignore
+  bad_result.emit_ext_inst(F64, @wasm_milkir.encode(GetExceptionTag), [])
+  |> ignore
   bad_result.return_([])
-  try verify_function(bad_result.get_function()) catch {
+  try @wasm_milkir.verify_function(bad_result.get_function()) catch {
     err => rejected.push(err)
   } noraise {
     _ => fail("expected Wasm validation to reject the wrong extension result")
@@ -164,9 +168,10 @@ test "Wasm dialect validation rejects fixed operand and result types" {
   )
   let lhs = bad_operands.add_param(I32)
   let rhs = bad_operands.add_param(I32)
-  bad_operands.emit_ext_inst(I32, encode(RefEq), [lhs, rhs]) |> ignore
+  bad_operands.emit_ext_inst(I32, @wasm_milkir.encode(RefEq), [lhs, rhs])
+  |> ignore
   bad_operands.return_([])
-  try verify_function(bad_operands.get_function()) catch {
+  try @wasm_milkir.verify_function(bad_operands.get_function()) catch {
     err => rejected.push(err)
   } noraise {
     _ => fail("expected Wasm validation to reject wrong extension operands")
@@ -228,7 +233,7 @@ fn packed_get_verify_error(
   )
   |> ignore
   builder.return_([])
-  try verify_function(builder.get_function()) catch {
+  try @wasm_milkir.verify_function(builder.get_function()) catch {
     err => err
   } noraise {
     _ => abort("expected \{probe.wire_name()} verification to fail")
@@ -296,9 +301,9 @@ test "Wasm call_indirect accepts a table64 index" {
     "table64_call_indirect",
   )
   let callee = builder.add_param(I64)
-  call_indirect_multi(builder, 0, 0, [], callee, []) |> ignore
+  @wasm_milkir.call_indirect_multi(builder, 0, 0, [], callee, []) |> ignore
   builder.return_([])
-  verify_function(builder.get_function())
+  @wasm_milkir.verify_function(builder.get_function())
 }
 
 ///|
@@ -307,9 +312,9 @@ test "Wasm return_call_indirect accepts a table64 index" {
     "table64_return_call_indirect",
   )
   let callee = builder.add_param(I64)
-  return_call_indirect_multi(builder, 0, 0, callee, [])
+  @wasm_milkir.return_call_indirect_multi(builder, 0, 0, callee, [])
   builder.trap("unreachable after return_call_indirect")
-  verify_function(builder.get_function())
+  @wasm_milkir.verify_function(builder.get_function())
 }
 
 ///|
@@ -319,9 +324,9 @@ test "Wasm indirect calls reject non-integer table indices" {
     "invalid_call_indirect_index",
   )
   let call_callee = call.add_param(F64)
-  call_indirect_multi(call, 0, 0, [], call_callee, []) |> ignore
+  @wasm_milkir.call_indirect_multi(call, 0, 0, [], call_callee, []) |> ignore
   call.return_([])
-  try verify_function(call.get_function()) catch {
+  try @wasm_milkir.verify_function(call.get_function()) catch {
     err => rejected.push(err)
   } noraise {
     _ => fail("expected call_indirect to reject an f64 table index")
@@ -331,9 +336,9 @@ test "Wasm indirect calls reject non-integer table indices" {
     "invalid_return_call_indirect_index",
   )
   let return_callee = return_call.add_param(F64)
-  return_call_indirect_multi(return_call, 0, 0, return_callee, [])
+  @wasm_milkir.return_call_indirect_multi(return_call, 0, 0, return_callee, [])
   return_call.trap("unreachable after return_call_indirect")
-  try verify_function(return_call.get_function()) catch {
+  try @wasm_milkir.verify_function(return_call.get_function()) catch {
     err => rejected.push(err)
   } noraise {
     _ => fail("expected return_call_indirect to reject an f64 table index")
@@ -365,8 +370,8 @@ test "Wasm extension decode rejects runtime-lowered operations" {
     ExtOp("wasm", "elem_drop", [0]),
   ]
   for ext in extensions {
-    assert_true(decode_error(ext) is Some(_))
-    assert_true(decode(ext) is None)
+    assert_true(@wasm_milkir.decode_error(ext) is Some(_))
+    assert_true(@wasm_milkir.decode(ext) is None)
   }
 }
 
@@ -377,17 +382,32 @@ test "GC builders preserve reference carriers" {
   let any_ref = builder.add_param(Ref)
   let extern_ref = builder.add_param(OpaqueRef)
 
-  inspect(struct_new(builder, 0, []).ty, content="ref")
-  inspect(struct_new_default(builder, 0).ty, content="ref")
-  inspect(array_new(builder, 0, i32, i32).ty, content="ref")
-  inspect(array_new_default(builder, 0, i32).ty, content="ref")
-  inspect(array_new_fixed(builder, 0, 1, [i32]).ty, content="ref")
-  inspect(array_new_data(builder, 0, 0, i32, i32).ty, content="ref")
-  inspect(array_new_elem(builder, 0, 0, i32, i32).ty, content="ref")
-  inspect(i31_new(builder, i32).ty, content="ref")
-  inspect(ref_cast(builder, 0, false, any_ref, Ref).ty, content="ref")
-  inspect(any_convert_extern(builder, extern_ref).ty, content="ref")
-  inspect(extern_convert_any(builder, any_ref).ty, content="opaque_ref")
+  inspect(@wasm_milkir.struct_new(builder, 0, []).ty, content="ref")
+  inspect(@wasm_milkir.struct_new_default(builder, 0).ty, content="ref")
+  inspect(@wasm_milkir.array_new(builder, 0, i32, i32).ty, content="ref")
+  inspect(@wasm_milkir.array_new_default(builder, 0, i32).ty, content="ref")
+  inspect(@wasm_milkir.array_new_fixed(builder, 0, 1, [i32]).ty, content="ref")
+  inspect(
+    @wasm_milkir.array_new_data(builder, 0, 0, i32, i32).ty,
+    content="ref",
+  )
+  inspect(
+    @wasm_milkir.array_new_elem(builder, 0, 0, i32, i32).ty,
+    content="ref",
+  )
+  inspect(@wasm_milkir.i31_new(builder, i32).ty, content="ref")
+  inspect(
+    @wasm_milkir.ref_cast(builder, 0, false, any_ref, Ref).ty,
+    content="ref",
+  )
+  inspect(
+    @wasm_milkir.any_convert_extern(builder, extern_ref).ty,
+    content="ref",
+  )
+  inspect(
+    @wasm_milkir.extern_convert_any(builder, any_ref).ty,
+    content="opaque_ref",
+  )
 }
 
 ///|
@@ -399,9 +419,11 @@ test "table grow preserves table index width" {
   let init_value = builder.add_param(CallableRef)
   builder.add_result(I32)
   builder.add_result(I64)
-  let symbols = RuntimeSymbols::with_runtime_prefix("wasm.runtime")
-  let result32 = table_grow(builder, symbols, vmctx, 0, delta32, init_value)
-  let result64 = table_grow(
+  let symbols = @wasm_milkir.RuntimeSymbols::with_runtime_prefix("wasm.runtime")
+  let result32 = @wasm_milkir.table_grow(
+    builder, symbols, vmctx, 0, delta32, init_value,
+  )
+  let result64 = @wasm_milkir.table_grow(
     builder,
     symbols,
     vmctx,

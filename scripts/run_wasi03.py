@@ -102,8 +102,10 @@ def main():
         case, engine = item
         directory = output / engine / case.stem
         directory.mkdir(parents=True)
-        work = directory / "suite"
-        work.mkdir()
+        # Guest fixtures can contain inaccessible paths and symlinks. Keep them
+        # outside the report tree consumed by artifact uploaders.
+        work = output.parent / (output.name + "-work") / engine / case.stem
+        work.mkdir(parents=True)
         shutil.copy(suite / "manifest.json", work)
         shutil.copy(case, work)
         config = case.with_suffix(".json")
@@ -146,6 +148,9 @@ def main():
     (output / "summary.json").write_text(json.dumps({"upstream": sha, "binary_sha256": binary_digest, "acknowledge_known_differences": args.acknowledge_known_differences, "counts": counts, "results": results}, indent=2) + "\n")
     for r in results:
         print(r["engine"], r["status"], r["name"])
+        if gate_failure(r, args.acknowledge_known_differences):
+            for failure in r.get("failures", []):
+                print(failure)
     print(json.dumps(counts))
     return int(any(gate_failure(r, args.acknowledge_known_differences) for r in results))
 
