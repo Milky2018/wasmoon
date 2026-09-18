@@ -20,6 +20,10 @@ def get_version():
     return subprocess.check_output([BINARY, "--version"], text=True).strip().split()[-1]
 
 
+def get_timeout_seconds():
+    return float(os.environ.get("WASI03_TIMEOUT", "30"))
+
+
 def get_wasi_versions():
     return ["wasm32-wasip3"]
 

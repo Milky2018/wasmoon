@@ -957,3 +957,42 @@ test "Preview 2 poll waits for the earliest source" {
     content="[List([U32(1)])]",
   )
 }
+
+///|
+test "Preview 3 socket buffer sizes use application units" {
+  let linker = @runtime_impl.ComponentLinker()
+  defer linker.close()
+  let ctx = @wasi_component.WasiComponentCtxBuilder().build()
+  defer ctx.close()
+  let host = @wasi_component.WasiComponentHost(linker, ctx)
+  host.add_preview3_sockets()
+  guard linker.get_import("wasi:sockets/types@0.3.0") is Some(Instance(sockets)) else {
+    fail("Preview 3 socket types were not registered")
+  }
+  for protocol in ["tcp", "udp"] {
+    for family in [0, 1] {
+      guard sockets.call_exported_func("[static]\{protocol}-socket.create", [
+          U32(family),
+        ])
+        is [Variant(0, Some(U32(socket)))] else {
+        fail("socket creation failed")
+      }
+      for direction in ["receive", "send"] {
+        debug_inspect(
+          sockets.call_exported_func(
+            "[method]\{protocol}-socket.set-\{direction}-buffer-size",
+            [U32(socket), U64(65536L)],
+          ),
+          content="[Variant(0, None)]",
+        )
+        debug_inspect(
+          sockets.call_exported_func(
+            "[method]\{protocol}-socket.get-\{direction}-buffer-size",
+            [U32(socket)],
+          ),
+          content="[Variant(0, Some(U64(65536)))]",
+        )
+      }
+    }
+  }
+}

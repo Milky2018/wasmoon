@@ -2071,6 +2071,11 @@ MOONBIT_FFI_EXPORT int wasmoon_wasi_socket_option_get(
   int value = 0;
   socklen_t length = sizeof(value);
   if (getsockopt(fd, level, native_option, &value, &length) != 0) return -1;
+#ifdef __linux__
+  // Linux includes doubled bookkeeping space in the returned buffer size.
+  // Expose the same application units accepted by setsockopt, as Wasmtime does.
+  if (option == 5 || option == 6) value /= 2;
+#endif
   return value;
 #endif
 }

@@ -87,7 +87,7 @@ fn validate_expr_with_offset(
   func_idx : Int,
 ) -> Unit raise ValidationError {
   for i, instr in instrs {
-    validate_instr(ctx, stack, instr) catch {
+    validate_expr(ctx, stack, [instr]) catch {
       e =>
         raise WithContext(
           ValidationErrorContext::from_error(e)
@@ -175,7 +175,197 @@ fn validate_expr(
   stack : OperandStack,
   instrs : Array[@types.Instruction],
 ) -> Unit raise ValidationError {
-  for instr in instrs {
-    validate_instr(ctx, stack, instr)
+  let tasks : Array[ValidationTask] = [Sequence(instrs[:], stack)]
+  while tasks.pop() is Some(task) {
+    match task {
+      Sequence([], _) => ()
+      Sequence([instr, .. rest], current) => {
+        tasks.push(Sequence(rest, current))
+        let (bt, body, alternative, kind, exit_name) = match instr {
+          Block(bt, body) => (bt, body, None, BlockLabel, "block exit")
+          Loop(bt, body) => (bt, body, None, LoopLabel, "loop exit")
+          If(bt, body, other) => {
+            current.pop(I32)
+            (bt, body, Some(other), BlockLabel, "if-then exit")
+          }
+          TryTable(bt, _, body) =>
+            (bt, body, None, BlockLabel, "try_table exit")
+          _ => {
+            validate_leaf_instr(ctx, current, instr)
+            continue
+          }
+        }
+        let results = get_block_results(ctx, bt)
+        let params = get_block_params(ctx, bt)
+        for i = params.length() - 1; i >= 0; i = i - 1 {
+          current.pop(params[i])
+        }
+        // Catch targets refer to the enclosing labels, before entering the try.
+        if instr is TryTable(_, handlers, _) {
+          validate_catch_handlers(ctx, handlers)
+        }
+        let saved_init = ctx.local_init.copy()
+        ctx.labels.push({ kind, block_type: bt, })
+        tasks.push(ExitControl(current, results))
+        if alternative is Some(other) {
+          let other_stack = OperandStack::new_with_subtyping(ctx.subtyping_ctx)
+          for param in params {
+            other_stack.push(param)
+          }
+          tasks.push(
+            FinishBranch(other_stack, results, saved_init, "if-else exit"),
+          )
+          tasks.push(Sequence(other[:], other_stack))
+        }
+        let inner = OperandStack::new_with_subtyping(ctx.subtyping_ctx)
+        for param in params {
+          inner.push(param)
+        }
+        tasks.push(FinishBranch(inner, results, saved_init, exit_name))
+        tasks.push(Sequence(body[:], inner))
+      }
+      FinishBranch(inner, results, saved_init, exit_name) => {
+        inner.check_height(results.length(), exit_name)
+        for i = results.length() - 1; i >= 0; i = i - 1 {
+          inner.pop(results[i])
+        }
+        // Each branch starts with the enclosing definite-initialization state.
+        for i in 0..<saved_init.length() {
+          ctx.local_init[i] = saved_init[i]
+        }
+      }
+      ExitControl(outer, results) => {
+        ctx.labels.pop() |> ignore
+        for result in results {
+          outer.push(result)
+        }
+      }
+    }
+  }
+}
+
+///|
+priv enum ValidationTask {
+  Sequence(ArrayView[@types.Instruction], OperandStack)
+  FinishBranch(OperandStack, Array[@types.ValueType], Array[Bool], String)
+  ExitControl(OperandStack, Array[@types.ValueType])
+}
+
+///|
+fn validate_catch_handlers(
+  ctx : ValidationContext,
+  handlers : Array[@types.CatchHandler],
+) -> Unit raise ValidationError {
+  for handler in handlers {
+    match handler {
+      Catch(tag_idx, label_idx) => {
+        // Validate tag index
+        if tag_idx < 0 || tag_idx >= ctx.tags.length() {
+          raise UnknownTag(tag_idx)
+        }
+        // Validate label index (labels are indexed from innermost)
+        if label_idx > ctx.labels.length() {
+          raise InvalidLabelIndex(label_idx)
+        }
+        // Get expected types at label
+        let expected_types = if label_idx == ctx.labels.length() {
+          ctx.returns
+        } else {
+          let target_label = ctx.labels[ctx.labels.length() - 1 - label_idx]
+          get_label_types(ctx, target_label)
+        }
+        // Catch provides tag params
+        let tag_type = ctx.exception_tag_type(tag_idx)
+        if tag_type.params.length() != expected_types.length() {
+          raise TypeMismatch(
+            "catch handler arity mismatch: tag has \{tag_type.params.length()} params, label expects \{expected_types.length()}",
+          )
+        }
+        // Check that each tag param is a subtype of the expected label type
+        for i, param_type in tag_type.params {
+          if !ctx.subtyping_ctx.value_type_subtype(
+              param_type,
+              expected_types[i],
+            ) {
+            raise TypeMismatch(
+              "catch handler type mismatch: tag param \{i} has type \{param_type}, label expects \{expected_types[i]}",
+            )
+          }
+        }
+      }
+      CatchRef(tag_idx, label_idx) => {
+        // Validate tag index
+        if tag_idx < 0 || tag_idx >= ctx.tags.length() {
+          raise UnknownTag(tag_idx)
+        }
+        // Validate label index
+        if label_idx > ctx.labels.length() {
+          raise InvalidLabelIndex(label_idx)
+        }
+        // Get expected types at label
+        let expected_types = if label_idx == ctx.labels.length() {
+          ctx.returns
+        } else {
+          let target_label = ctx.labels[ctx.labels.length() - 1 - label_idx]
+          get_label_types(ctx, target_label)
+        }
+        // CatchRef provides tag params + exnref
+        let tag_type = ctx.exception_tag_type(tag_idx)
+        let expected_arity = tag_type.params.length() + 1
+        if expected_arity != expected_types.length() {
+          raise TypeMismatch(
+            "catch_ref handler arity mismatch: tag has \{tag_type.params.length()} params + exnref, label expects \{expected_types.length()}",
+          )
+        }
+        // Check that each tag param is a subtype of the expected label type
+        for i, param_type in tag_type.params {
+          if !ctx.subtyping_ctx.value_type_subtype(
+              param_type,
+              expected_types[i],
+            ) {
+            raise TypeMismatch(
+              "catch_ref handler type mismatch: tag param \{i} has type \{param_type}, label expects \{expected_types[i]}",
+            )
+          }
+        }
+        // The last expected type should be ExnRef (exnref is always a subtype of itself)
+      }
+      CatchAll(label_idx) => {
+        // Validate label index
+        if label_idx > ctx.labels.length() {
+          raise InvalidLabelIndex(label_idx)
+        }
+        // CatchAll provides no values
+        let expected_types = if label_idx == ctx.labels.length() {
+          ctx.returns
+        } else {
+          let target_label = ctx.labels[ctx.labels.length() - 1 - label_idx]
+          get_label_types(ctx, target_label)
+        }
+        if expected_types.length() != 0 {
+          raise TypeMismatch(
+            "catch_all handler arity mismatch: provides 0 values, label expects \{expected_types.length()}",
+          )
+        }
+      }
+      CatchAllRef(label_idx) => {
+        // Validate label index
+        if label_idx > ctx.labels.length() {
+          raise InvalidLabelIndex(label_idx)
+        }
+        // CatchAllRef provides exnref only
+        let expected_types = if label_idx == ctx.labels.length() {
+          ctx.returns
+        } else {
+          let target_label = ctx.labels[ctx.labels.length() - 1 - label_idx]
+          get_label_types(ctx, target_label)
+        }
+        if expected_types.length() != 1 {
+          raise TypeMismatch(
+            "catch_all_ref handler arity mismatch: provides 1 value (exnref), label expects \{expected_types.length()}",
+          )
+        }
+      }
+    }
   }
 }

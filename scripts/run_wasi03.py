@@ -121,7 +121,7 @@ def main():
         cmd = [sys.executable, str(upstream / "test-runner/wasi_test_runner.py"),
                "-t", str(work), "-r", str(ROOT / "scripts/wasi03_testsuite_adapter.py"),
                "--json-output-location", str(result), "--disable-colors"]
-        env = os.environ | {"WASMOON": str(args.wasmoon.resolve()), "WASI03_ENGINE": engine}
+        env = os.environ | {"WASMOON": str(args.wasmoon.resolve()), "WASI03_ENGINE": engine, "WASI03_TIMEOUT": str(args.timeout)}
         with (directory / "log.txt").open("w") as log:
             proc = subprocess.Popen(cmd, stdout=log, stderr=log, env=env, start_new_session=True)
             try:

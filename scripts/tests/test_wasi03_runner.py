@@ -1,8 +1,12 @@
 """The regression gate never turns startup errors or new failures into passes."""
 import importlib.util
+import os
+import subprocess
+import tempfile
 from pathlib import Path
 import sys
 import unittest
+from unittest.mock import patch
 
 SCRIPTS = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(SCRIPTS))
@@ -12,6 +16,21 @@ spec.loader.exec_module(runner)
 
 
 class GateTests(unittest.TestCase):
+    @unittest.skipUnless(os.name == "nt", "Windows native exit status")
+    def test_process_wrapper_preserves_native_exception_status(self):
+        with tempfile.TemporaryDirectory() as directory:
+            guest = Path(directory) / "exit.py"
+            guest.write_text("import ctypes; ctypes.windll.kernel32.ExitProcess(0xc00000fd)\n")
+            result = subprocess.run([sys.executable, str(SCRIPTS / "wasi03_process.py"),
+                                     "command", sys.executable, str(guest)],
+                                    capture_output=True, timeout=10)
+            self.assertEqual(result.returncode, 0xc00000fd, result.stderr)
+
+    def test_guest_wait_uses_configured_watchdog_timeout(self):
+        import wasi03_testsuite_adapter as adapter
+        with patch.dict("os.environ", {"WASI03_TIMEOUT": "120"}):
+            self.assertEqual(adapter.get_timeout_seconds(), 120)
+
     def test_checkout_line_endings_do_not_change_json_identity(self):
         lf = b'{\n  "exit": 0\n}\n'
         crlf = lf.replace(b"\n", b"\r\n")
