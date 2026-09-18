@@ -4,7 +4,8 @@
 
 The initial audit below is retained as historical evidence. The fixes following
 that audit allow all 55 unchanged guests to reach execution on both engines.
-On macOS ARM64 the complete isolated suite reports **53 pass, 2 fail per engine**:
+On Linux AMD64, macOS ARM64, Windows AMD64 Clang and Windows AMD64 MSVC,
+the complete isolated suite reports **53 pass, 2 fail per engine**:
 all CLI, clock, random, filesystem and socket cases, all 14 HTTP service cases,
 and two of the four HTTP type command cases pass. Full WASI acceptance is still
 not claimed. Raw release-binary results and validation metadata are retained in
@@ -40,8 +41,14 @@ CI uses `--acknowledge-known-differences` as a regression gate. This keeps raw
 results marked **fail**, acknowledges only the exact reviewed panic/value
 fingerprints, and rejects new failures, timeouts, harness errors and unexpected
 passes. It is not a conformance pass. Reports are uploaded from Linux, macOS,
-Windows Clang and Windows MSVC; local evidence alone does not establish those
-platforms' results.
+Windows Clang and Windows MSVC. All four platform steps passed at runtime commit
+`ff98fb9bd0e732059e7f8a4f151f5739a57e45c7` in
+[CI run 35315434614](https://github.com/Milky2018/wasmoon/actions/runs/35315434614).
+Each uploaded `wasi03-*` artifact retains the raw 106-pass/4-fail results across
+both engines. The cross-platform repairs include explicit control traversal
+stacks in binary parsing and validation, Windows `rmdir(".")` errors, and Linux
+socket buffer size normalization. The runner preserves native Windows exception
+statuses and applies its configured timeout to upstream guest waits.
 
 Remaining boundaries:
 
