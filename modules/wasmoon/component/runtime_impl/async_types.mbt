@@ -36,16 +36,6 @@ pub impl Show for ComponentValue with fn output(self, logger) {
 }
 
 ///|
-pub(all) struct CoreFuncRef {
-  instance : @runtime.ModuleInstance
-  func_idx : Int
-  engine : CoreExecutionEngine
-  debug_name : String?
-  may_suspend : Bool
-  native_eligible : Bool
-} derive(Debug)
-
-///|
 /// Embedding-owned cleanup associated with an owned host resource handle.
 struct HostResourceDestructor {
   drop : (Int) -> Unit

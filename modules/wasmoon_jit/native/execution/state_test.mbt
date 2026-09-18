@@ -1,6 +1,6 @@
 ///|
 test "native execution state keeps parked resources distinct" {
-  let state = @wasmoon_jit.NativeExecutionState::NativeExecutionState()
+  let state = @execution.NativeExecutionState::NativeExecutionState()
   let released : Array[Int] = []
   let first = state.begin(release=fn() { released.push(1) })
   first.park()
@@ -39,7 +39,7 @@ test "native execution state keeps parked resources distinct" {
 
 ///|
 test "nested native activation restores its caller" {
-  let state = @wasmoon_jit.NativeExecutionState::NativeExecutionState()
+  let state = @execution.NativeExecutionState::NativeExecutionState()
   let outer = state.begin()
   let inner = state.begin()
   debug_inspect(
@@ -60,7 +60,7 @@ test "nested native activation restores its caller" {
 
 ///|
 test "native invocation resources release exactly once" {
-  let state = @wasmoon_jit.NativeExecutionState::NativeExecutionState()
+  let state = @execution.NativeExecutionState::NativeExecutionState()
   let releases = [0]
   let invocation = state.begin(release=fn() { releases[0] = releases[0] + 1 })
   invocation.park()
@@ -75,7 +75,7 @@ test "native invocation resources release exactly once" {
 
 ///|
 test "sealed native execution state rejects begin and preserves cleanup" {
-  let state = @wasmoon_jit.NativeExecutionState::NativeExecutionState()
+  let state = @execution.NativeExecutionState::NativeExecutionState()
   let existing_releases = [0]
   let rejected_releases = [0]
   let existing = state.begin(release=fn() {

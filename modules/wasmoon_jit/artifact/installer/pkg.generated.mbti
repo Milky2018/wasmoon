@@ -1,0 +1,74 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "Milky2018/wasmoon_jit/artifact/installer"
+
+import {
+  "Milky2018/vcode/code_object",
+  "Milky2018/wasmoon_jit/artifact",
+  "Milky2018/wasmoon_jit/artifact/loader",
+  "moonbitlang/core/debug",
+}
+
+// Values
+
+// Errors
+pub(all) suberror JitInstallError {
+  ResolutionFailed(kind~ : String, name~ : String)
+  AllocationFailed(function_index~ : Int)
+  RelocationFailed(function_index~ : Int, message~ : String)
+  ProtectionFailed(function_index~ : Int)
+  RegistrationFailed(function_index~ : Int, message~ : String)
+  PublicationFailed(message~ : String)
+  TrampolineAllocationFailed(code_size~ : Int)
+} derive(Eq, @debug.Debug)
+pub fn JitInstallError::equal(Self, Self) -> Bool
+pub fn JitInstallError::not_equal(Self, Self) -> Bool
+pub fn JitInstallError::to_repr(Self) -> @debug.Repr
+
+// Types and methods
+type ExecCode
+
+pub struct InstalledCode {
+  // private fields
+}
+pub fn InstalledCode::entry_address(Self, Int) -> Int64?
+pub fn InstalledCode::functions(Self) -> Array[InstalledFunction]
+pub fn InstalledCode::imports(Self) -> Array[InstalledImport]
+pub fn InstalledCode::release(Self) -> Unit
+
+pub struct InstalledFunction {
+  // private fields
+}
+pub fn InstalledFunction::code_address(Self) -> Int64
+pub fn InstalledFunction::code_size(Self) -> Int
+pub fn InstalledFunction::entry_address(Self) -> Int64
+pub fn InstalledFunction::entry_offset(Self) -> Int
+pub fn InstalledFunction::frame_size(Self) -> Int
+pub fn InstalledFunction::identity(Self) -> @artifact.FunctionIdentity
+pub fn InstalledFunction::safepoints(Self) -> Array[@code_object.SafepointSite]
+pub fn InstalledFunction::sources(Self) -> Array[@code_object.SourceSite]
+pub fn InstalledFunction::traps(Self) -> Array[@code_object.TrapSite]
+pub fn InstalledFunction::unwind(Self) -> Array[@code_object.UnwindDirective]
+
+pub struct InstalledImport {
+  // private fields
+}
+pub fn InstalledImport::address(Self) -> Int64
+pub fn InstalledImport::identity(Self) -> @artifact.ImportIdentity
+
+pub struct InstalledTrampoline {
+  // private fields
+}
+pub fn InstalledTrampoline::entry_address(Self) -> Int64
+pub fn InstalledTrampoline::release(Self) -> Unit
+
+pub struct JitCodeInstaller {
+  // private fields
+}
+pub fn JitCodeInstaller::current(Self) -> InstalledCode?
+pub fn JitCodeInstaller::install(Self, @loader.LoadedArtifact) -> InstalledCode raise JitInstallError
+pub fn JitCodeInstaller::install_trampoline(Self, Array[Int]) -> InstalledTrampoline raise JitInstallError
+pub fn JitCodeInstaller::new((@code_object.RelocationTarget) -> Int64?) -> Self
+
+// Type aliases
+
+// Traits

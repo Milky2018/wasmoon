@@ -4,6 +4,7 @@ package "Milky2018/wasmoon/wasi_http"
 import {
   "Milky2018/wasm_component/model",
   "Milky2018/wasmoon/component/runtime_impl",
+  "Milky2018/wasmoon/component/runtime_impl/core",
   "Milky2018/wasmoon/wasi_component",
   "moonbitlang/async",
   "moonbitlang/async/cond_var",
@@ -56,15 +57,15 @@ pub struct HttpHost {
   types : Array[@model.TypeDef?]
   resource_types : Map[String, @model.TypeDef?]
 }
-pub fn HttpHost::HttpHost(@runtime_impl.ComponentLinker) -> Self raise @runtime_impl.ComponentRuntimeError
-pub fn HttpHost::add_client(Self, (Array[@runtime_impl.ComponentValue], @runtime_impl.ResourceTable) -> @runtime_impl.HostFuture raise @runtime_impl.ComponentRuntimeError) -> Unit raise @runtime_impl.ComponentRuntimeError
-pub fn HttpHost::add_downstream(Self, @runtime_impl.ComponentInstance) -> Unit raise @runtime_impl.ComponentRuntimeError
-pub fn HttpHost::add_handler(Self, (Array[@runtime_impl.ComponentValue], @runtime_impl.ResourceTable) -> @runtime_impl.HostFuture raise @runtime_impl.ComponentRuntimeError) -> Unit raise @runtime_impl.ComponentRuntimeError
-pub fn HttpHost::add_network_client(Self, (String) -> Bool, allow_address? : (@socket.Addr) -> Bool, trust? : @tls.TrustedRoot) -> Unit raise @runtime_impl.ComponentRuntimeError
-pub fn HttpHost::add_service_base(Self, @wasi_component.WasiComponentCtx, stdout? : &@io.Writer, stderr? : &@io.Writer) -> Unit raise @runtime_impl.ComponentRuntimeError
-pub fn HttpHost::add_types(Self) -> Unit raise @runtime_impl.ComponentRuntimeError
+pub fn HttpHost::HttpHost(@runtime_impl.ComponentLinker) -> Self raise @core.ComponentRuntimeError
+pub fn HttpHost::add_client(Self, (Array[@runtime_impl.ComponentValue], @runtime_impl.ResourceTable) -> @runtime_impl.HostFuture raise @core.ComponentRuntimeError) -> Unit raise @core.ComponentRuntimeError
+pub fn HttpHost::add_downstream(Self, @runtime_impl.ComponentInstance) -> Unit raise @core.ComponentRuntimeError
+pub fn HttpHost::add_handler(Self, (Array[@runtime_impl.ComponentValue], @runtime_impl.ResourceTable) -> @runtime_impl.HostFuture raise @core.ComponentRuntimeError) -> Unit raise @core.ComponentRuntimeError
+pub fn HttpHost::add_network_client(Self, (String) -> Bool, allow_address? : (@socket.Addr) -> Bool, trust? : @tls.TrustedRoot) -> Unit raise @core.ComponentRuntimeError
+pub fn HttpHost::add_service_base(Self, @wasi_component.WasiComponentCtx, stdout? : &@io.Writer, stderr? : &@io.Writer) -> Unit raise @core.ComponentRuntimeError
+pub fn HttpHost::add_types(Self) -> Unit raise @core.ComponentRuntimeError
 pub async fn HttpHost::invoke(Self, @runtime_impl.ComponentInstance, String, Array[@runtime_impl.ComponentValue]) -> Array[@runtime_impl.ComponentValue]
-pub fn HttpHost::poll(Self) -> Bool raise @runtime_impl.ComponentRuntimeError
+pub fn HttpHost::poll(Self) -> Bool raise @core.ComponentRuntimeError
 pub async fn[T] HttpHost::run(Self, async () -> T) -> T
 pub async fn HttpHost::serve_connection(Self, @socket.Tcp, @runtime_impl.ComponentInstance) -> Unit
 

@@ -5,6 +5,7 @@ import {
   "Milky2018/wasm_core/types",
   "Milky2018/wasmoon/runtime",
   "Milky2018/wasmoon_jit",
+  "Milky2018/wasmoon_jit/native/execution",
   "moonbitlang/core/debug",
 }
 
@@ -60,7 +61,7 @@ pub(all) suberror JITCoreCallError {
   Exit(Int)
   HostInvocation(@runtime.RuntimeError)
   GcSetupFailed(String)
-  ExecutionStateFailure(@wasmoon_jit.NativeExecutionStateError)
+  ExecutionStateFailure(@execution.NativeExecutionStateError)
 } derive(Eq, @debug.Debug)
 pub fn JITCoreCallError::equal(Self, Self) -> Bool
 pub fn JITCoreCallError::not_equal(Self, Self) -> Bool

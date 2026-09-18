@@ -4,7 +4,10 @@ package "Milky2018/wasmoon/jit"
 import {
   "Milky2018/wasm_core/types",
   "Milky2018/wasmoon_jit",
+  "Milky2018/wasmoon_jit/artifact/installer",
   "Milky2018/wasmoon_jit/artifact/loader",
+  "Milky2018/wasmoon_jit/jit_ffi",
+  "Milky2018/wasmoon_jit/native/execution",
   "moonbitlang/core/debug",
 }
 
@@ -16,7 +19,7 @@ pub suberror JITModuleLoadError {
   UnsupportedImport(import_idx~ : Int, module_name~ : String, func_name~ : String)
   ImportTrampolineAllocationFailed(import_idx~ : Int, module_name~ : String, func_name~ : String, code_size~ : Int)
   ImportTrampolineCompilationFailed(import_idx~ : Int, module_name~ : String, func_name~ : String, message~ : String)
-  ArtifactInstallationFailed(cause~ : @wasmoon_jit.JitInstallError)
+  ArtifactInstallationFailed(cause~ : @installer.JitInstallError)
   FunctionMetadataRegistrationFailed(func_idx~ : Int, message~ : String)
 } derive(@debug.Debug)
 pub fn JITModuleLoadError::output(Self, &Logger) -> Unit
@@ -109,13 +112,13 @@ pub fn JITModule::init_wasi_quiet(Self, Array[String], Array[String], Array[(Str
 pub fn JITModule::init_wasi_with_stdio(Self, Array[String], Array[String], Array[(String, String)], ((Bytes) -> Unit)?, ((Bytes) -> Unit)?, Bytes?, stdin_callback? : (() -> Bytes)?, readonly_preopens? : Array[(String, String)]) -> Unit
 pub fn JITModule::load_artifact(@loader.LoadedArtifact, Array[(Array[@types.ValueType], Array[@types.ValueType])], function_names? : Array[String], debug_db? : @wasmoon_jit.JITDebugDB?) -> Self raise JITModuleLoadError
 pub fn JITModule::load_artifact_with_imports(@loader.LoadedArtifact, Array[(Array[@types.ValueType], Array[@types.ValueType])], Map[String, Map[String, Int64]], function_names? : Array[String], debug_db? : @wasmoon_jit.JITDebugDB?) -> Self raise JITModuleLoadError
-pub fn JITModule::prepare_continuations(Self, Array[@types.SubType], @wasmoon_jit.NativeExecutionState) -> Unit raise JITTrap
+pub fn JITModule::prepare_continuations(Self, Array[@types.SubType], @execution.NativeExecutionState) -> Unit raise JITTrap
 pub fn JITModule::refresh_table_layout(Self, Int) -> Bool
 pub fn JITModule::register_dwarf(Self, verbose? : Bool) -> @wasmoon_jit.DWARFBuilder
 pub fn JITModule::retain_callable_owner(Self) -> () -> Unit
 pub fn JITModule::set_callable_types(Self, Array[Int], Array[Int], Array[(Int64, Int)], Array[Int]) -> Unit
 pub fn JITModule::set_cooperative_scheduling(Self, Bool) -> Bool
-pub fn JITModule::set_exception_arena(Self, @wasmoon_jit.NativeExceptionArena) -> Unit
+pub fn JITModule::set_exception_arena(Self, @jit_ffi.NativeExceptionArena) -> Unit
 pub fn JITModule::set_gc_heap(Self, Int64) -> Unit
 pub fn JITModule::set_globals(Self, Int64) -> Unit
 pub fn JITModule::set_hostcall_callback(Self, () -> @wasmoon_jit.NativeHostcallOutcome) -> Unit

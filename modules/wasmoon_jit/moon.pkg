@@ -1,4 +1,6 @@
 import {
+  "Milky2018/wasmoon_jit/native/execution",
+  "Milky2018/wasmoon_jit/artifact/installer",
   "Milky2018/wasmoon_jit/artifact/loader" @artifact_loader,
   // Native JIT context teardown also links the host descriptor backend.
   "Milky2018/milkir/native" @milkir_native,
@@ -22,34 +24,3 @@ import {
 import {
   "Milky2018/wasmoon_jit/native_test_support",
 } for "test"
-
-import {
-  "Milky2018/wasmoon_jit/artifact/test_support" @artifact_test_support,
-} for "wbtest"
-
-options(
-  "native-stub": [
-    "jit_ffi/jit.c",
-    "jit_ffi/atomic.c",
-    "jit_ffi/atomic_wait.c",
-    "jit_ffi/trap.c",
-    "jit_ffi/exec_mem.c",
-    "jit_ffi/jit_context.c",
-    "jit_ffi/memory_ops.c",
-    "jit_ffi/segment_ops.c",
-    "jit_ffi/gc_type_cache.c",
-    "jit_ffi/gc_ops.c",
-    "jit_ffi/gc_allocator.c",
-    "jit_ffi/gc_heap.c",
-    "jit_ffi/exception.c",
-    "jit_ffi/wasi.c",
-    "jit_ffi/fiber.c",
-    "jit_ffi/guest_continuation.c",
-    "jit_ffi/trampoline_call_x86_64.S",
-    "jit_ffi/windows_context_x86_64.S",
-    "jit_ffi/msvc_guest_bridges.S",
-    "jit_ffi/stack_switch_aarch64.S",
-    "jit_ffi/stack_switch_x86_64.S",
-    "jit_ffi/dwarf.c",
-  ],
-)

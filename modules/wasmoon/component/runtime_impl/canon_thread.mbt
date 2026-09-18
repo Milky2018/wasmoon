@@ -445,7 +445,7 @@ fn execute_thread_suspension_intrinsic(
         Suspend(cancellable)
       },
     )
-    canon_suspend[0] = Some(Yield)
+    @core.set_suspension(Some(Yield))
     raise Unreachable
   }
 
@@ -462,7 +462,7 @@ fn execute_thread_suspension_intrinsic(
         }
       }
       if !resumed {
-        canon_suspend[0] = Some(Yield)
+        @core.set_suspension(Some(Yield))
         raise Unreachable
       }
     }
@@ -504,7 +504,7 @@ fn execute_thread_suspension_intrinsic(
             task_id,
             Suspend(cancellable),
           )
-          canon_suspend[0] = Some(Yield)
+          @core.set_suspension(Some(Yield))
           raise Unreachable
         }
         return [I32(0)]
@@ -549,7 +549,7 @@ fn execute_thread_suspension_intrinsic(
             Suspend(cancellable)
           },
         )
-        canon_suspend[0] = Some(Yield)
+        @core.set_suspension(Some(Yield))
         raise Unreachable
       }
       let resumed = dispatch_until_main_scheduled(
@@ -568,7 +568,7 @@ fn execute_thread_suspension_intrinsic(
             task_id,
             Suspend(cancellable),
           )
-          canon_suspend[0] = Some(Yield)
+          @core.set_suspension(Some(Yield))
           raise Unreachable
         }
         return [I32(0)]

@@ -337,6 +337,27 @@ class ComponentSecurityAuditTests(unittest.TestCase):
                 checks["validate-before-instantiate"].detail,
             )
 
+    def test_imported_runtime_error_preserves_validation_boundary(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.create_fixture(root)
+            interface = root / "runtime.mbti"
+            interface.write_text(
+                interface.read_text().replace(
+                    "raise ComponentRuntimeError", "raise @core.ComponentRuntimeError"
+                ),
+                encoding="utf-8",
+            )
+            checks = {check.name: check for check in audit_repo(root)}
+            self.assertTrue(checks["validate-before-instantiate"].passed)
+            interface.write_text(
+                interface.read_text().replace(
+                    "@component_model.ValidatedComponent", "@model.Component"
+                ),
+                encoding="utf-8",
+            )
+            self.assert_failed(root, "validate-before-instantiate")
+
     def test_public_register_fails(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

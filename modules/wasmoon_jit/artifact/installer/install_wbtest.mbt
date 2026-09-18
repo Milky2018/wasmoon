@@ -1,4 +1,7 @@
 ///|
+using @loader {verify_artifact, load_artifact}
+
+///|
 using @artifact_test_support {loader_artifact, loader_compatibility}
 
 ///|

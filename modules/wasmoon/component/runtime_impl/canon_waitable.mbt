@@ -206,7 +206,7 @@ fn instantiate_canon_waitable_set_wait(
             async_state.tasks.write_waiting_ws(task_id, ws_key)
           }
           async_state.tasks.write_task_suspensions(task_id, Wait(_cancellable))
-          canon_suspend[0] = Some(Wait(ws_key))
+          @core.set_suspension(Some(Wait(ws_key)))
           raise Unreachable
         }
         let ev = match pop_waitable_event(async_state, ws_key) {
@@ -216,7 +216,7 @@ fn instantiate_canon_waitable_set_wait(
               task_id,
               Wait(_cancellable),
             )
-            canon_suspend[0] = Some(Wait(ws_key))
+            @core.set_suspension(Some(Wait(ws_key)))
             raise Unreachable
           }
         }

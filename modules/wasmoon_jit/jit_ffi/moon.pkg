@@ -1,0 +1,30 @@
+import {
+  "Milky2018/wasm_core/types",
+}
+
+options(
+  "native-stub": [
+    "jit.c",
+    "atomic.c",
+    "atomic_wait.c",
+    "trap.c",
+    "exec_mem.c",
+    "jit_context.c",
+    "memory_ops.c",
+    "segment_ops.c",
+    "gc_type_cache.c",
+    "gc_ops.c",
+    "gc_allocator.c",
+    "gc_heap.c",
+    "exception.c",
+    "wasi.c",
+    "fiber.c",
+    "guest_continuation.c",
+    "trampoline_call_x86_64.S",
+    "windows_context_x86_64.S",
+    "msvc_guest_bridges.S",
+    "stack_switch_aarch64.S",
+    "stack_switch_x86_64.S",
+    "dwarf.c",
+  ],
+)

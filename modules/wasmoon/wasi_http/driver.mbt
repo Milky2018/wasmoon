@@ -71,7 +71,9 @@ async fn HttpHost::drive(self : HttpHost) -> Unit {
 /// tasks before returning; the linker still belongs to the embedding.
 pub async fn[T] HttpHost::run(self : HttpHost, action : async () -> T) -> T {
   if self.spawn.val is Some(_) {
-    raise @runtime_impl.HostCallError("HTTP host is already running")
+    raise @runtime_impl.ComponentRuntimeError::HostCallError(
+      "HTTP host is already running",
+    )
   }
   defer {
     for call in self.pending {

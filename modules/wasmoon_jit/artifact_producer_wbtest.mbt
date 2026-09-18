@@ -206,24 +206,14 @@ test "artifact producer preserves symbolic imported and internal code targets" {
       #|}
     ),
   )
-  let resolved = resolve_static_targets(
-    JitCodeInstaller::new(fn(target) {
-      match target {
-        External(symbol) if symbol.name == "wasm.func.0" => Some(42L)
-        _ => None
-      }
-    }),
-    loaded,
-  )
-  debug_inspect(
-    resolved,
-    content=(
-      #|[
-      #|  (External({ name: "wasm.func.0" }), 42),
-      #|  (Code({ name: "wasm.func.0" }), 42),
-      #|]
-    ),
-  )
+  let installed = JitCodeInstaller::new(fn(target) {
+    match target {
+      External(symbol) if symbol.name == "wasm.func.0" => Some(42L)
+      _ => None
+    }
+  }).install(loaded)
+  defer installed.release()
+  debug_inspect(installed.entry_address(0), content="Some(42)")
 }
 
 ///|

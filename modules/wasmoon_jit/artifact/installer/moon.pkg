@@ -1,0 +1,13 @@
+import {
+  "Milky2018/wasmoon_jit/jit_ffi",
+  "Milky2018/wasmoon_jit/artifact",
+  "Milky2018/wasmoon_jit/artifact/loader",
+  "Milky2018/vcode/native_types" @native,
+  "Milky2018/vcode/code_object",
+  "Milky2018/aarch64_target",
+  "Milky2018/x64_target",
+}
+
+import {
+  "Milky2018/wasmoon_jit/artifact/test_support" @artifact_test_support,
+} for "wbtest"

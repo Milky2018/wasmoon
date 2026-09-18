@@ -1,0 +1,67 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "Milky2018/wasmoon_jit/native/execution"
+
+import {
+  "Milky2018/wasmoon_jit/jit_ffi",
+  "moonbitlang/core/debug",
+}
+
+// Values
+
+// Errors
+pub suberror NativeExecutionStateError {
+  ExecutionStateSealed
+  UnknownInvocation(Int64)
+  InvocationNotActive(Int64)
+  InvocationNotParked(Int64)
+  InvocationNotCurrent(Int64)
+} derive(Eq, @debug.Debug)
+pub fn NativeExecutionStateError::equal(Self, Self) -> Bool
+pub fn NativeExecutionStateError::not_equal(Self, Self) -> Bool
+pub fn NativeExecutionStateError::output(Self, &Logger) -> Unit
+pub fn NativeExecutionStateError::to_repr(Self) -> @debug.Repr
+pub fn NativeExecutionStateError::to_string(Self) -> String
+pub impl Show for NativeExecutionStateError
+
+// Types and methods
+type NativeExecutionState
+pub fn NativeExecutionState::NativeExecutionState() -> Self
+pub fn NativeExecutionState::active_depth(Self) -> Int
+pub fn NativeExecutionState::begin(Self, release? : () -> Unit) -> NativeInvocationHandle raise NativeExecutionStateError
+pub fn NativeExecutionState::continuations(Self) -> @jit_ffi.NativeContinuationArena
+pub fn NativeExecutionState::current_invocation(Self) -> Int64?
+pub fn NativeExecutionState::exceptions(Self) -> @jit_ffi.NativeExceptionArena
+pub fn NativeExecutionState::live_count(Self) -> Int
+pub fn NativeExecutionState::parked_count(Self) -> Int
+pub fn NativeExecutionState::release_if_live(Self, Int64) -> Unit
+pub fn NativeExecutionState::retire_continuations(Self) -> Unit
+pub fn NativeExecutionState::seal(Self) -> Unit
+pub fn NativeExecutionState::to_repr(Self) -> @debug.Repr
+pub impl @debug.Debug for NativeExecutionState
+
+type NativeInvocationHandle
+pub fn NativeInvocationHandle::cancel(Self) -> Unit raise NativeExecutionStateError
+pub fn NativeInvocationHandle::complete(Self) -> Unit raise NativeExecutionStateError
+pub fn NativeInvocationHandle::id(Self) -> Int64
+pub fn NativeInvocationHandle::park(Self) -> Unit raise NativeExecutionStateError
+pub fn NativeInvocationHandle::phase(Self) -> NativeInvocationPhase raise NativeExecutionStateError
+pub fn NativeInvocationHandle::reactivate(Self) -> Unit raise NativeExecutionStateError
+pub fn NativeInvocationHandle::release_if_live(Self) -> Unit
+pub fn NativeInvocationHandle::resource_id(Self) -> Int64 raise NativeExecutionStateError
+pub fn NativeInvocationHandle::to_repr(Self) -> @debug.Repr
+pub impl @debug.Debug for NativeInvocationHandle
+
+pub(all) enum NativeInvocationPhase {
+  Active
+  Parked
+} derive(Eq, @debug.Debug)
+pub fn NativeInvocationPhase::equal(Self, Self) -> Bool
+pub fn NativeInvocationPhase::not_equal(Self, Self) -> Bool
+pub fn NativeInvocationPhase::to_repr(Self) -> @debug.Repr
+
+// Type aliases
+pub using @jit_ffi {type NativeContinuationArena}
+
+pub using @jit_ffi {type NativeExceptionArena}
+
+// Traits

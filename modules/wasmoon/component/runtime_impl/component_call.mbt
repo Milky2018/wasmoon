@@ -348,7 +348,7 @@ fn ComponentInvocation::wait_transport(
         })
         let wait_result : Result[Unit, ComponentRuntimeError] = try {
           if !wait_for_host_event(self.async_state, self.store) {
-            let error = CanonCallError(
+            let error = ComponentRuntimeError::CanonCallError(
               "wasm trap: deadlock detected: event loop cannot make further progress",
             )
             raise error

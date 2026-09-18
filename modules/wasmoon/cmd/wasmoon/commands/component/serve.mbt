@@ -11,7 +11,7 @@ pub async fn serve_http(
   try {
     let parsed_envs = envs.map(entry => {
       guard parse_env_var(entry) is Some(pair) else {
-        raise @runtime_impl.HostCallError(
+        raise @runtime_impl.ComponentRuntimeError::HostCallError(
           "invalid environment entry '\{entry}'",
         )
       }
@@ -99,7 +99,7 @@ fn load_http_service(
       ) &&
       export_.sortidx.sort is Instance
     }) {
-    raise @runtime_impl.HostCallError(
+    raise @runtime_impl.ComponentRuntimeError::HostCallError(
       "HTTP service must export wasi:http/handler@0.3.0: " + path,
     )
   }
@@ -158,14 +158,19 @@ pub async fn run_http_component_command(
           return match host.invoke(run, "run", []) {
             [Variant(0, None)] => 0
             [Variant(1, None)] => 1
-            _ => raise @runtime_impl.HostCallError("invalid command result")
+            _ =>
+              raise @runtime_impl.ComponentRuntimeError::HostCallError(
+                "invalid command result",
+              )
           }
         }
       }
-      raise @runtime_impl.HostCallError("missing command run export")
+      raise @runtime_impl.ComponentRuntimeError::HostCallError(
+        "missing command run export",
+      )
     })
   } catch {
-    @runtime_impl.HostExit(status) => status
+    @runtime_impl.ComponentRuntimeError::HostExit(status) => status
     error => report_component_run_error(error_format, "run", error.to_string())
   }
 }

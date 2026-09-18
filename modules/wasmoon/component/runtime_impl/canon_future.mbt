@@ -267,7 +267,7 @@ fn instantiate_canon_future_read(
                 mark_sync_waitable_blocked(
                   async_state, caller_component_id, handle, task_id,
                 )
-                canon_suspend[0] = Some(Yield)
+                @core.set_suspension(Some(Yield))
                 raise Unreachable
               }
               match st0.pending_write {
@@ -373,7 +373,7 @@ fn instantiate_canon_future_read(
                       mark_sync_waitable_blocked(
                         async_state, caller_component_id, handle, task_id,
                       )
-                      canon_suspend[0] = Some(Yield)
+                      @core.set_suspension(Some(Yield))
                       raise Unreachable
                     }
                   }
@@ -619,7 +619,7 @@ fn instantiate_canon_future_write(
                 mark_sync_waitable_blocked(
                   async_state, caller_component_id, handle, task_id,
                 )
-                canon_suspend[0] = Some(Yield)
+                @core.set_suspension(Some(Yield))
                 raise Unreachable
               }
 
@@ -749,7 +749,7 @@ fn instantiate_canon_future_write(
                     mark_sync_waitable_blocked(
                       async_state, caller_component_id, handle, task_id,
                     )
-                    canon_suspend[0] = Some(Yield)
+                    @core.set_suspension(Some(Yield))
                     raise Unreachable
                   }
                 }

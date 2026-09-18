@@ -110,7 +110,7 @@ def has_validated_instantiation_boundary(
     linker_requires_evidence = re.search(
         r"pub fn ComponentLinker::instantiate"
         r"\(Self, String, @[A-Za-z_][A-Za-z0-9_]*\.ValidatedComponent\)"
-        r" -> ComponentInstance raise ComponentRuntimeError",
+        r" -> ComponentInstance raise (?:@[A-Za-z_][A-Za-z0-9_]*\.)?ComponentRuntimeError",
         runtime,
     )
     # A component import is instantiated by whichever component imports it,

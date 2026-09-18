@@ -131,10 +131,10 @@ fn run_component_sections(
                 e => {
                   pop_task(async_state)
                   retire_task(async_state, inst_task_id)
-                  if canon_host_exit.val is Some(status) {
+                  if @core.host_exit_status() is Some(status) {
                     raise HostExit(status)
                   }
-                  match canon_trap_message[0] {
+                  match @core.trap_message() {
                     Some(msg) => raise CoreModuleInstantiateError(msg)
                     None => raise CoreModuleInstantiateError(e.to_string())
                   }

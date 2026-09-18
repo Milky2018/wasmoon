@@ -8,12 +8,6 @@ pub extend CallbackTask with Debug::{to_repr}
 pub extend CanonResources with Debug::{to_repr}
 
 ///|
-pub extend CanonSuspend with Debug::{to_repr}
-
-///|
-pub extend CanonSuspend with Eq::{not_equal, equal}
-
-///|
 pub extend ComponentClosure with Show::{to_string, output}
 
 ///|
@@ -26,19 +20,7 @@ pub extend ComponentFunc with Debug::{to_repr}
 pub extend ComponentFunc with Show::{to_string, output}
 
 ///|
-pub extend ComponentInstanceEntryState with Debug::{to_repr}
-
-///|
 pub extend ComponentInvocationPoll with Debug::{to_repr}
-
-///|
-pub extend ComponentRuntimeError with Debug::{to_repr}
-
-///|
-pub extend ComponentRuntimeError with Eq::{not_equal, equal}
-
-///|
-pub extend ComponentRuntimeError with Show::{to_string, output}
 
 ///|
 pub extend ComponentValue with Debug::{to_repr}
@@ -50,49 +32,7 @@ pub extend ComponentValue with Eq::{not_equal, equal}
 pub extend ComponentValue with Show::{to_string, output}
 
 ///|
-pub extend CoreBackendPolicy with Debug::{to_repr}
-
-///|
-pub extend CoreBackendPolicy with Eq::{not_equal, equal}
-
-///|
-pub extend CoreCallStyle with Debug::{to_repr}
-
-///|
-pub extend CoreCallStyle with Eq::{not_equal, equal}
-
-///|
-pub extend CoreContinuation with Debug::{to_repr}
-
-///|
-pub extend CoreExecutionEngine with Debug::{to_repr}
-
-///|
-pub extend CoreExecutionOutcome with Debug::{to_repr}
-
-///|
-pub extend CoreExecutionRequest with Debug::{to_repr}
-
-///|
-pub extend CoreExecutionRequest with Eq::{not_equal, equal}
-
-///|
-pub extend CoreFuncRef with Debug::{to_repr}
-
-///|
 pub extend CoreInstance with Show::{to_string, output}
-
-///|
-pub extend CoreSuspension with Debug::{to_repr}
-
-///|
-pub extend CoreSuspension with Eq::{not_equal, equal}
-
-///|
-pub extend CoreSuspensionPolicy with Debug::{to_repr}
-
-///|
-pub extend CoreSuspensionPolicy with Eq::{not_equal, equal}
 
 ///|
 pub extend DecodedCallbackCode with Debug::{to_repr}

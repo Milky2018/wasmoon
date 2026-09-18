@@ -36,7 +36,7 @@ pub fn alloc_host_core_func(
 }
 
 ///|
-fn alloc_component_host_core_func(
+pub fn alloc_component_host_core_func(
   store : @runtime.Store,
   core_type : @types.FuncType,
   host : (Array[@types.Value]) -> Array[@types.Value] raise @runtime.RuntimeError,
@@ -74,7 +74,7 @@ pub fn clear_canon_debug_message() -> Unit {
 }
 
 ///|
-fn call_core_func(
+pub fn call_core_func(
   store : @runtime.Store,
   core_func : CoreFuncRef,
   args : Array[@types.Value],
@@ -93,7 +93,7 @@ fn call_core_func(
 }
 
 ///|
-fn call_core_func_outcome(
+pub fn call_core_func_outcome(
   store : @runtime.Store,
   core_func : CoreFuncRef,
   args : Array[@types.Value],
@@ -185,7 +185,7 @@ fn call_core_func_outcome(
 }
 
 ///|
-fn call_core_func_guarded(
+pub fn call_core_func_guarded(
   store : @runtime.Store,
   entry : ComponentInstanceEntryState,
   core_func : CoreFuncRef,
@@ -241,7 +241,7 @@ fn guard_core_outcome(
 }
 
 ///|
-fn call_core_func_guarded_outcome(
+pub fn call_core_func_guarded_outcome(
   store : @runtime.Store,
   entry : ComponentInstanceEntryState,
   core_func : CoreFuncRef,
@@ -266,22 +266,5 @@ fn component_core_error(error : @runtime.RuntimeError) -> ComponentRuntimeError 
   match error {
     UncaughtException => UncaughtWasmException
     _ => CanonCallError(error.to_string())
-  }
-}
-
-///|
-fn run_post_return(
-  resources : CanonResources,
-  core_results : Array[@types.Value],
-  entry : ComponentInstanceEntryState,
-  store : @runtime.Store,
-) -> Unit raise ComponentRuntimeError {
-  if resources.post_return is Some(post_return) {
-    let previous = canon_may_leave[0]
-    canon_may_leave[0] = false
-    defer {
-      canon_may_leave[0] = previous
-    }
-    call_core_func_guarded(store, entry, post_return, core_results) |> ignore
   }
 }

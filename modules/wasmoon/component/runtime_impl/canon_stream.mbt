@@ -415,7 +415,7 @@ fn instantiate_canon_stream_read(
                         mark_sync_waitable_blocked(
                           async_state, owner_component_id, handle, task_id,
                         )
-                        canon_suspend[0] = Some(Yield)
+                        @core.set_suspension(Some(Yield))
                         raise Unreachable
                       }
                     }
@@ -463,7 +463,7 @@ fn instantiate_canon_stream_read(
                         mark_sync_waitable_blocked(
                           async_state, owner_component_id, handle, task_id,
                         )
-                        canon_suspend[0] = Some(Yield)
+                        @core.set_suspension(Some(Yield))
                         raise Unreachable
                       }
                     } else {
@@ -566,7 +566,7 @@ fn instantiate_canon_stream_read(
                         mark_sync_waitable_blocked(
                           async_state, owner_component_id, handle, task_id,
                         )
-                        canon_suspend[0] = Some(Yield)
+                        @core.set_suspension(Some(Yield))
                         raise Unreachable
                       }
                     }
@@ -685,7 +685,7 @@ fn instantiate_canon_stream_read(
                         mark_sync_waitable_blocked(
                           async_state, owner_component_id, handle, task_id,
                         )
-                        canon_suspend[0] = Some(Yield)
+                        @core.set_suspension(Some(Yield))
                         raise Unreachable
                       }
                     }
@@ -836,7 +836,7 @@ fn instantiate_canon_stream_write(
                           mark_sync_waitable_blocked(
                             async_state, owner_component_id, handle, task_id,
                           )
-                          canon_suspend[0] = Some(Yield)
+                          @core.set_suspension(Some(Yield))
                           raise Unreachable
                         }
                         let dropped = if st0.readable_dropped { 1 } else { 0 }
@@ -870,7 +870,7 @@ fn instantiate_canon_stream_write(
                         mark_sync_waitable_blocked(
                           async_state, owner_component_id, handle, task_id,
                         )
-                        canon_suspend[0] = Some(Yield)
+                        @core.set_suspension(Some(Yield))
                         raise Unreachable
                       }
                     } else {
@@ -967,7 +967,7 @@ fn instantiate_canon_stream_write(
                         mark_sync_waitable_blocked(
                           async_state, owner_component_id, handle, task_id,
                         )
-                        canon_suspend[0] = Some(Yield)
+                        @core.set_suspension(Some(Yield))
                         raise Unreachable
                       }
                     }
@@ -1102,7 +1102,7 @@ fn instantiate_canon_stream_write(
                       mark_sync_waitable_blocked(
                         async_state, owner_component_id, handle, task_id,
                       )
-                      canon_suspend[0] = Some(Yield)
+                      @core.set_suspension(Some(Yield))
                       raise Unreachable
                     }
                   }

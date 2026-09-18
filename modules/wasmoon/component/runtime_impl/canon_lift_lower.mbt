@@ -853,8 +853,8 @@ fn instantiate_canon_lower(
               ([] : Array[ComponentValue])
             } else {
               match st.task.waiting_set[0] {
-                Some(ws) => canon_suspend[0] = Some(Wait(ws))
-                None => canon_suspend[0] = Some(Yield)
+                Some(ws) => @core.set_suspension(Some(Wait(ws)))
+                None => @core.set_suspension(Some(Yield))
               }
               raise Unreachable
             }
