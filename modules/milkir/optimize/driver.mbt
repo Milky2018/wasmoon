@@ -91,19 +91,17 @@ fn run_acyclic_optimization_pass_with_analysis_at_level(
       "acyclic_optimize",
       before,
       instruction_count(func),
-      optimize_stats.result.changed,
+      optimize_stats.changed,
       perf_elapsed_us(tick),
       work_done=Some(optimize_stats.work_done),
-      rewrite_apps=Some(optimize_stats.rewrite_stats.applied),
-      rewrite_attempts=Some(optimize_stats.rewrite_stats.attempts),
-      rewrite_created_insts=Some(
-        optimize_stats.rewrite_stats.created_instructions,
-      ),
+      rewrite_apps=Some(optimize_stats.rewrite_applied),
+      rewrite_attempts=Some(optimize_stats.rewrite_attempts),
+      rewrite_created_insts=Some(optimize_stats.rewrite_created_instructions),
       budget_exhausted=Some(optimize_stats.budget_exhausted),
       value_lookup_probes=Some(optimize_stats.value_lookup_probes),
     )
   }
-  (optimize_stats.rewrite_stats.changed, optimize_stats.result)
+  (optimize_stats.rewrite_changed, { changed: optimize_stats.changed, })
 }
 
 ///|

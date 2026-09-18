@@ -274,7 +274,7 @@ test "GVN reuses float constants with identical NaN bits" {
     instruction_count(func),
     FunctionAnalysis::build(func),
   )
-  inspect(stats.result.changed, content="true")
+  inspect(stats.changed, content="true")
   inspect(
     func.block_instruction_at(func.blocks[0], 1).unwrap().opcode is Scalar(Copy),
     content="true",
@@ -295,7 +295,7 @@ test "GVN does not conflate integer constants with different widths" {
     instruction_count(func),
     FunctionAnalysis::build(func),
   )
-  inspect(stats.result.changed, content="false")
+  inspect(stats.changed, content="false")
   inspect(
     func.print(),
     content=(
@@ -1031,7 +1031,7 @@ test "CSE keeps duplicate loads without alias metadata" {
     instruction_count(func),
     FunctionAnalysis::build(func),
   )
-  inspect(stats.result.changed, content="false")
+  inspect(stats.changed, content="false")
   inspect(
     func.print(),
     content=(

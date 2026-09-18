@@ -278,7 +278,7 @@ fn instruction_memory_write_scope(
       WriteRegion(access.region)
     }
   }
-  if inst.opcode.semantics().memory.may_write_memory() {
+  if opcode_semantics(inst.opcode).memory.may_write_memory() {
     WriteAll
   } else {
     NoWrite
@@ -640,13 +640,13 @@ fn inst_dominates(
 /// separate correctness change even though this pass tracks memory versions.
 fn is_gvn_candidate(inst : @milkir.Inst) -> Bool {
   if inst.results.length() != 1 ||
-    !inst.opcode.semantics().can_stage_as_pure_candidate() {
+    !opcode_semantics(inst.opcode).can_stage_as_pure_candidate() {
     return false
   }
   if is_cheap_rematerializable_constant(inst) {
     return false
   }
-  !inst.opcode.semantics().must_preserve_if_unused()
+  !opcode_semantics(inst.opcode).must_preserve_if_unused()
 }
 
 ///|
@@ -662,7 +662,7 @@ fn gvn_memory_dependency(
         _ => None
       }
     _ =>
-      if inst.opcode.semantics().memory.reads_memory() {
+      if opcode_semantics(inst.opcode).memory.reads_memory() {
         match ptr_access_from_inst(inst, ptr_base_infos) {
           Some(access) => Some(access.region)
           None => Some(Other)
@@ -674,12 +674,15 @@ fn gvn_memory_dependency(
 }
 
 ///|
-priv struct AcyclicOptimizeStats {
-  result : OptResult
+pub struct AcyclicOptimizeStats {
+  changed : Bool
   work_done : Int
   budget_exhausted : Bool
   value_lookup_probes : Int
-  rewrite_stats : AcyclicRewriteStats
+  rewrite_changed : Bool
+  rewrite_attempts : Int
+  rewrite_applied : Int
+  rewrite_created_instructions : Int
 }
 
 ///|
@@ -713,7 +716,7 @@ priv struct AcyclicOptimizer {
   value_table : @hashmap.HashMap[@milkir.Inst, Array[AvailableExpression]]
   value_table_changes : Array[ValueTableChange]
   memory_values : @hashmap.HashMap[MemoryValueKey, MemoryValueEntry]
-  result : OptResult
+  mut changed : Bool
   mut work_done : Int
   mut budget_exhausted : Bool
   mut instruction_position : Int
@@ -791,7 +794,7 @@ fn AcyclicOptimizer::new(
     value_table: HashMap([]),
     value_table_changes: [],
     memory_values: HashMap([]),
-    result: OptResult(),
+    changed: false,
     work_done: 0,
     budget_exhausted: false,
     instruction_position: 0,
@@ -850,7 +853,7 @@ fn AcyclicOptimizer::process_block(
     let inst = self.func.instruction_by_id(inst_id).unwrap()
     let prefix : Array[@milkir.Inst] = []
     if self.session.rewrite_inst(inst, prefix) {
-      self.result.mark_changed()
+      self.changed = true
     }
     for created in prefix {
       self.process_inst(
@@ -863,7 +866,7 @@ fn AcyclicOptimizer::process_block(
       rewritten.push(created)
     }
     if self.session.canonicalize_operands(inst) {
-      self.result.mark_changed()
+      self.changed = true
     }
     self.process_inst(
       block_id,
@@ -925,7 +928,7 @@ fn AcyclicOptimizer::process_inst(
       if inst.first_result() is Some(result) {
         self.session.record_alias(result, entry.value)
       }
-      self.result.mark_changed()
+      self.changed = true
       replaced_by_memory = true
     }
   }
@@ -1008,7 +1011,7 @@ fn AcyclicOptimizer::process_inst(
       if !bounded_stable_global {
         self.session.record_alias(result_val, existing.value)
       }
-      self.result.mark_changed()
+      self.changed = true
       if bounded_stable_global {
         self.value_table_changes.push(
           Updated(entries, reusable_index, existing),
@@ -1040,16 +1043,19 @@ fn AcyclicOptimizer::finish(self : AcyclicOptimizer) -> AcyclicOptimizeStats {
   // an otherwise successful optimizer exit.
   self.session.discard_candidates(0)
   {
-    result: self.result,
+    changed: self.changed,
     work_done: self.work_done,
     budget_exhausted: self.budget_exhausted,
     value_lookup_probes: self.value_lookup_probes,
-    rewrite_stats: self.session.stats,
+    rewrite_changed: self.session.stats.changed,
+    rewrite_attempts: self.session.stats.attempts,
+    rewrite_applied: self.session.stats.applied,
+    rewrite_created_instructions: self.session.stats.created_instructions,
   }
 }
 
 ///|
-fn run_acyclic_optimization_with_budget_and_analysis(
+pub fn run_acyclic_optimization_with_budget_and_analysis(
   func : @milkir.Function,
   work_budget : Int,
   analysis : FunctionAnalysis,

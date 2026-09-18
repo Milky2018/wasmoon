@@ -79,7 +79,7 @@ fn is_loop_invariant(
   invariant_values : @hashmap.HashMap[Int, Bool],
 ) -> Bool {
   // Instructions with observable effects or traps cannot be hoisted.
-  if inst.opcode.semantics().must_preserve_if_unused() {
+  if opcode_semantics(inst.opcode).must_preserve_if_unused() {
     return false
   }
   if inst.opcode is GlobalValue(_) {

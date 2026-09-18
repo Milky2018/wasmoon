@@ -1,5 +1,5 @@
 ///|
-priv enum MemoryEffect {
+pub(all) enum MemoryEffect {
   None
   Read
   Write
@@ -7,7 +7,7 @@ priv enum MemoryEffect {
 }
 
 ///|
-priv struct OpcodeSemantics {
+pub struct OpcodeSemantics {
   memory : MemoryEffect
   may_trap : Bool
   other_observable_effect : Bool
@@ -170,8 +170,8 @@ fn @milkir.VectorOp::semantics(self : @milkir.VectorOp) -> OpcodeSemantics {
 }
 
 ///|
-fn @milkir.Opcode::semantics(self : @milkir.Opcode) -> OpcodeSemantics {
-  match self {
+pub fn opcode_semantics(opcode : @milkir.Opcode) -> OpcodeSemantics {
+  match opcode {
     Scalar(op) => op.semantics()
     Call(op) => op.semantics()
     Memory(op) => op.semantics()
@@ -182,7 +182,7 @@ fn @milkir.Opcode::semantics(self : @milkir.Opcode) -> OpcodeSemantics {
 }
 
 ///|
-fn MemoryEffect::reads_memory(self : MemoryEffect) -> Bool {
+pub fn MemoryEffect::reads_memory(self : MemoryEffect) -> Bool {
   match self {
     Read | Unknown => true
     None | Write => false
@@ -190,7 +190,7 @@ fn MemoryEffect::reads_memory(self : MemoryEffect) -> Bool {
 }
 
 ///|
-fn MemoryEffect::may_write_memory(self : MemoryEffect) -> Bool {
+pub fn MemoryEffect::may_write_memory(self : MemoryEffect) -> Bool {
   match self {
     Write | Unknown => true
     None | Read => false
@@ -198,13 +198,15 @@ fn MemoryEffect::may_write_memory(self : MemoryEffect) -> Bool {
 }
 
 ///|
-fn OpcodeSemantics::must_preserve_if_unused(self : OpcodeSemantics) -> Bool {
+pub fn OpcodeSemantics::must_preserve_if_unused(self : OpcodeSemantics) -> Bool {
   self.may_trap ||
   self.other_observable_effect ||
   self.memory.may_write_memory()
 }
 
 ///|
-fn OpcodeSemantics::can_stage_as_pure_candidate(self : OpcodeSemantics) -> Bool {
+pub fn OpcodeSemantics::can_stage_as_pure_candidate(
+  self : OpcodeSemantics,
+) -> Bool {
   !self.may_trap && !self.other_observable_effect && self.memory is None
 }

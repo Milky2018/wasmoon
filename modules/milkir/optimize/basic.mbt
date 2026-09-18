@@ -33,7 +33,7 @@ fn eliminate_dead_code(func : @milkir.Function) -> OptResult {
       let inst = func.instruction_by_id(inst_id).unwrap()
       if inst.results.length() > 0 &&
         inst.results.all(v => use_counts[v.id] == 0) &&
-        !inst.opcode.semantics().must_preserve_if_unused() {
+        !opcode_semantics(inst.opcode).must_preserve_if_unused() {
         dead_insts[inst.id] = true
         worklist.push(inst)
         result.mark_changed()
@@ -49,7 +49,7 @@ fn eliminate_dead_code(func : @milkir.Function) -> OptResult {
         if remaining == 0 && func.defining_inst(operand) is Some(definition) {
           if !dead_insts[definition.id] &&
             definition.results.all(value => use_counts[value.id] == 0) &&
-            !definition.opcode.semantics().must_preserve_if_unused() {
+            !opcode_semantics(definition.opcode).must_preserve_if_unused() {
             dead_insts[definition.id] = true
             worklist.push(definition)
             result.mark_changed()
@@ -64,44 +64,6 @@ fn eliminate_dead_code(func : @milkir.Function) -> OptResult {
     }
   }
   result
-}
-
-///|
-/// Compute use counts for all values in a function
-fn compute_use_counts(func : @milkir.Function) -> Array[Int] {
-  let counts = Array::make(func.next_value_id, 0)
-  fn count(value : @milkir.Value) -> Unit {
-    counts[value.id] = counts[value.id] + 1
-  }
-  for block in func.blocks {
-    for inst_id in block.instruction_ids() {
-      let inst = func.instruction_by_id(inst_id).unwrap()
-      for op in inst.operands {
-        count(op)
-      }
-    }
-    if block.terminator is Some(term) {
-      match term {
-        Jump(_, args) | Return(args) =>
-          for value in args {
-            count(value)
-          }
-        Branch(cond, _, true_args, _, false_args) => {
-          count(cond)
-          for value in true_args {
-            count(value)
-          }
-          for value in false_args {
-            count(value)
-          }
-        }
-        Brz(cond, _, _) | Brnz(cond, _, _) => count(cond)
-        BrTable(index, _, _) => count(index)
-        Trap(_) | TrapExit(_) => ()
-      }
-    }
-  }
-  counts
 }
 
 // ============ Constant Folding ============

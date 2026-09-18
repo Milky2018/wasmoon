@@ -66,7 +66,7 @@ fn OptimizerSession::stage_pure_candidate(
   operands : Array[@milkir.Value],
   result_type : @milkir.Type,
 ) -> @milkir.Value? {
-  if !opcode.semantics().can_stage_as_pure_candidate() {
+  if !opcode_semantics(opcode).can_stage_as_pure_candidate() {
     return None
   }
   let opcode : @milkir.Opcode = match (opcode, operands) {
