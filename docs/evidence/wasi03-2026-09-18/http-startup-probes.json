@@ -1,0 +1,170 @@
+[
+  {
+    "name": "http-client-chunked",
+    "engine": "jit",
+    "probe_error": "[Errno 54] Connection reset by peer",
+    "log": "Error: HTTP connection failed: UnknownImport(\"wasi:io/poll@0.2.4\")\nError: HTTP server failed: Cancelled\nServing /tmp/wasmoon-wasi03-accept-upstream/tests/rust/testsuite/wasm32-wasip3/http-client-chunked.wasm on http://127.0.0.1:61494\n"
+  },
+  {
+    "name": "http-client-chunked",
+    "engine": "interp",
+    "probe_error": "[Errno 54] Connection reset by peer",
+    "log": "Error: HTTP connection failed: UnknownImport(\"wasi:io/poll@0.2.4\")\nError: HTTP server failed: Cancelled\nServing /tmp/wasmoon-wasi03-accept-upstream/tests/rust/testsuite/wasm32-wasip3/http-client-chunked.wasm on http://127.0.0.1:61498\n"
+  },
+  {
+    "name": "http-client-headers",
+    "engine": "jit",
+    "probe_error": "[Errno 54] Connection reset by peer",
+    "log": "Error: HTTP connection failed: UnknownImport(\"wasi:io/poll@0.2.4\")\nError: HTTP server failed: Cancelled\nServing /tmp/wasmoon-wasi03-accept-upstream/tests/rust/testsuite/wasm32-wasip3/http-client-headers.wasm on http://127.0.0.1:61502\n"
+  },
+  {
+    "name": "http-client-headers",
+    "engine": "interp",
+    "probe_error": "[Errno 54] Connection reset by peer",
+    "log": "Error: HTTP connection failed: UnknownImport(\"wasi:io/poll@0.2.4\")\nError: HTTP server failed: Cancelled\nServing /tmp/wasmoon-wasi03-accept-upstream/tests/rust/testsuite/wasm32-wasip3/http-client-headers.wasm on http://127.0.0.1:61506\n"
+  },
+  {
+    "name": "http-client-method",
+    "engine": "jit",
+    "probe_error": "[Errno 54] Connection reset by peer",
+    "log": "Error: HTTP connection failed: UnknownImport(\"wasi:io/poll@0.2.4\")\nError: HTTP server failed: Cancelled\nServing /tmp/wasmoon-wasi03-accept-upstream/tests/rust/testsuite/wasm32-wasip3/http-client-method.wasm on http://127.0.0.1:61510\n"
+  },
+  {
+    "name": "http-client-method",
+    "engine": "interp",
+    "probe_error": "[Errno 54] Connection reset by peer",
+    "log": "Error: HTTP connection failed: UnknownImport(\"wasi:io/poll@0.2.4\")\nError: HTTP server failed: Cancelled\nServing /tmp/wasmoon-wasi03-accept-upstream/tests/rust/testsuite/wasm32-wasip3/http-client-method.wasm on http://127.0.0.1:61514\n"
+  },
+  {
+    "name": "http-client-path-none",
+    "engine": "jit",
+    "probe_error": "[Errno 54] Connection reset by peer",
+    "log": "Error: HTTP connection failed: UnknownImport(\"wasi:io/poll@0.2.4\")\nError: HTTP server failed: Cancelled\nServing /tmp/wasmoon-wasi03-accept-upstream/tests/rust/testsuite/wasm32-wasip3/http-client-path-none.wasm on http://127.0.0.1:61518\n"
+  },
+  {
+    "name": "http-client-path-none",
+    "engine": "interp",
+    "probe_error": "[Errno 54] Connection reset by peer",
+    "log": "Error: HTTP connection failed: UnknownImport(\"wasi:io/poll@0.2.4\")\nError: HTTP server failed: Cancelled\nServing /tmp/wasmoon-wasi03-accept-upstream/tests/rust/testsuite/wasm32-wasip3/http-client-path-none.wasm on http://127.0.0.1:61522\n"
+  },
+  {
+    "name": "http-client-path",
+    "engine": "jit",
+    "probe_error": "[Errno 54] Connection reset by peer",
+    "log": "Error: HTTP connection failed: UnknownImport(\"wasi:io/poll@0.2.4\")\nError: HTTP server failed: Cancelled\nServing /tmp/wasmoon-wasi03-accept-upstream/tests/rust/testsuite/wasm32-wasip3/http-client-path.wasm on http://127.0.0.1:61526\n"
+  },
+  {
+    "name": "http-client-path",
+    "engine": "interp",
+    "probe_error": "[Errno 54] Connection reset by peer",
+    "log": "Error: HTTP connection failed: UnknownImport(\"wasi:io/poll@0.2.4\")\nError: HTTP server failed: Cancelled\nServing /tmp/wasmoon-wasi03-accept-upstream/tests/rust/testsuite/wasm32-wasip3/http-client-path.wasm on http://127.0.0.1:61530\n"
+  },
+  {
+    "name": "http-client-send-errors",
+    "engine": "jit",
+    "probe_error": "[Errno 54] Connection reset by peer",
+    "log": "Error: HTTP connection failed: UnknownImport(\"wasi:io/poll@0.2.4\")\nError: HTTP server failed: Cancelled\nServing /tmp/wasmoon-wasi03-accept-upstream/tests/rust/testsuite/wasm32-wasip3/http-client-send-errors.wasm on http://127.0.0.1:61534\n"
+  },
+  {
+    "name": "http-client-send-errors",
+    "engine": "interp",
+    "probe_error": "[Errno 54] Connection reset by peer",
+    "log": "Error: HTTP connection failed: UnknownImport(\"wasi:io/poll@0.2.4\")\nError: HTTP server failed: Cancelled\nServing /tmp/wasmoon-wasi03-accept-upstream/tests/rust/testsuite/wasm32-wasip3/http-client-send-errors.wasm on http://127.0.0.1:61539\n"
+  },
+  {
+    "name": "http-client-sent",
+    "engine": "jit",
+    "probe_error": "[Errno 54] Connection reset by peer",
+    "log": "Error: HTTP connection failed: UnknownImport(\"wasi:io/poll@0.2.4\")\nError: HTTP server failed: Cancelled\nServing /tmp/wasmoon-wasi03-accept-upstream/tests/rust/testsuite/wasm32-wasip3/http-client-sent.wasm on http://127.0.0.1:61543\n"
+  },
+  {
+    "name": "http-client-sent",
+    "engine": "interp",
+    "probe_error": "[Errno 54] Connection reset by peer",
+    "log": "Error: HTTP connection failed: UnknownImport(\"wasi:io/poll@0.2.4\")\nError: HTTP server failed: Cancelled\nServing /tmp/wasmoon-wasi03-accept-upstream/tests/rust/testsuite/wasm32-wasip3/http-client-sent.wasm on http://127.0.0.1:61547\n"
+  },
+  {
+    "name": "http-client-status",
+    "engine": "jit",
+    "probe_error": "[Errno 54] Connection reset by peer",
+    "log": "Error: HTTP connection failed: UnknownImport(\"wasi:io/poll@0.2.4\")\nError: HTTP server failed: Cancelled\nServing /tmp/wasmoon-wasi03-accept-upstream/tests/rust/testsuite/wasm32-wasip3/http-client-status.wasm on http://127.0.0.1:61551\n"
+  },
+  {
+    "name": "http-client-status",
+    "engine": "interp",
+    "probe_error": "[Errno 54] Connection reset by peer",
+    "log": "Error: HTTP connection failed: UnknownImport(\"wasi:io/poll@0.2.4\")\nError: HTTP server failed: Cancelled\nServing /tmp/wasmoon-wasi03-accept-upstream/tests/rust/testsuite/wasm32-wasip3/http-client-status.wasm on http://127.0.0.1:61555\n"
+  },
+  {
+    "name": "http-client-trailer-error",
+    "engine": "jit",
+    "probe_error": "[Errno 54] Connection reset by peer",
+    "log": "Error: HTTP connection failed: UnknownImport(\"wasi:io/poll@0.2.4\")\nError: HTTP server failed: Cancelled\nServing /tmp/wasmoon-wasi03-accept-upstream/tests/rust/testsuite/wasm32-wasip3/http-client-trailer-error.wasm on http://127.0.0.1:61559\n"
+  },
+  {
+    "name": "http-client-trailer-error",
+    "engine": "interp",
+    "probe_error": "[Errno 54] Connection reset by peer",
+    "log": "Error: HTTP connection failed: UnknownImport(\"wasi:io/poll@0.2.4\")\nError: HTTP server failed: Cancelled\nServing /tmp/wasmoon-wasi03-accept-upstream/tests/rust/testsuite/wasm32-wasip3/http-client-trailer-error.wasm on http://127.0.0.1:61563\n"
+  },
+  {
+    "name": "http-client-trailers",
+    "engine": "jit",
+    "probe_error": "[Errno 54] Connection reset by peer",
+    "log": "Error: HTTP connection failed: UnknownImport(\"wasi:io/poll@0.2.4\")\nError: HTTP server failed: Cancelled\nServing /tmp/wasmoon-wasi03-accept-upstream/tests/rust/testsuite/wasm32-wasip3/http-client-trailers.wasm on http://127.0.0.1:61567\n"
+  },
+  {
+    "name": "http-client-trailers",
+    "engine": "interp",
+    "probe_error": "[Errno 54] Connection reset by peer",
+    "log": "Error: HTTP connection failed: UnknownImport(\"wasi:io/poll@0.2.4\")\nError: HTTP server failed: Cancelled\nServing /tmp/wasmoon-wasi03-accept-upstream/tests/rust/testsuite/wasm32-wasip3/http-client-trailers.wasm on http://127.0.0.1:61571\n"
+  },
+  {
+    "name": "http-client",
+    "engine": "jit",
+    "probe_error": "[Errno 54] Connection reset by peer",
+    "log": "Error: HTTP connection failed: UnknownImport(\"wasi:io/poll@0.2.4\")\nError: HTTP server failed: Cancelled\nServing /tmp/wasmoon-wasi03-accept-upstream/tests/rust/testsuite/wasm32-wasip3/http-client.wasm on http://127.0.0.1:61575\n"
+  },
+  {
+    "name": "http-client",
+    "engine": "interp",
+    "probe_error": "[Errno 54] Connection reset by peer",
+    "log": "Error: HTTP connection failed: UnknownImport(\"wasi:io/poll@0.2.4\")\nError: HTTP server failed: Cancelled\nServing /tmp/wasmoon-wasi03-accept-upstream/tests/rust/testsuite/wasm32-wasip3/http-client.wasm on http://127.0.0.1:61579\n"
+  },
+  {
+    "name": "http-service-echo",
+    "engine": "jit",
+    "probe_error": "[Errno 54] Connection reset by peer",
+    "log": "Error: HTTP connection failed: UnknownImport(\"wasi:io/poll@0.2.4\")\nError: HTTP server failed: Cancelled\nServing /tmp/wasmoon-wasi03-accept-upstream/tests/rust/testsuite/wasm32-wasip3/http-service-echo.wasm on http://127.0.0.1:61583\n"
+  },
+  {
+    "name": "http-service-echo",
+    "engine": "interp",
+    "probe_error": "[Errno 54] Connection reset by peer",
+    "log": "Error: HTTP connection failed: UnknownImport(\"wasi:io/poll@0.2.4\")\nError: HTTP server failed: Cancelled\nServing /tmp/wasmoon-wasi03-accept-upstream/tests/rust/testsuite/wasm32-wasip3/http-service-echo.wasm on http://127.0.0.1:61587\n"
+  },
+  {
+    "name": "http-service-uri",
+    "engine": "jit",
+    "probe_error": "[Errno 54] Connection reset by peer",
+    "log": "Error: HTTP connection failed: UnknownImport(\"wasi:io/poll@0.2.4\")\nError: HTTP server failed: Cancelled\nServing /tmp/wasmoon-wasi03-accept-upstream/tests/rust/testsuite/wasm32-wasip3/http-service-uri.wasm on http://127.0.0.1:61591\n"
+  },
+  {
+    "name": "http-service-uri",
+    "engine": "interp",
+    "probe_error": "[Errno 54] Connection reset by peer",
+    "log": "Error: HTTP connection failed: UnknownImport(\"wasi:io/poll@0.2.4\")\nError: HTTP server failed: Cancelled\nServing /tmp/wasmoon-wasi03-accept-upstream/tests/rust/testsuite/wasm32-wasip3/http-service-uri.wasm on http://127.0.0.1:61595\n"
+  },
+  {
+    "name": "http-service",
+    "engine": "jit",
+    "probe_error": "[Errno 54] Connection reset by peer",
+    "log": "Error: HTTP connection failed: UnknownImport(\"wasi:io/poll@0.2.4\")\nError: HTTP server failed: Cancelled\nServing /tmp/wasmoon-wasi03-accept-upstream/tests/rust/testsuite/wasm32-wasip3/http-service.wasm on http://127.0.0.1:61599\n"
+  },
+  {
+    "name": "http-service",
+    "engine": "interp",
+    "probe_error": "[Errno 54] Connection reset by peer",
+    "log": "Error: HTTP connection failed: UnknownImport(\"wasi:io/poll@0.2.4\")\nError: HTTP server failed: Cancelled\nServing /tmp/wasmoon-wasi03-accept-upstream/tests/rust/testsuite/wasm32-wasip3/http-service.wasm on http://127.0.0.1:61604\n"
+  }
+]

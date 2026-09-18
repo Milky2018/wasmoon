@@ -1,0 +1,489 @@
+{
+  "execution": {
+    "start_timestamp": "2026-09-18T03:31:41.392Z",
+    "finish_timestamp": "2026-09-18T03:31:42.310Z"
+  },
+  "results": [
+    {
+      "name": "WASI Rust tests [wasm32-wasip3]",
+      "runtime": {
+        "name": "wasmoon-interp",
+        "version": "0.16.0"
+      },
+      "duration_s": 0.882323,
+      "failed": 39,
+      "skipped": 14,
+      "passed": 2,
+      "xfailed": 0,
+      "xpassed": 0,
+      "tests": [
+        {
+          "name": "filesystem-open-errors",
+          "executed": true,
+          "outcome": "fail",
+          "duration_s": 0.020840167999267578,
+          "failures": [
+            "Wait(exit_code=0) failed: expected 0, got 1\n\n==STDOUT==\ncomponent instantiate error: InstantiationFailed(\"UnknownImport(\\\"wasi:io/poll@0.2.4\\\")\")\n"
+          ]
+        },
+        {
+          "name": "http-request-options",
+          "executed": true,
+          "outcome": "fail",
+          "duration_s": 0.024740219116210938,
+          "failures": [
+            "Wait(exit_code=0) failed: expected 0, got 1\n\n==STDOUT==\ncomponent instantiate error: InstantiationFailed(\"UnknownImport(\\\"wasi:http/types@0.3.0\\\")\")\n"
+          ]
+        },
+        {
+          "name": "filesystem-metadata-hash",
+          "executed": true,
+          "outcome": "fail",
+          "duration_s": 0.025562763214111328,
+          "failures": [
+            "Wait(exit_code=0) failed: expected 0, got 1\n\n==STDOUT==\ncomponent instantiate error: InstantiationFailed(\"UnknownImport(\\\"wasi:io/poll@0.2.4\\\")\")\n"
+          ]
+        },
+        {
+          "name": "filesystem-dotdot",
+          "executed": true,
+          "outcome": "fail",
+          "duration_s": 0.022462844848632812,
+          "failures": [
+            "Wait(exit_code=0) failed: expected 0, got 1\n\n==STDOUT==\ncomponent instantiate error: InstantiationFailed(\"UnknownImport(\\\"wasi:io/poll@0.2.4\\\")\")\n"
+          ]
+        },
+        {
+          "name": "run-with-err",
+          "executed": true,
+          "outcome": "pass",
+          "duration_s": 0.017184972763061523,
+          "failures": []
+        },
+        {
+          "name": "sockets-tcp-properties",
+          "executed": true,
+          "outcome": "fail",
+          "duration_s": 0.020059823989868164,
+          "failures": [
+            "Wait(exit_code=0) failed: expected 0, got 1\n\n==STDOUT==\ncomponent instantiate error: InstantiationFailed(\"UnknownImport(\\\"wasi:io/poll@0.2.4\\\")\")\n"
+          ]
+        },
+        {
+          "name": "filesystem-rename",
+          "executed": true,
+          "outcome": "fail",
+          "duration_s": 0.02214503288269043,
+          "failures": [
+            "Wait(exit_code=0) failed: expected 0, got 1\n\n==STDOUT==\ncomponent instantiate error: InstantiationFailed(\"UnknownImport(\\\"wasi:io/poll@0.2.4\\\")\")\n"
+          ]
+        },
+        {
+          "name": "multi-clock-wait",
+          "executed": true,
+          "outcome": "fail",
+          "duration_s": 0.018661975860595703,
+          "failures": [
+            "Wait(exit_code=0) failed: expected 0, got 1\n\n==STDOUT==\ncomponent instantiate error: InstantiationFailed(\"UnknownImport(\\\"wasi:io/poll@0.2.4\\\")\")\n"
+          ]
+        },
+        {
+          "name": "http-client-path-none",
+          "executed": false,
+          "outcome": "skip",
+          "duration_s": 0,
+          "failures": []
+        },
+        {
+          "name": "http-client-trailer-error",
+          "executed": false,
+          "outcome": "skip",
+          "duration_s": 0,
+          "failures": []
+        },
+        {
+          "name": "sockets-tcp-bind",
+          "executed": true,
+          "outcome": "fail",
+          "duration_s": 0.023214101791381836,
+          "failures": [
+            "Wait(exit_code=0) failed: expected 0, got 1\n\n==STDOUT==\ncomponent instantiate error: InstantiationFailed(\"UnknownImport(\\\"wasi:io/poll@0.2.4\\\")\")\n"
+          ]
+        },
+        {
+          "name": "sockets-udp-send",
+          "executed": true,
+          "outcome": "fail",
+          "duration_s": 0.019899845123291016,
+          "failures": [
+            "Wait(exit_code=0) failed: expected 0, got 1\n\n==STDOUT==\ncomponent instantiate error: InstantiationFailed(\"UnknownImport(\\\"wasi:io/poll@0.2.4\\\")\")\n"
+          ]
+        },
+        {
+          "name": "filesystem-hard-links",
+          "executed": true,
+          "outcome": "fail",
+          "duration_s": 0.02152395248413086,
+          "failures": [
+            "Wait(exit_code=0) failed: expected 0, got 1\n\n==STDOUT==\ncomponent instantiate error: InstantiationFailed(\"UnknownImport(\\\"wasi:io/poll@0.2.4\\\")\")\n"
+          ]
+        },
+        {
+          "name": "filesystem-is-same-object",
+          "executed": true,
+          "outcome": "fail",
+          "duration_s": 0.021786212921142578,
+          "failures": [
+            "Wait(exit_code=0) failed: expected 0, got 1\n\n==STDOUT==\ncomponent instantiate error: InstantiationFailed(\"UnknownImport(\\\"wasi:io/poll@0.2.4\\\")\")\n"
+          ]
+        },
+        {
+          "name": "cli-stdout-flush",
+          "executed": true,
+          "outcome": "fail",
+          "duration_s": 0.02043890953063965,
+          "failures": [
+            "Read(id='stdout', payload='READY') stdout failed: expected READY, got compo",
+            ""
+          ]
+        },
+        {
+          "name": "cli-terminal",
+          "executed": true,
+          "outcome": "fail",
+          "duration_s": 0.018290042877197266,
+          "failures": [
+            "Wait(exit_code=0) failed: expected 0, got 1\n\n==STDOUT==\ncomponent instantiate error: InstantiationFailed(\"UnknownImport(\\\"wasi:io/poll@0.2.4\\\")\")\n"
+          ]
+        },
+        {
+          "name": "http-client-path",
+          "executed": false,
+          "outcome": "skip",
+          "duration_s": 0,
+          "failures": []
+        },
+        {
+          "name": "filesystem-set-size",
+          "executed": true,
+          "outcome": "fail",
+          "duration_s": 0.021855831146240234,
+          "failures": [
+            "Wait(exit_code=0) failed: expected 0, got 1\n\n==STDOUT==\ncomponent instantiate error: InstantiationFailed(\"UnknownImport(\\\"wasi:io/poll@0.2.4\\\")\")\n"
+          ]
+        },
+        {
+          "name": "http-service-echo",
+          "executed": false,
+          "outcome": "skip",
+          "duration_s": 0,
+          "failures": []
+        },
+        {
+          "name": "http-fields",
+          "executed": true,
+          "outcome": "fail",
+          "duration_s": 0.0213010311126709,
+          "failures": [
+            "Wait(exit_code=0) failed: expected 0, got 1\n\n==STDOUT==\ncomponent instantiate error: InstantiationFailed(\"UnknownImport(\\\"wasi:http/types@0.3.0\\\")\")\n"
+          ]
+        },
+        {
+          "name": "sockets-tcp-listen",
+          "executed": true,
+          "outcome": "fail",
+          "duration_s": 0.020899057388305664,
+          "failures": [
+            "Wait(exit_code=0) failed: expected 0, got 1\n\n==STDOUT==\ncomponent instantiate error: InstantiationFailed(\"UnknownImport(\\\"wasi:io/poll@0.2.4\\\")\")\n"
+          ]
+        },
+        {
+          "name": "http-client-headers",
+          "executed": false,
+          "outcome": "skip",
+          "duration_s": 0,
+          "failures": []
+        },
+        {
+          "name": "http-client-sent",
+          "executed": false,
+          "outcome": "skip",
+          "duration_s": 0,
+          "failures": []
+        },
+        {
+          "name": "sockets-echo",
+          "executed": true,
+          "outcome": "fail",
+          "duration_s": 0.022034883499145508,
+          "failures": [
+            "Connect(id='echo-server', protocol_type=<ProtocolType.TCP: 'tcp'>): Expected address information to be available as <host>: <port>, found component instantiate error: InstantiationFailed(\"UnknownImport(\\\"wasi:io/poll@0.2.4\\\")\")",
+            ""
+          ]
+        },
+        {
+          "name": "http-client-trailers",
+          "executed": false,
+          "outcome": "skip",
+          "duration_s": 0,
+          "failures": []
+        },
+        {
+          "name": "http-client-send-errors",
+          "executed": false,
+          "outcome": "skip",
+          "duration_s": 0,
+          "failures": []
+        },
+        {
+          "name": "http-request",
+          "executed": true,
+          "outcome": "fail",
+          "duration_s": 0.024985074996948242,
+          "failures": [
+            "Wait(exit_code=0) failed: expected 0, got 1\n\n==STDOUT==\ncomponent instantiate error: InstantiationFailed(\"UnknownImport(\\\"wasi:http/types@0.3.0\\\")\")\n"
+          ]
+        },
+        {
+          "name": "filesystem-mkdir-rmdir",
+          "executed": true,
+          "outcome": "fail",
+          "duration_s": 0.02244114875793457,
+          "failures": [
+            "Wait(exit_code=0) failed: expected 0, got 1\n\n==STDOUT==\ncomponent instantiate error: InstantiationFailed(\"UnknownImport(\\\"wasi:io/poll@0.2.4\\\")\")\n"
+          ]
+        },
+        {
+          "name": "http-response",
+          "executed": true,
+          "outcome": "fail",
+          "duration_s": 0.02358412742614746,
+          "failures": [
+            "Wait(exit_code=0) failed: expected 0, got 1\n\n==STDOUT==\ncomponent instantiate error: InstantiationFailed(\"UnknownImport(\\\"wasi:http/types@0.3.0\\\")\")\n"
+          ]
+        },
+        {
+          "name": "filesystem-stat",
+          "executed": true,
+          "outcome": "fail",
+          "duration_s": 0.024036169052124023,
+          "failures": [
+            "Wait(exit_code=0) failed: expected 0, got 1\n\n==STDOUT==\ncomponent instantiate error: InstantiationFailed(\"UnknownImport(\\\"wasi:io/poll@0.2.4\\\")\")\n"
+          ]
+        },
+        {
+          "name": "filesystem-unlink-errors",
+          "executed": true,
+          "outcome": "fail",
+          "duration_s": 0.020245075225830078,
+          "failures": [
+            "Wait(exit_code=0) failed: expected 0, got 1\n\n==STDOUT==\ncomponent instantiate error: InstantiationFailed(\"UnknownImport(\\\"wasi:io/poll@0.2.4\\\")\")\n"
+          ]
+        },
+        {
+          "name": "sockets-udp-connect",
+          "executed": true,
+          "outcome": "fail",
+          "duration_s": 0.019090890884399414,
+          "failures": [
+            "Wait(exit_code=0) failed: expected 0, got 1\n\n==STDOUT==\ncomponent instantiate error: InstantiationFailed(\"UnknownImport(\\\"wasi:io/poll@0.2.4\\\")\")\n"
+          ]
+        },
+        {
+          "name": "sockets-tcp-connect",
+          "executed": true,
+          "outcome": "fail",
+          "duration_s": 0.021164894104003906,
+          "failures": [
+            "Wait(exit_code=0) failed: expected 0, got 1\n\n==STDOUT==\ncomponent instantiate error: InstantiationFailed(\"UnknownImport(\\\"wasi:io/poll@0.2.4\\\")\")\n"
+          ]
+        },
+        {
+          "name": "filesystem-io",
+          "executed": true,
+          "outcome": "fail",
+          "duration_s": 0.024763822555541992,
+          "failures": [
+            "Wait(exit_code=0) failed: expected 0, got 1\n\n==STDOUT==\ncomponent instantiate error: InstantiationFailed(\"UnknownImport(\\\"wasi:io/poll@0.2.4\\\")\")\n"
+          ]
+        },
+        {
+          "name": "cli-env",
+          "executed": true,
+          "outcome": "fail",
+          "duration_s": 0.018286943435668945,
+          "failures": [
+            "Wait(exit_code=0) failed: expected 0, got 1\n\n==STDOUT==\ncomponent instantiate error: InstantiationFailed(\"UnknownImport(\\\"wasi:io/poll@0.2.4\\\")\")\n"
+          ]
+        },
+        {
+          "name": "random",
+          "executed": true,
+          "outcome": "fail",
+          "duration_s": 0.017446041107177734,
+          "failures": [
+            "Wait(exit_code=0) failed: expected 0, got 1\n\n==STDOUT==\ncomponent instantiate error: InstantiationFailed(\"UnknownImport(\\\"wasi:io/poll@0.2.4\\\")\")\n"
+          ]
+        },
+        {
+          "name": "http-client-chunked",
+          "executed": false,
+          "outcome": "skip",
+          "duration_s": 0,
+          "failures": []
+        },
+        {
+          "name": "http-service",
+          "executed": false,
+          "outcome": "skip",
+          "duration_s": 0,
+          "failures": []
+        },
+        {
+          "name": "wall-clock",
+          "executed": true,
+          "outcome": "fail",
+          "duration_s": 0.018424034118652344,
+          "failures": [
+            "Wait(exit_code=0) failed: expected 0, got 1\n\n==STDOUT==\ncomponent instantiate error: InstantiationFailed(\"UnknownImport(\\\"wasi:io/poll@0.2.4\\\")\")\n"
+          ]
+        },
+        {
+          "name": "sockets-udp-properties",
+          "executed": true,
+          "outcome": "fail",
+          "duration_s": 0.01869797706604004,
+          "failures": [
+            "Wait(exit_code=0) failed: expected 0, got 1\n\n==STDOUT==\ncomponent instantiate error: InstantiationFailed(\"UnknownImport(\\\"wasi:io/poll@0.2.4\\\")\")\n"
+          ]
+        },
+        {
+          "name": "http-client-method",
+          "executed": false,
+          "outcome": "skip",
+          "duration_s": 0,
+          "failures": []
+        },
+        {
+          "name": "cli-stdio-roundtrip",
+          "executed": true,
+          "outcome": "fail",
+          "duration_s": 0.01955389976501465,
+          "failures": [
+            "Read(id='stdout', payload='Hello, world!') stdout failed: expected Hello, world!, got component ins",
+            ""
+          ]
+        },
+        {
+          "name": "filesystem-advise",
+          "executed": true,
+          "outcome": "fail",
+          "duration_s": 0.023954391479492188,
+          "failures": [
+            "Wait(exit_code=0) failed: expected 0, got 1\n\n==STDOUT==\ncomponent instantiate error: InstantiationFailed(\"UnknownImport(\\\"wasi:io/poll@0.2.4\\\")\")\n"
+          ]
+        },
+        {
+          "name": "cli-exit",
+          "executed": true,
+          "outcome": "pass",
+          "duration_s": 0.01864004135131836,
+          "failures": []
+        },
+        {
+          "name": "cli-stdio",
+          "executed": true,
+          "outcome": "fail",
+          "duration_s": 0.020540714263916016,
+          "failures": [
+            "Wait(exit_code=0) failed: expected 0, got 1\n\n==STDOUT==\ncomponent instantiate error: InstantiationFailed(\"UnknownImport(\\\"wasi:io/poll@0.2.4\\\")\")\n"
+          ]
+        },
+        {
+          "name": "monotonic-clock",
+          "executed": true,
+          "outcome": "fail",
+          "duration_s": 0.019929170608520508,
+          "failures": [
+            "Wait(exit_code=0) failed: expected 0, got 1\n\n==STDOUT==\ncomponent instantiate error: InstantiationFailed(\"UnknownImport(\\\"wasi:io/poll@0.2.4\\\")\")\n"
+          ]
+        },
+        {
+          "name": "http-client",
+          "executed": false,
+          "outcome": "skip",
+          "duration_s": 0,
+          "failures": []
+        },
+        {
+          "name": "http-client-status",
+          "executed": false,
+          "outcome": "skip",
+          "duration_s": 0,
+          "failures": []
+        },
+        {
+          "name": "sockets-tcp-receive",
+          "executed": true,
+          "outcome": "fail",
+          "duration_s": 0.02365708351135254,
+          "failures": [
+            "Wait(exit_code=0) failed: expected 0, got 1\n\n==STDOUT==\ncomponent instantiate error: InstantiationFailed(\"UnknownImport(\\\"wasi:io/poll@0.2.4\\\")\")\n"
+          ]
+        },
+        {
+          "name": "sockets-udp-bind",
+          "executed": true,
+          "outcome": "fail",
+          "duration_s": 0.019963741302490234,
+          "failures": [
+            "Wait(exit_code=0) failed: expected 0, got 1\n\n==STDOUT==\ncomponent instantiate error: InstantiationFailed(\"UnknownImport(\\\"wasi:io/poll@0.2.4\\\")\")\n"
+          ]
+        },
+        {
+          "name": "sockets-udp-receive",
+          "executed": true,
+          "outcome": "fail",
+          "duration_s": 0.022356033325195312,
+          "failures": [
+            "Wait(exit_code=0) failed: expected 0, got 1\n\n==STDOUT==\ncomponent instantiate error: InstantiationFailed(\"UnknownImport(\\\"wasi:io/poll@0.2.4\\\")\")\n"
+          ]
+        },
+        {
+          "name": "http-service-uri",
+          "executed": false,
+          "outcome": "skip",
+          "duration_s": 0,
+          "failures": []
+        },
+        {
+          "name": "filesystem-flags-and-type",
+          "executed": true,
+          "outcome": "fail",
+          "duration_s": 0.02303290367126465,
+          "failures": [
+            "Wait(exit_code=0) failed: expected 0, got 1\n\n==STDOUT==\ncomponent instantiate error: InstantiationFailed(\"UnknownImport(\\\"wasi:io/poll@0.2.4\\\")\")\n"
+          ]
+        },
+        {
+          "name": "filesystem-read-directory",
+          "executed": true,
+          "outcome": "fail",
+          "duration_s": 0.02291393280029297,
+          "failures": [
+            "Wait(exit_code=0) failed: expected 0, got 1\n\n==STDOUT==\ncomponent instantiate error: InstantiationFailed(\"UnknownImport(\\\"wasi:io/poll@0.2.4\\\")\")\n"
+          ]
+        },
+        {
+          "name": "sockets-tcp-send",
+          "executed": true,
+          "outcome": "fail",
+          "duration_s": 0.024001121520996094,
+          "failures": [
+            "Wait(exit_code=0) failed: expected 0, got 1\n\n==STDOUT==\ncomponent instantiate error: InstantiationFailed(\"UnknownImport(\\\"wasi:io/poll@0.2.4\\\")\")\n"
+          ]
+        }
+      ]
+    }
+  ]
+}

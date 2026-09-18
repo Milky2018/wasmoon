@@ -1,0 +1,20 @@
+[
+  {
+    "name": "sockets-tcp-properties",
+    "returncode": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "name": "sockets-udp-properties",
+    "returncode": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "name": "filesystem-read-directory",
+    "returncode": 0,
+    "stdout": "",
+    "stderr": ""
+  }
+]
