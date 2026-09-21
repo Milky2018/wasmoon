@@ -53,7 +53,7 @@ typedef int socklen_t;
 #include "moonbit.h"
 
 #include "native_filetype.h"
-#include "../path.h"
+#include "../path_inline.h"
 
 // Internal token values used by MoonBit side. Translate to host constants
 // before calling libc APIs so behavior is consistent across platforms.

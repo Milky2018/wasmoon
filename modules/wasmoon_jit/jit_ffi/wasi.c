@@ -32,7 +32,7 @@
 
 #include "moonbit.h"
 #include "jit_internal.h"
-#include "../host_io/path.h"
+#include "../host_io/path_inline.h"
 
 // ============ WASI Error Codes ============
 #define WASI_ESUCCESS     0
