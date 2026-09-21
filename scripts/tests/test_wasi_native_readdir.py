@@ -17,7 +17,7 @@ class NativeReaddirTests(unittest.TestCase):
                 'moonbit_bytes_t moonbit_make_bytes(int32_t size, int value);\n')
             binary = directory / "readdir"
             subprocess.run(['cc', '-fsanitize=address', '-g', '-Wall', '-Wextra', '-Werror',
-                            '-I', str(directory), str(ROOT / 'modules/wasmoon/wasi/directory_native.c'),
+                            '-I', str(directory), str(ROOT / 'modules/wasmoon_jit/host_io/wasi/directory_native.c'),
                             str(ROOT / 'scripts/tests/native/readdir.c'), '-o', str(binary)],
                            check=True, capture_output=True)
             scratch = directory / "scratch"

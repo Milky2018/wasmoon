@@ -1,0 +1,181 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "Milky2018/wasmoon_jit/host_io/wasi"
+
+// Values
+pub fn c_accept(Int) -> Int
+
+pub fn c_allocate(Int, Int64, Int64) -> Int
+
+pub fn c_clock_getres_monotonic() -> Int64
+
+pub fn c_clock_getres_realtime() -> Int64
+
+pub fn c_clock_gettime_monotonic() -> Int64
+
+pub fn c_clock_gettime_realtime() -> Int64
+
+pub fn c_close(Int) -> Int
+
+pub fn c_cpu_clock(Bool, Bool) -> Int64
+
+pub fn c_dup(Int) -> Int
+
+pub fn c_dup2(Int, Int) -> Int
+
+pub fn c_errno_to_wasi(Int) -> Int
+
+pub fn c_fcntl_getfl(Int) -> Int
+
+pub fn c_fcntl_setfl(Int, Int) -> Int
+
+pub fn c_fdatasync(Int) -> Int
+
+pub fn c_fstat(Int, FixedArray[UInt64], FixedArray[UInt64], FixedArray[Byte], FixedArray[UInt64], FixedArray[UInt64], FixedArray[UInt64], FixedArray[UInt64], FixedArray[UInt64]) -> Int
+
+pub fn c_fstat_beneath(Int, FixedArray[Byte], Int, FixedArray[UInt64], FixedArray[UInt64], FixedArray[Byte], FixedArray[UInt64], FixedArray[UInt64], FixedArray[UInt64], FixedArray[UInt64], FixedArray[UInt64]) -> Int
+
+pub fn c_fstatat(Int, FixedArray[Byte], Int, FixedArray[UInt64], FixedArray[UInt64], FixedArray[Byte], FixedArray[UInt64], FixedArray[UInt64], FixedArray[UInt64], FixedArray[UInt64], FixedArray[UInt64]) -> Int
+
+pub fn c_fsync(Int) -> Int
+
+pub fn c_ftruncate(Int, Int64) -> Int
+
+pub fn c_futimens(Int, Int64, Int64, Int) -> Int
+
+pub fn c_get_errno() -> Int
+
+pub fn c_get_error_message() -> Bytes
+
+pub fn c_getrandom(FixedArray[Byte], Int) -> Int
+
+pub fn c_isatty(Int) -> Int
+
+pub fn c_linkat(Int, FixedArray[Byte], Int, FixedArray[Byte], Int) -> Int
+
+pub fn c_lseek(Int, Int64, Int) -> Int64
+
+pub fn c_mkdir(FixedArray[Byte], Int) -> Int
+
+pub fn c_mkdirat(Int, FixedArray[Byte], Int) -> Int
+
+pub fn c_nanosleep(Int64) -> Int
+
+pub fn c_o_append() -> Int
+
+pub fn c_o_creat() -> Int
+
+pub fn c_o_directory() -> Int
+
+pub fn c_o_excl() -> Int
+
+pub fn c_o_nofollow() -> Int
+
+pub fn c_o_nonblock() -> Int
+
+pub fn c_o_rdonly() -> Int
+
+pub fn c_o_rdwr() -> Int
+
+pub fn c_o_trunc() -> Int
+
+pub fn c_o_wronly() -> Int
+
+pub fn c_open(FixedArray[Byte], Int, Int) -> Int
+
+pub fn c_open_parent_beneath(Int, FixedArray[Byte]) -> Int
+
+pub fn c_openat_beneath(Int, FixedArray[Byte], FixedArray[Byte], Int, Int, Int) -> Int
+
+pub fn c_p1_recv(Int, FixedArray[Byte], Int, Int, FixedArray[Int]) -> Int
+
+pub fn c_p1_send(Int, FixedArray[Byte], Int) -> Int
+
+pub fn c_path_within_base(FixedArray[Byte], FixedArray[Byte]) -> Int
+
+pub fn c_poll(FixedArray[Int], FixedArray[Int], FixedArray[Int], Int, Int) -> Int
+
+pub fn c_pread(Int, FixedArray[Byte], Int, Int64) -> Int
+
+pub fn c_print_string(FixedArray[Byte], Int) -> Unit
+
+pub fn c_putchar(Int) -> Unit
+
+pub fn c_pwrite(Int, FixedArray[Byte], Int, Int64) -> Int
+
+pub fn c_raise(Int) -> Int
+
+pub fn c_raise_signal(Int) -> Int
+
+pub fn c_read(Int, FixedArray[Byte], Int) -> Int
+
+pub fn c_readdir(FixedArray[Byte]) -> Bytes?
+
+pub fn c_readdir_fd(Int) -> Bytes?
+
+pub fn c_readlinkat(Int, FixedArray[Byte], FixedArray[Byte], Int64) -> Int64
+
+pub fn c_recv(Int, FixedArray[Byte], Int64, Int) -> Int64
+
+pub fn c_renameat(Int, FixedArray[Byte], Int, FixedArray[Byte]) -> Int
+
+pub fn c_resolver_drop(Int64) -> Unit
+
+pub fn c_resolver_next(Int64, FixedArray[Byte], FixedArray[Byte], FixedArray[UInt]) -> Int
+
+pub fn c_resolver_start(FixedArray[Byte], FixedArray[Int]) -> Int64
+
+pub fn c_send(Int, FixedArray[Byte], Int64, Int) -> Int64
+
+pub fn c_set_errno_illegal_byte_sequence() -> Unit
+
+pub fn c_set_errno_invalid_argument() -> Unit
+
+pub fn c_shutdown(Int, Int) -> Int
+
+pub fn c_socket_address_get(Int, Int, FixedArray[Byte], FixedArray[Byte], FixedArray[UInt16], FixedArray[UInt]) -> Int
+
+pub fn c_socket_bind(Int, Int, FixedArray[Byte], Int, Int) -> Int
+
+pub fn c_socket_bytes_available(Int) -> Int64
+
+pub fn c_socket_connect(Int, Int, FixedArray[Byte], Int, Int) -> Int
+
+pub fn c_socket_create(Int, Int) -> Int
+
+pub fn c_socket_disconnect(Int) -> Int
+
+pub fn c_socket_error(Int) -> Int
+
+pub fn c_socket_kind(Int) -> Int
+
+pub fn c_socket_listen(Int, Int) -> Int
+
+pub fn c_socket_option_get(Int, Int, Int) -> Int
+
+pub fn c_socket_option_set(Int, Int, Int, Int) -> Int
+
+pub fn c_socket_recv_from(Int, FixedArray[Byte], Int, FixedArray[Byte], FixedArray[Byte], FixedArray[UInt16], FixedArray[UInt]) -> Int64
+
+pub fn c_socket_send_to(Int, FixedArray[Byte], Int, Int, Int, FixedArray[Byte], Int, Int) -> Int64
+
+pub fn c_symlinkat(FixedArray[Byte], Int, FixedArray[Byte]) -> Int
+
+pub fn c_unlinkat(Int, FixedArray[Byte], Int) -> Int
+
+pub fn c_utimens_beneath(Int, FixedArray[Byte], Int, Int64, Int64, Int) -> Int
+
+pub fn c_utimensat(Int, FixedArray[Byte], Int64, Int64, Int, Int) -> Int
+
+pub fn c_write(Int, FixedArray[Byte], Int) -> Int
+
+pub fn c_yield() -> Int
+
+pub fn is_windows() -> Bool
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits

@@ -14,8 +14,8 @@ extern "C" {
 #include <sys/stat.h>
 
 #ifdef _WIN32
-#include "../../wasmoon_jit/host_io/windows_io.h"
-#include "../../wasmoon_jit/host_io/windows_fs.h"
+#include "../windows_io.h"
+#include "../windows_fs.h"
 #include <bcrypt.h>
 #pragma comment(lib, "bcrypt.lib")
 #include <ws2tcpip.h>
@@ -53,7 +53,7 @@ typedef int socklen_t;
 #include "moonbit.h"
 
 #include "native_filetype.h"
-#include "../../wasmoon_jit/jit_ffi/wasi_path_portability.h"
+#include "../path.h"
 
 // Internal token values used by MoonBit side. Translate to host constants
 // before calling libc APIs so behavior is consistent across platforms.

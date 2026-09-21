@@ -1,15 +1,7 @@
-#ifndef WASMOON_WASI_PATH_PORTABILITY_H
-#define WASMOON_WASI_PATH_PORTABILITY_H
-
+#include "path.h"
 #ifndef _WIN32
-#include <errno.h>
-#include <fcntl.h>
-#include <string.h>
-#include <sys/stat.h>
-#include <unistd.h>
-
 // Preserve Preview 1 path semantics across POSIX kernels in both engines.
-static inline int wasmoon_wasi_symlinkat_portable(
+int wasmoon_wasi_symlinkat_portable(
     const char *target, int dirfd, const char *linkpath) {
     int result = symlinkat(target, dirfd, linkpath);
     if (result < 0 && errno == EEXIST) {
@@ -28,7 +20,7 @@ static inline int wasmoon_wasi_symlinkat_portable(
     return result;
 }
 
-static inline ssize_t wasmoon_wasi_readlinkat_portable(
+ssize_t wasmoon_wasi_readlinkat_portable(
     int dirfd, const char *path, char *buf, size_t size) {
     if (size == 0) {
         // Validate the link even when there are no guest bytes to write.
@@ -37,5 +29,4 @@ static inline ssize_t wasmoon_wasi_readlinkat_portable(
     }
     return readlinkat(dirfd, path, buf, size);
 }
-#endif
 #endif

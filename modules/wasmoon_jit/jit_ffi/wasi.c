@@ -32,7 +32,7 @@
 
 #include "moonbit.h"
 #include "jit_internal.h"
-#include "wasi_path_portability.h"
+#include "../host_io/path.h"
 
 // ============ WASI Error Codes ============
 #define WASI_ESUCCESS     0

@@ -3,7 +3,7 @@
 #include <limits.h>
 #include "moonbit.h"
 #ifdef _WIN32
-#include "../../wasmoon_jit/host_io/windows_io.h"
+#include "../windows_io.h"
 #else
 #include <sys/socket.h>
 #include <sys/uio.h>

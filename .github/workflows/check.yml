@@ -114,6 +114,9 @@ jobs:
           fi
           ./install.sh
 
+      - name: install independently packaged modules
+        run: python3 scripts/test_packaged_install.py
+
       - name: test HTTP services, middleware and clients on both engines
         run: python3 scripts/test_wasi_http.py --wasmoon ./wasmoon
 
@@ -313,6 +316,9 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Copy-Item target/windows-build/native/release/build/Milky2018/wasmoon/cmd/wasmoon/wasmoon.exe wasmoon.exe
           Copy-Item target/windows-build/native/release/build/Milky2018/wasmoon/cmd/wasmoon-tools/wasmoon-tools.exe wasmoon-tools.exe
+      - name: install independently packaged modules on Windows
+        run: python scripts/test_packaged_install.py
+
       - name: test Windows HTTP services, middleware and clients on both engines
         if: ${{ !cancelled() && steps.windows_build.outcome == 'success' }}
         run: python scripts/test_wasi_http.py --wasmoon ./wasmoon.exe

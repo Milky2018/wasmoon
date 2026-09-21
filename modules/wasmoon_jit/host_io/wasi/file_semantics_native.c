@@ -7,8 +7,8 @@
 #include <sys/stat.h>
 #include "moonbit.h"
 #ifdef _WIN32
-#include "../../wasmoon_jit/host_io/windows_io.h"
-#include "../../wasmoon_jit/host_io/windows_fs.h"
+#include "../windows_io.h"
+#include "../windows_fs.h"
 #else
 #include <unistd.h>
 #endif

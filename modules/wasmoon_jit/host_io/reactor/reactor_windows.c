@@ -1,5 +1,5 @@
 #ifdef _WIN32
-#include "../../wasmoon_jit/host_io/windows_input.h"
+#include "../windows_input.h"
 #include <limits.h>
 #include "moonbit.h"
 #include <errno.h>

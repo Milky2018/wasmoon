@@ -1,4 +1,5 @@
 import {
+  "Milky2018/wasmoon_jit/host_io",
   "Milky2018/wasm_core/types",
 }
 
