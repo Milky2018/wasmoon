@@ -625,8 +625,6 @@ pub fn NativeJITContext::clear_cancellation_callback(Self) -> Unit
 pub fn NativeJITContext::clear_gc_heap(Self) -> Unit
 pub fn NativeJITContext::clear_hostcall_callback(Self) -> Unit
 pub fn NativeJITContext::clear_segments(Self) -> Unit
-pub fn NativeJITContext::clear_wasi_stdin_buffer(Self) -> Unit
-pub fn NativeJITContext::clear_wasi_stdin_callback(Self) -> Unit
 #alias(alloc_wasm_stack, deprecated)
 pub fn NativeJITContext::configure_native_fiber_stack_size(Self, Int64) -> Bool
 pub fn NativeJITContext::define_continuation_type(Self, Int, Int64, Array[@types.ValueType], Array[@types.ValueType]) -> Bool
@@ -642,7 +640,6 @@ pub fn NativeJITContext::gc_use_func_safepoints(Self, Int) -> Unit
 pub fn NativeJITContext::has_callable_metadata(Self) -> Bool
 #alias(has_wasm_stack, deprecated)
 pub fn NativeJITContext::has_configured_native_fiber_stack_size(Self) -> Bool
-pub fn NativeJITContext::init_wasi(Self, Array[String], Array[String], Array[(String, String)], quiet? : Bool, readonly_preopens? : Array[(String, String)]) -> Unit
 pub fn NativeJITContext::memory_ptr(Self, Int) -> Int64
 pub fn NativeJITContext::memory_size(Self, Int) -> Int64
 pub fn NativeJITContext::refresh_table_layout(Self, Int) -> Bool
@@ -661,17 +658,11 @@ pub fn NativeJITContext::set_indirect(Self, Int, Int, Int) -> Unit
 pub fn NativeJITContext::set_memory(Self, Int64) -> Unit
 pub fn NativeJITContext::set_memory_pointers(Self, Array[MemoryInfo]) -> Unit
 pub fn NativeJITContext::set_table_pointers(Self, Array[JITTable?]) -> Unit
-pub fn NativeJITContext::set_wasi_stderr_capture(Self, Bool) -> Unit
-pub fn NativeJITContext::set_wasi_stdin_buffer(Self, Bytes) -> Unit
-pub fn NativeJITContext::set_wasi_stdin_callback(Self, () -> Bytes) -> Unit
-pub fn NativeJITContext::set_wasi_stdout_capture(Self, Bool) -> Unit
 pub fn NativeJITContext::setup_gc(Self, CHeap, Array[@types.SubType], Array[Int], Array[Int]) -> Unit raise GCSetupError
 pub fn NativeJITContext::setup_gc_with_func_table(Self, CHeap, Array[@types.SubType], Array[Int], Array[Int], Int64, Int) -> Unit raise GCSetupError
 pub fn NativeJITContext::setup_segments(Self, Array[@types.Data], Array[Array[Int64]], data_dropped? : Array[Bool], elem_dropped? : Array[Bool]) -> Unit
 pub fn NativeJITContext::start_continuation(Self, Int64, Int64, FixedArray[Int64], Int, stack_size? : Int64) -> NativeJITContinuation raise NativeFiberError
 pub fn NativeJITContext::take_wasi_exit_code(Self) -> Int
-pub fn NativeJITContext::take_wasi_stderr(Self) -> Bytes
-pub fn NativeJITContext::take_wasi_stdout(Self) -> Bytes
 pub fn NativeJITContext::teardown_gc(Self) -> Unit
 pub fn NativeJITContext::throw_exception_tag(Self, Int) -> Unit
 pub fn NativeJITContext::throw_exception_values(Self, Int, Array[Int64]) -> Unit

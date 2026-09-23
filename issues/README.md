@@ -604,6 +604,7 @@ graph TD
   ISS_576["ISS-576: Audit remaining compiler and runtime package boundaries"]
   ISS_577["ISS-577: Make native host dependencies independent of repository layout"]
   ISS_578["ISS-578: Harden native ABI boundaries and retire duplicate WASI execution"]
+  ISS_579["ISS-579: Make resolver ownership safe and retire unused native WASI state"]
   ISS_002 --> ISS_003
   ISS_002 --> ISS_004
   ISS_003 --> ISS_005

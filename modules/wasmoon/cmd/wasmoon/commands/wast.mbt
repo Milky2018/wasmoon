@@ -418,17 +418,6 @@ fn build_wast_compile_mask(mod_ : @types.Module) -> Array[Bool]? {
 }
 
 ///|
-fn module_has_wasi_import(mod_ : @types.Module) -> Bool {
-  for imp in mod_.imports {
-    if imp.mod_name == "wasi_snapshot_preview1" ||
-      imp.mod_name == "wasi_unstable" {
-      return true
-    }
-  }
-  false
-}
-
-///|
 /// Try to compile a module to JIT and return JITModuleContext if successful
 fn try_compile_jit_with_suspension(
   mod_ : @types.Module,
@@ -525,10 +514,6 @@ fn try_compile_jit_with_suspension(
           // execution and hostcall bridges use this stack, so keep it aligned
           // with `wasmoon run`.
           jm.configure_native_fiber_stack_size(16L * 1024L * 1024L) |> ignore
-          // Initialize WASI only when the module imports it.
-          if module_has_wasi_import(lowered_mod) {
-            jm.init_wasi_quiet([], [], [])
-          }
           // Initialize all memories (multi-memory support)
           guard @wast.init_jit_memories_from_store(instance, store, jm)
             is Some(_) else {

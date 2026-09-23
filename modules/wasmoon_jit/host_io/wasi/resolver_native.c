@@ -152,8 +152,8 @@ static void *wasmoon_wasi_resolver_run(void *argument) {
   int dropped = resolver->dropped;
   int write_fd = resolver->write_fd;
   resolver->write_fd = -1;
-  wasmoon_wasi_resolver_unlock(resolver);
-  if (write_fd >= 0) {
+  // Keep notification and closing the read end mutually exclusive.
+  if (write_fd >= 0 && !dropped) {
     uint8_t ready = 1;
 #ifdef _WIN32
     (void)wasmoon_windows_write(write_fd, &ready, sizeof(ready));
@@ -162,13 +162,14 @@ static void *wasmoon_wasi_resolver_run(void *argument) {
     do { written = write(write_fd, &ready, sizeof(ready)); }
     while (written < 0 && errno == EINTR);
 #endif
-    wasmoon_wasi_resolver_close(write_fd);
   }
+  if (write_fd >= 0) wasmoon_wasi_resolver_close(write_fd);
+  wasmoon_wasi_resolver_unlock(resolver);
   if (dropped) wasmoon_wasi_resolver_free(resolver);
   return 0;
 }
 
-MOONBIT_FFI_EXPORT int64_t wasmoon_wasi_resolver_start(
+static struct wasmoon_wasi_resolver *resolver_start(
   moonbit_bytes_t name,
   int *poll_fd
 ) {
@@ -226,17 +227,55 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_wasi_resolver_start(
   pthread_detach(thread);
 #endif
   *poll_fd = resolver->read_fd;
-  return (int64_t)(intptr_t)resolver;
+  return resolver;
+}
+
+// The MoonBit-owned shell survives explicit close. Only the worker state is
+// shared with the background thread; its last owner frees it under the protocol
+// below. The worker never accesses a MoonBit object or its reference count.
+struct wasmoon_wasi_resolver_handle {
+  struct wasmoon_wasi_resolver *state;
+};
+
+MOONBIT_FFI_EXPORT void wasmoon_wasi_resolver_drop(
+  struct wasmoon_wasi_resolver_handle *handle
+) {
+  struct wasmoon_wasi_resolver *resolver = handle->state;
+  if (resolver == NULL) return;
+  handle->state = NULL;
+  wasmoon_wasi_resolver_lock(resolver);
+  resolver->dropped = 1;
+  int completed = resolver->completed;
+  if (resolver->read_fd >= 0) {
+    wasmoon_wasi_resolver_close(resolver->read_fd);
+    resolver->read_fd = -1;
+  }
+  wasmoon_wasi_resolver_unlock(resolver);
+  if (completed) wasmoon_wasi_resolver_free(resolver);
+}
+
+static void resolver_finalize(void *object) {
+  wasmoon_wasi_resolver_drop(object);
+}
+
+MOONBIT_FFI_EXPORT struct wasmoon_wasi_resolver_handle *wasmoon_wasi_resolver_start(
+  moonbit_bytes_t name, int *poll_fd
+) {
+  struct wasmoon_wasi_resolver_handle *handle = moonbit_make_external_object(
+    resolver_finalize, sizeof(*handle));
+  *poll_fd = -1;
+  handle->state = resolver_start(name, poll_fd);
+  return handle;
 }
 
 MOONBIT_FFI_EXPORT int wasmoon_wasi_resolver_next(
-  int64_t resolver_handle,
+  struct wasmoon_wasi_resolver_handle *handle,
   uint8_t *family,
   uint8_t *address,
   uint32_t *scope_id
 ) {
-  struct wasmoon_wasi_resolver *resolver =
-    (struct wasmoon_wasi_resolver *)(intptr_t)resolver_handle;
+  struct wasmoon_wasi_resolver *resolver = handle->state;
+  if (resolver == NULL) return 5;
   wasmoon_wasi_resolver_lock(resolver);
   if (!resolver->completed) {
     wasmoon_wasi_resolver_unlock(resolver);
@@ -266,18 +305,4 @@ MOONBIT_FFI_EXPORT int wasmoon_wasi_resolver_next(
   *scope_id = result->scope_id;
   wasmoon_wasi_resolver_unlock(resolver);
   return 0;
-}
-
-MOONBIT_FFI_EXPORT void wasmoon_wasi_resolver_drop(int64_t resolver_handle) {
-  struct wasmoon_wasi_resolver *resolver =
-    (struct wasmoon_wasi_resolver *)(intptr_t)resolver_handle;
-  if (resolver == NULL) return;
-  wasmoon_wasi_resolver_lock(resolver);
-  resolver->dropped = 1;
-  int completed = resolver->completed;
-  int read_fd = resolver->read_fd;
-  resolver->read_fd = -1;
-  wasmoon_wasi_resolver_unlock(resolver);
-  if (read_fd >= 0) wasmoon_wasi_resolver_close(read_fd);
-  if (completed) wasmoon_wasi_resolver_free(resolver);
 }

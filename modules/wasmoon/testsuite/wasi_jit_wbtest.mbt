@@ -354,24 +354,6 @@ fn run_wasi_jit_quiet(
     }
     @wast.register_instance_funcrefs_for_jit(jm, instance, store)
     jm.configure_native_fiber_stack_size(1048576L) |> ignore
-    jm.init_wasi_with_stdio(
-      [],
-      [],
-      preopens,
-      Some(fn(bytes) {
-        for b in bytes {
-          stdout_buf.push(b)
-        }
-      }),
-      Some(fn(bytes) {
-        for b in bytes {
-          stderr_buf.push(b)
-        }
-      }),
-      stdin_data,
-      stdin_callback~,
-      readonly_preopens~,
-    )
     guard @wast.init_jit_memories_from_store(instance, store, jm) is Some(_) else {
       return (Err("JIT memory initialization failed"), Bytes::from_array([]))
     }

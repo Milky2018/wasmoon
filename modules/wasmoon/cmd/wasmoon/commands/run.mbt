@@ -359,15 +359,11 @@ pub fn run_wasm(
   }
 
   // Build WASI context with directory mappings and environment variables
-  // Also collect preopens and env for JIT mode
   let wasi_builder = @wasi.WasiContextBuilder::WasiContextBuilder()
   // argv[0] is the basename of the wasm file (like wasmtime), followed by wasm_args
   let program_name = get_basename(wasm_path)
   let wasi_args = [program_name] + wasm_args
   wasi_builder.args(wasi_args) |> ignore
-  let jit_preopens : Array[(String, String)] = []
-  let jit_readonly_preopens : Array[(String, String)] = []
-  let jit_envs : Array[String] = []
   let explicit_env_keys : Map[String, Bool] = Map([])
   for dir in dirs {
     let mapping = parse_dir_mapping(dir)
@@ -375,7 +371,6 @@ pub fn run_wasm(
       Some((host_path, guest_path)) => {
         @logger.debug("Preopen dir: \{host_path} -> \{guest_path}")
         wasi_builder.preopen_dir(host_path, guest_path) |> ignore
-        jit_preopens.push((host_path, guest_path))
       }
       None => {
         @logger.error(
@@ -393,7 +388,6 @@ pub fn run_wasm(
       return 1
     }
     wasi_builder.preopen_dir_readonly(host, guest) |> ignore
-    jit_readonly_preopens.push((host, guest))
   }
   for env_var in envs {
     let parsed = parse_env_var(env_var)
@@ -402,7 +396,6 @@ pub fn run_wasm(
         @logger.debug("Environment: \{key}=\{value}")
         explicit_env_keys[key] = true
         wasi_builder.env(key, value) |> ignore
-        jit_envs.push("\{key}=\{value}")
       }
       None => {
         @logger.error("invalid --env format '\{env_var}', expected NAME=VALUE")
@@ -419,7 +412,6 @@ pub fn run_wasm(
       // Keep explicit --env values authoritative when keys overlap.
       if explicit_env_keys.get(key) is None {
         wasi_builder.env(key, value) |> ignore
-        jit_envs.push("\{key}=\{value}")
         inherited_count = inherited_count + 1
       }
     }
@@ -573,25 +565,9 @@ pub fn run_wasm(
       }
 
       // JIT execution path
-      // Build WASI args: program name + any remaining args after --
-      let jit_args : Array[String] = wasi_args
-      let jit_stdin_data = if inherit_stdin { None } else { Some(b"") }
       let jit_results = run_with_jit(
-        mod_,
-        instance,
-        store,
-        func_name,
-        args,
-        debug,
-        dump_on_trap,
-        jit_args,
-        jit_envs,
-        jit_preopens,
-        jit_stdin_data,
-        wasm_binary,
-        opt_level,
-        enable_dwarf,
-        readonly_preopens=jit_readonly_preopens,
+        mod_, instance, store, func_name, args, debug, dump_on_trap, wasm_binary,
+        opt_level, enable_dwarf,
       ) catch {
         CommandFailure(status) => return status
       }
@@ -1266,14 +1242,9 @@ fn run_with_jit(
   args : Array[@types.Value],
   debug : Bool,
   dump_on_trap : Bool,
-  wasi_args : Array[String],
-  wasi_envs : Array[String],
-  wasi_preopens : Array[(String, String)],
-  wasi_stdin_data : Bytes?,
   wasm_binary : Bytes?,
   opt_level : Int,
   enable_dwarf : Bool,
-  readonly_preopens? : Array[(String, String)] = [],
 ) -> Array[@types.Value] raise CommandFailure {
   @logger.debug("JIT: Compiling module...")
   // Get actual memory max from the store (for imported memories)
@@ -1433,16 +1404,6 @@ fn run_with_jit(
           } else {
             None
           }
-          // Initialize WASI context with args, env, and preopens
-          jm.init_wasi_with_stdio(
-            wasi_args,
-            wasi_envs,
-            wasi_preopens,
-            None,
-            None,
-            wasi_stdin_data,
-            readonly_preopens~,
-          )
           // Initialize all memories (multi-memory support)
           guard @wast.init_jit_memories_from_store(instance, store, jm)
             is Some(_) else {

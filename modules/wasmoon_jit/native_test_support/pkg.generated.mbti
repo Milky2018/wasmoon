@@ -50,8 +50,6 @@ pub fn shared_indirect_table_live_count() -> Int64
 
 pub fn transfer_cancellation_callback_to_null_context(() -> Bool) -> Unit
 
-pub fn transfer_wasi_stdin_callback_to_null_context(() -> Bytes) -> Unit
-
 pub fn x64_stack_alignment_probe_ptr() -> Int64
 
 // Errors

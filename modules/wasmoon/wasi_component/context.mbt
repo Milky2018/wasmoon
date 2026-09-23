@@ -529,7 +529,7 @@ priv struct OutgoingDatagramStreamState {
 
 ///|
 priv struct ResolveAddressStreamState {
-  resolver : Int64
+  resolver : @wasi.NativeResolverHandle
   poll_fd : Int
   policy : WasiNetworkPolicy
   closed : Ref[Bool]

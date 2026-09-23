@@ -142,9 +142,6 @@ jit_context_t *alloc_context_internal(int func_count) {
     ctx->debug_current_func_idx = -1;
     ctx->continuation_arena = continuation_arena_new();
     ctx->exception_arena = exception_arena_new();
-    ctx->stdin_fd = -1;
-    ctx->stdout_fd = -1;
-    ctx->stderr_fd = -1;
     return ctx;
 }
 
@@ -287,9 +284,6 @@ void free_context_internal(jit_context_t *ctx) {
         ctx->cancellation_callback_data = NULL;
     }
     ctx->cancellation_callback = NULL;
-
-    // Free WASI resources (fds, args/env, stdio buffers)
-    wasmoon_jit_free_wasi_fds((int64_t)ctx);
 
     free(ctx);
 }

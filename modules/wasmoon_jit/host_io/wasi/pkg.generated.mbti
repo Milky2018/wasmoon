@@ -118,11 +118,11 @@ pub fn c_recv(Int, FixedArray[Byte], Int64, Int) -> Int64
 
 pub fn c_renameat(Int, FixedArray[Byte], Int, FixedArray[Byte]) -> Int
 
-pub fn c_resolver_drop(Int64) -> Unit
+pub fn c_resolver_drop(NativeResolverHandle) -> Unit
 
-pub fn c_resolver_next(Int64, FixedArray[Byte], FixedArray[Byte], FixedArray[UInt]) -> Int
+pub fn c_resolver_next(NativeResolverHandle, FixedArray[Byte], FixedArray[Byte], FixedArray[UInt]) -> Int
 
-pub fn c_resolver_start(FixedArray[Byte], FixedArray[Int]) -> Int64
+pub fn c_resolver_start(FixedArray[Byte]) -> (NativeResolverHandle, Int)
 
 pub fn c_send(Int, FixedArray[Byte], Int64, Int) -> Int64
 
@@ -175,6 +175,7 @@ pub fn is_windows() -> Bool
 // Errors
 
 // Types and methods
+pub type NativeResolverHandle
 
 // Type aliases
 

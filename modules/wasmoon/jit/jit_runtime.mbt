@@ -81,8 +81,6 @@ struct JITModule {
   owned_trampolines : Array[@wasmoon_jit.InstalledTrampoline]
   // Keep the transactionally installed artifact alive.
   mut installed_code : @wasmoon_jit.InstalledCode?
-  mut wasi_stdout_callback : ((Bytes) -> Unit)?
-  mut wasi_stderr_callback : ((Bytes) -> Unit)?
   mut cancellation_safepoints : Bool
 }
 
@@ -100,8 +98,6 @@ pub fn JITModule::JITModule() -> JITModule {
     last_trap_report: None,
     owned_trampolines: [],
     installed_code: None,
-    wasi_stdout_callback: None,
-    wasi_stderr_callback: None,
     cancellation_safepoints: false,
   }
 }
@@ -581,7 +577,6 @@ pub fn JITModule::call_with_context(
       self.gc_end_frame()
       self.gc_use_func_safepoints(-1)
       self.gc_set_root_scratch([]) |> ignore
-      self.flush_wasi_output(ctx)
       match call_error {
         Some(JITTrap(msg)) => {
           let report = self.build_trap_report(msg)
@@ -688,21 +683,16 @@ fn JITCallContinuation::advance(
   }
   self.jit_module.gc_use_func_safepoints(-1)
   self.jit_module.gc_set_root_scratch([]) |> ignore
-  self.jit_module.flush_wasi_output(
-    match self.jit_module.context {
-      Some(ctx) => ctx
-      None => {
-        match (call_error, event) {
-          (Some(_), _) | (None, Returned(_)) => self.finish(AttachedFrame)
-          (None, Suspended(_)) => {
-            self.call.cancel()
-            self.finish(DetachedFrameReleased)
-          }
-        }
-        raise JITTrap("native JIT context disappeared while suspended")
+  if self.jit_module.context is None {
+    match (call_error, event) {
+      (Some(_), _) | (None, Returned(_)) => self.finish(AttachedFrame)
+      (None, Suspended(_)) => {
+        self.call.cancel()
+        self.finish(DetachedFrameReleased)
       }
-    },
-  )
+    }
+    raise JITTrap("native JIT context disappeared while suspended")
+  }
   if call_error is Some(error) {
     self.finish_error(error)
   }
@@ -808,23 +798,6 @@ pub fn JITModule::call_with_context_controlled(
       } noraise {
         values => if control.expired() { TimedOut } else { Completed(values) }
       }
-    }
-  }
-}
-
-///|
-/// Flush captured WASI stdout/stderr into callbacks (if configured)
-fn JITModule::flush_wasi_output(self : JITModule, ctx : JITContext) -> Unit {
-  if self.wasi_stdout_callback is Some(cb) {
-    let out = ctx.take_wasi_stdout()
-    if out.length() > 0 {
-      cb(out)
-    }
-  }
-  if self.wasi_stderr_callback is Some(cb) {
-    let out = ctx.take_wasi_stderr()
-    if out.length() > 0 {
-      cb(out)
     }
   }
 }
@@ -1275,83 +1248,6 @@ pub fn JITModule::set_hostcall_callback(
 pub fn JITModule::clear_hostcall_callback(self : JITModule) -> Unit {
   if self.context is Some(ctx) {
     ctx.clear_hostcall_callback()
-  }
-}
-
-///|
-/// Initialize WASI context for JIT execution
-/// args: command-line arguments
-/// env: environment variables (KEY=VALUE format)
-/// preopens: preopened directories as (host_path, guest_path) pairs
-pub fn JITModule::init_wasi(
-  self : JITModule,
-  args : Array[String],
-  env : Array[String],
-  preopens : Array[(String, String)],
-  readonly_preopens? : Array[(String, String)] = [],
-) -> Unit {
-  if self.context is Some(ctx) {
-    self.wasi_stdout_callback = None
-    self.wasi_stderr_callback = None
-    ctx.init_wasi(args, env, preopens, readonly_preopens~)
-  }
-}
-
-///|
-/// Initialize WASI context with custom stdio handling
-pub fn JITModule::init_wasi_with_stdio(
-  self : JITModule,
-  args : Array[String],
-  env : Array[String],
-  preopens : Array[(String, String)],
-  stdout : ((Bytes) -> Unit)?,
-  stderr : ((Bytes) -> Unit)?,
-  stdin_data : Bytes?,
-  stdin_callback? : (() -> Bytes)? = None,
-  readonly_preopens? : Array[(String, String)] = [],
-) -> Unit {
-  self.init_wasi(args, env, preopens, readonly_preopens~)
-  if self.context is Some(ctx) {
-    match stdout {
-      Some(cb) => {
-        self.wasi_stdout_callback = Some(cb)
-        ctx.set_wasi_stdout_capture(true)
-      }
-      None => ctx.set_wasi_stdout_capture(false)
-    }
-    match stderr {
-      Some(cb) => {
-        self.wasi_stderr_callback = Some(cb)
-        ctx.set_wasi_stderr_capture(true)
-      }
-      None => ctx.set_wasi_stderr_capture(false)
-    }
-    match stdin_callback {
-      Some(cb) => ctx.set_wasi_stdin_callback(cb)
-      None => {
-        ctx.clear_wasi_stdin_callback()
-        match stdin_data {
-          Some(data) => ctx.set_wasi_stdin_buffer(data)
-          None => ctx.clear_wasi_stdin_buffer()
-        }
-      }
-    }
-  }
-}
-
-///|
-/// Initialize WASI context with stdout/stderr redirected to /dev/null (for testing)
-pub fn JITModule::init_wasi_quiet(
-  self : JITModule,
-  args : Array[String],
-  env : Array[String],
-  preopens : Array[(String, String)],
-  readonly_preopens? : Array[(String, String)] = [],
-) -> Unit {
-  if self.context is Some(ctx) {
-    self.wasi_stdout_callback = None
-    self.wasi_stderr_callback = None
-    ctx.init_wasi_quiet(args, env, preopens, readonly_preopens~)
   }
 }
 
