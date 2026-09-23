@@ -15,7 +15,7 @@ pub extern "c" fn NativeExceptionArena::clear(
 #borrow(self, values)
 extern "c" fn NativeExceptionArena::insert_raw(
   self : NativeExceptionArena,
-  heap : Int64,
+  heap : GCHeapHandle,
   tag : Int,
   values : FixedArray[Int64],
   count : Int,
@@ -63,7 +63,7 @@ pub fn NativeExceptionArena::snapshot(
 ///|
 pub fn NativeExceptionArena::insert(
   self : NativeExceptionArena,
-  heap : Int64,
+  heap : GCHeapHandle,
   tag : Int,
   values : Array[Int64],
 ) -> Int64 {

@@ -1011,7 +1011,10 @@ fn JITModule::build_trap_report(
 
 ///|
 /// Set memory0 for the JIT context
-pub fn JITModule::set_memory(self : JITModule, mem0_ptr : Int64) -> Unit {
+pub fn JITModule::set_memory(
+  self : JITModule,
+  mem0_ptr : @wasmoon_jit.MemoryDescriptor,
+) -> Unit {
   if self.context is Some(ctx) {
     ctx.set_memory(mem0_ptr)
   }
@@ -1046,7 +1049,10 @@ pub fn JITModule::set_globals(self : JITModule, globals_ptr : Int64) -> Unit {
 ///|
 /// Set GC heap in the JIT context for inline allocation
 /// This enables fast-path bump-pointer allocation in JIT-compiled code
-pub fn JITModule::set_gc_heap(self : JITModule, heap_ptr : Int64) -> Unit {
+pub fn JITModule::set_gc_heap(
+  self : JITModule,
+  heap_ptr : @wasmoon_jit.GCHeapHandle,
+) -> Unit {
   if self.context is Some(context) {
     context.ctx.set_gc_heap_ptr(heap_ptr)
   }
@@ -1178,10 +1184,10 @@ pub fn JITModule::alloc_guarded_memory(
   self : JITModule,
   initial_pages : Int,
   max_pages : Int?,
-) -> Int64 {
+) -> @wasmoon_jit.MemoryDescriptor {
   match self.context {
     Some(ctx) => ctx.alloc_guarded_memory(initial_pages, max_pages)
-    None => 0L
+    None => @wasmoon_jit.MemoryDescriptor::null()
   }
 }
 

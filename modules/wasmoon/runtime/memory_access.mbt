@@ -22,7 +22,7 @@ fn Memory::read_fixed_at(
   len : Int,
 ) -> FixedArray[Byte] {
   let pointer = self.desc_ptr()
-  if pointer == 0L || len <= 0 {
+  if pointer.is_null() || len <= 0 {
     return FixedArray::make(0, b'\x00')
   }
   let out = FixedArray::make(len, b'\x00')
@@ -38,7 +38,7 @@ fn Memory::write_fixed_at(
   len : Int,
 ) -> Unit {
   let pointer = self.desc_ptr()
-  if pointer == 0L || len <= 0 {
+  if pointer.is_null() || len <= 0 {
     return
   }
   @wasmoon_jit.memory_descriptor_write(pointer, addr, data, len) |> ignore

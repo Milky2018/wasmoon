@@ -1,4 +1,5 @@
 import {
+  "Milky2018/wasmoon_jit",
   "Milky2018/wasm_component" @component_types,
   "Milky2018/wasm_core/types",
   "Milky2018/wasmoon/cmd/wasmoon/commands",

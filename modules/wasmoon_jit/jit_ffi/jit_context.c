@@ -195,7 +195,7 @@ void free_context_internal(jit_context_t *ctx) {
 
     // Free context-owned memory0 (guarded allocations are large and must not leak)
     if (ctx->owns_memory0 && ctx->memory0) {
-        wasmoon_jit_free_memory_desc((int64_t)ctx->memory0);
+        wasmoon_jit_free_memory_desc(ctx->memory0);
         ctx->memory0 = NULL;
         ctx->memory0_base = NULL;
         atomic_store_explicit(&ctx->memory0_size, 0, memory_order_relaxed);

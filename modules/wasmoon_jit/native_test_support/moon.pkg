@@ -1,3 +1,7 @@
+import {
+  "Milky2018/wasmoon_jit/jit_ffi",
+}
+
 options(
   "native-stub": [
     "fiber_test_support.c",

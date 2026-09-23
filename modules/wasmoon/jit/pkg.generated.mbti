@@ -77,7 +77,7 @@ pub struct JITFunction {
 
 type JITModule
 pub fn JITModule::JITModule() -> Self
-pub fn JITModule::alloc_guarded_memory(Self, Int, Int?) -> Int64
+pub fn JITModule::alloc_guarded_memory(Self, Int, Int?) -> @jit_ffi.MemoryDescriptor
 pub fn JITModule::call_with_context(Self, JITFunction, Array[Int64]) -> Array[Int64] raise JITTrap
 pub fn JITModule::call_with_context_controlled(Self, JITFunction, Array[Int64], cancel? : (() -> Bool)?, timeout_ms? : Int?) -> JITCallResult
 pub fn[Arg : DynamicArgs, Ret : DynamicReturn] JITModule::call_with_context_poly(Self, JITFunction, Arg) -> Ret raise PolycallError
@@ -116,10 +116,10 @@ pub fn JITModule::retain_callable_owner(Self) -> () -> Unit
 pub fn JITModule::set_callable_types(Self, Array[Int], Array[Int], Array[(Int64, Int)], Array[Int]) -> Unit
 pub fn JITModule::set_cooperative_scheduling(Self, Bool) -> Bool
 pub fn JITModule::set_exception_arena(Self, @jit_ffi.NativeExceptionArena) -> Unit
-pub fn JITModule::set_gc_heap(Self, Int64) -> Unit
+pub fn JITModule::set_gc_heap(Self, @jit_ffi.GCHeapHandle) -> Unit
 pub fn JITModule::set_globals(Self, Int64) -> Unit
 pub fn JITModule::set_hostcall_callback(Self, () -> @wasmoon_jit.NativeHostcallOutcome) -> Unit
-pub fn JITModule::set_memory(Self, Int64) -> Unit
+pub fn JITModule::set_memory(Self, @jit_ffi.MemoryDescriptor) -> Unit
 pub fn JITModule::set_memory_pointers(Self, Array[@wasmoon_jit.MemoryInfo]) -> Unit
 pub fn JITModule::setup_gc(Self, @wasmoon_jit.CHeap, Array[@types.SubType], Array[Int], Array[Int]) -> Unit raise @wasmoon_jit.GCSetupError
 pub fn JITModule::setup_gc_with_func_table(Self, @wasmoon_jit.CHeap, Array[@types.SubType], Array[Int], Array[Int], Int64, Int) -> Unit raise @wasmoon_jit.GCSetupError

@@ -64,3 +64,21 @@ object is combined with
 VMContext metadata, runtime symbols, and trampolines before it is installed and
 invoked by Wasmoon. Native stubs are private implementation details of this
 package rather than a separate public package.
+
+## Native resource handles
+
+C-owned memory descriptors (`MemoryDescriptor`), GC heaps (`GCHeapHandle`),
+indirect tables (`NativeTableHandle`), and the private DWARF builder handle are
+nominal `#external` types. Their native representation is a pointer, including
+in `FixedArray` arguments; the FFI does not box them or route them through Int64.
+These types provide identity, not ownership. Keep the owning Store, CHeap or
+JITTableOwner alive for every borrowed use. Existing retain/free protocols and
+managed executable-code, context, fiber and resolver finalizers are unchanged.
+
+The descriptor and heap APIs now accept/return these handles instead of Int64.
+Use `MemoryDescriptor::null()` / `is_null()` and `GCHeapHandle::null()` /
+`is_null()` instead of integer zero. `Memory::desc_ptr()` returns a borrowed
+MemoryDescriptor; `CHeap::get_ptr()` returns a borrowed GCHeapHandle. Descriptor
+equality compares pointer identity. There is no public integer-to-handle cast.
+Machine-code addresses, relocation values, raw byte addresses used for address
+arithmetic, and encoded guest values remain integers.

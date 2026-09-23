@@ -223,11 +223,11 @@ int wasmoon_jit_cancellation_requested(jit_context_t *ctx);
 jit_context_t *jit_execution_control_context(jit_context_t *ctx);
 int wasmoon_native_fiber_own_waiter(void *waiter);
 void wasmoon_native_fiber_release_waiter(void);
-MOONBIT_FFI_EXPORT void *wasmoon_atomic_wait_begin(int64_t, int64_t, int32_t, int64_t, int64_t);
+MOONBIT_FFI_EXPORT void *wasmoon_atomic_wait_begin(wasmoon_memory_t *, int64_t, int32_t, int64_t, int64_t);
 MOONBIT_FFI_EXPORT int32_t wasmoon_atomic_wait_poll(void *);
 MOONBIT_FFI_EXPORT void wasmoon_atomic_wait_destroy(void *);
-MOONBIT_FFI_EXPORT int32_t wasmoon_atomic_notify(int64_t, int64_t, int32_t);
-int32_t wasmoon_atomic_wait_guest(jit_context_t *, int64_t, int64_t, int32_t, int64_t, int64_t);
+MOONBIT_FFI_EXPORT int32_t wasmoon_atomic_notify(wasmoon_memory_t *, int64_t, int32_t);
+int32_t wasmoon_atomic_wait_guest(jit_context_t *, wasmoon_memory_t *, int64_t, int32_t, int64_t, int64_t);
 
 // ============ Executable Memory (exec_mem.c) ============
 
@@ -246,7 +246,7 @@ void ctx_refresh_memory0_fast_fields(jit_context_t *ctx);
 // ============ Memory Operations (memory_ops.c) ============
 
 // Free a `wasmoon_memory_t` descriptor (jit.c)
-MOONBIT_FFI_EXPORT void wasmoon_jit_free_memory_desc(int64_t mem_ptr);
+MOONBIT_FFI_EXPORT void wasmoon_jit_free_memory_desc(wasmoon_memory_t * mem_ptr);
 
 #define WASM_PAGE_SIZE 65536
 

@@ -1,7 +1,7 @@
 ///|
 test "atomic wait enqueue composes with an independent native notifier" {
   let memory = @wasmoon_jit.alloc_memory_desc(65536L, Some(1L), is_shared=true)
-  guard memory != 0L else { fail("memory allocation failed") }
+  guard !memory.is_null() else { fail("memory allocation failed") }
   defer @wasmoon_jit.free_memory_desc(memory)
   for i in 0..<100 {
     let worker = @native_test_support.atomic_notify_start(memory, 0L)
@@ -31,7 +31,7 @@ test "atomic wait enqueue composes with an independent native notifier" {
 ///|
 test "dropping an atomic waiter removes its queue entry" {
   let memory = @wasmoon_jit.alloc_memory_desc(65536L, Some(1L), is_shared=true)
-  guard memory != 0L else { fail("memory allocation failed") }
+  guard !memory.is_null() else { fail("memory allocation failed") }
   defer @wasmoon_jit.free_memory_desc(memory)
   fn register_and_drop() {
     let waiter = @wasmoon_jit.atomic_wait_begin(memory, 0L, 4, 0L, -1L)

@@ -277,7 +277,7 @@ static int32_t WASMOON_GUEST_ABI atomic_wait32_indexed(
     jit_context_t *ctx, int32_t memidx, int64_t pointer, int32_t expected, int64_t timeout
 ) {
     wasmoon_memory_t *memory = get_memory(ctx, memidx);
-    return wasmoon_atomic_wait_guest(ctx, (int64_t)(uintptr_t)memory,
+    return wasmoon_atomic_wait_guest(ctx, memory,
         (int64_t)((uintptr_t)pointer - (uintptr_t)memory->base), 4, expected, timeout);
 }
 
@@ -285,7 +285,7 @@ static int32_t WASMOON_GUEST_ABI atomic_wait64_indexed(
     jit_context_t *ctx, int32_t memidx, int64_t pointer, int64_t expected, int64_t timeout
 ) {
     wasmoon_memory_t *memory = get_memory(ctx, memidx);
-    return wasmoon_atomic_wait_guest(ctx, (int64_t)(uintptr_t)memory,
+    return wasmoon_atomic_wait_guest(ctx, memory,
         (int64_t)((uintptr_t)pointer - (uintptr_t)memory->base), 8, expected, timeout);
 }
 
@@ -293,7 +293,7 @@ static int32_t WASMOON_GUEST_ABI atomic_notify_indexed(
     jit_context_t *ctx, int32_t memidx, int64_t pointer, int32_t count
 ) {
     wasmoon_memory_t *memory = get_memory(ctx, memidx);
-    return wasmoon_atomic_notify((int64_t)(uintptr_t)memory,
+    return wasmoon_atomic_notify(memory,
         (int64_t)((uintptr_t)pointer - (uintptr_t)memory->base), count);
 }
 

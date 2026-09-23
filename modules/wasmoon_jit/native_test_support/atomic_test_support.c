@@ -26,18 +26,18 @@ static void join_worker(test_thread thread) { pthread_join(thread, NULL); }
 static void yield_worker(void) { sched_yield(); }
 #endif
 
-extern int32_t wasmoon_atomic_notify(int64_t, int64_t, int32_t);
-extern void wasmoon_jit_retain_memory_desc(int64_t);
-extern void wasmoon_jit_free_memory_desc(int64_t);
+extern int32_t wasmoon_atomic_notify(wasmoon_memory_t *, int64_t, int32_t);
+extern void wasmoon_jit_retain_memory_desc(wasmoon_memory_t *);
+extern void wasmoon_jit_free_memory_desc(wasmoon_memory_t *);
 
-MOONBIT_FFI_EXPORT int64_t wasmoon_test_memory_owner_count(int64_t descriptor) {
-    wasmoon_memory_t *memory = (void *)(uintptr_t)descriptor;
+MOONBIT_FFI_EXPORT int64_t wasmoon_test_memory_owner_count(wasmoon_memory_t *descriptor) {
+    wasmoon_memory_t *memory = descriptor;
     return (int64_t)atomic_load_explicit(&memory->owners, memory_order_relaxed);
 }
 
 typedef struct {
     test_thread thread;
-    int64_t descriptor;
+    wasmoon_memory_t *descriptor;
     int64_t offset;
     int32_t result;
 } atomic_notify_worker;
@@ -56,7 +56,7 @@ static WORKER_RESULT run_atomic_notify(void *argument) {
     return WORKER_DONE;
 }
 
-MOONBIT_FFI_EXPORT int64_t wasmoon_test_atomic_notify_start(int64_t descriptor, int64_t offset) {
+MOONBIT_FFI_EXPORT int64_t wasmoon_test_atomic_notify_start(wasmoon_memory_t *descriptor, int64_t offset) {
     atomic_notify_worker *worker = calloc(1, sizeof(*worker));
     if (!worker) return 0;
     worker->descriptor = descriptor;
@@ -110,9 +110,9 @@ static WORKER_RESULT run_atomic_counter(void *argument) {
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_test_atomic_counter_start(
-    int64_t descriptor, int32_t width, int32_t iterations
+    wasmoon_memory_t *descriptor, int32_t width, int32_t iterations
 ) {
-    wasmoon_memory_t *memory = (wasmoon_memory_t *)(uintptr_t)descriptor;
+    wasmoon_memory_t *memory = descriptor;
     if (!memory || (width != 4 && width != 8) || iterations <= 0) return 0;
     atomic_counter_worker *worker = calloc(1, sizeof(*worker));
     if (!worker) return 0;
@@ -172,8 +172,8 @@ static WORKER_RESULT run_memory_growth(void *argument) {
     return WORKER_DONE;
 }
 
-MOONBIT_FFI_EXPORT int64_t wasmoon_test_memory_growth_start(int64_t descriptor, int32_t iterations) {
-    wasmoon_memory_t *memory = (wasmoon_memory_t *)(uintptr_t)descriptor;
+MOONBIT_FFI_EXPORT int64_t wasmoon_test_memory_growth_start(wasmoon_memory_t *descriptor, int32_t iterations) {
+    wasmoon_memory_t *memory = descriptor;
     if (!memory || !memory->is_shared || iterations <= 0) return 0;
     memory_growth_worker *worker = calloc(1, sizeof(*worker));
     if (!worker) return 0;

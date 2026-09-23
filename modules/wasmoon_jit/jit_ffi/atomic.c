@@ -1,13 +1,13 @@
 // Sequentially consistent operations on checked linear-memory addresses.
 #include "jit_internal.h"
 
-static void *atomic_address(int64_t descriptor, int64_t offset) {
-    wasmoon_memory_t *memory = (wasmoon_memory_t *)(uintptr_t)descriptor;
+static void *atomic_address(wasmoon_memory_t *descriptor, int64_t offset) {
+    wasmoon_memory_t *memory = descriptor;
     return memory->base + (uint64_t)offset;
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_memory_atomic_load(
-    int64_t descriptor, int64_t offset, int32_t width
+    wasmoon_memory_t *descriptor, int64_t offset, int32_t width
 ) {
     void *address = atomic_address(descriptor, offset);
 #define LOAD_CASE(WIDTH, TYPE) case WIDTH: return (int64_t)atomic_load_explicit((_Atomic(TYPE) *)address, memory_order_seq_cst)
@@ -22,7 +22,7 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_memory_atomic_load(
 }
 
 MOONBIT_FFI_EXPORT void wasmoon_memory_atomic_store(
-    int64_t descriptor, int64_t offset, int32_t width, int64_t value
+    wasmoon_memory_t *descriptor, int64_t offset, int32_t width, int64_t value
 ) {
     void *address = atomic_address(descriptor, offset);
 #define STORE_CASE(WIDTH, TYPE) case WIDTH: atomic_store_explicit((_Atomic(TYPE) *)address, (TYPE)value, memory_order_seq_cst); return
@@ -37,7 +37,7 @@ MOONBIT_FFI_EXPORT void wasmoon_memory_atomic_store(
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_memory_atomic_rmw(
-    int64_t descriptor, int64_t offset, int32_t width, int32_t operation, int64_t value
+    wasmoon_memory_t *descriptor, int64_t offset, int32_t width, int32_t operation, int64_t value
 ) {
     void *address = atomic_address(descriptor, offset);
 #define RMW_CASE(WIDTH, TYPE) case WIDTH: { \
@@ -64,7 +64,7 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_memory_atomic_rmw(
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_memory_atomic_compare_exchange(
-    int64_t descriptor, int64_t offset, int32_t width, int64_t expected, int64_t replacement
+    wasmoon_memory_t *descriptor, int64_t offset, int32_t width, int64_t expected, int64_t replacement
 ) {
     void *address = atomic_address(descriptor, offset);
 #define CAS_CASE(WIDTH, TYPE) case WIDTH: { \

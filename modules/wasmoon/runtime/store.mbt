@@ -410,10 +410,10 @@ pub fn Store::set_module_types(
 
 ///|
 /// Get the C heap pointer (for JIT)
-pub fn Store::get_c_heap_ptr(self : Store) -> Int64 {
+pub fn Store::get_c_heap_ptr(self : Store) -> @wasmoon_jit.GCHeapHandle {
   match self.c_heap {
     Some(heap) => heap.get_ptr()
-    None => 0L
+    None => @wasmoon_jit.GCHeapHandle::null()
   }
 }
 

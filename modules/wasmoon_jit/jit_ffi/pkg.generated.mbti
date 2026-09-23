@@ -3,6 +3,7 @@ package "Milky2018/wasmoon_jit/jit_ffi"
 
 import {
   "Milky2018/wasm_core/types",
+  "moonbitlang/core/debug",
 }
 
 // Values
@@ -23,6 +24,23 @@ pub fn stage_exec_managed(Int) -> ExecCodeHandle
 // Types and methods
 type ExecCodeHandle
 
+#external
+pub type GCHeapHandle
+pub fn GCHeapHandle::is_null(Self) -> Bool
+pub fn GCHeapHandle::null() -> Self
+pub fn GCHeapHandle::to_repr(Self) -> @debug.Repr
+pub impl @debug.Debug for GCHeapHandle
+
+#external
+pub type MemoryDescriptor
+pub fn MemoryDescriptor::equal(Self, Self) -> Bool
+pub fn MemoryDescriptor::is_null(Self) -> Bool
+pub fn MemoryDescriptor::not_equal(Self, Self) -> Bool
+pub fn MemoryDescriptor::null() -> Self
+pub fn MemoryDescriptor::to_repr(Self) -> @debug.Repr
+pub impl Eq for MemoryDescriptor
+pub impl @debug.Debug for MemoryDescriptor
+
 type NativeContinuationArena
 pub fn NativeContinuationArena::clear(Self) -> Unit
 pub fn NativeContinuationArena::new() -> Self
@@ -30,7 +48,7 @@ pub fn NativeContinuationArena::new() -> Self
 type NativeExceptionArena
 pub fn NativeExceptionArena::clear(Self) -> Unit
 pub fn NativeExceptionArena::define_tag(Self, Int, Array[@types.ValueType]) -> Bool
-pub fn NativeExceptionArena::insert(Self, Int64, Int, Array[Int64]) -> Int64
+pub fn NativeExceptionArena::insert(Self, GCHeapHandle, Int, Array[Int64]) -> Int64
 pub fn NativeExceptionArena::new() -> Self
 pub fn NativeExceptionArena::snapshot(Self, Int64) -> (Int, Array[Int64])?
 

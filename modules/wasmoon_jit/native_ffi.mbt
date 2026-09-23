@@ -125,21 +125,21 @@ extern "c" fn c_jit_alloc_memory_desc(
   is_memory64 : Int,
   page_size_log2 : Int,
   is_shared : Int,
-) -> Int64 = "wasmoon_jit_alloc_memory_desc"
+) -> MemoryDescriptor = "wasmoon_jit_alloc_memory_desc"
 
 ///|
 /// Release one descriptor owner; free its backing after the final release.
-extern "c" fn c_jit_free_memory_desc(mem_ptr : Int64) -> Unit = "wasmoon_jit_free_memory_desc"
+extern "c" fn c_jit_free_memory_desc(mem_ptr : MemoryDescriptor) -> Unit = "wasmoon_jit_free_memory_desc"
 
 ///|
 /// Get current length in bytes from a `wasmoon_memory_t` descriptor.
-extern "c" fn c_mem_desc_get_len(mem_desc_ptr : Int64) -> Int64 = "wasmoon_mem_desc_get_len"
+extern "c" fn c_mem_desc_get_len(mem_desc_ptr : MemoryDescriptor) -> Int64 = "wasmoon_mem_desc_get_len"
 
 ///|
 /// Grow a `wasmoon_memory_t` descriptor by `delta_pages`.
 /// Returns old size in pages on success, or -1 on failure.
 extern "c" fn c_mem_desc_grow(
-  mem_desc_ptr : Int64,
+  mem_desc_ptr : MemoryDescriptor,
   delta_pages : Int64,
   max_pages : Int,
 ) -> Int64 = "wasmoon_mem_desc_grow"
@@ -148,7 +148,7 @@ extern "c" fn c_mem_desc_grow(
 /// Copy bytes from memory descriptor at offset into `out`.
 #borrow(out)
 extern "c" fn c_mem_desc_read(
-  mem_desc_ptr : Int64,
+  mem_desc_ptr : MemoryDescriptor,
   offset : Int64,
   out : FixedArray[Byte],
   size : Int,
@@ -158,7 +158,7 @@ extern "c" fn c_mem_desc_read(
 /// Copy bytes from `data` into memory descriptor at offset.
 #borrow(data)
 extern "c" fn c_mem_desc_write(
-  mem_desc_ptr : Int64,
+  mem_desc_ptr : MemoryDescriptor,
   offset : Int64,
   data : FixedArray[Byte],
   size : Int,
@@ -168,7 +168,7 @@ extern "c" fn c_mem_desc_write(
 /// Copy bytes from `data` into memory descriptor at offset (Bytes fast path).
 #borrow(data)
 extern "c" fn c_mem_desc_write_bytes(
-  mem_desc_ptr : Int64,
+  mem_desc_ptr : MemoryDescriptor,
   offset : Int64,
   data : Bytes,
   size : Int,
@@ -177,7 +177,7 @@ extern "c" fn c_mem_desc_write_bytes(
 ///|
 /// memmove within the same memory descriptor.
 extern "c" fn c_mem_desc_memmove(
-  mem_desc_ptr : Int64,
+  mem_desc_ptr : MemoryDescriptor,
   dst : Int64,
   src : Int64,
   size : Int,
@@ -186,7 +186,7 @@ extern "c" fn c_mem_desc_memmove(
 ///|
 /// memset within the same memory descriptor.
 extern "c" fn c_mem_desc_memset(
-  mem_desc_ptr : Int64,
+  mem_desc_ptr : MemoryDescriptor,
   dst : Int64,
   val : Int,
   size : Int,
@@ -199,7 +199,7 @@ extern "c" fn c_jit_alloc_guarded_memory_desc(
   initial_pages : Int64,
   max_pages : Int64,
   is_shared : Int,
-) -> Int64 = "wasmoon_jit_alloc_guarded_memory_desc"
+) -> MemoryDescriptor = "wasmoon_jit_alloc_guarded_memory_desc"
 
 ///|
 /// Free linear memory
@@ -268,16 +268,20 @@ extern "c" fn c_jit_get_elem_drop_ptr() -> Int64 = "wasmoon_jit_get_elem_drop_pt
 
 ///|
 /// Allocate a shared indirect table that can be used by multiple JIT modules
-extern "c" fn c_jit_alloc_shared_indirect_table(count : Int) -> Int64 = "wasmoon_jit_alloc_shared_indirect_table"
+extern "c" fn c_jit_alloc_shared_indirect_table(
+  count : Int,
+) -> NativeTableHandle = "wasmoon_jit_alloc_shared_indirect_table"
 
 ///|
 /// Free a shared indirect table owned by a Store.
-extern "c" fn c_jit_free_shared_indirect_table(table_ptr : Int64) -> Unit = "wasmoon_jit_free_shared_indirect_table"
+extern "c" fn c_jit_free_shared_indirect_table(
+  table_ptr : NativeTableHandle,
+) -> Unit = "wasmoon_jit_free_shared_indirect_table"
 
 ///|
 /// Set an entry in a shared indirect table
 extern "c" fn c_jit_shared_table_set(
-  table_ptr : Int64,
+  table_ptr : NativeTableHandle,
   table_idx : Int,
   func_ptr : Int64,
   type_hash : Int,
@@ -549,12 +553,12 @@ extern "c" fn c_jit_gc_clear_heap_managed(jit_context : JITContext) -> Unit = "w
 
 ///|
 /// Create a new GC heap with the given initial capacity
-/// Returns heap pointer as Int64
-extern "c" fn c_gc_heap_new(capacity : Int64) -> Int64 = "wasmoon_gc_heap_new"
+/// Returns a C-owned heap handle
+extern "c" fn c_gc_heap_new(capacity : Int64) -> GCHeapHandle = "wasmoon_gc_heap_new"
 
 ///|
 /// Free a GC heap and all its memory
-extern "c" fn c_gc_heap_free(heap : Int64) -> Unit = "wasmoon_gc_heap_free"
+extern "c" fn c_gc_heap_free(heap : GCHeapHandle) -> Unit = "wasmoon_gc_heap_free"
 
 // ============ Struct Operations ============
 
@@ -568,7 +572,7 @@ extern "c" fn c_gc_heap_free(heap : Int64) -> Unit = "wasmoon_gc_heap_free"
 /// that a v128 field never has to be squeezed into one word.
 #borrow(fields)
 extern "c" fn c_gc_heap_alloc_struct_wide(
-  heap : Int64,
+  heap : GCHeapHandle,
   type_idx : Int,
   fields : FixedArray[Int64],
   num_fields : Int,
@@ -578,7 +582,7 @@ extern "c" fn c_gc_heap_alloc_struct_wide(
 /// Read a struct field into `out` as [lo, hi]
 #borrow(out)
 extern "c" fn c_gc_heap_struct_get_wide(
-  heap : Int64,
+  heap : GCHeapHandle,
   gc_ref : Int,
   field_idx : Int,
   out : FixedArray[Int64],
@@ -587,7 +591,7 @@ extern "c" fn c_gc_heap_struct_get_wide(
 ///|
 /// Set a struct field value
 extern "c" fn c_gc_heap_struct_set_wide(
-  heap : Int64,
+  heap : GCHeapHandle,
   gc_ref : Int,
   field_idx : Int,
   lo : Int64,
@@ -600,7 +604,7 @@ extern "c" fn c_gc_heap_struct_set_wide(
 /// Allocate a new array
 /// Returns gc_ref (1-based index), or 0 on failure
 extern "c" fn c_gc_heap_alloc_array_wide(
-  heap : Int64,
+  heap : GCHeapHandle,
   type_idx : Int,
   len : Int,
   lo : Int64,
@@ -614,7 +618,7 @@ extern "c" fn c_gc_heap_alloc_array_wide(
 /// `values` is a flat run of [lo, hi] word pairs, two entries per element.
 #borrow(values)
 extern "c" fn c_gc_heap_alloc_array_from_slots(
-  heap : Int64,
+  heap : GCHeapHandle,
   type_idx : Int,
   values : FixedArray[Int64],
   len : Int,
@@ -622,13 +626,13 @@ extern "c" fn c_gc_heap_alloc_array_from_slots(
 
 ///|
 /// Get array length
-extern "c" fn c_gc_heap_array_len(heap : Int64, gc_ref : Int) -> Int = "wasmoon_gc_heap_array_len"
+extern "c" fn c_gc_heap_array_len(heap : GCHeapHandle, gc_ref : Int) -> Int = "wasmoon_gc_heap_array_len"
 
 ///|
 /// Read an array element into `out` as [lo, hi]
 #borrow(out)
 extern "c" fn c_gc_heap_array_get_wide(
-  heap : Int64,
+  heap : GCHeapHandle,
   gc_ref : Int,
   idx : Int,
   out : FixedArray[Int64],
@@ -637,7 +641,7 @@ extern "c" fn c_gc_heap_array_get_wide(
 ///|
 /// Set an array element
 extern "c" fn c_gc_heap_array_set_wide(
-  heap : Int64,
+  heap : GCHeapHandle,
   gc_ref : Int,
   idx : Int,
   lo : Int64,
@@ -647,7 +651,7 @@ extern "c" fn c_gc_heap_array_set_wide(
 ///|
 /// Fill array elements with a value
 extern "c" fn c_gc_heap_array_fill_wide(
-  heap : Int64,
+  heap : GCHeapHandle,
   gc_ref : Int,
   offset : Int,
   lo : Int64,
@@ -658,7 +662,7 @@ extern "c" fn c_gc_heap_array_fill_wide(
 ///|
 /// Copy array elements
 extern "c" fn c_gc_heap_array_copy(
-  heap : Int64,
+  heap : GCHeapHandle,
   dst_ref : Int,
   dst_offset : Int,
   src_ref : Int,
@@ -670,15 +674,15 @@ extern "c" fn c_gc_heap_array_copy(
 
 ///|
 /// Get the type index of an object
-extern "c" fn c_gc_heap_get_type_idx(heap : Int64, gc_ref : Int) -> Int = "wasmoon_gc_heap_get_type_idx"
+extern "c" fn c_gc_heap_get_type_idx(heap : GCHeapHandle, gc_ref : Int) -> Int = "wasmoon_gc_heap_get_type_idx"
 
 ///|
 /// Get the kind of an object (1=struct, 2=array)
-extern "c" fn c_gc_heap_get_kind(heap : Int64, gc_ref : Int) -> Int = "wasmoon_gc_heap_get_kind"
+extern "c" fn c_gc_heap_get_kind(heap : GCHeapHandle, gc_ref : Int) -> Int = "wasmoon_gc_heap_get_kind"
 
 ///|
 /// Check if a gc_ref is valid (non-null and within bounds)
-extern "c" fn c_gc_heap_is_valid(heap : Int64, gc_ref : Int) -> Int = "wasmoon_gc_heap_is_valid"
+extern "c" fn c_gc_heap_is_valid(heap : GCHeapHandle, gc_ref : Int) -> Int = "wasmoon_gc_heap_is_valid"
 
 // ============ GC Operations ============
 
@@ -687,7 +691,7 @@ extern "c" fn c_gc_heap_is_valid(heap : Int64, gc_ref : Int) -> Int = "wasmoon_g
 /// Returns number of objects collected
 #borrow(roots)
 extern "c" fn c_gc_heap_collect(
-  heap : Int64,
+  heap : GCHeapHandle,
   roots : FixedArray[Int64],
   num_roots : Int,
 ) -> Int = "wasmoon_jit_collect_heap"
@@ -696,7 +700,7 @@ extern "c" fn c_gc_heap_collect(
 /// Discard unreachable objects allocated after the supplied object-table boundary.
 #borrow(roots)
 extern "c" fn c_gc_heap_rollback_allocations(
-  heap : Int64,
+  heap : GCHeapHandle,
   object_count : Int,
   roots : FixedArray[Int64],
   num_roots : Int,
@@ -704,7 +708,7 @@ extern "c" fn c_gc_heap_rollback_allocations(
 
 ///|
 /// Verify C heap invariants (returns 1 when valid, 0 on failure)
-extern "c" fn c_gc_heap_verify(heap : Int64, verbose : Int) -> Int = "wasmoon_gc_heap_verify"
+extern "c" fn c_gc_heap_verify(heap : GCHeapHandle, verbose : Int) -> Int = "wasmoon_gc_heap_verify"
 
 ///|
 /// Configure allocation fault injection:
@@ -719,35 +723,35 @@ extern "c" fn c_gc_heap_debug_set_fail_alloc(
 
 ///|
 /// Get heap base pointer (for JIT inline access)
-extern "c" fn c_gc_heap_get_base(heap : Int64) -> Int64 = "wasmoon_gc_heap_get_base"
+extern "c" fn c_gc_heap_get_base(heap : GCHeapHandle) -> Int64 = "wasmoon_gc_heap_get_base"
 
 ///|
 /// Get object offset in heap (for JIT inline access)
-extern "c" fn c_gc_heap_get_offset(heap : Int64, gc_ref : Int) -> Int = "wasmoon_gc_heap_get_offset"
+extern "c" fn c_gc_heap_get_offset(heap : GCHeapHandle, gc_ref : Int) -> Int = "wasmoon_gc_heap_get_offset"
 
 ///|
 /// Get current heap size (bytes used)
-extern "c" fn c_gc_heap_get_size(heap : Int64) -> Int64 = "wasmoon_gc_heap_get_size"
+extern "c" fn c_gc_heap_get_size(heap : GCHeapHandle) -> Int64 = "wasmoon_gc_heap_get_size"
 
 ///|
 /// Get heap capacity (total allocated bytes)
-extern "c" fn c_gc_heap_get_capacity(heap : Int64) -> Int64 = "wasmoon_gc_heap_get_capacity"
+extern "c" fn c_gc_heap_get_capacity(heap : GCHeapHandle) -> Int64 = "wasmoon_gc_heap_get_capacity"
 
 ///|
 /// Get number of objects in heap
-extern "c" fn c_gc_heap_get_object_count(heap : Int64) -> Int = "wasmoon_gc_heap_get_object_count"
+extern "c" fn c_gc_heap_get_object_count(heap : GCHeapHandle) -> Int = "wasmoon_gc_heap_get_object_count"
 
 ///|
 /// Get total number of write-barrier calls recorded
-extern "c" fn c_gc_heap_get_barrier_writes(heap : Int64) -> Int = "wasmoon_gc_heap_get_barrier_writes"
+extern "c" fn c_gc_heap_get_barrier_writes(heap : GCHeapHandle) -> Int = "wasmoon_gc_heap_get_barrier_writes"
 
 ///|
 /// Get total number of allocations since heap creation
-extern "c" fn c_gc_heap_get_total_allocations(heap : Int64) -> Int = "wasmoon_gc_heap_get_total_allocations"
+extern "c" fn c_gc_heap_get_total_allocations(heap : GCHeapHandle) -> Int = "wasmoon_gc_heap_get_total_allocations"
 
 ///|
 /// Get total number of GC cycles performed
-extern "c" fn c_gc_heap_get_total_collections(heap : Int64) -> Int = "wasmoon_gc_heap_get_total_collections"
+extern "c" fn c_gc_heap_get_total_collections(heap : GCHeapHandle) -> Int = "wasmoon_gc_heap_get_total_collections"
 
 // ============ Exception Handling ============
 
@@ -819,7 +823,7 @@ extern "c" fn c_jit_get_exception_get_spilled_local_ptr() -> Int64 = "wasmoon_ji
 ///|
 /// Create a new DWARF debug info builder
 /// Returns an opaque handle to pass to other DWARF functions
-extern "c" fn c_dwarf_create() -> Int64 = "wasmoon_dwarf_create"
+extern "c" fn c_dwarf_create() -> DWARFHandle = "wasmoon_dwarf_create"
 
 ///|
 /// Add a function to the DWARF debug info
@@ -831,7 +835,7 @@ extern "c" fn c_dwarf_create() -> Int64 = "wasmoon_dwarf_create"
 ///   func_idx: WebAssembly function index
 #borrow(name)
 extern "c" fn c_dwarf_add_function(
-  dwarf : Int64,
+  dwarf : DWARFHandle,
   name : Bytes,
   addr : Int64,
   size : Int,
@@ -843,21 +847,21 @@ extern "c" fn c_dwarf_add_function(
 /// This generates an in-memory Mach-O/ELF object and registers it
 /// via the GDB JIT interface
 /// verbose: if true, print debug info to stderr
-extern "c" fn c_dwarf_register(dwarf : Int64, verbose : Int) -> Unit = "wasmoon_dwarf_register"
+extern "c" fn c_dwarf_register(dwarf : DWARFHandle, verbose : Int) -> Unit = "wasmoon_dwarf_register"
 
 ///|
 /// Unregister DWARF debug info from the debugger
-extern "c" fn c_dwarf_unregister(dwarf : Int64) -> Unit = "wasmoon_dwarf_unregister"
+extern "c" fn c_dwarf_unregister(dwarf : DWARFHandle) -> Unit = "wasmoon_dwarf_unregister"
 
 ///|
 /// Destroy the DWARF builder and free resources
 /// Also unregisters debug info if registered
-extern "c" fn c_dwarf_destroy(dwarf : Int64) -> Unit = "wasmoon_dwarf_destroy"
+extern "c" fn c_dwarf_destroy(dwarf : DWARFHandle) -> Unit = "wasmoon_dwarf_destroy"
 
 ///|
 /// Set the active DWARF builder for address lookups
 /// This is used for backtrace symbolication
-extern "c" fn c_dwarf_set_active(dwarf : Int64) -> Unit = "wasmoon_dwarf_set_active"
+extern "c" fn c_dwarf_set_active(dwarf : DWARFHandle) -> Unit = "wasmoon_dwarf_set_active"
 
 ///|
 /// Lookup an address in the DWARF debug info
@@ -865,7 +869,7 @@ extern "c" fn c_dwarf_set_active(dwarf : Int64) -> Unit = "wasmoon_dwarf_set_act
 /// If found, writes results to the provided arrays
 #borrow(name_out, func_idx_out, offset_out)
 extern "c" fn c_dwarf_lookup_address(
-  dwarf : Int64,
+  dwarf : DWARFHandle,
   addr : Int64,
   name_out : FixedArray[Byte],
   name_size : Int,
@@ -904,7 +908,7 @@ extern "c" fn c_jit_ctx_set_func_managed(
 #borrow(jit_context)
 extern "c" fn c_jit_ctx_set_memory_managed(
   jit_context : JITContext,
-  mem0_ptr : Int64,
+  mem0_ptr : MemoryDescriptor,
 ) -> Unit = "wasmoon_jit_ctx_set_memory_managed"
 
 ///|
@@ -929,7 +933,7 @@ extern "c" fn c_jit_ctx_get_func_count_managed(jit_context : JITContext) -> Int 
 extern "c" fn c_jit_ctx_get_table_ptr_managed(
   jit_context : JITContext,
   table_idx : Int,
-) -> Int64 = "wasmoon_jit_ctx_get_table_ptr_managed"
+) -> NativeTableHandle = "wasmoon_jit_ctx_get_table_ptr_managed"
 
 ///|
 #borrow(jit_context)
@@ -958,7 +962,7 @@ extern "c" fn c_jit_ctx_set_indirect_managed(
 #borrow(jit_context, memory_ptrs)
 extern "c" fn c_jit_ctx_set_memory_pointers_managed(
   jit_context : JITContext,
-  memory_ptrs : FixedArray[Int64],
+  memory_ptrs : FixedArray[MemoryDescriptor],
   memory_count : Int,
 ) -> Unit = "wasmoon_jit_ctx_set_memory_pointers_managed"
 
@@ -966,7 +970,7 @@ extern "c" fn c_jit_ctx_set_memory_pointers_managed(
 #borrow(jit_context, table_ptrs, table_sizes, table_max_sizes)
 extern "c" fn c_jit_ctx_set_table_pointers_managed(
   jit_context : JITContext,
-  table_ptrs : FixedArray[Int64],
+  table_ptrs : FixedArray[NativeTableHandle],
   table_sizes : FixedArray[Int],
   table_max_sizes : FixedArray[Int64],
   table_count : Int,
@@ -978,7 +982,7 @@ extern "c" fn c_jit_ctx_alloc_guarded_memory_managed(
   jit_context : JITContext,
   initial_pages : Int64,
   max_pages : Int64,
-) -> Int64 = "wasmoon_jit_ctx_alloc_guarded_memory_managed"
+) -> MemoryDescriptor = "wasmoon_jit_ctx_alloc_guarded_memory_managed"
 
 ///|
 #borrow(jit_context)
@@ -1126,14 +1130,14 @@ extern "c" fn c_jit_gc_clear_cache_managed(jit_context : JITContext) -> Unit = "
 #borrow(jit_context)
 extern "c" fn c_jit_gc_set_heap_managed(
   jit_context : JITContext,
-  heap_ptr : Int64,
+  heap_ptr : GCHeapHandle,
 ) -> Unit = "wasmoon_jit_gc_set_heap_managed"
 
 ///|
 #borrow(jit_context)
 extern "c" fn c_jit_ctx_set_gc_heap_managed(
   jit_context : JITContext,
-  heap_ptr : Int64,
+  heap_ptr : GCHeapHandle,
 ) -> Unit = "wasmoon_jit_ctx_set_gc_heap_managed"
 
 ///|
@@ -1197,7 +1201,7 @@ extern "c" fn c_jit_get_wasi_exit_code_managed(jit_context : JITContext) -> Int 
 extern "c" fn c_jit_clear_wasi_exit_managed(jit_context : JITContext) -> Unit = "wasmoon_jit_clear_wasi_exit_managed"
 
 ///|
-extern "c" fn c_jit_retain_memory_desc(mem_ptr : Int64) -> Unit = "wasmoon_jit_retain_memory_desc"
+extern "c" fn c_jit_retain_memory_desc(mem_ptr : MemoryDescriptor) -> Unit = "wasmoon_jit_retain_memory_desc"
 
 ///|
 extern "c" fn c_jit_get_exception_get_ref_ptr() -> Int64 = "wasmoon_jit_get_exception_get_ref_ptr"

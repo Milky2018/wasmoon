@@ -92,7 +92,10 @@ fn JITContext::set_indirect(
 
 ///|
 /// Set memory0 in the context
-fn JITContext::set_memory(self : JITContext, mem0_ptr : Int64) -> Unit {
+fn JITContext::set_memory(
+  self : JITContext,
+  mem0_ptr : @wasmoon_jit.MemoryDescriptor,
+) -> Unit {
   self.ctx.set_memory(mem0_ptr)
 }
 
@@ -111,7 +114,7 @@ fn JITContext::alloc_guarded_memory(
   self : JITContext,
   initial_pages : Int,
   max_pages : Int?,
-) -> Int64 {
+) -> @wasmoon_jit.MemoryDescriptor {
   self.ctx.alloc_guarded_memory(initial_pages, max_pages)
 }
 

@@ -15,8 +15,12 @@
 ///|
 /// DWARF debug info builder
 /// Accumulates function metadata and generates DWARF sections
+#external
+priv type DWARFHandle
+
+///|
 pub struct DWARFBuilder {
-  priv handle : Int64
+  priv handle : DWARFHandle
 }
 
 ///|

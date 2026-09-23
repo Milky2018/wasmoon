@@ -396,10 +396,10 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_set_func(int64_t ctx_ptr, int idx, int64
     }
 }
 
-MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_set_memory(int64_t ctx_ptr, int64_t mem0_ptr) {
+MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_set_memory(int64_t ctx_ptr, wasmoon_memory_t *mem0_ptr) {
     jit_context_t *ctx = (jit_context_t *)ctx_ptr;
     if (ctx) {
-        wasmoon_memory_t *new_mem0 = (wasmoon_memory_t *)mem0_ptr;
+        wasmoon_memory_t *new_mem0 = mem0_ptr;
 
         // If the pointer is unchanged, keep existing ownership state.
         if (ctx->memory0 == new_mem0) {
@@ -409,7 +409,7 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_set_memory(int64_t ctx_ptr, int64_t mem0
 
         // If we previously owned memory0 (allocated via ctx_alloc_guarded_memory), free it.
         if (ctx->owns_memory0 && ctx->memory0) {
-            wasmoon_jit_free_memory_desc((int64_t)ctx->memory0);
+            wasmoon_jit_free_memory_desc(ctx->memory0);
         }
 
         ctx->memory0 = new_mem0;
@@ -435,12 +435,12 @@ MOONBIT_FFI_EXPORT int wasmoon_jit_ctx_get_func_count(int64_t ctx_ptr) {
     return ctx ? ctx->func_count : 0;
 }
 
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_ctx_get_table_ptr(int64_t ctx_ptr, int table_idx) {
+MOONBIT_FFI_EXPORT void **wasmoon_jit_ctx_get_table_ptr(int64_t ctx_ptr, int table_idx) {
     jit_context_t *ctx = (jit_context_t *)ctx_ptr;
     if (!ctx || table_idx < 0 || table_idx >= ctx->table_count || !ctx->tables) {
         return 0;
     }
-    return (int64_t)ctx->tables[table_idx];
+    return ctx->tables[table_idx];
 }
 
 MOONBIT_FFI_EXPORT int wasmoon_jit_ctx_get_table_size(int64_t ctx_ptr, int table_idx) {
@@ -551,7 +551,7 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_jit_gc_environment_is_clear(int64_t ctx_ptr) 
 
 static _Atomic int64_t g_shared_indirect_table_live_count = 0;
 
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_alloc_shared_indirect_table(int count) {
+MOONBIT_FFI_EXPORT void **wasmoon_jit_alloc_shared_indirect_table(int count) {
     if (count <= 0) return 0;
 
     void **table = (void **)calloc((size_t)count * 2, sizeof(void *));
@@ -564,11 +564,11 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_alloc_shared_indirect_table(int count) {
 
     atomic_fetch_add_explicit(&g_shared_indirect_table_live_count, 1, memory_order_relaxed);
 
-    return (int64_t)table;
+    return table;
 }
 
-MOONBIT_FFI_EXPORT void wasmoon_jit_free_shared_indirect_table(int64_t table_ptr) {
-    void **table = (void **)table_ptr;
+MOONBIT_FFI_EXPORT void wasmoon_jit_free_shared_indirect_table(void **table_ptr) {
+    void **table = table_ptr;
     if (table) {
         free(table);
         atomic_fetch_sub_explicit(&g_shared_indirect_table_live_count, 1, memory_order_relaxed);
@@ -579,8 +579,8 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_debug_shared_indirect_table_live_count(vo
     return atomic_load_explicit(&g_shared_indirect_table_live_count, memory_order_relaxed);
 }
 
-MOONBIT_FFI_EXPORT void wasmoon_jit_shared_table_set(int64_t table_ptr, int table_idx, int64_t func_ptr, int type_idx) {
-    void **table = (void **)table_ptr;
+MOONBIT_FFI_EXPORT void wasmoon_jit_shared_table_set(void **table_ptr, int table_idx, int64_t func_ptr, int type_idx) {
+    void **table = table_ptr;
     if (table && table_idx >= 0) {
         table[(size_t)table_idx * 2] = (void *)func_ptr;
         table[(size_t)table_idx * 2 + 1] = (void*)(intptr_t)type_idx;
@@ -732,7 +732,7 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_i64_urem_ptr(void) {
 
 MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_set_memory_pointers(
     int64_t ctx_ptr,
-    int64_t *memory_ptrs,
+    wasmoon_memory_t **memory_ptrs,
     int memory_count
 ) {
     jit_context_t *ctx = (jit_context_t *)ctx_ptr;
@@ -740,7 +740,7 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_set_memory_pointers(
 
     wasmoon_memory_t *old_mem0 = ctx->memory0;
     int old_owns_mem0 = ctx->owns_memory0;
-    wasmoon_memory_t *new_mem0 = (wasmoon_memory_t *)memory_ptrs[0];
+    wasmoon_memory_t *new_mem0 = memory_ptrs[0];
 
     // Free existing array
     if (ctx->memories) {
@@ -751,7 +751,7 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_set_memory_pointers(
     // If we previously owned memory0 (allocated via ctx_alloc_guarded_memory), free it
     // unless the new memory0 pointer is the same.
     if (old_owns_mem0 && old_mem0 && old_mem0 != new_mem0) {
-        wasmoon_jit_free_memory_desc((int64_t)old_mem0);
+        wasmoon_jit_free_memory_desc(old_mem0);
         old_mem0 = NULL;
         old_owns_mem0 = 0;
     }
@@ -767,7 +767,7 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_set_memory_pointers(
 
     // Copy pointers
     for (int i = 0; i < memory_count; i++) {
-        ctx->memories[i] = (wasmoon_memory_t *)memory_ptrs[i];
+        ctx->memories[i] = memory_ptrs[i];
     }
     ctx->memory_count = memory_count;
 
@@ -793,7 +793,7 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_use_shared_table(int64_t ctx_ptr, int64_
 
 MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_set_table_pointers(
     int64_t ctx_ptr,
-    int64_t *table_ptrs,
+    void ***table_ptrs,
     int32_t *table_sizes,
     int64_t *table_max_sizes,
     int table_count
@@ -838,7 +838,7 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_set_table_pointers(
 
     // Copy table data
     for (int i = 0; i < table_count; i++) {
-        ctx->tables[i] = (void **)table_ptrs[i];
+        ctx->tables[i] = table_ptrs[i];
         if (table_sizes) {
             ctx->table_sizes[i] = (size_t)table_sizes[i];
         }
@@ -852,7 +852,7 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_set_table_pointers(
 
     // Set table0 fast path
     if (table_count > 0 && table_ptrs[0] != 0) {
-        ctx->table0_base = (void **)table_ptrs[0];
+        ctx->table0_base = table_ptrs[0];
         ctx->owns_indirect_table = 0;
         if (table_sizes) {
             ctx->table0_elements = table_sizes[0];
@@ -1054,7 +1054,7 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_alloc_memory(int64_t size) {
     return (int64_t)mem;
 }
 
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_alloc_memory_desc(
+MOONBIT_FFI_EXPORT wasmoon_memory_t *wasmoon_jit_alloc_memory_desc(
     int64_t size_bytes,
     int64_t max_pages,
     int32_t is_memory64,
@@ -1089,17 +1089,17 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_alloc_memory_desc(
         }
         atomic_store_explicit(&mem->current_length, (size_t)size_bytes, memory_order_relaxed);
     }
-    return (int64_t)mem;
+    return mem;
 }
 
 // The caller must already hold a live reference while acquiring another.
-MOONBIT_FFI_EXPORT void wasmoon_jit_retain_memory_desc(int64_t mem_ptr) {
-    wasmoon_memory_t *mem = (wasmoon_memory_t *)mem_ptr;
+MOONBIT_FFI_EXPORT void wasmoon_jit_retain_memory_desc(wasmoon_memory_t *mem_ptr) {
+    wasmoon_memory_t *mem = mem_ptr;
     if (mem) atomic_fetch_add_explicit(&mem->owners, 1, memory_order_relaxed);
 }
 
-MOONBIT_FFI_EXPORT void wasmoon_jit_free_memory_desc(int64_t mem_ptr) {
-    wasmoon_memory_t *mem = (wasmoon_memory_t *)mem_ptr;
+MOONBIT_FFI_EXPORT void wasmoon_jit_free_memory_desc(wasmoon_memory_t *mem_ptr) {
+    wasmoon_memory_t *mem = mem_ptr;
     if (!mem) return;
     if (atomic_fetch_sub_explicit(&mem->owners, 1, memory_order_acq_rel) != 1) return;
 
@@ -1124,7 +1124,7 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_free_memory_desc(int64_t mem_ptr) {
 // Returns `wasmoon_memory_t*` on success, 0 on failure.
 extern uint8_t *alloc_guarded_memory_external(wasmoon_memory_t *memory, size_t initial_size, size_t max_size);
 
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_alloc_guarded_memory_desc(int64_t initial_pages, int64_t max_pages, int32_t is_shared) {
+MOONBIT_FFI_EXPORT wasmoon_memory_t *wasmoon_jit_alloc_guarded_memory_desc(int64_t initial_pages, int64_t max_pages, int32_t is_shared) {
     // Guarded memory is used for memory32 bounds-check elimination.
     // Only supported for 64KiB pages.
     if (initial_pages < 0 || initial_pages > 65536) {
@@ -1155,14 +1155,14 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_alloc_guarded_memory_desc(int64_t initial
         return 0;
     }
 
-    return (int64_t)memory;
+    return memory;
 }
 
 // Allocate guarded memory directly into JIT context
 // This allocates memory using mmap with guard pages for bounds check elimination
 // Returns memory pointer on success, 0 on failure
 
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_ctx_alloc_guarded_memory(
+MOONBIT_FFI_EXPORT wasmoon_memory_t *wasmoon_jit_ctx_alloc_guarded_memory(
     int64_t ctx_ptr,
     int64_t initial_pages,
     int64_t max_pages
@@ -1189,7 +1189,7 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_ctx_alloc_guarded_memory(
 
     // If we previously owned memory0 (allocated via ctx_alloc_guarded_memory), free it.
     if (ctx->owns_memory0 && ctx->memory0) {
-        wasmoon_jit_free_memory_desc((int64_t)ctx->memory0);
+        wasmoon_jit_free_memory_desc(ctx->memory0);
         ctx->memory0 = NULL;
         ctx->owns_memory0 = 0;
         ctx_refresh_memory0_fast_fields(ctx);
@@ -1218,7 +1218,7 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_ctx_alloc_guarded_memory(
     ctx->owns_memory0 = 1;
     ctx_refresh_memory0_fast_fields(ctx);
 
-    return (int64_t)memory;
+    return memory;
 }
 
 MOONBIT_FFI_EXPORT void wasmoon_jit_free_memory(int64_t mem_ptr) {
@@ -1247,62 +1247,62 @@ MOONBIT_FFI_EXPORT int wasmoon_jit_memory_read(int64_t mem_ptr, int64_t offset, 
 
 // ============ Memory Descriptor Helpers (runtime + JIT sharing) ============
 
-MOONBIT_FFI_EXPORT int64_t wasmoon_mem_desc_get_base(int64_t mem_desc_ptr) {
-    wasmoon_memory_t *mem = (wasmoon_memory_t *)mem_desc_ptr;
+MOONBIT_FFI_EXPORT int64_t wasmoon_mem_desc_get_base(wasmoon_memory_t *mem_desc_ptr) {
+    wasmoon_memory_t *mem = mem_desc_ptr;
     return (int64_t)memory_base_desc_internal(mem);
 }
 
-MOONBIT_FFI_EXPORT int64_t wasmoon_mem_desc_get_len(int64_t mem_desc_ptr) {
-    wasmoon_memory_t *mem = (wasmoon_memory_t *)mem_desc_ptr;
+MOONBIT_FFI_EXPORT int64_t wasmoon_mem_desc_get_len(wasmoon_memory_t *mem_desc_ptr) {
+    wasmoon_memory_t *mem = mem_desc_ptr;
     return memory_len_desc_internal(mem);
 }
 
-MOONBIT_FFI_EXPORT int64_t wasmoon_mem_desc_grow(int64_t mem_desc_ptr, int64_t delta, int32_t max_pages) {
-    wasmoon_memory_t *mem = (wasmoon_memory_t *)mem_desc_ptr;
+MOONBIT_FFI_EXPORT int64_t wasmoon_mem_desc_grow(wasmoon_memory_t *mem_desc_ptr, int64_t delta, int32_t max_pages) {
+    wasmoon_memory_t *mem = mem_desc_ptr;
     return memory_grow_desc_internal(mem, delta, max_pages);
 }
 
-MOONBIT_FFI_EXPORT int wasmoon_mem_desc_read(int64_t mem_desc_ptr, int64_t offset, moonbit_bytes_t out, int size) {
-    wasmoon_memory_t *mem = (wasmoon_memory_t *)mem_desc_ptr;
+MOONBIT_FFI_EXPORT int wasmoon_mem_desc_read(wasmoon_memory_t *mem_desc_ptr, int64_t offset, moonbit_bytes_t out, int size) {
+    wasmoon_memory_t *mem = mem_desc_ptr;
     if (!mem || !mem->base || !out || size <= 0) return -1;
     memcpy(out, mem->base + offset, (size_t)size);
     return 0;
 }
 
-MOONBIT_FFI_EXPORT int wasmoon_mem_desc_write(int64_t mem_desc_ptr, int64_t offset, moonbit_bytes_t data, int size) {
-    wasmoon_memory_t *mem = (wasmoon_memory_t *)mem_desc_ptr;
+MOONBIT_FFI_EXPORT int wasmoon_mem_desc_write(wasmoon_memory_t *mem_desc_ptr, int64_t offset, moonbit_bytes_t data, int size) {
+    wasmoon_memory_t *mem = mem_desc_ptr;
     if (!mem || !mem->base || !data || size <= 0) return -1;
     memcpy(mem->base + offset, data, (size_t)size);
     return 0;
 }
 
-MOONBIT_FFI_EXPORT int wasmoon_mem_desc_write_bytes(int64_t mem_desc_ptr, int64_t offset, moonbit_bytes_t data, int size) {
+MOONBIT_FFI_EXPORT int wasmoon_mem_desc_write_bytes(wasmoon_memory_t *mem_desc_ptr, int64_t offset, moonbit_bytes_t data, int size) {
     return wasmoon_mem_desc_write(mem_desc_ptr, offset, data, size);
 }
 
-MOONBIT_FFI_EXPORT int wasmoon_mem_desc_memmove(int64_t mem_desc_ptr, int64_t dst, int64_t src, int size) {
-    wasmoon_memory_t *mem = (wasmoon_memory_t *)mem_desc_ptr;
+MOONBIT_FFI_EXPORT int wasmoon_mem_desc_memmove(wasmoon_memory_t *mem_desc_ptr, int64_t dst, int64_t src, int size) {
+    wasmoon_memory_t *mem = mem_desc_ptr;
     if (!mem || !mem->base || size <= 0) return -1;
     memmove(mem->base + dst, mem->base + src, (size_t)size);
     return 0;
 }
 
-MOONBIT_FFI_EXPORT int wasmoon_mem_desc_copy64(int64_t dst_desc, int64_t dst, int64_t src_desc, int64_t src, int64_t size) {
-    wasmoon_memory_t *destination = (wasmoon_memory_t *)dst_desc;
-    wasmoon_memory_t *source = (wasmoon_memory_t *)src_desc;
+MOONBIT_FFI_EXPORT int wasmoon_mem_desc_copy64(wasmoon_memory_t *dst_desc, int64_t dst, wasmoon_memory_t *src_desc, int64_t src, int64_t size) {
+    wasmoon_memory_t *destination = dst_desc;
+    wasmoon_memory_t *source = src_desc;
     if (!destination || !source || !destination->base || !source->base || size <= 0) return -1;
     memmove(destination->base + dst, source->base + src, (size_t)size);
     return 0;
 }
 
-MOONBIT_FFI_EXPORT int wasmoon_mem_desc_memset64(int64_t mem_desc_ptr, int64_t dst, int32_t val, int64_t size) {
-    wasmoon_memory_t *mem = (wasmoon_memory_t *)mem_desc_ptr;
+MOONBIT_FFI_EXPORT int wasmoon_mem_desc_memset64(wasmoon_memory_t *mem_desc_ptr, int64_t dst, int32_t val, int64_t size) {
+    wasmoon_memory_t *mem = mem_desc_ptr;
     if (!mem || !mem->base || size <= 0) return -1;
     memset(mem->base + dst, val & 0xFF, (size_t)size);
     return 0;
 }
 
-MOONBIT_FFI_EXPORT int wasmoon_mem_desc_memset(int64_t mem_desc_ptr, int64_t dst, int32_t val, int size) {
+MOONBIT_FFI_EXPORT int wasmoon_mem_desc_memset(wasmoon_memory_t *mem_desc_ptr, int64_t dst, int32_t val, int size) {
     return wasmoon_mem_desc_memset64(mem_desc_ptr, dst, val, size);
 }
 
@@ -1643,9 +1643,9 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_gc_clear_cache(int64_t ctx_ptr) {
 
 // ============ GC Heap Pointer Management ============
 
-MOONBIT_FFI_EXPORT void wasmoon_jit_gc_set_heap(int64_t ctx_ptr, int64_t heap_ptr) {
+MOONBIT_FFI_EXPORT void wasmoon_jit_gc_set_heap(int64_t ctx_ptr, GcHeap *heap_ptr) {
     jit_context_t *ctx = (jit_context_t *)(uintptr_t)ctx_ptr;
-    GcHeap *heap = (GcHeap *)(uintptr_t)heap_ptr;
+    GcHeap *heap = heap_ptr;
     ctx_set_gc_heap_internal(ctx, heap);
 }
 
@@ -1664,9 +1664,9 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_gc_get_heap(int64_t ctx_ptr) {
     return (ctx != NULL) ? (int64_t)(uintptr_t)ctx->gc_heap : 0;
 }
 
-MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_set_gc_heap(int64_t ctx_ptr, int64_t heap_ptr) {
+MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_set_gc_heap(int64_t ctx_ptr, GcHeap *heap_ptr) {
     jit_context_t *ctx = (jit_context_t *)(uintptr_t)ctx_ptr;
-    GcHeap *heap = (GcHeap *)(uintptr_t)heap_ptr;
+    GcHeap *heap = heap_ptr;
     ctx_set_gc_heap_internal(ctx, heap);
 }
 
@@ -1706,11 +1706,11 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_jit_gc_collect_for_alloc(
 // Host-triggered collection must include the dynamically active guest roots.
 // Raw heap collection also retains registered parked continuations.
 MOONBIT_FFI_EXPORT int32_t wasmoon_jit_collect_heap(
-    int64_t heap_ptr,
+    GcHeap *heap_ptr,
     int64_t *roots,
     int32_t root_count
 ) {
-    GcHeap *heap = (GcHeap *)(uintptr_t)heap_ptr;
+    GcHeap *heap = heap_ptr;
     jit_context_t *active = get_current_jit_context();
     if (active && active->gc_heap == heap) {
         return gc_collect_for_alloc_internal(active, roots, root_count);
@@ -1781,7 +1781,7 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_set_func_managed(
 }
 
 MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_set_memory_managed(
-    void *jit_context, int64_t mem0_ptr
+    void *jit_context, wasmoon_memory_t *mem0_ptr
 ) {
     wasmoon_jit_ctx_set_memory(MANAGED_CTX(jit_context), mem0_ptr);
 }
@@ -1804,7 +1804,7 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_jit_ctx_get_func_count_managed(
     return wasmoon_jit_ctx_get_func_count(MANAGED_CTX(jit_context));
 }
 
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_ctx_get_table_ptr_managed(
+MOONBIT_FFI_EXPORT void **wasmoon_jit_ctx_get_table_ptr_managed(
     void *jit_context, int table_idx
 ) {
     return wasmoon_jit_ctx_get_table_ptr(MANAGED_CTX(jit_context), table_idx);
@@ -1831,7 +1831,7 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_set_indirect_managed(
 }
 
 MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_set_memory_pointers_managed(
-    void *jit_context, int64_t *memory_ptrs, int memory_count
+    void *jit_context, wasmoon_memory_t **memory_ptrs, int memory_count
 ) {
     wasmoon_jit_ctx_set_memory_pointers(
         MANAGED_CTX(jit_context), memory_ptrs, memory_count
@@ -1840,7 +1840,7 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_set_memory_pointers_managed(
 
 MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_set_table_pointers_managed(
     void *jit_context,
-    int64_t *table_ptrs,
+    void ***table_ptrs,
     int32_t *table_sizes,
     int64_t *table_max_sizes,
     int table_count
@@ -1854,7 +1854,7 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_set_table_pointers_managed(
     );
 }
 
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_ctx_alloc_guarded_memory_managed(
+MOONBIT_FFI_EXPORT wasmoon_memory_t *wasmoon_jit_ctx_alloc_guarded_memory_managed(
     void *jit_context, int64_t initial_pages, int64_t max_pages
 ) {
     return wasmoon_jit_ctx_alloc_guarded_memory(
@@ -1919,13 +1919,13 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_gc_clear_cache_managed(
 }
 
 MOONBIT_FFI_EXPORT void wasmoon_jit_gc_set_heap_managed(
-    void *jit_context, int64_t heap_ptr
+    void *jit_context, GcHeap *heap_ptr
 ) {
     wasmoon_jit_gc_set_heap(MANAGED_CTX(jit_context), heap_ptr);
 }
 
 MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_set_gc_heap_managed(
-    void *jit_context, int64_t heap_ptr
+    void *jit_context, GcHeap *heap_ptr
 ) {
     wasmoon_jit_ctx_set_gc_heap(MANAGED_CTX(jit_context), heap_ptr);
 }
@@ -2136,3 +2136,19 @@ WASMOON_DEFINE_GUEST_TARGET(wasmoon_jit_i64_udiv);
 WASMOON_DEFINE_GUEST_TARGET(wasmoon_jit_i64_urem);
 WASMOON_DEFINE_GUEST_TARGET(wasmoon_jit_table_grow);
 #endif
+
+MOONBIT_FFI_EXPORT void *wasmoon_native_pointer_null(void) {
+    return NULL;
+}
+
+MOONBIT_FFI_EXPORT int32_t wasmoon_native_pointer_is_null(void *descriptor) {
+    return descriptor == NULL;
+}
+
+MOONBIT_FFI_EXPORT int32_t wasmoon_native_pointer_equal(void *a, void *b) {
+    return a == b;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_native_table_entry_word(void **table, int32_t index, int32_t word) {
+    return (int64_t)(intptr_t)table[(size_t)index * 2 + (size_t)word];
+}

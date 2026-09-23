@@ -36,6 +36,7 @@ def main():
     resolver = ROOT / "modules/wasmoon_jit/host_io/wasi/resolver_test.mbt"
     (PACKAGE / "resolver_test.mbt").write_text(
         resolver.read_text().replace("@wasi.", "@native_host."))
+    shutil.copy2(ROOT / "modules/wasmoon_jit/native_handles_test.mbt", PACKAGE)
     fixture_dir = PACKAGE / "testsuite" / "fixtures"
     fixture_dir.mkdir(parents=True)
     shutil.copy2(ROOT / "modules/wasmoon/testsuite/fixtures/wasi-command-async-stdin.component.wat",

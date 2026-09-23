@@ -1,4 +1,5 @@
 import {
+  "Milky2018/wasmoon_jit/jit_ffi",
   "Milky2018/wasmoon_jit/native/execution",
   "Milky2018/wasmoon_jit/artifact/installer",
   "Milky2018/wasmoon_jit/artifact/loader" @artifact_loader,

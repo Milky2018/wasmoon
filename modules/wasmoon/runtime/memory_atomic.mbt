@@ -13,7 +13,7 @@ fn Memory::checked_atomic_descriptor(
   self : Memory,
   offset : Int64,
   width : Int,
-) -> Int64 raise RuntimeError {
+) -> @wasmoon_jit.MemoryDescriptor raise RuntimeError {
   let descriptor = self.require_desc_ptr()
   if width != 1 && width != 2 && width != 4 && width != 8 {
     raise Unreachable

@@ -167,9 +167,9 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_exception_arena_define_tag(void *owner,
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_exception_arena_insert(void *owner,
-    int64_t heap, int32_t tag, const int64_t *values, int32_t count) {
+    GcHeap *heap, int32_t tag, const int64_t *values, int32_t count) {
     return exception_arena_insert(*(native_exception_arena_t **)owner,
-        (GcHeap *)heap, tag, values, count);
+        heap, tag, values, count);
 }
 
 MOONBIT_FFI_EXPORT int32_t wasmoon_exception_arena_tag(void *owner, int64_t ref) {

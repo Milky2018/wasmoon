@@ -33,9 +33,13 @@ const GC_KIND_ARRAY : Int = 2
 
 ///|
 /// C-managed GC Heap
-/// The heap is automatically freed when this object is garbage collected.
+/// A handle does not change the existing explicit ownership protocol.
+pub using @jit_ffi {type GCHeapHandle}
+
+///|
+/// C-managed GC heap, released explicitly by its owner.
 pub struct CHeap {
-  ptr : Int64 // C GcHeap* pointer
+  ptr : GCHeapHandle // C GcHeap* pointer
 } derive(Debug)
 
 ///|
@@ -46,14 +50,14 @@ pub fn CHeap::CHeap(capacity? : Int = @types.ONE_MIB_BYTES) -> CHeap {
 }
 
 ///|
-/// Free the C heap (called explicitly if needed before GC)
+/// Free the C heap. The caller must not use its borrowed handle afterwards.
 pub fn CHeap::free(self : CHeap) -> Unit {
   c_gc_heap_free(self.ptr)
 }
 
 ///|
 /// Get the raw C pointer (for JIT)
-pub fn CHeap::get_ptr(self : CHeap) -> Int64 {
+pub fn CHeap::get_ptr(self : CHeap) -> GCHeapHandle {
   self.ptr
 }
 
@@ -585,11 +589,11 @@ pub fn gc_debug_set_fail_alloc(fail_at : Int, fail_every? : Int = 0) -> Unit {
 }
 
 ///|
-extern "c" fn get_runtime_type(pointer : Int64, reference : Int) -> Int = "wasmoon_gc_heap_get_runtime_type"
+extern "c" fn get_runtime_type(pointer : GCHeapHandle, reference : Int) -> Int = "wasmoon_gc_heap_get_runtime_type"
 
 ///|
 extern "c" fn set_runtime_type(
-  pointer : Int64,
+  pointer : GCHeapHandle,
   reference : Int,
   identity : Int,
 ) -> Unit = "wasmoon_gc_heap_set_runtime_type"

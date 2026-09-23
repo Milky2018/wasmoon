@@ -222,7 +222,10 @@ fn gc_set_heap(context : JITContext, heap : CHeap) -> Unit {
 }
 
 ///|
-fn gc_set_context_heap_ptr(context : JITContext, heap_ptr : Int64) -> Unit {
+fn gc_set_context_heap_ptr(
+  context : JITContext,
+  heap_ptr : GCHeapHandle,
+) -> Unit {
   c_jit_ctx_set_gc_heap_managed(context, heap_ptr)
 }
 
@@ -421,7 +424,7 @@ pub fn NativeJITContext::teardown_gc(self : NativeJITContext) -> Unit {
 ///|
 pub fn NativeJITContext::set_gc_heap_ptr(
   self : NativeJITContext,
-  heap_ptr : Int64,
+  heap_ptr : GCHeapHandle,
 ) -> Unit {
   gc_set_context_heap_ptr(self.handle, heap_ptr)
 }
