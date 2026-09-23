@@ -20,13 +20,18 @@ def main():
         command = ['clang', '-fsyntax-only', '-Wall', '-Wextra', '-Werror',
                    '-I', str(include)]
     count = 0
+    failed = []
     for config in sorted((ROOT / 'modules').rglob('moon.pkg')):
         declaration = re.search(r'"native-stub"\s*:\s*\[([^]]*)\]', config.read_text())
         if declaration is None:
             continue
         for name in re.findall(r'"([^"]+\.c)"', declaration[1]):
-            subprocess.run([*command, str(config.parent / name)], check=True)
+            result = subprocess.run([*command, str(config.parent / name)])
+            if result.returncode:
+                failed.append(str(config.parent / name))
             count += 1
+    if failed:
+        raise SystemExit('Native C compilation failed: ' + ', '.join(failed))
     print(f'Compiled {count} native C stubs with warnings denied.')
 
 

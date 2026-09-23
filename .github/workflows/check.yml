@@ -69,6 +69,12 @@ jobs:
           wasm-tools --version
           uname -a
 
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: compile native C with strict warnings
+        run: python3 scripts/check_native_c.py
+
       - name: check source and generated interfaces
         run: |
           moon check --target native --warn-list +73 --deny-warn
@@ -114,12 +120,8 @@ jobs:
           fi
           ./install.sh
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
       - name: install independently packaged modules
         run: |
-          python3 scripts/check_native_c.py
           python3 scripts/test_packaged_install.py
 
       - name: test HTTP services, middleware and clients on both engines
@@ -291,6 +293,12 @@ jobs:
           $tools = @(Get-ChildItem target/windows-tools -Recurse -Filter wasm-tools.exe)
           if ($tools.Count -ne 1) { throw "Expected exactly one pinned wasm-tools binary" }
           $tools[0].DirectoryName >> $env:GITHUB_PATH
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: compile Windows C with strict warnings
+        run: python scripts/check_native_c.py
+
       - name: check Windows warnings
         run: moon check --target native --warn-list +73 --deny-warn
 
@@ -318,12 +326,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Copy-Item target/windows-build/native/release/build/Milky2018/wasmoon/cmd/wasmoon/wasmoon.exe wasmoon.exe
           Copy-Item target/windows-build/native/release/build/Milky2018/wasmoon/cmd/wasmoon-tools/wasmoon-tools.exe wasmoon-tools.exe
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
       - name: install independently packaged modules on Windows
         run: |
-          python scripts/check_native_c.py
           python scripts/test_packaged_install.py
 
       - name: test Windows HTTP services, middleware and clients on both engines
