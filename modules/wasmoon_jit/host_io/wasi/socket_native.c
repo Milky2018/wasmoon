@@ -6,6 +6,7 @@
 #include <string.h>
 #ifdef _WIN32
 #include "../windows_io.h"
+#include <fcntl.h>
 #include <ws2tcpip.h>
 #include <mstcpip.h>
 #include <process.h>
@@ -100,7 +101,7 @@ MOONBIT_FFI_EXPORT int wasmoon_wasi_socket_create(int family, int kind) {
     closesocket(socket);
     return wasmoon_windows_socket_error(error);
   }
-  return wasmoon_windows_socket_adopt(socket, O_RDWR | O_NONBLOCK);
+  return wasmoon_windows_socket_adopt(socket, _O_RDWR | WASMOON_O_NONBLOCK);
 #else
   int native_family = wasmoon_wasi_socket_family(family);
   if (native_family < 0 || (kind != 1 && kind != 2)) {
@@ -674,7 +675,7 @@ MOONBIT_FFI_EXPORT int wasmoon_wasi_accept(int sockfd) {
     closesocket(socket);
     return wasmoon_windows_socket_error(error);
   }
-  return wasmoon_windows_socket_adopt(socket, O_RDWR | O_NONBLOCK);
+  return wasmoon_windows_socket_adopt(socket, _O_RDWR | WASMOON_O_NONBLOCK);
 #else
   int fd = accept(sockfd, NULL, NULL);
   if (fd < 0) return -1;

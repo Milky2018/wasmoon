@@ -707,4 +707,3 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_set_wasi_exit_code_managed(void *jit_context
 }
 
 #undef MANAGED_CTX
-

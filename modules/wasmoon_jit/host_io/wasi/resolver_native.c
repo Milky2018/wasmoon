@@ -281,4 +281,3 @@ MOONBIT_FFI_EXPORT void wasmoon_wasi_resolver_drop(int64_t resolver_handle) {
   if (read_fd >= 0) wasmoon_wasi_resolver_close(read_fd);
   if (completed) wasmoon_wasi_resolver_free(resolver);
 }
-
