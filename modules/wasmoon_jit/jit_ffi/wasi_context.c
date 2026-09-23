@@ -92,6 +92,7 @@ static void clear_wasi_stdin_callback(jit_context_t *ctx) {
     ctx->wasi_stdin_callback = NULL;
 }
 
+#ifndef _WIN32
 static void clear_fd_metadata(jit_context_t *ctx, int wasi_fd) {
     if (wasi_fd < 0 || wasi_fd >= ctx->fd_table_size) return;
     if (ctx->fd_host_paths && ctx->fd_host_paths[wasi_fd]) {
@@ -102,6 +103,8 @@ static void clear_fd_metadata(jit_context_t *ctx, int wasi_fd) {
     if (ctx->fd_rights_base) ctx->fd_rights_base[wasi_fd] = 0;
     if (ctx->fd_rights_inheriting) ctx->fd_rights_inheriting[wasi_fd] = 0;
 }
+
+#endif
 
 static void set_fd_rights(
     jit_context_t *ctx,
@@ -115,6 +118,7 @@ static void set_fd_rights(
     ctx->fd_rights_inheriting[wasi_fd] = rights_inheriting;
 }
 
+#ifndef _WIN32
 static void set_fd_metadata(jit_context_t *ctx, int wasi_fd, char *host_path, int is_dir) {
     if (!host_path) return;
     if (!ctx->fd_host_paths || !ctx->fd_is_dir || wasi_fd < 0 || wasi_fd >= ctx->fd_table_size) {
@@ -174,6 +178,8 @@ static uint64_t preopen_directory_inheriting_rights(void) {
         WASI_RIGHT_FD_FILESTAT_SET_TIMES |
         WASI_RIGHT_POLL_FD_READWRITE;
 }
+
+#endif
 
 // ============ Context Initialization ============
 
