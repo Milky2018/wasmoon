@@ -24,7 +24,12 @@ int wasmoon_notification_init(wasmoon_notification *n) {
     if (n->writer == INVALID_SOCKET || connect(n->writer, (struct sockaddr *)&address, sizeof(address))) goto failed;
     n->reader = accept(listener, NULL, NULL);
     if (n->reader == INVALID_SOCKET) goto failed;
-    SetHandleInformation((HANDLE)n->reader, HANDLE_FLAG_INHERIT, 0);
+    if (!SetHandleInformation((HANDLE)n->reader, HANDLE_FLAG_INHERIT, 0)) {
+        DWORD error = GetLastError();
+        closesocket(listener);
+        wasmoon_notification_close(n);
+        return wasmoon_windows_error(error);
+    }
     u_long nonblocking = 1;
     int no_delay = 1;
     if (ioctlsocket(n->writer, FIONBIO, &nonblocking) ||

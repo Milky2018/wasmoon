@@ -13,6 +13,7 @@ import {
   "Milky2018/wasm_component/wit",
   "Milky2018/wasmoon/wit_binding",
   "Milky2018/wasmoon_jit/host_io/wasi" @native_host,
+  "Milky2018/wasmoon_jit/host_io/reactor",
   "moonbitlang/async",
   "moonbitlang/core/env",
   "moonbitlang/x/fs",

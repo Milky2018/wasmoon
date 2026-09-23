@@ -8,9 +8,9 @@ import unittest
 ROOT = Path(__file__).resolve().parents[2]
 
 
-@unittest.skipIf(os.name == 'nt', 'POSIX standalone allocation-failure probe')
+@unittest.skipIf(os.name == 'nt', 'POSIX resolver lifecycle and inheritance probe')
 class ResolverLifecycleTests(unittest.TestCase):
-    def test_failure_close_finalizer_and_completion_schedules(self):
+    def test_limits_cancellation_allocation_and_inheritance(self):
         with tempfile.TemporaryDirectory() as temporary:
             binary = Path(temporary) / 'resolver'
             subprocess.run([
@@ -20,4 +20,4 @@ class ResolverLifecycleTests(unittest.TestCase):
                 str(ROOT / 'scripts/tests/native/resolver_lifecycle.c'),
                 '-o', str(binary),
             ], check=True)
-            subprocess.run([str(binary)], check=True)
+            subprocess.run([str(binary)], check=True, timeout=30)

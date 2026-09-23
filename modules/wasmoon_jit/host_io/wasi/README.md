@@ -7,8 +7,25 @@ entering private raw externs. Resolver handles are opaque MoonBit external objec
 Explicit close is idempotent, and finalization closes an abandoned lookup. A
 closed handle rejects further reads. Worker state is separately allocated: the
 worker never touches MoonBit reference counts. Completion notification and
-closing the pipe read end are serialized under the worker mutex, so cancellation
-does not depend on process-wide SIGPIPE handling.
+closing the readiness descriptor are serialized under the resolver mutex, so
+cancellation does not depend on process-wide SIGPIPE handling.
+
+DNS work uses a process-wide FIFO with at most four active workers and 32
+queued/executing requests. Cancelling queued work removes it immediately;
+cancelling a running system lookup stops delivery but retains its admission slot
+until `getaddrinfo` returns. Idle workers exit. Saturation returns `EAGAIN`, mapped
+to temporary resolver failure by both P2 and P3. Completed results remain owned by
+their handles. This preserves system resolver policy and all returned addresses;
+`async` currently exposes a single-address public resolver, not a replacement for
+this all-address interface.
+
+Notification descriptors are non-inheritable from creation: Linux uses
+`pipe2(O_CLOEXEC | O_NONBLOCK)`, Darwin uses a close-on-exec/close-on-fork kqueue
+with `EVFILT_USER`, and Windows reuses the non-inheritable socket notification
+transport. The descriptor is a readiness token, not a portable byte stream;
+callers poll it and obtain results through `c_resolver_next`. Darwin's kqueue
+also works with the reactor's nested kqueue registration, without a global
+fork/spawn lock or a pipe-plus-fcntl race.
 
 The C translation units separate filesystem/capability traversal, sockets,
 resolver worker ownership, polling, process operations, and directory encoding.
