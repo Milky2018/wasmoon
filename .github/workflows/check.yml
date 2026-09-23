@@ -69,6 +69,12 @@ jobs:
           wasm-tools --version
           uname -a
 
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: compile native C with strict warnings
+        run: python3 scripts/check_native_c.py
+
       - name: check source and generated interfaces
         run: |
           moon check --target native --warn-list +73 --deny-warn
@@ -114,6 +120,10 @@ jobs:
           fi
           ./install.sh
 
+      - name: install independently packaged modules
+        run: |
+          python3 scripts/test_packaged_install.py
+
       - name: test HTTP services, middleware and clients on both engines
         run: python3 scripts/test_wasi_http.py --wasmoon ./wasmoon
 
@@ -123,9 +133,6 @@ jobs:
           repository: WebAssembly/wasi-testsuite
           ref: 609c446139956ff30239f87cb18af1dc6128bed2
           path: target/wasi03-upstream
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
       - name: install upstream WASI runner dependencies
         run: python -m pip install -r target/wasi03-upstream/test-runner/requirements.txt
       - name: test external WASI Preview 3 guests on both engines
@@ -286,6 +293,12 @@ jobs:
           $tools = @(Get-ChildItem target/windows-tools -Recurse -Filter wasm-tools.exe)
           if ($tools.Count -ne 1) { throw "Expected exactly one pinned wasm-tools binary" }
           $tools[0].DirectoryName >> $env:GITHUB_PATH
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: compile Windows C with strict warnings
+        run: python scripts/check_native_c.py
+
       - name: check Windows warnings
         run: moon check --target native --warn-list +73 --deny-warn
 
@@ -313,6 +326,10 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Copy-Item target/windows-build/native/release/build/Milky2018/wasmoon/cmd/wasmoon/wasmoon.exe wasmoon.exe
           Copy-Item target/windows-build/native/release/build/Milky2018/wasmoon/cmd/wasmoon-tools/wasmoon-tools.exe wasmoon-tools.exe
+      - name: install independently packaged modules on Windows
+        run: |
+          python scripts/test_packaged_install.py
+
       - name: test Windows HTTP services, middleware and clients on both engines
         if: ${{ !cancelled() && steps.windows_build.outcome == 'success' }}
         run: python scripts/test_wasi_http.py --wasmoon ./wasmoon.exe
@@ -324,10 +341,6 @@ jobs:
           repository: WebAssembly/wasi-testsuite
           ref: 609c446139956ff30239f87cb18af1dc6128bed2
           path: target/wasi03-upstream
-      - uses: actions/setup-python@v5
-        if: ${{ !cancelled() && steps.windows_build.outcome == 'success' }}
-        with:
-          python-version: '3.12'
       - name: install upstream WASI runner dependencies
         if: ${{ !cancelled() && steps.windows_build.outcome == 'success' }}
         run: python -m pip install -r target/wasi03-upstream/test-runner/requirements.txt
@@ -467,11 +480,10 @@ jobs:
           curl -fsSL https://cli.moonbitlang.com/install/unix.sh \
             | bash -s "$MOONBIT_TOOLCHAIN_VERSION"
           echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
-      - name: instrument generated MoonBit code and prove detection
-        # Package link flags instrument generated MoonBit C. Native stubs,
-        # MoonBit runtime objects and dynamically emitted JIT code are excluded.
-        # The runner also expects an actual ASan report from a deliberate unsafe
-        # MoonBit access; compiler flags or symbols alone are not proof.
+      - name: instrument MoonBit and native stubs and prove detection
+        # Supported package flags instrument generated C and handwritten stubs.
+        # Separate failing processes prove detection in both kinds of source.
+        # Prebuilt runtime objects and dynamically emitted JIT code are excluded.
         run: |
           moon update
           python3 scripts/run_sanitizers.py
@@ -482,6 +494,7 @@ jobs:
           path: |
             target/sanitizers/tests.log
             target/sanitizers/probe.log
+            target/sanitizers/native-probe.log
             target/sanitizers/symbols.log
             target/sanitizers/summary.json
             target/sanitizers/isolated

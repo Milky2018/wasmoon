@@ -12,6 +12,8 @@ pub fn exec_code_pointer(ExecCodeHandle) -> Int64
 
 pub fn finalize_exec_managed(ExecCodeHandle, FixedArray[Byte], Int) -> Int
 
+pub fn is_windows() -> Bool
+
 pub fn release_exec_managed(ExecCodeHandle) -> Int
 
 pub fn stage_exec_managed(Int) -> ExecCodeHandle

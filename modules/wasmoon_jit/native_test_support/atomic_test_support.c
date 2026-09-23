@@ -160,7 +160,7 @@ static WORKER_RESULT run_memory_growth(void *argument) {
     for (int32_t i = 0; i <= worker->iterations; i++) {
         if (atomic_load_explicit(&worker->cancelled, memory_order_seq_cst)) return WORKER_DONE;
         if (i == worker->iterations && !growth_wait(worker, 24)) return WORKER_DONE;
-        int32_t old = memory_grow_desc_internal(worker->memory, 1, -1);
+        int64_t old = memory_grow_desc_internal(worker->memory, 1, -1);
         if (old < 0 || worker->memory->base != original_base) {
             worker->sum = -1;
             atomic_store_explicit((_Atomic uint32_t *)(worker->memory->base + 28), 1, memory_order_seq_cst);

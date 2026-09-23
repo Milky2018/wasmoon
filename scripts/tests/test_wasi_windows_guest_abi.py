@@ -14,13 +14,17 @@ FFI = ROOT / 'modules/wasmoon_jit/jit_ffi'
 class WindowsGuestAbiTests(unittest.TestCase):
     def test_all_guest_helpers_preserve_argument_positions(self):
         signatures = {}
+        targets = set()
         directories = [FFI, FFI.parent / 'native_test_support']
         for path in [p for directory in directories for p in directory.glob('*.c')]:
+            targets.update(re.findall(r'WASMOON_GUEST_ADDRESS\((\w+)\)', path.read_text()))
             for match in re.finditer(r'\bWASMOON_GUEST_ABI\s+(\w+)\s*\(([^)]*)\)\s*\{', path.read_text()):
                 signatures[match[1]] = len(match[2].split(','))
         names = [name for directory in directories for name in re.findall(
             r'PUBLIC (\w+)_msvc_guest', (directory / 'msvc_guest_bridges.asm').read_text())]
-        self.assertGreater(len(names), 100)
+        self.assertTrue(targets)
+        self.assertEqual(set(names), targets)
+        self.assertEqual(len(names), len(targets))
         c = ['#include <stdint.h>', '#include <stdio.h>']
         asm = ['option casemap:none', '.code']
         checks = []

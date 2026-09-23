@@ -1,13 +1,12 @@
-#ifndef WASMOON_WASI_PATH_PORTABILITY_H
-#define WASMOON_WASI_PATH_PORTABILITY_H
-
+#ifndef WASMOON_HOST_PATH_INLINE_H
+#define WASMOON_HOST_PATH_INLINE_H
 #ifndef _WIN32
 #include <errno.h>
 #include <fcntl.h>
 #include <string.h>
 #include <sys/stat.h>
 #include <unistd.h>
-
+// These stateless helpers must not depend on static archive link order.
 // Preserve Preview 1 path semantics across POSIX kernels in both engines.
 static inline int wasmoon_wasi_symlinkat_portable(
     const char *target, int dirfd, const char *linkpath) {

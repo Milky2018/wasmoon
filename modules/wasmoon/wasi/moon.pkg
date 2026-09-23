@@ -1,4 +1,5 @@
 import {
+  "Milky2018/wasmoon_jit/host_io/wasi" @native_io,
   "Milky2018/wasmoon_jit/host_io",
   "Milky2018/wasm_core/types",
   "Milky2018/wasmoon/runtime",
@@ -17,13 +18,5 @@ import {
 } for "wbtest"
 
 options(
-  "native-stub": [
-    "ffi_native.c",
-    "file_semantics_native.c",
-    "socket_semantics_native.c",
-    "process_native.c",
-    "poll_native.c",
-    "directory_native.c",
-  ],
   targets: { "ffi_native.mbt": [ "native" ] },
 )

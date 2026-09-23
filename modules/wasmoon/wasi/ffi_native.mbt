@@ -1,134 +1,87 @@
 ///|
-/// Native FFI for file operations
-/// These functions call C functions defined in ffi_native.c
-/// which provides cross-platform support for Windows and Unix
+using @native_io {
+  c_open,
+  c_open_parent_beneath,
+  c_openat_beneath,
+  c_dup,
+  c_close,
+  c_read,
+  c_write,
+  c_pread,
+  c_pwrite,
+  c_lseek,
+  c_get_error_message,
+  c_get_errno,
+  c_set_errno_invalid_argument,
+  c_set_errno_illegal_byte_sequence,
+  c_isatty,
+  c_path_within_base,
+  c_errno_to_wasi,
+  c_o_rdonly,
+  c_o_wronly,
+  c_o_rdwr,
+  c_o_creat,
+  c_o_trunc,
+  c_o_append,
+  c_o_excl,
+  c_o_nonblock,
+  c_o_directory,
+  c_o_nofollow,
+  c_mkdir,
+  c_mkdirat,
+  c_readdir,
+  c_readdir_fd,
+  c_print_string,
+  c_putchar,
+  c_fsync,
+  c_fdatasync,
+  c_unlinkat,
+  c_renameat,
+  c_fstat,
+  c_fstatat,
+  c_ftruncate,
+  c_futimens,
+  c_utimensat,
+  c_fcntl_setfl,
+  c_fcntl_getfl,
+  c_dup2,
+  c_symlinkat,
+  c_readlinkat,
+  c_linkat,
+  c_nanosleep,
+  c_clock_gettime_monotonic,
+  c_clock_gettime_realtime,
+  c_clock_getres_monotonic,
+  c_clock_getres_realtime,
+  c_poll,
+  c_socket_bytes_available,
+  c_socket_create,
+  c_socket_bind,
+  c_socket_connect,
+  c_socket_disconnect,
+  c_socket_recv_from,
+  c_socket_send_to,
+  c_socket_listen,
+  c_socket_error,
+  c_socket_address_get,
+  c_socket_option_get,
+  c_socket_option_set,
+  c_resolver_start,
+  c_resolver_next,
+  c_resolver_drop,
+  c_recv,
+  c_send,
+  c_shutdown,
+  c_accept,
+  c_raise,
+  c_getrandom,
+  c_fstat_beneath,
+  c_utimens_beneath,
+}
 
 ///|
-/// Open a file
-/// Returns file descriptor or -1 on error
-#borrow(path)
-extern "c" fn c_open(path : FixedArray[Byte], flags : Int, mode : Int) -> Int = "wasmoon_wasi_open"
-
-///|
-#borrow(parent_path)
-extern "c" fn c_open_parent_beneath(
-  root_fd : Int,
-  parent_path : FixedArray[Byte],
-) -> Int = "wasmoon_wasi_open_parent_beneath"
-
-///|
-#borrow(parent_path, leaf)
-extern "c" fn c_openat_beneath(
-  root_fd : Int,
-  parent_path : FixedArray[Byte],
-  leaf : FixedArray[Byte],
-  flags : Int,
-  mode : Int,
-  follow_final : Int,
-) -> Int = "wasmoon_wasi_openat_beneath"
-
-///|
-extern "c" fn c_dup(fd : Int) -> Int = "wasmoon_wasi_dup"
-
-///|
-/// Close a file descriptor
-extern "c" fn c_close(fd : Int) -> Int = "wasmoon_wasi_close"
-
-///|
-/// Read from a file descriptor
-/// Returns number of bytes read, 0 for EOF, or -1 on error
-#borrow(buf)
-extern "c" fn c_read(fd : Int, buf : FixedArray[Byte], count : Int) -> Int = "wasmoon_wasi_read"
-
-///|
-/// Write to a file descriptor
-/// Returns number of bytes written or -1 on error
-#borrow(buf)
-extern "c" fn c_write(fd : Int, buf : FixedArray[Byte], count : Int) -> Int = "wasmoon_wasi_write"
-
-///|
-#borrow(buf)
-extern "c" fn c_pread(
-  fd : Int,
-  buf : FixedArray[Byte],
-  count : Int,
-  offset : Int64,
-) -> Int = "wasmoon_wasi_pread"
-
-///|
-#borrow(buf)
-extern "c" fn c_pwrite(
-  fd : Int,
-  buf : FixedArray[Byte],
-  count : Int,
-  offset : Int64,
-) -> Int = "wasmoon_wasi_pwrite"
-
-///|
-/// Seek in a file
-/// Returns new offset or -1 on error
-extern "c" fn c_lseek(fd : Int, offset : Int64, whence : Int) -> Int64 = "wasmoon_wasi_lseek"
-
-///|
-/// Get error message for last error
-extern "c" fn c_get_error_message() -> Bytes = "wasmoon_wasi_get_error_message"
-
-///|
-/// Get errno value
-extern "c" fn c_get_errno() -> Int = "wasmoon_wasi_get_errno"
-
-///|
-extern "c" fn c_set_errno_invalid_argument() -> Unit = "wasmoon_wasi_set_errno_invalid_argument"
-
-///|
-extern "c" fn c_set_errno_illegal_byte_sequence() -> Unit = "wasmoon_wasi_set_errno_illegal_byte_sequence"
-
-///|
-/// Check whether file descriptor is a TTY
-extern "c" fn c_isatty(fd : Int) -> Int = "wasmoon_wasi_isatty"
-
-///|
-/// Check whether target path remains within base after canonicalization
-#borrow(base_path, target_path)
-extern "c" fn c_path_within_base(
-  base_path : FixedArray[Byte],
-  target_path : FixedArray[Byte],
-) -> Int = "wasmoon_wasi_path_within_base"
-
-///|
-/// Convert native errno to WASI errno
-extern "c" fn c_errno_to_wasi(err : Int) -> Int = "wasmoon_wasi_errno_to_wasi"
-
-///|
-/// Platform-specific open flags (retrieved from C at runtime)
-extern "c" fn c_o_rdonly() -> Int = "wasmoon_wasi_o_rdonly"
-
-///|
-extern "c" fn c_o_wronly() -> Int = "wasmoon_wasi_o_wronly"
-
-///|
-extern "c" fn c_o_rdwr() -> Int = "wasmoon_wasi_o_rdwr"
-
-///|
-extern "c" fn c_o_creat() -> Int = "wasmoon_wasi_o_creat"
-
-///|
-extern "c" fn c_o_trunc() -> Int = "wasmoon_wasi_o_trunc"
-
-///|
-extern "c" fn c_o_append() -> Int = "wasmoon_wasi_o_append"
-
-///|
-extern "c" fn c_o_excl() -> Int = "wasmoon_wasi_o_excl"
-
-///|
-extern "c" fn c_o_nonblock() -> Int = "wasmoon_wasi_o_nonblock"
-
-///|
-extern "c" fn c_o_directory() -> Int = "wasmoon_wasi_o_directory"
-
-///|
-extern "c" fn c_o_nofollow() -> Int = "wasmoon_wasi_o_nofollow"
+/// WASI adapters over the shared native host backend.
+/// Guest memory and string conversion remain in this package.
 
 ///|
 /// File open flags
@@ -412,29 +365,6 @@ pub fn native_path_within_base(
 
 ///|
 /// Create a directory
-/// Returns 0 on success, -1 on error
-#borrow(path)
-extern "c" fn c_mkdir(path : FixedArray[Byte], mode : Int) -> Int = "wasmoon_wasi_mkdir"
-
-///|
-#borrow(path)
-extern "c" fn c_mkdirat(
-  dirfd : Int,
-  path : FixedArray[Byte],
-  mode : Int,
-) -> Int = "wasmoon_wasi_mkdirat"
-
-///|
-/// Read directory entries
-/// Returns serialized entries or null on error
-#borrow(path)
-extern "c" fn c_readdir(path : FixedArray[Byte]) -> Bytes? = "wasmoon_wasi_readdir"
-
-///|
-extern "c" fn c_readdir_fd(fd : Int) -> Bytes? = "wasmoon_wasi_readdir_fd"
-
-///|
-/// Create a directory
 /// Returns true on success
 pub fn native_mkdir(path : String, mode : Int) -> Bool {
   guard string_to_cstring(path) is Some(path_bytes) else { return false }
@@ -537,15 +467,6 @@ fn utf8_bytes_to_string(bytes : Bytes) -> String {
 }
 
 ///|
-/// Print string to stdout without newline
-#borrow(str)
-extern "c" fn c_print_string(str : FixedArray[Byte], len : Int) -> Unit = "wasmoon_print_string"
-
-///|
-/// Print a single character to stdout
-extern "c" fn c_putchar(c : Int) -> Unit = "wasmoon_putchar"
-
-///|
 /// Print a single character to stdout (public wrapper)
 pub fn putchar(c : Int) -> Unit {
   c_putchar(c)
@@ -589,33 +510,6 @@ pub fn native_read_to_memory(
 // ============================================================================
 // Phase 1: Core file operations
 // ============================================================================
-
-///|
-/// Sync file to disk
-extern "c" fn c_fsync(fd : Int) -> Int = "wasmoon_wasi_fsync"
-
-///|
-/// Sync file data (not metadata) to disk
-extern "c" fn c_fdatasync(fd : Int) -> Int = "wasmoon_wasi_fdatasync"
-
-///|
-/// Unlink file or directory
-#borrow(path)
-extern "c" fn c_unlinkat(
-  dirfd : Int,
-  path : FixedArray[Byte],
-  flags : Int,
-) -> Int = "wasmoon_wasi_unlinkat"
-
-///|
-/// Rename file or directory
-#borrow(old_path, new_path)
-extern "c" fn c_renameat(
-  old_dirfd : Int,
-  old_path : FixedArray[Byte],
-  new_dirfd : Int,
-  new_path : FixedArray[Byte],
-) -> Int = "wasmoon_wasi_renameat"
 
 ///|
 /// Sync file to disk (returns 0 on success, -1 on error)
@@ -673,63 +567,6 @@ pub(all) struct FileStat {
   mtim : UInt64
   ctim : UInt64
 }
-
-///|
-/// Get file stat via fd
-#borrow(dev, ino, filetype, nlink, size, atim, mtim, ctim)
-extern "c" fn c_fstat(
-  fd : Int,
-  dev : FixedArray[UInt64],
-  ino : FixedArray[UInt64],
-  filetype : FixedArray[Byte],
-  nlink : FixedArray[UInt64],
-  size : FixedArray[UInt64],
-  atim : FixedArray[UInt64],
-  mtim : FixedArray[UInt64],
-  ctim : FixedArray[UInt64],
-) -> Int = "wasmoon_wasi_fstat"
-
-///|
-/// Get file stat via path
-#borrow(path, dev, ino, filetype, nlink, size, atim, mtim, ctim)
-extern "c" fn c_fstatat(
-  dirfd : Int,
-  path : FixedArray[Byte],
-  flags : Int,
-  dev : FixedArray[UInt64],
-  ino : FixedArray[UInt64],
-  filetype : FixedArray[Byte],
-  nlink : FixedArray[UInt64],
-  size : FixedArray[UInt64],
-  atim : FixedArray[UInt64],
-  mtim : FixedArray[UInt64],
-  ctim : FixedArray[UInt64],
-) -> Int = "wasmoon_wasi_fstatat"
-
-///|
-/// Truncate file
-extern "c" fn c_ftruncate(fd : Int, size : Int64) -> Int = "wasmoon_wasi_ftruncate"
-
-///|
-/// Set file times via fd
-extern "c" fn c_futimens(
-  fd : Int,
-  atim : Int64,
-  mtim : Int64,
-  fst_flags : Int,
-) -> Int = "wasmoon_wasi_futimens"
-
-///|
-/// Set file times via path
-#borrow(path)
-extern "c" fn c_utimensat(
-  dirfd : Int,
-  path : FixedArray[Byte],
-  atim : Int64,
-  mtim : Int64,
-  fst_flags : Int,
-  lookup_flags : Int,
-) -> Int = "wasmoon_wasi_utimensat"
 
 ///|
 /// Get file stat via fd
@@ -830,18 +667,6 @@ pub fn native_utimensat(
 
 ///|
 /// Set fd flags
-extern "c" fn c_fcntl_setfl(fd : Int, flags : Int) -> Int = "wasmoon_wasi_fcntl_setfl"
-
-///|
-/// Get fd flags
-extern "c" fn c_fcntl_getfl(fd : Int) -> Int = "wasmoon_wasi_fcntl_getfl"
-
-///|
-/// Duplicate fd
-extern "c" fn c_dup2(oldfd : Int, newfd : Int) -> Int = "wasmoon_wasi_dup2"
-
-///|
-/// Set fd flags
 pub fn native_fcntl_setfl(fd : Int, flags : Int) -> Bool {
   c_fcntl_setfl(fd, flags) >= 0
 }
@@ -866,36 +691,6 @@ pub fn native_dup2(oldfd : Int, newfd : Int) -> Bool {
 // ============================================================================
 // Phase 4: Symlink operations
 // ============================================================================
-
-///|
-/// Create symbolic link
-#borrow(target, linkpath)
-extern "c" fn c_symlinkat(
-  target : FixedArray[Byte],
-  dirfd : Int,
-  linkpath : FixedArray[Byte],
-) -> Int = "wasmoon_wasi_symlinkat"
-
-///|
-/// Read symbolic link
-#borrow(path, buf)
-extern "c" fn c_readlinkat(
-  dirfd : Int,
-  path : FixedArray[Byte],
-  buf : FixedArray[Byte],
-  bufsize : Int64,
-) -> Int64 = "wasmoon_wasi_readlinkat"
-
-///|
-/// Create hard link
-#borrow(oldpath, newpath)
-extern "c" fn c_linkat(
-  olddirfd : Int,
-  oldpath : FixedArray[Byte],
-  newdirfd : Int,
-  newpath : FixedArray[Byte],
-  flags : Int,
-) -> Int = "wasmoon_wasi_linkat"
 
 ///|
 /// Create symbolic link
@@ -954,170 +749,6 @@ pub fn native_linkat(
 // ============================================================================
 // Phase 5: Poll and socket operations
 // ============================================================================
-
-///|
-/// Nanosleep
-extern "c" fn c_nanosleep(ns : Int64) -> Int = "wasmoon_wasi_nanosleep"
-
-///|
-/// Get monotonic time in nanoseconds
-extern "c" fn c_clock_gettime_monotonic() -> Int64 = "wasmoon_wasi_clock_gettime_monotonic"
-
-///|
-/// Get realtime in nanoseconds
-extern "c" fn c_clock_gettime_realtime() -> Int64 = "wasmoon_wasi_clock_gettime_realtime"
-
-///|
-/// Get monotonic clock resolution in nanoseconds
-extern "c" fn c_clock_getres_monotonic() -> Int64 = "wasmoon_wasi_clock_getres_monotonic"
-
-///|
-/// Get realtime clock resolution in nanoseconds
-extern "c" fn c_clock_getres_realtime() -> Int64 = "wasmoon_wasi_clock_getres_realtime"
-
-///|
-/// Poll on file descriptors
-#borrow(fds, events, revents)
-extern "c" fn c_poll(
-  fds : FixedArray[Int],
-  events : FixedArray[Int],
-  revents : FixedArray[Int],
-  nfds : Int,
-  timeout_ms : Int,
-) -> Int = "wasmoon_wasi_poll"
-
-///|
-extern "c" fn c_socket_bytes_available(fd : Int) -> Int64 = "wasmoon_wasi_socket_bytes_available"
-
-///|
-extern "c" fn c_socket_create(family : Int, kind : Int) -> Int = "wasmoon_wasi_socket_create"
-
-///|
-#borrow(address)
-extern "c" fn c_socket_bind(
-  fd : Int,
-  family : Int,
-  address : FixedArray[Byte],
-  port : Int,
-  scope_id : Int,
-) -> Int = "wasmoon_wasi_socket_bind"
-
-///|
-#borrow(address)
-extern "c" fn c_socket_connect(
-  fd : Int,
-  family : Int,
-  address : FixedArray[Byte],
-  port : Int,
-  scope_id : Int,
-) -> Int = "wasmoon_wasi_socket_connect"
-
-///|
-extern "c" fn c_socket_disconnect(fd : Int) -> Int = "wasmoon_wasi_socket_disconnect"
-
-///|
-#borrow(data, family, address, port, scope_id)
-extern "c" fn c_socket_recv_from(
-  fd : Int,
-  data : FixedArray[Byte],
-  length : Int,
-  family : FixedArray[Byte],
-  address : FixedArray[Byte],
-  port : FixedArray[UInt16],
-  scope_id : FixedArray[UInt],
-) -> Int64 = "wasmoon_wasi_socket_recv_from"
-
-///|
-#borrow(data, address)
-extern "c" fn c_socket_send_to(
-  fd : Int,
-  data : FixedArray[Byte],
-  length : Int,
-  has_address : Int,
-  family : Int,
-  address : FixedArray[Byte],
-  port : Int,
-  scope_id : Int,
-) -> Int64 = "wasmoon_wasi_socket_send_to"
-
-///|
-extern "c" fn c_socket_listen(fd : Int, backlog : Int) -> Int = "wasmoon_wasi_socket_listen"
-
-///|
-extern "c" fn c_socket_error(fd : Int) -> Int = "wasmoon_wasi_socket_error"
-
-///|
-#borrow(family, address, port, scope_id)
-extern "c" fn c_socket_address_get(
-  fd : Int,
-  peer : Int,
-  family : FixedArray[Byte],
-  address : FixedArray[Byte],
-  port : FixedArray[UInt16],
-  scope_id : FixedArray[UInt],
-) -> Int = "wasmoon_wasi_socket_address_get"
-
-///|
-extern "c" fn c_socket_option_get(fd : Int, family : Int, option : Int) -> Int = "wasmoon_wasi_socket_option_get"
-
-///|
-extern "c" fn c_socket_option_set(
-  fd : Int,
-  family : Int,
-  option : Int,
-  value : Int,
-) -> Int = "wasmoon_wasi_socket_option_set"
-
-///|
-#borrow(name, poll_fd)
-extern "c" fn c_resolver_start(
-  name : FixedArray[Byte],
-  poll_fd : FixedArray[Int],
-) -> Int64 = "wasmoon_wasi_resolver_start"
-
-///|
-#borrow(family, address, scope_id)
-extern "c" fn c_resolver_next(
-  resolver : Int64,
-  family : FixedArray[Byte],
-  address : FixedArray[Byte],
-  scope_id : FixedArray[UInt],
-) -> Int = "wasmoon_wasi_resolver_next"
-
-///|
-extern "c" fn c_resolver_drop(resolver : Int64) = "wasmoon_wasi_resolver_drop"
-
-///|
-/// Socket recv
-#borrow(buf)
-extern "c" fn c_recv(
-  sockfd : Int,
-  buf : FixedArray[Byte],
-  len : Int64,
-  flags : Int,
-) -> Int64 = "wasmoon_wasi_recv"
-
-///|
-/// Socket send
-#borrow(buf)
-extern "c" fn c_send(
-  sockfd : Int,
-  buf : FixedArray[Byte],
-  len : Int64,
-  flags : Int,
-) -> Int64 = "wasmoon_wasi_send"
-
-///|
-/// Socket shutdown
-extern "c" fn c_shutdown(sockfd : Int, how : Int) -> Int = "wasmoon_wasi_shutdown"
-
-///|
-/// Socket accept
-extern "c" fn c_accept(sockfd : Int) -> Int = "wasmoon_wasi_accept"
-
-///|
-/// Raise signal
-extern "c" fn c_raise(sig : Int) -> Int = "wasmoon_wasi_raise"
 
 ///|
 /// Nanosleep
@@ -1485,31 +1116,10 @@ pub fn native_raise(sig : Int) -> Bool {
 
 ///|
 /// Get random bytes from system
-#borrow(buf)
-extern "c" fn c_getrandom(buf : FixedArray[Byte], len : Int) -> Int = "wasmoon_wasi_getrandom"
-
-///|
-/// Get random bytes from system
 /// Returns true on success
 pub fn native_getrandom(buf : FixedArray[Byte], len : Int) -> Bool {
   c_getrandom(buf, len) == 0
 }
-
-///|
-#borrow(path, dev, ino, filetype, nlink, size, atim, mtim, ctim)
-extern "c" fn c_fstat_beneath(
-  dirfd : Int,
-  path : FixedArray[Byte],
-  flags : Int,
-  dev : FixedArray[UInt64],
-  ino : FixedArray[UInt64],
-  filetype : FixedArray[Byte],
-  nlink : FixedArray[UInt64],
-  size : FixedArray[UInt64],
-  atim : FixedArray[UInt64],
-  mtim : FixedArray[UInt64],
-  ctim : FixedArray[UInt64],
-) -> Int = "wasmoon_wasi_fstat_beneath"
 
 ///|
 pub fn native_fstat_beneath(
@@ -1544,17 +1154,6 @@ pub fn native_fstat_beneath(
     None
   }
 }
-
-///|
-#borrow(path)
-extern "c" fn c_utimens_beneath(
-  root : Int,
-  path : FixedArray[Byte],
-  follow : Int,
-  atim : Int64,
-  mtim : Int64,
-  flags : Int,
-) -> Int = "wasmoon_wasi_utimens_beneath"
 
 ///|
 pub fn native_utimens_beneath(

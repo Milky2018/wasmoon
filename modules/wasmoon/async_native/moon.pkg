@@ -1,9 +1,3 @@
 import {
-  "Milky2018/wasmoon_jit/host_io",
+  "Milky2018/wasmoon_jit/host_io/reactor",
 }
-
-options(
-  "native-stub": [ "reactor.c", "reactor_windows.c" ],
-  targets: { "reactor.mbt": [ "native" ] },
-  warn_list: "+73",
-)

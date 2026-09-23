@@ -6,7 +6,7 @@
 #include <string.h>
 #include "moonbit.h"
 #ifdef _WIN32
-#include "../../wasmoon_jit/host_io/windows_fs.h"
+#include "../windows_fs.h"
 #else
 #include <dirent.h>
 #include <fcntl.h>

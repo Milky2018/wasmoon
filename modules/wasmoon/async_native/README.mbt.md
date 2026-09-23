@@ -1,5 +1,8 @@
 # Native async reactor
 
+This package reexports `Milky2018/wasmoon_jit/host_io/reactor`. Native sources
+and their private platform headers ship together in the `wasmoon_jit` module.
+
 `Milky2018/wasmoon/async_native` adapts operating-system readiness to opaque
 one-shot registrations. It uses kqueue on macOS and epoll, timerfd, and eventfd
 on Linux. On Windows, an event handle supplies wakeups, performance-counter

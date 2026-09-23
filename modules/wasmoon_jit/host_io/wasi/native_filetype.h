@@ -7,7 +7,7 @@
 // WASI Preview 1 filetype; 8 extends the internal protocol for FIFO, which is
 // represented explicitly by the Component Model.
 #ifdef _WIN32
-static uint8_t wasmoon_wasi_filetype_from_mode(unsigned short mode) {
+static inline uint8_t wasmoon_wasi_filetype_from_mode(unsigned short mode) {
   switch (mode & _S_IFMT) {
     case _S_IFDIR: return 3;
     case _S_IFREG: return 4;
@@ -17,7 +17,7 @@ static uint8_t wasmoon_wasi_filetype_from_mode(unsigned short mode) {
   }
 }
 #else
-static uint8_t wasmoon_wasi_filetype_from_mode(mode_t mode) {
+static inline uint8_t wasmoon_wasi_filetype_from_mode(mode_t mode) {
   if (S_ISDIR(mode)) return 3;
   if (S_ISREG(mode)) return 4;
   if (S_ISLNK(mode)) return 7;

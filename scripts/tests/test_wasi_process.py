@@ -19,7 +19,7 @@ class ProcessTests(unittest.TestCase):
         root = Path(cls.build.name)
         export = '__declspec(dllexport)' if os.name == 'nt' else ''
         (root / 'moonbit.h').write_text(f'#define MOONBIT_FFI_EXPORT {export}\n')
-        source = ROOT / 'modules/wasmoon/wasi/process_native.c'
+        source = ROOT / 'modules/wasmoon_jit/host_io/wasi/process_native.c'
         cls.library = root / ('process.dll' if os.name == 'nt' else 'process.so')
         if os.name == 'nt':
             backend = ROOT / 'modules/wasmoon_jit/host_io'

@@ -20,7 +20,7 @@ class AllocationTests(unittest.TestCase):
         root = Path(cls.build.name)
         export = '__declspec(dllexport)' if os.name == 'nt' else ''
         (root / 'moonbit.h').write_text(f'#define MOONBIT_FFI_EXPORT {export}\n')
-        source = ROOT / 'modules/wasmoon/wasi/file_semantics_native.c'
+        source = ROOT / 'modules/wasmoon_jit/host_io/wasi/file_semantics_native.c'
         library = root / ('allocate.dll' if os.name == 'nt' else 'allocate.so')
         if os.name == 'nt':
             backend = ROOT / 'modules/wasmoon_jit/host_io'

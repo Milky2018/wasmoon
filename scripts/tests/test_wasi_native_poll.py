@@ -23,7 +23,7 @@ class NativePollTests(unittest.TestCase):
         (directory / "moonbit.h").write_text("#define MOONBIT_FFI_EXPORT\n")
         library = directory / "poll.so"
         subprocess.run(["cc", "-shared", "-fPIC", "-Wall", "-Wextra", "-Werror",
-                        "-I", str(directory), str(ROOT / "modules/wasmoon/wasi/poll_native.c"),
+                        "-I", str(directory), str(ROOT / "modules/wasmoon_jit/host_io/wasi/poll_native.c"),
                         "-o", str(library)], check=True)
         cls.library = ctypes.CDLL(str(library), use_errno=True)
         cls.poll = cls.library.wasmoon_wasi_poll

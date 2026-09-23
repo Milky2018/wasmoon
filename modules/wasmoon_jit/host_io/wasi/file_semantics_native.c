@@ -7,8 +7,8 @@
 #include <sys/stat.h>
 #include "moonbit.h"
 #ifdef _WIN32
-#include "../../wasmoon_jit/host_io/windows_io.h"
-#include "../../wasmoon_jit/host_io/windows_fs.h"
+#include "../windows_io.h"
+#include "../windows_fs.h"
 #else
 #include <unistd.h>
 #endif
@@ -17,7 +17,9 @@
 MOONBIT_FFI_EXPORT int wasmoon_wasi_allocate(int fd, int64_t offset, int64_t length) {
   if (offset < 0 || length < 0 || offset > INT64_MAX - length) return EOVERFLOW;
   if (length == 0) return EINVAL;
+#if defined(_WIN32) || defined(__APPLE__)
   int64_t end = offset + length;
+#endif
 #ifdef _WIN32
   int flags = wasmoon_windows_getfl(fd);
   if (flags < 0) return errno;

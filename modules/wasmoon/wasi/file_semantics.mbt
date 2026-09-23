@@ -1,5 +1,5 @@
 ///|
-extern "c" fn c_allocate(fd : Int, offset : Int64, length : Int64) -> Int = "wasmoon_wasi_allocate"
+using @native_io {c_allocate}
 
 ///|
 // Synchronization belongs to the descriptor contract rather than F_SETFL:

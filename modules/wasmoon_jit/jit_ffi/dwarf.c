@@ -194,12 +194,14 @@ static void buffer_write_bytes(buffer_t *buf, const void *data, size_t len) {
     buf->size += len;
 }
 
+#ifdef __APPLE__
 static void buffer_align(buffer_t *buf, size_t alignment) {
     size_t padding = (alignment - (buf->size % alignment)) % alignment;
     buffer_ensure(buf, padding);
     memset(buf->data + buf->size, 0, padding);
     buf->size += padding;
 }
+#endif
 
 static void buffer_free(buffer_t *buf) {
     free(buf->data);

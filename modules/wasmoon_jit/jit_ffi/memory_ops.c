@@ -103,24 +103,6 @@ static int grow_guarded_memory(wasmoon_memory_t *memory, size_t old_size, size_t
     return 0;
 }
 
-// Free guarded memory
-static void free_guarded_memory(wasmoon_memory_t *memory) {
-    if (!memory || !memory->alloc_base || !memory->is_guarded) return;
-
-#ifdef _WIN32
-    VirtualFree(memory->alloc_base, 0, MEM_RELEASE);
-#else
-    munmap(memory->alloc_base, memory->alloc_size);
-#endif
-
-    memory->alloc_base = NULL;
-    memory->alloc_size = 0;
-    memory->guard_start = 0;
-    memory->base = NULL;
-    atomic_store_explicit(&memory->current_length, 0, memory_order_relaxed);
-    memory->is_guarded = 0;
-}
-
 // External version of alloc_guarded_memory (used by jit.c)
 uint8_t *alloc_guarded_memory_external(wasmoon_memory_t *memory, size_t initial_size, size_t max_size) {
     (void)max_size;
