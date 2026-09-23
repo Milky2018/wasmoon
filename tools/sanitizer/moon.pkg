@@ -12,16 +12,19 @@ import {
   "Milky2018/wasm_core/wat",
   "Milky2018/wasm_component/wit",
   "Milky2018/wasmoon/wit_binding",
-  "Milky2018/wasmoon_jit",
+  "Milky2018/wasmoon_jit/host_io/wasi" @native_host,
   "moonbitlang/async",
   "moonbitlang/core/env",
   "moonbitlang/x/fs",
 } for "test"
 
 options(
+  "native-stub": [ "native_probe.c" ],
   link: {
     "native": {
       "cc": "clang",
+      "stub-cc": "clang",
+      "stub-cc-flags": "-fsanitize=address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer",
       "cc-flags": "-fsanitize=address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer",
       "cc-link-flags": "-fsanitize=address,undefined",
     },

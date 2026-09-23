@@ -140,7 +140,9 @@ int copy_code_internal(int64_t dest, const uint8_t *src, int size) {
 
     // Find the code block containing this complete write range.
     size_t alloc_size = 0;
+#ifndef __APPLE__
     void *block_base = NULL;
+#endif
     for (int i = 0; i < num_code_blocks; i++) {
         uint8_t *base = (uint8_t *)code_blocks[i].code;
         uintptr_t base_address = (uintptr_t)base;
@@ -149,7 +151,9 @@ int copy_code_internal(int64_t dest, const uint8_t *src, int size) {
         if (address >= base_address && address <= end_address &&
             end_address - address >= (size_t)size) {
             alloc_size = code_blocks[i].size;
+#ifndef __APPLE__
             block_base = base;
+#endif
             break;
         }
     }

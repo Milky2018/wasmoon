@@ -30,6 +30,9 @@ def main():
     fixtures = ROOT / "modules" / "wasmoon" / "sanitizer_testsuite"
     for source in fixtures.glob("*_test.mbt"):
         shutil.copy2(source, PACKAGE / source.name)
+    bounds = ROOT / "modules/wasmoon_jit/host_io/wasi/bounds_test.mbt"
+    (PACKAGE / "native_bounds_test.mbt").write_text(
+        bounds.read_text().replace("@wasi.", "@native_host."))
     fixture_dir = PACKAGE / "testsuite" / "fixtures"
     fixture_dir.mkdir(parents=True)
     shutil.copy2(ROOT / "modules/wasmoon/testsuite/fixtures/wasi-command-async-stdin.component.wat",
@@ -42,7 +45,31 @@ def main():
                                 f'import {{\n  "Milky2018/wasmoon@{version}",', 1)
     (PACKAGE / "moon.mod").write_text(manifest)
     members = re.findall(r'"(\./modules/[^"]+)"', (ROOT / "moon.work").read_text())
-    workspace = [str((ROOT / path).resolve()) for path in members] + [str(PACKAGE)]
+    # Instrument native stubs through supported package configuration in an
+    # isolated source workspace; never intercept compiler commands.
+    sources = OUT / "sources"
+    if sources.exists():
+        shutil.rmtree(sources)
+    sources.mkdir()
+    workspace = []
+    for member in members:
+        original = ROOT / member
+        destination = sources / original.name
+        shutil.copytree(original, destination, ignore=shutil.ignore_patterns(
+            "_build", "target", ".mooncakes", ".git"))
+        for config in destination.rglob("moon.pkg"):
+            text = config.read_text()
+            if '"native-stub"' not in text:
+                continue
+            if "link:" in text:
+                raise RuntimeError(f"Merge existing native link options explicitly: {config}")
+            text = text.replace("options(", 'options(\n  link: { "native": { '
+                '"stub-cc": "clang", '
+                '"stub-cc-flags": "-fsanitize=address,undefined -fno-sanitize-recover=all '
+                '-fno-omit-frame-pointer" } },', 1)
+            config.write_text(text)
+        workspace.append(str(destination))
+    workspace.append(str(PACKAGE))
     (PACKAGE / "moon.work").write_text("members = " + json.dumps(workspace) + "\n")
     environment = os.environ.copy()
     environment["MOON_WORK"] = str(PACKAGE / "moon.work")
@@ -84,20 +111,34 @@ def main():
     for symbol in ["__asan_init", "__ubsan_handle"]:
         if symbol not in symbols:
             raise RuntimeError(f"Missing instrumentation: {symbol}")
+    # Exercise all native context allocation failure paths under the same tools.
+    allocation_probe = OUT / "context-allocation"
+    include = Path(os.environ.get("MOON_HOME", Path.home() / ".moon")) / "include"
+    run(["clang", "-fsanitize=address,undefined", "-fno-sanitize-recover=all",
+         "-fno-omit-frame-pointer", "-I", str(include),
+         "-I", str(sources / "wasmoon_jit/jit_ffi"),
+         str(ROOT / "scripts/tests/native/wasi_context_alloc.c"),
+         "-o", str(allocation_probe)], log=OUT / "allocation-build.log")
+    run([str(allocation_probe)], log=OUT / "allocation.log")
     environment["WASMOON_SANITIZER_PROBE"] = "asan"
     probe = run([str(binary), "instrumentation_test.mbt:0-1"],
                 log=OUT / "probe.log", env=environment, expected_failure=True)
     if "ERROR: AddressSanitizer:" not in probe:
         raise RuntimeError("Positive control failed without an ASan diagnostic")
+    environment["WASMOON_SANITIZER_PROBE"] = "native"
+    native_probe = run([str(binary), "instrumentation_test.mbt:0-1"],
+                       log=OUT / "native-probe.log", env=environment, expected_failure=True)
+    if "ERROR: AddressSanitizer:" not in native_probe:
+        raise RuntimeError("Native stub positive control failed without an ASan diagnostic")
     (OUT / "summary.json").write_text(json.dumps({
         "version": version, "source_revision": subprocess.check_output(
             ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
         "source_dirty": bool(subprocess.check_output(
             ["git", "status", "--porcelain"], cwd=ROOT, text=True).strip()),
         "binary_sha256": hashlib.sha256(binary.read_bytes()).hexdigest(),
-        "tests": "passed", "asan_probe": "detected",
+        "tests": "passed", "asan_probe": "detected", "native_asan_probe": "detected",
         "binary": str(binary), "instrumentation": ["address", "undefined"], "allocator": "system",
-        "exclusions": ["native stubs", "MoonBit runtime objects", "JIT machine code"],
+        "exclusions": ["MoonBit runtime objects", "JIT machine code"],
     }, indent=2) + "\n")
     print(f"Sanitizer tests and instrumentation proof passed: {OUT}")
 

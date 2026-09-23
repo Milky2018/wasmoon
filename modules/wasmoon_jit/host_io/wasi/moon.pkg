@@ -5,6 +5,8 @@ import {
 options(
   "native-stub": [
     "ffi_native.c",
+    "socket_native.c",
+    "resolver_native.c",
     "file_semantics_native.c",
     "socket_semantics_native.c",
     "process_native.c",

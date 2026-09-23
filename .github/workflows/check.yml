@@ -118,7 +118,9 @@ jobs:
         with:
           python-version: '3.12'
       - name: install independently packaged modules
-        run: python3 scripts/test_packaged_install.py
+        run: |
+          python3 scripts/check_native_c.py
+          python3 scripts/test_packaged_install.py
 
       - name: test HTTP services, middleware and clients on both engines
         run: python3 scripts/test_wasi_http.py --wasmoon ./wasmoon
@@ -320,7 +322,9 @@ jobs:
         with:
           python-version: '3.12'
       - name: install independently packaged modules on Windows
-        run: python scripts/test_packaged_install.py
+        run: |
+          python scripts/check_native_c.py
+          python scripts/test_packaged_install.py
 
       - name: test Windows HTTP services, middleware and clients on both engines
         if: ${{ !cancelled() && steps.windows_build.outcome == 'success' }}
@@ -472,11 +476,10 @@ jobs:
           curl -fsSL https://cli.moonbitlang.com/install/unix.sh \
             | bash -s "$MOONBIT_TOOLCHAIN_VERSION"
           echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
-      - name: instrument generated MoonBit code and prove detection
-        # Package link flags instrument generated MoonBit C. Native stubs,
-        # MoonBit runtime objects and dynamically emitted JIT code are excluded.
-        # The runner also expects an actual ASan report from a deliberate unsafe
-        # MoonBit access; compiler flags or symbols alone are not proof.
+      - name: instrument MoonBit and native stubs and prove detection
+        # Supported package flags instrument generated C and handwritten stubs.
+        # Separate failing processes prove detection in both kinds of source.
+        # Prebuilt runtime objects and dynamically emitted JIT code are excluded.
         run: |
           moon update
           python3 scripts/run_sanitizers.py
@@ -487,6 +490,7 @@ jobs:
           path: |
             target/sanitizers/tests.log
             target/sanitizers/probe.log
+            target/sanitizers/native-probe.log
             target/sanitizers/symbols.log
             target/sanitizers/summary.json
             target/sanitizers/isolated

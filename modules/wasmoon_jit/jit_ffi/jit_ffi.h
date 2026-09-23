@@ -269,7 +269,6 @@ typedef struct {
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_alloc_exec(int size);
 MOONBIT_FFI_EXPORT int wasmoon_jit_copy_code(int64_t dest, uint8_t *src, int size);
-static int wasmoon_jit_free_exec(int64_t ptr);
 MOONBIT_FFI_EXPORT void *wasmoon_jit_stage_exec_managed(int size);
 MOONBIT_FFI_EXPORT int wasmoon_jit_finalize_exec_managed(void *exec_code, uint8_t *code, int size);
 MOONBIT_FFI_EXPORT int wasmoon_jit_release_exec_managed(void *exec_code);

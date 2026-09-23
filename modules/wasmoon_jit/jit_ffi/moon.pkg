@@ -18,7 +18,7 @@ options(
     "gc_allocator.c",
     "gc_heap.c",
     "exception.c",
-    "wasi.c",
+    "wasi_context.c",
     "fiber.c",
     "guest_continuation.c",
     "trampoline_call_x86_64.S",

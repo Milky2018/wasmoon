@@ -37,17 +37,37 @@ pub extern "c" fn c_close(fd : Int) -> Int = "wasmoon_wasi_close"
 /// Read from a file descriptor
 /// Returns number of bytes read, 0 for EOF, or -1 on error
 #borrow(buf)
-pub extern "c" fn c_read(fd : Int, buf : FixedArray[Byte], count : Int) -> Int = "wasmoon_wasi_read"
+extern "c" fn raw_c_read(fd : Int, buf : FixedArray[Byte], count : Int) -> Int = "wasmoon_wasi_read"
+
+///|
+/// Reject invalid buffer extents before entering the native ABI.
+pub fn c_read(fd : Int, buf : FixedArray[Byte], count : Int) -> Int {
+  if count < 0 || count > buf.length() {
+    c_set_errno_invalid_argument()
+    return -1
+  }
+  raw_c_read(fd, buf, count)
+}
 
 ///|
 /// Write to a file descriptor
 /// Returns number of bytes written or -1 on error
 #borrow(buf)
-pub extern "c" fn c_write(fd : Int, buf : FixedArray[Byte], count : Int) -> Int = "wasmoon_wasi_write"
+extern "c" fn raw_c_write(fd : Int, buf : FixedArray[Byte], count : Int) -> Int = "wasmoon_wasi_write"
+
+///|
+/// Reject invalid buffer extents before entering the native ABI.
+pub fn c_write(fd : Int, buf : FixedArray[Byte], count : Int) -> Int {
+  if count < 0 || count > buf.length() {
+    c_set_errno_invalid_argument()
+    return -1
+  }
+  raw_c_write(fd, buf, count)
+}
 
 ///|
 #borrow(buf)
-pub extern "c" fn c_pread(
+extern "c" fn raw_c_pread(
   fd : Int,
   buf : FixedArray[Byte],
   count : Int,
@@ -55,13 +75,43 @@ pub extern "c" fn c_pread(
 ) -> Int = "wasmoon_wasi_pread"
 
 ///|
+/// Reject invalid buffer extents before entering the native ABI.
+pub fn c_pread(
+  fd : Int,
+  buf : FixedArray[Byte],
+  count : Int,
+  offset : Int64,
+) -> Int {
+  if count < 0 || count > buf.length() {
+    c_set_errno_invalid_argument()
+    return -1
+  }
+  raw_c_pread(fd, buf, count, offset)
+}
+
+///|
 #borrow(buf)
-pub extern "c" fn c_pwrite(
+extern "c" fn raw_c_pwrite(
   fd : Int,
   buf : FixedArray[Byte],
   count : Int,
   offset : Int64,
 ) -> Int = "wasmoon_wasi_pwrite"
+
+///|
+/// Reject invalid buffer extents before entering the native ABI.
+pub fn c_pwrite(
+  fd : Int,
+  buf : FixedArray[Byte],
+  count : Int,
+  offset : Int64,
+) -> Int {
+  if count < 0 || count > buf.length() {
+    c_set_errno_invalid_argument()
+    return -1
+  }
+  raw_c_pwrite(fd, buf, count, offset)
+}
 
 ///|
 /// Seek in a file
@@ -155,7 +205,17 @@ pub extern "c" fn c_readdir_fd(fd : Int) -> Bytes? = "wasmoon_wasi_readdir_fd"
 ///|
 /// Print string to stdout without newline
 #borrow(str)
-pub extern "c" fn c_print_string(str : FixedArray[Byte], len : Int) -> Unit = "wasmoon_print_string"
+extern "c" fn raw_c_print_string(str : FixedArray[Byte], len : Int) -> Unit = "wasmoon_print_string"
+
+///|
+/// Reject invalid buffer extents before entering the native ABI.
+pub fn c_print_string(str : FixedArray[Byte], len : Int) -> Unit {
+  if len < 0 || len > str.length() {
+    c_set_errno_invalid_argument()
+    return ()
+  }
+  raw_c_print_string(str, len)
+}
 
 ///|
 /// Print a single character to stdout
@@ -191,7 +251,7 @@ pub extern "c" fn c_renameat(
 ///|
 /// Get file stat via fd
 #borrow(dev, ino, filetype, nlink, size, atim, mtim, ctim)
-pub extern "c" fn c_fstat(
+extern "c" fn raw_c_fstat(
   fd : Int,
   dev : FixedArray[UInt64],
   ino : FixedArray[UInt64],
@@ -204,9 +264,36 @@ pub extern "c" fn c_fstat(
 ) -> Int = "wasmoon_wasi_fstat"
 
 ///|
+/// Reject invalid buffer extents before entering the native ABI.
+pub fn c_fstat(
+  fd : Int,
+  dev : FixedArray[UInt64],
+  ino : FixedArray[UInt64],
+  filetype : FixedArray[Byte],
+  nlink : FixedArray[UInt64],
+  size : FixedArray[UInt64],
+  atim : FixedArray[UInt64],
+  mtim : FixedArray[UInt64],
+  ctim : FixedArray[UInt64],
+) -> Int {
+  if dev.length() < 1 ||
+    ino.length() < 1 ||
+    filetype.length() < 1 ||
+    nlink.length() < 1 ||
+    size.length() < 1 ||
+    atim.length() < 1 ||
+    mtim.length() < 1 ||
+    ctim.length() < 1 {
+    c_set_errno_invalid_argument()
+    return -1
+  }
+  raw_c_fstat(fd, dev, ino, filetype, nlink, size, atim, mtim, ctim)
+}
+
+///|
 /// Get file stat via path
 #borrow(path, dev, ino, filetype, nlink, size, atim, mtim, ctim)
-pub extern "c" fn c_fstatat(
+extern "c" fn raw_c_fstatat(
   dirfd : Int,
   path : FixedArray[Byte],
   flags : Int,
@@ -219,6 +306,37 @@ pub extern "c" fn c_fstatat(
   mtim : FixedArray[UInt64],
   ctim : FixedArray[UInt64],
 ) -> Int = "wasmoon_wasi_fstatat"
+
+///|
+/// Reject invalid buffer extents before entering the native ABI.
+pub fn c_fstatat(
+  dirfd : Int,
+  path : FixedArray[Byte],
+  flags : Int,
+  dev : FixedArray[UInt64],
+  ino : FixedArray[UInt64],
+  filetype : FixedArray[Byte],
+  nlink : FixedArray[UInt64],
+  size : FixedArray[UInt64],
+  atim : FixedArray[UInt64],
+  mtim : FixedArray[UInt64],
+  ctim : FixedArray[UInt64],
+) -> Int {
+  if dev.length() < 1 ||
+    ino.length() < 1 ||
+    filetype.length() < 1 ||
+    nlink.length() < 1 ||
+    size.length() < 1 ||
+    atim.length() < 1 ||
+    mtim.length() < 1 ||
+    ctim.length() < 1 {
+    c_set_errno_invalid_argument()
+    return -1
+  }
+  raw_c_fstatat(
+    dirfd, path, flags, dev, ino, filetype, nlink, size, atim, mtim, ctim,
+  )
+}
 
 ///|
 /// Truncate file
@@ -269,12 +387,27 @@ pub extern "c" fn c_symlinkat(
 ///|
 /// Read symbolic link
 #borrow(path, buf)
-pub extern "c" fn c_readlinkat(
+extern "c" fn raw_c_readlinkat(
   dirfd : Int,
   path : FixedArray[Byte],
   buf : FixedArray[Byte],
   bufsize : Int64,
 ) -> Int64 = "wasmoon_wasi_readlinkat"
+
+///|
+/// Reject invalid buffer extents before entering the native ABI.
+pub fn c_readlinkat(
+  dirfd : Int,
+  path : FixedArray[Byte],
+  buf : FixedArray[Byte],
+  bufsize : Int64,
+) -> Int64 {
+  if bufsize < 0L || bufsize > buf.length().to_int64() {
+    c_set_errno_invalid_argument()
+    return -1L
+  }
+  raw_c_readlinkat(dirfd, path, buf, bufsize)
+}
 
 ///|
 /// Create hard link
@@ -310,13 +443,32 @@ pub extern "c" fn c_clock_getres_realtime() -> Int64 = "wasmoon_wasi_clock_getre
 ///|
 /// Poll on file descriptors
 #borrow(fds, events, revents)
-pub extern "c" fn c_poll(
+extern "c" fn raw_c_poll(
   fds : FixedArray[Int],
   events : FixedArray[Int],
   revents : FixedArray[Int],
   nfds : Int,
   timeout_ms : Int,
 ) -> Int = "wasmoon_wasi_poll"
+
+///|
+/// Reject invalid buffer extents before entering the native ABI.
+pub fn c_poll(
+  fds : FixedArray[Int],
+  events : FixedArray[Int],
+  revents : FixedArray[Int],
+  nfds : Int,
+  timeout_ms : Int,
+) -> Int {
+  if nfds < 0 ||
+    nfds > fds.length() ||
+    nfds > events.length() ||
+    nfds > revents.length() {
+    c_set_errno_invalid_argument()
+    return -1
+  }
+  raw_c_poll(fds, events, revents, nfds, timeout_ms)
+}
 
 ///|
 pub extern "c" fn c_socket_bytes_available(fd : Int) -> Int64 = "wasmoon_wasi_socket_bytes_available"
@@ -326,7 +478,7 @@ pub extern "c" fn c_socket_create(family : Int, kind : Int) -> Int = "wasmoon_wa
 
 ///|
 #borrow(address)
-pub extern "c" fn c_socket_bind(
+extern "c" fn raw_c_socket_bind(
   fd : Int,
   family : Int,
   address : FixedArray[Byte],
@@ -335,8 +487,24 @@ pub extern "c" fn c_socket_bind(
 ) -> Int = "wasmoon_wasi_socket_bind"
 
 ///|
+/// Reject invalid buffer extents before entering the native ABI.
+pub fn c_socket_bind(
+  fd : Int,
+  family : Int,
+  address : FixedArray[Byte],
+  port : Int,
+  scope_id : Int,
+) -> Int {
+  if address.length() < (if family == 4 { 4 } else { 16 }) {
+    c_set_errno_invalid_argument()
+    return -1
+  }
+  raw_c_socket_bind(fd, family, address, port, scope_id)
+}
+
+///|
 #borrow(address)
-pub extern "c" fn c_socket_connect(
+extern "c" fn raw_c_socket_connect(
   fd : Int,
   family : Int,
   address : FixedArray[Byte],
@@ -345,11 +513,27 @@ pub extern "c" fn c_socket_connect(
 ) -> Int = "wasmoon_wasi_socket_connect"
 
 ///|
+/// Reject invalid buffer extents before entering the native ABI.
+pub fn c_socket_connect(
+  fd : Int,
+  family : Int,
+  address : FixedArray[Byte],
+  port : Int,
+  scope_id : Int,
+) -> Int {
+  if address.length() < (if family == 4 { 4 } else { 16 }) {
+    c_set_errno_invalid_argument()
+    return -1
+  }
+  raw_c_socket_connect(fd, family, address, port, scope_id)
+}
+
+///|
 pub extern "c" fn c_socket_disconnect(fd : Int) -> Int = "wasmoon_wasi_socket_disconnect"
 
 ///|
 #borrow(data, family, address, port, scope_id)
-pub extern "c" fn c_socket_recv_from(
+extern "c" fn raw_c_socket_recv_from(
   fd : Int,
   data : FixedArray[Byte],
   length : Int,
@@ -360,8 +544,31 @@ pub extern "c" fn c_socket_recv_from(
 ) -> Int64 = "wasmoon_wasi_socket_recv_from"
 
 ///|
+/// Reject invalid buffer extents before entering the native ABI.
+pub fn c_socket_recv_from(
+  fd : Int,
+  data : FixedArray[Byte],
+  length : Int,
+  family : FixedArray[Byte],
+  address : FixedArray[Byte],
+  port : FixedArray[UInt16],
+  scope_id : FixedArray[UInt],
+) -> Int64 {
+  if length < 0 ||
+    length > data.length() ||
+    family.length() < 1 ||
+    address.length() < 16 ||
+    port.length() < 1 ||
+    scope_id.length() < 1 {
+    c_set_errno_invalid_argument()
+    return -1L
+  }
+  raw_c_socket_recv_from(fd, data, length, family, address, port, scope_id)
+}
+
+///|
 #borrow(data, address)
-pub extern "c" fn c_socket_send_to(
+extern "c" fn raw_c_socket_send_to(
   fd : Int,
   data : FixedArray[Byte],
   length : Int,
@@ -373,6 +580,29 @@ pub extern "c" fn c_socket_send_to(
 ) -> Int64 = "wasmoon_wasi_socket_send_to"
 
 ///|
+/// Reject invalid buffer extents before entering the native ABI.
+pub fn c_socket_send_to(
+  fd : Int,
+  data : FixedArray[Byte],
+  length : Int,
+  has_address : Int,
+  family : Int,
+  address : FixedArray[Byte],
+  port : Int,
+  scope_id : Int,
+) -> Int64 {
+  if length < 0 ||
+    length > data.length() ||
+    (has_address != 0 && address.length() < (if family == 4 { 4 } else { 16 })) {
+    c_set_errno_invalid_argument()
+    return -1L
+  }
+  raw_c_socket_send_to(
+    fd, data, length, has_address, family, address, port, scope_id,
+  )
+}
+
+///|
 pub extern "c" fn c_socket_listen(fd : Int, backlog : Int) -> Int = "wasmoon_wasi_socket_listen"
 
 ///|
@@ -380,7 +610,7 @@ pub extern "c" fn c_socket_error(fd : Int) -> Int = "wasmoon_wasi_socket_error"
 
 ///|
 #borrow(family, address, port, scope_id)
-pub extern "c" fn c_socket_address_get(
+extern "c" fn raw_c_socket_address_get(
   fd : Int,
   peer : Int,
   family : FixedArray[Byte],
@@ -388,6 +618,26 @@ pub extern "c" fn c_socket_address_get(
   port : FixedArray[UInt16],
   scope_id : FixedArray[UInt],
 ) -> Int = "wasmoon_wasi_socket_address_get"
+
+///|
+/// Reject invalid buffer extents before entering the native ABI.
+pub fn c_socket_address_get(
+  fd : Int,
+  peer : Int,
+  family : FixedArray[Byte],
+  address : FixedArray[Byte],
+  port : FixedArray[UInt16],
+  scope_id : FixedArray[UInt],
+) -> Int {
+  if family.length() < 1 ||
+    address.length() < 16 ||
+    port.length() < 1 ||
+    scope_id.length() < 1 {
+    c_set_errno_invalid_argument()
+    return -1
+  }
+  raw_c_socket_address_get(fd, peer, family, address, port, scope_id)
+}
 
 ///|
 pub extern "c" fn c_socket_option_get(
@@ -406,14 +656,27 @@ pub extern "c" fn c_socket_option_set(
 
 ///|
 #borrow(name, poll_fd)
-pub extern "c" fn c_resolver_start(
+extern "c" fn raw_c_resolver_start(
   name : FixedArray[Byte],
   poll_fd : FixedArray[Int],
 ) -> Int64 = "wasmoon_wasi_resolver_start"
 
 ///|
+/// Reject invalid buffer extents before entering the native ABI.
+pub fn c_resolver_start(
+  name : FixedArray[Byte],
+  poll_fd : FixedArray[Int],
+) -> Int64 {
+  if poll_fd.length() < 1 {
+    c_set_errno_invalid_argument()
+    return 0L
+  }
+  raw_c_resolver_start(name, poll_fd)
+}
+
+///|
 #borrow(family, address, scope_id)
-pub extern "c" fn c_resolver_next(
+extern "c" fn raw_c_resolver_next(
   resolver : Int64,
   family : FixedArray[Byte],
   address : FixedArray[Byte],
@@ -421,12 +684,27 @@ pub extern "c" fn c_resolver_next(
 ) -> Int = "wasmoon_wasi_resolver_next"
 
 ///|
+/// Reject invalid buffer extents before entering the native ABI.
+pub fn c_resolver_next(
+  resolver : Int64,
+  family : FixedArray[Byte],
+  address : FixedArray[Byte],
+  scope_id : FixedArray[UInt],
+) -> Int {
+  if family.length() < 1 || address.length() < 16 || scope_id.length() < 1 {
+    c_set_errno_invalid_argument()
+    return 5
+  }
+  raw_c_resolver_next(resolver, family, address, scope_id)
+}
+
+///|
 pub extern "c" fn c_resolver_drop(resolver : Int64) = "wasmoon_wasi_resolver_drop"
 
 ///|
 /// Socket recv
 #borrow(buf)
-pub extern "c" fn c_recv(
+extern "c" fn raw_c_recv(
   sockfd : Int,
   buf : FixedArray[Byte],
   len : Int64,
@@ -434,14 +712,44 @@ pub extern "c" fn c_recv(
 ) -> Int64 = "wasmoon_wasi_recv"
 
 ///|
+/// Reject invalid buffer extents before entering the native ABI.
+pub fn c_recv(
+  sockfd : Int,
+  buf : FixedArray[Byte],
+  len : Int64,
+  flags : Int,
+) -> Int64 {
+  if len < 0L || len > buf.length().to_int64() {
+    c_set_errno_invalid_argument()
+    return -1L
+  }
+  raw_c_recv(sockfd, buf, len, flags)
+}
+
+///|
 /// Socket send
 #borrow(buf)
-pub extern "c" fn c_send(
+extern "c" fn raw_c_send(
   sockfd : Int,
   buf : FixedArray[Byte],
   len : Int64,
   flags : Int,
 ) -> Int64 = "wasmoon_wasi_send"
+
+///|
+/// Reject invalid buffer extents before entering the native ABI.
+pub fn c_send(
+  sockfd : Int,
+  buf : FixedArray[Byte],
+  len : Int64,
+  flags : Int,
+) -> Int64 {
+  if len < 0L || len > buf.length().to_int64() {
+    c_set_errno_invalid_argument()
+    return -1L
+  }
+  raw_c_send(sockfd, buf, len, flags)
+}
 
 ///|
 /// Socket shutdown
@@ -458,11 +766,21 @@ pub extern "c" fn c_raise(sig : Int) -> Int = "wasmoon_wasi_raise"
 ///|
 /// Get random bytes from system
 #borrow(buf)
-pub extern "c" fn c_getrandom(buf : FixedArray[Byte], len : Int) -> Int = "wasmoon_wasi_getrandom"
+extern "c" fn raw_c_getrandom(buf : FixedArray[Byte], len : Int) -> Int = "wasmoon_wasi_getrandom"
+
+///|
+/// Reject invalid buffer extents before entering the native ABI.
+pub fn c_getrandom(buf : FixedArray[Byte], len : Int) -> Int {
+  if len < 0 || len > buf.length() {
+    c_set_errno_invalid_argument()
+    return -1
+  }
+  raw_c_getrandom(buf, len)
+}
 
 ///|
 #borrow(path, dev, ino, filetype, nlink, size, atim, mtim, ctim)
-pub extern "c" fn c_fstat_beneath(
+extern "c" fn raw_c_fstat_beneath(
   dirfd : Int,
   path : FixedArray[Byte],
   flags : Int,
@@ -475,6 +793,37 @@ pub extern "c" fn c_fstat_beneath(
   mtim : FixedArray[UInt64],
   ctim : FixedArray[UInt64],
 ) -> Int = "wasmoon_wasi_fstat_beneath"
+
+///|
+/// Reject invalid buffer extents before entering the native ABI.
+pub fn c_fstat_beneath(
+  dirfd : Int,
+  path : FixedArray[Byte],
+  flags : Int,
+  dev : FixedArray[UInt64],
+  ino : FixedArray[UInt64],
+  filetype : FixedArray[Byte],
+  nlink : FixedArray[UInt64],
+  size : FixedArray[UInt64],
+  atim : FixedArray[UInt64],
+  mtim : FixedArray[UInt64],
+  ctim : FixedArray[UInt64],
+) -> Int {
+  if dev.length() < 1 ||
+    ino.length() < 1 ||
+    filetype.length() < 1 ||
+    nlink.length() < 1 ||
+    size.length() < 1 ||
+    atim.length() < 1 ||
+    mtim.length() < 1 ||
+    ctim.length() < 1 {
+    c_set_errno_invalid_argument()
+    return -1
+  }
+  raw_c_fstat_beneath(
+    dirfd, path, flags, dev, ino, filetype, nlink, size, atim, mtim, ctim,
+  )
+}
 
 ///|
 #borrow(path)
