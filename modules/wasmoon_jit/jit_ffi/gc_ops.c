@@ -511,7 +511,8 @@ int32_t WASMOON_GUEST_ABI gc_array_len_impl(int64_t ref) {
 
     // Check for null reference (encoded as 0)
     if (ref == 0) {
-        return trap_null_reference();
+        trap_null_reference();
+        return 0;
     }
 
     // Decode: gc_ref = ref >> 1 (1-based)

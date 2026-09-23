@@ -420,6 +420,7 @@ void jit_trap_activation_abandon(jit_trap_activation_t *activation) {
     }
 }
 
+#ifndef _WIN32
 // Alternate signal stack for handling stack overflow (per-thread; sigaltstack is per-thread)
 #define SIGSTACK_SIZE (64 * 1024)  // 64KB alternate stack
 static _Thread_local char g_sigstack[SIGSTACK_SIZE];
@@ -505,6 +506,8 @@ static void install_alt_stack(void) {
     }
 #endif
 }
+
+#endif
 
 // ============ Signal Handlers ============
 

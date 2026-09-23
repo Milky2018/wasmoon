@@ -592,7 +592,7 @@ MOONBIT_FFI_EXPORT long long wasmoon_wasi_lseek(int fd, long long offset, int wh
 MOONBIT_FFI_EXPORT moonbit_bytes_t wasmoon_wasi_get_error_message(void) {
   const char *err_str = strerror(errno);
   size_t len = strlen(err_str);
-  moonbit_bytes_t bytes = moonbit_make_bytes(len, 0);
+  moonbit_bytes_t bytes = moonbit_make_bytes((int32_t)len, 0);
   memcpy(bytes, err_str, len);
   return bytes;
 }

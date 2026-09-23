@@ -5,6 +5,7 @@
 #include <fcntl.h>
 #else
 #include <io.h>
+#define strdup _strdup
 #endif
 
 // WASI rights: valid bits are 0-29

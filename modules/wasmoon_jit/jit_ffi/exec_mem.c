@@ -17,7 +17,9 @@ typedef struct {
 static jit_code_block_t *code_blocks = NULL;
 static int num_code_blocks = 0;
 static int code_blocks_capacity = 0;
+#ifndef _WIN32
 static void *next_exec_hint = NULL;
+#endif
 
 #ifdef _WIN32
 static SRWLOCK code_blocks_lock = SRWLOCK_INIT;
