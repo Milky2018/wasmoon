@@ -38,7 +38,7 @@ jobs:
           python-version: '3.12'
       - name: Install toolchains
         run: |
-          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash -s nightly
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash -s latest
           echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
           rustup toolchain install 1.97.0 --profile minimal --target wasm32-wasip1
       - name: Build Wasmoon

@@ -610,6 +610,7 @@ graph TD
   ISS_581["ISS-581: Use typed external handles for C-owned resources"]
   ISS_582["ISS-582: Manage DWARF builder ownership with MoonBit RC"]
   ISS_583["ISS-583: Retain shared native resources with MoonBit RC"]
+  ISS_584["ISS-584: Use the latest stable MoonBit toolchain locally and in CI"]
   ISS_002 --> ISS_003
   ISS_002 --> ISS_004
   ISS_003 --> ISS_005
