@@ -19,10 +19,10 @@ struct Memory {
 } derive(Debug)
 
 ///|
-/// Return the borrowed native descriptor pointer.
+/// Retain the native memory descriptor.
 ///
-/// The pointer is valid only while the owning Store remains open. Do not retain
-/// it across `Store::close`; this method returns null after shared invalidation.
+/// Existing handles stay live across Store close; closed Memory aliases return
+/// an empty handle and reject further access through the Memory API.
 pub fn Memory::desc_ptr(self : Memory) -> @wasmoon_jit.MemoryDescriptor {
   match self.descriptor_state.val {
     Open(pointer) => pointer
@@ -44,12 +44,7 @@ fn Memory::require_desc_ptr(
 ///|
 fn Memory::close(self : Memory) -> Unit {
   match self.descriptor_state.val {
-    Open(pointer) => {
-      self.descriptor_state.val = Closed
-      if !pointer.is_null() {
-        @wasmoon_jit.free_memory_desc(pointer)
-      }
-    }
+    Open(_) => self.descriptor_state.val = Closed
     Closed => ()
   }
 }
@@ -564,7 +559,6 @@ fn Memory::share(self : Memory) -> Memory raise RuntimeError {
   if !self.is_shared {
     raise LinkErrorDetail("only shared memory can be imported across Stores")
   }
-  @wasmoon_jit.retain_memory_desc(pointer)
   {
     descriptor_state: Ref(Open(pointer)),
     max: self.max,

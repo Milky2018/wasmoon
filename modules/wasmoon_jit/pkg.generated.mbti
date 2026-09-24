@@ -99,8 +99,6 @@ pub fn format_u64_hex(Int64) -> String
 
 pub fn free_memory(Int64) -> Unit
 
-pub fn free_memory_desc(@jit_ffi.MemoryDescriptor) -> Unit
-
 pub fn gc_debug_set_fail_alloc(Int, fail_every? : Int) -> Unit
 
 pub fn get_hostcall_func_addr() -> Int
@@ -202,8 +200,6 @@ pub fn plan_wasm_body_x64_code_object(@milkir.Function, @wasm_milkir.WasmValidat
 pub fn resolve_import_function(Map[String, Map[String, Int64]], String, String) -> ImportFunctionResolution
 
 pub fn resolve_import_function_ptr(Map[String, Map[String, Int64]], String, String) -> Int64?
-
-pub fn retain_memory_desc(@jit_ffi.MemoryDescriptor) -> Unit
 
 pub fn sanitize_debug_filename(String) -> String
 
@@ -308,7 +304,7 @@ pub struct BacktraceFrame {
 }
 
 pub struct CHeap {
-  ptr : @jit_ffi.GCHeapHandle
+  // private fields
 } derive(@debug.Debug)
 pub fn CHeap::CHeap(capacity? : Int) -> Self
 pub fn CHeap::alloc_array(Self, Int, Int, @types.Value) -> Int raise CHeapError
@@ -514,7 +510,7 @@ pub fn JITTable::get_entry_type(Self, Int) -> Int
 pub fn JITTable::get_entry_value(Self, Int) -> Int64
 pub fn JITTable::get_max(Self) -> Int64?
 pub fn JITTable::get_size(Self) -> Int
-pub fn JITTable::raw_ptr(Self) -> NativeTableHandle
+pub fn JITTable::raw_ptr(Self) -> @jit_ffi.NativeTableHandle
 pub fn JITTable::set(Self, Int, Int64, Int) -> Unit
 pub fn JITTable::to_repr(Self) -> @debug.Repr
 
@@ -638,6 +634,7 @@ pub fn NativeJITContext::gc_use_func_safepoints(Self, Int) -> Unit
 pub fn NativeJITContext::has_callable_metadata(Self) -> Bool
 #alias(has_wasm_stack, deprecated)
 pub fn NativeJITContext::has_configured_native_fiber_stack_size(Self) -> Bool
+pub fn NativeJITContext::memory_descriptor(Self, Int) -> @jit_ffi.MemoryDescriptor
 pub fn NativeJITContext::memory_ptr(Self, Int) -> Int64
 pub fn NativeJITContext::memory_size(Self, Int) -> Int64
 pub fn NativeJITContext::refresh_table_layout(Self, Int) -> Bool
@@ -689,11 +686,6 @@ pub(all) enum NativeSuspensionReason {
 pub fn NativeSuspensionReason::equal(Self, Self) -> Bool
 pub fn NativeSuspensionReason::not_equal(Self, Self) -> Bool
 pub fn NativeSuspensionReason::to_repr(Self) -> @debug.Repr
-
-#external
-pub type NativeTableHandle
-pub fn NativeTableHandle::to_repr(Self) -> @debug.Repr
-pub impl @debug.Debug for NativeTableHandle
 
 pub(all) enum NativeTarget {
   X64
@@ -861,5 +853,7 @@ pub using @execution {type NativeExecutionStateError}
 pub using @execution {type NativeInvocationHandle}
 
 pub using @execution {type NativeInvocationPhase}
+
+pub using @jit_ffi {type NativeTableHandle}
 
 // Traits

@@ -12,7 +12,7 @@ pub extern "c" fn NativeExceptionArena::clear(
 ) -> Unit = "wasmoon_exception_arena_clear"
 
 ///|
-#borrow(self, values)
+#borrow(self, values, heap)
 extern "c" fn NativeExceptionArena::insert_raw(
   self : NativeExceptionArena,
   heap : GCHeapHandle,

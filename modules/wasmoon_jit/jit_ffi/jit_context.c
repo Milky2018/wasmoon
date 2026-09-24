@@ -153,6 +153,7 @@ void free_context_internal(jit_context_t *ctx) {
     continuation_arena_release(ctx->continuation_arena);
     continuation_types_free(ctx);
     exception_arena_release(ctx->exception_arena);
+    ctx_set_gc_heap_internal(ctx, NULL);
 
     // Free per-context segment storage (malloc-owned copies).
     if (ctx->data_segments) {
@@ -203,14 +204,10 @@ void free_context_internal(jit_context_t *ctx) {
     }
 
     if (ctx->func_table) free(ctx->func_table);
+    ctx_clear_table_bindings(ctx);
     if (ctx->tables) free(ctx->tables);
     if (ctx->table_sizes) free(ctx->table_sizes);
     if (ctx->table_max_sizes) free(ctx->table_max_sizes);
-    // Only free table0_base if we own it (allocated via alloc_indirect_table)
-    // Borrowed tables (from set_table_pointers) are managed by JITTable's GC
-    if (ctx->table0_base && ctx->owns_indirect_table) free(ctx->table0_base);
-    // Do not free memories here: memories are owned by the runtime Store and
-    // can be shared across multiple instances/contexts.
     if (ctx->globals) free(ctx->globals);
     free(ctx->callable_local_types);
     free(ctx->callable_type_parents);
@@ -218,8 +215,13 @@ void free_context_internal(jit_context_t *ctx) {
     free(ctx->callable_tags);
     free(ctx->gc_func_table);
 
-    // Free multi-memory arrays (but not the memory data itself - managed by runtime)
-    if (ctx->memories) free(ctx->memories);
+    // Release each managed descriptor retained by the multi-memory array.
+    if (ctx->memories) {
+        for (int i = 0; i < ctx->memory_count; ++i) {
+            if (ctx->memories[i]) moonbit_decref(ctx->memories[i]);
+        }
+        free(ctx->memories);
+    }
 
     if (ctx->gc_type_cache) {
         free(ctx->gc_type_cache);
@@ -326,30 +328,6 @@ void ctx_set_globals_internal(jit_context_t *ctx, void *globals_ptr) {
 
 // ============ Indirect Table Management ============
 
-int ctx_alloc_indirect_table_internal(jit_context_t *ctx, int count) {
-    if (!ctx || count <= 0) return 0;
-
-    // Only free if we own the current table0_base
-    if (ctx->table0_base && ctx->owns_indirect_table) {
-        free(ctx->table0_base);
-    }
-
-    // Allocate 2 slots per entry: func_ptr and type_idx
-    ctx->table0_base = (void **)calloc(count * 2, sizeof(void *));
-    if (!ctx->table0_base) {
-        ctx->table0_elements = 0;
-        ctx->owns_indirect_table = 0;
-        return 0;
-    }
-    // Initialize type indices to -1 (uninitialized marker)
-    for (int i = 0; i < count; i++) {
-        ctx->table0_base[i * 2 + 1] = (void*)(intptr_t)(-1);
-    }
-    ctx->table0_elements = count;
-    ctx->owns_indirect_table = 1;  // We own this table
-    return 1;
-}
-
 void ctx_set_indirect_internal(jit_context_t *ctx, int table_idx, int func_idx, int type_idx) {
     if (ctx && ctx->table0_base &&
         table_idx >= 0 && (size_t)table_idx < ctx->table0_elements &&
@@ -360,99 +338,18 @@ void ctx_set_indirect_internal(jit_context_t *ctx, int table_idx, int func_idx, 
     }
 }
 
-void ctx_use_shared_table_internal(jit_context_t *ctx, void **shared_table, int count) {
-    if (!ctx) return;
-
-    // Free existing table0_base only if we own it
-    if (ctx->table0_base && ctx->owns_indirect_table) {
-        free(ctx->table0_base);
-    }
-
-    // Point to the shared table (borrowed, not owned)
-    ctx->table0_base = shared_table;
-    ctx->table0_elements = count;
-    ctx->owns_indirect_table = 0;  // We don't own this table
-}
-
-// ============ Multi-Table Support ============
-
-void ctx_set_table_pointers_internal(
-    jit_context_t *ctx,
-    int64_t *table_ptrs,
-    int32_t *table_sizes,
-    int64_t *table_max_sizes,
-    int table_count
-) {
-    if (!ctx || table_count <= 0 || !table_ptrs) return;
-
-    // Free existing arrays
-    if (ctx->tables) {
-        free(ctx->tables);
-        ctx->tables = NULL;
-    }
-    if (ctx->table_sizes) {
-        free(ctx->table_sizes);
-        ctx->table_sizes = NULL;
-    }
-    if (ctx->table_max_sizes) {
-        free(ctx->table_max_sizes);
-        ctx->table_max_sizes = NULL;
-    }
-    ctx->table_count = 0;
-
-    // Allocate array to hold table pointers
-    ctx->tables = (void ***)calloc(table_count, sizeof(void **));
-    if (!ctx->tables) return;
-
-    // Allocate array to hold table sizes
-    ctx->table_sizes = (size_t *)calloc(table_count, sizeof(size_t));
-    if (!ctx->table_sizes) {
-        free(ctx->tables);
-        ctx->tables = NULL;
-        return;
-    }
-
-    // Allocate array to hold table max sizes
-    ctx->table_max_sizes = (size_t *)calloc(table_count, sizeof(size_t));
-    if (!ctx->table_max_sizes) {
-        free(ctx->tables);
-        free(ctx->table_sizes);
-        ctx->tables = NULL;
-        ctx->table_sizes = NULL;
-        return;
-    }
-
-    // Copy table pointers, sizes, and max sizes
-    for (int i = 0; i < table_count; i++) {
-        ctx->tables[i] = (void **)table_ptrs[i];
-        if (table_sizes) {
-            ctx->table_sizes[i] = (size_t)table_sizes[i];
-        }
-        if (table_max_sizes) {
-            // -1 means unlimited, store as SIZE_MAX
-            ctx->table_max_sizes[i] = (size_t)(uint64_t)table_max_sizes[i];
-        } else {
-            ctx->table_max_sizes[i] = SIZE_MAX;  // Default: unlimited
-        }
-    }
-    ctx->table_count = table_count;
-
-    // Keep the first table in the dedicated fast-path slot used by table0 operations.
-    if (table_count > 0 && table_ptrs[0] != 0) {
-        ctx->table0_base = (void **)table_ptrs[0];
-        ctx->owns_indirect_table = 0;  // Borrowed from JITTable, not owned
-        if (table_sizes) {
-            ctx->table0_elements = table_sizes[0];
-        }
-    }
-}
-
 // ============ GC Heap Support ============
 
 void ctx_set_gc_heap_internal(jit_context_t *ctx, GcHeap *heap) {
     if (!ctx) return;
 
-    ctx->gc_heap = heap;
+    heap = gc_heap_live(heap);
+    if (ctx->gc_heap != heap) {
+        if (heap) moonbit_incref(heap);
+        GcHeap *old = ctx->gc_heap;
+        ctx->gc_heap = heap;
+        if (old) moonbit_decref(old);
+    }
     if (heap) {
         // Set up pointers for inline allocation
         ctx->gc_heap_ptr = heap->data + heap->size;
@@ -855,4 +752,32 @@ int32_t gc_collect_for_alloc_internal(
     ctx->gc_collect_requested = 0;
     ctx_update_gc_heap_ptr_internal(ctx);
     return collected;
+}
+
+void ctx_clear_table_bindings(jit_context_t *ctx) {
+    if (!ctx->table_bindings) return;
+    for (int i = 0; i < ctx->table_count; ++i) {
+        wasmoon_table_binding_t *binding = &ctx->table_bindings[i];
+        wasmoon_table_t *owner = binding->owner;
+        if (binding->previous) binding->previous->next = binding->next;
+        else owner->bindings = binding->next;
+        if (binding->next) binding->next->previous = binding->previous;
+        moonbit_decref(owner);
+    }
+    free(ctx->table_bindings);
+    ctx->table_bindings = NULL;
+}
+
+void table_publish_layout(wasmoon_table_t *table, void **entries, size_t size) {
+    table->entries = entries;
+    table->size = size;
+    for (wasmoon_table_binding_t *binding = table->bindings; binding; binding = binding->next) {
+        jit_context_t *ctx = binding->context;
+        ctx->tables[binding->index] = entries;
+        ctx->table_sizes[binding->index] = size;
+        if (binding->index == 0) {
+            ctx->table0_base = entries;
+            ctx->table0_elements = size;
+        }
+    }
 }

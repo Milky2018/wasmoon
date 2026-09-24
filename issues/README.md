@@ -609,6 +609,7 @@ graph TD
   ISS_580["ISS-580: Bound resolver work and prevent notification inheritance"]
   ISS_581["ISS-581: Use typed external handles for C-owned resources"]
   ISS_582["ISS-582: Manage DWARF builder ownership with MoonBit RC"]
+  ISS_583["ISS-583: Retain shared native resources with MoonBit RC"]
   ISS_002 --> ISS_003
   ISS_002 --> ISS_004
   ISS_003 --> ISS_005
@@ -1071,6 +1072,7 @@ graph TD
   ISS_552 --> ISS_553
   ISS_553 --> ISS_554
   ISS_575 --> ISS_576
+  ISS_582 --> ISS_583
 ```
 
 ## Warnings

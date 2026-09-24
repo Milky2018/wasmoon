@@ -30,22 +30,23 @@ pub extern "c" fn release_exec_managed(exec_code : ExecCodeHandle) -> Int = "was
 pub extern "c" fn exec_code_pointer(exec_code : ExecCodeHandle) -> Int64 = "wasmoon_jit_exec_code_ptr"
 
 ///|
-/// Borrowed pointer to a C-owned linear-memory descriptor. The pointer does not
-/// retain the descriptor; callers must keep its Store or explicit owner alive.
-#external
+/// Shared managed linear-memory allocation. Each handle keeps the descriptor
+/// and its backing memory alive independently of a Store or JIT context.
 pub type MemoryDescriptor
 
 ///|
-pub extern "c" fn MemoryDescriptor::null() -> MemoryDescriptor = "wasmoon_native_pointer_null"
+pub extern "c" fn MemoryDescriptor::null() -> MemoryDescriptor = "wasmoon_memory_descriptor_empty"
 
 ///|
-pub extern "c" fn MemoryDescriptor::is_null(self : MemoryDescriptor) -> Bool = "wasmoon_native_pointer_is_null"
+#borrow(self)
+pub extern "c" fn MemoryDescriptor::is_null(self : MemoryDescriptor) -> Bool = "wasmoon_memory_descriptor_is_empty"
 
 ///|
+#borrow(a, b)
 extern "c" fn descriptor_equal(
   a : MemoryDescriptor,
   b : MemoryDescriptor,
-) -> Bool = "wasmoon_native_pointer_equal"
+) -> Bool = "wasmoon_memory_descriptor_equal"
 
 ///|
 pub impl Eq for MemoryDescriptor with fn equal(a, b) {

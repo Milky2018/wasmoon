@@ -423,7 +423,8 @@ int64_t table_grow_ctx_internal(
 ) {
     if (!ctx || table_idx < 0) return -1;
     if (table_idx >= ctx->table_count) return -1;
-    if (!ctx->tables || !ctx->table_sizes) return -1;
+    if (!ctx->tables || !ctx->table_sizes || !ctx->table_bindings) return -1;
+    if (!ctx->table_bindings[table_idx].owner->entries) return -1;
 
     size_t old_size = ctx->table_sizes[table_idx];
     if (delta == 0) return (int64_t)old_size;
@@ -465,15 +466,8 @@ int64_t table_grow_ctx_internal(
         new_table[i * 2 + 1] = (void*)(intptr_t)(-1); // type_idx (unknown)
     }
 
-    // Update the tables array
-    ctx->tables[table_idx] = new_table;
-    ctx->table_sizes[table_idx] = new_size;
-
-    // Update table0 fast path if this is table 0
-    if (table_idx == 0) {
-        ctx->table0_base = new_table;
-        ctx->table0_elements = new_size;
-    }
+    // Publish reallocations to every context retaining this stable owner.
+    table_publish_layout(ctx->table_bindings[table_idx].owner, new_table, new_size);
 
     // Free old table
     if (old_table) {

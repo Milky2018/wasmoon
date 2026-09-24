@@ -78,6 +78,7 @@ void exception_arena_release(native_exception_arena_t *arena) {
 
 static int64_t exception_arena_insert(native_exception_arena_t *arena,
     GcHeap *heap, int32_t tag, const int64_t *values, int32_t count) {
+    heap = gc_heap_live(heap);
     if (!arena || arena->sealed || count < 0 || (count && !values)) return 0;
     if (arena->count == arena->capacity) {
         size_t capacity = arena->capacity ? arena->capacity * 2 : 16;

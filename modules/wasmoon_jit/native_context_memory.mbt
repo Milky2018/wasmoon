@@ -137,9 +137,6 @@ pub fn NativeJITContext::set_table_pointers(
   for jit_table in jit_tables {
     self.jit_tables.push(jit_table)
   }
-  if jit_tables.is_empty() {
-    return
-  }
   let table_ptrs = FixedArray::make(
     jit_tables.length(),
     NativeTableHandle::null(),
@@ -178,7 +175,7 @@ pub fn NativeJITContext::refresh_table_layout(
   guard self.jit_tables[table_idx] is Some(jit_table) else { return false }
   let table_ptr = context_table_ptr(self.handle, table_idx)
   let size = context_table_size(self.handle, table_idx)
-  if table_ptr.is_null() || size < 0 {
+  if jit_table.table_ptr.is_null() || table_ptr.is_null() || size < 0 {
     return false
   }
   jit_table.refresh_layout(table_ptr, size)
@@ -190,9 +187,6 @@ pub fn NativeJITContext::set_memory_pointers(
   self : NativeJITContext,
   memories : Array[MemoryInfo],
 ) -> Unit {
-  if memories.is_empty() {
-    return
-  }
   let ptrs = FixedArray::make(memories.length(), MemoryDescriptor::null())
   for i, mem in memories {
     ptrs[i] = mem.ptr
@@ -201,6 +195,8 @@ pub fn NativeJITContext::set_memory_pointers(
 }
 
 ///|
+/// Borrow a raw byte address. Use memory_descriptor for accesses that must
+/// retain the allocation independently of this context.
 pub fn NativeJITContext::memory_ptr(
   self : NativeJITContext,
   memidx : Int,
@@ -294,11 +290,6 @@ pub fn free_memory(mem_ptr : Int64) -> Unit {
 }
 
 ///|
-pub fn free_memory_desc(mem_desc_ptr : MemoryDescriptor) -> Unit {
-  c_jit_free_memory_desc(mem_desc_ptr)
-}
-
-///|
 /// Initialize memory with data at offset.
 pub fn memory_init(mem_ptr : Int64, offset : Int64, data : Bytes) -> Bool {
   let size = data.length()
@@ -327,25 +318,10 @@ pub fn memory_read(mem_ptr : Int64, offset : Int64, size : Int) -> Bytes {
 }
 
 ///|
-/// Borrowed C table pointer; the JITTableOwner controls its lifetime.
-#external
-pub type NativeTableHandle
+pub using @jit_ffi {type NativeTableHandle}
 
 ///|
-extern "c" fn NativeTableHandle::null() -> NativeTableHandle = "wasmoon_native_pointer_null"
-
-///|
-extern "c" fn NativeTableHandle::is_null(self : NativeTableHandle) -> Bool = "wasmoon_native_pointer_is_null"
-
-///|
-pub impl Debug for NativeTableHandle with fn to_repr(_self) {
-  Repr::literal("NativeTableHandle")
-}
-
-///|
-pub extend NativeTableHandle with Debug::{to_repr}
-
-///|
+#borrow(table)
 extern "c" fn table_entry_word(
   table : NativeTableHandle,
   index : Int,
@@ -356,12 +332,11 @@ extern "c" fn table_entry_word(
 /// Shared indirect table that can be used by multiple JIT modules.
 struct JITTable {
   mut table_ptr : NativeTableHandle // Pointer to the shared C-side table
-  mut size : Int
   max : Int64?
 } derive(Debug)
 
 ///|
-/// Destruction capability for one shared JIT table allocation.
+/// Logical close capability for one shared JIT table view.
 struct JITTableOwner {
   table : JITTable
 } derive(Debug)
@@ -373,12 +348,11 @@ pub fn JITTableOwner::try_alloc(size : Int, max : Int64?) -> JITTableOwner? {
   if size < 0 {
     return None
   }
-  let alloc_size = if size == 0 { 1 } else { size }
-  let table_ptr = c_jit_alloc_shared_indirect_table(alloc_size)
+  let table_ptr = c_jit_alloc_shared_indirect_table(size)
   if table_ptr.is_null() {
     return None
   }
-  Some({ table: { table_ptr, size, max, }, })
+  Some({ table: { table_ptr, max, }, })
 }
 
 ///|
@@ -388,12 +362,11 @@ pub fn JITTableOwner::table(self : JITTableOwner) -> JITTable {
 }
 
 ///|
-/// Release the owned shared table allocation. Repeated close calls are harmless.
+/// Close all aliases of this view and release its reference. Context bindings
+/// and independently retained handles remain live. Repeated close is harmless.
 pub fn JITTableOwner::close(self : JITTableOwner) -> Unit {
   if !self.table.table_ptr.is_null() {
-    c_jit_free_shared_indirect_table(self.table.table_ptr)
     self.table.table_ptr = NativeTableHandle::null()
-    self.table.size = 0
   }
 }
 
@@ -405,7 +378,7 @@ pub fn JITTable::set(
   func_ptr : Int64,
   type_hash : Int,
 ) -> Unit {
-  if table_idx < 0 || table_idx >= self.size {
+  if table_idx < 0 || table_idx >= self.get_size() {
     return
   }
   c_jit_shared_table_set(self.table_ptr, table_idx, func_ptr, type_hash)
@@ -414,7 +387,7 @@ pub fn JITTable::set(
 ///|
 /// Read raw entry value bits from the shared table.
 pub fn JITTable::get_entry_value(self : JITTable, table_idx : Int) -> Int64 {
-  if table_idx < 0 || table_idx >= self.size {
+  if table_idx < 0 || table_idx >= self.get_size() {
     return 0L
   }
   table_entry_word(self.table_ptr, table_idx, 0)
@@ -423,7 +396,7 @@ pub fn JITTable::get_entry_value(self : JITTable, table_idx : Int) -> Int64 {
 ///|
 /// Read raw entry type index from the shared table.
 pub fn JITTable::get_entry_type(self : JITTable, table_idx : Int) -> Int {
-  if table_idx < 0 || table_idx >= self.size {
+  if table_idx < 0 || table_idx >= self.get_size() {
     return -1
   }
   table_entry_word(self.table_ptr, table_idx, 1).to_int()
@@ -432,11 +405,11 @@ pub fn JITTable::get_entry_type(self : JITTable, table_idx : Int) -> Int {
 ///|
 /// Get the table size.
 pub fn JITTable::get_size(self : JITTable) -> Int {
-  self.size
+  self.table_ptr.size()
 }
 
 ///|
-/// Get the raw shared table pointer.
+/// Retain the stable managed table descriptor.
 pub fn JITTable::raw_ptr(self : JITTable) -> NativeTableHandle {
   self.table_ptr
 }
@@ -448,11 +421,10 @@ fn JITTable::refresh_layout(
   table_ptr : NativeTableHandle,
   size : Int,
 ) -> Unit {
-  if table_ptr.is_null() || size < 0 {
+  if self.table_ptr.is_null() || table_ptr.is_null() || size < 0 {
     return
   }
   self.table_ptr = table_ptr
-  self.size = size
 }
 
 ///|
@@ -462,13 +434,8 @@ pub fn JITTable::get_max(self : JITTable) -> Int64? {
 }
 
 ///|
-/// Acquire a descriptor owner while the caller holds an existing live owner.
-pub fn retain_memory_desc(mem_desc_ptr : MemoryDescriptor) -> Unit {
-  c_jit_retain_memory_desc(mem_desc_ptr)
-}
-
-///|
 /// Copy checked byte ranges between live memory descriptors.
+#borrow(destination_memory, source_memory)
 pub extern "c" fn memory_descriptor_copy(
   destination_memory : MemoryDescriptor,
   destination : Int64,
@@ -479,6 +446,7 @@ pub extern "c" fn memory_descriptor_copy(
 
 ///|
 /// Fill a checked byte range of a live memory descriptor.
+#borrow(memory)
 pub extern "c" fn memory_descriptor_fill64(
   memory : MemoryDescriptor,
   destination : Int64,
@@ -492,4 +460,15 @@ pub fn memory_descriptor_grow64(
   delta_pages : Int64,
 ) -> Int64 {
   c_mem_desc_grow(mem_desc_ptr, delta_pages, -1)
+}
+
+///|
+/// Retain a bound memory independently of this context. Invalid indices return
+/// an empty handle. Passing this handle to descriptor operations keeps the
+/// allocation alive throughout the operation.
+pub fn NativeJITContext::memory_descriptor(
+  self : NativeJITContext,
+  memidx : Int,
+) -> MemoryDescriptor {
+  c_jit_ctx_get_memory_descriptor_managed(self.handle, memidx)
 }

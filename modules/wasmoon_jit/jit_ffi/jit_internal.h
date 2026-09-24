@@ -271,6 +271,12 @@ uint8_t *memory_base_desc_internal(wasmoon_memory_t *mem);
 int64_t table_grow_ctx_internal(jit_context_t *ctx, int32_t table_idx, int64_t delta, int64_t init_value);
 
 // GC heap management
+wasmoon_table_t *wasmoon_jit_alloc_shared_indirect_table(int count);
+void wasmoon_jit_ctx_set_table_pointers(int64_t ctx_ptr, wasmoon_table_t **owners,
+    int32_t *sizes, int64_t *max_sizes, int count);
+void ctx_clear_table_bindings(jit_context_t *ctx);
+void table_publish_layout(wasmoon_table_t *table, void **entries, size_t size);
+wasmoon_table_t *wasmoon_native_table_empty(void);
 void ctx_set_gc_heap_internal(jit_context_t *ctx, GcHeap *heap);
 void ctx_update_gc_heap_ptr_internal(jit_context_t *ctx);
 void ctx_gc_begin_frame_internal(jit_context_t *ctx, uintptr_t frame_id);

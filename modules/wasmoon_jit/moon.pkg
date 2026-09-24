@@ -25,3 +25,7 @@ import {
 import {
   "Milky2018/wasmoon_jit/native_test_support",
 } for "test"
+
+import {
+  "Milky2018/wasmoon_jit/native_test_support",
+} for "wbtest"

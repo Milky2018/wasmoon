@@ -24,14 +24,12 @@ pub fn stage_exec_managed(Int) -> ExecCodeHandle
 // Types and methods
 type ExecCodeHandle
 
-#external
 pub type GCHeapHandle
 pub fn GCHeapHandle::is_null(Self) -> Bool
 pub fn GCHeapHandle::null() -> Self
 pub fn GCHeapHandle::to_repr(Self) -> @debug.Repr
 pub impl @debug.Debug for GCHeapHandle
 
-#external
 pub type MemoryDescriptor
 pub fn MemoryDescriptor::equal(Self, Self) -> Bool
 pub fn MemoryDescriptor::is_null(Self) -> Bool
@@ -51,6 +49,13 @@ pub fn NativeExceptionArena::define_tag(Self, Int, Array[@types.ValueType]) -> B
 pub fn NativeExceptionArena::insert(Self, GCHeapHandle, Int, Array[Int64]) -> Int64
 pub fn NativeExceptionArena::new() -> Self
 pub fn NativeExceptionArena::snapshot(Self, Int64) -> (Int, Array[Int64])?
+
+pub type NativeTableHandle
+pub fn NativeTableHandle::is_null(Self) -> Bool
+pub fn NativeTableHandle::null() -> Self
+pub fn NativeTableHandle::size(Self) -> Int
+pub fn NativeTableHandle::to_repr(Self) -> @debug.Repr
+pub impl @debug.Debug for NativeTableHandle
 
 // Type aliases
 

@@ -34,8 +34,6 @@ pub fn memory_growth_finish(Int64, Int) -> Int64
 
 pub fn memory_growth_start(@jit_ffi.MemoryDescriptor, Int) -> Int64
 
-pub fn memory_owner_count(@jit_ffi.MemoryDescriptor) -> Int64
-
 pub fn mismatched_try_end_probe() -> Int64
 
 pub fn nested_activation_exception_probe() -> Int64
@@ -51,6 +49,8 @@ pub fn parked_gc_root_probe() -> Int64
 pub fn reset_callback_capture() -> Unit
 
 pub fn shared_indirect_table_live_count() -> Int64
+
+pub fn sparse_table(Int) -> @jit_ffi.NativeTableHandle
 
 pub fn transfer_cancellation_callback_to_null_context(() -> Bool) -> Unit
 

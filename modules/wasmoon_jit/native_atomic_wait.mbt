@@ -5,6 +5,7 @@
 pub type NativeAtomicWait
 
 ///|
+#borrow(descriptor)
 extern "c" fn atomic_wait_new(
   descriptor : MemoryDescriptor,
   offset : Int64,
@@ -50,6 +51,7 @@ pub fn atomic_wait_begin(
 }
 
 ///|
+#borrow(descriptor)
 pub extern "c" fn atomic_notify(
   descriptor : MemoryDescriptor,
   offset : Int64,

@@ -120,25 +120,24 @@ typedef struct GcHeap {
     int32_t* runtime_types;     // Store type identity, -1 for unbound objects
 } GcHeap;
 
+static inline GcHeap *gc_heap_live(GcHeap *heap) {
+    return heap && heap->data ? heap : NULL;
+}
+
 // ============ Heap Lifecycle ============
 
 /**
  * Create a new GC heap with the given initial capacity
  * @param initial_capacity Initial heap size in bytes
- * @return New heap, or NULL on allocation failure
+ * @return Managed heap, with empty data on allocation failure
  */
 GcHeap* gc_heap_new(size_t initial_capacity);
 
-/**
- * Free a GC heap and all its memory
- * @param heap Heap to free
- */
-void gc_heap_free(GcHeap* heap);
 
 /**
- * Register an updateable, heap-owned root array for a parked continuation.
- * The returned registration must be removed exactly once before freeing the
- * heap. `out_roots` points to `root_count` writable slots owned by the heap.
+ * Register an updateable root array and retain its heap with MoonBit RC.
+ * The continuation or exception arena must unregister exactly once.
+ * The heap borrows its registration list; the registration owns its root slots.
  */
 int32_t gc_heap_register_parked_roots(
     GcHeap* heap,

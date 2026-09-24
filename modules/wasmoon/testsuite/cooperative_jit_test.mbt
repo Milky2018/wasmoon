@@ -65,17 +65,12 @@ test "cooperative JIT wait is notified by interpreter and cancellation dequeues"
     cooperative=true,
   )
   defer context.close()
-  let baseline = @native_test_support.memory_owner_count(memory.desc_ptr())
   for cancel in [false, true] {
     let outcome = context.call_core_func_resumable(store, instance, 0, [])
     guard outcome is NativeCoreSuspended(AtomicWait, continuation) else {
       fail("expected native atomic wait suspension")
     }
     defer continuation.cancel()
-    assert_eq(
-      @native_test_support.memory_owner_count(memory.desc_ptr()),
-      baseline + 1L,
-    )
     if cancel {
       continuation.cancel()
       continuation.cancel()
@@ -88,10 +83,6 @@ test "cooperative JIT wait is notified by interpreter and cancellation dequeues"
       }
       debug_inspect(values, content="[I32(0)]")
     }
-    assert_eq(
-      @native_test_support.memory_owner_count(memory.desc_ptr()),
-      baseline,
-    )
   }
 }
 
@@ -136,7 +127,6 @@ test "controlled JIT cancellation releases an indefinitely blocked atomic wait" 
   )
   defer context.close()
   assert_true(context.jit_module.set_cooperative_scheduling(false))
-  let baseline = @native_test_support.memory_owner_count(memory.desc_ptr())
   let polls = Ref(0)
   debug_inspect(
     context.jit_module.call_with_context_controlled(
@@ -150,8 +140,4 @@ test "controlled JIT cancellation releases an indefinitely blocked atomic wait" 
     content="Cancelled",
   )
   inspect(memory.atomic_notify(0L, 0xffffffffU), content="0")
-  assert_eq(
-    @native_test_support.memory_owner_count(memory.desc_ptr()),
-    baseline,
-  )
 }

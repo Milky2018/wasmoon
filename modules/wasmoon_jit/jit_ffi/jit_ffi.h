@@ -52,8 +52,28 @@ typedef struct {
     int is_guarded;
     int is_shared;
     _Atomic int growth_lock;
-    _Atomic size_t owners;   // Independent Store/context ownership leases.
+    int valid;              // Empty managed handles represent allocation failure.
 } wasmoon_memory_t;
+
+static inline wasmoon_memory_t *memory_descriptor_live(wasmoon_memory_t *memory) {
+    return memory && memory->valid ? memory : NULL;
+}
+
+// Stable managed table identity; generated code borrows its entries.
+struct wasmoon_table_binding;
+typedef struct {
+    void **entries;
+    size_t size;
+    struct wasmoon_table_binding *bindings;
+} wasmoon_table_t;
+
+typedef struct wasmoon_table_binding {
+    wasmoon_table_t *owner;
+    void *context;
+    int index;
+    struct wasmoon_table_binding *next;
+    struct wasmoon_table_binding *previous;
+} wasmoon_table_binding_t;
 
 // GC safepoint metadata table (owned by compiler/runtime, borrowed by context).
 typedef struct wasmoon_gc_safepoint_table {
@@ -139,7 +159,7 @@ typedef struct {
 
     // Additional fields (not accessed by JIT code directly)
     int owns_memory0;         // Whether this context owns memory0 (should free it)
-    int owns_indirect_table;  // Whether this context owns table0_base (should free it)
+    int reserved_table_padding;  // Preserve the generated-code context ABI.
     int wasi_exited;          // WASI: proc_exit called
     int wasi_exit_code;       // WASI: exit code
 
@@ -215,6 +235,7 @@ typedef struct {
     int32_t *callable_tags;
     int callable_tag_count;
 
+    wasmoon_table_binding_t *table_bindings;
 } jit_context_t;
 
 // ============ Executable Memory Functions ============

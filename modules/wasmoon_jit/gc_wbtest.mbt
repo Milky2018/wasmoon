@@ -354,7 +354,6 @@ test "gc: fault injection fails configured allocation attempt" {
   inspect(first > 0, content="true")
   inspect(second == 0, content="true")
 
-  c_gc_heap_free(heap_ptr)
   gc_debug_set_fail_alloc(0)
 }
 
