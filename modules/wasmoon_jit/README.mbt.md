@@ -68,7 +68,7 @@ package rather than a separate public package.
 ## Native resource handles
 
 C-owned memory descriptors (`MemoryDescriptor`), GC heaps (`GCHeapHandle`),
-indirect tables (`NativeTableHandle`), and the private DWARF builder handle are
+and indirect tables (`NativeTableHandle`) are
 nominal `#external` types. Their native representation is a pointer, including
 in `FixedArray` arguments; the FFI does not box them or route them through Int64.
 These types provide identity, not ownership. Keep the owning Store, CHeap or
@@ -82,3 +82,13 @@ MemoryDescriptor; `CHeap::get_ptr()` returns a borrowed GCHeapHandle. Descriptor
 equality compares pointer identity. There is no public integer-to-handle cast.
 Machine-code addresses, relocation values, raw byte addresses used for address
 arithmetic, and encoded guest values remain integers.
+
+`DWARFBuilder` is a managed opaque `type`: its complete native state is allocated
+by `moonbit_make_external_object`, without a separate pointer wrapper or manual
+reference count. MoonBit aliases and capturing closures retain the same object.
+The finalizer unregisters debug information, frees the object buffer and clears
+the borrowed active-builder pointer. `destroy()` performs the same cleanup early
+and is idempotent; the MoonBit allocation survives until its last reference is
+released. After close, mutations are ignored and lookup returns None. Repeated
+registration is idempotent; unregister releases the generated buffer and permits
+registration again while the builder remains open.

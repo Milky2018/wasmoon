@@ -608,6 +608,7 @@ graph TD
   ISS_579["ISS-579: Make resolver ownership safe and retire unused native WASI state"]
   ISS_580["ISS-580: Bound resolver work and prevent notification inheritance"]
   ISS_581["ISS-581: Use typed external handles for C-owned resources"]
+  ISS_582["ISS-582: Manage DWARF builder ownership with MoonBit RC"]
   ISS_002 --> ISS_003
   ISS_002 --> ISS_004
   ISS_003 --> ISS_005

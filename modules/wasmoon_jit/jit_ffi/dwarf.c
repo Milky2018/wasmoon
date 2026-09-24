@@ -10,6 +10,8 @@
  * 3. LLDB sets a breakpoint on __jit_debug_register_code and reads the descriptor
  */
 
+#include <moonbit.h>
+#include "dwarf.h"
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
@@ -119,6 +121,7 @@ typedef struct {
 typedef struct {
     dwarf_func_t functions[MAX_DWARF_FUNCTIONS];
     int num_functions;
+    int closed;
     uint64_t low_pc;
     uint64_t high_pc;
     struct jit_code_entry *code_entry;
@@ -737,16 +740,16 @@ static void generate_elf_object(dwarf_builder_t *builder, buffer_t *output) {
 // Public API
 // ============================================================================
 
-#if defined(_MSC_VER) && !defined(__clang__)
-#define MOONBIT_FFI_EXPORT __declspec(dllexport)
-#elif defined(__APPLE__)
-#define MOONBIT_FFI_EXPORT __attribute__((visibility("default")))
-#else
-#define MOONBIT_FFI_EXPORT __attribute__((visibility("default")))
-#endif
+// Borrowed from the live managed builder; close/finalize clears this pointer.
+static dwarf_builder_t *g_active_dwarf = NULL;
+
+static void finalize_dwarf(void *object) {
+    wasmoon_dwarf_destroy(object);
+}
 
 MOONBIT_FFI_EXPORT void *wasmoon_dwarf_create(void) {
-    dwarf_builder_t *builder = (dwarf_builder_t *)calloc(1, sizeof(dwarf_builder_t));
+    dwarf_builder_t *builder = moonbit_make_external_object(finalize_dwarf, sizeof(dwarf_builder_t));
+    memset(builder, 0, sizeof(*builder));
     builder->low_pc = UINT64_MAX;
     builder->high_pc = 0;
     return builder;
@@ -760,6 +763,7 @@ MOONBIT_FFI_EXPORT void wasmoon_dwarf_add_function(
     int func_idx
 ) {
     dwarf_builder_t *builder = (dwarf_builder_t *)dwarf;
+    if (!builder || builder->closed) return;
     if (builder->num_functions >= MAX_DWARF_FUNCTIONS) {
         fprintf(stderr, "DWARF: too many functions (max %d)\n", MAX_DWARF_FUNCTIONS);
         return;
@@ -784,7 +788,7 @@ MOONBIT_FFI_EXPORT void wasmoon_dwarf_add_function(
 MOONBIT_FFI_EXPORT void wasmoon_dwarf_register(void *dwarf, int verbose) {
     dwarf_builder_t *builder = (dwarf_builder_t *)dwarf;
 
-    if (builder->num_functions == 0) {
+    if (!builder || builder->closed || builder->code_entry || builder->num_functions == 0) {
         return;
     }
 
@@ -850,6 +854,7 @@ MOONBIT_FFI_EXPORT void wasmoon_dwarf_register(void *dwarf, int verbose) {
 MOONBIT_FFI_EXPORT void wasmoon_dwarf_unregister(void *dwarf) {
     dwarf_builder_t *builder = (dwarf_builder_t *)dwarf;
 
+    if (!builder) return;
     if (builder->code_entry) {
         // Unlink from descriptor list
         struct jit_code_entry *entry = builder->code_entry;
@@ -869,34 +874,32 @@ MOONBIT_FFI_EXPORT void wasmoon_dwarf_unregister(void *dwarf) {
         __jit_debug_register_code();
         __jit_debug_descriptor.action_flag = JIT_NOACTION;
 
+        __jit_debug_descriptor.relevant_entry = NULL;
         free(entry);
         builder->code_entry = NULL;
     }
+    free(builder->object_buffer);
+    builder->object_buffer = NULL;
+    builder->object_size = 0;
 }
 
 MOONBIT_FFI_EXPORT void wasmoon_dwarf_destroy(void *dwarf) {
     dwarf_builder_t *builder = (dwarf_builder_t *)dwarf;
-
-    wasmoon_dwarf_unregister(dwarf);
-
-    if (builder->object_buffer) {
-        free(builder->object_buffer);
-        builder->object_buffer = NULL;
-    }
-
-    free(builder);
+    if (!builder || builder->closed) return;
+    builder->closed = 1;
+    if (g_active_dwarf == builder) g_active_dwarf = NULL;
+    wasmoon_dwarf_unregister(builder);
+    // The MoonBit runtime frees the object itself after its finalizer returns.
 }
 
 // ============================================================================
 // Backtrace Support
 // ============================================================================
 
-// Global pointer to the active DWARF builder for address lookups
-static dwarf_builder_t *g_active_dwarf = NULL;
-
 // Set the active DWARF builder for address lookups
 MOONBIT_FFI_EXPORT void wasmoon_dwarf_set_active(void *dwarf) {
-    g_active_dwarf = (dwarf_builder_t *)dwarf;
+    dwarf_builder_t *builder = (dwarf_builder_t *)dwarf;
+    if (builder && !builder->closed) g_active_dwarf = builder;
 }
 
 // Get JIT code address range (for frame walking boundary detection)
@@ -929,7 +932,7 @@ MOONBIT_FFI_EXPORT int wasmoon_dwarf_lookup_address(
     if (!builder) {
         builder = g_active_dwarf;
     }
-    if (!builder || builder->num_functions == 0) {
+    if (!builder || builder->closed || builder->num_functions == 0) {
         return 0;
     }
 

@@ -414,9 +414,7 @@ pub fn CompilationStrategy::stats(Self) -> (Int, Int, Int, Int, Int, Int)
 pub fn CompilationStrategy::to_string(Self) -> String
 pub impl Show for CompilationStrategy
 
-pub struct DWARFBuilder {
-  // private fields
-}
+pub type DWARFBuilder
 pub fn DWARFBuilder::DWARFBuilder() -> Self
 pub fn DWARFBuilder::add_function(Self, String, Int64, Int, Int) -> Unit
 pub fn DWARFBuilder::capture_backtrace(Self) -> Array[BacktraceFrame]

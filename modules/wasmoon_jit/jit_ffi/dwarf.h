@@ -13,7 +13,7 @@ extern "C" {
 
 /**
  * Create a new DWARF builder.
- * @return Opaque handle to the builder
+ * @return MoonBit managed object; C callers must retain/release it with MoonBit RC.
  */
 void *wasmoon_dwarf_create(void);
 
@@ -49,7 +49,8 @@ void wasmoon_dwarf_register(void *dwarf, int verbose);
 void wasmoon_dwarf_unregister(void *dwarf);
 
 /**
- * Destroy the DWARF builder and free resources.
+ * Close the DWARF builder and release its resources (idempotent).
+ * Does not free the managed object or consume a reference.
  * This also unregisters the debug info if registered.
  * @param dwarf  Builder handle
  */

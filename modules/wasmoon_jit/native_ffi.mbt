@@ -823,7 +823,7 @@ extern "c" fn c_jit_get_exception_get_spilled_local_ptr() -> Int64 = "wasmoon_ji
 ///|
 /// Create a new DWARF debug info builder
 /// Returns an opaque handle to pass to other DWARF functions
-extern "c" fn c_dwarf_create() -> DWARFHandle = "wasmoon_dwarf_create"
+extern "c" fn c_dwarf_create() -> DWARFBuilder = "wasmoon_dwarf_create"
 
 ///|
 /// Add a function to the DWARF debug info
@@ -833,9 +833,9 @@ extern "c" fn c_dwarf_create() -> DWARFHandle = "wasmoon_dwarf_create"
 ///   addr: Function start address
 ///   size: Function size in bytes
 ///   func_idx: WebAssembly function index
-#borrow(name)
+#borrow(dwarf, name)
 extern "c" fn c_dwarf_add_function(
-  dwarf : DWARFHandle,
+  dwarf : DWARFBuilder,
   name : Bytes,
   addr : Int64,
   size : Int,
@@ -847,29 +847,33 @@ extern "c" fn c_dwarf_add_function(
 /// This generates an in-memory Mach-O/ELF object and registers it
 /// via the GDB JIT interface
 /// verbose: if true, print debug info to stderr
-extern "c" fn c_dwarf_register(dwarf : DWARFHandle, verbose : Int) -> Unit = "wasmoon_dwarf_register"
+#borrow(dwarf)
+extern "c" fn c_dwarf_register(dwarf : DWARFBuilder, verbose : Int) -> Unit = "wasmoon_dwarf_register"
 
 ///|
 /// Unregister DWARF debug info from the debugger
-extern "c" fn c_dwarf_unregister(dwarf : DWARFHandle) -> Unit = "wasmoon_dwarf_unregister"
+#borrow(dwarf)
+extern "c" fn c_dwarf_unregister(dwarf : DWARFBuilder) -> Unit = "wasmoon_dwarf_unregister"
 
 ///|
 /// Destroy the DWARF builder and free resources
 /// Also unregisters debug info if registered
-extern "c" fn c_dwarf_destroy(dwarf : DWARFHandle) -> Unit = "wasmoon_dwarf_destroy"
+#borrow(dwarf)
+extern "c" fn c_dwarf_destroy(dwarf : DWARFBuilder) -> Unit = "wasmoon_dwarf_destroy"
 
 ///|
 /// Set the active DWARF builder for address lookups
 /// This is used for backtrace symbolication
-extern "c" fn c_dwarf_set_active(dwarf : DWARFHandle) -> Unit = "wasmoon_dwarf_set_active"
+#borrow(dwarf)
+extern "c" fn c_dwarf_set_active(dwarf : DWARFBuilder) -> Unit = "wasmoon_dwarf_set_active"
 
 ///|
 /// Lookup an address in the DWARF debug info
 /// Returns 1 if found, 0 if not found
 /// If found, writes results to the provided arrays
-#borrow(name_out, func_idx_out, offset_out)
+#borrow(dwarf, name_out, func_idx_out, offset_out)
 extern "c" fn c_dwarf_lookup_address(
-  dwarf : DWARFHandle,
+  dwarf : DWARFBuilder,
   addr : Int64,
   name_out : FixedArray[Byte],
   name_size : Int,

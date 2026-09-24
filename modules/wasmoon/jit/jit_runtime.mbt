@@ -1354,7 +1354,8 @@ pub fn JITModule::init_shared_tables(
 ///|
 /// Register DWARF debug info with the debugger (LLDB/GDB)
 /// This enables stack traces to show WebAssembly function names
-/// Returns the DWARFBuilder handle (call destroy() when done)
+/// Retain the returned owner while debug metadata is needed.
+/// Dropping its last reference unregisters it; destroy() closes it early.
 /// verbose: if true, print debug info to stderr
 pub fn JITModule::register_dwarf(
   self : JITModule,

@@ -10,23 +10,18 @@
 ///   dwarf.add_function("func_1", addr, size, 1)
 ///   dwarf.register()  // Register with LLDB
 ///   // ... JIT code runs here ...
-///   dwarf.destroy()   // Cleanup when done
+///   dwarf.destroy()   // Optional early cleanup; otherwise RC runs the finalizer
 
 ///|
 /// DWARF debug info builder
-/// Accumulates function metadata and generates DWARF sections
-#external
-priv type DWARFHandle
-
-///|
-pub struct DWARFBuilder {
-  priv handle : DWARFHandle
-}
+/// Owns native metadata and debugger registration through MoonBit RC.
+/// All aliases share the same state; destroy closes them together.
+pub type DWARFBuilder
 
 ///|
 /// Create a new DWARF builder
 pub fn DWARFBuilder::DWARFBuilder() -> DWARFBuilder {
-  { handle: c_dwarf_create(), }
+  c_dwarf_create()
 }
 
 ///|
@@ -47,7 +42,7 @@ pub fn DWARFBuilder::add_function(
   let name_bytes = Bytes::from_array(
     name.to_array().map(fn(c) { c.to_int().to_byte() }),
   )
-  c_dwarf_add_function(self.handle, name_bytes, addr, size, func_idx)
+  c_dwarf_add_function(self, name_bytes, addr, size, func_idx)
 }
 
 ///|
@@ -61,23 +56,24 @@ pub fn DWARFBuilder::register(
   self : DWARFBuilder,
   verbose? : Bool = false,
 ) -> Unit {
-  c_dwarf_register(self.handle, if verbose { 1 } else { 0 })
+  c_dwarf_register(self, if verbose { 1 } else { 0 })
   // Set as active for backtrace lookups
-  c_dwarf_set_active(self.handle)
+  c_dwarf_set_active(self)
 }
 
 ///|
 /// Unregister DWARF debug info from the debugger
 /// Call this before destroying if you want to explicitly unregister
 pub fn DWARFBuilder::unregister(self : DWARFBuilder) -> Unit {
-  c_dwarf_unregister(self.handle)
+  c_dwarf_unregister(self)
 }
 
 ///|
 /// Destroy the DWARF builder and free all resources
-/// This also unregisters the debug info if it was registered
+/// This also unregisters debug info. Repeated calls are harmless.
+/// Closed builders ignore mutations and return None from address lookup.
 pub fn DWARFBuilder::destroy(self : DWARFBuilder) -> Unit {
-  c_dwarf_destroy(self.handle)
+  c_dwarf_destroy(self)
 }
 
 ///|
@@ -99,12 +95,7 @@ pub fn DWARFBuilder::lookup_address(
   let func_idx_buf = FixedArray::make(1, 0)
   let offset_buf = FixedArray::make(1, 0L)
   let found = c_dwarf_lookup_address(
-    self.handle,
-    addr,
-    name_buf,
-    256,
-    func_idx_buf,
-    offset_buf,
+    self, addr, name_buf, 256, func_idx_buf, offset_buf,
   )
   if found != 0 {
     // Convert null-terminated bytes to string
