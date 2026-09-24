@@ -2,14 +2,14 @@
 #include "jit_internal.h"
 #include <time.h>
 
-extern void wasmoon_jit_retain_memory_desc(int64_t);
-extern void wasmoon_jit_free_memory_desc(int64_t);
-extern int64_t wasmoon_memory_atomic_load(int64_t, int64_t, int32_t);
+extern void wasmoon_jit_retain_memory_desc(wasmoon_memory_t *);
+extern void wasmoon_jit_free_memory_desc(wasmoon_memory_t *);
+extern int64_t wasmoon_memory_atomic_load(wasmoon_memory_t *, int64_t, int32_t);
 
 typedef struct atomic_waiter {
     struct atomic_waiter *next;
     struct atomic_waiter *previous;
-    int64_t descriptor;
+    wasmoon_memory_t *descriptor;
     int64_t offset;
     uint64_t deadline;
     int32_t result; // -1 pending, 0 notified, 1 unequal, 2 timeout, 3 cancelled
@@ -64,7 +64,7 @@ static void expire_waiter(atomic_waiter *waiter, uint64_t now) {
 // The caller has checked sharedness, bounds and natural alignment and owns
 // the descriptor until this function returns. No MoonBit callback runs here.
 MOONBIT_FFI_EXPORT void *wasmoon_atomic_wait_begin(
-    int64_t descriptor, int64_t offset, int32_t width,
+    wasmoon_memory_t *descriptor, int64_t offset, int32_t width,
     int64_t expected, int64_t timeout
 ) {
     atomic_waiter *waiter = calloc(1, sizeof(*waiter));
@@ -117,7 +117,7 @@ MOONBIT_FFI_EXPORT void wasmoon_atomic_wait_destroy(void *raw) {
 }
 
 MOONBIT_FFI_EXPORT int32_t wasmoon_atomic_notify(
-    int64_t descriptor, int64_t offset, int32_t count_bits
+    wasmoon_memory_t *descriptor, int64_t offset, int32_t count_bits
 ) {
     uint32_t remaining = (uint32_t)count_bits;
     uint32_t notified = 0;
@@ -144,7 +144,7 @@ static void finalize_managed_waiter(void *object) {
 }
 
 MOONBIT_FFI_EXPORT void *wasmoon_atomic_wait_managed(
-    int64_t descriptor, int64_t offset, int32_t width,
+    wasmoon_memory_t *descriptor, int64_t offset, int32_t width,
     int64_t expected, int64_t timeout
 ) {
     atomic_waiter **managed = moonbit_make_external_object(
@@ -188,7 +188,7 @@ MOONBIT_FFI_EXPORT void wasmoon_cooperative_idle(void) {
 }
 
 int32_t wasmoon_atomic_wait_guest(
-    jit_context_t *ctx, int64_t descriptor, int64_t offset,
+    jit_context_t *ctx, wasmoon_memory_t *descriptor, int64_t offset,
     int32_t width, int64_t expected, int64_t timeout
 ) {
     void *waiter = wasmoon_atomic_wait_begin(descriptor, offset, width, expected, timeout);

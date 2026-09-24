@@ -52,8 +52,28 @@ typedef struct {
     int is_guarded;
     int is_shared;
     _Atomic int growth_lock;
-    _Atomic size_t owners;   // Independent Store/context ownership leases.
+    int valid;              // Empty managed handles represent allocation failure.
 } wasmoon_memory_t;
+
+static inline wasmoon_memory_t *memory_descriptor_live(wasmoon_memory_t *memory) {
+    return memory && memory->valid ? memory : NULL;
+}
+
+// Stable managed table identity; generated code borrows its entries.
+struct wasmoon_table_binding;
+typedef struct {
+    void **entries;
+    size_t size;
+    struct wasmoon_table_binding *bindings;
+} wasmoon_table_t;
+
+typedef struct wasmoon_table_binding {
+    wasmoon_table_t *owner;
+    void *context;
+    int index;
+    struct wasmoon_table_binding *next;
+    struct wasmoon_table_binding *previous;
+} wasmoon_table_binding_t;
 
 // GC safepoint metadata table (owned by compiler/runtime, borrowed by context).
 typedef struct wasmoon_gc_safepoint_table {
@@ -139,11 +159,7 @@ typedef struct {
 
     // Additional fields (not accessed by JIT code directly)
     int owns_memory0;         // Whether this context owns memory0 (should free it)
-    int owns_indirect_table;  // Whether this context owns table0_base (should free it)
-    char **args;              // WASI: command line arguments
-    int argc;                 // WASI: number of arguments
-    char **envp;              // WASI: environment variables
-    int envc;                 // WASI: number of env vars
+    int reserved_table_padding;  // Preserve the generated-code context ABI.
     int wasi_exited;          // WASI: proc_exit called
     int wasi_exit_code;       // WASI: exit code
 
@@ -162,49 +178,6 @@ typedef struct {
     // can see the values at the throw point (not the setjmp point)
     int64_t *spilled_locals;      // Saved local values
     int32_t spilled_locals_count; // Number of saved locals
-
-    // WASI file descriptor table (all descriptors, including stdio mappings).
-    int *fd_table;                // Maps WASI fd -> native fd (-1 = not open)
-    int fd_table_size;            // Size of fd_table
-    int fd_next;                  // Next available fd slot
-
-    // WASI stdio descriptor routing (fd_renumber can move these to arbitrary fds)
-    int stdin_fd;                 // Descriptor currently bound to stdin stream
-    int stdout_fd;                // Descriptor currently bound to stdout stream
-    int stderr_fd;                // Descriptor currently bound to stderr stream
-
-    // Preopened directories
-    char **preopen_paths;         // Host paths for preopened dirs
-    char **preopen_guest_paths;   // Guest paths for preopened dirs
-    int *preopen_fds;             // WASI descriptor for each preopen entry
-    int preopen_count;            // Number of preopened dirs
-    int preopen_base_fd;          // First preopen fd (typically 3)
-
-    // WASI stdio buffers for custom callbacks
-    int wasi_stdin_use_buffer;    // Whether stdin reads from buffer
-    uint8_t *wasi_stdin_buf;      // Buffered stdin data
-    size_t wasi_stdin_len;        // Total stdin buffer length
-    size_t wasi_stdin_offset;     // Current read offset
-
-    int wasi_stdout_capture;      // Capture stdout writes
-    uint8_t *wasi_stdout_buf;     // Captured stdout data
-    size_t wasi_stdout_len;       // Captured stdout length
-    size_t wasi_stdout_cap;       // Captured stdout capacity
-
-    int wasi_stderr_capture;      // Capture stderr writes
-    uint8_t *wasi_stderr_buf;     // Captured stderr data
-    size_t wasi_stderr_len;       // Captured stderr length
-    size_t wasi_stderr_cap;       // Captured stderr capacity
-
-    // WASI open fd metadata (host path + directory flag)
-    char **fd_host_paths;         // Host paths for open fds (owned strings)
-    uint8_t *fd_is_dir;           // 1 if fd is a directory
-    uint64_t *fd_rights_base;     // Effective Preview1 base rights
-    uint64_t *fd_rights_inheriting; // Effective Preview1 inheriting rights
-
-    // WASI stdin callback (MoonBit closure)
-    void *wasi_stdin_callback;        // Function pointer for stdin callback
-    void *wasi_stdin_callback_data;   // Closure data for stdin callback
 
     // Hostcall callback (MoonBit closure) for JIT -> host function bridging.
     // This is invoked by `wasmoon_jit_hostcall` during JIT execution.
@@ -262,6 +235,7 @@ typedef struct {
     int32_t *callable_tags;
     int callable_tag_count;
 
+    wasmoon_table_binding_t *table_bindings;
 } jit_context_t;
 
 // ============ Executable Memory Functions ============

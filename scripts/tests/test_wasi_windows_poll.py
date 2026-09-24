@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import ctypes
 import errno
+import json
+import sys
 import os
 from pathlib import Path
 import socket
@@ -31,6 +33,8 @@ class WindowsPollTests(unittest.TestCase):
             str(ROOT / "modules/wasmoon_jit/host_io/windows_input.c"),
             "/link", "/EXPORT:wasmoon_windows_socket_adopt",
             "/EXPORT:wasmoon_windows_close",
+            "/EXPORT:wasmoon_windows_notification_pipe",
+            "/EXPORT:wasmoon_windows_socket_get",
             "/EXPORT:wasmoon_windows_bytes_available",
             "/EXPORT:wasmoon_windows_setfl", "/EXPORT:wasmoon_windows_getfl",
             "/EXPORT:wasmoon_windows_read", "/EXPORT:wasmoon_windows_dup",
@@ -68,6 +72,43 @@ class WindowsPollTests(unittest.TestCase):
         cls.scans = cls.library.wasmoon_windows_poll_scan_count
         cls.scans.restype = ctypes.c_int
 
+
+    def test_notification_handles_are_not_inherited(self):
+        notification = self.library.wasmoon_windows_notification_pipe
+        notification.argtypes = [ctypes.POINTER(ctypes.c_int)]
+        notification.restype = ctypes.c_int
+        get_socket = self.library.wasmoon_windows_socket_get
+        get_socket.argtypes = [ctypes.c_int]
+        get_socket.restype = ctypes.c_size_t
+        fds = (ctypes.c_int * 2)()
+        self.assertEqual(notification(fds), 0)
+        try:
+            handles = [get_socket(fd) for fd in fds]
+            for handle in handles:
+                self.assertFalse(os.get_handle_inheritable(handle))
+            kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+            kernel.CreateEventW.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_wchar_p]
+            kernel.CreateEventW.restype = ctypes.c_void_p
+            kernel.CloseHandle.argtypes = [ctypes.c_void_p]
+            control = kernel.CreateEventW(None, True, False, None)
+            self.assertTrue(control)
+            try:
+                os.set_handle_inheritable(control, True)
+                code = """import ctypes, json, sys
+kernel = ctypes.WinDLL('kernel32', use_last_error=True)
+kernel.GetHandleInformation.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_ulong)]
+flags = ctypes.c_ulong()
+print(json.dumps([bool(kernel.GetHandleInformation(int(h), ctypes.byref(flags))) for h in sys.argv[1:]]))
+"""
+                result = subprocess.run(
+                    [sys.executable, "-c", code, *map(str, handles), str(control)],
+                    close_fds=False, capture_output=True, text=True, check=True, timeout=30)
+                self.assertEqual(json.loads(result.stdout), [False, False, True])
+            finally:
+                kernel.CloseHandle(control)
+        finally:
+            for fd in fds:
+                self.close(fd)
 
     def readiness(self, fds, events, timeout=0):
         array = ctypes.c_int * len(fds)

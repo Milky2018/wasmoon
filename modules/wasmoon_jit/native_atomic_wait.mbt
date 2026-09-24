@@ -5,8 +5,9 @@
 pub type NativeAtomicWait
 
 ///|
+#borrow(descriptor)
 extern "c" fn atomic_wait_new(
-  descriptor : Int64,
+  descriptor : MemoryDescriptor,
   offset : Int64,
   width : Int,
   expected : Int64,
@@ -35,7 +36,7 @@ pub extern "c" fn NativeAtomicWait::pause(self : NativeAtomicWait) -> Unit = "wa
 
 ///|
 pub fn atomic_wait_begin(
-  descriptor : Int64,
+  descriptor : MemoryDescriptor,
   offset : Int64,
   width : Int,
   expected : Int64,
@@ -50,8 +51,9 @@ pub fn atomic_wait_begin(
 }
 
 ///|
+#borrow(descriptor)
 pub extern "c" fn atomic_notify(
-  descriptor : Int64,
+  descriptor : MemoryDescriptor,
   offset : Int64,
   count : Int,
 ) -> Int = "wasmoon_atomic_notify"

@@ -33,6 +33,10 @@ def main():
     bounds = ROOT / "modules/wasmoon_jit/host_io/wasi/bounds_test.mbt"
     (PACKAGE / "native_bounds_test.mbt").write_text(
         bounds.read_text().replace("@wasi.", "@native_host."))
+    resolver = ROOT / "modules/wasmoon_jit/host_io/wasi/resolver_test.mbt"
+    (PACKAGE / "resolver_test.mbt").write_text(
+        resolver.read_text().replace("@wasi.", "@native_host."))
+    shutil.copy2(ROOT / "modules/wasmoon_jit/native_handles_test.mbt", PACKAGE)
     fixture_dir = PACKAGE / "testsuite" / "fixtures"
     fixture_dir.mkdir(parents=True)
     shutil.copy2(ROOT / "modules/wasmoon/testsuite/fixtures/wasi-command-async-stdin.component.wat",
@@ -111,13 +115,13 @@ def main():
     for symbol in ["__asan_init", "__ubsan_handle"]:
         if symbol not in symbols:
             raise RuntimeError(f"Missing instrumentation: {symbol}")
-    # Exercise all native context allocation failure paths under the same tools.
-    allocation_probe = OUT / "context-allocation"
+    # Exercise resolver failure and cancellation schedules under the same tools.
+    allocation_probe = OUT / "resolver-lifecycle"
     include = Path(os.environ.get("MOON_HOME", Path.home() / ".moon")) / "include"
-    run(["clang", "-fsanitize=address,undefined", "-fno-sanitize-recover=all",
+    run(["clang", "-pthread", "-fsanitize=address,undefined", "-fno-sanitize-recover=all",
          "-fno-omit-frame-pointer", "-I", str(include),
-         "-I", str(sources / "wasmoon_jit/jit_ffi"),
-         str(ROOT / "scripts/tests/native/wasi_context_alloc.c"),
+         "-I", str(sources / "wasmoon_jit/host_io/wasi"),
+         str(ROOT / "scripts/tests/native/resolver_lifecycle.c"),
          "-o", str(allocation_probe)], log=OUT / "allocation-build.log")
     run([str(allocation_probe)], log=OUT / "allocation.log")
     environment["WASMOON_SANITIZER_PROBE"] = "asan"

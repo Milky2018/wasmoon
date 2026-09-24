@@ -26,18 +26,14 @@ static void join_worker(test_thread thread) { pthread_join(thread, NULL); }
 static void yield_worker(void) { sched_yield(); }
 #endif
 
-extern int32_t wasmoon_atomic_notify(int64_t, int64_t, int32_t);
-extern void wasmoon_jit_retain_memory_desc(int64_t);
-extern void wasmoon_jit_free_memory_desc(int64_t);
+extern int32_t wasmoon_atomic_notify(wasmoon_memory_t *, int64_t, int32_t);
+extern void wasmoon_jit_retain_memory_desc(wasmoon_memory_t *);
+extern void wasmoon_jit_free_memory_desc(wasmoon_memory_t *);
 
-MOONBIT_FFI_EXPORT int64_t wasmoon_test_memory_owner_count(int64_t descriptor) {
-    wasmoon_memory_t *memory = (void *)(uintptr_t)descriptor;
-    return (int64_t)atomic_load_explicit(&memory->owners, memory_order_relaxed);
-}
 
 typedef struct {
     test_thread thread;
-    int64_t descriptor;
+    wasmoon_memory_t *descriptor;
     int64_t offset;
     int32_t result;
 } atomic_notify_worker;
@@ -56,7 +52,7 @@ static WORKER_RESULT run_atomic_notify(void *argument) {
     return WORKER_DONE;
 }
 
-MOONBIT_FFI_EXPORT int64_t wasmoon_test_atomic_notify_start(int64_t descriptor, int64_t offset) {
+MOONBIT_FFI_EXPORT int64_t wasmoon_test_atomic_notify_start(wasmoon_memory_t *descriptor, int64_t offset) {
     atomic_notify_worker *worker = calloc(1, sizeof(*worker));
     if (!worker) return 0;
     worker->descriptor = descriptor;
@@ -85,6 +81,7 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_test_atomic_notify_finish(int64_t pointer) {
 typedef struct {
     test_thread thread;
     uint8_t *base;
+    wasmoon_memory_t *memory;
     int32_t width;
     int32_t iterations;
     _Atomic int32_t cancelled;
@@ -110,16 +107,19 @@ static WORKER_RESULT run_atomic_counter(void *argument) {
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_test_atomic_counter_start(
-    int64_t descriptor, int32_t width, int32_t iterations
+    wasmoon_memory_t *descriptor, int32_t width, int32_t iterations
 ) {
-    wasmoon_memory_t *memory = (wasmoon_memory_t *)(uintptr_t)descriptor;
+    wasmoon_memory_t *memory = descriptor;
     if (!memory || (width != 4 && width != 8) || iterations <= 0) return 0;
     atomic_counter_worker *worker = calloc(1, sizeof(*worker));
     if (!worker) return 0;
     worker->base = memory->base;
+    worker->memory = memory;
+    moonbit_incref(memory);
     worker->width = width;
     worker->iterations = iterations;
     if (start_worker(&worker->thread, run_atomic_counter, worker)) {
+        moonbit_decref(memory);
         free(worker);
         return 0;
     }
@@ -131,6 +131,7 @@ MOONBIT_FFI_EXPORT void wasmoon_test_atomic_counter_finish(int64_t pointer, int3
     if (!worker) return;
     if (cancel) atomic_store_explicit(&worker->cancelled, 1, memory_order_seq_cst);
     join_worker(worker->thread);
+    moonbit_decref(worker->memory);
     free(worker);
 }
 
@@ -172,14 +173,16 @@ static WORKER_RESULT run_memory_growth(void *argument) {
     return WORKER_DONE;
 }
 
-MOONBIT_FFI_EXPORT int64_t wasmoon_test_memory_growth_start(int64_t descriptor, int32_t iterations) {
-    wasmoon_memory_t *memory = (wasmoon_memory_t *)(uintptr_t)descriptor;
+MOONBIT_FFI_EXPORT int64_t wasmoon_test_memory_growth_start(wasmoon_memory_t *descriptor, int32_t iterations) {
+    wasmoon_memory_t *memory = descriptor;
     if (!memory || !memory->is_shared || iterations <= 0) return 0;
     memory_growth_worker *worker = calloc(1, sizeof(*worker));
     if (!worker) return 0;
     worker->memory = memory;
+    moonbit_incref(memory);
     worker->iterations = iterations;
     if (start_worker(&worker->thread, run_memory_growth, worker)) {
+        moonbit_decref(memory);
         free(worker);
         return 0;
     }
@@ -192,6 +195,27 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_test_memory_growth_finish(int64_t pointer, in
     if (cancel) atomic_store_explicit(&worker->cancelled, 1, memory_order_seq_cst);
     join_worker(worker->thread);
     int64_t result = worker->sum;
+    moonbit_decref(worker->memory);
     free(worker);
     return result;
+}
+
+// Sparse allocation for the table slot offset regression; avoid touching 2 GiB.
+MOONBIT_FFI_EXPORT wasmoon_table_t *wasmoon_test_sparse_table(int32_t count) {
+    wasmoon_table_t *table = wasmoon_jit_alloc_shared_indirect_table(0);
+    if (!table->entries) return table;
+    void **entries = calloc((size_t)count * 2, sizeof(void *));
+    if (entries) {
+        free(table->entries);
+        table->entries = entries;
+        table->size = (size_t)count;
+    }
+    return table;
+}
+
+extern int64_t wasmoon_jit_context_ptr(void *context);
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_test_table_grow(void *context, int32_t index, int64_t delta) {
+    return table_grow_ctx_internal((jit_context_t *)(uintptr_t)wasmoon_jit_context_ptr(context),
+        index, delta, 0);
 }

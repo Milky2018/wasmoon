@@ -2,6 +2,10 @@ import {
   "Milky2018/wasmoon_jit/host_io",
 }
 
+import {
+  "Milky2018/wasmoon_jit/host_io/reactor",
+} for "test"
+
 options(
   "native-stub": [
     "ffi_native.c",

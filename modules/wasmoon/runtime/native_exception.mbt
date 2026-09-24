@@ -119,7 +119,7 @@ pub fn Store::encode_native_exception(
   }
   let heap = match self.c_heap {
     Some(heap) => heap.get_ptr()
-    None => 0L
+    None => @wasmoon_jit.GCHeapHandle::null()
   }
   let reference = self.native_execution
     .exceptions()

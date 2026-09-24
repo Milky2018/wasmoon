@@ -1,3 +1,6 @@
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
 // Native networking backend; no guest memory or WASI policy lives here.
 #include "moonbit.h"
 #include <errno.h>
@@ -20,6 +23,9 @@ typedef int socklen_t;
 #include <pthread.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
+#ifdef __APPLE__
+#include <sys/event.h>
+#endif
 #endif
 
 struct wasmoon_wasi_resolver_address {
@@ -29,11 +35,8 @@ struct wasmoon_wasi_resolver_address {
 };
 
 struct wasmoon_wasi_resolver {
-#ifdef _WIN32
-  SRWLOCK mutex;
-#else
-  pthread_mutex_t mutex;
-#endif
+  struct wasmoon_wasi_resolver *next;
+  int queued;
   int read_fd;
   int write_fd;
   int completed;
@@ -45,20 +48,35 @@ struct wasmoon_wasi_resolver {
   char *name;
 };
 
-static void wasmoon_wasi_resolver_lock(struct wasmoon_wasi_resolver *resolver) {
+// Global admission accounts for queued and executing work, including cancelled
+// getaddrinfo calls until they return. Idle workers exit; no shutdown join can
+// be held hostage by the system resolver. All queue and result state uses this
+// mutex, but no name lookup runs while it is held.
+enum { RESOLVER_WORKERS = 4, RESOLVER_REQUESTS = 32 };
+static struct wasmoon_wasi_resolver *resolver_queue;
+static struct wasmoon_wasi_resolver *resolver_tail;
+static int resolver_workers;
+static int resolver_requests;
 #ifdef _WIN32
-  AcquireSRWLockExclusive(&resolver->mutex);
+static SRWLOCK resolver_mutex = SRWLOCK_INIT;
 #else
-  pthread_mutex_lock(&resolver->mutex);
+static pthread_mutex_t resolver_mutex = PTHREAD_MUTEX_INITIALIZER;
+#endif
+static void resolver_lock(void) {
+#ifdef _WIN32
+  AcquireSRWLockExclusive(&resolver_mutex);
+#else
+  pthread_mutex_lock(&resolver_mutex);
 #endif
 }
-static void wasmoon_wasi_resolver_unlock(struct wasmoon_wasi_resolver *resolver) {
+static void resolver_unlock(void) {
 #ifdef _WIN32
-  ReleaseSRWLockExclusive(&resolver->mutex);
+  ReleaseSRWLockExclusive(&resolver_mutex);
 #else
-  pthread_mutex_unlock(&resolver->mutex);
+  pthread_mutex_unlock(&resolver_mutex);
 #endif
 }
+
 static void wasmoon_wasi_resolver_close(int fd) {
 #ifdef _WIN32
   wasmoon_windows_close(fd);
@@ -72,9 +90,6 @@ static void wasmoon_wasi_resolver_free(struct wasmoon_wasi_resolver *resolver) {
   if (resolver->write_fd >= 0) wasmoon_wasi_resolver_close(resolver->write_fd);
   free(resolver->addresses);
   free(resolver->name);
-#ifndef _WIN32
-  pthread_mutex_destroy(&resolver->mutex);
-#endif
   free(resolver);
 }
 
@@ -86,13 +101,7 @@ static int wasmoon_wasi_is_mapped_ipv4(const struct in6_addr *address) {
   return bytes[10] == 0xff && bytes[11] == 0xff;
 }
 
-#ifdef _WIN32
-static unsigned __stdcall wasmoon_wasi_resolver_run(void *argument) {
-#else
-static void *wasmoon_wasi_resolver_run(void *argument) {
-#endif
-  struct wasmoon_wasi_resolver *resolver =
-    (struct wasmoon_wasi_resolver *)argument;
+static void resolver_lookup(struct wasmoon_wasi_resolver *resolver) {
   struct addrinfo hints;
   memset(&hints, 0, sizeof(hints));
   hints.ai_family = AF_UNSPEC;
@@ -144,16 +153,26 @@ static void *wasmoon_wasi_resolver_run(void *argument) {
   }
   if (results != NULL) freeaddrinfo(results);
 
-  wasmoon_wasi_resolver_lock(resolver);
+  resolver_lock();
   resolver->gai_error = gai_error;
   resolver->addresses = addresses;
   resolver->count = index;
   resolver->completed = 1;
+  resolver_requests--;
   int dropped = resolver->dropped;
   int write_fd = resolver->write_fd;
   resolver->write_fd = -1;
-  wasmoon_wasi_resolver_unlock(resolver);
-  if (write_fd >= 0) {
+  // Keep notification and closing the read end mutually exclusive.
+#ifdef __APPLE__
+  if (!dropped) {
+    struct kevent event;
+    EV_SET(&event, 1, EVFILT_USER, 0, NOTE_TRIGGER, 0, NULL);
+    int result;
+    do { result = kevent(resolver->read_fd, &event, 1, NULL, 0, NULL); }
+    while (result < 0 && errno == EINTR);
+  }
+#else
+  if (write_fd >= 0 && !dropped) {
     uint8_t ready = 1;
 #ifdef _WIN32
     (void)wasmoon_windows_write(write_fd, &ready, sizeof(ready));
@@ -162,89 +181,185 @@ static void *wasmoon_wasi_resolver_run(void *argument) {
     do { written = write(write_fd, &ready, sizeof(ready)); }
     while (written < 0 && errno == EINTR);
 #endif
-    wasmoon_wasi_resolver_close(write_fd);
   }
+#endif
+  if (write_fd >= 0) wasmoon_wasi_resolver_close(write_fd);
+  resolver_unlock();
   if (dropped) wasmoon_wasi_resolver_free(resolver);
+}
+
+#ifdef _WIN32
+static unsigned __stdcall resolver_worker(void *argument) {
+#else
+static void *resolver_worker(void *argument) {
+#endif
+  (void)argument;
+  for (;;) {
+    resolver_lock();
+    struct wasmoon_wasi_resolver *resolver = resolver_queue;
+    if (resolver == NULL) {
+      resolver_workers--;
+      resolver_unlock();
+      return 0;
+    }
+    resolver_queue = resolver->next;
+    if (resolver_queue == NULL) resolver_tail = NULL;
+    resolver->next = NULL;
+    resolver->queued = 0;
+    resolver_unlock();
+    resolver_lookup(resolver);
+  }
+}
+
+// Must be called with resolver_mutex held, before publishing a new request.
+static int resolver_start_worker(void) {
+#ifdef _WIN32
+  uintptr_t thread = _beginthreadex(NULL, 0, resolver_worker, NULL, 0, NULL);
+  if (!thread) return -1;
+  CloseHandle((HANDLE)thread);
+#else
+  pthread_attr_t attr;
+  int error = pthread_attr_init(&attr);
+  if (error) { errno = error; return -1; }
+  error = pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
+  pthread_t thread;
+  if (!error) error = pthread_create(&thread, &attr, resolver_worker, NULL);
+  pthread_attr_destroy(&attr);
+  if (error) { errno = error; return -1; }
+#endif
+  resolver_workers++;
   return 0;
 }
 
-MOONBIT_FFI_EXPORT int64_t wasmoon_wasi_resolver_start(
+static int resolver_notification(int *fds) {
+#ifdef _WIN32
+  return wasmoon_windows_notification_pipe(fds);
+#elif defined(__APPLE__)
+  // Darwin kqueues are close-on-exec and close-on-fork at creation. Poll and
+  // nested kqueue registration observe pending EVFILT_USER events as readable.
+  fds[0] = kqueue();
+  fds[1] = -1;
+  if (fds[0] < 0) return -1;
+  struct kevent event;
+  EV_SET(&event, 1, EVFILT_USER, EV_ADD | EV_CLEAR, 0, 0, NULL);
+  if (kevent(fds[0], &event, 1, NULL, 0, NULL) == 0) return 0;
+  int error = errno;
+  close(fds[0]);
+  errno = error;
+  return -1;
+#else
+  return pipe2(fds, O_CLOEXEC | O_NONBLOCK);
+#endif
+}
+
+static struct wasmoon_wasi_resolver *resolver_start(
   moonbit_bytes_t name,
   int *poll_fd
 ) {
   int pipe_fds[2];
-#ifdef _WIN32
-  if (wasmoon_windows_notification_pipe(pipe_fds) != 0) return 0;
-#else
-  if (pipe(pipe_fds) != 0) return 0;
-  int flags = fcntl(pipe_fds[0], F_GETFL, 0);
-  if (flags < 0 || fcntl(pipe_fds[0], F_SETFL, flags | O_NONBLOCK) != 0) {
-    wasmoon_wasi_resolver_close(pipe_fds[0]);
-    wasmoon_wasi_resolver_close(pipe_fds[1]);
-    return 0;
-  }
-#endif
+  if (resolver_notification(pipe_fds) != 0) return NULL;
   struct wasmoon_wasi_resolver *resolver = calloc(1, sizeof(*resolver));
   if (resolver == NULL) {
     wasmoon_wasi_resolver_close(pipe_fds[0]);
-    wasmoon_wasi_resolver_close(pipe_fds[1]);
+    if (pipe_fds[1] >= 0) wasmoon_wasi_resolver_close(pipe_fds[1]);
     return 0;
   }
   resolver->read_fd = pipe_fds[0];
   resolver->write_fd = pipe_fds[1];
 #ifdef _WIN32
   resolver->name = _strdup((const char *)name);
-  InitializeSRWLock(&resolver->mutex);
-  int mutex_error = 0;
 #else
   resolver->name = strdup((const char *)name);
-  int mutex_error = pthread_mutex_init(&resolver->mutex, NULL);
 #endif
-  if (resolver->name == NULL || mutex_error != 0) {
-#ifndef _WIN32
-    if (mutex_error == 0) pthread_mutex_destroy(&resolver->mutex);
-#endif
-    wasmoon_wasi_resolver_close(pipe_fds[0]);
-    wasmoon_wasi_resolver_close(pipe_fds[1]);
-    free(resolver->name);
-    free(resolver);
-    return 0;
-  }
-#ifdef _WIN32
-  uintptr_t thread = _beginthreadex(NULL, 0, wasmoon_wasi_resolver_run, resolver, 0, NULL);
-  if (!thread) {
+  if (resolver->name == NULL) {
     wasmoon_wasi_resolver_free(resolver);
-    return 0;
+    return NULL;
   }
-  CloseHandle((HANDLE)thread);
-#else
-  pthread_t thread;
-  if (pthread_create(&thread, NULL, wasmoon_wasi_resolver_run, resolver) != 0) {
+  resolver_lock();
+  if (resolver_requests == RESOLVER_REQUESTS ||
+      (resolver_workers < RESOLVER_WORKERS &&
+       resolver_start_worker() != 0 && resolver_workers == 0)) {
+    resolver_unlock();
     wasmoon_wasi_resolver_free(resolver);
-    return 0;
+    errno = EAGAIN;
+    return NULL;
   }
-  pthread_detach(thread);
-#endif
+  resolver_requests++;
+  resolver->queued = 1;
+  if (resolver_tail) resolver_tail->next = resolver;
+  else resolver_queue = resolver;
+  resolver_tail = resolver;
+  resolver_unlock();
   *poll_fd = resolver->read_fd;
-  return (int64_t)(intptr_t)resolver;
+  return resolver;
+}
+
+// The MoonBit-owned shell survives explicit close. Only the worker state is
+// shared with the background thread; its last owner frees it under the protocol
+// below. The worker never accesses a MoonBit object or its reference count.
+struct wasmoon_wasi_resolver_handle {
+  struct wasmoon_wasi_resolver *state;
+};
+
+MOONBIT_FFI_EXPORT void wasmoon_wasi_resolver_drop(
+  struct wasmoon_wasi_resolver_handle *handle
+) {
+  struct wasmoon_wasi_resolver *resolver = handle->state;
+  if (resolver == NULL) return;
+  handle->state = NULL;
+  resolver_lock();
+  resolver->dropped = 1;
+  int completed = resolver->completed;
+  if (resolver->queued) {
+    struct wasmoon_wasi_resolver *previous = NULL;
+    struct wasmoon_wasi_resolver **link = &resolver_queue;
+    while (*link != resolver) {
+      previous = *link;
+      link = &(*link)->next;
+    }
+    *link = resolver->next;
+    if (resolver_tail == resolver) resolver_tail = previous;
+    resolver_requests--;
+    completed = 1;
+  }
+  if (resolver->read_fd >= 0) {
+    wasmoon_wasi_resolver_close(resolver->read_fd);
+    resolver->read_fd = -1;
+  }
+  resolver_unlock();
+  if (completed) wasmoon_wasi_resolver_free(resolver);
+}
+
+static void resolver_finalize(void *object) {
+  wasmoon_wasi_resolver_drop(object);
+}
+
+MOONBIT_FFI_EXPORT struct wasmoon_wasi_resolver_handle *wasmoon_wasi_resolver_start(
+  moonbit_bytes_t name, int *poll_fd
+) {
+  struct wasmoon_wasi_resolver_handle *handle = moonbit_make_external_object(
+    resolver_finalize, sizeof(*handle));
+  *poll_fd = -1;
+  handle->state = resolver_start(name, poll_fd);
+  return handle;
 }
 
 MOONBIT_FFI_EXPORT int wasmoon_wasi_resolver_next(
-  int64_t resolver_handle,
+  struct wasmoon_wasi_resolver_handle *handle,
   uint8_t *family,
   uint8_t *address,
   uint32_t *scope_id
 ) {
-  struct wasmoon_wasi_resolver *resolver =
-    (struct wasmoon_wasi_resolver *)(intptr_t)resolver_handle;
-  wasmoon_wasi_resolver_lock(resolver);
+  struct wasmoon_wasi_resolver *resolver = handle->state;
+  if (resolver == NULL) return 5;
+  resolver_lock();
   if (!resolver->completed) {
-    wasmoon_wasi_resolver_unlock(resolver);
+    resolver_unlock();
     return 1;
   }
   if (resolver->gai_error != 0) {
     int error = resolver->gai_error;
-    wasmoon_wasi_resolver_unlock(resolver);
+    resolver_unlock();
     if (error == EAI_AGAIN) return 4;
 #if defined(EAI_NONAME)
     if (error == EAI_NONAME) return 3;
@@ -255,7 +370,7 @@ MOONBIT_FFI_EXPORT int wasmoon_wasi_resolver_next(
     return 5;
   }
   if (resolver->index >= resolver->count) {
-    wasmoon_wasi_resolver_unlock(resolver);
+    resolver_unlock();
     return 2;
   }
   struct wasmoon_wasi_resolver_address *result =
@@ -264,20 +379,6 @@ MOONBIT_FFI_EXPORT int wasmoon_wasi_resolver_next(
   memset(address, 0, 16);
   memcpy(address, result->address, result->family == 4 ? 4 : 16);
   *scope_id = result->scope_id;
-  wasmoon_wasi_resolver_unlock(resolver);
+  resolver_unlock();
   return 0;
-}
-
-MOONBIT_FFI_EXPORT void wasmoon_wasi_resolver_drop(int64_t resolver_handle) {
-  struct wasmoon_wasi_resolver *resolver =
-    (struct wasmoon_wasi_resolver *)(intptr_t)resolver_handle;
-  if (resolver == NULL) return;
-  wasmoon_wasi_resolver_lock(resolver);
-  resolver->dropped = 1;
-  int completed = resolver->completed;
-  int read_fd = resolver->read_fd;
-  resolver->read_fd = -1;
-  wasmoon_wasi_resolver_unlock(resolver);
-  if (read_fd >= 0) wasmoon_wasi_resolver_close(read_fd);
-  if (completed) wasmoon_wasi_resolver_free(resolver);
 }

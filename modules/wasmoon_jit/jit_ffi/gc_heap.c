@@ -7,10 +7,12 @@
  */
 
 #include "gc_heap.h"
+#include <moonbit.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
 #include <limits.h>
+#include <stdatomic.h>
 
 // Default sizes
 #define DEFAULT_HEAP_CAPACITY (1024 * 1024)  // 1MB
@@ -215,69 +217,50 @@ static uint8_t* get_object_data(GcHeap* heap, int32_t gc_ref) {
 
 // ============ Heap Lifecycle ============
 
-GcHeap* gc_heap_new(size_t initial_capacity) {
-    if (initial_capacity == 0) {
-        initial_capacity = DEFAULT_HEAP_CAPACITY;
-    }
+static _Atomic int64_t gc_heap_live_count;
 
-    GcHeap* heap = (GcHeap*)malloc(sizeof(GcHeap));
-    if (!heap) {
-        return NULL;
-    }
-
-    heap->data = (uint8_t*)malloc(initial_capacity);
-    if (!heap->data) {
-        free(heap);
-        return NULL;
-    }
-
-    heap->object_table = (int32_t*)malloc(DEFAULT_OBJECT_CAPACITY * sizeof(int32_t));
-    if (!heap->object_table) {
-        free(heap->data);
-        free(heap);
-        return NULL;
-    }
-
-    heap->runtime_types = malloc(DEFAULT_OBJECT_CAPACITY * sizeof(int32_t));
-    if (!heap->runtime_types) {
-        free(heap->object_table); free(heap->data); free(heap);
-        return NULL;
-    }
-    heap->free_list = (int32_t*)malloc(DEFAULT_FREE_CAPACITY * sizeof(int32_t));
-    if (!heap->free_list) {
-        free(heap->runtime_types);
-        free(heap->object_table);
-        free(heap->data);
-        free(heap);
-        return NULL;
-    }
-
-    heap->size = 0;
-    heap->capacity = initial_capacity;
-    heap->object_count = 0;
-    heap->object_capacity = DEFAULT_OBJECT_CAPACITY;
-    heap->free_count = 0;
-    heap->free_capacity = DEFAULT_FREE_CAPACITY;
-    heap->total_allocations = 0;
-    heap->total_collections = 0;
-    heap->barrier_writes = 0;
-    heap->parked_jit_roots_head = NULL;
-
-    return heap;
+int64_t wasmoon_gc_heap_live_count(void) {
+    return atomic_load_explicit(&gc_heap_live_count, memory_order_relaxed);
 }
 
-void gc_heap_free(GcHeap* heap) {
-    if (!heap) {
-        return;
-    }
-    if (heap->parked_jit_roots_head) {
-        abort();
-    }
+static void finalize_gc_heap(void *object) {
+    GcHeap *heap = object;
+    // Each live registration owns a reference, so none can outlive the heap.
+    if (heap->parked_jit_roots_head) abort();
     free(heap->free_list);
     free(heap->runtime_types);
     free(heap->object_table);
     free(heap->data);
-    free(heap);
+    if (heap->capacity) atomic_fetch_sub_explicit(&gc_heap_live_count, 1, memory_order_relaxed);
+}
+
+GcHeap *wasmoon_gc_heap_empty(void) {
+    GcHeap *heap = moonbit_make_external_object(finalize_gc_heap, sizeof(GcHeap));
+    memset(heap, 0, sizeof(*heap));
+    return heap;
+}
+
+int32_t wasmoon_gc_heap_is_empty(GcHeap *heap) {
+    return !heap->data;
+}
+
+GcHeap* gc_heap_new(size_t initial_capacity) {
+    if (initial_capacity == 0) initial_capacity = DEFAULT_HEAP_CAPACITY;
+    GcHeap *heap = wasmoon_gc_heap_empty();
+    heap->data = malloc(initial_capacity);
+    heap->object_table = malloc(DEFAULT_OBJECT_CAPACITY * sizeof(int32_t));
+    heap->runtime_types = malloc(DEFAULT_OBJECT_CAPACITY * sizeof(int32_t));
+    heap->free_list = malloc(DEFAULT_FREE_CAPACITY * sizeof(int32_t));
+    if (!heap->data || !heap->object_table || !heap->runtime_types || !heap->free_list) {
+        finalize_gc_heap(heap);
+        memset(heap, 0, sizeof(*heap));
+        return heap;
+    }
+    atomic_fetch_add_explicit(&gc_heap_live_count, 1, memory_order_relaxed);
+    heap->capacity = initial_capacity;
+    heap->object_capacity = DEFAULT_OBJECT_CAPACITY;
+    heap->free_capacity = DEFAULT_FREE_CAPACITY;
+    return heap;
 }
 
 int32_t gc_heap_register_parked_roots(
@@ -306,6 +289,7 @@ int32_t gc_heap_register_parked_roots(
         return 0;
     }
     GcParkedRoots* head = (GcParkedRoots*)heap->parked_jit_roots_head;
+    moonbit_incref(heap);
     registration->heap = heap;
     registration->root_count = root_count;
     registration->next = head;
@@ -338,6 +322,7 @@ void gc_heap_unregister_parked_roots(void* opaque_registration) {
     }
     free(registration->roots);
     free(registration);
+    moonbit_decref(heap);
 }
 
 // ============ Struct Operations ============
@@ -1156,208 +1141,242 @@ void gc_heap_get_stats(GcHeap* heap, int32_t* out_total_allocations, int32_t* ou
 
 // These functions are exported for MoonBit FFI
 
-int64_t wasmoon_gc_heap_new(int64_t capacity) {
+GcHeap *wasmoon_gc_heap_new(int64_t capacity) {
     GcHeap* heap = gc_heap_new((size_t)capacity);
-    return (int64_t)(uintptr_t)heap;
+    return heap;
 }
 
-void wasmoon_gc_heap_free(int64_t heap_ptr) {
-    gc_heap_free((GcHeap*)(uintptr_t)heap_ptr);
-}
 
-int32_t wasmoon_gc_heap_alloc_struct(int64_t heap_ptr, int32_t type_idx,
+int32_t wasmoon_gc_heap_alloc_struct(GcHeap *heap_ptr, int32_t type_idx,
                                       int64_t* fields, int32_t num_fields) {
-    return gc_heap_alloc_struct((GcHeap*)(uintptr_t)heap_ptr, type_idx, fields, num_fields);
+    heap_ptr = gc_heap_live(heap_ptr);
+    return gc_heap_alloc_struct(heap_ptr, type_idx, fields, num_fields);
 }
 
-int64_t wasmoon_gc_heap_struct_get(int64_t heap_ptr, int32_t gc_ref, int32_t field_idx) {
-    return gc_heap_struct_get((GcHeap*)(uintptr_t)heap_ptr, gc_ref, field_idx);
+int64_t wasmoon_gc_heap_struct_get(GcHeap *heap_ptr, int32_t gc_ref, int32_t field_idx) {
+    heap_ptr = gc_heap_live(heap_ptr);
+    return gc_heap_struct_get(heap_ptr, gc_ref, field_idx);
 }
 
-void wasmoon_gc_heap_struct_set(int64_t heap_ptr, int32_t gc_ref, int32_t field_idx, int64_t value) {
-    gc_heap_struct_set((GcHeap*)(uintptr_t)heap_ptr, gc_ref, field_idx, value);
+void wasmoon_gc_heap_struct_set(GcHeap *heap_ptr, int32_t gc_ref, int32_t field_idx, int64_t value) {
+    heap_ptr = gc_heap_live(heap_ptr);
+    gc_heap_struct_set(heap_ptr, gc_ref, field_idx, value);
 }
 
 // The `_wide` wrappers carry whole slots as flat [lo, hi] word pairs, because
 // that is what crosses the MoonBit FFI cleanly as a FixedArray[Int64].
 
-int32_t wasmoon_gc_heap_alloc_struct_wide(int64_t heap_ptr, int32_t type_idx,
+int32_t wasmoon_gc_heap_alloc_struct_wide(GcHeap *heap_ptr, int32_t type_idx,
                                            int64_t* words, int32_t num_fields) {
-    return gc_heap_alloc_struct_wide((GcHeap*)(uintptr_t)heap_ptr, type_idx,
+    heap_ptr = gc_heap_live(heap_ptr);
+    return gc_heap_alloc_struct_wide(heap_ptr, type_idx,
                                      (const GcSlot*)words, num_fields);
 }
 
-void wasmoon_gc_heap_struct_get_wide(int64_t heap_ptr, int32_t gc_ref,
+void wasmoon_gc_heap_struct_get_wide(GcHeap *heap_ptr, int32_t gc_ref,
                                       int32_t field_idx, int64_t* out_words) {
-    GcSlot slot = gc_heap_struct_get_wide((GcHeap*)(uintptr_t)heap_ptr, gc_ref, field_idx);
+    heap_ptr = gc_heap_live(heap_ptr);
+    GcSlot slot = gc_heap_struct_get_wide(heap_ptr, gc_ref, field_idx);
     out_words[0] = slot.lo;
     out_words[1] = slot.hi;
 }
 
-void wasmoon_gc_heap_struct_set_wide(int64_t heap_ptr, int32_t gc_ref,
+void wasmoon_gc_heap_struct_set_wide(GcHeap *heap_ptr, int32_t gc_ref,
                                       int32_t field_idx, int64_t lo, int64_t hi) {
+    heap_ptr = gc_heap_live(heap_ptr);
     GcSlot slot = {lo, hi};
-    gc_heap_struct_set_wide((GcHeap*)(uintptr_t)heap_ptr, gc_ref, field_idx, slot);
+    gc_heap_struct_set_wide(heap_ptr, gc_ref, field_idx, slot);
 }
 
-int32_t wasmoon_gc_heap_alloc_array(int64_t heap_ptr, int32_t type_idx,
+int32_t wasmoon_gc_heap_alloc_array(GcHeap *heap_ptr, int32_t type_idx,
                                      int32_t len, int64_t init_value) {
-    return gc_heap_alloc_array((GcHeap*)(uintptr_t)heap_ptr, type_idx, len, init_value);
+    heap_ptr = gc_heap_live(heap_ptr);
+    return gc_heap_alloc_array(heap_ptr, type_idx, len, init_value);
 }
 
-int32_t wasmoon_gc_heap_array_len(int64_t heap_ptr, int32_t gc_ref) {
-    return gc_heap_array_len((GcHeap*)(uintptr_t)heap_ptr, gc_ref);
+int32_t wasmoon_gc_heap_array_len(GcHeap *heap_ptr, int32_t gc_ref) {
+    heap_ptr = gc_heap_live(heap_ptr);
+    return gc_heap_array_len(heap_ptr, gc_ref);
 }
 
-int64_t wasmoon_gc_heap_array_get(int64_t heap_ptr, int32_t gc_ref, int32_t idx) {
-    return gc_heap_array_get((GcHeap*)(uintptr_t)heap_ptr, gc_ref, idx);
+int64_t wasmoon_gc_heap_array_get(GcHeap *heap_ptr, int32_t gc_ref, int32_t idx) {
+    heap_ptr = gc_heap_live(heap_ptr);
+    return gc_heap_array_get(heap_ptr, gc_ref, idx);
 }
 
-void wasmoon_gc_heap_array_set(int64_t heap_ptr, int32_t gc_ref, int32_t idx, int64_t value) {
-    gc_heap_array_set((GcHeap*)(uintptr_t)heap_ptr, gc_ref, idx, value);
+void wasmoon_gc_heap_array_set(GcHeap *heap_ptr, int32_t gc_ref, int32_t idx, int64_t value) {
+    heap_ptr = gc_heap_live(heap_ptr);
+    gc_heap_array_set(heap_ptr, gc_ref, idx, value);
 }
 
-void wasmoon_gc_heap_array_fill(int64_t heap_ptr, int32_t gc_ref, int32_t offset,
+void wasmoon_gc_heap_array_fill(GcHeap *heap_ptr, int32_t gc_ref, int32_t offset,
                                  int64_t value, int32_t count) {
-    gc_heap_array_fill((GcHeap*)(uintptr_t)heap_ptr, gc_ref, offset, value, count);
+    heap_ptr = gc_heap_live(heap_ptr);
+    gc_heap_array_fill(heap_ptr, gc_ref, offset, value, count);
 }
 
-int32_t wasmoon_gc_heap_alloc_array_wide(int64_t heap_ptr, int32_t type_idx,
+int32_t wasmoon_gc_heap_alloc_array_wide(GcHeap *heap_ptr, int32_t type_idx,
                                           int32_t len, int64_t lo, int64_t hi) {
+    heap_ptr = gc_heap_live(heap_ptr);
     GcSlot slot = {lo, hi};
-    return gc_heap_alloc_array_wide((GcHeap*)(uintptr_t)heap_ptr, type_idx, len, slot);
+    return gc_heap_alloc_array_wide(heap_ptr, type_idx, len, slot);
 }
 
-int32_t wasmoon_gc_heap_alloc_array_from_slots(int64_t heap_ptr, int32_t type_idx,
+int32_t wasmoon_gc_heap_alloc_array_from_slots(GcHeap *heap_ptr, int32_t type_idx,
                                                 int64_t* words, int32_t len) {
-    return gc_heap_alloc_array_from_slots((GcHeap*)(uintptr_t)heap_ptr, type_idx,
+    heap_ptr = gc_heap_live(heap_ptr);
+    return gc_heap_alloc_array_from_slots(heap_ptr, type_idx,
                                           (const GcSlot*)words, len);
 }
 
-void wasmoon_gc_heap_array_get_wide(int64_t heap_ptr, int32_t gc_ref,
+void wasmoon_gc_heap_array_get_wide(GcHeap *heap_ptr, int32_t gc_ref,
                                      int32_t idx, int64_t* out_words) {
-    GcSlot slot = gc_heap_array_get_wide((GcHeap*)(uintptr_t)heap_ptr, gc_ref, idx);
+    heap_ptr = gc_heap_live(heap_ptr);
+    GcSlot slot = gc_heap_array_get_wide(heap_ptr, gc_ref, idx);
     out_words[0] = slot.lo;
     out_words[1] = slot.hi;
 }
 
-void wasmoon_gc_heap_array_set_wide(int64_t heap_ptr, int32_t gc_ref, int32_t idx,
+void wasmoon_gc_heap_array_set_wide(GcHeap *heap_ptr, int32_t gc_ref, int32_t idx,
                                      int64_t lo, int64_t hi) {
+    heap_ptr = gc_heap_live(heap_ptr);
     GcSlot slot = {lo, hi};
-    gc_heap_array_set_wide((GcHeap*)(uintptr_t)heap_ptr, gc_ref, idx, slot);
+    gc_heap_array_set_wide(heap_ptr, gc_ref, idx, slot);
 }
 
-void wasmoon_gc_heap_array_fill_wide(int64_t heap_ptr, int32_t gc_ref, int32_t offset,
+void wasmoon_gc_heap_array_fill_wide(GcHeap *heap_ptr, int32_t gc_ref, int32_t offset,
                                       int64_t lo, int64_t hi, int32_t count) {
+    heap_ptr = gc_heap_live(heap_ptr);
     GcSlot slot = {lo, hi};
-    gc_heap_array_fill_wide((GcHeap*)(uintptr_t)heap_ptr, gc_ref, offset, slot, count);
+    gc_heap_array_fill_wide(heap_ptr, gc_ref, offset, slot, count);
 }
 
-void wasmoon_gc_heap_array_copy(int64_t heap_ptr, int32_t dst_ref, int32_t dst_offset,
+void wasmoon_gc_heap_array_copy(GcHeap *heap_ptr, int32_t dst_ref, int32_t dst_offset,
                                  int32_t src_ref, int32_t src_offset, int32_t count) {
-    gc_heap_array_copy((GcHeap*)(uintptr_t)heap_ptr, dst_ref, dst_offset,
+    heap_ptr = gc_heap_live(heap_ptr);
+    gc_heap_array_copy(heap_ptr, dst_ref, dst_offset,
                        src_ref, src_offset, count);
 }
 
-int32_t wasmoon_gc_heap_get_type_idx(int64_t heap_ptr, int32_t gc_ref) {
-    return gc_heap_get_type_idx((GcHeap*)(uintptr_t)heap_ptr, gc_ref);
+int32_t wasmoon_gc_heap_get_type_idx(GcHeap *heap_ptr, int32_t gc_ref) {
+    heap_ptr = gc_heap_live(heap_ptr);
+    return gc_heap_get_type_idx(heap_ptr, gc_ref);
 }
 
-int32_t wasmoon_gc_heap_get_kind(int64_t heap_ptr, int32_t gc_ref) {
-    return gc_heap_get_kind((GcHeap*)(uintptr_t)heap_ptr, gc_ref);
+int32_t wasmoon_gc_heap_get_kind(GcHeap *heap_ptr, int32_t gc_ref) {
+    heap_ptr = gc_heap_live(heap_ptr);
+    return gc_heap_get_kind(heap_ptr, gc_ref);
 }
 
-int32_t wasmoon_gc_heap_is_valid(int64_t heap_ptr, int32_t gc_ref) {
-    return gc_heap_is_valid((GcHeap*)(uintptr_t)heap_ptr, gc_ref);
+int32_t wasmoon_gc_heap_is_valid(GcHeap *heap_ptr, int32_t gc_ref) {
+    heap_ptr = gc_heap_live(heap_ptr);
+    return gc_heap_is_valid(heap_ptr, gc_ref);
 }
 
-int64_t wasmoon_gc_heap_get_base(int64_t heap_ptr) {
-    return (int64_t)(uintptr_t)gc_heap_get_base((GcHeap*)(uintptr_t)heap_ptr);
+int64_t wasmoon_gc_heap_get_base(GcHeap *heap_ptr) {
+    heap_ptr = gc_heap_live(heap_ptr);
+    return (int64_t)(uintptr_t)gc_heap_get_base(heap_ptr);
 }
 
-int32_t wasmoon_gc_heap_get_offset(int64_t heap_ptr, int32_t gc_ref) {
-    return gc_heap_get_offset((GcHeap*)(uintptr_t)heap_ptr, gc_ref);
+int32_t wasmoon_gc_heap_get_offset(GcHeap *heap_ptr, int32_t gc_ref) {
+    heap_ptr = gc_heap_live(heap_ptr);
+    return gc_heap_get_offset(heap_ptr, gc_ref);
 }
 
-int32_t wasmoon_gc_heap_collect(int64_t heap_ptr, int64_t* roots, int32_t num_roots) {
-    return gc_heap_collect((GcHeap*)(uintptr_t)heap_ptr, roots, num_roots);
+int32_t wasmoon_gc_heap_collect(GcHeap *heap_ptr, int64_t* roots, int32_t num_roots) {
+    heap_ptr = gc_heap_live(heap_ptr);
+    return gc_heap_collect(heap_ptr, roots, num_roots);
 }
 
-int32_t wasmoon_gc_heap_alloc_array_from_values(int64_t heap_ptr, int32_t type_idx,
+int32_t wasmoon_gc_heap_alloc_array_from_values(GcHeap *heap_ptr, int32_t type_idx,
                                                   int64_t* values, int32_t len) {
-    return gc_heap_alloc_array_from_values((GcHeap*)(uintptr_t)heap_ptr, type_idx, values, len);
+    heap_ptr = gc_heap_live(heap_ptr);
+    return gc_heap_alloc_array_from_values(heap_ptr, type_idx, values, len);
 }
 
-void wasmoon_gc_heap_mark(int64_t heap_ptr, int32_t gc_ref) {
-    gc_heap_mark((GcHeap*)(uintptr_t)heap_ptr, gc_ref);
+void wasmoon_gc_heap_mark(GcHeap *heap_ptr, int32_t gc_ref) {
+    heap_ptr = gc_heap_live(heap_ptr);
+    gc_heap_mark(heap_ptr, gc_ref);
 }
 
-void wasmoon_gc_heap_mark_roots(int64_t heap_ptr, int64_t* roots, int32_t num_roots) {
-    gc_heap_mark_roots((GcHeap*)(uintptr_t)heap_ptr, roots, num_roots);
+void wasmoon_gc_heap_mark_roots(GcHeap *heap_ptr, int64_t* roots, int32_t num_roots) {
+    heap_ptr = gc_heap_live(heap_ptr);
+    gc_heap_mark_roots(heap_ptr, roots, num_roots);
 }
 
-int32_t wasmoon_gc_heap_sweep(int64_t heap_ptr) {
-    return gc_heap_sweep((GcHeap*)(uintptr_t)heap_ptr);
+int32_t wasmoon_gc_heap_sweep(GcHeap *heap_ptr) {
+    heap_ptr = gc_heap_live(heap_ptr);
+    return gc_heap_sweep(heap_ptr);
 }
 
-int64_t wasmoon_gc_heap_get_size(int64_t heap_ptr) {
-    return (int64_t)gc_heap_get_size((GcHeap*)(uintptr_t)heap_ptr);
+int64_t wasmoon_gc_heap_get_size(GcHeap *heap_ptr) {
+    heap_ptr = gc_heap_live(heap_ptr);
+    return (int64_t)gc_heap_get_size(heap_ptr);
 }
 
-int64_t wasmoon_gc_heap_get_capacity(int64_t heap_ptr) {
-    return (int64_t)gc_heap_get_capacity((GcHeap*)(uintptr_t)heap_ptr);
+int64_t wasmoon_gc_heap_get_capacity(GcHeap *heap_ptr) {
+    heap_ptr = gc_heap_live(heap_ptr);
+    return (int64_t)gc_heap_get_capacity(heap_ptr);
 }
 
-int32_t wasmoon_gc_heap_get_object_count(int64_t heap_ptr) {
-    return gc_heap_get_object_count((GcHeap*)(uintptr_t)heap_ptr);
+int32_t wasmoon_gc_heap_get_object_count(GcHeap *heap_ptr) {
+    heap_ptr = gc_heap_live(heap_ptr);
+    return gc_heap_get_object_count(heap_ptr);
 }
 
 int32_t wasmoon_gc_heap_rollback_allocations(
-    int64_t heap_ptr,
+    GcHeap *heap_ptr,
     int32_t object_count,
     const int64_t* roots,
     int32_t num_roots
 ) {
+    heap_ptr = gc_heap_live(heap_ptr);
     return gc_heap_rollback_allocations(
-        (GcHeap*)(uintptr_t)heap_ptr,
+        heap_ptr,
         object_count,
         roots,
         num_roots
     );
 }
 
-int32_t wasmoon_gc_heap_get_barrier_writes(int64_t heap_ptr) {
-    return gc_heap_get_barrier_writes((GcHeap*)(uintptr_t)heap_ptr);
+int32_t wasmoon_gc_heap_get_barrier_writes(GcHeap *heap_ptr) {
+    heap_ptr = gc_heap_live(heap_ptr);
+    return gc_heap_get_barrier_writes(heap_ptr);
 }
 
-int32_t wasmoon_gc_heap_get_total_allocations(int64_t heap_ptr) {
+int32_t wasmoon_gc_heap_get_total_allocations(GcHeap *heap_ptr) {
+    heap_ptr = gc_heap_live(heap_ptr);
     int32_t allocations = 0;
-    gc_heap_get_stats((GcHeap*)(uintptr_t)heap_ptr, &allocations, NULL);
+    gc_heap_get_stats(heap_ptr, &allocations, NULL);
     return allocations;
 }
 
-int32_t wasmoon_gc_heap_get_total_collections(int64_t heap_ptr) {
+int32_t wasmoon_gc_heap_get_total_collections(GcHeap *heap_ptr) {
+    heap_ptr = gc_heap_live(heap_ptr);
     int32_t collections = 0;
-    gc_heap_get_stats((GcHeap*)(uintptr_t)heap_ptr, NULL, &collections);
+    gc_heap_get_stats(heap_ptr, NULL, &collections);
     return collections;
 }
 
-int32_t wasmoon_gc_heap_verify(int64_t heap_ptr, int32_t verbose) {
-    return gc_heap_verify((GcHeap*)(uintptr_t)heap_ptr, verbose);
+int32_t wasmoon_gc_heap_verify(GcHeap *heap_ptr, int32_t verbose) {
+    heap_ptr = gc_heap_live(heap_ptr);
+    return gc_heap_verify(heap_ptr, verbose);
 }
 
 void wasmoon_gc_heap_debug_set_fail_alloc(int32_t fail_at, int32_t fail_every) {
     gc_set_fail_alloc_config(fail_at, fail_every);
 }
 
-int32_t wasmoon_gc_heap_get_runtime_type(int64_t pointer, int32_t ref) {
-    GcHeap *heap = (GcHeap *)(uintptr_t)pointer;
+int32_t wasmoon_gc_heap_get_runtime_type(GcHeap *pointer, int32_t ref) {
+    pointer = gc_heap_live(pointer);
+    GcHeap *heap = pointer;
     if (!heap || ref <= 0 || ref > heap->object_count || heap->object_table[ref - 1] < 0) return -1;
     return heap->runtime_types[ref - 1];
 }
 
-void wasmoon_gc_heap_set_runtime_type(int64_t pointer, int32_t ref, int32_t identity) {
-    GcHeap *heap = (GcHeap *)(uintptr_t)pointer;
+void wasmoon_gc_heap_set_runtime_type(GcHeap *pointer, int32_t ref, int32_t identity) {
+    pointer = gc_heap_live(pointer);
+    GcHeap *heap = pointer;
     if (!heap || ref <= 0 || ref > heap->object_count || heap->object_table[ref - 1] < 0) return;
     heap->runtime_types[ref - 1] = identity;
 }

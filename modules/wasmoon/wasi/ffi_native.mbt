@@ -1,4 +1,7 @@
 ///|
+pub using @native_io {type NativeResolverHandle}
+
+///|
 using @native_io {
   c_open,
   c_open_parent_beneath,
@@ -1023,19 +1026,18 @@ pub fn native_socket_option_set(
 
 ///|
 pub(all) struct NativeResolver {
-  handle : Int64
+  handle : NativeResolverHandle
   poll_fd : Int
 }
 
 ///|
 pub fn native_resolver_start(name : String) -> NativeResolver? {
-  let poll_fd = FixedArray::make(1, -1)
   guard string_to_cstring(name) is Some(name_bytes) else { return None }
-  let handle = c_resolver_start(name_bytes, poll_fd)
-  if handle == 0L || poll_fd[0] < 0 {
+  let (handle, poll_fd) = c_resolver_start(name_bytes)
+  if poll_fd < 0 {
     None
   } else {
-    Some({ handle, poll_fd: poll_fd[0], })
+    Some({ handle, poll_fd, })
   }
 }
 
@@ -1050,7 +1052,9 @@ pub(all) enum NativeResolverNext {
 }
 
 ///|
-pub fn native_resolver_next(resolver : Int64) -> NativeResolverNext {
+pub fn native_resolver_next(
+  resolver : NativeResolverHandle,
+) -> NativeResolverNext {
   let family = FixedArray::make(1, b'\x00')
   let address = FixedArray::make(16, b'\x00')
   let scope_id = FixedArray::make(1, 0U)
@@ -1071,7 +1075,7 @@ pub fn native_resolver_next(resolver : Int64) -> NativeResolverNext {
 }
 
 ///|
-pub fn native_resolver_drop(resolver : Int64) -> Unit {
+pub fn native_resolver_drop(resolver : NativeResolverHandle) -> Unit {
   c_resolver_drop(resolver)
 }
 

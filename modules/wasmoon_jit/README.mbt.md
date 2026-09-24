@@ -64,3 +64,49 @@ object is combined with
 VMContext metadata, runtime symbols, and trampolines before it is installed and
 invoked by Wasmoon. Native stubs are private implementation details of this
 package rather than a separate public package.
+
+## Native resource handles
+
+Memory descriptors (`MemoryDescriptor`), GC heaps (`GCHeapHandle`),
+and indirect tables (`NativeTableHandle`) are managed opaque `type` values.
+Each native descriptor is allocated directly with `moonbit_make_external_object`;
+its finalizer releases its backing allocations. Copying a handle retains the
+resource through MoonBit RC, without a separate native owner counter or pointer
+wrapper. FFI operations borrow their arguments.
+
+`Memory::desc_ptr()`, `NativeJITContext::memory_descriptor()`,
+`CHeap::get_ptr()`, and `JITTable::raw_ptr()` return retaining
+handles. The owning Store can close while independently retained handles remain
+valid. Closing a CHeap or JITTableOwner invalidates aliases of that logical view
+and releases its reference; it does not invalidate another context's binding.
+Memory close similarly releases its descriptor. Explicit descriptor retain/free
+functions are no longer part of the MoonBit API.
+
+JIT contexts retain every bound memory, table and heap. Exception and parked
+continuation root registrations retain their heap until unregistration; the
+heap's registration list is non-owning. Table descriptors stay at a stable
+address as their entry arrays grow, and publish the new layout to all registered
+contexts. These context backlinks are non-owning and are unlinked before
+releasing the descriptor. Atomic wait registrations retain memory until
+cancellation or finalization. Native test workers acquire/release their RC
+references on the calling/joining thread, never on the worker thread.
+
+`null()` creates a managed empty handle, not a C NULL pointer.
+`is_null()` identifies an empty handle; descriptor equality compares live pointer
+identity and treats empty descriptors as equal. Native entrypoints normalize
+empty memory/heap handles to NULL before invoking internal helpers.
+There is no public integer-to-handle cast. Machine-code addresses, relocation
+values, raw byte addresses used for address arithmetic, and encoded guest values
+remain integers; callers must keep the relevant owner alive while using raw
+addresses. Lexical scope alone does not retain an owner past its last use;
+prefer descriptor-based operations over extracting an integer address.
+
+`DWARFBuilder` is a managed opaque `type`: its complete native state is allocated
+by `moonbit_make_external_object`, without a separate pointer wrapper or manual
+reference count. MoonBit aliases and capturing closures retain the same object.
+The finalizer unregisters debug information, frees the object buffer and clears
+the borrowed active-builder pointer. `destroy()` performs the same cleanup early
+and is idempotent; the MoonBit allocation survives until its last reference is
+released. After close, mutations are ignored and lookup returns None. Repeated
+registration is idempotent; unregister releases the generated buffer and permits
+registration again while the builder remains open.

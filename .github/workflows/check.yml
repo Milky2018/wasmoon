@@ -25,7 +25,8 @@ concurrency:
 
 env:
   COMPONENT_WASM_TOOLS_VERSION: "1.254.0"
-  MOONBIT_TOOLCHAIN_VERSION: "nightly"
+  # The installer names the latest stable channel "latest".
+  MOONBIT_TOOLCHAIN_VERSION: "latest"
 
 jobs:
   native-platform:
@@ -261,7 +262,7 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 60
     env:
-      MOONBIT_INSTALL_VERSION: nightly
+      MOONBIT_INSTALL_VERSION: latest
       MOON_CC: clang
     steps:
       - uses: actions/checkout@v4

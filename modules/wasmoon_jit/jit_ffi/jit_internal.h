@@ -223,11 +223,11 @@ int wasmoon_jit_cancellation_requested(jit_context_t *ctx);
 jit_context_t *jit_execution_control_context(jit_context_t *ctx);
 int wasmoon_native_fiber_own_waiter(void *waiter);
 void wasmoon_native_fiber_release_waiter(void);
-MOONBIT_FFI_EXPORT void *wasmoon_atomic_wait_begin(int64_t, int64_t, int32_t, int64_t, int64_t);
+MOONBIT_FFI_EXPORT void *wasmoon_atomic_wait_begin(wasmoon_memory_t *, int64_t, int32_t, int64_t, int64_t);
 MOONBIT_FFI_EXPORT int32_t wasmoon_atomic_wait_poll(void *);
 MOONBIT_FFI_EXPORT void wasmoon_atomic_wait_destroy(void *);
-MOONBIT_FFI_EXPORT int32_t wasmoon_atomic_notify(int64_t, int64_t, int32_t);
-int32_t wasmoon_atomic_wait_guest(jit_context_t *, int64_t, int64_t, int32_t, int64_t, int64_t);
+MOONBIT_FFI_EXPORT int32_t wasmoon_atomic_notify(wasmoon_memory_t *, int64_t, int32_t);
+int32_t wasmoon_atomic_wait_guest(jit_context_t *, wasmoon_memory_t *, int64_t, int32_t, int64_t, int64_t);
 
 // ============ Executable Memory (exec_mem.c) ============
 
@@ -241,13 +241,12 @@ int exec_block_count_internal(void);
 // Context allocation/free (internal implementations)
 jit_context_t *alloc_context_internal(int func_count);
 void free_context_internal(jit_context_t *ctx);
-MOONBIT_FFI_EXPORT void wasmoon_jit_free_wasi_fds(int64_t ctx_ptr);
 void ctx_refresh_memory0_fast_fields(jit_context_t *ctx);
 
 // ============ Memory Operations (memory_ops.c) ============
 
 // Free a `wasmoon_memory_t` descriptor (jit.c)
-MOONBIT_FFI_EXPORT void wasmoon_jit_free_memory_desc(int64_t mem_ptr);
+MOONBIT_FFI_EXPORT void wasmoon_jit_free_memory_desc(wasmoon_memory_t * mem_ptr);
 
 #define WASM_PAGE_SIZE 65536
 
@@ -270,6 +269,14 @@ uint8_t *memory_base_desc_internal(wasmoon_memory_t *mem);
 
 // Table operations
 int64_t table_grow_ctx_internal(jit_context_t *ctx, int32_t table_idx, int64_t delta, int64_t init_value);
+
+// Managed shared tables
+MOONBIT_FFI_EXPORT wasmoon_table_t *wasmoon_jit_alloc_shared_indirect_table(int count);
+MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_set_table_pointers(int64_t ctx_ptr, wasmoon_table_t **owners,
+    int32_t *sizes, int64_t *max_sizes, int count);
+void ctx_clear_table_bindings(jit_context_t *ctx);
+void table_publish_layout(wasmoon_table_t *table, void **entries, size_t size);
+MOONBIT_FFI_EXPORT wasmoon_table_t *wasmoon_native_table_empty(void);
 
 // GC heap management
 void ctx_set_gc_heap_internal(jit_context_t *ctx, GcHeap *heap);

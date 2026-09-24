@@ -1427,7 +1427,12 @@ fn preview3_resolve_addresses_future(
     return preview3_ready_future([preview3_lookup_error(0)])
   }
   guard @wasi.native_resolver_start(name) is Some(resolver) else {
-    return preview3_ready_future([preview3_lookup_error(5)])
+    let error = if @wasi.native_errno_to_wasi(@wasi.native_get_errno()) == 6 {
+      3
+    } else {
+      5
+    }
+    return preview3_ready_future([preview3_lookup_error(error)])
   }
   let operation : Ref[WasiAsyncOperation?] = Ref(None)
   let addresses : Array[@runtime_impl.ComponentValue] = []

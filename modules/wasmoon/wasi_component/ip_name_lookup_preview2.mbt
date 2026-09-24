@@ -126,7 +126,12 @@ fn add_preview2_ip_name_lookup(
             ),
           ]
         }
-        None => [socket_error_code(4)]
+        None =>
+          if @wasi.native_errno_to_wasi(@wasi.native_get_errno()) == 6 {
+            [socket_error_code(19)]
+          } else {
+            [socket_error_code(4)]
+          }
       }
     },
   )

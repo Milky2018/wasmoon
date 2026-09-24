@@ -4,7 +4,7 @@
 /// This implementation uses a shared C-side `wasmoon_memory_t` descriptor as the
 /// single source of truth for both interpreter and JIT.
 priv enum MemoryDescriptorState {
-  Open(Int64)
+  Open(@wasmoon_jit.MemoryDescriptor)
   Closed
 } derive(Debug)
 
@@ -19,21 +19,23 @@ struct Memory {
 } derive(Debug)
 
 ///|
-/// Return the borrowed native descriptor pointer.
+/// Retain the native memory descriptor.
 ///
-/// The pointer is valid only while the owning Store remains open. Do not retain
-/// it across `Store::close`; this method returns zero after shared invalidation.
-pub fn Memory::desc_ptr(self : Memory) -> Int64 {
+/// Existing handles stay live across Store close; closed Memory aliases return
+/// an empty handle and reject further access through the Memory API.
+pub fn Memory::desc_ptr(self : Memory) -> @wasmoon_jit.MemoryDescriptor {
   match self.descriptor_state.val {
     Open(pointer) => pointer
-    Closed => 0L
+    Closed => @wasmoon_jit.MemoryDescriptor::null()
   }
 }
 
 ///|
-fn Memory::require_desc_ptr(self : Memory) -> Int64 raise RuntimeError {
+fn Memory::require_desc_ptr(
+  self : Memory,
+) -> @wasmoon_jit.MemoryDescriptor raise RuntimeError {
   match self.descriptor_state.val {
-    Open(pointer) if pointer != 0L => pointer
+    Open(pointer) if !pointer.is_null() => pointer
     Open(_) => raise OutOfMemory
     Closed => raise MemoryClosed
   }
@@ -42,12 +44,7 @@ fn Memory::require_desc_ptr(self : Memory) -> Int64 raise RuntimeError {
 ///|
 fn Memory::close(self : Memory) -> Unit {
   match self.descriptor_state.val {
-    Open(pointer) => {
-      self.descriptor_state.val = Closed
-      if pointer != 0L {
-        @wasmoon_jit.free_memory_desc(pointer)
-      }
-    }
+    Open(_) => self.descriptor_state.val = Closed
     Closed => ()
   }
 }
@@ -55,7 +52,7 @@ fn Memory::close(self : Memory) -> Unit {
 ///|
 pub fn Memory::byte_len(self : Memory) -> Int64 {
   let pointer = self.desc_ptr()
-  if pointer == 0L {
+  if pointer.is_null() {
     0L
   } else {
     @wasmoon_jit.memory_descriptor_length(pointer)
@@ -119,7 +116,7 @@ fn Memory::allocate(
       (if l2 == 0 { 0xFFFF_FFFEL } else { 0x1_0000_0000L / page_size_bytes })
     )
   let mem_desc_ptr = if !valid_size {
-    0L
+    @wasmoon_jit.MemoryDescriptor::null()
   } else if !is_memory64 && l2 == 16 {
     @wasmoon_jit.alloc_guarded_memory_desc(
       min.to_int(),
@@ -399,7 +396,7 @@ pub fn Memory::grow(self : Memory, delta : Int) -> Int {
 /// Grow by an unsigned memory64 page count; negative bit patterns cannot fit.
 pub fn Memory::grow64(self : Memory, delta : Int64) -> Int64 {
   let pointer = self.desc_ptr()
-  if pointer == 0L || delta < 0L {
+  if pointer.is_null() || delta < 0L {
     return -1L
   }
   @wasmoon_jit.memory_descriptor_grow64(pointer, delta)
@@ -562,7 +559,6 @@ fn Memory::share(self : Memory) -> Memory raise RuntimeError {
   if !self.is_shared {
     raise LinkErrorDetail("only shared memory can be imported across Stores")
   }
-  @wasmoon_jit.retain_memory_desc(pointer)
   {
     descriptor_state: Ref(Open(pointer)),
     max: self.max,

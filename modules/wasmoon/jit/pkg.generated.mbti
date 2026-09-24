@@ -77,7 +77,7 @@ pub struct JITFunction {
 
 type JITModule
 pub fn JITModule::JITModule() -> Self
-pub fn JITModule::alloc_guarded_memory(Self, Int, Int?) -> Int64
+pub fn JITModule::alloc_guarded_memory(Self, Int, Int?) -> @jit_ffi.MemoryDescriptor
 pub fn JITModule::call_with_context(Self, JITFunction, Array[Int64]) -> Array[Int64] raise JITTrap
 pub fn JITModule::call_with_context_controlled(Self, JITFunction, Array[Int64], cancel? : (() -> Bool)?, timeout_ms? : Int?) -> JITCallResult
 pub fn[Arg : DynamicArgs, Ret : DynamicReturn] JITModule::call_with_context_poly(Self, JITFunction, Arg) -> Ret raise PolycallError
@@ -107,9 +107,6 @@ pub fn JITModule::has_callable_metadata(Self) -> Bool
 pub fn JITModule::has_configured_native_fiber_stack_size(Self) -> Bool
 pub fn JITModule::init_indirect_table(Self, Int, Array[(Int, Int, Int)]) -> Unit
 pub fn JITModule::init_shared_tables(Self, Array[@wasmoon_jit.JITTable?], Array[(Int, Int, Int?, Int)]) -> Unit
-pub fn JITModule::init_wasi(Self, Array[String], Array[String], Array[(String, String)], readonly_preopens? : Array[(String, String)]) -> Unit
-pub fn JITModule::init_wasi_quiet(Self, Array[String], Array[String], Array[(String, String)], readonly_preopens? : Array[(String, String)]) -> Unit
-pub fn JITModule::init_wasi_with_stdio(Self, Array[String], Array[String], Array[(String, String)], ((Bytes) -> Unit)?, ((Bytes) -> Unit)?, Bytes?, stdin_callback? : (() -> Bytes)?, readonly_preopens? : Array[(String, String)]) -> Unit
 pub fn JITModule::load_artifact(@loader.LoadedArtifact, Array[(Array[@types.ValueType], Array[@types.ValueType])], function_names? : Array[String], debug_db? : @wasmoon_jit.JITDebugDB?) -> Self raise JITModuleLoadError
 pub fn JITModule::load_artifact_with_imports(@loader.LoadedArtifact, Array[(Array[@types.ValueType], Array[@types.ValueType])], Map[String, Map[String, Int64]], function_names? : Array[String], debug_db? : @wasmoon_jit.JITDebugDB?) -> Self raise JITModuleLoadError
 pub fn JITModule::prepare_continuations(Self, Array[@types.SubType], @execution.NativeExecutionState) -> Unit raise JITTrap
@@ -119,10 +116,10 @@ pub fn JITModule::retain_callable_owner(Self) -> () -> Unit
 pub fn JITModule::set_callable_types(Self, Array[Int], Array[Int], Array[(Int64, Int)], Array[Int]) -> Unit
 pub fn JITModule::set_cooperative_scheduling(Self, Bool) -> Bool
 pub fn JITModule::set_exception_arena(Self, @jit_ffi.NativeExceptionArena) -> Unit
-pub fn JITModule::set_gc_heap(Self, Int64) -> Unit
+pub fn JITModule::set_gc_heap(Self, @jit_ffi.GCHeapHandle) -> Unit
 pub fn JITModule::set_globals(Self, Int64) -> Unit
 pub fn JITModule::set_hostcall_callback(Self, () -> @wasmoon_jit.NativeHostcallOutcome) -> Unit
-pub fn JITModule::set_memory(Self, Int64) -> Unit
+pub fn JITModule::set_memory(Self, @jit_ffi.MemoryDescriptor) -> Unit
 pub fn JITModule::set_memory_pointers(Self, Array[@wasmoon_jit.MemoryInfo]) -> Unit
 pub fn JITModule::setup_gc(Self, @wasmoon_jit.CHeap, Array[@types.SubType], Array[Int], Array[Int]) -> Unit raise @wasmoon_jit.GCSetupError
 pub fn JITModule::setup_gc_with_func_table(Self, @wasmoon_jit.CHeap, Array[@types.SubType], Array[Int], Array[Int], Int64, Int) -> Unit raise @wasmoon_jit.GCSetupError

@@ -4,7 +4,10 @@ test "Store close invalidates retained Memory aliases" {
   let memory = @runtime.Memory::Memory(1, None)
   store.alloc_mem(memory) |> ignore
   store.close()
-  debug_inspect((memory.byte_len(), memory.desc_ptr()), content="(0, 0)")
+  debug_inspect(
+    (memory.byte_len(), memory.desc_ptr().is_null()),
+    content="(0, true)",
+  )
 }
 
 ///|
@@ -19,8 +22,13 @@ test "Memory aliases shared by Stores are released exactly once" {
   memory.write_i32(0, 42)
   memory.write_byte(0, b'\x2A')
   debug_inspect(
-    (memory.byte_len(), memory.desc_ptr(), memory.grow(1), memory.read_i32(0)),
-    content="(0, 0, -1, 0)",
+    (
+      memory.byte_len(),
+      memory.desc_ptr().is_null(),
+      memory.grow(1),
+      memory.read_i32(0),
+    ),
+    content="(0, true, -1, 0)",
   )
   debug_inspect(memory.read_bytes(0, 1), content="<Bytes: []>")
 }
@@ -60,11 +68,11 @@ test "independent shared memory owners survive either Store closing" {
       inspect(original.byte_len(), content="131072")
       let survivor = if source_closes_first {
         source.close()
-        inspect(original.desc_ptr(), content="0")
+        inspect(original.desc_ptr().is_null(), content="true")
         shared
       } else {
         destination.close()
-        inspect(shared.desc_ptr(), content="0")
+        inspect(shared.desc_ptr().is_null(), content="true")
         original
       }
       inspect(survivor.load_i32(0), content="42")
@@ -74,7 +82,10 @@ test "independent shared memory owners survive either Store closing" {
       inspect(survivor.byte_len(), content="196608")
       source.close()
       destination.close()
-      debug_inspect((original.desc_ptr(), shared.desc_ptr()), content="(0, 0)")
+      debug_inspect(
+        (original.desc_ptr().is_null(), shared.desc_ptr().is_null()),
+        content="(true, true)",
+      )
     }
   }
 }

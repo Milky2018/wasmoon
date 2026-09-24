@@ -655,29 +655,37 @@ pub extern "c" fn c_socket_option_set(
 ) -> Int = "wasmoon_wasi_socket_option_set"
 
 ///|
+/// A managed DNS lookup; explicit close is idempotent.
+pub type NativeResolverHandle
+
+///|
 #borrow(name, poll_fd)
 extern "c" fn raw_c_resolver_start(
   name : FixedArray[Byte],
   poll_fd : FixedArray[Int],
-) -> Int64 = "wasmoon_wasi_resolver_start"
+) -> NativeResolverHandle = "wasmoon_wasi_resolver_start"
 
 ///|
-/// Reject invalid buffer extents before entering the native ABI.
-pub fn c_resolver_start(
-  name : FixedArray[Byte],
-  poll_fd : FixedArray[Int],
-) -> Int64 {
-  if poll_fd.length() < 1 {
-    c_set_errno_invalid_argument()
-    return 0L
+/// Start a lookup and return its readiness descriptor (-1 on failure).
+pub fn c_resolver_start(name : FixedArray[Byte]) -> (NativeResolverHandle, Int) {
+  let output = FixedArray::make(1, -1)
+  let terminated = if name.length() > 0 && name[name.length() - 1] == b'\x00' {
+    name
+  } else {
+    let buffer = FixedArray::make(name.length() + 1, b'\x00')
+    for i in 0..<name.length() {
+      buffer[i] = name[i]
+    }
+    buffer
   }
-  raw_c_resolver_start(name, poll_fd)
+  let resolver = raw_c_resolver_start(terminated, output)
+  (resolver, output[0])
 }
 
 ///|
-#borrow(family, address, scope_id)
+#borrow(resolver, family, address, scope_id)
 extern "c" fn raw_c_resolver_next(
-  resolver : Int64,
+  resolver : NativeResolverHandle,
   family : FixedArray[Byte],
   address : FixedArray[Byte],
   scope_id : FixedArray[UInt],
@@ -686,7 +694,7 @@ extern "c" fn raw_c_resolver_next(
 ///|
 /// Reject invalid buffer extents before entering the native ABI.
 pub fn c_resolver_next(
-  resolver : Int64,
+  resolver : NativeResolverHandle,
   family : FixedArray[Byte],
   address : FixedArray[Byte],
   scope_id : FixedArray[UInt],
@@ -699,7 +707,8 @@ pub fn c_resolver_next(
 }
 
 ///|
-pub extern "c" fn c_resolver_drop(resolver : Int64) = "wasmoon_wasi_resolver_drop"
+#borrow(resolver)
+pub extern "c" fn c_resolver_drop(resolver : NativeResolverHandle) = "wasmoon_wasi_resolver_drop"
 
 ///|
 /// Socket recv

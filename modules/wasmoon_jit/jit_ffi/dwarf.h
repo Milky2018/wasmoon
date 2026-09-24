@@ -6,6 +6,7 @@
 #define WASMOON_DWARF_H
 
 #include <stdint.h>
+#include "moonbit.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -13,9 +14,9 @@ extern "C" {
 
 /**
  * Create a new DWARF builder.
- * @return Opaque handle to the builder
+ * @return MoonBit managed object; C callers must retain/release it with MoonBit RC.
  */
-void *wasmoon_dwarf_create(void);
+MOONBIT_FFI_EXPORT void *wasmoon_dwarf_create(void);
 
 /**
  * Add a function to the DWARF debug info.
@@ -25,7 +26,7 @@ void *wasmoon_dwarf_create(void);
  * @param size    Function size in bytes
  * @param func_idx  WebAssembly function index
  */
-void wasmoon_dwarf_add_function(
+MOONBIT_FFI_EXPORT void wasmoon_dwarf_add_function(
     void *dwarf,
     const char *name,
     int64_t addr,
@@ -40,20 +41,21 @@ void wasmoon_dwarf_add_function(
  * @param dwarf    Builder handle
  * @param verbose  If non-zero, print debug info to stderr
  */
-void wasmoon_dwarf_register(void *dwarf, int verbose);
+MOONBIT_FFI_EXPORT void wasmoon_dwarf_register(void *dwarf, int verbose);
 
 /**
  * Unregister DWARF debug info from the debugger.
  * @param dwarf  Builder handle
  */
-void wasmoon_dwarf_unregister(void *dwarf);
+MOONBIT_FFI_EXPORT void wasmoon_dwarf_unregister(void *dwarf);
 
 /**
- * Destroy the DWARF builder and free resources.
+ * Close the DWARF builder and release its resources (idempotent).
+ * Does not free the managed object or consume a reference.
  * This also unregisters the debug info if registered.
  * @param dwarf  Builder handle
  */
-void wasmoon_dwarf_destroy(void *dwarf);
+MOONBIT_FFI_EXPORT void wasmoon_dwarf_destroy(void *dwarf);
 
 #ifdef __cplusplus
 }

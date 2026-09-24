@@ -4,6 +4,7 @@ package "Milky2018/wasmoon/runtime"
 import {
   "Milky2018/wasm_core/types",
   "Milky2018/wasmoon_jit",
+  "Milky2018/wasmoon_jit/jit_ffi",
   "Milky2018/wasmoon_jit/native/execution",
   "moonbitlang/core/debug",
 }
@@ -360,7 +361,7 @@ pub fn Memory::byte_len(Self) -> Int64
 pub fn Memory::copy(Self, Int, Int, Int) -> Unit raise RuntimeError
 pub fn Memory::copy_at(Self, Int64, Int64, Int64) -> Unit raise RuntimeError
 pub fn Memory::copy_from(Self, Int64, Self, Int64, Int64) -> Unit raise RuntimeError
-pub fn Memory::desc_ptr(Self) -> Int64
+pub fn Memory::desc_ptr(Self) -> @jit_ffi.MemoryDescriptor
 pub fn Memory::fill(Self, Int, Byte, Int) -> Unit raise RuntimeError
 pub fn Memory::fill_at(Self, Int64, Byte, Int64) -> Unit raise RuntimeError
 pub fn Memory::from_type(@types.MemoryType) -> Self raise RuntimeError
@@ -598,7 +599,7 @@ pub fn Store::enable_c_heap(Self) -> Unit raise RuntimeError
 pub fn Store::encode_native_exception(Self, Int) -> Int64 raise RuntimeError
 pub fn Store::enter_interpreter_boundary(Self) -> Unit raise RuntimeError
 pub fn Store::gc_type_is_subtype(Self, Int, ModuleInstance, Int) -> Bool
-pub fn Store::get_c_heap_ptr(Self) -> Int64
+pub fn Store::get_c_heap_ptr(Self) -> @jit_ffi.GCHeapHandle
 pub fn Store::get_exn(Self, Int) -> ExnInstance raise RuntimeError
 pub fn Store::get_func(Self, Int) -> @types.FunctionCode raise RuntimeError
 pub fn Store::get_func_canonical_type_idx(Self, Int) -> Int

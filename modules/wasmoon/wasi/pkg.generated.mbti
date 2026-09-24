@@ -166,9 +166,9 @@ pub fn native_recv(Int, FixedArray[Byte], Int) -> Int64
 
 pub fn native_renameat(Int, String, Int, String) -> Bool
 
-pub fn native_resolver_drop(Int64) -> Unit
+pub fn native_resolver_drop(@Milky2018/wasmoon_jit/host_io/wasi.NativeResolverHandle) -> Unit
 
-pub fn native_resolver_next(Int64) -> NativeResolverNext
+pub fn native_resolver_next(@Milky2018/wasmoon_jit/host_io/wasi.NativeResolverHandle) -> NativeResolverNext
 
 pub fn native_resolver_start(String) -> NativeResolver?
 
@@ -464,7 +464,7 @@ pub(all) struct IoVec {
 }
 
 pub(all) struct NativeResolver {
-  handle : Int64
+  handle : @Milky2018/wasmoon_jit/host_io/wasi.NativeResolverHandle
   poll_fd : Int
 }
 
@@ -604,5 +604,6 @@ pub(all) enum Whence {
 }
 
 // Type aliases
+pub using @Milky2018/wasmoon_jit/host_io/wasi {type NativeResolverHandle}
 
 // Traits

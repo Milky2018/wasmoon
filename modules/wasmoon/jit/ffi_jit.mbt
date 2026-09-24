@@ -52,8 +52,6 @@ fn JITContext::try_alloc(total_funcs : Int) -> JITContext? {
 fn JITContext::close(self : JITContext) -> Unit {
   self.clear_hostcall_callback()
   self.clear_cancellation_callback()
-  self.clear_wasi_stdin_callback()
-  self.clear_wasi_stdin_buffer()
   for entry in self.trampoline_cache {
     entry.1.release()
   }
@@ -94,7 +92,10 @@ fn JITContext::set_indirect(
 
 ///|
 /// Set memory0 in the context
-fn JITContext::set_memory(self : JITContext, mem0_ptr : Int64) -> Unit {
+fn JITContext::set_memory(
+  self : JITContext,
+  mem0_ptr : @wasmoon_jit.MemoryDescriptor,
+) -> Unit {
   self.ctx.set_memory(mem0_ptr)
 }
 
@@ -113,7 +114,7 @@ fn JITContext::alloc_guarded_memory(
   self : JITContext,
   initial_pages : Int,
   max_pages : Int?,
-) -> Int64 {
+) -> @wasmoon_jit.MemoryDescriptor {
   self.ctx.alloc_guarded_memory(initial_pages, max_pages)
 }
 
@@ -175,65 +176,6 @@ fn JITContext::has_configured_native_fiber_stack_size(
   self.ctx.has_configured_native_fiber_stack_size()
 }
 
-// ============ WASI Initialization ============
-
-///|
-/// Initialize WASI context with args, env, and preopens
-fn JITContext::init_wasi(
-  self : JITContext,
-  args : Array[String],
-  env : Array[String],
-  preopens : Array[(String, String)],
-  readonly_preopens? : Array[(String, String)] = [],
-) -> Unit {
-  self.ctx.init_wasi(args, env, preopens, readonly_preopens~)
-}
-
-///|
-/// Initialize WASI context with stdout/stderr redirected to /dev/null (for testing)
-fn JITContext::init_wasi_quiet(
-  self : JITContext,
-  args : Array[String],
-  env : Array[String],
-  preopens : Array[(String, String)],
-  readonly_preopens? : Array[(String, String)] = [],
-) -> Unit {
-  self.ctx.init_wasi(args, env, preopens, quiet=true, readonly_preopens~)
-}
-
-///|
-/// Enable or disable WASI stdout capture
-fn JITContext::set_wasi_stdout_capture(
-  self : JITContext,
-  enabled : Bool,
-) -> Unit {
-  self.ctx.set_wasi_stdout_capture(enabled)
-}
-
-///|
-/// Enable or disable WASI stderr capture
-fn JITContext::set_wasi_stderr_capture(
-  self : JITContext,
-  enabled : Bool,
-) -> Unit {
-  self.ctx.set_wasi_stderr_capture(enabled)
-}
-
-///|
-/// Set WASI stdin buffer (custom stdin)
-fn JITContext::set_wasi_stdin_buffer(self : JITContext, data : Bytes) -> Unit {
-  self.ctx.set_wasi_stdin_buffer(data)
-}
-
-///|
-/// Set WASI stdin callback (custom stdin)
-fn JITContext::set_wasi_stdin_callback(
-  self : JITContext,
-  callback : () -> Bytes,
-) -> Unit {
-  self.ctx.set_wasi_stdin_callback(callback)
-}
-
 ///|
 /// Set hostcall callback for JIT -> host bridging.
 fn JITContext::set_hostcall_callback(
@@ -259,30 +201,6 @@ fn JITContext::set_cancellation_callback(
 ///|
 fn JITContext::clear_cancellation_callback(self : JITContext) -> Unit {
   self.ctx.clear_cancellation_callback()
-}
-
-///|
-/// Clear WASI stdin callback
-fn JITContext::clear_wasi_stdin_callback(self : JITContext) -> Unit {
-  self.ctx.clear_wasi_stdin_callback()
-}
-
-///|
-/// Clear WASI stdin buffer
-fn JITContext::clear_wasi_stdin_buffer(self : JITContext) -> Unit {
-  self.ctx.clear_wasi_stdin_buffer()
-}
-
-///|
-/// Take captured stdout bytes (and clear buffer)
-fn JITContext::take_wasi_stdout(self : JITContext) -> Bytes {
-  self.ctx.take_wasi_stdout()
-}
-
-///|
-/// Take captured stderr bytes (and clear buffer)
-fn JITContext::take_wasi_stderr(self : JITContext) -> Bytes {
-  self.ctx.take_wasi_stderr()
 }
 
 // ============ Multi-value Return Support ============

@@ -23,7 +23,7 @@ pub fn init_jit_memories_from_store(
     let size = mem.byte_len()
     let (_, max_pages) = mem.get_limits()
     let mem_desc_ptr = mem.desc_ptr()
-    if mem_desc_ptr == 0L && size > 0L {
+    if mem_desc_ptr.is_null() && size > 0L {
       return None
     }
     memories.push(MemoryInfo(mem_desc_ptr, size, max_pages))

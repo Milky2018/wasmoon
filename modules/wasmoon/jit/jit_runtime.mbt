@@ -81,8 +81,6 @@ struct JITModule {
   owned_trampolines : Array[@wasmoon_jit.InstalledTrampoline]
   // Keep the transactionally installed artifact alive.
   mut installed_code : @wasmoon_jit.InstalledCode?
-  mut wasi_stdout_callback : ((Bytes) -> Unit)?
-  mut wasi_stderr_callback : ((Bytes) -> Unit)?
   mut cancellation_safepoints : Bool
 }
 
@@ -100,8 +98,6 @@ pub fn JITModule::JITModule() -> JITModule {
     last_trap_report: None,
     owned_trampolines: [],
     installed_code: None,
-    wasi_stdout_callback: None,
-    wasi_stderr_callback: None,
     cancellation_safepoints: false,
   }
 }
@@ -581,7 +577,6 @@ pub fn JITModule::call_with_context(
       self.gc_end_frame()
       self.gc_use_func_safepoints(-1)
       self.gc_set_root_scratch([]) |> ignore
-      self.flush_wasi_output(ctx)
       match call_error {
         Some(JITTrap(msg)) => {
           let report = self.build_trap_report(msg)
@@ -688,21 +683,16 @@ fn JITCallContinuation::advance(
   }
   self.jit_module.gc_use_func_safepoints(-1)
   self.jit_module.gc_set_root_scratch([]) |> ignore
-  self.jit_module.flush_wasi_output(
-    match self.jit_module.context {
-      Some(ctx) => ctx
-      None => {
-        match (call_error, event) {
-          (Some(_), _) | (None, Returned(_)) => self.finish(AttachedFrame)
-          (None, Suspended(_)) => {
-            self.call.cancel()
-            self.finish(DetachedFrameReleased)
-          }
-        }
-        raise JITTrap("native JIT context disappeared while suspended")
+  if self.jit_module.context is None {
+    match (call_error, event) {
+      (Some(_), _) | (None, Returned(_)) => self.finish(AttachedFrame)
+      (None, Suspended(_)) => {
+        self.call.cancel()
+        self.finish(DetachedFrameReleased)
       }
-    },
-  )
+    }
+    raise JITTrap("native JIT context disappeared while suspended")
+  }
   if call_error is Some(error) {
     self.finish_error(error)
   }
@@ -808,23 +798,6 @@ pub fn JITModule::call_with_context_controlled(
       } noraise {
         values => if control.expired() { TimedOut } else { Completed(values) }
       }
-    }
-  }
-}
-
-///|
-/// Flush captured WASI stdout/stderr into callbacks (if configured)
-fn JITModule::flush_wasi_output(self : JITModule, ctx : JITContext) -> Unit {
-  if self.wasi_stdout_callback is Some(cb) {
-    let out = ctx.take_wasi_stdout()
-    if out.length() > 0 {
-      cb(out)
-    }
-  }
-  if self.wasi_stderr_callback is Some(cb) {
-    let out = ctx.take_wasi_stderr()
-    if out.length() > 0 {
-      cb(out)
     }
   }
 }
@@ -1038,7 +1011,10 @@ fn JITModule::build_trap_report(
 
 ///|
 /// Set memory0 for the JIT context
-pub fn JITModule::set_memory(self : JITModule, mem0_ptr : Int64) -> Unit {
+pub fn JITModule::set_memory(
+  self : JITModule,
+  mem0_ptr : @wasmoon_jit.MemoryDescriptor,
+) -> Unit {
   if self.context is Some(ctx) {
     ctx.set_memory(mem0_ptr)
   }
@@ -1073,7 +1049,10 @@ pub fn JITModule::set_globals(self : JITModule, globals_ptr : Int64) -> Unit {
 ///|
 /// Set GC heap in the JIT context for inline allocation
 /// This enables fast-path bump-pointer allocation in JIT-compiled code
-pub fn JITModule::set_gc_heap(self : JITModule, heap_ptr : Int64) -> Unit {
+pub fn JITModule::set_gc_heap(
+  self : JITModule,
+  heap_ptr : @wasmoon_jit.GCHeapHandle,
+) -> Unit {
   if self.context is Some(context) {
     context.ctx.set_gc_heap_ptr(heap_ptr)
   }
@@ -1205,10 +1184,10 @@ pub fn JITModule::alloc_guarded_memory(
   self : JITModule,
   initial_pages : Int,
   max_pages : Int?,
-) -> Int64 {
+) -> @wasmoon_jit.MemoryDescriptor {
   match self.context {
     Some(ctx) => ctx.alloc_guarded_memory(initial_pages, max_pages)
-    None => 0L
+    None => @wasmoon_jit.MemoryDescriptor::null()
   }
 }
 
@@ -1275,83 +1254,6 @@ pub fn JITModule::set_hostcall_callback(
 pub fn JITModule::clear_hostcall_callback(self : JITModule) -> Unit {
   if self.context is Some(ctx) {
     ctx.clear_hostcall_callback()
-  }
-}
-
-///|
-/// Initialize WASI context for JIT execution
-/// args: command-line arguments
-/// env: environment variables (KEY=VALUE format)
-/// preopens: preopened directories as (host_path, guest_path) pairs
-pub fn JITModule::init_wasi(
-  self : JITModule,
-  args : Array[String],
-  env : Array[String],
-  preopens : Array[(String, String)],
-  readonly_preopens? : Array[(String, String)] = [],
-) -> Unit {
-  if self.context is Some(ctx) {
-    self.wasi_stdout_callback = None
-    self.wasi_stderr_callback = None
-    ctx.init_wasi(args, env, preopens, readonly_preopens~)
-  }
-}
-
-///|
-/// Initialize WASI context with custom stdio handling
-pub fn JITModule::init_wasi_with_stdio(
-  self : JITModule,
-  args : Array[String],
-  env : Array[String],
-  preopens : Array[(String, String)],
-  stdout : ((Bytes) -> Unit)?,
-  stderr : ((Bytes) -> Unit)?,
-  stdin_data : Bytes?,
-  stdin_callback? : (() -> Bytes)? = None,
-  readonly_preopens? : Array[(String, String)] = [],
-) -> Unit {
-  self.init_wasi(args, env, preopens, readonly_preopens~)
-  if self.context is Some(ctx) {
-    match stdout {
-      Some(cb) => {
-        self.wasi_stdout_callback = Some(cb)
-        ctx.set_wasi_stdout_capture(true)
-      }
-      None => ctx.set_wasi_stdout_capture(false)
-    }
-    match stderr {
-      Some(cb) => {
-        self.wasi_stderr_callback = Some(cb)
-        ctx.set_wasi_stderr_capture(true)
-      }
-      None => ctx.set_wasi_stderr_capture(false)
-    }
-    match stdin_callback {
-      Some(cb) => ctx.set_wasi_stdin_callback(cb)
-      None => {
-        ctx.clear_wasi_stdin_callback()
-        match stdin_data {
-          Some(data) => ctx.set_wasi_stdin_buffer(data)
-          None => ctx.clear_wasi_stdin_buffer()
-        }
-      }
-    }
-  }
-}
-
-///|
-/// Initialize WASI context with stdout/stderr redirected to /dev/null (for testing)
-pub fn JITModule::init_wasi_quiet(
-  self : JITModule,
-  args : Array[String],
-  env : Array[String],
-  preopens : Array[(String, String)],
-  readonly_preopens? : Array[(String, String)] = [],
-) -> Unit {
-  if self.context is Some(ctx) {
-    self.wasi_stdout_callback = None
-    self.wasi_stderr_callback = None
-    ctx.init_wasi_quiet(args, env, preopens, readonly_preopens~)
   }
 }
 
@@ -1452,7 +1354,8 @@ pub fn JITModule::init_shared_tables(
 ///|
 /// Register DWARF debug info with the debugger (LLDB/GDB)
 /// This enables stack traces to show WebAssembly function names
-/// Returns the DWARFBuilder handle (call destroy() when done)
+/// Retain the returned owner while debug metadata is needed.
+/// Dropping its last reference unregisters it; destroy() closes it early.
 /// verbose: if true, print debug info to stderr
 pub fn JITModule::register_dwarf(
   self : JITModule,
