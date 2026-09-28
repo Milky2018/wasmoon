@@ -324,17 +324,25 @@ fn build_command() -> @argparse.Command {
 
 ///|
 async fn main {
-  @async_native.install_event_loop() catch {
-    error => {
-      @logger.error("Failed to initialize host event loop: \{error}")
-      @sys.exit(1)
-    }
-  }
   let matches = build_command().parse(argv=@env.args()[1:]) catch {
     err => {
       write_usage(err.to_string())
       @sys.exit(2)
       return
+    }
+  }
+  let uses_http = match matches.subcommand {
+    Some(("serve", _)) => true
+    Some(("component", sub)) =>
+      sub.flags.get("run") is Some(true) && sub.flags.get("http") is Some(true)
+    _ => false
+  }
+  if uses_http {
+    @async_native.install_event_loop() catch {
+      error => {
+        @logger.error("Failed to initialize host event loop: \{error}")
+        @sys.exit(1)
+      }
     }
   }
   // The CLI owns stdin for the duration of guest execution. Embedders retain

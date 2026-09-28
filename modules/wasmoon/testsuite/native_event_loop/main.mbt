@@ -47,6 +47,15 @@ async fn main {
     assert_true(!dropped.is_ready())
     assert_true(!dropped.is_active())
 
+    // The pipe still contains data, but only the outer event loop may drain
+    // the kernel reactor, which also carries async's foreign-thread wakeups.
+    let next_read = second.register_read(pipe[0])
+    assert_eq(second.wait(Some(0L)), 0)
+    assert_true(!next_read.is_ready())
+    while !next_read.is_ready() {
+      @async_native.wait_for_readiness()
+    }
+
     let server = @socket.TcpServer(@socket.Addr::parse("127.0.0.1:0"))
     defer server.close()
     @async.with_task_group(async fn(group) {
@@ -84,7 +93,12 @@ async fn main {
     })
     // Exercise wake-before-wait: the wake token must survive until poll.
     second.wake()
-    assert_eq(second.wait(None), 0)
+    try second.wait(None) catch {
+      BlockingWaitInExternalLoop => ()
+      error => raise error
+    } noraise {
+      _ => fail("shared scopes must reject blocking waits")
+    }
     let final_timer = second.register_timer(1000000L)
     while !final_timer.is_ready() {
       @async_native.wait_for_readiness()

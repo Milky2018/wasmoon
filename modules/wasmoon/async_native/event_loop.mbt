@@ -25,13 +25,6 @@ pub fn install_event_loop() -> Unit raise NativeReactorError {
 }
 
 ///|
-fn notify_readiness() -> Unit {
-  if active_loop.val is Some(event_loop) {
-    event_loop.ready.broadcast()
-  }
-}
-
-///|
 /// Subscribe from a structured host task. The consumer must poll its persistent
 /// operation state before waiting; notifications themselves are not state.
 pub async fn wait_for_readiness() -> Unit {

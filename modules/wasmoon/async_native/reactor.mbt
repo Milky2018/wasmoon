@@ -83,10 +83,17 @@ pub fn NativeReactor::wait(
   timeout_ns : Int64?,
 ) -> Int raise NativeReactorError {
   self.check_open()
-  let completed = self.reactor.wait(timeout_ns)
-  if self.shared && completed > 0 {
-    notify_readiness()
+  if !self.shared {
+    return self.reactor.wait(timeout_ns)
   }
+  if timeout_ns != Some(0L) {
+    raise BlockingWaitInExternalLoop
+  }
+  // Only HostEventLoop.poll may consume kernel events, including async wakeups.
+  let completed = self.registrations.filter(r => r.is_ready()).length()
+  let pending = self.registrations.filter(r => r.is_active())
+  self.registrations.clear()
+  self.registrations.append(pending)
   completed
 }
 

@@ -1,6 +1,7 @@
 ///|
 pub(all) suberror NativeReactorError {
   Closed
+  BlockingWaitInExternalLoop
   UnsupportedPlatform
   AllocationFailed
   RegistrationFailed(Int)

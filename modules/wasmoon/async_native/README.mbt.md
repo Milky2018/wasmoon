@@ -9,7 +9,7 @@ The adapter retains no Wasm Store, component values, or guest continuations.
 
 An embedding that combines native WASI operations with asynchronous HTTP must
 call `install_event_loop()` before its first asynchronous operation and before
-creating WASI contexts. The Wasmoon CLI performs this initialization itself.
+creating WASI contexts. The Wasmoon CLI performs this initialization for HTTP commands and servers.
 The function uses the public `moonbitlang/async.set_external_event_loop` API;
 it cannot be installed after async starts, or alongside another independently
 installed external loop.
@@ -22,8 +22,12 @@ independent reactor for synchronous embeddings.
 
 The external loop honors async's zero, finite-millisecond, and indefinite waits.
 Native readiness wakes structured HTTP driver tasks; component execution only
-polls and advances continuations. The synchronous invocation APIs retain their
-blocking behavior and should not be used to drive mixed HTTP workloads.
+polls and advances continuations. Only the external loop consumes kernel events:
+context-local zero-timeout polls observe completed registrations, and blocking
+waits on shared contexts raise `BlockingWaitInExternalLoop`. This prevents an
+inner poll from consuming async's foreign-thread wakeup before its outer loop.
+Synchronous invocation APIs use independent reactors without installing the
+external loop; they should not be used to drive mixed HTTP workloads.
 
 All registration, cancellation, readiness delivery, and component execution
 remain on the MoonBit thread. Async owns its auxiliary I/O waiter. Its callback

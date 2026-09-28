@@ -11,6 +11,7 @@ pub fn detach_external_wakeup() -> Unit
 // Errors
 pub(all) suberror NativeReactorError {
   Closed
+  BlockingWaitInExternalLoop
   UnsupportedPlatform
   AllocationFailed
   RegistrationFailed(Int)
