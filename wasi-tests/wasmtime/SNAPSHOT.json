@@ -1,6 +1,6 @@
 {
   "repository": "https://github.com/bytecodealliance/wasmtime",
-  "commit": "668016926adfd1b8a79dbce894f1e203d8892599",
+  "commit": "46c23a87dac1465986a8ad53ba6a7ae49372857b",
   "files": [
     {
       "path": "LICENSE",
@@ -254,5 +254,6 @@
       "path": "crates/wasi/tests/all/store.rs",
       "sha256": "69803dfc1936168d3ffebab5f6e5526150c942bd29be4a2faf60ac6763f4832a"
     }
-  ]
+  ],
+  "release": "v49.0.1"
 }

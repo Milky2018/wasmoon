@@ -70,7 +70,7 @@ and retained failing binaries are recorded under
 `target/component-hardening/fuzz`.
 
 The differential harness compares successful typed results with the official
-Wasmtime 45.0.0 release. The installer verifies the official archive SHA-256.
+Wasmtime 49.0.1 release. The installer verifies the official archive SHA-256.
 Timeout, signal, trap, ordinary tool/runtime error, and malformed output remain
 distinct outcomes; two failures are never treated as semantic agreement.
 

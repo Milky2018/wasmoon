@@ -17,16 +17,16 @@ from component_hardening_lib import WASMTIME_VERSION, require_tool_version
 
 ASSETS = {
     ("Linux", "x86_64"): (
-        "wasmtime-v45.0.0-x86_64-linux.tar.xz",
-        "9d92e6dc04630f617e0e5d532327a5a917ac4898587e07f4fb7a5fc7fffef760",
+        "wasmtime-v49.0.1-x86_64-linux.tar.xz",
+        "c71f7e0d30a92e418f0d17db7c6d8f6664c1ad764340a1278678f4209deab534",
     ),
     ("Darwin", "arm64"): (
-        "wasmtime-v45.0.0-aarch64-macos.tar.xz",
-        "8c589a1feb6578ddfd76d4ee07bac551d7f3069d6cef9b2ae5e87e630b5198db",
+        "wasmtime-v49.0.1-aarch64-macos.tar.xz",
+        "93dde14d4efb20046e5af75517ac6a7f2246f6c2370fecff8f68839d4a9028f7",
     ),
     ("Darwin", "x86_64"): (
-        "wasmtime-v45.0.0-x86_64-macos.tar.xz",
-        "b01b421613d9e067103efb701cd66f436020b32f6e955125fac9eaf34fa5bce7",
+        "wasmtime-v49.0.1-x86_64-macos.tar.xz",
+        "56355136c4eaba17ef50b0e35e9774e25950333ba007c2a29c45d0906600e827",
     ),
 }
 

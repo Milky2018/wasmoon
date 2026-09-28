@@ -1,0 +1,23 @@
+{
+  "wasmtime_version": "wasmtime 49.0.1 (46c23a87d 2026-09-24)",
+  "wasmtime_release_commit": "46c23a87dac1465986a8ad53ba6a7ae49372857b",
+  "cranelift_version": "0.136.1",
+  "host": "arm64",
+  "evidence_sha256": {
+    "component-differential": "2976b78eaf119ad147cc9510110870ab3e42acc308d099ed87225d2cc583b1f6",
+    "p1": "c3d672e98b96641d2228eca069ac50ba56a521b126539dc3216f3f49f7098479",
+    "p1-oracle": "2051cc877adc9ce046dc1b15981fe7e5b0a02560e9f5e503462507e7eb2f533c",
+    "misc": "f08447a713425d4d01fd7c0a025f77978f0e49a596d967a6d0f39fba025fcf64",
+    "wasi03": "b889c835a5c1eceb0d20c8844b7eac4747ba91dea2bd2484cff0c42044d39005",
+    "algorithms": "2c2e0c162dd9c3fc8631aaea07732a0d9d18bd8bad2994b54a072051fd961c11",
+    "algorithms.md": "6f19b49bdae2b536b72563cf68ebda6ccf9618a85d60e9911b28bce1443789c1"
+  },
+  "binary_sha256": {
+    "wasmoon": "71453fd98ce330ddd889ee33842137238876d7da55e14aa2bbbe06ee588a5fe4",
+    "wasmoon-tools": "50623fc3ad7b2527eae6c1ba4cf4e94e8e27afe3e43976b973164e275365e906",
+    "wasmtime": "112d2142b0119362ab17777a1a6319c42cbff63627dae90ac55aba84df4383cf"
+  },
+  "wasmoon_parent_commit": "5484358f68804a4b7fc4f18edd3b17431aca5e7c",
+  "runtime_patch_sha256": "685ab36106e95fcb5dd13143e7a0f0e60401be5b1c27acf494fcd4c012a4f1e5",
+  "note": "Wasmoon built from the parent plus the source/test patch in this commit; historical reports are unchanged."
+}

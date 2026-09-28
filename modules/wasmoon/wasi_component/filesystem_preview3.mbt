@@ -568,7 +568,7 @@ fn preview3_filesystem_basic_operation(
             } else {
               preview3_filesystem_error()
             }
-          _ => preview3_filesystem_error_for(Inval)
+          _ => preview3_filesystem_error_for(Overflow)
         },
       ]
     "sync" =>
@@ -724,7 +724,7 @@ fn preview3_filesystem_path_operation(
       guard parse_preview3_new_timestamp(args[3], 0x01, 0x02)
         is Some((atim, af)) &&
         parse_preview3_new_timestamp(args[4], 0x04, 0x08) is Some((mtim, mf)) else {
-        return [preview3_filesystem_error_for(Inval)]
+        return [preview3_filesystem_error_for(Overflow)]
       }
       if follow {
         match capability_parent_and_leaf(path) {

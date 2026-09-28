@@ -1,0 +1,5172 @@
+{
+  "schema_version": 4,
+  "generated_at_unix_sec": 1790582773,
+  "config": {
+    "wasmoon": "./wasmoon",
+    "wasmtime": "/Users/zhengyu/.cargo/bin/wasmtime",
+    "timeout_sec": 300,
+    "runs_per_engine": 1,
+    "cache_policy": "cold-isolated-per-workload",
+    "wasmtime_parallel_compilation": false,
+    "value_ratio_threshold": 1.05,
+    "wall_ratio_threshold": 2.0,
+    "cache_root": "target/upstream-49/algorithms/jit-cache"
+  },
+  "stats": {
+    "total": 70,
+    "failures": 0,
+    "perf_gaps": 36,
+    "ok": 34
+  },
+  "failures": [],
+  "perf_gaps": [
+    "examples/algorithms/aead_chacha20poly1305.wasm: paired output ratio 1.3172 (threshold 1.0500)",
+    "examples/algorithms/aead_chacha20poly13052.wasm: paired output ratio 1.1791 (threshold 1.0500)",
+    "examples/algorithms/aead_xchacha20poly1305.wasm: paired output ratio 1.2328 (threshold 1.0500)",
+    "examples/algorithms/auth.wasm: paired output ratio 1.1368 (threshold 1.0500)",
+    "examples/algorithms/auth2.wasm: paired output ratio 1.1065 (threshold 1.0500)",
+    "examples/algorithms/auth3.wasm: paired output ratio 1.1276 (threshold 1.0500)",
+    "examples/algorithms/auth5.wasm: paired output ratio 1.1114 (threshold 1.0500)",
+    "examples/algorithms/auth6.wasm: paired output ratio 1.1462 (threshold 1.0500)",
+    "examples/algorithms/auth7.wasm: paired output ratio 1.0660 (threshold 1.0500)",
+    "examples/algorithms/codecs.wasm: paired output ratio 1.0883 (threshold 1.0500)",
+    "examples/algorithms/generichash.wasm: paired output ratio 1.0986 (threshold 1.0500)",
+    "examples/algorithms/generichash3.wasm: paired output ratio 1.0798 (threshold 1.0500)",
+    "examples/algorithms/hash.wasm: paired output ratio 1.0565 (threshold 1.0500)",
+    "examples/algorithms/hash3.wasm: paired output ratio 1.0588 (threshold 1.0500)",
+    "examples/algorithms/kdf.wasm: paired output ratio 1.1025 (threshold 1.0500)",
+    "examples/algorithms/kdf_hkdf.wasm: paired output ratio 1.1228 (threshold 1.0500)",
+    "examples/algorithms/keygen.wasm: paired output ratio 1.1873 (threshold 1.0500)",
+    "examples/algorithms/metamorphic.wasm: paired output ratio 1.1109 (threshold 1.0500)",
+    "examples/algorithms/onetimeauth.wasm: paired output ratio 1.2308 (threshold 1.0500)",
+    "examples/algorithms/onetimeauth7.wasm: paired output ratio 1.0733 (threshold 1.0500)",
+    "examples/algorithms/pwhash_argon2i.wasm: paired output ratio 1.1354 (threshold 1.0500)",
+    "examples/algorithms/pwhash_argon2id.wasm: paired output ratio 1.1440 (threshold 1.0500)",
+    "examples/algorithms/pwhash_scrypt.wasm: paired output ratio 1.0584 (threshold 1.0500)",
+    "examples/algorithms/pwhash_scrypt_ll.wasm: paired output ratio 1.0720 (threshold 1.0500)",
+    "examples/algorithms/randombytes.wasm: paired output ratio 2.1226 (threshold 1.0500)",
+    "examples/algorithms/secretbox.wasm: paired output ratio 1.0734 (threshold 1.0500)",
+    "examples/algorithms/secretbox2.wasm: paired output ratio 1.0800 (threshold 1.0500)",
+    "examples/algorithms/secretbox7.wasm: paired output ratio 1.0516 (threshold 1.0500)",
+    "examples/algorithms/secretbox8.wasm: paired output ratio 1.0599 (threshold 1.0500)",
+    "examples/algorithms/secretbox_easy.wasm: paired output ratio 1.2587 (threshold 1.0500)",
+    "examples/algorithms/secretbox_easy2.wasm: paired output ratio 1.0881 (threshold 1.0500)",
+    "examples/algorithms/secretstream_xchacha20poly1305.wasm: paired output ratio 1.1352 (threshold 1.0500)",
+    "examples/algorithms/sodium_utils.wasm: paired output ratio 1.0844 (threshold 1.0500)",
+    "examples/algorithms/stream3.wasm: paired output ratio 1.1176 (threshold 1.0500)",
+    "examples/algorithms/stream4.wasm: paired output ratio 1.0714 (threshold 1.0500)",
+    "examples/algorithms/verify1.wasm: paired output ratio 1.2116 (threshold 1.0500)"
+  ],
+  "rows": [
+    {
+      "workload": "examples/algorithms/aead_aegis128l.wasm",
+      "status": "ok",
+      "cache": {
+        "directory": "target/upstream-49/algorithms/jit-cache/aead_aegis128l",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "target/upstream-49/algorithms/jit-cache/aead_aegis128l/wasmoon",
+        "wasmtime_directory": "target/upstream-49/algorithms/jit-cache/aead_aegis128l/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmoon",
+          "wasmtime"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/aead_aegis128l.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.7649875839997549,
+          "parsed_value": 3528720000.0,
+          "stdout": "3528720000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_hit": false,
+          "cache_write_succeeded": true,
+          "cache_files_changed": true,
+          "compilation_evidence": "runtime-report",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v10-297cef6dafec53e1db857cc407444f5966cadcabb74a8af7bd59bdb51216b7f4.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "/Users/zhengyu/.cargo/bin/wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=/Users/zhengyu/Documents/projects/wasmoon/_build/upstream-49/algorithms/jit-cache/aead_aegis128l/wasmtime-cache.toml",
+            "-C",
+            "parallel-compilation=n",
+            "examples/algorithms/aead_aegis128l.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.7489872500009369,
+          "parsed_value": 3584905000.0,
+          "stdout": "3584905000",
+          "stderr": "",
+          "freshly_compiled": null,
+          "cache_hit": null,
+          "cache_write_succeeded": null,
+          "cache_files_changed": true,
+          "compilation_evidence": "unavailable",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-97065",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/tERJEJzy4YBOioxdchlG9eZ3AhOWP1dEdZOdPxeDIZ8",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/tERJEJzy4YBOioxdchlG9eZ3AhOWP1dEdZOdPxeDIZ8.stats"
+          ]
+        },
+        "value_ratio": 0.984327339218194,
+        "wall_ratio": 1.0213626253301347
+      }
+    },
+    {
+      "workload": "examples/algorithms/aead_aegis256.wasm",
+      "status": "ok",
+      "cache": {
+        "directory": "target/upstream-49/algorithms/jit-cache/aead_aegis256",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "target/upstream-49/algorithms/jit-cache/aead_aegis256/wasmoon",
+        "wasmtime_directory": "target/upstream-49/algorithms/jit-cache/aead_aegis256/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmtime",
+          "wasmoon"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/aead_aegis256.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.8390345000007073,
+          "parsed_value": 3880610000.0,
+          "stdout": "3880610000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_hit": false,
+          "cache_write_succeeded": true,
+          "cache_files_changed": true,
+          "compilation_evidence": "runtime-report",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v10-aae16d305de7988c18daaae5a4874852b4bf48d198f53caaebe408644bdf537b.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "/Users/zhengyu/.cargo/bin/wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=/Users/zhengyu/Documents/projects/wasmoon/_build/upstream-49/algorithms/jit-cache/aead_aegis256/wasmtime-cache.toml",
+            "-C",
+            "parallel-compilation=n",
+            "examples/algorithms/aead_aegis256.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.8302539159994922,
+          "parsed_value": 3995540000.0,
+          "stdout": "3995540000",
+          "stderr": "",
+          "freshly_compiled": null,
+          "cache_hit": null,
+          "cache_write_succeeded": null,
+          "cache_files_changed": true,
+          "compilation_evidence": "unavailable",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-97074",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/8vBvLohtpu8QxntGlIaiXH-wNtKw2YKl0FBaovAwmpQ",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/8vBvLohtpu8QxntGlIaiXH-wNtKw2YKl0FBaovAwmpQ.stats"
+          ]
+        },
+        "value_ratio": 0.9712354275016644,
+        "wall_ratio": 1.0105757814952847
+      }
+    },
+    {
+      "workload": "examples/algorithms/aead_chacha20poly1305.wasm",
+      "status": "perf_gap",
+      "cache": {
+        "directory": "target/upstream-49/algorithms/jit-cache/aead_chacha20poly1305",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "target/upstream-49/algorithms/jit-cache/aead_chacha20poly1305/wasmoon",
+        "wasmtime_directory": "target/upstream-49/algorithms/jit-cache/aead_chacha20poly1305/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmoon",
+          "wasmtime"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/aead_chacha20poly1305.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.07067574999746284,
+          "parsed_value": 93455000.0,
+          "stdout": "93455000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_hit": false,
+          "cache_write_succeeded": true,
+          "cache_files_changed": true,
+          "compilation_evidence": "runtime-report",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v10-294295d48a0ca10bdd1a568ecf74ea82704e977cb0a55038de31aed767577a8e.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "/Users/zhengyu/.cargo/bin/wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=/Users/zhengyu/Documents/projects/wasmoon/_build/upstream-49/algorithms/jit-cache/aead_chacha20poly1305/wasmtime-cache.toml",
+            "-C",
+            "parallel-compilation=n",
+            "examples/algorithms/aead_chacha20poly1305.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.04103766700063716,
+          "parsed_value": 70950000.0,
+          "stdout": "70950000",
+          "stderr": "",
+          "freshly_compiled": null,
+          "cache_hit": null,
+          "cache_write_succeeded": null,
+          "cache_files_changed": true,
+          "compilation_evidence": "unavailable",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-97133",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/0bajCvFvEG2qPbIHWiosXV8CIeGgx_qtEDad0pUes7A",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/0bajCvFvEG2qPbIHWiosXV8CIeGgx_qtEDad0pUes7A.stats"
+          ]
+        },
+        "value_ratio": 1.3171952078928824,
+        "wall_ratio": 1.72221656743707
+      }
+    },
+    {
+      "workload": "examples/algorithms/aead_chacha20poly13052.wasm",
+      "status": "perf_gap",
+      "cache": {
+        "directory": "target/upstream-49/algorithms/jit-cache/aead_chacha20poly13052",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "target/upstream-49/algorithms/jit-cache/aead_chacha20poly13052/wasmoon",
+        "wasmtime_directory": "target/upstream-49/algorithms/jit-cache/aead_chacha20poly13052/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmtime",
+          "wasmoon"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/aead_chacha20poly13052.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.08032583399835858,
+          "parsed_value": 162920000.0,
+          "stdout": "162920000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_hit": false,
+          "cache_write_succeeded": true,
+          "cache_files_changed": true,
+          "compilation_evidence": "runtime-report",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v10-b8ab2296a4d232588ecec0f511ede7aa1f44c55644bf18348d4f42702da3d8ba.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "/Users/zhengyu/.cargo/bin/wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=/Users/zhengyu/Documents/projects/wasmoon/_build/upstream-49/algorithms/jit-cache/aead_chacha20poly13052/wasmtime-cache.toml",
+            "-C",
+            "parallel-compilation=n",
+            "examples/algorithms/aead_chacha20poly13052.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.05518354200103204,
+          "parsed_value": 138175000.0,
+          "stdout": "138175000",
+          "stderr": "",
+          "freshly_compiled": null,
+          "cache_hit": null,
+          "cache_write_succeeded": null,
+          "cache_files_changed": true,
+          "compilation_evidence": "unavailable",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-97134",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/wa_D212b3SpEMRPzyPATMB_EHcVc_ZoGslhD0iUhwQE",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/wa_D212b3SpEMRPzyPATMB_EHcVc_ZoGslhD0iUhwQE.stats"
+          ]
+        },
+        "value_ratio": 1.1790844943007057,
+        "wall_ratio": 1.4556121460426794
+      }
+    },
+    {
+      "workload": "examples/algorithms/aead_xchacha20poly1305.wasm",
+      "status": "perf_gap",
+      "cache": {
+        "directory": "target/upstream-49/algorithms/jit-cache/aead_xchacha20poly1305",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "target/upstream-49/algorithms/jit-cache/aead_xchacha20poly1305/wasmoon",
+        "wasmtime_directory": "target/upstream-49/algorithms/jit-cache/aead_xchacha20poly1305/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmoon",
+          "wasmtime"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/aead_xchacha20poly1305.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.06573229100104072,
+          "parsed_value": 85895000.0,
+          "stdout": "85895000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_hit": false,
+          "cache_write_succeeded": true,
+          "cache_files_changed": true,
+          "compilation_evidence": "runtime-report",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v10-9a7e8cdd1aaddcdd9d33d427ad7778220bd659b52a50d34c33c46ba61f9ae4d0.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "/Users/zhengyu/.cargo/bin/wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=/Users/zhengyu/Documents/projects/wasmoon/_build/upstream-49/algorithms/jit-cache/aead_xchacha20poly1305/wasmtime-cache.toml",
+            "-C",
+            "parallel-compilation=n",
+            "examples/algorithms/aead_xchacha20poly1305.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.04034458400201402,
+          "parsed_value": 69675000.0,
+          "stdout": "69675000",
+          "stderr": "",
+          "freshly_compiled": null,
+          "cache_hit": null,
+          "cache_write_succeeded": null,
+          "cache_files_changed": true,
+          "compilation_evidence": "unavailable",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-97137",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/SmcXj8dvwLlFg7kjybc1-K5iGJx-tZ148J3jD6eB6Iw",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/SmcXj8dvwLlFg7kjybc1-K5iGJx-tZ148J3jD6eB6Iw.stats"
+          ]
+        },
+        "value_ratio": 1.2327951202009328,
+        "wall_ratio": 1.6292717505219372
+      }
+    },
+    {
+      "workload": "examples/algorithms/auth.wasm",
+      "status": "perf_gap",
+      "cache": {
+        "directory": "target/upstream-49/algorithms/jit-cache/auth",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "target/upstream-49/algorithms/jit-cache/auth/wasmoon",
+        "wasmtime_directory": "target/upstream-49/algorithms/jit-cache/auth/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmtime",
+          "wasmoon"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/auth.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.05683245900218026,
+          "parsed_value": 19615000.0,
+          "stdout": "19615000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_hit": false,
+          "cache_write_succeeded": true,
+          "cache_files_changed": true,
+          "compilation_evidence": "runtime-report",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v10-643024146d8677d9b4c0473f63791a5159ee31bc26ef82e912216c1c932fdf20.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "/Users/zhengyu/.cargo/bin/wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=/Users/zhengyu/Documents/projects/wasmoon/_build/upstream-49/algorithms/jit-cache/auth/wasmtime-cache.toml",
+            "-C",
+            "parallel-compilation=n",
+            "examples/algorithms/auth.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.03018858300129068,
+          "parsed_value": 17255000.0,
+          "stdout": "17255000",
+          "stderr": "",
+          "freshly_compiled": null,
+          "cache_hit": null,
+          "cache_write_succeeded": null,
+          "cache_files_changed": true,
+          "compilation_evidence": "unavailable",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-97138",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/FBKuASzAmFx9Xgt1Sz9V6rDI9HHcSM1_Z50Ai-qEI24",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/FBKuASzAmFx9Xgt1Sz9V6rDI9HHcSM1_Z50Ai-qEI24.stats"
+          ]
+        },
+        "value_ratio": 1.136771950159374,
+        "wall_ratio": 1.8825812062709417
+      }
+    },
+    {
+      "workload": "examples/algorithms/auth2.wasm",
+      "status": "perf_gap",
+      "cache": {
+        "directory": "target/upstream-49/algorithms/jit-cache/auth2",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "target/upstream-49/algorithms/jit-cache/auth2/wasmoon",
+        "wasmtime_directory": "target/upstream-49/algorithms/jit-cache/auth2/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmoon",
+          "wasmtime"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/auth2.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.04374062499846332,
+          "parsed_value": 935000.0,
+          "stdout": "935000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_hit": false,
+          "cache_write_succeeded": true,
+          "cache_files_changed": true,
+          "compilation_evidence": "runtime-report",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v10-3c3bd235ee39e39ef77f6675ff5e6d4ba8ee3ea3d09c2e77902cc293a23e6ad8.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "/Users/zhengyu/.cargo/bin/wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=/Users/zhengyu/Documents/projects/wasmoon/_build/upstream-49/algorithms/jit-cache/auth2/wasmtime-cache.toml",
+            "-C",
+            "parallel-compilation=n",
+            "examples/algorithms/auth2.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.023452916997484863,
+          "parsed_value": 845000.0,
+          "stdout": "845000",
+          "stderr": "",
+          "freshly_compiled": null,
+          "cache_hit": null,
+          "cache_write_succeeded": null,
+          "cache_files_changed": true,
+          "compilation_evidence": "unavailable",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-97141",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/6Y6PNDfuF4zgRrL_egwYjqNIC2e6tumziar5ERmnzm0",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/6Y6PNDfuF4zgRrL_egwYjqNIC2e6tumziar5ERmnzm0.stats"
+          ]
+        },
+        "value_ratio": 1.106508875739645,
+        "wall_ratio": 1.8650398585026395
+      }
+    },
+    {
+      "workload": "examples/algorithms/auth3.wasm",
+      "status": "perf_gap",
+      "cache": {
+        "directory": "target/upstream-49/algorithms/jit-cache/auth3",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "target/upstream-49/algorithms/jit-cache/auth3/wasmoon",
+        "wasmtime_directory": "target/upstream-49/algorithms/jit-cache/auth3/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmtime",
+          "wasmoon"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/auth3.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.044232917000044836,
+          "parsed_value": 1900000.0,
+          "stdout": "1900000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_hit": false,
+          "cache_write_succeeded": true,
+          "cache_files_changed": true,
+          "compilation_evidence": "runtime-report",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v10-2d9ca1571c917b2a2a863d544e2d5436d63123b653b24e156d91c77915fb2ee3.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "/Users/zhengyu/.cargo/bin/wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=/Users/zhengyu/Documents/projects/wasmoon/_build/upstream-49/algorithms/jit-cache/auth3/wasmtime-cache.toml",
+            "-C",
+            "parallel-compilation=n",
+            "examples/algorithms/auth3.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.02391416699902038,
+          "parsed_value": 1685000.0,
+          "stdout": "1685000",
+          "stderr": "",
+          "freshly_compiled": null,
+          "cache_hit": null,
+          "cache_write_succeeded": null,
+          "cache_files_changed": true,
+          "compilation_evidence": "unavailable",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-97142",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/6xA3XKdMUZIvgt4ev5fIL0-qYr7VNoOKa9JVgPfohb8",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/6xA3XKdMUZIvgt4ev5fIL0-qYr7VNoOKa9JVgPfohb8.stats"
+          ]
+        },
+        "value_ratio": 1.1275964391691395,
+        "wall_ratio": 1.849653262095928
+      }
+    },
+    {
+      "workload": "examples/algorithms/auth5.wasm",
+      "status": "perf_gap",
+      "cache": {
+        "directory": "target/upstream-49/algorithms/jit-cache/auth5",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "target/upstream-49/algorithms/jit-cache/auth5/wasmoon",
+        "wasmtime_directory": "target/upstream-49/algorithms/jit-cache/auth5/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmoon",
+          "wasmtime"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/auth5.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 2.2146639579987095,
+          "parsed_value": 10850155000.0,
+          "stdout": "10850155000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_hit": false,
+          "cache_write_succeeded": true,
+          "cache_files_changed": true,
+          "compilation_evidence": "runtime-report",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v10-96065671a1b8913360dfdf22dd04e58451411cc059af49a3afeaaaf703815118.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "/Users/zhengyu/.cargo/bin/wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=/Users/zhengyu/Documents/projects/wasmoon/_build/upstream-49/algorithms/jit-cache/auth5/wasmtime-cache.toml",
+            "-C",
+            "parallel-compilation=n",
+            "examples/algorithms/auth5.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 1.9778884590014059,
+          "parsed_value": 9762860000.0,
+          "stdout": "9762860000",
+          "stderr": "",
+          "freshly_compiled": null,
+          "cache_hit": null,
+          "cache_write_succeeded": null,
+          "cache_files_changed": true,
+          "compilation_evidence": "unavailable",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-97188",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/b5km75PdxRRfmujJImcoFZSZE7BaFoqpXlHVLtecShU",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/b5km75PdxRRfmujJImcoFZSZE7BaFoqpXlHVLtecShU.stats"
+          ]
+        },
+        "value_ratio": 1.1113705410094992,
+        "wall_ratio": 1.119711249600418
+      }
+    },
+    {
+      "workload": "examples/algorithms/auth6.wasm",
+      "status": "perf_gap",
+      "cache": {
+        "directory": "target/upstream-49/algorithms/jit-cache/auth6",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "target/upstream-49/algorithms/jit-cache/auth6/wasmoon",
+        "wasmtime_directory": "target/upstream-49/algorithms/jit-cache/auth6/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmtime",
+          "wasmoon"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/auth6.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.04384704200128908,
+          "parsed_value": 1490000.0,
+          "stdout": "1490000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_hit": false,
+          "cache_write_succeeded": true,
+          "cache_files_changed": true,
+          "compilation_evidence": "runtime-report",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v10-664dcaa3c3677d5d3db6416da81dc5477521473f224d75f28da50ea86db39d92.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "/Users/zhengyu/.cargo/bin/wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=/Users/zhengyu/Documents/projects/wasmoon/_build/upstream-49/algorithms/jit-cache/auth6/wasmtime-cache.toml",
+            "-C",
+            "parallel-compilation=n",
+            "examples/algorithms/auth6.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.02514458299992839,
+          "parsed_value": 1300000.0,
+          "stdout": "1300000",
+          "stderr": "",
+          "freshly_compiled": null,
+          "cache_hit": null,
+          "cache_write_succeeded": null,
+          "cache_files_changed": true,
+          "compilation_evidence": "unavailable",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-97232",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/bCUQXe0kHWfbblk-MzEdPKsriUyqNjUQBf2BF688v4M",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/bCUQXe0kHWfbblk-MzEdPKsriUyqNjUQBf2BF688v4M.stats"
+          ]
+        },
+        "value_ratio": 1.146153846153846,
+        "wall_ratio": 1.7437967454625896
+      }
+    },
+    {
+      "workload": "examples/algorithms/auth7.wasm",
+      "status": "perf_gap",
+      "cache": {
+        "directory": "target/upstream-49/algorithms/jit-cache/auth7",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "target/upstream-49/algorithms/jit-cache/auth7/wasmoon",
+        "wasmtime_directory": "target/upstream-49/algorithms/jit-cache/auth7/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmoon",
+          "wasmtime"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/auth7.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 1.2236996250030643,
+          "parsed_value": 5892775000.0,
+          "stdout": "5892775000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_hit": false,
+          "cache_write_succeeded": true,
+          "cache_files_changed": true,
+          "compilation_evidence": "runtime-report",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v10-de95d92e71f5c47b8c713ced53b3e08e91c62f1a6d70d6532a60364747f48347.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "/Users/zhengyu/.cargo/bin/wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=/Users/zhengyu/Documents/projects/wasmoon/_build/upstream-49/algorithms/jit-cache/auth7/wasmtime-cache.toml",
+            "-C",
+            "parallel-compilation=n",
+            "examples/algorithms/auth7.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 1.130627500002447,
+          "parsed_value": 5527695000.0,
+          "stdout": "5527695000",
+          "stderr": "",
+          "freshly_compiled": null,
+          "cache_hit": null,
+          "cache_write_succeeded": null,
+          "cache_files_changed": true,
+          "compilation_evidence": "unavailable",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-97286",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/ef1x1E2vmAHvTDBM9G20f582MM1D9ZTpnSaew3ZvQyg",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/ef1x1E2vmAHvTDBM9G20f582MM1D9ZTpnSaew3ZvQyg.stats"
+          ]
+        },
+        "value_ratio": 1.0660456121403226,
+        "wall_ratio": 1.0823189998477976
+      }
+    },
+    {
+      "workload": "examples/algorithms/box.wasm",
+      "status": "ok",
+      "cache": {
+        "directory": "target/upstream-49/algorithms/jit-cache/box",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "target/upstream-49/algorithms/jit-cache/box/wasmoon",
+        "wasmtime_directory": "target/upstream-49/algorithms/jit-cache/box/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmtime",
+          "wasmoon"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/box.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.13643333399886615,
+          "parsed_value": 220550000.0,
+          "stdout": "220550000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_hit": false,
+          "cache_write_succeeded": true,
+          "cache_files_changed": true,
+          "compilation_evidence": "runtime-report",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v10-3c777901ee10588add2de901adc2cc4255984bbd09a54732530b92de8fddbc96.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "/Users/zhengyu/.cargo/bin/wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=/Users/zhengyu/Documents/projects/wasmoon/_build/upstream-49/algorithms/jit-cache/box/wasmtime-cache.toml",
+            "-C",
+            "parallel-compilation=n",
+            "examples/algorithms/box.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.09049183299794095,
+          "parsed_value": 220095000.0,
+          "stdout": "220095000",
+          "stderr": "",
+          "freshly_compiled": null,
+          "cache_hit": null,
+          "cache_write_succeeded": null,
+          "cache_files_changed": true,
+          "compilation_evidence": "unavailable",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-97437",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/mIWNFnhQdeZ0inLTtKokxGrh7axkADhTDGNCbXWiFMM",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/mIWNFnhQdeZ0inLTtKokxGrh7axkADhTDGNCbXWiFMM.stats"
+          ]
+        },
+        "value_ratio": 1.0020672891251505,
+        "wall_ratio": 1.5076867102688765
+      }
+    },
+    {
+      "workload": "examples/algorithms/box2.wasm",
+      "status": "ok",
+      "cache": {
+        "directory": "target/upstream-49/algorithms/jit-cache/box2",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "target/upstream-49/algorithms/jit-cache/box2/wasmoon",
+        "wasmtime_directory": "target/upstream-49/algorithms/jit-cache/box2/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmoon",
+          "wasmtime"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/box2.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.141364250001061,
+          "parsed_value": 221435000.0,
+          "stdout": "221435000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_hit": false,
+          "cache_write_succeeded": true,
+          "cache_files_changed": true,
+          "compilation_evidence": "runtime-report",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v10-30c0cf64ca3850b0bd92de2fe5d3439d155fc3daf6a8c208ef92c40a29fa6311.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "/Users/zhengyu/.cargo/bin/wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=/Users/zhengyu/Documents/projects/wasmoon/_build/upstream-49/algorithms/jit-cache/box2/wasmtime-cache.toml",
+            "-C",
+            "parallel-compilation=n",
+            "examples/algorithms/box2.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.08875512499798788,
+          "parsed_value": 219030000.0,
+          "stdout": "219030000",
+          "stderr": "",
+          "freshly_compiled": null,
+          "cache_hit": null,
+          "cache_write_succeeded": null,
+          "cache_files_changed": true,
+          "compilation_evidence": "unavailable",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-97440",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/ndbNIhpqgRhIyQ4FEogqKgOqaj0mfRbcwF5RDRGAM9c",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/ndbNIhpqgRhIyQ4FEogqKgOqaj0mfRbcwF5RDRGAM9c.stats"
+          ]
+        },
+        "value_ratio": 1.010980231018582,
+        "wall_ratio": 1.5927446443714186
+      }
+    },
+    {
+      "workload": "examples/algorithms/box7.wasm",
+      "status": "ok",
+      "cache": {
+        "directory": "target/upstream-49/algorithms/jit-cache/box7",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "target/upstream-49/algorithms/jit-cache/box7/wasmoon",
+        "wasmtime_directory": "target/upstream-49/algorithms/jit-cache/box7/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmtime",
+          "wasmoon"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/box7.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 42.95614537499932,
+          "parsed_value": 214321325000.0,
+          "stdout": "214321325000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_hit": false,
+          "cache_write_succeeded": true,
+          "cache_files_changed": true,
+          "compilation_evidence": "runtime-report",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v10-16a82c1fbc614da8e1e8aeb972023dc769f5ea187d9c4850d2885b07c16384e7.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "/Users/zhengyu/.cargo/bin/wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=/Users/zhengyu/Documents/projects/wasmoon/_build/upstream-49/algorithms/jit-cache/box7/wasmtime-cache.toml",
+            "-C",
+            "parallel-compilation=n",
+            "examples/algorithms/box7.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 42.4196050419996,
+          "parsed_value": 211859535000.0,
+          "stdout": "211859535000",
+          "stderr": "",
+          "freshly_compiled": null,
+          "cache_hit": null,
+          "cache_write_succeeded": null,
+          "cache_files_changed": true,
+          "compilation_evidence": "unavailable",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-97441",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/XAyJa4ysY91FOJhaWyCOoo7yfLumS-auF-2ZkfE5quM",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/XAyJa4ysY91FOJhaWyCOoo7yfLumS-auF-2ZkfE5quM.stats"
+          ]
+        },
+        "value_ratio": 1.0116199159976444,
+        "wall_ratio": 1.012648404728627
+      }
+    },
+    {
+      "workload": "examples/algorithms/box8.wasm",
+      "status": "ok",
+      "cache": {
+        "directory": "target/upstream-49/algorithms/jit-cache/box8",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "target/upstream-49/algorithms/jit-cache/box8/wasmoon",
+        "wasmtime_directory": "target/upstream-49/algorithms/jit-cache/box8/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmoon",
+          "wasmtime"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/box8.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 128.59265795800093,
+          "parsed_value": 642488610000.0,
+          "stdout": "642488610000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_hit": false,
+          "cache_write_succeeded": true,
+          "cache_files_changed": true,
+          "compilation_evidence": "runtime-report",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v10-de1c8b6930aae7338d1fff3b6207d880ab82d52e8ab4cab3701729255a3241aa.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "/Users/zhengyu/.cargo/bin/wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=/Users/zhengyu/Documents/projects/wasmoon/_build/upstream-49/algorithms/jit-cache/box8/wasmtime-cache.toml",
+            "-C",
+            "parallel-compilation=n",
+            "examples/algorithms/box8.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 127.01064954200046,
+          "parsed_value": 634828005000.0,
+          "stdout": "634828005000",
+          "stderr": "",
+          "freshly_compiled": null,
+          "cache_hit": null,
+          "cache_write_succeeded": null,
+          "cache_files_changed": true,
+          "compilation_evidence": "unavailable",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-2693",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/PE84LeSXeMUcbWJ5G1mV-1i-nVgBwzqszDb-s43M97k",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/PE84LeSXeMUcbWJ5G1mV-1i-nVgBwzqszDb-s43M97k.stats"
+          ]
+        },
+        "value_ratio": 1.0120672133864037,
+        "wall_ratio": 1.0124557147113662
+      }
+    },
+    {
+      "workload": "examples/algorithms/box_easy.wasm",
+      "status": "ok",
+      "cache": {
+        "directory": "target/upstream-49/algorithms/jit-cache/box_easy",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "target/upstream-49/algorithms/jit-cache/box_easy/wasmoon",
+        "wasmtime_directory": "target/upstream-49/algorithms/jit-cache/box_easy/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmtime",
+          "wasmoon"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/box_easy.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.17728625000017928,
+          "parsed_value": 432280000.0,
+          "stdout": "432280000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_hit": false,
+          "cache_write_succeeded": true,
+          "cache_files_changed": true,
+          "compilation_evidence": "runtime-report",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v10-97814da7e8d5c964fa4b8260f4b999703032d95105e8f13cf68031b35179c99d.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "/Users/zhengyu/.cargo/bin/wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=/Users/zhengyu/Documents/projects/wasmoon/_build/upstream-49/algorithms/jit-cache/box_easy/wasmtime-cache.toml",
+            "-C",
+            "parallel-compilation=n",
+            "examples/algorithms/box_easy.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.13107987500188756,
+          "parsed_value": 431395000.0,
+          "stdout": "431395000",
+          "stderr": "",
+          "freshly_compiled": null,
+          "cache_hit": null,
+          "cache_write_succeeded": null,
+          "cache_files_changed": true,
+          "compilation_evidence": "unavailable",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-5375",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/Bdsga-3UoDb_FcafiGasuJbyuBpHtWgGhY7E1PuHL0M",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/Bdsga-3UoDb_FcafiGasuJbyuBpHtWgGhY7E1PuHL0M.stats"
+          ]
+        },
+        "value_ratio": 1.0020514841386665,
+        "wall_ratio": 1.3525054856638088
+      }
+    },
+    {
+      "workload": "examples/algorithms/box_easy2.wasm",
+      "status": "ok",
+      "cache": {
+        "directory": "target/upstream-49/algorithms/jit-cache/box_easy2",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "target/upstream-49/algorithms/jit-cache/box_easy2/wasmoon",
+        "wasmtime_directory": "target/upstream-49/algorithms/jit-cache/box_easy2/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmoon",
+          "wasmtime"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/box_easy2.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 5.707037166001101,
+          "parsed_value": 28017390000.0,
+          "stdout": "28017390000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_hit": false,
+          "cache_write_succeeded": true,
+          "cache_files_changed": true,
+          "compilation_evidence": "runtime-report",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v10-b24d1de91163523eaaf6603ef3f4a9969320f862edbb4c81df2728e1e7f84fea.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "/Users/zhengyu/.cargo/bin/wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=/Users/zhengyu/Documents/projects/wasmoon/_build/upstream-49/algorithms/jit-cache/box_easy2/wasmtime-cache.toml",
+            "-C",
+            "parallel-compilation=n",
+            "examples/algorithms/box_easy2.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 5.500027500002034,
+          "parsed_value": 27265110000.0,
+          "stdout": "27265110000",
+          "stderr": "",
+          "freshly_compiled": null,
+          "cache_hit": null,
+          "cache_write_succeeded": null,
+          "cache_files_changed": true,
+          "compilation_evidence": "unavailable",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-5513",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/E9kXVYL_j6joBCByjiQMLeXkCLZB9V8gNkyEXsjTV_Q",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/E9kXVYL_j6joBCByjiQMLeXkCLZB9V8gNkyEXsjTV_Q.stats"
+          ]
+        },
+        "value_ratio": 1.027591306251836,
+        "wall_ratio": 1.037637932901061
+      }
+    },
+    {
+      "workload": "examples/algorithms/box_seal.wasm",
+      "status": "ok",
+      "cache": {
+        "directory": "target/upstream-49/algorithms/jit-cache/box_seal",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "target/upstream-49/algorithms/jit-cache/box_seal/wasmoon",
+        "wasmtime_directory": "target/upstream-49/algorithms/jit-cache/box_seal/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmtime",
+          "wasmoon"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/box_seal.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.34806208399822935,
+          "parsed_value": 1175485000.0,
+          "stdout": "1175485000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_hit": false,
+          "cache_write_succeeded": true,
+          "cache_files_changed": true,
+          "compilation_evidence": "runtime-report",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v10-398bfb7875a8d859ea8e10e47232e5f55ba3f8a3c055aa7e8992fbeacef5556d.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "/Users/zhengyu/.cargo/bin/wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=/Users/zhengyu/Documents/projects/wasmoon/_build/upstream-49/algorithms/jit-cache/box_seal/wasmtime-cache.toml",
+            "-C",
+            "parallel-compilation=n",
+            "examples/algorithms/box_seal.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.28208366699982435,
+          "parsed_value": 1155855000.0,
+          "stdout": "1155855000",
+          "stderr": "",
+          "freshly_compiled": null,
+          "cache_hit": null,
+          "cache_write_succeeded": null,
+          "cache_files_changed": true,
+          "compilation_evidence": "unavailable",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-5644",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/5Y3xgtuPiI78B7yII-sUKaXuS4tZRgtIm1ulqGee_4Q",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/5Y3xgtuPiI78B7yII-sUKaXuS4tZRgtIm1ulqGee_4Q.stats"
+          ]
+        },
+        "value_ratio": 1.016983099091149,
+        "wall_ratio": 1.233896622587674
+      }
+    },
+    {
+      "workload": "examples/algorithms/box_seed.wasm",
+      "status": "ok",
+      "cache": {
+        "directory": "target/upstream-49/algorithms/jit-cache/box_seed",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "target/upstream-49/algorithms/jit-cache/box_seed/wasmoon",
+        "wasmtime_directory": "target/upstream-49/algorithms/jit-cache/box_seed/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmoon",
+          "wasmtime"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/box_seed.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.0960544999979902,
+          "parsed_value": 36475000.0,
+          "stdout": "36475000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_hit": false,
+          "cache_write_succeeded": true,
+          "cache_files_changed": true,
+          "compilation_evidence": "runtime-report",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v10-9512b46f59184fac5e1399da6a88e0ea0f414cda10dd0364969792174c43bce8.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "/Users/zhengyu/.cargo/bin/wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=/Users/zhengyu/Documents/projects/wasmoon/_build/upstream-49/algorithms/jit-cache/box_seed/wasmtime-cache.toml",
+            "-C",
+            "parallel-compilation=n",
+            "examples/algorithms/box_seed.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.04905295899880002,
+          "parsed_value": 34855000.0,
+          "stdout": "34855000",
+          "stderr": "",
+          "freshly_compiled": null,
+          "cache_hit": null,
+          "cache_write_succeeded": null,
+          "cache_files_changed": true,
+          "compilation_evidence": "unavailable",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-5647",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/aTp_96ZJSljGXPCmm0XDIyM9Olq5VPCZKNcQ3MwrjX4",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/aTp_96ZJSljGXPCmm0XDIyM9Olq5VPCZKNcQ3MwrjX4.stats"
+          ]
+        },
+        "value_ratio": 1.0464782671065844,
+        "wall_ratio": 1.958179525935224
+      }
+    },
+    {
+      "workload": "examples/algorithms/chacha20.wasm",
+      "status": "ok",
+      "cache": {
+        "directory": "target/upstream-49/algorithms/jit-cache/chacha20",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "target/upstream-49/algorithms/jit-cache/chacha20/wasmoon",
+        "wasmtime_directory": "target/upstream-49/algorithms/jit-cache/chacha20/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmtime",
+          "wasmoon"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/chacha20.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.12319437499900232,
+          "parsed_value": 377660000.0,
+          "stdout": "377660000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_hit": false,
+          "cache_write_succeeded": true,
+          "cache_files_changed": true,
+          "compilation_evidence": "runtime-report",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v10-3e0c29bbefe312bba55f0a6f0236c04c66a958eac553cd5a321c38df5c7b3db5.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "/Users/zhengyu/.cargo/bin/wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=/Users/zhengyu/Documents/projects/wasmoon/_build/upstream-49/algorithms/jit-cache/chacha20/wasmtime-cache.toml",
+            "-C",
+            "parallel-compilation=n",
+            "examples/algorithms/chacha20.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.10158374999809894,
+          "parsed_value": 375450000.0,
+          "stdout": "375450000",
+          "stderr": "",
+          "freshly_compiled": null,
+          "cache_hit": null,
+          "cache_write_succeeded": null,
+          "cache_files_changed": true,
+          "compilation_evidence": "unavailable",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-5648",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/_xfDQKsMjHVvmsgCH7g8WTafZuYpn8Kc08bc3LDdOrc",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/_xfDQKsMjHVvmsgCH7g8WTafZuYpn8Kc08bc3LDdOrc.stats"
+          ]
+        },
+        "value_ratio": 1.0058862698095619,
+        "wall_ratio": 1.2127370273425406
+      }
+    },
+    {
+      "workload": "examples/algorithms/codecs.wasm",
+      "status": "perf_gap",
+      "cache": {
+        "directory": "target/upstream-49/algorithms/jit-cache/codecs",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "target/upstream-49/algorithms/jit-cache/codecs/wasmoon",
+        "wasmtime_directory": "target/upstream-49/algorithms/jit-cache/codecs/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmoon",
+          "wasmtime"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/codecs.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.19133441700250842,
+          "parsed_value": 712885000.0,
+          "stdout": "712885000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_hit": false,
+          "cache_write_succeeded": true,
+          "cache_files_changed": true,
+          "compilation_evidence": "runtime-report",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v10-95a59b6b8d0ad7e5cd19f4fb44dbb0218bbef753fa4181696b6677f8d11e4b75.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "/Users/zhengyu/.cargo/bin/wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=/Users/zhengyu/Documents/projects/wasmoon/_build/upstream-49/algorithms/jit-cache/codecs/wasmtime-cache.toml",
+            "-C",
+            "parallel-compilation=n",
+            "examples/algorithms/codecs.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.15709220899952925,
+          "parsed_value": 655015000.0,
+          "stdout": "655015000",
+          "stderr": "",
+          "freshly_compiled": null,
+          "cache_hit": null,
+          "cache_write_succeeded": null,
+          "cache_files_changed": true,
+          "compilation_evidence": "unavailable",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-5651",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/CIaveI1en7Rp9pfQqkVJ-Kuhy3eabkxw42kHL4Aer4o",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/CIaveI1en7Rp9pfQqkVJ-Kuhy3eabkxw42kHL4Aer4o.stats"
+          ]
+        },
+        "value_ratio": 1.0883491217758372,
+        "wall_ratio": 1.2179752148184624
+      }
+    },
+    {
+      "workload": "examples/algorithms/core3.wasm",
+      "status": "ok",
+      "cache": {
+        "directory": "target/upstream-49/algorithms/jit-cache/core3",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "target/upstream-49/algorithms/jit-cache/core3/wasmoon",
+        "wasmtime_directory": "target/upstream-49/algorithms/jit-cache/core3/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmtime",
+          "wasmoon"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/core3.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 7.244022415998188,
+          "parsed_value": 35967820000.0,
+          "stdout": "35967820000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_hit": false,
+          "cache_write_succeeded": true,
+          "cache_files_changed": true,
+          "compilation_evidence": "runtime-report",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v10-8975efb0af6f1881de651cf334940766fb9ae4f93d21301e4cd9e13af9815a16.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "/Users/zhengyu/.cargo/bin/wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=/Users/zhengyu/Documents/projects/wasmoon/_build/upstream-49/algorithms/jit-cache/core3/wasmtime-cache.toml",
+            "-C",
+            "parallel-compilation=n",
+            "examples/algorithms/core3.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 7.124374667000666,
+          "parsed_value": 35484615000.0,
+          "stdout": "35484615000",
+          "stderr": "",
+          "freshly_compiled": null,
+          "cache_hit": null,
+          "cache_write_succeeded": null,
+          "cache_files_changed": true,
+          "compilation_evidence": "unavailable",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-5652",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/CgtmfBL2HS75x1uFML0Y8EDl3etC6-19mejQDZ1xPqU",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/CgtmfBL2HS75x1uFML0Y8EDl3etC6-19mejQDZ1xPqU.stats"
+          ]
+        },
+        "value_ratio": 1.013617309924315,
+        "wall_ratio": 1.0167941404810892
+      }
+    },
+    {
+      "workload": "examples/algorithms/core_ed25519.wasm",
+      "status": "ok",
+      "cache": {
+        "directory": "target/upstream-49/algorithms/jit-cache/core_ed25519",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "target/upstream-49/algorithms/jit-cache/core_ed25519/wasmoon",
+        "wasmtime_directory": "target/upstream-49/algorithms/jit-cache/core_ed25519/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmoon",
+          "wasmtime"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/core_ed25519.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 162.6889244160011,
+          "parsed_value": 812368910000.0,
+          "stdout": "812368910000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_hit": false,
+          "cache_write_succeeded": true,
+          "cache_files_changed": true,
+          "compilation_evidence": "runtime-report",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v10-77809558d81d73f6709a45ae29ef9401dbcbbade6fb9ee03cc75cd7f91803d57.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "/Users/zhengyu/.cargo/bin/wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=/Users/zhengyu/Documents/projects/wasmoon/_build/upstream-49/algorithms/jit-cache/core_ed25519/wasmtime-cache.toml",
+            "-C",
+            "parallel-compilation=n",
+            "examples/algorithms/core_ed25519.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 158.96076562500093,
+          "parsed_value": 794419095000.0,
+          "stdout": "794419095000",
+          "stderr": "",
+          "freshly_compiled": null,
+          "cache_hit": null,
+          "cache_write_succeeded": null,
+          "cache_files_changed": true,
+          "compilation_evidence": "unavailable",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-9361",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/aGVJkteeFKpQzLZU0OhXYSmx3Uid3S9TKmL0JSxvb1U",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/aGVJkteeFKpQzLZU0OhXYSmx3Uid3S9TKmL0JSxvb1U.stats"
+          ]
+        },
+        "value_ratio": 1.022594893693989,
+        "wall_ratio": 1.0234533268403798
+      }
+    },
+    {
+      "workload": "examples/algorithms/core_ed25519_h2c.wasm",
+      "status": "ok",
+      "cache": {
+        "directory": "target/upstream-49/algorithms/jit-cache/core_ed25519_h2c",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "target/upstream-49/algorithms/jit-cache/core_ed25519_h2c/wasmoon",
+        "wasmtime_directory": "target/upstream-49/algorithms/jit-cache/core_ed25519_h2c/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmtime",
+          "wasmoon"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/core_ed25519_h2c.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.4344379590002063,
+          "parsed_value": 1400865000.0,
+          "stdout": "1400865000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_hit": false,
+          "cache_write_succeeded": true,
+          "cache_files_changed": true,
+          "compilation_evidence": "runtime-report",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v10-48e50a9392809cb6ba19ccf091097fb1cd1d770a2a348004f2f9f28e6e277704.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "/Users/zhengyu/.cargo/bin/wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=/Users/zhengyu/Documents/projects/wasmoon/_build/upstream-49/algorithms/jit-cache/core_ed25519_h2c/wasmtime-cache.toml",
+            "-C",
+            "parallel-compilation=n",
+            "examples/algorithms/core_ed25519_h2c.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.3445786250013043,
+          "parsed_value": 1395980000.0,
+          "stdout": "1395980000",
+          "stderr": "",
+          "freshly_compiled": null,
+          "cache_hit": null,
+          "cache_write_succeeded": null,
+          "cache_files_changed": true,
+          "compilation_evidence": "unavailable",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-12620",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/E1dD_phBd4H7sfBmJITmHhLiKcYxG8M1ipS7OhDhkW4",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/E1dD_phBd4H7sfBmJITmHhLiKcYxG8M1ipS7OhDhkW4.stats"
+          ]
+        },
+        "value_ratio": 1.0034993338013438,
+        "wall_ratio": 1.260780348747871
+      }
+    },
+    {
+      "workload": "examples/algorithms/core_ristretto255.wasm",
+      "status": "ok",
+      "cache": {
+        "directory": "target/upstream-49/algorithms/jit-cache/core_ristretto255",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "target/upstream-49/algorithms/jit-cache/core_ristretto255/wasmoon",
+        "wasmtime_directory": "target/upstream-49/algorithms/jit-cache/core_ristretto255/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmoon",
+          "wasmtime"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/core_ristretto255.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 183.5951728330001,
+          "parsed_value": 917294695000.0,
+          "stdout": "917294695000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_hit": false,
+          "cache_write_succeeded": true,
+          "cache_files_changed": true,
+          "compilation_evidence": "runtime-report",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v10-649dff912a8bea150a2093594cf168ad648ba1d7fd8b2b7e22fc8b5ed6bf80c0.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "/Users/zhengyu/.cargo/bin/wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=/Users/zhengyu/Documents/projects/wasmoon/_build/upstream-49/algorithms/jit-cache/core_ristretto255/wasmtime-cache.toml",
+            "-C",
+            "parallel-compilation=n",
+            "examples/algorithms/core_ristretto255.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 179.93732399999863,
+          "parsed_value": 899396080000.0,
+          "stdout": "899396080000",
+          "stderr": "",
+          "freshly_compiled": null,
+          "cache_hit": null,
+          "cache_write_succeeded": null,
+          "cache_files_changed": true,
+          "compilation_evidence": "unavailable",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-16511",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/HlAiXRyRxcaj5K3upJdS-la9IPZh_zPOA7cUBxEUPOQ",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/HlAiXRyRxcaj5K3upJdS-la9IPZh_zPOA7cUBxEUPOQ.stats"
+          ]
+        },
+        "value_ratio": 1.0199007038144974,
+        "wall_ratio": 1.020328460775606
+      }
+    },
+    {
+      "workload": "examples/algorithms/ed25519_convert.wasm",
+      "status": "ok",
+      "cache": {
+        "directory": "target/upstream-49/algorithms/jit-cache/ed25519_convert",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "target/upstream-49/algorithms/jit-cache/ed25519_convert/wasmoon",
+        "wasmtime_directory": "target/upstream-49/algorithms/jit-cache/ed25519_convert/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmtime",
+          "wasmoon"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/ed25519_convert.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 18.963927417000377,
+          "parsed_value": 94159390000.0,
+          "stdout": "94159390000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_hit": false,
+          "cache_write_succeeded": true,
+          "cache_files_changed": true,
+          "compilation_evidence": "runtime-report",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v10-7e74a5ab7407889be6e58fc14ee06976ade0080d25b7f522b796d6b56e236ef3.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "/Users/zhengyu/.cargo/bin/wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=/Users/zhengyu/Documents/projects/wasmoon/_build/upstream-49/algorithms/jit-cache/ed25519_convert/wasmtime-cache.toml",
+            "-C",
+            "parallel-compilation=n",
+            "examples/algorithms/ed25519_convert.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 18.556272541998624,
+          "parsed_value": 92473875000.0,
+          "stdout": "92473875000",
+          "stderr": "",
+          "freshly_compiled": null,
+          "cache_hit": null,
+          "cache_write_succeeded": null,
+          "cache_files_changed": true,
+          "compilation_evidence": "unavailable",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-20196",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/33VJbkz5oKytlB3e1JLAt9Z4aBE4rlw0qWI1FBYqGY8",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/33VJbkz5oKytlB3e1JLAt9Z4aBE4rlw0qWI1FBYqGY8.stats"
+          ]
+        },
+        "value_ratio": 1.0182269316604284,
+        "wall_ratio": 1.0219685755357981
+      }
+    },
+    {
+      "workload": "examples/algorithms/generichash.wasm",
+      "status": "perf_gap",
+      "cache": {
+        "directory": "target/upstream-49/algorithms/jit-cache/generichash",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "target/upstream-49/algorithms/jit-cache/generichash/wasmoon",
+        "wasmtime_directory": "target/upstream-49/algorithms/jit-cache/generichash/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmoon",
+          "wasmtime"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/generichash.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.11333254099736223,
+          "parsed_value": 313480000.0,
+          "stdout": "313480000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_hit": false,
+          "cache_write_succeeded": true,
+          "cache_files_changed": true,
+          "compilation_evidence": "runtime-report",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v10-e07505822823cf6ad3e6e8d8176132d5a7cb9403e8bcfb56010134a61a16d6cf.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "/Users/zhengyu/.cargo/bin/wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=/Users/zhengyu/Documents/projects/wasmoon/_build/upstream-49/algorithms/jit-cache/generichash/wasmtime-cache.toml",
+            "-C",
+            "parallel-compilation=n",
+            "examples/algorithms/generichash.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.08431358300003922,
+          "parsed_value": 285350000.0,
+          "stdout": "285350000",
+          "stderr": "",
+          "freshly_compiled": null,
+          "cache_hit": null,
+          "cache_write_succeeded": null,
+          "cache_files_changed": true,
+          "compilation_evidence": "unavailable",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-20998",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/C-rSS_UMcxe8OIkHlb1kq4S-1Fxe-ZNPsMADoW87yjw",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/C-rSS_UMcxe8OIkHlb1kq4S-1Fxe-ZNPsMADoW87yjw.stats"
+          ]
+        },
+        "value_ratio": 1.0985806903802349,
+        "wall_ratio": 1.344178920700233
+      }
+    },
+    {
+      "workload": "examples/algorithms/generichash2.wasm",
+      "status": "ok",
+      "cache": {
+        "directory": "target/upstream-49/algorithms/jit-cache/generichash2",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "target/upstream-49/algorithms/jit-cache/generichash2/wasmoon",
+        "wasmtime_directory": "target/upstream-49/algorithms/jit-cache/generichash2/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmtime",
+          "wasmoon"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/generichash2.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.0528883750012028,
+          "parsed_value": 23995000.0,
+          "stdout": "23995000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_hit": false,
+          "cache_write_succeeded": true,
+          "cache_files_changed": true,
+          "compilation_evidence": "runtime-report",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v10-52533cfdd0ecc97c6b03ad52e7231a39ea2bf3d2bebd0cd1e44f2db100bc7648.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "/Users/zhengyu/.cargo/bin/wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=/Users/zhengyu/Documents/projects/wasmoon/_build/upstream-49/algorithms/jit-cache/generichash2/wasmtime-cache.toml",
+            "-C",
+            "parallel-compilation=n",
+            "examples/algorithms/generichash2.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.03148170800341177,
+          "parsed_value": 24825000.0,
+          "stdout": "24825000",
+          "stderr": "",
+          "freshly_compiled": null,
+          "cache_hit": null,
+          "cache_write_succeeded": null,
+          "cache_files_changed": true,
+          "compilation_evidence": "unavailable",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-20999",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/8gfSv6RBJ1K0y_RDL043sYIQ5OnmyWaH8w-tp8EUIhk",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/8gfSv6RBJ1K0y_RDL043sYIQ5OnmyWaH8w-tp8EUIhk.stats"
+          ]
+        },
+        "value_ratio": 0.9665659617321248,
+        "wall_ratio": 1.6799715884370419
+      }
+    },
+    {
+      "workload": "examples/algorithms/generichash3.wasm",
+      "status": "perf_gap",
+      "cache": {
+        "directory": "target/upstream-49/algorithms/jit-cache/generichash3",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "target/upstream-49/algorithms/jit-cache/generichash3/wasmoon",
+        "wasmtime_directory": "target/upstream-49/algorithms/jit-cache/generichash3/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmoon",
+          "wasmtime"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/generichash3.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.051422625001578126,
+          "parsed_value": 23540000.0,
+          "stdout": "23540000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_hit": false,
+          "cache_write_succeeded": true,
+          "cache_files_changed": true,
+          "compilation_evidence": "runtime-report",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v10-71f1214b238599f3cd7ad43c6465b98e6a1941bfd666700bf62f84fd2549390d.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "/Users/zhengyu/.cargo/bin/wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=/Users/zhengyu/Documents/projects/wasmoon/_build/upstream-49/algorithms/jit-cache/generichash3/wasmtime-cache.toml",
+            "-C",
+            "parallel-compilation=n",
+            "examples/algorithms/generichash3.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.02977279200058547,
+          "parsed_value": 21800000.0,
+          "stdout": "21800000",
+          "stderr": "",
+          "freshly_compiled": null,
+          "cache_hit": null,
+          "cache_write_succeeded": null,
+          "cache_files_changed": true,
+          "compilation_evidence": "unavailable",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-21002",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/5BqMrY7l98AhBOShB_O9n1Ad8v7mdKNfPYGh3XEsWIM",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/5BqMrY7l98AhBOShB_O9n1Ad8v7mdKNfPYGh3XEsWIM.stats"
+          ]
+        },
+        "value_ratio": 1.079816513761468,
+        "wall_ratio": 1.7271683824804513
+      }
+    },
+    {
+      "workload": "examples/algorithms/hash.wasm",
+      "status": "perf_gap",
+      "cache": {
+        "directory": "target/upstream-49/algorithms/jit-cache/hash",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "target/upstream-49/algorithms/jit-cache/hash/wasmoon",
+        "wasmtime_directory": "target/upstream-49/algorithms/jit-cache/hash/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmtime",
+          "wasmoon"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/hash.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.0478717920013878,
+          "parsed_value": 1965000.0,
+          "stdout": "1965000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_hit": false,
+          "cache_write_succeeded": true,
+          "cache_files_changed": true,
+          "compilation_evidence": "runtime-report",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v10-6b1c07d77e00e5de648df261b7d1ce0375ad5199252c7c725baf7261a9fbd53d.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "/Users/zhengyu/.cargo/bin/wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=/Users/zhengyu/Documents/projects/wasmoon/_build/upstream-49/algorithms/jit-cache/hash/wasmtime-cache.toml",
+            "-C",
+            "parallel-compilation=n",
+            "examples/algorithms/hash.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.02553083399834577,
+          "parsed_value": 1860000.0,
+          "stdout": "1860000",
+          "stderr": "",
+          "freshly_compiled": null,
+          "cache_hit": null,
+          "cache_write_succeeded": null,
+          "cache_files_changed": true,
+          "compilation_evidence": "unavailable",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-21003",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/Hv72ZOFWudJlc0E1t0rwViP72sm-2a7sCw0CLreKpdU",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/Hv72ZOFWudJlc0E1t0rwViP72sm-2a7sCw0CLreKpdU.stats"
+          ]
+        },
+        "value_ratio": 1.0564516129032258,
+        "wall_ratio": 1.8750579007520702
+      }
+    },
+    {
+      "workload": "examples/algorithms/hash3.wasm",
+      "status": "perf_gap",
+      "cache": {
+        "directory": "target/upstream-49/algorithms/jit-cache/hash3",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "target/upstream-49/algorithms/jit-cache/hash3/wasmoon",
+        "wasmtime_directory": "target/upstream-49/algorithms/jit-cache/hash3/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmoon",
+          "wasmtime"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/hash3.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.04199229100049706,
+          "parsed_value": 360000.0,
+          "stdout": "360000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_hit": false,
+          "cache_write_succeeded": true,
+          "cache_files_changed": true,
+          "compilation_evidence": "runtime-report",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v10-7d0d77903dd65d638e464d411c7cd7761532cdaf627f5ae906aa7b52785eed72.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "/Users/zhengyu/.cargo/bin/wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=/Users/zhengyu/Documents/projects/wasmoon/_build/upstream-49/algorithms/jit-cache/hash3/wasmtime-cache.toml",
+            "-C",
+            "parallel-compilation=n",
+            "examples/algorithms/hash3.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.02313270900049247,
+          "parsed_value": 340000.0,
+          "stdout": "340000",
+          "stderr": "",
+          "freshly_compiled": null,
+          "cache_hit": null,
+          "cache_write_succeeded": null,
+          "cache_files_changed": true,
+          "compilation_evidence": "unavailable",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-21006",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/7nwjS6q-5EF0IO8WN7agtmnM38eoKiZ_an6cBKiXKHs",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/7nwjS6q-5EF0IO8WN7agtmnM38eoKiZ_an6cBKiXKHs.stats"
+          ]
+        },
+        "value_ratio": 1.0588235294117647,
+        "wall_ratio": 1.8152777091348486
+      }
+    },
+    {
+      "workload": "examples/algorithms/kdf.wasm",
+      "status": "perf_gap",
+      "cache": {
+        "directory": "target/upstream-49/algorithms/jit-cache/kdf",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "target/upstream-49/algorithms/jit-cache/kdf/wasmoon",
+        "wasmtime_directory": "target/upstream-49/algorithms/jit-cache/kdf/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmtime",
+          "wasmoon"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/kdf.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.05122270799984108,
+          "parsed_value": 15005000.0,
+          "stdout": "15005000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_hit": false,
+          "cache_write_succeeded": true,
+          "cache_files_changed": true,
+          "compilation_evidence": "runtime-report",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v10-7eb209f960472fbd42da5b98ae379840fe25397168f47bc8fe36293cf100c18d.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "/Users/zhengyu/.cargo/bin/wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=/Users/zhengyu/Documents/projects/wasmoon/_build/upstream-49/algorithms/jit-cache/kdf/wasmtime-cache.toml",
+            "-C",
+            "parallel-compilation=n",
+            "examples/algorithms/kdf.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.02875845800008392,
+          "parsed_value": 13610000.0,
+          "stdout": "13610000",
+          "stderr": "",
+          "freshly_compiled": null,
+          "cache_hit": null,
+          "cache_write_succeeded": null,
+          "cache_files_changed": true,
+          "compilation_evidence": "unavailable",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-21007",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/gB25LqsL0OmS_uon1VROIadRdLUBcMqs0USGW0QmzNo",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/gB25LqsL0OmS_uon1VROIadRdLUBcMqs0USGW0QmzNo.stats"
+          ]
+        },
+        "value_ratio": 1.1024981631153563,
+        "wall_ratio": 1.781135414134221
+      }
+    },
+    {
+      "workload": "examples/algorithms/kdf_hkdf.wasm",
+      "status": "perf_gap",
+      "cache": {
+        "directory": "target/upstream-49/algorithms/jit-cache/kdf_hkdf",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "target/upstream-49/algorithms/jit-cache/kdf_hkdf/wasmoon",
+        "wasmtime_directory": "target/upstream-49/algorithms/jit-cache/kdf_hkdf/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmoon",
+          "wasmtime"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/kdf_hkdf.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.1540441249999276,
+          "parsed_value": 486940000.0,
+          "stdout": "486940000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_hit": false,
+          "cache_write_succeeded": true,
+          "cache_files_changed": true,
+          "compilation_evidence": "runtime-report",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v10-8b9c6035c7acd857e7aa3b02c3396b35b4fb8019a890d54dd4655375979afa8d.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "/Users/zhengyu/.cargo/bin/wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=/Users/zhengyu/Documents/projects/wasmoon/_build/upstream-49/algorithms/jit-cache/kdf_hkdf/wasmtime-cache.toml",
+            "-C",
+            "parallel-compilation=n",
+            "examples/algorithms/kdf_hkdf.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.11503900000025169,
+          "parsed_value": 433680000.0,
+          "stdout": "433680000",
+          "stderr": "",
+          "freshly_compiled": null,
+          "cache_hit": null,
+          "cache_write_succeeded": null,
+          "cache_files_changed": true,
+          "compilation_evidence": "unavailable",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-21010",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/33P2POsmrRuK0KMpdaLewr8edqdRLUICwp1JxurpjJk",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/33P2POsmrRuK0KMpdaLewr8edqdRLUICwp1JxurpjJk.stats"
+          ]
+        },
+        "value_ratio": 1.1228094447518908,
+        "wall_ratio": 1.3390600144263298
+      }
+    },
+    {
+      "workload": "examples/algorithms/keygen.wasm",
+      "status": "perf_gap",
+      "cache": {
+        "directory": "target/upstream-49/algorithms/jit-cache/keygen",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "target/upstream-49/algorithms/jit-cache/keygen/wasmoon",
+        "wasmtime_directory": "target/upstream-49/algorithms/jit-cache/keygen/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmtime",
+          "wasmoon"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/keygen.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.04140750000078697,
+          "parsed_value": 6845000.0,
+          "stdout": "6845000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_hit": false,
+          "cache_write_succeeded": true,
+          "cache_files_changed": true,
+          "compilation_evidence": "runtime-report",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v10-2091bd7c8620166f74af082bd0f72286ac4d574cf6a50f23adcc3b6480dfcdeb.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "/Users/zhengyu/.cargo/bin/wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=/Users/zhengyu/Documents/projects/wasmoon/_build/upstream-49/algorithms/jit-cache/keygen/wasmtime-cache.toml",
+            "-C",
+            "parallel-compilation=n",
+            "examples/algorithms/keygen.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.02406012500068755,
+          "parsed_value": 5765000.0,
+          "stdout": "5765000",
+          "stderr": "",
+          "freshly_compiled": null,
+          "cache_hit": null,
+          "cache_write_succeeded": null,
+          "cache_files_changed": true,
+          "compilation_evidence": "unavailable",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-21011",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/qyx1s5kyZsvNPT9EQX7CBB7ezRpuX1u8eCTS8eqi1E4",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/qyx1s5kyZsvNPT9EQX7CBB7ezRpuX1u8eCTS8eqi1E4.stats"
+          ]
+        },
+        "value_ratio": 1.1873373807458802,
+        "wall_ratio": 1.7210010338518065
+      }
+    },
+    {
+      "workload": "examples/algorithms/kx.wasm",
+      "status": "ok",
+      "cache": {
+        "directory": "target/upstream-49/algorithms/jit-cache/kx",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "target/upstream-49/algorithms/jit-cache/kx/wasmoon",
+        "wasmtime_directory": "target/upstream-49/algorithms/jit-cache/kx/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmoon",
+          "wasmtime"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/kx.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.3476491250003164,
+          "parsed_value": 1265580000.0,
+          "stdout": "1265580000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_hit": false,
+          "cache_write_succeeded": true,
+          "cache_files_changed": true,
+          "compilation_evidence": "runtime-report",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v10-7871643b23cdda1b84ba4a29ef84eaf2b8333c8c8f08bf4dd3b3c0693cc9c7ac.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "/Users/zhengyu/.cargo/bin/wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=/Users/zhengyu/Documents/projects/wasmoon/_build/upstream-49/algorithms/jit-cache/kx/wasmtime-cache.toml",
+            "-C",
+            "parallel-compilation=n",
+            "examples/algorithms/kx.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.2980353329985519,
+          "parsed_value": 1262195000.0,
+          "stdout": "1262195000",
+          "stderr": "",
+          "freshly_compiled": null,
+          "cache_hit": null,
+          "cache_write_succeeded": null,
+          "cache_files_changed": true,
+          "compilation_evidence": "unavailable",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-21014",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/s2RDSJoxj_saakcsqyzGIwg58aM-SBe1sCu7SYmr7m0",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/s2RDSJoxj_saakcsqyzGIwg58aM-SBe1sCu7SYmr7m0.stats"
+          ]
+        },
+        "value_ratio": 1.0026818360079068,
+        "wall_ratio": 1.1664694970982035
+      }
+    },
+    {
+      "workload": "examples/algorithms/metamorphic.wasm",
+      "status": "perf_gap",
+      "cache": {
+        "directory": "target/upstream-49/algorithms/jit-cache/metamorphic",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "target/upstream-49/algorithms/jit-cache/metamorphic/wasmoon",
+        "wasmtime_directory": "target/upstream-49/algorithms/jit-cache/metamorphic/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmtime",
+          "wasmoon"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/metamorphic.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 2.6768927080011053,
+          "parsed_value": 13024520000.0,
+          "stdout": "13024520000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_hit": false,
+          "cache_write_succeeded": true,
+          "cache_files_changed": true,
+          "compilation_evidence": "runtime-report",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v10-c9ce2c7e5fc33c381db4c27128f12eccfc44df758fc82bc87518ca1468dd92b3.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "/Users/zhengyu/.cargo/bin/wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=/Users/zhengyu/Documents/projects/wasmoon/_build/upstream-49/algorithms/jit-cache/metamorphic/wasmtime-cache.toml",
+            "-C",
+            "parallel-compilation=n",
+            "examples/algorithms/metamorphic.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 2.3803973329995642,
+          "parsed_value": 11723845000.0,
+          "stdout": "11723845000",
+          "stderr": "",
+          "freshly_compiled": null,
+          "cache_hit": null,
+          "cache_write_succeeded": null,
+          "cache_files_changed": true,
+          "compilation_evidence": "unavailable",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-21058",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/VvEdLBrq6UM2Txq9WlVgJQs3fBRNZlJluIXRSP9Zgbo",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/VvEdLBrq6UM2Txq9WlVgJQs3fBRNZlJluIXRSP9Zgbo.stats"
+          ]
+        },
+        "value_ratio": 1.110942698406538,
+        "wall_ratio": 1.1245570942679237
+      }
+    },
+    {
+      "workload": "examples/algorithms/onetimeauth.wasm",
+      "status": "perf_gap",
+      "cache": {
+        "directory": "target/upstream-49/algorithms/jit-cache/onetimeauth",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "target/upstream-49/algorithms/jit-cache/onetimeauth/wasmoon",
+        "wasmtime_directory": "target/upstream-49/algorithms/jit-cache/onetimeauth/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmoon",
+          "wasmtime"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/onetimeauth.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.04115987499972107,
+          "parsed_value": 480000.0,
+          "stdout": "480000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_hit": false,
+          "cache_write_succeeded": true,
+          "cache_files_changed": true,
+          "compilation_evidence": "runtime-report",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v10-36b342176ce2a8e72659837e6f184fdd60eb89fa81feb1dd31e914183b9ed85b.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "/Users/zhengyu/.cargo/bin/wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=/Users/zhengyu/Documents/projects/wasmoon/_build/upstream-49/algorithms/jit-cache/onetimeauth/wasmtime-cache.toml",
+            "-C",
+            "parallel-compilation=n",
+            "examples/algorithms/onetimeauth.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.023108249999495456,
+          "parsed_value": 390000.0,
+          "stdout": "390000",
+          "stderr": "",
+          "freshly_compiled": null,
+          "cache_hit": null,
+          "cache_write_succeeded": null,
+          "cache_files_changed": true,
+          "compilation_evidence": "unavailable",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-21151",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/HxU93mFGeKdChFR_nwfVZHlg3TsSi9EOZCjiInMPSM8",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/HxU93mFGeKdChFR_nwfVZHlg3TsSi9EOZCjiInMPSM8.stats"
+          ]
+        },
+        "value_ratio": 1.2307692307692308,
+        "wall_ratio": 1.7811766360767152
+      }
+    },
+    {
+      "workload": "examples/algorithms/onetimeauth2.wasm",
+      "status": "ok",
+      "cache": {
+        "directory": "target/upstream-49/algorithms/jit-cache/onetimeauth2",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "target/upstream-49/algorithms/jit-cache/onetimeauth2/wasmoon",
+        "wasmtime_directory": "target/upstream-49/algorithms/jit-cache/onetimeauth2/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmtime",
+          "wasmoon"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/onetimeauth2.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.03695770899867057,
+          "parsed_value": 5000.0,
+          "stdout": "5000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_hit": false,
+          "cache_write_succeeded": true,
+          "cache_files_changed": true,
+          "compilation_evidence": "runtime-report",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v10-ad7d702f6df761a5223c0fa57c6e5f35b7822591856a61d8cf55f5a735a93fb1.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "/Users/zhengyu/.cargo/bin/wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=/Users/zhengyu/Documents/projects/wasmoon/_build/upstream-49/algorithms/jit-cache/onetimeauth2/wasmtime-cache.toml",
+            "-C",
+            "parallel-compilation=n",
+            "examples/algorithms/onetimeauth2.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.021567458999925293,
+          "parsed_value": 5000.0,
+          "stdout": "5000",
+          "stderr": "",
+          "freshly_compiled": null,
+          "cache_hit": null,
+          "cache_write_succeeded": null,
+          "cache_files_changed": true,
+          "compilation_evidence": "unavailable",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-21152",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/2kVo1un5SnkL74xbYDVsqRsn_aPvFtOEquWoBTsT844",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/2kVo1un5SnkL74xbYDVsqRsn_aPvFtOEquWoBTsT844.stats"
+          ]
+        },
+        "value_ratio": 1.0,
+        "wall_ratio": 1.713586612071389
+      }
+    },
+    {
+      "workload": "examples/algorithms/onetimeauth7.wasm",
+      "status": "perf_gap",
+      "cache": {
+        "directory": "target/upstream-49/algorithms/jit-cache/onetimeauth7",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "target/upstream-49/algorithms/jit-cache/onetimeauth7/wasmoon",
+        "wasmtime_directory": "target/upstream-49/algorithms/jit-cache/onetimeauth7/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmoon",
+          "wasmtime"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/onetimeauth7.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.7639111249991402,
+          "parsed_value": 3614500000.0,
+          "stdout": "3614500000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_hit": false,
+          "cache_write_succeeded": true,
+          "cache_files_changed": true,
+          "compilation_evidence": "runtime-report",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v10-4d3b9202d3d14a19107d9efb81690fa16b6c1a34aee10242f0ff06997a6f00de.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "/Users/zhengyu/.cargo/bin/wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=/Users/zhengyu/Documents/projects/wasmoon/_build/upstream-49/algorithms/jit-cache/onetimeauth7/wasmtime-cache.toml",
+            "-C",
+            "parallel-compilation=n",
+            "examples/algorithms/onetimeauth7.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.6984786249995523,
+          "parsed_value": 3367690000.0,
+          "stdout": "3367690000",
+          "stderr": "",
+          "freshly_compiled": null,
+          "cache_hit": null,
+          "cache_write_succeeded": null,
+          "cache_files_changed": true,
+          "compilation_evidence": "unavailable",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-21155",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/w0d3X4bnsXRsih-vrEI83sUA1vqSNrK2LwB3XiKt1Oc",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/w0d3X4bnsXRsih-vrEI83sUA1vqSNrK2LwB3XiKt1Oc.stats"
+          ]
+        },
+        "value_ratio": 1.073287624454745,
+        "wall_ratio": 1.0936786004004486
+      }
+    },
+    {
+      "workload": "examples/algorithms/pwhash_argon2i.wasm",
+      "status": "perf_gap",
+      "cache": {
+        "directory": "target/upstream-49/algorithms/jit-cache/pwhash_argon2i",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "target/upstream-49/algorithms/jit-cache/pwhash_argon2i/wasmoon",
+        "wasmtime_directory": "target/upstream-49/algorithms/jit-cache/pwhash_argon2i/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmtime",
+          "wasmoon"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/pwhash_argon2i.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 37.66069425000023,
+          "parsed_value": 187937660000.0,
+          "stdout": "187937660000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_hit": false,
+          "cache_write_succeeded": true,
+          "cache_files_changed": true,
+          "compilation_evidence": "runtime-report",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v10-57c0cafd8a2be21d0a6a74dfd535326b544432c717386203bb71d872d9719bdf.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "/Users/zhengyu/.cargo/bin/wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=/Users/zhengyu/Documents/projects/wasmoon/_build/upstream-49/algorithms/jit-cache/pwhash_argon2i/wasmtime-cache.toml",
+            "-C",
+            "parallel-compilation=n",
+            "examples/algorithms/pwhash_argon2i.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 33.14280283300104,
+          "parsed_value": 165528645000.0,
+          "stdout": "165528645000",
+          "stderr": "",
+          "freshly_compiled": null,
+          "cache_hit": null,
+          "cache_write_succeeded": null,
+          "cache_files_changed": true,
+          "compilation_evidence": "unavailable",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-21199",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/GqZ0tDUFnxuPuxYyvhBFEPW_6JQmvs4KMoXa30mBQjI",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/GqZ0tDUFnxuPuxYyvhBFEPW_6JQmvs4KMoXa30mBQjI.stats"
+          ]
+        },
+        "value_ratio": 1.1353784718046838,
+        "wall_ratio": 1.1363159126813687
+      }
+    },
+    {
+      "workload": "examples/algorithms/pwhash_argon2id.wasm",
+      "status": "perf_gap",
+      "cache": {
+        "directory": "target/upstream-49/algorithms/jit-cache/pwhash_argon2id",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "target/upstream-49/algorithms/jit-cache/pwhash_argon2id/wasmoon",
+        "wasmtime_directory": "target/upstream-49/algorithms/jit-cache/pwhash_argon2id/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmoon",
+          "wasmtime"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/pwhash_argon2id.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 43.337710208001226,
+          "parsed_value": 216321445000.0,
+          "stdout": "216321445000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_hit": false,
+          "cache_write_succeeded": true,
+          "cache_files_changed": true,
+          "compilation_evidence": "runtime-report",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v10-8d64e623d627d2b5d0821eabbc1fe3eafd0a9db378d6e6504fb0362081be275f.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "/Users/zhengyu/.cargo/bin/wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=/Users/zhengyu/Documents/projects/wasmoon/_build/upstream-49/algorithms/jit-cache/pwhash_argon2id/wasmtime-cache.toml",
+            "-C",
+            "parallel-compilation=n",
+            "examples/algorithms/pwhash_argon2id.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 37.854562125001394,
+          "parsed_value": 189091465000.0,
+          "stdout": "189091465000",
+          "stderr": "",
+          "freshly_compiled": null,
+          "cache_hit": null,
+          "cache_write_succeeded": null,
+          "cache_files_changed": true,
+          "compilation_evidence": "unavailable",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-23505",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/sUcu-Br5UL9ewkXLtIc3GLQe-W5x9BY-9y6VMOlbd_w",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/sUcu-Br5UL9ewkXLtIc3GLQe-W5x9BY-9y6VMOlbd_w.stats"
+          ]
+        },
+        "value_ratio": 1.1440042785643445,
+        "wall_ratio": 1.1448477482025459
+      }
+    },
+    {
+      "workload": "examples/algorithms/pwhash_scrypt.wasm",
+      "status": "perf_gap",
+      "cache": {
+        "directory": "target/upstream-49/algorithms/jit-cache/pwhash_scrypt",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "target/upstream-49/algorithms/jit-cache/pwhash_scrypt/wasmoon",
+        "wasmtime_directory": "target/upstream-49/algorithms/jit-cache/pwhash_scrypt/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmtime",
+          "wasmoon"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/pwhash_scrypt.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 128.27269229099693,
+          "parsed_value": 641046695000.0,
+          "stdout": "641046695000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_hit": false,
+          "cache_write_succeeded": true,
+          "cache_files_changed": true,
+          "compilation_evidence": "runtime-report",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v10-b236aab8cfc7cfda2734d5cd08242a1479c1b1196a63f8c8ca27cf341ae45292.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "/Users/zhengyu/.cargo/bin/wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=/Users/zhengyu/Documents/projects/wasmoon/_build/upstream-49/algorithms/jit-cache/pwhash_scrypt/wasmtime-cache.toml",
+            "-C",
+            "parallel-compilation=n",
+            "examples/algorithms/pwhash_scrypt.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 121.16945620800107,
+          "parsed_value": 605681600000.0,
+          "stdout": "605681600000",
+          "stderr": "",
+          "freshly_compiled": null,
+          "cache_hit": null,
+          "cache_write_succeeded": null,
+          "cache_files_changed": true,
+          "compilation_evidence": "unavailable",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-24289",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/PZls6ESNtdSvhM7KCFD0b48tC9jdrC8VVXhptFyqOdg",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/PZls6ESNtdSvhM7KCFD0b48tC9jdrC8VVXhptFyqOdg.stats"
+          ]
+        },
+        "value_ratio": 1.05838892084554,
+        "wall_ratio": 1.058622331941495
+      }
+    },
+    {
+      "workload": "examples/algorithms/pwhash_scrypt_ll.wasm",
+      "status": "perf_gap",
+      "cache": {
+        "directory": "target/upstream-49/algorithms/jit-cache/pwhash_scrypt_ll",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "target/upstream-49/algorithms/jit-cache/pwhash_scrypt_ll/wasmoon",
+        "wasmtime_directory": "target/upstream-49/algorithms/jit-cache/pwhash_scrypt_ll/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmoon",
+          "wasmtime"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/pwhash_scrypt_ll.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 8.519132417000947,
+          "parsed_value": 42337360000.0,
+          "stdout": "42337360000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_hit": false,
+          "cache_write_succeeded": true,
+          "cache_files_changed": true,
+          "compilation_evidence": "runtime-report",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v10-4230d83305e03d09b63e693a6ce7e849b7c4667b9647243dafaa0181d19338bb.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "/Users/zhengyu/.cargo/bin/wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=/Users/zhengyu/Documents/projects/wasmoon/_build/upstream-49/algorithms/jit-cache/pwhash_scrypt_ll/wasmtime-cache.toml",
+            "-C",
+            "parallel-compilation=n",
+            "examples/algorithms/pwhash_scrypt_ll.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 7.925964750000276,
+          "parsed_value": 39495070000.0,
+          "stdout": "39495070000",
+          "stderr": "",
+          "freshly_compiled": null,
+          "cache_hit": null,
+          "cache_write_succeeded": null,
+          "cache_files_changed": true,
+          "compilation_evidence": "unavailable",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-29559",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/nWyPSy0Mv8LhS7WB4k1oDdY5w4Lgr1XpMwWpi55qitA",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/nWyPSy0Mv8LhS7WB4k1oDdY5w4Lgr1XpMwWpi55qitA.stats"
+          ]
+        },
+        "value_ratio": 1.0719656909077513,
+        "wall_ratio": 1.074838544670622
+      }
+    },
+    {
+      "workload": "examples/algorithms/randombytes.wasm",
+      "status": "perf_gap",
+      "cache": {
+        "directory": "target/upstream-49/algorithms/jit-cache/randombytes",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "target/upstream-49/algorithms/jit-cache/randombytes/wasmoon",
+        "wasmtime_directory": "target/upstream-49/algorithms/jit-cache/randombytes/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmtime",
+          "wasmoon"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/randombytes.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.736720916997001,
+          "parsed_value": 3477435000.0,
+          "stdout": "3477435000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_hit": false,
+          "cache_write_succeeded": true,
+          "cache_files_changed": true,
+          "compilation_evidence": "runtime-report",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v10-026b7499fde16eb36c29f05202e819042a871b1a35bc803c9426b80a31a6cb78.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "/Users/zhengyu/.cargo/bin/wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=/Users/zhengyu/Documents/projects/wasmoon/_build/upstream-49/algorithms/jit-cache/randombytes/wasmtime-cache.toml",
+            "-C",
+            "parallel-compilation=n",
+            "examples/algorithms/randombytes.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.351841791998595,
+          "parsed_value": 1638295000.0,
+          "stdout": "1638295000",
+          "stderr": "",
+          "freshly_compiled": null,
+          "cache_hit": null,
+          "cache_write_succeeded": null,
+          "cache_files_changed": true,
+          "compilation_evidence": "unavailable",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-29734",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/XLRmisrmpzaNedBRhX1L1QS6bethGJ3U8ImwcsR6RoI",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/XLRmisrmpzaNedBRhX1L1QS6bethGJ3U8ImwcsR6RoI.stats"
+          ]
+        },
+        "value_ratio": 2.1225939162360867,
+        "wall_ratio": 2.093898262659892
+      }
+    },
+    {
+      "workload": "examples/algorithms/scalarmult.wasm",
+      "status": "ok",
+      "cache": {
+        "directory": "target/upstream-49/algorithms/jit-cache/scalarmult",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "target/upstream-49/algorithms/jit-cache/scalarmult/wasmoon",
+        "wasmtime_directory": "target/upstream-49/algorithms/jit-cache/scalarmult/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmoon",
+          "wasmtime"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/scalarmult.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.16383637499893666,
+          "parsed_value": 392625000.0,
+          "stdout": "392625000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_hit": false,
+          "cache_write_succeeded": true,
+          "cache_files_changed": true,
+          "compilation_evidence": "runtime-report",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v10-c1e900a1951244ecb196249e62c7df2436ed3174196bd733ea561ececa34e847.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "/Users/zhengyu/.cargo/bin/wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=/Users/zhengyu/Documents/projects/wasmoon/_build/upstream-49/algorithms/jit-cache/scalarmult/wasmtime-cache.toml",
+            "-C",
+            "parallel-compilation=n",
+            "examples/algorithms/scalarmult.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.11976345900257002,
+          "parsed_value": 389785000.0,
+          "stdout": "389785000",
+          "stderr": "",
+          "freshly_compiled": null,
+          "cache_hit": null,
+          "cache_write_succeeded": null,
+          "cache_files_changed": true,
+          "compilation_evidence": "unavailable",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-29737",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/G5YBxvEIHlryfKzXl0Ez9dulCfmX8G224nx6c5oYca8",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/G5YBxvEIHlryfKzXl0Ez9dulCfmX8G224nx6c5oYca8.stats"
+          ]
+        },
+        "value_ratio": 1.0072860679605424,
+        "wall_ratio": 1.3679996917542343
+      }
+    },
+    {
+      "workload": "examples/algorithms/scalarmult2.wasm",
+      "status": "ok",
+      "cache": {
+        "directory": "target/upstream-49/algorithms/jit-cache/scalarmult2",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "target/upstream-49/algorithms/jit-cache/scalarmult2/wasmoon",
+        "wasmtime_directory": "target/upstream-49/algorithms/jit-cache/scalarmult2/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmtime",
+          "wasmoon"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/scalarmult2.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.0861685000018042,
+          "parsed_value": 35780000.0,
+          "stdout": "35780000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_hit": false,
+          "cache_write_succeeded": true,
+          "cache_files_changed": true,
+          "compilation_evidence": "runtime-report",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v10-0e1d7a663247e7d0ba91d0b448cc6eaaad83537b70dff1dfc0f82d9acad906d2.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "/Users/zhengyu/.cargo/bin/wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=/Users/zhengyu/Documents/projects/wasmoon/_build/upstream-49/algorithms/jit-cache/scalarmult2/wasmtime-cache.toml",
+            "-C",
+            "parallel-compilation=n",
+            "examples/algorithms/scalarmult2.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.04655062500023632,
+          "parsed_value": 35280000.0,
+          "stdout": "35280000",
+          "stderr": "",
+          "freshly_compiled": null,
+          "cache_hit": null,
+          "cache_write_succeeded": null,
+          "cache_files_changed": true,
+          "compilation_evidence": "unavailable",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-29781",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/GHHwcbLaEl5AUhFYDPbRgGZfItwWcMpnzoLdhuILG5s",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/GHHwcbLaEl5AUhFYDPbRgGZfItwWcMpnzoLdhuILG5s.stats"
+          ]
+        },
+        "value_ratio": 1.0141723356009071,
+        "wall_ratio": 1.8510707429033821
+      }
+    },
+    {
+      "workload": "examples/algorithms/scalarmult5.wasm",
+      "status": "ok",
+      "cache": {
+        "directory": "target/upstream-49/algorithms/jit-cache/scalarmult5",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "target/upstream-49/algorithms/jit-cache/scalarmult5/wasmoon",
+        "wasmtime_directory": "target/upstream-49/algorithms/jit-cache/scalarmult5/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmoon",
+          "wasmtime"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/scalarmult5.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.1001029170001857,
+          "parsed_value": 107095000.0,
+          "stdout": "107095000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_hit": false,
+          "cache_write_succeeded": true,
+          "cache_files_changed": true,
+          "compilation_evidence": "runtime-report",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v10-39dade5feed2f8be0ecfa92f4a049e2d5ecf145f9123dd0d435c629aa201f600.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "/Users/zhengyu/.cargo/bin/wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=/Users/zhengyu/Documents/projects/wasmoon/_build/upstream-49/algorithms/jit-cache/scalarmult5/wasmtime-cache.toml",
+            "-C",
+            "parallel-compilation=n",
+            "examples/algorithms/scalarmult5.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.06041312500019558,
+          "parsed_value": 106035000.0,
+          "stdout": "106035000",
+          "stderr": "",
+          "freshly_compiled": null,
+          "cache_hit": null,
+          "cache_write_succeeded": null,
+          "cache_files_changed": true,
+          "compilation_evidence": "unavailable",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-29785",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/Tgqkj45h-2bgz25d5RWWzOBrCEJwkgzV0ZsgpJ_18Jk",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/Tgqkj45h-2bgz25d5RWWzOBrCEJwkgzV0ZsgpJ_18Jk.stats"
+          ]
+        },
+        "value_ratio": 1.0099966992030933,
+        "wall_ratio": 1.656973000483945
+      }
+    },
+    {
+      "workload": "examples/algorithms/scalarmult6.wasm",
+      "status": "ok",
+      "cache": {
+        "directory": "target/upstream-49/algorithms/jit-cache/scalarmult6",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "target/upstream-49/algorithms/jit-cache/scalarmult6/wasmoon",
+        "wasmtime_directory": "target/upstream-49/algorithms/jit-cache/scalarmult6/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmtime",
+          "wasmoon"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/scalarmult6.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.10481337500095833,
+          "parsed_value": 107185000.0,
+          "stdout": "107185000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_hit": false,
+          "cache_write_succeeded": true,
+          "cache_files_changed": true,
+          "compilation_evidence": "runtime-report",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v10-774e599cf3b11936b35733240fd22fe9482002350b7798919d912e3e1e8497c2.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "/Users/zhengyu/.cargo/bin/wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=/Users/zhengyu/Documents/projects/wasmoon/_build/upstream-49/algorithms/jit-cache/scalarmult6/wasmtime-cache.toml",
+            "-C",
+            "parallel-compilation=n",
+            "examples/algorithms/scalarmult6.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.062140667003404815,
+          "parsed_value": 106060000.0,
+          "stdout": "106060000",
+          "stderr": "",
+          "freshly_compiled": null,
+          "cache_hit": null,
+          "cache_write_succeeded": null,
+          "cache_files_changed": true,
+          "compilation_evidence": "unavailable",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-29786",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/AULd8zrbyhDQmX5JYcBalOnAbtz3dVjAJLyZTryiwsI",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/AULd8zrbyhDQmX5JYcBalOnAbtz3dVjAJLyZTryiwsI.stats"
+          ]
+        },
+        "value_ratio": 1.0106072034697342,
+        "wall_ratio": 1.6867114573330118
+      }
+    },
+    {
+      "workload": "examples/algorithms/scalarmult7.wasm",
+      "status": "ok",
+      "cache": {
+        "directory": "target/upstream-49/algorithms/jit-cache/scalarmult7",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "target/upstream-49/algorithms/jit-cache/scalarmult7/wasmoon",
+        "wasmtime_directory": "target/upstream-49/algorithms/jit-cache/scalarmult7/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmoon",
+          "wasmtime"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/scalarmult7.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.12154908299999079,
+          "parsed_value": 214155000.0,
+          "stdout": "214155000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_hit": false,
+          "cache_write_succeeded": true,
+          "cache_files_changed": true,
+          "compilation_evidence": "runtime-report",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v10-c0150218a37e5859ae17d46b79739a70381ef7102d709290958c9ac5e5ada7b9.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "/Users/zhengyu/.cargo/bin/wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=/Users/zhengyu/Documents/projects/wasmoon/_build/upstream-49/algorithms/jit-cache/scalarmult7/wasmtime-cache.toml",
+            "-C",
+            "parallel-compilation=n",
+            "examples/algorithms/scalarmult7.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.08153166600095574,
+          "parsed_value": 211765000.0,
+          "stdout": "211765000",
+          "stderr": "",
+          "freshly_compiled": null,
+          "cache_hit": null,
+          "cache_write_succeeded": null,
+          "cache_files_changed": true,
+          "compilation_evidence": "unavailable",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-29789",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/h7iW7gGs7H3x_Rtt5P4OnFnqNnhNE2AB-P_cM04h998",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/h7iW7gGs7H3x_Rtt5P4OnFnqNnhNE2AB-P_cM04h998.stats"
+          ]
+        },
+        "value_ratio": 1.0112860954359786,
+        "wall_ratio": 1.4908205481605876
+      }
+    },
+    {
+      "workload": "examples/algorithms/scalarmult8.wasm",
+      "status": "ok",
+      "cache": {
+        "directory": "target/upstream-49/algorithms/jit-cache/scalarmult8",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "target/upstream-49/algorithms/jit-cache/scalarmult8/wasmoon",
+        "wasmtime_directory": "target/upstream-49/algorithms/jit-cache/scalarmult8/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmtime",
+          "wasmoon"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/scalarmult8.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 1.3554391249999753,
+          "parsed_value": 6367565000.0,
+          "stdout": "6367565000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_hit": false,
+          "cache_write_succeeded": true,
+          "cache_files_changed": true,
+          "compilation_evidence": "runtime-report",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v10-10400f933dd2c01a57e91ebdbb6f7e8bdcf39070deb55b305b75d3f5af2203d4.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "/Users/zhengyu/.cargo/bin/wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=/Users/zhengyu/Documents/projects/wasmoon/_build/upstream-49/algorithms/jit-cache/scalarmult8/wasmtime-cache.toml",
+            "-C",
+            "parallel-compilation=n",
+            "examples/algorithms/scalarmult8.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 1.307702624999365,
+          "parsed_value": 6338270000.0,
+          "stdout": "6338270000",
+          "stderr": "",
+          "freshly_compiled": null,
+          "cache_hit": null,
+          "cache_write_succeeded": null,
+          "cache_files_changed": true,
+          "compilation_evidence": "unavailable",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-29790",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/1sqoqYhIXcM-8IPAKdNL8iD7eXeymfh8FOls4GWnSBc",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/1sqoqYhIXcM-8IPAKdNL8iD7eXeymfh8FOls4GWnSBc.stats"
+          ]
+        },
+        "value_ratio": 1.0046219236479355,
+        "wall_ratio": 1.0365040943468578
+      }
+    },
+    {
+      "workload": "examples/algorithms/scalarmult_ed25519.wasm",
+      "status": "ok",
+      "cache": {
+        "directory": "target/upstream-49/algorithms/jit-cache/scalarmult_ed25519",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "target/upstream-49/algorithms/jit-cache/scalarmult_ed25519/wasmoon",
+        "wasmtime_directory": "target/upstream-49/algorithms/jit-cache/scalarmult_ed25519/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmoon",
+          "wasmtime"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/scalarmult_ed25519.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.5680288750008913,
+          "parsed_value": 2218735000.0,
+          "stdout": "2218735000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_hit": false,
+          "cache_write_succeeded": true,
+          "cache_files_changed": true,
+          "compilation_evidence": "runtime-report",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v10-4737796caba32787d947eec92fa2b9a0525e7cbf96e0ef4518d79b49b26077ee.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "/Users/zhengyu/.cargo/bin/wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=/Users/zhengyu/Documents/projects/wasmoon/_build/upstream-49/algorithms/jit-cache/scalarmult_ed25519/wasmtime-cache.toml",
+            "-C",
+            "parallel-compilation=n",
+            "examples/algorithms/scalarmult_ed25519.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.49446583399912925,
+          "parsed_value": 2184345000.0,
+          "stdout": "2184345000",
+          "stderr": "",
+          "freshly_compiled": null,
+          "cache_hit": null,
+          "cache_write_succeeded": null,
+          "cache_files_changed": true,
+          "compilation_evidence": "unavailable",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-29836",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/GR3HTgavjYdlG4yOssLejB63kHrO6OnVtyero1rScoI",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/GR3HTgavjYdlG4yOssLejB63kHrO6OnVtyero1rScoI.stats"
+          ]
+        },
+        "value_ratio": 1.015743849987067,
+        "wall_ratio": 1.1487727481731156
+      }
+    },
+    {
+      "workload": "examples/algorithms/scalarmult_ristretto255.wasm",
+      "status": "ok",
+      "cache": {
+        "directory": "target/upstream-49/algorithms/jit-cache/scalarmult_ristretto255",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "target/upstream-49/algorithms/jit-cache/scalarmult_ristretto255/wasmoon",
+        "wasmtime_directory": "target/upstream-49/algorithms/jit-cache/scalarmult_ristretto255/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmtime",
+          "wasmoon"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/scalarmult_ristretto255.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.6244186250005441,
+          "parsed_value": 2592890000.0,
+          "stdout": "2592890000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_hit": false,
+          "cache_write_succeeded": true,
+          "cache_files_changed": true,
+          "compilation_evidence": "runtime-report",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v10-10fc42ac691dd5d56261e59f7da684d65e62ca82c56d88980116281132b23364.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "/Users/zhengyu/.cargo/bin/wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=/Users/zhengyu/Documents/projects/wasmoon/_build/upstream-49/algorithms/jit-cache/scalarmult_ristretto255/wasmtime-cache.toml",
+            "-C",
+            "parallel-compilation=n",
+            "examples/algorithms/scalarmult_ristretto255.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.5593650419978076,
+          "parsed_value": 2554605000.0,
+          "stdout": "2554605000",
+          "stderr": "",
+          "freshly_compiled": null,
+          "cache_hit": null,
+          "cache_write_succeeded": null,
+          "cache_files_changed": true,
+          "compilation_evidence": "unavailable",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-29880",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/zVtERkRVdt-iZvcSUMN3nom6ZcTlKQZ0lsYCUuK3no0",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/zVtERkRVdt-iZvcSUMN3nom6ZcTlKQZ0lsYCUuK3no0.stats"
+          ]
+        },
+        "value_ratio": 1.0149866613429472,
+        "wall_ratio": 1.1162989785174875
+      }
+    },
+    {
+      "workload": "examples/algorithms/secretbox.wasm",
+      "status": "perf_gap",
+      "cache": {
+        "directory": "target/upstream-49/algorithms/jit-cache/secretbox",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "target/upstream-49/algorithms/jit-cache/secretbox/wasmoon",
+        "wasmtime_directory": "target/upstream-49/algorithms/jit-cache/secretbox/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmoon",
+          "wasmtime"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/secretbox.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.04452395900079864,
+          "parsed_value": 1170000.0,
+          "stdout": "1170000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_hit": false,
+          "cache_write_succeeded": true,
+          "cache_files_changed": true,
+          "compilation_evidence": "runtime-report",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v10-cf82cc389a8639d099f674ff3b252b87a164fb83f262eada5fdbbd9fbb658ea7.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "/Users/zhengyu/.cargo/bin/wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=/Users/zhengyu/Documents/projects/wasmoon/_build/upstream-49/algorithms/jit-cache/secretbox/wasmtime-cache.toml",
+            "-C",
+            "parallel-compilation=n",
+            "examples/algorithms/secretbox.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.024276583000755636,
+          "parsed_value": 1090000.0,
+          "stdout": "1090000",
+          "stderr": "",
+          "freshly_compiled": null,
+          "cache_hit": null,
+          "cache_write_succeeded": null,
+          "cache_files_changed": true,
+          "compilation_evidence": "unavailable",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-29884",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/Y3GP1GZZYbq6LMo2CQTSJKlz3oFYVJ4QPaN-NdzPSCM",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/Y3GP1GZZYbq6LMo2CQTSJKlz3oFYVJ4QPaN-NdzPSCM.stats"
+          ]
+        },
+        "value_ratio": 1.073394495412844,
+        "wall_ratio": 1.8340290723539134
+      }
+    },
+    {
+      "workload": "examples/algorithms/secretbox2.wasm",
+      "status": "perf_gap",
+      "cache": {
+        "directory": "target/upstream-49/algorithms/jit-cache/secretbox2",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "target/upstream-49/algorithms/jit-cache/secretbox2/wasmoon",
+        "wasmtime_directory": "target/upstream-49/algorithms/jit-cache/secretbox2/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmtime",
+          "wasmoon"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/secretbox2.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.04351433299962082,
+          "parsed_value": 810000.0,
+          "stdout": "810000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_hit": false,
+          "cache_write_succeeded": true,
+          "cache_files_changed": true,
+          "compilation_evidence": "runtime-report",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v10-7183ac4cb835c9ecec490ea3de1e12ab2a90e7c8b4a63ec7e90dfa7d9648185a.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "/Users/zhengyu/.cargo/bin/wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=/Users/zhengyu/Documents/projects/wasmoon/_build/upstream-49/algorithms/jit-cache/secretbox2/wasmtime-cache.toml",
+            "-C",
+            "parallel-compilation=n",
+            "examples/algorithms/secretbox2.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.023950708000484155,
+          "parsed_value": 750000.0,
+          "stdout": "750000",
+          "stderr": "",
+          "freshly_compiled": null,
+          "cache_hit": null,
+          "cache_write_succeeded": null,
+          "cache_files_changed": true,
+          "compilation_evidence": "unavailable",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-29885",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/0GBqDtoiVaa9DFENMKYK-SahflXZI0-6TQIxCQYQ50I",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/0GBqDtoiVaa9DFENMKYK-SahflXZI0-6TQIxCQYQ50I.stats"
+          ]
+        },
+        "value_ratio": 1.08,
+        "wall_ratio": 1.8168286715675042
+      }
+    },
+    {
+      "workload": "examples/algorithms/secretbox7.wasm",
+      "status": "perf_gap",
+      "cache": {
+        "directory": "target/upstream-49/algorithms/jit-cache/secretbox7",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "target/upstream-49/algorithms/jit-cache/secretbox7/wasmoon",
+        "wasmtime_directory": "target/upstream-49/algorithms/jit-cache/secretbox7/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmoon",
+          "wasmtime"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/secretbox7.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.9583781669971358,
+          "parsed_value": 4568485000.0,
+          "stdout": "4568485000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_hit": false,
+          "cache_write_succeeded": true,
+          "cache_files_changed": true,
+          "compilation_evidence": "runtime-report",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v10-1752ba434dc2f6741524e1a42baa01fa92c2ddf38bc9a33512348368cc018eb2.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "/Users/zhengyu/.cargo/bin/wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=/Users/zhengyu/Documents/projects/wasmoon/_build/upstream-49/algorithms/jit-cache/secretbox7/wasmtime-cache.toml",
+            "-C",
+            "parallel-compilation=n",
+            "examples/algorithms/secretbox7.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.8942091669996444,
+          "parsed_value": 4344320000.0,
+          "stdout": "4344320000",
+          "stderr": "",
+          "freshly_compiled": null,
+          "cache_hit": null,
+          "cache_write_succeeded": null,
+          "cache_files_changed": true,
+          "compilation_evidence": "unavailable",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-29931",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/p46Z0tDsUjwOV3l1aug3mH_L4hzMMt3ZGRdqAHzOzf4",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/p46Z0tDsUjwOV3l1aug3mH_L4hzMMt3ZGRdqAHzOzf4.stats"
+          ]
+        },
+        "value_ratio": 1.0515995598850914,
+        "wall_ratio": 1.0717606152627566
+      }
+    },
+    {
+      "workload": "examples/algorithms/secretbox8.wasm",
+      "status": "perf_gap",
+      "cache": {
+        "directory": "target/upstream-49/algorithms/jit-cache/secretbox8",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "target/upstream-49/algorithms/jit-cache/secretbox8/wasmoon",
+        "wasmtime_directory": "target/upstream-49/algorithms/jit-cache/secretbox8/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmtime",
+          "wasmoon"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/secretbox8.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 2.2826582500019867,
+          "parsed_value": 11186460000.0,
+          "stdout": "11186460000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_hit": false,
+          "cache_write_succeeded": true,
+          "cache_files_changed": true,
+          "compilation_evidence": "runtime-report",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v10-3c1b882233c223e26b1900f435eae8cc4ccb526ecce01ec8593f603750dbf8d6.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "/Users/zhengyu/.cargo/bin/wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=/Users/zhengyu/Documents/projects/wasmoon/_build/upstream-49/algorithms/jit-cache/secretbox8/wasmtime-cache.toml",
+            "-C",
+            "parallel-compilation=n",
+            "examples/algorithms/secretbox8.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 2.136844500000734,
+          "parsed_value": 10553895000.0,
+          "stdout": "10553895000",
+          "stderr": "",
+          "freshly_compiled": null,
+          "cache_hit": null,
+          "cache_write_succeeded": null,
+          "cache_files_changed": true,
+          "compilation_evidence": "unavailable",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-29934",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/1jenqYoZeMslLkjs3fL-AmmYQXJr_0BGmhb27thA2fc",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/1jenqYoZeMslLkjs3fL-AmmYQXJr_0BGmhb27thA2fc.stats"
+          ]
+        },
+        "value_ratio": 1.059936639506078,
+        "wall_ratio": 1.0682378853497307
+      }
+    },
+    {
+      "workload": "examples/algorithms/secretbox_easy.wasm",
+      "status": "perf_gap",
+      "cache": {
+        "directory": "target/upstream-49/algorithms/jit-cache/secretbox_easy",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "target/upstream-49/algorithms/jit-cache/secretbox_easy/wasmoon",
+        "wasmtime_directory": "target/upstream-49/algorithms/jit-cache/secretbox_easy/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmoon",
+          "wasmtime"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/secretbox_easy.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.05147837500044261,
+          "parsed_value": 5765000.0,
+          "stdout": "5765000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_hit": false,
+          "cache_write_succeeded": true,
+          "cache_files_changed": true,
+          "compilation_evidence": "runtime-report",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v10-9605561d2a72b2b45332276e5762145b3fb28e1d6d89da2f04abd8ff469aed63.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "/Users/zhengyu/.cargo/bin/wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=/Users/zhengyu/Documents/projects/wasmoon/_build/upstream-49/algorithms/jit-cache/secretbox_easy/wasmtime-cache.toml",
+            "-C",
+            "parallel-compilation=n",
+            "examples/algorithms/secretbox_easy.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.027138917001138907,
+          "parsed_value": 4580000.0,
+          "stdout": "4580000",
+          "stderr": "",
+          "freshly_compiled": null,
+          "cache_hit": null,
+          "cache_write_succeeded": null,
+          "cache_files_changed": true,
+          "compilation_evidence": "unavailable",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-30029",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/dguBti-h3Kok3G3qm9IWDXcXagimG03QIOvU32ubPmM",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/dguBti-h3Kok3G3qm9IWDXcXagimG03QIOvU32ubPmM.stats"
+          ]
+        },
+        "value_ratio": 1.2587336244541485,
+        "wall_ratio": 1.8968470627727068
+      }
+    },
+    {
+      "workload": "examples/algorithms/secretbox_easy2.wasm",
+      "status": "perf_gap",
+      "cache": {
+        "directory": "target/upstream-49/algorithms/jit-cache/secretbox_easy2",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "target/upstream-49/algorithms/jit-cache/secretbox_easy2/wasmoon",
+        "wasmtime_directory": "target/upstream-49/algorithms/jit-cache/secretbox_easy2/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmtime",
+          "wasmoon"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/secretbox_easy2.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 3.8691375409980537,
+          "parsed_value": 19089795000.0,
+          "stdout": "19089795000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_hit": false,
+          "cache_write_succeeded": true,
+          "cache_files_changed": true,
+          "compilation_evidence": "runtime-report",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v10-2555ddb8aa577171e80f33d410c5943aac7e1604b24cb7dccdfa6106d3cca726.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "/Users/zhengyu/.cargo/bin/wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=/Users/zhengyu/Documents/projects/wasmoon/_build/upstream-49/algorithms/jit-cache/secretbox_easy2/wasmtime-cache.toml",
+            "-C",
+            "parallel-compilation=n",
+            "examples/algorithms/secretbox_easy2.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 3.5363127080017875,
+          "parsed_value": 17543550000.0,
+          "stdout": "17543550000",
+          "stderr": "",
+          "freshly_compiled": null,
+          "cache_hit": null,
+          "cache_write_succeeded": null,
+          "cache_files_changed": true,
+          "compilation_evidence": "unavailable",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-30030",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/mL0WBXAHsTF4ZBlT9pVJA_qxhx0dQxjHCFW-pcF-Jx0",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/mL0WBXAHsTF4ZBlT9pVJA_qxhx0dQxjHCFW-pcF-Jx0.stats"
+          ]
+        },
+        "value_ratio": 1.088137520627239,
+        "wall_ratio": 1.0941163467368615
+      }
+    },
+    {
+      "workload": "examples/algorithms/secretstream_xchacha20poly1305.wasm",
+      "status": "perf_gap",
+      "cache": {
+        "directory": "target/upstream-49/algorithms/jit-cache/secretstream_xchacha20poly1305",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "target/upstream-49/algorithms/jit-cache/secretstream_xchacha20poly1305/wasmoon",
+        "wasmtime_directory": "target/upstream-49/algorithms/jit-cache/secretstream_xchacha20poly1305/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmoon",
+          "wasmtime"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/secretstream_xchacha20poly1305.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.0690589160003583,
+          "parsed_value": 54255000.0,
+          "stdout": "54255000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_hit": false,
+          "cache_write_succeeded": true,
+          "cache_files_changed": true,
+          "compilation_evidence": "runtime-report",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v10-a9987074588f839791b746eb83624ad17335494c0bbd4f23464558be8b4fc042.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "/Users/zhengyu/.cargo/bin/wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=/Users/zhengyu/Documents/projects/wasmoon/_build/upstream-49/algorithms/jit-cache/secretstream_xchacha20poly1305/wasmtime-cache.toml",
+            "-C",
+            "parallel-compilation=n",
+            "examples/algorithms/secretstream_xchacha20poly1305.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.038942084000154864,
+          "parsed_value": 47795000.0,
+          "stdout": "47795000",
+          "stderr": "",
+          "freshly_compiled": null,
+          "cache_hit": null,
+          "cache_write_succeeded": null,
+          "cache_files_changed": true,
+          "compilation_evidence": "unavailable",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-30210",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/MrNCwCLKmVRiMPRCfwda8QC5WEGV9qfrLasnjh4VrCk",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/MrNCwCLKmVRiMPRCfwda8QC5WEGV9qfrLasnjh4VrCk.stats"
+          ]
+        },
+        "value_ratio": 1.1351605816508004,
+        "wall_ratio": 1.7733749431613282
+      }
+    },
+    {
+      "workload": "examples/algorithms/shorthash.wasm",
+      "status": "ok",
+      "cache": {
+        "directory": "target/upstream-49/algorithms/jit-cache/shorthash",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "target/upstream-49/algorithms/jit-cache/shorthash/wasmoon",
+        "wasmtime_directory": "target/upstream-49/algorithms/jit-cache/shorthash/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmtime",
+          "wasmoon"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/shorthash.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.03746204100025352,
+          "parsed_value": 880000.0,
+          "stdout": "880000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_hit": false,
+          "cache_write_succeeded": true,
+          "cache_files_changed": true,
+          "compilation_evidence": "runtime-report",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v10-19ac8b79a730e19ec60d7e87d20d30128a2261ca6721930ae2f633f84690bb17.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "/Users/zhengyu/.cargo/bin/wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=/Users/zhengyu/Documents/projects/wasmoon/_build/upstream-49/algorithms/jit-cache/shorthash/wasmtime-cache.toml",
+            "-C",
+            "parallel-compilation=n",
+            "examples/algorithms/shorthash.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.02152633299920126,
+          "parsed_value": 880000.0,
+          "stdout": "880000",
+          "stderr": "",
+          "freshly_compiled": null,
+          "cache_hit": null,
+          "cache_write_succeeded": null,
+          "cache_files_changed": true,
+          "compilation_evidence": "unavailable",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-30211",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/V6Y1DThIGpvJRUlwNxYyQLq8jFNNFa6tTtsCvFrKwaA",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/V6Y1DThIGpvJRUlwNxYyQLq8jFNNFa6tTtsCvFrKwaA.stats"
+          ]
+        },
+        "value_ratio": 1.0,
+        "wall_ratio": 1.7402890218990648
+      }
+    },
+    {
+      "workload": "examples/algorithms/sign.wasm",
+      "status": "ok",
+      "cache": {
+        "directory": "target/upstream-49/algorithms/jit-cache/sign",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "target/upstream-49/algorithms/jit-cache/sign/wasmoon",
+        "wasmtime_directory": "target/upstream-49/algorithms/jit-cache/sign/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmoon",
+          "wasmtime"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/sign.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 80.2306520839993,
+          "parsed_value": 400426190000.0,
+          "stdout": "400426190000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_hit": false,
+          "cache_write_succeeded": true,
+          "cache_files_changed": true,
+          "compilation_evidence": "runtime-report",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v10-68c46f435ece0bdb691bd3d857fb09985d69ee8f376169c4dae33d356be554be.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "/Users/zhengyu/.cargo/bin/wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=/Users/zhengyu/Documents/projects/wasmoon/_build/upstream-49/algorithms/jit-cache/sign/wasmtime-cache.toml",
+            "-C",
+            "parallel-compilation=n",
+            "examples/algorithms/sign.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 79.05462895799792,
+          "parsed_value": 394937690000.0,
+          "stdout": "394937690000",
+          "stderr": "",
+          "freshly_compiled": null,
+          "cache_hit": null,
+          "cache_write_succeeded": null,
+          "cache_files_changed": true,
+          "compilation_evidence": "unavailable",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-31827",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/xMdxmyclbKuBN2x_XBqkyc9oX-fjWwTUIwMxZ88IThI",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/xMdxmyclbKuBN2x_XBqkyc9oX-fjWwTUIwMxZ88IThI.stats"
+          ]
+        },
+        "value_ratio": 1.0138971289369723,
+        "wall_ratio": 1.014876081786763
+      }
+    },
+    {
+      "workload": "examples/algorithms/sign2.wasm",
+      "status": "ok",
+      "cache": {
+        "directory": "target/upstream-49/algorithms/jit-cache/sign2",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "target/upstream-49/algorithms/jit-cache/sign2/wasmoon",
+        "wasmtime_directory": "target/upstream-49/algorithms/jit-cache/sign2/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmtime",
+          "wasmoon"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/sign2.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.2599027500000375,
+          "parsed_value": 662230000.0,
+          "stdout": "662230000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_hit": false,
+          "cache_write_succeeded": true,
+          "cache_files_changed": true,
+          "compilation_evidence": "runtime-report",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v10-620b2419eca4d38d0863b4e17f72f4c626415b727a427ef75966b63ec27186f3.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "/Users/zhengyu/.cargo/bin/wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=/Users/zhengyu/Documents/projects/wasmoon/_build/upstream-49/algorithms/jit-cache/sign2/wasmtime-cache.toml",
+            "-C",
+            "parallel-compilation=n",
+            "examples/algorithms/sign2.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.19103958299820079,
+          "parsed_value": 650525000.0,
+          "stdout": "650525000",
+          "stderr": "",
+          "freshly_compiled": null,
+          "cache_hit": null,
+          "cache_write_succeeded": null,
+          "cache_files_changed": true,
+          "compilation_evidence": "unavailable",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-33446",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/7_2ickCUENgc7MIQikDcntKS7Xajg7jt6Fgu-y3AWQo",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/7_2ickCUENgc7MIQikDcntKS7Xajg7jt6Fgu-y3AWQo.stats"
+          ]
+        },
+        "value_ratio": 1.017993159371277,
+        "wall_ratio": 1.3604654382148922
+      }
+    },
+    {
+      "workload": "examples/algorithms/siphashx24.wasm",
+      "status": "ok",
+      "cache": {
+        "directory": "target/upstream-49/algorithms/jit-cache/siphashx24",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "target/upstream-49/algorithms/jit-cache/siphashx24/wasmoon",
+        "wasmtime_directory": "target/upstream-49/algorithms/jit-cache/siphashx24/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmoon",
+          "wasmtime"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/siphashx24.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.037982792000548216,
+          "parsed_value": 1175000.0,
+          "stdout": "1175000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_hit": false,
+          "cache_write_succeeded": true,
+          "cache_files_changed": true,
+          "compilation_evidence": "runtime-report",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v10-684cd14397203234f4e7ec343639fc6f1e28ef2a1c65682d66ffdd168f7b4750.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "/Users/zhengyu/.cargo/bin/wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=/Users/zhengyu/Documents/projects/wasmoon/_build/upstream-49/algorithms/jit-cache/siphashx24/wasmtime-cache.toml",
+            "-C",
+            "parallel-compilation=n",
+            "examples/algorithms/siphashx24.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.021566624996921746,
+          "parsed_value": 1165000.0,
+          "stdout": "1165000",
+          "stderr": "",
+          "freshly_compiled": null,
+          "cache_hit": null,
+          "cache_write_succeeded": null,
+          "cache_files_changed": true,
+          "compilation_evidence": "unavailable",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-33493",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/r1EJavwrPekAs7nzFmbvB2p0rUQmq13O3GveGGQ9ZDs",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/r1EJavwrPekAs7nzFmbvB2p0rUQmq13O3GveGGQ9ZDs.stats"
+          ]
+        },
+        "value_ratio": 1.0085836909871244,
+        "wall_ratio": 1.761183866551655
+      }
+    },
+    {
+      "workload": "examples/algorithms/sodium_utils.wasm",
+      "status": "perf_gap",
+      "cache": {
+        "directory": "target/upstream-49/algorithms/jit-cache/sodium_utils",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "target/upstream-49/algorithms/jit-cache/sodium_utils/wasmoon",
+        "wasmtime_directory": "target/upstream-49/algorithms/jit-cache/sodium_utils/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmtime",
+          "wasmoon"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/sodium_utils.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 3.566065459002857,
+          "parsed_value": 17596960000.0,
+          "stdout": "17596960000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_hit": false,
+          "cache_write_succeeded": true,
+          "cache_files_changed": true,
+          "compilation_evidence": "runtime-report",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v10-76b9ee290ac8a8b02c221864398ea2fac6edc50e08e7925220fbf539f4c14856.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "/Users/zhengyu/.cargo/bin/wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=/Users/zhengyu/Documents/projects/wasmoon/_build/upstream-49/algorithms/jit-cache/sodium_utils/wasmtime-cache.toml",
+            "-C",
+            "parallel-compilation=n",
+            "examples/algorithms/sodium_utils.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 3.2702277499993215,
+          "parsed_value": 16226840000.0,
+          "stdout": "16226840000",
+          "stderr": "",
+          "freshly_compiled": null,
+          "cache_hit": null,
+          "cache_write_succeeded": null,
+          "cache_files_changed": true,
+          "compilation_evidence": "unavailable",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-33494",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/17VwSEneqZrgitjVb4VDMOaQX6zPInwvMEk2qyx7RNA",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/17VwSEneqZrgitjVb4VDMOaQX6zPInwvMEk2qyx7RNA.stats"
+          ]
+        },
+        "value_ratio": 1.0844354168772232,
+        "wall_ratio": 1.0904639467399777
+      }
+    },
+    {
+      "workload": "examples/algorithms/stream.wasm",
+      "status": "ok",
+      "cache": {
+        "directory": "target/upstream-49/algorithms/jit-cache/stream",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "target/upstream-49/algorithms/jit-cache/stream/wasmoon",
+        "wasmtime_directory": "target/upstream-49/algorithms/jit-cache/stream/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmoon",
+          "wasmtime"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/stream.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 5.439462709000509,
+          "parsed_value": 26936910000.0,
+          "stdout": "26936910000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_hit": false,
+          "cache_write_succeeded": true,
+          "cache_files_changed": true,
+          "compilation_evidence": "runtime-report",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v10-677b11a96769ce71a92b0dd9eb3b5c5dd8c896d65c2dadf18c5093abdd152395.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "/Users/zhengyu/.cargo/bin/wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=/Users/zhengyu/Documents/projects/wasmoon/_build/upstream-49/algorithms/jit-cache/stream/wasmtime-cache.toml",
+            "-C",
+            "parallel-compilation=n",
+            "examples/algorithms/stream.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 5.229233458001545,
+          "parsed_value": 26004785000.0,
+          "stdout": "26004785000",
+          "stderr": "",
+          "freshly_compiled": null,
+          "cache_hit": null,
+          "cache_write_succeeded": null,
+          "cache_files_changed": true,
+          "compilation_evidence": "unavailable",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-33762",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/242BJx5Wm-qNlTpet1ogxnpoEibB79KOD9v2Tj34sBg",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/242BJx5Wm-qNlTpet1ogxnpoEibB79KOD9v2Tj34sBg.stats"
+          ]
+        },
+        "value_ratio": 1.0358443647967095,
+        "wall_ratio": 1.040202689875565
+      }
+    },
+    {
+      "workload": "examples/algorithms/stream2.wasm",
+      "status": "ok",
+      "cache": {
+        "directory": "target/upstream-49/algorithms/jit-cache/stream2",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "target/upstream-49/algorithms/jit-cache/stream2/wasmoon",
+        "wasmtime_directory": "target/upstream-49/algorithms/jit-cache/stream2/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmtime",
+          "wasmoon"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/stream2.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 4.539332208001724,
+          "parsed_value": 22445820000.0,
+          "stdout": "22445820000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_hit": false,
+          "cache_write_succeeded": true,
+          "cache_files_changed": true,
+          "compilation_evidence": "runtime-report",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v10-b09767a9828152eeb5cd18219c8afb5179416dc059af810c2e1ff033bc6a398f.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "/Users/zhengyu/.cargo/bin/wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=/Users/zhengyu/Documents/projects/wasmoon/_build/upstream-49/algorithms/jit-cache/stream2/wasmtime-cache.toml",
+            "-C",
+            "parallel-compilation=n",
+            "examples/algorithms/stream2.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 4.347964042000967,
+          "parsed_value": 21599030000.0,
+          "stdout": "21599030000",
+          "stderr": "",
+          "freshly_compiled": null,
+          "cache_hit": null,
+          "cache_write_succeeded": null,
+          "cache_files_changed": true,
+          "compilation_evidence": "unavailable",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-33849",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/NS32ftET0Ua8TjBXhS16dcyqKrq99z8NUNaVlmapitI",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/NS32ftET0Ua8TjBXhS16dcyqKrq99z8NUNaVlmapitI.stats"
+          ]
+        },
+        "value_ratio": 1.0392050013357081,
+        "wall_ratio": 1.044013281653702
+      }
+    },
+    {
+      "workload": "examples/algorithms/stream3.wasm",
+      "status": "perf_gap",
+      "cache": {
+        "directory": "target/upstream-49/algorithms/jit-cache/stream3",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "target/upstream-49/algorithms/jit-cache/stream3/wasmoon",
+        "wasmtime_directory": "target/upstream-49/algorithms/jit-cache/stream3/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmoon",
+          "wasmtime"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/stream3.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.040305334001459414,
+          "parsed_value": 190000.0,
+          "stdout": "190000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_hit": false,
+          "cache_write_succeeded": true,
+          "cache_files_changed": true,
+          "compilation_evidence": "runtime-report",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v10-1c3320597f958154e5608046885616f483f447aac6340523445753cfdc24d37f.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "/Users/zhengyu/.cargo/bin/wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=/Users/zhengyu/Documents/projects/wasmoon/_build/upstream-49/algorithms/jit-cache/stream3/wasmtime-cache.toml",
+            "-C",
+            "parallel-compilation=n",
+            "examples/algorithms/stream3.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.022338416001730366,
+          "parsed_value": 170000.0,
+          "stdout": "170000",
+          "stderr": "",
+          "freshly_compiled": null,
+          "cache_hit": null,
+          "cache_write_succeeded": null,
+          "cache_files_changed": true,
+          "compilation_evidence": "unavailable",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-34024",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/5N5LOleIcmRcuLa1rSl9N0PDieYeJXxeDKBezWLsZvo",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/5N5LOleIcmRcuLa1rSl9N0PDieYeJXxeDKBezWLsZvo.stats"
+          ]
+        },
+        "value_ratio": 1.1176470588235294,
+        "wall_ratio": 1.8043058199980386
+      }
+    },
+    {
+      "workload": "examples/algorithms/stream4.wasm",
+      "status": "perf_gap",
+      "cache": {
+        "directory": "target/upstream-49/algorithms/jit-cache/stream4",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "target/upstream-49/algorithms/jit-cache/stream4/wasmoon",
+        "wasmtime_directory": "target/upstream-49/algorithms/jit-cache/stream4/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmtime",
+          "wasmoon"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/stream4.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.03977345800012699,
+          "parsed_value": 375000.0,
+          "stdout": "375000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_hit": false,
+          "cache_write_succeeded": true,
+          "cache_files_changed": true,
+          "compilation_evidence": "runtime-report",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v10-df151837124fd5cc85d91f0d1a80d5e752b597bbe17f9480cc5be30ffaea5d70.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "/Users/zhengyu/.cargo/bin/wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=/Users/zhengyu/Documents/projects/wasmoon/_build/upstream-49/algorithms/jit-cache/stream4/wasmtime-cache.toml",
+            "-C",
+            "parallel-compilation=n",
+            "examples/algorithms/stream4.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 0.02227399999901536,
+          "parsed_value": 350000.0,
+          "stdout": "350000",
+          "stderr": "",
+          "freshly_compiled": null,
+          "cache_hit": null,
+          "cache_write_succeeded": null,
+          "cache_files_changed": true,
+          "compilation_evidence": "unavailable",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-34025",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/RaJGtxkWAlr1BkUWgnSryEaG6ndfDfMF_fQBcktV2pk",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/RaJGtxkWAlr1BkUWgnSryEaG6ndfDfMF_fQBcktV2pk.stats"
+          ]
+        },
+        "value_ratio": 1.0714285714285714,
+        "wall_ratio": 1.7856450571017874
+      }
+    },
+    {
+      "workload": "examples/algorithms/verify1.wasm",
+      "status": "perf_gap",
+      "cache": {
+        "directory": "target/upstream-49/algorithms/jit-cache/verify1",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "target/upstream-49/algorithms/jit-cache/verify1/wasmoon",
+        "wasmtime_directory": "target/upstream-49/algorithms/jit-cache/verify1/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmoon",
+          "wasmtime"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/verify1.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 9.251251249999768,
+          "parsed_value": 46037095000.0,
+          "stdout": "46037095000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_hit": false,
+          "cache_write_succeeded": true,
+          "cache_files_changed": true,
+          "compilation_evidence": "runtime-report",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v10-0a2d4057f273bfed320ab48cfa336beace0a76b917b72d74abc57f595849161b.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "/Users/zhengyu/.cargo/bin/wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=/Users/zhengyu/Documents/projects/wasmoon/_build/upstream-49/algorithms/jit-cache/verify1/wasmtime-cache.toml",
+            "-C",
+            "parallel-compilation=n",
+            "examples/algorithms/verify1.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 7.624042709001515,
+          "parsed_value": 37997810000.0,
+          "stdout": "37997810000",
+          "stderr": "",
+          "freshly_compiled": null,
+          "cache_hit": null,
+          "cache_write_succeeded": null,
+          "cache_files_changed": true,
+          "compilation_evidence": "unavailable",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-34249",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/tWbzgbnAWSdE1FMf5oEf5H5z9G_kncpFGHei1kXJr-0",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/tWbzgbnAWSdE1FMf5oEf5H5z9G_kncpFGHei1kXJr-0.stats"
+          ]
+        },
+        "value_ratio": 1.2115723248260886,
+        "wall_ratio": 1.2134311943290992
+      }
+    },
+    {
+      "workload": "examples/algorithms/xchacha20.wasm",
+      "status": "ok",
+      "cache": {
+        "directory": "target/upstream-49/algorithms/jit-cache/xchacha20",
+        "isolated": true,
+        "cold": true,
+        "wasmoon_directory": "target/upstream-49/algorithms/jit-cache/xchacha20/wasmoon",
+        "wasmtime_directory": "target/upstream-49/algorithms/jit-cache/xchacha20/wasmtime"
+      },
+      "pair": {
+        "order": [
+          "wasmtime",
+          "wasmoon"
+        ],
+        "wasmoon": {
+          "command": [
+            "./wasmoon",
+            "run",
+            "examples/algorithms/xchacha20.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 1.5120172089991684,
+          "parsed_value": 7004865000.0,
+          "stdout": "7004865000",
+          "stderr": "",
+          "freshly_compiled": true,
+          "cache_hit": false,
+          "cache_write_succeeded": true,
+          "cache_files_changed": true,
+          "compilation_evidence": "runtime-report",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            "v10-a4f64ef375081823f613b0fe967d46e8d4a05b52ad16a7f551e91fd17a2c2a41.cwasm"
+          ]
+        },
+        "wasmtime": {
+          "command": [
+            "/Users/zhengyu/.cargo/bin/wasmtime",
+            "run",
+            "-C",
+            "cache=y",
+            "-C",
+            "cache-config=/Users/zhengyu/Documents/projects/wasmoon/_build/upstream-49/algorithms/jit-cache/xchacha20/wasmtime-cache.toml",
+            "-C",
+            "parallel-compilation=n",
+            "examples/algorithms/xchacha20.wasm"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "duration_sec": 1.4369726670011005,
+          "parsed_value": 6921810000.0,
+          "stdout": "6921810000",
+          "stderr": "",
+          "freshly_compiled": null,
+          "cache_hit": null,
+          "cache_write_succeeded": null,
+          "cache_files_changed": true,
+          "compilation_evidence": "unavailable",
+          "evidence_error": null,
+          "cache_files_before": [],
+          "cache_files_after": [
+            ".cleanup.wip-34382",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/YoNY-zwjzWz7GrosFXOg11B3ipuBy0N2Q9qAZkPMSec",
+            "modules/wasmtime-46c23a87dac1465986a8ad53ba6a7ae49372857b-1790580462736/YoNY-zwjzWz7GrosFXOg11B3ipuBy0N2Q9qAZkPMSec.stats"
+          ]
+        },
+        "value_ratio": 1.0119990291556689,
+        "wall_ratio": 1.052224056672339
+      }
+    }
+  ]
+}

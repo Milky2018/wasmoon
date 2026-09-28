@@ -125,6 +125,19 @@ jobs:
           fi
           ./install.sh
 
+      - name: test components against the pinned Wasmtime release
+        run: |
+          python3 scripts/install_wasmtime_oracle.py
+          python3 scripts/component_differential.py \
+            --wasmtime target/component-hardening/wasmtime-oracle/wasmtime
+      - name: upload Wasmtime differential evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wasmtime-differential-${{ matrix.os }}
+          path: target/component-hardening/differential
+          if-no-files-found: warn
+
       - name: install independently packaged modules
         run: |
           python3 scripts/test_packaged_install.py

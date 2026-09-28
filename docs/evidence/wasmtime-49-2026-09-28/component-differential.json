@@ -1,0 +1,2690 @@
+{
+  "cases": [
+    {
+      "compile": {
+        "command": [
+          "wasm-tools",
+          "parse",
+          "-o",
+          "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/signed-negate.component.wasm",
+          "-"
+        ],
+        "duration_sec": 0.0033553749999555293,
+        "returncode": 0,
+        "stderr": "",
+        "stdout": "",
+        "timed_out": false
+      },
+      "expected": [
+        -37
+      ],
+      "expected_kind": "success",
+      "name": "signed-negate",
+      "seed": null,
+      "status": "passed",
+      "wasmoon": {
+        "detail": "",
+        "kind": "success",
+        "process": {
+          "command": [
+            "./wasmoon",
+            "component",
+            "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/signed-negate.component.wasm",
+            "--invoke",
+            "negate",
+            "--error-format",
+            "json",
+            "--arg",
+            "37"
+          ],
+          "duration_sec": 0.0038311249991238583,
+          "returncode": 0,
+          "stderr": "",
+          "stdout": "{\"ok\":true,\"phase\":\"invoke\",\"detail\":\"negate\",\"result\":[-37]}\n",
+          "timed_out": false
+        },
+        "value": [
+          -37
+        ]
+      },
+      "wasmtime": {
+        "detail": "",
+        "kind": "success",
+        "process": {
+          "command": [
+            "/Users/zhengyu/.cargo/bin/wasmtime",
+            "run",
+            "--invoke",
+            "negate(37)",
+            "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/signed-negate.component.wasm"
+          ],
+          "duration_sec": 0.004706583000370301,
+          "returncode": 0,
+          "stderr": "",
+          "stdout": "-37\n",
+          "timed_out": false
+        },
+        "value": [
+          -37
+        ]
+      }
+    },
+    {
+      "compile": {
+        "command": [
+          "wasm-tools",
+          "parse",
+          "-o",
+          "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/float-add.component.wasm",
+          "-"
+        ],
+        "duration_sec": 0.003638917001808295,
+        "returncode": 0,
+        "stderr": "",
+        "stdout": "",
+        "timed_out": false
+      },
+      "expected": [
+        3.75
+      ],
+      "expected_kind": "success",
+      "name": "float-add",
+      "seed": null,
+      "status": "passed",
+      "wasmoon": {
+        "detail": "",
+        "kind": "success",
+        "process": {
+          "command": [
+            "./wasmoon",
+            "component",
+            "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/float-add.component.wasm",
+            "--invoke",
+            "add",
+            "--error-format",
+            "json",
+            "--arg",
+            "3.25"
+          ],
+          "duration_sec": 0.0033533330024511088,
+          "returncode": 0,
+          "stderr": "",
+          "stdout": "{\"ok\":true,\"phase\":\"invoke\",\"detail\":\"add\",\"result\":[3.75]}\n",
+          "timed_out": false
+        },
+        "value": [
+          3.75
+        ]
+      },
+      "wasmtime": {
+        "detail": "",
+        "kind": "success",
+        "process": {
+          "command": [
+            "/Users/zhengyu/.cargo/bin/wasmtime",
+            "run",
+            "--invoke",
+            "add(3.25)",
+            "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/float-add.component.wasm"
+          ],
+          "duration_sec": 0.004665707998356083,
+          "returncode": 0,
+          "stderr": "",
+          "stdout": "3.75\n",
+          "timed_out": false
+        },
+        "value": [
+          3.75
+        ]
+      }
+    },
+    {
+      "compile": {
+        "command": [
+          "wasm-tools",
+          "parse",
+          "-o",
+          "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/string-echo.component.wasm",
+          "-"
+        ],
+        "duration_sec": 0.003439207997871563,
+        "returncode": 0,
+        "stderr": "",
+        "stdout": "",
+        "timed_out": false
+      },
+      "expected": [
+        "component differential"
+      ],
+      "expected_kind": "success",
+      "name": "string-echo",
+      "seed": null,
+      "status": "passed",
+      "wasmoon": {
+        "detail": "",
+        "kind": "success",
+        "process": {
+          "command": [
+            "./wasmoon",
+            "component",
+            "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/string-echo.component.wasm",
+            "--invoke",
+            "echo",
+            "--error-format",
+            "json",
+            "--arg",
+            "\"component differential\""
+          ],
+          "duration_sec": 0.0034541250024631154,
+          "returncode": 0,
+          "stderr": "",
+          "stdout": "{\"ok\":true,\"phase\":\"invoke\",\"detail\":\"echo\",\"result\":[\"component differential\"]}\n",
+          "timed_out": false
+        },
+        "value": [
+          "component differential"
+        ]
+      },
+      "wasmtime": {
+        "detail": "",
+        "kind": "success",
+        "process": {
+          "command": [
+            "/Users/zhengyu/.cargo/bin/wasmtime",
+            "run",
+            "--invoke",
+            "echo(\"component differential\")",
+            "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/string-echo.component.wasm"
+          ],
+          "duration_sec": 0.004402750000735978,
+          "returncode": 0,
+          "stderr": "",
+          "stdout": "\"component differential\"\n",
+          "timed_out": false
+        },
+        "value": [
+          "component differential"
+        ]
+      }
+    },
+    {
+      "compile": {
+        "command": [
+          "wasm-tools",
+          "parse",
+          "-o",
+          "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/record-sum.component.wasm",
+          "-"
+        ],
+        "duration_sec": 0.0036977079980715644,
+        "returncode": 0,
+        "stderr": "",
+        "stdout": "",
+        "timed_out": false
+      },
+      "expected": [
+        42
+      ],
+      "expected_kind": "success",
+      "name": "record-sum",
+      "seed": null,
+      "status": "passed",
+      "wasmoon": {
+        "detail": "",
+        "kind": "success",
+        "process": {
+          "command": [
+            "./wasmoon",
+            "component",
+            "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/record-sum.component.wasm",
+            "--invoke",
+            "sum",
+            "--error-format",
+            "json",
+            "--arg",
+            "{\"x\":17,\"y\":25}"
+          ],
+          "duration_sec": 0.00330795799891348,
+          "returncode": 0,
+          "stderr": "",
+          "stdout": "{\"ok\":true,\"phase\":\"invoke\",\"detail\":\"sum\",\"result\":[42]}\n",
+          "timed_out": false
+        },
+        "value": [
+          42
+        ]
+      },
+      "wasmtime": {
+        "detail": "",
+        "kind": "success",
+        "process": {
+          "command": [
+            "/Users/zhengyu/.cargo/bin/wasmtime",
+            "run",
+            "--invoke",
+            "sum({x: 17, y: 25})",
+            "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/record-sum.component.wasm"
+          ],
+          "duration_sec": 0.004456666996702552,
+          "returncode": 0,
+          "stderr": "",
+          "stdout": "42\n",
+          "timed_out": false
+        },
+        "value": [
+          42
+        ]
+      }
+    },
+    {
+      "compile": {
+        "command": [
+          "wasm-tools",
+          "parse",
+          "-o",
+          "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/option-some.component.wasm",
+          "-"
+        ],
+        "duration_sec": 0.0033601250033825636,
+        "returncode": 0,
+        "stderr": "",
+        "stdout": "",
+        "timed_out": false
+      },
+      "expected": [
+        7
+      ],
+      "expected_kind": "success",
+      "name": "option-some",
+      "seed": null,
+      "status": "passed",
+      "wasmoon": {
+        "detail": "",
+        "kind": "success",
+        "process": {
+          "command": [
+            "./wasmoon",
+            "component",
+            "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/option-some.component.wasm",
+            "--invoke",
+            "unwrap",
+            "--error-format",
+            "json",
+            "--arg",
+            "{\"some\":7}"
+          ],
+          "duration_sec": 0.003343333999509923,
+          "returncode": 0,
+          "stderr": "",
+          "stdout": "{\"ok\":true,\"phase\":\"invoke\",\"detail\":\"unwrap\",\"result\":[7]}\n",
+          "timed_out": false
+        },
+        "value": [
+          7
+        ]
+      },
+      "wasmtime": {
+        "detail": "",
+        "kind": "success",
+        "process": {
+          "command": [
+            "/Users/zhengyu/.cargo/bin/wasmtime",
+            "run",
+            "--invoke",
+            "unwrap(some(7))",
+            "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/option-some.component.wasm"
+          ],
+          "duration_sec": 0.004633458000171231,
+          "returncode": 0,
+          "stderr": "",
+          "stdout": "7\n",
+          "timed_out": false
+        },
+        "value": [
+          7
+        ]
+      }
+    },
+    {
+      "compile": {
+        "command": [
+          "wasm-tools",
+          "parse",
+          "-o",
+          "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/guest-trap.component.wasm",
+          "-"
+        ],
+        "duration_sec": 0.003524499999912223,
+        "returncode": 0,
+        "stderr": "",
+        "stdout": "",
+        "timed_out": false
+      },
+      "expected": null,
+      "expected_kind": "trap",
+      "name": "guest-trap",
+      "seed": null,
+      "status": "passed",
+      "wasmoon": {
+        "detail": "InvocationFailed(\"CanonCallError(\\\"wasm trap: wasm `unreachable` instruction executed (core=invoke::coreinst0 func_idx=0)\\\")\")",
+        "kind": "trap",
+        "process": {
+          "command": [
+            "./wasmoon",
+            "component",
+            "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/guest-trap.component.wasm",
+            "--invoke",
+            "fail",
+            "--error-format",
+            "json"
+          ],
+          "duration_sec": 0.003364042000612244,
+          "returncode": 125,
+          "stderr": "",
+          "stdout": "{\"ok\":false,\"code\":\"COMP_RUNTIME_ERROR\",\"phase\":\"invoke\",\"detail\":\"InvocationFailed(\\\"CanonCallError(\\\\\\\"wasm trap: wasm `unreachable` instruction executed (core=invoke::coreinst0 func_idx=0)\\\\\\\")\\\")\"}\n",
+          "timed_out": false
+        },
+        "value": null
+      },
+      "wasmtime": {
+        "detail": "Error: failed to run main module `/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/guest-trap.component.wasm`\n\nCaused by:\n    0: error while executing at wasm backtrace:\n    0:     0x2c - m!<wasm function 0>\n    1: wasm trap: wasm `unreachable` instruction executed",
+        "kind": "trap",
+        "process": {
+          "command": [
+            "/Users/zhengyu/.cargo/bin/wasmtime",
+            "run",
+            "--invoke",
+            "fail()",
+            "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/guest-trap.component.wasm"
+          ],
+          "duration_sec": 0.004584875001455657,
+          "returncode": 134,
+          "stderr": "Error: failed to run main module `/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/guest-trap.component.wasm`\n\nCaused by:\n    0: error while executing at wasm backtrace:\n    0:     0x2c - m!<wasm function 0>\n    1: wasm trap: wasm `unreachable` instruction executed\n\n",
+          "stdout": "",
+          "timed_out": false
+        },
+        "value": null
+      }
+    },
+    {
+      "compile": {
+        "command": [
+          "wasm-tools",
+          "parse",
+          "-o",
+          "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/invalid-string-result-signature.component.wasm",
+          "-"
+        ],
+        "duration_sec": 0.0033614999993005767,
+        "returncode": 0,
+        "stderr": "",
+        "stdout": "",
+        "timed_out": false
+      },
+      "expected": null,
+      "expected_kind": "error",
+      "name": "invalid-string-result-signature",
+      "seed": null,
+      "status": "passed",
+      "wasmoon": {
+        "detail": "ValidationFailed(\"CanonCoreFuncTypeMismatch(\\\"canon lift core signature mismatch\\\")\")",
+        "kind": "error",
+        "process": {
+          "command": [
+            "./wasmoon",
+            "component",
+            "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/invalid-string-result-signature.component.wasm",
+            "--invoke",
+            "echo",
+            "--error-format",
+            "json",
+            "--arg",
+            "\"invalid\""
+          ],
+          "duration_sec": 0.0031195420015137643,
+          "returncode": 125,
+          "stderr": "",
+          "stdout": "{\"ok\":false,\"code\":\"COMP_RUNTIME_ERROR\",\"phase\":\"instantiate\",\"detail\":\"ValidationFailed(\\\"CanonCoreFuncTypeMismatch(\\\\\\\"canon lift core signature mismatch\\\\\\\")\\\")\"}\n",
+          "timed_out": false
+        },
+        "value": null
+      },
+      "wasmtime": {
+        "detail": "Error: failed to parse WebAssembly module\n\nCaused by:\n    lowered result types `[I32]` do not match result types `[I32, I32]` of core function 0 (at offset 0xc7)",
+        "kind": "error",
+        "process": {
+          "command": [
+            "/Users/zhengyu/.cargo/bin/wasmtime",
+            "run",
+            "--invoke",
+            "echo(\"invalid\")",
+            "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/invalid-string-result-signature.component.wasm"
+          ],
+          "duration_sec": 0.0043993339968437795,
+          "returncode": 1,
+          "stderr": "Error: failed to parse WebAssembly module\n\nCaused by:\n    lowered result types `[I32]` do not match result types `[I32, I32]` of core function 0 (at offset 0xc7)\n\n",
+          "stdout": "",
+          "timed_out": false
+        },
+        "value": null
+      }
+    },
+    {
+      "compile": {
+        "command": [
+          "wasm-tools",
+          "parse",
+          "-o",
+          "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/arithmetic-0000.component.wasm",
+          "-"
+        ],
+        "duration_sec": 0.0036858749990642536,
+        "returncode": 0,
+        "stderr": "",
+        "stdout": "",
+        "timed_out": false
+      },
+      "expected": [
+        2052050207
+      ],
+      "expected_kind": "success",
+      "name": "arithmetic-0000",
+      "seed": 12602704,
+      "status": "passed",
+      "wasmoon": {
+        "detail": "",
+        "kind": "success",
+        "process": {
+          "command": [
+            "./wasmoon",
+            "component",
+            "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/arithmetic-0000.component.wasm",
+            "--invoke",
+            "calculate",
+            "--error-format",
+            "json",
+            "--arg",
+            "2535727940"
+          ],
+          "duration_sec": 0.0035831249988405034,
+          "returncode": 0,
+          "stderr": "",
+          "stdout": "{\"ok\":true,\"phase\":\"invoke\",\"detail\":\"calculate\",\"result\":[2052050207]}\n",
+          "timed_out": false
+        },
+        "value": [
+          2052050207
+        ]
+      },
+      "wasmtime": {
+        "detail": "",
+        "kind": "success",
+        "process": {
+          "command": [
+            "/Users/zhengyu/.cargo/bin/wasmtime",
+            "run",
+            "--invoke",
+            "calculate(2535727940)",
+            "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/arithmetic-0000.component.wasm"
+          ],
+          "duration_sec": 0.004466250000405125,
+          "returncode": 0,
+          "stderr": "",
+          "stdout": "2052050207\n",
+          "timed_out": false
+        },
+        "value": [
+          2052050207
+        ]
+      }
+    },
+    {
+      "compile": {
+        "command": [
+          "wasm-tools",
+          "parse",
+          "-o",
+          "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/arithmetic-0001.component.wasm",
+          "-"
+        ],
+        "duration_sec": 0.003666874999908032,
+        "returncode": 0,
+        "stderr": "",
+        "stdout": "",
+        "timed_out": false
+      },
+      "expected": [
+        3408803970
+      ],
+      "expected_kind": "success",
+      "name": "arithmetic-0001",
+      "seed": 12602704,
+      "status": "passed",
+      "wasmoon": {
+        "detail": "",
+        "kind": "success",
+        "process": {
+          "command": [
+            "./wasmoon",
+            "component",
+            "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/arithmetic-0001.component.wasm",
+            "--invoke",
+            "math#calculate",
+            "--error-format",
+            "json",
+            "--arg",
+            "634443281"
+          ],
+          "duration_sec": 0.0034839169966289774,
+          "returncode": 0,
+          "stderr": "",
+          "stdout": "{\"ok\":true,\"phase\":\"invoke\",\"detail\":\"math#calculate\",\"result\":[3408803970]}\n",
+          "timed_out": false
+        },
+        "value": [
+          3408803970
+        ]
+      },
+      "wasmtime": {
+        "detail": "",
+        "kind": "success",
+        "process": {
+          "command": [
+            "/Users/zhengyu/.cargo/bin/wasmtime",
+            "run",
+            "--invoke",
+            "oracle(634443281)",
+            "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/arithmetic-0001.component.wasm"
+          ],
+          "duration_sec": 0.004433041998709086,
+          "returncode": 0,
+          "stderr": "",
+          "stdout": "3408803970\n",
+          "timed_out": false
+        },
+        "value": [
+          3408803970
+        ]
+      }
+    },
+    {
+      "compile": {
+        "command": [
+          "wasm-tools",
+          "parse",
+          "-o",
+          "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/arithmetic-0002.component.wasm",
+          "-"
+        ],
+        "duration_sec": 0.0033733339987520594,
+        "returncode": 0,
+        "stderr": "",
+        "stdout": "",
+        "timed_out": false
+      },
+      "expected": [
+        285490628
+      ],
+      "expected_kind": "success",
+      "name": "arithmetic-0002",
+      "seed": 12602704,
+      "status": "passed",
+      "wasmoon": {
+        "detail": "",
+        "kind": "success",
+        "process": {
+          "command": [
+            "./wasmoon",
+            "component",
+            "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/arithmetic-0002.component.wasm",
+            "--invoke",
+            "calculate",
+            "--error-format",
+            "json",
+            "--arg",
+            "4257061784"
+          ],
+          "duration_sec": 0.0033579580012883525,
+          "returncode": 0,
+          "stderr": "",
+          "stdout": "{\"ok\":true,\"phase\":\"invoke\",\"detail\":\"calculate\",\"result\":[285490628]}\n",
+          "timed_out": false
+        },
+        "value": [
+          285490628
+        ]
+      },
+      "wasmtime": {
+        "detail": "",
+        "kind": "success",
+        "process": {
+          "command": [
+            "/Users/zhengyu/.cargo/bin/wasmtime",
+            "run",
+            "--invoke",
+            "calculate(4257061784)",
+            "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/arithmetic-0002.component.wasm"
+          ],
+          "duration_sec": 0.00432304200148792,
+          "returncode": 0,
+          "stderr": "",
+          "stdout": "285490628\n",
+          "timed_out": false
+        },
+        "value": [
+          285490628
+        ]
+      }
+    },
+    {
+      "compile": {
+        "command": [
+          "wasm-tools",
+          "parse",
+          "-o",
+          "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/arithmetic-0003.component.wasm",
+          "-"
+        ],
+        "duration_sec": 0.0034618749996297993,
+        "returncode": 0,
+        "stderr": "",
+        "stdout": "",
+        "timed_out": false
+      },
+      "expected": [
+        2755194174
+      ],
+      "expected_kind": "success",
+      "name": "arithmetic-0003",
+      "seed": 12602704,
+      "status": "passed",
+      "wasmoon": {
+        "detail": "",
+        "kind": "success",
+        "process": {
+          "command": [
+            "./wasmoon",
+            "component",
+            "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/arithmetic-0003.component.wasm",
+            "--invoke",
+            "math#calculate",
+            "--error-format",
+            "json",
+            "--arg",
+            "264533249"
+          ],
+          "duration_sec": 0.0035189579975849483,
+          "returncode": 0,
+          "stderr": "",
+          "stdout": "{\"ok\":true,\"phase\":\"invoke\",\"detail\":\"math#calculate\",\"result\":[2755194174]}\n",
+          "timed_out": false
+        },
+        "value": [
+          2755194174
+        ]
+      },
+      "wasmtime": {
+        "detail": "",
+        "kind": "success",
+        "process": {
+          "command": [
+            "/Users/zhengyu/.cargo/bin/wasmtime",
+            "run",
+            "--invoke",
+            "oracle(264533249)",
+            "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/arithmetic-0003.component.wasm"
+          ],
+          "duration_sec": 0.004683541999838781,
+          "returncode": 0,
+          "stderr": "",
+          "stdout": "2755194174\n",
+          "timed_out": false
+        },
+        "value": [
+          2755194174
+        ]
+      }
+    },
+    {
+      "compile": {
+        "command": [
+          "wasm-tools",
+          "parse",
+          "-o",
+          "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/arithmetic-0004.component.wasm",
+          "-"
+        ],
+        "duration_sec": 0.0034495840009185486,
+        "returncode": 0,
+        "stderr": "",
+        "stdout": "",
+        "timed_out": false
+      },
+      "expected": [
+        2186611554
+      ],
+      "expected_kind": "success",
+      "name": "arithmetic-0004",
+      "seed": 12602704,
+      "status": "passed",
+      "wasmoon": {
+        "detail": "",
+        "kind": "success",
+        "process": {
+          "command": [
+            "./wasmoon",
+            "component",
+            "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/arithmetic-0004.component.wasm",
+            "--invoke",
+            "calculate",
+            "--error-format",
+            "json",
+            "--arg",
+            "1253839274"
+          ],
+          "duration_sec": 0.0034279999999853317,
+          "returncode": 0,
+          "stderr": "",
+          "stdout": "{\"ok\":true,\"phase\":\"invoke\",\"detail\":\"calculate\",\"result\":[2186611554]}\n",
+          "timed_out": false
+        },
+        "value": [
+          2186611554
+        ]
+      },
+      "wasmtime": {
+        "detail": "",
+        "kind": "success",
+        "process": {
+          "command": [
+            "/Users/zhengyu/.cargo/bin/wasmtime",
+            "run",
+            "--invoke",
+            "calculate(1253839274)",
+            "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/arithmetic-0004.component.wasm"
+          ],
+          "duration_sec": 0.00462804199923994,
+          "returncode": 0,
+          "stderr": "",
+          "stdout": "2186611554\n",
+          "timed_out": false
+        },
+        "value": [
+          2186611554
+        ]
+      }
+    },
+    {
+      "compile": {
+        "command": [
+          "wasm-tools",
+          "parse",
+          "-o",
+          "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/arithmetic-0005.component.wasm",
+          "-"
+        ],
+        "duration_sec": 0.003498040998238139,
+        "returncode": 0,
+        "stderr": "",
+        "stdout": "",
+        "timed_out": false
+      },
+      "expected": [
+        1686794213
+      ],
+      "expected_kind": "success",
+      "name": "arithmetic-0005",
+      "seed": 12602704,
+      "status": "passed",
+      "wasmoon": {
+        "detail": "",
+        "kind": "success",
+        "process": {
+          "command": [
+            "./wasmoon",
+            "component",
+            "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/arithmetic-0005.component.wasm",
+            "--invoke",
+            "math#calculate",
+            "--error-format",
+            "json",
+            "--arg",
+            "1140649592"
+          ],
+          "duration_sec": 0.003388749999430729,
+          "returncode": 0,
+          "stderr": "",
+          "stdout": "{\"ok\":true,\"phase\":\"invoke\",\"detail\":\"math#calculate\",\"result\":[1686794213]}\n",
+          "timed_out": false
+        },
+        "value": [
+          1686794213
+        ]
+      },
+      "wasmtime": {
+        "detail": "",
+        "kind": "success",
+        "process": {
+          "command": [
+            "/Users/zhengyu/.cargo/bin/wasmtime",
+            "run",
+            "--invoke",
+            "oracle(1140649592)",
+            "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/arithmetic-0005.component.wasm"
+          ],
+          "duration_sec": 0.004224084001180017,
+          "returncode": 0,
+          "stderr": "",
+          "stdout": "1686794213\n",
+          "timed_out": false
+        },
+        "value": [
+          1686794213
+        ]
+      }
+    },
+    {
+      "compile": {
+        "command": [
+          "wasm-tools",
+          "parse",
+          "-o",
+          "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/arithmetic-0006.component.wasm",
+          "-"
+        ],
+        "duration_sec": 0.003468292001343798,
+        "returncode": 0,
+        "stderr": "",
+        "stdout": "",
+        "timed_out": false
+      },
+      "expected": [
+        1763944379
+      ],
+      "expected_kind": "success",
+      "name": "arithmetic-0006",
+      "seed": 12602704,
+      "status": "passed",
+      "wasmoon": {
+        "detail": "",
+        "kind": "success",
+        "process": {
+          "command": [
+            "./wasmoon",
+            "component",
+            "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/arithmetic-0006.component.wasm",
+            "--invoke",
+            "calculate",
+            "--error-format",
+            "json",
+            "--arg",
+            "3796329914"
+          ],
+          "duration_sec": 0.0035209999987273477,
+          "returncode": 0,
+          "stderr": "",
+          "stdout": "{\"ok\":true,\"phase\":\"invoke\",\"detail\":\"calculate\",\"result\":[1763944379]}\n",
+          "timed_out": false
+        },
+        "value": [
+          1763944379
+        ]
+      },
+      "wasmtime": {
+        "detail": "",
+        "kind": "success",
+        "process": {
+          "command": [
+            "/Users/zhengyu/.cargo/bin/wasmtime",
+            "run",
+            "--invoke",
+            "calculate(3796329914)",
+            "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/arithmetic-0006.component.wasm"
+          ],
+          "duration_sec": 0.004612583998095943,
+          "returncode": 0,
+          "stderr": "",
+          "stdout": "1763944379\n",
+          "timed_out": false
+        },
+        "value": [
+          1763944379
+        ]
+      }
+    },
+    {
+      "compile": {
+        "command": [
+          "wasm-tools",
+          "parse",
+          "-o",
+          "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/arithmetic-0007.component.wasm",
+          "-"
+        ],
+        "duration_sec": 0.0033404589994461276,
+        "returncode": 0,
+        "stderr": "",
+        "stdout": "",
+        "timed_out": false
+      },
+      "expected": [
+        2212782952
+      ],
+      "expected_kind": "success",
+      "name": "arithmetic-0007",
+      "seed": 12602704,
+      "status": "passed",
+      "wasmoon": {
+        "detail": "",
+        "kind": "success",
+        "process": {
+          "command": [
+            "./wasmoon",
+            "component",
+            "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/arithmetic-0007.component.wasm",
+            "--invoke",
+            "math#calculate",
+            "--error-format",
+            "json",
+            "--arg",
+            "2733439487"
+          ],
+          "duration_sec": 0.003455250000115484,
+          "returncode": 0,
+          "stderr": "",
+          "stdout": "{\"ok\":true,\"phase\":\"invoke\",\"detail\":\"math#calculate\",\"result\":[2212782952]}\n",
+          "timed_out": false
+        },
+        "value": [
+          2212782952
+        ]
+      },
+      "wasmtime": {
+        "detail": "",
+        "kind": "success",
+        "process": {
+          "command": [
+            "/Users/zhengyu/.cargo/bin/wasmtime",
+            "run",
+            "--invoke",
+            "oracle(2733439487)",
+            "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/arithmetic-0007.component.wasm"
+          ],
+          "duration_sec": 0.004402999999001622,
+          "returncode": 0,
+          "stderr": "",
+          "stdout": "2212782952\n",
+          "timed_out": false
+        },
+        "value": [
+          2212782952
+        ]
+      }
+    },
+    {
+      "compile": {
+        "command": [
+          "wasm-tools",
+          "parse",
+          "-o",
+          "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/arithmetic-0008.component.wasm",
+          "-"
+        ],
+        "duration_sec": 0.0034807079973688815,
+        "returncode": 0,
+        "stderr": "",
+        "stdout": "",
+        "timed_out": false
+      },
+      "expected": [
+        869272235
+      ],
+      "expected_kind": "success",
+      "name": "arithmetic-0008",
+      "seed": 12602704,
+      "status": "passed",
+      "wasmoon": {
+        "detail": "",
+        "kind": "success",
+        "process": {
+          "command": [
+            "./wasmoon",
+            "component",
+            "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/arithmetic-0008.component.wasm",
+            "--invoke",
+            "calculate",
+            "--error-format",
+            "json",
+            "--arg",
+            "615260030"
+          ],
+          "duration_sec": 0.003447999999480089,
+          "returncode": 0,
+          "stderr": "",
+          "stdout": "{\"ok\":true,\"phase\":\"invoke\",\"detail\":\"calculate\",\"result\":[869272235]}\n",
+          "timed_out": false
+        },
+        "value": [
+          869272235
+        ]
+      },
+      "wasmtime": {
+        "detail": "",
+        "kind": "success",
+        "process": {
+          "command": [
+            "/Users/zhengyu/.cargo/bin/wasmtime",
+            "run",
+            "--invoke",
+            "calculate(615260030)",
+            "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/arithmetic-0008.component.wasm"
+          ],
+          "duration_sec": 0.004298250001738779,
+          "returncode": 0,
+          "stderr": "",
+          "stdout": "869272235\n",
+          "timed_out": false
+        },
+        "value": [
+          869272235
+        ]
+      }
+    },
+    {
+      "compile": {
+        "command": [
+          "wasm-tools",
+          "parse",
+          "-o",
+          "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/arithmetic-0009.component.wasm",
+          "-"
+        ],
+        "duration_sec": 0.003440917000261834,
+        "returncode": 0,
+        "stderr": "",
+        "stdout": "",
+        "timed_out": false
+      },
+      "expected": [
+        359390048
+      ],
+      "expected_kind": "success",
+      "name": "arithmetic-0009",
+      "seed": 12602704,
+      "status": "passed",
+      "wasmoon": {
+        "detail": "",
+        "kind": "success",
+        "process": {
+          "command": [
+            "./wasmoon",
+            "component",
+            "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/arithmetic-0009.component.wasm",
+            "--invoke",
+            "math#calculate",
+            "--error-format",
+            "json",
+            "--arg",
+            "3618090974"
+          ],
+          "duration_sec": 0.0033589170016057324,
+          "returncode": 0,
+          "stderr": "",
+          "stdout": "{\"ok\":true,\"phase\":\"invoke\",\"detail\":\"math#calculate\",\"result\":[359390048]}\n",
+          "timed_out": false
+        },
+        "value": [
+          359390048
+        ]
+      },
+      "wasmtime": {
+        "detail": "",
+        "kind": "success",
+        "process": {
+          "command": [
+            "/Users/zhengyu/.cargo/bin/wasmtime",
+            "run",
+            "--invoke",
+            "oracle(3618090974)",
+            "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/arithmetic-0009.component.wasm"
+          ],
+          "duration_sec": 0.004519499998423271,
+          "returncode": 0,
+          "stderr": "",
+          "stdout": "359390048\n",
+          "timed_out": false
+        },
+        "value": [
+          359390048
+        ]
+      }
+    },
+    {
+      "compile": {
+        "command": [
+          "wasm-tools",
+          "parse",
+          "-o",
+          "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/arithmetic-0010.component.wasm",
+          "-"
+        ],
+        "duration_sec": 0.003515374999551568,
+        "returncode": 0,
+        "stderr": "",
+        "stdout": "",
+        "timed_out": false
+      },
+      "expected": [
+        822963151
+      ],
+      "expected_kind": "success",
+      "name": "arithmetic-0010",
+      "seed": 12602704,
+      "status": "passed",
+      "wasmoon": {
+        "detail": "",
+        "kind": "success",
+        "process": {
+          "command": [
+            "./wasmoon",
+            "component",
+            "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/arithmetic-0010.component.wasm",
+            "--invoke",
+            "calculate",
+            "--error-format",
+            "json",
+            "--arg",
+            "2791878396"
+          ],
+          "duration_sec": 0.003227583998523187,
+          "returncode": 0,
+          "stderr": "",
+          "stdout": "{\"ok\":true,\"phase\":\"invoke\",\"detail\":\"calculate\",\"result\":[822963151]}\n",
+          "timed_out": false
+        },
+        "value": [
+          822963151
+        ]
+      },
+      "wasmtime": {
+        "detail": "",
+        "kind": "success",
+        "process": {
+          "command": [
+            "/Users/zhengyu/.cargo/bin/wasmtime",
+            "run",
+            "--invoke",
+            "calculate(2791878396)",
+            "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/arithmetic-0010.component.wasm"
+          ],
+          "duration_sec": 0.004453832996659912,
+          "returncode": 0,
+          "stderr": "",
+          "stdout": "822963151\n",
+          "timed_out": false
+        },
+        "value": [
+          822963151
+        ]
+      }
+    },
+    {
+      "compile": {
+        "command": [
+          "wasm-tools",
+          "parse",
+          "-o",
+          "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/arithmetic-0011.component.wasm",
+          "-"
+        ],
+        "duration_sec": 0.0035633329971460626,
+        "returncode": 0,
+        "stderr": "",
+        "stdout": "",
+        "timed_out": false
+      },
+      "expected": [
+        4284356495
+      ],
+      "expected_kind": "success",
+      "name": "arithmetic-0011",
+      "seed": 12602704,
+      "status": "passed",
+      "wasmoon": {
+        "detail": "",
+        "kind": "success",
+        "process": {
+          "command": [
+            "./wasmoon",
+            "component",
+            "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/arithmetic-0011.component.wasm",
+            "--invoke",
+            "math#calculate",
+            "--error-format",
+            "json",
+            "--arg",
+            "3041455183"
+          ],
+          "duration_sec": 0.003408500000659842,
+          "returncode": 0,
+          "stderr": "",
+          "stdout": "{\"ok\":true,\"phase\":\"invoke\",\"detail\":\"math#calculate\",\"result\":[4284356495]}\n",
+          "timed_out": false
+        },
+        "value": [
+          4284356495
+        ]
+      },
+      "wasmtime": {
+        "detail": "",
+        "kind": "success",
+        "process": {
+          "command": [
+            "/Users/zhengyu/.cargo/bin/wasmtime",
+            "run",
+            "--invoke",
+            "oracle(3041455183)",
+            "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/arithmetic-0011.component.wasm"
+          ],
+          "duration_sec": 0.004450666001503123,
+          "returncode": 0,
+          "stderr": "",
+          "stdout": "4284356495\n",
+          "timed_out": false
+        },
+        "value": [
+          4284356495
+        ]
+      }
+    },
+    {
+      "compile": {
+        "command": [
+          "wasm-tools",
+          "parse",
+          "-o",
+          "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/arithmetic-0012.component.wasm",
+          "-"
+        ],
+        "duration_sec": 0.003531291997205699,
+        "returncode": 0,
+        "stderr": "",
+        "stdout": "",
+        "timed_out": false
+      },
+      "expected": [
+        3649498359
+      ],
+      "expected_kind": "success",
+      "name": "arithmetic-0012",
+      "seed": 12602704,
+      "status": "passed",
+      "wasmoon": {
+        "detail": "",
+        "kind": "success",
+        "process": {
+          "command": [
+            "./wasmoon",
+            "component",
+            "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/arithmetic-0012.component.wasm",
+            "--invoke",
+            "calculate",
+            "--error-format",
+            "json",
+            "--arg",
+            "657244651"
+          ],
+          "duration_sec": 0.003239541001676116,
+          "returncode": 0,
+          "stderr": "",
+          "stdout": "{\"ok\":true,\"phase\":\"invoke\",\"detail\":\"calculate\",\"result\":[3649498359]}\n",
+          "timed_out": false
+        },
+        "value": [
+          3649498359
+        ]
+      },
+      "wasmtime": {
+        "detail": "",
+        "kind": "success",
+        "process": {
+          "command": [
+            "/Users/zhengyu/.cargo/bin/wasmtime",
+            "run",
+            "--invoke",
+            "calculate(657244651)",
+            "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/arithmetic-0012.component.wasm"
+          ],
+          "duration_sec": 0.004353707998234313,
+          "returncode": 0,
+          "stderr": "",
+          "stdout": "3649498359\n",
+          "timed_out": false
+        },
+        "value": [
+          3649498359
+        ]
+      }
+    },
+    {
+      "compile": {
+        "command": [
+          "wasm-tools",
+          "parse",
+          "-o",
+          "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/arithmetic-0013.component.wasm",
+          "-"
+        ],
+        "duration_sec": 0.003698374999657972,
+        "returncode": 0,
+        "stderr": "",
+        "stdout": "",
+        "timed_out": false
+      },
+      "expected": [
+        3199400112
+      ],
+      "expected_kind": "success",
+      "name": "arithmetic-0013",
+      "seed": 12602704,
+      "status": "passed",
+      "wasmoon": {
+        "detail": "",
+        "kind": "success",
+        "process": {
+          "command": [
+            "./wasmoon",
+            "component",
+            "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/arithmetic-0013.component.wasm",
+            "--invoke",
+            "math#calculate",
+            "--error-format",
+            "json",
+            "--arg",
+            "2571275644"
+          ],
+          "duration_sec": 0.0036315829966042656,
+          "returncode": 0,
+          "stderr": "",
+          "stdout": "{\"ok\":true,\"phase\":\"invoke\",\"detail\":\"math#calculate\",\"result\":[3199400112]}\n",
+          "timed_out": false
+        },
+        "value": [
+          3199400112
+        ]
+      },
+      "wasmtime": {
+        "detail": "",
+        "kind": "success",
+        "process": {
+          "command": [
+            "/Users/zhengyu/.cargo/bin/wasmtime",
+            "run",
+            "--invoke",
+            "oracle(2571275644)",
+            "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/arithmetic-0013.component.wasm"
+          ],
+          "duration_sec": 0.004860334000113653,
+          "returncode": 0,
+          "stderr": "",
+          "stdout": "3199400112\n",
+          "timed_out": false
+        },
+        "value": [
+          3199400112
+        ]
+      }
+    },
+    {
+      "compile": {
+        "command": [
+          "wasm-tools",
+          "parse",
+          "-o",
+          "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/arithmetic-0014.component.wasm",
+          "-"
+        ],
+        "duration_sec": 0.003683958999317838,
+        "returncode": 0,
+        "stderr": "",
+        "stdout": "",
+        "timed_out": false
+      },
+      "expected": [
+        19588709
+      ],
+      "expected_kind": "success",
+      "name": "arithmetic-0014",
+      "seed": 12602704,
+      "status": "passed",
+      "wasmoon": {
+        "detail": "",
+        "kind": "success",
+        "process": {
+          "command": [
+            "./wasmoon",
+            "component",
+            "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/arithmetic-0014.component.wasm",
+            "--invoke",
+            "calculate",
+            "--error-format",
+            "json",
+            "--arg",
+            "3747522055"
+          ],
+          "duration_sec": 0.003446708000410581,
+          "returncode": 0,
+          "stderr": "",
+          "stdout": "{\"ok\":true,\"phase\":\"invoke\",\"detail\":\"calculate\",\"result\":[19588709]}\n",
+          "timed_out": false
+        },
+        "value": [
+          19588709
+        ]
+      },
+      "wasmtime": {
+        "detail": "",
+        "kind": "success",
+        "process": {
+          "command": [
+            "/Users/zhengyu/.cargo/bin/wasmtime",
+            "run",
+            "--invoke",
+            "calculate(3747522055)",
+            "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/arithmetic-0014.component.wasm"
+          ],
+          "duration_sec": 0.004454750000149943,
+          "returncode": 0,
+          "stderr": "",
+          "stdout": "19588709\n",
+          "timed_out": false
+        },
+        "value": [
+          19588709
+        ]
+      }
+    },
+    {
+      "compile": {
+        "command": [
+          "wasm-tools",
+          "parse",
+          "-o",
+          "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/arithmetic-0015.component.wasm",
+          "-"
+        ],
+        "duration_sec": 0.003564458998880582,
+        "returncode": 0,
+        "stderr": "",
+        "stdout": "",
+        "timed_out": false
+      },
+      "expected": [
+        4106743025
+      ],
+      "expected_kind": "success",
+      "name": "arithmetic-0015",
+      "seed": 12602704,
+      "status": "passed",
+      "wasmoon": {
+        "detail": "",
+        "kind": "success",
+        "process": {
+          "command": [
+            "./wasmoon",
+            "component",
+            "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/arithmetic-0015.component.wasm",
+            "--invoke",
+            "math#calculate",
+            "--error-format",
+            "json",
+            "--arg",
+            "3030503801"
+          ],
+          "duration_sec": 0.0035034579996136017,
+          "returncode": 0,
+          "stderr": "",
+          "stdout": "{\"ok\":true,\"phase\":\"invoke\",\"detail\":\"math#calculate\",\"result\":[4106743025]}\n",
+          "timed_out": false
+        },
+        "value": [
+          4106743025
+        ]
+      },
+      "wasmtime": {
+        "detail": "",
+        "kind": "success",
+        "process": {
+          "command": [
+            "/Users/zhengyu/.cargo/bin/wasmtime",
+            "run",
+            "--invoke",
+            "oracle(3030503801)",
+            "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/arithmetic-0015.component.wasm"
+          ],
+          "duration_sec": 0.004439499996806262,
+          "returncode": 0,
+          "stderr": "",
+          "stdout": "4106743025\n",
+          "timed_out": false
+        },
+        "value": [
+          4106743025
+        ]
+      }
+    },
+    {
+      "compile": {
+        "command": [
+          "wasm-tools",
+          "parse",
+          "-o",
+          "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/arithmetic-0016.component.wasm",
+          "-"
+        ],
+        "duration_sec": 0.0037434170008054934,
+        "returncode": 0,
+        "stderr": "",
+        "stdout": "",
+        "timed_out": false
+      },
+      "expected": [
+        2974353353
+      ],
+      "expected_kind": "success",
+      "name": "arithmetic-0016",
+      "seed": 12602704,
+      "status": "passed",
+      "wasmoon": {
+        "detail": "",
+        "kind": "success",
+        "process": {
+          "command": [
+            "./wasmoon",
+            "component",
+            "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/arithmetic-0016.component.wasm",
+            "--invoke",
+            "calculate",
+            "--error-format",
+            "json",
+            "--arg",
+            "2233954514"
+          ],
+          "duration_sec": 0.003466457998001715,
+          "returncode": 0,
+          "stderr": "",
+          "stdout": "{\"ok\":true,\"phase\":\"invoke\",\"detail\":\"calculate\",\"result\":[2974353353]}\n",
+          "timed_out": false
+        },
+        "value": [
+          2974353353
+        ]
+      },
+      "wasmtime": {
+        "detail": "",
+        "kind": "success",
+        "process": {
+          "command": [
+            "/Users/zhengyu/.cargo/bin/wasmtime",
+            "run",
+            "--invoke",
+            "calculate(2233954514)",
+            "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/arithmetic-0016.component.wasm"
+          ],
+          "duration_sec": 0.004470374999073101,
+          "returncode": 0,
+          "stderr": "",
+          "stdout": "2974353353\n",
+          "timed_out": false
+        },
+        "value": [
+          2974353353
+        ]
+      }
+    },
+    {
+      "compile": {
+        "command": [
+          "wasm-tools",
+          "parse",
+          "-o",
+          "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/arithmetic-0017.component.wasm",
+          "-"
+        ],
+        "duration_sec": 0.003505583001242485,
+        "returncode": 0,
+        "stderr": "",
+        "stdout": "",
+        "timed_out": false
+      },
+      "expected": [
+        177070606
+      ],
+      "expected_kind": "success",
+      "name": "arithmetic-0017",
+      "seed": 12602704,
+      "status": "passed",
+      "wasmoon": {
+        "detail": "",
+        "kind": "success",
+        "process": {
+          "command": [
+            "./wasmoon",
+            "component",
+            "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/arithmetic-0017.component.wasm",
+            "--invoke",
+            "math#calculate",
+            "--error-format",
+            "json",
+            "--arg",
+            "107631304"
+          ],
+          "duration_sec": 0.0033604159980313852,
+          "returncode": 0,
+          "stderr": "",
+          "stdout": "{\"ok\":true,\"phase\":\"invoke\",\"detail\":\"math#calculate\",\"result\":[177070606]}\n",
+          "timed_out": false
+        },
+        "value": [
+          177070606
+        ]
+      },
+      "wasmtime": {
+        "detail": "",
+        "kind": "success",
+        "process": {
+          "command": [
+            "/Users/zhengyu/.cargo/bin/wasmtime",
+            "run",
+            "--invoke",
+            "oracle(107631304)",
+            "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/arithmetic-0017.component.wasm"
+          ],
+          "duration_sec": 0.0045547499976237305,
+          "returncode": 0,
+          "stderr": "",
+          "stdout": "177070606\n",
+          "timed_out": false
+        },
+        "value": [
+          177070606
+        ]
+      }
+    },
+    {
+      "compile": {
+        "command": [
+          "wasm-tools",
+          "parse",
+          "-o",
+          "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/arithmetic-0018.component.wasm",
+          "-"
+        ],
+        "duration_sec": 0.0034842500026570633,
+        "returncode": 0,
+        "stderr": "",
+        "stdout": "",
+        "timed_out": false
+      },
+      "expected": [
+        2684785524
+      ],
+      "expected_kind": "success",
+      "name": "arithmetic-0018",
+      "seed": 12602704,
+      "status": "passed",
+      "wasmoon": {
+        "detail": "",
+        "kind": "success",
+        "process": {
+          "command": [
+            "./wasmoon",
+            "component",
+            "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/arithmetic-0018.component.wasm",
+            "--invoke",
+            "calculate",
+            "--error-format",
+            "json",
+            "--arg",
+            "2707846481"
+          ],
+          "duration_sec": 0.0032856249999895226,
+          "returncode": 0,
+          "stderr": "",
+          "stdout": "{\"ok\":true,\"phase\":\"invoke\",\"detail\":\"calculate\",\"result\":[2684785524]}\n",
+          "timed_out": false
+        },
+        "value": [
+          2684785524
+        ]
+      },
+      "wasmtime": {
+        "detail": "",
+        "kind": "success",
+        "process": {
+          "command": [
+            "/Users/zhengyu/.cargo/bin/wasmtime",
+            "run",
+            "--invoke",
+            "calculate(2707846481)",
+            "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/arithmetic-0018.component.wasm"
+          ],
+          "duration_sec": 0.004482500000449363,
+          "returncode": 0,
+          "stderr": "",
+          "stdout": "2684785524\n",
+          "timed_out": false
+        },
+        "value": [
+          2684785524
+        ]
+      }
+    },
+    {
+      "compile": {
+        "command": [
+          "wasm-tools",
+          "parse",
+          "-o",
+          "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/arithmetic-0019.component.wasm",
+          "-"
+        ],
+        "duration_sec": 0.0035165000008419156,
+        "returncode": 0,
+        "stderr": "",
+        "stdout": "",
+        "timed_out": false
+      },
+      "expected": [
+        1252716346
+      ],
+      "expected_kind": "success",
+      "name": "arithmetic-0019",
+      "seed": 12602704,
+      "status": "passed",
+      "wasmoon": {
+        "detail": "",
+        "kind": "success",
+        "process": {
+          "command": [
+            "./wasmoon",
+            "component",
+            "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/arithmetic-0019.component.wasm",
+            "--invoke",
+            "math#calculate",
+            "--error-format",
+            "json",
+            "--arg",
+            "3338587066"
+          ],
+          "duration_sec": 0.003359084003022872,
+          "returncode": 0,
+          "stderr": "",
+          "stdout": "{\"ok\":true,\"phase\":\"invoke\",\"detail\":\"math#calculate\",\"result\":[1252716346]}\n",
+          "timed_out": false
+        },
+        "value": [
+          1252716346
+        ]
+      },
+      "wasmtime": {
+        "detail": "",
+        "kind": "success",
+        "process": {
+          "command": [
+            "/Users/zhengyu/.cargo/bin/wasmtime",
+            "run",
+            "--invoke",
+            "oracle(3338587066)",
+            "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/arithmetic-0019.component.wasm"
+          ],
+          "duration_sec": 0.004469499999686377,
+          "returncode": 0,
+          "stderr": "",
+          "stdout": "1252716346\n",
+          "timed_out": false
+        },
+        "value": [
+          1252716346
+        ]
+      }
+    },
+    {
+      "compile": {
+        "command": [
+          "wasm-tools",
+          "parse",
+          "-o",
+          "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/arithmetic-0020.component.wasm",
+          "-"
+        ],
+        "duration_sec": 0.0035282500030007213,
+        "returncode": 0,
+        "stderr": "",
+        "stdout": "",
+        "timed_out": false
+      },
+      "expected": [
+        3956589547
+      ],
+      "expected_kind": "success",
+      "name": "arithmetic-0020",
+      "seed": 12602704,
+      "status": "passed",
+      "wasmoon": {
+        "detail": "",
+        "kind": "success",
+        "process": {
+          "command": [
+            "./wasmoon",
+            "component",
+            "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/arithmetic-0020.component.wasm",
+            "--invoke",
+            "calculate",
+            "--error-format",
+            "json",
+            "--arg",
+            "4176357918"
+          ],
+          "duration_sec": 0.0032981250005832408,
+          "returncode": 0,
+          "stderr": "",
+          "stdout": "{\"ok\":true,\"phase\":\"invoke\",\"detail\":\"calculate\",\"result\":[3956589547]}\n",
+          "timed_out": false
+        },
+        "value": [
+          3956589547
+        ]
+      },
+      "wasmtime": {
+        "detail": "",
+        "kind": "success",
+        "process": {
+          "command": [
+            "/Users/zhengyu/.cargo/bin/wasmtime",
+            "run",
+            "--invoke",
+            "calculate(4176357918)",
+            "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/arithmetic-0020.component.wasm"
+          ],
+          "duration_sec": 0.004351833002147032,
+          "returncode": 0,
+          "stderr": "",
+          "stdout": "3956589547\n",
+          "timed_out": false
+        },
+        "value": [
+          3956589547
+        ]
+      }
+    },
+    {
+      "compile": {
+        "command": [
+          "wasm-tools",
+          "parse",
+          "-o",
+          "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/arithmetic-0021.component.wasm",
+          "-"
+        ],
+        "duration_sec": 0.0035629999983939342,
+        "returncode": 0,
+        "stderr": "",
+        "stdout": "",
+        "timed_out": false
+      },
+      "expected": [
+        1814174714
+      ],
+      "expected_kind": "success",
+      "name": "arithmetic-0021",
+      "seed": 12602704,
+      "status": "passed",
+      "wasmoon": {
+        "detail": "",
+        "kind": "success",
+        "process": {
+          "command": [
+            "./wasmoon",
+            "component",
+            "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/arithmetic-0021.component.wasm",
+            "--invoke",
+            "math#calculate",
+            "--error-format",
+            "json",
+            "--arg",
+            "3909252938"
+          ],
+          "duration_sec": 0.0034873329968831968,
+          "returncode": 0,
+          "stderr": "",
+          "stdout": "{\"ok\":true,\"phase\":\"invoke\",\"detail\":\"math#calculate\",\"result\":[1814174714]}\n",
+          "timed_out": false
+        },
+        "value": [
+          1814174714
+        ]
+      },
+      "wasmtime": {
+        "detail": "",
+        "kind": "success",
+        "process": {
+          "command": [
+            "/Users/zhengyu/.cargo/bin/wasmtime",
+            "run",
+            "--invoke",
+            "oracle(3909252938)",
+            "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/arithmetic-0021.component.wasm"
+          ],
+          "duration_sec": 0.004378125002403976,
+          "returncode": 0,
+          "stderr": "",
+          "stdout": "1814174714\n",
+          "timed_out": false
+        },
+        "value": [
+          1814174714
+        ]
+      }
+    },
+    {
+      "compile": {
+        "command": [
+          "wasm-tools",
+          "parse",
+          "-o",
+          "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/arithmetic-0022.component.wasm",
+          "-"
+        ],
+        "duration_sec": 0.0033444580003560986,
+        "returncode": 0,
+        "stderr": "",
+        "stdout": "",
+        "timed_out": false
+      },
+      "expected": [
+        281631040
+      ],
+      "expected_kind": "success",
+      "name": "arithmetic-0022",
+      "seed": 12602704,
+      "status": "passed",
+      "wasmoon": {
+        "detail": "",
+        "kind": "success",
+        "process": {
+          "command": [
+            "./wasmoon",
+            "component",
+            "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/arithmetic-0022.component.wasm",
+            "--invoke",
+            "calculate",
+            "--error-format",
+            "json",
+            "--arg",
+            "3668779422"
+          ],
+          "duration_sec": 0.0035677499981829897,
+          "returncode": 0,
+          "stderr": "",
+          "stdout": "{\"ok\":true,\"phase\":\"invoke\",\"detail\":\"calculate\",\"result\":[281631040]}\n",
+          "timed_out": false
+        },
+        "value": [
+          281631040
+        ]
+      },
+      "wasmtime": {
+        "detail": "",
+        "kind": "success",
+        "process": {
+          "command": [
+            "/Users/zhengyu/.cargo/bin/wasmtime",
+            "run",
+            "--invoke",
+            "calculate(3668779422)",
+            "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/arithmetic-0022.component.wasm"
+          ],
+          "duration_sec": 0.004310208001697902,
+          "returncode": 0,
+          "stderr": "",
+          "stdout": "281631040\n",
+          "timed_out": false
+        },
+        "value": [
+          281631040
+        ]
+      }
+    },
+    {
+      "compile": {
+        "command": [
+          "wasm-tools",
+          "parse",
+          "-o",
+          "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/arithmetic-0023.component.wasm",
+          "-"
+        ],
+        "duration_sec": 0.0033920829991984647,
+        "returncode": 0,
+        "stderr": "",
+        "stdout": "",
+        "timed_out": false
+      },
+      "expected": [
+        2331108948
+      ],
+      "expected_kind": "success",
+      "name": "arithmetic-0023",
+      "seed": 12602704,
+      "status": "passed",
+      "wasmoon": {
+        "detail": "",
+        "kind": "success",
+        "process": {
+          "command": [
+            "./wasmoon",
+            "component",
+            "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/arithmetic-0023.component.wasm",
+            "--invoke",
+            "math#calculate",
+            "--error-format",
+            "json",
+            "--arg",
+            "223155223"
+          ],
+          "duration_sec": 0.0033534159992996138,
+          "returncode": 0,
+          "stderr": "",
+          "stdout": "{\"ok\":true,\"phase\":\"invoke\",\"detail\":\"math#calculate\",\"result\":[2331108948]}\n",
+          "timed_out": false
+        },
+        "value": [
+          2331108948
+        ]
+      },
+      "wasmtime": {
+        "detail": "",
+        "kind": "success",
+        "process": {
+          "command": [
+            "/Users/zhengyu/.cargo/bin/wasmtime",
+            "run",
+            "--invoke",
+            "oracle(223155223)",
+            "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/arithmetic-0023.component.wasm"
+          ],
+          "duration_sec": 0.004365458997199312,
+          "returncode": 0,
+          "stderr": "",
+          "stdout": "2331108948\n",
+          "timed_out": false
+        },
+        "value": [
+          2331108948
+        ]
+      }
+    },
+    {
+      "compile": {
+        "command": [
+          "wasm-tools",
+          "parse",
+          "-o",
+          "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/arithmetic-0024.component.wasm",
+          "-"
+        ],
+        "duration_sec": 0.004159082996920915,
+        "returncode": 0,
+        "stderr": "",
+        "stdout": "",
+        "timed_out": false
+      },
+      "expected": [
+        4292141443
+      ],
+      "expected_kind": "success",
+      "name": "arithmetic-0024",
+      "seed": 12602704,
+      "status": "passed",
+      "wasmoon": {
+        "detail": "",
+        "kind": "success",
+        "process": {
+          "command": [
+            "./wasmoon",
+            "component",
+            "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/arithmetic-0024.component.wasm",
+            "--invoke",
+            "calculate",
+            "--error-format",
+            "json",
+            "--arg",
+            "1356156423"
+          ],
+          "duration_sec": 0.0035597079986473545,
+          "returncode": 0,
+          "stderr": "",
+          "stdout": "{\"ok\":true,\"phase\":\"invoke\",\"detail\":\"calculate\",\"result\":[4292141443]}\n",
+          "timed_out": false
+        },
+        "value": [
+          4292141443
+        ]
+      },
+      "wasmtime": {
+        "detail": "",
+        "kind": "success",
+        "process": {
+          "command": [
+            "/Users/zhengyu/.cargo/bin/wasmtime",
+            "run",
+            "--invoke",
+            "calculate(1356156423)",
+            "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/arithmetic-0024.component.wasm"
+          ],
+          "duration_sec": 0.004630291998182656,
+          "returncode": 0,
+          "stderr": "",
+          "stdout": "4292141443\n",
+          "timed_out": false
+        },
+        "value": [
+          4292141443
+        ]
+      }
+    },
+    {
+      "compile": {
+        "command": [
+          "wasm-tools",
+          "parse",
+          "-o",
+          "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/arithmetic-0025.component.wasm",
+          "-"
+        ],
+        "duration_sec": 0.0033321249975415412,
+        "returncode": 0,
+        "stderr": "",
+        "stdout": "",
+        "timed_out": false
+      },
+      "expected": [
+        664769812
+      ],
+      "expected_kind": "success",
+      "name": "arithmetic-0025",
+      "seed": 12602704,
+      "status": "passed",
+      "wasmoon": {
+        "detail": "",
+        "kind": "success",
+        "process": {
+          "command": [
+            "./wasmoon",
+            "component",
+            "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/arithmetic-0025.component.wasm",
+            "--invoke",
+            "math#calculate",
+            "--error-format",
+            "json",
+            "--arg",
+            "2448730008"
+          ],
+          "duration_sec": 0.0032795000006444752,
+          "returncode": 0,
+          "stderr": "",
+          "stdout": "{\"ok\":true,\"phase\":\"invoke\",\"detail\":\"math#calculate\",\"result\":[664769812]}\n",
+          "timed_out": false
+        },
+        "value": [
+          664769812
+        ]
+      },
+      "wasmtime": {
+        "detail": "",
+        "kind": "success",
+        "process": {
+          "command": [
+            "/Users/zhengyu/.cargo/bin/wasmtime",
+            "run",
+            "--invoke",
+            "oracle(2448730008)",
+            "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/arithmetic-0025.component.wasm"
+          ],
+          "duration_sec": 0.004307040999265155,
+          "returncode": 0,
+          "stderr": "",
+          "stdout": "664769812\n",
+          "timed_out": false
+        },
+        "value": [
+          664769812
+        ]
+      }
+    },
+    {
+      "compile": {
+        "command": [
+          "wasm-tools",
+          "parse",
+          "-o",
+          "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/arithmetic-0026.component.wasm",
+          "-"
+        ],
+        "duration_sec": 0.0034054999996442348,
+        "returncode": 0,
+        "stderr": "",
+        "stdout": "",
+        "timed_out": false
+      },
+      "expected": [
+        3903473019
+      ],
+      "expected_kind": "success",
+      "name": "arithmetic-0026",
+      "seed": 12602704,
+      "status": "passed",
+      "wasmoon": {
+        "detail": "",
+        "kind": "success",
+        "process": {
+          "command": [
+            "./wasmoon",
+            "component",
+            "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/arithmetic-0026.component.wasm",
+            "--invoke",
+            "calculate",
+            "--error-format",
+            "json",
+            "--arg",
+            "1435292859"
+          ],
+          "duration_sec": 0.003527166998537723,
+          "returncode": 0,
+          "stderr": "",
+          "stdout": "{\"ok\":true,\"phase\":\"invoke\",\"detail\":\"calculate\",\"result\":[3903473019]}\n",
+          "timed_out": false
+        },
+        "value": [
+          3903473019
+        ]
+      },
+      "wasmtime": {
+        "detail": "",
+        "kind": "success",
+        "process": {
+          "command": [
+            "/Users/zhengyu/.cargo/bin/wasmtime",
+            "run",
+            "--invoke",
+            "calculate(1435292859)",
+            "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/arithmetic-0026.component.wasm"
+          ],
+          "duration_sec": 0.004632125001080567,
+          "returncode": 0,
+          "stderr": "",
+          "stdout": "3903473019\n",
+          "timed_out": false
+        },
+        "value": [
+          3903473019
+        ]
+      }
+    },
+    {
+      "compile": {
+        "command": [
+          "wasm-tools",
+          "parse",
+          "-o",
+          "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/arithmetic-0027.component.wasm",
+          "-"
+        ],
+        "duration_sec": 0.0034607500019774307,
+        "returncode": 0,
+        "stderr": "",
+        "stdout": "",
+        "timed_out": false
+      },
+      "expected": [
+        3371950315
+      ],
+      "expected_kind": "success",
+      "name": "arithmetic-0027",
+      "seed": 12602704,
+      "status": "passed",
+      "wasmoon": {
+        "detail": "",
+        "kind": "success",
+        "process": {
+          "command": [
+            "./wasmoon",
+            "component",
+            "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/arithmetic-0027.component.wasm",
+            "--invoke",
+            "math#calculate",
+            "--error-format",
+            "json",
+            "--arg",
+            "586455175"
+          ],
+          "duration_sec": 0.0033947090014407877,
+          "returncode": 0,
+          "stderr": "",
+          "stdout": "{\"ok\":true,\"phase\":\"invoke\",\"detail\":\"math#calculate\",\"result\":[3371950315]}\n",
+          "timed_out": false
+        },
+        "value": [
+          3371950315
+        ]
+      },
+      "wasmtime": {
+        "detail": "",
+        "kind": "success",
+        "process": {
+          "command": [
+            "/Users/zhengyu/.cargo/bin/wasmtime",
+            "run",
+            "--invoke",
+            "oracle(586455175)",
+            "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/arithmetic-0027.component.wasm"
+          ],
+          "duration_sec": 0.004473624998354353,
+          "returncode": 0,
+          "stderr": "",
+          "stdout": "3371950315\n",
+          "timed_out": false
+        },
+        "value": [
+          3371950315
+        ]
+      }
+    },
+    {
+      "compile": {
+        "command": [
+          "wasm-tools",
+          "parse",
+          "-o",
+          "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/arithmetic-0028.component.wasm",
+          "-"
+        ],
+        "duration_sec": 0.0033971660013776273,
+        "returncode": 0,
+        "stderr": "",
+        "stdout": "",
+        "timed_out": false
+      },
+      "expected": [
+        3472929726
+      ],
+      "expected_kind": "success",
+      "name": "arithmetic-0028",
+      "seed": 12602704,
+      "status": "passed",
+      "wasmoon": {
+        "detail": "",
+        "kind": "success",
+        "process": {
+          "command": [
+            "./wasmoon",
+            "component",
+            "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/arithmetic-0028.component.wasm",
+            "--invoke",
+            "calculate",
+            "--error-format",
+            "json",
+            "--arg",
+            "1342408754"
+          ],
+          "duration_sec": 0.003277708001405699,
+          "returncode": 0,
+          "stderr": "",
+          "stdout": "{\"ok\":true,\"phase\":\"invoke\",\"detail\":\"calculate\",\"result\":[3472929726]}\n",
+          "timed_out": false
+        },
+        "value": [
+          3472929726
+        ]
+      },
+      "wasmtime": {
+        "detail": "",
+        "kind": "success",
+        "process": {
+          "command": [
+            "/Users/zhengyu/.cargo/bin/wasmtime",
+            "run",
+            "--invoke",
+            "calculate(1342408754)",
+            "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/arithmetic-0028.component.wasm"
+          ],
+          "duration_sec": 0.004365374999906635,
+          "returncode": 0,
+          "stderr": "",
+          "stdout": "3472929726\n",
+          "timed_out": false
+        },
+        "value": [
+          3472929726
+        ]
+      }
+    },
+    {
+      "compile": {
+        "command": [
+          "wasm-tools",
+          "parse",
+          "-o",
+          "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/arithmetic-0029.component.wasm",
+          "-"
+        ],
+        "duration_sec": 0.0033845420002762694,
+        "returncode": 0,
+        "stderr": "",
+        "stdout": "",
+        "timed_out": false
+      },
+      "expected": [
+        844249316
+      ],
+      "expected_kind": "success",
+      "name": "arithmetic-0029",
+      "seed": 12602704,
+      "status": "passed",
+      "wasmoon": {
+        "detail": "",
+        "kind": "success",
+        "process": {
+          "command": [
+            "./wasmoon",
+            "component",
+            "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/arithmetic-0029.component.wasm",
+            "--invoke",
+            "math#calculate",
+            "--error-format",
+            "json",
+            "--arg",
+            "467650653"
+          ],
+          "duration_sec": 0.0032483329996466637,
+          "returncode": 0,
+          "stderr": "",
+          "stdout": "{\"ok\":true,\"phase\":\"invoke\",\"detail\":\"math#calculate\",\"result\":[844249316]}\n",
+          "timed_out": false
+        },
+        "value": [
+          844249316
+        ]
+      },
+      "wasmtime": {
+        "detail": "",
+        "kind": "success",
+        "process": {
+          "command": [
+            "/Users/zhengyu/.cargo/bin/wasmtime",
+            "run",
+            "--invoke",
+            "oracle(467650653)",
+            "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/arithmetic-0029.component.wasm"
+          ],
+          "duration_sec": 0.004297249997762265,
+          "returncode": 0,
+          "stderr": "",
+          "stdout": "844249316\n",
+          "timed_out": false
+        },
+        "value": [
+          844249316
+        ]
+      }
+    },
+    {
+      "compile": {
+        "command": [
+          "wasm-tools",
+          "parse",
+          "-o",
+          "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/arithmetic-0030.component.wasm",
+          "-"
+        ],
+        "duration_sec": 0.0033639169996604323,
+        "returncode": 0,
+        "stderr": "",
+        "stdout": "",
+        "timed_out": false
+      },
+      "expected": [
+        4062388572
+      ],
+      "expected_kind": "success",
+      "name": "arithmetic-0030",
+      "seed": 12602704,
+      "status": "passed",
+      "wasmoon": {
+        "detail": "",
+        "kind": "success",
+        "process": {
+          "command": [
+            "./wasmoon",
+            "component",
+            "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/arithmetic-0030.component.wasm",
+            "--invoke",
+            "calculate",
+            "--error-format",
+            "json",
+            "--arg",
+            "4209326853"
+          ],
+          "duration_sec": 0.004665458000090439,
+          "returncode": 0,
+          "stderr": "",
+          "stdout": "{\"ok\":true,\"phase\":\"invoke\",\"detail\":\"calculate\",\"result\":[4062388572]}\n",
+          "timed_out": false
+        },
+        "value": [
+          4062388572
+        ]
+      },
+      "wasmtime": {
+        "detail": "",
+        "kind": "success",
+        "process": {
+          "command": [
+            "/Users/zhengyu/.cargo/bin/wasmtime",
+            "run",
+            "--invoke",
+            "calculate(4209326853)",
+            "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/arithmetic-0030.component.wasm"
+          ],
+          "duration_sec": 0.0043898749972868245,
+          "returncode": 0,
+          "stderr": "",
+          "stdout": "4062388572\n",
+          "timed_out": false
+        },
+        "value": [
+          4062388572
+        ]
+      }
+    },
+    {
+      "compile": {
+        "command": [
+          "wasm-tools",
+          "parse",
+          "-o",
+          "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/arithmetic-0031.component.wasm",
+          "-"
+        ],
+        "duration_sec": 0.003372749997652136,
+        "returncode": 0,
+        "stderr": "",
+        "stdout": "",
+        "timed_out": false
+      },
+      "expected": [
+        265400400
+      ],
+      "expected_kind": "success",
+      "name": "arithmetic-0031",
+      "seed": 12602704,
+      "status": "passed",
+      "wasmoon": {
+        "detail": "",
+        "kind": "success",
+        "process": {
+          "command": [
+            "./wasmoon",
+            "component",
+            "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/arithmetic-0031.component.wasm",
+            "--invoke",
+            "math#calculate",
+            "--error-format",
+            "json",
+            "--arg",
+            "3225842903"
+          ],
+          "duration_sec": 0.0032802499990793876,
+          "returncode": 0,
+          "stderr": "",
+          "stdout": "{\"ok\":true,\"phase\":\"invoke\",\"detail\":\"math#calculate\",\"result\":[265400400]}\n",
+          "timed_out": false
+        },
+        "value": [
+          265400400
+        ]
+      },
+      "wasmtime": {
+        "detail": "",
+        "kind": "success",
+        "process": {
+          "command": [
+            "/Users/zhengyu/.cargo/bin/wasmtime",
+            "run",
+            "--invoke",
+            "oracle(3225842903)",
+            "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/component-differential-n20kqrt5/arithmetic-0031.component.wasm"
+          ],
+          "duration_sec": 0.0043404169991845265,
+          "returncode": 0,
+          "stderr": "",
+          "stdout": "265400400\n",
+          "timed_out": false
+        },
+        "value": [
+          265400400
+        ]
+      }
+    }
+  ],
+  "curated_cases": 7,
+  "duration_sec": 0.46379637718200684,
+  "executed_cases": 39,
+  "failed_cases": 0,
+  "generated_cases": 32,
+  "schema_version": 1,
+  "seed": 12602704,
+  "wasm_tools_version": "wasm-tools 1.254.0",
+  "wasmtime_version": "wasmtime 49.0.1 (46c23a87d 2026-09-24)"
+}
