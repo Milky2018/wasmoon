@@ -1119,24 +1119,6 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_free_memory(int64_t mem_ptr) {
     }
 }
 
-MOONBIT_FFI_EXPORT int wasmoon_jit_memory_init(int64_t mem_ptr, int64_t offset, moonbit_bytes_t data, int size) {
-    if (!mem_ptr || !data || size <= 0) return -1;
-    uint8_t *mem = (uint8_t *)mem_ptr;
-    memcpy(mem + offset, data, (size_t)size);
-    return 0;
-}
-
-MOONBIT_FFI_EXPORT int wasmoon_jit_memory_init_bytes(int64_t mem_ptr, int64_t offset, moonbit_bytes_t data, int size) {
-    return wasmoon_jit_memory_init(mem_ptr, offset, data, size);
-}
-
-MOONBIT_FFI_EXPORT int wasmoon_jit_memory_read(int64_t mem_ptr, int64_t offset, moonbit_bytes_t out, int size) {
-    if (!mem_ptr || !out || size <= 0) return -1;
-    uint8_t *mem = (uint8_t *)mem_ptr;
-    memcpy(out, mem + offset, (size_t)size);
-    return 0;
-}
-
 // ============ Memory Descriptor Helpers (runtime + JIT sharing) ============
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_mem_desc_get_base(wasmoon_memory_t *mem_desc_ptr) {
@@ -1154,16 +1136,28 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_mem_desc_grow(wasmoon_memory_t *mem_desc_ptr,
     return memory_grow_desc_internal(mem, delta, max_pages);
 }
 
+// Validate without adding signed offsets or forming an out-of-range pointer.
+// Empty live allocations accept (0, 0); empty managed handles never do.
+static int memory_descriptor_range(wasmoon_memory_t *memory, int64_t offset, int64_t size) {
+    if (!memory || offset < 0 || size < 0) return 0;
+    size_t length = atomic_load_explicit(&memory->current_length, memory_order_acquire);
+    return (uint64_t)size <= length && (uint64_t)offset <= length - (uint64_t)size;
+}
+
 MOONBIT_FFI_EXPORT int wasmoon_mem_desc_read(wasmoon_memory_t *mem_desc_ptr, int64_t offset, moonbit_bytes_t out, int size) {
     wasmoon_memory_t *mem = memory_descriptor_live(mem_desc_ptr);
-    if (!mem || !mem->base || !out || size <= 0) return -1;
+    if (!memory_descriptor_range(mem, offset, size)) return -1;
+    if (size == 0) return 0;
+    if (!out) return -1;
     memcpy(out, mem->base + offset, (size_t)size);
     return 0;
 }
 
 MOONBIT_FFI_EXPORT int wasmoon_mem_desc_write(wasmoon_memory_t *mem_desc_ptr, int64_t offset, moonbit_bytes_t data, int size) {
     wasmoon_memory_t *mem = memory_descriptor_live(mem_desc_ptr);
-    if (!mem || !mem->base || !data || size <= 0) return -1;
+    if (!memory_descriptor_range(mem, offset, size)) return -1;
+    if (size == 0) return 0;
+    if (!data) return -1;
     memcpy(mem->base + offset, data, (size_t)size);
     return 0;
 }
@@ -1174,7 +1168,8 @@ MOONBIT_FFI_EXPORT int wasmoon_mem_desc_write_bytes(wasmoon_memory_t *mem_desc_p
 
 MOONBIT_FFI_EXPORT int wasmoon_mem_desc_memmove(wasmoon_memory_t *mem_desc_ptr, int64_t dst, int64_t src, int size) {
     wasmoon_memory_t *mem = memory_descriptor_live(mem_desc_ptr);
-    if (!mem || !mem->base || size <= 0) return -1;
+    if (!memory_descriptor_range(mem, dst, size) || !memory_descriptor_range(mem, src, size)) return -1;
+    if (size == 0) return 0;
     memmove(mem->base + dst, mem->base + src, (size_t)size);
     return 0;
 }
@@ -1182,14 +1177,16 @@ MOONBIT_FFI_EXPORT int wasmoon_mem_desc_memmove(wasmoon_memory_t *mem_desc_ptr, 
 MOONBIT_FFI_EXPORT int wasmoon_mem_desc_copy64(wasmoon_memory_t *dst_desc, int64_t dst, wasmoon_memory_t *src_desc, int64_t src, int64_t size) {
     wasmoon_memory_t *destination = memory_descriptor_live(dst_desc);
     wasmoon_memory_t *source = memory_descriptor_live(src_desc);
-    if (!destination || !source || !destination->base || !source->base || size <= 0) return -1;
+    if (!memory_descriptor_range(destination, dst, size) || !memory_descriptor_range(source, src, size)) return -1;
+    if (size == 0) return 0;
     memmove(destination->base + dst, source->base + src, (size_t)size);
     return 0;
 }
 
 MOONBIT_FFI_EXPORT int wasmoon_mem_desc_memset64(wasmoon_memory_t *mem_desc_ptr, int64_t dst, int32_t val, int64_t size) {
     wasmoon_memory_t *mem = memory_descriptor_live(mem_desc_ptr);
-    if (!mem || !mem->base || size <= 0) return -1;
+    if (!memory_descriptor_range(mem, dst, size)) return -1;
+    if (size == 0) return 0;
     memset(mem->base + dst, val & 0xFF, (size_t)size);
     return 0;
 }

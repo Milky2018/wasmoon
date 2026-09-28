@@ -177,10 +177,6 @@ pub fn memory_descriptor_write(@jit_ffi.MemoryDescriptor, Int64, FixedArray[Byte
 
 pub fn memory_descriptor_write_bytes(@jit_ffi.MemoryDescriptor, Int64, Bytes, Int) -> Int
 
-pub fn memory_init(Int64, Int64, Bytes) -> Bool
-
-pub fn memory_read(Int64, Int64, Int) -> Bytes
-
 pub fn native_value_slot_read(Int64, Int) -> Int64
 
 pub fn native_value_slot_write(Int64, Int, Int64) -> Unit

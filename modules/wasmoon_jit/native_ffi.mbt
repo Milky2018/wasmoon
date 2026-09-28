@@ -93,26 +93,6 @@ priv type JITContext
 extern "c" fn c_jit_alloc_context_managed(func_count : Int) -> JITContext = "wasmoon_jit_alloc_context_managed"
 
 ///|
-/// Copy bytes to linear memory at offset (zero-copy friendly Bytes path).
-#borrow(data)
-extern "c" fn c_jit_memory_init_bytes(
-  mem_ptr : Int64,
-  offset : Int64,
-  data : Bytes,
-  size : Int,
-) -> Int = "wasmoon_jit_memory_init_bytes"
-
-///|
-/// Copy data from linear memory at offset into `out`
-#borrow(out)
-extern "c" fn c_jit_memory_read(
-  mem_ptr : Int64,
-  offset : Int64,
-  out : FixedArray[Byte],
-  size : Int,
-) -> Int = "wasmoon_jit_memory_read"
-
-///|
 /// Allocate linear memory for generic buffers (globals, etc.)
 extern "c" fn c_jit_alloc_memory(size : Int64) -> Int64 = "wasmoon_jit_alloc_memory"
 

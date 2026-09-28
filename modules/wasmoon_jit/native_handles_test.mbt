@@ -369,3 +369,175 @@ test "descriptor returned by a context survives that context's finalizer" {
   read_after_context_drop()
   assert_eq(memory_live_count(), baseline)
 }
+
+///|
+test "descriptor access validates ranges before touching memory" {
+  let memory = @wasmoon_jit.alloc_memory_desc(8L, None)
+  let output = FixedArray::make(8, b'\x5A')
+  // This first assertion reproduces the old contract failure without an unsafe access.
+  assert_eq(@wasmoon_jit.memory_descriptor_read(memory, 8L, output, 0), 0)
+  assert_eq(
+    @wasmoon_jit.memory_descriptor_write_bytes(memory, 0L, b"abcdefgh", 8),
+    0,
+  )
+  for
+    (offset, size) in [
+      (-1L, 1),
+      (8L, 1),
+      (9L, 0),
+      (0L, -1),
+      (0L, 9),
+      (9223372036854775807L, 1),
+    ] {
+    assert_eq(
+      @wasmoon_jit.memory_descriptor_read(memory, offset, output, size),
+      -1,
+    )
+    assert_eq(
+      @wasmoon_jit.memory_descriptor_write(memory, offset, output, size),
+      -1,
+    )
+    assert_eq(
+      @wasmoon_jit.memory_descriptor_write_bytes(
+        memory, offset, b"12345678", size,
+      ),
+      -1,
+    )
+    assert_eq(@wasmoon_jit.memory_descriptor_fill(memory, offset, 0, size), -1)
+    assert_eq(
+      @wasmoon_jit.memory_descriptor_fill64(memory, offset, 0, size.to_int64()),
+      -1,
+    )
+    assert_eq(@wasmoon_jit.memory_descriptor_move(memory, 0L, offset, size), -1)
+    assert_eq(@wasmoon_jit.memory_descriptor_move(memory, offset, 0L, size), -1)
+    assert_eq(
+      @wasmoon_jit.memory_descriptor_copy(
+        memory,
+        0L,
+        memory,
+        offset,
+        size.to_int64(),
+      ),
+      -1,
+    )
+    assert_eq(
+      @wasmoon_jit.memory_descriptor_copy(
+        memory,
+        offset,
+        memory,
+        0L,
+        size.to_int64(),
+      ),
+      -1,
+    )
+  }
+  for byte in output {
+    assert_eq(byte, b'\x5A')
+  }
+  assert_eq(@wasmoon_jit.memory_descriptor_read(memory, 0L, output, 8), 0)
+  assert_eq(Bytes::from_array(Array::makei(8, i => output[i])), b"abcdefgh")
+  let small = FixedArray::make(1, b'\x5A')
+  assert_eq(@wasmoon_jit.memory_descriptor_read(memory, 0L, small, 2), -1)
+  assert_eq(small[0], b'\x5A')
+  assert_eq(@wasmoon_jit.memory_descriptor_write(memory, 0L, small, 2), -1)
+  assert_eq(@wasmoon_jit.memory_descriptor_write_bytes(memory, 0L, b"x", 2), -1)
+  assert_eq(
+    @wasmoon_jit.memory_descriptor_fill64(memory, 1L, 0, 9223372036854775807L),
+    -1,
+  )
+  assert_eq(
+    @wasmoon_jit.memory_descriptor_copy(
+      memory, 0L, memory, 1L, 9223372036854775807L,
+    ),
+    -1,
+  )
+  assert_eq(@wasmoon_jit.memory_descriptor_read(memory, 0L, output, 8), 0)
+  assert_eq(Bytes::from_array(Array::makei(8, i => output[i])), b"abcdefgh")
+}
+
+///|
+test "descriptor zero-length operations distinguish empty allocations from absent handles" {
+  let memory = @wasmoon_jit.alloc_memory_desc(0L, None)
+  let absent = @wasmoon_jit.MemoryDescriptor::null()
+  let buffer = FixedArray::make(0, b'\x00')
+  for (handle, result) in [(memory, 0), (absent, -1)] {
+    assert_eq(
+      @wasmoon_jit.memory_descriptor_read(handle, 0L, buffer, 0),
+      result,
+    )
+    assert_eq(
+      @wasmoon_jit.memory_descriptor_write(handle, 0L, buffer, 0),
+      result,
+    )
+    assert_eq(
+      @wasmoon_jit.memory_descriptor_write_bytes(handle, 0L, b"", 0),
+      result,
+    )
+    assert_eq(@wasmoon_jit.memory_descriptor_move(handle, 0L, 0L, 0), result)
+    assert_eq(@wasmoon_jit.memory_descriptor_fill(handle, 0L, 0, 0), result)
+    assert_eq(@wasmoon_jit.memory_descriptor_fill64(handle, 0L, 0, 0L), result)
+    assert_eq(
+      @wasmoon_jit.memory_descriptor_copy(handle, 0L, memory, 0L, 0L),
+      result,
+    )
+    assert_eq(
+      @wasmoon_jit.memory_descriptor_copy(memory, 0L, handle, 0L, 0L),
+      result,
+    )
+    assert_eq(@wasmoon_jit.memory_descriptor_read(handle, 1L, buffer, 0), -1)
+  }
+}
+
+///|
+test "descriptor copy preserves overlap and validates both allocations before mutation" {
+  let memory = @wasmoon_jit.alloc_memory_desc(8L, None)
+  let other = @wasmoon_jit.alloc_memory_desc(2L, None)
+  let output = FixedArray::make(8, b'\x00')
+  assert_eq(
+    @wasmoon_jit.memory_descriptor_write_bytes(memory, 0L, b"abcdefgh", 8),
+    0,
+  )
+  assert_eq(@wasmoon_jit.memory_descriptor_move(memory, 2L, 0L, 6), 0)
+  assert_eq(@wasmoon_jit.memory_descriptor_read(memory, 0L, output, 8), 0)
+  assert_eq(Bytes::from_array(Array::makei(8, i => output[i])), b"ababcdef")
+  assert_eq(@wasmoon_jit.memory_descriptor_copy(memory, 0L, memory, 2L, 6L), 0)
+  assert_eq(@wasmoon_jit.memory_descriptor_read(memory, 0L, output, 8), 0)
+  assert_eq(Bytes::from_array(Array::makei(8, i => output[i])), b"abcdefef")
+  assert_eq(@wasmoon_jit.memory_descriptor_copy(memory, 0L, other, 0L, 3L), -1)
+  assert_eq(@wasmoon_jit.memory_descriptor_copy(other, 0L, memory, 0L, 3L), -1)
+  assert_eq(@wasmoon_jit.memory_descriptor_read(memory, 0L, output, 8), 0)
+  assert_eq(Bytes::from_array(Array::makei(8, i => output[i])), b"abcdefef")
+  let small = FixedArray::make(2, b'\x01')
+  assert_eq(@wasmoon_jit.memory_descriptor_read(other, 0L, small, 2), 0)
+  assert_eq(small[0], b'\x00')
+  assert_eq(small[1], b'\x00')
+}
+
+///|
+test "guarded and shared descriptor access uses committed length rather than reservation" {
+  for
+    memory in [
+      @wasmoon_jit.alloc_guarded_memory_desc(1, Some(2)),
+      @wasmoon_jit.alloc_memory_desc(65536L, Some(2L), is_shared=true),
+    ] {
+    assert_false(memory.is_null())
+    assert_eq(
+      @wasmoon_jit.memory_descriptor_write_bytes(memory, 65535L, b"x", 1),
+      0,
+    )
+    assert_eq(
+      @wasmoon_jit.memory_descriptor_write_bytes(memory, 65536L, b"x", 1),
+      -1,
+    )
+    assert_eq(@wasmoon_jit.memory_descriptor_fill64(memory, 65536L, 0, 0L), 0)
+    assert_eq(@wasmoon_jit.memory_descriptor_grow64(memory, 1L), 1L)
+    assert_eq(
+      @wasmoon_jit.memory_descriptor_write_bytes(memory, 65536L, b"x", 1),
+      0,
+    )
+    assert_eq(
+      @wasmoon_jit.memory_descriptor_write_bytes(memory, 131072L, b"x", 1),
+      -1,
+    )
+  }
+}

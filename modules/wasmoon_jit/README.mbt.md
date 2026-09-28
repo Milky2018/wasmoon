@@ -110,3 +110,23 @@ and is idempotent; the MoonBit allocation survives until its last reference is
 released. After close, mutations are ignored and lookup returns None. Repeated
 registration is idempotent; unregister releases the generated buffer and permits
 registration again while the builder remains open.
+
+
+### Checked linear-memory access
+
+Public descriptor read, write, copy, move and fill operations return 0 on
+success and -1 for invalid descriptors, negative offsets/lengths, or ranges
+outside the current committed memory. Reads and writes also reject lengths
+larger than their MoonBit buffer. Rejection leaves the destination unchanged.
+Copies support overlapping ranges.
+
+A zero-length operation succeeds at any in-bounds position, including the end
+of a live zero-byte allocation. It never dereferences a pointer. Empty handles
+and positions past the end are rejected even for zero-length operations.
+The descriptor argument retains the allocation throughout each operation.
+
+The unused raw-address memory_read and memory_init APIs have been removed.
+Use memory_descriptor_read and memory_descriptor_write_bytes instead.
+alloc_memory/free_memory remain low-level unmanaged allocation operations for
+native ABI fixtures; callers must track ownership, capacity and alias lifetime.
+They are not substitutes for checked linear-memory access.
