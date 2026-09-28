@@ -203,3 +203,55 @@ Aggregate files:
 - Acyclic rewrite/GVN aggregate stats are emitted through the optional metrics
   sink in `modules/milkir/optimize/metrics.mbt`; embeddings install the sink
   through `@optimize.install_optimization_metrics_sink(...)`.
+
+## Cold CLI attribution
+
+`WASMOON_RUN_METRICS_FILE=<path>` enables separate, lightweight command-phase
+metrics for core `wasmoon run`. Unlike `WASMOON_PERF_METRICS`, it does **not**
+bypass or otherwise alter cache policy. It records a disjoint partition from
+entry into `run_wasm` to its return; argument parsing, executable startup,
+report serialization and some final destruction are outside this interval.
+The `phases_us` values sum to `command_us` (both use integer microseconds encoded
+as JSON strings). Failed and interpreter runs can have partial phase sets;
+consumers must not accept those as complete cold JIT measurements.
+
+The `compile` phase contains fresh artifact construction, including final
+compiler preparation/packaging. `artifact_verify` is separate. Cache hits omit
+`compile`; cache deserialization/verification is included in
+`jit_plan_and_cache_lookup`. `instantiate_including_start` includes any Wasm
+start function, while `invoke_including_hostcalls` measures the requested export
+including its host calls and invocation machinery. Thus neither field is a
+claim of pure guest CPU time. A trapped invocation also closes its timing phase.
+
+Use the serial comparison runner on macOS or Linux:
+
+```bash
+python3 scripts/benchmark_startup.py \
+  --wasmtime "$HOME/.cargo/bin/wasmtime" --output target/startup-reference
+python3 scripts/benchmark_startup.py \
+  --before /path/to/baseline/wasmoon --wasmoon ./wasmoon \
+  --output target/startup-candidate
+```
+
+The default six real workloads come from the 70-module algorithm corpus. Each
+receives 15 ordinary pairs in alternating engine order, an explicitly retained
+warmup pair, three separate phase captures, and one separate detailed compiler
+capture per Wasmoon binary. Every invocation has its own empty artifact caches;
+Wasmtime compilation is serial. Filesystem/executable pages are warmed, not
+flushed. This measures cold **artifact** caches, not cold disk I/O.
+
+Ordinary samples retain wall time, `/usr/bin/time` process peak RSS, raw stdout
+and stderr, and the guest's numeric metric without assuming its unit. Wasmtime
+internal compilation/execution times are not exposed by this runner and remain
+unknown. Never subtract timings from different invocations to fabricate them.
+Detailed compiler captures bypass the cache and are only attribution evidence;
+they do not enter ordinary medians. Two-Wasmoon comparisons additionally reject
+any difference in complete persisted artifact bytes.
+
+Failures are retained and prevent success; an ordinary failed sample prevents
+that workload's summary instead of being discarded. A timed-out process group
+is terminated before another sample starts. Output directories must be new.
+Do not run builds, tests or profilers alongside measurements. The report records
+binary versions/hashes, input hashes and every sample. Bootstrap intervals are
+fixed-seed intervals of paired percentage changes, not platform-independent
+performance guarantees.

@@ -547,7 +547,7 @@ fn push_bundle_register_index(
 }
 
 ///|
-fn bundle_register_order(
+fn bundle_preferred_registers(
   bundle : Int,
   context : AllocationContext,
   hint : Int,
@@ -585,11 +585,25 @@ fn bundle_register_order(
       preferred_by_value[segment.value.id],
     )
   }
-  let class = bundle_class(bundle, context, segments)
-  for register, reg in environment.allocatable_regs {
-    if reg.class == class && !order_marks[register] {
-      order_marks[register] = true
-      order.push(register)
+}
+
+///|
+// Preferences precede the remaining physical registers in machine order. Return
+// -1 for a default already present in the preferred prefix. Defaults are never
+// materialized: a successful early probe avoids visiting the unused suffix.
+fn bundle_register_candidate(
+  order : Array[Int],
+  marks : Array[Bool],
+  index : Int,
+) -> Int {
+  if index < order.length() {
+    order[index]
+  } else {
+    let register = index - order.length()
+    if marks[register] {
+      -1
+    } else {
+      register
     }
   }
 }
@@ -1296,7 +1310,7 @@ fn[F : FunctionView] allocate_bundles(
     if !(context.states[bundle] is BundlePending) {
       continue
     }
-    bundle_register_order(
+    bundle_preferred_registers(
       bundle,
       context,
       if spill_sets[context.spill_sets[bundle]].hint >= 0 {
@@ -1320,7 +1334,15 @@ fn[F : FunctionView] allocate_bundles(
     let mut split_cost = 0
     let mut split_point = ProgramPoint(-1, -1)
     let class = bundle_class(bundle, context, segments)
-    for register in register_order {
+    for
+      candidate in 0..<(register_order.length() +
+      environment.allocatable_regs.length()) {
+      let register = bundle_register_candidate(
+        register_order, register_order_marks, candidate,
+      )
+      if register < 0 {
+        continue
+      }
       let reg = environment.allocatable_regs[register]
       if reg.class != class {
         continue
@@ -1494,7 +1516,7 @@ fn[F : FunctionView] allocate_bundles(
   while second_chance.pop() is Some((bundle, _)) {
     guard context.states[bundle] is BundleDeferredSpill else { continue }
     statistics.second_chance_attempts = statistics.second_chance_attempts + 1
-    bundle_register_order(
+    bundle_preferred_registers(
       bundle,
       context,
       spill_sets[context.spill_sets[bundle]].hint,
@@ -1506,7 +1528,15 @@ fn[F : FunctionView] allocate_bundles(
       register_order_marks,
     )
     let mut free_register = -1
-    for register in register_order {
+    for
+      candidate in 0..<(register_order.length() +
+      environment.allocatable_regs.length()) {
+      let register = bundle_register_candidate(
+        register_order, register_order_marks, candidate,
+      )
+      if register < 0 {
+        continue
+      }
       let reg = environment.allocatable_regs[register]
       if reg.class != bundle_class(bundle, context, segments) {
         continue
