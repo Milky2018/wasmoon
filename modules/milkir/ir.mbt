@@ -498,7 +498,10 @@ fn Block::accepts_inst(self : Block, inst : Inst) -> Bool {
     return false
   }
   if reject_foreign_values(self.owner, inst.args) ||
-    reject_foreign_values(self.owner, inst.operands) ||
+    (
+      !physical_equal(inst.args, inst.operands) &&
+      reject_foreign_values(self.owner, inst.operands)
+    ) ||
     reject_foreign_values(self.owner, inst.results) ||
     reject_foreign_opcode_entities(self.owner, inst.opcode) {
     return false
