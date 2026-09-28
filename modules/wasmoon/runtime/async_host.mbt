@@ -124,7 +124,6 @@ pub fn AsyncHostCallDriver::poll(
 pub fn normalize_async_host_error(error : Error) -> RuntimeError {
   match RuntimeError::from_error(error) {
     Some(runtime_error) => runtime_error
-    None if @async.is_cancellation_error(error) => AsyncHostCallCancelled
     None => AsyncHostError(error.to_string())
   }
 }

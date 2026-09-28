@@ -188,12 +188,13 @@ async test "JIT async host function parks and resumes its native fiber" {
     @async.sleep(1)
     call.cancel()
     try call.wait() catch {
-      error => error.to_string()
+      @async.WaitedTaskAlreadyCancelled => "cancelled"
+      error => raise error
     } noraise {
       _ => fail("expected the asynchronous JIT call to be cancelled")
     }
   })
-  inspect(cancellation, content="Cancelled")
+  inspect(cancellation, content="cancelled")
   let after_cancellation = jit_context.call_core_func_async(
     store,
     instance,
@@ -286,12 +287,13 @@ async test "JIT propagates async suspension through an imported wasm function" {
     @async.sleep(1)
     call.cancel()
     try call.wait() catch {
-      error => error.to_string()
+      @async.WaitedTaskAlreadyCancelled => "cancelled"
+      error => raise error
     } noraise {
       _ => fail("expected the cross-module call to be cancelled")
     }
   })
-  inspect(cancellation, content="Cancelled")
+  inspect(cancellation, content="cancelled")
   let after_cancellation = jit_context.call_core_func_async(
     store,
     instance,

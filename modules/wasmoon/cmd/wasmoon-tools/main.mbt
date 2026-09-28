@@ -548,7 +548,7 @@ fn read_wit_deps(root : String) -> Array[@wit.Package] {
   if !is_dir(deps_dir) {
     return []
   }
-  let entries = @fs.read_dir(deps_dir) catch {
+  let entries = @fs.read_dir(deps_dir).to_owned() catch {
     IOError(message) => {
       exit_error(message)
       panic()

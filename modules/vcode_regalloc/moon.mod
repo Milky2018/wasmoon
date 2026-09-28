@@ -13,7 +13,7 @@ keywords = [ "compiler", "register-allocation", "vcode", "jit" ]
 description = "Target VCode adapter for the reusable register allocator"
 
 import {
-  "moonbitlang/x@0.5.1",
+  "moonbitlang/x@0.5.5",
   "Milky2018/vcode@0.16.0",
   "Milky2018/regalloc@0.16.0",
 }
