@@ -3,17 +3,33 @@ package "Milky2018/wasmoon/async_native"
 
 import {
   "Milky2018/wasmoon_jit/host_io/reactor",
+  "moonbitlang/core/debug",
 }
 
 // Values
+pub fn event_loop_installed() -> Bool
+
+pub fn install_event_loop() -> Unit raise @reactor.NativeReactorError
+
+pub async fn wait_for_readiness() -> Unit
 
 // Errors
 
 // Types and methods
+type NativeReactor
+pub fn NativeReactor::close(Self) -> Unit
+pub fn NativeReactor::has_pending(Self) -> Bool
+pub fn NativeReactor::register_read(Self, Int) -> @reactor.NativeRegistration raise @reactor.NativeReactorError
+pub fn NativeReactor::register_timer(Self, Int64) -> @reactor.NativeRegistration raise @reactor.NativeReactorError
+pub fn NativeReactor::register_write(Self, Int) -> @reactor.NativeRegistration raise @reactor.NativeReactorError
+pub fn NativeReactor::supported() -> Bool
+pub fn NativeReactor::to_repr(Self) -> @debug.Repr
+pub fn NativeReactor::try_new() -> Self raise @reactor.NativeReactorError
+pub fn NativeReactor::wait(Self, Int64?) -> Int raise @reactor.NativeReactorError
+pub fn NativeReactor::wake(Self) -> Unit raise @reactor.NativeReactorError
+pub impl @debug.Debug for NativeReactor
 
 // Type aliases
-pub using @reactor {type NativeReactor}
-
 pub using @reactor {type NativeReactorError}
 
 pub using @reactor {type NativeRegistration}

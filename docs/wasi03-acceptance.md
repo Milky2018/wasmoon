@@ -54,8 +54,10 @@ Remaining boundaries:
 
 - ISS-568: async exposes only `TlsError(String)`; structured certificate/protocol/
   alert categories depend on [async issue #620](https://github.com/moonbitlang/async/issues/620).
-- ISS-572: command HTTP composition with concurrent native WASI I/O needs reactor
-  integration. The current type-command guests and HTTP services do not prove it.
+- ISS-572: native WASI/HTTP event-loop integration is implemented using async
+  `ExternalEventLoop`. A mixed command guest passes on both engines locally;
+  cross-platform CI acceptance is pending. See `async_native/README.mbt.md`
+  under the Wasmoon module for the embedding initialization contract.
 - ISS-567: the intermittent macOS misc JIT timeout is outside this repair scope.
 
 ## Original audit verdict

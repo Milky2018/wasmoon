@@ -1,5 +1,6 @@
 ///|
-pub suberror NativeReactorError {
+pub(all) suberror NativeReactorError {
+  Closed
   UnsupportedPlatform
   AllocationFailed
   RegistrationFailed(Int)
@@ -283,4 +284,33 @@ pub fn NativeRegistration::cancel(self : NativeRegistration) -> Unit {
     Ready => self.2.state.val = Cancelled
     Cancelled => ()
   }
+}
+
+///|
+#owned(reactor)
+extern "c" fn c_external_attach(reactor : NativeReactorObject) -> Int = "wasmoon_async_external_loop_attach"
+
+///|
+extern "c" fn c_external_wake() -> Unit = "wasmoon_async_external_loop_wake"
+
+///|
+extern "c" fn c_external_detach() -> Unit = "wasmoon_async_external_loop_detach"
+
+///|
+/// Pin the process-wide foreign-thread wakeup target. The owner must keep the
+/// reactor open until its waiter has joined and `detach_external_wakeup` runs.
+pub fn NativeReactor::attach_external_wakeup(
+  self : NativeReactor,
+) -> FuncRef[() -> Unit] raise NativeReactorError {
+  let status = c_external_attach(self.raw)
+  if status != 0 {
+    raise WakeFailed(status)
+  }
+  () => c_external_wake()
+}
+
+///|
+/// Release the wakeup target on the main thread, after its waiter has joined.
+pub fn detach_external_wakeup() -> Unit {
+  c_external_detach()
 }

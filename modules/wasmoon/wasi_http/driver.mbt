@@ -46,7 +46,7 @@ async fn HttpHost::drive(self : HttpHost) -> Unit {
     let pending = self.pending.filter(fn(call) { !call.done })
     self.pending.clear()
     self.pending.append(pending)
-    if @runtime_impl.progress_one_subtask_intrinsic(
+    if @runtime_impl.progress_one_subtask_nonblocking(
         self.runtime.async_state(),
         self.linker.get_store(),
       ) {
@@ -89,6 +89,14 @@ pub async fn[T] HttpHost::run(self : HttpHost, action : async () -> T) -> T {
     self.spawn.val = Some(fn(job) { group.spawn(job, no_wait=true) })
     defer {
       self.spawn.val = None
+    }
+    if @async_native.event_loop_installed() {
+      group.spawn_bg(no_wait=true, async fn() {
+        while true {
+          @async_native.wait_for_readiness()
+          self.wake.broadcast()
+        }
+      })
     }
     let driver = group.spawn(async fn() { self.drive() })
     defer driver.cancel()

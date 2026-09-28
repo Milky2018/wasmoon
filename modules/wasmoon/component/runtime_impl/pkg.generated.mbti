@@ -22,6 +22,8 @@ pub fn preset_canon_debug_message(String) -> Unit
 
 pub fn progress_one_subtask_intrinsic(AsyncState, @runtime.Store) -> Bool raise @core.ComponentRuntimeError
 
+pub fn progress_one_subtask_nonblocking(AsyncState, @runtime.Store) -> Bool raise @core.ComponentRuntimeError
+
 pub fn set_canon_debug_message(String) -> Unit
 
 pub fn take_core_suspension() -> @core.CoreSuspension?

@@ -152,8 +152,8 @@ fn instantiate_canon_waitable_set_wait(
         let ws_key = handle_key(owner_component_id, ws)
         if !async_state.task_can_block[0] {
           // Synchronous tasks generally cannot block. One exception is waiting on
-          // an existing waitable membership: drive the cooperative event loop
-          // and report deadlock if no progress is possible.
+          // an existing waitable membership. Suspend through the ordinary
+          // continuation path below so the embedding controls external waits.
           if !waitable_set_has_event(async_state, ws_key) {
             let has_members = match async_state.waitable_sets.get(ws_key) {
               Some(set) => set.members.length() > 0
@@ -164,22 +164,6 @@ fn instantiate_canon_waitable_set_wait(
               // expects synchronous tasks to trap before attempting to block.
               trap_canon("cannot block a synchronous task before returning")
               return [I32(0)]
-            }
-            while !waitable_set_has_event(async_state, ws_key) {
-              let progressed = progress_one_subtask_intrinsic(
-                async_state, store,
-              ) catch {
-                e => {
-                  trap_canon(canon_err_message(e))
-                  return [I32(0)]
-                }
-              }
-              if !progressed {
-                trap_canon(
-                  "wasm trap: deadlock detected: event loop cannot make further progress",
-                )
-                return [I32(0)]
-              }
             }
           }
         }

@@ -486,19 +486,18 @@ MOONBIT_FFI_EXPORT int wasmoon_async_reactor_wake(void *managed) {
     0,
     (void *)(intptr_t)0
   );
-  if (kevent(reactor->handle, &change, 1, NULL, 0, NULL) != 0) {
-    reactor->last_errno = errno;
-    return errno;
-  }
-  return 0;
+  int status;
+  do {
+    status = kevent(reactor->handle, &change, 1, NULL, 0, NULL);
+  } while (status < 0 && errno == EINTR);
+  return status < 0 ? errno : 0;
 #elif defined(__linux__)
   uint64_t value = 1;
-  if (write(reactor->wake_handle, &value, sizeof(value)) < 0 &&
-      errno != EAGAIN) {
-    reactor->last_errno = errno;
-    return errno;
-  }
-  return 0;
+  ssize_t status;
+  do {
+    status = write(reactor->wake_handle, &value, sizeof(value));
+  } while (status < 0 && errno == EINTR);
+  return status < 0 && errno != EAGAIN ? errno : 0;
 #else
   return ENOTSUP;
 #endif

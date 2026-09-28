@@ -1,23 +1,41 @@
-# Native async reactor
+# Native WASI and async event-loop integration
 
-This package reexports `Milky2018/wasmoon_jit/host_io/reactor`. Native sources
-and their private platform headers ship together in the `wasmoon_jit` module.
+The native implementation and its private platform headers ship together in
+`Milky2018/wasmoon_jit/host_io/reactor`. It uses kqueue on macOS, epoll/timerfd/
+eventfd on Linux, and the interruptible descriptor adapter on Windows.
+Registrations are opaque and one-shot. Descriptor registrations own independent
+close-on-exec duplicates; monotonic tokens reject stale events after cancellation.
+The adapter retains no Wasm Store, component values, or guest continuations.
 
-`Milky2018/wasmoon/async_native` adapts operating-system readiness to opaque
-one-shot registrations. It uses kqueue on macOS and epoll, timerfd, and eventfd
-on Linux. On Windows, an event handle supplies wakeups, performance-counter
-deadlines supply timers, and the shared descriptor adapter supplies readiness
-with bounded polling.
+An embedding that combines native WASI operations with asynchronous HTTP must
+call `install_event_loop()` before its first asynchronous operation and before
+creating WASI contexts. The Wasmoon CLI performs this initialization itself.
+The function uses the public `moonbitlang/async.set_external_event_loop` API;
+it cannot be installed after async starts, or alongside another independently
+installed external loop.
 
-`NativeReactor` and `NativeRegistration` are opaque. Platform event structures,
-native descriptor ownership, and mutable registration tables are not exposed.
-Each registration owns only `Pending`, `Ready`, or `Cancelled` state. The
-adapter never retains a WebAssembly Store, component value, host future, or
-guest continuation.
+The adapter owns one kernel reactor for the host. Each `NativeReactor` created
+while it is installed owns only its own registrations: closing a WASI context
+cancels those registrations without closing other contexts' descriptors or the
+shared reactor. Without installation, `NativeReactor::try_new()` creates an
+independent reactor for synchronous embeddings.
 
-The reactor is single-threaded and must be driven on its creation thread.
-Cancellation is idempotent and stale events are rejected through monotonic
-registration tokens. Every descriptor registration owns a close-on-exec duplicate,
-so concurrent operations for the same descriptor and direction retain
-independent readiness and cancellation lifetimes. Windows implementation and
-acceptance status are documented in `docs/windows.md`.
+The external loop honors async's zero, finite-millisecond, and indefinite waits.
+Native readiness wakes structured HTTP driver tasks; component execution only
+polls and advances continuations. The synchronous invocation APIs retain their
+blocking behavior and should not be used to drive mixed HTTP workloads.
+
+All registration, cancellation, readiness delivery, and component execution
+remain on the MoonBit thread. Async owns its auxiliary I/O waiter. Its callback
+calls a C wakeup function directly without touching MoonBit reference counts.
+The C callback target holds an owned reference until async joins the waiter;
+`terminate` then releases that reference and closes the shared reactor.
+Notifications are wakeup hints. Registrations retain their ready state, so
+consumers check that state before awaiting another notification.
+
+`testsuite/native_event_loop` verifies native pipe readiness, timer delivery,
+async TCP progress, cancellation, context isolation, and normal termination.
+`scripts/test_wasi_http.py` additionally runs a real HTTP command guest on both
+engines while a long native timer is pending, then cancels that timer after the
+HTTP exchange completes. CI runs both on Linux, macOS, and Windows. The native
+integration executable also runs under ASan/UBSan through the sanitizer harness.
