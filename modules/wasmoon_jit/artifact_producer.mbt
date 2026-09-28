@@ -199,8 +199,8 @@ pub fn wasm_import_identity(
 }
 
 ///|
-fn artifact_function_from_code_object(
-  object : @code_object.UnlinkedCodeObject,
+fn artifact_function_from_code_data(
+  object : @code_object.CodeData,
   frame_size~ : Int,
   function_index~ : Int,
   signature~ : @native.Signature,
@@ -213,12 +213,12 @@ fn artifact_function_from_code_object(
     },
     entry_offset: 0,
     frame_size,
-    code: object.code(),
-    relocations: object.relocations(),
-    sources: object.sources(),
-    traps: object.traps(),
-    safepoints: object.safepoints(),
-    unwind: object.unwind(),
+    code: object.code,
+    relocations: object.relocations,
+    sources: object.sources,
+    traps: object.traps,
+    safepoints: object.safepoints,
+    unwind: object.unwind,
   }
 }
 
@@ -293,10 +293,18 @@ pub fn NativeCompiler::compile_wasm_body_artifact_function(
         canonical_type_indices,
         record_metrics=@perf.enabled(),
         function_index~,
-        compilation_session=self.aarch64.unwrap(),
+        compile=(selected, on_event) => {
+          self.aarch64
+          .unwrap()
+          .compile_selected_data(
+            selected,
+            on_event~,
+            verify_allocation=compiler_validation(),
+          )
+        },
       )
       let packaging_tick = detail_metrics_tick(@perf.enabled())
-      let result = artifact_function_from_code_object(
+      let result = artifact_function_from_code_data(
         compiled.object,
         frame_size=compiled.frame_size,
         function_index~,
@@ -313,10 +321,18 @@ pub fn NativeCompiler::compile_wasm_body_artifact_function(
         canonical_type_indices,
         record_metrics=@perf.enabled(),
         function_index~,
-        compilation_session=self.x64.unwrap(),
+        compile=(selected, on_event) => {
+          self.x64
+          .unwrap()
+          .compile_selected_data(
+            selected,
+            on_event~,
+            verify_allocation=compiler_validation(),
+          )
+        },
       )
       let packaging_tick = detail_metrics_tick(@perf.enabled())
-      let result = artifact_function_from_code_object(
+      let result = artifact_function_from_code_data(
         compiled.object,
         frame_size=compiled.frame_size,
         function_index~,
@@ -325,5 +341,17 @@ pub fn NativeCompiler::compile_wasm_body_artifact_function(
       record_compile_subphase("artifact_packaging", packaging_tick)
       result
     }
+  }
+}
+
+///|
+/// Release retained allocator capacity when this compiler is idle. Previously
+/// returned artifacts remain valid; the next compilation regrows scratch as needed.
+pub fn NativeCompiler::release_scratch(self : NativeCompiler) -> Unit {
+  if self.aarch64 is Some(session) {
+    session.release_scratch()
+  }
+  if self.x64 is Some(session) {
+    session.release_scratch()
   }
 }

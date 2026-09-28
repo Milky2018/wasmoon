@@ -31,6 +31,7 @@ pub struct AllocationSession {
 }
 pub fn[Inst] AllocationSession::allocate_selected_vcode(Self, @vcode.Function[Inst], VCodeAllocationEnvironment, on_phase? : ((String?) -> Unit)?, on_statistics? : ((@vcode.RegallocLoopStatistics) -> Unit)?, verify? : Bool) -> @vcode.Allocation raise VCodeAllocationError
 pub fn AllocationSession::new() -> Self
+pub fn AllocationSession::release_scratch(Self) -> Unit
 
 pub struct VCodeAllocationEnvironment {
   allocatable_regs : Array[@allocation_types.PhysicalReg]

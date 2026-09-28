@@ -174,6 +174,21 @@ fn relocation_matches_encoding(
 pub fn UnlinkedCodeObject::verify(
   self : UnlinkedCodeObject,
 ) -> Unit raise CodeObjectVerifyError {
+  let data : CodeData = {
+    architecture: self.architecture,
+    code: self.code,
+    relocations: self.relocations,
+    sources: self.sources,
+    traps: self.traps,
+    safepoints: self.safepoints,
+    unwind: self.unwind,
+  }
+  data.verify()
+}
+
+///|
+/// Check current contents without copying or retaining them.
+pub fn CodeData::verify(self : CodeData) -> Unit raise CodeObjectVerifyError {
   let code_size = self.code.length()
   if code_size == 0 {
     raise EmptyCode
@@ -256,7 +271,7 @@ pub fn build(
   safepoints? : Array[SafepointSite] = [],
   unwind? : Array[UnwindDirective] = [],
 ) -> UnlinkedCodeObject raise CodeObjectVerifyError {
-  let object = {
+  let object : UnlinkedCodeObject = {
     architecture,
     code: code.copy(),
     relocations: relocations.copy(),

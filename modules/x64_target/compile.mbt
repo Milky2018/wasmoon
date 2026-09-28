@@ -35,12 +35,13 @@ pub fn CompilationSession::new() -> CompilationSession {
 }
 
 ///|
-fn CompilationSession::compile_selected_function(
+fn[T] CompilationSession::compile_selected_function(
   self : CompilationSession,
   function : @vcode.Function[X64Inst],
+  finish : (@code_object.CodeData) -> T raise @code_object.CodeObjectVerifyError,
   on_event? : (@vcode.TargetCompileEvent) -> Unit = fn(_) { () },
   verify_allocation? : Bool = true,
-) -> (@code_object.UnlinkedCodeObject, Int) raise X64CompileError {
+) -> (T, Int) raise X64CompileError {
   on_event(RegallocStarted)
   let allocation = allocate_verified(
     function,
@@ -67,8 +68,11 @@ fn CompilationSession::compile_selected_function(
   let object = emit_verified(function, allocation, frame) catch {
     error => raise EmissionFailed(cause=error)
   }
+  let result = finish(object) catch {
+    error => raise EmissionFailed(cause=InvalidCodeObject(cause=error))
+  }
   on_event(EmissionFinished)
-  (object, frame.frame_size())
+  (result, frame.frame_size())
 }
 
 ///|
@@ -80,6 +84,7 @@ pub fn compile_selected(
 ) -> (@code_object.UnlinkedCodeObject, Int) raise X64CompileError {
   CompilationSession::new().compile_selected_function(
     selected.constructed.function,
+    data => data.freeze(),
     on_event~,
     verify_allocation~,
   )
@@ -96,6 +101,7 @@ pub fn CompilationSession::compile_selected(
 ) -> (@code_object.UnlinkedCodeObject, Int) raise X64CompileError {
   self.compile_selected_function(
     selected.constructed.function,
+    data => data.freeze(),
     on_event~,
     verify_allocation~,
   )
@@ -141,7 +147,38 @@ pub fn compile(
   }
   CompilationSession::new().compile_selected_function(
     function,
+    data => data.freeze(),
     on_event~,
     verify_allocation~,
   )
+}
+
+///|
+/// Compile to fresh mutable code data without an intermediate immutable snapshot.
+/// The returned data is verified at return and independent of session scratch.
+/// Callers that mutate it must revalidate it before installation.
+pub fn CompilationSession::compile_selected_data(
+  self : CompilationSession,
+  selected : SelectedFunction,
+  on_event? : (@vcode.TargetCompileEvent) -> Unit = fn(_) { () },
+  verify_allocation? : Bool = true,
+) -> (@code_object.CodeData, Int) raise X64CompileError {
+  self.compile_selected_function(
+    selected.constructed.function,
+    data => {
+      data.verify()
+      data.shrink_to_fit()
+      data
+    },
+    on_event~,
+    verify_allocation~,
+  )
+}
+
+///|
+/// Release retained allocator buffers between serial compilations. Returned
+/// results remain valid, and this session can compile again afterwards.
+/// Must not be called from a compilation observer during an active job.
+pub fn CompilationSession::release_scratch(self : CompilationSession) -> Unit {
+  self.allocation.release_scratch()
 }

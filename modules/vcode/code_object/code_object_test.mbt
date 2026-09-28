@@ -248,3 +248,46 @@ test "code object rejects an inconsistent frame pointer" {
     _ => fail("expected an inconsistent frame pointer to fail verification")
   }
 }
+
+///|
+test "mutable code data freezes independent code and nested metadata" {
+  let data : @code_object.CodeData = {
+    architecture: X64,
+    code: [b'\xe8', b'\x00', b'\x00', b'\x00', b'\x00', b'\xc3'],
+    relocations: [
+      @code_object.Relocation::new(
+        1,
+        X64PcRelative32,
+        Code(@native.CodeSymbol::new("callee")),
+      ),
+    ],
+    sources: [],
+    traps: [],
+    unwind: [],
+    safepoints: [@code_object.SafepointSite::new(0, Gc, [Register(Int, 0)])],
+  }
+  data.verify()
+  data.shrink_to_fit()
+  let frozen = data.freeze()
+  data.code[0] = b'\x90'
+  data.safepoints[0].roots[0] = Register(Int, 99)
+  try data.verify() catch {
+    InvalidRootLocation(..) => ()
+    error => raise error
+  } noraise {
+    _ => fail("mutated data must be revalidated")
+  }
+  frozen.verify()
+  assert_eq(frozen.code()[0], b'\xe8')
+  debug_inspect(frozen.safepoints()[0].roots, content="[Register(Int, 0)]")
+  let roots = frozen.safepoints()[0].roots
+  roots.clear()
+  debug_inspect(frozen.safepoints()[0].roots, content="[Register(Int, 0)]")
+  data.relocations.clear()
+  try data.freeze() |> ignore catch {
+    InvalidRootLocation(..) => ()
+    error => raise error
+  } noraise {
+    _ => fail("freeze must reject invalid nested metadata")
+  }
+}

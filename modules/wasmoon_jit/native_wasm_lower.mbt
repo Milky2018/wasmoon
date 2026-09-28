@@ -152,15 +152,18 @@ fn wasm_aarch64_context(
 }
 
 ///|
-fn compile_wasm_body_x64_target(
+fn[T] compile_wasm_body_x64_target(
   function : @milkir.Function,
   validation_context : @wasm_milkir.WasmValidationContext,
   use_subtype_indirect_check : Bool,
   canonical_type_indices : Array[Int],
   function_index? : Int = -1,
   record_metrics? : Bool = false,
-  compilation_session? : @x64_target.CompilationSession = @x64_target.CompilationSession::new(),
-) -> X64TargetCompilation raise JitPipelineError {
+  compile~ : (@x64_target.SelectedFunction, (@vcode.TargetCompileEvent) -> Unit) -> (
+    T,
+    Int,
+  ) raise @x64_target.X64CompileError,
+) -> X64TargetCompilation[T] raise JitPipelineError {
   let environment_tick = detail_metrics_tick(record_metrics)
   let environment = wasmoon_native_environment(
     use_subtype_indirect_check, canonical_type_indices,
@@ -220,21 +223,7 @@ fn compile_wasm_body_x64_target(
   let selected = session.finish_selected(verify_selected=compiler_validation()) catch {
     error => raise X64LoweringFailed(cause=error)
   }
-  let compiled = try {
-    match observer {
-      Some(observe) =>
-        compilation_session.compile_selected(
-          selected,
-          on_event=observe,
-          verify_allocation=compiler_validation(),
-        )
-      None =>
-        compilation_session.compile_selected(
-          selected,
-          verify_allocation=compiler_validation(),
-        )
-    }
-  } catch {
+  let compiled = compile(selected, observer.unwrap_or(fn(_) { () })) catch {
     error => raise X64CompilationFailed(cause=error)
   }
   let (object, frame_size) = compiled
@@ -242,15 +231,18 @@ fn compile_wasm_body_x64_target(
 }
 
 ///|
-fn compile_wasm_body_aarch64_target(
+fn[T] compile_wasm_body_aarch64_target(
   function : @milkir.Function,
   validation_context : @wasm_milkir.WasmValidationContext,
   use_subtype_indirect_check : Bool,
   canonical_type_indices : Array[Int],
   function_index? : Int = -1,
   record_metrics? : Bool = false,
-  compilation_session? : @aarch64_target.CompilationSession = @aarch64_target.CompilationSession::new(),
-) -> AArch64TargetCompilation raise JitPipelineError {
+  compile~ : (
+    @aarch64_target.SelectedFunction,
+    (@vcode.TargetCompileEvent) -> Unit,
+  ) -> (T, Int) raise @aarch64_target.AArch64CompileError,
+) -> AArch64TargetCompilation[T] raise JitPipelineError {
   let environment_tick = detail_metrics_tick(record_metrics)
   let environment = wasmoon_native_environment(
     use_subtype_indirect_check, canonical_type_indices,
@@ -310,21 +302,7 @@ fn compile_wasm_body_aarch64_target(
   let selected = session.finish_selected(verify_selected=compiler_validation()) catch {
     error => raise AArch64LoweringFailed(cause=error)
   }
-  let compiled = try {
-    match observer {
-      Some(observe) =>
-        compilation_session.compile_selected(
-          selected,
-          on_event=observe,
-          verify_allocation=compiler_validation(),
-        )
-      None =>
-        compilation_session.compile_selected(
-          selected,
-          verify_allocation=compiler_validation(),
-        )
-    }
-  } catch {
+  let compiled = compile(selected, observer.unwrap_or(fn(_) { () })) catch {
     error => raise AArch64CompilationFailed(cause=error)
   }
   let (object, frame_size) = compiled
@@ -424,9 +402,14 @@ pub fn plan_wasm_body_aarch64_code_object(
   use_subtype_indirect_check? : Bool = true,
   canonical_type_indices? : Array[Int] = [],
 ) -> @code_object.UnlinkedCodeObject raise JitPipelineError {
-  compile_wasm_body_aarch64_target(
-    function, validation_context, use_subtype_indirect_check, canonical_type_indices,
-  ).object
+  let compiled = compile_wasm_body_aarch64_target(
+    function,
+    validation_context,
+    use_subtype_indirect_check,
+    canonical_type_indices,
+    compile=compile_selected_aarch64_object,
+  )
+  compiled.object
 }
 
 ///|
@@ -436,7 +419,12 @@ pub fn plan_wasm_body_x64_code_object(
   use_subtype_indirect_check? : Bool = true,
   canonical_type_indices? : Array[Int] = [],
 ) -> @code_object.UnlinkedCodeObject raise JitPipelineError {
-  compile_wasm_body_x64_target(
-    function, validation_context, use_subtype_indirect_check, canonical_type_indices,
-  ).object
+  let compiled = compile_wasm_body_x64_target(
+    function,
+    validation_context,
+    use_subtype_indirect_check,
+    canonical_type_indices,
+    compile=compile_selected_x64_object,
+  )
+  compiled.object
 }

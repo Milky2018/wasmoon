@@ -51,7 +51,7 @@ target TargetSink --> target-owned Inst in vcode.Function[Inst]
                               target machine-code emitter
                                       |
                                       v
-                         code_object.UnlinkedCodeObject
+                       CodeData / UnlinkedCodeObject
                                       |
                                       v
                        embedding-owned linker and code loader
@@ -176,8 +176,8 @@ after any later mutation.
 
 ## Unlinked code objects
 
-`Milky2018/vcode/code_object.build` is the final reusable boundary between a
-target emitter and an embedding runtime. It copies the machine-code bytes and
+`Milky2018/vcode/code_object.build` provides an immutable snapshot boundary
+between a target emitter and an embedding runtime. It copies the machine-code bytes and
 metadata, validates them, and returns an `UnlinkedCodeObject` only when all
 architecture, alignment, bounds, relocation, instruction-encoding, stack-map,
 root-location, and unwind-state contracts hold.
@@ -186,6 +186,16 @@ root-location, and unwind-state contracts hold.
 ///|
 let object = @code_object.build(@code_object.X64, [b'\xc3'])
 ```
+
+For runtimes whose artifact representation is already mutable, AArch64 and x64
+`CompilationSession::compile_selected_data` return fresh `CodeData` arrays. This
+path checks the same code-object contracts and trims builder over-allocation,
+but avoids copying into and back out of an immutable snapshot. The returned
+arrays are independent of session scratch. Verification applies to their current
+contents; subsequent mutation requires revalidation before installation.
+`CodeData::freeze` makes an independent immutable snapshot when one is needed.
+Existing `UnlinkedCodeObject` APIs retain their defensive-copy guarantees,
+including nested safepoint roots.
 
 Relocations remain symbolic. The package does not resolve runtime symbols,
 apply relocations, allocate executable memory, encode platform unwind formats,

@@ -60,6 +60,7 @@ pub struct AllocationSession {
 }
 pub fn[F : FunctionView] AllocationSession::allocate_function(Self, F, MachineEnv, config? : RegallocConfig) -> AllocationPlan raise VerifyError
 pub fn AllocationSession::new() -> Self
+pub fn AllocationSession::release_scratch(Self) -> Unit
 
 pub struct BundleAllocationStatistics {
   mut queue_pops : Int
