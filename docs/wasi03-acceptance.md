@@ -50,14 +50,22 @@ stacks in binary parsing and validation, Windows `rmdir(".")` errors, and Linux
 socket buffer size normalization. The runner preserves native Windows exception
 statuses and applies its configured timeout to upstream guest waits.
 
+Native WASI/HTTP scheduling integration (ISS-572) is accepted at runtime commit
+`da047506502be734bb413e4987c1c7ced9845e94` in
+[CI run 36374528719](https://github.com/Milky2018/wasmoon/actions/runs/36374528719).
+Linux, macOS, Windows Clang, and Windows MSVC passed the standalone readiness,
+cancellation, ownership, and shutdown regression and the mixed native-timer/HTTP
+command on both engines. Every platform's external Preview 3 report retains the
+same 106-pass/4-fail baseline. Linux ASan/UBSan also passed. The integration uses
+async's public `ExternalEventLoop`; only its outer poll consumes kernel events,
+while context-local polls observe persistent readiness. See
+`modules/wasmoon/async_native/README.mbt.md` for the embedding initialization and
+synchronous invocation contracts.
+
 Remaining boundaries:
 
 - ISS-568: async exposes only `TlsError(String)`; structured certificate/protocol/
   alert categories depend on [async issue #620](https://github.com/moonbitlang/async/issues/620).
-- ISS-572: native WASI/HTTP event-loop integration is implemented using async
-  `ExternalEventLoop`. A mixed command guest passes on both engines locally;
-  cross-platform CI acceptance is pending. See `async_native/README.mbt.md`
-  under the Wasmoon module for the embedding initialization contract.
 - ISS-567: the intermittent macOS misc JIT timeout is outside this repair scope.
 
 ## Original audit verdict
