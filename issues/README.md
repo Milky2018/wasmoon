@@ -615,6 +615,7 @@ graph TD
   ISS_587["ISS-587: Evaluate remaining compiler allocation hotspots independently"]
   ISS_588["ISS-588: Refresh Wasmtime reference tools and correctness corpora"]
   ISS_589["ISS-589: Attribute cold CLI startup and compilation costs"]
+  ISS_590["ISS-590: Investigate allocator and acyclic optimizer hotspots"]
   ISS_002 --> ISS_003
   ISS_002 --> ISS_004
   ISS_003 --> ISS_005
