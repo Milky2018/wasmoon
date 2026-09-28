@@ -4340,7 +4340,7 @@ fn emit_verified(
   function : @vcode.Function[X64Inst],
   allocation : @vcode.Allocation,
   frame : X64Frame,
-) -> @code_object.CodeData raise X64EmitError {
+) -> @code_object.UnlinkedCodeObject raise X64EmitError {
   let buffer = CodeBuffer::new()
   let block_offsets = Array::make(function.block_count(), -1)
   let sources : Array[@code_object.SourceSite] = []
@@ -4389,14 +4389,16 @@ fn emit_verified(
   }
   patch_branches(buffer, function, block_offsets)
   let relocations = buffer.relocations
-  {
-    architecture: X64,
-    code: buffer.code,
-    relocations,
-    sources,
-    traps,
-    safepoints,
-    unwind,
+  @code_object.build(
+    X64,
+    buffer.code,
+    relocations~,
+    sources~,
+    traps~,
+    safepoints~,
+    unwind~,
+  ) catch {
+    error => raise InvalidCodeObject(cause=error)
   }
 }
 
@@ -4409,10 +4411,7 @@ pub fn emit(
   verify_frame(function, allocation, frame) catch {
     error => raise InvalidFrame(cause=error)
   }
-  let data = emit_verified(function, allocation, frame)
-  data.freeze() catch {
-    error => raise InvalidCodeObject(cause=error)
-  }
+  emit_verified(function, allocation, frame)
 }
 
 ///|

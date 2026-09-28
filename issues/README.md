@@ -611,7 +611,7 @@ graph TD
   ISS_583["ISS-583: Retain shared native resources with MoonBit RC"]
   ISS_584["ISS-584: Use the latest stable MoonBit toolchain locally and in CI"]
   ISS_585["ISS-585: Check all public descriptor memory accesses"]
-  ISS_586["ISS-586: Reduce compiler temporary storage and measure the result"]
+  ISS_586["ISS-586: Measure and reduce real compiler allocation churn"]
   ISS_002 --> ISS_003
   ISS_002 --> ISS_004
   ISS_003 --> ISS_005

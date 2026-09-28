@@ -1,6 +1,6 @@
 ///|
-priv struct X64TargetCompilation[T] {
-  object : T
+priv struct X64TargetCompilation {
+  object : @code_object.UnlinkedCodeObject
   frame_size : Int
 }
 
@@ -17,16 +17,4 @@ fn default_x64_context() -> @x64_target.LoweringContext raise JitPipelineError {
     error => raise X64AbiInvalid(cause=error)
   }
   @x64_target.LoweringContext::new(abi)
-}
-
-///|
-fn compile_selected_x64_object(
-  selected : @x64_target.SelectedFunction,
-  on_event : (@vcode.TargetCompileEvent) -> Unit,
-) -> (@code_object.UnlinkedCodeObject, Int) raise @x64_target.X64CompileError {
-  @x64_target.compile_selected(
-    selected,
-    on_event~,
-    verify_allocation=compiler_validation(),
-  )
 }

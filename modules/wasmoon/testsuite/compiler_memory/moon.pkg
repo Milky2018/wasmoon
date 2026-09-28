@@ -1,0 +1,9 @@
+import {
+  "Milky2018/wasmoon/cmd/wasmoon/commands",
+  "Milky2018/wasmoon_jit/artifact",
+  "Milky2018/wasmoon_jit/perf",
+  "moonbitlang/core/env",
+  "moonbitlang/x/fs",
+}
+
+pkgtype(kind: "executable")

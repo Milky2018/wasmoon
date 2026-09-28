@@ -565,7 +565,6 @@ pub struct NativeCompiler {
 }
 pub fn NativeCompiler::compile_wasm_body_artifact_function(Self, @milkir.Function, @wasm_milkir.WasmValidationContext, function_index~ : Int, signature~ : @native_types.Signature, use_subtype_indirect_check? : Bool, canonical_type_indices? : Array[Int]) -> @artifact.FunctionCode raise JitPipelineError
 pub fn NativeCompiler::new(NativeTarget) -> Self
-pub fn NativeCompiler::release_scratch(Self) -> Unit
 
 type NativeFiber
 pub fn NativeFiber::cancel(Self) -> Unit raise NativeFiberError

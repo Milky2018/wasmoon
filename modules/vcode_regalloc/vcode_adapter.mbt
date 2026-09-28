@@ -218,11 +218,3 @@ pub fn[Inst] allocate_vcode(
   }
   allocate_selected_vcode(function, environment)
 }
-
-///|
-/// Release retained allocator buffers between serial compilations. Returned
-/// results remain valid, and this session can compile again afterwards.
-/// Must not be called from a compilation observer during an active job.
-pub fn AllocationSession::release_scratch(self : AllocationSession) -> Unit {
-  self.core.release_scratch()
-}

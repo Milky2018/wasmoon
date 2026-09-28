@@ -54,16 +54,8 @@ test "artifact producer preserves symbolic imported and internal code targets" {
     ],
     unwind=[@code_object.UnwindDirective::new(1, StackAlloc(size=16))],
   )
-  let function = artifact_function_from_code_data(
-    {
-      architecture: object.architecture(),
-      code: object.code(),
-      relocations: object.relocations(),
-      sources: object.sources(),
-      traps: object.traps(),
-      safepoints: object.safepoints(),
-      unwind: object.unwind(),
-    },
+  let function = artifact_function_from_code_object(
+    object,
     frame_size=16,
     function_index=2,
     signature=@native.Signature::new([], []),

@@ -1,6 +1,6 @@
 ///|
-priv struct AArch64TargetCompilation[T] {
-  object : T
+priv struct AArch64TargetCompilation {
+  object : @code_object.UnlinkedCodeObject
   frame_size : Int
 }
 
@@ -17,16 +17,4 @@ fn default_aarch64_context() -> @aarch64_target.LoweringContext raise JitPipelin
     error => raise AArch64AbiInvalid(cause=error)
   }
   @aarch64_target.LoweringContext::new(abi)
-}
-
-///|
-fn compile_selected_aarch64_object(
-  selected : @aarch64_target.SelectedFunction,
-  on_event : (@vcode.TargetCompileEvent) -> Unit,
-) -> (@code_object.UnlinkedCodeObject, Int) raise @aarch64_target.AArch64CompileError {
-  @aarch64_target.compile_selected(
-    selected,
-    on_event~,
-    verify_allocation=compiler_validation(),
-  )
 }

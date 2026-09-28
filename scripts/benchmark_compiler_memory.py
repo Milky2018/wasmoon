@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Compare fresh-process compiler time/RSS with serial, cold-cache samples.
+"""Measure complete cold compilation of real modules and compare exact artifacts.
 
-Uses the host's /usr/bin/time (macOS or Linux). Artifacts, metrics, input hashes,
-raw logs, and per-sample results are retained for independent inspection.
+Build testsuite/compiler_memory at both revisions first. Each sample launches a
+fresh process; the fixture calls compile_module directly, bypassing the JIT cache.
+Allocation instrumentation must not be enabled in these timing binaries.
 """
 from __future__ import annotations
 
@@ -10,24 +11,13 @@ import argparse
 import hashlib
 import json
 import os
-from pathlib import Path
 import platform
+import random
 import re
 import statistics
 import subprocess
-import tempfile
 import time
-
-
-def function(name: str, operations: int) -> str:
-    step = 'local.get 0 i32.add i32.const 5 i32.rotl i32.const 1664525 i32.mul'
-    return f'(func ${name} (param i32) (result i32) local.get 0 ' + ' '.join([step] * operations) + ')'
-
-
-def workload(sizes: list[int]) -> str:
-    functions = [function(f'f{i}', size) for i, size in enumerate(sizes)]
-    calls = [f'i32.const {i + 1} call $f{i} drop' for i in range(len(sizes))]
-    return '(module\n' + '\n'.join(functions) + '\n(func (export "main") (result i32) ' + ' '.join(calls) + ' i32.const 42))\n'
+from pathlib import Path
 
 
 def peak_rss(log: str, system: str) -> int:
@@ -42,100 +32,90 @@ def peak_rss(log: str, system: str) -> int:
     return int(match[1]) * multiplier
 
 
-def sample(binary: Path, case: Path, directory: Path, system: str, metrics_enabled: bool) -> dict:
-    directory.mkdir(parents=True)
-    metrics = directory / 'metrics.json'
-    cache_report = directory / 'cache.json'
-    with tempfile.TemporaryDirectory(prefix='wasmoon-compile-cache-') as cache:
-        env = os.environ | {
-            'LC_ALL': 'C', 'WASMOON_JIT_CACHE_DIR': cache,
-            'WASMOON_JIT_CACHE_REPORT': str(cache_report),
-            'WASMOON_PERF_METRICS': '1' if metrics_enabled else '0',
-            'WASMOON_PERF_METRICS_DETAIL': '1' if metrics_enabled else '0',
-            'WASMOON_PERF_METRICS_FILE': str(metrics),
-        }
-        command = ['/usr/bin/time', '-l' if system == 'Darwin' else '-v',
-                   str(binary), 'run', '--invoke', 'main', str(case)]
-        started = time.monotonic()
-        result = subprocess.run(command, capture_output=True, text=True, env=env, timeout=180)
-        elapsed = time.monotonic() - started
-    (directory / 'stdout.txt').write_text(result.stdout)
-    (directory / 'stderr.txt').write_text(result.stderr)
-    if result.returncode or (metrics_enabled and not metrics.exists()):
-        raise RuntimeError(f'compilation failed or metrics missing: {directory}')
-    cache_evidence = json.loads(cache_report.read_text())
-    if cache_evidence.get('freshly_compiled') is not True or cache_evidence.get('cache_hit') is not False:
-        raise RuntimeError(f'expected cold compilation: {directory}')
-    data = json.loads(metrics.read_text()) if metrics_enabled else None
-    functions = data['functions'] if data else []
-    if metrics_enabled and (not functions or int(data['module_compile_us']) <= 0):
-        raise RuntimeError(f'no fresh compilation recorded: {directory}')
-    return {
-        'compile_us': int(data['module_compile_us']) if data else None,
-        'packaging_us': sum(int(p['duration_us']) for f in functions for p in f.get('compile_subphases', []) if p['name'] == 'artifact_packaging') if data else None,
-        'peak_rss_bytes': peak_rss(result.stderr, system),
-        'wall_seconds': elapsed,
-        'functions': len(functions),
-        'code_bytes': sum(f['code_size'] for f in functions),
-        'stdout': result.stdout,
-    }
+def digest(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def paired_change(before: list[float], after: list[float]) -> dict:
+    if not before or len(before) != len(after) or any(x <= 0 for x in before):
+        raise ValueError('expected positive, equally sized paired measurements')
+    changes = [(a / b - 1) * 100 for b, a in zip(before, after)]
+    rng = random.Random(586)
+    medians = sorted(statistics.median(rng.choices(changes, k=len(changes)))
+                     for _ in range(10000))
+    return {'median_percent': statistics.median(changes),
+            'bootstrap_95_percent': [medians[250], medians[9749]]}
+
+
+def sample(binary: Path, workload: Path, output: Path, system: str) -> dict:
+    output.mkdir(parents=True)
+    artifact = output / 'result.artifact'
+    started = time.monotonic()
+    result = subprocess.run(
+        ['/usr/bin/time', '-l' if system == 'Darwin' else '-v', str(binary),
+         str(workload), str(artifact)], capture_output=True, text=True, timeout=180,
+        env=os.environ | {'WASMOON_PERF_METRICS': '0', 'WASMOON_PERF_METRICS_DETAIL': '0'})
+    wall = time.monotonic() - started
+    (output / 'stdout.txt').write_text(result.stdout)
+    (output / 'stderr.txt').write_text(result.stderr)
+    if result.returncode != 0:
+        raise RuntimeError(f'compilation failed: {output}')
+    duration = int(result.stdout.strip())
+    if duration <= 0:
+        raise RuntimeError(f'invalid compilation duration: {output}')
+    return {'compile_us': duration, 'wall_seconds': wall,
+            'peak_rss_bytes': peak_rss(result.stderr, system),
+            'artifact_sha256': digest(artifact)}
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--before', type=Path, required=True)
-    parser.add_argument('--after', type=Path)
+    parser.add_argument('--after', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
-    parser.add_argument('--repetitions', type=int, default=7)
-    parser.add_argument('--no-metrics', action='store_true', help='measure ordinary CLI wall time/RSS without profiling allocations')
+    parser.add_argument('--repetitions', type=int, default=15)
+    parser.add_argument('workloads', nargs='+', type=Path)
     args = parser.parse_args()
-    if args.repetitions < 1:
-        parser.error('repetitions must be positive')
+    if args.repetitions < 3:
+        parser.error('at least three pairs are required')
     system = platform.system()
     if system not in {'Darwin', 'Linux'}:
-        parser.error('peak RSS collection currently requires macOS or Linux')
-    out = args.output.resolve()
-    out.mkdir(parents=True, exist_ok=False)
-    binaries = {'before': args.before.resolve()}
-    if args.after:
-        binaries['after'] = args.after.resolve()
-    cases = {
-        'many-small': [4] * 1500, 'one-medium': [3000],
-        'one-large': [30000], 'large-then-small': [30000] + [4] * 1000,
-    }
-    report = {'platform': platform.platform(), 'repetitions': args.repetitions, 'metrics_enabled': not args.no_metrics,
-              'binary_sha256': {k: hashlib.sha256(v.read_bytes()).hexdigest() for k, v in binaries.items()},
+        parser.error('RSS collection requires macOS or Linux')
+    output = args.output.resolve()
+    output.mkdir(parents=True, exist_ok=False)
+    binaries = {'before': args.before.resolve(), 'after': args.after.resolve()}
+    report = {'platform': platform.platform(), 'repetitions': args.repetitions,
+              'binary_sha256': {k: digest(v) for k, v in binaries.items()},
               'workloads': {}}
-    for name, sizes in cases.items():
-        wat = out / (name + '.wat')
-        wasm = out / (name + '.wasm')
-        wat.write_text(workload(sizes))
-        subprocess.run(['wasm-tools', 'parse', str(wat), '-o', str(wasm)], check=True)
-        samples = {label: [] for label in binaries}
+    for index, source in enumerate(args.workloads):
+        source = source.resolve()
+        key = f'{index}-{source.stem}'
+        samples = {k: [] for k in binaries}
+        # Warm filesystem/code pages once for each binary; artifact caching is absent.
+        for label, binary in binaries.items():
+            sample(binary, source, output / key / label / 'warmup', system)
         for repetition in range(args.repetitions):
-            # Alternate order to limit machine-load and thermal drift bias.
             order = list(binaries)
-            if repetition % 2:
+            if (index + repetition) % 2:
                 order.reverse()
             for label in order:
-                value = sample(binaries[label], wasm, out / name / label / str(repetition), system, not args.no_metrics)
-                if not args.no_metrics and value['functions'] != len(sizes) + 1:
-                    raise RuntimeError(f'incomplete compilation: {name}')
-                samples[label].append(value)
-                print(name, label, repetition, json.dumps(value), flush=True)
-        outputs = {s['stdout'] for rows in samples.values() for s in rows}
-        shapes = {(s['functions'], s['code_bytes']) for rows in samples.values() for s in rows}
-        if len(outputs) != 1 or len(shapes) != 1:
-            raise RuntimeError(f'guest output or emitted-code size differs: {name}')
-        report['workloads'][name] = {
-            'input_sha256': hashlib.sha256(wasm.read_bytes()).hexdigest(),
-            'samples': samples,
-            'medians': {label: {key: statistics.median(s[key] for s in rows) if rows[0][key] is not None else None
-                               for key in ['compile_us', 'packaging_us', 'peak_rss_bytes', 'wall_seconds']}
+                row = sample(binaries[label], source,
+                             output / key / label / str(repetition), system)
+                samples[label].append(row)
+        if len({r['artifact_sha256'] for rows in samples.values() for r in rows}) != 1:
+            raise RuntimeError(f'artifact bytes differ: {source}')
+        summary = {
+            'input': str(source), 'input_sha256': digest(source), 'samples': samples,
+            'medians': {label: {k: statistics.median(r[k] for r in rows)
+                                for k in ['compile_us', 'wall_seconds', 'peak_rss_bytes']}
                         for label, rows in samples.items()},
+            'paired_compile_change': paired_change(
+                [r['compile_us'] for r in samples['before']],
+                [r['compile_us'] for r in samples['after']]),
         }
-        (out / 'summary.json').write_text(json.dumps(report, indent=2) + '\n')
-    print('Results:', out / 'summary.json')
+        report['workloads'][key] = summary
+        (output / 'summary.json').write_text(json.dumps(report, indent=2) + '\n')
+        print(key, summary['medians'], summary['paired_compile_change'], flush=True)
 
 
 if __name__ == '__main__':

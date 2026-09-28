@@ -38,19 +38,6 @@ pub fn Architecture::equal(Self, Self) -> Bool
 pub fn Architecture::not_equal(Self, Self) -> Bool
 pub fn Architecture::to_repr(Self) -> @debug.Repr
 
-pub(all) struct CodeData {
-  architecture : Architecture
-  code : Array[Byte]
-  relocations : Array[Relocation]
-  sources : Array[SourceSite]
-  traps : Array[TrapSite]
-  safepoints : Array[SafepointSite]
-  unwind : Array[UnwindDirective]
-}
-pub fn CodeData::freeze(Self) -> UnlinkedCodeObject raise CodeObjectVerifyError
-pub fn CodeData::shrink_to_fit(Self) -> Unit
-pub fn CodeData::verify(Self) -> Unit raise CodeObjectVerifyError
-
 pub(all) enum RegisterBank {
   Int
   FpVector

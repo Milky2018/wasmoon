@@ -81,14 +81,3 @@ whole-function analysis.
 The production integration is complete. CI validates allocation correctness on
 both native targets; retired allocators and backends are not rebuilt as
 performance or code-size acceptance baselines.
-
-## Reusable session storage
-
-`AllocationSession` retains scalar working-array capacity across serial jobs.
-Use `release_scratch()` when a long-lived session becomes idle to clear and shrink
-those arrays. Previously returned allocation plans remain valid, repeated release
-is harmless, and the next job can reuse the session by regrowing its buffers.
-Do not call it from an allocation observer during an active job. Releasing after
-every function defeats normal reuse; destroying the session also releases its
-buffers. The VCode adapter, target compilation sessions, and Wasmoon's
-`NativeCompiler` expose the same operation at their respective boundaries.

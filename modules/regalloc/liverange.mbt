@@ -523,7 +523,12 @@ pub fn LiveRangeSet::get_by_vreg(
   if vreg.id < 0 {
     return None
   }
-  self.ranges_by_id_for_class(vreg.class).get(vreg.id).bind(range => range)
+  let ranges = self.ranges_by_id_for_class(vreg.class)
+  if vreg.id < ranges.length() {
+    ranges[vreg.id]
+  } else {
+    None
+  }
 }
 
 ///|

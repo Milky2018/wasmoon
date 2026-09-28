@@ -3842,7 +3842,7 @@ fn emit_single_pass(
   allocation : @vcode.Allocation,
   frame : AArch64Frame,
   long_branches? : Bool = false,
-) -> @code_object.CodeData raise AArch64EmitError {
+) -> @code_object.UnlinkedCodeObject raise AArch64EmitError {
   let buffer = CodeBuffer::new(long_branches~)
   let block_offsets = Array::make(function.block_count(), -1)
   let sources : Array[@code_object.SourceSite] = []
@@ -3891,14 +3891,16 @@ fn emit_single_pass(
   }
   patch_branches(buffer, function, block_offsets)
   let relocations = buffer.relocations
-  {
-    architecture: AArch64,
-    code: buffer.code,
-    relocations,
-    sources,
-    traps,
-    safepoints,
-    unwind,
+  @code_object.build(
+    AArch64,
+    buffer.code,
+    relocations~,
+    sources~,
+    traps~,
+    safepoints~,
+    unwind~,
+  ) catch {
+    error => raise InvalidCodeObject(cause=error)
   }
 }
 
@@ -3920,7 +3922,7 @@ fn emit_with_branch_fallback(
   function : @vcode.Function[AArch64Inst],
   allocation : @vcode.Allocation,
   frame : AArch64Frame,
-) -> @code_object.CodeData raise AArch64EmitError {
+) -> @code_object.UnlinkedCodeObject raise AArch64EmitError {
   emit_single_pass(function, allocation, frame) catch {
     BranchOutOfRange(_) =>
       emit_single_pass(function, allocation, frame, long_branches=true)
@@ -3937,8 +3939,5 @@ pub fn emit(
   verify_frame(function, allocation, frame) catch {
     error => raise InvalidFrame(cause=error)
   }
-  let data = emit_with_branch_fallback(function, allocation, frame)
-  data.freeze() catch {
-    error => raise InvalidCodeObject(cause=error)
-  }
+  emit_with_branch_fallback(function, allocation, frame)
 }

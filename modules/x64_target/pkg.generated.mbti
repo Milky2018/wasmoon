@@ -174,9 +174,7 @@ pub struct CompilationSession {
   // private fields
 }
 pub fn CompilationSession::compile_selected(Self, SelectedFunction, on_event? : (@vcode.TargetCompileEvent) -> Unit, verify_allocation? : Bool) -> (@code_object.UnlinkedCodeObject, Int) raise X64CompileError
-pub fn CompilationSession::compile_selected_data(Self, SelectedFunction, on_event? : (@vcode.TargetCompileEvent) -> Unit, verify_allocation? : Bool) -> (@code_object.CodeData, Int) raise X64CompileError
 pub fn CompilationSession::new() -> Self
-pub fn CompilationSession::release_scratch(Self) -> Unit
 
 pub struct DirectLoweringSession {
   // private fields

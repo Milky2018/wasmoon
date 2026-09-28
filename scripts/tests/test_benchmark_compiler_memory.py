@@ -1,7 +1,7 @@
 """Regression checks for compiler benchmark evidence and platform units."""
 import unittest
 
-from scripts.benchmark_compiler_memory import peak_rss, workload
+from scripts.benchmark_compiler_memory import peak_rss, paired_change
 
 
 class CompilerMemoryBenchmarkTests(unittest.TestCase):
@@ -13,9 +13,12 @@ class CompilerMemoryBenchmarkTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             peak_rss('process failed', 'Darwin')
 
-    def test_workload_executes_every_generated_function(self):
-        text = workload([2, 1, 3])
-        for index in range(3):
-            self.assertIn(f'(func $f{index} ', text)
-            self.assertIn(f'call $f{index} drop', text)
-        self.assertIn('(export "main")', text)
+    def test_change_is_paired_not_a_ratio_of_independent_medians(self):
+        result = paired_change([100, 1000, 10000], [90, 900, 9000])
+        self.assertAlmostEqual(result['median_percent'], -10)
+        for bound in result['bootstrap_95_percent']:
+            self.assertAlmostEqual(bound, -10)
+
+    def test_incomplete_pairs_are_rejected(self):
+        with self.assertRaises(ValueError):
+            paired_change([1, 2], [1])
