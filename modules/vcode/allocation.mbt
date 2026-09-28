@@ -161,19 +161,18 @@ fn[Inst] Allocation::for_function_with_storage(
 ) -> Allocation {
   let operand_counts : Array[Int] = []
   let operand_values : Array[Array[Value]] = []
-  for index in 0..<function.instruction_count() {
-    let instruction = function.instruction_at(index).unwrap()
-    let count = function.instruction_operand_count(instruction)
-    operand_counts.push(count)
+  for data in function.instructions {
+    operand_counts.push(data.operand_count)
     operand_values.push(
-      Array::makei(count, operand_index => {
-        function.instruction_operand_at(instruction, operand_index).unwrap().value
+      Array::makei(data.operand_count, operand_index => {
+        Value::new(
+          function.owner,
+          function.operands[data.operand_start + operand_index].vreg.id,
+        )
       }),
     )
   }
-  let value_types = Array::makei(function.value_count(), index => {
-    function.value_type(function.value_at(index).unwrap()).unwrap()
-  })
+  let value_types = function.values.map(value => value.ty)
   {
     source_owner: function.owner,
     owner: Ref(()),

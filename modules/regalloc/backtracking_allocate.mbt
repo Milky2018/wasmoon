@@ -223,7 +223,7 @@ fn build_allocation_segments(
 ///|
 fn segment_has_use(range : LiveRange, fragment : ProgramRange) -> Bool {
   for use_position in range.uses {
-    if fragment.contains(use_position.point, []) {
+    if fragment.contains_natural(use_position.point) {
       return true
     }
   }
@@ -591,14 +591,14 @@ fn segment_at(
   let mut hi = value_segments.length()
   while lo < hi {
     let mid = lo + (hi - lo) / 2
-    if segments[value_segments[mid]].range.end.compare_with_order(point, []) < 0 {
+    if segments[value_segments[mid]].range.end.compare_natural(point) < 0 {
       lo = mid + 1
     } else {
       hi = mid
     }
   }
   if lo < value_segments.length() &&
-    segments[value_segments[lo]].range.contains(point, []) {
+    segments[value_segments[lo]].range.contains_natural(point) {
     Some(value_segments[lo])
   } else {
     None
@@ -617,14 +617,14 @@ fn live_home_value_at(
   let mut hi = home_segments.length()
   while lo < hi {
     let mid = lo + (hi - lo) / 2
-    if segments[home_segments[mid]].range.end.compare_with_order(point, []) < 0 {
+    if segments[home_segments[mid]].range.end.compare_natural(point) < 0 {
       lo = mid + 1
     } else {
       hi = mid
     }
   }
   if lo < home_segments.length() &&
-    segments[home_segments[lo]].range.contains(point, []) {
+    segments[home_segments[lo]].range.contains_natural(point) {
     return Some(segments[home_segments[lo]].value)
   }
   None
@@ -639,7 +639,7 @@ fn live_register_value_at(
   point : ProgramPoint,
 ) -> VirtualReg? {
   let resident = resident_by_register[register_index]
-  if resident >= 0 && segments[resident].range.contains(point, []) {
+  if resident >= 0 && segments[resident].range.contains_natural(point) {
     return Some(segments[resident].value)
   }
   live_home_value_at(register_home_segments, segments, register_index, point)
@@ -748,11 +748,11 @@ fn[F : FunctionView] assign_segment_operands(
     home_segments.sort_by(fn(left, right) {
       let left_range = segments[left].range
       let right_range = segments[right].range
-      let end_order = left_range.end.compare_with_order(right_range.end, [])
+      let end_order = left_range.end.compare_natural(right_range.end)
       if end_order != 0 {
         end_order
       } else {
-        left_range.start.compare_with_order(right_range.start, [])
+        left_range.start.compare_natural(right_range.start)
       }
     })
   }

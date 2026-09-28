@@ -945,3 +945,31 @@ test "liveness retains operand timing preference and tie metadata" {
   assert_eq(position.preference, Some(preference))
   assert_eq(position.tie_id, 7)
 }
+
+///|
+test "natural program points preserve signed ordering and inclusive bounds" {
+  let points = [
+    ProgramPoint(-2_147_483_648, 2_147_483_647),
+    ProgramPoint(-1, -1),
+    ProgramPoint(0, -2_147_483_648),
+    ProgramPoint(0, 2_147_483_647),
+    ProgramPoint(1, -1),
+    ProgramPoint(2_147_483_647, 0),
+  ]
+  for i in 0..<points.length() {
+    for j in 0..<points.length() {
+      let expected = if i < j { -1 } else if i > j { 1 } else { 0 }
+      assert_eq(points[i].compare_natural(points[j]), expected)
+      assert_eq(points[i].compare_with_order(points[j], []), expected)
+    }
+  }
+  let range = ProgramRange(points[1], points[4])
+  for i in 0..<points.length() {
+    assert_eq(range.contains_natural(points[i]), i >= 1 && i <= 4)
+  }
+  // A caller-supplied block permutation must still override numeric order.
+  inspect(
+    ProgramPoint(0, 0).compare_with_order(ProgramPoint(1, 0), [1, 0]),
+    content="1",
+  )
+}

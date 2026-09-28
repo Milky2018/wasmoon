@@ -26,13 +26,23 @@ pub fn ProgramPoint::compare_with_order(
   } else {
     other.block
   }
+  compare_program_positions(lhs_block, self.inst, rhs_block, other.inst)
+}
+
+///|
+fn compare_program_positions(
+  lhs_block : Int,
+  lhs_inst : Int,
+  rhs_block : Int,
+  rhs_inst : Int,
+) -> Int {
   if lhs_block < rhs_block {
     -1
   } else if lhs_block > rhs_block {
     1
-  } else if self.inst < other.inst {
+  } else if lhs_inst < rhs_inst {
     -1
-  } else if self.inst > other.inst {
+  } else if lhs_inst > rhs_inst {
     1
   } else {
     0
@@ -563,4 +573,20 @@ fn add_live_range_fragment(
   end : ProgramPoint,
 ) -> Unit {
   find_or_create_live_range(ranges, vreg).add_range(ProgramRange(start, end))
+}
+
+///|
+fn ProgramPoint::compare_natural(
+  self : ProgramPoint,
+  other : ProgramPoint,
+) -> Int {
+  compare_program_positions(self.block, self.inst, other.block, other.inst)
+}
+
+///|
+fn ProgramRange::contains_natural(
+  self : ProgramRange,
+  point : ProgramPoint,
+) -> Bool {
+  self.start.compare_natural(point) <= 0 && point.compare_natural(self.end) <= 0
 }
