@@ -3,6 +3,7 @@ package "Milky2018/wasmoon_jit/jit_ffi"
 
 import {
   "Milky2018/wasm_core/types",
+  "Milky2018/wasmoon_jit/native/callable",
   "moonbitlang/core/debug",
 }
 
@@ -29,6 +30,10 @@ pub fn GCHeapHandle::is_null(Self) -> Bool
 pub fn GCHeapHandle::null() -> Self
 pub fn GCHeapHandle::to_repr(Self) -> @debug.Repr
 pub impl @debug.Debug for GCHeapHandle
+
+pub type JITContext
+pub fn JITContext::bind_callable_registry(Self, @callable.NativeCallableRegistry, FixedArray[Int], FixedArray[Int]) -> Unit
+pub fn JITContext::new(Int) -> Self
 
 pub type MemoryDescriptor
 pub fn MemoryDescriptor::equal(Self, Self) -> Bool

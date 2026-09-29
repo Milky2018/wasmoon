@@ -47,17 +47,6 @@ pub fn NativeCallable::release(self : NativeCallable) -> Unit {
 }
 
 ///|
-#borrow(context, registry, local_types, tags)
-extern "c" fn bind_callable_registry(
-  context : JITContext,
-  registry : NativeCallableRegistry,
-  local_types : FixedArray[Int],
-  local_count : Int,
-  tags : FixedArray[Int],
-  tag_count : Int,
-) -> Bool = "wasmoon_jit_bind_callable_registry"
-
-///|
 /// Bind shared Store identities with this instance's local type and tag maps.
 pub fn NativeJITContext::bind_callable_registry(
   self : NativeJITContext,
@@ -73,16 +62,7 @@ pub fn NativeJITContext::bind_callable_registry(
   for i, address in tags {
     tag_addresses[i] = address
   }
-  if !bind_callable_registry(
-      self.handle,
-      registry,
-      locals,
-      locals.length(),
-      tag_addresses,
-      tag_addresses.length(),
-    ) {
-    abort("failed to allocate native callable instance mappings")
-  }
+  self.handle.bind_callable_registry(registry, locals, tag_addresses)
 }
 
 ///|

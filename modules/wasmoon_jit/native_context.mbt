@@ -10,7 +10,7 @@ struct NativeJITContext {
 ///|
 pub fn NativeJITContext::try_alloc(total_funcs : Int) -> NativeJITContext? {
   let context : NativeJITContext = {
-    handle: c_jit_alloc_context_managed(total_funcs),
+    handle: @jit_ffi.JITContext::new(total_funcs),
     jit_tables: [],
     configured_native_fiber_stack_size: 0L,
   }

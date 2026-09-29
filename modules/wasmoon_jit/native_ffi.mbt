@@ -84,13 +84,7 @@ extern "c" fn c_jit_get_hostcall_num_results() -> Int = "wasmoon_jit_get_hostcal
 // ============ GC-managed JITContext ============
 
 ///|
-/// GC-managed JIT context object
-/// The context is automatically freed when the object is garbage collected
-priv type JITContext
-
-///|
-/// Allocate GC-managed JIT context
-extern "c" fn c_jit_alloc_context_managed(func_count : Int) -> JITContext = "wasmoon_jit_alloc_context_managed"
+using @jit_ffi {type JITContext}
 
 ///|
 /// Allocate linear memory for generic buffers (globals, etc.)

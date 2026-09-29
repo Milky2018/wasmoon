@@ -552,14 +552,87 @@ test "Store callable registry updates are shared and preserve instance isolation
   let first = @wasmoon_jit.NativeCallableRegistry::new()
   let second = @wasmoon_jit.NativeCallableRegistry::new()
   assert_true(first.replace([-1, 0], [(16777216L, 1)]))
+  assert_true(second.replace([-1, 0], [(16777216L, 0)]))
+  let a = @jit_ffi.JITContext::new(1)
+  let b = @jit_ffi.JITContext::new(1)
+  let c = @jit_ffi.JITContext::new(1)
+  a.bind_callable_registry(first, [0], [7])
+  b.bind_callable_registry(first, [1], [8])
+  c.bind_callable_registry(second, [0], [9])
+  inspect(@native_test_support.context_callable_tag(a), content="7")
+  inspect(@native_test_support.context_callable_tag(b), content="8")
   inspect(
-    @native_test_support.shared_callable_registry(first, second),
+    @native_test_support.context_callable_lookup(a, 16777216L),
     content="1",
   )
-  // The native contexts released their references without consuming ours.
-  assert_true(first.replace([], []))
+  inspect(
+    @native_test_support.context_callable_lookup(c, 16777216L),
+    content="0",
+  )
+  inspect(
+    @native_test_support.context_callable_subtype(a, 16777216L, 0),
+    content="1",
+  )
+  assert_true(first.replace([-1, -1], [(16777216L, 1)]))
+  inspect(
+    @native_test_support.context_callable_subtype(a, 16777216L, 0),
+    content="0",
+  )
+  assert_true(first.replace([-1, 0], [(16777216L, 0)]))
+  inspect(
+    @native_test_support.context_callable_lookup(b, 16777216L),
+    content="0",
+  )
+  inspect(
+    @native_test_support.context_callable_subtype(b, 16777216L, 0),
+    content="0",
+  )
+  inspect(
+    @native_test_support.context_callable_subtype(a, 16777216L, 2147483647),
+    content="0",
+  )
+  a.bind_callable_registry(second, [0], [10])
   first.clear()
-  second.clear()
+  first.clear()
+  inspect(
+    @native_test_support.context_callable_lookup(b, 16777216L),
+    content="-1",
+  )
+  inspect(
+    @native_test_support.context_callable_lookup(a, 16777216L),
+    content="0",
+  )
+  assert_true(second.replace([-1, 0], [(16777216L, 1)]))
+  inspect(
+    @native_test_support.context_callable_lookup(a, 16777216L),
+    content="1",
+  )
+  inspect(@native_test_support.context_callable_tag(a), content="10")
+}
+
+///|
+fn context_outliving_registry() -> @jit_ffi.JITContext {
+  let registry = @wasmoon_jit.NativeCallableRegistry::new()
+  assert_true(registry.replace([-1], [(16L, 0)])) catch {
+    _ => abort("registry setup failed")
+  }
+  let context = @jit_ffi.JITContext::new(1)
+  context.bind_callable_registry(registry, [0], [7])
+  context
+}
+
+///|
+test "context retains MoonBit array storage after registry owner leaves scope" {
+  let context = context_outliving_registry()
+  inspect(
+    @native_test_support.context_callable_lookup(context, 16L),
+    content="0",
+  )
+  inspect(
+    @native_test_support.context_callable_subtype(context, 16L, 0),
+    content="1",
+  )
+  inspect(@native_test_support.context_callable_tag(context), content="7")
 }
 
 ///|

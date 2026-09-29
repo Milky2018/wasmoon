@@ -36,77 +36,6 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_test_context_optional_state(void) {
     return passed;
 }
 
-extern void *wasmoon_jit_alloc_context_managed(int func_count);
-extern int64_t wasmoon_jit_context_ptr(void *context);
-extern int32_t wasmoon_jit_bind_callable_registry(void *context, void *registry,
-    const int32_t *locals, int32_t local_count, const int32_t *tags, int32_t tag_count);
-extern int32_t wasmoon_callable_registry_replace(void *registry,
-    const int32_t *parents, int32_t count, const int64_t *entries, int32_t entry_count);
-extern void wasmoon_callable_registry_clear(void *registry);
-
-MOONBIT_FFI_EXPORT int32_t wasmoon_test_shared_callable_registry(void *first, void *second) {
-    void *owners[3];
-    jit_context_t *contexts[3];
-    int32_t locals[] = {0, 1};
-    int32_t tags[] = {7, 8};
-    int32_t parents[] = {-1, 0};
-    int64_t entries[] = {0x1000000, 1};
-    int passed = wasmoon_callable_registry_replace(first, parents, 2, entries, 1);
-    jit_callable_registry_t *view = first;
-    int32_t *original_parents = view->parents;
-    jit_callable_entry_t *original_entries = view->entries;
-    passed &= wasmoon_callable_registry_replace(first, parents, 2, entries, 1);
-    passed &= view->parents == original_parents && view->entries == original_entries;
-    entries[1] = 0;
-    passed &= wasmoon_callable_registry_replace(second, parents, 2, entries, 1);
-    for (int i = 0; i < 3; ++i) {
-        owners[i] = wasmoon_jit_alloc_context_managed(1);
-        contexts[i] = (jit_context_t *)(uintptr_t)wasmoon_jit_context_ptr(owners[i]);
-        if (!contexts[i]) abort();
-        passed &= wasmoon_jit_bind_callable_registry(owners[i], i == 2 ? second : first,
-            &locals[i % 2], 1, &tags[i % 2], 1);
-    }
-    passed &= ctx_runtime(contexts[0])->callable_registry == ctx_runtime(contexts[1])->callable_registry;
-    passed &= ctx_runtime(contexts[0])->callable_registry != ctx_runtime(contexts[2])->callable_registry;
-    passed &= ctx_runtime(contexts[0])->callable_tags[0] == 7;
-    passed &= ctx_runtime(contexts[1])->callable_tags[0] == 8;
-    int64_t value = FUNCREF_TAG | 0x1000000;
-    passed &= callable_type_for_value(contexts[0], value) == 1;
-    passed &= callable_type_for_value(contexts[2], value) == 0;
-    passed &= gc_ref_test_impl(contexts[0], value, 0, 0) == 1;
-    passed &= gc_ref_test_impl(contexts[1], value, 0, 0) == 1;
-    // Updating one Store changes both bound contexts without rebinding locals.
-    passed &= wasmoon_callable_registry_replace(first, parents, 2, entries, 1);
-    passed &= view->parents == original_parents;
-    passed &= callable_type_for_value(contexts[0], value) == 0;
-    passed &= callable_type_for_value(contexts[1], value) == 0;
-    passed &= gc_ref_test_impl(contexts[1], value, 0, 0) == 0;
-    passed &= gc_ref_test_impl(contexts[0], value, INT32_MAX, 0) == 0;
-    entries[1] = -1;
-    passed &= wasmoon_callable_registry_replace(first, parents, 2, entries, 1);
-    passed &= gc_ref_test_impl(contexts[0], value, 0, 0) == 0;
-    entries[1] = 0;
-    passed &= wasmoon_callable_registry_replace(first, parents, 2, entries, 1);
-    // Rejected replacement preserves the old view.
-    passed &= !wasmoon_callable_registry_replace(first, parents, -1, entries, 1);
-    passed &= !wasmoon_callable_registry_replace(first, NULL, 2, entries, 1);
-    passed &= callable_type_for_value(contexts[0], value) == 0;
-    // Rebinding and releasing a peer must not destroy a surviving shared view.
-    passed &= wasmoon_jit_bind_callable_registry(owners[0], second, locals, 1, tags, 1);
-    moonbit_decref(owners[2]);
-    entries[1] = 1;
-    passed &= wasmoon_callable_registry_replace(second, parents, 2, entries, 1);
-    passed &= callable_type_for_value(contexts[0], value) == 1;
-    passed &= callable_type_for_value(contexts[1], value) == 0;
-    wasmoon_callable_registry_clear(first);
-    wasmoon_callable_registry_clear(first);
-    passed &= callable_type_for_value(contexts[1], value) == -1;
-    passed &= callable_type_for_value(contexts[0], value) == 1;
-    moonbit_decref(owners[0]);
-    moonbit_decref(owners[1]);
-    return passed;
-}
-
 MOONBIT_FFI_EXPORT int32_t wasmoon_test_safepoint_ownership(void) {
     jit_context_t *ctx = alloc_context_internal(3);
     if (!ctx) return 0;
@@ -134,11 +63,25 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_test_safepoint_ownership(void) {
     return passed;
 }
 
-MOONBIT_FFI_EXPORT int32_t wasmoon_test_callable_lookup(void *registry, int64_t value) {
-    void *owner = wasmoon_jit_alloc_context_managed(1);
-    jit_context_t *ctx = (jit_context_t *)(uintptr_t)wasmoon_jit_context_ptr(owner);
-    if (!ctx || !wasmoon_jit_bind_callable_registry(owner, registry, NULL, 0, NULL, 0)) abort();
-    int32_t result = callable_type_for_value(ctx, value);
-    moonbit_decref(owner);
-    return result;
+extern int64_t wasmoon_jit_context_ptr(void *context);
+
+MOONBIT_FFI_EXPORT int32_t wasmoon_test_callable_lookup(void *view, int64_t value) {
+    jit_context_owner_t owner = {0};
+    owner.runtime.callable_registry = view;
+    return callable_type_for_value(&owner.abi, value);
+}
+
+MOONBIT_FFI_EXPORT int32_t wasmoon_test_context_callable_lookup(void *context, int64_t value) {
+    jit_context_t *ctx = (jit_context_t *)(uintptr_t)wasmoon_jit_context_ptr(context);
+    return callable_type_for_value(ctx, value);
+}
+
+MOONBIT_FFI_EXPORT int32_t wasmoon_test_context_callable_subtype(void *context, int64_t value, int32_t expected) {
+    jit_context_t *ctx = (jit_context_t *)(uintptr_t)wasmoon_jit_context_ptr(context);
+    return gc_ref_test_impl(ctx, FUNCREF_TAG | value, expected, 0);
+}
+
+MOONBIT_FFI_EXPORT int32_t wasmoon_test_context_callable_tag(void *context) {
+    jit_context_t *ctx = (jit_context_t *)(uintptr_t)wasmoon_jit_context_ptr(context);
+    return ctx_runtime(ctx)->callable_tag_count ? ctx_runtime(ctx)->callable_tags[0] : -1;
 }

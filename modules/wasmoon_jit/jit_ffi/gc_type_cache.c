@@ -281,13 +281,13 @@ int32_t callable_type_for_value(jit_context_t *ctx, int64_t value) {
     int32_t low = 0, high = registry->entry_count;
     while (low < high) {
         int32_t middle = low + (high - low) / 2;
-        if (registry->entries[middle].pointer < pointer)
+        if ((uint64_t)registry->addresses[middle] < pointer)
             low = middle + 1;
         else
             high = middle;
     }
-    if (low < registry->entry_count && registry->entries[low].pointer == pointer)
-        return registry->entries[low].identity;
+    if (low < registry->entry_count && (uint64_t)registry->addresses[low] == pointer)
+        return registry->identities[low];
     return -1;
 }
 

@@ -23,6 +23,12 @@ pub fn callback_capture() -> CallbackCapture
 
 pub fn callback_capture_release_count() -> Int
 
+pub fn context_callable_lookup(@jit_ffi.JITContext, Int64) -> Int
+
+pub fn context_callable_subtype(@jit_ffi.JITContext, Int64, Int) -> Int
+
+pub fn context_callable_tag(@jit_ffi.JITContext) -> Int
+
 pub fn context_optional_state() -> Int
 
 pub fn fiber_guard_rejects_access(Int64) -> Bool
@@ -54,8 +60,6 @@ pub fn parked_gc_root_probe() -> Int64
 pub fn reset_callback_capture() -> Unit
 
 pub fn safepoint_ownership() -> Int
-
-pub fn shared_callable_registry(@callable.NativeCallableRegistry, @callable.NativeCallableRegistry) -> Int
 
 pub fn shared_indirect_table_live_count() -> Int64
 
