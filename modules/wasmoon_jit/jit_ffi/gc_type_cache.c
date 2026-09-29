@@ -278,9 +278,16 @@ int32_t callable_type_for_value(jit_context_t *ctx, int64_t value) {
     }
     const jit_callable_registry_t *registry = ctx_runtime(ctx)->callable_registry;
     if (!registry) return -1;
-    for (int i = 0; i < registry->entry_count; ++i) {
-        if ((uint64_t)registry->entries[i * 2] == pointer) return (int32_t)registry->entries[i * 2 + 1];
+    int32_t low = 0, high = registry->entry_count;
+    while (low < high) {
+        int32_t middle = low + (high - low) / 2;
+        if (registry->entries[middle].pointer < pointer)
+            low = middle + 1;
+        else
+            high = middle;
     }
+    if (low < registry->entry_count && registry->entries[low].pointer == pointer)
+        return registry->entries[low].identity;
     return -1;
 }
 

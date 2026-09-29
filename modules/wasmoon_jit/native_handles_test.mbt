@@ -561,3 +561,33 @@ test "Store callable registry updates are shared and preserve instance isolation
   first.clear()
   second.clear()
 }
+
+///|
+test "safepoint tables own copied metadata through replacement and teardown" {
+  inspect(@native_test_support.safepoint_ownership(), content="1")
+}
+
+///|
+test "callable lookup sorts privately and preserves the first duplicate" {
+  let registry = @wasmoon_jit.NativeCallableRegistry::new()
+  let entries = [(48L, 2), (16L, 1), (32L, 0), (16L, 9)]
+  assert_true(registry.replace([-1, 0, 0], entries))
+  assert_eq(entries, [(48L, 2), (16L, 1), (32L, 0), (16L, 9)])
+  for
+    (pointer, expected) in [(16L, 1), (32L, 0), (48L, 2), (24L, -1), (64L, -1)] {
+    assert_eq(@native_test_support.callable_lookup(registry, pointer), expected)
+  }
+  entries[1] = (16L, 7)
+  assert_true(registry.replace([-1, 0, 0], entries))
+  inspect(@native_test_support.callable_lookup(registry, 16L), content="7")
+  let many = Array::makei(1024, i => ((1024 - i).to_int64() * 16, i))
+  assert_true(registry.replace([], many))
+  for i in 0..<1024 {
+    assert_eq(
+      @native_test_support.callable_lookup(registry, (1024 - i).to_int64() * 16),
+      i,
+    )
+  }
+  registry.clear()
+  inspect(@native_test_support.callable_lookup(registry, 16L), content="-1")
+}

@@ -52,6 +52,11 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_test_shared_callable_registry(void *first, vo
     int32_t parents[] = {-1, 0};
     int64_t entries[] = {0x1000000, 1};
     int passed = wasmoon_callable_registry_replace(first, parents, 2, entries, 1);
+    jit_callable_registry_t *view = first;
+    int32_t *original_parents = view->parents;
+    jit_callable_entry_t *original_entries = view->entries;
+    passed &= wasmoon_callable_registry_replace(first, parents, 2, entries, 1);
+    passed &= view->parents == original_parents && view->entries == original_entries;
     entries[1] = 0;
     passed &= wasmoon_callable_registry_replace(second, parents, 2, entries, 1);
     for (int i = 0; i < 3; ++i) {
@@ -72,6 +77,7 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_test_shared_callable_registry(void *first, vo
     passed &= gc_ref_test_impl(contexts[1], value, 0, 0) == 1;
     // Updating one Store changes both bound contexts without rebinding locals.
     passed &= wasmoon_callable_registry_replace(first, parents, 2, entries, 1);
+    passed &= view->parents == original_parents;
     passed &= callable_type_for_value(contexts[0], value) == 0;
     passed &= callable_type_for_value(contexts[1], value) == 0;
     passed &= gc_ref_test_impl(contexts[1], value, 0, 0) == 0;
@@ -99,4 +105,40 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_test_shared_callable_registry(void *first, vo
     moonbit_decref(owners[0]);
     moonbit_decref(owners[1]);
     return passed;
+}
+
+MOONBIT_FFI_EXPORT int32_t wasmoon_test_safepoint_ownership(void) {
+    jit_context_t *ctx = alloc_context_internal(3);
+    if (!ctx) return 0;
+    uint8_t blob[] = {1, 2, 3};
+    int32_t offsets[] = {4, 12};
+    int passed = !ctx_runtime(ctx)->gc_func_safepoint_tables;
+    passed &= ctx_gc_set_func_safepoints_internal(ctx, 1, blob, 3, offsets, 2);
+    wasmoon_gc_safepoint_table_t *table = &ctx_runtime(ctx)->gc_func_safepoint_tables[1];
+    blob[0] = 9;
+    offsets[0] = 20;
+    passed &= table->stackmap_blob[0] == 1 && table->code_offsets[0] == 4;
+    ctx_gc_use_func_safepoints_internal(ctx, 1);
+    passed &= ctx_runtime(ctx)->gc_safepoint_table == table;
+    // Replacing one slot must release its previous copies and preserve peers.
+    passed &= ctx_gc_set_func_safepoints_internal(ctx, 2, blob, 3, offsets, 2);
+    passed &= ctx_gc_set_func_safepoints_internal(ctx, 1, blob, 1, offsets, 1);
+    passed &= table->stackmap_blob_size == 1 && table->code_offsets[0] == 20;
+    passed &= ctx_gc_set_func_safepoints_internal(ctx, 1, NULL, 0, NULL, 0);
+    passed &= !table->stackmap_blob && !table->code_offsets;
+    ctx_gc_use_func_safepoints_internal(ctx, 1);
+    passed &= !ctx_runtime(ctx)->gc_safepoint_table;
+    passed &= ctx_runtime(ctx)->gc_func_safepoint_tables[2].stackmap_blob[0] == 9;
+    passed &= ctx_gc_set_func_safepoints_internal(ctx, 1, blob, 3, offsets, 2);
+    free_context_internal(ctx);
+    return passed;
+}
+
+MOONBIT_FFI_EXPORT int32_t wasmoon_test_callable_lookup(void *registry, int64_t value) {
+    void *owner = wasmoon_jit_alloc_context_managed(1);
+    jit_context_t *ctx = (jit_context_t *)(uintptr_t)wasmoon_jit_context_ptr(owner);
+    if (!ctx || !wasmoon_jit_bind_callable_registry(owner, registry, NULL, 0, NULL, 0)) abort();
+    int32_t result = callable_type_for_value(ctx, value);
+    moonbit_decref(owner);
+    return result;
 }

@@ -204,23 +204,11 @@ void free_context_internal(jit_context_t *ctx) {
     if (ctx_runtime(ctx)->gc_func_safepoint_tables) {
         int32_t count = ctx_runtime(ctx)->gc_func_safepoint_table_count;
         for (int32_t i = 0; i < count; i++) {
-            if (ctx_runtime(ctx)->gc_func_stackmap_blobs && ctx_runtime(ctx)->gc_func_stackmap_blobs[i]) {
-                free(ctx_runtime(ctx)->gc_func_stackmap_blobs[i]);
-            }
-            if (ctx_runtime(ctx)->gc_func_safepoint_offsets && ctx_runtime(ctx)->gc_func_safepoint_offsets[i]) {
-                free(ctx_runtime(ctx)->gc_func_safepoint_offsets[i]);
-            }
+            free((void *)ctx_runtime(ctx)->gc_func_safepoint_tables[i].stackmap_blob);
+            free((void *)ctx_runtime(ctx)->gc_func_safepoint_tables[i].code_offsets);
         }
         free(ctx_runtime(ctx)->gc_func_safepoint_tables);
         ctx_runtime(ctx)->gc_func_safepoint_tables = NULL;
-    }
-    if (ctx_runtime(ctx)->gc_func_stackmap_blobs) {
-        free(ctx_runtime(ctx)->gc_func_stackmap_blobs);
-        ctx_runtime(ctx)->gc_func_stackmap_blobs = NULL;
-    }
-    if (ctx_runtime(ctx)->gc_func_safepoint_offsets) {
-        free(ctx_runtime(ctx)->gc_func_safepoint_offsets);
-        ctx_runtime(ctx)->gc_func_safepoint_offsets = NULL;
     }
     ctx_runtime(ctx)->gc_func_safepoint_table_count = 0;
 
@@ -431,20 +419,7 @@ static int32_t gc_alloc_func_safepoint_tables(jit_context_t *ctx) {
     if (!tables) {
         return 0;
     }
-    uint8_t **blobs = (uint8_t **)calloc((size_t)count, sizeof(uint8_t *));
-    if (!blobs) {
-        free(tables);
-        return 0;
-    }
-    uint32_t **offsets = (uint32_t **)calloc((size_t)count, sizeof(uint32_t *));
-    if (!offsets) {
-        free(blobs);
-        free(tables);
-        return 0;
-    }
     ctx_runtime(ctx)->gc_func_safepoint_tables = tables;
-    ctx_runtime(ctx)->gc_func_stackmap_blobs = blobs;
-    ctx_runtime(ctx)->gc_func_safepoint_offsets = offsets;
     ctx_runtime(ctx)->gc_func_safepoint_table_count = count;
     return 1;
 }
@@ -456,15 +431,10 @@ static void gc_clear_func_safepoint_slot(jit_context_t *ctx, int32_t func_idx) {
     if (func_idx < 0 || func_idx >= ctx_runtime(ctx)->gc_func_safepoint_table_count) {
         return;
     }
-    if (ctx_runtime(ctx)->gc_func_stackmap_blobs && ctx_runtime(ctx)->gc_func_stackmap_blobs[func_idx]) {
-        free(ctx_runtime(ctx)->gc_func_stackmap_blobs[func_idx]);
-        ctx_runtime(ctx)->gc_func_stackmap_blobs[func_idx] = NULL;
-    }
-    if (ctx_runtime(ctx)->gc_func_safepoint_offsets && ctx_runtime(ctx)->gc_func_safepoint_offsets[func_idx]) {
-        free(ctx_runtime(ctx)->gc_func_safepoint_offsets[func_idx]);
-        ctx_runtime(ctx)->gc_func_safepoint_offsets[func_idx] = NULL;
-    }
-    memset(&ctx_runtime(ctx)->gc_func_safepoint_tables[func_idx], 0, sizeof(wasmoon_gc_safepoint_table_t));
+    wasmoon_gc_safepoint_table_t *table = &ctx_runtime(ctx)->gc_func_safepoint_tables[func_idx];
+    free((void *)table->stackmap_blob);
+    free((void *)table->code_offsets);
+    memset(table, 0, sizeof(*table));
 }
 
 int32_t ctx_gc_set_func_safepoints_internal(
@@ -516,12 +486,6 @@ int32_t ctx_gc_set_func_safepoints_internal(
         }
     }
 
-    if (ctx_runtime(ctx)->gc_func_stackmap_blobs) {
-        ctx_runtime(ctx)->gc_func_stackmap_blobs[func_idx] = blob_copy;
-    }
-    if (ctx_runtime(ctx)->gc_func_safepoint_offsets) {
-        ctx_runtime(ctx)->gc_func_safepoint_offsets[func_idx] = offset_copy;
-    }
     wasmoon_gc_safepoint_table_t *table = &ctx_runtime(ctx)->gc_func_safepoint_tables[func_idx];
     table->stackmap_blob = blob_copy;
     table->stackmap_blob_size = (uint32_t)safe_blob_size;
@@ -766,4 +730,38 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_jit_layout_field(int32_t index) {
     };
     assert(index >= 0 && (size_t)index < sizeof(fields) / sizeof(fields[0]));
     return fields[index];
+}
+
+// Managed callable binding shares the context lifecycle translation unit.
+extern int64_t wasmoon_jit_context_ptr(void *context);
+
+MOONBIT_FFI_EXPORT int32_t wasmoon_jit_bind_callable_registry(
+    void *managed_context, void *registry,
+    const int32_t *local_types, int32_t local_count,
+    const int32_t *tags, int32_t tag_count
+) {
+    jit_context_t *ctx = (jit_context_t *)(uintptr_t)wasmoon_jit_context_ptr(managed_context);
+    if (!ctx) return 1;
+    if (local_count < 0 || tag_count < 0 ||
+        (local_count && !local_types) || (tag_count && !tags)) return 0;
+    int32_t *local_copy = local_count ? malloc((size_t)local_count * sizeof(int32_t)) : NULL;
+    int32_t *tag_copy = tag_count ? malloc((size_t)tag_count * sizeof(int32_t)) : NULL;
+    if ((local_count && !local_copy) || (tag_count && !tag_copy)) {
+        free(local_copy);
+        free(tag_copy);
+        return 0;
+    }
+    if (local_count) memcpy(local_copy, local_types, (size_t)local_count * sizeof(int32_t));
+    if (tag_count) memcpy(tag_copy, tags, (size_t)tag_count * sizeof(int32_t));
+    jit_runtime_state_t *state = ctx_runtime(ctx);
+    moonbit_incref(registry);
+    if (state->callable_registry) moonbit_decref(state->callable_registry);
+    free(state->callable_local_types);
+    free(state->callable_tags);
+    state->callable_registry = registry;
+    state->callable_local_types = local_copy;
+    state->callable_local_type_count = local_count;
+    state->callable_tags = tag_copy;
+    state->callable_tag_count = tag_count;
+    return 1;
 }

@@ -74,8 +74,6 @@ typedef struct jit_runtime_state {
     wasmoon_gc_root_scope_t *gc_root_scope_head;
     // Per-function safepoint tables owned by this context.
     wasmoon_gc_safepoint_table_t *gc_func_safepoint_tables;
-    uint8_t **gc_func_stackmap_blobs;
-    uint32_t **gc_func_safepoint_offsets;
     int32_t gc_func_safepoint_table_count;
     // Callable identity metadata persists across execution activations.
     int32_t *callable_local_types;

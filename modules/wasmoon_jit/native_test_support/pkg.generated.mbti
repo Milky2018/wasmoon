@@ -17,6 +17,8 @@ pub fn atomic_notify_finish(Int64) -> Int
 
 pub fn atomic_notify_start(@jit_ffi.MemoryDescriptor, Int64) -> Int64
 
+pub fn callable_lookup(@callable.NativeCallableRegistry, Int64) -> Int
+
 pub fn callback_capture() -> CallbackCapture
 
 pub fn callback_capture_release_count() -> Int
@@ -50,6 +52,8 @@ pub fn nested_trap_probe() -> Int64
 pub fn parked_gc_root_probe() -> Int64
 
 pub fn reset_callback_capture() -> Unit
+
+pub fn safepoint_ownership() -> Int
 
 pub fn shared_callable_registry(@callable.NativeCallableRegistry, @callable.NativeCallableRegistry) -> Int
 

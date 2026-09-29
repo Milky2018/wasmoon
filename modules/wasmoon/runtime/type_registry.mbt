@@ -121,20 +121,26 @@ pub fn Store::native_callable_registry(
   self : Store,
 ) -> @wasmoon_jit.NativeCallableRegistry? {
   guard !self.closed.val else { return None }
+  let mut changed = false
   let registry = match self.native_types.native_registry {
     Some(registry) => registry
     None => {
+      changed = true
       let registry = @wasmoon_jit.NativeCallableRegistry::new()
       self.native_types.native_registry = Some(registry)
       registry
     }
   }
   for entry in self.jit_funcref_entries() {
-    self.native_types.entries[entry.func_ptr] = self.get_func_canonical_type_idx(
-      entry.store_addr,
-    )
+    let identity = self.get_func_canonical_type_idx(entry.store_addr)
+    if self.native_types.entries.get(entry.func_ptr) != Some(identity) {
+      self.native_types.entries[entry.func_ptr] = identity
+      changed = true
+    }
   }
-  self.native_types.publish()
+  if changed {
+    self.native_types.publish()
+  }
   Some(registry)
 }
 
@@ -221,6 +227,9 @@ fn Store::gc_type_definition(
 
 ///|
 fn StoreTypeRegistry::publish(self : StoreTypeRegistry) -> Unit {
+  if self.native_registry is None && self.views.is_empty() {
+    return
+  }
   let entries : Array[(Int64, Int)] = []
   for pointer, identity in self.entries {
     entries.push((pointer, identity))
