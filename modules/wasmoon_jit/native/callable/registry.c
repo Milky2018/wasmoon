@@ -48,4 +48,3 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_callable_registry_replace(
     registry->entry_count = entry_count;
     return 1;
 }
-

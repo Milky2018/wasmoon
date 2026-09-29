@@ -59,4 +59,3 @@ Raw samples, probe source, benchmark scripts, allocation counts, selected assemb
 ## Scope remaining
 
 This removes actual duplicated Store data. It does **not** complete module-shaped VMContext allocation or move exception/GC-root state into activations. Those are explicitly tracked in ISS-602. In particular, 48 bytes in the referenced Wasmtime design describe its fixed prefix, followed by dynamically laid-out instance data and separately owned Store state; it is not a valid total-memory target by itself.
-
