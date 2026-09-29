@@ -43,3 +43,26 @@ pub extern "c" fn activation_scratch_isolation() -> Int = "wasmoon_test_activati
 
 ///|
 pub extern "c" fn activation_resume_roots() -> Int = "wasmoon_test_activation_resume_roots"
+
+///|
+#borrow(context)
+pub extern "c" fn context_gc_funcref_subtype(
+  context : @jit_ffi.JITContext,
+  function : Int,
+  expected : Int,
+) -> Int = "wasmoon_test_context_gc_funcref_subtype"
+
+///|
+#borrow(context)
+pub extern "c" fn context_gc_legacy_rebind(
+  context : @jit_ffi.JITContext,
+) -> Int = "wasmoon_test_context_gc_legacy_rebind"
+
+///|
+#borrow(context, types, canonical, functions)
+pub extern "c" fn context_gc_metadata_shares(
+  context : @jit_ffi.JITContext,
+  types : FixedArray[Int],
+  canonical : FixedArray[Int],
+  functions : FixedArray[Int],
+) -> Int = "wasmoon_test_context_gc_metadata_shares"

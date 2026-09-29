@@ -43,13 +43,14 @@ void exception_reset_execution_state(jit_execution_state_t *state);
 typedef struct jit_runtime_state {
     jit_execution_state_t *execution;
 
-    // GC runtime caches (context-local, not accessed by JIT code directly)
+    // RC-owned MoonBit GC metadata arrays; native helpers borrow their payloads.
     int32_t *gc_type_cache;
     int gc_num_types;
     int32_t *gc_canonical_indices;
     int gc_num_canonical;
     int32_t *gc_func_type_indices;
     int gc_num_funcs;
+    // Legacy native function-address snapshot remains malloc-owned.
     void **gc_func_table;
     int gc_func_table_size;
 

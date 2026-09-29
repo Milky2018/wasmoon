@@ -33,6 +33,7 @@ pub impl @debug.Debug for GCHeapHandle
 
 pub type JITContext
 pub fn JITContext::bind_callable_registry(Self, @callable.NativeCallableRegistry, FixedArray[Int], FixedArray[Int]) -> Unit
+pub fn JITContext::bind_gc_metadata(Self, FixedArray[Int], FixedArray[Int], FixedArray[Int]) -> Unit
 pub fn JITContext::new(Int) -> Self
 
 pub type MemoryDescriptor

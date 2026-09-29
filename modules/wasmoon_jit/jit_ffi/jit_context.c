@@ -189,13 +189,13 @@ void free_context_internal(jit_context_t *ctx) {
     }
 
     if (ctx_runtime(ctx)->gc_type_cache) {
-        free(ctx_runtime(ctx)->gc_type_cache);
+        moonbit_decref(ctx_runtime(ctx)->gc_type_cache);
     }
     if (ctx_runtime(ctx)->gc_canonical_indices) {
-        free(ctx_runtime(ctx)->gc_canonical_indices);
+        moonbit_decref(ctx_runtime(ctx)->gc_canonical_indices);
     }
     if (ctx_runtime(ctx)->gc_func_type_indices) {
-        free(ctx_runtime(ctx)->gc_func_type_indices);
+        moonbit_decref(ctx_runtime(ctx)->gc_func_type_indices);
     }
     jit_execution_state_clear(ctx_runtime(ctx)->execution);
     free(ctx_runtime(ctx)->execution);
@@ -772,4 +772,32 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_bind_callable_registry(
     state->callable_local_type_count = local_count;
     state->callable_tags = tag_map;
     state->callable_tag_count = tag_count;
+}
+
+// The MoonBit owner prepares typed arrays. Native helpers only retain/read them.
+MOONBIT_FFI_EXPORT void wasmoon_jit_bind_gc_metadata(
+    void *managed_context, int32_t *types, int32_t *canonical, int32_t *functions
+) {
+    jit_context_t *ctx = (jit_context_t *)(uintptr_t)wasmoon_jit_context_ptr(managed_context);
+    if (!ctx) return;
+    int32_t type_slots = Moonbit_array_length(types);
+    int32_t canonical_count = Moonbit_array_length(canonical);
+    int32_t function_count = Moonbit_array_length(functions);
+    // Retain all inputs first, including aliases of the currently bound arrays.
+    types = type_slots ? types : NULL;
+    canonical = canonical_count ? canonical : NULL;
+    functions = function_count ? functions : NULL;
+    if (types) moonbit_incref(types);
+    if (canonical) moonbit_incref(canonical);
+    if (functions) moonbit_incref(functions);
+    jit_runtime_state_t *state = ctx_runtime(ctx);
+    if (state->gc_type_cache) moonbit_decref(state->gc_type_cache);
+    if (state->gc_canonical_indices) moonbit_decref(state->gc_canonical_indices);
+    if (state->gc_func_type_indices) moonbit_decref(state->gc_func_type_indices);
+    state->gc_type_cache = types;
+    state->gc_num_types = type_slots / GC_TYPE_CACHE_STRIDE;
+    state->gc_canonical_indices = canonical;
+    state->gc_num_canonical = canonical_count;
+    state->gc_func_type_indices = functions;
+    state->gc_num_funcs = function_count;
 }

@@ -1081,30 +1081,6 @@ extern "c" fn c_jit_gc_environment_is_clear_managed(
 ) -> Int = "wasmoon_jit_gc_environment_is_clear_managed"
 
 ///|
-#borrow(jit_context, types_data)
-extern "c" fn c_jit_gc_set_type_cache_managed(
-  jit_context : JITContext,
-  types_data : FixedArray[Int],
-  num_types : Int,
-) -> Unit = "wasmoon_jit_gc_set_type_cache_managed"
-
-///|
-#borrow(jit_context, canonical)
-extern "c" fn c_jit_gc_set_canonical_indices_managed(
-  jit_context : JITContext,
-  canonical : FixedArray[Int],
-  num_types : Int,
-) -> Unit = "wasmoon_jit_gc_set_canonical_indices_managed"
-
-///|
-#borrow(jit_context, func_type_indices)
-extern "c" fn c_jit_gc_set_func_type_indices_managed(
-  jit_context : JITContext,
-  func_type_indices : FixedArray[Int],
-  num_funcs : Int,
-) -> Unit = "wasmoon_jit_gc_set_func_type_indices_managed"
-
-///|
 #borrow(jit_context)
 extern "c" fn c_jit_gc_set_func_table_managed(
   jit_context : JITContext,

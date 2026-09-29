@@ -118,14 +118,8 @@ pub fn decode_heap_ref(encoded : Int64) -> Int {
 // These return function pointers to C helper functions
 
 ///|
-/// Set up the type cache for subtyping checks from raw type data
-/// types: Array of SubType from the module
-/// canonical_indices: Array of canonical type indices
-fn setup_type_cache_from_types(
-  context : JITContext,
-  types : Array[@types.SubType],
-  canonical_indices : Array[Int],
-) -> Unit {
+/// Encode module types for native subtype and allocation helpers.
+fn gc_type_data(types : Array[@types.SubType]) -> FixedArray[Int] {
   let num_types = types.length()
   // Extended format (stride = 6, keep in sync with `jit_ffi/jit_internal.h`):
   //   [super_idx, kind, struct_num_fields, array_elem_tag, array_elem_bytes, array_elem_flags]
@@ -186,20 +180,7 @@ fn setup_type_cache_from_types(
       }
     }
   }
-  // Set the type cache in C
-  c_jit_gc_set_type_cache_managed(context, types_data, num_types)
-  // Also set canonical indices if available
-  if canonical_indices.length() > 0 {
-    let canonical = FixedArray::make(canonical_indices.length(), 0)
-    for i, idx in canonical_indices {
-      canonical[i] = idx
-    }
-    c_jit_gc_set_canonical_indices_managed(
-      context,
-      canonical,
-      canonical_indices.length(),
-    )
-  }
+  types_data
 }
 
 ///|
@@ -359,16 +340,10 @@ fn gc_setup(
     raise MissingFunctionTableContext(num_funcs~)
   }
   gc_set_heap(context, heap)
-  setup_type_cache_from_types(context, types, canonical_indices)
-  // Set function type indices for funcref subtyping
-  let indices = FixedArray::make(func_type_indices.length(), 0)
-  for i, idx in func_type_indices {
-    indices[i] = idx
-  }
-  c_jit_gc_set_func_type_indices_managed(
-    context,
-    indices,
-    func_type_indices.length(),
+  context.bind_gc_metadata(
+    gc_type_data(types),
+    FixedArray::from_array(canonical_indices),
+    FixedArray::from_array(func_type_indices),
   )
 
   // Set function table pointer for tagged pointer funcref lookups.

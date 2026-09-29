@@ -533,3 +533,26 @@ test "gc rollback: rooted transaction object is not reclaimed or reused" {
   )
   heap.free()
 }
+
+///|
+test "gc: repeated setup clears an omitted canonical mapping" {
+  guard NativeJITContext::try_alloc(2) is Some(context) else {
+    fail("context allocation failed")
+  }
+  let heap = CHeap::CHeap()
+  let types = [@types.SubType::func([], []), @types.SubType::func([], [])]
+  let canonical = [7, 7]
+  context.setup_gc(heap, types, canonical, [0, 1])
+  canonical[1] = 8
+  inspect(
+    @native_test_support.context_gc_funcref_subtype(context.handle, 0, 1),
+    content="1",
+  )
+  let functions = [0, 1]
+  context.setup_gc(heap, types, [], functions)
+  functions[0] = 1
+  inspect(
+    @native_test_support.context_gc_funcref_subtype(context.handle, 0, 1),
+    content="0",
+  )
+}

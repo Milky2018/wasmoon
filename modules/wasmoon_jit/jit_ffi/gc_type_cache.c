@@ -304,55 +304,37 @@ void WASMOON_GUEST_ABI gc_type_check_subtype_impl(jit_context_t *ctx, int32_t ac
 
 // ============ Type Cache Management ============
 
-void set_type_cache_internal(jit_context_t *ctx, int32_t *types_data, int num_types) {
-    if (!ctx) return;
-    if (ctx_runtime(ctx)->gc_type_cache) {
-        free(ctx_runtime(ctx)->gc_type_cache);
-        ctx_runtime(ctx)->gc_type_cache = NULL;
-    }
+// Legacy raw-pointer C setters copy into managed arrays. Raw input is never
+// treated as a MoonBit object, and all retained cache slots use one RC contract.
+static int32_t *copy_type_metadata(const int32_t *source, int32_t count) {
+    if (!source || count <= 0) return NULL;
+    int32_t *copy = moonbit_make_int32_array_raw(count);
+    memcpy(copy, source, (size_t)count * sizeof(int32_t));
+    return copy;
+}
 
+void set_type_cache_internal(jit_context_t *ctx, int32_t *types_data, int num_types) {
+    if (!ctx || num_types < 0 || num_types > INT32_MAX / GC_TYPE_CACHE_STRIDE) return;
+    int32_t *copy = copy_type_metadata(types_data, num_types * GC_TYPE_CACHE_STRIDE);
+    if (ctx_runtime(ctx)->gc_type_cache) moonbit_decref(ctx_runtime(ctx)->gc_type_cache);
+    ctx_runtime(ctx)->gc_type_cache = copy;
     ctx_runtime(ctx)->gc_num_types = num_types;
-    if (num_types > 0 && types_data) {
-        size_t bytes = (size_t)num_types * GC_TYPE_CACHE_STRIDE * sizeof(int32_t);
-        ctx_runtime(ctx)->gc_type_cache = (int32_t *)malloc(bytes);
-        if (ctx_runtime(ctx)->gc_type_cache) {
-            memcpy(ctx_runtime(ctx)->gc_type_cache, types_data, bytes);
-        }
-    }
 }
 
 void set_canonical_indices_internal(jit_context_t *ctx, int32_t *canonical, int num_types) {
-    if (!ctx) return;
-    if (ctx_runtime(ctx)->gc_canonical_indices) {
-        free(ctx_runtime(ctx)->gc_canonical_indices);
-        ctx_runtime(ctx)->gc_canonical_indices = NULL;
-    }
-
+    if (!ctx || num_types < 0) return;
+    int32_t *copy = copy_type_metadata(canonical, num_types);
+    if (ctx_runtime(ctx)->gc_canonical_indices) moonbit_decref(ctx_runtime(ctx)->gc_canonical_indices);
+    ctx_runtime(ctx)->gc_canonical_indices = copy;
     ctx_runtime(ctx)->gc_num_canonical = num_types;
-    if (num_types > 0 && canonical) {
-        size_t bytes = (size_t)num_types * sizeof(int32_t);
-        ctx_runtime(ctx)->gc_canonical_indices = (int32_t *)malloc(bytes);
-        if (ctx_runtime(ctx)->gc_canonical_indices) {
-            memcpy(ctx_runtime(ctx)->gc_canonical_indices, canonical, bytes);
-        }
-    }
 }
 
 void set_func_type_indices_internal(jit_context_t *ctx, int32_t *indices, int num_funcs) {
-    if (!ctx) return;
-    if (ctx_runtime(ctx)->gc_func_type_indices) {
-        free(ctx_runtime(ctx)->gc_func_type_indices);
-        ctx_runtime(ctx)->gc_func_type_indices = NULL;
-    }
-
+    if (!ctx || num_funcs < 0) return;
+    int32_t *copy = copy_type_metadata(indices, num_funcs);
+    if (ctx_runtime(ctx)->gc_func_type_indices) moonbit_decref(ctx_runtime(ctx)->gc_func_type_indices);
+    ctx_runtime(ctx)->gc_func_type_indices = copy;
     ctx_runtime(ctx)->gc_num_funcs = num_funcs;
-    if (num_funcs > 0 && indices) {
-        size_t bytes = (size_t)num_funcs * sizeof(int32_t);
-        ctx_runtime(ctx)->gc_func_type_indices = (int32_t *)malloc(bytes);
-        if (ctx_runtime(ctx)->gc_func_type_indices) {
-            memcpy(ctx_runtime(ctx)->gc_func_type_indices, indices, bytes);
-        }
-    }
 }
 
 void set_func_table_internal(jit_context_t *ctx, void **func_table_ptr, int num_funcs) {
@@ -369,19 +351,19 @@ void clear_type_cache_internal(jit_context_t *ctx) {
     if (!ctx) return;
 
     if (ctx_runtime(ctx)->gc_type_cache) {
-        free(ctx_runtime(ctx)->gc_type_cache);
+        moonbit_decref(ctx_runtime(ctx)->gc_type_cache);
         ctx_runtime(ctx)->gc_type_cache = NULL;
     }
     ctx_runtime(ctx)->gc_num_types = 0;
 
     if (ctx_runtime(ctx)->gc_canonical_indices) {
-        free(ctx_runtime(ctx)->gc_canonical_indices);
+        moonbit_decref(ctx_runtime(ctx)->gc_canonical_indices);
         ctx_runtime(ctx)->gc_canonical_indices = NULL;
     }
     ctx_runtime(ctx)->gc_num_canonical = 0;
 
     if (ctx_runtime(ctx)->gc_func_type_indices) {
-        free(ctx_runtime(ctx)->gc_func_type_indices);
+        moonbit_decref(ctx_runtime(ctx)->gc_func_type_indices);
         ctx_runtime(ctx)->gc_func_type_indices = NULL;
     }
     ctx_runtime(ctx)->gc_num_funcs = 0;

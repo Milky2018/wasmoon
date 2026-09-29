@@ -337,7 +337,7 @@ int32_t gc_collect_for_alloc_internal(
 #define GC_KIND_ARRAY  2
 
 // Type cache layout (per type) used by JIT libcalls.
-// Keep this in sync with `jit/gc_helpers.mbt` (setup_type_cache_from_types).
+// Keep this in sync with `gc_helpers.mbt` (gc_type_data).
 #define GC_TYPE_CACHE_STRIDE 6
 #define GC_TYPE_SUPER_IDX_OFF 0
 #define GC_TYPE_KIND_OFF 1

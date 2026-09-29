@@ -162,3 +162,46 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_test_activation_resume_roots(void) {
     moonbit_decref(heap);
     return passed;
 }
+
+MOONBIT_FFI_EXPORT int32_t wasmoon_test_context_gc_funcref_subtype(
+    void *context, int32_t function, int32_t expected
+) {
+    jit_context_t *ctx = (jit_context_t *)(uintptr_t)wasmoon_jit_context_ptr(context);
+    if (!ctx || function < 0 || function >= ctx_runtime(ctx)->gc_num_funcs ||
+        !ctx_runtime(ctx)->gc_func_type_indices) return 0;
+    jit_trap_activation_t activation;
+    jit_trap_activation_init(&activation, ctx);
+    jit_trap_activation_push(&activation);
+    int result = is_subtype_cached(ctx_runtime(ctx)->gc_func_type_indices[function], expected);
+    jit_trap_activation_pop(&activation);
+    return result;
+}
+
+MOONBIT_FFI_EXPORT int32_t wasmoon_test_context_gc_legacy_rebind(void *context) {
+    jit_context_t *ctx = (jit_context_t *)(uintptr_t)wasmoon_jit_context_ptr(context);
+    int32_t types[] = {-1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+    int32_t canonical[] = {0, 1};
+    int32_t functions[] = {1};
+    set_type_cache_internal(ctx, types, 2);
+    set_canonical_indices_internal(ctx, canonical, 2);
+    set_func_type_indices_internal(ctx, functions, 1);
+    types[6] = -1;
+    canonical[1] = 0;
+    functions[0] = 0;
+    jit_runtime_state_t *state = ctx_runtime(ctx);
+    int passed = state->gc_type_cache[6] == 0 &&
+        state->gc_canonical_indices[1] == 1 && state->gc_func_type_indices[0] == 1;
+    clear_type_cache_internal(ctx);
+    clear_type_cache_internal(ctx);
+    return passed && !state->gc_type_cache && !state->gc_canonical_indices &&
+        !state->gc_func_type_indices;
+}
+
+MOONBIT_FFI_EXPORT int32_t wasmoon_test_context_gc_metadata_shares(
+    void *context, int32_t *types, int32_t *canonical, int32_t *functions
+) {
+    jit_context_t *ctx = (jit_context_t *)(uintptr_t)wasmoon_jit_context_ptr(context);
+    jit_runtime_state_t *state = ctx_runtime(ctx);
+    return state->gc_type_cache == types && state->gc_canonical_indices == canonical &&
+        state->gc_func_type_indices == functions;
+}

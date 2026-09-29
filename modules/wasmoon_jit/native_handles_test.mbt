@@ -674,3 +674,54 @@ test "activation scratch roots survive reentry and isolate parked abandonment" {
 test "parked scratch roots survive GC and resume restores the actual caller" {
   inspect(@native_test_support.activation_resume_roots(), content="1")
 }
+
+///|
+fn context_with_owned_gc_metadata() -> @jit_ffi.JITContext {
+  let context = @jit_ffi.JITContext::new(2)
+  let types : FixedArray[Int] = [-1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+  let indices : FixedArray[Int] = [0, 1]
+  context.bind_gc_metadata(types, indices, indices)
+  // Both slots alias one array; rebinding must retain before releasing either.
+  context.bind_gc_metadata(types, indices, indices)
+  assert_eq(
+    @native_test_support.context_gc_metadata_shares(
+      context, types, indices, indices,
+    ),
+    1,
+  ) catch {
+    _ => abort("GC metadata was copied")
+  }
+  context
+}
+
+///|
+test "GC metadata survives MoonBit owners and supports replacement and clearing" {
+  let first = context_with_owned_gc_metadata()
+  let second = context_with_owned_gc_metadata()
+  inspect(@native_test_support.context_gc_legacy_rebind(second), content="1")
+  second.bind_gc_metadata([-1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], [], [0, 1])
+  inspect(
+    @native_test_support.context_gc_funcref_subtype(first, 1, 0),
+    content="1",
+  )
+  first.bind_gc_metadata([-1, 0, 0, 0, 0, 0, -1, 0, 0, 0, 0, 0], [], [0, 1])
+  inspect(
+    @native_test_support.context_gc_funcref_subtype(first, 1, 0),
+    content="0",
+  )
+  inspect(
+    @native_test_support.context_gc_funcref_subtype(second, 1, 0),
+    content="1",
+  )
+  first.bind_gc_metadata([-1, 0, 0, 0, 0, 0], [], [0, 0])
+  inspect(
+    @native_test_support.context_gc_funcref_subtype(first, 1, 0),
+    content="1",
+  )
+  first.bind_gc_metadata([], [], [])
+  first.bind_gc_metadata([], [], [])
+  inspect(
+    @native_test_support.context_gc_funcref_subtype(first, 1, 0),
+    content="0",
+  )
+}
