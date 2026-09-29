@@ -37,3 +37,9 @@ pub extern "c" fn context_callable_subtype(
 ///|
 #borrow(context)
 pub extern "c" fn context_callable_tag(context : @jit_ffi.JITContext) -> Int = "wasmoon_test_context_callable_tag"
+
+///|
+pub extern "c" fn activation_scratch_isolation() -> Int = "wasmoon_test_activation_scratch_isolation"
+
+///|
+pub extern "c" fn activation_resume_roots() -> Int = "wasmoon_test_activation_resume_roots"

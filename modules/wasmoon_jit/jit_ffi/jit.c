@@ -815,6 +815,51 @@ jit_context_t *get_current_jit_context(void) {
     return activation->active ? activation->context : NULL;
 }
 
+// Keep mutable activation storage in the caller of setjmp. Its contents remain
+// defined after longjmp, unlike modified automatic locals in this function.
+static int invoke_trampoline_caught(
+    jit_trap_activation_t *activation,
+    int64_t trampoline_ptr,
+    jit_context_t *ctx,
+    int64_t func_ptr,
+    int64_t *values_vec,
+    int64_t *exception
+) {
+    if (sigsetjmp(activation->jmp_buf, 1) != 0) {
+#ifdef _WIN32
+        if ((DWORD)activation->signal == EXCEPTION_STACK_OVERFLOW && !_resetstkoflw()) abort();
+#endif
+        int trap_code = (int)activation->code;
+        if (exception && trap_code == 12) *exception = exception_capture_current(ctx);
+        jit_trap_activation_finalize(activation);
+        jit_trap_activation_publish(activation);
+        return trap_code;
+    }
+
+    int result;
+#if defined(__x86_64__) || defined(_M_X64)
+    result = wasmoon_call_entry_trampoline(
+        (void *)trampoline_ptr,
+        ctx,
+        values_vec,
+        (void *)func_ptr
+    );
+#else
+    entry_trampoline_fn trampoline = (entry_trampoline_fn)trampoline_ptr;
+    result = trampoline(ctx, values_vec, (void *)func_ptr);
+#endif
+
+    int trap_code = (int)activation->code;
+    jit_trap_activation_finalize(activation);
+    jit_trap_activation_publish(activation);
+
+    if (trap_code != 0) {
+        return trap_code;
+    }
+
+    return result;
+}
+
 int wasmoon_jit_call_trampoline_caught(
     int64_t trampoline_ptr,
     int64_t ctx_ptr,
@@ -837,42 +882,9 @@ int wasmoon_jit_call_trampoline_caught(
     activation.inherit_controls = exception != NULL;
     jit_trap_activation_push(&activation);
 
-    if (sigsetjmp(activation.jmp_buf, 1) != 0) {
-#ifdef _WIN32
-        if ((DWORD)activation.signal == EXCEPTION_STACK_OVERFLOW && !_resetstkoflw()) abort();
-#endif
-        int trap_code = (int)activation.code;
-        if (exception && trap_code == 12) *exception = exception_capture_current(ctx);
-        jit_trap_activation_finalize(&activation);
-        jit_trap_activation_publish(&activation);
-        exception_reset_context_state(ctx);
-        jit_trap_activation_pop(&activation);
-        return trap_code;
-    }
-
-    int result;
-#if defined(__x86_64__) || defined(_M_X64)
-    result = wasmoon_call_entry_trampoline(
-        (void *)trampoline_ptr,
-        ctx,
-        values_vec,
-        (void *)func_ptr
-    );
-#else
-    entry_trampoline_fn trampoline = (entry_trampoline_fn)trampoline_ptr;
-    result = trampoline(ctx, values_vec, (void *)func_ptr);
-#endif
-
-    int trap_code = (int)activation.code;
-    jit_trap_activation_finalize(&activation);
-    jit_trap_activation_publish(&activation);
-    exception_reset_context_state(ctx);
+    int result = invoke_trampoline_caught(
+        &activation, trampoline_ptr, ctx, func_ptr, values_vec, exception);
     jit_trap_activation_pop(&activation);
-
-    if (trap_code != 0) {
-        return trap_code;
-    }
-
     return result;
 }
 
@@ -1476,7 +1488,7 @@ static void WASMOON_GUEST_ABI wasmoon_jit_gc_push_root_scope_or_trap(
 static void WASMOON_GUEST_ABI wasmoon_jit_gc_pop_root_scope_or_trap(jit_context_t *ctx) {
     jit_context_t *activation = get_current_jit_context();
     if (activation) ctx = activation;
-    if (ctx && ctx_runtime(ctx)->gc_root_scope_head) {
+    if (ctx && ctx_execution(ctx)->gc_root_scope_head) {
         ctx_gc_pop_root_scope_internal(ctx);
         return;
     }

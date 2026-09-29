@@ -85,3 +85,80 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_test_context_callable_tag(void *context) {
     jit_context_t *ctx = (jit_context_t *)(uintptr_t)wasmoon_jit_context_ptr(context);
     return ctx_runtime(ctx)->callable_tag_count ? ctx_runtime(ctx)->callable_tags[0] : -1;
 }
+
+// Scratch roots belong to an invocation, including while it is parked.
+MOONBIT_FFI_EXPORT int32_t wasmoon_test_activation_scratch_isolation(void) {
+    jit_context_t *ctx = alloc_context_internal(1);
+    if (!ctx) return 0;
+    jit_trap_activation_t outer, inner;
+    jit_trap_activation_init(&outer, ctx);
+    jit_trap_activation_push(&outer);
+    int64_t first = 16, second = 32;
+    int passed = ctx_gc_set_root_scratch_internal(ctx, &first, 1);
+    jit_trap_activation_init(&inner, ctx);
+    jit_trap_activation_push(&inner);
+    passed &= ctx_execution(ctx)->gc_root_scratch_len == 0;
+    passed &= ctx_gc_set_root_scratch_internal(ctx, &second, 1);
+    jit_trap_activation_pop(&inner);
+    passed &= ctx_execution(ctx)->gc_root_scratch_len == 1 &&
+        ctx_execution(ctx)->gc_root_scratch[0] == first;
+    jit_trap_activation_detach();
+    jit_trap_activation_init(&inner, ctx);
+    jit_trap_activation_push(&inner);
+    passed &= ctx_execution(ctx)->gc_root_scratch_len == 0;
+    passed &= ctx_gc_set_root_scratch_internal(ctx, &second, 1);
+    jit_trap_activation_abandon(&outer);
+    passed &= ctx_execution(ctx)->gc_root_scratch_len == 1 &&
+        ctx_execution(ctx)->gc_root_scratch[0] == second;
+    jit_trap_activation_pop(&inner);
+    free_context_internal(ctx);
+    return passed;
+}
+
+MOONBIT_FFI_EXPORT int32_t wasmoon_test_activation_resume_roots(void) {
+    jit_context_t *ctx = alloc_context_internal(1);
+    if (!ctx) return 0;
+    GcHeap *heap = gc_heap_new(1024);
+    ctx_set_gc_heap_internal(ctx, heap);
+    int32_t ref = gc_heap_alloc_struct(heap, 0, NULL, 0);
+    int64_t root = (int64_t)ref << 1;
+    jit_trap_activation_t parked, caller;
+    jit_trap_activation_init(&parked, ctx);
+    jit_trap_activation_push(&parked);
+    ctx->debug_current_func_idx = 17;
+    int passed = ref != 0 && ctx_gc_set_root_scratch_internal(ctx, &root, 1);
+    jit_trap_activation_detach();
+    void *registration = NULL;
+    passed &= jit_parked_gc_roots_register(&parked, &registration);
+    gc_heap_collect(heap, NULL, 0);
+    passed &= gc_heap_is_valid(heap, ref);
+    jit_trap_activation_init(&caller, ctx);
+    jit_trap_activation_push(&caller);
+    ctx->debug_current_func_idx = 23;
+    int64_t other = 1;
+    passed &= ctx_gc_set_root_scratch_internal(ctx, &other, 1);
+    jit_trap_activation_attach(&parked);
+    passed &= ctx->debug_current_func_idx == 17;
+    passed &= ctx_execution(ctx)->gc_root_scratch[0] == root;
+    jit_parked_gc_roots_unregister(registration);
+    registration = NULL;
+    jit_trap_activation_pop(&parked);
+    passed &= ctx->debug_current_func_idx == 23;
+    passed &= ctx_execution(ctx)->gc_root_scratch[0] == other;
+    jit_trap_activation_pop(&caller);
+    gc_heap_collect(heap, NULL, 0);
+    passed &= !gc_heap_is_valid(heap, ref);
+    // Standalone state is independent and destroyed by context teardown.
+    passed &= ctx_runtime(ctx)->execution == NULL;
+    passed &= ctx_gc_set_root_scratch_internal(ctx, &other, 1);
+    jit_trap_activation_init(&caller, ctx);
+    jit_trap_activation_push(&caller);
+    passed &= ctx_execution(ctx)->gc_root_scratch_len == 1 &&
+        ctx_execution(ctx)->gc_root_scratch[0] == other;
+    passed &= ctx_gc_set_root_scratch_internal(ctx, &root, 1);
+    jit_trap_activation_pop(&caller);
+    passed &= ctx_execution(ctx)->gc_root_scratch[0] == other;
+    free_context_internal(ctx);
+    moonbit_decref(heap);
+    return passed;
+}

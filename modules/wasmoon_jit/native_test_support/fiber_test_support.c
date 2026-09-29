@@ -244,7 +244,7 @@ static int WASMOON_GUEST_ABI nested_activation_exception_probe(
             exception_try_end_impl(ctx, 17);
             return result;
         }
-        if (ctx_runtime(ctx)->exception_handler) {
+        if (ctx_execution(ctx)->exception_handler) {
             result = wasmoon_jit_hostcall(
                 ctx,
                 47,

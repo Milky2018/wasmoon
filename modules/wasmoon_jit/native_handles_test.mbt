@@ -664,3 +664,13 @@ test "callable lookup sorts privately and preserves the first duplicate" {
   registry.clear()
   inspect(@native_test_support.callable_lookup(registry, 16L), content="-1")
 }
+
+///|
+test "activation scratch roots survive reentry and isolate parked abandonment" {
+  inspect(@native_test_support.activation_scratch_isolation(), content="1")
+}
+
+///|
+test "parked scratch roots survive GC and resume restores the actual caller" {
+  inspect(@native_test_support.activation_resume_roots(), content="1")
+}

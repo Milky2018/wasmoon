@@ -190,18 +190,19 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_exception_arena_value(void *owner, int64_t re
 
 static int64_t WASMOON_GUEST_ABI exception_get_ref_impl(jit_context_t *ctx) {
     ctx = exception_activation_context(ctx);
-    if (!ctx_runtime(ctx)->exception_ref) {
+    jit_execution_state_t *state = ctx_execution(ctx);
+    if (!state->exception_ref) {
         if (!ctx_runtime(ctx)->exception_arena)
             ctx_runtime(ctx)->exception_arena = exception_arena_new();
-        ctx_runtime(ctx)->exception_ref = exception_arena_insert(ctx_runtime(ctx)->exception_arena,
-            ctx->gc_heap, ctx_runtime(ctx)->exception_tag, ctx_runtime(ctx)->exception_values,
-            ctx_runtime(ctx)->exception_value_count);
-        if (!ctx_runtime(ctx)->exception_ref) {
+        state->exception_ref = exception_arena_insert(ctx_runtime(ctx)->exception_arena,
+            ctx->gc_heap, state->exception_tag, state->exception_values,
+            state->exception_value_count);
+        if (!state->exception_ref) {
             g_trap_code = 9;
             siglongjmp(g_trap_jmp_buf, 1);
         }
     }
-    return ctx_runtime(ctx)->exception_ref;
+    return state->exception_ref;
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_exception_get_ref_ptr(void) {
@@ -212,6 +213,7 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_exception_get_ref_ptr(void) {
 
 sigjmp_buf* exception_try_begin_impl(jit_context_t *ctx, int32_t handler_id) {
     ctx = exception_activation_context(ctx);
+    jit_execution_state_t *state = ctx_execution(ctx);
     // Allocate new handler node
     exception_handler_t *handler = (exception_handler_t *)malloc(sizeof(exception_handler_t));
     if (!handler) {
@@ -221,10 +223,10 @@ sigjmp_buf* exception_try_begin_impl(jit_context_t *ctx, int32_t handler_id) {
     }
 
     // Link to previous handler
-    handler->prev = (exception_handler_t *)ctx_runtime(ctx)->exception_handler;
+    handler->prev = (exception_handler_t *)state->exception_handler;
     handler->handler_id = handler_id;
-    handler->gc_root_scope_marker = ctx_runtime(ctx)->gc_root_scope_head;
-    ctx_runtime(ctx)->exception_handler = handler;
+    handler->gc_root_scope_marker = state->gc_root_scope_head;
+    state->exception_handler = handler;
 
     // Return pointer to jmp_buf for caller to call setjmp
     return &handler->jmp_buf;
@@ -232,7 +234,8 @@ sigjmp_buf* exception_try_begin_impl(jit_context_t *ctx, int32_t handler_id) {
 
 void exception_try_end_impl(jit_context_t *ctx, int32_t handler_id) {
     ctx = exception_activation_context(ctx);
-    exception_handler_t *handler = (exception_handler_t *)ctx_runtime(ctx)->exception_handler;
+    jit_execution_state_t *state = ctx_execution(ctx);
+    exception_handler_t *handler = (exception_handler_t *)state->exception_handler;
 
     // A mismatch means generated control flow violated lexical handler order.
     // Continuing would leave a stale jmp_buf linked into the runtime chain.
@@ -240,55 +243,56 @@ void exception_try_end_impl(jit_context_t *ctx, int32_t handler_id) {
         g_trap_code = 8;
         siglongjmp(g_trap_jmp_buf, 1);
     }
-    ctx_runtime(ctx)->exception_handler = handler->prev;
+    state->exception_handler = handler->prev;
     free(handler);
 
     // Clear any pending exception values
-    if (ctx_runtime(ctx)->exception_values) {
-        free(ctx_runtime(ctx)->exception_values);
-        ctx_runtime(ctx)->exception_values = NULL;
+    if (state->exception_values) {
+        free(state->exception_values);
+        state->exception_values = NULL;
     }
-    ctx_runtime(ctx)->exception_ref = 0;
-    ctx_runtime(ctx)->exception_value_count = 0;
+    state->exception_ref = 0;
+    state->exception_value_count = 0;
 
     // Clear any spilled locals
-    if (ctx_runtime(ctx)->spilled_locals) {
-        free(ctx_runtime(ctx)->spilled_locals);
-        ctx_runtime(ctx)->spilled_locals = NULL;
+    if (state->spilled_locals) {
+        free(state->spilled_locals);
+        state->spilled_locals = NULL;
     }
-    ctx_runtime(ctx)->spilled_locals_count = 0;
+    state->spilled_locals_count = 0;
 }
 
-void exception_reset_context_state(jit_context_t *ctx) {
-    if (!ctx) {
+void exception_reset_execution_state(jit_execution_state_t *state) {
+    if (!state) {
         return;
     }
 
     // Unwind and free any stale handler chain. This can happen when control
     // exits a function via trap longjmp before try_end executes.
-    exception_handler_t *handler = (exception_handler_t *)ctx_runtime(ctx)->exception_handler;
+    exception_handler_t *handler = (exception_handler_t *)state->exception_handler;
     while (handler) {
         exception_handler_t *prev = handler->prev;
         free(handler);
         handler = prev;
     }
-    ctx_runtime(ctx)->exception_handler = NULL;
-    ctx_gc_clear_root_scopes_internal(ctx);
+    state->exception_handler = NULL;
+    jit_execution_clear_root_scopes(state);
 
-    if (ctx_runtime(ctx)->exception_values) {
-        free(ctx_runtime(ctx)->exception_values);
-        ctx_runtime(ctx)->exception_values = NULL;
+    if (state->exception_values) {
+        free(state->exception_values);
+        state->exception_values = NULL;
     }
-    ctx_runtime(ctx)->exception_ref = 0;
-    ctx_runtime(ctx)->exception_value_count = 0;
-    ctx_runtime(ctx)->exception_tag = 0;
+    state->exception_ref = 0;
+    state->exception_value_count = 0;
+    state->exception_tag = 0;
 
-    if (ctx_runtime(ctx)->spilled_locals) {
-        free(ctx_runtime(ctx)->spilled_locals);
-        ctx_runtime(ctx)->spilled_locals = NULL;
+    if (state->spilled_locals) {
+        free(state->spilled_locals);
+        state->spilled_locals = NULL;
     }
-    ctx_runtime(ctx)->spilled_locals_count = 0;
+    state->spilled_locals_count = 0;
 }
+
 
 // ============ Exception Throwing ============
 
@@ -298,7 +302,7 @@ __declspec(noreturn) static void exception_raise_current(jit_context_t *ctx);
 static void exception_raise_current(jit_context_t *ctx) __attribute__((noreturn));
 #endif
 static void exception_raise_current(jit_context_t *ctx) {
-    exception_handler_t *handler = (exception_handler_t *)ctx_runtime(ctx)->exception_handler;
+    exception_handler_t *handler = (exception_handler_t *)ctx_execution(ctx)->exception_handler;
     if (handler) {
         ctx_gc_restore_root_scopes_internal(ctx, handler->gc_root_scope_marker);
         siglongjmp(handler->jmp_buf, handler->handler_id);
@@ -310,6 +314,7 @@ static void exception_raise_current(jit_context_t *ctx) {
 
 static void exception_set_payload(jit_context_t *ctx, int32_t tag,
     const int64_t *values, int32_t count, int64_t reference) {
+    jit_execution_state_t *state = ctx_execution(ctx);
     int64_t *copy = NULL;
     if (count > 0) {
         copy = malloc((size_t)count * sizeof(int64_t));
@@ -319,11 +324,11 @@ static void exception_set_payload(jit_context_t *ctx, int32_t tag,
         }
         memcpy(copy, values, (size_t)count * sizeof(int64_t));
     }
-    free(ctx_runtime(ctx)->exception_values);
-    ctx_runtime(ctx)->exception_values = copy;
-    ctx_runtime(ctx)->exception_value_count = count;
-    ctx_runtime(ctx)->exception_tag = tag;
-    ctx_runtime(ctx)->exception_ref = reference;
+    free(state->exception_values);
+    state->exception_values = copy;
+    state->exception_value_count = count;
+    state->exception_tag = tag;
+    state->exception_ref = reference;
 }
 
 void exception_throw_impl(jit_context_t *ctx, int32_t tag_addr,
@@ -349,15 +354,16 @@ void exception_throw_ref_impl(jit_context_t *ctx, int64_t exnref) {
 
 void exception_delegate_impl(jit_context_t *ctx, int32_t depth) {
     ctx = exception_activation_context(ctx);
+    jit_execution_state_t *state = ctx_execution(ctx);
     // Delegate skips 'depth' handlers and throws to the one at that level
-    exception_handler_t *target = (exception_handler_t *)ctx_runtime(ctx)->exception_handler;
+    exception_handler_t *target = (exception_handler_t *)state->exception_handler;
 
     // Walk up the handler chain by depth
     for (int i = 0; i < depth && target; i++) {
         // Pop this handler (we're delegating past it)
         exception_handler_t *to_free = target;
         target = target->prev;
-        ctx_runtime(ctx)->exception_handler = target;
+        state->exception_handler = target;
         free(to_free);
     }
 
@@ -380,29 +386,31 @@ void exception_delegate_impl(jit_context_t *ctx, int32_t depth) {
 
 void exception_spill_locals_impl(jit_context_t *ctx, int64_t *locals, int32_t count) {
     ctx = exception_activation_context(ctx);
+    jit_execution_state_t *state = ctx_execution(ctx);
     // Free any previous spilled locals
-    if (ctx_runtime(ctx)->spilled_locals) {
-        free(ctx_runtime(ctx)->spilled_locals);
-        ctx_runtime(ctx)->spilled_locals = NULL;
+    if (state->spilled_locals) {
+        free(state->spilled_locals);
+        state->spilled_locals = NULL;
     }
 
-    ctx_runtime(ctx)->spilled_locals_count = count;
+    state->spilled_locals_count = count;
 
     if (count > 0 && locals) {
         // Copy locals to heap
-        ctx_runtime(ctx)->spilled_locals = (int64_t *)malloc(count * sizeof(int64_t));
-        if (ctx_runtime(ctx)->spilled_locals) {
-            memcpy(ctx_runtime(ctx)->spilled_locals, locals, count * sizeof(int64_t));
+        state->spilled_locals = (int64_t *)malloc(count * sizeof(int64_t));
+        if (state->spilled_locals) {
+            memcpy(state->spilled_locals, locals, count * sizeof(int64_t));
         }
     } else {
-        ctx_runtime(ctx)->spilled_locals = NULL;
+        state->spilled_locals = NULL;
     }
 }
 
 int64_t exception_get_spilled_local_impl(jit_context_t *ctx, int32_t idx) {
     ctx = exception_activation_context(ctx);
-    if (idx >= 0 && idx < ctx_runtime(ctx)->spilled_locals_count && ctx_runtime(ctx)->spilled_locals) {
-        return ctx_runtime(ctx)->spilled_locals[idx];
+    jit_execution_state_t *state = ctx_execution(ctx);
+    if (idx >= 0 && idx < state->spilled_locals_count && state->spilled_locals) {
+        return state->spilled_locals[idx];
     }
     return 0;  // Return 0 for out-of-bounds access
 }
@@ -410,7 +418,7 @@ int64_t exception_get_spilled_local_impl(jit_context_t *ctx, int32_t idx) {
 // ============ Exception Value Access ============
 
 int32_t exception_get_tag_impl(jit_context_t *ctx) {
-    int32_t tag = ctx_runtime(exception_activation_context(ctx))->exception_tag;
+    int32_t tag = ctx_execution(exception_activation_context(ctx))->exception_tag;
     if (ctx_runtime(ctx)->callable_local_types) {
         for (int i = 0; i < ctx_runtime(ctx)->callable_tag_count; ++i) {
             if (ctx_runtime(ctx)->callable_tags[i] == tag) return i;
@@ -422,15 +430,16 @@ int32_t exception_get_tag_impl(jit_context_t *ctx) {
 
 int64_t exception_get_value_impl(jit_context_t *ctx, int32_t idx) {
     ctx = exception_activation_context(ctx);
-    if (idx >= 0 && idx < ctx_runtime(ctx)->exception_value_count && ctx_runtime(ctx)->exception_values) {
-        return ctx_runtime(ctx)->exception_values[idx];
+    jit_execution_state_t *state = ctx_execution(ctx);
+    if (idx >= 0 && idx < state->exception_value_count && state->exception_values) {
+        return state->exception_values[idx];
     }
     return 0;  // Return 0 for out-of-bounds access
 }
 
 int32_t exception_get_value_count_impl(jit_context_t *ctx) {
     ctx = exception_activation_context(ctx);
-    return ctx_runtime(ctx)->exception_value_count;
+    return ctx_execution(ctx)->exception_value_count;
 }
 
 // ============ FFI Exports ============

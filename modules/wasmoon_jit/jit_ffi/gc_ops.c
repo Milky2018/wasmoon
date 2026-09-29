@@ -146,8 +146,8 @@ static const wasmoon_gc_safepoint_table_t *gc_active_safepoint_table(jit_context
         return table;
     }
     table = ctx_runtime(ctx)->gc_safepoint_table;
-    if (ctx_runtime(ctx)->gc_frame_chain_head && ctx_runtime(ctx)->gc_frame_chain_head->table) {
-        table = ctx_runtime(ctx)->gc_frame_chain_head->table;
+    if (ctx_execution(ctx)->gc_frame_chain_head && ctx_execution(ctx)->gc_frame_chain_head->table) {
+        table = ctx_execution(ctx)->gc_frame_chain_head->table;
     }
     return table;
 }

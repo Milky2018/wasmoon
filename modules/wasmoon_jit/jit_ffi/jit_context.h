@@ -17,7 +17,32 @@ typedef struct {
     int elem_segment_count;
 } jit_segments_state_t;
 
+// Native control-flow state belongs to one invocation, not one instance.
+// The legacy standalone helper API allocates this lazily outside an invocation.
+typedef struct {
+    void *exception_handler;  // Current exception handler (exception_handler_t*)
+    int64_t exception_ref;
+    int32_t exception_tag;    // Tag of in-flight exception
+    int64_t *exception_values; // Exception payload values
+    int32_t exception_value_count; // Number of exception values
+    int64_t *spilled_locals;      // Saved local values
+    int32_t spilled_locals_count; // Number of saved locals
+    int gc_collect_requested;
+    int gc_in_collect;
+    int64_t *gc_root_scratch;
+    int32_t gc_root_scratch_len;
+    int32_t gc_root_scratch_cap;
+    wasmoon_gc_frame_t *gc_frame_chain_head;
+    wasmoon_gc_root_scope_t *gc_root_scope_head;
+} jit_execution_state_t;
+
+void jit_execution_state_clear(jit_execution_state_t *state);
+void jit_execution_clear_root_scopes(jit_execution_state_t *state);
+void exception_reset_execution_state(jit_execution_state_t *state);
+
 typedef struct jit_runtime_state {
+    jit_execution_state_t *execution;
+
     // GC runtime caches (context-local, not accessed by JIT code directly)
     int32_t *gc_type_cache;
     int gc_num_types;
@@ -33,21 +58,10 @@ typedef struct jit_runtime_state {
     int wasi_exited;          // WASI: proc_exit called
     int wasi_exit_code;       // WASI: exit code
 
-    // Exception handling state
-    void *exception_handler;  // Current exception handler (exception_handler_t*)
+    // Store-bound continuation and exception arenas
     struct native_continuation_arena *continuation_arena;
     struct native_continuation_type *continuation_types;
     struct native_exception_arena *exception_arena;
-    int64_t exception_ref;
-    int32_t exception_tag;    // Tag of in-flight exception
-    int64_t *exception_values; // Exception payload values
-    int32_t exception_value_count; // Number of exception values
-
-    // Spilled locals for exception handling
-    // When throwing, current local values are saved here so catch handlers
-    // can see the values at the throw point (not the setjmp point)
-    int64_t *spilled_locals;      // Saved local values
-    int32_t spilled_locals_count; // Number of saved locals
 
     // Hostcall callback (MoonBit closure) for JIT -> host function bridging.
     // This is invoked by `wasmoon_jit_hostcall` during JIT execution.
@@ -63,15 +77,7 @@ typedef struct jit_runtime_state {
     // Optional bulk-memory/table segment storage.
     jit_segments_state_t *segments;
 
-    // Execution bookkeeping is transferred to trap activations on suspension.
-    int gc_collect_requested;
-    int gc_in_collect;
-    int64_t *gc_root_scratch;
-    int32_t gc_root_scratch_len;
-    int32_t gc_root_scratch_cap;
     const wasmoon_gc_safepoint_table_t *gc_safepoint_table;
-    wasmoon_gc_frame_t *gc_frame_chain_head;
-    wasmoon_gc_root_scope_t *gc_root_scope_head;
     // Per-function safepoint tables owned by this context.
     wasmoon_gc_safepoint_table_t *gc_func_safepoint_tables;
     int32_t gc_func_safepoint_table_count;
@@ -95,6 +101,14 @@ typedef struct {
 // Recovering the owner keeps helper accesses direct, without a back-pointer load.
 static inline jit_runtime_state_t *ctx_runtime(const jit_context_t *ctx) {
     return &((jit_context_owner_t *)(void *)ctx)->runtime;
+}
+
+// Read/write helper access. Real invocations install their stack-owned state;
+// only standalone context helpers need a separately allocated fallback.
+jit_execution_state_t *ctx_execution_fallback(const jit_context_t *ctx);
+static inline jit_execution_state_t *ctx_execution(const jit_context_t *ctx) {
+    jit_execution_state_t *state = ctx_runtime(ctx)->execution;
+    return state ? state : ctx_execution_fallback(ctx);
 }
 
 static inline const jit_segments_state_t *ctx_segments_state(const jit_context_t *ctx) {

@@ -143,16 +143,10 @@ typedef struct jit_trap_activation {
     jit_context_t *control_context;
     int inherit_controls;
     struct jit_trap_activation *previous;
-    void *exception_handler;
-    int32_t exception_tag;
-    int64_t exception_ref;
-    int64_t *exception_values;
-    int32_t exception_value_count;
-    int64_t *spilled_locals;
-    int32_t spilled_locals_count;
-    wasmoon_gc_frame_t *gc_frame_chain_head;
-    wasmoon_gc_root_scope_t *gc_root_scope_head;
+    jit_execution_state_t execution;
+    jit_execution_state_t *previous_execution;
     int32_t debug_current_func_idx;
+    int32_t previous_debug_func_idx;
     int context_detached;
 } jit_trap_activation_t;
 
@@ -285,7 +279,6 @@ void ctx_set_gc_heap_internal(jit_context_t *ctx, GcHeap *heap);
 void ctx_update_gc_heap_ptr_internal(jit_context_t *ctx);
 void ctx_gc_begin_frame_internal(jit_context_t *ctx, uintptr_t frame_id);
 void ctx_gc_end_frame_internal(jit_context_t *ctx);
-void ctx_gc_clear_frames_internal(jit_context_t *ctx);
 int32_t ctx_gc_push_root_scope_internal(
     jit_context_t *ctx,
     const int64_t *roots,
@@ -398,7 +391,6 @@ int64_t exception_get_value_impl(jit_context_t *ctx, int32_t idx);
 int32_t exception_get_value_count_impl(jit_context_t *ctx);
 void exception_spill_locals_impl(jit_context_t *ctx, int64_t *locals, int32_t count);
 int64_t exception_get_spilled_local_impl(jit_context_t *ctx, int32_t idx);
-void exception_reset_context_state(jit_context_t *ctx);
 
 // Get the context owned by the current trap activation.
 jit_context_t *get_current_jit_context(void);
