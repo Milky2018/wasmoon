@@ -136,6 +136,12 @@ fn lower_direct_operation(
     guard optional_gpr_width(result_types.get(0)) is Some(width) else {
       raise UnsupportedOperation(block_index~, instruction_index~, operation~)
     }
+    // Add/sub wrap at the operand width; negate the constant at that width.
+    let negated_bits = if width == W32 {
+      (0UL - bits) & 0xFFFFFFFFUL
+    } else {
+      0UL - bits
+    }
     let selected : AArch64Inst? = match binary {
       UnsignedRem if bits > 1UL && (bits & (bits - 1UL)) == 0UL =>
         Some(IntBinaryImmediate(width, And, bits - 1UL))
@@ -145,6 +151,10 @@ fn lower_direct_operation(
         match lower_binary(binary) {
           Some(lowered) if valid_int_binary_immediate(width, lowered, bits) =>
             Some(IntBinaryImmediate(width, lowered, bits))
+          Some(Add) if valid_int_binary_immediate(width, Sub, negated_bits) =>
+            Some(IntBinaryImmediate(width, Sub, negated_bits))
+          Some(Sub) if valid_int_binary_immediate(width, Add, negated_bits) =>
+            Some(IntBinaryImmediate(width, Add, negated_bits))
           _ => None
         }
     }

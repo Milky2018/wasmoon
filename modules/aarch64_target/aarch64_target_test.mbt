@@ -100,3 +100,68 @@ test "AArch64 direct selection erases raw-word pointer bitcasts" {
   builder.finish()
   session.finish_selected() |> ignore
 }
+
+///|
+test "AArch64 direct arithmetic selects modular negative immediates" {
+  let abi = @aarch64_target.InternalAbi::new(
+    0,
+    8,
+    [1, 2, 3, 4, 5, 6, 7],
+    [0, 1, 2, 3, 4, 5, 6, 7],
+    [0, 1, 2, 3, 4, 5, 6, 7],
+    [0, 1, 2, 3, 4, 5, 6, 7],
+  )
+  let cases : Array[(@native.ValueType, @lowering.IntBinaryOp, UInt64, UInt?)] = [
+    (I32, Add, 0xffffffc0UL, Some(0x51010020U)),
+    (I32, Sub, 0xffffffc0UL, Some(0x11010020U)),
+    (I64, Add, 0xffffffffffffffc0UL, Some(0xd1010020U)),
+    (I64, Sub, 0xffffffffffffffc0UL, Some(0x91010020U)),
+    (I32, Add, 0xfffff000UL, Some(0x51400420U)),
+    (I64, Sub, 0xfffffffffffff000UL, Some(0x91400420U)),
+    (I32, Add, 0xff001000UL, Some(0x517ffc20U)),
+    (I64, Sub, 0xffffffffff001000UL, Some(0x917ffc20U)),
+    (I32, Add, 64UL, Some(0x11010020U)),
+    (I64, Sub, 64UL, Some(0xd1010020U)),
+    (I32, Add, 0xffffefffUL, None),
+    (I64, Sub, 0xffffffffffffefffUL, None),
+    (I32, Add, 0x80000000UL, None),
+    (I64, Sub, 0x8000000000000000UL, None),
+  ]
+  for (ty, operation, bits, expected) in cases {
+    let session = @aarch64_target.DirectLoweringSession::new(
+      "negative_immediate",
+      Internal,
+      [Ptr64, ty],
+      [ty],
+      @aarch64_target.LoweringContext::new(abi),
+    )
+    let builder = @lowering.DirectBuilder::new([Ptr64, ty], session.sink())
+    let result = builder.emit_with_metadata(
+        IntBinaryImmediate(operation, bits),
+        [builder.parameters()[1]],
+        [ty],
+        @lowering.InstructionMetadata::empty(),
+      )[0]
+    builder.return_([result])
+    builder.finish()
+    let diagnostics = @aarch64_target.diagnose_selected(
+      session.finish_selected(),
+    )
+    match expected {
+      Some(word) => {
+        let code = diagnostics.object.code()
+        inspect(code.length(), content="8")
+        let actual = code[0].to_uint() |
+          (code[1].to_uint() << 8) |
+          (code[2].to_uint() << 16) |
+          (code[3].to_uint() << 24)
+        inspect(actual == word, content="true")
+      }
+      None =>
+        inspect(
+          diagnostics.target_vcode.contains("LoadConstant"),
+          content="true",
+        )
+    }
+  }
+}

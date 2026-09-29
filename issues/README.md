@@ -621,6 +621,7 @@ graph TD
   ISS_591["ISS-591: Evaluate three bounded compiler allocation and scan optimizations"]
   ISS_592["ISS-592: Explain guest execution sensitivity in compiler-only builds"]
   ISS_593["ISS-593: Normalize vector AndNot in MilkIR"]
+  ISS_594["ISS-594: Select opposite AArch64 arithmetic immediates"]
   ISS_002 --> ISS_003
   ISS_002 --> ISS_004
   ISS_003 --> ISS_005
