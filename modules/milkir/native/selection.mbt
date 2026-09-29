@@ -486,6 +486,7 @@ fn selection_tracks_shared_consumers(
   match definitions[value.id] {
     Some(definition) =>
       match definition.opcode {
+        Vector(Bitwise(Not)) => true
         Scalar(Convert(Bitcast)) =>
           definition.args is [source] && source.ty == Ptr && value.ty == I64
         Scalar(Convert(UnsignedExtend)) =>
@@ -750,6 +751,9 @@ fn compute_should_defer_instruction(
   facts : SelectionFacts,
 ) -> Bool {
   guard instruction.results is [result] else { return false }
+  if instruction.opcode is Vector(Bitwise(Not)) {
+    return vector_not_is_fully_selected(result, facts)
+  }
   guard result.ty is (I32 | I64) else { return false }
   if instruction.opcode is Scalar(IntConst(_)) {
     return constant_is_fully_selected(result, facts)

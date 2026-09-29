@@ -685,7 +685,6 @@ pub impl @debug.Debug for Value
 pub(all) enum VectorBitwiseOp {
   Not
   And
-  AndNot
   Or
   Xor
   Bitselect

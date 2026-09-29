@@ -539,8 +539,7 @@ fn verify_vector_contract(
       require_result_types(inst, [I32], "v128 predicate")
     }
     Bitwise(Not) => verify_v128_unary(inst, "v128 bitwise unary")
-    Bitwise(And | AndNot | Or | Xor) | Swizzle =>
-      verify_v128_binary(inst, "v128 binary")
+    Bitwise(And | Or | Xor) | Swizzle => verify_v128_binary(inst, "v128 binary")
     Bitwise(Bitselect) => verify_v128_ternary(inst, "v128 bitselect")
     IntUnary(op, lane) => {
       if !vector_int_unary_supported(op, lane) {

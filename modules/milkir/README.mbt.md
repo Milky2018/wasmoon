@@ -127,6 +127,15 @@ Every instruction belongs to one semantic family. `Opcode` has no source-languag
 
 Frontends must consume source-only metadata before constructing a core instruction. For example, a WebAssembly frontend resolves a SIMD memory index, alignment hint, and immediate offset while computing the effective address; MilkIR receives that address and the vector load/store semantics. A frontend uses `Ext` only when the operation genuinely requires dialect-owned validation and lowering.
 
+Vector bitwise IR uses `And`, `Or`, `Xor`, and `Not` rather than a separate
+`AndNot` opcode. The `v128_andnot(a, b)` builder remains available and emits
+`And(a, Not(b))`. Native selection recognizes either operand order and recovers
+the target `AndNot` operation only when all uses of the negation are absorbed.
+Otherwise it retains `Not` and ordinary `And`, avoiding redundant complement
+work and extra x64 moves. Code constructing the old enum variant directly should use
+the builder or the canonical pair. Target-level `AndNot` operations remain
+available for efficient instruction encoding.
+
 ### Embedding context fields
 
 `GlobalValue` models a typed value loaded from an embedding-provided context, such as a linear-memory base pointer. Its declaration is interned in the `Function`; the instruction names that declaration and takes the context pointer explicitly. MilkIR does not know the field offset or runtime layout. The owning dialect validates the opaque `ContextField`, and its native-lowering adapter resolves it to an `EnvironmentField`.

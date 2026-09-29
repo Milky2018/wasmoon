@@ -1340,12 +1340,13 @@ fn lower_instruction(
   dialect : DialectLowering?,
 ) -> Bool raise NativeLowerError {
   if instruction.opcode
-    is Scalar(
+    is (Scalar(
       IntConst(_)
       | IntBinary(Add | Mul | ShiftLeft)
       | IntCompare(_)
       | Convert(UnsignedExtend | Bitcast)
-    ) &&
+    )
+    | Vector(Bitwise(Not))) &&
     should_defer_instruction(instruction, facts) {
     return false
   }

@@ -366,3 +366,40 @@ test "x64 demote preserves a coalesced input" {
     ),
   )
 }
+
+///|
+test "x64 vector and-not keeps complement operand order with overlapping outputs" {
+  let first = @vcode.PhysicalReg::new(0, FpVector)
+  let second = @vcode.PhysicalReg::new(1, FpVector)
+  for destination in 0..<3 {
+    let buffer = CodeBuffer::new()
+    emit_vector_bitwise(
+      buffer,
+      AndNot,
+      first,
+      second,
+      second,
+      @vcode.PhysicalReg::new(destination, FpVector),
+    )
+    // movaps xmm14, xmm1; pandn xmm14, xmm0; movaps destination, xmm14.
+    inspect(
+      buffer.code ==
+      [
+        0x44,
+        0x0f,
+        0x28,
+        0xf1,
+        0x66,
+        0x44,
+        0x0f,
+        0xdf,
+        0xf0,
+        0x41,
+        0x0f,
+        0x28,
+        (0xc6 + 8 * destination).to_byte(),
+      ],
+      content="true",
+    )
+  }
+}

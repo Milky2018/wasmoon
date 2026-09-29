@@ -557,3 +557,35 @@ test "simd: extending load consumes offset once" {
   let result = @testsuite.compare_jit_interp(source, "load", [])
   inspect(result, content="matched")
 }
+
+///|
+test "simd: canonical and-not preserves commutation and shared negations" {
+  let source =
+    #|(module
+    #|  (func (export "direct") (param i32 i32) (result v128)
+    #|    (v128.andnot (i32x4.splat (local.get 0)) (i32x4.splat (local.get 1))))
+    #|  (func (export "commuted") (param i32 i32) (result v128)
+    #|    (v128.and (v128.not (i32x4.splat (local.get 1))) (i32x4.splat (local.get 0))))
+    #|  (func (export "shared") (param i32 i32) (result v128 v128 v128)
+    #|    (local $n v128)
+    #|    (local.set $n (v128.not (i32x4.splat (local.get 1))))
+    #|    (v128.and (i32x4.splat (local.get 0)) (local.get $n))
+    #|    (v128.and (local.get $n) (i32x4.splat (local.get 1)))
+    #|    (local.get $n))
+    #|  (func (export "identical") (param i32 i32) (result v128)
+    #|    (local $n v128)
+    #|    (local.set $n (v128.not (i32x4.splat (local.get 0))))
+    #|    (v128.and (local.get $n) (local.get $n)))
+    #|  (func (export "both_not") (param i32 i32) (result v128)
+    #|    (v128.and (v128.not (i32x4.splat (local.get 0)))
+    #|              (v128.not (i32x4.splat (local.get 1)))))
+    #|)
+  for name in ["direct", "commuted", "shared", "identical", "both_not"] {
+    for (a, b) in [(0, 0), (-1, 0), (1, -1), (-1431655766, 1431655765)] {
+      inspect(
+        @testsuite.compare_jit_interp(source, name, [I32(a), I32(b)]),
+        content="matched",
+      )
+    }
+  }
+}

@@ -803,7 +803,6 @@ pub(all) enum VectorHalf {
 pub(all) enum VectorBitwiseOp {
   Not
   And
-  AndNot
   Or
   Xor
   Bitselect

@@ -1,6 +1,7 @@
 ///|
 priv struct LoweringTrace {
   operations : Array[@lowering.Operation]
+  operands : Array[Array[Int]]
   operation_blocks : Array[Int]
   terminators : Array[@lowering.TargetTerminator]
 }
@@ -10,6 +11,7 @@ fn trace_lowering(
   function : @milkir.Function,
   folds_unsigned_index_into_memory? : Bool = false,
 ) -> LoweringTrace raise {
+  let operands : Array[Array[Int]] = []
   let operations : Array[@lowering.Operation] = []
   let operation_blocks : Array[Int] = []
   let terminators : Array[@lowering.TargetTerminator] = []
@@ -32,7 +34,8 @@ fn trace_lowering(
     },
     fn(_, _) { 0 },
     fn(_) { () },
-    fn(block, operation, _, result_types, _, _, _) {
+    fn(block, operation, arguments, result_types, _, _, _) {
+      operands.push(arguments)
       operation_blocks.push(block)
       operations.push(operation)
       fresh_values(result_types.length())
@@ -42,7 +45,7 @@ fn trace_lowering(
     folds_unsigned_index_into_memory~,
   )
   lower_core_to_sink(function, sink, verify_input=false)
-  { operations, operation_blocks, terminators, }
+  { operations, operands, operation_blocks, terminators, }
 }
 
 ///|
@@ -398,4 +401,102 @@ test "native demand selection keeps shared addresses in their dominator" {
     .length(),
     content="2",
   )
+}
+
+///|
+test "native vector and-not selection preserves operand order in both canonical forms" {
+  for commuted in [false, true] {
+    let builder = @milkir.FunctionBuilder::FunctionBuilder("andnot")
+    let a = builder.add_param(V128)
+    let b = builder.add_param(V128)
+    builder.add_result(V128)
+    let negated = builder.v128_not(b)
+    let result = if commuted {
+      builder.v128_and(negated, a)
+    } else {
+      builder.v128_and(a, negated)
+    }
+    builder.return_([result])
+    let function = builder.finalize()
+    function.verify()
+    let trace = trace_lowering(function)
+    debug_inspect(trace.operations, content="[Vector(Bitwise(AndNot))]")
+    debug_inspect(trace.operands, content="[[0, 1]]")
+  }
+}
+
+///|
+test "native vector and-not selection absorbs shared negations only when fully consumed" {
+  for returned in [false, true] {
+    let builder = @milkir.FunctionBuilder::FunctionBuilder("shared_not")
+    let a = builder.add_param(V128)
+    let b = builder.add_param(V128)
+    let c = builder.add_param(V128)
+    builder.add_result(V128)
+    builder.add_result(V128)
+    let negated = builder.v128_not(b)
+    let first = builder.v128_and(a, negated)
+    let second = builder.v128_and(negated, c)
+    let results = [first, second]
+    if returned {
+      builder.add_result(V128)
+      results.push(negated)
+    }
+    builder.return_(results)
+    let trace = trace_lowering(builder.finalize())
+    inspect(
+      trace.operations.filter(op => op is Vector(Bitwise(AndNot))).length(),
+      content=if returned { "0" } else { "2" },
+    )
+    inspect(
+      trace.operations.filter(op => op is Vector(Bitwise(Not))).length(),
+      content=if returned { "1" } else { "0" },
+    )
+    let selected = []
+    for i, op in trace.operations {
+      if op is Vector(Bitwise(AndNot)) {
+        selected.push(trace.operands[i])
+      }
+    }
+    if returned {
+      debug_inspect(
+        trace.operations,
+        content="[Vector(Bitwise(Not)), Vector(Bitwise(And)), Vector(Bitwise(And))]",
+      )
+      debug_inspect(trace.operands, content="[[1], [0, 3], [3, 2]]")
+    } else {
+      debug_inspect(selected, content="[[0, 1], [2, 1]]")
+    }
+  }
+}
+
+///|
+test "native vector and-not selection retains the other negation and identical operands" {
+  for identical in [false, true] {
+    let builder = @milkir.FunctionBuilder::FunctionBuilder("two_nots")
+    let a = builder.add_param(V128)
+    let b = builder.add_param(V128)
+    builder.add_result(V128)
+    let left = builder.v128_not(a)
+    let right = if identical { left } else { builder.v128_not(b) }
+    builder.return_([builder.v128_and(left, right)])
+    let trace = trace_lowering(builder.finalize())
+    inspect(
+      trace.operations.filter(op => op is Vector(Bitwise(Not))).length(),
+      content="1",
+    )
+    if identical {
+      debug_inspect(
+        trace.operations,
+        content="[Vector(Bitwise(Not)), Vector(Bitwise(And))]",
+      )
+      debug_inspect(trace.operands, content="[[0], [2, 2]]")
+    } else {
+      debug_inspect(
+        trace.operations,
+        content="[Vector(Bitwise(Not)), Vector(Bitwise(AndNot))]",
+      )
+      debug_inspect(trace.operands, content="[[0], [2, 1]]")
+    }
+  }
 }

@@ -3366,3 +3366,25 @@ test "validated internal ABI derives context, overflow, and result locations" {
     ),
   )
 }
+
+///|
+test "aarch64 vector and-not remains one BIC with overlapping outputs" {
+  let first = @vcode.PhysicalReg::new(0, FpVector)
+  let second = @vcode.PhysicalReg::new(1, FpVector)
+  for destination in 0..<3 {
+    let buffer = CodeBuffer::new()
+    emit_vector_bitwise(
+      buffer,
+      AndNot,
+      first,
+      second,
+      second,
+      @vcode.PhysicalReg::new(destination, FpVector),
+    )
+    // bic vD.16b, v0.16b, v1.16b.
+    inspect(
+      buffer.code == [destination.to_byte(), 0x1c, 0x61, 0x4e],
+      content="true",
+    )
+  }
+}
