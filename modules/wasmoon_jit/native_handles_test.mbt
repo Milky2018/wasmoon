@@ -773,3 +773,38 @@ test "GC payloads retain MoonBit owners through replacement and legacy bindings"
 test "invocation controls isolate reentry and retain parked cancellation captures" {
   inspect(@native_test_support.activation_controls(), content="1")
 }
+
+///|
+fn contexts_with_owned_segments() -> (@jit_ffi.JITContext, @jit_ffi.JITContext) {
+  let first = @jit_ffi.JITContext::new(1)
+  let second = @jit_ffi.JITContext::new(1)
+  let blob = Bytes::from_array([1, 2, 3])
+  let data = [blob]
+  let elements = [[16L, 0L]]
+  guard first.set_segments(data, elements) &&
+    second.set_segments(data, elements) else {
+    abort("segment binding failed")
+  }
+  guard @native_test_support.context_segments_share_data(first, blob) == 1 else {
+    abort("immutable segment data was copied")
+  }
+  data[0] = b"changed"
+  elements[0][0] = 99L
+  (first, second)
+}
+
+///|
+test "segment snapshots retain data and isolate mutable inputs and instance drop state" {
+  let (first, second) = contexts_with_owned_segments()
+  inspect(@native_test_support.context_segments_valid(first), content="1")
+  inspect(@native_test_support.context_segments_valid(second), content="1")
+  inspect(@native_test_support.context_segments_legacy(first), content="1")
+  inspect(@native_test_support.context_segments_valid(second), content="1")
+  assert_true(first.set_segments([], []))
+  assert_true(first.set_segments([], []))
+  inspect(@native_test_support.context_segments_empty(first), content="1")
+  assert_true(
+    first.set_segments([Bytes::from_array([1, 2, 3])], [[16L, 0L, 99L]]),
+  )
+  inspect(@native_test_support.context_segments_valid(first), content="1")
+}

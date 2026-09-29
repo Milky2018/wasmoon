@@ -96,3 +96,22 @@ pub extern "c" fn context_gc_payload_empty(
 
 ///|
 pub extern "c" fn activation_controls() -> Int = "wasmoon_test_activation_controls"
+
+///|
+#borrow(context, data)
+pub extern "c" fn context_segments_share_data(
+  context : @jit_ffi.JITContext,
+  data : Bytes,
+) -> Int = "wasmoon_test_context_segments_share_data"
+
+///|
+#borrow(context)
+pub extern "c" fn context_segments_valid(context : @jit_ffi.JITContext) -> Int = "wasmoon_test_context_segments_valid"
+
+///|
+#borrow(context)
+pub extern "c" fn context_segments_legacy(context : @jit_ffi.JITContext) -> Int = "wasmoon_test_context_segments_legacy"
+
+///|
+#borrow(context)
+pub extern "c" fn context_segments_empty(context : @jit_ffi.JITContext) -> Int = "wasmoon_test_context_segments_empty"

@@ -5,16 +5,11 @@
 #include "jit_ffi.h"
 #include "../native/callable/registry.h"
 
+// RC-owned reference arrays. Each context owns its mutable outer arrays;
+// empty payloads represent dropped segments. Element payloads contain pairs.
 typedef struct {
     uint8_t **data_segments;
-    size_t *data_segment_sizes;   // number of bytes per segment
-    uint8_t *data_dropped;        // 0/1 per segment
-    int data_segment_count;
-    // Each element is a (value, type index) pair.
     int64_t **elem_segments;
-    size_t *elem_segment_sizes;   // number of elements (not Int64 slots)
-    uint8_t *elem_dropped;        // 0/1 per segment
-    int elem_segment_count;
 } jit_segments_state_t;
 
 // Native control-flow state belongs to one invocation, not one instance.

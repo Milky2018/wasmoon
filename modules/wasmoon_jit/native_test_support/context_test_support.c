@@ -21,15 +21,15 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_test_context_optional_state(void) {
     wasmoon_jit_ctx_init_data_segments(address, 1);
     wasmoon_jit_ctx_init_elem_segments(address, 2);
     passed = passed && ctx_runtime(first)->segments &&
-        ctx_runtime(first)->segments->data_segment_count == 1 &&
-        ctx_runtime(first)->segments->elem_segment_count == 2 &&
+        Moonbit_array_length(ctx_runtime(first)->segments->data_segments) == 1 &&
+        Moonbit_array_length(ctx_runtime(first)->segments->elem_segments) == 2 &&
         !ctx_runtime(second)->segments;
     ctx_clear_segments_internal(first);
     passed = passed && !ctx_runtime(first)->segments;
     ctx_clear_segments_internal(first);
     wasmoon_jit_ctx_init_elem_segments(address, 1);
     passed = passed && ctx_runtime(first)->segments &&
-        ctx_runtime(first)->segments->elem_segment_count == 1 &&
+        Moonbit_array_length(ctx_runtime(first)->segments->elem_segments) == 1 &&
         !ctx_runtime(first)->segments->data_segments;
     free_context_internal(first);
     free_context_internal(second);
@@ -320,4 +320,43 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_test_activation_controls(void) {
     free_context_internal(other);
     free_context_internal(ctx);
     return passed;
+}
+
+MOONBIT_FFI_EXPORT int32_t wasmoon_test_context_segments_share_data(void *context, uint8_t *data) {
+    jit_context_t *ctx = (jit_context_t *)(uintptr_t)wasmoon_jit_context_ptr(context);
+    return ctx_runtime(ctx)->segments && ctx_runtime(ctx)->segments->data_segments[0] == data;
+}
+
+MOONBIT_FFI_EXPORT int32_t wasmoon_test_context_segments_valid(void *context) {
+    jit_context_t *ctx = (jit_context_t *)(uintptr_t)wasmoon_jit_context_ptr(context);
+    jit_segments_state_t *state = ctx_runtime(ctx)->segments;
+    return state && Moonbit_array_length(state->data_segments) == 1 &&
+        Moonbit_array_length(state->elem_segments) == 1 &&
+        Moonbit_array_length(state->data_segments[0]) == 3 && state->data_segments[0][2] == 3 &&
+        Moonbit_array_length(state->elem_segments[0]) == 2 && state->elem_segments[0][0] == 16;
+}
+
+extern void wasmoon_jit_ctx_add_data_segment(int64_t, int, uint8_t *, int, int);
+extern void wasmoon_jit_ctx_add_elem_segment(int64_t, int, int64_t *, int, int);
+
+MOONBIT_FFI_EXPORT int32_t wasmoon_test_context_segments_legacy(void *context) {
+    int64_t address = wasmoon_jit_context_ptr(context);
+    jit_context_t *ctx = (jit_context_t *)(uintptr_t)address;
+    uint8_t data[] = {1, 2, 3};
+    int64_t elements[] = {16, 0};
+    wasmoon_jit_ctx_add_data_segment(address, 0, data, 3, 0);
+    wasmoon_jit_ctx_add_elem_segment(address, 0, elements, 1, 0);
+    data[2] = 99;
+    elements[0] = 99;
+    int passed = wasmoon_test_context_segments_valid(context);
+    wasmoon_jit_ctx_add_data_segment(address, 0, data, 3, 1);
+    wasmoon_jit_ctx_add_elem_segment(address, 0, elements, 1, 1);
+    passed &= Moonbit_array_length(ctx_runtime(ctx)->segments->data_segments[0]) == 0 &&
+        Moonbit_array_length(ctx_runtime(ctx)->segments->elem_segments[0]) == 0;
+    return passed;
+}
+
+MOONBIT_FFI_EXPORT int32_t wasmoon_test_context_segments_empty(void *context) {
+    jit_context_t *ctx = (jit_context_t *)(uintptr_t)wasmoon_jit_context_ptr(context);
+    return !ctx_runtime(ctx)->segments;
 }

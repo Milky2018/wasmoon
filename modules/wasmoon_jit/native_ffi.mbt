@@ -1006,40 +1006,6 @@ extern "c" fn c_jit_exception_throw_values_managed(
 
 ///|
 #borrow(jit_context)
-extern "c" fn c_jit_ctx_init_data_segments_managed(
-  jit_context : JITContext,
-  count : Int,
-) -> Unit = "wasmoon_jit_ctx_init_data_segments_managed"
-
-///|
-#borrow(jit_context, data)
-extern "c" fn c_jit_ctx_add_data_segment_managed(
-  jit_context : JITContext,
-  idx : Int,
-  data : FixedArray[Byte],
-  size : Int,
-  dropped : Int,
-) -> Unit = "wasmoon_jit_ctx_add_data_segment_managed"
-
-///|
-#borrow(jit_context)
-extern "c" fn c_jit_ctx_init_elem_segments_managed(
-  jit_context : JITContext,
-  count : Int,
-) -> Unit = "wasmoon_jit_ctx_init_elem_segments_managed"
-
-///|
-#borrow(jit_context, data)
-extern "c" fn c_jit_ctx_add_elem_segment_managed(
-  jit_context : JITContext,
-  idx : Int,
-  data : FixedArray[Int64],
-  size : Int,
-  dropped : Int,
-) -> Unit = "wasmoon_jit_ctx_add_elem_segment_managed"
-
-///|
-#borrow(jit_context)
 extern "c" fn c_jit_ctx_clear_segments_managed(
   jit_context : JITContext,
 ) -> Unit = "wasmoon_jit_ctx_clear_segments_managed"

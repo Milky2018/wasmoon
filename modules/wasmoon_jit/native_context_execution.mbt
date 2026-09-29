@@ -28,35 +28,22 @@ fn setup_segments(
   data_dropped? : Array[Bool] = [],
   elem_dropped? : Array[Bool] = [],
 ) -> Unit {
-  c_jit_ctx_init_data_segments_managed(context, datas.length())
-  for i, data in datas {
-    let bytes = data.init
-    let size = bytes.length()
-    let dropped = if i < data_dropped.length() && data_dropped[i] {
-      1
+  let data = Array::makei(datas.length(), i => {
+    if i < data_dropped.length() && data_dropped[i] {
+      b""
     } else {
-      0
+      datas[i].init
     }
-    let buf = FixedArray::make(size.max(1), b'\x00')
-    for j in 0..<size {
-      buf[j] = bytes[j]
-    }
-    c_jit_ctx_add_data_segment_managed(context, i, buf, size, dropped)
-  }
-
-  c_jit_ctx_init_elem_segments_managed(context, elem_segments.length())
-  for i, seg in elem_segments {
-    let dropped = if i < elem_dropped.length() && elem_dropped[i] {
-      1
+  })
+  let elements = Array::makei(elem_segments.length(), i => {
+    if i < elem_dropped.length() && elem_dropped[i] {
+      []
     } else {
-      0
+      elem_segments[i]
     }
-    let nslots = seg.length()
-    let buf = FixedArray::make(nslots.max(1), 0L)
-    for j in 0..<nslots {
-      buf[j] = seg[j]
-    }
-    c_jit_ctx_add_elem_segment_managed(context, i, buf, nslots / 2, dropped)
+  })
+  guard context.set_segments(data, elements) else {
+    abort("failed to allocate native segment state")
   }
 }
 
