@@ -3388,3 +3388,29 @@ test "aarch64 vector and-not remains one BIC with overlapping outputs" {
     )
   }
 }
+
+///|
+test "AArch64 constants choose shorter inverted and logical forms" {
+  let cases : Array[(GprWidth, UInt64, Array[UInt])] = [
+    (W64, 0xffffffffffffffffUL, [0x92e00000U]),
+    (W32, 0xffffffc0UL, [0x128007e0U]),
+    (W64, 0x00ff00ff00ff00ffUL, [0xb2009fe0U]),
+    (W32, 0x00ff00ffUL, [0x32009fe0U]),
+    (W64, 0xffff1234ffff5678UL, [0x929530e0U, 0xf2c24680U]),
+    (W64, 0UL, [0xd2e00000U]),
+    (W32, 0UL, [0x52a00000U]),
+    (W64, 0x1234UL, [0xd2824680U]),
+  ]
+  for (width, bits, expected) in cases {
+    let buffer = CodeBuffer::new()
+    emit_constant(buffer, width, @vcode.PhysicalReg::new(0, Int), bits)
+    let words = Array::makei(buffer.code.length() / 4, fn(i) {
+      let offset = i * 4
+      buffer.code[offset].to_uint() |
+      (buffer.code[offset + 1].to_uint() << 8) |
+      (buffer.code[offset + 2].to_uint() << 16) |
+      (buffer.code[offset + 3].to_uint() << 24)
+    })
+    inspect(words == expected, content="true")
+  }
+}

@@ -241,17 +241,48 @@ fn emit_constant(
   bits : UInt64,
 ) -> Unit {
   let halfword_count = if width == W32 { 2 } else { 4 }
-  let movz_base = if width == W32 { 0x52800000U } else { 0xD2800000U }
+  let mut nonzero = 0
+  let mut nonones = 0
+  for index in 0..<halfword_count {
+    let halfword = (bits >> (index * 16)) & 0xFFFFUL
+    if halfword != 0UL {
+      nonzero += 1
+    }
+    if halfword != 0xFFFFUL {
+      nonones += 1
+    }
+  }
+  let inverted = Int::max(1, nonones) < Int::max(1, nonzero)
+  if Int::min(Int::max(1, nonzero), Int::max(1, nonones)) > 1 &&
+    logical_immediate_bits(bits, width) is Some(encoded) {
+    let base = if width == W32 { 0x320003E0U } else { 0xB20003E0U }
+    buffer.emit_word(
+      base | (encoded.reinterpret_as_uint() << 10) | reg_bits(destination),
+    )
+    return
+  }
+  let seed_base = match (width, inverted) {
+    (W32, false) => 0x52800000U
+    (W64, false) => 0xD2800000U
+    (W32, true) => 0x12800000U
+    (W64, true) => 0x92800000U
+  }
   let movk_base = if width == W32 { 0x72800000U } else { 0xF2800000U }
+  let default_halfword = if inverted { 0xFFFFU } else { 0U }
   let mut first = true
   for index in 0..<halfword_count {
     let halfword = ((bits >> (index * 16)) & 0xFFFFUL).to_uint()
-    if halfword != 0U || (first && index == halfword_count - 1) {
-      let base = if first { movz_base } else { movk_base }
+    if halfword != default_halfword || (first && index == halfword_count - 1) {
+      let base = if first { seed_base } else { movk_base }
+      let immediate = if first && inverted {
+        halfword ^ 0xFFFFU
+      } else {
+        halfword
+      }
       buffer.emit_word(
         base |
         (index.reinterpret_as_uint() << 21) |
-        (halfword << 5) |
+        (immediate << 5) |
         reg_bits(destination),
       )
       first = false

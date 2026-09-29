@@ -44,3 +44,34 @@ test "JIT: arithmetic immediates preserve width, operand order and shared consta
     }
   }
 }
+
+///|
+test "JIT: materialized integer constants preserve all bits" {
+  for
+    (width, constants) in [
+      (
+        "i32",
+        [
+          "0", "-1", "-64", "0x00ff00ff", "0x80000000", "0x12345678", "0xffff1234",
+          "0x1234ffff",
+        ],
+      ),
+      (
+        "i64",
+        [
+          "0", "-1", "-64", "0x00ff00ff00ff00ff", "0x8000000000000000", "0x123456789abcdef0",
+          "0xffff1234ffff5678", "0x1234ffffffffffff", "0xffffffff1234ffff", "0x00000000ffffffff",
+        ],
+      ),
+    ] {
+    for constant in constants {
+      let source =
+        $|(module (func (export "test") (result \{width})
+        $|  (\{width}.const \{constant})))
+      inspect(
+        @testsuite.compare_jit_interp(source, "test", []),
+        content="matched",
+      )
+    }
+  }
+}
