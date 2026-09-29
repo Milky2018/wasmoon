@@ -450,9 +450,9 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_test_fresh_context_scheduling_budget(void) {
     for (int i = 0; i < 64; ++i) {
         jit_context_t *ctx = alloc_context_internal(1);
         if (!ctx) return -1;
-        int32_t budget = ctx_runtime(ctx)->scheduling_budget;
+        int32_t budget = ctx_runtime(ctx)->control_defaults.scheduling_budget;
         // Exercise allocator reuse after a previously enabled context.
-        ctx_runtime(ctx)->scheduling_budget = 1;
+        ctx_runtime(ctx)->control_defaults.scheduling_budget = 1;
         free_context_internal(ctx);
         if (budget != 0) return budget;
     }

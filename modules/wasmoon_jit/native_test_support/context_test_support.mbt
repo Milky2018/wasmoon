@@ -93,3 +93,6 @@ pub extern "c" fn context_gc_payload_legacy(
 pub extern "c" fn context_gc_payload_empty(
   context : @jit_ffi.JITContext,
 ) -> Int = "wasmoon_test_context_gc_payload_empty"
+
+///|
+pub extern "c" fn activation_controls() -> Int = "wasmoon_test_activation_controls"

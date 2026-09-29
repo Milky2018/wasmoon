@@ -225,11 +225,11 @@ void free_context_internal(jit_context_t *ctx) {
     ctx_runtime(ctx)->hostcall_callback = NULL;
 
     // Free cancellation callback closure (if registered).
-    if (ctx_runtime(ctx)->cancellation_callback_data) {
-        moonbit_decref(ctx_runtime(ctx)->cancellation_callback_data);
-        ctx_runtime(ctx)->cancellation_callback_data = NULL;
+    if (ctx_runtime(ctx)->control_defaults.cancellation_callback_data) {
+        moonbit_decref(ctx_runtime(ctx)->control_defaults.cancellation_callback_data);
+        ctx_runtime(ctx)->control_defaults.cancellation_callback_data = NULL;
     }
-    ctx_runtime(ctx)->cancellation_callback = NULL;
+    ctx_runtime(ctx)->control_defaults.cancellation_callback = NULL;
 
     free(ctx);
 }

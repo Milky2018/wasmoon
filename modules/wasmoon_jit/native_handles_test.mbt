@@ -768,3 +768,8 @@ test "GC payloads retain MoonBit owners through replacement and legacy bindings"
   first.bind_gc_function_addresses([16L, 32L])
   inspect(@native_test_support.context_gc_payload_valid(first), content="1")
 }
+
+///|
+test "invocation controls isolate reentry and retain parked cancellation captures" {
+  inspect(@native_test_support.activation_controls(), content="1")
+}

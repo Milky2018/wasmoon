@@ -7,6 +7,8 @@ import {
 }
 
 // Values
+pub fn activation_controls() -> Int
+
 pub fn activation_resume_roots() -> Int
 
 pub fn activation_scratch_isolation() -> Int

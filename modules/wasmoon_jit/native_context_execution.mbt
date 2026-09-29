@@ -211,6 +211,8 @@ pub fn NativeJITContext::clear_hostcall_callback(
 }
 
 ///|
+/// Set the cancellation callback for subsequent invocations. Active and parked
+/// invocations retain their existing callback; mutate its captured signal to cancel.
 pub fn NativeJITContext::set_cancellation_callback(
   self : NativeJITContext,
   callback : () -> Bool,
@@ -226,6 +228,7 @@ pub fn NativeJITContext::set_cancellation_callback(
 }
 
 ///|
+/// Clear the default callback without changing active or parked invocations.
 pub fn NativeJITContext::clear_cancellation_callback(
   self : NativeJITContext,
 ) -> Unit {
@@ -240,7 +243,8 @@ extern "c" fn c_set_cooperative_scheduling(
 ) -> Unit = "wasmoon_jit_set_cooperative_scheduling_managed"
 
 ///|
-/// Enable native scheduling at instrumented guest safepoints. The embedding
+/// Configure native scheduling for subsequent invocations at instrumented
+/// guest safepoints. Active invocations keep their own budget. The embedding
 /// must enter this context through a resumable native invocation.
 pub fn NativeJITContext::set_cooperative_scheduling(
   self : NativeJITContext,

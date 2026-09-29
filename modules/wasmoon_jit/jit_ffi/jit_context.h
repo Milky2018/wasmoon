@@ -40,6 +40,13 @@ void jit_execution_state_clear(jit_execution_state_t *state);
 void jit_execution_clear_root_scopes(jit_execution_state_t *state);
 void exception_reset_execution_state(jit_execution_state_t *state);
 
+// Contexts store defaults; active invocations retain their own control snapshot.
+typedef struct {
+    void *cancellation_callback;
+    void *cancellation_callback_data;
+    int32_t scheduling_budget;
+} jit_invocation_controls_t;
+
 typedef struct jit_runtime_state {
     jit_execution_state_t *execution;
 
@@ -69,11 +76,7 @@ typedef struct jit_runtime_state {
     void *hostcall_callback;          // Function pointer for hostcall callback
     void *hostcall_callback_data;     // Closure data for hostcall callback
 
-    // Invocation-local cooperative cancellation callback. Generated code only
-    // passes the context to a C helper; these fields stay outside the fixed ABI.
-    void *cancellation_callback;
-    void *cancellation_callback_data;
-    int32_t scheduling_budget;
+    jit_invocation_controls_t control_defaults;
 
     // Optional bulk-memory/table segment storage.
     jit_segments_state_t *segments;

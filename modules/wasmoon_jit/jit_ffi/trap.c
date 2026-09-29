@@ -83,7 +83,7 @@ void jit_trap_activation_init(
     activation->brk_imm = -1;
     activation->func_idx = -1;
     activation->context = context;
-    activation->control_context = context;
+    activation->controls = &activation->owned_controls;
     uintptr_t stack_base = 0;
     uintptr_t stack_top = 0;
     uintptr_t guard_base = 0;
@@ -252,8 +252,13 @@ static jit_trap_activation_t *matching_context_activation(jit_context_t *context
 
 void jit_trap_activation_push(jit_trap_activation_t *activation) {
     activation->previous = current_activation;
+    if (activation->context) {
+        activation->owned_controls = ctx_runtime(activation->context)->control_defaults;
+        if (activation->owned_controls.cancellation_callback_data)
+            moonbit_incref(activation->owned_controls.cancellation_callback_data);
+    }
     if (activation->inherit_controls && current_activation) {
-        activation->control_context = current_activation->control_context;
+        activation->controls = current_activation->controls;
     }
     if (activation->context) {
         jit_execution_state_t *previous = ctx_runtime(activation->context)->execution;
@@ -311,11 +316,19 @@ void jit_trap_activation_publish(jit_trap_activation_t *activation) {
     observed_activation_valid = 1;
 }
 
+static void release_activation_controls(jit_trap_activation_t *activation) {
+    if (activation->owned_controls.cancellation_callback_data)
+        moonbit_decref(activation->owned_controls.cancellation_callback_data);
+    memset(&activation->owned_controls, 0, sizeof(activation->owned_controls));
+    activation->controls = &activation->owned_controls;
+}
+
 void jit_trap_activation_pop(jit_trap_activation_t *activation) {
     if (current_activation != activation) abort();
     save_activation_context(activation);
     current_activation = activation->previous;
     jit_execution_state_clear(&activation->execution);
+    release_activation_controls(activation);
     activation->active = 0;
 }
 
@@ -331,8 +344,9 @@ void jit_trap_activation_attach(jit_trap_activation_t *activation) {
     if (!activation) return;
     activation->previous = current_activation;
     restore_activation_context(activation);
+    activation->controls = &activation->owned_controls;
     if (activation->inherit_controls && current_activation) {
-        activation->control_context = current_activation->control_context;
+        activation->controls = current_activation->controls;
     }
     current_activation = activation;
 }
@@ -344,6 +358,7 @@ void jit_trap_activation_abandon(jit_trap_activation_t *activation) {
         current_activation = activation->previous;
     }
     jit_execution_state_clear(&activation->execution);
+    release_activation_controls(activation);
     activation->active = 0;
 }
 

@@ -140,7 +140,8 @@ typedef struct jit_trap_activation {
     volatile uintptr_t frames_fp[MAX_TRAP_FRAMES];
     volatile int frame_count;
     jit_context_t *context;
-    jit_context_t *control_context;
+    jit_invocation_controls_t owned_controls;
+    jit_invocation_controls_t *controls;
     int inherit_controls;
     struct jit_trap_activation *previous;
     jit_execution_state_t execution;
@@ -215,7 +216,7 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_native_fiber_yield(int64_t value);
 #define WASMOON_FIBER_EVENT_ATOMIC_WAIT INT64_C(0x57534d5355535003)
 
 int wasmoon_jit_cancellation_requested(jit_context_t *ctx);
-jit_context_t *jit_execution_control_context(jit_context_t *ctx);
+jit_invocation_controls_t *jit_execution_controls(jit_context_t *ctx);
 int wasmoon_native_fiber_own_waiter(void *waiter);
 void wasmoon_native_fiber_release_waiter(void);
 MOONBIT_FFI_EXPORT void *wasmoon_atomic_wait_begin(wasmoon_memory_t *, int64_t, int32_t, int64_t, int64_t);

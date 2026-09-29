@@ -249,3 +249,75 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_test_context_gc_payload_empty(void *context) 
         !table->stackmap_blob_size && !table->safepoint_count &&
         !state->gc_func_table && !state->gc_func_table_size;
 }
+
+static int control_capture_releases;
+static void release_control_capture(void *capture) {
+    (void)capture;
+    control_capture_releases++;
+}
+static int32_t poll_control_capture(void *capture) {
+    return *(int32_t *)capture;
+}
+extern void wasmoon_jit_set_cancellation_callback(
+    int64_t context, int32_t (*callback)(void *), void *capture);
+extern void wasmoon_jit_clear_cancellation_callback(int64_t context);
+
+static void set_control_capture(jit_context_t *ctx, int32_t value) {
+    int32_t *capture = moonbit_make_external_object(release_control_capture, sizeof(int32_t));
+    *capture = value;
+    wasmoon_jit_set_cancellation_callback((int64_t)(uintptr_t)ctx,
+        poll_control_capture, capture);
+}
+
+MOONBIT_FFI_EXPORT int32_t wasmoon_test_activation_controls(void) {
+    jit_context_t *ctx = alloc_context_internal(1);
+    jit_context_t *other = alloc_context_internal(1);
+    if (!ctx || !other) {
+        free_context_internal(ctx);
+        free_context_internal(other);
+        return 0;
+    }
+    control_capture_releases = 0;
+    set_control_capture(ctx, 1);
+    ctx_runtime(ctx)->control_defaults.scheduling_budget = 9;
+    jit_trap_activation_t root, child, bound, caller;
+    jit_trap_activation_init(&root, ctx);
+    jit_trap_activation_push(&root);
+    wasmoon_jit_clear_cancellation_callback((int64_t)(uintptr_t)ctx);
+    int passed = control_capture_releases == 0 && wasmoon_jit_cancellation_requested(ctx);
+    root.controls->scheduling_budget = 3;
+    set_control_capture(ctx, 0);
+    ctx_runtime(ctx)->control_defaults.scheduling_budget = 5;
+    jit_trap_activation_init(&child, ctx);
+    jit_trap_activation_push(&child);
+    passed &= !wasmoon_jit_cancellation_requested(ctx) &&
+        child.controls->scheduling_budget == 5 && root.controls->scheduling_budget == 3;
+    jit_trap_activation_init(&bound, other);
+    bound.inherit_controls = 1;
+    jit_trap_activation_push(&bound);
+    passed &= bound.controls == child.controls;
+    bound.controls->scheduling_budget--;
+    jit_trap_activation_detach();
+    passed &= child.controls->scheduling_budget == 4;
+    jit_trap_activation_pop(&child);
+    // A resumed continuation inherits its actual caller, not its old caller.
+    jit_trap_activation_attach(&bound);
+    passed &= bound.controls == root.controls && wasmoon_jit_cancellation_requested(other);
+    jit_trap_activation_pop(&bound);
+    jit_trap_activation_detach();
+    jit_trap_activation_init(&caller, ctx);
+    jit_trap_activation_push(&caller);
+    jit_trap_activation_attach(&root);
+    passed &= root.controls == &root.owned_controls &&
+        root.controls->scheduling_budget == 3 && wasmoon_jit_cancellation_requested(ctx);
+    jit_trap_activation_pop(&root);
+    passed &= control_capture_releases == 1 && !wasmoon_jit_cancellation_requested(ctx);
+    jit_trap_activation_detach();
+    wasmoon_jit_clear_cancellation_callback((int64_t)(uintptr_t)ctx);
+    passed &= control_capture_releases == 1;
+    jit_trap_activation_abandon(&caller);
+    passed &= control_capture_releases == 2;
+    free_context_internal(other);
+    free_context_internal(ctx);
+    return passed;
+}
