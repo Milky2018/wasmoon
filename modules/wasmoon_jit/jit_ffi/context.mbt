@@ -3,7 +3,29 @@
 pub type JITContext
 
 ///|
-pub extern "c" fn JITContext::new(func_count : Int) -> JITContext = "wasmoon_jit_alloc_context_managed"
+#external
+priv type FunctionAddress
+
+///|
+extern "c" fn null_function_address() -> FunctionAddress = "wasmoon_jit_null_function_address"
+
+///|
+#owned(functions)
+extern "c" fn allocate_context(
+  functions : FixedArray[FunctionAddress],
+) -> JITContext = "wasmoon_jit_alloc_context_with_functions_managed"
+
+///|
+extern "c" fn allocate_legacy_context(count : Int) -> JITContext = "wasmoon_jit_alloc_context_managed"
+
+///|
+pub fn JITContext::new(func_count : Int) -> JITContext {
+  if func_count < 0 {
+    // Keep the legacy nullable result for invalid counts.
+    return allocate_legacy_context(func_count)
+  }
+  allocate_context(FixedArray::make(func_count, null_function_address()))
+}
 
 ///|
 #borrow(context, view, locals, tags)

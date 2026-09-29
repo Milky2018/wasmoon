@@ -35,6 +35,8 @@ pub fn context_callable_subtype(@jit_ffi.JITContext, Int64, Int) -> Int
 
 pub fn context_callable_tag(@jit_ffi.JITContext) -> Int
 
+pub fn context_function_array(@jit_ffi.JITContext) -> Int
+
 pub fn context_gc_funcref_subtype(@jit_ffi.JITContext, Int, Int) -> Int
 
 pub fn context_gc_legacy_rebind(@jit_ffi.JITContext) -> Int
@@ -84,6 +86,8 @@ pub fn nested_hostcall_tls_probe_trampoline() -> Int64
 pub fn nested_trap_probe() -> Int64
 
 pub fn parked_gc_root_probe() -> Int64
+
+pub fn raw_context_function_array() -> Int
 
 pub fn reset_callback_capture() -> Unit
 

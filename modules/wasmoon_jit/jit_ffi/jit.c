@@ -295,17 +295,20 @@ jit_invocation_controls_t *jit_execution_controls(jit_context_t *ctx) {
         (ctx ? &ctx_runtime(ctx)->control_defaults : NULL);
 }
 
-int wasmoon_jit_cancellation_requested(jit_context_t *ctx) {
-    jit_invocation_controls_t *controls = jit_execution_controls(ctx);
+static int cancellation_requested(jit_invocation_controls_t *controls) {
     if (!controls || !controls->cancellation_callback) return 0;
     cancellation_callback_fn cb =
         (cancellation_callback_fn)controls->cancellation_callback;
     return call_cancellation_callback(cb, controls->cancellation_callback_data) != 0;
 }
 
+int wasmoon_jit_cancellation_requested(jit_context_t *ctx) {
+    return cancellation_requested(jit_execution_controls(ctx));
+}
+
 MOONBIT_FFI_EXPORT int32_t WASMOON_GUEST_ABI wasmoon_jit_cancel_poll(jit_context_t *ctx) {
     jit_invocation_controls_t *controls = jit_execution_controls(ctx);
-    if (wasmoon_jit_cancellation_requested(ctx)) {
+    if (cancellation_requested(controls)) {
         g_trap_code = 11;
         if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
         return 11;
@@ -503,8 +506,7 @@ static void finalize_jit_context(void *self) {
     }
 }
 
-MOONBIT_FFI_EXPORT void *wasmoon_jit_alloc_context_managed(int func_count) {
-    int64_t ctx_ptr = wasmoon_jit_alloc_context(func_count);
+static void *wrap_jit_context(int64_t ctx_ptr) {
     if (ctx_ptr == 0) {
         return NULL;
     }
@@ -517,6 +519,18 @@ MOONBIT_FFI_EXPORT void *wasmoon_jit_alloc_context_managed(int func_count) {
 
     *payload = ctx_ptr;
     return payload;
+}
+
+MOONBIT_FFI_EXPORT void *wasmoon_jit_alloc_context_managed(int func_count) {
+    return wrap_jit_context(wasmoon_jit_alloc_context(func_count));
+}
+
+MOONBIT_FFI_EXPORT void *wasmoon_jit_null_function_address(void) {
+    return NULL;
+}
+
+MOONBIT_FFI_EXPORT void *wasmoon_jit_alloc_context_with_functions_managed(void **functions) {
+    return wrap_jit_context((int64_t)(uintptr_t)alloc_context_with_functions(functions));
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_context_ptr(void *jit_context) {

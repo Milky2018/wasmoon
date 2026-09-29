@@ -360,3 +360,30 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_test_context_segments_empty(void *context) {
     jit_context_t *ctx = (jit_context_t *)(uintptr_t)wasmoon_jit_context_ptr(context);
     return !ctx_runtime(ctx)->segments;
 }
+
+MOONBIT_FFI_EXPORT int32_t wasmoon_test_context_function_array(void *context) {
+    jit_context_t *ctx = (jit_context_t *)(uintptr_t)wasmoon_jit_context_ptr(context);
+    if (!ctx || Moonbit_array_length(ctx->func_table) != ctx->func_count) return 0;
+    for (int i = 0; i < ctx->func_count; ++i) {
+        if (ctx->func_table[i]) return 0;
+        // Array teardown must not treat these borrowed addresses as RC objects.
+        ctx->func_table[i] = (void *)(uintptr_t)(16 + i * 16);
+        if (ctx->func_table[i] != (void *)(uintptr_t)(16 + i * 16)) return 0;
+    }
+    return 1;
+}
+
+MOONBIT_FFI_EXPORT int32_t wasmoon_test_raw_context_function_array(void) {
+    int passed = alloc_context_internal(-1) == NULL;
+    for (int count = 0; count < 3; ++count) {
+        jit_context_t *ctx = alloc_context_internal(count);
+        if (!ctx) return 0;
+        passed &= Moonbit_array_length(ctx->func_table) == count;
+        for (int i = 0; i < count; ++i) {
+            passed &= ctx->func_table[i] == NULL;
+            ctx->func_table[i] = (void *)(uintptr_t)(16 + i * 16);
+        }
+        free_context_internal(ctx);
+    }
+    return passed;
+}

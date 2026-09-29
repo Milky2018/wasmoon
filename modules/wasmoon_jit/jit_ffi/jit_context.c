@@ -128,21 +128,24 @@ static int32_t gc_copy_table_roots(const jit_context_t *ctx, int64_t *dst) {
 
 // ============ Context Allocation ============
 
-jit_context_t *alloc_context_internal(int func_count) {
-    // Optional callbacks, scheduling and GC state must start disabled, even
-    // when the allocator returns storage previously used by another context.
+// Consume a MoonBit external-pointer array. Its entries do not own code.
+jit_context_t *alloc_context_with_functions(void **functions) {
     jit_context_owner_t *owner = calloc(1, sizeof(*owner));
-    if (!owner) return NULL;
-    jit_context_t *ctx = &owner->abi;
-    atomic_init(&ctx->memory0_size, 0);
-    ctx->func_table = (void **)calloc(func_count, sizeof(void *));
-    if (!ctx->func_table) {
-        free(ctx);
+    if (!owner) {
+        moonbit_decref(functions);
         return NULL;
     }
-    ctx->func_count = func_count;
+    jit_context_t *ctx = &owner->abi;
+    atomic_init(&ctx->memory0_size, 0);
+    ctx->func_table = functions;
+    ctx->func_count = Moonbit_array_length(functions);
     ctx->debug_current_func_idx = -1;
     return ctx;
+}
+
+jit_context_t *alloc_context_internal(int func_count) {
+    if (func_count < 0) return NULL;
+    return alloc_context_with_functions(moonbit_make_extern_ref_array(func_count, NULL));
 }
 
 // Descriptor addresses stay stable while their RC-owned payloads are replaced.
@@ -173,7 +176,7 @@ void free_context_internal(jit_context_t *ctx) {
         ctx_runtime(ctx)->owns_memory0 = 0;
     }
 
-    if (ctx->func_table) free(ctx->func_table);
+    if (ctx->func_table) moonbit_decref(ctx->func_table);
     ctx_clear_table_bindings(ctx);
     if (ctx->tables) free(ctx->tables);
     if (ctx->table_sizes) free(ctx->table_sizes);

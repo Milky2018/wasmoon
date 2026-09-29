@@ -115,3 +115,10 @@ pub extern "c" fn context_segments_legacy(context : @jit_ffi.JITContext) -> Int 
 ///|
 #borrow(context)
 pub extern "c" fn context_segments_empty(context : @jit_ffi.JITContext) -> Int = "wasmoon_test_context_segments_empty"
+
+///|
+#borrow(context)
+pub extern "c" fn context_function_array(context : @jit_ffi.JITContext) -> Int = "wasmoon_test_context_function_array"
+
+///|
+pub extern "c" fn raw_context_function_array() -> Int = "wasmoon_test_raw_context_function_array"

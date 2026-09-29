@@ -808,3 +808,17 @@ test "segment snapshots retain data and isolate mutable inputs and instance drop
   )
   inspect(@native_test_support.context_segments_valid(first), content="1")
 }
+
+///|
+test "function address arrays retain storage without owning executable pointers" {
+  inspect(
+    @native_test_support.context_function_array(@jit_ffi.JITContext::new(0)),
+    content="1",
+  )
+  inspect(
+    @native_test_support.context_function_array(@jit_ffi.JITContext::new(2)),
+    content="1",
+  )
+  inspect(@native_test_support.raw_context_function_array(), content="1")
+  assert_true(@wasmoon_jit.NativeJITContext::try_alloc(-1) is None)
+}
