@@ -162,3 +162,14 @@ test "Store close seals previously borrowed native execution state" {
     content="(\"ExecutionStateSealed\", 0, 0, 0)",
   )
 }
+
+///|
+test "closed Store cannot recreate native callable registry" {
+  let unused = @runtime.Store::Store()
+  unused.close()
+  assert_true(unused.native_callable_registry() is None)
+  let used = @runtime.Store::Store()
+  assert_true(used.native_callable_registry() is Some(_))
+  used.close()
+  assert_true(used.native_callable_registry() is None)
+}

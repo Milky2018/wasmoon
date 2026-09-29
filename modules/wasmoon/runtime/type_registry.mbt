@@ -5,6 +5,7 @@ priv struct StoreTypeRegistry {
   mappings : Map[Int, (Array[@types.SubType], Array[Int], Array[Int])]
   parents : Array[Int]
   views : Array[NativeCallableTypeView]
+  mut native_registry : @wasmoon_jit.NativeCallableRegistry?
   entries : Map[Int64, Int]
   heap_types : Map[Int, Int]
 } derive(Debug)
@@ -16,6 +17,7 @@ fn StoreTypeRegistry::new() -> StoreTypeRegistry {
     mappings: Map([]),
     parents: [],
     views: [],
+    native_registry: None,
     entries: Map([]),
     heap_types: Map([]),
   }
@@ -113,6 +115,30 @@ pub fn Store::bind_native_callable_view(
 }
 
 ///|
+/// Share Store-wide callable identities while each context owns its local maps.
+/// Returns None after the Store is closed.
+pub fn Store::native_callable_registry(
+  self : Store,
+) -> @wasmoon_jit.NativeCallableRegistry? {
+  guard !self.closed.val else { return None }
+  let registry = match self.native_types.native_registry {
+    Some(registry) => registry
+    None => {
+      let registry = @wasmoon_jit.NativeCallableRegistry::new()
+      self.native_types.native_registry = Some(registry)
+      registry
+    }
+  }
+  for entry in self.jit_funcref_entries() {
+    self.native_types.entries[entry.func_ptr] = self.get_func_canonical_type_idx(
+      entry.store_addr,
+    )
+  }
+  self.native_types.publish()
+  Some(registry)
+}
+
+///|
 fn Store::record_gc_type(
   self : Store,
   index : Int,
@@ -198,6 +224,14 @@ fn StoreTypeRegistry::publish(self : StoreTypeRegistry) -> Unit {
   let entries : Array[(Int64, Int)] = []
   for pointer, identity in self.entries {
     entries.push((pointer, identity))
+  }
+  if self.native_registry is Some(registry) {
+    if !registry.replace(self.parents, entries) {
+      abort("failed to publish native callable identities")
+    }
+  }
+  if self.views.is_empty() {
+    return
   }
   let parents = self.parents.copy()
   for view in self.views {

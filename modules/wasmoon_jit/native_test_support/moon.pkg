@@ -1,5 +1,6 @@
 import {
   "Milky2018/wasmoon_jit/jit_ffi",
+  "Milky2018/wasmoon_jit/native/callable",
 }
 
 options(

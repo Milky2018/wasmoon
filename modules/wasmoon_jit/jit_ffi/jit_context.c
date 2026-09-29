@@ -173,8 +173,8 @@ void free_context_internal(jit_context_t *ctx) {
     if (ctx->table_max_sizes) free(ctx->table_max_sizes);
     if (ctx->globals) free(ctx->globals);
     free(ctx_runtime(ctx)->callable_local_types);
-    free(ctx_runtime(ctx)->callable_type_parents);
-    free(ctx_runtime(ctx)->callable_entries);
+    if (ctx_runtime(ctx)->callable_registry)
+        moonbit_decref(ctx_runtime(ctx)->callable_registry);
     free(ctx_runtime(ctx)->callable_tags);
     free(ctx_runtime(ctx)->gc_func_table);
 

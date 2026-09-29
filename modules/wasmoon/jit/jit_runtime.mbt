@@ -1384,6 +1384,18 @@ pub fn JITModule::set_callable_types(
 }
 
 ///|
+pub fn JITModule::bind_callable_registry(
+  self : JITModule,
+  registry : @wasmoon_jit.NativeCallableRegistry,
+  local_types : Array[Int],
+  tags : Array[Int],
+) -> Unit {
+  if self.context is Some(context) {
+    context.ctx.bind_callable_registry(registry, local_types, tags)
+  }
+}
+
+///|
 pub fn JITModule::has_callable_metadata(self : JITModule) -> Bool {
   match self.context {
     Some(context) => context.ctx.has_callable_metadata()

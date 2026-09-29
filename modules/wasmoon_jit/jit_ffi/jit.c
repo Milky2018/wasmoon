@@ -1973,40 +1973,6 @@ MOONBIT_FFI_EXPORT int wasmoon_jit_write_bound_entry_code(
 #endif
 }
 
-MOONBIT_FFI_EXPORT void wasmoon_jit_set_callable_types(
-    void *managed_context, const int32_t *local_types, int32_t local_count,
-    const int32_t *parents, int32_t type_count,
-    const int64_t *entries, int32_t entry_count,
-    const int32_t *tags, int32_t tag_count
-) {
-    jit_context_t *ctx = (jit_context_t *)(uintptr_t)wasmoon_jit_context_ptr(managed_context);
-    if (!ctx) return;
-    int32_t *local_copy = local_count ? malloc((size_t)local_count * sizeof(int32_t)) : NULL;
-    int32_t *parent_copy = type_count ? malloc((size_t)type_count * sizeof(int32_t)) : NULL;
-    int64_t *entry_copy = entry_count ? malloc((size_t)entry_count * 2 * sizeof(int64_t)) : NULL;
-    int32_t *tag_copy = tag_count ? malloc((size_t)tag_count * sizeof(int32_t)) : NULL;
-    if ((tag_count && !tag_copy) || (local_count && !local_copy) || (type_count && !parent_copy) || (entry_count && !entry_copy)) {
-        free(local_copy); free(parent_copy); free(entry_copy); free(tag_copy);
-        return;
-    }
-    if (local_count) memcpy(local_copy, local_types, (size_t)local_count * sizeof(int32_t));
-    if (type_count) memcpy(parent_copy, parents, (size_t)type_count * sizeof(int32_t));
-    if (entry_count) memcpy(entry_copy, entries, (size_t)entry_count * 2 * sizeof(int64_t));
-    if (tag_count) memcpy(tag_copy, tags, (size_t)tag_count * sizeof(int32_t));
-    free(ctx_runtime(ctx)->callable_tags);
-    ctx_runtime(ctx)->callable_tags = tag_copy;
-    ctx_runtime(ctx)->callable_tag_count = tag_count;
-    free(ctx_runtime(ctx)->callable_local_types);
-    free(ctx_runtime(ctx)->callable_type_parents);
-    free(ctx_runtime(ctx)->callable_entries);
-    ctx_runtime(ctx)->callable_local_types = local_copy;
-    ctx_runtime(ctx)->callable_local_type_count = local_count;
-    ctx_runtime(ctx)->callable_type_parents = parent_copy;
-    ctx_runtime(ctx)->callable_type_count = type_count;
-    ctx_runtime(ctx)->callable_entries = entry_copy;
-    ctx_runtime(ctx)->callable_entry_count = entry_count;
-}
-
 MOONBIT_FFI_EXPORT int32_t wasmoon_jit_has_callable_metadata(void *managed_context) {
     jit_context_t *ctx = (jit_context_t *)(uintptr_t)wasmoon_jit_context_ptr(managed_context);
     return ctx && ctx_runtime(ctx)->callable_local_types != NULL;

@@ -3,6 +3,7 @@
 #define WASMOON_JIT_CONTEXT_H
 
 #include "jit_ffi.h"
+#include "../native/callable/registry.h"
 
 typedef struct {
     uint8_t **data_segments;
@@ -79,10 +80,7 @@ typedef struct jit_runtime_state {
     // Callable identity metadata persists across execution activations.
     int32_t *callable_local_types;
     int callable_local_type_count;
-    int32_t *callable_type_parents;
-    int callable_type_count;
-    int64_t *callable_entries;
-    int callable_entry_count;
+    jit_callable_registry_t *callable_registry;
     int32_t *callable_tags;
     int callable_tag_count;
 

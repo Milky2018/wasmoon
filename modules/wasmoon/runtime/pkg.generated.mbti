@@ -5,6 +5,7 @@ import {
   "Milky2018/wasm_core/types",
   "Milky2018/wasmoon_jit",
   "Milky2018/wasmoon_jit/jit_ffi",
+  "Milky2018/wasmoon_jit/native/callable",
   "Milky2018/wasmoon_jit/native/execution",
   "moonbitlang/core/debug",
 }
@@ -629,6 +630,7 @@ pub fn Store::leave_interpreter_boundary(Self) -> Unit
 pub fn Store::lookup_jit_funcref_ptr(Self, Int) -> Int64?
 pub fn Store::lookup_jit_funcref_store_addr(Self, Int64) -> Int?
 pub fn Store::maybe_collect(Self, additional_roots? : Array[@types.Value], threshold? : Double) -> Int
+pub fn Store::native_callable_registry(Self) -> @callable.NativeCallableRegistry?
 pub fn Store::native_execution_state(Self) -> @execution.NativeExecutionState
 pub fn Store::native_type_indices(Self, ModuleInstance) -> Array[Int]
 pub fn Store::native_type_parents(Self) -> Array[Int]

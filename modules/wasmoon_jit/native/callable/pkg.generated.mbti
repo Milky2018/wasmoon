@@ -1,0 +1,23 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "Milky2018/wasmoon_jit/native/callable"
+
+import {
+  "moonbitlang/core/debug",
+}
+
+// Values
+
+// Errors
+
+// Types and methods
+pub type NativeCallableRegistry
+pub fn NativeCallableRegistry::clear(Self) -> Unit
+pub fn NativeCallableRegistry::new() -> Self
+pub fn NativeCallableRegistry::replace(Self, Array[Int], Array[(Int64, Int)]) -> Bool
+#deprecated
+pub fn NativeCallableRegistry::to_repr(Self) -> @debug.Repr
+pub impl @debug.Debug for NativeCallableRegistry
+
+// Type aliases
+
+// Traits

@@ -240,17 +240,30 @@ int64_t WASMOON_GUEST_ABI gc_ref_cast_impl(jit_context_t *ctx, int64_t value, in
 
 // ============ Type Check for call_indirect ============
 
-static int callable_subtype(jit_context_t *ctx, int32_t actual, int32_t local_expected) {
-    if (!ctx || !ctx_runtime(ctx)->callable_local_types) return is_subtype_cached_ctx(ctx, actual, local_expected);
-    if (local_expected < 0 || local_expected >= ctx_runtime(ctx)->callable_local_type_count) return 0;
-    int32_t expected = ctx_runtime(ctx)->callable_local_types[local_expected];
-    while (actual >= 0 && actual < ctx_runtime(ctx)->callable_type_count) {
+static inline int callable_subtype_registered(
+    const jit_runtime_state_t *state, int32_t actual, int32_t local_expected
+) {
+    if ((uint32_t)local_expected >= (uint32_t)state->callable_local_type_count) return 0;
+    int32_t expected = state->callable_local_types[local_expected];
+    const jit_callable_registry_t *registry = state->callable_registry;
+    if (!registry) return 0;
+    // Counts are nonnegative at publication. Snapshot the read-only view once;
+    // unsigned bounds checks also reject negative type indices.
+    uint32_t type_count = (uint32_t)registry->type_count;
+    const int32_t *parents = registry->parents;
+    while ((uint32_t)actual < type_count) {
         if (actual == expected) return 1;
-        int32_t parent = ctx_runtime(ctx)->callable_type_parents[actual];
+        int32_t parent = parents[actual];
         if (parent == actual) return 0;
         actual = parent;
     }
     return 0;
+}
+
+static int callable_subtype(jit_context_t *ctx, int32_t actual, int32_t local_expected) {
+    if (!ctx || !ctx_runtime(ctx)->callable_local_types)
+        return is_subtype_cached_ctx(ctx, actual, local_expected);
+    return callable_subtype_registered(ctx_runtime(ctx), actual, local_expected);
 }
 
 int32_t callable_type_for_value(jit_context_t *ctx, int64_t value) {
@@ -263,14 +276,21 @@ int32_t callable_type_for_value(jit_context_t *ctx, int64_t value) {
     } else {
         pointer = (uint64_t)value & ~FUNCREF_TAG;
     }
-    for (int i = 0; i < ctx_runtime(ctx)->callable_entry_count; ++i) {
-        if ((uint64_t)ctx_runtime(ctx)->callable_entries[i * 2] == pointer) return (int32_t)ctx_runtime(ctx)->callable_entries[i * 2 + 1];
+    const jit_callable_registry_t *registry = ctx_runtime(ctx)->callable_registry;
+    if (!registry) return -1;
+    for (int i = 0; i < registry->entry_count; ++i) {
+        if ((uint64_t)registry->entries[i * 2] == pointer) return (int32_t)registry->entries[i * 2 + 1];
     }
     return -1;
 }
 
 void WASMOON_GUEST_ABI gc_type_check_subtype_impl(jit_context_t *ctx, int32_t actual_type, int32_t expected_type) {
-    if (callable_subtype(ctx, actual_type, expected_type)) return;
+    // Keep the Store-backed path leaf-like; the legacy cache fallback is larger.
+    if (ctx && ctx_runtime(ctx)->callable_local_types) {
+        if (callable_subtype_registered(ctx_runtime(ctx), actual_type, expected_type)) return;
+    } else if (is_subtype_cached_ctx(ctx, actual_type, expected_type)) {
+        return;
+    }
     g_trap_code = 4;
     if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
 }

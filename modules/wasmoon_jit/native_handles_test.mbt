@@ -546,3 +546,18 @@ test "guarded and shared descriptor access uses committed length rather than res
 test "context allocates optional segment state on demand and releases it on reset" {
   inspect(@native_test_support.context_optional_state(), content="1")
 }
+
+///|
+test "Store callable registry updates are shared and preserve instance isolation" {
+  let first = @wasmoon_jit.NativeCallableRegistry::new()
+  let second = @wasmoon_jit.NativeCallableRegistry::new()
+  assert_true(first.replace([-1, 0], [(16777216L, 1)]))
+  inspect(
+    @native_test_support.shared_callable_registry(first, second),
+    content="1",
+  )
+  // The native contexts released their references without consuming ours.
+  assert_true(first.replace([], []))
+  first.clear()
+  second.clear()
+}

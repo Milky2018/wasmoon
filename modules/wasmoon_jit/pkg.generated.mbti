@@ -13,6 +13,7 @@ import {
   "Milky2018/wasmoon_jit/artifact/installer",
   "Milky2018/wasmoon_jit/artifact/loader",
   "Milky2018/wasmoon_jit/jit_ffi",
+  "Milky2018/wasmoon_jit/native/callable",
   "Milky2018/wasmoon_jit/native/execution",
   "Milky2018/wasmoon_jit/perf",
   "Milky2018/x64_target",
@@ -610,6 +611,7 @@ type NativeJITContext
 pub fn NativeJITContext::alloc_guarded_memory(Self, Int, Int?) -> @jit_ffi.MemoryDescriptor
 pub fn NativeJITContext::alloc_indirect_table(Self, Int) -> Bool
 pub fn NativeJITContext::bind_callable(Self, Int64) -> NativeCallable raise @installer.JitInstallError
+pub fn NativeJITContext::bind_callable_registry(Self, @callable.NativeCallableRegistry, Array[Int], Array[Int]) -> Unit
 pub fn NativeJITContext::call_trampoline(Self, Int64, Int64, FixedArray[Int64], Int, Bool) -> Int raise NativeFiberError
 pub fn NativeJITContext::clear_cancellation_callback(Self) -> Unit
 pub fn NativeJITContext::clear_gc_heap(Self) -> Unit
@@ -837,6 +839,8 @@ pub using @installer {type JitInstallError}
 pub using @loader {type LoadedArtifact}
 
 pub using @jit_ffi {type MemoryDescriptor}
+
+pub using @callable {type NativeCallableRegistry}
 
 pub using @jit_ffi {type NativeContinuationArena}
 

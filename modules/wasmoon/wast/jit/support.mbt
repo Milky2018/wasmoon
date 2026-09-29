@@ -250,14 +250,9 @@ pub fn register_owned_instance_funcrefs_for_jit(
     |> ignore
   }
   let local_types = store.native_type_indices(instance)
-  store.bind_native_callable_view(fn(parents, entries) {
-    jit_module.set_callable_types(
-      local_types,
-      parents,
-      entries,
-      instance.tag_addrs,
-    )
-  })
+  if store.native_callable_registry() is Some(registry) {
+    jit_module.bind_callable_registry(registry, local_types, instance.tag_addrs)
+  }
   { lease, }
 }
 

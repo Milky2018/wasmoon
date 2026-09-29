@@ -1,4 +1,7 @@
 ///|
+pub using @callable {type NativeCallableRegistry}
+
+///|
 #borrow(context, output)
 extern "c" fn write_bound_entry_code(
   context : JITContext,
@@ -44,20 +47,46 @@ pub fn NativeCallable::release(self : NativeCallable) -> Unit {
 }
 
 ///|
-#borrow(context, local_types, parents, entries, tags)
-extern "c" fn set_callable_types(
+#borrow(context, registry, local_types, tags)
+extern "c" fn bind_callable_registry(
   context : JITContext,
+  registry : NativeCallableRegistry,
   local_types : FixedArray[Int],
   local_count : Int,
-  parents : FixedArray[Int],
-  type_count : Int,
-  entries : FixedArray[Int64],
-  entry_count : Int,
   tags : FixedArray[Int],
   tag_count : Int,
-) -> Unit = "wasmoon_jit_set_callable_types"
+) -> Bool = "wasmoon_jit_bind_callable_registry"
 
 ///|
+/// Bind shared Store identities with this instance's local type and tag maps.
+pub fn NativeJITContext::bind_callable_registry(
+  self : NativeJITContext,
+  registry : NativeCallableRegistry,
+  local_types : Array[Int],
+  tags : Array[Int],
+) -> Unit {
+  let locals = FixedArray::make(local_types.length(), 0)
+  for i, value in local_types {
+    locals[i] = value
+  }
+  let tag_addresses = FixedArray::make(tags.length(), 0)
+  for i, address in tags {
+    tag_addresses[i] = address
+  }
+  if !bind_callable_registry(
+      self.handle,
+      registry,
+      locals,
+      locals.length(),
+      tag_addresses,
+      tag_addresses.length(),
+    ) {
+    abort("failed to allocate native callable instance mappings")
+  }
+}
+
+///|
+/// Install an independent callable view for a standalone context.
 pub fn NativeJITContext::set_callable_types(
   self : NativeJITContext,
   local_types : Array[Int],
@@ -65,32 +94,9 @@ pub fn NativeJITContext::set_callable_types(
   entries : Array[(Int64, Int)],
   tags : Array[Int],
 ) -> Unit {
-  let locals = FixedArray::make(local_types.length(), 0)
-  for i, value in local_types {
-    locals[i] = value
+  let registry = NativeCallableRegistry::new()
+  if !registry.replace(parents, entries) {
+    abort("failed to allocate native callable registry")
   }
-  let supers = FixedArray::make(parents.length(), 0)
-  for i, value in parents {
-    supers[i] = value
-  }
-  let functions = FixedArray::make(entries.length() * 2, 0L)
-  for i, entry in entries {
-    functions[i * 2] = entry.0
-    functions[i * 2 + 1] = entry.1.to_int64()
-  }
-  let tag_addresses = FixedArray::make(tags.length(), 0)
-  for i, address in tags {
-    tag_addresses[i] = address
-  }
-  set_callable_types(
-    self.handle,
-    locals,
-    locals.length(),
-    supers,
-    supers.length(),
-    functions,
-    entries.length(),
-    tag_addresses,
-    tag_addresses.length(),
-  )
+  self.bind_callable_registry(registry, local_types, tags)
 }

@@ -11,6 +11,7 @@ options(
     "trap.c",
     "exec_mem.c",
     "jit_context.c",
+    "callable_registry.c",
     "memory_ops.c",
     "segment_ops.c",
     "gc_type_cache.c",
