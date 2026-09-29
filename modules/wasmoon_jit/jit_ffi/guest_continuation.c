@@ -117,14 +117,14 @@ void continuation_arena_release(native_continuation_arena_t *arena) {
 }
 
 void continuation_types_free(jit_context_t *ctx) {
-    native_continuation_type_t *type = ctx->continuation_types;
+    native_continuation_type_t *type = ctx_runtime(ctx)->continuation_types;
     while (type) {
         native_continuation_type_t *next = type->next;
         free(type->roots);
         free(type);
         type = next;
     }
-    ctx->continuation_types = NULL;
+    ctx_runtime(ctx)->continuation_types = NULL;
 }
 
 static int64_t publish_continuation(native_continuation_arena_t *arena,
@@ -145,7 +145,7 @@ static int64_t publish_continuation(native_continuation_arena_t *arena,
 }
 
 static native_continuation_body_t *take_continuation(jit_context_t *ctx, int64_t reference) {
-    native_continuation_arena_t *arena = ctx->continuation_arena;
+    native_continuation_arena_t *arena = ctx_runtime(ctx)->continuation_arena;
     if (!reference) continuation_trap(14);
     if (!arena || reference > 0 || !(reference & 1)) continuation_trap(CONT_CONSUMED);
     uint64_t index = (uint64_t)(-(reference + 1)) >> 1;
@@ -157,7 +157,7 @@ static native_continuation_body_t *take_continuation(jit_context_t *ctx, int64_t
 }
 
 static int32_t global_tag(jit_context_t *ctx, int32_t tag) {
-    return tag >= 0 && tag < ctx->callable_tag_count ? ctx->callable_tags[tag] : tag;
+    return tag >= 0 && tag < ctx_runtime(ctx)->callable_tag_count ? ctx_runtime(ctx)->callable_tags[tag] : tag;
 }
 
 static void bind_values(native_continuation_body_t *body, const int64_t *values, int32_t count) {
@@ -181,9 +181,9 @@ static int64_t continuation_entry(void *closure) {
 
 static int64_t WASMOON_GUEST_ABI continuation_new(jit_context_t *ctx, int32_t index, int64_t function) {
     if (!function) continuation_trap(14);
-    native_continuation_type_t *type = ctx->continuation_types;
+    native_continuation_type_t *type = ctx_runtime(ctx)->continuation_types;
     while (type && type->index != index) type = type->next;
-    if (!type || !ctx->continuation_arena || ctx->continuation_arena->sealed) continuation_trap(8);
+    if (!type || !ctx_runtime(ctx)->continuation_arena || ctx_runtime(ctx)->continuation_arena->sealed) continuation_trap(8);
     native_continuation_body_t *body = calloc(1, sizeof(*body));
     if (!body) continuation_trap(9);
     body->context = ctx;
@@ -199,16 +199,16 @@ static int64_t WASMOON_GUEST_ABI continuation_new(jit_context_t *ctx, int32_t in
         }
         memset(body->roots, 0, (size_t)type->params * sizeof(int64_t));
     }
-    body->next = ctx->continuation_arena->bodies;
-    ctx->continuation_arena->bodies = body;
-    return publish_continuation(ctx->continuation_arena, body);
+    body->next = ctx_runtime(ctx)->continuation_arena->bodies;
+    ctx_runtime(ctx)->continuation_arena->bodies = body;
+    return publish_continuation(ctx_runtime(ctx)->continuation_arena, body);
 }
 
 static int64_t WASMOON_GUEST_ABI continuation_bind(jit_context_t *ctx, int32_t input_type, int64_t reference,
     const int64_t *values, int32_t count) {
     native_continuation_body_t *body = take_continuation(ctx, reference);
     if (body->started) {
-        native_continuation_type_t *type = ctx->continuation_types;
+        native_continuation_type_t *type = ctx_runtime(ctx)->continuation_types;
         while (type && type->index != input_type) type = type->next;
         if (!type || count < 0 || count > type->params) continuation_trap(8);
         void *registration = NULL;
@@ -234,7 +234,7 @@ static int64_t WASMOON_GUEST_ABI continuation_bind(jit_context_t *ctx, int32_t i
         body->input = input;
         body->input_count += count;
     } else bind_values(body, values, count);
-    return publish_continuation(ctx->continuation_arena, body);
+    return publish_continuation(ctx_runtime(ctx)->continuation_arena, body);
 }
 
 static void deliver_input(native_continuation_body_t *body, int64_t *outputs, int32_t count) {
@@ -339,7 +339,7 @@ static int32_t WASMOON_GUEST_ABI continuation_resume(jit_context_t *ctx, int64_t
                 handlers[i * 3 + 1] == effect.switching) { matched = i; break; }
         }
         if (matched >= 0) {
-            int64_t saved = publish_continuation(ctx->continuation_arena, body);
+            int64_t saved = publish_continuation(ctx_runtime(ctx)->continuation_arena, body);
             if (!effect.switching) {
                 int64_t *region = outputs + handlers[matched * 3 + 2];
                 if (effect.count) memcpy(region, effect.values, (size_t)effect.count * sizeof(int64_t));
@@ -385,16 +385,20 @@ MOONBIT_FFI_EXPORT void wasmoon_continuation_arena_clear(void *owner) {
 MOONBIT_FFI_EXPORT void wasmoon_continuation_arena_bind(void *context, void *owner) {
     jit_context_t *ctx = (jit_context_t *)wasmoon_jit_context_ptr(context);
     native_continuation_arena_t *arena = *(native_continuation_arena_t **)owner;
-    if (ctx && arena != ctx->continuation_arena) {
+    if (ctx && arena != ctx_runtime(ctx)->continuation_arena) {
         if (arena) ++arena->references;
-        continuation_arena_release(ctx->continuation_arena);
-        ctx->continuation_arena = arena;
+        continuation_arena_release(ctx_runtime(ctx)->continuation_arena);
+        ctx_runtime(ctx)->continuation_arena = arena;
     }
 }
 MOONBIT_FFI_EXPORT int32_t wasmoon_continuation_define_type(void *context, int32_t index,
     int64_t trampoline, int32_t params, int32_t results, const int32_t *roots) {
     jit_context_t *ctx = (jit_context_t *)wasmoon_jit_context_ptr(context);
     if (!ctx || params < 0 || results < 0) return 0;
+    if (!ctx_runtime(ctx)->continuation_arena) {
+        ctx_runtime(ctx)->continuation_arena = continuation_arena_new();
+        if (!ctx_runtime(ctx)->continuation_arena) return 0;
+    }
     native_continuation_type_t *type = calloc(1, sizeof(*type));
     if (!type) return 0;
     type->index = index;
@@ -406,8 +410,8 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_continuation_define_type(void *context, int32
         if (!type->roots) { free(type); return 0; }
         memcpy(type->roots, roots, (size_t)params * sizeof(int32_t));
     }
-    type->next = ctx->continuation_types;
-    ctx->continuation_types = type;
+    type->next = ctx_runtime(ctx)->continuation_types;
+    ctx_runtime(ctx)->continuation_types = type;
     return 1;
 }
 MOONBIT_FFI_EXPORT int64_t wasmoon_cont_new_ptr(void) { return WASMOON_GUEST_ADDRESS(continuation_new); }

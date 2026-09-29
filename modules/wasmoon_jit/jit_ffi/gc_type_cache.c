@@ -40,26 +40,26 @@ static int is_concrete_subtype(
     int32_t actual_type,
     int32_t expected_type
 ) {
-    if (!ctx || !ctx->gc_type_cache) return 0;
-    if (actual_type < 0 || actual_type >= ctx->gc_num_types) return 0;
-    if (expected_type < 0 || expected_type >= ctx->gc_num_types) return 0;
+    if (!ctx || !ctx_runtime(ctx)->gc_type_cache) return 0;
+    if (actual_type < 0 || actual_type >= ctx_runtime(ctx)->gc_num_types) return 0;
+    if (expected_type < 0 || expected_type >= ctx_runtime(ctx)->gc_num_types) return 0;
 
     int32_t target_canonical = expected_type;
-    if (ctx->gc_canonical_indices && expected_type < ctx->gc_num_canonical) {
-        target_canonical = ctx->gc_canonical_indices[expected_type];
+    if (ctx_runtime(ctx)->gc_canonical_indices && expected_type < ctx_runtime(ctx)->gc_num_canonical) {
+        target_canonical = ctx_runtime(ctx)->gc_canonical_indices[expected_type];
     }
 
     int32_t current_type = actual_type;
-    while (current_type >= 0 && current_type < ctx->gc_num_types) {
+    while (current_type >= 0 && current_type < ctx_runtime(ctx)->gc_num_types) {
         int32_t current_canonical = current_type;
-        if (ctx->gc_canonical_indices && current_type < ctx->gc_num_canonical) {
-            current_canonical = ctx->gc_canonical_indices[current_type];
+        if (ctx_runtime(ctx)->gc_canonical_indices && current_type < ctx_runtime(ctx)->gc_num_canonical) {
+            current_canonical = ctx_runtime(ctx)->gc_canonical_indices[current_type];
         }
         if (current_canonical == target_canonical) {
             return 1;
         }
         int32_t super_idx =
-            ctx->gc_type_cache[current_type * GC_TYPE_CACHE_STRIDE + GC_TYPE_SUPER_IDX_OFF];
+            ctx_runtime(ctx)->gc_type_cache[current_type * GC_TYPE_CACHE_STRIDE + GC_TYPE_SUPER_IDX_OFF];
         if (super_idx < 0 || super_idx == current_type) {
             break;
         }
@@ -70,14 +70,14 @@ static int is_concrete_subtype(
 
 static int is_subtype_cached_ctx(jit_context_t *ctx, int type1, int type2) {
     if (type1 == type2) return 1;
-    if (!ctx || !ctx->gc_type_cache) return 0;
-    if (type1 < 0 || type1 >= ctx->gc_num_types) return 0;
-    if (type2 < 0 || type2 >= ctx->gc_num_types) return 0;
+    if (!ctx || !ctx_runtime(ctx)->gc_type_cache) return 0;
+    if (type1 < 0 || type1 >= ctx_runtime(ctx)->gc_num_types) return 0;
+    if (type2 < 0 || type2 >= ctx_runtime(ctx)->gc_num_types) return 0;
 
     // Check canonical indices first (if available)
-    if (ctx->gc_canonical_indices && ctx->gc_num_canonical > 0) {
-        if (type1 < ctx->gc_num_canonical && type2 < ctx->gc_num_canonical) {
-            if (ctx->gc_canonical_indices[type1] == ctx->gc_canonical_indices[type2]) {
+    if (ctx_runtime(ctx)->gc_canonical_indices && ctx_runtime(ctx)->gc_num_canonical > 0) {
+        if (type1 < ctx_runtime(ctx)->gc_num_canonical && type2 < ctx_runtime(ctx)->gc_num_canonical) {
+            if (ctx_runtime(ctx)->gc_canonical_indices[type1] == ctx_runtime(ctx)->gc_canonical_indices[type2]) {
                 return 1;
             }
         }
@@ -85,9 +85,9 @@ static int is_subtype_cached_ctx(jit_context_t *ctx, int type1, int type2) {
 
     // Walk the supertype chain
     int current = type1;
-    while (current >= 0 && current < ctx->gc_num_types) {
+    while (current >= 0 && current < ctx_runtime(ctx)->gc_num_types) {
         if (current == type2) return 1;
-        int super_idx = ctx->gc_type_cache[current * GC_TYPE_CACHE_STRIDE + GC_TYPE_SUPER_IDX_OFF];
+        int super_idx = ctx_runtime(ctx)->gc_type_cache[current * GC_TYPE_CACHE_STRIDE + GC_TYPE_SUPER_IDX_OFF];
         if (super_idx < 0) break;  // No more supertypes
         if (super_idx == current) break;  // Avoid infinite loop
         current = super_idx;
@@ -139,11 +139,11 @@ int32_t WASMOON_GUEST_ABI gc_ref_test_impl(jit_context_t *ctx, int64_t value, in
             case ABSTRACT_TYPE_NOEXTERN:
                 return 0;
             default: {
-                if (ctx && ctx->callable_local_types) {
+                if (ctx && ctx_runtime(ctx)->callable_local_types) {
                     return callable_subtype(ctx, callable_type_for_value(ctx, value), type_idx);
                 }
                 // For concrete type indices, check if the function's type is a subtype
-                if (!ctx || !ctx->gc_func_type_indices || !ctx->gc_type_cache) {
+                if (!ctx || !ctx_runtime(ctx)->gc_func_type_indices || !ctx_runtime(ctx)->gc_type_cache) {
                     return 0;
                 }
 
@@ -152,19 +152,19 @@ int32_t WASMOON_GUEST_ABI gc_ref_test_impl(jit_context_t *ctx, int64_t value, in
                 if (value < 0) {
                     // IR-encoded funcref: value = -(func_idx + 1)
                     func_idx = (int32_t)(-(value + 1));
-                } else if (is_funcref_ptr_value(value) && ctx->gc_func_table && ctx->gc_func_table_size > 0) {
+                } else if (is_funcref_ptr_value(value) && ctx_runtime(ctx)->gc_func_table && ctx_runtime(ctx)->gc_func_table_size > 0) {
                     // Tagged pointer funcref: search func_table for the ptr
                     void *raw_ptr = (void *)(uintptr_t)(value & ~FUNCREF_TAG);
-                    for (int i = 0; i < ctx->gc_func_table_size; i++) {
-                        if (ctx->gc_func_table[i] == raw_ptr) {
+                    for (int i = 0; i < ctx_runtime(ctx)->gc_func_table_size; i++) {
+                        if (ctx_runtime(ctx)->gc_func_table[i] == raw_ptr) {
                             func_idx = i;
                             break;
                         }
                     }
                 }
 
-                if (func_idx >= 0 && func_idx < ctx->gc_num_funcs) {
-                    int32_t func_type_idx = ctx->gc_func_type_indices[func_idx];
+                if (func_idx >= 0 && func_idx < ctx_runtime(ctx)->gc_num_funcs) {
+                    int32_t func_type_idx = ctx_runtime(ctx)->gc_func_type_indices[func_idx];
                     if (is_concrete_subtype(ctx, func_type_idx, type_idx)) {
                         return 1;
                     }
@@ -241,12 +241,12 @@ int64_t WASMOON_GUEST_ABI gc_ref_cast_impl(jit_context_t *ctx, int64_t value, in
 // ============ Type Check for call_indirect ============
 
 static int callable_subtype(jit_context_t *ctx, int32_t actual, int32_t local_expected) {
-    if (!ctx || !ctx->callable_local_types) return is_subtype_cached_ctx(ctx, actual, local_expected);
-    if (local_expected < 0 || local_expected >= ctx->callable_local_type_count) return 0;
-    int32_t expected = ctx->callable_local_types[local_expected];
-    while (actual >= 0 && actual < ctx->callable_type_count) {
+    if (!ctx || !ctx_runtime(ctx)->callable_local_types) return is_subtype_cached_ctx(ctx, actual, local_expected);
+    if (local_expected < 0 || local_expected >= ctx_runtime(ctx)->callable_local_type_count) return 0;
+    int32_t expected = ctx_runtime(ctx)->callable_local_types[local_expected];
+    while (actual >= 0 && actual < ctx_runtime(ctx)->callable_type_count) {
         if (actual == expected) return 1;
-        int32_t parent = ctx->callable_type_parents[actual];
+        int32_t parent = ctx_runtime(ctx)->callable_type_parents[actual];
         if (parent == actual) return 0;
         actual = parent;
     }
@@ -263,8 +263,8 @@ int32_t callable_type_for_value(jit_context_t *ctx, int64_t value) {
     } else {
         pointer = (uint64_t)value & ~FUNCREF_TAG;
     }
-    for (int i = 0; i < ctx->callable_entry_count; ++i) {
-        if ((uint64_t)ctx->callable_entries[i * 2] == pointer) return (int32_t)ctx->callable_entries[i * 2 + 1];
+    for (int i = 0; i < ctx_runtime(ctx)->callable_entry_count; ++i) {
+        if ((uint64_t)ctx_runtime(ctx)->callable_entries[i * 2] == pointer) return (int32_t)ctx_runtime(ctx)->callable_entries[i * 2 + 1];
     }
     return -1;
 }
@@ -279,51 +279,51 @@ void WASMOON_GUEST_ABI gc_type_check_subtype_impl(jit_context_t *ctx, int32_t ac
 
 void set_type_cache_internal(jit_context_t *ctx, int32_t *types_data, int num_types) {
     if (!ctx) return;
-    if (ctx->gc_type_cache) {
-        free(ctx->gc_type_cache);
-        ctx->gc_type_cache = NULL;
+    if (ctx_runtime(ctx)->gc_type_cache) {
+        free(ctx_runtime(ctx)->gc_type_cache);
+        ctx_runtime(ctx)->gc_type_cache = NULL;
     }
 
-    ctx->gc_num_types = num_types;
+    ctx_runtime(ctx)->gc_num_types = num_types;
     if (num_types > 0 && types_data) {
         size_t bytes = (size_t)num_types * GC_TYPE_CACHE_STRIDE * sizeof(int32_t);
-        ctx->gc_type_cache = (int32_t *)malloc(bytes);
-        if (ctx->gc_type_cache) {
-            memcpy(ctx->gc_type_cache, types_data, bytes);
+        ctx_runtime(ctx)->gc_type_cache = (int32_t *)malloc(bytes);
+        if (ctx_runtime(ctx)->gc_type_cache) {
+            memcpy(ctx_runtime(ctx)->gc_type_cache, types_data, bytes);
         }
     }
 }
 
 void set_canonical_indices_internal(jit_context_t *ctx, int32_t *canonical, int num_types) {
     if (!ctx) return;
-    if (ctx->gc_canonical_indices) {
-        free(ctx->gc_canonical_indices);
-        ctx->gc_canonical_indices = NULL;
+    if (ctx_runtime(ctx)->gc_canonical_indices) {
+        free(ctx_runtime(ctx)->gc_canonical_indices);
+        ctx_runtime(ctx)->gc_canonical_indices = NULL;
     }
 
-    ctx->gc_num_canonical = num_types;
+    ctx_runtime(ctx)->gc_num_canonical = num_types;
     if (num_types > 0 && canonical) {
         size_t bytes = (size_t)num_types * sizeof(int32_t);
-        ctx->gc_canonical_indices = (int32_t *)malloc(bytes);
-        if (ctx->gc_canonical_indices) {
-            memcpy(ctx->gc_canonical_indices, canonical, bytes);
+        ctx_runtime(ctx)->gc_canonical_indices = (int32_t *)malloc(bytes);
+        if (ctx_runtime(ctx)->gc_canonical_indices) {
+            memcpy(ctx_runtime(ctx)->gc_canonical_indices, canonical, bytes);
         }
     }
 }
 
 void set_func_type_indices_internal(jit_context_t *ctx, int32_t *indices, int num_funcs) {
     if (!ctx) return;
-    if (ctx->gc_func_type_indices) {
-        free(ctx->gc_func_type_indices);
-        ctx->gc_func_type_indices = NULL;
+    if (ctx_runtime(ctx)->gc_func_type_indices) {
+        free(ctx_runtime(ctx)->gc_func_type_indices);
+        ctx_runtime(ctx)->gc_func_type_indices = NULL;
     }
 
-    ctx->gc_num_funcs = num_funcs;
+    ctx_runtime(ctx)->gc_num_funcs = num_funcs;
     if (num_funcs > 0 && indices) {
         size_t bytes = (size_t)num_funcs * sizeof(int32_t);
-        ctx->gc_func_type_indices = (int32_t *)malloc(bytes);
-        if (ctx->gc_func_type_indices) {
-            memcpy(ctx->gc_func_type_indices, indices, bytes);
+        ctx_runtime(ctx)->gc_func_type_indices = (int32_t *)malloc(bytes);
+        if (ctx_runtime(ctx)->gc_func_type_indices) {
+            memcpy(ctx_runtime(ctx)->gc_func_type_indices, indices, bytes);
         }
     }
 }
@@ -333,35 +333,35 @@ void set_func_table_internal(jit_context_t *ctx, void **func_table_ptr, int num_
     void **copy = num_funcs ? malloc((size_t)num_funcs * sizeof(void *)) : NULL;
     if (num_funcs && !copy) return;
     if (num_funcs) memcpy(copy, func_table_ptr, (size_t)num_funcs * sizeof(void *));
-    free(ctx->gc_func_table);
-    ctx->gc_func_table = copy;
-    ctx->gc_func_table_size = num_funcs;
+    free(ctx_runtime(ctx)->gc_func_table);
+    ctx_runtime(ctx)->gc_func_table = copy;
+    ctx_runtime(ctx)->gc_func_table_size = num_funcs;
 }
 
 void clear_type_cache_internal(jit_context_t *ctx) {
     if (!ctx) return;
 
-    if (ctx->gc_type_cache) {
-        free(ctx->gc_type_cache);
-        ctx->gc_type_cache = NULL;
+    if (ctx_runtime(ctx)->gc_type_cache) {
+        free(ctx_runtime(ctx)->gc_type_cache);
+        ctx_runtime(ctx)->gc_type_cache = NULL;
     }
-    ctx->gc_num_types = 0;
+    ctx_runtime(ctx)->gc_num_types = 0;
 
-    if (ctx->gc_canonical_indices) {
-        free(ctx->gc_canonical_indices);
-        ctx->gc_canonical_indices = NULL;
+    if (ctx_runtime(ctx)->gc_canonical_indices) {
+        free(ctx_runtime(ctx)->gc_canonical_indices);
+        ctx_runtime(ctx)->gc_canonical_indices = NULL;
     }
-    ctx->gc_num_canonical = 0;
+    ctx_runtime(ctx)->gc_num_canonical = 0;
 
-    if (ctx->gc_func_type_indices) {
-        free(ctx->gc_func_type_indices);
-        ctx->gc_func_type_indices = NULL;
+    if (ctx_runtime(ctx)->gc_func_type_indices) {
+        free(ctx_runtime(ctx)->gc_func_type_indices);
+        ctx_runtime(ctx)->gc_func_type_indices = NULL;
     }
-    ctx->gc_num_funcs = 0;
+    ctx_runtime(ctx)->gc_num_funcs = 0;
 
-    free(ctx->gc_func_table);
-    ctx->gc_func_table = NULL;
-    ctx->gc_func_table_size = 0;
+    free(ctx_runtime(ctx)->gc_func_table);
+    ctx_runtime(ctx)->gc_func_table = NULL;
+    ctx_runtime(ctx)->gc_func_table_size = 0;
 }
 
 #if defined(_MSC_VER) && !defined(__clang__)

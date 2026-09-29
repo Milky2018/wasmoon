@@ -179,7 +179,7 @@ int32_t gc_alloc_array_from_values_with_retry(
 
 void gc_record_runtime_type(jit_context_t *ctx, GcHeap *heap, int32_t ref, int32_t local_type) {
     if (!ctx || !heap || ref <= 0 || ref > heap->object_count) return;
-    if (local_type >= 0 && local_type < ctx->callable_local_type_count) {
-        heap->runtime_types[ref - 1] = ctx->callable_local_types[local_type];
+    if (local_type >= 0 && local_type < ctx_runtime(ctx)->callable_local_type_count) {
+        heap->runtime_types[ref - 1] = ctx_runtime(ctx)->callable_local_types[local_type];
     }
 }

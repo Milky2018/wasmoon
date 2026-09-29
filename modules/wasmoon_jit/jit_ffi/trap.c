@@ -104,48 +104,48 @@ void jit_trap_activation_init(
 static void save_activation_context(jit_trap_activation_t *activation) {
     jit_context_t *context = activation->context;
     if (!context || activation->context_detached) return;
-    activation->exception_handler = context->exception_handler;
-    activation->exception_ref = context->exception_ref;
-    activation->exception_tag = context->exception_tag;
-    activation->exception_values = context->exception_values;
-    activation->exception_value_count = context->exception_value_count;
-    activation->spilled_locals = context->spilled_locals;
-    activation->spilled_locals_count = context->spilled_locals_count;
-    activation->gc_frame_chain_head = context->gc_frame_chain_head;
-    activation->gc_root_scope_head = context->gc_root_scope_head;
+    activation->exception_handler = ctx_runtime(context)->exception_handler;
+    activation->exception_ref = ctx_runtime(context)->exception_ref;
+    activation->exception_tag = ctx_runtime(context)->exception_tag;
+    activation->exception_values = ctx_runtime(context)->exception_values;
+    activation->exception_value_count = ctx_runtime(context)->exception_value_count;
+    activation->spilled_locals = ctx_runtime(context)->spilled_locals;
+    activation->spilled_locals_count = ctx_runtime(context)->spilled_locals_count;
+    activation->gc_frame_chain_head = ctx_runtime(context)->gc_frame_chain_head;
+    activation->gc_root_scope_head = ctx_runtime(context)->gc_root_scope_head;
     activation->debug_current_func_idx = context->debug_current_func_idx;
     activation->context_detached = 1;
-    context->exception_handler = NULL;
-    context->exception_ref = 0;
-    context->exception_tag = 0;
-    context->exception_values = NULL;
-    context->exception_value_count = 0;
-    context->spilled_locals = NULL;
-    context->spilled_locals_count = 0;
-    context->gc_frame_chain_head = NULL;
-    context->gc_root_scope_head = NULL;
+    ctx_runtime(context)->exception_handler = NULL;
+    ctx_runtime(context)->exception_ref = 0;
+    ctx_runtime(context)->exception_tag = 0;
+    ctx_runtime(context)->exception_values = NULL;
+    ctx_runtime(context)->exception_value_count = 0;
+    ctx_runtime(context)->spilled_locals = NULL;
+    ctx_runtime(context)->spilled_locals_count = 0;
+    ctx_runtime(context)->gc_frame_chain_head = NULL;
+    ctx_runtime(context)->gc_root_scope_head = NULL;
     context->debug_current_func_idx = -1;
 }
 
 static void restore_activation_context(jit_trap_activation_t *activation) {
     jit_context_t *context = activation->context;
     if (!context || !activation->context_detached) return;
-    if (context->exception_handler ||
-        context->exception_values ||
-        context->spilled_locals ||
-        context->gc_frame_chain_head ||
-        context->gc_root_scope_head) {
+    if (ctx_runtime(context)->exception_handler ||
+        ctx_runtime(context)->exception_values ||
+        ctx_runtime(context)->spilled_locals ||
+        ctx_runtime(context)->gc_frame_chain_head ||
+        ctx_runtime(context)->gc_root_scope_head) {
         abort();
     }
-    context->exception_handler = activation->exception_handler;
-    context->exception_ref = activation->exception_ref;
-    context->exception_tag = activation->exception_tag;
-    context->exception_values = activation->exception_values;
-    context->exception_value_count = activation->exception_value_count;
-    context->spilled_locals = activation->spilled_locals;
-    context->spilled_locals_count = activation->spilled_locals_count;
-    context->gc_frame_chain_head = activation->gc_frame_chain_head;
-    context->gc_root_scope_head = activation->gc_root_scope_head;
+    ctx_runtime(context)->exception_handler = activation->exception_handler;
+    ctx_runtime(context)->exception_ref = activation->exception_ref;
+    ctx_runtime(context)->exception_tag = activation->exception_tag;
+    ctx_runtime(context)->exception_values = activation->exception_values;
+    ctx_runtime(context)->exception_value_count = activation->exception_value_count;
+    ctx_runtime(context)->spilled_locals = activation->spilled_locals;
+    ctx_runtime(context)->spilled_locals_count = activation->spilled_locals_count;
+    ctx_runtime(context)->gc_frame_chain_head = activation->gc_frame_chain_head;
+    ctx_runtime(context)->gc_root_scope_head = activation->gc_root_scope_head;
     context->debug_current_func_idx = activation->debug_current_func_idx;
     activation->exception_handler = NULL;
     activation->exception_values = NULL;
@@ -225,17 +225,17 @@ void jit_mark_active_gc_roots(GcHeap *heap) {
         jit_context_t *context = activation->context;
         if (!activation->active || !context || context->gc_heap != heap) continue;
         const wasmoon_gc_root_scope_t *scope = activation->context_detached
-            ? activation->gc_root_scope_head : context->gc_root_scope_head;
+            ? activation->gc_root_scope_head : ctx_runtime(context)->gc_root_scope_head;
         for (; scope; scope = scope->prev) {
             gc_heap_mark_roots(heap, scope->roots, scope->root_count);
         }
         gc_heap_mark_roots(heap,
-            activation->context_detached ? activation->exception_values : context->exception_values,
-            activation->context_detached ? activation->exception_value_count : context->exception_value_count);
+            activation->context_detached ? activation->exception_values : ctx_runtime(context)->exception_values,
+            activation->context_detached ? activation->exception_value_count : ctx_runtime(context)->exception_value_count);
         gc_heap_mark_roots(heap,
-            activation->context_detached ? activation->spilled_locals : context->spilled_locals,
-            activation->context_detached ? activation->spilled_locals_count : context->spilled_locals_count);
-        gc_heap_mark_roots(heap, context->gc_root_scratch, context->gc_root_scratch_len);
+            activation->context_detached ? activation->spilled_locals : ctx_runtime(context)->spilled_locals,
+            activation->context_detached ? activation->spilled_locals_count : ctx_runtime(context)->spilled_locals_count);
+        gc_heap_mark_roots(heap, ctx_runtime(context)->gc_root_scratch, ctx_runtime(context)->gc_root_scratch_len);
     }
 }
 
@@ -380,35 +380,35 @@ void jit_trap_activation_abandon(jit_trap_activation_t *activation) {
     activation->active = 0;
     jit_context_t *context = activation->context;
     if (context && activation->context_detached) {
-        void *saved_handler = context->exception_handler;
-        int64_t saved_ref = context->exception_ref;
-        int32_t saved_tag = context->exception_tag;
-        int64_t *saved_values = context->exception_values;
-        int32_t saved_value_count = context->exception_value_count;
-        int64_t *saved_locals = context->spilled_locals;
-        int32_t saved_locals_count = context->spilled_locals_count;
-        wasmoon_gc_frame_t *saved_frames = context->gc_frame_chain_head;
-        wasmoon_gc_root_scope_t *saved_scopes = context->gc_root_scope_head;
-        context->exception_handler = activation->exception_handler;
-        context->exception_ref = activation->exception_ref;
-        context->exception_tag = activation->exception_tag;
-        context->exception_values = activation->exception_values;
-        context->exception_value_count = activation->exception_value_count;
-        context->spilled_locals = activation->spilled_locals;
-        context->spilled_locals_count = activation->spilled_locals_count;
-        context->gc_frame_chain_head = activation->gc_frame_chain_head;
-        context->gc_root_scope_head = activation->gc_root_scope_head;
+        void *saved_handler = ctx_runtime(context)->exception_handler;
+        int64_t saved_ref = ctx_runtime(context)->exception_ref;
+        int32_t saved_tag = ctx_runtime(context)->exception_tag;
+        int64_t *saved_values = ctx_runtime(context)->exception_values;
+        int32_t saved_value_count = ctx_runtime(context)->exception_value_count;
+        int64_t *saved_locals = ctx_runtime(context)->spilled_locals;
+        int32_t saved_locals_count = ctx_runtime(context)->spilled_locals_count;
+        wasmoon_gc_frame_t *saved_frames = ctx_runtime(context)->gc_frame_chain_head;
+        wasmoon_gc_root_scope_t *saved_scopes = ctx_runtime(context)->gc_root_scope_head;
+        ctx_runtime(context)->exception_handler = activation->exception_handler;
+        ctx_runtime(context)->exception_ref = activation->exception_ref;
+        ctx_runtime(context)->exception_tag = activation->exception_tag;
+        ctx_runtime(context)->exception_values = activation->exception_values;
+        ctx_runtime(context)->exception_value_count = activation->exception_value_count;
+        ctx_runtime(context)->spilled_locals = activation->spilled_locals;
+        ctx_runtime(context)->spilled_locals_count = activation->spilled_locals_count;
+        ctx_runtime(context)->gc_frame_chain_head = activation->gc_frame_chain_head;
+        ctx_runtime(context)->gc_root_scope_head = activation->gc_root_scope_head;
         exception_reset_context_state(context);
         ctx_gc_clear_frames_internal(context);
-        context->exception_handler = saved_handler;
-        context->exception_ref = saved_ref;
-        context->exception_tag = saved_tag;
-        context->exception_values = saved_values;
-        context->exception_value_count = saved_value_count;
-        context->spilled_locals = saved_locals;
-        context->spilled_locals_count = saved_locals_count;
-        context->gc_frame_chain_head = saved_frames;
-        context->gc_root_scope_head = saved_scopes;
+        ctx_runtime(context)->exception_handler = saved_handler;
+        ctx_runtime(context)->exception_ref = saved_ref;
+        ctx_runtime(context)->exception_tag = saved_tag;
+        ctx_runtime(context)->exception_values = saved_values;
+        ctx_runtime(context)->exception_value_count = saved_value_count;
+        ctx_runtime(context)->spilled_locals = saved_locals;
+        ctx_runtime(context)->spilled_locals_count = saved_locals_count;
+        ctx_runtime(context)->gc_frame_chain_head = saved_frames;
+        ctx_runtime(context)->gc_root_scope_head = saved_scopes;
         activation->exception_handler = NULL;
         activation->exception_values = NULL;
         activation->exception_value_count = 0;

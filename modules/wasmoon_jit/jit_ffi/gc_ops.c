@@ -123,14 +123,14 @@ static uint32_t gc_read_u32_le(const uint8_t *ptr) {
 static const wasmoon_gc_safepoint_table_t *gc_func_safepoint_table_for_current(
     jit_context_t *ctx
 ) {
-    if (!ctx || !ctx->gc_func_safepoint_tables) {
+    if (!ctx || !ctx_runtime(ctx)->gc_func_safepoint_tables) {
         return NULL;
     }
     int32_t func_idx = ctx->debug_current_func_idx;
-    if (func_idx < 0 || func_idx >= ctx->gc_func_safepoint_table_count) {
+    if (func_idx < 0 || func_idx >= ctx_runtime(ctx)->gc_func_safepoint_table_count) {
         return NULL;
     }
-    const wasmoon_gc_safepoint_table_t *table = &ctx->gc_func_safepoint_tables[func_idx];
+    const wasmoon_gc_safepoint_table_t *table = &ctx_runtime(ctx)->gc_func_safepoint_tables[func_idx];
     if (!table->stackmap_blob || table->stackmap_blob_size < 8) {
         return NULL;
     }
@@ -145,9 +145,9 @@ static const wasmoon_gc_safepoint_table_t *gc_active_safepoint_table(jit_context
     if (table) {
         return table;
     }
-    table = ctx->gc_safepoint_table;
-    if (ctx->gc_frame_chain_head && ctx->gc_frame_chain_head->table) {
-        table = ctx->gc_frame_chain_head->table;
+    table = ctx_runtime(ctx)->gc_safepoint_table;
+    if (ctx_runtime(ctx)->gc_frame_chain_head && ctx_runtime(ctx)->gc_frame_chain_head->table) {
+        table = ctx_runtime(ctx)->gc_frame_chain_head->table;
     }
     return table;
 }
@@ -217,8 +217,8 @@ static int32_t gc_select_alloc_roots(
         return -1;
     }
     const wasmoon_gc_safepoint_table_t *table =
-        function_index >= 0 && function_index < ctx->gc_func_safepoint_table_count
-        ? &ctx->gc_func_safepoint_tables[function_index]
+        function_index >= 0 && function_index < ctx_runtime(ctx)->gc_func_safepoint_table_count
+        ? &ctx_runtime(ctx)->gc_func_safepoint_tables[function_index]
         : gc_active_safepoint_table(ctx);
     if (!table || !table->stackmap_blob || table->stackmap_blob_size < 8) {
         gc_log_precise_root_failure(op, safepoint_id, "missing safepoint table");
@@ -318,13 +318,13 @@ int64_t WASMOON_GUEST_ABI gc_struct_new_impl(int32_t type_idx, int64_t *fields, 
     if (
         num_fields == 0 &&
         ctx &&
-        ctx->gc_type_cache &&
+        ctx_runtime(ctx)->gc_type_cache &&
         type_idx >= 0 &&
-        type_idx < ctx->gc_num_types
+        type_idx < ctx_runtime(ctx)->gc_num_types
     ) {
         // Get actual field count from type cache
         // Format: [super_idx, kind, num_fields] per type
-        actual_num_fields = ctx->gc_type_cache[type_idx * GC_TYPE_CACHE_STRIDE + GC_TYPE_STRUCT_NUM_FIELDS_OFF];
+        actual_num_fields = ctx_runtime(ctx)->gc_type_cache[type_idx * GC_TYPE_CACHE_STRIDE + GC_TYPE_STRUCT_NUM_FIELDS_OFF];
         if (actual_num_fields > 0) {
             // Allocate and zero-initialize default fields
             default_fields = (int64_t *)calloc((size_t)actual_num_fields, sizeof(int64_t));
@@ -650,14 +650,14 @@ int64_t WASMOON_GUEST_ABI gc_alloc_struct_slow(
     if (
         num_fields == 0 &&
         actual_ctx &&
-        actual_ctx->gc_type_cache &&
+        ctx_runtime(actual_ctx)->gc_type_cache &&
         type_idx >= 0 &&
-        type_idx < actual_ctx->gc_num_types
+        type_idx < ctx_runtime(actual_ctx)->gc_num_types
     ) {
         // Get actual field count from type cache
         // Format: [super_idx, kind, num_fields] per type
         actual_num_fields =
-            actual_ctx->gc_type_cache[type_idx * GC_TYPE_CACHE_STRIDE + GC_TYPE_STRUCT_NUM_FIELDS_OFF];
+            ctx_runtime(actual_ctx)->gc_type_cache[type_idx * GC_TYPE_CACHE_STRIDE + GC_TYPE_STRUCT_NUM_FIELDS_OFF];
         if (actual_num_fields > 0) {
             // Allocate and zero-initialize default fields
             default_fields = (int64_t *)calloc((size_t)actual_num_fields, sizeof(int64_t));

@@ -623,6 +623,7 @@ graph TD
   ISS_597["ISS-597: Narrow zero-extended constants and share comparison matching"]
   ISS_598["ISS-598: Replace occupied-range probe stacks with scalar cursors"]
   ISS_599["ISS-599: Identify the mechanism behind context placement sensitivity"]
+  ISS_600["ISS-600: Separate the JIT context ABI from private runtime state"]
   ISS_002 --> ISS_003
   ISS_002 --> ISS_004
   ISS_003 --> ISS_005

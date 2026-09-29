@@ -109,11 +109,11 @@ static WASMOON_NO_FUNCTION_SANITIZE int32_t call_hostcall_callback(
 
 static void clear_hostcall_callback(jit_context_t *ctx) {
     if (!ctx) return;
-    if (ctx->hostcall_callback_data) {
-        moonbit_decref(ctx->hostcall_callback_data);
-        ctx->hostcall_callback_data = NULL;
+    if (ctx_runtime(ctx)->hostcall_callback_data) {
+        moonbit_decref(ctx_runtime(ctx)->hostcall_callback_data);
+        ctx_runtime(ctx)->hostcall_callback_data = NULL;
     }
-    ctx->hostcall_callback = NULL;
+    ctx_runtime(ctx)->hostcall_callback = NULL;
 }
 
 MOONBIT_FFI_EXPORT void wasmoon_jit_set_hostcall_callback(
@@ -127,8 +127,8 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_set_hostcall_callback(
         return;
     }
     clear_hostcall_callback(ctx);
-    ctx->hostcall_callback = (void *)callback;
-    ctx->hostcall_callback_data = closure;
+    ctx_runtime(ctx)->hostcall_callback = (void *)callback;
+    ctx_runtime(ctx)->hostcall_callback_data = closure;
 }
 
 MOONBIT_FFI_EXPORT void wasmoon_jit_clear_hostcall_callback(int64_t ctx_ptr) {
@@ -159,7 +159,7 @@ MOONBIT_FFI_EXPORT int32_t WASMOON_GUEST_ABI wasmoon_jit_hostcall(
     int32_t num_args,
     int32_t num_results
 ) {
-    if (!ctx || !ctx->hostcall_callback) {
+    if (!ctx || !ctx_runtime(ctx)->hostcall_callback) {
         g_trap_code = 3; // unreachable
         if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
         return (int32_t)g_trap_code;
@@ -199,9 +199,9 @@ MOONBIT_FFI_EXPORT int32_t WASMOON_GUEST_ABI wasmoon_jit_hostcall(
     g_hostcall_num_args = num_args;
     g_hostcall_num_results = num_results;
 
-    hostcall_callback_fn cb = (hostcall_callback_fn)ctx->hostcall_callback;
+    hostcall_callback_fn cb = (hostcall_callback_fn)ctx_runtime(ctx)->hostcall_callback;
     int32_t trap = call_hostcall_callback(
-        cb, ctx->hostcall_callback_data
+        cb, ctx_runtime(ctx)->hostcall_callback_data
     );
     while (trap == WASMOON_HOSTCALL_SUSPEND_STATUS) {
         // A parked fiber is not the dynamically active hostcall. Restore its
@@ -229,7 +229,7 @@ MOONBIT_FFI_EXPORT int32_t WASMOON_GUEST_ABI wasmoon_jit_hostcall(
             trap = 8;
         } else if (resume == 1) {
             trap = call_hostcall_callback(
-                cb, ctx->hostcall_callback_data
+                cb, ctx_runtime(ctx)->hostcall_callback_data
             );
         } else {
             trap = 0;
@@ -263,11 +263,11 @@ static WASMOON_NO_FUNCTION_SANITIZE int32_t call_cancellation_callback(
 
 static void clear_cancellation_callback(jit_context_t *ctx) {
     if (!ctx) return;
-    if (ctx->cancellation_callback_data) {
-        moonbit_decref(ctx->cancellation_callback_data);
-        ctx->cancellation_callback_data = NULL;
+    if (ctx_runtime(ctx)->cancellation_callback_data) {
+        moonbit_decref(ctx_runtime(ctx)->cancellation_callback_data);
+        ctx_runtime(ctx)->cancellation_callback_data = NULL;
     }
-    ctx->cancellation_callback = NULL;
+    ctx_runtime(ctx)->cancellation_callback = NULL;
 }
 
 MOONBIT_FFI_EXPORT void wasmoon_jit_set_cancellation_callback(
@@ -281,8 +281,8 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_set_cancellation_callback(
         return;
     }
     clear_cancellation_callback(ctx);
-    ctx->cancellation_callback = (void *)callback;
-    ctx->cancellation_callback_data = closure;
+    ctx_runtime(ctx)->cancellation_callback = (void *)callback;
+    ctx_runtime(ctx)->cancellation_callback_data = closure;
 }
 
 MOONBIT_FFI_EXPORT void wasmoon_jit_clear_cancellation_callback(int64_t ctx_ptr) {
@@ -296,10 +296,10 @@ jit_context_t *jit_execution_control_context(jit_context_t *ctx) {
 
 int wasmoon_jit_cancellation_requested(jit_context_t *ctx) {
     ctx = jit_execution_control_context(ctx);
-    if (!ctx || !ctx->cancellation_callback) return 0;
+    if (!ctx || !ctx_runtime(ctx)->cancellation_callback) return 0;
     cancellation_callback_fn cb =
-        (cancellation_callback_fn)ctx->cancellation_callback;
-    return call_cancellation_callback(cb, ctx->cancellation_callback_data) != 0;
+        (cancellation_callback_fn)ctx_runtime(ctx)->cancellation_callback;
+    return call_cancellation_callback(cb, ctx_runtime(ctx)->cancellation_callback_data) != 0;
 }
 
 MOONBIT_FFI_EXPORT int32_t WASMOON_GUEST_ABI wasmoon_jit_cancel_poll(jit_context_t *ctx) {
@@ -311,8 +311,8 @@ MOONBIT_FFI_EXPORT int32_t WASMOON_GUEST_ABI wasmoon_jit_cancel_poll(jit_context
     }
     // A MoonBit cancellation callback has returned before the native stack is
     // parked. Only compiled guest/C frames are retained by this suspension.
-    if (ctx && ctx->scheduling_budget > 0 && --ctx->scheduling_budget == 0) {
-        ctx->scheduling_budget = 1024;
+    if (ctx && ctx_runtime(ctx)->scheduling_budget > 0 && --ctx_runtime(ctx)->scheduling_budget == 0) {
+        ctx_runtime(ctx)->scheduling_budget = 1024;
         if (wasmoon_native_fiber_yield(WASMOON_FIBER_EVENT_GUEST_YIELD) == INT64_MIN) {
             g_trap_code = 8;
             if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
@@ -324,7 +324,7 @@ MOONBIT_FFI_EXPORT int32_t WASMOON_GUEST_ABI wasmoon_jit_cancel_poll(jit_context
 
 MOONBIT_FFI_EXPORT void wasmoon_jit_set_cooperative_scheduling(int64_t pointer, int32_t enabled) {
     jit_context_t *ctx = (void *)(uintptr_t)pointer;
-    if (ctx) ctx->scheduling_budget = enabled ? 1024 : 0;
+    if (ctx) ctx_runtime(ctx)->scheduling_budget = enabled ? 1024 : 0;
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_cancel_poll_ptr(void) {
@@ -408,13 +408,13 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_set_memory(int64_t ctx_ptr, wasmoon_memo
         }
 
         // Release the previous binding. Every non-null binding owns one RC reference.
-        if (ctx->owns_memory0 && ctx->memory0) {
+        if (ctx_runtime(ctx)->owns_memory0 && ctx->memory0) {
             wasmoon_jit_free_memory_desc(ctx->memory0);
         }
 
         if (new_mem0) moonbit_incref(new_mem0);
         ctx->memory0 = new_mem0;
-        ctx->owns_memory0 = new_mem0 != NULL;
+        ctx_runtime(ctx)->owns_memory0 = new_mem0 != NULL;
         ctx_refresh_memory0_fast_fields(ctx);
     }
 }
@@ -438,9 +438,9 @@ MOONBIT_FFI_EXPORT int wasmoon_jit_ctx_get_func_count(int64_t ctx_ptr) {
 
 MOONBIT_FFI_EXPORT wasmoon_table_t *wasmoon_jit_ctx_get_table_ptr(int64_t ctx_ptr, int table_idx) {
     jit_context_t *ctx = (jit_context_t *)ctx_ptr;
-    if (!ctx || table_idx < 0 || table_idx >= ctx->table_count || !ctx->table_bindings)
+    if (!ctx || table_idx < 0 || table_idx >= ctx->table_count || !ctx_runtime(ctx)->table_bindings)
         return wasmoon_native_table_empty();
-    wasmoon_table_t *owner = ctx->table_bindings[table_idx].owner;
+    wasmoon_table_t *owner = ctx_runtime(ctx)->table_bindings[table_idx].owner;
     moonbit_incref(owner);
     return owner;
 }
@@ -465,7 +465,7 @@ MOONBIT_FFI_EXPORT int wasmoon_jit_ctx_alloc_indirect_table(int64_t ctx_ptr, int
     wasmoon_table_t *owner = wasmoon_jit_alloc_shared_indirect_table(count);
     if (!owner->entries) { moonbit_decref(owner); return 0; }
     wasmoon_jit_ctx_set_table_pointers(ctx_ptr, &owner, NULL, NULL, 1);
-    int bound = ctx->table_bindings && ctx->table_bindings[0].owner == owner;
+    int bound = ctx_runtime(ctx)->table_bindings && ctx_runtime(ctx)->table_bindings[0].owner == owner;
     moonbit_decref(owner);
     return bound;
 }
@@ -529,10 +529,10 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_jit_gc_environment_is_clear(int64_t ctx_ptr) 
     return ctx->gc_heap == NULL &&
         ctx->gc_heap_ptr == NULL &&
         ctx->gc_heap_limit == NULL &&
-        ctx->gc_type_cache == NULL &&
-        ctx->gc_canonical_indices == NULL &&
-        ctx->gc_func_type_indices == NULL &&
-        ctx->gc_func_table == NULL;
+        ctx_runtime(ctx)->gc_type_cache == NULL &&
+        ctx_runtime(ctx)->gc_canonical_indices == NULL &&
+        ctx_runtime(ctx)->gc_func_type_indices == NULL &&
+        ctx_runtime(ctx)->gc_func_table == NULL;
 }
 
 // ============ Shared Indirect Table Support ============
@@ -778,7 +778,7 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_set_table_pointers(
     ctx_clear_table_bindings(ctx);
     free(ctx->tables); free(ctx->table_sizes); free(ctx->table_max_sizes);
     ctx->tables = tables; ctx->table_sizes = sizes; ctx->table_max_sizes = maxima;
-    ctx->table_bindings = bindings; ctx->table_count = table_count;
+    ctx_runtime(ctx)->table_bindings = bindings; ctx->table_count = table_count;
     for (int i = 0; i < table_count; ++i) {
         wasmoon_table_t *owner = owners[i];
         tables[i] = owner->entries;
@@ -1476,7 +1476,7 @@ static void WASMOON_GUEST_ABI wasmoon_jit_gc_push_root_scope_or_trap(
 static void WASMOON_GUEST_ABI wasmoon_jit_gc_pop_root_scope_or_trap(jit_context_t *ctx) {
     jit_context_t *activation = get_current_jit_context();
     if (activation) ctx = activation;
-    if (ctx && ctx->gc_root_scope_head) {
+    if (ctx && ctx_runtime(ctx)->gc_root_scope_head) {
         ctx_gc_pop_root_scope_internal(ctx);
         return;
     }
@@ -1993,23 +1993,23 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_set_callable_types(
     if (type_count) memcpy(parent_copy, parents, (size_t)type_count * sizeof(int32_t));
     if (entry_count) memcpy(entry_copy, entries, (size_t)entry_count * 2 * sizeof(int64_t));
     if (tag_count) memcpy(tag_copy, tags, (size_t)tag_count * sizeof(int32_t));
-    free(ctx->callable_tags);
-    ctx->callable_tags = tag_copy;
-    ctx->callable_tag_count = tag_count;
-    free(ctx->callable_local_types);
-    free(ctx->callable_type_parents);
-    free(ctx->callable_entries);
-    ctx->callable_local_types = local_copy;
-    ctx->callable_local_type_count = local_count;
-    ctx->callable_type_parents = parent_copy;
-    ctx->callable_type_count = type_count;
-    ctx->callable_entries = entry_copy;
-    ctx->callable_entry_count = entry_count;
+    free(ctx_runtime(ctx)->callable_tags);
+    ctx_runtime(ctx)->callable_tags = tag_copy;
+    ctx_runtime(ctx)->callable_tag_count = tag_count;
+    free(ctx_runtime(ctx)->callable_local_types);
+    free(ctx_runtime(ctx)->callable_type_parents);
+    free(ctx_runtime(ctx)->callable_entries);
+    ctx_runtime(ctx)->callable_local_types = local_copy;
+    ctx_runtime(ctx)->callable_local_type_count = local_count;
+    ctx_runtime(ctx)->callable_type_parents = parent_copy;
+    ctx_runtime(ctx)->callable_type_count = type_count;
+    ctx_runtime(ctx)->callable_entries = entry_copy;
+    ctx_runtime(ctx)->callable_entry_count = entry_count;
 }
 
 MOONBIT_FFI_EXPORT int32_t wasmoon_jit_has_callable_metadata(void *managed_context) {
     jit_context_t *ctx = (jit_context_t *)(uintptr_t)wasmoon_jit_context_ptr(managed_context);
-    return ctx && ctx->callable_local_types != NULL;
+    return ctx && ctx_runtime(ctx)->callable_local_types != NULL;
 }
 
 MOONBIT_FFI_EXPORT void wasmoon_jit_set_cooperative_scheduling_managed(void *context, int32_t enabled) {

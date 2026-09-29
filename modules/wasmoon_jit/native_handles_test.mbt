@@ -541,3 +541,8 @@ test "guarded and shared descriptor access uses committed length rather than res
     )
   }
 }
+
+///|
+test "context allocates optional segment state on demand and releases it on reset" {
+  inspect(@native_test_support.context_optional_state(), content="1")
+}

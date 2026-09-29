@@ -29,6 +29,7 @@
 
 #include "moonbit.h"
 #include "jit_ffi.h"
+#include "jit_context.h"
 #include "windows_context.h"
 #include "fiber_protocol.h"
 #include "gc_heap.h"
@@ -239,6 +240,7 @@ int exec_block_count_internal(void);
 // ============ JIT Context (jit_context.c) ============
 
 // Context allocation/free (internal implementations)
+void ctx_clear_segments_internal(jit_context_t *ctx);
 jit_context_t *alloc_context_internal(int func_count);
 void free_context_internal(jit_context_t *ctx);
 void ctx_refresh_memory0_fast_fields(jit_context_t *ctx);

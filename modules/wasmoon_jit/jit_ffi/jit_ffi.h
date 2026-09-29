@@ -97,7 +97,8 @@ typedef struct wasmoon_gc_root_scope {
     int32_t root_count;
 } wasmoon_gc_root_scope_t;
 
-// VMContext v3 - layout MUST match vcode/abi/abi.mbt constants:
+// VMContext fixed prefix. vmcontext_abi.mbt reads these offsets from C.
+// Changing this prefix requires a JIT artifact codegen revision bump.
 //   +0:   memory0 (wasmoon_memory_t*)  - memory 0 descriptor pointer
 //   +8:   memory0_base (uint8_t*)      - cached memory 0 base pointer (hot)
 //   +16:  memory0_size (size_t)        - cached memory 0 current length bytes (hot)
@@ -147,95 +148,6 @@ typedef struct {
     uint8_t *gc_heap_limit;   // +112: Allocation limit (triggers slow path when exceeded)
     void *gc_heap;            // +120: GcHeap* pointer for slow path
 
-    // GC runtime caches (context-local, not accessed by JIT code directly)
-    int32_t *gc_type_cache;
-    int gc_num_types;
-    int32_t *gc_canonical_indices;
-    int gc_num_canonical;
-    int32_t *gc_func_type_indices;
-    int gc_num_funcs;
-    void **gc_func_table;
-    int gc_func_table_size;
-
-    // Additional fields (not accessed by JIT code directly)
-    int owns_memory0;         // Whether this context owns memory0 (should free it)
-    int reserved_table_padding;  // Preserve the generated-code context ABI.
-    int wasi_exited;          // WASI: proc_exit called
-    int wasi_exit_code;       // WASI: exit code
-
-    // Exception handling state
-    void *exception_handler;  // Current exception handler (exception_handler_t*)
-    struct native_continuation_arena *continuation_arena;
-    struct native_continuation_type *continuation_types;
-    struct native_exception_arena *exception_arena;
-    int64_t exception_ref;
-    int32_t exception_tag;    // Tag of in-flight exception
-    int64_t *exception_values; // Exception payload values
-    int32_t exception_value_count; // Number of exception values
-
-    // Spilled locals for exception handling
-    // When throwing, current local values are saved here so catch handlers
-    // can see the values at the throw point (not the setjmp point)
-    int64_t *spilled_locals;      // Saved local values
-    int32_t spilled_locals_count; // Number of saved locals
-
-    // Hostcall callback (MoonBit closure) for JIT -> host function bridging.
-    // This is invoked by `wasmoon_jit_hostcall` during JIT execution.
-    void *hostcall_callback;          // Function pointer for hostcall callback
-    void *hostcall_callback_data;     // Closure data for hostcall callback
-
-    // Invocation-local cooperative cancellation callback. Generated code only
-    // passes the context to a C helper; these fields stay outside the fixed ABI.
-    void *cancellation_callback;
-    void *cancellation_callback_data;
-    int32_t scheduling_budget;
-
-    // ============ Bulk Memory/Table Segment State ============
-    // Per-instance (per jit_context_t) storage for bulk memory/table operations:
-    //   memory.init/data.drop/table.init/elem.drop and GC array.*_{data,elem}.
-    //
-    // This is intentionally *not* in the fixed-offset hot VMContext prefix since
-    // JIT-generated code never accesses these fields directly; only libcalls do.
-
-    // Data segments (malloc-owned byte copies).
-    uint8_t **data_segments;
-    size_t *data_segment_sizes;   // number of bytes per segment
-    uint8_t *data_dropped;        // 0/1 per segment
-    int data_segment_count;
-
-    // Element segments (malloc-owned Int64 copies).
-    // Each element segment stores pairs: (value, type_idx) for each element.
-    int64_t **elem_segments;
-    size_t *elem_segment_sizes;   // number of elements (not Int64 slots)
-    uint8_t *elem_dropped;        // 0/1 per segment
-    int elem_segment_count;
-
-    // GC safepoint/collection bookkeeping (appended to preserve existing
-    // VMContext offsets used by JIT-generated code).
-    int gc_collect_requested;
-    int gc_in_collect;
-    int64_t *gc_root_scratch;
-    int32_t gc_root_scratch_len;
-    int32_t gc_root_scratch_cap;
-    const wasmoon_gc_safepoint_table_t *gc_safepoint_table;
-    wasmoon_gc_frame_t *gc_frame_chain_head;
-    wasmoon_gc_root_scope_t *gc_root_scope_head;
-    // Per-function safepoint tables owned by this context.
-    wasmoon_gc_safepoint_table_t *gc_func_safepoint_tables;
-    uint8_t **gc_func_stackmap_blobs;
-    uint32_t **gc_func_safepoint_offsets;
-    int32_t gc_func_safepoint_table_count;
-    // Callable identity metadata persists across execution activations.
-    int32_t *callable_local_types;
-    int callable_local_type_count;
-    int32_t *callable_type_parents;
-    int callable_type_count;
-    int64_t *callable_entries;
-    int callable_entry_count;
-    int32_t *callable_tags;
-    int callable_tag_count;
-
-    wasmoon_table_binding_t *table_bindings;
 } jit_context_t;
 
 // ============ Executable Memory Functions ============
