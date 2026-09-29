@@ -279,15 +279,7 @@ fn gc_set_code_object_safepoints(
   let offsets = FixedArray::makei(entries.length(), fn(i) {
     entries[i].code_offset
   })
-  c_jit_gc_set_func_safepoints_managed(
-    context,
-    func_idx,
-    stackmap_blob,
-    stackmap_blob.length(),
-    offsets,
-    entries.length(),
-  ) ==
-  1
+  context.bind_gc_safepoints(func_idx, stackmap_blob, offsets)
 }
 
 ///|
@@ -347,7 +339,7 @@ fn gc_setup(
   )
 
   // Set function table pointer for tagged pointer funcref lookups.
-  c_jit_gc_set_func_table_managed(context, func_table_ptr, num_funcs)
+  context.snapshot_gc_function_addresses(func_table_ptr, num_funcs)
 }
 
 ///|

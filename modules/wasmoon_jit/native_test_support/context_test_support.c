@@ -205,3 +205,47 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_test_context_gc_metadata_shares(
     return state->gc_type_cache == types && state->gc_canonical_indices == canonical &&
         state->gc_func_type_indices == functions;
 }
+
+MOONBIT_FFI_EXPORT int32_t wasmoon_test_context_gc_payload_shares(
+    void *context, uint8_t *blob, int32_t *offsets, int64_t *addresses
+) {
+    jit_context_t *ctx = (jit_context_t *)(uintptr_t)wasmoon_jit_context_ptr(context);
+    jit_runtime_state_t *state = ctx_runtime(ctx);
+    return state->gc_func_safepoint_tables[0].stackmap_blob == blob &&
+        state->gc_func_safepoint_tables[0].code_offsets == (uint32_t *)offsets &&
+        state->gc_func_table == addresses;
+}
+
+MOONBIT_FFI_EXPORT int32_t wasmoon_test_context_gc_payload_valid(void *context) {
+    jit_context_t *ctx = (jit_context_t *)(uintptr_t)wasmoon_jit_context_ptr(context);
+    jit_runtime_state_t *state = ctx_runtime(ctx);
+    wasmoon_gc_safepoint_table_t *table = &state->gc_func_safepoint_tables[0];
+    return table->stackmap_blob_size == 3 && table->stackmap_blob[2] == 3 &&
+        table->safepoint_count == 2 && table->code_offsets[1] == 12 &&
+        state->gc_func_table_size == 2 && state->gc_func_table[1] == 32;
+}
+
+MOONBIT_FFI_EXPORT int32_t wasmoon_test_context_gc_payload_legacy(void *context) {
+    jit_context_t *ctx = (jit_context_t *)(uintptr_t)wasmoon_jit_context_ptr(context);
+    jit_runtime_state_t *state = ctx_runtime(ctx);
+    wasmoon_gc_safepoint_table_t *table = &state->gc_func_safepoint_tables[0];
+    uint8_t blob[] = {1, 2, 3};
+    int32_t offsets[] = {4, 12};
+    void *addresses[] = {(void *)(uintptr_t)16, (void *)(uintptr_t)32};
+    int passed = ctx_gc_set_func_safepoints_internal(ctx, 0, blob, 3, offsets, 2);
+    set_func_table_internal(ctx, addresses, 2);
+    blob[2] = 99;
+    offsets[1] = 99;
+    addresses[1] = NULL;
+    return passed && table == &state->gc_func_safepoint_tables[0] &&
+        wasmoon_test_context_gc_payload_valid(context);
+}
+
+MOONBIT_FFI_EXPORT int32_t wasmoon_test_context_gc_payload_empty(void *context) {
+    jit_context_t *ctx = (jit_context_t *)(uintptr_t)wasmoon_jit_context_ptr(context);
+    jit_runtime_state_t *state = ctx_runtime(ctx);
+    wasmoon_gc_safepoint_table_t *table = &state->gc_func_safepoint_tables[0];
+    return !table->stackmap_blob && !table->code_offsets &&
+        !table->stackmap_blob_size && !table->safepoint_count &&
+        !state->gc_func_table && !state->gc_func_table_size;
+}

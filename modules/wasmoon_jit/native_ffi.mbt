@@ -1082,14 +1082,6 @@ extern "c" fn c_jit_gc_environment_is_clear_managed(
 
 ///|
 #borrow(jit_context)
-extern "c" fn c_jit_gc_set_func_table_managed(
-  jit_context : JITContext,
-  func_table_ptr : Int64,
-  num_funcs : Int,
-) -> Unit = "wasmoon_jit_gc_set_func_table_managed"
-
-///|
-#borrow(jit_context)
 extern "c" fn c_jit_gc_clear_cache_managed(jit_context : JITContext) -> Unit = "wasmoon_jit_gc_clear_cache_managed"
 
 ///|
@@ -1139,17 +1131,6 @@ extern "c" fn c_jit_gc_set_safepoint_table_managed(
   jit_context : JITContext,
   table_ptr : Int64,
 ) -> Unit = "wasmoon_jit_gc_set_safepoint_table_managed"
-
-///|
-#borrow(jit_context, stackmap_blob, code_offsets)
-extern "c" fn c_jit_gc_set_func_safepoints_managed(
-  jit_context : JITContext,
-  func_idx : Int,
-  stackmap_blob : Bytes,
-  stackmap_blob_size : Int,
-  code_offsets : FixedArray[Int],
-  safepoint_count : Int,
-) -> Int = "wasmoon_jit_gc_set_func_safepoints_managed"
 
 ///|
 #borrow(jit_context)

@@ -156,7 +156,7 @@ int32_t WASMOON_GUEST_ABI gc_ref_test_impl(jit_context_t *ctx, int64_t value, in
                     // Tagged pointer funcref: search func_table for the ptr
                     void *raw_ptr = (void *)(uintptr_t)(value & ~FUNCREF_TAG);
                     for (int i = 0; i < ctx_runtime(ctx)->gc_func_table_size; i++) {
-                        if (ctx_runtime(ctx)->gc_func_table[i] == raw_ptr) {
+                        if (ctx_runtime(ctx)->gc_func_table[i] == (int64_t)(uintptr_t)raw_ptr) {
                             func_idx = i;
                             break;
                         }
@@ -337,12 +337,24 @@ void set_func_type_indices_internal(jit_context_t *ctx, int32_t *indices, int nu
     ctx_runtime(ctx)->gc_num_funcs = num_funcs;
 }
 
+// The FFI conversion copies native pointers into typed MoonBit scalar storage.
+MOONBIT_FFI_EXPORT int64_t *wasmoon_jit_snapshot_gc_function_addresses(
+    int64_t table_address, int32_t count
+) {
+    if (count < 0) count = 0;
+    void **table = (void **)(uintptr_t)table_address;
+    int64_t *addresses = moonbit_make_int64_array(count, 0);
+    if (table) {
+        for (int32_t i = 0; i < count; ++i) addresses[i] = (int64_t)(uintptr_t)table[i];
+    }
+    return addresses;
+}
+
 void set_func_table_internal(jit_context_t *ctx, void **func_table_ptr, int num_funcs) {
-    if (!ctx) return;
-    void **copy = num_funcs ? malloc((size_t)num_funcs * sizeof(void *)) : NULL;
-    if (num_funcs && !copy) return;
-    if (num_funcs) memcpy(copy, func_table_ptr, (size_t)num_funcs * sizeof(void *));
-    free(ctx_runtime(ctx)->gc_func_table);
+    if (!ctx || num_funcs < 0) return;
+    int64_t *copy = num_funcs ? wasmoon_jit_snapshot_gc_function_addresses(
+        (int64_t)(uintptr_t)func_table_ptr, num_funcs) : NULL;
+    if (ctx_runtime(ctx)->gc_func_table) moonbit_decref(ctx_runtime(ctx)->gc_func_table);
     ctx_runtime(ctx)->gc_func_table = copy;
     ctx_runtime(ctx)->gc_func_table_size = num_funcs;
 }
@@ -368,7 +380,7 @@ void clear_type_cache_internal(jit_context_t *ctx) {
     }
     ctx_runtime(ctx)->gc_num_funcs = 0;
 
-    free(ctx_runtime(ctx)->gc_func_table);
+    if (ctx_runtime(ctx)->gc_func_table) moonbit_decref(ctx_runtime(ctx)->gc_func_table);
     ctx_runtime(ctx)->gc_func_table = NULL;
     ctx_runtime(ctx)->gc_func_table_size = 0;
 }

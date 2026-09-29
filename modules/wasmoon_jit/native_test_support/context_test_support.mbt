@@ -66,3 +66,30 @@ pub extern "c" fn context_gc_metadata_shares(
   canonical : FixedArray[Int],
   functions : FixedArray[Int],
 ) -> Int = "wasmoon_test_context_gc_metadata_shares"
+
+///|
+#borrow(context, blob, offsets, addresses)
+pub extern "c" fn context_gc_payload_shares(
+  context : @jit_ffi.JITContext,
+  blob : Bytes,
+  offsets : FixedArray[Int],
+  addresses : FixedArray[Int64],
+) -> Int = "wasmoon_test_context_gc_payload_shares"
+
+///|
+#borrow(context)
+pub extern "c" fn context_gc_payload_valid(
+  context : @jit_ffi.JITContext,
+) -> Int = "wasmoon_test_context_gc_payload_valid"
+
+///|
+#borrow(context)
+pub extern "c" fn context_gc_payload_legacy(
+  context : @jit_ffi.JITContext,
+) -> Int = "wasmoon_test_context_gc_payload_legacy"
+
+///|
+#borrow(context)
+pub extern "c" fn context_gc_payload_empty(
+  context : @jit_ffi.JITContext,
+) -> Int = "wasmoon_test_context_gc_payload_empty"

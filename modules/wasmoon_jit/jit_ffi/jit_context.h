@@ -50,8 +50,8 @@ typedef struct jit_runtime_state {
     int gc_num_canonical;
     int32_t *gc_func_type_indices;
     int gc_num_funcs;
-    // Legacy native function-address snapshot remains malloc-owned.
-    void **gc_func_table;
+    // RC-owned MoonBit Int64 snapshot of native function addresses.
+    int64_t *gc_func_table;
     int gc_func_table_size;
 
     // Additional fields (not accessed by JIT code directly)
@@ -79,7 +79,7 @@ typedef struct jit_runtime_state {
     jit_segments_state_t *segments;
 
     const wasmoon_gc_safepoint_table_t *gc_safepoint_table;
-    // Per-function safepoint tables owned by this context.
+    // Stable native descriptors retaining MoonBit blob/offset arrays.
     wasmoon_gc_safepoint_table_t *gc_func_safepoint_tables;
     int32_t gc_func_safepoint_table_count;
     // Callable identity metadata persists across execution activations.

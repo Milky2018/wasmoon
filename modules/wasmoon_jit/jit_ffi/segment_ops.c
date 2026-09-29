@@ -407,7 +407,7 @@ static void WASMOON_GUEST_ABI table_fill_impl(
     ) {
         void* raw_ptr = (void*)(uintptr_t)(val & ~FUNCREF_TAG);
         for (int i = 0; i < ctx_runtime(ctx)->gc_func_table_size; i++) {
-            if (ctx_runtime(ctx)->gc_func_table[i] == raw_ptr) {
+            if (ctx_runtime(ctx)->gc_func_table[i] == (int64_t)(uintptr_t)raw_ptr) {
                 int32_t t = ctx_runtime(ctx)->gc_func_type_indices[i];
                 if (ctx_runtime(ctx)->gc_canonical_indices && t >= 0 && t < ctx_runtime(ctx)->gc_num_canonical) {
                     t = ctx_runtime(ctx)->gc_canonical_indices[t];

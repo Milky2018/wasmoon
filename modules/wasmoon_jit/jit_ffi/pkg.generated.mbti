@@ -33,8 +33,11 @@ pub impl @debug.Debug for GCHeapHandle
 
 pub type JITContext
 pub fn JITContext::bind_callable_registry(Self, @callable.NativeCallableRegistry, FixedArray[Int], FixedArray[Int]) -> Unit
+pub fn JITContext::bind_gc_function_addresses(Self, FixedArray[Int64]) -> Unit
 pub fn JITContext::bind_gc_metadata(Self, FixedArray[Int], FixedArray[Int], FixedArray[Int]) -> Unit
+pub fn JITContext::bind_gc_safepoints(Self, Int, Bytes, FixedArray[Int]) -> Bool
 pub fn JITContext::new(Int) -> Self
+pub fn JITContext::snapshot_gc_function_addresses(Self, Int64, Int) -> Unit
 
 pub type MemoryDescriptor
 pub fn MemoryDescriptor::equal(Self, Self) -> Bool

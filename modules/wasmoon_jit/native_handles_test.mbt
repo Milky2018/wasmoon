@@ -725,3 +725,46 @@ test "GC metadata survives MoonBit owners and supports replacement and clearing"
     content="0",
   )
 }
+
+///|
+fn context_with_owned_gc_payloads() -> @jit_ffi.JITContext {
+  let context = @jit_ffi.JITContext::new(2)
+  let blob = Bytes::from_array([1, 2, 3])
+  let offsets : FixedArray[Int] = [4, 12]
+  let addresses : FixedArray[Int64] = [16L, 32L]
+  for _ in 0..<2 {
+    guard context.bind_gc_safepoints(0, blob, offsets) else {
+      abort("binding failed")
+    }
+    context.bind_gc_function_addresses(addresses)
+  }
+  guard @native_test_support.context_gc_payload_shares(
+      context, blob, offsets, addresses,
+    ) ==
+    1 else {
+    abort("GC payloads were copied")
+  }
+  context
+}
+
+///|
+test "GC payloads retain MoonBit owners through replacement and legacy bindings" {
+  let first = context_with_owned_gc_payloads()
+  let second = context_with_owned_gc_payloads()
+  inspect(@native_test_support.context_gc_payload_valid(first), content="1")
+  assert_false(first.bind_gc_safepoints(-1, b"", []))
+  assert_false(first.bind_gc_safepoints(2, b"", []))
+  inspect(@native_test_support.context_gc_payload_valid(first), content="1")
+  inspect(@native_test_support.context_gc_payload_legacy(first), content="1")
+  assert_true(first.bind_gc_safepoints(0, b"", []))
+  first.bind_gc_function_addresses([])
+  inspect(@native_test_support.context_gc_payload_empty(first), content="1")
+  assert_true(first.bind_gc_safepoints(0, b"", []))
+  first.bind_gc_function_addresses([])
+  inspect(@native_test_support.context_gc_payload_valid(second), content="1")
+  assert_true(
+    first.bind_gc_safepoints(0, Bytes::from_array([1, 2, 3]), [4, 12]),
+  )
+  first.bind_gc_function_addresses([16L, 32L])
+  inspect(@native_test_support.context_gc_payload_valid(first), content="1")
+}
