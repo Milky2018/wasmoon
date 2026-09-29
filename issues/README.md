@@ -624,6 +624,7 @@ graph TD
   ISS_594["ISS-594: Select opposite AArch64 arithmetic immediates"]
   ISS_595["ISS-595: Minimize AArch64 constant materialization"]
   ISS_596["ISS-596: Select immediate comparisons that return booleans"]
+  ISS_597["ISS-597: Narrow zero-extended constants and share comparison matching"]
   ISS_002 --> ISS_003
   ISS_002 --> ISS_004
   ISS_003 --> ISS_005

@@ -158,7 +158,7 @@ test "AArch64 stack address fallback preserves SP above immediate range" {
       #|  0x10,
       #|  0x20,
       #|  0xa0,
-      #|  0xd2,
+      #|  0x52,
       #|  0xf0,
       #|  0x63,
       #|  0x30,
@@ -3397,9 +3397,16 @@ test "AArch64 constants choose shorter inverted and logical forms" {
     (W64, 0x00ff00ff00ff00ffUL, [0xb2009fe0U]),
     (W32, 0x00ff00ffUL, [0x32009fe0U]),
     (W64, 0xffff1234ffff5678UL, [0x929530e0U, 0xf2c24680U]),
-    (W64, 0UL, [0xd2e00000U]),
+    (W64, 0UL, [0x52a00000U]),
     (W32, 0UL, [0x52a00000U]),
-    (W64, 0x1234UL, [0xd2824680U]),
+    (W64, 0x1234UL, [0x52824680U]),
+    (W64, 0xffff1234UL, [0x129db960U]),
+    (W64, 0x00ff00ffUL, [0x32009fe0U]),
+    (W64, 0xffffffc0UL, [0x128007e0U]),
+    (W64, 0x12345678UL, [0x528acf00U, 0x72a24680U]),
+    (W64, 0xffffffffUL, [0x12a00000U]),
+    (W64, 0x100000000UL, [0xd2c00020U]),
+    (W64, 0xffffffffffff1234UL, [0x929db960U]),
   ]
   for (width, bits, expected) in cases {
     let buffer = CodeBuffer::new()

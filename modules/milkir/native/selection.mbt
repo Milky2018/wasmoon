@@ -22,9 +22,14 @@ priv enum ScalarSelection {
 }
 
 ///|
-priv enum BranchSelection {
+priv enum ComparisonSelection {
   Compare(@milkir.Value, @milkir.Value, @lowering.IntComparison)
-  CompareImmediate(@milkir.Value, UInt64, @lowering.IntComparison)
+  CompareImmediate(
+    @milkir.Value,
+    @milkir.Value,
+    UInt64,
+    @lowering.IntComparison
+  )
 }
 
 ///|
@@ -449,22 +454,13 @@ fn select_scalar_instruction(
   constants : Array[UInt64?],
   supports_int_compare_immediate : (@native_types.ValueType, UInt64) -> Bool,
 ) -> (ScalarSelection, @milkir.Value)? {
-  if instruction.opcode is Scalar(IntCompare(comparison)) &&
-    binary_operands(instruction) is Some((left, right)) &&
-    left.ty == right.ty &&
-    left.ty is (I32 | I64) {
-    let condition = selection_comparison(comparison)
-    if constants[right.id] is Some(bits) &&
-      supports_int_compare_immediate(lower_type(left.ty), bits) {
-      return Some((CompareImmediate(left, condition, bits), right))
+  if instruction.opcode is Scalar(IntCompare(_)) {
+    return match
+      select_comparison(instruction, constants, supports_int_compare_immediate) {
+      Some(CompareImmediate(input, constant, bits, condition)) =>
+        Some((CompareImmediate(input, condition, bits), constant))
+      _ => None
     }
-    if constants[left.id] is Some(bits) &&
-      supports_int_compare_immediate(lower_type(right.ty), bits) {
-      return Some(
-        (CompareImmediate(right, swapped_comparison(condition), bits), left),
-      )
-    }
-    return None
   }
   guard instruction.opcode is Scalar(IntBinary(binary)) else { return None }
   guard binary_operands(instruction) is Some((left, right)) else { return None }
@@ -733,7 +729,8 @@ fn consumer_selects_constant(
   if instruction.opcode is Scalar(IntCompare(_)) &&
     instruction.results is [condition] &&
     facts.consumers[condition.id] == -1 &&
-    select_branch_lowering(condition, facts) is Some(CompareImmediate(_, _, _)) {
+    select_branch_lowering(condition, facts)
+    is Some(CompareImmediate(_, _, _, _)) {
     return true
   }
   selected_by_memory_address_use(constant, instruction, facts)
@@ -896,27 +893,41 @@ fn select_scalar_lowering(
 }
 
 ///|
-fn select_branch_lowering(
-  condition : @milkir.Value,
-  facts : SelectionFacts,
-) -> BranchSelection? {
-  guard facts.uses[condition.id] == 1 else { return None }
-  guard facts.definitions[condition.id] is Some(instruction) else {
-    return None
-  }
+// Both value and branch consumers share operand matching and condition reversal.
+// Branches retain their existing materialization fallback for any constant;
+// value consumers only absorb constants accepted by the target.
+fn select_comparison(
+  instruction : @milkir.Inst,
+  constants : Array[UInt64?],
+  accepts_immediate : (@native_types.ValueType, UInt64) -> Bool,
+) -> ComparisonSelection? {
   guard instruction.opcode is Scalar(IntCompare(comparison)) else {
     return None
   }
   guard binary_operands(instruction) is Some((left, right)) else { return None }
   guard left.ty == right.ty && left.ty is (I32 | I64) else { return None }
-  let lowered = selection_comparison(comparison)
-  match facts.constants[right.id] {
-    Some(bits) => Some(CompareImmediate(left, bits, lowered))
-    None =>
-      match facts.constants[left.id] {
-        Some(bits) =>
-          Some(CompareImmediate(right, bits, swapped_comparison(lowered)))
-        None => Some(Compare(left, right, lowered))
-      }
+  let condition = selection_comparison(comparison)
+  if constants[right.id] is Some(bits) &&
+    accepts_immediate(lower_type(left.ty), bits) {
+    return Some(CompareImmediate(left, right, bits, condition))
   }
+  if constants[left.id] is Some(bits) &&
+    accepts_immediate(lower_type(right.ty), bits) {
+    return Some(
+      CompareImmediate(right, left, bits, swapped_comparison(condition)),
+    )
+  }
+  Some(Compare(left, right, condition))
+}
+
+///|
+fn select_branch_lowering(
+  condition : @milkir.Value,
+  facts : SelectionFacts,
+) -> ComparisonSelection? {
+  guard facts.uses[condition.id] == 1 else { return None }
+  guard facts.definitions[condition.id] is Some(instruction) else {
+    return None
+  }
+  select_comparison(instruction, facts.constants, fn(_, _) { true })
 }

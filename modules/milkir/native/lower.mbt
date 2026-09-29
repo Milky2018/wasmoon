@@ -1546,7 +1546,7 @@ fn lower_terminator(
             lowered_false_target,
             lowered_false_arguments,
           )
-        Some(CompareImmediate(input, bits, comparison)) =>
+        Some(CompareImmediate(input, _, bits, comparison)) =>
           builder.branch_int_compare_immediate(
             comparison,
             demand_value(builder, values, value_types, facts, input),
@@ -1578,7 +1578,7 @@ fn lower_terminator(
             mapped_block(blocks, false_target),
             [],
           )
-        Some(CompareImmediate(input, bits, comparison)) =>
+        Some(CompareImmediate(input, _, bits, comparison)) =>
           builder.branch_int_compare_immediate(
             comparison,
             demand_value(builder, values, value_types, facts, input),
@@ -1609,7 +1609,7 @@ fn lower_terminator(
             mapped_block(blocks, true_target),
             [],
           )
-        Some(CompareImmediate(input, bits, comparison)) =>
+        Some(CompareImmediate(input, _, bits, comparison)) =>
           builder.branch_int_compare_immediate(
             comparison,
             demand_value(builder, values, value_types, facts, input),

@@ -240,6 +240,8 @@ fn emit_constant(
   destination : @vcode.PhysicalReg,
   bits : UInt64,
 ) -> Unit {
+  // W-register writes clear the upper half even when the result is i64.
+  let width = if bits >> 32 == 0UL { W32 } else { width }
   let halfword_count = if width == W32 { 2 } else { 4 }
   let mut nonzero = 0
   let mut nonones = 0

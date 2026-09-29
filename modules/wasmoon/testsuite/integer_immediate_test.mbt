@@ -61,6 +61,8 @@ test "JIT: materialized integer constants preserve all bits" {
         [
           "0", "-1", "-64", "0x00ff00ff00ff00ff", "0x8000000000000000", "0x123456789abcdef0",
           "0xffff1234ffff5678", "0x1234ffffffffffff", "0xffffffff1234ffff", "0x00000000ffffffff",
+          "0x00000000ffff1234", "0x0000000000ff00ff", "0x00000000ffffffc0", "0x0000000012345678",
+          "0x0000000100000000", "0xffffffffffff1234",
         ],
       ),
     ] {
@@ -122,6 +124,29 @@ test "JIT: immediate comparisons preserve signedness and both operand orders" {
           content="matched",
         )
       }
+    }
+  }
+}
+
+///|
+test "JIT: shared constants across value and branch comparisons" {
+  for constant in ["42", "4097", "0xffff1234"] {
+    let source =
+      $|(module (func (export "test") (param $x i64) (result i32 i64)
+      $|  (local $c i64)
+      $|  (local.set $c (i64.const \{constant}))
+      $|  (if (result i32) (i64.lt_s (local.get $c) (local.get $x))
+      $|    (then (i64.ge_u (local.get $x) (local.get $c)))
+      $|    (else (i64.ne (local.get $c) (local.get $x))))
+      $|  (local.get $c)))
+    for
+      input in [
+        0L, -1L, 42L, 4097L, 4294906420L, 9223372036854775807L, -9223372036854775808L,
+      ] {
+      inspect(
+        @testsuite.compare_jit_interp(source, "test", [I64(input)]),
+        content="matched",
+      )
     }
   }
 }

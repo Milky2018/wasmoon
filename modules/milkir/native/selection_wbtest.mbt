@@ -555,3 +555,40 @@ test "native comparison selection respects target eligibility and shared constan
   inspect(trace.operations.any(op => op is I32Const(43U)), content="true")
   inspect(trace.operations.any(op => op is IntCompare(_)), content="true")
 }
+
+///|
+test "branch comparison sharing preserves constant-left fallback" {
+  for enabled in [false, true] {
+    let builder = @milkir.FunctionBuilder::FunctionBuilder(
+      "branch_constant_left",
+    )
+    let input = builder.add_param(I64)
+    builder.add_result(I64)
+    let constant = builder.iconst_i64(4097L)
+    let condition = builder.icmp_slt(constant, input)
+    let yes = builder.create_block()
+    let no = builder.create_block()
+    builder.brnz(condition, yes, no)
+    builder.switch_to_block(yes)
+    builder.return_([constant])
+    builder.switch_to_block(no)
+    builder.return_([input])
+    let trace = trace_lowering(builder.finalize(), compare_immediates=enabled)
+    inspect(
+      trace.terminators.any(t => {
+        t is BranchIntCompareImmediate(SignedGreaterThan, _, 4097UL, _, _, _, _)
+      }),
+      content="true",
+    )
+    inspect(
+      trace.operations.filter(op => op is I64Const(4097UL)).length(),
+      content="1",
+    )
+    inspect(
+      trace.operations.any(op => {
+        op is (IntCompare(_) | IntCompareImmediate(_, _))
+      }),
+      content="false",
+    )
+  }
+}
